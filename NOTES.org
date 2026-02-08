@@ -1,0 +1,81 @@
+
+
+
+
+* Desiderata
+** Syntax
+*** Homoiconicity
+  * Code as Data
+    - reflectivity, inspectability, malleability
+  * Simple syntax
+  * Metaprogramming facility
+  * Prefix-notation
+*** Significant whitespace
+  * No opening bracketing like Lisp (more like TCL)
+  * New line, same level:   implicit list of arguments
+  * New line, deeper level: implicit tree-depth of the AST
+  * Same line with `()` groupings: deeper tree-depth of the AST
+*** Groupings with `()` (NOT `[]`)
+*** Fully qualified namespaces with `/` seperator
+*** EDN support
+  * Vectors: `[]`
+  * Hashmaps/associative arrays/dictionaries:
+    `{:key00 "value" :key01 12}`
+
+** Fully qualified namespaces
+  * disambiguate imports' names
+** Strongly typed
+** Functional-Logic-based language
+  * Also functional aspects
+  * With procedural
+** Dependent Types as first class
+** Session Types for protocol, Linear Types for memory-guarentees
+  - Dependent Session types
+** Strong support for parallel processing
+** Pattern Matching as first class (like in Erlang or Prolog)
+** Constraint Solver Language
+** Blazingly fast
+** Excellent, human-readable, compiler errors in the likes of Rust or Gleam *VERY IMPORTANT*
+** Arbitrary precision numbers, EFFICIENTLY
+  - I don't like "wrapping" Ints, for example; I would rather throw run-time errors than silently wrapping
+** Innovations on UNUM types
+** A "don't stop the world" garbage collector, like in Pony
+
+
+
+
+* Languages that inspire us
+** Logic Programmming
+  * Prolog (also homoiconic)
+** Constraint Logic Programming
+  * ECLiPSe
+** Functional Programming
+  * LISP
+    * Clojure
+      - "Hosted language",
+        - allows for seamless interop, especially on the JVM with Java
+        - Large reach, can reuse pre-existing libraries in ecosystem
+        - multiple hosts, JVM and javascript... even more reach
+      - Immutable datastructures
+        - Efficient with structural sharing (like git)
+        - Safe sharing for concurrency use-cases
+** Scripting Languages
+  * TCL
+** Formal Verification
+  * Maude
+    - Flexibility to define arbitrary formal languages or logics, can be powerful and flexible in proving certain
+** Sussman's Propogators
+  * Some formalisms using lattices
+** Interesting Type Systems
+  * Pony
+  * Idris
+  * Rust
+
+
+* Target
+** LLVM
+  * Hope to be able to leverage other languages in the ecosystem, with strong ffi support to things like C, C++, Rust, and others
+** Prototype in
+  * Racket?
+  * Maude?
+

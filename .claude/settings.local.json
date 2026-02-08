@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(wc:*)",
+      "Bash(maude:*)",
+      "Bash(/tmp/debug-offer.maude:*)",
+      "Bash(ls:*)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:docs.racket-lang.org)",
+      "WebFetch(domain:davidchristiansen.dk)",
+      "WebFetch(domain:www.cis.upenn.edu)",
+      "WebFetch(domain:www.williamjbowman.com)",
+      "Bash(racket:*)",
+      "Bash(/opt/homebrew/bin/racket --version)",
+      "Bash(/opt/homebrew/bin/raco test:*)",
+      "Bash(raco test:*)",
+      "Bash(python3:*)"
+    ]
+  }
+}

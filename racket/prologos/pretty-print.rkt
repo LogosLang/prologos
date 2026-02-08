@@ -1,0 +1,278 @@
+#lang racket/base
+
+;;;
+;;; PROLOGOS PRETTY PRINTER
+;;; Convert core AST (Expr, Session, Process) back to readable surface syntax strings.
+;;; Uses a name supply to convert de Bruijn indices to human-readable names.
+;;;
+
+(require racket/match
+         racket/string
+         "prelude.rkt"
+         "syntax.rkt"
+         "sessions.rkt")
+
+(provide pp-expr
+         pp-session
+         pp-mult)
+
+;; ========================================
+;; Name supply for de Bruijn -> named variables
+;; ========================================
+
+;; Base names to use (cycle through these)
+(define base-names '("x" "y" "z" "a" "b" "c" "d" "e" "f" "g" "h"))
+
+;; Generate a fresh name given the current name stack depth
+(define (fresh-name depth names-in-scope)
+  (define idx depth)
+  (define base-idx (modulo idx (length base-names)))
+  (define cycle (quotient idx (length base-names)))
+  (define base (list-ref base-names base-idx))
+  (define candidate
+    (if (= cycle 0) base (format "~a~a" base cycle)))
+  ;; Avoid collisions with names already in scope
+  (if (member candidate names-in-scope)
+      (format "~a_~a" base depth)
+      candidate))
+
+;; ========================================
+;; Pretty-print expressions
+;; ========================================
+
+;; pp-expr: convert Expr -> string
+;; names is a list of name strings (stack), innermost binding first
+(define (pp-expr e [names '()])
+  (match e
+    ;; Variables
+    [(expr-bvar k)
+     (if (< k (length names))
+         (list-ref names k)
+         (format "?bvar~a" k))]
+    [(expr-fvar name) (symbol->string name)]
+
+    ;; Atoms
+    [(expr-zero) "zero"]
+    [(expr-refl) "refl"]
+    [(expr-Nat) "Nat"]
+    [(expr-Bool) "Bool"]
+    [(expr-true) "true"]
+    [(expr-false) "false"]
+    [(expr-error) "<error>"]
+
+    ;; Universes
+    [(expr-Type l) (format "(Type ~a)" (pp-level l))]
+
+    ;; Successor — detect numeric literals
+    [(expr-suc _)
+     (let ([n (try-as-nat e)])
+       (if n
+           (number->string n)
+           (format "(suc ~a)" (pp-expr (expr-suc-pred e) names))))]
+
+    ;; Lambda
+    [(expr-lam m t body)
+     (let ([name (fresh-name (length names) names)])
+       (format "(lam (~a~a ~a) ~a)"
+               name
+               (pp-mult-annot m)
+               (pp-expr t names)
+               (pp-expr body (cons name names))))]
+
+    ;; Pi — detect non-dependent arrow
+    [(expr-Pi m dom cod)
+     (if (and (eq? m 'mw) (not (uses-bvar0? cod)))
+         ;; Non-dependent: (-> A B)
+         (format "(-> ~a ~a)" (pp-expr dom names) (pp-expr cod names))
+         ;; Dependent: (Pi (x :m A) B)
+         (let ([name (fresh-name (length names) names)])
+           (format "(Pi (~a~a ~a) ~a)"
+                   name
+                   (pp-mult-annot m)
+                   (pp-expr dom names)
+                   (pp-expr cod (cons name names)))))]
+
+    ;; Sigma
+    [(expr-Sigma t1 t2)
+     (if (not (uses-bvar0? t2))
+         ;; Non-dependent: (Sigma A B) — could use a different sugar
+         (format "(Sigma ~a ~a)" (pp-expr t1 names) (pp-expr t2 names))
+         (let ([name (fresh-name (length names) names)])
+           (format "(Sigma (~a : ~a) ~a)"
+                   name
+                   (pp-expr t1 names)
+                   (pp-expr t2 (cons name names)))))]
+
+    ;; Application — flatten nested apps
+    [(expr-app _ _)
+     (let-values ([(func args) (flatten-app e)])
+       (format "(~a)" (string-join (map (lambda (x) (pp-expr x names))
+                                        (cons func args))
+                                   " ")))]
+
+    ;; Pair
+    [(expr-pair e1 e2)
+     (format "(pair ~a ~a)" (pp-expr e1 names) (pp-expr e2 names))]
+
+    ;; Projections
+    [(expr-fst e1) (format "(fst ~a)" (pp-expr e1 names))]
+    [(expr-snd e1) (format "(snd ~a)" (pp-expr e1 names))]
+
+    ;; Annotation
+    [(expr-ann term type)
+     (format "(the ~a ~a)" (pp-expr type names) (pp-expr term names))]
+
+    ;; Equality
+    [(expr-Eq t e1 e2)
+     (format "(Eq ~a ~a ~a)" (pp-expr t names) (pp-expr e1 names) (pp-expr e2 names))]
+
+    ;; Eliminators
+    [(expr-natrec mot base step target)
+     (format "(natrec ~a ~a ~a ~a)"
+             (pp-expr mot names) (pp-expr base names)
+             (pp-expr step names) (pp-expr target names))]
+    [(expr-J mot base left right proof)
+     (format "(J ~a ~a ~a ~a ~a)"
+             (pp-expr mot names) (pp-expr base names)
+             (pp-expr left names) (pp-expr right names) (pp-expr proof names))]
+
+    ;; Vec/Fin
+    [(expr-Vec t n) (format "(Vec ~a ~a)" (pp-expr t names) (pp-expr n names))]
+    [(expr-vnil t) (format "(vnil ~a)" (pp-expr t names))]
+    [(expr-vcons t n hd tl)
+     (format "(vcons ~a ~a ~a ~a)"
+             (pp-expr t names) (pp-expr n names) (pp-expr hd names) (pp-expr tl names))]
+    [(expr-Fin n) (format "(Fin ~a)" (pp-expr n names))]
+    [(expr-fzero n) (format "(fzero ~a)" (pp-expr n names))]
+    [(expr-fsuc n i) (format "(fsuc ~a ~a)" (pp-expr n names) (pp-expr i names))]
+    [(expr-vhead t n v) (format "(vhead ~a ~a ~a)" (pp-expr t names) (pp-expr n names) (pp-expr v names))]
+    [(expr-vtail t n v) (format "(vtail ~a ~a ~a)" (pp-expr t names) (pp-expr n names) (pp-expr v names))]
+    [(expr-vindex t n i v) (format "(vindex ~a ~a ~a ~a)" (pp-expr t names) (pp-expr n names) (pp-expr i names) (pp-expr v names))]
+
+    ;; Fallback
+    [_ (format "~a" e)]))
+
+;; ========================================
+;; Helpers
+;; ========================================
+
+;; Try to interpret an expr as a Racket natural number (suc chain ending in zero)
+(define (try-as-nat e)
+  (match e
+    [(expr-zero) 0]
+    [(expr-suc inner)
+     (let ([n (try-as-nat inner)])
+       (and n (+ n 1)))]
+    [_ #f]))
+
+;; Check if a term uses bvar(0) — used to detect non-dependent Pi/Sigma
+(define (uses-bvar0? e)
+  (match e
+    [(expr-bvar 0) #t]
+    [(expr-bvar _) #f]
+    [(expr-fvar _) #f]
+    [(expr-zero) #f]
+    [(expr-refl) #f]
+    [(expr-Nat) #f]
+    [(expr-Bool) #f]
+    [(expr-true) #f]
+    [(expr-false) #f]
+    [(expr-Type _) #f]
+    [(expr-error) #f]
+    [(expr-suc e1) (uses-bvar0? e1)]
+    [(expr-lam _ t body) (or (uses-bvar0? t) (uses-bvar0? body))]
+    [(expr-Pi _ dom cod) (or (uses-bvar0? dom) (uses-bvar0? cod))]
+    [(expr-Sigma t1 t2) (or (uses-bvar0? t1) (uses-bvar0? t2))]
+    [(expr-app f a) (or (uses-bvar0? f) (uses-bvar0? a))]
+    [(expr-pair e1 e2) (or (uses-bvar0? e1) (uses-bvar0? e2))]
+    [(expr-fst e1) (uses-bvar0? e1)]
+    [(expr-snd e1) (uses-bvar0? e1)]
+    [(expr-ann term type) (or (uses-bvar0? term) (uses-bvar0? type))]
+    [(expr-Eq t e1 e2) (or (uses-bvar0? t) (uses-bvar0? e1) (uses-bvar0? e2))]
+    [(expr-natrec m b s t) (or (uses-bvar0? m) (uses-bvar0? b) (uses-bvar0? s) (uses-bvar0? t))]
+    [(expr-J m b l r p) (or (uses-bvar0? m) (uses-bvar0? b) (uses-bvar0? l) (uses-bvar0? r) (uses-bvar0? p))]
+    [(expr-Vec t n) (or (uses-bvar0? t) (uses-bvar0? n))]
+    [(expr-vnil t) (uses-bvar0? t)]
+    [(expr-vcons t n h tl) (or (uses-bvar0? t) (uses-bvar0? n) (uses-bvar0? h) (uses-bvar0? tl))]
+    [(expr-Fin n) (uses-bvar0? n)]
+    [(expr-fzero n) (uses-bvar0? n)]
+    [(expr-fsuc n i) (or (uses-bvar0? n) (uses-bvar0? i))]
+    [(expr-vhead t n v) (or (uses-bvar0? t) (uses-bvar0? n) (uses-bvar0? v))]
+    [(expr-vtail t n v) (or (uses-bvar0? t) (uses-bvar0? n) (uses-bvar0? v))]
+    [(expr-vindex t n i v) (or (uses-bvar0? t) (uses-bvar0? n) (uses-bvar0? i) (uses-bvar0? v))]
+    [_ #f]))
+
+;; Flatten nested left-associative applications
+(define (flatten-app e)
+  (match e
+    [(expr-app (expr-app _ _) arg)
+     (let-values ([(func args) (flatten-app (expr-app-func e))])
+       (values func (append args (list arg))))]
+    [(expr-app func arg)
+     (values func (list arg))]
+    [_ (values e '())]))
+
+;; ========================================
+;; Pretty-print multiplicity
+;; ========================================
+(define (pp-mult m)
+  (case m
+    [(m0) "0"]
+    [(m1) "1"]
+    [(mw) "w"]
+    [else (format "~a" m)]))
+
+;; Multiplicity annotation for binders: " : " for mw, " :0 " etc for others
+(define (pp-mult-annot m)
+  (case m
+    [(mw) " : "]
+    [(m0) " :0 "]
+    [(m1) " :1 "]
+    [else (format " :~a " m)]))
+
+;; ========================================
+;; Pretty-print levels
+;; ========================================
+(define (pp-level l)
+  (match l
+    [(lzero) "0"]
+    [(lsuc inner) (number->string (level->nat l))]
+    [_ (format "~a" l)]))
+
+(define (level->nat l)
+  (match l
+    [(lzero) 0]
+    [(lsuc inner) (+ 1 (level->nat inner))]))
+
+;; ========================================
+;; Pretty-print session types
+;; ========================================
+(define (pp-session s [names '()])
+  (match s
+    [(sess-send t cont)
+     (format "(!~a . ~a)" (pp-expr t names) (pp-session cont names))]
+    [(sess-recv t cont)
+     (format "(?~a . ~a)" (pp-expr t names) (pp-session cont names))]
+    [(sess-dsend t cont)
+     (let ([name (fresh-name (length names) names)])
+       (format "(!(~a : ~a) . ~a)" name (pp-expr t names) (pp-session cont (cons name names))))]
+    [(sess-drecv t cont)
+     (let ([name (fresh-name (length names) names)])
+       (format "(?(~a : ~a) . ~a)" name (pp-expr t names) (pp-session cont (cons name names))))]
+    [(sess-choice branches)
+     (format "(+{ ~a })" (pp-branches branches names))]
+    [(sess-offer branches)
+     (format "(&{ ~a })" (pp-branches branches names))]
+    [(sess-mu body)
+     (format "(mu ~a)" (pp-session body names))]
+    [(sess-svar n)
+     (format "svar(~a)" n)]
+    [(sess-end) "end"]
+    [(sess-branch-error) "<branch-error>"]
+    [_ (format "~a" s)]))
+
+(define (pp-branches bl names)
+  (string-join
+   (map (lambda (b) (format "~a: ~a" (car b) (pp-session (cdr b) names)))
+        bl)
+   ", "))
