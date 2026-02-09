@@ -340,15 +340,15 @@
        (cond
          [(null? dirs) (void)]
 
-         ;; :as alias
-         [(and (>= (length dirs) 2) (eq? (car dirs) ':as) (symbol? (cadr dirs)))
+         ;; :as alias (WS reader may strip colon: 'as or ':as)
+         [(and (>= (length dirs) 2) (memq (car dirs) '(:as as)) (symbol? (cadr dirs)))
           (define alias (cadr dirs))
           (current-ns-context
            (ns-context-add-alias (current-ns-context) alias ns-sym))
           (loop (cddr dirs))]
 
-         ;; :refer [name ...]
-         [(and (>= (length dirs) 2) (eq? (car dirs) ':refer) (list? (cadr dirs)))
+         ;; :refer [name ...] (WS reader may strip colon: 'refer or ':refer)
+         [(and (>= (length dirs) 2) (memq (car dirs) '(:refer refer)) (list? (cadr dirs)))
           (define names (cadr dirs))
           ;; Validate that all referred names are exported by the module
           (when mod
@@ -362,8 +362,8 @@
            (ns-context-add-refer (current-ns-context) ns-sym names))
           (loop (cddr dirs))]
 
-         ;; :refer-all
-         [(eq? (car dirs) ':refer-all)
+         ;; :refer-all (WS reader may strip colon: 'refer-all or ':refer-all)
+         [(memq (car dirs) '(:refer-all refer-all))
           (current-ns-context
            (ns-context-add-refer-all (current-ns-context) ns-sym))
           ;; Also add explicit refers for all exports so they resolve without registry lookup

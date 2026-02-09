@@ -173,6 +173,7 @@
      ;; 4. Process the file in a fresh environment
      (define mod-env #f)
      (define mod-ns-ctx #f)
+     (define mod-preparse-reg #f)
 
      (parameterize ([current-global-env (hasheq)]
                     [current-ns-context #f]
@@ -196,9 +197,15 @@
              (error 'require "Error loading module ~a: ~a"
                     ns-sym (prologos-error-message result)))))
 
-       ;; Capture the resulting environment and namespace context
+       ;; Capture the resulting environment, namespace context, and preparse registry
        (set! mod-env (current-global-env))
-       (set! mod-ns-ctx (current-ns-context)))
+       (set! mod-ns-ctx (current-ns-context))
+       (set! mod-preparse-reg (current-preparse-registry)))
+
+     ;; Propagate preparse registry changes (deftype/defmacro) to the caller.
+     ;; This ensures type aliases and macros defined in loaded modules are
+     ;; available to subsequent code in the requiring module.
+     (current-preparse-registry mod-preparse-reg)
 
      ;; 5. Build module-info
      (define exports
@@ -226,15 +233,13 @@
      ;; 6. Register
      (register-module! ns-sym mi)
 
-     ;; 7. Import module's fqn definitions into the CALLER's global env
-     (for ([short-name (in-list exports)])
-       (define fqn (qualify-name short-name ns-sym))
-       (define entry (hash-ref mod-env fqn #f))
-       ;; Also try bare name if fqn not found
-       (define entry* (or entry (hash-ref mod-env short-name #f)))
-       (when entry*
-         (current-global-env
-          (hash-set (current-global-env) fqn entry*))))
+     ;; 7. Import ALL of module's definitions into the CALLER's global env.
+     ;; This includes transitive dependencies (from modules the loaded module
+     ;; itself required), which are needed for reduction/evaluation — function
+     ;; bodies may reference cross-module globals that must be unfoldable.
+     (for ([(k v) (in-hash mod-env)])
+       (current-global-env
+        (hash-set (current-global-env) k v)))
 
      mi]))
 

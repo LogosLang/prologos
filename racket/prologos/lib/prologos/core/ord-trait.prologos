@@ -1,0 +1,98 @@
+ns prologos.core.ord-trait
+
+require [prologos.data.ordering :refer [Ordering lt-ord eq-ord gt-ord]]
+require [prologos.data.nat :refer [lt? nat-eq?]]
+require [prologos.data.bool :refer [not]]
+
+provide nat-ord ord-lt ord-le ord-gt ord-ge ord-eq ord-min ord-max
+
+;; ========================================
+;; Ord Trait — Dictionary-Passing Style
+;; ========================================
+;; Ord A = A -> A -> Ordering
+;; An Ord dictionary is a two-argument function returning Ordering.
+
+deftype (Ord $A) (-> $A (-> $A Ordering))
+
+;; Nat instance: compare two naturals
+;; Returns Ordering (Church-encoded, Type 1), so we use delegation.
+;; If lt? x y → lt-ord. Else if nat-eq? x y → eq-ord. Else gt-ord.
+;; boolrec R true-case false-case target
+defn nat-ord [x <Nat> y <Nat>] <Ordering>
+  fn [__R :0 <(Type 0)>] (fn [__lt <__R>] (fn [__eq <__R>] (fn [__gt <__R>]
+    (boolrec __R
+      __lt
+      (boolrec __R __eq __gt (nat-eq? x y))
+      (lt? x y)))))
+
+;; Derived operations from an Ord dictionary
+
+;; Less than: match ordering, lt → true, else false
+defn ord-lt [A :0 <(Type 0)> dict <(Ord A)> x <A> y <A>] <Bool>
+  match (dict x y) <Bool>
+    lt-ord
+      true
+    eq-ord
+      false
+    gt-ord
+      false
+
+;; Less than or equal
+defn ord-le [A :0 <(Type 0)> dict <(Ord A)> x <A> y <A>] <Bool>
+  match (dict x y) <Bool>
+    lt-ord
+      true
+    eq-ord
+      true
+    gt-ord
+      false
+
+;; Greater than
+defn ord-gt [A :0 <(Type 0)> dict <(Ord A)> x <A> y <A>] <Bool>
+  match (dict x y) <Bool>
+    lt-ord
+      false
+    eq-ord
+      false
+    gt-ord
+      true
+
+;; Greater than or equal
+defn ord-ge [A :0 <(Type 0)> dict <(Ord A)> x <A> y <A>] <Bool>
+  match (dict x y) <Bool>
+    lt-ord
+      false
+    eq-ord
+      true
+    gt-ord
+      true
+
+;; Equal (derived from Ord)
+defn ord-eq [A :0 <(Type 0)> dict <(Ord A)> x <A> y <A>] <Bool>
+  match (dict x y) <Bool>
+    lt-ord
+      false
+    eq-ord
+      true
+    gt-ord
+      false
+
+;; Minimum
+defn ord-min [A :0 <(Type 0)> dict <(Ord A)> x <A> y <A>] <A>
+  match (dict x y) <A>
+    lt-ord
+      x
+    eq-ord
+      x
+    gt-ord
+      y
+
+;; Maximum
+defn ord-max [A :0 <(Type 0)> dict <(Ord A)> x <A> y <A>] <A>
+  match (dict x y) <A>
+    lt-ord
+      y
+    eq-ord
+      x
+    gt-ord
+      x

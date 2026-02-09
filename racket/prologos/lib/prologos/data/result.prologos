@@ -1,6 +1,6 @@
 ns prologos.data.result
 
-provide Result ok err result-map result-map-err result-unwrap-or
+provide Result ok err result-map result-map-err result-unwrap-or result-and-then result-or-else
 
 ;; ========================================
 ;; Prologos Result Type
@@ -33,3 +33,17 @@ defn result-unwrap-or [A :0 <(Type 0)> E :0 <(Type 0)>
       x
     err [_ <E>]
       default
+
+;; Chain a computation on the ok value (monadic bind).
+;; Delegation: fn R ok err . r R (fn x . f x R ok err) err
+defn result-and-then [A :0 <(Type 0)> E :0 <(Type 0)> B :0 <(Type 0)>
+                      f <(-> A (Result B E))> r <(Result A E)>] <(Result B E)>
+  fn [__R :0 <(Type 0)>] (fn [__ok <(-> B __R)>] (fn [__err <(-> E __R)>]
+    (r __R (fn [x <A>] (f x __R __ok __err)) __err)))
+
+;; Chain a computation on the error value (recover from errors).
+;; Delegation: fn R ok err . r R ok (fn e . f e R ok err)
+defn result-or-else [A :0 <(Type 0)> E :0 <(Type 0)> F :0 <(Type 0)>
+                     f <(-> E (Result A F))> r <(Result A E)>] <(Result A F)>
+  fn [__R :0 <(Type 0)>] (fn [__ok <(-> A __R)>] (fn [__err <(-> F __R)>]
+    (r __R __ok (fn [e <E>] (f e __R __ok __err)))))

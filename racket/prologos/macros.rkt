@@ -283,14 +283,31 @@
   (reverse result))
 
 ;; ========================================
+;; WS reader normalization for pattern variables
+;; ========================================
+;; The WS reader converts $X to ($quote X). For defmacro/deftype patterns
+;; and templates, we need to convert these back to the $X symbol form.
+(define (normalize-quote-vars datum)
+  (cond
+    ;; ($quote X) → $X
+    [(and (list? datum) (= (length datum) 2)
+          (eq? (car datum) '$quote) (symbol? (cadr datum)))
+     (string->symbol (string-append "$" (symbol->string (cadr datum))))]
+    ;; Recurse into lists
+    [(list? datum)
+     (map normalize-quote-vars datum)]
+    ;; Pass through atoms
+    [else datum]))
+
+;; ========================================
 ;; process-defmacro: register a user macro
 ;; ========================================
 ;; (defmacro (name $param ...) template)
 (define (process-defmacro datum)
   (unless (and (list? datum) (= (length datum) 3))
     (error 'defmacro "defmacro requires: (defmacro (name $params...) template)"))
-  (define pattern (cadr datum))
-  (define template (caddr datum))
+  (define pattern (normalize-quote-vars (cadr datum)))
+  (define template (normalize-quote-vars (caddr datum)))
   (unless (and (pair? pattern) (symbol? (car pattern)))
     (error 'defmacro "defmacro: first argument must be (name ...)"))
   (define macro-name (car pattern))
@@ -304,8 +321,8 @@
 (define (process-deftype datum)
   (unless (and (list? datum) (= (length datum) 3))
     (error 'deftype "deftype requires: (deftype name-or-pattern body)"))
-  (define pattern (cadr datum))
-  (define body (caddr datum))
+  (define pattern (normalize-quote-vars (cadr datum)))
+  (define body (normalize-quote-vars (caddr datum)))
   (cond
     [(symbol? pattern)
      ;; Simple alias: bare symbol expands to body
@@ -674,6 +691,22 @@
            `(Pi (,name ,mult ,type) ,rest))
          body bindings))
 
+;; Check if a field type is a self-reference to the type being defined
+;; Matches bare TypeName (no params) or (TypeName A B ...) with exact param names
+(define (self-reference? field-type type-name params)
+  (cond
+    ;; Bare name with no params: e.g., MyType when defining (data MyType ...)
+    [(and (symbol? field-type) (eq? field-type type-name) (null? params)) #t]
+    ;; Applied name: e.g., (List A) when defining (data (List (A : (Type 0))) ...)
+    [(and (pair? field-type)
+          (eq? (car field-type) type-name)
+          (= (length (cdr field-type)) (length params))
+          (andmap (lambda (arg param)
+                    (and (symbol? arg) (eq? arg (car param))))
+                  (cdr field-type) params))
+     #t]
+    [else #f]))
+
 ;; Main data processing function
 ;; Returns a list of s-expression datums: ((def ...) (def ...) ...)
 (define (process-data datum)
@@ -714,10 +747,15 @@
 
   ;; Build branch types: for each constructor, the type of its branch
   ;; (field1 -> field2 -> ... -> R)
+  ;; Self-referential fields (recursive types) become R in the branch type
   (define branch-types
     (for/list ([ctor (in-list ctors)])
       (define field-types (cdr ctor))
-      (build-arrow-type field-types r-name)))
+      (define substituted-fields
+        (map (lambda (ft)
+               (if (self-reference? ft type-name params) r-name ft))
+             field-types))
+      (build-arrow-type substituted-fields r-name)))
 
   ;; Full Church-encoded type body (inside the param lambdas):
   ;; Pi(R : (Type 0)). branch1-type -> branch2-type -> ... -> R
@@ -772,10 +810,17 @@
 
       ;; Constructor body: fn R . fn branch0 ... branch_{n-1} . branch_i x0 x1 ...
       ;; The branch_i is applied to the field arguments
+      ;; For recursive fields, fold them: (field R branch0 branch1 ...) before passing
+      (define field-is-recursive
+        (map (lambda (ft) (self-reference? ft type-name params)) field-types))
+      (define folded-field-args
+        (map (lambda (fname is-rec)
+               (if is-rec `(,fname ,r-name ,@branch-names) fname))
+             field-names field-is-recursive))
       (define branch-application
-        (if (null? field-names)
+        (if (null? folded-field-args)
             (list-ref branch-names i)
-            `(,(list-ref branch-names i) ,@field-names)))
+            `(,(list-ref branch-names i) ,@folded-field-args)))
 
       ;; Build the body from inside out:
       ;; 1. Innermost: branch_i applied to fields

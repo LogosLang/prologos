@@ -1,6 +1,6 @@
 ns prologos.data.option
 
-provide Option none some option-map option-flat-map option-unwrap-or
+provide Option none some option-map option-flat-map option-unwrap-or option-or-else option-filter option-zip-with option-zip
 
 ;; ========================================
 ;; Prologos Option Type
@@ -35,3 +35,30 @@ defn option-unwrap-or [A :0 <(Type 0)>
       default
     some [x <A>]
       x
+
+;; Return opt if some, else fall back to alt.
+;; Delegation: fn R n s . opt R (alt R n s) s
+defn option-or-else [A :0 <(Type 0)>
+                     opt <(Option A)> alt <(Option A)>] <(Option A)>
+  fn [__R :0 <(Type 0)>] (fn [__n <__R>] (fn [__s <(-> A __R)>]
+    (opt __R (alt __R __n __s) __s)))
+
+;; Keep the value only if the predicate holds, else none.
+;; Delegation + boolrec: fn R n s . opt R n (fn x . boolrec R (s x) n (pred x))
+defn option-filter [A :0 <(Type 0)>
+                    pred <(-> A Bool)> opt <(Option A)>] <(Option A)>
+  fn [__R :0 <(Type 0)>] (fn [__n <__R>] (fn [__s <(-> A __R)>]
+    (opt __R __n (fn [x <A>] (boolrec __R (__s x) __n (pred x))))))
+
+;; Combine two Options with a function. None if either is none.
+;; Nested delegation: fn R n s . oa R n (fn a . ob R n (fn b . s (f a b)))
+defn option-zip-with [A :0 <(Type 0)> B :0 <(Type 0)> C :0 <(Type 0)>
+                      f <(-> A (-> B C))> oa <(Option A)> ob <(Option B)>] <(Option C)>
+  fn [__R :0 <(Type 0)>] (fn [__n <__R>] (fn [__s <(-> C __R)>]
+    (oa __R __n (fn [a <A>] (ob __R __n (fn [b <B>] (__s (f a b))))))))
+
+;; Combine two Options into an Option of pairs. None if either is none.
+;; option-zip oa ob = option-zip-with (fn a b . pair a b) oa ob
+defn option-zip [A :0 <(Type 0)> B :0 <(Type 0)>
+                 oa <(Option A)> ob <(Option B)>] <(Option (Sigma [_ <A>] B))>
+  option-zip-with A B (Sigma [_ <A>] B) (fn [a <A>] (fn [b <B>] (pair a b))) oa ob
