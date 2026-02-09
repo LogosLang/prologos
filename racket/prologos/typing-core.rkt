@@ -57,6 +57,27 @@
     ;; Type(n) : Type(n+1)
     [(expr-Type l) (expr-Type (lsuc l))]
 
+    ;; ---- Pi type formation ----
+    ;; Pi(m, A, B) : Type(max(level(A), level(B)))
+    [(expr-Pi m a b)
+     (match (infer-level ctx (expr-Pi m a b))
+       [(just-level l) (expr-Type l)]
+       [_ (expr-error)])]
+
+    ;; ---- Sigma type formation ----
+    ;; Sigma(A, B) : Type(max(level(A), level(B)))
+    [(expr-Sigma a b)
+     (match (infer-level ctx (expr-Sigma a b))
+       [(just-level l) (expr-Type l)]
+       [_ (expr-error)])]
+
+    ;; ---- Eq type formation ----
+    ;; Eq(A, a, b) : Type(level(A))
+    [(expr-Eq a e1 e2)
+     (match (infer-level ctx (expr-Eq a e1 e2))
+       [(just-level l) (expr-Type l)]
+       [_ (expr-error)])]
+
     ;; ---- Natural numbers ----
     [(expr-Nat) (expr-Type (lzero))]
     [(expr-zero) (expr-Nat)]
@@ -80,13 +101,27 @@
 
     ;; ---- Pi elimination (application) ----
     [(expr-app e1 e2)
-     (let ([t1 (whnf (infer ctx e1))])
-       (match t1
-         [(expr-Pi m a b)
-          (if (check ctx e2 a)
-              (subst 0 e2 b)
-              (expr-error))]
-         [_ (expr-error)]))]
+     (match e1
+       ;; Special case: ((lam m A body) arg) — direct beta-typed application
+       ;; The lambda's domain gives us the argument type, and we infer the body
+       ;; type in the extended context. This supports let-expansion and similar patterns.
+       [(expr-lam m dom body)
+        (if (and (is-type ctx dom)
+                 (check ctx e2 dom))
+            (let ([body-ty (infer (ctx-extend ctx dom m) body)])
+              (if (equal? body-ty (expr-error))
+                  (expr-error)
+                  (subst 0 e2 body-ty)))
+            (expr-error))]
+       ;; General case: infer function type, check argument
+       [_
+        (let ([t1 (whnf (infer ctx e1))])
+          (match t1
+            [(expr-Pi m a b)
+             (if (check ctx e2 a)
+                 (subst 0 e2 b)
+                 (expr-error))]
+            [_ (expr-error)]))])]
 
     ;; ---- Sigma elimination: fst ----
     [(expr-fst e1)
@@ -100,6 +135,25 @@
      (let ([t (whnf (infer ctx e1))])
        (match t
          [(expr-Sigma _ b) (subst 0 (expr-fst e1) b)]
+         [_ (expr-error)]))]
+
+    ;; ---- Bool eliminator (boolrec) ----
+    ;; boolrec(motive, true-case, false-case, target)
+    ;; motive : Bool -> Type(l)
+    ;; true-case : motive(true)
+    ;; false-case : motive(false)
+    ;; target : Bool
+    ;; result type: app(motive, target)
+    [(expr-boolrec mot tc fc target)
+     (let ([mot-ty (whnf (infer ctx mot))])
+       (match mot-ty
+         [(expr-Pi _ dom _)
+          (if (and (conv dom (expr-Bool))
+                   (check ctx tc (expr-app mot (expr-true)))
+                   (check ctx fc (expr-app mot (expr-false)))
+                   (check ctx target (expr-Bool)))
+              (expr-app mot target)
+              (expr-error))]
          [_ (expr-error)]))]
 
     ;; ---- Nat eliminator (natrec) ----
@@ -143,6 +197,57 @@
               (check ctx v (expr-Vec a n)))
          a
          (expr-error))]
+
+    ;; ---- Posit8 ----
+    [(expr-Posit8) (expr-Type (lzero))]
+
+    ;; posit8 literal
+    [(expr-posit8 v)
+     (if (and (exact-integer? v) (<= 0 v 255))
+         (expr-Posit8)
+         (expr-error))]
+
+    ;; Binary arithmetic: Posit8 -> Posit8 -> Posit8
+    [(expr-p8-add a b)
+     (if (and (check ctx a (expr-Posit8)) (check ctx b (expr-Posit8)))
+         (expr-Posit8) (expr-error))]
+    [(expr-p8-sub a b)
+     (if (and (check ctx a (expr-Posit8)) (check ctx b (expr-Posit8)))
+         (expr-Posit8) (expr-error))]
+    [(expr-p8-mul a b)
+     (if (and (check ctx a (expr-Posit8)) (check ctx b (expr-Posit8)))
+         (expr-Posit8) (expr-error))]
+    [(expr-p8-div a b)
+     (if (and (check ctx a (expr-Posit8)) (check ctx b (expr-Posit8)))
+         (expr-Posit8) (expr-error))]
+
+    ;; Unary ops: Posit8 -> Posit8
+    [(expr-p8-neg a)
+     (if (check ctx a (expr-Posit8)) (expr-Posit8) (expr-error))]
+    [(expr-p8-abs a)
+     (if (check ctx a (expr-Posit8)) (expr-Posit8) (expr-error))]
+    [(expr-p8-sqrt a)
+     (if (check ctx a (expr-Posit8)) (expr-Posit8) (expr-error))]
+
+    ;; Comparison: Posit8 -> Posit8 -> Bool
+    [(expr-p8-lt a b)
+     (if (and (check ctx a (expr-Posit8)) (check ctx b (expr-Posit8)))
+         (expr-Bool) (expr-error))]
+    [(expr-p8-le a b)
+     (if (and (check ctx a (expr-Posit8)) (check ctx b (expr-Posit8)))
+         (expr-Bool) (expr-error))]
+
+    ;; Conversion: Nat -> Posit8
+    [(expr-p8-from-nat n)
+     (if (check ctx n (expr-Nat)) (expr-Posit8) (expr-error))]
+
+    ;; p8-if-nar(A, nar-case, normal-case, val) : A
+    [(expr-p8-if-nar tp nc vc v)
+     (if (and (is-type ctx tp)
+              (check ctx nc tp)
+              (check ctx vc tp)
+              (check ctx v (expr-Posit8)))
+         tp (expr-error))]
 
     ;; ---- Fallback: cannot infer ----
     [_ (expr-error)]))
@@ -201,12 +306,23 @@
      (and (conv bound (expr-suc n1))
           (check ctx i (expr-Fin n1)))]
 
+    ;; ---- Posit8 literal check ----
+    [((expr-posit8 v) (expr-Posit8))
+     (and (exact-integer? v) (<= 0 v 255))]
+
     ;; ---- Conversion fallback ----
-    ;; If e synthesizes to T' and conv(T, T'), then check succeeds
+    ;; If e synthesizes to T' and conv(T, T'), then check succeeds.
+    ;; Cumulativity: if T' = Type(m) and T = Type(n) where m ≤ n, accept.
+    ;; This allows types from lower universes to be used where higher universes are expected.
     [(_ t-whnf)
      (let ([t1 (infer ctx e)])
        (and (not (expr-error? t1))
-            (conv t t1)))]))
+            (or (conv t t1)
+                ;; Cumulativity: Type(m) ≤ Type(n) when m ≤ n
+                (match* ((whnf t) (whnf t1))
+                  [((expr-Type l1) (expr-Type l2))
+                   (level<=? l2 l1)]
+                  [(_ _) #f]))))]))
 
 ;; ========================================
 ;; Infer universe level of a type
@@ -260,6 +376,9 @@
      (if (check ctx n (expr-Nat))
          (just-level (lzero))
          (no-level))]
+
+    ;; Posit8 formation: Posit8 : Type(0)
+    [(expr-Posit8) (just-level (lzero))]
 
     ;; Fallback: try to infer and match Type(L)
     [_

@@ -80,15 +80,15 @@
 (test-case "subst: matching bvar(0) replaced"
   (check-equal? (subst 0 (expr-zero) (expr-bvar 0)) (expr-zero)))
 
-(test-case "subst: non-matching bvar(1) unchanged"
-  (check-equal? (subst 0 (expr-zero) (expr-bvar 1)) (expr-bvar 1)))
+(test-case "subst: bvar(1) above target decrements to bvar(0)"
+  (check-equal? (subst 0 (expr-zero) (expr-bvar 1)) (expr-bvar 0)))
 
 (test-case "subst: free variable unchanged"
   (check-equal? (subst 0 (expr-zero) (expr-fvar 'x)) (expr-fvar 'x)))
 
-(test-case "subst: into application"
+(test-case "subst: into application (bvar above target decrements)"
   (check-equal? (subst 0 (expr-zero) (expr-app (expr-bvar 0) (expr-bvar 1)))
-                (expr-app (expr-zero) (expr-bvar 1))))
+                (expr-app (expr-zero) (expr-bvar 0))))
 
 (test-case "subst: under lambda, external ref replaced"
   ;; lam(mw, Nat, app(bvar(1), bvar(0))) with subst(0, zero, ...)
@@ -112,12 +112,12 @@
 (test-case "open: bvar(0) -> zero"
   (check-equal? (open-expr (expr-bvar 0) (expr-zero)) (expr-zero)))
 
-(test-case "open: bvar(1) unchanged"
-  (check-equal? (open-expr (expr-bvar 1) (expr-zero)) (expr-bvar 1)))
+(test-case "open: bvar(1) decrements to bvar(0)"
+  (check-equal? (open-expr (expr-bvar 1) (expr-zero)) (expr-bvar 0)))
 
-(test-case "open: app(bvar(0), bvar(1)) with fvar('x)"
+(test-case "open: app(bvar(0), bvar(1)) with fvar('x) — bvar(1) decrements"
   (check-equal? (open-expr (expr-app (expr-bvar 0) (expr-bvar 1)) (expr-fvar 'x))
-                (expr-app (expr-fvar 'x) (expr-bvar 1))))
+                (expr-app (expr-fvar 'x) (expr-bvar 0))))
 
 ;; ========================================
 ;; Combined / beta-reduction examples
@@ -166,3 +166,19 @@
 (test-case "shift: vhead"
   (check-equal? (shift 1 0 (expr-vhead (expr-Nat) (expr-bvar 0) (expr-bvar 1)))
                 (expr-vhead (expr-Nat) (expr-bvar 1) (expr-bvar 2))))
+
+;; ========================================
+;; Boolrec substitution tests
+;; ========================================
+
+(test-case "shift: boolrec shifts all subexpressions"
+  (check-equal? (shift 1 0 (expr-boolrec (expr-bvar 0) (expr-bvar 1) (expr-bvar 2) (expr-bvar 3)))
+                (expr-boolrec (expr-bvar 1) (expr-bvar 2) (expr-bvar 3) (expr-bvar 4))))
+
+(test-case "subst: boolrec substitutes in all subexpressions"
+  (check-equal? (subst 0 (expr-true) (expr-boolrec (expr-bvar 0) (expr-zero) (expr-suc (expr-zero)) (expr-bvar 0)))
+                (expr-boolrec (expr-true) (expr-zero) (expr-suc (expr-zero)) (expr-true))))
+
+(test-case "shift: boolrec with constants unchanged"
+  (check-equal? (shift 1 0 (expr-boolrec (expr-lam 'mw (expr-Bool) (expr-Nat)) (expr-zero) (expr-suc (expr-zero)) (expr-true)))
+                (expr-boolrec (expr-lam 'mw (expr-Bool) (expr-Nat)) (expr-zero) (expr-suc (expr-zero)) (expr-true))))

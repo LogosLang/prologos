@@ -33,6 +33,7 @@
  (struct-out expr-Bool)
  (struct-out expr-true)
  (struct-out expr-false)
+ (struct-out expr-boolrec)
  (struct-out expr-Pi)
  (struct-out expr-Sigma)
  (struct-out expr-Eq)
@@ -46,6 +47,20 @@
  (struct-out expr-vhead)
  (struct-out expr-vtail)
  (struct-out expr-vindex)
+ ;; Posit8 (8-bit posit, es=2, 2022 Standard)
+ (struct-out expr-Posit8)
+ (struct-out expr-posit8)
+ (struct-out expr-p8-add)
+ (struct-out expr-p8-sub)
+ (struct-out expr-p8-mul)
+ (struct-out expr-p8-div)
+ (struct-out expr-p8-neg)
+ (struct-out expr-p8-abs)
+ (struct-out expr-p8-sqrt)
+ (struct-out expr-p8-lt)
+ (struct-out expr-p8-le)
+ (struct-out expr-p8-from-nat)
+ (struct-out expr-p8-if-nar)
  ;; Error marker
  (struct-out expr-error)
  ;; Expr predicate
@@ -114,6 +129,15 @@
 (struct expr-true () #:transparent)
 (struct expr-false () #:transparent)
 
+;; Bool eliminator
+;; boolrec(motive, true-case, false-case, target)
+;; motive     : Bool -> Type(l)
+;; true-case  : motive(true)
+;; false-case : motive(false)
+;; target     : Bool
+;; result     : motive(target)
+(struct expr-boolrec (motive true-case false-case target) #:transparent)
+
 ;; Dependent function type
 (struct expr-Pi (mult domain codomain) #:transparent) ; Pi(mult, domain, codomain)
 
@@ -148,6 +172,39 @@
 (struct expr-vindex (type len idx vec) #:transparent) ; vindex(A, n, i, v) : A
 
 ;; ========================================
+;; Posit8 (8-bit posit, es=2, 2022 Standard)
+;; ========================================
+
+;; Type
+(struct expr-Posit8 () #:transparent)                           ; Posit8 : Type 0
+
+;; Value (val is exact integer 0–255 representing the posit8 bit pattern)
+(struct expr-posit8 (val) #:transparent)                        ; posit8 literal
+
+;; Binary arithmetic (Posit8 -> Posit8 -> Posit8)
+(struct expr-p8-add (a b) #:transparent)
+(struct expr-p8-sub (a b) #:transparent)
+(struct expr-p8-mul (a b) #:transparent)
+(struct expr-p8-div (a b) #:transparent)
+
+;; Unary operations (Posit8 -> Posit8)
+(struct expr-p8-neg (a) #:transparent)
+(struct expr-p8-abs (a) #:transparent)
+(struct expr-p8-sqrt (a) #:transparent)
+
+;; Comparison (Posit8 -> Posit8 -> Bool)
+(struct expr-p8-lt (a b) #:transparent)
+(struct expr-p8-le (a b) #:transparent)
+
+;; Conversion (Nat -> Posit8)
+(struct expr-p8-from-nat (n) #:transparent)
+
+;; Eliminator: branch on NaR
+;; p8-if-nar(A, nar-case, normal-case, x) : A
+;; If x is NaR, return nar-case; otherwise, return normal-case
+(struct expr-p8-if-nar (type nar-case normal-case val) #:transparent)
+
+;; ========================================
 ;; Error marker (for failed inference)
 ;; ========================================
 (struct expr-error () #:transparent)
@@ -163,11 +220,16 @@
       (expr-refl? x) (expr-ann? x)
       (expr-natrec? x) (expr-J? x)
       (expr-Type? x) (expr-Nat? x)
-      (expr-Bool? x) (expr-true? x) (expr-false? x)
+      (expr-Bool? x) (expr-true? x) (expr-false? x) (expr-boolrec? x)
       (expr-Pi? x) (expr-Sigma? x) (expr-Eq? x)
       (expr-Vec? x) (expr-vnil? x) (expr-vcons? x)
       (expr-Fin? x) (expr-fzero? x) (expr-fsuc? x)
       (expr-vhead? x) (expr-vtail? x) (expr-vindex? x)
+      (expr-Posit8? x) (expr-posit8? x)
+      (expr-p8-add? x) (expr-p8-sub? x) (expr-p8-mul? x) (expr-p8-div? x)
+      (expr-p8-neg? x) (expr-p8-abs? x) (expr-p8-sqrt? x)
+      (expr-p8-lt? x) (expr-p8-le? x)
+      (expr-p8-from-nat? x) (expr-p8-if-nar? x)
       (expr-error? x)))
 
 ;; ========================================

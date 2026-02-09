@@ -1,0 +1,37 @@
+ns prologos.data.option
+
+provide Option none some option-map option-flat-map option-unwrap-or
+
+;; ========================================
+;; Prologos Option Type
+;; Church-encoded optional value.
+;; ========================================
+
+data (Option [A <(Type 0)>])
+  none
+  some <A>
+
+;; Map a function over the contained value.
+;; Uses delegation: builds a new Church-encoded Option by delegating
+;; to the original option with transformed branches.
+;; option-map f opt = fn R n s . opt R n (fn x . s (f x))
+defn option-map [A :0 <(Type 0)> B :0 <(Type 0)>
+                 f <(-> A B)> opt <(Option A)>] <(Option B)>
+  fn [__R :0 <(Type 0)>] (fn [__n <__R>] (fn [__s <(-> B __R)>]
+    (opt __R __n (fn [x <A>] (__s (f x))))))
+
+;; Flat-map (bind): apply f that returns Option B.
+;; flat-map f opt = fn R n s . opt R n (fn x . f x R n s)
+defn option-flat-map [A :0 <(Type 0)> B :0 <(Type 0)>
+                      f <(-> A (Option B))> opt <(Option A)>] <(Option B)>
+  fn [__R :0 <(Type 0)>] (fn [__n <__R>] (fn [__s <(-> B __R)>]
+    (opt __R __n (fn [x <A>] (f x __R __n __s)))))
+
+;; Unwrap with a default value
+defn option-unwrap-or [A :0 <(Type 0)>
+                       default <A> opt <(Option A)>] <A>
+  match opt <A>
+    none
+      default
+    some [x <A>]
+      x

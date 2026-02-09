@@ -68,14 +68,14 @@
      (let ([n (try-as-nat e)])
        (if n
            (number->string n)
-           (format "(suc ~a)" (pp-expr (expr-suc-pred e) names))))]
+           (format "(inc ~a)" (pp-expr (expr-suc-pred e) names))))]
 
     ;; Lambda
     [(expr-lam m t body)
      (let ([name (fresh-name (length names) names)])
-       (format "(lam (~a~a ~a) ~a)"
+       (format "(fn [~a~a <~a>] ~a)"
                name
-               (pp-mult-annot m)
+               (pp-mult-prefix m)
                (pp-expr t names)
                (pp-expr body (cons name names))))]
 
@@ -83,12 +83,14 @@
     [(expr-Pi m dom cod)
      (if (and (eq? m 'mw) (not (uses-bvar0? cod)))
          ;; Non-dependent: (-> A B)
-         (format "(-> ~a ~a)" (pp-expr dom names) (pp-expr cod names))
-         ;; Dependent: (Pi (x :m A) B)
+         ;; Still push a dummy name since cod may reference outer bvars
          (let ([name (fresh-name (length names) names)])
-           (format "(Pi (~a~a ~a) ~a)"
+           (format "(-> ~a ~a)" (pp-expr dom names) (pp-expr cod (cons name names))))
+         ;; Dependent: (Pi [x :m <A>] B)
+         (let ([name (fresh-name (length names) names)])
+           (format "(Pi [~a~a <~a>] ~a)"
                    name
-                   (pp-mult-annot m)
+                   (pp-mult-prefix m)
                    (pp-expr dom names)
                    (pp-expr cod (cons name names)))))]
 
@@ -98,7 +100,7 @@
          ;; Non-dependent: (Sigma A B) — could use a different sugar
          (format "(Sigma ~a ~a)" (pp-expr t1 names) (pp-expr t2 names))
          (let ([name (fresh-name (length names) names)])
-           (format "(Sigma (~a : ~a) ~a)"
+           (format "(Sigma [~a <~a>] ~a)"
                    name
                    (pp-expr t1 names)
                    (pp-expr t2 (cons name names)))))]
@@ -115,8 +117,8 @@
      (format "(pair ~a ~a)" (pp-expr e1 names) (pp-expr e2 names))]
 
     ;; Projections
-    [(expr-fst e1) (format "(fst ~a)" (pp-expr e1 names))]
-    [(expr-snd e1) (format "(snd ~a)" (pp-expr e1 names))]
+    [(expr-fst e1) (format "(first ~a)" (pp-expr e1 names))]
+    [(expr-snd e1) (format "(second ~a)" (pp-expr e1 names))]
 
     ;; Annotation
     [(expr-ann term type)
@@ -127,6 +129,10 @@
      (format "(Eq ~a ~a ~a)" (pp-expr t names) (pp-expr e1 names) (pp-expr e2 names))]
 
     ;; Eliminators
+    [(expr-boolrec mot tc fc target)
+     (format "(boolrec ~a ~a ~a ~a)"
+             (pp-expr mot names) (pp-expr tc names)
+             (pp-expr fc names) (pp-expr target names))]
     [(expr-natrec mot base step target)
      (format "(natrec ~a ~a ~a ~a)"
              (pp-expr mot names) (pp-expr base names)
@@ -148,6 +154,23 @@
     [(expr-vhead t n v) (format "(vhead ~a ~a ~a)" (pp-expr t names) (pp-expr n names) (pp-expr v names))]
     [(expr-vtail t n v) (format "(vtail ~a ~a ~a)" (pp-expr t names) (pp-expr n names) (pp-expr v names))]
     [(expr-vindex t n i v) (format "(vindex ~a ~a ~a ~a)" (pp-expr t names) (pp-expr n names) (pp-expr i names) (pp-expr v names))]
+
+    ;; Posit8
+    [(expr-Posit8) "Posit8"]
+    [(expr-posit8 v) (format "(posit8 ~a)" v)]
+    [(expr-p8-add a b) (format "(p8+ ~a ~a)" (pp-expr a names) (pp-expr b names))]
+    [(expr-p8-sub a b) (format "(p8- ~a ~a)" (pp-expr a names) (pp-expr b names))]
+    [(expr-p8-mul a b) (format "(p8* ~a ~a)" (pp-expr a names) (pp-expr b names))]
+    [(expr-p8-div a b) (format "(p8/ ~a ~a)" (pp-expr a names) (pp-expr b names))]
+    [(expr-p8-neg a) (format "(p8-neg ~a)" (pp-expr a names))]
+    [(expr-p8-abs a) (format "(p8-abs ~a)" (pp-expr a names))]
+    [(expr-p8-sqrt a) (format "(p8-sqrt ~a)" (pp-expr a names))]
+    [(expr-p8-lt a b) (format "(p8-lt ~a ~a)" (pp-expr a names) (pp-expr b names))]
+    [(expr-p8-le a b) (format "(p8-le ~a ~a)" (pp-expr a names) (pp-expr b names))]
+    [(expr-p8-from-nat n) (format "(p8-from-nat ~a)" (pp-expr n names))]
+    [(expr-p8-if-nar t nc vc v)
+     (format "(p8-if-nar ~a ~a ~a ~a)"
+             (pp-expr t names) (pp-expr nc names) (pp-expr vc names) (pp-expr v names))]
 
     ;; Fallback
     [_ (format "~a" e)]))
@@ -189,6 +212,7 @@
     [(expr-snd e1) (uses-bvar0? e1)]
     [(expr-ann term type) (or (uses-bvar0? term) (uses-bvar0? type))]
     [(expr-Eq t e1 e2) (or (uses-bvar0? t) (uses-bvar0? e1) (uses-bvar0? e2))]
+    [(expr-boolrec m tc fc t) (or (uses-bvar0? m) (uses-bvar0? tc) (uses-bvar0? fc) (uses-bvar0? t))]
     [(expr-natrec m b s t) (or (uses-bvar0? m) (uses-bvar0? b) (uses-bvar0? s) (uses-bvar0? t))]
     [(expr-J m b l r p) (or (uses-bvar0? m) (uses-bvar0? b) (uses-bvar0? l) (uses-bvar0? r) (uses-bvar0? p))]
     [(expr-Vec t n) (or (uses-bvar0? t) (uses-bvar0? n))]
@@ -200,6 +224,19 @@
     [(expr-vhead t n v) (or (uses-bvar0? t) (uses-bvar0? n) (uses-bvar0? v))]
     [(expr-vtail t n v) (or (uses-bvar0? t) (uses-bvar0? n) (uses-bvar0? v))]
     [(expr-vindex t n i v) (or (uses-bvar0? t) (uses-bvar0? n) (uses-bvar0? i) (uses-bvar0? v))]
+    [(expr-Posit8) #f]
+    [(expr-posit8 _) #f]
+    [(expr-p8-add a b) (or (uses-bvar0? a) (uses-bvar0? b))]
+    [(expr-p8-sub a b) (or (uses-bvar0? a) (uses-bvar0? b))]
+    [(expr-p8-mul a b) (or (uses-bvar0? a) (uses-bvar0? b))]
+    [(expr-p8-div a b) (or (uses-bvar0? a) (uses-bvar0? b))]
+    [(expr-p8-neg a) (uses-bvar0? a)]
+    [(expr-p8-abs a) (uses-bvar0? a)]
+    [(expr-p8-sqrt a) (uses-bvar0? a)]
+    [(expr-p8-lt a b) (or (uses-bvar0? a) (uses-bvar0? b))]
+    [(expr-p8-le a b) (or (uses-bvar0? a) (uses-bvar0? b))]
+    [(expr-p8-from-nat n) (uses-bvar0? n)]
+    [(expr-p8-if-nar t nc vc v) (or (uses-bvar0? t) (uses-bvar0? nc) (uses-bvar0? vc) (uses-bvar0? v))]
     [_ #f]))
 
 ;; Flatten nested left-associative applications
@@ -222,13 +259,21 @@
     [(mw) "w"]
     [else (format "~a" m)]))
 
-;; Multiplicity annotation for binders: " : " for mw, " :0 " etc for others
+;; Multiplicity annotation for binders (old colon syntax): " : " for mw, " :0 " etc for others
 (define (pp-mult-annot m)
   (case m
     [(mw) " : "]
     [(m0) " :0 "]
     [(m1) " :1 "]
     [else (format " :~a " m)]))
+
+;; Multiplicity prefix for new angle bracket syntax: "" for mw, " :0" etc for others
+(define (pp-mult-prefix m)
+  (case m
+    [(mw) ""]
+    [(m0) " :0"]
+    [(m1) " :1"]
+    [else (format " :~a" m)]))
 
 ;; ========================================
 ;; Pretty-print levels
@@ -255,10 +300,10 @@
      (format "(?~a . ~a)" (pp-expr t names) (pp-session cont names))]
     [(sess-dsend t cont)
      (let ([name (fresh-name (length names) names)])
-       (format "(!(~a : ~a) . ~a)" name (pp-expr t names) (pp-session cont (cons name names))))]
+       (format "(![~a <~a>] . ~a)" name (pp-expr t names) (pp-session cont (cons name names))))]
     [(sess-drecv t cont)
      (let ([name (fresh-name (length names) names)])
-       (format "(?(~a : ~a) . ~a)" name (pp-expr t names) (pp-session cont (cons name names))))]
+       (format "(?[~a <~a>] . ~a)" name (pp-expr t names) (pp-session cont (cons name names))))]
     [(sess-choice branches)
      (format "(+{ ~a })" (pp-branches branches names))]
     [(sess-offer branches)

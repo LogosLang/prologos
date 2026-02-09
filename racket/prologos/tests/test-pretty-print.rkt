@@ -50,7 +50,7 @@
   (check-equal? (pp-expr (nat->expr 5)) "5"))
 
 (test-case "pp: suc(bvar(0)) — not a literal"
-  (check-equal? (pp-expr (expr-suc (expr-bvar 0)) '("n")) "(suc n)"))
+  (check-equal? (pp-expr (expr-suc (expr-bvar 0)) '("n")) "(inc n)"))
 
 ;; ========================================
 ;; Variables
@@ -100,9 +100,9 @@
 
 (test-case "pp: lambda"
   (let ([result (pp-expr (expr-lam 'mw (expr-Nat) (expr-suc (expr-bvar 0))))])
-    (check-true (string-contains? result "lam"))
+    (check-true (string-contains? result "fn"))
     (check-true (string-contains? result "Nat"))
-    (check-true (string-contains? result "suc"))))
+    (check-true (string-contains? result "inc"))))
 
 (test-case "pp: linear lambda"
   (let ([result (pp-expr (expr-lam 'm1 (expr-Nat) (expr-bvar 0)))])
@@ -128,13 +128,13 @@
   (check-equal? (pp-expr (expr-pair (expr-zero) (expr-refl)))
                 "(pair zero refl)"))
 
-(test-case "pp: fst"
+(test-case "pp: first"
   (check-equal? (pp-expr (expr-fst (expr-fvar 'p)))
-                "(fst p)"))
+                "(first p)"))
 
-(test-case "pp: snd"
+(test-case "pp: second"
   (check-equal? (pp-expr (expr-snd (expr-fvar 'p)))
-                "(snd p)"))
+                "(second p)"))
 
 ;; ========================================
 ;; Annotation

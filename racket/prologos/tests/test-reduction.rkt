@@ -139,3 +139,30 @@
   (check-equal? (whnf (expr-vtail (expr-Nat) (expr-zero)
                         (expr-vcons (expr-Nat) (expr-zero) (expr-suc (expr-zero)) (expr-vnil (expr-Nat)))))
                 (expr-vnil (expr-Nat))))
+
+;; ========================================
+;; Boolrec tests
+;; ========================================
+
+(define boolrec-motive (expr-lam 'mw (expr-Bool) (expr-Nat)))
+
+(test-case "whnf: boolrec true -> true-case"
+  (check-equal? (whnf (expr-boolrec boolrec-motive (expr-zero) (expr-suc (expr-zero)) (expr-true)))
+                (expr-zero)))
+
+(test-case "whnf: boolrec false -> false-case"
+  (check-equal? (whnf (expr-boolrec boolrec-motive (expr-zero) (expr-suc (expr-zero)) (expr-false)))
+                (expr-suc (expr-zero))))
+
+(test-case "whnf: boolrec stuck on bvar"
+  ;; When target is not a value, boolrec should not reduce
+  (define result (whnf (expr-boolrec boolrec-motive (expr-zero) (expr-suc (expr-zero)) (expr-bvar 0))))
+  (check-true (expr-boolrec? result)))
+
+(test-case "nf: boolrec true normalizes all subexpressions"
+  (check-equal? (nf (expr-boolrec boolrec-motive (expr-zero) (expr-suc (expr-zero)) (expr-true)))
+                (expr-zero)))
+
+(test-case "conv: boolrec true === true-case"
+  (check-true (conv (expr-boolrec boolrec-motive (expr-zero) (expr-suc (expr-zero)) (expr-true))
+                    (expr-zero))))

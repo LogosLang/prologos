@@ -14,7 +14,7 @@
  mult-add mult-mul mult-leq compatible
  ;; Universe levels
  (struct-out lzero) (struct-out lsuc)
- level? lmax)
+ level? lmax level<=?)
 
 ;; ========================================
 ;; Multiplicity Semiring: {0, 1, omega}
@@ -102,3 +102,15 @@
     [(and (lsuc? l1) (lsuc? l2))
      (lsuc (lmax (lsuc-pred l1) (lsuc-pred l2)))]
     [else (error 'lmax "cannot compute lmax of ~a and ~a" l1 l2)]))
+
+;; level<=?: universe level comparison
+;; lzero <= anything
+;; lsuc(L1) <= lsuc(L2) iff L1 <= L2
+;; lsuc(_) <= lzero is false
+(define (level<=? l1 l2)
+  (cond
+    [(lzero? l1) #t]
+    [(and (lsuc? l1) (lzero? l2)) #f]
+    [(and (lsuc? l1) (lsuc? l2))
+     (level<=? (lsuc-pred l1) (lsuc-pred l2))]
+    [else #f]))

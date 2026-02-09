@@ -72,6 +72,11 @@
              (shift delta cutoff left)
              (shift delta cutoff right)
              (shift delta cutoff proof))]
+    [(expr-boolrec mot tc fc target)
+     (expr-boolrec (shift delta cutoff mot)
+                   (shift delta cutoff tc)
+                   (shift delta cutoff fc)
+                   (shift delta cutoff target))]
 
     ;; Vec/Fin (all non-binding)
     [(expr-Vec t n)
@@ -89,7 +94,24 @@
      (expr-vtail (shift delta cutoff t) (shift delta cutoff n) (shift delta cutoff v))]
     [(expr-vindex t n i v)
      (expr-vindex (shift delta cutoff t) (shift delta cutoff n)
-                  (shift delta cutoff i) (shift delta cutoff v))]))
+                  (shift delta cutoff i) (shift delta cutoff v))]
+
+    ;; Posit8 (all non-binding)
+    [(expr-Posit8) e]
+    [(expr-posit8 _) e]
+    [(expr-p8-add a b) (expr-p8-add (shift delta cutoff a) (shift delta cutoff b))]
+    [(expr-p8-sub a b) (expr-p8-sub (shift delta cutoff a) (shift delta cutoff b))]
+    [(expr-p8-mul a b) (expr-p8-mul (shift delta cutoff a) (shift delta cutoff b))]
+    [(expr-p8-div a b) (expr-p8-div (shift delta cutoff a) (shift delta cutoff b))]
+    [(expr-p8-neg a) (expr-p8-neg (shift delta cutoff a))]
+    [(expr-p8-abs a) (expr-p8-abs (shift delta cutoff a))]
+    [(expr-p8-sqrt a) (expr-p8-sqrt (shift delta cutoff a))]
+    [(expr-p8-lt a b) (expr-p8-lt (shift delta cutoff a) (shift delta cutoff b))]
+    [(expr-p8-le a b) (expr-p8-le (shift delta cutoff a) (shift delta cutoff b))]
+    [(expr-p8-from-nat n) (expr-p8-from-nat (shift delta cutoff n))]
+    [(expr-p8-if-nar t nc vc v)
+     (expr-p8-if-nar (shift delta cutoff t) (shift delta cutoff nc)
+                     (shift delta cutoff vc) (shift delta cutoff v))]))
 
 ;; ========================================
 ;; Substitution: replace bvar(k) with s in e
@@ -99,7 +121,10 @@
   (match e
     ;; Variables
     [(expr-bvar n)
-     (if (= n k) s (expr-bvar n))]
+     (cond
+       [(= n k) s]           ; target variable: replace with s
+       [(> n k) (expr-bvar (- n 1))]  ; above target: decrement (binder removed)
+       [else (expr-bvar n)])]         ; below target: unchanged
     [(expr-fvar _) e]
 
     ;; Constants
@@ -145,6 +170,11 @@
              (subst k s left)
              (subst k s right)
              (subst k s proof))]
+    [(expr-boolrec mot tc fc target)
+     (expr-boolrec (subst k s mot)
+                   (subst k s tc)
+                   (subst k s fc)
+                   (subst k s target))]
 
     ;; Vec/Fin (all non-binding)
     [(expr-Vec t n)
@@ -162,7 +192,24 @@
      (expr-vtail (subst k s t) (subst k s n) (subst k s v))]
     [(expr-vindex t n i v)
      (expr-vindex (subst k s t) (subst k s n)
-                  (subst k s i) (subst k s v))]))
+                  (subst k s i) (subst k s v))]
+
+    ;; Posit8 (all non-binding)
+    [(expr-Posit8) e]
+    [(expr-posit8 _) e]
+    [(expr-p8-add a b) (expr-p8-add (subst k s a) (subst k s b))]
+    [(expr-p8-sub a b) (expr-p8-sub (subst k s a) (subst k s b))]
+    [(expr-p8-mul a b) (expr-p8-mul (subst k s a) (subst k s b))]
+    [(expr-p8-div a b) (expr-p8-div (subst k s a) (subst k s b))]
+    [(expr-p8-neg a) (expr-p8-neg (subst k s a))]
+    [(expr-p8-abs a) (expr-p8-abs (subst k s a))]
+    [(expr-p8-sqrt a) (expr-p8-sqrt (subst k s a))]
+    [(expr-p8-lt a b) (expr-p8-lt (subst k s a) (subst k s b))]
+    [(expr-p8-le a b) (expr-p8-le (subst k s a) (subst k s b))]
+    [(expr-p8-from-nat n) (expr-p8-from-nat (subst k s n))]
+    [(expr-p8-if-nar t nc vc v)
+     (expr-p8-if-nar (subst k s t) (subst k s nc)
+                     (subst k s vc) (subst k s v))]))
 
 ;; ========================================
 ;; Open: substitute s for bvar(0)

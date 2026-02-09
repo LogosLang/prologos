@@ -32,6 +32,8 @@
 ** Session Types for protocol, Linear Types for memory-guarentees
   - Dependent Session types
 ** Strong support for parallel processing
+  - anything that is "embarrassingly" parallel, and that would benefit from being so without extra overhead costs, should be so automatically
+  - easy to  understand/use primitives  for concurrent and parallel processing
 ** Pattern Matching as first class (like in Erlang or Prolog)
 ** Constraint Solver Language
 ** Blazingly fast
@@ -40,6 +42,9 @@
   - I don't like "wrapping" Ints, for example; I would rather throw run-time errors than silently wrapping
 ** Innovations on UNUM types
 ** A "don't stop the world" garbage collector, like in Pony
+** Immutable datastructures with structural sharing, like in Clojure
+  - Philip Bagwell's Ideal Hashmaps Research
+  - ideal vector commitments
 
 
 

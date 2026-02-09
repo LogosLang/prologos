@@ -12,7 +12,8 @@
          "source-location.rkt"
          "surface-syntax.rkt"
          "errors.rkt"
-         "global-env.rkt")
+         "global-env.rkt"
+         "namespace.rkt")
 
 (provide elaborate
          elaborate-top-level)
@@ -48,7 +49,18 @@
      (let ([idx (env-lookup env name depth)])
        (cond
          [idx (expr-bvar idx)]
-         ;; Check global environment
+         ;; When namespace context is active, try FQN resolution FIRST.
+         ;; This ensures cross-definition references within a module use the
+         ;; fully-qualified name, which is essential for module exports.
+         [(and (current-ns-context)
+               (let ([resolved (resolve-name name (current-ns-context))])
+                 (and resolved
+                      (not (eq? resolved name))
+                      (global-env-lookup-type resolved)
+                      resolved)))
+          => (lambda (resolved) (expr-fvar resolved))]
+         ;; Fall back to bare name (backward-compatible for non-namespaced code,
+         ;; also catches built-in types/keywords stored under bare names)
          [(global-env-lookup-type name) (expr-fvar name)]
          [else (unbound-variable-error loc "Unbound variable" name)]))]
 
@@ -161,6 +173,18 @@
              [(prologos-error? r) r]
              [else (expr-Eq t l r)]))]
 
+    ;; boolrec
+    [(surf-boolrec mot tc fc target loc)
+     (let ([m (elaborate mot env depth)]
+           [t (elaborate tc env depth)]
+           [f (elaborate fc env depth)]
+           [tgt (elaborate target env depth)])
+       (cond [(prologos-error? m) m]
+             [(prologos-error? t) t]
+             [(prologos-error? f) f]
+             [(prologos-error? tgt) tgt]
+             [else (expr-boolrec m t f tgt)]))]
+
     ;; natrec
     [(surf-natrec mot base step target loc)
      (let ([m (elaborate mot env depth)]
@@ -246,6 +270,68 @@
              [(prologos-error? vec) vec]
              [else (expr-vindex a len idx vec)]))]
 
+    ;; ---- Posit8 ----
+    [(surf-posit8-type loc) (expr-Posit8)]
+    [(surf-posit8 v loc) (expr-posit8 v)]
+    [(surf-p8-add a b loc)
+     (let ([ea (elaborate a env depth)]
+           [eb (elaborate b env depth)])
+       (cond [(prologos-error? ea) ea]
+             [(prologos-error? eb) eb]
+             [else (expr-p8-add ea eb)]))]
+    [(surf-p8-sub a b loc)
+     (let ([ea (elaborate a env depth)]
+           [eb (elaborate b env depth)])
+       (cond [(prologos-error? ea) ea]
+             [(prologos-error? eb) eb]
+             [else (expr-p8-sub ea eb)]))]
+    [(surf-p8-mul a b loc)
+     (let ([ea (elaborate a env depth)]
+           [eb (elaborate b env depth)])
+       (cond [(prologos-error? ea) ea]
+             [(prologos-error? eb) eb]
+             [else (expr-p8-mul ea eb)]))]
+    [(surf-p8-div a b loc)
+     (let ([ea (elaborate a env depth)]
+           [eb (elaborate b env depth)])
+       (cond [(prologos-error? ea) ea]
+             [(prologos-error? eb) eb]
+             [else (expr-p8-div ea eb)]))]
+    [(surf-p8-neg a loc)
+     (let ([ea (elaborate a env depth)])
+       (if (prologos-error? ea) ea (expr-p8-neg ea)))]
+    [(surf-p8-abs a loc)
+     (let ([ea (elaborate a env depth)])
+       (if (prologos-error? ea) ea (expr-p8-abs ea)))]
+    [(surf-p8-sqrt a loc)
+     (let ([ea (elaborate a env depth)])
+       (if (prologos-error? ea) ea (expr-p8-sqrt ea)))]
+    [(surf-p8-lt a b loc)
+     (let ([ea (elaborate a env depth)]
+           [eb (elaborate b env depth)])
+       (cond [(prologos-error? ea) ea]
+             [(prologos-error? eb) eb]
+             [else (expr-p8-lt ea eb)]))]
+    [(surf-p8-le a b loc)
+     (let ([ea (elaborate a env depth)]
+           [eb (elaborate b env depth)])
+       (cond [(prologos-error? ea) ea]
+             [(prologos-error? eb) eb]
+             [else (expr-p8-le ea eb)]))]
+    [(surf-p8-from-nat n loc)
+     (let ([en (elaborate n env depth)])
+       (if (prologos-error? en) en (expr-p8-from-nat en)))]
+    [(surf-p8-if-nar tp nc vc v loc)
+     (let ([etp (elaborate tp env depth)]
+           [enc (elaborate nc env depth)]
+           [evc (elaborate vc env depth)]
+           [ev (elaborate v env depth)])
+       (cond [(prologos-error? etp) etp]
+             [(prologos-error? enc) enc]
+             [(prologos-error? evc) evc]
+             [(prologos-error? ev) ev]
+             [else (expr-p8-if-nar etp enc evc ev)]))]
+
     ;; Fallback
     [_ (prologos-error srcloc-unknown (format "Cannot elaborate: ~a" surf))]))
 
@@ -298,5 +384,11 @@
      (let ([e (elaborate expr-surf)])
        (if (prologos-error? e) e
            (list 'infer e)))]
+
+    [(surf-defn name _ _ _ loc)
+     (prologos-error loc "defn should have been expanded by the macro system before elaboration")]
+
+    [(surf-the-fn _ _ _ loc)
+     (prologos-error loc "the-fn should have been expanded by the macro system before elaboration")]
 
     [_ (prologos-error srcloc-unknown (format "Unknown top-level form: ~a" surf))]))

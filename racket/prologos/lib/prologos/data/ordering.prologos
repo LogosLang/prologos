@@ -1,0 +1,13 @@
+ns prologos.data.ordering
+
+provide Ordering lt-ord eq-ord gt-ord
+
+;; ========================================
+;; Prologos Ordering Type
+;; Church-encoded three-way comparison result.
+;; ========================================
+
+data Ordering
+  lt-ord
+  eq-ord
+  gt-ord

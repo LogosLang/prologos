@@ -1,0 +1,45 @@
+ns prologos.core
+
+provide id const compose apply flip on
+
+;; ========================================
+;; Prologos Core Library
+;; Auto-loaded when a file uses (ns ...).
+;; ========================================
+
+;; Polymorphic identity: forall (A : Type 0). A -> A
+defn id [A :0 <(Type 0)>
+         x <A>] <A>
+  x
+
+;; Constant function: forall A B. A -> B -> A
+defn const [A :0 <(Type 0)>
+            B :0 <(Type 0)>
+            x <A> _ <B>] <A>
+  x
+
+;; Function composition: forall A B C. (B -> C) -> (A -> B) -> A -> C
+defn compose [A :0 <(Type 0)>
+              B :0 <(Type 0)>
+              C :0 <(Type 0)>
+              g <(-> B C)>
+              f <(-> A B)>
+              x <A>] <C>
+  g (f x)
+
+;; Apply: forall A B. (A -> B) -> A -> B
+defn apply [A :0 <(Type 0)> B :0 <(Type 0)> f <(-> A B)> x <A>] <B>
+  (f x)
+
+;; Flip: forall A B C. (A -> B -> C) -> B -> A -> C
+defn flip [A :0 <(Type 0)> B :0 <(Type 0)> C :0 <(Type 0)>
+           f <(-> A (-> B C))> b <B> a <A>] <C>
+  (f a b)
+
+;; On combinator: (on f g) x y = f (g x) (g y)
+;; Useful for "compare by projection": (on nat-eq? first) p1 p2
+defn on [A :0 <(Type 0)> B :0 <(Type 0)> C :0 <(Type 0)>
+         f <(-> B (-> B C))>
+         g <(-> A B)>
+         x <A> y <A>] <C>
+  f (g x) (g y)

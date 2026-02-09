@@ -1,47 +1,48 @@
-- [Desiderata](#orgf193672)
-  - [Syntax](#org92b3d89)
-    - [Homoiconicity](#orge3c4eb4)
-    - [Significant whitespace](#org4a6fd54)
-    - [Groupings with \`()\` (NOT \`[]\`)](#orga2c3a47)
-    - [Fully qualified namespaces with \`/\` seperator](#orgbdc2a9d)
-    - [EDN support](#org230d8f2)
-  - [Fully qualified namespaces](#orga79e996)
-  - [Strongly typed](#org7570bd9)
-  - [Functional-Logic-based language](#orgde40418)
-  - [Dependent Types as first class](#orgcc6d25d)
-  - [Session Types for protocol, Linear Types for memory-guarentees](#org8a2b742)
-  - [Strong support for parallel processing](#org4730464)
-  - [Pattern Matching as first class (like in Erlang or Prolog)](#org5334dc9)
-  - [Constraint Solver Language](#org67b3112)
-  - [Blazingly fast](#orge123a76)
-  - [Excellent, human-readable, compiler errors in the likes of Rust or Gleam **VERY IMPORTANT**](#orgc549259)
-  - [Arbitrary precision numbers, EFFICIENTLY](#org30f2aec)
-  - [Innovations on UNUM types](#org2316a8c)
-  - [A "don't stop the world" garbage collector, like in Pony](#org1600c4b)
-- [Languages that inspire us](#orga811c7e)
-  - [Logic Programmming](#orgb017610)
-  - [Constraint Logic Programming](#org9d87da5)
-  - [Functional Programming](#org662c00a)
-  - [Scripting Languages](#orga2cb3be)
-  - [Formal Verification](#org74ad85a)
-  - [Sussman's Propogators](#org6446934)
-  - [Interesting Type Systems](#orgb95e29e)
-- [Target](#orgbf0fd9c)
-  - [LLVM](#orgbb625a6)
-  - [Prototype in](#org0b5eaa4)
+- [Desiderata](#orgfe48f51)
+  - [Syntax](#orgdec3dd2)
+    - [Homoiconicity](#org941be6b)
+    - [Significant whitespace](#org85577b6)
+    - [Groupings with \`()\` (NOT \`[]\`)](#org7931503)
+    - [Fully qualified namespaces with \`/\` seperator](#org251ee97)
+    - [EDN support](#org8371e81)
+  - [Fully qualified namespaces](#org85d4e2e)
+  - [Strongly typed](#org2234d0f)
+  - [Functional-Logic-based language](#org2fb8a99)
+  - [Dependent Types as first class](#orge57d3dc)
+  - [Session Types for protocol, Linear Types for memory-guarentees](#orgf07f801)
+  - [Strong support for parallel processing](#org2d48b39)
+  - [Pattern Matching as first class (like in Erlang or Prolog)](#org3cec270)
+  - [Constraint Solver Language](#org8872733)
+  - [Blazingly fast](#orgf27c74d)
+  - [Excellent, human-readable, compiler errors in the likes of Rust or Gleam **VERY IMPORTANT**](#org395a73e)
+  - [Arbitrary precision numbers, EFFICIENTLY](#org44a9290)
+  - [Innovations on UNUM types](#org12646c8)
+  - [A "don't stop the world" garbage collector, like in Pony](#orga4dfb74)
+  - [Immutable datastructures with structural sharing, like in Clojure](#orgc7ef3f8)
+- [Languages that inspire us](#orgf0289b9)
+  - [Logic Programmming](#org52b4b01)
+  - [Constraint Logic Programming](#org0c85030)
+  - [Functional Programming](#org2534be5)
+  - [Scripting Languages](#org53295ed)
+  - [Formal Verification](#org862ae7b)
+  - [Sussman's Propogators](#orgc4cbe7d)
+  - [Interesting Type Systems](#org9340541)
+- [Target](#org0b89cb9)
+  - [LLVM](#org20f039d)
+  - [Prototype in](#org380a8d1)
 
 
-<a id="orgf193672"></a>
+<a id="orgfe48f51"></a>
 
 # Desiderata
 
 
-<a id="org92b3d89"></a>
+<a id="orgdec3dd2"></a>
 
 ## Syntax
 
 
-<a id="orge3c4eb4"></a>
+<a id="org941be6b"></a>
 
 ### Homoiconicity
 
@@ -52,7 +53,7 @@
 -   Prefix-notation
 
 
-<a id="org4a6fd54"></a>
+<a id="org85577b6"></a>
 
 ### Significant whitespace
 
@@ -62,17 +63,17 @@
 -   Same line with \`()\` groupings: deeper tree-depth of the AST
 
 
-<a id="orga2c3a47"></a>
+<a id="org7931503"></a>
 
 ### Groupings with \`()\` (NOT \`[]\`)
 
 
-<a id="orgbdc2a9d"></a>
+<a id="org251ee97"></a>
 
 ### Fully qualified namespaces with \`/\` seperator
 
 
-<a id="org230d8f2"></a>
+<a id="org8371e81"></a>
 
 ### EDN support
 
@@ -80,19 +81,19 @@
 -   Hashmaps/associative arrays/dictionaries: \`{:key00 "value" :key01 12}\`
 
 
-<a id="orga79e996"></a>
+<a id="org85d4e2e"></a>
 
 ## Fully qualified namespaces
 
 -   disambiguate imports' names
 
 
-<a id="org7570bd9"></a>
+<a id="org2234d0f"></a>
 
 ## Strongly typed
 
 
-<a id="orgde40418"></a>
+<a id="org2fb8a99"></a>
 
 ## Functional-Logic-based language
 
@@ -100,80 +101,91 @@
 -   With procedural
 
 
-<a id="orgcc6d25d"></a>
+<a id="orge57d3dc"></a>
 
 ## Dependent Types as first class
 
 
-<a id="org8a2b742"></a>
+<a id="orgf07f801"></a>
 
 ## Session Types for protocol, Linear Types for memory-guarentees
 
 -   Dependent Session types
 
 
-<a id="org4730464"></a>
+<a id="org2d48b39"></a>
 
 ## Strong support for parallel processing
 
+-   anything that is "embarrassingly" parallel, and that would benefit from being so without extra overhead costs, should be so automatically
+-   easy to understand/use primitives for concurrent and parallel processing
 
-<a id="org5334dc9"></a>
+
+<a id="org3cec270"></a>
 
 ## Pattern Matching as first class (like in Erlang or Prolog)
 
 
-<a id="org67b3112"></a>
+<a id="org8872733"></a>
 
 ## Constraint Solver Language
 
 
-<a id="orge123a76"></a>
+<a id="orgf27c74d"></a>
 
 ## Blazingly fast
 
 
-<a id="orgc549259"></a>
+<a id="org395a73e"></a>
 
 ## Excellent, human-readable, compiler errors in the likes of Rust or Gleam **VERY IMPORTANT**
 
 
-<a id="org30f2aec"></a>
+<a id="org44a9290"></a>
 
 ## Arbitrary precision numbers, EFFICIENTLY
 
 -   I don't like "wrapping" Ints, for example; I would rather throw run-time errors than silently wrapping
 
 
-<a id="org2316a8c"></a>
+<a id="org12646c8"></a>
 
 ## Innovations on UNUM types
 
 
-<a id="org1600c4b"></a>
+<a id="orga4dfb74"></a>
 
 ## A "don't stop the world" garbage collector, like in Pony
 
 
-<a id="orga811c7e"></a>
+<a id="orgc7ef3f8"></a>
+
+## Immutable datastructures with structural sharing, like in Clojure
+
+-   Philip Bagwell's Ideal Hashmaps Research
+-   ideal vector commitments
+
+
+<a id="orgf0289b9"></a>
 
 # Languages that inspire us
 
 
-<a id="orgb017610"></a>
+<a id="org52b4b01"></a>
 
 ## Logic Programmming
 
 -   Prolog (also homoiconic)
 
 
-<a id="org9d87da5"></a>
+<a id="org0c85030"></a>
 
 ## Constraint Logic Programming
 
 -   ECLiPSe
 
 
-<a id="org662c00a"></a>
+<a id="org2534be5"></a>
 
 ## Functional Programming
 
@@ -188,14 +200,14 @@
             -   Safe sharing for concurrency use-cases
 
 
-<a id="orga2cb3be"></a>
+<a id="org53295ed"></a>
 
 ## Scripting Languages
 
 -   TCL
 
 
-<a id="org74ad85a"></a>
+<a id="org862ae7b"></a>
 
 ## Formal Verification
 
@@ -203,14 +215,14 @@
     -   Flexibility to define arbitrary formal languages or logics, can be powerful and flexible in proving certain
 
 
-<a id="org6446934"></a>
+<a id="orgc4cbe7d"></a>
 
 ## Sussman's Propogators
 
 -   Some formalisms using lattices
 
 
-<a id="orgb95e29e"></a>
+<a id="org9340541"></a>
 
 ## Interesting Type Systems
 
@@ -219,19 +231,19 @@
 -   Rust
 
 
-<a id="orgbf0fd9c"></a>
+<a id="org0b89cb9"></a>
 
 # Target
 
 
-<a id="orgbb625a6"></a>
+<a id="org20f039d"></a>
 
 ## LLVM
 
 -   Hope to be able to leverage other languages in the ecosystem, with strong ffi support to things like C, C++, Rust, and others
 
 
-<a id="org0b5eaa4"></a>
+<a id="org380a8d1"></a>
 
 ## Prototype in
 

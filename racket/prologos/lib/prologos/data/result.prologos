@@ -1,0 +1,35 @@
+ns prologos.data.result
+
+provide Result ok err result-map result-map-err result-unwrap-or
+
+;; ========================================
+;; Prologos Result Type
+;; Church-encoded error-or-value.
+;; ========================================
+
+data (Result [A <(Type 0)>] [E <(Type 0)>])
+  ok <A>
+  err <E>
+
+;; Map a function over the ok value.
+;; Uses delegation: result-map f r = fn R ok-case err-case . r R (fn x . ok-case (f x)) err-case
+defn result-map [A :0 <(Type 0)> E :0 <(Type 0)> B :0 <(Type 0)>
+                 f <(-> A B)> r <(Result A E)>] <(Result B E)>
+  fn [__R :0 <(Type 0)>] (fn [__ok <(-> B __R)>] (fn [__err <(-> E __R)>]
+    (r __R (fn [x <A>] (__ok (f x))) __err)))
+
+;; Map a function over the error value.
+;; result-map-err f r = fn R ok-case err-case . r R ok-case (fn e . err-case (f e))
+defn result-map-err [A :0 <(Type 0)> E :0 <(Type 0)> F :0 <(Type 0)>
+                     f <(-> E F)> r <(Result A E)>] <(Result A F)>
+  fn [__R :0 <(Type 0)>] (fn [__ok <(-> A __R)>] (fn [__err <(-> F __R)>]
+    (r __R __ok (fn [e <E>] (__err (f e))))))
+
+;; Unwrap with a default value
+defn result-unwrap-or [A :0 <(Type 0)> E :0 <(Type 0)>
+                       default <A> r <(Result A E)>] <A>
+  match r <A>
+    ok [x <A>]
+      x
+    err [_ <E>]
+      default

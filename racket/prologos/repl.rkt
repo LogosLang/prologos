@@ -3,6 +3,9 @@
 ;;;
 ;;; PROLOGOS REPL
 ;;; Interactive read-eval-type-check loop.
+;;; Supports two modes:
+;;;   - sexp: S-expression syntax (default)
+;;;   - ws:   Whitespace syntax (blank line to submit)
 ;;;
 
 (require racket/string
@@ -11,16 +14,26 @@
          "parser.rkt"
          "driver.rkt"
          "pretty-print.rkt"
-         "global-env.rkt")
+         "global-env.rkt"
+         "reader.rkt"
+         "macros.rkt"
+         "sexp-readtable.rkt")
 
-(provide run-repl)
+(provide run-repl
+         current-repl-mode)
+
+;; ========================================
+;; Mode parameter
+;; ========================================
+(define current-repl-mode (make-parameter 'sexp))
 
 ;; ========================================
 ;; REPL Main Loop
 ;; ========================================
 (define (run-repl)
-  (displayln "Prologos v0.2.0")
-  (displayln "Type :quit to exit, :env to see definitions, :load \"file\" to load a file.")
+  (displayln "Prologos v0.3.0")
+  (displayln (format "Mode: ~a | :mode sexp/ws to switch | :quit to exit | :env | :load"
+                     (current-repl-mode)))
   (newline)
   ;; Start with empty global env
   (parameterize ([current-global-env (hasheq)])
@@ -29,60 +42,151 @@
 (define (repl-loop)
   (display "> ")
   (flush-output)
-  (define input (read-repl-input))
+  (define input
+    (case (current-repl-mode)
+      [(sexp) (read-repl-input-sexp)]
+      [(ws)   (read-repl-input-ws)]))
   (cond
     [(eof-object? input)
      (displayln "")
      (displayln "Goodbye.")]
+    [(not input)
+     ;; blank line in ws mode, skip
+     (repl-loop)]
     [(string=? (string-trim input) "")
      (repl-loop)]
     [(repl-command? input)
      (handle-repl-command input)
      (repl-loop)]
     [else
-     (with-handlers
-       ([exn:fail? (lambda (e)
-                     (displayln (format "Error: ~a" (exn-message e))))])
-       (define port (open-input-string input))
-       (port-count-lines! port)
-       (define stx (read-syntax "<repl>" port))
-       (unless (eof-object? stx)
-         (define surf (parse-datum stx))
+     (case (current-repl-mode)
+       [(sexp) (process-sexp-input input)]
+       [(ws)   (process-ws-input input)])
+     (repl-loop)]))
+
+;; ========================================
+;; Process input in S-expression mode
+;; ========================================
+(define (process-sexp-input input)
+  (with-handlers
+    ([exn:fail? (lambda (e)
+                  (displayln (format "Error: ~a" (exn-message e))))])
+    (define port (open-input-string input))
+    (port-count-lines! port)
+    (define stx (prologos-sexp-read-syntax "<repl>" port))
+    (unless (eof-object? stx)
+      ;; Pre-parse macro expansion
+      (define datum (syntax->datum stx))
+      (cond
+        ;; defmacro — register and consume
+        [(and (pair? datum) (eq? (car datum) 'defmacro))
+         (process-defmacro datum)
+         (displayln "Macro defined.")]
+        ;; deftype — register and consume
+        [(and (pair? datum) (eq? (car datum) 'deftype))
+         (process-deftype datum)
+         (displayln "Type alias defined.")]
+        [else
+         ;; Expand pre-parse macros
+         (define expanded-datum (preparse-expand-form datum))
+         ;; Preserve original syntax if no change (keeps paren-shape etc.)
+         (define expanded-stx
+           (if (equal? expanded-datum datum) stx (datum->syntax #f expanded-datum stx)))
+         (define surf (parse-datum expanded-stx))
          (if (prologos-error? surf)
              (displayln (format-error surf))
              (let ([result (process-command surf)])
                (if (prologos-error? result)
                    (displayln (format-error result))
-                   (displayln result))))))
-     (repl-loop)]))
+                   (displayln result))))]))))
 
 ;; ========================================
-;; Read input with multi-line support
+;; Process input in whitespace mode
 ;; ========================================
-(define (read-repl-input)
+(define (process-ws-input input)
+  (with-handlers
+    ([exn:fail? (lambda (e)
+                  (displayln (format "Error: ~a" (exn-message e))))])
+    (define port (open-input-string input))
+    (port-count-lines! port)
+    ;; Read all forms produced by the whitespace reader
+    (define stx (prologos-read-syntax "<repl>" port))
+    (let loop ()
+      (unless (eof-object? stx)
+        ;; Pre-parse macro expansion
+        (define datum (syntax->datum stx))
+        (cond
+          [(and (pair? datum) (eq? (car datum) 'defmacro))
+           (process-defmacro datum)
+           (displayln "Macro defined.")]
+          [(and (pair? datum) (eq? (car datum) 'deftype))
+           (process-deftype datum)
+           (displayln "Type alias defined.")]
+          [else
+           (define expanded-datum (preparse-expand-form datum))
+           (define expanded-stx
+             (if (equal? expanded-datum datum) stx (datum->syntax #f expanded-datum stx)))
+           (define surf (parse-datum expanded-stx))
+           (if (prologos-error? surf)
+               (displayln (format-error surf))
+               (let ([result (process-command surf)])
+                 (if (prologos-error? result)
+                     (displayln (format-error result))
+                     (displayln result))))])
+        (set! stx (prologos-read-syntax "<repl>" port))
+        (loop)))))
+
+;; ========================================
+;; Read input in S-expression mode (paren-balanced)
+;; ========================================
+(define (read-repl-input-sexp)
   (define first-line (read-line))
   (cond
     [(eof-object? first-line) first-line]
     [else
-     ;; Check if parens are balanced
+     ;; Check if brackets are balanced
      (let loop ([acc first-line])
-       (if (parens-balanced? acc)
+       (if (brackets-balanced? acc)
            acc
            (begin
              (display "  ")
              (flush-output)
              (let ([next (read-line)])
                (if (eof-object? next)
-                   acc  ; return what we have
+                   acc
                    (loop (string-append acc "\n" next)))))))]))
 
-;; Simple paren balance checker
-(define (parens-balanced? s)
+;; ========================================
+;; Read input in whitespace mode (blank-line terminated)
+;; ========================================
+(define (read-repl-input-ws)
+  (define first-line (read-line))
+  (cond
+    [(eof-object? first-line) eof]
+    [(string=? (string-trim first-line) "") #f]
+    [else
+     (let loop ([lines (list first-line)])
+       (display "  ")
+       (flush-output)
+       (define next (read-line))
+       (cond
+         [(eof-object? next)
+          (string-join (reverse lines) "\n")]
+         [(string=? (string-trim next) "")
+          ;; Blank line terminates the form
+          (string-join (reverse lines) "\n")]
+         [else
+          (loop (cons next lines))]))]))
+
+;; ========================================
+;; Bracket balance checker (handles (), [], {})
+;; ========================================
+(define (brackets-balanced? s)
   (let loop ([chars (string->list s)] [count 0])
     (cond
       [(null? chars) (= count 0)]
-      [(char=? (car chars) #\() (loop (cdr chars) (+ count 1))]
-      [(char=? (car chars) #\)) (loop (cdr chars) (- count 1))]
+      [(memq (car chars) '(#\( #\[ #\{ #\<)) (loop (cdr chars) (+ count 1))]
+      [(memq (car chars) '(#\) #\] #\} #\>)) (loop (cdr chars) (- count 1))]
       [else (loop (cdr chars) count)])))
 
 ;; ========================================
@@ -99,6 +203,17 @@
      (exit 0)]
     [(string=? cmd ":env")
      (display-env)]
+    [(string-prefix? cmd ":mode")
+     (let ([mode-str (string-trim (substring cmd 5))])
+       (cond
+         [(string=? mode-str "sexp")
+          (current-repl-mode 'sexp)
+          (displayln "Switched to S-expression mode.")]
+         [(string=? mode-str "ws")
+          (current-repl-mode 'ws)
+          (displayln "Switched to whitespace mode. Blank line to submit.")]
+         [else
+          (displayln "Usage: :mode sexp | :mode ws")]))]
     [(string-prefix? cmd ":load")
      (let ([path (string-trim (substring cmd 5))])
        ;; Strip quotes if present
@@ -120,7 +235,7 @@
      (let ([expr-str (string-trim (substring cmd 5))])
        (define port (open-input-string (format "(infer ~a)" expr-str)))
        (port-count-lines! port)
-       (define stx (read-syntax "<repl>" port))
+       (define stx (prologos-sexp-read-syntax "<repl>" port))
        (unless (eof-object? stx)
          (define surf (parse-datum stx))
          (if (prologos-error? surf)
@@ -145,4 +260,13 @@
 ;; Entry point
 ;; ========================================
 (module+ main
-  (run-repl))
+  (require racket/cmdline)
+  (define ws-mode? (make-parameter #f))
+  (command-line
+   #:once-each
+   ["--ws" "Start in whitespace syntax mode"
+    (ws-mode? #t)]
+   #:args ()
+   (when (ws-mode?)
+     (current-repl-mode 'ws))
+   (run-repl)))

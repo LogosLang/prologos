@@ -59,8 +59,8 @@
 (test-case "elab: 3 -> suc(suc(suc(zero)))"
   (check-equal? (elab "3") (nat->expr 3)))
 
-(test-case "elab: (suc zero)"
-  (check-equal? (elab "(suc zero)") (expr-suc (expr-zero))))
+(test-case "elab: (inc zero)"
+  (check-equal? (elab "(inc zero)") (expr-suc (expr-zero))))
 
 ;; ========================================
 ;; Arrow (non-dependent)
@@ -76,32 +76,32 @@
 ;; Lambda — de Bruijn indices
 ;; ========================================
 
-(test-case "elab: (lam (x : Nat) x) — identity"
+(test-case "elab: (fn (x : Nat) x) — identity"
   ;; x is bound at depth 0, used at depth 1, so index = 1 - 0 - 1 = 0
-  (check-equal? (elab "(lam (x : Nat) x)")
+  (check-equal? (elab "(fn (x : Nat) x)")
                 (expr-lam 'mw (expr-Nat) (expr-bvar 0))))
 
-(test-case "elab: (lam (x : Nat) (suc x))"
-  (check-equal? (elab "(lam (x : Nat) (suc x))")
+(test-case "elab: (fn (x : Nat) (inc x))"
+  (check-equal? (elab "(fn (x : Nat) (inc x))")
                 (expr-lam 'mw (expr-Nat) (expr-suc (expr-bvar 0)))))
 
-(test-case "elab: (lam (x : Nat) (lam (y : Nat) x)) — outer variable"
+(test-case "elab: (fn (x : Nat) (fn (y : Nat) x)) — outer variable"
   ;; x bound at depth 0, y bound at depth 1
   ;; x used at depth 2: index = 2 - 0 - 1 = 1
-  (check-equal? (elab "(lam (x : Nat) (lam (y : Nat) x))")
+  (check-equal? (elab "(fn (x : Nat) (fn (y : Nat) x))")
                 (expr-lam 'mw (expr-Nat) (expr-lam 'mw (expr-Nat) (expr-bvar 1)))))
 
-(test-case "elab: (lam (x : Nat) (lam (y : Nat) y)) — inner variable"
+(test-case "elab: (fn (x : Nat) (fn (y : Nat) y)) — inner variable"
   ;; y bound at depth 1, used at depth 2: index = 2 - 1 - 1 = 0
-  (check-equal? (elab "(lam (x : Nat) (lam (y : Nat) y))")
+  (check-equal? (elab "(fn (x : Nat) (fn (y : Nat) y))")
                 (expr-lam 'mw (expr-Nat) (expr-lam 'mw (expr-Nat) (expr-bvar 0)))))
 
 (test-case "elab: linear lambda"
-  (check-equal? (elab "(lam (x :1 Nat) x)")
+  (check-equal? (elab "(fn (x :1 Nat) x)")
                 (expr-lam 'm1 (expr-Nat) (expr-bvar 0))))
 
 (test-case "elab: erased lambda"
-  (check-equal? (elab "(lam (x :0 Nat) zero)")
+  (check-equal? (elab "(fn (x :0 Nat) zero)")
                 (expr-lam 'm0 (expr-Nat) (expr-zero))))
 
 ;; ========================================
@@ -160,11 +160,11 @@
 (test-case "elab: (pair zero refl)"
   (check-equal? (elab "(pair zero refl)") (expr-pair (expr-zero) (expr-refl))))
 
-(test-case "elab: (fst (pair zero refl))"
-  (check-equal? (elab "(fst (pair zero refl))") (expr-fst (expr-pair (expr-zero) (expr-refl)))))
+(test-case "elab: (first (pair zero refl))"
+  (check-equal? (elab "(first (pair zero refl))") (expr-fst (expr-pair (expr-zero) (expr-refl)))))
 
-(test-case "elab: (snd (pair zero refl))"
-  (check-equal? (elab "(snd (pair zero refl))") (expr-snd (expr-pair (expr-zero) (expr-refl)))))
+(test-case "elab: (second (pair zero refl))"
+  (check-equal? (elab "(second (pair zero refl))") (expr-snd (expr-pair (expr-zero) (expr-refl)))))
 
 ;; ========================================
 ;; Annotation
@@ -184,22 +184,22 @@
 ;; Vec/Fin
 ;; ========================================
 
-(test-case "elab: (Vec Nat (suc zero))"
-  (check-equal? (elab "(Vec Nat (suc zero))") (expr-Vec (expr-Nat) (expr-suc (expr-zero)))))
+(test-case "elab: (Vec Nat (inc zero))"
+  (check-equal? (elab "(Vec Nat (inc zero))") (expr-Vec (expr-Nat) (expr-suc (expr-zero)))))
 
 (test-case "elab: (vnil Nat)"
   (check-equal? (elab "(vnil Nat)") (expr-vnil (expr-Nat))))
 
-(test-case "elab: (Fin (suc zero))"
-  (check-equal? (elab "(Fin (suc zero))") (expr-Fin (expr-suc (expr-zero)))))
+(test-case "elab: (Fin (inc zero))"
+  (check-equal? (elab "(Fin (inc zero))") (expr-Fin (expr-suc (expr-zero)))))
 
 ;; ========================================
 ;; Shadowing
 ;; ========================================
 
-(test-case "elab: shadowing — (lam (x : Nat) (lam (x : Bool) x)) refers to inner x"
+(test-case "elab: shadowing — (fn (x : Nat) (fn (x : Bool) x)) refers to inner x"
   ;; Inner x at depth 1, used at depth 2: index = 0
-  (check-equal? (elab "(lam (x : Nat) (lam (x : Bool) x))")
+  (check-equal? (elab "(fn (x : Nat) (fn (x : Bool) x))")
                 (expr-lam 'mw (expr-Nat) (expr-lam 'mw (expr-Bool) (expr-bvar 0)))))
 
 ;; ========================================
@@ -210,7 +210,7 @@
   (check-true (prologos-error? (elab "undefined_var"))))
 
 (test-case "elab: unbound in body"
-  (check-true (prologos-error? (elab "(lam (x : Nat) y)"))))
+  (check-true (prologos-error? (elab "(fn (x : Nat) y)"))))
 
 ;; ========================================
 ;; Top-level elaboration
@@ -218,7 +218,7 @@
 
 (test-case "elab-top: def"
   (let ([result (elaborate-top-level
-                 (parse-string "(def myid : (-> Nat Nat) (lam (x : Nat) x))"))])
+                 (parse-string "(def myid : (-> Nat Nat) (fn (x : Nat) x))"))])
     (check-false (prologos-error? result))
     (check-equal? (car result) 'def)
     (check-equal? (cadr result) 'myid)
@@ -235,7 +235,7 @@
 
 (test-case "elab-top: eval"
   (let ([result (elaborate-top-level
-                 (parse-string "(eval (suc zero))"))])
+                 (parse-string "(eval (inc zero))"))])
     (check-false (prologos-error? result))
     (check-equal? (car result) 'eval)
     (check-equal? (cadr result) (expr-suc (expr-zero)))))

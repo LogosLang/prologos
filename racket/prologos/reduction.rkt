@@ -14,9 +14,38 @@
          "prelude.rkt"
          "syntax.rkt"
          "substitution.rkt"
-         "global-env.rkt")
+         "global-env.rkt"
+         "posit-impl.rkt")
 
 (provide whnf nf nf-whnf conv)
+
+;; ========================================
+;; Helpers for Posit8 reduction
+;; ========================================
+
+;; Extract a Racket natural number from an expr-zero/expr-suc chain, or #f if not a numeral.
+(define (nat-value e)
+  (match e
+    [(expr-zero) 0]
+    [(expr-suc e1) (let ([v (nat-value e1)]) (and v (+ v 1)))]
+    [_ #f]))
+
+;; Reduce a binary Posit8 operation: try reducing left, then right.
+(define (reduce-p8-binary ctor a b)
+  (let ([a* (whnf a)])
+    (if (equal? a* a)
+        (let ([b* (whnf b)])
+          (if (equal? b* b)
+              (ctor a b)   ; stuck — both operands in WHNF
+              (whnf (ctor a b*))))
+        (whnf (ctor a* b)))))
+
+;; Reduce a unary Posit8 operation: try reducing the operand.
+(define (reduce-p8-unary ctor a)
+  (let ([a* (whnf a)])
+    (if (equal? a* a)
+        (ctor a)   ; stuck
+        (whnf (ctor a*)))))
 
 ;; ========================================
 ;; Weak Head Normal Form
@@ -40,6 +69,12 @@
 
     ;; J reduction: J(motive, base, a, _, refl) -> app(base, a)
     [(expr-J _ base left _ (expr-refl)) (whnf (expr-app base left))]
+
+    ;; Bool elimination (iota rules)
+    ;; boolrec(M, t, f, true)  -> t
+    ;; boolrec(M, t, f, false) -> f
+    [(expr-boolrec _ tc _ (expr-true)) (whnf tc)]
+    [(expr-boolrec _ _ fc (expr-false)) (whnf fc)]
 
     ;; Annotation erasure
     [(expr-ann e1 _) (whnf e1)]
@@ -81,6 +116,13 @@
            e  ; stuck
            (whnf (expr-J mot base left right proof*))))]
 
+    ;; boolrec with non-canonical target: reduce target first
+    [(expr-boolrec mot tc fc target)
+     (let ([target* (whnf target)])
+       (if (equal? target* target)
+           e  ; stuck — target is neutral
+           (whnf (expr-boolrec mot tc fc target*))))]
+
     ;; vhead/vtail with non-vcons: reduce vec first
     [(expr-vhead t n v)
      (let ([v* (whnf v)])
@@ -88,6 +130,58 @@
     [(expr-vtail t n v)
      (let ([v* (whnf v)])
        (if (equal? v* v) e (whnf (expr-vtail t n v*))))]
+
+    ;; ---- Posit8 iota rules: compute when arguments are posit8 literals ----
+
+    ;; Binary arithmetic on literals
+    [(expr-p8-add (expr-posit8 a) (expr-posit8 b)) (expr-posit8 (posit8-add a b))]
+    [(expr-p8-sub (expr-posit8 a) (expr-posit8 b)) (expr-posit8 (posit8-sub a b))]
+    [(expr-p8-mul (expr-posit8 a) (expr-posit8 b)) (expr-posit8 (posit8-mul a b))]
+    [(expr-p8-div (expr-posit8 a) (expr-posit8 b)) (expr-posit8 (posit8-div a b))]
+
+    ;; Unary ops on literals
+    [(expr-p8-neg (expr-posit8 a)) (expr-posit8 (posit8-neg a))]
+    [(expr-p8-abs (expr-posit8 a)) (expr-posit8 (posit8-abs a))]
+    [(expr-p8-sqrt (expr-posit8 a)) (expr-posit8 (posit8-sqrt a))]
+
+    ;; Comparison on literals → Bool
+    [(expr-p8-lt (expr-posit8 a) (expr-posit8 b))
+     (if (posit8-lt? a b) (expr-true) (expr-false))]
+    [(expr-p8-le (expr-posit8 a) (expr-posit8 b))
+     (if (posit8-le? a b) (expr-true) (expr-false))]
+
+    ;; from-nat: compute when arg is a Nat numeral
+    [(expr-p8-from-nat n)
+     (let ([n* (whnf n)])
+       (let ([k (nat-value n*)])
+         (cond
+           [k (expr-posit8 (posit8-from-nat k))]
+           [(equal? n* n) e]    ; stuck
+           [else (whnf (expr-p8-from-nat n*))])))]
+
+    ;; p8-if-nar: branch when val is a literal
+    [(expr-p8-if-nar _ nc _ (expr-posit8 128)) (whnf nc)]    ; NaR = 0x80 = 128
+    [(expr-p8-if-nar _ _ vc (expr-posit8 _)) (whnf vc)]      ; any non-NaR literal
+
+    ;; ---- Posit8 stuck-term reduction ----
+
+    ;; Binary ops: reduce operands
+    [(expr-p8-add a b) (reduce-p8-binary expr-p8-add a b)]
+    [(expr-p8-sub a b) (reduce-p8-binary expr-p8-sub a b)]
+    [(expr-p8-mul a b) (reduce-p8-binary expr-p8-mul a b)]
+    [(expr-p8-div a b) (reduce-p8-binary expr-p8-div a b)]
+    [(expr-p8-lt a b) (reduce-p8-binary expr-p8-lt a b)]
+    [(expr-p8-le a b) (reduce-p8-binary expr-p8-le a b)]
+
+    ;; Unary ops: reduce operand
+    [(expr-p8-neg a) (reduce-p8-unary expr-p8-neg a)]
+    [(expr-p8-abs a) (reduce-p8-unary expr-p8-abs a)]
+    [(expr-p8-sqrt a) (reduce-p8-unary expr-p8-sqrt a)]
+
+    ;; p8-if-nar: reduce the value argument
+    [(expr-p8-if-nar t nc vc v)
+     (let ([v* (whnf v)])
+       (if (equal? v* v) e (whnf (expr-p8-if-nar t nc vc v*))))]
 
     ;; Free variable: unfold global definition if available
     [(expr-fvar name)
@@ -141,6 +235,8 @@
      (expr-natrec (nf mot) (nf base) (nf step) (nf target))]
     [(expr-J mot base left right proof)
      (expr-J (nf mot) (nf base) (nf left) (nf right) (nf proof))]
+    [(expr-boolrec mot tc fc target)
+     (expr-boolrec (nf mot) (nf tc) (nf fc) (nf target))]
 
     ;; Vec/Fin normalization
     [(expr-Vec t n) (expr-Vec (nf t) (nf n))]
@@ -151,7 +247,23 @@
     [(expr-fsuc n i) (expr-fsuc (nf n) (nf i))]
     [(expr-vhead t n v) (expr-vhead (nf t) (nf n) (nf v))]
     [(expr-vtail t n v) (expr-vtail (nf t) (nf n) (nf v))]
-    [(expr-vindex t n i v) (expr-vindex (nf t) (nf n) (nf i) (nf v))]))
+    [(expr-vindex t n i v) (expr-vindex (nf t) (nf n) (nf i) (nf v))]
+
+    ;; Posit8 normalization
+    [(expr-Posit8) e]
+    [(expr-posit8 _) e]
+    [(expr-p8-add a b) (expr-p8-add (nf a) (nf b))]
+    [(expr-p8-sub a b) (expr-p8-sub (nf a) (nf b))]
+    [(expr-p8-mul a b) (expr-p8-mul (nf a) (nf b))]
+    [(expr-p8-div a b) (expr-p8-div (nf a) (nf b))]
+    [(expr-p8-neg a) (expr-p8-neg (nf a))]
+    [(expr-p8-abs a) (expr-p8-abs (nf a))]
+    [(expr-p8-sqrt a) (expr-p8-sqrt (nf a))]
+    [(expr-p8-lt a b) (expr-p8-lt (nf a) (nf b))]
+    [(expr-p8-le a b) (expr-p8-le (nf a) (nf b))]
+    [(expr-p8-from-nat n) (expr-p8-from-nat (nf n))]
+    [(expr-p8-if-nar t nc vc v)
+     (expr-p8-if-nar (nf t) (nf nc) (nf vc) (nf v))]))
 
 ;; ========================================
 ;; Definitional Equality (conversion)

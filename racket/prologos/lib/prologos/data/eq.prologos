@@ -1,0 +1,31 @@
+ns prologos.data.eq
+
+provide sym cong trans
+
+;; ========================================
+;; Prologos Propositional Equality Library
+;; Lemmas derived from the J eliminator.
+;; ========================================
+
+;; Symmetry: Eq(A, a, b) -> Eq(A, b, a)
+defn sym [A :0 <(Type 0)> a :0 <A> b :0 <A>
+          prf <(Eq A a b)>] <(Eq A b a)>
+  (J (fn [x <A>] (fn [y <A>] (fn [_ <(Eq A x y)>] (Eq A y x))))
+     (fn [x <A>] refl)
+     a b prf)
+
+;; Congruence: f : A -> B, Eq(A, a, b) -> Eq(B, f(a), f(b))
+defn cong [A :0 <(Type 0)> B :0 <(Type 0)> a :0 <A> b :0 <A>
+           f :0 <(-> A B)>
+           prf <(Eq A a b)>] <(Eq B (f a) (f b))>
+  (J (fn [x <A>] (fn [y <A>] (fn [_ <(Eq A x y)>] (Eq B (f x) (f y)))))
+     (fn [x <A>] refl)
+     a b prf)
+
+;; Transitivity: Eq(A, a, b) -> Eq(A, b, c) -> Eq(A, a, c)
+defn trans [A :0 <(Type 0)> a :0 <A> b :0 <A> c :0 <A>
+            prf1 <(Eq A a b)>
+            prf2 <(Eq A b c)>] <(Eq A a c)>
+  (J (fn [x <A>] (fn [y <A>] (fn [_ <(Eq A x y)>] (-> (Eq A y c) (Eq A x c)))))
+     (fn [x <A>] (fn [p <(Eq A x c)>] p))
+     a b prf1) prf2

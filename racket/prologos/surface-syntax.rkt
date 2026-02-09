@@ -30,6 +30,7 @@
  (struct-out surf-type)
  (struct-out surf-nat-type)
  (struct-out surf-bool-type)
+ (struct-out surf-boolrec)
  (struct-out surf-natrec)
  (struct-out surf-J)
  ;; Vec/Fin surface forms
@@ -42,11 +43,28 @@
  (struct-out surf-vhead)
  (struct-out surf-vtail)
  (struct-out surf-vindex)
+ ;; Posit8 surface forms
+ (struct-out surf-posit8-type)
+ (struct-out surf-posit8)
+ (struct-out surf-p8-add)
+ (struct-out surf-p8-sub)
+ (struct-out surf-p8-mul)
+ (struct-out surf-p8-div)
+ (struct-out surf-p8-neg)
+ (struct-out surf-p8-abs)
+ (struct-out surf-p8-sqrt)
+ (struct-out surf-p8-lt)
+ (struct-out surf-p8-le)
+ (struct-out surf-p8-from-nat)
+ (struct-out surf-p8-if-nar)
  ;; Top-level commands
  (struct-out surf-def)
+ (struct-out surf-defn)
  (struct-out surf-check)
  (struct-out surf-eval)
  (struct-out surf-infer)
+ ;; Annotated lambda
+ (struct-out surf-the-fn)
  ;; Binder info
  (struct-out binder-info))
 
@@ -113,6 +131,9 @@
 ;; Bool type: Bool
 (struct surf-bool-type (srcloc) #:transparent)
 
+;; Bool eliminator: (boolrec motive true-case false-case target)
+(struct surf-boolrec (motive true-case false-case target srcloc) #:transparent)
+
 ;; Nat eliminator: (natrec motive base step target)
 (struct surf-natrec (motive base step target srcloc) #:transparent)
 
@@ -151,11 +172,46 @@
 (struct surf-vindex (type len idx vec srcloc) #:transparent)
 
 ;; ========================================
+;; Posit8 surface forms (8-bit posit, es=2, 2022 Standard)
+;; ========================================
+
+;; Posit8 type: Posit8
+(struct surf-posit8-type (srcloc) #:transparent)
+
+;; Posit8 literal: (posit8 <integer>)
+(struct surf-posit8 (val srcloc) #:transparent)
+
+;; Binary arithmetic: (p8+ a b), (p8- a b), (p8* a b), (p8/ a b)
+(struct surf-p8-add (a b srcloc) #:transparent)
+(struct surf-p8-sub (a b srcloc) #:transparent)
+(struct surf-p8-mul (a b srcloc) #:transparent)
+(struct surf-p8-div (a b srcloc) #:transparent)
+
+;; Unary ops: (p8-neg a), (p8-abs a), (p8-sqrt a)
+(struct surf-p8-neg (a srcloc) #:transparent)
+(struct surf-p8-abs (a srcloc) #:transparent)
+(struct surf-p8-sqrt (a srcloc) #:transparent)
+
+;; Comparison: (p8< a b), (p8<= a b)
+(struct surf-p8-lt (a b srcloc) #:transparent)
+(struct surf-p8-le (a b srcloc) #:transparent)
+
+;; Conversion: (p8-from-nat n)
+(struct surf-p8-from-nat (n srcloc) #:transparent)
+
+;; Eliminator: (p8-if-nar A nar-case normal-case val)
+(struct surf-p8-if-nar (type nar-case normal-case val srcloc) #:transparent)
+
+;; ========================================
 ;; Top-level commands
 ;; ========================================
 
 ;; Definition: (def name : type body)
 (struct surf-def (name type body srcloc) #:transparent)
+
+;; Sugared definition: (defn name : type [params...] body)
+;; Desugars to (def name : type (fn ...nested lambdas... body))
+(struct surf-defn (name type param-names body srcloc) #:transparent)
 
 ;; Type check: (check expr : type)
 (struct surf-check (expr type srcloc) #:transparent)
@@ -165,3 +221,7 @@
 
 ;; Infer type: (infer expr)
 (struct surf-infer (expr srcloc) #:transparent)
+
+;; Annotated lambda: (the-fn type [params...] body)
+;; Desugars to (the type (fn (p1:T1) (fn (p2:T2) ... body)))
+(struct surf-the-fn (type param-names body srcloc) #:transparent)

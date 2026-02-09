@@ -1,0 +1,789 @@
+#lang racket/base
+
+;;;
+;;; PROLOGOS READER
+;;; Custom reader with significant whitespace for #lang prologos.
+;;;
+;;; Converts indentation-sensitive syntax into S-expression syntax objects
+;;; that feed directly into the existing parse-datum pipeline.
+;;;
+;;; Design rules (from NOTES.org):
+;;;   1. No opening brackets — top-level forms don't start with (
+;;;   2. New line, same level — tokens are siblings (arguments)
+;;;   3. New line, deeper level — each child line becomes a sub-list
+;;;   4. Same line with () groupings — explicit grouping inline
+;;;   5. () for grouping, [] for parameter lists (e.g. defn)
+;;;   6. {} reserved for future EDN hashmaps
+;;;
+
+(require racket/match
+         racket/string)
+
+(provide prologos-read
+         prologos-read-syntax
+         ;; For #:whole-body-readers? #t in syntax/module-reader:
+         prologos-read-syntax-all
+         ;; For testing:
+         tokenize-string
+         read-all-forms-string)
+
+;; ========================================
+;; Token structure
+;; ========================================
+
+(struct token (type value line col pos span) #:transparent)
+
+;; ========================================
+;; Tokenizer
+;; ========================================
+
+(struct tokenizer
+  (port           ; input port
+   source         ; source name (string or path)
+   indent-stack   ; (mutable) list of column numbers
+   bracket-depth  ; (mutable) nesting depth of () [] {}
+   pending        ; (mutable) list of pending tokens (for INDENT/DEDENT)
+   line           ; (mutable) current line
+   col            ; (mutable) current column
+   pos            ; (mutable) current position
+   at-line-start? ; (mutable) are we at the start of a line?
+   )
+  #:mutable
+  #:transparent)
+
+(define (make-tokenizer port source)
+  (port-count-lines! port)
+  (tokenizer port source
+             (list 0)   ; indent-stack starts at column 0
+             0           ; bracket-depth
+             '()         ; pending tokens
+             1           ; line
+             0           ; col
+             1           ; pos
+             #t))        ; at-line-start
+
+;; --- Character reading with position tracking ---
+
+(define (tok-peek tok)
+  (peek-char (tokenizer-port tok)))
+
+(define (tok-read! tok)
+  (define c (read-char (tokenizer-port tok)))
+  (unless (eof-object? c)
+    (cond
+      [(char=? c #\newline)
+       (set-tokenizer-line! tok (+ 1 (tokenizer-line tok)))
+       (set-tokenizer-col! tok 0)
+       (set-tokenizer-pos! tok (+ 1 (tokenizer-pos tok)))]
+      [else
+       (set-tokenizer-col! tok (+ 1 (tokenizer-col tok)))
+       (set-tokenizer-pos! tok (+ 1 (tokenizer-pos tok)))]))
+  c)
+
+;; --- Helper predicates ---
+
+(define (ident-start? c)
+  (and (char? c)
+       (or (char-alphabetic? c)
+           (char=? c #\_)
+           (char=? c #\-)))) ; for ->
+
+(define (ident-continue? c)
+  (and (char? c)
+       (or (char-alphabetic? c)
+           (char-numeric? c)
+           (char=? c #\_)
+           (char=? c #\-)
+           (char=? c #\?)
+           (char=? c #\!)
+           (char=? c #\*)
+           (char=? c #\+)    ; for p8+ etc.
+           (char=? c #\')
+           (char=? c #\/)    ; qualified names
+           (char=? c #\.)    ; namespace dots
+           (char=? c #\=)))) ; for => and similar
+
+(define (delimiter? c)
+  (and (char? c)
+       (or (char-whitespace? c)
+           (char=? c #\()
+           (char=? c #\))
+           (char=? c #\[)
+           (char=? c #\])
+           (char=? c #\{)
+           (char=? c #\})
+           (char=? c #\<)
+           (char=? c #\>)
+           (char=? c #\;))))
+
+;; --- Skip whitespace (not newlines) on the current line ---
+
+(define (skip-inline-whitespace! tok)
+  (let loop ()
+    (define c (tok-peek tok))
+    (when (and (char? c)
+               (char-whitespace? c)
+               (not (char=? c #\newline)))
+      (tok-read! tok)
+      (loop))))
+
+;; --- Skip comment (from ; to end of line) ---
+
+(define (skip-comment! tok)
+  (let loop ()
+    (define c (tok-peek tok))
+    (when (and (char? c) (not (char=? c #\newline)))
+      (tok-read! tok)
+      (loop))))
+
+;; --- Process line-start indentation ---
+;; Returns: number of leading spaces, or #f if blank/comment-only line
+
+(define (count-leading-spaces! tok)
+  (let loop ([spaces 0])
+    (define c (tok-peek tok))
+    (cond
+      [(eof-object? c)
+       spaces]
+      [(char=? c #\space)
+       (tok-read! tok)
+       (loop (+ spaces 1))]
+      [(char=? c #\tab)
+       (error 'prologos-reader
+              "~a:~a: Use spaces for indentation, not tabs"
+              (tokenizer-source tok) (tokenizer-line tok))]
+      [(char=? c #\newline)
+       ;; Blank line — skip it and try next line
+       (tok-read! tok)
+       #f]
+      [(char=? c #\;)
+       ;; Comment-only line — skip comment and newline, try next
+       (skip-comment! tok)
+       (define next (tok-peek tok))
+       (when (and (char? next) (char=? next #\newline))
+         (tok-read! tok))
+       #f]
+      [else
+       spaces])))
+
+;; Generate INDENT/DEDENT/NEWLINE tokens based on indentation level
+
+(define (process-indentation! tok col)
+  (define stack (tokenizer-indent-stack tok))
+  (define top (car stack))
+  (define ln (tokenizer-line tok))
+  (cond
+    [(> col top)
+     ;; INDENT
+     (set-tokenizer-indent-stack! tok (cons col stack))
+     (list (token 'indent #f ln col (tokenizer-pos tok) 0))]
+    [(= col top)
+     ;; Same level — NEWLINE (used to separate top-level forms)
+     (list (token 'newline #f ln col (tokenizer-pos tok) 0))]
+    [else
+     ;; DEDENT — pop stack until we find a match
+     (let loop ([stk stack] [dedents '()])
+       (cond
+         [(null? stk)
+          (error 'prologos-reader
+                 "~a:~a: Indentation level ~a does not match any outer block"
+                 (tokenizer-source tok) ln col)]
+         [(= col (car stk))
+          (set-tokenizer-indent-stack! tok stk)
+          (append dedents
+                  (list (token 'newline #f ln col (tokenizer-pos tok) 0)))]
+         [(< col (car stk))
+          (loop (cdr stk)
+                (append dedents
+                        (list (token 'dedent #f ln col (tokenizer-pos tok) 0))))]
+         [else
+          (error 'prologos-reader
+                 "~a:~a: Indentation level ~a does not match any outer block"
+                 (tokenizer-source tok) ln col)]))]))
+
+(define (tokenizer-next! tok)
+  (let/ec return
+    (define (return-token t) (return t))
+
+    ;; Check pending tokens first
+    (when (pair? (tokenizer-pending tok))
+      (define t (car (tokenizer-pending tok)))
+      (set-tokenizer-pending! tok (cdr (tokenizer-pending tok)))
+      (return-token t))
+
+    ;; At line start? Process indentation (only when not inside brackets)
+    (when (tokenizer-at-line-start? tok)
+      (set-tokenizer-at-line-start?! tok #f)
+      (when (= 0 (tokenizer-bracket-depth tok))
+        ;; Count leading spaces, skipping blank/comment-only lines
+        (let loop ()
+          (define spaces (count-leading-spaces! tok))
+          (cond
+            [(not spaces) ; blank or comment-only line
+             (loop)]
+            [else
+             (when (eof-object? (tok-peek tok))
+               ;; EOF after blank lines — just fall through to EOF handling below
+               (void))
+             (unless (eof-object? (tok-peek tok))
+               (define indent-tokens (process-indentation! tok spaces))
+               (when (pair? (cdr indent-tokens))
+                 (set-tokenizer-pending! tok
+                                        (append (cdr indent-tokens) (tokenizer-pending tok))))
+               (return-token (car indent-tokens)))]))))
+
+    ;; Skip inline whitespace
+    (skip-inline-whitespace! tok)
+
+    (define c (tok-peek tok))
+    (define ln (tokenizer-line tok))
+    (define cl (tokenizer-col tok))
+    (define ps (tokenizer-pos tok))
+
+    (cond
+      ;; EOF
+      [(eof-object? c)
+       (define stack (tokenizer-indent-stack tok))
+       (if (and (pair? stack) (pair? (cdr stack)))
+           (begin
+             (set-tokenizer-indent-stack! tok (cdr stack))
+             (token 'dedent #f ln cl ps 0))
+           (token 'eof #f ln cl ps 0))]
+
+      ;; Newline
+      [(char=? c #\newline)
+       (tok-read! tok)
+       (if (> (tokenizer-bracket-depth tok) 0)
+           (tokenizer-next! tok)
+           (begin
+             (set-tokenizer-at-line-start?! tok #t)
+             (tokenizer-next! tok)))]
+
+      ;; Comment
+      [(char=? c #\;)
+       (skip-comment! tok)
+       (tokenizer-next! tok)]
+
+      ;; Open paren
+      [(char=? c #\()
+       (tok-read! tok)
+       (set-tokenizer-bracket-depth! tok (+ 1 (tokenizer-bracket-depth tok)))
+       (token 'lparen #f ln cl ps 1)]
+
+      ;; Close paren
+      [(char=? c #\))
+       (tok-read! tok)
+       (define depth (tokenizer-bracket-depth tok))
+       (when (= depth 0)
+         (error 'prologos-reader "~a:~a:~a: Unexpected closing parenthesis"
+                (tokenizer-source tok) ln (+ cl 1)))
+       (set-tokenizer-bracket-depth! tok (- depth 1))
+       (token 'rparen #f ln cl ps 1)]
+
+      ;; Square brackets — parameter lists
+      [(char=? c #\[)
+       (tok-read! tok)
+       (set-tokenizer-bracket-depth! tok (+ 1 (tokenizer-bracket-depth tok)))
+       (token 'lbracket #f ln cl ps 1)]
+
+      [(char=? c #\])
+       (tok-read! tok)
+       (define depth (tokenizer-bracket-depth tok))
+       (when (= depth 0)
+         (error 'prologos-reader "~a:~a:~a: Unexpected closing bracket"
+                (tokenizer-source tok) ln (+ cl 1)))
+       (set-tokenizer-bracket-depth! tok (- depth 1))
+       (token 'rbracket #f ln cl ps 1)]
+
+      ;; Braces — reserved for EDN
+      [(char=? c #\{)
+       (tok-read! tok)
+       (set-tokenizer-bracket-depth! tok (+ 1 (tokenizer-bracket-depth tok)))
+       (token 'lbrace #f ln cl ps 1)]
+
+      [(char=? c #\})
+       (tok-read! tok)
+       (define depth (tokenizer-bracket-depth tok))
+       (when (= depth 0)
+         (error 'prologos-reader "~a:~a:~a: Unexpected closing brace"
+                (tokenizer-source tok) ln (+ cl 1)))
+       (set-tokenizer-bracket-depth! tok (- depth 1))
+       (token 'rbrace #f ln cl ps 1)]
+
+      ;; Angle brackets — type annotations
+      [(char=? c #\<)
+       (tok-read! tok)
+       (set-tokenizer-bracket-depth! tok (+ 1 (tokenizer-bracket-depth tok)))
+       (token 'langle #f ln cl ps 1)]
+
+      [(char=? c #\>)
+       (tok-read! tok)
+       (define depth (tokenizer-bracket-depth tok))
+       (when (= depth 0)
+         (error 'prologos-reader "~a:~a:~a: Unexpected >"
+                (tokenizer-source tok) ln (+ cl 1)))
+       (set-tokenizer-bracket-depth! tok (- depth 1))
+       (token 'rangle #f ln cl ps 1)]
+
+      ;; Dollar — quote operator
+      [(char=? c #\$)
+       (tok-read! tok)
+       (token 'dollar #f ln cl ps 1)]
+
+      ;; Colon
+      [(char=? c #\:)
+       (tok-read! tok)
+       (define next (tok-peek tok))
+       (cond
+         ;; :0, :1, :w — multiplicity annotations
+         [(and (char? next) (or (char=? next #\0) (char=? next #\1) (char=? next #\w)))
+          (define nc (tok-read! tok))
+          (define after (tok-peek tok))
+          (if (and (char? after) (ident-continue? after)
+                   (not (char=? nc #\0)) (not (char=? nc #\1)))
+              ;; :w followed by more chars → keyword like :widget
+              (let ()
+                (define rest (read-ident-rest! tok))
+                (token 'keyword
+                       (string->symbol (string-append (string nc) rest))
+                       ln cl ps (+ 2 (string-length rest))))
+              ;; :0, :1, or :w standalone
+              (token 'symbol
+                     (string->symbol (string #\: nc))
+                     ln cl ps 2))]
+         ;; :keyword
+         [(and (char? next) (char-alphabetic? next))
+          (define rest (read-ident-chars! tok))
+          (token 'keyword
+                 (string->symbol rest)
+                 ln cl ps (+ 1 (string-length rest)))]
+         ;; Freestanding colon
+         [else
+          (token 'colon #f ln cl ps 1)])]
+
+      ;; String literal
+      [(char=? c #\")
+       (read-string-token! tok ln cl ps)]
+
+      ;; Number
+      [(char-numeric? c)
+       (read-number-token! tok ln cl ps)]
+
+      ;; -> arrow operator (must come before ident-start? since - is ident-start)
+      [(and (char=? c #\-)
+            (let ([c2 (peek-char (tokenizer-port tok) 1)])
+              (and (char? c2) (char=? c2 #\>))))
+       (tok-read! tok)  ; consume -
+       (tok-read! tok)  ; consume >
+       (token 'symbol '-> ln cl ps 2)]
+
+      ;; Identifier
+      [(ident-start? c)
+       (read-ident-token! tok ln cl ps)]
+
+      [else
+       (tok-read! tok)
+       (error 'prologos-reader "~a:~a:~a: Unexpected character: ~a"
+              (tokenizer-source tok) ln (+ cl 1) c)])))
+
+;; --- Token reading helpers ---
+
+(define (read-ident-chars! tok)
+  (let loop ([chars '()])
+    (define c (tok-peek tok))
+    (if (and (char? c) (ident-continue? c))
+        (begin (tok-read! tok) (loop (cons c chars)))
+        (list->string (reverse chars)))))
+
+(define (read-ident-rest! tok)
+  ;; Like read-ident-chars! but for the remaining part after first char(s) consumed
+  (read-ident-chars! tok))
+
+(define (read-ident-token! tok ln cl ps)
+  (define s (read-ident-chars! tok))
+  (token 'symbol (string->symbol s) ln cl ps (string-length s)))
+
+(define (read-number-token! tok ln cl ps)
+  (let loop ([chars '()])
+    (define c (tok-peek tok))
+    (if (and (char? c) (char-numeric? c))
+        (begin (tok-read! tok) (loop (cons c chars)))
+        (let ([s (list->string (reverse chars))])
+          (token 'number (string->number s) ln cl ps (string-length s))))))
+
+(define (read-string-token! tok ln cl ps)
+  (tok-read! tok) ; consume opening "
+  (let loop ([chars '()])
+    (define c (tok-peek tok))
+    (cond
+      [(eof-object? c)
+       (error 'prologos-reader "~a:~a:~a: Unterminated string literal"
+              (tokenizer-source tok) ln cl)]
+      [(char=? c #\\)
+       (tok-read! tok)
+       (define esc (tok-read! tok))
+       (when (eof-object? esc)
+         (error 'prologos-reader "~a:~a:~a: Unterminated string escape"
+                (tokenizer-source tok) ln cl))
+       (define actual
+         (case esc
+           [(#\n) #\newline]
+           [(#\t) #\tab]
+           [(#\\) #\\]
+           [(#\") #\"]
+           [else esc]))
+       (loop (cons actual chars))]
+      [(char=? c #\")
+       (tok-read! tok) ; consume closing "
+       (let ([s (list->string (reverse chars))])
+         (token 'string s ln cl ps (+ 2 (string-length s))))]
+      [else
+       (tok-read! tok)
+       (loop (cons c chars))])))
+
+;; --- Public tokenizer interface ---
+
+(define (tokenize-string s)
+  (define port (open-input-string s))
+  (define tok (make-tokenizer port "<string>"))
+  (let loop ([tokens '()])
+    (define t (tokenizer-next! tok))
+    (if (eq? (token-type t) 'eof)
+        (reverse (cons t tokens))
+        (loop (cons t tokens)))))
+
+;; ========================================
+;; Indentation Parser
+;; ========================================
+;; Converts token stream into Racket syntax objects (S-expressions).
+
+;; Parser state
+(struct parser (tok source) #:transparent)
+
+(define (make-parser port source)
+  (parser (make-tokenizer port source) source))
+
+;; Peek at the next token without consuming
+(define (parser-peek p)
+  (define tok (parser-tok p))
+  (when (null? (tokenizer-pending tok))
+    ;; Read next token and push it back as pending.
+    ;; tokenizer-next! may have added extra tokens to pending already
+    ;; (e.g. multiple DEDENTs), so we prepend the returned token
+    ;; rather than overwriting.
+    (define t (tokenizer-next! tok))
+    (set-tokenizer-pending! tok (cons t (tokenizer-pending tok))))
+  (car (tokenizer-pending tok)))
+
+(define (parser-next! p)
+  (tokenizer-next! (parser-tok p)))
+
+(define (parser-peek-type p)
+  (token-type (parser-peek p)))
+
+;; Make a syntax object from a datum with source location
+(define (make-stx datum source line col pos span)
+  (datum->syntax #f datum (list source line col pos span)))
+
+(define (token->stx t source)
+  (make-stx (token-value t) source
+            (token-line t) (token-col t) (token-pos t) (token-span t)))
+
+;; --- Parse a grouped form: ( ... ) ---
+;; Inside parens, indentation is disabled. Content is a flat sequence.
+
+(define (parse-grouped-form p)
+  (define open-tok (parser-next! p))  ; consume lparen
+  (define ln (token-line open-tok))
+  (define cl (token-col open-tok))
+  (define ps (token-pos open-tok))
+  (define src (parser-source p))
+
+  (define elements
+    (let loop ([elems '()])
+      (define tt (parser-peek-type p))
+      (cond
+        [(eq? tt 'rparen)
+         (parser-next! p) ; consume rparen
+         (reverse elems)]
+        [(eq? tt 'eof)
+         (error 'prologos-reader "~a:~a:~a: Unclosed parenthesis"
+                src ln cl)]
+        [else
+         (define elem (parse-inline-element p))
+         (loop (cons elem elems))])))
+
+  ;; Produce a syntax list
+  (make-stx elements src ln cl ps
+            (- (+ (token-pos (parser-peek p)) 1) ps)))
+
+;; --- Parse a bracket form: [ ... ] ---
+;; Like parse-grouped-form but attaches 'paren-shape #\[ syntax property.
+
+(define (parse-bracket-form p)
+  (define open-tok (parser-next! p))  ; consume lbracket
+  (define ln (token-line open-tok))
+  (define cl (token-col open-tok))
+  (define ps (token-pos open-tok))
+  (define src (parser-source p))
+
+  (define elements
+    (let loop ([elems '()])
+      (define tt (parser-peek-type p))
+      (cond
+        [(eq? tt 'rbracket)
+         (parser-next! p) ; consume rbracket
+         (reverse elems)]
+        [(eq? tt 'eof)
+         (error 'prologos-reader "~a:~a:~a: Unclosed bracket"
+                src ln cl)]
+        [else
+         (define elem (parse-inline-element p))
+         (loop (cons elem elems))])))
+
+  (define stx (make-stx elements src ln cl ps
+                        (- (+ (token-pos (parser-peek p)) 1) ps)))
+  (syntax-property stx 'paren-shape #\[))
+
+;; --- Parse an angle-bracket form: < ... > ---
+;; Wraps contents with $angle-type sentinel for type annotations.
+
+(define (parse-angle-form p)
+  (define open-tok (parser-next! p))  ; consume langle
+  (define ln (token-line open-tok))
+  (define cl (token-col open-tok))
+  (define ps (token-pos open-tok))
+  (define src (parser-source p))
+
+  (define elements
+    (let loop ([elems '()])
+      (define tt (parser-peek-type p))
+      (cond
+        [(eq? tt 'rangle)
+         (parser-next! p) ; consume rangle
+         (reverse elems)]
+        [(eq? tt 'eof)
+         (error 'prologos-reader "~a:~a:~a: Unclosed <"
+                src ln cl)]
+        [else
+         (define elem (parse-inline-element p))
+         (loop (cons elem elems))])))
+
+  ;; Wrap with $angle-type sentinel
+  (define sentinel (make-stx '$angle-type src ln cl ps 0))
+  (define all (cons sentinel elements))
+  (make-stx all src ln cl ps
+            (max 1 (- (+ (token-pos (parser-peek p)) 1) ps))))
+
+;; --- Parse a single inline element (atom, grouped form, $-quote, <angle>) ---
+
+(define (parse-inline-element p)
+  (define tt (parser-peek-type p))
+  (define src (parser-source p))
+  (cond
+    [(eq? tt 'lparen)
+     (parse-grouped-form p)]
+    [(eq? tt 'lbracket)
+     (parse-bracket-form p)]
+    [(eq? tt 'langle)
+     (parse-angle-form p)]
+    [(eq? tt 'lbrace)
+     (define t (parser-next! p))
+     (error 'prologos-reader
+            "~a:~a:~a: Braces {} are reserved for EDN hashmaps (coming soon)."
+            src (token-line t) (token-col t))]
+    [(eq? tt 'dollar)
+     ;; $expr — quote operator
+     (define d (parser-next! p)) ; consume $
+     (define inner (parse-inline-element p))
+     (define src (parser-source p))
+     (make-stx (list (make-stx '$quote src
+                               (token-line d) (token-col d) (token-pos d) 1)
+                     inner)
+               src (token-line d) (token-col d) (token-pos d)
+               (token-span d))]
+    [(eq? tt 'symbol)
+     (define t (parser-next! p))
+     (token->stx t src)]
+    [(eq? tt 'number)
+     (define t (parser-next! p))
+     (token->stx t src)]
+    [(eq? tt 'colon)
+     ;; Freestanding : becomes the symbol ':
+     (define t (parser-next! p))
+     (make-stx ': src (token-line t) (token-col t) (token-pos t) 1)]
+    [(eq? tt 'string)
+     (define t (parser-next! p))
+     (token->stx t src)]
+    [(eq? tt 'keyword)
+     (define t (parser-next! p))
+     (token->stx t src)]
+    [else
+     (define t (parser-peek p))
+     (error 'prologos-reader
+            "~a:~a:~a: Unexpected token: ~a"
+            src (token-line t) (token-col t) (token-type t))]))
+
+;; --- Read all tokens on the current line (up to NEWLINE, INDENT, DEDENT, or EOF) ---
+
+(define (read-line-elements p)
+  (let loop ([elems '()])
+    (define tt (parser-peek-type p))
+    (cond
+      [(or (eq? tt 'newline) (eq? tt 'indent)
+           (eq? tt 'dedent) (eq? tt 'eof))
+       (reverse elems)]
+      [else
+       (define elem (parse-inline-element p))
+       (loop (cons elem elems))])))
+
+;; --- Parse a child form (inside an indented block) ---
+
+(define (parse-child-form p)
+  (define elems (read-line-elements p))
+  (define tt (parser-peek-type p))
+
+  (cond
+    ;; Child has an indented block below it
+    [(eq? tt 'indent)
+     (define children (parse-indented-block p))
+     (define all-elems (append elems children))
+     ;; Always wrap when there are indented children
+     (wrap-as-list all-elems (parser-source p))]
+
+    ;; Single-element child — unwrap
+    [(and (= (length elems) 1))
+     (car elems)]
+
+    ;; Multi-element child — wrap as list
+    [else
+     (wrap-as-list elems (parser-source p))]))
+
+;; --- Parse an indented block ---
+
+(define (parse-indented-block p)
+  (parser-next! p) ; consume INDENT
+  (let loop ([forms '()])
+    (define tt (parser-peek-type p))
+    (cond
+      [(eq? tt 'dedent)
+       (parser-next! p) ; consume DEDENT
+       (reverse forms)]
+      [(eq? tt 'eof)
+       (reverse forms)]
+      [(eq? tt 'newline)
+       (parser-next! p) ; consume NEWLINE between children
+       (loop forms)]
+      [else
+       (define form (parse-child-form p))
+       (loop (cons form forms))])))
+
+;; --- Parse a top-level form ---
+
+(define (parse-top-level-form p)
+  (define elems (read-line-elements p))
+  (define tt (parser-peek-type p))
+
+  (cond
+    ;; Top-level form has an indented block
+    [(eq? tt 'indent)
+     (define children (parse-indented-block p))
+     (define all-elems (append elems children))
+     (wrap-as-list all-elems (parser-source p))]
+
+    ;; Single element at top level — still wrap (top-level forms are always commands)
+    [else
+     (wrap-as-list elems (parser-source p))]))
+
+;; --- Wrap a list of syntax elements as a syntax list ---
+
+(define (wrap-as-list elems source)
+  (if (null? elems)
+      (make-stx '() source 0 0 0 0)
+      (let ([first (car elems)])
+        (make-stx elems source
+                  (syntax-line first)
+                  (syntax-column first)
+                  (syntax-position first)
+                  (max 1 (- (+ (syntax-position (last-elem elems))
+                               (syntax-span (last-elem elems)))
+                            (syntax-position first)))))))
+
+(define (last-elem lst)
+  (if (null? (cdr lst)) (car lst) (last-elem (cdr lst))))
+
+;; --- Read all top-level forms ---
+
+(define (read-all-forms p)
+  (let loop ([forms '()])
+    (define tt (parser-peek-type p))
+    (cond
+      [(eq? tt 'eof)
+       (reverse forms)]
+      [(eq? tt 'newline)
+       (parser-next! p) ; skip newlines between top-level forms
+       (loop forms)]
+      [else
+       (define form (parse-top-level-form p))
+       (loop (cons form forms))])))
+
+;; ========================================
+;; Public API
+;; ========================================
+
+;; Read one datum (no source locations)
+;; NOTE: Because indentation-sensitive parsing requires reading the entire
+;; input to determine block structure, this reads ALL forms on first call
+;; and caches remaining forms for subsequent calls via a port property.
+(define prologos-form-cache (make-weak-hasheq))
+
+(define (prologos-read in)
+  (define cached (hash-ref prologos-form-cache in #f))
+  (cond
+    [(and cached (pair? cached))
+     (hash-set! prologos-form-cache in (cdr cached))
+     (syntax->datum (car cached))]
+    [(and cached (null? cached))
+     eof]
+    [else
+     ;; First call: parse everything
+     (define p (make-parser in "<unknown>"))
+     (define all-forms (read-all-forms p))
+     (cond
+       [(null? all-forms) eof]
+       [else
+        (hash-set! prologos-form-cache in (cdr all-forms))
+        (syntax->datum (car all-forms))])]))
+
+;; Read one datum with source locations
+(define prologos-stx-cache (make-weak-hasheq))
+
+(define (prologos-read-syntax source in)
+  (define cached (hash-ref prologos-stx-cache in #f))
+  (cond
+    [(and cached (pair? cached))
+     (hash-set! prologos-stx-cache in (cdr cached))
+     (car cached)]
+    [(and cached (null? cached))
+     eof]
+    [else
+     ;; First call: parse everything
+     (define p (make-parser in (or source "<unknown>")))
+     (define all-forms (read-all-forms p))
+     (cond
+       [(null? all-forms) eof]
+       [else
+        (hash-set! prologos-stx-cache in (cdr all-forms))
+        (car all-forms)])]))
+
+;; Read ALL forms at once (for #:whole-body-readers? #t in syntax/module-reader)
+(define (prologos-read-syntax-all source in)
+  (define p (make-parser in (or source "<unknown>")))
+  (read-all-forms p))
+
+;; Read all forms from a string (for testing)
+(define (read-all-forms-string s)
+  (define port (open-input-string s))
+  (define p (make-parser port "<string>"))
+  (map syntax->datum (read-all-forms p)))
+

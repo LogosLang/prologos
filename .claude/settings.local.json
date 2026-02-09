@@ -14,7 +14,22 @@
       "Bash(/opt/homebrew/bin/racket --version)",
       "Bash(/opt/homebrew/bin/raco test:*)",
       "Bash(raco test:*)",
-      "Bash(python3:*)"
+      "Bash(python3:*)",
+      "Bash(raco expand:*)",
+      "Bash(raco pkg:*)",
+      "Bash(raco pkg show:*)",
+      "WebFetch(domain:lambda-the-ultimate.org)",
+      "WebFetch(domain:stchang.github.io)",
+      "WebFetch(domain:beautifulracket.com)",
+      "Bash(echo:*)",
+      "WebFetch(domain:eighty-twenty.org)",
+      "Bash(for f in prologos/tests/test-*.rkt)",
+      "Bash(do echo \"=== $f ===\")",
+      "Bash(done)",
+      "Bash(raco make:*)",
+      "Bash(find:*)",
+      "Bash(git stash:*)",
+      "Bash(grep:*)"
     ]
   }
 }
