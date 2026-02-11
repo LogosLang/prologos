@@ -6,10 +6,10 @@
 
 ;; Custom indentation for Prologos source files.
 ;;
-;; Sexp mode (#lang prologos/sexp): Lisp-style indentation using a
-;; custom `lisp-indent-function' that dispatches on per-form indent
-;; properties.  Reuses Emacs's `lisp-indent-specform' and
-;; `lisp-indent-defform' for battle-tested indentation logic.
+;; Sexp mode (#lang prologos/sexp): Lisp-style indentation using the
+;; standard `lisp-indent-function' symbol property on each form.
+;; Emacs's built-in `calculate-lisp-indent' reads these properties
+;; and dispatches to `lisp-indent-specform'/`lisp-indent-defform'.
 ;;
 ;; WS mode (#lang prologos): Indentation is semantically significant.
 ;; The engine preserves existing indentation on non-blank lines and
@@ -21,74 +21,56 @@
 (defvar prologos--ws-mode-p)
 
 ;; ============================================================
-;; Sexp mode: custom lisp-indent-function
+;; Customization
 ;; ============================================================
 
-(defun prologos-lisp-indent-function (indent-point state)
-  "Calculate indentation for Prologos forms in sexp mode.
-Consults the `prologos-indent-function' property of the head symbol.
+(defcustom prologos-indent-offset 2
+  "Number of spaces for each indentation level in Prologos."
+  :type 'integer
+  :group 'prologos)
 
-INDENT-POINT is the position being indented.
-STATE is the parse state from `parse-partial-sexp'."
-  (let ((normal-indent (current-column)))
-    (goto-char (1+ (elt state 1)))
-    (parse-partial-sexp (point) indent-point 0 t)
-    (if (and (elt state 2)
-             (not (looking-at "\\sw\\|\\s_")))
-        ;; First element is not a symbol — align with first arg
-        (progn
-          (when (not (> (save-excursion (forward-line 1) (point))
-                       (elt state 2)))
-            (goto-char (elt state 2))
-            (beginning-of-line)
-            (parse-partial-sexp (point) (elt state 2) 0 t))
-          (current-column))
-      ;; First element is a symbol — check for prologos-indent-function property
-      (let* ((function (buffer-substring (point)
-                                         (progn (forward-sexp 1) (point))))
-             (method (get (intern-soft function) 'prologos-indent-function)))
-        (cond ((integerp method)
-               (lisp-indent-specform method state indent-point normal-indent))
-              ((eq method 'defun)
-               (lisp-indent-defform state indent-point))
-              (t
-               ;; Default: align with first argument
-               (let ((function (buffer-substring (point)
-                                                 (progn (goto-char (elt state 1))
-                                                        (forward-sexp 1)
-                                                        (point)))))
-                 normal-indent)))))))
+(defcustom prologos-indent-trigger-commands
+  '(indent-for-tab-command)
+  "Commands that trigger indent cycling in WS mode.
+When one of these commands is repeated (TAB TAB TAB...),
+WS mode cycles through plausible indentation levels."
+  :type '(repeat symbol)
+  :group 'prologos)
 
 ;; ============================================================
 ;; Indent properties for Prologos forms
+;;
+;; Uses the standard 'lisp-indent-function symbol property so that
+;; Emacs's built-in calculate-lisp-indent dispatches correctly.
+;; This is the same mechanism used by racket-mode and clojure-mode.
 ;; ============================================================
 
 ;; defun-style indentation (body gets extra indent)
-(put 'def      'prologos-indent-function 'defun)
-(put 'defn     'prologos-indent-function 'defun)
-(put 'deftype  'prologos-indent-function 'defun)
-(put 'defmacro 'prologos-indent-function 'defun)
-(put 'data     'prologos-indent-function 'defun)
-(put 'relation 'prologos-indent-function 'defun)
+(put 'def      'lisp-indent-function 'defun)
+(put 'defn     'lisp-indent-function 'defun)
+(put 'deftype  'lisp-indent-function 'defun)
+(put 'defmacro 'lisp-indent-function 'defun)
+(put 'data     'lisp-indent-function 'defun)
+(put 'relation 'lisp-indent-function 'defun)
 
 ;; 1-arg special forms (first arg on same line, rest indented)
-(put 'fn      'prologos-indent-function 1)
-(put 'the     'prologos-indent-function 1)
-(put 'match   'prologos-indent-function 1)
-(put 'reduce  'prologos-indent-function 1)
+(put 'fn      'lisp-indent-function 1)
+(put 'the     'lisp-indent-function 1)
+(put 'match   'lisp-indent-function 1)
+(put 'reduce  'lisp-indent-function 1)
 
 ;; 2-arg special forms
-(put 'if 'prologos-indent-function 2)
+(put 'if 'lisp-indent-function 2)
 
 ;; let/do
-(put 'let 'prologos-indent-function 1)
-(put 'do  'prologos-indent-function 0)
+(put 'let 'lisp-indent-function 1)
+(put 'do  'lisp-indent-function 0)
 
 ;; Type forms
-(put 'Pi     'prologos-indent-function 1)
-(put 'Sigma  'prologos-indent-function 1)
-(put 'forall 'prologos-indent-function 1)
-(put 'exists 'prologos-indent-function 1)
+(put 'Pi     'lisp-indent-function 1)
+(put 'Sigma  'lisp-indent-function 1)
+(put 'forall 'lisp-indent-function 1)
+(put 'exists 'lisp-indent-function 1)
 
 ;; ============================================================
 ;; Sexp mode indent-line wrapper
@@ -99,24 +81,75 @@ STATE is the parse state from `parse-partial-sexp'."
   (lisp-indent-line))
 
 ;; ============================================================
-;; WS mode indent-line
+;; WS mode — TAB-cycling indentation
+;;
+;; Follows the Python-mode pattern: first TAB indents to the
+;; suggested level; repeated TABs cycle through plausible
+;; indent levels (decreasing, then wrap back to maximum).
 ;; ============================================================
 
+(defun prologos--ws-prev-nonblank-indent ()
+  "Return indentation of the previous non-blank line, or 0."
+  (save-excursion
+    (forward-line -1)
+    (while (and (not (bobp))
+                (looking-at "^\\s-*$"))
+      (forward-line -1))
+    (if (looking-at "^\\s-*$")
+        0
+      (current-indentation))))
+
+(defun prologos--ws-calculate-indent-levels ()
+  "Return a sorted list of plausible indent levels for current line.
+Based on the previous non-blank line's indentation, offers:
+  - 0 (top-level)
+  - prev-indent - offset (dedent)
+  - prev-indent (same level)
+  - prev-indent + offset (indent deeper)"
+  (let* ((prev-indent (prologos--ws-prev-nonblank-indent))
+         (offset prologos-indent-offset)
+         (candidates (list 0
+                           (max 0 (- prev-indent offset))
+                           prev-indent
+                           (+ prev-indent offset))))
+    (delete-dups (sort candidates #'<))))
+
+(defun prologos--ws-cycle-indent (levels current-indent)
+  "Return the next lower indent level from LEVELS, cycling at minimum.
+LEVELS is a sorted ascending list of indent columns.
+CURRENT-INDENT is the current indentation.
+Returns the largest level that is strictly less than CURRENT-INDENT,
+or wraps to the maximum level if already at or below the minimum."
+  (let* ((rev-levels (reverse levels))
+         (default (car rev-levels)))  ;; max level
+    (catch 'found
+      (dolist (level rev-levels)
+        (when (< level current-indent)
+          (throw 'found level)))
+      default)))
+
 (defun prologos--ws-indent-line ()
-  "Indent line in whitespace-significant mode.
-Preserves existing indentation (which is semantic).
-Only indents blank lines to match previous non-blank line."
-  (let ((current-indent (current-indentation)))
-    (if (= (line-beginning-position) (line-end-position))
-        ;; Blank line: indent to match previous non-blank line
-        (indent-line-to (save-excursion
-                          (forward-line -1)
-                          (while (and (not (bobp))
-                                      (looking-at "^\\s-*$"))
-                            (forward-line -1))
-                          (current-indentation)))
-      ;; Non-blank line: preserve existing indentation (semantic!)
-      (indent-line-to current-indent))))
+  "Indent line in whitespace-significant mode with TAB cycling.
+Blank lines: indent to match previous non-blank line.
+Non-blank lines, first TAB: preserve existing indentation.
+Non-blank lines, repeated TABs: cycle through plausible indent levels."
+  (if (= (line-beginning-position) (line-end-position))
+      ;; Blank line: indent to match previous non-blank line
+      (let ((target (prologos--ws-prev-nonblank-indent)))
+        (indent-line-to target)
+        (when (< (current-column) target)
+          (move-to-column target)))
+    ;; Non-blank line: cycle on repeated TAB
+    (let* ((cycling-p (and (memq this-command prologos-indent-trigger-commands)
+                           (eq last-command this-command)))
+           (levels (prologos--ws-calculate-indent-levels))
+           (target (if cycling-p
+                       (prologos--ws-cycle-indent levels (current-indentation))
+                     ;; First TAB: preserve existing indentation
+                     (current-indentation))))
+      (indent-line-to target)
+      (when (< (current-column) target)
+        (move-to-column target)))))
 
 ;; ============================================================
 ;; Top-level dispatcher
@@ -124,7 +157,7 @@ Only indents blank lines to match previous non-blank line."
 
 (defun prologos-indent-line ()
   "Indent current line as Prologos code.
-In WS mode, indentation is semantic and preserved.
+In WS mode, TAB cycles through plausible indentation levels.
 In sexp mode, uses Lisp-style indentation with Prologos-specific rules."
   (interactive)
   (if prologos--ws-mode-p

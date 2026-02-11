@@ -293,9 +293,14 @@ If MODE-FN is given, call it instead of `prologos-mode'."
     (should (eq prologos--ws-mode-p nil))))
 
 (ert-deftest prologos-test/no-lang-detection ()
-  "No #lang directive should default to sexp mode (nil)."
+  "No #lang directive should default to WS mode (t)."
   (prologos-test--in-buffer "(def x <Nat> zero)"
-    (should (eq prologos--ws-mode-p nil))))
+    (should (eq prologos--ws-mode-p t))))
+
+(ert-deftest prologos-test/ns-detection ()
+  "Files starting with `ns' should be WS mode (the common case)."
+  (prologos-test--in-buffer "ns prologos.data.nat\n\nprovide add mult\n\ndefn add [x : Nat, y : Nat] : Nat\n  match y\n    | zero  -> x\n    | inc k -> inc (add x k)"
+    (should (eq prologos--ws-mode-p t))))
 
 ;; ============================================================
 ;; Test: Defun navigation

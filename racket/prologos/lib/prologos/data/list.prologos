@@ -28,7 +28,7 @@ defn length {A} [xs : List A] : Nat
 ;; Map a function over the list.
 defn map {A B} [f : A -> B, xs : List A] : List B
   match xs
-    | nil      -> nil
+    | nil       -> nil
     | cons a as -> cons (f a) (map f as)
 
 ;; Filter: keep elements satisfying the predicate.
@@ -44,6 +44,7 @@ defn append {A} [xs : List A, ys : List A] : List A
   match xs
     | nil       -> ys
     | cons a as -> cons a (append as ys)
+
 
 ;; Head of a list with a default value.
 defn head {A} [default : A, xs : List A] : A

@@ -39,7 +39,11 @@
       "WebFetch(domain:www.rntz.net)",
       "Bash(raco help:*)",
       "Bash(sysctl:*)",
-      "Bash(emacs:*)"
+      "Bash(emacs:*)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(head:*)",
+      "Bash(tree-sitter:*)",
+      "Bash(node --version:*)"
     ]
   }
 }

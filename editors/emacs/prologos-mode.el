@@ -135,12 +135,12 @@ Detected from the `#lang' directive on the first line.")
 
 (defun prologos--detect-lang-mode ()
   "Detect whether this file uses sexp or whitespace mode.
-Sets `prologos--ws-mode-p' based on the #lang directive."
+WS mode is the default.  Only `#lang prologos/sexp' triggers sexp mode.
+Files starting with `ns', `#lang prologos', or anything else use WS mode."
   (save-excursion
     (goto-char (point-min))
     (setq prologos--ws-mode-p
-          (and (looking-at "#lang\\s-+prologos\\s-*$")
-               t))))
+          (not (looking-at "#lang\\s-+prologos/sexp")))))
 
 ;; ============================================================
 ;; Defun navigation
@@ -189,7 +189,6 @@ Sets `prologos--ws-mode-p' based on the #lang directive."
 
   ;; Indentation
   (setq-local indent-line-function #'prologos-indent-line)
-  (setq-local lisp-indent-function #'prologos-lisp-indent-function)
 
   ;; Comments
   (setq-local comment-start ";; ")
