@@ -22,7 +22,8 @@
 (require racket/list
          racket/match
          "syntax.rkt"
-         "prelude.rkt")
+         "prelude.rkt"
+         "sessions.rkt")
 
 (provide
  ;; Meta-info struct
@@ -63,7 +64,15 @@
  mult-meta-solved?
  mult-meta-solution
  zonk-mult
- zonk-mult-default)
+ zonk-mult-default
+ ;; Sprint 8: Session metavariables
+ current-sess-meta-store
+ fresh-sess-meta
+ solve-sess-meta!
+ sess-meta-solved?
+ sess-meta-solution
+ zonk-session
+ zonk-session-default)
 
 ;; ========================================
 ;; Meta-info: everything about a single metavariable
@@ -319,11 +328,84 @@
         (if sol (zonk-mult-default sol) 'mw))
       m))
 
+;; ========================================
+;; Sprint 8: Session metavariables
+;; ========================================
+;; Same pattern as level-metas/mult-metas: simple id → solution or 'unsolved store.
+;; sess-meta solutions are session types (sess-send, sess-recv, sess-end, etc.).
+
+(define current-sess-meta-store (make-parameter (make-hasheq)))
+
+;; Create a fresh sess metavariable, register in store, return sess-meta.
+(define (fresh-sess-meta source)
+  (define id (gensym 'smeta))
+  (hash-set! (current-sess-meta-store) id 'unsolved)
+  (sess-meta id))
+
+;; Assign a solution to a sess metavariable.
+(define (solve-sess-meta! id solution)
+  (define status (hash-ref (current-sess-meta-store) id #f))
+  (unless status
+    (error 'solve-sess-meta! "unknown sess-meta: ~a" id))
+  (when (not (eq? status 'unsolved))
+    (error 'solve-sess-meta! "sess-meta ~a already solved" id))
+  (hash-set! (current-sess-meta-store) id solution))
+
+;; Check if a sess metavariable has been solved.
+(define (sess-meta-solved? id)
+  (define v (hash-ref (current-sess-meta-store) id #f))
+  (and v (not (eq? v 'unsolved))))
+
+;; Retrieve the solution of a sess metavariable, or #f if unsolved/unknown.
+(define (sess-meta-solution id)
+  (define v (hash-ref (current-sess-meta-store) id #f))
+  (and v (not (eq? v 'unsolved)) v))
+
+;; Zonk a session: follow solved sess-metas, leave unsolved in place.
+;; Use zonk-session-default for final output (defaults unsolved to sess-end).
+(define (zonk-session s)
+  (cond
+    [(sess-meta? s)
+     (let ([sol (sess-meta-solution (sess-meta-id s))])
+       (if sol (zonk-session sol) s))]
+    [(sess-send? s) (sess-send (sess-send-type s) (zonk-session (sess-send-cont s)))]
+    [(sess-recv? s) (sess-recv (sess-recv-type s) (zonk-session (sess-recv-cont s)))]
+    [(sess-dsend? s) (sess-dsend (sess-dsend-type s) (zonk-session (sess-dsend-cont s)))]
+    [(sess-drecv? s) (sess-drecv (sess-drecv-type s) (zonk-session (sess-drecv-cont s)))]
+    [(sess-choice? s)
+     (sess-choice (map (lambda (b) (cons (car b) (zonk-session (cdr b))))
+                       (sess-choice-branches s)))]
+    [(sess-offer? s)
+     (sess-offer (map (lambda (b) (cons (car b) (zonk-session (cdr b))))
+                      (sess-offer-branches s)))]
+    [(sess-mu? s) (sess-mu (zonk-session (sess-mu-body s)))]
+    [else s]))  ;; sess-end, sess-svar, sess-branch-error
+
+;; Final zonk: defaults unsolved sess-metas to sess-end (for output/display).
+(define (zonk-session-default s)
+  (cond
+    [(sess-meta? s)
+     (let ([sol (sess-meta-solution (sess-meta-id s))])
+       (if sol (zonk-session-default sol) (sess-end)))]
+    [(sess-send? s) (sess-send (sess-send-type s) (zonk-session-default (sess-send-cont s)))]
+    [(sess-recv? s) (sess-recv (sess-recv-type s) (zonk-session-default (sess-recv-cont s)))]
+    [(sess-dsend? s) (sess-dsend (sess-dsend-type s) (zonk-session-default (sess-dsend-cont s)))]
+    [(sess-drecv? s) (sess-drecv (sess-drecv-type s) (zonk-session-default (sess-drecv-cont s)))]
+    [(sess-choice? s)
+     (sess-choice (map (lambda (b) (cons (car b) (zonk-session-default (cdr b))))
+                       (sess-choice-branches s)))]
+    [(sess-offer? s)
+     (sess-offer (map (lambda (b) (cons (car b) (zonk-session-default (cdr b))))
+                      (sess-offer-branches s)))]
+    [(sess-mu? s) (sess-mu (zonk-session-default (sess-mu-body s)))]
+    [else s]))
+
 ;; Clear all metavariables and constraints from the store.
 (define (reset-meta-store!)
   (hash-clear! (current-meta-store))
   (hash-clear! (current-level-meta-store))
   (hash-clear! (current-mult-meta-store))
+  (hash-clear! (current-sess-meta-store))
   (reset-constraint-store!))
 
 ;; List all unsolved metavariable infos.

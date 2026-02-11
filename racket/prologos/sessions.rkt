@@ -18,6 +18,7 @@
  (struct-out sess-choice) (struct-out sess-offer)
  (struct-out sess-mu) (struct-out sess-svar)
  (struct-out sess-end)
+ (struct-out sess-meta)
  (struct-out sess-branch-error)
  ;; Operations
  dual substS unfold-session lookup-branch)
@@ -35,6 +36,7 @@
 (struct sess-mu (body) #:transparent)              ; recursive session
 (struct sess-svar (index) #:transparent)           ; session variable (de Bruijn)
 (struct sess-end () #:transparent)                 ; session end
+(struct sess-meta (id) #:transparent)              ; Sprint 8: unsolved session continuation
 (struct sess-branch-error () #:transparent)        ; lookup failure
 
 ;; BranchList: assoc list of (cons label session)
@@ -53,7 +55,8 @@
     [(sess-offer branches) (sess-choice (dual-branches branches))]
     [(sess-mu body) (sess-mu (dual body))]
     [(sess-svar _) s]
-    [(sess-end) s]))
+    [(sess-end) s]
+    [(sess-meta _) s]))  ;; Sprint 8: can't dual an unknown session
 
 (define (dual-branches bl)
   (map (lambda (b) (cons (car b) (dual (cdr b)))) bl))
@@ -73,7 +76,8 @@
     [(sess-offer branches) (sess-offer (substS-branches branches k e))]
     [(sess-mu body) (sess-mu (substS body k e))] ; mu binds session vars, not expr vars
     [(sess-svar _) s]
-    [(sess-end) s]))
+    [(sess-end) s]
+    [(sess-meta _) s]))  ;; Sprint 8: no expression variables in unsolved meta
 
 (define (substS-branches bl k e)
   (map (lambda (b) (cons (car b) (substS (cdr b) k e))) bl))
@@ -96,7 +100,8 @@
     [(sess-offer branches) (sess-offer (unfoldS-branches branches k replacement))]
     [(sess-mu body) (sess-mu (unfoldS body (add1 k) replacement))] ; mu binds, increment
     [(sess-svar n) (if (= n k) replacement (sess-svar n))]
-    [(sess-end) s]))
+    [(sess-end) s]
+    [(sess-meta _) s]))  ;; Sprint 8: can't unfold an unsolved meta
 
 (define (unfoldS-branches bl k replacement)
   (map (lambda (b) (cons (car b) (unfoldS (cdr b) k replacement))) bl))
