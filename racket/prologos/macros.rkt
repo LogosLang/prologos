@@ -452,14 +452,25 @@
 ;; Note: The expansion uses old colon syntax internally since macros generate
 ;; internal forms that the parser's backward compatibility handles.
 (define (expand-if datum)
-  (unless (and (list? datum) (= (length datum) 5))
-    (error 'if "if requires: (if ResultType cond then else)"))
-  (define result-type (list-ref datum 1))
-  (define cond-expr (list-ref datum 2))
-  (define then-expr (list-ref datum 3))
-  (define else-expr (list-ref datum 4))
-  ;; Use constant motive shorthand — the parser wraps bare types automatically.
-  `(boolrec ,result-type ,then-expr ,else-expr ,cond-expr))
+  (unless (and (list? datum) (or (= (length datum) 4) (= (length datum) 5)))
+    (error 'if "if requires: (if cond then else) or (if ResultType cond then else)"))
+  (cond
+    ;; Sprint 10: 3-arg form — (if cond then else), motive inferred via hole
+    [(= (length datum) 4)
+     (define cond-expr (list-ref datum 1))
+     (define then-expr (list-ref datum 2))
+     (define else-expr (list-ref datum 3))
+     ;; Use `_` as motive — parser converts to surf-hole, boolrec wraps it,
+     ;; type checker infers result type from checking context.
+     `(boolrec _ ,then-expr ,else-expr ,cond-expr)]
+    ;; 4-arg form — (if ResultType cond then else), backward compat
+    [else
+     (define result-type (list-ref datum 1))
+     (define cond-expr (list-ref datum 2))
+     (define then-expr (list-ref datum 3))
+     (define else-expr (list-ref datum 4))
+     ;; Use constant motive shorthand — the parser wraps bare types automatically.
+     `(boolrec ,result-type ,then-expr ,else-expr ,cond-expr)]))
 
 ;; Register built-in pre-parse macros at module load time
 (register-preparse-macro! 'let expand-let)
@@ -1091,7 +1102,9 @@
     ;; Already a top-level command — expand sub-expressions, then pass through
     [(surf-def? surf)
      (surf-def (surf-def-name surf)
-               (expand-expression (surf-def-type surf))
+               ;; Sprint 10: type may be #f for type-inferred defs
+               (let ([ty (surf-def-type surf)])
+                 (if ty (expand-expression ty) #f))
                (expand-expression (surf-def-body surf))
                (surf-def-srcloc surf))]
     [(surf-check? surf)

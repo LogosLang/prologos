@@ -52,6 +52,17 @@
 ;; ========================================
 ;; Process a single parsed surface form
 ;; ========================================
+;; Sprint 10: Check if an elaborated type contains expr-hole
+(define (type-contains-hole? e)
+  (match e
+    [(expr-hole) #t]
+    [(expr-Pi _ a b) (or (type-contains-hole? a) (type-contains-hole? b))]
+    [(expr-Sigma a b) (or (type-contains-hole? a) (type-contains-hole? b))]
+    [(expr-app f x) (or (type-contains-hole? f) (type-contains-hole? x))]
+    [(expr-lam _ a b) (or (type-contains-hole? a) (type-contains-hole? b))]
+    [_ #f]))
+
+
 ;; Returns: (list 'def name type-string)
 ;;        | (list 'output string)
 ;; Raises: exn:fail:prologos on any error
@@ -63,9 +74,26 @@
     (raise-prologos-error elab-result))
 
   (match elab-result
-    ;; (def name type body)
+    ;; Sprint 10: (def name #f body) — type inferred from body
+    [(list 'def name #f body)
+     (let ([inferred-type (infer/err ctx-empty body loc)])
+       (when (prologos-error? inferred-type)
+         (raise-prologos-error inferred-type))
+       (let ([ty-ok (is-type/err ctx-empty inferred-type loc)])
+         (when (prologos-error? ty-ok)
+           (raise-prologos-error ty-ok))
+         (let ([z-type (zonk-final inferred-type)]
+               [z-body (zonk-final body)])
+           (current-global-env
+            (global-env-add (current-global-env) name z-type z-body))
+           (list 'def name (pp-expr z-type)))))]
+
+    ;; (def name type body) — annotated path
     [(list 'def name type body)
-     (let ([ty-ok (is-type/err ctx-empty type loc)])
+     ;; Sprint 10: skip is-type check when type has holes (bare-param defn)
+     (let ([ty-ok (if (type-contains-hole? type)
+                      #t
+                      (is-type/err ctx-empty type loc))])
        (when (prologos-error? ty-ok)
          (raise-prologos-error ty-ok))
        (let ([chk (check/err ctx-empty body type loc)])

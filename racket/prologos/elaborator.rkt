@@ -482,10 +482,14 @@
   (match arm
     [(reduce-arm ctor-name bindings body-surf loc)
      ;; Add each binding name to the environment
+     ;; Sprint 10: Wildcard `_` — skip env-extend but still increment depth
+     ;; so de Bruijn indices for subsequent bindings remain correct.
      (define-values (new-env new-depth)
        (for/fold ([e env] [d depth])
                  ([name (in-list bindings)])
-         (values (env-extend e name d) (+ d 1))))
+         (if (eq? name '_)
+             (values e (+ d 1))               ;; wildcard: skip binding, bump depth
+             (values (env-extend e name d) (+ d 1)))))
      (define elab-body (elaborate body-surf new-env new-depth))
      (if (prologos-error? elab-body) elab-body
          (expr-reduce-arm ctor-name (length bindings) elab-body))]))
@@ -504,12 +508,19 @@
 (define (elaborate-top-level surf)
   (match surf
     [(surf-def name type-surf body-surf loc)
-     (let ([ty (elaborate type-surf)]
-           [bd (elaborate body-surf)])
-       (cond
-         [(prologos-error? ty) ty]
-         [(prologos-error? bd) bd]
-         [else (list 'def name ty bd)]))]
+     (cond
+       ;; Sprint 10: No type annotation — elaborate body only
+       [(not type-surf)
+        (let ([bd (elaborate body-surf)])
+          (if (prologos-error? bd) bd
+              (list 'def name #f bd)))]
+       [else
+        (let ([ty (elaborate type-surf)]
+              [bd (elaborate body-surf)])
+          (cond
+            [(prologos-error? ty) ty]
+            [(prologos-error? bd) bd]
+            [else (list 'def name ty bd)]))])]
 
     [(surf-check expr-surf type-surf loc)
      (let ([e (elaborate expr-surf)]

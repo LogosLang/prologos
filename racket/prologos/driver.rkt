@@ -101,6 +101,24 @@
         result)))
 
 ;; ========================================
+;; Sprint 10: Check if an elaborated type contains expr-hole
+;; Used to detect types with holes from bare-param defn.
+;; When a type has holes, is-type will fail, but check will still work.
+;; ========================================
+(define (type-contains-hole? e)
+  (match e
+    [(expr-hole) #t]
+    [(expr-Pi _ a b) (or (type-contains-hole? a) (type-contains-hole? b))]
+    [(expr-Sigma a b) (or (type-contains-hole? a) (type-contains-hole? b))]
+    [(expr-app f x) (or (type-contains-hole? f) (type-contains-hole? x))]
+    [(expr-lam _ a b) (or (type-contains-hole? a) (type-contains-hole? b))]
+    [_ #f]))
+
+;; Sprint 10: For bare-param defn, the type has holes. We skip is-type and
+;; just run check(body, type) — the holes act as wildcards, accepting any type.
+;; The stored type retains holes which display as `_`.
+
+;; ========================================
 ;; Process a single top-level command
 ;; ========================================
 ;; Returns a result string, or a prologos-error.
@@ -155,47 +173,25 @@
   (define name (surf-def-name expanded))
   (define type-surf (surf-def-type expanded))
   (define body-surf (surf-def-body expanded))
-  ;; 1. Elaborate type
-  (define type (elaborate type-surf))
   (cond
-    [(prologos-error? type) type]
-    [else
-     ;; 2. Check type is well-formed
-     (define ty-ok (is-type/err ctx-empty type))
+    ;; Sprint 10: Type-inferred def (no type annotation)
+    [(not type-surf)
+     (define body (elaborate body-surf))
      (cond
-       [(prologos-error? ty-ok) ty-ok]
+       [(prologos-error? body) body]
        [else
-        ;; 3. Pre-register for recursive references
-        (current-global-env
-         (global-env-add-type-only (current-global-env) name type))
-        (when (current-ns-context)
-          (define fqn (qualify-name name
-                        (ns-context-current-ns (current-ns-context))))
-          (current-global-env
-           (global-env-add-type-only (current-global-env) fqn type)))
-        ;; 4. Elaborate body (self-reference now resolves)
-        (define body (elaborate body-surf))
+        (define inferred-type (infer/err ctx-empty body))
         (cond
-          [(prologos-error? body)
-           ;; Remove pre-registered entry on elaboration failure
-           (current-global-env (hash-remove (current-global-env) name))
-           body]
+          [(prologos-error? inferred-type) inferred-type]
           [else
-           ;; 5. Check body against type
-           ;; Sprint 9: pass recovered name map for de Bruijn recovery in errors
-           (define chk (check/err ctx-empty body type srcloc-unknown (recover-name-map)))
+           (define ty-ok (is-type/err ctx-empty inferred-type))
            (cond
-             [(prologos-error? chk)
-              ;; Remove pre-registered entry on type-check failure
-              (current-global-env (hash-remove (current-global-env) name))
-              chk]
+             [(prologos-error? ty-ok) ty-ok]
              [else
-              ;; 5.5. Check for failed constraints (Sprint 5)
+              ;; Check for failed constraints (Sprint 5)
               (define failed (all-failed-constraints))
               (cond
                 [(not (null? failed))
-                 ;; Remove pre-registered entry on constraint failure
-                 (current-global-env (hash-remove (current-global-env) name))
                  ;; Sprint 9: structured constraint failure with provenance
                  (define c (car failed))
                  (define prov (constraint-source c))
@@ -215,20 +211,97 @@
                    lhs-str rhs-str
                    error-loc error-loc)]
                 [else
-                 ;; 6. Apply structural reduce marks (before zonk, so eq? identity holds),
-                 ;;    then zonk-final (defaults unsolved level-metas to lzero)
                  (define marked-body (apply-structural-marks body))
                  (define zonked-body (zonk-final marked-body))
-                 (define zonked-type (zonk-final type))
-                 (define final-body zonked-body)
+                 (define zonked-type (zonk-final inferred-type))
                  (current-global-env
-                  (global-env-add (current-global-env) name zonked-type final-body))
+                  (global-env-add (current-global-env) name zonked-type zonked-body))
                  (when (current-ns-context)
                    (define fqn (qualify-name name
                                  (ns-context-current-ns (current-ns-context))))
                    (current-global-env
-                    (global-env-add (current-global-env) fqn zonked-type final-body)))
-                 (format "~a : ~a defined." name (pp-expr zonked-type))])])])])]))
+                    (global-env-add (current-global-env) fqn zonked-type zonked-body)))
+                 (format "~a : ~a defined." name (pp-expr zonked-type))])])])])]
+    ;; Existing annotated path (type annotation present)
+    [else
+     ;; 1. Elaborate type
+     (define type (elaborate type-surf))
+     (cond
+       [(prologos-error? type) type]
+       [else
+        ;; 2. Check type is well-formed
+        ;; Sprint 10: Skip is-type for types with holes (bare-param defn).
+        ;; Holes act as wildcards in check and are retained in the stored type.
+        (define ty-ok (if (type-contains-hole? type)
+                          #t
+                          (is-type/err ctx-empty type)))
+        (cond
+          [(prologos-error? ty-ok) ty-ok]
+          [else
+           ;; 3. Pre-register for recursive references
+           (current-global-env
+            (global-env-add-type-only (current-global-env) name type))
+           (when (current-ns-context)
+             (define fqn (qualify-name name
+                           (ns-context-current-ns (current-ns-context))))
+             (current-global-env
+              (global-env-add-type-only (current-global-env) fqn type)))
+           ;; 4. Elaborate body (self-reference now resolves)
+           (define body (elaborate body-surf))
+           (cond
+             [(prologos-error? body)
+              ;; Remove pre-registered entry on elaboration failure
+              (current-global-env (hash-remove (current-global-env) name))
+              body]
+             [else
+              ;; 5. Check body against type (use type which has metas instead of holes)
+              ;; Sprint 9: pass recovered name map for de Bruijn recovery in errors
+              (define chk (check/err ctx-empty body type srcloc-unknown (recover-name-map)))
+              (cond
+                [(prologos-error? chk)
+                 ;; Remove pre-registered entry on type-check failure
+                 (current-global-env (hash-remove (current-global-env) name))
+                 chk]
+                [else
+                 ;; 5.5. Check for failed constraints (Sprint 5)
+                 (define failed (all-failed-constraints))
+                 (cond
+                   [(not (null? failed))
+                    ;; Remove pre-registered entry on constraint failure
+                    (current-global-env (hash-remove (current-global-env) name))
+                    ;; Sprint 9: structured constraint failure with provenance
+                    (define c (car failed))
+                    (define prov (constraint-source c))
+                    (define names (recover-name-map))
+                    (define error-loc
+                      (cond
+                        [(and (constraint-provenance? prov)
+                              (meta-source-info? (constraint-provenance-meta-source prov)))
+                         (meta-source-info-loc (constraint-provenance-meta-source prov))]
+                        [(constraint-provenance? prov) (constraint-provenance-loc prov)]
+                        [else srcloc-unknown]))
+                    (define lhs-str (pp-expr (zonk-final (constraint-lhs c)) names))
+                    (define rhs-str (pp-expr (zonk-final (constraint-rhs c)) names))
+                    (conflicting-constraints-error
+                      error-loc
+                      (format "Type error in ~a: cannot satisfy constraint" name)
+                      lhs-str rhs-str
+                      error-loc error-loc)]
+                   [else
+                    ;; 6. Apply structural reduce marks (before zonk, so eq? identity holds),
+                    ;;    then zonk-final (defaults unsolved level-metas to lzero)
+                    (define marked-body (apply-structural-marks body))
+                    (define zonked-body (zonk-final marked-body))
+                    (define zonked-type (zonk-final type))
+                    (define final-body zonked-body)
+                    (current-global-env
+                     (global-env-add (current-global-env) name zonked-type final-body))
+                    (when (current-ns-context)
+                      (define fqn (qualify-name name
+                                    (ns-context-current-ns (current-ns-context))))
+                      (current-global-env
+                       (global-env-add (current-global-env) fqn zonked-type final-body)))
+                    (format "~a : ~a defined." name (pp-expr zonked-type))])])])])])]))
 
 ;; ========================================
 ;; Read all syntax objects from a port

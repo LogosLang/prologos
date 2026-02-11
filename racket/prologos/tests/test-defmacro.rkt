@@ -171,9 +171,17 @@
   ;; The parser's constant motive shorthand wraps the bare Nat type.
   (check-equal? result '(boolrec Nat zero (inc zero) true)))
 
+(test-case "if: 3-arg form expands to boolrec with hole motive"
+  ;; Sprint 10: (if cond then else) — motive inferred via hole
+  (define result (preparse-expand-form '(if true zero (inc zero))))
+  ;; → (boolrec _ zero (inc zero) true)
+  (check-equal? result '(boolrec _ zero (inc zero) true)))
+
 (test-case "if: wrong arity"
+  ;; Sprint 10: 3-arg form is now valid — (if cond then else)
+  ;; Test 2-arg form which is still an error
   (check-exn exn:fail?
-    (lambda () (preparse-expand-form '(if Nat true zero)))))
+    (lambda () (preparse-expand-form '(if true zero)))))
 
 ;; ========================================
 ;; defmacro registration

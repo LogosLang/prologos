@@ -695,9 +695,20 @@
 ;; Parse def: (def name : type body)
 ;; ========================================
 (define (parse-def args loc)
+  ;; Sprint 10: (def name body) — 2 args, type inferred from body
   ;; NEW: (def name <type> body) — 3 args where second is ($angle-type ...)
   ;; OLD: (def name : type body) — 4 args with colon
   (cond
+    ;; Sprint 10: (def name body) — 2 args, type inferred
+    [(= (length args) 2)
+     (let ([name (stx->datum (car args))])
+       (cond
+         [(not (symbol? name))
+          (parse-error loc (format "def: expected name, got ~a" name) name)]
+         [else
+          (let ([bd (parse-datum (cadr args))])
+            (if (prologos-error? bd) bd
+                (surf-def name #f bd loc)))]))]
     ;; NEW: name <type> body — 3 elements
     [(and (= (length args) 3)
           (angle-type-stx? (cadr args)))
@@ -738,15 +749,33 @@
 ;; ========================================
 (define (parse-defn args loc)
   ;; NEWEST: (defn name {A B} [param <T> ...] <ReturnType> body) — with implicit type params
+  ;; Sprint 10: (defn name [x y z] <ReturnType> body) — bare params, types inferred
   ;; NEW: (defn name [param <T> ...] <ReturnType> body) — typed binders
   ;; OLD: (defn name : type [params...] body) — 5 elements with colon
   (cond
     ;; NEWEST: second arg is $brace-params → implicit type parameters
     ;; defn name {A B} [x <T> ...] <ReturnType> body
     ;; OR defn name {A B} [x : T, ...] : ReturnType body
+    ;; OR Sprint 10: defn name {A B} [x y z] <ReturnType> body — bare params + implicits
     [(and (>= (length args) 5)
           (brace-params-stx? (cadr args)))
      (parse-defn-with-implicits args loc)]
+
+    ;; Sprint 10: Bare-param syntax: (defn name [x y z] <ReturnType> body)
+    ;; Detection: second arg is bracket form containing ONLY bare symbols
+    ;; (no $angle-type markers, no ':', no multiplicity annotations)
+    [(and (>= (length args) 4)
+          (let ([second (cadr args)])
+            (and (syntax? second)
+                 (eq? (syntax-property second 'paren-shape) #\[)
+                 (let ([elems (syntax->list second)])
+                   (and elems (not (null? elems))
+                        (andmap (lambda (e) (symbol? (syntax-e e))) elems)
+                        (not (ormap (lambda (e)
+                                     (let ([d (syntax-e e)])
+                                       (or (eq? d ':) (mult-annot? d))))
+                                    elems)))))))
+     (parse-defn-bare-params args loc)]
 
     ;; NEW: Detect typed binder syntax: second arg is a bracket form (params with types)
     ;; Detection: either paren-shape property is #\[, or content contains $angle-type markers
@@ -810,8 +839,21 @@
   (define params-stx (car rest-after-braces))
   (define rest-args (cdr rest-after-braces)) ; <ReturnType> body  OR  : RetType body
 
-  ;; Parse explicit typed binders from the bracket form
-  (define explicit-binders (parse-defn-binders params-stx loc))
+  ;; Parse explicit binders from the bracket form
+  ;; Sprint 10: detect bare params (only symbols, no types) vs typed params
+  (define explicit-binders
+    (let ([elems (if (syntax? params-stx) (syntax->list params-stx) #f)])
+      (if (and elems (not (null? elems))
+               (andmap (lambda (e) (symbol? (syntax-e e))) elems)
+               (not (ormap (lambda (e)
+                             (let ([d (syntax-e e)])
+                               (or (eq? d ':) (mult-annot? d))))
+                           elems)))
+          ;; Bare params: build binders with surf-hole types
+          (for/list ([e (in-list elems)])
+            (binder-info (syntax-e e) #f (surf-hole loc)))
+          ;; Typed params: existing path
+          (parse-defn-binders params-stx loc))))
   (when (prologos-error? explicit-binders)
     (values explicit-binders))
 
@@ -922,6 +964,75 @@
            ;; Collect type atoms between ':' and the body.
            ;; The body is the last element.
            ;; Type atoms are everything between ':' and the last element.
+           (define after-colon (cdr rest-args))
+           (define type-atoms (drop-right after-colon 1))
+           (define body-stx (last after-colon))
+           (when (null? type-atoms)
+             (parse-error loc "defn: missing return type after ':'" #f))
+           (define ret-type (parse-infix-type type-atoms loc))
+           (define body (parse-datum body-stx))
+           (cond
+             [(prologos-error? ret-type) ret-type]
+             [(prologos-error? body) body]
+             [else
+              (define full-type
+                (foldr (lambda (bnd rest-ty)
+                         (surf-pi bnd rest-ty loc))
+                       ret-type
+                       binders))
+              (define param-names (map binder-info-name binders))
+              (surf-defn name full-type param-names body loc)])])]
+       [else
+        (parse-error loc (format "defn: expected <ReturnType> or : ReturnType, got ~a"
+                                 (stx->datum ret-type-stx)) #f)])]))
+
+;; ========================================
+;; Sprint 10: Parse defn with bare (untyped) parameters
+;; (defn name [x y z] <ReturnType> body) — parameter types inferred
+;; ========================================
+(define (parse-defn-bare-params args loc)
+  (define name (stx->datum (car args)))
+  (when (not (symbol? name))
+    (parse-error loc (format "defn: expected name, got ~a" name) name))
+
+  (define params-stx (cadr args))
+  (define rest-args (cddr args)) ; <ReturnType> body  OR  : ReturnType body
+
+  ;; Build binders with surf-hole types (to be inferred by bidirectional checking)
+  (define param-elems (syntax->list params-stx))
+  (define binders
+    (for/list ([e (in-list param-elems)])
+      (binder-info (syntax-e e) #f (surf-hole loc))))
+
+  ;; rest-args should be: <ReturnType> body  OR  : ReturnType body
+  (cond
+    [(< (length rest-args) 2)
+     (parse-error loc "defn: missing return type or body" #f)]
+    [else
+     (define ret-type-stx (car rest-args))
+     (cond
+       ;; <ReturnType> body
+       [(angle-type-stx? ret-type-stx)
+        (define ret-type (unwrap-angle-type ret-type-stx loc))
+        (define body (parse-datum (cadr rest-args)))
+        (cond
+          [(prologos-error? ret-type) ret-type]
+          [(prologos-error? body) body]
+          [else
+           ;; Build the full Pi type from binders (with hole types) and return type
+           (define full-type
+             (foldr (lambda (bnd rest-ty)
+                      (surf-pi bnd rest-ty loc))
+                    ret-type
+                    binders))
+           (define param-names (map binder-info-name binders))
+           (surf-defn name full-type param-names body loc)])]
+       ;; : ReturnType body
+       [(eq? (stx->datum ret-type-stx) ':)
+        (cond
+          [(< (length rest-args) 3)
+           (parse-error loc "defn: missing return type or body after ':'" #f)]
+          [else
            (define after-colon (cdr rest-args))
            (define type-atoms (drop-right after-colon 1))
            (define body-stx (last after-colon))
