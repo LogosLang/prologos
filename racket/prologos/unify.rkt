@@ -4,9 +4,12 @@
 ;;; PROLOGOS UNIFICATION
 ;;; Pattern unification for dependent types with metavariable solving.
 ;;;
-;;; unify(ctx, t1, t2) → #t | #f
+;;; unify(ctx, t1, t2) → #t | 'postponed | #f
 ;;;   Attempt to make t1 and t2 definitionally equal, solving metavariables
-;;;   as side effects. Returns #t if unification succeeds, #f if it fails.
+;;;   as side effects. Returns:
+;;;     #t         — unified successfully (possibly solving metas)
+;;;     'postponed — can't solve now, registered constraint for later retry
+;;;     #f         — definitely incompatible (e.g., Nat vs Bool)
 ;;;
 ;;; occurs?(id, expr) → bool
 ;;;   Occur check: does metavariable `id` appear in `expr`?
@@ -15,6 +18,7 @@
 ;;; Sprint 2a: Core structural unification (bare metas, decomposition)
 ;;; Sprint 2b: Miller's pattern condition, applied metas, binder handling
 ;;; Sprint 3:  Fresh fvar binder opening (Lean/Agda/Elab-Zoo technique)
+;;; Sprint 5:  Constraint postponement — pattern-check failure → 'postponed
 ;;;
 
 (require racket/match
@@ -25,9 +29,17 @@
          "substitution.rkt"
          "zonk.rkt")
 
-(provide unify occurs?
+(provide unify unify-ok? occurs?
          ;; Sprint 2b exports
          decompose-meta-app pattern-check invert-args)
+
+;; ========================================
+;; Sprint 5: Three-valued result helper
+;; ========================================
+;; unify-ok? treats both #t and 'postponed as success (optimistic continuation).
+;; Callers that need boolean semantics (e.g., (and ... (unify ...)))
+;; should use (unify-ok? (unify ...)) instead of bare (unify ...).
+(define (unify-ok? result) (not (eq? result #f)))
 
 ;; ========================================
 ;; Occur Check
@@ -257,8 +269,9 @@
      ;; Bare meta (shouldn't reach here from flex-app?, but defensive)
      (solve-flex-rigid id rhs ctx)]
     [(not (pattern-check args))
-     ;; Failed pattern condition — cannot solve
-     #f]
+     ;; Failed pattern condition — postpone for later retry (Sprint 5)
+     (add-constraint! flex-term rhs ctx "flex-app-pattern-fail")
+     'postponed]
     [(occurs? id rhs) #f]  ; occur check
     [else
      ;; Solve by inversion: construct lambda abstraction
@@ -312,3 +325,20 @@
                  (let-values ([(st _) (struct-info expr)]) st))
                 new-fields))]
       [else expr])))
+
+;; ========================================
+;; Sprint 5: Install constraint retry callback
+;; ========================================
+;; When solve-meta! solves a metavariable, retry-constraints-for-meta!
+;; calls this callback on each postponed constraint that mentions the meta.
+(current-retry-unify
+ (lambda (c)
+   (let ([lhs (zonk (constraint-lhs c))]
+         [rhs (zonk (constraint-rhs c))])
+     (define result (unify (constraint-ctx c) lhs rhs))
+     (cond
+       [(eq? result #t)   (set-constraint-status! c 'solved)]
+       [(eq? result #f)   (set-constraint-status! c 'failed)]
+       ;; 'postponed: leave status as-is (will be set back to 'postponed
+       ;; by retry-constraints-for-meta! if still 'retrying)
+       ))))

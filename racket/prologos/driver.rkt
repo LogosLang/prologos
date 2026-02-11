@@ -174,20 +174,32 @@
               (current-global-env (hash-remove (current-global-env) name))
               chk]
              [else
-              ;; 6. Apply structural reduce marks (before zonk, so eq? identity holds),
-              ;;    then zonk solved metas, and store
-              (define marked-body (apply-structural-marks body))
-              (define zonked-body (zonk marked-body))
-              (define zonked-type (zonk type))
-              (define final-body zonked-body)
-              (current-global-env
-               (global-env-add (current-global-env) name zonked-type final-body))
-              (when (current-ns-context)
-                (define fqn (qualify-name name
-                              (ns-context-current-ns (current-ns-context))))
-                (current-global-env
-                 (global-env-add (current-global-env) fqn zonked-type final-body)))
-              (format "~a : ~a defined." name (pp-expr zonked-type))])])])]))
+              ;; 5.5. Check for failed constraints (Sprint 5)
+              (define failed (all-failed-constraints))
+              (cond
+                [(not (null? failed))
+                 ;; Remove pre-registered entry on constraint failure
+                 (current-global-env (hash-remove (current-global-env) name))
+                 (prologos-error srcloc-unknown
+                   (format "Type error in ~a: unsatisfiable constraint ~a ≡ ~a"
+                           name
+                           (pp-expr (zonk (constraint-lhs (car failed))))
+                           (pp-expr (zonk (constraint-rhs (car failed))))))]
+                [else
+                 ;; 6. Apply structural reduce marks (before zonk, so eq? identity holds),
+                 ;;    then zonk solved metas, and store
+                 (define marked-body (apply-structural-marks body))
+                 (define zonked-body (zonk marked-body))
+                 (define zonked-type (zonk type))
+                 (define final-body zonked-body)
+                 (current-global-env
+                  (global-env-add (current-global-env) name zonked-type final-body))
+                 (when (current-ns-context)
+                   (define fqn (qualify-name name
+                                 (ns-context-current-ns (current-ns-context))))
+                   (current-global-env
+                    (global-env-add (current-global-env) fqn zonked-type final-body)))
+                 (format "~a : ~a defined." name (pp-expr zonked-type))])])])])]))
 
 ;; ========================================
 ;; Read all syntax objects from a port
@@ -279,6 +291,8 @@
      (parameterize ([current-global-env (hasheq)]
                     [current-ns-context #f]
                     [current-meta-store (make-hasheq)]
+                    [current-constraint-store '()]
+                    [current-wakeup-registry (make-hasheq)]
                     [current-preparse-registry (current-preparse-registry)]
                     [current-ctor-registry (current-ctor-registry)]
                     [current-type-meta (current-type-meta)]

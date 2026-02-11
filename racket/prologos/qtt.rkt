@@ -195,7 +195,7 @@
          [(tu t5 u5)
           (match (whnf t5)
             [(expr-Eq t t1 t2)
-             (if (and (unify ctx t1 left) (unify ctx t2 right))
+             (if (and (unify-ok? (unify ctx t1 left)) (unify-ok? (unify ctx t2 right)))
                  (tu (expr-app (expr-app (expr-app mot left) right) proof) u5)
                  (tu-error))]
             [_ (tu-error)])]
@@ -222,7 +222,7 @@
     [((expr-lam m a body) (expr-Pi m2 t-dom b))
      (cond
        [(not (eq? m m2)) (bu #f (zero-usage n))]
-       [(not (unify ctx a t-dom)) (bu #f (zero-usage n))]
+       [(not (unify-ok? (unify ctx a t-dom))) (bu #f (zero-usage n))]
        [else
         (let ([r (checkQ (ctx-extend ctx a m) body b)])
           (match r
@@ -245,7 +245,7 @@
 
     ;; ---- refl: check against Eq ----
     [((expr-refl) (expr-Eq _ e1 e2))
-     (bu (unify ctx e1 e2) (zero-usage n))]
+     (bu (unify-ok? (unify ctx e1 e2)) (zero-usage n))]
 
     ;; ---- Meta expression: optimistically succeed with zero usage ----
     ;; A metavariable (from implicit arg insertion) doesn't consume resources.
@@ -256,7 +256,7 @@
      (let ([r (inferQ ctx e)])
        (match r
          [(tu t1 u)
-          (if (and (not (expr-error? t1)) (unify ctx t t1))
+          (if (and (not (expr-error? t1)) (unify-ok? (unify ctx t t1)))
               (bu #t u)
               (bu #f (zero-usage n)))]
          [_ (bu #f (zero-usage n))]))]))

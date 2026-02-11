@@ -399,13 +399,17 @@
     (check-true (expr-lam? sol))
     (check-equal? (expr-lam-body sol) (expr-Nat))))
 
-(test-case "unify: applied meta with non-pattern args fails gracefully"
+(test-case "unify: applied meta with non-pattern args postpones (Sprint 5)"
   (parameterize ([current-meta-store (make-hasheq)]
-                 [current-global-env (hasheq)])
+                 [current-global-env (hasheq)]
+                 [current-constraint-store '()]
+                 [current-wakeup-registry (make-hasheq)])
     (define m (fresh-meta ctx-empty (expr-Type (lzero)) "test"))
-    ;; (app ?m zero) — zero is not a bvar, pattern check fails
+    ;; (app ?m zero) — zero is not a bvar, pattern check fails → postpone
     (define flex-term (expr-app m (expr-zero)))
-    (check-false (unify ctx-empty flex-term (expr-Nat)))))
+    (check-equal? (unify ctx-empty flex-term (expr-Nat)) 'postponed)
+    ;; A constraint should have been registered
+    (check-equal? (length (all-postponed-constraints)) 1)))
 
 (test-case "unify: applied meta occur check"
   (parameterize ([current-meta-store (make-hasheq)]

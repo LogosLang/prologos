@@ -168,7 +168,7 @@
      (let ([mot-ty (whnf (infer ctx mot))])
        (match mot-ty
          [(expr-Pi _ dom _)
-          (if (and (unify ctx dom (expr-Bool))
+          (if (and (unify-ok? (unify ctx dom (expr-Bool)))
                    (check ctx tc (expr-app mot (expr-true)))
                    (check ctx fc (expr-app mot (expr-false)))
                    (check ctx target (expr-Bool)))
@@ -193,7 +193,7 @@
      (let ([pt (whnf (infer ctx proof))])
        (match pt
          [(expr-Eq t t1 t2)
-          (if (and (unify ctx t1 left) (unify ctx t2 right))
+          (if (and (unify-ok? (unify ctx t1 left)) (unify-ok? (unify ctx t2 right)))
               (expr-app (expr-app (expr-app mot left) right) proof)
               (expr-error))]
          [_ (expr-error)]))]
@@ -291,7 +291,7 @@
         ;; Type hole: accept both the expected domain and multiplicity from the Pi type
         (check (ctx-extend ctx t-dom m2) body b)]
        [(not (eq? m m2)) #f]  ; multiplicity mismatch
-       [(not (unify ctx a t-dom)) #f]  ; domain mismatch
+       [(not (unify-ok? (unify ctx a t-dom))) #f]  ; domain mismatch
        [else (check (ctx-extend ctx a m) body b)])]
 
     ;; ---- Pair: check against Sigma ----
@@ -303,31 +303,31 @@
     ;; ---- refl: check against Eq ----
     ;; refl : Eq(A, e1, e2) iff conv(e1, e2)
     [((expr-refl) (expr-Eq _ e1 e2))
-     (unify ctx e1 e2)]
+     (unify-ok? (unify ctx e1 e2))]
 
     ;; ---- Vec constructors ----
     ;; vnil(A) : Vec(A, zero)
     [((expr-vnil a1) (expr-Vec a2 n))
      (and (is-type ctx a1)
-          (unify ctx a1 a2)
-          (unify ctx n (expr-zero)))]
+          (unify-ok? (unify ctx a1 a2))
+          (unify-ok? (unify ctx n (expr-zero))))]
 
     ;; vcons(A, n, head, tail) : Vec(A, suc(n))
     [((expr-vcons a1 n1 hd tl) (expr-Vec a2 len))
-     (and (unify ctx a1 a2)
-          (unify ctx len (expr-suc n1))
+     (and (unify-ok? (unify ctx a1 a2))
+          (unify-ok? (unify ctx len (expr-suc n1)))
           (check ctx hd a1)
           (check ctx tl (expr-Vec a1 n1)))]
 
     ;; ---- Fin constructors ----
     ;; fzero(n) : Fin(suc(n))
     [((expr-fzero n1) (expr-Fin bound))
-     (and (unify ctx bound (expr-suc n1))
+     (and (unify-ok? (unify ctx bound (expr-suc n1)))
           (check ctx n1 (expr-Nat)))]
 
     ;; fsuc(n, i) : Fin(suc(n))  when i : Fin(n)
     [((expr-fsuc n1 i) (expr-Fin bound))
-     (and (unify ctx bound (expr-suc n1))
+     (and (unify-ok? (unify ctx bound (expr-suc n1)))
           (check ctx i (expr-Fin n1)))]
 
     ;; ---- Posit8 literal check ----
@@ -364,7 +364,7 @@
     [(_ t-whnf)
      (let ([t1 (infer ctx e)])
        (and (not (expr-error? t1))
-            (or (unify ctx t t1)
+            (or (unify-ok? (unify ctx t t1))
                 ;; Cumulativity: Type(m) ≤ Type(n) when m ≤ n
                 (match* ((whnf t) (whnf t1))
                   [((expr-Type l1) (expr-Type l2))
