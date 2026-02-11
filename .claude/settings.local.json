@@ -38,7 +38,8 @@
       "WebFetch(domain:leanprover-community.github.io)",
       "WebFetch(domain:www.rntz.net)",
       "Bash(raco help:*)",
-      "Bash(sysctl:*)"
+      "Bash(sysctl:*)",
+      "Bash(emacs:*)"
     ]
   }
 }

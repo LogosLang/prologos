@@ -29,24 +29,21 @@ defn length {A} [xs : List A] : Nat
 defn map {A B} [f : A -> B, xs : List A] : List B
   match xs
     | nil      -> nil
-    | cons a t -> cons (f a) (map f t)
-
-
+    | cons a as -> cons (f a) (map f as)
 
 ;; Filter: keep elements satisfying the predicate.
-;; Uses match on Bool (structural PM) — no longer needs Church delegation.
 defn filter {A} [pred : A -> Bool, xs : List A] : List A
   match xs
-    | nil      -> nil
-    | cons a t -> match (pred a)
-                    | true  -> cons a (filter pred t)
-                    | false -> filter pred t
+    | nil       -> nil
+    | cons a as -> match (pred a)
+                    | true  -> cons a (filter pred as)
+                    | false -> filter pred as
 
 ;; Append two lists.
 defn append {A} [xs : List A, ys : List A] : List A
   match xs
-    | nil      -> ys
-    | cons a t -> cons a (append t ys)
+    | nil       -> ys
+    | cons a as -> cons a (append as ys)
 
 ;; Head of a list with a default value.
 defn head {A} [default : A, xs : List A] : A

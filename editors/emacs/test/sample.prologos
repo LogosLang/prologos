@@ -1,0 +1,120 @@
+#lang prologos/sexp
+
+;; Sample Prologos file for testing syntax highlighting
+;; Exercises all syntax categories in the font-lock rules
+
+;; ===== Namespace and imports =====
+(ns sample)
+(require [prologos.data.nat :refer [add mul]])
+(provide double is-zero)
+
+;; ===== Definitions =====
+(def one (inc zero))
+(def two (inc one))
+(def my-bool <Bool> true)
+(def my-type <(Type 0)> Nat)
+
+;; ===== Function definitions =====
+(defn double [x <Nat>] <Nat>
+  (add x x))
+
+(defn is-zero [n <Nat>] <Bool>
+  (match n
+    (zero -> true)
+    (inc _ -> false)))
+
+(defn const-nat [x <Nat> y <Nat>] <Nat>
+  x)
+
+;; ===== QTT multiplicities =====
+(defn id [A :0 <(Type 0)> x <A>] <A>
+  x)
+
+(defn linear-use [handle :1 <Nat>] <Nat>
+  handle)
+
+;; ===== Type constructors =====
+(def my-pi <(Type 1)>
+  (Pi [A <(Type 0)>] (-> A A)))
+
+(def my-sigma <(Type 1)>
+  (Sigma [A <(Type 0)>] A))
+
+;; ===== Pattern matching =====
+(defn pred [n <Nat>] <Nat>
+  (match n
+    (zero -> zero)
+    (inc k -> k)))
+
+;; ===== Eliminators =====
+(eval (natrec Nat zero (fn [k <Nat> rec <Nat>] (inc rec)) two))
+(eval (boolrec Nat (inc zero) zero true))
+(eval (first Nat Bool (pair (inc zero) true)))
+(eval (second Nat Bool (pair (inc zero) true)))
+
+;; ===== Value constructors =====
+(eval zero)
+(eval true)
+(eval false)
+(eval (inc (inc zero)))
+(eval (pair zero true))
+(eval refl)
+
+;; ===== Posit8 operations =====
+(eval (p8+ (posit8 42) (posit8 10)))
+(eval (p8- (posit8 100) (posit8 50)))
+(eval (p8* (posit8 3) (posit8 7)))
+(eval (p8/ (posit8 10) (posit8 2)))
+(eval (p8-neg (posit8 42)))
+(eval (p8-abs (posit8 42)))
+(eval (p8-sqrt (posit8 64)))
+(eval (p8-lt (posit8 1) (posit8 2)))
+(eval (p8-le (posit8 1) (posit8 1)))
+(eval (p8-from-nat 42))
+(eval (p8-if-nar (posit8 0) (posit8 1)))
+
+;; ===== Vectors and Fin =====
+(eval (vcons zero vnil))
+(eval (fzero))
+(eval (fsuc (fzero)))
+
+;; ===== Commands =====
+(check (inc zero) <Nat>)
+(infer (inc zero))
+
+;; ===== Strings =====
+(def greeting "Hello, Prologos!")
+(def escaped "tab:\there\nnewline")
+
+;; ===== Holes (metavariables) =====
+;; ?alpha ?beta are unsolved holes
+
+;; ===== If expression =====
+(def result <Nat> (if true (inc zero) zero))
+(eval (if Nat true (inc zero) zero))
+
+;; ===== Let expression =====
+(eval (let [x <Nat> (inc zero)]
+  (add x x)))
+
+;; ===== Do expression =====
+(eval (do [x <Nat> (inc zero)
+           y <Nat> (inc x)]
+  (add x y)))
+
+;; ===== Arrow type =====
+(def my-fn-type <(Type 0)> (-> Nat Bool))
+
+;; ===== Macros =====
+(defmacro my-macro [$x] $x)
+
+;; ===== Data declarations =====
+(data (MyList A)
+  (mynil)
+  (mycons A (MyList A)))
+
+;; ===== Future keywords (reserved) =====
+;; relation clause query
+;; actor spawn send recv chan
+;; propagator cell
+;; forall exists
