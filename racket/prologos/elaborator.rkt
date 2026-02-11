@@ -39,6 +39,11 @@
 (define (env-extend env name depth)
   (cons (cons name depth) env))
 
+;; Sprint 9: Convert elaborator env to a de Bruijn name stack for error messages.
+;; The env stores (name . depth), most recent first — same order as pp-expr's names.
+(define (env->name-stack env)
+  (map (lambda (pair) (symbol->string (car pair))) env))
+
 ;; ========================================
 ;; Implicit argument helpers
 ;; ========================================
@@ -59,7 +64,7 @@
 ;; Only applies when ALL Pi binders are m0 (fully implicit).
 ;; For mixed types (like cons : Pi(A :0 Type 0, A -> List A -> List A)),
 ;; we don't auto-apply — the user must use application syntax.
-(define (maybe-auto-apply-implicits fvar-expr resolved-name)
+(define (maybe-auto-apply-implicits fvar-expr resolved-name loc env)
   (define ftype (global-env-lookup-type resolved-name))
   (if ftype
       (let ([mults (collect-pi-mults ftype)])
@@ -68,7 +73,10 @@
             ;; All params are implicit → auto-apply with fresh metavariables
             (for/fold ([acc fvar-expr])
                       ([_ (in-range (length mults))])
-              (expr-app acc (fresh-meta ctx-empty (expr-hole) "implicit")))
+              (expr-app acc (fresh-meta ctx-empty (expr-hole)
+                              (meta-source-info loc 'implicit
+                                (format "implicit type argument for ~a" resolved-name)
+                                #f (env->name-stack env)))))
             fvar-expr))
       fvar-expr))
 
@@ -113,12 +121,12 @@
                    resolved)))
        => (lambda (resolved)
             (if auto-apply?
-                (maybe-auto-apply-implicits (expr-fvar resolved) resolved)
+                (maybe-auto-apply-implicits (expr-fvar resolved) resolved loc env)
                 (expr-fvar resolved)))]
       ;; Fall back to bare name
       [(global-env-lookup-type name)
        (if auto-apply?
-           (maybe-auto-apply-implicits (expr-fvar name) name)
+           (maybe-auto-apply-implicits (expr-fvar name) name loc env)
            (expr-fvar name))]
       [else (unbound-variable-error loc "Unbound variable" name)])))
 
@@ -155,7 +163,7 @@
     [(surf-type n loc)
      (if n
          (expr-Type (nat->level n))
-         (expr-Type (fresh-level-meta "bare-Type")))]
+         (expr-Type (fresh-level-meta (meta-source-info loc 'bare-Type "universe level" #f #f))))]
 
     ;; Arrow (non-dependent): (-> A B) -> Pi(mw, elab-A, elab-B-shifted)
     ;; Pi introduces a binder, so codomain is under a binder even for arrows.
@@ -174,7 +182,8 @@
     [(surf-pi binder body loc)
      (let* ([name (binder-info-name binder)]
             [raw-mult (binder-info-mult binder)]
-            [mult (if raw-mult raw-mult (fresh-mult-meta "pi-param"))]
+            [mult (if raw-mult raw-mult
+                     (fresh-mult-meta (meta-source-info loc 'pi-param "multiplicity of Pi parameter" #f #f)))]
             [ty-surf (binder-info-type binder)]
             [ty (elaborate ty-surf env depth)])
        (if (prologos-error? ty) ty
@@ -189,7 +198,8 @@
     [(surf-lam binder body loc)
      (let* ([name (binder-info-name binder)]
             [raw-mult (binder-info-mult binder)]
-            [mult (if raw-mult raw-mult (fresh-mult-meta "lambda-param"))]
+            [mult (if raw-mult raw-mult
+                     (fresh-mult-meta (meta-source-info loc 'lambda-param "multiplicity of lambda parameter" #f #f)))]
             [ty-surf (binder-info-type binder)]
             [ty (elaborate ty-surf env depth)])
        (if (prologos-error? ty) ty
@@ -233,7 +243,10 @@
                            (let ([with-metas
                                   (for/fold ([acc ef])
                                             ([_ (in-range n-holes)])
-                                    (expr-app acc (fresh-meta ctx-empty (expr-hole) "implicit-app")))])
+                                    (expr-app acc (fresh-meta ctx-empty (expr-hole)
+                                                    (meta-source-info loc 'implicit-app
+                                                      (format "implicit argument for ~a" (expr-fvar-name ef))
+                                                      #f (env->name-stack env)))))])
                              (elaborate-args with-metas args env depth loc))
                            (elaborate-args ef args env depth loc)))
                      (elaborate-args ef args env depth loc)))

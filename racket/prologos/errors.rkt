@@ -22,6 +22,10 @@
  (struct-out session-error)
  (struct-out inference-failed-error)
  (struct-out arity-error)
+ ;; Sprint 9: Structured inference errors
+ (struct-out cannot-infer-param-error)
+ (struct-out conflicting-constraints-error)
+ (struct-out unsolved-implicit-error)
  ;; Predicates
  prologos-error?
  ;; Formatting
@@ -60,6 +64,16 @@
 
 ;; Wrong number of arguments
 (struct arity-error prologos-error (form expected got) #:transparent)
+
+;; Sprint 9: Cannot infer type of parameter (E1001)
+(struct cannot-infer-param-error prologos-error (param-name hint) #:transparent)
+
+;; Sprint 9: Conflicting type constraints (E1002)
+(struct conflicting-constraints-error prologos-error
+  (constraint-lhs constraint-rhs lhs-loc rhs-loc) #:transparent)
+
+;; Sprint 9: Unsolved implicit argument (E1003)
+(struct unsolved-implicit-error prologos-error (func-name meta-id hint) #:transparent)
 
 ;; ========================================
 ;; Error Formatting
@@ -128,6 +142,33 @@
             (format "  ~a" msg)
             (format "  Form: ~a" form)
             (format "  Expected ~a arguments, got ~a" expected got))
+      "\n")]
+    ;; Sprint 9: E1001 — Cannot infer type of parameter
+    [(cannot-infer-param-error _ _ param-name hint)
+     (string-join
+      (filter (lambda (s) (not (string=? s "")))
+       (list (format "error[E1001]: cannot infer type of parameter '~a'" param-name)
+             (format "  --> ~a" loc-str)
+             (if hint (format "  = help: ~a" hint) "")))
+      "\n")]
+    ;; Sprint 9: E1002 — Conflicting type constraints
+    [(conflicting-constraints-error _ _ lhs rhs lhs-loc rhs-loc)
+     (string-join
+      (list (format "error[E1002]: conflicting type constraints")
+            (format "  --> ~a" loc-str)
+            (format "  ~a" msg)
+            (format "  = expected: ~a" lhs)
+            (format "  = got:      ~a" rhs))
+      "\n")]
+    ;; Sprint 9: E1003 — Unsolved implicit argument
+    [(unsolved-implicit-error _ _ func-name meta-id hint)
+     (string-join
+      (filter (lambda (s) (not (string=? s "")))
+       (list (format "error[E1003]: unsolved implicit argument")
+             (format "  --> ~a" loc-str)
+             (format "  = could not determine implicit argument~a"
+                     (if func-name (format " for '~a'" func-name) ""))
+             (if hint (format "  = help: ~a" hint) "")))
       "\n")]
     [_ ;; base prologos-error
      (string-join

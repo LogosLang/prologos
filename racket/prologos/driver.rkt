@@ -86,6 +86,21 @@
     [_ e]))  ;; atoms, fvar, bvar, zero, etc.
 
 ;; ========================================
+;; Sprint 9: Recover a name map from the meta store for error formatting.
+;; ========================================
+;; Searches the meta store for the first meta with a meta-source-info
+;; containing a name-map, and returns it. Falls back to '() if none found.
+(define (recover-name-map)
+  (for/fold ([result '()])
+            ([(id info) (in-hash (current-meta-store))])
+    (if (null? result)
+        (let ([src (meta-info-source info)])
+          (if (and (meta-source-info? src) (meta-source-info-name-map src))
+              (meta-source-info-name-map src)
+              result))
+        result)))
+
+;; ========================================
 ;; Process a single top-level command
 ;; ========================================
 ;; Returns a result string, or a prologos-error.
@@ -167,7 +182,8 @@
            body]
           [else
            ;; 5. Check body against type
-           (define chk (check/err ctx-empty body type))
+           ;; Sprint 9: pass recovered name map for de Bruijn recovery in errors
+           (define chk (check/err ctx-empty body type srcloc-unknown (recover-name-map)))
            (cond
              [(prologos-error? chk)
               ;; Remove pre-registered entry on type-check failure
@@ -180,11 +196,24 @@
                 [(not (null? failed))
                  ;; Remove pre-registered entry on constraint failure
                  (current-global-env (hash-remove (current-global-env) name))
-                 (prologos-error srcloc-unknown
-                   (format "Type error in ~a: unsatisfiable constraint ~a ≡ ~a"
-                           name
-                           (pp-expr (zonk-final (constraint-lhs (car failed))))
-                           (pp-expr (zonk-final (constraint-rhs (car failed))))))]
+                 ;; Sprint 9: structured constraint failure with provenance
+                 (define c (car failed))
+                 (define prov (constraint-source c))
+                 (define names (recover-name-map))
+                 (define error-loc
+                   (cond
+                     [(and (constraint-provenance? prov)
+                           (meta-source-info? (constraint-provenance-meta-source prov)))
+                      (meta-source-info-loc (constraint-provenance-meta-source prov))]
+                     [(constraint-provenance? prov) (constraint-provenance-loc prov)]
+                     [else srcloc-unknown]))
+                 (define lhs-str (pp-expr (zonk-final (constraint-lhs c)) names))
+                 (define rhs-str (pp-expr (zonk-final (constraint-rhs c)) names))
+                 (conflicting-constraints-error
+                   error-loc
+                   (format "Type error in ~a: cannot satisfy constraint" name)
+                   lhs-str rhs-str
+                   error-loc error-loc)]
                 [else
                  ;; 6. Apply structural reduce marks (before zonk, so eq? identity holds),
                  ;;    then zonk-final (defaults unsolved level-metas to lzero)

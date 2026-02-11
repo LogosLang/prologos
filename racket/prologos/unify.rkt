@@ -28,7 +28,8 @@
          "reduction.rkt"
          "metavar-store.rkt"
          "substitution.rkt"
-         "zonk.rkt")
+         "zonk.rkt"
+         "source-location.rkt")
 
 (provide unify unify-ok? occurs?
          ;; Sprint 2b exports
@@ -272,7 +273,14 @@
      (solve-flex-rigid id rhs ctx)]
     [(not (pattern-check args))
      ;; Failed pattern condition — postpone for later retry (Sprint 5)
-     (add-constraint! flex-term rhs ctx "flex-app-pattern-fail")
+     ;; Sprint 9: attach structured provenance from the head meta
+     (add-constraint! flex-term rhs ctx
+       (constraint-provenance
+         srcloc-unknown
+         "pattern condition failed for applied metavariable"
+         (let-values ([(head-id _args) (decompose-meta-app flex-term)])
+           (and head-id (let ([info (meta-lookup head-id)])
+                          (and info (meta-info-source info)))))))
      'postponed]
     [(occurs? id rhs) #f]  ; occur check
     [else

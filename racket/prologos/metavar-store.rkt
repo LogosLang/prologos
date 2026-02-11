@@ -23,7 +23,8 @@
          racket/match
          "syntax.rkt"
          "prelude.rkt"
-         "sessions.rkt")
+         "sessions.rkt"
+         "source-location.rkt")
 
 (provide
  ;; Meta-info struct
@@ -72,7 +73,12 @@
  sess-meta-solved?
  sess-meta-solution
  zonk-session
- zonk-session-default)
+ zonk-session-default
+ ;; Sprint 9: Structured provenance
+ (struct-out meta-source-info)
+ (struct-out constraint-provenance)
+ meta-category
+ primary-unsolved-metas)
 
 ;; ========================================
 ;; Meta-info: everything about a single metavariable
@@ -99,10 +105,33 @@
   (lhs       ;; Expr — left side of unification
    rhs       ;; Expr — right side of unification
    ctx       ;; Context — typing context at creation
-   source    ;; any — debug info (description string)
+   source    ;; any — debug info (string or constraint-provenance)
    status)   ;; 'postponed | 'retrying | 'solved | 'failed
   #:transparent
   #:mutable)
+
+;; ========================================
+;; Sprint 9: Structured provenance for error messages
+;; ========================================
+
+;; Structured source info for metavariables.
+;; Replaces the string previously stored in meta-info.source.
+;; Both strings and meta-source-info are accepted by the source field.
+(struct meta-source-info
+  (loc          ;; srcloc — where in user code this meta was created
+   kind         ;; symbol: 'implicit | 'implicit-app | 'pi-param | 'lambda-param | 'bare-Type | 'other
+   description  ;; string — human-readable description
+   def-name     ;; symbol or #f — which definition this meta belongs to
+   name-map)    ;; (listof string) or #f — de Bruijn name stack at creation site
+  #:transparent)
+
+;; Structured provenance for constraints.
+;; Replaces the string stored in constraint.source.
+(struct constraint-provenance
+  (loc          ;; srcloc — where in user code this constraint arose
+   description  ;; string — human-readable
+   meta-source) ;; meta-source-info or #f — the meta that triggered this constraint
+  #:transparent)
 
 ;; Global constraint store: list of all constraints
 (define current-constraint-store (make-parameter '()))
@@ -413,3 +442,30 @@
   (for/list ([(id info) (in-hash (current-meta-store))]
              #:when (eq? (meta-info-status info) 'unsolved))
     info))
+
+;; ========================================
+;; Sprint 9: Noise filtering for error display
+;; ========================================
+
+;; Categorize a meta for error display.
+;; Returns 'primary | 'secondary | 'internal.
+(define (meta-category info)
+  (define src (meta-info-source info))
+  (cond
+    [(meta-source-info? src)
+     (case (meta-source-info-kind src)
+       [(implicit implicit-app) 'secondary]    ;; implicit elaboration
+       [(pi-param lambda-param) 'primary]      ;; user-written binder
+       [(bare-Type) 'internal]                  ;; universe level inference
+       [else 'primary])]
+    [(string? src)
+     (cond
+       [(member src '("implicit" "implicit-app")) 'secondary]
+       [(equal? src "bare-Type") 'internal]
+       [else 'primary])]
+    [else 'primary]))
+
+;; Filter to only primary unsolved metas for error display.
+(define (primary-unsolved-metas)
+  (filter (lambda (info) (eq? (meta-category info) 'primary))
+          (all-unsolved-metas)))
