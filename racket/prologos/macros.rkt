@@ -492,6 +492,22 @@
   (hash-ref (current-type-meta) type-name #f))
 
 ;; ========================================
+;; Built-in constructor metadata (Nat, Bool)
+;; ========================================
+;; Register Nat and Bool constructors so match/reduce works on them.
+;; These are built-in types with no type parameters.
+
+;; Nat: zero (nullary), inc (one recursive Nat field)
+(register-ctor! 'zero (ctor-meta 'Nat '() '() '() 0))
+(register-ctor! 'inc  (ctor-meta 'Nat '() (list 'Nat) (list #t) 1))
+(current-type-meta (hash-set (current-type-meta) 'Nat '(zero inc)))
+
+;; Bool: true (nullary), false (nullary)
+(register-ctor! 'true  (ctor-meta 'Bool '() '() '() 0))
+(register-ctor! 'false (ctor-meta 'Bool '() '() '() 1))
+(current-type-meta (hash-set (current-type-meta) 'Bool '(true false)))
+
+;; ========================================
 ;; process-data: Church-encoded algebraic data types
 ;; ========================================
 ;; Syntax:

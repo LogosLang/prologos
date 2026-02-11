@@ -34,11 +34,13 @@ defn map {A B} [f : A -> B, xs : List A] : List B
 
 
 ;; Filter: keep elements satisfying the predicate.
-;; Note: uses delegation pattern because boolrec cannot return Type 1 values.
-;; Once Bool gets constructor metadata, this can use match throughout.
+;; Uses match on Bool (structural PM) — no longer needs Church delegation.
 defn filter {A} [pred : A -> Bool, xs : List A] : List A
-  fn __R __nil __cons
-    xs __R __nil (fn a acc (boolrec __R (__cons a acc) acc (pred a)))
+  match xs
+    | nil      -> nil
+    | cons a t -> match (pred a)
+                    | true  -> cons a (filter pred t)
+                    | false -> filter pred t
 
 ;; Append two lists.
 defn append {A} [xs : List A, ys : List A] : List A
@@ -60,4 +62,6 @@ defn singleton {A} [x : A] : List A
 defn elem {A} [eq : Eq A, x : A, xs : List A] : Bool
   match xs
     | nil        -> false
-    | cons a acc -> boolrec Bool true acc (eq x a)
+    | cons a acc -> match (eq x a)
+                      | true  -> true
+                      | false -> acc

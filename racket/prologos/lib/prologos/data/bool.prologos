@@ -4,28 +4,38 @@ provide not and or xor bool-eq nand nor implies
 
 ;; ========================================
 ;; Prologos Boolean Library
-;; Pure Prologos definitions using boolrec.
+;; Pure Prologos definitions using match (structural PM).
 ;; ========================================
 
 ;; Logical NOT: not(true) = false, not(false) = true
 defn not [b : Bool] : Bool
-  boolrec Bool false true b
+  match b
+    | true  -> false
+    | false -> true
 
 ;; Logical AND: and(true, b) = b, and(false, b) = false
 defn and [a : Bool, b : Bool] : Bool
-  boolrec Bool b false a
+  match a
+    | true  -> b
+    | false -> false
 
 ;; Logical OR: or(true, b) = true, or(false, b) = b
 defn or [a : Bool, b : Bool] : Bool
-  boolrec Bool true b a
+  match a
+    | true  -> true
+    | false -> b
 
 ;; Logical XOR: xor(true, b) = not(b), xor(false, b) = b
 defn xor [a : Bool, b : Bool] : Bool
-  boolrec Bool (not b) b a
+  match a
+    | true  -> not b
+    | false -> b
 
 ;; Boolean equality: bool-eq(true, b) = b, bool-eq(false, b) = not(b)
 defn bool-eq [a : Bool, b : Bool] : Bool
-  boolrec Bool b (not b) a
+  match a
+    | true  -> b
+    | false -> not b
 
 ;; ========================================
 ;; Derived Boolean Operations

@@ -15,15 +15,13 @@ provide nat-ord ord-lt ord-le ord-gt ord-ge ord-eq ord-min ord-max
 deftype (Ord $A) (-> $A (-> $A Ordering))
 
 ;; Nat instance: compare two naturals
-;; Returns Ordering (Church-encoded, Type 1), so we use delegation.
-;; If lt? x y → lt-ord. Else if nat-eq? x y → eq-ord. Else gt-ord.
-;; boolrec R true-case false-case target
+;; Returns Ordering. Uses match on Bool (structural PM) — returns Type 1 values.
 defn nat-ord [x : Nat, y : Nat] : Ordering
-  fn __R __lt __eq __gt
-    boolrec __R
-      __lt
-      (boolrec __R __eq __gt (nat-eq? x y))
-      (lt? x y)
+  match (lt? x y)
+    | true  -> lt-ord
+    | false -> match (nat-eq? x y)
+                | true  -> eq-ord
+                | false -> gt-ord
 
 ;; Derived operations from an Ord dictionary
 

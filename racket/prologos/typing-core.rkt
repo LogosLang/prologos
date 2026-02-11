@@ -388,6 +388,9 @@
     (match expr
       [(expr-app f a) (loop f (cons a args))]
       [(expr-fvar name) (values name args)]
+      ;; Built-in types: Nat and Bool (no type parameters)
+      [(expr-Nat) (values 'Nat args)]
+      [(expr-Bool) (values 'Bool args)]
       [_ (values #f #f)])))
 
 ;; 'prologos.data.list/List → 'List, 'List → 'List
@@ -431,20 +434,43 @@
   (cond
     [(expr-error? scrut-type) #f]
     [else
-     ;; Try Church fold first — this handles recursive fields correctly via fold semantics
-     ;; (e.g., `cons _ n -> inc n` where n is the already-folded accumulator).
-     ;; If Church fold fails (e.g., expected-type is Type 1), fall back to structural PM.
-     (or (check-reduce-church ctx scrutinee arms expected-type)
-         ;; Structural path: look up constructor metadata and check directly
-         (let-values ([(type-ctor-name type-args) (decompose-type-app scrut-type)])
-           (let* ([bare-tc (and type-ctor-name (bare-name type-ctor-name))]
-                  [type-ctors (and bare-tc (lookup-type-ctors bare-tc))])
-             (and type-ctors (not (null? type-ctors))
-                  (let ([result (check-reduce-structural ctx arms expected-type
-                                           type-ctor-name type-args)])
-                    (when result
-                      (mark-structural-reduce! reduce-expr))
-                    result)))))]))
+     ;; Dispatch strategy:
+     ;; - For built-in types (Nat, Bool): structural PM first (their constructors
+     ;;   are primitive expr nodes, not Church-encoded lambdas)
+     ;; - For user-defined data types: Church fold first, structural fallback
+     ;;   (their constructors are Church-encoded lambdas at runtime, so structural
+     ;;   PM only works if the value hasn't been unfolded yet)
+     (let-values ([(type-ctor-name type-args) (decompose-type-app scrut-type)])
+       (let* ([bare-tc (and type-ctor-name (bare-name type-ctor-name))]
+              [type-ctors (and bare-tc (lookup-type-ctors bare-tc))]
+              [builtin-type? (and bare-tc (memq bare-tc '(Nat Bool)))])
+         (if builtin-type?
+             ;; Built-in types: structural PM (always works at runtime)
+             (or (and type-ctors (not (null? type-ctors))
+                      (let ([result (check-reduce-structural ctx arms expected-type
+                                               type-ctor-name type-args)])
+                        (when result
+                          (mark-structural-reduce! reduce-expr))
+                        result))
+                 ;; Fallback to Church fold (shouldn't happen for Nat/Bool, but defensive)
+                 (check-reduce-church ctx scrutinee arms expected-type))
+             ;; User-defined types: Church fold first, structural fallback
+             (or (check-reduce-church ctx scrutinee arms expected-type)
+                 (and type-ctors (not (null? type-ctors))
+                      (let ([result (check-reduce-structural ctx arms expected-type
+                                               type-ctor-name type-args)])
+                        (when result
+                          (mark-structural-reduce! reduce-expr))
+                        result))))))]))
+
+;; Built-in constructor types for Nat/Bool (not in global-env)
+(define (builtin-ctor-type ctor-name)
+  (case ctor-name
+    [(zero) (expr-Nat)]
+    [(inc)  (expr-Pi 'mw (expr-Nat) (expr-Nat))]
+    [(true) (expr-Bool)]
+    [(false) (expr-Bool)]
+    [else #f]))
 
 ;; Path A: True structural pattern matching using constructor metadata
 (define (check-reduce-structural ctx arms expected-type
@@ -453,10 +479,11 @@
     (define ctor-name (expr-reduce-arm-ctor-name arm))
     (define bc (expr-reduce-arm-binding-count arm))
     (define body (expr-reduce-arm-body arm))
-    ;; Look up constructor type from global-env (try FQN then bare)
+    ;; Look up constructor type from global-env (try FQN, bare, then built-in)
     (define ctor-fqn (qualify-ctor-name ctor-name type-ctor-name))
     (define ctor-type (or (global-env-lookup-type ctor-fqn)
-                          (global-env-lookup-type ctor-name)))
+                          (global-env-lookup-type ctor-name)
+                          (builtin-ctor-type ctor-name)))
     (cond
       [(not ctor-type) #f]
       [else

@@ -99,6 +99,33 @@
   (define parts (string-split (symbol->string fqn) "/"))
   (string->symbol (last parts)))
 
+;; Try built-in structural reduce for Nat/Bool constructors.
+;; These are primitive expr nodes (not fvar applications), so decompose-app
+;; can't handle them. Returns substituted body expression, or #f.
+(define (try-builtin-reduce scrut arms)
+  (cond
+    ;; Nat: zero (nullary)
+    [(expr-zero? scrut)
+     (let ([arm (findf (lambda (a) (eq? (expr-reduce-arm-ctor-name a) 'zero)) arms)])
+       (and arm (= (expr-reduce-arm-binding-count arm) 0)
+            (expr-reduce-arm-body arm)))]
+    ;; Nat: suc/inc (one field: the predecessor)
+    [(expr-suc? scrut)
+     (let ([arm (findf (lambda (a) (eq? (expr-reduce-arm-ctor-name a) 'inc)) arms)])
+       (and arm (= (expr-reduce-arm-binding-count arm) 1)
+            (subst 0 (expr-suc-pred scrut) (expr-reduce-arm-body arm))))]
+    ;; Bool: true (nullary)
+    [(expr-true? scrut)
+     (let ([arm (findf (lambda (a) (eq? (expr-reduce-arm-ctor-name a) 'true)) arms)])
+       (and arm (= (expr-reduce-arm-binding-count arm) 0)
+            (expr-reduce-arm-body arm)))]
+    ;; Bool: false (nullary)
+    [(expr-false? scrut)
+     (let ([arm (findf (lambda (a) (eq? (expr-reduce-arm-ctor-name a) 'false)) arms)])
+       (and arm (= (expr-reduce-arm-binding-count arm) 0)
+            (expr-reduce-arm-body arm)))]
+    [else #f]))
+
 ;; ========================================
 ;; Weak Head Normal Form
 ;; ========================================
@@ -260,8 +287,12 @@
     [(expr-reduce scrutinee arms #t)
      ;; True structural pattern matching: decompose scrutinee as constructor,
      ;; substitute field values into matching arm body.
+     ;; Try user-defined constructors (fvar applications) first, then built-in
+     ;; constructors (expr-zero, expr-suc, expr-true, expr-false).
+     (define scrut-whnf* (whnf scrutinee))
      (define struct-result (or (try-structural-reduce scrutinee arms)
-                               (try-structural-reduce (whnf scrutinee) arms)))
+                               (try-structural-reduce scrut-whnf* arms)
+                               (try-builtin-reduce scrut-whnf* arms)))
      (if struct-result
          (whnf struct-result)
          e)]  ;; stuck — scrutinee not a constructor application

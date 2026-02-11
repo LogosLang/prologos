@@ -118,7 +118,7 @@
                   [(list 'eval expr)
                    (let ([ty (infer/err ctx-empty expr)])
                      (if (prologos-error? ty) ty
-                         (let ([val (nf (zonk expr))]
+                         (let ([val (nf (zonk (apply-structural-marks expr)))]
                                [ty-nf (nf (zonk ty))])
                            (format "~a : ~a" (pp-expr val) (pp-expr ty-nf)))))]
 

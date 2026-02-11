@@ -36,10 +36,13 @@ defn or-else {A} [opt : Option A, alt : Option A] : Option A
     | some x -> some x
 
 ;; Keep the value only if the predicate holds, else none.
-;; Note: uses delegation because boolrec cannot return Type 1 values.
+;; Uses match on Bool (structural PM) — no longer needs Church delegation.
 defn filter {A} [pred : A -> Bool, opt : Option A] : Option A
-  fn __R __n __s
-    opt __R __n (fn x (boolrec __R (__s x) __n (pred x)))
+  match opt
+    | none   -> none
+    | some x -> match (pred x)
+                  | true  -> some x
+                  | false -> none
 
 ;; Combine two Options with a function. None if either is none.
 defn zip-with {A B C} [f : A -> B -> C, oa : Option A, ob : Option B] : Option C

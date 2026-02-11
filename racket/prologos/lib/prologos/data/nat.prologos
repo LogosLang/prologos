@@ -4,28 +4,38 @@ provide add mult double pred zero? sub le? lt? gt? ge? nat-eq? min max power boo
 
 ;; ========================================
 ;; Prologos Natural Number Library
-;; Pure Prologos definitions using natrec.
+;; Pure Prologos definitions using match (structural PM).
 ;; ========================================
 
 ;; Addition: add x y = x + y (by recursion on y)
 defn add [x : Nat, y : Nat] : Nat
-  natrec Nat x (fn _ r (inc r)) y
+  match y
+    | zero  -> x
+    | inc k -> inc (add x k)
 
 ;; Multiplication: mult x y = x * y (by recursion on y)
 defn mult [x : Nat, y : Nat] : Nat
-  natrec Nat zero (fn _ r (add x r)) y
+  match y
+    | zero  -> zero
+    | inc k -> add x (mult x k)
 
 ;; Double: double n = n + n
 defn double [n : Nat] : Nat
-  natrec Nat zero (fn _ r (inc (inc r))) n
+  match n
+    | zero  -> zero
+    | inc k -> inc (inc (double k))
 
 ;; Predecessor: pred(0) = 0, pred(suc(k)) = k
 defn pred [n : Nat] : Nat
-  natrec Nat zero (fn k _ k) n
+  match n
+    | zero  -> zero
+    | inc k -> k
 
 ;; Zero predicate: zero?(0) = true, zero?(suc(k)) = false
 defn zero? [n : Nat] : Bool
-  natrec Bool true (fn _ _ false) n
+  match n
+    | zero  -> true
+    | inc _ -> false
 
 ;; ========================================
 ;; Arithmetic
@@ -34,11 +44,15 @@ defn zero? [n : Nat] : Bool
 ;; Saturating subtraction: sub(x, y) = max(x - y, 0)
 ;; Iterates pred y times starting from x.
 defn sub [x : Nat, y : Nat] : Nat
-  natrec Nat x (fn _ r (pred r)) y
+  match y
+    | zero  -> x
+    | inc k -> pred (sub x k)
 
 ;; Exponentiation: power(base, exp) = base^exp
 defn power [base : Nat, exp : Nat] : Nat
-  natrec Nat (inc zero) (fn _ r (mult base r)) exp
+  match exp
+    | zero  -> inc zero
+    | inc k -> mult base (power base k)
 
 ;; ========================================
 ;; Comparison
@@ -49,9 +63,10 @@ defn le? [x : Nat, y : Nat] : Bool
   zero? (sub x y)
 
 ;; Less-than: lt?(x, y) iff not(le?(y, x))
-;; Inline negation via boolrec to avoid cross-module dependency on bool/not.
 defn lt? [x : Nat, y : Nat] : Bool
-  boolrec Bool false true (le? y x)
+  match (le? y x)
+    | true  -> false
+    | false -> true
 
 ;; Greater-than: gt?(x, y) = lt?(y, x)
 defn gt? [x : Nat, y : Nat] : Bool
@@ -62,9 +77,10 @@ defn ge? [x : Nat, y : Nat] : Bool
   le? y x
 
 ;; Nat equality: nat-eq?(x, y) iff le?(x, y) and le?(y, x)
-;; Inline and: if le?(x,y) then check le?(y,x) else false.
 defn nat-eq? [x : Nat, y : Nat] : Bool
-  boolrec Bool (le? y x) false (le? x y)
+  match (le? x y)
+    | true  -> le? y x
+    | false -> false
 
 ;; ========================================
 ;; Min / Max
@@ -72,11 +88,15 @@ defn nat-eq? [x : Nat, y : Nat] : Bool
 
 ;; Minimum of two naturals
 defn min [x : Nat, y : Nat] : Nat
-  boolrec Nat x y (le? x y)
+  match (le? x y)
+    | true  -> x
+    | false -> y
 
 ;; Maximum of two naturals
 defn max [x : Nat, y : Nat] : Nat
-  boolrec Nat y x (le? x y)
+  match (le? x y)
+    | true  -> y
+    | false -> x
 
 ;; ========================================
 ;; Conversion
@@ -84,4 +104,6 @@ defn max [x : Nat, y : Nat] : Nat
 
 ;; Bool to Nat: true -> 1, false -> 0
 defn bool-to-nat [b : Bool] : Nat
-  boolrec Nat (inc zero) zero b
+  match b
+    | true  -> inc zero
+    | false -> zero
