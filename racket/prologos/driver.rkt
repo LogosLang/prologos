@@ -118,15 +118,15 @@
                   [(list 'eval expr)
                    (let ([ty (infer/err ctx-empty expr)])
                      (if (prologos-error? ty) ty
-                         (let ([val (nf (zonk (apply-structural-marks expr)))]
-                               [ty-nf (nf (zonk ty))])
+                         (let ([val (nf (zonk-final (apply-structural-marks expr)))]
+                               [ty-nf (nf (zonk-final ty))])
                            (format "~a : ~a" (pp-expr val) (pp-expr ty-nf)))))]
 
                   ;; (infer expr)
                   [(list 'infer expr)
                    (let ([ty (infer/err ctx-empty expr)])
                      (if (prologos-error? ty) ty
-                         (pp-expr (zonk ty))))]
+                         (pp-expr (zonk-final ty))))]
 
                   [_ (prologos-error srcloc-unknown (format "Unknown command: ~a" elab-result))]))))))
 
@@ -183,14 +183,14 @@
                  (prologos-error srcloc-unknown
                    (format "Type error in ~a: unsatisfiable constraint ~a ≡ ~a"
                            name
-                           (pp-expr (zonk (constraint-lhs (car failed))))
-                           (pp-expr (zonk (constraint-rhs (car failed))))))]
+                           (pp-expr (zonk-final (constraint-lhs (car failed))))
+                           (pp-expr (zonk-final (constraint-rhs (car failed))))))]
                 [else
                  ;; 6. Apply structural reduce marks (before zonk, so eq? identity holds),
-                 ;;    then zonk solved metas, and store
+                 ;;    then zonk-final (defaults unsolved level-metas to lzero)
                  (define marked-body (apply-structural-marks body))
-                 (define zonked-body (zonk marked-body))
-                 (define zonked-type (zonk type))
+                 (define zonked-body (zonk-final marked-body))
+                 (define zonked-type (zonk-final type))
                  (define final-body zonked-body)
                  (current-global-env
                   (global-env-add (current-global-env) name zonked-type final-body))
@@ -291,6 +291,7 @@
      (parameterize ([current-global-env (hasheq)]
                     [current-ns-context #f]
                     [current-meta-store (make-hasheq)]
+                    [current-level-meta-store (make-hasheq)]
                     [current-constraint-store '()]
                     [current-wakeup-registry (make-hasheq)]
                     [current-preparse-registry (current-preparse-registry)]

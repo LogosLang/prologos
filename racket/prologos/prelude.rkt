@@ -13,7 +13,7 @@
  m0 m1 mw mult?
  mult-add mult-mul mult-leq compatible
  ;; Universe levels
- (struct-out lzero) (struct-out lsuc)
+ (struct-out lzero) (struct-out lsuc) (struct-out level-meta)
  level? lmax level<=?)
 
 ;; ========================================
@@ -85,9 +85,10 @@
 
 (struct lzero () #:transparent)
 (struct lsuc (pred) #:transparent)
+(struct level-meta (id) #:transparent)  ;; Sprint 6: unsolved universe level
 
 (define (level? x)
-  (or (lzero? x) (and (lsuc? x) (level? (lsuc-pred x)))))
+  (or (lzero? x) (level-meta? x) (and (lsuc? x) (level? (lsuc-pred x)))))
 
 ;; lmax: maximum of two levels
 ;; lmax(lzero, L) = L
@@ -101,6 +102,9 @@
     [(equal? l1 l2) l1]
     [(and (lsuc? l1) (lsuc? l2))
      (lsuc (lmax (lsuc-pred l1) (lsuc-pred l2)))]
+    ;; Sprint 6: level-meta handling — concrete level wins (conservative)
+    [(level-meta? l1) l2]
+    [(level-meta? l2) l1]
     [else (error 'lmax "cannot compute lmax of ~a and ~a" l1 l2)]))
 
 ;; level<=?: universe level comparison
@@ -113,4 +117,7 @@
     [(and (lsuc? l1) (lzero? l2)) #f]
     [(and (lsuc? l1) (lsuc? l2))
      (level<=? (lsuc-pred l1) (lsuc-pred l2))]
+    ;; Sprint 6: optimistic with level-metas (unsolved defaults to 0)
+    [(level-meta? l1) #t]
+    [(level-meta? l2) #t]
     [else #f]))

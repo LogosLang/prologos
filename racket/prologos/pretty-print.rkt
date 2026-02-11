@@ -316,12 +316,15 @@
   (match l
     [(lzero) "0"]
     [(lsuc inner) (number->string (level->nat l))]
+    [(level-meta _) "0"]    ;; unsolved level-meta defaults to 0 in output
     [_ (format "~a" l)]))
 
 (define (level->nat l)
   (match l
     [(lzero) 0]
-    [(lsuc inner) (+ 1 (level->nat inner))]))
+    [(lsuc inner) (+ 1 (level->nat inner))]
+    [(level-meta _) 0]   ;; fallback for unsolved level-metas
+    [_ 0]))
 
 ;; ========================================
 ;; Pretty-print session types

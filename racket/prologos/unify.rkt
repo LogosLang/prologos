@@ -24,6 +24,7 @@
 (require racket/match
          racket/list
          "syntax.rkt"
+         "prelude.rkt"
          "reduction.rkt"
          "metavar-store.rkt"
          "substitution.rkt"
@@ -217,9 +218,9 @@
        (and (unify ctx (expr-pair-fst a) (expr-pair-fst b))
             (unify ctx (expr-pair-snd a) (expr-pair-snd b)))]
 
-      ;; Type vs Type (universe levels)
+      ;; Type vs Type (universe levels) — Sprint 6: level-meta aware
       [(and (expr-Type? a) (expr-Type? b))
-       (equal? (expr-Type-level a) (expr-Type-level b))]
+       (unify-level (expr-Type-level a) (expr-Type-level b))]
 
       ;; ann: should not survive WHNF, but handle defensively
       [(expr-ann? a) (unify ctx (expr-ann-term a) b)]
@@ -325,6 +326,33 @@
                  (let-values ([(st _) (struct-info expr)]) st))
                 new-fields))]
       [else expr])))
+
+;; ========================================
+;; Sprint 6: Universe Level Unification
+;; ========================================
+;; Unify two universe levels, solving level-metas as side effects.
+;; Returns #t if levels are equal (possibly after solving), #f otherwise.
+
+(define (unify-level l1 l2)
+  (cond
+    [(equal? l1 l2) #t]
+    ;; level-meta on left: follow or solve
+    [(level-meta? l1)
+     (let ([sol (level-meta-solution (level-meta-id l1))])
+       (if sol
+           (unify-level sol l2)
+           (begin (solve-level-meta! (level-meta-id l1) l2) #t)))]
+    ;; level-meta on right: follow or solve
+    [(level-meta? l2)
+     (let ([sol (level-meta-solution (level-meta-id l2))])
+       (if sol
+           (unify-level l1 sol)
+           (begin (solve-level-meta! (level-meta-id l2) l1) #t)))]
+    ;; lsuc vs lsuc: recurse
+    [(and (lsuc? l1) (lsuc? l2))
+     (unify-level (lsuc-pred l1) (lsuc-pred l2))]
+    ;; Mismatch (e.g., lzero vs lsuc)
+    [else #f]))
 
 ;; ========================================
 ;; Sprint 5: Install constraint retry callback

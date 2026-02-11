@@ -17,7 +17,7 @@
          "syntax.rkt"
          "metavar-store.rkt")
 
-(provide zonk zonk-ctx)
+(provide zonk zonk-ctx zonk-final)
 
 ;; ========================================
 ;; Zonk: substitute solved metavariables
@@ -40,7 +40,7 @@
     [(expr-Bool) e]
     [(expr-true) e]
     [(expr-false) e]
-    [(expr-Type _) e]
+    [(expr-Type l) (expr-Type (zonk-level l))]
     [(expr-hole) e]
     [(expr-error) e]
 
@@ -108,6 +108,88 @@
                           (zonk (expr-reduce-arm-body arm))))
                        arms)
                   structural?)]))
+
+;; ========================================
+;; Zonk-final: zonk + default unsolved level-metas to lzero
+;; ========================================
+;; Used as the final pass before storing in global env or displaying output.
+;; Regular `zonk` preserves unsolved level-metas (needed during unification).
+(define (zonk-final e)
+  (define z (zonk e))
+  (default-levels z))
+
+;; Walk an expression replacing all unsolved level-metas with lzero.
+(define (default-levels e)
+  (match e
+    [(expr-Type l) (expr-Type (zonk-level-default l))]
+    [(expr-meta _) e]
+    [(expr-bvar _) e]
+    [(expr-fvar _) e]
+    [(expr-zero) e]
+    [(expr-refl) e]
+    [(expr-Nat) e]
+    [(expr-Bool) e]
+    [(expr-true) e]
+    [(expr-false) e]
+    [(expr-hole) e]
+    [(expr-error) e]
+    [(expr-lam m t body) (expr-lam m (default-levels t) (default-levels body))]
+    [(expr-Pi m dom cod) (expr-Pi m (default-levels dom) (default-levels cod))]
+    [(expr-Sigma t1 t2) (expr-Sigma (default-levels t1) (default-levels t2))]
+    [(expr-suc e1) (expr-suc (default-levels e1))]
+    [(expr-app f a) (expr-app (default-levels f) (default-levels a))]
+    [(expr-pair e1 e2) (expr-pair (default-levels e1) (default-levels e2))]
+    [(expr-fst e1) (expr-fst (default-levels e1))]
+    [(expr-snd e1) (expr-snd (default-levels e1))]
+    [(expr-ann e1 e2) (expr-ann (default-levels e1) (default-levels e2))]
+    [(expr-Eq t e1 e2) (expr-Eq (default-levels t) (default-levels e1) (default-levels e2))]
+    [(expr-natrec mot base step target)
+     (expr-natrec (default-levels mot) (default-levels base)
+                  (default-levels step) (default-levels target))]
+    [(expr-J mot base left right proof)
+     (expr-J (default-levels mot) (default-levels base)
+             (default-levels left) (default-levels right) (default-levels proof))]
+    [(expr-boolrec mot tc fc target)
+     (expr-boolrec (default-levels mot) (default-levels tc)
+                   (default-levels fc) (default-levels target))]
+    [(expr-Vec t n) (expr-Vec (default-levels t) (default-levels n))]
+    [(expr-vnil t) (expr-vnil (default-levels t))]
+    [(expr-vcons t n hd tl)
+     (expr-vcons (default-levels t) (default-levels n)
+                 (default-levels hd) (default-levels tl))]
+    [(expr-Fin n) (expr-Fin (default-levels n))]
+    [(expr-fzero n) (expr-fzero (default-levels n))]
+    [(expr-fsuc n i) (expr-fsuc (default-levels n) (default-levels i))]
+    [(expr-vhead t n v) (expr-vhead (default-levels t) (default-levels n) (default-levels v))]
+    [(expr-vtail t n v) (expr-vtail (default-levels t) (default-levels n) (default-levels v))]
+    [(expr-vindex t n i v)
+     (expr-vindex (default-levels t) (default-levels n)
+                  (default-levels i) (default-levels v))]
+    [(expr-Posit8) e]
+    [(expr-posit8 _) e]
+    [(expr-p8-add a b) (expr-p8-add (default-levels a) (default-levels b))]
+    [(expr-p8-sub a b) (expr-p8-sub (default-levels a) (default-levels b))]
+    [(expr-p8-mul a b) (expr-p8-mul (default-levels a) (default-levels b))]
+    [(expr-p8-div a b) (expr-p8-div (default-levels a) (default-levels b))]
+    [(expr-p8-neg a) (expr-p8-neg (default-levels a))]
+    [(expr-p8-abs a) (expr-p8-abs (default-levels a))]
+    [(expr-p8-sqrt a) (expr-p8-sqrt (default-levels a))]
+    [(expr-p8-lt a b) (expr-p8-lt (default-levels a) (default-levels b))]
+    [(expr-p8-le a b) (expr-p8-le (default-levels a) (default-levels b))]
+    [(expr-p8-from-nat n) (expr-p8-from-nat (default-levels n))]
+    [(expr-p8-if-nar t nc vc v)
+     (expr-p8-if-nar (default-levels t) (default-levels nc)
+                     (default-levels vc) (default-levels v))]
+    [(expr-reduce scrut arms structural?)
+     (expr-reduce (default-levels scrut)
+                  (map (lambda (arm)
+                         (expr-reduce-arm
+                          (expr-reduce-arm-ctor-name arm)
+                          (expr-reduce-arm-binding-count arm)
+                          (default-levels (expr-reduce-arm-body arm))))
+                       arms)
+                  structural?)]
+    [_ e]))
 
 ;; ========================================
 ;; Zonk a typing context

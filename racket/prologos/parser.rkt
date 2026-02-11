@@ -111,7 +111,7 @@
     (define name (if (syntax? p) (syntax-e p) p))
     (unless (symbol? name)
       (parse-error loc (format "Implicit type parameter must be a symbol, got ~a" name) name))
-    (binder-info name 'm0 (surf-type 0 loc))))
+    (binder-info name 'm0 (surf-type #f loc))))
 
 (define (unwrap-angle-type stx loc)
   ;; Extract and parse the type from ($angle-type content...)
@@ -168,7 +168,7 @@
     [(Nat)    (surf-nat-type loc)]
     [(Bool)   (surf-bool-type loc)]
     [(Posit8) (surf-posit8-type loc)]
-    [(Type)   (surf-type 0 loc)]      ;; bare Type defaults to (Type 0)
+    [(Type)   (surf-type #f loc)]     ;; bare Type → infer level (Sprint 6)
     [(zero)   (surf-zero loc)]
     [(true)   (surf-true loc)]
     [(false)  (surf-false loc)]

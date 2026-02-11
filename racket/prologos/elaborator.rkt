@@ -151,9 +151,11 @@
     [(surf-hole loc)
      (expr-hole)]
 
-    ;; Type universe
+    ;; Type universe — Sprint 6: #f means infer level
     [(surf-type n loc)
-     (expr-Type (nat->level n))]
+     (if n
+         (expr-Type (nat->level n))
+         (expr-Type (fresh-level-meta "bare-Type")))]
 
     ;; Arrow (non-dependent): (-> A B) -> Pi(mw, elab-A, elab-B-shifted)
     ;; Pi introduces a binder, so codomain is under a binder even for arrows.
