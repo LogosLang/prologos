@@ -7,13 +7,15 @@
 ;;;
 
 (require racket/match
+         racket/list
          "prelude.rkt"
          "syntax.rkt"
          "source-location.rkt"
          "surface-syntax.rkt"
          "errors.rkt"
          "global-env.rkt"
-         "namespace.rkt")
+         "namespace.rkt"
+         "metavar-store.rkt")
 
 (provide elaborate
          elaborate-top-level)
@@ -38,31 +40,97 @@
   (cons (cons name depth) env))
 
 ;; ========================================
+;; Implicit argument helpers
+;; ========================================
+
+;; Walk a core Pi chain and collect the multiplicity of each binder.
+;; Returns a list of multiplicities ('m0 or 'mw).
+(define (collect-pi-mults type)
+  (match type
+    [(expr-Pi m _ cod) (cons m (collect-pi-mults cod))]
+    [_ '()]))
+
+;; Count leading m0 (implicit/erased) parameters.
+(define (leading-m0-count mults)
+  (length (takef mults (lambda (m) (eq? m 'm0)))))
+
+;; Auto-apply holes for a bare variable whose type has ALL m0 parameters.
+;; e.g., nil : Pi(A :0 Type 0, List A) → (app (fvar nil) hole)
+;; Only applies when ALL Pi binders are m0 (fully implicit).
+;; For mixed types (like cons : Pi(A :0 Type 0, A -> List A -> List A)),
+;; we don't auto-apply — the user must use application syntax.
+(define (maybe-auto-apply-implicits fvar-expr resolved-name)
+  (define ftype (global-env-lookup-type resolved-name))
+  (if ftype
+      (let ([mults (collect-pi-mults ftype)])
+        (if (and (not (null? mults))
+                 (andmap (lambda (m) (eq? m 'm0)) mults))
+            ;; All params are implicit → auto-apply with fresh metavariables
+            (for/fold ([acc fvar-expr])
+                      ([_ (in-range (length mults))])
+              (expr-app acc (fresh-meta ctx-empty (expr-hole) "implicit")))
+            fvar-expr))
+      fvar-expr))
+
+;; Given a function's global type and the number of user-supplied args,
+;; return the number of implicit holes to prepend (or 0 if no insertion needed).
+;; Rules:
+;;   - total-arity = length of Pi chain
+;;   - n-implicit = count of leading m0 binders
+;;   - n-explicit = total-arity - n-implicit
+;;   - If user provides n-explicit args → prepend n-implicit holes
+;;   - If user provides total-arity args → no insertion (backward compat)
+;;   - Otherwise → no insertion (let type checker report arity error)
+(define (implicit-holes-needed func-type n-user-args)
+  (define mults (collect-pi-mults func-type))
+  (define total (length mults))
+  (define n-imp (leading-m0-count mults))
+  (define n-exp (- total n-imp))
+  (cond
+    [(= n-user-args total) 0]         ; user gave all args → backward compat, no insertion
+    [(and (> n-imp 0)                 ; has implicit params
+          (= n-user-args n-exp))      ; user gave explicit-only count
+     n-imp]                           ; → insert implicits
+    [else 0]))                        ; mismatch → don't insert, let checker error
+
+;; ========================================
 ;; Main elaboration: surface -> core
 ;; ========================================
+
+;; Resolve a surf-var to a core expression.
+;; When auto-apply? is #t and the global has ALL m0 params, auto-apply with holes.
+;; When auto-apply? is #f (function position), just return the fvar.
+(define (elaborate-var name loc env depth auto-apply?)
+  (let ([idx (env-lookup env name depth)])
+    (cond
+      [idx (expr-bvar idx)]
+      ;; When namespace context is active, try FQN resolution FIRST.
+      [(and (current-ns-context)
+            (let ([resolved (resolve-name name (current-ns-context))])
+              (and resolved
+                   (not (eq? resolved name))
+                   (global-env-lookup-type resolved)
+                   resolved)))
+       => (lambda (resolved)
+            (if auto-apply?
+                (maybe-auto-apply-implicits (expr-fvar resolved) resolved)
+                (expr-fvar resolved)))]
+      ;; Fall back to bare name
+      [(global-env-lookup-type name)
+       (if auto-apply?
+           (maybe-auto-apply-implicits (expr-fvar name) name)
+           (expr-fvar name))]
+      [else (unbound-variable-error loc "Unbound variable" name)])))
 
 ;; elaborate: surface-expr, env, depth -> (or/c expr? prologos-error?)
 (define (elaborate surf [env '()] [depth 0])
   (match surf
     ;; Variable: look up name, compute de Bruijn index
+    ;; For globals with ALL-implicit type params (e.g., nil : Pi(A :0 Type). List A),
+    ;; auto-apply with holes so bare `nil` becomes `(nil _)`.
+    ;; This auto-apply is suppressed when the var is in function position of surf-app.
     [(surf-var name loc)
-     (let ([idx (env-lookup env name depth)])
-       (cond
-         [idx (expr-bvar idx)]
-         ;; When namespace context is active, try FQN resolution FIRST.
-         ;; This ensures cross-definition references within a module use the
-         ;; fully-qualified name, which is essential for module exports.
-         [(and (current-ns-context)
-               (let ([resolved (resolve-name name (current-ns-context))])
-                 (and resolved
-                      (not (eq? resolved name))
-                      (global-env-lookup-type resolved)
-                      resolved)))
-          => (lambda (resolved) (expr-fvar resolved))]
-         ;; Fall back to bare name (backward-compatible for non-namespaced code,
-         ;; also catches built-in types/keywords stored under bare names)
-         [(global-env-lookup-type name) (expr-fvar name)]
-         [else (unbound-variable-error loc "Unbound variable" name)]))]
+     (elaborate-var name loc env depth #t)]
 
     ;; Nat literal: desugar to suc chain
     [(surf-nat-lit n loc)
@@ -78,6 +146,10 @@
     [(surf-refl _) (expr-refl)]
     [(surf-nat-type _) (expr-Nat)]
     [(surf-bool-type _) (expr-Bool)]
+
+    ;; Type hole (inferred during checking)
+    [(surf-hole loc)
+     (expr-hole)]
 
     ;; Type universe
     [(surf-type n loc)
@@ -134,10 +206,32 @@
                  (expr-Sigma ty bod)))))]
 
     ;; Application: (f a b c) -> app(app(app(elab-f, elab-a), elab-b), elab-c)
+    ;; When the function resolves to an expr-fvar, check its type for leading
+    ;; implicit (m0) parameters and auto-insert holes if the user provided
+    ;; only the explicit arguments.
+    ;; The function is elaborated WITHOUT auto-apply (auto-apply? = #f) to avoid
+    ;; double-application — the implicit insertion here handles ALL cases.
     [(surf-app func args loc)
-     (let ([ef (elaborate func env depth)])
+     (let ([ef (if (surf-var? func)
+                   (elaborate-var (surf-var-name func) (surf-var-srcloc func)
+                                  env depth #f)
+                   (elaborate func env depth))])
        (if (prologos-error? ef) ef
-           (elaborate-args ef args env depth loc)))]
+           ;; Check for implicit parameters and insert fresh metavariables
+           (if (expr-fvar? ef)
+               (let ([ftype (global-env-lookup-type (expr-fvar-name ef))])
+                 (if ftype
+                     (let ([n-holes (implicit-holes-needed ftype (length args))])
+                       (if (> n-holes 0)
+                           ;; Insert fresh metas for implicit args, then elaborate user args
+                           (let ([with-metas
+                                  (for/fold ([acc ef])
+                                            ([_ (in-range n-holes)])
+                                    (expr-app acc (fresh-meta ctx-empty (expr-hole) "implicit-app")))])
+                             (elaborate-args with-metas args env depth loc))
+                           (elaborate-args ef args env depth loc)))
+                     (elaborate-args ef args env depth loc)))
+               (elaborate-args ef args env depth loc))))]
 
     ;; Pair
     [(surf-pair e1 e2 loc)
@@ -332,6 +426,19 @@
              [(prologos-error? ev) ev]
              [else (expr-p8-if-nar etp enc evc ev)]))]
 
+    ;; Reduce: ML-style pattern matching
+    ;; Each arm's body must be elaborated with binding names in scope.
+    ;; We add dummy binders (the actual types come from the type checker).
+    [(surf-reduce scrutinee arms loc)
+     (let ([elab-scrutinee (elaborate scrutinee env depth)])
+       (if (prologos-error? elab-scrutinee) elab-scrutinee
+           (let ([elab-arms
+                  (for/list ([arm (in-list arms)])
+                    (elaborate-reduce-arm arm env depth))])
+             (define first-err (findf prologos-error? elab-arms))
+             (if first-err first-err
+                 (expr-reduce elab-scrutinee elab-arms #f)))))]
+
     ;; Fallback
     [_ (prologos-error srcloc-unknown (format "Cannot elaborate: ~a" surf))]))
 
@@ -345,6 +452,24 @@
         (if (prologos-error? arg) arg
             (elaborate-args (expr-app func-expr arg)
                            (cdr arg-surfs) env depth loc)))))
+
+;; ========================================
+;; Elaborate a reduce arm
+;; ========================================
+;; Bindings are added to the environment (with dummy types) so
+;; the body's variable references get correct de Bruijn indices.
+;; The actual types are resolved by the type checker.
+(define (elaborate-reduce-arm arm env depth)
+  (match arm
+    [(reduce-arm ctor-name bindings body-surf loc)
+     ;; Add each binding name to the environment
+     (define-values (new-env new-depth)
+       (for/fold ([e env] [d depth])
+                 ([name (in-list bindings)])
+         (values (env-extend e name d) (+ d 1))))
+     (define elab-body (elaborate body-surf new-env new-depth))
+     (if (prologos-error? elab-body) elab-body
+         (expr-reduce-arm ctor-name (length bindings) elab-body))]))
 
 ;; ========================================
 ;; Helper: natural -> level

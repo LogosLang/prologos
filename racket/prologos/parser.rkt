@@ -8,10 +8,12 @@
 
 (require racket/match
          racket/port
+         racket/list
          "source-location.rkt"
          "surface-syntax.rkt"
          "errors.rkt"
-         "sexp-readtable.rkt")
+         "sexp-readtable.rkt"
+         "macros.rkt")
 
 (provide parse-datum
          parse-string
@@ -25,9 +27,9 @@
     Vec Fin vnil vcons vhead vtail vindex fzero fsuc
     natrec J pair first second boolrec
     Posit8 posit8 p8+ p8- p8* p8/ p8-neg p8-abs p8-sqrt p8-lt p8-le p8-from-nat p8-if-nar
-    def defn check eval infer
+    def defn check eval infer reduce match
     ;; Pre-parse macros — should be expanded before reaching parser
-    defmacro let do if deftype data match
+    defmacro let do if deftype data
     ;; Pre-parse namespace directives — consumed before reaching parser
     ns require provide))
 
@@ -76,6 +78,40 @@
     ;; If stx->datum returned syntax-e, the car might be a syntax object
     [(pair? d) (angle-type? d)]
     [else #f]))
+
+;; ========================================
+;; Brace params: {A B C} → ($brace-params A B C)
+;; Used for implicit type parameters in defn and data.
+;; ========================================
+
+(define (brace-params? d)
+  ;; Check if datum is ($brace-params ...)
+  (and (pair? d)
+       (let ([head (car d)])
+         (cond
+           [(symbol? head) (eq? head '$brace-params)]
+           [(syntax? head) (eq? (syntax-e head) '$brace-params)]
+           [else #f]))))
+
+(define (brace-params-stx? stx)
+  ;; Check if a syntax object wraps a ($brace-params ...) form
+  (define d (stx->datum stx))
+  (cond
+    [(pair? d) (brace-params? d)]
+    [else #f]))
+
+(define (unwrap-brace-params stx loc)
+  ;; Extract the symbols from ($brace-params A B C)
+  ;; Returns a list of binder-info structs, each with :0 multiplicity and Type 0
+  (define d (stx->datum stx))
+  (define contents (cdr d)) ; skip $brace-params sentinel
+  (define parts
+    (if (syntax? stx) (cdr (syntax->list stx)) contents))
+  (for/list ([p (in-list parts)])
+    (define name (if (syntax? p) (syntax-e p) p))
+    (unless (symbol? name)
+      (parse-error loc (format "Implicit type parameter must be a symbol, got ~a" name) name))
+    (binder-info name 'm0 (surf-type 0 loc))))
 
 (define (unwrap-angle-type stx loc)
   ;; Extract and parse the type from ($angle-type content...)
@@ -128,9 +164,11 @@
 ;; ========================================
 (define (parse-symbol sym loc)
   (case sym
+    [(_)      (surf-hole loc)]
     [(Nat)    (surf-nat-type loc)]
     [(Bool)   (surf-bool-type loc)]
     [(Posit8) (surf-posit8-type loc)]
+    [(Type)   (surf-type 0 loc)]      ;; bare Type defaults to (Type 0)
     [(zero)   (surf-zero loc)]
     [(true)   (surf-true loc)]
     [(false)  (surf-false loc)]
@@ -166,14 +204,37 @@
               (if (prologos-error? e) e
                   (surf-suc e loc))))]
 
-       ;; (fn (x : T) body) or (fn (x :m T) body)
+       ;; (fn (x : T) body) or (fn (x :m T) body) or (fn [x <T>] body)
+       ;; Also: (fn a b c body) — multi-arg untyped fn (all-but-last are bare symbols)
        [(fn)
-        (or (check-arity 'fn args 2 loc)
-            (let ([bnd (parse-binder (car args) loc)])
-              (if (prologos-error? bnd) bnd
-                  (let ([body (parse-datum (cadr args))])
-                    (if (prologos-error? body) body
-                        (surf-lam bnd body loc))))))]
+        (cond
+          [(< (length args) 2)
+           (parse-error loc "fn requires at least 2 arguments" #f)]
+          ;; Standard: (fn binder body) — exactly 2 args, first is a binder (pair)
+          [(and (= (length args) 2)
+                (pair? (stx->datum (car args))))
+           (let ([bnd (parse-binder (car args) loc)])
+             (if (prologos-error? bnd) bnd
+                 (let ([body (parse-datum (cadr args))])
+                   (if (prologos-error? body) body
+                       (surf-lam bnd body loc)))))]
+          ;; Multi-arg untyped: (fn a body) or (fn a b c body) — all-but-last are bare symbols
+          [else
+           (define params (drop-right args 1))
+           (define body-stx (last args))
+           (define all-symbols?
+             (andmap (lambda (a) (symbol? (stx->datum a))) params))
+           (cond
+             [all-symbols?
+              ;; Desugar: (fn a b c body) → nested surf-lam with surf-hole types
+              (define param-names (map stx->datum params))
+              (define body (parse-datum body-stx))
+              (if (prologos-error? body) body
+                  (foldr (lambda (name inner)
+                           (surf-lam (binder-info name 'mw (surf-hole loc)) inner loc))
+                         body param-names))]
+             [else
+              (parse-error loc "fn: all parameters except body must be bare symbols or a binder (x : T)" #f)])])]
 
        ;; (Pi (x : T) body) or (Pi (x :m T) body)
        [(Pi)
@@ -485,6 +546,10 @@
        [(the-fn)
         (parse-the-fn args loc)]
 
+       ;; (reduce scrutinee arm1 arm2 ...) or (match scrutinee arm1 arm2 ...)
+       [(reduce match)
+        (parse-reduce args loc)]
+
        ;; Pre-parse macro forms — should have been expanded before parsing
        [(defmacro)
         (parse-error loc "defmacro should have been expanded before parsing" #f)]
@@ -670,21 +735,30 @@
 ;; Parse defn: (defn name : type [params...] body)
 ;; ========================================
 (define (parse-defn args loc)
+  ;; NEWEST: (defn name {A B} [param <T> ...] <ReturnType> body) — with implicit type params
   ;; NEW: (defn name [param <T> ...] <ReturnType> body) — typed binders
   ;; OLD: (defn name : type [params...] body) — 5 elements with colon
   (cond
-    ;; Detect new syntax: second arg is a bracket form (params with types)
+    ;; NEWEST: second arg is $brace-params → implicit type parameters
+    ;; defn name {A B} [x <T> ...] <ReturnType> body
+    ;; OR defn name {A B} [x : T, ...] : ReturnType body
+    [(and (>= (length args) 5)
+          (brace-params-stx? (cadr args)))
+     (parse-defn-with-implicits args loc)]
+
+    ;; NEW: Detect typed binder syntax: second arg is a bracket form (params with types)
     ;; Detection: either paren-shape property is #\[, or content contains $angle-type markers
     ;; (The latter handles cases where syntax properties were lost during macro expansion)
     [(and (>= (length args) 4)
           (let ([second (cadr args)])
             (or (and (syntax? second)
                      (eq? (syntax-property second 'paren-shape) #\[))
-                ;; Content-based detection: list containing $angle-type markers
+                ;; Content-based detection: list containing $angle-type markers or : symbols
                 (let ([d (if (syntax? second) (syntax->datum second) second)])
                   (and (list? d)
                        (ormap (lambda (x)
-                                (and (pair? x) (eq? (car x) '$angle-type)))
+                                (or (and (pair? x) (eq? (car x) '$angle-type))
+                                    (eq? x ':)))
                               d))))))
      ;; New syntax: name [typed-binders...] <ReturnType> body
      (parse-defn-new args loc)]
@@ -715,6 +789,89 @@
      (parse-error loc "defn requires: (defn name [x <T> ...] <ReturnType> body) or (defn name : type [params] body)" #f)]))
 
 ;; ========================================
+;; Parse defn with implicit type params: (defn name {A B} [params...] <RetType> body)
+;; ========================================
+(define (parse-defn-with-implicits args loc)
+  (define name (stx->datum (car args)))
+  (when (not (symbol? name))
+    (parse-error loc (format "defn: expected name, got ~a" name) name))
+
+  ;; Extract implicit binders from {A B}
+  (define implicit-binders (unwrap-brace-params (cadr args) loc))
+  (when (prologos-error? implicit-binders)
+    (values implicit-binders))
+
+  ;; Remaining args after {A B}: [params...] <RetType> body (or [params...] : RetType body)
+  (define rest-after-braces (cddr args))
+
+  ;; The next arg should be the explicit params bracket
+  (define params-stx (car rest-after-braces))
+  (define rest-args (cdr rest-after-braces)) ; <ReturnType> body  OR  : RetType body
+
+  ;; Parse explicit typed binders from the bracket form
+  (define explicit-binders (parse-defn-binders params-stx loc))
+  (when (prologos-error? explicit-binders)
+    (values explicit-binders))
+
+  ;; Combine implicit + explicit binders
+  (define all-binders (append implicit-binders explicit-binders))
+
+  (cond
+    [(prologos-error? implicit-binders) implicit-binders]
+    [(prologos-error? explicit-binders) explicit-binders]
+    [(< (length rest-args) 2)
+     (parse-error loc "defn: missing return type or body" #f)]
+    [else
+     (define ret-type-stx (car rest-args))
+     (define body-stx (cadr rest-args))
+     (cond
+       ;; Return type in angle brackets: <RetType>
+       [(angle-type-stx? ret-type-stx)
+        (define ret-type (unwrap-angle-type ret-type-stx loc))
+        (define body (parse-datum body-stx))
+        (cond
+          [(prologos-error? ret-type) ret-type]
+          [(prologos-error? body) body]
+          [else
+           ;; Build the full Pi type from all binders and return type
+           (define full-type
+             (foldr (lambda (bnd rest-ty)
+                      (surf-pi bnd rest-ty loc))
+                    ret-type
+                    all-binders))
+           ;; Extract parameter names
+           (define param-names (map binder-info-name all-binders))
+           (surf-defn name full-type param-names body loc)])]
+       ;; Return type with colon: : RetType body
+       ;; Collect type atoms between ':' and the body (last element).
+       [(eq? (stx->datum ret-type-stx) ':)
+        (cond
+          [(< (length rest-args) 3)
+           (parse-error loc "defn: missing return type or body after ':'" #f)]
+          [else
+           (define after-colon (cdr rest-args))
+           (define type-atoms (drop-right after-colon 1))
+           (define actual-body-stx (last after-colon))
+           (when (null? type-atoms)
+             (parse-error loc "defn: missing return type after ':'" #f))
+           (define ret-type (parse-infix-type type-atoms loc))
+           (define body (parse-datum actual-body-stx))
+           (cond
+             [(prologos-error? ret-type) ret-type]
+             [(prologos-error? body) body]
+             [else
+              (define full-type
+                (foldr (lambda (bnd rest-ty)
+                         (surf-pi bnd rest-ty loc))
+                       ret-type
+                       all-binders))
+              (define param-names (map binder-info-name all-binders))
+              (surf-defn name full-type param-names body loc)])])]
+       [else
+        (parse-error loc (format "defn: expected <ReturnType> or : ReturnType, got ~a"
+                                 (stx->datum ret-type-stx)) #f)])]))
+
+;; ========================================
 ;; Parse new-style defn: (defn name [param <T> param :m <T> ...] <ReturnType> body)
 ;; ========================================
 (define (parse-defn-new args loc)
@@ -730,36 +887,63 @@
   (when (prologos-error? binders)
     (values binders))
 
-  ;; rest-args should be: <ReturnType> body
+  ;; rest-args should be: <ReturnType> body  OR  : ReturnType body
   (cond
     [(prologos-error? binders) binders]
     [(< (length rest-args) 2)
      (parse-error loc "defn: missing return type or body" #f)]
     [else
      (define ret-type-stx (car rest-args))
-     (define body-stx (cadr rest-args))
      (cond
-       [(not (angle-type-stx? ret-type-stx))
-        (parse-error loc (format "defn: expected <ReturnType>, got ~a" (stx->datum ret-type-stx)) #f)]
-       [else
+       ;; OLD: <ReturnType> body
+       [(angle-type-stx? ret-type-stx)
         (define ret-type (unwrap-angle-type ret-type-stx loc))
-        (define body (parse-datum body-stx))
+        (define body (parse-datum (cadr rest-args)))
         (cond
           [(prologos-error? ret-type) ret-type]
           [(prologos-error? body) body]
           [else
            ;; Build the full Pi type from binders and return type
-           ;; (Pi [A :0 <(Type 0)>] (Pi [x <A>] ReturnType)) etc.
            (define full-type
              (foldr (lambda (bnd rest-ty)
                       (surf-pi bnd rest-ty loc))
                     ret-type
                     binders))
-           ;; Extract just the parameter names for surf-defn
            (define param-names (map binder-info-name binders))
-           (surf-defn name full-type param-names body loc)])])]))
+           (surf-defn name full-type param-names body loc)])]
+       ;; NEW: : ReturnType body — colon followed by type atoms then body
+       [(eq? (stx->datum ret-type-stx) ':)
+        (cond
+          [(< (length rest-args) 3)
+           (parse-error loc "defn: missing return type or body after ':'" #f)]
+          [else
+           ;; Collect type atoms between ':' and the body.
+           ;; The body is the last element.
+           ;; Type atoms are everything between ':' and the last element.
+           (define after-colon (cdr rest-args))
+           (define type-atoms (drop-right after-colon 1))
+           (define body-stx (last after-colon))
+           (when (null? type-atoms)
+             (parse-error loc "defn: missing return type after ':'" #f))
+           (define ret-type (parse-infix-type type-atoms loc))
+           (define body (parse-datum body-stx))
+           (cond
+             [(prologos-error? ret-type) ret-type]
+             [(prologos-error? body) body]
+             [else
+              (define full-type
+                (foldr (lambda (bnd rest-ty)
+                         (surf-pi bnd rest-ty loc))
+                       ret-type
+                       binders))
+              (define param-names (map binder-info-name binders))
+              (surf-defn name full-type param-names body loc)])])]
+       [else
+        (parse-error loc (format "defn: expected <ReturnType> or : ReturnType, got ~a"
+                                 (stx->datum ret-type-stx)) #f)])]))
 
 ;; Parse typed binders from bracket contents: [x <T> y :0 <T2> ...]
+;; Also supports colon syntax: [f : A -> B, z : B]
 ;; Returns a list of binder-info structs.
 (define (parse-defn-binders stx loc)
   (define parts
@@ -769,6 +953,13 @@
      (parse-error loc "defn: malformed parameter list" #f)]
     [(null? parts)
      (parse-error loc "defn: parameter list cannot be empty" #f)]
+    ;; Detect colon-based syntax: check if any element is a bare ': symbol
+    ;; (not :0/:1/:w multiplicities, and not inside $angle-type)
+    [(ormap (lambda (p)
+              (let ([d (stx->datum p)])
+                (eq? d ':)))
+            parts)
+     (parse-colon-binder-seq parts loc)]
     [else
      (parse-defn-binder-seq parts loc)]))
 
@@ -803,6 +994,154 @@
                   (format "defn: expected 'name <type>' in parameter list, got ~a"
                           (map stx->datum parts))
                   #f)]))
+
+;; ========================================
+;; Colon-based parameter parsing: [f : A -> B -> B, z : B, xs : List A]
+;; Commas are already stripped by the reader. So the flat sequence is:
+;; (f : A -> B -> B z : B xs : List A)
+;; We split on ':' boundaries to get individual binders.
+;; ========================================
+
+;; Parse colon-based binder sequence from flat parts list.
+;; Format: name [mult] : type-atoms... name [mult] : type-atoms... ...
+;; Returns a list of binder-info structs.
+(define (parse-colon-binder-seq parts loc)
+  ;; Strategy: Walk through parts, collecting binders.
+  ;; A binder starts with a symbol name, optionally followed by a multiplicity (:0/:1/:w),
+  ;; then a colon ':' , then type atoms until the next binder or end of list.
+  ;; The "next binder" is detected by: a symbol followed by ':' (with or without mult in between).
+  (define (is-colon? p) (eq? (stx->datum p) ':))
+  (define (is-mult? p) (mult-annot? (stx->datum p)))
+  (define (is-sym? p) (symbol? (stx->datum p)))
+
+  ;; Find the index of the next colon that starts a new binder.
+  ;; A colon starts a new binder if it's preceded by a symbol name
+  ;; (possibly with a multiplicity in between).
+  ;; We skip the first colon (which belongs to the current binder).
+  (define (find-next-binder-start type-atoms)
+    ;; type-atoms is the list of atoms after the current binder's ':'
+    ;; Look for a pattern: ... sym : ... or ... sym mult : ...
+    ;; where sym starts a new binder.
+    (let loop ([i 0] [remaining type-atoms])
+      (cond
+        [(null? remaining) i] ; end of list — all atoms belong to current binder
+        ;; sym : pattern — the sym starts a new binder, and everything before it is type
+        [(and (is-sym? (car remaining))
+              (>= (length remaining) 2)
+              (is-colon? (cadr remaining)))
+         i]
+        ;; sym mult : pattern — the sym starts a new binder
+        [(and (is-sym? (car remaining))
+              (>= (length remaining) 3)
+              (is-mult? (cadr remaining))
+              (is-colon? (caddr remaining)))
+         i]
+        [else (loop (+ i 1) (cdr remaining))])))
+
+  (let loop ([parts parts] [result '()])
+    (cond
+      [(null? parts) (reverse result)]
+      [else
+       ;; Expect: name [mult] : type-atoms...
+       (define name-stx (car parts))
+       (define name (stx->datum name-stx))
+       (unless (symbol? name)
+         (parse-error loc (format "defn: expected parameter name, got ~a" name) name))
+
+       (define after-name (cdr parts))
+       ;; Check for multiplicity
+       (define-values (mult after-mult)
+         (if (and (not (null? after-name))
+                  (is-mult? (car after-name)))
+             (values (parse-mult-annot (stx->datum (car after-name)))
+                     (cdr after-name))
+             (values 'mw after-name)))
+
+       ;; Expect colon
+       (when (or (null? after-mult) (not (is-colon? (car after-mult))))
+         (parse-error loc (format "defn: expected ':' after parameter name ~a" name) name))
+
+       (define after-colon (cdr after-mult))
+
+       ;; Collect type atoms until the next binder start
+       (define split-idx (find-next-binder-start after-colon))
+       (define type-atoms (take after-colon split-idx))
+       (define rest-parts (drop after-colon split-idx))
+
+       (when (null? type-atoms)
+         (parse-error loc (format "defn: missing type after ':' for parameter ~a" name) name))
+
+       ;; Parse the type atoms with infix -> support
+       (define ty (parse-infix-type type-atoms loc))
+       (if (prologos-error? ty) ty
+           (loop rest-parts (cons (binder-info name mult ty) result)))])))
+
+;; ========================================
+;; Infix type parser: A -> B -> C, List A, Nat, (Option A)
+;; Handles right-associative -> and type application (juxtaposition).
+;; ========================================
+
+;; Parse a flat list of type atoms with infix -> support.
+;; Splits on '-> symbols, right-associates the arrow, and parses each segment.
+(define (parse-infix-type atoms loc)
+  ;; Split the atoms list on '-> into segments
+  (define segments (split-on-arrow atoms))
+  (cond
+    [(null? segments)
+     (parse-error loc "Empty type expression" #f)]
+    [(= (length segments) 1)
+     ;; No arrows — just parse as a type application or single type
+     (parse-type-segment (car segments) loc)]
+    [else
+     ;; Right-fold with surf-arrow
+     (define parsed-segments
+       (for/list ([seg (in-list segments)])
+         (parse-type-segment seg loc)))
+     ;; Check for errors
+     (define first-err (findf prologos-error? parsed-segments))
+     (if first-err first-err
+         (foldr (lambda (dom cod) (surf-arrow dom cod loc))
+                (last parsed-segments)
+                (drop-right parsed-segments 1)))]))
+
+;; Split a list of atoms on the '-> symbol.
+;; Returns a list of lists (segments between arrows).
+(define (split-on-arrow atoms)
+  (let loop ([remaining atoms] [current '()] [result '()])
+    (cond
+      [(null? remaining)
+       (reverse (cons (reverse current) result))]
+      [(eq? (stx->datum (car remaining)) '->)
+       (loop (cdr remaining) '() (cons (reverse current) result))]
+      [else
+       (loop (cdr remaining) (cons (car remaining) current) result)])))
+
+;; Parse a single type segment (atoms between arrows).
+;; A segment like (List A) is type application; (Nat) is a single type.
+;; For multi-atom segments, we first construct a list datum and run pre-parse
+;; expansion on it, so that deftype macros (e.g., Eq A → (-> A (-> A Bool)))
+;; are expanded correctly.
+(define (parse-type-segment atoms loc)
+  (cond
+    [(null? atoms)
+     (parse-error loc "Empty type segment in arrow type" #f)]
+    [(= (length atoms) 1)
+     ;; Single atom — just parse it
+     (parse-datum (car atoms))]
+    [else
+     ;; Multiple atoms — construct a list datum and run pre-parse expansion
+     (define datums (map stx->datum atoms))
+     (define expanded (preparse-expand-form datums))
+     ;; If expansion changed the form (macro was applied), parse the expanded result
+     (if (not (equal? expanded datums))
+         ;; Macro expanded — wrap in syntax and parse
+         (parse-datum (datum->syntax #f expanded))
+         ;; No expansion — treat as type application
+         (let ([func (parse-datum (car atoms))]
+               [args (map (lambda (a) (parse-datum a)) (cdr atoms))])
+           (let ([first-err (findf prologos-error? (cons func args))])
+             (if first-err first-err
+                 (surf-app func args loc)))))]))
 
 ;; ========================================
 ;; Parse the-fn: (the-fn type [params...] body)
@@ -900,6 +1239,89 @@
                    (format "~a expects ~a argument~a, got ~a"
                            form expected (if (= expected 1) "" "s") (length args))
                    form expected (length args))))
+
+;; ========================================
+;; Parse reduce: (reduce scrutinee arm1 arm2 ...)
+;; ========================================
+;; WS mode (pipe syntax):
+;;   (reduce scrutinee ($pipe nil -> default) ($pipe cons a acc -> body))
+;; Sexp mode (arrow syntax):
+;;   (reduce scrutinee (nil -> default) (cons a acc -> body))
+
+(define (parse-reduce args loc)
+  (when (< (length args) 2)
+    (parse-error loc "reduce requires scrutinee and at least one arm" #f))
+  (define scrutinee (parse-datum (car args)))
+  (if (prologos-error? scrutinee) scrutinee
+      (let ([arms (parse-reduce-arms (cdr args) loc)])
+        (if (prologos-error? arms) arms
+            (surf-reduce scrutinee arms loc)))))
+
+(define (parse-reduce-arms arm-stxs loc)
+  (define result
+    (for/list ([arm-stx (in-list arm-stxs)])
+      (parse-reduce-arm arm-stx loc)))
+  (define first-err (findf prologos-error? result))
+  (if first-err first-err result))
+
+(define (parse-reduce-arm arm-stx loc)
+  ;; arm-stx is a syntax object or datum wrapping a list like:
+  ;; ($pipe nil -> default) or (cons a acc -> body)
+  (define d (stx->datum arm-stx))
+  (define parts
+    (if (syntax? arm-stx) (syntax->list arm-stx)
+        (if (list? d) (map (lambda (x) (datum->syntax #f x)) d) #f)))
+  (unless parts
+    (parse-error loc "reduce arm must be a list" #f))
+
+  ;; Skip leading $pipe if present (WS mode)
+  (define cleaned
+    (if (and (not (null? parts))
+             (eq? (stx->datum (car parts)) '$pipe))
+        (cdr parts)
+        parts))
+
+  ;; Find -> in the arm
+  (define arrow-idx
+    (for/or ([p (in-list cleaned)] [i (in-naturals)])
+      (and (eq? (stx->datum p) '->) i)))
+  (unless arrow-idx
+    (parse-error loc "reduce arm missing -> separator" #f))
+
+  (define pattern (take cleaned arrow-idx))
+  (define body-parts (drop cleaned (+ arrow-idx 1)))
+
+  (when (null? pattern)
+    (parse-error loc "reduce arm missing constructor name" #f))
+  (when (null? body-parts)
+    (parse-error loc "reduce arm missing body after ->" #f))
+
+  ;; Body: may be a single expression or multiple tokens forming one expression
+  ;; For WS mode, each arm is a sub-list, so body-parts should have exactly 1 element
+  ;; For sexp mode, body should also be a single form
+  ;; But we need to handle (ctor args -> (f x)) where body is one list
+  ;; If multiple body parts, wrap them as an application
+  (define body-stx
+    (if (= (length body-parts) 1)
+        (car body-parts)
+        ;; Multiple body parts: treat as application
+        (datum->syntax #f
+                       (map stx->datum body-parts)
+                       (car body-parts))))
+
+  (define ctor-name (stx->datum (car pattern)))
+  (define binding-names
+    (for/list ([p (in-list (cdr pattern))])
+      (stx->datum p)))
+
+  (unless (symbol? ctor-name)
+    (parse-error loc (format "reduce arm: constructor name must be a symbol, got ~a" ctor-name) #f))
+  (unless (andmap symbol? binding-names)
+    (parse-error loc "reduce arm: all bindings must be bare symbols" #f))
+
+  (define body (parse-datum body-stx))
+  (if (prologos-error? body) body
+      (reduce-arm ctor-name binding-names body loc)))
 
 ;; ========================================
 ;; Convenience: parse from string

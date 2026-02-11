@@ -29,7 +29,14 @@
       "Bash(raco make:*)",
       "Bash(find:*)",
       "Bash(git stash:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "WebFetch(domain:www.irif.fr)",
+      "WebFetch(domain:leodemoura.github.io)",
+      "WebFetch(domain:www.cs.mcgill.ca)",
+      "WebFetch(domain:arxiv.org)",
+      "WebFetch(domain:blog.jez.io)",
+      "WebFetch(domain:leanprover-community.github.io)",
+      "WebFetch(domain:www.rntz.net)"
     ]
   }
 }

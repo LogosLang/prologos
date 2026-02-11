@@ -12,6 +12,7 @@
          global-env-lookup-type
          global-env-lookup-value
          global-env-add
+         global-env-add-type-only
          global-env-names
          global-env-import-module
          global-env-snapshot)
@@ -32,6 +33,12 @@
 ;; Add a definition to the global environment (returns new env)
 (define (global-env-add env name type value)
   (hash-set env name (cons type value)))
+
+;; Pre-register only the type (value = #f) for recursive definitions.
+;; whnf treats #f as stuck (no unfolding), so self-references are opaque
+;; during type checking. After checking, call global-env-add with real value.
+(define (global-env-add-type-only env name type)
+  (hash-set env name (cons type #f)))
 
 ;; List all definition names
 (define (global-env-names)

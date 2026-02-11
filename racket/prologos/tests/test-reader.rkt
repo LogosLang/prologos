@@ -239,12 +239,38 @@
    (read-all-forms-string "eval [1 2 3]")
    '((eval (1 2 3)))))
 
-(test-case "parse: {} reserved error"
-  (check-exn
-   (lambda (e)
-     (and (exn:fail? e)
-          (string-contains? (exn-message e) "reserved")))
-   (lambda () (read-all-forms-string "eval {:name x}"))))
+(test-case "parse: {} brace params"
+  ;; Braces now produce ($brace-params ...) sentinel
+  (define forms (read-all-forms-string "defn foo {A B} [x <A>] <A>\n  x"))
+  (check-not-false forms)
+  ;; Verify {A B} produces ($brace-params A B) in the datum
+  (define first-form (car forms))
+  ;; first-form should be (defn foo ($brace-params A B) (x ($angle-type A)) ($angle-type A) x)
+  (define brace-part (caddr first-form))
+  (check-equal? (car brace-part) '$brace-params)
+  (check-equal? (cadr brace-part) 'A)
+  (check-equal? (caddr brace-part) 'B))
+
+;; ================================================================
+;; COMMA SEPARATOR TESTS
+;; ================================================================
+
+(test-case "tokenize: comma token"
+  (define toks (tokenize-string "a, b"))
+  (define types (map (lambda (t) (vector-ref (struct->vector t) 1)) toks))
+  (check-not-false (member 'comma types)))
+
+(test-case "parse: commas in brackets stripped"
+  ;; Commas in [...] should be silently removed by the bracket parser
+  (define forms (read-all-forms-string "defn foo [x : Nat, y : Nat] <Nat>\n  x"))
+  (check-not-false forms)
+  (define first-form (car forms))
+  ;; first-form: (defn foo (x : Nat y : Nat) ($angle-type Nat) x)
+  ;; The bracket content should have commas stripped
+  (define bracket-part (caddr first-form))
+  (check-true (list? bracket-part))
+  ;; Should be (x : Nat y : Nat) — no commas
+  (check-equal? bracket-part '(x : Nat y : Nat)))
 
 ;; ================================================================
 ;; ROUND-TRIP TESTS — ws syntax produces same S-exprs as sexp

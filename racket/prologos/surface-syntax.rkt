@@ -65,8 +65,18 @@
  (struct-out surf-infer)
  ;; Annotated lambda
  (struct-out surf-the-fn)
+ ;; Type hole (inferred)
+ (struct-out surf-hole)
+ ;; Reduce (ML-style pattern matching with type inference)
+ (struct-out surf-reduce)
+ (struct-out reduce-arm)
  ;; Binder info
  (struct-out binder-info))
+
+;; ========================================
+;; Type hole (to be inferred by the type checker)
+;; ========================================
+(struct surf-hole (srcloc) #:transparent)
 
 ;; ========================================
 ;; Binder information (for lam, Pi, Sigma)
@@ -225,3 +235,15 @@
 ;; Annotated lambda: (the-fn type [params...] body)
 ;; Desugars to (the type (fn (p1:T1) (fn (p2:T2) ... body)))
 (struct surf-the-fn (type param-names body srcloc) #:transparent)
+
+;; ========================================
+;; Reduce: ML-style pattern matching with type inference
+;; ========================================
+;; reduce scrutinee | ctor1 bindings -> body1 | ctor2 bindings -> body2 ...
+;; Result type is inferred from the checking context.
+
+;; reduce-arm: constructor name, list of binding names (symbols), body (surf expr)
+(struct reduce-arm (ctor-name bindings body srcloc) #:transparent)
+
+;; reduce: scrutinee (surf expr), list of reduce-arms
+(struct surf-reduce (scrutinee arms srcloc) #:transparent)

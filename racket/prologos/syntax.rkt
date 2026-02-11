@@ -61,6 +61,13 @@
  (struct-out expr-p8-le)
  (struct-out expr-p8-from-nat)
  (struct-out expr-p8-if-nar)
+ ;; Type hole (to be inferred during checking)
+ (struct-out expr-hole)
+ ;; Metavariable (to be solved during elaboration/unification)
+ (struct-out expr-meta)
+ ;; Reduce (ML-style pattern matching — desugared in type checker)
+ (struct-out expr-reduce)
+ (struct-out expr-reduce-arm)
  ;; Error marker
  (struct-out expr-error)
  ;; Expr predicate
@@ -205,6 +212,26 @@
 (struct expr-p8-if-nar (type nar-case normal-case val) #:transparent)
 
 ;; ========================================
+;; Type hole (for untyped lambda parameters — filled during checking)
+;; ========================================
+(struct expr-hole () #:transparent)
+
+;; ========================================
+;; Metavariable (placeholder to be solved by unification)
+;; ========================================
+(struct expr-meta (id) #:transparent)    ; id is a gensym symbol
+
+;; ========================================
+;; Reduce (ML-style pattern matching — desugared in type checker)
+;; ========================================
+;; expr-reduce-arm: ctor-name (symbol), binding-count (int), body (core expr)
+(struct expr-reduce-arm (ctor-name binding-count body) #:transparent)
+
+;; expr-reduce: scrutinee (core expr), arms (list of expr-reduce-arm),
+;;   structural? (boolean) — #t for true structural PM, #f for Church fold semantics
+(struct expr-reduce (scrutinee arms structural?) #:transparent)
+
+;; ========================================
 ;; Error marker (for failed inference)
 ;; ========================================
 (struct expr-error () #:transparent)
@@ -230,7 +257,7 @@
       (expr-p8-neg? x) (expr-p8-abs? x) (expr-p8-sqrt? x)
       (expr-p8-lt? x) (expr-p8-le? x)
       (expr-p8-from-nat? x) (expr-p8-if-nar? x)
-      (expr-error? x)))
+      (expr-hole? x) (expr-meta? x) (expr-reduce? x) (expr-error? x)))
 
 ;; ========================================
 ;; Convenience: convert Racket natural to Prologos numerals

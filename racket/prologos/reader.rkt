@@ -310,6 +310,11 @@
        (set-tokenizer-bracket-depth! tok (- depth 1))
        (token 'rbrace #f ln cl ps 1)]
 
+      ;; Comma — parameter separator (stripped by bracket parsing)
+      [(char=? c #\,)
+       (tok-read! tok)
+       (token 'comma #f ln cl ps 1)]
+
       ;; Angle brackets — type annotations
       [(char=? c #\<)
        (tok-read! tok)
@@ -329,6 +334,11 @@
       [(char=? c #\$)
        (tok-read! tok)
        (token 'dollar #f ln cl ps 1)]
+
+      ;; Pipe — reduce arm separator
+      [(char=? c #\|)
+       (tok-read! tok)
+       (token 'symbol '$pipe ln cl ps 1)]
 
       ;; Colon
       [(char=? c #\:)
@@ -537,6 +547,10 @@
         [(eq? tt 'eof)
          (error 'prologos-reader "~a:~a:~a: Unclosed bracket"
                 src ln cl)]
+        ;; Skip comma tokens inside brackets (parameter separator)
+        [(eq? tt 'comma)
+         (parser-next! p) ; consume comma
+         (loop elems)]
         [else
          (define elem (parse-inline-element p))
          (loop (cons elem elems))])))
@@ -575,7 +589,38 @@
   (make-stx all src ln cl ps
             (max 1 (- (+ (token-pos (parser-peek p)) 1) ps))))
 
-;; --- Parse a single inline element (atom, grouped form, $-quote, <angle>) ---
+;; --- Parse a brace form: { ... } ---
+;; Wraps contents with $brace-params sentinel for implicit type parameters.
+;; {A B C} → ($brace-params A B C)
+
+(define (parse-brace-form p)
+  (define open-tok (parser-next! p))  ; consume lbrace
+  (define ln (token-line open-tok))
+  (define cl (token-col open-tok))
+  (define ps (token-pos open-tok))
+  (define src (parser-source p))
+
+  (define elements
+    (let loop ([elems '()])
+      (define tt (parser-peek-type p))
+      (cond
+        [(eq? tt 'rbrace)
+         (parser-next! p) ; consume rbrace
+         (reverse elems)]
+        [(eq? tt 'eof)
+         (error 'prologos-reader "~a:~a:~a: Unclosed {"
+                src ln cl)]
+        [else
+         (define elem (parse-inline-element p))
+         (loop (cons elem elems))])))
+
+  ;; Wrap with $brace-params sentinel
+  (define sentinel (make-stx '$brace-params src ln cl ps 0))
+  (define all (cons sentinel elements))
+  (make-stx all src ln cl ps
+            (max 1 (- (+ (token-pos (parser-peek p)) 1) ps))))
+
+;; --- Parse a single inline element (atom, grouped form, $-quote, <angle>, {brace}) ---
 
 (define (parse-inline-element p)
   (define tt (parser-peek-type p))
@@ -588,10 +633,7 @@
     [(eq? tt 'langle)
      (parse-angle-form p)]
     [(eq? tt 'lbrace)
-     (define t (parser-next! p))
-     (error 'prologos-reader
-            "~a:~a:~a: Braces {} are reserved for EDN hashmaps (coming soon)."
-            src (token-line t) (token-col t))]
+     (parse-brace-form p)]
     [(eq? tt 'dollar)
      ;; $expr — quote operator
      (define d (parser-next! p)) ; consume $

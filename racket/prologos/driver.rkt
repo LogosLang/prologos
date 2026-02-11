@@ -26,13 +26,64 @@
          "macros.rkt"
          "sexp-readtable.rkt"
          "reader.rkt"
-         "namespace.rkt")
+         "namespace.rkt"
+         "metavar-store.rkt"
+         "zonk.rkt")
 
 (provide process-command
          process-file
          process-string
          load-module
          install-module-loader!)
+
+;; ========================================
+;; Apply structural reduce marks from type checker
+;; ========================================
+;; Walk the expression tree and reconstruct any expr-reduce nodes
+;; that were marked as needing structural PM (by check-reduce) with
+;; structural? = #t.
+(define (apply-structural-marks e)
+  (match e
+    [(expr-reduce scrut arms structural?)
+     (define new-structural? (or structural? (structural-reduce? e)))
+     (define new-scrut (apply-structural-marks scrut))
+     (define new-arms
+       (map (lambda (arm)
+              (expr-reduce-arm
+               (expr-reduce-arm-ctor-name arm)
+               (expr-reduce-arm-binding-count arm)
+               (apply-structural-marks (expr-reduce-arm-body arm))))
+            arms))
+     (expr-reduce new-scrut new-arms new-structural?)]
+    [(expr-lam m t body)
+     (expr-lam m (apply-structural-marks t) (apply-structural-marks body))]
+    [(expr-Pi m dom cod)
+     (expr-Pi m (apply-structural-marks dom) (apply-structural-marks cod))]
+    [(expr-app f a)
+     (expr-app (apply-structural-marks f) (apply-structural-marks a))]
+    [(expr-ann e1 t1)
+     (expr-ann (apply-structural-marks e1) (apply-structural-marks t1))]
+    [(expr-suc e1) (expr-suc (apply-structural-marks e1))]
+    [(expr-natrec mot base step target)
+     (expr-natrec (apply-structural-marks mot) (apply-structural-marks base)
+                  (apply-structural-marks step) (apply-structural-marks target))]
+    [(expr-boolrec mot tc fc target)
+     (expr-boolrec (apply-structural-marks mot) (apply-structural-marks tc)
+                   (apply-structural-marks fc) (apply-structural-marks target))]
+    [(expr-Sigma t1 t2)
+     (expr-Sigma (apply-structural-marks t1) (apply-structural-marks t2))]
+    [(expr-pair e1 e2)
+     (expr-pair (apply-structural-marks e1) (apply-structural-marks e2))]
+    [(expr-fst e1) (expr-fst (apply-structural-marks e1))]
+    [(expr-snd e1) (expr-snd (apply-structural-marks e1))]
+    [(expr-Eq t e1 e2)
+     (expr-Eq (apply-structural-marks t) (apply-structural-marks e1)
+              (apply-structural-marks e2))]
+    [(expr-J mot base left right proof)
+     (expr-J (apply-structural-marks mot) (apply-structural-marks base)
+             (apply-structural-marks left) (apply-structural-marks right)
+             (apply-structural-marks proof))]
+    [_ e]))  ;; atoms, fvar, bvar, zero, etc.
 
 ;; ========================================
 ;; Process a single top-level command
@@ -43,52 +94,100 @@
 ;; When a namespace context is active, def stores names both as
 ;; bare symbols (for local use) and as fully-qualified names (for export).
 (define (process-command surf)
+  (reset-meta-store!)  ;; clear metavariables from previous command
   (define expanded (expand-top-level surf))
   (if (prologos-error? expanded)
       expanded
-      (let ([elab-result (elaborate-top-level expanded)])
-        (if (prologos-error? elab-result)
-            elab-result
-            (match elab-result
-              ;; (def name type body)
-              [(list 'def name type body)
-               (let ([ty-ok (is-type/err ctx-empty type)])
-                 (if (prologos-error? ty-ok) ty-ok
-                     (let ([chk (check/err ctx-empty body type)])
-                       (if (prologos-error? chk) chk
-                           (begin
-                             ;; Store under bare name (for local use within the module)
-                             (current-global-env
-                              (global-env-add (current-global-env) name type body))
-                             ;; Also store under fully-qualified name if namespace is active
-                             (when (current-ns-context)
-                               (define fqn (qualify-name name
-                                             (ns-context-current-ns (current-ns-context))))
-                               (current-global-env
-                                (global-env-add (current-global-env) fqn type body)))
-                             (format "~a : ~a defined." name (pp-expr type)))))))]
+      (if (surf-def? expanded)
+          ;; Special handling for def: split elaboration for recursive support.
+          ;; We elaborate the type first, pre-register it in the global env,
+          ;; then elaborate the body (so self-references resolve).
+          (process-def expanded)
+          ;; All other forms: elaborate fully, then process
+          (let ([elab-result (elaborate-top-level expanded)])
+            (if (prologos-error? elab-result)
+                elab-result
+                (match elab-result
+                  ;; (check expr type)
+                  [(list 'check expr type)
+                   (let ([chk (check/err ctx-empty expr type)])
+                     (if (prologos-error? chk) chk
+                         "OK"))]
 
-              ;; (check expr type)
-              [(list 'check expr type)
-               (let ([chk (check/err ctx-empty expr type)])
-                 (if (prologos-error? chk) chk
-                     "OK"))]
+                  ;; (eval expr)
+                  [(list 'eval expr)
+                   (let ([ty (infer/err ctx-empty expr)])
+                     (if (prologos-error? ty) ty
+                         (let ([val (nf (zonk expr))]
+                               [ty-nf (nf (zonk ty))])
+                           (format "~a : ~a" (pp-expr val) (pp-expr ty-nf)))))]
 
-              ;; (eval expr)
-              [(list 'eval expr)
-               (let ([ty (infer/err ctx-empty expr)])
-                 (if (prologos-error? ty) ty
-                     (let ([val (nf expr)]
-                           [ty-nf (nf ty)])
-                       (format "~a : ~a" (pp-expr val) (pp-expr ty-nf)))))]
+                  ;; (infer expr)
+                  [(list 'infer expr)
+                   (let ([ty (infer/err ctx-empty expr)])
+                     (if (prologos-error? ty) ty
+                         (pp-expr (zonk ty))))]
 
-              ;; (infer expr)
-              [(list 'infer expr)
-               (let ([ty (infer/err ctx-empty expr)])
-                 (if (prologos-error? ty) ty
-                     (pp-expr ty)))]
+                  [_ (prologos-error srcloc-unknown (format "Unknown command: ~a" elab-result))]))))))
 
-              [_ (prologos-error srcloc-unknown (format "Unknown command: ~a" elab-result))])))))
+;; Process a def command with split elaboration for recursive support.
+;; 1. Elaborate type first
+;; 2. Pre-register (cons type #f) in global env
+;; 3. Elaborate body (self-reference now resolves to fvar)
+;; 4. Type-check body against type
+;; 5. Update global env with real value
+(define (process-def expanded)
+  (define name (surf-def-name expanded))
+  (define type-surf (surf-def-type expanded))
+  (define body-surf (surf-def-body expanded))
+  ;; 1. Elaborate type
+  (define type (elaborate type-surf))
+  (cond
+    [(prologos-error? type) type]
+    [else
+     ;; 2. Check type is well-formed
+     (define ty-ok (is-type/err ctx-empty type))
+     (cond
+       [(prologos-error? ty-ok) ty-ok]
+       [else
+        ;; 3. Pre-register for recursive references
+        (current-global-env
+         (global-env-add-type-only (current-global-env) name type))
+        (when (current-ns-context)
+          (define fqn (qualify-name name
+                        (ns-context-current-ns (current-ns-context))))
+          (current-global-env
+           (global-env-add-type-only (current-global-env) fqn type)))
+        ;; 4. Elaborate body (self-reference now resolves)
+        (define body (elaborate body-surf))
+        (cond
+          [(prologos-error? body)
+           ;; Remove pre-registered entry on elaboration failure
+           (current-global-env (hash-remove (current-global-env) name))
+           body]
+          [else
+           ;; 5. Check body against type
+           (define chk (check/err ctx-empty body type))
+           (cond
+             [(prologos-error? chk)
+              ;; Remove pre-registered entry on type-check failure
+              (current-global-env (hash-remove (current-global-env) name))
+              chk]
+             [else
+              ;; 6. Apply structural reduce marks (before zonk, so eq? identity holds),
+              ;;    then zonk solved metas, and store
+              (define marked-body (apply-structural-marks body))
+              (define zonked-body (zonk marked-body))
+              (define zonked-type (zonk type))
+              (define final-body zonked-body)
+              (current-global-env
+               (global-env-add (current-global-env) name zonked-type final-body))
+              (when (current-ns-context)
+                (define fqn (qualify-name name
+                              (ns-context-current-ns (current-ns-context))))
+                (current-global-env
+                 (global-env-add (current-global-env) fqn zonked-type final-body)))
+              (format "~a : ~a defined." name (pp-expr zonked-type))])])])]))
 
 ;; ========================================
 ;; Read all syntax objects from a port
@@ -174,10 +273,15 @@
      (define mod-env #f)
      (define mod-ns-ctx #f)
      (define mod-preparse-reg #f)
+     (define mod-ctor-reg #f)
+     (define mod-type-meta #f)
 
      (parameterize ([current-global-env (hasheq)]
                     [current-ns-context #f]
+                    [current-meta-store (make-hasheq)]
                     [current-preparse-registry (current-preparse-registry)]
+                    [current-ctor-registry (current-ctor-registry)]
+                    [current-type-meta (current-type-meta)]
                     [current-loading-set (set-add (current-loading-set) ns-sym)])
        ;; Read and process the file
        ;; Use WS reader for .prologos files, sexp reader otherwise
@@ -197,15 +301,21 @@
              (error 'require "Error loading module ~a: ~a"
                     ns-sym (prologos-error-message result)))))
 
-       ;; Capture the resulting environment, namespace context, and preparse registry
+       ;; Capture the resulting environment, namespace context, and registries
        (set! mod-env (current-global-env))
        (set! mod-ns-ctx (current-ns-context))
-       (set! mod-preparse-reg (current-preparse-registry)))
+       (set! mod-preparse-reg (current-preparse-registry))
+       (set! mod-ctor-reg (current-ctor-registry))
+       (set! mod-type-meta (current-type-meta)))
 
      ;; Propagate preparse registry changes (deftype/defmacro) to the caller.
      ;; This ensures type aliases and macros defined in loaded modules are
      ;; available to subsequent code in the requiring module.
      (current-preparse-registry mod-preparse-reg)
+
+     ;; Propagate constructor metadata (for reduce) to the caller.
+     (current-ctor-registry mod-ctor-reg)
+     (current-type-meta mod-type-meta)
 
      ;; 5. Build module-info
      (define exports

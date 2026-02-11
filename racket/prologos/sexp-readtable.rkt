@@ -109,11 +109,65 @@
   (syntax->datum stx))
 
 ;; ========================================
+;; Brace reader procedure
+;; ========================================
+;; Called when { is encountered. Reads content until matching }.
+;; Returns ($brace-params content...) as a syntax object or datum.
+;; Used for implicit type parameters: {A B C} → ($brace-params A B C).
+
+(define (read-brace-params-syntax ch port src line col pos)
+  (define elements
+    (let loop ([elems '()])
+      ;; Skip whitespace inside braces
+      (let skip-ws ()
+        (define c (peek-char port))
+        (when (and (char? c) (char-whitespace? c))
+          (read-char port)
+          (skip-ws)))
+      (define next (peek-char port))
+      (cond
+        [(eof-object? next)
+         (error 'prologos-reader "Unclosed { at ~a:~a:~a" src line col)]
+        [(char=? next #\})
+         (read-char port) ; consume }
+         (reverse elems)]
+        [else
+         (define val
+           (parameterize ([current-readtable prologos-readtable])
+             (read-syntax src port)))
+         (loop (cons val elems))])))
+  ;; Build ($brace-params content...) syntax
+  (define end-pos (file-position port))
+  (define span (- end-pos pos))
+  (define sentinel (datum->syntax #f '$brace-params (list src line col pos 0)))
+  (datum->syntax #f (cons sentinel elements)
+                 (list src line col pos span)))
+
+(define (read-brace-params-datum ch port)
+  (define stx (read-brace-params-syntax ch port "<unknown>" #f #f (file-position port)))
+  (syntax->datum stx))
+
+;; ========================================
+;; Comma reader: skip commas as separators in [param : Type, param : Type]
+;; ========================================
+;; When a comma is encountered, just read and return the next datum.
+;; This effectively makes commas whitespace-like separators.
+(define (read-comma-syntax ch port src line col pos)
+  (parameterize ([current-readtable prologos-readtable])
+    (read-syntax src port)))
+
+(define (read-comma-datum ch port)
+  (parameterize ([current-readtable prologos-readtable])
+    (read port)))
+
+;; ========================================
 ;; The custom readtable
 ;; ========================================
 (define prologos-readtable
   (make-readtable (current-readtable)
-    #\< 'terminating-macro read-angle-bracket-syntax))
+    #\< 'terminating-macro read-angle-bracket-syntax
+    #\{ 'terminating-macro read-brace-params-syntax
+    #\, 'terminating-macro read-comma-syntax))
 
 ;; ========================================
 ;; Convenience read functions

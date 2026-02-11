@@ -7,6 +7,7 @@
 
 (require rackunit
          racket/string
+         racket/list
          "../prelude.rkt"
          "../syntax.rkt"
          "../reduction.rkt"
@@ -437,3 +438,149 @@
   (check-equal?
    (run-first "(infer (Pi [A :0 <(Type 0)>] (-> A A)))")
    "(Type 1)"))
+
+;; ========================================
+;; Phase 3: Colon-based parameter syntax (integration tests)
+;; ========================================
+
+(test-case "surface: colon defn simple increment"
+  (parameterize ([current-global-env (hasheq)])
+    (define results (process-string
+                     (string-append
+                      "(defn inc2 [x : Nat] : Nat (inc (inc x)))\n"
+                      "(eval (inc2 zero))")))
+    (check-equal? (length results) 2)
+    (check-equal? (car results) "inc2 : (-> Nat Nat) defined.")
+    (check-equal? (cadr results) "2 : Nat")))
+
+(test-case "surface: colon defn with arrow param"
+  (parameterize ([current-global-env (hasheq)])
+    (define results (process-string
+                     (string-append
+                      "(defn apply-to-zero [f : Nat -> Nat] : Nat (f zero))\n"
+                      "(defn inc2 [x : Nat] : Nat (inc (inc x)))\n"
+                      "(eval (apply-to-zero inc2))")))
+    (check-equal? (length results) 3)
+    (check-equal? (car results) "apply-to-zero : (-> (-> Nat Nat) Nat) defined.")
+    (check-equal? (caddr results) "2 : Nat")))
+
+(test-case "surface: colon defn polymorphic with {A}"
+  (parameterize ([current-global-env (hasheq)])
+    (define results (process-string
+                     (string-append
+                      "(defn id {A} [x : A] : A x)\n"
+                      "(eval (id Nat zero))\n"
+                      "(eval (id Bool true))")))
+    (check-equal? (length results) 3)
+    (check-equal? (car results) "id : (Pi [x :0 <(Type 0)>] (-> x x)) defined.")
+    (check-equal? (cadr results) "zero : Nat")
+    (check-equal? (caddr results) "true : Bool")))
+
+(test-case "surface: colon defn with multiplicity"
+  (parameterize ([current-global-env (hasheq)])
+    (define results (process-string
+                     (string-append
+                      "(defn const {A B} [x : A y :0 : B] : A x)\n"
+                      "(eval (const Nat Bool (inc zero) true))")))
+    (check-equal? (length results) 2)
+    (check-equal? (cadr results) "1 : Nat")))
+
+(test-case "surface: colon defn multi-arrow type A -> B -> C"
+  (parameterize ([current-global-env (hasheq)])
+    (define results (process-string
+                     (string-append
+                      "(defn add [x : Nat y : Nat] : Nat (natrec Nat y (fn (_ : Nat) (fn (acc : Nat) (inc acc))) x))\n"
+                      "(eval (add (inc zero) (inc (inc zero))))")))
+    (check-equal? (length results) 2)
+    (check-equal? (cadr results) "3 : Nat")))
+
+(test-case "surface: colon defn with bare Type"
+  (parameterize ([current-global-env (hasheq)])
+    (define results (process-string
+                     (string-append
+                      "(defn id [A :0 : Type x : A] : A x)\n"
+                      "(eval (id Nat (inc zero)))")))
+    (check-equal? (length results) 2)
+    (check-equal? (cadr results) "1 : Nat")))
+
+;; ========================================
+;; Phase 4: Untyped multi-argument fn
+;; ========================================
+
+(test-case "surface: untyped fn identity in checked context"
+  (check-equal?
+   (run-first "(check (fn x x) : (-> Nat Nat))")
+   "OK"))
+
+(test-case "surface: untyped fn two args in checked context"
+  (check-equal?
+   (run-first "(check (fn x y (inc x)) : (-> Nat (-> Nat Nat)))")
+   "OK"))
+
+(test-case "surface: untyped fn used in defn body"
+  (parameterize ([current-global-env (hasheq)])
+    (define results (process-string
+                     (string-append
+                      "(defn apply-to-zero [f : Nat -> Nat] : Nat (f zero))\n"
+                      "(eval (apply-to-zero (fn x (inc x))))")))
+    (check-equal? (length results) 2)
+    (check-equal? (cadr results) "1 : Nat")))
+
+(test-case "surface: untyped fn in let binding"
+  (parameterize ([current-global-env (hasheq)])
+    (check-equal?
+     (run-first "(eval (let ([f : (-> Nat Nat) (fn x (inc x))]) (f zero)))")
+     "1 : Nat")))
+
+(test-case "surface: untyped multi-arg fn in defn body"
+  (parameterize ([current-global-env (hasheq)])
+    (define results (process-string
+                     (string-append
+                      "(defn add [x : Nat y : Nat] : Nat (natrec Nat y (fn _ acc (inc acc)) x))\n"
+                      "(eval (add (inc zero) (inc (inc zero))))")))
+    (check-equal? (length results) 2)
+    (check-equal? (cadr results) "3 : Nat")))
+
+;; ========================================
+;; Phase 5: Clean data constructor syntax
+;; ========================================
+
+(test-case "surface: data with colon ctor syntax (no params)"
+  (parameterize ([current-global-env (hasheq)]
+                 [current-preparse-registry (current-preparse-registry)])
+    (define results (process-string
+                     (string-append
+                      "(data MyBool my-true my-false)\n"
+                      "(check my-true : MyBool)")))
+    ;; data generates: type def + 2 ctor defs = 3, then check = 1, total = 4
+    (check-equal? (length results) 4)
+    (check-equal? (last results) "OK")))
+
+(test-case "surface: data with colon ctor syntax (parameterized)"
+  (parameterize ([current-global-env (hasheq)]
+                 [current-preparse-registry (current-preparse-registry)])
+    (define results (process-string
+                     (string-append
+                      "(data Maybe {A} nothing (just : A))\n"
+                      ;; Constructors need explicit type param: (nothing Nat), (just Nat zero)
+                      "(check (nothing Nat) : (Maybe Nat))\n"
+                      "(check (just Nat zero) : (Maybe Nat))")))
+    ;; data generates: type def + 2 ctor defs = 3, then 2 checks, total = 5
+    (check-equal? (length results) 5)
+    ;; Last two should be OK
+    (check-equal? (list-ref results 3) "OK")
+    (check-equal? (list-ref results 4) "OK")))
+
+(test-case "surface: data List with colon ctor syntax"
+  (parameterize ([current-global-env (hasheq)]
+                 [current-preparse-registry (current-preparse-registry)])
+    (define results (process-string
+                     (string-append
+                      "(data List {A} nil (cons : A -> List A))\n"
+                      ;; Constructors need explicit type param
+                      "(check (nil Nat) : (List Nat))\n"
+                      "(check (cons Nat zero (nil Nat)) : (List Nat))")))
+    ;; data generates: type def + 2 ctor defs = 3, then 2 checks, total = 5
+    (check-equal? (length results) 5)
+    (check-equal? (list-ref results 3) "OK")
+    (check-equal? (list-ref results 4) "OK")))

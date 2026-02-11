@@ -16,14 +16,34 @@
 ;;;
 
 (require racket/match
+
          "prelude.rkt"
          "syntax.rkt"
          "substitution.rkt"
          "reduction.rkt"
-         "global-env.rkt")
+         "unify.rkt"
+         "global-env.rkt"
+         "macros.rkt"
+         "namespace.rkt"
+)
 
 (provide infer check is-type infer-level
-         (struct-out no-level) (struct-out just-level))
+         (struct-out no-level) (struct-out just-level)
+         mark-structural-reduce! structural-reduce? structural-reduce-set)
+
+;; ========================================
+;; Structural reduce tracking
+;; ========================================
+;; During type checking, expr-reduce nodes that need structural PM
+;; (instead of Church fold) are recorded here. The driver uses this
+;; to set the structural? flag before storing the body for evaluation.
+(define structural-reduce-set (make-hasheq))
+
+(define (mark-structural-reduce! reduce-expr)
+  (hash-set! structural-reduce-set reduce-expr #t))
+
+(define (structural-reduce? reduce-expr)
+  (hash-ref structural-reduce-set reduce-expr #f))
 
 ;; ========================================
 ;; MaybeLevel: result of inferLevel
@@ -148,7 +168,7 @@
      (let ([mot-ty (whnf (infer ctx mot))])
        (match mot-ty
          [(expr-Pi _ dom _)
-          (if (and (conv dom (expr-Bool))
+          (if (and (unify ctx dom (expr-Bool))
                    (check ctx tc (expr-app mot (expr-true)))
                    (check ctx fc (expr-app mot (expr-false)))
                    (check ctx target (expr-Bool)))
@@ -173,7 +193,7 @@
      (let ([pt (whnf (infer ctx proof))])
        (match pt
          [(expr-Eq t t1 t2)
-          (if (and (conv t1 left) (conv t2 right))
+          (if (and (unify ctx t1 left) (unify ctx t2 right))
               (expr-app (expr-app (expr-app mot left) right) proof)
               (expr-error))]
          [_ (expr-error)]))]
@@ -264,10 +284,14 @@
     ;; ---- Lambda: check against Pi ----
     ;; check(G, lam(m, A, body), Pi(m, A', B))
     ;; requires A conv A' and body checks against B in extended context
+    ;; Special case: if A is expr-hole, use the expected domain AND multiplicity
     [((expr-lam m a body) (expr-Pi m2 t-dom b))
      (cond
+       [(expr-hole? a)
+        ;; Type hole: accept both the expected domain and multiplicity from the Pi type
+        (check (ctx-extend ctx t-dom m2) body b)]
        [(not (eq? m m2)) #f]  ; multiplicity mismatch
-       [(not (conv a t-dom)) #f]  ; domain mismatch
+       [(not (unify ctx a t-dom)) #f]  ; domain mismatch
        [else (check (ctx-extend ctx a m) body b)])]
 
     ;; ---- Pair: check against Sigma ----
@@ -279,36 +303,59 @@
     ;; ---- refl: check against Eq ----
     ;; refl : Eq(A, e1, e2) iff conv(e1, e2)
     [((expr-refl) (expr-Eq _ e1 e2))
-     (conv e1 e2)]
+     (unify ctx e1 e2)]
 
     ;; ---- Vec constructors ----
     ;; vnil(A) : Vec(A, zero)
     [((expr-vnil a1) (expr-Vec a2 n))
      (and (is-type ctx a1)
-          (conv a1 a2)
-          (conv n (expr-zero)))]
+          (unify ctx a1 a2)
+          (unify ctx n (expr-zero)))]
 
     ;; vcons(A, n, head, tail) : Vec(A, suc(n))
     [((expr-vcons a1 n1 hd tl) (expr-Vec a2 len))
-     (and (conv a1 a2)
-          (conv len (expr-suc n1))
+     (and (unify ctx a1 a2)
+          (unify ctx len (expr-suc n1))
           (check ctx hd a1)
           (check ctx tl (expr-Vec a1 n1)))]
 
     ;; ---- Fin constructors ----
     ;; fzero(n) : Fin(suc(n))
     [((expr-fzero n1) (expr-Fin bound))
-     (and (conv bound (expr-suc n1))
+     (and (unify ctx bound (expr-suc n1))
           (check ctx n1 (expr-Nat)))]
 
     ;; fsuc(n, i) : Fin(suc(n))  when i : Fin(n)
     [((expr-fsuc n1 i) (expr-Fin bound))
-     (and (conv bound (expr-suc n1))
+     (and (unify ctx bound (expr-suc n1))
           (check ctx i (expr-Fin n1)))]
 
     ;; ---- Posit8 literal check ----
     [((expr-posit8 v) (expr-Posit8))
      (and (exact-integer? v) (<= 0 v 255))]
+
+    ;; ---- Reduce: ML-style Church elimination ----
+    ;; check(G, reduce(scrutinee, arms), T)
+    ;; 1. Infer scrutinee type, WHNF it to get Church Pi chain
+    ;; 2. Build the Church application: (scrutinee T arm1 arm2 ...)
+    ;; 3. Type-check the generated application
+    [((expr-reduce scrutinee arms _) expected-type)
+     (check-reduce ctx e scrutinee arms expected-type)]
+
+    ;; ---- Hole expression: checks against any type ----
+    ;; An expr-hole is a placeholder that will be filled by type inference.
+    [((expr-hole) _) #t]
+
+    ;; ---- Meta expression: optimistically succeed ----
+    ;; A metavariable in expression position (e.g., implicit argument)
+    ;; will be solved by unification constraints from other arguments.
+    ;; We can't infer its type yet, so accept it optimistically.
+    [((expr-meta _) _) #t]
+
+    ;; ---- Checking against hole type: succeed if expression is inferrable ----
+    ;; When the expected type is a hole, just verify the expression is well-typed.
+    [(_ (expr-hole))
+     (not (expr-error? (infer ctx e)))]
 
     ;; ---- Conversion fallback ----
     ;; If e synthesizes to T' and conv(T, T'), then check succeeds.
@@ -317,12 +364,130 @@
     [(_ t-whnf)
      (let ([t1 (infer ctx e)])
        (and (not (expr-error? t1))
-            (or (conv t t1)
+            (or (unify ctx t t1)
                 ;; Cumulativity: Type(m) ≤ Type(n) when m ≤ n
                 (match* ((whnf t) (whnf t1))
                   [((expr-Type l1) (expr-Type l2))
                    (level<=? l2 l1)]
                   [(_ _) #f]))))]))
+
+;; ========================================
+;; check-reduce: type-check a reduce (match) expression
+;; ========================================
+;; Two paths:
+;;   Path A (structural): When constructor metadata is available (types defined via `data`),
+;;     use true structural pattern matching — look up constructor field types,
+;;     extend the context, and check each arm body directly. This lifts the
+;;     Type 0 restriction from Church encoding, allowing match to return Type 1.
+;;   Path B (Church fold): Fallback for built-in types or when metadata is unavailable.
+;;     Desugars match into a Church application as before.
+
+;; Decompose (app (app (fvar 'List) Nat) ...) → (values 'List (list Nat ...))
+(define (decompose-type-app e)
+  (let loop ([expr e] [args '()])
+    (match expr
+      [(expr-app f a) (loop f (cons a args))]
+      [(expr-fvar name) (values name args)]
+      [_ (values #f #f)])))
+
+;; 'prologos.data.list/List → 'List, 'List → 'List
+(define (bare-name sym)
+  (define-values (_prefix short) (split-qualified-name sym))
+  (or short sym))
+
+;; Substitute type-args into leading m0 Pi binders of a constructor type.
+;; Returns the remaining Pi chain with field types as domains.
+(define (instantiate-pi-chain type args)
+  (cond
+    [(null? args) type]
+    [else
+     (match (whnf type)
+       [(expr-Pi 'm0 _dom cod)
+        (instantiate-pi-chain (subst 0 (car args) cod) (cdr args))]
+       [_ #f])]))
+
+;; Walk the instantiated Pi chain, extending ctx with each field's domain type.
+(define (extend-ctx-with-fields ctx type n-fields)
+  (let loop ([ty (whnf type)] [ctx ctx] [remaining n-fields])
+    (if (= remaining 0)
+        ctx
+        (match ty
+          [(expr-Pi m dom cod)
+           (loop cod (ctx-extend ctx dom m) (- remaining 1))]
+          [_ ctx]))))
+
+;; Qualify a bare ctor name using the type constructor's FQN prefix.
+;; e.g., ctor='cons, type-fqn='prologos.data.list/List → 'prologos.data.list/cons
+(define (qualify-ctor-name ctor-name type-ctor-fqn)
+  (define-values (prefix _short) (split-qualified-name type-ctor-fqn))
+  (if prefix
+      (string->symbol
+       (string-append (symbol->string prefix) "/"
+                      (symbol->string ctor-name)))
+      ctor-name))
+
+(define (check-reduce ctx reduce-expr scrutinee arms expected-type)
+  (define scrut-type (infer ctx scrutinee))
+  (cond
+    [(expr-error? scrut-type) #f]
+    [else
+     ;; Try Church fold first — this handles recursive fields correctly via fold semantics
+     ;; (e.g., `cons _ n -> inc n` where n is the already-folded accumulator).
+     ;; If Church fold fails (e.g., expected-type is Type 1), fall back to structural PM.
+     (or (check-reduce-church ctx scrutinee arms expected-type)
+         ;; Structural path: look up constructor metadata and check directly
+         (let-values ([(type-ctor-name type-args) (decompose-type-app scrut-type)])
+           (let* ([bare-tc (and type-ctor-name (bare-name type-ctor-name))]
+                  [type-ctors (and bare-tc (lookup-type-ctors bare-tc))])
+             (and type-ctors (not (null? type-ctors))
+                  (let ([result (check-reduce-structural ctx arms expected-type
+                                           type-ctor-name type-args)])
+                    (when result
+                      (mark-structural-reduce! reduce-expr))
+                    result)))))]))
+
+;; Path A: True structural pattern matching using constructor metadata
+(define (check-reduce-structural ctx arms expected-type
+                                  type-ctor-name type-args)
+  (for/and ([arm (in-list arms)])
+    (define ctor-name (expr-reduce-arm-ctor-name arm))
+    (define bc (expr-reduce-arm-binding-count arm))
+    (define body (expr-reduce-arm-body arm))
+    ;; Look up constructor type from global-env (try FQN then bare)
+    (define ctor-fqn (qualify-ctor-name ctor-name type-ctor-name))
+    (define ctor-type (or (global-env-lookup-type ctor-fqn)
+                          (global-env-lookup-type ctor-name)))
+    (cond
+      [(not ctor-type) #f]
+      [else
+       (define instantiated (instantiate-pi-chain ctor-type type-args))
+       (cond
+         [(not instantiated) #f]
+         [else
+          (if (= bc 0)
+              ;; No bindings: just check body against expected type
+              (check ctx body expected-type)
+              ;; Extend context with field types, shift expected-type
+              (let ([ext-ctx (extend-ctx-with-fields ctx instantiated bc)])
+                (check ext-ctx body (shift bc 0 expected-type))))])])))
+
+;; Path B: Church fold desugaring (fallback for built-in types)
+(define (check-reduce-church ctx scrutinee arms expected-type)
+  (define branch-lams
+    (for/list ([arm (in-list arms)])
+      (define bc (expr-reduce-arm-binding-count arm))
+      (define body (expr-reduce-arm-body arm))
+      (if (= bc 0)
+          body
+          (for/fold ([inner body])
+                    ([_ (in-range bc)])
+            (expr-lam 'mw (expr-hole) inner)))))
+  (define church-app
+    (foldl (lambda (branch app-so-far)
+             (expr-app app-so-far branch))
+           (expr-app scrutinee expected-type)
+           branch-lams))
+  (check ctx church-app expected-type))
 
 ;; ========================================
 ;; Infer universe level of a type

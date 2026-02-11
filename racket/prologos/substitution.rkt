@@ -38,6 +38,8 @@
     [(expr-true) e]
     [(expr-false) e]
     [(expr-Type _) e]
+    [(expr-hole) e]
+    [(expr-meta _) e]
     [(expr-error) e]
 
     ;; Binding forms: cutoff increases under binders
@@ -111,7 +113,19 @@
     [(expr-p8-from-nat n) (expr-p8-from-nat (shift delta cutoff n))]
     [(expr-p8-if-nar t nc vc v)
      (expr-p8-if-nar (shift delta cutoff t) (shift delta cutoff nc)
-                     (shift delta cutoff vc) (shift delta cutoff v))]))
+                     (shift delta cutoff vc) (shift delta cutoff v))]
+
+    ;; Reduce: scrutinee is non-binding, arm bodies have binding-count binders
+    [(expr-reduce scrut arms structural?)
+     (expr-reduce (shift delta cutoff scrut)
+                  (map (lambda (arm)
+                         (expr-reduce-arm
+                          (expr-reduce-arm-ctor-name arm)
+                          (expr-reduce-arm-binding-count arm)
+                          (shift delta (+ cutoff (expr-reduce-arm-binding-count arm))
+                                (expr-reduce-arm-body arm))))
+                       arms)
+                  structural?)]))
 
 ;; ========================================
 ;; Substitution: replace bvar(k) with s in e
@@ -136,6 +150,8 @@
     [(expr-true) e]
     [(expr-false) e]
     [(expr-Type _) e]
+    [(expr-hole) e]
+    [(expr-meta _) e]
     [(expr-error) e]
 
     ;; Binding forms: increase k, shift s up by 1
@@ -209,7 +225,20 @@
     [(expr-p8-from-nat n) (expr-p8-from-nat (subst k s n))]
     [(expr-p8-if-nar t nc vc v)
      (expr-p8-if-nar (subst k s t) (subst k s nc)
-                     (subst k s vc) (subst k s v))]))
+                     (subst k s vc) (subst k s v))]
+
+    ;; Reduce: arm bodies have binding-count binders
+    [(expr-reduce scrut arms structural?)
+     (expr-reduce (subst k s scrut)
+                  (map (lambda (arm)
+                         (define bc (expr-reduce-arm-binding-count arm))
+                         (expr-reduce-arm
+                          (expr-reduce-arm-ctor-name arm)
+                          bc
+                          (subst (+ k bc) (shift bc 0 s)
+                                 (expr-reduce-arm-body arm))))
+                       arms)
+                  structural?)]))
 
 ;; ========================================
 ;; Open: substitute s for bvar(0)

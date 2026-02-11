@@ -8,23 +8,23 @@ provide not and or xor bool-eq nand nor implies
 ;; ========================================
 
 ;; Logical NOT: not(true) = false, not(false) = true
-defn not [b <Bool>] <Bool>
+defn not [b : Bool] : Bool
   boolrec Bool false true b
 
 ;; Logical AND: and(true, b) = b, and(false, b) = false
-defn and [a <Bool> b <Bool>] <Bool>
+defn and [a : Bool, b : Bool] : Bool
   boolrec Bool b false a
 
 ;; Logical OR: or(true, b) = true, or(false, b) = b
-defn or [a <Bool> b <Bool>] <Bool>
+defn or [a : Bool, b : Bool] : Bool
   boolrec Bool true b a
 
 ;; Logical XOR: xor(true, b) = not(b), xor(false, b) = b
-defn xor [a <Bool> b <Bool>] <Bool>
+defn xor [a : Bool, b : Bool] : Bool
   boolrec Bool (not b) b a
 
 ;; Boolean equality: bool-eq(true, b) = b, bool-eq(false, b) = not(b)
-defn bool-eq [a <Bool> b <Bool>] <Bool>
+defn bool-eq [a : Bool, b : Bool] : Bool
   boolrec Bool b (not b) a
 
 ;; ========================================
@@ -32,13 +32,13 @@ defn bool-eq [a <Bool> b <Bool>] <Bool>
 ;; ========================================
 
 ;; NAND: nand(a, b) = not(and(a, b))
-defn nand [a <Bool> b <Bool>] <Bool>
+defn nand [a : Bool, b : Bool] : Bool
   not (and a b)
 
 ;; NOR: nor(a, b) = not(or(a, b))
-defn nor [a <Bool> b <Bool>] <Bool>
+defn nor [a : Bool, b : Bool] : Bool
   not (or a b)
 
 ;; Material implication: implies(a, b) = or(not(a), b)
-defn implies [a <Bool> b <Bool>] <Bool>
+defn implies [a : Bool, b : Bool] : Bool
   or (not a) b

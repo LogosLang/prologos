@@ -25,7 +25,9 @@
                  [current-ns-context #f]
                  [current-module-registry (hasheq)]
                  [current-lib-paths (list lib-dir)]
-                 [current-preparse-registry (current-preparse-registry)])
+                 [current-preparse-registry (current-preparse-registry)]
+                 [current-ctor-registry (current-ctor-registry)]
+                 [current-type-meta (current-type-meta)])
     (install-module-loader!)
     (process-string s)))
 
@@ -736,9 +738,9 @@
     (check-not-false (member 'Option exports) "exports Option")
     (check-not-false (member 'none exports) "exports none")
     (check-not-false (member 'some exports) "exports some")
-    (check-not-false (member 'option-map exports) "exports option-map")
-    (check-not-false (member 'option-flat-map exports) "exports option-flat-map")
-    (check-not-false (member 'option-unwrap-or exports) "exports option-unwrap-or")))
+    (check-not-false (member 'map exports) "exports map")
+    (check-not-false (member 'flat-map exports) "exports flat-map")
+    (check-not-false (member 'unwrap-or exports) "exports unwrap-or")))
 
 ;; ========================================
 ;; prologos.data.option — Constructors
@@ -773,32 +775,32 @@
 ;; prologos.data.option — Combinators
 ;; ========================================
 
-(test-case "option/option-map"
+(test-case "option/map"
   ;; Map over some
   (check-equal?
-   (run-ns "(ns om1)\n(require [prologos.data.option :refer [Option none some option-map option-unwrap-or]])\n(eval (option-unwrap-or Nat zero (option-map Nat Nat (fn (x : Nat) (inc x)) (some Nat (inc zero)))))")
+   (run-ns "(ns om1)\n(require [prologos.data.option :refer [Option none some map unwrap-or]])\n(eval (unwrap-or Nat zero (map Nat Nat (fn (x : Nat) (inc x)) (some Nat (inc zero)))))")
    '("2 : Nat"))
   ;; Map over none
   (check-equal?
-   (run-ns "(ns om2)\n(require [prologos.data.option :refer [Option none some option-map option-unwrap-or]])\n(eval (option-unwrap-or Nat zero (option-map Nat Nat (fn (x : Nat) (inc x)) (none Nat))))")
+   (run-ns "(ns om2)\n(require [prologos.data.option :refer [Option none some map unwrap-or]])\n(eval (unwrap-or Nat zero (map Nat Nat (fn (x : Nat) (inc x)) (none Nat))))")
    '("zero : Nat")))
 
-(test-case "option/option-flat-map"
+(test-case "option/flat-map"
   ;; Flat-map some -> some
   (check-equal?
-   (run-ns "(ns ofm1)\n(require [prologos.data.option :refer [Option none some option-flat-map option-unwrap-or]])\n(eval (option-unwrap-or Nat zero (option-flat-map Nat Nat (fn (x : Nat) (some Nat (inc x))) (some Nat (inc zero)))))")
+   (run-ns "(ns ofm1)\n(require [prologos.data.option :refer [Option none some flat-map unwrap-or]])\n(eval (unwrap-or Nat zero (flat-map Nat Nat (fn (x : Nat) (some Nat (inc x))) (some Nat (inc zero)))))")
    '("2 : Nat"))
   ;; Flat-map none
   (check-equal?
-   (run-ns "(ns ofm2)\n(require [prologos.data.option :refer [Option none some option-flat-map option-unwrap-or]])\n(eval (option-unwrap-or Nat zero (option-flat-map Nat Nat (fn (x : Nat) (some Nat (inc x))) (none Nat))))")
+   (run-ns "(ns ofm2)\n(require [prologos.data.option :refer [Option none some flat-map unwrap-or]])\n(eval (unwrap-or Nat zero (flat-map Nat Nat (fn (x : Nat) (some Nat (inc x))) (none Nat))))")
    '("zero : Nat")))
 
-(test-case "option/option-unwrap-or"
+(test-case "option/unwrap-or"
   (check-equal?
-   (run-ns "(ns ou1)\n(require [prologos.data.option :refer [Option none some option-unwrap-or]])\n(eval (option-unwrap-or Nat (inc (inc zero)) (some Nat zero)))")
+   (run-ns "(ns ou1)\n(require [prologos.data.option :refer [Option none some unwrap-or]])\n(eval (unwrap-or Nat (inc (inc zero)) (some Nat zero)))")
    '("zero : Nat"))
   (check-equal?
-   (run-ns "(ns ou2)\n(require [prologos.data.option :refer [Option none some option-unwrap-or]])\n(eval (option-unwrap-or Nat (inc (inc zero)) (none Nat)))")
+   (run-ns "(ns ou2)\n(require [prologos.data.option :refer [Option none some unwrap-or]])\n(eval (unwrap-or Nat (inc (inc zero)) (none Nat)))")
    '("2 : Nat")))
 
 ;; ========================================
@@ -817,9 +819,9 @@
     (check-not-false (member 'Result exports) "exports Result")
     (check-not-false (member 'ok exports) "exports ok")
     (check-not-false (member 'err exports) "exports err")
-    (check-not-false (member 'result-map exports) "exports result-map")
-    (check-not-false (member 'result-map-err exports) "exports result-map-err")
-    (check-not-false (member 'result-unwrap-or exports) "exports result-unwrap-or")))
+    (check-not-false (member 'map exports) "exports map")
+    (check-not-false (member 'map-err exports) "exports map-err")
+    (check-not-false (member 'unwrap-or exports) "exports unwrap-or")))
 
 ;; ========================================
 ;; prologos.data.result — Constructors + Combinators
@@ -843,20 +845,20 @@
    (run-ns "(ns re2)\n(require [prologos.data.result :refer [Result ok err]])\n(eval ((err Nat Bool true) Nat (fn (x : Nat) (inc x)) (fn (e : Bool) zero)))")
    '("zero : Nat")))
 
-(test-case "result/result-map"
+(test-case "result/map"
   (check-equal?
-   (run-ns "(ns rm1)\n(require [prologos.data.result :refer [Result ok err result-map result-unwrap-or]])\n(eval (result-unwrap-or Nat Bool zero (result-map Nat Bool Nat (fn (x : Nat) (inc x)) (ok Nat Bool (inc zero)))))")
+   (run-ns "(ns rm1)\n(require [prologos.data.result :refer [Result ok err map unwrap-or]])\n(eval (unwrap-or Nat Bool zero (map Nat Bool Nat (fn (x : Nat) (inc x)) (ok Nat Bool (inc zero)))))")
    '("2 : Nat"))
   (check-equal?
-   (run-ns "(ns rm2)\n(require [prologos.data.result :refer [Result ok err result-map result-unwrap-or]])\n(eval (result-unwrap-or Nat Bool zero (result-map Nat Bool Nat (fn (x : Nat) (inc x)) (err Nat Bool false))))")
+   (run-ns "(ns rm2)\n(require [prologos.data.result :refer [Result ok err map unwrap-or]])\n(eval (unwrap-or Nat Bool zero (map Nat Bool Nat (fn (x : Nat) (inc x)) (err Nat Bool false))))")
    '("zero : Nat")))
 
-(test-case "result/result-unwrap-or"
+(test-case "result/unwrap-or"
   (check-equal?
-   (run-ns "(ns ruo1)\n(require [prologos.data.result :refer [Result ok err result-unwrap-or]])\n(eval (result-unwrap-or Nat Bool (inc (inc zero)) (ok Nat Bool zero)))")
+   (run-ns "(ns ruo1)\n(require [prologos.data.result :refer [Result ok err unwrap-or]])\n(eval (unwrap-or Nat Bool (inc (inc zero)) (ok Nat Bool zero)))")
    '("zero : Nat"))
   (check-equal?
-   (run-ns "(ns ruo2)\n(require [prologos.data.result :refer [Result ok err result-unwrap-or]])\n(eval (result-unwrap-or Nat Bool (inc (inc zero)) (err Nat Bool true)))")
+   (run-ns "(ns ruo2)\n(require [prologos.data.result :refer [Result ok err unwrap-or]])\n(eval (unwrap-or Nat Bool (inc (inc zero)) (err Nat Bool true)))")
    '("2 : Nat")))
 
 ;; ========================================
@@ -931,6 +933,7 @@
 
 ;; ========================================
 ;; match keyword — Pattern matching on Church-encoded ADTs
+;; (match is an alias for reduce, using the | ctor args -> body syntax)
 ;; ========================================
 
 ;; --- match on Option ---
@@ -938,19 +941,19 @@
 (test-case "match/option-some"
   ;; Match on some: extract the value
   (check-equal?
-   (run-ns "(ns mo1)\n(require [prologos.data.option :refer [Option none some]])\n(eval (match (some Nat zero) Nat (none (inc zero)) (some (x : Nat) x)))")
+   (run-ns "(ns mo1)\n(require [prologos.data.option :refer [Option none some]])\n(eval (the Nat (match (some Nat zero) (none -> (inc zero)) (some x -> x))))")
    '("zero : Nat")))
 
 (test-case "match/option-none"
   ;; Match on none: use default
   (check-equal?
-   (run-ns "(ns mo2)\n(require [prologos.data.option :refer [Option none some]])\n(eval (match (none Nat) Nat (none (inc zero)) (some (x : Nat) x)))")
+   (run-ns "(ns mo2)\n(require [prologos.data.option :refer [Option none some]])\n(eval (the Nat (match (none Nat) (none -> (inc zero)) (some x -> x))))")
    '("1 : Nat")))
 
 (test-case "match/option-some-transform"
   ;; Match on some: transform the value
   (check-equal?
-   (run-ns "(ns mo3)\n(require [prologos.data.option :refer [Option none some]])\n(eval (match (some Nat (inc (inc zero))) Nat (none zero) (some (x : Nat) (inc x))))")
+   (run-ns "(ns mo3)\n(require [prologos.data.option :refer [Option none some]])\n(eval (the Nat (match (some Nat (inc (inc zero))) (none -> zero) (some x -> (inc x)))))")
    '("3 : Nat")))
 
 ;; --- match on Result ---
@@ -958,37 +961,37 @@
 (test-case "match/result-ok"
   ;; Match on ok: extract value
   (check-equal?
-   (run-ns "(ns mr1)\n(require [prologos.data.result :refer [Result ok err]])\n(eval (match (ok Nat Bool zero) Nat (ok (x : Nat) x) (err (e : Bool) (inc zero))))")
+   (run-ns "(ns mr1)\n(require [prologos.data.result :refer [Result ok err]])\n(eval (the Nat (match (ok Nat Bool zero) (ok x -> x) (err _ -> (inc zero)))))")
    '("zero : Nat")))
 
 (test-case "match/result-err"
   ;; Match on err: use error branch
   (check-equal?
-   (run-ns "(ns mr2)\n(require [prologos.data.result :refer [Result ok err]])\n(eval (match (err Nat Bool true) Nat (ok (x : Nat) x) (err (e : Bool) (inc zero))))")
+   (run-ns "(ns mr2)\n(require [prologos.data.result :refer [Result ok err]])\n(eval (the Nat (match (err Nat Bool true) (ok x -> (inc zero)) (err _ -> (inc zero)))))")
    '("1 : Nat")))
 
 (test-case "match/result-err-use-value"
   ;; Match on err: use the error value
   ;; Convert Bool to Nat using boolrec
   (check-equal?
-   (run-ns "(ns mr3)\n(require [prologos.data.result :refer [Result ok err]])\n(eval (match (err Nat Bool true) Nat (ok (x : Nat) x) (err (e : Bool) (boolrec Nat (inc (inc zero)) zero e))))")
+   (run-ns "(ns mr3)\n(require [prologos.data.result :refer [Result ok err]])\n(eval (the Nat (match (err Nat Bool true) (ok x -> x) (err e -> (boolrec Nat (inc (inc zero)) zero e)))))")
    '("2 : Nat")))
 
 ;; --- match on Ordering ---
 
 (test-case "match/ordering-lt"
   (check-equal?
-   (run-ns "(ns mord1)\n(require [prologos.data.ordering :refer [Ordering lt-ord eq-ord gt-ord]])\n(eval (match lt-ord Nat (lt-ord zero) (eq-ord (inc zero)) (gt-ord (inc (inc zero)))))")
+   (run-ns "(ns mord1)\n(require [prologos.data.ordering :refer [Ordering lt-ord eq-ord gt-ord]])\n(eval (the Nat (match (lt-ord) (lt-ord -> zero) (eq-ord -> (inc zero)) (gt-ord -> (inc (inc zero))))))")
    '("zero : Nat")))
 
 (test-case "match/ordering-eq"
   (check-equal?
-   (run-ns "(ns mord2)\n(require [prologos.data.ordering :refer [Ordering lt-ord eq-ord gt-ord]])\n(eval (match eq-ord Nat (lt-ord zero) (eq-ord (inc zero)) (gt-ord (inc (inc zero)))))")
+   (run-ns "(ns mord2)\n(require [prologos.data.ordering :refer [Ordering lt-ord eq-ord gt-ord]])\n(eval (the Nat (match (eq-ord) (lt-ord -> zero) (eq-ord -> (inc zero)) (gt-ord -> (inc (inc zero))))))")
    '("1 : Nat")))
 
 (test-case "match/ordering-gt"
   (check-equal?
-   (run-ns "(ns mord3)\n(require [prologos.data.ordering :refer [Ordering lt-ord eq-ord gt-ord]])\n(eval (match gt-ord Nat (lt-ord zero) (eq-ord (inc zero)) (gt-ord (inc (inc zero)))))")
+   (run-ns "(ns mord3)\n(require [prologos.data.ordering :refer [Ordering lt-ord eq-ord gt-ord]])\n(eval (the Nat (match (gt-ord) (lt-ord -> zero) (eq-ord -> (inc zero)) (gt-ord -> (inc (inc zero))))))")
    '("2 : Nat")))
 
 ;; --- match on inline ADTs ---
@@ -996,19 +999,19 @@
 (test-case "match/inline-enum"
   ;; Define and match on an inline enum
   (check-equal?
-   (last (run-ns "(ns mi1)\n(data (Color) (red) (green) (blue))\n(eval (match red Nat (red zero) (green (inc zero)) (blue (inc (inc zero)))))"))
+   (last (run-ns "(ns mi1)\n(data (Color) (red) (green) (blue))\n(eval (the Nat (match (red) (red -> zero) (green -> (inc zero)) (blue -> (inc (inc zero))))))"))
    "zero : Nat")
   (check-equal?
-   (last (run-ns "(ns mi2)\n(data (Color) (red) (green) (blue))\n(eval (match blue Nat (red zero) (green (inc zero)) (blue (inc (inc zero)))))"))
+   (last (run-ns "(ns mi2)\n(data (Color) (red) (green) (blue))\n(eval (the Nat (match (blue) (red -> zero) (green -> (inc zero)) (blue -> (inc (inc zero))))))"))
    "2 : Nat"))
 
 (test-case "match/inline-parameterized"
   ;; Define and match on a parameterized ADT
   (check-equal?
-   (last (run-ns "(ns mi3)\n(data (Maybe (A : (Type 0))) (nothing) (just A))\n(eval (match (just Nat (inc (inc zero))) Nat (nothing zero) (just (x : Nat) x)))"))
+   (last (run-ns "(ns mi3)\n(data (Maybe (A : (Type 0))) (nothing) (just A))\n(eval (the Nat (match (just Nat (inc (inc zero))) (nothing -> zero) (just x -> x))))"))
    "2 : Nat")
   (check-equal?
-   (last (run-ns "(ns mi4)\n(data (Maybe (A : (Type 0))) (nothing) (just A))\n(eval (match (nothing Nat) Nat (nothing zero) (just (x : Nat) x)))"))
+   (last (run-ns "(ns mi4)\n(data (Maybe (A : (Type 0))) (nothing) (just A))\n(eval (the Nat (match (nothing Nat) (nothing -> zero) (just x -> x))))"))
    "zero : Nat"))
 
 ;; --- match inside def ---
@@ -1016,30 +1019,30 @@
 (test-case "match/inside-def"
   ;; Use match inside a function definition
   (check-equal?
-   (last (run-ns "(ns md1)\n(require [prologos.data.option :refer [Option none some]])\n(def unwrap : (Pi (A :0 (Type 0)) (-> A (-> (Option A) A)))\n  (fn (A :0 (Type 0)) (fn (default : A) (fn (opt : (Option A))\n    (match opt A (none default) (some (x : A) x))))))\n(eval (unwrap Nat (inc (inc zero)) (some Nat zero)))"))
+   (last (run-ns "(ns md1)\n(require [prologos.data.option :refer [Option none some]])\n(def unwrap : (Pi (A :0 (Type 0)) (-> A (-> (Option A) A)))\n  (fn (A :0 (Type 0)) (fn (default : A) (fn (opt : (Option A))\n    (the A (match opt (none -> default) (some x -> x)))))))\n(eval (unwrap Nat (inc (inc zero)) (some Nat zero)))"))
    "zero : Nat")
   (check-equal?
-   (last (run-ns "(ns md2)\n(require [prologos.data.option :refer [Option none some]])\n(def unwrap : (Pi (A :0 (Type 0)) (-> A (-> (Option A) A)))\n  (fn (A :0 (Type 0)) (fn (default : A) (fn (opt : (Option A))\n    (match opt A (none default) (some (x : A) x))))))\n(eval (unwrap Nat (inc (inc zero)) (none Nat)))"))
+   (last (run-ns "(ns md2)\n(require [prologos.data.option :refer [Option none some]])\n(def unwrap : (Pi (A :0 (Type 0)) (-> A (-> (Option A) A)))\n  (fn (A :0 (Type 0)) (fn (default : A) (fn (opt : (Option A))\n    (the A (match opt (none -> default) (some x -> x)))))))\n(eval (unwrap Nat (inc (inc zero)) (none Nat)))"))
    "2 : Nat"))
 
 ;; --- match with library's match-based functions ---
 
-(test-case "match/library-option-unwrap-or"
-  ;; option-unwrap-or is now implemented with match
+(test-case "match/library-unwrap-or"
+  ;; unwrap-or is now implemented with match
   (check-equal?
-   (run-ns "(ns mlu1)\n(require [prologos.data.option :refer [Option none some option-unwrap-or]])\n(eval (option-unwrap-or Nat (inc (inc zero)) (some Nat zero)))")
+   (run-ns "(ns mlu1)\n(require [prologos.data.option :refer [Option none some unwrap-or]])\n(eval (unwrap-or Nat (inc (inc zero)) (some Nat zero)))")
    '("zero : Nat"))
   (check-equal?
-   (run-ns "(ns mlu2)\n(require [prologos.data.option :refer [Option none some option-unwrap-or]])\n(eval (option-unwrap-or Nat (inc (inc zero)) (none Nat)))")
+   (run-ns "(ns mlu2)\n(require [prologos.data.option :refer [Option none some unwrap-or]])\n(eval (unwrap-or Nat (inc (inc zero)) (none Nat)))")
    '("2 : Nat")))
 
-(test-case "match/library-result-unwrap-or"
-  ;; result-unwrap-or is now implemented with match
+(test-case "match/library-unwrap-or"
+  ;; unwrap-or is now implemented with match
   (check-equal?
-   (run-ns "(ns mlu3)\n(require [prologos.data.result :refer [Result ok err result-unwrap-or]])\n(eval (result-unwrap-or Nat Bool (inc (inc zero)) (ok Nat Bool zero)))")
+   (run-ns "(ns mlu3)\n(require [prologos.data.result :refer [Result ok err unwrap-or]])\n(eval (unwrap-or Nat Bool (inc (inc zero)) (ok Nat Bool zero)))")
    '("zero : Nat"))
   (check-equal?
-   (run-ns "(ns mlu4)\n(require [prologos.data.result :refer [Result ok err result-unwrap-or]])\n(eval (result-unwrap-or Nat Bool (inc (inc zero)) (err Nat Bool true)))")
+   (run-ns "(ns mlu4)\n(require [prologos.data.result :refer [Result ok err unwrap-or]])\n(eval (unwrap-or Nat Bool (inc (inc zero)) (err Nat Bool true)))")
    '("2 : Nat")))
 
 ;; --- match on Bool (boolrec replacement) ---
@@ -1047,164 +1050,164 @@
 (test-case "match/bool-as-adt"
   ;; Define Bool-like ADT and match on it
   (check-equal?
-   (last (run-ns "(ns mb1)\n(data (MyBool) (my-true) (my-false))\n(eval (match my-true Nat (my-true (inc zero)) (my-false zero)))"))
+   (last (run-ns "(ns mb1)\n(data (MyBool) (my-true) (my-false))\n(eval (the Nat (match (my-true) (my-true -> (inc zero)) (my-false -> zero))))"))
    "1 : Nat")
   (check-equal?
-   (last (run-ns "(ns mb2)\n(data (MyBool) (my-true) (my-false))\n(eval (match my-false Nat (my-true (inc zero)) (my-false zero)))"))
+   (last (run-ns "(ns mb2)\n(data (MyBool) (my-true) (my-false))\n(eval (the Nat (match (my-false) (my-true -> (inc zero)) (my-false -> zero))))"))
    "zero : Nat"))
 
 ;; ========================================
 ;; Sprint 0.3 Combinators — Option
 ;; ========================================
 
-;; --- option-or-else ---
+;; --- or-else ---
 
-(test-case "option-or-else/some-some"
+(test-case "or-else/some-some"
   ;; some takes priority over alt
   (check-equal?
-   (last (run-ns "(ns ooe1)\n(require [prologos.data.option :refer [Option none some option-or-else]])\n(eval (option-or-else Nat (some Nat zero) (some Nat (inc zero)) Nat (inc (inc zero)) (fn (x : Nat) x)))"))
+   (last (run-ns "(ns ooe1)\n(require [prologos.data.option :refer [Option none some or-else]])\n(eval (or-else Nat (some Nat zero) (some Nat (inc zero)) Nat (inc (inc zero)) (fn (x : Nat) x)))"))
    "zero : Nat"))
 
-(test-case "option-or-else/some-none"
+(test-case "or-else/some-none"
   ;; some takes priority, alt is none
   (check-equal?
-   (last (run-ns "(ns ooe2)\n(require [prologos.data.option :refer [Option none some option-or-else]])\n(eval (option-or-else Nat (some Nat (inc zero)) (none Nat) Nat (inc (inc zero)) (fn (x : Nat) x)))"))
+   (last (run-ns "(ns ooe2)\n(require [prologos.data.option :refer [Option none some or-else]])\n(eval (or-else Nat (some Nat (inc zero)) (none Nat) Nat (inc (inc zero)) (fn (x : Nat) x)))"))
    "1 : Nat"))
 
-(test-case "option-or-else/none-some"
+(test-case "or-else/none-some"
   ;; opt is none, falls back to alt
   (check-equal?
-   (last (run-ns "(ns ooe3)\n(require [prologos.data.option :refer [Option none some option-or-else]])\n(eval (option-or-else Nat (none Nat) (some Nat (inc (inc zero))) Nat zero (fn (x : Nat) x)))"))
+   (last (run-ns "(ns ooe3)\n(require [prologos.data.option :refer [Option none some or-else]])\n(eval (or-else Nat (none Nat) (some Nat (inc (inc zero))) Nat zero (fn (x : Nat) x)))"))
    "2 : Nat"))
 
-(test-case "option-or-else/none-none"
+(test-case "or-else/none-none"
   ;; both none
   (check-equal?
-   (last (run-ns "(ns ooe4)\n(require [prologos.data.option :refer [Option none some option-or-else]])\n(eval (option-or-else Nat (none Nat) (none Nat) Nat (inc (inc (inc zero))) (fn (x : Nat) x)))"))
+   (last (run-ns "(ns ooe4)\n(require [prologos.data.option :refer [Option none some or-else]])\n(eval (or-else Nat (none Nat) (none Nat) Nat (inc (inc (inc zero))) (fn (x : Nat) x)))"))
    "3 : Nat"))
 
-;; --- option-filter ---
+;; --- filter ---
 
-(test-case "option-filter/pred-true"
+(test-case "filter/pred-true"
   ;; some with pred returning true → keeps value
   (check-equal?
-   (last (run-ns "(ns of1)\n(require [prologos.data.option :refer [Option none some option-filter]])\n(require [prologos.data.nat :refer [zero?]])\n(eval (option-filter Nat zero? (some Nat zero) Nat (inc zero) (fn (x : Nat) x)))"))
+   (last (run-ns "(ns of1)\n(require [prologos.data.option :refer [Option none some filter]])\n(require [prologos.data.nat :refer [zero?]])\n(eval (filter Nat zero? (some Nat zero) Nat (inc zero) (fn (x : Nat) x)))"))
    "zero : Nat"))
 
-(test-case "option-filter/pred-false"
+(test-case "filter/pred-false"
   ;; some with pred returning false → none
   (check-equal?
-   (last (run-ns "(ns of2)\n(require [prologos.data.option :refer [Option none some option-filter]])\n(require [prologos.data.nat :refer [zero?]])\n(eval (option-filter Nat zero? (some Nat (inc zero)) Nat (inc (inc zero)) (fn (x : Nat) x)))"))
+   (last (run-ns "(ns of2)\n(require [prologos.data.option :refer [Option none some filter]])\n(require [prologos.data.nat :refer [zero?]])\n(eval (filter Nat zero? (some Nat (inc zero)) Nat (inc (inc zero)) (fn (x : Nat) x)))"))
    "2 : Nat"))
 
-(test-case "option-filter/none"
+(test-case "filter/none"
   ;; none stays none
   (check-equal?
-   (last (run-ns "(ns of3)\n(require [prologos.data.option :refer [Option none some option-filter]])\n(require [prologos.data.nat :refer [zero?]])\n(eval (option-filter Nat zero? (none Nat) Nat (inc (inc (inc zero))) (fn (x : Nat) x)))"))
+   (last (run-ns "(ns of3)\n(require [prologos.data.option :refer [Option none some filter]])\n(require [prologos.data.nat :refer [zero?]])\n(eval (filter Nat zero? (none Nat) Nat (inc (inc (inc zero))) (fn (x : Nat) x)))"))
    "3 : Nat"))
 
-;; --- option-zip-with ---
+;; --- zip-with ---
 
-(test-case "option-zip-with/both-some"
+(test-case "zip-with/both-some"
   ;; zip two somes with add
   (check-equal?
-   (last (run-ns "(ns ozw1)\n(require [prologos.data.option :refer [Option none some option-zip-with]])\n(require [prologos.data.nat :refer [add]])\n(eval (option-zip-with Nat Nat Nat add (some Nat (inc (inc zero))) (some Nat (inc (inc (inc zero)))) Nat zero (fn (x : Nat) x)))"))
+   (last (run-ns "(ns ozw1)\n(require [prologos.data.option :refer [Option none some zip-with]])\n(require [prologos.data.nat :refer [add]])\n(eval (zip-with Nat Nat Nat add (some Nat (inc (inc zero))) (some Nat (inc (inc (inc zero)))) Nat zero (fn (x : Nat) x)))"))
    "5 : Nat"))
 
-(test-case "option-zip-with/first-none"
+(test-case "zip-with/first-none"
   (check-equal?
-   (last (run-ns "(ns ozw2)\n(require [prologos.data.option :refer [Option none some option-zip-with]])\n(require [prologos.data.nat :refer [add]])\n(eval (option-zip-with Nat Nat Nat add (none Nat) (some Nat (inc zero)) Nat (inc (inc (inc zero))) (fn (x : Nat) x)))"))
+   (last (run-ns "(ns ozw2)\n(require [prologos.data.option :refer [Option none some zip-with]])\n(require [prologos.data.nat :refer [add]])\n(eval (zip-with Nat Nat Nat add (none Nat) (some Nat (inc zero)) Nat (inc (inc (inc zero))) (fn (x : Nat) x)))"))
    "3 : Nat"))
 
-(test-case "option-zip-with/second-none"
+(test-case "zip-with/second-none"
   (check-equal?
-   (last (run-ns "(ns ozw3)\n(require [prologos.data.option :refer [Option none some option-zip-with]])\n(require [prologos.data.nat :refer [add]])\n(eval (option-zip-with Nat Nat Nat add (some Nat (inc zero)) (none Nat) Nat (inc (inc (inc zero))) (fn (x : Nat) x)))"))
+   (last (run-ns "(ns ozw3)\n(require [prologos.data.option :refer [Option none some zip-with]])\n(require [prologos.data.nat :refer [add]])\n(eval (zip-with Nat Nat Nat add (some Nat (inc zero)) (none Nat) Nat (inc (inc (inc zero))) (fn (x : Nat) x)))"))
    "3 : Nat"))
 
-(test-case "option-zip-with/both-none"
+(test-case "zip-with/both-none"
   (check-equal?
-   (last (run-ns "(ns ozw4)\n(require [prologos.data.option :refer [Option none some option-zip-with]])\n(require [prologos.data.nat :refer [add]])\n(eval (option-zip-with Nat Nat Nat add (none Nat) (none Nat) Nat (inc (inc (inc zero))) (fn (x : Nat) x)))"))
+   (last (run-ns "(ns ozw4)\n(require [prologos.data.option :refer [Option none some zip-with]])\n(require [prologos.data.nat :refer [add]])\n(eval (zip-with Nat Nat Nat add (none Nat) (none Nat) Nat (inc (inc (inc zero))) (fn (x : Nat) x)))"))
    "3 : Nat"))
 
-;; --- option-zip ---
+;; --- zip ---
 
-(test-case "option-zip/both-some"
+(test-case "zip/both-some"
   ;; zip into a pair, then extract first
   (check-equal?
-   (last (run-ns "(ns oz1)\n(require [prologos.data.option :refer [Option none some option-zip]])\n(eval (option-zip Nat Nat (some Nat (inc zero)) (some Nat (inc (inc zero))) Nat zero (fn (p : (Sigma (_ : Nat) Nat)) (first p))))"))
+   (last (run-ns "(ns oz1)\n(require [prologos.data.option :refer [Option none some zip]])\n(eval (zip Nat Nat (some Nat (inc zero)) (some Nat (inc (inc zero))) Nat zero (fn (p : (Sigma (_ : Nat) Nat)) (first p))))"))
    "1 : Nat"))
 
-(test-case "option-zip/one-none"
+(test-case "zip/one-none"
   (check-equal?
-   (last (run-ns "(ns oz2)\n(require [prologos.data.option :refer [Option none some option-zip]])\n(eval (option-zip Nat Nat (none Nat) (some Nat (inc (inc zero))) Nat (inc (inc (inc zero))) (fn (p : (Sigma (_ : Nat) Nat)) (first p))))"))
+   (last (run-ns "(ns oz2)\n(require [prologos.data.option :refer [Option none some zip]])\n(eval (zip Nat Nat (none Nat) (some Nat (inc (inc zero))) Nat (inc (inc (inc zero))) (fn (p : (Sigma (_ : Nat) Nat)) (first p))))"))
    "3 : Nat"))
 
 ;; --- Type checking for Option combinators ---
 
-(test-case "option-or-else/type-check"
+(test-case "or-else/type-check"
   (check-equal?
-   (last (run-ns "(ns ooetc)\n(require [prologos.data.option :refer [Option option-or-else]])\n(check option-or-else : (Pi (A :0 (Type 0)) (-> (Option A) (-> (Option A) (Option A)))))"))
+   (last (run-ns "(ns ooetc)\n(require [prologos.data.option :refer [Option or-else]])\n(check or-else : (Pi (A :0 (Type 0)) (-> (Option A) (-> (Option A) (Option A)))))"))
    "OK"))
 
-(test-case "option-filter/type-check"
+(test-case "filter/type-check"
   (check-equal?
-   (last (run-ns "(ns oftc)\n(require [prologos.data.option :refer [Option option-filter]])\n(check option-filter : (Pi (A :0 (Type 0)) (-> (-> A Bool) (-> (Option A) (Option A)))))"))
+   (last (run-ns "(ns oftc)\n(require [prologos.data.option :refer [Option filter]])\n(check filter : (Pi (A :0 (Type 0)) (-> (-> A Bool) (-> (Option A) (Option A)))))"))
    "OK"))
 
 ;; ========================================
 ;; Sprint 0.3 Combinators — Result
 ;; ========================================
 
-;; --- result-and-then ---
+;; --- and-then ---
 
-(test-case "result-and-then/ok-to-ok"
+(test-case "and-then/ok-to-ok"
   ;; ok value → apply f → ok result
   (check-equal?
-   (last (run-ns "(ns rat1)\n(require [prologos.data.result :refer [Result ok err result-and-then]])\n(require [prologos.data.nat :refer [add]])\n(eval (result-and-then Nat Bool Nat (fn (x : Nat) (ok Nat Bool (add x (inc zero)))) (ok Nat Bool (inc (inc zero))) Nat (fn (x : Nat) x) (fn (e : Bool) zero)))"))
+   (last (run-ns "(ns rat1)\n(require [prologos.data.result :refer [Result ok err and-then]])\n(require [prologos.data.nat :refer [add]])\n(eval (and-then Nat Bool Nat (fn (x : Nat) (ok Nat Bool (add x (inc zero)))) (ok Nat Bool (inc (inc zero))) Nat (fn (x : Nat) x) (fn (e : Bool) zero)))"))
    "3 : Nat"))
 
-(test-case "result-and-then/ok-to-err"
+(test-case "and-then/ok-to-err"
   ;; ok value → apply f → err result
   (check-equal?
-   (last (run-ns "(ns rat2)\n(require [prologos.data.result :refer [Result ok err result-and-then]])\n(eval (result-and-then Nat Bool Nat (fn (x : Nat) (err Nat Bool true)) (ok Nat Bool (inc zero)) Nat (fn (x : Nat) x) (fn (e : Bool) (boolrec Nat (inc (inc (inc (inc (inc zero))))) zero e))))"))
+   (last (run-ns "(ns rat2)\n(require [prologos.data.result :refer [Result ok err and-then]])\n(eval (and-then Nat Bool Nat (fn (x : Nat) (err Nat Bool true)) (ok Nat Bool (inc zero)) Nat (fn (x : Nat) x) (fn (e : Bool) (boolrec Nat (inc (inc (inc (inc (inc zero))))) zero e))))"))
    "5 : Nat"))
 
-(test-case "result-and-then/err-passthrough"
+(test-case "and-then/err-passthrough"
   ;; err → f not called, err passes through
   (check-equal?
-   (last (run-ns "(ns rat3)\n(require [prologos.data.result :refer [Result ok err result-and-then]])\n(eval (result-and-then Nat Bool Nat (fn (x : Nat) (ok Nat Bool (inc x))) (err Nat Bool true) Nat (fn (x : Nat) x) (fn (e : Bool) (boolrec Nat (inc (inc (inc (inc (inc (inc (inc zero))))))) zero e))))"))
+   (last (run-ns "(ns rat3)\n(require [prologos.data.result :refer [Result ok err and-then]])\n(eval (and-then Nat Bool Nat (fn (x : Nat) (ok Nat Bool (inc x))) (err Nat Bool true) Nat (fn (x : Nat) x) (fn (e : Bool) (boolrec Nat (inc (inc (inc (inc (inc (inc (inc zero))))))) zero e))))"))
    "7 : Nat"))
 
-;; --- result-or-else ---
+;; --- or-else ---
 
-(test-case "result-or-else/ok-passthrough"
+(test-case "or-else/ok-passthrough"
   ;; ok → f not called, ok passes through
   (check-equal?
-   (last (run-ns "(ns roe1)\n(require [prologos.data.result :refer [Result ok err result-or-else]])\n(eval (result-or-else Nat Bool Nat (fn (e : Bool) (ok Nat Nat zero)) (ok Nat Bool (inc (inc zero))) Nat (fn (x : Nat) x) (fn (e : Nat) e)))"))
+   (last (run-ns "(ns roe1)\n(require [prologos.data.result :refer [Result ok err or-else]])\n(eval (or-else Nat Bool Nat (fn (e : Bool) (ok Nat Nat zero)) (ok Nat Bool (inc (inc zero))) Nat (fn (x : Nat) x) (fn (e : Nat) e)))"))
    "2 : Nat"))
 
-(test-case "result-or-else/err-to-ok"
+(test-case "or-else/err-to-ok"
   ;; err → apply f → recovers to ok
   (check-equal?
-   (last (run-ns "(ns roe2)\n(require [prologos.data.result :refer [Result ok err result-or-else]])\n(eval (result-or-else Nat Bool Nat (fn (e : Bool) (ok Nat Nat (boolrec Nat (inc zero) zero e))) (err Nat Bool true) Nat (fn (x : Nat) x) (fn (e : Nat) e)))"))
+   (last (run-ns "(ns roe2)\n(require [prologos.data.result :refer [Result ok err or-else]])\n(eval (or-else Nat Bool Nat (fn (e : Bool) (ok Nat Nat (boolrec Nat (inc zero) zero e))) (err Nat Bool true) Nat (fn (x : Nat) x) (fn (e : Nat) e)))"))
    "1 : Nat"))
 
-(test-case "result-or-else/err-to-err"
+(test-case "or-else/err-to-err"
   ;; err → apply f → still err (with new error type)
   (check-equal?
-   (last (run-ns "(ns roe3)\n(require [prologos.data.result :refer [Result ok err result-or-else]])\n(eval (result-or-else Nat Bool Nat (fn (e : Bool) (err Nat Nat (boolrec Nat (inc (inc (inc zero))) zero e))) (err Nat Bool true) Nat (fn (x : Nat) x) (fn (e : Nat) e)))"))
+   (last (run-ns "(ns roe3)\n(require [prologos.data.result :refer [Result ok err or-else]])\n(eval (or-else Nat Bool Nat (fn (e : Bool) (err Nat Nat (boolrec Nat (inc (inc (inc zero))) zero e))) (err Nat Bool true) Nat (fn (x : Nat) x) (fn (e : Nat) e)))"))
    "3 : Nat"))
 
 ;; --- Type checking for Result combinators ---
 
-(test-case "result-and-then/type-check"
+(test-case "and-then/type-check"
   (check-equal?
-   (last (run-ns "(ns rattc)\n(require [prologos.data.result :refer [Result result-and-then]])\n(check result-and-then : (Pi (A :0 (Type 0)) (Pi (E :0 (Type 0)) (Pi (B :0 (Type 0)) (-> (-> A (Result B E)) (-> (Result A E) (Result B E)))))))"))
+   (last (run-ns "(ns rattc)\n(require [prologos.data.result :refer [Result and-then]])\n(check and-then : (Pi (A :0 (Type 0)) (Pi (E :0 (Type 0)) (Pi (B :0 (Type 0)) (-> (-> A (Result B E)) (-> (Result A E) (Result B E)))))))"))
    "OK"))
 
-(test-case "result-or-else/type-check"
+(test-case "or-else/type-check"
   (check-equal?
-   (last (run-ns "(ns roetc)\n(require [prologos.data.result :refer [Result result-or-else]])\n(check result-or-else : (Pi (A :0 (Type 0)) (Pi (E :0 (Type 0)) (Pi (F :0 (Type 0)) (-> (-> E (Result A F)) (-> (Result A E) (Result A F)))))))"))
+   (last (run-ns "(ns roetc)\n(require [prologos.data.result :refer [Result or-else]])\n(check or-else : (Pi (A :0 (Type 0)) (Pi (E :0 (Type 0)) (Pi (F :0 (Type 0)) (-> (-> E (Result A F)) (-> (Result A E) (Result A F)))))))"))
    "OK"))
 
 ;; ========================================
@@ -1244,13 +1247,13 @@
 (test-case "data/recursive-match-sum"
   ;; Match on recursive type is a fold
   (check-equal?
-   (last (run-ns "(ns rd7)\n(require [prologos.data.nat :refer [add]])\n(data (List (A : (Type 0))) (nil) (cons A (List A)))\n(def my-list : (List Nat) (cons Nat (inc zero) (cons Nat (inc (inc zero)) (cons Nat (inc (inc (inc zero))) (nil Nat)))))\n(eval (match my-list Nat (nil zero) (cons (x : Nat) (acc : Nat) (add x acc))))"))
+   (last (run-ns "(ns rd7)\n(require [prologos.data.nat :refer [add]])\n(data (List (A : (Type 0))) (nil) (cons A (List A)))\n(def my-list : (List Nat) (cons Nat (inc zero) (cons Nat (inc (inc zero)) (cons Nat (inc (inc (inc zero))) (nil Nat)))))\n(eval (the Nat (match my-list (nil -> zero) (cons x acc -> (add x acc)))))"))
    "6 : Nat"))
 
 (test-case "data/recursive-match-empty"
   ;; Match on empty list
   (check-equal?
-   (last (run-ns "(ns rd8)\n(data (List (A : (Type 0))) (nil) (cons A (List A)))\n(eval (match (nil Nat) Nat (nil (inc (inc (inc zero)))) (cons (x : Nat) (acc : Nat) acc)))"))
+   (last (run-ns "(ns rd8)\n(data (List (A : (Type 0))) (nil) (cons A (List A)))\n(eval (the Nat (match (nil Nat) (nil -> (inc (inc (inc zero)))) (cons x acc -> acc))))"))
    "3 : Nat"))
 
 ;; ========================================
@@ -1269,92 +1272,92 @@
 (test-case "list/foldr-sum"
   ;; foldr add zero [1,2,3] = 6
   (check-equal?
-   (last (run-ns "(ns lst3)\n(require [prologos.data.list :refer [List nil cons list-foldr]])\n(require [prologos.data.nat :refer [add]])\n(eval (list-foldr Nat Nat add zero (cons Nat (inc zero) (cons Nat (inc (inc zero)) (cons Nat (inc (inc (inc zero))) (nil Nat))))))"))
+   (last (run-ns "(ns lst3)\n(require [prologos.data.list :refer [List nil cons foldr]])\n(require [prologos.data.nat :refer [add]])\n(eval (foldr Nat Nat add zero (cons Nat (inc zero) (cons Nat (inc (inc zero)) (cons Nat (inc (inc (inc zero))) (nil Nat))))))"))
    "6 : Nat"))
 
 (test-case "list/foldr-product"
   ;; foldr mult 1 [2,3] = 6
   (check-equal?
-   (last (run-ns "(ns lst4)\n(require [prologos.data.list :refer [List nil cons list-foldr]])\n(require [prologos.data.nat :refer [mult]])\n(eval (list-foldr Nat Nat mult (inc zero) (cons Nat (inc (inc zero)) (cons Nat (inc (inc (inc zero))) (nil Nat)))))"))
+   (last (run-ns "(ns lst4)\n(require [prologos.data.list :refer [List nil cons foldr]])\n(require [prologos.data.nat :refer [mult]])\n(eval (foldr Nat Nat mult (inc zero) (cons Nat (inc (inc zero)) (cons Nat (inc (inc (inc zero))) (nil Nat)))))"))
    "6 : Nat"))
 
 (test-case "list/foldr-empty"
   ;; foldr f z [] = z
   (check-equal?
-   (last (run-ns "(ns lst5)\n(require [prologos.data.list :refer [List nil cons list-foldr]])\n(require [prologos.data.nat :refer [add]])\n(eval (list-foldr Nat Nat add (inc (inc (inc (inc (inc zero))))) (nil Nat)))"))
+   (last (run-ns "(ns lst5)\n(require [prologos.data.list :refer [List nil cons foldr]])\n(require [prologos.data.nat :refer [add]])\n(eval (foldr Nat Nat add (inc (inc (inc (inc (inc zero))))) (nil Nat)))"))
    "5 : Nat"))
 
 (test-case "list/length-empty"
   (check-equal?
-   (last (run-ns "(ns lst6)\n(require [prologos.data.list :refer [List nil list-length]])\n(eval (list-length Nat (nil Nat)))"))
+   (last (run-ns "(ns lst6)\n(require [prologos.data.list :refer [List nil length]])\n(eval (length Nat (nil Nat)))"))
    "zero : Nat"))
 
 (test-case "list/length-three"
   (check-equal?
-   (last (run-ns "(ns lst7)\n(require [prologos.data.list :refer [List nil cons list-length]])\n(eval (list-length Nat (cons Nat zero (cons Nat (inc zero) (cons Nat (inc (inc zero)) (nil Nat))))))"))
+   (last (run-ns "(ns lst7)\n(require [prologos.data.list :refer [List nil cons length]])\n(eval (length Nat (cons Nat zero (cons Nat (inc zero) (cons Nat (inc (inc zero)) (nil Nat))))))"))
    "3 : Nat"))
 
 (test-case "list/map-inc"
   ;; map (fn x . suc x) [0, 1] then sum = 1 + 2 = 3
   (check-equal?
-   (last (run-ns "(ns lst8)\n(require [prologos.data.list :refer [List nil cons list-map list-foldr]])\n(require [prologos.data.nat :refer [add]])\n(eval (list-foldr Nat Nat add zero (list-map Nat Nat (fn (x : Nat) (inc x)) (cons Nat zero (cons Nat (inc zero) (nil Nat))))))"))
+   (last (run-ns "(ns lst8)\n(require [prologos.data.list :refer [List nil cons map foldr]])\n(require [prologos.data.nat :refer [add]])\n(eval (foldr Nat Nat add zero (map Nat Nat (fn (x : Nat) (inc x)) (cons Nat zero (cons Nat (inc zero) (nil Nat))))))"))
    "3 : Nat"))
 
 (test-case "list/map-empty"
   ;; map f [] = [], length = 0
   (check-equal?
-   (last (run-ns "(ns lst9)\n(require [prologos.data.list :refer [List nil list-map list-length]])\n(eval (list-length Nat (list-map Nat Nat (fn (x : Nat) (inc x)) (nil Nat))))"))
+   (last (run-ns "(ns lst9)\n(require [prologos.data.list :refer [List nil map length]])\n(eval (length Nat (map Nat Nat (fn (x : Nat) (inc x)) (nil Nat))))"))
    "zero : Nat"))
 
 (test-case "list/filter-keep-zeros"
   ;; filter zero? [0, 1, 0] → length 2
   (check-equal?
-   (last (run-ns "(ns lst10)\n(require [prologos.data.list :refer [List nil cons list-filter list-length]])\n(require [prologos.data.nat :refer [zero?]])\n(eval (list-length Nat (list-filter Nat zero? (cons Nat zero (cons Nat (inc zero) (cons Nat zero (nil Nat)))))))"))
+   (last (run-ns "(ns lst10)\n(require [prologos.data.list :refer [List nil cons filter length]])\n(require [prologos.data.nat :refer [zero?]])\n(eval (length Nat (filter Nat zero? (cons Nat zero (cons Nat (inc zero) (cons Nat zero (nil Nat)))))))"))
    "2 : Nat"))
 
 (test-case "list/filter-drop-all"
   ;; filter zero? [1, 2] → length 0
   (check-equal?
-   (last (run-ns "(ns lst11)\n(require [prologos.data.list :refer [List nil cons list-filter list-length]])\n(require [prologos.data.nat :refer [zero?]])\n(eval (list-length Nat (list-filter Nat zero? (cons Nat (inc zero) (cons Nat (inc (inc zero)) (nil Nat))))))"))
+   (last (run-ns "(ns lst11)\n(require [prologos.data.list :refer [List nil cons filter length]])\n(require [prologos.data.nat :refer [zero?]])\n(eval (length Nat (filter Nat zero? (cons Nat (inc zero) (cons Nat (inc (inc zero)) (nil Nat))))))"))
    "zero : Nat"))
 
 (test-case "list/append"
   ;; [1,2] ++ [3] → sum = 6
   (check-equal?
-   (last (run-ns "(ns lst12)\n(require [prologos.data.list :refer [List nil cons list-append list-foldr]])\n(require [prologos.data.nat :refer [add]])\n(eval (list-foldr Nat Nat add zero (list-append Nat (cons Nat (inc zero) (cons Nat (inc (inc zero)) (nil Nat))) (cons Nat (inc (inc (inc zero))) (nil Nat)))))"))
+   (last (run-ns "(ns lst12)\n(require [prologos.data.list :refer [List nil cons append foldr]])\n(require [prologos.data.nat :refer [add]])\n(eval (foldr Nat Nat add zero (append Nat (cons Nat (inc zero) (cons Nat (inc (inc zero)) (nil Nat))) (cons Nat (inc (inc (inc zero))) (nil Nat)))))"))
    "6 : Nat"))
 
 (test-case "list/append-empty-left"
   ;; [] ++ [1] → sum = 1
   (check-equal?
-   (last (run-ns "(ns lst13)\n(require [prologos.data.list :refer [List nil cons list-append list-foldr]])\n(require [prologos.data.nat :refer [add]])\n(eval (list-foldr Nat Nat add zero (list-append Nat (nil Nat) (cons Nat (inc zero) (nil Nat)))))"))
+   (last (run-ns "(ns lst13)\n(require [prologos.data.list :refer [List nil cons append foldr]])\n(require [prologos.data.nat :refer [add]])\n(eval (foldr Nat Nat add zero (append Nat (nil Nat) (cons Nat (inc zero) (nil Nat)))))"))
    "1 : Nat"))
 
 (test-case "list/append-empty-right"
   ;; [1] ++ [] → sum = 1
   (check-equal?
-   (last (run-ns "(ns lst14)\n(require [prologos.data.list :refer [List nil cons list-append list-foldr]])\n(require [prologos.data.nat :refer [add]])\n(eval (list-foldr Nat Nat add zero (list-append Nat (cons Nat (inc zero) (nil Nat)) (nil Nat))))"))
+   (last (run-ns "(ns lst14)\n(require [prologos.data.list :refer [List nil cons append foldr]])\n(require [prologos.data.nat :refer [add]])\n(eval (foldr Nat Nat add zero (append Nat (cons Nat (inc zero) (nil Nat)) (nil Nat))))"))
    "1 : Nat"))
 
 (test-case "list/head-nonempty"
   (check-equal?
-   (last (run-ns "(ns lst15)\n(require [prologos.data.list :refer [List nil cons list-head]])\n(eval (list-head Nat (inc (inc (inc zero))) (cons Nat (inc zero) (nil Nat))))"))
+   (last (run-ns "(ns lst15)\n(require [prologos.data.list :refer [List nil cons head]])\n(eval (head Nat (inc (inc (inc zero))) (cons Nat (inc zero) (nil Nat))))"))
    "1 : Nat"))
 
 (test-case "list/head-empty"
   ;; head returns default for empty list
   (check-equal?
-   (last (run-ns "(ns lst16)\n(require [prologos.data.list :refer [List nil list-head]])\n(eval (list-head Nat (inc (inc (inc zero))) (nil Nat)))"))
+   (last (run-ns "(ns lst16)\n(require [prologos.data.list :refer [List nil head]])\n(eval (head Nat (inc (inc (inc zero))) (nil Nat)))"))
    "3 : Nat"))
 
 (test-case "list/singleton"
   (check-equal?
-   (last (run-ns "(ns lst17)\n(require [prologos.data.list :refer [List list-singleton list-length]])\n(eval (list-length Nat (list-singleton Nat zero)))"))
+   (last (run-ns "(ns lst17)\n(require [prologos.data.list :refer [List singleton length]])\n(eval (length Nat (singleton Nat zero)))"))
    "1 : Nat"))
 
 (test-case "list/singleton-head"
   (check-equal?
-   (last (run-ns "(ns lst18)\n(require [prologos.data.list :refer [List list-singleton list-head]])\n(eval (list-head Nat (inc (inc (inc zero))) (list-singleton Nat (inc (inc zero)))))"))
+   (last (run-ns "(ns lst18)\n(require [prologos.data.list :refer [List singleton head]])\n(eval (head Nat (inc (inc (inc zero))) (singleton Nat (inc (inc zero)))))"))
    "2 : Nat"))
 
 ;; ========================================
@@ -1541,35 +1544,253 @@
    "3 : Nat"))
 
 ;; ========================================
-;; Integration: List + Eq (list-elem)
+;; Integration: List + Eq (elem)
 ;; ========================================
 
-(test-case "list-elem/found"
+(test-case "elem/found"
   ;; 2 is in [1, 2, 3]
   (check-equal?
-   (last (run-ns "(ns le1)\n(require [prologos.data.list :refer [List nil cons list-elem]])\n(require [prologos.core.eq-trait :refer [nat-eq]])\n(eval (list-elem Nat nat-eq (inc (inc zero)) (cons Nat (inc zero) (cons Nat (inc (inc zero)) (cons Nat (inc (inc (inc zero))) (nil Nat))))))"))
+   (last (run-ns "(ns le1)\n(require [prologos.data.list :refer [List nil cons elem]])\n(require [prologos.core.eq-trait :refer [nat-eq]])\n(eval (elem Nat nat-eq (inc (inc zero)) (cons Nat (inc zero) (cons Nat (inc (inc zero)) (cons Nat (inc (inc (inc zero))) (nil Nat))))))"))
    "true : Bool"))
 
-(test-case "list-elem/not-found"
+(test-case "elem/not-found"
   ;; 5 is not in [1, 2, 3]
   (check-equal?
-   (last (run-ns "(ns le2)\n(require [prologos.data.list :refer [List nil cons list-elem]])\n(require [prologos.core.eq-trait :refer [nat-eq]])\n(eval (list-elem Nat nat-eq (inc (inc (inc (inc (inc zero))))) (cons Nat (inc zero) (cons Nat (inc (inc zero)) (cons Nat (inc (inc (inc zero))) (nil Nat))))))"))
+   (last (run-ns "(ns le2)\n(require [prologos.data.list :refer [List nil cons elem]])\n(require [prologos.core.eq-trait :refer [nat-eq]])\n(eval (elem Nat nat-eq (inc (inc (inc (inc (inc zero))))) (cons Nat (inc zero) (cons Nat (inc (inc zero)) (cons Nat (inc (inc (inc zero))) (nil Nat))))))"))
    "false : Bool"))
 
-(test-case "list-elem/empty-list"
+(test-case "elem/empty-list"
   ;; Any element not in []
   (check-equal?
-   (last (run-ns "(ns le3)\n(require [prologos.data.list :refer [List nil list-elem]])\n(require [prologos.core.eq-trait :refer [nat-eq]])\n(eval (list-elem Nat nat-eq zero (nil Nat)))"))
+   (last (run-ns "(ns le3)\n(require [prologos.data.list :refer [List nil elem]])\n(require [prologos.core.eq-trait :refer [nat-eq]])\n(eval (elem Nat nat-eq zero (nil Nat)))"))
    "false : Bool"))
 
-(test-case "list-elem/first-element"
+(test-case "elem/first-element"
   ;; 0 is first in [0, 1, 2]
   (check-equal?
-   (last (run-ns "(ns le4)\n(require [prologos.data.list :refer [List nil cons list-elem]])\n(require [prologos.core.eq-trait :refer [nat-eq]])\n(eval (list-elem Nat nat-eq zero (cons Nat zero (cons Nat (inc zero) (cons Nat (inc (inc zero)) (nil Nat))))))"))
+   (last (run-ns "(ns le4)\n(require [prologos.data.list :refer [List nil cons elem]])\n(require [prologos.core.eq-trait :refer [nat-eq]])\n(eval (elem Nat nat-eq zero (cons Nat zero (cons Nat (inc zero) (cons Nat (inc (inc zero)) (nil Nat))))))"))
    "true : Bool"))
 
-(test-case "list-elem/last-element"
+(test-case "elem/last-element"
   ;; 3 is last in [1, 2, 3]
   (check-equal?
-   (last (run-ns "(ns le5)\n(require [prologos.data.list :refer [List nil cons list-elem]])\n(require [prologos.core.eq-trait :refer [nat-eq]])\n(eval (list-elem Nat nat-eq (inc (inc (inc zero))) (cons Nat (inc zero) (cons Nat (inc (inc zero)) (cons Nat (inc (inc (inc zero))) (nil Nat))))))"))
+   (last (run-ns "(ns le5)\n(require [prologos.data.list :refer [List nil cons elem]])\n(require [prologos.core.eq-trait :refer [nat-eq]])\n(eval (elem Nat nat-eq (inc (inc (inc zero))) (cons Nat (inc zero) (cons Nat (inc (inc zero)) (cons Nat (inc (inc (inc zero))) (nil Nat))))))"))
    "true : Bool"))
+
+;; ========================================
+;; Reduce — ML-style pattern matching
+;; ========================================
+
+;; reduce on Option — some case (sexp mode)
+(test-case "reduce/option-some"
+  (check-equal?
+   (last (run-ns "(ns ro1)\n(require [prologos.data.option :refer [Option none some]])\n(eval (the Nat (reduce (some Nat zero) (none -> (inc zero)) (some x -> x))))"))
+   "zero : Nat"))
+
+;; reduce on Option — none case
+(test-case "reduce/option-none"
+  (check-equal?
+   (last (run-ns "(ns ro2)\n(require [prologos.data.option :refer [Option none some]])\n(eval (the Nat (reduce (none Nat) (none -> (inc zero)) (some x -> x))))"))
+   "1 : Nat"))
+
+;; reduce on Ordering — nullary constructors
+(test-case "reduce/ordering-lt"
+  (check-equal?
+   (last (run-ns "(ns ro3)\n(require [prologos.data.ordering :refer [Ordering lt-ord eq-ord gt-ord]])\n(eval (the Nat (reduce (lt-ord) (lt-ord -> zero) (eq-ord -> (inc zero)) (gt-ord -> (inc (inc zero))))))"))
+   "zero : Nat"))
+
+(test-case "reduce/ordering-gt"
+  (check-equal?
+   (last (run-ns "(ns ro4)\n(require [prologos.data.ordering :refer [Ordering lt-ord eq-ord gt-ord]])\n(eval (the Nat (reduce (gt-ord) (lt-ord -> zero) (eq-ord -> (inc zero)) (gt-ord -> (inc (inc zero))))))"))
+   "2 : Nat"))
+
+;; reduce on Result — ok case
+(test-case "reduce/result-ok"
+  (check-equal?
+   (last (run-ns "(ns ro5)\n(require [prologos.data.result :refer [Result ok err]])\n(eval (the Nat (reduce (ok Nat Bool zero) (ok x -> x) (err _ -> (inc zero)))))"))
+   "zero : Nat"))
+
+;; reduce on Result — err case
+(test-case "reduce/result-err"
+  (check-equal?
+   (last (run-ns "(ns ro6)\n(require [prologos.data.result :refer [Result ok err]])\n(eval (the Nat (reduce (err Nat Bool true) (ok x -> (inc zero)) (err _ -> zero))))"))
+   "zero : Nat"))
+
+;; reduce on List — nil case (fold semantics)
+(test-case "reduce/list-nil"
+  (check-equal?
+   (last (run-ns "(ns ro7)\n(require [prologos.data.list :refer [List nil cons]])\n(eval (the Nat (reduce (nil Nat) (nil -> zero) (cons _ acc -> acc))))"))
+   "zero : Nat"))
+
+;; reduce on List — cons case with fold semantics
+;; length via reduce: reduce xs | nil -> 0 | cons _ acc -> (inc acc)
+(test-case "reduce/length-via-reduce"
+  (check-equal?
+   (last (run-ns "(ns ro8)\n(require [prologos.data.list :refer [List nil cons]])\n(eval (the Nat (reduce (cons Nat zero (cons Nat (inc zero) (nil Nat))) (nil -> zero) (cons _ acc -> (inc acc)))))"))
+   "2 : Nat"))
+
+;; ========================================
+;; Recursive defn — self-referential function definitions
+;; ========================================
+
+;; Simple recursion: count-down n = natrec on n, calling self on predecessor
+(test-case "recursive-defn/count-down"
+  ;; count-down just recurses to zero (using natrec, calling itself on k)
+  (check-equal?
+   (last (run-ns "(ns rec1)\n(def count-down : (-> Nat Nat)\n  (fn (n : Nat) (natrec Nat zero (fn (k : Nat) (fn (_ : Nat) (count-down k))) n)))\n(eval (count-down (inc (inc (inc zero)))))"))
+   "zero : Nat"))
+
+;; Recursive defn: factorial using natrec + self-reference
+;; fact 0 = 1, fact (suc k) = (suc k) * fact(k)
+(test-case "recursive-defn/factorial"
+  (check-equal?
+   (last (run-ns "(ns rec2)\n(require [prologos.data.nat :refer [mult]])\n(def fact : (-> Nat Nat)\n  (fn (n : Nat) (natrec Nat (inc zero) (fn (k : Nat) (fn (_ : Nat) (mult (inc k) (fact k)))) n)))\n(eval (fact (inc (inc (inc zero)))))"))
+   "6 : Nat")
+  ;; fact(4) = 24
+  (check-equal?
+   (last (run-ns "(ns rec2b)\n(require [prologos.data.nat :refer [mult]])\n(def fact : (-> Nat Nat)\n  (fn (n : Nat) (natrec Nat (inc zero) (fn (k : Nat) (fn (_ : Nat) (mult (inc k) (fact k)))) n)))\n(eval (fact (inc (inc (inc (inc zero))))))"))
+   "24 : Nat"))
+
+;; Recursive defn with defn syntax
+(test-case "recursive-defn/defn-syntax"
+  ;; defn double-it [n : Nat] : Nat uses natrec and calls itself
+  (check-equal?
+   (last (run-ns "(ns rec3)\n(defn my-double [n : Nat] : Nat\n  (natrec Nat zero (fn (k : Nat) (fn (_ : Nat) (inc (inc (my-double k)))) ) n))\n(eval (my-double (inc (inc (inc zero)))))"))
+   "6 : Nat"))
+
+;; Recursive defn with match (the key use case!)
+;; Sum a list of Nats using match + recursion
+(test-case "recursive-defn/list-sum-with-match"
+  (check-equal?
+   (last (run-ns "(ns rec4)\n(require [prologos.data.list :refer [List nil cons]])\n(require [prologos.data.nat :refer [add]])\n(defn my-sum [xs : List Nat] : Nat\n  (match xs (nil -> zero) (cons a acc -> (add a acc))))\n(eval (my-sum (cons Nat (inc zero) (cons Nat (inc (inc zero)) (cons Nat (inc (inc (inc zero))) (nil Nat))))))"))
+   "6 : Nat"))
+
+;; Non-recursive def still works (regression check)
+(test-case "recursive-defn/non-recursive-still-works"
+  (check-equal?
+   (last (run-ns "(ns rec5)\n(def id-nat : (-> Nat Nat) (fn (n : Nat) n))\n(eval (id-nat (inc (inc zero))))"))
+   "2 : Nat"))
+
+;; ========================================
+;; Implicit Argument Inference Tests
+;; ========================================
+
+;; cons with implicit type arg (1 implicit, 2 explicit → unambiguous)
+(test-case "implicit/cons-zero-nil"
+  (check-equal?
+   (last (run-ns "(ns imp1)\n(require [prologos.data.list :refer [List nil cons length]])\n(eval (length Nat (cons zero (nil Nat))))"))
+   "1 : Nat"))
+
+;; bare nil auto-applies (all-implicit type)
+(test-case "implicit/bare-nil"
+  (check-equal?
+   (last (run-ns "(ns imp2)\n(require [prologos.data.list :refer [List nil length]])\n(eval (length Nat nil))"))
+   "zero : Nat"))
+
+;; cons zero nil — both cons and nil with implicit insertion
+(test-case "implicit/cons-zero-bare-nil"
+  (check-equal?
+   (last (run-ns "(ns imp3)\n(require [prologos.data.list :refer [List nil cons length]])\n(eval (length Nat (cons zero nil)))"))
+   "1 : Nat"))
+
+;; singleton with implicit insertion (1 implicit, 1 explicit)
+(test-case "implicit/singleton-zero"
+  (check-equal?
+   (last (run-ns "(ns imp4)\n(require [prologos.data.list :refer [List singleton length]])\n(eval (length Nat (singleton zero)))"))
+   "1 : Nat"))
+
+;; backward compat: explicit type args still work
+(test-case "implicit/backward-compat-cons"
+  (check-equal?
+   (last (run-ns "(ns imp5)\n(require [prologos.data.list :refer [List nil cons length]])\n(eval (length Nat (cons Nat zero (nil Nat))))"))
+   "1 : Nat"))
+
+;; backward compat: explicit type args to nil still work
+(test-case "implicit/backward-compat-nil"
+  (check-equal?
+   (last (run-ns "(ns imp6)\n(require [prologos.data.list :refer [List nil length]])\n(eval (length Nat (nil Nat)))"))
+   "zero : Nat"))
+
+;; some with implicit insertion
+(test-case "implicit/some-zero"
+  (check-equal?
+   (last (run-ns "(ns imp7)\n(require [prologos.data.option :refer [Option some unwrap-or]])\n(eval (unwrap-or Nat (inc zero) (some Nat zero)))"))
+   "zero : Nat"))
+
+;; bare none auto-applies
+(test-case "implicit/bare-none"
+  (check-equal?
+   (last (run-ns "(ns imp8)\n(require [prologos.data.option :refer [Option none unwrap-or]])\n(eval (unwrap-or Nat (inc zero) none))"))
+   "1 : Nat"))
+
+;; underscore _ as explicit hole in sexp mode
+(test-case "implicit/explicit-underscore-hole"
+  (check-equal?
+   (last (run-ns "(ns imp9)\n(require [prologos.data.list :refer [List nil cons length]])\n(eval (length Nat (cons _ zero nil)))"))
+   "1 : Nat"))
+
+;; ========================================
+;; True Structural Pattern Matching (match returning Type 1)
+;; ========================================
+;; These tests verify that match can return Church-encoded types
+;; (List, Option, Result) which live in Type 1.
+
+;; map with match returns List B (Type 1)
+(test-case "structural-pm/map-returns-list"
+  (check-equal?
+   (last (run-ns "(ns spm1)\n(require [prologos.data.list :refer [List nil cons map foldr]])\n(require [prologos.data.nat :refer [add]])\n(eval (foldr Nat Nat add zero (map Nat Nat (fn (x : Nat) (inc x)) (cons Nat zero (cons Nat (inc zero) (cons Nat (inc (inc zero)) (nil Nat)))))))"))
+   "6 : Nat"))
+
+;; map empty list
+(test-case "structural-pm/map-empty"
+  (check-equal?
+   (last (run-ns "(ns spm2)\n(require [prologos.data.list :refer [List nil map length]])\n(eval (length Nat (map Nat Nat (fn (x : Nat) (inc x)) (nil Nat))))"))
+   "zero : Nat"))
+
+;; append with match returns List A (Type 1)
+(test-case "structural-pm/append-returns-list"
+  (check-equal?
+   (last (run-ns "(ns spm3)\n(require [prologos.data.list :refer [List nil cons append foldr]])\n(require [prologos.data.nat :refer [add]])\n(eval (foldr Nat Nat add zero (append Nat (cons Nat (inc zero) (nil Nat)) (cons Nat (inc (inc zero)) (nil Nat)))))"))
+   "3 : Nat"))
+
+;; option/map with match returns Option B (Type 1)
+(test-case "structural-pm/option-map"
+  (check-equal?
+   (last (run-ns "(ns spm4)\n(require [prologos.data.option :refer [Option none some map unwrap-or]])\n(eval (unwrap-or Nat zero (map Nat Nat (fn (x : Nat) (inc x)) (some Nat (inc (inc zero))))))"))
+   "3 : Nat"))
+
+;; option/flat-map with match returns Option B (Type 1)
+(test-case "structural-pm/option-flat-map"
+  (check-equal?
+   (last (run-ns "(ns spm5)\n(require [prologos.data.option :refer [Option none some flat-map unwrap-or]])\n(eval (unwrap-or Nat zero (flat-map Nat Nat (fn (x : Nat) (some Nat (inc x))) (some Nat (inc zero)))))"))
+   "2 : Nat"))
+
+;; option/or-else with match returns Option A (Type 1)
+(test-case "structural-pm/option-or-else"
+  (check-equal?
+   (last (run-ns "(ns spm6)\n(require [prologos.data.option :refer [Option none some or-else unwrap-or]])\n(eval (unwrap-or Nat zero (or-else Nat (none Nat) (some Nat (inc (inc (inc zero)))))))"))
+   "3 : Nat"))
+
+;; option/zip-with with nested match returns Option C (Type 1)
+(test-case "structural-pm/option-zip-with"
+  (check-equal?
+   (last (run-ns "(ns spm7)\n(require [prologos.data.option :refer [Option none some zip-with unwrap-or]])\n(require [prologos.data.nat :refer [add]])\n(eval (unwrap-or Nat zero (zip-with Nat Nat Nat add (some Nat (inc zero)) (some Nat (inc (inc zero))))))"))
+   "3 : Nat"))
+
+;; result/map with match returns Result B E (Type 1)
+(test-case "structural-pm/result-map"
+  (check-equal?
+   (last (run-ns "(ns spm8)\n(require [prologos.data.result :refer [Result ok err map unwrap-or]])\n(eval (unwrap-or Nat Nat zero (map Nat Nat Nat (fn (x : Nat) (inc x)) (ok Nat Nat (inc (inc zero))))))"))
+   "3 : Nat"))
+
+;; result/and-then with match returns Result B E (Type 1)
+(test-case "structural-pm/result-and-then"
+  (check-equal?
+   (last (run-ns "(ns spm9)\n(require [prologos.data.result :refer [Result ok err and-then unwrap-or]])\n(eval (unwrap-or Nat Nat zero (and-then Nat Nat Nat (fn (x : Nat) (ok Nat Nat (inc x))) (ok Nat Nat (inc zero)))))"))
+   "2 : Nat"))
+
+;; result/or-else with match returns Result A F (Type 1)
+(test-case "structural-pm/result-or-else"
+  (check-equal?
+   (last (run-ns "(ns spm10)\n(require [prologos.data.result :refer [Result ok err or-else unwrap-or]])\n(eval (unwrap-or Nat Nat zero (or-else Nat Nat Nat (fn (e : Nat) (ok Nat Nat (inc e))) (err Nat Nat (inc (inc zero))))))"))
+   "3 : Nat"))

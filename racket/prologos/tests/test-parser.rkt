@@ -302,8 +302,13 @@
 (test-case "parse: (Type x) — non-numeric level"
   (check-true (prologos-error? (p "(Type x)"))))
 
-(test-case "parse: (fn x y) — bad binder"
-  (check-true (prologos-error? (p "(fn x y)"))))
+(test-case "parse: (fn x y) — untyped fn"
+  ;; (fn x y) is now a valid untyped lambda: fn with hole type
+  (let ([r (p "(fn x y)")])
+    (check-true (surf-lam? r))
+    (check-equal? (binder-info-name (surf-lam-binder r)) 'x)
+    (check-true (surf-hole? (binder-info-type (surf-lam-binder r))))
+    (check-true (surf-var? (surf-lam-body r)))))
 
 ;; ========================================
 ;; parse-port: multiple forms
@@ -412,3 +417,112 @@
   (define result (p "(def f <(-> Nat Nat)> (fn [x <Nat>] (inc x)))"))
   (check-true (surf-def? result))
   (check-true (surf-arrow? (surf-def-type result))))
+
+;; ========================================
+;; Phase 3: Colon-based parameter syntax
+;; ========================================
+
+(test-case "parse: colon binder [x : Nat]"
+  (define result (p "(defn inc2 [x : Nat] <Nat> (inc x))"))
+  (check-true (surf-defn? result))
+  (check-equal? (surf-defn-name result) 'inc2)
+  (check-equal? (surf-defn-param-names result) '(x))
+  ;; Type is Pi (constructed from binder + return type)
+  (check-true (surf-pi? (surf-defn-type result))))
+
+(test-case "parse: colon binder with arrow type [f : Nat -> Nat x : Nat]"
+  ;; Note: no commas in sexp mode (comma is Racket's unquote)
+  (define result (p "(defn apply-fn [f : Nat -> Nat x : Nat] <Nat> (f x))"))
+  (check-true (surf-defn? result))
+  (check-equal? (surf-defn-name result) 'apply-fn)
+  (check-equal? (surf-defn-param-names result) '(f x))
+  ;; Type should be Pi for f:(->Nat Nat), then Pi for x:Nat, then Nat
+  (check-true (surf-pi? (surf-defn-type result)))
+  ;; f's type should be (-> Nat Nat)
+  (define f-type (binder-info-type (surf-pi-binder (surf-defn-type result))))
+  (check-true (surf-arrow? f-type)))
+
+(test-case "parse: colon binder with multiplicity [x :0 : Nat]"
+  (define result (p "(defn erase [x :0 : Nat] <Nat> zero)"))
+  (check-true (surf-defn? result))
+  (check-equal? (surf-defn-param-names result) '(x))
+  ;; Check multiplicity is m0
+  (define pi-type (surf-defn-type result))
+  (check-true (surf-pi? pi-type))
+  (check-equal? (binder-info-mult (surf-pi-binder pi-type)) 'm0))
+
+(test-case "parse: colon return type : Nat"
+  (define result (p "(defn inc2 [x : Nat] : Nat (inc x))"))
+  (check-true (surf-defn? result))
+  (check-equal? (surf-defn-name result) 'inc2)
+  (check-equal? (surf-defn-param-names result) '(x))
+  ;; Full type is Pi (from colon binder + colon return type)
+  (check-true (surf-pi? (surf-defn-type result))))
+
+(test-case "parse: colon return type with arrow : Nat -> Nat"
+  (define result (p "(defn mk-fn [x : Nat] : Nat -> Nat (fn [y <Nat>] x))"))
+  (check-true (surf-defn? result))
+  ;; Return type should be (-> Nat Nat), so full type is Pi(x:Nat, (-> Nat Nat))
+  (define full-type (surf-defn-type result))
+  (check-true (surf-pi? full-type))
+  (define ret-type (surf-pi-body full-type))
+  (check-true (surf-arrow? ret-type)))
+
+(test-case "parse: colon binder right-associative arrow [f : Nat -> Nat -> Nat]"
+  ;; No commas in sexp mode
+  (define result (p "(defn app [f : Nat -> Nat -> Nat x : Nat y : Nat] <Nat> (f x y))"))
+  (check-true (surf-defn? result))
+  (check-equal? (surf-defn-param-names result) '(f x y))
+  ;; f's type should be (-> Nat (-> Nat Nat)) — right-associative
+  (define pi1 (surf-defn-type result))
+  (check-true (surf-pi? pi1))
+  (define f-type (binder-info-type (surf-pi-binder pi1)))
+  (check-true (surf-arrow? f-type))
+  (check-true (surf-arrow? (surf-arrow-codomain f-type))))
+
+(test-case "parse: colon with {A B} implicit params"
+  (define result (p "(defn id {A} [x : A] : A x)"))
+  (check-true (surf-defn? result))
+  (check-equal? (surf-defn-name result) 'id)
+  (check-equal? (surf-defn-param-names result) '(A x))
+  ;; Type should be Pi [A :0 Type0] (Pi [x :mw A] A)
+  (check-true (surf-pi? (surf-defn-type result)))
+  (check-equal? (binder-info-mult (surf-pi-binder (surf-defn-type result))) 'm0))
+
+(test-case "parse: bare Type in colon binder [A :0 : Type x : A]"
+  ;; No commas in sexp mode
+  (define result (p "(defn id [A :0 : Type x : A] : A x)"))
+  (check-true (surf-defn? result))
+  (check-equal? (surf-defn-param-names result) '(A x))
+  (define pi1 (surf-defn-type result))
+  (check-true (surf-pi? pi1))
+  (check-equal? (binder-info-mult (surf-pi-binder pi1)) 'm0)
+  ;; A's type should be Type (= (Type 0))
+  (check-true (surf-type? (binder-info-type (surf-pi-binder pi1)))))
+
+(test-case "parse: colon binder with commas [x : Nat, y : Nat]"
+  ;; Commas are now supported in sexp mode via readtable
+  (define result (p "(defn add [x : Nat, y : Nat] <Nat> (natrec Nat y (fn (_ : Nat) (fn (acc : Nat) (inc acc))) x))"))
+  (check-true (surf-defn? result))
+  (check-equal? (surf-defn-param-names result) '(x y)))
+
+;; ========================================
+;; Phase 4: Multi-argument untyped fn
+;; ========================================
+
+(test-case "parse: (fn a b c body) — multi-arg untyped fn"
+  (let ([r (p "(fn a b c (f a b c))")])
+    (check-true (surf-lam? r))
+    (check-equal? (binder-info-name (surf-lam-binder r)) 'a)
+    (check-true (surf-hole? (binder-info-type (surf-lam-binder r))))
+    ;; Second level
+    (define inner1 (surf-lam-body r))
+    (check-true (surf-lam? inner1))
+    (check-equal? (binder-info-name (surf-lam-binder inner1)) 'b)
+    (check-true (surf-hole? (binder-info-type (surf-lam-binder inner1))))
+    ;; Third level
+    (define inner2 (surf-lam-body inner1))
+    (check-true (surf-lam? inner2))
+    (check-equal? (binder-info-name (surf-lam-binder inner2)) 'c)
+    ;; Innermost body is the application
+    (check-true (surf-app? (surf-lam-body inner2)))))

@@ -126,7 +126,7 @@
   ;; flip Nat Bool Nat (const Nat Bool) true zero -> zero
   ;; const Nat Bool zero true -> zero, so flip should give same result
   (check-equal?
-   (run-ns "(ns test.flip)\n(eval (flip Nat Bool Nat (const Nat Bool) true zero))")
+   (run-ns "(ns test.flip)\n(eval (flip Nat Bool Nat (fn (a : Nat) (fn (b : Bool) a)) true zero))")
    '("zero : Nat")))
 
 ;; ========================================
@@ -148,13 +148,13 @@
 ;; ========================================
 
 (test-case "core definitions type-check"
-  ;; id Nat : Nat -> Nat
+  ;; id zero : Nat (implicit type inference for A = Nat)
   (check-equal?
-   (run-ns "(ns test.check-id)\n(check (id Nat) <(-> Nat Nat)>)")
+   (run-ns "(ns test.check-id)\n(check (id zero) <Nat>)")
    '("OK"))
-  ;; const Nat Bool : Nat -> Bool -> Nat
+  ;; const zero true : Nat (implicit type inference for A = Nat, B = Bool)
   (check-equal?
-   (run-ns "(ns test.check-const)\n(check (const Nat Bool) <(-> Nat (-> Bool Nat))>)")
+   (run-ns "(ns test.check-const)\n(check (const zero true) <Nat>)")
    '("OK")))
 
 ;; ========================================

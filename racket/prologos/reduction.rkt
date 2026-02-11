@@ -11,13 +11,17 @@
 ;;;
 
 (require racket/match
+         racket/list
+         racket/string
          "prelude.rkt"
          "syntax.rkt"
          "substitution.rkt"
          "global-env.rkt"
-         "posit-impl.rkt")
+         "posit-impl.rkt"
+         "macros.rkt"
+         "metavar-store.rkt")
 
-(provide whnf nf nf-whnf conv)
+(provide whnf nf nf-whnf conv conv-nf)
 
 ;; ========================================
 ;; Helpers for Posit8 reduction
@@ -46,6 +50,54 @@
     (if (equal? a* a)
         (ctor a)   ; stuck
         (whnf (ctor a*)))))
+
+;; ========================================
+;; Structural pattern matching for reduce
+;; ========================================
+;; Decompose an expression into (head-fvar arg1 arg2 ...) if possible.
+;; Returns (values fvar-name args-list) or (values #f #f).
+(define (decompose-app e)
+  (let loop ([expr e] [args '()])
+    (match expr
+      [(expr-app f a) (loop f (cons a args))]
+      [(expr-fvar name) (values name args)]
+      [_ (values #f #f)])))
+
+;; Try structural reduce: if scrutinee is a constructor application,
+;; match the arm and substitute field values into the body.
+;; Returns the substituted body expression, or #f if not a constructor.
+(define (try-structural-reduce scrut arms)
+  (define-values (head-name all-args) (decompose-app scrut))
+  (and head-name
+       (let ([meta (or (lookup-ctor head-name)
+                       (lookup-ctor (ctor-short-name head-name)))])
+         (and meta
+              (let* ([n-type-params (length (ctor-meta-params meta))]
+                     [field-values (drop all-args n-type-params)]
+                     [short-name (ctor-short-name head-name)]
+                     ;; Find matching arm
+                     [matching-arm
+                      (findf (lambda (arm)
+                               (eq? (expr-reduce-arm-ctor-name arm) short-name))
+                             arms)])
+                (and matching-arm
+                     (let ([bc (expr-reduce-arm-binding-count matching-arm)]
+                           [body (expr-reduce-arm-body matching-arm)])
+                       (if (= (length field-values) bc)
+                           ;; Substitute field values for bindings.
+                           ;; bindings: bvar(0) = last field, bvar(1) = second-to-last, etc.
+                           ;; We substitute bvar(0) first with last field, which decrements
+                           ;; higher indices, then repeat for the next.
+                           (for/fold ([result body])
+                                     ([fv (in-list (reverse field-values))])
+                             (subst 0 fv result))
+                           #f))))))))
+
+;; Extract the short (bare) name from a potentially FQN symbol.
+;; 'prologos.data.list/cons → 'cons, 'cons → 'cons
+(define (ctor-short-name fqn)
+  (define parts (string-split (symbol->string fqn) "/"))
+  (string->symbol (last parts)))
 
 ;; ========================================
 ;; Weak Head Normal Form
@@ -183,10 +235,46 @@
      (let ([v* (whnf v)])
        (if (equal? v* v) e (whnf (expr-p8-if-nar t nc vc v*))))]
 
+    ;; Reduce: dispatch based on structural? flag
+    ;; structural? = #f → Church fold (fold semantics, recursive fields are accumulators)
+    ;; structural? = #t → True structural PM (recursive fields are raw values)
+    [(expr-reduce scrutinee arms #f)
+     ;; Church fold desugaring
+     (define scrut-whnf (whnf scrutinee))
+     (define branch-lams
+       (for/list ([arm (in-list arms)])
+         (define bc (expr-reduce-arm-binding-count arm))
+         (define body (expr-reduce-arm-body arm))
+         (if (= bc 0)
+             body
+             (for/fold ([inner body])
+                       ([_ (in-range bc)])
+               (expr-lam 'mw (expr-hole) inner)))))
+     (define church-app
+       (foldl (lambda (branch app-so-far)
+                (expr-app app-so-far branch))
+              (expr-app scrut-whnf (expr-hole))
+              branch-lams))
+     (whnf church-app)]
+
+    [(expr-reduce scrutinee arms #t)
+     ;; True structural pattern matching: decompose scrutinee as constructor,
+     ;; substitute field values into matching arm body.
+     (define struct-result (or (try-structural-reduce scrutinee arms)
+                               (try-structural-reduce (whnf scrutinee) arms)))
+     (if struct-result
+         (whnf struct-result)
+         e)]  ;; stuck — scrutinee not a constructor application
+
     ;; Free variable: unfold global definition if available
     [(expr-fvar name)
      (let ([val (global-env-lookup-value name)])
        (if val (whnf val) e))]
+
+    ;; Metavariable: if solved, reduce solution; if unsolved, stuck
+    [(expr-meta id)
+     (let ([sol (meta-solution id)])
+       (if sol (whnf sol) e))]
 
     ;; Everything else is already in WHNF
     [_ e]))
@@ -211,6 +299,8 @@
     [(expr-true) e]
     [(expr-false) e]
     [(expr-Type _) e]
+    [(expr-hole) e]
+    [(expr-meta _) e]
     [(expr-error) e]
 
     ;; Structured terms: normalize subterms
@@ -263,7 +353,19 @@
     [(expr-p8-le a b) (expr-p8-le (nf a) (nf b))]
     [(expr-p8-from-nat n) (expr-p8-from-nat (nf n))]
     [(expr-p8-if-nar t nc vc v)
-     (expr-p8-if-nar (nf t) (nf nc) (nf vc) (nf v))]))
+     (expr-p8-if-nar (nf t) (nf nc) (nf vc) (nf v))]
+
+    ;; Reduce: should be desugared by type checker before reaching nf,
+    ;; but handle it defensively by normalizing sub-terms
+    [(expr-reduce scrut arms structural?)
+     (expr-reduce (nf scrut)
+                  (map (lambda (arm)
+                         (expr-reduce-arm
+                          (expr-reduce-arm-ctor-name arm)
+                          (expr-reduce-arm-binding-count arm)
+                          (nf (expr-reduce-arm-body arm))))
+                       arms)
+                  structural?)]))
 
 ;; ========================================
 ;; Definitional Equality (conversion)
@@ -272,4 +374,25 @@
 ;; (#:transparent structs give us deep structural equal?)
 ;; ========================================
 (define (conv e1 e2)
-  (equal? (nf e1) (nf e2)))
+  (conv-nf (nf e1) (nf e2)))
+
+;; Deep structural equality with hole-as-wildcard.
+;; expr-hole on either side matches anything.
+;; Uses struct->vector for generic traversal of #:transparent structs.
+(define (conv-nf a b)
+  (cond
+    [(expr-hole? a) #t]
+    [(expr-hole? b) #t]
+    ;; Unsolved metavariables: equal only if same ID
+    ;; (solved metas are already eliminated by nf→whnf)
+    [(expr-meta? a)
+     (and (expr-meta? b) (eq? (expr-meta-id a) (expr-meta-id b)))]
+    [(expr-meta? b) #f]
+    [(and (struct? a) (struct? b))
+     (let ([va (struct->vector a)]
+           [vb (struct->vector b)])
+       (and (eq? (vector-ref va 0) (vector-ref vb 0))     ; same struct type
+            (= (vector-length va) (vector-length vb))
+            (for/and ([i (in-range 1 (vector-length va))]) ; skip struct-name at 0
+              (conv-nf (vector-ref va i) (vector-ref vb i)))))]
+    [else (equal? a b)]))

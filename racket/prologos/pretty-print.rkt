@@ -10,7 +10,8 @@
          racket/string
          "prelude.rkt"
          "syntax.rkt"
-         "sessions.rkt")
+         "sessions.rkt"
+         "metavar-store.rkt")
 
 (provide pp-expr
          pp-session
@@ -58,6 +59,12 @@
     [(expr-Bool) "Bool"]
     [(expr-true) "true"]
     [(expr-false) "false"]
+    [(expr-hole) "_"]
+    [(expr-meta id)
+     (let ([sol (meta-solution id)])
+       (if sol
+           (pp-expr sol names)
+           (format "?~a" id)))]
     [(expr-error) "<error>"]
 
     ;; Universes
@@ -172,6 +179,28 @@
      (format "(p8-if-nar ~a ~a ~a ~a)"
              (pp-expr t names) (pp-expr nc names) (pp-expr vc names) (pp-expr v names))]
 
+    ;; Reduce
+    [(expr-reduce scrut arms _)
+     (format "(reduce ~a~a)"
+             (pp-expr scrut names)
+             (apply string-append
+                    (map (lambda (arm)
+                           (format " | ~a~a -> ~a"
+                                   (expr-reduce-arm-ctor-name arm)
+                                   (let ([bc (expr-reduce-arm-binding-count arm)])
+                                     (if (= bc 0) ""
+                                         (apply string-append
+                                                (for/list ([i (in-range bc)])
+                                                  (let ([n (fresh-name (+ (length names) i) names)])
+                                                    (format " ~a" n))))))
+                                   (pp-expr (expr-reduce-arm-body arm)
+                                            ;; Push fresh names for bindings
+                                            (let ([bc (expr-reduce-arm-binding-count arm)])
+                                              (for/fold ([ns names])
+                                                        ([i (in-range bc)])
+                                                (cons (fresh-name (+ (length names) i) names) ns))))))
+                         arms)))]
+
     ;; Fallback
     [_ (format "~a" e)]))
 
@@ -201,6 +230,8 @@
     [(expr-true) #f]
     [(expr-false) #f]
     [(expr-Type _) #f]
+    [(expr-hole) #f]
+    [(expr-meta _) #f]
     [(expr-error) #f]
     [(expr-suc e1) (uses-bvar0? e1)]
     [(expr-lam _ t body) (or (uses-bvar0? t) (uses-bvar0? body))]
@@ -237,6 +268,9 @@
     [(expr-p8-le a b) (or (uses-bvar0? a) (uses-bvar0? b))]
     [(expr-p8-from-nat n) (uses-bvar0? n)]
     [(expr-p8-if-nar t nc vc v) (or (uses-bvar0? t) (uses-bvar0? nc) (uses-bvar0? vc) (uses-bvar0? v))]
+    [(expr-reduce scrut arms _)
+     (or (uses-bvar0? scrut)
+         (ormap (lambda (arm) (uses-bvar0? (expr-reduce-arm-body arm))) arms))]
     [_ #f]))
 
 ;; Flatten nested left-associative applications

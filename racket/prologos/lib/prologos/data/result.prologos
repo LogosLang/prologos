@@ -1,49 +1,42 @@
 ns prologos.data.result
 
-provide Result ok err result-map result-map-err result-unwrap-or result-and-then result-or-else
+provide Result ok err map map-err unwrap-or and-then or-else
 
 ;; ========================================
 ;; Prologos Result Type
 ;; Church-encoded error-or-value.
 ;; ========================================
 
-data (Result [A <(Type 0)>] [E <(Type 0)>])
-  ok <A>
-  err <E>
+data Result {A E}
+  ok : A
+  err : E
 
 ;; Map a function over the ok value.
-;; Uses delegation: result-map f r = fn R ok-case err-case . r R (fn x . ok-case (f x)) err-case
-defn result-map [A :0 <(Type 0)> E :0 <(Type 0)> B :0 <(Type 0)>
-                 f <(-> A B)> r <(Result A E)>] <(Result B E)>
-  fn [__R :0 <(Type 0)>] (fn [__ok <(-> B __R)>] (fn [__err <(-> E __R)>]
-    (r __R (fn [x <A>] (__ok (f x))) __err)))
+defn map {A E B} [f : A -> B, r : Result A E] : Result B E
+  match r
+    | ok x  -> ok (f x)
+    | err e -> err e
 
 ;; Map a function over the error value.
-;; result-map-err f r = fn R ok-case err-case . r R ok-case (fn e . err-case (f e))
-defn result-map-err [A :0 <(Type 0)> E :0 <(Type 0)> F :0 <(Type 0)>
-                     f <(-> E F)> r <(Result A E)>] <(Result A F)>
-  fn [__R :0 <(Type 0)>] (fn [__ok <(-> A __R)>] (fn [__err <(-> F __R)>]
-    (r __R __ok (fn [e <E>] (__err (f e))))))
+defn map-err {A E F} [f : E -> F, r : Result A E] : Result A F
+  match r
+    | ok x  -> ok x
+    | err e -> err (f e)
 
-;; Unwrap with a default value
-defn result-unwrap-or [A :0 <(Type 0)> E :0 <(Type 0)>
-                       default <A> r <(Result A E)>] <A>
-  match r <A>
-    ok [x <A>]
-      x
-    err [_ <E>]
-      default
+;; Unwrap with a default value.
+defn unwrap-or {A E} [default : A, r : Result A E] : A
+  match r
+    | ok x  -> x
+    | err _ -> default
 
 ;; Chain a computation on the ok value (monadic bind).
-;; Delegation: fn R ok err . r R (fn x . f x R ok err) err
-defn result-and-then [A :0 <(Type 0)> E :0 <(Type 0)> B :0 <(Type 0)>
-                      f <(-> A (Result B E))> r <(Result A E)>] <(Result B E)>
-  fn [__R :0 <(Type 0)>] (fn [__ok <(-> B __R)>] (fn [__err <(-> E __R)>]
-    (r __R (fn [x <A>] (f x __R __ok __err)) __err)))
+defn and-then {A E B} [f : A -> Result B E, r : Result A E] : Result B E
+  match r
+    | ok x  -> f x
+    | err e -> err e
 
 ;; Chain a computation on the error value (recover from errors).
-;; Delegation: fn R ok err . r R ok (fn e . f e R ok err)
-defn result-or-else [A :0 <(Type 0)> E :0 <(Type 0)> F :0 <(Type 0)>
-                     f <(-> E (Result A F))> r <(Result A E)>] <(Result A F)>
-  fn [__R :0 <(Type 0)>] (fn [__ok <(-> A __R)>] (fn [__err <(-> F __R)>]
-    (r __R __ok (fn [e <E>] (f e __R __ok __err)))))
+defn or-else {A E F} [f : E -> Result A F, r : Result A E] : Result A F
+  match r
+    | ok x  -> ok x
+    | err e -> f e

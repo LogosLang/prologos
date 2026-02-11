@@ -15,9 +15,9 @@ provide nat-eq eq-neq
 deftype (Eq $A) (-> $A (-> $A Bool))
 
 ;; Nat instance: delegates to nat-eq? from prologos.data.nat
-defn nat-eq [x <Nat> y <Nat>] <Bool>
+defn nat-eq [x : Nat, y : Nat] : Bool
   nat-eq? x y
 
 ;; Generic neq: negate equality
-defn eq-neq [A :0 <(Type 0)> dict <(Eq A)> x <A> y <A>] <Bool>
+defn eq-neq {A} [dict : Eq A, x : A, y : A] : Bool
   not (dict x y)

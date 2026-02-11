@@ -40,6 +40,19 @@
          process-defmacro
          process-deftype
          process-data
+         ;; Constructor metadata registry (for reduce)
+         current-ctor-registry
+         current-type-meta
+         ctor-meta
+         ctor-meta?
+         ctor-meta-type-name
+         ctor-meta-params
+         ctor-meta-field-types
+         ctor-meta-is-recursive
+         ctor-meta-branch-index
+         register-ctor!
+         lookup-ctor
+         lookup-type-ctors
          ;; Shared
          extract-pi-binders)
 
@@ -448,96 +461,35 @@
   ;; Use constant motive shorthand — the parser wraps bare types automatically.
   `(boolrec ,result-type ,then-expr ,else-expr ,cond-expr))
 
-;; match: pattern matching on Church-encoded ADTs
-;; WS format (from reader):
-;;   (match scrutinee ($angle-type ResultType)
-;;          (ctor1 body1)                               — nullary ctor
-;;          (ctor2 (x ($angle-type T)) body2) ...)      — ctor with field bindings
-;;
-;; Sexp format:
-;;   (match scrutinee ResultType
-;;          (ctor1 body1)
-;;          (ctor2 (x : T) body2) ...)
-;;
-;; Desugars to Church-encoded application:
-;;   (scrutinee ResultType branch1 branch2 ...)
-;; where branch_i is:
-;;   body                        for nullary constructors
-;;   (fn (x : T) body)           for constructors with one field
-;;   (fn (x : T) (fn (y : U) body))  for constructors with multiple fields
-;;
-;; Approach 1 from the plan: require type annotations in patterns.
-;; [x <T>] in WS becomes (x ($angle-type T)), parsed as a binding.
-;; (x : T) in sexp also works directly.
-
-(define (expand-match datum)
-  (unless (and (list? datum) (>= (length datum) 4))
-    (error 'match "match requires: (match scrutinee <ResultType> branch1 branch2 ...)"))
-
-  (define scrutinee (cadr datum))
-  (define result-type-raw (caddr datum))
-  ;; Unwrap $angle-type if present (WS: ($angle-type T) → T)
-  (define result-type
-    (if (and (pair? result-type-raw)
-             (eq? (car result-type-raw) '$angle-type))
-        (cadr result-type-raw)
-        result-type-raw))
-
-  (define raw-branches (cdddr datum))
-  (when (null? raw-branches)
-    (error 'match "match requires at least one branch"))
-
-  ;; Parse each branch: (ctor-name [bindings...] body)
-  ;; Bindings are optional; body is the last element
-  ;; Returns the branch expression (either body or nested fn wrapping body)
-  (define branch-exprs
-    (for/list ([branch (in-list raw-branches)])
-      (unless (and (pair? branch) (symbol? (car branch)) (>= (length branch) 2))
-        (error 'match "match: each branch must be (CtorName [bindings...] body), got ~a" branch))
-      (define ctor-name (car branch))
-      (define rest (cdr branch))
-      ;; rest is either: (body) for nullary, or ((x ($angle-type T)) ... body) for fields
-      ;; The body is always the last element
-      (define body (last rest))
-      (define raw-bindings (drop-right rest 1))
-
-      (if (null? raw-bindings)
-          ;; Nullary constructor: branch = body
-          body
-          ;; Constructor with fields: wrap body in nested fn
-          (foldr
-           (lambda (binding inner)
-             (cond
-               ;; WS format: (x ($angle-type T))
-               [(and (list? binding) (= (length binding) 2)
-                     (symbol? (car binding))
-                     (pair? (cadr binding))
-                     (eq? (car (cadr binding)) '$angle-type))
-                (define name (car binding))
-                (define type (cadr (cadr binding)))
-                `(fn (,name : ,type) ,inner)]
-               ;; Sexp format: (x : T)
-               [(and (list? binding) (>= (length binding) 3)
-                     (symbol? (car binding))
-                     (eq? (cadr binding) ':))
-                (define name (car binding))
-                (define type (caddr binding))
-                `(fn (,name : ,type) ,inner)]
-               [else
-                (error 'match "match: invalid binding in branch ~a, expected [x <T>] or (x : T), got ~a"
-                       ctor-name binding)]))
-           body
-           raw-bindings))))
-
-  ;; Generate: (scrutinee ResultType branch1 branch2 ...)
-  `(,scrutinee ,result-type ,@branch-exprs))
-
 ;; Register built-in pre-parse macros at module load time
 (register-preparse-macro! 'let expand-let)
 (register-preparse-macro! 'do expand-do)
 (register-preparse-macro! 'if expand-if)
-(register-preparse-macro! 'match expand-match)
 
+
+;; ========================================
+;; Constructor metadata registry (for reduce)
+;; ========================================
+;; Stores metadata about each constructor so the type checker can build
+;; Church-encoded elimination from reduce arms.
+
+;; ctor-meta: type-name, params, field-types, is-recursive flags, branch-index
+(struct ctor-meta (type-name params field-types is-recursive branch-index) #:transparent)
+
+;; Registry: ctor-name (symbol) → ctor-meta
+(define current-ctor-registry (make-parameter (hasheq)))
+
+;; Type metadata: type-name (symbol) → (list ctor-names-in-order)
+(define current-type-meta (make-parameter (hasheq)))
+
+(define (register-ctor! name meta)
+  (current-ctor-registry (hash-set (current-ctor-registry) name meta)))
+
+(define (lookup-ctor name)
+  (hash-ref (current-ctor-registry) name #f))
+
+(define (lookup-type-ctors type-name)
+  (hash-ref (current-type-meta) type-name #f))
 
 ;; ========================================
 ;; process-data: Church-encoded algebraic data types
@@ -580,11 +532,23 @@
      (error 'data "data: expected type name or (type-name params...), got ~a" head-datum)]))
 
 ;; Parse parameter list in WS or sexp format
+;; NEW: ($brace-params A B C) — implicit type params, all get type (Type 0)
 ;; WS: (A ($angle-type (Type 0)) B ($angle-type (Type 0)) ...)
 ;; Sexp: ((A : (Type 0)) (B : (Type 0)) ...)
 (define (parse-data-param-list raw)
   (cond
     [(null? raw) '()]
+    ;; NEW: ($brace-params A B C) — single element containing all params
+    [(and (= (length raw) 1)
+          (pair? (car raw))
+          (list? (car raw))
+          (>= (length (car raw)) 2)
+          (eq? (car (car raw)) '$brace-params))
+     (define symbols (cdr (car raw)))
+     (for/list ([s (in-list symbols)])
+       (unless (symbol? s)
+         (error 'data "data: implicit type parameter must be a symbol, got ~a" s))
+       (cons s '(Type 0)))]
     ;; WS format: name ($angle-type Type) name ($angle-type Type) ...
     [(and (symbol? (car raw))
           (>= (length raw) 2)
@@ -645,6 +609,7 @@
      (error 'data "data: unexpected parameter format: ~a" raw)]))
 
 ;; Parse a constructor declaration
+;; NEW: (CtorName : T1 -> T2 -> ... -> ResultType) — colon-based (field types only)
 ;; WS: bare symbol (nullary), (CtorName ($angle-type T1) ...) (with fields)
 ;; Sexp: (CtorName field1 field2 ...) or (CtorName) for nullary
 ;; Returns: (cons name (list field-types...))
@@ -656,16 +621,49 @@
     ;; List: (CtorName fields...)
     [(and (pair? raw) (symbol? (car raw)))
      (define name (car raw))
-     (define raw-fields (cdr raw))
-     (define fields
-       (map (lambda (f)
-              (if (and (pair? f) (eq? (car f) '$angle-type))
-                  (cadr f)   ;; WS: ($angle-type T) → T
-                  f))        ;; Sexp: bare T
-            raw-fields))
-     (cons name fields)]
+     (define rest (cdr raw))
+     (cond
+       ;; NEW: colon-based syntax: (CtorName : T1 -> T2 -> ...)
+       ;; The return type (last segment) is implicit (always the data type itself)
+       ;; so we treat all-but-last segments as field types
+       [(and (not (null? rest))
+             (eq? (car rest) ':))
+        (define type-atoms (cdr rest)) ;; everything after ':'
+        (when (null? type-atoms)
+          (error 'data "data constructor ~a: missing type after ':'" name))
+        ;; Split on -> to get segments
+        ;; ALL segments are field types (return type is implicit — always the data type)
+        (define segments (split-on-arrow-datum type-atoms))
+        (define fields
+          (map (lambda (seg)
+                 (if (= (length seg) 1)
+                     (car seg)  ;; single atom: e.g., A
+                     seg))      ;; multi-atom: e.g., (List A) — left as-is for now
+               segments))
+        (cons name fields)]
+       ;; EXISTING: angle-bracket or bare fields
+       [else
+        (define fields
+          (map (lambda (f)
+                 (if (and (pair? f) (eq? (car f) '$angle-type))
+                     (cadr f)   ;; WS: ($angle-type T) → T
+                     f))        ;; Sexp: bare T
+               rest))
+        (cons name fields)])]
     [else
      (error 'data "data: constructor must be (Name fields...) or a bare symbol, got ~a" raw)]))
+
+;; Split a flat list of atoms on the '-> symbol (datum-level, not syntax).
+;; Returns a list of lists (segments between arrows).
+(define (split-on-arrow-datum atoms)
+  (let loop ([remaining atoms] [current '()] [result '()])
+    (cond
+      [(null? remaining)
+       (reverse (cons (reverse current) result))]
+      [(eq? (car remaining) '->)
+       (loop (cdr remaining) '() (cons (reverse current) result))]
+      [else
+       (loop (cdr remaining) (cons (car remaining) current) result)])))
 
 ;; Build a nested -> type from a list of domains and a codomain
 ;; (build-arrow-type '(A B C) 'R) → (-> A (-> B (-> C R)))
@@ -713,9 +711,31 @@
   (unless (and (list? datum) (>= (length datum) 2))
     (error 'data "data requires: (data TypeName-or-(TypeName params...) ctor1 ctor2 ...)"))
 
-  (define-values (type-name params)
-    (parse-data-params (cadr datum)))
-  (define raw-ctors (cddr datum))
+  ;; NEW: detect (data TypeName {A B} ctor1 ctor2 ...) — brace-params after bare type name
+  ;; In WS mode: (data Maybe ($brace-params A) nothing ...)
+  ;; In sexp mode: (data Maybe ($brace-params A) (nothing) (just A))
+  (define-values (type-name params raw-ctors)
+    (let ([head (cadr datum)]
+          [rest (cddr datum)])
+      (cond
+        ;; NEW: bare symbol followed by ($brace-params ...)
+        [(and (symbol? head)
+              (not (null? rest))
+              (let ([maybe-braces (car rest)])
+                (and (pair? maybe-braces)
+                     (eq? (car maybe-braces) '$brace-params))))
+         (define brace-element (car rest))
+         (define symbols (cdr brace-element))
+         (define brace-params
+           (for/list ([s (in-list symbols)])
+             (unless (symbol? s)
+               (error 'data "data: implicit type parameter must be a symbol, got ~a" s))
+             (cons s '(Type 0))))
+         (values head brace-params (cdr rest))]
+        ;; EXISTING: parse head normally
+        [else
+         (define-values (tn ps) (parse-data-params head))
+         (values tn ps rest)])))
 
   (when (null? raw-ctors)
     (error 'data "data ~a: must have at least one constructor" type-name))
@@ -869,6 +889,20 @@
 
       `(def ,ctor-name : ,ctor-type ,full-body)))
 
+  ;; Register constructor metadata for reduce
+  (current-type-meta
+   (hash-set (current-type-meta) type-name
+             (map car ctors)))
+
+  (for ([ctor (in-list ctors)]
+        [i (in-naturals)])
+    (define ctor-name (car ctor))
+    (define field-types (cdr ctor))
+    (define rec-flags
+      (map (lambda (ft) (self-reference? ft type-name params)) field-types))
+    (register-ctor! ctor-name
+                    (ctor-meta type-name params field-types rec-flags i)))
+
   ;; Return all definitions
   (cons type-def ctor-defs))
 
@@ -1008,6 +1042,16 @@
      (surf-J (expand-expression mot) (expand-expression base)
              (expand-expression left) (expand-expression right)
              (expand-expression proof) loc)]
+    ;; Reduce — walk scrutinee and arm bodies
+    [(surf-reduce scrutinee arms loc)
+     (surf-reduce (expand-expression scrutinee)
+                  (map (lambda (arm)
+                         (reduce-arm (reduce-arm-ctor-name arm)
+                                     (reduce-arm-bindings arm)
+                                     (expand-expression (reduce-arm-body arm))
+                                     (reduce-arm-srcloc arm)))
+                       arms)
+                  loc)]
     ;; Leaf forms — pass through
     [_ surf]))
 

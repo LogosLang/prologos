@@ -2,7 +2,7 @@ ns prologos.data.list
 
 require [prologos.core.eq-trait :refer [nat-eq]]
 
-provide List nil cons list-foldr list-length list-map list-filter list-append list-head list-singleton list-elem
+provide List nil cons foldr length map filter append head singleton elem
 
 ;; ========================================
 ;; Prologos List Type
@@ -10,55 +10,54 @@ provide List nil cons list-foldr list-length list-map list-filter list-append li
 ;; List A = Pi(R : Type 0). R -> (A -> R -> R) -> R
 ;; ========================================
 
-data (List [A <(Type 0)>])
+data List {A}
   nil
-  cons <A> <(List A)>
+  cons : A -> List A
 
 ;; Right fold over the list.
-;; list-foldr f z xs = xs B z f
-defn list-foldr [A :0 <(Type 0)> B :0 <(Type 0)>
-                 f <(-> A (-> B B))> z <B> xs <(List A)>] <B>
+;; foldr f z xs = xs B z f
+defn foldr {A B} [f : A -> B -> B, z : B, xs : List A] : B
   xs B z f
 
 ;; Length of a list.
-;; Fold counting elements, ignoring values.
-defn list-length [A :0 <(Type 0)>
-                  xs <(List A)>] <Nat>
-  xs Nat zero (fn [_ <A>] (fn [acc <Nat>] (inc acc)))
+defn length {A} [xs : List A] : Nat
+  match xs
+    | nil      -> zero
+    | cons _ n -> inc n
 
 ;; Map a function over the list.
-;; Delegation: fn R nil cons . xs R nil (fn a acc . cons (f a) acc)
-defn list-map [A :0 <(Type 0)> B :0 <(Type 0)>
-               f <(-> A B)> xs <(List A)>] <(List B)>
-  fn [__R :0 <(Type 0)>] (fn [__nil <__R>] (fn [__cons <(-> B (-> __R __R))>]
-    (xs __R __nil (fn [a <A>] (fn [acc <__R>] (__cons (f a) acc))))))
+defn map {A B} [f : A -> B, xs : List A] : List B
+  match xs
+    | nil      -> nil
+    | cons a t -> cons (f a) (map f t)
+
+
 
 ;; Filter: keep elements satisfying the predicate.
-;; Delegation + boolrec: fn R nil cons . xs R nil (fn a acc . boolrec R (cons a acc) acc (pred a))
-defn list-filter [A :0 <(Type 0)>
-                  pred <(-> A Bool)> xs <(List A)>] <(List A)>
-  fn [__R :0 <(Type 0)>] (fn [__nil <__R>] (fn [__cons <(-> A (-> __R __R))>]
-    (xs __R __nil (fn [a <A>] (fn [acc <__R>] (boolrec __R (__cons a acc) acc (pred a)))))))
+;; Note: uses delegation pattern because boolrec cannot return Type 1 values.
+;; Once Bool gets constructor metadata, this can use match throughout.
+defn filter {A} [pred : A -> Bool, xs : List A] : List A
+  fn __R __nil __cons
+    xs __R __nil (fn a acc (boolrec __R (__cons a acc) acc (pred a)))
 
 ;; Append two lists.
-;; Delegation: fn R nil cons . xs R (ys R nil cons) cons
-defn list-append [A :0 <(Type 0)>
-                  xs <(List A)> ys <(List A)>] <(List A)>
-  fn [__R :0 <(Type 0)>] (fn [__nil <__R>] (fn [__cons <(-> A (-> __R __R))>]
-    (xs __R (ys __R __nil __cons) __cons)))
+defn append {A} [xs : List A, ys : List A] : List A
+  match xs
+    | nil      -> ys
+    | cons a t -> cons a (append t ys)
 
 ;; Head of a list with a default value.
-;; Fold: xs A default (fn a _ . a)
-defn list-head [A :0 <(Type 0)>
-                default <A> xs <(List A)>] <A>
-  xs A default (fn [a <A>] (fn [_ <A>] a))
+defn head {A} [default : A, xs : List A] : A
+  match xs
+    | nil      -> default
+    | cons a _ -> a
 
 ;; Singleton list: a list containing one element.
-defn list-singleton [A :0 <(Type 0)>
-                     x <A>] <(List A)>
-  cons A x (nil A)
+defn singleton {A} [x : A] : List A
+  cons x nil
 
 ;; Element membership: check if x is in the list using Eq dictionary.
-;; Fold: xs Bool false (fn a acc . boolrec Bool true acc (eq x a))
-defn list-elem [A :0 <(Type 0)> eq <(Eq A)> x <A> xs <(List A)>] <Bool>
-  xs Bool false (fn [a <A>] (fn [acc <Bool>] (boolrec Bool true acc (eq x a))))
+defn elem {A} [eq : Eq A, x : A, xs : List A] : Bool
+  match xs
+    | nil        -> false
+    | cons a acc -> boolrec Bool true acc (eq x a)
