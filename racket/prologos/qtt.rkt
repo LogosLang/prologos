@@ -22,7 +22,8 @@
          "substitution.rkt"
          "reduction.rkt"
          "unify.rkt"
-         "typing-core.rkt")
+         "typing-core.rkt"
+         "metavar-store.rkt")
 
 (provide
  ;; Usage context operations
@@ -219,18 +220,30 @@
          [_ (bu #f (zero-usage n))]))]
 
     ;; ---- Lambda: check against Pi ----
+    ;; Sprint 7: mult-meta-aware — resolve mult-metas from Pi context or usage
     [((expr-lam m a body) (expr-Pi m2 t-dom b))
-     (cond
-       [(not (eq? m m2)) (bu #f (zero-usage n))]
-       [(not (unify-ok? (unify ctx a t-dom))) (bu #f (zero-usage n))]
-       [else
-        (let ([r (checkQ (ctx-extend ctx a m) body b)])
-          (match r
-            [(bu #t u)
-             (if (compatible m (uhead u))
-                 (bu #t (utail u))
-                 (bu #f (zero-usage n)))]
-            [_ (bu #f (zero-usage n))]))])]
+     (let* ([effective-m (cond
+                           [(mult-meta? m) (if (mult-meta? m2) 'mw m2)]
+                           [(mult-meta? m2) m]
+                           [else m])]
+            [mults-ok (or (mult-meta? m) (mult-meta? m2) (eq? m m2))])
+       (cond
+         [(not mults-ok) (bu #f (zero-usage n))]
+         [(not (unify-ok? (unify ctx a t-dom))) (bu #f (zero-usage n))]
+         [else
+          (let ([r (checkQ (ctx-extend ctx a effective-m) body b)])
+            (match r
+              [(bu #t u)
+               (let ([actual-usage (uhead u)])
+                 ;; Sprint 7: solve mult-metas to observed usage
+                 (when (and (mult-meta? m) (not (mult-meta-solved? (mult-meta-id m))))
+                   (solve-mult-meta! (mult-meta-id m) actual-usage))
+                 (when (and (mult-meta? m2) (not (mult-meta-solved? (mult-meta-id m2))))
+                   (solve-mult-meta! (mult-meta-id m2) actual-usage))
+                 (if (compatible effective-m actual-usage)
+                     (bu #t (utail u))
+                     (bu #f (zero-usage n))))]
+              [_ (bu #f (zero-usage n))]))]))]
 
     ;; ---- Pair: check against Sigma ----
     [((expr-pair e1 e2) (expr-Sigma a b))

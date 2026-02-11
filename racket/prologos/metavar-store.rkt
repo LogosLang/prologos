@@ -55,7 +55,15 @@
  level-meta-solved?
  level-meta-solution
  zonk-level
- zonk-level-default)
+ zonk-level-default
+ ;; Sprint 7: Multiplicity metavariables
+ current-mult-meta-store
+ fresh-mult-meta
+ solve-mult-meta!
+ mult-meta-solved?
+ mult-meta-solution
+ zonk-mult
+ zonk-mult-default)
 
 ;; ========================================
 ;; Meta-info: everything about a single metavariable
@@ -263,10 +271,59 @@
     [(lsuc pred) (lsuc (zonk-level-default pred))]
     [_ l]))
 
+;; ========================================
+;; Sprint 7: Multiplicity metavariables
+;; ========================================
+;; Same pattern as level-metas: simple id → solution or 'unsolved store.
+;; mult-meta solutions are concrete multiplicities ('m0, 'm1, 'mw).
+
+(define current-mult-meta-store (make-parameter (make-hasheq)))
+
+;; Create a fresh mult metavariable, register in store, return mult-meta.
+(define (fresh-mult-meta source)
+  (define id (gensym 'mmeta))
+  (hash-set! (current-mult-meta-store) id 'unsolved)
+  (mult-meta id))
+
+;; Assign a solution to a mult metavariable.
+(define (solve-mult-meta! id solution)
+  (define status (hash-ref (current-mult-meta-store) id #f))
+  (unless status
+    (error 'solve-mult-meta! "unknown mult-meta: ~a" id))
+  (when (not (eq? status 'unsolved))
+    (error 'solve-mult-meta! "mult-meta ~a already solved" id))
+  (hash-set! (current-mult-meta-store) id solution))
+
+;; Check if a mult metavariable has been solved.
+(define (mult-meta-solved? id)
+  (define v (hash-ref (current-mult-meta-store) id #f))
+  (and v (not (eq? v 'unsolved))))
+
+;; Retrieve the solution of a mult metavariable, or #f if unsolved/unknown.
+(define (mult-meta-solution id)
+  (define v (hash-ref (current-mult-meta-store) id #f))
+  (and v (not (eq? v 'unsolved)) v))
+
+;; Zonk a multiplicity: follow solved mult-metas, leave unsolved in place.
+;; Use zonk-mult-default for final output (defaults unsolved to 'mw).
+(define (zonk-mult m)
+  (if (mult-meta? m)
+      (let ([sol (mult-meta-solution (mult-meta-id m))])
+        (if sol (zonk-mult sol) m))
+      m))
+
+;; Final zonk: defaults unsolved mult-metas to 'mw (for output/display).
+(define (zonk-mult-default m)
+  (if (mult-meta? m)
+      (let ([sol (mult-meta-solution (mult-meta-id m))])
+        (if sol (zonk-mult-default sol) 'mw))
+      m))
+
 ;; Clear all metavariables and constraints from the store.
 (define (reset-meta-store!)
   (hash-clear! (current-meta-store))
   (hash-clear! (current-level-meta-store))
+  (hash-clear! (current-mult-meta-store))
   (reset-constraint-store!))
 
 ;; List all unsolved metavariable infos.

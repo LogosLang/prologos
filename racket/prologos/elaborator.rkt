@@ -170,9 +170,11 @@
          [else (expr-Pi 'mw a b)]))]
 
     ;; Pi type: (Pi (x :m A) B) -> Pi(m, elab-A, elab-B) with x bound in B
+    ;; Sprint 7: #f mult → fresh-mult-meta
     [(surf-pi binder body loc)
      (let* ([name (binder-info-name binder)]
-            [mult (binder-info-mult binder)]
+            [raw-mult (binder-info-mult binder)]
+            [mult (if raw-mult raw-mult (fresh-mult-meta "pi-param"))]
             [ty-surf (binder-info-type binder)]
             [ty (elaborate ty-surf env depth)])
        (if (prologos-error? ty) ty
@@ -183,9 +185,11 @@
                  (expr-Pi mult ty bod)))))]
 
     ;; Lambda: (lam (x :m A) body) -> lam(m, elab-A, elab-body) with x bound
+    ;; Sprint 7: #f mult → fresh-mult-meta
     [(surf-lam binder body loc)
      (let* ([name (binder-info-name binder)]
-            [mult (binder-info-mult binder)]
+            [raw-mult (binder-info-mult binder)]
+            [mult (if raw-mult raw-mult (fresh-mult-meta "lambda-param"))]
             [ty-surf (binder-info-type binder)]
             [ty (elaborate ty-surf env depth)])
        (if (prologos-error? ty) ty

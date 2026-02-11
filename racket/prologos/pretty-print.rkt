@@ -287,27 +287,33 @@
 ;; Pretty-print multiplicity
 ;; ========================================
 (define (pp-mult m)
-  (case m
-    [(m0) "0"]
-    [(m1) "1"]
-    [(mw) "w"]
-    [else (format "~a" m)]))
+  (cond
+    [(mult-meta? m) "w"]    ;; Sprint 7: unsolved mult-meta displays as unrestricted
+    [else (case m
+            [(m0) "0"]
+            [(m1) "1"]
+            [(mw) "w"]
+            [else (format "~a" m)])]))
 
 ;; Multiplicity annotation for binders (old colon syntax): " : " for mw, " :0 " etc for others
 (define (pp-mult-annot m)
-  (case m
-    [(mw) " : "]
-    [(m0) " :0 "]
-    [(m1) " :1 "]
-    [else (format " :~a " m)]))
+  (cond
+    [(mult-meta? m) " : "]  ;; Sprint 7: unsolved mult-meta → like mw
+    [else (case m
+            [(mw) " : "]
+            [(m0) " :0 "]
+            [(m1) " :1 "]
+            [else (format " :~a " m)])]))
 
 ;; Multiplicity prefix for new angle bracket syntax: "" for mw, " :0" etc for others
 (define (pp-mult-prefix m)
-  (case m
-    [(mw) ""]
-    [(m0) " :0"]
-    [(m1) " :1"]
-    [else (format " :~a" m)]))
+  (cond
+    [(mult-meta? m) ""]     ;; Sprint 7: unsolved mult-meta → no prefix (like mw)
+    [else (case m
+            [(mw) ""]
+            [(m0) " :0"]
+            [(m1) " :1"]
+            [else (format " :~a" m)])]))
 
 ;; ========================================
 ;; Pretty-print levels

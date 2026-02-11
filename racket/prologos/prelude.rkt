@@ -10,7 +10,7 @@
 
 (provide
  ;; Multiplicities
- m0 m1 mw mult?
+ m0 m1 mw mult? (struct-out mult-meta)
  mult-add mult-mul mult-leq compatible
  ;; Universe levels
  (struct-out lzero) (struct-out lsuc) (struct-out level-meta)
@@ -25,8 +25,10 @@
 (define m1 'm1)
 (define mw 'mw)
 
+(struct mult-meta (id) #:transparent)  ;; Sprint 7: unsolved multiplicity
+
 (define (mult? x)
-  (memq x '(m0 m1 mw)))
+  (or (memq x '(m0 m1 mw)) (mult-meta? x)))
 
 ;; Addition (join in the semiring)
 ;; Commutative: we enumerate all ordered pairs

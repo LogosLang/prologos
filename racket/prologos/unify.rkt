@@ -154,11 +154,12 @@
 
       ;; --- Structural decomposition ---
 
-      ;; Pi vs Pi: multiplicities must match, then unify domains and codomains.
+      ;; Pi vs Pi: multiplicities must unify, then unify domains and codomains.
       ;; Codomains are opened with a fresh fvar to avoid de Bruijn depth issues.
+      ;; Sprint 7: uses unify-mult instead of eq? for mult-meta support.
       [(and (expr-Pi? a) (expr-Pi? b))
        (let ([m1 (expr-Pi-mult a)] [m2 (expr-Pi-mult b)])
-         (and (eq? m1 m2)
+         (and (unify-mult m1 m2)
               (unify ctx (expr-Pi-domain a) (expr-Pi-domain b))
               (let ([x (expr-fvar (gensym 'unify))])
                 (unify ctx
@@ -352,6 +353,30 @@
     [(and (lsuc? l1) (lsuc? l2))
      (unify-level (lsuc-pred l1) (lsuc-pred l2))]
     ;; Mismatch (e.g., lzero vs lsuc)
+    [else #f]))
+
+;; ========================================
+;; Sprint 7: Multiplicity Unification
+;; ========================================
+;; Unify two multiplicities, solving mult-metas as side effects.
+;; Returns #t if multiplicities are equal (possibly after solving), #f otherwise.
+
+(define (unify-mult m1 m2)
+  (cond
+    [(equal? m1 m2) #t]
+    ;; mult-meta on left: follow or solve
+    [(mult-meta? m1)
+     (let ([sol (mult-meta-solution (mult-meta-id m1))])
+       (if sol
+           (unify-mult sol m2)
+           (begin (solve-mult-meta! (mult-meta-id m1) m2) #t)))]
+    ;; mult-meta on right: follow or solve
+    [(mult-meta? m2)
+     (let ([sol (mult-meta-solution (mult-meta-id m2))])
+       (if sol
+           (unify-mult m1 sol)
+           (begin (solve-mult-meta! (mult-meta-id m2) m1) #t)))]
+    ;; Concrete mismatch
     [else #f]))
 
 ;; ========================================

@@ -30,6 +30,8 @@
          "global-env.rkt"
          "lang-error.rkt"
          "macros.rkt"
+         "metavar-store.rkt"
+         "zonk.rkt"
          (for-template racket/base
                       "repl-support.rkt"))
 
@@ -54,6 +56,7 @@
 ;;        | (list 'output string)
 ;; Raises: exn:fail:prologos on any error
 (define (process-form surf)
+  (reset-meta-store!)  ;; Sprint 7: clear metas between forms (matches driver.rkt)
   (define loc (surf-loc surf))
   (define elab-result (elaborate-top-level surf))
   (when (prologos-error? elab-result)
@@ -68,10 +71,13 @@
        (let ([chk (check/err ctx-empty body type loc)])
          (when (prologos-error? chk)
            (raise-prologos-error chk))
-         ;; Update the global environment for subsequent forms
-         (current-global-env
-          (global-env-add (current-global-env) name type body))
-         (list 'def name (pp-expr type))))]
+         ;; Zonk for storage and display (defaults unsolved level/mult-metas)
+         (let ([z-type (zonk-final type)]
+               [z-body (zonk-final body)])
+           ;; Update the global environment for subsequent forms
+           (current-global-env
+            (global-env-add (current-global-env) name z-type z-body))
+           (list 'def name (pp-expr z-type)))))]
 
     ;; (check expr type)
     [(list 'check expr type)
@@ -85,8 +91,8 @@
      (let ([ty (infer/err ctx-empty expr loc)])
        (when (prologos-error? ty)
          (raise-prologos-error ty))
-       (let ([val (nf expr)]
-             [ty-nf (nf ty)])
+       (let ([val (nf (zonk-final expr))]
+             [ty-nf (nf (zonk-final ty))])
          (list 'output (format "~a : ~a" (pp-expr val) (pp-expr ty-nf)))))]
 
     ;; (infer expr)
@@ -94,7 +100,7 @@
      (let ([ty (infer/err ctx-empty expr loc)])
        (when (prologos-error? ty)
          (raise-prologos-error ty))
-       (list 'output (pp-expr ty)))]
+       (list 'output (pp-expr (zonk-final ty))))]
 
     [_ (raise-prologos-error
         (prologos-error srcloc-unknown

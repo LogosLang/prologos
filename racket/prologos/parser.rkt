@@ -231,7 +231,7 @@
               (define body (parse-datum body-stx))
               (if (prologos-error? body) body
                   (foldr (lambda (name inner)
-                           (surf-lam (binder-info name 'mw (surf-hole loc)) inner loc))
+                           (surf-lam (binder-info name #f (surf-hole loc)) inner loc))
                          body param-names))]
              [else
               (parse-error loc "fn: all parameters except body must be bare symbols or a binder (x : T)" #f)])])]
@@ -628,13 +628,14 @@
        (if (syntax? stx) (syntax->list stx) d))
      (cond
        ;; NEW: [x <T>] — 2 elements where second is ($angle-type ...)
+       ;; Sprint 7: omitted mult → #f (elaborator will create mult-meta)
        [(and (= (length parts) 2)
              (angle-type-stx? (cadr parts)))
         (let ([name (stx->datum (car parts))])
           (if (symbol? name)
               (let ([ty (unwrap-angle-type (cadr parts) loc)])
                 (if (prologos-error? ty) ty
-                    (binder-info name 'mw ty)))
+                    (binder-info name #f ty)))
               (parse-error loc (format "Expected variable name, got ~a" name) name)))]
 
        ;; NEW: [x :m <T>] — 3 elements where second is mult, third is ($angle-type ...)
@@ -650,6 +651,7 @@
               (parse-error loc (format "Expected variable name, got ~a" name) name)))]
 
        ;; OLD: (x : T) — 3 elements (backward compat)
+       ;; Sprint 7: omitted mult → #f (elaborator will create mult-meta)
        [(and (= (length parts) 3)
              (eq? (stx->datum (cadr parts)) ':))
         (let ([name (stx->datum (car parts))]
@@ -657,7 +659,7 @@
           (if (symbol? name)
               (let ([ty (parse-datum type-stx)])
                 (if (prologos-error? ty) ty
-                    (binder-info name 'mw ty)))
+                    (binder-info name #f ty)))
               (parse-error loc (format "Expected variable name, got ~a" name) name)))]
 
        ;; OLD: (x :m T) — 3 elements where second is :0, :1, :w (backward compat)
@@ -980,6 +982,7 @@
              (if (prologos-error? rest) rest
                  (cons (binder-info name mult ty) rest)))))]
     ;; name <type> — 2 elements consumed
+    ;; Sprint 7: omitted mult → #f (elaborator will create mult-meta)
     [(and (>= (length parts) 2)
           (symbol? (stx->datum (car parts)))
           (angle-type-stx? (cadr parts)))
@@ -988,7 +991,7 @@
        (if (prologos-error? ty) ty
            (let ([rest (parse-defn-binder-seq (cddr parts) loc)])
              (if (prologos-error? rest) rest
-                 (cons (binder-info name 'mw ty) rest)))))]
+                 (cons (binder-info name #f ty) rest)))))]
     [else
      (parse-error loc
                   (format "defn: expected 'name <type>' in parameter list, got ~a"
@@ -1050,12 +1053,13 @@
 
        (define after-name (cdr parts))
        ;; Check for multiplicity
+       ;; Sprint 7: omitted mult → #f (elaborator will create mult-meta)
        (define-values (mult after-mult)
          (if (and (not (null? after-name))
                   (is-mult? (car after-name)))
              (values (parse-mult-annot (stx->datum (car after-name)))
                      (cdr after-name))
-             (values 'mw after-name)))
+             (values #f after-name)))
 
        ;; Expect colon
        (when (or (null? after-mult) (not (is-colon? (car after-mult))))

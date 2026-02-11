@@ -75,7 +75,8 @@
     (check-true (surf-lam? r))
     (let ([b (surf-lam-binder r)])
       (check-equal? (binder-info-name b) 'x)
-      (check-equal? (binder-info-mult b) 'mw)
+      ;; Sprint 7: omitted mult → #f (elaborator converts to mult-meta)
+      (check-false (binder-info-mult b))
       (check-true (surf-nat-type? (binder-info-type b))))
     (check-true (surf-var? (surf-lam-body r)))))
 
@@ -370,7 +371,8 @@
   (define result (p "(fn [x <Nat>] x)"))
   (check-true (surf-lam? result))
   (check-equal? (binder-info-name (surf-lam-binder result)) 'x)
-  (check-equal? (binder-info-mult (surf-lam-binder result)) 'mw)
+  ;; Sprint 7: omitted mult → #f (elaborator converts to mult-meta)
+  (check-false (binder-info-mult (surf-lam-binder result)))
   (check-true (surf-nat-type? (binder-info-type (surf-lam-binder result)))))
 
 (test-case "parse: angle-bracket binder with multiplicity [x :0 <Nat>]"

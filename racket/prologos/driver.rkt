@@ -292,6 +292,7 @@
                     [current-ns-context #f]
                     [current-meta-store (make-hasheq)]
                     [current-level-meta-store (make-hasheq)]
+                    [current-mult-meta-store (make-hasheq)]
                     [current-constraint-store '()]
                     [current-wakeup-registry (make-hasheq)]
                     [current-preparse-registry (current-preparse-registry)]

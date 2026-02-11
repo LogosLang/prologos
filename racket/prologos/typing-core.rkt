@@ -25,6 +25,7 @@
          "global-env.rkt"
          "macros.rkt"
          "namespace.rkt"
+         "metavar-store.rkt"
 )
 
 (provide infer check is-type infer-level
@@ -290,8 +291,22 @@
        [(expr-hole? a)
         ;; Type hole: accept both the expected domain and multiplicity from the Pi type
         (check (ctx-extend ctx t-dom m2) body b)]
-       [(not (eq? m m2)) #f]  ; multiplicity mismatch
-       [(not (unify-ok? (unify ctx a t-dom))) #f]  ; domain mismatch
+       ;; Sprint 7: lambda mult is mult-meta → accept Pi's mult
+       [(mult-meta? m)
+        (let ([resolved (if (mult-meta? m2) 'mw m2)])
+          (solve-mult-meta! (mult-meta-id m) resolved)
+          (when (mult-meta? m2)
+            (solve-mult-meta! (mult-meta-id m2) resolved))
+          (and (unify-ok? (unify ctx a t-dom))
+               (check (ctx-extend ctx a resolved) body b)))]
+       ;; Sprint 7: Pi mult is mult-meta → accept lambda's mult
+       [(mult-meta? m2)
+        (solve-mult-meta! (mult-meta-id m2) m)
+        (and (unify-ok? (unify ctx a t-dom))
+             (check (ctx-extend ctx a m) body b))]
+       ;; Concrete mults: must match
+       [(not (eq? m m2)) #f]
+       [(not (unify-ok? (unify ctx a t-dom))) #f]
        [else (check (ctx-extend ctx a m) body b)])]
 
     ;; ---- Pair: check against Sigma ----
