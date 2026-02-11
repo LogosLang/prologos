@@ -29,17 +29,19 @@ defn zero? [n : Nat] : Bool
             pattern: (pattern
               (identifier_pattern
                 (identifier)))
-            body: (expression
-              (atom
-                (identifier))))
+            body: (match_arm_body
+              (expression
+                (atom
+                  (identifier)))))
           (match_arm
             pattern: (pattern
               (constructor_pattern
                 (identifier)
                 (pattern_arg)))
-            body: (expression
-              (atom
-                (identifier)))))))))
+            body: (match_arm_body
+              (expression
+                (atom
+                  (identifier))))))))))
 
 ===
 Match with parenthesized body expression
@@ -76,32 +78,34 @@ defn add [x : Nat, y : Nat] : Nat
             pattern: (pattern
               (identifier_pattern
                 (identifier)))
-            body: (expression
-              (atom
-                (identifier))))
+            body: (match_arm_body
+              (expression
+                (atom
+                  (identifier)))))
           (match_arm
             pattern: (pattern
               (constructor_pattern
                 (identifier)
                 (pattern_arg
                   (identifier))))
-            body: (expression
-              (application
-                (expression
-                  (atom
-                    (identifier)))
-                (expression
-                  (paren_expr
-                    (expression
-                      (application
-                        (expression
-                          (application
-                            (expression
-                              (atom
-                                (identifier)))
-                            (expression
-                              (atom
-                                (identifier)))))
-                        (expression
-                          (atom
-                            (identifier)))))))))))))))
+            body: (match_arm_body
+              (expression
+                (application
+                  (expression
+                    (atom
+                      (identifier)))
+                  (expression
+                    (paren_expr
+                      (expression
+                        (application
+                          (expression
+                            (application
+                              (expression
+                                (atom
+                                  (identifier)))
+                              (expression
+                                (atom
+                                  (identifier)))))
+                          (expression
+                            (atom
+                              (identifier))))))))))))))))

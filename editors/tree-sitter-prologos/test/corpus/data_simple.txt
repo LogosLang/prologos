@@ -1,0 +1,21 @@
+===
+Data type with no parameters
+===
+
+data Ordering
+  lt-ord
+  eq-ord
+  gt-ord
+
+---
+
+(source_file
+  (top_level
+    (data_form
+      name: (identifier)
+      (data_constructor
+        name: (identifier))
+      (data_constructor
+        name: (identifier))
+      (data_constructor
+        name: (identifier)))))

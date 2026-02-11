@@ -1,0 +1,119 @@
+===
+Nested match in match arm body
+===
+
+defn filter {A} [pred : A -> Bool, xs : List A] : List A
+  match xs
+    | nil       -> nil
+    | cons a as -> match (pred a)
+                    | true  -> cons a (filter pred as)
+                    | false -> filter pred as
+
+---
+
+(source_file
+  (top_level
+    (defn_form
+      name: (identifier)
+      implicit_params: (implicit_params
+        (identifier))
+      params: (param_list
+        (typed_param
+          name: (identifier)
+          type: (type_expr
+            (arrow_type
+              (type_expr
+                (identifier))
+              (type_expr
+                (identifier)))))
+        (typed_param
+          name: (identifier)
+          type: (type_expr
+            (type_application
+              (identifier)
+              (identifier)))))
+      return_type: (type_expr
+        (type_application
+          (identifier)
+          (identifier)))
+      body: (block_body
+        (match_expr
+          scrutinee: (expression
+            (atom
+              (identifier)))
+          (match_arm
+            pattern: (pattern
+              (identifier_pattern
+                (identifier)))
+            body: (match_arm_body
+              (expression
+                (atom
+                  (identifier)))))
+          (match_arm
+            pattern: (pattern
+              (constructor_pattern
+                (identifier)
+                (pattern_arg
+                  (identifier))
+                (pattern_arg
+                  (identifier))))
+            body: (match_arm_body
+              (match_expr
+                scrutinee: (expression
+                  (paren_expr
+                    (expression
+                      (application
+                        (expression
+                          (atom
+                            (identifier)))
+                        (expression
+                          (atom
+                            (identifier)))))))
+                (match_arm
+                  pattern: (pattern
+                    (identifier_pattern
+                      (identifier)))
+                  body: (match_arm_body
+                    (expression
+                      (application
+                        (expression
+                          (application
+                            (expression
+                              (atom
+                                (identifier)))
+                            (expression
+                              (atom
+                                (identifier)))))
+                        (expression
+                          (paren_expr
+                            (expression
+                              (application
+                                (expression
+                                  (application
+                                    (expression
+                                      (atom
+                                        (identifier)))
+                                    (expression
+                                      (atom
+                                        (identifier)))))
+                                (expression
+                                  (atom
+                                    (identifier)))))))))))
+                (match_arm
+                  pattern: (pattern
+                    (identifier_pattern
+                      (identifier)))
+                  body: (match_arm_body
+                    (expression
+                      (application
+                        (expression
+                          (application
+                            (expression
+                              (atom
+                                (identifier)))
+                            (expression
+                              (atom
+                                (identifier)))))
+                        (expression
+                          (atom
+                            (identifier)))))))))))))))

@@ -1,0 +1,27 @@
+===
+Deftype declaration
+===
+
+deftype (Eq $A) (-> $A (-> $A Bool))
+
+---
+
+(source_file
+  (top_level
+    (deftype_form
+      signature: (sexp
+        (sexp_list
+          (sexp
+            (identifier))
+          (sexp
+            (identifier))))
+      body: (sexp
+        (sexp_list
+          (sexp
+            (identifier))
+          (sexp
+            (sexp_list
+              (sexp
+                (identifier))
+              (sexp
+                (identifier)))))))))

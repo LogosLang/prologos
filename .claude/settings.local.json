@@ -50,7 +50,12 @@
       "Bash(git clone:*)",
       "Bash(npm root:*)",
       "Bash(curl:*)",
-      "Bash(xargs:*)"
+      "Bash(xargs:*)",
+      "Bash(for f in /Users/avanti/dev/projects/prologos/racket/prologos/lib/prologos/data/*.prologos)",
+      "Bash(mdfind:*)",
+      "Bash(/tmp/test_multiline.prologos << 'EOF'\ndefn sym {A} [a :0 : A, b :0 : A, prf : \\(Eq A a b\\)] : \\(Eq A b a\\)\n  \\(J a b prf\\)\nEOF)",
+      "Bash(/tmp/test_data_simple.prologos << 'EOF'\ndata Ordering\n  lt-ord\n  eq-ord\n  gt-ord\nEOF)",
+      "Bash(cc:*)"
     ]
   }
 }

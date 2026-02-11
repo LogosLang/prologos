@@ -1,0 +1,49 @@
+===
+Lambda with parenthesized body
+===
+
+defn test {A} [x : A] : A
+  (fn a (Eq A a x))
+
+---
+
+(source_file
+  (top_level
+    (defn_form
+      name: (identifier)
+      implicit_params: (implicit_params
+        (identifier))
+      params: (param_list
+        (typed_param
+          name: (identifier)
+          type: (type_expr
+            (identifier))))
+      return_type: (type_expr
+        (identifier))
+      body: (block_body
+        (expression
+          (paren_expr
+            (expression
+              (fn_expr
+                (fn_param
+                  (identifier))
+                (fn_body
+                  (paren_expr
+                    (expression
+                      (application
+                        (expression
+                          (application
+                            (expression
+                              (application
+                                (expression
+                                  (atom
+                                    (identifier)))
+                                (expression
+                                  (atom
+                                    (identifier)))))
+                            (expression
+                              (atom
+                                (identifier)))))
+                        (expression
+                          (atom
+                            (identifier)))))))))))))))

@@ -1,0 +1,68 @@
+===
+Defn with implicit type parameters
+===
+
+defn map {A B} [f : A -> B, xs : List A] : List B
+  nil
+
+---
+
+(source_file
+  (top_level
+    (defn_form
+      name: (identifier)
+      implicit_params: (implicit_params
+        (identifier)
+        (identifier))
+      params: (param_list
+        (typed_param
+          name: (identifier)
+          type: (type_expr
+            (arrow_type
+              (type_expr
+                (identifier))
+              (type_expr
+                (identifier)))))
+        (typed_param
+          name: (identifier)
+          type: (type_expr
+            (type_application
+              (identifier)
+              (identifier)))))
+      return_type: (type_expr
+        (type_application
+          (identifier)
+          (identifier)))
+      body: (block_body
+        (expression
+          (atom
+            (identifier)))))))
+
+===
+Defn with single implicit parameter
+===
+
+defn length {A} [xs : List A] : Nat
+  zero
+
+---
+
+(source_file
+  (top_level
+    (defn_form
+      name: (identifier)
+      implicit_params: (implicit_params
+        (identifier))
+      params: (param_list
+        (typed_param
+          name: (identifier)
+          type: (type_expr
+            (type_application
+              (identifier)
+              (identifier)))))
+      return_type: (type_expr
+        (identifier))
+      body: (block_body
+        (expression
+          (atom
+            (identifier)))))))

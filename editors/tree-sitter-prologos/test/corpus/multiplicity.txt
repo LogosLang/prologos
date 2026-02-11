@@ -1,0 +1,32 @@
+===
+Multiplicity annotations on parameters
+===
+
+defn sym {A} [a :0 : A, b :0 : A] : A
+  a
+
+---
+
+(source_file
+  (top_level
+    (defn_form
+      name: (identifier)
+      implicit_params: (implicit_params
+        (identifier))
+      params: (param_list
+        (typed_param
+          name: (identifier)
+          multiplicity: (multiplicity)
+          type: (type_expr
+            (identifier)))
+        (typed_param
+          name: (identifier)
+          multiplicity: (multiplicity)
+          type: (type_expr
+            (identifier))))
+      return_type: (type_expr
+        (identifier))
+      body: (block_body
+        (expression
+          (atom
+            (identifier)))))))

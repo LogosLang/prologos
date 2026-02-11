@@ -1,0 +1,54 @@
+===
+Data type with implicit type parameters
+===
+
+data List {A}
+  nil
+  cons : A -> List A
+
+---
+
+(source_file
+  (top_level
+    (data_form
+      name: (identifier)
+      type_params: (implicit_params
+        (identifier))
+      (data_constructor
+        name: (identifier))
+      (data_constructor
+        name: (identifier)
+        type: (type_expr
+          (arrow_type
+            (type_expr
+              (identifier))
+            (type_expr
+              (type_application
+                (identifier)
+                (identifier)))))))))
+
+===
+Data type with multiple type parameters
+===
+
+data Result {A E}
+  ok : A
+  err : E
+
+---
+
+(source_file
+  (top_level
+    (data_form
+      name: (identifier)
+      type_params: (implicit_params
+        (identifier)
+        (identifier))
+      (data_constructor
+        name: (identifier)
+        type: (type_expr
+          (identifier)))
+      (data_constructor
+        name: (identifier)
+        type: (type_expr
+          (identifier))))))

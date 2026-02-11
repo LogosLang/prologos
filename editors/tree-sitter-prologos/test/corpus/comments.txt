@@ -50,15 +50,17 @@ defn pred [n : Nat] : Nat
             pattern: (pattern
               (identifier_pattern
                 (identifier)))
-            body: (expression
-              (atom
-                (identifier))))
+            body: (match_arm_body
+              (expression
+                (atom
+                  (identifier)))))
           (match_arm
             pattern: (pattern
               (constructor_pattern
                 (identifier)
                 (pattern_arg
                   (identifier))))
-            body: (expression
-              (atom
-                (identifier)))))))))
+            body: (match_arm_body
+              (expression
+                (atom
+                  (identifier))))))))))

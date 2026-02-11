@@ -1,0 +1,32 @@
+===
+Require with refer
+===
+
+require [prologos.core.eq-trait :refer [nat-eq]]
+
+---
+
+(source_file
+  (top_level
+    (require_declaration
+      module: (qualified_name)
+      (identifier))))
+
+===
+Multiple requires
+===
+
+require [prologos.core.eq-trait :refer [nat-eq]]
+require [prologos.data.bool :refer [not]]
+
+---
+
+(source_file
+  (top_level
+    (require_declaration
+      module: (qualified_name)
+      (identifier)))
+  (top_level
+    (require_declaration
+      module: (qualified_name)
+      (identifier))))
