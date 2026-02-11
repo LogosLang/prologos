@@ -43,7 +43,14 @@
       "WebFetch(domain:raw.githubusercontent.com)",
       "Bash(head:*)",
       "Bash(tree-sitter:*)",
-      "Bash(node --version:*)"
+      "Bash(node --version:*)",
+      "Bash(npm install:*)",
+      "Bash(printf:*)",
+      "WebFetch(domain:tree-sitter.github.io)",
+      "Bash(git clone:*)",
+      "Bash(npm root:*)",
+      "Bash(curl:*)",
+      "Bash(xargs:*)"
     ]
   }
 }

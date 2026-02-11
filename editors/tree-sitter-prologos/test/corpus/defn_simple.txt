@@ -1,0 +1,78 @@
+===
+Simple function with match
+===
+
+defn pred [n : Nat] : Nat
+  match n
+    | zero -> zero
+    | inc k -> k
+
+---
+
+(source_file
+  (top_level
+    (defn_form
+      name: (identifier)
+      params: (param_list
+        (typed_param
+          name: (identifier)
+          type: (type_expr
+            (identifier))))
+      return_type: (type_expr
+        (identifier))
+      body: (block_body
+        (match_expr
+          scrutinee: (expression
+            (atom
+              (identifier)))
+          (match_arm
+            pattern: (pattern
+              (identifier_pattern
+                (identifier)))
+            body: (expression
+              (atom
+                (identifier))))
+          (match_arm
+            pattern: (pattern
+              (constructor_pattern
+                (identifier)
+                (pattern_arg
+                  (identifier))))
+            body: (expression
+              (atom
+                (identifier)))))))))
+
+===
+Simple function body (no match)
+===
+
+defn double [n : Nat] : Nat
+  add n n
+
+---
+
+(source_file
+  (top_level
+    (defn_form
+      name: (identifier)
+      params: (param_list
+        (typed_param
+          name: (identifier)
+          type: (type_expr
+            (identifier))))
+      return_type: (type_expr
+        (identifier))
+      body: (block_body
+        (expression
+          (application
+            (expression
+              (application
+                (expression
+                  (atom
+                    (identifier)))
+                (expression
+                  (atom
+                    (identifier)))))
+            (expression
+              (atom
+                (identifier)))))))))

@@ -1,0 +1,43 @@
+{
+  "name": "tree-sitter-prologos",
+  "version": "0.1.0",
+  "description": "Tree-sitter grammar for the Prologos programming language (whitespace-significant syntax)",
+  "main": "bindings/node",
+  "keywords": ["parser", "tree-sitter", "prologos"],
+  "files": [
+    "grammar.js",
+    "binding.gyp",
+    "prebuilds/**",
+    "bindings/node/*",
+    "queries/*",
+    "src/**",
+    "*.wasm"
+  ],
+  "dependencies": {
+    "node-addon-api": "^8.0.0",
+    "node-gyp-build": "^4.8.0"
+  },
+  "devDependencies": {
+    "tree-sitter-cli": "^0.25.0"
+  },
+  "peerDependencies": {
+    "tree-sitter": "^0.22.0"
+  },
+  "peerDependenciesMeta": {
+    "tree-sitter": {
+      "optional": true
+    }
+  },
+  "scripts": {
+    "build": "tree-sitter generate && node-gyp build",
+    "test": "tree-sitter test",
+    "parse": "tree-sitter parse"
+  },
+  "tree-sitter": [
+    {
+      "scope": "source.prologos",
+      "file-types": ["prologos"],
+      "highlights": "queries/highlights.scm"
+    }
+  ]
+}

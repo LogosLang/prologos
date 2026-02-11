@@ -1,0 +1,6 @@
+node_modules/
+build/
+src/parser.c
+src/tree_sitter/
+bindings/
+*.wasm

@@ -1,0 +1,196 @@
+===
+Full module with ns, provide, and multiple defns
+===
+
+ns test
+
+provide add pred
+
+defn add [x : Nat, y : Nat] : Nat
+  match y
+    | zero -> x
+    | inc k -> inc (add x k)
+
+defn pred [n : Nat] : Nat
+  match n
+    | zero -> zero
+    | inc k -> k
+
+---
+
+(source_file
+  (top_level
+    (ns_declaration
+      name: (qualified_name)))
+  (top_level
+    (provide_declaration
+      (identifier)
+      (identifier)))
+  (top_level
+    (defn_form
+      name: (identifier)
+      params: (param_list
+        (typed_param
+          name: (identifier)
+          type: (type_expr
+            (identifier)))
+        (typed_param
+          name: (identifier)
+          type: (type_expr
+            (identifier))))
+      return_type: (type_expr
+        (identifier))
+      body: (block_body
+        (match_expr
+          scrutinee: (expression
+            (atom
+              (identifier)))
+          (match_arm
+            pattern: (pattern
+              (identifier_pattern
+                (identifier)))
+            body: (expression
+              (atom
+                (identifier))))
+          (match_arm
+            pattern: (pattern
+              (constructor_pattern
+                (identifier)
+                (pattern_arg
+                  (identifier))))
+            body: (expression
+              (application
+                (expression
+                  (atom
+                    (identifier)))
+                (expression
+                  (paren_expr
+                    (expression
+                      (application
+                        (expression
+                          (application
+                            (expression
+                              (atom
+                                (identifier)))
+                            (expression
+                              (atom
+                                (identifier)))))
+                        (expression
+                          (atom
+                            (identifier))))))))))))))
+  (top_level
+    (defn_form
+      name: (identifier)
+      params: (param_list
+        (typed_param
+          name: (identifier)
+          type: (type_expr
+            (identifier))))
+      return_type: (type_expr
+        (identifier))
+      body: (block_body
+        (match_expr
+          scrutinee: (expression
+            (atom
+              (identifier)))
+          (match_arm
+            pattern: (pattern
+              (identifier_pattern
+                (identifier)))
+            body: (expression
+              (atom
+                (identifier))))
+          (match_arm
+            pattern: (pattern
+              (constructor_pattern
+                (identifier)
+                (pattern_arg
+                  (identifier))))
+            body: (expression
+              (atom
+                (identifier)))))))))
+
+===
+Function with non-match body
+===
+
+defn le? [x : Nat, y : Nat] : Bool
+  zero? (sub x y)
+
+---
+
+(source_file
+  (top_level
+    (defn_form
+      name: (identifier)
+      params: (param_list
+        (typed_param
+          name: (identifier)
+          type: (type_expr
+            (identifier)))
+        (typed_param
+          name: (identifier)
+          type: (type_expr
+            (identifier))))
+      return_type: (type_expr
+        (identifier))
+      body: (block_body
+        (expression
+          (application
+            (expression
+              (atom
+                (identifier)))
+            (expression
+              (paren_expr
+                (expression
+                  (application
+                    (expression
+                      (application
+                        (expression
+                          (atom
+                            (identifier)))
+                        (expression
+                          (atom
+                            (identifier)))))
+                    (expression
+                      (atom
+                        (identifier)))))))))))))
+
+===
+Function with simple two-arg body
+===
+
+defn gt? [x : Nat, y : Nat] : Bool
+  lt? y x
+
+---
+
+(source_file
+  (top_level
+    (defn_form
+      name: (identifier)
+      params: (param_list
+        (typed_param
+          name: (identifier)
+          type: (type_expr
+            (identifier)))
+        (typed_param
+          name: (identifier)
+          type: (type_expr
+            (identifier))))
+      return_type: (type_expr
+        (identifier))
+      body: (block_body
+        (expression
+          (application
+            (expression
+              (application
+                (expression
+                  (atom
+                    (identifier)))
+                (expression
+                  (atom
+                    (identifier)))))
+            (expression
+              (atom
+                (identifier)))))))))

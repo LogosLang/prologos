@@ -1,0 +1,32 @@
+===
+Namespace declaration
+===
+
+ns prologos.data.nat
+
+---
+
+(source_file
+  (top_level
+    (ns_declaration
+      name: (qualified_name))))
+
+===
+Provide declaration
+===
+
+ns test
+
+provide add mult double
+
+---
+
+(source_file
+  (top_level
+    (ns_declaration
+      name: (qualified_name)))
+  (top_level
+    (provide_declaration
+      (identifier)
+      (identifier)
+      (identifier))))
