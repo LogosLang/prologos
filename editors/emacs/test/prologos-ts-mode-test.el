@@ -203,15 +203,15 @@
         (should (= (length types) 1))
         (should (string= (car (car types)) "Ordering"))))))
 
-(ert-deftest prologos-ts-test/imenu-finds-ns ()
-  "Imenu should find ns_declaration entries."
+(ert-deftest prologos-ts-test/imenu-finds-deftype ()
+  "Imenu should find deftype_form entries under Type."
   (skip-unless prologos-ts-test--treesit-available)
-  (prologos-ts-test--in-buffer "ns prologos.data.nat\n"
+  (prologos-ts-test--in-buffer "deftype (Eq $A) (-> $A (-> $A Bool))\n"
     (let ((items (treesit-simple-imenu)))
       (should items)
-      (let ((nss (cdr (assoc "Namespace" items))))
-        (should nss)
-        (should (= (length nss) 1))))))
+      (let ((types (cdr (assoc "Type" items))))
+        (should types)
+        (should (>= (length types) 1))))))
 
 ;; ============================================================
 ;; Test: Defun navigation
@@ -275,6 +275,139 @@
   (prologos-ts-test--in-buffer "ns test\n"
     (should (string= comment-start ";; "))
     (should (string= comment-end ""))))
+
+;; ============================================================
+;; Test: Font-lock identifier-matched keywords
+;; ============================================================
+
+(ert-deftest prologos-ts-test/font-lock-let-keyword ()
+  "The identifier `let' should get keyword face via :match predicate."
+  (skip-unless prologos-ts-test--treesit-available)
+  (prologos-ts-test--in-buffer "defn foo [x : Nat] : Nat\n  let y x\n"
+    (goto-char (point-min))
+    (search-forward "let")
+    (let ((face (get-text-property (match-beginning 0) 'face)))
+      (should (eq face 'font-lock-keyword-face)))))
+
+(ert-deftest prologos-ts-test/font-lock-if-keyword ()
+  "The identifier `if' should get keyword face via :match predicate."
+  (skip-unless prologos-ts-test--treesit-available)
+  (prologos-ts-test--in-buffer "defn foo [x : Bool] : Nat\n  if x zero zero\n"
+    (goto-char (point-min))
+    (search-forward "if")
+    (let ((face (get-text-property (match-beginning 0) 'face)))
+      (should (eq face 'font-lock-keyword-face)))))
+
+(ert-deftest prologos-ts-test/font-lock-the-keyword ()
+  "The identifier `the' should get keyword face via :match predicate."
+  (skip-unless prologos-ts-test--treesit-available)
+  (prologos-ts-test--in-buffer "defn foo [x : Nat] : Nat\n  the x\n"
+    (goto-char (point-min))
+    (search-forward "the")
+    (let ((face (get-text-property (match-beginning 0) 'face)))
+      (should (eq face 'font-lock-keyword-face)))))
+
+(ert-deftest prologos-ts-test/font-lock-forall-keyword ()
+  "The identifier `forall' should get keyword face via :match predicate."
+  (skip-unless prologos-ts-test--treesit-available)
+  (prologos-ts-test--in-buffer "defn foo [x : Nat] : Nat\n  forall x\n"
+    (goto-char (point-min))
+    (search-forward "forall")
+    (let ((face (get-text-property (match-beginning 0) 'face)))
+      (should (eq face 'font-lock-keyword-face)))))
+
+;; ============================================================
+;; Test: Font-lock built-in type names
+;; ============================================================
+
+(ert-deftest prologos-ts-test/font-lock-nat-type ()
+  "The identifier `Nat' should get type face via :match predicate."
+  (skip-unless prologos-ts-test--treesit-available)
+  (prologos-ts-test--in-buffer "defn foo [x : Nat] : Nat\n  x\n"
+    ;; Check Nat in param type position
+    (goto-char (point-min))
+    (search-forward "Nat")
+    (let ((face (get-text-property (match-beginning 0) 'face)))
+      (should (eq face 'font-lock-type-face)))))
+
+(ert-deftest prologos-ts-test/font-lock-pi-type ()
+  "The identifier `Pi' in expression position should get type face."
+  (skip-unless prologos-ts-test--treesit-available)
+  (prologos-ts-test--in-buffer "defn foo [x : Nat] : Nat\n  Pi x\n"
+    (goto-char (point-min))
+    (search-forward "Pi")
+    (let ((face (get-text-property (match-beginning 0) 'face)))
+      (should (eq face 'font-lock-type-face)))))
+
+(ert-deftest prologos-ts-test/font-lock-type-keyword ()
+  "The identifier `Type' should get type face via :match predicate."
+  (skip-unless prologos-ts-test--treesit-available)
+  (prologos-ts-test--in-buffer "defn foo [x : Nat] : Nat\n  Type x\n"
+    (goto-char (point-min))
+    (search-forward "Type")
+    (let ((face (get-text-property (match-beginning 0) 'face)))
+      (should (eq face 'font-lock-type-face)))))
+
+;; ============================================================
+;; Test: Font-lock built-in constants
+;; ============================================================
+
+(ert-deftest prologos-ts-test/font-lock-zero-constant ()
+  "The identifier `zero' should get constant face via :match predicate."
+  (skip-unless prologos-ts-test--treesit-available)
+  (prologos-ts-test--in-buffer "defn foo [x : Nat] : Nat\n  zero\n"
+    (goto-char (point-min))
+    (search-forward "zero")
+    (let ((face (get-text-property (match-beginning 0) 'face)))
+      (should (eq face 'font-lock-constant-face)))))
+
+(ert-deftest prologos-ts-test/font-lock-true-constant ()
+  "The identifier `true' should get constant face via :match predicate."
+  (skip-unless prologos-ts-test--treesit-available)
+  (prologos-ts-test--in-buffer "defn foo [x : Bool] : Bool\n  true\n"
+    (goto-char (point-min))
+    (search-forward "true")
+    (let ((face (get-text-property (match-beginning 0) 'face)))
+      (should (eq face 'font-lock-constant-face)))))
+
+(ert-deftest prologos-ts-test/font-lock-refl-constant ()
+  "The identifier `refl' should get constant face via :match predicate."
+  (skip-unless prologos-ts-test--treesit-available)
+  (prologos-ts-test--in-buffer "defn foo [x : Nat] : Nat\n  refl\n"
+    (goto-char (point-min))
+    (search-forward "refl")
+    (let ((face (get-text-property (match-beginning 0) 'face)))
+      (should (eq face 'font-lock-constant-face)))))
+
+;; ============================================================
+;; Test: #lang detection
+;; ============================================================
+
+(ert-deftest prologos-ts-test/lang-ws-mode-detection ()
+  "Files starting with `ns' should detect WS mode."
+  (skip-unless prologos-ts-test--treesit-available)
+  (prologos-ts-test--in-buffer "ns test\n"
+    (should prologos--ws-mode-p)))
+
+(ert-deftest prologos-ts-test/lang-ws-mode-indent ()
+  "WS mode files should use prologos--ws-indent-line."
+  (skip-unless prologos-ts-test--treesit-available)
+  (prologos-ts-test--in-buffer "ns test\n"
+    (should (eq indent-line-function #'prologos--ws-indent-line))))
+
+;; ============================================================
+;; Test: Imenu def_form under Function
+;; ============================================================
+
+(ert-deftest prologos-ts-test/imenu-def-under-function ()
+  "def_form should appear under Function category in imenu."
+  (skip-unless prologos-ts-test--treesit-available)
+  (prologos-ts-test--in-buffer "def myval\n  zero\n"
+    (let ((items (treesit-simple-imenu)))
+      (should items)
+      (let ((fns (cdr (assoc "Function" items))))
+        (should fns)
+        (should (string= (car (car fns)) "myval"))))))
 
 (provide 'prologos-ts-mode-test)
 

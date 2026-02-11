@@ -1,7 +1,7 @@
 ;;; prologos-ts-mode.el --- Tree-sitter major mode for Prologos -*- lexical-binding: t; -*-
 
 ;; Copyright (C) 2025 Prologos Contributors
-;; Version: 0.1.0
+;; Version: 0.2.0
 ;; Package-Requires: ((emacs "29.1"))
 ;; Keywords: languages tree-sitter
 ;; URL: https://github.com/prologos-lang/prologos
@@ -16,16 +16,17 @@
 ;; - libtree-sitter-prologos.dylib installed in ~/.emacs.d/tree-sitter/
 ;;
 ;; Features:
-;; - Tree-sitter based font-lock (4 levels: comment/string, keyword/definition,
-;;   type/constant/number, operator/multiplicity)
-;; - Imenu support for defn, def, data, and ns declarations
+;; - Tree-sitter based font-lock (4 levels)
+;; - Imenu support for defn, def, data, and deftype declarations
 ;; - Defun navigation (C-M-a / C-M-e) via treesit
+;; - #lang detection for WS vs sexp mode
 ;; - WS mode indentation (TAB cycling, reused from prologos-indent.el)
 ;; - Automatic fallback to prologos-mode when grammar unavailable
 
 ;;; Code:
 
 (require 'treesit)
+(require 'prologos-mode)
 (require 'prologos-font-lock)
 (require 'prologos-indent)
 
@@ -44,28 +45,53 @@
    :feature 'string
    '((string) @font-lock-string-face)
 
-   ;; Level 2: keywords and definition names
+   ;; Level 2: keywords (grammar keywords + identifier-matched keywords)
    :language 'prologos
    :feature 'keyword
    '(["defn" "def" "data" "deftype" "match" "fn"
       "ns" "provide" "require" ":refer"] @font-lock-keyword-face)
 
    :language 'prologos
-   :feature 'definition
+   :feature 'keyword
+   :override t
+   '(((identifier) @font-lock-keyword-face
+      (:match "\\`\\(?:the\\|let\\|do\\|if\\|reduce\\|forall\\|exists\\|check\\|eval\\|infer\\|defmacro\\|relation\\|clause\\|query\\)\\'"
+              @font-lock-keyword-face)))
+
+   ;; Level 2: function/definition names
+   :language 'prologos
+   :feature 'function
    '((defn_form name: (identifier) @font-lock-function-name-face)
-     (def_form name: (identifier) @font-lock-function-name-face)
-     (data_form name: (identifier) @font-lock-type-face)
+     (def_form name: (identifier) @font-lock-function-name-face))
+
+   :language 'prologos
+   :feature 'definition
+   '((data_form name: (identifier) @font-lock-type-face)
      (data_constructor name: (identifier) @font-lock-constant-face)
      (ns_declaration name: (qualified_name) @font-lock-constant-face))
 
-   ;; Level 3: types, constructors, numbers
+   ;; Level 3: built-in type names (identifier-matched)
+   :language 'prologos
+   :feature 'type
+   :override t
+   '(((identifier) @font-lock-type-face
+      (:match "\\`\\(?:Pi\\|Sigma\\|Type\\|Nat\\|Bool\\|Posit8\\|Vec\\|Fin\\|Eq\\|Chan\\|Session\\)\\'"
+              @font-lock-type-face)))
+
+   ;; Level 3: type expressions from grammar nodes
    :language 'prologos
    :feature 'type
    '((type_expr (identifier) @font-lock-type-face)
      (type_application (identifier) @font-lock-type-face)
-     (arrow_type) @font-lock-type-face
-     (paren_type) @font-lock-type-face
      (implicit_params (identifier) @font-lock-type-face))
+
+   ;; Level 3: built-in constants (identifier-matched)
+   :language 'prologos
+   :feature 'constant
+   :override t
+   '(((identifier) @font-lock-constant-face
+      (:match "\\`\\(?:zero\\|true\\|false\\|refl\\|pair\\|inc\\|vnil\\|vcons\\|fzero\\|fsuc\\|nil\\|cons\\|nothing\\|just\\|posit8\\)\\'"
+              @font-lock-constant-face)))
 
    :language 'prologos
    :feature 'number
@@ -113,13 +139,19 @@
   (setq-local treesit-font-lock-settings prologos-ts-font-lock-rules)
   (setq-local treesit-font-lock-feature-list
               '((comment string)
-                (keyword definition)
-                (type number operator multiplicity)))
+                (keyword function definition)
+                (type constant number multiplicity)
+                (operator)))
+
+  ;; Detect #lang mode — WS mode is default, sexp mode only for #lang prologos/sexp
+  (prologos--detect-lang-mode)
 
   ;; Indentation — WS mode: indentation IS the syntax, use TAB cycling
   ;; Tree-sitter indent rules don't make sense for WS-significant syntax
-  (setq-local prologos--ws-mode-p t)
-  (setq-local indent-line-function #'prologos--ws-indent-line)
+  (setq-local indent-line-function
+              (if prologos--ws-mode-p
+                  #'prologos--ws-indent-line
+                #'prologos--sexp-indent-line))
 
   ;; Comments
   (setq-local comment-start ";; ")
@@ -134,9 +166,9 @@
   ;; Imenu via treesit
   (setq-local treesit-simple-imenu-settings
               '(("Function" "\\`defn_form\\'" nil nil)
-                ("Definition" "\\`def_form\\'" nil nil)
+                ("Function" "\\`def_form\\'" nil nil)
                 ("Type" "\\`data_form\\'" nil nil)
-                ("Namespace" "\\`ns_declaration\\'" nil nil)))
+                ("Type" "\\`deftype_form\\'" nil nil)))
 
   ;; Activate tree-sitter features
   (treesit-major-mode-setup))
