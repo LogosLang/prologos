@@ -20,8 +20,9 @@
 ;;
 ;; Or toggle manually: M-x prologos-surfer-mode
 ;;
-;; Sprint 1 deliverable: scope detection, overlay, mode-line lighter.
-;; Sprint 2 will add navigation commands (up/down/left/right in AST).
+;; Sprint 1: scope detection, overlay, mode-line lighter.
+;; Sprint 2: navigation commands (up/down/left/right), repeat-mode,
+;;   optional hydra, select/expand/contract.
 
 ;;; Code:
 
@@ -100,6 +101,10 @@
 (defvar-local prologos-surfer--current-scope nil
   "The tree-sitter node for the current scope (nil if none).")
 
+(defun prologos-surfer-current-scope ()
+  "Return the current scope node, or nil."
+  prologos-surfer--current-scope)
+
 (defvar-local prologos-surfer--scope-overlay nil
   "The primary overlay highlighting the current scope.")
 
@@ -146,6 +151,21 @@ whose only scope-node ancestor is source_file counts as depth 1)."
   "Return a short label for NODE's type, or its raw type if no label defined."
   (or (cdr (assoc (treesit-node-type node) prologos-surfer--node-type-labels))
       (treesit-node-type node)))
+
+(defun prologos-surfer--effective-end (node)
+  "Return the effective end position of NODE, trimming trailing blank lines.
+The tree-sitter external scanner extends node boundaries into trailing
+whitespace and blank lines (due to INDENT/DEDENT token mechanics).
+This function walks backward from the raw node end to find the end of
+the last line with actual content, including its trailing newline."
+  (let ((end (treesit-node-end node))
+        (start (treesit-node-start node)))
+    (save-excursion
+      (goto-char end)
+      (skip-chars-backward " \t\n\r" start)
+      ;; Now at last non-whitespace char.  Include its trailing newline.
+      (end-of-line)
+      (min (1+ (point)) end))))
 
 ;; ============================================================================
 ;; Face Generation
@@ -208,7 +228,7 @@ Only redraws if the scope has actually changed."
   (when (and prologos-surfer-enable-overlay
              prologos-surfer--current-scope)
     (let* ((start (treesit-node-start prologos-surfer--current-scope))
-           (end (treesit-node-end prologos-surfer--current-scope))
+           (end (prologos-surfer--effective-end prologos-surfer--current-scope))
            (depth (prologos-surfer--scope-depth prologos-surfer--current-scope))
            (face (if prologos-surfer-depth-tinting
                      (prologos-surfer--get-scope-face depth)
@@ -232,6 +252,21 @@ Only redraws if the scope has actually changed."
   (setq prologos-surfer--mode-line-lighter nil))
 
 ;; ============================================================================
+;; Navigation Helper
+;; ============================================================================
+
+(defun prologos-surfer--navigate-to-scope (node)
+  "Move point to NODE and update the overlay immediately.
+Used by navigation commands for instant feedback (bypasses debounce)."
+  (when node
+    (goto-char (treesit-node-start node))
+    (setq prologos-surfer--current-scope node)
+    (prologos-surfer--redraw-overlay)
+    (setq prologos-surfer--mode-line-lighter
+          (format " surfer:%s" (prologos-surfer--scope-label node)))
+    (force-mode-line-update)))
+
+;; ============================================================================
 ;; Post-Command Hook (debounced)
 ;; ============================================================================
 
@@ -251,8 +286,20 @@ Only redraws if the scope has actually changed."
   (let ((map (make-sparse-keymap)))
     ;; Toggle surfer mode
     (define-key map (kbd "C-c s s") #'prologos-surfer-mode)
-    ;; Sprint 2 will add: C-c s u (up), C-c s d (down),
-    ;; C-c s l (left/prev-sibling), C-c s r (right/next-sibling)
+    ;; Navigation (Sprint 2)
+    (define-key map (kbd "C-c s u") #'prologos-surfer-up-scope)
+    (define-key map (kbd "C-c s d") #'prologos-surfer-down-scope)
+    (define-key map (kbd "C-c s l") #'prologos-surfer-prev-sibling)
+    (define-key map (kbd "C-c s r") #'prologos-surfer-next-sibling)
+    ;; Smart forward/backward (DFS pre-order traversal)
+    (define-key map (kbd "C-c s f") #'prologos-surfer-forward)
+    (define-key map (kbd "C-c s b") #'prologos-surfer-backward)
+    ;; Selection (Sprint 2)
+    (define-key map (kbd "C-c s e") #'prologos-surfer-expand-scope)
+    (define-key map (kbd "C-c s c") #'prologos-surfer-contract-scope)
+    (define-key map (kbd "C-c s v") #'prologos-surfer-select-scope)
+    ;; Optional hydra entry (Sprint 2)
+    (define-key map (kbd "C-c s h") #'prologos-surfer-hydra)
     map)
   "Keymap for `prologos-surfer-mode'.")
 
@@ -306,6 +353,8 @@ Requires a tree-sitter parser for Prologos to be available.
 Intended for use in `prologos-ts-mode-hook'."
   (when (treesit-parser-list)
     (prologos-surfer-mode 1)))
+
+(require 'prologos-surfer-navigation)
 
 (provide 'prologos-surfer)
 
