@@ -427,18 +427,18 @@
 ;; prologos.data.nat — Power
 ;; ========================================
 
-(test-case "nat/power"
+(test-case "nat/pow"
   (check-equal?
-   (run-ns "(ns tp1)\n(require [prologos.data.nat :refer [power]])\n(eval (power (inc (inc zero)) zero))")
+   (run-ns "(ns tp1)\n(require [prologos.data.nat :refer [pow]])\n(eval (pow (inc (inc zero)) zero))")
    '("1 : Nat"))
   (check-equal?
-   (run-ns "(ns tp2)\n(require [prologos.data.nat :refer [power]])\n(eval (power (inc (inc zero)) (inc (inc (inc zero)))))")
+   (run-ns "(ns tp2)\n(require [prologos.data.nat :refer [pow]])\n(eval (pow (inc (inc zero)) (inc (inc (inc zero)))))")
    '("8 : Nat"))
   (check-equal?
-   (run-ns "(ns tp3)\n(require [prologos.data.nat :refer [power]])\n(eval (power (inc (inc (inc zero))) (inc (inc zero))))")
+   (run-ns "(ns tp3)\n(require [prologos.data.nat :refer [pow]])\n(eval (pow (inc (inc (inc zero))) (inc (inc zero))))")
    '("9 : Nat"))
   (check-equal?
-   (run-ns "(ns tp4)\n(require [prologos.data.nat :refer [power]])\n(eval (power zero (inc (inc (inc (inc (inc zero)))))))")
+   (run-ns "(ns tp4)\n(require [prologos.data.nat :refer [pow]])\n(eval (pow zero (inc (inc (inc (inc (inc zero)))))))")
    '("zero : Nat")))
 
 ;; ========================================
@@ -471,7 +471,7 @@
    (run-ns "(ns tt4)\n(require [prologos.data.nat :refer [min]])\n(check min <(-> Nat (-> Nat Nat))>)")
    '("OK"))
   (check-equal?
-   (run-ns "(ns tt5)\n(require [prologos.data.nat :refer [power]])\n(check power <(-> Nat (-> Nat Nat))>)")
+   (run-ns "(ns tt5)\n(require [prologos.data.nat :refer [pow]])\n(check pow <(-> Nat (-> Nat Nat))>)")
    '("OK"))
   (check-equal?
    (run-ns "(ns tt6)\n(require [prologos.data.nat :refer [bool-to-nat]])\n(check bool-to-nat <(-> Bool Nat)>)")
@@ -497,7 +497,7 @@
     (check-not-false (member 'nat-eq? exports) "exports nat-eq?")
     (check-not-false (member 'min exports) "exports min")
     (check-not-false (member 'max exports) "exports max")
-    (check-not-false (member 'power exports) "exports power")
+    (check-not-false (member 'pow exports) "exports pow")
     (check-not-false (member 'bool-to-nat exports) "exports bool-to-nat")))
 
 ;; ========================================

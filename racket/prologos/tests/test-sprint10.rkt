@@ -225,3 +225,68 @@
   (check-equal?
    (run-last "(ns reg2)\n(require [prologos.data.nat :refer [zero?]])\n(eval (zero? zero))")
    "true : Bool"))
+
+;; ========================================
+;; Phase 5: fn with return type annotation
+;; ========================================
+
+(test-case "fn-rettype/simple-identity"
+  ;; (fn (x : Nat) <Nat> x) should type-check as (-> Nat Nat)
+  (check-equal?
+   (run-last "(ns frt1)\n(eval (the (-> Nat Nat) (fn (x : Nat) <Nat> x)))")
+   "(fn [x <Nat>] x) : (-> Nat Nat)"))
+
+(test-case "fn-rettype/applied"
+  ;; fn with return type, applied to argument
+  (check-equal?
+   (run-last "(ns frt2)\n(eval ((fn (x : Nat) <Nat> (inc x)) (inc zero)))")
+   "2 : Nat"))
+
+(test-case "fn-rettype/bracket-binder"
+  ;; [x <Nat>] <Nat> syntax
+  (check-equal?
+   (run-last "(ns frt3)\n(eval ((fn [x <Nat>] <Nat> (inc x)) zero))")
+   "1 : Nat"))
+
+(test-case "fn-rettype/multi-param"
+  ;; Multi-parameter: fn [x <Nat> y <Nat>] <Nat> body
+  (check-equal?
+   (run-last "(ns frt4)\n(eval ((fn [x <Nat> y <Nat>] <Nat> x) (inc zero) zero))")
+   "1 : Nat"))
+
+(test-case "fn-rettype/as-defn-body"
+  ;; fn with return type used as body of a defn
+  ;; def add1 : (-> Nat Nat) (fn (x : Nat) <Nat> (inc x))
+  (check-equal?
+   (run-last "(ns frt5)\n(def add1 : (-> Nat Nat) (fn (x : Nat) <Nat> (inc x)))\n(eval (add1 (inc (inc zero))))")
+   "3 : Nat"))
+
+(test-case "fn-rettype/defn-returns-function"
+  ;; defn with function-returning return type + inner fn with return type
+  ;; This is the clamp pattern: defn f [a, b] <Nat -> Nat> fn [x] <Nat> body
+  (check-equal?
+   (run-last "(ns frt6)\n(require [prologos.data.nat :refer [min max]])\n(defn clamp [low <Nat> high <Nat>] <(-> Nat Nat)> (fn [x <Nat>] <Nat> (max low (min x high))))\n(eval (clamp (inc (inc zero)) (inc (inc (inc (inc zero)))) (inc (inc (inc (inc (inc (inc zero))))))))")
+   "4 : Nat"))
+
+(test-case "fn-rettype/defn-returns-function-simple"
+  ;; Simpler: defn that returns a function
+  (check-equal?
+   (run-last "(ns frt7)\n(defn add-n [n <Nat>] <(-> Nat Nat)> (fn [x <Nat>] <Nat> (the Nat n)))\n(eval (add-n (inc (inc zero)) zero))")
+   "2 : Nat"))
+
+(test-case "fn-rettype/colon-style"
+  ;; fn (x : Nat) : Nat body — colon-style return type
+  (check-equal?
+   (run-last "(ns frt8)\n(eval ((fn (x : Nat) : Nat (inc x)) zero))")
+   "1 : Nat"))
+
+(test-case "fn-rettype/colon-style-arrow"
+  ;; fn (x : Nat) : Nat -> Nat body — colon-style with arrow return type
+  (check-equal?
+   (run-last "(ns frt9)\n(def f : (-> Nat (-> Nat Nat)) (fn (x : Nat) : Nat -> Nat (fn (y : Nat) : Nat x)))\n(eval (f (inc (inc zero)) zero))")
+   "2 : Nat"))
+
+;; Note: bare params (fn x <Nat> body) with return type annotation
+;; create holes in both Pi and lam that can't be resolved through
+;; the double-annotation pattern. Use typed params instead:
+;; fn [x <Nat>] <Nat> body

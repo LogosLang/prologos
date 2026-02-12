@@ -1,6 +1,6 @@
 ns prologos.data.nat
 
-provide add mult double dec zero? sub le? lt? gt? ge? nat-eq? min max power bool-to-nat
+provide add mult double dec zero? sub le? lt? gt? ge? nat-eq? min max pow bool-to-nat clamp
 
 ;; ========================================
 ;; Prologos Natural Number Library
@@ -49,10 +49,10 @@ defn sub [x : Nat, y : Nat] : Nat
     | inc k -> dec (sub x k)
 
 ;; Exponentiation: power(base, exp) = base^exp
-defn power [base : Nat, exp : Nat] : Nat
+defn pow [base : Nat, exp : Nat] : Nat
   match exp
     | zero  -> inc zero
-    | inc k -> mult base (power base k)
+    | inc k -> mult base (pow base k)
 
 ;; ========================================
 ;; Comparison
@@ -108,4 +108,7 @@ defn bool-to-nat [b : Bool] : Nat
     | true  -> inc zero
     | false -> zero
 
-
+;; Clamp: clamp low high returns a function that clamps x to [low, high]
+defn clamp [low : Nat, high : Nat] <Nat -> Nat>
+  fn [x]
+    max low (min x high)

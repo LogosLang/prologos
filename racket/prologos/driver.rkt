@@ -338,8 +338,12 @@
 ;; ========================================
 (define (process-file path)
   (define port (open-input-file path))
-  ;; Read raw syntax, apply pre-parse expansion, then parse
-  (define raw-stxs (read-all-syntax port path))
+  ;; Use WS reader for .prologos files, sexp reader otherwise
+  (define path-str (if (string? path) path (path->string path)))
+  (define raw-stxs
+    (if (regexp-match? #rx"\\.prologos$" path-str)
+        (read-all-syntax-ws port path-str)
+        (read-all-syntax port path-str)))
   (close-input-port port)
   (define expanded-stxs (preparse-expand-all raw-stxs))
   (define surfs (map parse-datum expanded-stxs))

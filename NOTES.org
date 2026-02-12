@@ -22,6 +22,9 @@
   * Hashmaps/associative arrays/dictionaries:
     `{:key00 "value" :key01 12}`
 
+*** predicate functions prefer ending in `?`, by convention
+  * valid? NOT isValid
+
 ** Propagotors as first class
 ** Fully qualified namespaces
   * disambiguate imports' names
@@ -48,17 +51,33 @@
   - ideal vector commitments
 
 
+* primitives
+  * (:= varName [: type] expr) inline let variable binding, attached to parent scope
+  * 
 
 * Logic Language
 ** Runs on Propagator Infrastructure rather than typical SLD/SLG Resolution
+** Logical variable names with significant modal prefixes
+  * ?logicVar: bimodal - designates either input or output
+  * +logicVar: input   - must be instantiated on use
+  * -logicVar: output
+
 ** First-class anonymous relation primitive
   `defn` <=> `defr` :: `fn` <=> `rel`
 
 ** Core primitives:
+  * `clause`
+  * `&>` conjunctive clause piping
   * `rel` => relation
     - defines an anonymous relation
 
+** Seamless integration into the functional language.
+  - use `rel` inside `defn`s; use `
 
+*** example prototype syntax
+
+
+A /relation that produces proofs/, defined /locally/ inside a /function/, returning /dependent types/.
 
 
 

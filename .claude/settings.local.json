@@ -56,7 +56,8 @@
       "Bash(/tmp/test_multiline.prologos << 'EOF'\ndefn sym {A} [a :0 : A, b :0 : A, prf : \\(Eq A a b\\)] : \\(Eq A b a\\)\n  \\(J a b prf\\)\nEOF)",
       "Bash(/tmp/test_data_simple.prologos << 'EOF'\ndata Ordering\n  lt-ord\n  eq-ord\n  gt-ord\nEOF)",
       "Bash(cc:*)",
-      "WebFetch(domain:www.gnu.org)"
+      "WebFetch(domain:www.gnu.org)",
+      "Bash(raco setup:*)"
     ]
   }
 }

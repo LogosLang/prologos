@@ -528,3 +528,98 @@
     (check-equal? (binder-info-name (surf-lam-binder inner2)) 'c)
     ;; Innermost body is the application
     (check-true (surf-app? (surf-lam-body inner2)))))
+
+;; ========================================
+;; fn with return type annotation
+;; ========================================
+
+(test-case "parse: (fn (x : Nat) <Nat> x) — single binder with return type"
+  (let ([r (p "(fn (x : Nat) <Nat> x)")])
+    ;; Should produce surf-ann wrapping surf-lam
+    (check-true (surf-ann? r))
+    ;; Annotation type should be a Pi: (Pi (x : Nat) Nat)
+    (let ([ty (surf-ann-type r)])
+      (check-true (surf-pi? ty))
+      (check-equal? (binder-info-name (surf-pi-binder ty)) 'x)
+      (check-true (surf-nat-type? (binder-info-type (surf-pi-binder ty))))
+      (check-true (surf-nat-type? (surf-pi-body ty))))
+    ;; Inner term should be surf-lam
+    (let ([tm (surf-ann-term r)])
+      (check-true (surf-lam? tm))
+      (check-equal? (binder-info-name (surf-lam-binder tm)) 'x)
+      (check-true (surf-var? (surf-lam-body tm))))))
+
+(test-case "parse: (fn [x <Nat>] <Nat> x) — bracket binder with return type"
+  (let ([r (p "(fn [x <Nat>] <Nat> x)")])
+    (check-true (surf-ann? r))
+    (check-true (surf-pi? (surf-ann-type r)))
+    (check-true (surf-lam? (surf-ann-term r)))
+    (check-equal? (binder-info-name (surf-lam-binder (surf-ann-term r))) 'x)))
+
+(test-case "parse: (fn [x <Nat> y <Nat>] <Nat> x) — multi-binder with return type"
+  (let ([r (p "(fn [x <Nat> y <Nat>] <Nat> x)")])
+    (check-true (surf-ann? r))
+    ;; Type should be nested Pi: (Pi (x : Nat) (Pi (y : Nat) Nat))
+    (let ([ty (surf-ann-type r)])
+      (check-true (surf-pi? ty))
+      (check-equal? (binder-info-name (surf-pi-binder ty)) 'x)
+      (check-true (surf-pi? (surf-pi-body ty)))
+      (check-equal? (binder-info-name (surf-pi-binder (surf-pi-body ty))) 'y)
+      (check-true (surf-nat-type? (surf-pi-body (surf-pi-body ty)))))
+    ;; Term should be nested lam
+    (let ([tm (surf-ann-term r)])
+      (check-true (surf-lam? tm))
+      (check-equal? (binder-info-name (surf-lam-binder tm)) 'x)
+      (check-true (surf-lam? (surf-lam-body tm)))
+      (check-equal? (binder-info-name (surf-lam-binder (surf-lam-body tm))) 'y))))
+
+(test-case "parse: (fn x <Nat> x) — bare param with return type"
+  (let ([r (p "(fn x <Nat> x)")])
+    (check-true (surf-ann? r))
+    ;; Type: Pi with hole domain
+    (let ([ty (surf-ann-type r)])
+      (check-true (surf-pi? ty))
+      (check-equal? (binder-info-name (surf-pi-binder ty)) 'x)
+      (check-true (surf-hole? (binder-info-type (surf-pi-binder ty))))
+      (check-true (surf-nat-type? (surf-pi-body ty))))
+    ;; Term: lam with hole type
+    (let ([tm (surf-ann-term r)])
+      (check-true (surf-lam? tm))
+      (check-equal? (binder-info-name (surf-lam-binder tm)) 'x)
+      (check-true (surf-hole? (binder-info-type (surf-lam-binder tm)))))))
+
+(test-case "parse: (fn x y <Nat> (f x y)) — multi bare params with return type"
+  (let ([r (p "(fn x y <Nat> (f x y))")])
+    (check-true (surf-ann? r))
+    ;; Type: nested Pi with holes
+    (let ([ty (surf-ann-type r)])
+      (check-true (surf-pi? ty))
+      (check-equal? (binder-info-name (surf-pi-binder ty)) 'x)
+      (check-true (surf-pi? (surf-pi-body ty)))
+      (check-equal? (binder-info-name (surf-pi-binder (surf-pi-body ty))) 'y)
+      (check-true (surf-nat-type? (surf-pi-body (surf-pi-body ty)))))
+    ;; Term: nested lam
+    (let ([tm (surf-ann-term r)])
+      (check-true (surf-lam? tm))
+      (check-equal? (binder-info-name (surf-lam-binder tm)) 'x)
+      (check-true (surf-lam? (surf-lam-body tm)))
+      (check-equal? (binder-info-name (surf-lam-binder (surf-lam-body tm))) 'y))))
+
+(test-case "parse: (fn (x : Nat) : Nat x) — colon-style return type"
+  (let ([r (p "(fn (x : Nat) : Nat x)")])
+    (check-true (surf-ann? r))
+    (let ([ty (surf-ann-type r)])
+      (check-true (surf-pi? ty))
+      (check-equal? (binder-info-name (surf-pi-binder ty)) 'x)
+      (check-true (surf-nat-type? (surf-pi-body ty))))
+    (let ([tm (surf-ann-term r)])
+      (check-true (surf-lam? tm))
+      (check-equal? (binder-info-name (surf-lam-binder tm)) 'x))))
+
+(test-case "parse: (fn (x : Nat) : Nat -> Nat x) — colon-style arrow return type"
+  (let ([r (p "(fn (x : Nat) : Nat -> Nat x)")])
+    (check-true (surf-ann? r))
+    (let ([ty (surf-ann-type r)])
+      (check-true (surf-pi? ty))
+      ;; Return type should be (-> Nat Nat) = surf-arrow
+      (check-true (surf-arrow? (surf-pi-body ty))))))

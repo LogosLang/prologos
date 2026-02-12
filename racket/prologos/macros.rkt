@@ -1104,14 +1104,20 @@
 (define (desugar-defn form)
   (match form
     [(surf-defn name type-ast param-names body-ast loc)
-     (define binders (extract-pi-binders type-ast))
+     (define all-binders (extract-pi-binders type-ast))
+     (define n-params (length param-names))
+     (define n-binders (length all-binders))
      (cond
-       [(not (= (length param-names) (length binders)))
+       [(> n-params n-binders)
         (prologos-error
          loc
-         (format "defn ~a: parameter list has ~a names but type has ~a binders"
-                 name (length param-names) (length binders)))]
+         (format "defn ~a: parameter list has ~a names but type has only ~a binders"
+                 name n-params n-binders))]
        [else
+        ;; Take only as many binders as there are parameter names.
+        ;; The remaining Pi binders are part of the return type
+        ;; (e.g. defn f [x : Nat] <Nat -> Nat> ... has return type Nat -> Nat).
+        (define binders (take all-binders n-params))
         (define named-binders
           (for/list ([pname (in-list param-names)]
                      [bnd (in-list binders)])
@@ -1130,14 +1136,18 @@
 (define (desugar-the-fn form)
   (match form
     [(surf-the-fn type-ast param-names body-ast loc)
-     (define binders (extract-pi-binders type-ast))
+     (define all-binders (extract-pi-binders type-ast))
+     (define n-params (length param-names))
+     (define n-binders (length all-binders))
      (cond
-       [(not (= (length param-names) (length binders)))
+       [(> n-params n-binders)
         (prologos-error
          loc
-         (format "the-fn: parameter list has ~a names but type has ~a binders"
-                 (length param-names) (length binders)))]
+         (format "the-fn: parameter list has ~a names but type has only ~a binders"
+                 n-params n-binders))]
        [else
+        ;; Take only as many binders as there are parameter names
+        (define binders (take all-binders n-params))
         (define named-binders
           (for/list ([pname (in-list param-names)]
                      [bnd (in-list binders)])

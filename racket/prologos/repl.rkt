@@ -25,15 +25,14 @@
 ;; ========================================
 ;; Mode parameter
 ;; ========================================
-(define current-repl-mode (make-parameter 'sexp))
+(define current-repl-mode (make-parameter 'ws))
 
 ;; ========================================
 ;; REPL Main Loop
 ;; ========================================
 (define (run-repl)
   (displayln "Prologos v0.3.0")
-  (displayln (format "Mode: ~a | :mode sexp/ws to switch | :quit to exit | :env | :load"
-                     (current-repl-mode)))
+  (displayln ":quit to exit | :env | :load \"path\"")
   (newline)
   ;; Start with empty global env
   (parameterize ([current-global-env (hasheq)])
@@ -42,10 +41,7 @@
 (define (repl-loop)
   (display "> ")
   (flush-output)
-  (define input
-    (case (current-repl-mode)
-      [(sexp) (read-repl-input-sexp)]
-      [(ws)   (read-repl-input-ws)]))
+  (define input (read-repl-input-ws))
   (cond
     [(eof-object? input)
      (displayln "")
@@ -59,9 +55,7 @@
      (handle-repl-command input)
      (repl-loop)]
     [else
-     (case (current-repl-mode)
-       [(sexp) (process-sexp-input input)]
-       [(ws)   (process-ws-input input)])
+     (process-ws-input input)
      (repl-loop)]))
 
 ;; ========================================
@@ -204,17 +198,6 @@
      (exit 0)]
     [(string=? cmd ":env")
      (display-env)]
-    [(string-prefix? cmd ":mode")
-     (let ([mode-str (string-trim (substring cmd 5))])
-       (cond
-         [(string=? mode-str "sexp")
-          (current-repl-mode 'sexp)
-          (displayln "Switched to S-expression mode.")]
-         [(string=? mode-str "ws")
-          (current-repl-mode 'ws)
-          (displayln "Switched to whitespace mode. Blank line to submit.")]
-         [else
-          (displayln "Usage: :mode sexp | :mode ws")]))]
     [(string-prefix? cmd ":load")
      (let ([path (string-trim (substring cmd 5))])
        ;; Strip quotes if present
@@ -261,13 +244,4 @@
 ;; Entry point
 ;; ========================================
 (module+ main
-  (require racket/cmdline)
-  (define ws-mode? (make-parameter #f))
-  (command-line
-   #:once-each
-   ["--ws" "Start in whitespace syntax mode"
-    (ws-mode? #t)]
-   #:args ()
-   (when (ws-mode?)
-     (current-repl-mode 'ws))
-   (run-repl)))
+  (run-repl))

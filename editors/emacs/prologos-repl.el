@@ -78,8 +78,8 @@ and syntax highlighting."
   :syntax-table (if (boundp 'prologos-mode-syntax-table)
                     prologos-mode-syntax-table
                   (make-syntax-table))
-  ;; Prompt: "> " (verified from repl.rkt line 43)
-  (setq-local comint-prompt-regexp "^> ")
+  ;; Prompt: "> " for main prompt, "  " for WS continuation
+  (setq-local comint-prompt-regexp "^\\(?:> \\|  \\)")
   (setq-local comint-prompt-read-only t)
   (setq-local comint-input-ignoredups t)
   (setq-local comint-input-ring-size 500)
@@ -148,10 +148,12 @@ the cleaned response string."
     (let* ((raw prologos--pending-output)
            ;; Strip the trailing prompt
            (response (substring raw 0 (match-beginning 0)))
-           ;; Strip leading prompt echo if present
+           ;; Strip leading prompt echo if present (main or continuation)
            (response (if (string-prefix-p "> " response)
                          (substring response 2)
                        response))
+           ;; Strip WS continuation prompt artifacts
+           (response (replace-regexp-in-string "^  \n" "" response))
            (response (string-trim response))
            (entry (pop prologos--callback-queue)))
       (setq prologos--pending-output "")
@@ -179,8 +181,8 @@ CALLBACK is invoked in the source buffer that called this function."
       (setq prologos--callback-queue
             (append prologos--callback-queue
                     (list (cons callback src-buf)))))
-    ;; Send the expression to the REPL process
-    (comint-send-string proc (concat expr "\n"))))
+    ;; Send the expression followed by blank line (WS mode termination)
+    (comint-send-string proc (concat expr "\n\n"))))
 
 ;; ============================================================
 ;; Result parsing

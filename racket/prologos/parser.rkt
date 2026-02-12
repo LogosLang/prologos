@@ -116,7 +116,7 @@
 (define (unwrap-angle-type stx loc)
   ;; Extract and parse the type from ($angle-type content...)
   ;; If single content element: parse it directly
-  ;; If multiple elements: wrap in a list and parse as application
+  ;; If multiple elements: parse as infix type (handles -> arrows)
   (define d (stx->datum stx))
   (define contents (cdr d)) ; skip $angle-type sentinel
   (define parts
@@ -125,12 +125,12 @@
     [(null? contents)
      (parse-error loc "Empty type annotation <>" #f)]
     [(= (length contents) 1)
-     ;; Single element: <Nat> or <Bool> etc
+     ;; Single element: <Nat> or <Bool> or <(-> Nat Nat)> etc
      (parse-datum (car parts))]
     [else
-     ;; Multiple elements: <(-> Nat Nat)> reads as ($angle-type (-> Nat Nat))
-     ;; which is single. But <A B> would be two elements — treat as (A B) application
-     (parse-datum (car parts))]))  ; For now, only use first element
+     ;; Multiple elements: <Nat -> Nat> reads as ($angle-type Nat -> Nat)
+     ;; Use parse-infix-type to handle arrow chains
+     (parse-infix-type parts loc)]))
 
 ;; ========================================
 ;; Main parser: datum -> surface AST
@@ -205,11 +205,58 @@
                   (surf-suc e loc))))]
 
        ;; (fn (x : T) body) or (fn (x :m T) body) or (fn [x <T>] body)
+       ;; (fn [x <T>] <RetType> body) or (fn x y <RetType> body) — with return type
        ;; Also: (fn a b c body) — multi-arg untyped fn (all-but-last are bare symbols)
        [(fn)
         (cond
           [(< (length args) 2)
            (parse-error loc "fn requires at least 2 arguments" #f)]
+          ;; NEW: (fn binder-list <RetType> body) — 3 args, first is pair, second is angle-type
+          ;; Desugars to: (ann (Pi binders RetType) (lam binders body))
+          [(and (= (length args) 3)
+                (pair? (stx->datum (car args)))
+                (angle-type-stx? (cadr args)))
+           (let ([binders (parse-fn-binders (car args) loc)]
+                 [ret-type (unwrap-angle-type (cadr args) loc)]
+                 [body (parse-datum (caddr args))])
+             (cond
+               [(prologos-error? binders) binders]
+               [(prologos-error? ret-type) ret-type]
+               [(prologos-error? body) body]
+               [else
+                ;; Build full Pi type: (Pi (x : T) ... RetType)
+                (define full-type
+                  (foldr (lambda (bnd rest-ty) (surf-pi bnd rest-ty loc))
+                         ret-type binders))
+                ;; Build nested lambdas: (lam (x : T) ... body)
+                (define nested-lam
+                  (foldr (lambda (bnd inner) (surf-lam bnd inner loc))
+                         body binders))
+                (surf-ann full-type nested-lam loc)]))]
+          ;; NEW: (fn binder-list : RetType body) — 4+ args, first is pair, second is ':'
+          ;; Colon-style return type: fn [x : Nat] : Nat body
+          ;; or fn [x : Nat] : Nat -> Nat body (multi-token return type)
+          [(and (>= (length args) 4)
+                (pair? (stx->datum (car args)))
+                (eq? (stx->datum (cadr args)) ':))
+           (let* ([binders (parse-fn-binders (car args) loc)]
+                  ;; Collect type atoms between ':' and body (last arg)
+                  [type-atoms (drop-right (cddr args) 1)]
+                  [body-stx (last args)]
+                  [ret-type (parse-infix-type type-atoms loc)]
+                  [body (parse-datum body-stx)])
+             (cond
+               [(prologos-error? binders) binders]
+               [(prologos-error? ret-type) ret-type]
+               [(prologos-error? body) body]
+               [else
+                (define full-type
+                  (foldr (lambda (bnd rest-ty) (surf-pi bnd rest-ty loc))
+                         ret-type binders))
+                (define nested-lam
+                  (foldr (lambda (bnd inner) (surf-lam bnd inner loc))
+                         body binders))
+                (surf-ann full-type nested-lam loc)]))]
           ;; Standard: (fn binder body) — exactly 2 args, first is a binder (pair)
           [(and (= (length args) 2)
                 (pair? (stx->datum (car args))))
@@ -218,6 +265,38 @@
                  (let ([body (parse-datum (cadr args))])
                    (if (prologos-error? body) body
                        (surf-lam bnd body loc)))))]
+          ;; Multi-arg with return type: (fn a b ... <RetType> body)
+          ;; penultimate arg is angle-type, all before it are bare symbols
+          [(and (>= (length args) 3)
+                (angle-type-stx? (list-ref args (- (length args) 2))))
+           (define params (drop-right args 2))
+           (define ret-type-stx (list-ref args (- (length args) 2)))
+           (define body-stx (last args))
+           (define all-symbols?
+             (andmap (lambda (a) (symbol? (stx->datum a))) params))
+           (cond
+             [(not all-symbols?)
+              (parse-error loc "fn: parameters before return type must be bare symbols or a binder [x <T>]" #f)]
+             [else
+              (define param-names (map stx->datum params))
+              (define ret-type (unwrap-angle-type ret-type-stx loc))
+              (define body (parse-datum body-stx))
+              (cond
+                [(prologos-error? ret-type) ret-type]
+                [(prologos-error? body) body]
+                [else
+                 (define binders
+                   (map (lambda (name) (binder-info name #f (surf-hole loc)))
+                        param-names))
+                 ;; Build full Pi type: (Pi (_ : _) ... RetType)
+                 (define full-type
+                   (foldr (lambda (bnd rest-ty) (surf-pi bnd rest-ty loc))
+                          ret-type binders))
+                 ;; Build nested lambdas
+                 (define nested-lam
+                   (foldr (lambda (bnd inner) (surf-lam bnd inner loc))
+                          body binders))
+                 (surf-ann full-type nested-lam loc)])])]
           ;; Multi-arg untyped: (fn a body) or (fn a b c body) — all-but-last are bare symbols
           [else
            (define params (drop-right args 1))
@@ -674,6 +753,11 @@
                     (binder-info name mult ty)))
               (parse-error loc (format "Expected variable name, got ~a" name) name)))]
 
+       ;; [x] — 1 element, bare param with inferred type (hole)
+       [(and (= (length parts) 1)
+             (symbol? (stx->datum (car parts))))
+        (binder-info (stx->datum (car parts)) #f (surf-hole loc))]
+
        [else
         (parse-error loc
                      (format "Expected binder [x <T>] or (x : T), got ~a" d)
@@ -1108,6 +1192,57 @@
                   (format "defn: expected 'name <type>' in parameter list, got ~a"
                           (map stx->datum parts))
                   #f)]))
+
+;; Parse fn binder list for return-type-annotated fn expressions.
+;; Handles both single-binder (x : T) and multi-binder [x <T>, y <U>] syntax.
+;; Returns a list of binder-info structs.
+(define (parse-fn-binders stx loc)
+  (define d (stx->datum stx))
+  (cond
+    [(not (pair? d))
+     (parse-error loc (format "fn: expected parameter list, got ~a" d) d)]
+    [else
+     (define parts
+       (if (syntax? stx) (syntax->list stx) d))
+     (cond
+       ;; Single bare param: [x] — 1 element, symbol → hole type
+       [(and (= (length parts) 1)
+             (symbol? (stx->datum (car parts))))
+        (list (binder-info (stx->datum (car parts)) #f (surf-hole loc)))]
+       ;; Single binder: (x : T) — 3 elements with colon
+       [(and (= (length parts) 3)
+             (eq? (stx->datum (cadr parts)) ':))
+        (let ([bnd (parse-binder stx loc)])
+          (if (prologos-error? bnd) bnd
+              (list bnd)))]
+       ;; Single binder: (x :m T) — 3 elements with multiplicity
+       [(and (= (length parts) 3)
+             (mult-annot? (stx->datum (cadr parts))))
+        (let ([bnd (parse-binder stx loc)])
+          (if (prologos-error? bnd) bnd
+              (list bnd)))]
+       ;; Single binder: (x ($angle-type T)) — 2 elements
+       [(and (= (length parts) 2)
+             (angle-type-stx? (cadr parts)))
+        (let ([bnd (parse-binder stx loc)])
+          (if (prologos-error? bnd) bnd
+              (list bnd)))]
+       ;; All bare params: [x y z] — all symbols, none are ':' or mults → hole types
+       [(and (> (length parts) 1)
+             (andmap (lambda (p)
+                       (let ([d (stx->datum p)])
+                         (and (symbol? d)
+                              (not (eq? d ':))
+                              (not (mult-annot? d))
+                              (not (angle-type? (if (syntax? p) (syntax-e p) d))))))
+                     parts))
+        (map (lambda (p) (binder-info (stx->datum p) #f (surf-hole loc)))
+             parts)]
+       ;; Multi-binder: delegate to parse-defn-binders
+       [else
+        (define result (parse-defn-binders stx loc))
+        (if (prologos-error? result) result
+            result)])]))
 
 ;; ========================================
 ;; Colon-based parameter parsing: [f : A -> B -> B, z : B, xs : List A]
