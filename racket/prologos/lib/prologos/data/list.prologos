@@ -6,7 +6,6 @@ provide List nil cons foldr length map filter append head singleton elem
 
 ;; ========================================
 ;; Prologos List Type
-;; Church-encoded recursive linked list.
 ;; List A = Pi(R : Type 0). R -> (A -> R -> R) -> R
 ;; ========================================
 
