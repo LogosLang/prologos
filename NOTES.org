@@ -22,6 +22,7 @@
   * Hashmaps/associative arrays/dictionaries:
     `{:key00 "value" :key01 12}`
 
+** Propagotors as first class
 ** Fully qualified namespaces
   * disambiguate imports' names
 ** Strongly typed
@@ -45,6 +46,20 @@
 ** Immutable datastructures with structural sharing, like in Clojure
   - Philip Bagwell's Ideal Hashmaps Research
   - ideal vector commitments
+
+
+
+* Logic Language
+** Runs on Propagator Infrastructure rather than typical SLD/SLG Resolution
+** First-class anonymous relation primitive
+  `defn` <=> `defr` :: `fn` <=> `rel`
+
+** Core primitives:
+  * `rel` => relation
+    - defines an anonymous relation
+
+
+
 
 
 

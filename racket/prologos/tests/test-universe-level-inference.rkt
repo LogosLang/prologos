@@ -203,7 +203,7 @@
 
 (test-case "implicit/compose-with-inferred-level"
   (check-equal?
-   (run-last "(ns lvl3)\n(require [prologos.core :refer [compose]])\n(require [prologos.data.nat :refer [double pred]])\n(eval (compose double pred 3))")
+   (run-last "(ns lvl3)\n(require [prologos.core :refer [compose]])\n(require [prologos.data.nat :refer [double dec]])\n(eval (compose double dec 3))")
    "4 : Nat"))
 
 (test-case "explicit-type-0-still-works"

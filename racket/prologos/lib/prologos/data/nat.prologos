@@ -1,6 +1,6 @@
 ns prologos.data.nat
 
-provide add mult double pred zero? sub le? lt? gt? ge? nat-eq? min max power bool-to-nat
+provide add mult double dec zero? sub le? lt? gt? ge? nat-eq? min max power bool-to-nat
 
 ;; ========================================
 ;; Prologos Natural Number Library
@@ -26,7 +26,7 @@ defn double [n : Nat] : Nat
     | inc k -> inc (inc (double k))
 
 ;; Predecessor: pred(0) = 0, pred(suc(k)) = k
-defn pred [n : Nat] : Nat
+defn dec [n : Nat] : Nat
   match n
     | zero  -> zero
     | inc k -> k
@@ -46,7 +46,7 @@ defn zero? [n : Nat] : Bool
 defn sub [x : Nat, y : Nat] : Nat
   match y
     | zero  -> x
-    | inc k -> pred (sub x k)
+    | inc k -> dec (sub x k)
 
 ;; Exponentiation: power(base, exp) = base^exp
 defn power [base : Nat, exp : Nat] : Nat
@@ -107,3 +107,5 @@ defn bool-to-nat [b : Bool] : Nat
   match b
     | true  -> inc zero
     | false -> zero
+
+

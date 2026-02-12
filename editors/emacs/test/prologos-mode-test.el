@@ -288,9 +288,9 @@ If MODE-FN is given, call it instead of `prologos-mode'."
     (should (eq prologos--ws-mode-p t))))
 
 (ert-deftest prologos-test/sexp-mode-detection ()
-  "#lang prologos/sexp should set ws-mode to nil."
+  "#lang prologos/sexp should still use WS mode (sexp not supported in editor)."
   (prologos-test--in-buffer "#lang prologos/sexp\n\n(def x <Nat> zero)"
-    (should (eq prologos--ws-mode-p nil))))
+    (should (eq prologos--ws-mode-p t))))
 
 (ert-deftest prologos-test/no-lang-detection ()
   "No #lang directive should default to WS mode (t)."

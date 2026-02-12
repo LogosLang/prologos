@@ -180,13 +180,14 @@
 
 ;; ========================================
 ;; Bracket balance checker (handles (), [], {})
+;; Note: <> are NOT counted — the > in -> would cause false imbalance.
 ;; ========================================
 (define (brackets-balanced? s)
   (let loop ([chars (string->list s)] [count 0])
     (cond
       [(null? chars) (= count 0)]
-      [(memq (car chars) '(#\( #\[ #\{ #\<)) (loop (cdr chars) (+ count 1))]
-      [(memq (car chars) '(#\) #\] #\} #\>)) (loop (cdr chars) (- count 1))]
+      [(memq (car chars) '(#\( #\[ #\{)) (loop (cdr chars) (+ count 1))]
+      [(memq (car chars) '(#\) #\] #\})) (loop (cdr chars) (- count 1))]
       [else (loop (cdr chars) count)])))
 
 ;; ========================================

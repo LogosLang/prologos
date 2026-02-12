@@ -47,7 +47,7 @@
     (check-not-false (member 'add exports) "exports add")
     (check-not-false (member 'mult exports) "exports mult")
     (check-not-false (member 'double exports) "exports double")
-    (check-not-false (member 'pred exports) "exports pred")
+    (check-not-false (member 'dec exports) "exports dec")
     (check-not-false (member 'zero? exports) "exports zero?")))
 
 ;; ========================================
@@ -104,18 +104,18 @@
 ;; prologos.data.nat — Predecessor
 ;; ========================================
 
-(test-case "nat/pred"
-  ;; pred 0 = 0
+(test-case "nat/dec"
+  ;; dec 0 = 0
   (check-equal?
-   (run-ns "(ns t9)\n(require [prologos.data.nat :refer [pred]])\n(eval (pred zero))")
+   (run-ns "(ns t9)\n(require [prologos.data.nat :refer [dec]])\n(eval (dec zero))")
    '("zero : Nat"))
-  ;; pred 3 = 2
+  ;; dec 3 = 2
   (check-equal?
-   (run-ns "(ns t10)\n(require [prologos.data.nat :refer [pred]])\n(eval (pred (inc (inc (inc zero)))))")
+   (run-ns "(ns t10)\n(require [prologos.data.nat :refer [dec]])\n(eval (dec (inc (inc (inc zero)))))")
    '("2 : Nat"))
-  ;; pred 1 = 0
+  ;; dec 1 = 0
   (check-equal?
-   (run-ns "(ns t11)\n(require [prologos.data.nat :refer [pred]])\n(eval (pred (inc zero)))")
+   (run-ns "(ns t11)\n(require [prologos.data.nat :refer [dec]])\n(eval (dec (inc zero)))")
    '("zero : Nat")))
 
 ;; ========================================

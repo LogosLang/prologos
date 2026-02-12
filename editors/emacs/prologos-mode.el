@@ -137,18 +137,13 @@ Scans region from START to END."
 ;; #lang mode detection
 ;; ============================================================
 
-(defvar-local prologos--ws-mode-p nil
+(defvar-local prologos--ws-mode-p t
   "Non-nil when the current buffer uses significant-whitespace mode.
-Detected from the `#lang' directive on the first line.")
+Prologos .prologos files always use WS mode.")
 
 (defun prologos--detect-lang-mode ()
-  "Detect whether this file uses sexp or whitespace mode.
-WS mode is the default.  Only `#lang prologos/sexp' triggers sexp mode.
-Files starting with `ns', `#lang prologos', or anything else use WS mode."
-  (save-excursion
-    (goto-char (point-min))
-    (setq prologos--ws-mode-p
-          (not (looking-at "#lang\\s-+prologos/sexp")))))
+  "Set WS mode (the only supported mode for .prologos files)."
+  (setq prologos--ws-mode-p t))
 
 ;; ============================================================
 ;; Defun navigation

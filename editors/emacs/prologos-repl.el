@@ -16,7 +16,6 @@
 ;; - Load file into REPL (C-c C-l)
 ;; - Evaluate defun at point (C-c C-d)
 ;;
-;; The REPL always runs in S-expression mode for reliable programmatic I/O.
 ;; Inline result overlays (CIDER-style) appear at the evaluation point
 ;; and auto-clear on the next command or after a configurable timeout.
 
@@ -44,8 +43,7 @@
   :group 'prologos-repl)
 
 (defcustom prologos-program-args '("-l" "prologos/repl")
-  "Arguments passed to Racket to start the Prologos REPL.
-The default launches the Prologos REPL module in sexp mode."
+  "Arguments passed to Racket to start the Prologos REPL."
   :type '(repeat string)
   :group 'prologos-repl)
 
@@ -268,12 +266,16 @@ The result appears as an overlay at point (CIDER-style)."
             (prologos--display-inline-result result display-pos)))))))
 
 (defun prologos-eval-buffer ()
-  "Evaluate the entire buffer contents in the REPL.
-Results are displayed in the echo area (not as overlay)."
+  "Evaluate the entire buffer in the REPL.
+Saves to a temporary file and uses :load for reliable multi-form processing.
+Results are displayed in the echo area."
   (interactive)
-  (let ((code (buffer-substring-no-properties (point-min) (point-max))))
-    (prologos--send-eval code
+  (let* ((tmp (make-temp-file "prologos-eval-" nil ".prologos"))
+         (code (buffer-substring-no-properties (point-min) (point-max))))
+    (write-region code nil tmp nil 'silent)
+    (prologos--send-eval (format ":load \"%s\"" tmp)
       (lambda (output)
+        (ignore-errors (delete-file tmp))
         (let ((result (prologos--parse-result output)))
           (message "Buffer evaluated: %s"
                    (or result "(no output)")))))))

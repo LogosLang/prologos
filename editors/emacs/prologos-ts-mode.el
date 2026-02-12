@@ -166,15 +166,11 @@
                 (type constant number multiplicity)
                 (operator)))
 
-  ;; Detect #lang mode — WS mode is default, sexp mode only for #lang prologos/sexp
+  ;; WS mode — .prologos files always use whitespace-significant syntax
   (prologos--detect-lang-mode)
 
   ;; Indentation — WS mode: indentation IS the syntax, use TAB cycling
-  ;; Tree-sitter indent rules don't make sense for WS-significant syntax
-  (setq-local indent-line-function
-              (if prologos--ws-mode-p
-                  #'prologos--ws-indent-line
-                #'prologos--sexp-indent-line))
+  (setq-local indent-line-function #'prologos--ws-indent-line)
 
   ;; Comments
   (setq-local comment-start ";; ")

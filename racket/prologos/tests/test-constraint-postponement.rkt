@@ -169,9 +169,9 @@
   (last (run-ns s)))
 
 (test-case "implicit/compose-three-args"
-  ;; compose double pred 3 → pred 3 = 2, double 2 = 4
+  ;; compose double dec 3 → dec 3 = 2, double 2 = 4
   (check-equal?
-   (run-last "(ns cp1)\n(require [prologos.core :refer [compose]])\n(require [prologos.data.nat :refer [double pred]])\n(eval (compose double pred 3))")
+   (run-last "(ns cp1)\n(require [prologos.core :refer [compose]])\n(require [prologos.data.nat :refer [double dec]])\n(eval (compose double dec 3))")
    "4 : Nat"))
 
 (test-case "implicit/apply-two-args"
