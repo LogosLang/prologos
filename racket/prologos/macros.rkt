@@ -21,7 +21,8 @@
          "surface-syntax.rkt"
          "source-location.rkt"
          "errors.rkt"
-         "namespace.rkt")
+         "namespace.rkt"
+         "global-env.rkt")
 
 (provide ;; Post-parse (layer 2)
          expand-top-level
@@ -962,6 +963,127 @@
       (surf-infer? surf)))
 
 ;; ========================================
+;; Collect all surf-var names from a surface type AST
+;; ========================================
+;; Walks a type-level surface AST and returns a list of symbol names
+;; in left-to-right first-appearance order (deduplicated).
+;; Used by infer-auto-implicits to find free type variables.
+(define (collect-surf-vars type-ast)
+  (define seen (make-hasheq))
+  (define result '())
+  (define (add! name)
+    (unless (hash-ref seen name #f)
+      (hash-set! seen name #t)
+      (set! result (cons name result))))
+  (define (walk ast)
+    (match ast
+      [(surf-var name _loc) (add! name)]
+      [(surf-pi binder body _loc)
+       (let ([btype (binder-info-type binder)])
+         (when btype (walk btype)))
+       (walk body)]
+      [(surf-arrow domain codomain _loc)
+       (walk domain)
+       (walk codomain)]
+      [(surf-sigma binder body _loc)
+       (let ([btype (binder-info-type binder)])
+         (when btype (walk btype)))
+       (walk body)]
+      [(surf-app func args _loc)
+       (walk func)
+       (for-each walk args)]
+      [(surf-eq type lhs rhs _loc)
+       (walk type) (walk lhs) (walk rhs)]
+      [(surf-vec-type elem-type length _loc)
+       (walk elem-type) (walk length)]
+      [(surf-fin-type bound _loc)
+       (walk bound)]
+      [(surf-ann type term _loc)
+       (walk type) (walk term)]
+      [(surf-suc pred _loc)
+       (walk pred)]
+      ;; Terminal nodes that are not variable references — skip
+      [(surf-hole _) (void)]
+      [(surf-type _ _) (void)]
+      [(surf-nat-type _) (void)]
+      [(surf-bool-type _) (void)]
+      [(surf-posit8-type _) (void)]
+      [(surf-zero _) (void)]
+      [(surf-true _) (void)]
+      [(surf-false _) (void)]
+      [(surf-refl _) (void)]
+      [(surf-nat-lit _ _) (void)]
+      ;; Catch-all for any unhandled nodes
+      [_ (void)]))
+  (walk type-ast)
+  (reverse result))
+
+;; ========================================
+;; Auto-implicit type parameter inference
+;; ========================================
+
+;; Built-in type/constructor names that should never become auto-implicits.
+;; These are symbols recognized by parse-symbol in parser.rkt.
+(define builtin-names
+  '(Nat Bool Type Posit8 zero true false refl inc
+    Pi Sigma Eq Vec Fin natrec boolrec J pair fst snd
+    vnil vcons vhead vtail vindex fzero fsuc
+    posit8 p8+ p8- p8* p8/ p8-neg p8-abs p8-sqrt p8< p8<= p8-from-nat p8-if-nar))
+
+;; Check if a symbol is a "known name" — should NOT be treated as a free type variable.
+(define (known-name? name)
+  (or (memq name builtin-names)
+      (global-env-lookup-type name)                      ;; previously defined def/defn
+      (hash-ref (current-ctor-registry) name #f)         ;; data constructor
+      (hash-ref (current-type-meta) name #f)             ;; data type name
+      (hash-ref (current-preparse-registry) name #f)))   ;; deftype alias / macro
+
+;; Detect if a surf-defn already has explicit implicit params (from {A B} syntax).
+;; If the first Pi binder has mult='m0 and type=(surf-type ...) and its name
+;; matches the first param-name, then the parser already inserted implicits.
+(define (has-leading-implicits? type-ast param-names)
+  (and (not (null? param-names))
+       (match type-ast
+         [(surf-pi (binder-info bname 'm0 (surf-type _ _)) _body _loc)
+          (eq? bname (car param-names))]
+         [_ #f])))
+
+;; Infer auto-implicit type parameters for a surf-defn.
+;; If the defn already has explicit implicits, returns unchanged.
+;; Otherwise, finds free type variables in the type signature and
+;; prepends them as implicit (m0) parameters of type Type (level inferred).
+(define (infer-auto-implicits form)
+  (match form
+    [(surf-defn name type-ast param-names body-ast loc)
+     (cond
+       ;; Already has explicit {A B} — skip
+       [(has-leading-implicits? type-ast param-names) form]
+       [else
+        (define all-vars (collect-surf-vars type-ast))
+        ;; Filter out: param names, known names
+        (define free-vars
+          (filter (lambda (v)
+                    (and (not (memq v param-names))
+                         (not (known-name? v))))
+                  all-vars))
+        (cond
+          [(null? free-vars) form]
+          [else
+           ;; Build implicit binders
+           (define implicit-binders
+             (map (lambda (v) (binder-info v 'm0 (surf-type #f loc)))
+                  free-vars))
+           ;; Prepend Pi binders to type-ast
+           (define new-type-ast
+             (foldr (lambda (bnd rest) (surf-pi bnd rest loc))
+                    type-ast
+                    implicit-binders))
+           ;; Prepend names to param-names
+           (define new-param-names (append free-vars param-names))
+           (surf-defn name new-type-ast new-param-names body-ast loc)])])]
+    [_ form]))
+
+;; ========================================
 ;; Extract Pi binders from a surface type AST
 ;; ========================================
 ;; Walks the type to collect the chain of Pi/arrow binders.
@@ -1093,9 +1215,10 @@
      (prologos-error
       srcloc-unknown
       "Macro expansion depth limit exceeded (possible infinite loop)")]
-    ;; Built-in: defn desugaring
+    ;; Built-in: defn desugaring (with auto-implicit inference)
     [(surf-defn? surf)
-     (define result (desugar-defn surf))
+     (define with-implicits (infer-auto-implicits surf))
+     (define result (desugar-defn with-implicits))
      (if (prologos-error? result)
          result
          (expand-top-level result (+ depth 1)))]
