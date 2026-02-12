@@ -15,48 +15,54 @@ data List {A}
 
 ;; Right fold over the list.
 ;; foldr f z xs = xs B z f
-defn foldr {A B} [f : A -> B -> B, z : B, xs : List A] : B
+defn foldr [f : A -> B -> B
+            z : B
+            xs : List A] : B
   xs B z f
 
 ;; Length of a list.
-defn length {A} [xs : List A] : Nat
+defn length [xs : List A] : Nat
   match xs
     | nil      -> zero
     | cons _ n -> inc n
 
 ;; Map a function over the list.
-defn map {A B} [f : A -> B, xs : List A] : List B
+defn map [f  : A -> B
+          xs : List A] : List B
   match xs
     | nil       -> nil
     | cons a as -> cons (f a) (map f as)
 
 ;; Filter: keep elements satisfying the predicate.
-defn filter {A} [pred : A -> Bool, xs : List A] : List A
+defn filter [pred : A -> Bool
+             xs   : List A] : List A
   match xs
     | nil       -> nil
     | cons a as -> match (pred a)
-                    | true  -> cons a (filter pred as)
-                    | false -> filter pred as
+      | true  -> cons a (filter pred as)
+      | false -> filter pred as
 
 ;; Append two lists.
-defn append {A} [xs : List A, ys : List A] : List A
+defn append [xs : List A
+             ys : List A] : List A
   match xs
     | nil       -> ys
     | cons a as -> cons a (append as ys)
 
 
 ;; Head of a list with a default value.
-defn head {A} [default : A, xs : List A] : A
+defn head [default : A
+           xs      : List A] : A
   match xs
     | nil      -> default
     | cons a _ -> a
 
 ;; Singleton list: a list containing one element.
-defn singleton {A} [x : A] : List A
+defn singleton [x : A] : List A
   cons x nil
 
 ;; Element membership: check if x is in the list using Eq dictionary.
-defn elem {A} [eq : Eq A, x : A, xs : List A] : Bool
+defn elem [eq : Eq A, x : A, xs : List A] : Bool
   match xs
     | nil        -> false
     | cons a acc -> match (eq x a)

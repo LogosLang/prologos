@@ -27,6 +27,14 @@
 (require 'prologos-font-lock)
 (require 'prologos-indent)
 
+;; REPL integration (autoloaded — only loaded when first invoked)
+(autoload 'prologos-repl "prologos-repl" "Start or switch to the Prologos REPL." t)
+(autoload 'prologos-eval-last-sexp "prologos-repl" "Evaluate the sexp before point." t)
+(autoload 'prologos-eval-region "prologos-repl" "Evaluate the region." t)
+(autoload 'prologos-eval-buffer "prologos-repl" "Evaluate the entire buffer." t)
+(autoload 'prologos-load-file "prologos-repl" "Load current file into REPL." t)
+(autoload 'prologos-eval-defun-at-point "prologos-repl" "Evaluate defun at point." t)
+
 ;; ============================================================
 ;; Customization
 ;; ============================================================
@@ -170,6 +178,21 @@ Files starting with `ns', `#lang prologos', or anything else use WS mode."
     ("Macros"      "^\\s-*(defmacro\\s-+\\([a-zA-Z_][a-zA-Z0-9_!?*-]*\\)" 1)
     ("Data"        "^\\s-*(data\\s-+(?\\([A-Z][a-zA-Z0-9_]*\\)" 1))
   "Imenu generic expression for Prologos mode.")
+
+;; ============================================================
+;; Keymap
+;; ============================================================
+
+(defvar prologos-mode-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map (kbd "C-c C-z") #'prologos-repl)
+    (define-key map (kbd "C-x C-e") #'prologos-eval-last-sexp)
+    (define-key map (kbd "C-c C-r") #'prologos-eval-region)
+    (define-key map (kbd "C-c C-k") #'prologos-eval-buffer)
+    (define-key map (kbd "C-c C-l") #'prologos-load-file)
+    (define-key map (kbd "C-c C-d") #'prologos-eval-defun-at-point)
+    map)
+  "Keymap for `prologos-mode'.")
 
 ;; ============================================================
 ;; Mode definition
