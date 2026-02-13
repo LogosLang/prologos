@@ -406,12 +406,17 @@
 (define (load-module ns-sym base-dir)
   ;; 1. Check cache
   (define cached (lookup-module ns-sym))
-  (when cached (begin cached))
-  (when cached cached)
 
-  ;; Actually return early if cached
+  ;; Return early if cached — but still import env into caller
   (cond
-    [cached cached]
+    [cached
+     ;; Import ALL of the cached module's definitions into the caller's global env.
+     ;; Without this, modules loaded in nested parameterize scopes (which start
+     ;; with fresh empty envs) can't see definitions from previously-cached modules.
+     (for ([(k v) (in-hash (module-info-env-snapshot cached))])
+       (current-global-env
+        (hash-set (current-global-env) k v)))
+     cached]
     [else
      ;; 2. Check for circular dependencies
      (when (set-member? (current-loading-set) ns-sym)

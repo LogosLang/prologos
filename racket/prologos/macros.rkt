@@ -26,6 +26,7 @@
 
 (provide ;; Post-parse (layer 2)
          expand-top-level
+         expand-expression
          current-macro-registry
          register-macro!
          ;; Pre-parse (layer 1)
@@ -1119,8 +1120,26 @@
      (define result (desugar-the-fn surf))
      (if (prologos-error? result) result (expand-expression result))]
     ;; Walk sub-expressions
+    ;; Placeholder desugaring: _ in app args → anonymous lambda
+    ;; (add 1 _) → (fn [$_0] (add 1 $_0))
+    ;; (clamp _ 100 _) → (fn [$_0 $_1] (clamp $_0 100 $_1))
     [(surf-app fn args loc)
-     (surf-app (expand-expression fn) (map expand-expression args) loc)]
+     (if (ormap surf-hole? args)
+         (let* ([hole-count (count surf-hole? args)]
+                [names (for/list ([i (in-range hole-count)])
+                         (string->symbol (format "$_~a" i)))]
+                [new-args (let loop ([as args] [ns names])
+                            (cond
+                              [(null? as) '()]
+                              [(surf-hole? (car as))
+                               (cons (surf-var (car ns) loc) (loop (cdr as) (cdr ns)))]
+                              [else (cons (car as) (loop (cdr as) ns))]))]
+                [new-app (surf-app fn new-args loc)]
+                [result (foldr (lambda (name inner)
+                                 (surf-lam (binder-info name #f (surf-hole loc)) inner loc))
+                               new-app names)])
+           (expand-expression result))
+         (surf-app (expand-expression fn) (map expand-expression args) loc))]
     [(surf-lam binder body loc)
      (surf-lam binder (expand-expression body) loc)]
     [(surf-ann type term loc)

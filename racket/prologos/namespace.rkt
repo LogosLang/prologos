@@ -380,14 +380,15 @@
     [else
      (error 'require "Invalid require spec: ~a" spec)]))
 
-;; Ensure a module is loaded, returning its module-info (or #f if loader unavailable)
+;; Ensure a module is loaded, returning its module-info (or #f if loader unavailable).
+;; Always calls load-module (even if cached) so that load-module can import
+;; the module's env-snapshot into the caller's current-global-env.
 (define (ensure-module-loaded ns-sym)
-  (or (lookup-module ns-sym)
-      (let ([loader (current-module-loader)])
-        (cond
-          [loader
-           (define mod (loader ns-sym #f))
-           mod]
-          [else
-           ;; No loader available — module must already be registered
-           #f]))))
+  (let ([loader (current-module-loader)])
+    (cond
+      [loader
+       (define mod (loader ns-sym #f))
+       mod]
+      [else
+       ;; No loader available — check cache directly
+       (lookup-module ns-sym)])))

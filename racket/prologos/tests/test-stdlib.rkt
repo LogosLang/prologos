@@ -1788,10 +1788,11 @@
    (last (run-ns "(ns imp8)\n(require [prologos.data.option :refer [Option none unwrap-or]])\n(eval (unwrap-or Nat (inc zero) none))"))
    "1 : Nat"))
 
-;; underscore _ as explicit hole in sexp mode
-(test-case "implicit/explicit-underscore-hole"
+;; underscore _ in app args now desugars to placeholder (partial application).
+;; Use explicit type argument Nat instead of _ hole.
+(test-case "implicit/explicit-type-arg"
   (check-equal?
-   (last (run-ns "(ns imp9)\n(require [prologos.data.list :refer [List nil cons length]])\n(eval (length Nat (cons _ zero nil)))"))
+   (last (run-ns "(ns imp9)\n(require [prologos.data.list :refer [List nil cons length]])\n(eval (length Nat (cons Nat zero nil)))"))
    "1 : Nat"))
 
 ;; ========================================
