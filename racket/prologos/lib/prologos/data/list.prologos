@@ -20,11 +20,12 @@ data List {A}
 ;; ========================================
 
 ;; Right fold over the list.
-;; foldr f z xs = xs B z f
 defn foldr [f : A -> B -> B
             z : B
             xs : List A] : B
-  xs B z f
+  match xs
+    | nil       -> z
+    | cons a as -> f a (foldr f z as)
 
 ;; Left fold over the list (tail-recursive).
 ;; foldl f z [a,b,c] = f (f (f z a) b) c
@@ -43,7 +44,7 @@ defn foldl [f : B -> A -> B
 defn length [xs : List A] : Nat
   match xs
     | nil      -> zero
-    | cons _ n -> inc n
+    | cons _ as -> inc (length as)
 
 ;; Map a function over the list.
 defn map [f  : A -> B
@@ -88,10 +89,10 @@ defn singleton [x : A] : List A
 ;; Element membership: check if x is in the list using Eq dictionary.
 defn elem [eq : Eq A, x : A, xs : List A] : Bool
   match xs
-    | nil        -> false
-    | cons a acc -> match (eq x a)
-                      | true  -> true
-                      | false -> acc
+    | nil       -> false
+    | cons a as -> match (eq x a)
+                     | true  -> true
+                     | false -> elem eq x as
 
 ;; ========================================
 ;; Derived from foldl

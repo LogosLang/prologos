@@ -126,87 +126,6 @@
             (expr-reduce-arm-body arm)))]
     [else #f]))
 
-;; Reify a Church-encoded value into constructor-application form.
-;; Church-fold the lambda with constructors as branch arguments so that
-;; structural PM can decompose the result.
-;; scrut is a lambda (Church encoding), arms give us the constructor names.
-;; Returns a reified expression (constructor applications) or #f.
-(define (try-reify-church scrut arms)
-  ;; Find the constructor metadata from the first arm
-  (define first-ctor-name (expr-reduce-arm-ctor-name (car arms)))
-  (define meta (or (lookup-ctor first-ctor-name)
-                   ;; Try FQN lookup through global env constructors
-                   (for/or ([arm (in-list arms)])
-                     (define name (expr-reduce-arm-ctor-name arm))
-                     (or (lookup-ctor name)
-                         ;; Search ctor registry for a name ending with this short name
-                         (for/or ([(k v) (in-hash (current-ctor-registry))])
-                           (and (eq? (ctor-short-name k) name) v))))))
-  (and meta
-       (let* ([type-name (ctor-meta-type-name meta)]
-              [type-ctors (lookup-type-ctors type-name)])
-         (and type-ctors
-              ;; Build Church fold: scrut (hole) ctor1-wrapper ctor2-wrapper ...
-              ;; Each ctor-wrapper wraps the constructor fvar in lambdas for its fields,
-              ;; applying the fvar to holes (for type params) and bvars (for fields).
-              (let ([branch-args
-                     (for/list ([ctor-name (in-list type-ctors)])
-                       (define cmeta (or (lookup-ctor ctor-name)
-                                        (for/or ([(k v) (in-hash (current-ctor-registry))])
-                                          (and (eq? (ctor-short-name k) ctor-name) v))))
-                       (if (not cmeta)
-                           (expr-hole) ;; shouldn't happen, but be defensive
-                           (let* ([n-params (length (ctor-meta-params cmeta))]
-                                  [n-fields (length (ctor-meta-field-types cmeta))]
-                                  ;; Build the fvar name — prefer FQN if available
-                                  [fvar-name
-                                   (or (for/or ([(k v) (in-hash (current-ctor-registry))])
-                                         (and (eq? v cmeta) k))
-                                       ctor-name)]
-                                  ;; Build inner application: (fvar-name hole ... bvar(n-1) ... bvar(0))
-                                  [inner
-                                   (let* ([base (expr-fvar fvar-name)]
-                                          ;; Apply type params as holes
-                                          [with-params
-                                           (for/fold ([app base])
-                                                     ([_ (in-range n-params)])
-                                             (expr-app app (expr-hole)))]
-                                          ;; Apply field bvars: bvar(n-1), bvar(n-2), ..., bvar(0)
-                                          [with-fields
-                                           (for/fold ([app with-params])
-                                                     ([i (in-range n-fields)])
-                                             (expr-app app (expr-bvar (- n-fields 1 i))))])
-                                     with-fields)])
-                             ;; Wrap in lambdas for each field
-                             (for/fold ([e inner])
-                                       ([_ (in-range n-fields)])
-                               (expr-lam 'mw (expr-hole) e)))))])
-                ;; Build Church fold application: (((...(scrut (hole)) ctor1) ctor2) ...)
-                (let ([app (foldl (lambda (branch acc)
-                                   (expr-app acc branch))
-                                 (expr-app scrut (expr-hole))
-                                 branch-args)])
-                  ;; Beta-reduce only (no fvar unfolding) to get constructor apps
-                  (whnf-no-unfold app)))))))
-
-;; ========================================
-;; Beta-only WHNF — no global definition unfolding
-;; Used by try-reify-church to Church-fold a value into
-;; constructor applications without re-unfolding the constructors.
-;; ========================================
-(define (whnf-no-unfold e)
-  (match e
-    [(expr-app (expr-lam _ _ body) arg)
-     (whnf-no-unfold (subst 0 arg body))]
-    [(expr-app f arg)
-     (let ([f* (whnf-no-unfold f)])
-       (if (equal? f* f)
-           e
-           (whnf-no-unfold (expr-app f* arg))))]
-    [(expr-fst (expr-pair e1 _)) (whnf-no-unfold e1)]
-    [(expr-snd (expr-pair _ e2)) (whnf-no-unfold e2)]
-    [(expr-ann e1 _) (whnf-no-unfold e1)]
-    [_ e]))
 
 ;; ========================================
 ;; Weak Head Normal Form
@@ -371,26 +290,26 @@
      ;; substitute field values into matching arm body.
      ;; Try user-defined constructors (fvar applications) first, then built-in
      ;; constructors (expr-zero, expr-suc, expr-true, expr-false).
+     ;; With native constructors, constructor fvars are never unfolded,
+     ;; so the scrutinee is always a constructor application (not a lambda).
      (define scrut-whnf* (whnf scrutinee))
      (define struct-result (or (try-structural-reduce scrutinee arms)
                                (try-structural-reduce scrut-whnf* arms)
                                (try-builtin-reduce scrut-whnf* arms)))
-     (cond
-       [struct-result (whnf struct-result)]
-       ;; Structural PM stuck on a Church-encoded value (lambda).
-       ;; Reify: Church-fold the scrutinee with the actual constructors
-       ;; to produce constructor applications, then retry structural PM.
-       [(expr-lam? scrut-whnf*)
-        (define reified (try-reify-church scrut-whnf* arms))
-        (if reified
-            (whnf (expr-reduce reified arms #t))
-            e)]
-       [else e])]
+     (if struct-result
+         (whnf struct-result)
+         e)]  ;; stuck — scrutinee is neutral
 
-    ;; Free variable: unfold global definition if available
+    ;; Free variable: unfold global definition if available.
+    ;; Constructor and type-name fvars are canonical — do NOT unfold.
+    ;; This keeps constructor applications as (fvar 'cons arg1 arg2) in WHNF,
+    ;; allowing structural PM (try-structural-reduce) to decompose them.
     [(expr-fvar name)
-     (let ([val (global-env-lookup-value name)])
-       (if val (whnf val) e))]
+     (if (or (lookup-ctor name) (lookup-ctor (ctor-short-name name))
+             (lookup-type-ctors name) (lookup-type-ctors (ctor-short-name name)))
+         e  ;; constructor or type name: canonical, don't unfold
+         (let ([val (global-env-lookup-value name)])
+           (if val (whnf val) e)))]
 
     ;; Metavariable: if solved, reduce solution; if unsolved, stuck
     [(expr-meta id)

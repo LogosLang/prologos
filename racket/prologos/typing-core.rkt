@@ -452,31 +452,18 @@
      (let-values ([(type-ctor-name type-args) (decompose-type-app scrut-type)])
        (define bare-tc (and type-ctor-name (bare-name type-ctor-name)))
        (define type-ctors (and bare-tc (lookup-type-ctors bare-tc)))
-       (define builtin-type? (and bare-tc (memq bare-tc '(Nat Bool))))
-       (if builtin-type?
-           ;; Built-in types (Nat/Bool): structural PM first, Church fold fallback
-           (or (and type-ctors (not (null? type-ctors))
-                    (let ([result (check-reduce-structural ctx arms expected-type
-                                             type-ctor-name type-args)])
-                      (when result (mark-structural-reduce! reduce-expr))
-                      result))
-               (check-reduce-church ctx scrutinee arms expected-type))
-           ;; User-defined types: Church fold first, structural fallback.
-           ;; Save meta state before Church fold attempt so that if it fails,
-           ;; the structural PM attempt starts with clean (unsolved) metas.
-           ;; Church fold desugaring solves metas as side effects, and those
-           ;; solutions may be at the wrong de Bruijn depth for structural PM.
-           (let ([saved-meta-state (save-meta-state)])
-             (let ([church-result (check-reduce-church ctx scrutinee arms expected-type)])
-               (or church-result
-                   (begin
-                     ;; Restore metas to pre-Church-fold state before structural PM
-                     (restore-meta-state! saved-meta-state)
-                     (and type-ctors (not (null? type-ctors))
-                          (let ([result (check-reduce-structural ctx arms expected-type
-                                                     type-ctor-name type-args)])
-                            (when result (mark-structural-reduce! reduce-expr))
-                            result))))))))]))
+       (cond
+         ;; Structural PM for all types with constructor metadata
+         ;; (both built-in and user-defined). With native constructors,
+         ;; there is no Church fold / structural PM split — all match
+         ;; uses structural decomposition.
+         [(and type-ctors (not (null? type-ctors)))
+          (let ([result (check-reduce-structural ctx arms expected-type
+                                                  type-ctor-name type-args)])
+            (when result (mark-structural-reduce! reduce-expr))
+            result)]
+         ;; Fallback: Church fold for types without constructor metadata
+         [else (check-reduce-church ctx scrutinee arms expected-type)]))]))
 
 
 ;; Built-in constructor types for Nat/Bool (not in global-env)

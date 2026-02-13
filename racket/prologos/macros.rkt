@@ -860,14 +860,17 @@
        (list (car p) ':0 (cdr p)))
      church-body))
 
-  ;; Type type: param-types -> (Type 1)
-  ;; Church encoding lives in (Type 1) because it quantifies over R : (Type 0)
+  ;; Type type: param-types -> (Type 0)
+  ;; With native constructors (non-unfolding fvars), user-defined types
+  ;; are opaque and live at Type 0, matching built-in types (Nat, Bool).
+  ;; The Church-encoded body is retained for backward compat but never
+  ;; unfolded at runtime (whnf guards constructor/type fvars).
   (define type-type
     (if (null? params)
-        '(Type 1)
+        '(Type 0)
         (build-nested-pi
          param-pi-bindings
-         '(Type 1))))
+         '(Type 0))))
 
   ;; The type def
   (define type-def

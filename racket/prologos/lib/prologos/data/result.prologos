@@ -4,7 +4,6 @@ provide Result ok err map map-err unwrap-or and-then or-else
 
 ;; ========================================
 ;; Prologos Result Type
-;; Church-encoded error-or-value.
 ;; ========================================
 
 data Result {A E}
