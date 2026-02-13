@@ -37,7 +37,17 @@
          process-file
          process-string
          load-module
-         install-module-loader!)
+         install-module-loader!
+         prologos-lib-dir)
+
+;; ========================================
+;; Standard library path (computed from this module's location)
+;; ========================================
+;; driver.rkt lives at prologos/driver.rkt, lib/ is at prologos/lib/
+(define prologos-lib-dir
+  (let ([mod-path (variable-reference->module-path-index (#%variable-reference))])
+    (define resolved (resolved-module-path-name (module-path-index-resolve mod-path)))
+    (simplify-path (build-path (path-only resolved) "lib"))))
 
 ;; ========================================
 ;; Sprint 9: Recover a name map from the meta store for error formatting.
@@ -527,8 +537,11 @@
 ;; Install the module loader callback
 ;; ========================================
 ;; Call this at startup to wire up the namespace system.
+;; Also sets the standard library path if not already configured.
 (define (install-module-loader!)
-  (current-module-loader load-module))
+  (current-module-loader load-module)
+  (when (null? (current-lib-paths))
+    (current-lib-paths (list prologos-lib-dir))))
 
 ;; Auto-install on module load
 (install-module-loader!)

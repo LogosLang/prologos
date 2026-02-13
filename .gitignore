@@ -1,0 +1,13 @@
+# Racket compilation caches
+**/compiled/
+
+# Emacs
+.#*
+*~
+\#*\#
+
+# LaTeX image previews
+ltximg/
+
+# macOS
+.DS_Store

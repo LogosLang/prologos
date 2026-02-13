@@ -303,6 +303,60 @@
   (check-equal? (list-ref result 3) "false : Bool"))
 
 ;; ========================================
+;; Multi-spec require + :as alias + qualified access
+;; ========================================
+
+(test-case "multi-spec require (WS: single require, multiple specs)"
+  ;; Single require keyword with two indented specs
+  (define result
+    (run-ns "(ns msr1)
+             (require [prologos.data.nat :as nat :refer [add]]
+                      [prologos.data.bool :as bool :refer [not]])
+             (eval (add (inc zero) (inc (inc zero))))
+             (eval (not true))"))
+  (check-equal? (length result) 2)
+  (check-equal? (first result) "3 : Nat")
+  (check-equal? (second result) "false : Bool"))
+
+(test-case "multi-spec require with qualified access to non-referred name"
+  ;; 'double' is not in :refer, but nat/double works via alias
+  (check-equal?
+   (run-ns "(ns msr2)\n(require [prologos.data.nat :as nat])\n(eval (nat/double (inc (inc (inc zero)))))")
+   '("6 : Nat")))
+
+(test-case "multi-spec require mixed: referred bare + qualified alias"
+  ;; 'add' is referred (bare access), 'double' is not (qualified access)
+  (define result
+    (run-ns "(ns msr3)
+             (require [prologos.data.nat :as nat :refer [add mult]]
+                      [prologos.data.list :as list :refer [List nil cons map]])
+             (def three <Nat> (add (inc zero) (inc (inc zero))))
+             (eval three)
+             (eval (nat/double three))
+             (eval (map (nat/double _) (cons (inc zero) (cons (inc (inc zero)) nil))))"))
+  (check-equal? (length result) 4)
+  (check-equal? (list-ref result 0) "three : Nat defined.")
+  (check-equal? (list-ref result 1) "3 : Nat")
+  (check-equal? (list-ref result 2) "6 : Nat")
+  ;; map (nat/double _) [1, 2] => [2, 4]
+  (check-true (string-contains? (list-ref result 3) "2"))
+  (check-true (string-contains? (list-ref result 3) "4")))
+
+(test-case "multi-spec require with three modules"
+  (define result
+    (run-ns "(ns msr4)
+             (require [prologos.data.nat  :as nat  :refer [add]]
+                      [prologos.data.bool :as bool :refer [not]]
+                      [prologos.data.list :as list :refer [List nil cons length]])
+             (eval (add (inc zero) (inc (inc zero))))
+             (eval (bool/and true false))
+             (eval (length Nat (cons (inc zero) (cons (inc (inc zero)) nil))))"))
+  (check-equal? (length result) 3)
+  (check-equal? (first result) "3 : Nat")
+  (check-equal? (second result) "false : Bool")
+  (check-equal? (third result) "2 : Nat"))
+
+;; ========================================
 ;; prologos.data.nat — Subtraction
 ;; ========================================
 

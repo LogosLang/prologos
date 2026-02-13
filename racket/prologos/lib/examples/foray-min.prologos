@@ -1,0 +1,11 @@
+ns examples.foray-min
+
+require [prologos.data.list :refer [List nil cons map length]]
+require [prologos.data.nat :refer [add]]
+
+provide inc-all
+
+defn inc-all [xs : List Nat] : List Nat
+  map (add _ (inc zero)) xs
+
+eval (inc-all (cons (inc zero) (cons (inc (inc zero)) nil)))
