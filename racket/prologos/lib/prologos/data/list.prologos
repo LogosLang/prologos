@@ -1,10 +1,8 @@
 ns prologos.data.list
 
 require [prologos.core.eq-trait :refer [nat-eq]]
-require [prologos.data.option :refer [Option none some]]
-require [prologos.data.nat :refer [add mult dec zero?]]
-
-provide List nil cons foldr reduce length map filter append head tail singleton elem reverse sum product any? all? find nth last replicate range concat concat-map take drop split-at take-while drop-while partition zip-with zip unzip intersperse halve merge sort
+        [prologos.data.option   :refer [Option none some]]
+        [prologos.data.nat      :refer [add mult dec zero?]]
 
 ;; ========================================
 ;; Prologos List Type

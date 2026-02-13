@@ -498,20 +498,31 @@
      (current-multi-defn-registry mod-multi-defn-reg)
 
      ;; 5. Build module-info
+     ;; Export determination priority:
+     ;;   1. Explicit `provide` overrides everything (backward compat)
+     ;;   2. Auto-exports from public def/defn/data/deftype/defmacro
+     ;;   3. No provide and no auto-exports → export nothing
      (define exports
-       (if (and mod-ns-ctx (ns-context-exports mod-ns-ctx))
-           (let ([exp (ns-context-exports mod-ns-ctx)])
-             (cond
-               ;; :all — export everything defined in the namespace
-               [(and (pair? exp) (eq? (car exp) ':all))
-                (for/list ([(k _) (in-hash mod-env)]
-                           #:when (let-values ([(prefix name) (split-qualified-name k)])
-                                    (and prefix (eq? prefix ns-sym))))
-                  (let-values ([(_ name) (split-qualified-name k)])
-                    name))]
-               [else exp]))
-           ;; No provide — export nothing (or we could default to all?)
-           '()))
+       (cond
+         ;; Explicit provide present and non-empty
+         [(and mod-ns-ctx
+               (not (null? (ns-context-exports mod-ns-ctx))))
+          (let ([exp (ns-context-exports mod-ns-ctx)])
+            (cond
+              ;; :all — export everything defined in the namespace
+              [(and (pair? exp) (eq? (car exp) ':all))
+               (for/list ([(k _) (in-hash mod-env)]
+                          #:when (let-values ([(prefix name) (split-qualified-name k)])
+                                   (and prefix (eq? prefix ns-sym))))
+                 (let-values ([(_ name) (split-qualified-name k)])
+                   name))]
+              [else exp]))]
+         ;; No explicit provide — use auto-exports if available
+         [(and mod-ns-ctx
+               (not (null? (ns-context-auto-exports mod-ns-ctx))))
+          (reverse (ns-context-auto-exports mod-ns-ctx))]
+         ;; No provide and no auto-exports — export nothing
+         [else '()]))
 
      (define mi (module-info ns-sym
                              exports

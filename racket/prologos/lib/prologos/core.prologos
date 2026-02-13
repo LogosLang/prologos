@@ -1,7 +1,5 @@
 ns prologos.core
 
-provide id const compose apply flip on
-
 ;; ========================================
 ;; Prologos Core Library
 ;; Auto-loaded when a file uses (ns ...).

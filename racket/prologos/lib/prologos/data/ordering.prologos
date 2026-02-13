@@ -1,7 +1,5 @@
 ns prologos.data.ordering
 
-provide Ordering lt-ord eq-ord gt-ord
-
 ;; ========================================
 ;; Prologos Ordering Type
 ;; Three-way comparison result.

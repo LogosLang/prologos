@@ -273,40 +273,140 @@
 ;; Handles defmacro and deftype forms (consumes them).
 ;; Expands all other forms.
 ;; Returns filtered list of syntax objects.
+;; Helper: auto-export a name if a namespace context is active.
+;; Does nothing if no ns-context (legacy mode).
+(define (auto-export-name! name)
+  (when (current-ns-context)
+    (current-ns-context
+     (ns-context-add-auto-export (current-ns-context) name))))
+
+;; Helper: auto-export multiple names.
+(define (auto-export-names! names)
+  (for ([name (in-list names)])
+    (auto-export-name! name)))
+
+;; Helper: detect private suffix forms (defn-, def-, data-, deftype-, defmacro-).
+;; Returns the base keyword symbol (e.g., 'defn for 'defn-) or #f.
+(define (private-form-base head)
+  (case head
+    [(defn-)    'defn]
+    [(def-)     'def]
+    [(data-)    'data]
+    [(deftype-) 'deftype]
+    [(defmacro-) 'defmacro]
+    [else #f]))
+
+;; Helper: extract the defined name(s) from a top-level form datum.
+;; Returns a list of symbols for auto-export.
+;;  - defn, def: (cadr datum) is the name
+;;  - deftype: (caadr datum) if parameterized, (cadr datum) if bare alias
+;;  - defmacro: (caadr datum) (first element of the pattern)
+;;  - data: handled separately (type + constructor names from process-data result)
+(define (extract-defined-name datum head)
+  (case head
+    [(defn def)
+     (if (and (>= (length datum) 2) (symbol? (cadr datum)))
+         (list (cadr datum))
+         '())]
+    [(deftype)
+     (if (>= (length datum) 2)
+         (let ([pattern (cadr datum)])
+           (cond
+             [(symbol? pattern) (list pattern)]
+             [(and (pair? pattern) (symbol? (car pattern))) (list (car pattern))]
+             [else '()]))
+         '())]
+    [(defmacro)
+     (if (and (>= (length datum) 2) (pair? (cadr datum)) (symbol? (caadr datum)))
+         (list (caadr datum))
+         '())]
+    [else '()]))
+
 (define (preparse-expand-all stxs)
   (define result
     (for/fold ([acc '()])
               ([stx (in-list stxs)])
       (define datum (syntax->datum stx))
+      (define head (and (pair? datum) (car datum)))
       (cond
         ;; ns — set namespace context and consume
-        [(and (pair? datum) (eq? (car datum) 'ns))
+        [(and (pair? datum) (eq? head 'ns))
          (process-ns-declaration datum)
          acc]
         ;; require — import module and consume
-        [(and (pair? datum) (eq? (car datum) 'require))
+        [(and (pair? datum) (eq? head 'require))
          (process-require datum)
          acc]
         ;; provide — record exports and consume
-        [(and (pair? datum) (eq? (car datum) 'provide))
+        [(and (pair? datum) (eq? head 'provide))
          (process-provide datum)
          acc]
-        ;; defmacro — register and consume
-        [(and (pair? datum) (eq? (car datum) 'defmacro))
+
+        ;; ---- Private suffix forms: defn-, def-, data-, deftype-, defmacro- ----
+        ;; Rewrite to the base form but do NOT auto-export.
+        [(and (pair? datum) (private-form-base head))
+         => (lambda (base)
+              (define rewritten (cons base (cdr datum)))
+              (cond
+                [(eq? base 'defmacro)
+                 (process-defmacro rewritten)
+                 acc]
+                [(eq? base 'deftype)
+                 (process-deftype rewritten)
+                 acc]
+                [(eq? base 'data)
+                 (define defs (process-data rewritten))
+                 (define new-stxs
+                   (for/list ([d (in-list defs)])
+                     (datum->syntax #f d stx)))
+                 (append (reverse new-stxs) acc)]
+                ;; def- or defn- — rewrite head, preserving child syntax properties
+                [else
+                 ;; Replace just the head symbol in the syntax list to preserve
+                 ;; properties like paren-shape on child nodes (e.g., [params]).
+                 (define children (if (syntax? stx) (syntax->list stx) #f))
+                 (define new-stx
+                   (if children
+                       ;; Replace head syntax object, keep remaining children
+                       (datum->syntax stx (cons (datum->syntax (car children) base (car children))
+                                                (cdr children))
+                                      stx)
+                       ;; Fallback: pure datum
+                       (datum->syntax #f rewritten stx)))
+                 (define expanded (preparse-expand-form (syntax->datum new-stx)))
+                 (if (equal? expanded rewritten)
+                     (cons new-stx acc)
+                     (cons (datum->syntax #f expanded stx) acc))]))]
+
+        ;; ---- Public defmacro — register, consume, AND auto-export ----
+        [(and (pair? datum) (eq? head 'defmacro))
          (process-defmacro datum)
+         (auto-export-names! (extract-defined-name datum 'defmacro))
          acc]
-        ;; deftype — register and consume
-        [(and (pair? datum) (eq? (car datum) 'deftype))
+        ;; ---- Public deftype — register, consume, AND auto-export ----
+        [(and (pair? datum) (eq? head 'deftype))
          (process-deftype datum)
+         (auto-export-names! (extract-defined-name datum 'deftype))
          acc]
-        ;; data — generate type/constructor defs, inject into stream
-        [(and (pair? datum) (eq? (car datum) 'data))
+        ;; ---- Public data — generate defs, auto-export type + constructors ----
+        [(and (pair? datum) (eq? head 'data))
          (define defs (process-data datum))
+         ;; Auto-export: type name + all constructor names from generated defs
+         (for ([d (in-list defs)])
+           (when (and (list? d) (>= (length d) 2) (symbol? (cadr d)))
+             (auto-export-name! (cadr d))))
          ;; Convert each def to a syntax object and add to accumulator
          (define new-stxs
            (for/list ([d (in-list defs)])
              (datum->syntax #f d stx)))
          (append (reverse new-stxs) acc)]
+        ;; ---- Public defn/def — auto-export the name ----
+        [(and (pair? datum) (memq head '(defn def)))
+         (auto-export-names! (extract-defined-name datum head))
+         (define expanded (preparse-expand-form datum))
+         (if (equal? expanded datum)
+             (cons stx acc)
+             (cons (datum->syntax #f expanded stx) acc))]
         ;; Regular form — expand
         [else
          (define expanded (preparse-expand-form datum))

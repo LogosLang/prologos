@@ -1,7 +1,5 @@
 ns prologos.data.result
 
-provide Result ok err map map-err unwrap-or and-then or-else
-
 ;; ========================================
 ;; Prologos Result Type
 ;; ========================================

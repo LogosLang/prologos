@@ -34,6 +34,7 @@
  ns-context-add-refer
  ns-context-add-refer-all
  ns-context-set-exports
+ ns-context-add-auto-export
  ;; Name resolution
  resolve-name
  qualify-name
@@ -95,7 +96,8 @@
    refer-map       ; hasheq: short-name → fully-qualified-name
                    ;   e.g., 'add → 'prologos.data.nat/add
    refer-all-nses  ; (listof symbol): namespaces where all exports are available unqualified
-   exports)        ; (listof symbol): names this module provides (short names)
+   exports         ; (listof symbol): names this module provides (short names) — from explicit provide
+   auto-exports)   ; (listof symbol): names auto-exported by public def/defn/data/deftype/defmacro
   #:transparent)
 
 ;; The current namespace context (parameterized per-file)
@@ -104,7 +106,7 @@
 
 ;; Create an empty namespace context for a given namespace
 (define (make-empty-ns-context ns-sym)
-  (ns-context ns-sym (hasheq) (hasheq) '() '()))
+  (ns-context ns-sym (hasheq) (hasheq) '() '() '()))
 
 ;; Add an alias: (require [prologos.data.nat :as nat])
 ;; Maps alias → namespace-symbol
@@ -129,6 +131,14 @@
 ;; Set the exports list
 (define (ns-context-set-exports ctx export-names)
   (struct-copy ns-context ctx [exports export-names]))
+
+;; Add a name to the auto-exports list (for public definitions).
+;; Avoids duplicates.
+(define (ns-context-add-auto-export ctx name)
+  (if (memq name (ns-context-auto-exports ctx))
+      ctx
+      (struct-copy ns-context ctx
+        [auto-exports (cons name (ns-context-auto-exports ctx))])))
 
 ;; ========================================
 ;; Name Qualification
@@ -354,7 +364,8 @@
           (when mod
             (define exports (module-info-exports mod))
             (for ([name (in-list names)])
-              (unless (or (member name exports) (eq? (car exports) ':all))
+              (unless (or (member name exports)
+                          (and (pair? exports) (eq? (car exports) ':all)))
                 (error 'require
                        "~a does not export ~a (exports: ~a)"
                        ns-sym name exports))))

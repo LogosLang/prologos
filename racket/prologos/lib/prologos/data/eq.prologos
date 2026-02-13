@@ -1,7 +1,5 @@
 ns prologos.data.eq
 
-provide sym cong trans
-
 ;; ========================================
 ;; Prologos Propositional Equality Library
 ;; Lemmas derived from the J eliminator.

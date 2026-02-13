@@ -5,8 +5,6 @@ require [prologos.data.nat    :as nat  :refer [add mult zero?]]
         [prologos.data.list   :as list :refer [List nil cons map filter length sum zip-with]]
         [prologos.data.option :as opt  :refer [Option none some]]
 
-provide inc-all double-all evens square add-to negate keep-positive factorial squares-up-to dot-product count-if apply-twice
-
 ;; ========================================
 ;; Foray: a kitchen-sink tour of Prologos
 ;; ========================================

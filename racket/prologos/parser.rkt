@@ -30,6 +30,8 @@
     def defn check eval infer match
     ;; Pre-parse macros — should be expanded before reaching parser
     defmacro let do if deftype data
+    ;; Private-suffix forms — consumed in preparse, rewritten to base form
+    defn- def- data- deftype- defmacro-
     ;; Pre-parse namespace directives — consumed before reaching parser
     ns require provide))
 
@@ -646,6 +648,9 @@
         (parse-error loc "require should have been processed before parsing" #f)]
        [(provide)
         (parse-error loc "provide should have been processed before parsing" #f)]
+       ;; Private-suffix forms — should have been rewritten in preparse
+       [(defn- def- data- deftype- defmacro-)
+        (parse-error loc (format "~a should have been expanded before parsing" head) #f)]
 
        ;; Top-level commands
        ;; (def name : type body)

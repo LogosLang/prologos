@@ -1,7 +1,5 @@
 ns prologos.data.pair
 
-provide swap map-fst map-snd bimap
-
 ;; ========================================
 ;; Prologos Pair Library
 ;; Utilities for non-dependent Sigma pairs.

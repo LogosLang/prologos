@@ -4,8 +4,6 @@ require [prologos.data.ordering :refer [Ordering lt-ord eq-ord gt-ord]]
 require [prologos.data.nat :refer [lt? nat-eq?]]
 require [prologos.data.bool :refer [not]]
 
-provide nat-ord ord-lt ord-le ord-gt ord-ge ord-eq ord-min ord-max
-
 ;; ========================================
 ;; Ord Trait — Dictionary-Passing Style
 ;; ========================================

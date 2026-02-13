@@ -1,7 +1,5 @@
 ns prologos.data.nat
 
-provide add mult double dec zero? sub le? lt? gt? ge? nat-eq? min max pow bool-to-nat clamp
-
 ;; ========================================
 ;; Prologos Natural Number Library
 ;; Pure Prologos definitions using match (structural PM).

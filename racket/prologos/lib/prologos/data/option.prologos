@@ -1,7 +1,5 @@
 ns prologos.data.option
 
-provide Option none some map flat-map unwrap-or or-else filter zip-with zip
-
 ;; ========================================
 ;; Prologos Option Type
 ;; Optional value with native constructors.

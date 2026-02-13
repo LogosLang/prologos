@@ -1,7 +1,5 @@
 ns prologos.data.bool
 
-provide not and or xor bool-eq nand nor implies
-
 ;; ========================================
 ;; Prologos Boolean Library
 ;; Pure Prologos definitions using match (structural PM).

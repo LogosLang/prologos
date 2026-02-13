@@ -3,8 +3,6 @@ ns prologos.core.eq-trait
 require [prologos.data.nat :refer [nat-eq?]]
 require [prologos.data.bool :refer [not]]
 
-provide nat-eq eq-neq
-
 ;; ========================================
 ;; Eq Trait — Dictionary-Passing Style
 ;; ========================================
