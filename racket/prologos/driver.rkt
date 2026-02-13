@@ -11,6 +11,8 @@
          racket/port
          racket/set
          racket/path
+         racket/list
+         racket/string
          "prelude.rkt"
          "syntax.rkt"
          "reduction.rkt"
@@ -28,7 +30,8 @@
          "reader.rkt"
          "namespace.rkt"
          "metavar-store.rkt"
-         "zonk.rkt")
+         "zonk.rkt"
+         "multi-dispatch.rkt")
 
 (provide process-command
          process-file
@@ -97,12 +100,17 @@
   (define expanded (expand-top-level surf))
   (if (prologos-error? expanded)
       expanded
-      (if (surf-def? expanded)
-          ;; Special handling for def: split elaboration for recursive support.
-          ;; We elaborate the type first, pre-register it in the global env,
-          ;; then elaborate the body (so self-references resolve).
-          (process-def expanded)
-          ;; All other forms: elaborate fully, then process
+      (cond
+        [(surf-def? expanded)
+         ;; Special handling for def: split elaboration for recursive support.
+         ;; We elaborate the type first, pre-register it in the global env,
+         ;; then elaborate the body (so self-references resolve).
+         (process-def expanded)]
+        [(surf-def-group? expanded)
+         ;; Multi-body defn: process each clause def, register dispatch table
+         (process-def-group expanded)]
+        [else
+         ;; All other forms: elaborate fully, then process
           (let ([elab-result (elaborate-top-level expanded)])
             (if (prologos-error? elab-result)
                 elab-result
@@ -127,7 +135,7 @@
                      (if (prologos-error? ty) ty
                          (pp-expr (zonk-final ty))))]
 
-                  [_ (prologos-error srcloc-unknown (format "Unknown command: ~a" elab-result))]))))))
+                  [_ (prologos-error srcloc-unknown (format "Unknown command: ~a" elab-result))])))])))
 
 ;; Process a def command with split elaboration for recursive support.
 ;; 1. Elaborate type first
@@ -293,6 +301,46 @@
                        (format "~a : ~a defined." name (pp-expr zonked-type))])])])])])])]))
 
 ;; ========================================
+;; Process a multi-body defn group
+;; ========================================
+;; Each clause is a surf-def with an internal name (name/N).
+;; 1. Pre-register all clause types (for cross-clause recursion)
+;; 2. Process each clause's body
+;; 3. Register dispatch table in multi-defn registry
+(define (process-def-group group)
+  (define name (surf-def-group-name group))
+  (define defs (surf-def-group-defs group))
+  (define arities (surf-def-group-arities group))
+  (define docstring (surf-def-group-docstring group))
+  ;; Build arity-map from arities
+  (define arity-map
+    (for/fold ([m (hasheq)])
+              ([arity (in-list arities)])
+      (hash-set m arity (string->symbol (format "~a/~a" name arity)))))
+  ;; Register the dispatch table
+  (register-multi-defn! name arities arity-map docstring)
+  ;; Also register with namespace qualification if applicable
+  (when (current-ns-context)
+    (define fqn (qualify-name name (ns-context-current-ns (current-ns-context))))
+    (define fqn-arity-map
+      (for/fold ([m (hasheq)])
+                ([arity (in-list arities)])
+        (hash-set m arity (qualify-name
+                           (string->symbol (format "~a/~a" name arity))
+                           (ns-context-current-ns (current-ns-context))))))
+    (register-multi-defn! fqn arities fqn-arity-map docstring))
+  ;; Process each clause def through process-def (handles type checking, registration)
+  (define results
+    (for/list ([def (in-list defs)])
+      (reset-meta-store!)
+      (process-def def)))
+  ;; Check for errors
+  (define first-err (findf prologos-error? results))
+  (if first-err first-err
+      (format "~a defined (arities: ~a)."
+              name (string-join (map number->string (sort arities <)) ", "))))
+
+;; ========================================
 ;; Read all syntax objects from a port
 ;; ========================================
 (define (read-all-syntax port [source "<port>"])
@@ -382,6 +430,7 @@
      (define mod-preparse-reg #f)
      (define mod-ctor-reg #f)
      (define mod-type-meta #f)
+     (define mod-multi-defn-reg #f)
 
      (parameterize ([current-global-env (hasheq)]
                     [current-ns-context #f]
@@ -393,6 +442,7 @@
                     [current-preparse-registry (current-preparse-registry)]
                     [current-ctor-registry (current-ctor-registry)]
                     [current-type-meta (current-type-meta)]
+                    [current-multi-defn-registry (current-multi-defn-registry)]
                     [current-loading-set (set-add (current-loading-set) ns-sym)])
        ;; Read and process the file
        ;; Use WS reader for .prologos files, sexp reader otherwise
@@ -417,7 +467,8 @@
        (set! mod-ns-ctx (current-ns-context))
        (set! mod-preparse-reg (current-preparse-registry))
        (set! mod-ctor-reg (current-ctor-registry))
-       (set! mod-type-meta (current-type-meta)))
+       (set! mod-type-meta (current-type-meta))
+       (set! mod-multi-defn-reg (current-multi-defn-registry)))
 
      ;; Propagate preparse registry changes (deftype/defmacro) to the caller.
      ;; This ensures type aliases and macros defined in loaded modules are
@@ -427,6 +478,9 @@
      ;; Propagate constructor metadata (for reduce) to the caller.
      (current-ctor-registry mod-ctor-reg)
      (current-type-meta mod-type-meta)
+
+     ;; Propagate multi-defn dispatch tables to the caller.
+     (current-multi-defn-registry mod-multi-defn-reg)
 
      ;; 5. Build module-info
      (define exports

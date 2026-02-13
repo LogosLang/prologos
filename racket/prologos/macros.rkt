@@ -1165,6 +1165,56 @@
     [_ surf]))
 
 ;; ========================================
+;; Expand multi-body defn → surf-def-group
+;; ========================================
+;; Each clause becomes a separate surf-def with an internal name (name/N).
+;; The surf-def-group carries the dispatch metadata.
+(define (expand-defn-multi form)
+  (match form
+    [(surf-defn-multi name docstring clauses loc)
+     ;; Compute arities (explicit param count per clause)
+     (define arities
+       (for/list ([clause (in-list clauses)])
+         (length (defn-clause-param-names clause))))
+     ;; Check for duplicate arities
+     (if (not (= (length arities) (length (remove-duplicates arities))))
+       (prologos-error loc
+         (format "defn ~a: multiple clauses with the same arity" name))
+       ;; Expand each clause through the normal defn pipeline
+       (let ()
+         (define expanded-defs
+           (for/list ([clause (in-list clauses)]
+                      [arity (in-list arities)])
+             (define internal-name
+               (string->symbol (format "~a/~a" name arity)))
+             ;; Wrap as surf-defn for existing pipeline
+             (define as-defn
+               (surf-defn internal-name
+                          (defn-clause-type clause)
+                          (defn-clause-param-names clause)
+                          (defn-clause-body clause)
+                          (defn-clause-srcloc clause)))
+             ;; Apply auto-implicits then desugar to surf-def
+             (define with-implicits (infer-auto-implicits as-defn))
+             (define desugared (desugar-defn with-implicits))
+             (if (prologos-error? desugared)
+                 desugared
+                 (expand-top-level desugared))))
+         ;; Check for errors in expansion
+         (define first-err (findf prologos-error? expanded-defs))
+         (cond
+           [first-err first-err]
+           [else
+            ;; Build arity-map for dispatch
+            (define arity-map
+              (for/fold ([m (hasheq)])
+                        ([clause (in-list clauses)]
+                         [arity (in-list arities)])
+                (hash-set m arity
+                          (string->symbol (format "~a/~a" name arity)))))
+            (surf-def-group name expanded-defs arities docstring loc)])))]))
+
+;; ========================================
 ;; Expand a top-level form (post-parse)
 ;; ========================================
 ;; Applies macro expansion, expression-level expansion, and implicit eval.
@@ -1175,6 +1225,11 @@
      (prologos-error
       srcloc-unknown
       "Macro expansion depth limit exceeded (possible infinite loop)")]
+    ;; Multi-body defn: expand each clause, produce surf-def-group
+    [(surf-defn-multi? surf)
+     (expand-defn-multi surf)]
+    ;; surf-def-group: already expanded, pass through
+    [(surf-def-group? surf) surf]
     ;; Built-in: defn desugaring (with auto-implicit inference)
     [(surf-defn? surf)
      (define with-implicits (infer-auto-implicits surf))

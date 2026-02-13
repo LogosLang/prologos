@@ -15,6 +15,8 @@
 ;;;
 
 (require racket/match
+         racket/list
+         racket/string
          syntax/parse
          "source-location.rkt"
          "surface-syntax.rkt"
@@ -32,6 +34,7 @@
          "macros.rkt"
          "metavar-store.rkt"
          "zonk.rkt"
+         "multi-dispatch.rkt"
          (for-template racket/base
                       "repl-support.rkt"))
 
@@ -158,13 +161,33 @@
            (when (prologos-error? expanded)
              (raise-prologos-error expanded))
            ;; Process the form (type check, elaborate, etc.)
-           (define result (process-form expanded))
-           ;; Generate runtime code
-           (match result
-             [(list 'def name type-str)
-              #`(displayln #,(format "~a : ~a defined." name type-str))]
-             [(list 'output str)
-              #`(displayln #,str)])))
+           ;; Multi-body defn: surf-def-group contains multiple surf-defs
+           (cond
+             [(surf-def-group? expanded)
+              (define grp-name (surf-def-group-name expanded))
+              (define grp-arities (surf-def-group-arities expanded))
+              (define grp-docstring (surf-def-group-docstring expanded))
+              ;; Register dispatch table
+              (define arity-map
+                (for/fold ([m (hasheq)])
+                          ([arity (in-list grp-arities)])
+                  (hash-set m arity (string->symbol (format "~a/~a" grp-name arity)))))
+              (register-multi-defn! grp-name grp-arities arity-map grp-docstring)
+              ;; Process each clause def
+              (for ([def (in-list (surf-def-group-defs expanded))])
+                (reset-meta-store!)
+                (process-form def))
+              #`(displayln #,(format "~a defined (arities: ~a)."
+                                     grp-name
+                                     (string-join (map number->string (sort grp-arities <)) ", ")))]
+             [else
+              (define result (process-form expanded))
+              ;; Generate runtime code
+              (match result
+                [(list 'def name type-str)
+                 #`(displayln #,(format "~a : ~a defined." name type-str))]
+                [(list 'output str)
+                 #`(displayln #,str)])])))
        ;; Wrap in the real #%module-begin
        ;; Include prologos-init-repl-env to populate runtime env for REPL
        ;; Pass expanded syntax (after pre-parse) for REPL replay

@@ -70,6 +70,10 @@
  ;; Reduce (ML-style pattern matching with type inference)
  (struct-out surf-reduce)
  (struct-out reduce-arm)
+ ;; Multi-body defn (case-split by arity)
+ (struct-out defn-clause)
+ (struct-out surf-defn-multi)
+ (struct-out surf-def-group)
  ;; Binder info
  (struct-out binder-info))
 
@@ -247,3 +251,20 @@
 
 ;; reduce: scrutinee (surf expr), list of reduce-arms
 (struct surf-reduce (scrutinee arms srcloc) #:transparent)
+
+;; ========================================
+;; Multi-body defn: case-split by arity
+;; ========================================
+;; Each clause has its own parameter list, return type, and body.
+;; Compile-time dispatch selects the clause matching the argument count.
+
+;; A single clause of a multi-body defn
+(struct defn-clause (type param-names body srcloc) #:transparent)
+
+;; Multi-body defn: name, optional docstring, list of clauses
+(struct surf-defn-multi (name docstring clauses srcloc) #:transparent)
+
+;; Group of surf-defs produced by expanding a multi-body defn
+;; name: base name (symbol), defs: list of surf-def, arities: sorted list of int,
+;; docstring: (or/c string? #f)
+(struct surf-def-group (name defs arities docstring srcloc) #:transparent)

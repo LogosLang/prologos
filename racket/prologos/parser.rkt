@@ -829,6 +829,139 @@
      (parse-error loc "def requires: (def name <type> body) or (def name : type body)" #f)]))
 
 ;; ========================================
+;; Multi-body defn detection and parsing
+;; ========================================
+
+;; Check if defn args contain $pipe clauses (multi-body syntax).
+;; args is the list after 'defn' keyword: (name [optional-docstring] ($pipe ...) ($pipe ...) ...)
+(define (has-pipe-clauses? args)
+  (and (>= (length args) 2)
+       (symbol? (stx->datum (car args)))
+       (let ([rest (cdr args)])
+         ;; Skip optional docstring
+         (define check-from
+           (if (and (not (null? rest))
+                    (string? (stx->datum (car rest))))
+               (cdr rest)
+               rest))
+         (and (not (null? check-from))
+              (ormap (lambda (a)
+                       (let ([d (stx->datum a)])
+                         (and (pair? d)
+                              (eq? (let ([h (car d)])
+                                     (if (syntax? h) (syntax-e h) h))
+                                   '$pipe))))
+                     check-from)))))
+
+;; Parse a multi-body defn: defn name "doc" | clause1 | clause2 ...
+(define (parse-defn-multi args loc)
+  (define name (stx->datum (car args)))
+  (unless (symbol? name)
+    (parse-error loc (format "defn: expected name, got ~a" name) name))
+  ;; Skip optional docstring
+  (define-values (docstring clause-args)
+    (let ([rest (cdr args)])
+      (if (and (not (null? rest))
+               (string? (stx->datum (car rest))))
+          (values (stx->datum (car rest)) (cdr rest))
+          (values #f rest))))
+  (when (null? clause-args)
+    (parse-error loc (format "defn ~a: multi-body defn requires at least one clause" name) #f))
+  ;; Parse each $pipe clause
+  (define clauses
+    (for/list ([clause-stx (in-list clause-args)])
+      (parse-defn-clause clause-stx name loc)))
+  (define first-err (findf prologos-error? clauses))
+  (if first-err first-err
+      (surf-defn-multi name docstring clauses loc)))
+
+;; Parse a single clause of a multi-body defn.
+;; Input: ($pipe [params...] : RetType body) or ($pipe [params...] <RetType> body)
+(define (parse-defn-clause clause-stx name loc)
+  (define d (stx->datum clause-stx))
+  (define parts
+    (if (syntax? clause-stx) (syntax->list clause-stx)
+        (if (list? d) (map (lambda (x) (datum->syntax #f x)) d) #f)))
+  (unless parts
+    (parse-error loc (format "defn ~a: clause must be a list" name) #f))
+  ;; Skip leading $pipe
+  (define cleaned
+    (if (and (not (null? parts))
+             (eq? (stx->datum (car parts)) '$pipe))
+        (cdr parts)
+        parts))
+  (when (null? cleaned)
+    (parse-error loc (format "defn ~a: empty clause" name) #f))
+  ;; First element should be the params bracket
+  (define params-stx (car cleaned))
+  (define rest-args (cdr cleaned))
+  ;; Detect bare vs typed params (same logic as parse-defn)
+  (define binders
+    (let ([elems (if (syntax? params-stx) (syntax->list params-stx) #f)])
+      (cond
+        ;; Bare params: all symbols, no types
+        [(and elems (not (null? elems))
+              (andmap (lambda (e) (symbol? (syntax-e e))) elems)
+              (not (ormap (lambda (e)
+                            (let ([dd (syntax-e e)])
+                              (or (eq? dd ':) (mult-annot? dd))))
+                          elems)))
+         (for/list ([e (in-list elems)])
+           (binder-info (syntax-e e) #f (surf-hole loc)))]
+        ;; Typed params
+        [else
+         (parse-defn-binders params-stx loc)])))
+  (cond
+    [(prologos-error? binders) binders]
+    [(< (length rest-args) 2)
+     (parse-error loc (format "defn ~a: clause missing return type or body" name) #f)]
+    [else
+     (define ret-type-stx (car rest-args))
+     (cond
+       ;; <ReturnType> body
+       [(angle-type-stx? ret-type-stx)
+        (define ret-type (unwrap-angle-type ret-type-stx loc))
+        (define body (parse-datum (cadr rest-args)))
+        (cond
+          [(prologos-error? ret-type) ret-type]
+          [(prologos-error? body) body]
+          [else
+           (define full-type
+             (foldr (lambda (bnd rest-ty)
+                      (surf-pi bnd rest-ty loc))
+                    ret-type
+                    binders))
+           (define param-names (map binder-info-name binders))
+           (defn-clause full-type param-names body loc)])]
+       ;; : ReturnType body
+       [(eq? (stx->datum ret-type-stx) ':)
+        (cond
+          [(< (length rest-args) 3)
+           (parse-error loc (format "defn ~a: clause missing return type or body after ':'" name) #f)]
+          [else
+           (define after-colon (cdr rest-args))
+           (define type-atoms (drop-right after-colon 1))
+           (define body-stx (last after-colon))
+           (when (null? type-atoms)
+             (parse-error loc (format "defn ~a: clause missing return type after ':'" name) #f))
+           (define ret-type (parse-infix-type type-atoms loc))
+           (define body (parse-datum body-stx))
+           (cond
+             [(prologos-error? ret-type) ret-type]
+             [(prologos-error? body) body]
+             [else
+              (define full-type
+                (foldr (lambda (bnd rest-ty)
+                         (surf-pi bnd rest-ty loc))
+                       ret-type
+                       binders))
+              (define param-names (map binder-info-name binders))
+              (defn-clause full-type param-names body loc)])])]
+       [else
+        (parse-error loc (format "defn ~a: clause expected <ReturnType> or : ReturnType, got ~a"
+                                 name (stx->datum ret-type-stx)) #f)])]))
+
+;; ========================================
 ;; Parse defn: (defn name : type [params...] body)
 ;; ========================================
 (define (parse-defn args loc)
@@ -837,6 +970,11 @@
   ;; NEW: (defn name [param <T> ...] <ReturnType> body) — typed binders
   ;; OLD: (defn name : type [params...] body) — 5 elements with colon
   (cond
+    ;; MULTI-BODY: args contain $pipe children (case-split by arity)
+    ;; defn name "docstring" | [params...] : RetType body | [params...] : RetType body
+    [(has-pipe-clauses? args)
+     (parse-defn-multi args loc)]
+
     ;; NEWEST: second arg is $brace-params → implicit type parameters
     ;; defn name {A B} [x <T> ...] <ReturnType> body
     ;; OR defn name {A B} [x : T, ...] : ReturnType body

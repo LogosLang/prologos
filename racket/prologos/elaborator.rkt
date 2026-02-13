@@ -8,6 +8,7 @@
 
 (require racket/match
          racket/list
+         racket/string
          "prelude.rkt"
          "syntax.rkt"
          "source-location.rkt"
@@ -16,7 +17,8 @@
          "global-env.rkt"
          "namespace.rkt"
          "metavar-store.rkt"
-         "pretty-print.rkt")
+         "pretty-print.rkt"
+         "multi-dispatch.rkt")
 
 (provide elaborate
          elaborate-top-level)
@@ -148,6 +150,13 @@
        (if auto-apply?
            (maybe-auto-apply-implicits (expr-fvar name) name loc env)
            (expr-fvar name))]
+      ;; Multi-body function: base name exists in dispatch registry but not in global env.
+      ;; Must be applied (bare reference is ambiguous — which arity?).
+      [(lookup-multi-defn name)
+       => (lambda (info)
+            (prologos-error loc
+              (format "Multi-body function '~a' must be applied; available arities: ~a"
+                      name (string-join (map number->string (multi-defn-info-arities info)) ", "))))]
       [else (unbound-variable-error loc "Unbound variable" name)])))
 
 ;; elaborate: surface-expr, env, depth -> (or/c expr? prologos-error?)
@@ -248,47 +257,69 @@
     ;; The function is elaborated WITHOUT auto-apply (auto-apply? = #f) to avoid
     ;; double-application — the implicit insertion here handles ALL cases.
     [(surf-app func args loc)
-     (let ([ef (if (surf-var? func)
-                   (elaborate-var (surf-var-name func) (surf-var-srcloc func)
-                                  env depth #f)
-                   (elaborate func env depth))])
-       (if (prologos-error? ef) ef
-           ;; Check for implicit parameters, arity, and insert fresh metavariables
-           (if (expr-fvar? ef)
-               (let ([ftype (global-env-lookup-type (expr-fvar-name ef))])
-                 (if ftype
-                     (let* ([fname (expr-fvar-name ef)]
-                            [n-user-args (length args)]
-                            [mults (collect-pi-mults ftype)]
-                            [n-total (length mults)]
-                            [n-imp (leading-m0-count mults)]
-                            [n-exp (- n-total n-imp)]
-                            [n-holes (implicit-holes-needed ftype n-user-args)])
-                       ;; Arity check: reject over-application for known globals
-                       (cond
-                         ;; Too many args (more than explicit count, and not total count)
-                         [(and (> n-user-args n-exp)
-                               (not (= n-user-args n-total))
-                               (> n-total 0))
-                          (arity-error loc
-                            (format "Too many arguments to '~a'" fname)
-                            fname n-exp n-user-args
-                            (pp-function-signature ftype))]
-                         ;; Insert implicits if needed
-                         [(> n-holes 0)
-                          (let ([with-metas
-                                 (for/fold ([acc ef])
-                                           ([_ (in-range n-holes)])
-                                   (expr-app acc (fresh-meta ctx-empty (expr-hole)
-                                                   (meta-source-info loc 'implicit-app
-                                                     (format "implicit argument for ~a" fname)
-                                                     #f (env->name-stack env)))))])
-                            (elaborate-args with-metas args env depth loc))]
-                         ;; Normal case: no insertion needed, proceed
-                         [else
-                          (elaborate-args ef args env depth loc)]))
-                     (elaborate-args ef args env depth loc)))
-               (elaborate-args ef args env depth loc))))]
+     ;; Multi-defn dispatch: resolve base name to internal clause by arity
+     (cond
+       [(and (surf-var? func)
+             (lookup-multi-defn (surf-var-name func)))
+        => (lambda (multi-info)
+             (define n-user-args (length args))
+             (define resolved-name (resolve-multi-defn (surf-var-name func) n-user-args))
+             (cond
+               [resolved-name
+                ;; Elaborate as if the user wrote the internal name
+                (elaborate (surf-app (surf-var resolved-name (surf-var-srcloc func))
+                                     args loc)
+                           env depth)]
+               [else
+                (multi-arity-error loc
+                  (format "No matching clause for '~a' with ~a argument~a"
+                          (surf-var-name func) n-user-args
+                          (if (= n-user-args 1) "" "s"))
+                  (surf-var-name func) n-user-args
+                  (multi-defn-info-arities multi-info))]))]
+       [else
+        ;; Normal application path
+        (let ([ef (if (surf-var? func)
+                      (elaborate-var (surf-var-name func) (surf-var-srcloc func)
+                                     env depth #f)
+                      (elaborate func env depth))])
+          (if (prologos-error? ef) ef
+              ;; Check for implicit parameters, arity, and insert fresh metavariables
+              (if (expr-fvar? ef)
+                  (let ([ftype (global-env-lookup-type (expr-fvar-name ef))])
+                    (if ftype
+                        (let* ([fname (expr-fvar-name ef)]
+                               [n-user-args (length args)]
+                               [mults (collect-pi-mults ftype)]
+                               [n-total (length mults)]
+                               [n-imp (leading-m0-count mults)]
+                               [n-exp (- n-total n-imp)]
+                               [n-holes (implicit-holes-needed ftype n-user-args)])
+                          ;; Arity check: reject over-application for known globals
+                          (cond
+                            ;; Too many args (more than explicit count, and not total count)
+                            [(and (> n-user-args n-exp)
+                                  (not (= n-user-args n-total))
+                                  (> n-total 0))
+                             (arity-error loc
+                               (format "Too many arguments to '~a'" fname)
+                               fname n-exp n-user-args
+                               (pp-function-signature ftype))]
+                            ;; Insert implicits if needed
+                            [(> n-holes 0)
+                             (let ([with-metas
+                                    (for/fold ([acc ef])
+                                              ([_ (in-range n-holes)])
+                                      (expr-app acc (fresh-meta ctx-empty (expr-hole)
+                                                      (meta-source-info loc 'implicit-app
+                                                        (format "implicit argument for ~a" fname)
+                                                        #f (env->name-stack env)))))])
+                               (elaborate-args with-metas args env depth loc))]
+                            ;; Normal case: no insertion needed, proceed
+                            [else
+                             (elaborate-args ef args env depth loc)]))
+                        (elaborate-args ef args env depth loc)))
+                  (elaborate-args ef args env depth loc))))])]
 
     ;; Pair
     [(surf-pair e1 e2 loc)

@@ -22,6 +22,7 @@
  (struct-out session-error)
  (struct-out inference-failed-error)
  (struct-out arity-error)
+ (struct-out multi-arity-error)
  ;; Sprint 9: Structured inference errors
  (struct-out cannot-infer-param-error)
  (struct-out conflicting-constraints-error)
@@ -64,6 +65,9 @@
 
 ;; Wrong number of arguments (with optional type for doc-like messages)
 (struct arity-error prologos-error (form expected got func-type) #:transparent)
+
+;; No matching clause in a multi-body defn (arity mismatch)
+(struct multi-arity-error prologos-error (func-name user-args valid-arities) #:transparent)
 
 ;; Sprint 9: Cannot infer type of parameter (E1001)
 (struct cannot-infer-param-error prologos-error (param-name hint) #:transparent)
@@ -145,6 +149,17 @@
              (format "  Expected ~a argument~a, got ~a"
                      expected (if (= expected 1) "" "s") got)
              (if func-type (format "  Signature: ~a" (format-val func-type)) "")))
+      "\n")]
+    [(multi-arity-error _ _ func-name user-args valid-arities)
+     (string-join
+      (list (format "Error at ~a" loc-str)
+            (format "  ~a" msg)
+            (format "  Function '~a' has clauses for ~a: ~a"
+                    func-name
+                    (if (= (length valid-arities) 1) "arity" "arities")
+                    (string-join (map number->string valid-arities) ", "))
+            (format "  Called with ~a argument~a"
+                    user-args (if (= user-args 1) "" "s")))
       "\n")]
     ;; Sprint 9: E1001 — Cannot infer type of parameter
     [(cannot-infer-param-error _ _ param-name hint)
