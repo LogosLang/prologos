@@ -1482,16 +1482,23 @@
      ;; No arrows — just parse as a type application or single type
      (parse-type-segment (car segments) loc)]
     [else
-     ;; Right-fold with surf-arrow
-     (define parsed-segments
-       (for/list ([seg (in-list segments)])
-         (parse-type-segment seg loc)))
+     ;; Uncurried arrow syntax: non-last segments have each atom parsed individually.
+     ;; A B -> C  =  A -> B -> C  (each atom in non-last segment = separate arg)
+     ;; [A -> B] C -> D  =  (A->B) -> C -> D  (sub-lists parsed as grouped types)
+     ;; Last segment: parsed as type application (multi-atom = app).
+     (define all-arg-types
+       (append-map
+        (lambda (seg)
+          (map (lambda (atom) (parse-single-type-element atom loc)) seg))
+        (drop-right segments 1)))
+     (define return-type (parse-type-segment (last segments) loc))
      ;; Check for errors
-     (define first-err (findf prologos-error? parsed-segments))
+     (define all-types (append all-arg-types (list return-type)))
+     (define first-err (findf prologos-error? all-types))
      (if first-err first-err
          (foldr (lambda (dom cod) (surf-arrow dom cod loc))
-                (last parsed-segments)
-                (drop-right parsed-segments 1)))]))
+                return-type
+                all-arg-types))]))
 
 ;; Split a list of atoms on the '-> symbol.
 ;; Returns a list of lists (segments between arrows).
@@ -1504,6 +1511,23 @@
        (loop (cdr remaining) '() (cons (reverse current) result))]
       [else
        (loop (cdr remaining) (cons (car remaining) current) result)])))
+
+;; Parse a single atom in a non-last arrow segment.
+;; - Sub-list (from [...] grouping): recurse parse-infix-type on contents
+;; - Atom: parse-datum
+(define (parse-single-type-element stx loc)
+  (define d (stx->datum stx))
+  (cond
+    ;; Sub-list (grouped type like [List Nat] or [Nat -> Nat])
+    [(list? d)
+     ;; Get the elements — they may be syntax objects or plain datums
+     (define elems (if (syntax? stx) (syntax->list stx) d))
+     (if (null? elems)
+         (parse-error loc "Empty grouped type []" #f)
+         ;; Parse as infix-type to support arrows within groups
+         (parse-infix-type elems loc))]
+    ;; Regular atom
+    [else (parse-datum stx)]))
 
 ;; Parse a single type segment (atoms between arrows).
 ;; A segment like (List A) is type application; (Nat) is a single type.

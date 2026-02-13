@@ -198,7 +198,7 @@
                       "(defn increment : (-> Nat Nat) [x] (inc x))\n"
                       "(eval (increment zero))")))
     (check-equal? (length results) 2)
-    (check-equal? (car results) "increment : [-> Nat Nat] defined.")
+    (check-equal? (car results) "increment : Nat -> Nat defined.")
     (check-equal? (cadr results) "1 : Nat")))
 
 (test-case "surface: defn polymorphic id"
@@ -208,7 +208,7 @@
                       "(defn id : (Pi (A :0 (Type 0)) (-> A A)) [A x] x)\n"
                       "(eval (id Nat (inc zero)))")))
     (check-equal? (length results) 2)
-    (check-equal? (car results) "id : [Pi [x :0 <[Type 0]>] [-> x x]] defined.")
+    (check-equal? (car results) "id : [Pi [x :0 <[Type 0]>] x -> x] defined.")
     (check-equal? (cadr results) "1 : Nat")))
 
 (test-case "surface: defn param count mismatch"
@@ -276,6 +276,51 @@
     (check-equal?
      (run-first "(eval (let ([x : Nat (inc (inc zero))]) (inc x)))")
      "3 : Nat")))
+
+;; ========================================
+;; let := tests
+;; ========================================
+
+(test-case "surface: let := with type evaluates"
+  (parameterize ([current-global-env (hasheq)])
+    (check-equal?
+     (run-first "(eval (let x : Nat := (inc zero) x))")
+     "1 : Nat")))
+
+(test-case "surface: let := bracket with types"
+  (parameterize ([current-global-env (hasheq)])
+    (check-equal?
+     (run-first "(eval (let (x : Nat := (inc zero) y : Nat := (inc x)) y))")
+     "2 : Nat")))
+
+(test-case "surface: let := bracket single binding"
+  (parameterize ([current-global-env (hasheq)])
+    (check-equal?
+     (run-first "(eval (let (x : Nat := (inc (inc zero))) (inc x)))")
+     "3 : Nat")))
+
+(test-case "surface: let := with computation"
+  (parameterize ([current-global-env (hasheq)])
+    (check-equal?
+     (run-first "(eval (let x : Nat := (inc (inc zero)) (inc x)))")
+     "3 : Nat")))
+
+;; ========================================
+;; Sibling let merge tests
+;; ========================================
+
+(test-case "surface: sibling lets evaluate"
+  (parameterize ([current-global-env (hasheq)])
+    ;; Sexp-mode: def with sibling let forms
+    (define results
+      (run "(def result : Nat (let a : Nat := (inc zero)) (let b : Nat := (inc a) (inc b)))\n(eval result)"))
+    (check-equal? (second results) "3 : Nat")))
+
+(test-case "surface: three sibling lets"
+  (parameterize ([current-global-env (hasheq)])
+    (define results
+      (run "(def r : Nat (let a : Nat := zero) (let b : Nat := (inc a)) (let c : Nat := (inc b) c))\n(eval r)"))
+    (check-equal? (second results) "2 : Nat")))
 
 ;; ========================================
 ;; do macro tests
@@ -408,7 +453,7 @@
                       "(defn inc2 [x <Nat>] <Nat> (inc (inc x)))\n"
                       "(eval (inc2 zero))")))
     (check-equal? (length results) 2)
-    (check-equal? (car results) "inc2 : [-> Nat Nat] defined.")
+    (check-equal? (car results) "inc2 : Nat -> Nat defined.")
     (check-equal? (cadr results) "2 : Nat")))
 
 (test-case "surface: angle-bracket defn polymorphic"
@@ -419,7 +464,7 @@
                       "(eval (id Nat zero))\n"
                       "(eval (id Bool true))")))
     (check-equal? (length results) 3)
-    (check-equal? (car results) "id : [Pi [x :0 <[Type 0]>] [-> x x]] defined.")
+    (check-equal? (car results) "id : [Pi [x :0 <[Type 0]>] x -> x] defined.")
     (check-equal? (cadr results) "zero : Nat")
     (check-equal? (caddr results) "true : Bool")))
 
@@ -450,7 +495,7 @@
                       "(defn inc2 [x : Nat] : Nat (inc (inc x)))\n"
                       "(eval (inc2 zero))")))
     (check-equal? (length results) 2)
-    (check-equal? (car results) "inc2 : [-> Nat Nat] defined.")
+    (check-equal? (car results) "inc2 : Nat -> Nat defined.")
     (check-equal? (cadr results) "2 : Nat")))
 
 (test-case "surface: colon defn with arrow param"
@@ -461,7 +506,7 @@
                       "(defn inc2 [x : Nat] : Nat (inc (inc x)))\n"
                       "(eval (apply-to-zero inc2))")))
     (check-equal? (length results) 3)
-    (check-equal? (car results) "apply-to-zero : [-> [-> Nat Nat] Nat] defined.")
+    (check-equal? (car results) "apply-to-zero : [Nat -> Nat] -> Nat defined.")
     (check-equal? (caddr results) "2 : Nat")))
 
 (test-case "surface: colon defn polymorphic with {A}"
@@ -472,7 +517,7 @@
                       "(eval (id Nat zero))\n"
                       "(eval (id Bool true))")))
     (check-equal? (length results) 3)
-    (check-equal? (car results) "id : [Pi [x :0 <[Type 0]>] [-> x x]] defined.")
+    (check-equal? (car results) "id : [Pi [x :0 <[Type 0]>] x -> x] defined.")
     (check-equal? (cadr results) "zero : Nat")
     (check-equal? (caddr results) "true : Bool")))
 
@@ -584,3 +629,55 @@
     (check-equal? (length results) 5)
     (check-equal? (list-ref results 3) "OK")
     (check-equal? (list-ref results 4) "OK")))
+
+;; ========================================
+;; Uncurried arrow syntax tests
+;; ========================================
+
+(test-case "surface: uncurried arrow Nat Nat -> Nat"
+  (parameterize ([current-global-env (hasheq)])
+    (define results (process-string
+      (string-append
+       "(defn add [x <Nat> y <Nat>] <Nat>\n"
+       "  (natrec Nat x (fn (k : Nat) (fn (r : Nat) (inc r))) y))\n"
+       "(check add <Nat Nat -> Nat>)")))
+    (check-equal? (last results) "OK")))
+
+(test-case "surface: Nat -> Nat unchanged"
+  (parameterize ([current-global-env (hasheq)])
+    (define results (process-string
+      "(defn id [x <Nat>] <Nat> x)\n(check id <Nat -> Nat>)"))
+    (check-equal? (last results) "OK")))
+
+(test-case "surface: grouped HOF [Nat -> Nat] -> Nat"
+  (parameterize ([current-global-env (hasheq)])
+    (define results (process-string
+      (string-append
+       "(defn apply-fn [f <(-> Nat Nat)> x <Nat>] <Nat> (f x))\n"
+       "(check apply-fn <[Nat -> Nat] Nat -> Nat>)")))
+    (check-equal? (last results) "OK")))
+
+(test-case "surface: uncurried A B C -> D"
+  (parameterize ([current-global-env (hasheq)])
+    ;; 3-arg function: A B C -> D parsed as A -> B -> C -> D
+    (define results (process-string
+      (string-append
+       "(defn f3 [a <Nat> b <Nat> c <Nat>] <Nat> a)\n"
+       "(check f3 <Nat Nat Nat -> Nat>)")))
+    (check-equal? (last results) "OK")))
+
+(test-case "surface: A -> B -> C still right-assoc"
+  (parameterize ([current-global-env (hasheq)])
+    (define results (process-string
+      (string-append
+       "(defn f2 [a <Nat> b <Nat>] <Nat> a)\n"
+       "(check f2 <Nat -> Nat -> Nat>)")))
+    (check-equal? (last results) "OK")))
+
+(test-case "surface: [Nat -> Nat] Nat -> Nat grouped param"
+  (parameterize ([current-global-env (hasheq)])
+    (define results (process-string
+      (string-append
+       "(defn app [f <(-> Nat Nat)> x <Nat>] <Nat> (f x))\n"
+       "(check app <[Nat -> Nat] Nat -> Nat>)")))
+    (check-equal? (last results) "OK")))

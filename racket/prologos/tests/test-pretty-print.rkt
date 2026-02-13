@@ -82,7 +82,7 @@
 (test-case "pp: non-dependent Pi -> arrow"
   ;; Pi(mw, Nat, Nat) where body doesn't use bvar(0)
   (check-equal? (pp-expr (expr-Pi 'mw (expr-Nat) (expr-Nat)))
-                "[-> Nat Nat]"))
+                "Nat -> Nat"))
 
 (test-case "pp: dependent Pi"
   ;; Pi(mw, Nat, bvar(0)) — body uses bvar(0)

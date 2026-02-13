@@ -145,6 +145,88 @@
     (lambda () (preparse-expand-form '(let)))))
 
 ;; ========================================
+;; let := expansion
+;; ========================================
+
+(test-case "let :=: no type"
+  ;; (let x := zero body) → ((fn (x : _) body) zero)
+  (define result (preparse-expand-form '(let x := zero body)))
+  (check-equal? result '((fn (x : _) body) zero)))
+
+(test-case "let :=: with type"
+  ;; (let x : Nat := zero body) → ((fn (x : Nat) body) zero)
+  (define result (preparse-expand-form '(let x : Nat := zero body)))
+  (check-equal? result '((fn (x : Nat) body) zero)))
+
+(test-case "let :=: complex type (List Nat)"
+  ;; (let xs : List Nat := nil body) → ((fn (xs : (List Nat)) body) nil)
+  (define result (preparse-expand-form '(let xs : List Nat := nil body)))
+  (check-equal? result '((fn (xs : (List Nat)) body) nil)))
+
+(test-case "let :=: bracket multi-binding"
+  ;; (let [x := zero y := (inc zero)] body) → nested fns
+  (define result (preparse-expand-form '(let (x := zero y := (inc zero)) body)))
+  (check-equal? result '((fn (x : _) ((fn (y : _) body) (inc zero))) zero)))
+
+(test-case "let :=: bracket with types"
+  ;; (let [x : Nat := zero y : Nat := (inc x)] body) → nested fns with types
+  (define result (preparse-expand-form '(let (x : Nat := zero y : Nat := (inc x)) body)))
+  (check-equal? result '((fn (x : Nat) ((fn (y : Nat) body) (inc x))) zero)))
+
+(test-case "let :=: with -> in type"
+  ;; (let f : Nat -> Nat := (fn (x : Nat) x) body) — type contains ->
+  ;; type atoms: (Nat -> Nat), value: (fn (x : Nat) x)
+  ;; Since -> is a symbol in sexp mode, type = (Nat -> Nat)
+  (define result (preparse-expand-form '(let f : (-> Nat Nat) := (fn (x : Nat) x) body)))
+  (check-equal? result '((fn (f : (-> Nat Nat)) body) (fn (x : Nat) x))))
+
+(test-case "let: minimal no-:= shorthand"
+  ;; (let x zero body) → ((fn (x : _) body) zero)
+  (define result (preparse-expand-form '(let x zero body)))
+  (check-equal? result '((fn (x : _) body) zero)))
+
+(test-case "let: existing old format still works"
+  ;; (let ([x : Nat zero]) body) — must still work
+  (define result (preparse-expand-form '(let ([x : Nat zero]) body)))
+  (check-equal? result '((fn (x : Nat) body) zero)))
+
+;; ========================================
+;; Sibling let merging
+;; ========================================
+
+(test-case "sibling let: two lets merge"
+  (define elems (list '(let a := 1) '(let b := 2 body)))
+  (define merged (merge-sibling-lets elems))
+  (check-equal? merged '((let (a := 1 b := 2) body))))
+
+(test-case "sibling let: three lets merge"
+  (define elems (list '(let a := 1) '(let b := 2) '(let c := 3 body)))
+  (define merged (merge-sibling-lets elems))
+  (check-equal? merged '((let (a := 1 b := 2 c := 3) body))))
+
+(test-case "sibling let: no merge for non-adjacent"
+  (define elems (list '(let a := 1 body1) 'something '(let b := 2 body2)))
+  (define merged (merge-sibling-lets elems))
+  (check-equal? merged elems))
+
+(test-case "sibling let: typed lets merge"
+  (define elems (list '(let a : Nat := 1) '(let b : Nat := 2 body)))
+  (define merged (merge-sibling-lets elems))
+  (check-equal? merged '((let (a : Nat := 1 b : Nat := 2) body))))
+
+(test-case "sibling let: single let unchanged"
+  (define elems (list '(let x := 42 body)))
+  (define merged (merge-sibling-lets elems))
+  (check-equal? merged elems))
+
+(test-case "sibling let: merge in preparse context"
+  ;; Simulate what def body looks like: (def name : type (let a ...) (let b ... body))
+  (define datum '(def result : Nat (let a : Nat := zero) (let b : Nat := (inc a) (inc b))))
+  (define expanded (preparse-expand-form datum))
+  ;; Should merge lets, then expand to nested fn/app
+  (check-equal? expanded '(def result : Nat ((fn (a : Nat) ((fn (b : Nat) (inc b)) (inc a))) zero))))
+
+;; ========================================
 ;; Built-in do expansion
 ;; ========================================
 

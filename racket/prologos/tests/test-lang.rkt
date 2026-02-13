@@ -153,7 +153,7 @@
 (test-case "macros.rkt: defmacro, deftype, let, if"
   (define output (run-prologos-file "macros.rkt"))
   ;; double should be defined
-  (check-true (string-contains? output "double : [-> Nat Nat] defined.")
+  (check-true (string-contains? output "double : Nat -> Nat defined.")
               "should define double")
   ;; double (inc (inc zero)) = 4
   (check-true (string-contains? output "4 : Nat")
@@ -179,7 +179,7 @@
 (test-case "macros-ws.rkt: if, boolrec, let in whitespace mode"
   (define output (run-prologos-file "macros-ws.rkt"))
   ;; double should be defined
-  (check-true (string-contains? output "double : [-> Nat Nat] defined.")
+  (check-true (string-contains? output "double : Nat -> Nat defined.")
               "should define double")
   ;; double (inc (inc zero)) = 4
   (check-true (string-contains? output "4 : Nat")
@@ -244,3 +244,28 @@
   (define result (repl-eval-after-file "hello.rkt" "(inc zero)"))
   (check-true (string-contains? result "1 : Nat")
               (format "Expected '1 : Nat', got: ~a" result)))
+
+;; ========================================
+;; Let :=, sibling lets, uncurried arrows (WS mode)
+;; ========================================
+
+(test-case "let-arrow-ws.rkt: let :=, sibling lets, uncurried arrows"
+  (define output (run-prologos-file "let-arrow-ws.rkt"))
+  ;; let := basic: one = 1
+  (check-true (string-contains? output "one : Nat defined.")
+              "should define one")
+  (check-true (string-contains? output "1 : Nat")
+              "one = 1")
+  ;; sibling lets: three = 3
+  (check-true (string-contains? output "three : Nat defined.")
+              "should define three")
+  (check-true (string-contains? output "3 : Nat")
+              "three = 3 via sibling lets")
+  ;; uncurried arrow: add has Nat Nat -> Nat type
+  (check-true (string-contains? output "add : Nat Nat -> Nat defined.")
+              "add should have uncurried arrow type")
+  ;; apply-fn and inc2
+  (check-true (string-contains? output "apply-fn")
+              "should define apply-fn")
+  (check-true (string-contains? output "inc2")
+              "should define inc2"))

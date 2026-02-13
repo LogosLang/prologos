@@ -216,10 +216,10 @@
   ;; defn: omitted mult in defn params should display with (-> ...) or (Pi ...)
   (check-equal?
    (run-last "(ns mi7)\n(defn myid [x <Nat>] <Nat> x)")
-   "myid : [-> Nat Nat] defined."))
+   "myid : Nat -> Nat defined."))
 
 (test-case "mult-inference/bare-lambda-checked-against-arrow"
   ;; A lambda checked against an arrow: mult-meta solved from the arrow's 'mw
   (check-equal?
    (run-last "(ns mi8)\n(eval (the (-> Nat Nat) (fn [x <Nat>] x)))")
-   "[fn [x <Nat>] x] : [-> Nat Nat]"))
+   "[fn [x <Nat>] x] : Nat -> Nat"))

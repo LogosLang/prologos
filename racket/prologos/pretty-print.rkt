@@ -87,13 +87,29 @@
                (pp-expr t names)
                (pp-expr body (cons name names))))]
 
-    ;; Pi — detect non-dependent arrow
+    ;; Pi — detect non-dependent arrow chain
     [(expr-Pi m dom cod)
      (if (and (eq? m 'mw) (not (uses-bvar0? cod)))
-         ;; Non-dependent: [-> A B]
-         ;; Still push a dummy name since cod may reference outer bvars
-         (let ([name (fresh-name (length names) names)])
-           (format "[-> ~a ~a]" (pp-expr dom names) (pp-expr cod (cons name names))))
+         ;; Non-dependent: collect arrow chain A B C -> D
+         (let loop ([doms '()] [cur-dom dom] [cur-cod cod] [ns names])
+           (let ([name (fresh-name (length ns) ns)])
+             (define dom-str (pp-expr cur-dom ns))
+             ;; Wrap domain in [...] if it's itself a Pi (higher-order function type)
+             (define wrapped-dom
+               (if (expr-Pi? cur-dom) (format "[~a]" dom-str) dom-str))
+             (define new-ns (cons name ns))
+             (if (and (expr-Pi? cur-cod)
+                      (eq? (expr-Pi-mult cur-cod) 'mw)
+                      (not (uses-bvar0? (expr-Pi-codomain cur-cod))))
+                 ;; Continue chain
+                 (loop (cons wrapped-dom doms)
+                       (expr-Pi-domain cur-cod) (expr-Pi-codomain cur-cod) new-ns)
+                 ;; End of chain
+                 (let* ([all-doms (reverse (cons wrapped-dom doms))]
+                        [cod-str (pp-expr cur-cod new-ns)])
+                   (format "~a -> ~a"
+                           (string-join all-doms " ")
+                           cod-str)))))
          ;; Dependent: [Pi [x :m <A>] B]
          (let ([name (fresh-name (length names) names)])
            (format "[Pi [~a~a <~a>] ~a]"

@@ -102,11 +102,11 @@
   ;; Note: inc/suc is syntax, not first-class. We wrap it in a lambda.
   (check-equal?
    (run-ns "(ns test.compose)\n(def suc-fn <(-> Nat Nat)> (fn [n <Nat>] (inc n)))\n(eval (compose Nat Nat Nat suc-fn suc-fn zero))")
-   '("suc-fn : [-> Nat Nat] defined." "2 : Nat"))
+   '("suc-fn : Nat -> Nat defined." "2 : Nat"))
   ;; compose Nat Nat Nat suc-fn suc-fn 1 -> 3
   (check-equal?
    (run-ns "(ns test.compose2)\n(def suc-fn <(-> Nat Nat)> (fn [n <Nat>] (inc n)))\n(eval (compose Nat Nat Nat suc-fn suc-fn (inc zero)))")
-   '("suc-fn : [-> Nat Nat] defined." "3 : Nat")))
+   '("suc-fn : Nat -> Nat defined." "3 : Nat")))
 
 ;; ========================================
 ;; Test: apply function
@@ -116,7 +116,7 @@
   ;; apply Nat Nat suc-fn zero -> 1
   (check-equal?
    (run-ns "(ns test.apply)\n(def suc-fn <(-> Nat Nat)> (fn [n <Nat>] (inc n)))\n(eval (apply Nat Nat suc-fn zero))")
-   '("suc-fn : [-> Nat Nat] defined." "1 : Nat")))
+   '("suc-fn : Nat -> Nat defined." "1 : Nat")))
 
 ;; ========================================
 ;; Test: flip function
@@ -141,7 +141,7 @@
 (test-case "explicit require prologos.core with :refer"
   (check-equal?
    (run-ns "(ns test.refer)\n(require [prologos.core :refer [compose]])\n(def suc-fn <(-> Nat Nat)> (fn [n <Nat>] (inc n)))\n(eval (compose Nat Nat Nat suc-fn suc-fn zero))")
-   '("suc-fn : [-> Nat Nat] defined." "2 : Nat")))
+   '("suc-fn : Nat -> Nat defined." "2 : Nat")))
 
 ;; ========================================
 ;; Test: type checking of core definitions

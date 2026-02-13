@@ -308,6 +308,44 @@
   (check-equal? (syntax-line stx) 1)
   (check-equal? (syntax-column stx) 0))
 
+;; ================================================================
+;; := tokenization
+;; ================================================================
+
+(test-case "tokenize: := as symbol"
+  ;; tokenize-string prepends a newline token, so indices are offset by 1
+  (define tokens (tokenize-string "x := 42"))
+  (check-equal? (tok-type tokens 1) 'symbol)
+  (check-equal? (tok-val tokens 1) 'x)
+  (check-equal? (tok-type tokens 2) 'symbol)
+  (check-equal? (tok-val tokens 2) ':=)
+  (check-equal? (tok-type tokens 3) 'number)
+  (check-equal? (tok-val tokens 3) 42))
+
+(test-case "tokenize: := after name"
+  ;; Ensure := is a single token, not : then =
+  (define tokens (tokenize-string "let x := 42"))
+  (check-equal? (tok-val tokens 2) 'x)
+  (check-equal? (tok-val tokens 3) ':=)
+  (check-equal? (tok-type tokens 3) 'symbol))
+
+(test-case "tokenize: := does not consume :0"
+  ;; Ensure := doesn't break :0 — :0 is still token type 'symbol with value ':0
+  (define tokens (tokenize-string "x :0"))
+  (check-equal? (tok-type tokens 2) 'symbol)
+  (check-equal? (tok-val tokens 2) ':0))
+
+(test-case "WS parse: let x := 42 with body"
+  ;; read-all-forms-string returns datums (already syntax->datum'd)
+  (define forms (read-all-forms-string "let x := 42\n  body"))
+  (check-equal? (length forms) 1)
+  (check-equal? (car forms) '(let x := 42 body)))
+
+(test-case "WS parse: let x : Nat := 42 with body"
+  (define forms (read-all-forms-string "let x : Nat := 42\n  body"))
+  (check-equal? (length forms) 1)
+  (check-equal? (car forms) '(let x : Nat := 42 body)))
+
 (test-case "source locations: second form has correct line"
   (define port (open-input-string "eval zero\neval one"))
   (port-count-lines! port)

@@ -355,6 +355,10 @@
        (tok-read! tok)
        (define next (tok-peek tok))
        (cond
+         ;; := assignment operator
+         [(and (char? next) (char=? next #\=))
+          (tok-read! tok)
+          (token 'symbol ':= ln cl ps 2)]
          ;; :0, :1, :w — multiplicity annotations
          [(and (char? next) (or (char=? next #\0) (char=? next #\1) (char=? next #\w)))
           (define nc (tok-read! tok))

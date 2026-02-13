@@ -56,7 +56,9 @@
          lookup-ctor
          lookup-type-ctors
          ;; Shared
-         extract-pi-binders)
+         extract-pi-binders
+         ;; Sibling let merging (for testing)
+         merge-sibling-lets)
 
 ;; ================================================================
 ;; LAYER 1: PRE-PARSE MACRO SYSTEM
@@ -241,15 +243,141 @@
      (preparse-expand-subforms datum reg depth)]
     [else datum]))
 
+;; Merge consecutive bodyless let forms into a single let with bracket bindings.
+;; Input: list of elements (siblings in a form).
+;; A "bodyless let" is (let name [: T] := value) with no body — detected because
+;; the last element is NOT a list (it's the value, not a body expression like (add a b)).
+;; The last let in a consecutive run has a body.
+;;
+;; Example: (defn ... (let a := 1) (let b := 2 (add a b)))
+;; → (defn ... (let (a := 1 b := 2) (add a b)))
+(define (merge-sibling-lets elems)
+  (cond
+    [(or (not (list? elems)) (null? elems)) elems]
+    [else
+     (let loop ([rest elems] [acc '()])
+       (cond
+         [(null? rest) (reverse acc)]
+         ;; Check if current element is a bodyless let
+         [(let-form? (car rest))
+          ;; Collect consecutive let forms
+          (define-values (lets remaining) (collect-consecutive-lets rest))
+          (cond
+            ;; Single let — no merging needed
+            [(<= (length lets) 1)
+             (loop remaining (cons (car lets) acc))]
+            ;; Multiple consecutive lets — merge
+            [else
+             (define merged (merge-let-sequence lets))
+             (loop remaining (cons merged acc))])]
+         [else
+          (loop (cdr rest) (cons (car rest) acc))]))]))
+
+;; Is this element a let form?
+(define (let-form? elem)
+  (and (list? elem) (pair? elem) (eq? (car elem) 'let)))
+
+;; Is this let form bodyless? A bodyless let has no body expression.
+;; For := format: (let name := value) — no further elements after value.
+;; We detect this by: the form has no nested list as last element
+;; that could be a body, OR the form only has binding tokens.
+;; Simple heuristic: a let with only binding tokens (no body) will have
+;; := as the second-to-last element, or will lack a final body form.
+(define (let-bodyless? elem)
+  (and (let-form? elem)
+       (let ([rest (cdr elem)])
+         (cond
+           ;; (let name := value) — 3 elements in rest, := is second
+           [(and (>= (length rest) 3) (eq? (cadr rest) ':=)
+                 (= (length rest) 3))
+            #t]
+           ;; (let name : T1 T2 ... := value) — has := but last is the value, no body
+           ;; Count: name : T1 ... := value = even number of "sections"
+           ;; Detect by: rest ends right after the value following :=
+           [(memq ':= rest)
+            ;; Find := position, check if there's exactly one element after it
+            (let ([assign-pos (index-of-symbol ':= rest)])
+              (and assign-pos (= (length rest) (+ assign-pos 2))))]
+           ;; (let [bindings] body) — has body, not bodyless
+           ;; (let name value body) — has body, not bodyless
+           [else #f]))))
+
+;; Find the index of a symbol in a list
+(define (index-of-symbol sym lst)
+  (let loop ([i 0] [rest lst])
+    (cond
+      [(null? rest) #f]
+      [(eq? (car rest) sym) i]
+      [else (loop (+ i 1) (cdr rest))])))
+
+;; Collect consecutive let forms from the start of a list.
+;; Returns (values lets remaining).
+(define (collect-consecutive-lets elems)
+  (let loop ([rest elems] [lets '()])
+    (cond
+      [(and (pair? rest) (let-form? (car rest)))
+       (loop (cdr rest) (cons (car rest) lets))]
+      [else
+       (values (reverse lets) rest)])))
+
+;; Merge a sequence of let forms into one let with bracket bindings.
+;; All but the last must be bodyless. The last has the body.
+;; Returns a single (let (bindings...) body) form.
+(define (merge-let-sequence lets)
+  (define last-let (last lets))
+  (define bodyless-lets (drop-right lets 1))
+  ;; Extract bindings from bodyless lets
+  (define bindings
+    (append-map extract-let-binding-tokens bodyless-lets))
+  ;; Extract bindings and body from the last let
+  (define-values (last-bindings last-body) (split-last-let last-let))
+  ;; Combine all bindings into bracket format
+  (define all-bindings (append bindings last-bindings))
+  `(let ,all-bindings ,last-body))
+
+;; Extract binding tokens from a bodyless let form.
+;; (let name := value) → (name := value)
+;; (let name : T := value) → (name : T := value)
+(define (extract-let-binding-tokens let-form)
+  (cdr let-form))  ; everything after 'let
+
+;; Split the last let in a sequence into (values binding-tokens body).
+;; The last let has a body.
+(define (split-last-let let-form)
+  (define rest (cdr let-form))
+  (cond
+    ;; := format: find the body (last element after the value)
+    [(memq ':= rest)
+     ;; For (let name := value body) or (let name : T := value body)
+     ;; Body is the last element, bindings are everything else
+     (define body (last rest))
+     (define binding-tokens (drop-right rest 1))
+     (values binding-tokens body)]
+    ;; Bracket format: (let [bindings] body) — already has bracket
+    [(and (>= (length rest) 2) (list? (car rest)))
+     (values (car rest) (cadr rest))]
+    ;; Legacy format: (let name value body) — 3 elements
+    [(= (length rest) 3)
+     (define body (caddr rest))
+     (define binding-tokens (list (car rest) ':= (cadr rest)))
+     (values binding-tokens body)]
+    [else
+     ;; Fallback: treat last element as body
+     (define body (last rest))
+     (define binding-tokens (drop-right rest 1))
+     (values binding-tokens body)]))
+
 ;; Recursively expand subexpressions of a list datum
 ;; Special handling for $pipe forms: group elements after -> into a single
 ;; sub-form so pre-parse macros (like let) see the correct structure.
+;; Also merges consecutive bodyless let forms (sibling lets) before expansion.
 (define (preparse-expand-subforms datum reg depth)
   (define grouped (maybe-group-pipe-body datum))
+  (define merged (merge-sibling-lets grouped))
   (define expanded
     (map (lambda (sub) (preparse-expand-form sub reg depth))
-         grouped))
-  (if (equal? expanded grouped) datum expanded))
+         merged))
+  (if (equal? expanded merged) datum expanded))
 
 ;; For $pipe forms (WS match arms), group body elements after -> into a single list.
 ;; ($pipe ctor args... -> e1 e2 e3) → ($pipe ctor args... -> (e1 e2 e3))
@@ -474,44 +602,179 @@
 ;; ========================================
 
 ;; let: sequential local bindings
-;; NEW: (let [x <T> e1 y <T2> e2] body) → flat triples in bracket
-;; OLD: (let ([x : T e] ...) body) → nested 4-element sub-lists
-;; Both expand to: nested ((fn (x : T) ...) e) applications
+;; Formats (all expand to nested ((fn (name : type) ...) value) applications):
+;;
+;; 1. Inline :=  — (let name := value body)
+;;                  (let name : T1 T2 := value body)
+;; 2. Bracket := — (let [name := value  name2 : T := value2] body)
+;; 3. Bracket <> — (let [name ($angle-type T) value ...] body) — flat triples
+;; 4. Bracket () — (let ([name : T value] ...) body) — nested 4-element sub-lists
+;; 5. Shorthand  — (let name value body) — no type, 4 elements
+;;
 (define (expand-let datum)
-  (unless (and (list? datum) (= (length datum) 3))
-    (error 'let "let requires: (let (bindings...) body)"))
-  (define bindings-datum (cadr datum))
-  (define body (caddr datum))
-  (unless (list? bindings-datum)
-    (error 'let "let: bindings must be a list"))
+  (unless (and (list? datum) (>= (length datum) 3))
+    (error 'let "let requires at least: (let name value body)"))
+  (define rest (cdr datum))  ; everything after 'let
+
   (cond
-    ;; Detect new flat format: first element is a symbol, second is ($angle-type ...)
-    [(and (not (null? bindings-datum))
-          (symbol? (car bindings-datum))
+    ;; --- Branch 1: Bracket format — second element is a list ---
+    [(list? (car rest))
+     (unless (= (length rest) 2)
+       (error 'let "let with bracket bindings requires: (let [bindings...] body)"))
+     (define bindings-datum (car rest))
+     (define body (cadr rest))
+     (expand-let-bracket-bindings bindings-datum body)]
+
+    ;; --- Branch 2: Inline := format — find := in rest ---
+    [(memq ':= rest)
+     (expand-let-inline-assign rest)]
+
+    ;; --- Branch 3: Legacy shorthand — (let name value body) ---
+    [(and (= (length rest) 3) (symbol? (car rest)))
+     (define name (car rest))
+     (define value (cadr rest))
+     (define body (caddr rest))
+     `((fn (,name : _) ,body) ,value)]
+
+    ;; --- Branch 4: Legacy angle-type format — (let name ($angle-type T) value body) ---
+    [(and (>= (length rest) 4)
+          (symbol? (car rest))
+          (let ([second (cadr rest)])
+            (and (pair? second) (eq? (car second) '$angle-type))))
+     ;; Re-wrap as bracket format for uniform handling
+     (define body (last rest))
+     (define bindings-tokens (drop-right rest 1))
+     (expand-let-bracket-bindings bindings-tokens body)]
+
+    [else
+     (error 'let "let: unrecognized format: ~a" datum)]))
+
+;; Expand bracket-style let bindings.
+;; Handles three sub-formats within the bracket:
+;;   := format: [name := value  name2 : T := value2 ...]
+;;   angle-type format: [name ($angle-type T) value ...]
+;;   nested format: ([name : T value] ...)
+(define (expand-let-bracket-bindings bindings-datum body)
+  (cond
+    ;; Empty bindings — just return body
+    [(null? bindings-datum) body]
+    ;; := format: contains := symbol somewhere in the flat list
+    [(memq ':= bindings-datum)
+     (define parsed (parse-assign-bindings bindings-datum))
+     (let-bindings->nested-fn parsed body)]
+    ;; Angle-type format: first element is symbol, second is ($angle-type ...)
+    [(and (symbol? (car bindings-datum))
           (>= (length bindings-datum) 3)
           (let ([second (cadr bindings-datum)])
             (and (pair? second) (eq? (car second) '$angle-type))))
-     ;; New flat triple format: [name ($angle-type T) expr ...]
-     (define parsed-bindings (parse-let-flat-triples bindings-datum))
-     (foldr (lambda (binding inner)
-              (define name (car binding))
-              (define type (cadr binding))
-              (define value (caddr binding))
-              `((fn (,name : ,type) ,inner) ,value))
-            body
-            parsed-bindings)]
-    ;; Old nested format: ([x : T e] ...)
+     (define parsed (parse-let-flat-triples bindings-datum))
+     (let-bindings->nested-fn parsed body)]
+    ;; Nested format: ([name : T value] ...)
     [else
-     (foldr (lambda (binding inner)
-              (unless (and (list? binding) (= (length binding) 4))
-                (error 'let "let: each binding must be (name : type value), got ~a" binding))
-              (define name (car binding))
-              ;; binding is (name : type value)
-              (define type (caddr binding))
-              (define value (cadddr binding))
-              `((fn (,name : ,type) ,inner) ,value))
-            body
-            bindings-datum)]))
+     (define parsed
+       (for/list ([binding (in-list bindings-datum)])
+         (unless (and (list? binding) (= (length binding) 4))
+           (error 'let "let: each binding must be (name : type value), got ~a" binding))
+         (list (car binding) (caddr binding) (cadddr binding))))
+     (let-bindings->nested-fn parsed body)]))
+
+;; Expand inline := let: rest = (name [: type-atoms...] := value body)
+;; The last element is the body. Everything before is: name [: T1 T2 ...] := value
+(define (expand-let-inline-assign rest)
+  (define body (last rest))
+  (define tokens (drop-right rest 1))  ; name [: T1 T2 ...] := value
+  (define parsed (parse-assign-bindings tokens))
+  (let-bindings->nested-fn parsed body))
+
+;; Convert parsed bindings ((name type value) ...) to nested fn application.
+;; Type '_ means inferred (hole).
+(define (let-bindings->nested-fn parsed-bindings body)
+  (foldr (lambda (binding inner)
+           (define name (car binding))
+           (define type (cadr binding))
+           (define value (caddr binding))
+           `((fn (,name : ,type) ,inner) ,value))
+         body
+         parsed-bindings))
+
+;; Parse := bindings from a flat token list.
+;; Format: name [: T1 T2 ...] := value [name2 [: T3 ...] := value2 ...]
+;; Returns list of (name type value) triples. Type = '_ when omitted.
+(define (parse-assign-bindings tokens)
+  (cond
+    [(null? tokens) '()]
+    [else
+     (unless (symbol? (car tokens))
+       (error 'let "let :=: expected variable name, got ~a" (car tokens)))
+     (define name (car tokens))
+     (define after-name (cdr tokens))
+     ;; Check for optional type annotation: : T1 T2 ... :=
+     (cond
+       ;; name := value ... — no type annotation
+       [(and (pair? after-name) (eq? (car after-name) ':=))
+        (define after-assign (cdr after-name))
+        (when (null? after-assign)
+          (error 'let "let :=: missing value after := for ~a" name))
+        ;; Value = everything until next binding start or end
+        (define-values (value-tokens rest) (split-at-next-assign-binding after-assign))
+        (define value (if (= (length value-tokens) 1)
+                          (car value-tokens)
+                          value-tokens))
+        (cons (list name '_ value) (parse-assign-bindings rest))]
+       ;; name : T1 T2 ... := value ... — with type annotation
+       [(and (pair? after-name) (eq? (car after-name) ':))
+        (define after-colon (cdr after-name))
+        ;; Collect type atoms until :=
+        (define-values (type-atoms after-assign)
+          (split-before-symbol ':= after-colon))
+        (when (null? type-atoms)
+          (error 'let "let :=: empty type annotation for ~a" name))
+        (when (null? after-assign)
+          (error 'let "let :=: missing := after type for ~a" name))
+        ;; after-assign starts with :=, skip it
+        (define past-assign (cdr after-assign))
+        (when (null? past-assign)
+          (error 'let "let :=: missing value after := for ~a" name))
+        (define-values (value-tokens rest) (split-at-next-assign-binding past-assign))
+        (define type (if (= (length type-atoms) 1)
+                         (car type-atoms)
+                         type-atoms))
+        (define value (if (= (length value-tokens) 1)
+                          (car value-tokens)
+                          value-tokens))
+        (cons (list name type value) (parse-assign-bindings rest))]
+       [else
+        (error 'let "let :=: expected := or : after name ~a, got ~a" name after-name)])]))
+
+;; Split a list at the first occurrence of a given symbol.
+;; Returns (values before-symbol from-symbol-onwards).
+;; If symbol not found, returns (values list '()).
+(define (split-before-symbol sym lst)
+  (let loop ([acc '()] [rest lst])
+    (cond
+      [(null? rest) (values (reverse acc) '())]
+      [(eq? (car rest) sym) (values (reverse acc) rest)]
+      [else (loop (cons (car rest) acc) (cdr rest))])))
+
+;; Split at the start of the next := binding in a value token list.
+;; A binding starts at position i if tokens[i] is a symbol and
+;; tokens[i+1] is := or tokens[i+1] is : (followed eventually by :=).
+;; Returns (values value-tokens remaining-tokens).
+(define (split-at-next-assign-binding tokens)
+  (let loop ([i 0] [rest tokens])
+    (cond
+      [(null? rest)
+       (values tokens '())]
+      [(and (> i 0)
+            (symbol? (car rest))
+            (not (eq? (car rest) ':))
+            (not (eq? (car rest) ':=))
+            (pair? (cdr rest))
+            (or (eq? (cadr rest) ':=)
+                (eq? (cadr rest) ':)))
+       (values (take tokens i) rest)]
+      [else
+       (loop (+ i 1) (cdr rest))])))
 
 ;; Parse flat triples from let binding list: name ($angle-type T) expr ...
 ;; Value tokens: everything after the type until the next binding (symbol ($angle-type ...))
