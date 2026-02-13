@@ -15,9 +15,10 @@
 
 (require racket/match
          "syntax.rkt"
-         "metavar-store.rkt")
+         "metavar-store.rkt"
+         "substitution.rkt")
 
-(provide zonk zonk-ctx zonk-final)
+(provide zonk zonk-ctx zonk-final zonk-at-depth)
 
 ;; ========================================
 ;; Zonk: substitute solved metavariables
@@ -106,6 +107,115 @@
                           (expr-reduce-arm-ctor-name arm)
                           (expr-reduce-arm-binding-count arm)
                           (zonk (expr-reduce-arm-body arm))))
+                       arms)
+                  structural?)]))
+
+;; ========================================
+;; Zonk-at-depth: depth-aware zonk for use under binders.
+;; ========================================
+;; When a metavariable is solved to an expression containing bvars,
+;; those bvar indices are relative to the depth where the meta was solved.
+;; If the meta appears under additional binders (e.g., in a Pi codomain),
+;; the solution's bvar indices need shifting by the number of extra binders.
+;;
+;; zonk-at-depth(depth, e):
+;;   Like zonk, but shifts meta solutions by `depth` when substituting.
+;;   Call with depth=0 for normal behavior (equivalent to plain zonk).
+;;   Use depth=1 when zonking a Pi/Sigma/lam codomain/body.
+(define (zonk-at-depth depth e)
+  (match e
+    ;; THE KEY CASE: metavariable — follow solution and shift by accumulated depth
+    [(expr-meta id)
+     (let ([sol (meta-solution id)])
+       (if sol
+           (let ([zonked-sol (zonk sol)])  ; zonk at depth 0 (solution is at solve-site depth)
+             (if (> depth 0)
+                 (shift depth 0 zonked-sol)
+                 zonked-sol))
+           e))]  ; unsolved: leave as-is
+
+    ;; Atoms — return unchanged
+    [(expr-bvar _) e]
+    [(expr-fvar _) e]
+    [(expr-zero) e]
+    [(expr-refl) e]
+    [(expr-Nat) e]
+    [(expr-Bool) e]
+    [(expr-true) e]
+    [(expr-false) e]
+    [(expr-Type l) (expr-Type (zonk-level l))]
+    [(expr-hole) e]
+    [(expr-error) e]
+
+    ;; Binding forms: increment depth for codomains/bodies
+    [(expr-lam m t body)
+     (expr-lam (zonk-mult m) (zonk-at-depth depth t) (zonk-at-depth (add1 depth) body))]
+    [(expr-Pi m dom cod)
+     (expr-Pi (zonk-mult m) (zonk-at-depth depth dom) (zonk-at-depth (add1 depth) cod))]
+    [(expr-Sigma t1 t2)
+     (expr-Sigma (zonk-at-depth depth t1) (zonk-at-depth (add1 depth) t2))]
+
+    ;; Non-binding compound forms
+    [(expr-suc e1) (expr-suc (zonk-at-depth depth e1))]
+    [(expr-app f a) (expr-app (zonk-at-depth depth f) (zonk-at-depth depth a))]
+    [(expr-pair e1 e2) (expr-pair (zonk-at-depth depth e1) (zonk-at-depth depth e2))]
+    [(expr-fst e1) (expr-fst (zonk-at-depth depth e1))]
+    [(expr-snd e1) (expr-snd (zonk-at-depth depth e1))]
+    [(expr-ann e1 e2) (expr-ann (zonk-at-depth depth e1) (zonk-at-depth depth e2))]
+    [(expr-Eq t e1 e2) (expr-Eq (zonk-at-depth depth t) (zonk-at-depth depth e1) (zonk-at-depth depth e2))]
+
+    ;; Eliminators
+    [(expr-natrec mot base step target)
+     (expr-natrec (zonk-at-depth depth mot) (zonk-at-depth depth base)
+                  (zonk-at-depth depth step) (zonk-at-depth depth target))]
+    [(expr-J mot base left right proof)
+     (expr-J (zonk-at-depth depth mot) (zonk-at-depth depth base)
+             (zonk-at-depth depth left) (zonk-at-depth depth right) (zonk-at-depth depth proof))]
+    [(expr-boolrec mot tc fc target)
+     (expr-boolrec (zonk-at-depth depth mot) (zonk-at-depth depth tc)
+                   (zonk-at-depth depth fc) (zonk-at-depth depth target))]
+
+    ;; Vec/Fin
+    [(expr-Vec t n) (expr-Vec (zonk-at-depth depth t) (zonk-at-depth depth n))]
+    [(expr-vnil t) (expr-vnil (zonk-at-depth depth t))]
+    [(expr-vcons t n hd tl)
+     (expr-vcons (zonk-at-depth depth t) (zonk-at-depth depth n)
+                 (zonk-at-depth depth hd) (zonk-at-depth depth tl))]
+    [(expr-Fin n) (expr-Fin (zonk-at-depth depth n))]
+    [(expr-fzero n) (expr-fzero (zonk-at-depth depth n))]
+    [(expr-fsuc n i) (expr-fsuc (zonk-at-depth depth n) (zonk-at-depth depth i))]
+    [(expr-vhead t n v) (expr-vhead (zonk-at-depth depth t) (zonk-at-depth depth n) (zonk-at-depth depth v))]
+    [(expr-vtail t n v) (expr-vtail (zonk-at-depth depth t) (zonk-at-depth depth n) (zonk-at-depth depth v))]
+    [(expr-vindex t n i v)
+     (expr-vindex (zonk-at-depth depth t) (zonk-at-depth depth n)
+                  (zonk-at-depth depth i) (zonk-at-depth depth v))]
+
+    ;; Posit8
+    [(expr-Posit8) e]
+    [(expr-posit8 _) e]
+    [(expr-p8-add a b) (expr-p8-add (zonk-at-depth depth a) (zonk-at-depth depth b))]
+    [(expr-p8-sub a b) (expr-p8-sub (zonk-at-depth depth a) (zonk-at-depth depth b))]
+    [(expr-p8-mul a b) (expr-p8-mul (zonk-at-depth depth a) (zonk-at-depth depth b))]
+    [(expr-p8-div a b) (expr-p8-div (zonk-at-depth depth a) (zonk-at-depth depth b))]
+    [(expr-p8-neg a) (expr-p8-neg (zonk-at-depth depth a))]
+    [(expr-p8-abs a) (expr-p8-abs (zonk-at-depth depth a))]
+    [(expr-p8-sqrt a) (expr-p8-sqrt (zonk-at-depth depth a))]
+    [(expr-p8-lt a b) (expr-p8-lt (zonk-at-depth depth a) (zonk-at-depth depth b))]
+    [(expr-p8-le a b) (expr-p8-le (zonk-at-depth depth a) (zonk-at-depth depth b))]
+    [(expr-p8-from-nat n) (expr-p8-from-nat (zonk-at-depth depth n))]
+    [(expr-p8-if-nar t nc vc v)
+     (expr-p8-if-nar (zonk-at-depth depth t) (zonk-at-depth depth nc)
+                     (zonk-at-depth depth vc) (zonk-at-depth depth v))]
+
+    ;; Reduce (pattern matching)
+    [(expr-reduce scrut arms structural?)
+     (expr-reduce (zonk-at-depth depth scrut)
+                  (map (lambda (arm)
+                         (expr-reduce-arm
+                          (expr-reduce-arm-ctor-name arm)
+                          (expr-reduce-arm-binding-count arm)
+                          (zonk-at-depth (+ depth (expr-reduce-arm-binding-count arm))
+                                         (expr-reduce-arm-body arm))))
                        arms)
                   structural?)]))
 

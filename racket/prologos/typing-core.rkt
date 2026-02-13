@@ -449,34 +449,35 @@
   (cond
     [(expr-error? scrut-type) #f]
     [else
-     ;; Dispatch strategy:
-     ;; - For built-in types (Nat, Bool): structural PM first (their constructors
-     ;;   are primitive expr nodes, not Church-encoded lambdas)
-     ;; - For user-defined data types: Church fold first, structural fallback
-     ;;   (their constructors are Church-encoded lambdas at runtime, so structural
-     ;;   PM only works if the value hasn't been unfolded yet)
      (let-values ([(type-ctor-name type-args) (decompose-type-app scrut-type)])
-       (let* ([bare-tc (and type-ctor-name (bare-name type-ctor-name))]
-              [type-ctors (and bare-tc (lookup-type-ctors bare-tc))]
-              [builtin-type? (and bare-tc (memq bare-tc '(Nat Bool)))])
-         (if builtin-type?
-             ;; Built-in types: structural PM (always works at runtime)
-             (or (and type-ctors (not (null? type-ctors))
-                      (let ([result (check-reduce-structural ctx arms expected-type
-                                               type-ctor-name type-args)])
-                        (when result
-                          (mark-structural-reduce! reduce-expr))
-                        result))
-                 ;; Fallback to Church fold (shouldn't happen for Nat/Bool, but defensive)
-                 (check-reduce-church ctx scrutinee arms expected-type))
-             ;; User-defined types: Church fold first, structural fallback
-             (or (check-reduce-church ctx scrutinee arms expected-type)
-                 (and type-ctors (not (null? type-ctors))
-                      (let ([result (check-reduce-structural ctx arms expected-type
-                                               type-ctor-name type-args)])
-                        (when result
-                          (mark-structural-reduce! reduce-expr))
-                        result))))))]))
+       (define bare-tc (and type-ctor-name (bare-name type-ctor-name)))
+       (define type-ctors (and bare-tc (lookup-type-ctors bare-tc)))
+       (define builtin-type? (and bare-tc (memq bare-tc '(Nat Bool))))
+       (if builtin-type?
+           ;; Built-in types (Nat/Bool): structural PM first, Church fold fallback
+           (or (and type-ctors (not (null? type-ctors))
+                    (let ([result (check-reduce-structural ctx arms expected-type
+                                             type-ctor-name type-args)])
+                      (when result (mark-structural-reduce! reduce-expr))
+                      result))
+               (check-reduce-church ctx scrutinee arms expected-type))
+           ;; User-defined types: Church fold first, structural fallback.
+           ;; Save meta state before Church fold attempt so that if it fails,
+           ;; the structural PM attempt starts with clean (unsolved) metas.
+           ;; Church fold desugaring solves metas as side effects, and those
+           ;; solutions may be at the wrong de Bruijn depth for structural PM.
+           (let ([saved-meta-state (save-meta-state)])
+             (let ([church-result (check-reduce-church ctx scrutinee arms expected-type)])
+               (or church-result
+                   (begin
+                     ;; Restore metas to pre-Church-fold state before structural PM
+                     (restore-meta-state! saved-meta-state)
+                     (and type-ctors (not (null? type-ctors))
+                          (let ([result (check-reduce-structural ctx arms expected-type
+                                                     type-ctor-name type-args)])
+                            (when result (mark-structural-reduce! reduce-expr))
+                            result))))))))]))
+
 
 ;; Built-in constructor types for Nat/Bool (not in global-env)
 (define (builtin-ctor-type ctor-name)
@@ -507,11 +508,10 @@
          [(not instantiated) #f]
          [else
           (if (= bc 0)
-              ;; No bindings: just check body against expected type
               (check ctx body expected-type)
-              ;; Extend context with field types, shift expected-type
               (let ([ext-ctx (extend-ctx-with-fields ctx instantiated bc)])
-                (check ext-ctx body (shift bc 0 expected-type))))])])))
+                (define shifted-exp (shift bc 0 expected-type))
+                (check ext-ctx body shifted-exp)))])])))
 
 ;; Path B: Church fold desugaring (fallback for built-in types)
 (define (check-reduce-church ctx scrutinee arms expected-type)

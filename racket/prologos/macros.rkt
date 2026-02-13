@@ -241,11 +241,30 @@
     [else datum]))
 
 ;; Recursively expand subexpressions of a list datum
+;; Special handling for $pipe forms: group elements after -> into a single
+;; sub-form so pre-parse macros (like let) see the correct structure.
 (define (preparse-expand-subforms datum reg depth)
+  (define grouped (maybe-group-pipe-body datum))
   (define expanded
     (map (lambda (sub) (preparse-expand-form sub reg depth))
-         datum))
-  (if (equal? expanded datum) datum expanded))
+         grouped))
+  (if (equal? expanded grouped) datum expanded))
+
+;; For $pipe forms (WS match arms), group body elements after -> into a single list.
+;; ($pipe ctor args... -> e1 e2 e3) → ($pipe ctor args... -> (e1 e2 e3))
+;; This ensures pre-parse macros like `let` see (let bindings body) correctly.
+(define (maybe-group-pipe-body datum)
+  (if (and (pair? datum) (eq? (car datum) '$pipe))
+      (let ([arrow-idx (for/or ([x (in-list datum)] [i (in-naturals)])
+                         (and (eq? x '->) i))])
+        (if (and arrow-idx (> (length datum) (+ arrow-idx 2)))
+            ;; Multiple body elements after -> : group them
+            (let ([before-body (take datum (+ arrow-idx 1))]
+                  [body-elems (drop datum (+ arrow-idx 1))])
+              (append before-body (list body-elems)))
+            ;; Single body element or no -> : leave as-is
+            datum))
+      datum))
 
 ;; ========================================
 ;; preparse-expand-all: process a list of syntax objects
@@ -394,26 +413,47 @@
             bindings-datum)]))
 
 ;; Parse flat triples from let binding list: name ($angle-type T) expr ...
+;; Value tokens: everything after the type until the next binding (symbol ($angle-type ...))
+;; or end of list. Multi-token values are wrapped as an application list.
 (define (parse-let-flat-triples elems)
   (cond
     [(null? elems) '()]
     [(< (length elems) 3)
      (error 'let "let: incomplete binding triple, got ~a" elems)]
     [else
-     (define name (car elems))
-     (define angle-form (cadr elems))
-     (define value (caddr elems))
-     (unless (symbol? name)
-       (error 'let "let: expected variable name, got ~a" name))
-     (unless (and (pair? angle-form) (eq? (car angle-form) '$angle-type))
-       (error 'let "let: expected <type>, got ~a" angle-form))
-     ;; Extract the type from ($angle-type content)
-     (define type
-       (if (= (length (cdr angle-form)) 1)
-           (cadr angle-form)  ; single element: ($angle-type Nat) → Nat
-           (cdr angle-form))) ; multiple: ($angle-type -> Nat Nat) → (-> Nat Nat) -- shouldn't happen with reader
-     (cons (list name type value)
-           (parse-let-flat-triples (cdddr elems)))]))
+     (let* ([name (car elems)]
+            [angle-form (cadr elems)]
+            [_ (unless (symbol? name)
+                 (error 'let "let: expected variable name, got ~a" name))]
+            [_ (unless (and (pair? angle-form) (eq? (car angle-form) '$angle-type))
+                 (error 'let "let: expected <type>, got ~a" angle-form))]
+            [type (if (= (length (cdr angle-form)) 1)
+                      (cadr angle-form)
+                      (cdr angle-form))]
+            [after-type (cddr elems)])
+       (define-values (value-tokens rest)
+         (split-at-next-binding after-type))
+       (let ([value (if (= (length value-tokens) 1)
+                        (car value-tokens)
+                        value-tokens)])
+         (cons (list name type value)
+               (parse-let-flat-triples rest))))]))
+
+;; Split a list at the start of the next binding (symbol followed by ($angle-type ...)).
+;; Returns (values consumed-tokens remaining-tokens).
+(define (split-at-next-binding elems)
+  (let loop ([i 0] [rest elems])
+    (cond
+      [(null? rest)
+       (values elems '())]
+      [(and (> i 0)
+            (>= (length rest) 2)
+            (symbol? (car rest))
+            (let ([next (cadr rest)])
+              (and (pair? next) (eq? (car next) '$angle-type))))
+       (values (take elems i) rest)]
+      [else
+       (loop (+ i 1) (cdr rest))])))
 
 ;; do: sequenced bindings
 ;; NEW: (do [x ($angle-type T) e1] [y ($angle-type T2) e2] body) → 3-element bindings

@@ -112,3 +112,4 @@ defn bool-to-nat [b : Bool] : Nat
 defn clamp [low : Nat, high : Nat] <Nat -> Nat>
   fn [x]
     max low (min x high)
+

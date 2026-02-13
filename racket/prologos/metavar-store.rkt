@@ -39,6 +39,9 @@
  meta-lookup
  reset-meta-store!
  all-unsolved-metas
+ ;; Meta state save/restore (for speculative type-checking)
+ save-meta-state
+ restore-meta-state!
  ;; Sprint 5: Constraint postponement
  (struct-out constraint)
  current-constraint-store
@@ -436,6 +439,30 @@
   (hash-clear! (current-mult-meta-store))
   (hash-clear! (current-sess-meta-store))
   (reset-constraint-store!))
+
+;; ========================================
+;; Meta state save/restore for speculative type-checking
+;; ========================================
+;; Used by check-reduce to save meta state before a speculative Church fold
+;; attempt and restore it if the attempt fails, preventing meta contamination
+;; when falling back to structural PM.
+;;
+;; Saves the status and solution of all metas in the current store.
+;; Restore resets each meta back to its saved state.
+
+(define (save-meta-state)
+  ;; Save a snapshot of each meta's (status, solution) pair
+  (for/hasheq ([(id info) (in-hash (current-meta-store))])
+    (values id (cons (meta-info-status info) (meta-info-solution info)))))
+
+(define (restore-meta-state! saved)
+  ;; Restore each meta's status and solution from the snapshot.
+  ;; Any metas created AFTER the save are left as-is (they'll be garbage).
+  (for ([(id state) (in-hash saved)])
+    (define info (hash-ref (current-meta-store) id #f))
+    (when info
+      (set-meta-info-status! info (car state))
+      (set-meta-info-solution! info (cdr state)))))
 
 ;; List all unsolved metavariable infos.
 (define (all-unsolved-metas)

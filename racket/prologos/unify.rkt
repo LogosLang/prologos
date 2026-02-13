@@ -101,8 +101,8 @@
   ;; are applications (e.g., (app List ?m) vs (app List B)), decomposing
   ;; BEFORE WHNF avoids unfolding definitions, which would push unsolved
   ;; metas under binders and cause de Bruijn index mismatches in solutions.
-  (let ([z1 (zonk t1)]
-        [z2 (zonk t2)])
+  (let ([z1 (zonk-at-depth 0 t1)]
+        [z2 (zonk-at-depth 0 t2)])
     ;; Fast path: structurally identical after zonk (no WHNF needed)
     (cond
       [(equal? z1 z2) #t]
@@ -158,22 +158,29 @@
       ;; Pi vs Pi: multiplicities must unify, then unify domains and codomains.
       ;; Codomains are opened with a fresh fvar to avoid de Bruijn depth issues.
       ;; Sprint 7: uses unify-mult instead of eq? for mult-meta support.
+      ;; Sprint 11: Use zonk-at-depth(1, cod) before opening codomains.
+      ;; When a meta is solved to bvar(N) during domain unification, that bvar
+      ;; is at depth 0 (the domain level). Inside the codomain (depth 1), the
+      ;; same context variable is at bvar(N+1). zonk-at-depth shifts meta
+      ;; solutions by the accumulated binder depth, so bvar(N) becomes bvar(N+1)
+      ;; in the codomain, yielding correct de Bruijn indices after open-expr.
       [(and (expr-Pi? a) (expr-Pi? b))
        (let ([m1 (expr-Pi-mult a)] [m2 (expr-Pi-mult b)])
          (and (unify-mult m1 m2)
               (unify ctx (expr-Pi-domain a) (expr-Pi-domain b))
               (let ([x (expr-fvar (gensym 'unify))])
                 (unify ctx
-                       (open-expr (expr-Pi-codomain a) x)
-                       (open-expr (expr-Pi-codomain b) x)))))]
+                       (open-expr (zonk-at-depth 1 (expr-Pi-codomain a)) x)
+                       (open-expr (zonk-at-depth 1 (expr-Pi-codomain b)) x)))))]
 
       ;; Sigma vs Sigma: opened with fresh fvar for second type
+      ;; Same depth-aware zonking as Pi codomains.
       [(and (expr-Sigma? a) (expr-Sigma? b))
        (and (unify ctx (expr-Sigma-fst-type a) (expr-Sigma-fst-type b))
             (let ([x (expr-fvar (gensym 'unify))])
               (unify ctx
-                     (open-expr (expr-Sigma-snd-type a) x)
-                     (open-expr (expr-Sigma-snd-type b) x))))]
+                     (open-expr (zonk-at-depth 1 (expr-Sigma-snd-type a)) x)
+                     (open-expr (zonk-at-depth 1 (expr-Sigma-snd-type b)) x))))]
 
       ;; suc vs suc
       [(and (expr-suc? a) (expr-suc? b))
@@ -208,12 +215,13 @@
        (unify ctx (expr-Fin-bound a) (expr-Fin-bound b))]
 
       ;; lam vs lam: opened with fresh fvar for body
+      ;; Same depth-aware zonking as Pi/Sigma.
       [(and (expr-lam? a) (expr-lam? b))
        (and (unify ctx (expr-lam-type a) (expr-lam-type b))
             (let ([x (expr-fvar (gensym 'unify))])
               (unify ctx
-                     (open-expr (expr-lam-body a) x)
-                     (open-expr (expr-lam-body b) x))))]
+                     (open-expr (zonk-at-depth 1 (expr-lam-body a)) x)
+                     (open-expr (zonk-at-depth 1 (expr-lam-body b)) x))))]
 
       ;; pair vs pair
       [(and (expr-pair? a) (expr-pair? b))
@@ -394,8 +402,8 @@
 ;; calls this callback on each postponed constraint that mentions the meta.
 (current-retry-unify
  (lambda (c)
-   (let ([lhs (zonk (constraint-lhs c))]
-         [rhs (zonk (constraint-rhs c))])
+   (let ([lhs (zonk-at-depth 0 (constraint-lhs c))]
+         [rhs (zonk-at-depth 0 (constraint-rhs c))])
      (define result (unify (constraint-ctx c) lhs rhs))
      (cond
        [(eq? result #t)   (set-constraint-status! c 'solved)]

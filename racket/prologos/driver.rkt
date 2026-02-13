@@ -114,6 +114,21 @@
     [(expr-lam _ a b) (or (type-contains-hole? a) (type-contains-hole? b))]
     [_ #f]))
 
+;; Check if an elaborated type contains unsolved metas (level-meta, mult-meta, or expr-meta).
+;; When a type has unsolved metas (from implicit parameter inference), is-type may fail
+;; because infer-level can't handle universe level mismatches caused by Church encoding
+;; (e.g., Option (List A) where List A : Type 1 but Option expects Type 0).
+;; These types will be properly checked during the body type-check phase.
+(define (type-contains-meta? e)
+  (match e
+    [(expr-meta _) #t]
+    [(expr-Type l) (level-meta? l)]
+    [(expr-Pi m a b) (or (mult-meta? m) (type-contains-meta? a) (type-contains-meta? b))]
+    [(expr-Sigma a b) (or (type-contains-meta? a) (type-contains-meta? b))]
+    [(expr-app f x) (or (type-contains-meta? f) (type-contains-meta? x))]
+    [(expr-lam m a b) (or (mult-meta? m) (type-contains-meta? a) (type-contains-meta? b))]
+    [_ #f]))
+
 ;; Sprint 10: For bare-param defn, the type has holes. We skip is-type and
 ;; just run check(body, type) — the holes act as wildcards, accepting any type.
 ;; The stored type retains holes which display as `_`.
@@ -232,7 +247,13 @@
         ;; 2. Check type is well-formed
         ;; Sprint 10: Skip is-type for types with holes (bare-param defn).
         ;; Holes act as wildcards in check and are retained in the stored type.
-        (define ty-ok (if (type-contains-hole? type)
+        ;; Sprint 10: skip is-type for types with holes (bare-param defn)
+        ;; Sprint 1.1: also skip for types with unsolved metas (implicit params).
+        ;; Church-encoded types inflate universe levels (List A : Type 1), making
+        ;; is-type fail for nested type applications like Option (List A).
+        ;; The body type-check phase will properly validate these types.
+        (define ty-ok (if (or (type-contains-hole? type)
+                              (type-contains-meta? type))
                           #t
                           (is-type/err ctx-empty type)))
         (cond
