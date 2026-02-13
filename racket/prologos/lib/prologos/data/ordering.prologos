@@ -4,7 +4,7 @@ provide Ordering lt-ord eq-ord gt-ord
 
 ;; ========================================
 ;; Prologos Ordering Type
-;; Church-encoded three-way comparison result.
+;; Three-way comparison result.
 ;; ========================================
 
 data Ordering

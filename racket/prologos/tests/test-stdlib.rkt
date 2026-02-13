@@ -912,7 +912,7 @@
   (define result1
     (run-ns "(ns di1)\n(data (MyBool) (my-true) (my-false))\n(check my-true : MyBool)"))
   (check-equal? (last result1) "OK")
-  ;; Eliminate via match instead of Church application
+  ;; Eliminate via structural match
   (define result2
     (run-ns "(ns di2)\n(data (MyBool) (my-true) (my-false))\n(eval (the Nat (match my-true (my-true -> zero) (my-false -> (inc zero)))))"))
   (check-equal? (last result2) "zero : Nat")
@@ -928,13 +928,13 @@
   (define result2
     (run-ns "(ns dp2)\n(data (Maybe (A : (Type 0))) (nothing) (just A))\n(check (just Nat zero) : (Maybe Nat))"))
   (check-equal? (last result2) "OK")
-  ;; Eliminate via match instead of Church application
+  ;; Eliminate via structural match
   (define result3
     (run-ns "(ns dp3)\n(data (Maybe (A : (Type 0))) (nothing) (just A))\n(eval (the Nat (match (just Nat (inc zero)) (nothing -> zero) (just x -> (inc x)))))"))
   (check-equal? (last result3) "2 : Nat"))
 
 ;; ========================================
-;; match keyword — Pattern matching on Church-encoded ADTs
+;; match keyword — Structural pattern matching on ADTs
 ;; (match is an alias for reduce, using the | ctor args -> body syntax)
 ;; ========================================
 
@@ -1618,7 +1618,7 @@
    (last (run-ns "(ns ro6)\n(require [prologos.data.result :refer [Result ok err]])\n(eval (the Nat (reduce (err Nat Bool true) (ok x -> (inc zero)) (err _ -> zero))))"))
    "zero : Nat"))
 
-;; reduce on List — nil case (fold semantics)
+;; reduce on List — nil case (structural PM)
 (test-case "reduce/list-nil"
   ;; Match on nil list returns nil-branch value
   (check-equal?
@@ -1795,10 +1795,10 @@
    "1 : Nat"))
 
 ;; ========================================
-;; True Structural Pattern Matching (match returning Type 1)
+;; Structural Pattern Matching (match returning ADTs)
 ;; ========================================
-;; These tests verify that match can return Church-encoded types
-;; (List, Option, Result) which live in Type 1.
+;; These tests verify that match can return higher-kinded types
+;; (List, Option, Result) which live at Type 0 with native constructors.
 
 ;; map with match returns List B (Type 1)
 (test-case "structural-pm/map-returns-list"

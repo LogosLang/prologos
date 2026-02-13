@@ -37,55 +37,6 @@
          install-module-loader!)
 
 ;; ========================================
-;; Apply structural reduce marks from type checker
-;; ========================================
-;; Walk the expression tree and reconstruct any expr-reduce nodes
-;; that were marked as needing structural PM (by check-reduce) with
-;; structural? = #t.
-(define (apply-structural-marks e)
-  (match e
-    [(expr-reduce scrut arms structural?)
-     (define new-structural? (or structural? (structural-reduce? e)))
-     (define new-scrut (apply-structural-marks scrut))
-     (define new-arms
-       (map (lambda (arm)
-              (expr-reduce-arm
-               (expr-reduce-arm-ctor-name arm)
-               (expr-reduce-arm-binding-count arm)
-               (apply-structural-marks (expr-reduce-arm-body arm))))
-            arms))
-     (expr-reduce new-scrut new-arms new-structural?)]
-    [(expr-lam m t body)
-     (expr-lam m (apply-structural-marks t) (apply-structural-marks body))]
-    [(expr-Pi m dom cod)
-     (expr-Pi m (apply-structural-marks dom) (apply-structural-marks cod))]
-    [(expr-app f a)
-     (expr-app (apply-structural-marks f) (apply-structural-marks a))]
-    [(expr-ann e1 t1)
-     (expr-ann (apply-structural-marks e1) (apply-structural-marks t1))]
-    [(expr-suc e1) (expr-suc (apply-structural-marks e1))]
-    [(expr-natrec mot base step target)
-     (expr-natrec (apply-structural-marks mot) (apply-structural-marks base)
-                  (apply-structural-marks step) (apply-structural-marks target))]
-    [(expr-boolrec mot tc fc target)
-     (expr-boolrec (apply-structural-marks mot) (apply-structural-marks tc)
-                   (apply-structural-marks fc) (apply-structural-marks target))]
-    [(expr-Sigma t1 t2)
-     (expr-Sigma (apply-structural-marks t1) (apply-structural-marks t2))]
-    [(expr-pair e1 e2)
-     (expr-pair (apply-structural-marks e1) (apply-structural-marks e2))]
-    [(expr-fst e1) (expr-fst (apply-structural-marks e1))]
-    [(expr-snd e1) (expr-snd (apply-structural-marks e1))]
-    [(expr-Eq t e1 e2)
-     (expr-Eq (apply-structural-marks t) (apply-structural-marks e1)
-              (apply-structural-marks e2))]
-    [(expr-J mot base left right proof)
-     (expr-J (apply-structural-marks mot) (apply-structural-marks base)
-             (apply-structural-marks left) (apply-structural-marks right)
-             (apply-structural-marks proof))]
-    [_ e]))  ;; atoms, fvar, bvar, zero, etc.
-
-;; ========================================
 ;; Sprint 9: Recover a name map from the meta store for error formatting.
 ;; ========================================
 ;; Searches the meta store for the first meta with a meta-source-info
@@ -166,7 +117,7 @@
                   [(list 'eval expr)
                    (let ([ty (infer/err ctx-empty expr)])
                      (if (prologos-error? ty) ty
-                         (let ([val (nf (zonk-final (apply-structural-marks expr)))]
+                         (let ([val (nf (zonk-final expr))]
                                [ty-nf (nf (zonk-final ty))])
                            (format "~a : ~a" (pp-expr val) (pp-expr ty-nf)))))]
 
@@ -226,8 +177,7 @@
                    lhs-str rhs-str
                    error-loc error-loc)]
                 [else
-                 (define marked-body (apply-structural-marks body))
-                 (define zonked-body (zonk-final marked-body))
+                 (define zonked-body (zonk-final body))
                  (define zonked-type (zonk-final inferred-type))
                  (current-global-env
                   (global-env-add (current-global-env) name zonked-type zonked-body))
@@ -331,8 +281,7 @@
                       [else
                        ;; 6. Apply structural reduce marks (before zonk, so eq? identity holds),
                        ;;    then zonk-final (defaults unsolved level-metas to lzero)
-                       (define marked-body (apply-structural-marks body))
-                       (define zonked-body (zonk-final marked-body))
+                       (define zonked-body (zonk-final body))
                        (define zonked-type (zonk-final type))
                        (current-global-env
                         (global-env-add (current-global-env) name zonked-type zonked-body))

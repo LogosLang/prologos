@@ -298,7 +298,7 @@
         [(and (pair? datum) (eq? (car datum) 'deftype))
          (process-deftype datum)
          acc]
-        ;; data — generate Church-encoded defs, inject into stream
+        ;; data — generate type/constructor defs, inject into stream
         [(and (pair? datum) (eq? (car datum) 'data))
          (define defs (process-data datum))
          ;; Convert each def to a syntax object and add to accumulator
@@ -522,8 +522,8 @@
 ;; ========================================
 ;; Constructor metadata registry (for reduce)
 ;; ========================================
-;; Stores metadata about each constructor so the type checker can build
-;; Church-encoded elimination from reduce arms.
+;; Stores metadata about each constructor so the type checker can
+;; perform structural pattern matching from reduce arms.
 
 ;; ctor-meta: type-name, params, field-types, is-recursive flags, branch-index
 (struct ctor-meta (type-name params field-types is-recursive branch-index) #:transparent)
@@ -560,7 +560,7 @@
 (current-type-meta (hash-set (current-type-meta) 'Bool '(true false)))
 
 ;; ========================================
-;; process-data: Church-encoded algebraic data types
+;; process-data: algebraic data types with native constructors
 ;; ========================================
 ;; Syntax:
 ;;   (data TypeName ctor1 (Ctor2 field2 ...) ...)                     — no params
@@ -572,9 +572,10 @@
 ;;
 ;; Constructors can be bare symbols (nullary) or (Name fields...).
 ;;
-;; Generates Church-encoded definitions:
-;;   - Type definition: TypeName as a function returning a Pi type
-;;   - Constructor definitions: each constructor as a lambda
+;; Generates opaque definitions (bodies are placeholders, never evaluated):
+;;   - Type definition: TypeName with type annotation (Type 0)
+;;   - Constructor definitions: each with type annotation only
+;;   - Constructor metadata: registered for structural pattern matching
 ;;
 ;; Returns: list of s-expression datums (def type-name ...) (def ctor1 ...) ...
 
@@ -811,60 +812,17 @@
   (define ctors (map parse-data-ctor raw-ctors))
   ;; ctors = ((name . (field-types ...)) ...)
 
-  ;; Number of constructors
-  (define n-ctors (length ctors))
-
-  ;; Generate fresh names for constructor branch parameters
-  ;; Each branch parameter corresponds to a constructor's elimination branch
-  (define branch-names
-    (for/list ([ctor (in-list ctors)]
-               [i (in-naturals)])
-      (string->symbol (format "~a~a" "branch" i))))
-
   ;; ---- Generate the type definition ----
-  ;; Church encoding: TypeName A B ... = Pi(R : (Type 0)). branch1-type -> branch2-type -> ... -> R
-  ;; where branch_i-type = field1 -> field2 -> ... -> R
 
   ;; Type params as Pi bindings (all :0)
   (define param-pi-bindings
     (for/list ([p (in-list params)])
       (list (car p) ':0 (cdr p))))
 
-  ;; The R parameter — use a name unlikely to clash with user names
-  (define r-name '__R)
-
-  ;; Build branch types: for each constructor, the type of its branch
-  ;; (field1 -> field2 -> ... -> R)
-  ;; Self-referential fields (recursive types) become R in the branch type
-  (define branch-types
-    (for/list ([ctor (in-list ctors)])
-      (define field-types (cdr ctor))
-      (define substituted-fields
-        (map (lambda (ft)
-               (if (self-reference? ft type-name params) r-name ft))
-             field-types))
-      (build-arrow-type substituted-fields r-name)))
-
-  ;; Full Church-encoded type body (inside the param lambdas):
-  ;; Pi(R : (Type 0)). branch1-type -> branch2-type -> ... -> R
-  ;; R ranges over (Type 0) for small elimination.
-  ;; Combinators returning Church-encoded types use delegation instead.
-  (define church-body
-    `(Pi (,r-name :0 (Type 0))
-         ,(build-arrow-type branch-types r-name)))
-
-  ;; Type body with param lambdas
-  (define type-body
-    (build-nested-fn
-     (for/list ([p (in-list params)])
-       (list (car p) ':0 (cdr p)))
-     church-body))
-
   ;; Type type: param-types -> (Type 0)
-  ;; With native constructors (non-unfolding fvars), user-defined types
-  ;; are opaque and live at Type 0, matching built-in types (Nat, Bool).
-  ;; The Church-encoded body is retained for backward compat but never
-  ;; unfolded at runtime (whnf guards constructor/type fvars).
+  ;; User-defined types are opaque (non-unfolding fvars) and live at Type 0,
+  ;; matching built-in types (Nat, Bool). The body is a placeholder —
+  ;; driver.rkt stores these with value=#f (never evaluated at runtime).
   (define type-type
     (if (null? params)
         '(Type 0)
@@ -872,14 +830,17 @@
          param-pi-bindings
          '(Type 0))))
 
+  ;; Body placeholder — never elaborated or evaluated (driver.rkt skips
+  ;; body processing for data type definitions and stores value=#f).
+  (define type-body '(Type 0))
+
   ;; The type def
   (define type-def
     `(def ,type-name : ,type-type ,type-body))
 
   ;; ---- Generate constructor definitions ----
-  ;; For constructor i with fields f1:T1 f2:T2 ...:
   ;; Type: Pi(A :0 T_A) ... -> T1 -> T2 -> ... -> (TypeName A B ...)
-  ;; Body: fn A ... . fn f1 f2 ... . fn R . fn branch0 branch1 ... . branch_i f1 f2 ...
+  ;; Body: placeholder (never evaluated — constructors are opaque fvars)
 
   ;; Applied type: (TypeName A B ...) or just TypeName if no params
   (define applied-type-name
@@ -893,63 +854,6 @@
       (define ctor-name (car ctor))
       (define field-types (cdr ctor))
 
-      ;; Generate fresh field parameter names
-      (define field-names
-        (for/list ([_ (in-list field-types)]
-                   [j (in-naturals)])
-          (string->symbol (format "x~a" j))))
-
-      ;; Constructor body: fn R . fn branch0 ... branch_{n-1} . branch_i x0 x1 ...
-      ;; The branch_i is applied to the field arguments
-      ;; For recursive fields, fold them: (field R branch0 branch1 ...) before passing
-      (define field-is-recursive
-        (map (lambda (ft) (self-reference? ft type-name params)) field-types))
-      (define folded-field-args
-        (map (lambda (fname is-rec)
-               (if is-rec `(,fname ,r-name ,@branch-names) fname))
-             field-names field-is-recursive))
-      (define branch-application
-        (if (null? folded-field-args)
-            (list-ref branch-names i)
-            `(,(list-ref branch-names i) ,@folded-field-args)))
-
-      ;; Build the body from inside out:
-      ;; 1. Innermost: branch_i applied to fields
-      ;; 2. Wrap with branch parameter lambdas
-      ;; 3. Wrap with R parameter lambda
-      ;; 4. Wrap with field parameter lambdas
-      ;; 5. Wrap with type parameter lambdas
-
-      ;; Branch parameter bindings
-      (define branch-bindings
-        (for/list ([bn (in-list branch-names)]
-                   [bt (in-list branch-types)])
-          (list bn ': bt)))
-
-      ;; R binding — must match the type definition's Pi(R : (Type 0))
-      (define r-binding `(,r-name :0 (Type 0)))
-
-      ;; Field bindings
-      (define field-bindings
-        (for/list ([fn field-names]
-                   [ft (in-list field-types)])
-          (list fn ': ft)))
-
-      ;; Type parameter bindings (same as params but as fn bindings)
-      (define param-fn-bindings
-        (for/list ([p (in-list params)])
-          (list (car p) ':0 (cdr p))))
-
-      ;; Build nested fn from inside out
-      (define body-with-branches
-        (build-nested-fn branch-bindings branch-application))
-      (define body-with-r
-        `(fn (,@r-binding) ,body-with-branches))
-      (define body-with-fields
-        (build-nested-fn field-bindings body-with-r))
-      (define full-body
-        (build-nested-fn param-fn-bindings body-with-fields))
-
       ;; Constructor type:
       ;; Pi(A :0 T_A) ... -> T1 -> T2 -> ... -> (TypeName A B ...)
       (define ctor-result-type applied-type-name)
@@ -957,6 +861,9 @@
         (build-nested-pi
          param-pi-bindings
          (build-arrow-type field-types ctor-result-type)))
+
+      ;; Body placeholder — never elaborated or evaluated
+      (define full-body '(Type 0))
 
       `(def ,ctor-name : ,ctor-type ,full-body)))
 

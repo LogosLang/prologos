@@ -4,7 +4,7 @@ provide Option none some map flat-map unwrap-or or-else filter zip-with zip
 
 ;; ========================================
 ;; Prologos Option Type
-;; Church-encoded optional value.
+;; Optional value with native constructors.
 ;; ========================================
 
 data Option {A}

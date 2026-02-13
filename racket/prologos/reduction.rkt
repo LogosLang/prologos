@@ -263,35 +263,13 @@
      (let ([v* (whnf v)])
        (if (equal? v* v) e (whnf (expr-p8-if-nar t nc vc v*))))]
 
-    ;; Reduce: dispatch based on structural? flag
-    ;; structural? = #f → Church fold (fold semantics, recursive fields are accumulators)
-    ;; structural? = #t → True structural PM (recursive fields are raw values)
-    [(expr-reduce scrutinee arms #f)
-     ;; Church fold desugaring
-     (define scrut-whnf (whnf scrutinee))
-     (define branch-lams
-       (for/list ([arm (in-list arms)])
-         (define bc (expr-reduce-arm-binding-count arm))
-         (define body (expr-reduce-arm-body arm))
-         (if (= bc 0)
-             body
-             (for/fold ([inner body])
-                       ([_ (in-range bc)])
-               (expr-lam 'mw (expr-hole) inner)))))
-     (define church-app
-       (foldl (lambda (branch app-so-far)
-                (expr-app app-so-far branch))
-              (expr-app scrut-whnf (expr-hole))
-              branch-lams))
-     (whnf church-app)]
-
-    [(expr-reduce scrutinee arms #t)
-     ;; True structural pattern matching: decompose scrutinee as constructor,
-     ;; substitute field values into matching arm body.
-     ;; Try user-defined constructors (fvar applications) first, then built-in
-     ;; constructors (expr-zero, expr-suc, expr-true, expr-false).
-     ;; With native constructors, constructor fvars are never unfolded,
-     ;; so the scrutinee is always a constructor application (not a lambda).
+    ;; Reduce: structural pattern matching.
+    ;; Decompose scrutinee as constructor, substitute field values into
+    ;; matching arm body. Handles user-defined constructors (fvar applications)
+    ;; and built-in constructors (expr-zero, expr-suc, expr-true, expr-false).
+    ;; With native constructors, constructor fvars are never unfolded,
+    ;; so the scrutinee is always a constructor application (not a lambda).
+    [(expr-reduce scrutinee arms _structural?)
      (define scrut-whnf* (whnf scrutinee))
      (define struct-result (or (try-structural-reduce scrutinee arms)
                                (try-structural-reduce scrut-whnf* arms)

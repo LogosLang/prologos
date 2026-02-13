@@ -456,7 +456,9 @@
                     (elaborate-reduce-arm arm env depth))])
              (define first-err (findf prologos-error? elab-arms))
              (if first-err first-err
-                 (expr-reduce elab-scrutinee elab-arms #f)))))]
+                 ;; All match/reduce uses structural PM with native constructors.
+                 ;; No Church fold desugaring path needed.
+                 (expr-reduce elab-scrutinee elab-arms #t)))))]
 
     ;; Fallback
     [_ (prologos-error srcloc-unknown (format "Cannot elaborate: ~a" surf))]))
