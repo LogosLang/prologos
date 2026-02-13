@@ -935,7 +935,7 @@
 
 ;; ========================================
 ;; match keyword — Structural pattern matching on ADTs
-;; (match is an alias for reduce, using the | ctor args -> body syntax)
+;; (using the | ctor args -> body syntax)
 ;; ========================================
 
 ;; --- match on Option ---
@@ -1580,53 +1580,53 @@
    "true : Bool"))
 
 ;; ========================================
-;; Reduce — ML-style pattern matching
+;; match — Structural pattern matching (sexp mode)
 ;; ========================================
 
-;; reduce on Option — some case (sexp mode)
-(test-case "reduce/option-some"
+;; match on Option — some case (sexp mode)
+(test-case "match/option-some"
   (check-equal?
-   (last (run-ns "(ns ro1)\n(require [prologos.data.option :refer [Option none some]])\n(eval (the Nat (reduce (some Nat zero) (none -> (inc zero)) (some x -> x))))"))
+   (last (run-ns "(ns ro1)\n(require [prologos.data.option :refer [Option none some]])\n(eval (the Nat (match (some Nat zero) (none -> (inc zero)) (some x -> x))))"))
    "zero : Nat"))
 
-;; reduce on Option — none case
-(test-case "reduce/option-none"
+;; match on Option — none case
+(test-case "match/option-none"
   (check-equal?
-   (last (run-ns "(ns ro2)\n(require [prologos.data.option :refer [Option none some]])\n(eval (the Nat (reduce (none Nat) (none -> (inc zero)) (some x -> x))))"))
+   (last (run-ns "(ns ro2)\n(require [prologos.data.option :refer [Option none some]])\n(eval (the Nat (match (none Nat) (none -> (inc zero)) (some x -> x))))"))
    "1 : Nat"))
 
-;; reduce on Ordering — nullary constructors
-(test-case "reduce/ordering-lt"
+;; match on Ordering — nullary constructors
+(test-case "match/ordering-lt"
   (check-equal?
-   (last (run-ns "(ns ro3)\n(require [prologos.data.ordering :refer [Ordering lt-ord eq-ord gt-ord]])\n(eval (the Nat (reduce (lt-ord) (lt-ord -> zero) (eq-ord -> (inc zero)) (gt-ord -> (inc (inc zero))))))"))
+   (last (run-ns "(ns ro3)\n(require [prologos.data.ordering :refer [Ordering lt-ord eq-ord gt-ord]])\n(eval (the Nat (match (lt-ord) (lt-ord -> zero) (eq-ord -> (inc zero)) (gt-ord -> (inc (inc zero))))))"))
    "zero : Nat"))
 
-(test-case "reduce/ordering-gt"
+(test-case "match/ordering-gt"
   (check-equal?
-   (last (run-ns "(ns ro4)\n(require [prologos.data.ordering :refer [Ordering lt-ord eq-ord gt-ord]])\n(eval (the Nat (reduce (gt-ord) (lt-ord -> zero) (eq-ord -> (inc zero)) (gt-ord -> (inc (inc zero))))))"))
+   (last (run-ns "(ns ro4)\n(require [prologos.data.ordering :refer [Ordering lt-ord eq-ord gt-ord]])\n(eval (the Nat (match (gt-ord) (lt-ord -> zero) (eq-ord -> (inc zero)) (gt-ord -> (inc (inc zero))))))"))
    "2 : Nat"))
 
-;; reduce on Result — ok case
-(test-case "reduce/result-ok"
+;; match on Result — ok case
+(test-case "match/result-ok"
   (check-equal?
-   (last (run-ns "(ns ro5)\n(require [prologos.data.result :refer [Result ok err]])\n(eval (the Nat (reduce (ok Nat Bool zero) (ok x -> x) (err _ -> (inc zero)))))"))
+   (last (run-ns "(ns ro5)\n(require [prologos.data.result :refer [Result ok err]])\n(eval (the Nat (match (ok Nat Bool zero) (ok x -> x) (err _ -> (inc zero)))))"))
    "zero : Nat"))
 
-;; reduce on Result — err case
-(test-case "reduce/result-err"
+;; match on Result — err case
+(test-case "match/result-err"
   (check-equal?
-   (last (run-ns "(ns ro6)\n(require [prologos.data.result :refer [Result ok err]])\n(eval (the Nat (reduce (err Nat Bool true) (ok x -> (inc zero)) (err _ -> zero))))"))
+   (last (run-ns "(ns ro6)\n(require [prologos.data.result :refer [Result ok err]])\n(eval (the Nat (match (err Nat Bool true) (ok x -> (inc zero)) (err _ -> zero))))"))
    "zero : Nat"))
 
-;; reduce on List — nil case (structural PM)
-(test-case "reduce/list-nil"
+;; match on List — nil case (structural PM)
+(test-case "match/list-nil"
   ;; Match on nil list returns nil-branch value
   (check-equal?
    (last (run-ns "(ns ro7)\n(require [prologos.data.list :refer [List nil cons]])\n(eval (the Nat (match (nil Nat) (nil -> zero) (cons _ rest -> zero))))"))
    "zero : Nat"))
 
-;; reduce on List — structural PM: cons gives raw tail, need explicit recursion for length
-(test-case "reduce/length-via-reduce"
+;; match on List — structural PM: cons gives raw tail, need explicit recursion for length
+(test-case "match/length-via-match"
   (check-equal?
    (last (run-ns "(ns ro8)\n(require [prologos.data.list :refer [List nil cons length]])\n(eval (length Nat (cons Nat zero (cons Nat (inc zero) (nil Nat)))))"))
    "2 : Nat"))
@@ -1864,24 +1864,24 @@
 ;; prologos.data.list — Sprint 1.1 New Functions
 ;; ========================================
 
-;; --- foldl ---
+;; --- reduce (left fold) ---
 
-(test-case "list/foldl-empty"
-  ;; foldl add 0 [] = 0
+(test-case "list/reduce-empty"
+  ;; reduce add 0 [] = 0
   (check-equal?
-   (last (run-ns "(ns lst100)\n(require [prologos.data.list :refer [List nil foldl]])\n(require [prologos.data.nat :refer [add]])\n(eval (foldl Nat Nat add zero (nil Nat)))"))
+   (last (run-ns "(ns lst100)\n(require [prologos.data.list :refer [List nil reduce]])\n(require [prologos.data.nat :refer [add]])\n(eval (reduce Nat Nat add zero (nil Nat)))"))
    "zero : Nat"))
 
-(test-case "list/foldl-single"
-  ;; foldl add 0 [5] = 5
+(test-case "list/reduce-single"
+  ;; reduce add 0 [5] = 5
   (check-equal?
-   (last (run-ns "(ns lst101)\n(require [prologos.data.list :refer [List nil cons foldl]])\n(require [prologos.data.nat :refer [add]])\n(eval (foldl Nat Nat add zero (cons Nat (inc (inc (inc (inc (inc zero))))) (nil Nat))))"))
+   (last (run-ns "(ns lst101)\n(require [prologos.data.list :refer [List nil cons reduce]])\n(require [prologos.data.nat :refer [add]])\n(eval (reduce Nat Nat add zero (cons Nat (inc (inc (inc (inc (inc zero))))) (nil Nat))))"))
    "5 : Nat"))
 
-(test-case "list/foldl-multi"
-  ;; foldl add 0 [1,2,3] = 6
+(test-case "list/reduce-multi"
+  ;; reduce add 0 [1,2,3] = 6
   (check-equal?
-   (last (run-ns "(ns lst102)\n(require [prologos.data.list :refer [List nil cons foldl]])\n(require [prologos.data.nat :refer [add]])\n(eval (foldl Nat Nat add zero (cons Nat (inc zero) (cons Nat (inc (inc zero)) (cons Nat (inc (inc (inc zero))) (nil Nat))))))"))
+   (last (run-ns "(ns lst102)\n(require [prologos.data.list :refer [List nil cons reduce]])\n(require [prologos.data.nat :refer [add]])\n(eval (reduce Nat Nat add zero (cons Nat (inc zero) (cons Nat (inc (inc zero)) (cons Nat (inc (inc (inc zero))) (nil Nat))))))"))
    "6 : Nat"))
 
 ;; --- tail ---

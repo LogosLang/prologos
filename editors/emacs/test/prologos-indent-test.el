@@ -205,13 +205,13 @@ LINE-NUM is 1-based.  Uses sexp mode for indentation."
    4 4))  ;; arm at column 4
 
 ;; ============================================================
-;; Test: reduce indentation (same as match)
+;; Test: match indentation (sexp mode)
 ;; ============================================================
 
-(ert-deftest prologos-indent-test/reduce-arms ()
-  "Reduce arms should be indented 2 from reduce (same as match)."
+(ert-deftest prologos-indent-test/match-arms ()
+  "Match arms should be indented 2 from match."
   (prologos-indent-test--check
-   "(reduce n\n  zero -> zero\n  (inc k) -> k)"))
+   "(match n\n  zero -> zero\n  (inc k) -> k)"))
 
 ;; ============================================================
 ;; Test: WS mode — semantic indentation preservation

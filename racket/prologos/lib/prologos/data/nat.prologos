@@ -109,7 +109,8 @@ defn bool-to-nat [b : Bool] : Nat
     | false -> zero
 
 ;; Clamp: clamp low high returns a function that clamps x to [low, high]
-defn clamp [low : Nat, high : Nat] <Nat -> Nat>
+defn clamp [low : Nat, high : Nat] : Nat -> Nat
   fn [x]
     max low (min x high)
+
 

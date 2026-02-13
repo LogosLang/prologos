@@ -52,7 +52,7 @@
   (append prologos-font-lock-keywords-1
    `(;; Expression forms
      (,(regexp-opt '("fn" "the" "the-fn" "let" "do" "if"
-                     "match" "reduce" "forall" "exists")
+                     "match" "forall" "exists")
                    'symbols)
       . font-lock-keyword-face)
      ;; Type constructors

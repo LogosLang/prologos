@@ -27,7 +27,7 @@
     Vec Fin vnil vcons vhead vtail vindex fzero fsuc
     natrec J pair first second boolrec
     Posit8 posit8 p8+ p8- p8* p8/ p8-neg p8-abs p8-sqrt p8-lt p8-le p8-from-nat p8-if-nar
-    def defn check eval infer reduce match
+    def defn check eval infer match
     ;; Pre-parse macros — should be expanded before reaching parser
     defmacro let do if deftype data
     ;; Pre-parse namespace directives — consumed before reaching parser
@@ -625,8 +625,8 @@
        [(the-fn)
         (parse-the-fn args loc)]
 
-       ;; (reduce scrutinee arm1 arm2 ...) or (match scrutinee arm1 arm2 ...)
-       [(reduce match)
+       ;; (match scrutinee arm1 arm2 ...)
+       [(match)
         (parse-reduce args loc)]
 
        ;; Pre-parse macro forms — should have been expanded before parsing

@@ -63,7 +63,7 @@
    :feature 'keyword
    :override t
    '(((identifier) @font-lock-keyword-face
-      (:match "\\`\\(?:the\\|let\\|do\\|if\\|reduce\\|forall\\|exists\\|check\\|eval\\|infer\\|defmacro\\|relation\\|clause\\|query\\)\\'"
+      (:match "\\`\\(?:the\\|let\\|do\\|if\\|forall\\|exists\\|check\\|eval\\|infer\\|defmacro\\|relation\\|clause\\|query\\)\\'"
               @font-lock-keyword-face)))
 
    ;; Level 2: function/definition names

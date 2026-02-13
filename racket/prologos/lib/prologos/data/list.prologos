@@ -4,7 +4,7 @@ require [prologos.core.eq-trait :refer [nat-eq]]
 require [prologos.data.option :refer [Option none some]]
 require [prologos.data.nat :refer [add mult dec zero?]]
 
-provide List nil cons foldr foldl length map filter append head tail singleton elem reverse sum product any? all? find nth last replicate range concat concat-map take drop split-at take-while drop-while partition zip-with zip unzip intersperse halve merge sort
+provide List nil cons foldr reduce length map filter append head tail singleton elem reverse sum product any? all? find nth last replicate range concat concat-map take drop split-at take-while drop-while partition zip-with zip unzip intersperse halve merge sort
 
 ;; ========================================
 ;; Prologos List Type
@@ -27,14 +27,14 @@ defn foldr [f : A -> B -> B
     | nil       -> z
     | cons a as -> f a (foldr f z as)
 
-;; Left fold over the list (tail-recursive).
-;; foldl f z [a,b,c] = f (f (f z a) b) c
-defn foldl [f : B -> A -> B
-            z : B
-            xs : List A] : B
+;; Left fold (reduce) over the list (tail-recursive).
+;; reduce f z [a,b,c] = f (f (f z a) b) c
+defn reduce [f : B -> A -> B
+             z : B
+             xs : List A] : B
   match xs
     | nil       -> z
-    | cons a as -> foldl f (f z a) as
+    | cons a as -> reduce f (f z a) as
 
 ;; ========================================
 ;; Basic Operations
@@ -109,11 +109,11 @@ defn reverse [xs : List A] : List A
 
 ;; Sum of a list of naturals.
 defn sum [xs : List Nat] : Nat
-  foldl add zero xs
+  reduce add zero xs
 
 ;; Product of a list of naturals.
 defn product [xs : List Nat] : Nat
-  foldl mult (inc zero) xs
+  reduce mult (inc zero) xs
 
 ;; ========================================
 ;; Predicates and Search

@@ -57,7 +57,6 @@ WS mode cycles through plausible indentation levels."
 (put 'fn      'lisp-indent-function 1)
 (put 'the     'lisp-indent-function 1)
 (put 'match   'lisp-indent-function 1)
-(put 'reduce  'lisp-indent-function 1)
 
 ;; 2-arg special forms
 (put 'if 'lisp-indent-function 2)
