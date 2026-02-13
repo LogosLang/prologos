@@ -15,7 +15,8 @@
 
 (provide pp-expr
          pp-session
-         pp-mult)
+         pp-mult
+         pp-function-signature)
 
 ;; ========================================
 ;; Name supply for de Bruijn -> named variables
@@ -203,6 +204,37 @@
 
     ;; Fallback
     [_ (format "~a" e)]))
+
+;; ========================================
+;; Function signature pretty-printing
+;; ========================================
+
+;; Pretty-print a Pi chain as a function signature for arity error messages.
+;; Groups explicit params with commas, shows implicits in braces.
+;; Pi(m0, Type, Pi(mw, Nat, Pi(mw, Nat, Bool))) → "{Type} -> (Nat, Nat) -> Bool"
+(define (pp-function-signature type [names '()])
+  (define-values (implicits explicits result) (collect-pi-groups type names))
+  (define parts '())
+  (when (not (null? explicits))
+    (set! parts (cons (format "(~a)" (string-join explicits ", ")) parts)))
+  (when (not (null? implicits))
+    (set! parts (cons (format "{~a}" (string-join implicits ", ")) parts)))
+  (if (null? parts)
+      (pp-expr type names)
+      (string-join (append (reverse parts) (list (format "~a" result))) " -> ")))
+
+;; Walk a Pi chain, collecting implicit and explicit parameter types as strings,
+;; and return the final result type as a string.
+(define (collect-pi-groups type names)
+  (let loop ([ty type] [ns names] [imps '()] [exps '()])
+    (match ty
+      [(expr-Pi m dom cod)
+       (let ([name (fresh-name (length ns) ns)]
+             [dom-str (pp-expr dom ns)])
+         (if (eq? m 'm0)
+             (loop cod (cons name ns) (cons dom-str imps) exps)
+             (loop cod (cons name ns) imps (cons dom-str exps))))]
+      [_ (values (reverse imps) (reverse exps) (pp-expr ty ns))])))
 
 ;; ========================================
 ;; Helpers

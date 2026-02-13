@@ -1488,7 +1488,7 @@
       (arity-error loc
                    (format "~a expects ~a argument~a, got ~a"
                            form expected (if (= expected 1) "" "s") (length args))
-                   form expected (length args))))
+                   form expected (length args) #f)))
 
 ;; ========================================
 ;; Parse reduce: (reduce scrutinee arm1 arm2 ...)

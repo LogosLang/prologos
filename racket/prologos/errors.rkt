@@ -62,8 +62,8 @@
 ;; Type inference failed (could not synthesize a type)
 (struct inference-failed-error prologos-error (expr) #:transparent)
 
-;; Wrong number of arguments
-(struct arity-error prologos-error (form expected got) #:transparent)
+;; Wrong number of arguments (with optional type for doc-like messages)
+(struct arity-error prologos-error (form expected got func-type) #:transparent)
 
 ;; Sprint 9: Cannot infer type of parameter (E1001)
 (struct cannot-infer-param-error prologos-error (param-name hint) #:transparent)
@@ -136,12 +136,15 @@
             (format "  ~a" msg)
             (format "  Expression: ~a" (format-val expr)))
       "\n")]
-    [(arity-error _ _ form expected got)
+    [(arity-error _ _ form expected got func-type)
      (string-join
-      (list (format "Error at ~a" loc-str)
-            (format "  ~a" msg)
-            (format "  Form: ~a" form)
-            (format "  Expected ~a arguments, got ~a" expected got))
+      (filter (lambda (s) (not (string=? s "")))
+       (list (format "Error at ~a" loc-str)
+             (format "  ~a" msg)
+             (format "  Function: ~a" form)
+             (format "  Expected ~a argument~a, got ~a"
+                     expected (if (= expected 1) "" "s") got)
+             (if func-type (format "  Signature: ~a" (format-val func-type)) "")))
       "\n")]
     ;; Sprint 9: E1001 — Cannot infer type of parameter
     [(cannot-infer-param-error _ _ param-name hint)

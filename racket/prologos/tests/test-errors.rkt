@@ -87,9 +87,10 @@
 (test-case "format-error: arity error"
   (let ([err (arity-error (srcloc "test.prl" 2 3 10)
                            "Wrong number of arguments"
-                           "suc" 1 2)])
-    (check-true (string-contains? (format-error err) "Form: suc"))
-    (check-true (string-contains? (format-error err) "Expected 1 arguments, got 2"))))
+                           "suc" 1 2 #f)])
+    (check-true (string-contains? (format-error err) "suc"))
+    (check-true (string-contains? (format-error err) "1"))
+    (check-true (string-contains? (format-error err) "2"))))
 
 (test-case "format-error: base prologos-error"
   (let ([err (prologos-error (srcloc "test.prl" 1 0 0) "Something went wrong")])

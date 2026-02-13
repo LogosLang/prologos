@@ -15,7 +15,8 @@
          "errors.rkt"
          "global-env.rkt"
          "namespace.rkt"
-         "metavar-store.rkt")
+         "metavar-store.rkt"
+         "pretty-print.rkt")
 
 (provide elaborate
          elaborate-top-level)
@@ -100,6 +101,25 @@
           (= n-user-args n-exp))      ; user gave explicit-only count
      n-imp]                           ; → insert implicits
     [else 0]))                        ; mismatch → don't insert, let checker error
+
+;; ========================================
+;; Arity checking helpers
+;; ========================================
+
+;; Count explicit (non-m0) parameters in a Pi chain.
+(define (count-explicit-params type)
+  (match type
+    [(expr-Pi m _ cod)
+     (if (eq? m 'm0)
+         (count-explicit-params cod)
+         (add1 (count-explicit-params cod)))]
+    [_ 0]))
+
+;; Count total parameters (implicit + explicit) in a Pi chain.
+(define (total-params type)
+  (match type
+    [(expr-Pi _ _ cod) (add1 (total-params cod))]
+    [_ 0]))
 
 ;; ========================================
 ;; Main elaboration: surface -> core
@@ -233,22 +253,40 @@
                                   env depth #f)
                    (elaborate func env depth))])
        (if (prologos-error? ef) ef
-           ;; Check for implicit parameters and insert fresh metavariables
+           ;; Check for implicit parameters, arity, and insert fresh metavariables
            (if (expr-fvar? ef)
                (let ([ftype (global-env-lookup-type (expr-fvar-name ef))])
                  (if ftype
-                     (let ([n-holes (implicit-holes-needed ftype (length args))])
-                       (if (> n-holes 0)
-                           ;; Insert fresh metas for implicit args, then elaborate user args
-                           (let ([with-metas
-                                  (for/fold ([acc ef])
-                                            ([_ (in-range n-holes)])
-                                    (expr-app acc (fresh-meta ctx-empty (expr-hole)
-                                                    (meta-source-info loc 'implicit-app
-                                                      (format "implicit argument for ~a" (expr-fvar-name ef))
-                                                      #f (env->name-stack env)))))])
-                             (elaborate-args with-metas args env depth loc))
-                           (elaborate-args ef args env depth loc)))
+                     (let* ([fname (expr-fvar-name ef)]
+                            [n-user-args (length args)]
+                            [mults (collect-pi-mults ftype)]
+                            [n-total (length mults)]
+                            [n-imp (leading-m0-count mults)]
+                            [n-exp (- n-total n-imp)]
+                            [n-holes (implicit-holes-needed ftype n-user-args)])
+                       ;; Arity check: reject over-application for known globals
+                       (cond
+                         ;; Too many args (more than explicit count, and not total count)
+                         [(and (> n-user-args n-exp)
+                               (not (= n-user-args n-total))
+                               (> n-total 0))
+                          (arity-error loc
+                            (format "Too many arguments to '~a'" fname)
+                            fname n-exp n-user-args
+                            (pp-function-signature ftype))]
+                         ;; Insert implicits if needed
+                         [(> n-holes 0)
+                          (let ([with-metas
+                                 (for/fold ([acc ef])
+                                           ([_ (in-range n-holes)])
+                                   (expr-app acc (fresh-meta ctx-empty (expr-hole)
+                                                   (meta-source-info loc 'implicit-app
+                                                     (format "implicit argument for ~a" fname)
+                                                     #f (env->name-stack env)))))])
+                            (elaborate-args with-metas args env depth loc))]
+                         ;; Normal case: no insertion needed, proceed
+                         [else
+                          (elaborate-args ef args env depth loc)]))
                      (elaborate-args ef args env depth loc)))
                (elaborate-args ef args env depth loc))))]
 
