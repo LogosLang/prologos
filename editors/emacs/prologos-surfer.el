@@ -74,8 +74,7 @@
     "block_body"
     "match_arm_body"
     "application"
-    "paren_expr"
-    "bracket_expr")
+    "grouped_expr")
   "Tree-sitter node types that represent structural scopes in Prologos.")
 
 (defconst prologos-surfer--node-type-labels
@@ -90,8 +89,7 @@
     ("block_body" . "body")
     ("match_arm_body" . "arm-body")
     ("application" . "app")
-    ("paren_expr" . "paren")
-    ("bracket_expr" . "bracket"))
+    ("grouped_expr" . "group"))
   "Short labels for scope node types, used in the mode-line lighter.")
 
 ;; ============================================================================

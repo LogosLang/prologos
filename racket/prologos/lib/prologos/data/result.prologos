@@ -11,14 +11,14 @@ data Result {A E}
 ;; Map a function over the ok value.
 defn map {A E B} [f : A -> B, r : Result A E] : Result B E
   match r
-    | ok x  -> ok (f x)
+    | ok x  -> ok [f x]
     | err e -> err e
 
 ;; Map a function over the error value.
 defn map-err {A E F} [f : E -> F, r : Result A E] : Result A F
   match r
     | ok x  -> ok x
-    | err e -> err (f e)
+    | err e -> err [f e]
 
 ;; Unwrap with a default value.
 defn unwrap-or {A E} [default : A, r : Result A E] : A

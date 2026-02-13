@@ -102,11 +102,11 @@
      ("\\?[a-zA-Z_][a-zA-Z0-9_]*" . font-lock-warning-face)
      ;; Macro pattern variables
      ("\\$[a-zA-Z_][a-zA-Z0-9_]*" . font-lock-variable-name-face)
-     ;; Definition name after def/defn/deftype/defmacro
-     ("(def\\(?:n\\|type\\|macro\\)?\\s-+\\([a-zA-Z_][a-zA-Z0-9_!?*-]*\\)"
+     ;; Definition name after def/defn/deftype/defmacro (matches both ( and [ delimiters)
+     ("[(\\[]def\\(?:n\\|type\\|macro\\)?\\s-+\\([a-zA-Z_][a-zA-Z0-9_!?*-]*\\)"
       (1 font-lock-function-name-face))
      ;; Data type name
-     ("(data\\s-+(?\\([A-Z][a-zA-Z0-9_]*\\)"
+     ("[(\\[]data\\s-+(?\\([A-Z][a-zA-Z0-9_]*\\)"
       (1 font-lock-type-face))))
   "Level 5: add multiplicities, holes, definition names.")
 

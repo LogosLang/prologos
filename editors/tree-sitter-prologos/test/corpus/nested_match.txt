@@ -5,8 +5,8 @@ Nested match in match arm body
 defn filter {A} [pred : A -> Bool, xs : List A] : List A
   match xs
     | nil       -> nil
-    | cons a as -> match (pred a)
-                    | true  -> cons a (filter pred as)
+    | cons a as -> match [pred a]
+                    | true  -> cons a [filter pred as]
                     | false -> filter pred as
 
 ---
@@ -60,7 +60,7 @@ defn filter {A} [pred : A -> Bool, xs : List A] : List A
             body: (match_arm_body
               (match_expr
                 scrutinee: (expression
-                  (paren_expr
+                  (grouped_expr
                     (expression
                       (application
                         (expression
@@ -85,7 +85,7 @@ defn filter {A} [pred : A -> Bool, xs : List A] : List A
                               (atom
                                 (identifier)))))
                         (expression
-                          (paren_expr
+                          (grouped_expr
                             (expression
                               (application
                                 (expression

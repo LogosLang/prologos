@@ -16,7 +16,7 @@
 ;; Features:
 ;; - Syntax highlighting (5 levels via font-lock)
 ;; - Comment and string handling
-;; - Bracket matching for (), [], <>, {}
+;; - Bracket matching for (), [], <>, {} ([] used for grouping in WS mode)
 ;; - #lang detection for sexp vs. whitespace-significant mode
 ;; - Defun navigation (C-M-a / C-M-e)
 ;; - Imenu support for definitions
@@ -153,7 +153,7 @@ Prologos .prologos files always use WS mode.")
   "Move to the beginning of the ARGth preceding top-level definition."
   (interactive "p")
   (re-search-backward
-   "^\\s-*(\\(?:def\\(?:n\\|type\\|macro\\)?\\|data\\|relation\\)\\s-"
+   "^\\s-*[(\\[]\\(?:def\\(?:n\\|type\\|macro\\)?\\|data\\|relation\\)\\s-"
    nil t (or arg 1)))
 
 (defun prologos-end-of-defun (&optional arg)
@@ -167,11 +167,11 @@ Prologos .prologos files always use WS mode.")
 ;; ============================================================
 
 (defvar prologos-imenu-generic-expression
-  `(("Definitions" "^\\s-*(def\\s-+\\([a-zA-Z_][a-zA-Z0-9_!?*-]*\\)" 1)
-    ("Functions"   "^\\s-*(defn\\s-+\\([a-zA-Z_][a-zA-Z0-9_!?*-]*\\)" 1)
-    ("Types"       "^\\s-*(deftype\\s-+\\([a-zA-Z_][a-zA-Z0-9_!?*-]*\\)" 1)
-    ("Macros"      "^\\s-*(defmacro\\s-+\\([a-zA-Z_][a-zA-Z0-9_!?*-]*\\)" 1)
-    ("Data"        "^\\s-*(data\\s-+(?\\([A-Z][a-zA-Z0-9_]*\\)" 1))
+  `(("Definitions" "^\\s-*[(\\[]def\\s-+\\([a-zA-Z_][a-zA-Z0-9_!?*-]*\\)" 1)
+    ("Functions"   "^\\s-*[(\\[]defn\\s-+\\([a-zA-Z_][a-zA-Z0-9_!?*-]*\\)" 1)
+    ("Types"       "^\\s-*[(\\[]deftype\\s-+\\([a-zA-Z_][a-zA-Z0-9_!?*-]*\\)" 1)
+    ("Macros"      "^\\s-*[(\\[]defmacro\\s-+\\([a-zA-Z_][a-zA-Z0-9_!?*-]*\\)" 1)
+    ("Data"        "^\\s-*[(\\[]data\\s-+(?\\([A-Z][a-zA-Z0-9_]*\\)" 1))
   "Imenu generic expression for Prologos mode.")
 
 ;; ============================================================

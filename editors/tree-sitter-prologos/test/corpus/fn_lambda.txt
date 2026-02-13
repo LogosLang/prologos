@@ -1,9 +1,9 @@
 ===
-Lambda with parenthesized body
+Lambda with bracketed body
 ===
 
 defn test {A} [x : A] : A
-  (fn a (Eq A a x))
+  [fn a [Eq A a x]]
 
 ---
 
@@ -22,13 +22,13 @@ defn test {A} [x : A] : A
         (identifier))
       body: (block_body
         (expression
-          (paren_expr
+          (grouped_expr
             (expression
               (fn_expr
                 (fn_param
                   (identifier))
                 (fn_body
-                  (paren_expr
+                  (grouped_expr
                     (expression
                       (application
                         (expression

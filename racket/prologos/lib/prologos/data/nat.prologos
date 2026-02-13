@@ -9,19 +9,19 @@ ns prologos.data.nat
 defn add [x : Nat, y : Nat] : Nat
   match y
     | zero  -> x
-    | inc k -> inc (add x k)
+    | inc k -> inc [add x k]
 
 ;; Multiplication: mult x y = x * y (by recursion on y)
 defn mult [x : Nat, y : Nat] : Nat
   match y
     | zero  -> zero
-    | inc k -> add x (mult x k)
+    | inc k -> add x [mult x k]
 
 ;; Double: double n = n + n
 defn double [n : Nat] : Nat
   match n
     | zero  -> zero
-    | inc k -> inc (inc (double k))
+    | inc k -> inc [inc [double k]]
 
 ;; Predecessor: pred(0) = 0, pred(suc(k)) = k
 defn dec [n : Nat] : Nat
@@ -44,13 +44,13 @@ defn zero? [n : Nat] : Bool
 defn sub [x : Nat, y : Nat] : Nat
   match y
     | zero  -> x
-    | inc k -> dec (sub x k)
+    | inc k -> dec [sub x k]
 
 ;; Exponentiation: power(base, exp) = base^exp
 defn pow [base : Nat, exp : Nat] : Nat
   match exp
     | zero  -> inc zero
-    | inc k -> mult base (pow base k)
+    | inc k -> mult base [pow base k]
 
 ;; ========================================
 ;; Comparison
@@ -58,11 +58,11 @@ defn pow [base : Nat, exp : Nat] : Nat
 
 ;; Less-than-or-equal: le?(x, y) iff sub(x, y) == 0
 defn le? [x : Nat, y : Nat] : Bool
-  zero? (sub x y)
+  zero? [sub x y]
 
 ;; Less-than: lt?(x, y) iff not(le?(y, x))
 defn lt? [x : Nat, y : Nat] : Bool
-  match (le? y x)
+  match [le? y x]
     | true  -> false
     | false -> true
 
@@ -76,7 +76,7 @@ defn ge? [x : Nat, y : Nat] : Bool
 
 ;; Nat equality: nat-eq?(x, y) iff le?(x, y) and le?(y, x)
 defn nat-eq? [x : Nat, y : Nat] : Bool
-  match (le? x y)
+  match [le? x y]
     | true  -> le? y x
     | false -> false
 
@@ -86,13 +86,13 @@ defn nat-eq? [x : Nat, y : Nat] : Bool
 
 ;; Minimum of two naturals
 defn min [x : Nat, y : Nat] : Nat
-  match (le? x y)
+  match [le? x y]
     | true  -> x
     | false -> y
 
 ;; Maximum of two naturals
 defn max [x : Nat, y : Nat] : Nat
-  match (le? x y)
+  match [le? x y]
     | true  -> y
     | false -> x
 
@@ -109,6 +109,6 @@ defn bool-to-nat [b : Bool] : Nat
 ;; Clamp: clamp low high returns a function that clamps x to [low, high]
 defn clamp [low : Nat, high : Nat] : Nat -> Nat
   fn [x]
-    max low (min x high)
+    max low [min x high]
 
 

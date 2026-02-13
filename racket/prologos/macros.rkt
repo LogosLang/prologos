@@ -614,10 +614,42 @@
      ;; Use constant motive shorthand — the parser wraps bare types automatically.
      `(boolrec ,result-type ,then-expr ,else-expr ,cond-expr)]))
 
+;; list literal: '[1 2 3] → (cons 1 (cons 2 (cons 3 nil)))
+;; The WS reader produces ($list-literal e1 e2 ...) and ($list-tail tail)
+;; for the pipe syntax '[1 2 | ys].
+;; Expansion:
+;;   ($list-literal)             → nil
+;;   ($list-literal 1 2 3)      → (cons 1 (cons 2 (cons 3 nil)))
+;;   ($list-literal 1 ($list-tail ys)) → (cons 1 ys)
+;;   ($list-literal 1 2 ($list-tail ys)) → (cons 1 (cons 2 ys))
+(define (expand-list-literal datum)
+  (unless (and (list? datum) (>= (length datum) 1)
+               (eq? (car datum) '$list-literal))
+    (error '$list-literal "expected ($list-literal ...), got ~a" datum))
+  (define elems (cdr datum))
+  (cond
+    [(null? elems) 'nil]
+    [else
+     ;; Build nested cons from right to left
+     ;; Check if the last element is a ($list-tail ...) sentinel
+     (define last-elem (last elems))
+     (define-values (proper-elems tail)
+       (if (and (list? last-elem)
+                (not (null? last-elem))
+                (eq? (car last-elem) '$list-tail))
+           ;; Tail syntax: the last element is ($list-tail expr)
+           (values (drop-right elems 1) (cadr last-elem))
+           ;; No tail: terminate with nil
+           (values elems 'nil)))
+     (foldr (lambda (elem rest) `(cons ,elem ,rest))
+            tail
+            proper-elems)]))
+
 ;; Register built-in pre-parse macros at module load time
 (register-preparse-macro! 'let expand-let)
 (register-preparse-macro! 'do expand-do)
 (register-preparse-macro! 'if expand-if)
+(register-preparse-macro! '$list-literal expand-list-literal)
 
 
 ;; ========================================

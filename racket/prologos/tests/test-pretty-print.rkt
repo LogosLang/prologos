@@ -50,7 +50,7 @@
   (check-equal? (pp-expr (nat->expr 5)) "5"))
 
 (test-case "pp: suc(bvar(0)) — not a literal"
-  (check-equal? (pp-expr (expr-suc (expr-bvar 0)) '("n")) "(inc n)"))
+  (check-equal? (pp-expr (expr-suc (expr-bvar 0)) '("n")) "[inc n]"))
 
 ;; ========================================
 ;; Variables
@@ -70,10 +70,10 @@
 ;; ========================================
 
 (test-case "pp: Type(0)"
-  (check-equal? (pp-expr (expr-Type (lzero))) "(Type 0)"))
+  (check-equal? (pp-expr (expr-Type (lzero))) "[Type 0]"))
 
 (test-case "pp: Type(1)"
-  (check-equal? (pp-expr (expr-Type (lsuc (lzero)))) "(Type 1)"))
+  (check-equal? (pp-expr (expr-Type (lsuc (lzero)))) "[Type 1]"))
 
 ;; ========================================
 ;; Pi — non-dependent arrow
@@ -82,7 +82,7 @@
 (test-case "pp: non-dependent Pi -> arrow"
   ;; Pi(mw, Nat, Nat) where body doesn't use bvar(0)
   (check-equal? (pp-expr (expr-Pi 'mw (expr-Nat) (expr-Nat)))
-                "(-> Nat Nat)"))
+                "[-> Nat Nat]"))
 
 (test-case "pp: dependent Pi"
   ;; Pi(mw, Nat, bvar(0)) — body uses bvar(0)
@@ -114,11 +114,11 @@
 
 (test-case "pp: simple app"
   (let ([result (pp-expr (expr-app (expr-fvar 'f) (expr-zero)))])
-    (check-equal? result "(f zero)")))
+    (check-equal? result "[f zero]")))
 
 (test-case "pp: multi-arg app flattened"
   (let ([result (pp-expr (expr-app (expr-app (expr-fvar 'f) (expr-zero)) (expr-true)))])
-    (check-equal? result "(f zero true)")))
+    (check-equal? result "[f zero true]")))
 
 ;; ========================================
 ;; Pair, fst, snd
@@ -126,15 +126,15 @@
 
 (test-case "pp: pair"
   (check-equal? (pp-expr (expr-pair (expr-zero) (expr-refl)))
-                "(pair zero refl)"))
+                "[pair zero refl]"))
 
 (test-case "pp: first"
   (check-equal? (pp-expr (expr-fst (expr-fvar 'p)))
-                "(first p)"))
+                "[first p]"))
 
 (test-case "pp: second"
   (check-equal? (pp-expr (expr-snd (expr-fvar 'p)))
-                "(second p)"))
+                "[second p]"))
 
 ;; ========================================
 ;; Annotation
@@ -142,7 +142,7 @@
 
 (test-case "pp: annotation"
   (check-equal? (pp-expr (expr-ann (expr-zero) (expr-Nat)))
-                "(the Nat zero)"))
+                "[the Nat zero]"))
 
 ;; ========================================
 ;; Eq
@@ -150,7 +150,7 @@
 
 (test-case "pp: Eq"
   (check-equal? (pp-expr (expr-Eq (expr-Nat) (expr-zero) (expr-zero)))
-                "(Eq Nat zero zero)"))
+                "[Eq Nat zero zero]"))
 
 ;; ========================================
 ;; Vec/Fin
@@ -158,15 +158,15 @@
 
 (test-case "pp: Vec"
   (check-equal? (pp-expr (expr-Vec (expr-Nat) (expr-suc (expr-zero))))
-                "(Vec Nat 1)"))
+                "[Vec Nat 1]"))
 
 (test-case "pp: vnil"
   (check-equal? (pp-expr (expr-vnil (expr-Nat)))
-                "(vnil Nat)"))
+                "[vnil Nat]"))
 
 (test-case "pp: Fin"
   (check-equal? (pp-expr (expr-Fin (expr-suc (expr-suc (expr-zero)))))
-                "(Fin 2)"))
+                "[Fin 2]"))
 
 ;; ========================================
 ;; Multiplicity formatting
@@ -190,11 +190,11 @@
 
 (test-case "pp: session send"
   (check-equal? (pp-session (sess-send (expr-Nat) (sess-end)))
-                "(!Nat . end)"))
+                "[!Nat . end]"))
 
 (test-case "pp: session recv"
   (check-equal? (pp-session (sess-recv (expr-Bool) (sess-end)))
-                "(?Bool . end)"))
+                "[?Bool . end]"))
 
 (test-case "pp: session choice"
   (let ([result (pp-session (sess-choice (list (cons 'ping (sess-send (expr-Nat) (sess-end)))

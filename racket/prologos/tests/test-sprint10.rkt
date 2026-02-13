@@ -136,7 +136,7 @@
   ;; (def identity (the (-> Nat Nat) (fn [x <Nat>] x)))
   (check-equal?
    (run-first "(def identity (the (-> Nat Nat) (fn [x <Nat>] x)))")
-   "identity : (-> Nat Nat) defined."))
+   "identity : [-> Nat Nat] defined."))
 
 (test-case "def-inferred/using-previous-def"
   ;; Use a previous type-inferred def
@@ -160,7 +160,7 @@
   ;; Type-level def: (def MyType (Type 0))
   (check-equal?
    (run-first "(def MyType (Type 0))")
-   "MyType : (Type 1) defined."))
+   "MyType : [Type 1] defined."))
 
 (test-case "def-inferred/eval-after-inferred-def"
   ;; Eval an expression using a type-inferred def
@@ -234,7 +234,7 @@
   ;; (fn (x : Nat) <Nat> x) should type-check as (-> Nat Nat)
   (check-equal?
    (run-last "(ns frt1)\n(eval (the (-> Nat Nat) (fn (x : Nat) <Nat> x)))")
-   "(fn [x <Nat>] x) : (-> Nat Nat)"))
+   "[fn [x <Nat>] x] : [-> Nat Nat]"))
 
 (test-case "fn-rettype/applied"
   ;; fn with return type, applied to argument

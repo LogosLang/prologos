@@ -13,15 +13,15 @@ require [prologos.data.nat    :as nat  :refer [add mult zero?]]
 
 ;; Increment every element
 defn inc-all [xs : List Nat] : List Nat
-  map (add _ (inc zero)) xs
+  map [add _ [inc zero]] xs
 
 ;; Double every element (qualified access: nat/double not in :refer)
 defn double-all [xs : List Nat] : List Nat
-  map (nat/double _) xs
+  map [nat/double _] xs
 
 ;; Keep only even elements
 defn evens [xs : List Nat] : List Nat
-  filter (zero? _) xs
+  filter [zero? _] xs
 
 ;; --- Pattern matching ---
 
@@ -29,7 +29,7 @@ defn evens [xs : List Nat] : List Nat
 defn factorial [n : Nat] : Nat
   match n
     | zero  -> inc zero
-    | inc k -> mult n (factorial k)
+    | inc k -> mult n [factorial k]
 
 ;; Square: n * n
 defn square [n : Nat] : Nat
@@ -39,39 +39,39 @@ defn square [n : Nat] : Nat
 
 ;; Squares of 0..n (qualified: list/range, nat/double not referred)
 defn squares-up-to [n : Nat] : List Nat
-  zip-with mult (list/range n) (list/range n)
+  zip-with mult [list/range n] [list/range n]
 
 ;; Dot product of two lists
 defn dot-product [xs : List Nat, ys : List Nat] : Nat
-  sum (zip-with mult xs ys)
+  sum [zip-with mult xs ys]
 
 ;; Count elements satisfying a predicate
 defn count-if {A} [p : A -> Bool, xs : List A] : Nat
-  length (filter p xs)
+  length [filter p xs]
 
 ;; Apply a function twice: f(f(x))
 defn apply-twice {A} [f : A -> A, x : A] : A
-  f (f x)
+  f [f x]
 
 ;; --- Placeholder + higher-order combos ---
 
 ;; Partial: add n to every element
 defn add-to [n : Nat, xs : List Nat] : List Nat
-  map (add n _) xs
+  map [add n _] xs
 
 ;; Negate a boolean list (qualified: bool/not is also referred as not)
 defn negate [xs : List Bool] : List Bool
-  map (not _) xs
+  map [not _] xs
 
 ;; Keep positive (nonzero) naturals
 defn keep-positive [xs : List Nat] : List Nat
-  filter (fn [n : Nat] (not (zero? n))) xs
+  filter [fn [n : Nat] [not [zero? n]]] xs
 
 ;; --- Eval some expressions ---
 
-eval (inc-all (cons (inc zero) (cons (inc (inc zero)) (cons (inc (inc (inc zero))) nil))))
-eval (factorial (inc (inc (inc (inc (inc zero))))))
-eval (double-all (list/range (inc (inc (inc zero)))))
-eval (sum (list/range (inc (inc (inc (inc (inc zero)))))))
-eval (dot-product (cons (inc zero) (cons (inc (inc zero)) nil)) (cons (inc (inc (inc zero))) (cons (inc (inc (inc (inc zero)))) nil)))
-eval (apply-twice nat/double (inc (inc zero)))
+eval [inc-all [cons [inc zero] [cons [inc [inc zero]] [cons [inc [inc [inc zero]]] nil]]]]
+eval [factorial [inc [inc [inc [inc [inc zero]]]]]]
+eval [double-all [list/range [inc [inc [inc zero]]]]]
+eval [sum [list/range [inc [inc [inc [inc [inc zero]]]]]]]
+eval [dot-product [cons [inc zero] [cons [inc [inc zero]] nil]] [cons [inc [inc [inc zero]]] [cons [inc [inc [inc [inc zero]]]] nil]]]
+eval [apply-twice nat/double [inc [inc zero]]]

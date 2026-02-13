@@ -1,0 +1,130 @@
+===
+Empty list literal
+===
+
+def xs : List Nat
+  '[]
+
+---
+
+(source_file
+  (top_level
+    (def_form
+      name: (identifier)
+      type: (type_expr
+        (type_application
+          (identifier)
+          (identifier)))
+      body: (block_body
+        (expression
+          (atom
+            (list_literal)))))))
+
+===
+Single element list literal
+===
+
+def xs : List Nat
+  '[1]
+
+---
+
+(source_file
+  (top_level
+    (def_form
+      name: (identifier)
+      type: (type_expr
+        (type_application
+          (identifier)
+          (identifier)))
+      body: (block_body
+        (expression
+          (atom
+            (list_literal
+              (expression
+                (atom
+                  (number))))))))))
+
+===
+Multi-element list literal
+===
+
+def xs : List Nat
+  '[1, 2, 3]
+
+---
+
+(source_file
+  (top_level
+    (def_form
+      name: (identifier)
+      type: (type_expr
+        (type_application
+          (identifier)
+          (identifier)))
+      body: (block_body
+        (expression
+          (atom
+            (list_literal
+              (expression
+                (atom
+                  (number)))
+              (expression
+                (atom
+                  (number)))
+              (expression
+                (atom
+                  (number))))))))))
+
+===
+List literal with expressions
+===
+
+defn example [x : Nat] : List Nat
+  '[x, inc x, [add x x]]
+
+---
+
+(source_file
+  (top_level
+    (defn_form
+      name: (identifier)
+      params: (param_list
+        (typed_param
+          name: (identifier)
+          type: (type_expr
+            (identifier))))
+      return_type: (type_expr
+        (type_application
+          (identifier)
+          (identifier)))
+      body: (block_body
+        (expression
+          (atom
+            (list_literal
+              (expression
+                (atom
+                  (identifier)))
+              (expression
+                (application
+                  (expression
+                    (atom
+                      (identifier)))
+                  (expression
+                    (atom
+                      (identifier)))))
+              (expression
+                (grouped_expr
+                  (expression
+                    (application
+                      (expression
+                        (application
+                          (expression
+                            (atom
+                              (identifier)))
+                          (expression
+                            (atom
+                              (identifier)))))
+                      (expression
+                        (atom
+                          (identifier))))))))))))))

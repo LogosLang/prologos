@@ -86,11 +86,10 @@
   (check-equal? (tok-type toks 1) 'keyword)
   (check-equal? (tok-val toks 1) 'widget))
 
-(test-case "tokenize: parentheses"
-  (define toks (tokenize-string "(x)"))
-  (check-equal? (tok-type toks 1) 'lparen)
-  (check-equal? (tok-type toks 2) 'symbol)
-  (check-equal? (tok-type toks 3) 'rparen))
+(test-case "tokenize: parentheses error in WS mode"
+  ;; () is reserved for future tuple syntax — errors in WS mode
+  (check-exn exn:fail?
+    (lambda () (tokenize-string "(x)"))))
 
 (test-case "tokenize: dollar sign"
   (define toks (tokenize-string "$x"))
@@ -124,8 +123,8 @@
   (check-not-false (member 'dedent types)))
 
 (test-case "tokenize: brackets inside disable indentation"
-  ;; Inside parens, newlines should not produce indent/dedent
-  (define toks (tokenize-string "(x\n  y)"))
+  ;; Inside brackets, newlines should not produce indent/dedent
+  (define toks (tokenize-string "[x\n  y]"))
   (define types (map (lambda (t) (vector-ref (struct->vector t) 1)) toks))
   (check-false (member 'indent types))
   (check-false (member 'dedent types)))
@@ -153,7 +152,7 @@
                 '((eval zero))))
 
 (test-case "parse: single-line with grouping"
-  (check-equal? (read-all-forms-string "eval (inc zero)")
+  (check-equal? (read-all-forms-string "eval [inc zero]")
                 '((eval (inc zero)))))
 
 (test-case "parse: multi-token indented child"
@@ -161,7 +160,7 @@
                 '((eval (id Nat zero)))))
 
 (test-case "parse: single-atom indented child (unwrapped)"
-  (check-equal? (read-all-forms-string "fn (x : Nat)\n  x")
+  (check-equal? (read-all-forms-string "fn [x : Nat]\n  x")
                 '((fn (x : Nat) x))))
 
 (test-case "parse: nested indentation"
@@ -172,27 +171,27 @@
 (test-case "parse: nested with grouping"
   (check-equal?
    (read-all-forms-string
-    "def id : (Pi (A :0 (Type 0)) (-> A A))\n  fn (A :0 (Type 0))\n    fn (x : A) x")
+    "def id : [Pi [A :0 [Type 0]] [-> A A]]\n  fn [A :0 [Type 0]]\n    fn [x : A] x")
    '((def id : (Pi (A :0 (Type 0)) (-> A A)) (fn (A :0 (Type 0)) (fn (x : A) x))))))
 
 (test-case "parse: check form with colon"
   (check-equal?
-   (read-all-forms-string "check (pair zero true) : (Sigma (x : Nat) Bool)")
+   (read-all-forms-string "check [pair zero true] : [Sigma [x : Nat] Bool]")
    '((check (pair zero true) : (Sigma (x : Nat) Bool)))))
 
 (test-case "parse: def form with body"
   (check-equal?
-   (read-all-forms-string "def one : Nat (inc zero)")
+   (read-all-forms-string "def one : Nat [inc zero]")
    '((def one : Nat (inc zero)))))
 
 (test-case "parse: multiple top-level forms"
   (check-equal?
-   (read-all-forms-string "eval zero\neval (inc zero)")
+   (read-all-forms-string "eval zero\neval [inc zero]")
    '((eval zero) (eval (inc zero)))))
 
 (test-case "parse: blank lines between top-level forms"
   (check-equal?
-   (read-all-forms-string "eval zero\n\n\neval (inc zero)")
+   (read-all-forms-string "eval zero\n\n\neval [inc zero]")
    '((eval zero) (eval (inc zero)))))
 
 (test-case "parse: nested indentation back to column 0"
@@ -208,13 +207,13 @@
 
 (test-case "parse: grouping inside grouping"
   (check-equal?
-   (read-all-forms-string "eval (id (inc zero))")
+   (read-all-forms-string "eval [id [inc zero]]")
    '((eval (id (inc zero))))))
 
-(test-case "parse: indentation inside parens ignored"
-  ;; Newlines inside () don't create indent/dedent
+(test-case "parse: indentation inside brackets ignored"
+  ;; Newlines inside [] don't create indent/dedent
   (check-equal?
-   (read-all-forms-string "eval (id\n  Nat\n  zero)")
+   (read-all-forms-string "eval [id\n  Nat\n  zero]")
    '((eval (id Nat zero)))))
 
 (test-case "parse: blank line inside indented block"
@@ -278,7 +277,7 @@
 
 (test-case "round-trip: hello"
   (define ws-forms (read-all-forms-string
-   "def one : Nat (inc zero)\ndef two : Nat (inc one)\ncheck two : Nat\neval two"))
+   "def one : Nat [inc zero]\ndef two : Nat [inc one]\ncheck two : Nat\neval two"))
   (check-equal? ws-forms
    '((def one : Nat (inc zero))
      (def two : Nat (inc one))
@@ -287,14 +286,14 @@
 
 (test-case "round-trip: identity def"
   (define ws-forms (read-all-forms-string
-   "def id : (Pi (A :0 (Type 0)) (-> A A))\n  fn (A :0 (Type 0))\n    fn (x : A) x"))
+   "def id : [Pi [A :0 [Type 0]] [-> A A]]\n  fn [A :0 [Type 0]]\n    fn [x : A] x"))
   (check-equal? ws-forms
    '((def id : (Pi (A :0 (Type 0)) (-> A A))
        (fn (A :0 (Type 0)) (fn (x : A) x))))))
 
 (test-case "round-trip: check with sigma"
   (define ws-forms (read-all-forms-string
-   "check (pair zero true) : (Sigma (x : Nat) Bool)"))
+   "check [pair zero true] : [Sigma [x : Nat] Bool]"))
   (check-equal? ws-forms
    '((check (pair zero true) : (Sigma (x : Nat) Bool)))))
 

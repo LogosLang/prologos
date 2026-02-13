@@ -357,8 +357,10 @@
 (test-case "parse: defn error — missing colon"
   (check-true (prologos-error? (p "(defn f Nat [x] x)"))))
 
-(test-case "parse: defn error — no brackets for params"
-  (check-true (prologos-error? (p "(defn f : Nat (x) x)"))))
+;; After position-based detection (Sub-Sprint A), () and [] are equivalent
+;; for param lists — both accepted. This test now verifies acceptance.
+(test-case "parse: defn — parens accepted for params (position-based)"
+  (check-false (prologos-error? (p "(defn f : Nat (x) x)"))))
 
 (test-case "parse: defn error — non-symbol in params"
   (check-true (prologos-error? (p "(defn f : Nat [42] zero)"))))

@@ -23,7 +23,7 @@ defn foldr [f : A -> B -> B
             xs : List A] : B
   match xs
     | nil       -> z
-    | cons a as -> f a (foldr f z as)
+    | cons a as -> f a [foldr f z as]
 
 ;; Left fold (reduce) over the list (tail-recursive).
 ;; reduce f z [a,b,c] = f (f (f z a) b) c
@@ -32,7 +32,7 @@ defn reduce [f : B -> A -> B
              xs : List A] : B
   match xs
     | nil       -> z
-    | cons a as -> reduce f (f z a) as
+    | cons a as -> reduce f [f z a] as
 
 ;; ========================================
 ;; Basic Operations
@@ -42,22 +42,22 @@ defn reduce [f : B -> A -> B
 defn length [xs : List A] : Nat
   match xs
     | nil      -> zero
-    | cons _ as -> inc (length as)
+    | cons _ as -> inc [length as]
 
 ;; Map a function over the list.
 defn map [f  : A -> B
           xs : List A] : List B
   match xs
     | nil       -> nil
-    | cons a as -> cons (f a) (map f as)
+    | cons a as -> cons [f a] [map f as]
 
 ;; Filter: keep elements satisfying the predicate.
 defn filter [pred : A -> Bool
              xs   : List A] : List A
   match xs
     | nil       -> nil
-    | cons a as -> match (pred a)
-      | true  -> cons a (filter pred as)
+    | cons a as -> match [pred a]
+      | true  -> cons a [filter pred as]
       | false -> filter pred as
 
 ;; Append two lists.
@@ -65,7 +65,7 @@ defn append [xs : List A
              ys : List A] : List A
   match xs
     | nil       -> ys
-    | cons a as -> cons a (append as ys)
+    | cons a as -> cons a [append as ys]
 
 ;; Head of a list with a default value.
 defn head [default : A
@@ -75,7 +75,7 @@ defn head [default : A
     | cons a _ -> a
 
 ;; Tail: returns Option (List A) -- none if empty, some of tail if non-empty.
-defn tail [xs : List A] : Option (List A)
+defn tail [xs : List A] : Option [List A]
   match xs
     | nil       -> none
     | cons _ as -> some as
@@ -88,7 +88,7 @@ defn singleton [x : A] : List A
 defn elem [eq : Eq A, x : A, xs : List A] : Bool
   match xs
     | nil       -> false
-    | cons a as -> match (eq x a)
+    | cons a as -> match [eq x a]
                      | true  -> true
                      | false -> elem eq x as
 
@@ -100,7 +100,7 @@ defn elem [eq : Eq A, x : A, xs : List A] : Bool
 defn reverse-acc [acc : List A, xs : List A] : List A
   match xs
     | nil       -> acc
-    | cons a as -> reverse-acc (cons a acc) as
+    | cons a as -> reverse-acc [cons a acc] as
 
 defn reverse [xs : List A] : List A
   reverse-acc nil xs
@@ -111,7 +111,7 @@ defn sum [xs : List Nat] : Nat
 
 ;; Product of a list of naturals.
 defn product [xs : List Nat] : Nat
-  reduce mult (inc zero) xs
+  reduce mult [inc zero] xs
 
 ;; ========================================
 ;; Predicates and Search
@@ -121,7 +121,7 @@ defn product [xs : List Nat] : Nat
 defn any? [p : A -> Bool, xs : List A] : Bool
   match xs
     | nil       -> false
-    | cons a as -> match (p a)
+    | cons a as -> match [p a]
       | true  -> true
       | false -> any? p as
 
@@ -129,7 +129,7 @@ defn any? [p : A -> Bool, xs : List A] : Bool
 defn all? [p : A -> Bool, xs : List A] : Bool
   match xs
     | nil       -> true
-    | cons a as -> match (p a)
+    | cons a as -> match [p a]
       | true  -> all? p as
       | false -> false
 
@@ -137,7 +137,7 @@ defn all? [p : A -> Bool, xs : List A] : Bool
 defn find [p : A -> Bool, xs : List A] : Option A
   match xs
     | nil       -> none
-    | cons a as -> match (p a)
+    | cons a as -> match [p a]
       | true  -> some a
       | false -> find p as
 
@@ -149,9 +149,9 @@ defn find [p : A -> Bool, xs : List A] : Option A
 defn nth [n : Nat, xs : List A] : Option A
   match xs
     | nil       -> none
-    | cons a as -> match (zero? n)
+    | cons a as -> match [zero? n]
       | true  -> some a
-      | false -> nth (dec n) as
+      | false -> nth [dec n] as
 
 ;; Last element of a list.
 defn last [xs : List A] : Option A
@@ -169,27 +169,27 @@ defn last [xs : List A] : Option A
 defn replicate [n : Nat, x : A] : List A
   match n
     | zero  -> nil
-    | inc k -> cons x (replicate k x)
+    | inc k -> cons x [replicate k x]
 
 ;; Helper for range: builds [0..n-1] via accumulator.
 defn range-helper [n : Nat, acc : List Nat] : List Nat
   match n
     | zero  -> acc
-    | inc k -> range-helper k (cons k acc)
+    | inc k -> range-helper k [cons k acc]
 
 ;; List of naturals [0, 1, ..., n-1].
 defn range [n : Nat] : List Nat
   range-helper n nil
 
 ;; Flatten a list of lists.
-defn concat [xss : List (List A)] : List A
+defn concat [xss : List [List A]] : List A
   match xss
     | nil        -> nil
-    | cons xs rest -> append xs (concat rest)
+    | cons xs rest -> append xs [concat rest]
 
 ;; Map then flatten (flatMap/bind).
 defn concat-map [f : A -> List B, xs : List A] : List B
-  concat (map f xs)
+  concat [map f xs]
 
 ;; ========================================
 ;; Slicing
@@ -201,7 +201,7 @@ defn take [n : Nat, xs : List A] : List A
     | zero  -> nil
     | inc k -> match xs
       | nil       -> nil
-      | cons a as -> cons a (take k as)
+      | cons a as -> cons a [take k as]
 
 ;; Drop the first n elements.
 defn drop [n : Nat, xs : List A] : List A
@@ -212,22 +212,22 @@ defn drop [n : Nat, xs : List A] : List A
       | cons _ as -> drop k as
 
 ;; Split a list at position n. Returns a pair (take n xs, drop n xs).
-defn split-at [n : Nat, xs : List A] : (Sigma [_ <List A>] (List A))
-  pair (take n xs) (drop n xs)
+defn split-at [n : Nat, xs : List A] : [Sigma [_ <List A>] [List A]]
+  pair [take n xs] [drop n xs]
 
 ;; Take elements while the predicate holds.
 defn take-while [p : A -> Bool, xs : List A] : List A
   match xs
     | nil       -> nil
-    | cons a as -> match (p a)
-      | true  -> cons a (take-while p as)
+    | cons a as -> match [p a]
+      | true  -> cons a [take-while p as]
       | false -> nil
 
 ;; Drop elements while the predicate holds.
 defn drop-while [p : A -> Bool, xs : List A] : List A
   match xs
     | nil       -> nil
-    | cons a as -> match (p a)
+    | cons a as -> match [p a]
       | true  -> drop-while p as
       | false -> xs
 
@@ -236,14 +236,14 @@ defn drop-while [p : A -> Bool, xs : List A] : List A
 ;; ========================================
 
 ;; Split a list by predicate. Returns (satisfy, don't-satisfy).
-defn partition-helper [p : A -> Bool, yes : List A, no : List A, xs : List A] : (Sigma [_ <List A>] (List A))
+defn partition-helper [p : A -> Bool, yes : List A, no : List A, xs : List A] : [Sigma [_ <List A>] [List A]]
   match xs
-    | nil       -> pair (reverse yes) (reverse no)
-    | cons a as -> match (p a)
-      | true  -> partition-helper p (cons a yes) no as
-      | false -> partition-helper p yes (cons a no) as
+    | nil       -> pair [reverse yes] [reverse no]
+    | cons a as -> match [p a]
+      | true  -> partition-helper p [cons a yes] no as
+      | false -> partition-helper p yes [cons a no] as
 
-defn partition [p : A -> Bool, xs : List A] : (Sigma [_ <List A>] (List A))
+defn partition [p : A -> Bool, xs : List A] : [Sigma [_ <List A>] [List A]]
   partition-helper p nil nil xs
 
 ;; ========================================
@@ -256,19 +256,19 @@ defn zip-with [f : A -> B -> C, xs : List A, ys : List B] : List C
     | nil       -> nil
     | cons a as -> match ys
       | nil       -> nil
-      | cons b bs -> cons (f a b) (zip-with f as bs)
+      | cons b bs -> cons [f a b] [zip-with f as bs]
 
 ;; Zip two lists into pairs.
-defn zip {A B} [xs : List A, ys : List B] : List (Sigma [_ <A>] B)
-  zip-with A B (Sigma [_ <A>] B) (fn a b (pair a b)) xs ys
+defn zip {A B} [xs : List A, ys : List B] : List [Sigma [_ <A>] B]
+  zip-with A B [Sigma [_ <A>] B] [fn a b [pair a b]] xs ys
 
 ;; Unzip pairs into two lists.
-defn unzip-helper [ls : List A, rs : List B, ps : List (Sigma [_ <A>] B)] : (Sigma [_ <List A>] (List B))
+defn unzip-helper [ls : List A, rs : List B, ps : List [Sigma [_ <A>] B]] : [Sigma [_ <List A>] [List B]]
   match ps
-    | nil       -> pair (reverse ls) (reverse rs)
-    | cons p rest -> unzip-helper (cons (first p) ls) (cons (second p) rs) rest
+    | nil       -> pair [reverse ls] [reverse rs]
+    | cons p rest -> unzip-helper [cons [first p] ls] [cons [second p] rs] rest
 
-defn unzip [ps : List (Sigma [_ <A>] B)] : (Sigma [_ <List A>] (List B))
+defn unzip [ps : List [Sigma [_ <A>] B]] : [Sigma [_ <List A>] [List B]]
   unzip-helper nil nil ps
 
 ;; ========================================
@@ -281,7 +281,7 @@ defn intersperse [sep : A, xs : List A] : List A
     | nil       -> nil
     | cons a as -> match as
       | nil     -> cons a nil
-      | cons _ _ -> cons a (cons sep (intersperse sep as))
+      | cons _ _ -> cons a [cons sep [intersperse sep as]]
 
 ;; ========================================
 ;; Sorting
@@ -289,14 +289,14 @@ defn intersperse [sep : A, xs : List A] : List A
 
 ;; Split list into two halves by alternating assignment.
 ;; halve-helper alternates: odd-indexed → left, even-indexed → right, reversed at end.
-defn halve-helper [left : List A, right : List A, xs : List A] : (Sigma [_ <List A>] (List A))
+defn halve-helper [left : List A, right : List A, xs : List A] : [Sigma [_ <List A>] [List A]]
   match xs
-    | nil       -> pair (reverse left) (reverse right)
+    | nil       -> pair [reverse left] [reverse right]
     | cons a as -> match as
-      | nil     -> pair (reverse (cons a left)) (reverse right)
-      | cons b rest -> halve-helper (cons a left) (cons b right) rest
+      | nil     -> pair [reverse [cons a left]] [reverse right]
+      | cons b rest -> halve-helper [cons a left] [cons b right] rest
 
-defn halve [xs : List A] : (Sigma [_ <List A>] (List A))
+defn halve [xs : List A] : [Sigma [_ <List A>] [List A]]
   halve-helper nil nil xs
 
 ;; Merge two sorted lists using a comparator.
@@ -305,9 +305,9 @@ defn merge [lte : A -> A -> Bool, xs : List A, ys : List A] : List A
     | nil -> ys
     | cons x xs2 -> match ys
       | nil -> xs
-      | cons y ys2 -> match (lte x y)
-        | true  -> cons x (merge lte xs2 ys)
-        | false -> cons y (merge lte xs ys2)
+      | cons y ys2 -> match [lte x y]
+        | true  -> cons x [merge lte xs2 ys]
+        | false -> cons y [merge lte xs ys2]
 
 ;; Merge sort using a comparator.
 defn sort [lte : A -> A -> Bool, xs : List A] : List A
@@ -315,4 +315,4 @@ defn sort [lte : A -> A -> Bool, xs : List A] : List A
     | nil       -> nil
     | cons a as -> match as
       | nil     -> cons a nil
-      | cons _ _ -> merge lte (sort lte (first (halve xs))) (sort lte (second (halve xs)))
+      | cons _ _ -> merge lte [sort lte [first [halve xs]]] [sort lte [second [halve xs]]]

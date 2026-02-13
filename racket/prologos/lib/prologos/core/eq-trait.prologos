@@ -10,7 +10,7 @@ require [prologos.data.bool :refer [not]]
 ;; An Eq dictionary is just a two-argument function returning Bool.
 ;; Instances: nat-eq (here), bool-eq (in prologos.data.bool)
 
-deftype (Eq $A) (-> $A (-> $A Bool))
+deftype [Eq $A] [-> $A [-> $A Bool]]
 
 ;; Nat instance: delegates to nat-eq? from prologos.data.nat
 defn nat-eq [x : Nat, y : Nat] : Bool
@@ -18,4 +18,4 @@ defn nat-eq [x : Nat, y : Nat] : Bool
 
 ;; Generic neq: negate equality
 defn eq-neq {A} [dict : Eq A, x : A, y : A] : Bool
-  not (dict x y)
+  not [dict x y]

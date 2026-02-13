@@ -15,17 +15,17 @@ defn const {A B} [x : A, _ : B] : A
 
 ;; Function composition: forall A B C. (B -> C) -> (A -> B) -> A -> C
 defn compose {A B C} [g : B -> C, f : A -> B, x : A] : C
-  g (f x)
+  g [f x]
 
 ;; Apply: forall A B. (A -> B) -> A -> B
 defn apply {A B} [f : A -> B, x : A] : B
-  (f x)
+  [f x]
 
 ;; Flip: forall A B C. (A -> B -> C) -> B -> A -> C
 defn flip {A B C} [f : A -> B -> C, b : B, a : A] : C
-  (f a b)
+  [f a b]
 
 ;; On combinator: (on f g) x y = f (g x) (g y)
 ;; Useful for "compare by projection": (on nat-eq? first) p1 p2
 defn on {A B C} [f : B -> B -> C, g : A -> B, x : A, y : A] : C
-  f (g x) (g y)
+  f [g x] [g y]

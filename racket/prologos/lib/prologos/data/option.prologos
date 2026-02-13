@@ -13,7 +13,7 @@ data Option {A}
 defn map {A B} [f : A -> B, opt : Option A] : Option B
   match opt
     | none   -> none
-    | some x -> some (f x)
+    | some x -> some [f x]
 
 ;; Flat-map (bind): apply f that returns Option B.
 defn flat-map {A B} [f : A -> Option B, opt : Option A] : Option B
@@ -38,7 +38,7 @@ defn or-else {A} [opt : Option A, alt : Option A] : Option A
 defn filter {A} [pred : A -> Bool, opt : Option A] : Option A
   match opt
     | none   -> none
-    | some x -> match (pred x)
+    | some x -> match [pred x]
                   | true  -> some x
                   | false -> none
 
@@ -48,8 +48,8 @@ defn zip-with {A B C} [f : A -> B -> C, oa : Option A, ob : Option B] : Option C
     | none   -> none
     | some a -> match ob
                   | none   -> none
-                  | some b -> some (f a b)
+                  | some b -> some [f a b]
 
 ;; Combine two Options into an Option of pairs. None if either is none.
-defn zip {A B} [oa : Option A, ob : Option B] : Option (Sigma [_ <A>] B)
-  zip-with A B (Sigma [_ <A>] B) (fn a b (pair a b)) oa ob
+defn zip {A B} [oa : Option A, ob : Option B] : Option [Sigma [_ <A>] B]
+  zip-with A B [Sigma [_ <A>] B] [fn a b [pair a b]] oa ob

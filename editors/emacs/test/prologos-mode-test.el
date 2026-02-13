@@ -299,7 +299,7 @@ If MODE-FN is given, call it instead of `prologos-mode'."
 
 (ert-deftest prologos-test/ns-detection ()
   "Files starting with `ns' should be WS mode (the common case)."
-  (prologos-test--in-buffer "ns prologos.data.nat\n\nprovide add mult\n\ndefn add [x : Nat, y : Nat] : Nat\n  match y\n    | zero  -> x\n    | inc k -> inc (add x k)"
+  (prologos-test--in-buffer "ns prologos.data.nat\n\nprovide add mult\n\ndefn add [x : Nat, y : Nat] : Nat\n  match y\n    | zero  -> x\n    | inc k -> inc [add x k]"
     (should (eq prologos--ws-mode-p t))))
 
 ;; ============================================================
@@ -333,9 +333,25 @@ If MODE-FN is given, call it instead of `prologos-mode'."
       (let ((defs (cdr (assoc "Definitions" index))))
         (should (>= (length defs) 2))))))
 
+(ert-deftest prologos-test/imenu-definitions-bracket ()
+  "Imenu should find def definitions using [] brackets."
+  (prologos-test--in-buffer "[def one [inc zero]]\n[def two [inc one]]"
+    (let ((index (imenu--make-index-alist t)))
+      (should (assoc "Definitions" index))
+      (let ((defs (cdr (assoc "Definitions" index))))
+        (should (>= (length defs) 2))))))
+
 (ert-deftest prologos-test/imenu-functions ()
   "Imenu should find defn definitions."
   (prologos-test--in-buffer "(defn double [x <Nat>] <Nat> (add x x))\n(defn pred [n <Nat>] <Nat> n)"
+    (let ((index (imenu--make-index-alist t)))
+      (should (assoc "Functions" index))
+      (let ((fns (cdr (assoc "Functions" index))))
+        (should (>= (length fns) 2))))))
+
+(ert-deftest prologos-test/imenu-functions-bracket ()
+  "Imenu should find defn definitions using [] brackets."
+  (prologos-test--in-buffer "[defn double [x <Nat>] <Nat> [add x x]]\n[defn pred [n <Nat>] <Nat> n]"
     (let ((index (imenu--make-index-alist t)))
       (should (assoc "Functions" index))
       (let ((fns (cdr (assoc "Functions" index))))

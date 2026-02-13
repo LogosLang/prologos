@@ -63,7 +63,7 @@
   (check-equal? (run-first "(infer true)") "Bool"))
 
 (test-case "surface: (infer Nat) -> (Type 0)"
-  (check-equal? (run-first "(infer Nat)") "(Type 0)"))
+  (check-equal? (run-first "(infer Nat)") "[Type 0]"))
 
 ;; ========================================
 ;; Evaluation
@@ -198,7 +198,7 @@
                       "(defn increment : (-> Nat Nat) [x] (inc x))\n"
                       "(eval (increment zero))")))
     (check-equal? (length results) 2)
-    (check-equal? (car results) "increment : (-> Nat Nat) defined.")
+    (check-equal? (car results) "increment : [-> Nat Nat] defined.")
     (check-equal? (cadr results) "1 : Nat")))
 
 (test-case "surface: defn polymorphic id"
@@ -208,7 +208,7 @@
                       "(defn id : (Pi (A :0 (Type 0)) (-> A A)) [A x] x)\n"
                       "(eval (id Nat (inc zero)))")))
     (check-equal? (length results) 2)
-    (check-equal? (car results) "id : (Pi [x :0 <(Type 0)>] (-> x x)) defined.")
+    (check-equal? (car results) "id : [Pi [x :0 <[Type 0]>] [-> x x]] defined.")
     (check-equal? (cadr results) "1 : Nat")))
 
 (test-case "surface: defn param count mismatch"
@@ -348,7 +348,7 @@
                       "(infer Endo)")))
     ;; deftype consumed, 1 result
     (check-equal? (length results) 1)
-    (check-equal? (car results) "(Type 0)")))
+    (check-equal? (car results) "[Type 0]")))
 
 (test-case "surface: deftype parameterized alias"
   (parameterize ([current-global-env (hasheq)]
@@ -408,7 +408,7 @@
                       "(defn inc2 [x <Nat>] <Nat> (inc (inc x)))\n"
                       "(eval (inc2 zero))")))
     (check-equal? (length results) 2)
-    (check-equal? (car results) "inc2 : (-> Nat Nat) defined.")
+    (check-equal? (car results) "inc2 : [-> Nat Nat] defined.")
     (check-equal? (cadr results) "2 : Nat")))
 
 (test-case "surface: angle-bracket defn polymorphic"
@@ -419,7 +419,7 @@
                       "(eval (id Nat zero))\n"
                       "(eval (id Bool true))")))
     (check-equal? (length results) 3)
-    (check-equal? (car results) "id : (Pi [x :0 <(Type 0)>] (-> x x)) defined.")
+    (check-equal? (car results) "id : [Pi [x :0 <[Type 0]>] [-> x x]] defined.")
     (check-equal? (cadr results) "zero : Nat")
     (check-equal? (caddr results) "true : Bool")))
 
@@ -437,7 +437,7 @@
 (test-case "surface: angle-bracket Pi"
   (check-equal?
    (run-first "(infer (Pi [A :0 <(Type 0)>] (-> A A)))")
-   "(Type 1)"))
+   "[Type 1]"))
 
 ;; ========================================
 ;; Phase 3: Colon-based parameter syntax (integration tests)
@@ -450,7 +450,7 @@
                       "(defn inc2 [x : Nat] : Nat (inc (inc x)))\n"
                       "(eval (inc2 zero))")))
     (check-equal? (length results) 2)
-    (check-equal? (car results) "inc2 : (-> Nat Nat) defined.")
+    (check-equal? (car results) "inc2 : [-> Nat Nat] defined.")
     (check-equal? (cadr results) "2 : Nat")))
 
 (test-case "surface: colon defn with arrow param"
@@ -461,7 +461,7 @@
                       "(defn inc2 [x : Nat] : Nat (inc (inc x)))\n"
                       "(eval (apply-to-zero inc2))")))
     (check-equal? (length results) 3)
-    (check-equal? (car results) "apply-to-zero : (-> (-> Nat Nat) Nat) defined.")
+    (check-equal? (car results) "apply-to-zero : [-> [-> Nat Nat] Nat] defined.")
     (check-equal? (caddr results) "2 : Nat")))
 
 (test-case "surface: colon defn polymorphic with {A}"
@@ -472,7 +472,7 @@
                       "(eval (id Nat zero))\n"
                       "(eval (id Bool true))")))
     (check-equal? (length results) 3)
-    (check-equal? (car results) "id : (Pi [x :0 <(Type 0)>] (-> x x)) defined.")
+    (check-equal? (car results) "id : [Pi [x :0 <[Type 0]>] [-> x x]] defined.")
     (check-equal? (cadr results) "zero : Nat")
     (check-equal? (caddr results) "true : Bool")))
 

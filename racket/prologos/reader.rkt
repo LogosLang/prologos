@@ -7,13 +7,14 @@
 ;;; Converts indentation-sensitive syntax into S-expression syntax objects
 ;;; that feed directly into the existing parse-datum pipeline.
 ;;;
-;;; Design rules (from NOTES.org):
-;;;   1. No opening brackets — top-level forms don't start with (
+;;; Design rules:
+;;;   1. No opening brackets — top-level forms don't start with [
 ;;;   2. New line, same level — tokens are siblings (arguments)
 ;;;   3. New line, deeper level — each child line becomes a sub-list
-;;;   4. Same line with () groupings — explicit grouping inline
-;;;   5. () for grouping, [] for parameter lists (e.g. defn)
-;;;   6. {} reserved for future EDN hashmaps
+;;;   4. Same line with [] groupings — explicit grouping inline
+;;;   5. [] for all grouping (code); () reserved for future tuples
+;;;   6. {} for implicit type params; <> for type annotations
+;;;   7. '[] for list literals (linked list)
 ;;;
 
 (require racket/match
@@ -264,23 +265,19 @@
        (skip-comment! tok)
        (tokenizer-next! tok)]
 
-      ;; Open paren
+      ;; Open paren — reserved for future tuple syntax
       [(char=? c #\()
-       (tok-read! tok)
-       (set-tokenizer-bracket-depth! tok (+ 1 (tokenizer-bracket-depth tok)))
-       (token 'lparen #f ln cl ps 1)]
+       (error 'prologos-reader
+              "~a:~a:~a: Use [] for grouping; () is reserved for future tuple syntax"
+              (tokenizer-source tok) ln (+ cl 1))]
 
-      ;; Close paren
+      ;; Close paren — error (no matching open)
       [(char=? c #\))
-       (tok-read! tok)
-       (define depth (tokenizer-bracket-depth tok))
-       (when (= depth 0)
-         (error 'prologos-reader "~a:~a:~a: Unexpected closing parenthesis"
-                (tokenizer-source tok) ln (+ cl 1)))
-       (set-tokenizer-bracket-depth! tok (- depth 1))
-       (token 'rparen #f ln cl ps 1)]
+       (error 'prologos-reader
+              "~a:~a:~a: Unexpected ); use [] for grouping"
+              (tokenizer-source tok) ln (+ cl 1))]
 
-      ;; Square brackets — parameter lists
+      ;; Square brackets — primary grouping delimiter
       [(char=? c #\[)
        (tok-read! tok)
        (set-tokenizer-bracket-depth! tok (+ 1 (tokenizer-bracket-depth tok)))
@@ -334,6 +331,19 @@
       [(char=? c #\$)
        (tok-read! tok)
        (token 'dollar #f ln cl ps 1)]
+
+      ;; Single quote — list literal '[ ... ]
+      [(char=? c #\')
+       (tok-read! tok)
+       (define next (tok-peek tok))
+       (cond
+         [(and (char? next) (char=? next #\[))
+          ;; '[ — list literal opener; [ will be consumed by parse-list-literal-form
+          (token 'quote-lbracket #f ln cl ps 1)]
+         [else
+          (error 'prologos-reader
+                 "~a:~a:~a: Unexpected ' — use '[...] for list literals or $expr for quoting"
+                 (tokenizer-source tok) ln (+ cl 1))])]
 
       ;; Pipe — reduce arm separator
       [(char=? c #\|)
@@ -528,7 +538,8 @@
             (- (+ (token-pos (parser-peek p)) 1) ps)))
 
 ;; --- Parse a bracket form: [ ... ] ---
-;; Like parse-grouped-form but attaches 'paren-shape #\[ syntax property.
+;; Primary grouping delimiter. Produces plain S-expression lists.
+;; Commas inside brackets are stripped (parameter separator).
 
 (define (parse-bracket-form p)
   (define open-tok (parser-next! p))  ; consume lbracket
@@ -555,9 +566,64 @@
          (define elem (parse-inline-element p))
          (loop (cons elem elems))])))
 
-  (define stx (make-stx elements src ln cl ps
-                        (- (+ (token-pos (parser-peek p)) 1) ps)))
-  (syntax-property stx 'paren-shape #\[))
+  (make-stx elements src ln cl ps
+            (- (+ (token-pos (parser-peek p)) 1) ps)))
+
+;; --- Parse a list literal form: '[ ... ] ---
+;; Wraps contents with $list-literal sentinel.
+;; '[] → ($list-literal)
+;; '[1 2 3] → ($list-literal 1 2 3)
+;; '[1 2 | ys] → ($list-literal 1 2 ($list-tail ys))
+
+(define (parse-list-literal-form p)
+  (define quote-tok (parser-next! p))  ; consume quote-lbracket (the ')
+  (define open-tok (parser-next! p))   ; consume lbracket (the [)
+  (define ln (token-line quote-tok))
+  (define cl (token-col quote-tok))
+  (define ps (token-pos quote-tok))
+  (define src (parser-source p))
+
+  (define elements
+    (let loop ([elems '()])
+      (define tt (parser-peek-type p))
+      (cond
+        [(eq? tt 'rbracket)
+         (parser-next! p) ; consume rbracket
+         (reverse elems)]
+        [(eq? tt 'eof)
+         (error 'prologos-reader "~a:~a:~a: Unclosed list literal '[..."
+                src ln cl)]
+        ;; Skip commas inside list literals
+        [(eq? tt 'comma)
+         (parser-next! p)
+         (loop elems)]
+        ;; Pipe for cons-tail syntax: '[ 1 2 | ys ]
+        [(and (eq? tt 'symbol)
+              (eq? (token-value (parser-peek p)) '$pipe))
+         (parser-next! p) ; consume |
+         (define tail-elem (parse-inline-element p))
+         ;; Wrap the tail with $list-tail sentinel
+         (define tail-stx
+           (make-stx (list (make-stx '$list-tail src ln cl ps 0)
+                           tail-elem)
+                     src (token-line (parser-peek p)) (token-col (parser-peek p))
+                     (token-pos (parser-peek p)) 1))
+         ;; Expect closing bracket
+         (define close-tt (parser-peek-type p))
+         (unless (eq? close-tt 'rbracket)
+           (error 'prologos-reader "~a:~a:~a: Expected ] after tail in list literal"
+                  src ln cl))
+         (parser-next! p) ; consume rbracket
+         (reverse (cons tail-stx elems))]
+        [else
+         (define elem (parse-inline-element p))
+         (loop (cons elem elems))])))
+
+  ;; Wrap with $list-literal sentinel
+  (define sentinel (make-stx '$list-literal src ln cl ps 0))
+  (define all (cons sentinel elements))
+  (make-stx all src ln cl ps
+            (max 1 (- (+ (token-pos (parser-peek p)) 1) ps))))
 
 ;; --- Parse an angle-bracket form: < ... > ---
 ;; Wraps contents with $angle-type sentinel for type annotations.
@@ -626,14 +692,15 @@
   (define tt (parser-peek-type p))
   (define src (parser-source p))
   (cond
-    [(eq? tt 'lparen)
-     (parse-grouped-form p)]
     [(eq? tt 'lbracket)
      (parse-bracket-form p)]
     [(eq? tt 'langle)
      (parse-angle-form p)]
     [(eq? tt 'lbrace)
      (parse-brace-form p)]
+    [(eq? tt 'quote-lbracket)
+     ;; '[ ... ] — list literal
+     (parse-list-literal-form p)]
     [(eq? tt 'dollar)
      ;; $expr — quote operator
      (define d (parser-next! p)) ; consume $

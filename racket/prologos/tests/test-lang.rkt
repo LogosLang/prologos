@@ -153,7 +153,7 @@
 (test-case "macros.rkt: defmacro, deftype, let, if"
   (define output (run-prologos-file "macros.rkt"))
   ;; double should be defined
-  (check-true (string-contains? output "double : (-> Nat Nat) defined.")
+  (check-true (string-contains? output "double : [-> Nat Nat] defined.")
               "should define double")
   ;; double (inc (inc zero)) = 4
   (check-true (string-contains? output "4 : Nat")
@@ -179,7 +179,7 @@
 (test-case "macros-ws.rkt: if, boolrec, let in whitespace mode"
   (define output (run-prologos-file "macros-ws.rkt"))
   ;; double should be defined
-  (check-true (string-contains? output "double : (-> Nat Nat) defined.")
+  (check-true (string-contains? output "double : [-> Nat Nat] defined.")
               "should define double")
   ;; double (inc (inc zero)) = 4
   (check-true (string-contains? output "4 : Nat")

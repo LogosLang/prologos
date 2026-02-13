@@ -216,7 +216,7 @@
   ;; Note: infer returns just the type, not "expr : type"
   (check-equal?
    (run-last "(ns lvl5)\n(infer Type)")
-   "(Type 1)"))
+   "[Type 1]"))
 
 (test-case "implicit/stdlib-nat-with-inferred-level"
   ;; add 2 3 = 5 — stdlib still works with level inference

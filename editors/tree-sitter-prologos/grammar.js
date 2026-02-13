@@ -5,6 +5,10 @@
  * defn, def, data, deftype, match, fn, multiplicity annotations, and
  * basic expressions.
  *
+ * Bracket convention: [] is the primary grouping delimiter. () is reserved
+ * for future tuple syntax and produces errors in the WS reader.
+ * deftype still uses sexp-style () since its patterns are s-expressions.
+ *
  * The external scanner (src/scanner.c) emits INDENT, DEDENT, and NEWLINE
  * tokens based on indentation changes, following the same logic as reader.rkt.
  */
@@ -29,7 +33,7 @@ module.exports = grammar({
   word: $ => $.identifier,
 
   conflicts: $ => [
-    // fn_param vs fn_body: an identifier before a paren expr could be
+    // fn_param vs fn_body: an identifier before a bracket expr could be
     // either the last param or the body.
     [$.fn_param, $.fn_body],
   ],
@@ -138,6 +142,7 @@ module.exports = grammar({
 
     // S-expression: used in deftype which uses sexp-style syntax
     // Handles forms like (Eq $A), (-> $A (-> $A Bool))
+    // deftype still uses () since it's sexp-mode syntax
     sexp: $ => choice(
       $.sexp_list,
       $.identifier,
@@ -236,23 +241,32 @@ module.exports = grammar({
 
     expression: $ => choice(
       $.fn_expr,
-      $.paren_expr,
-      $.bracket_expr,
+      $.grouped_expr,
       $.application,
       $.atom,
     ),
 
-    // Bracket expression: [_ <A>] — used for Sigma binders in expression context
-    bracket_expr: $ => seq('[', repeat1($.bracket_elem), ']'),
+    // Grouped expression: [expr1 expr2 ...] — primary grouping delimiter
+    // Replaces the old paren_expr which used (), and subsumes the old bracket_expr.
+    // Used for function application: [add x k], [inc zero]
+    // and for Sigma binders: [x <A>]
+    grouped_expr: $ => seq('[', repeat1($.expression), ']'),
 
-    bracket_elem: $ => choice(
-      $.angle_type,
-      $.identifier,
-      '_',
+    // List literal: '[expr1 expr2 ...] — linked list literal
+    // '[1 2 3] → (cons 1 (cons 2 (cons 3 nil)))
+    // '[1 2 | xs] → (cons 1 (cons 2 xs))
+    list_literal: $ => seq(
+      "'[",
+      repeat(choice(
+        $.expression,
+        seq('|', $.expression),
+        ',',
+      )),
+      ']',
     ),
 
     // Anonymous lambda: fn x y _ expr
-    // Appears inside parentheses: (fn x y _ (Eq A y x))
+    // Appears inside brackets: [fn x y _ [Eq A y x]]
     fn_expr: $ => prec.right(seq(
       'fn',
       repeat1($.fn_param),
@@ -265,14 +279,8 @@ module.exports = grammar({
     ),
 
     fn_body: $ => choice(
-      $.paren_expr,
+      $.grouped_expr,
       $.identifier,
-    ),
-
-    paren_expr: $ => seq(
-      '(',
-      repeat1($.expression),
-      ')',
     ),
 
     // Application by juxtaposition: f x y
@@ -287,10 +295,11 @@ module.exports = grammar({
       $.number,
       $.string,
       $.arrow_op,
+      $.list_literal,
     ),
 
     // Arrow operator as an expression: used in dependent types where
-    // (-> A B) appears in expression/term position
+    // [-> A B] appears in expression/term position
     arrow_op: $ => '->',
 
     // ============================================================
@@ -300,8 +309,7 @@ module.exports = grammar({
     type_expr: $ => choice(
       $.arrow_type,
       $.type_application,
-      $.paren_type,
-      $.bracket_type,
+      $.grouped_type,
       $.identifier,
     ),
 
@@ -314,30 +322,13 @@ module.exports = grammar({
     // Type application by juxtaposition: List A, Result A E, Eq A
     type_application: $ => prec.left(2, seq(
       $.identifier,
-      repeat1(choice($.identifier, $.paren_type)),
+      repeat1(choice($.identifier, $.grouped_type)),
     )),
 
-    // Parenthesized type expressions — handles multi-arg type application:
-    //   (Eq A a b), (Sigma [_ <A>] B), (-> A B)
-    paren_type: $ => seq('(', repeat1($.type_expr), ')'),
-
-    // Bracket type expressions — used in Sigma binders: [_ <A>]
-    bracket_type: $ => seq('[', repeat1($.type_expr_inner), ']'),
-
-    // Inner type expression elements that can appear inside bracket types
-    type_expr_inner: $ => choice(
-      $.arrow_type_inner,
-      $.paren_type,
-      $.angle_type,
-      $.identifier,
-      '_',
-    ),
-
-    arrow_type_inner: $ => prec.right(1, seq(
-      $.type_expr_inner,
-      '->',
-      $.type_expr_inner,
-    )),
+    // Grouped type expression: [Eq A a b], [Sigma [_ <A>] B], [-> A B]
+    // Replaces old paren_type and bracket_type which used () and [] respectively.
+    // Now [] is the universal grouping delimiter for both types and expressions.
+    grouped_type: $ => seq('[', repeat1($.type_expr), ']'),
 
     // Angle-bracket type annotation: <A>
     angle_type: $ => seq('<', $.identifier, '>'),

@@ -44,13 +44,13 @@ defn zero? [n : Nat] : Bool
                   (identifier))))))))))
 
 ===
-Match with parenthesized body expression
+Match with bracketed body expression
 ===
 
 defn add [x : Nat, y : Nat] : Nat
   match y
     | zero -> x
-    | inc k -> inc (add x k)
+    | inc k -> inc [add x k]
 
 ---
 
@@ -95,7 +95,7 @@ defn add [x : Nat, y : Nat] : Nat
                     (atom
                       (identifier)))
                   (expression
-                    (paren_expr
+                    (grouped_expr
                       (expression
                         (application
                           (expression

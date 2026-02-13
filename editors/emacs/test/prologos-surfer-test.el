@@ -141,12 +141,12 @@
       (should (prologos-surfer--scope-node-p scope)))))
 
 (ert-deftest prologos-surfer-test/scope-application ()
-  "Inside a function application, scope should be application or paren_expr."
+  "Inside a function application, scope should be application or grouped_expr."
   (skip-unless prologos-surfer-test--available)
-  (prologos-surfer-test--in-buffer "defn foo [x : Nat] : Nat\n  inc (inc x)\n"
+  (prologos-surfer-test--in-buffer "defn foo [x : Nat] : Nat\n  inc [inc x]\n"
     (goto-char (point-min))
-    (search-forward "(inc x)")
-    (backward-char 3) ;; inside the paren_expr
+    (search-forward "[inc x]")
+    (backward-char 3) ;; inside the grouped_expr
     (let ((scope (prologos-surfer--find-scope)))
       (should scope)
       (should (prologos-surfer--scope-node-p scope)))))

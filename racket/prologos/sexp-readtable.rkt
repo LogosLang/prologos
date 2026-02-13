@@ -161,13 +161,90 @@
     (read port)))
 
 ;; ========================================
+;; Single-quote reader: intercept '[ for list literals
+;; ========================================
+;; When ' is followed by [, read list literal as ($list-literal ...).
+;; Otherwise, fall back to standard Racket quote behavior.
+
+(define (read-quote-syntax ch port src line col pos)
+  (define next (peek-char port))
+  (cond
+    ;; '[ — list literal
+    [(and (char? next) (char=? next #\[))
+     (read-char port) ; consume [
+     ;; Read elements until ]
+     (define elements
+       (let loop ([elems '()])
+         ;; Skip whitespace
+         (let skip-ws ()
+           (define c (peek-char port))
+           (when (and (char? c) (char-whitespace? c))
+             (read-char port)
+             (skip-ws)))
+         (define nc (peek-char port))
+         (cond
+           [(eof-object? nc)
+            (error 'prologos-reader "Unclosed list literal '[ at ~a:~a:~a" src line col)]
+           [(char=? nc #\])
+            (read-char port) ; consume ]
+            (reverse elems)]
+           ;; Pipe for cons-tail syntax: '[1 2 | ys]
+           [(char=? nc #\|)
+            (read-char port) ; consume |
+            (define tail-val
+              (parameterize ([current-readtable prologos-readtable])
+                (read-syntax src port)))
+            (define tail-datum
+              (if (syntax? tail-val) (syntax->datum tail-val) tail-val))
+            ;; Expect closing ]
+            (let skip-ws ()
+              (define c (peek-char port))
+              (when (and (char? c) (char-whitespace? c))
+                (read-char port)
+                (skip-ws)))
+            (define close (peek-char port))
+            (unless (and (char? close) (char=? close #\]))
+              (error 'prologos-reader "Expected ] after tail in list literal at ~a:~a:~a"
+                     src line col))
+            (read-char port) ; consume ]
+            (reverse (cons `($list-tail ,tail-datum) elems))]
+           ;; Skip commas
+           [(char=? nc #\,)
+            (read-char port) ; consume comma
+            (loop elems)]
+           [else
+            (define val
+              (parameterize ([current-readtable prologos-readtable])
+                (read-syntax src port)))
+            (define datum-val
+              (if (syntax? val) (syntax->datum val) val))
+            (loop (cons datum-val elems))])))
+     ;; Build ($list-literal ...) as syntax
+     (define end-pos (file-position port))
+     (define span (- end-pos pos))
+     (datum->syntax #f (cons '$list-literal elements)
+                    (list src line col pos span))]
+    ;; Not '[ — fall back to standard quote
+    [else
+     (define inner
+       (parameterize ([current-readtable prologos-readtable])
+         (read-syntax src port)))
+     (datum->syntax #f (list 'quote inner)
+                    (list src line col pos (max 1 (- (file-position port) pos))))]))
+
+(define (read-quote-datum ch port)
+  (define stx (read-quote-syntax ch port "<unknown>" #f #f (file-position port)))
+  (if (syntax? stx) (syntax->datum stx) stx))
+
+;; ========================================
 ;; The custom readtable
 ;; ========================================
 (define prologos-readtable
   (make-readtable (current-readtable)
     #\< 'terminating-macro read-angle-bracket-syntax
     #\{ 'terminating-macro read-brace-params-syntax
-    #\, 'terminating-macro read-comma-syntax))
+    #\, 'terminating-macro read-comma-syntax
+    #\' 'terminating-macro read-quote-syntax))
 
 ;; ========================================
 ;; Convenience read functions

@@ -69,19 +69,19 @@
     [(expr-error) "<error>"]
 
     ;; Universes
-    [(expr-Type l) (format "(Type ~a)" (pp-level l))]
+    [(expr-Type l) (format "[Type ~a]" (pp-level l))]
 
     ;; Successor — detect numeric literals
     [(expr-suc _)
      (let ([n (try-as-nat e)])
        (if n
            (number->string n)
-           (format "(inc ~a)" (pp-expr (expr-suc-pred e) names))))]
+           (format "[inc ~a]" (pp-expr (expr-suc-pred e) names))))]
 
     ;; Lambda
     [(expr-lam m t body)
      (let ([name (fresh-name (length names) names)])
-       (format "(fn [~a~a <~a>] ~a)"
+       (format "[fn [~a~a <~a>] ~a]"
                name
                (pp-mult-prefix m)
                (pp-expr t names)
@@ -90,13 +90,13 @@
     ;; Pi — detect non-dependent arrow
     [(expr-Pi m dom cod)
      (if (and (eq? m 'mw) (not (uses-bvar0? cod)))
-         ;; Non-dependent: (-> A B)
+         ;; Non-dependent: [-> A B]
          ;; Still push a dummy name since cod may reference outer bvars
          (let ([name (fresh-name (length names) names)])
-           (format "(-> ~a ~a)" (pp-expr dom names) (pp-expr cod (cons name names))))
-         ;; Dependent: (Pi [x :m <A>] B)
+           (format "[-> ~a ~a]" (pp-expr dom names) (pp-expr cod (cons name names))))
+         ;; Dependent: [Pi [x :m <A>] B]
          (let ([name (fresh-name (length names) names)])
-           (format "(Pi [~a~a <~a>] ~a)"
+           (format "[Pi [~a~a <~a>] ~a]"
                    name
                    (pp-mult-prefix m)
                    (pp-expr dom names)
@@ -105,84 +105,98 @@
     ;; Sigma
     [(expr-Sigma t1 t2)
      (if (not (uses-bvar0? t2))
-         ;; Non-dependent: (Sigma A B) — could use a different sugar
-         (format "(Sigma ~a ~a)" (pp-expr t1 names) (pp-expr t2 names))
+         ;; Non-dependent: [Sigma A B]
+         (format "[Sigma ~a ~a]" (pp-expr t1 names) (pp-expr t2 names))
          (let ([name (fresh-name (length names) names)])
-           (format "(Sigma [~a <~a>] ~a)"
+           (format "[Sigma [~a <~a>] ~a]"
                    name
                    (pp-expr t1 names)
                    (pp-expr t2 (cons name names)))))]
 
-    ;; Application — flatten nested apps
+    ;; Application — check for cons-chain (list literal), then flatten nested apps
     [(expr-app _ _)
-     (let-values ([(func args) (flatten-app e)])
-       (format "(~a)" (string-join (map (lambda (x) (pp-expr x names))
-                                        (cons func args))
-                                   " ")))]
+     (let ([list-result (try-as-list e)])
+       (cond
+         [list-result
+          (let ([elements (car list-result)]
+                [tail (cadr list-result)])
+            (let ([elem-strs (map (lambda (x) (pp-expr x names)) elements)])
+              (if tail
+                  ;; Improper list: '[1 2 | xs]
+                  (format "'[~a | ~a]"
+                          (string-join elem-strs " ")
+                          (pp-expr tail names))
+                  ;; Proper list: '[1 2 3]
+                  (format "'[~a]" (string-join elem-strs " ")))))]
+         [else
+          (let-values ([(func args) (flatten-app e)])
+            (format "[~a]" (string-join (map (lambda (x) (pp-expr x names))
+                                             (cons func args))
+                                        " ")))]))]
 
     ;; Pair
     [(expr-pair e1 e2)
-     (format "(pair ~a ~a)" (pp-expr e1 names) (pp-expr e2 names))]
+     (format "[pair ~a ~a]" (pp-expr e1 names) (pp-expr e2 names))]
 
     ;; Projections
-    [(expr-fst e1) (format "(first ~a)" (pp-expr e1 names))]
-    [(expr-snd e1) (format "(second ~a)" (pp-expr e1 names))]
+    [(expr-fst e1) (format "[first ~a]" (pp-expr e1 names))]
+    [(expr-snd e1) (format "[second ~a]" (pp-expr e1 names))]
 
     ;; Annotation
     [(expr-ann term type)
-     (format "(the ~a ~a)" (pp-expr type names) (pp-expr term names))]
+     (format "[the ~a ~a]" (pp-expr type names) (pp-expr term names))]
 
     ;; Equality
     [(expr-Eq t e1 e2)
-     (format "(Eq ~a ~a ~a)" (pp-expr t names) (pp-expr e1 names) (pp-expr e2 names))]
+     (format "[Eq ~a ~a ~a]" (pp-expr t names) (pp-expr e1 names) (pp-expr e2 names))]
 
     ;; Eliminators
     [(expr-boolrec mot tc fc target)
-     (format "(boolrec ~a ~a ~a ~a)"
+     (format "[boolrec ~a ~a ~a ~a]"
              (pp-expr mot names) (pp-expr tc names)
              (pp-expr fc names) (pp-expr target names))]
     [(expr-natrec mot base step target)
-     (format "(natrec ~a ~a ~a ~a)"
+     (format "[natrec ~a ~a ~a ~a]"
              (pp-expr mot names) (pp-expr base names)
              (pp-expr step names) (pp-expr target names))]
     [(expr-J mot base left right proof)
-     (format "(J ~a ~a ~a ~a ~a)"
+     (format "[J ~a ~a ~a ~a ~a]"
              (pp-expr mot names) (pp-expr base names)
              (pp-expr left names) (pp-expr right names) (pp-expr proof names))]
 
     ;; Vec/Fin
-    [(expr-Vec t n) (format "(Vec ~a ~a)" (pp-expr t names) (pp-expr n names))]
-    [(expr-vnil t) (format "(vnil ~a)" (pp-expr t names))]
+    [(expr-Vec t n) (format "[Vec ~a ~a]" (pp-expr t names) (pp-expr n names))]
+    [(expr-vnil t) (format "[vnil ~a]" (pp-expr t names))]
     [(expr-vcons t n hd tl)
-     (format "(vcons ~a ~a ~a ~a)"
+     (format "[vcons ~a ~a ~a ~a]"
              (pp-expr t names) (pp-expr n names) (pp-expr hd names) (pp-expr tl names))]
-    [(expr-Fin n) (format "(Fin ~a)" (pp-expr n names))]
-    [(expr-fzero n) (format "(fzero ~a)" (pp-expr n names))]
-    [(expr-fsuc n i) (format "(fsuc ~a ~a)" (pp-expr n names) (pp-expr i names))]
-    [(expr-vhead t n v) (format "(vhead ~a ~a ~a)" (pp-expr t names) (pp-expr n names) (pp-expr v names))]
-    [(expr-vtail t n v) (format "(vtail ~a ~a ~a)" (pp-expr t names) (pp-expr n names) (pp-expr v names))]
-    [(expr-vindex t n i v) (format "(vindex ~a ~a ~a ~a)" (pp-expr t names) (pp-expr n names) (pp-expr i names) (pp-expr v names))]
+    [(expr-Fin n) (format "[Fin ~a]" (pp-expr n names))]
+    [(expr-fzero n) (format "[fzero ~a]" (pp-expr n names))]
+    [(expr-fsuc n i) (format "[fsuc ~a ~a]" (pp-expr n names) (pp-expr i names))]
+    [(expr-vhead t n v) (format "[vhead ~a ~a ~a]" (pp-expr t names) (pp-expr n names) (pp-expr v names))]
+    [(expr-vtail t n v) (format "[vtail ~a ~a ~a]" (pp-expr t names) (pp-expr n names) (pp-expr v names))]
+    [(expr-vindex t n i v) (format "[vindex ~a ~a ~a ~a]" (pp-expr t names) (pp-expr n names) (pp-expr i names) (pp-expr v names))]
 
     ;; Posit8
     [(expr-Posit8) "Posit8"]
-    [(expr-posit8 v) (format "(posit8 ~a)" v)]
-    [(expr-p8-add a b) (format "(p8+ ~a ~a)" (pp-expr a names) (pp-expr b names))]
-    [(expr-p8-sub a b) (format "(p8- ~a ~a)" (pp-expr a names) (pp-expr b names))]
-    [(expr-p8-mul a b) (format "(p8* ~a ~a)" (pp-expr a names) (pp-expr b names))]
-    [(expr-p8-div a b) (format "(p8/ ~a ~a)" (pp-expr a names) (pp-expr b names))]
-    [(expr-p8-neg a) (format "(p8-neg ~a)" (pp-expr a names))]
-    [(expr-p8-abs a) (format "(p8-abs ~a)" (pp-expr a names))]
-    [(expr-p8-sqrt a) (format "(p8-sqrt ~a)" (pp-expr a names))]
-    [(expr-p8-lt a b) (format "(p8-lt ~a ~a)" (pp-expr a names) (pp-expr b names))]
-    [(expr-p8-le a b) (format "(p8-le ~a ~a)" (pp-expr a names) (pp-expr b names))]
-    [(expr-p8-from-nat n) (format "(p8-from-nat ~a)" (pp-expr n names))]
+    [(expr-posit8 v) (format "[posit8 ~a]" v)]
+    [(expr-p8-add a b) (format "[p8+ ~a ~a]" (pp-expr a names) (pp-expr b names))]
+    [(expr-p8-sub a b) (format "[p8- ~a ~a]" (pp-expr a names) (pp-expr b names))]
+    [(expr-p8-mul a b) (format "[p8* ~a ~a]" (pp-expr a names) (pp-expr b names))]
+    [(expr-p8-div a b) (format "[p8/ ~a ~a]" (pp-expr a names) (pp-expr b names))]
+    [(expr-p8-neg a) (format "[p8-neg ~a]" (pp-expr a names))]
+    [(expr-p8-abs a) (format "[p8-abs ~a]" (pp-expr a names))]
+    [(expr-p8-sqrt a) (format "[p8-sqrt ~a]" (pp-expr a names))]
+    [(expr-p8-lt a b) (format "[p8-lt ~a ~a]" (pp-expr a names) (pp-expr b names))]
+    [(expr-p8-le a b) (format "[p8-le ~a ~a]" (pp-expr a names) (pp-expr b names))]
+    [(expr-p8-from-nat n) (format "[p8-from-nat ~a]" (pp-expr n names))]
     [(expr-p8-if-nar t nc vc v)
-     (format "(p8-if-nar ~a ~a ~a ~a)"
+     (format "[p8-if-nar ~a ~a ~a ~a]"
              (pp-expr t names) (pp-expr nc names) (pp-expr vc names) (pp-expr v names))]
 
     ;; Reduce
     [(expr-reduce scrut arms _)
-     (format "(reduce ~a~a)"
+     (format "[reduce ~a~a]"
              (pp-expr scrut names)
              (apply string-append
                     (map (lambda (arm)
@@ -248,6 +262,82 @@
      (let ([n (try-as-nat inner)])
        (and n (+ n 1)))]
     [_ #f]))
+
+;; Try to interpret an expr as a cons-chain (linked list).
+;; cons is a user-defined data type represented as (expr-app (expr-app (expr-fvar 'cons) head) tail).
+;; nil is (expr-fvar 'nil).
+;; Handles both bare names (cons, nil) and qualified names (prologos.data.list/cons, etc.)
+;; Returns (list elements tail) where:
+;;   - elements is a list of Expr items
+;;   - tail is either #f (proper list ending in nil) or an Expr (improper tail)
+;; Returns #f if the expression is not a cons-chain.
+
+;; Check if symbol name matches 'cons or ends with '/cons' (qualified)
+(define (cons-name? name)
+  (or (eq? name 'cons)
+      (let ([s (symbol->string name)])
+        (let ([len (string-length s)])
+          (and (>= len 5)
+               (string=? (substring s (- len 5)) "/cons"))))))
+
+;; Check if symbol name matches 'nil or ends with '/nil' (qualified)
+(define (nil-name? name)
+  (or (eq? name 'nil)
+      (let ([s (symbol->string name)])
+        (let ([len (string-length s)])
+          (and (>= len 4)
+               (string=? (substring s (- len 4)) "/nil"))))))
+
+(define (try-as-list e)
+  (let loop ([cur e] [elems '()] [depth 0])
+    ;; Limit depth to avoid infinite loops on cyclic structures
+    (cond
+      [(> depth 1000) #f]
+      ;; nil — end of proper list (bare nil or (nil A) with type arg)
+      [(and (expr-fvar? cur) (nil-name? (expr-fvar-name cur)))
+       (if (null? elems)
+           #f   ;; bare nil — don't print as '[], just show "nil"
+           (list (reverse elems) #f))]
+      ;; (nil A) — nil applied to type argument
+      [(and (expr-app? cur)
+            (let ([func (expr-app-func cur)])
+              (and (expr-fvar? func)
+                   (nil-name? (expr-fvar-name func)))))
+       (if (null? elems)
+           #f   ;; bare (nil A) — don't print as '[]
+           (list (reverse elems) #f))]
+      ;; (cons head tail) — curried binary application to expr-fvar 'cons
+      ;; BUT: data constructors may have implicit type params that get applied first
+      ;; e.g., (cons Nat 1 (cons Nat 2 (cons Nat 3 (nil Nat))))
+      ;; Detect pattern: (expr-app (expr-app (expr-fvar 'cons) type-arg) head) tail
+      ;; Actually, fully applied cons is: (((cons A) head) tail) — 3 args curried
+      ;; So the pattern is: expr-app(expr-app(expr-app(expr-fvar 'cons, A), head), tail)
+      [(and (expr-app? cur)
+            (let ([f1 (expr-app-func cur)])  ;; ((cons A) head) applied to tail
+              (and (expr-app? f1)
+                   (let ([f2 (expr-app-func f1)])  ;; (cons A) applied to head
+                     (and (expr-app? f2)
+                          (let ([f3 (expr-app-func f2)])  ;; cons applied to A
+                            (and (expr-fvar? f3)
+                                 (cons-name? (expr-fvar-name f3)))))))))
+       ;; (((cons A) head) tail) — skip the type arg
+       (define head (expr-app-arg (expr-app-func cur)))  ;; head
+       (define tail (expr-app-arg cur))                   ;; tail
+       (loop tail (cons head elems) (+ depth 1))]
+      ;; Also handle: ((cons head) tail) — 2-arg version (no implicit type param)
+      [(and (expr-app? cur)
+            (let ([func (expr-app-func cur)])
+              (and (expr-app? func)
+                   (let ([inner-func (expr-app-func func)])
+                     (and (expr-fvar? inner-func)
+                          (cons-name? (expr-fvar-name inner-func)))))))
+       (define head (expr-app-arg (expr-app-func cur)))
+       (define tail (expr-app-arg cur))
+       (loop tail (cons head elems) (+ depth 1))]
+      ;; Non-nil tail (improper list) — only if we have at least one element
+      [(not (null? elems))
+       (list (reverse elems) cur)]
+      [else #f])))
 
 ;; Check if a term uses bvar(0) — used to detect non-dependent Pi/Sigma
 (define (uses-bvar0? e)
@@ -370,23 +460,23 @@
 (define (pp-session s [names '()])
   (match s
     [(sess-send t cont)
-     (format "(!~a . ~a)" (pp-expr t names) (pp-session cont names))]
+     (format "[!~a . ~a]" (pp-expr t names) (pp-session cont names))]
     [(sess-recv t cont)
-     (format "(?~a . ~a)" (pp-expr t names) (pp-session cont names))]
+     (format "[?~a . ~a]" (pp-expr t names) (pp-session cont names))]
     [(sess-dsend t cont)
      (let ([name (fresh-name (length names) names)])
-       (format "(![~a <~a>] . ~a)" name (pp-expr t names) (pp-session cont (cons name names))))]
+       (format "[![~a <~a>] . ~a]" name (pp-expr t names) (pp-session cont (cons name names))))]
     [(sess-drecv t cont)
      (let ([name (fresh-name (length names) names)])
-       (format "(?[~a <~a>] . ~a)" name (pp-expr t names) (pp-session cont (cons name names))))]
+       (format "[?[~a <~a>] . ~a]" name (pp-expr t names) (pp-session cont (cons name names))))]
     [(sess-choice branches)
-     (format "(+{ ~a })" (pp-branches branches names))]
+     (format "[+{ ~a }]" (pp-branches branches names))]
     [(sess-offer branches)
-     (format "(&{ ~a })" (pp-branches branches names))]
+     (format "[&{ ~a }]" (pp-branches branches names))]
     [(sess-mu body)
-     (format "(mu ~a)" (pp-session body names))]
+     (format "[mu ~a]" (pp-session body names))]
     [(sess-svar n)
-     (format "svar(~a)" n)]
+     (format "svar[~a]" n)]
     [(sess-end) "end"]
     [(sess-branch-error) "<branch-error>"]
     [_ (format "~a" s)]))

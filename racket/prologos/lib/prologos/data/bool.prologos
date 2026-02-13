@@ -41,12 +41,12 @@ defn bool-eq [a : Bool, b : Bool] : Bool
 
 ;; NAND: nand(a, b) = not(and(a, b))
 defn nand [a : Bool, b : Bool] : Bool
-  not (and a b)
+  not [and a b]
 
 ;; NOR: nor(a, b) = not(or(a, b))
 defn nor [a : Bool, b : Bool] : Bool
-  not (or a b)
+  not [or a b]
 
 ;; Material implication: implies(a, b) = or(not(a), b)
 defn implies [a : Bool, b : Bool] : Bool
-  or (not a) b
+  or [not a] b

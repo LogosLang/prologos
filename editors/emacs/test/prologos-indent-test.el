@@ -222,7 +222,7 @@ LINE-NUM is 1-based.  Uses sexp mode for indentation."
   (let ((buf (generate-new-buffer "*prologos-ws-indent-test*")))
     (unwind-protect
         (with-current-buffer buf
-          (insert "#lang prologos\n\ndefn double\n  x <Nat>\n  <Nat>\n  match x\n    zero -> zero\n    inc n -> inc (inc (double n))")
+          (insert "#lang prologos\n\ndefn double\n  x <Nat>\n  <Nat>\n  match x\n    zero -> zero\n    inc n -> inc [inc [double n]]")
           (goto-char (point-min))
           (prologos-mode)
           ;; Verify ws-mode detected
@@ -359,7 +359,7 @@ LINE-NUM is 1-based.  Uses sexp mode for indentation."
     (unwind-protect
         (with-current-buffer buf
           ;; Real-world content: no #lang, starts with ns
-          (insert "ns prologos.data.nat\n\ndefn add [x : Nat, y : Nat] : Nat\n  match y\n    | zero  -> x\n    | inc k -> inc (add x k)")
+          (insert "ns prologos.data.nat\n\ndefn add [x : Nat, y : Nat] : Nat\n  match y\n    | zero  -> x\n    | inc k -> inc [add x k]")
           (goto-char (point-min))
           (prologos-mode)
           ;; Must detect WS mode from ns-prefixed file

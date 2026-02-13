@@ -989,36 +989,32 @@
      (parse-defn-with-implicits args loc)]
 
     ;; Sprint 10: Bare-param syntax: (defn name [x y z] <ReturnType> body)
-    ;; Detection: second arg is bracket form containing ONLY bare symbols
+    ;; Detection: second arg is a list containing ONLY bare symbols
     ;; (no $angle-type markers, no ':', no multiplicity annotations)
+    ;; Position-based: second arg of defn is always the param list.
     [(and (>= (length args) 4)
           (let ([second (cadr args)])
-            (and (syntax? second)
-                 (eq? (syntax-property second 'paren-shape) #\[)
-                 (let ([elems (syntax->list second)])
-                   (and elems (not (null? elems))
-                        (andmap (lambda (e) (symbol? (syntax-e e))) elems)
-                        (not (ormap (lambda (e)
-                                     (let ([d (syntax-e e)])
-                                       (or (eq? d ':) (mult-annot? d))))
-                                    elems)))))))
+            (let ([elems (if (syntax? second) (syntax->list second) #f)])
+              (and elems (not (null? elems))
+                   (andmap (lambda (e) (symbol? (syntax-e e))) elems)
+                   (not (ormap (lambda (e)
+                                (let ([d (syntax-e e)])
+                                  (or (eq? d ':) (mult-annot? d))))
+                               elems))))))
      (parse-defn-bare-params args loc)]
 
-    ;; NEW: Detect typed binder syntax: second arg is a bracket form (params with types)
-    ;; Detection: either paren-shape property is #\[, or content contains $angle-type markers
-    ;; (The latter handles cases where syntax properties were lost during macro expansion)
+    ;; Detect typed binder syntax: second arg is a list containing typed binders.
+    ;; Content-based detection: list containing $angle-type markers or : symbols.
+    ;; Position-based: second arg of defn is always the param list.
     [(and (>= (length args) 4)
           (let ([second (cadr args)])
-            (or (and (syntax? second)
-                     (eq? (syntax-property second 'paren-shape) #\[))
-                ;; Content-based detection: list containing $angle-type markers or : symbols
-                (let ([d (if (syntax? second) (syntax->datum second) second)])
-                  (and (list? d)
-                       (ormap (lambda (x)
-                                (or (and (pair? x) (eq? (car x) '$angle-type))
-                                    (eq? x ':)))
-                              d))))))
-     ;; New syntax: name [typed-binders...] <ReturnType> body
+            (let ([d (if (syntax? second) (syntax->datum second) second)])
+              (and (list? d)
+                   (ormap (lambda (x)
+                            (or (and (pair? x) (eq? (car x) '$angle-type))
+                                (eq? x ':)))
+                          d)))))
+     ;; Syntax: name [typed-binders...] <ReturnType> body
      (parse-defn-new args loc)]
 
     ;; OLD: name : type [params...] body — 5 elements (backward compat)
@@ -1564,28 +1560,23 @@
   (parse-param-names-for stx 'defn loc))
 
 ;; Generalized parameter name parser (used by defn and the-fn)
+;; Position-based: callers know this is a parameter list from its position in the form.
 (define (parse-param-names-for stx form-name loc)
-  ;; stx should be a syntax list with 'paren-shape #\[
-  (define shape (syntax-property stx 'paren-shape))
+  (define elems (if (syntax? stx) (syntax->list stx) #f))
   (cond
-    [(not (eq? shape #\[))
-     (parse-error loc (format "~a: parameter list must use square brackets [...]" form-name) (syntax->datum stx))]
+    [(not elems)
+     (parse-error loc (format "~a: malformed parameter list" form-name) (if (syntax? stx) (syntax->datum stx) stx))]
+    [(null? elems)
+     (parse-error loc (format "~a: parameter list cannot be empty" form-name) '())]
     [else
-     (define elems (syntax->list stx))
-     (cond
-       [(not elems)
-        (parse-error loc (format "~a: malformed parameter list" form-name) (syntax->datum stx))]
-       [(null? elems)
-        (parse-error loc (format "~a: parameter list cannot be empty" form-name) '())]
-       [else
-        (for/fold ([result '()])
-                  ([e (in-list elems)])
-          (define d (syntax->datum e))
-          (cond
-            [(prologos-error? result) result]
-            [(not (symbol? d))
-             (parse-error loc (format "~a: expected parameter name, got ~a" form-name d) d)]
-            [else (append result (list d))]))])]))
+     (for/fold ([result '()])
+               ([e (in-list elems)])
+       (define d (syntax->datum e))
+       (cond
+         [(prologos-error? result) result]
+         [(not (symbol? d))
+          (parse-error loc (format "~a: expected parameter name, got ~a" form-name d) d)]
+         [else (append result (list d))]))]))
 
 ;; ========================================
 ;; Parse check command: (check expr : type)

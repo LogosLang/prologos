@@ -777,7 +777,7 @@
   ;; sym evaluates to refl
   (check-equal?
    (run-ns "(ns es3)\n(require [prologos.data.eq :refer [sym]])\n(eval (sym Nat zero zero (the (Eq Nat zero zero) refl)))")
-   '("refl : (Eq Nat zero zero)")))
+   '("refl : [Eq Nat zero zero]")))
 
 ;; ========================================
 ;; prologos.data.eq — cong (congruence)
@@ -791,7 +791,7 @@
   ;; cong evaluates to refl
   (check-equal?
    (run-ns "(ns ec2)\n(require [prologos.data.eq :refer [cong]])\n(eval (cong Nat Nat zero zero (fn (x : Nat) (inc x)) (the (Eq Nat zero zero) refl)))")
-   '("refl : (Eq Nat 1 1)")))
+   '("refl : [Eq Nat 1 1]")))
 
 ;; ========================================
 ;; prologos.data.eq — trans (transitivity)
@@ -805,7 +805,7 @@
   ;; trans evaluates to refl
   (check-equal?
    (run-ns "(ns et2)\n(require [prologos.data.eq :refer [trans]])\n(eval (trans Nat zero zero zero (the (Eq Nat zero zero) refl) (the (Eq Nat zero zero) refl)))")
-   '("refl : (Eq Nat zero zero)")))
+   '("refl : [Eq Nat zero zero]")))
 
 ;; ========================================
 ;; prologos.data.option — Module Loading
