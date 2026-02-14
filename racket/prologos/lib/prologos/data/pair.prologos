@@ -6,17 +6,21 @@ ns prologos.data.pair
 ;; ========================================
 
 ;; Swap: (a, b) -> (b, a)
-defn swap {A B} [p : [Sigma [_ <A>] B]] : [Sigma [_ <B>] A]
+spec swap [Sigma [_ <A>] B] -> [Sigma [_ <B>] A]
+defn swap [p]
   pair [second p] [first p]
 
 ;; Map over first component: (A -> C) -> (A, B) -> (C, B)
-defn map-fst {A B C} [f : A -> C, p : [Sigma [_ <A>] B]] : [Sigma [_ <C>] B]
+spec map-fst [A -> C] [Sigma [_ <A>] B] -> [Sigma [_ <C>] B]
+defn map-fst [f p]
   pair [f [first p]] [second p]
 
 ;; Map over second component: (B -> C) -> (A, B) -> (A, C)
-defn map-snd {A B C} [f : B -> C, p : [Sigma [_ <A>] B]] : [Sigma [_ <A>] C]
+spec map-snd [B -> C] [Sigma [_ <A>] B] -> [Sigma [_ <A>] C]
+defn map-snd [f p]
   pair [first p] [f [second p]]
 
 ;; Bimap: (A -> C) -> (B -> D) -> (A, B) -> (C, D)
-defn bimap {A B C D} [f : A -> C, g : B -> D, p : [Sigma [_ <A>] B]] : [Sigma [_ <C>] D]
+spec bimap [A -> C] [B -> D] [Sigma [_ <A>] B] -> [Sigma [_ <C>] D]
+defn bimap [f g p]
   pair [f [first p]] [g [second p]]

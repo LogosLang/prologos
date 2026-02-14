@@ -799,9 +799,14 @@
     ;; Dependent binder: (name : type-atoms...)
     [(and (list? ptype) (>= (length ptype) 3) (eq? (cadr ptype) ':))
      `($angle-type ,@(cddr ptype))]
-    ;; Grouped type: sub-list like (-> Nat Nat) or (List Nat)
-    ;; Wrap as a single element so parse-angle-type dispatches to parse-datum
-    ;; rather than parse-infix-type (which would mis-split on ->)
+    ;; Grouped type containing infix -> : flatten so parse-infix-type handles arrow
+    ;; e.g. (B -> C) → ($angle-type B -> C), (A -> B -> C) → ($angle-type A -> B -> C)
+    ;; But NOT prefix -> like (-> Nat Nat) which would break parse-infix-type
+    [(and (list? ptype) (pair? ptype) (not (eq? (car ptype) '->))
+          (memq '-> ptype))
+     `($angle-type ,@ptype)]
+    ;; All other grouped types: wrap as single element for parse-datum
+    ;; Handles: (-> Nat Nat), (List A), (Sigma (_ ...) B), (Option A), etc.
     [(list? ptype)
      `($angle-type ,ptype)]
     ;; Plain atom

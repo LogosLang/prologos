@@ -10,32 +10,37 @@ data Option {A}
   some : A
 
 ;; Map a function over the contained value.
-defn map {A B} [f : A -> B, opt : Option A] : Option B
+spec map [A -> B] [Option A] -> Option B
+defn map [f opt]
   match opt
     | none   -> none
     | some x -> some [f x]
 
 ;; Flat-map (bind): apply f that returns Option B.
-defn flat-map {A B} [f : A -> Option B, opt : Option A] : Option B
+spec flat-map [A -> Option B] [Option A] -> Option B
+defn flat-map [f opt]
   match opt
     | none   -> none
     | some x -> f x
 
 ;; Unwrap with a default value.
-defn unwrap-or {A} [default : A, opt : Option A] : A
+spec unwrap-or A [Option A] -> A
+defn unwrap-or [default opt]
   match opt
     | none   -> default
     | some x -> x
 
 ;; Return opt if some, else fall back to alt.
-defn or-else {A} [opt : Option A, alt : Option A] : Option A
+spec or-else [Option A] [Option A] -> Option A
+defn or-else [opt alt]
   match opt
     | none   -> alt
     | some x -> some x
 
 ;; Keep the value only if the predicate holds, else none.
 ;; Uses match on Bool (structural PM) — no longer needs Church delegation.
-defn filter {A} [pred : A -> Bool, opt : Option A] : Option A
+spec filter [A -> Bool] [Option A] -> Option A
+defn filter [pred opt]
   match opt
     | none   -> none
     | some x -> match [pred x]
@@ -43,7 +48,8 @@ defn filter {A} [pred : A -> Bool, opt : Option A] : Option A
                   | false -> none
 
 ;; Combine two Options with a function. None if either is none.
-defn zip-with {A B C} [f : A -> B -> C, oa : Option A, ob : Option B] : Option C
+spec zip-with [A -> B -> C] [Option A] [Option B] -> Option C
+defn zip-with [f oa ob]
   match oa
     | none   -> none
     | some a -> match ob
@@ -51,5 +57,6 @@ defn zip-with {A B C} [f : A -> B -> C, oa : Option A, ob : Option B] : Option C
                   | some b -> some [f a b]
 
 ;; Combine two Options into an Option of pairs. None if either is none.
-defn zip {A B} [oa : Option A, ob : Option B] : Option [Sigma [_ <A>] B]
+spec zip [Option A] [Option B] -> Option [Sigma [_ <A>] B]
+defn zip [oa ob]
   zip-with A B [Sigma [_ <A>] B] [fn a b [pair a b]] oa ob

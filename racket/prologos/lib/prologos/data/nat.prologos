@@ -6,31 +6,36 @@ ns prologos.data.nat
 ;; ========================================
 
 ;; Addition: add x y = x + y (by recursion on y)
-defn add [x : Nat, y : Nat] : Nat
+spec add Nat Nat -> Nat
+defn add [x y]
   match y
     | zero  -> x
     | inc k -> inc [add x k]
 
 ;; Multiplication: mult x y = x * y (by recursion on y)
-defn mult [x : Nat, y : Nat] : Nat
+spec mult Nat Nat -> Nat
+defn mult [x y]
   match y
     | zero  -> zero
     | inc k -> add x [mult x k]
 
 ;; Double: double n = n + n
-defn double [n : Nat] : Nat
+spec double Nat -> Nat
+defn double [n]
   match n
     | zero  -> zero
     | inc k -> inc [inc [double k]]
 
 ;; Predecessor: pred(0) = 0, pred(suc(k)) = k
-defn dec [n : Nat] : Nat
+spec dec Nat -> Nat
+defn dec [n]
   match n
     | zero  -> zero
     | inc k -> k
 
 ;; Zero predicate: zero?(0) = true, zero?(suc(k)) = false
-defn zero? [n : Nat] : Bool
+spec zero? Nat -> Bool
+defn zero? [n]
   match n
     | zero  -> true
     | inc _ -> false
@@ -41,13 +46,15 @@ defn zero? [n : Nat] : Bool
 
 ;; Saturating subtraction: sub(x, y) = max(x - y, 0)
 ;; Iterates pred y times starting from x.
-defn sub [x : Nat, y : Nat] : Nat
+spec sub Nat Nat -> Nat
+defn sub [x y]
   match y
     | zero  -> x
     | inc k -> dec [sub x k]
 
 ;; Exponentiation: power(base, exp) = base^exp
-defn pow [base : Nat, exp : Nat] : Nat
+spec pow Nat Nat -> Nat
+defn pow [base exp]
   match exp
     | zero  -> inc zero
     | inc k -> mult base [pow base k]
@@ -57,25 +64,30 @@ defn pow [base : Nat, exp : Nat] : Nat
 ;; ========================================
 
 ;; Less-than-or-equal: le?(x, y) iff sub(x, y) == 0
-defn le? [x : Nat, y : Nat] : Bool
+spec le? Nat Nat -> Bool
+defn le? [x y]
   zero? [sub x y]
 
 ;; Less-than: lt?(x, y) iff not(le?(y, x))
-defn lt? [x : Nat, y : Nat] : Bool
+spec lt? Nat Nat -> Bool
+defn lt? [x y]
   match [le? y x]
     | true  -> false
     | false -> true
 
 ;; Greater-than: gt?(x, y) = lt?(y, x)
-defn gt? [x : Nat, y : Nat] : Bool
+spec gt? Nat Nat -> Bool
+defn gt? [x y]
   lt? y x
 
 ;; Greater-than-or-equal: ge?(x, y) = le?(y, x)
-defn ge? [x : Nat, y : Nat] : Bool
+spec ge? Nat Nat -> Bool
+defn ge? [x y]
   le? y x
 
 ;; Nat equality: nat-eq?(x, y) iff le?(x, y) and le?(y, x)
-defn nat-eq? [x : Nat, y : Nat] : Bool
+spec nat-eq? Nat Nat -> Bool
+defn nat-eq? [x y]
   match [le? x y]
     | true  -> le? y x
     | false -> false
@@ -85,13 +97,15 @@ defn nat-eq? [x : Nat, y : Nat] : Bool
 ;; ========================================
 
 ;; Minimum of two naturals
-defn min [x : Nat, y : Nat] : Nat
+spec min Nat Nat -> Nat
+defn min [x y]
   match [le? x y]
     | true  -> x
     | false -> y
 
 ;; Maximum of two naturals
-defn max [x : Nat, y : Nat] : Nat
+spec max Nat Nat -> Nat
+defn max [x y]
   match [le? x y]
     | true  -> y
     | false -> x
@@ -101,13 +115,15 @@ defn max [x : Nat, y : Nat] : Nat
 ;; ========================================
 
 ;; Bool to Nat: true -> 1, false -> 0
-defn bool-to-nat [b : Bool] : Nat
+spec bool-to-nat Bool -> Nat
+defn bool-to-nat [b]
   match b
     | true  -> inc zero
     | false -> zero
 
 ;; Clamp: clamp low high returns a function that clamps x to [low, high]
-defn clamp [low : Nat, high : Nat] : Nat -> Nat
+spec clamp Nat Nat -> Nat -> Nat
+defn clamp [low high]
   fn [x]
     max low [min x high]
 

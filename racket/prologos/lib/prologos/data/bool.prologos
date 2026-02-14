@@ -6,31 +6,36 @@ ns prologos.data.bool
 ;; ========================================
 
 ;; Logical NOT: not(true) = false, not(false) = true
-defn not [b : Bool] : Bool
+spec not Bool -> Bool
+defn not [b]
   match b
     | true  -> false
     | false -> true
 
 ;; Logical AND: and(true, b) = b, and(false, b) = false
-defn and [a : Bool, b : Bool] : Bool
+spec and Bool Bool -> Bool
+defn and [a b]
   match a
     | true  -> b
     | false -> false
 
 ;; Logical OR: or(true, b) = true, or(false, b) = b
-defn or [a : Bool, b : Bool] : Bool
+spec or Bool Bool -> Bool
+defn or [a b]
   match a
     | true  -> true
     | false -> b
 
 ;; Logical XOR: xor(true, b) = not(b), xor(false, b) = b
-defn xor [a : Bool, b : Bool] : Bool
+spec xor Bool Bool -> Bool
+defn xor [a b]
   match a
     | true  -> not b
     | false -> b
 
 ;; Boolean equality: bool-eq(true, b) = b, bool-eq(false, b) = not(b)
-defn bool-eq [a : Bool, b : Bool] : Bool
+spec bool-eq Bool Bool -> Bool
+defn bool-eq [a b]
   match a
     | true  -> b
     | false -> not b
@@ -40,13 +45,16 @@ defn bool-eq [a : Bool, b : Bool] : Bool
 ;; ========================================
 
 ;; NAND: nand(a, b) = not(and(a, b))
-defn nand [a : Bool, b : Bool] : Bool
+spec nand Bool Bool -> Bool
+defn nand [a b]
   not [and a b]
 
 ;; NOR: nor(a, b) = not(or(a, b))
-defn nor [a : Bool, b : Bool] : Bool
+spec nor Bool Bool -> Bool
+defn nor [a b]
   not [or a b]
 
 ;; Material implication: implies(a, b) = or(not(a), b)
-defn implies [a : Bool, b : Bool] : Bool
+spec implies Bool Bool -> Bool
+defn implies [a b]
   or [not a] b

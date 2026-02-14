@@ -13,9 +13,11 @@ require [prologos.data.bool :refer [not]]
 deftype [Eq $A] [-> $A [-> $A Bool]]
 
 ;; Nat instance: delegates to nat-eq? from prologos.data.nat
-defn nat-eq [x : Nat, y : Nat] : Bool
+spec nat-eq Nat Nat -> Bool
+defn nat-eq [x y]
   nat-eq? x y
 
 ;; Generic neq: negate equality
-defn eq-neq {A} [dict : Eq A, x : A, y : A] : Bool
+spec eq-neq [Eq A] A A -> Bool
+defn eq-neq [dict x y]
   not [dict x y]

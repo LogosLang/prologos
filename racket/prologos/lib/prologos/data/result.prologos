@@ -9,31 +9,36 @@ data Result {A E}
   err : E
 
 ;; Map a function over the ok value.
-defn map {A E B} [f : A -> B, r : Result A E] : Result B E
+spec map [A -> B] [Result A E] -> Result B E
+defn map [f r]
   match r
     | ok x  -> ok [f x]
     | err e -> err e
 
 ;; Map a function over the error value.
-defn map-err {A E F} [f : E -> F, r : Result A E] : Result A F
+spec map-err [E -> F] [Result A E] -> Result A F
+defn map-err [f r]
   match r
     | ok x  -> ok x
     | err e -> err [f e]
 
 ;; Unwrap with a default value.
-defn unwrap-or {A E} [default : A, r : Result A E] : A
+spec unwrap-or A [Result A E] -> A
+defn unwrap-or [default r]
   match r
     | ok x  -> x
     | err _ -> default
 
 ;; Chain a computation on the ok value (monadic bind).
-defn and-then {A E B} [f : A -> Result B E, r : Result A E] : Result B E
+spec and-then [A -> Result B E] [Result A E] -> Result B E
+defn and-then [f r]
   match r
     | ok x  -> f x
     | err e -> err e
 
 ;; Chain a computation on the error value (recover from errors).
-defn or-else {A E F} [f : E -> Result A F, r : Result A E] : Result A F
+spec or-else [E -> Result A F] [Result A E] -> Result A F
+defn or-else [f r]
   match r
     | ok x  -> ok x
     | err e -> f e

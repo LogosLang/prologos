@@ -690,11 +690,12 @@
 ;; ========================================
 
 (test-case "pair/map-fst"
+  ;; Auto-implicit order: A C B (first-occurrence in spec [A -> C] [Sigma [_ <A>] B] -> ...)
   (check-equal?
-   (run-ns "(ns pm1)\n(require [prologos.data.pair :refer [map-fst]])\n(eval (first (map-fst Nat Bool Nat (fn (x : Nat) (inc x)) (pair zero true))))")
+   (run-ns "(ns pm1)\n(require [prologos.data.pair :refer [map-fst]])\n(eval (first (map-fst Nat Nat Bool (fn (x : Nat) (inc x)) (pair zero true))))")
    '("1 : Nat"))
   (check-equal?
-   (run-ns "(ns pm2)\n(require [prologos.data.pair :refer [map-fst]])\n(eval (second (map-fst Nat Bool Nat (fn (x : Nat) (inc x)) (pair zero true))))")
+   (run-ns "(ns pm2)\n(require [prologos.data.pair :refer [map-fst]])\n(eval (second (map-fst Nat Nat Bool (fn (x : Nat) (inc x)) (pair zero true))))")
    '("true : Bool")))
 
 ;; ========================================
@@ -702,11 +703,12 @@
 ;; ========================================
 
 (test-case "pair/map-snd"
+  ;; Auto-implicit order: B C A (first-occurrence in spec [B -> C] [Sigma [_ <A>] B] -> ...)
   (check-equal?
-   (run-ns "(ns pm3)\n(require [prologos.data.pair :refer [map-snd]])\n(eval (first (map-snd Nat Bool Nat (fn (b : Bool) zero) (pair (inc zero) true))))")
+   (run-ns "(ns pm3)\n(require [prologos.data.pair :refer [map-snd]])\n(eval (first (map-snd Bool Nat Nat (fn (b : Bool) zero) (pair (inc zero) true))))")
    '("1 : Nat"))
   (check-equal?
-   (run-ns "(ns pm4)\n(require [prologos.data.pair :refer [map-snd]])\n(eval (second (map-snd Nat Bool Nat (fn (b : Bool) zero) (pair (inc zero) true))))")
+   (run-ns "(ns pm4)\n(require [prologos.data.pair :refer [map-snd]])\n(eval (second (map-snd Bool Nat Nat (fn (b : Bool) zero) (pair (inc zero) true))))")
    '("zero : Nat")))
 
 ;; ========================================
@@ -714,11 +716,12 @@
 ;; ========================================
 
 (test-case "pair/bimap"
+  ;; Auto-implicit order: A C B D (first-occurrence in spec [A -> C] [B -> D] [Sigma [_ <A>] B] -> ...)
   (check-equal?
-   (run-ns "(ns pb1)\n(require [prologos.data.pair :refer [bimap]])\n(eval (first (bimap Nat Bool Nat Bool (fn (x : Nat) (inc x)) (fn (b : Bool) (boolrec Bool false true b)) (pair (inc zero) true))))")
+   (run-ns "(ns pb1)\n(require [prologos.data.pair :refer [bimap]])\n(eval (first (bimap Nat Nat Bool Bool (fn (x : Nat) (inc x)) (fn (b : Bool) (boolrec Bool false true b)) (pair (inc zero) true))))")
    '("2 : Nat"))
   (check-equal?
-   (run-ns "(ns pb2)\n(require [prologos.data.pair :refer [bimap]])\n(eval (second (bimap Nat Bool Nat Bool (fn (x : Nat) (inc x)) (fn (b : Bool) (boolrec Bool false true b)) (pair (inc zero) true))))")
+   (run-ns "(ns pb2)\n(require [prologos.data.pair :refer [bimap]])\n(eval (second (bimap Nat Nat Bool Bool (fn (x : Nat) (inc x)) (fn (b : Bool) (boolrec Bool false true b)) (pair (inc zero) true))))")
    '("false : Bool")))
 
 ;; ========================================
@@ -726,13 +729,14 @@
 ;; ========================================
 
 (test-case "core/on"
+  ;; Auto-implicit order: B C A (first-occurrence in spec [B -> B -> C] [A -> B] A A -> C)
   ;; (on nat-eq? id) should compare two nats for equality: on(nat-eq?, id, 3, 3) = true
   (check-equal?
-   (run-ns "(ns co1)\n(require [prologos.data.nat :refer [nat-eq?]])\n(eval (on Nat Nat Bool nat-eq? (fn (x : Nat) x) (inc (inc (inc zero))) (inc (inc (inc zero)))))")
+   (run-ns "(ns co1)\n(require [prologos.data.nat :refer [nat-eq?]])\n(eval (on Nat Bool Nat nat-eq? (fn (x : Nat) x) (inc (inc (inc zero))) (inc (inc (inc zero)))))")
    '("true : Bool"))
   ;; on(nat-eq?, id, 2, 3) = false
   (check-equal?
-   (run-ns "(ns co2)\n(require [prologos.data.nat :refer [nat-eq?]])\n(eval (on Nat Nat Bool nat-eq? (fn (x : Nat) x) (inc (inc zero)) (inc (inc (inc zero)))))")
+   (run-ns "(ns co2)\n(require [prologos.data.nat :refer [nat-eq?]])\n(eval (on Nat Bool Nat nat-eq? (fn (x : Nat) x) (inc (inc zero)) (inc (inc (inc zero)))))")
    '("false : Bool")))
 
 ;; ========================================
@@ -931,11 +935,12 @@
    '("zero : Nat")))
 
 (test-case "result/map"
+  ;; Auto-implicit order: A B E (first-occurrence in spec [A -> B] [Result A E] -> Result B E)
   (check-equal?
-   (run-ns "(ns rm1)\n(require [prologos.data.result :refer [Result ok err map unwrap-or]])\n(eval (unwrap-or Nat Bool zero (map Nat Bool Nat (fn (x : Nat) (inc x)) (ok Nat Bool (inc zero)))))")
+   (run-ns "(ns rm1)\n(require [prologos.data.result :refer [Result ok err map unwrap-or]])\n(eval (unwrap-or Nat Bool zero (map Nat Nat Bool (fn (x : Nat) (inc x)) (ok Nat Bool (inc zero)))))")
    '("2 : Nat"))
   (check-equal?
-   (run-ns "(ns rm2)\n(require [prologos.data.result :refer [Result ok err map unwrap-or]])\n(eval (unwrap-or Nat Bool zero (map Nat Bool Nat (fn (x : Nat) (inc x)) (err Nat Bool false))))")
+   (run-ns "(ns rm2)\n(require [prologos.data.result :refer [Result ok err map unwrap-or]])\n(eval (unwrap-or Nat Bool zero (map Nat Nat Bool (fn (x : Nat) (inc x)) (err Nat Bool false))))")
    '("zero : Nat")))
 
 (test-case "result/unwrap-or"
@@ -1246,55 +1251,59 @@
 ;; ========================================
 
 ;; --- and-then ---
+;; Auto-implicit order: A B E (first-occurrence in spec [A -> Result B E] [Result A E] -> Result B E)
 
 (test-case "and-then/ok-to-ok"
   ;; ok value → apply f → ok result — use unwrap-or to extract
   (check-equal?
-   (last (run-ns "(ns rat1)\n(require [prologos.data.result :refer [Result ok err and-then unwrap-or]])\n(require [prologos.data.nat :refer [add]])\n(eval (unwrap-or Nat Bool zero (and-then Nat Bool Nat (fn (x : Nat) (ok Nat Bool (add x (inc zero)))) (ok Nat Bool (inc (inc zero))))))"))
+   (last (run-ns "(ns rat1)\n(require [prologos.data.result :refer [Result ok err and-then unwrap-or]])\n(require [prologos.data.nat :refer [add]])\n(eval (unwrap-or Nat Bool zero (and-then Nat Nat Bool (fn (x : Nat) (ok Nat Bool (add x (inc zero)))) (ok Nat Bool (inc (inc zero))))))"))
    "3 : Nat"))
 
 (test-case "and-then/ok-to-err"
   ;; ok value → apply f → err result — match to extract
   (check-equal?
-   (last (run-ns "(ns rat2)\n(require [prologos.data.result :refer [Result ok err and-then]])\n(eval (the Nat (match (and-then Nat Bool Nat (fn (x : Nat) (err Nat Bool true)) (ok Nat Bool (inc zero))) (ok x -> x) (err e -> (match e (true -> (inc (inc (inc (inc (inc zero)))))) (false -> zero))))))"))
+   (last (run-ns "(ns rat2)\n(require [prologos.data.result :refer [Result ok err and-then]])\n(eval (the Nat (match (and-then Nat Nat Bool (fn (x : Nat) (err Nat Bool true)) (ok Nat Bool (inc zero))) (ok x -> x) (err e -> (match e (true -> (inc (inc (inc (inc (inc zero)))))) (false -> zero))))))"))
    "5 : Nat"))
 
 (test-case "and-then/err-passthrough"
   ;; err → f not called, err passes through
   (check-equal?
-   (last (run-ns "(ns rat3)\n(require [prologos.data.result :refer [Result ok err and-then]])\n(eval (the Nat (match (and-then Nat Bool Nat (fn (x : Nat) (ok Nat Bool (inc x))) (err Nat Bool true)) (ok x -> x) (err e -> (match e (true -> (inc (inc (inc (inc (inc (inc (inc zero)))))))) (false -> zero))))))"))
+   (last (run-ns "(ns rat3)\n(require [prologos.data.result :refer [Result ok err and-then]])\n(eval (the Nat (match (and-then Nat Nat Bool (fn (x : Nat) (ok Nat Bool (inc x))) (err Nat Bool true)) (ok x -> x) (err e -> (match e (true -> (inc (inc (inc (inc (inc (inc (inc zero)))))))) (false -> zero))))))"))
    "7 : Nat"))
 
 ;; --- or-else ---
+;; Auto-implicit order: E A F (first-occurrence in spec [E -> Result A F] [Result A E] -> Result A F)
 
 (test-case "or-else/ok-passthrough"
   ;; ok → f not called, ok passes through — use unwrap-or
   (check-equal?
-   (last (run-ns "(ns roe1)\n(require [prologos.data.result :refer [Result ok err or-else unwrap-or]])\n(eval (unwrap-or Nat Nat zero (or-else Nat Bool Nat (fn (e : Bool) (ok Nat Nat zero)) (ok Nat Bool (inc (inc zero))))))"))
+   (last (run-ns "(ns roe1)\n(require [prologos.data.result :refer [Result ok err or-else unwrap-or]])\n(eval (unwrap-or Nat Nat zero (or-else Bool Nat Nat (fn (e : Bool) (ok Nat Nat zero)) (ok Nat Bool (inc (inc zero))))))"))
    "2 : Nat"))
 
 (test-case "or-else/err-to-ok"
   ;; err → apply f → recovers to ok — use unwrap-or
   (check-equal?
-   (last (run-ns "(ns roe2)\n(require [prologos.data.result :refer [Result ok err or-else unwrap-or]])\n(eval (unwrap-or Nat Nat zero (or-else Nat Bool Nat (fn (e : Bool) (ok Nat Nat (match e (true -> (inc zero)) (false -> zero)))) (err Nat Bool true))))"))
+   (last (run-ns "(ns roe2)\n(require [prologos.data.result :refer [Result ok err or-else unwrap-or]])\n(eval (unwrap-or Nat Nat zero (or-else Bool Nat Nat (fn (e : Bool) (ok Nat Nat (match e (true -> (inc zero)) (false -> zero)))) (err Nat Bool true))))"))
    "1 : Nat"))
 
 (test-case "or-else/err-to-err"
   ;; err → apply f → still err (with new error type) — match to extract
   (check-equal?
-   (last (run-ns "(ns roe3)\n(require [prologos.data.result :refer [Result ok err or-else]])\n(eval (the Nat (match (or-else Nat Bool Nat (fn (e : Bool) (err Nat Nat (the Nat (match e (true -> (inc (inc (inc zero)))) (false -> zero))))) (err Nat Bool true)) (ok x -> x) (err e -> e))))"))
+   (last (run-ns "(ns roe3)\n(require [prologos.data.result :refer [Result ok err or-else]])\n(eval (the Nat (match (or-else Bool Nat Nat (fn (e : Bool) (err Nat Nat (the Nat (match e (true -> (inc (inc (inc zero)))) (false -> zero))))) (err Nat Bool true)) (ok x -> x) (err e -> e))))"))
    "3 : Nat"))
 
 ;; --- Type checking for Result combinators ---
 
 (test-case "and-then/type-check"
+  ;; Auto-implicit order: A B E (first-occurrence in spec)
   (check-equal?
-   (last (run-ns "(ns rattc)\n(require [prologos.data.result :refer [Result and-then]])\n(check and-then : (Pi (A :0 (Type 0)) (Pi (E :0 (Type 0)) (Pi (B :0 (Type 0)) (-> (-> A (Result B E)) (-> (Result A E) (Result B E)))))))"))
+   (last (run-ns "(ns rattc)\n(require [prologos.data.result :refer [Result and-then]])\n(check and-then : (Pi (A :0 (Type 0)) (Pi (B :0 (Type 0)) (Pi (E :0 (Type 0)) (-> (-> A (Result B E)) (-> (Result A E) (Result B E)))))))"))
    "OK"))
 
 (test-case "or-else/type-check"
+  ;; Auto-implicit order: E A F (first-occurrence in spec)
   (check-equal?
-   (last (run-ns "(ns roetc)\n(require [prologos.data.result :refer [Result or-else]])\n(check or-else : (Pi (A :0 (Type 0)) (Pi (E :0 (Type 0)) (Pi (F :0 (Type 0)) (-> (-> E (Result A F)) (-> (Result A E) (Result A F)))))))"))
+   (last (run-ns "(ns roetc)\n(require [prologos.data.result :refer [Result or-else]])\n(check or-else : (Pi (E :0 (Type 0)) (Pi (A :0 (Type 0)) (Pi (F :0 (Type 0)) (-> (-> E (Result A F)) (-> (Result A E) (Result A F)))))))"))
    "OK"))
 
 ;; ========================================
