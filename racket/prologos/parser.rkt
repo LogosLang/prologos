@@ -27,7 +27,7 @@
     Vec Fin vnil vcons vhead vtail vindex fzero fsuc
     natrec J pair first second boolrec
     Posit8 posit8 p8+ p8- p8* p8/ p8-neg p8-abs p8-sqrt p8-lt p8-le p8-from-nat p8-if-nar
-    def defn check eval infer match
+    def defn check eval infer expand parse elaborate match
     ;; Pre-parse macros — should be expanded before reaching parser
     defmacro let do if deftype data spec
     ;; Private-suffix forms — consumed in preparse, rewritten to base form
@@ -672,6 +672,24 @@
         (or (check-arity 'infer args 1 loc)
             (let ([e (parse-datum (car args))])
               (if (prologos-error? e) e (surf-infer e loc))))]
+
+       ;; (expand form) — raw datum, NOT parsed (shows preparse expansion)
+       [(expand)
+        (or (check-arity 'expand args 1 loc)
+            (let ([raw (car args)])
+              (surf-expand (if (syntax? raw) (syntax->datum raw) raw) loc)))]
+
+       ;; (parse form) — parsed surface AST
+       [(parse)
+        (or (check-arity 'parse args 1 loc)
+            (let ([e (parse-datum (car args))])
+              (if (prologos-error? e) e (surf-parse e loc))))]
+
+       ;; (elaborate form) — elaborated core AST
+       [(elaborate)
+        (or (check-arity 'elaborate args 1 loc)
+            (let ([e (parse-datum (car args))])
+              (if (prologos-error? e) e (surf-elaborate e loc))))]
 
        ;; Not a keyword -> function application
        [else

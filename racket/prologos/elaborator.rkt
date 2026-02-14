@@ -611,6 +611,20 @@
        (if (prologos-error? e) e
            (list 'infer e)))]
 
+    ;; Inspection: expand — datum passes through, handled in driver
+    [(surf-expand datum loc)
+     (list 'expand datum)]
+
+    ;; Inspection: parse — surface AST passes through, shown directly
+    [(surf-parse expr-surf loc)
+     (list 'parse expr-surf)]
+
+    ;; Inspection: elaborate — elaborate the sub-expression
+    [(surf-elaborate expr-surf loc)
+     (let ([e (elaborate expr-surf)])
+       (if (prologos-error? e) e
+           (list 'elaborate e)))]
+
     [(surf-defn name _ _ _ loc)
      (prologos-error loc "defn should have been expanded by the macro system before elaboration")]
 

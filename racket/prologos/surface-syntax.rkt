@@ -63,6 +63,10 @@
  (struct-out surf-check)
  (struct-out surf-eval)
  (struct-out surf-infer)
+ ;; Inspection commands
+ (struct-out surf-expand)
+ (struct-out surf-parse)
+ (struct-out surf-elaborate)
  ;; Annotated lambda
  (struct-out surf-the-fn)
  ;; Type hole (inferred)
@@ -235,6 +239,15 @@
 
 ;; Infer type: (infer expr)
 (struct surf-infer (expr srcloc) #:transparent)
+
+;; Inspection: (expand form) — show preparse macro expansion
+(struct surf-expand (datum srcloc) #:transparent)
+
+;; Inspection: (parse form) — show parsed surface AST
+(struct surf-parse (expr srcloc) #:transparent)
+
+;; Inspection: (elaborate form) — show elaborated core AST
+(struct surf-elaborate (expr srcloc) #:transparent)
 
 ;; Annotated lambda: (the-fn type [params...] body)
 ;; Desugars to (the type (fn (p1:T1) (fn (p2:T2) ... body)))

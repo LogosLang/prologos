@@ -34,6 +34,7 @@
          register-preparse-macro!
          preparse-expand-form
          preparse-expand-all
+         preparse-expand-single
          preparse-macro
          preparse-macro?
          pattern-var?
@@ -274,6 +275,31 @@
     [(pair? datum)
      (preparse-expand-subforms datum reg depth)]
     [else datum]))
+
+;; Expand a single top-level datum through all preparse stages.
+;; Applies: def := expansion, spec injection, then preparse-expand-form.
+;; Used by the `expand` inspection command.
+(define (preparse-expand-single datum)
+  (cond
+    [(and (pair? datum) (symbol? (car datum)))
+     (define head (car datum))
+     (cond
+       ;; def with := — expand assignment syntax, then spec injection
+       [(and (eq? head 'def) (memq ':= datum))
+        (define pre (expand-def-assign datum))
+        (define injected (maybe-inject-spec-def pre))
+        (preparse-expand-form injected)]
+       ;; def without := — try spec injection
+       [(eq? head 'def)
+        (define injected (maybe-inject-spec-def datum))
+        (preparse-expand-form injected)]
+       ;; defn — spec injection
+       [(eq? head 'defn)
+        (define injected (maybe-inject-spec datum))
+        (preparse-expand-form injected)]
+       ;; Everything else — standard preparse
+       [else (preparse-expand-form datum)])]
+    [else (preparse-expand-form datum)]))
 
 ;; Merge consecutive bodyless let forms into a single let with bracket bindings.
 ;; Input: list of elements (siblings in a form).
@@ -1690,7 +1716,10 @@
       (surf-defn? surf)
       (surf-check? surf)
       (surf-eval? surf)
-      (surf-infer? surf)))
+      (surf-infer? surf)
+      (surf-expand? surf)
+      (surf-parse? surf)
+      (surf-elaborate? surf)))
 
 ;; ========================================
 ;; Collect all surf-var names from a surface type AST
@@ -2053,6 +2082,13 @@
     [(surf-infer? surf)
      (surf-infer (expand-expression (surf-infer-expr surf))
                  (surf-infer-srcloc surf))]
+    ;; Inspection commands — expand/parse pass through as-is,
+    ;; elaborate expands its sub-expression (consistent with eval/infer)
+    [(surf-expand? surf) surf]
+    [(surf-parse? surf) surf]
+    [(surf-elaborate? surf)
+     (surf-elaborate (expand-expression (surf-elaborate-expr surf))
+                     (surf-elaborate-srcloc surf))]
     ;; Bare expression — implicit eval
     [else
      (define loc (cond

@@ -45,12 +45,15 @@
 ;; ========================================
 (define (surf-loc surf)
   (cond
-    [(surf-def? surf)   (surf-def-srcloc surf)]
-    [(surf-defn? surf)  (surf-defn-srcloc surf)]
-    [(surf-check? surf) (surf-check-srcloc surf)]
-    [(surf-eval? surf)  (surf-eval-srcloc surf)]
-    [(surf-infer? surf) (surf-infer-srcloc surf)]
-    [else               srcloc-unknown]))
+    [(surf-def? surf)       (surf-def-srcloc surf)]
+    [(surf-defn? surf)      (surf-defn-srcloc surf)]
+    [(surf-check? surf)     (surf-check-srcloc surf)]
+    [(surf-eval? surf)      (surf-eval-srcloc surf)]
+    [(surf-infer? surf)     (surf-infer-srcloc surf)]
+    [(surf-expand? surf)    (surf-expand-srcloc surf)]
+    [(surf-parse? surf)     (surf-parse-srcloc surf)]
+    [(surf-elaborate? surf) (surf-elaborate-srcloc surf)]
+    [else                   srcloc-unknown]))
 
 ;; ========================================
 ;; Process a single parsed surface form
@@ -132,6 +135,18 @@
        (when (prologos-error? ty)
          (raise-prologos-error ty))
        (list 'output (pp-expr (zonk-final ty))))]
+
+    ;; (expand datum) — show preparse expansion
+    [(list 'expand datum)
+     (list 'output (format "~s" (preparse-expand-single datum)))]
+
+    ;; (parse surf) — show parsed surface AST
+    [(list 'parse surf-ast)
+     (list 'output (format "~s" surf-ast))]
+
+    ;; (elaborate expr) — show elaborated core AST
+    [(list 'elaborate expr)
+     (list 'output (pp-expr (zonk-final expr)))]
 
     [_ (raise-prologos-error
         (prologos-error srcloc-unknown

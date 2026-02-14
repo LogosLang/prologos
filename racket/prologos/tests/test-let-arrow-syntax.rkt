@@ -237,3 +237,40 @@
   (define results
     (run "(def id : Nat -> Nat := (fn [x <Nat>] x))\n(eval (id (inc zero)))"))
   (check-equal? (last results) "1 : Nat"))
+
+;; ========================================
+;; 11. expand / parse / elaborate inspection commands
+;; ========================================
+
+(test-case "e2e: expand shows def := expansion"
+  (check-equal?
+   (run-first "(expand (def one := (inc zero)))")
+   "(def one (inc zero))"))
+
+(test-case "e2e: expand shows let expansion"
+  (check-equal?
+   (run-first "(expand (let x (inc zero) x))")
+   "((fn (x : _) x) (inc zero))"))
+
+(test-case "e2e: expand passes through plain expression"
+  (check-equal?
+   (run-first "(expand (inc zero))")
+   "(inc zero)"))
+
+(test-case "e2e: parse shows surface AST"
+  (check-true
+   (string-contains? (run-first "(parse zero)") "surf-zero")))
+
+(test-case "e2e: parse shows surface AST for application"
+  (check-true
+   (string-contains? (run-first "(parse (inc zero))") "surf-suc")))
+
+(test-case "e2e: elaborate shows core AST for inc zero"
+  (check-equal?
+   (run-first "(elaborate (inc zero))")
+   "1"))
+
+(test-case "e2e: elaborate shows core AST for zero"
+  (check-equal?
+   (run-first "(elaborate zero)")
+   "zero"))

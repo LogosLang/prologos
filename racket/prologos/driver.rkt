@@ -145,6 +145,18 @@
                      (if (prologos-error? ty) ty
                          (pp-expr (zonk-final ty))))]
 
+                  ;; (expand datum) — show preparse expansion
+                  [(list 'expand datum)
+                   (format "~s" (preparse-expand-single datum))]
+
+                  ;; (parse surf) — show parsed surface AST
+                  [(list 'parse surf)
+                   (format "~s" surf)]
+
+                  ;; (elaborate expr) — show elaborated core AST
+                  [(list 'elaborate expr)
+                   (pp-expr (zonk-final expr))]
+
                   [_ (prologos-error srcloc-unknown (format "Unknown command: ~a" elab-result))])))])))
 
 ;; Process a def command with split elaboration for recursive support.
