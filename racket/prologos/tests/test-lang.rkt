@@ -269,3 +269,19 @@
               "should define apply-fn")
   (check-true (string-contains? output "inc2")
               "should define inc2"))
+
+(test-case "spec-ws.rkt: spec form with WS mode"
+  (define output (run-prologos-file "spec-ws.rkt"))
+  ;; add with spec: Nat Nat -> Nat
+  (check-true (string-contains? output "add : Nat Nat -> Nat defined.")
+              "spec'd add should have uncurried arrow type")
+  (check-true (string-contains? output "3 : Nat")
+              "add 1 2 = 3")
+  ;; inc2 with docstring spec
+  (check-true (string-contains? output "inc2 : Nat -> Nat defined.")
+              "spec'd inc2 should have Nat -> Nat type")
+  ;; HOF apply-fn
+  (check-true (string-contains? output "apply-fn : [Nat -> Nat] Nat -> Nat defined.")
+              "spec'd apply-fn should wrap HOF domain in brackets")
+  (check-true (string-contains? output "2 : Nat")
+              "apply-fn inc2 zero = 2"))

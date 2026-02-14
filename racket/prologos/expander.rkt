@@ -147,7 +147,8 @@
   (syntax-parse stx
     [(_ form ...)
      (parameterize ([current-global-env (hasheq)]
-                    [current-preparse-registry (current-preparse-registry)])
+                    [current-preparse-registry (current-preparse-registry)]
+                    [current-spec-store (current-spec-store)])
        ;; Pre-parse macro expansion: expand defmacro/let/do/if/deftype
        (define expanded-stxs (preparse-expand-all (syntax->list #'(form ...))))
        (define output-exprs

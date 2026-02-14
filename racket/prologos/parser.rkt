@@ -29,9 +29,9 @@
     Posit8 posit8 p8+ p8- p8* p8/ p8-neg p8-abs p8-sqrt p8-lt p8-le p8-from-nat p8-if-nar
     def defn check eval infer match
     ;; Pre-parse macros — should be expanded before reaching parser
-    defmacro let do if deftype data
+    defmacro let do if deftype data spec
     ;; Private-suffix forms — consumed in preparse, rewritten to base form
-    defn- def- data- deftype- defmacro-
+    defn- def- data- deftype- defmacro- spec-
     ;; Pre-parse namespace directives — consumed before reaching parser
     ns require provide))
 

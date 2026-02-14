@@ -446,6 +446,7 @@
      (define mod-ctor-reg #f)
      (define mod-type-meta #f)
      (define mod-multi-defn-reg #f)
+     (define mod-spec-store #f)
 
      (parameterize ([current-global-env (hasheq)]
                     [current-ns-context #f]
@@ -458,6 +459,7 @@
                     [current-ctor-registry (current-ctor-registry)]
                     [current-type-meta (current-type-meta)]
                     [current-multi-defn-registry (current-multi-defn-registry)]
+                    [current-spec-store (current-spec-store)]
                     [current-loading-set (set-add (current-loading-set) ns-sym)])
        ;; Read and process the file
        ;; Use WS reader for .prologos files, sexp reader otherwise
@@ -483,7 +485,8 @@
        (set! mod-preparse-reg (current-preparse-registry))
        (set! mod-ctor-reg (current-ctor-registry))
        (set! mod-type-meta (current-type-meta))
-       (set! mod-multi-defn-reg (current-multi-defn-registry)))
+       (set! mod-multi-defn-reg (current-multi-defn-registry))
+       (set! mod-spec-store (current-spec-store)))
 
      ;; Propagate preparse registry changes (deftype/defmacro) to the caller.
      ;; This ensures type aliases and macros defined in loaded modules are
@@ -496,6 +499,9 @@
 
      ;; Propagate multi-defn dispatch tables to the caller.
      (current-multi-defn-registry mod-multi-defn-reg)
+
+     ;; Propagate spec store to the caller.
+     (current-spec-store mod-spec-store)
 
      ;; 5. Build module-info
      ;; Export determination priority:

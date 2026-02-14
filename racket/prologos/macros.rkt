@@ -58,7 +58,18 @@
          ;; Shared
          extract-pi-binders
          ;; Sibling let merging (for testing)
-         merge-sibling-lets)
+         merge-sibling-lets
+         ;; Spec store
+         current-spec-store
+         spec-entry
+         spec-entry?
+         spec-entry-type-datums
+         spec-entry-docstring
+         spec-entry-multi?
+         spec-entry-srcloc
+         register-spec!
+         lookup-spec
+         process-spec)
 
 ;; ================================================================
 ;; LAYER 1: PRE-PARSE MACRO SYSTEM
@@ -79,6 +90,27 @@
 (define (register-preparse-macro! name entry)
   (current-preparse-registry
    (hash-set (current-preparse-registry) name entry)))
+
+;; ========================================
+;; Spec store: type signatures for named definitions
+;; ========================================
+
+;; A spec entry: stores a type specification for a named definition.
+;; type-datums: list of type-token-lists. Single-arity: ((Nat Nat -> Nat)).
+;;              Multi-arity: ((Nat Nat -> Nat) (Nat -> Nat)).
+;; docstring: (or/c string? #f)
+;; multi?: #t if declared with | branches
+;; srcloc: source location of the spec form
+(struct spec-entry (type-datums docstring multi? srcloc) #:transparent)
+
+;; Spec store: symbol → spec-entry
+(define current-spec-store (make-parameter (hasheq)))
+
+(define (register-spec! name entry)
+  (current-spec-store (hash-set (current-spec-store) name entry)))
+
+(define (lookup-spec name)
+  (hash-ref (current-spec-store) name #f))
 
 ;; ========================================
 ;; Pattern variables: symbols starting with $
@@ -422,6 +454,7 @@
     [(data-)    'data]
     [(deftype-) 'deftype]
     [(defmacro-) 'defmacro]
+    [(spec-)    'spec]
     [else #f]))
 
 ;; Helper: extract the defined name(s) from a top-level form datum.
@@ -482,6 +515,9 @@
                 [(eq? base 'deftype)
                  (process-deftype rewritten)
                  acc]
+                [(eq? base 'spec)
+                 (process-spec rewritten)
+                 acc]
                 [(eq? base 'data)
                  (define defs (process-data rewritten))
                  (define new-stxs
@@ -501,9 +537,13 @@
                                       stx)
                        ;; Fallback: pure datum
                        (datum->syntax #f rewritten stx)))
-                 (define expanded (preparse-expand-form (syntax->datum new-stx)))
-                 (if (equal? expanded rewritten)
-                     (cons new-stx acc)
+                 ;; Inject spec type into bare-param defn- if matching spec exists
+                 (define maybe-injected
+                   (let ([d (syntax->datum new-stx)])
+                     (if (eq? base 'defn) (maybe-inject-spec d) d)))
+                 (define expanded (preparse-expand-form maybe-injected))
+                 (if (equal? expanded maybe-injected)
+                     (cons (datum->syntax #f maybe-injected stx) acc)
                      (cons (datum->syntax #f expanded stx) acc))]))]
 
         ;; ---- Public defmacro — register, consume, AND auto-export ----
@@ -515,6 +555,12 @@
         [(and (pair? datum) (eq? head 'deftype))
          (process-deftype datum)
          (auto-export-names! (extract-defined-name datum 'deftype))
+         acc]
+        ;; ---- Public spec — register type spec, consume, AND auto-export ----
+        [(and (pair? datum) (eq? head 'spec))
+         (process-spec datum)
+         (when (and (list? datum) (>= (length datum) 2) (symbol? (cadr datum)))
+           (auto-export-name! (cadr datum)))
          acc]
         ;; ---- Public data — generate defs, auto-export type + constructors ----
         [(and (pair? datum) (eq? head 'data))
@@ -531,9 +577,14 @@
         ;; ---- Public defn/def — auto-export the name ----
         [(and (pair? datum) (memq head '(defn def)))
          (auto-export-names! (extract-defined-name datum head))
-         (define expanded (preparse-expand-form datum))
-         (if (equal? expanded datum)
-             (cons stx acc)
+         ;; Inject spec type into bare-param defn if a matching spec exists
+         (define maybe-injected
+           (if (eq? head 'defn) (maybe-inject-spec datum) datum))
+         (define expanded (preparse-expand-form maybe-injected))
+         (if (equal? expanded maybe-injected)
+             (if (equal? maybe-injected datum)
+                 (cons stx acc)
+                 (cons (datum->syntax #f maybe-injected stx) acc))
              (cons (datum->syntax #f expanded stx) acc))]
         ;; Regular form — expand
         [else
@@ -596,6 +647,264 @@
      (register-preparse-macro! macro-name (preparse-macro macro-name pattern body))]
     [else
      (error 'deftype "deftype: expected name or (name params...) pattern")]))
+
+;; ========================================
+;; process-spec: register a type specification
+;; ========================================
+;; Syntax variants:
+;;   (spec name type-atoms...)                     — single arity
+;;   (spec name "docstring" type-atoms...)          — with docstring
+;;   (spec name ($pipe type-atoms...) ($pipe ...))  — multi-arity
+;;   (spec name "docstring" ($pipe ...) ($pipe ...)) — multi with docstring
+(define (process-spec datum)
+  (unless (and (list? datum) (>= (length datum) 3))
+    (error 'spec "spec requires: (spec name type-signature)"))
+  (define name (cadr datum))
+  (unless (symbol? name)
+    (error 'spec "spec: name must be a symbol, got ~a" name))
+  (define rest (cddr datum))
+  ;; Check for optional docstring (first element after name is a string)
+  (define-values (docstring body-tokens)
+    (if (and (not (null? rest)) (string? (car rest)))
+        (values (car rest) (cdr rest))
+        (values #f rest)))
+  (when (null? body-tokens)
+    (error 'spec "spec ~a: missing type signature" name))
+  ;; Check for multi-arity: body-tokens contain $pipe forms
+  (define has-pipes?
+    (ormap (lambda (t) (or (eq? t '$pipe)
+                           (and (pair? t) (eq? (car t) '$pipe))))
+           body-tokens))
+  (cond
+    [has-pipes?
+     ;; Split on $pipe to get branches
+     (define branches (split-on-pipe body-tokens))
+     (register-spec! name (spec-entry branches docstring #t srcloc-unknown))]
+    [else
+     ;; Single-arity: the entire body-tokens is the type datum
+     (register-spec! name (spec-entry (list body-tokens) docstring #f srcloc-unknown))]))
+
+;; Split a token list on '$pipe boundaries.
+;; Handles two forms:
+;;   Flat: ($pipe A B -> C $pipe D E -> F) → ((A B -> C) (D E -> F))
+;;   Grouped: (($pipe A B -> C) ($pipe D E -> F)) → ((A B -> C) (D E -> F))
+;; Leading $pipe is consumed.
+(define (split-on-pipe tokens)
+  (cond
+    ;; Grouped form: each element is ($pipe content...)
+    [(and (pair? tokens)
+          (pair? (car tokens))
+          (eq? (car (car tokens)) '$pipe))
+     (map cdr tokens)]
+    ;; Flat form: $pipe separates items
+    [else
+     (define stripped
+       (if (and (pair? tokens) (eq? (car tokens) '$pipe))
+           (cdr tokens)
+           tokens))
+     (let loop ([remaining stripped] [current '()] [result '()])
+       (cond
+         [(null? remaining)
+          (reverse (if (null? current) result (cons (reverse current) result)))]
+         [(eq? (car remaining) '$pipe)
+          (loop (cdr remaining) '() (cons (reverse current) result))]
+         [else
+          (loop (cdr remaining) (cons (car remaining) current) result)]))]))
+
+;; ========================================
+;; Spec injection into defn
+;; ========================================
+;; When a defn has bare params (no type annotations) and a matching spec
+;; exists, inject the spec type into the defn datum so the existing parser
+;; handles it as a typed defn.
+
+;; Check if a parameter list contains only bare symbols (no type annotations).
+(define (spec-bare-param-list? lst)
+  (and (list? lst) (not (null? lst))
+       (andmap (lambda (x)
+                 (and (symbol? x)
+                      (not (memq x '(: :0 :1 :w)))))
+               lst)
+       (not (ormap (lambda (x) (and (pair? x) (eq? (car x) '$angle-type))) lst))))
+
+;; Check if defn rest (after name) has any type annotation indicators.
+;; rest = (param-bracket possibly-more...)
+(define (defn-has-type-annotation? rest)
+  (and (pair? rest)
+       (let ([params (car rest)])
+         (or
+          ;; Params contain type markers
+          (and (list? params)
+               (ormap (lambda (x)
+                        (or (and (pair? x) (eq? (car x) '$angle-type))
+                            (eq? x ':)
+                            (memq x '(:0 :1 :w))))
+                      params))
+          ;; Has angle-type or colon after params (return type)
+          (and (pair? (cdr rest))
+               (let ([after (cadr rest)])
+                 (or (and (pair? after) (eq? (car after) '$angle-type))
+                     (eq? after ':))))))))
+
+;; Check if rest contains $pipe clauses (multi-body defn at datum level)
+(define (defn-has-pipes? rest)
+  (ormap (lambda (x)
+           (and (pair? x) (eq? (car x) '$pipe)))
+         rest))
+
+;; Decompose spec type tokens into parameter types and return type.
+;; Uses the Prologos uncurried arrow convention:
+;;   A B -> C  means  A -> B -> C  (each atom in non-last segment = separate param type)
+;;   [A -> B] C -> D  means  (A->B) -> C -> D  (sub-lists are grouped param types)
+;;   (n : Nat) A -> Vec n A  means  Pi(n:Nat) -> A -> Vec n A  (sub-list binder)
+;;
+;; Returns (values param-types return-type-tokens)
+;; param-types: a list of param type atoms/lists (one per expected param)
+;; return-type-tokens: the tokens for the return type
+(define (decompose-spec-type tokens n-params name)
+  (define segments (split-on-arrow-datum tokens))
+  (cond
+    ;; No arrows: relation type (or zero-param function)
+    [(= (length segments) 1)
+     (if (= n-params 0)
+         (values '() tokens)
+         (error 'spec "spec type for ~a has no arrow but defn has ~a params"
+                name n-params))]
+    [else
+     ;; Has arrows: non-last segments = param types, last = return type
+     (define non-last (drop-right segments 1))
+     (define last-seg (last segments))
+     ;; Flatten non-last segments: each element is a param type
+     ;; Elements that are sub-lists (from [...]) stay as single param types
+     (define flat-params (append-map (lambda (x) x) non-last))
+     (cond
+       [(= (length flat-params) n-params)
+        (values flat-params last-seg)]
+       [(> (length flat-params) n-params)
+        ;; More type params than defn params — extra become part of return type
+        ;; This happens for curried returns: spec f Nat -> Nat -> Nat, defn f [x] ...
+        (define actual (take flat-params n-params))
+        (define extra (drop flat-params n-params))
+        (values actual (append extra (list '->) last-seg))]
+       [else
+        (error 'spec "spec ~a: type has ~a type parameters but defn has ~a params"
+               name (length flat-params) n-params)])]))
+
+;; Convert a spec param-type element to an $angle-type annotation.
+;; - plain atom Nat → ($angle-type Nat)
+;; - grouped list [List A] → ($angle-type List A)
+;; - dependent binder (n : Nat) → just Nat (the type part, binder name ignored)
+(define (param-type->angle-type ptype)
+  (cond
+    ;; Dependent binder: (name : type-atoms...)
+    [(and (list? ptype) (>= (length ptype) 3) (eq? (cadr ptype) ':))
+     `($angle-type ,@(cddr ptype))]
+    ;; Grouped type: sub-list like (-> Nat Nat) or (List Nat)
+    ;; Wrap as a single element so parse-angle-type dispatches to parse-datum
+    ;; rather than parse-infix-type (which would mis-split on ->)
+    [(list? ptype)
+     `($angle-type ,ptype)]
+    ;; Plain atom
+    [else
+     `($angle-type ,ptype)]))
+
+;; Inject a spec type into a single-arity defn datum.
+;; datum: (defn name [x y] body)  OR  (defn name [x y] body1 body2 ...)
+;; spec-tokens: (Nat Nat -> Nat)
+;; Returns: (defn name [x ($angle-type Nat) y ($angle-type Nat)] ($angle-type Nat) body)
+(define (inject-spec-into-defn datum spec-tokens)
+  (define name (cadr datum))
+  (define rest (cddr datum))  ;; ([x y] body ...)
+  (define param-bracket (car rest))
+  (define body-forms (cdr rest))  ;; could be multiple body forms
+  (define param-names
+    (if (list? param-bracket) param-bracket
+        (error 'spec "Expected parameter list, got ~a" param-bracket)))
+  ;; Decompose spec type into param types + return type
+  (define-values (param-types return-type-tokens)
+    (decompose-spec-type spec-tokens (length param-names) name))
+  ;; Build typed bracket: [x ($angle-type T1) y ($angle-type T2)]
+  (define typed-bracket
+    (apply append
+           (for/list ([pname (in-list param-names)]
+                      [ptype (in-list param-types)])
+             (list pname (param-type->angle-type ptype)))))
+  ;; Build return type angle form
+  (define ret-angle `($angle-type ,@return-type-tokens))
+  ;; Assemble: (defn name [typed-bracket...] ($angle-type ret) body-forms...)
+  `(defn ,name ,typed-bracket ,ret-angle ,@body-forms))
+
+;; Inject spec types into a multi-arity defn datum.
+;; Each $pipe clause gets its corresponding spec branch type.
+(define (inject-spec-into-defn-multi datum name spec-branches)
+  (define rest (cddr datum))  ;; everything after name
+  ;; Extract pipe clauses and any docstring
+  (define docstring
+    (and (pair? rest) (string? (car rest)) (car rest)))
+  (define clauses
+    (filter (lambda (x) (and (pair? x) (eq? (car x) '$pipe)))
+            rest))
+  (unless (= (length clauses) (length spec-branches))
+    (error 'spec "spec ~a has ~a branches but defn has ~a clauses"
+           name (length spec-branches) (length clauses)))
+  ;; Rewrite each clause
+  (define rewritten-clauses
+    (for/list ([clause (in-list clauses)]
+               [branch-tokens (in-list spec-branches)])
+      ;; clause = ($pipe [params...] body ...)
+      (define clause-body (cdr clause))  ;; everything after $pipe
+      ;; Build a temporary defn datum for injection
+      (define temp-datum `(defn ,name ,@clause-body))
+      (define injected (inject-spec-into-defn temp-datum branch-tokens))
+      ;; Re-wrap as $pipe clause: ($pipe typed-bracket ret body...)
+      `($pipe ,@(cddr injected))))
+  ;; Reconstruct the defn with rewritten clauses
+  (if docstring
+      `(defn ,name ,docstring ,@rewritten-clauses)
+      `(defn ,name ,@rewritten-clauses)))
+
+;; Top-level dispatcher: check if a defn should have spec type injected.
+;; Returns the original datum unchanged if no spec applies.
+(define (maybe-inject-spec datum)
+  (define name (and (list? datum) (>= (length datum) 3) (cadr datum)))
+  (cond
+    [(not (symbol? name)) datum]
+    [else
+     (define rest (cddr datum))
+     (define spec (lookup-spec name))
+     (cond
+       [(not spec) datum]
+       ;; Multi-body defn with pipes
+       [(defn-has-pipes? rest)
+        (cond
+          [(defn-has-type-annotation? rest)
+           ;; Error: defn has inline types AND spec
+           ;; But multi-body pipes may have types per-clause; check first clause
+           ;; For now, attempt injection — if clauses have bare params, inject
+           ;; If not, error.
+           ;; Actually, for multi-body, check each clause individually
+           ;; For simplicity: if any clause has type annotations, error
+           (error 'spec "defn ~a has both a spec and inline type annotations" name)]
+          [(not (spec-entry-multi? spec))
+           (error 'spec "spec for ~a is single-arity but defn ~a has multiple clauses"
+                  name name)]
+          [else
+           (inject-spec-into-defn-multi datum name (spec-entry-type-datums spec))])]
+       ;; Single-body defn
+       [(and (pair? rest) (list? (car rest)) (spec-bare-param-list? (car rest))
+             (not (defn-has-type-annotation? rest)))
+        ;; Bare params with no type → inject spec
+        (cond
+          [(spec-entry-multi? spec)
+           (error 'spec "spec for ~a is multi-arity but defn ~a is single-body"
+                  name name)]
+          [else
+           (inject-spec-into-defn datum (car (spec-entry-type-datums spec)))])]
+       ;; Defn has inline types — conflict with spec
+       [(defn-has-type-annotation? rest)
+        (error 'spec "defn ~a has both a spec and inline type annotations" name)]
+       ;; No injection needed (e.g., no params bracket)
+       [else datum])]))
 
 ;; ========================================
 ;; Built-in pre-parse macros
