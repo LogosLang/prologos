@@ -218,3 +218,22 @@
   (check-equal?
    (run-first "(eval (let ([x (inc zero)] [y : Nat (inc x)]) (inc y)))")
    "3 : Nat"))
+
+;; ========================================
+;; 10. def := assignment syntax
+;; ========================================
+
+(test-case "e2e: def := with inferred type"
+  (define results
+    (run "(def one := (inc zero))\n(eval one)"))
+  (check-equal? (last results) "1 : Nat"))
+
+(test-case "e2e: def := with type annotation"
+  (define results
+    (run "(def one : Nat := (inc zero))\n(eval one)"))
+  (check-equal? (last results) "1 : Nat"))
+
+(test-case "e2e: def := with multi-token type"
+  (define results
+    (run "(def id : Nat -> Nat := (fn [x <Nat>] x))\n(eval (id (inc zero)))"))
+  (check-equal? (last results) "1 : Nat"))

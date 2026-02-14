@@ -577,9 +577,17 @@
         ;; ---- Public defn/def — auto-export the name ----
         [(and (pair? datum) (memq head '(defn def)))
          (auto-export-names! (extract-defined-name datum head))
-         ;; Inject spec type into bare-param defn if a matching spec exists
+         ;; Step 1: expand := syntax for def (before spec injection)
+         (define pre-datum
+           (if (and (eq? head 'def) (memq ':= datum))
+               (expand-def-assign datum)
+               datum))
+         ;; Step 2: inject spec type (defn or def)
          (define maybe-injected
-           (if (eq? head 'defn) (maybe-inject-spec datum) datum))
+           (cond
+             [(eq? (car pre-datum) 'defn) (maybe-inject-spec pre-datum)]
+             [(eq? (car pre-datum) 'def)  (maybe-inject-spec-def pre-datum)]
+             [else pre-datum]))
          (define expanded (preparse-expand-form maybe-injected))
          (if (equal? expanded maybe-injected)
              (if (equal? maybe-injected datum)
@@ -910,6 +918,62 @@
         (error 'spec "defn ~a has both a spec and inline type annotations" name)]
        ;; No injection needed (e.g., no params bracket)
        [else datum])]))
+
+;; Inject a spec type into a def datum.
+;; datum: (def name body)
+;; spec-tokens: (Nat) or (Nat -> Nat)
+;; Returns: (def name ($angle-type spec-tokens...) body)
+(define (inject-spec-into-def datum spec-tokens)
+  (define name (cadr datum))
+  (define rest (cddr datum))
+  `(def ,name ($angle-type ,@spec-tokens) ,@rest))
+
+;; Top-level dispatcher: check if a def should have spec type injected.
+;; Returns the original datum unchanged if no spec applies.
+(define (maybe-inject-spec-def datum)
+  (define name (and (list? datum) (>= (length datum) 2) (cadr datum)))
+  (cond
+    [(not (symbol? name)) datum]
+    [else
+     (define spec (lookup-spec name))
+     (cond
+       [(not spec) datum]
+       [(spec-entry-multi? spec)
+        (error 'spec "spec for ~a is multi-arity but used with def" name)]
+       ;; Check if def already has a type annotation (angle-type or colon)
+       [(and (>= (length datum) 4)
+             (let ([third (caddr datum)])
+               (or (and (pair? third) (eq? (car third) '$angle-type))
+                   (eq? third ':))))
+        (error 'spec "def ~a has both a spec and inline type annotation" name)]
+       [else
+        (inject-spec-into-def datum (car (spec-entry-type-datums spec)))])]))
+
+;; Expand def := assignment syntax into standard def form.
+;; (def name := value) → (def name value)
+;; (def name : T1 T2 ... := value) → (def name ($angle-type T1 T2 ...) value)
+(define (expand-def-assign datum)
+  (define name (cadr datum))
+  (define rest (cddr datum))  ; tokens after name
+  (define assign-pos (index-of-symbol ':= rest))
+  (cond
+    [(not assign-pos) datum]
+    [else
+     (define before (take rest assign-pos))
+     (define after (drop rest (+ assign-pos 1)))
+     (unless (= (length after) 1)
+       (error 'def "def: expected exactly one value after :=, got ~a" after))
+     (define value (car after))
+     (cond
+       ;; No type annotation: (def name := value) → (def name value)
+       [(null? before)
+        `(def ,name ,value)]
+       ;; Type annotation with colon: (def name : T1 T2 ... := value)
+       [(and (>= (length before) 2) (eq? (car before) ':))
+        (define type-tokens (cdr before))
+        `(def ,name ($angle-type ,@type-tokens) ,value)]
+       [else
+        (error 'def "def: unexpected tokens before :=: ~a" before)])]))
 
 ;; ========================================
 ;; Built-in pre-parse macros

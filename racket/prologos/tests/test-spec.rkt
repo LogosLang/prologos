@@ -340,3 +340,38 @@
      (run (string-append
            "(spec id A -> A)\n"
            "(defn id {A} [x : A] : A x)")))))
+
+;; ========================================
+;; spec + def
+;; ========================================
+
+(test-case "spec: def with spec type (simple value)"
+  (define results
+    (run "(spec one Nat)\n(def one := (inc zero))\n(eval one)"))
+  (check-equal? (last results) "1 : Nat"))
+
+(test-case "spec: def with spec function type"
+  (define results
+    (run (string-append
+          "(spec double Nat -> Nat)\n"
+          "(def double := (fn [x] (inc (inc x))))\n"
+          "(eval (double (inc zero)))")))
+  (check-equal? (last results) "3 : Nat"))
+
+(test-case "spec: def with spec type, no :="
+  ;; spec + def without :=  (bare def name body)
+  (define results
+    (run "(spec two Nat)\n(def two (inc (inc zero)))\n(eval two)"))
+  (check-equal? (last results) "2 : Nat"))
+
+(test-case "spec: def with spec AND inline type errors"
+  (check-exn
+   exn:fail?
+   (lambda ()
+     (run "(spec foo Nat)\n(def foo <Nat> zero)"))))
+
+(test-case "spec: multi-arity spec with def errors"
+  (check-exn
+   exn:fail?
+   (lambda ()
+     (run "(spec foo ($pipe Nat -> Nat) ($pipe Bool -> Bool))\n(def foo zero)"))))
