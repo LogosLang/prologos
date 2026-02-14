@@ -983,13 +983,19 @@
             (and (pair? second) (eq? (car second) '$angle-type))))
      (define parsed (parse-let-flat-triples bindings-datum))
      (let-bindings->nested-fn parsed body)]
-    ;; Nested format: ([name : T value] ...)
+    ;; Nested format: ([name : T value] ...) or ([name value] ...) with inferred type
     [else
      (define parsed
        (for/list ([binding (in-list bindings-datum)])
-         (unless (and (list? binding) (= (length binding) 4))
-           (error 'let "let: each binding must be (name : type value), got ~a" binding))
-         (list (car binding) (caddr binding) (cadddr binding))))
+         (cond
+           [(and (list? binding) (= (length binding) 4))
+            ;; (name : type value)
+            (list (car binding) (caddr binding) (cadddr binding))]
+           [(and (list? binding) (= (length binding) 2) (symbol? (car binding)))
+            ;; (name value) — type inferred via hole
+            (list (car binding) '_ (cadr binding))]
+           [else
+            (error 'let "let: each binding must be (name value) or (name : type value), got ~a" binding)])))
      (let-bindings->nested-fn parsed body)]))
 
 ;; Expand inline := let: rest = (name [: type-atoms...] := value body)

@@ -75,3 +75,61 @@ eval [double-all [list/range [inc [inc [inc zero]]]]]
 eval [sum [list/range [inc [inc [inc [inc [inc zero]]]]]]]
 eval [dot-product [cons [inc zero] [cons [inc [inc zero]] nil]] [cons [inc [inc [inc zero]]] [cons [inc [inc [inc [inc zero]]]] nil]]]
 eval [apply-twice nat/double [inc [inc zero]]]
+
+
+
+;; let xs : [List Nat] := [range 10]
+;;   map [add 1 _] xs
+
+
+
+;; let [xs [range 10]]
+;;   map [add 1 _] xs
+
+
+
+
+;; map nat/double [range 10]
+
+
+
+
+;; let [xs : List Nat := range [inc 10]]
+;;   map [add 10 _] xs
+
+
+
+;; let [xs : [List Nat] := [range 10]]
+;;   map [add 1 _] xs
+
+
+
+
+
+
+;; spec should be syntax highlight 😭
+;; and the type signature
+;; <- comment string... for docs... at some point
+
+
+
+
+;; `spec` allows separate type signature
+spec squares-up-to  Nat -> [List Nat]
+defn squares-up-to
+  "Here's a docstring for '[0²..n²]"
+  [n]
+  zip-with mult [list/range n] [list/range n]
+
+squares-up-to [inc  5]
+
+
+
+spec compose
+  "Compose two functions. (g ∘ f)(x) = g(f(x))"
+  [B -> C] [A -> B] -> [A -> C]
+def compose [_ _ _]
+
+
+
+

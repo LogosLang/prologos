@@ -39,7 +39,7 @@
 
 (defconst prologos-font-lock-keywords-1
   `(;; Top-level definition forms
-    (,(regexp-opt '("def" "defn" "defmacro" "deftype" "data"
+    (,(regexp-opt '("def" "defn" "defmacro" "deftype" "data" "spec"
                     "ns" "require" "provide")
                   'symbols)
      . font-lock-keyword-face)
@@ -104,6 +104,9 @@
      ("\\$[a-zA-Z_][a-zA-Z0-9_]*" . font-lock-variable-name-face)
      ;; Definition name after def/defn/deftype/defmacro (matches both ( and [ delimiters)
      ("[(\\[]def\\(?:n\\|type\\|macro\\)?\\s-+\\([a-zA-Z_][a-zA-Z0-9_!?*-]*\\)"
+      (1 font-lock-function-name-face))
+     ;; Spec name (WS mode: bare `spec name ...`, no parens)
+     ("\\bspec\\s-+\\([a-zA-Z_][a-zA-Z0-9_!?*-]*\\)"
       (1 font-lock-function-name-face))
      ;; Data type name
      ("[(\\[]data\\s-+(?\\([A-Z][a-zA-Z0-9_]*\\)"

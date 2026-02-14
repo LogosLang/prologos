@@ -199,3 +199,22 @@
   (check-equal?
    (run-first "(eval (let x <Nat> (inc zero) x))")
    "1 : Nat"))
+
+;; ========================================
+;; 9. Let bracket binding with inferred type
+;; ========================================
+
+(test-case "e2e: let bracket binding with inferred type (single)"
+  (check-equal?
+   (run-first "(eval (let ([x (inc zero)]) (inc x)))")
+   "2 : Nat"))
+
+(test-case "e2e: let bracket binding with inferred type (multiple)"
+  (check-equal?
+   (run-first "(eval (let ([x (inc zero)] [y (inc x)]) (inc y)))")
+   "3 : Nat"))
+
+(test-case "e2e: let bracket binding mixed inferred and annotated"
+  (check-equal?
+   (run-first "(eval (let ([x (inc zero)] [y : Nat (inc x)]) (inc y)))")
+   "3 : Nat"))

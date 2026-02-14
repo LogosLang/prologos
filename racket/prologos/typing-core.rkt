@@ -127,13 +127,24 @@
        ;; The lambda's domain gives us the argument type, and we infer the body
        ;; type in the extended context. This supports let-expansion and similar patterns.
        [(expr-lam m dom body)
-        (if (and (is-type ctx dom)
-                 (check ctx e2 dom))
-            (let ([body-ty (infer (ctx-extend ctx dom m) body)])
-              (if (equal? body-ty (expr-error))
-                  (expr-error)
-                  (subst 0 e2 body-ty)))
-            (expr-error))]
+        (cond
+          ;; Hole domain: infer arg type and use as domain (let type inference)
+          [(expr-hole? dom)
+           (let ([arg-ty (infer ctx e2)])
+             (if (equal? arg-ty (expr-error))
+                 (expr-error)
+                 (let ([body-ty (infer (ctx-extend ctx arg-ty m) body)])
+                   (if (equal? body-ty (expr-error))
+                       (expr-error)
+                       (subst 0 e2 body-ty)))))]
+          ;; Explicit domain: check arg against it
+          [(and (is-type ctx dom)
+                (check ctx e2 dom))
+           (let ([body-ty (infer (ctx-extend ctx dom m) body)])
+             (if (equal? body-ty (expr-error))
+                 (expr-error)
+                 (subst 0 e2 body-ty)))]
+          [else (expr-error)])]
        ;; General case: infer function type, check argument
        [_
         (let ([t1 (whnf (infer ctx e1))])
