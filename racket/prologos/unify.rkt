@@ -33,7 +33,9 @@
 
 (provide unify unify-ok? occurs?
          ;; Sprint 2b exports
-         decompose-meta-app pattern-check invert-args)
+         decompose-meta-app pattern-check invert-args
+         ;; Union type helpers
+         flatten-union)
 
 ;; ========================================
 ;; Sprint 5: Three-valued result helper
@@ -232,6 +234,13 @@
       [(and (expr-Type? a) (expr-Type? b))
        (unify-level (expr-Type-level a) (expr-Type-level b))]
 
+      ;; Union vs Union: flatten both, sort, and unify component-wise.
+      ;; Handles ACI (associativity, commutativity, idempotence).
+      [(and (expr-union? a) (expr-union? b))
+       (let ([cs-a (flatten-union a)]
+             [cs-b (flatten-union b)])
+         (unify-union-components ctx cs-a cs-b))]
+
       ;; ann: should not survive WHNF, but handle defensively
       [(expr-ann? a) (unify ctx (expr-ann-term a) b)]
       [(expr-ann? b) (unify ctx a (expr-ann-term b))]
@@ -240,6 +249,65 @@
       ;; This handles bvar, fvar, zero, true, false, refl, Nat, Bool,
       ;; natrec, J, boolrec, and any remaining cases
       [else (conv-nf a b)])))
+
+;; ========================================
+;; Union type unification helpers
+;; ========================================
+
+;; Flatten a (possibly nested) expr-union into a list of non-union components.
+;; E.g., (union (union A B) C) → (A B C)
+(define (flatten-union e)
+  (match e
+    [(expr-union l r)
+     (append (flatten-union l) (flatten-union r))]
+    [_ (list e)]))
+
+;; Canonical key for sorting union components.
+;; Uses pretty-print-like classification for deterministic ordering.
+(define (union-sort-key e)
+  (match e
+    [(expr-Nat) "0:Nat"]
+    [(expr-Bool) "0:Bool"]
+    [(expr-Unit) "0:Unit"]
+    [(expr-Posit8) "0:Posit8"]
+    [(expr-Type l) (format "0:Type~a" l)]
+    [(expr-fvar name) (format "1:~a" name)]
+    [(expr-bvar idx) (format "2:~a" idx)]
+    [(expr-Pi _ _ _) "3:Pi"]
+    [(expr-Sigma _ _) "3:Sigma"]
+    [(expr-Eq _ _ _) "3:Eq"]
+    [(expr-Vec _ _) "3:Vec"]
+    [(expr-Fin _) "3:Fin"]
+    [(expr-app _ _) "4:app"]
+    [(expr-meta id) (format "5:?~a" id)]
+    [_ "9:other"]))
+
+;; Remove duplicate components (idempotence: A | A ≡ A).
+;; Uses structural equality (equal?) after sorting.
+(define (dedup-union-components cs)
+  (if (null? cs) '()
+      (let loop ([prev (car cs)] [rest (cdr cs)] [acc (list (car cs))])
+        (cond
+          [(null? rest) (reverse acc)]
+          [(equal? prev (car rest))
+           (loop prev (cdr rest) acc)]
+          [else
+           (loop (car rest) (cdr rest) (cons (car rest) acc))]))))
+
+;; Unify two lists of union components.
+;; After flattening, sorting, and dedup, the lists should have the same
+;; length and each pair must unify.
+(define (unify-union-components ctx cs-a cs-b)
+  (let ([sorted-a (dedup-union-components
+                    (sort cs-a string<? #:key union-sort-key))]
+        [sorted-b (dedup-union-components
+                    (sort cs-b string<? #:key union-sort-key))])
+    (cond
+      [(not (= (length sorted-a) (length sorted-b))) #f]
+      [else
+       (for/and ([a (in-list sorted-a)]
+                 [b (in-list sorted-b)])
+         (unify ctx a b))])))
 
 ;; ========================================
 ;; Sprint 2b: Applied Meta (Flex-App) Support

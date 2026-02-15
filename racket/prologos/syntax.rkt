@@ -70,6 +70,8 @@
  ;; Reduce (ML-style pattern matching — desugared in type checker)
  (struct-out expr-reduce)
  (struct-out expr-reduce-arm)
+ ;; Union types
+ (struct-out expr-union)
  ;; Error marker
  (struct-out expr-error)
  ;; Expr predicate
@@ -238,6 +240,15 @@
 (struct expr-reduce (scrutinee arms structural?) #:transparent)
 
 ;; ========================================
+;; Union types: A | B
+;; ========================================
+;; Represents the union of two types. Components are normalized:
+;;   - Flattened: (A | B) | C ≡ A | (B | C) (right-associated)
+;;   - Idempotent: A | A ≡ A
+;;   - Commutative: A | B ≡ B | A (for unification, sorted by canonical order)
+(struct expr-union (left right) #:transparent)
+
+;; ========================================
 ;; Error marker (for failed inference)
 ;; ========================================
 (struct expr-error () #:transparent)
@@ -264,7 +275,8 @@
       (expr-p8-neg? x) (expr-p8-abs? x) (expr-p8-sqrt? x)
       (expr-p8-lt? x) (expr-p8-le? x)
       (expr-p8-from-nat? x) (expr-p8-if-nar? x)
-      (expr-hole? x) (expr-meta? x) (expr-reduce? x) (expr-error? x)))
+      (expr-hole? x) (expr-meta? x) (expr-reduce? x)
+      (expr-union? x) (expr-error? x)))
 
 ;; ========================================
 ;; Convenience: convert Racket natural to Prologos numerals

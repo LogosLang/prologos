@@ -24,6 +24,10 @@
     (lambda (ch port src line col pos)
       ;; Return a sentinel to signal closing
       '$angle-close$)
+    #\| 'terminating-macro
+    (lambda (ch port src line col pos)
+      ;; Pipe in type position → $pipe sentinel for union types
+      '$pipe)
     #\- 'terminating-macro
     (lambda (ch port src line col pos)
       ;; Check if this is -> (arrow operator)

@@ -1,0 +1,10 @@
+ns prologos.data.never
+
+;; ========================================
+;; Prologos Never Type (Uninhabited)
+;; Never has no constructors — it cannot be instantiated.
+;; Used as the return type of diverging computations,
+;; and as the bottom of the subtyping lattice (with union types).
+;; ========================================
+
+data Never

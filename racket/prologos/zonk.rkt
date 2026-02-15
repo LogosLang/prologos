@@ -101,6 +101,9 @@
     [(expr-p8-if-nar t nc vc v)
      (expr-p8-if-nar (zonk t) (zonk nc) (zonk vc) (zonk v))]
 
+    ;; Union types
+    [(expr-union l r) (expr-union (zonk l) (zonk r))]
+
     ;; Reduce (pattern matching)
     [(expr-reduce scrut arms structural?)
      (expr-reduce (zonk scrut)
@@ -211,6 +214,9 @@
      (expr-p8-if-nar (zonk-at-depth depth t) (zonk-at-depth depth nc)
                      (zonk-at-depth depth vc) (zonk-at-depth depth v))]
 
+    ;; Union types
+    [(expr-union l r) (expr-union (zonk-at-depth depth l) (zonk-at-depth depth r))]
+
     ;; Reduce (pattern matching)
     [(expr-reduce scrut arms structural?)
      (expr-reduce (zonk-at-depth depth scrut)
@@ -299,6 +305,7 @@
     [(expr-p8-if-nar t nc vc v)
      (expr-p8-if-nar (default-metas t) (default-metas nc)
                      (default-metas vc) (default-metas v))]
+    [(expr-union l r) (expr-union (default-metas l) (default-metas r))]
     [(expr-reduce scrut arms structural?)
      (expr-reduce (default-metas scrut)
                   (map (lambda (arm)

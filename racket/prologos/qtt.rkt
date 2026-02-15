@@ -437,6 +437,17 @@
     ;; A metavariable (from implicit arg insertion) doesn't consume resources.
     [((expr-meta _) _) (bu #t (zero-usage n))]
 
+    ;; ---- Union type: checkQ(G, e, A | B) ----
+    ;; Try left component first, then right. Uses speculative meta state.
+    [(_ (expr-union l r))
+     (let ([saved (save-meta-state)])
+       (let ([rl (checkQ ctx e l)])
+         (match rl
+           [(bu #t u) (bu #t u)]
+           [_
+            (restore-meta-state! saved)
+            (checkQ ctx e r)])))]
+
     ;; ---- Conversion fallback ----
     [(_ _)
      (let ([r (inferQ ctx e)])

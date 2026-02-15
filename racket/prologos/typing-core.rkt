@@ -99,6 +99,13 @@
        [(just-level l) (expr-Type l)]
        [_ (expr-error)])]
 
+    ;; ---- Union type formation ----
+    ;; A | B : Type(max(level(A), level(B)))
+    [(expr-union l r)
+     (match (infer-level ctx (expr-union l r))
+       [(just-level lv) (expr-Type lv)]
+       [_ (expr-error)])]
+
     ;; ---- Natural numbers ----
     [(expr-Nat) (expr-Type (lzero))]
     [(expr-zero) (expr-Nat)]
@@ -413,6 +420,17 @@
     ;; We can't infer its type yet, so accept it optimistically.
     [((expr-meta _) _) #t]
 
+    ;; ---- Union type: check against A | B ----
+    ;; check(G, e, A | B) succeeds if e : A or e : B.
+    ;; Uses speculative meta state to avoid contamination from failed attempts.
+    [(_ (expr-union l r))
+     (let ([saved (save-meta-state)])
+       (if (check ctx e l)
+           #t
+           (begin
+             (restore-meta-state! saved)
+             (check ctx e r))))]
+
     ;; ---- Checking against hole type: succeed if expression is inferrable ----
     ;; When the expected type is a hole, just verify the expression is well-typed.
     [(_ (expr-hole))
@@ -621,6 +639,17 @@
 
     ;; Posit8 formation: Posit8 : Type(0)
     [(expr-Posit8) (just-level (lzero))]
+
+    ;; Union formation: A | B : Type(max(level(A), level(B)))
+    [(expr-union l r)
+     (let ([ll (infer-level ctx l)])
+       (match ll
+         [(just-level l1)
+          (let ([lr (infer-level ctx r)])
+            (match lr
+              [(just-level l2) (just-level (lmax l1 l2))]
+              [_ (no-level)]))]
+         [_ (no-level)]))]
 
     ;; Fallback: try to infer and match Type(L)
     [_

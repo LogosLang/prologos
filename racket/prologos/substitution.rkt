@@ -117,6 +117,10 @@
      (expr-p8-if-nar (shift delta cutoff t) (shift delta cutoff nc)
                      (shift delta cutoff vc) (shift delta cutoff v))]
 
+    ;; Union types (non-binding)
+    [(expr-union l r)
+     (expr-union (shift delta cutoff l) (shift delta cutoff r))]
+
     ;; Reduce: scrutinee is non-binding, arm bodies have binding-count binders
     [(expr-reduce scrut arms structural?)
      (expr-reduce (shift delta cutoff scrut)
@@ -230,6 +234,10 @@
     [(expr-p8-if-nar t nc vc v)
      (expr-p8-if-nar (subst k s t) (subst k s nc)
                      (subst k s vc) (subst k s v))]
+
+    ;; Union types (non-binding)
+    [(expr-union l r)
+     (expr-union (subst k s l) (subst k s r))]
 
     ;; Reduce: arm bodies have binding-count binders
     [(expr-reduce scrut arms structural?)

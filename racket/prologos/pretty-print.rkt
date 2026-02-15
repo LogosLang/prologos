@@ -212,6 +212,10 @@
      (format "[p8-if-nar ~a ~a ~a ~a]"
              (pp-expr t names) (pp-expr nc names) (pp-expr vc names) (pp-expr v names))]
 
+    ;; Union types
+    [(expr-union l r)
+     (format "~a | ~a" (pp-expr l names) (pp-expr r names))]
+
     ;; Reduce
     [(expr-reduce scrut arms _)
      (format "[reduce ~a~a]"

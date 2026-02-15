@@ -29,9 +29,9 @@
     Posit8 posit8 p8+ p8- p8* p8/ p8-neg p8-abs p8-sqrt p8-lt p8-le p8-from-nat p8-if-nar
     def defn check eval infer expand parse elaborate match
     ;; Pre-parse macros — should be expanded before reaching parser
-    defmacro let do if deftype data spec
+    defmacro let do if deftype data spec trait impl
     ;; Private-suffix forms — consumed in preparse, rewritten to base form
-    defn- def- data- deftype- defmacro- spec-
+    defn- def- data- deftype- defmacro- spec- trait- impl-
     ;; Pre-parse namespace directives — consumed before reaching parser
     ns require provide))
 
@@ -206,6 +206,10 @@
   (define args (cdr parts))
 
   (cond
+    ;; $angle-type sentinel: unwrap as type annotation
+    [(and (symbol? head) (eq? head '$angle-type))
+     (unwrap-angle-type stx loc)]
+
     ;; Keyword-headed forms
     [(symbol? head)
      (case head
@@ -1496,11 +1500,48 @@
 ;; ========================================
 ;; Infix type parser: A -> B -> C, List A, Nat, (Option A)
 ;; Handles right-associative -> and type application (juxtaposition).
+;; Also handles union types: A | B (lower precedence than ->).
 ;; ========================================
 
-;; Parse a flat list of type atoms with infix -> support.
-;; Splits on '-> symbols, right-associates the arrow, and parses each segment.
+;; Parse a flat list of type atoms with infix | and -> support.
+;; Precedence: | (lowest) < -> (higher) < application (highest)
+;; So: A -> B | C -> D  =  (A -> B) | (C -> D)
 (define (parse-infix-type atoms loc)
+  ;; First, split on | (union, lowest precedence)
+  (define union-parts (split-on-pipe atoms))
+  (cond
+    [(null? union-parts)
+     (parse-error loc "Empty type expression" #f)]
+    [(= (length union-parts) 1)
+     ;; No unions — parse with arrows
+     (parse-arrow-type (car union-parts) loc)]
+    [else
+     ;; Union type: parse each component, then fold into right-associated union
+     (define parsed-parts
+       (map (lambda (part) (parse-arrow-type part loc)) union-parts))
+     (define first-err (findf prologos-error? parsed-parts))
+     (if first-err first-err
+         ;; Right-associate: A | B | C  →  union(A, union(B, C))
+         (foldr (lambda (left right) (surf-union left right loc))
+                (last parsed-parts)
+                (drop-right parsed-parts 1)))]))
+
+;; Split a list of atoms on '| or '$pipe symbols.
+;; Returns a list of lists (segments between pipes).
+(define (split-on-pipe atoms)
+  (let loop ([remaining atoms] [current '()] [result '()])
+    (cond
+      [(null? remaining)
+       (if (null? current)
+           (if (null? result) '() (reverse (cons '() result)))
+           (reverse (cons (reverse current) result)))]
+      [(eq? (stx->datum (car remaining)) '$pipe)
+       (loop (cdr remaining) '() (cons (reverse current) result))]
+      [else
+       (loop (cdr remaining) (cons (car remaining) current) result)])))
+
+;; Parse a single union component (handles -> arrows).
+(define (parse-arrow-type atoms loc)
   ;; Split the atoms list on '-> into segments
   (define segments (split-on-arrow atoms))
   (cond
@@ -1656,7 +1697,9 @@
           (parse-error loc (format "check: expected ':', got ~a" colon) colon)]
          [else
           (let ([e (parse-datum expr-stx)]
-                [t (parse-datum type-stx)])
+                [t (if (angle-type-stx? type-stx)
+                       (unwrap-angle-type type-stx loc)
+                       (parse-datum type-stx))])
             (cond
               [(prologos-error? e) e]
               [(prologos-error? t) t]

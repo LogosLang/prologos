@@ -75,6 +75,8 @@
  (struct-out surf-hole)
  ;; Numbered placeholder (_1, _2, etc.)
  (struct-out surf-numbered-hole)
+ ;; Union type
+ (struct-out surf-union)
  ;; Reduce (ML-style pattern matching with type inference)
  (struct-out surf-reduce)
  (struct-out reduce-arm)
@@ -266,6 +268,13 @@
 ;; Annotated lambda: (the-fn type [params...] body)
 ;; Desugars to (the type (fn (p1:T1) (fn (p2:T2) ... body)))
 (struct surf-the-fn (type param-names body srcloc) #:transparent)
+
+;; ========================================
+;; Union type: A | B
+;; ========================================
+;; Represents a union type at the surface level.
+;; Parsed from infix `|` in type position (e.g., Nat | Bool, A | B | C).
+(struct surf-union (left right srcloc) #:transparent)
 
 ;; ========================================
 ;; Reduce: ML-style pattern matching with type inference

@@ -1,0 +1,68 @@
+ns prologos.data.either
+
+require [prologos.data.option :refer [Option none some]]
+
+;; ========================================
+;; Prologos Either Type
+;; Either A B = Left A | Right B
+;; ========================================
+
+data Either {A B}
+  left : A
+  right : B
+
+;; Map a function over the Right value.
+spec map [B -> C] [Either A B] -> Either A C
+defn map [f e]
+  match e
+    | left a  -> left a
+    | right b -> right [f b]
+
+;; Map a function over the Left value.
+spec map-left [A -> C] [Either A B] -> Either C B
+defn map-left [f e]
+  match e
+    | left a  -> left [f a]
+    | right b -> right b
+
+;; Flat-map (bind) over the Right value.
+spec flat-map [B -> Either A C] [Either A B] -> Either A C
+defn flat-map [f e]
+  match e
+    | left a  -> left a
+    | right b -> f b
+
+;; Convert Either to Option, keeping only Right values.
+spec to-option [Either A B] -> Option B
+defn to-option [e]
+  match e
+    | left _  -> none
+    | right b -> some b
+
+;; True if Left.
+spec is-left [Either A B] -> Bool
+defn is-left [e]
+  match e
+    | left _  -> true
+    | right _ -> false
+
+;; True if Right.
+spec is-right [Either A B] -> Bool
+defn is-right [e]
+  match e
+    | left _  -> false
+    | right _ -> true
+
+;; Unwrap Right with a default.
+spec unwrap-right B [Either A B] -> B
+defn unwrap-right [default e]
+  match e
+    | left _  -> default
+    | right b -> b
+
+;; Unwrap Left with a default.
+spec unwrap-left A [Either A B] -> A
+defn unwrap-left [default e]
+  match e
+    | left a  -> a
+    | right _ -> default

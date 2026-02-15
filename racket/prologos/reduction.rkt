@@ -268,6 +268,9 @@
      (let ([v* (whnf v)])
        (if (equal? v* v) e (whnf (expr-p8-if-nar t nc vc v*))))]
 
+    ;; Union types: pass through (types don't reduce)
+    [(expr-union _ _) e]
+
     ;; Reduce: structural pattern matching.
     ;; Decompose scrutinee as constructor, substitute field values into
     ;; matching arm body. Handles user-defined constructors (fvar applications)
@@ -391,6 +394,9 @@
     [(expr-p8-from-nat n) (expr-p8-from-nat (nf n))]
     [(expr-p8-if-nar t nc vc v)
      (expr-p8-if-nar (nf t) (nf nc) (nf vc) (nf v))]
+
+    ;; Union types: normalize components
+    [(expr-union l r) (expr-union (nf l) (nf r))]
 
     ;; Reduce: should be desugared by type checker before reaching nf,
     ;; but handle it defensively by normalizing sub-terms
