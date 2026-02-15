@@ -324,7 +324,20 @@
             ;; Single let — no merging needed
             [(<= (length lets) 1)
              (loop remaining (cons (car lets) acc))]
-            ;; Multiple consecutive lets — merge
+            ;; Multiple lets followed by a non-let body expression —
+            ;; treat ALL lets as bodyless bindings, trailing expr is the body.
+            ;; This handles WS-mode where body is at the same indent level:
+            ;;   let x := 10
+            ;;   let y := add x x
+            ;;   y              ← not a let, so it's the body
+            [(and (pair? remaining)
+                  (not (let-form? (car remaining))))
+             (define body (car remaining))
+             (define all-bindings
+               (append-map extract-let-binding-tokens lets))
+             (define merged `(let ,all-bindings ,body))
+             (loop (cdr remaining) (cons merged acc))]
+            ;; Multiple consecutive lets (last has body embedded) — merge
             [else
              (define merged (merge-let-sequence lets))
              (loop remaining (cons merged acc))])]
@@ -2013,7 +2026,7 @@
            (for/list ([clause (in-list clauses)]
                       [arity (in-list arities)])
              (define internal-name
-               (string->symbol (format "~a/~a" name arity)))
+               (string->symbol (format "~a::~a" name arity)))
              ;; Wrap as surf-defn for existing pipeline
              (define as-defn
                (surf-defn internal-name
@@ -2038,7 +2051,7 @@
                         ([clause (in-list clauses)]
                          [arity (in-list arities)])
                 (hash-set m arity
-                          (string->symbol (format "~a/~a" name arity)))))
+                          (string->symbol (format "~a::~a" name arity)))))
             (surf-def-group name expanded-defs arities docstring loc)])))]))
 
 ;; ========================================

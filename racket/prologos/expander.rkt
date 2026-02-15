@@ -187,7 +187,7 @@
               (define arity-map
                 (for/fold ([m (hasheq)])
                           ([arity (in-list grp-arities)])
-                  (hash-set m arity (string->symbol (format "~a/~a" grp-name arity)))))
+                  (hash-set m arity (string->symbol (format "~a::~a" grp-name arity)))))
               (register-multi-defn! grp-name grp-arities arity-map grp-docstring)
               ;; Process each clause def
               (for ([def (in-list (surf-def-group-defs expanded))])

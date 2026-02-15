@@ -5,7 +5,7 @@
 ;;; Module registry, namespace contexts, and name resolution.
 ;;;
 ;;; Namespaces use Clojure-style naming:
-;;;   prologos.data.nat/add — dots for hierarchy, slash for name
+;;;   prologos.data.nat::add — dots for hierarchy, :: for name
 ;;;
 ;;; The module registry caches loaded modules.
 ;;; The namespace context tracks per-file imports, aliases, and exports.
@@ -94,7 +94,7 @@
    alias-map       ; hasheq: alias-symbol → namespace-symbol
                    ;   e.g., 'nat → 'prologos.data.nat
    refer-map       ; hasheq: short-name → fully-qualified-name
-                   ;   e.g., 'add → 'prologos.data.nat/add
+                   ;   e.g., 'add → 'prologos.data.nat::add
    refer-all-nses  ; (listof symbol): namespaces where all exports are available unqualified
    exports         ; (listof symbol): names this module provides (short names) — from explicit provide
    auto-exports)   ; (listof symbol): names auto-exported by public def/defn/data/deftype/defmacro
@@ -145,27 +145,29 @@
 ;; ========================================
 
 ;; Create a fully-qualified name: short-name + namespace → fqn
-;; e.g., 'add + 'prologos.data.nat → 'prologos.data.nat/add
+;; e.g., 'add + 'prologos.data.nat → 'prologos.data.nat::add
 (define (qualify-name short-name ns-sym)
   (string->symbol
-   (string-append (symbol->string ns-sym) "/" (symbol->string short-name))))
+   (string-append (symbol->string ns-sym) "::" (symbol->string short-name))))
 
 ;; Split a qualified name into prefix and short-name
-;; 'nat/add → (values 'nat 'add)
-;; 'prologos.data.nat/add → (values 'prologos.data.nat 'add)
-;; 'add (no slash) → (values #f 'add)
+;; 'nat::add → (values 'nat 'add)
+;; 'prologos.data.nat::add → (values 'prologos.data.nat 'add)
+;; 'add (no ::) → (values #f 'add)
 (define (split-qualified-name sym)
   (define s (symbol->string sym))
-  (define idx (string-index-of s #\/))
+  (define idx (string-find-substring s "::"))
   (if idx
       (values (string->symbol (substring s 0 idx))
-              (string->symbol (substring s (+ idx 1))))
+              (string->symbol (substring s (+ idx 2))))
       (values #f sym)))
 
-;; Helper: find the index of a character in a string, or #f
-(define (string-index-of s ch)
-  (for/first ([i (in-range (string-length s))]
-              #:when (char=? (string-ref s i) ch))
+;; Helper: find the index of a substring in a string, or #f
+(define (string-find-substring s sub)
+  (define sub-len (string-length sub))
+  (define s-len (string-length s))
+  (for/first ([i (in-range (+ 1 (- s-len sub-len)))]
+              #:when (string=? (substring s i (+ i sub-len)) sub))
     i))
 
 ;; ========================================

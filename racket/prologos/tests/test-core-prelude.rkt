@@ -135,7 +135,7 @@
 
 (test-case "explicit require prologos.core with :as alias"
   (check-equal?
-   (run-ns "(ns test.alias)\n(require [prologos.core :as core])\n(eval (core/id Nat zero))")
+   (run-ns "(ns test.alias)\n(require [prologos.core :as core])\n(eval (core::id Nat zero))")
    '("zero : Nat")))
 
 (test-case "explicit require prologos.core with :refer"

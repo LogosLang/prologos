@@ -32,3 +32,12 @@ defn inc2 [x : Nat] <Nat>
   [inc [inc x]]
 
 eval [apply-fn inc2 [inc zero]]
+
+;; Sibling lets with trailing body at same indent (no indentation under last let)
+def five : Nat
+  let a := [inc [inc [inc zero]]]
+  let b := [inc [inc zero]]
+  let c := [add a b]
+  c
+
+eval five

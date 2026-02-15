@@ -85,6 +85,35 @@
           "(eval (add-three zero))")))
   (check-equal? (second results) "3 : Nat"))
 
+(test-case "e2e: sibling lets with trailing body (all bodyless)"
+  ;; When body is a sibling (same level), not indented under last let:
+  ;; (def r : Nat (let x := 10) (let y := 20) (let z := (inc x)) z)
+  ;; All lets are bodyless; trailing `z` is the body.
+  (define results
+    (run (string-append
+          "(def r : Nat "
+          "  (let x := (inc zero))"
+          "  (let y := (inc (inc zero)))"
+          "  (let z := (inc x))"
+          "  z)\n"
+          "(eval r)")))
+  (check-equal? (second results) "2 : Nat"))
+
+(test-case "e2e: sibling lets with multi-token value and trailing body"
+  ;; Multi-token value: the value is (add x y), not separate tokens.
+  ;; (def r : Nat (let x := 10) (let y := 20) (let z := add x y) z)
+  (define results
+    (run (string-append
+          "(defn add [x : Nat y : Nat] : Nat"
+          "  (natrec Nat x (fn (k : Nat) (fn (r : Nat) (inc r))) y))\n"
+          "(def r : Nat "
+          "  (let x := (inc (inc (inc zero))))"
+          "  (let y := (inc (inc zero)))"
+          "  (let z := (add x y))"
+          "  z)\n"
+          "(eval r)")))
+  (check-equal? (third results) "5 : Nat"))
+
 ;; ========================================
 ;; 4. Inline [let ...] in expression position
 ;; ========================================

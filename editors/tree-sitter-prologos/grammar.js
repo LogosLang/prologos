@@ -340,8 +340,8 @@ module.exports = grammar({
     // Qualified name for ns declarations and require paths (includes dots)
     qualified_name: $ => /[a-zA-Z_][a-zA-Z0-9_.\-]+/,
 
-    // Regular identifier (includes $-prefixed type vars for deftype)
-    identifier: $ => /\$?[a-zA-Z_][a-zA-Z0-9_!?*+\-]*/,
+    // Regular identifier (includes $-prefixed type vars for deftype, :: qualified names)
+    identifier: $ => /\$?[a-zA-Z_][a-zA-Z0-9_!?*+\-']*(::[\$a-zA-Z_][a-zA-Z0-9_!?*+\-']*)*/,
 
     number: $ => /[0-9]+/,
 

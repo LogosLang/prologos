@@ -2,7 +2,7 @@ ns examples.foray
 
 require [prologos.data.nat    :as nat  :refer [add mult zero?]]
         [prologos.data.bool   :as bool :refer [not]]
-        [prologos.data.list   :as list :refer [List nil cons map filter length sum zip-with]]
+        [prologos.data.list   :as list :refer [List nil cons map filter length zip-with reduce]]
         [prologos.data.option :as opt  :refer [Option none some]]
 
 ;; ========================================
@@ -15,9 +15,9 @@ require [prologos.data.nat    :as nat  :refer [add mult zero?]]
 defn inc-all [xs : List Nat] : List Nat
   map [add _ [inc zero]] xs
 
-;; Double every element (qualified access: nat/double not in :refer)
+;; Double every element (qualified access: nat::double not in :refer)
 defn double-all [xs : List Nat] : List Nat
-  map [nat/double _] xs
+  map [nat::double _] xs
 
 ;; Keep only even elements
 defn evens [xs : List Nat] : List Nat
@@ -26,7 +26,8 @@ defn evens [xs : List Nat] : List Nat
 ;; --- Pattern matching ---
 
 ;; Factorial via match
-defn factorial [n : Nat] : Nat
+spec factorial Nat -> Nat
+defn factorial [n]
   match n
     | zero  -> inc zero
     | inc k -> mult n [factorial k]
@@ -37,9 +38,9 @@ defn square [n : Nat] : Nat
 
 ;; --- Composition and higher-order ---
 
-;; Squares of 0..n (qualified: list/range, nat/double not referred)
-defn squares-up-to [n : Nat] : List Nat
-  zip-with mult [list/range n] [list/range n]
+;; Squares of 0..n (qualified: list::range, nat::double not referred)
+;; defn squares-up-to [n : Nat] : List Nat
+;;   zip-with mult [list::range n] [list::range n]
 
 ;; Dot product of two lists
 defn dot-product [xs : List Nat, ys : List Nat] : Nat
@@ -59,7 +60,7 @@ defn apply-twice {A} [f : A -> A, x : A] : A
 defn add-to [n : Nat, xs : List Nat] : List Nat
   map [add n _] xs
 
-;; Negate a boolean list (qualified: bool/not is also referred as not)
+;; Negate a boolean list (qualified: bool::not is also referred as not)
 defn negate [xs : List Bool] : List Bool
   map [not _] xs
 
@@ -71,10 +72,11 @@ defn keep-positive [xs : List Nat] : List Nat
 
 eval [inc-all [cons [inc zero] [cons [inc [inc zero]] [cons [inc [inc [inc zero]]] nil]]]]
 eval [factorial [inc [inc [inc [inc [inc zero]]]]]]
-eval [double-all [list/range [inc [inc [inc zero]]]]]
-eval [sum [list/range [inc [inc [inc [inc [inc zero]]]]]]]
+eval [double-all [list::range [inc [inc [inc zero]]]]]
+eval [sum [list::range [inc [inc [inc [inc [inc zero]]]]]]]
 eval [dot-product [cons [inc zero] [cons [inc [inc zero]] nil]] [cons [inc [inc [inc zero]]] [cons [inc [inc [inc [inc zero]]]] nil]]]
-eval [apply-twice nat/double [inc [inc zero]]]
+eval [apply-twice nat::double [inc [inc zero]]]
+
 
 
 
@@ -89,7 +91,7 @@ eval [apply-twice nat/double [inc [inc zero]]]
 
 
 
-;; map nat/double [range 10]
+;; map nat::double [range 10]
 
 
 
@@ -107,28 +109,111 @@ eval [apply-twice nat/double [inc [inc zero]]]
 
 
 
-;; spec should be syntax highlight 😭
-;; and the type signature
-;; <- comment string... for docs... at some point
+
 
 
 
 
 ;; `spec` allows separate type signature
-spec squares-up-to  Nat -> [List Nat]
-defn squares-up-to
-  "Here's a docstring for '[0²..n²]"
-  [n]
-  zip-with mult [list/range n] [list/range n]
+;; spec squares-up-to  Nat -> [List Nat]
+;; defn squares-up-to
+;;   "Here's a docstring for '[0²..n²]"
+;;   [n]
+;;   zip-with mult [list::range n] [list::range n]
 
-squares-up-to [inc  5]
+;; squares-up-to [inc  5]
+
+
+;; xs typ is inferred from type of add
+;; let xs := list::reduce add 0 [list::range 10]
+;;   xs
 
 
 
-spec compose
-  "Compose two functions. (g ∘ f)(x) = g(f(x))"
-  [B -> C] [A -> B] -> [A -> C]
-def compose [_ _ _]
+;; "Point Free" style function definition with partial application
+spec my-sum [[List Nat] -> Nat]
+def  my-sum := [reduce add 0 _]
+
+
+
+
+
+
+
+my-sum '[1 2 3]
+
+
+
+
+
+
+
+;; parse $[[List Nat] -> Nat]
+
+
+;; elaborate sum
+
+
+
+[reduce add 0 _] '[1 2 3 4 5 6 7 8 9 10]
+
+
+my-sum '[1 2 3 4 5]
+;; => 15 : Nat
+
+
+
+
+;; let x : Nat := 15
+;; let y : Nat := eval [add 5 x]
+;;  y
+
+
+;; let x 15
+;; let y 5
+;; let z [add x y]
+;;     z
+
+;; let x := 15
+;; let y := 5
+;;   add x y
+
+
+
+;; let [x := 15
+;;      y := 5
+;;      z := add x y]
+;;   z
+
+
+
+
+;; let y := 20
+;; let z := [add x y]
+;;   z
+
+;; let [x := 15]
+;;   x
+
+
+
+spec clamp Nat Nat Nat -> Nat   ;; separate type signature clear documentation/thinking, less clutter
+defn clamp [x low high]
+  nat::max low [nat::min x high]
+
+;;         x  partial function... very flexible!
+;;--------\/-----
+map [clamp _ 5 15] [list::range [inc 20]]
+;; => '[5 5 5 5 5 5 6 7 8 9 10 11 12 13 14 15 15 15 15 15 15] : [prologos.data.list::List Nat]
+
+
+
+
+
+
+
+
+
 
 
 

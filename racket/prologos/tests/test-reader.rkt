@@ -53,9 +53,13 @@
   (check-equal? (tok-type toks 1) 'symbol)
   (check-equal? (tok-val toks 1) '->))
 
-(test-case "tokenize: qualified name"
-  (define toks (tokenize-string "std/list/append"))
-  (check-equal? (tok-val toks 1) 'std/list/append))
+(test-case "tokenize: qualified name with ::"
+  (define toks (tokenize-string "std::append"))
+  (check-equal? (tok-val toks 1) 'std::append))
+
+(test-case "tokenize: nested qualified name with ::"
+  (define toks (tokenize-string "prologos.data.nat::add"))
+  (check-equal? (tok-val toks 1) 'prologos.data.nat::add))
 
 (test-case "tokenize: freestanding colon"
   (define toks (tokenize-string "x : Nat"))

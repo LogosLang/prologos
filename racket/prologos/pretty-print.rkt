@@ -282,27 +282,27 @@
 ;; Try to interpret an expr as a cons-chain (linked list).
 ;; cons is a user-defined data type represented as (expr-app (expr-app (expr-fvar 'cons) head) tail).
 ;; nil is (expr-fvar 'nil).
-;; Handles both bare names (cons, nil) and qualified names (prologos.data.list/cons, etc.)
+;; Handles both bare names (cons, nil) and qualified names (prologos.data.list::cons, etc.)
 ;; Returns (list elements tail) where:
 ;;   - elements is a list of Expr items
 ;;   - tail is either #f (proper list ending in nil) or an Expr (improper tail)
 ;; Returns #f if the expression is not a cons-chain.
 
-;; Check if symbol name matches 'cons or ends with '/cons' (qualified)
+;; Check if symbol name matches 'cons or ends with '::cons' (qualified)
 (define (cons-name? name)
   (or (eq? name 'cons)
       (let ([s (symbol->string name)])
         (let ([len (string-length s)])
-          (and (>= len 5)
-               (string=? (substring s (- len 5)) "/cons"))))))
+          (and (>= len 6)
+               (string=? (substring s (- len 6)) "::cons"))))))
 
-;; Check if symbol name matches 'nil or ends with '/nil' (qualified)
+;; Check if symbol name matches 'nil or ends with '::nil' (qualified)
 (define (nil-name? name)
   (or (eq? name 'nil)
       (let ([s (symbol->string name)])
         (let ([len (string-length s)])
-          (and (>= len 4)
-               (string=? (substring s (- len 4)) "/nil"))))))
+          (and (>= len 5)
+               (string=? (substring s (- len 5)) "::nil"))))))
 
 (define (try-as-list e)
   (let loop ([cur e] [elems '()] [depth 0])

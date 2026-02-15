@@ -94,9 +94,9 @@
                            #f))))))))
 
 ;; Extract the short (bare) name from a potentially FQN symbol.
-;; 'prologos.data.list/cons → 'cons, 'cons → 'cons
+;; 'prologos.data.list::cons → 'cons, 'cons → 'cons
 (define (ctor-short-name fqn)
-  (define parts (string-split (symbol->string fqn) "/"))
+  (define parts (string-split (symbol->string fqn) "::"))
   (string->symbol (last parts)))
 
 ;; Try built-in structural reduce for Nat/Bool constructors.

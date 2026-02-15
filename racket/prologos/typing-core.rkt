@@ -419,7 +419,7 @@
       [(expr-Bool) (values 'Bool args)]
       [_ (values #f #f)])))
 
-;; 'prologos.data.list/List → 'List, 'List → 'List
+;; 'prologos.data.list::List → 'List, 'List → 'List
 (define (bare-name sym)
   (define-values (_prefix short) (split-qualified-name sym))
   (or short sym))
@@ -446,12 +446,12 @@
           [_ ctx]))))
 
 ;; Qualify a bare ctor name using the type constructor's FQN prefix.
-;; e.g., ctor='cons, type-fqn='prologos.data.list/List → 'prologos.data.list/cons
+;; e.g., ctor='cons, type-fqn='prologos.data.list::List → 'prologos.data.list::cons
 (define (qualify-ctor-name ctor-name type-ctor-fqn)
   (define-values (prefix _short) (split-qualified-name type-ctor-fqn))
   (if prefix
       (string->symbol
-       (string-append (symbol->string prefix) "/"
+       (string-append (symbol->string prefix) "::"
                       (symbol->string ctor-name)))
       ctor-name))
 

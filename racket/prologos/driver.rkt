@@ -338,7 +338,7 @@
   (define arity-map
     (for/fold ([m (hasheq)])
               ([arity (in-list arities)])
-      (hash-set m arity (string->symbol (format "~a/~a" name arity)))))
+      (hash-set m arity (string->symbol (format "~a::~a" name arity)))))
   ;; Register the dispatch table
   (register-multi-defn! name arities arity-map docstring)
   ;; Also register with namespace qualification if applicable
@@ -348,7 +348,7 @@
       (for/fold ([m (hasheq)])
                 ([arity (in-list arities)])
         (hash-set m arity (qualify-name
-                           (string->symbol (format "~a/~a" name arity))
+                           (string->symbol (format "~a::~a" name arity))
                            (ns-context-current-ns (current-ns-context))))))
     (register-multi-defn! fqn arities fqn-arity-map docstring))
   ;; Process each clause def through process-def (handles type checking, registration)

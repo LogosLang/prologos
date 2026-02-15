@@ -415,9 +415,21 @@
 (define (read-ident-chars! tok)
   (let loop ([chars '()])
     (define c (tok-peek tok))
-    (if (and (char? c) (ident-continue? c))
-        (begin (tok-read! tok) (loop (cons c chars)))
-        (list->string (reverse chars)))))
+    (cond
+      [(and (char? c) (ident-continue? c))
+       (tok-read! tok) (loop (cons c chars))]
+      ;; :: namespace separator: consume both colons if followed by ident char
+      ;; e.g., nat::add tokenizes as a single symbol
+      [(and (char? c) (char=? c #\:)
+            (let ([c2 (peek-char (tokenizer-port tok) 1)])
+              (and (char? c2) (char=? c2 #\:)))
+            (let ([c3 (peek-char (tokenizer-port tok) 2)])
+              (and (char? c3) (ident-start? c3)))
+            (pair? chars))  ; must have identifier chars before ::
+       (tok-read! tok) (tok-read! tok)  ; consume both colons
+       (loop (cons #\: (cons #\: chars)))]
+      [else
+       (list->string (reverse chars))])))
 
 (define (read-ident-rest! tok)
   ;; Like read-ident-chars! but for the remaining part after first char(s) consumed

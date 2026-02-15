@@ -112,12 +112,12 @@
 ;; ========================================
 
 (test-case "multi/internal-names-registered"
-  ;; After defining multi-body f, f/1 and f/2 should be in global env
+  ;; After defining multi-body f, f::1 and f::2 should be in global env
   (parameterize ([current-global-env (hasheq)]
                  [current-multi-defn-registry (hasheq)])
     (process-string "(defn f ($pipe [x <Nat>] <Nat> (inc x)) ($pipe [x <Nat> y <Nat>] <Nat> x))")
-    (check-not-false (global-env-lookup-type 'f/1))
-    (check-not-false (global-env-lookup-type 'f/2))
+    (check-not-false (global-env-lookup-type 'f::1))
+    (check-not-false (global-env-lookup-type 'f::2))
     ;; Base name should NOT be in global env
     (check-false (global-env-lookup-type 'f))))
 
@@ -162,7 +162,7 @@
 ;; ========================================
 
 (test-case "multi/self-recursion"
-  ;; f/1 calls itself recursively (factorial-like)
+  ;; f::1 calls itself recursively (factorial-like)
   (define results
     (run (string-append
       "(defn double"
