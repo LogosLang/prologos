@@ -14,6 +14,7 @@
          "syntax.rkt"
          "reduction.rkt"
          "typing-core.rkt"
+         "qtt.rkt"
          "source-location.rkt"
          "errors.rkt"
          "pretty-print.rkt"
@@ -21,7 +22,8 @@
 
 (provide infer/err
          check/err
-         is-type/err)
+         is-type/err
+         checkQ-top/err)
 
 ;; ========================================
 ;; Infer with error reporting
@@ -64,3 +66,18 @@
       (not-a-type-error loc
                          "Expression is not a valid type"
                          (pp-expr e names))))
+
+;; ========================================
+;; QTT multiplicity check with error reporting
+;; ========================================
+;; Returns (or/c #t prologos-error?)
+;; Runs checkQ-top to verify that variable usage matches declared multiplicities.
+;; For v1, error message is generic (checkQ-top returns boolean only).
+(define (checkQ-top/err ctx e t [loc srcloc-unknown] [names '()])
+  (if (checkQ-top ctx e t)
+      #t
+      (multiplicity-error loc
+                          "Multiplicity violation"
+                          (pp-expr e names)
+                          "declared"
+                          "actual")))

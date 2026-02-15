@@ -31,6 +31,7 @@
          "namespace.rkt"
          "metavar-store.rkt"
          "zonk.rkt"
+         "qtt.rkt"
          "multi-dispatch.rkt")
 
 (provide process-command
@@ -91,6 +92,38 @@
     [(expr-Sigma a b) (or (type-contains-meta? a) (type-contains-meta? b))]
     [(expr-app f x) (or (type-contains-meta? f) (type-contains-meta? x))]
     [(expr-lam m a b) (or (mult-meta? m) (type-contains-meta? a) (type-contains-meta? b))]
+    [_ #f]))
+
+;; Check if an expression contains node types that the QTT module
+;; doesn't handle yet: expr-reduce (structural PM), Vec, Fin constructors/eliminators.
+;; Other expression types (boolrec, Posit8, fvar, Pi/Sigma/Eq)
+;; are now handled by qtt.rkt directly.
+(define (contains-unsupported-qtt? e)
+  (match e
+    [(expr-reduce _ _ _) #t]
+    [(expr-vnil _) #t]
+    [(expr-vcons _ _ _ _) #t]
+    [(expr-vhead _ _ _) #t]
+    [(expr-vtail _ _ _) #t]
+    [(expr-vindex _ _ _ _) #t]
+    [(expr-fzero _) #t]
+    [(expr-fsuc _ _) #t]
+    [(expr-app f x) (or (contains-unsupported-qtt? f) (contains-unsupported-qtt? x))]
+    [(expr-lam _ a b) (or (contains-unsupported-qtt? a) (contains-unsupported-qtt? b))]
+    [(expr-Pi _ a b) (or (contains-unsupported-qtt? a) (contains-unsupported-qtt? b))]
+    [(expr-Sigma a b) (or (contains-unsupported-qtt? a) (contains-unsupported-qtt? b))]
+    [(expr-pair a b) (or (contains-unsupported-qtt? a) (contains-unsupported-qtt? b))]
+    [(expr-fst e) (contains-unsupported-qtt? e)]
+    [(expr-snd e) (contains-unsupported-qtt? e)]
+    [(expr-ann e t) (or (contains-unsupported-qtt? e) (contains-unsupported-qtt? t))]
+    [(expr-suc e) (contains-unsupported-qtt? e)]
+    [(expr-natrec m b s t) (or (contains-unsupported-qtt? m) (contains-unsupported-qtt? b)
+                               (contains-unsupported-qtt? s) (contains-unsupported-qtt? t))]
+    [(expr-boolrec m tc fc t) (or (contains-unsupported-qtt? m) (contains-unsupported-qtt? tc)
+                                  (contains-unsupported-qtt? fc) (contains-unsupported-qtt? t))]
+    [(expr-J m b l r p) (or (contains-unsupported-qtt? m) (contains-unsupported-qtt? b)
+                            (contains-unsupported-qtt? l) (contains-unsupported-qtt? r)
+                            (contains-unsupported-qtt? p))]
     [_ #f]))
 
 ;; Sprint 10: For bare-param defn, the type has holes. We skip is-type and
@@ -208,16 +241,25 @@
                    lhs-str rhs-str
                    error-loc error-loc)]
                 [else
+                 ;; zonk-final FIRST, then QTT on zonked terms
                  (define zonked-body (zonk-final body))
                  (define zonked-type (zonk-final inferred-type))
-                 (current-global-env
-                  (global-env-add (current-global-env) name zonked-type zonked-body))
-                 (when (current-ns-context)
-                   (define fqn (qualify-name name
-                                 (ns-context-current-ns (current-ns-context))))
-                   (current-global-env
-                    (global-env-add (current-global-env) fqn zonked-type zonked-body)))
-                 (format "~a : ~a defined." name (pp-expr zonked-type))])])])])]
+                 ;; Skip QTT for expressions with unsupported node types (Vec/Fin)
+                 (define qtt-ok
+                   (if (contains-unsupported-qtt? zonked-body)
+                       #t
+                       (checkQ-top/err ctx-empty zonked-body zonked-type)))
+                 (cond
+                   [(prologos-error? qtt-ok) qtt-ok]
+                   [else
+                    (current-global-env
+                     (global-env-add (current-global-env) name zonked-type zonked-body))
+                    (when (current-ns-context)
+                      (define fqn (qualify-name name
+                                    (ns-context-current-ns (current-ns-context))))
+                      (current-global-env
+                       (global-env-add (current-global-env) fqn zonked-type zonked-body)))
+                    (format "~a : ~a defined." name (pp-expr zonked-type))])])])])])]
     ;; Existing annotated path (type annotation present)
     [else
      ;; 1. Elaborate type
@@ -310,18 +352,33 @@
                          lhs-str rhs-str
                          error-loc error-loc)]
                       [else
-                       ;; 6. Apply structural reduce marks (before zonk, so eq? identity holds),
-                       ;;    then zonk-final (defaults unsolved level-metas to lzero)
+                       ;; 6. zonk-final (resolves mult-metas to concrete values,
+                       ;; defaults unsolved level-metas to lzero, mult-metas to mw).
                        (define zonked-body (zonk-final body))
                        (define zonked-type (zonk-final type))
-                       (current-global-env
-                        (global-env-add (current-global-env) name zonked-type zonked-body))
-                       (when (current-ns-context)
-                         (define fqn (qualify-name name
-                                       (ns-context-current-ns (current-ns-context))))
-                         (current-global-env
-                          (global-env-add (current-global-env) fqn zonked-type zonked-body)))
-                       (format "~a : ~a defined." name (pp-expr zonked-type))])])])])])])]))
+                       ;; 6.5. QTT multiplicity check (on zonked terms with concrete mults).
+                       ;; Skip for expressions containing unsupported node types (Vec/Fin).
+                       (define qtt-ok
+                         (if (contains-unsupported-qtt? zonked-body)
+                             #t  ;; skip QTT for unsupported expression types
+                             (checkQ-top/err ctx-empty zonked-body zonked-type
+                                             srcloc-unknown (recover-name-map))))
+                       (cond
+                         [(prologos-error? qtt-ok)
+                          ;; Remove pre-registered entry on QTT failure
+                          (current-global-env (hash-remove (current-global-env) name))
+                          qtt-ok]
+                         [else
+                          (current-global-env
+                           (global-env-add (current-global-env) name zonked-type zonked-body))
+                          (when (current-ns-context)
+                            (define fqn (qualify-name name
+                                          (ns-context-current-ns (current-ns-context))))
+                            (current-global-env
+                             (global-env-add (current-global-env) fqn zonked-type zonked-body)))
+                          (format "~a : ~a defined."
+                                  name (pp-expr zonked-type))])]
+                      )])])])])])]))
 
 ;; ========================================
 ;; Process a multi-body defn group

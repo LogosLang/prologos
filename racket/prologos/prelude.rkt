@@ -32,54 +32,66 @@
 
 ;; Addition (join in the semiring)
 ;; Commutative: we enumerate all ordered pairs
+;; mult-meta treated as 'mw (unsolved → unrestricted)
 (define (mult-add a b)
-  (match* (a b)
-    [('m0 'm0) 'm0]
-    [('m0 'm1) 'm1]
-    [('m1 'm0) 'm1]
-    [('m0 'mw) 'mw]
-    [('mw 'm0) 'mw]
-    [('m1 'm1) 'mw]
-    [('m1 'mw) 'mw]
-    [('mw 'm1) 'mw]
-    [('mw 'mw) 'mw]))
+  (let ([a (if (mult-meta? a) 'mw a)]
+        [b (if (mult-meta? b) 'mw b)])
+    (match* (a b)
+      [('m0 'm0) 'm0]
+      [('m0 'm1) 'm1]
+      [('m1 'm0) 'm1]
+      [('m0 'mw) 'mw]
+      [('mw 'm0) 'mw]
+      [('m1 'm1) 'mw]
+      [('m1 'mw) 'mw]
+      [('mw 'm1) 'mw]
+      [('mw 'mw) 'mw])))
 
 ;; Multiplication (scaling)
 ;; Commutative: enumerate all ordered pairs
+;; mult-meta treated as 'mw (unsolved → unrestricted)
 (define (mult-mul a b)
-  (match* (a b)
-    [('m0 'm0) 'm0]
-    [('m0 'm1) 'm0]
-    [('m1 'm0) 'm0]
-    [('m0 'mw) 'm0]
-    [('mw 'm0) 'm0]
-    [('m1 'm1) 'm1]
-    [('m1 'mw) 'mw]
-    [('mw 'm1) 'mw]
-    [('mw 'mw) 'mw]))
+  (let ([a (if (mult-meta? a) 'mw a)]
+        [b (if (mult-meta? b) 'mw b)])
+    (match* (a b)
+      [('m0 'm0) 'm0]
+      [('m0 'm1) 'm0]
+      [('m1 'm0) 'm0]
+      [('m0 'mw) 'm0]
+      [('mw 'm0) 'm0]
+      [('m1 'm1) 'm1]
+      [('m1 'mw) 'mw]
+      [('mw 'm1) 'mw]
+      [('mw 'mw) 'mw])))
 
 ;; Ordering: m0 <= m1 <= mw
+;; mult-meta treated as 'mw (unsolved → unrestricted)
 (define (mult-leq a b)
-  (match* (a b)
-    [('m0 _)   #t]
-    [('m1 'm0) #f]
-    [('m1 _)   #t]
-    [('mw 'mw) #t]
-    [('mw _)   #f]))
+  (let ([a (if (mult-meta? a) 'mw a)]
+        [b (if (mult-meta? b) 'mw b)])
+    (match* (a b)
+      [('m0 _)   #t]
+      [('m1 'm0) #f]
+      [('m1 _)   #t]
+      [('mw 'mw) #t]
+      [('mw _)   #f])))
 
 ;; Compatibility: actual usage p is compatible with declared multiplicity q
 ;; m0: must use 0 times; m1: exactly 1; mw: any number
+;; mult-meta treated as 'mw (unsolved → unrestricted)
 (define (compatible declared actual)
-  (match* (declared actual)
-    [('m0 'm0) #t]
-    [('m0 'm1) #f]
-    [('m0 'mw) #f]
-    [('m1 'm0) #f]
-    [('m1 'm1) #t]
-    [('m1 'mw) #f]
-    [('mw 'm0) #t]
-    [('mw 'm1) #t]
-    [('mw 'mw) #t]))
+  (let ([declared (if (mult-meta? declared) 'mw declared)]
+        [actual (if (mult-meta? actual) 'mw actual)])
+    (match* (declared actual)
+      [('m0 'm0) #t]
+      [('m0 'm1) #f]
+      [('m0 'mw) #f]
+      [('m1 'm0) #f]
+      [('m1 'm1) #t]
+      [('m1 'mw) #f]
+      [('mw 'm0) #t]
+      [('mw 'm1) #t]
+      [('mw 'mw) #t])))
 
 ;; ========================================
 ;; Universe Levels

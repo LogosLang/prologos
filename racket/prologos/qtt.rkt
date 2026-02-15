@@ -23,7 +23,8 @@
          "reduction.rkt"
          "unify.rkt"
          "typing-core.rkt"
-         "metavar-store.rkt")
+         "metavar-store.rkt"
+         "global-env.rkt")
 
 (provide
  ;; Usage context operations
@@ -107,8 +108,13 @@
              (single-usage k n))
          (tu-error))]
 
-    ;; ---- Free variable: cannot infer ----
-    [(expr-fvar _) (tu-error)]
+    ;; ---- Free variable: look up global environment ----
+    ;; Global references do not consume local linear resources.
+    [(expr-fvar name)
+     (let ([ty (global-env-lookup-type name)])
+       (if ty
+           (tu ty (zero-usage n))
+           (tu-error)))]
 
     ;; ---- Constants: zero usage ----
     [(expr-Type l) (tu (expr-Type (lsuc l)) (zero-usage n))]
@@ -119,6 +125,40 @@
     [(expr-false) (tu (expr-Bool) (zero-usage n))]
     [(expr-Unit) (tu (expr-Type (lzero)) (zero-usage n))]
     [(expr-unit) (tu (expr-Unit) (zero-usage n))]
+    [(expr-Posit8) (tu (expr-Type (lzero)) (zero-usage n))]
+    [(expr-posit8 _) (tu (expr-Posit8) (zero-usage n))]
+
+    ;; ---- Type formers: Pi, Sigma, Eq ----
+    ;; Type formers inhabit Type. Usage comes from sub-terms.
+    ;; For top-level QTT checking of closed terms, these will have zero usage.
+    [(expr-Pi m a b)
+     (let ([r1 (inferQ ctx a)])
+       (match r1
+         [(tu _ u1)
+          (let ([r2 (inferQ (ctx-extend ctx a m) b)])
+            (match r2
+              [(tu _ u2)
+               (tu (expr-Type (lzero)) (add-usage u1 (utail u2)))]
+              [_ (tu-error)]))]
+         [_ (tu-error)]))]
+    [(expr-Sigma a b)
+     (let ([r1 (inferQ ctx a)])
+       (match r1
+         [(tu _ u1)
+          (let ([r2 (inferQ (ctx-extend ctx a 'mw) b)])
+            (match r2
+              [(tu _ u2)
+               (tu (expr-Type (lzero)) (add-usage u1 (utail u2)))]
+              [_ (tu-error)]))]
+         [_ (tu-error)]))]
+    [(expr-Eq ty e1 e2)
+     (let* ([r1 (inferQ ctx ty)]
+            [r2 (inferQ ctx e1)]
+            [r3 (inferQ ctx e2)])
+       (match* (r1 r2 r3)
+         [((tu _ u1) (tu _ u2) (tu _ u3))
+          (tu (expr-Type (lzero)) (add-usage u1 (add-usage u2 u3)))]
+         [(_ _ _) (tu-error)]))]
 
     ;; ---- Suc: usage from the argument ----
     [(expr-suc e1)
@@ -139,18 +179,41 @@
     ;; ---- Application ----
     ;; Usage = U_func + pi * U_arg
     [(expr-app e1 e2)
-     (let ([r1 (inferQ ctx e1)])
-       (match r1
-         [(tu t1 u1)
-          (match (whnf t1)
-            [(expr-Pi m a b)
-             (let ([r2 (checkQ ctx e2 a)])
-               (match r2
-                 [(bu #t u2)
-                  (tu (subst 0 e2 b) (add-usage u1 (scale-usage m u2)))]
-                 [_ (tu-error)]))]
-            [_ (tu-error)])]
-         [_ (tu-error)]))]
+     (match e1
+       ;; Special case: app(lam(m, dom, body), arg) — beta-typed application
+       ;; This supports let-expansion: (let x := v body) = app(lam(m, dom, body), v)
+       [(expr-lam m dom body)
+        (let ([arg-dom (if (expr-hole? dom)
+                           ;; Infer arg type for hole domain
+                           (let ([ri (inferQ ctx e2)])
+                             (match ri [(tu t _) t] [_ #f]))
+                           dom)])
+          (if (not arg-dom)
+              (tu-error)
+              (let ([r2 (checkQ ctx e2 arg-dom)])
+                (match r2
+                  [(bu #t u2)
+                   (let ([r-body (inferQ (ctx-extend ctx arg-dom m) body)])
+                     (match r-body
+                       [(tu body-ty u-body)
+                        (tu (subst 0 e2 body-ty)
+                            (add-usage (scale-usage m u2) (utail u-body)))]
+                       [_ (tu-error)]))]
+                  [_ (tu-error)]))))]
+       ;; General case: infer function type, check argument
+       [_
+        (let ([r1 (inferQ ctx e1)])
+          (match r1
+            [(tu t1 u1)
+             (match (whnf t1)
+               [(expr-Pi m a b)
+                (let ([r2 (checkQ ctx e2 a)])
+                  (match r2
+                    [(bu #t u2)
+                     (tu (subst 0 e2 b) (add-usage u1 (scale-usage m u2)))]
+                    [_ (tu-error)]))]
+               [_ (tu-error)])]
+            [_ (tu-error)]))])]
 
     ;; ---- fst ----
     [(expr-fst e1)
@@ -195,6 +258,98 @@
                 [_ (tu-error)]))]
            [_ (tu-error)])))]
 
+    ;; ---- boolrec ----
+    ;; Usage = U_target + U_true-case + U_false-case (motive is type-level)
+    ;; boolrec(motive, true-case, false-case, target)
+    [(expr-boolrec mot tc fc target)
+     (let ([r4 (checkQ ctx target (expr-Bool))])
+       (match r4
+         [(bu #t u4)
+          (let ([r2 (checkQ ctx tc (expr-app mot (expr-true)))])
+            (match r2
+              [(bu #t u2)
+               (let ([r3 (checkQ ctx fc (expr-app mot (expr-false)))])
+                 (match r3
+                   [(bu #t u3)
+                    (tu (expr-app mot target)
+                        (add-usage u4 (add-usage u2 u3)))]
+                   [_ (tu-error)]))]
+              [_ (tu-error)]))]
+         [_ (tu-error)]))]
+
+    ;; ---- Posit8 binary operations ----
+    ;; Binary ops: Posit8 -> Posit8 -> Posit8
+    [(expr-p8-add a b)
+     (let ([r1 (checkQ ctx a (expr-Posit8))]
+           [r2 (checkQ ctx b (expr-Posit8))])
+       (match* (r1 r2)
+         [((bu #t u1) (bu #t u2)) (tu (expr-Posit8) (add-usage u1 u2))]
+         [(_ _) (tu-error)]))]
+    [(expr-p8-sub a b)
+     (let ([r1 (checkQ ctx a (expr-Posit8))]
+           [r2 (checkQ ctx b (expr-Posit8))])
+       (match* (r1 r2)
+         [((bu #t u1) (bu #t u2)) (tu (expr-Posit8) (add-usage u1 u2))]
+         [(_ _) (tu-error)]))]
+    [(expr-p8-mul a b)
+     (let ([r1 (checkQ ctx a (expr-Posit8))]
+           [r2 (checkQ ctx b (expr-Posit8))])
+       (match* (r1 r2)
+         [((bu #t u1) (bu #t u2)) (tu (expr-Posit8) (add-usage u1 u2))]
+         [(_ _) (tu-error)]))]
+    [(expr-p8-div a b)
+     (let ([r1 (checkQ ctx a (expr-Posit8))]
+           [r2 (checkQ ctx b (expr-Posit8))])
+       (match* (r1 r2)
+         [((bu #t u1) (bu #t u2)) (tu (expr-Posit8) (add-usage u1 u2))]
+         [(_ _) (tu-error)]))]
+
+    ;; Unary Posit8 ops: Posit8 -> Posit8
+    [(expr-p8-neg a)
+     (let ([r (inferQ ctx a)])
+       (match r [(tu (expr-Posit8) u) (tu (expr-Posit8) u)] [_ (tu-error)]))]
+    [(expr-p8-abs a)
+     (let ([r (inferQ ctx a)])
+       (match r [(tu (expr-Posit8) u) (tu (expr-Posit8) u)] [_ (tu-error)]))]
+    [(expr-p8-sqrt a)
+     (let ([r (inferQ ctx a)])
+       (match r [(tu (expr-Posit8) u) (tu (expr-Posit8) u)] [_ (tu-error)]))]
+
+    ;; Posit8 comparisons: Posit8 -> Posit8 -> Bool
+    [(expr-p8-lt a b)
+     (let ([r1 (checkQ ctx a (expr-Posit8))]
+           [r2 (checkQ ctx b (expr-Posit8))])
+       (match* (r1 r2)
+         [((bu #t u1) (bu #t u2)) (tu (expr-Bool) (add-usage u1 u2))]
+         [(_ _) (tu-error)]))]
+    [(expr-p8-le a b)
+     (let ([r1 (checkQ ctx a (expr-Posit8))]
+           [r2 (checkQ ctx b (expr-Posit8))])
+       (match* (r1 r2)
+         [((bu #t u1) (bu #t u2)) (tu (expr-Bool) (add-usage u1 u2))]
+         [(_ _) (tu-error)]))]
+
+    ;; Posit8 conversion: Nat -> Posit8
+    [(expr-p8-from-nat e1)
+     (let ([r (checkQ ctx e1 (expr-Nat))])
+       (match r [(bu #t u) (tu (expr-Posit8) u)] [_ (tu-error)]))]
+
+    ;; Posit8 NaR eliminator: p8-if-nar(A, nar-case, normal-case, val)
+    [(expr-p8-if-nar ty nar-case normal-case val)
+     (let ([r4 (checkQ ctx val (expr-Posit8))])
+       (match r4
+         [(bu #t u4)
+          (let ([r2 (checkQ ctx nar-case ty)])
+            (match r2
+              [(bu #t u2)
+               (let ([r3 (checkQ ctx normal-case ty)])
+                 (match r3
+                   [(bu #t u3)
+                    (tu ty (add-usage u4 (add-usage u2 u3)))]
+                   [_ (tu-error)]))]
+              [_ (tu-error)]))]
+         [_ (tu-error)]))]
+
     ;; ---- J eliminator ----
     ;; Usage from proof, base, motive arguments
     [(expr-J mot base left right proof)
@@ -215,6 +370,10 @@
                  (tu-error))]
             [_ (tu-error)])]
          [_ (tu-error)]))]
+
+    ;; ---- Vec/Fin type constructors: zero usage for types ----
+    [(expr-Vec _ _) (tu (expr-Type (lzero)) (zero-usage n))]
+    [(expr-Fin _) (tu (expr-Type (lzero)) (zero-usage n))]
 
     ;; ---- Fallback ----
     [_ (tu-error)]))
