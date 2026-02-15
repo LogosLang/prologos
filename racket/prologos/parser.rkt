@@ -177,7 +177,15 @@
     [(false)  (surf-false loc)]
     [(unit)   (surf-unit loc)]
     [(refl)   (surf-refl loc)]
-    [else     (surf-var sym loc)]))
+    [else
+     ;; Check for _N pattern (positional placeholder: _1, _2, etc.)
+     (define s (symbol->string sym))
+     (if (and (> (string-length s) 1)
+              (char=? (string-ref s 0) #\_)
+              (for/and ([c (in-string (substring s 1))])
+                (char-numeric? c)))
+         (surf-numbered-hole (string->number (substring s 1)) loc)
+         (surf-var sym loc))]))
 
 ;; ========================================
 ;; Parse list forms: (op arg ...)

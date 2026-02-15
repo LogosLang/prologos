@@ -148,3 +148,134 @@
            "(eval (apply-fn (the (-> Nat Nat) (myadd _ (inc zero))) (inc (inc zero))))")
      "\n"))
    "3 : Nat"))
+
+;; ========================================
+;; Unit tests: numbered placeholder (_N) desugaring
+;; ========================================
+
+(test-case "numbered-placeholder/unit: single _1 produces surf-lam"
+  (define loc srcloc-unknown)
+  (define input (surf-app (surf-var 'f loc)
+                          (list (surf-zero loc) (surf-numbered-hole 1 loc))
+                          loc))
+  (define result (expand-expression input))
+  ;; Result should be a surf-lam wrapping a surf-app
+  (check-true (surf-lam? result))
+  (check-equal? (binder-info-name (surf-lam-binder result)) '$_1)
+  ;; Body should be an application
+  (check-true (surf-app? (surf-lam-body result))))
+
+(test-case "numbered-placeholder/unit: _2 _1 produces ordered lambdas (_1 outermost)"
+  (define loc srcloc-unknown)
+  (define input (surf-app (surf-var 'f loc)
+                          (list (surf-numbered-hole 2 loc)
+                                (surf-zero loc)
+                                (surf-numbered-hole 1 loc))
+                          loc))
+  (define result (expand-expression input))
+  ;; Outermost: surf-lam with $_1 (smallest index = outermost)
+  (check-true (surf-lam? result))
+  (check-equal? (binder-info-name (surf-lam-binder result)) '$_1)
+  ;; Inner: surf-lam with $_2
+  (define inner (surf-lam-body result))
+  (check-true (surf-lam? inner))
+  (check-equal? (binder-info-name (surf-lam-binder inner)) '$_2)
+  ;; Innermost: surf-app with no numbered holes
+  (define body (surf-lam-body inner))
+  (check-true (surf-app? body))
+  (check-false (ormap surf-numbered-hole? (surf-app-args body))))
+
+(test-case "numbered-placeholder/unit: non-contiguous indices (_1 _3)"
+  (define loc srcloc-unknown)
+  (define input (surf-app (surf-var 'f loc)
+                          (list (surf-numbered-hole 1 loc)
+                                (surf-numbered-hole 3 loc))
+                          loc))
+  (define result (expand-expression input))
+  ;; Outermost: $_1
+  (check-true (surf-lam? result))
+  (check-equal? (binder-info-name (surf-lam-binder result)) '$_1)
+  ;; Inner: $_3
+  (define inner (surf-lam-body result))
+  (check-true (surf-lam? inner))
+  (check-equal? (binder-info-name (surf-lam-binder inner)) '$_3))
+
+(test-case "numbered-placeholder/unit: mixed plain and numbered errors"
+  (define loc srcloc-unknown)
+  (define input (surf-app (surf-var 'f loc)
+                          (list (surf-hole loc) (surf-numbered-hole 1 loc))
+                          loc))
+  (check-exn exn:fail?
+    (lambda () (expand-expression input))))
+
+(test-case "numbered-placeholder/unit: duplicate index errors"
+  (define loc srcloc-unknown)
+  (define input (surf-app (surf-var 'f loc)
+                          (list (surf-numbered-hole 1 loc) (surf-numbered-hole 1 loc))
+                          loc))
+  (check-exn exn:fail?
+    (lambda () (expand-expression input))))
+
+;; ========================================
+;; Integration tests: numbered placeholders end-to-end
+;; ========================================
+
+(test-case "numbered-placeholder/single-_1-applied"
+  ;; (myadd (inc zero) _1) applied to (inc (inc zero)) → 3
+  (check-equal?
+   (run-last
+    (string-join
+     (list "(def myadd <(-> Nat (-> Nat Nat))>"
+           "  (fn [x <Nat>] (fn [y <Nat>] (natrec (fn [_ <Nat>] Nat) x (fn [_ <Nat>] (fn [r <Nat>] (inc r))) y))))"
+           "(eval ((the (-> Nat Nat) (myadd (inc zero) _1)) (inc (inc zero))))")
+     "\n"))
+   "3 : Nat"))
+
+(test-case "numbered-placeholder/reorder-args"
+  ;; Use _2 and _1 to swap argument order
+  ;; choose : Nat → Nat → Nat → Nat, returns second arg
+  ;; (choose _2 _1 zero) called with (inc zero) (inc (inc zero))
+  ;; = (choose (inc (inc zero)) (inc zero) zero) = inc zero = 1
+  (check-equal?
+   (run-last
+    (string-join
+     (list "(def choose <(-> Nat (-> Nat (-> Nat Nat)))>"
+           "  (fn [a <Nat>] (fn [b <Nat>] (fn [c <Nat>] b))))"
+           "(eval ((the (-> Nat (-> Nat Nat)) (choose _2 _1 zero)) (inc zero) (inc (inc zero))))")
+     "\n"))
+   "1 : Nat"))
+
+(test-case "numbered-placeholder/type-check-reordered"
+  ;; Type-checking: (choose _2 _1 zero) should have type (-> Nat (-> Nat Nat))
+  (check-equal?
+   (run-last
+    (string-join
+     (list "(def choose <(-> Nat (-> Nat (-> Nat Nat)))>"
+           "  (fn [a <Nat>] (fn [b <Nat>] (fn [c <Nat>] b))))"
+           "(check (choose _2 _1 zero) <(-> Nat (-> Nat Nat))>)")
+     "\n"))
+   "OK"))
+
+(test-case "numbered-placeholder/plain-holes-still-work"
+  ;; Existing plain _ behavior still works after adding numbered support
+  (check-equal?
+   (run-last
+    (string-join
+     (list "(def myadd <(-> Nat (-> Nat Nat))>"
+           "  (fn [x <Nat>] (fn [y <Nat>] (natrec (fn [_ <Nat>] Nat) x (fn [_ <Nat>] (fn [r <Nat>] (inc r))) y))))"
+           "(eval ((the (-> Nat Nat) (myadd _ (inc zero))) (inc (inc zero))))")
+     "\n"))
+   "3 : Nat"))
+
+(test-case "numbered-placeholder/same-order-as-plain"
+  ;; _1 _2 in order should behave same as _ _ for argument passing
+  ;; (choose _1 _2 zero) called with (inc zero) (inc (inc zero))
+  ;; = choose (inc zero) (inc (inc zero)) zero = (inc (inc zero)) = 2
+  (check-equal?
+   (run-last
+    (string-join
+     (list "(def choose <(-> Nat (-> Nat (-> Nat Nat)))>"
+           "  (fn [a <Nat>] (fn [b <Nat>] (fn [c <Nat>] b))))"
+           "(eval ((the (-> Nat (-> Nat Nat)) (choose _1 _2 zero)) (inc zero) (inc (inc zero))))")
+     "\n"))
+   "2 : Nat"))

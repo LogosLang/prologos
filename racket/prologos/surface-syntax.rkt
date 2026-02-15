@@ -73,6 +73,8 @@
  (struct-out surf-the-fn)
  ;; Type hole (inferred)
  (struct-out surf-hole)
+ ;; Numbered placeholder (_1, _2, etc.)
+ (struct-out surf-numbered-hole)
  ;; Reduce (ML-style pattern matching with type inference)
  (struct-out surf-reduce)
  (struct-out reduce-arm)
@@ -87,6 +89,12 @@
 ;; Type hole (to be inferred by the type checker)
 ;; ========================================
 (struct surf-hole (srcloc) #:transparent)
+
+;; ========================================
+;; Numbered placeholder: _N where N is a positive integer (1-based)
+;; Used for positional argument reordering in partial application.
+;; ========================================
+(struct surf-numbered-hole (index srcloc) #:transparent)
 
 ;; ========================================
 ;; Binder information (for lam, Pi, Sigma)

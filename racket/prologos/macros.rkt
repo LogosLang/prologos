@@ -1948,24 +1948,65 @@
     ;; Walk sub-expressions
     ;; Placeholder desugaring: _ in app args → anonymous lambda
     ;; (add 1 _) → (fn [$_0] (add 1 $_0))
-    ;; (clamp _ 100 _) → (fn [$_0 $_1] (clamp $_0 100 $_1))
+    ;; (clamp _ 100 _) → (fn [$_0] (fn [$_1] (clamp $_0 100 $_1)))
+    ;; Positional placeholders: _N (1-based) control lambda ordering
+    ;; (f _2 zero _1) → (fn [$_1] (fn [$_2] (f $_2 zero $_1)))
     [(surf-app fn args loc)
-     (if (ormap surf-hole? args)
-         (let* ([hole-count (count surf-hole? args)]
-                [names (for/list ([i (in-range hole-count)])
-                         (string->symbol (format "$_~a" i)))]
-                [new-args (let loop ([as args] [ns names])
-                            (cond
-                              [(null? as) '()]
-                              [(surf-hole? (car as))
-                               (cons (surf-var (car ns) loc) (loop (cdr as) (cdr ns)))]
-                              [else (cons (car as) (loop (cdr as) ns))]))]
-                [new-app (surf-app fn new-args loc)]
-                [result (foldr (lambda (name inner)
-                                 (surf-lam (binder-info name #f (surf-hole loc)) inner loc))
-                               new-app names)])
-           (expand-expression result))
-         (surf-app (expand-expression fn) (map expand-expression args) loc))]
+     (define has-plain (ormap surf-hole? args))
+     (define has-numbered (ormap surf-numbered-hole? args))
+     (cond
+       ;; Error: cannot mix plain _ and numbered _N
+       [(and has-plain has-numbered)
+        (error 'expand-expression
+               "cannot mix plain _ and numbered _N placeholders in the same application")]
+       ;; Plain holes: existing sequential behavior
+       [has-plain
+        (let* ([hole-count (count surf-hole? args)]
+               [names (for/list ([i (in-range hole-count)])
+                        (string->symbol (format "$_~a" i)))]
+               [new-args (let loop ([as args] [ns names])
+                           (cond
+                             [(null? as) '()]
+                             [(surf-hole? (car as))
+                              (cons (surf-var (car ns) loc) (loop (cdr as) (cdr ns)))]
+                             [else (cons (car as) (loop (cdr as) ns))]))]
+               [new-app (surf-app fn new-args loc)]
+               [result (foldr (lambda (name inner)
+                                (surf-lam (binder-info name #f (surf-hole loc)) inner loc))
+                              new-app names)])
+          (expand-expression result))]
+       ;; Numbered holes: positional placeholders with explicit ordering
+       [has-numbered
+        (let* (;; Collect all indices
+               [indices (for/list ([a (in-list args)]
+                                   #:when (surf-numbered-hole? a))
+                          (surf-numbered-hole-index a))]
+               ;; Check for duplicates
+               [_ (unless (= (length indices) (length (remove-duplicates indices)))
+                    (error 'expand-expression
+                           "duplicate numbered placeholder indices: ~a" indices))]
+               ;; Sort indices ascending — smallest index = outermost lambda
+               [sorted-indices (sort indices <)]
+               ;; Create name map: index → $_N symbol
+               [name-map (for/hasheq ([idx (in-list sorted-indices)])
+                           (values idx (string->symbol (format "$_~a" idx))))]
+               ;; Replace each numbered hole with its corresponding surf-var
+               [new-args (for/list ([a (in-list args)])
+                           (if (surf-numbered-hole? a)
+                               (surf-var (hash-ref name-map (surf-numbered-hole-index a)) loc)
+                               a))]
+               [new-app (surf-app fn new-args loc)]
+               ;; Wrap in nested lambdas ordered by sorted indices
+               ;; sorted ascending: _1 outermost, _2 next, etc.
+               [result (foldr (lambda (idx inner)
+                                (surf-lam (binder-info (hash-ref name-map idx)
+                                                       #f (surf-hole loc))
+                                          inner loc))
+                              new-app sorted-indices)])
+          (expand-expression result))]
+       ;; No holes: just recurse on sub-expressions
+       [else
+        (surf-app (expand-expression fn) (map expand-expression args) loc)])]
     [(surf-lam binder body loc)
      (surf-lam binder (expand-expression body) loc)]
     [(surf-ann type term loc)
