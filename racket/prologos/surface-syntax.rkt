@@ -31,6 +31,8 @@
  (struct-out surf-nat-type)
  (struct-out surf-bool-type)
  (struct-out surf-boolrec)
+ (struct-out surf-unit-type)
+ (struct-out surf-unit)
  (struct-out surf-natrec)
  (struct-out surf-J)
  ;; Vec/Fin surface forms
@@ -148,6 +150,10 @@
 
 ;; Bool type: Bool
 (struct surf-bool-type (srcloc) #:transparent)
+
+;; Unit type: Unit
+(struct surf-unit-type (srcloc) #:transparent)
+(struct surf-unit (srcloc) #:transparent)
 
 ;; Bool eliminator: (boolrec motive true-case false-case target)
 (struct surf-boolrec (motive true-case false-case target srcloc) #:transparent)

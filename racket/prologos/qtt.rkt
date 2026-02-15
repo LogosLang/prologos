@@ -117,6 +117,8 @@
     [(expr-zero) (tu (expr-Nat) (zero-usage n))]
     [(expr-true) (tu (expr-Bool) (zero-usage n))]
     [(expr-false) (tu (expr-Bool) (zero-usage n))]
+    [(expr-Unit) (tu (expr-Type (lzero)) (zero-usage n))]
+    [(expr-unit) (tu (expr-Unit) (zero-usage n))]
 
     ;; ---- Suc: usage from the argument ----
     [(expr-suc e1)

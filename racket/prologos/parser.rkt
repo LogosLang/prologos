@@ -169,11 +169,13 @@
     [(_)      (surf-hole loc)]
     [(Nat)    (surf-nat-type loc)]
     [(Bool)   (surf-bool-type loc)]
+    [(Unit)   (surf-unit-type loc)]
     [(Posit8) (surf-posit8-type loc)]
     [(Type)   (surf-type #f loc)]     ;; bare Type → infer level (Sprint 6)
     [(zero)   (surf-zero loc)]
     [(true)   (surf-true loc)]
     [(false)  (surf-false loc)]
+    [(unit)   (surf-unit loc)]
     [(refl)   (surf-refl loc)]
     [else     (surf-var sym loc)]))
 

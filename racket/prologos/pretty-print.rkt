@@ -60,6 +60,8 @@
     [(expr-Bool) "Bool"]
     [(expr-true) "true"]
     [(expr-false) "false"]
+    [(expr-Unit) "Unit"]
+    [(expr-unit) "unit"]
     [(expr-hole) "_"]
     [(expr-meta id)
      (let ([sol (meta-solution id)])

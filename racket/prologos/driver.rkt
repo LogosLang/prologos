@@ -107,6 +107,7 @@
 ;; bare symbols (for local use) and as fully-qualified names (for export).
 (define (process-command surf)
   (reset-meta-store!)  ;; clear metavariables from previous command
+  (parameterize ([current-nf-cache (make-hash)])  ;; per-command nf memoization
   (define expanded (expand-top-level surf))
   (if (prologos-error? expanded)
       expanded
@@ -157,7 +158,7 @@
                   [(list 'elaborate expr)
                    (pp-expr (zonk-final expr))]
 
-                  [_ (prologos-error srcloc-unknown (format "Unknown command: ~a" elab-result))])))])))
+                  [_ (prologos-error srcloc-unknown (format "Unknown command: ~a" elab-result))])))]))))
 
 ;; Process a def command with split elaboration for recursive support.
 ;; 1. Elaborate type first

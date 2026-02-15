@@ -113,6 +113,10 @@
     [(expr-true) (expr-Bool)]
     [(expr-false) (expr-Bool)]
 
+    ;; ---- Unit ----
+    [(expr-Unit) (expr-Type (lzero))]
+    [(expr-unit) (expr-Unit)]
+
     ;; ---- Annotated terms ----
     ;; ann(e, T) synthesizes T if T is a type and e checks against T
     [(expr-ann e1 t)
@@ -414,9 +418,10 @@
     (match expr
       [(expr-app f a) (loop f (cons a args))]
       [(expr-fvar name) (values name args)]
-      ;; Built-in types: Nat and Bool (no type parameters)
+      ;; Built-in types: Nat, Bool, Unit (no type parameters)
       [(expr-Nat) (values 'Nat args)]
       [(expr-Bool) (values 'Bool args)]
+      [(expr-Unit) (values 'Unit args)]
       [_ (values #f #f)])))
 
 ;; 'prologos.data.list::List → 'List, 'List → 'List
@@ -484,6 +489,7 @@
     [(inc)  (expr-Pi 'mw (expr-Nat) (expr-Nat))]
     [(true) (expr-Bool)]
     [(false) (expr-Bool)]
+    [(unit) (expr-Unit)]
     [else #f]))
 
 ;; Path A: True structural pattern matching using constructor metadata

@@ -21,7 +21,7 @@
          "macros.rkt"
          "metavar-store.rkt")
 
-(provide whnf nf nf-whnf conv conv-nf)
+(provide whnf nf nf-whnf conv conv-nf current-nf-cache)
 
 ;; ========================================
 ;; Helpers for Posit8 reduction
@@ -122,6 +122,11 @@
     ;; Bool: false (nullary)
     [(expr-false? scrut)
      (let ([arm (findf (lambda (a) (eq? (expr-reduce-arm-ctor-name a) 'false)) arms)])
+       (and arm (= (expr-reduce-arm-binding-count arm) 0)
+            (expr-reduce-arm-body arm)))]
+    ;; Unit: unit (nullary)
+    [(expr-unit? scrut)
+     (let ([arm (findf (lambda (a) (eq? (expr-reduce-arm-ctor-name a) 'unit)) arms)])
        (and arm (= (expr-reduce-arm-binding-count arm) 0)
             (expr-reduce-arm-body arm)))]
     [else #f]))
@@ -299,10 +304,22 @@
 
 ;; ========================================
 ;; Full Normalization
-;; First reduce to WHNF, then normalize all subterms
+;; First reduce to WHNF, then normalize all subterms.
+;; Per-command memoization: when current-nf-cache is active,
+;; cache nf results keyed by expr (transparent structs → equal?-based hashing).
 ;; ========================================
+(define current-nf-cache (make-parameter #f))
+
 (define (nf e)
-  (nf-whnf (whnf e)))
+  (define cache (current-nf-cache))
+  (cond
+    [(and cache (hash-ref cache e #f))
+     => values]
+    [else
+     (define result (nf-whnf (whnf e)))
+     (when cache
+       (hash-set! cache e result))
+     result]))
 
 ;; Helper: normalize a term that is already in WHNF
 (define (nf-whnf e)
@@ -316,6 +333,8 @@
     [(expr-Bool) e]
     [(expr-true) e]
     [(expr-false) e]
+    [(expr-Unit) e]
+    [(expr-unit) e]
     [(expr-Type _) e]
     [(expr-hole) e]
     [(expr-meta _) e]

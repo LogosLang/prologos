@@ -34,6 +34,8 @@
  (struct-out expr-true)
  (struct-out expr-false)
  (struct-out expr-boolrec)
+ (struct-out expr-Unit)
+ (struct-out expr-unit)
  (struct-out expr-Pi)
  (struct-out expr-Sigma)
  (struct-out expr-Eq)
@@ -145,6 +147,10 @@
 ;; result     : motive(target)
 (struct expr-boolrec (motive true-case false-case target) #:transparent)
 
+;; Unit type
+(struct expr-Unit () #:transparent)
+(struct expr-unit () #:transparent)
+
 ;; Dependent function type
 (struct expr-Pi (mult domain codomain) #:transparent) ; Pi(mult, domain, codomain)
 
@@ -248,6 +254,7 @@
       (expr-natrec? x) (expr-J? x)
       (expr-Type? x) (expr-Nat? x)
       (expr-Bool? x) (expr-true? x) (expr-false? x) (expr-boolrec? x)
+      (expr-Unit? x) (expr-unit? x)
       (expr-Pi? x) (expr-Sigma? x) (expr-Eq? x)
       (expr-Vec? x) (expr-vnil? x) (expr-vcons? x)
       (expr-Fin? x) (expr-fzero? x) (expr-fsuc? x)

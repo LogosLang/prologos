@@ -180,9 +180,11 @@
        (if (prologos-error? e) e (expr-suc e)))]
     [(surf-true _) (expr-true)]
     [(surf-false _) (expr-false)]
+    [(surf-unit _) (expr-unit)]
     [(surf-refl _) (expr-refl)]
     [(surf-nat-type _) (expr-Nat)]
     [(surf-bool-type _) (expr-Bool)]
+    [(surf-unit-type _) (expr-Unit)]
 
     ;; Type hole (inferred during checking)
     [(surf-hole loc)

@@ -1378,6 +1378,10 @@
 (register-ctor! 'false (ctor-meta 'Bool '() '() '() 1))
 (current-type-meta (hash-set (current-type-meta) 'Bool '(true false)))
 
+;; Unit: unit (nullary)
+(register-ctor! 'unit (ctor-meta 'Unit '() '() '() 0))
+(current-type-meta (hash-set (current-type-meta) 'Unit '(unit)))
+
 ;; ========================================
 ;; process-data: algebraic data types with native constructors
 ;; ========================================
