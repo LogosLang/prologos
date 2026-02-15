@@ -24,3 +24,13 @@ defn map-snd [f p]
 spec bimap [A -> C] [B -> D] [Sigma [_ <A>] B] -> [Sigma [_ <C>] D]
 defn bimap [f g p]
   pair [f [first p]] [g [second p]]
+
+;; Duplicate: a -> (a, a)
+spec dup A -> [Sigma [_ <A>] A]
+defn dup [x]
+  pair x x
+
+;; Uncurry: (A -> B -> C) -> (A, B) -> C
+spec uncurry [A -> B -> C] [Sigma [_ <A>] B] -> C
+defn uncurry [f p]
+  f [first p] [second p]

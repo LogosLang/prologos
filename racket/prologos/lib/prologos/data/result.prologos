@@ -42,3 +42,35 @@ defn or-else [f r]
   match r
     | ok x  -> ok x
     | err e -> f e
+
+;; True if ok.
+spec is-ok [Result A E] -> Bool
+defn is-ok [r]
+  match r
+    | ok _  -> true
+    | err _ -> false
+
+;; True if err.
+spec is-err [Result A E] -> Bool
+defn is-err [r]
+  match r
+    | ok _  -> false
+    | err _ -> true
+
+;; Convert Result to Option, discarding error info.
+require [prologos.data.option :refer [Option none some]]
+
+spec to-option [Result A E] -> Option A
+defn to-option [r]
+  match r
+    | ok x  -> some x
+    | err _ -> none
+
+;; Apply a 2-argument function to two Results. Returns first error.
+spec map2 [A -> B -> C] [Result A E] [Result B E] -> Result C E
+defn map2 [f ra rb]
+  match ra
+    | err e -> err e
+    | ok a  -> match rb
+      | err e -> err e
+      | ok b  -> ok [f a b]

@@ -4,18 +4,22 @@ require [prologos.data.nat :refer [nat-eq?]]
 require [prologos.data.bool :refer [not]]
 
 ;; ========================================
-;; Eq Trait — Dictionary-Passing Style
+;; Eq Trait — via trait/impl system
 ;; ========================================
-;; Eq A = A -> A -> Bool
-;; An Eq dictionary is just a two-argument function returning Bool.
-;; Instances: nat-eq (here), bool-eq (in prologos.data.bool)
+;; Eq A = A -> A -> Bool (single-method: dict IS the function)
+;; Generated: deftype Eq, accessor Eq-eq?
+;; Instance: Nat--Eq--dict, Nat--Eq--eq?
 
-deftype [Eq $A] [-> $A [-> $A Bool]]
+trait Eq {A}
+  eq? : A -> A -> Bool
 
-;; Nat instance: delegates to nat-eq? from prologos.data.nat
-spec nat-eq Nat Nat -> Bool
-defn nat-eq [x y]
-  nat-eq? x y
+;; Nat instance
+impl Eq Nat
+  defn eq? [x y] <Bool>
+    nat-eq? x y
+
+;; Backward-compatible alias
+def nat-eq Nat--Eq--dict
 
 ;; Generic neq: negate equality
 spec eq-neq [Eq A] A A -> Bool

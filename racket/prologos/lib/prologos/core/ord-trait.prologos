@@ -5,26 +5,30 @@ require [prologos.data.nat :refer [lt? nat-eq?]]
 require [prologos.data.bool :refer [not]]
 
 ;; ========================================
-;; Ord Trait — Dictionary-Passing Style
+;; Ord Trait — via trait/impl system
 ;; ========================================
-;; Ord A = A -> A -> Ordering
-;; An Ord dictionary is a two-argument function returning Ordering.
+;; Ord A = A -> A -> Ordering (single-method: dict IS the function)
+;; Generated: deftype Ord, accessor Ord-compare
+;; Instance: Nat--Ord--dict, Nat--Ord--compare
 
-deftype [Ord $A] [-> $A [-> $A Ordering]]
+trait Ord {A}
+  compare : A -> A -> Ordering
 
-;; Nat instance: compare two naturals
-;; Returns Ordering. Uses match on Bool (structural PM) — returns Type 1 values.
-spec nat-ord Nat Nat -> Ordering
-defn nat-ord [x y]
-  match [lt? x y]
-    | true  -> lt-ord
-    | false -> match [nat-eq? x y]
-                | true  -> eq-ord
-                | false -> gt-ord
+;; Nat instance
+impl Ord Nat
+  defn compare [x y] <Ordering>
+    match [lt? x y]
+      | true  -> lt-ord
+      | false -> match [nat-eq? x y]
+                   | true  -> eq-ord
+                   | false -> gt-ord
+
+;; Backward-compatible alias
+def nat-ord Nat--Ord--dict
 
 ;; Derived operations from an Ord dictionary
 
-;; Less than: match ordering, lt -> true, else false
+;; Less than
 spec ord-lt [Ord A] A A -> Bool
 defn ord-lt [dict x y]
   match [dict x y]

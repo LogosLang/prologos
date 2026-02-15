@@ -60,3 +60,29 @@ defn zip-with [f oa ob]
 spec zip [Option A] [Option B] -> Option [Sigma [_ <A>] B]
 defn zip [oa ob]
   zip-with A B [Sigma [_ <A>] B] [fn a b [pair a b]] oa ob
+
+;; True if some.
+spec is-some [Option A] -> Bool
+defn is-some [opt]
+  match opt
+    | none   -> false
+    | some _ -> true
+
+;; True if none.
+spec is-none [Option A] -> Bool
+defn is-none [opt]
+  match opt
+    | none   -> true
+    | some _ -> false
+
+;; Flatten nested Option.
+spec flatten [Option [Option A]] -> Option A
+defn flatten [opt]
+  match opt
+    | none   -> none
+    | some x -> x
+
+;; Apply a 2-argument function to two Options.
+spec map2 [A -> B -> C] [Option A] [Option B] -> Option C
+defn map2 [f oa ob]
+  zip-with f oa ob
