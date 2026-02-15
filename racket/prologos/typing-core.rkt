@@ -180,6 +180,11 @@
     ;; false-case : motive(false)
     ;; target : Bool
     ;; result type: app(motive, target)
+    ;;
+    ;; Note: The motive's codomain is not explicitly verified to be Type(l).
+    ;; This is safe because the result type app(mot, target) propagates upward,
+    ;; and any consumer that uses it as a type will fail if it's not one.
+    ;; Adding is-type here causes re-entrancy issues with mult-meta solving.
     [(expr-boolrec mot tc fc target)
      (let ([mot-ty (whnf (infer ctx mot))])
        (match mot-ty
@@ -194,22 +199,48 @@
 
     ;; ---- Nat eliminator (natrec) ----
     ;; natrec(motive, base, step, target)
+    ;; motive : Nat → Type(l)
+    ;; base   : motive(zero)
+    ;; step   : Π(n:Nat). motive(n) → motive(suc(n))
+    ;; target : Nat
     ;; result type: app(motive, target)
     [(expr-natrec mot base step target)
-     (if (and (check ctx target (expr-Nat))
-              (check ctx base (expr-app mot (expr-zero))))
-         (expr-app mot target)
-         (expr-error))]
+     (let ([step-type
+            ;; Π(n:Nat). motive(n) → motive(suc(n))
+            ;; Under one binder (n), mot must be shifted by 1.
+            ;; Under two binders (n, rec), mot must be shifted by 2.
+            (expr-Pi 'mw (expr-Nat)
+              (expr-Pi 'mw (expr-app (shift 1 0 mot) (expr-bvar 0))
+                (expr-app (shift 2 0 mot) (expr-suc (expr-bvar 1)))))])
+       (if (and (check ctx target (expr-Nat))
+                (check ctx base (expr-app mot (expr-zero)))
+                (check ctx step step-type))
+           (expr-app mot target)
+           (expr-error)))]
 
     ;; ---- J eliminator ----
     ;; J(motive, base, left, right, proof)
-    ;; Need to extract type from proof's type Eq(A, left, right)
+    ;; motive : Π(a:A). Π(b:A). Eq(A,a,b) → Type(l)
+    ;; base   : Π(a:A). motive(a, a, refl)
+    ;; proof  : Eq(A, left, right)
     ;; result type: app(app(app(motive, left), right), proof)
+    ;;
+    ;; Note: The motive's codomain is not explicitly checked to be Type(l).
+    ;; This is safe because the result type propagates upward, and any consumer
+    ;; that uses it as a type will fail if it's not one. Adding is-type here
+    ;; causes re-entrancy issues with mult-meta solving.
     [(expr-J mot base left right proof)
      (let ([pt (whnf (infer ctx proof))])
        (match pt
          [(expr-Eq t t1 t2)
-          (if (and (unify-ok? (unify ctx t1 left)) (unify-ok? (unify ctx t2 right)))
+          (if (and (unify-ok? (unify ctx t1 left))
+                   (unify-ok? (unify ctx t2 right))
+                   ;; Verify base has correct type: Π(a:A). motive(a, a, refl)
+                   (check ctx base
+                     (expr-Pi 'mw t
+                       (expr-app (expr-app (expr-app (shift 1 0 mot) (expr-bvar 0))
+                                           (expr-bvar 0))
+                                 (expr-refl)))))
               (expr-app (expr-app (expr-app mot left) right) proof)
               (expr-error))]
          [_ (expr-error)]))]

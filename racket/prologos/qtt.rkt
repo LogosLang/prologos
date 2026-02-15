@@ -175,30 +175,42 @@
     ;; ---- natrec ----
     ;; Usage = U_target + U_base + U_step (motive is type-level)
     [(expr-natrec mot base step target)
-     (let ([r4 (checkQ ctx target (expr-Nat))])
-       (match r4
-         [(bu #t u4)
-          (let ([r2 (checkQ ctx base (expr-app mot (expr-zero)))])
-            (match r2
-              [(bu #t u2)
-               (let ([r3 (inferQ ctx step)])
-                 (match r3
-                   [(tu _ u3)
-                    (tu (expr-app mot target)
-                        (add-usage u4 (add-usage u2 u3)))]
-                   [_ (tu-error)]))]
-              [_ (tu-error)]))]
-         [_ (tu-error)]))]
+     (let ([step-type
+            ;; Π(n:Nat). motive(n) → motive(suc(n))
+            (expr-Pi 'mw (expr-Nat)
+              (expr-Pi 'mw (expr-app (shift 1 0 mot) (expr-bvar 0))
+                (expr-app (shift 2 0 mot) (expr-suc (expr-bvar 1)))))])
+       (let ([r4 (checkQ ctx target (expr-Nat))])
+         (match r4
+           [(bu #t u4)
+            (let ([r2 (checkQ ctx base (expr-app mot (expr-zero)))])
+              (match r2
+                [(bu #t u2)
+                 (let ([r3 (checkQ ctx step step-type)])
+                   (match r3
+                     [(bu #t u3)
+                      (tu (expr-app mot target)
+                          (add-usage u4 (add-usage u2 u3)))]
+                     [_ (tu-error)]))]
+                [_ (tu-error)]))]
+           [_ (tu-error)])))]
 
     ;; ---- J eliminator ----
-    ;; Usage from the proof argument primarily
+    ;; Usage from proof, base, motive arguments
     [(expr-J mot base left right proof)
      (let ([r5 (inferQ ctx proof)])
        (match r5
          [(tu t5 u5)
           (match (whnf t5)
             [(expr-Eq t t1 t2)
-             (if (and (unify-ok? (unify ctx t1 left)) (unify-ok? (unify ctx t2 right)))
+             (if (and (unify-ok? (unify ctx t1 left))
+                      (unify-ok? (unify ctx t2 right))
+                      ;; Verify base type: Π(a:A). motive(a, a, refl)
+                      (check ctx base
+                        (expr-Pi 'mw t
+                          (expr-app (expr-app (expr-app (shift 1 0 mot) (expr-bvar 0))
+                                              (expr-bvar 0))
+                                    (expr-refl)))))
                  (tu (expr-app (expr-app (expr-app mot left) right) proof) u5)
                  (tu-error))]
             [_ (tu-error)])]
