@@ -1,0 +1,34 @@
+ns prologos.core.seq-list
+
+require [prologos.core.seq-trait :refer [Seq]]
+require [prologos.data.list :refer [List nil cons]]
+require [prologos.data.option :refer [Option some none]]
+
+;; ========================================
+;; Seq instance for List
+;; ========================================
+
+;; first : List A -> Option A
+spec list-seq-first [List A] -> [Option A]
+defn list-seq-first [xs]
+  match xs
+    | nil       -> none A
+    | cons a _  -> some A a
+
+;; rest : List A -> List A
+spec list-seq-rest [List A] -> [List A]
+defn list-seq-rest [xs]
+  match xs
+    | nil       -> nil A
+    | cons _ as -> as
+
+;; empty? : List A -> Bool
+spec list-seq-empty? [List A] -> Bool
+defn list-seq-empty? [xs]
+  match xs
+    | nil      -> true
+    | cons _ _ -> false
+
+;; Assemble the dictionary: (pair first-fn (pair rest-fn empty?-fn))
+spec list-seq [Seq List]
+def list-seq [pair list-seq-first [pair list-seq-rest list-seq-empty?]]

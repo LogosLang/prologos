@@ -1,0 +1,13 @@
+ns prologos.core.foldable-list
+
+require [prologos.core.foldable-trait :refer [Foldable]]
+require [prologos.data.list :refer [List foldr]]
+
+;; ========================================
+;; Foldable instance for List
+;; ========================================
+;; list-foldable : Foldable List
+;; = Pi(A :0 Type) Pi(B :0 Type) (A -> B -> B) -> B -> List A -> B
+
+spec list-foldable [Foldable List]
+def list-foldable foldr

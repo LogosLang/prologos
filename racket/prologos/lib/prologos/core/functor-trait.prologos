@@ -1,0 +1,12 @@
+ns prologos.core.functor-trait
+
+;; ========================================
+;; Functor Trait
+;; ========================================
+;; A functor maps a function over a container.
+;; fmap : (A -> B) -> F A -> F B
+;;
+;; Functor F = Pi(A :0 Type) Pi(B :0 Type) (A -> B) -> F A -> F B
+;; Single-method: dict IS the function
+
+deftype [Functor $F] [Pi [A :0 <Type>] [Pi [B :0 <Type>] [-> [-> A B] [-> [$F A] [$F B]]]]]

@@ -1,0 +1,12 @@
+ns prologos.core.foldable-trait
+
+;; ========================================
+;; Foldable Trait
+;; ========================================
+;; A foldable container supports right fold.
+;; foldr : (A -> B -> B) -> B -> F A -> B
+;;
+;; Foldable F = Pi(A :0 Type) Pi(B :0 Type) (A -> B -> B) -> B -> F A -> B
+;; Single-method: dict IS the function
+
+deftype [Foldable $F] [Pi [A :0 <Type>] [Pi [B :0 <Type>] [-> [-> A [-> B B]] [-> B [-> [$F A] B]]]]]

@@ -1,0 +1,33 @@
+ns prologos.core.seq-trait
+
+require [prologos.data.option :refer [Option some none]]
+
+;; ========================================
+;; Seq Trait — Universal Sequence Interface
+;; ========================================
+;; A Seq dict bundles three operations as a nested Sigma:
+;;   first  : S A -> Option A
+;;   rest   : S A -> S A
+;;   empty? : S A -> Bool
+;;
+;; Dict layout: (Sigma first-fn (Sigma rest-fn empty?-fn))
+
+deftype [Seq $S] [Sigma [_ <[Pi [A :0 <Type>] [-> [$S A] [Option A]]]>] [Sigma [_ <[Pi [A :0 <Type>] [-> [$S A] [$S A]]]>] [Pi [A :0 <Type>] [-> [$S A] Bool]]]]
+
+;; Accessors: project from the dictionary
+;; Each takes the dict + the collection, with S and A implicit
+
+;; seq-first : (Seq S) -> S A -> Option A
+spec seq-first [Seq S] [S A] -> [Option A]
+defn seq-first [dict xs]
+  [first dict] A xs
+
+;; seq-rest : (Seq S) -> S A -> S A
+spec seq-rest [Seq S] [S A] -> [S A]
+defn seq-rest [dict xs]
+  [first [second dict]] A xs
+
+;; seq-empty? : (Seq S) -> S A -> Bool
+spec seq-empty? [Seq S] [S A] -> Bool
+defn seq-empty? [dict xs]
+  [second [second dict]] A xs
