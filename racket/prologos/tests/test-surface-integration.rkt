@@ -363,7 +363,7 @@
                  [current-preparse-registry (current-preparse-registry)])
     (define results (process-string
                      (string-append
-                      "(defmacro (not $b) (if Bool $b false true))\n"
+                      "(defmacro not ($b) (if Bool $b false true))\n"
                       "(eval (not true))")))
     ;; defmacro is consumed, so 1 result
     (check-equal? (length results) 1)
@@ -374,7 +374,7 @@
                  [current-preparse-registry (current-preparse-registry)])
     (define results (process-string
                      (string-append
-                      "(defmacro (not $b) (if Bool $b false true))\n"
+                      "(defmacro not ($b) (if Bool $b false true))\n"
                       "(eval (not false))")))
     (check-equal? (car results) "true : Bool")))
 

@@ -1,7 +1,7 @@
 #lang prologos/sexp
 
 ;; Define a not macro
-(defmacro (not $b) (if Bool $b false true))
+(defmacro not ($b) (if Bool $b false true))
 
 ;; Define a parameterized type alias
 (deftype (Pair $A $B) (Sigma [x <$A>] $B))

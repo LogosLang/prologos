@@ -74,21 +74,21 @@
 (test-case "inline-macro/inc2"
   ;; defmacro inc2 — increment twice
   (check-equal?
-   (run-last "(ns dm6)\n(defmacro (inc2 $x) (inc (inc $x)))\n(eval (the Nat (inc2 zero)))")
+   (run-last "(ns dm6)\n(defmacro inc2 ($x) (inc (inc $x)))\n(eval (the Nat (inc2 zero)))")
    "2 : Nat"))
 
 (test-case "inline-macro/constant"
   ;; defmacro with no pattern vars — constant replacement
   (check-equal?
-   (run-last "(ns dm7)\n(defmacro (my-zero) zero)\n(eval (the Nat (my-zero)))")
+   (run-last "(ns dm7)\n(defmacro my-zero () zero)\n(eval (the Nat (my-zero)))")
    "zero : Nat"))
 
 (test-case "inline-macro/chain"
   ;; macro calling macro: inc2 then inc4
   (check-equal?
    (run-last (string-append "(ns dm8)\n"
-                            "(defmacro (inc2 $x) (inc (inc $x)))\n"
-                            "(defmacro (inc4 $x) (inc2 (inc2 $x)))\n"
+                            "(defmacro inc2 ($x) (inc (inc $x)))\n"
+                            "(defmacro inc4 ($x) (inc2 (inc2 $x)))\n"
                             "(eval (the Nat (inc4 zero)))"))
    "4 : Nat"))
 
@@ -97,7 +97,7 @@
   (check-equal?
    (run-last (string-append "(ns dm9)\n"
                             "(require (prologos.data.nat :refer (add)))\n"
-                            "(defmacro (add3 $a $b $c) (add $a (add $b $c)))\n"
+                            "(defmacro add3 ($a $b $c) (add $a (add $b $c)))\n"
                             "(eval (add3 (the Nat (inc zero)) (the Nat (inc zero)) (the Nat (inc zero))))"))
    "3 : Nat"))
 
@@ -106,7 +106,7 @@
   (check-equal?
    (run-last (string-append "(ns dm10)\n"
                             "(require (prologos.data.nat :refer (add)))\n"
-                            "(defmacro (apply2 $f $x $y) ($f $x $y))\n"
+                            "(defmacro apply2 ($f $x $y) ($f $x $y))\n"
                             "(eval (apply2 add (the Nat (inc zero)) (the Nat (inc zero))))"))
    "2 : Nat"))
 
@@ -114,7 +114,7 @@
   ;; macro with nested expression in body
   (check-equal?
    (run-last (string-append "(ns dm11)\n"
-                            "(defmacro (suc3 $x) (inc (inc (inc $x))))\n"
+                            "(defmacro suc3 ($x) (inc (inc (inc $x))))\n"
                             "(eval (the Nat (suc3 zero)))"))
    "3 : Nat"))
 
@@ -149,7 +149,7 @@
   ;; defmacro- defines a macro that works locally
   (check-equal?
    (run-last (string-append "(ns dm15)\n"
-                            "(defmacro- (my-inc $x) (inc $x))\n"
+                            "(defmacro- my-inc ($x) (inc $x))\n"
                             "(eval (the Nat (my-inc zero)))"))
    "1 : Nat"))
 
@@ -165,7 +165,7 @@
     (install-module-loader!)
     ;; Process a namespace with a private macro
     (process-string (string-append "(ns dm16)\n"
-                                   "(defmacro- (secret-inc $x) (inc $x))\n"
+                                   "(defmacro- secret-inc ($x) (inc $x))\n"
                                    "(def pub : Nat (secret-inc zero))"))
     ;; Check auto-exports: 'pub should be there but 'secret-inc should not
     (define ctx (current-ns-context))
@@ -182,7 +182,7 @@
   ;; Macro applied recursively (calling a macro-defined form multiple times)
   (check-equal?
    (run-last (string-append "(ns dm17)\n"
-                            "(defmacro (wrap-inc $x) (inc $x))\n"
+                            "(defmacro wrap-inc ($x) (inc $x))\n"
                             "(eval (the Nat (wrap-inc (wrap-inc zero))))"))
    "2 : Nat"))
 
@@ -191,26 +191,26 @@
   (check-equal?
    (run-last (string-append "(ns dm18)\n"
                             "(require (prologos.data.nat :refer (add)))\n"
-                            "(defmacro (double-add $x) (add $x $x))\n"
+                            "(defmacro double-add ($x) (add $x $x))\n"
                             "(eval (double-add (the Nat (inc zero))))"))
    "2 : Nat"))
 
 (test-case "pattern/ellipsis-rest"
   ;; Rest capture with ... — works at the datum level
-  ;; (defmacro (first-of $x $rest ...) $x)
+  ;; (defmacro first-of ($x $rest ...) $x)
   (check-equal?
    (run-last (string-append "(ns dm19)\n"
-                            "(defmacro (first-of $x $rest ...) $x)\n"
+                            "(defmacro first-of ($x $rest ...) $x)\n"
                             "(eval (the Nat (first-of zero (inc zero) (inc (inc zero)))))"))
    "zero : Nat"))
 
 (test-case "pattern/ellipsis-splice"
   ;; Splice rest args into template
-  ;; (defmacro (call-with $f $args ...) ($f $args ...))
+  ;; (defmacro call-with ($f $args ...) ($f $args ...))
   (check-equal?
    (run-last (string-append "(ns dm20)\n"
                             "(require (prologos.data.nat :refer (add)))\n"
-                            "(defmacro (call-with $f $args ...) ($f $args ...))\n"
+                            "(defmacro call-with ($f $args ...) ($f $args ...))\n"
                             "(eval (call-with add (the Nat (inc zero)) (the Nat (inc zero))))"))
    "2 : Nat"))
 
@@ -254,7 +254,7 @@
   ;; Macro that expands to itself → depth limit error
   (check-exn exn:fail?
     (lambda ()
-      (run-ns "(ns dm26)\n(defmacro (loop $x) (loop $x))\n(eval (loop zero))"))))
+      (run-ns "(ns dm26)\n(defmacro loop ($x) (loop $x))\n(eval (loop zero))"))))
 
 ;; ========================================
 ;; 2h. Macro + type checking
@@ -281,6 +281,6 @@
 (test-case "macro/expansion-visible"
   ;; Use expand command to see the macro expansion
   (define results
-    (run-ns "(ns dm30)\n(defmacro (my-double $x) (inc (inc $x)))\n(expand (my-double zero))"))
+    (run-ns "(ns dm30)\n(defmacro my-double ($x) (inc (inc $x)))\n(expand (my-double zero))"))
   ;; expand should show the expanded form
   (check-true (> (length results) 0)))

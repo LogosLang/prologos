@@ -271,7 +271,7 @@
 
 (test-case "process-defmacro: register and expand"
   (parameterize ([current-preparse-registry (current-preparse-registry)])
-    (process-defmacro '(defmacro (not $b) (if Bool $b false true)))
+    (process-defmacro '(defmacro not ($b) (if Bool $b false true)))
     ;; Now 'not should be registered
     (define expanded (preparse-expand-form '(not true)))
     ;; not true → (if Bool true false true) → (boolrec Bool false true true)
@@ -303,7 +303,7 @@
 
 (test-case "preparse-expand-all: consume defmacro, expand usage"
   (parameterize ([current-preparse-registry (current-preparse-registry)])
-    (define stxs (list (datum->syntax #f '(defmacro (not $b) (if Bool $b false true)))
+    (define stxs (list (datum->syntax #f '(defmacro not ($b) (if Bool $b false true)))
                        (datum->syntax #f '(not true))))
     (define results (preparse-expand-all stxs))
     ;; defmacro should be consumed

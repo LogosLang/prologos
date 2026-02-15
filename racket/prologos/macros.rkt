@@ -500,7 +500,7 @@
 ;; Returns a list of symbols for auto-export.
 ;;  - defn, def: (cadr datum) is the name
 ;;  - deftype: (caadr datum) if parameterized, (cadr datum) if bare alias
-;;  - defmacro: (caadr datum) (first element of the pattern)
+;;  - defmacro: (cadr datum) (the name symbol)
 ;;  - data: handled separately (type + constructor names from process-data result)
 (define (extract-defined-name datum head)
   (case head
@@ -517,8 +517,8 @@
              [else '()]))
          '())]
     [(defmacro)
-     (if (and (>= (length datum) 2) (pair? (cadr datum)) (symbol? (caadr datum)))
-         (list (caadr datum))
+     (if (and (>= (length datum) 2) (symbol? (cadr datum)))
+         (list (cadr datum))
          '())]
     [else '()]))
 
@@ -662,15 +662,16 @@
 ;; ========================================
 ;; process-defmacro: register a user macro
 ;; ========================================
-;; (defmacro (name $param ...) template)
+;; (defmacro name ($param ...) template)
 (define (process-defmacro datum)
-  (unless (and (list? datum) (= (length datum) 3))
-    (error 'defmacro "defmacro requires: (defmacro (name $params...) template)"))
-  (define pattern (normalize-quote-vars (cadr datum)))
-  (define template (normalize-quote-vars (caddr datum)))
-  (unless (and (pair? pattern) (symbol? (car pattern)))
-    (error 'defmacro "defmacro: first argument must be (name ...)"))
-  (define macro-name (car pattern))
+  (unless (and (list? datum) (= (length datum) 4))
+    (error 'defmacro "defmacro requires: (defmacro name ($params...) template)"))
+  (define macro-name (cadr datum))
+  (unless (symbol? macro-name)
+    (error 'defmacro "defmacro: name must be a symbol, got ~a" macro-name))
+  (define params (normalize-quote-vars (caddr datum)))
+  (define template (normalize-quote-vars (cadddr datum)))
+  (define pattern (if (list? params) (cons macro-name params) (list macro-name params)))
   (register-preparse-macro! macro-name (preparse-macro macro-name pattern template)))
 
 ;; ========================================
