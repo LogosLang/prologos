@@ -35,3 +35,26 @@ defn flip [f b a]
 spec on [B -> B -> C] [A -> B] A A -> C
 defn on [f g x y]
   f [g x] [g y]
+
+;; ========================================
+;; Core Macros
+;; ========================================
+
+;; when: conditional — returns body if true, unit otherwise.
+;; Use in checking context: (the Unit (when cond body))
+defmacro [when $cond $body] [if $cond $body unit]
+
+;; unless: negated conditional — returns body if false, unit otherwise.
+defmacro [unless $cond $body] [if $cond unit $body]
+
+;; pipe2: thread a value through two functions.
+;; (pipe2 x f g) = g(f(x))
+defmacro [pipe2 $x $f $g] [$g [$f $x]]
+
+;; pipe3: thread a value through three functions.
+;; (pipe3 x f g h) = h(g(f(x)))
+defmacro [pipe3 $x $f $g $h] [$h [$g [$f $x]]]
+
+;; twice: apply a function twice.
+;; (twice f x) = f(f(x))
+defmacro [twice $f $x] [$f [$f $x]]
