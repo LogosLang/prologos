@@ -1,0 +1,221 @@
+***
+*** Tests for Sub-Phase 0d: Core Type Checking
+***
+
+load prologos-prelude .
+load prologos-syntax .
+load prologos-substitution .
+load prologos-reduction .
+load prologos-typing-core .
+
+*** ========================================
+*** Universe typing
+*** ========================================
+
+*** Type(0) : Type(1)
+red infer(empty, Type(lzero)) .
+*** Expected: Type(lsuc(lzero))
+
+*** Type(1) : Type(2)
+red infer(empty, Type(lsuc(lzero))) .
+*** Expected: Type(lsuc(lsuc(lzero)))
+
+*** ========================================
+*** Nat typing
+*** ========================================
+
+*** Nat : Type(0)
+red infer(empty, Nat) .
+*** Expected: Type(lzero)
+
+*** zero : Nat
+red infer(empty, zero) .
+*** Expected: Nat
+
+*** suc(zero) : Nat
+red infer(empty, suc(zero)) .
+*** Expected: Nat
+
+*** suc(suc(zero)) : Nat
+red infer(empty, suc(suc(zero))) .
+*** Expected: Nat
+
+*** check: suc(zero) : Nat
+red check(empty, suc(zero), Nat) .
+*** Expected: true
+
+*** ========================================
+*** Bool typing
+*** ========================================
+
+red infer(empty, Bool) .
+*** Expected: Type(lzero)
+
+red infer(empty, true) .
+*** Expected: Bool
+
+*** ========================================
+*** Pi type formation
+*** ========================================
+
+*** Nat -> Nat : Type(0)
+red isType(empty, Pi(mw, Nat, Nat)) .
+*** Expected: true
+
+*** Pi(m0, Type(0), bvar(0)) : Type(1)
+*** This is the polymorphic identity type: forall (A:Type). A
+*** bvar(0) in the codomain refers to the bound Type variable
+red isType(empty, Pi(m0, Type(lzero), bvar(0))) .
+*** Expected: true
+
+*** ========================================
+*** Lambda typing (check mode)
+*** ========================================
+
+*** Identity: lam(mw, Nat, bvar(0)) : Nat -> Nat
+red check(empty, lam(mw, Nat, bvar(0)), Pi(mw, Nat, Nat)) .
+*** Expected: true
+
+*** Successor function: lam(mw, Nat, suc(bvar(0))) : Nat -> Nat
+red check(empty, lam(mw, Nat, suc(bvar(0))), Pi(mw, Nat, Nat)) .
+*** Expected: true
+
+*** Constant function: lam(mw, Nat, zero) : Nat -> Nat
+red check(empty, lam(mw, Nat, zero), Pi(mw, Nat, Nat)) .
+*** Expected: true
+
+*** NEGATIVE: lam(mw, Nat, bvar(0)) does NOT have type Nat -> Bool
+red check(empty, lam(mw, Nat, bvar(0)), Pi(mw, Nat, Bool)) .
+*** Expected: false
+
+*** ========================================
+*** Application typing (synthesis)
+*** ========================================
+
+*** (lam x:Nat. suc x) zero : Nat  (lambda must be annotated for synthesis)
+red infer(empty, app(ann(lam(mw, Nat, suc(bvar(0))), Pi(mw, Nat, Nat)), zero)) .
+*** Expected: Nat
+
+*** In context x:Nat, app of annotated identity to x
+red infer(extend(empty, Nat, mw), app(ann(lam(mw, Nat, bvar(0)), Pi(mw, Nat, Nat)), bvar(0))) .
+*** Expected: Nat
+
+*** ========================================
+*** Annotated terms
+*** ========================================
+
+*** ann(zero, Nat) synthesizes Nat
+red infer(empty, ann(zero, Nat)) .
+*** Expected: Nat
+
+*** ann(lam(mw, Nat, bvar(0)), Pi(mw, Nat, Nat)) synthesizes Pi(mw, Nat, Nat)
+red infer(empty, ann(lam(mw, Nat, bvar(0)), Pi(mw, Nat, Nat))) .
+*** Expected: Pi(mw, Nat, Nat)
+
+*** ========================================
+*** Sigma types
+*** ========================================
+
+*** Sigma(Nat, Nat) is a type (non-dependent pair)
+red isType(empty, Sigma(Nat, Nat)) .
+*** Expected: true
+
+*** pair(zero, suc(zero)) : Sigma(Nat, Nat)
+red check(empty, pair(zero, suc(zero)), Sigma(Nat, Nat)) .
+*** Expected: true
+
+*** fst(pair(zero, suc(zero))) : Nat
+red infer(empty, fst(ann(pair(zero, suc(zero)), Sigma(Nat, Nat)))) .
+*** Expected: Nat
+
+*** snd(pair(zero, suc(zero))) : Nat
+red infer(empty, snd(ann(pair(zero, suc(zero)), Sigma(Nat, Nat)))) .
+*** Expected: Nat
+
+*** ========================================
+*** Dependent pair: (zero, refl) : Sigma(x:Nat, Eq(Nat, x, zero))
+*** Sigma(Nat, Eq(Nat, bvar(0), zero))
+*** pair(zero, refl) checks:
+***   fst = zero : Nat  OK
+***   snd = refl : Eq(Nat, bvar(0), zero)[zero/0] = Eq(Nat, zero, zero)
+***   refl checks against Eq(Nat, zero, zero) iff conv(zero, zero) = true
+*** ========================================
+
+red check(empty, pair(zero, refl), Sigma(Nat, Eq(Nat, bvar(0), zero))) .
+*** Expected: true
+
+*** NEGATIVE: pair(suc(zero), refl) : Sigma(x:Nat, Eq(Nat, x, zero))
+*** snd would need refl : Eq(Nat, suc(zero), zero) which fails since suc(zero) /= zero
+red check(empty, pair(suc(zero), refl), Sigma(Nat, Eq(Nat, bvar(0), zero))) .
+*** Expected: false
+
+*** ========================================
+*** Equality types
+*** ========================================
+
+*** Eq(Nat, zero, zero) is a type
+red isType(empty, Eq(Nat, zero, zero)) .
+*** Expected: true
+
+*** refl : Eq(Nat, zero, zero)
+red check(empty, refl, Eq(Nat, zero, zero)) .
+*** Expected: true
+
+*** NEGATIVE: refl : Eq(Nat, zero, suc(zero))
+red check(empty, refl, Eq(Nat, zero, suc(zero))) .
+*** Expected: false
+
+*** ========================================
+*** Polymorphic identity function
+*** ========================================
+
+*** Type: Pi(m0, Type(0), Pi(mw, bvar(0), bvar(1)))
+*** Term: lam(m0, Type(0), lam(mw, bvar(0), bvar(0)))
+*** In the body of the outer lambda, context is [Type(0) : m0]
+*** Inner lambda has domain bvar(0) (= A), body bvar(0) (= x)
+*** Inner Pi codomain is bvar(1) (= A, shifted by one for inner binder)
+
+red check(empty,
+  lam(m0, Type(lzero), lam(mw, bvar(0), bvar(0))),
+  Pi(m0, Type(lzero), Pi(mw, bvar(0), bvar(1)))) .
+*** Expected: true
+
+*** ========================================
+*** Dependent application of polymorphic identity
+*** ========================================
+
+*** Let id = ann(lam(m0, Type(0), lam(mw, bvar(0), bvar(0))),
+***              Pi(m0, Type(0), Pi(mw, bvar(0), bvar(1))))
+*** app(id, Nat) : Pi(mw, Nat, Nat)
+*** app(app(id, Nat), zero) : Nat
+
+*** First: app(id, Nat) should infer to Pi(mw, Nat, Nat)
+*** Pi(m0, Type(0), Pi(mw, bvar(0), bvar(1))) applied to Nat:
+*** subst(0, Nat, Pi(mw, bvar(0), bvar(1))) = Pi(mw, Nat, Nat)
+red infer(empty,
+  app(ann(lam(m0, Type(lzero), lam(mw, bvar(0), bvar(0))),
+          Pi(m0, Type(lzero), Pi(mw, bvar(0), bvar(1)))),
+      Nat)) .
+*** Expected: Pi(mw, Nat, Nat)
+
+*** Full application: id Nat zero : Nat
+red infer(empty,
+  app(app(ann(lam(m0, Type(lzero), lam(mw, bvar(0), bvar(0))),
+              Pi(m0, Type(lzero), Pi(mw, bvar(0), bvar(1)))),
+          Nat),
+      zero)) .
+*** Expected: Nat
+
+*** ========================================
+*** NEGATIVE tests
+*** ========================================
+
+*** Cannot infer type of a bare lambda
+red infer(empty, lam(mw, Nat, bvar(0))) .
+*** Expected: errorExpr
+
+*** zero is not a Bool
+red check(empty, zero, Bool) .
+*** Expected: false
+
+quit .

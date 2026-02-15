@@ -1,0 +1,114 @@
+***
+*** PROLOGOS-SESSIONS
+*** Session types with dependency, duality, and substitution.
+***
+*** Session types govern communication protocols on channels.
+*** Dependent sessions allow protocol continuations to depend on communicated values.
+***
+
+fmod PROLOGOS-SESSIONS is
+  protecting PROLOGOS-INDUCTIVE .
+
+  *** ========================================
+  *** Session Type Constructors
+  *** ========================================
+  sort Session Label BranchList .
+  subsort Qid < Label .
+
+  op send : Expr Session -> Session [ctor] .       *** !A. S  (send value of type A)
+  op recv : Expr Session -> Session [ctor] .       *** ?A. S  (receive value of type A)
+  op dsend : Expr Session -> Session [ctor] .      *** !(x:A). S  (dependent send, binds in S)
+  op drecv : Expr Session -> Session [ctor] .      *** ?(x:A). S  (dependent receive, binds in S)
+  op choice : BranchList -> Session [ctor] .       *** internal choice
+  op offer : BranchList -> Session [ctor] .        *** external choice
+  op mu : Session -> Session [ctor] .              *** recursive session (binds svar(0))
+  op svar : Nat -> Session [ctor] .                *** session variable (de Bruijn)
+  op endS : -> Session [ctor] .                    *** session end
+
+  *** Branch lists
+  op nilB : -> BranchList [ctor] .
+  op branch : Label Session BranchList -> BranchList [ctor] .
+
+  *** ========================================
+  *** Duality: what the other endpoint sees
+  *** ========================================
+  op dual : Session -> Session .
+  op dualB : BranchList -> BranchList .
+
+  var A : Expr .
+  vars S S1 S2 : Session .
+  var L : Label .
+  var B : BranchList .
+  var N : Nat .
+
+  eq dual(send(A, S)) = recv(A, dual(S)) .
+  eq dual(recv(A, S)) = send(A, dual(S)) .
+  eq dual(dsend(A, S)) = drecv(A, dual(S)) .
+  eq dual(drecv(A, S)) = dsend(A, dual(S)) .
+  eq dual(choice(B)) = offer(dualB(B)) .
+  eq dual(offer(B)) = choice(dualB(B)) .
+  eq dual(mu(S)) = mu(dual(S)) .
+  eq dual(svar(N)) = svar(N) .
+  eq dual(endS) = endS .
+
+  eq dualB(nilB) = nilB .
+  eq dualB(branch(L, S, B)) = branch(L, dual(S), dualB(B)) .
+
+  *** ========================================
+  *** Session substitution (for dependent sessions)
+  *** Replace bvar(K) in session S with expression E
+  *** ========================================
+  op substS : Session Nat Expr -> Session .
+  op substSB : BranchList Nat Expr -> BranchList .
+
+  vars E E1 : Expr .
+  vars K2 : Nat .
+
+  eq substS(send(A, S), K2, E) = send(subst(K2, E, A), substS(S, K2, E)) .
+  eq substS(recv(A, S), K2, E) = recv(subst(K2, E, A), substS(S, K2, E)) .
+  *** dsend/drecv bind a variable in S, so K increases
+  eq substS(dsend(A, S), K2, E) = dsend(subst(K2, E, A), substS(S, s K2, shift(1, 0, E))) .
+  eq substS(drecv(A, S), K2, E) = drecv(subst(K2, E, A), substS(S, s K2, shift(1, 0, E))) .
+  eq substS(choice(B), K2, E) = choice(substSB(B, K2, E)) .
+  eq substS(offer(B), K2, E) = offer(substSB(B, K2, E)) .
+  eq substS(mu(S), K2, E) = mu(substS(S, K2, E)) .  *** mu binds session vars, not expr vars
+  eq substS(svar(N), K2, E) = svar(N) .
+  eq substS(endS, K2, E) = endS .
+
+  eq substSB(nilB, K2, E) = nilB .
+  eq substSB(branch(L, S, B), K2, E) = branch(L, substS(S, K2, E), substSB(B, K2, E)) .
+
+  *** ========================================
+  *** Session unfolding: unfold(mu(S)) = S[mu(S)/svar(0)]
+  *** ========================================
+  op unfold : Session -> Session .
+  op unfoldS : Session Nat Session -> Session .   *** unfoldS(body, k, replacement)
+  op unfoldSB : BranchList Nat Session -> BranchList .
+
+  eq unfold(mu(S)) = unfoldS(S, 0, mu(S)) .
+
+  eq unfoldS(send(A, S), K2, S1) = send(A, unfoldS(S, K2, S1)) .
+  eq unfoldS(recv(A, S), K2, S1) = recv(A, unfoldS(S, K2, S1)) .
+  eq unfoldS(dsend(A, S), K2, S1) = dsend(A, unfoldS(S, K2, S1)) .
+  eq unfoldS(drecv(A, S), K2, S1) = drecv(A, unfoldS(S, K2, S1)) .
+  eq unfoldS(choice(B), K2, S1) = choice(unfoldSB(B, K2, S1)) .
+  eq unfoldS(offer(B), K2, S1) = offer(unfoldSB(B, K2, S1)) .
+  eq unfoldS(mu(S), K2, S1) = mu(unfoldS(S, s K2, S1)) .  *** mu binds, so increment
+  eq unfoldS(svar(K2), K2, S1) = S1 .  *** found the variable to replace
+  ceq unfoldS(svar(N), K2, S1) = svar(N) if K2 =/= N .
+  eq unfoldS(endS, K2, S1) = endS .
+
+  eq unfoldSB(nilB, K2, S1) = nilB .
+  eq unfoldSB(branch(L, S, B), K2, S1) = branch(L, unfoldS(S, K2, S1), unfoldSB(B, K2, S1)) .
+
+  *** ========================================
+  *** Branch lookup
+  *** ========================================
+  op lookupBranch : Label BranchList -> Session .
+  op branchError : -> Session [ctor] .
+
+  eq lookupBranch(L, branch(L, S, B)) = S .
+  ceq lookupBranch(L, branch(L':Label, S, B)) = lookupBranch(L, B) if L =/= L':Label .
+  eq lookupBranch(L, nilB) = branchError .
+
+endfm

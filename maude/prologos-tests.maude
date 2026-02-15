@@ -1,0 +1,315 @@
+***
+*** PROLOGOS-TESTS
+*** Comprehensive integration test suite for the Prologos formal specification.
+***
+*** This file loads ALL modules and runs tests that exercise the complete
+*** specification, including cross-module interactions.
+***
+
+load prologos-prelude .
+load prologos-syntax .
+load prologos-substitution .
+load prologos-reduction .
+load prologos-typing-core .
+load prologos-inductive .
+load prologos-qtt .
+load prologos-sessions .
+load prologos-processes .
+load prologos-typing-sessions .
+
+*** ================================================================
+*** 1. POLYMORPHIC IDENTITY APPLIED TO NAT ZERO
+***    Tests: Pi types, lambda, application, annotation, conversion
+*** ================================================================
+
+*** The polymorphic identity: lam(m0, Type(0), lam(mw, bvar(0), bvar(0)))
+*** Its type: Pi(m0, Type(0), Pi(mw, bvar(0), bvar(1)))
+*** Applied to Nat and zero:
+***   app(app(ann(polyId, polyIdType), Nat), zero)
+
+*** Type of polyId
+red check(empty,
+  lam(m0, Type(lzero), lam(mw, bvar(0), bvar(0))),
+  Pi(m0, Type(lzero), Pi(mw, bvar(0), bvar(1)))) .
+*** Expected: true
+
+*** Apply polyId to Nat: result should have type Pi(mw, Nat, Nat)
+red infer(empty,
+  app(ann(lam(m0, Type(lzero), lam(mw, bvar(0), bvar(0))),
+          Pi(m0, Type(lzero), Pi(mw, bvar(0), bvar(1)))),
+      Nat)) .
+*** Expected: Pi(mw, Nat, Nat)
+
+*** Apply polyId to Nat then to zero: result type should be Nat
+red infer(empty,
+  app(app(ann(lam(m0, Type(lzero), lam(mw, bvar(0), bvar(0))),
+              Pi(m0, Type(lzero), Pi(mw, bvar(0), bvar(1)))),
+          Nat),
+      zero)) .
+*** Expected: Nat
+
+*** Normalize the application: should reduce to zero
+red nf(app(app(ann(lam(m0, Type(lzero), lam(mw, bvar(0), bvar(0))),
+                    Pi(m0, Type(lzero), Pi(mw, bvar(0), bvar(1)))),
+                Nat),
+            zero)) .
+*** Expected: zero
+
+*** ================================================================
+*** 2. NESTED DEPENDENT TYPES: Vector append type signature
+***    Tests: Vec, dependent Pi, substitution, type formation
+*** ================================================================
+
+*** Vec append type: Pi(0, Type(0), Pi(mw, Nat, Pi(mw, Nat,
+***   Pi(mw, Vec(bvar(2), bvar(1)), Pi(mw, Vec(bvar(3), bvar(1)),
+***     Vec(bvar(4), natrec(lam(mw, Nat, Nat), bvar(3), lam(mw, Nat, lam(mw, Nat, suc(bvar(0)))), bvar(2))))))))
+*** Simplified: just check that Vec(Nat, suc(suc(zero))) is a well-formed type
+red isType(empty, Vec(Nat, suc(suc(zero)))) .
+*** Expected: true
+
+*** Vec of Vec is a type
+red isType(empty, Vec(Vec(Nat, zero), suc(zero))) .
+*** Expected: true
+
+*** Fin(3) is a type
+red isType(empty, Fin(suc(suc(suc(zero))))) .
+*** Expected: true
+
+*** ================================================================
+*** 3. LENGTH-INDEXED SAFE HEAD
+***    Tests: Vec, Fin, vindex, dependent types interaction
+*** ================================================================
+
+*** A 2-element vector: vcons(Nat, 1, zero, vcons(Nat, 0, suc(zero), vnil(Nat)))
+*** Its type: Vec(Nat, suc(suc(zero)))
+red check(empty,
+  vcons(Nat, suc(zero), zero, vcons(Nat, zero, suc(zero), vnil(Nat))),
+  Vec(Nat, suc(suc(zero)))) .
+*** Expected: true
+
+*** Safe indexing with fzero: get first element
+red check(empty, fzero(suc(zero)), Fin(suc(suc(zero)))) .
+*** Expected: true
+
+*** vindex to get the first element of a 2-vector
+*** vindex(Nat, suc(suc(zero)), fzero(suc(zero)), vec2)
+red infer(empty,
+  vindex(Nat, suc(suc(zero)),
+    ann(fzero(suc(zero)), Fin(suc(suc(zero)))),
+    ann(vcons(Nat, suc(zero), zero, vcons(Nat, zero, suc(zero), vnil(Nat))),
+        Vec(Nat, suc(suc(zero)))))) .
+*** Expected: Nat
+
+*** NEGATIVE: Fin(0) has no constructors — fzero(0) is wrong
+*** fzero(N) : Fin(suc(N)), so fzero requires N >= 0, giving Fin(suc(N))
+*** We can't construct Fin(0) at all
+red check(empty, fzero(zero), Fin(zero)) .
+*** Expected: false (fzero(zero) : Fin(suc(zero)), not Fin(zero))
+
+*** ================================================================
+*** 4. ATM PROTOCOL AS SESSION TYPE WITH DUALITY
+***    Tests: Session constructors, duality, branching
+*** ================================================================
+
+*** ATM protocol from client's perspective:
+*** choice( auth -> send(Nat, choice( withdraw -> send(Nat, recv(Bool, endS)),
+***                                    balance -> recv(Nat, endS),
+***                                    quit -> endS )),
+***          quit -> endS )
+
+*** Simplified: a 2-branch protocol
+*** Client: choice(branch('deposit, send(Nat, endS), branch('query, recv(Nat, endS), nilB)))
+*** Server (dual): offer(branch('deposit, recv(Nat, endS), branch('query, send(Nat, endS), nilB)))
+
+red dual(choice(branch('deposit, send(Nat, endS),
+           branch('query, recv(Nat, endS), nilB)))) .
+*** Expected: offer(branch('deposit, recv(Nat, endS), branch('query, send(Nat, endS), nilB)))
+
+*** Dual is involution on the ATM protocol
+red dual(dual(choice(branch('deposit, send(Nat, endS),
+                branch('query, recv(Nat, endS), nilB))))) .
+*** Expected: choice(branch('deposit, send(Nat, endS), branch('query, recv(Nat, endS), nilB)))
+
+*** ================================================================
+*** 5. CLIENT-SERVER INTERACTION
+***    Tests: Process typing, send/recv, select/offer, duality
+*** ================================================================
+
+*** Server offers: offer(branch('ping, recv(Nat, endS), branch('quit, endS, nilB)))
+*** Client selects: psel, then sends/stops
+
+*** Client process: select 'ping, send zero, stop
+*** Client channel: choice(branch('ping, send(Nat, endS), branch('quit, endS, nilB)))
+red typeProc(empty,
+  ('c :: choice(branch('ping, send(Nat, endS), branch('quit, endS, nilB)))),
+  psel('c, 'ping, psend(zero, 'c, stop))) .
+*** Expected: true
+
+*** Server process: case { ping -> recv then stop, quit -> stop }
+*** Server channel: offer(branch('ping, recv(Nat, endS), branch('quit, endS, nilB)))
+red typeProc(empty,
+  ('s :: offer(branch('ping, recv(Nat, endS), branch('quit, endS, nilB)))),
+  pcase('s, branchP('ping, precv('s, Nat, stop),
+               branchP('quit, stop, nilBP)))) .
+*** Expected: true
+
+*** ================================================================
+*** 6. DEPENDENT VECTOR PROTOCOL
+***    Tests: dsend/drecv, session substitution, Vec in session
+*** ================================================================
+
+*** Protocol: dsend(Nat, send(Vec(Nat, bvar(0)), endS))
+*** "First send a number n, then send a vector of that length"
+
+*** After sending 2, continuation becomes: send(Vec(Nat, 2), endS)
+red substS(send(Vec(Nat, bvar(0)), endS), 0, suc(suc(zero))) .
+*** Expected: send(Vec(Nat, suc(suc(zero))), endS)
+
+*** Process types correctly with dependent send
+red typeProc(empty,
+  ('c :: dsend(Nat, send(Vec(Nat, bvar(0)), endS))),
+  psend(suc(suc(zero)), 'c,
+    psend(ann(vcons(Nat, suc(zero), zero, vcons(Nat, zero, suc(zero), vnil(Nat))),
+              Vec(Nat, suc(suc(zero)))),
+          'c, stop))) .
+*** Expected: true
+
+*** NEGATIVE: Send wrong-length vector after dependent send
+*** Send n=2, but then try to send a 1-element vector
+red typeProc(empty,
+  ('c :: dsend(Nat, send(Vec(Nat, bvar(0)), endS))),
+  psend(suc(suc(zero)), 'c,
+    psend(ann(vcons(Nat, zero, zero, vnil(Nat)),
+              Vec(Nat, suc(zero))),
+          'c, stop))) .
+*** Expected: false (Vec(Nat, 1) =/= Vec(Nat, 2))
+
+*** ================================================================
+*** 7. QTT VIOLATION DETECTION
+***    Tests: Linear variable duplication, erased variable use
+*** ================================================================
+
+*** Linear identity: lam(m1, Nat, bvar(0)) — uses x exactly once
+red in PROLOGOS-QTT : checkQtop(empty, lam(m1, Nat, bvar(0)), Pi(m1, Nat, Nat)) .
+*** Expected: true
+
+*** NEGATIVE: Duplicate linear variable
+*** lam(m1, Nat, pair(bvar(0), bvar(0))) — uses x twice
+red in PROLOGOS-QTT : checkQtop(empty,
+  lam(m1, Nat, pair(bvar(0), bvar(0))),
+  Pi(m1, Nat, Sigma(Nat, Nat))) .
+*** Expected: false
+
+*** NEGATIVE: Unused linear variable
+*** lam(m1, Nat, zero) — doesn't use x
+red in PROLOGOS-QTT : checkQtop(empty, lam(m1, Nat, zero), Pi(m1, Nat, Nat)) .
+*** Expected: false
+
+*** NEGATIVE: Erased variable used at runtime
+*** lam(m0, Nat, bvar(0)) — uses erased x
+red in PROLOGOS-QTT : checkQtop(empty, lam(m0, Nat, bvar(0)), Pi(m0, Nat, Nat)) .
+*** Expected: false
+
+*** Erased argument correctly ignored
+*** lam(m0, Nat, zero) — doesn't use x, and x is erased — fine
+red in PROLOGOS-QTT : checkQtop(empty, lam(m0, Nat, zero), Pi(m0, Nat, Nat)) .
+*** Expected: true
+
+*** Omega variable used multiple times is OK
+*** lam(mw, Nat, pair(bvar(0), bvar(0)))
+red in PROLOGOS-QTT : checkQtop(empty,
+  lam(mw, Nat, pair(bvar(0), bvar(0))),
+  Pi(mw, Nat, Sigma(Nat, Nat))) .
+*** Expected: true
+
+*** QTT with application: linear function consumes argument once
+red in PROLOGOS-QTT : checkQtop(extend(empty, Nat, m1),
+  app(ann(lam(m1, Nat, bvar(0)), Pi(m1, Nat, Nat)), bvar(0)),
+  Nat) .
+*** Expected: true
+
+*** NEGATIVE: Linear variable passed to unrestricted function
+*** In context [x : Nat, m1]:
+*** app(ann(lam(mw, Nat, bvar(0)), Pi(mw, Nat, Nat)), bvar(0))
+*** inferQ function = ucons(m0), checkQ arg = ucons(m1)
+*** total = ucons(m0) + mw * ucons(m1) = ucons(m0 + mw) = ucons(mw)
+*** compatible(m1, mw) = false — rejected!
+red in PROLOGOS-QTT : checkQtop(extend(empty, Nat, m1),
+  app(ann(lam(mw, Nat, bvar(0)), Pi(mw, Nat, Nat)), bvar(0)),
+  Nat) .
+*** Expected: false — because mw usage of x is not compatible with m1
+
+*** ================================================================
+*** 8. RECURSIVE SESSIONS
+***    Tests: mu, unfold, svar
+*** ================================================================
+
+*** Recursive protocol: mu(send(Nat, svar(0)))
+*** "Repeatedly send Nats forever"
+red in PROLOGOS-TYPING-SESSIONS : unfold(mu(send(Nat, svar(0)))) .
+*** Expected: send(Nat, mu(send(Nat, svar(0))))
+
+*** Dual of recursive protocol
+red in PROLOGOS-TYPING-SESSIONS : dual(mu(send(Nat, svar(0)))) .
+*** Expected: mu(recv(Nat, svar(0)))
+
+*** ================================================================
+*** 9. CONVERSION AND NORMALIZATION CROSS-MODULE
+***    Tests: conv with complex terms, WHNF under session types
+*** ================================================================
+
+*** natrec computes: 2 + 1 = 3
+*** plus = lam(mw, Nat, lam(mw, Nat, natrec(lam(mw, Nat, Nat), bvar(0), lam(mw, Nat, lam(mw, Nat, suc(bvar(0)))), bvar(1))))
+*** We test that natrec(motive, suc(zero), step, suc(suc(zero))) normalizes correctly
+red nf(natrec(ann(lam(mw, Nat, Nat), Pi(mw, Nat, Type(lzero))),
+              suc(zero),
+              ann(lam(mw, Nat, lam(mw, Nat, suc(bvar(0)))), Pi(mw, Nat, Pi(mw, Nat, Nat))),
+              suc(suc(zero)))) .
+*** Expected: suc(suc(suc(zero)))  (i.e., 2 + 1 = 3)
+
+*** Conversion: 1+1 == 2
+red conv(natrec(ann(lam(mw, Nat, Nat), Pi(mw, Nat, Type(lzero))),
+               suc(zero),
+               ann(lam(mw, Nat, lam(mw, Nat, suc(bvar(0)))), Pi(mw, Nat, Pi(mw, Nat, Nat))),
+               suc(zero)),
+        suc(suc(zero))) .
+*** Expected: true (1 + 1 normalizes to suc(suc(zero)))
+
+*** ================================================================
+*** 10. LINK WITH DUAL SESSIONS
+***     Tests: plink, duality check
+*** ================================================================
+
+*** link two channels with dual sessions
+red in PROLOGOS-TYPING-SESSIONS : typeProc(empty,
+  ('c1 :: send(Nat, endS) , 'c2 :: recv(Nat, endS)),
+  plink('c1, 'c2)) .
+*** Expected: true
+
+*** NEGATIVE: link with non-dual sessions
+red in PROLOGOS-TYPING-SESSIONS : typeProc(empty,
+  ('c1 :: send(Nat, endS) , 'c2 :: send(Nat, endS)),
+  plink('c1, 'c2)) .
+*** Expected: false
+
+*** ================================================================
+*** 11. SOLVE (AXIOMATIC PROOF SEARCH)
+***     Tests: psolve extends unrestricted context
+*** ================================================================
+
+*** solve for a Nat, then use it in a send
+red in PROLOGOS-TYPING-SESSIONS : typeProc(empty,
+  ('c :: send(Nat, endS)),
+  psolve(Nat, psend(bvar(0), 'c, stop))) .
+*** Expected: true
+
+*** ================================================================
+*** SUMMARY
+*** ================================================================
+*** Total tests: ~35
+*** Covering: Core types, dependent types, Vec/Fin, session types,
+***   process typing, QTT multiplicities, normalization, duality,
+***   dependent sessions, branching, conversion, and negative cases.
+***
+
+quit .

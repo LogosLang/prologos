@@ -1,0 +1,140 @@
+***
+*** Tests for Sub-Phase 0b: Substitution
+***
+
+load prologos-prelude .
+load prologos-syntax .
+load prologos-substitution .
+
+*** ========================================
+*** Shift tests
+*** ========================================
+
+*** Shift bvar(0) by 1 at cutoff 0 -> bvar(1)
+red shift(1, 0, bvar(0)) .
+*** Expected: bvar(1)
+
+*** Shift bvar(0) by 1 at cutoff 1 -> bvar(0) (below cutoff, unchanged)
+red shift(1, 1, bvar(0)) .
+*** Expected: bvar(0)
+
+*** Shift bvar(2) by 1 at cutoff 0 -> bvar(3)
+red shift(1, 0, bvar(2)) .
+*** Expected: bvar(3)
+
+*** Shift free variable: unchanged
+red shift(1, 0, fvar('x)) .
+*** Expected: fvar('x)
+
+*** Shift under lambda: lam(mw, Nat, bvar(0)) -- bvar(0) is the lambda's own
+*** binding, so cutoff is 1 inside body, bvar(0) < 1, unchanged
+red shift(1, 0, lam(mw, Nat, bvar(0))) .
+*** Expected: lam(mw, Nat, bvar(0))
+
+*** Shift under lambda: lam(mw, Nat, bvar(1)) -- bvar(1) refers outside lambda
+*** Inside body cutoff is 1, bvar(1) >= 1, so shifted to bvar(2)
+red shift(1, 0, lam(mw, Nat, bvar(1))) .
+*** Expected: lam(mw, Nat, bvar(2))
+
+*** Shift constant: unchanged
+red shift(1, 0, zero) .
+*** Expected: zero
+
+*** Shift app
+red shift(1, 0, app(bvar(0), bvar(1))) .
+*** Expected: app(bvar(1), bvar(2))
+
+*** ========================================
+*** Substitution tests
+*** ========================================
+
+*** Substitute into matching bvar
+red subst(0, zero, bvar(0)) .
+*** Expected: zero
+
+*** Substitute into non-matching bvar
+red subst(0, zero, bvar(1)) .
+*** Expected: bvar(1)
+
+*** Substitute into free variable: unchanged
+red subst(0, zero, fvar('x)) .
+*** Expected: fvar('x)
+
+*** Substitute into application
+red subst(0, zero, app(bvar(0), bvar(1))) .
+*** Expected: app(zero, bvar(1))
+
+*** Substitute under a lambda:
+*** lam(mw, Nat, app(bvar(1), bvar(0)))
+*** bvar(1) in body refers to external bvar(0) (shifted by entering binder)
+*** bvar(0) in body refers to the lambda's own binding
+*** subst(0, zero, ...) should replace the external reference
+*** Under the binder: K becomes 1, S becomes shift(1,0,zero) = zero
+*** subst(1, zero, app(bvar(1), bvar(0))) = app(zero, bvar(0))
+red subst(0, zero, lam(mw, Nat, app(bvar(1), bvar(0)))) .
+*** Expected: lam(mw, Nat, app(zero, bvar(0)))
+
+*** Substitute under Pi type
+red subst(0, zero, Pi(mw, Nat, bvar(1))) .
+*** Expected: Pi(mw, Nat, zero)
+
+*** Substitute suc
+red subst(0, zero, suc(bvar(0))) .
+*** Expected: suc(zero)
+
+*** ========================================
+*** Open tests
+*** ========================================
+
+*** Open a simple body: bvar(0) is the binding, replace with zero
+red open(bvar(0), zero) .
+*** Expected: zero
+
+*** Open: bvar(1) in body refers to something outside; after opening
+*** (replacing bvar(0) with zero), bvar(1) stays bvar(1)
+red open(bvar(1), zero) .
+*** Expected: bvar(1)
+
+*** Open app(bvar(0), bvar(1)) with fvar('x)
+red open(app(bvar(0), bvar(1)), fvar('x)) .
+*** Expected: app(fvar('x), bvar(1))
+
+*** ========================================
+*** Combined: representing (lam x:Nat. suc x) and substituting
+*** ========================================
+
+*** The identity function on Nat: lam(mw, Nat, bvar(0))
+*** Apply it to zero: app(lam(mw, Nat, bvar(0)), zero)
+*** Beta-reducing means: open(bvar(0), zero) = zero
+red open(bvar(0), zero) .
+*** Expected: zero
+
+*** (lam x:Nat. suc x) applied to zero:
+*** open(suc(bvar(0)), zero) = suc(zero)
+red open(suc(bvar(0)), zero) .
+*** Expected: suc(zero)
+
+*** Nested: (lam x:Nat. lam y:Nat. x) applied to zero:
+*** Body is lam(mw, Nat, bvar(1)) -- bvar(1) refers to x (the outer binder)
+*** open(lam(mw, Nat, bvar(1)), zero) should give lam(mw, Nat, zero)
+*** Under the inner binder, bvar(1) should be replaced by shift(1,0,zero) = zero
+red open(lam(mw, Nat, bvar(1)), zero) .
+*** Expected: lam(mw, Nat, zero)
+
+*** Substitute expression containing bound variables:
+*** Let s = suc(bvar(0)) (referring to some outer binder)
+*** subst(0, suc(bvar(0)), bvar(0)) = suc(bvar(0))
+red subst(0, suc(bvar(0)), bvar(0)) .
+*** Expected: suc(bvar(0))
+
+*** Under a lambda, the substituted term must be shifted:
+*** subst(0, bvar(0), lam(mw, Nat, bvar(1)))
+*** Inside lambda: K=1, S=shift(1,0,bvar(0))=bvar(1)
+*** subst(1, bvar(1), bvar(1)) = bvar(1)  (matches!)
+red subst(0, bvar(0), lam(mw, Nat, bvar(1))) .
+*** Expected: lam(mw, Nat, bvar(1))
+*** Wait -- bvar(1) in the body referred to the external bvar(0).
+*** After substitution, it should be replaced with bvar(0) shifted to bvar(1).
+*** So: lam(mw, Nat, bvar(1)) -- same term, but now bvar(1) IS the substituted value
+
+quit .

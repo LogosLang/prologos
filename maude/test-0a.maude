@@ -1,0 +1,78 @@
+***
+*** Tests for Sub-Phase 0a: Prelude + Syntax
+***
+
+load prologos-prelude .
+load prologos-syntax .
+
+*** ========================================
+*** Multiplicity semiring tests
+*** ========================================
+
+*** Addition
+red m0 +m m0 .   *** Expected: m0
+red m0 +m m1 .   *** Expected: m1
+red m1 +m m1 .   *** Expected: mw
+red m1 +m mw .   *** Expected: mw
+red mw +m mw .   *** Expected: mw
+
+*** Multiplication
+red m0 *m m1 .   *** Expected: m0
+red m1 *m m1 .   *** Expected: m1
+red mw *m m1 .   *** Expected: mw
+red m0 *m mw .   *** Expected: m0
+
+*** Ordering
+red m0 <=m m1 .  *** Expected: true
+red m1 <=m mw .  *** Expected: true
+red mw <=m m1 .  *** Expected: false
+red m0 <=m mw .  *** Expected: true
+
+*** Compatibility
+red compatible(mw, m0) .  *** Expected: true (omega allows zero use)
+red compatible(mw, m1) .  *** Expected: true (omega allows one use)
+red compatible(mw, mw) .  *** Expected: true
+red compatible(m1, m1) .  *** Expected: true
+red compatible(m1, m0) .  *** Expected: false (linear must be used)
+red compatible(m0, m1) .  *** Expected: false (erased can't be used)
+
+*** ========================================
+*** Universe level tests
+*** ========================================
+
+red lmax(lzero, lsuc(lzero)) .      *** Expected: lsuc(lzero)
+red lmax(lsuc(lzero), lzero) .      *** Expected: lsuc(lzero)
+red lmax(lsuc(lzero), lsuc(lzero)) .  *** Expected: lsuc(lzero)
+red lmax(lsuc(lsuc(lzero)), lsuc(lzero)) .  *** Expected: lsuc(lsuc(lzero))
+red lmax(lzero, lzero) .            *** Expected: lzero
+
+*** ========================================
+*** Nat convenience
+*** ========================================
+
+red nat(0) .  *** Expected: zero
+red nat(3) .  *** Expected: suc(suc(suc(zero)))
+
+*** ========================================
+*** Context operations
+*** ========================================
+
+red ctxLen(empty) .  *** Expected: 0
+red ctxLen(extend(empty, Nat, mw)) .  *** Expected: 1
+red ctxLen(extend(extend(empty, Nat, mw), Bool, m1)) .  *** Expected: 2
+
+red lookupType(0, extend(empty, Nat, mw)) .  *** Expected: Nat
+red lookupType(0, extend(extend(empty, Nat, mw), Bool, m1)) .  *** Expected: Bool
+red lookupType(1, extend(extend(empty, Nat, mw), Bool, m1)) .  *** Expected: Nat
+
+red lookupMult(0, extend(empty, Nat, mw)) .  *** Expected: mw
+red lookupMult(0, extend(extend(empty, Nat, mw), Bool, m1)) .  *** Expected: m1
+
+*** ========================================
+*** Non-dependent type sugar
+*** ========================================
+
+red Nat --> Nat .  *** Expected: Pi(mw, Nat, Nat)
+red Nat ** Bool .  *** Expected: Sigma(Nat, Bool)
+
+quit .

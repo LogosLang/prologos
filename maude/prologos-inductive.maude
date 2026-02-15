@@ -1,0 +1,160 @@
+***
+*** PROLOGOS-INDUCTIVE
+*** Built-in inductive families: Vec (length-indexed vectors) and Fin (bounded naturals).
+*** Extends syntax, substitution, reduction, and typing for these types.
+***
+*** This module adds Vec and Fin as built-in types rather than via a general
+*** inductive type mechanism. A general mechanism is deferred to later phases.
+***
+
+fmod PROLOGOS-INDUCTIVE is
+  protecting PROLOGOS-TYPING-CORE .
+
+  *** ========================================
+  *** Additional Constructors
+  *** (Declared using op in this extending module)
+  *** ========================================
+
+  *** Vec type: Vec(A, n) where A : Type and n : Nat
+  op Vec : Expr Expr -> Expr [ctor] .
+
+  *** Vec constructors
+  op vnil : Expr -> Expr [ctor] .                   *** vnil(A) : Vec(A, zero)
+  op vcons : Expr Expr Expr Expr -> Expr [ctor] .   *** vcons(A, n, head, tail) : Vec(A, suc(n))
+
+  *** Fin type: Fin(n) where n : Nat
+  op Fin : Expr -> Expr [ctor] .
+
+  *** Fin constructors
+  op fzero : Expr -> Expr [ctor] .           *** fzero(n) : Fin(suc(n))
+  op fsuc : Expr Expr -> Expr [ctor] .       *** fsuc(n, i) : Fin(suc(n)) when i : Fin(n)
+
+  *** Vec eliminators
+  op vhead : Expr Expr Expr -> Expr [ctor] . *** vhead(A, n, v) : A  when v : Vec(A, suc(n))
+  op vtail : Expr Expr Expr -> Expr [ctor] . *** vtail(A, n, v) : Vec(A, n) when v : Vec(A, suc(n))
+  op vindex : Expr Expr Expr Expr -> Expr [ctor] .  *** vindex(A, n, i, v) : A when i : Fin(n), v : Vec(A, n)
+
+  *** ========================================
+  *** Shift extensions for new constructors
+  *** ========================================
+  vars D C K N2 : Nat .
+  vars E E1 E2 E3 E4 : Expr .
+  var M : Mult .
+
+  eq shift(D, C, Vec(E1, E2)) = Vec(shift(D, C, E1), shift(D, C, E2)) .
+  eq shift(D, C, vnil(E1)) = vnil(shift(D, C, E1)) .
+  eq shift(D, C, vcons(E1, E2, E3, E4)) =
+    vcons(shift(D, C, E1), shift(D, C, E2), shift(D, C, E3), shift(D, C, E4)) .
+  eq shift(D, C, Fin(E1)) = Fin(shift(D, C, E1)) .
+  eq shift(D, C, fzero(E1)) = fzero(shift(D, C, E1)) .
+  eq shift(D, C, fsuc(E1, E2)) = fsuc(shift(D, C, E1), shift(D, C, E2)) .
+  eq shift(D, C, vhead(E1, E2, E3)) = vhead(shift(D, C, E1), shift(D, C, E2), shift(D, C, E3)) .
+  eq shift(D, C, vtail(E1, E2, E3)) = vtail(shift(D, C, E1), shift(D, C, E2), shift(D, C, E3)) .
+  eq shift(D, C, vindex(E1, E2, E3, E4)) =
+    vindex(shift(D, C, E1), shift(D, C, E2), shift(D, C, E3), shift(D, C, E4)) .
+
+  *** ========================================
+  *** Substitution extensions
+  *** ========================================
+  var S : Expr .
+
+  eq subst(K, S, Vec(E1, E2)) = Vec(subst(K, S, E1), subst(K, S, E2)) .
+  eq subst(K, S, vnil(E1)) = vnil(subst(K, S, E1)) .
+  eq subst(K, S, vcons(E1, E2, E3, E4)) =
+    vcons(subst(K, S, E1), subst(K, S, E2), subst(K, S, E3), subst(K, S, E4)) .
+  eq subst(K, S, Fin(E1)) = Fin(subst(K, S, E1)) .
+  eq subst(K, S, fzero(E1)) = fzero(subst(K, S, E1)) .
+  eq subst(K, S, fsuc(E1, E2)) = fsuc(subst(K, S, E1), subst(K, S, E2)) .
+  eq subst(K, S, vhead(E1, E2, E3)) = vhead(subst(K, S, E1), subst(K, S, E2), subst(K, S, E3)) .
+  eq subst(K, S, vtail(E1, E2, E3)) = vtail(subst(K, S, E1), subst(K, S, E2), subst(K, S, E3)) .
+  eq subst(K, S, vindex(E1, E2, E3, E4)) =
+    vindex(subst(K, S, E1), subst(K, S, E2), subst(K, S, E3), subst(K, S, E4)) .
+
+  *** ========================================
+  *** Reduction extensions
+  *** ========================================
+
+  *** vhead reduces on vcons
+  eq whnf(vhead(E1, E2, vcons(E1, E2, E3, E4))) = whnf(E3) .
+  *** vtail reduces on vcons
+  eq whnf(vtail(E1, E2, vcons(E1, E2, E3, E4))) = whnf(E4) .
+
+  *** Normalization extensions
+  eq nfWhnf(Vec(E1, E2)) = Vec(nf(E1), nf(E2)) .
+  eq nfWhnf(vnil(E1)) = vnil(nf(E1)) .
+  eq nfWhnf(vcons(E1, E2, E3, E4)) = vcons(nf(E1), nf(E2), nf(E3), nf(E4)) .
+  eq nfWhnf(Fin(E1)) = Fin(nf(E1)) .
+  eq nfWhnf(fzero(E1)) = fzero(nf(E1)) .
+  eq nfWhnf(fsuc(E1, E2)) = fsuc(nf(E1), nf(E2)) .
+  eq nfWhnf(vhead(E1, E2, E3)) = vhead(nf(E1), nf(E2), nf(E3)) .
+  eq nfWhnf(vtail(E1, E2, E3)) = vtail(nf(E1), nf(E2), nf(E3)) .
+  eq nfWhnf(vindex(E1, E2, E3, E4)) = vindex(nf(E1), nf(E2), nf(E3), nf(E4)) .
+
+  *** ========================================
+  *** Typing rules for Vec and Fin
+  *** ========================================
+  var G : Context .
+  var L : Level .
+
+  *** Vec(A, n) : Type(level(A))  if A : Type(l) and n : Nat
+  ceq inferLevel(G, Vec(E1, E2)) = justLevel(L)
+    if justLevel(L) := inferLevel(G, E1)
+    /\ check(G, E2, Nat) .
+
+  *** Fin(n) : Type(0)  if n : Nat
+  ceq inferLevel(G, Fin(E1)) = justLevel(lzero)
+    if check(G, E1, Nat) .
+
+  *** vnil(A) : Vec(A, zero)
+  ceq check(G, vnil(E1), Vec(E1, zero)) = true
+    if isType(G, E1) .
+
+  *** vnil(A) inferred with conversion
+  ceq check(G, vnil(E1), Vec(E2, E3)) = true
+    if isType(G, E1)
+    /\ conv(E1, E2)
+    /\ conv(E3, zero) .
+
+  *** vcons(A, n, x, xs) : Vec(A, suc(n))
+  ceq check(G, vcons(E1, E2, E3, E4), Vec(E1, suc(E2))) = true
+    if check(G, E3, E1)
+    /\ check(G, E4, Vec(E1, E2)) .
+
+  *** vcons with conversion
+  ceq check(G, vcons(E1, E2, E3, E4), Vec(E1, N2:Expr)) = true
+    if conv(N2:Expr, suc(E2))
+    /\ check(G, E3, E1)
+    /\ check(G, E4, Vec(E1, E2)) [owise] .
+
+  *** fzero(n) : Fin(suc(n))
+  ceq check(G, fzero(E1), Fin(suc(E1))) = true
+    if check(G, E1, Nat) .
+
+  *** fzero with conversion
+  ceq check(G, fzero(E1), Fin(E2)) = true
+    if conv(E2, suc(E1))
+    /\ check(G, E1, Nat) [owise] .
+
+  *** fsuc(n, i) : Fin(suc(n))  when i : Fin(n)
+  ceq check(G, fsuc(E1, E2), Fin(suc(E1))) = true
+    if check(G, E2, Fin(E1)) .
+
+  *** fsuc with conversion
+  ceq check(G, fsuc(E1, E2), Fin(E3)) = true
+    if conv(E3, suc(E1))
+    /\ check(G, E2, Fin(E1)) [owise] .
+
+  *** vhead(A, n, v) : A  when v : Vec(A, suc(n))
+  ceq infer(G, vhead(E1, E2, E3)) = E1
+    if check(G, E3, Vec(E1, suc(E2))) .
+
+  *** vtail(A, n, v) : Vec(A, n)  when v : Vec(A, suc(n))
+  ceq infer(G, vtail(E1, E2, E3)) = Vec(E1, E2)
+    if check(G, E3, Vec(E1, suc(E2))) .
+
+  *** vindex(A, n, i, v) : A  when i : Fin(n) and v : Vec(A, n)
+  ceq infer(G, vindex(E1, E2, E3, E4)) = E1
+    if check(G, E3, Fin(E2))
+    /\ check(G, E4, Vec(E1, E2)) .
+
+endfm

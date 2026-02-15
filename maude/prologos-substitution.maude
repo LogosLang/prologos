@@ -1,0 +1,120 @@
+***
+*** PROLOGOS-SUBSTITUTION
+*** Locally-nameless substitution operations for Prologos.
+***
+*** shift(d, c, e) : increase all bound indices >= c by d in e
+*** subst(k, s, e) : replace bvar(k) with s in e (shifting s appropriately)
+*** open(e, s)     : replace bvar(0) with s and decrement all other indices
+***                  (used when entering a binder)
+***
+
+fmod PROLOGOS-SUBSTITUTION is
+  protecting PROLOGOS-SYNTAX .
+
+  *** ========================================
+  *** Shift: increase bound indices >= cutoff by delta
+  *** ========================================
+  op shift : Nat Nat Expr -> Expr .
+
+  vars D C K N : Nat .
+  vars E E1 E2 E3 E4 E5 : Expr .
+  var Q : Qid .
+  var M : Mult .
+  var L : Level .
+
+  *** Variables
+  ceq shift(D, C, bvar(K)) = bvar(K + D) if K >= C .
+  ceq shift(D, C, bvar(K)) = bvar(K) if K < C .
+  eq shift(D, C, fvar(Q)) = fvar(Q) .
+
+  *** Constants
+  eq shift(D, C, zero) = zero .
+  eq shift(D, C, suc(E)) = suc(shift(D, C, E)) .
+  eq shift(D, C, refl) = refl .
+  eq shift(D, C, Nat) = Nat .
+  eq shift(D, C, Bool) = Bool .
+  eq shift(D, C, true) = true .
+  eq shift(D, C, false) = false .
+  eq shift(D, C, Unit) = Unit .
+  eq shift(D, C, unit) = unit .
+  eq shift(D, C, Type(L)) = Type(L) .
+  eq shift(D, C, errorExpr) = errorExpr .
+
+  *** Binding forms: cutoff increases under binders
+  eq shift(D, C, lam(M, E1, E2)) = lam(M, shift(D, C, E1), shift(D, s C, E2)) .
+  eq shift(D, C, Pi(M, E1, E2)) = Pi(M, shift(D, C, E1), shift(D, s C, E2)) .
+  eq shift(D, C, Sigma(E1, E2)) = Sigma(shift(D, C, E1), shift(D, s C, E2)) .
+
+  *** Non-binding forms
+  eq shift(D, C, app(E1, E2)) = app(shift(D, C, E1), shift(D, C, E2)) .
+  eq shift(D, C, pair(E1, E2)) = pair(shift(D, C, E1), shift(D, C, E2)) .
+  eq shift(D, C, fst(E)) = fst(shift(D, C, E)) .
+  eq shift(D, C, snd(E)) = snd(shift(D, C, E)) .
+  eq shift(D, C, ann(E1, E2)) = ann(shift(D, C, E1), shift(D, C, E2)) .
+  eq shift(D, C, Eq(E1, E2, E3)) = Eq(shift(D, C, E1), shift(D, C, E2), shift(D, C, E3)) .
+
+  *** Eliminators (all arguments are non-binding — motive/step/base are lambda terms)
+  eq shift(D, C, natrec(E1, E2, E3, E4)) =
+    natrec(shift(D, C, E1), shift(D, C, E2), shift(D, C, E3), shift(D, C, E4)) .
+
+  eq shift(D, C, J(E1, E2, E3, E4, E5)) =
+    J(shift(D, C, E1), shift(D, C, E2), shift(D, C, E3), shift(D, C, E4), shift(D, C, E5)) .
+
+  *** ========================================
+  *** Substitution: replace bvar(K) with S in E
+  *** When going under a binder, K increases and S is shifted up
+  *** ========================================
+  op subst : Nat Expr Expr -> Expr .
+
+  var S : Expr .
+
+  *** Variables
+  eq subst(K, S, bvar(K)) = S .
+  ceq subst(K, S, bvar(N)) = bvar(N) if K =/= N .
+  eq subst(K, S, fvar(Q)) = fvar(Q) .
+
+  *** Constants
+  eq subst(K, S, zero) = zero .
+  eq subst(K, S, suc(E)) = suc(subst(K, S, E)) .
+  eq subst(K, S, refl) = refl .
+  eq subst(K, S, Nat) = Nat .
+  eq subst(K, S, Bool) = Bool .
+  eq subst(K, S, true) = true .
+  eq subst(K, S, false) = false .
+  eq subst(K, S, Unit) = Unit .
+  eq subst(K, S, unit) = unit .
+  eq subst(K, S, Type(L)) = Type(L) .
+  eq subst(K, S, errorExpr) = errorExpr .
+
+  *** Binding forms: increase K, shift S up by 1
+  eq subst(K, S, lam(M, E1, E2)) =
+    lam(M, subst(K, S, E1), subst(s K, shift(1, 0, S), E2)) .
+  eq subst(K, S, Pi(M, E1, E2)) =
+    Pi(M, subst(K, S, E1), subst(s K, shift(1, 0, S), E2)) .
+  eq subst(K, S, Sigma(E1, E2)) =
+    Sigma(subst(K, S, E1), subst(s K, shift(1, 0, S), E2)) .
+
+  *** Non-binding forms
+  eq subst(K, S, app(E1, E2)) = app(subst(K, S, E1), subst(K, S, E2)) .
+  eq subst(K, S, pair(E1, E2)) = pair(subst(K, S, E1), subst(K, S, E2)) .
+  eq subst(K, S, fst(E)) = fst(subst(K, S, E)) .
+  eq subst(K, S, snd(E)) = snd(subst(K, S, E)) .
+  eq subst(K, S, ann(E1, E2)) = ann(subst(K, S, E1), subst(K, S, E2)) .
+  eq subst(K, S, Eq(E1, E2, E3)) =
+    Eq(subst(K, S, E1), subst(K, S, E2), subst(K, S, E3)) .
+
+  *** Eliminators (non-binding — motive/step/base are lambda terms)
+  eq subst(K, S, natrec(E1, E2, E3, E4)) =
+    natrec(subst(K, S, E1), subst(K, S, E2), subst(K, S, E3), subst(K, S, E4)) .
+
+  eq subst(K, S, J(E1, E2, E3, E4, E5)) =
+    J(subst(K, S, E1), subst(K, S, E2), subst(K, S, E3), subst(K, S, E4), subst(K, S, E5)) .
+
+  *** ========================================
+  *** Open: substitute s for bvar(0)
+  *** open(e, s) = subst(0, s, e)
+  *** ========================================
+  op open : Expr Expr -> Expr .
+  eq open(E, S) = subst(0, S, E) .
+
+endfm

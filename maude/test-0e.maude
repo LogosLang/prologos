@@ -1,0 +1,103 @@
+***
+*** Tests for Sub-Phase 0e: Inductive Families (Vec, Fin)
+***
+
+load prologos-prelude .
+load prologos-syntax .
+load prologos-substitution .
+load prologos-reduction .
+load prologos-typing-core .
+load prologos-inductive .
+
+*** ========================================
+*** Vec type formation
+*** ========================================
+
+*** Vec(Nat, zero) is a type
+red isType(empty, Vec(Nat, zero)) .
+*** Expected: true
+
+*** Vec(Nat, suc(zero)) is a type
+red isType(empty, Vec(Nat, suc(zero))) .
+*** Expected: true
+
+*** Vec(Bool, suc(suc(zero))) is a type
+red isType(empty, Vec(Bool, suc(suc(zero)))) .
+*** Expected: true
+
+*** ========================================
+*** Fin type formation
+*** ========================================
+
+*** Fin(suc(zero)) is a type
+red isType(empty, Fin(suc(zero))) .
+*** Expected: true
+
+*** Fin(suc(suc(suc(zero)))) is a type
+red isType(empty, Fin(suc(suc(suc(zero))))) .
+*** Expected: true
+
+*** ========================================
+*** Vec constructor typing
+*** ========================================
+
+*** vnil(Nat) : Vec(Nat, zero)
+red check(empty, vnil(Nat), Vec(Nat, zero)) .
+*** Expected: true
+
+*** vcons(Nat, zero, zero, vnil(Nat)) : Vec(Nat, suc(zero))
+*** A single-element vector [0]
+red check(empty, vcons(Nat, zero, zero, vnil(Nat)), Vec(Nat, suc(zero))) .
+*** Expected: true
+
+*** Two-element vector [1, 0] : Vec(Nat, suc(suc(zero)))
+red check(empty,
+  vcons(Nat, suc(zero), suc(zero),
+    vcons(Nat, zero, zero, vnil(Nat))),
+  Vec(Nat, suc(suc(zero)))) .
+*** Expected: true
+
+*** Three-element vector [0, 1, 2] : Vec(Nat, 3)
+red check(empty,
+  vcons(Nat, suc(suc(zero)), zero,
+    vcons(Nat, suc(zero), suc(zero),
+      vcons(Nat, zero, suc(suc(zero)), vnil(Nat)))),
+  Vec(Nat, suc(suc(suc(zero))))) .
+*** Expected: true
+
+*** NEGATIVE: wrong length
+red check(empty, vnil(Nat), Vec(Nat, suc(zero))) .
+*** Expected: false
+
+*** ========================================
+*** Fin constructor typing
+*** ========================================
+
+*** fzero(zero) : Fin(suc(zero))  i.e. 0 : Fin(1)
+red check(empty, fzero(zero), Fin(suc(zero))) .
+*** Expected: true
+
+*** fzero(suc(suc(zero))) : Fin(suc(suc(suc(zero))))  i.e. 0 : Fin(3)
+red check(empty, fzero(suc(suc(zero))), Fin(suc(suc(suc(zero))))) .
+*** Expected: true
+
+*** fsuc(suc(zero), fzero(suc(zero))) : Fin(suc(suc(suc(zero))))
+*** i.e. 1 : Fin(3)  (fsuc wrapping fzero(1) : Fin(2))
+red check(empty, fsuc(suc(suc(zero)), fzero(suc(zero))), Fin(suc(suc(suc(zero))))) .
+*** Expected: true
+
+*** NEGATIVE: fzero(zero) : Fin(zero) -- impossible, no Fin(0)
+red check(empty, fzero(zero), Fin(zero)) .
+*** Expected: false
+
+*** ========================================
+*** Safe indexing
+*** ========================================
+
+*** vindex(Nat, suc(zero), fzero(zero), vcons(Nat, zero, suc(suc(zero)), vnil(Nat))) : Nat
+*** Index 0 into [2] gives Nat
+red infer(empty, vindex(Nat, suc(zero), fzero(zero),
+  ann(vcons(Nat, zero, suc(suc(zero)), vnil(Nat)), Vec(Nat, suc(zero))))) .
+*** Expected: Nat
+
+quit .

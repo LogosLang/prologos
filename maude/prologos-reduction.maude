@@ -1,0 +1,114 @@
+***
+*** PROLOGOS-REDUCTION
+*** Weak head normal form reduction, full normalization, and definitional equality.
+***
+*** whnf(e)      : reduce to weak head normal form (beta, iota, projections)
+*** nf(e)        : reduce to full normal form (under all binders)
+*** conv(e1, e2) : check definitional equality (compare normal forms)
+***
+
+fmod PROLOGOS-REDUCTION is
+  protecting PROLOGOS-SUBSTITUTION .
+
+  *** ========================================
+  *** Weak Head Normal Form
+  *** ========================================
+  op whnf : Expr -> Expr .
+
+  vars E E1 E2 E3 E4 E5 : Expr .
+  var M : Mult .
+  var L : Level .
+  var Q : Qid .
+  var N : Nat .
+
+  *** Beta reduction: app(lam(m, A, body), arg) -> subst(0, arg, body)
+  eq whnf(app(lam(M, E1, E2), E3)) = whnf(subst(0, E3, E2)) .
+
+  *** Projections on pairs
+  eq whnf(fst(pair(E1, E2))) = whnf(E1) .
+  eq whnf(snd(pair(E1, E2))) = whnf(E2) .
+
+  *** Iota reduction for natrec
+  *** natrec(motive, base, step, zero) -> base
+  eq whnf(natrec(E1, E2, E3, zero)) = whnf(E2) .
+  *** natrec(motive, base, step, suc(n)) -> app(app(step, n), natrec(motive, base, step, n))
+  eq whnf(natrec(E1, E2, E3, suc(E4))) =
+    whnf(app(app(E3, E4), natrec(E1, E2, E3, E4))) .
+  *** natrec with non-canonical target: reduce target first, then retry
+  ceq whnf(natrec(E1, E2, E3, E4)) = whnf(natrec(E1, E2, E3, whnf(E4)))
+    if E4 =/= whnf(E4)
+    /\ whnf(E4) =/= E4 [owise] .
+
+  *** J reduction: J(motive, base, a, a, refl) -> app(base, a)
+  eq whnf(J(E1, E2, E3, E4, refl)) = whnf(app(E2, E3)) .
+
+  *** Annotation erasure
+  eq whnf(ann(E1, E2)) = whnf(E1) .
+
+  *** Application of non-lambda: reduce function first
+  ceq whnf(app(E1, E2)) = whnf(app(whnf(E1), E2))
+    if whnf(E1) =/= E1 [owise] .
+
+  *** Projection of non-pair: reduce argument first
+  ceq whnf(fst(E)) = whnf(fst(whnf(E)))
+    if whnf(E) =/= E [owise] .
+  ceq whnf(snd(E)) = whnf(snd(whnf(E)))
+    if whnf(E) =/= E [owise] .
+
+  *** Everything else is already in WHNF
+  eq whnf(E) = E [owise] .
+
+  *** ========================================
+  *** Full Normalization
+  *** Reduce to WHNF, then recurse under all subterms
+  *** ========================================
+  op nf : Expr -> Expr .
+
+  *** First reduce to WHNF, then normalize subterms
+  ceq nf(E) = nfWhnf(whnf(E)) if true .
+
+  *** Helper: normalize a term that is already in WHNF
+  op nfWhnf : Expr -> Expr .
+
+  *** Atoms / leaves
+  eq nfWhnf(bvar(N)) = bvar(N) .
+  eq nfWhnf(fvar(Q)) = fvar(Q) .
+  eq nfWhnf(zero) = zero .
+  eq nfWhnf(refl) = refl .
+  eq nfWhnf(Nat) = Nat .
+  eq nfWhnf(Bool) = Bool .
+  eq nfWhnf(true) = true .
+  eq nfWhnf(false) = false .
+  eq nfWhnf(Type(L)) = Type(L) .
+  eq nfWhnf(errorExpr) = errorExpr .
+
+  *** Structured terms: normalize subterms
+  eq nfWhnf(suc(E)) = suc(nf(E)) .
+  eq nfWhnf(lam(M, E1, E2)) = lam(M, nf(E1), nf(E2)) .
+  eq nfWhnf(Pi(M, E1, E2)) = Pi(M, nf(E1), nf(E2)) .
+  eq nfWhnf(Sigma(E1, E2)) = Sigma(nf(E1), nf(E2)) .
+  eq nfWhnf(pair(E1, E2)) = pair(nf(E1), nf(E2)) .
+  eq nfWhnf(Eq(E1, E2, E3)) = Eq(nf(E1), nf(E2), nf(E3)) .
+
+  *** Application that didn't reduce (neutral term)
+  eq nfWhnf(app(E1, E2)) = app(nf(E1), nf(E2)) .
+  *** Projection that didn't reduce (neutral)
+  eq nfWhnf(fst(E)) = fst(nf(E)) .
+  eq nfWhnf(snd(E)) = snd(nf(E)) .
+
+  *** Eliminators stuck on neutral
+  eq nfWhnf(natrec(E1, E2, E3, E4)) =
+    natrec(nf(E1), nf(E2), nf(E3), nf(E4)) .
+  eq nfWhnf(J(E1, E2, E3, E4, E5)) =
+    J(nf(E1), nf(E2), nf(E3), nf(E4), nf(E5)) .
+  eq nfWhnf(ann(E1, E2)) = nf(E1) .
+
+  *** ========================================
+  *** Definitional Equality (conversion)
+  *** Two terms are definitionally equal iff their normal forms
+  *** are syntactically identical.
+  *** ========================================
+  op conv : Expr Expr -> Bool .
+  eq conv(E1, E2) = (nf(E1) == nf(E2)) .
+
+endfm

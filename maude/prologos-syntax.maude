@@ -1,0 +1,138 @@
+***
+*** PROLOGOS-SYNTAX
+*** The complete term language for Prologos in locally-nameless representation.
+***
+*** Bound variables are de Bruijn indices (bvar(Nat)).
+*** Free variables are names (fvar(Qid)).
+*** Types are a subsort of Expr (types are first-class in dependent type theory).
+***
+
+fmod PROLOGOS-SYNTAX is
+  protecting PROLOGOS-PRELUDE .
+
+  *** ========================================
+  *** Sort Hierarchy
+  *** ========================================
+  sorts Expr Context .
+
+  *** ========================================
+  *** Expression Constructors
+  *** ========================================
+
+  *** Variables
+  op bvar : Nat -> Expr [ctor] .           *** bound variable (de Bruijn index)
+  op fvar : Qid -> Expr [ctor] .           *** free variable (named)
+
+  *** Natural numbers
+  op zero : -> Expr [ctor] .
+  op suc : Expr -> Expr [ctor] .
+
+  *** Lambda and application
+  op lam : Mult Expr Expr -> Expr [ctor] . *** lam(mult, type, body)
+  op app : Expr Expr -> Expr [ctor] .      *** app(func, arg)
+
+  *** Pairs (Sigma intro/elim)
+  op pair : Expr Expr -> Expr [ctor] .
+  op fst : Expr -> Expr [ctor] .
+  op snd : Expr -> Expr [ctor] .
+
+  *** Equality introduction
+  op refl : -> Expr [ctor] .
+
+  *** Type annotation
+  op ann : Expr Expr -> Expr [ctor] .      *** ann(term, type)
+
+  *** Nat eliminator
+  *** natrec(motive, base, step, target)
+  *** motive : Nat -> Type
+  *** base   : motive(0)
+  *** step   : Pi(n:Nat). motive(n) -> motive(suc(n))
+  *** target : Nat
+  op natrec : Expr Expr Expr Expr -> Expr [ctor] .
+
+  *** J eliminator for equality
+  *** J(motive, base, target-left, target-right, proof)
+  *** motive : Pi(a:A). Pi(b:A). (a = b) -> Type
+  *** base   : Pi(a:A). motive(a, a, refl)
+  *** target-left, target-right : A
+  *** proof  : target-left = target-right
+  op J : Expr Expr Expr Expr Expr -> Expr [ctor] .
+
+  *** ========================================
+  *** Type Constructors (also Exprs)
+  *** ========================================
+
+  *** Universe
+  op Type : Level -> Expr [ctor] .         *** Type(n) : Type(n+1)
+
+  *** Natural number type
+  op Nat : -> Expr [ctor] .
+
+  *** Bool type
+  op Bool : -> Expr [ctor] .
+  ops true false : -> Expr [ctor] .
+
+  *** Unit type
+  op Unit : -> Expr [ctor] .
+  op unit : -> Expr [ctor] .
+
+  *** Dependent function type
+  op Pi : Mult Expr Expr -> Expr [ctor] .  *** Pi(mult, domain, codomain)
+
+  *** Dependent pair type
+  op Sigma : Expr Expr -> Expr [ctor] .    *** Sigma(fst-type, snd-type)
+
+  *** Identity/Equality type
+  op Eq : Expr Expr Expr -> Expr [ctor] .  *** Eq(type, lhs, rhs)
+
+  *** ========================================
+  *** Error marker (for failed inference)
+  *** ========================================
+  op errorExpr : -> Expr [ctor] .
+
+  *** ========================================
+  *** Convenience: convert Maude Nat to Prologos numerals
+  *** ========================================
+  op nat : Nat -> Expr .
+  eq nat(0) = zero .
+  eq nat(s N:Nat) = suc(nat(N:Nat)) .
+
+  *** Non-dependent function type sugar
+  op _-->_ : Expr Expr -> Expr .
+  vars A B : Expr .
+  eq A --> B = Pi(mw, A, B) .
+
+  *** Non-dependent pair type sugar
+  op _**_ : Expr Expr -> Expr .
+  eq A ** B = Sigma(A, B) .
+
+  *** ========================================
+  *** Contexts
+  *** ========================================
+  *** A context is a list of (Type, Multiplicity) bindings.
+  *** Binding at position 0 is the most recently added.
+  *** bvar(k) refers to the binding at position k.
+
+  op empty : -> Context [ctor] .
+  op extend : Context Expr Mult -> Context [ctor] .  *** extend(ctx, type, mult)
+
+  *** Lookup: retrieve the type at position k
+  op lookupType : Nat Context -> Expr .
+  op lookupMult : Nat Context -> Mult .
+  op ctxLen : Context -> Nat .
+
+  var G : Context .
+  var T : Expr .
+  var M : Mult .
+  var K : Nat .
+
+  eq lookupType(0, extend(G, T, M)) = T .
+  eq lookupType(s K, extend(G, T, M)) = lookupType(K, G) .
+
+  eq lookupMult(0, extend(G, T, M)) = M .
+  eq lookupMult(s K, extend(G, T, M)) = lookupMult(K, G) .
+
+  eq ctxLen(empty) = 0 .
+  eq ctxLen(extend(G, T, M)) = s ctxLen(G) .
+
+endfm

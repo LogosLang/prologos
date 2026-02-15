@@ -1,0 +1,80 @@
+***
+*** PROLOGOS-PRELUDE
+*** Utility sorts and operations for the Prologos formal specification.
+***
+
+fmod PROLOGOS-PRELUDE is
+  protecting NAT .
+  protecting QID .
+  protecting BOOL .
+
+  *** ========================================
+  *** Multiplicity Semiring: {0, 1, omega}
+  *** ========================================
+  sort Mult .
+  ops m0 m1 mw : -> Mult [ctor] .
+
+  *** Addition (join in the semiring)
+  op _+m_ : Mult Mult -> Mult [comm] .
+  *** Multiplication (scaling)
+  op _*m_ : Mult Mult -> Mult [comm] .
+  *** Ordering: 0 <= 1 <= omega
+  op _<=m_ : Mult Mult -> Bool .
+
+  *** Addition rules
+  eq m0 +m m0 = m0 .
+  eq m0 +m m1 = m1 .
+  eq m0 +m mw = mw .
+  eq m1 +m m1 = mw .
+  eq m1 +m mw = mw .
+  eq mw +m mw = mw .
+
+  *** Multiplication rules
+  eq m0 *m m0 = m0 .
+  eq m0 *m m1 = m0 .
+  eq m0 *m mw = m0 .
+  eq m1 *m m1 = m1 .
+  eq m1 *m mw = mw .
+  eq mw *m mw = mw .
+
+  *** Ordering
+  eq m0 <=m m0 = true .
+  eq m0 <=m m1 = true .
+  eq m0 <=m mw = true .
+  eq m1 <=m m0 = false .
+  eq m1 <=m m1 = true .
+  eq m1 <=m mw = true .
+  eq mw <=m m0 = false .
+  eq mw <=m m1 = false .
+  eq mw <=m mw = true .
+
+  *** Compatibility: actual usage p is compatible with declared multiplicity q
+  *** m0: must use 0 times; m1: exactly 1; mw: any
+  op compatible : Mult Mult -> Bool .
+  eq compatible(m0, m0) = true .
+  eq compatible(m0, m1) = false .
+  eq compatible(m0, mw) = false .
+  eq compatible(m1, m0) = false .
+  eq compatible(m1, m1) = true .
+  eq compatible(m1, mw) = false .
+  eq compatible(mw, m0) = true .
+  eq compatible(mw, m1) = true .
+  eq compatible(mw, mw) = true .
+
+  *** ========================================
+  *** Universe Levels
+  *** ========================================
+  sort Level .
+  op lzero : -> Level [ctor] .
+  op lsuc : Level -> Level [ctor] .
+  op lmax : Level Level -> Level .
+
+  vars L L1 L2 : Level .
+
+  *** lmax simplification rules
+  eq lmax(lzero, L) = L .
+  eq lmax(L, lzero) = L .
+  eq lmax(L, L) = L .
+  eq lmax(lsuc(L1), lsuc(L2)) = lsuc(lmax(L1, L2)) .
+
+endfm

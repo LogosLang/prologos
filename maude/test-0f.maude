@@ -1,0 +1,180 @@
+***
+*** Tests for Sub-Phase 0f: QTT Multiplicities
+***
+
+load prologos-prelude .
+load prologos-syntax .
+load prologos-substitution .
+load prologos-reduction .
+load prologos-typing-core .
+load prologos-inductive .
+load prologos-qtt .
+
+*** ========================================
+*** Usage context operations
+*** ========================================
+
+*** zeroUsage of length 3
+red zeroUsage(3) .
+*** Expected: ucons(m0, ucons(m0, ucons(m0, unil)))
+
+*** singleUsage(1, 3) — m1 at position 1
+red singleUsage(1, 3) .
+*** Expected: ucons(m0, ucons(m1, ucons(m0, unil)))
+
+*** addUsage
+red addUsage(ucons(m0, ucons(m1, unil)), ucons(m1, ucons(m0, unil))) .
+*** Expected: ucons(m1, ucons(m1, unil))
+
+*** scaleUsage with m0 (erased)
+red scaleUsage(m0, ucons(m1, ucons(mw, unil))) .
+*** Expected: ucons(m0, ucons(m0, unil))
+
+*** scaleUsage with mw
+red scaleUsage(mw, ucons(m1, ucons(m0, unil))) .
+*** Expected: ucons(mw, ucons(m0, unil))
+
+*** ========================================
+*** checkAllUsages
+*** ========================================
+
+*** All compatible: omega context, zero usage
+red checkAllUsages(extend(empty, Nat, mw), ucons(m0, unil)) .
+*** Expected: true (omega allows 0 usage)
+
+*** Linear used once: compatible
+red checkAllUsages(extend(empty, Nat, m1), ucons(m1, unil)) .
+*** Expected: true
+
+*** Linear used zero times: incompatible
+red checkAllUsages(extend(empty, Nat, m1), ucons(m0, unil)) .
+*** Expected: false
+
+*** Erased used once: incompatible
+red checkAllUsages(extend(empty, Nat, m0), ucons(m1, unil)) .
+*** Expected: false
+
+*** ========================================
+*** inferQ basic tests
+*** ========================================
+
+*** zero has type Nat, zero usage
+red inferQ(empty, zero) .
+*** Expected: tu(Nat, unil)
+
+*** bvar(0) in context [Nat:mw] — uses position 0 once
+red inferQ(extend(empty, Nat, mw), bvar(0)) .
+*** Expected: tu(Nat, ucons(m1, unil))
+
+*** ========================================
+*** QTT: Unrestricted identity lam(mw, Nat, bvar(0))
+*** Pi(mw, Nat, Nat) — body uses bvar(0) once, compatible with mw
+*** ========================================
+red checkQ(empty, lam(mw, Nat, bvar(0)), Pi(mw, Nat, Nat)) .
+*** Expected: bu(true, unil)
+
+*** Top-level check
+red checkQtop(empty, lam(mw, Nat, bvar(0)), Pi(mw, Nat, Nat)) .
+*** Expected: true
+
+*** ========================================
+*** QTT: Linear identity lam(m1, Nat, bvar(0))
+*** Pi(m1, Nat, Nat) — body uses bvar(0) exactly once, compatible with m1
+*** ========================================
+red checkQ(empty, lam(m1, Nat, bvar(0)), Pi(m1, Nat, Nat)) .
+*** Expected: bu(true, unil)
+
+red checkQtop(empty, lam(m1, Nat, bvar(0)), Pi(m1, Nat, Nat)) .
+*** Expected: true
+
+*** ========================================
+*** QTT: Erased constant lam(m0, Nat, zero)
+*** Pi(m0, Nat, Nat) — body does NOT use bvar(0), compatible with m0
+*** ========================================
+red checkQ(empty, lam(m0, Nat, zero), Pi(m0, Nat, Nat)) .
+*** Expected: bu(true, unil)
+
+red checkQtop(empty, lam(m0, Nat, zero), Pi(m0, Nat, Nat)) .
+*** Expected: true
+
+*** ========================================
+*** NEGATIVE: Erased variable used at runtime
+*** lam(m0, Nat, bvar(0)) against Pi(m0, Nat, Nat)
+*** Body uses bvar(0) once, but declared m0 — incompatible!
+*** ========================================
+red checkQ(empty, lam(m0, Nat, bvar(0)), Pi(m0, Nat, Nat)) .
+*** Expected: bu(false, ...) — because compatible(m0, m1) = false
+
+red checkQtop(empty, lam(m0, Nat, bvar(0)), Pi(m0, Nat, Nat)) .
+*** Expected: false
+
+*** ========================================
+*** NEGATIVE: Linear variable not used
+*** lam(m1, Nat, zero) against Pi(m1, Nat, Nat)
+*** Body doesn't use bvar(0), but declared m1 — incompatible!
+*** ========================================
+red checkQ(empty, lam(m1, Nat, zero), Pi(m1, Nat, Nat)) .
+*** Expected: bu(false, ...) — because compatible(m1, m0) = false
+
+red checkQtop(empty, lam(m1, Nat, zero), Pi(m1, Nat, Nat)) .
+*** Expected: false
+
+*** ========================================
+*** QTT: Application — usage combination
+*** Apply identity to zero: app(ann(lam(mw, Nat, bvar(0)), Pi(mw, Nat, Nat)), zero)
+*** Function usage: zero (annotation), Arg usage: zero (constant)
+*** Total: zero + mw * zero = zero — correct
+*** ========================================
+red inferQ(empty, app(ann(lam(mw, Nat, bvar(0)), Pi(mw, Nat, Nat)), zero)) .
+*** Expected: tu(Nat, unil)
+
+*** ========================================
+*** QTT: Application with variable argument
+*** In context [x : Nat, mw], apply id to x
+*** app(ann(lam(mw, Nat, bvar(0)), Pi(mw, Nat, Nat)), bvar(0))
+*** Function usage: ucons(m0), Arg usage: ucons(m1)
+*** Total: ucons(m0) + mw * ucons(m1) = ucons(m0 + mw) = ucons(mw)
+*** ========================================
+red inferQ(extend(empty, Nat, mw),
+  app(ann(lam(mw, Nat, bvar(0)), Pi(mw, Nat, Nat)), bvar(0))) .
+*** Expected: tu(Nat, ucons(mw, unil))
+
+*** ========================================
+*** QTT: Linear application with variable argument
+*** In context [x : Nat, m1], apply linear id to x
+*** app(ann(lam(m1, Nat, bvar(0)), Pi(m1, Nat, Nat)), bvar(0))
+*** Function usage: ucons(m0), Arg usage: ucons(m1)
+*** Total: ucons(m0) + m1 * ucons(m1) = ucons(m0 + m1) = ucons(m1)
+*** ========================================
+red inferQ(extend(empty, Nat, m1),
+  app(ann(lam(m1, Nat, bvar(0)), Pi(m1, Nat, Nat)), bvar(0))) .
+*** Expected: tu(Nat, ucons(m1, unil))
+
+*** Top-level check: linear var used exactly once — good
+red checkQtop(extend(empty, Nat, m1),
+  app(ann(lam(m1, Nat, bvar(0)), Pi(m1, Nat, Nat)), bvar(0)),
+  Nat) .
+*** Expected: true
+
+*** ========================================
+*** NEGATIVE: Linear variable duplicated
+*** In context [x : Nat, m1], pair(bvar(0), bvar(0))
+*** Usage: ucons(m1) + ucons(m1) = ucons(mw)
+*** But declared m1, compatible(m1, mw) = false
+*** ========================================
+red checkQtop(extend(empty, Nat, m1),
+  pair(bvar(0), bvar(0)),
+  Sigma(Nat, Nat)) .
+*** Expected: false
+
+*** ========================================
+*** Pair with proper linear split
+*** In context [x : Nat, m1, y : Nat, m1], pair(bvar(1), bvar(0))
+*** x used once, y used once — both linear, both OK
+*** ========================================
+red checkQtop(extend(extend(empty, Nat, m1), Nat, m1),
+  pair(bvar(1), bvar(0)),
+  Sigma(Nat, Nat)) .
+*** Expected: true
+
+quit .

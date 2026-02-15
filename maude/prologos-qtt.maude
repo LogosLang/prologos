@@ -1,0 +1,245 @@
+***
+*** PROLOGOS-QTT
+*** Quantitative Type Theory: multiplicity tracking layered on top of core typing.
+***
+*** The QTT layer tracks how each variable is used (0, 1, or ω times)
+*** and verifies that actual usage is compatible with declared multiplicities.
+***
+*** UsageCtx: a list of multiplicities parallel to Context, where position k
+*** records how many times bvar(k) has been used.
+***
+*** inferQ(Ctx, e) -> TypeUsage(Type, UsageCtx)
+*** checkQ(Ctx, e, T) -> BoolUsage(Bool, UsageCtx)
+***
+*** After elaborating under a binder with declared multiplicity m,
+*** we check that the usage of bvar(0) is compatible with m.
+***
+
+fmod PROLOGOS-QTT is
+  protecting PROLOGOS-INDUCTIVE .
+
+  *** ========================================
+  *** Usage Context: parallel list of multiplicities
+  *** ========================================
+  sort UsageCtx .
+  op unil : -> UsageCtx [ctor] .
+  op ucons : Mult UsageCtx -> UsageCtx [ctor] .
+
+  *** Create a zero-usage context of length n
+  op zeroUsage : Nat -> UsageCtx .
+  eq zeroUsage(0) = unil .
+  eq zeroUsage(s N:Nat) = ucons(m0, zeroUsage(N:Nat)) .
+
+  *** Create a usage context with m1 at position k, m0 elsewhere, length n
+  op singleUsage : Nat Nat -> UsageCtx .
+  op singleUsageH : Nat Nat Nat -> UsageCtx .  *** helper: pos, target, total
+  eq singleUsage(K:Nat, N:Nat) = singleUsageH(0, K:Nat, N:Nat) .
+  ceq singleUsageH(I:Nat, K:Nat, N:Nat) = unil if I:Nat >= N:Nat .
+  ceq singleUsageH(I:Nat, K:Nat, N:Nat) = ucons(m1, singleUsageH(s I:Nat, K:Nat, N:Nat))
+    if I:Nat == K:Nat /\ I:Nat < N:Nat .
+  ceq singleUsageH(I:Nat, K:Nat, N:Nat) = ucons(m0, singleUsageH(s I:Nat, K:Nat, N:Nat))
+    if I:Nat =/= K:Nat /\ I:Nat < N:Nat .
+
+  *** Pointwise addition of usage contexts
+  op addUsage : UsageCtx UsageCtx -> UsageCtx .
+  eq addUsage(unil, unil) = unil .
+  eq addUsage(ucons(M1:Mult, U1:UsageCtx), ucons(M2:Mult, U2:UsageCtx)) =
+    ucons(M1:Mult +m M2:Mult, addUsage(U1:UsageCtx, U2:UsageCtx)) .
+  *** Mismatched lengths: identity cases
+  eq addUsage(unil, U:UsageCtx) = U:UsageCtx [owise] .
+  eq addUsage(U:UsageCtx, unil) = U:UsageCtx [owise] .
+
+  *** Scalar multiplication of usage context
+  op scaleUsage : Mult UsageCtx -> UsageCtx .
+  eq scaleUsage(M:Mult, unil) = unil .
+  eq scaleUsage(M:Mult, ucons(M2:Mult, U:UsageCtx)) =
+    ucons(M:Mult *m M2:Mult, scaleUsage(M:Mult, U:UsageCtx)) .
+
+  *** Get the head (usage of bvar(0)) and tail of a usage context
+  op uhead : UsageCtx -> Mult .
+  op utail : UsageCtx -> UsageCtx .
+  eq uhead(ucons(M:Mult, U:UsageCtx)) = M:Mult .
+  eq utail(ucons(M:Mult, U:UsageCtx)) = U:UsageCtx .
+
+  *** Length of usage context
+  op ulen : UsageCtx -> Nat .
+  eq ulen(unil) = 0 .
+  eq ulen(ucons(M:Mult, U:UsageCtx)) = s ulen(U:UsageCtx) .
+
+  *** ========================================
+  *** Check that actual usages are compatible with declared multiplicities
+  *** ========================================
+  op checkAllUsages : Context UsageCtx -> Bool .
+  eq checkAllUsages(empty, unil) = true .
+  ceq checkAllUsages(extend(G:Context, T:Expr, M:Mult), ucons(U:Mult, US:UsageCtx)) =
+    compatible(M:Mult, U:Mult) and checkAllUsages(G:Context, US:UsageCtx)
+    if true .
+  eq checkAllUsages(G:Context, US:UsageCtx) = false [owise] .
+
+  *** ========================================
+  *** Result types for QTT inference and checking
+  *** ========================================
+  sort TypeUsage BoolUsage .
+  op tu : Expr UsageCtx -> TypeUsage [ctor] .       *** type + usage
+  op tuError : -> TypeUsage [ctor] .                  *** inference failed
+  op bu : Bool UsageCtx -> BoolUsage [ctor] .        *** bool + usage
+
+  *** Extract type from TypeUsage
+  op tuType : TypeUsage -> Expr .
+  eq tuType(tu(T:Expr, U:UsageCtx)) = T:Expr .
+  eq tuType(tuError) = errorExpr .
+
+  *** Extract usage from TypeUsage
+  op tuUsage : TypeUsage -> UsageCtx .
+  eq tuUsage(tu(T:Expr, U:UsageCtx)) = U:UsageCtx .
+
+  *** ========================================
+  *** QTT inference: inferQ(Ctx, e) -> TypeUsage
+  *** ========================================
+  op inferQ : Context Expr -> TypeUsage .
+
+  *** ========================================
+  *** QTT checking: checkQ(Ctx, e, T) -> BoolUsage
+  *** ========================================
+  op checkQ : Context Expr Expr -> BoolUsage .
+
+  *** Variables
+  var G : Context .
+  vars E E1 E2 E3 E4 E5 : Expr .
+  vars A B T T1 T2 : Expr .
+  var M M2 : Mult .
+  var L L1 L2 : Level .
+  var Q : Qid .
+  var K N : Nat .
+  var U U1 U2 U3 U4 U5 : UsageCtx .
+  var T3 T5 : Expr .
+
+  *** ========================================
+  *** Variable: bvar(K) uses position K exactly once
+  *** ========================================
+  ceq inferQ(G, bvar(K)) = tu(shift(s K, 0, lookupType(K, G)),
+                               singleUsage(K, ctxLen(G)))
+    if K < ctxLen(G) .
+
+  *** Free variable: cannot infer
+  eq inferQ(G, fvar(Q)) = tuError .
+
+  *** ========================================
+  *** Constants: zero usage
+  *** ========================================
+  eq inferQ(G, Type(L)) = tu(Type(lsuc(L)), zeroUsage(ctxLen(G))) .
+  eq inferQ(G, Nat) = tu(Type(lzero), zeroUsage(ctxLen(G))) .
+  eq inferQ(G, Bool) = tu(Type(lzero), zeroUsage(ctxLen(G))) .
+  eq inferQ(G, zero) = tu(Nat, zeroUsage(ctxLen(G))) .
+  eq inferQ(G, true) = tu(Bool, zeroUsage(ctxLen(G))) .
+  eq inferQ(G, false) = tu(Bool, zeroUsage(ctxLen(G))) .
+
+  *** ========================================
+  *** Suc: usage comes from the argument
+  *** ========================================
+  ceq checkQ(G, suc(E), Nat) = bu(true, U)
+    if bu(true, U) := checkQ(G, E, Nat) .
+
+  ceq inferQ(G, suc(E)) = tu(Nat, U)
+    if tu(Nat, U) := inferQ(G, E) .
+
+  *** ========================================
+  *** Annotation: ann(e, T)
+  *** Type annotations themselves are erased (0 usage for type part)
+  *** ========================================
+  ceq inferQ(G, ann(E, T)) = tu(T, U)
+    if isType(G, T)
+    /\ bu(true, U) := checkQ(G, E, T) .
+
+  *** ========================================
+  *** Pi types: function type formation (zero runtime usage)
+  *** ========================================
+
+  *** Lambda checking: check against Pi type
+  *** Under the binder, the body's usage of bvar(0) must be compatible with M
+  ceq checkQ(G, lam(M, A, E), Pi(M, T, B)) =
+    bu(true, utail(U))
+    if conv(A, T)
+    /\ bu(true, U) := checkQ(extend(G, A, M), E, B)
+    /\ compatible(M, uhead(U)) .
+
+  *** Lambda with wrong multiplicity
+  ceq checkQ(G, lam(M, A, E), Pi(M2, T, B)) = bu(false, zeroUsage(ctxLen(G)))
+    if M =/= M2 .
+
+  *** Application: inferQ function, checkQ argument
+  *** Usage = U_func + pi * U_arg (where pi is the multiplicity on the Pi)
+  ceq inferQ(G, app(E1, E2)) = tu(subst(0, E2, B),
+                                    addUsage(U1, scaleUsage(M, U2)))
+    if tu(T1, U1) := inferQ(G, E1)
+    /\ Pi(M, A, B) := whnf(T1)
+    /\ bu(true, U2) := checkQ(G, E2, A) .
+
+  *** ========================================
+  *** Sigma types
+  *** ========================================
+
+  *** Pair checking: usage = U_fst + U_snd
+  ceq checkQ(G, pair(E1, E2), Sigma(A, B)) =
+    bu(true, addUsage(U1, U2))
+    if bu(true, U1) := checkQ(G, E1, A)
+    /\ bu(true, U2) := checkQ(G, E2, subst(0, E1, B)) .
+
+  *** fst: usage from the pair
+  ceq inferQ(G, fst(E)) = tu(A, U)
+    if tu(T, U) := inferQ(G, E)
+    /\ Sigma(A, B) := whnf(T) .
+
+  *** snd: usage from the pair
+  ceq inferQ(G, snd(E)) = tu(subst(0, fst(E), B), U)
+    if tu(T, U) := inferQ(G, E)
+    /\ Sigma(A, B) := whnf(T) .
+
+  *** ========================================
+  *** Equality types: refl has zero usage
+  *** ========================================
+  ceq checkQ(G, refl, Eq(A, E1, E2)) = bu(conv(E1, E2), zeroUsage(ctxLen(G)))
+    if true .
+
+  *** ========================================
+  *** Natrec: usage = U_target + U_base + U_step
+  *** (motive is erased / type-level, so zero usage for motive)
+  *** ========================================
+  ceq inferQ(G, natrec(E1, E2, E3, E4)) = tu(app(E1, E4),
+    addUsage(U4, addUsage(U2, U3)))
+    if bu(true, U4) := checkQ(G, E4, Nat)
+    /\ bu(true, U2) := checkQ(G, E2, app(E1, zero))
+    /\ tu(T3, U3) := inferQ(G, E3) .
+
+  *** ========================================
+  *** J eliminator: usage from the proof argument primarily
+  *** ========================================
+  ceq inferQ(G, J(E1, E2, E3, E4, E5)) = tu(app(app(app(E1, E3), E4), E5), U5)
+    if tu(T5, U5) := inferQ(G, E5)
+    /\ Eq(T, T1, T2) := whnf(T5)
+    /\ conv(T1, E3) /\ conv(T2, E4) .
+
+  *** ========================================
+  *** Conversion fallback for checkQ
+  *** ========================================
+  ceq checkQ(G, E, T) = bu(true, U)
+    if tu(T1, U) := inferQ(G, E)
+    /\ T1 =/= errorExpr
+    /\ conv(T, T1) [owise] .
+
+  *** ========================================
+  *** Fallbacks
+  *** ========================================
+  eq checkQ(G, E, T) = bu(false, zeroUsage(ctxLen(G))) [owise] .
+  eq inferQ(G, E) = tuError [owise] .
+
+  *** ========================================
+  *** Top-level QTT check: verify all usages in a closed term
+  *** ========================================
+  op checkQtop : Context Expr Expr -> Bool .
+  ceq checkQtop(G, E, T) = true
+    if bu(true, U) := checkQ(G, E, T)
+    /\ checkAllUsages(G, U) .
+  eq checkQtop(G, E, T) = false [owise] .
+
+endfm

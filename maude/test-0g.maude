@@ -1,0 +1,173 @@
+***
+*** Tests for Sub-Phase 0g: Session Types and Process Typing
+***
+
+load prologos-prelude .
+load prologos-syntax .
+load prologos-substitution .
+load prologos-reduction .
+load prologos-typing-core .
+load prologos-inductive .
+load prologos-sessions .
+load prologos-processes .
+load prologos-typing-sessions .
+
+*** ========================================
+*** Duality tests
+*** ========================================
+
+*** dual of send is recv
+red dual(send(Nat, endS)) .
+*** Expected: recv(Nat, endS)
+
+*** dual of recv is send
+red dual(recv(Nat, endS)) .
+*** Expected: send(Nat, endS)
+
+*** dual of send-then-recv
+red dual(send(Nat, recv(Bool, endS))) .
+*** Expected: recv(Nat, send(Bool, endS))
+
+*** dual of choice is offer
+red dual(choice(branch('left, send(Nat, endS), branch('right, endS, nilB)))) .
+*** Expected: offer(branch('left, recv(Nat, endS), branch('right, endS, nilB)))
+
+*** dual of dependent send
+red dual(dsend(Nat, send(Vec(Nat, bvar(0)), endS))) .
+*** Expected: drecv(Nat, recv(Vec(Nat, bvar(0)), endS))
+
+*** dual is involution: dual(dual(S)) == S
+red dual(dual(send(Nat, recv(Bool, endS)))) .
+*** Expected: send(Nat, recv(Bool, endS))
+
+*** dual of end
+red dual(endS) .
+*** Expected: endS
+
+*** dual of mu
+red dual(mu(send(Nat, svar(0)))) .
+*** Expected: mu(recv(Nat, svar(0)))
+
+*** ========================================
+*** Session substitution tests
+*** ========================================
+
+*** Substitute into a dependent session continuation
+*** dsend(Nat, send(Vec(Nat, bvar(0)), endS))
+*** After sending value suc(suc(zero)), continuation becomes send(Vec(Nat, suc(suc(zero))), endS)
+red substS(send(Vec(Nat, bvar(0)), endS), 0, suc(suc(zero))) .
+*** Expected: send(Vec(Nat, suc(suc(zero))), endS)
+
+*** ========================================
+*** Session unfolding tests
+*** ========================================
+
+*** unfold(mu(send(Nat, svar(0)))) should replace svar(0) with mu(send(Nat, svar(0)))
+red unfold(mu(send(Nat, svar(0)))) .
+*** Expected: send(Nat, mu(send(Nat, svar(0))))
+
+*** ========================================
+*** Branch lookup tests
+*** ========================================
+
+red lookupBranch('left, branch('left, send(Nat, endS), branch('right, endS, nilB))) .
+*** Expected: send(Nat, endS)
+
+red lookupBranch('right, branch('left, send(Nat, endS), branch('right, endS, nilB))) .
+*** Expected: endS
+
+*** ========================================
+*** Process typing: simple send
+*** ========================================
+
+*** send zero on c then stop, where c :: send(Nat, endS)
+red typeProc(empty, ('c :: send(Nat, endS)), psend(zero, 'c, stop)) .
+*** Expected: true
+
+*** NEGATIVE: send true on c where c :: send(Nat, endS)
+red typeProc(empty, ('c :: send(Nat, endS)), psend(true, 'c, stop)) .
+*** Expected: false
+
+*** ========================================
+*** Process typing: simple recv
+*** ========================================
+
+*** recv on c into x:Nat, then stop, where c :: recv(Nat, endS)
+red typeProc(empty, ('c :: recv(Nat, endS)), precv('c, Nat, stop)) .
+*** Expected: true
+
+*** ========================================
+*** Process typing: send then recv
+*** ========================================
+
+*** c :: send(Nat, recv(Bool, endS))
+*** send zero on c, then recv on c into x:Bool, then stop
+red typeProc(empty, ('c :: send(Nat, recv(Bool, endS))),
+  psend(zero, 'c, precv('c, Bool, stop))) .
+*** Expected: true
+
+*** ========================================
+*** Process typing: dependent send
+*** ========================================
+
+*** c :: dsend(Nat, send(Vec(Nat, bvar(0)), endS))
+*** Send suc(suc(zero)) on c (n=2), then send a Vec(Nat, 2) on c, then stop
+*** After the dependent send, the session becomes send(Vec(Nat, suc(suc(zero))), endS)
+red typeProc(empty,
+  ('c :: dsend(Nat, send(Vec(Nat, bvar(0)), endS))),
+  psend(suc(suc(zero)), 'c,
+    psend(ann(vcons(Nat, suc(zero), zero, vcons(Nat, zero, suc(zero), vnil(Nat))),
+              Vec(Nat, suc(suc(zero)))),
+          'c, stop))) .
+*** Expected: true
+
+*** ========================================
+*** Process typing: select
+*** ========================================
+
+*** c :: choice(branch('ping, send(Nat, endS), branch('quit, endS, nilB)))
+*** select 'ping on c, send zero, stop
+red typeProc(empty,
+  ('c :: choice(branch('ping, send(Nat, endS), branch('quit, endS, nilB)))),
+  psel('c, 'ping, psend(zero, 'c, stop))) .
+*** Expected: true
+
+*** select 'quit on c, stop
+red typeProc(empty,
+  ('c :: choice(branch('ping, send(Nat, endS), branch('quit, endS, nilB)))),
+  psel('c, 'quit, stop)) .
+*** Expected: true
+
+*** ========================================
+*** Process typing: case/offer
+*** ========================================
+
+*** c :: offer(branch('ping, recv(Nat, endS), branch('quit, endS, nilB)))
+*** case c of { ping -> recv on c then stop, quit -> stop }
+red typeProc(empty,
+  ('c :: offer(branch('ping, recv(Nat, endS), branch('quit, endS, nilB)))),
+  pcase('c, branchP('ping, precv('c, Nat, stop),
+                branchP('quit, stop, nilBP)))) .
+*** Expected: true
+
+*** ========================================
+*** Process typing: solve (axiomatic)
+*** ========================================
+
+*** solve for a Nat, then send it on c
+red typeProc(empty,
+  ('c :: send(Nat, endS)),
+  psolve(Nat, psend(bvar(0), 'c, stop))) .
+*** Expected: true
+
+*** ========================================
+*** Process typing: link
+*** ========================================
+
+*** link c1 c2 where c1 :: send(Nat, endS), c2 :: recv(Nat, endS)
+red typeProc(empty,
+  ('c1 :: send(Nat, endS) , 'c2 :: recv(Nat, endS)),
+  plink('c1, 'c2)) .
+*** Expected: true
+
+quit .

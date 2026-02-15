@@ -1,0 +1,170 @@
+***
+*** PROLOGOS-TYPING-SESSIONS
+*** Process typing judgment for session-typed processes.
+***
+*** typeProc(Gamma, Delta, P) -> Bool
+***   Gamma : unrestricted context (types)
+***   Delta : linear channel context (channels with session types)
+***   P     : process
+***
+*** The judgment verifies that process P correctly implements the protocol
+*** specified by the channel sessions in Delta.
+***
+
+fmod PROLOGOS-TYPING-SESSIONS is
+  protecting PROLOGOS-PROCESSES .
+
+  *** ========================================
+  *** Main process typing judgment
+  *** ========================================
+  op typeProc : Context ChanCtx Proc -> Bool .
+
+  *** Helper: check all branches of a case/offer
+  op typeAllBranches : Context ChanCtx Chan BranchProcList BranchList -> Bool .
+
+  var G : Context .
+  var D D1 D2 : ChanCtx .
+  var C C1 C2 : Chan .
+  vars S S1 S2 : Session .
+  vars A B E E1 E2 : Expr .
+  var P P1 P2 : Proc .
+  var L : Label .
+  var M : Mult .
+  var BPs : BranchProcList .
+  var Bs : BranchList .
+  var N : Nat .
+
+  *** ========================================
+  *** Stop: all channels must be ended
+  *** ========================================
+  ceq typeProc(G, D, stop) = true
+    if allEnded(D) .
+
+  *** Stop with empty context
+  eq typeProc(G, emptyC, stop) = true .
+
+  *** ========================================
+  *** Send: send e on c, continue as P
+  *** Channel c must have session send(A, S)
+  *** Check e : A, then typeProc with c advanced to S
+  *** ========================================
+  ceq typeProc(G, (C :: send(A, S) , D), psend(E, C, P)) = true
+    if check(G, E, A)
+    /\ typeProc(G, (C :: S , D), P) .
+
+  *** ========================================
+  *** Dependent Send: send e on c, continue as P
+  *** Channel c must have session dsend(A, S)
+  *** Check e : A, then typeProc with c advanced to substS(S, 0, e)
+  *** ========================================
+  ceq typeProc(G, (C :: dsend(A, S) , D), psend(E, C, P)) = true
+    if check(G, E, A)
+    /\ typeProc(G, (C :: substS(S, 0, E) , D), P) .
+
+  *** ========================================
+  *** Receive: recv from c into x:A, continue as P
+  *** Channel c must have session recv(A, S)
+  *** Extend unrestricted context with A, advance channel to S
+  *** ========================================
+  ceq typeProc(G, (C :: recv(A, S) , D), precv(C, A, P)) = true
+    if isType(G, A)
+    /\ typeProc(extend(G, A, mw), (C :: S , D), P) .
+
+  *** Receive with convertible type annotation
+  ceq typeProc(G, (C :: recv(A, S) , D), precv(C, B, P)) = true
+    if conv(A, B)
+    /\ isType(G, B)
+    /\ typeProc(extend(G, A, mw), (C :: S , D), P) [owise] .
+
+  *** ========================================
+  *** Dependent Receive: recv from c, binding enters scope in session
+  *** Channel c must have session drecv(A, S)
+  *** Extend context with A, advance channel to S
+  *** (S may reference bvar(0) which is the received value)
+  *** ========================================
+  ceq typeProc(G, (C :: drecv(A, S) , D), precv(C, A, P)) = true
+    if isType(G, A)
+    /\ typeProc(extend(G, A, mw), (C :: S , D), P) .
+
+  *** ========================================
+  *** Select: select branch l on channel c
+  *** Channel c must have session choice(branches)
+  *** l must be in branches; advance channel to the selected branch's session
+  *** ========================================
+  ceq typeProc(G, (C :: choice(Bs) , D), psel(C, L, P)) = true
+    if S := lookupBranch(L, Bs)
+    /\ S =/= branchError
+    /\ typeProc(G, (C :: S , D), P) .
+
+  *** ========================================
+  *** Case/Offer: handle all branches offered by environment
+  *** Channel c must have session offer(branches)
+  *** Each branch in the process must match a branch in the session
+  *** ========================================
+  ceq typeProc(G, (C :: offer(Bs) , D), pcase(C, BPs)) = true
+    if typeAllBranches(G, D, C, BPs, Bs) .
+
+  *** Walk session branches; for each, look up the corresponding process branch
+  *** This ensures every offered session branch is handled by the process
+  eq typeAllBranches(G, D, C, BPs, nilB) = true .
+  ceq typeAllBranches(G, D, C, BPs, branch(L, S, Bs)) = true
+    if P := lookupBranchP(L, BPs)
+    /\ P =/= noProc
+    /\ typeProc(G, (C :: S , D), P)
+    /\ typeAllBranches(G, D, C, BPs, Bs) .
+
+  *** ========================================
+  *** New/Cut: create a new channel with session S
+  *** pnew(S, ppar(P1, P2)): create channel, give S to P1 and dual(S) to P2
+  *** We use channel name 'ch for the fresh channel (simplified)
+  *** Context D is split via AC matching on LHS
+  *** ========================================
+  ceq typeProc(G, (D1 , D2), pnew(S, ppar(P1, P2))) = true
+    if typeProc(G, ('ch :: S , D1), P1)
+    /\ typeProc(G, ('ch :: dual(S) , D2), P2) .
+
+  *** Also handle empty context case for pnew
+  ceq typeProc(G, emptyC, pnew(S, ppar(P1, P2))) = true
+    if typeProc(G, ('ch :: S), P1)
+    /\ typeProc(G, ('ch :: dual(S)), P2) .
+
+  *** ========================================
+  *** Parallel composition: split the linear context
+  *** Each sub-process gets a disjoint portion of the channels
+  *** Maude's AC matching on ChanCtx handles the nondeterministic split
+  *** ========================================
+  ceq typeProc(G, (D1 , D2), ppar(P1, P2)) = true
+    if typeProc(G, D1, P1)
+    /\ typeProc(G, D2, P2) [owise] .
+
+  *** Par with one side getting empty context
+  ceq typeProc(G, D, ppar(P1, P2)) = true
+    if typeProc(G, D, P1)
+    /\ typeProc(G, emptyC, P2) [owise] .
+
+  ceq typeProc(G, D, ppar(P1, P2)) = true
+    if typeProc(G, emptyC, P1)
+    /\ typeProc(G, D, P2) [owise] .
+
+  *** ========================================
+  *** Link/Forward: c1 and c2 have dual sessions
+  *** ========================================
+  ceq typeProc(G, (C1 :: S1 , C2 :: S2), plink(C1, C2)) = true
+    if dual(S1) == S2 .
+
+  *** ========================================
+  *** Solve (axiomatic): assume proof search succeeds
+  *** psolve(A, P): the proof search produces a value of type A,
+  *** which enters the unrestricted context for P
+  *** ========================================
+  ceq typeProc(G, D, psolve(A, P)) = true
+    if isType(G, A)
+    /\ typeProc(extend(G, A, mw), D, P) .
+
+  *** ========================================
+  *** Fallback: typing fails
+  *** ========================================
+  eq typeProc(G, D, P) = false [owise] .
+  eq typeAllBranches(G, D, C, BPs, Bs) = false [owise] .
+
+endfm

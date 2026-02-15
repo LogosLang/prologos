@@ -1,0 +1,98 @@
+***
+*** PROLOGOS-PROCESSES
+*** Process syntax, linear channel contexts, and context operations.
+***
+
+fmod PROLOGOS-PROCESSES is
+  protecting PROLOGOS-SESSIONS .
+
+  *** ========================================
+  *** Channel identifiers
+  *** ========================================
+  sort Chan .
+  subsort Qid < Chan .
+  op bch : Nat -> Chan [ctor] .    *** bound channel (for pnew)
+
+  *** ========================================
+  *** Process constructors
+  *** ========================================
+  sort Proc .
+
+  op stop : -> Proc [ctor] .
+  op psend : Expr Chan Proc -> Proc [ctor] .          *** send e on c, continue P
+  op precv : Chan Expr Proc -> Proc [ctor] .           *** recv from c into x:A, continue P
+  op psel : Chan Label Proc -> Proc [ctor] .           *** select branch l on c
+  op pcase : Chan BranchProcList -> Proc [ctor] .      *** offer branches on c
+  op pnew : Session Proc -> Proc [ctor] .              *** new channel with session S
+  op ppar : Proc Proc -> Proc [ctor] .                 *** parallel composition
+  op plink : Chan Chan -> Proc [ctor] .                *** link/forward
+  op psolve : Expr Proc -> Proc [ctor] .               *** proof search (axiomatic)
+
+  *** Branch process lists
+  sort BranchProcList .
+  op nilBP : -> BranchProcList [ctor] .
+  op branchP : Label Proc BranchProcList -> BranchProcList [ctor] .
+
+  *** ========================================
+  *** Linear channel context
+  *** Represented as an associative-commutative multiset of (Chan, Session) pairs
+  *** Using _::_ to avoid parse conflicts with Maude's built-in _:_
+  *** ========================================
+  sort ChanCtx ChanBinding .
+
+  op _::_ : Chan Session -> ChanBinding [ctor prec 25] .
+  op emptyC : -> ChanCtx [ctor] .
+  op _,_ : ChanCtx ChanCtx -> ChanCtx [ctor assoc comm id: emptyC prec 40] .
+
+  *** Lift single binding to context
+  subsort ChanBinding < ChanCtx .
+
+  *** ========================================
+  *** Channel context operations
+  *** ========================================
+
+  *** Lookup: find session type for a channel
+  op lookupChan : Chan ChanCtx -> Session .
+
+  var C C1 C2 : Chan .
+  var SS : Session .
+  var D D1 D2 : ChanCtx .
+  var CB : ChanBinding .
+
+  eq lookupChan(C, (C :: SS , D)) = SS .
+
+  *** Remove a channel from context
+  op removeChan : Chan ChanCtx -> ChanCtx .
+  eq removeChan(C, (C :: SS , D)) = D .
+
+  *** Update a channel's session
+  op updateChan : Chan Session ChanCtx -> ChanCtx .
+  eq updateChan(C, SS, (C :: SS':Session , D)) = (C :: SS , D) .
+
+  *** Check if context is empty (all channels consumed)
+  op isEmptyC : ChanCtx -> Bool .
+  eq isEmptyC(emptyC) = true .
+  eq isEmptyC(CB , D) = false [owise] .
+
+  *** Check if all channels are at endS
+  op allEnded : ChanCtx -> Bool .
+  eq allEnded(emptyC) = true .
+  ceq allEnded((C :: SS , D)) = allEnded(D) if SS == endS .
+  eq allEnded(D) = false [owise] .
+
+  *** ========================================
+  *** Branch lookup in process branches
+  *** ========================================
+  op lookupBranchP : Label BranchProcList -> Proc .
+  sort MaybeProc .
+  op noProc : -> Proc [ctor] .
+
+  var LP : Label .
+  var P : Proc .
+  var BPs : BranchProcList .
+
+  eq lookupBranchP(LP, branchP(LP, P, BPs)) = P .
+  ceq lookupBranchP(LP, branchP(L':Label, P, BPs)) = lookupBranchP(LP, BPs) if LP =/= L':Label .
+  eq lookupBranchP(LP, nilBP) = noProc .
+
+endfm

@@ -1,0 +1,117 @@
+***
+*** Tests for Sub-Phase 0c: Reduction and Conversion
+***
+
+load prologos-prelude .
+load prologos-syntax .
+load prologos-substitution .
+load prologos-reduction .
+
+*** ========================================
+*** WHNF tests
+*** ========================================
+
+*** Beta reduction: (lam x:Nat. x) zero -> zero
+red whnf(app(lam(mw, Nat, bvar(0)), zero)) .
+*** Expected: zero
+
+*** Beta reduction: (lam x:Nat. suc x) zero -> suc(zero)
+red whnf(app(lam(mw, Nat, suc(bvar(0))), zero)) .
+*** Expected: suc(zero)
+
+*** Nested beta: (lam x. lam y. x) zero -> lam(mw, Nat, zero)
+*** Body of outer lambda is: lam(mw, Nat, bvar(1))
+*** After subst(0, zero, lam(mw, Nat, bvar(1))): lam(mw, Nat, zero)
+red whnf(app(lam(mw, Nat, lam(mw, Nat, bvar(1))), zero)) .
+*** Expected: lam(mw, Nat, zero)
+
+*** Projection: fst(pair(zero, suc(zero))) -> zero
+red whnf(fst(pair(zero, suc(zero)))) .
+*** Expected: zero
+
+*** Projection: snd(pair(zero, suc(zero))) -> suc(zero)
+red whnf(snd(pair(zero, suc(zero)))) .
+*** Expected: suc(zero)
+
+*** Annotation erasure
+red whnf(ann(zero, Nat)) .
+*** Expected: zero
+
+*** Non-reducible term stays as-is
+red whnf(bvar(0)) .
+*** Expected: bvar(0)
+
+red whnf(Pi(mw, Nat, Nat)) .
+*** Expected: Pi(mw, Nat, Nat)
+
+*** ========================================
+*** Natrec (Nat eliminator) tests
+*** ========================================
+
+*** natrec(motive, base, step, zero) -> base
+*** We use a simple motive (lam n:Nat. Nat) and add function
+*** natrec(lam(mw,Nat,Nat), zero, lam(mw,Nat,lam(mw,Nat,suc(bvar(0)))), zero) -> zero
+red whnf(natrec(lam(mw, Nat, Nat), zero, lam(mw, Nat, lam(mw, Nat, suc(bvar(0)))), zero)) .
+*** Expected: zero
+
+*** natrec with suc(zero): step(zero, natrec(motive,base,step,zero))
+*** = step(zero, zero) = (lam n. lam acc. suc(acc))(zero)(zero) = suc(zero)
+red whnf(natrec(lam(mw, Nat, Nat), zero, lam(mw, Nat, lam(mw, Nat, suc(bvar(0)))), suc(zero))) .
+*** Expected: suc(zero)
+
+*** natrec with suc(suc(zero)): should give suc(suc(zero))
+*** This is essentially: 0 + 2 via the successor step
+red nf(natrec(lam(mw, Nat, Nat), zero, lam(mw, Nat, lam(mw, Nat, suc(bvar(0)))), suc(suc(zero)))) .
+*** Expected: suc(suc(zero))
+
+*** ========================================
+*** J eliminator test
+*** ========================================
+
+*** J(motive, base, a, a, refl) -> app(base, a)
+*** Simple case: J(motive, lam(mw, Nat, refl), zero, zero, refl) -> refl
+red whnf(J(lam(mw, Nat, lam(mw, Nat, lam(mw, Eq(Nat, bvar(1), bvar(0)), Nat))),
+           lam(mw, Nat, refl),
+           zero, zero, refl)) .
+*** Expected: refl
+
+*** ========================================
+*** Full normalization tests
+*** ========================================
+
+*** nf of a beta redex nested inside a lambda
+*** lam(mw, Nat, app(lam(mw, Nat, bvar(0)), bvar(0)))
+*** Under the outer lambda, the body app(lam(mw, Nat, bvar(0)), bvar(0)) reduces to bvar(0)
+red nf(lam(mw, Nat, app(lam(mw, Nat, bvar(0)), bvar(0)))) .
+*** Expected: lam(mw, Nat, bvar(0))
+
+*** Normalize type: Pi(mw, Nat, app(lam(mw, Nat, bvar(0)), Nat))
+*** The codomain app(lam(mw, Nat, bvar(0)), Nat) reduces to Nat
+red nf(Pi(mw, Nat, app(lam(mw, Nat, bvar(0)), Nat))) .
+*** Expected: Pi(mw, Nat, Nat)
+
+*** ========================================
+*** Conversion tests
+*** ========================================
+
+*** Same term
+red conv(zero, zero) .
+*** Expected: true
+
+*** Different terms
+red conv(zero, suc(zero)) .
+*** Expected: false
+
+*** Beta-equal terms: (lam x. x) zero === zero
+red conv(app(lam(mw, Nat, bvar(0)), zero), zero) .
+*** Expected: true
+
+*** Eta-style: both reduce to suc(zero)
+red conv(app(lam(mw, Nat, suc(bvar(0))), zero), suc(zero)) .
+*** Expected: true
+
+*** Type conversion: Pi(mw, Nat, app(id, Nat)) === Pi(mw, Nat, Nat)
+red conv(Pi(mw, Nat, app(lam(mw, Nat, bvar(0)), Nat)), Pi(mw, Nat, Nat)) .
+*** Expected: true
+
+quit .

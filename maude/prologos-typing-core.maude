@@ -1,0 +1,229 @@
+***
+*** PROLOGOS-TYPING-CORE
+*** Bidirectional type checker for the core dependent type theory.
+***
+*** infer(Ctx, e)       -> Expr    : synthesize a type (or errorExpr)
+*** check(Ctx, e, T)    -> Bool    : check that e has type T
+*** isType(Ctx, T)      -> Bool    : verify T is a well-formed type
+*** inferLevel(Ctx, T)  -> Level   : infer the universe level of type T
+***
+*** Core types: Pi, Sigma, Eq, Nat, Bool, Type(Level)
+*** No multiplicity checking here (added in prologos-qtt.maude).
+***
+*** IMPORTANT: When looking up bvar(K) in the context, the stored type
+*** must be shifted by (K+1) because it was stored relative to the context
+*** above position K, but we need it relative to the current scope.
+***
+
+fmod PROLOGOS-TYPING-CORE is
+  protecting PROLOGOS-REDUCTION .
+
+  *** ========================================
+  *** Type inference (synthesis mode)
+  *** ========================================
+  op infer : Context Expr -> Expr .
+
+  *** ========================================
+  *** Type checking (checking mode)
+  *** ========================================
+  op check : Context Expr Expr -> Bool .
+
+  *** ========================================
+  *** Type formation check
+  *** ========================================
+  op isType : Context Expr -> Bool .
+
+  *** ========================================
+  *** Infer universe level of a type
+  *** ========================================
+  sort MaybeLevel .
+  op noLevel : -> MaybeLevel [ctor] .
+  op justLevel : Level -> MaybeLevel [ctor] .
+  op inferLevel : Context Expr -> MaybeLevel .
+
+  *** ========================================
+  *** Variables
+  *** ========================================
+
+  vars E E1 E2 E3 E4 E5 : Expr .
+  vars A B T T1 T2 : Expr .
+  var G : Context .
+  var M M2 : Mult .
+  var L L1 L2 : Level .
+  var Q : Qid .
+  var K N : Nat .
+
+  *** ---- Bound variable: lookup in context and SHIFT the type ----
+  *** The type at position K was entered when there were K fewer bindings,
+  *** so we shift it by (K + 1) to account for all bindings at positions 0..K.
+  ceq infer(G, bvar(K)) = shift(s K, 0, lookupType(K, G))
+    if K < ctxLen(G) .
+
+  *** ---- Free variable: cannot infer ----
+  eq infer(G, fvar(Q)) = errorExpr .
+
+  *** ========================================
+  *** Universes
+  *** ========================================
+
+  *** Type(n) : Type(n+1)
+  eq infer(G, Type(L)) = Type(lsuc(L)) .
+
+  *** ========================================
+  *** Natural numbers
+  *** ========================================
+
+  *** Nat : Type(0)
+  eq infer(G, Nat) = Type(lzero) .
+
+  *** zero : Nat
+  eq infer(G, zero) = Nat .
+
+  *** suc : check against Nat
+  eq check(G, suc(E), Nat) = check(G, E, Nat) .
+
+  *** suc in synthesis: if argument infers to Nat
+  ceq infer(G, suc(E)) = Nat if infer(G, E) == Nat .
+
+  *** ========================================
+  *** Booleans
+  *** ========================================
+
+  eq infer(G, Bool) = Type(lzero) .
+  eq infer(G, true) = Bool .
+  eq infer(G, false) = Bool .
+
+  *** Unit
+  eq infer(G, Unit) = Type(lzero) .
+  eq infer(G, unit) = Unit .
+
+  *** ========================================
+  *** Annotated terms
+  *** ========================================
+
+  *** ann(e, T) synthesizes T if T is a type and e checks against T
+  ceq infer(G, ann(E, T)) = T
+    if isType(G, T)
+    /\ check(G, E, T) .
+
+  *** ========================================
+  *** Pi types (dependent functions)
+  *** ========================================
+
+  *** Pi formation: Pi(m, A, B) : Type(max(level(A), level(B)))
+  ceq inferLevel(G, Pi(M, A, B)) = justLevel(lmax(L1, L2))
+    if justLevel(L1) := inferLevel(G, A)
+    /\ justLevel(L2) := inferLevel(extend(G, A, M), B) .
+
+  *** Pi introduction (lambda): check mode only
+  *** check(G, lam(m, A, body), Pi(m, A', B))
+  *** requires A conv A' and body checks against B in extended context
+  ceq check(G, lam(M, A, E), Pi(M, T, B)) =
+    check(extend(G, A, M), E, B)
+    if conv(A, T) .
+
+  *** Lambda with different multiplicity: always fails
+  ceq check(G, lam(M, A, E), Pi(M2, T, B)) = false
+    if M =/= M2 .
+
+  *** Pi elimination (application): synthesize
+  ceq infer(G, app(E1, E2)) = subst(0, E2, B)
+    if Pi(M, A, B) := whnf(infer(G, E1))
+    /\ check(G, E2, A) .
+
+  *** ========================================
+  *** Sigma types (dependent pairs)
+  *** ========================================
+
+  *** Sigma formation
+  ceq inferLevel(G, Sigma(A, B)) = justLevel(lmax(L1, L2))
+    if justLevel(L1) := inferLevel(G, A)
+    /\ justLevel(L2) := inferLevel(extend(G, A, mw), B) .
+
+  *** Sigma introduction: check(G, pair(a, b), Sigma(A, B))
+  ceq check(G, pair(E1, E2), Sigma(A, B)) =
+    check(G, E1, A) and check(G, E2, subst(0, E1, B))
+    if true .
+
+  *** Sigma elimination: fst
+  ceq infer(G, fst(E)) = A
+    if Sigma(A, B) := whnf(infer(G, E)) .
+
+  *** Sigma elimination: snd
+  ceq infer(G, snd(E)) = subst(0, fst(E), B)
+    if Sigma(A, B) := whnf(infer(G, E)) .
+
+  *** ========================================
+  *** Equality types
+  *** ========================================
+
+  *** Eq formation
+  ceq inferLevel(G, Eq(A, E1, E2)) = justLevel(L)
+    if justLevel(L) := inferLevel(G, A)
+    /\ check(G, E1, A)
+    /\ check(G, E2, A) .
+
+  *** refl : Eq(A, e, e) -- check mode
+  ceq check(G, refl, Eq(A, E1, E2)) = conv(E1, E2) if true .
+
+  *** J eliminator: synthesis mode
+  *** J(motive, base, left, right, proof)
+  *** We need to extract the type A from the proof's type Eq(A, left, right)
+  *** motive : Pi(a:A, Pi(b:A, Eq(A,a,b) -> Type))
+  *** base : Pi(a:A, motive a a refl)
+  *** result type: app(app(app(motive, left), right), proof)
+  ceq infer(G, J(E1, E2, E3, E4, E5)) =
+    app(app(app(E1, E3), E4), E5)
+    if Eq(T, T1, T2) := whnf(infer(G, E5))
+    /\ conv(T1, E3) /\ conv(T2, E4) .
+
+  *** ========================================
+  *** Nat eliminator (natrec)
+  *** ========================================
+
+  *** natrec(motive, base, step, target)
+  *** motive : Nat -> Type
+  *** base   : motive(zero)
+  *** step   : Pi(n:Nat). motive(n) -> motive(suc(n))
+  *** target : Nat
+  *** result : motive(target)
+  ceq infer(G, natrec(E1, E2, E3, E4)) =
+    app(E1, E4)
+    if check(G, E4, Nat)
+    /\ check(G, E2, app(E1, zero)) .
+
+  *** ========================================
+  *** Type formation (isType)
+  *** ========================================
+
+  *** A term is a type if it infers to some Type(level)
+  ceq isType(G, E) = true
+    if justLevel(L) := inferLevel(G, E) .
+
+  *** Also accept Type(L) directly
+  eq isType(G, Type(L)) = true .
+
+  *** Fallback for inferLevel: try to infer and match Type(L)
+  ceq inferLevel(G, E) = justLevel(L)
+    if Type(L) := whnf(infer(G, E)) [owise] .
+
+  *** Fallback
+  eq inferLevel(G, E) = noLevel [owise] .
+  eq isType(G, E) = false [owise] .
+
+  *** ========================================
+  *** Checking mode: conversion fallback
+  *** If e synthesizes to T' and conv(T, T'), then check succeeds
+  *** ========================================
+  ceq check(G, E, T) = true
+    if T1 := infer(G, E)
+    /\ T1 =/= errorExpr
+    /\ conv(T, T1) [owise] .
+
+  *** Final fallback: check fails
+  eq check(G, E, T) = false [owise] .
+
+  *** Final fallback: infer fails
+  eq infer(G, E) = errorExpr [owise] .
+
+endfm
