@@ -18,6 +18,7 @@
 
 (require racket/match
          racket/list
+         racket/string
          "surface-syntax.rkt"
          "source-location.rkt"
          "errors.rkt"
@@ -43,6 +44,8 @@
          process-defmacro
          process-deftype
          process-data
+         process-trait
+         process-impl
          ;; Constructor metadata registry (for reduce)
          current-ctor-registry
          current-type-meta
@@ -56,6 +59,29 @@
          register-ctor!
          lookup-ctor
          lookup-type-ctors
+         ;; Trait metadata registry
+         current-trait-registry
+         trait-meta
+         trait-meta?
+         trait-meta-name
+         trait-meta-params
+         trait-meta-methods
+         trait-method
+         trait-method?
+         trait-method-name
+         trait-method-type-datum
+         register-trait!
+         lookup-trait
+         parse-trait-method
+         ;; Impl metadata registry
+         current-impl-registry
+         impl-entry
+         impl-entry?
+         impl-entry-trait-name
+         impl-entry-type-args
+         impl-entry-dict-name
+         register-impl!
+         lookup-impl
          ;; Shared
          extract-pi-binders
          ;; Sibling let merging (for testing)
@@ -494,6 +520,8 @@
     [(deftype-) 'deftype]
     [(defmacro-) 'defmacro]
     [(spec-)    'spec]
+    [(trait-)   'trait]
+    [(impl-)    'impl]
     [else #f]))
 
 ;; Helper: extract the defined name(s) from a top-level form datum.
@@ -563,6 +591,18 @@
                    (for/list ([d (in-list defs)])
                      (datum->syntax #f d stx)))
                  (append (reverse new-stxs) acc)]
+                [(eq? base 'trait)
+                 (define defs (process-trait rewritten))
+                 (define new-stxs
+                   (for/list ([d (in-list defs)])
+                     (datum->syntax #f (preparse-expand-form d) stx)))
+                 (append (reverse new-stxs) acc)]
+                [(eq? base 'impl)
+                 (define defs (process-impl rewritten))
+                 (define new-stxs
+                   (for/list ([d (in-list defs)])
+                     (datum->syntax #f (preparse-expand-form d) stx)))
+                 (append (reverse new-stxs) acc)]
                 ;; def- or defn- — rewrite head, preserving child syntax properties
                 [else
                  ;; Replace just the head symbol in the syntax list to preserve
@@ -612,6 +652,33 @@
          (define new-stxs
            (for/list ([d (in-list defs)])
              (datum->syntax #f d stx)))
+         (append (reverse new-stxs) acc)]
+        ;; ---- Public trait — generate deftype + accessor defs, auto-export ----
+        [(and (pair? datum) (eq? head 'trait))
+         (define defs (process-trait datum))
+         ;; Auto-export: trait name + accessor names
+         (define tname (let ([h (cadr datum)])
+                         (if (symbol? h) h (and (pair? h) (car h)))))
+         (when tname (auto-export-name! tname))
+         (for ([d (in-list defs)])
+           (when (and (list? d) (>= (length d) 2) (symbol? (cadr d)))
+             (auto-export-name! (cadr d))))
+         ;; Convert accessor defs to syntax objects (expand sub-forms for deftype macros)
+         (define new-stxs
+           (for/list ([d (in-list defs)])
+             (datum->syntax #f (preparse-expand-form d) stx)))
+         (append (reverse new-stxs) acc)]
+        ;; ---- Public impl — generate dict + method defs, auto-export ----
+        [(and (pair? datum) (eq? head 'impl))
+         (define defs (process-impl datum))
+         ;; Auto-export: dict name + method helper names
+         (for ([d (in-list defs)])
+           (when (and (list? d) (>= (length d) 2) (symbol? (cadr d)))
+             (auto-export-name! (cadr d))))
+         ;; Convert defs to syntax objects (expand sub-forms for deftype macros)
+         (define new-stxs
+           (for/list ([d (in-list defs)])
+             (datum->syntax #f (preparse-expand-form d) stx)))
          (append (reverse new-stxs) acc)]
         ;; ---- Public defn/def — auto-export the name ----
         [(and (pair? datum) (memq head '(defn def)))
@@ -1384,6 +1451,43 @@
 (current-type-meta (hash-set (current-type-meta) 'Unit '(unit)))
 
 ;; ========================================
+;; Trait metadata registry
+;; ========================================
+;; Stores metadata about each trait for impl validation and dictionary resolution.
+
+;; trait-method: name (symbol), type-datum (s-expression for the method type)
+(struct trait-method (name type-datum) #:transparent)
+
+;; trait-meta: name (symbol), params ((name . type) ...), methods (list of trait-method)
+(struct trait-meta (name params methods) #:transparent)
+
+;; Registry: trait-name (symbol) → trait-meta
+(define current-trait-registry (make-parameter (hasheq)))
+
+(define (register-trait! name meta)
+  (current-trait-registry (hash-set (current-trait-registry) name meta)))
+
+(define (lookup-trait name)
+  (hash-ref (current-trait-registry) name #f))
+
+;; ========================================
+;; Impl metadata registry
+;; ========================================
+;; Stores metadata about each impl for dictionary resolution.
+
+;; impl-entry: trait-name (symbol), type-args (list of type datums), dict-name (symbol)
+(struct impl-entry (trait-name type-args dict-name) #:transparent)
+
+;; Registry: key (symbol, e.g. "Nat--Eq") → impl-entry
+(define current-impl-registry (make-parameter (hasheq)))
+
+(define (register-impl! key entry)
+  (current-impl-registry (hash-set (current-impl-registry) key entry)))
+
+(define (lookup-impl key)
+  (hash-ref (current-impl-registry) key #f))
+
+;; ========================================
 ;; process-data: algebraic data types with native constructors
 ;; ========================================
 ;; Syntax:
@@ -1630,9 +1734,7 @@
          (define-values (tn ps) (parse-data-params head))
          (values tn ps rest)])))
 
-  (when (null? raw-ctors)
-    (error 'data "data ~a: must have at least one constructor" type-name))
-
+  ;; Zero-constructor types are allowed (uninhabited types like Never/Void)
   (define ctors (map parse-data-ctor raw-ctors))
   ;; ctors = ((name . (field-types ...)) ...)
 
@@ -1707,6 +1809,392 @@
 
   ;; Return all definitions
   (cons type-def ctor-defs))
+
+;; ========================================
+;; process-trait: trait declarations
+;; ========================================
+;; Syntax (WS, after reader):
+;;   (trait TraitName ($brace-params A) (method1 : T1 -> T2) (method2 : T3))
+;;
+;; Syntax (sexp):
+;;   (trait (TraitName (A : (Type 0))) (method1 : T1 -> T2) (method2 : T3))
+;;
+;; Generates:
+;;   - deftype for the dictionary type
+;;     Single-method: (deftype (TraitName A) <method-type>)
+;;     Multi-method: (deftype (TraitName A) (Sigma (_ <method1-type>) method2-type...))
+;;   - Accessor defs for each method
+;;     Single-method: (def trait-method1 : Pi(A :0 Type) -> (TraitName A) -> method1-type
+;;                       (fn (dict) dict))
+;;     Multi-method: first/second projections
+;;   - Trait metadata registered for impl validation
+;;
+;; Returns: list of s-expression datums
+
+;; Parse a trait method declaration.
+;; Input: (method-name : type-atoms...) or (method-name ($angle-type ...) ...)
+;; Returns: trait-method struct
+(define (parse-trait-method raw trait-name)
+  (unless (and (pair? raw) (symbol? (car raw)))
+    (error 'trait "trait ~a: method must be (name : type ...), got ~a" trait-name raw))
+  (define name (car raw))
+  (define rest (cdr raw))
+  (cond
+    ;; Colon-based: (method : T1 -> T2 -> Result)
+    [(and (not (null? rest)) (eq? (car rest) ':))
+     (define type-atoms (cdr rest))
+     (when (null? type-atoms)
+       (error 'trait "trait ~a: method ~a: missing type after ':'" trait-name name))
+     ;; Build the method's function type from atoms
+     ;; Unlike data ctor, we keep the FULL type (including return type)
+     (define segments (split-on-arrow-datum type-atoms))
+     (define method-type
+       (if (= (length segments) 1)
+           ;; Single segment, no arrows — bare type
+           (let ([seg (car segments)])
+             (if (= (length seg) 1) (car seg) seg))
+           ;; Multiple segments — build arrow type
+           (let ([domains (drop-right segments 1)]
+                 [codomain-seg (last segments)])
+             (define codomain
+               (if (= (length codomain-seg) 1) (car codomain-seg) codomain-seg))
+             (define domain-types
+               (map (lambda (seg)
+                      (if (= (length seg) 1) (car seg) seg))
+                    domains))
+             (build-arrow-type domain-types codomain))))
+     (trait-method name method-type)]
+    ;; Angle-bracket (WS reader): (method ($angle-type T1) ...)
+    [(and (not (null? rest))
+          (pair? (car rest))
+          (eq? (car (car rest)) '$angle-type))
+     ;; Extract the type from the angle bracket
+     (define type-datum (cadr (car rest)))
+     (trait-method name type-datum)]
+    [else
+     (error 'trait "trait ~a: method ~a must have type annotation (name : type)" trait-name name)]))
+
+;; Build a nested Sigma type from a list of types.
+;; (build-sigma-type '(T1 T2 T3)) → (Sigma (_ : T1) (Sigma (_ : T2) T3))
+;; Uses (_ : T) binder syntax for proper sexp parsing.
+(define (build-sigma-type types)
+  (cond
+    [(= (length types) 1) (car types)]
+    [(= (length types) 2)
+     `(Sigma (_ : ,(car types)) ,(cadr types))]
+    [else
+     `(Sigma (_ : ,(car types)) ,(build-sigma-type (cdr types)))]))
+
+;; Build accessor expression for the i-th element of a nested Sigma.
+;; n = total number of methods
+;; i = 0-based index
+;; dict-expr = the expression to project from
+(define (build-sigma-accessor n i dict-expr)
+  (cond
+    ;; Last element: apply (n-1) `second` projections
+    [(= i (- n 1))
+     (for/fold ([expr dict-expr])
+               ([_ (in-range (- n 1))])
+       `(second ,expr))]
+    ;; Not last: apply i `second` projections, then `first`
+    [else
+     (define inner
+       (for/fold ([expr dict-expr])
+                 ([_ (in-range i)])
+         `(second ,expr)))
+     `(first ,inner)]))
+
+(define (process-trait datum)
+  (unless (and (list? datum) (>= (length datum) 3))
+    (error 'trait "trait requires: (trait TraitName {params} method1 method2 ...)"))
+
+  ;; Parse trait name and params (same patterns as data)
+  (define-values (trait-name params raw-methods)
+    (let ([head (cadr datum)]
+          [rest (cddr datum)])
+      (cond
+        ;; Brace-params: (trait Eq ($brace-params A) ...)
+        [(and (symbol? head)
+              (not (null? rest))
+              (let ([maybe-braces (car rest)])
+                (and (pair? maybe-braces)
+                     (eq? (car maybe-braces) '$brace-params))))
+         (define brace-element (car rest))
+         (define symbols (cdr brace-element))
+         (define brace-params
+           (for/list ([s (in-list symbols)])
+             (unless (symbol? s)
+               (error 'trait "trait: implicit type parameter must be a symbol, got ~a" s))
+             (cons s '(Type 0))))
+         (values head brace-params (cdr rest))]
+        ;; Sexp params: (trait (Eq (A : (Type 0))) ...)
+        [else
+         (define-values (tn ps) (parse-data-params head))
+         (values tn ps rest)])))
+
+  (when (null? raw-methods)
+    (error 'trait "trait ~a: must have at least one method" trait-name))
+
+  ;; Parse methods
+  (define methods
+    (map (lambda (m) (parse-trait-method m trait-name)) raw-methods))
+
+  ;; Register trait metadata
+  (register-trait! trait-name (trait-meta trait-name params methods))
+
+  ;; ---- Generate the dictionary type ----
+  ;; Type params as Pi bindings (all :0)
+  (define param-pi-bindings
+    (for/list ([p (in-list params)])
+      (list (car p) ':0 (cdr p))))
+
+  ;; For parameterized deftype, we need $-prefixed param names
+  ;; so process-deftype's pattern-template macro expansion works.
+  ;; Map: A → $A in both the deftype pattern and body.
+  (define param-name->pvar
+    (for/hasheq ([p (in-list params)])
+      (values (car p)
+              (string->symbol (string-append "$" (symbol->string (car p)))))))
+
+  ;; Substitute param names with $-prefixed versions in a type datum
+  (define (pvarify datum)
+    (cond
+      [(symbol? datum)
+       (hash-ref param-name->pvar datum datum)]
+      [(pair? datum)
+       (map pvarify datum)]
+      [else datum]))
+
+  (define method-types (map trait-method-type-datum methods))
+
+  ;; Pvarified method types for the deftype body
+  (define pvar-method-types (map pvarify method-types))
+
+  ;; Dictionary type body: single method → bare type, multi → nested Sigma
+  (define dict-body
+    (if (= (length methods) 1)
+        (car pvar-method-types)
+        (build-sigma-type pvar-method-types)))
+
+  ;; deftype pattern: (TraitName $A $B ...) or bare TraitName
+  (define deftype-pattern
+    (if (null? params)
+        trait-name
+        `(,trait-name ,@(map (lambda (p) (hash-ref param-name->pvar (car p))) params))))
+
+  ;; deftype datum with $-prefixed params for pattern-template expansion
+  (define deftype-datum `(deftype ,deftype-pattern ,dict-body))
+
+  ;; Process deftype to register it as a pre-parse macro
+  (process-deftype deftype-datum)
+
+  ;; ---- Generate accessor definitions ----
+  ;; Each accessor takes type params + a dict, and projects the right field.
+  ;; Single method: accessor is identity (dict IS the function)
+  ;; Multi method: accessor projects from nested Sigma
+
+  (define n-methods (length methods))
+
+  ;; Applied trait type: (TraitName A B ...) or bare TraitName
+  (define applied-trait-type
+    (if (null? params)
+        trait-name
+        `(,trait-name ,@(map car params))))
+
+  (define accessor-defs
+    (for/list ([method (in-list methods)]
+               [i (in-naturals)])
+      (define method-name (trait-method-name method))
+      (define method-type (trait-method-type-datum method))
+      ;; Accessor name: TraitName-methodname
+      (define accessor-name
+        (string->symbol
+         (string-append (symbol->string trait-name)
+                        "-"
+                        (symbol->string method-name))))
+
+      ;; Accessor type: Pi(A :0 Type 0) ... -> TraitName A -> method-type
+      (define accessor-type
+        (build-nested-pi
+         param-pi-bindings
+         (build-arrow-type (list applied-trait-type) method-type)))
+
+      ;; Accessor body: fn that projects from dict
+      ;; For single-method: (fn (dict <TraitType>) dict)
+      ;; For multi-method: (fn (dict <TraitType>) (first/second... dict))
+      (define dict-var 'dict)
+      (define projection
+        (if (= n-methods 1)
+            dict-var
+            (build-sigma-accessor n-methods i dict-var)))
+
+      (define inner-fn
+        `(fn (,dict-var : ,applied-trait-type) ,projection))
+      (define accessor-body
+        (if (null? params)
+            inner-fn
+            (build-nested-fn param-pi-bindings inner-fn)))
+
+      `(def ,accessor-name : ,accessor-type ,accessor-body)))
+
+  ;; Return the accessor defs (deftype was already processed via process-deftype)
+  accessor-defs)
+
+;; ========================================
+;; process-impl: trait implementation
+;; ========================================
+;; Syntax (WS, after reader):
+;;   (impl TraitName TypeArg1 TypeArg2 ...
+;;     (defn method1 [params] <ReturnType> body1)
+;;     (defn method2 [params] <ReturnType> body2))
+;;
+;; Sexp:
+;;   (impl TraitName TypeArg1 ...
+;;     (defn method1 (x : T1) ... : Ret body)
+;;     ...)
+;;
+;; Generates:
+;;   (def TypeArg--TraitName--dict : (TraitName TypeArg) dict-value)
+;;
+;; For single-method traits: dict value is the bare fn
+;; For multi-method traits: dict value is (pair fn1 (pair fn2 ...)) nested
+;;
+;; Returns: list of s-expression datums (just the dict def)
+
+;; Build a nested pair expression from a list of expressions.
+;; (build-nested-pair '(e1 e2 e3)) → (pair e1 (pair e2 e3))
+(define (build-nested-pair exprs)
+  (cond
+    [(= (length exprs) 1) (car exprs)]
+    [(= (length exprs) 2)
+     `(pair ,(car exprs) ,(cadr exprs))]
+    [else
+     `(pair ,(car exprs) ,(build-nested-pair (cdr exprs)))]))
+
+;; Extract method body from a defn datum.
+;; Input: (defn name [params] <RetType> body) or (defn name (p : T) ... : Ret body)
+;; Returns: the full defn datum as-is (will be processed by preparse later)
+;; We extract just the defn body parts and build an fn expression.
+(define (impl-method-to-fn defn-datum)
+  ;; The defn datum is a full defn form. We want to return it as a defn
+  ;; that gets processed normally. But for impl, we need to convert
+  ;; the defn body into a lambda for the dictionary.
+  ;;
+  ;; Strategy: return the defn as-is. The impl will emit individual defn forms
+  ;; for each method, plus a dictionary def that references them.
+  defn-datum)
+
+(define (process-impl datum)
+  (unless (and (list? datum) (>= (length datum) 4))
+    (error 'impl "impl requires: (impl TraitName TypeArgs... method-defn1 method-defn2 ...)"))
+
+  (define trait-name (cadr datum))
+  (unless (symbol? trait-name)
+    (error 'impl "impl: trait name must be a symbol, got ~a" trait-name))
+
+  ;; Look up trait metadata
+  (define tm (lookup-trait trait-name))
+  (unless tm
+    (error 'impl "impl: unknown trait ~a (must be declared with 'trait' first)" trait-name))
+
+  (define expected-methods (trait-meta-methods tm))
+  (define n-expected (length expected-methods))
+
+  ;; Parse type args and method defns from the rest of the datum
+  ;; The structure is: (impl TraitName type-arg1 ... method-defn1 method-defn2 ...)
+  ;; Type args are symbols/lists that are NOT defn forms.
+  ;; Method defns are lists starting with 'defn.
+  (define rest-after-trait (cddr datum))
+
+  ;; Split into type-args and method-defns
+  (define-values (type-args method-defns)
+    (let loop ([remaining rest-after-trait]
+               [targs '()])
+      (cond
+        [(null? remaining)
+         (values (reverse targs) '())]
+        [(and (pair? (car remaining))
+              (eq? (caar remaining) 'defn))
+         (values (reverse targs) remaining)]
+        [else
+         (loop (cdr remaining) (cons (car remaining) targs))])))
+
+  (when (null? type-args)
+    (error 'impl "impl ~a: must specify at least one type argument" trait-name))
+
+  ;; Validate method count
+  (unless (= (length method-defns) n-expected)
+    (error 'impl "impl ~a: expected ~a method(s), got ~a"
+           trait-name n-expected (length method-defns)))
+
+  ;; Validate method names match trait declaration (in order)
+  (for ([defn-d (in-list method-defns)]
+        [expected-m (in-list expected-methods)]
+        [i (in-naturals)])
+    (define defn-name (and (list? defn-d) (>= (length defn-d) 2) (cadr defn-d)))
+    (define expected-name (trait-method-name expected-m))
+    (unless (eq? defn-name expected-name)
+      (error 'impl "impl ~a: method ~a at position ~a should be '~a', got '~a'"
+             trait-name trait-name i expected-name defn-name)))
+
+  ;; Generate dictionary name: TypeArg1--TraitName--dict
+  ;; For single type arg: "Nat--Eq--dict"
+  ;; For multiple: "Nat-Bool--Convert--dict"
+  (define type-arg-str
+    (string-join
+     (map (lambda (ta)
+            (if (symbol? ta)
+                (symbol->string ta)
+                (format "~a" ta)))
+          type-args)
+     "-"))
+  (define dict-name
+    (string->symbol
+     (string-append type-arg-str "--" (symbol->string trait-name) "--dict")))
+
+  ;; Generate the applied trait type: (TraitName TypeArg1 TypeArg2 ...)
+  (define applied-trait-type
+    (if (= (length type-args) 1)
+        (let ([ta (car type-args)])
+          (if (null? (trait-meta-params tm))
+              trait-name
+              `(,trait-name ,ta)))
+        `(,trait-name ,@type-args)))
+
+  ;; Generate method helper defns (each method gets its own top-level defn)
+  ;; Method defn names are scoped: TypeArg--TraitName--method-name
+  (define method-helper-names
+    (for/list ([defn-d (in-list method-defns)])
+      (define method-name (cadr defn-d))
+      (string->symbol
+       (string-append type-arg-str "--" (symbol->string trait-name)
+                      "--" (symbol->string method-name)))))
+
+  ;; Rewrite each defn with scoped name
+  (define method-helper-defns
+    (for/list ([defn-d (in-list method-defns)]
+               [helper-name (in-list method-helper-names)])
+      (cons 'defn (cons helper-name (cddr defn-d)))))
+
+  ;; Build dictionary value: for single-method, just the helper name.
+  ;; For multi-method, (pair helper1 (pair helper2 helper3))
+  (define dict-value
+    (if (= n-expected 1)
+        (car method-helper-names)
+        (build-nested-pair method-helper-names)))
+
+  ;; Dictionary def: (def dict-name : applied-trait-type dict-value)
+  (define dict-def
+    `(def ,dict-name : ,applied-trait-type ,dict-value))
+
+  ;; Register impl in the registry
+  (define impl-key
+    (string->symbol (string-append type-arg-str "--" (symbol->string trait-name))))
+  (register-impl! impl-key (impl-entry trait-name type-args dict-name))
+
+  ;; Return all definitions: helper defns + dict def
+  ;; For single-method, still emit the helper defn too (for direct use by name)
+  (append method-helper-defns (list dict-def)))
 
 
 ;; ================================================================

@@ -357,6 +357,14 @@
              [(prologos-error? r) r]
              [else (expr-Eq t l r)]))]
 
+    ;; Union type
+    [(surf-union left right loc)
+     (let ([l (elaborate left env depth)]
+           [r (elaborate right env depth)])
+       (cond [(prologos-error? l) l]
+             [(prologos-error? r) r]
+             [else (expr-union l r)]))]
+
     ;; boolrec
     [(surf-boolrec mot tc fc target loc)
      (let ([m (elaborate mot env depth)]
