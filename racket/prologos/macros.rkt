@@ -2247,7 +2247,7 @@
        (let ([btype (binder-info-type binder)])
          (when btype (walk btype)))
        (walk body)]
-      [(surf-arrow domain codomain _loc)
+      [(surf-arrow _ domain codomain _loc)
        (walk domain)
        (walk codomain)]
       [(surf-sigma binder body _loc)
@@ -2357,7 +2357,7 @@
   (match type-ast
     [(surf-pi binder body _loc)
      (cons binder (extract-pi-binders body))]
-    [(surf-arrow domain codomain _loc)
+    [(surf-arrow _ domain codomain _loc)
      ;; Non-dependent arrow: generate anonymous binder
      (cons (binder-info '_ 'mw domain)
            (extract-pi-binders codomain))]
@@ -2509,8 +2509,8 @@
      (surf-suc (expand-expression e) loc)]
     [(surf-pi binder body loc)
      (surf-pi binder (expand-expression body) loc)]
-    [(surf-arrow dom cod loc)
-     (surf-arrow (expand-expression dom) (expand-expression cod) loc)]
+    [(surf-arrow m dom cod loc)
+     (surf-arrow m (expand-expression dom) (expand-expression cod) loc)]
     [(surf-sigma binder body loc)
      (surf-sigma binder (expand-expression body) loc)]
     [(surf-eq type lhs rhs loc)

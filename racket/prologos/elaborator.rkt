@@ -200,13 +200,14 @@
     ;; Pi introduces a binder, so codomain is under a binder even for arrows.
     ;; We elaborate B at depth+1 (under a dummy binding) so that references
     ;; to outer variables get the correct de Bruijn indices.
-    [(surf-arrow dom cod loc)
-     (let ([a (elaborate dom env depth)]
-           [b (elaborate cod env (+ depth 1))])
+    [(surf-arrow raw-mult dom cod loc)
+     (let* ([m (or raw-mult 'mw)]  ;; #f defaults to unrestricted
+            [a (elaborate dom env depth)]
+            [b (elaborate cod env (+ depth 1))])
        (cond
          [(prologos-error? a) a]
          [(prologos-error? b) b]
-         [else (expr-Pi 'mw a b)]))]
+         [else (expr-Pi m a b)]))]
 
     ;; Pi type: (Pi (x :m A) B) -> Pi(m, elab-A, elab-B) with x bound in B
     ;; Sprint 7: #f mult → fresh-mult-meta

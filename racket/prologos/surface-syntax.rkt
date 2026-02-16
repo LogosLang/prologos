@@ -130,8 +130,9 @@
 ;; Pi type: (Pi (x : T) body)
 (struct surf-pi (binder body srcloc) #:transparent)
 
-;; Non-dependent function: (-> A B)
-(struct surf-arrow (domain codomain srcloc) #:transparent)
+;; Non-dependent function: (-> A B), with optional multiplicity
+;; mult is #f (default unrestricted), 'm0 (erased), 'm1 (linear), or 'mw (unrestricted)
+(struct surf-arrow (mult domain codomain srcloc) #:transparent)
 
 ;; Sigma type: (Sigma (x : T) body)
 (struct surf-sigma (binder body srcloc) #:transparent)
