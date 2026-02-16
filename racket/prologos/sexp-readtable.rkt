@@ -30,9 +30,29 @@
       '$pipe)
     #\- 'terminating-macro
     (lambda (ch port src line col pos)
-      ;; Check if this is -> (arrow operator)
+      ;; Check if this is ->, -0>, -1>, or -w> (arrow operators)
       (define next (peek-char port))
       (cond
+        ;; Multiplied arrows: -0>, -1>, -w>
+        [(and (char? next) (memq next '(#\0 #\1 #\w)))
+         (define mc (read-char port))
+         (define after-mult (peek-char port))
+         (cond
+           [(and (char? after-mult) (char=? after-mult #\>))
+            (read-char port) ; consume >
+            (string->symbol (string #\- mc #\>))]
+           [else
+            ;; Not a multiplied arrow; reconstruct identifier
+            (let loop ([chars (list mc #\-)])
+              (define c (peek-char port))
+              (cond
+                [(and (char? c)
+                      (not (char-whitespace? c))
+                      (not (memq c '(#\( #\) #\[ #\] #\< #\> #\; #\"))))
+                 (read-char port)
+                 (loop (cons c chars))]
+                [else
+                 (string->symbol (list->string (reverse chars)))]))])]
         [(and (char? next) (char=? next #\>))
          ;; -> arrow: consume >, check what follows
          (read-char port)
