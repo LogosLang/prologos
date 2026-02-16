@@ -115,6 +115,552 @@ A /relation that produces proofs/, defined /locally/ inside a /function/, return
 ** LLVM
   * Hope to be able to leverage other languages in the ecosystem, with strong ffi support to things like C, C++, Rust, and others
 ** Prototype in
-  * Racket?
-  * Maude?
+  * ✅ Racket 🚀
 
+
+
+  Write a clean commit message detailing what we accomplished, only output as a markdown block.
+
+
+
+* Personal TODOS
+** Editor Support
+  - [X] load file, proper library path loading
+  - [ ] tab on argument vectors, let-binding vectors, align to first var
+  - [ ] rather than send last sym-expr to repl, send surfer-highlight region
+  - [ ] Surfer Mode QoL
+    - [ ] timer issue 🐞
+    - [ ] forward-back tree gets occasional stuck... just jump to next tree node if misaligned
+    - [ ] better keybindings for nav, expand/contract context
+    - [ ] send overlay region to REPL
+  - [ ] Documentation
+    - [ ] Doc Completion Keep currying in the core, add arity checking in the surface language
+    - [ ] Docstrings: Store documentation strings with definitions
+  - Interactivity
+    - Hole-Driven Development Features
+** Language
+  - [ ] Clarify `()` as logic clauses and Type Groupings
+  - [ ] ‼️ Better Type delimiters in WS mode
+    - Any complex grouped types, Function, Pi, Sigma use `()`
+      - [ ] 👩‍🔬🦆 Syntax Workshop!
+  - [ ] ‼️🦆 Workshop Session Syntax
+    - [ ] Syntax Notes
+  - [ ] +Anonymous Relation `?()`... but also `rel`+  DEFER
+    | Command Language | Relational Languages |                 |
+    | []  OR  "bare"   | ()                   |                 |
+    | defn             | defr                 |                 |
+    | fn               | rel                  |                 |
+    | #()              | ?()                  | ;; more ⚙️🔧🧠 |
+    - [ ] Syntax Notes
+  - [X] +Deprecate `<>` (but keep, for now)+
+    - [X] Repurpose `<>` For Pi and Sigma Types
+  - [X] Multi-arity defn: Case-split syntax with multiple arities (original feature request)
+  - [X] Partial function application with wildcards
+  - [ ] variable argument support `...name` syntax?
+  - [X] Migrate Groupings syntax from `()` to `[]`
+  - [X] define sigil syntax for common data structures (see Syntax Studies below)
+  - [X] Prologos `defmacro`
+    - test (see re: homoiconicity concerns)
+  - [X] Unit Type
+  - [ ] Nil Type? (equivalent semantically  to Unit.. redundant? or good meaning?)
+    - [ ] verify
+  - [X] Union Type
+  - [X] Nullable Type? -> Union Type of [A | Nil]
+  - [X] Memoization Infra
+  - [-] Polymorphic Dispatch 🦆
+    - [X] `trait` and `impl`
+    - [ ] ??? check back on notes for further design patterns
+  - [X] Return types arity style `A B C -> D` *NOT* curry style: `A -> B -> C -> D`
+  - [X] `defn` default public `defn-` default private -- deprecate `provide`
+  - [X] `require` QoL - `:as`
+  - [X] `let` block vs in-line `let`s
+    - We support both... sibling in-line lets share same local scope
+    - Design research/🦆
+** Namespacing
+  - [X] auto provide `defn`s
+    - [X] create private defn- and co.
+    - [X] remove/deprecate `provide`
+  - [X] Ensure namespace aliasing with `:as`
+  - [X] change namespace delimiter from `/` to `::`
+  - [ ] determine what core libraries get loaded in automatically can be called in by their fully-qualified names without require
+** Research/Implementation Guidance Documentations
+  - [ ] Updated Deep Propagator Implementation Guide?
+    - Update with choice-point designs
+    - What are the core
+  - [ ] WAM-light? SLD/SLG fallbacks
+    - What's the MVP for Unification, at least? (Our type inference already has this... can we re-purpose the same tooling?)
+  - [ ] Dependent Type Interactive Design: Agda/Idris: Implementation Guide
+  - [ ] Develop Spec Language as core to Dependent Type Interactive Dev
+    - Lessons from Clojure | Idris | Agda
+    - Property Based test (comprehensive research across language ecosystem)
+      - properl - Erlang
+      - Lean, Coq, Maude... Formal methods as a grounding into sound inference
+    - Automated fuzzing/generative testing at a push of button
+    - [ ] Derive Properties (see notes... fill in more here)
+  - [ ] Best in Modern Tooling Support
+    - Package manager
+    - build tools
+    - test framework
+  - [ ] Modal Logic | LTL Applications... How does our type system do at expressing, constructing Modal Logic Modelling!!!!
+
+
+
+
+
+
+* Syntax Studies
+** Multi-arity function bodies
+#+begin_src prologos
+;; Multi-arity syntax design
+;; Option 1: groupings with `()`
+defn clamp
+  "clamp `low` `high` returns a function that clamps `x` to [`low`, `high`]"
+  ([low : Nat, high : Nat] : Nat -> Nat
+    fn [x] max low (min x high))
+
+  ([x : Nat, low : Nat, high : Nat] : Nat
+    max low (min x high))
+
+;; Option 2: Case-Style
+defn clamp
+  "Clamp a value to a range"
+  | [low : Nat, high : Nat] : Nat -> Nat
+      fn [x] (max low (min x high))
+
+  | [x : Nat, low : Nat, high : Nat] -> Nat
+      max low (min x high)
+#+end_src
+** IDEAs FOR PAREN GROUPINGS
+#+begin_src prologos
+
+  ;; if we move from `()` -> `[]` groupings for AST-nesting
+  ;; perhaps we could set aside `()` to offer a mixed fix arithmetic sub-language???
+  ;; NOPE!
+
+  [(x : A) -> B]
+  <(x : A) -> B>
+
+  [(x : A) * B]
+  <(x : A) * B>
+
+
+#+end_src
+
+For this run, we want to clarify Type system syntax and the issues involved with groupings and their parsing. Let's put on our best program language design hat while we consider deeply some goals:
+
+ * refactor `<>` to support Pi and Sigma dependent type groupings, remove for other cases
+   - Unified Type system for Depdent Pi and Sigma types with `<>` groupings
+     - Pi:    `<(x : A) -> B>`
+     - Sigma: `<(x : A) * B>`
+ * In Pi and Sigma types, /optionally/ drop inner parens for single binder; multiple binders still use parens
+ * uncurried surface for multiple binders
+ * Session types "carry the multiplicity on the arrow" in type signatures `A -1> B`
+   - after variable in bindings [x :1 A] and implicits {n :0 Nat}
+ * Reserve `()` for groupings in compound types
+   - Function: `(A -> B)`
+   - Product:  `(A * B)`
+   - Union:    `(A | B)`
+ * Future plan to use `()` uniquely for clauses in the "Relational Language" of the Logical Core, distinct from  `[]` in the "Command Language" (Functional Core). Defered for later.
+
+ Let's consider the following conversation to inform this work, following the best recommendations and guidance:
+
+ ```
+ ```
+
+
+
+
+
+** Piping
+
+#+begin_src prologos
+
+  |>    `pipe-as`
+  |>.   `pipe-first`
+  |>..  `pipe-last`
+
+  >>  Transducer
+
+#+end_src
+
+** `spec`
+
+#+begin_src prologos
+spec add Nat Nat -> Nat
+defn add [x y]
+    + x y
+
+
+defn clamp
+  "Clamp a value to a range"
+  | [low : Nat, high : Nat] : Nat -> Nat
+      fn [x] (max low (min x high))
+
+  | [x : Nat, low : Nat, high : Nat] -> Nat
+      max low (min x high)
+;; ---
+
+spec clamp
+  "Clamp a value to a range"
+  | Nat Nat -> [Nat -> Nat]
+  | Nat Nat Nat -> Nat
+
+defn clamp
+  | [low high] [fn [x] (max low (min x high))]
+  | [max low [min x high]]
+
+;; full potential example
+;; This starts to feel like Clojure's =spec= system—contracts, generative testing, documentation all in one.
+spec add
+  "Add two natural numbers."
+  Nat Nat -> Nat
+  :examples
+    [add 1 2] => 3
+    [add 0 n] => n
+  :properties
+    [add x y] = [add y x]   ;; commutativity
+
+#+end_src
+
+** Schema, Selection, Session
+*** schema
+*** selection: require, include, and provide
+*** session
+
+
+
+
+** Point Free... APL Style Trains, Trines, and Trouble????
+
+#+begin_src prologos
+
+spec compose [B -> C] [A -> B] -> [A -> C]
+defn compose [f g]
+  f [g _]
+
+#+end_src
+
+
+
+
+
+
+
+** Free standing hash-map: The Implicit HashMap Syntax
+  * Keys on same level implicit Hashmap
+  * 
+
+#+begin_src prologos
+
+spec add
+  "Add two natural numbers."
+  Nat Nat -> Nat
+  :examples
+    [add 1 2] => 3
+    [add 0 n] => n
+  :properties
+    [add x y] = [add y x]   ;; commutativity
+
+#+end_src
+
+
+
+
+
+** In-line let
+  * `:=` vs `let`
+
+#+begin_src prologos
+
+  :=  foo 42
+  let foo 42
+
+
+  let x : Nat 42     ;; 1?
+  let x : Nat = 42   ;; 2?
+  let x : Nat := 42  ;; 3?
+
+  ;; should the `:=` or `=` be optional?
+
+
+
+  ;; 1. Paren Groupings? `()`
+  let answer <Nat> (mult 21 2)  ;; 1?  var <Type> expr
+  let answer : Nat (mult 21 2)  ;; 2?  var : Type expr
+  let answer::Nat  (mult 21 2)  ;; 3?  var::Type  expr
+
+  ;; 2. Square brackets groupings? `[]`
+  let answer <Nat> [mult 21 2]  ;; 1?   var <Type> expr
+  let answer : Nat [mult 21 2]  ;; 2?   var : Type expr
+  let answer::Nat  [mult 21 2]  ;; 3?   var::Type expr
+
+
+
+
+  let xs [: Vec 5 Nat]  [1 2 3 4 5]
+
+  let xs : Vec 5 Nat := [1 2 3 4 5]
+  let ys : List Nat  := #[3 4 5]
+  let xs : List Nat  := #[1 2 | ys]
+  let xs : Seq A := #'[...]  ;; VERY LOW CONFIDENCE ON THIS SYNTAX
+  let xs : Set A := #{...}   ;; EDN-style sets
+  let xs : HMapType := {:k v, ...}  ;; EDN-style maps
+
+
+  let [xs [: List Nat] #[10 20]
+       ys [: List Nat] #[3 4 5]
+       zs #[xs | ys]]
+
+  let [xs (: List Nat) #[10 20]
+       ys (: List Nat) #[3 4 5]
+       zs #[xs | ys]]
+
+
+   map [add 2 _] xs
+   map [clamp _ 50 100] xs
+
+   map (add 2 _) xs
+   map (clamp _ 50 100) xs
+
+
+#+end_src
+
+** Sigil Design
+#+begin_src quote
+| Collection        | Sigil    | Mnemonic              | Example          |
+|-------------------+----------+-----------------------+------------------|
+| Grouping          |  `[...]`  | "Expression"         | =[add 1 2]=      |
+| Persistent Vec    | `@[...]` | "At" = indexed access | =@[1 2 3]=       |
+| Linked List       | `'[...]` | "Quote" = literal     | ='[1 2 3]=       |
+| Lazy Seq          | `~[...]` | "Tilde" = lazy/wave   | =~[1 2 3]=       |
+| Set               | `#{...}` | EDN-style             | =#{1 2 3}=       |
+| Map               |  `{...}` | EDN-style            | ={:a 1 :b 2}=     |
+| Tuple (if needed) | =(...)=  | Traditional           | =(1, "a", true)= |
+#+end_src
+
+
+
+** fn
+
+#+begin_src prologos
+
+  fn [x] add 2 x
+
+#+end_src
+
+
+
+
+
+
+** Partial Functions, strict arity, and the Hole-y Trinity: Curry Favor
+
+*** Use placeholders to invoke partial function
+#+begin_src prologos
+defn clamp
+  "Clamp value to range"
+  | [low : Nat, high : Nat] : Nat -> Nat
+      fn x (max low (min high x))
+  | [low : Nat, high : Nat, x : Nat] : Nat
+      max low (min high x)
+
+;; Now both work:
+clamp 0 100          ;; 2-arity, returns function
+clamp 0 100 50       ;; 3-arity, returns value
+
+;; And placeholder works too:
+map (clamp 0 100 _) xs   ;; explicit partial of 3-arity
+map (clamp 0 100) xs     ;; using 2-arity overload (cleaner!)
+
+#+end_src
+
+
+** Type Syntax
+  * <Type>
+  * var : Type
+  * var::Type
+
+** Logical Language
+*** Keywords
+#+begin_src prologos
+  rel  | relation
+  defr | defrel
+  clause
+  &>
+  =   ;; unify
+  .>
+
+#+end_src
+
+*** Logic Variable Syntax and notes
+
+| General Modality | ?var        | Input OR Output |
+| Input   Modality | var OR -var | Input only      |
+| Output  Modality | ?+var       | Output          |
+
+
+#+begin_src prologos
+
+
+
+#+end_src
+
+
+
+  * *What is a good convention for naming `defr` forms? (Like predicate functions in Clojure, by convention, end in `?`)
+    - We don't want to enforce the naming, but encourage community
+
+
+*** Namespaces and Requires
+
+  * `require` should take a list of require forms and allow for local aliasing with `alias/def-name` syntax
+
+Example:
+#+begin_src prologos
+
+  require [prologos.data.nat  :as nat  :refer [add mult pow zero?]]
+          [prologos.data.bool :as bool :refer [not and or]]
+          [prologos.data.list :as list :refer [List nil cons map filter reduce]]
+
+  defn double-all [xs : List Nat] : List Nat
+    map (nat/double _) xs
+
+#+end_src
+
+
+
+
+*** Clause Pipes
+**** `&>`
+#+begin_src prologos
+
+#+end_src
+
+*** Unification
+
+#+begin_src prologos
+  ~
+  <=>
+  =   ;; semantically overloaded... but greater primacy to Logical Language Aspect ***
+
+
+  ;; `:=` to functional binding
+  ;; `==` to equality test
+
+#+end_src
+
+
+
+** fn/rel fusion...
+** Unify | = | eq? 🤷‍♀️
+  * Should we keep Prolog's use of `=` for unification
+    - use `unify` keyword?
+
+
+* Data Structures
+  * Relaxed Radix Balanced Trees (RRB-trees) compared with HAMT-vectors?
+
+
+* Vision, Principles,
+  * Interactive Development
+    - The programmer is in constant conversation with the runtime tooling, code, evaluation
+    - Hole-driven Development with Dependent Types
+      - Derive structure, case splits, etc.
+      - Editor Assisted Coding
+    - In-line evaluation
+    - Keep locked in to context (no switching cost between code and run/eval)
+    - Frictionless Developer Tooling Integration
+  * Homoiconicity: Code is Data
+    - What you
+    - Uniform Syntax
+
+
+
+* Considerations
+** Part 2: Persistent Data Structures
+*** 1. HAMT (Hash Array Mapped Trie)
+
+#+begin_src
+;; Key insight: 32-bit hash → 6 levels max (32^6 > 1 billion)
+;; Each node: up to 32 children
+;; Structural sharing: updates copy only path from root to changed leaf
+
+       [root]
+      /      \
+   [node]   [node]
+   /    \
+[leaf] [leaf]  <-- update here copies 3 nodes, shares rest
+#+end_src
+
+*** 2. Transients for Batch Updates
+
+#+begin_src prologos
+;; Problem: building a map one item at a time = O(n log n)
+;; Solution: transient (mutable) version for batch ops
+
+defn build-map [pairs : List (Pair K V)] : Map K V
+  persistent!
+    (reduce pairs (transient empty-map)
+      (fn acc (k, v) -> assoc! acc k v))
+#+end_src
+
+/3. RRB-Trees for Vectors/
+
+If you want efficient =concat=, =slice=, =insert-at=, consider RRB-trees (Relaxed Radix Balanced) instead of plain tries.
+
+#+begin_src prologos
+;; Standard vector trie: O(n) concat
+;; RRB-tree: O(log n) concat, slice, insert
+#+end_src
+
+*** 3. RRB-Trees for Vectors
+
+If you want efficient =concat=, =slice=, =insert-at=, consider RRB-trees (Relaxed Radix Balanced) instead of plain tries.
+
+#+begin_src prologos
+;; Standard vector trie: O(n) concat
+;; RRB-tree: O(log n) concat, slice, insert
+#+end_src
+
+*** 4. Structural Sharing + Logic Variables/
+This is unique to Prologos:
+
+#+begin_src prologos
+;; Logic variables in persistent structures
+:= m (map-of "a" ?x "b" ?y)
+
+;; Unification might bind ?x
+(unify ?x 42)
+
+;; What happens to m?
+;; Option A: m is unchanged (logic vars are immutable references)
+;; Option B: m "sees" the binding (requires indirection)
+#+end_src
+
+You need to decide how logic variables interact with persistent structures.
+** Part 3: Evaluation Strategy
+
+/Key Question: Strict or Lazy by Default?/
+
+| Strategy                 | Pros                            | Cons                         |
+|--------------------------+---------------------------------+------------------------------|
+| Strict (Clojure, ML)     | Predictable, debuggable         | Can't do infinite structures |
+| Lazy (Haskell)           | Infinite structures, modularity | Space leaks, hard to reason  |
+| Lazy Seqs Only (Clojure) | Best of both                    | Two mental models            |
+
+- Recommendation for Prologos
+
+#+begin_src prologos
+;; Strict by default (like Clojure)
+;; Explicit laziness via Seq and delay/force
+
+defn eager-map {A B} [f : A -> B, xs : List A] : List B
+  match xs
+    | nil       -> nil
+    | cons x xs -> cons (f x) (eager-map f xs)
+
+defn lazy-map {A B} [f : A -> B, xs : Seq A] : Seq B
+  match xs
+    | empty    -> empty
+    | cell x xs -> cell (f x) (delay (lazy-map f (force xs)))
+#+end_src

@@ -3481,3 +3481,5625 @@ def six-factorial : (r : Nat) * [Factorial [nat 6] r]
 The logic engine does the computation /and/ constructs the proof. You get certified results without writing proof terms manually.
 
 ** 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+* Overflow ---
+* Let's refine our syntax on one of your examples:
+```
+#+begin_src prologos
+defn solve-with-proof [goal : Goal] : Maybe (Answer * Proof)
+  ;; Local relation with proof term
+  := solver (rel [?g ?answer ?proof]
+               &> [?g :=(atom ?p ?args),
+                   lookup-clause ?p ?clause,
+                   unify ?clause ?args ?subst,
+                   ?answer :=(apply-subst ?subst ?args),
+                   ?proof :=(by-clause ?p ?clause)])
+
+  match (solve-one [solver goal ?a ?p])
+    | (some (pair a p)) -> (just (pair a p))
+    | none -> nothing
+#+end_src
+```
+I'm thinking of using `()` as groupings rather than `[]` for now--reserving `[]` for vectors.
+ - except argument bodies are grouped in vector-syntax
+ - grouping is implied on single line. For example `:= ?g (atom ?p ?args)\n...`
+I'm thinking of significant modoal prefixes to logic variables: ?multiModal -outputVar +inputVar
+`:=` would need to be prefix notation in our above example
+
+In this example, can you explain the intent with some of the calls? For example `unify`... why three args? I sort of expect unify to take two terms...
+
+- Clarifying the Example
+
+You're right to question it. Let me break down what I /intended/ vs. what makes sense:
+
+---
+
+- The Original (Confused) Version
+
+#+begin_src prologos
+:= solver (rel [?g ?answer ?proof]
+  &> [:= ?g (atom ?p ?args)      ;; match goal structure
+      (lookup-clause ?p ?clause) ;; find clause for predicate ?p
+      (unify ?clause ?args ?subst)  ;; ??? confusing
+      := ?answer (apply-subst ?subst ?args)
+      := ?proof (by-clause ?p ?clause)])
+#+end_src
+
+---
+
+- What =unify= Should Be
+
+You're correct: unification takes /two terms/ and either succeeds (binding variables) or fails.
+
+#+begin_src prologos
+(unify ?term1 ?term2)  ;; succeeds if unifiable, binds variables
+#+end_src
+
+If you want the /substitution/ as a reified value:
+
+#+begin_src prologos
+(unify-with-subst ?term1 ?term2 -?subst)  ;; outputs substitution
+#+end_src
+
+---
+
+- Modal Prefixes Clarified
+
+| Prefix | Meaning | Mode |
+|--------|---------|------|
+| =?var= | Unification variable | bidirectional (classic Prolog) |
+| =+var= | Input (must be bound) | in |
+| =-var= | Output (will be bound) | out |
+
+So:
+
+#+begin_src prologos
+(unify +term1 +term2)            ;; both inputs, check equality
+(unify ?term1 ?term2)            ;; either/both can be unbound
+(unify-subst +t1 +t2 -subst)     ;; reify substitution as output
+#+end_src
+
+---
+
+- Rewritten Example with Clearer Intent
+
+Let me explain what I was /trying/ to express:
+
+#+begin_src prologos
+defn solve-with-proof [+goal : Goal] : Maybe (Answer * Proof)
+  ;; A relation that searches for an answer and builds a proof
+  := solver (rel [+g -answer -proof]
+    &> (                                  ;; clause 1: direct fact
+         := ?g (atom ?pred ?args)         ;; destructure goal
+         (fact ?pred ?fact-args)          ;; look up a fact
+         (unify ?args ?fact-args)         ;; unify goal args with fact
+         := -answer ?args                 ;; answer is unified args
+         := -proof (by-fact ?pred))       ;; proof is "by fact"
+
+    &> (                                  ;; clause 2: rule with body
+         := ?g (atom ?pred ?args)         ;; destructure goal
+         (rule ?pred ?head ?body)         ;; look up a rule: head :- body
+         (unify ?args ?head)              ;; unify goal with head
+         (solve-body ?body -sub-proofs)   ;; recursively solve body
+         := -answer ?args
+         := -proof (by-rule ?pred ?sub-proofs)))
+
+  match (solve-one (solver goal -a -p))
+    | some (a, p) -> just (a, p)
+    | none        -> nothing
+#+end_src
+
+---
+
+- Explaining Each Part
+
+/Goal destructuring:/
+#+begin_src prologos
+:= ?g (atom ?pred ?args)
+;; ?g is the goal, like (append (list 1 2) (list 3) ?result)
+;; After this: ?pred = append, ?args = ((list 1 2) (list 3) ?result)
+#+end_src
+
+/Looking up clauses:/
+#+begin_src prologos
+(fact ?pred ?fact-args)
+;; Searches knowledge base for facts matching predicate
+;; e.g., (fact append (nil ?ys ?ys)) succeeds
+
+(rule ?pred ?head ?body)
+;; Searches for rules
+;; e.g., (rule append ((cons ?h ?t) ?ys (cons ?h ?r)) (append ?t ?ys ?r))
+#+end_src
+
+/Unification:/
+#+begin_src prologos
+(unify ?args ?fact-args)
+;; Two-argument unify
+;; Binds variables in both terms to make them equal
+;; Fails if not unifiable
+#+end_src
+
+/Recursive solving:/
+#+begin_src prologos
+(solve-body ?body -sub-proofs)
+;; Solve the body goals, collect proofs
+#+end_src
+
+---
+
+- Even Simpler Example
+
+Let me show a cleaner example of mixing =fn= and =rel=:
+
+#+begin_src prologos
+defn find-path [graph : Graph, start : Node, end : Node] : Maybe (List Node)
+  ;; Local relation: reachable with path
+  := reachable (rel [+from +to -path]
+    &> (                              ;; base: already there
+         (= ?from ?to)
+         := -path (cons ?to nil))
+
+    &> (                              ;; step: take an edge
+         (edge ?from ?mid)            ;; edge exists in graph
+         (reachable ?mid ?to -rest)   ;; recursively find path
+         := -path (cons ?from ?rest)))
+
+  solve-one (reachable start end -p)
+#+end_src
+
+---
+
+- The Modal Prefix System
+
+| Syntax | In Clause Head | In Clause Body |
+|--------|----------------|----------------|
+| =+x= | Must be provided by caller | Must be bound before this goal |
+| =-x= | Will be bound by this clause | Will be bound by this goal |
+| =?x= | Bidirectional (Prolog-style) | Bidirectional |
+
+Examples:
+
+#+begin_src prologos
+;; Append with modes
+defr append [+xs +ys -zs]       ;; xs, ys are inputs; zs is output
+  &> (= +xs nil) (= -zs +ys)
+  &> (= +xs (cons ?h ?t))
+     (append ?t +ys -rest)
+     (= -zs (cons ?h ?rest))
+
+;; Can also define reverse mode
+defr append-rev [-xs -ys +zs]   ;; zs is input; xs, ys are outputs
+  ;; ... different clauses for this mode
+#+end_src
+
+---
+
+- Grouping Syntax Refined
+
+#+begin_src prologos
+;; () for grouping/calls
+;; [] for vectors/lists
+;; {} for maybe records/maps later?
+
+defn process [+items : [Item]] : [Result]   ;; [Item] is vector type
+  := filtered (filter is-valid items)
+  (map transform filtered)
+
+defr member [?x +list]
+  &> (= +list (cons ?x ?rest))              ;; x is head
+  &> (= +list (cons ?other ?rest))          ;; x is in tail
+     (member ?x ?rest)
+#+end_src
+
+---
+
+- Summary of Syntax Changes
+
+| Element | Syntax |
+|---------|--------|
+| Grouping/calls | =(...)= |
+| Vectors/lists | =[...]= |
+| Logic variable | =?var= |
+| Input mode | =+var= |
+| Output mode | =-var= |
+| Binding | =:= var expr= |
+| Unification | =(= term1 term2)= or =(unify t1 t2)= |
+| Relation | =(rel [modes...] &> clause ...)= |
+| Clause conjunction | goals on same line or indented |
+
+Does this clarification help? Should we refine further?
+
+* ---
+* 
+
+
+
+
+#+begin_src prologos
+
+  rel [?xs ?ys ?zs]
+    &> (= ?xs nil) (= zs ys)
+    
+
+#+end_src
+
+
+
+
+
+
+
+
+
+
+- Clarifying the Example
+
+You're right to question this. Let me break it down and fix it.
+
+---
+
+- The =unify= Problem
+
+You're correct: =unify= should take /two terms/ and either succeed (binding variables) or fail.
+
+My original:
+#+begin_src prologos
+unify ?clause ?args ?subst   ;; three args - weird!
+#+end_src
+
+This conflates two different operations:
+
+1. /Unification/: Do these two terms match? (two args, success/failure)
+2. /Substitution extraction/: What bindings resulted? (implicit in logic programming)
+
+In pure logic programming, unification is implicit - you don't call it, you just use ===:
+
+#+begin_src prologos
+?x = (foo ?y ?z)   ;; unification happens here
+#+end_src
+
+---
+
+- Rewritten with Clearer Intent
+
+#+begin_src prologos
+defn solve-with-proof (goal : Goal) : Maybe (Answer * Proof)
+  ;; Local relation: given goal ?g, find ?answer and ?proof
+  := solver
+     rel (?g ?answer ?proof)
+       &> (:= ?g (atom ?p ?args))            ;; ?g is an atomic goal with predicate ?p
+          (lookup-clause ?p ?head ?body)     ;; find a clause for ?p
+          (:= ?head (atom ?p ?params))       ;; clause head has params
+          (= ?args ?params)                  ;; unify args with params (binds variables)
+          (solve-body ?body ?subproof)       ;; recursively solve body
+          (:= ?answer ?args)                 ;; answer is the unified args
+          (:= ?proof (by-clause ?p ?subproof))
+
+  match (solve-one (solver goal ?a ?p))
+    | some (a , p) -> just (a , p)
+    | none -> nothing
+#+end_src
+
+---
+
+- Explaining Each Line
+
+#+begin_src prologos
+&> (:= ?g (atom ?p ?args))
+#+end_src
+/Destructuring/: Assert that =?g= has the form =(atom ?p ?args)= where =?p= is the predicate name and =?args= are the arguments.
+
+#+begin_src prologos
+   (lookup-clause ?p ?head ?body)
+#+end_src
+/Relation call/: Look up a clause whose head matches predicate =?p=. Binds =?head= and =?body=.
+
+#+begin_src prologos
+   (:= ?head (atom ?p ?params))
+#+end_src
+/Destructuring/: Extract =?params= from the clause head.
+
+#+begin_src prologos
+   (= ?args ?params)
+#+end_src
+/Unification/: Unify the goal's arguments with the clause's parameters. This is where variable binding happens. Two args, success or failure.
+
+#+begin_src prologos
+   (solve-body ?body ?subproof)
+#+end_src
+/Recursive solve/: Solve the clause body, get a subproof.
+
+#+begin_src prologos
+   (:= ?answer ?args)
+#+end_src
+/Bind output/: The answer is the (now-unified) args.
+
+#+begin_src prologos
+   (:= ?proof (by-clause ?p ?subproof))
+#+end_src
+/Construct proof/: Build proof term showing which clause was used.
+
+---
+
+- Modal Variable Prefixes
+
+Your idea:
+
+| Prefix | Meaning | Example |
+|--------|---------|---------|
+| =?= | Multi-modal (any direction) | =?x= |
+| =-= | Input (must be bound) | =-input= |
+| =+= | Output (will be bound) | =+output= |
+
+This is like Mercury's modes but in the variable name itself!
+
+#+begin_src prologos
+;; append: first two are inputs, third is output
+defr append (?xs ?ys +zs)
+  &> (= -xs nil)
+     (= +zs -ys)
+  &> (:= -xs (cons ?h ?t))
+     (append ?t -ys +rest)
+     (:= +zs (cons ?h +rest))
+#+end_src
+
+Actually wait - let me reconsider. The prefix is on the /variable itself/, not the parameter position. So:
+
+#+begin_src prologos
+defr append (?xs ?ys ?zs)          ;; all multi-modal at signature level
+  &> (= ?xs nil)                    ;; pattern match: xs is nil
+     (= ?zs ?ys)                    ;; then zs equals ys
+  &> (:= ?xs (cons ?h ?t))          ;; destructure xs
+     (append ?t ?ys ?rest)          ;; recursive call
+     (:= ?zs (cons ?h ?rest))       ;; construct output
+#+end_src
+
+When /calling/:
+
+#+begin_src prologos
+(append -known-list -another +result)   ;; inputs bound, output unbound
+(append +prefix +suffix -known-whole)   ;; reverse direction!
+#+end_src
+
+---
+
+- Refined Syntax Summary
+
+#+begin_src
+Grouping:
+  ()     general grouping / function application
+  []     vectors / argument lists in definitions
+
+Variables:
+  ?var   multi-modal (can be input or output)
+  -var   input mode (must be bound before call)
+  +var   output mode (will be bound by call)
+
+Binding:
+  := ?var expr     prefix binding in logic context
+  = term1 term2    unification (two terms)
+
+Definition:
+  defn name [args] : Type    function
+  defr name (?vars)          relation
+  
+Clauses:
+  &> goal1 goal2 ...         conjunctive clause
+#+end_src
+
+---
+
+- Full Example Refined
+
+#+begin_src prologos
+defn solve-with-proof [goal : Goal] : Maybe (Answer * Proof)
+  := solver
+     rel (?g +answer +proof)
+       &> := ?g (atom ?p ?args)
+          lookup-clause ?p +head +body
+          := +head (atom ?p ?params)
+          unify ?args ?params
+          solve-body +body +subproof
+          := +answer ?args
+          := +proof (by-clause ?p +subproof)
+
+  match (solve-one (solver goal +a +p))
+    | some (a , p) -> just (a , p)
+    | none -> nothing
+#+end_src
+
+Now the modes are explicit:
+- =?g= is input (the goal we're solving)
+- =+answer= and =+proof= are outputs
+- =+head=, =+body=, =+subproof= are intermediate outputs
+
+---
+
+- Does This Clarify Things?
+
+The key insight:
+- === takes /two/ terms and unifies them (success/fail)
+- =:== is /destructuring assignment/ (like pattern matching)
+- Modal prefixes document dataflow explicitly
+
+Is this closer to what you're envisioning?
+
+* In the full example refined, `solve-body +body +subproof` is being marked as input, but where would that be coming from? Would it not be marked multi-modal or output?
+
+You're absolutely right. Let me trace the dataflow carefully:
+
+---
+
+- Corrected Dataflow Analysis
+
+#+begin_src prologos
+&> := ?g (atom ?p ?args)           ;; ?g is input, ?p and ?args are OUTPUT (extracted)
+   lookup-clause ?p +head +body    ;; ?p is INPUT (from above), +head +body are OUTPUT
+   := +head (atom ?p ?params)      ;; +head is INPUT (from above), ?params is OUTPUT
+   unify ?args ?params             ;; both INPUT (from above), unification binds internal vars
+   solve-body ?body +subproof      ;; ?body is INPUT (from lookup), +subproof is OUTPUT
+   := +answer ?args                ;; ?args INPUT, +answer OUTPUT
+   := +proof (by-clause ?p +subproof)  ;; ?p, +subproof INPUT, +proof OUTPUT
+#+end_src
+
+Wait - I also had =+body= in =lookup-clause= but then used =?body= in =solve-body=. Let me fix that:
+
+---
+
+- Fully Corrected Version
+
+#+begin_src prologos
+defn solve-with-proof [goal : Goal] : Maybe (Answer * Proof)
+  := solver
+     rel (-g +answer +proof)
+       &> := -g (atom ?p ?args)            ;; destructure input goal
+          lookup-clause -p +head +body     ;; ?p is now bound, so -p; get +head +body
+          := -head (atom _ ?params)        ;; destructure head to get params
+          unify -args -params              ;; both bound from above
+          solve-body -body +subproof       ;; body from lookup, get subproof
+          := +answer -args                 ;; output the unified args
+          := +proof (by-clause -p -subproof)
+
+  match (solve-one (solver -goal +a +p))
+    | some (a , p) -> just (a , p)
+    | none -> nothing
+#+end_src
+
+---
+
+- The Flow
+
+#+begin_src
+-g (INPUT: the goal)
+  │
+  ▼ destructure
+?p, ?args (extracted, now bound)
+  │
+  ▼ lookup-clause uses -p (bound)
++head, +body (OUTPUT from lookup)
+  │
+  ▼ destructure -head
+?params (extracted, now bound)
+  │
+  ▼ unify -args -params (both bound)
+  │
+  ▼ solve-body uses -body (bound from lookup)
++subproof (OUTPUT)
+  │
+  ▼ construct outputs
++answer, +proof (FINAL OUTPUTS)
+#+end_src
+
+---
+
+- The Pattern
+
+| After this line... | Newly bound |
+|--------------------|-------------|
+| =:= -g (atom ?p ?args)= | =?p=, =?args= |
+| =lookup-clause -p +head +body= | =+head=, =+body= |
+| =:= -head (atom _ ?params)= | =?params= |
+| =unify -args -params= | (internal unification) |
+| =solve-body -body +subproof= | =+subproof= |
+| =:= +answer -args= | =+answer= |
+| =:= +proof (...)= | =+proof= |
+
+---
+
+- Subtle Point: =?= vs =-= After Binding
+
+Once a =?var= gets bound, subsequent uses could be =-var= to indicate "this is now input."
+
+Or we could say:
+- =?var= on /first occurrence/ = "introduce this variable"
+- =-var= = "this must already be bound"
+- =+var= = "this will be bound by this call"
+
+So:
+
+#+begin_src prologos
+&> := -g (atom ?p ?args)      ;; ?p, ?args: first occurrence (introduced)
+   lookup-clause -p +head +body  ;; -p: now bound, +head/+body: will be bound
+   := -head (atom _ ?params)  ;; -head: bound, ?params: introduced
+   unify -args -params        ;; both bound
+   solve-body -body +subproof ;; -body: bound, +subproof: will be bound
+#+end_src
+
+This makes the dataflow crystal clear!
+
+---
+
+- Alternative: Infer Modes
+
+We could also let =?= mean "infer the mode" and only use =-=/=+= when you want to be explicit or override:
+
+#+begin_src prologos
+&> := ?g (atom ?p ?args)        ;; all inferred
+   lookup-clause ?p ?head ?body ;; inferred: p is input, head/body output
+   := ?head (atom _ ?params)
+   unify ?args ?params
+   solve-body ?body ?subproof
+   := +answer ?args             ;; explicit: answer is output
+   := +proof (by-clause ?p ?subproof)
+#+end_src
+
+This is less verbose but less explicit. Your call on the tradeoff.
+
+* I'm sort of moving away from the Church encodings--especially in the surface language--in favor of structural pattern matching. I would rather support a more-familiar reduce-as-foldl
+
+- Moving to =reduce= as Left-Fold
+
+Excellent decision. This aligns with mainstream languages and is more intuitive.
+
+---
+
+- The Change
+
+#+begin_src prologos
+;; reduce is LEFT fold (like Clojure, JS, Python, Rust)
+reduce xs init (fn acc x -> ...)
+
+;; Evaluation order:
+reduce [1, 2, 3] 0 (fn acc x -> add acc x)
+;; => add (add (add 0 1) 2) 3
+;; => ((0 + 1) + 2) + 3
+;; => 6
+#+end_src
+
+---
+
+- Signature
+
+#+begin_src prologos
+reduce : {A R} -> List A -> R -> (R -> A -> R) -> R
+
+;; Parameters:
+;;   xs   : List A      - list to process
+;;   init : R           - initial accumulator
+;;   f    : R -> A -> R - takes (accumulator, element), returns new accumulator
+
+;; Processes LEFT to RIGHT
+#+end_src
+
+---
+
+- Examples
+
+#+begin_src prologos
+;; Sum
+defn sum [xs : List Nat] : Nat
+  reduce xs zero (fn acc x -> add acc x)
+  ;; Or: reduce xs zero add
+
+;; Reverse
+defn reverse {A} [xs : List A] : List A
+  reduce xs nil (fn acc x -> cons x acc)
+
+;; Length
+defn length {A} [xs : List A] : Nat
+  reduce xs zero (fn acc _ -> inc acc)
+
+;; Map (builds reversed, then reverse)
+defn map {A B} [f : A -> B, xs : List A] : List B
+  reverse (reduce xs nil (fn acc x -> cons (f x) acc))
+
+;; Or with cons-right / snoc:
+defn map {A B} [f : A -> B, xs : List A] : List B
+  reduce xs nil (fn acc x -> snoc acc (f x))
+#+end_src
+
+---
+
+- With Structural Pattern Matching
+
+Now =match= is /real/ pattern matching:
+
+#+begin_src prologos
+;; Map using recursion (clean!)
+defn map {A B} [f : A -> B, xs : List A] : List B
+  match xs
+    | nil       -> nil
+    | cons x xs -> cons (f x) (map f xs)
+
+;; Filter
+defn filter {A} [pred : A -> Bool, xs : List A] : List A
+  match xs
+    | nil -> nil
+    | cons x xs ->
+        if pred x
+          then cons x (filter pred xs)
+          else filter pred xs
+
+;; But reduce is still useful for accumulation
+defn sum [xs : List Nat] : Nat
+  reduce xs zero add
+
+defn any {A} [pred : A -> Bool, xs : List A] : Bool
+  reduce xs false (fn acc x -> or acc (pred x))
+#+end_src
+
+---
+
+- Both Tools Available
+
+#+begin_src prologos
+;; ========================================
+;; Use MATCH for structural recursion
+;; ========================================
+
+defn map {A B} [f : A -> B, xs : List A] : List B
+  match xs
+    | nil       -> nil
+    | cons x xs -> cons (f x) (map f xs)
+
+;; ========================================
+;; Use REDUCE for accumulation
+;; ========================================
+
+defn sum [xs : List Nat] : Nat
+  reduce xs zero add
+
+defn reverse {A} [xs : List A] : List A
+  reduce xs nil (fn acc x -> cons x acc)
+
+;; ========================================
+;; Guideline:
+;; - match: when output STRUCTURE mirrors input structure
+;; - reduce: when COLLAPSING to a single value
+;; ========================================
+#+end_src
+
+---
+
+- Future: =reduce-right= If Needed
+
+#+begin_src prologos
+;; Left fold (primary, familiar)
+reduce : {A R} -> List A -> R -> (R -> A -> R) -> R
+
+;; Right fold (when needed for laziness or specific algorithms)
+reduce-right : {A R} -> List A -> R -> (A -> R -> R) -> R
+#+end_src
+
+---
+
+- Summary
+
+| Operation      | Accumulator | Element | Direction     | Example             |
+|----------------+-------------+---------+---------------+---------------------|
+| =reduce=       | First       | Second  | Left-to-right | =(fn acc x -> ...)= |
+| =reduce-right= | Second      | First   | Right-to-left | =(fn x acc -> ...)= |
+
+
+This matches:
+- ✅ Clojure =reduce=
+- ✅ JavaScript =Array.reduce=
+- ✅ Python =functools.reduce=
+- ✅ Rust =Iterator::fold=
+
+Much more familiar to most programmers!
+
+* Does clojure has a `foldr` like construct? In what cases would you use foldr over foldl?
+
+- Clojure and Right Folds
+
+---
+
+- Does Clojure Have =foldr=?
+
+/No, not built-in./ Clojure only provides =reduce= (left fold).
+
+You can implement it:
+#+begin_src clojure
+;; Manual foldr in Clojure
+(defn foldr [f init coll]
+  (reduce (fn [acc x] (f x acc)) init (reverse coll)))
+
+;; Or using recursion (not stack-safe)
+(defn foldr [f init coll]
+  (if (empty? coll)
+    init
+    (f (first coll) (foldr f init (rest coll)))))
+#+end_src
+
+But it's rarely used in Clojure because:
+- Clojure sequences are not lazy like Haskell's
+- =reduce= + =reverse= covers most cases
+- Clojure idioms favor left-to-right processing
+
+---
+
+- When to Use =foldr= vs =foldl=
+
+- 1. Building Lists (Preserving Order)
+
+#+begin_src haskell
+-- foldr: natural for cons-based construction
+foldr (:) [] [1,2,3]         -- => [1,2,3] (same order)
+
+-- foldl: reverses!
+foldl (flip (:)) [] [1,2,3]  -- => [3,2,1]
+#+end_src
+
+#+begin_src prologos
+;; With reduce (foldl), map reverses:
+reduce [1,2,3] nil (fn acc x -> cons x acc)
+;; => [3, 2, 1]
+
+;; Need to reverse after:
+reverse (reduce xs nil (fn acc x -> cons (f x) acc))
+
+;; With foldr, map is natural:
+reduce-right [1,2,3] nil (fn x acc -> cons x acc)
+;; => [1, 2, 3]
+#+end_src
+
+- 2. Short-Circuiting / Laziness
+
+#+begin_src haskell
+-- foldr can short-circuit with lazy evaluation
+foldr (&&) True [True, True, False, undefined]
+-- => False (never touches undefined!)
+
+-- foldl cannot (strict, processes everything)
+foldl (&&) True [True, True, False, undefined]
+-- => ERROR (hits undefined)
+#+end_src
+
+- 3. Infinite Lists (Haskell Only)
+
+#+begin_src haskell
+-- foldr works on infinite lists if f is lazy in second arg
+foldr (\x acc -> x : acc) [] [1..]  -- works! (lazily)
+
+-- foldl diverges on infinite lists
+foldl (\acc x -> acc ++ [x]) [] [1..]  -- never terminates
+#+end_src
+
+- 4. Associativity Matters
+
+#+begin_src prologos
+;; Subtraction is not associative
+reduce [1, 2, 3] 0 (fn acc x -> sub acc x)
+;; => ((0 - 1) - 2) - 3 = -6
+
+reduce-right [1, 2, 3] 0 (fn x acc -> sub x acc)
+;; => 1 - (2 - (3 - 0)) = 1 - (2 - 3) = 1 - (-1) = 2
+#+end_src
+
+---
+
+- Summary Table
+
+| Use Case | Prefer | Why |
+|----------|--------|-----|
+| Summing, counting | =foldl= | Order doesn't matter, tail-recursive |
+| Building lists | =foldr= | Preserves order with =cons= |
+| Short-circuit (any, all) | =foldr= | Can stop early |
+| Infinite structures | =foldr= | Works with laziness |
+| String building | =foldl= | Append to end efficiently |
+| Most real-world code | =foldl= | Simpler mental model |
+
+---
+
+- For Prologos: Practical Recommendation
+
+Since you're not doing Haskell-style laziness:
+
+#+begin_src prologos
+;; PRIMARY: reduce (left fold) - covers 90% of cases
+reduce : {A R} -> List A -> R -> (R -> A -> R) -> R
+
+;; SECONDARY: reduce-right (when building lists or need right-assoc)
+reduce-right : {A R} -> List A -> R -> (A -> R -> R) -> R
+#+end_src
+
+Most users will only need =reduce=. Provide =reduce-right= for:
+- Implementing =map=, =filter= without reversing
+- When associativity matters
+- Algorithms that naturally work right-to-left
+
+---
+
+- Clean Library Design
+
+#+begin_src prologos
+;; Use reduce for accumulation
+defn sum [xs : List Nat] : Nat
+  reduce xs zero add
+
+;; Use reduce-right for structure-preserving transforms
+defn map {A B} [f : A -> B, xs : List A] : List B
+  reduce-right xs nil (fn x acc -> cons (f x) acc)
+
+;; Or just use match + recursion (clearest!)
+defn map {A B} [f : A -> B, xs : List A] : List B
+  match xs
+    | nil       -> nil
+    | cons x xs -> cons (f x) (map f xs)
+#+end_src
+
+With structural pattern matching available, =match= + recursion is often clearer than either fold. Reserve =reduce= for when you're genuinely accumulating a value.
+
+* Actually, I am looking at implementing something like Clojure's `seq`--which is lazy sequence abstraction; and adopting their approach to persistent datastructures with structural sharing... (I'm quite the devotee of Clojure, I suppose...). But, I'm wondering what other best practices you're aware of and what I should be considering at a deeper level like this, with the implementation of Prologos?
+
+- Deep Implementation Considerations for Prologos
+
+This is a fantastic question. Let me share best practices and considerations at the foundational level.
+
+---
+
+- Part 1: Lazy Sequences (=seq= Abstraction)
+
+- Clojure's Approach
+
+#+begin_src clojure
+;; seq is a lazy abstraction over collections
+;; - first: get head
+;; - rest: get tail (also lazy)
+;; - cons: prepend
+;; - nil punning: empty seq is nil/falsy
+#+end_src
+
+- Considerations for Prologos
+
+/1. Laziness + Dependent Types = Complex/
+
+#+begin_src prologos
+;; Problem: What's the type of an infinite sequence?
+;; Vec A n requires knowing n at compile time...
+
+;; Solution: Separate types
+Vec  : Type -> Nat -> Type       ;; sized, strict
+List : Type -> Type              ;; unsized, strict
+Seq  : Type -> Type              ;; unsized, lazy (no length in type)
+#+end_src
+
+/2. Laziness + Logic Programming = Powerful/
+
+#+begin_src prologos
+;; Lazy seqs are PERFECT for logic programming
+;; Query results are naturally lazy streams
+
+solve (append ?x ?y [1, 2, 3])
+;; => lazy seq of all solutions
+;; Only computed as consumed
+#+end_src
+
+/3. Memoization / Caching/
+
+#+begin_src prologos
+;; Clojure seqs cache computed values
+;; Important for: (let [s (map f huge-seq)] (first s) (first s))
+;; Second (first s) shouldn't recompute
+
+;; Implementation: thunk with mutation to cached value
+data Seq {A}
+  | empty
+  | cell : A -> Lazy (Seq A) -> Seq A
+
+data Lazy {A}
+  | thunk   : (() -> A) -> Lazy A
+  | cached  : A -> Lazy A
+#+end_src
+
+/4. Chunked Sequences/
+
+Clojure uses chunked seqs for performance (32-element chunks). Consider whether this complexity is worth it for Prologos.
+
+---
+
+- Part 2: Persistent Data Structures
+
+- Clojure's Approach
+
+| Structure | Implementation     | Complexity        |
+|-----------+--------------------+-------------------|
+| List      | Linked list        | O(1) prepend      |
+| Vector    | 32-way trie (HAMT) | O(log32 n) ≈ O(1) |
+| Map       | HAMT               | O(log32 n)        |
+| Set       | HAMT               | O(log32 n)        |
+
+- Considerations for Prologos
+
+/1. HAMT (Hash Array Mapped Trie)/
+
+#+begin_src
+;; Key insight: 32-bit hash → 6 levels max (32^6 > 1 billion)
+;; Each node: up to 32 children
+;; Structural sharing: updates copy only path from root to changed leaf
+
+       [root]
+      /      \
+   [node]   [node]
+   /    \
+[leaf] [leaf]  <-- update here copies 3 nodes, shares rest
+#+end_src
+
+/2. Transients for Batch Updates/
+
+#+begin_src prologos
+;; Problem: building a map one item at a time = O(n log n)
+;; Solution: transient (mutable) version for batch ops
+
+defn build-map [pairs : List (Pair K V)] : Map K V
+  persistent!
+    (reduce pairs (transient empty-map)
+      (fn acc (k, v) -> assoc! acc k v))
+#+end_src
+
+/3. RRB-Trees for Vectors/
+
+If you want efficient =concat=, =slice=, =insert-at=, consider RRB-trees (Relaxed Radix Balanced) instead of plain tries.
+
+#+begin_src prologos
+;; Standard vector trie: O(n) concat
+;; RRB-tree: O(log n) concat, slice, insert
+#+end_src
+
+/4. Structural Sharing + Logic Variables/
+
+This is unique to Prologos:
+
+#+begin_src prologos
+;; Logic variables in persistent structures
+:= m (map-of "a" ?x "b" ?y)
+
+;; Unification might bind ?x
+(unify ?x 42)
+
+;; What happens to m?
+;; Option A: m is unchanged (logic vars are immutable references)
+;; Option B: m "sees" the binding (requires indirection)
+#+end_src
+
+You need to decide how logic variables interact with persistent structures.
+
+---
+
+- Part 3: Evaluation Strategy
+
+/Key Question: Strict or Lazy by Default?/
+
+| Strategy                 | Pros                            | Cons                         |
+|--------------------------+---------------------------------+------------------------------|
+| Strict (Clojure, ML)     | Predictable, debuggable         | Can't do infinite structures |
+| Lazy (Haskell)           | Infinite structures, modularity | Space leaks, hard to reason  |
+| Lazy Seqs Only (Clojure) | Best of both                    | Two mental models            |
+
+- Recommendation for Prologos
+
+#+begin_src prologos
+;; Strict by default (like Clojure)
+;; Explicit laziness via Seq and delay/force
+
+defn eager-map {A B} [f : A -> B, xs : List A] : List B
+  match xs
+    | nil       -> nil
+    | cons x xs -> cons (f x) (eager-map f xs)
+
+defn lazy-map {A B} [f : A -> B, xs : Seq A] : Seq B
+  match xs
+    | empty    -> empty
+    | cell x xs -> cell (f x) (delay (lazy-map f (force xs)))
+#+end_src
+
+---
+
+- Part 4: Memory Management
+
+/1. Reference Counting vs Tracing GC/
+
+| Approach      | Pros                         | Cons                    |
+|---------------+------------------------------+-------------------------|
+| Ref counting  | Deterministic, simple        | Cycles, overhead per op |
+| Tracing GC    | Handles cycles, faster alloc | Pauses, complexity      |
+| Hybrid (Rust) | Best of both                 | Complex implementation  |
+
+For a Racket-hosted prototype, you get Racket's GC. For production, consider:
+
+#+begin_src
+;; Option A: Target JVM (get mature GC)
+;; Option B: Target BEAM (get actor-isolated heaps)
+;; Option C: Target native with Boehm GC or custom
+#+end_src
+
+/2. Persistent Structures Help GC/
+
+Structural sharing means less allocation and more sharing, which is GC-friendly.
+
+---
+
+- Part 5: Runtime Representation
+
+/1. Tagged Pointers/
+
+#+begin_src
+;; Use low bits of pointers for type tags (common trick)
+;; 64-bit pointer, 3 low bits always 0 (8-byte alignment)
+;; Use those bits for: integer, symbol, cons, vector, etc.
+
+0b...000  -> pointer to heap object
+0b...001  -> small integer (fixnum)
+0b...010  -> symbol
+0b...011  -> cons cell
+;; etc.
+#+end_src
+
+/2. Unboxed Primitives/
+
+#+begin_src prologos
+;; Numbers, bools should be unboxed when possible
+;; Avoids heap allocation for (add 1 2)
+
+;; But: logic variables complicate this
+;; ?x might be unbound OR a number
+;; Need uniform representation or runtime checks
+#+end_src
+
+/3. Symbols / Interning/
+
+#+begin_src prologos
+;; Intern all symbols (like Clojure keywords)
+;; Symbol comparison becomes pointer comparison: O(1)
+
+:foo == :foo  ;; same pointer, instant
+#+end_src
+
+---
+
+- Part 6: Logic Programming Integration
+
+/1. Substitution Representation/
+
+#+begin_src prologos
+;; Option A: Association list (simple, slow)
+Subst = List (Pair Var Term)
+
+;; Option B: Persistent map (faster lookup)
+Subst = Map Var Term
+
+;; Option C: Union-find (fast unification)
+;; Variables point to their binding or to another variable
+;; Path compression for efficiency
+#+end_src
+
+/2. Occurs Check/
+
+#+begin_src prologos
+;; Should unify ?x (cons 1 ?x) succeed?
+;; Creates infinite term: (cons 1 (cons 1 (cons 1 ...)))
+
+;; Standard Prolog: no occurs check (fast, unsound)
+;; Sound unification: occurs check (slower, safe)
+
+;; Recommendation: default off, opt-in via flag
+(with-occurs-check
+  (unify ?x (cons 1 ?x)))  ;; fails
+#+end_src
+
+/3. Tabling / Memoization/
+
+#+begin_src prologos
+;; Critical for performance and termination
+;; Clojure doesn't have this, but Prologos should
+
+defr-tabled fib (?n ?result)
+  &> (= ?n zero) (= ?result zero)
+  &> (= ?n (suc zero)) (= ?result (suc zero))
+  &> (= ?n (suc (suc ?m)))
+     (fib ?m ?r1)
+     (fib (suc ?m) ?r2)
+     (= ?result (add ?r1 ?r2))
+
+;; Without tabling: exponential
+;; With tabling: linear
+#+end_src
+
+---
+
+- Part 7: Concurrency Model
+
+/1. Clojure's Approach/
+
+| Primitive  | Use Case                   |
+|------------+----------------------------|
+| Atoms      | Uncoordinated sync updates |
+| Refs + STM | Coordinated sync updates   |
+| Agents     | Async updates              |
+| core.async | CSP channels               |
+
+/2. For Prologos with Session Types/
+
+#+begin_src prologos
+;; Session types ARE your concurrency primitive
+;; Channels with protocols
+
+defproc worker : Proc worker-protocol
+  recv self (task : Task)
+    let result = compute task
+    send result self
+      worker  ;; loop
+#+end_src
+
+/3. Consider Actor Model (Erlang/BEAM)/
+
+#+begin_src prologos
+;; Each process has isolated heap
+;; Message passing = copy (or ref with shared heap)
+;; Perfect fit for session types
+
+;; Benefits:
+;; - No shared-memory bugs
+;; - Per-process GC (no global pauses)
+;; - Fault isolation
+#+end_src
+
+---
+
+- Part 8: Error Handling
+
+/1. Clojure: Exceptions/
+
+Traditional try/catch, not great for functional code.
+
+/2. Better for Prologos: Result Types + Effects/
+
+#+begin_src prologos
+;; Result type (you have this)
+data Result {A E}
+  | ok  : A -> Result A E
+  | err : E -> Result A E
+
+;; With ? operator (like Rust)
+defn parse-and-process [input : String] : Result Output Error
+  let parsed = (parse input)?        ;; early return on err
+  let validated = (validate parsed)? ;; early return on err
+  ok (transform validated)
+#+end_src
+
+/3. Logic Programming: Failure as Control Flow/
+
+#+begin_src prologos
+;; Failure is natural in logic programming
+;; Not an "error", just "no solution"
+
+solve (member ?x [])
+;; => empty stream (no solutions)
+
+;; Combine with Result for true errors
+solve! (parse-expr input ?ast)
+;; => Result (ok ?ast) or (err "parse error: ...")
+#+end_src
+
+---
+
+- Part 9: Module System
+
+/1. Clojure: Namespaces/
+
+#+begin_src clojure
+(ns my.namespace
+  (:require [other.ns :as other]
+            [another.ns :refer [foo bar]]))
+#+end_src
+
+/2. For Prologos: Consider ML-style Modules/
+
+#+begin_src prologos
+;; Modules as first-class values (functors!)
+
+module Stack (Elem : Type)
+  type T = List Elem
+
+  defn empty : T
+    nil
+
+  defn push [x : Elem, s : T] : T
+    cons x s
+
+  defn pop [s : T] : Option (Elem * T)
+    match s
+      | nil       -> none
+      | cons x xs -> some (x, xs)
+
+;; Instantiate
+module IntStack = Stack Nat
+IntStack.push 42 IntStack.empty
+#+end_src
+
+/3. Module + Relation Interaction/
+
+#+begin_src prologos
+;; Can modules export relations?
+module Graph
+  defr edge (?from ?to)
+    &> ...
+
+;; Import and extend?
+module MyGraph
+  import Graph
+
+  defr edge (?from ?to)
+    &> (Graph.edge ?from ?to)
+    &> (my-extra-edge ?from ?to)
+#+end_src
+
+---
+
+- Part 10: Implementation Checklist
+
+/Phase 1: Core/
+- [ ] Lazy seq abstraction
+- [ ] Persistent list (simple linked list)
+- [ ] Persistent map (HAMT)
+- [ ] Unification with substitutions
+- [ ] Basic logic programming (solve, rel)
+
+/Phase 2: Performance/
+- [ ] Tabling for relations
+- [ ] Transients for batch updates
+- [ ] Symbol interning
+- [ ] Chunked sequences
+
+/Phase 3: Concurrency/
+- [ ] Session-typed channels
+- [ ] Process spawning
+- [ ] Message passing
+
+/Phase 4: Polish/
+- [ ] Module system
+- [ ] Error messages
+- [ ] Debugging tools
+- [ ] REPL experience
+
+---
+
+- Key Architectural Decisions to Make Now
+
+| Decision | Options | Recommendation |
+|----------|---------|----------------|
+| Evaluation | Strict / Lazy / Hybrid | Hybrid (strict default, lazy seqs) |
+| Logic vars in data | Copy / Reference | Reference with indirection |
+| Unification | With/without occurs check | Without by default, opt-in |
+| Concurrency | Threads / Actors / CSP | Actors (fits session types) |
+| Target runtime | JVM / BEAM / Native / WASM | BEAM (best fit) or JVM (ecosystem) |
+
+---
+
+- My Top Recommendations
+
+1. /Adopt lazy seqs/ (like Clojure) for logic programming results
+2. /Use HAMT/ for persistent maps/sets
+3. /Target BEAM/ if possible (actors + isolation = perfect for session types)
+4. /Implement tabling early/ (essential for practical logic programming)
+5. /Keep strict evaluation default/ (easier to reason about)
+6. /Design substitutions carefully/ (persistent map with union-find)
+
+This is a deep rabbit hole, but you're asking the right questions at the right time. What area would you like to explore further?
+
+* What are the consequences of our Prologos prototype being curried? I'm not sure I like/prefer that being the default.
+
+- Currying: Consequences and Alternatives
+
+This is an important design decision. Let me lay out the tradeoffs honestly.
+
+---
+
+- What Currying Means
+
+#+begin_src prologos
+;; Curried (current)
+defn add [x : Nat] : Nat -> Nat
+  fn y (plus x y)
+
+;; Usage
+add 1 2          ;; works
+(add 1) 2        ;; also works
+map (add 1) xs   ;; partial application, nice!
+
+;; Uncurried
+defn add [x : Nat, y : Nat] : Nat
+  plus x y
+
+;; Usage
+add 1 2          ;; works
+add(1, 2)        ;; alternative syntax
+map (add 1) xs   ;; ERROR: add takes 2 args
+map (fn x -> add x 1) xs  ;; need explicit lambda
+#+end_src
+
+---
+
+- Consequences of Currying
+
+- Pros
+
+| Benefit | Example |
+|---------|---------|
+| Partial application | =map (add 1) xs= |
+| Point-free style | =compose inc double= |
+| Uniform syntax | =f a b c= always works |
+| Simpler type theory | Functions are always unary |
+
+- Cons
+
+| Problem                    | Explanation                                    |
+|----------------------------+------------------------------------------------|
+| Arity errors are confusing | =add 1= returns a function, not an error       |
+| Performance overhead       | Each application creates closure               |
+| Debugging difficulty       | Stack traces show nested lambdas               |
+| Unfamiliar to most         | JS/Python/Clojure programmers expect multi-arg |
+| Strict evaluation awkward  | Must force each argument separately            |
+| Tooling complexity         | IDE can't easily show "needs 2 more args"      |
+
+---
+
+- The Arity Error Problem
+
+This is the worst consequence:
+
+#+begin_src prologos
+;; Curried: silent "error"
+defn greet [name : String, greeting : String] : String
+  concat greeting name
+
+greet "Alice"
+;; No error! Returns: (fn [greeting] -> concat greeting "Alice")
+;; User expected a string, got a function
+;; Bug surfaces much later, far from source
+#+end_src
+
+#+begin_src prologos
+;; Uncurried: immediate error
+greet "Alice"
+;; Error: greet expects 2 arguments, got 1
+;; Clear, actionable, at the right location
+#+end_src
+
+---
+
+- What Clojure Does
+
+Clojure is /uncurried/ with explicit partial application:
+
+#+begin_src clojure
+;; Multi-arity, not curried
+(defn add [x y] (+ x y))
+
+(add 1 2)        ;; => 3
+(add 1)          ;; ArityException!
+
+;; Explicit partial application
+(partial add 1)  ;; => #<Fn>
+(map (partial add 1) [1 2 3])  ;; => (2 3 4)
+
+;; Or use anonymous function
+(map #(add 1 %) [1 2 3])
+#+end_src
+
+---
+
+- Recommendation: Uncurried with Explicit Partials
+
+- Function Definition
+
+#+begin_src prologos
+;; Functions take multiple arguments (uncurried)
+defn add [x : Nat, y : Nat] : Nat
+  plus x y
+
+defn clamp [low : Nat, high : Nat, x : Nat] : Nat
+  max low (min high x)
+#+end_src
+
+- Function Application
+
+#+begin_src prologos
+;; All arguments at once
+add 1 2              ;; => 3
+clamp 0 100 50       ;; => 50
+
+;; Too few = error
+add 1                ;; Error: add expects 2 arguments, got 1
+#+end_src
+
+- Explicit Partial Application
+
+#+begin_src prologos
+;; Option A: partial keyword (like Clojure)
+map (partial add 1) xs
+filter (partial greater-than 10) xs
+
+;; Option B: _ placeholder (like Scala)
+map (add 1 _) xs
+map (add _ 1) xs
+filter (_ > 10) xs
+clamp 0 100 _        ;; fn taking last arg
+
+;; Option C: & operator
+map (add & 1) xs      ;; & marks "partial from here"
+
+;; Option D: explicit lambda (always works)
+map (fn x -> add 1 x) xs
+#+end_src
+
+---
+
+- My Preferred Syntax: Placeholder =_=
+
+#+begin_src prologos
+;; _ creates an anonymous function
+
+add 1 _              ;; => (fn x -> add 1 x)
+add _ 1              ;; => (fn x -> add x 1)
+add _ _              ;; => (fn x y -> add x y) = add
+
+clamp 0 100 _        ;; => (fn x -> clamp 0 100 x)
+clamp 0 _ 50         ;; => (fn x -> clamp 0 x 50)
+clamp _ _ _          ;; => clamp
+
+;; Works in any expression
+map (add 1 _) [1, 2, 3]           ;; => [2, 3, 4]
+filter (greater-than _ 10) xs     ;; elements > 10
+reduce xs 0 (add _ _)             ;; same as: reduce xs 0 add
+#+end_src
+
+This gives you:
+- ✅ Arity errors when wrong
+- ✅ Partial application when wanted
+- ✅ Visual clarity (=_= shows "hole")
+- ✅ Flexible positioning (not just "from the right")
+- ✅ Familiar to Scala/Kotlin users
+
+---
+
+- Type Signatures
+
+#+begin_src prologos
+;; Uncurried: multi-argument function type
+add : (Nat, Nat) -> Nat
+
+;; Or with named parameters
+add : [x : Nat, y : Nat] -> Nat
+
+;; Partial application type
+add 1 _   : Nat -> Nat
+add _ 1   : Nat -> Nat
+add _ _   : (Nat, Nat) -> Nat
+#+end_src
+
+---
+
+- Implementation
+
+- Parser Change
+
+#+begin_src racket
+;; Detect _ in application
+(add 1 _)
+
+;; Desugar to lambda
+(fn [_arg1] (add 1 _arg1))
+
+;; Multiple placeholders
+(clamp _ 100 _)
+
+;; Desugar to
+(fn [_arg1 _arg2] (clamp _arg1 100 _arg2))
+#+end_src
+
+- Type Checker Change
+
+#+begin_src racket
+;; Function types become n-ary
+(Nat, Nat) -> Nat
+
+;; Not curried
+Nat -> Nat -> Nat    ;; This is different! Returns a function
+#+end_src
+
+---
+
+- Comparison
+
+| Aspect              | Curried             | Uncurried + =_=        |
+|---------------------+---------------------+------------------------|
+| Partial application | Implicit            | Explicit               |
+| Arity errors        | Silent (returns fn) | Loud (error)           |
+| Performance         | Closure per arg     | Single call            |
+| Debugging           | Hard                | Easy                   |
+| Type signatures     | =A -> B -> C=       | =(A, B) -> C=          |
+| Point-free          | Natural             | Requires =_=           |
+| Familiarity         | Haskell/ML          | JS/Python/Clojure/Rust |
+
+---
+
+- Multi-Arity + Placeholder
+
+With your earlier multi-arity syntax:
+
+#+begin_src prologos
+defn clamp
+  "Clamp value to range"
+  | [low : Nat, high : Nat] : Nat -> Nat
+      fn x (max low (min high x))
+  | [low : Nat, high : Nat, x : Nat] : Nat
+      max low (min high x)
+
+;; Now both work:
+clamp 0 100          ;; 2-arity, returns function
+clamp 0 100 50       ;; 3-arity, returns value
+
+;; And placeholder works too:
+map (clamp 0 100 _) xs   ;; explicit partial of 3-arity
+map (clamp 0 100) xs     ;; using 2-arity overload (cleaner!)
+#+end_src
+
+This is powerful: multi-arity gives you "designed" partial application points, and =_= gives you ad-hoc ones.
+
+---
+
+- Final Recommendation
+
+1. /Make functions uncurried by default/
+2. /Add =_= placeholder for partial application/
+3. /Use multi-arity for common partial application patterns/
+4. /Keep explicit =fn= for complex cases/
+
+#+begin_src prologos
+;; Uncurried definition
+defn add [x : Nat, y : Nat] : Nat
+  plus x y
+
+;; Arity error (good!)
+add 1              ;; Error!
+
+;; Explicit partial (clear!)
+map (add 1 _) xs   ;; => [2, 3, 4]
+
+;; Multi-arity for designed partials
+defn clamp
+  | [low : Nat, high : Nat] : Nat -> Nat
+      clamp low high _
+  | [low : Nat, high : Nat, x : Nat] : Nat
+      max low (min high x)
+
+;; Both work naturally
+map (clamp 0 100) xs     ;; 2-arity
+filter (clamp 0 _ 50) xs ;; placeholder
+#+end_src
+
+This gives you the best of both worlds: safety by default, flexibility when needed, and familiar semantics for most programmers.
+
+---
+
+Want me to sketch how to implement the =_= placeholder macro?
+
+
+
+
+
+
+* ---
+
+* If we were to reframe/rename the Pi and Sigma dependent types, so that they have a more-familiar and descriptive name to most programmers, what are some alternative nomenclatures we may consider using?
+
+- Renaming Pi and Sigma Types
+
+This is a great question. The Greek letters are intimidating and obscure the /intuition/.
+
+- The Problem with Current Names
+
+| Name | What It Actually Is | Why Obscure |
+|------|---------------------|-------------|
+| Π (Pi) | Dependent function | Looks like product symbol, reads as "pi" |
+| Σ (Sigma) | Dependent pair | Looks like summation, unclear connection |
+| → (Arrow) | Non-dependent function | Clear! |
+| × (Times) | Non-dependent pair | Clear! |
+
+The non-dependent versions have good names. We need equally good names for the dependent versions.
+
+- Option 1: Based on Programming Concepts
+
+** For Dependent Functions (Π)
+
+| Name | Syntax | Rationale |
+|------|--------|-----------|
+| =for-all= | =for-all (x : A) -> B= | "For all x of type A, returns B(x)" |
+| =fn= | =fn (x : A) -> B= | Generic "function" |
+| =defn= | =defn (x : A) -> B= | "Definition" (dependent function) |
+| =func= | =func (x : A) -> B= | Slightly more explicit than =fn= |
+| =->= | =(x : A) -> B= | Reuse arrow, context distinguishes |
+
+** For Dependent Pairs (Σ)
+
+| Name | Syntax | Rationale |
+|------|--------|-----------|
+| =exists= | =exists (x : A) . B= | "There exists x of type A such that B(x)" |
+| =with= | =(x : A) with B= | "Value of type A /with/ related B" |
+| =such-that= | =(x : A) such-that B= | More readable "such that" |
+| =where= | =(x : A) where B= | "A where B holds" |
+| =*= | =(x : A) * B= | Reuse product, context distinguishes |
+
+- Option 2: Logical/Mathematical Clarity
+
+Using logical quantifiers explicitly:
+
+| Type | Current | Alternative |
+|------|---------|-------------|
+| Π(x:A).B | =Pi (x : A) . B= | =forall (x : A) . B= |
+| Σ(x:A).B | =Sigma (x : A) . B= | =exists (x : A) . B= |
+
+This makes the Curry-Howard correspondence transparent:
+
+#+begin_src prologos
+-- Universal quantification
+sort : forall (xs : List Nat) .
+       exists (ys : List Nat) .
+         [IsSorted ys] * [Permutation xs ys]
+
+-- Read as: "For all lists xs, there exists a sorted list ys
+--           that is a permutation of xs"
+#+end_src
+
+- Option 3: Intent-Based Names
+
+Focus on /what the programmer is trying to express/:
+
+** Dependent Function
+
+| Name | Meaning | Example |
+|------|---------|---------|
+| =given= | Given an input, produce output | =given (n : Nat) -> Vec A n= |
+| =accepting= | Function accepting | =accepting (x : A) -> B x= |
+| =taking= | Taking argument | =taking (n : Nat) -> Vec A n= |
+
+** Dependent Pair
+
+| Name | Meaning | Example |
+|------|---------|---------|
+| =having= | First component having property | =(xs : List A) having [IsSorted xs]= |
+| =with-proof= | Value with proof | =(n : Nat) with-proof [Even n]= |
+| =certified= | Certified value | =certified (x : A) by [Valid x]= |
+| =witness= | Existential witness | =witness (x : A) satisfying P= |
+
+- Option 4: Rust/TypeScript Inspired
+
+Based on familiar syntax from mainstream languages:
+
+#+begin_src prologos
+-- Dependent function: explicit generic parameter
+<n : Nat> -> Vec Int n
+fn<n : Nat> -> Vec Int n
+
+-- Dependent pair: tuple with constraint
+(n : Nat, v : Vec Int n)
+{n : Nat, v : Vec Int n}        -- record-like
+#+end_src
+
+- My Recommendation: Contextual Syntax
+
+Use /different syntax for different contexts/:
+
+** 1. When It's Clearly Universal Quantification
+
+#+begin_src prologos
+-- Type signature reads as "for all"
+head : forall (n : Nat) . Vec A (suc n) -> A
+
+-- Or shorter
+head : for (n : Nat) . Vec A (suc n) -> A
+#+end_src
+
+** 2. When It's Just a Function Parameter
+
+#+begin_src prologos
+-- If the dependency is "normal", just use arrow
+head : (n : Nat) -> Vec A (suc n) -> A
+
+-- The parentheses + name signal dependency
+-- Compare to non-dependent:
+length : List A -> Nat
+#+end_src
+
+** 3. When It's Existential/Witness
+
+#+begin_src prologos
+-- Type signature for sort
+sort : List A -> exists (ys : List A) . [IsSorted ys] * [Permutation xs ys]
+
+-- Or with "witness"
+sort : List A -> witness (ys : List A) where [IsSorted ys] * [Permutation xs ys]
+
+-- Or briefer
+sort : List A -> (ys : List A) * [IsSorted ys] * [Permutation xs ys]
+#+end_src
+
+** 4. When It's a Certified Value
+
+#+begin_src prologos
+-- Returns value with proof
+validate : Credential -> (tok : Token) with-proof [Valid tok]
+
+-- Or
+validate : Credential -> (tok : Token) where [Valid tok]
+#+end_src
+
+- Complete Syntax Proposal
+
+#+begin_src prologos
+-- DEPENDENT FUNCTIONS
+
+-- Style 1: Explicit universal (when emphasizing logic)
+forall (x : A) . B
+for (x : A) . B
+
+-- Style 2: Arrow with named parameter (when it's "just a function")
+(x : A) -> B
+
+-- Sugar: multiple parameters
+(x : A) (y : B) -> C     ≡    (x : A) -> (y : B) -> C
+
+-- Style 3: Angle brackets (generic-like, for type parameters)
+<A : Type> -> A -> A     -- identity function
+
+
+-- DEPENDENT PAIRS
+
+-- Style 1: Explicit existential (when emphasizing logic)
+exists (x : A) . B
+witness (x : A) where B
+some (x : A) such-that B
+
+-- Style 2: Product with name (when it's "just structured data")
+(x : A) * B
+(x : A, B)               -- tuple notation
+
+-- Style 3: With-proof (when second part is a proof)
+(x : A) with-proof B
+(x : A) where B
+certified (x : A) by B
+
+
+-- EXAMPLES
+
+-- Vector head
+head : (n : Nat) -> Vec A (suc n) -> A
+head : forall (n : Nat) . Vec A (suc n) -> A
+
+-- Sorting with proof
+sort : List A -> (ys : List A) * [IsSorted ys] * [Permutation xs ys]
+sort : List A -> exists (ys : List A) . [IsSorted ys] * [Permutation xs ys]
+sort : List A -> witness (ys : List A) where [IsSorted ys]
+
+-- Authentication
+auth : Credential -> (tok : Token) with-proof [Valid tok]
+auth : Credential -> certified (tok : Token) by [Valid tok]
+
+-- Type-level function
+replicate : forall (A : Type) . (n : Nat) -> A -> Vec A n
+replicate : <A : Type> -> (n : Nat) -> A -> Vec A n
+#+end_src
+
+- Comparison Table
+
+| Context | Old | New (Recommended) |
+|---------|-----|-------------------|
+| Function with dependency | =Pi (x : A) . B= | =(x : A) -> B= |
+| Explicit universal | =Pi (x : A) . B= | =forall (x : A) . B= |
+| Type parameter | =Pi (A : Type) . ...= | =<A : Type> -> ...= |
+| Pair with dependency | =Sigma (x : A) . B= | =(x : A) * B= |
+| Existential witness | =Sigma (x : A) . B= | =exists (x : A) . B= |
+| Certified value | =Sigma (x : A) . B= | =(x : A) with-proof B= |
+
+- Why This Works
+
+1. /Familiarity/: =(x : A) -> B= looks like regular function syntax
+2. /Context-appropriate/: Use =forall= when you want logical flavor, arrow when you want functional flavor
+3. /Readable/: =with-proof= and =where= are English words
+4. /Gradual learning/: Start with arrows, introduce =forall/exists= when teaching logic
+5. /Homoiconic/: These all desugar to the same AST forms
+
+#+begin_src prologos
+-- Surface syntax
+(x : Nat) -> Vec A x
+
+-- Desugars to
+[Pi x Nat [Vec A x]]
+
+-- Surface syntax
+(x : Nat) * Vec A x
+
+-- Desugars to
+[Sigma x Nat [Vec A x]]
+#+end_src
+
+- My Final Recommendation
+
+Default to the /arrow and product/ syntax:
+
+#+begin_src prologos
+-- Use this 90% of the time
+head : (n : Nat) -> Vec A (suc n) -> A
+sort : List A -> (ys : List A) * [IsSorted ys]
+#+end_src
+
+Provide =forall= and =exists= as aliases for when you want to emphasize the logical reading:
+
+#+begin_src prologos
+-- Use this when teaching or when logic is foreground
+theorem : forall (n : Nat) . exists (m : Nat) . [n < m]
+#+end_src
+
+Add =with-proof= / =where= as sugar for the proof-carrying pattern:
+
+#+begin_src prologos
+-- Use this when "certification" is the point
+validate : Input -> (output : Output) with-proof [Valid output]
+#+end_src
+
+This gives programmers familiar syntax while preserving the option to use more explicit logical notation when it clarifies intent.
+
+
+
+
+
+* Let's write a factorial function in prologos
+
+- Factorial in Prologos
+
+Let me show several versions, from simple to fully dependent.
+
+- Version 1: Pure Logic Programming
+
+The simplest approach—factorial as a relation:
+
+#+begin_src prologos
+clause factorial
+  factorial zero [suc zero]
+
+clause factorial
+  factorial [suc n] result
+  :- factorial n sub-result
+     multiply [suc n] sub-result result
+#+end_src
+
+Query:
+#+begin_src prologos
+?- factorial [suc [suc [suc zero]]] Result
+-- Result = 6
+#+end_src
+
+- Version 2: Functional Style
+
+As a function with type annotation:
+
+#+begin_src prologos
+def factorial : Nat -> Nat
+  lam n : Nat .
+    match n
+      zero
+        [suc zero]
+      [suc m]
+        [multiply [suc m] [factorial m]]
+#+end_src
+
+Or with explicit recursion:
+
+#+begin_src prologos
+def factorial : Nat -> Nat
+  fix fact : (Nat -> Nat) .
+    lam n : Nat .
+      match n
+        zero
+          [suc zero]
+        [suc m]
+          [multiply [suc m] [fact m]]
+#+end_src
+
+- Version 3: With Proof of Correctness
+
+Return the result /and/ a proof it's correct:
+
+#+begin_src prologos
+-- Define what it means for f to be factorial of n
+def Factorial : Nat -> Nat -> Type
+  lam n : Nat . lam result : Nat .
+    match n
+      zero
+        [Eq Nat result [suc zero]]
+      [suc m]
+        (sub : Nat) * [Factorial m sub] * [Eq Nat result [multiply [suc m] sub]]
+
+-- Function returns result with proof
+def factorial-certified : (n : Nat) -> (r : Nat) * [Factorial n r]
+  lam n : Nat .
+    match n
+      zero
+        [pair [suc zero] refl]
+      [suc m]
+        let [pair sub sub-proof] = [factorial-certified m]
+        [pair [multiply [suc m] sub]
+              [pack sub sub-proof refl]]
+#+end_src
+
+- Version 4: Using Proof Search
+
+Let the logic engine find the proof:
+
+#+begin_src prologos
+-- Factorial as a logic relation
+clause factorial-rel
+  factorial-rel zero [suc zero]
+
+clause factorial-rel
+  factorial-rel [suc n] result
+  :- factorial-rel n sub
+     [= result [multiply [suc n] sub]]
+
+-- Wrapper that invokes proof search
+def factorial-search : (n : Nat) -> (r : Nat) * [Factorial n r]
+  lam n : Nat .
+    solve [goal factorial-rel n r] (r : Nat) (proof : [Factorial n r])
+      [pair r proof]
+#+end_src
+
+- Version 5: As a Session-Typed Service
+
+Factorial as a communicating process:
+
+#+begin_src prologos
+def factorial-session : Session
+  mu Loop .
+    &>
+      compute :
+        ?: (n : Nat) .
+          !: (result : Nat) .
+            [svar Loop]
+      quit :
+        end
+
+defproc factorial-server : Proc factorial-session
+  case self
+    compute
+      recv self (n : Nat)
+        solve [goal factorial-rel n r] (r : Nat)
+          send r self
+            factorial-server
+    quit
+      stop
+
+-- Client usage
+defproc factorial-client : Proc [dual factorial-session]
+  sel self compute
+    send [suc [suc [suc zero]]] self    -- send 3
+      recv self (result : Nat)           -- receive 6
+        sel self quit
+          stop
+#+end_src
+
+- Version 6: Parallel Factorial (for large n)
+
+Split computation across workers:
+
+#+begin_src prologos
+-- factorial n = product [1..n]
+-- Split range, compute in parallel, multiply results
+
+def parallel-factorial : Nat -> Nat
+  lam n : Nat .
+    match [<= n [nat 10]]
+      true
+        [factorial n]                    -- base case: sequential
+      false
+        let mid = [div n [nat 2]]
+        par
+          let left = [product-range [suc zero] mid]
+          let right = [product-range [suc mid] n]
+        [multiply left right]
+
+-- As processes with explicit channels
+defproc par-factorial : (n : Nat) -> Proc [! Nat . end]
+  lam n : Nat .
+    match [<= n [nat 10]]
+      true
+        solve [goal factorial-rel n r] (r : Nat)
+          send r self
+            stop
+      false
+        let mid = [div n [nat 2]]
+        new left-chan [! Nat . end]
+          new right-chan [! Nat . end]
+            par
+              solve [goal product-range [suc zero] mid l] (l : Nat)
+                send l left-chan
+                  stop
+              solve [goal product-range [suc mid] n r] (r : Nat)
+                send r right-chan
+                  stop
+              recv left-chan (left : Nat)
+                recv right-chan (right : Nat)
+                  send [multiply left right] self
+                    stop
+#+end_src
+
+- Version 7: Tail-Recursive with Accumulator
+
+More efficient, with dependent type tracking the invariant:
+
+#+begin_src prologos
+-- Invariant: acc * factorial(n) = factorial(original)
+def factorial-tail : Nat -> Nat
+  lam n : Nat .
+    [factorial-acc n [suc zero]]
+
+def factorial-acc : Nat -> Nat -> Nat
+  lam n : Nat . lam acc : Nat .
+    match n
+      zero
+        acc
+      [suc m]
+        [factorial-acc m [multiply [suc m] acc]]
+#+end_src
+
+With the invariant expressed in the type:
+
+#+begin_src prologos
+-- The accumulator version, with proof
+def factorial-acc-certified
+  : (n : Nat)
+    -> (acc : Nat)
+    -> (original : Nat)
+    -> (pf : [Eq Nat [multiply acc [factorial n]] [factorial original]])
+    -> (r : Nat) * [Eq Nat r [factorial original]]
+  lam n : Nat .
+    lam acc : Nat .
+      lam original : Nat .
+        lam pf : [Eq Nat [multiply acc [factorial n]] [factorial original]] .
+          match n
+            zero
+              [pair acc pf]    -- acc * 1 = acc, use proof
+            [suc m]
+              [factorial-acc-certified
+                m
+                [multiply [suc m] acc]
+                original
+                [rewrite-proof pf ...]]  -- proof term showing invariant maintained
+#+end_src
+
+- Summary Table
+
+| Version | Style | Guarantees | Use Case |
+|---------|-------|------------|----------|
+| 1 | Logic relation | None | Quick queries |
+| 2 | Functional | Type-checked | Normal programming |
+| 3 | Certified | Proof of correctness | High assurance |
+| 4 | Proof search | Auto-generated proof | Best of both |
+| 5 | Session | Protocol compliance | Distributed/service |
+| 6 | Parallel | Concurrent | Performance |
+| 7 | Tail-recursive | Efficient + proof | Production + verified |
+
+- The Prologos Sweet Spot
+
+The most idiomatic version combines logic programming with types:
+
+#+begin_src prologos
+-- Declare the relation
+clause factorial
+  factorial zero [suc zero]
+
+clause factorial
+  factorial [suc n] [multiply [suc n] r]
+  :- factorial n r
+
+-- Give it a type
+factorial : (n : Nat) -> (r : Nat) * [Factorial n r]
+
+-- Use it
+def six-factorial : (r : Nat) * [Factorial [nat 6] r]
+  factorial [nat 6]
+-- Returns: [pair 720 <proof>]
+#+end_src
+
+The logic engine does the computation /and/ constructs the proof. You get certified results without writing proof terms manually.
+
+
+
+
+
+* Remind me, what is our `.` operator, again? What does it mean, how and when is it used?
+
+- The =.= Operator in Prologos
+
+Good catch—we've been using it inconsistently! Let me clarify.
+
+- What =.= Means
+
+The dot is a /separator/ in binding forms. It marks the boundary between:
+
+1. The /binder/ (what's being bound)
+2. The /body/ (where the binding is used)
+
+Think of it as "in" or "such that".
+
+- Where We Use It
+
+- 1. Lambda Expressions
+
+#+begin_src prologos
+lam x : Nat . [suc x]
+     ^^^^^^   ^^^^^^^^
+     binder    body
+
+-- Read as: "lambda x of type Nat, IN [suc x]"
+-- Or: "function taking x : Nat, PRODUCING [suc x]"
+#+end_src
+
+Multiple parameters:
+
+#+begin_src prologos
+lam x : Nat . lam y : Nat . [add x y]
+
+-- Or collapsed (implicit dots)
+lam (x : Nat) (y : Nat) . [add x y]
+#+end_src
+
+- 2. Dependent Types (forall/exists)
+
+#+begin_src prologos
+forall (x : A) . B
+       ^^^^^^^^  ^
+       binder    body
+
+-- Read as: "for all x of type A, SUCH THAT B"
+
+exists (x : A) . B
+-- Read as: "there exists x of type A, SUCH THAT B"
+#+end_src
+
+- 3. Session Types
+
+#+begin_src prologos
+!: (n : Nat) . [! [Vec Int n] . end]
+   ^^^^^^^^^   ^^^^^^^^^^^^^^^^^^^^
+   binder       continuation
+
+-- Read as: "send n of type Nat, THEN continue with this session"
+
+?: (cred : Credential) . [&> [valid S1] [invalid S2]]
+   ^^^^^^^^^^^^^^^^^^^   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   binder                continuation
+
+-- Read as: "receive cred of type Credential, THEN branch..."
+#+end_src
+
+- 4. Recursive Definitions
+
+#+begin_src prologos
+mu X . S
+   ^   ^
+   var body
+
+-- Read as: "recursive session X, DEFINED AS S"
+
+fix f : (Nat -> Nat) . lam n : Nat . ...
+    ^^^^^^^^^^^^^^^^   ^^^^^^^^^^^^^^^^^
+    binder             body
+
+-- Read as: "fixpoint f of type Nat->Nat, DEFINED AS ..."
+#+end_src
+
+- What =.` Does NOT Mean
+
+It's NOT:
+
+- Function application (that's just juxtaposition: =[f x]=)
+- Field access (we'd use different syntax)
+- Composition (would need explicit operator)
+- Statement terminator (we use indentation)
+
+- Comparison to Other Languages
+
+| Language | Binder Separator |
+|----------|------------------|
+| Haskell | =->= in lambda: =\x -> e= |
+| OCaml | =->= in lambda: =fun x -> e= |
+| Coq | =.= in forall: =forall x : A, B= (uses comma!) |
+| Agda | =→= everywhere: =(x : A) → B= |
+| Idris | ==>=: =\x => e= |
+| Prologos | =.= : =lam x : A . e= |
+
+- Our Current Grammar
+
+#+begin_src
+Binder forms all use dot:
+
+lam Var : Type . Expr
+forall (Var : Type) . Type
+exists (Var : Type) . Type
+!: (Var : Type) . Session
+?: (Var : Type) . Session
+mu Var . Session
+fix Var : Type . Expr
+#+end_src
+
+- Alternative: We Could Drop It Sometimes
+
+For conciseness, we might make the dot optional when the body starts with punctuation:
+
+#+begin_src prologos
+-- With dots (explicit)
+lam x : Nat . [suc x]
+forall (n : Nat) . [Vec A n]
+?: (n : Nat) . [! n . end]
+
+-- Without dots (implicit, since bracket/session follows)
+lam x : Nat [suc x]
+forall (n : Nat) [Vec A n]
+?: (n : Nat) [! n . end]        -- still need the internal dot!
+#+end_src
+
+But this might be confusing. The dot is a clear visual separator.
+
+- When You DON'T Need Dot
+
+** Arrow Syntax (Non-Binding)
+
+#+begin_src prologos
+Nat -> Bool                  -- no dot, just arrow
+(x : Nat) -> [Vec A x]       -- arrow, not dot (though x is bound!)
+#+end_src
+
+Wait, this is confusing! In =(x : Nat) -> B=, we're binding =x= but using arrow, not dot.
+
+Let me clarify the actual rule:
+
+- The Actual Rule
+
+| Form | Separator | Why |
+|------|-----------|-----|
+| =(x : A) -> B= | Arrow | Pi type (function type) |
+| =lam x : A . e= | Dot | Lambda (function term) |
+| =forall (x : A) . B= | Dot | Explicit Pi (same as arrow) |
+| =(x : A) * B= | Star | Sigma type (pair type) |
+| =exists (x : A) . B= | Dot | Explicit Sigma (same as star) |
+| =mu X . S= | Dot | Recursive definition |
+
+So the pattern is:
+
+- /Types/ use their operators: =->= for Pi, =*= for Sigma
+- /Terms/ and /explicit forms/ use =.= for binding
+
+- Consistent Version
+
+Maybe we should standardize:
+
+#+begin_src prologos
+-- TYPES always use their operators
+(x : Nat) -> Vec A x             -- Pi type
+(x : Nat) * Vec A x              -- Sigma type
+Nat -> Bool                      -- non-dependent Pi
+
+-- TERMS always use dot
+lam x : Nat . [suc x]            -- lambda term
+[pair 5 [vec-of 5 zero]]         -- pair term
+
+-- EXPLICIT QUANTIFIERS use dot (they're like terms)
+forall (x : Nat) . [Vec A x]     -- explicit Pi
+exists (x : Nat) . [Vec A x]     -- explicit Sigma
+
+-- SESSIONS use dot for continuation
+!: (n : Nat) . Session           -- dependent send
+?: (n : Nat) . Session           -- dependent receive
+mu X . Session                   -- recursion
+#+end_src
+
+- Summary
+
+The =.= operator means:
+
+> "Here's the binder, NOW here's the body/continuation"
+
+It's used in:
+
+1. =lam x : A . body= — lambda abstraction
+2. =forall (x : A) . body= — universal quantification
+3. =exists (x : A) . body= — existential quantification
+4. =!: (x : A) . continuation= — dependent send
+5. =?: (x : A) . continuation= — dependent receive
+6. =mu X . body= — recursive definition
+7. =fix f : T . body= — fixpoint
+
+It's NOT used in:
+
+1. =(x : A) -> B= — we use arrow for type-level Pi
+2. =(x : A) * B= — we use star for type-level Sigma
+3. =send e c= — process commands (indentation shows continuation)
+
+The distinction: =->= and =*= are for TYPE-level dependency, =.= is for TERM-level binding.
+
+Does this clarification help? Should we adjust the syntax further for consistency?
+
+
+
+* I've been trying to make an actual implementation of our paper-language of Prologos that we've been using here. I'm not satisfied with how complex the Dependent Type system is coming out, and I wonder if you have any guidance you can give in suggesting a way to simplify it visually. Below is an example from one of the modules that I have running, a prototype built in Racket:
+```
+ns prologos.data.bool
+
+provide not and or xor bool-eq
+
+;; ========================================
+;; Prologos Boolean Library
+;; Pure Prologos definitions using boolrec.
+;; ========================================
+
+;; Logical NOT: not(true) = false, not(false) = true
+def not <(-> Bool Bool)>
+  fn [b <Bool>]
+    boolrec (the <(-> Bool (Type 0))> (fn [_ <Bool>] Bool))
+      false
+      true
+      b
+
+;; Logical AND: and(true, b) = b, and(false, b) = false
+def and <(-> Bool (-> Bool Bool))>
+  fn [a <Bool>]
+    fn [b <Bool>]
+      boolrec (the <(-> Bool (Type 0))> (fn [_ <Bool>] Bool))
+        b
+        false
+        a
+
+;; Logical OR: or(true, b) = true, or(false, b) = b
+def or <(-> Bool (-> Bool Bool))>
+  fn [a <Bool>]
+    fn [b <Bool>]
+      boolrec (the <(-> Bool (Type 0))> (fn [_ <Bool>] Bool))
+        true
+        b
+        a
+
+;; Logical XOR: xor(true, b) = not(b), xor(false, b) = b
+def xor <(-> Bool (-> Bool Bool))>
+  fn [a <Bool>]
+    fn [b <Bool>]
+      boolrec (the <(-> Bool (Type 0))> (fn [_ <Bool>] Bool))
+        (not b)
+        b
+        a
+
+;; Boolean equality: bool-eq(true, b) = b, bool-eq(false, b) = not(b)
+def bool-eq <(-> Bool (-> Bool Bool))>
+  fn [a <Bool>]
+    fn [b <Bool>]
+      boolrec (the <(-> Bool (Type 0))> (fn [_ <Bool>] Bool))
+        b
+        (not b)
+        a
+
+```
+
+Looking at your code, I see several visual complexity issues. Let me suggest simplifications:
+
+- Problems I See
+
+1. *Angle brackets for types*: =<Bool>= is noisy
+2. *Explicit =the= annotations*: =the <(-> Bool (Type 0))> (fn ...)= is heavy
+3. *Nested arrows*: =<(-> Bool (-> Bool Bool))>= hard to read
+4. *Type universe noise*: =(Type 0)= shouldn't be necessary for simple functions
+
+- Simplification Strategy
+
+- Option 1: Make Type Annotations Optional (Inferred)
+
+#+begin_src racket
+;; Without type annotations (inferred from boolrec usage)
+def not
+  fn b
+    boolrec Bool false true b
+
+def and
+  fn a b
+    boolrec Bool b false a
+#+end_src
+
+- Option 2: Use =:= Instead of Angle Brackets
+
+#+begin_src racket
+;; Cleaner type syntax
+def not : Bool -> Bool
+  fn b : Bool
+    boolrec Bool false true b
+
+def and : Bool -> Bool -> Bool
+  fn a : Bool . fn b : Bool
+    boolrec Bool b false a
+
+;; Or with our sugar
+def and : Bool -> Bool -> Bool
+  fn (a : Bool) (b : Bool)
+    boolrec Bool b false a
+#+end_src
+
+- Option 3: Infer Motive from Context
+
+The =the <(-> Bool (Type 0))> (fn [_ <Bool>] Bool)= part is the /motive/—what you're eliminating into. For simple cases, this should be inferrable:
+
+#+begin_src racket
+;; Instead of explicit motive
+boolrec (the <(-> Bool (Type 0))> (fn [_ <Bool>] Bool))
+  false true b
+
+;; Infer it from the branches
+boolrec Bool false true b
+;; Compiler infers: eliminating into Bool, motive is (fn _ Bool)
+#+end_src
+
+- Option 4: Eliminate Currying Noise
+
+#+begin_src racket
+;; Current: nested functions
+def and <(-> Bool (-> Bool Bool))>
+  fn [a <Bool>]
+    fn [b <Bool>]
+      ...
+
+;; Better: multi-argument
+def and : Bool -> Bool -> Bool
+  fn a b
+    boolrec Bool b false a
+#+end_src
+
+- Recommended Rewrite
+
+#+begin_src racket
+ns prologos.data.bool
+
+provide not and or xor bool-eq
+
+;; Type annotations on definitions, not everywhere
+def not : Bool -> Bool
+  fn b
+    boolrec Bool false true b
+
+def and : Bool -> Bool -> Bool
+  fn a b
+    boolrec Bool b false a
+
+def or : Bool -> Bool -> Bool
+  fn a b
+    boolrec Bool true b a
+
+def xor : Bool -> Bool -> Bool
+  fn a b
+    boolrec Bool [not b] b a
+
+def bool-eq : Bool -> Bool -> Bool
+  fn a b
+    boolrec Bool b [not b] a
+#+end_src
+
+*Changes*:
+- Removed angle brackets: =:= for type annotations
+- Removed explicit motives: inferred from return type
+- Multi-argument lambdas: =fn a b= instead of nested =fn=
+- Type annotation only on =def=, not on every parameter
+
+- If You NEED Explicit Types Sometimes
+
+Have a lighter syntax:
+
+#+begin_src racket
+;; When you need to annotate a parameter
+def complex-fn : (n : Nat) -> Vec Bool n
+  fn (n : Nat)
+    ...
+
+;; When inference fails, use local annotation
+def tricky
+  fn x
+    let y : Nat = [compute-something x]
+    ...
+
+;; Explicit motive only when really needed
+def custom-elim
+  fn b
+    boolrec [fn _ Bool]  ;; lightweight motive
+      false true b
+#+end_src
+
+- Visual Weight Comparison
+
+*Before* (your current):
+#+begin_src racket
+def and <(-> Bool (-> Bool Bool))>
+  fn [a <Bool>]
+    fn [b <Bool>]
+      boolrec (the <(-> Bool (Type 0))> (fn [_ <Bool>] Bool))
+        b
+        false
+        a
+#+end_src
+
+*After* (recommended):
+#+begin_src racket
+def and : Bool -> Bool -> Bool
+  fn a b
+    boolrec Bool b false a
+#+end_src
+
+That's 5 lines → 3 lines, and drastically less visual noise.
+
+- Grammar Adjustment
+
+#+begin_src
+;; Type annotations
+Def ::= def Name : Type
+          Expr
+      | def Name              ;; inferred type
+          Expr
+
+;; Lambda
+Expr ::= fn Var+ . Expr       ;; multi-arg, no types (inferred)
+       | fn (Var : Type)+ . Expr  ;; with types when needed
+       | fn Var+ Expr         ;; no dot if body starts with bracket/keyword
+
+;; Eliminators
+boolrec Type Expr Expr Expr   ;; motive inferred from Type
+boolrec [Motive] Expr Expr Expr  ;; explicit when needed
+#+end_src
+
+- For Real Dependent Types
+
+When you actually need dependency, keep it minimal:
+
+#+begin_src racket
+;; Vector append
+def append : (n : Nat) -> (m : Nat) -> Vec A n -> Vec A m -> Vec A [+ n m]
+  fn n m xs ys
+    natrec
+      [fn k _ -> Vec A [+ k m]]  ;; motive when needed
+      ys                         ;; base
+      [fn k acc -> vcons [vhead xs] acc]  ;; step
+      n xs
+#+end_src
+
+Still verbose, but unavoidable for real dependent types. The key is making the SIMPLE cases simple.
+
+- Implementation Hint
+
+In your typechecker:
+
+#+begin_src racket
+;; When you see
+(boolrec <return-type> <true-case> <false-case> <scrutinee>)
+
+;; Infer motive as
+(fn [_ Bool] <return-type>)
+
+;; When you see
+(fn a b <body>)
+
+;; Infer types from usage or require them on def
+#+end_src
+
+Does this help reduce the visual complexity you're experiencing?
+
+* I've implemented changes with a built-in `defn` macro, which has cleared up some of the currying noise. I'm still not pleased with the `the` forms. What are some concrete guidance that you can give on simplifying the following:
+```
+;; Logical OR: or(true, b) = true, or(false, b) = b
+defn or [a <Bool> b <Bool>] <Bool>
+  boolrec (the <(-> Bool (Type 0))> (fn [_ <Bool>] Bool))
+    true
+    b
+    a
+```
+
+- Simplifying the =the= Form
+
+The =the= annotation is solving a specific problem: telling =boolrec= what type family you're eliminating into. Let me show concrete simplifications.
+
+- Understanding What's Happening
+
+#+begin_src racket
+boolrec (the <(-> Bool (Type 0))> (fn [_ <Bool>] Bool))
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        This is the MOTIVE: (fn [_ Bool] Bool)
+
+        The outer type annotation says: "this function has type Bool -> Type"
+        The inner function says: "for any Bool, return the type Bool"
+#+end_src
+
+Since you're always returning the type =Bool= regardless of which boolean you have, this is the /constant/ motive.
+
+- Solution 1: Infer Constant Motives
+
+Most common case: motive is constant. Make =boolrec= smart:
+
+#+begin_src racket
+;; New syntax: just give the return type
+defn or [a <Bool> b <Bool>] <Bool>
+  boolrec Bool
+    true   ;; true case
+    b      ;; false case
+    a      ;; scrutinee
+#+end_src
+
+Implementation:
+#+begin_src racket
+;; In your expander/typechecker
+(define (expand-boolrec return-type true-case false-case scrutinee)
+  ;; If return-type is not a function, make it constant
+  (if (function-type? return-type)
+      ;; Already a motive, use as-is
+      (boolrec-core return-type true-case false-case scrutinee)
+      ;; Wrap in constant function
+      (boolrec-core `(fn [_ Bool] ,return-type)
+                    true-case false-case scrutinee)))
+#+end_src
+
+- Solution 2: Pattern Match on =the= Forms
+
+Make =the= itself lighter:
+
+#+begin_src racket
+;; Instead of
+(the <(-> Bool (Type 0))> (fn [_ <Bool>] Bool))
+
+;; Just write
+(motive [_ Bool] Bool)
+
+;; Or even shorter
+(_ : Bool => Bool)
+#+end_src
+
+Your example becomes:
+#+begin_src racket
+defn or [a <Bool> b <Bool>] <Bool>
+  boolrec (_ : Bool => Bool)
+    true b a
+#+end_src
+
+- Solution 3: Default to Constant Motive (Recommended)
+
+Change =boolrec= signature:
+
+#+begin_src racket
+;; OLD signature
+boolrec : (P : Bool -> Type) -> P true -> P false -> (b : Bool) -> P b
+
+;; NEW signature with optional motive
+boolrec : {implicit P : Bool -> Type default (fn _ Bool)}
+          -> P true -> P false -> (b : Bool) -> P b
+#+end_src
+
+Then:
+#+begin_src racket
+;; Simple case (90% of uses): motive inferred as constant
+defn or [a <Bool> b <Bool>] <Bool>
+  boolrec true b a
+
+;; Complex case: explicit motive when needed
+defn bool-to-type [b <Bool>] <(Type 0)>
+  boolrec {P = (fn x (if-bool x Nat String))}
+    Nat
+    String
+    b
+#+end_src
+
+- Solution 4: Make Return Type Visible to Eliminator
+
+Pass context through:
+
+#+begin_src racket
+;; In your macro expander for defn
+(defn or [a <Bool> b <Bool>] <Bool>   ;; <-- return type here
+  ...)
+
+;; When you encounter boolrec inside, auto-inject return type
+;; So programmer writes:
+  boolrec true b a
+
+;; Expander sees return type is Bool, rewrites to:
+  boolrec (fn [_ Bool] Bool) true b a
+#+end_src
+
+Implementation sketch:
+#+begin_src racket
+(define-syntax defn
+  (syntax-rules ()
+    [(defn name [arg <type>] ... <return-type>
+       body ...)
+     (def name <(-> type ... return-type)>
+       (fn [arg <type>] ...
+         (let-syntax ([boolrec
+                       (λ (stx)
+                         (syntax-case stx ()
+                           [(_ tcase fcase scrut)
+                            #'(boolrec* (fn [_ Bool] return-type)
+                                       tcase fcase scrut)]))])
+           body ...)))]))
+#+end_src
+
+- Solution 5: Keyword Argument for Motive
+
+Only specify when non-constant:
+
+#+begin_src racket
+;; Default usage
+defn or [a <Bool> b <Bool>] <Bool>
+  boolrec true b a
+
+;; When you need explicit motive
+defn dependent-example [b <Bool>] <(Type 0)>
+  boolrec #:motive [x Bool => (if-bool x Nat String)]
+    Nat
+    String
+    b
+#+end_src
+
+- My Concrete Recommendation
+
+Implement /Solution 1/ (simplest, biggest impact):
+
+#+begin_src racket
+;; In your boolrec implementation/macro
+
+(define (boolrec* motive-or-type true-case false-case scrutinee)
+  (define motive
+    (if (and (list? motive-or-type)
+             (eq? (car motive-or-type) 'fn))
+        ;; Already a function, use as motive
+        motive-or-type
+        ;; Just a type, make constant motive
+        `(fn [_ <Bool>] ,motive-or-type)))
+
+  ;; Now use 'motive' in your actual bool elimination
+  (eliminate-bool motive true-case false-case scrutinee))
+#+end_src
+
+Your code becomes:
+#+begin_src racket
+ns prologos.data.bool
+
+provide not and or xor bool-eq
+
+defn not [b <Bool>] <Bool>
+  boolrec Bool false true b
+
+defn and [a <Bool> b <Bool>] <Bool>
+  boolrec Bool b false a
+
+defn or [a <Bool> b <Bool>] <Bool>
+  boolrec Bool true b a
+
+defn xor [a <Bool> b <Bool>] <Bool>
+  boolrec Bool (not b) b a
+
+defn bool-eq [a <Bool> b <Bool>] <Bool>
+  boolrec Bool b (not b) a
+#+end_src
+
+/If you need dependent elimination later/, add it back:
+
+#+begin_src racket
+defn bool-to-nat [b <Bool>] <Nat>
+  boolrec Nat (suc zero) zero b
+  ;; ^^^ constant motive inferred
+
+defn bool-to-type [b <Bool>] <(Type 0)>
+  boolrec [fn x Bool => (if-bool x Nat String)]
+    Nat String b
+  ;; ^^^ explicit motive when needed
+#+end_src
+
+This gives you:
+- Clean syntax for 90% case (constant motive)
+- Explicit syntax available when needed
+- No loss of expressiveness
+- Dramatically less noise
+
+Want me to sketch the full Racket macro implementation?
+
+* Yes please
+
+- Full Racket Implementation
+
+- Core =boolrec= Macro
+
+#+begin_src racket
+#lang racket
+
+(require (for-syntax syntax/parse racket/syntax))
+
+;; ========================================
+;; Smart boolrec that infers constant motives
+;; ========================================
+
+(define-syntax (boolrec stx)
+  (syntax-parse stx
+    ;; Case 1: Explicit motive (starts with fn or is bracketed lambda)
+    [(_ motive:expr true-case:expr false-case:expr scrutinee:expr)
+     #:when (syntax-parse #'motive
+              [(fn . _) #t]
+              [_ #f])
+     #'(boolrec-core motive true-case false-case scrutinee)]
+
+    ;; Case 2: Simple type - infer constant motive
+    [(_ return-type:expr true-case:expr false-case:expr scrutinee:expr)
+     #'(boolrec-core (fn [_ <Bool>] return-type)
+                     true-case
+                     false-case
+                     scrutinee)]))
+
+;; The actual eliminator (you already have this)
+(define-syntax (boolrec-core stx)
+  (syntax-parse stx
+    [(_ motive:expr true-case:expr false-case:expr scrutinee:expr)
+     ;; This would call your actual bool eliminator
+     ;; For now, pseudocode:
+     #'(eliminate-bool 'motive true-case false-case scrutinee)]))
+#+end_src
+
+- Enhanced =defn= Macro
+
+#+begin_src racket
+;; ========================================
+;; defn: Define function with cleaner syntax
+;; ========================================
+
+(define-syntax (defn stx)
+  (syntax-parse stx
+    ;; With return type annotation
+    [(_ name:id [arg:id <arg-type:expr>] ... <return-type:expr>
+        body:expr ...+)
+     #'(def name <(-> arg-type ... return-type)>
+         (fn [arg <arg-type>] ...
+           body ...))]
+
+    ;; Without return type (inferred)
+    [(_ name:id [arg:id <arg-type:expr>] ...
+        body:expr ...+)
+     #'(def name
+         (fn [arg <arg-type>] ...
+           body ...))]))
+#+end_src
+
+- Alternative: Context-Aware =boolrec=
+
+If you want =boolrec= to know the return type from =defn=:
+
+#+begin_src racket
+(define-syntax (defn stx)
+  (syntax-parse stx
+    [(_ name:id [arg:id <arg-type:expr>] ... <return-type:expr>
+        body:expr ...+)
+     ;; Inject return-type into boolrec's context
+     (with-syntax ([return-type-binding #'return-type])
+       #'(def name <(-> arg-type ... return-type)>
+           (fn [arg <arg-type>] ...
+             (let-syntax ([boolrec
+                           (make-contextual-boolrec #'return-type-binding)])
+               body ...))))]))
+
+(define-for-syntax (make-contextual-boolrec return-type-stx)
+  (lambda (stx)
+    (syntax-parse stx
+      ;; Only three arguments = use context return type
+      [(_ true-case:expr false-case:expr scrutinee:expr)
+       #`(boolrec-core (fn [_ <Bool>] #,return-type-stx)
+                       true-case
+                       false-case
+                       scrutinee)]
+
+      ;; Four arguments = explicit motive/type
+      [(_ motive-or-type:expr true-case:expr false-case:expr scrutinee:expr)
+       (syntax-parse #'motive-or-type
+         ;; Explicit motive
+         [(fn . _)
+          #'(boolrec-core motive-or-type true-case false-case scrutinee)]
+         ;; Simple type
+         [_
+          #'(boolrec-core (fn [_ <Bool>] motive-or-type)
+                          true-case false-case scrutinee)])])))
+#+end_src
+
+- Complete Working Example
+
+#+begin_src racket
+#lang racket
+
+(require (for-syntax syntax/parse racket/syntax))
+
+;; ========================================
+;; Your existing core definitions
+;; ========================================
+
+;; Assuming you have these primitives defined:
+;; - Bool type
+;; - true, false constructors
+;; - def macro for definitions
+;; - fn macro for lambdas
+;; - eliminate-bool for actual recursion
+
+;; ========================================
+;; Smart boolrec
+;; ========================================
+
+(define-syntax (boolrec stx)
+  (syntax-parse stx
+    ;; Pattern 1: [fn ...] motive (explicit)
+    [(_ (fn [var:id <Bool>] motive-body:expr)
+        true-case:expr
+        false-case:expr
+        scrutinee:expr)
+     #'(boolrec-core (fn [var <Bool>] motive-body)
+                     true-case false-case scrutinee)]
+
+    ;; Pattern 2: Simple expression (treat as constant motive)
+    [(_ return-type:expr true-case:expr false-case:expr scrutinee:expr)
+     #:when (not (syntax-parse #'return-type
+                   [(fn . _) #t]
+                   [_ #f]))
+     (with-syntax ([fresh-var (generate-temporary '_)])
+       #'(boolrec-core (fn [fresh-var <Bool>] return-type)
+                       true-case
+                       false-case
+                       scrutinee))]))
+
+;; Core eliminator - interfaces with your type system
+(define-syntax (boolrec-core stx)
+  (syntax-parse stx
+    [(_ motive:expr tc:expr fc:expr scrut:expr)
+     ;; This is where you'd call your actual eliminator
+     ;; Placeholder that shows structure:
+     #'(let ([P motive]
+             [t-case tc]
+             [f-case fc]
+             [b scrut])
+         ;; Your actual elimination logic here
+         ;; For demo, simple if:
+         (if b t-case f-case))]))
+
+;; ========================================
+;; Enhanced defn
+;; ========================================
+
+(define-syntax (defn stx)
+  (syntax-parse stx
+    ;; With return type
+    [(_ name:id [arg:id <arg-type:expr>] ... <return-type:expr>
+        body:expr ...+)
+     #'(define name
+         (fn [arg <arg-type>] ...
+           body ...))]
+
+    ;; Without return type
+    [(_ name:id [arg:id <arg-type:expr>] ...
+        body:expr ...+)
+     #'(define name
+         (fn [arg <arg-type>] ...
+           body ...))]))
+
+;; ========================================
+;; Example usage
+;; ========================================
+
+;; Now your code looks like:
+
+(defn not [b <Bool>] <Bool>
+  (boolrec Bool false true b))
+
+(defn and [a <Bool> b <Bool>] <Bool>
+  (boolrec Bool b false a))
+
+(defn or [a <Bool> b <Bool>] <Bool>
+  (boolrec Bool true b a))
+
+(defn xor [a <Bool> b <Bool>] <Bool>
+  (boolrec Bool (not b) b a))
+
+(defn bool-eq [a <Bool> b <Bool>] <Bool>
+  (boolrec Bool b (not b) a))
+
+;; When you need explicit motive (rare):
+(defn bool-to-type [b <Bool>] <Type>
+  (boolrec (fn [x <Bool>] (if x Nat String))
+    Nat
+    String
+    b))
+#+end_src
+
+- Even Cleaner: Keyword Argument Version
+
+#+begin_src racket
+(define-syntax (boolrec stx)
+  (syntax-parse stx
+    ;; With explicit #:motive
+    [(_ #:motive motive:expr
+        true-case:expr
+        false-case:expr
+        scrutinee:expr)
+     #'(boolrec-core motive true-case false-case scrutinee)]
+
+    ;; With #:into (type hint)
+    [(_ #:into return-type:expr
+        true-case:expr
+        false-case:expr
+        scrutinee:expr)
+     #'(boolrec-core (fn [_ <Bool>] return-type)
+                     true-case false-case scrutinee)]
+
+    ;; Default: three args, infer from defn context or fail gracefully
+    [(_ true-case:expr false-case:expr scrutinee:expr)
+     #'(syntax-error "boolrec needs type hint or #:into")]
+
+    ;; Four args: first is type
+    [(_ type-hint:expr true-case:expr false-case:expr scrutinee:expr)
+     #'(boolrec #:into type-hint true-case false-case scrutinee)]))
+#+end_src
+
+Usage:
+#+begin_src racket
+(defn or [a <Bool> b <Bool>] <Bool>
+  (boolrec Bool true b a))
+
+;; Or more explicit
+(defn or [a <Bool> b <Bool>] <Bool>
+  (boolrec #:into Bool true b a))
+
+;; Dependent case
+(defn dependent-example [b <Bool>]
+  (boolrec #:motive (fn [x <Bool>] (if x Nat String))
+    zero
+    "false"
+    b))
+#+end_src
+
+- Integration with Your Type System
+
+You'll need to connect this to your actual type checker:
+
+#+begin_src racket
+(define-syntax (boolrec-core stx)
+  (syntax-parse stx
+    [(_ motive:expr true-case:expr false-case:expr scrutinee:expr)
+     ;; Generate typed term
+     (quasisyntax/loc stx
+       (the #,(infer-boolrec-type #'motive
+                                   #'true-case
+                                   #'false-case
+                                   #'scrutinee)
+            (eliminate 'Bool
+                       motive
+                       true-case
+                       false-case
+                       scrutinee)))]))
+
+(define-for-syntax (infer-boolrec-type motive tc fc scrut)
+  ;; Call your type inference to determine result type
+  ;; Pseudocode:
+  (syntax-parse motive
+    [(fn [var:id <Bool>] body)
+     ;; Apply motive to scrutinee
+     #'(subst body var scrut)]
+    [_
+     (error "Invalid motive")]))
+#+end_src
+
+- Final Recommendation
+
+Use the simplest version that works:
+
+#+begin_src racket
+;; smart-boolrec.rkt
+
+(define-syntax (boolrec stx)
+  (syntax-parse stx
+    ;; Explicit function motive
+    [(_ (fn args ...) tc fc scrut)
+     #'(boolrec-core (fn args ...) tc fc scrut)]
+
+    ;; Simple type - wrap in constant function
+    [(_ type tc fc scrut)
+     #'(boolrec-core (fn [_ <Bool>] type) tc fc scrut)]))
+#+end_src
+
+This gives you exactly what you wanted:
+
+/Before:/
+#+begin_src racket
+(boolrec (the <(-> Bool (Type 0))> (fn [_ <Bool>] Bool))
+  true b a)
+#+end_src
+
+/After:/
+#+begin_src racket
+(boolrec Bool true b a)
+#+end_src
+
+Clean, readable, and the motive inference is invisible.
+
+
+
+* How would this look with our proposed changes:
+```
+;; Multiplication: mult x y = x * y (by recursion on y)
+defn mult [x <Nat> y <Nat>] <Nat>
+  natrec (the <(-> Nat (Type 0))> (fn [_ <Nat>] Nat))
+    zero
+    (the <(-> Nat (-> Nat Nat))> (fn [_ <Nat>] (fn [r <Nat>] (add x r))))
+    y
+```
+
+- Simplified Multiplication
+
+With the proposed changes:
+
+#+begin_src racket
+;; Multiplication: mult x y = x * y (by recursion on y)
+defn mult [x <Nat> y <Nat>] <Nat>
+  natrec Nat
+    zero
+    (fn _ r (add x r))
+    y
+#+end_src
+
+- Breaking Down the Changes
+
+/Before:/
+#+begin_src racket
+natrec (the <(-> Nat (Type 0))> (fn [_ <Nat>] Nat))
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ motive
+    zero
+    (the <(-> Nat (-> Nat Nat))> (fn [_ <Nat>] (fn [r <Nat>] (add x r))))
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ step function type
+    y
+#+end_src
+
+/After:/
+#+begin_src racket
+natrec Nat           ;; constant motive inferred
+    zero             ;; base case
+    (fn _ r          ;; step: takes k (ignored) and rec-result
+      (add x r))     ;; body: x + recursive result
+    y                ;; scrutinee
+#+end_src
+
+- What Changed
+
+| Element | Before | After | Why |
+|---------|--------|-------|-----|
+| Motive | =the <...> (fn [_ <Nat>] Nat)= | =Nat= | Constant motive inferred |
+| Step type | =the <...> (fn [...] ...)= | =(fn _ r ...)= | Types inferred from context |
+| Parameters | =[_ <Nat>] [r <Nat>]= | =_ r= | Types known from =natrec= signature |
+
+- The =natrec= Signature
+
+Your =natrec= eliminator has type:
+#+begin_src racket
+natrec : (P : Nat -> Type)           ;; motive
+      -> P zero                      ;; base case
+      -> ((k : Nat) -> P k -> P (suc k))  ;; step function
+      -> (n : Nat)                   ;; scrutinee
+      -> P n                         ;; result
+#+end_src
+
+When =P= is constant (always returns =Nat=):
+- =P zero = Nat=
+- =P k = Nat= for any =k=
+- Step function: =Nat -> Nat -> Nat=
+
+So the types can be fully inferred!
+
+- Smart =natrec= Macro
+
+#+begin_src racket
+(define-syntax (natrec stx)
+  (syntax-parse stx
+    ;; Explicit motive (function)
+    [(_ (fn [var:id <Nat>] motive-body:expr)
+        base:expr
+        step:expr
+        scrut:expr)
+     #'(natrec-core (fn [var <Nat>] motive-body)
+                    base step scrut)]
+
+    ;; Simple type - constant motive
+    [(_ return-type:expr base:expr step:expr scrut:expr)
+     #:when (not (syntax-parse #'return-type
+                   [(fn . _) #t]
+                   [_ #f]))
+     (with-syntax ([fresh-var (generate-temporary '_)])
+       #'(natrec-core (fn [fresh-var <Nat>] return-type)
+                      base step scrut))]))
+#+end_src
+
+- More Examples
+
+/Addition (recursion on second argument):/
+#+begin_src racket
+;; Before
+defn add [x <Nat> y <Nat>] <Nat>
+  natrec (the <(-> Nat (Type 0))> (fn [_ <Nat>] Nat))
+    x
+    (the <(-> Nat (-> Nat Nat))> (fn [_ <Nat>] (fn [r <Nat>] (suc r))))
+    y
+
+;; After
+defn add [x <Nat> y <Nat>] <Nat>
+  natrec Nat
+    x
+    (fn _ r (suc r))
+    y
+#+end_src
+
+/Factorial:/
+#+begin_src racket
+;; Before
+defn factorial [n <Nat>] <Nat>
+  natrec (the <(-> Nat (Type 0))> (fn [_ <Nat>] Nat))
+    (suc zero)
+    (the <(-> Nat (-> Nat Nat))>
+      (fn [k <Nat>] (fn [r <Nat>] (mult (suc k) r))))
+    n
+
+;; After
+defn factorial [n <Nat>] <Nat>
+  natrec Nat
+    (suc zero)
+    (fn k r (mult (suc k) r))
+    n
+#+end_src
+
+/Exponentiation (x^y):/
+#+begin_src racket
+defn power [x <Nat> y <Nat>] <Nat>
+  natrec Nat
+    (suc zero)            ;; x^0 = 1
+    (fn _ r (mult x r))   ;; x^(k+1) = x * x^k
+    y
+#+end_src
+
+- When You Need Dependent Elimination
+
+For truly dependent types, you still can use explicit motive:
+
+#+begin_src racket
+;; vec-replicate : (n : Nat) -> A -> Vec A n
+defn vec-replicate [n <Nat> a <A>] <(Vec A n)>
+  natrec (fn k (Vec A k))      ;; motive: k ↦ Vec A k
+    vnil                        ;; base: Vec A 0
+    (fn k vec-k (vcons a vec-k))  ;; step: Vec A k → Vec A (suc k)
+    n
+#+end_src
+
+Or with our notation:
+#+begin_src racket
+defn vec-replicate (n : Nat) (a : A) : Vec A n
+  natrec (fn k (Vec A k))
+    vnil
+    (fn k vec-k (vcons a vec-k))
+    n
+#+end_src
+
+- Alternative: Keyword Syntax
+
+If you want even more explicit control:
+
+#+begin_src racket
+(define-syntax (natrec stx)
+  (syntax-parse stx
+    ;; With #:into
+    [(_ #:into type base step scrut)
+     #'(natrec-core (fn [_ <Nat>] type) base step scrut)]
+
+    ;; With #:motive
+    [(_ #:motive motive base step scrut)
+     #'(natrec-core motive base step scrut)]
+
+    ;; Default: four args, first is type/motive
+    [(_ type-or-motive base step scrut)
+     (syntax-parse #'type-or-motive
+       [(fn . _) #'(natrec-core type-or-motive base step scrut)]
+       [_ #'(natrec-core (fn [_ <Nat>] type-or-motive) base step scrut)])]))
+#+end_src
+
+Then you could write:
+#+begin_src racket
+;; Most common
+defn mult [x <Nat> y <Nat>] <Nat>
+  natrec Nat zero (fn _ r (add x r)) y
+
+;; Explicit keyword
+defn mult [x <Nat> y <Nat>] <Nat>
+  natrec #:into Nat zero (fn _ r (add x r)) y
+
+;; Dependent
+defn vec-replicate (n : Nat) (a : A) : Vec A n
+  natrec #:motive (fn k (Vec A k))
+    vnil
+    (fn k vec-k (vcons a vec-k))
+    n
+#+end_src
+
+- Summary
+
+Your original:
+#+begin_src racket
+defn mult [x <Nat> y <Nat>] <Nat>
+  natrec (the <(-> Nat (Type 0))> (fn [_ <Nat>] Nat))
+    zero
+    (the <(-> Nat (-> Nat Nat))> (fn [_ <Nat>] (fn [r <Nat>] (add x r))))
+    y
+#+end_src
+
+Simplified to:
+#+begin_src racket
+defn mult [x <Nat> y <Nat>] <Nat>
+  natrec Nat zero (fn _ r (add x r)) y
+#+end_src
+
+That's 5 lines → 2 lines, and vastly more readable. The =the= forms are gone, currying noise is gone, and the intent is crystal clear.
+
+
+
+* Here's another example from our current library in Prologos... I'm seeking guidance in how to simplify the type system further, to make it as ergonomic and intuitive to developers:
+```
+data (List [A <(Type 0)>])
+  nil
+  cons <A> <(List A)>
+
+;; Right fold over the list.
+;; list-foldr f z xs = xs B z f
+defn list-foldr [A :0 <(Type 0)> B :0 <(Type 0)>
+                 f <(-> A (-> B B))> z <B> xs <(List A)>] <B>
+  xs B z f
+
+;; Length of a list.
+;; Fold counting elements, ignoring values.
+defn list-length [A :0 <(Type 0)>
+                  xs <(List A)>] <Nat>
+  xs Nat zero (fn [_ <A>] (fn [acc <Nat>] (inc acc)))
+
+;; Map a function over the list.
+;; Delegation: fn R nil cons . xs R nil (fn a acc . cons (f a) acc)
+defn list-map [A :0 <(Type 0)> B :0 <(Type 0)>
+               f <(-> A B)> xs <(List A)>] <(List B)>
+  fn [__R :0 <(Type 0)>] (fn [__nil <__R>] (fn [__cons <(-> B (-> __R __R))>]
+    (xs __R __nil (fn [a <A>] (fn [acc <__R>] (__cons (f a) acc))))))
+
+;; Filter: keep elements satisfying the predicate.
+;; Delegation + boolrec: fn R nil cons . xs R nil (fn a acc . boolrec R (cons a acc) acc (pred a))
+defn list-filter [A :0 <(Type 0)>
+                  pred <(-> A Bool)> xs <(List A)>] <(List A)>
+  fn [__R :0 <(Type 0)>] (fn [__nil <__R>] (fn [__cons <(-> A (-> __R __R))>]
+    (xs __R __nil (fn [a <A>] (fn [acc <__R>] (boolrec __R (__cons a acc) acc (pred a)))))))
+
+;; Append two lists.
+;; Delegation: fn R nil cons . xs R (ys R nil cons) cons
+defn list-append [A :0 <(Type 0)>
+                  xs <(List A)> ys <(List A)>] <(List A)>
+  fn [__R :0 <(Type 0)>] (fn [__nil <__R>] (fn [__cons <(-> A (-> __R __R))>]
+    (xs __R (ys __R __nil __cons) __cons)))
+
+;; Head of a list with a default value.
+;; Fold: xs A default (fn a _ . a)
+defn list-head [A :0 <(Type 0)>
+                default <A> xs <(List A)>] <A>
+  xs A default (fn [a <A>] (fn [_ <A>] a))
+
+```
+
+
+- Analyzing the Ergonomics Issues
+
+Looking at your code, I see several pain points:
+
+1. *Explicit universe levels*: =<(Type 0)>= everywhere
+2. *Explicit type parameters*: =[A :0 <(Type 0)>]= when A is never used at term level
+3. *Currying noise*: Nested =fn= for multi-argument functions
+4. *Verbose Church encoding*: The delegation pattern is obscured by syntax
+5. *Type annotation heaviness*: =<(-> A (-> B B))>= is hard to read
+
+Let me propose progressive simplifications:
+
+---
+
+- Level 1: Remove Universe Annotations
+
+Most programs don't need explicit universe levels. Default to Type₀:
+
+*Before:*
+#+begin_src racket
+data (List [A <(Type 0)>])
+  nil
+  cons <A> <(List A)>
+
+defn list-length [A :0 <(Type 0)> xs <(List A)>] <Nat>
+#+end_src
+
+*After:*
+#+begin_src racket
+data (List [A <Type>])
+  nil
+  cons <A> <(List A)>
+
+defn list-length [A :0 <Type> xs <(List A)>] <Nat>
+#+end_src
+
+Or even better, infer Type:
+#+begin_src racket
+data (List [A])
+  nil
+  cons <A> <(List A)>
+
+defn list-length [A :0 xs <(List A)>] <Nat>
+#+end_src
+
+---
+
+- Level 2: Implicit Type Parameters
+
+The =:0= annotation means "erased/implicit at runtime". Make this the default for type parameters:
+
+*Before:*
+#+begin_src racket
+defn list-map [A :0 <Type> B :0 <Type>
+               f <(-> A B)> xs <(List A)>] <(List B)>
+#+end_src
+
+*After:*
+#+begin_src racket
+defn list-map {A B}           ;; implicit type params in braces
+              [f (A -> B) xs (List A)] : List B
+#+end_src
+
+Or use angle brackets:
+#+begin_src racket
+defn list-map <A B>
+              [f (A -> B) xs (List A)] : List B
+#+end_src
+
+---
+
+- Level 3: Cleaner Arrow Syntax
+
+Replace =<(-> A B)>= with more readable syntax:
+
+*Before:*
+#+begin_src racket
+f <(-> A (-> B B))>
+#+end_src
+
+*After (using our colon syntax):*
+#+begin_src racket
+f : A -> B -> B
+#+end_src
+
+Combined with brackets for grouping:
+#+begin_src racket
+[f : A -> B -> B]
+#+end_src
+
+---
+
+- Level 4: Multi-Argument Lambdas
+
+*Before:*
+#+begin_src racket
+(fn [a <A>] (fn [acc <Nat>] (inc acc)))
+#+end_src
+
+*After:*
+#+begin_src racket
+(fn a acc (inc acc))
+;; or with types when needed:
+(fn [a : A] [acc : Nat] (inc acc))
+;; or even:
+(fn (a : A) (acc : Nat) (inc acc))
+#+end_src
+
+---
+
+- Level 5: Complete Rewrite
+
+Here's your entire library with all simplifications:
+
+#+begin_src racket
+;; ========================================
+;; Prologos List Library (Simplified)
+;; ========================================
+
+;; List type (Church-encoded)
+data List {A}
+  nil
+  cons : A -> List A -> List A
+
+;; Right fold - just delegation to Church encoding
+defn list-foldr {A B}
+                [f : A -> B -> B, z : B, xs : List A] : B
+  xs B z f
+
+;; Length: count elements
+defn list-length {A} [xs : List A] : Nat
+  xs Nat zero (fn _ acc (inc acc))
+
+;; Map function over list
+defn list-map {A B} [f : A -> B, xs : List A] : List B
+  fn R nil cons
+    xs R nil (fn a acc (cons (f a) acc))
+
+;; Filter: keep elements satisfying predicate
+defn list-filter {A} [pred : A -> Bool, xs : List A] : List A
+  fn R nil cons
+    xs R nil (fn a acc
+      (boolrec R (cons a acc) acc (pred a)))
+
+;; Append two lists
+defn list-append {A} [xs : List A, ys : List A] : List A
+  fn R nil cons
+    xs R (ys R nil cons) cons
+
+;; Head with default value
+defn list-head {A} [default : A, xs : List A] : A
+  xs A default (fn a _ a)
+#+end_src
+
+---
+
+- Comparison Table
+
+| Element | Before | After |
+|---------|--------|-------|
+| Type universes | =<(Type 0)>= | =Type= or omitted |
+| Type params | =[A :0 <Type>]= | ={A}= |
+| Function types | =<(-> A (-> B B))>= | =A -> B -> B= |
+| Type annotations | =[f <(-> A B)>]= | =[f : A -> B]= |
+| Multi-arg lambda | =(fn [x <A>] (fn [y <B>] e))= | =(fn x y e)= |
+| Return types | =] <Nat>= | =] : Nat= |
+
+---
+
+- Implementation Strategy
+
+*Phase 1: Parser Changes*
+
+#+begin_src racket
+;; Add support for {A B} syntax
+(define-syntax-class implicit-params
+  #:datum-literals ({})
+  (pattern ({param:id ...})))
+
+;; Add support for : in parameter lists
+(define-syntax-class typed-param
+  (pattern [name:id : type:expr])
+  (pattern (name:id : type:expr)))
+
+;; Rewrite defn
+(define-syntax (defn stx)
+  (syntax-parse stx
+    ;; With implicit type params
+    [(_ name:id {implicit:id ...} [param:typed-param ...] : return-type:expr
+        body:expr ...+)
+     #'(def name
+         ;; implicit params become lambda-bound
+         (fn {implicit ...}
+           (fn param ... body ...)))]
+
+    ;; Without implicit params
+    [(_ name:id [param:typed-param ...] : return-type:expr
+        body:expr ...+)
+     #'(def name (fn param ... body ...))]))
+#+end_src
+
+*Phase 2: Type Inference*
+
+#+begin_src racket
+;; When you see {A B}, these are implicit arguments
+;; The typechecker should infer them at call sites
+
+;; Example:
+(list-map inc my-list)
+;; Typechecker infers: A = Nat, B = Nat
+;; Expands to: ((list-map {Nat} {Nat}) inc my-list)
+#+end_src
+
+*Phase 3: Arrow Sugar*
+
+#+begin_src racket
+(define-syntax (-> stx)
+  (syntax-parse stx
+    [(_ a:expr b:expr)
+     #'(Pi _ a b)]
+    [(_ a:expr rest:expr ...+)
+     #'(Pi _ a (-> rest ...))]))
+
+;; So: A -> B -> C
+;; Becomes: (-> A B C)
+;; Expands: (Pi _ A (Pi _ B C))
+#+end_src
+
+---
+
+- Even More Radical: Haskell-Style Syntax
+
+If you want to go further:
+
+#+begin_src racket
+;; Type signature separate from definition
+list-foldr : {A B} -> (A -> B -> B) -> B -> List A -> B
+list-foldr f z xs = xs B z f
+
+list-length : {A} -> List A -> Nat
+list-length xs = xs Nat zero (fn _ acc (inc acc))
+
+list-map : {A B} -> (A -> B) -> List A -> List B
+list-map f xs =
+  fn R nil cons ->
+    xs R nil (fn a acc -> cons (f a) acc)
+
+list-filter : {A} -> (A -> Bool) -> List A -> List A
+list-filter pred xs =
+  fn R nil cons ->
+    xs R nil (fn a acc ->
+      if pred a
+        then cons a acc
+        else acc)
+#+end_src
+
+---
+
+- My Recommendation: Pragmatic Middle Ground
+
+Keep the essence of your syntax but remove noise:
+
+#+begin_src racket
+;; Clear implicit/explicit boundary
+defn list-map {A B}                    ;; implicit types
+              [f : A -> B              ;; explicit params with types
+               xs : List A]
+              : List B                 ;; return type
+  fn R nil cons                        ;; Church encoding delegation
+    xs R nil (fn a acc (cons (f a) acc))
+
+;; When types can be inferred, omit them
+defn list-head {A} [default : A, xs : List A] : A
+  xs A default (fn a _ a)
+
+;; Simple cases very clean
+defn list-length {A} [xs : List A] : Nat
+  xs Nat zero (fn _ acc (inc acc))
+#+end_src
+
+This gives you:
+- *Clear visual structure*: ={...}= for implicit, =[...]= for explicit
+- *Readable types*: =A -> B= instead of =<(-> A B)>=
+- *No universe clutter*: Type₀ is default
+- *Familiar syntax*: Looks like ML/Haskell but Lispy
+
+---
+
+- Implementation Checklist
+
+1. ✅ Add ={A B}= syntax for implicit params
+2. ✅ Add =:= operator for type annotations (we discussed this)
+3. ✅ Make =->= right-associative infix operator
+4. ✅ Default universe to Type₀
+5. ✅ Multi-arg =fn= (you have =defn=, extend to =fn=)
+6. ✅ Type inference for implicit arguments
+
+The result: *Your library shrinks by ~40% and becomes vastly more readable*, without losing any expressive power.
+
+Want me to show the full macro implementation for the implicit parameter system?
+
+
+* Currently, I have the syntax down to this form:
+```
+defn map {A B} [f  : A -> B
+                xs : List A] : List B
+  fn __R __nil __cons
+    xs __R __nil (fn a acc (__cons (f a) acc))
+```
+Please critique the current syntax. Honestly, I still don't understand what is going on here exactly, and would find it hard for me to come up with this.
+
+- Honest Critique
+
+You're right to be confused. This is /obscure as hell/, and there's a fundamental mismatch between what you're trying to express and how it looks.
+
+Let me break down what's actually happening:
+
+---
+
+- What This Code Is Really Doing
+
+This is a /Church-encoded list/ where the list type itself IS its own eliminator/fold function.
+
+#+begin_src racket
+;; A Church-encoded list is literally a function:
+List A = forall R. R -> (A -> R -> R) -> R
+
+;; In other words, a list IS:
+;;   - A function that takes:
+;;     1. A result type R
+;;     2. A "nil" value of type R
+;;     3. A "cons" function: A -> R -> R
+;;   - And produces: R
+#+end_src
+
+So when you write:
+#+begin_src racket
+xs __R __nil __cons
+#+end_src
+
+You're literally /calling the list as a function/ with three arguments.
+
+---
+
+- Why Your Code Looks Weird
+
+/The problem:/ You're mixing two different representations:
+
+1. /Surface syntax/: =List A= looks like a normal datatype
+2. /Implementation/: Lists are actually functions in disguise
+
+This creates cognitive dissonance. Let me trace through =map=:
+
+#+begin_src racket
+defn map {A B} [f  : A -> B
+                xs : List A] : List B
+  ;; We want to return a new list (which is a function!)
+  ;; So we return a lambda that takes R, nil, cons
+  fn __R __nil __cons
+    ;; Now we CALL xs (because xs IS a function)
+    xs __R              ;; Give xs the result type __R
+       __nil            ;; Give xs a nil case
+       (fn a acc        ;; Give xs a cons function
+         (__cons        ;; Use the NEW cons function
+           (f a)        ;; Apply f to element
+           acc))        ;; Accumulator
+#+end_src
+
+The mental model required:
+1. A list is a function waiting for "what to do with nil/cons"
+2. To map over a list, we create a NEW function (the result list)
+3. That new function, when given __nil and __cons, calls the OLD list
+4. And transforms elements on the way through
+
+This is /beautiful mathematically/ but /terrible for intuition/.
+
+---
+
+- The Core Problem
+
+Church encoding makes the /implementation details leak into the API/.
+
+Compare to a normal recursive definition:
+
+#+begin_src racket
+;; What you WANT to write (if lists were "real"):
+defn map {A B} [f : A -> B, xs : List A] : List B
+  match xs
+    nil -> nil
+    cons a rest -> cons (f a) (map f rest)
+#+end_src
+
+vs.
+
+#+begin_src racket
+;; What you HAVE to write (Church encoding):
+defn map {A B} [f : A -> B, xs : List A] : List B
+  fn __R __nil __cons
+    xs __R __nil (fn a acc (__cons (f a) acc))
+#+end_src
+
+The Church version is:
+- Impossible to understand without knowing the encoding
+- Impossible to write without the pattern
+- The __R, __nil, __cons variables are "magic"
+
+---
+
+- Solutions
+
+- Option 1: Hide Church Encoding Behind Macros
+
+Provide a pattern-matching macro that compiles to Church encoding:
+
+#+begin_src racket
+;; Surface syntax (what you write):
+defn map {A B} [f : A -> B, xs : List A] : List B
+  list-match xs
+    nil -> nil
+    cons a rest -> cons (f a) (map f rest)
+
+;; Expands to Church encoding (what runs):
+defn map {A B} [f : A -> B, xs : List A] : List B
+  fn __R __nil __cons
+    xs __R __nil (fn a acc (__cons (f a) acc))
+#+end_src
+
+Implementation:
+#+begin_src racket
+(define-syntax list-match
+  (syntax-rules (nil cons ->)
+    [(list-match xs
+       nil -> nil-case
+       cons a rest -> cons-case)
+     (xs (List A)  ;; Result type
+         nil-case
+         (fn a rest cons-case))]))
+#+end_src
+
+- Option 2: Use Built-In Recursion
+
+Define a proper =listrec= eliminator:
+
+#+begin_src racket
+;; listrec : {A} -> (R : Type)
+;;        -> R                    ;; nil case
+;;        -> (A -> List A -> R -> R)  ;; cons case (element, tail, rec-result)
+;;        -> List A
+;;        -> R
+
+defn map {A B} [f : A -> B, xs : List A] : List B
+  listrec (List B)
+    nil                         ;; nil -> nil
+    (fn a tail rec-tail         ;; cons a tail -> cons (f a) (map tail)
+      (cons (f a) rec-tail))
+    xs
+#+end_src
+
+This is closer to =natrec= - explicit recursion primitive.
+
+- Option 3: Drop Church Encoding Entirely
+
+Use a real inductive datatype:
+
+#+begin_src racket
+;; Define List as an actual ADT
+data List {A}
+  | nil  : List A
+  | cons : A -> List A -> List A
+
+;; Now map is straightforward
+defn map {A B} [f : A -> B, xs : List A] : List B
+  match xs
+    | nil       -> nil
+    | cons a as -> cons (f a) (map f as)
+#+end_src
+
+This requires:
+- Proper inductive type support
+- Pattern matching
+- Structural recursion checking
+
+But it's /vastly/ more intuitive.
+
+---
+
+- Why Church Encoding Was Chosen (Probably)
+
+I'm guessing you're using Church encoding because:
+
+1. It's "simple" - just functions, no special datatypes needed
+2. It works in pure lambda calculus
+3. It's a common technique in dependent type theory papers
+
+But in practice, /nobody thinks in Church encodings/. Even Coq and Agda use proper inductive types.
+
+---
+
+- My Strong Recommendation
+
+/Don't expose Church encoding to users./ Choose one:
+
+- Beginner-Friendly Path
+
+Add pattern matching sugar:
+
+#+begin_src racket
+;; User writes:
+defn map {A B} [f : A -> B, xs : List A] : List B
+  match xs
+    | nil       -> nil
+    | cons a as -> cons (f a) (map f as)
+
+;; Macro expands to Church encoding internally
+#+end_src
+
+Implementation:
+#+begin_src racket
+(define-syntax (match stx)
+  (syntax-parse stx
+    [(match xs:id
+       (~literal |) nil (~literal ->) nil-case:expr
+       (~literal |) cons a:id as:id (~literal ->) cons-case:expr)
+     #'(fn __R __nil __cons
+         (xs __R
+             nil-case
+             (fn a as cons-case)))]))
+#+end_src
+
+- Advanced Path
+
+Provide proper inductive types:
+
+#+begin_src racket
+;; Define eliminator
+listrec : {A R} -> R -> (A -> List A -> R -> R) -> List A -> R
+
+;; Users write:
+defn map {A B} [f : A -> B, xs : List A] : List B
+  listrec nil
+          (fn a _ rec (cons (f a) rec))
+          xs
+
+;; Or with helper:
+defn map {A B} [f : A -> B, xs : List A] : List B
+  fold-list nil (fn a rec (cons (f a) rec)) xs
+#+end_src
+
+---
+
+- Rewriting Your Examples
+
+- With Pattern Matching (Best UX)
+
+#+begin_src racket
+defn map {A B} [f : A -> B, xs : List A] : List B
+  match xs
+    | nil       -> nil
+    | cons a as -> cons (f a) (map f as)
+
+defn filter {A} [pred : A -> Bool, xs : List A] : List A
+  match xs
+    | nil -> nil
+    | cons a as ->
+        if pred a
+          then cons a (filter pred as)
+          else filter pred as
+
+defn append {A} [xs : List A, ys : List A] : List A
+  match xs
+    | nil       -> ys
+    | cons a as -> cons a (append as ys)
+
+defn head {A} [default : A, xs : List A] : A
+  match xs
+    | nil      -> default
+    | cons a _ -> a
+#+end_src
+
+/This is readable./ Anyone who knows ML/Haskell/Rust can understand it.
+
+- With Fold Primitive (Functional Style)
+
+#+begin_src racket
+defn map {A B} [f : A -> B, xs : List A] : List B
+  fold xs nil (fn a acc (cons (f a) acc))
+
+defn filter {A} [pred : A -> Bool, xs : List A] : List A
+  fold xs nil (fn a acc
+    (if pred a
+      (cons a acc)
+      acc))
+
+defn append {A} [xs : List A, ys : List A] : List A
+  fold xs ys cons
+
+defn length {A} [xs : List A] : Nat
+  fold xs zero (fn _ acc (inc acc))
+#+end_src
+
+Where:
+#+begin_src racket
+defn fold {A B} [xs : List A, z : B, f : A -> B -> B] : B
+  xs B z f  ;; This line STILL weird, but hidden in library
+#+end_src
+
+---
+
+- Bottom Line
+
+Your current syntax is:
+- ❌ Requires understanding Church encoding
+- ❌ The __R, __nil, __cons are mysterious
+- ❌ The pattern is not discoverable
+- ❌ Error messages would be incomprehensible
+
+/You should never expose Church encoding to end users./
+
+Even if internally you use it, provide either:
+1. Pattern matching that compiles to it
+2. Named eliminators that hide it
+3. Both
+
+The goal of dependent types is to make /correct code easy to write/, not to showcase encoding tricks. Church encoding is an implementation detail that should stay hidden.
+
+Does this help clarify what's happening and why it's confusing?
+
+
+
+**
+
+```
+defn map {A B} [f  : A -> B,
+                     xs : List A] : List B
+  match xs
+    | nil         -> nil B
+    | cons a rest -> cons B (f a) (map A B f rest)
+```
+
+
+
+* Having challenges getting our map syntax to match our above ideal, I'm presented with the following options, if you can provide guidance:
+```
+The `map` signature already uses implicit types ({A B}), so callers can write `map f xs`. But the body still uses delegation because `match` can't return Church-encoded types (Type 1). Which approach would you like to pursue to enable `match xs | nil -> nil | cons a t -> cons (f a) (map f t)`?
+
+Universe polymorphism
+Let the Church encoding's R range over Type i for any level, so R can be instantiated with List B (Type 1)
+1
+
+True pattern matching
+Add a new match mechanism that does structural case analysis without going through Church folds
+2
+
+Keep delegation
+The current form is fine — callers already get implicit types. No body changes needed.
+3
+
+Large elimination
+Change the Church encoding to use R : Type 1 (or Type (max ...)) to allow returning higher-universe types
+4
+
+Type something else...
+```
+
+Looking at your options, here's my guidance:
+
+---
+
+- Analysis of Each Option
+
+** Option 1: Universe Polymorphism*
+
+#+begin_src racket
+;; Church encoding becomes:
+List A : Type (i+1)
+  = forall (R : Type i). R -> (A -> R -> R) -> R
+#+end_src
+
+/Pros:/
+- Fixes the immediate problem
+- Church encoding can return any universe level
+
+/Cons:/
+- Still Church-encoded underneath (cognitive overhead remains)
+- Universe management complexity leaks everywhere
+- Users need to understand universes
+- =nil B= and =cons B= are still ugly
+
+/Verdict:/ ❌ Solves technical issue, not UX issue
+
+---
+
+** Option 2: True Pattern Matching*
+
+#+begin_src racket
+;; Internal: List is Church-encoded
+;; Surface: match compiles to something smarter
+
+defn map {A B} [f : A -> B, xs : List A] : List B
+  match xs
+    | nil       -> nil
+    | cons a as -> cons (f a) (map f as)
+#+end_src
+
+/Pros:/
+- ✅ Clean, intuitive syntax
+- ✅ Matches user expectations
+- ✅ No universe annotations needed
+- ✅ Can optimize differently than Church encoding
+
+/Cons:/
+- Requires implementing pattern matching infrastructure
+- Need to decide: compile to Church, or have "real" datatypes?
+
+/Verdict:/ ✅ Best UX, moderate implementation cost
+
+---
+
+** Option 3: Keep Delegation*
+
+#+begin_src racket
+defn map {A B} [f : A -> B, xs : List A] : List B
+  fn __R __nil __cons
+    xs __R __nil (fn a acc (__cons (f a) acc))
+#+end_src
+
+/Pros:/
+- Works right now
+- No new features needed
+
+/Cons:/
+- ❌ Unintuitive
+- ❌ Hard to learn
+- ❌ Error-prone
+- ❌ You literally said "I don't understand this"
+
+/Verdict:/ ❌ Technically fine, pedagogically awful
+
+---
+
+** Option 4: Large Elimination*
+
+#+begin_src racket
+;; List constructor lives in higher universe
+List : Type 0 -> Type 1
+#+end_src
+
+/Pros:/
+- Allows Church encoding to work at higher levels
+- Standard technique in type theory
+
+/Cons:/
+- =nil B= and =cons B= still required
+- Universe annotations everywhere
+- Doesn't address fundamental UX problem
+
+/Verdict:/ ❌ Academic solution, not practical
+
+---
+
+- My Strong Recommendation
+
+*Choose Option 2: True Pattern Matching*
+
+Here's why and how:
+
+- Implementation Strategy
+
+** Phase 1: Keep Church Encoding Internally*
+
+#+begin_src racket
+;; Internal representation stays the same
+data List {A}
+  nil  : forall R. R -> (A -> R -> R) -> R
+  cons : A -> List A -> forall R. R -> (A -> R -> R) -> R
+#+end_src
+
+** Phase 2: Add Pattern Match Macro*
+
+#+begin_src racket
+(define-syntax (match stx)
+  (syntax-parse stx
+    ;; List pattern matching
+    [(match xs:id
+       (~datum |) nil (~datum ->) nil-case:expr
+       (~datum |) cons a:id rest:id (~datum ->) cons-case:expr)
+
+     ;; Expand to Church elimination
+     #'(xs _                              ;; R inferred from context
+           nil-case                        ;; nil case
+           (fn a rest cons-case))]))      ;; cons case
+#+end_src
+
+** Phase 3: Smart Type Inference*
+
+The key insight: when you write =nil= in the nil-case, infer it means =nil B= from return type:
+
+#+begin_src racket
+defn map {A B} [f : A -> B, xs : List A] : List B
+  match xs
+    | nil       -> nil          ;; infer: nil B
+    | cons a as -> cons (f a) (map f as)  ;; infer: cons B
+#+end_src
+
+The macro sees return type is =List B=, so:
+- =nil= → =nil B=
+- =cons e1 e2= → =cons B e1 e2=
+
+Implementation:
+#+begin_src racket
+(define-syntax (match stx)
+  (syntax-parse stx
+    [(match xs:id : return-type:expr
+       (~datum |) nil (~datum ->) nil-case:expr
+       (~datum |) cons a:id rest:id (~datum ->) cons-case:expr)
+
+     ;; Extract type parameter from return-type
+     (define-values (type-param)
+       (syntax-parse #'return-type
+         [(List T) #'T]
+         [_ (error "Expected List type")]))
+
+     ;; Rewrite constructors with explicit types
+     (define nil-case*
+       (rewrite-constructors #'nil-case type-param))
+     (define cons-case*
+       (rewrite-constructors #'cons-case type-param))
+
+     #'(xs _
+           nil-case*
+           (fn a rest cons-case*))]))
+
+(define (rewrite-constructors expr type-param)
+  (syntax-parse expr
+    [nil #`(nil #,type-param)]
+    [(cons e1 e2)
+     #`(cons #,type-param
+             #,(rewrite-constructors #'e1 type-param)
+             #,(rewrite-constructors #'e2 type-param))]
+    [other #'other]))
+#+end_src
+
+** Phase 4: Provide Both Styles*
+
+#+begin_src racket
+;; High-level: pattern matching
+defn map {A B} [f : A -> B, xs : List A] : List B
+  match xs
+    | nil       -> nil
+    | cons a as -> cons (f a) (map f as)
+
+;; Low-level: explicit fold (for advanced users)
+defn map-fold {A B} [f : A -> B, xs : List A] : List B
+  fold xs (nil B) (fn a acc (cons B (f a) acc))
+
+;; Direct Church (for experts/library implementers)
+defn map-church {A B} [f : A -> B, xs : List A] : List B
+  fn __R __nil __cons
+    xs __R __nil (fn a acc (__cons (f a) acc))
+#+end_src
+
+---
+
+- Concrete Example
+
+Here's what your library becomes:
+
+#+begin_src racket
+;; ========================================
+;; List Library with Pattern Matching
+;; ========================================
+
+defn map {A B} [f : A -> B, xs : List A] : List B
+  match xs
+    | nil       -> nil
+    | cons a as -> cons (f a) (map f as)
+
+defn filter {A} [pred : A -> Bool, xs : List A] : List A
+  match xs
+    | nil -> nil
+    | cons a as ->
+        if pred a
+          (cons a (filter pred as))
+          (filter pred as)
+
+defn append {A} [xs : List A, ys : List A] : List A
+  match xs
+    | nil       -> ys
+    | cons a as -> cons a (append as ys)
+
+defn length {A} [xs : List A] : Nat
+  match xs
+    | nil      -> zero
+    | cons _ t -> inc (length t)
+
+defn head {A} [default : A, xs : List A] : A
+  match xs
+    | nil      -> default
+    | cons a _ -> a
+
+defn reverse {A} [xs : List A] : List A
+  reverse-acc xs nil
+  where
+    defn reverse-acc [ys : List A, acc : List A] : List A
+      match ys
+        | nil       -> acc
+        | cons a as -> reverse-acc as (cons a acc)
+#+end_src
+
+---
+
+- Why This Is The Right Choice
+
+| Criterion | Score | Notes |
+|-----------|-------|-------|
+| Learnability | ⭐⭐⭐⭐⭐ | Looks like every ML-family language |
+| Debuggability | ⭐⭐⭐⭐⭐ | Clear what's happening |
+| Error messages | ⭐⭐⭐⭐⭐ | "nil expects 1 argument" vs universe errors |
+| Performance | ⭐⭐⭐⭐ | Can optimize pattern matches |
+| Implementation | ⭐⭐⭐ | Moderate complexity |
+
+Compare to keeping delegation:
+
+| Criterion | Score | Notes |
+|-----------|-------|-------|
+| Learnability | ⭐ | Need to understand Church encoding |
+| Debuggability | ⭐ | __R, __nil, __cons are mysterious |
+| Error messages | ⭐ | Universe errors, arity mismatches |
+| Performance | ⭐⭐⭐⭐ | Direct Church encoding |
+| Implementation | ⭐⭐⭐⭐⭐ | Already works |
+
+---
+
+- Migration Path
+
+1. *Now:* Implement basic =match= macro that desugars to Church
+2. *Soon:* Add type inference for constructors
+3. *Later:* Optimize compiled pattern matches
+4. *Eventually:* Consider switching to true inductive types
+
+Start with something that works and improves UX immediately:
+
+#+begin_src racket
+;; Minimal viable match (20 lines of code)
+(define-syntax (match stx)
+  (syntax-parse stx
+    [(match xs:id
+       (~datum |) nil (~datum ->) nc:expr
+       (~datum |) cons a:id r:id (~datum ->) cc:expr)
+     #'(xs _ nc (fn a r cc))]))
+#+end_src
+
+This alone makes your code readable, even if users need to write =nil B= for now.
+
+---
+
+- Final Answer
+
+*Choose Option 2: True Pattern Matching*
+
+Start simple (basic desugaring), iterate toward better inference. This is the path every practical dependently-typed language has taken (Agda, Idris, Lean). Church encoding is an implementation detail that should be invisible to users.
+
+The syntax you showed at the top is what users /should/ write. Make that work, even if it requires macro magic underneath.
+
+
+
+* Is it possible in this language to fully support any/all combinators and combinator logic?
+
+- Combinators in Prologos
+
+*Yes, absolutely.* In fact, Prologos can support combinators at /multiple levels/ simultaneously.
+
+---
+
+- Level 1: Basic Combinators (Already Have)
+
+The classic SKI combinators are trivial:
+
+#+begin_src racket
+;; S combinator: S x y z = x z (y z)
+defn S {A B C} : (A -> B -> C) -> (A -> B) -> A -> C
+  fn x y z (x z (y z))
+
+;; K combinator: K x y = x
+defn K {A B} : A -> B -> A
+  fn x y x
+
+;; I combinator: I x = x
+defn I {A} : A -> A
+  fn x x
+
+;; Proof that I = SKK
+defn I-is-SKK {A} : I A = S K K
+  refl  ;; They're definitionally equal
+#+end_src
+
+You can encode /any/ lambda term as combinators:
+
+#+begin_src racket
+;; λx. λy. x becomes K
+;; λx. λy. y becomes K I = S K K
+;; λx. x x becomes S I I
+defn omega {A} : A
+  let ω = S I I
+  ω ω  ;; This diverges, but type-checks!
+#+end_src
+
+---
+
+- Level 2: Fixed-Point Combinators
+
+The Y combinator for recursion:
+
+#+begin_src racket
+;; Y combinator (untyped - won't type in pure System F)
+;; Y f = (λx. f (x x)) (λx. f (x x))
+
+;; But you can do Curry's paradoxical combinator with dependent types:
+defn Y {A} : ((A -> A) -> A -> A) -> A -> A
+  fn f
+    let fix = fn x (f (x x) x)
+    fix fix
+
+;; Usage:
+defn factorial : Nat -> Nat
+  Y (fn rec n
+    match n
+      | zero   -> suc zero
+      | suc m  -> mult (suc m) (rec m))
+#+end_src
+
+Actually, with dependent types you can type the Y combinator using recursive types:
+
+#+begin_src racket
+;; Self-application type
+data Rec {A}
+  roll : (Rec A -> A) -> Rec A
+
+defn unroll {A} [r : Rec A] : Rec A -> A
+  match r
+    | roll f -> f
+
+;; Now Y types!
+defn Y {A} : ((A -> A) -> A -> A) -> A -> A
+  fn f
+    let g = fn x (f (unroll x x))
+    g (roll g)
+#+end_src
+
+---
+
+- Level 3: Church Encodings Are Combinators
+
+Your current Church-encoded types /are already combinators/:
+
+#+begin_src racket
+;; Church booleans
+true  = λt. λf. t        ;; = K
+false = λt. λf. f        ;; = K I
+
+;; Church pairs
+pair = λa. λb. λf. f a b
+fst  = λp. p (λa. λb. a) ;; = λp. p K
+snd  = λp. p (λa. λb. b) ;; = λp. p (K I)
+
+;; Church numerals
+zero = λf. λx. x                    ;; = K I
+succ = λn. λf. λx. f (n f x)
+add  = λm. λn. λf. λx. m f (n f x)
+
+;; Lists are combinators too
+nil  = λz. λc. z           ;; = K
+cons = λa. λt. λz. λc. c a (t z c)
+#+end_src
+
+So when you write:
+
+#+begin_src racket
+defn map {A B} [f : A -> B, xs : List A] : List B
+  fn __R __nil __cons
+    xs __R __nil (fn a acc (__cons (f a) acc))
+#+end_src
+
+You're writing in /pure combinator calculus/!
+
+---
+
+- Level 4: Point-Free Combinator Style
+
+You can write fully point-free:
+
+#+begin_src racket
+;; Function composition combinator
+defn compose {A B C} : (B -> C) -> (A -> B) -> A -> C
+  fn f g x (f (g x))
+
+;; Or point-free:
+defn compose {A B C} : (B -> C) -> (A -> B) -> A -> C
+  S (K S) K
+
+;; Flip combinator
+defn flip {A B C} : (A -> B -> C) -> B -> A -> C
+  fn f y x (f x y)
+
+;; Point-free:
+defn flip {A B C} : (A -> B -> C) -> B -> A -> C
+  S (S (K S) (S (K K) S)) (K K)
+#+end_src
+
+Your map example in point-free style:
+
+#+begin_src racket
+;; map f = foldr (compose cons f) nil
+defn map {A B} : (A -> B) -> List A -> List B
+  fn f (foldr (compose cons f) nil)
+
+;; Or fully point-free:
+defn map {A B} : (A -> B) -> List A -> List B
+  S (compose foldr (compose (compose cons))) (K nil)
+#+end_src
+
+(Though this is unreadable!)
+
+---
+
+- Level 5: Category Theory Combinators
+
+You can encode category theory directly:
+
+#+begin_src racket
+;; Category type class
+class Category {C : Type -> Type -> Type}
+  id   : {A} -> C A A
+  comp : {A B D} -> C B D -> C A B -> C A D
+
+;; Function category instance
+instance Category (->)
+  id   = fn x x
+  comp = fn f g x (f (g x))
+
+;; Functor
+class Functor {F : Type -> Type}
+  fmap : {A B} -> (A -> B) -> F A -> F B
+
+instance Functor List
+  fmap = map  ;; our map function
+
+;; Monad combinators
+class Monad {M : Type -> Type}
+  return : {A} -> A -> M A
+  bind   : {A B} -> M A -> (A -> M B) -> M B
+
+instance Monad List
+  return = fn x (cons x nil)
+  bind   = fn xs f (concat (map f xs))
+#+end_src
+
+---
+
+- Level 6: Advanced Combinators
+
+- Linear Logic Combinators/
+
+With session types, you get linear combinators:
+
+#+begin_src racket
+;; Linear function composition (channels)
+defn lcomp {A B C}
+  : Chan (! A . end) ⊸ Chan (? A . ! B . end) ⊸ Chan (? B . ! C . end)
+    ⊸ Chan (! C . end)
+  fn c1 c2 c3
+    recv c2 x
+      send x c1
+        recv c3 y
+          send y c2
+            stop
+#+end_src
+
+- Continuation Combinators/
+
+#+begin_src racket
+;; Call-with-current-continuation
+defn call/cc {A B}
+  : ((A -> Cont B) -> Cont A) -> Cont A
+  fn f k (f (fn a _ (k a)) k)
+
+;; Continuation monad combinators
+defn return-cont {A} : A -> Cont A
+  fn x k (k x)
+
+defn bind-cont {A B} : Cont A -> (A -> Cont B) -> Cont B
+  fn m f k (m (fn a (f a k)))
+#+end_src
+
+---
+
+- Level 7: Dependent Combinators
+
+The real power: combinators that compute /types/:
+
+#+begin_src racket
+;; Type-level composition
+defn TComp : (Type -> Type) -> (Type -> Type) -> Type -> Type
+  fn F G A (F (G A))
+
+;; Dependent eliminator combinator
+defn elim
+  : {A : Type}
+    -> (P : A -> Type)
+    -> ((a : A) -> P a)  ;; How to build P a for any a
+    -> (x : A)
+    -> P x
+  fn P f x (f x)
+
+;; Sigma eliminator as combinator
+defn sigma-elim
+  : {A : Type} {B : A -> Type} {C : Type}
+    -> ((x : A) -> B x -> C)
+    -> (p : (x : A) * B x)
+    -> C
+  fn f p (f (fst p) (snd p))
+
+;; Dependent composition
+defn dcomp
+  : {A : Type} {B : A -> Type} {C : (a : A) -> B a -> Type}
+    -> ((a : A) -> (b : B a) -> C a b)
+    -> (f : (a : A) -> B a)
+    -> (a : A)
+    -> C a (f a)
+  fn g f a (g a (f a))
+#+end_src
+
+---
+
+- Level 8: Proof Combinators
+
+Combinators for manipulating proofs:
+
+#+begin_src racket
+;; Symmetry combinator
+defn sym {A} {x y : A} : x = y -> y = x
+  fn p
+    match p
+      | refl -> refl
+
+;; Transitivity combinator
+defn trans {A} {x y z : A} : x = y -> y = z -> x = z
+  fn p q
+    match p
+      | refl -> q
+
+;; Congruence combinator
+defn cong {A B} {f : A -> B} {x y : A}
+  : x = y -> f x = f y
+  fn p
+    match p
+      | refl -> refl
+
+;; Function extensionality (if you add it)
+defn funext {A B} {f g : A -> B}
+  : ((x : A) -> f x = g x) -> f = g
+  -- (requires axiom)
+#+end_src
+
+---
+
+- Level 9: Process Combinators
+
+Session-typed process combinators:
+
+#+begin_src racket
+;; Sequential composition of processes
+defn seq-proc
+  : Proc (! A . S) -> Proc (? A . T) -> Proc (S | T)
+  fn p q
+    new c (! A . end)
+      par
+        p c
+        q c
+
+;; Parallel composition with barrier
+defn par-barrier
+  : Proc S -> Proc T -> Proc (S | T | barrier)
+  fn p q
+    new b barrier-session
+      par
+        par p (sync b)
+        par q (sync b)
+        barrier-coordinator b
+#+end_src
+
+---
+
+- Can You Express /Any/ Combinator?
+
+*Yes.* Here's why:
+
+1. /Lambda calculus completeness/: Prologos has lambda, so any combinator expressible in λ-calculus works
+2. /Dependent types/: You can express /indexed/ combinators (types depending on values)
+3. /Church encoding/: You already encode data as combinators
+4. /Session types/: Linear/affine combinators for resources
+5. /Homoiconicity/: Meta-combinators that manipulate syntax
+
+The only limitation: /non-terminating/ combinators may not type-check (depending on your termination checker).
+
+---
+
+- Example: Turing Completeness via Combinators
+
+#+begin_src racket
+;; Iota combinator (universal combinator)
+;; ι = λf. f S K
+defn iota {A B C} : ((A -> B -> C) -> (A -> B) -> A -> C)
+                    -> ((A -> B -> C) -> (A -> B) -> A -> C)
+  fn f (f S K)
+
+;; Every combinator can be built from ι alone:
+;; I = ι ι
+;; K = ι (ι (ι ι))
+;; S = ι (ι (ι (ι ι)))
+
+defn I-from-iota {A} : A -> A
+  iota iota
+
+defn K-from-iota {A B} : A -> B -> A
+  iota (iota (iota iota))
+#+end_src
+
+---
+
+- Summary
+
+| Combinator Class | Supported? | Example |
+|------------------|------------|---------|
+| SKI basis | ✅ | =S K I= |
+| Church encodings | ✅ | Church numerals, lists |
+| Fixed-point | ✅ | Y combinator (with recursive types) |
+| Point-free | ✅ | =compose=, =flip= |
+| Category theory | ✅ | Functors, monads |
+| Linear | ✅ | Session-typed combinators |
+| Dependent | ✅ | Type-level combinators |
+| Continuation | ✅ | =call/cc= |
+| Proof | ✅ | =sym=, =trans=, =cong= |
+| Meta | ✅ | Syntax-manipulating (homoiconic) |
+
+*Prologos is /fully combinator-complete/.* In fact, your Church-encoded datatypes mean you're /already/ programming in combinator style—you just didn't realize it!
+
+The question isn't "can Prologos support combinators?"—it's "can we make combinator-style code readable?" And the answer is: yes, with the right syntactic sugar (like the =match= we discussed).
+
+
+
+* I want to understand better what uncurried is going to get, and what I'm going to lose. The switching cost is high-ish effort. What is the performance cost of multiple intermediate closures? Why do Lean/Agda and all other dependent type languages use curried-approaches? Is there some benefit to typing correctness/soundness/usability?
+
+- Deep Dive: Currying in Dependent Type Theory
+
+This is an excellent question. Let me give you the full picture.
+
+---
+
+- Why Dependently-Typed Languages Use Currying
+
+- 1. Type Theory Foundation
+
+Lambda calculus is inherently curried. Functions take /one argument/:
+
+#+begin_src
+λx. λy. x + y   -- two nested single-arg functions
+#+end_src
+
+Dependent type theory (Martin-Löf, Calculus of Constructions) builds on this:
+
+#+begin_src
+Π(x : A). Π(y : B x). C x y
+#+end_src
+
+This is naturally curried: each Π binds one variable. The type of the /second/ argument can depend on the /value/ of the first.
+
+- 2. The Killer Feature: Dependent Arguments
+
+#+begin_src prologos
+;; Curried: this works naturally
+defn replicate [n : Nat] : [A : Type] -> A -> Vec A n
+  fn A a -> ...
+
+;; The return type (Vec A n) depends on BOTH earlier arguments
+;; n comes first, then A, then a
+;; Each step refines the type
+
+replicate 3           ;; : [A : Type] -> A -> Vec A 3
+replicate 3 Nat       ;; : Nat -> Vec Nat 3
+replicate 3 Nat 0     ;; : Vec Nat 3
+#+end_src
+
+#+begin_src prologos
+;; Uncurried: how do you write this type?
+defn replicate [n : Nat, A : Type, a : A] : Vec A n
+
+;; The return type mentions n, A, a
+;; All must be in scope simultaneously
+;; Works, but partial application breaks:
+
+replicate 3           ;; Error: expects 3 args
+replicate 3 Nat       ;; Error: expects 3 args
+
+;; Need explicit placeholder:
+replicate 3 Nat _     ;; : Nat -> Vec Nat 3
+#+end_src
+
+- 3. Implicit Arguments
+
+Currying makes implicit argument inference elegant:
+
+#+begin_src prologos
+;; Curried with implicits
+defn id {A : Type} [x : A] : A
+  x
+
+;; Application proceeds left to right
+id 42
+;; Step 1: infer A = Nat from 42
+;; Step 2: apply 42
+;; Result: 42
+
+;; Partial application with implicits "just works"
+map id xs
+;; id gets its A inferred at each element
+#+end_src
+
+#+begin_src prologos
+;; Uncurried: implicits are trickier
+defn id {A : Type} [x : A] : A
+
+id 42        ;; Works, A inferred
+id _         ;; Partial... but A is unknown?
+map id xs    ;; id used as function value... A = ???
+#+end_src
+
+---
+
+- What You Lose Going Uncurried
+
+- 1. Seamless Partial Application
+
+#+begin_src prologos
+;; Curried: zero friction
+map (add 1) xs
+filter (equals target) xs
+compose (multiply 2) (add 1)
+
+;; Uncurried: explicit placeholders everywhere
+map (add 1 _) xs
+filter (equals target _) xs
+compose (multiply 2 _) (add 1 _)
+#+end_src
+
+Not terrible, but more noise.
+
+- 2. Point-Free Programming
+
+#+begin_src prologos
+;; Curried: point-free is natural
+sum = reduce add 0
+average = compose (divide-by length) sum
+
+;; Uncurried: need placeholders or explicit lambdas
+sum = reduce _ 0 (add _ _)           ;; awkward
+sum = fn xs -> reduce xs 0 add       ;; explicit
+average = fn xs -> divide (sum xs) (length xs)  ;; no composition
+#+end_src
+
+- 3. Uniform Treatment of Functions
+
+#+begin_src prologos
+;; Curried: all functions are the same
+f : A -> B -> C
+g : A -> (B -> C)     ;; same type!
+
+;; f and g are interchangeable
+map f xs              ;; f takes one arg, returns function
+map g xs              ;; same behavior
+
+;; Uncurried: different types
+f : (A, B) -> C
+g : A -> (B -> C)     ;; different!
+
+;; Can't substitute one for the other
+#+end_src
+
+- 4. Dependent Type Ergonomics
+
+#+begin_src prologos
+;; Curried: natural telescope
+defn lookup {A : Type} {n : Nat} [v : Vec A n] [i : Fin n] : A
+
+lookup v i
+;; A inferred from v
+;; n inferred from v
+;; i checked against Fin n
+
+;; Uncurried: same, but partial application awkward
+defn lookup {A : Type} {n : Nat} [v : Vec A n, i : Fin n] : A
+
+lookup v i          ;; fine
+lookup v            ;; Error! not a partial application point
+lookup v _          ;; : Fin n -> A (works, but explicit)
+#+end_src
+
+---
+
+- What You Gain Going Uncurried
+
+- 1. Arity Errors
+
+The big one:
+
+#+begin_src prologos
+;; Curried: silent
+add 1                 ;; : Nat -> Nat (function, not error)
+                      ;; bug surfaces later
+
+;; Uncurried: loud
+add 1                 ;; Error: add expects 2 arguments, got 1
+                      ;; bug caught immediately
+#+end_src
+
+- 2. Performance (Potentially)
+
+#+begin_src prologos
+;; Curried: chain of closures
+add 1 2 3
+;; Compiles to: ((add 1) 2) 3
+;; Creates closure for (add 1)
+;; Creates closure for ((add 1) 2)
+;; Finally evaluates
+
+;; Uncurried: direct call
+add 1 2 3
+;; Compiles to: add(1, 2, 3)
+;; Single function call, no closures
+#+end_src
+
+BUT: optimizing compilers eliminate this. GHC (Haskell) is curried but generates efficient multi-arg calls when possible.
+
+- 3. Familiarity
+
+Most programmers expect =f(a, b, c)= semantics.
+
+- 4. Strictness Clarity
+
+#+begin_src prologos
+;; Curried + strict: when is each arg evaluated?
+f a b c
+;; Is 'a' evaluated before f is called?
+;; Is 'b' evaluated before (f a) returns?
+;; Confusing with effects
+
+;; Uncurried + strict: clear
+f a b c
+;; All args evaluated, then f called
+;; Standard semantics
+#+end_src
+
+---
+
+- Performance: The Real Story
+
+- Naive Implementation
+
+#+begin_src
+;; Curried add
+add = λx. λy. x + y
+
+add 1 2
+  → (λx. λy. x + y) 1 2
+  → (λy. 1 + y) 2         ;; creates closure
+  → 1 + 2
+  → 3
+
+;; Two beta reductions, one closure allocated
+#+end_src
+
+- Optimized Implementation (What GHC Does)
+
+#+begin_src
+;; GHC compiles curried functions to multi-arity internally
+add :: Int -> Int -> Int
+add x y = x + y
+
+;; Compiled to (pseudocode):
+add_2(x, y) = x + y                    ;; fast path: both args
+add_1(x) = closure { add_2(x, _) }     ;; slow path: partial
+
+add 1 2
+  → add_2(1, 2)    ;; direct call, no closure!
+
+(add 1) 
+  → add_1(1)       ;; closure only when actually currying
+#+end_src
+
+/So the performance cost is minimal with optimization./
+
+- Your Prototype (Racket-hosted)
+
+In your Racket prototype, you're paying the closure cost every time. But:
+- Racket's closures are cheap
+- For a prototype, this doesn't matter
+- When you compile to native, you'd optimize
+
+---
+
+- Why Lean/Agda/Coq Use Currying
+
+/It's not about performance. It's about type theory./
+
+- 1. Foundational Simplicity
+
+#+begin_src
+;; One rule for function types:
+Π(x : A). B
+
+;; One rule for function application:
+f a
+
+;; Multi-arg is sugar:
+f a b c = ((f a) b) c
+#+end_src
+
+The metatheory (proofs about the type system) is simpler with currying.
+
+- 2. Dependent Types Flow Naturally
+
+#+begin_src prologos
+;; This type is natural with currying:
+printf : (fmt : String) -> ArgsFor fmt -> String
+
+printf "%d + %d = %d"       ;; : (Nat, Nat, Nat) -> String
+printf "%s says %s"         ;; : (String, String) -> String
+
+;; The return type DEPENDS on the first argument's VALUE
+;; Currying lets you "see" the type after partial application
+#+end_src
+
+- 3. Implicit Argument Inference
+
+#+begin_src prologos
+;; Curried: inference proceeds left to right
+defn cons {A : Type} [x : A] [xs : List A] : List A
+
+cons 1 xs
+;; Step 1: {A} = ? (unknown)
+;; Step 2: see argument 1 : Nat, infer A = Nat
+;; Step 3: check xs : List Nat
+;; Step 4: return List Nat
+
+;; Uncurried: must infer all at once
+defn cons {A : Type} [x : A, xs : List A] : List A
+
+cons 1 xs
+;; Must unify A with both 1 and xs simultaneously
+;; Same result, but inference engine works differently
+#+end_src
+
+---
+
+- The Hybrid Approach: What You Could Do
+
+- Option A: Curried Core, Uncurried Surface
+
+#+begin_src prologos
+;; User writes (uncurried surface):
+defn add [x : Nat, y : Nat] : Nat
+  plus x y
+
+;; Compiler transforms to (curried core):
+add : Nat -> Nat -> Nat
+add = λx. λy. plus x y
+
+;; Arity checking at call sites:
+add 1 2      ;; OK: fully applied
+add 1        ;; Error: "add expects 2 arguments"
+             ;; (even though internally it's valid)
+#+end_src
+
+This gives you:
+- ✅ Arity errors
+- ✅ Simpler type theory core
+- ✅ Partial application when explicit
+
+- Option B: True Multi-Arg with Explicit Currying
+
+#+begin_src prologos
+;; Functions are truly multi-arg:
+defn add [x : Nat, y : Nat] : Nat
+
+add : (Nat, Nat) -> Nat     ;; NOT Nat -> Nat -> Nat
+
+;; Explicit currying when wanted:
+curry add     ;; : Nat -> Nat -> Nat
+curry add 1   ;; : Nat -> Nat
+
+;; Or with placeholder:
+add 1 _       ;; : Nat -> Nat
+#+end_src
+
+- Option C: Clojure-Style (Your Likely Sweet Spot)
+
+#+begin_src prologos
+;; Multi-arity definitions
+defn add
+  | [x : Nat] : Nat -> Nat
+      add x _                    ;; returns partial
+  | [x : Nat, y : Nat] : Nat
+      plus x y
+
+;; 1 arg: returns function (explicit arity)
+add 1          ;; : Nat -> Nat
+
+;; 2 args: returns value
+add 1 2        ;; : Nat
+
+;; Wrong arity: error
+add 1 2 3      ;; Error: no 3-argument arity for add
+#+end_src
+
+This is what Clojure does, and it's pragmatic:
+- You /design/ your partial application points
+- Wrong arity is an error
+- Still functional, still composable
+
+---
+
+- My Recommendation
+
+/Keep currying in the core, add arity checking in the surface language./
+
+#+begin_src prologos
+;; Definition declares expected arity
+defn add [x : Nat, y : Nat] : Nat
+  plus x y
+
+;; Fully applied: OK
+add 1 2              ;; => 3
+
+;; Under-applied: ERROR by default
+add 1                ;; Error: add expects 2 arguments
+
+;; Explicit partial: OK
+partial add 1        ;; => (fn y -> add 1 y)
+add 1 _              ;; => (fn y -> add 1 y)
+
+;; Internally, still curried (for type theory)
+;; But surface language catches arity mistakes
+#+end_src
+
+/Why:/
+- Type theory stays simple (curried)
+- Users get arity errors (practical)
+- Explicit partial application (clear intent)
+- Best of both worlds
+
+---
+
+- Summary
+
+| Aspect                  | Curried  | Uncurried | Hybrid        |
+|-------------------------+----------+-----------+---------------|
+| Type theory             | Simple   | Complex   | Simple core   |
+| Arity errors            | No       | Yes       | Yes (surface) |
+| Partial application     | Implicit | Explicit  | Explicit      |
+| Performance (naive)     | Closures | Direct    | Closures      |
+| Performance (optimized) | Good     | Good      | Good          |
+| Dependent types         | Natural  | Awkward   | Natural       |
+| Implicit args           | Easy     | Harder    | Easy          |
+| Familiarity             | FP folks | Most devs | Both          |
+
+/The switching cost is high, but you don't need to fully switch./
+
+Keep curried core, add arity checking at the surface. You get dependent type ergonomics /and/ arity errors. That's what I'd do.
+
+
+
+
+
+
+
+* ---
+
+* I really like that placeholder design... I have one concern with using `_` for the placeholder... I was thinking of the syntax for interactive dependent-type devolpment... In Idris, the question-mark `?varName` is used to indicate a hole... a good choice, but it will conflict with logic-variable prefixing, so I was thinking of using the underscore `_varName` as holes. What options do we have here? Is context enough for us to feasibly disambiguate here, and keep underscores in both cases? Do have alternate decent symbols handy to support these two use-cases?
+
+- Disambiguating Placeholders and Typed Holes
+
+Great catch. Let me analyze the conflict and explore options.
+
+---
+
+- The Two Use Cases
+
+/1. Partial Application Placeholder/
+#+begin_src prologos
+map (add 1 _) xs         ;; _ = "fill this argument later"
+;; Creates: fn x -> add 1 x
+#+end_src
+
+/2. Typed Holes (Interactive Development)/
+#+begin_src prologos
+defn sort [xs : List Nat] : List Nat
+  _todo                   ;; Hole: "I'll fill this later, tell me the type"
+;; Compiler says: _todo : List Nat
+#+end_src
+
+---
+
+- Can Context Disambiguate?
+
+Let's see:
+
+#+begin_src prologos
+map (add 1 _) xs        ;; Placeholder: _ in application position
+map (add 1 _hole) xs    ;; Hole? Or placeholder with name?
+
+defn foo : Nat -> Nat
+  _                      ;; Hole (expression position, needs type)
+
+defn bar : Nat -> Nat
+  add _ 1                ;; Placeholder (argument position)
+#+end_src
+
+/Analysis:/
+
+| Context | =_= alone | =_name= |
+|---------|-----------|---------|
+| Argument in application | Placeholder | Ambiguous |
+| Expression body | Hole | Hole |
+| Pattern match | Wildcard | Named wildcard? |
+
+The problem is =_name= in argument position:
+
+#+begin_src prologos
+map (add 1 _x) xs
+;; Is this:
+;;   A) Placeholder named x (for multiple placeholders)?
+;;   B) A hole named x?
+#+end_src
+
+---
+
+- Option Analysis
+
+- Option A: Underscore Variants (Positional Rules)
+
+#+begin_src prologos
+;; Bare _ in application = placeholder
+map (add 1 _) xs
+
+;; _name always = hole
+defn sort [xs : List Nat] : List Nat
+  _todo
+
+;; Multiple placeholders: _1, _2, etc.
+map (clamp _1 100 _2) pairs
+;; => fn x y -> clamp x 100 y
+#+end_src
+
+/Pros:/ Simple rule: =_= vs =_name=
+/Cons:/ =_1=, =_2= look like holes too
+
+---
+
+- Option B: Different Symbols
+
+| Use Case    | Symbol | Example   |
+|-------------+--------+-----------|
+| Placeholder | =_=    | =add 1 _= |
+| Hole        | =?=    | =?todo=   |
+| Logic var   | =??=   | =??x=     |
+
+#+begin_src prologos
+;; Placeholder
+map (add 1 _) xs
+
+;; Typed hole
+defn sort [xs : List Nat] : List Nat
+  ?todo
+;; Compiler: ?todo : List Nat
+
+;; Logic variable
+solve (append ??xs ??ys [1, 2, 3])
+#+end_src
+
+/Pros:/ Clear visual distinction
+/Cons:/ =??= is a bit ugly, =?= conflicts with original logic var
+
+---
+
+- Option C: Flip the Convention
+
+What if logic variables use a different prefix entirely?
+
+| Use Case    | Symbol  | Example   |
+|-------------+---------+-----------|
+| Placeholder | =_=     | =add 1 _= |
+| Hole        | =_name= | =_todo=   |
+| Logic var   | =%=     | =%x=      |
+
+#+begin_src prologos
+;; Placeholder
+map (add 1 _) xs
+map (clamp _ 100 _) xs
+
+;; Typed hole
+defn sort [xs : List Nat] : List Nat
+  _todo
+
+;; Logic variable
+solve (append %xs %ys [1, 2, 3])
+defr append (%xs %ys %zs)
+  &> (= %xs nil) (= %zs %ys)
+#+end_src
+
+/Pros:/ Clean separation
+/Cons:/ =%= is unfamiliar for logic vars (Prolog uses =?= implicitly via case)
+
+---
+
+- Option D: Sigils with Modifiers
+
+Keep =?= for logic variables, use modifier for modes:
+
+| Use Case           | Syntax         | Example    |
+|--------------------+----------------+------------|
+| Placeholder        | =_=            | =add 1 _=  |
+| Hole               | =??=           | =??todo=   |
+| Logic var (multi)  | =?x=           | =?x=       |
+| Logic var (input)  | =?-x= or =?+x= | =?-input=  |
+| Logic var (output) | =?+x= or =?-x= | =?+output= |
+
+#+begin_src prologos
+;; Placeholder
+map (add 1 _) xs
+
+;; Typed hole (double question mark)
+defn sort [xs : List Nat] : List Nat
+  ??todo
+;; Compiler: ??todo : List Nat
+
+;; Logic variable
+solve (append ?xs ?ys [1, 2, 3])
+#+end_src
+
+/Pros:/ =??= reads as "what goes here?" (very intuitive!)
+/Cons:/ Extra character
+
+---
+
+- Option E: Keyword-Based Holes
+
+#+begin_src prologos
+;; Placeholder
+map (add 1 _) xs
+
+;; Hole is a keyword form
+defn sort [xs : List Nat] : List Nat
+  (hole todo)
+  ;; or
+  (TODO "implement sorting")
+;; Compiler: hole 'todo' : List Nat
+#+end_src
+
+/Pros:/ Explicit, no symbol conflicts
+/Cons:/ Verbose
+
+---
+
+- Option F: Context-Aware =_=
+
+Make the parser/compiler smart:
+
+#+begin_src prologos
+;; Bare _ in argument = placeholder
+map (add 1 _) xs
+
+;; Bare _ as expression = anonymous hole
+defn foo : Nat
+  _                      ;; Hole, compiler names it
+
+;; _name as expression = named hole
+defn sort [xs : List Nat] : List Nat
+  _todo                  ;; Named hole
+
+;; _name in argument = STILL placeholder (named for reuse)
+map (fn pair -> add (fst pair) _x (snd pair) _x) pairs
+;; Wait, this doesn't make sense...
+#+end_src
+
+Actually this breaks down. Named placeholders and named holes conflict.
+
+---
+
+- My Recommendation: Option D (=??= for Holes)
+
+| Use Case          | Syntax           | Mnemonic                       |
+|-------------------+------------------+--------------------------------|
+| Placeholder       | =_=              | "blank"                        |
+| Named placeholder | =_1=, =_2=       | "first blank, second blank"    |
+| Typed hole        | =??= or =??name= | "what what?" / "what is name?" |
+| Logic var         | =?x=             | "unknown x"                    |
+| Logic input       | =?-x=            | "known x"                      |
+| Logic output      | =?+x=            | "will-know x"                  |
+
+#+begin_src prologos
+;; ========================================
+;; Partial Application Placeholders
+;; ========================================
+
+map (add 1 _) xs                    ;; single placeholder
+map (clamp _1 100 _2) pairs         ;; multiple, ordered
+filter (_ > 10) xs                  ;; in operator position
+
+;; ========================================
+;; Typed Holes (Interactive Development)
+;; ========================================
+
+defn sort [xs : List Nat] : List Nat
+  ??                                ;; anonymous hole
+;; Compiler: Found hole ?? : List Nat
+
+defn merge-sort [xs : List Nat] : List Nat
+  let halves = split xs
+  ??merge                           ;; named hole
+;; Compiler: Found hole ??merge : (List Nat, List Nat) -> List Nat
+
+;; ========================================
+;; Logic Variables
+;; ========================================
+
+solve (append ?xs ?ys [1, 2, 3])
+
+defr append (?xs ?ys ?zs)
+  &> (= ?xs nil) (= ?zs ?ys)
+  &> (= ?xs (cons ?h ?t)) (= ?zs (cons ?h ?r)) :- (append ?t ?ys ?r)
+
+;; With modes
+defr append (?-xs ?-ys ?+zs)
+  ...
+#+end_src
+
+---
+
+- Why This Works
+
+| Symbol     | Meaning                     | Position      | Example           |
+|------------+-----------------------------+---------------+-------------------|
+| =_=        | "fill later"                | Argument      | =add 1 _=         |
+| =_1=, =_2= | "fill later, ordered"       | Argument      | =clamp _1 100 _2= |
+| =??=       | "tell me type"              | Expression    | =??=              |
+| =??name=   | "tell me type, called name" | Expression    | =??todo=          |
+| =?x=       | "logic unknown"             | Logic context | =?result=         |
+| =?-x=      | "logic input"               | Logic context | =?-input=         |
+| =?+x=      | "logic output"              | Logic context | =?+output=        |
+
+No conflicts:
+- =_= never has a name attached (bare only)
+- =_1= is a number, not a name
+- =??= starts with double question mark
+- =?x= is single question mark + identifier
+
+---
+
+- Visual Summary
+
+#+begin_src prologos
+;; All three in one function!
+
+defn solve-and-transform [query : Query] : Result
+  let solutions = solve (parse-query query ?result)  ;; ?result = logic var
+  map (transform _) solutions                        ;; _ = placeholder
+  ??                                                 ;; ?? = hole (unimplemented)
+
+;; Compiler output:
+;; Found hole ?? : List Value
+;; Expected: Result
+;; In context:
+;;   query : Query
+;;   solutions : List Value
+#+end_src
+
+---
+
+- Alternative: Different Hole Syntax
+
+If =??= feels too similar to =?=, consider:
+
+| Option | Hole syntax   | Example       |
+|--------+---------------+---------------|
+| A      | =??name=      | =??todo=      |
+| B      | =!name=       | =!todo=       |
+| C      | =...name=     | =...todo=     |
+| D      | =???=         | =???=         |
+| E      | =[hole name]= | =[hole todo]= |
+
+I prefer =??= because:
+- Intuitive: "what? what?"
+- Distinct from =?x= (single vs double)
+- Short to type
+- Grep-able
+
+---
+
+- Final Answer
+
+Use =??= for typed holes:
+
+#+begin_src prologos
+;; Placeholders
+map (add 1 _) xs
+map (clamp _1 100 _2) pairs
+
+;; Holes
+defn sort [xs : List Nat] : List Nat
+  ??todo
+
+;; Logic variables
+solve (append ?xs ?ys [1, 2, 3])
+#+end_src
+
+Clean, no conflicts, all three features coexist!
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
