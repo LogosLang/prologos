@@ -23,7 +23,7 @@
 ;; Keywords: forms with special parsing rules
 ;; ========================================
 (define keywords
-  '(inc fn Pi Sigma -> Eq the the-fn Type
+  '(inc fn Pi Sigma -> -0> -1> -w> Eq the the-fn Type
     Vec Fin vnil vcons vhead vtail vindex fzero fsuc
     natrec J pair first second boolrec
     Posit8 posit8 p8+ p8- p8* p8/ p8-neg p8-abs p8-sqrt p8-lt p8-le p8-from-nat p8-if-nar
@@ -117,8 +117,9 @@
 
 (define (unwrap-angle-type stx loc)
   ;; Extract and parse the type from ($angle-type content...)
-  ;; If single content element: parse it directly
-  ;; If multiple elements: parse as infix type (handles -> arrows)
+  ;; Handles: <Nat>, <Nat -> Nat>, <Nat | Bool>,
+  ;;          <(x : A) -> B> (dependent Pi), <(x : A) * B> (dependent Sigma),
+  ;;          <x : A -> B> (shorthand dependent Pi)
   (define d (stx->datum stx))
   (define contents (cdr d)) ; skip $angle-type sentinel
   (define parts
@@ -126,6 +127,17 @@
   (cond
     [(null? contents)
      (parse-error loc "Empty type annotation <>" #f)]
+    ;; Dependent Pi/Sigma: <(x : A) -> B> or <(x : A) * B>
+    [(and (>= (length parts) 3)
+          (paren-binder-group? (car parts))
+          (let ([op (stx->datum (cadr parts))])
+            (or (arrow-symbol? op) (star-symbol? op))))
+     (parse-dependent-angle parts loc)]
+    ;; Shorthand: <x : A -> B> (single binder, no inner parens)
+    [(and (>= (length parts) 4)
+          (symbol? (stx->datum (car parts)))
+          (eq? (stx->datum (cadr parts)) ':))
+     (parse-shorthand-dependent-angle parts loc)]
     [(= (length contents) 1)
      ;; Single element: <Nat> or <Bool> or <(-> Nat Nat)> etc
      (parse-datum (car parts))]
@@ -133,6 +145,146 @@
      ;; Multiple elements: <Nat -> Nat> reads as ($angle-type Nat -> Nat)
      ;; Use parse-infix-type to handle arrow chains
      (parse-infix-type parts loc)]))
+
+;; Check if a datum looks like a paren-grouped binder: (x : A) or (x :m A)
+;; Requires that the list contains a ':' symbol.
+(define (paren-binder-group? stx)
+  (define d (stx->datum stx))
+  (and (list? d) (pair? d)
+       (ormap (lambda (x) (eq? (if (syntax? x) (syntax-e x) x) ':))
+              (if (syntax? stx) (syntax->list stx) d))))
+
+;; Parse <(x : A, y : B) -> C> or <(x : A) * B> dependent type in angle brackets.
+;; parts: list of elements starting with the paren-binder-group.
+(define (parse-dependent-angle parts loc)
+  (define binder-group-stx (car parts))
+  (define op-stx (cadr parts))
+  (define op (stx->datum op-stx))
+  (define body-atoms (cddr parts))
+
+  ;; Parse binders from the paren group
+  (define binders (parse-angle-binder-group binder-group-stx loc))
+  (cond
+    [(prologos-error? binders) binders]
+    [(null? body-atoms)
+     (parse-error loc "Missing body after operator in dependent type" #f)]
+    [else
+     ;; Parse the body (everything after -> or *)
+     (define body (if (= (length body-atoms) 1)
+                      (parse-datum (car body-atoms))
+                      (parse-infix-type body-atoms loc)))
+     (cond
+       [(prologos-error? body) body]
+       [(arrow-symbol? op)
+        ;; Dependent Pi: fold binders right-to-left
+        (define m (arrow-mult op))
+        (foldr (lambda (bnd rest)
+                 (surf-pi (binder-info (car bnd) m (cdr bnd)) rest loc))
+               body binders)]
+       [(star-symbol? op)
+        ;; Dependent Sigma: fold binders right-to-left
+        (foldr (lambda (bnd rest)
+                 (surf-sigma (binder-info (car bnd) #f (cdr bnd)) rest loc))
+               body binders)]
+       [else (parse-error loc "Expected -> or * after binder group" #f)])]))
+
+;; Parse binder group from paren form: (x : A, y : B) → list of (name . parsed-type)
+;; Commas are stripped by both readers. Flat sequence: x : A y : B
+(define (parse-angle-binder-group stx loc)
+  (define parts (if (syntax? stx) (syntax->list stx) (stx->datum stx)))
+  ;; Parse as sequence of name : type binders, separated by commas (already stripped)
+  ;; Format: name : type-atoms... [, name : type-atoms...]*
+  ;; We split on ':' to find binder boundaries.
+  (let loop ([remaining parts] [result '()])
+    (cond
+      [(null? remaining) (reverse result)]
+      [else
+       ;; First element should be the name
+       (define name-stx (car remaining))
+       (define name (stx->datum name-stx))
+       (cond
+         [(not (symbol? name))
+          (parse-error loc (format "Expected variable name in binder, got ~a" name) name)]
+         [(null? (cdr remaining))
+          (parse-error loc (format "Expected ':' after variable name ~a" name) name)]
+         [(not (eq? (stx->datum (cadr remaining)) ':))
+          (parse-error loc (format "Expected ':' after variable name ~a, got ~a"
+                                   name (stx->datum (cadr remaining))) name)]
+         [else
+          ;; Collect type atoms until next name-colon pair or end
+          (define after-colon (cddr remaining))
+          (define-values (type-atoms rest)
+            (collect-type-atoms-in-binder after-colon))
+          (cond
+            [(null? type-atoms)
+             (parse-error loc (format "Missing type after ':' for variable ~a" name) name)]
+            [else
+             (define ty (if (= (length type-atoms) 1)
+                            (parse-datum (car type-atoms))
+                            (parse-infix-type type-atoms loc)))
+             (if (prologos-error? ty) ty
+                 (loop rest (cons (cons name ty) result)))])])])))
+
+;; Collect type atoms in a binder group until we hit another name : pattern or end.
+;; Returns (values type-atoms remaining-atoms).
+(define (collect-type-atoms-in-binder atoms)
+  (let loop ([remaining atoms] [acc '()])
+    (cond
+      [(null? remaining)
+       (values (reverse acc) '())]
+      ;; Look for "name :" pattern — peek ahead
+      [(and (>= (length remaining) 2)
+            (symbol? (stx->datum (car remaining)))
+            (eq? (stx->datum (cadr remaining)) ':)
+            ;; Make sure this isn't an arrow operator being confused
+            (not (arrow-symbol? (stx->datum (car remaining))))
+            (not (star-symbol? (stx->datum (car remaining)))))
+       ;; This is a new binder start
+       (values (reverse acc) remaining)]
+      [else
+       (loop (cdr remaining) (cons (car remaining) acc))])))
+
+;; Parse <x : A -> B> shorthand dependent type (single binder, no inner parens).
+;; parts: (x : A-atoms... -> B-atoms...) or (x : A-atoms... * B-atoms...)
+(define (parse-shorthand-dependent-angle parts loc)
+  (define name (stx->datum (car parts)))
+  ;; Skip name and ':'
+  (define after-colon (cddr parts))
+  ;; Find the operator (-> or $star)
+  (define-values (type-atoms op rest-atoms)
+    (let loop ([remaining after-colon] [acc '()])
+      (cond
+        [(null? remaining)
+         (values (reverse acc) #f '())]
+        [(let ([s (stx->datum (car remaining))])
+           (or (arrow-symbol? s) (star-symbol? s)))
+         (values (reverse acc) (stx->datum (car remaining)) (cdr remaining))]
+        [else
+         (loop (cdr remaining) (cons (car remaining) acc))])))
+  (cond
+    [(not op)
+     ;; No operator found — fall through to regular infix type parse
+     ;; This handles cases like <x : Nat> which is just a binder annotation
+     (parse-infix-type parts loc)]
+    [(null? type-atoms)
+     (parse-error loc "Missing type after ':' in dependent binder" #f)]
+    [(null? rest-atoms)
+     (parse-error loc "Missing body after operator in dependent type" #f)]
+    [else
+     (define binder-type (if (= (length type-atoms) 1)
+                             (parse-datum (car type-atoms))
+                             (parse-infix-type type-atoms loc)))
+     (define body (if (= (length rest-atoms) 1)
+                      (parse-datum (car rest-atoms))
+                      (parse-infix-type rest-atoms loc)))
+     (cond
+       [(prologos-error? binder-type) binder-type]
+       [(prologos-error? body) body]
+       [(arrow-symbol? op)
+        (surf-pi (binder-info name (arrow-mult op) binder-type) body loc)]
+       [(star-symbol? op)
+        (surf-sigma (binder-info name #f binder-type) body loc)]
+       [else (parse-error loc "Unexpected operator" #f)])]))
 
 ;; ========================================
 ;; Main parser: datum -> surface AST
@@ -357,7 +509,37 @@
               (cond
                 [(prologos-error? a) a]
                 [(prologos-error? b) b]
-                [else (surf-arrow a b loc)])))]
+                [else (surf-arrow #f a b loc)])))]
+
+       ;; (-0> A B) — erased arrow
+       [(-0>)
+        (or (check-arity '-0> args 2 loc)
+            (let ([a (parse-datum (car args))]
+                  [b (parse-datum (cadr args))])
+              (cond
+                [(prologos-error? a) a]
+                [(prologos-error? b) b]
+                [else (surf-arrow 'm0 a b loc)])))]
+
+       ;; (-1> A B) — linear arrow
+       [(-1>)
+        (or (check-arity '-1> args 2 loc)
+            (let ([a (parse-datum (car args))]
+                  [b (parse-datum (cadr args))])
+              (cond
+                [(prologos-error? a) a]
+                [(prologos-error? b) b]
+                [else (surf-arrow 'm1 a b loc)])))]
+
+       ;; (-w> A B) — unrestricted arrow
+       [(-w>)
+        (or (check-arity '-w> args 2 loc)
+            (let ([a (parse-datum (car args))]
+                  [b (parse-datum (cadr args))])
+              (cond
+                [(prologos-error? a) a]
+                [(prologos-error? b) b]
+                [else (surf-arrow 'mw a b loc)])))]
 
        ;; (Eq A a b)
        [(Eq)
@@ -428,7 +610,7 @@
                             (let ([type-expr (parse-datum (car args))])
                               (if (prologos-error? type-expr) type-expr
                                   (surf-ann
-                                   (surf-arrow (surf-bool-type loc) (surf-type 0 loc) loc)
+                                   (surf-arrow #f (surf-bool-type loc) (surf-type 0 loc) loc)
                                    (surf-lam (binder-info '_ 'mw (surf-bool-type loc))
                                              type-expr loc)
                                    loc))))]
@@ -459,7 +641,7 @@
                             (let ([type-expr (parse-datum (car args))])
                               (if (prologos-error? type-expr) type-expr
                                   (surf-ann
-                                   (surf-arrow (surf-nat-type loc) (surf-type 0 loc) loc)
+                                   (surf-arrow #f (surf-nat-type loc) (surf-type 0 loc) loc)
                                    (surf-lam (binder-info '_ 'mw (surf-nat-type loc))
                                              type-expr loc)
                                    loc))))]
@@ -1540,43 +1722,107 @@
       [else
        (loop (cdr remaining) (cons (car remaining) current) result)])))
 
-;; Parse a single union component (handles -> arrows).
+;; Arrow symbol detection and multiplicity extraction.
+(define (arrow-symbol? s) (memq s '(-> -0> -1> -w>)))
+(define (arrow-mult sym)
+  (case sym [(-0>) 'm0] [(-1>) 'm1] [(-w>) 'mw] [(->)  #f] [else #f]))
+
+;; Parse a single union component (handles -> / -0> / -1> / -w> arrows).
 (define (parse-arrow-type atoms loc)
-  ;; Split the atoms list on '-> into segments
-  (define segments (split-on-arrow atoms))
+  ;; Split the atoms list on arrow symbols into (segment . arrow-sym) pairs.
+  ;; The last pair has #f for arrow-sym.
+  (define seg+arrows (split-on-arrow-with-mult atoms))
+  (define segments (map car seg+arrows))
   (cond
     [(null? segments)
      (parse-error loc "Empty type expression" #f)]
     [(= (length segments) 1)
-     ;; No arrows — just parse as a type application or single type
-     (parse-type-segment (car segments) loc)]
+     ;; No arrows — try product types, then type application
+     (parse-product-type (car segments) loc)]
     [else
      ;; Uncurried arrow syntax: non-last segments have each atom parsed individually.
      ;; A B -> C  =  A -> B -> C  (each atom in non-last segment = separate arg)
      ;; [A -> B] C -> D  =  (A->B) -> C -> D  (sub-lists parsed as grouped types)
      ;; Last segment: parsed as type application (multi-atom = app).
-     (define all-arg-types
+     ;;
+     ;; Build list of (parsed-arg-type . mult) pairs for all non-last segments.
+     ;; Each segment before the last shares the arrow mult from its trailing arrow.
+     ;; Within a segment, check for * operators: if present, parse as product type.
+     ;; If no *, use uncurried syntax (each atom = separate domain).
+     (define non-last (drop-right seg+arrows 1))
+     (define (segment-has-star? seg)
+       (ormap (lambda (a) (star-symbol? (stx->datum a))) seg))
+     (define all-arg-type-mults
        (append-map
-        (lambda (seg)
-          (map (lambda (atom) (parse-single-type-element atom loc)) seg))
-        (drop-right segments 1)))
-     (define return-type (parse-type-segment (last segments) loc))
+        (lambda (seg+arrow)
+          (define seg (car seg+arrow))
+          (define arr (cdr seg+arrow))
+          (if (segment-has-star? seg)
+              ;; Segment contains *: parse as single product type domain
+              (list (cons (parse-product-type seg loc) arr))
+              ;; No *: uncurried syntax — each atom is separate domain
+              (map (lambda (atom) (cons (parse-single-type-element atom loc) arr))
+                   seg)))
+        non-last))
+     (define return-type (parse-product-type (last segments) loc))
      ;; Check for errors
-     (define all-types (append all-arg-types (list return-type)))
-     (define first-err (findf prologos-error? all-types))
+     (define all-parsed (append (map car all-arg-type-mults) (list return-type)))
+     (define first-err (findf prologos-error? all-parsed))
      (if first-err first-err
-         (foldr (lambda (dom cod) (surf-arrow dom cod loc))
+         ;; Right-associate: A -1> B -> C → arrow('m1, A, arrow(#f, B, C))
+         (foldr (lambda (dom-pair cod)
+                  (surf-arrow (arrow-mult (cdr dom-pair)) (car dom-pair) cod loc))
                 return-type
-                all-arg-types))]))
+                all-arg-type-mults))]))
 
-;; Split a list of atoms on the '-> symbol.
-;; Returns a list of lists (segments between arrows).
-(define (split-on-arrow atoms)
+;; Split a list of atoms on arrow symbols (-> / -0> / -1> / -w>).
+;; Returns a list of (segment . arrow-or-#f) pairs.
+;; The last segment's arrow is always #f.
+(define (split-on-arrow-with-mult atoms)
+  (let loop ([remaining atoms] [current '()] [result '()])
+    (cond
+      [(null? remaining)
+       (reverse (cons (cons (reverse current) #f) result))]
+      [(arrow-symbol? (stx->datum (car remaining)))
+       (define arr-sym (stx->datum (car remaining)))
+       (loop (cdr remaining) '() (cons (cons (reverse current) arr-sym) result))]
+      [else
+       (loop (cdr remaining) (cons (car remaining) current) result)])))
+
+;; ========================================
+;; Product type: * operator (higher precedence than ->, lower than application)
+;; A * B desugars to Sigma(_, A, B)
+;; ========================================
+
+(define (star-symbol? s) (memq s '(* $star)))
+
+;; Parse a product type segment (handles * between arrow segments).
+;; Precedence: | < -> < * < application
+(define (parse-product-type atoms loc)
+  (define segments (split-on-star atoms))
+  (cond
+    [(null? segments)
+     (parse-error loc "Empty type expression" #f)]
+    [(= (length segments) 1)
+     ;; No products — just parse as type application
+     (parse-type-segment (car segments) loc)]
+    [else
+     ;; Right-associate: A * B * C → Sigma(_, A, Sigma(_, B, C))
+     (define parsed (map (lambda (seg) (parse-type-segment seg loc)) segments))
+     (define err (findf prologos-error? parsed))
+     (if err err
+         (foldr (lambda (left right) (surf-sigma (binder-info '_ #f left) right loc))
+                (last parsed)
+                (drop-right parsed 1)))]))
+
+;; Split a list of atoms on * / $star symbols.
+;; Returns a list of lists (segments between stars).
+(define (split-on-star atoms)
   (let loop ([remaining atoms] [current '()] [result '()])
     (cond
       [(null? remaining)
        (reverse (cons (reverse current) result))]
-      [(eq? (stx->datum (car remaining)) '->)
+      [(star-symbol? (stx->datum (car remaining)))
        (loop (cdr remaining) '() (cons (reverse current) result))]
       [else
        (loop (cdr remaining) (cons (car remaining) current) result)])))

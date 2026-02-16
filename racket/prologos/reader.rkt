@@ -265,17 +265,20 @@
        (skip-comment! tok)
        (tokenizer-next! tok)]
 
-      ;; Open paren — reserved for future tuple syntax
+      ;; Parentheses — type grouping
       [(char=? c #\()
-       (error 'prologos-reader
-              "~a:~a:~a: Use [] for grouping; () is reserved for future tuple syntax"
-              (tokenizer-source tok) ln (+ cl 1))]
+       (tok-read! tok)
+       (set-tokenizer-bracket-depth! tok (+ 1 (tokenizer-bracket-depth tok)))
+       (token 'lparen #f ln cl ps 1)]
 
-      ;; Close paren — error (no matching open)
       [(char=? c #\))
-       (error 'prologos-reader
-              "~a:~a:~a: Unexpected ); use [] for grouping"
-              (tokenizer-source tok) ln (+ cl 1))]
+       (tok-read! tok)
+       (define depth (tokenizer-bracket-depth tok))
+       (when (= depth 0)
+         (error 'prologos-reader "~a:~a:~a: Unexpected closing paren"
+                (tokenizer-source tok) ln (+ cl 1)))
+       (set-tokenizer-bracket-depth! tok (- depth 1))
+       (token 'rparen #f ln cl ps 1)]
 
       ;; Square brackets — primary grouping delimiter
       [(char=? c #\[)
@@ -393,6 +396,18 @@
       [(char-numeric? c)
        (read-number-token! tok ln cl ps)]
 
+      ;; Multiplied arrows: -0>, -1>, -w> (must check BEFORE -> since - triggers both)
+      [(and (char=? c #\-)
+            (let ([c2 (peek-char (tokenizer-port tok) 1)])
+              (and (char? c2)
+                   (or (char=? c2 #\0) (char=? c2 #\1) (char=? c2 #\w))
+                   (let ([c3 (peek-char (tokenizer-port tok) 2)])
+                     (and (char? c3) (char=? c3 #\>))))))
+       (tok-read! tok)  ; consume -
+       (define mc (tok-read! tok))  ; consume 0/1/w
+       (tok-read! tok)  ; consume >
+       (token 'symbol (string->symbol (string #\- mc #\>)) ln cl ps 3)]
+
       ;; -> arrow operator (must come before ident-start? since - is ident-start)
       [(and (char=? c #\-)
             (let ([c2 (peek-char (tokenizer-port tok) 1)])
@@ -404,6 +419,11 @@
       ;; Identifier
       [(ident-start? c)
        (read-ident-token! tok ln cl ps)]
+
+      ;; Star — product type operator (only when freestanding, not inside identifier)
+      [(char=? c #\*)
+       (tok-read! tok)
+       (token 'symbol '$star ln cl ps 1)]
 
       [else
        (tok-read! tok)
@@ -585,6 +605,37 @@
   (make-stx elements src ln cl ps
             (- (+ (token-pos (parser-peek p)) 1) ps)))
 
+;; --- Parse a paren form: ( ... ) ---
+;; Produces the same datum tree as brackets (a plain list).
+;; Used for type grouping: (Nat -> Nat), (A * B), (A | B), etc.
+(define (parse-paren-form p)
+  (define open-tok (parser-next! p))  ; consume lparen
+  (define ln (token-line open-tok))
+  (define cl (token-col open-tok))
+  (define ps (token-pos open-tok))
+  (define src (parser-source p))
+
+  (define elements
+    (let loop ([elems '()])
+      (define tt (parser-peek-type p))
+      (cond
+        [(eq? tt 'rparen)
+         (parser-next! p) ; consume rparen
+         (reverse elems)]
+        [(eq? tt 'eof)
+         (error 'prologos-reader "~a:~a:~a: Unclosed paren"
+                src ln cl)]
+        ;; Skip comma tokens inside parens (parameter separator)
+        [(eq? tt 'comma)
+         (parser-next! p) ; consume comma
+         (loop elems)]
+        [else
+         (define elem (parse-inline-element p))
+         (loop (cons elem elems))])))
+
+  (make-stx elements src ln cl ps
+            (- (+ (token-pos (parser-peek p)) 1) ps)))
+
 ;; --- Parse a list literal form: '[ ... ] ---
 ;; Wraps contents with $list-literal sentinel.
 ;; '[] → ($list-literal)
@@ -710,6 +761,8 @@
   (cond
     [(eq? tt 'lbracket)
      (parse-bracket-form p)]
+    [(eq? tt 'lparen)
+     (parse-paren-form p)]
     [(eq? tt 'langle)
      (parse-angle-form p)]
     [(eq? tt 'lbrace)
