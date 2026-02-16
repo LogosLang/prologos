@@ -90,10 +90,13 @@
   (check-equal? (tok-type toks 1) 'keyword)
   (check-equal? (tok-val toks 1) 'widget))
 
-(test-case "tokenize: parentheses error in WS mode"
-  ;; () is reserved for future tuple syntax — errors in WS mode
-  (check-exn exn:fail?
-    (lambda () (tokenize-string "(x)"))))
+(test-case "tokenize: parentheses work in WS mode"
+  ;; () now works for type grouping
+  (define toks (tokenize-string "(x)"))
+  (check-equal? (tok-type toks 1) 'lparen)
+  (check-equal? (tok-type toks 2) 'symbol)
+  (check-equal? (tok-val toks 2) 'x)
+  (check-equal? (tok-type toks 3) 'rparen))
 
 (test-case "tokenize: dollar sign"
   (define toks (tokenize-string "$x"))
