@@ -37,6 +37,7 @@
     Quire32 q32-zero q32-fma q32-to
     Quire64 q64-zero q64-fma q64-to
     Keyword Map map-empty map-assoc map-get map-dissoc map-size map-has-key? map-keys map-vals
+    Set set-empty set-insert set-member? set-delete set-size set-union set-intersect set-diff set-to-list
     PVec pvec-empty pvec-push pvec-nth pvec-update pvec-length pvec-pop pvec-concat pvec-slice
     def defn check eval infer expand parse elaborate match
     ;; Pre-parse macros — should be expanded before reaching parser
@@ -413,6 +414,10 @@
     ;; $brace-params sentinel: map literal {k1 v1 k2 v2 ...}
     [(and (symbol? head) (eq? head '$brace-params))
      (parse-map-literal args loc)]
+
+    ;; $set-literal sentinel: Set literal #{e1 e2 ...}
+    [(and (symbol? head) (eq? head '$set-literal))
+     (parse-set-literal args loc)]
 
     ;; $vec-literal sentinel: PVec literal @[e1 e2 ...]
     [(and (symbol? head) (eq? head '$vec-literal))
@@ -1444,6 +1449,89 @@
             (let ([m (parse-datum (car args))])
               (if (prologos-error? m) m
                   (surf-map-vals m loc))))]
+
+       ;; ---- Set type and operations ----
+       ;; (Set A)
+       [(Set)
+        (or (check-arity 'Set args 1 loc)
+            (let ([a (parse-datum (car args))])
+              (if (prologos-error? a) a
+                  (surf-set-type a loc))))]
+
+       ;; (set-empty A)
+       [(set-empty)
+        (or (check-arity 'set-empty args 1 loc)
+            (let ([a (parse-datum (car args))])
+              (if (prologos-error? a) a
+                  (surf-set-empty a loc))))]
+
+       ;; (set-insert s a)
+       [(set-insert)
+        (or (check-arity 'set-insert args 2 loc)
+            (let ([s (parse-datum (car args))]
+                  [a (parse-datum (cadr args))])
+              (cond [(prologos-error? s) s]
+                    [(prologos-error? a) a]
+                    [else (surf-set-insert s a loc)])))]
+
+       ;; (set-member? s a)
+       [(|set-member?|)
+        (or (check-arity 'set-member? args 2 loc)
+            (let ([s (parse-datum (car args))]
+                  [a (parse-datum (cadr args))])
+              (cond [(prologos-error? s) s]
+                    [(prologos-error? a) a]
+                    [else (surf-set-member s a loc)])))]
+
+       ;; (set-delete s a)
+       [(set-delete)
+        (or (check-arity 'set-delete args 2 loc)
+            (let ([s (parse-datum (car args))]
+                  [a (parse-datum (cadr args))])
+              (cond [(prologos-error? s) s]
+                    [(prologos-error? a) a]
+                    [else (surf-set-delete s a loc)])))]
+
+       ;; (set-size s)
+       [(set-size)
+        (or (check-arity 'set-size args 1 loc)
+            (let ([s (parse-datum (car args))])
+              (if (prologos-error? s) s
+                  (surf-set-size s loc))))]
+
+       ;; (set-union s1 s2)
+       [(set-union)
+        (or (check-arity 'set-union args 2 loc)
+            (let ([s1 (parse-datum (car args))]
+                  [s2 (parse-datum (cadr args))])
+              (cond [(prologos-error? s1) s1]
+                    [(prologos-error? s2) s2]
+                    [else (surf-set-union s1 s2 loc)])))]
+
+       ;; (set-intersect s1 s2)
+       [(set-intersect)
+        (or (check-arity 'set-intersect args 2 loc)
+            (let ([s1 (parse-datum (car args))]
+                  [s2 (parse-datum (cadr args))])
+              (cond [(prologos-error? s1) s1]
+                    [(prologos-error? s2) s2]
+                    [else (surf-set-intersect s1 s2 loc)])))]
+
+       ;; (set-diff s1 s2)
+       [(set-diff)
+        (or (check-arity 'set-diff args 2 loc)
+            (let ([s1 (parse-datum (car args))]
+                  [s2 (parse-datum (cadr args))])
+              (cond [(prologos-error? s1) s1]
+                    [(prologos-error? s2) s2]
+                    [else (surf-set-diff s1 s2 loc)])))]
+
+       ;; (set-to-list s)
+       [(set-to-list)
+        (or (check-arity 'set-to-list args 1 loc)
+            (let ([s (parse-datum (car args))])
+              (if (prologos-error? s) s
+                  (surf-set-to-list s loc))))]
 
        ;; ---- PVec type and operations ----
        ;; (PVec A)
@@ -2978,6 +3066,21 @@
 ;; ========================================
 ;; Parse a PVec literal from $vec-literal contents.
 ;; args = list of element datums: (e1 e2 e3 ...)
+(define (parse-set-literal args loc)
+  ;; #{e1 e2 ...} — elements are just expressions (not key-value pairs)
+  (define parsed-elems
+    (let loop ([remaining args] [acc '()])
+      (cond
+        [(null? remaining) (reverse acc)]
+        [else
+         (define parsed (parse-datum (car remaining)))
+         (if (prologos-error? parsed)
+             parsed  ; propagate error immediately
+             (loop (cdr remaining) (cons parsed acc)))])))
+  (if (prologos-error? parsed-elems)
+      parsed-elems
+      (surf-set-literal parsed-elems loc)))
+
 (define (parse-pvec-literal args loc)
   (define parsed-elems
     (let loop ([remaining args] [acc '()])

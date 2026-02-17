@@ -842,6 +842,98 @@
          [(tu _ u) (tu (tu-type r) u)]
          [_ (tu-error)]))]
 
+    ;; ---- Set type and operations ----
+    [(expr-Set a)
+     (let ([r (inferQ ctx a)])
+       (match r
+         [(tu _ u) (tu (expr-Type (lzero)) u)]
+         [_ (tu-error)]))]
+    [(expr-hset _) (tu (expr-Set (expr-hole)) (zero-usage n))]
+    [(expr-set-empty a)
+     (let ([r (inferQ ctx a)])
+       (match r
+         [(tu _ u) (tu (expr-Set a) u)]
+         [_ (tu-error)]))]
+    [(expr-set-insert s a)
+     (let ([r1 (inferQ ctx s)]
+           [r2 (inferQ ctx a)])
+       (match* (r1 r2)
+         [((tu t1 u1) (tu _ u2))
+          (match (whnf t1)
+            [(expr-Set a-ty)
+             (if (check ctx a a-ty)
+                 (tu (expr-Set a-ty) (add-usage u1 u2))
+                 (tu-error))]
+            [_ (tu-error)])]
+         [(_ _) (tu-error)]))]
+    [(expr-set-member s a)
+     (let ([r1 (inferQ ctx s)]
+           [r2 (inferQ ctx a)])
+       (match* (r1 r2)
+         [((tu t1 u1) (tu _ u2))
+          (match (whnf t1)
+            [(expr-Set a-ty)
+             (if (check ctx a a-ty)
+                 (tu (expr-Bool) (add-usage u1 u2))
+                 (tu-error))]
+            [_ (tu-error)])]
+         [(_ _) (tu-error)]))]
+    [(expr-set-delete s a)
+     (let ([r1 (inferQ ctx s)]
+           [r2 (inferQ ctx a)])
+       (match* (r1 r2)
+         [((tu t1 u1) (tu _ u2))
+          (match (whnf t1)
+            [(expr-Set a-ty)
+             (if (check ctx a a-ty)
+                 (tu (expr-Set a-ty) (add-usage u1 u2))
+                 (tu-error))]
+            [_ (tu-error)])]
+         [(_ _) (tu-error)]))]
+    [(expr-set-size s)
+     (let ([r (inferQ ctx s)])
+       (match r
+         [(tu _ u) (tu (expr-Nat) u)]
+         [_ (tu-error)]))]
+    [(expr-set-union s1 s2)
+     (let ([r1 (inferQ ctx s1)]
+           [r2 (inferQ ctx s2)])
+       (match* (r1 r2)
+         [((tu t1 u1) (tu _ u2))
+          (match (whnf t1)
+            [(expr-Set a-ty)
+             (if (check ctx s2 (expr-Set a-ty))
+                 (tu (expr-Set a-ty) (add-usage u1 u2))
+                 (tu-error))]
+            [_ (tu-error)])]
+         [(_ _) (tu-error)]))]
+    [(expr-set-intersect s1 s2)
+     (let ([r1 (inferQ ctx s1)]
+           [r2 (inferQ ctx s2)])
+       (match* (r1 r2)
+         [((tu t1 u1) (tu _ u2))
+          (match (whnf t1)
+            [(expr-Set a-ty)
+             (if (check ctx s2 (expr-Set a-ty))
+                 (tu (expr-Set a-ty) (add-usage u1 u2))
+                 (tu-error))]
+            [_ (tu-error)])]
+         [(_ _) (tu-error)]))]
+    [(expr-set-diff s1 s2)
+     (let ([r1 (inferQ ctx s1)]
+           [r2 (inferQ ctx s2)])
+       (match* (r1 r2)
+         [((tu t1 u1) (tu _ u2))
+          (match (whnf t1)
+            [(expr-Set a-ty)
+             (if (check ctx s2 (expr-Set a-ty))
+                 (tu (expr-Set a-ty) (add-usage u1 u2))
+                 (tu-error))]
+            [_ (tu-error)])]
+         [(_ _) (tu-error)]))]
+    ;; set-to-list: no core expr-List type, fall through to error
+    [(expr-set-to-list _) (tu-error)]
+
     ;; ---- PVec type and operations ----
     [(expr-PVec a)
      (let ([r (inferQ ctx a)])
@@ -1013,6 +1105,21 @@
          [((bu #t u1) (bu #t u2) (bu #t u3))
           (bu #t (add-usage u1 (add-usage u2 u3)))]
          [(_ _ _) (bu #f (zero-usage n))]))]
+
+    ;; ---- Set constructors: check against Set type ----
+    [((expr-hset _) (expr-Set _)) (bu #t (zero-usage n))]
+    [((expr-set-empty a) (expr-Set _))
+     (let ([r (inferQ ctx a)])
+       (match r
+         [(tu _ u) (bu #t u)]
+         [_ (bu #f (zero-usage n))]))]
+    [((expr-set-insert s a) (expr-Set a-ty))
+     (let ([rs (checkQ ctx s (expr-Set a-ty))]
+           [ra (checkQ ctx a a-ty)])
+       (match* (rs ra)
+         [((bu #t u1) (bu #t u2))
+          (bu #t (add-usage u1 u2))]
+         [(_ _) (bu #f (zero-usage n))]))]
 
     ;; ---- PVec constructors: check against PVec type ----
     [((expr-rrb _) (expr-PVec _)) (bu #t (zero-usage n))]

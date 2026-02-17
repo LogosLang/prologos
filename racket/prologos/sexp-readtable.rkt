@@ -384,6 +384,55 @@
 ;; ========================================
 ;; The custom readtable
 ;; ========================================
+;; ========================================
+;; Hash dispatch: #{ → Set literal
+;; ========================================
+(define (read-hash-dispatch-syntax ch port src line col pos)
+  (define next (peek-char port))
+  (cond
+    ;; #{ — Set literal
+    [(and (char? next) (char=? next #\{))
+     (read-char port) ; consume {
+     (define elements
+       (let loop ([elems '()])
+         ;; Skip whitespace
+         (let skip-ws ()
+           (define c (peek-char port))
+           (when (and (char? c) (char-whitespace? c))
+             (read-char port)
+             (skip-ws)))
+         (define nc (peek-char port))
+         (cond
+           [(eof-object? nc)
+            (error 'prologos-reader "Unclosed Set literal #{ at ~a:~a:~a" src line col)]
+           [(char=? nc #\})
+            (read-char port) ; consume }
+            (reverse elems)]
+           ;; Skip commas
+           [(char=? nc #\,)
+            (read-char port)
+            (loop elems)]
+           [else
+            (define val
+              (parameterize ([current-readtable prologos-readtable])
+                (read-syntax src port)))
+            (define datum-val
+              (if (syntax? val) (syntax->datum val) val))
+            (loop (cons datum-val elems))])))
+     ;; Build ($set-literal ...) as syntax
+     (define end-pos (file-position port))
+     (define span (- end-pos pos))
+     (datum->syntax #f (cons '$set-literal elements)
+                    (list src line col pos span))]
+    [else
+     (error 'prologos-reader "~a:~a:~a: # must be followed by { for Set literal (#{...})"
+            src (or line 0) (or col 0))]))
+
+;; Datum-level reader for #{ (used by prologos-sexp-read)
+(define (read-hash-dispatch-datum ch port)
+  (define stx (read-hash-dispatch-syntax ch port "<unknown>" #f #f (file-position port)))
+  (if (syntax? stx) (syntax->datum stx) stx))
+
 (define prologos-readtable
   (make-readtable (current-readtable)
     #\< 'terminating-macro read-angle-bracket-syntax
@@ -391,7 +440,8 @@
     #\, 'terminating-macro read-comma-syntax
     #\' 'terminating-macro read-quote-syntax
     #\~ 'terminating-macro read-tilde-syntax
-    #\@ 'terminating-macro read-at-bracket-syntax))
+    #\@ 'terminating-macro read-at-bracket-syntax
+    #\# 'terminating-macro read-hash-dispatch-syntax))
 
 ;; ========================================
 ;; Convenience read functions

@@ -11,7 +11,8 @@
          "prelude.rkt"
          "syntax.rkt"
          "sessions.rkt"
-         "metavar-store.rkt")
+         "metavar-store.rkt"
+         "champ.rkt")
 
 (provide pp-expr
          pp-session
@@ -307,6 +308,22 @@
     [(expr-map-has-key m k) (format "[map-has-key? ~a ~a]" (pp-expr m names) (pp-expr k names))]
     [(expr-map-keys m) (format "[map-keys ~a]" (pp-expr m names))]
     [(expr-map-vals m) (format "[map-vals ~a]" (pp-expr m names))]
+    ;; Set
+    [(expr-Set a) (format "(Set ~a)" (pp-expr a names))]
+    [(expr-hset c)
+     (let ([keys (champ-keys c)])
+       (if (null? keys)
+           "#{}"
+           (format "#{~a}" (string-join (map (lambda (k) (pp-expr k names)) keys) " "))))]
+    [(expr-set-empty a) (format "(set-empty ~a)" (pp-expr a names))]
+    [(expr-set-insert s a) (format "(set-insert ~a ~a)" (pp-expr s names) (pp-expr a names))]
+    [(expr-set-member s a) (format "(set-member? ~a ~a)" (pp-expr s names) (pp-expr a names))]
+    [(expr-set-delete s a) (format "(set-delete ~a ~a)" (pp-expr s names) (pp-expr a names))]
+    [(expr-set-size s) (format "(set-size ~a)" (pp-expr s names))]
+    [(expr-set-union s1 s2) (format "(set-union ~a ~a)" (pp-expr s1 names) (pp-expr s2 names))]
+    [(expr-set-intersect s1 s2) (format "(set-intersect ~a ~a)" (pp-expr s1 names) (pp-expr s2 names))]
+    [(expr-set-diff s1 s2) (format "(set-diff ~a ~a)" (pp-expr s1 names) (pp-expr s2 names))]
+    [(expr-set-to-list s) (format "(set-to-list ~a)" (pp-expr s names))]
 
     ;; PVec
     [(expr-PVec a) (format "(PVec ~a)" (pp-expr a names))]
@@ -705,6 +722,18 @@
     [(expr-map-has-key m k) (or (uses-bvar0? m) (uses-bvar0? k))]
     [(expr-map-keys m) (uses-bvar0? m)]
     [(expr-map-vals m) (uses-bvar0? m)]
+    ;; Set
+    [(expr-Set a) (uses-bvar0? a)]
+    [(expr-hset _) #f]
+    [(expr-set-empty a) (uses-bvar0? a)]
+    [(expr-set-insert s a) (or (uses-bvar0? s) (uses-bvar0? a))]
+    [(expr-set-member s a) (or (uses-bvar0? s) (uses-bvar0? a))]
+    [(expr-set-delete s a) (or (uses-bvar0? s) (uses-bvar0? a))]
+    [(expr-set-size s) (uses-bvar0? s)]
+    [(expr-set-union s1 s2) (or (uses-bvar0? s1) (uses-bvar0? s2))]
+    [(expr-set-intersect s1 s2) (or (uses-bvar0? s1) (uses-bvar0? s2))]
+    [(expr-set-diff s1 s2) (or (uses-bvar0? s1) (uses-bvar0? s2))]
+    [(expr-set-to-list s) (uses-bvar0? s)]
     ;; PVec
     [(expr-PVec a) (uses-bvar0? a)]
     [(expr-rrb _) #f]

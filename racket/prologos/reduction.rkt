@@ -812,6 +812,77 @@
      (let ([m* (whnf m)])
        (if (equal? m* m) e (whnf (expr-map-vals m*))))]
 
+    ;; ---- Set iota rules: compute when arguments are hset (champ with #t sentinel) ----
+    ;; set-empty reduces to hset(champ-empty) — the runtime representation
+    [(expr-set-empty _) (expr-hset champ-empty)]
+
+    [(expr-set-insert s a)
+     (define s* (whnf s))
+     (match s*
+       [(expr-hset c)
+        (define a* (nf a))
+        (expr-hset (champ-insert c (equal-hash-code a*) a* #t))]
+       [_ (expr-set-insert s* a)])]
+
+    [(expr-set-member s a)
+     (define s* (whnf s))
+     (match s*
+       [(expr-hset c)
+        (define a* (nf a))
+        (if (champ-has-key? c (equal-hash-code a*) a*)
+            (expr-true)
+            (expr-false))]
+       [_ (expr-set-member s* a)])]
+
+    [(expr-set-delete s a)
+     (define s* (whnf s))
+     (match s*
+       [(expr-hset c)
+        (define a* (nf a))
+        (expr-hset (champ-delete c (equal-hash-code a*) a*))]
+       [_ (expr-set-delete s* a)])]
+
+    [(expr-set-size s)
+     (define s* (whnf s))
+     (match s*
+       [(expr-hset c) (nat->expr (champ-size c))]
+       [_ (expr-set-size s*)])]
+
+    [(expr-set-union s1 s2)
+     (define s1* (whnf s1))
+     (define s2* (whnf s2))
+     (match (list s1* s2*)
+       [(list (expr-hset c1) (expr-hset c2))
+        (expr-hset (champ-fold c2 (lambda (k _v acc) (champ-insert acc (equal-hash-code k) k #t)) c1))]
+       [_ (expr-set-union s1* s2*)])]
+
+    [(expr-set-intersect s1 s2)
+     (define s1* (whnf s1))
+     (define s2* (whnf s2))
+     (match (list s1* s2*)
+       [(list (expr-hset c1) (expr-hset c2))
+        (expr-hset (champ-fold c1
+                     (lambda (k _v acc)
+                       (if (champ-has-key? c2 (equal-hash-code k) k)
+                           (champ-insert acc (equal-hash-code k) k #t)
+                           acc))
+                     champ-empty))]
+       [_ (expr-set-intersect s1* s2*)])]
+
+    [(expr-set-diff s1 s2)
+     (define s1* (whnf s1))
+     (define s2* (whnf s2))
+     (match (list s1* s2*)
+       [(list (expr-hset c1) (expr-hset c2))
+        (expr-hset (champ-fold c2 (lambda (k _v acc) (champ-delete acc (equal-hash-code k) k)) c1))]
+       [_ (expr-set-diff s1* s2*)])]
+
+    [(expr-set-to-list s)
+     (define s* (whnf s))
+     (match s*
+       [(expr-hset c) e]   ;; stub — will be completed when List is a core type
+       [_ (expr-set-to-list s*)])]
+
     ;; Union types: pass through (types don't reduce)
     [(expr-union _ _) e]
 
@@ -1051,6 +1122,19 @@
     [(expr-map-has-key m k) (expr-map-has-key (nf m) (nf k))]
     [(expr-map-keys m) (expr-map-keys (nf m))]
     [(expr-map-vals m) (expr-map-vals (nf m))]
+
+    ;; Set normalization
+    [(expr-Set a) (expr-Set (nf a))]
+    [(expr-hset _) e]
+    [(expr-set-empty a) (expr-set-empty (nf a))]
+    [(expr-set-insert s a) (expr-set-insert (nf s) (nf a))]
+    [(expr-set-member s a) (expr-set-member (nf s) (nf a))]
+    [(expr-set-delete s a) (expr-set-delete (nf s) (nf a))]
+    [(expr-set-size s) (expr-set-size (nf s))]
+    [(expr-set-union s1 s2) (expr-set-union (nf s1) (nf s2))]
+    [(expr-set-intersect s1 s2) (expr-set-intersect (nf s1) (nf s2))]
+    [(expr-set-diff s1 s2) (expr-set-diff (nf s1) (nf s2))]
+    [(expr-set-to-list s) (expr-set-to-list (nf s))]
 
     ;; PVec normalization
     [(expr-PVec a) (expr-PVec (nf a))]

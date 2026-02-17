@@ -2544,6 +2544,9 @@
       ;; Map type: walk key and value type sub-expressions
       [(surf-map-type k v _loc)
        (walk k) (walk v)]
+      ;; Set type: walk element type
+      [(surf-set-type a _loc)
+       (walk a)]
       ;; PVec type: walk element type
       [(surf-pvec-type a _loc)
        (walk a)]
@@ -2580,6 +2583,7 @@
     Int int int+ int- int* int/ int-mod int-neg int-abs int-lt int-le int-eq from-nat
     Rat rat rat+ rat- rat* rat/ rat-neg rat-abs rat-lt rat-le rat-eq from-int rat-numer rat-denom
     Keyword Map map-empty map-assoc map-get map-dissoc map-size map-has-key? map-keys map-vals
+    Set set-empty set-insert set-member? set-delete set-size set-union set-intersect set-diff set-to-list
     PVec pvec-empty pvec-push pvec-nth pvec-update pvec-length pvec-pop pvec-concat pvec-slice))
 
 ;; Check if a symbol is a "known name" — should NOT be treated as a free type variable.

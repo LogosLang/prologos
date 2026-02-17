@@ -163,6 +163,18 @@
  (struct-out surf-map-has-key)
  (struct-out surf-map-keys)
  (struct-out surf-map-vals)
+ ;; Set surface forms
+ (struct-out surf-set-type)
+ (struct-out surf-set-literal)
+ (struct-out surf-set-empty)
+ (struct-out surf-set-insert)
+ (struct-out surf-set-member)
+ (struct-out surf-set-delete)
+ (struct-out surf-set-size)
+ (struct-out surf-set-union)
+ (struct-out surf-set-intersect)
+ (struct-out surf-set-diff)
+ (struct-out surf-set-to-list)
  ;; Persistent Vector (PVec)
  (struct-out surf-pvec-type) (struct-out surf-pvec-literal)
  (struct-out surf-pvec-empty) (struct-out surf-pvec-push)
@@ -554,6 +566,21 @@
 (struct surf-map-has-key (m k srcloc) #:transparent)       ; (map-has-key m k)
 (struct surf-map-keys (m srcloc) #:transparent)            ; (map-keys m)
 (struct surf-map-vals (m srcloc) #:transparent)            ; (map-vals m)
+
+;; ========================================
+;; Set (CHAMP-backed persistent hash set)
+;; ========================================
+(struct surf-set-type (elem srcloc) #:transparent)           ; Set A type
+(struct surf-set-literal (elems srcloc) #:transparent)       ; #{e1 e2 ...} — elems is a list of parsed surface exprs
+(struct surf-set-empty (elem srcloc) #:transparent)          ; (set-empty A)
+(struct surf-set-insert (s a srcloc) #:transparent)          ; (set-insert s a)
+(struct surf-set-member (s a srcloc) #:transparent)          ; (set-member? s a)
+(struct surf-set-delete (s a srcloc) #:transparent)          ; (set-delete s a)
+(struct surf-set-size (s srcloc) #:transparent)              ; (set-size s)
+(struct surf-set-union (s1 s2 srcloc) #:transparent)         ; (set-union s1 s2)
+(struct surf-set-intersect (s1 s2 srcloc) #:transparent)     ; (set-intersect s1 s2)
+(struct surf-set-diff (s1 s2 srcloc) #:transparent)          ; (set-diff s1 s2)
+(struct surf-set-to-list (s srcloc) #:transparent)           ; (set-to-list s)
 
 ;; ========================================
 ;; Persistent Vector (PVec)

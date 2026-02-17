@@ -1,0 +1,29 @@
+ns prologos.data.set
+
+require [prologos.data.list :refer [List nil cons reduce]]
+
+;; ========================================
+;; Prologos Set — Persistent Hash Set
+;; ========================================
+;; Built on the CHAMP trie (same as Map), with #t sentinel values.
+;; Core operations are AST-level keywords:
+;;   Set, set-empty, set-insert, set-member?, set-delete,
+;;   set-size, set-union, set-intersect, set-diff, set-to-list
+;;
+;; This module provides derived set-algebra operations.
+
+;; Create a singleton set containing one element.
+spec set-singleton A -> Set A
+defn set-singleton [a]
+  set-insert (set-empty) a
+
+;; Build a set from a list of elements.
+spec set-from-list [List A] -> Set A
+defn set-from-list [xs]
+  reduce (\ [acc <(Set A)>] [a <A>] -> <(Set A)> (set-insert acc a)) (set-empty) xs
+
+;; Symmetric difference: elements in exactly one of the two sets.
+;; set-symmetric-diff s1 s2 = union (diff s1 s2) (diff s2 s1)
+spec set-symmetric-diff [Set A] [Set A] -> Set A
+defn set-symmetric-diff [s1 s2]
+  set-union (set-diff s1 s2) (set-diff s2 s1)

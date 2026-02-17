@@ -998,6 +998,86 @@
        (if (prologos-error? em) em
            (expr-map-vals em)))]
 
+    ;; ---- Set type and operations ----
+    [(surf-set-type a loc)
+     (let ([ea (elaborate a env depth)])
+       (if (prologos-error? ea) ea
+           (expr-Set ea)))]
+
+    [(surf-set-literal elems loc)
+     ;; Elaborate to nested set-insert on set-empty.
+     ;; Element type uses a fresh meta — unification will resolve it.
+     (let ([am (fresh-meta ctx-empty (expr-hole)
+                 (meta-source-info loc 'set-elem-type "element type of set literal" #f (env->name-stack env)))])
+       (if (null? elems)
+           (expr-set-empty am)
+           (let loop ([remaining elems]
+                      [result (expr-set-empty am)])
+             (cond
+               [(null? remaining) result]
+               [else
+                (define ea (elaborate (car remaining) env depth))
+                (if (prologos-error? ea) ea
+                    (loop (cdr remaining)
+                          (expr-set-insert result ea)))]))))]
+
+    [(surf-set-empty a loc)
+     (let ([ea (elaborate a env depth)])
+       (if (prologos-error? ea) ea
+           (expr-set-empty ea)))]
+
+    [(surf-set-insert s a loc)
+     (let ([es (elaborate s env depth)]
+           [ea (elaborate a env depth)])
+       (cond [(prologos-error? es) es]
+             [(prologos-error? ea) ea]
+             [else (expr-set-insert es ea)]))]
+
+    [(surf-set-member s a loc)
+     (let ([es (elaborate s env depth)]
+           [ea (elaborate a env depth)])
+       (cond [(prologos-error? es) es]
+             [(prologos-error? ea) ea]
+             [else (expr-set-member es ea)]))]
+
+    [(surf-set-delete s a loc)
+     (let ([es (elaborate s env depth)]
+           [ea (elaborate a env depth)])
+       (cond [(prologos-error? es) es]
+             [(prologos-error? ea) ea]
+             [else (expr-set-delete es ea)]))]
+
+    [(surf-set-size s loc)
+     (let ([es (elaborate s env depth)])
+       (if (prologos-error? es) es
+           (expr-set-size es)))]
+
+    [(surf-set-union s1 s2 loc)
+     (let ([es1 (elaborate s1 env depth)]
+           [es2 (elaborate s2 env depth)])
+       (cond [(prologos-error? es1) es1]
+             [(prologos-error? es2) es2]
+             [else (expr-set-union es1 es2)]))]
+
+    [(surf-set-intersect s1 s2 loc)
+     (let ([es1 (elaborate s1 env depth)]
+           [es2 (elaborate s2 env depth)])
+       (cond [(prologos-error? es1) es1]
+             [(prologos-error? es2) es2]
+             [else (expr-set-intersect es1 es2)]))]
+
+    [(surf-set-diff s1 s2 loc)
+     (let ([es1 (elaborate s1 env depth)]
+           [es2 (elaborate s2 env depth)])
+       (cond [(prologos-error? es1) es1]
+             [(prologos-error? es2) es2]
+             [else (expr-set-diff es1 es2)]))]
+
+    [(surf-set-to-list s loc)
+     (let ([es (elaborate s env depth)])
+       (if (prologos-error? es) es
+           (expr-set-to-list es)))]
+
     ;; ---- PVec type and operations ----
     [(surf-pvec-type a loc)
      (let ([ea (elaborate a env depth)])

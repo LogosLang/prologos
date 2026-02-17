@@ -122,6 +122,13 @@
  (struct-out expr-map-get) (struct-out expr-map-dissoc)
  (struct-out expr-map-size) (struct-out expr-map-has-key)
  (struct-out expr-map-keys) (struct-out expr-map-vals)
+ ;; Set (persistent hash set)
+ (struct-out expr-Set) (struct-out expr-hset)
+ (struct-out expr-set-empty) (struct-out expr-set-insert)
+ (struct-out expr-set-member) (struct-out expr-set-delete)
+ (struct-out expr-set-size) (struct-out expr-set-union)
+ (struct-out expr-set-intersect) (struct-out expr-set-diff)
+ (struct-out expr-set-to-list)
  ;; Persistent Vector (PVec)
  (struct-out expr-PVec) (struct-out expr-rrb) (struct-out expr-pvec-empty)
  (struct-out expr-pvec-push) (struct-out expr-pvec-nth) (struct-out expr-pvec-update)
@@ -429,6 +436,29 @@
 (struct expr-map-keys (m) #:transparent)                      ; keys : Map K V → List K
 (struct expr-map-vals (m) #:transparent)                      ; vals : Map K V → List V
 
+;; ========================================
+;; Set (persistent hash set, backed by CHAMP with #t sentinel)
+;; ========================================
+
+;; Type constructor: Set A
+(struct expr-Set (elem-type) #:transparent)                   ; Set A : Type(level(A))
+
+;; Runtime value (racket-champ is a champ-root from champ.rkt, values are #t)
+(struct expr-hset (racket-champ) #:transparent)               ; set literal value
+
+;; Constructor
+(struct expr-set-empty (elem-type) #:transparent)             ; empty set : Set A
+
+;; Operations
+(struct expr-set-insert (s a) #:transparent)                  ; set-insert : Set A → A → Set A
+(struct expr-set-member (s a) #:transparent)                  ; set-member? : Set A → A → Bool
+(struct expr-set-delete (s a) #:transparent)                  ; set-delete : Set A → A → Set A
+(struct expr-set-size (s) #:transparent)                      ; set-size : Set A → Nat
+(struct expr-set-union (s1 s2) #:transparent)                 ; set-union : Set A → Set A → Set A
+(struct expr-set-intersect (s1 s2) #:transparent)             ; set-intersect : Set A → Set A → Set A
+(struct expr-set-diff (s1 s2) #:transparent)                  ; set-diff : Set A → Set A → Set A
+(struct expr-set-to-list (s) #:transparent)                   ; set-to-list : Set A → List A
+
 ;; ---- Persistent Vector (PVec, RRB-Tree-backed) ----
 (struct expr-PVec (elem-type) #:transparent)                  ; PVec A : Type(level(A))
 (struct expr-rrb (racket-rrb) #:transparent)                  ; runtime wrapper (opaque Racket rrb-root)
@@ -598,6 +628,11 @@
       (expr-map-assoc? x) (expr-map-get? x) (expr-map-dissoc? x)
       (expr-map-size? x) (expr-map-has-key? x)
       (expr-map-keys? x) (expr-map-vals? x)
+      (expr-Set? x) (expr-hset? x) (expr-set-empty? x)
+      (expr-set-insert? x) (expr-set-member? x) (expr-set-delete? x)
+      (expr-set-size? x) (expr-set-union? x)
+      (expr-set-intersect? x) (expr-set-diff? x)
+      (expr-set-to-list? x)
       (expr-PVec? x) (expr-rrb? x) (expr-pvec-empty? x)
       (expr-pvec-push? x) (expr-pvec-nth? x) (expr-pvec-update? x)
       (expr-pvec-length? x) (expr-pvec-pop? x)

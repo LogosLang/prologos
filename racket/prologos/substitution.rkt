@@ -202,6 +202,19 @@
     [(expr-map-keys m) (expr-map-keys (shift delta cutoff m))]
     [(expr-map-vals m) (expr-map-vals (shift delta cutoff m))]
 
+    ;; Set (all non-binding)
+    [(expr-Set a) (expr-Set (shift delta cutoff a))]
+    [(expr-hset _) e]  ; Racket value, no de Bruijn vars
+    [(expr-set-empty a) (expr-set-empty (shift delta cutoff a))]
+    [(expr-set-insert s a) (expr-set-insert (shift delta cutoff s) (shift delta cutoff a))]
+    [(expr-set-member s a) (expr-set-member (shift delta cutoff s) (shift delta cutoff a))]
+    [(expr-set-delete s a) (expr-set-delete (shift delta cutoff s) (shift delta cutoff a))]
+    [(expr-set-size s) (expr-set-size (shift delta cutoff s))]
+    [(expr-set-union s1 s2) (expr-set-union (shift delta cutoff s1) (shift delta cutoff s2))]
+    [(expr-set-intersect s1 s2) (expr-set-intersect (shift delta cutoff s1) (shift delta cutoff s2))]
+    [(expr-set-diff s1 s2) (expr-set-diff (shift delta cutoff s1) (shift delta cutoff s2))]
+    [(expr-set-to-list s) (expr-set-to-list (shift delta cutoff s))]
+
     ;; PVec (all non-binding)
     [(expr-PVec a) (expr-PVec (shift delta cutoff a))]
     [(expr-rrb _) e]
@@ -450,6 +463,19 @@
     [(expr-map-has-key m key) (expr-map-has-key (subst k s m) (subst k s key))]
     [(expr-map-keys m) (expr-map-keys (subst k s m))]
     [(expr-map-vals m) (expr-map-vals (subst k s m))]
+
+    ;; Set (all non-binding)
+    [(expr-Set a) (expr-Set (subst k s a))]
+    [(expr-hset _) e]
+    [(expr-set-empty a) (expr-set-empty (subst k s a))]
+    [(expr-set-insert m x) (expr-set-insert (subst k s m) (subst k s x))]
+    [(expr-set-member m x) (expr-set-member (subst k s m) (subst k s x))]
+    [(expr-set-delete m x) (expr-set-delete (subst k s m) (subst k s x))]
+    [(expr-set-size m) (expr-set-size (subst k s m))]
+    [(expr-set-union s1 s2) (expr-set-union (subst k s s1) (subst k s s2))]
+    [(expr-set-intersect s1 s2) (expr-set-intersect (subst k s s1) (subst k s s2))]
+    [(expr-set-diff s1 s2) (expr-set-diff (subst k s s1) (subst k s s2))]
+    [(expr-set-to-list m) (expr-set-to-list (subst k s m))]
 
     ;; PVec (all non-binding)
     [(expr-PVec a) (expr-PVec (subst k s a))]

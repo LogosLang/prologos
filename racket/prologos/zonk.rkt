@@ -187,6 +187,18 @@
     [(expr-map-has-key m k) (expr-map-has-key (zonk m) (zonk k))]
     [(expr-map-keys m) (expr-map-keys (zonk m))]
     [(expr-map-vals m) (expr-map-vals (zonk m))]
+    ;; Set
+    [(expr-Set a) (expr-Set (zonk a))]
+    [(expr-hset _) e]
+    [(expr-set-empty a) (expr-set-empty (zonk a))]
+    [(expr-set-insert s a) (expr-set-insert (zonk s) (zonk a))]
+    [(expr-set-member s a) (expr-set-member (zonk s) (zonk a))]
+    [(expr-set-delete s a) (expr-set-delete (zonk s) (zonk a))]
+    [(expr-set-size s) (expr-set-size (zonk s))]
+    [(expr-set-union s1 s2) (expr-set-union (zonk s1) (zonk s2))]
+    [(expr-set-intersect s1 s2) (expr-set-intersect (zonk s1) (zonk s2))]
+    [(expr-set-diff s1 s2) (expr-set-diff (zonk s1) (zonk s2))]
+    [(expr-set-to-list s) (expr-set-to-list (zonk s))]
 
     ;; PVec (all non-binding)
     [(expr-PVec a) (expr-PVec (zonk a))]
@@ -436,6 +448,18 @@
     [(expr-map-has-key m k) (expr-map-has-key (zonk-at-depth depth m) (zonk-at-depth depth k))]
     [(expr-map-keys m) (expr-map-keys (zonk-at-depth depth m))]
     [(expr-map-vals m) (expr-map-vals (zonk-at-depth depth m))]
+    ;; Set
+    [(expr-Set a) (expr-Set (zonk-at-depth depth a))]
+    [(expr-hset _) e]
+    [(expr-set-empty a) (expr-set-empty (zonk-at-depth depth a))]
+    [(expr-set-insert s a) (expr-set-insert (zonk-at-depth depth s) (zonk-at-depth depth a))]
+    [(expr-set-member s a) (expr-set-member (zonk-at-depth depth s) (zonk-at-depth depth a))]
+    [(expr-set-delete s a) (expr-set-delete (zonk-at-depth depth s) (zonk-at-depth depth a))]
+    [(expr-set-size s) (expr-set-size (zonk-at-depth depth s))]
+    [(expr-set-union s1 s2) (expr-set-union (zonk-at-depth depth s1) (zonk-at-depth depth s2))]
+    [(expr-set-intersect s1 s2) (expr-set-intersect (zonk-at-depth depth s1) (zonk-at-depth depth s2))]
+    [(expr-set-diff s1 s2) (expr-set-diff (zonk-at-depth depth s1) (zonk-at-depth depth s2))]
+    [(expr-set-to-list s) (expr-set-to-list (zonk-at-depth depth s))]
 
     ;; PVec (all non-binding)
     [(expr-PVec a) (expr-PVec (zonk-at-depth depth a))]
@@ -656,6 +680,18 @@
     [(expr-map-has-key m k) (expr-map-has-key (default-metas m) (default-metas k))]
     [(expr-map-keys m) (expr-map-keys (default-metas m))]
     [(expr-map-vals m) (expr-map-vals (default-metas m))]
+    ;; Set
+    [(expr-Set a) (expr-Set (default-metas a))]
+    [(expr-hset _) e]
+    [(expr-set-empty a) (expr-set-empty (default-metas a))]
+    [(expr-set-insert s a) (expr-set-insert (default-metas s) (default-metas a))]
+    [(expr-set-member s a) (expr-set-member (default-metas s) (default-metas a))]
+    [(expr-set-delete s a) (expr-set-delete (default-metas s) (default-metas a))]
+    [(expr-set-size s) (expr-set-size (default-metas s))]
+    [(expr-set-union s1 s2) (expr-set-union (default-metas s1) (default-metas s2))]
+    [(expr-set-intersect s1 s2) (expr-set-intersect (default-metas s1) (default-metas s2))]
+    [(expr-set-diff s1 s2) (expr-set-diff (default-metas s1) (default-metas s2))]
+    [(expr-set-to-list s) (expr-set-to-list (default-metas s))]
     ;; PVec (all non-binding)
     [(expr-PVec a) (expr-PVec (default-metas a))]
     [(expr-rrb _) e]

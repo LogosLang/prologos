@@ -433,6 +433,19 @@
        (tok-read! tok)  ; consume >
        (token 'symbol '-> ln cl ps 2)]
 
+      ;; Hash — Set literal #{...}
+      [(char=? c #\#)
+       (tok-read! tok)
+       (define next (tok-peek tok))
+       (cond
+         [(and (char? next) (char=? next #\{))
+          ;; #{ — Set literal opener; { will be consumed by parse-set-literal-form
+          (token 'hash-lbrace #f ln cl ps 1)]
+         [else
+          (error 'prologos-reader
+                 "~a:~a:~a: # must be followed by { for Set literal (#{...})"
+                 (tokenizer-source tok) ln (+ cl 1))])]
+
       ;; Tilde — LSeq literal ~[ or approximate literal prefix ~42, ~3/7
       [(char=? c #\~)
        (tok-read! tok)
@@ -882,6 +895,43 @@
   (make-stx all src ln cl ps
             (max 1 (- (+ (token-pos (parser-peek p)) 1) ps))))
 
+;; --- Parse a Set literal form: #{ ... } ---
+;; Wraps contents with $set-literal sentinel.
+;; #{} → ($set-literal)
+;; #{1 2 3} → ($set-literal 1 2 3)
+
+(define (parse-set-literal-form p)
+  (define hash-tok (parser-next! p))   ; consume hash-lbrace (the #)
+  (define open-tok (parser-next! p))   ; consume lbrace (the {)
+  (define ln (token-line hash-tok))
+  (define cl (token-col hash-tok))
+  (define ps (token-pos hash-tok))
+  (define src (parser-source p))
+
+  (define elements
+    (let loop ([elems '()])
+      (define tt (parser-peek-type p))
+      (cond
+        [(eq? tt 'rbrace)
+         (parser-next! p) ; consume rbrace
+         (reverse elems)]
+        [(eq? tt 'eof)
+         (error 'prologos-reader "~a:~a:~a: Unclosed Set literal #{"
+                src ln cl)]
+        ;; Skip commas
+        [(eq? tt 'comma)
+         (parser-next! p)
+         (loop elems)]
+        [else
+         (define elem (parse-inline-element p))
+         (loop (cons elem elems))])))
+
+  ;; Wrap with $set-literal sentinel
+  (define sentinel (make-stx '$set-literal src ln cl ps 0))
+  (define all (cons sentinel elements))
+  (make-stx all src ln cl ps
+            (max 1 (- (+ (token-pos (parser-peek p)) 1) ps))))
+
 ;; --- Parse a single inline element (atom, grouped form, $-quote, <angle>, {brace}) ---
 
 (define (parse-inline-element p)
@@ -905,6 +955,9 @@
     [(eq? tt 'tilde-lbracket)
      ;; ~[ ... ] — LSeq literal
      (parse-lseq-literal-form p)]
+    [(eq? tt 'hash-lbrace)
+     ;; #{ ... } — Set literal
+     (parse-set-literal-form p)]
     [(eq? tt 'dollar)
      ;; $expr — quote operator
      (define d (parser-next! p)) ; consume $

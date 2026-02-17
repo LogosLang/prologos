@@ -668,6 +668,58 @@
     [(expr-map-keys _) (expr-error)]
     [(expr-map-vals _) (expr-error)]
 
+    ;; ---- Set type and operations ----
+    [(expr-Set a)
+     (match (infer-level ctx a)
+       [(just-level l) (expr-Type l)]
+       [_ (expr-error)])]
+    [(expr-hset _) (expr-error)]  ;; hset needs checking context
+    [(expr-set-empty a)
+     (if (is-type ctx a) (expr-Set a) (expr-error))]
+    [(expr-set-insert s a)
+     (let ([ts (whnf (infer ctx s))])
+       (match ts
+         [(expr-Set a-ty)
+          (if (check ctx a a-ty) (expr-Set a-ty) (expr-error))]
+         [_ (expr-error)]))]
+    [(expr-set-member s a)
+     (let ([ts (whnf (infer ctx s))])
+       (match ts
+         [(expr-Set a-ty)
+          (if (check ctx a a-ty) (expr-Bool) (expr-error))]
+         [_ (expr-error)]))]
+    [(expr-set-delete s a)
+     (let ([ts (whnf (infer ctx s))])
+       (match ts
+         [(expr-Set a-ty)
+          (if (check ctx a a-ty) (expr-Set a-ty) (expr-error))]
+         [_ (expr-error)]))]
+    [(expr-set-size s)
+     (let ([ts (whnf (infer ctx s))])
+       (match ts
+         [(expr-Set _) (expr-Nat)]
+         [_ (expr-error)]))]
+    [(expr-set-union s1 s2)
+     (let ([ts1 (whnf (infer ctx s1))])
+       (match ts1
+         [(expr-Set a-ty)
+          (if (check ctx s2 (expr-Set a-ty)) (expr-Set a-ty) (expr-error))]
+         [_ (expr-error)]))]
+    [(expr-set-intersect s1 s2)
+     (let ([ts1 (whnf (infer ctx s1))])
+       (match ts1
+         [(expr-Set a-ty)
+          (if (check ctx s2 (expr-Set a-ty)) (expr-Set a-ty) (expr-error))]
+         [_ (expr-error)]))]
+    [(expr-set-diff s1 s2)
+     (let ([ts1 (whnf (infer ctx s1))])
+       (match ts1
+         [(expr-Set a-ty)
+          (if (check ctx s2 (expr-Set a-ty)) (expr-Set a-ty) (expr-error))]
+         [_ (expr-error)]))]
+    ;; set-to-list: no core expr-List type, fall through to error
+    [(expr-set-to-list _) (expr-error)]
+
     ;; ---- PVec type and operations ----
     [(expr-PVec a)
      (if (is-type ctx a) (expr-Type (lzero)) (expr-error))]
@@ -830,6 +882,17 @@
      (and (check ctx m (expr-Map kt vt))
           (check ctx k kt)
           (check ctx v vt))]
+
+    ;; ---- Set checks ----
+    ;; hset checked against Set A
+    [((expr-hset _) (expr-Set _)) #t]
+    ;; set-empty checked against Set A
+    [((expr-set-empty a1) (expr-Set a2))
+     (unify-ok? (unify ctx a1 a2))]
+    ;; set-insert checked against Set A — propagate expected type
+    [((expr-set-insert s a) (expr-Set a-ty))
+     (and (check ctx s (expr-Set a-ty))
+          (check ctx a a-ty))]
 
     ;; ---- PVec checks ----
     [((expr-rrb _) (expr-PVec _)) #t]
@@ -1109,6 +1172,9 @@
          [((just-level lk*) (just-level lv*))
           (just-level (lmax lk* lv*))]
          [(_ _) (no-level)]))]
+
+    ;; Set formation: Set A : Type(level(A))
+    [(expr-Set a) (infer-level ctx a)]
 
     ;; PVec formation: PVec A : Type(level(A))
     [(expr-PVec a) (infer-level ctx a)]
