@@ -348,3 +348,189 @@ defn sort [lte xs]
     | cons a as -> match as
       | nil     -> cons a nil
       | cons _ _ -> merge lte [sort lte [first [halve xs]]] [sort lte [second [halve xs]]]
+
+;; ========================================
+;; Non-empty Folds
+;; ========================================
+
+;; Left fold on non-empty list (first element is the initial accumulator).
+;; reduce1 f [a,b,c] = f (f a b) c
+spec reduce1 [A -> A -> A] [List A] -> Option A
+defn reduce1 [f xs]
+  match xs
+    | nil       -> none
+    | cons a as -> some [reduce f a as]
+
+;; Right fold on non-empty list (last element is the base).
+;; foldr1 f [a,b,c] = f a (f b c)
+;; Wraps each element in some, then folds with a combiner.
+spec foldr1-step [A -> A -> A] A [Option A] -> Option A
+defn foldr1-step [f a acc]
+  match acc
+    | none   -> some a
+    | some r -> some [f a r]
+
+spec foldr1 [A -> A -> A] [List A] -> Option A
+defn foldr1 [f xs]
+  foldr A [Option A] [foldr1-step A f] [none A] xs
+
+;; ========================================
+;; Splitting
+;; ========================================
+
+;; All elements except the last. Returns none for empty list.
+spec init-helper [List A] [List A] -> List A
+defn init-helper [acc xs]
+  match xs
+    | nil       -> reverse acc
+    | cons a as -> match as
+      | nil     -> reverse acc
+      | cons _ _ -> init-helper [cons a acc] as
+
+spec init [List A] -> Option [List A]
+defn init [xs]
+  match xs
+    | nil      -> none
+    | cons _ _ -> some [init-helper nil xs]
+
+;; Split where predicate first fails: returns (passing-prefix, rest).
+;; span zero? [0,0,1,2] = pair [0,0] [1,2]
+spec span-helper [A -> Bool] [List A] [List A] -> [Sigma [_ <List A>] [List A]]
+defn span-helper [p acc xs]
+  match xs
+    | nil       -> pair [reverse acc] nil
+    | cons a as -> match [p a]
+      | true  -> span-helper p [cons a acc] as
+      | false -> pair [reverse acc] xs
+
+spec span [A -> Bool] [List A] -> [Sigma [_ <List A>] [List A]]
+defn span [p xs]
+  span-helper p nil xs
+
+;; Split where predicate first succeeds (complement of span).
+;; break zero? [1,2,0,3] = pair [1,2] [0,3]
+spec break-helper [A -> Bool] [List A] [List A] -> [Sigma [_ <List A>] [List A]]
+defn break-helper [p acc xs]
+  match xs
+    | nil       -> pair [reverse acc] nil
+    | cons a as -> match [p a]
+      | true  -> pair [reverse acc] xs
+      | false -> break-helper p [cons a acc] as
+
+spec break [A -> Bool] [List A] -> [Sigma [_ <List A>] [List A]]
+defn break [p xs]
+  break-helper p nil xs
+
+;; ========================================
+;; Equality-Based Operations
+;; ========================================
+
+;; Remove consecutive duplicates (like Unix uniq).
+;; dedup nat-eq [1,1,2,2,3] = [1,2,3]
+spec dedup-helper [A -> A -> Bool] A [List A] -> List A
+defn dedup-helper [eq prev xs]
+  match xs
+    | nil       -> nil
+    | cons a as -> match [eq prev a]
+      | true  -> dedup-helper eq prev as
+      | false -> cons a [dedup-helper eq a as]
+
+spec dedup [A -> A -> Bool] [List A] -> List A
+defn dedup [eq xs]
+  match xs
+    | nil       -> nil
+    | cons a as -> cons a [dedup-helper eq a as]
+
+;; Check if one list is a prefix of another.
+;; is-prefix-of nat-eq [1,2] [1,2,3] = true
+spec is-prefix-of [A -> A -> Bool] [List A] [List A] -> Bool
+defn is-prefix-of [eq prefix xs]
+  match prefix
+    | nil       -> true
+    | cons p ps -> match xs
+      | nil       -> false
+      | cons x rest -> match [eq p x]
+        | true  -> is-prefix-of eq ps rest
+        | false -> false
+
+;; Check if one list is a suffix of another.
+;; is-suffix-of nat-eq [2,3] [1,2,3] = true
+spec is-suffix-of [A -> A -> Bool] [List A] [List A] -> Bool
+defn is-suffix-of [eq suffix xs]
+  is-prefix-of eq [reverse suffix] [reverse xs]
+
+;; Remove first occurrence of an element.
+;; delete nat-eq 2 [1,2,3,2] = [1,3,2]
+spec delete [A -> A -> Bool] A [List A] -> List A
+defn delete [eq x xs]
+  match xs
+    | nil       -> nil
+    | cons a as -> match [eq x a]
+      | true  -> as
+      | false -> cons a [delete eq x as]
+
+;; ========================================
+;; Search and Counting
+;; ========================================
+
+;; Index of first element satisfying predicate.
+;; find-index zero? [3,2,0,1] = some 2
+spec find-index-helper [A -> Bool] Nat [List A] -> Option Nat
+defn find-index-helper [p n xs]
+  match xs
+    | nil       -> none
+    | cons a as -> match [p a]
+      | true  -> some n
+      | false -> find-index-helper p [inc n] as
+
+spec find-index [A -> Bool] [List A] -> Option Nat
+defn find-index [p xs]
+  find-index-helper p zero xs
+
+;; Count elements satisfying predicate.
+;; count zero? [0,1,0,2,0] = 3
+spec count-helper [A -> Bool] Nat [List A] -> Nat
+defn count-helper [p n xs]
+  match xs
+    | nil       -> n
+    | cons a as -> match [p a]
+      | true  -> count-helper p [inc n] as
+      | false -> count-helper p n as
+
+spec count [A -> Bool] [List A] -> Nat
+defn count [p xs]
+  count-helper p zero xs
+
+;; ========================================
+;; Accumulating Transforms
+;; ========================================
+
+;; Left fold with intermediate results.
+;; scanl add 0 [1,2,3] = [0,1,3,6]
+spec scanl [B -> A -> B] B [List A] -> List B
+defn scanl [f z xs]
+  match xs
+    | nil       -> cons z nil
+    | cons a as -> cons z [scanl f [f z a] as]
+
+;; Generate N values by repeated function application.
+;; iterate-n 4 inc 0 = [0,1,2,3]
+spec iterate-n Nat [A -> A] A -> List A
+defn iterate-n [n f x]
+  match n
+    | zero  -> nil
+    | inc k -> cons x [iterate-n k f [f x]]
+
+;; Concat with separator list between each sublist.
+;; intercalate [0] [[1,2],[3,4]] = [1,2,0,3,4]
+spec intercalate [List A] [List [List A]] -> List A
+defn intercalate [sep xss]
+  concat [intersperse sep xss]
+
+;; Sort by derived key using an existing comparator.
+;; sort-on nat-lte key xs — sorts xs by (key x) using nat-lte
+;; Sort by derived key using an existing comparator.
+;; sort-on nat-lte key xs — sorts xs by (key x) using nat-lte
+spec sort-on [B -> B -> Bool] [A -> B] [List A] -> List A
+defn sort-on [lte key xs]
+  sort A [fn a b [lte [key a] [key b]]] xs
