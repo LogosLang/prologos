@@ -20,7 +20,8 @@
          "pretty-print.rkt"
          "multi-dispatch.rkt"
          "foreign.rkt"
-         "posit-impl.rkt")
+         "posit-impl.rkt"
+         "champ.rkt")
 
 (provide elaborate
          elaborate-top-level)
@@ -898,6 +899,104 @@
     ;; At elaboration time, we default to Posit32.
     [(surf-approx-literal v loc)
      (expr-posit32 (posit32-encode (if (exact? v) v (inexact->exact v))))]
+
+    ;; ---- Keyword type and literal ----
+    [(surf-keyword-type loc)
+     (expr-Keyword)]
+    [(surf-keyword name loc)
+     (expr-keyword name)]
+
+    ;; ---- Map type and operations ----
+    [(surf-map-type k v loc)
+     (let ([ek (elaborate k env depth)]
+           [ev (elaborate v env depth)])
+       (cond [(prologos-error? ek) ek]
+             [(prologos-error? ev) ev]
+             [else (expr-Map ek ev)]))]
+
+    [(surf-map-literal entries loc)
+     ;; Elaborate to nested map-assoc on map-empty.
+     ;; entries is a list of (parsed-key . parsed-val) pairs.
+     ;; Key and value types use fresh metas — unification will resolve them.
+     (if (null? entries)
+         ;; Empty map: fresh metas for key/value types
+         (let ([km (fresh-meta ctx-empty (expr-hole)
+                     (meta-source-info loc 'map-key-type "key type of empty map literal" #f (env->name-stack env)))]
+               [vm (fresh-meta ctx-empty (expr-hole)
+                     (meta-source-info loc 'map-val-type "value type of empty map literal" #f (env->name-stack env)))])
+           (expr-map-empty km vm))
+         ;; Non-empty: elaborate all entries, then fold into map-assoc
+         (let ([km (fresh-meta ctx-empty (expr-hole)
+                     (meta-source-info loc 'map-key-type "key type of map literal" #f (env->name-stack env)))]
+               [vm (fresh-meta ctx-empty (expr-hole)
+                     (meta-source-info loc 'map-val-type "value type of map literal" #f (env->name-stack env)))])
+           (let loop ([remaining entries]
+                      [result (expr-map-empty km vm)])
+             (cond
+               [(null? remaining)
+                result]
+               [else
+                (define entry (car remaining))
+                (define ek (elaborate (car entry) env depth))
+                (define ev (elaborate (cdr entry) env depth))
+                (cond
+                  [(prologos-error? ek) ek]
+                  [(prologos-error? ev) ev]
+                  [else
+                   (loop (cdr remaining)
+                         (expr-map-assoc result ek ev))])]))))]
+
+    [(surf-map-empty k v loc)
+     (let ([ek (elaborate k env depth)]
+           [ev (elaborate v env depth)])
+       (cond [(prologos-error? ek) ek]
+             [(prologos-error? ev) ev]
+             [else (expr-map-empty ek ev)]))]
+
+    [(surf-map-assoc m k v loc)
+     (let ([em (elaborate m env depth)]
+           [ek (elaborate k env depth)]
+           [ev (elaborate v env depth)])
+       (cond [(prologos-error? em) em]
+             [(prologos-error? ek) ek]
+             [(prologos-error? ev) ev]
+             [else (expr-map-assoc em ek ev)]))]
+
+    [(surf-map-get m k loc)
+     (let ([em (elaborate m env depth)]
+           [ek (elaborate k env depth)])
+       (cond [(prologos-error? em) em]
+             [(prologos-error? ek) ek]
+             [else (expr-map-get em ek)]))]
+
+    [(surf-map-dissoc m k loc)
+     (let ([em (elaborate m env depth)]
+           [ek (elaborate k env depth)])
+       (cond [(prologos-error? em) em]
+             [(prologos-error? ek) ek]
+             [else (expr-map-dissoc em ek)]))]
+
+    [(surf-map-size m loc)
+     (let ([em (elaborate m env depth)])
+       (if (prologos-error? em) em
+           (expr-map-size em)))]
+
+    [(surf-map-has-key m k loc)
+     (let ([em (elaborate m env depth)]
+           [ek (elaborate k env depth)])
+       (cond [(prologos-error? em) em]
+             [(prologos-error? ek) ek]
+             [else (expr-map-has-key em ek)]))]
+
+    [(surf-map-keys m loc)
+     (let ([em (elaborate m env depth)])
+       (if (prologos-error? em) em
+           (expr-map-keys em)))]
+
+    [(surf-map-vals m loc)
+     (let ([em (elaborate m env depth)])
+       (if (prologos-error? em) em
+           (expr-map-vals em)))]
 
     ;; Reduce: ML-style pattern matching
     ;; Each arm's body must be elaborated with binding names in scope.

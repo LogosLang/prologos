@@ -287,6 +287,21 @@
     [(expr-quire64-fma q a b) (format "[q64-fma ~a ~a ~a]" (pp-expr q names) (pp-expr a names) (pp-expr b names))]
     [(expr-quire64-to q) (format "[q64-to ~a]" (pp-expr q names))]
 
+    ;; Keyword
+    [(expr-Keyword) "Keyword"]
+    [(expr-keyword name) (format ":~a" name)]
+    ;; Map
+    [(expr-Map k v) (format "(Map ~a ~a)" (pp-expr k names) (pp-expr v names))]
+    [(expr-champ c) "{map ...}"]
+    [(expr-map-empty k v) (format "{} : (Map ~a ~a)" (pp-expr k names) (pp-expr v names))]
+    [(expr-map-assoc m k v) (format "[map-assoc ~a ~a ~a]" (pp-expr m names) (pp-expr k names) (pp-expr v names))]
+    [(expr-map-get m k) (format "[map-get ~a ~a]" (pp-expr m names) (pp-expr k names))]
+    [(expr-map-dissoc m k) (format "[map-dissoc ~a ~a]" (pp-expr m names) (pp-expr k names))]
+    [(expr-map-size m) (format "[map-size ~a]" (pp-expr m names))]
+    [(expr-map-has-key m k) (format "[map-has-key? ~a ~a]" (pp-expr m names) (pp-expr k names))]
+    [(expr-map-keys m) (format "[map-keys ~a]" (pp-expr m names))]
+    [(expr-map-vals m) (format "[map-vals ~a]" (pp-expr m names))]
+
     ;; Int
     [(expr-Int) "Int"]
     [(expr-int v) (number->string v)]
@@ -583,6 +598,20 @@
     [(expr-quire64-val _) #f]
     [(expr-quire64-fma q a b) (or (uses-bvar0? q) (uses-bvar0? a) (uses-bvar0? b))]
     [(expr-quire64-to q) (uses-bvar0? q)]
+    ;; Keyword
+    [(expr-Keyword) #f]
+    [(expr-keyword _) #f]
+    ;; Map
+    [(expr-Map k v) (or (uses-bvar0? k) (uses-bvar0? v))]
+    [(expr-champ _) #f]
+    [(expr-map-empty k v) (or (uses-bvar0? k) (uses-bvar0? v))]
+    [(expr-map-assoc m k v) (or (uses-bvar0? m) (uses-bvar0? k) (uses-bvar0? v))]
+    [(expr-map-get m k) (or (uses-bvar0? m) (uses-bvar0? k))]
+    [(expr-map-dissoc m k) (or (uses-bvar0? m) (uses-bvar0? k))]
+    [(expr-map-size m) (uses-bvar0? m)]
+    [(expr-map-has-key m k) (or (uses-bvar0? m) (uses-bvar0? k))]
+    [(expr-map-keys m) (uses-bvar0? m)]
+    [(expr-map-vals m) (uses-bvar0? m)]
     [(expr-Int) #f]
     [(expr-int _) #f]
     [(expr-int-add a b) (or (uses-bvar0? a) (uses-bvar0? b))]

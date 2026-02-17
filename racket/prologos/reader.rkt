@@ -376,7 +376,7 @@
               (let ()
                 (define rest (read-ident-rest! tok))
                 (token 'keyword
-                       (string->symbol (string-append (string nc) rest))
+                       (string->symbol (string-append ":" (string nc) rest))
                        ln cl ps (+ 2 (string-length rest))))
               ;; :0, :1, or :w standalone
               (token 'symbol
@@ -386,7 +386,7 @@
          [(and (char? next) (char-alphabetic? next))
           (define rest (read-ident-chars! tok))
           (token 'keyword
-                 (string->symbol rest)
+                 (string->symbol (string-append ":" rest))
                  ln cl ps (+ 1 (string-length rest)))]
          ;; Freestanding colon
          [else

@@ -173,6 +173,21 @@
     [(expr-quire64-fma q a b) (expr-quire64-fma (zonk q) (zonk a) (zonk b))]
     [(expr-quire64-to q) (expr-quire64-to (zonk q))]
 
+    ;; Keyword
+    [(expr-Keyword) e]
+    [(expr-keyword _) e]
+    ;; Map
+    [(expr-Map k v) (expr-Map (zonk k) (zonk v))]
+    [(expr-champ _) e]
+    [(expr-map-empty k v) (expr-map-empty (zonk k) (zonk v))]
+    [(expr-map-assoc m k v) (expr-map-assoc (zonk m) (zonk k) (zonk v))]
+    [(expr-map-get m k) (expr-map-get (zonk m) (zonk k))]
+    [(expr-map-dissoc m k) (expr-map-dissoc (zonk m) (zonk k))]
+    [(expr-map-size m) (expr-map-size (zonk m))]
+    [(expr-map-has-key m k) (expr-map-has-key (zonk m) (zonk k))]
+    [(expr-map-keys m) (expr-map-keys (zonk m))]
+    [(expr-map-vals m) (expr-map-vals (zonk m))]
+
     ;; Int
     [(expr-Int) e]
     [(expr-int _) e]
@@ -395,6 +410,21 @@
     [(expr-quire64-fma q a b) (expr-quire64-fma (zonk-at-depth depth q) (zonk-at-depth depth a) (zonk-at-depth depth b))]
     [(expr-quire64-to q) (expr-quire64-to (zonk-at-depth depth q))]
 
+    ;; Keyword
+    [(expr-Keyword) e]
+    [(expr-keyword _) e]
+    ;; Map
+    [(expr-Map k v) (expr-Map (zonk-at-depth depth k) (zonk-at-depth depth v))]
+    [(expr-champ _) e]
+    [(expr-map-empty k v) (expr-map-empty (zonk-at-depth depth k) (zonk-at-depth depth v))]
+    [(expr-map-assoc m k v) (expr-map-assoc (zonk-at-depth depth m) (zonk-at-depth depth k) (zonk-at-depth depth v))]
+    [(expr-map-get m k) (expr-map-get (zonk-at-depth depth m) (zonk-at-depth depth k))]
+    [(expr-map-dissoc m k) (expr-map-dissoc (zonk-at-depth depth m) (zonk-at-depth depth k))]
+    [(expr-map-size m) (expr-map-size (zonk-at-depth depth m))]
+    [(expr-map-has-key m k) (expr-map-has-key (zonk-at-depth depth m) (zonk-at-depth depth k))]
+    [(expr-map-keys m) (expr-map-keys (zonk-at-depth depth m))]
+    [(expr-map-vals m) (expr-map-vals (zonk-at-depth depth m))]
+
     ;; Int
     [(expr-Int) e]
     [(expr-int _) e]
@@ -588,6 +618,20 @@
     [(expr-quire64-val _) e]
     [(expr-quire64-fma q a b) (expr-quire64-fma (default-metas q) (default-metas a) (default-metas b))]
     [(expr-quire64-to q) (expr-quire64-to (default-metas q))]
+    ;; Keyword
+    [(expr-Keyword) e]
+    [(expr-keyword _) e]
+    ;; Map
+    [(expr-Map k v) (expr-Map (default-metas k) (default-metas v))]
+    [(expr-champ _) e]
+    [(expr-map-empty k v) (expr-map-empty (default-metas k) (default-metas v))]
+    [(expr-map-assoc m k v) (expr-map-assoc (default-metas m) (default-metas k) (default-metas v))]
+    [(expr-map-get m k) (expr-map-get (default-metas m) (default-metas k))]
+    [(expr-map-dissoc m k) (expr-map-dissoc (default-metas m) (default-metas k))]
+    [(expr-map-size m) (expr-map-size (default-metas m))]
+    [(expr-map-has-key m k) (expr-map-has-key (default-metas m) (default-metas k))]
+    [(expr-map-keys m) (expr-map-keys (default-metas m))]
+    [(expr-map-vals m) (expr-map-vals (default-metas m))]
     [(expr-Int) e]
     [(expr-int _) e]
     [(expr-int-add a b) (expr-int-add (default-metas a) (default-metas b))]

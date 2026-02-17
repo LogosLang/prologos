@@ -83,12 +83,12 @@
 (test-case "tokenize: EDN keyword :name"
   (define toks (tokenize-string ":name"))
   (check-equal? (tok-type toks 1) 'keyword)
-  (check-equal? (tok-val toks 1) 'name))
+  (check-equal? (tok-val toks 1) ':name))
 
 (test-case "tokenize: :widget is keyword, not :w + ident"
   (define toks (tokenize-string ":widget"))
   (check-equal? (tok-type toks 1) 'keyword)
-  (check-equal? (tok-val toks 1) 'widget))
+  (check-equal? (tok-val toks 1) ':widget))
 
 (test-case "tokenize: parentheses work in WS mode"
   ;; () now works for type grouping

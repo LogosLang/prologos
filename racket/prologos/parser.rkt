@@ -36,6 +36,7 @@
     Quire16 q16-zero q16-fma q16-to
     Quire32 q32-zero q32-fma q32-to
     Quire64 q64-zero q64-fma q64-to
+    Keyword Map map-empty map-assoc map-get map-dissoc map-size map-has-key? map-keys map-vals
     def defn check eval infer expand parse elaborate match
     ;; Pre-parse macros — should be expanded before reaching parser
     defmacro let do if deftype data spec trait impl
@@ -349,6 +350,7 @@
     [(q16-zero) (surf-quire16-zero loc)]
     [(q32-zero) (surf-quire32-zero loc)]
     [(q64-zero) (surf-quire64-zero loc)]
+    [(Keyword) (surf-keyword-type loc)]
     [(Type)   (surf-type #f loc)]     ;; bare Type → infer level (Sprint 6)
     [(zero)   (surf-zero loc)]
     [(true)   (surf-true loc)]
@@ -356,14 +358,19 @@
     [(unit)   (surf-unit loc)]
     [(refl)   (surf-refl loc)]
     [else
-     ;; Check for _N pattern (positional placeholder: _1, _2, etc.)
      (define s (symbol->string sym))
-     (if (and (> (string-length s) 1)
-              (char=? (string-ref s 0) #\_)
-              (for/and ([c (in-string (substring s 1))])
-                (char-numeric? c)))
-         (surf-numbered-hole (string->number (substring s 1)) loc)
-         (surf-var sym loc))]))
+     (cond
+       ;; Keyword literal: :name (colon-prefixed symbol, at least 2 chars)
+       [(and (> (string-length s) 1)
+             (char=? (string-ref s 0) #\:))
+        (surf-keyword (string->symbol (substring s 1)) loc)]
+       ;; Numbered placeholder: _N where N is a positive integer
+       [(and (> (string-length s) 1)
+             (char=? (string-ref s 0) #\_)
+             (for/and ([c (in-string (substring s 1))])
+               (char-numeric? c)))
+        (surf-numbered-hole (string->number (substring s 1)) loc)]
+       [else (surf-var sym loc)])]))
 
 ;; ========================================
 ;; Parse list forms: (op arg ...)
@@ -401,6 +408,10 @@
     ;; ($foreign-block racket (code-datums...) (captures...) (exports...))
     [(and (symbol? head) (eq? head '$foreign-block))
      (parse-foreign-block args loc)]
+
+    ;; $brace-params sentinel: map literal {k1 v1 k2 v2 ...}
+    [(and (symbol? head) (eq? head '$brace-params))
+     (parse-map-literal args loc)]
 
     ;; Keyword-headed forms
     [(symbol? head)
@@ -1343,6 +1354,91 @@
         (or (check-arity 'q64-to args 1 loc)
             (let ([q (parse-datum (car args))])
               (if (prologos-error? q) q (surf-quire64-to q loc))))]
+
+       ;; ---- Keyword / Map operations ----
+
+       ;; Keyword type: (Keyword)
+       [(Keyword)
+        (if (null? args)
+            (surf-keyword-type loc)
+            (parse-error loc "Keyword takes no arguments" #f))]
+
+       ;; Map type: (Map K V)
+       [(Map)
+        (or (check-arity 'Map args 2 loc)
+            (let ([k (parse-datum (car args))]
+                  [v (parse-datum (cadr args))])
+              (cond [(prologos-error? k) k]
+                    [(prologos-error? v) v]
+                    [else (surf-map-type k v loc)])))]
+
+       ;; map-empty: (map-empty K V)
+       [(map-empty)
+        (or (check-arity 'map-empty args 2 loc)
+            (let ([k (parse-datum (car args))]
+                  [v (parse-datum (cadr args))])
+              (cond [(prologos-error? k) k]
+                    [(prologos-error? v) v]
+                    [else (surf-map-empty k v loc)])))]
+
+       ;; map-assoc: (map-assoc m k v)
+       [(map-assoc)
+        (or (check-arity 'map-assoc args 3 loc)
+            (let ([m (parse-datum (car args))]
+                  [k (parse-datum (cadr args))]
+                  [v (parse-datum (caddr args))])
+              (cond [(prologos-error? m) m]
+                    [(prologos-error? k) k]
+                    [(prologos-error? v) v]
+                    [else (surf-map-assoc m k v loc)])))]
+
+       ;; map-get: (map-get m k)
+       [(map-get)
+        (or (check-arity 'map-get args 2 loc)
+            (let ([m (parse-datum (car args))]
+                  [k (parse-datum (cadr args))])
+              (cond [(prologos-error? m) m]
+                    [(prologos-error? k) k]
+                    [else (surf-map-get m k loc)])))]
+
+       ;; map-dissoc: (map-dissoc m k)
+       [(map-dissoc)
+        (or (check-arity 'map-dissoc args 2 loc)
+            (let ([m (parse-datum (car args))]
+                  [k (parse-datum (cadr args))])
+              (cond [(prologos-error? m) m]
+                    [(prologos-error? k) k]
+                    [else (surf-map-dissoc m k loc)])))]
+
+       ;; map-size: (map-size m)
+       [(map-size)
+        (or (check-arity 'map-size args 1 loc)
+            (let ([m (parse-datum (car args))])
+              (if (prologos-error? m) m
+                  (surf-map-size m loc))))]
+
+       ;; map-has-key?: (map-has-key? m k)
+       [(|map-has-key?|)
+        (or (check-arity 'map-has-key? args 2 loc)
+            (let ([m (parse-datum (car args))]
+                  [k (parse-datum (cadr args))])
+              (cond [(prologos-error? m) m]
+                    [(prologos-error? k) k]
+                    [else (surf-map-has-key m k loc)])))]
+
+       ;; map-keys: (map-keys m)
+       [(map-keys)
+        (or (check-arity 'map-keys args 1 loc)
+            (let ([m (parse-datum (car args))])
+              (if (prologos-error? m) m
+                  (surf-map-keys m loc))))]
+
+       ;; map-vals: (map-vals m)
+       [(map-vals)
+        (or (check-arity 'map-vals args 1 loc)
+            (let ([m (parse-datum (car args))])
+              (if (prologos-error? m) m
+                  (surf-map-vals m loc))))]
 
        ;; (the-fn type [params...] body)
        [(the-fn)
@@ -2749,6 +2845,58 @@
   (if (eof-object? stx)
       (parse-error srcloc-unknown "Empty input" #f)
       (parse-datum stx)))
+
+;; ========================================
+;; Map literal parsing
+;; ========================================
+;; Parse a map literal from $brace-params contents.
+;; args = list of alternating key-value datums: (k1 v1 k2 v2 ...)
+;; Keys must be: keyword (:name), string, number, or [expr].
+;; Bare symbols are not allowed as keys.
+(define (parse-map-literal args loc)
+  (when (odd? (length args))
+    (parse-error loc "Map literal requires an even number of elements (key-value pairs)" #f))
+  (define entries
+    (let loop ([remaining args] [acc '()])
+      (cond
+        [(null? remaining) (reverse acc)]
+        [else
+         (define key-stx (car remaining))
+         (define val-stx (cadr remaining))
+         (define key-datum (stx->datum key-stx))
+         (define parsed-key
+           (cond
+             ;; Keyword: symbol starting with :
+             [(and (symbol? key-datum)
+                   (let ([s (symbol->string key-datum)])
+                     (and (> (string-length s) 1)
+                          (char=? (string-ref s 0) #\:))))
+              (surf-keyword (string->symbol (substring (symbol->string key-datum) 1)) loc)]
+             ;; String key
+             [(string? key-datum)
+              (parse-datum key-stx)]
+             ;; Number key
+             [(number? key-datum)
+              (parse-datum key-stx)]
+             ;; Bracket form [expr] — computed key
+             [(pair? key-datum)
+              (parse-datum key-stx)]
+             ;; Bare symbol — error
+             [(symbol? key-datum)
+              (parse-error loc
+                (format "Bare symbol '~a' not allowed as map key; use :~a for keyword" key-datum key-datum)
+                #f)]
+             [else
+              (parse-error loc
+                (format "Invalid map key: ~a" key-datum) #f)]))
+         (define parsed-val (parse-datum val-stx))
+         (cond
+           [(prologos-error? parsed-key) parsed-key]
+           [(prologos-error? parsed-val) parsed-val]
+           [else (loop (cddr remaining) (cons (cons parsed-key parsed-val) acc))])])))
+  (if (prologos-error? entries)
+      entries
+      (surf-map-literal entries loc)))
 
 ;; ========================================
 ;; Foreign escape block parsing

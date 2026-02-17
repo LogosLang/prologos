@@ -149,6 +149,20 @@
  (struct-out surf-quire64-to)
  ;; Approximate literal (~N)
  (struct-out surf-approx-literal)
+ ;; Keyword surface forms
+ (struct-out surf-keyword-type)
+ (struct-out surf-keyword)
+ ;; Map surface forms
+ (struct-out surf-map-type)
+ (struct-out surf-map-literal)
+ (struct-out surf-map-empty)
+ (struct-out surf-map-assoc)
+ (struct-out surf-map-get)
+ (struct-out surf-map-dissoc)
+ (struct-out surf-map-size)
+ (struct-out surf-map-has-key)
+ (struct-out surf-map-keys)
+ (struct-out surf-map-vals)
  ;; Top-level commands
  (struct-out surf-def)
  (struct-out surf-defn)
@@ -514,6 +528,26 @@
 ;; Approximate literal: ~N → nearest Posit32 (default), width-aware in check context
 ;; val is an exact rational (integer or fraction)
 (struct surf-approx-literal (val srcloc) #:transparent)
+
+;; ========================================
+;; Keyword type and literal
+;; ========================================
+(struct surf-keyword-type (srcloc) #:transparent)          ; Keyword type
+(struct surf-keyword (name srcloc) #:transparent)          ; keyword literal, name is a symbol
+
+;; ========================================
+;; Map (CHAMP-backed persistent hash map)
+;; ========================================
+(struct surf-map-type (k v srcloc) #:transparent)          ; Map K V type
+(struct surf-map-literal (entries srcloc) #:transparent)   ; {k1 v1, k2 v2, ...} — entries is list of (key . val) pairs
+(struct surf-map-empty (k v srcloc) #:transparent)         ; (map-empty K V)
+(struct surf-map-assoc (m k v srcloc) #:transparent)       ; (map-assoc m k v)
+(struct surf-map-get (m k srcloc) #:transparent)           ; (map-get m k)
+(struct surf-map-dissoc (m k srcloc) #:transparent)        ; (map-dissoc m k)
+(struct surf-map-size (m srcloc) #:transparent)            ; (map-size m)
+(struct surf-map-has-key (m k srcloc) #:transparent)       ; (map-has-key m k)
+(struct surf-map-keys (m srcloc) #:transparent)            ; (map-keys m)
+(struct surf-map-vals (m srcloc) #:transparent)            ; (map-vals m)
 
 ;; ========================================
 ;; Top-level commands

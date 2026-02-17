@@ -618,6 +618,56 @@
     [(expr-quire64-to q)
      (if (check ctx q (expr-Quire64)) (expr-Posit64) (expr-error))]
 
+    ;; ---- Keyword type and literals ----
+    [(expr-Keyword) (expr-Type (lzero))]
+    [(expr-keyword _) (expr-Keyword)]
+
+    ;; ---- Map type and operations ----
+    [(expr-Map k v)
+     (if (and (is-type ctx k) (is-type ctx v))
+         (expr-Type (lzero))
+         (expr-error))]
+    [(expr-champ _) (expr-error)]  ;; champ needs checking context
+    [(expr-map-empty k v)
+     (if (and (is-type ctx k) (is-type ctx v))
+         (expr-Map k v)
+         (expr-error))]
+    [(expr-map-assoc m k v)
+     (let ([tm (infer ctx m)])
+       (match tm
+         [(expr-Map kt vt)
+          (if (and (check ctx k kt) (check ctx v vt))
+              (expr-Map kt vt)
+              (expr-error))]
+         [_ (expr-error)]))]
+    [(expr-map-get m k)
+     (let ([tm (infer ctx m)])
+       (match tm
+         [(expr-Map kt vt)
+          (if (check ctx k kt) vt (expr-error))]
+         [_ (expr-error)]))]
+    [(expr-map-dissoc m k)
+     (let ([tm (infer ctx m)])
+       (match tm
+         [(expr-Map kt vt)
+          (if (check ctx k kt) (expr-Map kt vt) (expr-error))]
+         [_ (expr-error)]))]
+    [(expr-map-size m)
+     (let ([tm (infer ctx m)])
+       (match tm
+         [(expr-Map _ _) (expr-Nat)]
+         [_ (expr-error)]))]
+    [(expr-map-has-key m k)
+     (let ([tm (infer ctx m)])
+       (match tm
+         [(expr-Map kt _)
+          (if (check ctx k kt) (expr-Bool) (expr-error))]
+         [_ (expr-error)]))]
+    ;; map-keys and map-vals: no core expr-List type, fall through to error
+    ;; These will be typed at the surface level when List integration is available
+    [(expr-map-keys _) (expr-error)]
+    [(expr-map-vals _) (expr-error)]
+
     ;; ---- Foreign function: look up type from global env ----
     [(expr-foreign-fn name _ _ _ _ _)
      (or (global-env-lookup-type name) (expr-error))]
@@ -720,6 +770,22 @@
     ;; ---- Posit64 literal check ----
     [((expr-posit64 v) (expr-Posit64))
      (and (exact-integer? v) (<= 0 v 18446744073709551615))]
+
+    ;; ---- Keyword literal check ----
+    [((expr-keyword _) (expr-Keyword)) #t]
+
+    ;; ---- Map checks ----
+    ;; champ checked against Map K V
+    [((expr-champ _) (expr-Map _ _)) #t]
+    ;; map-empty checked against Map K V
+    [((expr-map-empty k1 v1) (expr-Map k2 v2))
+     (and (unify-ok? (unify ctx k1 k2))
+          (unify-ok? (unify ctx v1 v2)))]
+    ;; map-assoc checked against Map K V — propagate expected type
+    [((expr-map-assoc m k v) (expr-Map kt vt))
+     (and (check ctx m (expr-Map kt vt))
+          (check ctx k kt)
+          (check ctx v vt))]
 
     ;; ---- Reduce: ML-style Church elimination ----
     ;; check(G, reduce(scrutinee, arms), T)
@@ -979,6 +1045,18 @@
     [(expr-Quire16) (just-level (lzero))]
     [(expr-Quire32) (just-level (lzero))]
     [(expr-Quire64) (just-level (lzero))]
+
+    ;; Keyword formation: Keyword : Type(0)
+    [(expr-Keyword) (just-level (lzero))]
+
+    ;; Map formation: Map K V : Type(max(level(K), level(V)))
+    [(expr-Map k v)
+     (let ([lk (infer-level ctx k)]
+           [lv (infer-level ctx v)])
+       (match* (lk lv)
+         [((just-level lk*) (just-level lv*))
+          (just-level (lmax lk* lv*))]
+         [(_ _) (no-level)]))]
 
     ;; Union formation: A | B : Type(max(level(A), level(B)))
     [(expr-union l r)

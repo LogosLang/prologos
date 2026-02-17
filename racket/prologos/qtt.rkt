@@ -775,6 +775,73 @@
      (let ([r (checkQ ctx q (expr-Quire64))])
        (match r [(bu #t u) (tu (expr-Posit64) u)] [_ (tu-error)]))]
 
+    ;; Keyword
+    [(expr-Keyword) (tu (expr-Type (lzero)) (zero-usage n))]
+    [(expr-keyword _) (tu (expr-Keyword) (zero-usage n))]
+    ;; Map
+    [(expr-Map k v)
+     (let ([r1 (inferQ ctx k)]
+           [r2 (inferQ ctx v)])
+       (match* (r1 r2)
+         [((tu _ u1) (tu _ u2))
+          (tu (expr-Type (lzero)) (add-usage u1 u2))]
+         [(_ _) (tu-error)]))]
+    [(expr-champ _) (tu (expr-Map (expr-hole) (expr-hole)) (zero-usage n))]
+    [(expr-map-empty k v)
+     (let ([r1 (inferQ ctx k)]
+           [r2 (inferQ ctx v)])
+       (match* (r1 r2)
+         [((tu _ u1) (tu _ u2))
+          (tu (expr-Map k v) (add-usage u1 u2))]
+         [(_ _) (tu-error)]))]
+    [(expr-map-assoc m k v)
+     (let ([r1 (inferQ ctx m)]
+           [r2 (inferQ ctx k)]
+           [r3 (inferQ ctx v)])
+       (match* (r1 r2 r3)
+         [((tu _ u1) (tu _ u2) (tu _ u3))
+          (tu (tu-type r1) (add-usage u1 (add-usage u2 u3)))]
+         [(_ _ _) (tu-error)]))]
+    [(expr-map-get m k)
+     (let ([r1 (inferQ ctx m)]
+           [r2 (inferQ ctx k)])
+       (match* (r1 r2)
+         [((tu t1 u1) (tu _ u2))
+          ;; map-get returns the value type V from Map K V
+          (match t1
+            [(expr-Map _ vt) (tu vt (add-usage u1 u2))]
+            [_ (tu-error)])]
+         [(_ _) (tu-error)]))]
+    [(expr-map-dissoc m k)
+     (let ([r1 (inferQ ctx m)]
+           [r2 (inferQ ctx k)])
+       (match* (r1 r2)
+         [((tu _ u1) (tu _ u2))
+          (tu (tu-type r1) (add-usage u1 u2))]
+         [(_ _) (tu-error)]))]
+    [(expr-map-size m)
+     (let ([r (inferQ ctx m)])
+       (match r
+         [(tu _ u) (tu (expr-Nat) u)]
+         [_ (tu-error)]))]
+    [(expr-map-has-key m k)
+     (let ([r1 (inferQ ctx m)]
+           [r2 (inferQ ctx k)])
+       (match* (r1 r2)
+         [((tu _ u1) (tu _ u2))
+          (tu (expr-Bool) (add-usage u1 u2))]
+         [(_ _) (tu-error)]))]
+    [(expr-map-keys m)
+     (let ([r (inferQ ctx m)])
+       (match r
+         [(tu _ u) (tu (tu-type r) u)]
+         [_ (tu-error)]))]
+    [(expr-map-vals m)
+     (let ([r (inferQ ctx m)])
+       (match r
+         [(tu _ u) (tu (tu-type r) u)]
+         [_ (tu-error)]))]
+
     ;; ---- J eliminator ----
     ;; Usage from proof, base, motive arguments
     [(expr-J mot base left right proof)
@@ -861,6 +928,28 @@
     ;; ---- Meta expression: optimistically succeed with zero usage ----
     ;; A metavariable (from implicit arg insertion) doesn't consume resources.
     [((expr-meta _) _) (bu #t (zero-usage n))]
+
+    ;; ---- Keyword literal: check against Keyword type ----
+    [((expr-keyword _) (expr-Keyword)) (bu #t (zero-usage n))]
+
+    ;; ---- Map constructors: check against Map type ----
+    [((expr-champ _) (expr-Map _ _)) (bu #t (zero-usage n))]
+    [((expr-map-empty k v) (expr-Map _ _))
+     (let ([r1 (inferQ ctx k)]
+           [r2 (inferQ ctx v)])
+       (match* (r1 r2)
+         [((tu _ u1) (tu _ u2))
+          (bu #t (add-usage u1 u2))]
+         [(_ _) (bu #f (zero-usage n))]))]
+    ;; map-assoc checked against Map K V — propagate expected type
+    [((expr-map-assoc m k v) (expr-Map kt vt))
+     (let ([rm (checkQ ctx m (expr-Map kt vt))]
+           [rk (checkQ ctx k kt)]
+           [rv (checkQ ctx v vt)])
+       (match* (rm rk rv)
+         [((bu #t u1) (bu #t u2) (bu #t u3))
+          (bu #t (add-usage u1 (add-usage u2 u3)))]
+         [(_ _ _) (bu #f (zero-usage n))]))]
 
     ;; ---- Union type: checkQ(G, e, A | B) ----
     ;; Try left component first, then right. Uses speculative meta state.

@@ -114,6 +114,14 @@
  (struct-out expr-quire32-fma) (struct-out expr-quire32-to)
  (struct-out expr-Quire64) (struct-out expr-quire64-val)
  (struct-out expr-quire64-fma) (struct-out expr-quire64-to)
+ ;; Keyword type (opaque atomic type for map keys)
+ (struct-out expr-Keyword) (struct-out expr-keyword)
+ ;; Map (persistent hash map)
+ (struct-out expr-Map) (struct-out expr-champ)
+ (struct-out expr-map-empty) (struct-out expr-map-assoc)
+ (struct-out expr-map-get) (struct-out expr-map-dissoc)
+ (struct-out expr-map-size) (struct-out expr-map-has-key)
+ (struct-out expr-map-keys) (struct-out expr-map-vals)
  ;; Int (arbitrary-precision integers)
  (struct-out expr-Int)
  (struct-out expr-int)
@@ -386,6 +394,37 @@
 (struct expr-quire64-to (q) #:transparent)
 
 ;; ========================================
+;; Keyword (opaque atomic type for map keys)
+;; ========================================
+
+;; Type
+(struct expr-Keyword () #:transparent)                        ; Keyword : Type 0
+;; Value (name is a Racket symbol, e.g. 'name for :name)
+(struct expr-keyword (name) #:transparent)                    ; keyword literal
+
+;; ========================================
+;; Map (persistent hash map, backed by CHAMP)
+;; ========================================
+
+;; Type constructor: Map K V
+(struct expr-Map (k-type v-type) #:transparent)               ; Map K V : Type 0
+
+;; Runtime value (racket-champ is a champ-root from champ.rkt)
+(struct expr-champ (racket-champ) #:transparent)              ; map literal value
+
+;; Constructor
+(struct expr-map-empty (k-type v-type) #:transparent)         ; empty map : Map K V
+
+;; Operations
+(struct expr-map-assoc (m k v) #:transparent)                 ; assoc : Map K V → K → V → Map K V
+(struct expr-map-get (m k) #:transparent)                     ; get : Map K V → K → V (error if missing)
+(struct expr-map-dissoc (m k) #:transparent)                  ; dissoc : Map K V → K → Map K V
+(struct expr-map-size (m) #:transparent)                      ; size : Map K V → Nat
+(struct expr-map-has-key (m k) #:transparent)                 ; has-key? : Map K V → K → Bool
+(struct expr-map-keys (m) #:transparent)                      ; keys : Map K V → List K
+(struct expr-map-vals (m) #:transparent)                      ; vals : Map K V → List V
+
+;; ========================================
 ;; Int (arbitrary-precision integers, backed by Racket exact integers)
 ;; ========================================
 
@@ -537,6 +576,11 @@
       (expr-rat-neg? x) (expr-rat-abs? x)
       (expr-rat-lt? x) (expr-rat-le? x) (expr-rat-eq? x)
       (expr-from-int? x) (expr-rat-numer? x) (expr-rat-denom? x)
+      (expr-Keyword? x) (expr-keyword? x)
+      (expr-Map? x) (expr-champ? x) (expr-map-empty? x)
+      (expr-map-assoc? x) (expr-map-get? x) (expr-map-dissoc? x)
+      (expr-map-size? x) (expr-map-has-key? x)
+      (expr-map-keys? x) (expr-map-vals? x)
       (expr-hole? x) (expr-meta? x) (expr-reduce? x)
       (expr-union? x) (expr-error? x)))
 

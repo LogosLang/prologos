@@ -2520,6 +2520,11 @@
       [(surf-quire16-type _) (void)]
       [(surf-quire32-type _) (void)]
       [(surf-quire64-type _) (void)]
+      [(surf-keyword-type _) (void)]
+      [(surf-keyword _ _) (void)]
+      ;; Map type: walk key and value type sub-expressions
+      [(surf-map-type k v _loc)
+       (walk k) (walk v)]
       [(surf-zero _) (void)]
       [(surf-true _) (void)]
       [(surf-false _) (void)]
@@ -2549,7 +2554,8 @@
     Quire32 q32-zero q32-fma q32-to
     Quire64 q64-zero q64-fma q64-to
     Int int int+ int- int* int/ int-mod int-neg int-abs int-lt int-le int-eq from-nat
-    Rat rat rat+ rat- rat* rat/ rat-neg rat-abs rat-lt rat-le rat-eq from-int rat-numer rat-denom))
+    Rat rat rat+ rat- rat* rat/ rat-neg rat-abs rat-lt rat-le rat-eq from-int rat-numer rat-denom
+    Keyword Map map-empty map-assoc map-get map-dissoc map-size map-has-key? map-keys map-vals))
 
 ;; Check if a symbol is a "known name" — should NOT be treated as a free type variable.
 (define (known-name? name)

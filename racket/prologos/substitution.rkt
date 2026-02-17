@@ -186,6 +186,22 @@
     [(expr-quire64-fma q a b) (expr-quire64-fma (shift delta cutoff q) (shift delta cutoff a) (shift delta cutoff b))]
     [(expr-quire64-to q) (expr-quire64-to (shift delta cutoff q))]
 
+    ;; Keyword (all non-binding, no subexpressions with de Bruijn vars)
+    [(expr-Keyword) e]
+    [(expr-keyword _) e]
+
+    ;; Map (all non-binding)
+    [(expr-Map k v) (expr-Map (shift delta cutoff k) (shift delta cutoff v))]
+    [(expr-champ _) e]  ; Racket value, no de Bruijn vars
+    [(expr-map-empty k v) (expr-map-empty (shift delta cutoff k) (shift delta cutoff v))]
+    [(expr-map-assoc m k v) (expr-map-assoc (shift delta cutoff m) (shift delta cutoff k) (shift delta cutoff v))]
+    [(expr-map-get m k) (expr-map-get (shift delta cutoff m) (shift delta cutoff k))]
+    [(expr-map-dissoc m k) (expr-map-dissoc (shift delta cutoff m) (shift delta cutoff k))]
+    [(expr-map-size m) (expr-map-size (shift delta cutoff m))]
+    [(expr-map-has-key m k) (expr-map-has-key (shift delta cutoff m) (shift delta cutoff k))]
+    [(expr-map-keys m) (expr-map-keys (shift delta cutoff m))]
+    [(expr-map-vals m) (expr-map-vals (shift delta cutoff m))]
+
     ;; Int (all non-binding)
     [(expr-Int) e]
     [(expr-int _) e]
@@ -406,6 +422,22 @@
     [(expr-quire64-val _) e]
     [(expr-quire64-fma q a b) (expr-quire64-fma (subst k s q) (subst k s a) (subst k s b))]
     [(expr-quire64-to q) (expr-quire64-to (subst k s q))]
+
+    ;; Keyword (no subexpressions)
+    [(expr-Keyword) e]
+    [(expr-keyword _) e]
+
+    ;; Map (all non-binding)
+    [(expr-Map kt vt) (expr-Map (subst k s kt) (subst k s vt))]
+    [(expr-champ _) e]
+    [(expr-map-empty kt vt) (expr-map-empty (subst k s kt) (subst k s vt))]
+    [(expr-map-assoc m key v) (expr-map-assoc (subst k s m) (subst k s key) (subst k s v))]
+    [(expr-map-get m key) (expr-map-get (subst k s m) (subst k s key))]
+    [(expr-map-dissoc m key) (expr-map-dissoc (subst k s m) (subst k s key))]
+    [(expr-map-size m) (expr-map-size (subst k s m))]
+    [(expr-map-has-key m key) (expr-map-has-key (subst k s m) (subst k s key))]
+    [(expr-map-keys m) (expr-map-keys (subst k s m))]
+    [(expr-map-vals m) (expr-map-vals (subst k s m))]
 
     ;; Int (all non-binding)
     [(expr-Int) e]

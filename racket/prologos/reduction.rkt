@@ -20,7 +20,8 @@
          "posit-impl.rkt"
          "macros.rkt"
          "metavar-store.rkt"
-         "foreign.rkt")
+         "foreign.rkt"
+         "champ.rkt")
 
 (provide whnf nf nf-whnf conv conv-nf current-nf-cache)
 
@@ -689,6 +690,58 @@
     [(expr-quire64-to q)
      (let ([q* (whnf q)]) (if (equal? q* q) e (whnf (expr-quire64-to q*))))]
 
+    ;; Keyword — no reduction (atoms are values)
+    ;; (no clauses needed for expr-Keyword or expr-keyword — they're values)
+
+    ;; ---- Map iota rules: compute when arguments are champ values ----
+    ;; map-empty reduces to champ(champ-empty) — the runtime representation
+    [(expr-map-empty _ _) (expr-champ champ-empty)]
+
+    [(expr-map-assoc (expr-champ c) k v)
+     (let ([k* (whnf k)] [v* (whnf v)])
+       (expr-champ (champ-insert c (equal-hash-code k*) k* v*)))]
+    [(expr-map-get (expr-champ c) k)
+     (let ([k* (whnf k)])
+       (let ([result (champ-lookup c (equal-hash-code k*) k*)])
+         (if (eq? result 'none)
+             (expr-error)
+             (whnf result))))]
+    [(expr-map-dissoc (expr-champ c) k)
+     (let ([k* (whnf k)])
+       (expr-champ (champ-delete c (equal-hash-code k*) k*)))]
+    [(expr-map-size (expr-champ c))
+     (nat->expr (champ-size c))]
+    [(expr-map-has-key (expr-champ c) k)
+     (let ([k* (whnf k)])
+       (if (champ-has-key? c (equal-hash-code k*) k*)
+           (expr-true)
+           (expr-false)))]
+    [(expr-map-keys (expr-champ c)) e]   ;; stub — will be completed when List is a core type
+    [(expr-map-vals (expr-champ c)) e]   ;; stub — will be completed when List is a core type
+
+    ;; ---- Map stuck-term reduction (try reducing subexpressions) ----
+    [(expr-map-assoc m k v)
+     (let ([m* (whnf m)])
+       (if (equal? m* m) e (whnf (expr-map-assoc m* k v))))]
+    [(expr-map-get m k)
+     (let ([m* (whnf m)])
+       (if (equal? m* m) e (whnf (expr-map-get m* k))))]
+    [(expr-map-dissoc m k)
+     (let ([m* (whnf m)])
+       (if (equal? m* m) e (whnf (expr-map-dissoc m* k))))]
+    [(expr-map-size m)
+     (let ([m* (whnf m)])
+       (if (equal? m* m) e (whnf (expr-map-size m*))))]
+    [(expr-map-has-key m k)
+     (let ([m* (whnf m)])
+       (if (equal? m* m) e (whnf (expr-map-has-key m* k))))]
+    [(expr-map-keys m)
+     (let ([m* (whnf m)])
+       (if (equal? m* m) e (whnf (expr-map-keys m*))))]
+    [(expr-map-vals m)
+     (let ([m* (whnf m)])
+       (if (equal? m* m) e (whnf (expr-map-vals m*))))]
+
     ;; Union types: pass through (types don't reduce)
     [(expr-union _ _) e]
 
@@ -912,6 +965,22 @@
     [(expr-quire64-val _) e]
     [(expr-quire64-fma q a b) (expr-quire64-fma (nf q) (nf a) (nf b))]
     [(expr-quire64-to q) (expr-quire64-to (nf q))]
+
+    ;; Keyword normalization
+    [(expr-Keyword) e]
+    [(expr-keyword _) e]
+
+    ;; Map normalization
+    [(expr-Map k v) (expr-Map (nf k) (nf v))]
+    [(expr-champ _) e]
+    [(expr-map-empty k v) (expr-map-empty (nf k) (nf v))]
+    [(expr-map-assoc m k v) (expr-map-assoc (nf m) (nf k) (nf v))]
+    [(expr-map-get m k) (expr-map-get (nf m) (nf k))]
+    [(expr-map-dissoc m k) (expr-map-dissoc (nf m) (nf k))]
+    [(expr-map-size m) (expr-map-size (nf m))]
+    [(expr-map-has-key m k) (expr-map-has-key (nf m) (nf k))]
+    [(expr-map-keys m) (expr-map-keys (nf m))]
+    [(expr-map-vals m) (expr-map-vals (nf m))]
 
     ;; Foreign function: opaque leaf (already in WHNF)
     [(expr-foreign-fn _ _ _ _ _ _) e]

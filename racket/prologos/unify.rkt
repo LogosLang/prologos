@@ -279,6 +279,7 @@
     [(expr-Quire16) "0:Quire16"]
     [(expr-Quire32) "0:Quire32"]
     [(expr-Quire64) "0:Quire64"]
+    [(expr-Keyword) "0:Keyword"]
     [(expr-Type l) (format "0:Type~a" l)]
     [(expr-fvar name) (format "1:~a" name)]
     [(expr-bvar idx) (format "2:~a" idx)]
@@ -287,6 +288,7 @@
     [(expr-Eq _ _ _) "3:Eq"]
     [(expr-Vec _ _) "3:Vec"]
     [(expr-Fin _) "3:Fin"]
+    [(expr-Map _ _) "3:Map"]
     [(expr-app _ _) "4:app"]
     [(expr-meta id) (format "5:?~a" id)]
     [_ "9:other"]))
