@@ -33,7 +33,7 @@
     ;; Private-suffix forms — consumed in preparse, rewritten to base form
     defn- def- data- deftype- defmacro- spec- trait- impl-
     ;; Pre-parse namespace directives — consumed before reaching parser
-    ns require provide))
+    ns require provide foreign))
 
 (define (keyword? sym)
   (and (symbol? sym) (memq sym keywords)))

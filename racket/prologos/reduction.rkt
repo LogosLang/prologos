@@ -19,7 +19,8 @@
          "global-env.rkt"
          "posit-impl.rkt"
          "macros.rkt"
-         "metavar-store.rkt")
+         "metavar-store.rkt"
+         "foreign.rkt")
 
 (provide whnf nf nf-whnf conv conv-nf current-nf-cache)
 
@@ -167,6 +168,20 @@
     ;; Vec eliminators: vhead/vtail on vcons
     [(expr-vhead _ _ (expr-vcons _ _ hd _)) (whnf hd)]
     [(expr-vtail _ _ (expr-vcons _ _ _ tl)) (whnf tl)]
+
+    ;; Foreign function application: accumulate args, call when arity reached
+    [(expr-app (expr-foreign-fn name proc arity args marshal-in marshal-out) arg)
+     (let* ([arg* (whnf arg)]
+            [new-args (append args (list arg*))])
+       (if (= (length new-args) arity)
+           ;; All args collected — fully normalize for marshalling, then call Racket
+           (let* ([nf-args (map nf new-args)]
+                  [rkt-args (map (lambda (m a) (m a)) marshal-in nf-args)]
+                  [rkt-result (apply proc rkt-args)]
+                  [prologos-result (marshal-out rkt-result)])
+             (whnf prologos-result))
+           ;; Partial application — return updated foreign-fn
+           (expr-foreign-fn name proc arity new-args marshal-in marshal-out)))]
 
     ;; Application of non-lambda: reduce function first
     [(expr-app e1 e2)
@@ -394,6 +409,9 @@
     [(expr-p8-from-nat n) (expr-p8-from-nat (nf n))]
     [(expr-p8-if-nar t nc vc v)
      (expr-p8-if-nar (nf t) (nf nc) (nf vc) (nf v))]
+
+    ;; Foreign function: opaque leaf (already in WHNF)
+    [(expr-foreign-fn _ _ _ _ _ _) e]
 
     ;; Union types: normalize components
     [(expr-union l r) (expr-union (nf l) (nf r))]

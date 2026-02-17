@@ -323,6 +323,10 @@
               (check ctx v (expr-Posit8)))
          tp (expr-error))]
 
+    ;; ---- Foreign function: look up type from global env ----
+    [(expr-foreign-fn name _ _ _ _ _)
+     (or (global-env-lookup-type name) (expr-error))]
+
     ;; ---- Fallback: cannot infer ----
     [_ (expr-error)]))
 

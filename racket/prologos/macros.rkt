@@ -572,6 +572,10 @@
         [(and (pair? datum) (eq? head 'provide))
          (process-provide datum)
          acc]
+        ;; foreign — import foreign function binding and consume
+        [(and (pair? datum) (eq? head 'foreign))
+         (process-foreign datum)
+         acc]
 
         ;; ---- Private suffix forms: defn-, def-, data-, deftype-, defmacro- ----
         ;; Rewrite to the base form but do NOT auto-export.

@@ -50,7 +50,10 @@
  ;; Pre-parse directive processing
  process-ns-declaration
  process-require
- process-provide)
+ process-provide
+ ;; Foreign import handler (callback set by driver.rkt)
+ current-foreign-handler
+ process-foreign)
 
 ;; ========================================
 ;; Module Info — describes a loaded module
@@ -405,3 +408,18 @@
       [else
        ;; No loader available — check cache directly
        (lookup-module ns-sym)])))
+
+;; ========================================
+;; Foreign Import Handler
+;; ========================================
+;; Callback pattern: the actual handler is set by driver.rkt because it
+;; needs access to parse-datum, elaborate, and dynamic-require.
+;; namespace.rkt provides the parameter and thin dispatcher.
+
+(define current-foreign-handler (make-parameter #f))
+
+(define (process-foreign datum)
+  (define handler (current-foreign-handler))
+  (unless handler
+    (error 'foreign "foreign handler not initialized (no driver context)"))
+  (handler datum))

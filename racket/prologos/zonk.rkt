@@ -104,6 +104,9 @@
     ;; Union types
     [(expr-union l r) (expr-union (zonk l) (zonk r))]
 
+    ;; Foreign function (opaque leaf)
+    [(expr-foreign-fn _ _ _ _ _ _) e]
+
     ;; Reduce (pattern matching)
     [(expr-reduce scrut arms structural?)
      (expr-reduce (zonk scrut)
@@ -217,6 +220,9 @@
     ;; Union types
     [(expr-union l r) (expr-union (zonk-at-depth depth l) (zonk-at-depth depth r))]
 
+    ;; Foreign function (opaque leaf)
+    [(expr-foreign-fn _ _ _ _ _ _) e]
+
     ;; Reduce (pattern matching)
     [(expr-reduce scrut arms structural?)
      (expr-reduce (zonk-at-depth depth scrut)
@@ -306,6 +312,8 @@
      (expr-p8-if-nar (default-metas t) (default-metas nc)
                      (default-metas vc) (default-metas v))]
     [(expr-union l r) (expr-union (default-metas l) (default-metas r))]
+    ;; Foreign function (opaque leaf)
+    [(expr-foreign-fn _ _ _ _ _ _) e]
     [(expr-reduce scrut arms structural?)
      (expr-reduce (default-metas scrut)
                   (map (lambda (arm)

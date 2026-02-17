@@ -212,6 +212,12 @@
      (format "[p8-if-nar ~a ~a ~a ~a]"
              (pp-expr t names) (pp-expr nc names) (pp-expr vc names) (pp-expr v names))]
 
+    ;; Foreign function
+    [(expr-foreign-fn name _ arity args _ _)
+     (if (null? args)
+         (format "[foreign ~a]" name)
+         (format "[foreign ~a ~a/~a applied]" name (length args) arity))]
+
     ;; Union types
     [(expr-union l r)
      (format "~a | ~a" (pp-expr l names) (pp-expr r names))]
@@ -412,6 +418,7 @@
     [(expr-p8-le a b) (or (uses-bvar0? a) (uses-bvar0? b))]
     [(expr-p8-from-nat n) (uses-bvar0? n)]
     [(expr-p8-if-nar t nc vc v) (or (uses-bvar0? t) (uses-bvar0? nc) (uses-bvar0? vc) (uses-bvar0? v))]
+    [(expr-foreign-fn _ _ _ _ _ _) #f]
     [(expr-reduce scrut arms _)
      (or (uses-bvar0? scrut)
          (ormap (lambda (arm) (uses-bvar0? (expr-reduce-arm-body arm))) arms))]

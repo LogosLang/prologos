@@ -121,6 +121,9 @@
     [(expr-union l r)
      (expr-union (shift delta cutoff l) (shift delta cutoff r))]
 
+    ;; Foreign function (opaque leaf — no Prologos sub-expressions)
+    [(expr-foreign-fn _ _ _ _ _ _) e]
+
     ;; Reduce: scrutinee is non-binding, arm bodies have binding-count binders
     [(expr-reduce scrut arms structural?)
      (expr-reduce (shift delta cutoff scrut)
@@ -238,6 +241,9 @@
     ;; Union types (non-binding)
     [(expr-union l r)
      (expr-union (subst k s l) (subst k s r))]
+
+    ;; Foreign function (opaque leaf — no Prologos sub-expressions)
+    [(expr-foreign-fn _ _ _ _ _ _) e]
 
     ;; Reduce: arm bodies have binding-count binders
     [(expr-reduce scrut arms structural?)

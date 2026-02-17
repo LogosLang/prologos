@@ -32,7 +32,8 @@
          "metavar-store.rkt"
          "zonk.rkt"
          "qtt.rkt"
-         "multi-dispatch.rkt")
+         "multi-dispatch.rkt"
+         "foreign.rkt")
 
 (provide process-command
          process-file
@@ -108,6 +109,7 @@
     [(expr-vindex _ _ _ _) #t]
     [(expr-fzero _) #t]
     [(expr-fsuc _ _) #t]
+    [(expr-foreign-fn _ _ _ _ _ _) #t]
     [(expr-app f x) (or (contains-unsupported-qtt? f) (contains-unsupported-qtt? x))]
     [(expr-lam _ a b) (or (contains-unsupported-qtt? a) (contains-unsupported-qtt? b))]
     [(expr-Pi _ a b) (or (contains-unsupported-qtt? a) (contains-unsupported-qtt? b))]
@@ -623,8 +625,117 @@
 ;; Also sets the standard library path if not already configured.
 (define (install-module-loader!)
   (current-module-loader load-module)
+  (current-foreign-handler handle-foreign)
   (when (null? (current-lib-paths))
     (current-lib-paths (list prologos-lib-dir))))
+
+;; ========================================
+;; Foreign Import Handler
+;; ========================================
+;; datum = (foreign racket "module-path" (name1 : type1...) (name2 : type2...) ...)
+;; Parses each declaration, dynamic-requires the Racket binding, builds
+;; an expr-foreign-fn value, and registers it in the global environment.
+
+(define (handle-foreign datum)
+  (unless (and (list? datum) (>= (length datum) 4)
+               (eq? (cadr datum) 'racket)
+               (string? (caddr datum)))
+    (error 'foreign "Expected: (foreign racket \"module\" (name : type) ...)"))
+  (define module-path-str (caddr datum))
+  (define decls (cdddr datum))
+  (for ([decl (in-list decls)])
+    (handle-foreign-decl module-path-str decl)))
+
+;; Process a single foreign declaration: (name : type-tokens...)
+;; e.g., (add1 : Nat -> Nat)
+(define (handle-foreign-decl module-path-str decl)
+  (unless (and (list? decl) (>= (length decl) 3)
+               (symbol? (car decl))
+               (eq? (cadr decl) ':))
+    (error 'foreign "Expected: (name : type), got: ~a" decl))
+  (define name (car decl))
+  (define type-tokens (cddr decl))  ;; everything after the ':'
+
+  ;; Build a type sexp from the tokens: (Nat -> Nat -> Bool) → (-> Nat (-> Nat Bool))
+  (define type-sexp (foreign-type-tokens->sexp type-tokens))
+
+  ;; Parse and elaborate the type
+  (reset-meta-store!)
+  (define type-surf (parse-datum type-sexp))
+  (when (prologos-error? type-surf)
+    (error 'foreign "Failed to parse type for ~a: ~a" name type-surf))
+  (define type-expr (elaborate type-surf))
+  (when (prologos-error? type-expr)
+    (error 'foreign "Failed to elaborate type for ~a: ~a" name type-expr))
+
+  ;; Zonk the type to resolve any metas
+  (define zonked-type (zonk-final type-expr))
+
+  ;; dynamic-require the Racket function
+  (define rkt-mod-path (string->symbol module-path-str))
+  (define rkt-proc
+    (with-handlers ([exn:fail? (lambda (e)
+                                 (error 'foreign "Cannot import ~a from ~a: ~a"
+                                        name module-path-str (exn-message e)))])
+      (dynamic-require rkt-mod-path name)))
+
+  ;; Parse type to get marshalling info
+  (define parsed-type (parse-foreign-type zonked-type))
+  (define-values (marshal-in marshal-out) (make-marshaller-pair parsed-type))
+  (define arity (length (car parsed-type)))
+
+  ;; Build the foreign-fn value
+  (define val (expr-foreign-fn name rkt-proc arity '() marshal-in marshal-out))
+
+  ;; Register in global env
+  (current-global-env
+   (global-env-add (current-global-env) name zonked-type val))
+
+  ;; Also register FQN if in a namespace
+  (when (current-ns-context)
+    (define fqn (qualify-name name (ns-context-current-ns (current-ns-context))))
+    (current-global-env
+     (global-env-add (current-global-env) fqn zonked-type val))
+    ;; Auto-export the foreign binding
+    (ns-context-add-auto-export (current-ns-context) name)))
+
+;; Convert foreign type tokens to a parseable sexp.
+;; Transforms infix (Nat -> Nat -> Bool) to prefix (-> Nat (-> Nat Bool)).
+;; Also handles bare types (Nat) and type constructors.
+(define (foreign-type-tokens->sexp tokens)
+  (cond
+    ;; Single token: bare type like Nat, Bool, Unit
+    [(= (length tokens) 1) (car tokens)]
+    ;; Multi-token with ->: split on arrows
+    [(memq '-> tokens)
+     (define parts (split-on-arrow tokens))
+     (define (build parts)
+       (cond
+         [(= (length parts) 1) (car parts)]
+         [else (list '-> (car parts) (build (cdr parts)))]))
+     (build parts)]
+    ;; No arrows: just a single type expression (shouldn't happen with well-formed input)
+    [else (error 'foreign "Cannot parse foreign type tokens: ~a" tokens)]))
+
+;; Split a flat list on '-> symbols.
+;; (Nat -> Nat -> Bool) → (Nat Nat Bool)
+(define (split-on-arrow tokens)
+  (let loop ([toks tokens] [current '()] [segments '()])
+    (cond
+      [(null? toks)
+       (reverse (cons (if (= (length current) 1)
+                          (car current)
+                          (reverse current))
+                      segments))]
+      [(eq? (car toks) '->)
+       (loop (cdr toks)
+             '()
+             (cons (if (= (length current) 1)
+                       (car current)
+                       (reverse current))
+                   segments))]
+      [else
+       (loop (cdr toks) (cons (car toks) current) segments)])))
 
 ;; Auto-install on module load
 (install-module-loader!)

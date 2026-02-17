@@ -63,6 +63,8 @@
  (struct-out expr-p8-le)
  (struct-out expr-p8-from-nat)
  (struct-out expr-p8-if-nar)
+ ;; Foreign function binding
+ (struct-out expr-foreign-fn)
  ;; Type hole (to be inferred during checking)
  (struct-out expr-hole)
  ;; Metavariable (to be solved during elaboration/unification)
@@ -218,6 +220,17 @@
 ;; p8-if-nar(A, nar-case, normal-case, x) : A
 ;; If x is NaR, return nar-case; otherwise, return normal-case
 (struct expr-p8-if-nar (type nar-case normal-case val) #:transparent)
+
+;; ========================================
+;; Foreign function binding
+;; ========================================
+;; name:        symbol (the Prologos binding name)
+;; proc:        Racket procedure (the actual function)
+;; arity:       exact non-negative integer (number of Prologos args)
+;; args:        list of accumulated args (for curried partial application)
+;; marshal-in:  list of (Prologos-value -> Racket-value) converters, one per arg
+;; marshal-out: (Racket-value -> Prologos-value) converter for return type
+(struct expr-foreign-fn (name proc arity args marshal-in marshal-out) #:transparent)
 
 ;; ========================================
 ;; Type hole (for untyped lambda parameters — filled during checking)
