@@ -125,6 +125,8 @@
     [(expr-false) (tu (expr-Bool) (zero-usage n))]
     [(expr-Unit) (tu (expr-Type (lzero)) (zero-usage n))]
     [(expr-unit) (tu (expr-Unit) (zero-usage n))]
+    [(expr-Int) (tu (expr-Type (lzero)) (zero-usage n))]
+    [(expr-int _) (tu (expr-Int) (zero-usage n))]
     [(expr-Posit8) (tu (expr-Type (lzero)) (zero-usage n))]
     [(expr-posit8 _) (tu (expr-Posit8) (zero-usage n))]
 
@@ -276,6 +278,72 @@
                    [_ (tu-error)]))]
               [_ (tu-error)]))]
          [_ (tu-error)]))]
+
+    ;; ---- Int binary operations ----
+    ;; Binary ops: Int -> Int -> Int
+    [(expr-int-add a b)
+     (let ([r1 (checkQ ctx a (expr-Int))]
+           [r2 (checkQ ctx b (expr-Int))])
+       (match* (r1 r2)
+         [((bu #t u1) (bu #t u2)) (tu (expr-Int) (add-usage u1 u2))]
+         [(_ _) (tu-error)]))]
+    [(expr-int-sub a b)
+     (let ([r1 (checkQ ctx a (expr-Int))]
+           [r2 (checkQ ctx b (expr-Int))])
+       (match* (r1 r2)
+         [((bu #t u1) (bu #t u2)) (tu (expr-Int) (add-usage u1 u2))]
+         [(_ _) (tu-error)]))]
+    [(expr-int-mul a b)
+     (let ([r1 (checkQ ctx a (expr-Int))]
+           [r2 (checkQ ctx b (expr-Int))])
+       (match* (r1 r2)
+         [((bu #t u1) (bu #t u2)) (tu (expr-Int) (add-usage u1 u2))]
+         [(_ _) (tu-error)]))]
+    [(expr-int-div a b)
+     (let ([r1 (checkQ ctx a (expr-Int))]
+           [r2 (checkQ ctx b (expr-Int))])
+       (match* (r1 r2)
+         [((bu #t u1) (bu #t u2)) (tu (expr-Int) (add-usage u1 u2))]
+         [(_ _) (tu-error)]))]
+    [(expr-int-mod a b)
+     (let ([r1 (checkQ ctx a (expr-Int))]
+           [r2 (checkQ ctx b (expr-Int))])
+       (match* (r1 r2)
+         [((bu #t u1) (bu #t u2)) (tu (expr-Int) (add-usage u1 u2))]
+         [(_ _) (tu-error)]))]
+
+    ;; Unary Int ops: Int -> Int
+    [(expr-int-neg a)
+     (let ([r (inferQ ctx a)])
+       (match r [(tu (expr-Int) u) (tu (expr-Int) u)] [_ (tu-error)]))]
+    [(expr-int-abs a)
+     (let ([r (inferQ ctx a)])
+       (match r [(tu (expr-Int) u) (tu (expr-Int) u)] [_ (tu-error)]))]
+
+    ;; Int comparisons: Int -> Int -> Bool
+    [(expr-int-lt a b)
+     (let ([r1 (checkQ ctx a (expr-Int))]
+           [r2 (checkQ ctx b (expr-Int))])
+       (match* (r1 r2)
+         [((bu #t u1) (bu #t u2)) (tu (expr-Bool) (add-usage u1 u2))]
+         [(_ _) (tu-error)]))]
+    [(expr-int-le a b)
+     (let ([r1 (checkQ ctx a (expr-Int))]
+           [r2 (checkQ ctx b (expr-Int))])
+       (match* (r1 r2)
+         [((bu #t u1) (bu #t u2)) (tu (expr-Bool) (add-usage u1 u2))]
+         [(_ _) (tu-error)]))]
+    [(expr-int-eq a b)
+     (let ([r1 (checkQ ctx a (expr-Int))]
+           [r2 (checkQ ctx b (expr-Int))])
+       (match* (r1 r2)
+         [((bu #t u1) (bu #t u2)) (tu (expr-Bool) (add-usage u1 u2))]
+         [(_ _) (tu-error)]))]
+
+    ;; Int conversion: Nat -> Int
+    [(expr-from-nat e1)
+     (let ([r (checkQ ctx e1 (expr-Nat))])
+       (match r [(bu #t u) (tu (expr-Int) u)] [_ (tu-error)]))]
 
     ;; ---- Posit8 binary operations ----
     ;; Binary ops: Posit8 -> Posit8 -> Posit8

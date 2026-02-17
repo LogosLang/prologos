@@ -117,6 +117,21 @@
      (expr-p8-if-nar (shift delta cutoff t) (shift delta cutoff nc)
                      (shift delta cutoff vc) (shift delta cutoff v))]
 
+    ;; Int (all non-binding)
+    [(expr-Int) e]
+    [(expr-int _) e]
+    [(expr-int-add a b) (expr-int-add (shift delta cutoff a) (shift delta cutoff b))]
+    [(expr-int-sub a b) (expr-int-sub (shift delta cutoff a) (shift delta cutoff b))]
+    [(expr-int-mul a b) (expr-int-mul (shift delta cutoff a) (shift delta cutoff b))]
+    [(expr-int-div a b) (expr-int-div (shift delta cutoff a) (shift delta cutoff b))]
+    [(expr-int-mod a b) (expr-int-mod (shift delta cutoff a) (shift delta cutoff b))]
+    [(expr-int-neg a) (expr-int-neg (shift delta cutoff a))]
+    [(expr-int-abs a) (expr-int-abs (shift delta cutoff a))]
+    [(expr-int-lt a b) (expr-int-lt (shift delta cutoff a) (shift delta cutoff b))]
+    [(expr-int-le a b) (expr-int-le (shift delta cutoff a) (shift delta cutoff b))]
+    [(expr-int-eq a b) (expr-int-eq (shift delta cutoff a) (shift delta cutoff b))]
+    [(expr-from-nat n) (expr-from-nat (shift delta cutoff n))]
+
     ;; Union types (non-binding)
     [(expr-union l r)
      (expr-union (shift delta cutoff l) (shift delta cutoff r))]
@@ -237,6 +252,21 @@
     [(expr-p8-if-nar t nc vc v)
      (expr-p8-if-nar (subst k s t) (subst k s nc)
                      (subst k s vc) (subst k s v))]
+
+    ;; Int (all non-binding)
+    [(expr-Int) e]
+    [(expr-int _) e]
+    [(expr-int-add a b) (expr-int-add (subst k s a) (subst k s b))]
+    [(expr-int-sub a b) (expr-int-sub (subst k s a) (subst k s b))]
+    [(expr-int-mul a b) (expr-int-mul (subst k s a) (subst k s b))]
+    [(expr-int-div a b) (expr-int-div (subst k s a) (subst k s b))]
+    [(expr-int-mod a b) (expr-int-mod (subst k s a) (subst k s b))]
+    [(expr-int-neg a) (expr-int-neg (subst k s a))]
+    [(expr-int-abs a) (expr-int-abs (subst k s a))]
+    [(expr-int-lt a b) (expr-int-lt (subst k s a) (subst k s b))]
+    [(expr-int-le a b) (expr-int-le (subst k s a) (subst k s b))]
+    [(expr-int-eq a b) (expr-int-eq (subst k s a) (subst k s b))]
+    [(expr-from-nat n) (expr-from-nat (subst k s n))]
 
     ;; Union types (non-binding)
     [(expr-union l r)

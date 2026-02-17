@@ -35,6 +35,23 @@
     [(expr-suc e1) (let ([v (nat-value e1)]) (and v (+ v 1)))]
     [_ #f]))
 
+;; Reduce a binary Int operation: try reducing left, then right.
+(define (reduce-int-binary ctor a b)
+  (let ([a* (whnf a)])
+    (if (equal? a* a)
+        (let ([b* (whnf b)])
+          (if (equal? b* b)
+              (ctor a b)   ; stuck — both operands in WHNF
+              (whnf (ctor a b*))))
+        (whnf (ctor a* b)))))
+
+;; Reduce a unary Int operation: try reducing the operand.
+(define (reduce-int-unary ctor a)
+  (let ([a* (whnf a)])
+    (if (equal? a* a)
+        (ctor a)   ; stuck
+        (whnf (ctor a*)))))
+
 ;; Reduce a binary Posit8 operation: try reducing left, then right.
 (define (reduce-p8-binary ctor a b)
   (let ([a* (whnf a)])
@@ -231,6 +248,54 @@
      (let ([v* (whnf v)])
        (if (equal? v* v) e (whnf (expr-vtail t n v*))))]
 
+    ;; ---- Int iota rules: compute when arguments are int literals ----
+
+    ;; Binary arithmetic on literals
+    [(expr-int-add (expr-int a) (expr-int b)) (expr-int (+ a b))]
+    [(expr-int-sub (expr-int a) (expr-int b)) (expr-int (- a b))]
+    [(expr-int-mul (expr-int a) (expr-int b)) (expr-int (* a b))]
+    [(expr-int-div (expr-int a) (expr-int b))
+     (if (zero? b) e (expr-int (quotient a b)))]
+    [(expr-int-mod (expr-int a) (expr-int b))
+     (if (zero? b) e (expr-int (remainder a b)))]
+
+    ;; Unary ops on literals
+    [(expr-int-neg (expr-int a)) (expr-int (- a))]
+    [(expr-int-abs (expr-int a)) (expr-int (abs a))]
+
+    ;; Comparison on literals → Bool
+    [(expr-int-lt (expr-int a) (expr-int b))
+     (if (< a b) (expr-true) (expr-false))]
+    [(expr-int-le (expr-int a) (expr-int b))
+     (if (<= a b) (expr-true) (expr-false))]
+    [(expr-int-eq (expr-int a) (expr-int b))
+     (if (= a b) (expr-true) (expr-false))]
+
+    ;; from-nat: compute when arg is a Nat numeral
+    [(expr-from-nat n)
+     (let ([n* (whnf n)])
+       (let ([k (nat-value n*)])
+         (cond
+           [k (expr-int k)]
+           [(equal? n* n) e]    ; stuck
+           [else (whnf (expr-from-nat n*))])))]
+
+    ;; ---- Int stuck-term reduction ----
+
+    ;; Binary ops: reduce operands
+    [(expr-int-add a b) (reduce-int-binary expr-int-add a b)]
+    [(expr-int-sub a b) (reduce-int-binary expr-int-sub a b)]
+    [(expr-int-mul a b) (reduce-int-binary expr-int-mul a b)]
+    [(expr-int-div a b) (reduce-int-binary expr-int-div a b)]
+    [(expr-int-mod a b) (reduce-int-binary expr-int-mod a b)]
+    [(expr-int-lt a b) (reduce-int-binary expr-int-lt a b)]
+    [(expr-int-le a b) (reduce-int-binary expr-int-le a b)]
+    [(expr-int-eq a b) (reduce-int-binary expr-int-eq a b)]
+
+    ;; Unary ops: reduce operand
+    [(expr-int-neg a) (reduce-int-unary expr-int-neg a)]
+    [(expr-int-abs a) (reduce-int-unary expr-int-abs a)]
+
     ;; ---- Posit8 iota rules: compute when arguments are posit8 literals ----
 
     ;; Binary arithmetic on literals
@@ -393,6 +458,21 @@
     [(expr-vhead t n v) (expr-vhead (nf t) (nf n) (nf v))]
     [(expr-vtail t n v) (expr-vtail (nf t) (nf n) (nf v))]
     [(expr-vindex t n i v) (expr-vindex (nf t) (nf n) (nf i) (nf v))]
+
+    ;; Int normalization
+    [(expr-Int) e]
+    [(expr-int _) e]
+    [(expr-int-add a b) (expr-int-add (nf a) (nf b))]
+    [(expr-int-sub a b) (expr-int-sub (nf a) (nf b))]
+    [(expr-int-mul a b) (expr-int-mul (nf a) (nf b))]
+    [(expr-int-div a b) (expr-int-div (nf a) (nf b))]
+    [(expr-int-mod a b) (expr-int-mod (nf a) (nf b))]
+    [(expr-int-neg a) (expr-int-neg (nf a))]
+    [(expr-int-abs a) (expr-int-abs (nf a))]
+    [(expr-int-lt a b) (expr-int-lt (nf a) (nf b))]
+    [(expr-int-le a b) (expr-int-le (nf a) (nf b))]
+    [(expr-int-eq a b) (expr-int-eq (nf a) (nf b))]
+    [(expr-from-nat n) (expr-from-nat (nf n))]
 
     ;; Posit8 normalization
     [(expr-Posit8) e]

@@ -42,9 +42,16 @@
     [_ (error 'foreign "Cannot marshal to boolean — not a Bool: ~a" e)]))
 
 ;; Dispatch marshal-out by base type symbol
+;; Convert a Prologos Int to a Racket exact integer
+(define (int->integer e)
+  (match e
+    [(expr-int v) v]
+    [_ (error 'foreign "Cannot marshal to integer — not an Int literal: ~a" e)]))
+
 (define (marshal-prologos->racket base-type val)
   (case base-type
     [(Nat)  (nat->integer val)]
+    [(Int)  (int->integer val)]
     [(Bool) (bool->boolean val)]
     [(Unit) (void)]
     [else (error 'foreign "Unsupported marshal-in type: ~a" base-type)]))
@@ -61,9 +68,16 @@
     (if (zero? n) (expr-zero) (expr-suc (loop (sub1 n))))))
 
 ;; Dispatch marshal-in by base type symbol
+;; Convert a Racket exact integer to a Prologos Int
+(define (integer->int n)
+  (unless (exact-integer? n)
+    (error 'foreign "Cannot marshal from Racket: expected exact integer, got ~a" n))
+  (expr-int n))
+
 (define (marshal-racket->prologos base-type val)
   (case base-type
     [(Nat)  (integer->nat val)]
+    [(Int)  (integer->int val)]
     [(Bool) (if val (expr-true) (expr-false))]
     [(Unit) (expr-unit)]
     [else (error 'foreign "Unsupported marshal-out type: ~a" base-type)]))
@@ -80,6 +94,7 @@
     [(expr-Bool)   'Bool]
     [(expr-Unit)   'Unit]
     [(expr-Posit8) 'Posit8]
+    [(expr-Int)    'Int]
     [_ (error 'foreign "Unsupported foreign type component: ~a" e)]))
 
 ;; Parse a Prologos core type expression into a marshalling descriptor.

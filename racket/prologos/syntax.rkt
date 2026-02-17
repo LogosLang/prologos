@@ -63,6 +63,20 @@
  (struct-out expr-p8-le)
  (struct-out expr-p8-from-nat)
  (struct-out expr-p8-if-nar)
+ ;; Int (arbitrary-precision integers)
+ (struct-out expr-Int)
+ (struct-out expr-int)
+ (struct-out expr-int-add)
+ (struct-out expr-int-sub)
+ (struct-out expr-int-mul)
+ (struct-out expr-int-div)
+ (struct-out expr-int-mod)
+ (struct-out expr-int-neg)
+ (struct-out expr-int-abs)
+ (struct-out expr-int-lt)
+ (struct-out expr-int-le)
+ (struct-out expr-int-eq)
+ (struct-out expr-from-nat)
  ;; Foreign function binding
  (struct-out expr-foreign-fn)
  ;; Type hole (to be inferred during checking)
@@ -222,6 +236,35 @@
 (struct expr-p8-if-nar (type nar-case normal-case val) #:transparent)
 
 ;; ========================================
+;; Int (arbitrary-precision integers, backed by Racket exact integers)
+;; ========================================
+
+;; Type
+(struct expr-Int () #:transparent)                             ; Int : Type 0
+
+;; Value (val is a Racket exact integer)
+(struct expr-int (val) #:transparent)                          ; int literal
+
+;; Binary arithmetic (Int -> Int -> Int)
+(struct expr-int-add (a b) #:transparent)
+(struct expr-int-sub (a b) #:transparent)
+(struct expr-int-mul (a b) #:transparent)
+(struct expr-int-div (a b) #:transparent)                      ; truncating division
+(struct expr-int-mod (a b) #:transparent)                      ; remainder
+
+;; Unary operations (Int -> Int)
+(struct expr-int-neg (a) #:transparent)
+(struct expr-int-abs (a) #:transparent)
+
+;; Comparison (Int -> Int -> Bool)
+(struct expr-int-lt (a b) #:transparent)
+(struct expr-int-le (a b) #:transparent)
+(struct expr-int-eq (a b) #:transparent)
+
+;; Conversion (Nat -> Int, lossless)
+(struct expr-from-nat (n) #:transparent)
+
+;; ========================================
 ;; Foreign function binding
 ;; ========================================
 ;; name:        symbol (the Prologos binding name)
@@ -288,6 +331,12 @@
       (expr-p8-neg? x) (expr-p8-abs? x) (expr-p8-sqrt? x)
       (expr-p8-lt? x) (expr-p8-le? x)
       (expr-p8-from-nat? x) (expr-p8-if-nar? x)
+      (expr-Int? x) (expr-int? x)
+      (expr-int-add? x) (expr-int-sub? x) (expr-int-mul? x)
+      (expr-int-div? x) (expr-int-mod? x)
+      (expr-int-neg? x) (expr-int-abs? x)
+      (expr-int-lt? x) (expr-int-le? x) (expr-int-eq? x)
+      (expr-from-nat? x)
       (expr-hole? x) (expr-meta? x) (expr-reduce? x)
       (expr-union? x) (expr-error? x)))
 

@@ -101,6 +101,21 @@
     [(expr-p8-if-nar t nc vc v)
      (expr-p8-if-nar (zonk t) (zonk nc) (zonk vc) (zonk v))]
 
+    ;; Int
+    [(expr-Int) e]
+    [(expr-int _) e]
+    [(expr-int-add a b) (expr-int-add (zonk a) (zonk b))]
+    [(expr-int-sub a b) (expr-int-sub (zonk a) (zonk b))]
+    [(expr-int-mul a b) (expr-int-mul (zonk a) (zonk b))]
+    [(expr-int-div a b) (expr-int-div (zonk a) (zonk b))]
+    [(expr-int-mod a b) (expr-int-mod (zonk a) (zonk b))]
+    [(expr-int-neg a) (expr-int-neg (zonk a))]
+    [(expr-int-abs a) (expr-int-abs (zonk a))]
+    [(expr-int-lt a b) (expr-int-lt (zonk a) (zonk b))]
+    [(expr-int-le a b) (expr-int-le (zonk a) (zonk b))]
+    [(expr-int-eq a b) (expr-int-eq (zonk a) (zonk b))]
+    [(expr-from-nat n) (expr-from-nat (zonk n))]
+
     ;; Union types
     [(expr-union l r) (expr-union (zonk l) (zonk r))]
 
@@ -217,6 +232,21 @@
      (expr-p8-if-nar (zonk-at-depth depth t) (zonk-at-depth depth nc)
                      (zonk-at-depth depth vc) (zonk-at-depth depth v))]
 
+    ;; Int
+    [(expr-Int) e]
+    [(expr-int _) e]
+    [(expr-int-add a b) (expr-int-add (zonk-at-depth depth a) (zonk-at-depth depth b))]
+    [(expr-int-sub a b) (expr-int-sub (zonk-at-depth depth a) (zonk-at-depth depth b))]
+    [(expr-int-mul a b) (expr-int-mul (zonk-at-depth depth a) (zonk-at-depth depth b))]
+    [(expr-int-div a b) (expr-int-div (zonk-at-depth depth a) (zonk-at-depth depth b))]
+    [(expr-int-mod a b) (expr-int-mod (zonk-at-depth depth a) (zonk-at-depth depth b))]
+    [(expr-int-neg a) (expr-int-neg (zonk-at-depth depth a))]
+    [(expr-int-abs a) (expr-int-abs (zonk-at-depth depth a))]
+    [(expr-int-lt a b) (expr-int-lt (zonk-at-depth depth a) (zonk-at-depth depth b))]
+    [(expr-int-le a b) (expr-int-le (zonk-at-depth depth a) (zonk-at-depth depth b))]
+    [(expr-int-eq a b) (expr-int-eq (zonk-at-depth depth a) (zonk-at-depth depth b))]
+    [(expr-from-nat n) (expr-from-nat (zonk-at-depth depth n))]
+
     ;; Union types
     [(expr-union l r) (expr-union (zonk-at-depth depth l) (zonk-at-depth depth r))]
 
@@ -311,6 +341,19 @@
     [(expr-p8-if-nar t nc vc v)
      (expr-p8-if-nar (default-metas t) (default-metas nc)
                      (default-metas vc) (default-metas v))]
+    [(expr-Int) e]
+    [(expr-int _) e]
+    [(expr-int-add a b) (expr-int-add (default-metas a) (default-metas b))]
+    [(expr-int-sub a b) (expr-int-sub (default-metas a) (default-metas b))]
+    [(expr-int-mul a b) (expr-int-mul (default-metas a) (default-metas b))]
+    [(expr-int-div a b) (expr-int-div (default-metas a) (default-metas b))]
+    [(expr-int-mod a b) (expr-int-mod (default-metas a) (default-metas b))]
+    [(expr-int-neg a) (expr-int-neg (default-metas a))]
+    [(expr-int-abs a) (expr-int-abs (default-metas a))]
+    [(expr-int-lt a b) (expr-int-lt (default-metas a) (default-metas b))]
+    [(expr-int-le a b) (expr-int-le (default-metas a) (default-metas b))]
+    [(expr-int-eq a b) (expr-int-eq (default-metas a) (default-metas b))]
+    [(expr-from-nat n) (expr-from-nat (default-metas n))]
     [(expr-union l r) (expr-union (default-metas l) (default-metas r))]
     ;; Foreign function (opaque leaf)
     [(expr-foreign-fn _ _ _ _ _ _) e]

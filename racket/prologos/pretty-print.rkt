@@ -212,6 +212,21 @@
      (format "[p8-if-nar ~a ~a ~a ~a]"
              (pp-expr t names) (pp-expr nc names) (pp-expr vc names) (pp-expr v names))]
 
+    ;; Int
+    [(expr-Int) "Int"]
+    [(expr-int v) (number->string v)]
+    [(expr-int-add a b) (format "[int+ ~a ~a]" (pp-expr a names) (pp-expr b names))]
+    [(expr-int-sub a b) (format "[int- ~a ~a]" (pp-expr a names) (pp-expr b names))]
+    [(expr-int-mul a b) (format "[int* ~a ~a]" (pp-expr a names) (pp-expr b names))]
+    [(expr-int-div a b) (format "[int/ ~a ~a]" (pp-expr a names) (pp-expr b names))]
+    [(expr-int-mod a b) (format "[int-mod ~a ~a]" (pp-expr a names) (pp-expr b names))]
+    [(expr-int-neg a) (format "[int-neg ~a]" (pp-expr a names))]
+    [(expr-int-abs a) (format "[int-abs ~a]" (pp-expr a names))]
+    [(expr-int-lt a b) (format "[int< ~a ~a]" (pp-expr a names) (pp-expr b names))]
+    [(expr-int-le a b) (format "[int<= ~a ~a]" (pp-expr a names) (pp-expr b names))]
+    [(expr-int-eq a b) (format "[int= ~a ~a]" (pp-expr a names) (pp-expr b names))]
+    [(expr-from-nat n) (format "[from-nat ~a]" (pp-expr n names))]
+
     ;; Foreign function
     [(expr-foreign-fn name _ arity args _ _)
      (if (null? args)
@@ -418,6 +433,19 @@
     [(expr-p8-le a b) (or (uses-bvar0? a) (uses-bvar0? b))]
     [(expr-p8-from-nat n) (uses-bvar0? n)]
     [(expr-p8-if-nar t nc vc v) (or (uses-bvar0? t) (uses-bvar0? nc) (uses-bvar0? vc) (uses-bvar0? v))]
+    [(expr-Int) #f]
+    [(expr-int _) #f]
+    [(expr-int-add a b) (or (uses-bvar0? a) (uses-bvar0? b))]
+    [(expr-int-sub a b) (or (uses-bvar0? a) (uses-bvar0? b))]
+    [(expr-int-mul a b) (or (uses-bvar0? a) (uses-bvar0? b))]
+    [(expr-int-div a b) (or (uses-bvar0? a) (uses-bvar0? b))]
+    [(expr-int-mod a b) (or (uses-bvar0? a) (uses-bvar0? b))]
+    [(expr-int-neg a) (uses-bvar0? a)]
+    [(expr-int-abs a) (uses-bvar0? a)]
+    [(expr-int-lt a b) (or (uses-bvar0? a) (uses-bvar0? b))]
+    [(expr-int-le a b) (or (uses-bvar0? a) (uses-bvar0? b))]
+    [(expr-int-eq a b) (or (uses-bvar0? a) (uses-bvar0? b))]
+    [(expr-from-nat n) (uses-bvar0? n)]
     [(expr-foreign-fn _ _ _ _ _ _) #f]
     [(expr-reduce scrut arms _)
      (or (uses-bvar0? scrut)

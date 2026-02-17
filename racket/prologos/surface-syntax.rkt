@@ -45,6 +45,20 @@
  (struct-out surf-vhead)
  (struct-out surf-vtail)
  (struct-out surf-vindex)
+ ;; Int surface forms
+ (struct-out surf-int-type)
+ (struct-out surf-int-lit)
+ (struct-out surf-int-add)
+ (struct-out surf-int-sub)
+ (struct-out surf-int-mul)
+ (struct-out surf-int-div)
+ (struct-out surf-int-mod)
+ (struct-out surf-int-neg)
+ (struct-out surf-int-abs)
+ (struct-out surf-int-lt)
+ (struct-out surf-int-le)
+ (struct-out surf-int-eq)
+ (struct-out surf-from-nat)
  ;; Posit8 surface forms
  (struct-out surf-posit8-type)
  (struct-out surf-posit8)
@@ -207,6 +221,35 @@
 
 ;; vindex: (vindex A n i v)
 (struct surf-vindex (type len idx vec srcloc) #:transparent)
+
+;; ========================================
+;; Int surface forms (arbitrary-precision integers)
+;; ========================================
+
+;; Int type: Int
+(struct surf-int-type (srcloc) #:transparent)
+
+;; Int literal: bare integer (e.g., 42, -5)
+(struct surf-int-lit (value srcloc) #:transparent)
+
+;; Binary arithmetic: (int+ a b), (int- a b), (int* a b), (int/ a b), (int-mod a b)
+(struct surf-int-add (a b srcloc) #:transparent)
+(struct surf-int-sub (a b srcloc) #:transparent)
+(struct surf-int-mul (a b srcloc) #:transparent)
+(struct surf-int-div (a b srcloc) #:transparent)
+(struct surf-int-mod (a b srcloc) #:transparent)
+
+;; Unary ops: (int-neg a), (int-abs a)
+(struct surf-int-neg (a srcloc) #:transparent)
+(struct surf-int-abs (a srcloc) #:transparent)
+
+;; Comparison: (int< a b), (int<= a b), (int= a b)
+(struct surf-int-lt (a b srcloc) #:transparent)
+(struct surf-int-le (a b srcloc) #:transparent)
+(struct surf-int-eq (a b srcloc) #:transparent)
+
+;; Conversion: (from-nat n)
+(struct surf-from-nat (n srcloc) #:transparent)
 
 ;; ========================================
 ;; Posit8 surface forms (8-bit posit, es=2, 2022 Standard)

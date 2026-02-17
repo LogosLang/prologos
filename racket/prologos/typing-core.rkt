@@ -272,6 +272,53 @@
          a
          (expr-error))]
 
+    ;; ---- Int (arbitrary-precision integers) ----
+    [(expr-Int) (expr-Type (lzero))]
+
+    ;; int literal: val must be a Racket exact integer
+    [(expr-int v)
+     (if (exact-integer? v)
+         (expr-Int)
+         (expr-error))]
+
+    ;; Binary arithmetic: Int -> Int -> Int
+    [(expr-int-add a b)
+     (if (and (check ctx a (expr-Int)) (check ctx b (expr-Int)))
+         (expr-Int) (expr-error))]
+    [(expr-int-sub a b)
+     (if (and (check ctx a (expr-Int)) (check ctx b (expr-Int)))
+         (expr-Int) (expr-error))]
+    [(expr-int-mul a b)
+     (if (and (check ctx a (expr-Int)) (check ctx b (expr-Int)))
+         (expr-Int) (expr-error))]
+    [(expr-int-div a b)
+     (if (and (check ctx a (expr-Int)) (check ctx b (expr-Int)))
+         (expr-Int) (expr-error))]
+    [(expr-int-mod a b)
+     (if (and (check ctx a (expr-Int)) (check ctx b (expr-Int)))
+         (expr-Int) (expr-error))]
+
+    ;; Unary ops: Int -> Int
+    [(expr-int-neg a)
+     (if (check ctx a (expr-Int)) (expr-Int) (expr-error))]
+    [(expr-int-abs a)
+     (if (check ctx a (expr-Int)) (expr-Int) (expr-error))]
+
+    ;; Comparison: Int -> Int -> Bool
+    [(expr-int-lt a b)
+     (if (and (check ctx a (expr-Int)) (check ctx b (expr-Int)))
+         (expr-Bool) (expr-error))]
+    [(expr-int-le a b)
+     (if (and (check ctx a (expr-Int)) (check ctx b (expr-Int)))
+         (expr-Bool) (expr-error))]
+    [(expr-int-eq a b)
+     (if (and (check ctx a (expr-Int)) (check ctx b (expr-Int)))
+         (expr-Bool) (expr-error))]
+
+    ;; Conversion: Nat -> Int
+    [(expr-from-nat n)
+     (if (check ctx n (expr-Nat)) (expr-Int) (expr-error))]
+
     ;; ---- Posit8 ----
     [(expr-Posit8) (expr-Type (lzero))]
 
@@ -401,6 +448,10 @@
     [((expr-fsuc n1 i) (expr-Fin bound))
      (and (unify-ok? (unify ctx bound (expr-suc n1)))
           (check ctx i (expr-Fin n1)))]
+
+    ;; ---- Int literal check ----
+    [((expr-int v) (expr-Int))
+     (exact-integer? v)]
 
     ;; ---- Posit8 literal check ----
     [((expr-posit8 v) (expr-Posit8))
@@ -640,6 +691,9 @@
      (if (check ctx n (expr-Nat))
          (just-level (lzero))
          (no-level))]
+
+    ;; Int formation: Int : Type(0)
+    [(expr-Int) (just-level (lzero))]
 
     ;; Posit8 formation: Posit8 : Type(0)
     [(expr-Posit8) (just-level (lzero))]

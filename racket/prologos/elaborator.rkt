@@ -464,6 +464,67 @@
              [(prologos-error? vec) vec]
              [else (expr-vindex a len idx vec)]))]
 
+    ;; ---- Int ----
+    [(surf-int-type loc) (expr-Int)]
+    [(surf-int-lit v loc) (expr-int v)]
+    [(surf-int-add a b loc)
+     (let ([ea (elaborate a env depth)]
+           [eb (elaborate b env depth)])
+       (cond [(prologos-error? ea) ea]
+             [(prologos-error? eb) eb]
+             [else (expr-int-add ea eb)]))]
+    [(surf-int-sub a b loc)
+     (let ([ea (elaborate a env depth)]
+           [eb (elaborate b env depth)])
+       (cond [(prologos-error? ea) ea]
+             [(prologos-error? eb) eb]
+             [else (expr-int-sub ea eb)]))]
+    [(surf-int-mul a b loc)
+     (let ([ea (elaborate a env depth)]
+           [eb (elaborate b env depth)])
+       (cond [(prologos-error? ea) ea]
+             [(prologos-error? eb) eb]
+             [else (expr-int-mul ea eb)]))]
+    [(surf-int-div a b loc)
+     (let ([ea (elaborate a env depth)]
+           [eb (elaborate b env depth)])
+       (cond [(prologos-error? ea) ea]
+             [(prologos-error? eb) eb]
+             [else (expr-int-div ea eb)]))]
+    [(surf-int-mod a b loc)
+     (let ([ea (elaborate a env depth)]
+           [eb (elaborate b env depth)])
+       (cond [(prologos-error? ea) ea]
+             [(prologos-error? eb) eb]
+             [else (expr-int-mod ea eb)]))]
+    [(surf-int-neg a loc)
+     (let ([ea (elaborate a env depth)])
+       (if (prologos-error? ea) ea (expr-int-neg ea)))]
+    [(surf-int-abs a loc)
+     (let ([ea (elaborate a env depth)])
+       (if (prologos-error? ea) ea (expr-int-abs ea)))]
+    [(surf-int-lt a b loc)
+     (let ([ea (elaborate a env depth)]
+           [eb (elaborate b env depth)])
+       (cond [(prologos-error? ea) ea]
+             [(prologos-error? eb) eb]
+             [else (expr-int-lt ea eb)]))]
+    [(surf-int-le a b loc)
+     (let ([ea (elaborate a env depth)]
+           [eb (elaborate b env depth)])
+       (cond [(prologos-error? ea) ea]
+             [(prologos-error? eb) eb]
+             [else (expr-int-le ea eb)]))]
+    [(surf-int-eq a b loc)
+     (let ([ea (elaborate a env depth)]
+           [eb (elaborate b env depth)])
+       (cond [(prologos-error? ea) ea]
+             [(prologos-error? eb) eb]
+             [else (expr-int-eq ea eb)]))]
+    [(surf-from-nat n loc)
+     (let ([en (elaborate n env depth)])
+       (if (prologos-error? en) en (expr-from-nat en)))]
+
     ;; ---- Posit8 ----
     [(surf-posit8-type loc) (expr-Posit8)]
     [(surf-posit8 v loc) (expr-posit8 v)]
