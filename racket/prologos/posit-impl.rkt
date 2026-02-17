@@ -62,7 +62,12 @@
  posit64-eq? posit64-lt? posit64-le?
  posit64-nar? posit64-zero?
  posit64-from-nat posit64-to-rational
- posit64-display)
+ posit64-display
+ ;; ---- Quire (exact accumulators) ----
+ quire8-fma quire8-to
+ quire16-fma quire16-to
+ quire32-fma quire32-to
+ quire64-fma quire64-to)
 
 ;; ========================================
 ;; Global parameters (2022 Standard)
@@ -466,3 +471,43 @@
 (define (posit64-from-nat n) (posit-from-nat 64 n))
 (define (posit64-to-rational v) (posit-to-rational 64 v))
 (define (posit64-display v) (posit-display 64 v))
+
+;; ========================================
+;; Quire accumulators (exact product sums)
+;; ========================================
+;;
+;; A quire accumulates exact sums of products.  Since posit-impl.rkt already
+;; operates via exact rationals internally, the quire is simply an exact
+;; Racket rational.  quire-fma(q, a, b) = q + decode(a) * decode(b).
+;; quire-to(q) = encode(q) — single final rounding.
+;;
+;; NaR in either operand contaminates the quire (becomes 'nar).
+;; A contaminated quire converts to NaR.
+
+(define (quire-fma-impl nbits q a-bits b-bits)
+  (cond
+    [(eq? q 'nar) 'nar]
+    [else
+     (let ([ra (posit-decode nbits a-bits)]
+           [rb (posit-decode nbits b-bits)])
+       (if (or (eq? ra 'nar) (eq? rb 'nar))
+           'nar
+           (+ q (* ra rb))))]))
+
+(define (quire-to-impl nbits q)
+  (cond
+    [(eq? q 'nar) (posit-nar-val nbits)]
+    [else (posit-encode nbits q)]))
+
+;; Per-width wrappers
+(define (quire8-fma q a b) (quire-fma-impl 8 q a b))
+(define (quire8-to q) (quire-to-impl 8 q))
+
+(define (quire16-fma q a b) (quire-fma-impl 16 q a b))
+(define (quire16-to q) (quire-to-impl 16 q))
+
+(define (quire32-fma q a b) (quire-fma-impl 32 q a b))
+(define (quire32-to q) (quire-to-impl 32 q))
+
+(define (quire64-fma q a b) (quire-fma-impl 64 q a b))
+(define (quire64-to q) (quire-to-impl 64 q))

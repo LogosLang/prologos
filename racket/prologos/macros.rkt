@@ -2516,6 +2516,10 @@
       [(surf-posit16-type _) (void)]
       [(surf-posit32-type _) (void)]
       [(surf-posit64-type _) (void)]
+      [(surf-quire8-type _) (void)]
+      [(surf-quire16-type _) (void)]
+      [(surf-quire32-type _) (void)]
+      [(surf-quire64-type _) (void)]
       [(surf-zero _) (void)]
       [(surf-true _) (void)]
       [(surf-false _) (void)]
@@ -2540,6 +2544,10 @@
     Posit16 posit16 p16+ p16- p16* p16/ p16-neg p16-abs p16-sqrt p16-lt p16-le p16-from-nat p16-if-nar
     Posit32 posit32 p32+ p32- p32* p32/ p32-neg p32-abs p32-sqrt p32-lt p32-le p32-from-nat p32-if-nar
     Posit64 posit64 p64+ p64- p64* p64/ p64-neg p64-abs p64-sqrt p64-lt p64-le p64-from-nat p64-if-nar
+    Quire8 q8-zero q8-fma q8-to
+    Quire16 q16-zero q16-fma q16-to
+    Quire32 q32-zero q32-fma q32-to
+    Quire64 q64-zero q64-fma q64-to
     Int int int+ int- int* int/ int-mod int-neg int-abs int-lt int-le int-eq from-nat
     Rat rat rat+ rat- rat* rat/ rat-neg rat-abs rat-lt rat-le rat-eq from-int rat-numer rat-denom))
 

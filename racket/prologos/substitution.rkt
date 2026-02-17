@@ -168,6 +168,24 @@
      (expr-p64-if-nar (shift delta cutoff t) (shift delta cutoff nc)
                       (shift delta cutoff vc) (shift delta cutoff v))]
 
+    ;; Quire accumulators (all non-binding)
+    [(expr-Quire8) e]
+    [(expr-quire8-val _) e]
+    [(expr-quire8-fma q a b) (expr-quire8-fma (shift delta cutoff q) (shift delta cutoff a) (shift delta cutoff b))]
+    [(expr-quire8-to q) (expr-quire8-to (shift delta cutoff q))]
+    [(expr-Quire16) e]
+    [(expr-quire16-val _) e]
+    [(expr-quire16-fma q a b) (expr-quire16-fma (shift delta cutoff q) (shift delta cutoff a) (shift delta cutoff b))]
+    [(expr-quire16-to q) (expr-quire16-to (shift delta cutoff q))]
+    [(expr-Quire32) e]
+    [(expr-quire32-val _) e]
+    [(expr-quire32-fma q a b) (expr-quire32-fma (shift delta cutoff q) (shift delta cutoff a) (shift delta cutoff b))]
+    [(expr-quire32-to q) (expr-quire32-to (shift delta cutoff q))]
+    [(expr-Quire64) e]
+    [(expr-quire64-val _) e]
+    [(expr-quire64-fma q a b) (expr-quire64-fma (shift delta cutoff q) (shift delta cutoff a) (shift delta cutoff b))]
+    [(expr-quire64-to q) (expr-quire64-to (shift delta cutoff q))]
+
     ;; Int (all non-binding)
     [(expr-Int) e]
     [(expr-int _) e]
@@ -370,6 +388,24 @@
     [(expr-p64-if-nar t nc vc v)
      (expr-p64-if-nar (subst k s t) (subst k s nc)
                       (subst k s vc) (subst k s v))]
+
+    ;; Quire accumulators (all non-binding)
+    [(expr-Quire8) e]
+    [(expr-quire8-val _) e]
+    [(expr-quire8-fma q a b) (expr-quire8-fma (subst k s q) (subst k s a) (subst k s b))]
+    [(expr-quire8-to q) (expr-quire8-to (subst k s q))]
+    [(expr-Quire16) e]
+    [(expr-quire16-val _) e]
+    [(expr-quire16-fma q a b) (expr-quire16-fma (subst k s q) (subst k s a) (subst k s b))]
+    [(expr-quire16-to q) (expr-quire16-to (subst k s q))]
+    [(expr-Quire32) e]
+    [(expr-quire32-val _) e]
+    [(expr-quire32-fma q a b) (expr-quire32-fma (subst k s q) (subst k s a) (subst k s b))]
+    [(expr-quire32-to q) (expr-quire32-to (subst k s q))]
+    [(expr-Quire64) e]
+    [(expr-quire64-val _) e]
+    [(expr-quire64-fma q a b) (expr-quire64-fma (subst k s q) (subst k s a) (subst k s b))]
+    [(expr-quire64-to q) (expr-quire64-to (subst k s q))]
 
     ;; Int (all non-binding)
     [(expr-Int) e]

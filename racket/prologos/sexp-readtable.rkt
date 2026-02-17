@@ -261,6 +261,35 @@
   (if (syntax? stx) (syntax->datum stx) stx))
 
 ;; ========================================
+;; Tilde reader: ~N for approximate literals
+;; ========================================
+;; When ~ is followed by a number, reads as ($approx-literal <value>).
+;; ~42 → ($approx-literal 42)
+;; ~3/7 → ($approx-literal 3/7)
+;; Bare ~ (not followed by a digit) is an error.
+
+(define (read-tilde-syntax ch port src line col pos)
+  (define next (peek-char port))
+  (cond
+    [(and (char? next) (char-numeric? next))
+     ;; Read the number using the standard Racket reader
+     (define num-val
+       (parameterize ([current-readtable prologos-readtable])
+         (read-syntax src port)))
+     (define v (if (syntax? num-val) (syntax-e num-val) num-val))
+     (define end-pos (file-position port))
+     (define span (- end-pos pos))
+     (datum->syntax #f (list '$approx-literal v)
+                    (list src line col pos span))]
+    [else
+     (error 'prologos-reader "~a:~a:~a: ~ must be followed by a number (approximate literal)"
+            src (or line 0) (or col 0))]))
+
+(define (read-tilde-datum ch port)
+  (define stx (read-tilde-syntax ch port "<unknown>" #f #f (file-position port)))
+  (if (syntax? stx) (syntax->datum stx) stx))
+
+;; ========================================
 ;; The custom readtable
 ;; ========================================
 (define prologos-readtable
@@ -268,7 +297,8 @@
     #\< 'terminating-macro read-angle-bracket-syntax
     #\{ 'terminating-macro read-brace-params-syntax
     #\, 'terminating-macro read-comma-syntax
-    #\' 'terminating-macro read-quote-syntax))
+    #\' 'terminating-macro read-quote-syntax
+    #\~ 'terminating-macro read-tilde-syntax))
 
 ;; ========================================
 ;; Convenience read functions

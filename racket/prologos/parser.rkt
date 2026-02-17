@@ -32,6 +32,10 @@
     Posit16 posit16 p16+ p16- p16* p16/ p16-neg p16-abs p16-sqrt p16-lt p16-le p16-from-nat p16-if-nar
     Posit32 posit32 p32+ p32- p32* p32/ p32-neg p32-abs p32-sqrt p32-lt p32-le p32-from-nat p32-if-nar
     Posit64 posit64 p64+ p64- p64* p64/ p64-neg p64-abs p64-sqrt p64-lt p64-le p64-from-nat p64-if-nar
+    Quire8 q8-zero q8-fma q8-to
+    Quire16 q16-zero q16-fma q16-to
+    Quire32 q32-zero q32-fma q32-to
+    Quire64 q64-zero q64-fma q64-to
     def defn check eval infer expand parse elaborate match
     ;; Pre-parse macros — should be expanded before reaching parser
     defmacro let do if deftype data spec trait impl
@@ -337,6 +341,14 @@
     [(Posit16) (surf-posit16-type loc)]
     [(Posit32) (surf-posit32-type loc)]
     [(Posit64) (surf-posit64-type loc)]
+    [(Quire8) (surf-quire8-type loc)]
+    [(Quire16) (surf-quire16-type loc)]
+    [(Quire32) (surf-quire32-type loc)]
+    [(Quire64) (surf-quire64-type loc)]
+    [(q8-zero) (surf-quire8-zero loc)]
+    [(q16-zero) (surf-quire16-zero loc)]
+    [(q32-zero) (surf-quire32-zero loc)]
+    [(q64-zero) (surf-quire64-zero loc)]
     [(Type)   (surf-type #f loc)]     ;; bare Type → infer level (Sprint 6)
     [(zero)   (surf-zero loc)]
     [(true)   (surf-true loc)]
@@ -375,6 +387,15 @@
     ;; $angle-type sentinel: unwrap as type annotation
     [(and (symbol? head) (eq? head '$angle-type))
      (unwrap-angle-type stx loc)]
+
+    ;; $approx-literal sentinel: ~N → surf-approx-literal
+    [(and (symbol? head) (eq? head '$approx-literal))
+     (if (= (length args) 1)
+         (let ([v (stx->datum (car args))])
+           (if (and (number? v) (or (exact? v) (inexact? v)))
+               (surf-approx-literal (if (exact? v) v (inexact->exact v)) loc)
+               (parse-error loc (format "~~ requires a numeric argument, got: ~a" v) #f)))
+         (parse-error loc "~~ requires exactly one argument" #f))]
 
     ;; $foreign-block sentinel: foreign escape block
     ;; ($foreign-block racket (code-datums...) (captures...) (exports...))
@@ -1248,6 +1269,80 @@
                     [(prologos-error? vc) vc]
                     [(prologos-error? v) v]
                     [else (surf-p64-if-nar tp nc vc v loc)])))]
+
+       ;; ---- Quire operations ----
+       ;; Quire types (bare symbol parsed above; list form for consistency)
+       [(Quire8)
+        (or (check-arity 'Quire8 args 0 loc) (surf-quire8-type loc))]
+       [(Quire16)
+        (or (check-arity 'Quire16 args 0 loc) (surf-quire16-type loc))]
+       [(Quire32)
+        (or (check-arity 'Quire32 args 0 loc) (surf-quire32-type loc))]
+       [(Quire64)
+        (or (check-arity 'Quire64 args 0 loc) (surf-quire64-type loc))]
+       ;; Quire zero constructors (nullary)
+       [(q8-zero)
+        (or (check-arity 'q8-zero args 0 loc) (surf-quire8-zero loc))]
+       [(q16-zero)
+        (or (check-arity 'q16-zero args 0 loc) (surf-quire16-zero loc))]
+       [(q32-zero)
+        (or (check-arity 'q32-zero args 0 loc) (surf-quire32-zero loc))]
+       [(q64-zero)
+        (or (check-arity 'q64-zero args 0 loc) (surf-quire64-zero loc))]
+       ;; Quire FMA: (qW-fma q a b)
+       [(q8-fma)
+        (or (check-arity 'q8-fma args 3 loc)
+            (let ([q (parse-datum (car args))]
+                  [a (parse-datum (cadr args))]
+                  [b (parse-datum (caddr args))])
+              (cond [(prologos-error? q) q]
+                    [(prologos-error? a) a]
+                    [(prologos-error? b) b]
+                    [else (surf-quire8-fma q a b loc)])))]
+       [(q16-fma)
+        (or (check-arity 'q16-fma args 3 loc)
+            (let ([q (parse-datum (car args))]
+                  [a (parse-datum (cadr args))]
+                  [b (parse-datum (caddr args))])
+              (cond [(prologos-error? q) q]
+                    [(prologos-error? a) a]
+                    [(prologos-error? b) b]
+                    [else (surf-quire16-fma q a b loc)])))]
+       [(q32-fma)
+        (or (check-arity 'q32-fma args 3 loc)
+            (let ([q (parse-datum (car args))]
+                  [a (parse-datum (cadr args))]
+                  [b (parse-datum (caddr args))])
+              (cond [(prologos-error? q) q]
+                    [(prologos-error? a) a]
+                    [(prologos-error? b) b]
+                    [else (surf-quire32-fma q a b loc)])))]
+       [(q64-fma)
+        (or (check-arity 'q64-fma args 3 loc)
+            (let ([q (parse-datum (car args))]
+                  [a (parse-datum (cadr args))]
+                  [b (parse-datum (caddr args))])
+              (cond [(prologos-error? q) q]
+                    [(prologos-error? a) a]
+                    [(prologos-error? b) b]
+                    [else (surf-quire64-fma q a b loc)])))]
+       ;; Quire TO: (qW-to q)
+       [(q8-to)
+        (or (check-arity 'q8-to args 1 loc)
+            (let ([q (parse-datum (car args))])
+              (if (prologos-error? q) q (surf-quire8-to q loc))))]
+       [(q16-to)
+        (or (check-arity 'q16-to args 1 loc)
+            (let ([q (parse-datum (car args))])
+              (if (prologos-error? q) q (surf-quire16-to q loc))))]
+       [(q32-to)
+        (or (check-arity 'q32-to args 1 loc)
+            (let ([q (parse-datum (car args))])
+              (if (prologos-error? q) q (surf-quire32-to q loc))))]
+       [(q64-to)
+        (or (check-arity 'q64-to args 1 loc)
+            (let ([q (parse-datum (car args))])
+              (if (prologos-error? q) q (surf-quire64-to q loc))))]
 
        ;; (the-fn type [params...] body)
        [(the-fn)

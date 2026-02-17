@@ -140,6 +140,15 @@
     ;; Posit64
     [(expr-Posit64) (tu (expr-Type (lzero)) (zero-usage n))]
     [(expr-posit64 _) (tu (expr-Posit64) (zero-usage n))]
+    ;; Quire types and values (zero-usage: type formers and literals)
+    [(expr-Quire8) (tu (expr-Type (lzero)) (zero-usage n))]
+    [(expr-quire8-val _) (tu (expr-Quire8) (zero-usage n))]
+    [(expr-Quire16) (tu (expr-Type (lzero)) (zero-usage n))]
+    [(expr-quire16-val _) (tu (expr-Quire16) (zero-usage n))]
+    [(expr-Quire32) (tu (expr-Type (lzero)) (zero-usage n))]
+    [(expr-quire32-val _) (tu (expr-Quire32) (zero-usage n))]
+    [(expr-Quire64) (tu (expr-Type (lzero)) (zero-usage n))]
+    [(expr-quire64-val _) (tu (expr-Quire64) (zero-usage n))]
 
     ;; ---- Type formers: Pi, Sigma, Eq ----
     ;; Type formers inhabit Type. Usage comes from sub-terms.
@@ -715,6 +724,56 @@
                    [_ (tu-error)]))]
               [_ (tu-error)]))]
          [_ (tu-error)]))]
+
+    ;; ---- Quire FMA operations ----
+    ;; quireW-fma(q, a, b): usage = U_q + U_a + U_b
+    [(expr-quire8-fma q a b)
+     (let ([r1 (checkQ ctx q (expr-Quire8))]
+           [r2 (checkQ ctx a (expr-Posit8))]
+           [r3 (checkQ ctx b (expr-Posit8))])
+       (match* (r1 r2 r3)
+         [((bu #t u1) (bu #t u2) (bu #t u3))
+          (tu (expr-Quire8) (add-usage u1 (add-usage u2 u3)))]
+         [(_ _ _) (tu-error)]))]
+    [(expr-quire16-fma q a b)
+     (let ([r1 (checkQ ctx q (expr-Quire16))]
+           [r2 (checkQ ctx a (expr-Posit16))]
+           [r3 (checkQ ctx b (expr-Posit16))])
+       (match* (r1 r2 r3)
+         [((bu #t u1) (bu #t u2) (bu #t u3))
+          (tu (expr-Quire16) (add-usage u1 (add-usage u2 u3)))]
+         [(_ _ _) (tu-error)]))]
+    [(expr-quire32-fma q a b)
+     (let ([r1 (checkQ ctx q (expr-Quire32))]
+           [r2 (checkQ ctx a (expr-Posit32))]
+           [r3 (checkQ ctx b (expr-Posit32))])
+       (match* (r1 r2 r3)
+         [((bu #t u1) (bu #t u2) (bu #t u3))
+          (tu (expr-Quire32) (add-usage u1 (add-usage u2 u3)))]
+         [(_ _ _) (tu-error)]))]
+    [(expr-quire64-fma q a b)
+     (let ([r1 (checkQ ctx q (expr-Quire64))]
+           [r2 (checkQ ctx a (expr-Posit64))]
+           [r3 (checkQ ctx b (expr-Posit64))])
+       (match* (r1 r2 r3)
+         [((bu #t u1) (bu #t u2) (bu #t u3))
+          (tu (expr-Quire64) (add-usage u1 (add-usage u2 u3)))]
+         [(_ _ _) (tu-error)]))]
+
+    ;; ---- Quire TO operations ----
+    ;; quireW-to(q): usage = U_q
+    [(expr-quire8-to q)
+     (let ([r (checkQ ctx q (expr-Quire8))])
+       (match r [(bu #t u) (tu (expr-Posit8) u)] [_ (tu-error)]))]
+    [(expr-quire16-to q)
+     (let ([r (checkQ ctx q (expr-Quire16))])
+       (match r [(bu #t u) (tu (expr-Posit16) u)] [_ (tu-error)]))]
+    [(expr-quire32-to q)
+     (let ([r (checkQ ctx q (expr-Quire32))])
+       (match r [(bu #t u) (tu (expr-Posit32) u)] [_ (tu-error)]))]
+    [(expr-quire64-to q)
+     (let ([r (checkQ ctx q (expr-Quire64))])
+       (match r [(bu #t u) (tu (expr-Posit64) u)] [_ (tu-error)]))]
 
     ;; ---- J eliminator ----
     ;; Usage from proof, base, motive arguments

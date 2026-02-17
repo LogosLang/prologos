@@ -573,6 +573,51 @@
               (check ctx v (expr-Posit64)))
          tp (expr-error))]
 
+    ;; ---- Quire types ----
+    ;; QuireW : Type 0
+    [(expr-Quire8) (expr-Type (lzero))]
+    [(expr-Quire16) (expr-Type (lzero))]
+    [(expr-Quire32) (expr-Type (lzero))]
+    [(expr-Quire64) (expr-Type (lzero))]
+
+    ;; quireW-val: runtime literal → QuireW
+    [(expr-quire8-val _) (expr-Quire8)]
+    [(expr-quire16-val _) (expr-Quire16)]
+    [(expr-quire32-val _) (expr-Quire32)]
+    [(expr-quire64-val _) (expr-Quire64)]
+
+    ;; quireW-fma: QuireW → PositW → PositW → QuireW
+    [(expr-quire8-fma q a b)
+     (if (and (check ctx q (expr-Quire8))
+              (check ctx a (expr-Posit8))
+              (check ctx b (expr-Posit8)))
+         (expr-Quire8) (expr-error))]
+    [(expr-quire16-fma q a b)
+     (if (and (check ctx q (expr-Quire16))
+              (check ctx a (expr-Posit16))
+              (check ctx b (expr-Posit16)))
+         (expr-Quire16) (expr-error))]
+    [(expr-quire32-fma q a b)
+     (if (and (check ctx q (expr-Quire32))
+              (check ctx a (expr-Posit32))
+              (check ctx b (expr-Posit32)))
+         (expr-Quire32) (expr-error))]
+    [(expr-quire64-fma q a b)
+     (if (and (check ctx q (expr-Quire64))
+              (check ctx a (expr-Posit64))
+              (check ctx b (expr-Posit64)))
+         (expr-Quire64) (expr-error))]
+
+    ;; quireW-to: QuireW → PositW
+    [(expr-quire8-to q)
+     (if (check ctx q (expr-Quire8)) (expr-Posit8) (expr-error))]
+    [(expr-quire16-to q)
+     (if (check ctx q (expr-Quire16)) (expr-Posit16) (expr-error))]
+    [(expr-quire32-to q)
+     (if (check ctx q (expr-Quire32)) (expr-Posit32) (expr-error))]
+    [(expr-quire64-to q)
+     (if (check ctx q (expr-Quire64)) (expr-Posit64) (expr-error))]
+
     ;; ---- Foreign function: look up type from global env ----
     [(expr-foreign-fn name _ _ _ _ _)
      (or (global-env-lookup-type name) (expr-error))]
@@ -928,6 +973,12 @@
 
     ;; Posit64 formation: Posit64 : Type(0)
     [(expr-Posit64) (just-level (lzero))]
+
+    ;; Quire formations: QuireW : Type(0)
+    [(expr-Quire8) (just-level (lzero))]
+    [(expr-Quire16) (just-level (lzero))]
+    [(expr-Quire32) (just-level (lzero))]
+    [(expr-Quire64) (just-level (lzero))]
 
     ;; Union formation: A | B : Type(max(level(A), level(B)))
     [(expr-union l r)

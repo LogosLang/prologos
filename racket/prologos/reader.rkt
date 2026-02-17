@@ -420,6 +420,23 @@
        (tok-read! tok)  ; consume >
        (token 'symbol '-> ln cl ps 2)]
 
+      ;; Tilde — approximate literal prefix: ~42, ~3/7
+      [(char=? c #\~)
+       (tok-read! tok)
+       (define next (tok-peek tok))
+       (cond
+         [(and (char? next) (char-numeric? next))
+          ;; ~N — read the number, produce ($approx-literal N) as a list
+          (let ([num-tok (read-number-token! tok (tokenizer-line tok)
+                                                 (tokenizer-col tok)
+                                                 (tokenizer-pos tok))])
+            (token 'approx-literal (token-value num-tok) ln cl ps
+                   (+ 1 (token-span num-tok))))]
+         [else
+          (error 'prologos-reader
+                 "~a:~a:~a: ~ must be followed by a number (approximate literal)"
+                 (tokenizer-source tok) ln (+ cl 1))])]
+
       ;; Identifier
       [(ident-start? c)
        (read-ident-token! tok ln cl ps)]
@@ -818,6 +835,16 @@
     [(eq? tt 'keyword)
      (define t (parser-next! p))
      (token->stx t src)]
+    [(eq? tt 'approx-literal)
+     ;; ~N — produce ($approx-literal N) as syntax list
+     (define t (parser-next! p))
+     (define ln (token-line t))
+     (define cl (token-col t))
+     (define ps (token-pos t))
+     (define sp (token-span t))
+     (make-stx (list (make-stx '$approx-literal src ln cl ps 0)
+                     (make-stx (token-value t) src ln (+ cl 1) (+ ps 1) (- sp 1)))
+               src ln cl ps sp)]
     [else
      (define t (parser-peek p))
      (error 'prologos-reader

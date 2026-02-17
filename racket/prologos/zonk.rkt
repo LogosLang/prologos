@@ -149,6 +149,30 @@
     [(expr-p64-if-nar t nc vc v)
      (expr-p64-if-nar (zonk t) (zonk nc) (zonk vc) (zonk v))]
 
+    ;; Quire8 (exact accumulator for Posit8)
+    [(expr-Quire8) e]
+    [(expr-quire8-val _) e]
+    [(expr-quire8-fma q a b) (expr-quire8-fma (zonk q) (zonk a) (zonk b))]
+    [(expr-quire8-to q) (expr-quire8-to (zonk q))]
+
+    ;; Quire16 (exact accumulator for Posit16)
+    [(expr-Quire16) e]
+    [(expr-quire16-val _) e]
+    [(expr-quire16-fma q a b) (expr-quire16-fma (zonk q) (zonk a) (zonk b))]
+    [(expr-quire16-to q) (expr-quire16-to (zonk q))]
+
+    ;; Quire32 (exact accumulator for Posit32)
+    [(expr-Quire32) e]
+    [(expr-quire32-val _) e]
+    [(expr-quire32-fma q a b) (expr-quire32-fma (zonk q) (zonk a) (zonk b))]
+    [(expr-quire32-to q) (expr-quire32-to (zonk q))]
+
+    ;; Quire64 (exact accumulator for Posit64)
+    [(expr-Quire64) e]
+    [(expr-quire64-val _) e]
+    [(expr-quire64-fma q a b) (expr-quire64-fma (zonk q) (zonk a) (zonk b))]
+    [(expr-quire64-to q) (expr-quire64-to (zonk q))]
+
     ;; Int
     [(expr-Int) e]
     [(expr-int _) e]
@@ -347,6 +371,30 @@
      (expr-p64-if-nar (zonk-at-depth depth t) (zonk-at-depth depth nc)
                       (zonk-at-depth depth vc) (zonk-at-depth depth v))]
 
+    ;; Quire8
+    [(expr-Quire8) e]
+    [(expr-quire8-val _) e]
+    [(expr-quire8-fma q a b) (expr-quire8-fma (zonk-at-depth depth q) (zonk-at-depth depth a) (zonk-at-depth depth b))]
+    [(expr-quire8-to q) (expr-quire8-to (zonk-at-depth depth q))]
+
+    ;; Quire16
+    [(expr-Quire16) e]
+    [(expr-quire16-val _) e]
+    [(expr-quire16-fma q a b) (expr-quire16-fma (zonk-at-depth depth q) (zonk-at-depth depth a) (zonk-at-depth depth b))]
+    [(expr-quire16-to q) (expr-quire16-to (zonk-at-depth depth q))]
+
+    ;; Quire32
+    [(expr-Quire32) e]
+    [(expr-quire32-val _) e]
+    [(expr-quire32-fma q a b) (expr-quire32-fma (zonk-at-depth depth q) (zonk-at-depth depth a) (zonk-at-depth depth b))]
+    [(expr-quire32-to q) (expr-quire32-to (zonk-at-depth depth q))]
+
+    ;; Quire64
+    [(expr-Quire64) e]
+    [(expr-quire64-val _) e]
+    [(expr-quire64-fma q a b) (expr-quire64-fma (zonk-at-depth depth q) (zonk-at-depth depth a) (zonk-at-depth depth b))]
+    [(expr-quire64-to q) (expr-quire64-to (zonk-at-depth depth q))]
+
     ;; Int
     [(expr-Int) e]
     [(expr-int _) e]
@@ -520,6 +568,26 @@
     [(expr-p64-if-nar t nc vc v)
      (expr-p64-if-nar (default-metas t) (default-metas nc)
                       (default-metas vc) (default-metas v))]
+    ;; Quire8
+    [(expr-Quire8) e]
+    [(expr-quire8-val _) e]
+    [(expr-quire8-fma q a b) (expr-quire8-fma (default-metas q) (default-metas a) (default-metas b))]
+    [(expr-quire8-to q) (expr-quire8-to (default-metas q))]
+    ;; Quire16
+    [(expr-Quire16) e]
+    [(expr-quire16-val _) e]
+    [(expr-quire16-fma q a b) (expr-quire16-fma (default-metas q) (default-metas a) (default-metas b))]
+    [(expr-quire16-to q) (expr-quire16-to (default-metas q))]
+    ;; Quire32
+    [(expr-Quire32) e]
+    [(expr-quire32-val _) e]
+    [(expr-quire32-fma q a b) (expr-quire32-fma (default-metas q) (default-metas a) (default-metas b))]
+    [(expr-quire32-to q) (expr-quire32-to (default-metas q))]
+    ;; Quire64
+    [(expr-Quire64) e]
+    [(expr-quire64-val _) e]
+    [(expr-quire64-fma q a b) (expr-quire64-fma (default-metas q) (default-metas a) (default-metas b))]
+    [(expr-quire64-to q) (expr-quire64-to (default-metas q))]
     [(expr-Int) e]
     [(expr-int _) e]
     [(expr-int-add a b) (expr-int-add (default-metas a) (default-metas b))]

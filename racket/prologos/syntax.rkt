@@ -105,6 +105,15 @@
  (struct-out expr-p64-le)
  (struct-out expr-p64-from-nat)
  (struct-out expr-p64-if-nar)
+ ;; Quire accumulators (exact product sums for posit types)
+ (struct-out expr-Quire8) (struct-out expr-quire8-val)
+ (struct-out expr-quire8-fma) (struct-out expr-quire8-to)
+ (struct-out expr-Quire16) (struct-out expr-quire16-val)
+ (struct-out expr-quire16-fma) (struct-out expr-quire16-to)
+ (struct-out expr-Quire32) (struct-out expr-quire32-val)
+ (struct-out expr-quire32-fma) (struct-out expr-quire32-to)
+ (struct-out expr-Quire64) (struct-out expr-quire64-val)
+ (struct-out expr-quire64-fma) (struct-out expr-quire64-to)
  ;; Int (arbitrary-precision integers)
  (struct-out expr-Int)
  (struct-out expr-int)
@@ -345,6 +354,36 @@
 (struct expr-p64-le (a b) #:transparent)
 (struct expr-p64-from-nat (n) #:transparent)
 (struct expr-p64-if-nar (type nar-case normal-case val) #:transparent)
+
+;; ========================================
+;; Quire accumulators (exact product sums for posit types)
+;; ========================================
+;; A quire accumulates exact sums of products.  Runtime value is an exact
+;; Racket rational (or 'nar for NaR contamination).
+
+;; Quire8 (32-bit accumulator for Posit8)
+(struct expr-Quire8 () #:transparent)                              ; Quire8 : Type 0
+(struct expr-quire8-val (v) #:transparent)                         ; quire literal (runtime)
+(struct expr-quire8-fma (q a b) #:transparent)                     ; Quire8 → Posit8 → Posit8 → Quire8
+(struct expr-quire8-to (q) #:transparent)                          ; Quire8 → Posit8
+
+;; Quire16 (128-bit accumulator for Posit16)
+(struct expr-Quire16 () #:transparent)
+(struct expr-quire16-val (v) #:transparent)
+(struct expr-quire16-fma (q a b) #:transparent)
+(struct expr-quire16-to (q) #:transparent)
+
+;; Quire32 (512-bit accumulator for Posit32)
+(struct expr-Quire32 () #:transparent)
+(struct expr-quire32-val (v) #:transparent)
+(struct expr-quire32-fma (q a b) #:transparent)
+(struct expr-quire32-to (q) #:transparent)
+
+;; Quire64 (2048-bit accumulator for Posit64)
+(struct expr-Quire64 () #:transparent)
+(struct expr-quire64-val (v) #:transparent)
+(struct expr-quire64-fma (q a b) #:transparent)
+(struct expr-quire64-to (q) #:transparent)
 
 ;; ========================================
 ;; Int (arbitrary-precision integers, backed by Racket exact integers)

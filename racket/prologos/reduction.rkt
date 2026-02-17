@@ -624,6 +624,71 @@
      (let ([v* (whnf v)])
        (if (equal? v* v) e (whnf (expr-p64-if-nar t nc vc v*))))]
 
+    ;; ---- Quire iota rules ----
+    ;; quireW-fma on literals: accumulate exact product
+    [(expr-quire8-fma (expr-quire8-val q) (expr-posit8 a) (expr-posit8 b))
+     (expr-quire8-val (quire8-fma q a b))]
+    [(expr-quire16-fma (expr-quire16-val q) (expr-posit16 a) (expr-posit16 b))
+     (expr-quire16-val (quire16-fma q a b))]
+    [(expr-quire32-fma (expr-quire32-val q) (expr-posit32 a) (expr-posit32 b))
+     (expr-quire32-val (quire32-fma q a b))]
+    [(expr-quire64-fma (expr-quire64-val q) (expr-posit64 a) (expr-posit64 b))
+     (expr-quire64-val (quire64-fma q a b))]
+
+    ;; quireW-to on literals: convert accumulator to posit
+    [(expr-quire8-to (expr-quire8-val q)) (expr-posit8 (quire8-to q))]
+    [(expr-quire16-to (expr-quire16-val q)) (expr-posit16 (quire16-to q))]
+    [(expr-quire32-to (expr-quire32-val q)) (expr-posit32 (quire32-to q))]
+    [(expr-quire64-to (expr-quire64-val q)) (expr-posit64 (quire64-to q))]
+
+    ;; ---- Quire stuck-term reduction ----
+    ;; fma: try reducing q, then a, then b
+    [(expr-quire8-fma q a b)
+     (let ([q* (whnf q)])
+       (if (equal? q* q)
+           (let ([a* (whnf a)])
+             (if (equal? a* a)
+                 (let ([b* (whnf b)])
+                   (if (equal? b* b) e (whnf (expr-quire8-fma q a b*))))
+                 (whnf (expr-quire8-fma q a* b))))
+           (whnf (expr-quire8-fma q* a b))))]
+    [(expr-quire16-fma q a b)
+     (let ([q* (whnf q)])
+       (if (equal? q* q)
+           (let ([a* (whnf a)])
+             (if (equal? a* a)
+                 (let ([b* (whnf b)])
+                   (if (equal? b* b) e (whnf (expr-quire16-fma q a b*))))
+                 (whnf (expr-quire16-fma q a* b))))
+           (whnf (expr-quire16-fma q* a b))))]
+    [(expr-quire32-fma q a b)
+     (let ([q* (whnf q)])
+       (if (equal? q* q)
+           (let ([a* (whnf a)])
+             (if (equal? a* a)
+                 (let ([b* (whnf b)])
+                   (if (equal? b* b) e (whnf (expr-quire32-fma q a b*))))
+                 (whnf (expr-quire32-fma q a* b))))
+           (whnf (expr-quire32-fma q* a b))))]
+    [(expr-quire64-fma q a b)
+     (let ([q* (whnf q)])
+       (if (equal? q* q)
+           (let ([a* (whnf a)])
+             (if (equal? a* a)
+                 (let ([b* (whnf b)])
+                   (if (equal? b* b) e (whnf (expr-quire64-fma q a b*))))
+                 (whnf (expr-quire64-fma q a* b))))
+           (whnf (expr-quire64-fma q* a b))))]
+    ;; to: try reducing q
+    [(expr-quire8-to q)
+     (let ([q* (whnf q)]) (if (equal? q* q) e (whnf (expr-quire8-to q*))))]
+    [(expr-quire16-to q)
+     (let ([q* (whnf q)]) (if (equal? q* q) e (whnf (expr-quire16-to q*))))]
+    [(expr-quire32-to q)
+     (let ([q* (whnf q)]) (if (equal? q* q) e (whnf (expr-quire32-to q*))))]
+    [(expr-quire64-to q)
+     (let ([q* (whnf q)]) (if (equal? q* q) e (whnf (expr-quire64-to q*))))]
+
     ;; Union types: pass through (types don't reduce)
     [(expr-union _ _) e]
 
@@ -829,6 +894,24 @@
     [(expr-p64-from-nat n) (expr-p64-from-nat (nf n))]
     [(expr-p64-if-nar t nc vc v)
      (expr-p64-if-nar (nf t) (nf nc) (nf vc) (nf v))]
+
+    ;; Quire normalization
+    [(expr-Quire8) e]
+    [(expr-quire8-val _) e]
+    [(expr-quire8-fma q a b) (expr-quire8-fma (nf q) (nf a) (nf b))]
+    [(expr-quire8-to q) (expr-quire8-to (nf q))]
+    [(expr-Quire16) e]
+    [(expr-quire16-val _) e]
+    [(expr-quire16-fma q a b) (expr-quire16-fma (nf q) (nf a) (nf b))]
+    [(expr-quire16-to q) (expr-quire16-to (nf q))]
+    [(expr-Quire32) e]
+    [(expr-quire32-val _) e]
+    [(expr-quire32-fma q a b) (expr-quire32-fma (nf q) (nf a) (nf b))]
+    [(expr-quire32-to q) (expr-quire32-to (nf q))]
+    [(expr-Quire64) e]
+    [(expr-quire64-val _) e]
+    [(expr-quire64-fma q a b) (expr-quire64-fma (nf q) (nf a) (nf b))]
+    [(expr-quire64-to q) (expr-quire64-to (nf q))]
 
     ;; Foreign function: opaque leaf (already in WHNF)
     [(expr-foreign-fn _ _ _ _ _ _) e]

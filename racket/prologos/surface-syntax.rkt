@@ -130,6 +130,25 @@
  (struct-out surf-p64-le)
  (struct-out surf-p64-from-nat)
  (struct-out surf-p64-if-nar)
+ ;; Quire surface forms (exact accumulators)
+ (struct-out surf-quire8-type)
+ (struct-out surf-quire8-zero)
+ (struct-out surf-quire8-fma)
+ (struct-out surf-quire8-to)
+ (struct-out surf-quire16-type)
+ (struct-out surf-quire16-zero)
+ (struct-out surf-quire16-fma)
+ (struct-out surf-quire16-to)
+ (struct-out surf-quire32-type)
+ (struct-out surf-quire32-zero)
+ (struct-out surf-quire32-fma)
+ (struct-out surf-quire32-to)
+ (struct-out surf-quire64-type)
+ (struct-out surf-quire64-zero)
+ (struct-out surf-quire64-fma)
+ (struct-out surf-quire64-to)
+ ;; Approximate literal (~N)
+ (struct-out surf-approx-literal)
  ;; Top-level commands
  (struct-out surf-def)
  (struct-out surf-defn)
@@ -463,6 +482,38 @@
 
 ;; Eliminator: (p64-if-nar A nar-case normal-case val)
 (struct surf-p64-if-nar (type nar-case normal-case val srcloc) #:transparent)
+
+;; ========================================
+;; Quire surface forms (exact accumulators for posit arithmetic)
+;; ========================================
+
+;; Quire8
+(struct surf-quire8-type (srcloc) #:transparent)
+(struct surf-quire8-zero (srcloc) #:transparent)
+(struct surf-quire8-fma (q a b srcloc) #:transparent)
+(struct surf-quire8-to (q srcloc) #:transparent)
+
+;; Quire16
+(struct surf-quire16-type (srcloc) #:transparent)
+(struct surf-quire16-zero (srcloc) #:transparent)
+(struct surf-quire16-fma (q a b srcloc) #:transparent)
+(struct surf-quire16-to (q srcloc) #:transparent)
+
+;; Quire32
+(struct surf-quire32-type (srcloc) #:transparent)
+(struct surf-quire32-zero (srcloc) #:transparent)
+(struct surf-quire32-fma (q a b srcloc) #:transparent)
+(struct surf-quire32-to (q srcloc) #:transparent)
+
+;; Quire64
+(struct surf-quire64-type (srcloc) #:transparent)
+(struct surf-quire64-zero (srcloc) #:transparent)
+(struct surf-quire64-fma (q a b srcloc) #:transparent)
+(struct surf-quire64-to (q srcloc) #:transparent)
+
+;; Approximate literal: ~N → nearest Posit32 (default), width-aware in check context
+;; val is an exact rational (integer or fraction)
+(struct surf-approx-literal (val srcloc) #:transparent)
 
 ;; ========================================
 ;; Top-level commands

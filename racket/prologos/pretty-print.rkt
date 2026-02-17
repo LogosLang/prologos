@@ -263,6 +263,30 @@
      (format "[p64-if-nar ~a ~a ~a ~a]"
              (pp-expr t names) (pp-expr nc names) (pp-expr vc names) (pp-expr v names))]
 
+    ;; Quire8
+    [(expr-Quire8) "Quire8"]
+    [(expr-quire8-val v) (format "[quire8-val ~a]" v)]
+    [(expr-quire8-fma q a b) (format "[q8-fma ~a ~a ~a]" (pp-expr q names) (pp-expr a names) (pp-expr b names))]
+    [(expr-quire8-to q) (format "[q8-to ~a]" (pp-expr q names))]
+
+    ;; Quire16
+    [(expr-Quire16) "Quire16"]
+    [(expr-quire16-val v) (format "[quire16-val ~a]" v)]
+    [(expr-quire16-fma q a b) (format "[q16-fma ~a ~a ~a]" (pp-expr q names) (pp-expr a names) (pp-expr b names))]
+    [(expr-quire16-to q) (format "[q16-to ~a]" (pp-expr q names))]
+
+    ;; Quire32
+    [(expr-Quire32) "Quire32"]
+    [(expr-quire32-val v) (format "[quire32-val ~a]" v)]
+    [(expr-quire32-fma q a b) (format "[q32-fma ~a ~a ~a]" (pp-expr q names) (pp-expr a names) (pp-expr b names))]
+    [(expr-quire32-to q) (format "[q32-to ~a]" (pp-expr q names))]
+
+    ;; Quire64
+    [(expr-Quire64) "Quire64"]
+    [(expr-quire64-val v) (format "[quire64-val ~a]" v)]
+    [(expr-quire64-fma q a b) (format "[q64-fma ~a ~a ~a]" (pp-expr q names) (pp-expr a names) (pp-expr b names))]
+    [(expr-quire64-to q) (format "[q64-to ~a]" (pp-expr q names))]
+
     ;; Int
     [(expr-Int) "Int"]
     [(expr-int v) (number->string v)]
@@ -539,6 +563,26 @@
     [(expr-p64-le a b) (or (uses-bvar0? a) (uses-bvar0? b))]
     [(expr-p64-from-nat n) (uses-bvar0? n)]
     [(expr-p64-if-nar t nc vc v) (or (uses-bvar0? t) (uses-bvar0? nc) (uses-bvar0? vc) (uses-bvar0? v))]
+    ;; Quire8
+    [(expr-Quire8) #f]
+    [(expr-quire8-val _) #f]
+    [(expr-quire8-fma q a b) (or (uses-bvar0? q) (uses-bvar0? a) (uses-bvar0? b))]
+    [(expr-quire8-to q) (uses-bvar0? q)]
+    ;; Quire16
+    [(expr-Quire16) #f]
+    [(expr-quire16-val _) #f]
+    [(expr-quire16-fma q a b) (or (uses-bvar0? q) (uses-bvar0? a) (uses-bvar0? b))]
+    [(expr-quire16-to q) (uses-bvar0? q)]
+    ;; Quire32
+    [(expr-Quire32) #f]
+    [(expr-quire32-val _) #f]
+    [(expr-quire32-fma q a b) (or (uses-bvar0? q) (uses-bvar0? a) (uses-bvar0? b))]
+    [(expr-quire32-to q) (uses-bvar0? q)]
+    ;; Quire64
+    [(expr-Quire64) #f]
+    [(expr-quire64-val _) #f]
+    [(expr-quire64-fma q a b) (or (uses-bvar0? q) (uses-bvar0? a) (uses-bvar0? b))]
+    [(expr-quire64-to q) (uses-bvar0? q)]
     [(expr-Int) #f]
     [(expr-int _) #f]
     [(expr-int-add a b) (or (uses-bvar0? a) (uses-bvar0? b))]

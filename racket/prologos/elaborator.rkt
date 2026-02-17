@@ -19,7 +19,8 @@
          "metavar-store.rkt"
          "pretty-print.rkt"
          "multi-dispatch.rkt"
-         "foreign.rkt")
+         "foreign.rkt"
+         "posit-impl.rkt")
 
 (provide elaborate
          elaborate-top-level)
@@ -833,6 +834,70 @@
              [(prologos-error? evc) evc]
              [(prologos-error? ev) ev]
              [else (expr-p64-if-nar etp enc evc ev)]))]
+
+    ;; ---- Quire operations ----
+    ;; Types
+    [(surf-quire8-type loc) (expr-Quire8)]
+    [(surf-quire16-type loc) (expr-Quire16)]
+    [(surf-quire32-type loc) (expr-Quire32)]
+    [(surf-quire64-type loc) (expr-Quire64)]
+    ;; Zero constructors → quireW-val with 0
+    [(surf-quire8-zero loc) (expr-quire8-val 0)]
+    [(surf-quire16-zero loc) (expr-quire16-val 0)]
+    [(surf-quire32-zero loc) (expr-quire32-val 0)]
+    [(surf-quire64-zero loc) (expr-quire64-val 0)]
+    ;; FMA: (qW-fma q a b)
+    [(surf-quire8-fma q a b loc)
+     (let ([eq (elaborate q env depth)]
+           [ea (elaborate a env depth)]
+           [eb (elaborate b env depth)])
+       (cond [(prologos-error? eq) eq]
+             [(prologos-error? ea) ea]
+             [(prologos-error? eb) eb]
+             [else (expr-quire8-fma eq ea eb)]))]
+    [(surf-quire16-fma q a b loc)
+     (let ([eq (elaborate q env depth)]
+           [ea (elaborate a env depth)]
+           [eb (elaborate b env depth)])
+       (cond [(prologos-error? eq) eq]
+             [(prologos-error? ea) ea]
+             [(prologos-error? eb) eb]
+             [else (expr-quire16-fma eq ea eb)]))]
+    [(surf-quire32-fma q a b loc)
+     (let ([eq (elaborate q env depth)]
+           [ea (elaborate a env depth)]
+           [eb (elaborate b env depth)])
+       (cond [(prologos-error? eq) eq]
+             [(prologos-error? ea) ea]
+             [(prologos-error? eb) eb]
+             [else (expr-quire32-fma eq ea eb)]))]
+    [(surf-quire64-fma q a b loc)
+     (let ([eq (elaborate q env depth)]
+           [ea (elaborate a env depth)]
+           [eb (elaborate b env depth)])
+       (cond [(prologos-error? eq) eq]
+             [(prologos-error? ea) ea]
+             [(prologos-error? eb) eb]
+             [else (expr-quire64-fma eq ea eb)]))]
+    ;; TO: (qW-to q)
+    [(surf-quire8-to q loc)
+     (let ([eq (elaborate q env depth)])
+       (if (prologos-error? eq) eq (expr-quire8-to eq)))]
+    [(surf-quire16-to q loc)
+     (let ([eq (elaborate q env depth)])
+       (if (prologos-error? eq) eq (expr-quire16-to eq)))]
+    [(surf-quire32-to q loc)
+     (let ([eq (elaborate q env depth)])
+       (if (prologos-error? eq) eq (expr-quire32-to eq)))]
+    [(surf-quire64-to q loc)
+     (let ([eq (elaborate q env depth)])
+       (if (prologos-error? eq) eq (expr-quire64-to eq)))]
+
+    ;; Approximate literal: ~N → default Posit32
+    ;; Context-aware width selection happens in the type checker (check mode).
+    ;; At elaboration time, we default to Posit32.
+    [(surf-approx-literal v loc)
+     (expr-posit32 (posit32-encode (if (exact? v) v (inexact->exact v))))]
 
     ;; Reduce: ML-style pattern matching
     ;; Each arm's body must be elaborated with binding names in scope.
