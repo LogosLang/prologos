@@ -1992,7 +1992,147 @@
     (for/list ([arm-stx (in-list arm-stxs)])
       (parse-reduce-arm arm-stx loc)))
   (define first-err (findf prologos-error? result))
-  (if first-err first-err result))
+  (cond
+    [first-err first-err]
+    ;; If any arms have numeric ctor-names, desugar them
+    [(ormap (lambda (a) (integer? (reduce-arm-ctor-name a))) result)
+     (desugar-numeric-arms result)]
+    [else result]))
+
+;; Desugar numeric literal patterns in a list of reduce-arms.
+;; Numeric arms have integer ctor-names (produced by parse-reduce-arm).
+;; Strategy: collect all numeric arms, convert to a cascading nested match tree,
+;; then splice the desugared arm(s) back into the arm list at the position of
+;; the first numeric arm.
+;;
+;; Example: | 0 -> A | 1 -> B | 2 -> C | inc k -> D
+;; Desugars to: | zero -> A | inc $v -> (match $v | zero -> B | inc $v2 -> (match $v2 | zero -> C | inc k -> D))
+;;
+;; The cascading match peels one layer of `inc` per numeric level, trying the
+;; numeric arms from smallest to largest before falling through to user-written
+;; `inc` arms.
+(define (desugar-numeric-arms arms)
+  ;; Separate numeric-literal arms from normal arms
+  (define numeric-arms
+    (filter (lambda (a) (integer? (reduce-arm-ctor-name a))) arms))
+  (when (null? numeric-arms) (error 'desugar-numeric-arms "no numeric arms"))
+
+  ;; Non-numeric arms, preserving order
+  (define normal-arms
+    (filter (lambda (a) (not (integer? (reduce-arm-ctor-name a)))) arms))
+
+  ;; Sort numeric arms by value (ascending) for cascading dispatch
+  (define sorted-numeric
+    (sort numeric-arms < #:key reduce-arm-ctor-name))
+
+  ;; Find the existing 'inc arm and 'zero arm from normal arms (if any)
+  (define user-zero-arm
+    (findf (lambda (a) (eq? (reduce-arm-ctor-name a) 'zero)) normal-arms))
+  (define user-inc-arm
+    (findf (lambda (a) (eq? (reduce-arm-ctor-name a) 'inc)) normal-arms))
+
+  ;; Normal arms that are NOT zero or inc (e.g., for other types — shouldn't
+  ;; happen for Nat, but be safe)
+  (define other-arms
+    (filter (lambda (a)
+              (and (not (integer? (reduce-arm-ctor-name a)))
+                   (not (eq? (reduce-arm-ctor-name a) 'zero))
+                   (not (eq? (reduce-arm-ctor-name a) 'inc))))
+            arms))
+
+  ;; Build the desugared arm list.
+  ;; Numeric arms produce: zero arms (for N=0) and a cascading inc arm (for N>0)
+  (define zero-numeric (filter (lambda (a) (= (reduce-arm-ctor-name a) 0)) sorted-numeric))
+  (define positive-numeric (filter (lambda (a) (> (reduce-arm-ctor-name a) 0)) sorted-numeric))
+
+  ;; The zero arm: either from numeric | 0 -> ... or from user | zero -> ...
+  ;; Numeric takes priority (it appears in the arm list position)
+  (define final-zero-arm
+    (cond
+      [(not (null? zero-numeric))
+       (let ([a (car zero-numeric)])
+         (reduce-arm 'zero '() (reduce-arm-body a) (reduce-arm-srcloc a)))]
+      [user-zero-arm user-zero-arm]
+      [else #f]))
+
+  ;; Build cascading nested match for positive numeric patterns.
+  ;; Each level peels one `inc` and dispatches on the predecessor.
+  ;; At the bottom, fall through to the user's `inc k -> ...` arm if present.
+  ;;
+  ;; For N=1: match pred | zero -> body1 | inc k -> <user-inc-body or next-level>
+  ;; For N=2 after peeling to pred:
+  ;;   match pred | zero -> body1 | inc $v -> match $v | zero -> body2 | inc k -> ...
+  ;;
+  ;; We build this inside-out: start with the deepest level and work outward.
+  (define final-inc-arm
+    (if (null? positive-numeric)
+        user-inc-arm  ;; no positive numeric arms, keep user's inc arm
+        (let ()
+          ;; Group positive-numeric by depth (value - 1 = depth of predecessor match)
+          ;; Build a tree: at depth d, match the d-th predecessor
+          ;; Approach: recursively build from the highest numeric value down
+          ;;
+          ;; We organize by value: for each N, at nesting depth N-1, we match zero.
+          ;; Between levels, we match inc and recurse.
+          ;;
+          ;; Build a function that creates the nested match for a range of values.
+          ;; Given a list of (value . body) pairs sorted ascending and a fallthrough arm,
+          ;; produce a reduce-arm for 'inc that dispatches.
+
+          (define (build-dispatch remaining-pairs fallthrough-inc-arm depth loc)
+            ;; remaining-pairs: list of (value . body) sorted ascending, all > depth
+            ;; depth: current nesting depth (0 = matching pred of outermost inc)
+            ;; fallthrough-inc-arm: user's inc arm to use when no numeric match
+            (cond
+              [(null? remaining-pairs)
+               ;; No more numeric patterns at this level or deeper
+               ;; Use the user's inc arm if available, else no arm
+               fallthrough-inc-arm]
+              [else
+               (define next-val (car (car remaining-pairs)))
+               (define next-body (cdr (car remaining-pairs)))
+               (define rest-pairs (cdr remaining-pairs))
+               (cond
+                 [(= next-val (+ depth 1))
+                  ;; This pattern matches zero at this level (i.e., value = depth+1
+                  ;; means after peeling depth+1 incs total, we find zero at this pred)
+                  ;; Build: match pred | zero -> body | inc $v -> <recurse>
+                  (define var (gensym '$np-))
+                  (define deeper
+                    (build-dispatch rest-pairs fallthrough-inc-arm (+ depth 1) loc))
+                  (define inner-arms
+                    (append
+                     (list (reduce-arm 'zero '() next-body loc))
+                     (if deeper (list deeper) '())))
+                  ;; Return an inc arm at this level
+                  (reduce-arm 'inc (list var)
+                              (surf-reduce (surf-var var loc) inner-arms loc)
+                              loc)]
+                 [else
+                  ;; next-val > depth+1: no pattern at this level, just peel and recurse
+                  (define var (gensym '$np-))
+                  (define deeper
+                    (build-dispatch remaining-pairs fallthrough-inc-arm (+ depth 1) loc))
+                  (define inner-arms
+                    (if deeper (list deeper) '()))
+                  (if (null? inner-arms)
+                      fallthrough-inc-arm  ;; nothing to dispatch, fall through
+                      (reduce-arm 'inc (list var)
+                                  (surf-reduce (surf-var var loc) inner-arms loc)
+                                  loc))])]))
+
+          (define pairs
+            (map (lambda (a) (cons (reduce-arm-ctor-name a) (reduce-arm-body a)))
+                 positive-numeric))
+          (define loc (reduce-arm-srcloc (car positive-numeric)))
+
+          (build-dispatch pairs user-inc-arm 0 loc))))
+
+  ;; Assemble final arm list: zero arm, inc arm, then other arms
+  (append
+   (if final-zero-arm (list final-zero-arm) '())
+   (if final-inc-arm (list final-inc-arm) '())
+   other-arms))
 
 (define (parse-reduce-arm arm-stx loc)
   ;; arm-stx is a syntax object or datum wrapping a list like:
@@ -2044,14 +2184,40 @@
     (for/list ([p (in-list (cdr pattern))])
       (stx->datum p)))
 
-  (unless (symbol? ctor-name)
-    (parse-error loc (format "reduce arm: constructor name must be a symbol, got ~a" ctor-name) #f))
-  (unless (andmap symbol? binding-names)
-    (parse-error loc "reduce arm: all bindings must be bare symbols" #f))
-
+  ;; Parse body first (needed by all paths)
   (define body (parse-datum body-stx))
-  (if (prologos-error? body) body
-      (reduce-arm ctor-name binding-names body loc)))
+  (cond
+    [(prologos-error? body) body]
+
+    ;; Numeric literal pattern: validate and produce tagged reduce-arm
+    ;; Actual desugaring happens in desugar-numeric-arms (called from parse-reduce-arms)
+    [(and (exact-nonnegative-integer? ctor-name) (integer? ctor-name))
+     (cond
+       ;; Numeric patterns cannot have bindings: | 2 k -> ... is invalid
+       [(not (null? binding-names))
+        (parse-error loc
+          (format "reduce arm: numeric literal pattern ~a cannot have bindings" ctor-name) #f)]
+       ;; Reject unreasonably large patterns to avoid deep nesting
+       [(> ctor-name 20)
+        (parse-error loc
+          (format "reduce arm: numeric literal pattern ~a is too large (max 20)" ctor-name) #f)]
+       ;; Tag with the numeric value as ctor-name (integer, not symbol)
+       ;; desugar-numeric-arms will convert these to proper constructor arms
+       [else
+        (reduce-arm ctor-name '() body loc)])]
+
+    ;; Non-numeric, non-symbol constructor name: error (fixes latent unless bug)
+    [(not (symbol? ctor-name))
+     (parse-error loc
+       (format "reduce arm: constructor name must be a symbol, got ~a" ctor-name) #f)]
+
+    ;; Non-symbol bindings: error (fixes latent unless bug)
+    [(not (andmap symbol? binding-names))
+     (parse-error loc "reduce arm: all bindings must be bare symbols" #f)]
+
+    ;; Normal constructor pattern
+    [else
+     (reduce-arm ctor-name binding-names body loc)]))
 
 ;; ========================================
 ;; Convenience: parse from string

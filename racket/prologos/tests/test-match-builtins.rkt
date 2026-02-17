@@ -154,3 +154,55 @@
   (check-equal?
    (run-last "(ns mn5)\n(defn f [n : Nat, b : Bool] : Nat\n  (match b (true -> (match n (zero -> zero) (inc k -> k))) (false -> n)))\n(eval (f (inc (inc zero)) true))")
    "1 : Nat"))
+
+;; ========================================
+;; Numeric literal patterns
+;; ========================================
+
+(test-case "match-nat/literal-0-pattern"
+  ;; | 0 -> ... is equivalent to | zero -> ...
+  (check-equal?
+   (run-last "(ns nlp1)\n(eval (the Bool (match zero (0 -> true) (inc _ -> false))))")
+   "true : Bool"))
+
+(test-case "match-nat/literal-0-non-match"
+  ;; | 0 -> ... does NOT match inc zero
+  (check-equal?
+   (run-last "(ns nlp2)\n(eval (the Bool (match (inc zero) (0 -> false) (inc _ -> true))))")
+   "true : Bool"))
+
+(test-case "match-nat/literal-1-pattern"
+  ;; | 1 -> ... matches inc(zero)
+  (check-equal?
+   (run-last "(ns nlp3)\n(eval (the Bool (match (inc zero) (0 -> false) (1 -> true) (inc _ -> false))))")
+   "true : Bool"))
+
+(test-case "match-nat/literal-2-pattern"
+  ;; | 2 -> ... matches inc(inc(zero))
+  (check-equal?
+   (run-last "(ns nlp4)\n(eval (the Bool (match (inc (inc zero)) (0 -> false) (1 -> false) (2 -> true) (inc _ -> false))))")
+   "true : Bool"))
+
+(test-case "match-nat/literal-3-pattern"
+  ;; | 3 -> ... matches 3
+  (check-equal?
+   (run-last "(ns nlp5)\n(eval (the Nat (match 3 (0 -> 0) (1 -> 10) (2 -> 20) (3 -> 30) (inc _ -> 99))))")
+   "30 : Nat"))
+
+(test-case "match-nat/mixed-literal-and-ctor"
+  ;; Mix numeric literal (0) with constructor pattern (inc k)
+  (check-equal?
+   (run-last "(ns nlp6)\n(eval (the Nat (match 5 (0 -> 0) (inc k -> k))))")
+   "4 : Nat"))
+
+(test-case "match-nat/literal-in-defn"
+  ;; Numeric patterns in a defn
+  (check-equal?
+   (run-last "(ns nlp7)\n(defn classify [n : Nat] : Nat\n  (match n (0 -> 0) (1 -> 1) (inc k -> k)))\n(eval (classify 1))")
+   "1 : Nat"))
+
+(test-case "match-nat/literal-0-returns-computed"
+  ;; | 0 -> (inc (inc zero)) returns 2
+  (check-equal?
+   (run-last "(ns nlp8)\n(eval (the Nat (match 0 (0 -> 2) (inc _ -> 0))))")
+   "2 : Nat"))
