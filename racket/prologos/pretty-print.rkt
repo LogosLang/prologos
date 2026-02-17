@@ -131,26 +131,32 @@
                    (pp-expr t1 names)
                    (pp-expr t2 (cons name names)))))]
 
-    ;; Application — check for cons-chain (list literal), then flatten nested apps
+    ;; Application — check for lseq-cell chain, cons-chain, then flatten nested apps
     [(expr-app _ _)
-     (let ([list-result (try-as-list e)])
+     (let ([lseq-result (try-as-lseq e)])
        (cond
-         [list-result
-          (let ([elements (car list-result)]
-                [tail (cadr list-result)])
-            (let ([elem-strs (map (lambda (x) (pp-expr x names)) elements)])
-              (if tail
-                  ;; Improper list: '[1 2 | xs]
-                  (format "'[~a | ~a]"
-                          (string-join elem-strs " ")
-                          (pp-expr tail names))
-                  ;; Proper list: '[1 2 3]
-                  (format "'[~a]" (string-join elem-strs " ")))))]
+         [lseq-result
+          (let ([elem-strs (map (lambda (x) (pp-expr x names)) lseq-result)])
+            (format "~~[~a]" (string-join elem-strs " ")))]
          [else
-          (let-values ([(func args) (flatten-app e)])
-            (format "[~a]" (string-join (map (lambda (x) (pp-expr x names))
-                                             (cons func args))
-                                        " ")))]))]
+          (let ([list-result (try-as-list e)])
+            (cond
+              [list-result
+               (let ([elements (car list-result)]
+                     [tail (cadr list-result)])
+                 (let ([elem-strs (map (lambda (x) (pp-expr x names)) elements)])
+                   (if tail
+                       ;; Improper list: '[1 2 | xs]
+                       (format "'[~a | ~a]"
+                               (string-join elem-strs " ")
+                               (pp-expr tail names))
+                       ;; Proper list: '[1 2 3]
+                       (format "'[~a]" (string-join elem-strs " ")))))]
+              [else
+               (let-values ([(func args) (flatten-app e)])
+                 (format "[~a]" (string-join (map (lambda (x) (pp-expr x names))
+                                                  (cons func args))
+                                             " ")))]))]))]
 
     ;; Pair
     [(expr-pair e1 e2)
@@ -498,6 +504,81 @@
       ;; Non-nil tail (improper list) — only if we have at least one element
       [(not (null? elems))
        (list (reverse elems) cur)]
+      [else #f])))
+
+;; ---- LSeq literal detection ----
+
+;; Check if symbol name matches 'lseq-cell or ends with '::lseq-cell' (qualified)
+(define (lseq-cell-name? name)
+  (or (eq? name 'lseq-cell)
+      (let ([s (symbol->string name)])
+        (let ([len (string-length s)])
+          (and (>= len 11)
+               (string=? (substring s (- len 11)) "::lseq-cell"))))))
+
+;; Check if symbol name matches 'lseq-nil or ends with '::lseq-nil' (qualified)
+(define (lseq-nil-name? name)
+  (or (eq? name 'lseq-nil)
+      (let ([s (symbol->string name)])
+        (let ([len (string-length s)])
+          (and (>= len 10)
+               (string=? (substring s (- len 10)) "::lseq-nil"))))))
+
+;; Try to detect an lseq-cell chain for ~[...] output.
+;; lseq-cell is a data constructor applied to 3 args: (((lseq-cell A) val) thunk)
+;; where thunk is a lambda (lam _ body) containing the next cell or nil.
+;; Returns: list of element expressions if detected, #f otherwise.
+(define (try-as-lseq e)
+  (let loop ([cur e] [elems '()] [depth 0])
+    (cond
+      [(> depth 1000) #f]
+      ;; lseq-nil — end of sequence (bare lseq-nil)
+      [(and (expr-fvar? cur) (lseq-nil-name? (expr-fvar-name cur)))
+       (if (null? elems)
+           #f   ;; bare lseq-nil — don't print as ~[], just show "lseq-nil"
+           (reverse elems))]
+      ;; (lseq-nil A) — lseq-nil applied to type argument
+      [(and (expr-app? cur)
+            (let ([func (expr-app-func cur)])
+              (and (expr-fvar? func)
+                   (lseq-nil-name? (expr-fvar-name func)))))
+       (if (null? elems)
+           #f   ;; bare (lseq-nil A) — don't print as ~[]
+           (reverse elems))]
+      ;; (((lseq-cell A) val) thunk) — 3-arg version with type param
+      ;; thunk is a lambda: (lam _ body) where body is next cell/nil
+      [(and (expr-app? cur)
+            (let ([f1 (expr-app-func cur)])  ;; ((lseq-cell A) val) applied to thunk
+              (and (expr-app? f1)
+                   (let ([f2 (expr-app-func f1)])  ;; (lseq-cell A) applied to val
+                     (and (expr-app? f2)
+                          (let ([f3 (expr-app-func f2)])  ;; lseq-cell applied to A
+                            (and (expr-fvar? f3)
+                                 (lseq-cell-name? (expr-fvar-name f3)))))))))
+       (define val (expr-app-arg (expr-app-func cur)))   ;; the head value
+       (define thunk (expr-app-arg cur))                  ;; the thunk
+       ;; Check if thunk is a lambda wrapping the next cell/nil
+       (cond
+         [(expr-lam? thunk)
+          (define body (expr-lam-body thunk))
+          (loop body (cons val elems) (+ depth 1))]
+         [else
+          ;; thunk is not a lambda — can't peek inside, bail out
+          #f])]
+      ;; Also handle: ((lseq-cell val) thunk) — 2-arg version (no implicit type param)
+      [(and (expr-app? cur)
+            (let ([func (expr-app-func cur)])
+              (and (expr-app? func)
+                   (let ([inner-func (expr-app-func func)])
+                     (and (expr-fvar? inner-func)
+                          (lseq-cell-name? (expr-fvar-name inner-func)))))))
+       (define val (expr-app-arg (expr-app-func cur)))
+       (define thunk (expr-app-arg cur))
+       (cond
+         [(expr-lam? thunk)
+          (define body (expr-lam-body thunk))
+          (loop body (cons val elems) (+ depth 1))]
+         [else #f])]
       [else #f])))
 
 ;; Check if a term uses bvar(0) — used to detect non-dependent Pi/Sigma

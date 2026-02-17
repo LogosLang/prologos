@@ -38,6 +38,7 @@
          preparse-expand-single
          preparse-macro
          preparse-macro?
+         expand-lseq-literal
          pattern-var?
          datum-match
          datum-subst
@@ -1517,11 +1518,29 @@
             tail
             proper-elems)]))
 
+;; lseq literal: ~[1 2 3] → nested lseq-cell with thunks
+;; The WS reader produces ($lseq-literal e1 e2 ...).
+;; Expansion:
+;;   ($lseq-literal)         → lseq-nil
+;;   ($lseq-literal 1 2 3)  → (lseq-cell 1 (fn (_ : Unit) (lseq-cell 2 (fn (_ : Unit) (lseq-cell 3 (fn (_ : Unit) lseq-nil))))))
+;; The implicit type parameter {A} of lseq-cell/lseq-nil is inferred
+;; by the type checker (same pattern as '[...] list literal using cons/nil).
+(define (expand-lseq-literal datum)
+  (unless (and (list? datum) (>= (length datum) 1)
+               (eq? (car datum) '$lseq-literal))
+    (error '$lseq-literal "expected ($lseq-literal ...), got ~a" datum))
+  (define elems (cdr datum))
+  (foldr (lambda (elem rest)
+           `(lseq-cell ,elem (fn (_ : Unit) ,rest)))
+         'lseq-nil
+         elems))
+
 ;; Register built-in pre-parse macros at module load time
 (register-preparse-macro! 'let expand-let)
 (register-preparse-macro! 'do expand-do)
 (register-preparse-macro! 'if expand-if)
 (register-preparse-macro! '$list-literal expand-list-literal)
+(register-preparse-macro! '$lseq-literal expand-lseq-literal)
 
 
 ;; ========================================

@@ -433,11 +433,14 @@
        (tok-read! tok)  ; consume >
        (token 'symbol '-> ln cl ps 2)]
 
-      ;; Tilde — approximate literal prefix: ~42, ~3/7
+      ;; Tilde — LSeq literal ~[ or approximate literal prefix ~42, ~3/7
       [(char=? c #\~)
        (tok-read! tok)
        (define next (tok-peek tok))
        (cond
+         [(and (char? next) (char=? next #\[))
+          ;; ~[ — LSeq literal opener; [ will be consumed by parse-lseq-literal-form
+          (token 'tilde-lbracket #f ln cl ps 1)]
          [(and (char? next) (char-numeric? next))
           ;; ~N — read the number, produce ($approx-literal N) as a list
           (let ([num-tok (read-number-token! tok (tokenizer-line tok)
@@ -447,7 +450,7 @@
                    (+ 1 (token-span num-tok))))]
          [else
           (error 'prologos-reader
-                 "~a:~a:~a: ~ must be followed by a number (approximate literal)"
+                 "~a:~a:~a: ~ must be followed by [ (LSeq literal) or a number (approximate literal)"
                  (tokenizer-source tok) ln (+ cl 1))])]
 
       ;; Identifier
@@ -781,6 +784,43 @@
   (make-stx all src ln cl ps
             (max 1 (- (+ (token-pos (parser-peek p)) 1) ps))))
 
+;; --- Parse an LSeq literal form: ~[ ... ] ---
+;; Wraps contents with $lseq-literal sentinel.
+;; ~[] → ($lseq-literal)
+;; ~[1 2 3] → ($lseq-literal 1 2 3)
+
+(define (parse-lseq-literal-form p)
+  (define tilde-tok (parser-next! p))   ; consume tilde-lbracket (the ~)
+  (define open-tok (parser-next! p))    ; consume lbracket (the [)
+  (define ln (token-line tilde-tok))
+  (define cl (token-col tilde-tok))
+  (define ps (token-pos tilde-tok))
+  (define src (parser-source p))
+
+  (define elements
+    (let loop ([elems '()])
+      (define tt (parser-peek-type p))
+      (cond
+        [(eq? tt 'rbracket)
+         (parser-next! p) ; consume rbracket
+         (reverse elems)]
+        [(eq? tt 'eof)
+         (error 'prologos-reader "~a:~a:~a: Unclosed LSeq literal ~[..."
+                src ln cl)]
+        ;; Skip commas
+        [(eq? tt 'comma)
+         (parser-next! p)
+         (loop elems)]
+        [else
+         (define elem (parse-inline-element p))
+         (loop (cons elem elems))])))
+
+  ;; Wrap with $lseq-literal sentinel
+  (define sentinel (make-stx '$lseq-literal src ln cl ps 0))
+  (define all (cons sentinel elements))
+  (make-stx all src ln cl ps
+            (max 1 (- (+ (token-pos (parser-peek p)) 1) ps))))
+
 ;; --- Parse an angle-bracket form: < ... > ---
 ;; Wraps contents with $angle-type sentinel for type annotations.
 
@@ -862,6 +902,9 @@
     [(eq? tt 'at-lbracket)
      ;; @[ ... ] — PVec literal
      (parse-vec-literal-form p)]
+    [(eq? tt 'tilde-lbracket)
+     ;; ~[ ... ] — LSeq literal
+     (parse-lseq-literal-form p)]
     [(eq? tt 'dollar)
      ;; $expr — quote operator
      (define d (parser-next! p)) ; consume $

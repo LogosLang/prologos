@@ -261,16 +261,54 @@
   (if (syntax? stx) (syntax->datum stx) stx))
 
 ;; ========================================
-;; Tilde reader: ~N for approximate literals
+;; Tilde reader: ~[ for LSeq literals, ~N for approximate literals
 ;; ========================================
+;; When ~ is followed by [, read LSeq literal as ($lseq-literal ...).
+;; ~[1 2 3] → ($lseq-literal 1 2 3)
+;; ~[] → ($lseq-literal)
 ;; When ~ is followed by a number, reads as ($approx-literal <value>).
 ;; ~42 → ($approx-literal 42)
 ;; ~3/7 → ($approx-literal 3/7)
-;; Bare ~ (not followed by a digit) is an error.
+;; Bare ~ (not followed by [ or digit) is an error.
 
 (define (read-tilde-syntax ch port src line col pos)
   (define next (peek-char port))
   (cond
+    ;; ~[ — LSeq literal
+    [(and (char? next) (char=? next #\[))
+     (read-char port) ; consume [
+     (define elements
+       (let loop ([elems '()])
+         ;; Skip whitespace
+         (let skip-ws ()
+           (define c (peek-char port))
+           (when (and (char? c) (char-whitespace? c))
+             (read-char port)
+             (skip-ws)))
+         (define nc (peek-char port))
+         (cond
+           [(eof-object? nc)
+            (error 'prologos-reader "Unclosed LSeq literal ~[ at ~a:~a:~a" src line col)]
+           [(char=? nc #\])
+            (read-char port) ; consume ]
+            (reverse elems)]
+           ;; Skip commas
+           [(char=? nc #\,)
+            (read-char port)
+            (loop elems)]
+           [else
+            (define val
+              (parameterize ([current-readtable prologos-readtable])
+                (read-syntax src port)))
+            (define datum-val
+              (if (syntax? val) (syntax->datum val) val))
+            (loop (cons datum-val elems))])))
+     ;; Build ($lseq-literal ...) as syntax
+     (define end-pos (file-position port))
+     (define span (- end-pos pos))
+     (datum->syntax #f (cons '$lseq-literal elements)
+                    (list src line col pos span))]
+    ;; ~N — approximate literal
     [(and (char? next) (char-numeric? next))
      ;; Read the number using the standard Racket reader
      (define num-val
@@ -282,7 +320,7 @@
      (datum->syntax #f (list '$approx-literal v)
                     (list src line col pos span))]
     [else
-     (error 'prologos-reader "~a:~a:~a: ~ must be followed by a number (approximate literal)"
+     (error 'prologos-reader "~a:~a:~a: ~ must be followed by [ (LSeq literal) or a number (approximate literal)"
             src (or line 0) (or col 0))]))
 
 (define (read-tilde-datum ch port)
