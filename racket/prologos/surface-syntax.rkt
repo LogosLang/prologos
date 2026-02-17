@@ -85,7 +85,9 @@
  (struct-out surf-defn-multi)
  (struct-out surf-def-group)
  ;; Binder info
- (struct-out binder-info))
+ (struct-out binder-info)
+ ;; Foreign escape block
+ (struct-out surf-foreign-block))
 
 ;; ========================================
 ;; Type hole (to be inferred by the type checker)
@@ -305,3 +307,13 @@
 ;; name: base name (symbol), defs: list of surf-def, arities: sorted list of int,
 ;; docstring: (or/c string? #f)
 (struct surf-def-group (name defs arities docstring srcloc) #:transparent)
+
+;; ========================================
+;; Foreign escape block
+;; ========================================
+;; Inline Racket code with explicit capture/export lists.
+;; lang: symbol (currently always 'racket)
+;; code-datums: list of raw Racket S-expression datums (the code inside {})
+;; captures: list of (list name type-surf) — Prologos values captured from scope
+;; return-type: surface type expression for the return value
+(struct surf-foreign-block (lang code-datums captures return-type srcloc) #:transparent)

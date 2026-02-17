@@ -86,6 +86,8 @@
          extract-pi-binders
          ;; Sibling let merging (for testing)
          merge-sibling-lets
+         ;; Foreign escape block combining (for testing)
+         combine-foreign-blocks
          ;; HKT brace-param parsing
          parse-brace-param-list
          group-brace-params
@@ -467,17 +469,122 @@
      (define binding-tokens (drop-right rest 1))
      (values binding-tokens body)]))
 
+;; ========================================
+;; Foreign escape block combining pass
+;; ========================================
+;; Merges sibling elements: racket ($brace-params code...) [captures...] -> [exports...]
+;; into a single ($foreign-block ...) sentinel form.
+;;
+;; Input:  (...before... racket ($brace-params c1 c2) (x : Nat) -> (y : Nat) ...after...)
+;; Output: (...before... ($foreign-block racket (c1 c2) ((x : Nat)) ((y : Nat))) ...after...)
+;;
+;; The parser then handles the detailed parsing of captures/exports.
+
+;; Is this element a ($brace-params ...) form?
+(define (brace-params? elem)
+  (and (pair? elem)
+       (let ([h (car elem)])
+         (cond
+           [(symbol? h) (eq? h '$brace-params)]
+           [(syntax? h) (eq? (syntax-e h) '$brace-params)]
+           [else #f]))))
+
+;; Is this element a list that looks like a capture/export spec?
+;; A capture list is [...] containing (name : Type) patterns.
+;; At the datum level, it's a list whose first element is a symbol (not a keyword)
+;; and contains the symbol ':'.
+(define (capture-or-export-list? elem)
+  (and (pair? elem)
+       (not (null? elem))
+       ;; Must not be a sentinel form ($brace-params, $angle-type, etc.)
+       (let ([h (if (syntax? (car elem)) (syntax-e (car elem)) (car elem))])
+         (and (symbol? h)
+              (not (eq? h '$brace-params))
+              (not (eq? h '$angle-type))
+              (not (eq? h '$foreign-block))
+              (not (eq? h '$quote))
+              (not (eq? h '$pipe))
+              ;; Must contain ':' somewhere (type annotation)
+              (ormap (lambda (e)
+                       (let ([v (if (syntax? e) (syntax-e e) e)])
+                         (eq? v ':)))
+                     elem)))))
+
+;; Is this element the arrow '->' symbol?
+(define (arrow-sym? elem)
+  (let ([v (if (syntax? elem) (syntax-e elem) elem)])
+    (eq? v '->)))
+
+;; Combine foreign escape blocks in a flat element list.
+;; Scans for: racket ($brace-params ...) [captures...] -> [exports...]
+;; and merges into ($foreign-block racket (code...) (captures...) (exports...))
+(define (combine-foreign-blocks elems)
+  (if (or (not (list? elems)) (null? elems))
+      elems
+      (let loop ([rest elems] [acc '()])
+        (cond
+          [(null? rest) (reverse acc)]
+          ;; Detect: racket followed by ($brace-params ...)
+          [(and (pair? (cdr rest))
+                (let ([v (if (syntax? (car rest)) (syntax-e (car rest)) (car rest))])
+                  (eq? v 'racket))
+                (let ([next (cadr rest)])
+                  (let ([d (if (syntax? next) (syntax-e next) next)])
+                    (brace-params? d))))
+           (define lang 'racket)
+           (define brace-elem (cadr rest))
+           (define brace-datum (if (syntax? brace-elem) (syntax-e brace-elem) brace-elem))
+           ;; Extract code datums (skip $brace-params sentinel)
+           (define code-datums (cdr brace-datum))
+           ;; Look ahead for captures and exports
+           (define remaining (cddr rest))
+           (define-values (captures remaining2)
+             (if (and (pair? remaining)
+                      (let ([e (car remaining)])
+                        (let ([d (if (syntax? e) (syntax-e e) e)])
+                          (capture-or-export-list? d))))
+                 ;; Next element is a capture list
+                 (let ([cap (car remaining)]
+                       [cap-datum (let ([e (car remaining)])
+                                    (if (syntax? e) (syntax-e e) e))])
+                   (values (list cap-datum) (cdr remaining)))
+                 (values '() remaining)))
+           (define-values (exports remaining3)
+             (if (and (pair? remaining2)
+                      (arrow-sym? (car remaining2))
+                      (pair? (cdr remaining2))
+                      (let ([e (cadr remaining2)])
+                        (let ([d (if (syntax? e) (syntax-e e) e)])
+                          (capture-or-export-list? d))))
+                 ;; -> followed by export list
+                 (let ([exp (cadr remaining2)]
+                       [exp-datum (let ([e (cadr remaining2)])
+                                    (if (syntax? e) (syntax-e e) e))])
+                   (values (list exp-datum) (cddr remaining2)))
+                 (values '() remaining2)))
+           ;; Build ($foreign-block racket (code...) (captures...) (exports...))
+           (define block `($foreign-block ,lang ,code-datums ,captures ,exports))
+           (loop remaining3 (cons block acc))]
+          ;; Not a foreign block — pass through
+          [else
+           (loop (cdr rest) (cons (car rest) acc))]))))
+
 ;; Recursively expand subexpressions of a list datum
 ;; Special handling for $pipe forms: group elements after -> into a single
 ;; sub-form so pre-parse macros (like let) see the correct structure.
 ;; Also merges consecutive bodyless let forms (sibling lets) before expansion.
+;; Also combines foreign escape blocks (racket { ... } [captures] -> [exports]).
 (define (preparse-expand-subforms datum reg depth)
   (define grouped (maybe-group-pipe-body datum))
-  (define merged (merge-sibling-lets grouped))
+  (define foreign-combined (combine-foreign-blocks grouped))
+  (define merged (merge-sibling-lets foreign-combined))
   (define expanded
     (map (lambda (sub) (preparse-expand-form sub reg depth))
          merged))
-  (if (equal? expanded merged) datum expanded))
+  ;; Return expanded if any transformation changed the datum.
+  ;; Compare against original datum (not intermediate) to preserve
+  ;; changes from combining passes (foreign blocks, pipe grouping, let merging).
+  (if (equal? expanded datum) datum expanded))
 
 ;; For $pipe forms (WS match arms), group body elements after -> into a single list.
 ;; ($pipe ctor args... -> e1 e2 e3) → ($pipe ctor args... -> (e1 e2 e3))

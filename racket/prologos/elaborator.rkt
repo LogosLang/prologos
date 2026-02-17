@@ -18,7 +18,8 @@
          "namespace.rkt"
          "metavar-store.rkt"
          "pretty-print.rkt"
-         "multi-dispatch.rkt")
+         "multi-dispatch.rkt"
+         "foreign.rkt")
 
 (provide elaborate
          elaborate-top-level)
@@ -540,6 +541,15 @@
                  ;; No Church fold desugaring path needed.
                  (expr-reduce elab-scrutinee elab-arms #t)))))]
 
+    ;; Foreign escape block: racket{ code } [captures] -> [exports]
+    ;; Desugar to expr-foreign-fn application:
+    ;; 1. Build a Racket lambda from code + capture names
+    ;; 2. Eval it in a Racket namespace
+    ;; 3. Wrap as expr-foreign-fn
+    ;; 4. Apply to elaborated capture expressions
+    [(surf-foreign-block lang code-datums captures return-type loc)
+     (elaborate-foreign-block lang code-datums captures return-type loc env depth)]
+
     ;; Fallback
     [_ (prologos-error srcloc-unknown (format "Cannot elaborate: ~a" surf))]))
 
@@ -575,6 +585,146 @@
      (define elab-body (elaborate body-surf new-env new-depth))
      (if (prologos-error? elab-body) elab-body
          (expr-reduce-arm ctor-name (length bindings) elab-body))]))
+
+;; ========================================
+;; Elaborate a foreign escape block
+;; ========================================
+;; Transforms: racket{ code } [captures] -> [exports]
+;; into: (expr-app ... (expr-foreign-fn gensym proc arity () marshal-in marshal-out) cap1 cap2 ...)
+;;
+;; The strategy:
+;; 1. Elaborate capture types to core types
+;; 2. Build a Racket lambda: (lambda (cap-names...) code-datums...)
+;; 3. Eval the lambda in a Racket namespace
+;; 4. Determine return type (from annotation or hole for checking context)
+;; 5. Build type: Cap1Type -> Cap2Type -> ... -> ReturnType
+;; 6. Create expr-foreign-fn with marshallers
+;; 7. Apply to elaborated capture expressions
+(define (elaborate-foreign-block lang code-datums captures return-type loc env depth)
+  ;; Step 1: Elaborate capture types
+  (define elab-captures
+    (for/list ([cap (in-list captures)])
+      (define name (car cap))
+      (define type-surf (cadr cap))
+      (define type-core (elaborate type-surf env depth))
+      (list name type-surf type-core)))
+
+  ;; Check for errors in capture type elaboration
+  (define cap-type-error
+    (for/or ([cap (in-list elab-captures)])
+      (and (prologos-error? (caddr cap)) (caddr cap))))
+
+  (cond
+    [cap-type-error cap-type-error]
+    [else
+     ;; Step 2: Elaborate return type (if provided)
+     (define ret-type-core
+       (if return-type
+           (elaborate return-type env depth)
+           #f))  ;; #f = no explicit return type
+
+     (cond
+       [(and ret-type-core (prologos-error? ret-type-core)) ret-type-core]
+       [else
+        (define capture-names (map car captures))
+        (define capture-types-core (map caddr elab-captures))
+
+        ;; Step 3: Build a Racket lambda from the code datums
+        (define rkt-lambda-expr
+          (if (null? capture-names)
+              `(lambda () ,@code-datums)
+              `(lambda ,capture-names ,@code-datums)))
+
+        ;; Step 4: Eval in a Racket namespace
+        (define rkt-ns (make-base-namespace))
+        (define rkt-proc
+          (with-handlers ([exn:fail? (lambda (e)
+                                       (prologos-error loc
+                                         (format "foreign block eval error: ~a" (exn-message e))))])
+            (eval rkt-lambda-expr rkt-ns)))
+
+        (cond
+          [(prologos-error? rkt-proc) rkt-proc]
+          [else
+           ;; Step 5: Determine return type
+           ;; If no explicit return type AND no captures, eval immediately
+           ;; and auto-detect the Prologos type from the Racket result
+           (define-values (actual-ret-type-core result-val)
+             (cond
+               ;; Explicit return type provided
+               [ret-type-core (values ret-type-core #f)]
+               ;; No return type, no captures: eval thunk immediately and detect type
+               [(null? capture-names)
+                (define rkt-result
+                  (with-handlers ([exn:fail? (lambda (e)
+                                               (prologos-error loc
+                                                 (format "foreign block runtime error: ~a" (exn-message e))))])
+                    (rkt-proc)))
+                (cond
+                  [(prologos-error? rkt-result) (values #f rkt-result)]
+                  [(and (exact-integer? rkt-result) (>= rkt-result 0))
+                   (values (expr-Nat) (integer->nat rkt-result))]
+                  [(boolean? rkt-result)
+                   (values (expr-Bool) (if rkt-result (expr-true) (expr-false)))]
+                  [(void? rkt-result)
+                   (values (expr-Unit) (expr-unit))]
+                  [else
+                   (values #f
+                     (prologos-error loc
+                       (format "foreign block: cannot auto-detect type of Racket result: ~a" rkt-result)))])]
+               ;; No return type, with captures: error — need explicit type
+               [else
+                (values #f
+                  (prologos-error loc
+                    "foreign block with captures requires explicit return type"))]))
+
+           (cond
+             ;; If result-val is an error, propagate it
+             [(and result-val (prologos-error? result-val)) result-val]
+             ;; If we eagerly evaluated (zero captures, auto-detect), return the result directly
+             [result-val result-val]
+             ;; Normal path: build expr-foreign-fn with marshallers
+             [else
+              ;; Build the full type: Cap1Type -> Cap2Type -> ... -> ReturnType
+              (define full-type
+                (foldr (lambda (cap-type rest-type)
+                         (expr-Pi 'mw cap-type rest-type))
+                       actual-ret-type-core
+                       capture-types-core))
+
+              ;; Build marshaller pair from the type
+              (define parsed-type (parse-foreign-type full-type))
+              (define-values (marshal-in marshal-out) (make-marshaller-pair parsed-type))
+              (define arity (length capture-names))
+
+              ;; Create the foreign-fn with a gensym name
+              (define fn-name (gensym 'foreign-block))
+              (define foreign-fn-val
+                (expr-foreign-fn fn-name rkt-proc arity '() marshal-in marshal-out))
+
+              ;; Register the type in global-env so the infer case can find it
+              (current-global-env
+               (global-env-add (current-global-env) fn-name full-type foreign-fn-val))
+
+              ;; Elaborate capture expressions (they reference variables in scope)
+              (define elab-cap-exprs
+                (for/list ([cap (in-list captures)])
+                  (define name (car cap))
+                  (elaborate (surf-var name loc) env depth)))
+
+              ;; Check for errors in capture elaboration
+              (define cap-expr-error
+                (for/or ([e (in-list elab-cap-exprs)])
+                  (and (prologos-error? e) e)))
+
+              (cond
+                [cap-expr-error cap-expr-error]
+                [else
+                 ;; Apply the foreign-fn to all capture expressions
+                 (foldl (lambda (cap-expr acc)
+                          (expr-app acc cap-expr))
+                        foreign-fn-val
+                        elab-cap-exprs)])])])])]))
 
 ;; ========================================
 ;; Helper: natural -> level

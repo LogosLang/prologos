@@ -362,6 +362,11 @@
     [(and (symbol? head) (eq? head '$angle-type))
      (unwrap-angle-type stx loc)]
 
+    ;; $foreign-block sentinel: foreign escape block
+    ;; ($foreign-block racket (code-datums...) (captures...) (exports...))
+    [(and (symbol? head) (eq? head '$foreign-block))
+     (parse-foreign-block args loc)]
+
     ;; Keyword-headed forms
     [(symbol? head)
      (case head
@@ -2058,6 +2063,174 @@
   (if (eof-object? stx)
       (parse-error srcloc-unknown "Empty input" #f)
       (parse-datum stx)))
+
+;; ========================================
+;; Foreign escape block parsing
+;; ========================================
+;; Parses a ($foreign-block lang (code-datums) (captures) (exports)) form
+;; produced by the combining pass in macros.rkt.
+;;
+;; Capture format: ((name : Type) ...) or () for no captures
+;; Export format:  ((name : Type) ...) or () for single-return (type from context)
+;;
+;; Returns a surf-foreign-block.
+
+(define (parse-foreign-block args loc)
+  ;; args = (lang (code-datums...) (captures...) (exports...))
+  (unless (and (>= (length args) 4))
+    (parse-error loc "Invalid $foreign-block: expected (lang code captures exports)" #f))
+
+  (define lang-stx (car args))
+  (define lang (stx->datum lang-stx))
+  (define code-datums-stx (cadr args))
+  ;; Use syntax->datum (recursive) for code datums — these are raw Racket S-exprs
+  ;; that must be fully unwrapped for eval
+  (define code-datums
+    (let ([d (if (syntax? code-datums-stx) (syntax->datum code-datums-stx) code-datums-stx)])
+      d))
+  (define captures-stx (caddr args))
+  ;; Also recursively unwrap captures and exports
+  (define captures-raw
+    (let ([d (if (syntax? captures-stx) (syntax->datum captures-stx) captures-stx)])
+      d))
+  (define exports-stx (cadddr args))
+  (define exports-raw
+    (let ([d (if (syntax? exports-stx) (syntax->datum exports-stx) exports-stx)])
+      d))
+
+  ;; Parse captures: list of (name : Type) specs → list of (name, parsed-type) pairs
+  (define captures
+    (if (null? captures-raw)
+        '()
+        (parse-foreign-capture-specs captures-raw loc)))
+
+  ;; Parse return type from exports (single-return = first export's type)
+  ;; For now, Phase 1: single-return only; exports spec provides the return type
+  (define return-type
+    (cond
+      [(null? exports-raw)
+       ;; No explicit return type — will be inferred from checking context
+       #f]
+      [else
+       ;; Single export: (name : Type) — the type is the return type
+       ;; For Phase 1 we only support single return
+       (parse-foreign-return-type (car exports-raw) loc)]))
+
+  (if (or (prologos-error? captures) (and return-type (prologos-error? return-type)))
+      (or (and (prologos-error? captures) captures)
+          return-type)
+      (surf-foreign-block lang code-datums captures return-type loc)))
+
+;; Parse a list of capture specs from the combining pass.
+;; Input: ((name : Type-tokens...) ...) — a list of spec lists
+;; Each spec: (name : Type) or just (name) for untyped
+;; Returns: list of (list name surf-type) pairs
+(define (parse-foreign-capture-specs specs loc)
+  ;; The specs come from the combining pass as a list of bracket contents.
+  ;; Typically: ((x : Nat y : Nat)) — one sublist with flat multi-capture tokens.
+  ;; Or: ((x : Nat) (y : Nat)) — multiple sublists, one per capture.
+  ;; Or empty: ()
+  (cond
+    ;; Single flat list starts with symbol → treat as flat multi-capture
+    [(and (pair? specs) (symbol? (car specs)))
+     (parse-foreign-capture-flat specs loc)]
+    ;; List containing sublists
+    [(and (pair? specs) (pair? (car specs)))
+     ;; Check if this is a single sublist containing flat multi-capture tokens
+     ;; e.g., ((x : Nat y : Nat)) — one sublist with multiple colon-separated captures
+     (if (and (= (length specs) 1)
+              (pair? (car specs))
+              (symbol? (caar specs))
+              ;; Has more than one ':' → multiple captures in one bracket group
+              (> (length (filter (lambda (e) (eq? e ':)) (car specs))) 1))
+         ;; Flat multi-capture: (x : Nat y : Nat)
+         (parse-foreign-capture-flat (car specs) loc)
+         ;; Multiple sublists or single simple capture: parse each
+         (if (and (= (length specs) 1))
+             ;; Single sublist: parse as single capture OR flat
+             (let ([sublist (car specs)])
+               (if (and (pair? sublist) (symbol? (car sublist)))
+                   (parse-foreign-capture-flat sublist loc)
+                   (parse-single-capture sublist loc)))
+             ;; Multiple sublists: parse each individually
+             (let loop ([rest specs] [acc '()])
+               (if (null? rest)
+                   (reverse acc)
+                   (let ([spec (car rest)])
+                     (define parsed (parse-single-capture spec loc))
+                     (if (prologos-error? parsed) parsed
+                         (loop (cdr rest) (cons parsed acc))))))))]
+    [else '()]))
+
+;; Parse a flat capture list: (name1 : Type1 name2 : Type2 ...)
+;; Returns list of (list name surf-type) pairs
+(define (parse-foreign-capture-flat tokens loc)
+  ;; Split on ':' boundaries
+  (let loop ([rest tokens] [acc '()])
+    (cond
+      [(null? rest) (reverse acc)]
+      ;; name : Type [name : Type ...]
+      [(and (symbol? (car rest))
+            (pair? (cdr rest))
+            (eq? (cadr rest) ':))
+       ;; Collect type tokens until next name-colon or end
+       (define name (car rest))
+       (define type-and-rest (cddr rest))
+       ;; Find where the next capture starts (symbol followed by ':')
+       (define-values (type-tokens remaining)
+         (split-capture-type-tokens type-and-rest))
+       (define type-surf (parse-infix-type (map (lambda (t) (datum->syntax #f t)) type-tokens) loc))
+       (if (prologos-error? type-surf) type-surf
+           (loop remaining (cons (list name type-surf) acc)))]
+      ;; Bare name without type
+      [(symbol? (car rest))
+       (loop (cdr rest) (cons (list (car rest) (surf-hole loc)) acc))]
+      [else
+       (parse-error loc (format "foreign block: invalid capture spec: ~a" rest) #f)])))
+
+;; Split type tokens from a flat capture list, stopping at the next name : boundary
+(define (split-capture-type-tokens tokens)
+  (let loop ([rest tokens] [type-acc '()])
+    (cond
+      [(null? rest)
+       (values (reverse type-acc) '())]
+      ;; If we see symbol : pattern, it's the start of next capture
+      [(and (symbol? (car rest))
+            (pair? (cdr rest))
+            (eq? (cadr rest) ':))
+       (values (reverse type-acc) rest)]
+      [else
+       (loop (cdr rest) (cons (car rest) type-acc))])))
+
+;; Parse a single capture spec: (name : Type)
+(define (parse-single-capture spec loc)
+  (cond
+    [(and (pair? spec) (>= (length spec) 3)
+          (symbol? (car spec))
+          (eq? (cadr spec) ':))
+     (define name (car spec))
+     (define type-tokens (cddr spec))
+     (define type-surf (parse-infix-type (map (lambda (t) (datum->syntax #f t)) type-tokens) loc))
+     (if (prologos-error? type-surf) type-surf
+         (list name type-surf))]
+    [(and (pair? spec) (= (length spec) 1) (symbol? (car spec)))
+     (list (car spec) (surf-hole loc))]
+    [else
+     (parse-error loc (format "foreign block: invalid capture spec: ~a" spec) #f)]))
+
+;; Parse return type from an export spec: (name : Type) → just the Type part
+(define (parse-foreign-return-type spec loc)
+  (cond
+    [(and (pair? spec) (>= (length spec) 3)
+          (symbol? (car spec))
+          (eq? (cadr spec) ':))
+     (define type-tokens (cddr spec))
+     (parse-infix-type (map (lambda (t) (datum->syntax #f t)) type-tokens) loc)]
+    [(and (pair? spec) (= (length spec) 1))
+     ;; Bare type name
+     (parse-datum (car spec))]
+    [else
+     (parse-error loc (format "foreign block: invalid export/return spec: ~a" spec) #f)]))
 
 ;; Parse all forms from a port (for file loading)
 (define (parse-port port [source "<port>"])
