@@ -86,6 +86,9 @@
          extract-pi-binders
          ;; Sibling let merging (for testing)
          merge-sibling-lets
+         ;; HKT brace-param parsing
+         parse-brace-param-list
+         group-brace-params
          ;; Spec store
          current-spec-store
          spec-entry
@@ -1528,24 +1531,115 @@
     [else
      (error 'data "data: expected type name or (type-name params...), got ~a" head-datum)]))
 
+;; ========================================
+;; parse-brace-param-list: parse {A B} or {F : Type -> Type} brace params
+;; ========================================
+;; Input: list of symbols/tokens after $brace-params sentinel
+;;   e.g., (A B)                    for {A B}
+;;   e.g., (F : Type -> Type)       for {F : Type -> Type}
+;;   e.g., (F : Type -> Type A)     for {F : Type -> Type, A}
+;;   e.g., (A B : Type -> Type -> Type) for {A, B : Type -> Type -> Type}
+;; Output: alist of ((name . kind) ...) where kind is a type datum
+;;   e.g., ((A . (Type 0)) (B . (Type 0)))
+;;   e.g., ((F . (-> (Type 0) (Type 0))))
+;;
+;; Algorithm: find all "symbol :" boundaries to identify param groups.
+;; Each "symbol :" starts a kinded param whose kind extends until the next
+;; "symbol :" boundary or end of tokens. Any symbols before the first kinded
+;; param (or if no colons exist) are bare params with default kind (Type 0).
+
+(define (parse-brace-param-list symbols context-name)
+  (define groups (group-brace-params symbols))
+  (for/list ([g (in-list groups)])
+    (cond
+      ;; Kinded: (name : kind-tokens...)
+      [(and (>= (length g) 3) (eq? (cadr g) ':))
+       (define name (car g))
+       (unless (symbol? name)
+         (error context-name "~a: parameter name must be a symbol, got ~a" context-name name))
+       (define kind-tokens (cddr g))
+       ;; Normalize bare 'Type' to '(Type 0)' in kind tokens
+       (define normalized-tokens
+         (map (lambda (t) (if (eq? t 'Type) '(Type 0) t)) kind-tokens))
+       ;; Parse using arrow splitting (reuse existing utilities)
+       (define segments (split-on-arrow-datum normalized-tokens))
+       (define kind
+         (if (= (length segments) 1)
+             ;; No arrows — bare kind
+             (let ([seg (car segments)])
+               (if (= (length seg) 1) (car seg) seg))
+             ;; Has arrows — build nested arrow type
+             (let* ([domains (drop-right segments 1)]
+                    [codomain-seg (last segments)]
+                    [codomain (if (= (length codomain-seg) 1)
+                                  (car codomain-seg)
+                                  codomain-seg)]
+                    [domain-types (map (lambda (seg)
+                                         (if (= (length seg) 1) (car seg) seg))
+                                       domains)])
+               (build-arrow-type domain-types codomain))))
+       (cons name kind)]
+      ;; Bare: (name)
+      [(and (= (length g) 1) (symbol? (car g)))
+       (cons (car g) '(Type 0))]
+      [else
+       (error context-name "~a: malformed brace parameter: ~a" context-name g)])))
+
+;; Group a flat list of brace-param tokens into parameter groups.
+;; Strategy: find positions of ':' preceded by a symbol. These are kinded param
+;; boundaries. Split the token list so each kinded param gets its name + : + kind,
+;; and each bare symbol becomes its own group.
+(define (group-brace-params tokens)
+  (if (null? tokens)
+      '()
+      (let ()
+        (define tvec (list->vector tokens))
+        (define n (vector-length tvec))
+        ;; Find indices of ':' preceded by a symbol — these are "name :" boundaries
+        ;; The param name is at index (colon-idx - 1)
+        (define param-start-indices
+          (for/list ([i (in-range 1 n)]
+                     #:when (and (eq? (vector-ref tvec i) ':)
+                                 (symbol? (vector-ref tvec (- i 1)))))
+            (- i 1)))  ;; position of the name symbol
+        (cond
+          ;; No colons — all bare symbols
+          [(null? param-start-indices)
+           (for/list ([t (in-list tokens)])
+             (list t))]
+          [else
+           ;; Build groups by splitting at param-start boundaries
+           ;; Tokens before the first kinded param are bare params
+           ;; Tokens between kinded param starts belong to the preceding kind
+           (define result '())
+           ;; Process bare params before the first kinded param
+           (define first-start (car param-start-indices))
+           (for ([i (in-range 0 first-start)])
+             (set! result (cons (list (vector-ref tvec i)) result)))
+           ;; Process each kinded param
+           (for ([start-idx (in-list param-start-indices)]
+                 [next-idx (in-list (append (cdr param-start-indices) (list n)))])
+             (define group
+               (for/list ([k (in-range start-idx next-idx)])
+                 (vector-ref tvec k)))
+             (set! result (cons group result)))
+           (reverse result)]))))
+
 ;; Parse parameter list in WS or sexp format
-;; NEW: ($brace-params A B C) — implicit type params, all get type (Type 0)
+;; ($brace-params ...) — implicit type params, optionally with kind annotations
 ;; WS: (A ($angle-type (Type 0)) B ($angle-type (Type 0)) ...)
 ;; Sexp: ((A : (Type 0)) (B : (Type 0)) ...)
 (define (parse-data-param-list raw)
   (cond
     [(null? raw) '()]
-    ;; NEW: ($brace-params A B C) — single element containing all params
+    ;; ($brace-params ...) — implicit type params with optional kind annotations
     [(and (= (length raw) 1)
           (pair? (car raw))
           (list? (car raw))
           (>= (length (car raw)) 2)
           (eq? (car (car raw)) '$brace-params))
      (define symbols (cdr (car raw)))
-     (for/list ([s (in-list symbols)])
-       (unless (symbol? s)
-         (error 'data "data: implicit type parameter must be a symbol, got ~a" s))
-       (cons s '(Type 0)))]
+     (parse-brace-param-list symbols 'data)]
     ;; WS format: name ($angle-type Type) name ($angle-type Type) ...
     [(and (symbol? (car raw))
           (>= (length raw) 2)
@@ -1633,9 +1727,13 @@
         (define segments (split-on-arrow-datum type-atoms))
         (define fields
           (map (lambda (seg)
-                 (if (= (length seg) 1)
-                     (car seg)  ;; single atom: e.g., A
-                     seg))      ;; multi-atom: e.g., (List A) — left as-is for now
+                 (define field-type
+                   (if (= (length seg) 1)
+                       (car seg)  ;; single atom: e.g., A
+                       seg))      ;; multi-atom: e.g., (List A)
+                 ;; Normalize any infix -> inside grouped types
+                 ;; e.g., (Unit -> LSeq A) → (-> Unit (LSeq A))
+                 (normalize-infix-arrow-type field-type))
                segments))
         (cons name fields)]
        ;; EXISTING: angle-bracket or bare fields
@@ -1649,6 +1747,41 @@
         (cons name fields)])]
     [else
      (error 'data "data: constructor must be (Name fields...) or a bare symbol, got ~a" raw)]))
+
+;; Normalize a type datum that may contain infix ->
+;; Converts (Unit -> LSeq A) → (-> Unit (LSeq A))
+;; Leaves (List A) and bare symbols unchanged.
+;; Recursively normalizes nested grouped types.
+(define (normalize-infix-arrow-type ty)
+  (cond
+    ;; Not a list — bare atom, leave as-is
+    [(not (list? ty)) ty]
+    ;; Empty list — leave as-is
+    [(null? ty) ty]
+    ;; Already prefix -> — normalize children
+    [(eq? (car ty) '->)
+     (cons '-> (map normalize-infix-arrow-type (cdr ty)))]
+    ;; Contains infix -> (e.g., (Unit -> LSeq A))
+    ;; Convert to prefix form
+    [(memq '-> ty)
+     (define segments (split-on-arrow-datum ty))
+     (if (= (length segments) 1)
+         ;; No actual -> found (shouldn't happen since memq found one)
+         (map normalize-infix-arrow-type ty)
+         ;; Build prefix arrow from segments
+         (let* ([normalized-segs
+                 (map (lambda (seg)
+                        (define normalized (map normalize-infix-arrow-type seg))
+                        (if (= (length normalized) 1)
+                            (car normalized)
+                            normalized))
+                      segments)]
+                [domains (drop-right normalized-segs 1)]
+                [codomain (last normalized-segs)])
+           (build-arrow-type domains codomain)))]
+    ;; No infix -> — normalize children
+    [else
+     (map normalize-infix-arrow-type ty)]))
 
 ;; Split a flat list of atoms on the '-> symbol (datum-level, not syntax).
 ;; Returns a list of lists (segments between arrows).
@@ -1723,11 +1856,7 @@
                      (eq? (car maybe-braces) '$brace-params))))
          (define brace-element (car rest))
          (define symbols (cdr brace-element))
-         (define brace-params
-           (for/list ([s (in-list symbols)])
-             (unless (symbol? s)
-               (error 'data "data: implicit type parameter must be a symbol, got ~a" s))
-             (cons s '(Type 0))))
+         (define brace-params (parse-brace-param-list symbols 'data))
          (values head brace-params (cdr rest))]
         ;; EXISTING: parse head normally
         [else
@@ -1921,11 +2050,7 @@
                      (eq? (car maybe-braces) '$brace-params))))
          (define brace-element (car rest))
          (define symbols (cdr brace-element))
-         (define brace-params
-           (for/list ([s (in-list symbols)])
-             (unless (symbol? s)
-               (error 'trait "trait: implicit type parameter must be a symbol, got ~a" s))
-             (cons s '(Type 0))))
+         (define brace-params (parse-brace-param-list symbols 'trait))
          (values head brace-params (cdr rest))]
         ;; Sexp params: (trait (Eq (A : (Type 0))) ...)
         [else
