@@ -1,142 +1,152 @@
-- [In Type Theory, explain in detail Dependent Types. First start with the theory; then practical use  cases; then examples](#orgb403d79)
-- [Dependent Types in Type Theory](#orgfe44c42)
-  - [Theoretical Foundation](#org2d08e69)
-    - [Basic Idea](#org59b71a6)
-    - [Formal Definitions](#org153002d)
-    - [The Curry-Howard Correspondence Extended](#orgef103e7)
-  - [Practical Use Cases](#org474b517)
-    - [1. **Length-Indexed Vectors**](#orgea139ad)
-    - [2. **Certified Programming**](#orgc73d925)
-    - [3. **Protocol State Machines**](#org0c1285d)
-    - [4. **Units of Measure**](#org8b3f01c)
-    - [5. **Database Queries**](#org43a9b77)
-    - [6. **Format Strings**](#orgf95f7c0)
-  - [Examples](#orgc231924)
-    - [Example 1: Vectors (Idris/Agda-style pseudocode)](#orgc56071b)
-    - [Example 2: Finite Numbers (Safe Indexing)](#orgc82e69f)
-    - [Example 3: Printf (Type-safe Format Strings)](#org54609c9)
-    - [Example 4: Equality Type (Propositional Equality)](#org508dc6d)
-    - [Example 5: Certified Sorting](#org52b2e28)
-  - [Summary](#org7cc0e14)
-- [Let's write a Dependent Type module in the formmal specification language, Maude.](#org3c26ba1)
-  - [Module 1: Basic Syntax](#org3f2f65e)
-  - [Module 2: Substitution](#org468af9d)
-  - [Module 3: Typing Judgments](#org00126b1)
-  - [Module 4: Vectors with Dependent Types](#org1ab33f1)
-  - [Module 5: Finite Types (Safe Indexing)](#org69faad6)
-  - [Module 6: Examples and Tests](#orgd069e17)
-    - [Run the examples](#orgca0ec7f)
-  - [Module 7: Propositional Equality and Transport](#org5fd3b23)
-- [Is it fair to say that any multi-arity predicate in Prolog is a dependent type declaration (when fully concretized)?](#org9d8a2d8)
-  - [The Correspondence](#org27e2375)
-  - [What's Right About This View](#org62d788b)
-  - [What's Missing](#org20eb29b)
-  - [A More Precise Correspondence](#org87ffa58)
-  - [Mercury and Typed Logic Programming](#org722154b)
-  - [Curry-Howard for Logic Programming](#org956a07d)
-  - [Conclusion](#org0112cba)
-- [How might we conceptualize of Session Types as compared to Linear Types?](#org19f1ac7)
-  - [The Core Intuition](#orgf2223db)
-  - [Linear Types](#org92f451e)
-  - [Session Types](#org33c4e12)
-  - [The Relationship](#org6767f14)
-  - [Comparison Table](#orgca596b5)
-  - [Typed Process Calculus View](#org4d8f27a)
-  - [Maude Specification Sketch](#org02db426)
-  - [Summary](#orgbb105ad)
-- [How might we imagine a logic programming language that supported first-class dependent-types, with support also for a fully realized Session Type system?](#org8bb9201)
-  - [Design Principles](#org0d93234)
-  - [The Core Judgment Forms](#org1a69193)
-  - [Syntax Overview](#org9d964b1)
-  - [The Key Integration: Logic Programming + Sessions](#orgdc26889)
-  - [Formal Maude Specification](#orgb9df240)
-- [How might we envision the syntax to be for Prologos if we were a homoiconic language&#x2013;enabling ease of metaprogramming and supporting the code-as-data paradigm, as well as simplicity of syntax? I'm thinking prefix-operators, nested commands with square  brackets  \`[op &#x2026;]\` and significant whitespace.](#org7897d57)
-- [How might a language like this enhance the capabilities of agentic AI, or be used to provide explainability in AI systems? How might this enhance orchestrated programming, or be used for parallelism?](#org0247820)
-  - [The Agent-as-Process Model](#org82d2f41)
-  - [Why This Matters for Agents](#org2296884)
-  - [Multi-Agent Orchestration](#org2471c40)
-  - [Proof Terms as Explanations](#org3e5bbe9)
-  - [Derivation Trees as Data](#orgdda4860)
-  - [Contrastive Explanations](#orgf11e41d)
-  - [Uncertainty and Probabilistic Explanations](#orgd9c354e)
-  - [Workflows as Session Types](#org9f73178)
-  - [Dynamic Orchestration with Dependent Types](#orgefc20cf)
-  - [Choreography vs Orchestration](#orge8cb859)
-  - [Session Types Guarantee Deadlock Freedom](#org189e18f)
-  - [Dependent Parallelism: Fork-Join with Proof](#orgc533f39)
-  - [Speculative Parallelism with Session Types](#orgba4c1a7)
-  - [Data Parallelism with Proof-Carrying Results](#orge7f29e7)
-- [Can we simplify our syntax in Prologos&#x2026;](#org4f68ab2)
-  - [Basic Channel Communication](#org1bd1f17)
-  - [Branching with Case](#orgedc9596)
-  - [Parallel Composition](#org1c62792)
-  - [Full Agent Definition](#org975ef1a)
-  - [Pipeline Orchestration](#orgbd90a89)
-  - [Speculative Parallelism](#org1470dba)
-- [Can we further modify the syntax to have Term:Type while still maintaining homoiconicity?](#org4cbd319)
-- [I find the concept of dependent types hard to understand, and I get a sense that they don't really increase expressiveness, and I can't quite see their utility vs. the simplicity of not having them. What do you think in light of everything else we've been talking about?](#orgb57b469)
-  - [1. Moving Runtime Checks to Compile Time](#org7e43de1)
-  - [2. Proofs as Documentation That's Checked](#org1b40a11)
-  - [Where Dependent Types Shine](#orga00a603)
-  - [Where They're Overkill](#org85ea082)
-  - [For Session Types: Dependency Is Natural](#orgb9ce2db)
-  - [For Logic Programming: You Already Have It](#orgbeaca33)
-  - [For Agentic AI: The Proof Is the Explanation](#org693747d)
-- [Is this a type of language that you'd prefer to write in? I mean, have that compile-time feedback about correctness?](#org08fc1df)
-- [If we were to make this language, in what framework or language would you recommend writing the prototype/compiler, etc.?](#orgbe614f7)
-  - [Stage 1: Racket (Prototype & Exploration)](#org1369b77)
-  - [Stage 2: Haskell or OCaml (Serious Prototype)](#org409415e)
-  - [Stage 3: Consider Self-Hosting](#org067f268)
-  - [For Racket Path](#org8087aee)
-  - [For Haskell Path](#orge7b901a)
-  - [For Logic Engine](#orgfa76889)
-- [So one thing I'm contemplating on the syntax&#x2026; Is say we have](#orgd1315e7)
-- [Right, but horn clauses can be disjunctive as well. Some thoughts I'm having are \`sequent\` (but that sounds too formal), or may \`&|>\` or \`&>\` ..mmm](#org0e3d861)
-- [So one other idea I'm having is to call \`relation\` \`rel\` and treat it more like an anonymous function \`lam\` or \`fn\`; and also to introduce a one-liner variable binding (like a smaller let) with the syntax \`=: Var Expr\`, and in this way mix functional code with logical code in a larger body.  And thinking of \`defr\` stand for "define relation", much like our \`defn\` function is sugar on \`def\` + \`fn\`](#org9c14b59)
-- [Have you seen anything like this? My mind is reeling with excitement&#x2026;](#orgd455a26)
-- [---](#orga8a4adb)
-- [Thank you, that suggestion saved me a lot of time now, and probably a lot of headache later (although I'll still need to grapple with optimizations from intermediate closures, but hopefully I'll be more able to support a joyful, interactive "hole-driven" development).](#org571a376)
-- [I'm considering three different styles of syntax for type annotations in the prototype Prologos, if you can provide some comparison and consideration; or even, offer other takes. What do people find more ergonomic, what is successful in other languages that people like. How can we learn lessons and apply it here? Here are the three variants currently under consideration:](#org54c6d9a)
-- [One reason I don't have the equal sign, in part, is because of the homoiconicity;;; but I suppose that can be overcome with the proper macro. The other concern I have is the consideration of reserving \`=\` for \`unify\`. So I guess we can briefly touch on the first part; but what considerations may be out there that you're aware of, or guidance/suggestions around syntax with \`unify\` in the logic-language portion?](#org570f835)
-- [In our current running prototype of Prologos, we are using \`()\` as groupings for further tree-depth. I'm thinking of switching it out back to \`[]\`. There's one concern, and that is having 100% support for EDN datastructures; with a planned scope spec'd out for implementing Clojure's core immutable, persistent datastructures. The issue is that \`[&#x2026;]\` means a Persistent Vector&#x2026; And I want to hear your take on overcoming this; and also perspective on the two different styles of in-line tree-depth with delimiters (or other takes?). How do you think either will take with other programmers; and how does it compare across the landscape of programming languages that you're aware of?](#org802862e)
-- [I agree with your aesthetic of \`[]\`. I too find them cleaner; and also when typing they're slightly more ergonomic&#x2013;the fingers still hit the same keys, but without having to hold down shift. I also agree that brackets aren't as familiar in popular languages today, but they aren't without precedent; in fact, a large inspiration to me is TCL, which uses operator prefix and homoiconic syntax with square-bracketing.](#org4851182)
-- [I agree with your proposed sigils&#x2013;nice find on the Seq with the \`~[..]\`. A good rationale. One thing we have currently supported in the prototype is anonymous functions and \`defn\` use \`[]\` for argument lists. How much does this pollute our homoiconicity/code-is-data? I mean, if it's macro-expanded are we in a clean spot? What considerations should we have in mind on this point?](#orge682355)
-- [I'm thinking of an option to alternatively specify the type layer separate from the function definition&#x2013;like how Maude does it. (I think Haskell has such a facility?) This is what I've worked out so far:](#orgbcb05dc)
-- [Yes, so one of the aims of Prologos is to have excellent language tooling&#x2026; And I think having something where we can offer generative testing frameworks (essentially for free with dependent types, narrowing, search resolution/propagator networks)&#x2026; there could be developers who never touch the logic-side of the language and yet could benefit from it's leverage in things like generative testing/fuzzing&#x2026; This is exciting&#x2026;](#org4bd9a64)
-- [Oh! And! Similar to interactive hole-driven development with dependent-types, you can \`solve\` (with a keybinding that calls the language tooling) over various properties or types of the spec, and &#x2013; right in the editor &#x2013; derive provable other properties!? Yeah!?](#org306f156)
-- [Let's write a prompt for implementing and integrating \`spec\` according to our conversation, with examples. Let's only include the type information and comment string for now, I think&#x2026; I'm not quite sure how the \`:examples\`, \`:properties\` parses into a homoiconic data structure exactly right now&#x2026; and we don't have keywords implemented at the data layer yet. But I definitely want to see this syntax at play. We're making it right now!](#org7b85471)
-- [Let's try to define a number of point free functions with Prologos](#orgc2b4afb)
-- [One concept I've been acquainted with in logic/proof search contexts, is "narrowing". Please explain it, and what is its relevant to what Prologos wants to be?](#org69e7ff8)
-- [So as the core substrate to run the logical language, I'm planning on building out a propagator-as-first-class fabric grounded on Lattice formalisms (LVars, Lindsey Kuper, et alii). What are your thoughts of using this as the first goto for binding resolution (as compared to SLD and SLG resolution); and are propagators general enough, and computationally efficient/feasible enough, to also support Narrowing?](#orgeb6dc67)
-- [How could we do polymorphic dispatch with all of this?](#org6998d89)
-- [I'm interested in supporting variable arguments in functions. I have the syntax in mind, but I'm struggling to conceive of how that would be specified at the Type level. Is there a way to support var args in Prologos, with our type system?](#orgef6e1f0)
-- [Do we need to support an Iterable Type like in many popular languages? What does that give us, what does that cost us? It seems like a lot of mechanisms to keep inn mind to the programmer to me, when we have constructs like map/foldr/reduce, and the like. Let's consider all sides on this.](#orgf274f42)
-- [Rich Hickey gave a talk called "Maybe Not" where he talks about language design, history of null pointers costs (quoting  Tony Hoare), and talks about cost of Maybe / Options. Let's discuss how prolog can address, how we may want to think differently about burden to programmers while providing stronger guarentees](#org77bb2b4)
-- [In the functional core, however, what options can we explore to mitigate this further?](#orgf438a64)
-- [I think I read somewhere from Rich Hickey, that if he were able to start Clojure over again, to change any iterable structure to a fundamental seq. I think he may have been refering to Iterables in this case, which we discussed previously. One thing I don't like in Clojure is how so much automatically returns lazy seqs, and how much work it is to constrain to reified structures. There's a cost to lazyness, and I wonder how we can keep the generality in prologos of a universal iterable-sequence like abstraction, but make it easy to express these data structures rather than default to something you don't always want.](#orgb1f7df8)
-- [](#org2e0db2a)
-- [](#orgb5a7d66)
-- [How should we expect to \`def sum\` on \`[list/reduce add 0 \_]\`](#org1eba64c)
-- [](#orgdeb0c70)
-- [The other syntax that I am overthinking is whether to support groupings](#orgb8a3653)
+- [In Type Theory, explain in detail Dependent Types. First start with the theory; then practical use  cases; then examples](#orgc58d8d6)
+- [Dependent Types in Type Theory](#org586ff17)
+  - [Theoretical Foundation](#org021d8d1)
+    - [Basic Idea](#org1e6419d)
+    - [Formal Definitions](#org10877b7)
+    - [The Curry-Howard Correspondence Extended](#org559b820)
+  - [Practical Use Cases](#org5ddca26)
+    - [1. **Length-Indexed Vectors**](#org778b465)
+    - [2. **Certified Programming**](#org64f6da2)
+    - [3. **Protocol State Machines**](#orgdb709e2)
+    - [4. **Units of Measure**](#org8155516)
+    - [5. **Database Queries**](#org8641e10)
+    - [6. **Format Strings**](#orgd2c59a7)
+  - [Examples](#org951a851)
+    - [Example 1: Vectors (Idris/Agda-style pseudocode)](#org259f597)
+    - [Example 2: Finite Numbers (Safe Indexing)](#org8968314)
+    - [Example 3: Printf (Type-safe Format Strings)](#orge6672df)
+    - [Example 4: Equality Type (Propositional Equality)](#orgf22ec8b)
+    - [Example 5: Certified Sorting](#org8d04fea)
+  - [Summary](#org68c0990)
+- [Let's write a Dependent Type module in the formmal specification language, Maude.](#org345be92)
+  - [Module 1: Basic Syntax](#org27a0413)
+  - [Module 2: Substitution](#orgf0fe179)
+  - [Module 3: Typing Judgments](#orgb9c4d5a)
+  - [Module 4: Vectors with Dependent Types](#org3ea7845)
+  - [Module 5: Finite Types (Safe Indexing)](#org681aeb7)
+  - [Module 6: Examples and Tests](#orgabddabf)
+    - [Run the examples](#orgd89732f)
+  - [Module 7: Propositional Equality and Transport](#orge1e571a)
+- [Is it fair to say that any multi-arity predicate in Prolog is a dependent type declaration (when fully concretized)?](#orgdf7a5b4)
+  - [The Correspondence](#orgd8cfa23)
+  - [What's Right About This View](#org17abb4e)
+  - [What's Missing](#org9c827cc)
+  - [A More Precise Correspondence](#org0620190)
+  - [Mercury and Typed Logic Programming](#org4c2235f)
+  - [Curry-Howard for Logic Programming](#orgd92a997)
+  - [Conclusion](#orgdfa4a07)
+- [How might we conceptualize of Session Types as compared to Linear Types?](#org3a56e1b)
+  - [The Core Intuition](#orgea939db)
+  - [Linear Types](#orgcd991b4)
+  - [Session Types](#org2a45fff)
+  - [The Relationship](#org6f36872)
+  - [Comparison Table](#org5e2946c)
+  - [Typed Process Calculus View](#org5065d47)
+  - [Maude Specification Sketch](#orgf20d696)
+  - [Summary](#orgbe5691c)
+- [How might we imagine a logic programming language that supported first-class dependent-types, with support also for a fully realized Session Type system?](#orgc38403a)
+  - [Design Principles](#orgb1bd7cb)
+  - [The Core Judgment Forms](#orgfa017c3)
+  - [Syntax Overview](#org907b9e2)
+  - [The Key Integration: Logic Programming + Sessions](#orgb56dd1b)
+  - [Formal Maude Specification](#org3a61ec5)
+- [How might we envision the syntax to be for Prologos if we were a homoiconic language&#x2013;enabling ease of metaprogramming and supporting the code-as-data paradigm, as well as simplicity of syntax? I'm thinking prefix-operators, nested commands with square  brackets  \`[op &#x2026;]\` and significant whitespace.](#orgfa2166c)
+- [How might a language like this enhance the capabilities of agentic AI, or be used to provide explainability in AI systems? How might this enhance orchestrated programming, or be used for parallelism?](#orgbf88951)
+  - [The Agent-as-Process Model](#org0bbbcc2)
+  - [Why This Matters for Agents](#orgff49b38)
+  - [Multi-Agent Orchestration](#orga9392a5)
+  - [Proof Terms as Explanations](#orgefa7140)
+  - [Derivation Trees as Data](#org88ea465)
+  - [Contrastive Explanations](#org459b937)
+  - [Uncertainty and Probabilistic Explanations](#orgd6e7e54)
+  - [Workflows as Session Types](#org556ad22)
+  - [Dynamic Orchestration with Dependent Types](#org35456f7)
+  - [Choreography vs Orchestration](#org4fc444e)
+  - [Session Types Guarantee Deadlock Freedom](#orgfa85745)
+  - [Dependent Parallelism: Fork-Join with Proof](#org952027c)
+  - [Speculative Parallelism with Session Types](#org516b1be)
+  - [Data Parallelism with Proof-Carrying Results](#org8e50736)
+- [Can we simplify our syntax in Prologos&#x2026;](#org6233560)
+  - [Basic Channel Communication](#orgda32a1b)
+  - [Branching with Case](#org6b79591)
+  - [Parallel Composition](#org8e70e99)
+  - [Full Agent Definition](#org01f18d5)
+  - [Pipeline Orchestration](#orgad2230b)
+  - [Speculative Parallelism](#orge0a514a)
+- [Can we further modify the syntax to have Term:Type while still maintaining homoiconicity?](#orgd21ceb0)
+- [I find the concept of dependent types hard to understand, and I get a sense that they don't really increase expressiveness, and I can't quite see their utility vs. the simplicity of not having them. What do you think in light of everything else we've been talking about?](#org2aec14b)
+  - [1. Moving Runtime Checks to Compile Time](#org76de73d)
+  - [2. Proofs as Documentation That's Checked](#orgf95bde4)
+  - [Where Dependent Types Shine](#org4eaa339)
+  - [Where They're Overkill](#org32174b8)
+  - [For Session Types: Dependency Is Natural](#org38dd5ae)
+  - [For Logic Programming: You Already Have It](#orgde496f4)
+  - [For Agentic AI: The Proof Is the Explanation](#orgd368d82)
+- [Is this a type of language that you'd prefer to write in? I mean, have that compile-time feedback about correctness?](#org5446b7b)
+- [If we were to make this language, in what framework or language would you recommend writing the prototype/compiler, etc.?](#org35aad38)
+  - [Stage 1: Racket (Prototype & Exploration)](#orgc2774ec)
+  - [Stage 2: Haskell or OCaml (Serious Prototype)](#org034ff98)
+  - [Stage 3: Consider Self-Hosting](#org170509c)
+  - [For Racket Path](#orgd6a6ad8)
+  - [For Haskell Path](#org38a4870)
+  - [For Logic Engine](#org2967be2)
+- [So one thing I'm contemplating on the syntax&#x2026; Is say we have](#orgc09fbe7)
+- [Right, but horn clauses can be disjunctive as well. Some thoughts I'm having are \`sequent\` (but that sounds too formal), or may \`&|>\` or \`&>\` ..mmm](#org780b10e)
+- [So one other idea I'm having is to call \`relation\` \`rel\` and treat it more like an anonymous function \`lam\` or \`fn\`; and also to introduce a one-liner variable binding (like a smaller let) with the syntax \`=: Var Expr\`, and in this way mix functional code with logical code in a larger body.  And thinking of \`defr\` stand for "define relation", much like our \`defn\` function is sugar on \`def\` + \`fn\`](#org5197092)
+- [Have you seen anything like this? My mind is reeling with excitement&#x2026;](#orgc9a67e2)
+- [---](#org0d4e9c9)
+- [Thank you, that suggestion saved me a lot of time now, and probably a lot of headache later (although I'll still need to grapple with optimizations from intermediate closures, but hopefully I'll be more able to support a joyful, interactive "hole-driven" development).](#orgafcdb2d)
+- [I'm considering three different styles of syntax for type annotations in the prototype Prologos, if you can provide some comparison and consideration; or even, offer other takes. What do people find more ergonomic, what is successful in other languages that people like. How can we learn lessons and apply it here? Here are the three variants currently under consideration:](#org50f5f6d)
+- [One reason I don't have the equal sign, in part, is because of the homoiconicity;;; but I suppose that can be overcome with the proper macro. The other concern I have is the consideration of reserving \`=\` for \`unify\`. So I guess we can briefly touch on the first part; but what considerations may be out there that you're aware of, or guidance/suggestions around syntax with \`unify\` in the logic-language portion?](#orgd985f53)
+- [In our current running prototype of Prologos, we are using \`()\` as groupings for further tree-depth. I'm thinking of switching it out back to \`[]\`. There's one concern, and that is having 100% support for EDN datastructures; with a planned scope spec'd out for implementing Clojure's core immutable, persistent datastructures. The issue is that \`[&#x2026;]\` means a Persistent Vector&#x2026; And I want to hear your take on overcoming this; and also perspective on the two different styles of in-line tree-depth with delimiters (or other takes?). How do you think either will take with other programmers; and how does it compare across the landscape of programming languages that you're aware of?](#org916a006)
+- [I agree with your aesthetic of \`[]\`. I too find them cleaner; and also when typing they're slightly more ergonomic&#x2013;the fingers still hit the same keys, but without having to hold down shift. I also agree that brackets aren't as familiar in popular languages today, but they aren't without precedent; in fact, a large inspiration to me is TCL, which uses operator prefix and homoiconic syntax with square-bracketing.](#orgcac1748)
+- [I agree with your proposed sigils&#x2013;nice find on the Seq with the \`~[..]\`. A good rationale. One thing we have currently supported in the prototype is anonymous functions and \`defn\` use \`[]\` for argument lists. How much does this pollute our homoiconicity/code-is-data? I mean, if it's macro-expanded are we in a clean spot? What considerations should we have in mind on this point?](#orgccdb55c)
+- [I'm thinking of an option to alternatively specify the type layer separate from the function definition&#x2013;like how Maude does it. (I think Haskell has such a facility?) This is what I've worked out so far:](#org1abda14)
+- [Yes, so one of the aims of Prologos is to have excellent language tooling&#x2026; And I think having something where we can offer generative testing frameworks (essentially for free with dependent types, narrowing, search resolution/propagator networks)&#x2026; there could be developers who never touch the logic-side of the language and yet could benefit from it's leverage in things like generative testing/fuzzing&#x2026; This is exciting&#x2026;](#org5b6e298)
+- [Oh! And! Similar to interactive hole-driven development with dependent-types, you can \`solve\` (with a keybinding that calls the language tooling) over various properties or types of the spec, and &#x2013; right in the editor &#x2013; derive provable other properties!? Yeah!?](#orgb0c29ca)
+- [Let's write a prompt for implementing and integrating \`spec\` according to our conversation, with examples. Let's only include the type information and comment string for now, I think&#x2026; I'm not quite sure how the \`:examples\`, \`:properties\` parses into a homoiconic data structure exactly right now&#x2026; and we don't have keywords implemented at the data layer yet. But I definitely want to see this syntax at play. We're making it right now!](#orge9efc44)
+- [Let's try to define a number of point free functions with Prologos](#orgb5728d8)
+- [One concept I've been acquainted with in logic/proof search contexts, is "narrowing". Please explain it, and what is its relevant to what Prologos wants to be?](#org237ce0d)
+- [So as the core substrate to run the logical language, I'm planning on building out a propagator-as-first-class fabric grounded on Lattice formalisms (LVars, Lindsey Kuper, et alii). What are your thoughts of using this as the first goto for binding resolution (as compared to SLD and SLG resolution); and are propagators general enough, and computationally efficient/feasible enough, to also support Narrowing?](#org2685f26)
+- [How could we do polymorphic dispatch with all of this?](#orgf773b7d)
+- [I'm interested in supporting variable arguments in functions. I have the syntax in mind, but I'm struggling to conceive of how that would be specified at the Type level. Is there a way to support var args in Prologos, with our type system?](#org47b2476)
+- [Do we need to support an Iterable Type like in many popular languages? What does that give us, what does that cost us? It seems like a lot of mechanisms to keep inn mind to the programmer to me, when we have constructs like map/foldr/reduce, and the like. Let's consider all sides on this.](#orge49b6da)
+- [Rich Hickey gave a talk called "Maybe Not" where he talks about language design, history of null pointers costs (quoting  Tony Hoare), and talks about cost of Maybe / Options. Let's discuss how prolog can address, how we may want to think differently about burden to programmers while providing stronger guarentees](#org8fef15c)
+- [So I have some more syntax design thoughts&#x2013;and exciting clarity around the use of the paren \`()\` delimiters! There are two distinct uses that I have in mind for parens.](#orgc5d40d7)
+  - [Firstly, complex types such as Function, Pi, Sigma Types, are currently struggling to be distinct in type signatures with deeply nested \`[]\`, and sometimes awkward angle-brackets. I am thinking of deprecating the \`<>\` type syntax entirely, and moving to Dependent Types, Pi, Function, Sigma types with \`()\` while "compound simple types" such as [Nat List] retain brackets&#x2026; this needs some comparison, expansion, and critique to compare and crontrast ergonomics, clarity, and aesthetics across all the various complex types. Multiplicatives need to be considered, as far as their position goes in complex tyep groupings, but :0 :1 :w remain clear and ergonomic.](#org82dc647)
+  - [The next, exciting, idea for parens is to denote "clause syntax", and to be exclusively used in function/relationship bodies to represent a relational statement.](#orgd25083a)
+- [A few more notes on paren groupings with types&#x2026; I did some more workshoping around Pi and Sigma types, and I think the angle brackets may actually be useful to make these types clear (without throwing scary words like Pi and Sigma out to pragmatic programmers&#x2026;). But in any case, I think they need more groupings to be clear visually and clear for the parser. Also, I should mention, we changed the surface syntax to display types in an uncurried manner (But they are still curried underneath)](#orge6c9cfd)
+- [So let's focus in real quick on the linear types&#x2026; we haven't really given them too much love yet&#x2026; above where you write \`(handle :1 FileHandle) -> Result\`, what is \`handle\` here? is that a def name? Whence is that proposed?](#org50b0d66)
+- [](#org80c40a3)
+- [Let's explicate on Generic Types. To be honest, it's one type system/paradigm with which I'm not well acquainted. What are they specifically, how are they used, what critique of various generics in different languages can we provide? Are they necessary, do they fit into Prologos, or is there a more fundamental re-thinking or approach we can offer that accomplishes the same thing in an elegant and clear way with what we have built and specced out so far?](#orgf51d84c)
+- [In the functional core, however, what options can we explore to mitigate this further?](#org7ad5bed)
+- [I think I read somewhere from Rich Hickey, that if he were able to start Clojure over again, to change any iterable structure to a fundamental seq. I think he may have been refering to Iterables in this case, which we discussed previously. One thing I don't like in Clojure is how so much automatically returns lazy seqs, and how much work it is to constrain to reified structures. There's a cost to lazyness, and I wonder how we can keep the generality in prologos of a universal iterable-sequence like abstraction, but make it easy to express these data structures rather than default to something you don't always want.](#orgd1f6e54)
+- [Later Maybe Not, Rich Hickey has this to say about the challenges of specifying what he calls "schemas", which seem to be the shape of reusable and common structures as part of a multi-party communication process:](#org0721a89)
+- [It's certainly getting there. There are still some fundamental considerations of the syntax of the HashMap datastructure that we haven't addressed&#x2026; how we syntactically represent them, how we do keylookup, whether we keep EDN syntax or diverge. (I do like keywords preceded by a \`:\`&#x2026; that we keep. But beside that, thinking about \`session\` as the keyword for describing protocol-interactions (rather than defproc) feels right. But one thing in considering the syntax of it, it doesn't feel they need to be nested&#x2026; they're not a tree of deeper nesting needing bottom-up reductions from the leaves&#x2026; they're a sequential, linear back-and-forth of (of linear session types, yes!)&#x2026; so it feels more natural that they would be siblings, different line, same column&#x2026; this would be visually more appealing and clear, and provide horizontal space, and scale with sessions that are more lengthy.](#org7723b4a)
+- [In some other context, we were speaking of HAMT as the core of our Persistent collection types, with a preference to use these as the default data structures. Since they use structural sharing, they can be efficient to build off of without copying. You also talked about RBB-trees as a potential contender. I wonder, in what context might we want one or the other; are we able to support both and apply to  settings where they are best suited without overburdening the user? Let's discuss their costs and benifits in a critique; and open ourselves to other cutting-edge data structures that may lay the foundations for building a solid suite to build out more infrastructure on top of (like lattice-based Propagators?).](#orgc68a1df)
+- [](#org177fda4)
+- [](#orgc441d99)
+- [How should we expect to \`def sum\` on \`[list/reduce add 0 \_]\`](#orgd1af11e)
+- [](#orgb82cfdd)
+- [The other syntax that I am overthinking is whether to support groupings](#orgb802ff3)
 
 
-<a id="orgb403d79"></a>
+<a id="orgc58d8d6"></a>
 
 # In Type Theory, explain in detail Dependent Types. First start with the theory; then practical use  cases; then examples
 
 
-<a id="orgfe44c42"></a>
+<a id="org586ff17"></a>
 
 # Dependent Types in Type Theory
 
 
-<a id="org2d08e69"></a>
+<a id="org021d8d1"></a>
 
 ## Theoretical Foundation
 
 
-<a id="org59b71a6"></a>
+<a id="org1e6419d"></a>
 
 ### Basic Idea
 
@@ -148,7 +158,7 @@ In dependent type theory, we have:
 -   **Dependent pair types (Σ-types)**: `Σ(x : A). B(x)` — a pair where the *second component's type* depends on the *first component's value*
 
 
-<a id="org153002d"></a>
+<a id="org10877b7"></a>
 
 ### Formal Definitions
 
@@ -161,7 +171,7 @@ If $B$ doesn't actually depend on $x$, this reduces to the simple function type 
 If $B$ doesn't depend on $x$, this reduces to the product type $A \times B$.
 
 
-<a id="orgef103e7"></a>
+<a id="org559b820"></a>
 
 ### The Curry-Howard Correspondence Extended
 
@@ -175,47 +185,47 @@ This allows types to express *propositions* and terms to express *proofs*.
 &#x2014;
 
 
-<a id="org474b517"></a>
+<a id="org5ddca26"></a>
 
 ## Practical Use Cases
 
 
-<a id="orgea139ad"></a>
+<a id="org778b465"></a>
 
 ### 1. **Length-Indexed Vectors**
 
 Encode the length of a list in its type, preventing index-out-of-bounds errors at compile time.
 
 
-<a id="orgc73d925"></a>
+<a id="org64f6da2"></a>
 
 ### 2. **Certified Programming**
 
 Write functions that carry proofs of correctness (e.g., a sorting function that returns a proof the output is sorted).
 
 
-<a id="org0c1285d"></a>
+<a id="orgdb709e2"></a>
 
 ### 3. **Protocol State Machines**
 
 Ensure at the type level that protocol steps happen in the correct order (e.g., can't send data before connection is established).
 
 
-<a id="org8b3f01c"></a>
+<a id="org8155516"></a>
 
 ### 4. **Units of Measure**
 
 Prevent adding meters to seconds by encoding units in types.
 
 
-<a id="org43a9b77"></a>
+<a id="org8641e10"></a>
 
 ### 5. **Database Queries**
 
 Type-safe queries where the return type depends on the schema and query structure.
 
 
-<a id="orgf95f7c0"></a>
+<a id="orgd2c59a7"></a>
 
 ### 6. **Format Strings**
 
@@ -224,12 +234,12 @@ Type-safe queries where the return type depends on the schema and query structur
 &#x2014;
 
 
-<a id="orgc231924"></a>
+<a id="org951a851"></a>
 
 ## Examples
 
 
-<a id="orgc56071b"></a>
+<a id="org259f597"></a>
 
 ### Example 1: Vectors (Idris/Agda-style pseudocode)
 
@@ -252,7 +262,7 @@ append (x :: xs) ys = x :: append xs ys
 The type `Vect 3 Int` is *different* from `Vect 5 Int`. You cannot call `head` on `Vect 0 a`.
 
 
-<a id="orgc82e69f"></a>
+<a id="org8968314"></a>
 
 ### Example 2: Finite Numbers (Safe Indexing)
 
@@ -271,7 +281,7 @@ index (FS k) (x :: xs) = index k xs
 It's *impossible* to construct a `Fin 0`, so you can't index an empty vector.
 
 
-<a id="org54609c9"></a>
+<a id="orge6672df"></a>
 
 ### Example 3: Printf (Type-safe Format Strings)
 
@@ -292,7 +302,7 @@ printf : (fmt : Format) → PrintfType fmt
 For format `FInt (FString FEnd)`, the type becomes `Int → String → String`.
 
 
-<a id="org508dc6d"></a>
+<a id="orgf22ec8b"></a>
 
 ### Example 4: Equality Type (Propositional Equality)
 
@@ -309,7 +319,7 @@ trans Refl Refl = Refl
 ```
 
 
-<a id="org52b2e28"></a>
+<a id="org8d04fea"></a>
 
 ### Example 5: Certified Sorting
 
@@ -328,7 +338,7 @@ The `**` is sigma-type notation: the function returns a list *and* a proof it's 
 &#x2014;
 
 
-<a id="org7cc0e14"></a>
+<a id="org68c0990"></a>
 
 ## Summary
 
@@ -342,7 +352,7 @@ The `**` is sigma-type notation: the function returns a list *and* a proof it's 
 Dependent types unify types and values, enabling specifications to live in types and making "if it compiles, it's correct" achievable for rich properties.
 
 
-<a id="org3c26ba1"></a>
+<a id="org345be92"></a>
 
 # Let's write a Dependent Type module in the formmal specification language, Maude.
 
@@ -351,7 +361,7 @@ Dependent types unify types and values, enabling specifications to live in types
 Maude is a reflective language based on rewriting logic. We'll build a dependent type system as a formal specification, representing typing judgments as terms and type checking as equational reduction.
 
 
-<a id="org3f2f65e"></a>
+<a id="org27a0413"></a>
 
 ## Module 1: Basic Syntax
 
@@ -406,7 +416,7 @@ endfm
 ```
 
 
-<a id="org468af9d"></a>
+<a id="orgf0fe179"></a>
 
 ## Module 2: Substitution
 
@@ -452,7 +462,7 @@ endfm
 ```
 
 
-<a id="org00126b1"></a>
+<a id="orgb9c4d5a"></a>
 
 ## Module 3: Typing Judgments
 
@@ -553,7 +563,7 @@ endfm
 ```
 
 
-<a id="org1ab33f1"></a>
+<a id="org3ea7845"></a>
 
 ## Module 4: Vectors with Dependent Types
 
@@ -597,7 +607,7 @@ endfm
 ```
 
 
-<a id="org69faad6"></a>
+<a id="org681aeb7"></a>
 
 ## Module 5: Finite Types (Safe Indexing)
 
@@ -637,7 +647,7 @@ endfm
 ```
 
 
-<a id="orgd069e17"></a>
+<a id="orgabddabf"></a>
 
 ## Module 6: Examples and Tests
 
@@ -676,14 +686,14 @@ endfm
 ```
 
 
-<a id="orgca0ec7f"></a>
+<a id="orgd89732f"></a>
 
 ### Run the examples
 
 red check(ex1) . **\*** should be: yes red check(ex2) . **\*** should be: yes red check(ex3) . **\*** should be: yes red check(ex4) . **\*** should be: yes \#+end<sub>src</sub>
 
 
-<a id="org5fd3b23"></a>
+<a id="orge1e571a"></a>
 
 ## Module 7: Propositional Equality and Transport
 
@@ -707,14 +717,14 @@ fmod EQUALITY is
 ```
 
 
-<a id="org9d8a2d8"></a>
+<a id="orgdf7a5b4"></a>
 
 # Is it fair to say that any multi-arity predicate in Prolog is a dependent type declaration (when fully concretized)?
 
 That's a perceptive observation, but I'd say it's *partially true with important caveats*.
 
 
-<a id="org27e2375"></a>
+<a id="orgd8cfa23"></a>
 
 ## The Correspondence
 
@@ -732,7 +742,7 @@ $$\text{Append} : \Pi(xs : \text{List}). \Pi(ys : \text{List}). \Pi(zs : \text{L
 where `Append xs ys zs` is inhabited iff the relation holds.
 
 
-<a id="org62d788b"></a>
+<a id="org17abb4e"></a>
 
 ## What's Right About This View
 
@@ -749,7 +759,7 @@ The *proof-relevance* differs though:
 -   Dependent types: the *proof term itself* is a first-class value
 
 
-<a id="org20eb29b"></a>
+<a id="org9c827cc"></a>
 
 ## What's Missing
 
@@ -786,7 +796,7 @@ The proof is *data* you can manipulate.
 Prolog uses negation-as-failure (open world). Type theory is closed—a type is either inhabited or not, decidably so (in many systems).
 
 
-<a id="org87ffa58"></a>
+<a id="org0620190"></a>
 
 ## A More Precise Correspondence
 
@@ -799,7 +809,7 @@ Prolog uses negation-as-failure (open world). Type theory is closed—a type is 
 | Logic variables      | Implicit arguments / unification variables |
 
 
-<a id="org722154b"></a>
+<a id="org4c2235f"></a>
 
 ## Mercury and Typed Logic Programming
 
@@ -814,7 +824,7 @@ Mercury makes this more explicit:
 Here you *do* get types, and modes specify the "direction" of computation—closer to dependent types with computational content.
 
 
-<a id="org956a07d"></a>
+<a id="orgd92a997"></a>
 
 ## Curry-Howard for Logic Programming
 
@@ -832,7 +842,7 @@ Prolog *is* doing proof search in Horn clause logic, but:
 -   No dependent types (predicates can't appear in "types" of other predicates)
 
 
-<a id="org0112cba"></a>
+<a id="orgdfa4a07"></a>
 
 ## Conclusion
 
@@ -852,14 +862,14 @@ A fairer statement might be:
 > Prolog predicates are *indexed relations* that correspond to the *propositional fragment* of dependent type theory, where proof search replaces proof construction.
 
 
-<a id="org19f1ac7"></a>
+<a id="org3a56e1b"></a>
 
 # How might we conceptualize of Session Types as compared to Linear Types?
 
 -   Session Types vs Linear Types
 
 
-<a id="orgf2223db"></a>
+<a id="orgea939db"></a>
 
 ## The Core Intuition
 
@@ -872,7 +882,7 @@ A fairer statement might be:
 Both arise from *substructural logic*, but they govern different dimensions of program behavior.
 
 
-<a id="org92f451e"></a>
+<a id="orgcd991b4"></a>
 
 ## Linear Types
 
@@ -909,7 +919,7 @@ $$\frac{\Gamma_1 \vdash e_1 : A \multimap B \quad \Gamma_2 \vdash e_2 : A}{\Gamm
 Context is *split*, not shared. Each linear variable goes to exactly one subterm.
 
 
-<a id="org33c4e12"></a>
+<a id="org2a45fff"></a>
 
 ## Session Types
 
@@ -961,7 +971,7 @@ The *type itself* encodes:
 -   *No stuck states*: Every reachable state has a valid continuation
 
 
-<a id="org6767f14"></a>
+<a id="org6f36872"></a>
 
 ## The Relationship
 
@@ -1009,7 +1019,7 @@ recv c2          -- but c2 is still at original type!
 Session types = Linear types + Protocol structure (sequencing, choice, duality)
 
 
-<a id="orgca596b5"></a>
+<a id="org5e2946c"></a>
 
 ## Comparison Table
 
@@ -1024,7 +1034,7 @@ Session types = Linear types + Protocol structure (sequencing, choice, duality)
 | *Logic origin*  | Linear logic ($\multimap$) | Linear logic + process algebra |
 
 
-<a id="org4d8f27a"></a>
+<a id="org5065d47"></a>
 
 ## Typed Process Calculus View
 
@@ -1048,7 +1058,7 @@ This gives a logical interpretation:
 -   Communication is cut elimination
 
 
-<a id="org02db426"></a>
+<a id="orgf20d696"></a>
 
 ## Maude Specification Sketch
 
@@ -1112,7 +1122,7 @@ endfm
 ```
 
 
-<a id="orgbb105ad"></a>
+<a id="orgbe5691c"></a>
 
 ## Summary
 
@@ -1125,7 +1135,7 @@ endfm
 The two are complementary: session types *need* linearity to ensure protocol integrity, and linear types gain *structure* from session types when applied to communication.
 
 
-<a id="org8bb9201"></a>
+<a id="orgc38403a"></a>
 
 # How might we imagine a logic programming language that supported first-class dependent-types, with support also for a fully realized Session Type system?
 
@@ -1134,7 +1144,7 @@ The two are complementary: session types *need* linearity to ensure protocol int
 Let us call this hypothetical language *Πρόλογος* (Prologos)—a logic programming language with first-class dependent types and session types.
 
 
-<a id="org0d93234"></a>
+<a id="orgb1bd7cb"></a>
 
 ## Design Principles
 
@@ -1144,7 +1154,7 @@ Let us call this hypothetical language *Πρόλογος* (Prologos)—a logic p
 4.  *Proof search as session orchestration*: Resolution spawns processes that synchronize
 
 
-<a id="org1a69193"></a>
+<a id="orgfa017c3"></a>
 
 ## The Core Judgment Forms
 
@@ -1161,7 +1171,7 @@ Where:
 -   Δ is the *linear* context (each channel used exactly once)
 
 
-<a id="org9d964b1"></a>
+<a id="org907b9e2"></a>
 
 ## Syntax Overview
 
@@ -1215,7 +1225,7 @@ Process ::=
 ```
 
 
-<a id="orgdc26889"></a>
+<a id="orgb56dd1b"></a>
 
 ## The Key Integration: Logic Programming + Sessions
 
@@ -1290,7 +1300,7 @@ defproc sorted_service =
 ```
 
 
-<a id="orgb9df240"></a>
+<a id="org3a61ec5"></a>
 
 ## Formal Maude Specification
 
@@ -1500,7 +1510,7 @@ fmod PROLOGOS-TYPING is
 ```
 
 
-<a id="org7897d57"></a>
+<a id="orgfa2166c"></a>
 
 # How might we envision the syntax to be for Prologos if we were a homoiconic language&#x2013;enabling ease of metaprogramming and supporting the code-as-data paradigm, as well as simplicity of syntax? I'm thinking prefix-operators, nested commands with square  brackets  \`[op &#x2026;]\` and significant whitespace.
 
@@ -1885,7 +1895,7 @@ clause session-ok
 This is the essence of homoiconicity: the language's syntax *is* its primary data structure.
 
 
-<a id="org0247820"></a>
+<a id="orgbf88951"></a>
 
 # How might a language like this enhance the capabilities of agentic AI, or be used to provide explainability in AI systems? How might this enhance orchestrated programming, or be used for parallelism?
 
@@ -1894,7 +1904,7 @@ This is the essence of homoiconicity: the language's syntax *is* its primary dat
 -   Part I: Agentic AI
 
 
-<a id="org82d2f41"></a>
+<a id="org0bbbcc2"></a>
 
 ## The Agent-as-Process Model
 
@@ -1952,7 +1962,7 @@ defproc reasoning-agent : [Proc agent-protocol]
 ```
 
 
-<a id="org2296884"></a>
+<a id="orgff49b38"></a>
 
 ## Why This Matters for Agents
 
@@ -1965,7 +1975,7 @@ defproc reasoning-agent : [Proc agent-protocol]
 | *Verifiable*    | Proof terms         | Every decision has a checkable justification |
 
 
-<a id="org2471c40"></a>
+<a id="orga9392a5"></a>
 
 ## Multi-Agent Orchestration
 
@@ -2009,7 +2019,7 @@ defproc worker : [Pi n Nat [Fin n -> Proc [dual [coordination-protocol n]]]]
 -   Part II: Explainability
 
 
-<a id="org3e5bbe9"></a>
+<a id="orgefa7140"></a>
 
 ## Proof Terms as Explanations
 
@@ -2036,7 +2046,7 @@ defproc explainable-agent : [Proc explainable-protocol]
 ```
 
 
-<a id="orgdda4860"></a>
+<a id="org88ea465"></a>
 
 ## Derivation Trees as Data
 
@@ -2071,7 +2081,7 @@ clause explain
 ```
 
 
-<a id="orgf11e41d"></a>
+<a id="org459b937"></a>
 
 ## Contrastive Explanations
 
@@ -2094,7 +2104,7 @@ defproc explain-contrast
 ```
 
 
-<a id="orgd9c354e"></a>
+<a id="orgd6e7e54"></a>
 
 ## Uncertainty and Probabilistic Explanations
 
@@ -2120,7 +2130,7 @@ clause explain-uncertainty
 -   Part III: Orchestration
 
 
-<a id="org9f73178"></a>
+<a id="org556ad22"></a>
 
 ## Workflows as Session Types
 
@@ -2153,7 +2163,7 @@ defproc full-pipeline : [Proc etl-pipeline]
 ```
 
 
-<a id="orgefc20cf"></a>
+<a id="org35456f7"></a>
 
 ## Dynamic Orchestration with Dependent Types
 
@@ -2197,7 +2207,7 @@ defproc adaptive-orchestrator : [Proc adaptive-workflow]
 ```
 
 
-<a id="orge8cb859"></a>
+<a id="org4fc444e"></a>
 
 ## Choreography vs Orchestration
 
@@ -2230,7 +2240,7 @@ def seller-protocol : Session
 -   Part IV: Parallelism
 
 
-<a id="org189e18f"></a>
+<a id="orgfa85745"></a>
 
 ## Session Types Guarantee Deadlock Freedom
 
@@ -2255,7 +2265,7 @@ defproc safe-parallel : [Proc end]
 ```
 
 
-<a id="orgc533f39"></a>
+<a id="org952027c"></a>
 
 ## Dependent Parallelism: Fork-Join with Proof
 
@@ -2288,7 +2298,7 @@ defproc par-map : [par-map-type A B n]
 ```
 
 
-<a id="orgba4c1a7"></a>
+<a id="org516b1be"></a>
 
 ## Speculative Parallelism with Session Types
 
@@ -2325,7 +2335,7 @@ defproc speculative-solve : [Pi G Goal [Pi A Type [Proc [! A end]]]]
 ```
 
 
-<a id="orge7f29e7"></a>
+<a id="org8e50736"></a>
 
 ## Data Parallelism with Proof-Carrying Results
 
@@ -2362,7 +2372,7 @@ defproc map-reduce
 ```
 
 
-<a id="org4f68ab2"></a>
+<a id="org6233560"></a>
 
 # Can we simplify our syntax in Prologos&#x2026;
 
@@ -2434,7 +2444,7 @@ Decl ::= def Name : Type
 -   Examples Rewritten
 
 
-<a id="org1bd1f17"></a>
+<a id="orgda32a1b"></a>
 
 ## Basic Channel Communication
 
@@ -2457,7 +2467,7 @@ new c [?: n Nat [! [Vec Int n] end]]
 ```
 
 
-<a id="orgedc9596"></a>
+<a id="org6b79591"></a>
 
 ## Branching with Case
 
@@ -2496,7 +2506,7 @@ case self
 ```
 
 
-<a id="org1c62792"></a>
+<a id="org8e70e99"></a>
 
 ## Parallel Composition
 
@@ -2522,7 +2532,7 @@ new c S
 ```
 
 
-<a id="org975ef1a"></a>
+<a id="org01f18d5"></a>
 
 ## Full Agent Definition
 
@@ -2568,7 +2578,7 @@ defproc reasoning-agent : [Proc agent-protocol]
 ```
 
 
-<a id="orgbd90a89"></a>
+<a id="orgad2230b"></a>
 
 ## Pipeline Orchestration
 
@@ -2583,7 +2593,7 @@ defproc full-pipeline : [Proc etl-pipeline]
 ```
 
 
-<a id="org1470dba"></a>
+<a id="orge0a514a"></a>
 
 ## Speculative Parallelism
 
@@ -2647,7 +2657,7 @@ case channel                  ← case analysis
 This gives us Python-like readability for control flow while preserving Lisp-like uniformity for data—the best of both worlds for a homoiconic language.
 
 
-<a id="org4cbd319"></a>
+<a id="orgd21ceb0"></a>
 
 # Can we further modify the syntax to have Term:Type while still maintaining homoiconicity?
 
@@ -2972,7 +2982,7 @@ While the underlying AST remains uniform:
 ```
 
 
-<a id="orgb57b469"></a>
+<a id="org2aec14b"></a>
 
 # I find the concept of dependent types hard to understand, and I get a sense that they don't really increase expressiveness, and I can't quite see their utility vs. the simplicity of not having them. What do you think in light of everything else we've been talking about?
 
@@ -2987,7 +2997,7 @@ So what *do* they add?
 -   What Dependent Types Actually Buy You
 
 
-<a id="org7e43de1"></a>
+<a id="org76de73d"></a>
 
 ## 1. Moving Runtime Checks to Compile Time
 
@@ -3011,7 +3021,7 @@ The function *cannot be called* on an empty vector. The check moved from runtime
 But here's your valid objection: *so what?* You still need to establish `n ≥ 0` somewhere. The work doesn't disappear—it moves.
 
 
-<a id="org1b40a11"></a>
+<a id="orgf95bde4"></a>
 
 ## 2. Proofs as Documentation That's Checked
 
@@ -3036,7 +3046,7 @@ But again: you could just write tests. Is the proof machinery worth it?
 -   The Honest Answer: It Depends on Your Domain
 
 
-<a id="orga00a603"></a>
+<a id="org4eaa339"></a>
 
 ## Where Dependent Types Shine
 
@@ -3048,7 +3058,7 @@ But again: you could just write tests. Is the proof machinery worth it?
 | Distributed systems     | Protocol compliance across network boundaries                      |
 
 
-<a id="org85ea082"></a>
+<a id="org32174b8"></a>
 
 ## Where They're Overkill
 
@@ -3064,7 +3074,7 @@ But again: you could just write tests. Is the proof machinery worth it?
 Here's where it gets interesting in the context of Prologos:
 
 
-<a id="orgb9ce2db"></a>
+<a id="org38dd5ae"></a>
 
 ## For Session Types: Dependency Is Natural
 
@@ -3079,7 +3089,7 @@ send-vec : !: (n : Nat) . ! [Vec Int n] . end
 Session types *want* to be dependent. The protocol "send a length, then send that many items" is inherently dependent. Without dependency, you can't express this precisely.
 
 
-<a id="orgbeaca33"></a>
+<a id="orgde496f4"></a>
 
 ## For Logic Programming: You Already Have It
 
@@ -3102,7 +3112,7 @@ append : (xs : List A) -> (ys : List A) ->
 But if you're already doing logic programming, you might ask: *why bother with static checking when I have unification?*
 
 
-<a id="org693747d"></a>
+<a id="orgd368d82"></a>
 
 ## For Agentic AI: The Proof Is the Explanation
 
@@ -3194,7 +3204,7 @@ The combination with logic programming is genuinely interesting though: proof se
 That's the real synthesis: *logic programming as proof automation for dependent types*.
 
 
-<a id="org08fc1df"></a>
+<a id="org5446b7b"></a>
 
 # Is this a type of language that you'd prefer to write in? I mean, have that compile-time feedback about correctness?
 
@@ -3294,7 +3304,7 @@ Maybe that's as close to preference as I get.
 Do *you* find yourself drawn to this style? The compile-time guarantees, the proofs-as-data, the protocol-as-type? Or does it feel like overhead for the problems you actually solve?
 
 
-<a id="orgbe614f7"></a>
+<a id="org35aad38"></a>
 
 # If we were to make this language, in what framework or language would you recommend writing the prototype/compiler, etc.?
 
@@ -3317,7 +3327,7 @@ This is a fun question. Let me think through the options seriously.
 -   My Recommendation: A Staged Approach
 
 
-<a id="org1369b77"></a>
+<a id="orgc2774ec"></a>
 
 ## Stage 1: Racket (Prototype & Exploration)
 
@@ -3369,7 +3379,7 @@ Why Racket:
 ```
 
 
-<a id="org409415e"></a>
+<a id="org034ff98"></a>
 
 ## Stage 2: Haskell or OCaml (Serious Prototype)
 
@@ -3426,7 +3436,7 @@ Why Haskell/OCaml:
 -   QuickCheck/Hedgehog for property testing
 
 
-<a id="org067f268"></a>
+<a id="org170509c"></a>
 
 ## Stage 3: Consider Self-Hosting
 
@@ -3463,7 +3473,7 @@ Self-hosting is compelling because:
 -   Specific Library Recommendations
 
 
-<a id="org8087aee"></a>
+<a id="orgd6a6ad8"></a>
 
 ## For Racket Path
 
@@ -3476,7 +3486,7 @@ Self-hosting is compelling because:
 | `rosette`          | Solver-aided programming (for proof search) |
 
 
-<a id="orge7b901a"></a>
+<a id="org38a4870"></a>
 
 ## For Haskell Path
 
@@ -3516,7 +3526,7 @@ pProc = indentBlock $ \indent ->
 ```
 
 
-<a id="orgfa76889"></a>
+<a id="org2967be2"></a>
 
 ## For Logic Engine
 
@@ -3620,7 +3630,7 @@ Logic engine  Channel runtime  Proof checker
 The key insight: don't optimize prematurely. Prologos has novel interactions between dependent types, session types, and logic programming. You'll discover design issues only by building. Racket lets you build fast.
 
 
-<a id="orgd1315e7"></a>
+<a id="orgc09fbe7"></a>
 
 # So one thing I'm contemplating on the syntax&#x2026; Is say we have
 
@@ -3879,7 +3889,7 @@ This is how mathematicians speak: "Define append where the base case is&#x2026; 
 What's your instinct?
 
 
-<a id="org0e3d861"></a>
+<a id="org780b10e"></a>
 
 # Right, but horn clauses can be disjunctive as well. Some thoughts I'm having are \`sequent\` (but that sounds too formal), or may \`&|>\` or \`&>\` ..mmm
 
@@ -4137,7 +4147,7 @@ relation append [?xs ?ys ?zs]
 What feels right to you?
 
 
-<a id="org9c14b59"></a>
+<a id="org5197092"></a>
 
 # So one other idea I'm having is to call \`relation\` \`rel\` and treat it more like an anonymous function \`lam\` or \`fn\`; and also to introduce a one-liner variable binding (like a smaller let) with the syntax \`=: Var Expr\`, and in this way mix functional code with logical code in a larger body.  And thinking of \`defr\` stand for "define relation", much like our \`defn\` function is sugar on \`def\` + \`fn\`
 
@@ -4392,7 +4402,7 @@ This makes Prologos truly a *unified* functional-logic language, not two languag
 What do you think?
 
 
-<a id="orgd455a26"></a>
+<a id="orgc9a67e2"></a>
 
 # Have you seen anything like this? My mind is reeling with excitement&#x2026;
 
@@ -4626,12 +4636,12 @@ This is genuinely novel. I'd encourage you to write this up formally.
 You're onto something real here. The excitement is justified.
 
 
-<a id="orga8a4adb"></a>
+<a id="org0d4e9c9"></a>
 
 # ---
 
 
-<a id="org571a376"></a>
+<a id="orgafcdb2d"></a>
 
 # Thank you, that suggestion saved me a lot of time now, and probably a lot of headache later (although I'll still need to grapple with optimizations from intermediate closures, but hopefully I'll be more able to support a joyful, interactive "hole-driven" development).
 
@@ -4774,7 +4784,7 @@ The placeholder `_` is probably sufficient. Keep it simple for now.
 Good luck with the implementation! The hole-driven workflow is genuinely one of the most joyful ways to program—Agda and Idris users love it. You're building something special.
 
 
-<a id="org54c6d9a"></a>
+<a id="org50f5f6d"></a>
 
 # I'm considering three different styles of syntax for type annotations in the prototype Prologos, if you can provide some comparison and consideration; or even, offer other takes. What do people find more ergonomic, what is successful in other languages that people like. How can we learn lessons and apply it here? Here are the three variants currently under consideration:
 
@@ -5119,7 +5129,7 @@ This is clean, consistent, and familiar to most programmers.
 *Go with `: Type`.* You'll thank yourself later.
 
 
-<a id="org570f835"></a>
+<a id="orgd985f53"></a>
 
 # One reason I don't have the equal sign, in part, is because of the homoiconicity;;; but I suppose that can be overcome with the proper macro. The other concern I have is the consideration of reserving \`=\` for \`unify\`. So I guess we can briefly touch on the first part; but what considerations may be out there that you're aware of, or guidance/suggestions around syntax with \`unify\` in the logic-language portion?
 
@@ -5455,7 +5465,7 @@ This keeps:
 Does this resolve your concerns?
 
 
-<a id="org802862e"></a>
+<a id="org916a006"></a>
 
 # In our current running prototype of Prologos, we are using \`()\` as groupings for further tree-depth. I'm thinking of switching it out back to \`[]\`. There's one concern, and that is having 100% support for EDN datastructures; with a planned scope spec'd out for implementing Clojure's core immutable, persistent datastructures. The issue is that \`[&#x2026;]\` means a Persistent Vector&#x2026; And I want to hear your take on overcoming this; and also perspective on the two different styles of in-line tree-depth with delimiters (or other takes?). How do you think either will take with other programmers; and how does it compare across the landscape of programming languages that you're aware of?
 
@@ -5898,7 +5908,7 @@ defn process [data : {String : Nat}] : #[Nat]
 Does this resolve the tension?
 
 
-<a id="org4851182"></a>
+<a id="orgcac1748"></a>
 
 # I agree with your aesthetic of \`[]\`. I too find them cleaner; and also when typing they're slightly more ergonomic&#x2013;the fingers still hit the same keys, but without having to hold down shift. I also agree that brackets aren't as familiar in popular languages today, but they aren't without precedent; in fact, a large inspiration to me is TCL, which uses operator prefix and homoiconic syntax with square-bracketing.
 
@@ -6244,7 +6254,7 @@ This gives you:
 Does this feel right? Would you like to explore any of these sigils further?
 
 
-<a id="orge682355"></a>
+<a id="orgccdb55c"></a>
 
 # I agree with your proposed sigils&#x2013;nice find on the Seq with the \`~[..]\`. A good rationale. One thing we have currently supported in the prototype is anonymous functions and \`defn\` use \`[]\` for argument lists. How much does this pollute our homoiconicity/code-is-data? I mean, if it's macro-expanded are we in a clean spot? What considerations should we have in mind on this point?
 
@@ -6532,7 +6542,7 @@ Clear and unambiguous!
 You're in a clean spot!
 
 
-<a id="orgbcb05dc"></a>
+<a id="org1abda14"></a>
 
 # I'm thinking of an option to alternatively specify the type layer separate from the function definition&#x2013;like how Maude does it. (I think Haskell has such a facility?) This is what I've worked out so far:
 
@@ -6899,7 +6909,7 @@ This starts to feel like Clojure's `spec` system—contracts, generative testing
 Does this analysis help? I think `spec` is the right choice, and the `|` alignment for multi-arity is particularly elegant.
 
 
-<a id="org4bd9a64"></a>
+<a id="org5b6e298"></a>
 
 # Yes, so one of the aims of Prologos is to have excellent language tooling&#x2026; And I think having something where we can offer generative testing frameworks (essentially for free with dependent types, narrowing, search resolution/propagator networks)&#x2026; there could be developers who never touch the logic-side of the language and yet could benefit from it's leverage in things like generative testing/fuzzing&#x2026; This is exciting&#x2026;
 
@@ -7262,7 +7272,7 @@ This is genuinely exciting. You're building a language where *formal methods com
 What aspect would you like to explore deeper?
 
 
-<a id="org306f156"></a>
+<a id="orgb0c29ca"></a>
 
 # Oh! And! Similar to interactive hole-driven development with dependent-types, you can \`solve\` (with a keybinding that calls the language tooling) over various properties or types of the spec, and &#x2013; right in the editor &#x2013; derive provable other properties!? Yeah!?
 
@@ -7608,7 +7618,7 @@ You're designing a language where *mathematical insight is a keybind away*. This
 What aspect should we detail next?
 
 
-<a id="org7b85471"></a>
+<a id="orge9efc44"></a>
 
 # Let's write a prompt for implementing and integrating \`spec\` according to our conversation, with examples. Let's only include the type information and comment string for now, I think&#x2026; I'm not quite sure how the \`:examples\`, \`:properties\` parses into a homoiconic data structure exactly right now&#x2026; and we don't have keywords implemented at the data layer yet. But I definitely want to see this syntax at play. We're making it right now!
 
@@ -7964,7 +7974,7 @@ defn mystery [x y] [+ x y]
 This spec form lays the groundwork for our generative testing and property discovery features. Once keywords are implemented, we can extend `spec` with `:examples`, `:properties`, and `:derive`.
 
 
-<a id="orgc2b4afb"></a>
+<a id="orgb5728d8"></a>
 
 # Let's try to define a number of point free functions with Prologos
 
@@ -8528,7 +8538,7 @@ This gives us a rich vocabulary of point-free combinators. The `spec` declaratio
 Shall I explore
 
 
-<a id="org69e7ff8"></a>
+<a id="org237ce0d"></a>
 
 # One concept I've been acquainted with in logic/proof search contexts, is "narrowing". Please explain it, and what is its relevant to what Prologos wants to be?
 
@@ -8921,7 +8931,7 @@ defn append [xs : List A, ys : List A] : List A
 Do you want to explore the implementation of narrowing further?
 
 
-<a id="orgeb6dc67"></a>
+<a id="org2685f26"></a>
 
 # So as the core substrate to run the logical language, I'm planning on building out a propagator-as-first-class fabric grounded on Lattice formalisms (LVars, Lindsey Kuper, et alii). What are your thoughts of using this as the first goto for binding resolution (as compared to SLD and SLG resolution); and are propagators general enough, and computationally efficient/feasible enough, to also support Narrowing?
 
@@ -10721,7 +10731,7 @@ propagator-tabled fib [n result]
 (define (new-cell lattice) (
 
 
-<a id="org6998d89"></a>
+<a id="orgf773b7d"></a>
 
 # How could we do polymorphic dispatch with all of this?
 
@@ -11144,7 +11154,7 @@ This gives you:
 Does this direction feel right?
 
 
-<a id="orgef6e1f0"></a>
+<a id="org47b2476"></a>
 
 # I'm interested in supporting variable arguments in functions. I have the syntax in mind, but I'm struggling to conceive of how that would be specified at the Type level. Is there a way to support var args in Prologos, with our type system?
 
@@ -11587,7 +11597,7 @@ The `A...` syntax covers 90% of use cases. The dependent/format approaches handl
 Does this design feel workable for Prologos?
 
 
-<a id="orgf274f42"></a>
+<a id="orge49b6da"></a>
 
 # Do we need to support an Iterable Type like in many popular languages? What does that give us, what does that cost us? It seems like a lot of mechanisms to keep inn mind to the programmer to me, when we have constructs like map/foldr/reduce, and the like. Let's consider all sides on this.
 
@@ -12022,7 +12032,7 @@ The Prologos way is *fewer concepts*, *more composable*, and *fits the functiona
 Does this analysis help clarify the tradeoffs?
 
 
-<a id="org77bb2b4"></a>
+<a id="org8fef15c"></a>
 
 # Rich Hickey gave a talk called "Maybe Not" where he talks about language design, history of null pointers costs (quoting  Tony Hoare), and talks about cost of Maybe / Options. Let's discuss how prolog can address, how we may want to think differently about burden to programmers while providing stronger guarentees
 
@@ -12543,7 +12553,1973 @@ This gives us:
 Does this direction resonate with your vision for Prologos?
 
 
-<a id="orgf438a64"></a>
+<a id="orgc5d40d7"></a>
+
+# So I have some more syntax design thoughts&#x2013;and exciting clarity around the use of the paren \`()\` delimiters! There are two distinct uses that I have in mind for parens.
+
+
+<a id="org82dc647"></a>
+
+## Firstly, complex types such as Function, Pi, Sigma Types, are currently struggling to be distinct in type signatures with deeply nested \`[]\`, and sometimes awkward angle-brackets. I am thinking of deprecating the \`<>\` type syntax entirely, and moving to Dependent Types, Pi, Function, Sigma types with \`()\` while "compound simple types" such as [Nat List] retain brackets&#x2026; this needs some comparison, expansion, and critique to compare and crontrast ergonomics, clarity, and aesthetics across all the various complex types. Multiplicatives need to be considered, as far as their position goes in complex tyep groupings, but :0 :1 :w remain clear and ergonomic.
+
+
+<a id="orgd25083a"></a>
+
+## The next, exciting, idea for parens is to denote "clause syntax", and to be exclusively used in function/relationship bodies to represent a relational statement.
+
+I'm calling the \`[]\` "Command Language" informally (for the functional core language); and \`()\` "Relational Language" informally for the logical core language. This creates a clear distinction to the user as to what mode/language is being invoked on each line. (Command Language can be "bare" still, but I think Relational Language should always be marked with parens). And also I have a clear idea for the syntax of "Anonymous Relationships"&#x2026; \`?()\` And also, modal logic variables&#x2026; if it's intended to be instantiated, it should either be a bare variable name (without a precedent identifier), or preceeded with \`-\` So \`-name\` or just \`name\` I'm thinking outputs should be \`?+name\` and bimodal vars \`?name\` I'm seeing so many ways that these two languages can fuse and interplay within each other!
+
+-   Syntax Refinement: Types with `()` and Relational Language with `()`
+
+This is a beautiful clarification. Let me explore and expand these ideas.
+
+&#x2014;
+
+-   Part 1: Types with `()` for Complex Types
+
+-   The Problem
+
+Current type syntax struggles with nesting:
+
+```prologos
+;; Awkward nesting
+spec map : [A -> B] -> [List A] -> List B
+spec fold : [A -> B -> B] -> B -> [List A] -> B
+spec compose : [B -> C] -> [A -> B] -> [A -> C]
+
+;; Dependent types even worse
+spec replicate : <n : Nat> -> A -> [Vec n A]
+spec append : <xs : Vec n A> -> <ys : Vec m A> -> [Vec [+ n m] A]
+```
+
+-   The Proposal
+
+| Type Form               | Old              | New              |
+|----------------------- |---------------- |---------------- |
+| Simple compound         | `[List Nat]`     | `[List Nat]`     |
+| Function                | `[A -> B]`       | `(A -> B)`       |
+| Pi (dependent function) | `<x : A> -> B`   | `(x : A) -> B`   |
+| Sigma (dependent pair)  | `<x : A> * B`    | `(x : A) * B`    |
+| Multiplicities          | `:0`, `:1`, `:w` | `:0`, `:1`, `:w` |
+| Compound applied        | `[Vec n A]`      | `[Vec n A]`      |
+
+-   Comparison
+
+```prologos
+;; ========================================
+;; Function Types: () for grouping
+;; ========================================
+
+;; Old (brackets for function types)
+spec map : [A -> B] -> [List A] -> List B
+
+;; New (parens for function types)
+spec map : (A -> B) -> [List A] -> [List B]
+
+;; Much clearer nesting
+spec compose : (B -> C) -> (A -> B) -> (A -> C)
+
+;; Old
+spec apply-twice : [[A -> A] -> A -> A]
+
+;; New
+spec apply-twice : (A -> A) -> A -> A
+
+;; ========================================
+;; Dependent Function Types (Pi)
+;; ========================================
+
+;; Old (angle brackets)
+spec replicate : <n : Nat> -> A -> [Vec n A]
+
+;; New (parens)
+spec replicate : (n : Nat) -> A -> [Vec n A]
+
+;; Multiple dependent args
+spec make-matrix : (rows : Nat) -> (cols : Nat) -> A -> [Matrix rows cols A]
+
+;; ========================================
+;; Dependent Pair Types (Sigma)
+;; ========================================
+
+;; Old
+spec parse : String -> <n : Nat> * [Vec n Token]
+
+;; New
+spec parse : String -> (n : Nat) * [Vec n Token]
+
+;; Nested
+spec complex : (x : Nat) * (y : Nat) * [Proof [< x y]]
+
+;; ========================================
+;; Multiplicities
+;; ========================================
+
+;; Linear argument (used exactly once)
+spec consume : (handle :1 FileHandle) -> Result
+
+;; Unrestricted (used any number)
+spec pure-fn : (x :w Nat) -> Nat
+
+;; Erased (compile-time only)
+spec length : (n :0 Nat) -> [Vec n A] -> Nat
+
+;; In Pi types
+spec linear-apply : (f :1 (A -> B)) -> (x :1 A) -> B
+
+;; ========================================
+;; Compound Types (Still Brackets)
+;; ========================================
+
+;; Simple application
+[List Nat]
+[Vec 5 Nat]
+[Option String]
+[Either Error Result]
+
+;; Nested
+[List [Option Nat]]
+[Map String [List User]]
+
+;; ========================================
+;; Mixed Examples
+;; ========================================
+
+;; Function taking compound, returning compound
+spec filter : (A -> Bool) -> [List A] -> [List A]
+
+;; Dependent with compound
+spec head : (xs : [List A]) -> [NonEmpty xs] -> A
+
+;; Higher-order with dependency
+spec fold-vec : (n : Nat) -> (A -> B -> B) -> B -> [Vec n A] -> B
+
+;; Complex nested
+spec traverse : (Applicative F) => (A -> [F B]) -> [List A] -> [F [List B]]
+```
+
+&#x2014;
+
+-   Visual Clarity Comparison
+
+```prologos
+;; ========================================
+;; OLD: All brackets
+;; ========================================
+
+spec bind : [M A] -> [A -> [M B]] -> [M B]
+spec ap : [M [A -> B]] -> [M A] -> [M B]
+spec sequence : [List [M A]] -> [M [List A]]
+spec replicate : <n : Nat> -> A -> [Vec n A]
+spec append : <xs : [Vec n A]> -> <ys : [Vec m A]> -> [Vec [+ n m] A]
+
+;; ========================================
+;; NEW: Parens for functions/dependent, brackets for compound
+;; ========================================
+
+spec bind : [M A] -> (A -> [M B]) -> [M B]
+spec ap : [M (A -> B)] -> [M A] -> [M B]
+spec sequence : [List [M A]] -> [M [List A]]
+spec replicate : (n : Nat) -> A -> [Vec n A]
+spec append : (xs : [Vec n A]) -> (ys : [Vec m A]) -> [Vec (+ n m) A]
+```
+
+The distinction is now clear:
+
+-   `()` = binding/abstraction (function, pi, sigma)
+-   `[]` = application/compound (type application)
+
+&#x2014;
+
+-   Part 2: Relational Language with `()`
+
+-   The Insight
+
+Two distinct sublanguages:
+
+| Language   | Delimiter    | Mode                      | Example                |
+|---------- |------------ |------------------------- |---------------------- |
+| Command    | `[]` or bare | Functional, deterministic | `[map f xs]`           |
+| Relational | `()`         | Logic, search             | `(append ?xs ?ys ?zs)` |
+
+-   Variable Modes
+
+| Syntax   | Mode             | Meaning                           |
+|-------- |---------------- |--------------------------------- |
+| `name`   | Input (grounded) | Must be bound before              |
+| `-name`  | Input (explicit) | Same as bare, explicit input      |
+| `?+name` | Output           | Will be bound by relation         |
+| `?name`  | Bidirectional    | Input or output depending on call |
+
+-   Anonymous Relations
+
+| Syntax      | Meaning                     |
+|----------- |--------------------------- |
+| `?()`       | Anonymous relation (lambda) |
+| `(rel ...)` | Named inline relation       |
+
+&#x2014;
+
+-   Examples: Command vs Relational
+
+```prologos
+;; ========================================
+;; Command Language (Functional) - [] or bare
+;; ========================================
+
+defn double [x]
+  [mult 2 x]
+
+defn process [xs]
+  let ys = [map double xs]
+  let zs = [filter even? ys]
+  [take 5 zs]
+
+;; Bare (no brackets for simple calls)
+defn double [x]
+  mult 2 x
+
+defn process [xs]
+  let ys = map double xs
+  let zs = filter even? ys
+  take 5 zs
+
+;; ========================================
+;; Relational Language (Logic) - ()
+;; ========================================
+
+defr append (?xs ?ys ?zs)
+  &> (= ?xs nil) (= ?zs ?ys)
+  &> (= ?xs (cons ?h ?t)) (= ?zs (cons ?h ?r)) (append ?t ?ys ?r)
+
+defr member (?x ?xs)
+  &> (= ?xs (cons ?x ?rest))
+  &> (= ?xs (cons ?other ?rest)) (member ?x ?rest)
+
+;; ========================================
+;; Mixing Command and Relational
+;; ========================================
+
+defn find-path [graph start end]
+  ;; Functional context
+  let edges = get-edges graph
+
+  ;; Drop into relational
+  solve-one
+    (path edges -start -end ?+result)
+
+  ;; Back to functional
+  format-path ?+result
+
+;; ========================================
+;; Variable Modes in Practice
+;; ========================================
+
+;; -name : explicitly marked input (grounded)
+;; ?+name : output (will be bound)
+;; ?name : bidirectional (input OR output)
+
+defr path (-edges -start -end ?+path)
+  &> (= -start -end)
+     (= ?+path (list -end))
+  &> (edge -edges -start ?mid)
+     (path -edges ?mid -end ?+rest)
+     (= ?+path (cons -start ?+rest))
+
+;; Calling with different modes
+(path edges 'a 'z ?+p)      ;; find path from a to z
+(path edges 'a ?+end ?+p)   ;; find all reachable from a
+(path edges ?+start 'z ?+p) ;; find all that can reach z
+```
+
+&#x2014;
+
+-   Anonymous Relations: `?()`
+
+```prologos
+;; ========================================
+;; Anonymous Relation Syntax: ?()
+;; ========================================
+
+;; Named relation
+defr even (?n)
+  &> (= ?n 0)
+  &> (= ?n (suc (suc ?m))) (even ?m)
+
+;; Anonymous relation inline
+let evens = filter ?((?n) (= 0 (mod ?n 2))) nums
+
+;; Or with solve
+solve
+  (member ?x items)
+  ?((?x) (> ?x 10))    ;; anonymous constraint
+
+;; ========================================
+;; Comparison: fn vs rel vs ?()
+;; ========================================
+
+;; Anonymous function
+fn [x] (mult 2 x)
+
+;; Anonymous relation (named form)
+rel (?x ?y) &> (= ?y (mult 2 ?x))
+
+;; Anonymous relation (short form)
+?((?x ?y) (= ?y (mult 2 ?x)))
+
+;; Even shorter for single clause
+?((?x ?y) = ?y (mult 2 ?x))
+
+;; ========================================
+;; Higher-Order Relations
+;; ========================================
+
+defr map-rel (?rel ?xs ?ys)
+  &> (= ?xs nil) (= ?ys nil)
+  &> (= ?xs (cons ?h ?t))
+     (= ?ys (cons ?h2 ?t2))
+     (?rel ?h ?h2)          ;; apply relation
+     (map-rel ?rel ?t ?t2)
+
+;; Usage with anonymous relation
+solve
+  (map-rel ?((-a ?b) :- = ?b (mult 2 -a))
+           '[1 2 3]
+           ?+result)
+;; ?+result = '[2 4 6]
+```
+
+&#x2014;
+
+-   Interplay: Functional and Relational
+
+```prologos
+;; ========================================
+;; Functional Calling Relational
+;; ========================================
+
+defn safe-head [xs]
+  ;; Use relation, get Option back
+  solve-one (head -xs ?+h)
+
+defn all-splits [xs]
+  ;; Use relation, get all results
+  solve-all (append ?+a ?+b -xs)
+
+defn find-factors [n]
+  ;; Constraint solving
+  solve-all
+    (mult ?+a ?+b -n)
+    (> ?+a 1)
+    (> ?+b 1)
+
+;; ========================================
+;; Relational Calling Functional
+;; ========================================
+
+defr valid-user (?user)
+  &> (= ?user.age ?age)
+     (>= -?age 18)           ;; functional comparison
+     (valid-email ?user.email)
+     (let hash = [hash-password ?user.password])  ;; functional call
+     (= ?user.password-hash -hash)
+
+;; ========================================
+;; Seamless Integration
+;; ========================================
+
+defn process-order [order]
+  ;; Validate with relations
+  unless (solve? (valid-order -order))
+    return (err "Invalid order")
+
+  ;; Compute with functions
+  let total = compute-total order
+  let tax = compute-tax total order.region
+
+  ;; Find shipping options with relations
+  let options = solve-all
+    (shipping-option -order.address ?+carrier ?+days ?+cost)
+    (< ?+days 5)
+
+  ;; Return functional result
+  ok {:total (+ total tax)
+      :options options}
+```
+
+&#x2014;
+
+-   Full Syntax Example
+
+\#+begin<sub>src</sub> prologos ;; `======================================` ;; Schema (Types) ;; `======================================`
+
+schema User id : UserId name : String email : Email address : Address
+
+schema Address street : String city : String zip : ZipCode
+
+;; `======================================` ;; Type Signatures with () and [] ;; `======================================`
+
+;; Function types with () spec map : (A -> B) -> [List A] -> [List B] spec filter : (A -> Bool) -> [List A] -> [List A] spec fold : (A -> B -> B) -> B -> [List A] -> B
+
+;; Dependent types with () spec replicate : (n : Nat) -> A -> [Vec n A] spec append : (xs : [Vec n A]) -> (ys : [Vec m A]) -> [Vec (+ n m) A] spec lookup : (key : K) -> (m : [Map K V]) -> [HasKey m key] -> V
+
+;; Linear types with multiplicity spec with-file : (path : String) -> (f :1 (Handle -> A)) -> [IO A] spec consume : (h :1 Handle) -> [IO Unit]
+
+;; `======================================` ;; Relations with () ;; `======================================`
+
+defr append (?xs ?ys ?zs) &> (= ?xs nil) (= ?zs ?ys) &> (= ?xs (cons ?h ?t)) (= ?zs (cons ?h ?r)) (append ?t ?ys ?r)
+
+defr member (?x ?xs) &> (= ?xs (cons ?x \_)) &> (= ?xs (cons \_ ?rest)) (member ?x ?rest)
+
+defr path (-graph -start -end ?+path) &> (= -start -end) (= ?+path [-end]) &> (edge -graph -start ?mid) (path -graph ?mid -end ?+rest) (= ?+path (cons -start ?+rest))
+
+;; `======================================` ;; Functions with [] ;; `======================================`
+
+defn map [f xs] match xs
+
+| nil -> nil                       |
+| cons h t -> cons [f h] [map f t] |
+
+defn process [data] let filtered = filter valid? data let mapped = map transform filtered take 10 mapped
+
+;; `======================================` ;; Mixing [] and () ;; `======================================`
+
+defn find-route [graph src dst] ;; Functional setup let valid-graph = validate-graph graph
+
+;; Relational search match solve-one (path -valid-graph -src -dst ?+route)
+
+| some route -> ok [format-route route] |
+| none -> err "No route found"          |
+
+defn query-users [criteria] ;; Build query relationally solve-all (user ?+u) (matches ?+u -criteria) (active ?+u) ;; Result is list of users
+
+;; `======================================` ;; Anonymous Relations ?() ;; `======================================`
+
+;; Filter with anonymous relation let adults = solve-all (member ?+u -users) ?((?+u) >= ?+u.age 18)
+
+;; Map with anonymous relation let doubled = solve-all (member ?x -nums) ?((?x ?+y) = ?+y (mult 2 ?x))
+
+
+<a id="orge6c9cfd"></a>
+
+# A few more notes on paren groupings with types&#x2026; I did some more workshoping around Pi and Sigma types, and I think the angle brackets may actually be useful to make these types clear (without throwing scary words like Pi and Sigma out to pragmatic programmers&#x2026;). But in any case, I think they need more groupings to be clear visually and clear for the parser. Also, I should mention, we changed the surface syntax to display types in an uncurried manner (But they are still curried underneath)
+
+Instead of this for Pi types: [(x : A) -> B]
+
+We write this: <(x : A) -> B>
+
+Insteard of: [(x : A) \* B]
+
+We write this: <(x : A) \* B>
+
+What do you think of this syntax? Give it a good comparison and critique against other languages and design patterns.
+
+-   Pi and Sigma Type Syntax: Critique and Comparison
+
+Let me analyze your proposal thoroughly.
+
+&#x2014;
+
+-   Your Proposal
+
+| Type Form         | Syntax           | Example                    |
+|----------------- |---------------- |-------------------------- |
+| Pi (dependent)    | `<(x : A) -> B>` | `<(n : Nat) -> [Vec n A]>` |
+| Sigma (dependent) | `<(x : A) * B>`  | `<(n : Nat) * [Vec n A]>`  |
+| Function (simple) | `(A -> B)`       | `(Nat -> Bool)`            |
+| Product (simple)  | `(A * B)`        | `(Nat * String)`           |
+
+&#x2014;
+
+-   How Other Languages Handle This
+
+| Language   | Pi Type            | Sigma Type          | Notes                    |
+|---------- |------------------ |------------------- |------------------------ |
+| Idris      | `(x : A) -> B`     | `(x : A * B)`       | No outer delimiter       |
+| Agda       | `(x : A) → B`      | `Σ A (λ x → B)`     | Unicode, explicit Σ      |
+| Coq        | `forall x : A, B`  | `sigT (fun x => B)` | Keyword-based            |
+| Lean       | `(x : A) → B`      | `Σ x : A, B`        | Unicode, Σ symbol        |
+| Haskell    | N/A (no dependent) | N/A                 | Uses GADTs as workaround |
+| TypeScript | N/A                | N/A                 | No dependent types       |
+| Scala 3    | Dependent methods  | Tuples              | Limited dependent types  |
+
+&#x2014;
+
+-   Analysis: Your Syntax
+
+-   Strengths
+
+```prologos
+;; 1. VISUALLY DISTINCT from simple types
+(Nat -> Bool)           ;; simple function
+<(n : Nat) -> [Vec n A]>  ;; dependent function (Pi)
+
+(Nat * String)          ;; simple product
+<(n : Nat) * [Vec n A]>   ;; dependent pair (Sigma)
+
+;; The <...> "wrapping" makes dependency obvious
+
+;; 2. NO SCARY KEYWORDS
+;; Instead of:
+forall (n : Nat) . Vec n A      ;; Coq-style
+Π (n : Nat) . Vec n A           ;; Math-style
+
+;; You have:
+<(n : Nat) -> [Vec n A]>        ;; Looks like "fancy function"
+
+;; 3. CONSISTENT STRUCTURE
+;; Both Pi and Sigma follow same pattern:
+<(binder : Type) CONNECTOR ResultType>
+
+;; 4. PARSER CLARITY
+;; The < signals "dependent type coming"
+;; The ( signals "here's the binding"
+;; The -> or * signals "here's the body"
+;; The > closes it
+
+;; 5. UNCURRIED SURFACE, CURRIED CORE
+;; Surface (what user writes):
+spec foo : <(x : A, y : B) -> C>
+
+;; Core (what compiler sees):
+;; Π(x : A). Π(y : B). C
+```
+
+-   Potential Concerns
+
+```prologos
+;; 1. DOUBLE DELIMITERS
+<(x : A) -> B>
+;; The <( and )> feel slightly heavy
+;; But: this IS a heavy/important type construct
+
+;; 2. ANGLE BRACKET OVERLOAD?
+;; Are <> used elsewhere?
+;; - Type parameters: No, you use {} for implicit args
+;; - Comparison operators: < and > but spaced differently
+;; Verdict: Should be unambiguous in context
+
+;; 3. NESTED DEPENDENT TYPES
+<(x : A) -> <(y : [B x]) -> [C x y]>>
+;; Gets nested, but still clear
+;; The <...> clearly delineate each Pi
+
+;; 4. MIXING WITH OTHER TYPES
+spec complex : <(n : Nat) -> (A -> [Vec n A])>
+;; Function returning simple function
+;; Clear: outer <> is Pi, inner () is simple function
+```
+
+&#x2014;
+
+-   Comparison: Your Syntax vs Alternatives
+
+-   Option A: Your Proposal `<(x : A) -> B>`
+
+```prologos
+spec replicate : <(n : Nat) -> A -> [Vec n A]>
+spec append : <(xs : [Vec n A]) -> (ys : [Vec m A]) -> [Vec (+ n m) A]>
+spec parse : String -> <(n : Nat) * [Vec n Token]>
+spec lookup : <(k : Key) -> (m : [Map k V]) -> [HasKey m k] -> V>
+```
+
+*Pros:*
+
+-   Clear visual distinction
+-   No keywords to learn
+-   Parser-friendly
+
+*Cons:*
+
+-   Double delimiters `<(` and `)>`
+-   Slightly verbose
+
+-   Option B: Keyword-Based (Coq/Lean-style)
+
+```prologos
+spec replicate : forall (n : Nat) . A -> [Vec n A]
+spec append : forall (xs : [Vec n A]) (ys : [Vec m A]) . [Vec (+ n m) A]
+spec parse : String -> exists (n : Nat) . [Vec n Token]
+spec lookup : forall (k : Key) (m : [Map k V]) . [HasKey m k] -> V
+```
+
+*Pros:*
+
+-   Explicit meaning
+-   Familiar to theorem prover users
+
+*Cons:*
+
+-   `forall` and `exists` are "scary words"
+-   More verbose
+-   Doesn't fit Lisp-like aesthetic
+
+-   Option C: Unicode Symbols (Agda-style)
+
+```prologos
+spec replicate : Π(n : Nat). A → [Vec n A]
+spec append : Π(xs : [Vec n A]). Π(ys : [Vec m A]). [Vec (+ n m) A]
+spec parse : String → Σ(n : Nat). [Vec n Token]
+spec lookup : Π(k : Key). Π(m : [Map k V]). [HasKey m k] → V
+```
+
+*Pros:*
+
+-   Mathematically precise
+-   Compact
+
+*Cons:*
+
+-   Requires Unicode input
+-   Π and Σ are intimidating
+-   Mainstream programmers don't know these symbols
+
+-   Option D: Just Use Parens (Idris-style)
+
+```prologos
+spec replicate : (n : Nat) -> A -> [Vec n A]
+spec append : (xs : [Vec n A]) -> (ys : [Vec m A]) -> [Vec (+ n m) A]
+spec parse : String -> (n : Nat ** [Vec n Token])
+spec lookup : (k : Key) -> (m : [Map k V]) -> [HasKey m k] -> V
+```
+
+*Pros:*
+
+-   Simple
+-   Familiar-looking
+
+*Cons:*
+
+-   Hard to distinguish dependent from non-dependent at a glance
+-   `(n : Nat) -> B` vs `(Nat -> B)` are visually similar
+-   `*` for Sigma is non-obvious
+
+&#x2014;
+
+-   Side-by-Side Comparison
+
+```prologos
+;; ========================================
+;; Example: Vector operations
+;; ========================================
+
+;; Your Proposal
+spec head      : <(xs : [Vec (suc n) A]) -> A>
+spec tail      : <(xs : [Vec (suc n) A]) -> [Vec n A]>
+spec append    : <(xs : [Vec n A]) -> (ys : [Vec m A]) -> [Vec (+ n m) A]>
+spec replicate : <(n : Nat) -> A -> [Vec n A]>
+
+;; Idris-style (parens only)
+spec head      : (xs : [Vec (suc n) A]) -> A
+spec tail      : (xs : [Vec (suc n) A]) -> [Vec n A]
+spec append    : (xs : [Vec n A]) -> (ys : [Vec m A]) -> [Vec (+ n m) A]
+spec replicate : (n : Nat) -> A -> [Vec n A]
+
+;; Coq-style (keywords)
+spec head      : forall (xs : [Vec (suc n) A]) . A
+spec tail      : forall (xs : [Vec (suc n) A]) . [Vec n A]
+spec append    : forall (xs : [Vec n A]) (ys : [Vec m A]) . [Vec (+ n m) A]
+spec replicate : forall (n : Nat) . A -> [Vec n A]
+
+;; ========================================
+;; Example: Sigma types (dependent pairs)
+;; ========================================
+
+;; Your Proposal
+spec parse      : String -> <(n : Nat) * [Vec n Token]>
+spec filter-dep : <(xs : [List A]) -> <(ys : [List A]) * [Sublist ys xs]>>
+
+;; Idris-style
+spec parse      : String -> (n : Nat ** [Vec n Token])
+spec filter-dep : (xs : [List A]) -> (ys : [List A] ** [Sublist ys xs])
+
+;; Coq-style
+spec parse      : String -> exists (n : Nat) . [Vec n Token]
+spec filter-dep : forall (xs : [List A]) . exists (ys : [List A]) . [Sublist ys xs]
+```
+
+&#x2014;
+
+-   My Assessment
+
+| Criterion             | Your `<()>` | Idris `()`   | Coq Keywords |
+|--------------------- |----------- |------------ |------------ |
+| Visual distinction    | ✅ Excellent | ⚠️ Subtle     | ✅ Explicit  |
+| Beginner friendliness | ✅ Good     | ⚠️ Confusing  | ❌ Scary     |
+| Parsing clarity       | ✅ Excellent | ⚠️ Context    | ✅ Good      |
+| Typing ergonomics     | ⚠️ Heavier   | ✅ Light     | ⚠️ Verbose    |
+| Aesthetic consistency | ✅ Good     | ✅ Good      | ⚠️ Mixed      |
+| Nested readability    | ✅ Good     | ⚠️ Hard       | ⚠️ Hard       |
+
+&#x2014;
+
+-   Refinement Suggestions
+
+-   1. Consider Lighter Inner Syntax
+
+```prologos
+;; Current (your proposal)
+<(n : Nat) -> [Vec n A]>
+
+;; Alternative: drop inner parens for single binder?
+<n : Nat -> [Vec n A]>
+
+;; Multiple binders still use parens
+<(n : Nat, m : Nat) -> [Matrix n m A]>
+```
+
+But this might make parsing harder. Your current syntax is unambiguous.
+
+-   2. Uncurried Surface for Multiple Binders
+
+```prologos
+;; Single binder
+<(n : Nat) -> [Vec n A]>
+
+;; Multiple binders (uncurried surface)
+<(n : Nat, m : Nat) -> [Matrix n m A]>
+
+;; Desugars to (curried core)
+Π(n : Nat). Π(m : Nat). Matrix n m A
+```
+
+This is clean and matches your "uncurried surface, curried core" philosophy.
+
+-   3. Sigma with Same Pattern
+
+```prologos
+;; Single dependent pair
+<(n : Nat) * [Vec n Token]>
+
+;; Nested (telescope)
+<(n : Nat, xs : [Vec n A]) * [Sorted xs]>
+
+;; Reads as: "there exist n and xs such that xs is sorted"
+```
+
+&#x2014;
+
+-   Full Type Syntax Summary
+
+```prologos
+;; ========================================
+;; Type Syntax Overview
+;; ========================================
+
+;; Simple Types (atoms)
+Nat
+Bool
+String
+
+;; Compound Types (brackets)
+[List Nat]
+[Vec 5 Bool]
+[Option String]
+[Map Key Value]
+
+;; Simple Function Types (parens)
+(Nat -> Bool)
+(A -> B -> C)
+(String -> Nat -> Bool)
+
+;; Simple Product Types (parens)
+(Nat * String)
+(A * B * C)
+
+;; Dependent Function Types / Pi (angle + parens)
+<n : Nat -> [Vec n A]>
+<xs : [List A] -> [NonEmpty xs] -> A>
+<(n : Nat, m : Nat) -> [Matrix n m A]>
+
+;; Dependent Pair Types / Sigma (angle + parens)
+<n : Nat * [Vec n A]>
+<xs : [List A] * [Sorted xs]>
+<(x : A, y : B) * [Related x y]>
+
+;; Linear / Multiplicity Annotations
+(handle :1 FileHandle) -> Result     ;; linear (use exactly once)
+(config :w Config) -> App            ;; unrestricted
+(proof :0 [P x]) -> [Q x]            ;; erased (compile-time only)
+
+;; With implicit arguments {}
+{A : Type} -> (xs : [List A]) -> Nat
+<{A : Type} (n : Nat) -> [Vec n A]>
+
+;; Union Types
+(Nat | String)
+(Result | Error | Timeout)
+
+;; Nullable
+A?                                   ;; same as (A | Nil)
+
+;; ========================================
+;; Full Examples
+;; ========================================
+
+spec map
+  "Apply function to each element."
+  {A B : Type} -> (A -> B) -> [List A] -> [List B]
+
+spec replicate
+  "Create vector of n copies."
+  {A : Type} -> <(n : Nat) -> A -> [Vec n A]>
+
+spec append
+  "Append two vectors, length is sum."
+  {A : Type} {n m : Nat} ->
+    <(xs : [Vec n A]) -> (ys : [Vec m A]) -> [Vec (+ n m) A]>
+
+spec head
+  "First element of non-empty vector."
+  {A : Type} {n : Nat} ->
+    <(xs : [Vec (suc n) A]) -> A>
+
+spec parse
+  "Parse string, return token count and tokens."
+  String -> <(n : Nat) * [Vec n Token]>
+
+spec filter-length
+  "Filter with proof result is smaller."
+  {A : Type} ->
+    (A -> Bool) ->
+    <(xs : [List A]) -> <(ys : [List A]) * [<= (length ys) (length xs)]>>
+
+spec with-file
+  "Open file, use linearly, close."
+  (path : String) -> (f :1 (Handle -> A)) -> [IO A]
+```
+
+&#x2014;
+
+-   Verdict
+
+Your syntax `<(x : A) -> B>` and `<(x : A) * B>` is *well-designed*:
+
+| Aspect          | Assessment                                  |
+|--------------- |------------------------------------------- |
+| Visual clarity  | ✅ `<>` clearly marks dependent types       |
+| No jargon       | ✅ No Π/Σ/forall/exists keywords            |
+| Parser friendly | ✅ Unambiguous delimiters                   |
+| Consistent      | ✅ Same pattern for Pi and Sigma            |
+| Extensible      | ✅ Works with multiplicities, implicits     |
+| Learning curve  | ✅ Approachable for non-theorem-prover users |
+
+I think this is a *good choice* for Prologos.
+
+
+<a id="org50b0d66"></a>
+
+# So let's focus in real quick on the linear types&#x2026; we haven't really given them too much love yet&#x2026; above where you write \`(handle :1 FileHandle) -> Result\`, what is \`handle\` here? is that a def name? Whence is that proposed?
+
+-   Linear Types: Clarifying the Syntax
+
+You're right to question this. Let me clarify the confusion.
+
+&#x2014;
+
+-   The Problem
+
+In the example:
+
+```prologos
+(handle :1 FileHandle) -> Result
+```
+
+`handle` appears to be a *variable name* in what should be a *type signature*. This is mixing levels inappropriately.
+
+&#x2014;
+
+-   Where Did This Come From?
+
+I was conflating two different things:
+
+| Context             | What We're Expressing           | Example                           |
+|------------------- |------------------------------- |--------------------------------- |
+| Type signature      | Multiplicity of a type position | `FileHandle :1 -> Result`         |
+| Function definition | Binding with multiplicity       | `defn foo [handle :1 FileHandle]` |
+
+&#x2014;
+
+-   Clarifying: Where Do Multiplicities Go?
+
+-   Option A: On the Arrow (Quantitative Type Theory Style)
+
+The multiplicity annotates the *arrow*, not the type:
+
+```prologos
+;; Syntax: A -n> B means "use A exactly n times to produce B"
+
+FileHandle -1> Result      ;; linear: use handle once
+FileHandle -w> Result      ;; unrestricted: use any times
+FileHandle -0> Result      ;; erased: can't use at runtime
+
+;; Multi-argument
+FileHandle -1> Config -w> Result
+
+;; In spec
+spec close : FileHandle -1> IO Unit
+spec read : FileHandle -w> String    ;; can read multiple times
+```
+
+-   Option B: On the Type (Rust/Linear Haskell Style)
+
+The multiplicity annotates the type itself:
+
+```prologos
+;; Syntax: T :n means "value of type T with multiplicity n"
+
+FileHandle :1 -> Result
+Config :w -> FileHandle :1 -> Result
+
+;; In spec
+spec close : FileHandle :1 -> IO Unit
+spec read : FileHandle :w -> String
+```
+
+-   Option C: In the Binder (Definition Site)
+
+Multiplicity only appears in function *definitions*, not in type signatures:
+
+```prologos
+;; Spec doesn't mention multiplicity
+spec close : FileHandle -> IO Unit
+
+;; Definition declares linear usage
+defn close [handle :1 FileHandle] : IO Unit
+  ...
+```
+
+&#x2014;
+
+-   What Other Languages Do
+
+| Language       | Syntax               | Where                |
+|-------------- |-------------------- |-------------------- |
+| Linear Haskell | `a %1 -> b`          | On the arrow         |
+| Idris 2        | `(1 x : A) -> B`     | On the binder        |
+| Rust           | Ownership (implicit) | Type system + borrow |
+| Clean          | `*World`             | Uniqueness marker    |
+| Granule        | `A [1] -> B`         | Bracketed annotation |
+
+&#x2014;
+
+-   Recommendation for Prologos
+
+I think multiplicities should appear in *two places*:
+
+&#x2014;
+
+-   1. In Type Signatures: On the Arrow
+
+```prologos
+;; Arrow carries multiplicity
+A -1> B      ;; linear
+A -w> B      ;; unrestricted (omega)
+A -0> B      ;; erased
+
+;; Or with explicit symbols
+A ->1 B      ;; alternative
+A ->w B
+A ->0 B
+
+;; Or superscript-like
+A -¹> B      ;; if we want unicode
+A -ʷ> B
+A -⁰> B
+```
+
+-   2. In Definitions: On the Binder
+
+```prologos
+;; Multiplicity on the variable
+defn close [handle :1 FileHandle] : IO Unit
+  ...
+
+;; Meaning: handle must be used exactly once in the body
+```
+
+&#x2014;
+
+-   Full Syntax Proposal
+
+```prologos
+;; ========================================
+;; Type Signatures
+;; ========================================
+
+;; Simple linear function
+spec close : FileHandle -1> [IO Unit]
+
+;; Multiple arguments with mixed multiplicity
+spec with-file : String -w> (FileHandle -1> A) -1> [IO A]
+;;                 ^          ^                ^
+;;                 path       handler          handler used once
+;;                 (copy ok)  (must close)
+
+;; Unrestricted (normal functions)
+spec add : Nat -w> Nat -w> Nat
+;; Or just omit (default is -w>)
+spec add : Nat -> Nat -> Nat
+
+;; Erased (compile-time only)
+spec length : {n :0 Nat} -> [Vec n A] -w> Nat
+;;             ^
+;;             n is erased, not available at runtime
+
+;; ========================================
+;; Function Definitions
+;; ========================================
+
+;; Linear argument in definition
+defn close [handle :1 FileHandle] : [IO Unit]
+  file-close handle
+  ;; handle used exactly once ✓
+
+;; Error: linear variable used twice
+defn bad [handle :1 FileHandle] : [IO Unit]
+  file-read handle    ;; use 1
+  file-close handle   ;; use 2 -- ERROR!
+
+;; Error: linear variable not used
+defn also-bad [handle :1 FileHandle] : [IO Unit]
+  pure unit           ;; handle never used -- ERROR!
+
+;; ========================================
+;; Examples
+;; ========================================
+
+spec open : String -w> [IO FileHandle]
+spec close : FileHandle -1> [IO Unit]
+spec read : FileHandle -w> [IO String]
+spec write : String -w> FileHandle -w> [IO Unit]
+
+;; Safe file handling
+spec with-file : String -w> (FileHandle -1> [IO A]) -1> [IO A]
+
+defn with-file [path :w String, action :1 (FileHandle -1> [IO A])] : [IO A]
+  let handle = open path
+  let result = action handle    ;; handle consumed by action
+  pure result
+  ;; action ensures handle is closed
+
+;; Usage
+with-file "data.txt" [fn [h :1 FileHandle]
+  let contents = read h
+  close h               ;; must close!
+  pure contents]
+```
+
+&#x2014;
+
+-   Multiplicity Annotations Summary
+
+| Syntax         | Meaning               | Use                |
+|-------------- |--------------------- |------------------ |
+| `-1>` or `->1` | Linear (exactly once) | Resources, handles |
+| `-w>` or `->`  | Unrestricted (any)    | Normal functions   |
+| `-0>` or `->0` | Erased (zero times)   | Proofs, type-level |
+
+| Context           | Syntax         | Example      |
+|----------------- |-------------- |------------ |
+| Type signature    | On arrow       | `A -1> B`    |
+| Definition binder | After variable | `[x :1 A]`   |
+| Implicit argument | In braces      | `{n :0 Nat}` |
+
+&#x2014;
+
+-   Alternative: Unified Syntax
+
+If you prefer consistency, use `:n` everywhere:
+
+```prologos
+;; In types: annotate the argument position
+spec close : (FileHandle :1) -> [IO Unit]
+spec read : (FileHandle :w) -> [IO String]
+spec length : {Nat :0} -> [Vec n A] -> Nat
+
+;; In definitions: annotate the binder
+defn close [handle :1 FileHandle] : [IO Unit]
+  ...
+```
+
+But this requires parens around the type, which is slightly heavier.
+
+&#x2014;
+
+-   My Recommendation
+
+Use `-n>` on arrows for types, `:n` on binders for definitions:
+
+```prologos
+;; Types: multiplicity on arrow
+spec close : FileHandle -1> [IO Unit]
+spec pure : A -w> [IO A]
+spec ghost : [Proof P] -0> [HasProof P]
+
+;; Definitions: multiplicity on binder
+defn close [h :1 FileHandle] : [IO Unit]
+  ...
+```
+
+This is clean, unambiguous, and consistent.
+
+Does this clarify the linear types story?
+
+
+<a id="org80c40a3"></a>
+
+# 
+
+-   Pi and Sigma Type Syntax: `<(x : A) -> B>` Analysis
+
+Let me analyze this proposal thoroughly.
+
+&#x2014;
+
+-   Your Proposal
+
+| Type Form           | Syntax           | Example                      |
+|------------------- |---------------- |---------------------------- |
+| Pi (dependent fn)   | `<(x : A) -> B>` | `<(n : Nat) -> [Vec n A]>`   |
+| Sigma (dependent Σ) | `<(x : A) * B>`  | `<(n : Nat) * [Vec n A]>`    |
+| Simple function     | `(A -> B)`       | `(Nat -> Bool)`              |
+| Simple product      | `(A * B)`        | `(Nat * String)`             |
+| Type application    | `[F A]`          | `[List Nat]`, `[Vec 5 Bool]` |
+
+&#x2014;
+
+-   What Other Languages Do
+
+| Language   | Pi Type             | Sigma Type              | Notes                     |
+|---------- |------------------- |----------------------- |------------------------- |
+| Agda       | `(x : A) → B`       | `Σ (x : A) B` or `Σ[]`  | Unicode arrows, Σ symbol  |
+| Idris      | `(x : A) -> B`      | `(x : A * B)`           | #ERROR                    |
+| Coq        | `forall (x : A), B` | `sigT` or `{x : A & B}` | Verbose keywords          |
+| Lean       | `(x : A) → B`       | `Σ x : A, B` or `⟨,⟩`   | Unicode, sigma notation   |
+| Haskell    | N/A (simulated)     | N/A                     | No native dependent types |
+| Typescript | N/A                 | N/A                     | No dependent types        |
+| Rust       | N/A                 | N/A                     | No dependent types        |
+
+&#x2014;
+
+-   Analysis of Your Syntax
+
+-   Strengths
+
+-   *Clear Delimiters*
+
+```prologos
+;; Pi type is visually distinct
+<(n : Nat) -> [Vec n A]>
+
+;; vs ambiguous
+(n : Nat) -> [Vec n A]    ;; Is this Pi or something else?
+```
+
+The `<...>` wrapper says: "this is a dependent/binding type form."
+
+1.  *No Scary Keywords*
+
+```prologos
+;; Agda/Coq style (intimidating to newcomers)
+forall (n : Nat) . Vec n A
+Π (n : Nat) . Vec n A
+
+;; Your style (structural, no jargon)
+<(n : Nat) -> [Vec n A]>
+```
+
+Programmers see arrow `->` and star `*` which are familiar.
+
+1.  *Parser Clarity*
+
+```prologos
+;; Unambiguous parse
+<(x : A) -> B>     ;; clearly a Pi
+(A -> B)           ;; clearly a simple function
+[F A]              ;; clearly type application
+```
+
+No lookahead needed to distinguish forms.
+
+1.  *Consistent Grouping*
+
+```prologos
+;; The pattern: <(binding) -> result>
+<(x : A) -> B>             ;; single binder
+<(x : A) -> (y : B) -> C>  ;; multiple (curried)
+<(x : A) (y : B) -> C>     ;; multiple (grouped)
+```
+
+&#x2014;
+
+-   Potential Concerns
+
+-   1. Angle Bracket Overload?
+
+If you use `<>` elsewhere (generics, comparison), could conflict:
+
+```prologos
+;; Could this be confusing?
+<(x : A) -> B>     ;; Pi type
+map<Nat>           ;; if you had generic syntax
+x < y              ;; comparison
+```
+
+*Mitigation*: You're not using `<>` for generics (you use `[]`), so this is fine.
+
+-   2. Visual Weight
+
+```prologos
+;; Heavily nested
+spec foo : <(n : Nat) -> <(m : Nat) -> [Matrix n m A]>>
+
+;; vs Agda style
+spec foo : (n : Nat) → (m : Nat) → Matrix n m A
+```
+
+The angle brackets add visual noise.
+
+*Mitigation*: Real code rarely nests this deep. And the clarity is worth it.
+
+-   3. Sigma Readability
+
+```prologos
+;; Your Sigma
+<(n : Nat) * [Vec n A]>
+
+;; Idris style
+(n : Nat ** Vec n A)
+
+;; Which reads better?
+```
+
+I think yours is actually clearer: the `*` for product is familiar, and the `<>` signals dependency.
+
+&#x2014;
+
+-   Comparison Table
+
+| Criterion         | Agda/Idris         | Your Syntax       | Winner     |
+|----------------- |------------------ |----------------- |---------- |
+| Familiarity       | Academic only      | Uses `->` and `*` | Prologos   |
+| No jargon         | `forall`, `Π`, `Σ` | Just punctuation  | Prologos   |
+| Parse clarity     | Needs context      | Unambiguous       | Prologos   |
+| Visual lightness  | Lighter (no `<>`)  | Heavier           | Agda/Idris |
+| Beginner friendly | Intimidating       | Approachable      | Prologos   |
+| Nested types      | Flows nicely       | More brackets     | Agda/Idris |
+
+&#x2014;
+
+-   Full Examples
+
+```prologos
+;; ========================================
+;; Pi Types (Dependent Functions)
+;; ========================================
+
+;; Simple: vector of n elements
+spec replicate : <(n : Nat) -> A -> [Vec n A]>
+
+;; Multiple dependent args
+spec make-matrix : <(rows : Nat) -> (cols : Nat) -> A -> [Matrix rows cols A]>
+
+;; Dependent on value AND type
+spec cast : <(A : Type) -> (B : Type) -> [Castable A B] -> A -> B>
+
+;; With constraints
+spec sort : <(A : Type) -> [Ord A] => [List A] -> [List A]>
+
+;; ========================================
+;; Sigma Types (Dependent Pairs)
+;; ========================================
+
+;; Parse result: length-indexed
+spec parse : String -> <(n : Nat) * [Vec n Token]>
+
+;; Existential: some vector (unknown length)
+spec read-vec : Handle -> <(n : Nat) * [Vec n Byte]>
+
+;; Nested dependent pair
+spec factor : Nat -> <(p : Nat) * (q : Nat) * [Equal (mult p q) n]>
+
+;; ========================================
+;; Non-Dependent (Simple)
+;; ========================================
+
+;; Simple function (no dependency)
+spec map : (A -> B) -> [List A] -> [List B]
+
+;; Simple product (no dependency)
+spec swap : (A * B) -> (B * A)
+
+;; ========================================
+;; Mixed Examples
+;; ========================================
+
+;; Function returning dependent pair
+spec split-at : <(n : Nat) -> [List A] -> ([Vec n A] * [List A])>
+
+;; Dependent function returning simple pair
+spec bounds : <(xs : [Vec n A]) -> (A * A)>
+
+;; Higher-order with dependency
+spec fold-vec : <(n : Nat) -> (A -> B -> B) -> B -> [Vec n A] -> B>
+
+;; ========================================
+;; With Multiplicities
+;; ========================================
+
+;; Linear dependent function
+spec consume-vec : <(n : Nat) -> (xs :1 [Vec n A]) -> [Result A]>
+
+;; Erased size parameter
+spec length : <(n :0 Nat) -> [Vec n A] -> Nat>
+```
+
+&#x2014;
+
+-   Edge Cases and Clarity
+
+```prologos
+;; ========================================
+;; Distinguishing Similar Forms
+;; ========================================
+
+;; Pi type (dependent)
+<(x : A) -> B>
+
+;; Simple function type (non-dependent)
+(A -> B)
+
+;; The difference is:
+;;   - Pi: x is bound, can appear in B
+;;   - Simple: no binding, just A to B
+
+;; Example showing difference:
+<(n : Nat) -> [Vec n A]>   ;; n appears in result: MUST be Pi
+(Nat -> [List A])          ;; no dependency: simple function
+
+;; ========================================
+;; Sigma vs Product
+;; ========================================
+
+;; Sigma (dependent pair)
+<(n : Nat) * [Vec n A]>
+
+;; Simple product (non-dependent)
+(Nat * [List A])
+
+;; The difference:
+;;   - Sigma: first component (n) appears in second type
+;;   - Product: types are independent
+
+;; ========================================
+;; Nested Types
+;; ========================================
+
+;; Function taking Pi, returning Sigma
+spec foo : <(f : <(x : A) -> [P x]>) -> <(y : B) * [Q f y]>>
+
+;; Clearer with newlines
+spec foo
+  : <(f : <(x : A) -> [P x]>)
+  -> <(y : B) * [Q f y]>>
+
+;; ========================================
+;; Implicit Arguments (If You Add Them)
+;; ========================================
+
+;; Explicit Pi
+<(n : Nat) -> [Vec n A] -> A>
+
+;; Implicit Pi (curly braces inside angle?)
+<{n : Nat} -> [Vec n A] -> A>
+
+;; Or separate syntax
+spec head : {n : Nat} -> <(xs : [Vec (suc n) A]) -> A>
+```
+
+&#x2014;
+
+-   Alternative: Double Angle for Sigma?
+
+One possible refinement:
+
+```prologos
+;; Pi: single angle
+<(x : A) -> B>
+
+;; Sigma: double angle or different marker
+<<(x : A) * B>>   ;; too heavy?
+<(x : A) & B>     ;; ampersand for "and/with"?
+<(x : A) ∧ B>     ;; unicode and?
+```
+
+But I think your original is fine—the `*` vs `->` distinction is clear enough.
+
+&#x2014;
+
+-   My Assessment
+
+| Aspect              | Score | Notes                                  |
+|------------------- |----- |-------------------------------------- |
+| Clarity             | 9/10  | Very clear what's dependent vs not     |
+| Parser friendliness | 10/10 | Unambiguous, easy to parse             |
+| Beginner friendly   | 8/10  | No jargon, but `<>` might seem unusual |
+| Visual aesthetics   | 7/10  | Slightly heavy, but acceptable         |
+| Consistency         | 9/10  | Clear pattern: `<(binding) -> result>` |
+| Expressiveness      | 10/10 | Handles all cases                      |
+
+*Overall: This is a good design.*
+
+&#x2014;
+
+-   Final Syntax Summary
+
+```prologos
+;; ========================================
+;; Type Syntax Summary
+;; ========================================
+
+;; Simple types
+Nat
+Bool
+String
+
+;; Type application (compound)
+[List Nat]
+[Vec 5 Bool]
+[Map String User]
+
+;; Simple function
+(A -> B)
+(Nat -> Bool)
+(A -> B -> C)
+
+;; Simple product
+(A * B)
+(Nat * String * Bool)
+
+;; Pi type (dependent function)
+<(x : A) -> B>
+<(n : Nat) -> [Vec n A]>
+<(n : Nat) -> (m : Nat) -> [Matrix n m A]>
+
+;; Sigma type (dependent pair)
+<(x : A) * B>
+<(n : Nat) * [Vec n A]>
+<(p : Nat) * (q : Nat) * [Equal (mult p q) n]>
+
+;; With multiplicities
+<(x :1 A) -> B>      ;; linear
+<(x :0 A) -> B>      ;; erased
+<(x :w A) -> B>      ;; unrestricted (default)
+
+;; With implicit arguments (if supported)
+{A : Type} -> <(xs : [List A]) -> [NonEmpty xs] -> A>
+```
+
+&#x2014;
+
+-   Recommendation
+
+*Go with this syntax.* It's:
+
+-   ✅ Clear (no Pi/Sigma jargon)
+-   ✅ Unambiguous (parser-friendly)
+-   ✅ Consistent (binding pattern)
+-   ✅ Familiar (uses `->` and `*`)
+-   ✅ Distinct (`<>` for dependent, `()` for simple)
+
+The slight visual heaviness is a worthwhile tradeoff for clarity, especially for a language aiming to be accessible to pragmatic programmers who haven't studied type theory.
+
+
+<a id="orgf51d84c"></a>
+
+# Let's explicate on Generic Types. To be honest, it's one type system/paradigm with which I'm not well acquainted. What are they specifically, how are they used, what critique of various generics in different languages can we provide? Are they necessary, do they fit into Prologos, or is there a more fundamental re-thinking or approach we can offer that accomplishes the same thing in an elegant and clear way with what we have built and specced out so far?
+
+-   Generic Types: A Deep Dive
+
+Let me explain generics from first principles, critique various implementations, and explore whether Prologos needs them at all.
+
+&#x2014;
+
+-   What Are Generics?
+
+Generics allow you to write code that works over *many types* without committing to a specific one.
+
+```java
+// Without generics: separate functions for each type
+int firstInt(List<Integer> xs) { return xs.get(0); }
+String firstString(List<String> xs) { return xs.get(0); }
+
+// With generics: one function works for all types
+<T> T first(List<T> xs) { return xs.get(0); }
+
+// Usage
+first(listOfInts)     // T = Integer
+first(listOfStrings)  // T = String
+```
+
+The `T` is a /type parameter/—a placeholder that gets filled in at use sites.
+
+&#x2014;
+
+-   The Core Problem Generics Solve
+
+Without generics, you have three bad options:
+
+| Approach         | Problem                               |
+|---------------- |------------------------------------- |
+| Duplicate code   | Write `firstInt`, `firstString`, etc. |
+| Lose type safety | Use `Object` / `any` / `void/`        |
+| Restrict to one  | Only work with one type               |
+
+Generics give you: *write once, use with any type, keep type safety*.
+
+&#x2014;
+
+-   How Various Languages Implement Generics
+
+-   Java (Type Erasure)
+
+```java
+class Box<T> {
+    private T value;
+    public T get() { return value; }
+}
+
+Box<String> box = new Box<>();
+box.get() // returns String
+```
+
+*Critique:*
+
+-   ❌ Type erasure: `T` becomes `Object` at runtime
+-   ❌ Can't do `new T()` or `T.class`
+-   ❌ No primitive generics (`Box<int>` illegal)
+-   ❌ Verbose syntax
+-   ✅ Backwards compatible with pre-generics code
+
+-   C++ (Templates)
+
+```cpp
+template<typename T>
+T first(std::vector<T>& xs) {
+    return xs[0];
+}
+```
+
+*Critique:*
+
+-   ✅ Full type information at compile time
+-   ✅ Can specialize for specific types
+-   ❌ Code bloat (generates copy for each type)
+-   ❌ Terrible error messages
+-   ❌ No constraint syntax (pre-C++20)
+-   ⚠️ "Duck typing" on templates
+
+-   C# (Reified Generics)
+
+```csharp
+class Box<T> {
+    public T Value { get; set; }
+}
+
+// Can do runtime reflection
+typeof(Box<string>)  // works!
+```
+
+*Critique:*
+
+-   ✅ Reified: type info at runtime
+-   ✅ Works with value types
+-   ✅ Better than Java erasure
+-   ❌ Still verbose
+
+-   Rust (Monomorphization + Traits)
+
+```rust
+fn largest<T: PartialOrd>(list: &[T]) -> &T {
+    let mut largest = &list[0];
+    for item in list {
+        if item > largest {
+            largest = item;
+        }
+    }
+    largest
+}
+```
+
+*Critique:*
+
+-   ✅ Trait bounds constrain generics
+-   ✅ Zero-cost abstraction
+-   ✅ Excellent error messages
+-   ❌ Monomorphization = code bloat
+-   ❌ Complex lifetime interaction
+
+-   Haskell (Parametric Polymorphism + Type Classes)
+
+```haskell
+-- Unconstrained polymorphism
+head :: [a] -> a
+head (x:_) = x
+
+-- Constrained polymorphism
+sort :: Ord a => [a] -> [a]
+```
+
+*Critique:*
+
+-   ✅ Parametric: truly works for *any* type
+-   ✅ Type classes for constraints
+-   ✅ Type inference handles most cases
+-   ✅ No runtime cost (erased)
+-   ❌ Can be hard to understand
+
+-   TypeScript (Structural + Inference)
+
+```typescript
+function first<T>(xs: T[]): T {
+    return xs[0];
+}
+
+// Inferred
+first([1, 2, 3])  // T = number
+```
+
+*Critique:*
+
+-   ✅ Good inference
+-   ✅ Structural typing flexible
+-   ❌ Still erased to JavaScript
+-   ⚠️ `any` escape hatch weakens guarantees
+
+-   Go (Recent Addition)
+
+```go
+func First[T any](xs []T) T {
+    return xs[0]
+}
+
+func Max[T constraints.Ordered](a, b T) T {
+    if a > b { return a }
+    return b
+}
+```
+
+*Critique:*
+
+-   ✅ Simple syntax
+-   ✅ Constraint interfaces
+-   ❌ Added late, feels bolted on
+-   ❌ Limited compared to Rust/Haskell
+
+&#x2014;
+
+-   Key Concepts in Generics
+
+| Concept             | What It Means                | Example                          |
+|------------------- |---------------------------- |-------------------------------- |
+| Type parameter      | Placeholder for a type       | `T` in `List<T>`                 |
+| Type argument       | Actual type supplied         | `String` in `List<String>`       |
+| Parametric poly.    | Works for ANY type           | `head : [a] -> a`                |
+| Bounded/constrained | Must satisfy trait/interface | `T: Ord`, `T extends Comparable` |
+| Variance            | How subtyping interacts      | Covariant, contravariant         |
+| Monomorphization    | Generate code per type       | Rust, C++                        |
+| Type erasure        | Remove types at runtime      | Java, TypeScript                 |
+| Reification         | Keep types at runtime        | C#                               |
+
+&#x2014;
+
+-   Does Prologos Need Generics?
+
+Here's the key insight: *Prologos already has something more powerful*.
+
+&#x2014;
+
+-   What Prologos Has: Parametric Polymorphism
+
+```prologos
+;; This already works for ANY type A
+spec map : (A -> B) -> [List A] -> [List B]
+
+defn map [f xs]
+  match xs
+    | nil -> nil
+    | cons h t -> cons (f h) (map f t)
+```
+
+The `A` and `B` are *type variables*. This is parametric polymorphism—it works for any type, automatically.
+
+No special generic syntax needed!
+
+&#x2014;
+
+-   Comparison: Java vs Prologos
+
+```java
+// Java: explicit type parameter syntax
+public <A, B> List<B> map(Function<A, B> f, List<A> xs) { ... }
+
+// Calling requires type arguments (or inference)
+List<Integer> result = map(x -> x + 1, listOfInts);
+```
+
+```prologos
+;; Prologos: just use type variables
+spec map : (A -> B) -> [List A] -> [List B]
+defn map [f xs] ...
+
+;; Calling is clean
+let result = map (+ 1 _) list-of-ints
+;; Types inferred automatically
+```
+
+&#x2014;
+
+-   What About Constraints?
+
+Java/Rust need explicit bounds:
+
+```rust
+fn sort<T: Ord>(xs: Vec<T>) -> Vec<T>
+```
+
+Prologos uses *traits* (like Haskell type classes):
+
+```prologos
+spec sort : [List A] -> [List A] where (Ord A)
+
+;; Or inline
+spec sort : (Ord A) => [List A] -> [List A]
+
+;; Multiple constraints
+spec show-sorted : [List A] -> String where (Ord A, Show A)
+```
+
+This is the same power, cleaner syntax.
+
+&#x2014;
+
+-   What About Higher-Kinded Types?
+
+Some generics systems can't express:
+
+```haskell
+-- Haskell: F is a type constructor, not a type
+class Functor f where
+  fmap :: (a -> b) -> f a -> f b
+```
+
+Prologos can handle this:
+
+```prologos
+;; F is a type constructor (Type -> Type)
+trait Functor (F : Type -> Type)
+  map : (A -> B) -> [F A] -> [F B]
+
+impl Functor List
+  defn map [f xs] ...
+
+impl Functor Option
+  defn map [f opt] ...
+```
+
+This is *more powerful* than Java/C#/Go generics.
+
+&#x2014;
+
+-   The Prologos Approach: No Separate "Generics"
+
+Instead of a separate generics feature, Prologos has:
+
+| Concept                | Syntax                     | What It Replaces         |
+|---------------------- |-------------------------- |------------------------ |
+| Type variables         | `A`, `B`, `F`              | `<T>`, `<U>`             |
+| Implicit instantiation | Inference                  | `foo<String>(...)`       |
+| Constraints            | `where (Ord A)`            | `<T extends Comparable>` |
+| Higher-kinded          | `F : Type -> Type`         | N/A in most languages    |
+| Dependent types        | `<(n : Nat) -> [Vec n A]>` | N/A in most languages    |
+
+&#x2014;
+
+-   Full Example: Prologos vs Other Languages
+
+-   The Task: Generic Map
+
+```java
+// Java
+public static <A, B> List<B> map(Function<A, B> f, List<A> xs) {
+    List<B> result = new ArrayList<>();
+    for (A x : xs) {
+        result.add(f.apply(x));
+    }
+    return result;
+}
+```
+
+```rust
+// Rust
+fn map<A, B, F>(f: F, xs: Vec<A>) -> Vec<B>
+where
+    F: Fn(A) -> B,
+{
+    xs.into_iter().map(f).collect()
+}
+```
+
+```typescript
+// TypeScript
+function map<A, B>(f: (a: A) => B, xs: A[]): B[] {
+    return xs.map(f);
+}
+```
+
+```prologos
+;; Prologos
+spec map : (A -> B) -> [List A] -> [List B]
+defn map [f xs]
+  match xs
+    | nil -> nil
+    | cons h t -> cons (f h) (map f t)
+```
+
+*Prologos is the cleanest.* No angle brackets, no `where` clause for simple polymorphism, type variables are just lowercase identifiers.
+
+&#x2014;
+
+-   The Task: Constrained Generic
+
+```rust
+// Rust
+fn largest<T: PartialOrd + Copy>(list: &[T]) -> T {
+    let mut largest = list[0];
+    for &item in list {
+        if item > largest {
+            largest = item;
+        }
+    }
+    largest
+}
+```
+
+```prologos
+;; Prologos
+spec largest : [List A] -> A where (Ord A)
+defn largest [xs]
+  fold max (head xs) (tail xs)
+```
+
+Again, cleaner.
+
+&#x2014;
+
+-   When Might You Want Explicit Type Arguments?
+
+Sometimes inference fails or you want to be explicit:
+
+```prologos
+;; Ambiguous: what type is the empty list?
+let xs = nil
+
+;; Explicit type annotation
+let xs : [List Nat] = nil
+
+;; Or at call site (if we support it)
+let xs = nil @Nat  ;; "nil at type Nat"
+
+;; But usually, context resolves it
+let xs = cons 1 nil  ;; clearly [List Nat]
+```
+
+&#x2014;
+
+-   Syntax Options for Explicit Type Application
+
+If you want to allow explicit type arguments:
+
+```prologos
+;; Option A: @ syntax (Haskell-style)
+nil @Nat                    ;; empty list of Nat
+map @Nat @Bool f xs         ;; explicit type args
+
+;; Option B: Brackets after name
+nil[Nat]
+map[Nat, Bool] f xs
+
+;; Option C: Turbofish (Rust-style)
+nil::<Nat>
+map::<Nat, Bool>(f, xs)
+
+;; Option D: Just use type annotation
+(nil : [List Nat])
+```
+
+I recommend *Option A or D*. Option A is concise when needed, Option D leverages existing annotation syntax.
+
+&#x2014;
+
+-   Summary: Prologos vs "Generics"
+
+| Feature                | Java/C# Generics | Prologos               |
+|---------------------- |---------------- |---------------------- |
+| Type parameters        | `<T>`            | Just `A` (lowercase)   |
+| Explicit instantiation | `List<String>`   | Inferred (or annotate) |
+| Constraints            | `<T extends X>`  | `where (Trait A)`      |
+| Higher-kinded          | ❌ No            | ✅ `F : Type -> Type`  |
+| Dependent types        | ❌ No            | ✅ `<(n : Nat) -> ...>` |
+| Variance               | Complex          | Simpler (parametric)   |
+| Syntax overhead        | High             | Low                    |
+
+&#x2014;
+
+-   Recommendation for Prologos
+
+*Don't add a separate "generics" feature.*
+
+Instead:
+
+1.  *Type variables* are implicit (lowercase letters)
+2.  *Inference* handles most cases
+3.  *Trait constraints* when needed: `where (Ord A)`
+4.  *Type annotations* for disambiguation: `: [List Nat]`
+5.  *Optional explicit application* if needed: `@Nat`
+
+This is simpler, more powerful, and consistent with the rest of the type system.
+
+```prologos
+;; ========================================
+;; Prologos: Clean Polymorphism
+;; ========================================
+
+;; Unconstrained polymorphism
+spec id : A -> A
+spec first : (A * B) -> A
+spec map : (A -> B) -> [List A] -> [List B]
+
+;; Constrained polymorphism
+spec sort : [List A] -> [List A] where (Ord A)
+spec show : A -> String where (Show A)
+spec eq : A -> A -> Bool where (Eq A)
+
+;; Higher-kinded
+trait Functor (F : Type -> Type)
+  map : (A -> B) -> [F A] -> [F B]
+
+;; Dependent + polymorphic
+spec replicate : <(n : Nat) A -> [Vec n A]>
+spec head : <(xs : [Vec (suc n) A]) -> A>
+
+;; No special "generic" syntax needed!
+```
+
+Does this clarify the relationship between generics and what Prologos already has?
+
+
+<a id="org7ad5bed"></a>
 
 # In the functional core, however, what options can we explore to mitigate this further?
 
@@ -13036,7 +15012,7 @@ spec fetch-user : UserId -> User | NotFound | Forbidden
 Does this give you enough options to mitigate the functional burden?
 
 
-<a id="orgb1f7df8"></a>
+<a id="orgd1f6e54"></a>
 
 # I think I read somewhere from Rich Hickey, that if he were able to start Clojure over again, to change any iterable structure to a fundamental seq. I think he may have been refering to Iterables in this case, which we discussed previously. One thing I don't like in Clojure is how so much automatically returns lazy seqs, and how much work it is to constrain to reified structures. There's a cost to lazyness, and I wonder how we can keep the generality in prologos of a universal iterable-sequence like abstraction, but make it easy to express these data structures rather than default to something you don't always want.
 
@@ -13420,7 +15396,1768 @@ This gives you Rich Hickey's universal seq abstraction, but without the "everyth
 Does this feel like the right balance?
 
 
-<a id="org2e0db2a"></a>
+<a id="org0721a89"></a>
+
+# Later Maybe Not, Rich Hickey has this to say about the challenges of specifying what he calls "schemas", which seem to be the shape of reusable and common structures as part of a multi-party communication process:
+
+```quote
+  0:34:09while my code deals with my cars and your car deals with your cars we don't have any code that deals with cars because we all had to make separate cars because we all had to make a car that
+0:34:19had a different Smashing of optionality for use in a different context so we don't want that so we want to maximize the reuse of the idea of car or other
+0:34:28schemas other shapes the shape is sort of a generic idea it is not yet instantiated right a schema is a form for a model it's not the thing right
+0:34:40it's sort of like the outline of a think form you know that's what schema means we want to support a whole bunch of situations and these are the situations
+0:34:50I think people have encountered and see if you recognize them in trying to apply spec for instance there are many kinds
+0:35:00of AP is especially wire protocols and things like that that have symmetric request/response specifications from a
+0:35:09schema standpoint give me a partially filled in form I will give you back a more filled in form right that's quite a common thing right
+0:35:20but with spec if you had to say well the thing I require is you must give me the ID and database something context and what I provide will
+0:35:29definitely include the names and phone numbers but maybe not these other things they became they were forced to become two different specs right one was
+0:35:38suspect for the what you need what's required and the other was suspect for what was provided and everybody wanted to reuse the specs across those things
+0:35:47and they wrote really goofy predicates inside to try to reuse some stuff because what the other problem with not
+0:35:56being able to reuse it's a recipe for error if you have to define car and I have to define car well maybe you'll
+0:36:05call it make and model and maybe I'll call it brand and model and now we've got no connection where we absolutely
+0:36:16should have had a connection because we've had to restate the same ideas so that's a context another context which is quite common is a pipeline of
+0:36:26information building right so you think about like ring you know request chains and things like that where each handler can sort of adorn the request with more
+0:36:35information or to fill out default information things like that right we have a bunch of handlers that work that way well what would the spec be for each stage again it's sort of like an
+0:36:46explosion what we want is the overall name for the idea of this heard is coming through but you know the heard may start small and then you know I walk
+0:36:55by with my sheep I added to the her and you add your seats the herd and you we're acquiring information right acquiring information should not be hard and we were doing it already in closure
+0:37:05and closure programs are actually really good at both of these things but spec wasn't as good as closure was in allowing you to talk about orthogonal E
+0:37:15the information set the information schema and the actual requirements and provisions of for instance stages in a
+0:37:24in a pipeline how many people have felt tension applying spec in these kinds of contexts yeah so eventually you know if you get to become you're doing more
+0:37:33you'll feel this more it's even harder than this right because the thing is schemas nest right you can
+0:37:47have a schema that is an aggregate and one or more of the things in the aggregate are themselves aggregates and this is where you truly realize that
+0:37:56putting in aggregates is impossibly wrong right because essentially a schema means shape if I give you a scheme it
+0:38:07says a b c d and c and d are themselves XYZ foobar baths what is the shape it's not a four thing
+0:38:18vector is it that's shape described by that schema which has pointers to other aggregates describes a tree the shape of the thing
+0:38:29is actually a tree and the thing you get past will be a tree and the thing you return will be a tree it's deep and it
+0:38:40means the optionality specs should be deep right because you can't talk you can't talk about a tree only by putting
+0:38:49you know annotations on the root there's no place for it right if I said C has
+0:38:58XYZ and you need X where are you going to put that in a definition of of the top you can't so we want it to be we
+0:39:08want it to be deep we want this to be deep so the you know like all design things this is just what was wrong two things were combined that should've
+0:39:17been combined and how do you fix it you take them apart the rest this is all this is all it is the whole thing is
+0:39:26this you got a dictionary and the idea of like taking things apart and you're done
+0:39:35so we had the talking about forms right is schema right just the overall shape and then talking about subsets of the
+0:39:44schema subsets of the shape in context is selection what things are we gonna pick as being required or as being
+0:39:54provided right and we do selections in contexts and that gives us this orthogonality and two things we can combine so let's look at how we would do
+0:40:03this all right so we have the schema this is shapes only this is you know pseudo future code and the idea here is
+0:40:15that this doesn't apply or optional at all it's not what it's talking about it's only talking about in this herd we can have sheep and we don't have helicopters you know that's the idea
+0:40:27we're just talking about that so we can have an idea of an address that has a street a city a state and a zip I'm not advocating any of these things as canonic whatever and I know zip codes
+0:40:37are hard and blah blah blah so we say you know Street describes its range so you describes this range etc etc state has you know an arbitrary
+0:40:46predicate state codes you know there are thing zip code could be its own function right and then address is a schema that says you could have streets or cities or
+0:40:58states or zips and addresses that's all it says and that is a useful thing to be able to say and to name and then we have
+0:41:07a user you know we have a user in our system people make systems with users all the time and so a a user has an ID a
+0:41:16first name and last no can have an ID a first name and last name and and an address all right so we're going to
+0:41:26define new attributes for ID first name and last name and then we're going to say user could have ID first name last name or address which was the the other
+0:41:35aggregate so this describes a little tree now we have some imaginary usage context right so maybe we're building a
+0:41:44system we have users earnest and our system can let you get movie times and it lets you buy popcorn so get
+0:41:56you movie times in order to give you the movie times I need I want to see your user ID and your zip code that's all I need I'm gonna use that I'm gonna go
+0:42:05find this stuff so I want a user to be past but all I need to know about it are these two things now the user ID is up high in the root definition of user but
+0:42:16the zip code is an attribute of the address of a user inside a nested aggregate further down the tree what
+0:42:25about placing orders placing an order you know I want to see your first and last name and I'm going to ship it to you so I need your whole address these are both functions of users that have
+0:42:35different requirements in different contexts these are the kinds of things we want to model the important thing is that there's no way there's no
+0:42:44optionality spec at the top level that can represent saying these things just you can't say it which means nobody can
+0:42:53say it we just had a graphic you all talk guess who can't say it yeah but you'll
+0:43:03be the first to feel of saying this would be awesome so what how will this work well and again this is this is like not syntax yet but imagine you could say
+0:43:15that that this spec for user will be this selection it'll say from from the herd user from the shape the schema user
+0:43:25I'm interested and I must have the ID and the address and of the address I need the zip code right and then to
+0:43:36place an order we're saying again I'm interested in user information here this is what I'm expecting to see and I need the first and last name and the address
+0:43:45and from the address I need the whole thing Street city state and zip right this select notion is a is a deep requirements thing
+0:43:55if you've ever used the atomic pull it smell like pizza right it's this it's a similar pizza it's a you know you need a
+0:44:05language for talking about trees and in recursion and things like that so this separates requiring the attribute from the requirements of an attribute you saw
+0:44:15address and then zip of address that seems like good I don't have to say that it's just like four more characters or you know like this is so hard but it is
+0:44:26if they're different things because there are definitely contexts in which you say addresses are optional but if you give me an address you have to give me a whole address okay those are two
+```
+
+It seems to me tho prologos may have some answers here, with the ability and guarentees around Session Types. He mentions the way to "fix it" is to "take things apart"&#x2013;decomplect in the language of Clojure, "unbraid"&#x2013;to split apart schema&#x2013;shape from selection&#x2013;what's required/provided in a context. How might prologos address this, and what challenges do we have providing the surface syntax and tools to make this challenge easy and simple?
+
+-   Schema vs Selection: Decomplecting Shape from Requirements
+
+This is a profound insight from Hickey. Let me explore how Prologos can address this.
+
+&#x2014;
+
+-   The Problem Restated
+
+Traditional approaches braid together:
+
+1.  *Schema*: The shape (what fields CAN exist)
+2.  *Selection*: What's required/provided in a context
+
+```haskell
+-- Haskell: Must define separate types
+data UserRequest = UserRequest { reqId :: UserId }
+data UserResponse = UserResponse { respId :: UserId, respName :: String, ... }
+
+-- Can't reuse "User" concept - forced to make separate types
+-- Easy to get out of sync
+```
+
+```clojure
+;; Clojure spec: Optionality baked into schema
+(s/def ::user
+  (s/keys :req [::id]
+          :opt [::name ::address]))
+
+;; Different contexts need different optionality
+;; Forced to make separate specs
+```
+
+&#x2014;
+
+-   The Prologos Opportunity
+
+We have several tools:
+
+1.  *Session types*: Describe communication protocols
+2.  *Dependent types*: Types can depend on values
+3.  *Logic programming*: Relations naturally express partial information
+4.  *Row types*: Extensible records
+
+&#x2014;
+
+-   Proposal: Schema + Selection Separation
+
+&#x2014;
+
+-   Layer 1: Schema (Shape Only)
+
+Schema defines *what CAN exist*, not what's required:
+
+```prologos
+;; Schema: pure shape definition
+;; No optionality - just "these fields can exist"
+
+schema Address
+  street : String
+  city : String
+  state : StateCode
+  zip : ZipCode
+
+schema User
+  id : UserId
+  first-name : String
+  last-name : String
+  address : Address
+
+;; Schemas compose (nesting)
+;; This describes a TREE of possible fields
+```
+
+&#x2014;
+
+-   Layer 2: Selection (Context Requirements)
+
+Selection defines *what's required or provided* in a context:
+
+```prologos
+;; Selection: pick from schema for a context
+
+;; For getting movie times: need id and zip only
+select MovieTimesRequest from User
+  require id
+  require address { zip }    ;; nested selection
+
+;; For placing order: need name and full address
+select PlaceOrderRequest from User
+  require first-name
+  require last-name
+  require address { street, city, state, zip }
+
+;; For user response: provide everything we have
+select UserResponse from User
+  provide id
+  provide first-name
+  provide last-name
+  provide address { street, city, state, zip }
+```
+
+&#x2014;
+
+-   Layer 3: Session Types for Protocols
+
+Session types describe the *flow* of selections:
+
+```prologos
+;; Protocol: request/response with selections
+session MovieService
+  ?: (req : User & MovieTimesRequest)      ;; receive User with MovieTimesRequest selection
+    !: (times : List MovieTime)
+      end
+
+session OrderService
+  ?: (req : User & PlaceOrderRequest)      ;; receive User with PlaceOrderRequest selection
+    !: (confirmation : OrderConfirmation)
+      !: (user : User & UserResponse)      ;; send back User with UserResponse selection
+        end
+```
+
+&#x2014;
+
+-   The `&` Operator: Schema + Selection
+
+```prologos
+;; User & MovieTimesRequest means:
+;; - Has shape of User
+;; - Must have fields required by MovieTimesRequest
+;; - May have other User fields (but not guaranteed)
+
+;; Type checking:
+;; - Sender must provide at least required fields
+;; - Receiver can only assume required fields exist
+
+defn get-movie-times [user : User & MovieTimesRequest] : List MovieTime
+  ;; Can safely access: user.id, user.address.zip
+  ;; Cannot access: user.first-name (not in selection)
+  lookup-times user.address.zip
+```
+
+&#x2014;
+
+-   Pipeline / Information Building
+
+For Hickey's "pipeline of information building":
+
+```prologos
+;; Schema for request going through pipeline
+schema Request
+  id : RequestId
+  user : User
+  timestamp : Time
+  auth : AuthToken
+  rate-limit : RateLimit
+  parsed-body : ParsedBody
+  validated : ValidationResult
+
+;; Each stage selects what it requires and provides
+
+select AuthStageInput from Request
+  require id
+  require auth
+
+select AuthStageOutput from Request
+  require id
+  require auth
+  provide user          ;; auth stage ADDS user
+
+select RateLimitInput from Request
+  require id
+  require user
+
+select RateLimitOutput from Request
+  require id
+  require user
+  provide rate-limit    ;; rate limit stage ADDS rate-limit
+
+;; Pipeline type
+session RequestPipeline
+  ?: (req : Request & AuthStageInput)
+    ;; After auth
+    let req2 : Request & AuthStageOutput = auth-handler req
+    ;; After rate limit
+    let req3 : Request & RateLimitOutput = rate-limit-handler req2
+    ;; Continue...
+```
+
+&#x2014;
+
+-   Deep Selection (Nested Requirements)
+
+```prologos
+;; Nested selection syntax
+select DeepSelection from User
+  require id
+  require address {
+    require street
+    require city
+    ;; state and zip are optional in this context
+  }
+
+;; Alternative syntax: path-based
+select DeepSelection from User
+  require id
+  require address.street
+  require address.city
+```
+
+&#x2014;
+
+-   Syntax Exploration
+
+Let me explore several syntax options:
+
+&#x2014;
+
+-   Option A: Declarative Block Syntax
+
+```prologos
+schema User
+  id : UserId
+  first-name : String
+  last-name : String
+  address : Address
+
+schema Address
+  street : String
+  city : String
+  state : StateCode
+  zip : ZipCode
+
+select MovieTimesReq from User
+  require
+    id
+    address { zip }
+
+select PlaceOrderReq from User
+  require
+    first-name
+    last-name
+    address { street city state zip }
+
+;; Usage in function
+defn get-times [u : User & MovieTimesReq] : List MovieTime
+  lookup u.id u.address.zip
+```
+
+&#x2014;
+
+-   Option B: Inline Selection Syntax
+
+```prologos
+;; Schema as normal
+schema User
+  id : UserId
+  name : String
+  address : Address
+
+;; Selection inline with type
+defn get-times [u : User { id, address { zip } }] : List MovieTime
+  lookup u.id u.address.zip
+
+defn place-order [u : User { name, address { * } }] : Order
+  ;; address { * } means "all of address"
+  create-order u.name u.address
+
+;; Protocol with inline selection
+session MovieService
+  ?: (u : User { id, address { zip } })
+    !: (times : List MovieTime)
+      end
+```
+
+&#x2014;
+
+-   Option C: Spec-Like Separate Declaration
+
+```prologos
+;; Schema (shape)
+schema User
+  id : UserId
+  name : String
+  address : Address
+
+;; Named selections (reusable)
+selection UserIdentity : User
+  id
+
+selection UserWithZip : User
+  id
+  address.zip
+
+selection UserFull : User
+  *   ;; everything
+
+;; Use in functions
+spec get-times : UserWithZip -> List MovieTime
+defn get-times [u]
+  lookup u.id u.address.zip
+
+;; Use in sessions
+session MovieService
+  ?: UserWithZip
+    !: List MovieTime
+      end
+```
+
+&#x2014;
+
+-   Option D: Algebraic Selection (Composable)
+
+```prologos
+;; Base schema
+schema User { id, name, address : Address { street, city, state, zip } }
+
+;; Selections as sets of paths
+:= identity-sel   #{ .id }
+:= zip-sel        #{ .address.zip }
+:= full-addr-sel  #{ .address.* }
+:= name-sel       #{ .name }
+
+;; Compose selections
+:= movie-req      (union identity-sel zip-sel)
+:= order-req      (union name-sel full-addr-sel)
+
+;; Use in types
+defn get-times [u : User & movie-req] : List MovieTime
+  ...
+
+defn place-order [u : User & order-req] : Order
+  ...
+```
+
+&#x2014;
+
+-   Provide vs Require (Bidirectional)
+
+Hickey mentions both *requiring* (input) and *providing* (output):
+
+```prologos
+;; Selection can be for require OR provide
+selection MovieTimesRequest : User
+  require id
+  require address.zip
+
+selection UserResponse : User
+  provide id
+  provide name
+  provide address.*
+
+;; In session type:
+session UserService
+  ?: (req : User & MovieTimesRequest)      ;; caller must provide
+    !: (resp : User & UserResponse)        ;; service provides
+      end
+
+;; Variance:
+;; - require: contravariant (caller provides at least this)
+;; - provide: covariant (callee provides at least this)
+```
+
+&#x2014;
+
+-   Subtyping / Compatibility
+
+This is where Hickey's point about compatible changes comes in:
+
+```prologos
+;; If I require LESS, callers are still compatible
+selection V1 : User
+  require id
+  require name
+  require address.zip
+
+selection V2 : User     ;; relaxed: dropped name requirement
+  require id
+  require address.zip
+
+;; V1 <: V2 (V1 is subtype of V2)
+;; Anything that satisfies V1 also satisfies V2
+;; So V1 -> V2 is a COMPATIBLE change for inputs
+
+;; If I provide MORE, callers are still compatible
+selection R1 : User
+  provide id
+
+selection R2 : User     ;; strengthened: now provide name too
+  provide id
+  provide name
+
+;; R1 <: R2 (R2 provides more)
+;; So R1 -> R2 is a COMPATIBLE change for outputs
+```
+
+&#x2014;
+
+-   Integration with Logic Programming
+
+Here's where Prologos shines:
+
+```prologos
+;; Schema as relation
+defr user-schema (?u)
+  &> (has-field ?u 'id UserId)
+     (has-field ?u 'name String)
+     (has-field ?u 'address address-schema)
+
+defr address-schema (?a)
+  &> (has-field ?a 'street String)
+     (has-field ?a 'city String)
+     (has-field ?a 'state StateCode)
+     (has-field ?a 'zip ZipCode)
+
+;; Selection as relation
+defr movie-times-req (?u)
+  &> (has-field ?u 'id ?id)
+     (has-field ?u 'address ?addr)
+     (has-field ?addr 'zip ?zip)
+
+;; Validation via unification
+defn validate-request [data]
+  solve? (movie-times-req data)
+
+;; Generate test data
+defn gen-movie-request []
+  solve-one
+    (movie-times-req ?u)
+    (gen-user-id ?u.id)
+    (gen-zip ?u.address.zip)
+```
+
+&#x2014;
+
+-   Propagator Integration
+
+Partial information flows naturally:
+
+```prologos
+;; Cell holds partial User information
+cell user-data : Lattice (Partial User)
+
+;; Propagators enforce selection requirements
+propagator movie-times-req-check [user-data result]
+  watch user-data
+    let u = get user-data
+    if (and (known? u.id) (known? u.address.zip))
+      put result (valid u)
+    else
+      put result (missing (unknown-fields u #{ .id, .address.zip }))
+
+;; As information arrives, constraints are checked incrementally
+put user-data { :id 123 }           ;; not enough yet
+put user-data { :address { :zip 90210 } }  ;; now valid!
+```
+
+&#x2014;
+
+-   Final Syntax Proposal
+
+```prologos
+;; ========================================
+;; Schema Definition (Shape Only)
+;; ========================================
+
+schema Address
+  street : String
+  city : String
+  state : StateCode
+  zip : ZipCode
+
+schema User
+  id : UserId
+  name : String
+  email : Email
+  address : Address
+  preferences : Preferences
+
+;; ========================================
+;; Selection Definition (Context Requirements)
+;; ========================================
+
+;; Named selection (reusable)
+selection MovieTimesReq from User
+  require id
+  require address { zip }
+
+selection PlaceOrderReq from User
+  require name
+  require email
+  require address { * }   ;; all address fields
+
+selection UserResponse from User
+  provide id
+  provide name
+  provide email
+  provide address { * }
+
+;; ========================================
+;; Function Types with Selection
+;; ========================================
+
+spec get-movie-times : User & MovieTimesReq -> List MovieTime
+defn get-movie-times [user]
+  ;; user.id and user.address.zip are guaranteed
+  lookup-times user.address.zip
+
+spec place-order : User & PlaceOrderReq -> Order
+defn place-order [user]
+  ;; user.name, user.email, user.address.* are guaranteed
+  create-order user
+
+;; ========================================
+;; Session Types with Selection
+;; ========================================
+
+session UserMovieService
+  ?: (user : User & MovieTimesReq)
+    !: (times : List MovieTime)
+      end
+
+session OrderService
+  ?: (user : User & PlaceOrderReq)
+    !: (order : Order)
+      !: (receipt : User & UserResponse)
+        end
+
+;; ========================================
+;; Pipeline with Progressive Selection
+;; ========================================
+
+selection AuthInput from Request
+  require id
+  require token
+
+selection AuthOutput from Request
+  require id
+  require token
+  provide user        ;; auth adds user
+
+selection ValidatedOutput from Request
+  require id
+  require token
+  require user
+  provide validated   ;; validation adds result
+
+;; Pipeline stages type-check selections
+defn auth-stage [req : Request & AuthInput] : Request & AuthOutput
+  let user = lookup-user req.token
+  assoc req :user user
+
+defn validate-stage [req : Request & AuthOutput] : Request & ValidatedOutput
+  let result = validate req.user
+  assoc req :validated result
+
+;; ========================================
+;; Inline Selection (Quick/Local)
+;; ========================================
+
+defn quick-lookup [u : User { id, address { zip } }] : Info
+  lookup u.id u.address.zip
+
+;; ========================================
+;; Selection Composition
+;; ========================================
+
+selection Combined from User
+  include MovieTimesReq     ;; include another selection
+  require email             ;; add more requirements
+
+;; ========================================
+;; Partial Data Handling
+;; ========================================
+
+;; Maybe-like but decomplected
+defn get-user-if-valid [data : Partial User] : Option (User & MovieTimesReq)
+  if (satisfies? data MovieTimesReq)
+    some (data as User & MovieTimesReq)
+  else
+    none
+```
+
+&#x2014;
+
+-   Summary: Schema vs Selection
+
+| Concept   | What It Describes              | Example                                       |
+|--------- |------------------------------ |--------------------------------------------- |
+| Schema    | Shape (what CAN exist)         | `schema User { id, name, address }`           |
+| Selection | Requirements (what MUST exist) | `selection Req from User { id, address.zip }` |
+| `&`       | Combines schema with selection | `User & Req`                                  |
+| `require` | Field must be present (input)  | `require id`                                  |
+| `provide` | Field will be present (output) | `provide id`                                  |
+
+&#x2014;
+
+-   Benefits
+
+| Benefit             | Description                              |
+|------------------- |---------------------------------------- |
+| Reuse schema        | One `User` schema, many selections       |
+| Compatible changes  | Relax requirements = compatible          |
+| Deep selections     | Nested requirements work naturally       |
+| Session integration | Protocols specify selections per message |
+| Pipeline support    | Progressive information building         |
+| Type safety         | Compiler enforces selection requirements |
+
+This decomplects shape from optionality, exactly as Hickey advocates.
+
+Does this approach feel right for Prologos?
+
+
+<a id="org7723b4a"></a>
+
+# It's certainly getting there. There are still some fundamental considerations of the syntax of the HashMap datastructure that we haven't addressed&#x2026; how we syntactically represent them, how we do keylookup, whether we keep EDN syntax or diverge. (I do like keywords preceded by a \`:\`&#x2026; that we keep. But beside that, thinking about \`session\` as the keyword for describing protocol-interactions (rather than defproc) feels right. But one thing in considering the syntax of it, it doesn't feel they need to be nested&#x2026; they're not a tree of deeper nesting needing bottom-up reductions from the leaves&#x2026; they're a sequential, linear back-and-forth of (of linear session types, yes!)&#x2026; so it feels more natural that they would be siblings, different line, same column&#x2026; this would be visually more appealing and clear, and provide horizontal space, and scale with sessions that are more lengthy.
+
+-   Refining HashMap Syntax and Session Types
+
+Let me address both concerns.
+
+&#x2014;
+
+-   Part 1: HashMap Syntax
+
+-   Current EDN-Style
+
+```prologos
+;; EDN style
+{:name "Alice" :age 42 :active true}
+
+;; Lookup... how?
+```
+
+-   Key Questions
+
+-   Do we use `:keyword` syntax? (Yes, you like this)
+-   How do we write map literals?
+-   How do we do key lookup?
+-   How do we do nested access?
+
+&#x2014;
+
+-   Map Literal Options
+
+-   Option A: EDN-Style (Spaces)
+
+```prologos
+{:name "Alice" :age 42}
+{:user {:name "Alice" :address {:zip 90210}}}
+```
+
+-   Option B: Commas for Clarity
+
+```prologos
+{:name "Alice", :age 42}
+{:user {:name "Alice", :address {:zip 90210}}}
+```
+
+-   Option C: `key: value` Style (JSON-ish)
+
+```prologos
+{name: "Alice", age: 42}
+{user: {name: "Alice", address: {zip: 90210}}}
+```
+
+-   Option D: Colon After (Elixir-Style Keywords)
+
+```prologos
+{name: "Alice", age: 42}
+;; But :name for keyword as value
+let k = :name
+```
+
+&#x2014;
+
+-   Lookup Syntax Options
+
+-   Option A: Function Call
+
+```prologos
+(get m :name)              ;; explicit function
+(get-in m [:user :address :zip])  ;; nested
+```
+
+-   Option B: Dot Notation
+
+```prologos
+m.name                     ;; simple
+m.user.address.zip         ;; nested
+```
+
+-   Option C: Keyword as Function (Clojure)
+
+```prologos
+(:name m)                  ;; keyword as function
+(:zip (:address (:user m)))  ;; nested (ugly)
+```
+
+-   Option D: Bracket Indexing
+
+```prologos
+m[:name]                   ;; bracket lookup
+m[:user][:address][:zip]   ;; nested (verbose)
+```
+
+-   Option E: Dot + Bracket Hybrid
+
+```prologos
+m.name                     ;; static key
+m[:dynamic-key]            ;; dynamic key
+m.user.address.zip         ;; nested static
+m.user[:key].zip           ;; mixed
+```
+
+&#x2014;
+
+-   My Recommendation: Dot + Brackets
+
+```prologos
+;; ========================================
+;; Map Literals (EDN-ish with optional commas)
+;; ========================================
+
+{:name "Alice" :age 42}              ;; spaces ok
+{:name "Alice", :age 42}             ;; commas ok too
+
+;; Nested
+{:user {:name "Alice"
+        :address {:street "123 Main"
+                  :zip 90210}}}
+
+;; ========================================
+;; Lookup: Dot for Static Keys
+;; ========================================
+
+m.name                     ;; => "Alice"
+m.user.address.zip         ;; => 90210
+
+;; ========================================
+;; Lookup: Brackets for Dynamic Keys
+;; ========================================
+
+let key = :name
+m[key]                     ;; => "Alice"
+
+let path = [:user :address :zip]
+get-in m path              ;; => 90210
+
+;; ========================================
+;; Safe Navigation
+;; ========================================
+
+m.user?.address?.zip       ;; => nil if any missing
+m.user?.address?.zip ?: 0  ;; => 0 if any missing
+
+;; ========================================
+;; Update Syntax
+;; ========================================
+
+assoc m :name "Bob"        ;; => {:name "Bob" :age 42}
+update m :age inc          ;; => {:name "Alice" :age 43}
+assoc-in m [:user :address :zip] 90211
+
+;; ========================================
+;; Destructuring
+;; ========================================
+
+let {:name n :age a} = m
+;; n = "Alice", a = 42
+
+let {:user {:address {:zip z}}} = m
+;; z = 90210
+```
+
+&#x2014;
+
+-   Part 2: Session Types - Linear, Not Nested
+
+You're absolutely right. Session types are *linear sequences*, not trees. The nesting we had was misleading.
+
+&#x2014;
+
+-   Current (Nested, Wrong)
+
+```prologos
+session MovieService
+  ?: (req : User & MovieTimesReq)
+    !: (times : List MovieTime)
+      end
+```
+
+This nesting suggests hierarchy, but it's really just sequence.
+
+&#x2014;
+
+-   Proposed: Linear, Sibling Syntax
+
+```prologos
+;; ========================================
+;; Simple Request/Response
+;; ========================================
+
+session MovieService
+  ? req : User & MovieTimesReq
+  ! times : List MovieTime
+  end
+
+;; ========================================
+;; Multi-Step Protocol
+;; ========================================
+
+session OrderService
+  ? user : User & PlaceOrderReq
+  ! order-id : OrderId
+  ? payment : PaymentInfo
+  ! confirmation : OrderConfirmation
+  ! receipt : Receipt
+  end
+
+;; ========================================
+;; With Choice (Branching)
+;; ========================================
+
+session AuthService
+  ? credentials : Credentials
+  +>
+    | :success
+        ! token : AuthToken
+        ! user : User
+        end
+    | :failure
+        ! error : AuthError
+        end
+
+;; ========================================
+;; External Choice (Server Offers)
+;; ========================================
+
+session FileService
+  &>
+    | :read
+        ? path : FilePath
+        ! content : Bytes
+        end
+    | :write
+        ? path : FilePath
+        ? content : Bytes
+        ! ok : Unit
+        end
+    | :delete
+        ? path : FilePath
+        ! ok : Unit
+        end
+
+;; ========================================
+;; Recursive Protocol
+;; ========================================
+
+session ChatService
+  rec Loop
+    &>
+      | :message
+          ? msg : Message
+          ! ack : Ack
+          Loop
+      | :quit
+          ! goodbye : String
+          end
+
+;; ========================================
+;; Longer Protocol (Scales Horizontally)
+;; ========================================
+
+session ComplexService
+  ? handshake : Handshake
+  ! ack : Ack
+  ? auth : AuthRequest
+  +>
+    | :authenticated
+        ! session : SessionToken
+        ? request : Request
+        ! response : Response
+        ? confirm : Confirmation
+        ! receipt : Receipt
+        end
+    | :denied
+        ! reason : String
+        end
+```
+
+&#x2014;
+
+-   Syntax Summary
+
+| Symbol | Meaning         | Example             |
+|------ |--------------- |------------------- |
+| `?`    | Receive         | `? req : Request`   |
+| `!`    | Send            | `! resp : Response` |
+| `+>`   | Internal choice | =+> \\              | :a &#x2026; \\ | :b &#x2026;= |
+| `&>`   | External choice | =&> \\              | :a &#x2026; \\ | :b &#x2026;= |
+| `rec`  | Recursion point | `rec Loop`          |
+| `Loop` | Recurse         | `Loop`              |
+| `end`  | Session ends    | `end`               |
+
+&#x2014;
+
+-   Visual Comparison
+
+-   Old (Nested)
+
+```prologos
+session OrderService
+  ?: (user : User & PlaceOrderReq)
+    !: (order-id : OrderId)
+      ?: (payment : PaymentInfo)
+        !: (confirmation : OrderConfirmation)
+          !: (receipt : Receipt)
+            end
+```
+
+-   New (Linear)
+
+```prologos
+session OrderService
+  ? user : User & PlaceOrderReq
+  ! order-id : OrderId
+  ? payment : PaymentInfo
+  ! confirmation : OrderConfirmation
+  ! receipt : Receipt
+  end
+```
+
+Much cleaner. Horizontal space preserved. Scales to long protocols.
+
+&#x2014;
+
+-   Session + Schema/Selection Together
+
+```prologos
+;; Schema
+schema User
+  id : UserId
+  name : String
+  email : Email
+  address : Address
+
+schema Address
+  street : String
+  city : String
+  zip : ZipCode
+
+;; Selections
+selection MovieReq from User
+  require id
+  require address.zip
+
+selection OrderReq from User
+  require name
+  require email
+  require address { street city zip }
+
+selection UserSummary from User
+  provide id
+  provide name
+
+;; Session with selections
+session MovieService
+  ? user : User & MovieReq
+  ! times : List MovieTime
+  end
+
+session OrderService
+  ? user : User & OrderReq
+  ! order-id : OrderId
+  ? payment : PaymentInfo
+  +>
+    | :success
+        ! confirmation : OrderConfirmation
+        ! user-summary : User & UserSummary
+        end
+    | :failure
+        ! error : OrderError
+        end
+```
+
+&#x2014;
+
+-   Implementation Process: defproc
+
+Now `session` defines the protocol type, and `defproc` implements it:
+
+```prologos
+;; Session type definition
+session Greeter
+  ? name : String
+  ! greeting : String
+  end
+
+;; Process implementation
+defproc greeter : Greeter
+  recv name
+  let greeting = concat "Hello, " name
+  send greeting
+  stop
+
+;; Or with match on choice
+session Calculator
+  &>
+    | :add
+        ? a : Nat
+        ? b : Nat
+        ! result : Nat
+        end
+    | :mult
+        ? a : Nat
+        ? b : Nat
+        ! result : Nat
+        end
+
+defproc calculator : Calculator
+  offer
+    | :add
+        recv a
+        recv b
+        send (+ a b)
+        stop
+    | :mult
+        recv a
+        recv b
+        send (* a b)
+        stop
+```
+
+&#x2014;
+
+-   Full Example: User Service
+
+```prologos
+;; ========================================
+;; Schemas
+;; ========================================
+
+schema User
+  id : UserId
+  name : String
+  email : Email
+  password-hash : Hash
+  profile : Profile
+  settings : Settings
+
+schema Profile
+  bio : String
+  avatar : Url
+  links : List Url
+
+schema Settings
+  notifications : Bool
+  theme : Theme
+  language : Language
+
+;; ========================================
+;; Selections
+;; ========================================
+
+selection AuthReq from User
+  require email
+  require password-hash
+
+selection PublicProfile from User
+  provide id
+  provide name
+  provide profile { bio avatar }
+
+selection FullProfile from User
+  provide id
+  provide name
+  provide email
+  provide profile { * }
+  provide settings { * }
+
+selection UpdateReq from User
+  require id
+  optional name
+  optional email
+  optional profile { bio avatar links }
+  optional settings { * }
+
+;; ========================================
+;; Session Protocols
+;; ========================================
+
+session AuthService
+  ? credentials : User & AuthReq
+  +>
+    | :success
+        ! token : AuthToken
+        ! user : User & FullProfile
+        end
+    | :invalid
+        ! error : AuthError
+        end
+
+session ProfileService
+  rec Loop
+    &>
+      | :get
+          ? user-id : UserId
+          +>
+            | :found
+                ! profile : User & PublicProfile
+                end
+            | :not-found
+                ! error : NotFound
+                end
+      | :update
+          ? token : AuthToken
+          ? updates : User & UpdateReq
+          +>
+            | :success
+                ! user : User & FullProfile
+                Loop
+            | :unauthorized
+                ! error : Unauthorized
+                end
+      | :quit
+          end
+
+;; ========================================
+;; Process Implementation
+;; ========================================
+
+defproc profile-service : ProfileService
+  loop
+    offer
+      | :get
+          recv user-id
+          match (lookup-user user-id)
+            | some user ->
+                select :found
+                send (project user PublicProfile)
+                stop
+            | none ->
+                select :not-found
+                send (not-found user-id)
+                stop
+
+      | :update
+          recv token
+          recv updates
+          match (validate-token token)
+            | some user-id ->
+                let updated = (apply-updates user-id updates)
+                select :success
+                send (project updated FullProfile)
+                continue
+            | none ->
+                select :unauthorized
+                send unauthorized-error
+                stop
+
+      | :quit
+          stop
+```
+
+&#x2014;
+
+-   Summary
+
+-   Maps
+
+| Feature        | Syntax                        |
+|-------------- |----------------------------- |
+| Literal        | `{:name "Alice" :age 42}`     |
+| Static lookup  | `m.name`                      |
+| Dynamic lookup | `m[key]`                      |
+| Nested         | `m.user.address.zip`          |
+| Safe nav       | `m.user?.address?.zip`        |
+| Default        | `m.user?.name ?: "Anonymous"` |
+| Update         | `assoc m :name "Bob"`         |
+| Nested update  | `assoc-in m [:a :b] val`      |
+| Destructure    | `let {:name n} = m`           |
+
+-   Sessions
+
+| Feature  | Old (Nested)          | New (Linear)           |
+|-------- |--------------------- |---------------------- |
+| Receive  | `?: (x : T) ...`      | `? x : T`              |
+| Send     | `!: (x : T) ...`      | `! x : T`              |
+| Sequence | Indented children     | Siblings, same indent  |
+| Choice   | `+> [...]`            | =+> \\                 | :a &#x2026; \\ | :b &#x2026;= |
+| End      | `end` (deeply nested) | `end` (at end of list) |
+| Visual   | Tree (misleading)     | Linear (accurate)      |
+
+Does this feel right?
+
+
+<a id="orgc68a1df"></a>
+
+# In some other context, we were speaking of HAMT as the core of our Persistent collection types, with a preference to use these as the default data structures. Since they use structural sharing, they can be efficient to build off of without copying. You also talked about RBB-trees as a potential contender. I wonder, in what context might we want one or the other; are we able to support both and apply to  settings where they are best suited without overburdening the user? Let's discuss their costs and benifits in a critique; and open ourselves to other cutting-edge data structures that may lay the foundations for building a solid suite to build out more infrastructure on top of (like lattice-based Propagators?).
+
+-   Persistent Data Structures: HAMT, RRB-Trees, and Beyond
+
+Let me provide a deep analysis of these structures and how they fit into Prologos.
+
+&#x2014;
+
+-   The Core Requirements
+
+For Prologos, we need data structures that support:
+
+1.  *Persistence*: Old versions remain valid after "modification"
+2.  *Structural sharing*: Efficient memory via shared substructure
+3.  *Functional updates*: Return new version, don't mutate
+4.  *Good complexity*: Competitive with mutable structures
+5.  *Lattice compatibility*: Work well with propagator networks
+
+&#x2014;
+
+-   HAMT (Hash Array Mapped Trie)
+
+-   What It Is
+
+A trie where:
+
+-   Hash of key determines path through tree
+-   Each node has up to 32 children (5 bits of hash per level)
+-   Bitmap indicates which children exist (sparse)
+
+```
+HAMT for {:a 1 :b 2 :c 3}
+
+         [root]
+        /   |   \
+      [a]  [b]  [c]     <- determined by hash bits
+       |    |    |
+       1    2    3
+```
+
+-   Complexity
+
+| Operation     | Complexity | Notes                        |
+|------------- |---------- |---------------------------- |
+| Lookup        | O(log₃₂ n) | Effectively O(1) for n < 1B  |
+| Insert        | O(log₃₂ n) | Path copying                 |
+| Delete        | O(log₃₂ n) | Path copying                 |
+| Memory per op | O(log₃₂ n) | ~7 nodes max for 1B elements |
+
+-   Strengths
+
+-   ✅ Excellent for maps/sets (hash-based)
+-   ✅ Very fast lookup (wide branching = shallow)
+-   ✅ Good structural sharing
+-   ✅ Battle-tested (Clojure, Scala, Haskell)
+
+-   Weaknesses
+
+-   ❌ No ordering (hash-based)
+-   ❌ Not great for sequential access
+-   ❌ No efficient slicing/concatenation
+-   ❌ Cache-unfriendly for small maps
+
+&#x2014;
+
+-   RRB-Tree (Relaxed Radix Balanced Tree)
+
+-   What It Is
+
+A variant of the persistent vector (Bagwell's Bit-Mapped Vector Trie) that allows:
+
+-   Efficient concatenation (not just append)
+-   Efficient slicing
+-   Relaxed balancing constraints
+
+```
+RRB-Tree for [1 2 3 4 5 6 7 8 ...]
+
+         [root]
+        /      \
+    [1-4]      [5-8]      <- chunks of elements
+   /    \     /    \
+ [1,2] [3,4] [5,6] [7,8]
+```
+
+-   Complexity
+
+| Operation    | Complexity | Notes                           |
+|------------ |---------- |------------------------------- |
+| Index lookup | O(log₃₂ n) | Effectively O(1)                |
+| Update       | O(log₃₂ n) | Path copying                    |
+| Append       | O(1)/      | Amortized                       |
+| Prepend      | O(log n)   | Needs rebalancing               |
+| Concat       | O(log n)   | Key advantage over plain vector |
+| Slice        | O(log n)   | Key advantage over plain vector |
+
+-   Strengths
+
+-   ✅ Ordered sequences
+-   ✅ Efficient concatenation
+-   ✅ Efficient slicing
+-   ✅ Good for vectors/lists
+-   ✅ Cache-friendly chunks
+
+-   Weaknesses
+
+-   ❌ More complex implementation
+-   ❌ Not for maps/sets (ordered by index, not key)
+-   ❌ Prepend is slower than append
+
+&#x2014;
+
+-   When to Use Which
+
+| Use Case                  | Best Structure | Why                       |
+|------------------------- |-------------- |------------------------- |
+| Key-value map             | HAMT           | Hash-based O(1) lookup    |
+| Set membership            | HAMT           | Hash-based O(1) lookup    |
+| Indexed sequence (vector) | RRB-Tree       | Index-based O(1) lookup   |
+| Concatenation-heavy       | RRB-Tree       | O(log n) concat           |
+| Queue/deque               | Finger Tree    | O(1) both ends            |
+| Sorted map                | Balanced BST   | Ordered traversal         |
+| Priority queue            | Pairing Heap   | O(1) insert, O(log n) pop |
+
+&#x2014;
+
+-   Other Cutting-Edge Structures
+
+-   Finger Trees
+
+```
+Finger Tree structure:
+
+  [left fingers] -- [spine] -- [right fingers]
+       ||              ||            ||
+    fast access    recursive    fast access
+    to front       structure    to back
+```
+
+| Operation  | Complexity | Notes                 |
+|---------- |---------- |--------------------- |
+| First/Last | O(1)       | Finger access         |
+| Cons/Snoc  | O(1)/      | Amortized             |
+| Concat     | O(log n)   | Efficient             |
+| Split      | O(log n)   | At any point          |
+| Index      | O(log n)   | With size annotations |
+
+*Use for*: Sequences needing fast access at both ends, deques, priority queues.
+
+&#x2014;
+
+-   Ctrie (Concurrent Trie)
+
+A lock-free concurrent version of HAMT:
+
+-   Supports concurrent reads and writes
+-   No global locks
+-   Snapshot isolation
+
+*Use for*: Multi-threaded maps where propagators run in parallel.
+
+-   Adaptive Radix Tree (ART)
+
+-   Nodes adapt their size (4, 16, 48, 256 children)
+-   Cache-efficient
+-   Great for string keys
+
+*Use for*: Symbol tables, string-keyed maps.
+
+-   CHAMP (Compressed Hash-Array Mapped Prefix-tree)
+
+Improved HAMT:
+
+-   Better memory locality
+-   Fewer indirections
+-   2x faster iteration than HAMT
+-   Used in recent Clojure versions
+
+*Use for*: Maps and sets (drop-in HAMT replacement).
+
+-   B+ Trees (Persistent)
+
+-   Good cache locality
+-   Efficient range queries
+-   Used in databases
+
+*Use for*: Sorted maps, range queries, persistent indexes.
+
+&#x2014;
+
+-   Proposal: Layered Data Structure Architecture
+
+&#x2014;
+
+-   Layer 1: User-Facing Types (Abstract)
+
+Users don't think about implementation:
+
+```prologos
+;; Users see these abstract types
+Vec A           ;; indexed sequence
+List A          ;; linked list
+Map K V         ;; key-value map
+Set A           ;; unique elements
+Seq A           ;; lazy sequence
+```
+
+&#x2014;
+
+-   Layer 2: Smart Defaults
+
+Compiler chooses best implementation:
+
+```prologos
+;; Vec: RRB-Tree (good indexing, concat, slice)
+@[1 2 3 4 5]
+
+;; Map: CHAMP (improved HAMT)
+{:a 1 :b 2}
+
+;; Set: CHAMP (improved HAMT)
+#{1 2 3}
+
+;; List: Linked (fast cons, pattern match)
+'[1 2 3]
+
+;; Seq: Lazy (generator-based)
+~[1 2 3 ...]
+```
+
+&#x2014;
+
+-   Layer 3: Explicit Variants (When Needed)
+
+Power users can choose specific implementations:
+
+```prologos
+;; Sorted map (B+ tree or balanced BST)
+sorted-map {:a 1 :b 2}     ;; or
+{:a 1 :b 2} as SortedMap
+
+;; Finger tree for deque operations
+finger-tree [1 2 3 4 5]    ;; or
+@[1 2 3] as FingerTree
+
+;; Concurrent map (Ctrie)
+ctrie {:a 1 :b 2}          ;; or
+{:a 1 :b 2} as ConcurrentMap
+```
+
+&#x2014;
+
+-   Layer 4: Trait-Based Abstraction
+
+All structures implement common traits:
+
+```prologos
+;; Core traits
+trait Indexed (C : Type -> Type)
+  nth : C A -> Nat -> Option A
+  length : C A -> Nat
+
+trait Keyed (C : Type -> Type -> Type)
+  get : C K V -> K -> Option V
+  assoc : C K V -> K -> V -> C K V
+  dissoc : C K V -> K -> C K V
+
+trait Sequential (C : Type -> Type)
+  first : C A -> Option A
+  rest : C A -> C A
+  cons : A -> C A -> C A
+
+trait Concatenable (C : Type -> Type)
+  concat : C A -> C A -> C A
+  slice : C A -> Nat -> Nat -> C A
+
+trait Foldable (C : Type -> Type)
+  fold : (A -> B -> B) -> B -> C A -> B
+
+;; Implementations
+impl Indexed Vec using RRB-Tree
+impl Keyed Map using CHAMP
+impl Sequential List using Linked
+impl Concatenable Vec using RRB-Tree
+```
+
+&#x2014;
+
+-   Lattice Compatibility for Propagators
+
+This is crucial for Prologos. Data structures must work with:
+
+-   Monotonic updates (only add information)
+-   Partial information (unknown fields)
+-   Concurrent access (parallel propagation)
+
+&#x2014;
+
+-   LVar-Compatible Maps
+
+```prologos
+;; Map lattice: join = merge with conflict detection
+;;
+;;        ⊤ (conflict)
+;;       /|\
+;;      / | \
+;;   {:a 1}  {:b 2}   {:a 1 :b 2}
+;;      \     |      /
+;;       \    |     /
+;;         \  |   /
+;;           ⊥ (empty map)
+
+;; Lattice operations on CHAMP
+trait LatticeMap (M : Type -> Type -> Type)
+  empty : M K V
+  join : M K V -> M K V -> M K V      ;; merge, conflict = ⊤
+  meet : M K V -> M K V -> M K V      ;; intersection
+  lte : M K V -> M K V -> Bool        ;; subset check
+```
+
+&#x2014;
+
+-   Propagator-Friendly Structures
+
+```prologos
+;; Cell holding partial map information
+cell user-data : LVar (Map String Value)
+
+;; Propagators can:
+;; 1. Add keys (monotonic)
+put user-data {:name "Alice"}
+put user-data {:age 42}
+;; Result: {:name "Alice" :age 42}
+
+;; 2. Detect conflicts
+put user-data {:name "Bob"}
+;; Conflict! Two different values for :name
+
+;; 3. Read with threshold
+get user-data #:when {:name _ :age _}
+;; Blocks until both :name and :age are known
+```
+
+&#x2014;
+
+-   Concurrent Data Structures
+
+For parallel propagator execution:
+
+```prologos
+;; Ctrie for concurrent map
+;; - Lock-free reads
+;; - Atomic updates
+;; - Snapshot isolation for iteration
+
+cell shared-map : Ctrie String Value
+
+;; Multiple propagators can update concurrently
+par
+  (put shared-map :a 1)
+  (put shared-map :b 2)
+  (put shared-map :c 3)
+
+;; Consistent snapshot for reading
+let snapshot = snapshot shared-map
+fold process-entry {} snapshot
+```
+
+&#x2014;
+
+-   Comparison Matrix
+
+| Structure   | Lookup | Insert | Concat | Slice  | Ordered | Concurrent |
+|----------- |------ |------ |------ |------ |------- |---------- |
+| HAMT        | O(1)/  | O(1)/  | O(n)   | N/A    | No      | No         |
+| CHAMP       | O(1)/  | O(1)/  | O(n)   | N/A    | No      | No         |
+| RRB-Tree    | O(1)/  | O(1)/  | O(log) | O(log) | Yes     | No         |
+| Finger Tree | O(log) | O(1)   | O(log) | O(log) | Yes     | No         |
+| Ctrie       | O(1)/  | O(1)/  | O(n)   | N/A    | No      | Yes        |
+| B+ Tree     | O(log) | O(log) | O(n)   | O(log) | Yes     | No         |
+| Red-Black   | O(log) | O(log) | O(n)   | O(log) | Yes     | No         |
+
+(/ = effectively constant for realistic sizes)
+
+&#x2014;
+
+-   Recommended Defaults for Prologos
+
+| Type            | Default Implementation | Why                              |
+|--------------- |---------------------- |-------------------------------- |
+| `Vec A`         | RRB-Tree               | Index, concat, slice all good    |
+| `Map K V`       | CHAMP                  | Fast lookup, memory efficient    |
+| `Set A`         | CHAMP                  | Same as map, just keys           |
+| `List A`        | Cons cells             | Pattern matching, simple         |
+| `Seq A`         | Lazy generator         | Memory efficient streaming       |
+| `SortedMap K V` | Persistent B+ Tree     | Ordered traversal, range queries |
+| `Deque A`       | Finger Tree            | O(1) both ends                   |
+| Concurrent      | Ctrie                  | Lock-free parallel access        |
+
+&#x2014;
+
+-   Implementation Strategy
+
+```prologos
+;; ========================================
+;; Phase 1: Core (Simple, Correct)
+;; ========================================
+
+;; Start with simple implementations
+Vec     -> Balanced tree (not RRB yet)
+Map     -> HAMT
+Set     -> HAMT
+List    -> Cons cells
+
+;; ========================================
+;; Phase 2: Optimized (Performance)
+;; ========================================
+
+;; Upgrade to better implementations
+Vec     -> RRB-Tree
+Map/Set -> CHAMP
+
+;; ========================================
+;; Phase 3: Specialized (Completeness)
+;; ========================================
+
+;; Add specialized structures
+SortedMap   -> Persistent B+ Tree
+Deque       -> Finger Tree
+Concurrent  -> Ctrie
+PriorityQ   -> Pairing Heap
+
+;; ========================================
+;; Phase 4: Adaptive (Optimization)
+;; ========================================
+
+;; Compiler chooses based on usage patterns
+;; Small map? Use array-based
+;; Large vec with concat? Use RRB
+;; Concurrent access? Use Ctrie
+```
+
+&#x2014;
+
+-   Lattice-Based Data Structures (Novel)
+
+For propagators, we might want *native lattice structures*:
+
+```prologos
+;; Interval lattice map
+;; Values are intervals, join = intersection
+cell bounds : IntervalMap String (Interval Nat)
+
+put bounds {:x [0 100]}
+put bounds {:x [50 150]}
+;; Result: {:x [50 100]} (intersection)
+
+;; Set lattice map
+;; Values are sets, join = union
+cell tags : SetMap ItemId (Set Tag)
+
+put tags {item-1 #{:red}}
+put tags {item-1 #{:large}}
+;; Result: {item-1 #{:red :large}}
+
+;; Causal map (for distributed systems)
+;; Values carry vector clocks
+cell state : CausalMap String Value
+
+put state {:x 1} @clock-1
+put state {:x 2} @clock-2
+;; No conflict if clocks are ordered
+;; Conflict if concurrent
+```
+
+&#x2014;
+
+-   Summary
+
+| Concern                  | Solution                             |
+|------------------------ |------------------------------------ |
+| User simplicity          | Abstract types (Vec, Map, Set)       |
+| Performance              | Smart defaults (RRB, CHAMP)          |
+| Power users              | Explicit variants (as SortedMap)     |
+| Propagator compatibility | Lattice traits, monotonic operations |
+| Concurrent propagators   | Ctrie for shared state               |
+| Extensibility            | Trait-based abstraction              |
+
+Users write `@[1 2 3]` and ={:a 1}
+
+
+<a id="org177fda4"></a>
 
 # 
 
@@ -13826,12 +17563,12 @@ No iterator protocol. No `next()` method. No state machine. Just:
 *Simpler. Predictable. Functional.*
 
 
-<a id="orgb5a7d66"></a>
+<a id="orgc441d99"></a>
 
 # 
 
 
-<a id="org1eba64c"></a>
+<a id="orgd1af11e"></a>
 
 # How should we expect to \`def sum\` on \`[list/reduce add 0 \_]\`
 
@@ -14035,11 +17772,11 @@ def sum [fn [x$1] [list/reduce add 0 x$1]]
 Does this match your intent?
 
 
-<a id="orgdeb0c70"></a>
+<a id="orgb82cfdd"></a>
 
 # 
 
 
-<a id="orgb8a3653"></a>
+<a id="orgb802ff3"></a>
 
 # The other syntax that I am overthinking is whether to support groupings

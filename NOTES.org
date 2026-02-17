@@ -176,6 +176,11 @@ A /relation that produces proofs/, defined /locally/ inside a /function/, return
   - [X] `let` block vs in-line `let`s
     - We support both... sibling in-line lets share same local scope
     - Design research/🦆
+  - [ ] Map with key access syntax
+    - Make Example in Syntax Lab
+    - Implicit Map syntax
+  - [ ] foreign/ffi syntax
+
 ** Namespacing
   - [X] auto provide `defn`s
     - [X] create private defn- and co.
@@ -268,6 +273,15 @@ For this run, we want to clarify Type system syntax and the issues involved with
  ```
 
 
+** call site typing, "Explicit Application"
+
+- When Might You Want Explicit Type Arguments?
+
+Sometimes inference fails or you want to be explicit:
+#+begin_src prologos
+  ;; Or at call site (if we support it)
+  let xs = nil @Nat  ;; "nil at type Nat"
+#+end_src
 
 
 
@@ -452,6 +466,19 @@ spec add
 
 
 
+** HashMap
+*** Map Literal uses EDN style
+#+begin_src prologos
+  {:name "Alice" :age 42}
+#+end_src
+*** Lookup Syntax
+
+** foreign imports and ffi
+
+
+
+
+
 
 ** Partial Functions, strict arity, and the Hole-y Trinity: Curry Favor
 
@@ -554,7 +581,10 @@ Example:
 ** fn/rel fusion...
 ** Unify | = | eq? 🤷‍♀️
   * Should we keep Prolog's use of `=` for unification
-    - use `unify` keyword?
+    - +use `unify` keyword?+
+    - We're going with the classic `=` is unify! 🎉
+
+
 
 
 * Data Structures
@@ -570,10 +600,15 @@ Example:
     - In-line evaluation
     - Keep locked in to context (no switching cost between code and run/eval)
     - Frictionless Developer Tooling Integration
+  * Tooling
+    - Data Viewer
+    - Build Tooling
+    - Testing Infrastructure
+    - Package Manager
   * Homoiconicity: Code is Data
-    - What you
+    - What you you see is what you get, your code is your data
+      - easy macro rewriting and expanding/inspectability of data and runtime
     - Uniform Syntax
-
 
 
 * Considerations
