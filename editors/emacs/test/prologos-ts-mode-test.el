@@ -453,6 +453,168 @@
     (let ((face (get-text-property (match-beginning 0) 'face)))
       (should (eq face 'font-lock-string-face)))))
 
+;; ============================================================
+;; Test: Syntactic fallback — comments in ERROR regions
+;; ============================================================
+;;
+;; The tree-sitter grammar can't parse `foreign' declarations, so
+;; they produce ERROR nodes.  Comments near ERROR nodes lose their
+;; (comment) tree-sitter nodes.  The syntactic fallback catches these.
+
+(ert-deftest prologos-ts-test/fallback-comment-after-foreign ()
+  "Comments after `foreign' declarations should get comment face via fallback."
+  (skip-unless prologos-ts-test--treesit-available)
+  (prologos-ts-test--in-buffer
+      "foreign racket \"racket/base\" [add1 : Nat -> Nat]\n\nadd1 2\n;; => 3 : Nat\n"
+    (goto-char (point-min))
+    (search-forward ";; =>")
+    (let ((face (get-text-property (match-beginning 0) 'face)))
+      (should (memq face '(font-lock-comment-face
+                            font-lock-comment-delimiter-face))))))
+
+(ert-deftest prologos-ts-test/fallback-comment-between-foreigns ()
+  "Comments between `foreign' lines should get comment face."
+  (skip-unless prologos-ts-test--treesit-available)
+  (prologos-ts-test--in-buffer
+      "foreign racket \"racket/base\" [add1 : Nat -> Nat]\n;; separator\nforeign racket \"racket/base\" [sub1 : Nat -> Nat]\n"
+    (goto-char (point-min))
+    (search-forward ";; separator")
+    (let ((face (get-text-property (match-beginning 0) 'face)))
+      (should (memq face '(font-lock-comment-face
+                            font-lock-comment-delimiter-face))))))
+
+(ert-deftest prologos-ts-test/fallback-comment-no-bleed ()
+  "Fallback should not apply comment face to non-comment text."
+  (skip-unless prologos-ts-test--treesit-available)
+  (prologos-ts-test--in-buffer
+      ";; a comment\nforeign racket \"racket/base\" [add1 : Nat -> Nat]\nadd1 2\n"
+    ;; "add1 2" on line 3 should NOT get comment face
+    (goto-char (point-min))
+    (search-forward "add1 2")
+    (let ((face (get-text-property (match-beginning 0) 'face)))
+      (should-not (memq face '(font-lock-comment-face
+                                font-lock-comment-delimiter-face))))))
+
+;; ============================================================
+;; Test: Syntactic fallback — strings in ERROR regions
+;; ============================================================
+
+(ert-deftest prologos-ts-test/fallback-string-in-foreign ()
+  "String literals on `foreign' lines should get string face via fallback."
+  (skip-unless prologos-ts-test--treesit-available)
+  (prologos-ts-test--in-buffer
+      "foreign racket \"racket/base\" [add1 : Nat -> Nat]\n"
+    (goto-char (point-min))
+    (search-forward "racket/")
+    (let ((face (get-text-property (match-beginning 0) 'face)))
+      (should (eq face 'font-lock-string-face)))))
+
+(ert-deftest prologos-ts-test/fallback-nat-not-string ()
+  "Nat after string on foreign line should NOT get string face."
+  (skip-unless prologos-ts-test--treesit-available)
+  (prologos-ts-test--in-buffer
+      "foreign racket \"racket/base\" [add1 : Nat -> Nat]\n"
+    (goto-char (point-min))
+    (search-forward "[add1 : ")
+    (search-forward "Nat")
+    (let ((face (get-text-property (match-beginning 0) 'face)))
+      (should-not (eq face 'font-lock-string-face)))))
+
+;; ============================================================
+;; Test: Native racket{...} block fontification
+;; ============================================================
+
+(ert-deftest prologos-ts-test/racket-block-delimiter-face ()
+  "racket{...} delimiters should get `prologos-racket-delimiter-face'."
+  (skip-unless prologos-ts-test--treesit-available)
+  (prologos-ts-test--in-buffer "def x : Nat racket{42}\n"
+    (goto-char (point-min))
+    (search-forward "racket{")
+    (let ((face (get-text-property (match-beginning 0) 'face)))
+      (should (eq face 'prologos-racket-delimiter-face)))))
+
+(ert-deftest prologos-ts-test/racket-block-native-keywords ()
+  "Scheme keywords inside racket{...} should get keyword face."
+  (skip-unless prologos-ts-test--treesit-available)
+  (prologos-ts-test--in-buffer
+      "def x : Nat racket{(define (helper n) (if (= n 0) 1 n))}\n"
+    (goto-char (point-min))
+    (search-forward "define")
+    (let ((face (get-text-property (match-beginning 0) 'face)))
+      (should (eq face 'font-lock-keyword-face)))))
+
+(ert-deftest prologos-ts-test/racket-block-multiline-native ()
+  "Multi-line racket{...} blocks should have native fontification."
+  (skip-unless prologos-ts-test--treesit-available)
+  (prologos-ts-test--in-buffer
+      "def countdown : Nat racket{\n  (let loop ([n 10] [acc 0])\n    (if (zero? n) acc (loop n acc)))\n}\n"
+    ;; `let' should get keyword face from scheme-mode
+    (goto-char (point-min))
+    (search-forward "let")
+    (let ((face (get-text-property (match-beginning 0) 'face)))
+      (should (eq face 'font-lock-keyword-face)))
+    ;; `loop' should get function-name face (named let)
+    (search-forward "loop")
+    (let ((face (get-text-property (match-beginning 0) 'face)))
+      (should (eq face 'font-lock-function-name-face)))))
+
+(ert-deftest prologos-ts-test/racket-block-string-inside ()
+  "Strings inside racket{...} should get string face from scheme-mode."
+  (skip-unless prologos-ts-test--treesit-available)
+  (prologos-ts-test--in-buffer
+      "def x : Nat racket{(string-length \"hello world\")}\n"
+    (goto-char (point-min))
+    (search-forward "hello")
+    (let ((face (get-text-property (match-beginning 0) 'face)))
+      (should (eq face 'font-lock-string-face)))))
+
+(ert-deftest prologos-ts-test/racket-block-no-bleed ()
+  "Faces from racket{...} blocks should not bleed past closing `}'."
+  (skip-unless prologos-ts-test--treesit-available)
+  (prologos-ts-test--in-buffer
+      "def x : Nat racket{42}\ndef y : Nat\n  zero\n"
+    ;; "zero" on the next line should not be affected by racket block
+    (goto-char (point-min))
+    (search-forward "zero")
+    (let ((face (get-text-property (match-beginning 0) 'face)))
+      (should (eq face 'font-lock-constant-face)))))
+
+;; ============================================================
+;; Test: Keywords inside ERROR nodes (grammar misparsing)
+;; ============================================================
+;;
+;; When the tree-sitter grammar can't parse constructs like `foreign'
+;; declarations or capture/export syntax, subsequent `def' keywords
+;; can be swallowed into ERROR nodes and parsed as `identifier' inside
+;; `type_application'.  The identifier-matched keyword rule must
+;; override the type rule to keep `def' highlighted as a keyword.
+
+(ert-deftest prologos-ts-test/def-keyword-after-bare-symbol ()
+  "def keyword should get keyword face even when inside an ERROR node.
+This happens when a bare symbol usage line (e.g., `n-plus-one')
+causes tree-sitter to absorb the following `def' into a type_application."
+  (skip-unless prologos-ts-test--treesit-available)
+  (prologos-ts-test--in-buffer
+      "def n-plus-one : Nat racket{(add1 n)} [n : Nat] -> [n-plus-one : Nat]\n\nn-plus-one\n\ndef a : Nat 2\n"
+    (goto-char (point-min))
+    (search-forward "\ndef a")
+    (let ((face (get-text-property (1+ (match-beginning 0)) 'face)))
+      (should (eq face 'font-lock-keyword-face)))))
+
+(ert-deftest prologos-ts-test/def-keyword-after-multiple-error-lines ()
+  "Multiple def keywords after ERROR-producing lines should all get keyword face."
+  (skip-unless prologos-ts-test--treesit-available)
+  (prologos-ts-test--in-buffer
+      "def x : Nat racket{42} [x : Nat] -> [result : Nat]\n\nx\n\ndef a : Nat 2\ndef b : Nat 5\n"
+    ;; Both def a and def b should get keyword face
+    (goto-char (point-min))
+    (search-forward "def a")
+    (let ((face (get-text-property (match-beginning 0) 'face)))
+      (should (eq face 'font-lock-keyword-face)))
+    (search-forward "def b")
+    (let ((face (get-text-property (match-beginning 0) 'face)))
+      (should (eq face 'font-lock-keyword-face)))))
+
 (provide 'prologos-ts-mode-test)
 
 ;;; prologos-ts-mode-test.el ends here

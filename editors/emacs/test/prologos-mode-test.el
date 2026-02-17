@@ -103,11 +103,12 @@ If MODE-FN is given, call it instead of `prologos-mode'."
                (+ (point-min) 9)))))
 
 (ert-deftest prologos-test/syntax-curly-brackets ()
-  "Curly brackets should be matched pairs."
+  "Curly brackets are punctuation by default (not matched brackets).
+They are promoted to generic-string syntax only inside racket{...} blocks."
   (prologos-test--in-buffer "{A B}"
     (goto-char (point-min))
-    (should (= (save-excursion (forward-sexp 1) (point))
-               (+ (point-min) 5)))))
+    ;; { is punctuation (syntax class 1), not open-bracket
+    (should (= (car (syntax-after (point))) 1))))
 
 (ert-deftest prologos-test/syntax-angle-brackets ()
   "Angle brackets should be matched pairs."
@@ -504,6 +505,142 @@ A < in a comment must NOT be marked as an open-bracket."
                      (forward-sexp 1)
                      (point))
                    (+ nat-pos 5)))))))
+
+;; ============================================================
+;; Test: racket{...} escape blocks — syntax and fontification
+;; ============================================================
+
+(ert-deftest prologos-test/syntax-racket-block-single-line ()
+  "Single-line racket{...} should be treated as generic-string.
+The { should have generic-string syntax class."
+  (prologos-test--in-buffer "(def x <Nat> racket{42})"
+    (goto-char (point-min))
+    (search-forward "{")
+    ;; The { should have generic-string syntax (class |)
+    (let ((syn (syntax-after (1- (point)))))
+      (should (= (car syn) 15)))))   ; 15 = generic-string
+
+(ert-deftest prologos-test/syntax-racket-block-multiline ()
+  "Multi-line racket{...} should not corrupt highlighting after the block.
+Comments following a multi-line block must still get comment face."
+  (prologos-test--in-buffer "def x : Nat racket{\n  (+ 1 2)\n}\n;; ok"
+    (goto-char (point-min))
+    ;; Comment after the block should get comment face
+    (search-forward "ok")
+    (should (eq (get-text-property (match-beginning 0) 'face)
+                'font-lock-comment-face))))
+
+(ert-deftest prologos-test/syntax-racket-block-with-quotes ()
+  "Racket strings inside racket{...} should not leak into Prologos.
+The embedded quotes must be absorbed by the generic-string block."
+  (prologos-test--in-buffer "def x : Nat racket{(string-length \"hello\")}\ndef y : Nat zero"
+    (goto-char (point-min))
+    ;; `zero' on the next line should get its normal face, not string
+    (search-forward "zero")
+    (should (eq (get-text-property (match-beginning 0) 'face)
+                'font-lock-constant-face))))
+
+;; ============================================================
+;; Test: racket{...} native fontification (org-babel style)
+;; ============================================================
+
+(ert-deftest prologos-test/racket-block-delimiter-face ()
+  "The `racket{' and `}' delimiters should get delimiter face."
+  (prologos-test--in-buffer "def x : Nat racket{42}"
+    (goto-char (point-min))
+    (search-forward "racket")
+    (should (eq (get-text-property (match-beginning 0) 'face)
+                'prologos-racket-delimiter-face))
+    ;; closing }
+    (search-forward "}")
+    (should (eq (get-text-property (1- (point)) 'face)
+                'prologos-racket-delimiter-face))))
+
+(ert-deftest prologos-test/racket-block-native-keywords ()
+  "Scheme keywords inside racket{...} should get scheme-mode faces."
+  (prologos-test--in-buffer "def x : Nat racket{(if (zero? n) 1 2)}"
+    (goto-char (point-min))
+    (search-forward "if")
+    (should (eq (get-text-property (match-beginning 0) 'face)
+                'font-lock-keyword-face))))
+
+(ert-deftest prologos-test/racket-block-multiline-native ()
+  "Multi-line racket{...} blocks should get native Racket highlighting."
+  (prologos-test--in-buffer "def countdown : Nat racket{\n  (let loop ([n 10] [acc 0])\n    (if (zero? n) acc\n        (loop (sub1 n) (add1 acc))))\n}"
+    (goto-char (point-min))
+    ;; `let' should get keyword face from scheme-mode
+    (search-forward "let")
+    (should (eq (get-text-property (match-beginning 0) 'face)
+                'font-lock-keyword-face))
+    ;; `if' should also get keyword face
+    (search-forward "if")
+    (should (eq (get-text-property (match-beginning 0) 'face)
+                'font-lock-keyword-face))))
+
+(ert-deftest prologos-test/racket-block-no-bleed ()
+  "Highlighting from racket{...} blocks must not bleed into surrounding code."
+  (prologos-test--in-buffer "def x : Nat racket{42}\n;; comment\ndef y : Nat zero"
+    (goto-char (point-min))
+    ;; Comment after the block
+    (search-forward "comment")
+    (should (eq (get-text-property (match-beginning 0) 'face)
+                'font-lock-comment-face))
+    ;; `zero' should get constant face
+    (search-forward "zero")
+    (should (eq (get-text-property (match-beginning 0) 'face)
+                'font-lock-constant-face))))
+
+(ert-deftest prologos-test/racket-block-with-foreign ()
+  "racket{...} blocks after a `foreign racket' import should work."
+  (prologos-test--in-buffer "foreign racket \"racket/base\" [add1 : Nat -> Nat]\ndef x : Nat racket{42}"
+    (goto-char (point-min))
+    ;; The foreign keyword
+    (search-forward "foreign")
+    (should (eq (get-text-property (match-beginning 0) 'face)
+                'font-lock-keyword-face))
+    ;; The racket{ delimiter in the escape block (second line)
+    (search-forward "racket{")
+    (should (eq (get-text-property (match-beginning 0) 'face)
+                'prologos-racket-delimiter-face))))
+
+(ert-deftest prologos-test/racket-block-string-inside ()
+  "Strings inside racket{...} should get scheme-mode string face."
+  (prologos-test--in-buffer "def x : Nat racket{(string-length \"hello\")}"
+    (goto-char (point-min))
+    (search-forward "hello")
+    (should (eq (get-text-property (match-beginning 0) 'face)
+                'font-lock-string-face))))
+
+(ert-deftest prologos-test/comment-face-after-racket-blocks ()
+  "All comments in a file with multiple racket{...} blocks should have comment face."
+  (prologos-test--in-buffer "def x : Nat racket{42}\n;; first comment\ndef y : Nat racket{\n  (+ 1 2)\n}\n;; second comment"
+    (goto-char (point-min))
+    (search-forward "first comment")
+    (should (eq (get-text-property (match-beginning 0) 'face)
+                'font-lock-comment-face))
+    (search-forward "second comment")
+    (should (eq (get-text-property (match-beginning 0) 'face)
+                'font-lock-comment-face))))
+
+;; ============================================================
+;; Test: WS-mode definition names (bare def without parens)
+;; ============================================================
+
+(ert-deftest prologos-test/font-lock-ws-def-name ()
+  "In WS mode, bare `def name' (no parens) should highlight name."
+  (prologos-test--in-buffer "def base : Nat zero"
+    (goto-char (point-min))
+    (search-forward "base")
+    (should (eq (get-text-property (match-beginning 0) 'face)
+                'font-lock-function-name-face))))
+
+(ert-deftest prologos-test/font-lock-ws-defn-name ()
+  "In WS mode, bare `defn name' (no parens) should highlight name."
+  (prologos-test--in-buffer "defn double [x : Nat] : Nat\n  x"
+    (goto-char (point-min))
+    (search-forward "double")
+    (should (eq (get-text-property (match-beginning 0) 'face)
+                'font-lock-function-name-face))))
 
 (provide 'prologos-mode-test)
 

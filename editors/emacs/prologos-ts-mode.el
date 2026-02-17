@@ -42,7 +42,7 @@
 ;; Font-lock rules
 ;; ============================================================
 
-(defvar prologos-ts-font-lock-rules
+(defconst prologos-ts-font-lock-rules
   (treesit-font-lock-rules
    ;; Level 1: comments and strings
    :language 'prologos
@@ -63,7 +63,7 @@
    :feature 'keyword
    :override t
    '(((identifier) @font-lock-keyword-face
-      (:match "\\`\\(?:the\\|let\\|do\\|if\\|forall\\|exists\\|check\\|eval\\|infer\\|defmacro\\|spec\\|relation\\|clause\\|query\\|foreign\\|trait\\|impl\\)\\'"
+      (:match "\\`\\(?:def\\|defn\\|data\\|deftype\\|match\\|fn\\|ns\\|provide\\|require\\|the\\|let\\|do\\|if\\|forall\\|exists\\|check\\|eval\\|infer\\|defmacro\\|spec\\|relation\\|clause\\|query\\|foreign\\|trait\\|impl\\)\\'"
               @font-lock-keyword-face)))
    ;; TODO: When the tree-sitter grammar adds `foreign` declarations,
    ;; add structural rules for :as aliases, racket language identifier,
@@ -129,6 +129,178 @@
    t))
 
 ;; ============================================================
+;; Syntactic fontification fallback for tree-sitter
+;; ============================================================
+;;
+;; The tree-sitter grammar doesn't handle all Prologos constructs
+;; (e.g., `foreign' declarations).  Comments near ERROR nodes don't
+;; get (comment) tree-sitter nodes, so they lose their face.
+;;
+;; This wrapper runs tree-sitter fontification first, then applies
+;; Emacs's built-in syntactic fontification (using the syntax table)
+;; as a safety net — any comment or string that tree-sitter missed
+;; gets its face from the standard `syntax-ppss' based pass.
+
+(defun prologos-ts--syntactic-fallback (beg end)
+  "Apply comment/string faces via `syntax-ppss' in region BEG..END.
+Only applies to positions where the `face' property is still nil,
+so tree-sitter results are never overridden.
+
+Handles three cases:
+1. Point starts inside a comment or string (multi-line continuation).
+2. Line begins with `;' — apply comment delimiter + comment faces.
+3. Otherwise scan within the line for mid-line strings and comments
+   that tree-sitter missed (e.g., on `foreign' declaration lines
+   inside ERROR nodes)."
+  (save-excursion
+    (goto-char beg)
+    (beginning-of-line)
+    (while (< (point) end)
+      (let* ((ppss (syntax-ppss (point)))
+             (in-string (nth 3 ppss))
+             (in-comment (nth 4 ppss))
+             (start (point)))
+        (cond
+         (in-comment
+          ;; Inside a comment — apply face to end of line
+          (let ((comment-end (line-end-position)))
+            (prologos-ts--apply-fallback-face
+             start comment-end in-string in-comment)
+            (goto-char (min (1+ comment-end) end))))
+         (in-string
+          ;; Inside a string — find its end via parse-partial-sexp
+          (let ((string-end (save-excursion
+                              (parse-partial-sexp (point) end nil nil ppss
+                                                  'syntax-table)
+                              (point))))
+            (prologos-ts--apply-fallback-face
+             start string-end in-string in-comment)
+            (goto-char string-end)))
+         (t
+          ;; Not inside string or comment at start of line.
+          ;; Check if line begins with comment delimiters.
+          (if (looking-at "\\(;+\\)\\(.*\\)$")
+              (let ((delim-end (match-end 1))
+                    (line-end (match-end 0)))
+                (prologos-ts--apply-fallback-face-range
+                 start delim-end 'font-lock-comment-delimiter-face)
+                (when (< delim-end line-end)
+                  (prologos-ts--apply-fallback-face-range
+                   delim-end line-end 'font-lock-comment-face))
+                (goto-char (min (1+ line-end) end)))
+            ;; Scan within the line for mid-line syntactic constructs.
+            ;; This catches strings like "racket/base" and inline comments
+            ;; on lines the tree-sitter grammar can't parse (ERROR nodes).
+            (prologos-ts--scan-line-for-syntax end)
+            (forward-line 1))))))))
+
+(defun prologos-ts--scan-line-for-syntax (region-end)
+  "Scan current line for mid-line strings and comments missed by tree-sitter.
+Applies `font-lock-string-face' to string literals and
+`font-lock-comment-face' to trailing comments.  Only touches
+positions where `face' is still nil.  REGION-END bounds the scan."
+  (let ((line-end (min (line-end-position) region-end))
+        (pos (point)))
+    (while (< pos line-end)
+      (let ((ppss (syntax-ppss pos)))
+        (cond
+         ;; Entered a string
+         ((nth 3 ppss)
+          (let ((str-start (nth 8 ppss))  ; string/comment start position
+                (str-end (save-excursion
+                           (parse-partial-sexp pos line-end nil nil ppss
+                                               'syntax-table)
+                           (point))))
+            ;; Apply string face (skip generic-string = racket blocks)
+            (unless (eq (nth 3 ppss) t)
+              (prologos-ts--apply-fallback-face-range pos str-end
+                                                      'font-lock-string-face))
+            (setq pos str-end)))
+         ;; Entered a comment
+         ((nth 4 ppss)
+          (prologos-ts--apply-fallback-face-range pos line-end
+                                                  'font-lock-comment-face)
+          (setq pos line-end))
+         ;; Normal code — advance to the next syntactically interesting char
+         (t
+          (let ((next (save-excursion
+                        (parse-partial-sexp pos line-end nil nil ppss
+                                            'syntax-table)
+                        (point))))
+            ;; If parse didn't advance (e.g., at line-end), force progress
+            (setq pos (if (= next pos) line-end next)))))))))
+
+(defun prologos-ts--apply-fallback-face (beg end in-string in-comment)
+  "Apply syntactic face in BEG..END based on IN-STRING and IN-COMMENT.
+Only applies where existing face is nil."
+  (let ((face (cond
+               (in-comment 'font-lock-comment-face)
+               ((eq in-string t) nil)       ; generic-string (racket block)
+               (in-string 'font-lock-string-face)
+               (t nil))))
+    (when face
+      (prologos-ts--apply-fallback-face-range beg end face))))
+
+(defun prologos-ts--apply-fallback-face-range (beg end face)
+  "Apply FACE to positions in BEG..END where existing face is nil."
+  (let ((pos beg))
+    (while (< pos end)
+      (let ((existing (get-text-property pos 'face))
+            (next-change (or (next-single-property-change pos 'face nil end)
+                             end)))
+        (when (null existing)
+          (put-text-property pos (min next-change end) 'face face))
+        (setq pos next-change)))))
+
+;; ============================================================
+;; Native racket{...} block fontification for tree-sitter mode
+;; ============================================================
+;;
+;; The tree-sitter grammar doesn't have a racket_escape node, so
+;; racket{...} blocks parse as ERROR with their content treated as
+;; regular Prologos nodes.  This pass finds racket blocks, applies
+;; `prologos-racket-delimiter-face' to the delimiters, and delegates
+;; to `prologos--fontify-racket-block-natively' (from prologos-font-lock.el)
+;; for scheme-mode/racket-mode highlighting of the interior.
+
+(defun prologos-ts--fontify-racket-blocks (beg end)
+  "Find and natively fontify all racket{...} blocks in BEG..END.
+Applies `prologos-racket-delimiter-face' to `racket{' and `}' delimiters,
+and delegates interior fontification to scheme-mode/racket-mode."
+  (save-excursion
+    (goto-char beg)
+    (while (re-search-forward "racket{" end t)
+      (let ((kw-start (match-beginning 0))
+            (brace-start (1- (point)))
+            (content-start (point)))
+        ;; Skip if inside a comment or string
+        (unless (let ((ppss (save-excursion (syntax-ppss brace-start))))
+                  (or (nth 3 ppss) (nth 4 ppss)))
+          ;; Find matching } by brace counting
+          (let ((depth 1)
+                close)
+            (save-excursion
+              (goto-char content-start)
+              (while (and (> depth 0) (re-search-forward "[{}]" end t))
+                (cond
+                 ((eq (char-before) ?\{) (setq depth (1+ depth)))
+                 ((eq (char-before) ?\})
+                  (setq depth (1- depth))
+                  (when (= depth 0)
+                    (setq close (1- (point))))))))
+            (when close
+              ;; Highlight delimiters
+              (put-text-property kw-start (1+ brace-start)
+                                 'face 'prologos-racket-delimiter-face)
+              (put-text-property close (1+ close)
+                                 'face 'prologos-racket-delimiter-face)
+              ;; Natively fontify the interior content
+              (when (< content-start close)
+                (save-match-data
+                  (prologos--fontify-racket-block-natively content-start close)))
+              (goto-char (1+ close)))))))))
+
+;; ============================================================
 ;; Keymap
 ;; ============================================================
 
@@ -161,13 +333,22 @@
 
   (treesit-parser-create 'prologos)
 
-  ;; Font-lock
+  ;; Font-lock — tree-sitter rules
   (setq-local treesit-font-lock-settings prologos-ts-font-lock-rules)
   (setq-local treesit-font-lock-feature-list
               '((comment string)
                 (keyword function definition)
                 (type constant number multiplicity)
                 (operator)))
+
+  ;; Syntax propertize — angle brackets + racket{...} escape blocks
+  (setq-local syntax-propertize-function #'prologos--syntax-propertize)
+  (add-hook 'syntax-propertize-extend-region-functions
+            #'prologos--extend-region-for-syntax nil t)
+
+  ;; Extend jit-lock region across racket{...} blocks
+  (add-hook 'jit-lock-after-change-extend-region-functions
+            #'prologos--jit-lock-extend-region nil t)
 
   ;; WS mode — .prologos files always use whitespace-significant syntax
   (prologos--detect-lang-mode)
@@ -193,7 +374,23 @@
                 ("Type" "\\`deftype_form\\'" nil nil)))
 
   ;; Activate tree-sitter features
-  (treesit-major-mode-setup))
+  (treesit-major-mode-setup)
+
+  ;; After treesit-major-mode-setup: install a wrapper around the
+  ;; fontify-region function that runs three passes:
+  ;; 1. Standard tree-sitter font-lock
+  ;; 2. Syntactic fallback (comments/strings in ERROR regions)
+  ;; 3. Native racket{...} block fontification (scheme-mode highlighting)
+  (let ((original-fn font-lock-fontify-region-function))
+    (setq-local font-lock-fontify-region-function
+                (lambda (beg end &optional loudly)
+                  ;; Pass 1: tree-sitter font-lock
+                  (funcall original-fn beg end loudly)
+                  ;; Pass 2: syntactic fallback for missed comments/strings
+                  (prologos-ts--syntactic-fallback beg end)
+                  ;; Pass 3: native racket{...} block highlighting
+                  (when prologos-fontify-racket-blocks-natively
+                    (prologos-ts--fontify-racket-blocks beg end))))))
 
 ;; ============================================================
 ;; Auto-mode fallback
