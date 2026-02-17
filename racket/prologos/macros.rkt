@@ -280,6 +280,10 @@
         (if (equal? result datum) datum
             (preparse-expand-form result reg (+ depth 1)))]
        [else datum])]
+    ;; $foreign-block — opaque, do NOT recurse into code datums
+    ;; The code inside is raw Racket, not Prologos surface syntax
+    [(and (pair? datum) (eq? (car datum) '$foreign-block))
+     datum]
     ;; List form — check head symbol for macros
     [(and (pair? datum) (symbol? (car datum)))
      (define entry (hash-ref reg (car datum) #f))
