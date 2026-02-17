@@ -1,0 +1,59 @@
+ns prologos.core.hashable-instances
+
+require [prologos.core.hashable-trait :refer [Hashable Hashable-hash hash-combine]]
+require [prologos.data.nat            :refer [add]]
+require [prologos.data.option          :refer [Option some none]]
+require [prologos.data.list            :refer [List nil cons]]
+require [prologos.data.ordering        :refer [Ordering lt-ord eq-ord gt-ord]]
+
+;; ========================================
+;; Hashable Nat — identity hash
+;; ========================================
+;; hash n = n (the natural number itself)
+
+impl Hashable Nat
+  defn hash [n : Nat] <Nat>
+    n
+
+;; ========================================
+;; Hashable Bool — true=1, false=0
+;; ========================================
+;; Note: Use 'if' instead of 'match' — match on Bool inside impl
+;; body hits a mult-meta store issue with bare params.
+
+impl Hashable Bool
+  defn hash [b : Bool] <Nat>
+    if b [inc zero] zero
+
+;; ========================================
+;; Hashable Ordering — lt=0, eq=1, gt=2
+;; ========================================
+
+impl Hashable Ordering
+  defn hash [o : Ordering] <Nat>
+    match o
+      | lt-ord -> zero
+      | eq-ord -> inc zero
+      | gt-ord -> inc [inc zero]
+
+;; ========================================
+;; Parameterized hash functions (explicit dict)
+;; ========================================
+;; These take the Hashable dictionary as an explicit argument,
+;; matching the existing pattern used by `elem` in list.prologos.
+
+;; hash-option: hash an Option A using a Hashable A dict.
+;; none → 0, some a → hash-combine 1 (hash a)
+spec hash-option [Hashable A] [Option A] -> Nat
+defn hash-option [hash-a opt]
+  match opt
+    | none   -> zero
+    | some a -> hash-combine [inc zero] [hash-a a]
+
+;; hash-list: hash a List A using a Hashable A dict.
+;; nil → 0, cons a as → hash-combine (hash a) (hash-list as)
+spec hash-list [Hashable A] [List A] -> Nat
+defn hash-list [hash-a xs]
+  match xs
+    | nil       -> zero
+    | cons a as -> hash-combine [hash-a a] [hash-list hash-a as]
