@@ -196,3 +196,123 @@
     "(foreign racket \"racket/base\" (add1 : Nat -> Nat))
      (eval (add1 (inc (add1 zero))))")
    "3 : Nat"))
+
+;; ========================================
+;; Symbol-level :as alias tests
+;; ========================================
+
+(test-case "foreign/symbol-alias-eval"
+  ;; Import add1 as increment, eval with alias name
+  (check-contains
+   (run-ns-last
+    "(foreign racket \"racket/base\" (add1 :as increment : Nat -> Nat))
+     (eval (increment (inc (inc zero))))")
+   "3 : Nat"))
+
+(test-case "foreign/symbol-alias-type"
+  ;; Aliased name has correct type
+  (define result
+    (run-ns-last
+     "(foreign racket \"racket/base\" (add1 :as increment : Nat -> Nat))
+      (infer increment)"))
+  (check-contains result "Nat")
+  (check-contains result "->"))
+
+(test-case "foreign/symbol-alias-original-hidden"
+  ;; Original Racket name should NOT be available under its original name
+  (check-contains
+   (format "~a"
+    (run-ns-last
+     "(foreign racket \"racket/base\" (add1 :as increment : Nat -> Nat))
+      (eval (add1 zero))"))
+   "Unbound variable"))
+
+(test-case "foreign/symbol-alias-bool"
+  ;; Alias a Bool-returning function
+  (check-contains
+   (run-ns-last
+    "(foreign racket \"racket/base\" (zero? :as is-zero : Nat -> Bool))
+     (eval (is-zero zero))")
+   "true : Bool"))
+
+;; ========================================
+;; Module-level :as alias tests
+;; ========================================
+
+(test-case "foreign/module-alias-eval"
+  ;; Module alias: rkt/add1
+  (check-contains
+   (run-ns-last
+    "(foreign racket \"racket/base\" :as rkt (add1 : Nat -> Nat))
+     (eval (rkt/add1 (inc (inc zero))))")
+   "3 : Nat"))
+
+(test-case "foreign/module-alias-multiple"
+  ;; Multiple declarations with module alias, compose them
+  (check-contains
+   (run-ns-last
+    "(foreign racket \"racket/base\" :as rkt (add1 : Nat -> Nat) (sub1 : Nat -> Nat))
+     (eval (rkt/sub1 (rkt/add1 (inc (inc zero)))))")
+   "2 : Nat"))
+
+(test-case "foreign/module-alias-type"
+  ;; Module-aliased name has correct type
+  (define result
+    (run-ns-last
+     "(foreign racket \"racket/base\" :as rkt (add1 : Nat -> Nat))
+      (infer rkt/add1)"))
+  (check-contains result "Nat")
+  (check-contains result "->"))
+
+(test-case "foreign/module-alias-original-hidden"
+  ;; Bare name should NOT be available when module alias is used
+  (check-contains
+   (format "~a"
+    (run-ns-last
+     "(foreign racket \"racket/base\" :as rkt (add1 : Nat -> Nat))
+      (eval (add1 zero))"))
+   "Unbound variable"))
+
+;; ========================================
+;; Combined (module + symbol) alias tests
+;; ========================================
+
+(test-case "foreign/combined-alias"
+  ;; Module alias + symbol alias → rkt/increment
+  (check-contains
+   (run-ns-last
+    "(foreign racket \"racket/base\" :as rkt (add1 :as increment : Nat -> Nat))
+     (eval (rkt/increment (inc (inc zero))))")
+   "3 : Nat"))
+
+(test-case "foreign/combined-mixed"
+  ;; Module alias with one symbol aliased, one not
+  (check-contains
+   (run-ns-last
+    "(foreign racket \"racket/base\" :as rkt (add1 :as increment : Nat -> Nat) (sub1 : Nat -> Nat))
+     (eval (rkt/increment (rkt/sub1 (inc (inc (inc zero))))))")
+   "3 : Nat"))
+
+;; ========================================
+;; Backward compatibility
+;; ========================================
+
+(test-case "foreign/no-alias-unchanged"
+  ;; Original syntax without any alias still works
+  (check-contains
+   (run-ns-last
+    "(foreign racket \"racket/base\" (add1 : Nat -> Nat))
+     (eval (add1 (inc zero)))")
+   "2 : Nat"))
+
+;; ========================================
+;; Error cases
+;; ========================================
+
+(test-case "foreign/module-alias-no-decls"
+  ;; Module alias with no declarations → error
+  (check-exn
+   exn:fail?
+   (lambda ()
+     (run-ns
+      "(foreign racket \"racket/base\" :as rkt)"))))

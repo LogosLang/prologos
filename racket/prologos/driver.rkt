@@ -632,29 +632,73 @@
 ;; ========================================
 ;; Foreign Import Handler
 ;; ========================================
-;; datum = (foreign racket "module-path" (name1 : type1...) (name2 : type2...) ...)
+;; datum = (foreign racket "module-path" [:as module-alias] (name1 [:as alias1] : type1...) ...)
 ;; Parses each declaration, dynamic-requires the Racket binding, builds
 ;; an expr-foreign-fn value, and registers it in the global environment.
+;;
+;; Supports :as aliasing at two levels:
+;;   Module-level: (foreign racket "mod" :as rkt (add1 : Nat -> Nat))
+;;                 → registers as rkt/add1
+;;   Symbol-level: (foreign racket "mod" (add1 :as increment : Nat -> Nat))
+;;                 → registers as increment
+;;   Combined:     (foreign racket "mod" :as rkt (add1 :as increment : Nat -> Nat))
+;;                 → registers as rkt/increment
 
 (define (handle-foreign datum)
   (unless (and (list? datum) (>= (length datum) 4)
                (eq? (cadr datum) 'racket)
                (string? (caddr datum)))
-    (error 'foreign "Expected: (foreign racket \"module\" (name : type) ...)"))
+    (error 'foreign "Expected: (foreign racket \"module\" [:as alias] (name [:as alias] : type) ...)"))
   (define module-path-str (caddr datum))
-  (define decls (cdddr datum))
-  (for ([decl (in-list decls)])
-    (handle-foreign-decl module-path-str decl)))
+  (define rest (cdddr datum))
 
-;; Process a single foreign declaration: (name : type-tokens...)
-;; e.g., (add1 : Nat -> Nat)
-(define (handle-foreign-decl module-path-str decl)
-  (unless (and (list? decl) (>= (length decl) 3)
-               (symbol? (car decl))
-               (eq? (cadr decl) ':))
-    (error 'foreign "Expected: (name : type), got: ~a" decl))
-  (define name (car decl))
-  (define type-tokens (cddr decl))  ;; everything after the ':'
+  ;; Check for optional module-level :as alias
+  ;; WS reader produces 'as (keyword stripped), sexp reader produces ':as
+  (define-values (module-alias decls)
+    (if (and (>= (length rest) 2)
+             (memq (car rest) '(:as as))
+             (symbol? (cadr rest)))
+        (values (cadr rest) (cddr rest))
+        (values #f rest)))
+
+  (when (null? decls)
+    (error 'foreign "No declarations after module alias ~a" (or module-alias "")))
+
+  (for ([decl (in-list decls)])
+    (handle-foreign-decl module-path-str decl module-alias)))
+
+;; Process a single foreign declaration: (name [:as alias] : type-tokens...)
+;; e.g., (add1 : Nat -> Nat)            — no alias
+;;       (add1 :as increment : Nat -> Nat) — symbol alias
+;;
+;; module-alias: optional symbol prefix (e.g., 'rkt → registers as rkt/name)
+(define (handle-foreign-decl module-path-str decl [module-alias #f])
+  (unless (and (list? decl) (>= (length decl) 3) (symbol? (car decl)))
+    (error 'foreign "Expected: (name [:as alias] : type), got: ~a" decl))
+
+  ;; Parse symbol-level alias: (name :as alias : type...) or (name : type...)
+  (define-values (racket-name local-name type-tokens)
+    (cond
+      ;; (name :as alias : type...) — symbol-level alias
+      [(and (>= (length decl) 5)
+            (memq (cadr decl) '(:as as))
+            (symbol? (caddr decl))
+            (eq? (cadddr decl) ':))
+       (values (car decl) (caddr decl) (cddddr decl))]
+      ;; (name : type...) — no alias
+      [(eq? (cadr decl) ':)
+       (values (car decl) (car decl) (cddr decl))]
+      [else
+       (error 'foreign "Expected: (name : type) or (name :as alias : type), got: ~a" decl)]))
+
+  ;; Compute final Prologos registration name
+  ;; With module-alias 'rkt and local-name 'increment → 'rkt/increment
+  ;; Without module-alias, local-name 'increment → 'increment
+  (define prologos-name
+    (if module-alias
+        (string->symbol
+         (string-append (symbol->string module-alias) "/" (symbol->string local-name)))
+        local-name))
 
   ;; Build a type sexp from the tokens: (Nat -> Nat -> Bool) → (-> Nat (-> Nat Bool))
   (define type-sexp (foreign-type-tokens->sexp type-tokens))
@@ -663,41 +707,41 @@
   (reset-meta-store!)
   (define type-surf (parse-datum type-sexp))
   (when (prologos-error? type-surf)
-    (error 'foreign "Failed to parse type for ~a: ~a" name type-surf))
+    (error 'foreign "Failed to parse type for ~a: ~a" racket-name type-surf))
   (define type-expr (elaborate type-surf))
   (when (prologos-error? type-expr)
-    (error 'foreign "Failed to elaborate type for ~a: ~a" name type-expr))
+    (error 'foreign "Failed to elaborate type for ~a: ~a" racket-name type-expr))
 
   ;; Zonk the type to resolve any metas
   (define zonked-type (zonk-final type-expr))
 
-  ;; dynamic-require the Racket function
+  ;; dynamic-require the Racket function using its ORIGINAL Racket name
   (define rkt-mod-path (string->symbol module-path-str))
   (define rkt-proc
     (with-handlers ([exn:fail? (lambda (e)
                                  (error 'foreign "Cannot import ~a from ~a: ~a"
-                                        name module-path-str (exn-message e)))])
-      (dynamic-require rkt-mod-path name)))
+                                        racket-name module-path-str (exn-message e)))])
+      (dynamic-require rkt-mod-path racket-name)))
 
   ;; Parse type to get marshalling info
   (define parsed-type (parse-foreign-type zonked-type))
   (define-values (marshal-in marshal-out) (make-marshaller-pair parsed-type))
   (define arity (length (car parsed-type)))
 
-  ;; Build the foreign-fn value
-  (define val (expr-foreign-fn name rkt-proc arity '() marshal-in marshal-out))
+  ;; Build the foreign-fn value with the Prologos name
+  (define val (expr-foreign-fn prologos-name rkt-proc arity '() marshal-in marshal-out))
 
-  ;; Register in global env
+  ;; Register in global env under the Prologos name
   (current-global-env
-   (global-env-add (current-global-env) name zonked-type val))
+   (global-env-add (current-global-env) prologos-name zonked-type val))
 
   ;; Also register FQN if in a namespace
   (when (current-ns-context)
-    (define fqn (qualify-name name (ns-context-current-ns (current-ns-context))))
+    (define fqn (qualify-name prologos-name (ns-context-current-ns (current-ns-context))))
     (current-global-env
      (global-env-add (current-global-env) fqn zonked-type val))
     ;; Auto-export the foreign binding
-    (ns-context-add-auto-export (current-ns-context) name)))
+    (ns-context-add-auto-export (current-ns-context) prologos-name)))
 
 ;; Convert foreign type tokens to a parseable sexp.
 ;; Transforms infix (Nat -> Nat -> Bool) to prefix (-> Nat (-> Nat Bool)).
