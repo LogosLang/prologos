@@ -1,0 +1,15 @@
+ns prologos.core.seqable-trait
+
+require [prologos.data.lseq :refer [LSeq]]
+
+;; ========================================
+;; Seqable Trait — Convert to LSeq
+;; ========================================
+;; A Seqable collection can be converted to a lazy sequence.
+;; to-seq : C A -> LSeq A
+;;
+;; The method type uses explicit Pi for the free type variable A,
+;; because the trait macro doesn't auto-quantify free vars.
+
+trait Seqable {C : Type -> Type}
+  to-seq : [Pi [A :0 <Type>] [-> [C A] [LSeq A]]]

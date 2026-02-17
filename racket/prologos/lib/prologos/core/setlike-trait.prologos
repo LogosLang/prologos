@@ -1,0 +1,15 @@
+ns prologos.core.setlike-trait
+
+;; ========================================
+;; Setlike Trait — Set Operations
+;; ========================================
+;; A Setlike collection supports membership, insertion, and removal.
+;;
+;; set-member? : C A -> A -> Bool
+;; set-insert  : C A -> A -> C A
+;; set-remove  : C A -> A -> C A
+
+trait Setlike {C : Type -> Type}
+  set-member? : [Pi [A :0 <Type>] [-> [C A] [-> A Bool]]]
+  set-insert  : [Pi [A :0 <Type>] [-> [C A] [-> A [C A]]]]
+  set-remove  : [Pi [A :0 <Type>] [-> [C A] [-> A [C A]]]]

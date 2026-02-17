@@ -1,0 +1,17 @@
+ns prologos.core.indexed-trait
+
+require [prologos.data.option :refer [Option]]
+
+;; ========================================
+;; Indexed Trait — Positional Access
+;; ========================================
+;; An Indexed collection supports access by natural number index.
+;;
+;; idx-nth    : C A -> Nat -> Option A
+;; idx-length : C A -> Nat
+;; idx-update : C A -> Nat -> A -> C A
+
+trait Indexed {C : Type -> Type}
+  idx-nth    : [Pi [A :0 <Type>] [-> [C A] [-> Nat [Option A]]]]
+  idx-length : [Pi [A :0 <Type>] [-> [C A] Nat]]
+  idx-update : [Pi [A :0 <Type>] [-> [C A] [-> Nat [-> A [C A]]]]]

@@ -1,0 +1,42 @@
+ns prologos.core.indexed-list
+
+require [prologos.core.indexed-trait :refer [Indexed Indexed-idx-nth Indexed-idx-length Indexed-idx-update]]
+require [prologos.data.option        :refer [Option some none]]
+require [prologos.data.list           :refer [List nil cons]]
+require [prologos.data.nat            :refer [zero?]]
+
+;; ========================================
+;; Indexed List Instance
+;; ========================================
+;; O(n) implementations for linked list.
+
+;; idx-nth : List A -> Nat -> Option A
+;; Returns (some elem) at index n, or none if out of bounds.
+(def list-idx-nth : (Pi (A :0 (Type 0)) (-> (List A) (-> Nat (Option A))))
+  (fn (A :0 (Type 0)) (fn (xs : (List A)) (fn (n : Nat)
+    (match xs
+      (nil -> (none A))
+      (cons a as -> (match n
+        (zero -> (some A a))
+        (inc k -> (list-idx-nth A as k)))))))))
+
+;; idx-length : List A -> Nat
+(def list-idx-length : (Pi (A :0 (Type 0)) (-> (List A) Nat))
+  (fn (A :0 (Type 0)) (fn (xs : (List A))
+    (match xs
+      (nil -> zero)
+      (cons _ as -> (inc (list-idx-length A as)))))))
+
+;; idx-update : List A -> Nat -> A -> List A
+;; Replace element at index n. If out of bounds, return unchanged.
+(def list-idx-update : (Pi (A :0 (Type 0)) (-> (List A) (-> Nat (-> A (List A)))))
+  (fn (A :0 (Type 0)) (fn (xs : (List A)) (fn (n : Nat) (fn (v : A)
+    (match xs
+      (nil -> (nil A))
+      (cons a as -> (match n
+        (zero -> (cons A v as))
+        (inc k -> (cons A a (list-idx-update A as k v)))))))))))
+
+;; Indexed dict: triple (idx-nth, idx-length, idx-update) as nested Sigma
+(def List--Indexed--dict : (Indexed List)
+  (pair list-idx-nth (pair list-idx-length list-idx-update)))

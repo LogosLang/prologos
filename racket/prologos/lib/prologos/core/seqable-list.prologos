@@ -1,0 +1,14 @@
+ns prologos.core.seqable-list
+
+require [prologos.core.seqable-trait :refer [Seqable Seqable-to-seq]]
+require [prologos.data.lseq          :refer [LSeq]]
+require [prologos.data.lseq-ops      :refer [list-to-lseq]]
+require [prologos.data.list           :refer [List]]
+
+;; ========================================
+;; Seqable List Instance
+;; ========================================
+;; Convert a List to an LSeq via list-to-lseq.
+;; The Seqable dict IS the function (single-method trait).
+
+(def List--Seqable--dict : (Seqable List) list-to-lseq)

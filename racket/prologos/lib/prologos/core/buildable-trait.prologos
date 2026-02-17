@@ -1,0 +1,16 @@
+ns prologos.core.buildable-trait
+
+require [prologos.data.lseq :refer [LSeq]]
+
+;; ========================================
+;; Buildable Trait — Construct from LSeq
+;; ========================================
+;; A Buildable collection can be constructed from a lazy sequence
+;; and provides an empty collection.
+;;
+;; from-seq   : LSeq A -> C A
+;; empty-coll : C A
+
+trait Buildable {C : Type -> Type}
+  from-seq   : [Pi [A :0 <Type>] [-> [LSeq A] [C A]]]
+  empty-coll : [Pi [A :0 <Type>] [C A]]
