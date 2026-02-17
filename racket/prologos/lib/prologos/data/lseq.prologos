@@ -1,0 +1,38 @@
+ns prologos.data.lseq
+
+require [prologos.data.option :refer [Option none some]]
+
+;; ========================================
+;; Prologos LSeq — Lazy Sequence
+;; ========================================
+;; A lazy sequence with two constructors:
+;;   lseq-nil  — empty sequence
+;;   lseq-cell — head element + thunk producing the tail
+;;
+;; The thunk field (Unit -> LSeq A) provides laziness:
+;; the tail is only computed when forced by applying to unit.
+
+data LSeq {A}
+  lseq-nil
+  lseq-cell : A -> [Unit -> LSeq A]
+
+;; Get the head element as an Option.
+spec lseq-head [LSeq A] -> Option A
+defn lseq-head [xs]
+  match xs
+    | lseq-nil      -> none
+    | lseq-cell a _t -> some a
+
+;; Get the tail, forcing the thunk. Returns lseq-nil for empty.
+spec lseq-rest [LSeq A] -> LSeq A
+defn lseq-rest [xs]
+  match xs
+    | lseq-nil       -> lseq-nil
+    | lseq-cell _a t -> t unit
+
+;; Check if the lazy sequence is empty.
+spec lseq-empty? [LSeq A] -> Bool
+defn lseq-empty? [xs]
+  match xs
+    | lseq-nil      -> true
+    | lseq-cell _ _ -> false

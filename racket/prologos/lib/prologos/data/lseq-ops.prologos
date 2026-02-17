@@ -1,0 +1,79 @@
+ns prologos.data.lseq-ops
+
+require [prologos.data.lseq   :refer [LSeq lseq-nil lseq-cell lseq-head lseq-rest lseq-empty?]]
+        [prologos.data.option  :refer [Option none some]]
+        [prologos.data.list    :refer [List nil cons]]
+
+;; ========================================
+;; LSeq Operations
+;; ========================================
+;; Functions that construct lseq-cell use explicit (def ... (fn ...))
+;; in sexp form because the thunk field requires explicit type arguments
+;; for the type checker's implicit inference.
+
+;; Convert a List to an LSeq (preserves order, lazy tail thunks).
+(def list-to-lseq : (Pi (A :0 (Type 0)) (-> (List A) (LSeq A)))
+  (fn (A :0 (Type 0)) (fn (xs : (List A))
+    (match xs
+      (nil -> (lseq-nil A))
+      (cons a as -> (lseq-cell A a (fn (_ : Unit) (list-to-lseq A as))))))))
+
+;; Convert an LSeq to a List (strict — forces all thunks).
+(def lseq-to-list : (Pi (A :0 (Type 0)) (-> (LSeq A) (List A)))
+  (fn (A :0 (Type 0)) (fn (xs : (LSeq A))
+    (match xs
+      (lseq-nil -> (nil A))
+      (lseq-cell a t -> (cons A a (lseq-to-list A (t unit))))))))
+
+;; Map a function over an LSeq (lazy).
+(def lseq-map : (Pi (A :0 (Type 0)) (Pi (B :0 (Type 0)) (-> (-> A B) (-> (LSeq A) (LSeq B)))))
+  (fn (A :0 (Type 0)) (fn (B :0 (Type 0)) (fn (f : (-> A B)) (fn (xs : (LSeq A))
+    (match xs
+      (lseq-nil -> (lseq-nil B))
+      (lseq-cell a t -> (lseq-cell B (f a) (fn (_ : Unit) (lseq-map A B f (t unit)))))))))))
+
+;; Filter an LSeq (lazy — skips non-matching elements).
+(def lseq-filter : (Pi (A :0 (Type 0)) (-> (-> A Bool) (-> (LSeq A) (LSeq A))))
+  (fn (A :0 (Type 0)) (fn (pred : (-> A Bool)) (fn (xs : (LSeq A))
+    (match xs
+      (lseq-nil -> (lseq-nil A))
+      (lseq-cell a t -> (match (pred a)
+        (true -> (lseq-cell A a (fn (_ : Unit) (lseq-filter A pred (t unit)))))
+        (false -> (lseq-filter A pred (t unit))))))))))
+
+;; Take the first n elements (lazy).
+(def lseq-take : (Pi (A :0 (Type 0)) (-> Nat (-> (LSeq A) (LSeq A))))
+  (fn (A :0 (Type 0)) (fn (n : Nat) (fn (xs : (LSeq A))
+    (match n
+      (zero -> (lseq-nil A))
+      (inc k -> (match xs
+        (lseq-nil -> (lseq-nil A))
+        (lseq-cell a t -> (lseq-cell A a (fn (_ : Unit) (lseq-take A k (t unit))))))))))))
+
+;; Drop the first n elements (strict on the dropped portion).
+(def lseq-drop : (Pi (A :0 (Type 0)) (-> Nat (-> (LSeq A) (LSeq A))))
+  (fn (A :0 (Type 0)) (fn (n : Nat) (fn (xs : (LSeq A))
+    (match n
+      (zero -> xs)
+      (inc k -> (match xs
+        (lseq-nil -> (lseq-nil A))
+        (lseq-cell _ t -> (lseq-drop A k (t unit))))))))))
+
+;; Append two LSeqs (lazy).
+(def lseq-append : (Pi (A :0 (Type 0)) (-> (LSeq A) (-> (LSeq A) (LSeq A))))
+  (fn (A :0 (Type 0)) (fn (xs : (LSeq A)) (fn (ys : (LSeq A))
+    (match xs
+      (lseq-nil -> ys)
+      (lseq-cell a t -> (lseq-cell A a (fn (_ : Unit) (lseq-append A (t unit) ys)))))))))
+
+;; Left fold (strict — forces all elements).
+(def lseq-fold : (Pi (A :0 (Type 0)) (Pi (B :0 (Type 0)) (-> (-> A (-> B A)) (-> A (-> (LSeq B) A)))))
+  (fn (A :0 (Type 0)) (fn (B :0 (Type 0)) (fn (f : (-> A (-> B A))) (fn (acc : A) (fn (xs : (LSeq B))
+    (match xs
+      (lseq-nil -> acc)
+      (lseq-cell b t -> (lseq-fold A B f (f acc b) (t unit))))))))))
+
+;; Length (strict — forces all elements).
+(def lseq-length : (Pi (A :0 (Type 0)) (-> (LSeq A) Nat))
+  (fn (A :0 (Type 0)) (fn (xs : (LSeq A))
+    (lseq-fold Nat A (fn (n : Nat) (fn (_ : A) (inc n))) zero xs))))

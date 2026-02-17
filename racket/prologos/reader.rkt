@@ -869,6 +869,13 @@
      (define all-elems (append elems children))
      (wrap-as-list all-elems (parser-source p))]
 
+    ;; Single paren-form at top level — already a list, don't double-wrap.
+    ;; e.g. (def foo : Nat body) should stay as (def foo : Nat body),
+    ;; not become ((def foo : Nat body)).
+    [(and (= (length elems) 1)
+          (pair? (syntax-e (car elems))))
+     (car elems)]
+
     ;; Single element at top level — still wrap (top-level forms are always commands)
     [else
      (wrap-as-list elems (parser-source p))]))
