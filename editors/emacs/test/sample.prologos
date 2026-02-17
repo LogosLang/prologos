@@ -113,6 +113,27 @@
   (mynil)
   (mycons A (MyList A)))
 
+;; ===== Foreign imports =====
+(foreign racket "racket/base" (add1 : Nat -> Nat))
+(foreign racket "racket/base" (add1 :as increment : Nat -> Nat))
+(foreign racket "racket/base" :as rkt (add1 : Nat -> Nat) (sub1 : Nat -> Nat))
+(foreign racket "racket/base" :as math
+  (add1 :as inc1 : Nat -> Nat)
+  (modulo :as mod : Nat -> Nat -> Nat))
+
+;; ===== Foreign escape blocks =====
+(def the-answer <Nat> racket{42})
+(def n-plus-one <Nat> racket{(add1 n)} (n : Nat) -> (n-plus-one : Nat))
+
+;; ===== Traits and implementations =====
+(trait Show (show : A -> String))
+(impl Show Nat (show : Nat -> String))
+
+;; ===== Comment edge cases =====
+;; Comments with <angle> brackets should not corrupt highlighting
+;; The -> arrow in comments is fine too
+;; Even ;;; triple-semicolon comments <with angles>
+
 ;; ===== Future keywords (reserved) =====
 ;; relation clause query
 ;; actor spawn send recv chan

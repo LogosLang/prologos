@@ -409,6 +409,50 @@
         (should fns)
         (should (string= (car (car fns)) "myval"))))))
 
+;; ============================================================
+;; Test: Font-lock — foreign interop keywords (identifier-matched)
+;; ============================================================
+
+(ert-deftest prologos-ts-test/font-lock-foreign-keyword ()
+  "The identifier `foreign' should get keyword face via :match predicate."
+  (skip-unless prologos-ts-test--treesit-available)
+  (prologos-ts-test--in-buffer "defn foo [x : Nat] : Nat\n  foreign x\n"
+    (goto-char (point-min))
+    (search-forward "foreign")
+    (let ((face (get-text-property (match-beginning 0) 'face)))
+      (should (eq face 'font-lock-keyword-face)))))
+
+(ert-deftest prologos-ts-test/font-lock-trait-keyword ()
+  "The identifier `trait' should get keyword face via :match predicate."
+  (skip-unless prologos-ts-test--treesit-available)
+  (prologos-ts-test--in-buffer "defn foo [x : Nat] : Nat\n  trait x\n"
+    (goto-char (point-min))
+    (search-forward "trait")
+    (let ((face (get-text-property (match-beginning 0) 'face)))
+      (should (eq face 'font-lock-keyword-face)))))
+
+(ert-deftest prologos-ts-test/font-lock-impl-keyword ()
+  "The identifier `impl' should get keyword face via :match predicate."
+  (skip-unless prologos-ts-test--treesit-available)
+  (prologos-ts-test--in-buffer "defn foo [x : Nat] : Nat\n  impl x\n"
+    (goto-char (point-min))
+    (search-forward "impl")
+    (let ((face (get-text-property (match-beginning 0) 'face)))
+      (should (eq face 'font-lock-keyword-face)))))
+
+;; ============================================================
+;; Test: Font-lock — strings
+;; ============================================================
+
+(ert-deftest prologos-ts-test/font-lock-string ()
+  "Strings should get string face from tree-sitter."
+  (skip-unless prologos-ts-test--treesit-available)
+  (prologos-ts-test--in-buffer "def greeting\n  \"hello world\"\n"
+    (goto-char (point-min))
+    (search-forward "hello")
+    (let ((face (get-text-property (match-beginning 0) 'face)))
+      (should (eq face 'font-lock-string-face)))))
+
 (provide 'prologos-ts-mode-test)
 
 ;;; prologos-ts-mode-test.el ends here

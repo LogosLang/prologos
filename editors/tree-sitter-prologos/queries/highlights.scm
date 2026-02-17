@@ -10,7 +10,7 @@
 
 ; Keywords (identifier-matched — not grammar tokens)
 ((identifier) @keyword
-  (#match? @keyword "^(the|let|do|if|forall|exists|check|eval|infer|defmacro|spec|relation|clause|query)$"))
+  (#match? @keyword "^(the|let|do|if|forall|exists|check|eval|infer|defmacro|spec|relation|clause|query|foreign|trait|impl)$"))
 
 ; ============================================================
 ; Definition names

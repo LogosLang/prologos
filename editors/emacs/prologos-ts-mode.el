@@ -63,8 +63,11 @@
    :feature 'keyword
    :override t
    '(((identifier) @font-lock-keyword-face
-      (:match "\\`\\(?:the\\|let\\|do\\|if\\|forall\\|exists\\|check\\|eval\\|infer\\|defmacro\\|spec\\|relation\\|clause\\|query\\)\\'"
+      (:match "\\`\\(?:the\\|let\\|do\\|if\\|forall\\|exists\\|check\\|eval\\|infer\\|defmacro\\|spec\\|relation\\|clause\\|query\\|foreign\\|trait\\|impl\\)\\'"
               @font-lock-keyword-face)))
+   ;; TODO: When the tree-sitter grammar adds `foreign` declarations,
+   ;; add structural rules for :as aliases, racket language identifier,
+   ;; and imported symbol names (currently only identifier-matched).
 
    ;; Level 2: function/definition names
    :language 'prologos

@@ -371,6 +371,140 @@ If MODE-FN is given, call it instead of `prologos-mode'."
   (prologos-test--in-buffer ""
     (should (string= comment-end ""))))
 
+;; ============================================================
+;; Test: Font-lock — comments (syntactic fontification)
+;; ============================================================
+
+(ert-deftest prologos-test/font-lock-comment ()
+  "Comments should get comment face via syntactic fontification.
+Emacs uses `font-lock-comment-delimiter-face' for the ;; delimiters
+and `font-lock-comment-face' for the body text."
+  (prologos-test--in-buffer ";; a comment\n(def x <Nat> zero)"
+    (goto-char (point-min))
+    ;; Check the ;; delimiters get comment-delimiter face
+    (should (eq (get-text-property (point-min) 'face)
+                'font-lock-comment-delimiter-face))
+    ;; Check the comment body text gets comment face
+    (search-forward "a comment")
+    (should (eq (get-text-property (match-beginning 0) 'face)
+                'font-lock-comment-face))))
+
+;; ============================================================
+;; Test: Font-lock — strings (syntactic fontification)
+;; ============================================================
+
+(ert-deftest prologos-test/font-lock-string ()
+  "Strings should get string face via syntactic fontification."
+  (prologos-test--in-buffer "(def s \"hello world\")"
+    (goto-char (point-min))
+    (search-forward "hello")
+    (should (eq (get-text-property (match-beginning 0) 'face)
+                'font-lock-string-face))))
+
+(ert-deftest prologos-test/font-lock-string-in-foreign ()
+  "Module path string in foreign directive should get string face."
+  (prologos-test--in-buffer "(foreign racket \"racket/base\" (add1 : Nat -> Nat))"
+    (goto-char (point-min))
+    (search-forward "racket/base")
+    (should (eq (get-text-property (match-beginning 0) 'face)
+                'font-lock-string-face))))
+
+;; ============================================================
+;; Test: Font-lock — foreign interop keywords
+;; ============================================================
+
+(ert-deftest prologos-test/font-lock-foreign ()
+  "The `foreign' keyword should be highlighted."
+  (let ((face (prologos-test--face-at-first
+               "foreign"
+               "(foreign racket \"racket/base\" (add1 : Nat -> Nat))")))
+    (should (eq face 'font-lock-keyword-face))))
+
+(ert-deftest prologos-test/font-lock-trait ()
+  "The `trait' keyword should be highlighted."
+  (let ((face (prologos-test--face-at-first
+               "trait"
+               "(trait Show (show : A -> String))")))
+    (should (eq face 'font-lock-keyword-face))))
+
+(ert-deftest prologos-test/font-lock-impl ()
+  "The `impl' keyword should be highlighted."
+  (let ((face (prologos-test--face-at-first
+               "impl"
+               "(impl Show Nat)")))
+    (should (eq face 'font-lock-keyword-face))))
+
+(ert-deftest prologos-test/font-lock-racket-identifier ()
+  "The `racket' identifier after `foreign' should get constant face."
+  (prologos-test--in-buffer "(foreign racket \"racket/base\" (add1 : Nat -> Nat))"
+    (goto-char (point-min))
+    (search-forward "racket")
+    (should (eq (get-text-property (match-beginning 0) 'face)
+                'font-lock-constant-face))))
+
+;; ============================================================
+;; Test: Font-lock — :as and :refer keyword tokens
+;; ============================================================
+
+(ert-deftest prologos-test/font-lock-as-keyword ()
+  "The `:as' token should get keyword face."
+  (prologos-test--in-buffer "(foreign racket \"racket/base\" (add1 :as increment : Nat -> Nat))"
+    (goto-char (point-min))
+    (search-forward ":as")
+    (should (eq (get-text-property (match-beginning 0) 'face)
+                'font-lock-keyword-face))))
+
+(ert-deftest prologos-test/font-lock-refer-keyword ()
+  "The `:refer' token should get keyword face."
+  (prologos-test--in-buffer "(require [prologos.data.nat :refer [add mul]])"
+    (goto-char (point-min))
+    (search-forward ":refer")
+    (should (eq (get-text-property (match-beginning 0) 'face)
+                'font-lock-keyword-face))))
+
+;; ============================================================
+;; Test: Font-lock — imported and aliased symbols
+;; ============================================================
+
+(ert-deftest prologos-test/font-lock-refer-import ()
+  "Names inside `:refer [...]' should get variable-name face."
+  (prologos-test--in-buffer "(require [prologos.data.nat :refer [add mul]])"
+    (goto-char (point-min))
+    (search-forward "add")
+    (should (eq (get-text-property (match-beginning 0) 'face)
+                'font-lock-variable-name-face))))
+
+(ert-deftest prologos-test/font-lock-as-alias-name ()
+  "Alias name after `:as' should get function-name face."
+  (prologos-test--in-buffer "(foreign racket \"racket/base\" (add1 :as increment : Nat -> Nat))"
+    (goto-char (point-min))
+    (search-forward "increment")
+    (should (eq (get-text-property (match-beginning 0) 'face)
+                'font-lock-function-name-face))))
+
+;; ============================================================
+;; Test: Syntax propertize — comment with angle brackets
+;; ============================================================
+
+(ert-deftest prologos-test/syntax-comment-with-angle ()
+  "Angle brackets inside comments should not corrupt highlighting.
+A < in a comment must NOT be marked as an open-bracket."
+  (prologos-test--in-buffer ";; <not a bracket>\n(def x <Nat> zero)"
+    ;; The < inside the comment should NOT have bracket syntax
+    (goto-char (point-min))
+    (search-forward "<not")
+    (let ((pos (1- (match-beginning 0))))
+      ;; pos is the < inside the comment
+      (should-not (eq (car (syntax-after pos)) ?\())
+      ;; But the < in <Nat> on the next line SHOULD have bracket syntax
+      (search-forward "<Nat>")
+      (let ((nat-pos (match-beginning 0)))
+        (should (= (save-excursion
+                     (goto-char nat-pos)
+                     (forward-sexp 1)
+                     (point))
+                   (+ nat-pos 5)))))))
+
 (provide 'prologos-mode-test)
 
 ;;; prologos-mode-test.el ends here

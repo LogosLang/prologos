@@ -40,7 +40,7 @@
 (defconst prologos-font-lock-keywords-1
   `(;; Top-level definition forms
     (,(regexp-opt '("def" "defn" "defmacro" "deftype" "data" "spec"
-                    "ns" "require" "provide")
+                    "ns" "require" "provide" "foreign" "trait" "impl")
                   'symbols)
      . font-lock-keyword-face)
     ;; Top-level commands
@@ -90,9 +90,12 @@
                      "send" "recv" "chan" "propagator" "cell")
                    'symbols)
       . font-lock-keyword-face)
+     ;; Module system keyword tokens
+     (":as\\>" . font-lock-keyword-face)
+     (":refer\\>" . font-lock-keyword-face)
      ;; Arrow operator
      ("->" . font-lock-constant-face)))
-  "Level 4: add Posit8 ops, future keywords, operators.")
+  "Level 4: add Posit8 ops, future keywords, module tokens, operators.")
 
 (defconst prologos-font-lock-keywords-5
   (append prologos-font-lock-keywords-4
@@ -110,8 +113,19 @@
       (1 font-lock-function-name-face))
      ;; Data type name
      ("[(\\[]data\\s-+(?\\([A-Z][a-zA-Z0-9_]*\\)"
-      (1 font-lock-type-face))))
-  "Level 5: add multiplicities, holes, definition names.")
+      (1 font-lock-type-face))
+     ;; Foreign language identifier: `racket' after `foreign'
+     ("\\bforeign\\s-+\\(racket\\)" (1 font-lock-constant-face))
+     ;; Alias name after :as (acts as a local definition)
+     (":as\\s-+\\([a-zA-Z_][a-zA-Z0-9_!?*/-]*\\)"
+      (1 font-lock-function-name-face))
+     ;; Imported names inside :refer [...] — anchored matcher
+     (":refer\\s-*\\["
+      ("[a-zA-Z_][a-zA-Z0-9_!?*-]*"
+       (save-excursion (search-forward "]" nil t) (point))
+       nil
+       (0 font-lock-variable-name-face)))))
+  "Level 5: add multiplicities, holes, definition names, foreign interop.")
 
 ;; Default: use the most complete level
 (defconst prologos-font-lock-keywords prologos-font-lock-keywords-5

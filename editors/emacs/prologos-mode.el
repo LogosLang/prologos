@@ -99,32 +99,39 @@
 
 (defun prologos--syntax-propertize (start end)
   "Apply bracket syntax to angle brackets used as type annotations.
-Scans region from START to END."
+Scans region from START to END.  Skips angle brackets that appear inside
+comments or strings so they don't corrupt syntactic fontification."
   (goto-char start)
   (while (re-search-forward "<" end t)
-    ;; Only treat < as open-bracket if not preceded by - (i.e., not ->)
     (let ((pos (match-beginning 0)))
-      (unless (and (> pos (point-min))
-                   (eq (char-before pos) ?-))
-        ;; Find the matching > by counting nesting
-        (let ((depth 1)
-              (limit end)
-              (found nil))
-          (save-excursion
-            (while (and (> depth 0) (re-search-forward "[<>]" limit t))
-              (let ((ch (char-before)))
-                (cond
-                 ((eq ch ?<)
-                  ;; Only count as nesting if not part of ->
-                  (unless (and (> (match-beginning 0) (point-min))
-                               (eq (char-before (match-beginning 0)) ?-))
-                    (setq depth (1+ depth))))
-                 ((eq ch ?>)
-                  ;; Only count as closing if not followed by something
-                  ;; that makes it part of a symbol (future-proofing)
-                  (setq depth (1- depth))
-                  (when (= depth 0)
-                    (setq found (match-beginning 0)))))))
+      ;; Skip angle brackets inside comments or strings
+      (unless (let ((ppss (save-excursion (syntax-ppss pos))))
+                (or (nth 3 ppss) (nth 4 ppss)))
+        ;; Only treat < as open-bracket if not preceded by - (i.e., not ->)
+        (unless (and (> pos (point-min))
+                     (eq (char-before pos) ?-))
+          ;; Find the matching > by counting nesting
+          (let ((depth 1)
+                (limit end)
+                (found nil))
+            (save-excursion
+              (while (and (> depth 0) (re-search-forward "[<>]" limit t))
+                (let* ((mpos (match-beginning 0))
+                       (ch (char-before))
+                       (inner-ppss (save-excursion (syntax-ppss mpos))))
+                  ;; Skip brackets inside comments or strings
+                  (unless (or (nth 3 inner-ppss) (nth 4 inner-ppss))
+                    (cond
+                     ((eq ch ?<)
+                      ;; Only count as nesting if not part of ->
+                      (unless (and (> mpos (point-min))
+                                   (eq (char-before mpos) ?-))
+                        (setq depth (1+ depth))))
+                     ((eq ch ?>)
+                      ;; Only count as closing
+                      (setq depth (1- depth))
+                      (when (= depth 0)
+                        (setq found mpos))))))))
             (when found
               ;; Mark the < as open-bracket
               (put-text-property pos (1+ pos)
