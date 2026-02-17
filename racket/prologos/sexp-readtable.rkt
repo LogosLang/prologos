@@ -290,6 +290,60 @@
   (if (syntax? stx) (syntax->datum stx) stx))
 
 ;; ========================================
+;; At-bracket reader: @[ for PVec literals
+;; ========================================
+;; When @ is followed by [, read PVec literal as ($vec-literal ...).
+;; @[1 2 3] → ($vec-literal 1 2 3)
+;; @[] → ($vec-literal)
+;; Bare @ (not followed by [) is an error.
+
+(define (read-at-bracket-syntax ch port src line col pos)
+  (define next (peek-char port))
+  (cond
+    ;; @[ — PVec literal
+    [(and (char? next) (char=? next #\[))
+     (read-char port) ; consume [
+     (define elements
+       (let loop ([elems '()])
+         ;; Skip whitespace
+         (let skip-ws ()
+           (define c (peek-char port))
+           (when (and (char? c) (char-whitespace? c))
+             (read-char port)
+             (skip-ws)))
+         (define nc (peek-char port))
+         (cond
+           [(eof-object? nc)
+            (error 'prologos-reader "Unclosed PVec literal @[ at ~a:~a:~a" src line col)]
+           [(char=? nc #\])
+            (read-char port) ; consume ]
+            (reverse elems)]
+           ;; Skip commas
+           [(char=? nc #\,)
+            (read-char port)
+            (loop elems)]
+           [else
+            (define val
+              (parameterize ([current-readtable prologos-readtable])
+                (read-syntax src port)))
+            (define datum-val
+              (if (syntax? val) (syntax->datum val) val))
+            (loop (cons datum-val elems))])))
+     ;; Build ($vec-literal ...) as syntax
+     (define end-pos (file-position port))
+     (define span (- end-pos pos))
+     (datum->syntax #f (cons '$vec-literal elements)
+                    (list src line col pos span))]
+    ;; Not @[ — error
+    [else
+     (error 'prologos-reader "~a:~a:~a: @ must be followed by [ for PVec literal (@[...])"
+            src (or line 0) (or col 0))]))
+
+(define (read-at-bracket-datum ch port)
+  (define stx (read-at-bracket-syntax ch port "<unknown>" #f #f (file-position port)))
+  (if (syntax? stx) (syntax->datum stx) stx))
+
+;; ========================================
 ;; The custom readtable
 ;; ========================================
 (define prologos-readtable
@@ -298,7 +352,8 @@
     #\{ 'terminating-macro read-brace-params-syntax
     #\, 'terminating-macro read-comma-syntax
     #\' 'terminating-macro read-quote-syntax
-    #\~ 'terminating-macro read-tilde-syntax))
+    #\~ 'terminating-macro read-tilde-syntax
+    #\@ 'terminating-macro read-at-bracket-syntax))
 
 ;; ========================================
 ;; Convenience read functions

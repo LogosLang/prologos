@@ -2525,6 +2525,11 @@
       ;; Map type: walk key and value type sub-expressions
       [(surf-map-type k v _loc)
        (walk k) (walk v)]
+      ;; PVec type: walk element type
+      [(surf-pvec-type a _loc)
+       (walk a)]
+      [(surf-pvec-literal elems _loc)
+       (for-each walk elems)]
       [(surf-zero _) (void)]
       [(surf-true _) (void)]
       [(surf-false _) (void)]
@@ -2555,7 +2560,8 @@
     Quire64 q64-zero q64-fma q64-to
     Int int int+ int- int* int/ int-mod int-neg int-abs int-lt int-le int-eq from-nat
     Rat rat rat+ rat- rat* rat/ rat-neg rat-abs rat-lt rat-le rat-eq from-int rat-numer rat-denom
-    Keyword Map map-empty map-assoc map-get map-dissoc map-size map-has-key? map-keys map-vals))
+    Keyword Map map-empty map-assoc map-get map-dissoc map-size map-has-key? map-keys map-vals
+    PVec pvec-empty pvec-push pvec-nth pvec-update pvec-length pvec-pop pvec-concat pvec-slice))
 
 ;; Check if a symbol is a "known name" — should NOT be treated as a free type variable.
 (define (known-name? name)

@@ -842,6 +842,69 @@
          [(tu _ u) (tu (tu-type r) u)]
          [_ (tu-error)]))]
 
+    ;; ---- PVec type and operations ----
+    [(expr-PVec a)
+     (let ([r (inferQ ctx a)])
+       (match r
+         [(tu _ u) (tu (expr-Type (lzero)) u)]
+         [_ (tu-error)]))]
+    [(expr-rrb _) (tu (expr-PVec (expr-hole)) (zero-usage n))]
+    [(expr-pvec-empty a)
+     (let ([r (inferQ ctx a)])
+       (match r
+         [(tu _ u) (tu (expr-PVec a) u)]
+         [_ (tu-error)]))]
+    [(expr-pvec-push v x)
+     (let ([r1 (inferQ ctx v)]
+           [r2 (inferQ ctx x)])
+       (match* (r1 r2)
+         [((tu _ u1) (tu _ u2))
+          (tu (tu-type r1) (add-usage u1 u2))]
+         [(_ _) (tu-error)]))]
+    [(expr-pvec-nth v i)
+     (let ([r1 (inferQ ctx v)]
+           [r2 (inferQ ctx i)])
+       (match* (r1 r2)
+         [((tu t1 u1) (tu _ u2))
+          ;; pvec-nth returns the ELEMENT TYPE, not PVec
+          (match t1
+            [(expr-PVec a) (tu a (add-usage u1 u2))]
+            [_ (tu-error)])]
+         [(_ _) (tu-error)]))]
+    [(expr-pvec-update v i x)
+     (let ([r1 (inferQ ctx v)]
+           [r2 (inferQ ctx i)]
+           [r3 (inferQ ctx x)])
+       (match* (r1 r2 r3)
+         [((tu _ u1) (tu _ u2) (tu _ u3))
+          (tu (tu-type r1) (add-usage u1 (add-usage u2 u3)))]
+         [(_ _ _) (tu-error)]))]
+    [(expr-pvec-length v)
+     (let ([r (inferQ ctx v)])
+       (match r
+         [(tu _ u) (tu (expr-Nat) u)]
+         [_ (tu-error)]))]
+    [(expr-pvec-pop v)
+     (let ([r (inferQ ctx v)])
+       (match r
+         [(tu _ u) (tu (tu-type r) u)]
+         [_ (tu-error)]))]
+    [(expr-pvec-concat v1 v2)
+     (let ([r1 (inferQ ctx v1)]
+           [r2 (inferQ ctx v2)])
+       (match* (r1 r2)
+         [((tu _ u1) (tu _ u2))
+          (tu (tu-type r1) (add-usage u1 u2))]
+         [(_ _) (tu-error)]))]
+    [(expr-pvec-slice v lo hi)
+     (let ([r1 (inferQ ctx v)]
+           [r2 (inferQ ctx lo)]
+           [r3 (inferQ ctx hi)])
+       (match* (r1 r2 r3)
+         [((tu _ u1) (tu _ u2) (tu _ u3))
+          (tu (tu-type r1) (add-usage u1 (add-usage u2 u3)))]
+         [(_ _ _) (tu-error)]))]
+
     ;; ---- J eliminator ----
     ;; Usage from proof, base, motive arguments
     [(expr-J mot base left right proof)
@@ -950,6 +1013,21 @@
          [((bu #t u1) (bu #t u2) (bu #t u3))
           (bu #t (add-usage u1 (add-usage u2 u3)))]
          [(_ _ _) (bu #f (zero-usage n))]))]
+
+    ;; ---- PVec constructors: check against PVec type ----
+    [((expr-rrb _) (expr-PVec _)) (bu #t (zero-usage n))]
+    [((expr-pvec-empty a) (expr-PVec _))
+     (let ([r (inferQ ctx a)])
+       (match r
+         [(tu _ u) (bu #t u)]
+         [_ (bu #f (zero-usage n))]))]
+    [((expr-pvec-push v x) (expr-PVec a))
+     (let ([rv (checkQ ctx v (expr-PVec a))]
+           [rx (checkQ ctx x a)])
+       (match* (rv rx)
+         [((bu #t u1) (bu #t u2))
+          (bu #t (add-usage u1 u2))]
+         [(_ _) (bu #f (zero-usage n))]))]
 
     ;; ---- Union type: checkQ(G, e, A | B) ----
     ;; Try left component first, then right. Uses speculative meta state.

@@ -122,6 +122,11 @@
  (struct-out expr-map-get) (struct-out expr-map-dissoc)
  (struct-out expr-map-size) (struct-out expr-map-has-key)
  (struct-out expr-map-keys) (struct-out expr-map-vals)
+ ;; Persistent Vector (PVec)
+ (struct-out expr-PVec) (struct-out expr-rrb) (struct-out expr-pvec-empty)
+ (struct-out expr-pvec-push) (struct-out expr-pvec-nth) (struct-out expr-pvec-update)
+ (struct-out expr-pvec-length) (struct-out expr-pvec-pop)
+ (struct-out expr-pvec-concat) (struct-out expr-pvec-slice)
  ;; Int (arbitrary-precision integers)
  (struct-out expr-Int)
  (struct-out expr-int)
@@ -424,6 +429,18 @@
 (struct expr-map-keys (m) #:transparent)                      ; keys : Map K V → List K
 (struct expr-map-vals (m) #:transparent)                      ; vals : Map K V → List V
 
+;; ---- Persistent Vector (PVec, RRB-Tree-backed) ----
+(struct expr-PVec (elem-type) #:transparent)                  ; PVec A : Type(level(A))
+(struct expr-rrb (racket-rrb) #:transparent)                  ; runtime wrapper (opaque Racket rrb-root)
+(struct expr-pvec-empty (elem-type) #:transparent)            ; pvec-empty(A) : PVec A
+(struct expr-pvec-push (v x) #:transparent)                   ; pvec-push : PVec A → A → PVec A
+(struct expr-pvec-nth (v i) #:transparent)                    ; pvec-nth : PVec A → Nat → A
+(struct expr-pvec-update (v i x) #:transparent)               ; pvec-update : PVec A → Nat → A → PVec A
+(struct expr-pvec-length (v) #:transparent)                   ; pvec-length : PVec A → Nat
+(struct expr-pvec-pop (v) #:transparent)                      ; pvec-pop : PVec A → PVec A
+(struct expr-pvec-concat (v1 v2) #:transparent)               ; pvec-concat : PVec A → PVec A → PVec A
+(struct expr-pvec-slice (v lo hi) #:transparent)              ; pvec-slice : PVec A → Nat → Nat → PVec A
+
 ;; ========================================
 ;; Int (arbitrary-precision integers, backed by Racket exact integers)
 ;; ========================================
@@ -581,6 +598,10 @@
       (expr-map-assoc? x) (expr-map-get? x) (expr-map-dissoc? x)
       (expr-map-size? x) (expr-map-has-key? x)
       (expr-map-keys? x) (expr-map-vals? x)
+      (expr-PVec? x) (expr-rrb? x) (expr-pvec-empty? x)
+      (expr-pvec-push? x) (expr-pvec-nth? x) (expr-pvec-update? x)
+      (expr-pvec-length? x) (expr-pvec-pop? x)
+      (expr-pvec-concat? x) (expr-pvec-slice? x)
       (expr-hole? x) (expr-meta? x) (expr-reduce? x)
       (expr-union? x) (expr-error? x)))
 

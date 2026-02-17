@@ -202,6 +202,18 @@
     [(expr-map-keys m) (expr-map-keys (shift delta cutoff m))]
     [(expr-map-vals m) (expr-map-vals (shift delta cutoff m))]
 
+    ;; PVec (all non-binding)
+    [(expr-PVec a) (expr-PVec (shift delta cutoff a))]
+    [(expr-rrb _) e]
+    [(expr-pvec-empty a) (expr-pvec-empty (shift delta cutoff a))]
+    [(expr-pvec-push v x) (expr-pvec-push (shift delta cutoff v) (shift delta cutoff x))]
+    [(expr-pvec-nth v i) (expr-pvec-nth (shift delta cutoff v) (shift delta cutoff i))]
+    [(expr-pvec-update v i x) (expr-pvec-update (shift delta cutoff v) (shift delta cutoff i) (shift delta cutoff x))]
+    [(expr-pvec-length v) (expr-pvec-length (shift delta cutoff v))]
+    [(expr-pvec-pop v) (expr-pvec-pop (shift delta cutoff v))]
+    [(expr-pvec-concat v1 v2) (expr-pvec-concat (shift delta cutoff v1) (shift delta cutoff v2))]
+    [(expr-pvec-slice v lo hi) (expr-pvec-slice (shift delta cutoff v) (shift delta cutoff lo) (shift delta cutoff hi))]
+
     ;; Int (all non-binding)
     [(expr-Int) e]
     [(expr-int _) e]
@@ -438,6 +450,18 @@
     [(expr-map-has-key m key) (expr-map-has-key (subst k s m) (subst k s key))]
     [(expr-map-keys m) (expr-map-keys (subst k s m))]
     [(expr-map-vals m) (expr-map-vals (subst k s m))]
+
+    ;; PVec (all non-binding)
+    [(expr-PVec a) (expr-PVec (subst k s a))]
+    [(expr-rrb _) e]
+    [(expr-pvec-empty a) (expr-pvec-empty (subst k s a))]
+    [(expr-pvec-push v x) (expr-pvec-push (subst k s v) (subst k s x))]
+    [(expr-pvec-nth v i) (expr-pvec-nth (subst k s v) (subst k s i))]
+    [(expr-pvec-update v i x) (expr-pvec-update (subst k s v) (subst k s i) (subst k s x))]
+    [(expr-pvec-length v) (expr-pvec-length (subst k s v))]
+    [(expr-pvec-pop v) (expr-pvec-pop (subst k s v))]
+    [(expr-pvec-concat v1 v2) (expr-pvec-concat (subst k s v1) (subst k s v2))]
+    [(expr-pvec-slice v lo hi) (expr-pvec-slice (subst k s v) (subst k s lo) (subst k s hi))]
 
     ;; Int (all non-binding)
     [(expr-Int) e]

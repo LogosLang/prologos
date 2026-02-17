@@ -37,6 +37,7 @@
     Quire32 q32-zero q32-fma q32-to
     Quire64 q64-zero q64-fma q64-to
     Keyword Map map-empty map-assoc map-get map-dissoc map-size map-has-key? map-keys map-vals
+    PVec pvec-empty pvec-push pvec-nth pvec-update pvec-length pvec-pop pvec-concat pvec-slice
     def defn check eval infer expand parse elaborate match
     ;; Pre-parse macros — should be expanded before reaching parser
     defmacro let do if deftype data spec trait impl
@@ -412,6 +413,10 @@
     ;; $brace-params sentinel: map literal {k1 v1 k2 v2 ...}
     [(and (symbol? head) (eq? head '$brace-params))
      (parse-map-literal args loc)]
+
+    ;; $vec-literal sentinel: PVec literal @[e1 e2 ...]
+    [(and (symbol? head) (eq? head '$vec-literal))
+     (parse-pvec-literal args loc)]
 
     ;; Keyword-headed forms
     [(symbol? head)
@@ -1439,6 +1444,76 @@
             (let ([m (parse-datum (car args))])
               (if (prologos-error? m) m
                   (surf-map-vals m loc))))]
+
+       ;; ---- PVec type and operations ----
+       ;; (PVec A)
+       [(PVec)
+        (or (check-arity 'PVec args 1 loc)
+            (let ([a (parse-datum (car args))])
+              (if (prologos-error? a) a
+                  (surf-pvec-type a loc))))]
+       ;; (pvec-empty A)
+       [(pvec-empty)
+        (or (check-arity 'pvec-empty args 1 loc)
+            (let ([a (parse-datum (car args))])
+              (if (prologos-error? a) a
+                  (surf-pvec-empty a loc))))]
+       ;; (pvec-push v x)
+       [(pvec-push)
+        (or (check-arity 'pvec-push args 2 loc)
+            (let ([v (parse-datum (car args))]
+                  [x (parse-datum (cadr args))])
+              (cond [(prologos-error? v) v]
+                    [(prologos-error? x) x]
+                    [else (surf-pvec-push v x loc)])))]
+       ;; (pvec-nth v i)
+       [(pvec-nth)
+        (or (check-arity 'pvec-nth args 2 loc)
+            (let ([v (parse-datum (car args))]
+                  [i (parse-datum (cadr args))])
+              (cond [(prologos-error? v) v]
+                    [(prologos-error? i) i]
+                    [else (surf-pvec-nth v i loc)])))]
+       ;; (pvec-update v i x)
+       [(pvec-update)
+        (or (check-arity 'pvec-update args 3 loc)
+            (let ([v (parse-datum (car args))]
+                  [i (parse-datum (cadr args))]
+                  [x (parse-datum (caddr args))])
+              (cond [(prologos-error? v) v]
+                    [(prologos-error? i) i]
+                    [(prologos-error? x) x]
+                    [else (surf-pvec-update v i x loc)])))]
+       ;; (pvec-length v)
+       [(pvec-length)
+        (or (check-arity 'pvec-length args 1 loc)
+            (let ([v (parse-datum (car args))])
+              (if (prologos-error? v) v
+                  (surf-pvec-length v loc))))]
+       ;; (pvec-pop v)
+       [(pvec-pop)
+        (or (check-arity 'pvec-pop args 1 loc)
+            (let ([v (parse-datum (car args))])
+              (if (prologos-error? v) v
+                  (surf-pvec-pop v loc))))]
+       ;; (pvec-concat v1 v2)
+       [(pvec-concat)
+        (or (check-arity 'pvec-concat args 2 loc)
+            (let ([v1 (parse-datum (car args))]
+                  [v2 (parse-datum (cadr args))])
+              (cond [(prologos-error? v1) v1]
+                    [(prologos-error? v2) v2]
+                    [else (surf-pvec-concat v1 v2 loc)])))]
+       ;; (pvec-slice v lo hi)
+       [(pvec-slice)
+        (or (check-arity 'pvec-slice args 3 loc)
+            (let ([v (parse-datum (car args))]
+                  [lo (parse-datum (cadr args))]
+                  [hi (parse-datum (caddr args))])
+              (cond [(prologos-error? v) v]
+                    [(prologos-error? lo) lo]
+                    [(prologos-error? hi) hi]
+                    [else (surf-pvec-slice v lo hi loc)])))]
 
        ;; (the-fn type [params...] body)
        [(the-fn)
@@ -2897,6 +2972,25 @@
   (if (prologos-error? entries)
       entries
       (surf-map-literal entries loc)))
+
+;; ========================================
+;; PVec literal parsing
+;; ========================================
+;; Parse a PVec literal from $vec-literal contents.
+;; args = list of element datums: (e1 e2 e3 ...)
+(define (parse-pvec-literal args loc)
+  (define parsed-elems
+    (let loop ([remaining args] [acc '()])
+      (cond
+        [(null? remaining) (reverse acc)]
+        [else
+         (define parsed (parse-datum (car remaining)))
+         (if (prologos-error? parsed)
+             parsed  ; propagate error immediately
+             (loop (cdr remaining) (cons parsed acc)))])))
+  (if (prologos-error? parsed-elems)
+      parsed-elems
+      (surf-pvec-literal parsed-elems loc)))
 
 ;; ========================================
 ;; Foreign escape block parsing

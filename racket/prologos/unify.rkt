@@ -289,6 +289,7 @@
     [(expr-Vec _ _) "3:Vec"]
     [(expr-Fin _) "3:Fin"]
     [(expr-Map _ _) "3:Map"]
+    [(expr-PVec _) "3:PVec"]
     [(expr-app _ _) "4:app"]
     [(expr-meta id) (format "5:?~a" id)]
     [_ "9:other"]))

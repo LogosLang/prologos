@@ -352,6 +352,19 @@
                  "~a:~a:~a: Unexpected ' — use '[...] for list literals or $expr for quoting"
                  (tokenizer-source tok) ln (+ cl 1))])]
 
+      ;; At-sign — PVec literal @[ ... ]
+      [(char=? c #\@)
+       (tok-read! tok)
+       (define next (tok-peek tok))
+       (cond
+         [(and (char? next) (char=? next #\[))
+          ;; @[ — PVec literal opener; [ will be consumed by parse-vec-literal-form
+          (token 'at-lbracket #f ln cl ps 1)]
+         [else
+          (error 'prologos-reader
+                 "~a:~a:~a: Unexpected @ — use @[...] for PVec literals"
+                 (tokenizer-source tok) ln (+ cl 1))])]
+
       ;; Pipe — reduce arm separator
       [(char=? c #\|)
        (tok-read! tok)
@@ -731,6 +744,43 @@
   (make-stx all src ln cl ps
             (max 1 (- (+ (token-pos (parser-peek p)) 1) ps))))
 
+;; --- Parse a PVec literal form: @[ ... ] ---
+;; Wraps contents with $vec-literal sentinel.
+;; @[] → ($vec-literal)
+;; @[1 2 3] → ($vec-literal 1 2 3)
+
+(define (parse-vec-literal-form p)
+  (define at-tok (parser-next! p))    ; consume at-lbracket (the @)
+  (define open-tok (parser-next! p))  ; consume lbracket (the [)
+  (define ln (token-line at-tok))
+  (define cl (token-col at-tok))
+  (define ps (token-pos at-tok))
+  (define src (parser-source p))
+
+  (define elements
+    (let loop ([elems '()])
+      (define tt (parser-peek-type p))
+      (cond
+        [(eq? tt 'rbracket)
+         (parser-next! p) ; consume rbracket
+         (reverse elems)]
+        [(eq? tt 'eof)
+         (error 'prologos-reader "~a:~a:~a: Unclosed PVec literal @[..."
+                src ln cl)]
+        ;; Skip commas
+        [(eq? tt 'comma)
+         (parser-next! p)
+         (loop elems)]
+        [else
+         (define elem (parse-inline-element p))
+         (loop (cons elem elems))])))
+
+  ;; Wrap with $vec-literal sentinel
+  (define sentinel (make-stx '$vec-literal src ln cl ps 0))
+  (define all (cons sentinel elements))
+  (make-stx all src ln cl ps
+            (max 1 (- (+ (token-pos (parser-peek p)) 1) ps))))
+
 ;; --- Parse an angle-bracket form: < ... > ---
 ;; Wraps contents with $angle-type sentinel for type annotations.
 
@@ -809,6 +859,9 @@
     [(eq? tt 'quote-lbracket)
      ;; '[ ... ] — list literal
      (parse-list-literal-form p)]
+    [(eq? tt 'at-lbracket)
+     ;; @[ ... ] — PVec literal
+     (parse-vec-literal-form p)]
     [(eq? tt 'dollar)
      ;; $expr — quote operator
      (define d (parser-next! p)) ; consume $

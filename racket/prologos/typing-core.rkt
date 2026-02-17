@@ -668,6 +668,50 @@
     [(expr-map-keys _) (expr-error)]
     [(expr-map-vals _) (expr-error)]
 
+    ;; ---- PVec type and operations ----
+    [(expr-PVec a)
+     (if (is-type ctx a) (expr-Type (lzero)) (expr-error))]
+    [(expr-rrb _) (expr-error)]   ;; rrb needs checking context
+    [(expr-pvec-empty a)
+     (if (is-type ctx a) (expr-PVec a) (expr-error))]
+    [(expr-pvec-push v x)
+     (let ([tv (infer ctx v)])
+       (match tv
+         [(expr-PVec a) (if (check ctx x a) (expr-PVec a) (expr-error))]
+         [_ (expr-error)]))]
+    [(expr-pvec-nth v i)
+     (let ([tv (infer ctx v)])
+       (match tv
+         [(expr-PVec a) (if (check ctx i (expr-Nat)) a (expr-error))]
+         [_ (expr-error)]))]
+    [(expr-pvec-update v i x)
+     (let ([tv (infer ctx v)])
+       (match tv
+         [(expr-PVec a) (if (and (check ctx i (expr-Nat)) (check ctx x a))
+                            (expr-PVec a) (expr-error))]
+         [_ (expr-error)]))]
+    [(expr-pvec-length v)
+     (let ([tv (infer ctx v)])
+       (match tv
+         [(expr-PVec _) (expr-Nat)]
+         [_ (expr-error)]))]
+    [(expr-pvec-pop v)
+     (let ([tv (infer ctx v)])
+       (match tv
+         [(expr-PVec a) (expr-PVec a)]
+         [_ (expr-error)]))]
+    [(expr-pvec-concat v1 v2)
+     (let ([tv1 (infer ctx v1)])
+       (match tv1
+         [(expr-PVec a) (if (check ctx v2 (expr-PVec a)) (expr-PVec a) (expr-error))]
+         [_ (expr-error)]))]
+    [(expr-pvec-slice v lo hi)
+     (let ([tv (infer ctx v)])
+       (match tv
+         [(expr-PVec a) (if (and (check ctx lo (expr-Nat)) (check ctx hi (expr-Nat)))
+                            (expr-PVec a) (expr-error))]
+         [_ (expr-error)]))]
+
     ;; ---- Foreign function: look up type from global env ----
     [(expr-foreign-fn name _ _ _ _ _)
      (or (global-env-lookup-type name) (expr-error))]
@@ -786,6 +830,14 @@
      (and (check ctx m (expr-Map kt vt))
           (check ctx k kt)
           (check ctx v vt))]
+
+    ;; ---- PVec checks ----
+    [((expr-rrb _) (expr-PVec _)) #t]
+    [((expr-pvec-empty a1) (expr-PVec a2))
+     (unify-ok? (unify ctx a1 a2))]
+    [((expr-pvec-push v x) (expr-PVec a))
+     (and (check ctx v (expr-PVec a))
+          (check ctx x a))]
 
     ;; ---- Reduce: ML-style Church elimination ----
     ;; check(G, reduce(scrutinee, arms), T)
@@ -1057,6 +1109,9 @@
          [((just-level lk*) (just-level lv*))
           (just-level (lmax lk* lv*))]
          [(_ _) (no-level)]))]
+
+    ;; PVec formation: PVec A : Type(level(A))
+    [(expr-PVec a) (infer-level ctx a)]
 
     ;; Union formation: A | B : Type(max(level(A), level(B)))
     [(expr-union l r)

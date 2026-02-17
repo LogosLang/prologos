@@ -998,6 +998,81 @@
        (if (prologos-error? em) em
            (expr-map-vals em)))]
 
+    ;; ---- PVec type and operations ----
+    [(surf-pvec-type a loc)
+     (let ([ea (elaborate a env depth)])
+       (cond [(prologos-error? ea) ea]
+             [else (expr-PVec ea)]))]
+
+    [(surf-pvec-literal elems loc)
+     ;; Desugar @[e1 e2 e3] → pvec-push(pvec-push(pvec-push(pvec-empty(meta), e1), e2), e3)
+     (let ([am (fresh-meta ctx-empty (expr-hole)
+                 (meta-source-info loc 'pvec-elem-type "element type of PVec literal" #f (env->name-stack env)))])
+       (let loop ([remaining elems]
+                  [result (expr-pvec-empty am)])
+         (cond
+           [(null? remaining) result]
+           [else
+            (define ex (elaborate (car remaining) env depth))
+            (cond
+              [(prologos-error? ex) ex]
+              [else (loop (cdr remaining)
+                          (expr-pvec-push result ex))])])))]
+
+    [(surf-pvec-empty a loc)
+     (let ([ea (elaborate a env depth)])
+       (cond [(prologos-error? ea) ea]
+             [else (expr-pvec-empty ea)]))]
+
+    [(surf-pvec-push v x loc)
+     (let ([ev (elaborate v env depth)]
+           [ex (elaborate x env depth)])
+       (cond [(prologos-error? ev) ev]
+             [(prologos-error? ex) ex]
+             [else (expr-pvec-push ev ex)]))]
+
+    [(surf-pvec-nth v i loc)
+     (let ([ev (elaborate v env depth)]
+           [ei (elaborate i env depth)])
+       (cond [(prologos-error? ev) ev]
+             [(prologos-error? ei) ei]
+             [else (expr-pvec-nth ev ei)]))]
+
+    [(surf-pvec-update v i x loc)
+     (let ([ev (elaborate v env depth)]
+           [ei (elaborate i env depth)]
+           [ex (elaborate x env depth)])
+       (cond [(prologos-error? ev) ev]
+             [(prologos-error? ei) ei]
+             [(prologos-error? ex) ex]
+             [else (expr-pvec-update ev ei ex)]))]
+
+    [(surf-pvec-length v loc)
+     (let ([ev (elaborate v env depth)])
+       (cond [(prologos-error? ev) ev]
+             [else (expr-pvec-length ev)]))]
+
+    [(surf-pvec-pop v loc)
+     (let ([ev (elaborate v env depth)])
+       (cond [(prologos-error? ev) ev]
+             [else (expr-pvec-pop ev)]))]
+
+    [(surf-pvec-concat v1 v2 loc)
+     (let ([ev1 (elaborate v1 env depth)]
+           [ev2 (elaborate v2 env depth)])
+       (cond [(prologos-error? ev1) ev1]
+             [(prologos-error? ev2) ev2]
+             [else (expr-pvec-concat ev1 ev2)]))]
+
+    [(surf-pvec-slice v lo hi loc)
+     (let ([ev (elaborate v env depth)]
+           [elo (elaborate lo env depth)]
+           [ehi (elaborate hi env depth)])
+       (cond [(prologos-error? ev) ev]
+             [(prologos-error? elo) elo]
+             [(prologos-error? ehi) ehi]
+             [else (expr-pvec-slice ev elo ehi)]))]
+
     ;; Reduce: ML-style pattern matching
     ;; Each arm's body must be elaborated with binding names in scope.
     ;; We add dummy binders (the actual types come from the type checker).

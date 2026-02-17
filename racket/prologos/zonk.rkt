@@ -188,6 +188,18 @@
     [(expr-map-keys m) (expr-map-keys (zonk m))]
     [(expr-map-vals m) (expr-map-vals (zonk m))]
 
+    ;; PVec (all non-binding)
+    [(expr-PVec a) (expr-PVec (zonk a))]
+    [(expr-rrb _) e]
+    [(expr-pvec-empty a) (expr-pvec-empty (zonk a))]
+    [(expr-pvec-push v x) (expr-pvec-push (zonk v) (zonk x))]
+    [(expr-pvec-nth v i) (expr-pvec-nth (zonk v) (zonk i))]
+    [(expr-pvec-update v i x) (expr-pvec-update (zonk v) (zonk i) (zonk x))]
+    [(expr-pvec-length v) (expr-pvec-length (zonk v))]
+    [(expr-pvec-pop v) (expr-pvec-pop (zonk v))]
+    [(expr-pvec-concat v1 v2) (expr-pvec-concat (zonk v1) (zonk v2))]
+    [(expr-pvec-slice v lo hi) (expr-pvec-slice (zonk v) (zonk lo) (zonk hi))]
+
     ;; Int
     [(expr-Int) e]
     [(expr-int _) e]
@@ -425,6 +437,18 @@
     [(expr-map-keys m) (expr-map-keys (zonk-at-depth depth m))]
     [(expr-map-vals m) (expr-map-vals (zonk-at-depth depth m))]
 
+    ;; PVec (all non-binding)
+    [(expr-PVec a) (expr-PVec (zonk-at-depth depth a))]
+    [(expr-rrb _) e]
+    [(expr-pvec-empty a) (expr-pvec-empty (zonk-at-depth depth a))]
+    [(expr-pvec-push v x) (expr-pvec-push (zonk-at-depth depth v) (zonk-at-depth depth x))]
+    [(expr-pvec-nth v i) (expr-pvec-nth (zonk-at-depth depth v) (zonk-at-depth depth i))]
+    [(expr-pvec-update v i x) (expr-pvec-update (zonk-at-depth depth v) (zonk-at-depth depth i) (zonk-at-depth depth x))]
+    [(expr-pvec-length v) (expr-pvec-length (zonk-at-depth depth v))]
+    [(expr-pvec-pop v) (expr-pvec-pop (zonk-at-depth depth v))]
+    [(expr-pvec-concat v1 v2) (expr-pvec-concat (zonk-at-depth depth v1) (zonk-at-depth depth v2))]
+    [(expr-pvec-slice v lo hi) (expr-pvec-slice (zonk-at-depth depth v) (zonk-at-depth depth lo) (zonk-at-depth depth hi))]
+
     ;; Int
     [(expr-Int) e]
     [(expr-int _) e]
@@ -632,6 +656,17 @@
     [(expr-map-has-key m k) (expr-map-has-key (default-metas m) (default-metas k))]
     [(expr-map-keys m) (expr-map-keys (default-metas m))]
     [(expr-map-vals m) (expr-map-vals (default-metas m))]
+    ;; PVec (all non-binding)
+    [(expr-PVec a) (expr-PVec (default-metas a))]
+    [(expr-rrb _) e]
+    [(expr-pvec-empty a) (expr-pvec-empty (default-metas a))]
+    [(expr-pvec-push v x) (expr-pvec-push (default-metas v) (default-metas x))]
+    [(expr-pvec-nth v i) (expr-pvec-nth (default-metas v) (default-metas i))]
+    [(expr-pvec-update v i x) (expr-pvec-update (default-metas v) (default-metas i) (default-metas x))]
+    [(expr-pvec-length v) (expr-pvec-length (default-metas v))]
+    [(expr-pvec-pop v) (expr-pvec-pop (default-metas v))]
+    [(expr-pvec-concat v1 v2) (expr-pvec-concat (default-metas v1) (default-metas v2))]
+    [(expr-pvec-slice v lo hi) (expr-pvec-slice (default-metas v) (default-metas lo) (default-metas hi))]
     [(expr-Int) e]
     [(expr-int _) e]
     [(expr-int-add a b) (expr-int-add (default-metas a) (default-metas b))]

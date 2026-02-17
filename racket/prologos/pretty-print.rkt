@@ -302,6 +302,18 @@
     [(expr-map-keys m) (format "[map-keys ~a]" (pp-expr m names))]
     [(expr-map-vals m) (format "[map-vals ~a]" (pp-expr m names))]
 
+    ;; PVec
+    [(expr-PVec a) (format "(PVec ~a)" (pp-expr a names))]
+    [(expr-rrb _) "@[...]"]
+    [(expr-pvec-empty a) (format "@[] : (PVec ~a)" (pp-expr a names))]
+    [(expr-pvec-push v x) (format "[pvec-push ~a ~a]" (pp-expr v names) (pp-expr x names))]
+    [(expr-pvec-nth v i) (format "[pvec-nth ~a ~a]" (pp-expr v names) (pp-expr i names))]
+    [(expr-pvec-update v i x) (format "[pvec-update ~a ~a ~a]" (pp-expr v names) (pp-expr i names) (pp-expr x names))]
+    [(expr-pvec-length v) (format "[pvec-length ~a]" (pp-expr v names))]
+    [(expr-pvec-pop v) (format "[pvec-pop ~a]" (pp-expr v names))]
+    [(expr-pvec-concat v1 v2) (format "[pvec-concat ~a ~a]" (pp-expr v1 names) (pp-expr v2 names))]
+    [(expr-pvec-slice v lo hi) (format "[pvec-slice ~a ~a ~a]" (pp-expr v names) (pp-expr lo names) (pp-expr hi names))]
+
     ;; Int
     [(expr-Int) "Int"]
     [(expr-int v) (number->string v)]
@@ -612,6 +624,17 @@
     [(expr-map-has-key m k) (or (uses-bvar0? m) (uses-bvar0? k))]
     [(expr-map-keys m) (uses-bvar0? m)]
     [(expr-map-vals m) (uses-bvar0? m)]
+    ;; PVec
+    [(expr-PVec a) (uses-bvar0? a)]
+    [(expr-rrb _) #f]
+    [(expr-pvec-empty a) (uses-bvar0? a)]
+    [(expr-pvec-push v x) (or (uses-bvar0? v) (uses-bvar0? x))]
+    [(expr-pvec-nth v i) (or (uses-bvar0? v) (uses-bvar0? i))]
+    [(expr-pvec-update v i x) (or (uses-bvar0? v) (uses-bvar0? i) (uses-bvar0? x))]
+    [(expr-pvec-length v) (uses-bvar0? v)]
+    [(expr-pvec-pop v) (uses-bvar0? v)]
+    [(expr-pvec-concat v1 v2) (or (uses-bvar0? v1) (uses-bvar0? v2))]
+    [(expr-pvec-slice v lo hi) (or (uses-bvar0? v) (uses-bvar0? lo) (uses-bvar0? hi))]
     [(expr-Int) #f]
     [(expr-int _) #f]
     [(expr-int-add a b) (or (uses-bvar0? a) (uses-bvar0? b))]

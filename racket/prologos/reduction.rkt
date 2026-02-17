@@ -21,7 +21,8 @@
          "macros.rkt"
          "metavar-store.rkt"
          "foreign.rkt"
-         "champ.rkt")
+         "champ.rkt"
+         "rrb.rkt")
 
 (provide whnf nf nf-whnf conv conv-nf current-nf-cache)
 
@@ -719,6 +720,75 @@
     [(expr-map-keys (expr-champ c)) e]   ;; stub — will be completed when List is a core type
     [(expr-map-vals (expr-champ c)) e]   ;; stub — will be completed when List is a core type
 
+    ;; ---- PVec iota rules ----
+    [(expr-pvec-empty _) (expr-rrb rrb-empty)]
+
+    [(expr-pvec-push (expr-rrb r) x)
+     (let ([x* (whnf x)])
+       (expr-rrb (rrb-push r x*)))]
+
+    [(expr-pvec-nth (expr-rrb r) i)
+     (let* ([i* (whnf i)]
+            [n (nat-value i*)])
+       (if n
+           (with-handlers ([exn:fail? (lambda (_) e)])
+             (whnf (rrb-get r n)))
+           e))]
+
+    [(expr-pvec-update (expr-rrb r) i x)
+     (let* ([i* (whnf i)]
+            [n (nat-value i*)]
+            [x* (whnf x)])
+       (if n
+           (with-handlers ([exn:fail? (lambda (_) e)])
+             (expr-rrb (rrb-set r n x*)))
+           e))]
+
+    [(expr-pvec-length (expr-rrb r))
+     (nat->expr (rrb-size r))]
+
+    [(expr-pvec-pop (expr-rrb r))
+     (with-handlers ([exn:fail? (lambda (_) e)])
+       (expr-rrb (rrb-pop r)))]
+
+    [(expr-pvec-concat (expr-rrb r1) (expr-rrb r2))
+     (expr-rrb (rrb-concat r1 r2))]
+
+    [(expr-pvec-slice (expr-rrb r) lo hi)
+     (let* ([lo* (whnf lo)] [hi* (whnf hi)]
+            [lo-n (nat-value lo*)] [hi-n (nat-value hi*)])
+       (if (and lo-n hi-n)
+           (expr-rrb (rrb-slice r lo-n hi-n))
+           e))]
+
+    ;; ---- PVec stuck-term reduction ----
+    [(expr-pvec-push v x)
+     (let ([v* (whnf v)])
+       (if (equal? v* v) e (whnf (expr-pvec-push v* x))))]
+    [(expr-pvec-nth v i)
+     (let ([v* (whnf v)])
+       (if (equal? v* v) e (whnf (expr-pvec-nth v* i))))]
+    [(expr-pvec-update v i x)
+     (let ([v* (whnf v)])
+       (if (equal? v* v) e (whnf (expr-pvec-update v* i x))))]
+    [(expr-pvec-length v)
+     (let ([v* (whnf v)])
+       (if (equal? v* v) e (whnf (expr-pvec-length v*))))]
+    [(expr-pvec-pop v)
+     (let ([v* (whnf v)])
+       (if (equal? v* v) e (whnf (expr-pvec-pop v*))))]
+    [(expr-pvec-concat v1 v2)
+     (let ([v1* (whnf v1)])
+       (if (not (equal? v1* v1))
+           (whnf (expr-pvec-concat v1* v2))
+           (let ([v2* (whnf v2)])
+             (if (not (equal? v2* v2))
+                 (whnf (expr-pvec-concat v1 v2*))
+                 e))))]
+    [(expr-pvec-slice v lo hi)
+     (let ([v* (whnf v)])
+       (if (equal? v* v) e (whnf (expr-pvec-slice v* lo hi))))]
+
     ;; ---- Map stuck-term reduction (try reducing subexpressions) ----
     [(expr-map-assoc m k v)
      (let ([m* (whnf m)])
@@ -981,6 +1051,18 @@
     [(expr-map-has-key m k) (expr-map-has-key (nf m) (nf k))]
     [(expr-map-keys m) (expr-map-keys (nf m))]
     [(expr-map-vals m) (expr-map-vals (nf m))]
+
+    ;; PVec normalization
+    [(expr-PVec a) (expr-PVec (nf a))]
+    [(expr-rrb _) e]
+    [(expr-pvec-empty a) (expr-pvec-empty (nf a))]
+    [(expr-pvec-push v x) (expr-pvec-push (nf v) (nf x))]
+    [(expr-pvec-nth v i) (expr-pvec-nth (nf v) (nf i))]
+    [(expr-pvec-update v i x) (expr-pvec-update (nf v) (nf i) (nf x))]
+    [(expr-pvec-length v) (expr-pvec-length (nf v))]
+    [(expr-pvec-pop v) (expr-pvec-pop (nf v))]
+    [(expr-pvec-concat v1 v2) (expr-pvec-concat (nf v1) (nf v2))]
+    [(expr-pvec-slice v lo hi) (expr-pvec-slice (nf v) (nf lo) (nf hi))]
 
     ;; Foreign function: opaque leaf (already in WHNF)
     [(expr-foreign-fn _ _ _ _ _ _) e]

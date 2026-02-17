@@ -163,6 +163,12 @@
  (struct-out surf-map-has-key)
  (struct-out surf-map-keys)
  (struct-out surf-map-vals)
+ ;; Persistent Vector (PVec)
+ (struct-out surf-pvec-type) (struct-out surf-pvec-literal)
+ (struct-out surf-pvec-empty) (struct-out surf-pvec-push)
+ (struct-out surf-pvec-nth) (struct-out surf-pvec-update)
+ (struct-out surf-pvec-length) (struct-out surf-pvec-pop)
+ (struct-out surf-pvec-concat) (struct-out surf-pvec-slice)
  ;; Top-level commands
  (struct-out surf-def)
  (struct-out surf-defn)
@@ -548,6 +554,20 @@
 (struct surf-map-has-key (m k srcloc) #:transparent)       ; (map-has-key m k)
 (struct surf-map-keys (m srcloc) #:transparent)            ; (map-keys m)
 (struct surf-map-vals (m srcloc) #:transparent)            ; (map-vals m)
+
+;; ========================================
+;; Persistent Vector (PVec)
+;; ========================================
+(struct surf-pvec-type (elem srcloc) #:transparent)          ; PVec A type
+(struct surf-pvec-literal (elems srcloc) #:transparent)      ; @[e1 e2 ...] literal — elems is a list of parsed surface exprs
+(struct surf-pvec-empty (elem-type srcloc) #:transparent)    ; (pvec-empty A)
+(struct surf-pvec-push (v x srcloc) #:transparent)           ; (pvec-push v x)
+(struct surf-pvec-nth (v i srcloc) #:transparent)            ; (pvec-nth v i)
+(struct surf-pvec-update (v i x srcloc) #:transparent)       ; (pvec-update v i x)
+(struct surf-pvec-length (v srcloc) #:transparent)           ; (pvec-length v)
+(struct surf-pvec-pop (v srcloc) #:transparent)              ; (pvec-pop v)
+(struct surf-pvec-concat (v1 v2 srcloc) #:transparent)       ; (pvec-concat v1 v2)
+(struct surf-pvec-slice (v lo hi srcloc) #:transparent)      ; (pvec-slice v lo hi)
 
 ;; ========================================
 ;; Top-level commands
