@@ -7,225 +7,239 @@ ns examples.foreign
 ;; Prologos provides two mechanisms for calling Racket code:
 ;;
 ;;   1. `foreign racket "module" [name : Type]`
-;;      — Import a named Racket function with an explicit type signature.
-;;        Prologos automatically marshals values between representations
-;;        (e.g. Nat <-> exact integer, Bool <-> boolean).
+;;      Import a named Racket function with an explicit type signature.
+;;      Supports :as aliasing at the module and symbol level.
 ;;
-;;   2. `racket { ... }` escape blocks
-;;      — Write inline Racket expressions. Optionally capture Prologos
-;;        variables and specify a return type for marshalling.
+;;   2. `racket{ code } [captures] -> [exports]`
+;;      Inline Racket escape blocks. Code inside braces is opaque to
+;;      Prologos — no macro rewriting. Optionally capture Prologos
+;;      variables and declare a typed return.
 ;;
-;; Both mechanisms desugar to the same internal `foreign-fn` node, so
-;; foreign values compose seamlessly with native Prologos operations.
-;;
-;; NOTE: In whitespace-mode (.prologos files), the contents of { }
-;; are tokenized by the Prologos reader. Use named Racket functions
-;; (add1, sub1, string-length, etc.) rather than operator symbols
-;; (+, *, <, etc.) inside braces. For full Racket code with operators,
-;; use the sexp reader.
+;; Both desugar to the same internal foreign-fn node, so foreign
+;; values compose seamlessly with native Prologos operations.
 
 ;; ========================================
 ;; Part 1: Foreign Imports
 ;; ========================================
 
-;; --- Basic imports from racket/base ---
-
-;; Import Racket's add1 and sub1 as Nat -> Nat functions.
-;; Prologos Nat (Peano: zero, inc zero, inc (inc zero), ...)
-;; is automatically converted to/from Racket exact integers.
+;; --- Basic imports ---
 
 foreign racket "racket/base" [add1 : Nat -> Nat]
 foreign racket "racket/base" [sub1 : Nat -> Nat]
 
-add1 3
-
 add1 2
 ;; => 3 : Nat
 
-sub1 
-sub1 [inc [inc [inc zero]]]
+sub1 3
 ;; => 2 : Nat
 
 
-;; --- Boolean-returning foreign functions ---
+;; --- Boolean-returning predicates ---
 
-;; Import Racket's zero? predicate: Nat -> Bool
-;; Racket #t/#f is marshalled to Prologos true/false.
 foreign racket "racket/base" [zero? : Nat -> Bool]
 
-zero? zero
+zero? 0
 ;; => true : Bool
 
-zero? [inc [inc zero]]
+zero? 1
 ;; => false : Bool
 
 
-;; --- Multiple declarations in one foreign block ---
+;; --- Multiple declarations ---
 
-;; You can declare several imports from the same module at once.
 foreign racket "racket/base" [modulo : Nat -> Nat -> Nat] [quotient : Nat -> Nat -> Nat]
 
-eval [modulo [inc [inc [inc [inc [inc [inc [inc zero]]]]]]] [inc [inc [inc zero]]]]
-;; => 1 : Nat   (7 mod 3 = 1)
+modulo 7 3
+;; => 1 : Nat   (7 mod 3)
 
-eval [quotient [inc [inc [inc [inc [inc [inc [inc [inc [inc [inc zero]]]]]]]]]] [inc [inc [inc zero]]]]
-;; => 3 : Nat   (10 / 3 = 3)
+quotient 10 3
+;; => 3 : Nat   (10 / 3)
 
 
-;; --- Composing foreign and native functions ---
+;; ========================================
+;; Part 2: Symbol-level :as Aliasing
+;; ========================================
+;;
+;; Rename foreign symbols to Prologos conventions or to avoid conflicts.
+;; Syntax: [racket-name :as prologos-name : Type]
 
-;; Foreign results are ordinary Prologos values. Use them with
-;; native functions like `inc`, or pass them to other foreign functions.
+foreign racket "racket/base" [add1 :as increment : Nat -> Nat]
+foreign racket "racket/base" [sub1 :as decrement : Nat -> Nat]
+foreign racket "racket/base" [zero? :as is-zero : Nat -> Bool]
 
-def three : Nat [add1 [inc [inc zero]]]
-
-eval [inc three]
-;; => 4 : Nat
-
-eval [add1 [inc [add1 zero]]]
+increment 2
 ;; => 3 : Nat
 
+decrement 3
+;; => 2 : Nat
+
+is-zero 0
+;; => true : Bool
+
 
 ;; ========================================
-;; Part 2: Escape Blocks
+;; Part 3: Module-level :as Aliasing
 ;; ========================================
+;;
+;; Group all imports from a module under a namespace prefix.
+;; Syntax: foreign racket "module" :as prefix [name : Type]
+;; Access as: prefix/name
 
-;; --- Constants (no captures) ---
+foreign racket "racket/base" :as rkt [add1 : Nat -> Nat] [sub1 : Nat -> Nat] [zero? : Nat -> Bool]
 
-;; The simplest escape block: a Racket expression with no free variables.
-;; The return type is auto-detected from the Racket value.
-def the-answer : Nat racket {42}
+rkt/add1 2
+;; => 3 : Nat
 
-eval the-answer
+rkt/sub1 3
+;; => 2 : Nat
+
+rkt/zero? 0
+;; => true : Bool
+
+;; Module alias avoids name conflicts with Prologos builtins
+;; — rkt/add1 won't shadow a native definition named add1.
+
+
+;; ========================================
+;; Part 4: Combined Aliasing
+;; ========================================
+;;
+;; Module alias + symbol alias: prefix/alias-name
+;; Mix aliased and non-aliased in the same block.
+
+foreign racket "racket/base" :as math
+  [add1 :as inc1 : Nat -> Nat]
+  [sub1 :as dec1 : Nat -> Nat]
+  [modulo :as mod : Nat -> Nat -> Nat]
+  [quotient :as div : Nat -> Nat -> Nat]
+
+math/inc1 4
+;; => 5 : Nat
+
+math/mod 7 3
+;; => 1 : Nat   (7 mod 3)
+
+math/div 10 3
+;; => 3 : Nat   (10 / 3)
+
+
+;; ========================================
+;; Part 5: Escape Blocks — racket{...}
+;; ========================================
+;;
+;; Write inline Racket code. The braces attach directly to the
+;; language identifier: racket{...} (no space).
+;; Code inside is opaque — Prologos macros do not apply.
+
+;; --- Constants (auto-detected type) ---
+
+def the-answer : Nat racket{42}
+
+the-answer
 ;; => 42 : Nat
 
+def hello-len : Nat racket{(string-length "hello world")}
 
-;; --- Racket-only computations ---
-
-;; Anything that evaluates to a non-negative integer becomes a Nat.
-;; Use named Racket functions inside braces for WS-mode compatibility.
-def hello-len : Nat racket {(string-length "hello world")}
-
-eval hello-len
+hello-len
 ;; => 11 : Nat
-
-def added : Nat racket {(add1 (add1 (add1 41)))}
-
-eval added
-;; => 44 : Nat
 
 
 ;; --- Boolean auto-detection ---
 
-;; Boolean Racket results are auto-detected and marshalled.
-def is-empty : Bool racket {(zero? 0)}
+def is-empty : Bool racket{(zero? 0)}
 
-eval is-empty
-;; => true : Bool
-
-def not-empty : Bool racket {(not (zero? 5))}
-
-eval not-empty
+is-empty
 ;; => true : Bool
 
 
-;; --- Complex Racket code in escape blocks ---
+;; --- Complex Racket code ---
 
-;; Racket code inside { } is completely opaque to Prologos.
-;; Prologos macros (let -> fn, if -> boolrec) do NOT apply here.
-;; Named-let loops, if, cond, etc. all work as expected.
+;; Named-let, if, cond — all work because braces are opaque.
 
-def countdown : Nat racket {
+def countdown : Nat racket{
   (let loop ([n 10] [acc 0])
     (if (zero? n) acc
         (loop (sub1 n) (add1 acc))))
 }
 
-eval countdown
+countdown
 ;; => 10 : Nat
 
-;; String operations — compute the length of a repeated string.
-def repeated-len : Nat racket {
+def repeated-len : Nat racket{
   (string-length
     (string-append "hello" " " "world" "!"))
 }
 
-eval repeated-len
+repeated-len
 ;; => 12 : Nat
 
 
-;; --- Escape blocks with captures ---
-
-;; Capture Prologos variables into the Racket code.
-;; Syntax: racket { code } [var : Type] -> [result : Type]
-;; The captured variable must already be defined in scope.
+;; ========================================
+;; Part 6: Captures and Exports
+;; ========================================
+;;
+;; Syntax: racket{code} [captures] -> [exports]
+;;
+;; Captures reference existing Prologos variables in scope.
 ;; Prologos Nat values are marshalled to Racket integers,
 ;; the Racket code runs, and the result is marshalled back.
 
-def n : Nat [inc [inc [inc zero]]]
+;; --- Single capture ---
 
-def n-plus-one : Nat racket {(add1 n)} [n : Nat] -> [n-plus-one : Nat]
+def n : Nat 3
 
-eval n-plus-one
+def n-plus-one : Nat racket{(add1 n)} [n : Nat] -> [n-plus-one : Nat]
+
+n-plus-one
 ;; => 4 : Nat
-
-def n-minus-one : Nat racket {(sub1 n)} [n : Nat] -> [n-minus-one : Nat]
-
-eval n-minus-one
-;; => 2 : Nat
 
 
 ;; --- Multiple captures ---
 
-def x : Nat [inc [inc zero]]
-def y : Nat [inc [inc [inc [inc [inc zero]]]]]
+def a : Nat 2
+def b : Nat 5
 
-;; Capture both x and y, compute modulo in Racket
-def remainder : Nat racket {(modulo y x)} [x : Nat y : Nat] -> [remainder : Nat]
+def remainder-ab : Nat racket{(modulo b a)} [a : Nat b : Nat] -> [remainder-ab : Nat]
 
-eval remainder
-;; => 1 : Nat   (5 mod 2 = 1)
+remainder-ab
+;; => 1 : Nat   (5 mod 2)
 
 
-;; --- Boolean return with captures ---
+;; --- Boolean return with capture ---
 
-def val : Nat zero
+def v : Nat 0
 
-def is-zero : Bool racket {(zero? val)} [val : Nat] -> [is-zero : Bool]
+def v-is-zero : Bool racket{(zero? v)} [v : Nat] -> [v-is-zero : Bool]
 
-eval is-zero
+v-is-zero
 ;; => true : Bool
 
 
-;; --- Composing foreign imports + escape blocks ---
+;; ========================================
+;; Part 7: Composition
+;; ========================================
+;;
+;; Foreign imports, aliases, and escape blocks all produce ordinary
+;; Prologos values. Mix them freely with native operations.
 
-;; Use a foreign-imported function to compute a base value,
-;; then feed it into an escape block for further Racket computation.
+;; Use an aliased import to build a value, then capture into an escape block.
+def base : Nat [math/inc1 [math/inc1 2]]
 
-def base : Nat [add1 [add1 [inc [inc zero]]]]
-
-eval base
+base
 ;; => 4 : Nat
 
-def incremented : Nat racket {(add1 (add1 base))} [base : Nat] -> [incremented : Nat]
+def bumped : Nat racket{(add1 (add1 base))} [base : Nat] -> [bumped : Nat]
 
-eval incremented
+bumped
 ;; => 6 : Nat
 
+;; Escape block result used with native inc
+def ten : Nat racket{10}
 
-;; --- Escape block results compose with native operations ---
-
-def ten : Nat racket {10}
-
-eval [inc [inc ten]]
+inc [inc ten]
 ;; => 12 : Nat
 
-eval [add1 ten]
-;; => 11 : Nat
-
-
-;; --- Type checking works for all foreign values ---
-
+;; Type checking works for all foreign values
 check the-answer : Nat
 check is-empty : Bool
 check ten : Nat

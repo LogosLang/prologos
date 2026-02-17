@@ -98,59 +98,67 @@
 ;; ========================================
 ;; Integration tests: full pipeline
 ;; ========================================
+;; Canonical form: racket{...} (no space between identifier and brace)
 
 (test-case "foreign-block/constant-no-captures"
-  ;; racket{ (+ 1 2) } with no captures — constant expression
+  ;; racket{(+ 1 2)} with no captures — constant expression
   (check-contains
    (run-ns-last
-    "(def x : Nat racket {(+ 1 2)})\n(eval x)")
+    "(def x : Nat racket{(+ 1 2)})\n(eval x)")
    "3 : Nat"))
 
 (test-case "foreign-block/single-capture"
-  ;; racket{ (add1 n) } [n : Nat] -> [result : Nat]
+  ;; racket{(add1 n)} [n : Nat] -> [result : Nat]
   (check-contains
    (run-ns-last
-    "(def n : Nat (inc (inc (inc zero))))\n(def result : Nat racket {(add1 n)} (n : Nat) -> (result : Nat))\n(eval result)")
+    "(def n : Nat (inc (inc (inc zero))))\n(def result : Nat racket{(add1 n)} (n : Nat) -> (result : Nat))\n(eval result)")
    "4 : Nat"))
 
 (test-case "foreign-block/multiple-captures"
-  ;; racket{ (+ x y) } [x : Nat, y : Nat] -> [result : Nat]
+  ;; racket{(+ x y)} [x : Nat y : Nat] -> [result : Nat]
   (check-contains
    (run-ns-last
-    "(def x : Nat (inc (inc zero)))\n(def y : Nat (inc (inc (inc zero))))\n(def result : Nat racket {(+ x y)} (x : Nat y : Nat) -> (result : Nat))\n(eval result)")
+    "(def x : Nat (inc (inc zero)))\n(def y : Nat (inc (inc (inc zero))))\n(def result : Nat racket{(+ x y)} (x : Nat y : Nat) -> (result : Nat))\n(eval result)")
    "5 : Nat"))
 
 (test-case "foreign-block/bool-return"
-  ;; racket{ (zero? n) } [n : Nat] -> [result : Bool]
+  ;; racket{(zero? n)} [n : Nat] -> [result : Bool]
   (check-contains
    (run-ns-last
-    "(def n : Nat zero)\n(def result : Bool racket {(zero? n)} (n : Nat) -> (result : Bool))\n(eval result)")
+    "(def n : Nat zero)\n(def result : Bool racket{(zero? n)} (n : Nat) -> (result : Bool))\n(eval result)")
    "true : Bool"))
 
 (test-case "foreign-block/type-check"
   ;; Foreign block result type-checks
   (check-contains
    (run-ns-last
-    "(def x : Nat racket {42})\n(check x : Nat)")
+    "(def x : Nat racket{42})\n(check x : Nat)")
    "OK"))
 
 (test-case "foreign-block/in-def-body"
   ;; Foreign block as the body of a def
   (check-contains
    (run-ns-last
-    "(def five : Nat racket {(+ 2 3)})\n(eval five)")
+    "(def five : Nat racket{(+ 2 3)})\n(eval five)")
    "5 : Nat"))
 
 (test-case "foreign-block/compose-with-native"
   ;; Use foreign block result in further Prologos computation
   (check-contains
    (run-ns-last
-    "(def three : Nat racket {3})\n(eval (inc three))")
+    "(def three : Nat racket{3})\n(eval (inc three))")
    "4 : Nat"))
 
 (test-case "foreign-block/string-ops"
   ;; Use Racket string operations via foreign block
   (check-contains
    (run-ns-last
-    "(def len : Nat racket {(string-length \"hello\")})\n(eval len)")
+    "(def len : Nat racket{(string-length \"hello\")})\n(eval len)")
    "5 : Nat"))
+
+(test-case "foreign-block/space-backward-compat"
+  ;; racket { ... } with space also works (backward compatibility)
+  (check-contains
+   (run-ns-last
+    "(def x : Nat racket {99})\n(eval x)")
+   "99 : Nat"))
