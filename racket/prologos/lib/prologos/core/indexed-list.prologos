@@ -12,7 +12,7 @@ require [prologos.data.nat            :refer [zero?]]
 
 ;; idx-nth : List A -> Nat -> Option A
 ;; Returns (some elem) at index n, or none if out of bounds.
-(def list-idx-nth : (Pi (A :0 (Type 0)) (-> (List A) (-> Nat (Option A))))
+(def list-idx-nth : [Pi [A :0 <Type>] [-> [List A] [-> Nat [Option A]]]]
   (fn (A :0 (Type 0)) (fn (xs : (List A)) (fn (n : Nat)
     (match xs
       (nil -> (none A))
@@ -21,7 +21,7 @@ require [prologos.data.nat            :refer [zero?]]
         (inc k -> (list-idx-nth A as k)))))))))
 
 ;; idx-length : List A -> Nat
-(def list-idx-length : (Pi (A :0 (Type 0)) (-> (List A) Nat))
+(def list-idx-length : [Pi [A :0 <Type>] [-> [List A] Nat]]
   (fn (A :0 (Type 0)) (fn (xs : (List A))
     (match xs
       (nil -> zero)
@@ -29,7 +29,7 @@ require [prologos.data.nat            :refer [zero?]]
 
 ;; idx-update : List A -> Nat -> A -> List A
 ;; Replace element at index n. If out of bounds, return unchanged.
-(def list-idx-update : (Pi (A :0 (Type 0)) (-> (List A) (-> Nat (-> A (List A)))))
+(def list-idx-update : [Pi [A :0 <Type>] [-> [List A] [-> Nat [-> A [List A]]]]]
   (fn (A :0 (Type 0)) (fn (xs : (List A)) (fn (n : Nat) (fn (v : A)
     (match xs
       (nil -> (nil A))

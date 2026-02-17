@@ -21,10 +21,7 @@ require [prologos.data.list             :refer [List]]
 
 ;; coll-map : (A -> B) -> List A -> List B
 ;; Converts to LSeq, maps, then rebuilds.
-(def coll-map :
-  (Pi (A :0 (Type 0))
-    (Pi (B :0 (Type 0))
-      (-> (-> A B) (-> (List A) (List B)))))
+(def coll-map : [Pi [A :0 <Type>] [Pi [B :0 <Type>] [-> [-> A B] [-> [List A] [List B]]]]]
   (fn (A :0 (Type 0))
     (fn (B :0 (Type 0))
       (fn (f : (-> A B))
@@ -34,9 +31,7 @@ require [prologos.data.list             :refer [List]]
 
 ;; coll-filter : (A -> Bool) -> List A -> List A
 ;; Converts to LSeq, filters, then rebuilds.
-(def coll-filter :
-  (Pi (A :0 (Type 0))
-    (-> (-> A Bool) (-> (List A) (List A))))
+(def coll-filter : [Pi [A :0 <Type>] [-> [-> A Bool] [-> [List A] [List A]]]]
   (fn (A :0 (Type 0))
     (fn (pred : (-> A Bool))
       (fn (xs : (List A))
@@ -45,18 +40,14 @@ require [prologos.data.list             :refer [List]]
 
 ;; coll-length : List A -> Nat
 ;; Converts to LSeq and computes length.
-(def coll-length :
-  (Pi (A :0 (Type 0))
-    (-> (List A) Nat))
+(def coll-length : [Pi [A :0 <Type>] [-> [List A] Nat]]
   (fn (A :0 (Type 0))
     (fn (xs : (List A))
       (lseq-length A (List--Seqable--dict A xs)))))
 
 ;; coll-to-list : List A -> List A
 ;; Identity for List; demonstrates the Seq roundtrip.
-(def coll-to-list :
-  (Pi (A :0 (Type 0))
-    (-> (List A) (List A)))
+(def coll-to-list : [Pi [A :0 <Type>] [-> [List A] [List A]]]
   (fn (A :0 (Type 0))
     (fn (xs : (List A))
       (lseq-to-list A (List--Seqable--dict A xs)))))

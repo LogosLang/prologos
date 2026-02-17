@@ -15,10 +15,10 @@ require [prologos.data.list             :refer [List nil]]
 ;; pair with named refs can't infer the dependent Sigma type, so we
 ;; use inline lambdas in the pair constructor (same as sexp inline approach).
 
-(def List--Buildable--from-seq : (Pi (A :0 (Type 0)) (-> (LSeq A) (List A)))
+(def List--Buildable--from-seq : [Pi [A :0 <Type>] [-> [LSeq A] [List A]]]
   lseq-to-list)
 
-(def List--Buildable--empty-coll : (Pi (A :0 (Type 0)) (List A))
+(def List--Buildable--empty-coll : [Pi [A :0 <Type>] [List A]]
   (fn (A :0 (Type 0)) (nil A)))
 
 ;; Assemble the dictionary: inline lambdas so pair can type-check
