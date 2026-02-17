@@ -1,0 +1,35 @@
+ns prologos.core.eq-instances
+
+require [prologos.core.eq-trait   :refer [Eq Eq-eq?]]
+require [prologos.data.bool       :refer [bool-eq not]]
+require [prologos.data.ordering   :refer [Ordering lt-ord eq-ord gt-ord]]
+
+;; ========================================
+;; Eq Bool
+;; ========================================
+;; Reuses bool-eq from prologos.data.bool.
+
+impl Eq Bool
+  defn eq? [x : Bool y : Bool] <Bool>
+    bool-eq x y
+
+;; ========================================
+;; Eq Ordering
+;; ========================================
+;; 9-case match: equal only when same constructor.
+
+impl Eq Ordering
+  defn eq? [x : Ordering y : Ordering] <Bool>
+    match x
+      | lt-ord -> match y
+                    | lt-ord -> true
+                    | eq-ord -> false
+                    | gt-ord -> false
+      | eq-ord -> match y
+                    | lt-ord -> false
+                    | eq-ord -> true
+                    | gt-ord -> false
+      | gt-ord -> match y
+                    | lt-ord -> false
+                    | eq-ord -> false
+                    | gt-ord -> true

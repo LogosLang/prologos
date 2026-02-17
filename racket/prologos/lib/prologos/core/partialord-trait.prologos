@@ -1,0 +1,15 @@
+ns prologos.core.partialord-trait
+
+require [prologos.data.option    :refer [Option some none]]
+require [prologos.data.ordering  :refer [Ordering lt-ord eq-ord gt-ord]]
+
+;; ========================================
+;; PartialOrd Trait
+;; ========================================
+;; A partial order supports comparison that may be incomparable.
+;; partial-compare : A -> A -> Option Ordering
+;; Returns (some ordering) for comparable elements, (none) for incomparable.
+;; Needed for lattice types in propagator integration.
+
+trait PartialOrd {A}
+  partial-compare : A -> A -> [Option Ordering]

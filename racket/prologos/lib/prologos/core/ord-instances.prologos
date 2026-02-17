@@ -1,0 +1,14 @@
+ns prologos.core.ord-instances
+
+require [prologos.core.ord-trait    :refer [Ord Ord-compare]]
+require [prologos.data.ordering     :refer [Ordering lt-ord eq-ord gt-ord]]
+
+;; ========================================
+;; Ord Bool — false < true
+;; ========================================
+
+impl Ord Bool
+  defn compare [x : Bool y : Bool] <Ordering>
+    if x
+      [if y eq-ord gt-ord]
+      [if y lt-ord eq-ord]
