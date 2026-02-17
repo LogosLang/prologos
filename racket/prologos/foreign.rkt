@@ -108,6 +108,9 @@
     [(expr-Bool)   'Bool]
     [(expr-Unit)   'Unit]
     [(expr-Posit8) 'Posit8]
+    [(expr-Posit16) 'Posit16]
+    [(expr-Posit32) 'Posit32]
+    [(expr-Posit64) 'Posit64]
     [(expr-Int)    'Int]
     [(expr-Rat)    'Rat]
     [_ (error 'foreign "Unsupported foreign type component: ~a" e)]))

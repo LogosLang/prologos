@@ -101,6 +101,54 @@
     [(expr-p8-if-nar t nc vc v)
      (expr-p8-if-nar (zonk t) (zonk nc) (zonk vc) (zonk v))]
 
+    ;; Posit16 (all non-binding)
+    [(expr-Posit16) e]
+    [(expr-posit16 _) e]
+    [(expr-p16-add a b) (expr-p16-add (zonk a) (zonk b))]
+    [(expr-p16-sub a b) (expr-p16-sub (zonk a) (zonk b))]
+    [(expr-p16-mul a b) (expr-p16-mul (zonk a) (zonk b))]
+    [(expr-p16-div a b) (expr-p16-div (zonk a) (zonk b))]
+    [(expr-p16-neg a) (expr-p16-neg (zonk a))]
+    [(expr-p16-abs a) (expr-p16-abs (zonk a))]
+    [(expr-p16-sqrt a) (expr-p16-sqrt (zonk a))]
+    [(expr-p16-lt a b) (expr-p16-lt (zonk a) (zonk b))]
+    [(expr-p16-le a b) (expr-p16-le (zonk a) (zonk b))]
+    [(expr-p16-from-nat n) (expr-p16-from-nat (zonk n))]
+    [(expr-p16-if-nar t nc vc v)
+     (expr-p16-if-nar (zonk t) (zonk nc) (zonk vc) (zonk v))]
+
+    ;; Posit32 (all non-binding)
+    [(expr-Posit32) e]
+    [(expr-posit32 _) e]
+    [(expr-p32-add a b) (expr-p32-add (zonk a) (zonk b))]
+    [(expr-p32-sub a b) (expr-p32-sub (zonk a) (zonk b))]
+    [(expr-p32-mul a b) (expr-p32-mul (zonk a) (zonk b))]
+    [(expr-p32-div a b) (expr-p32-div (zonk a) (zonk b))]
+    [(expr-p32-neg a) (expr-p32-neg (zonk a))]
+    [(expr-p32-abs a) (expr-p32-abs (zonk a))]
+    [(expr-p32-sqrt a) (expr-p32-sqrt (zonk a))]
+    [(expr-p32-lt a b) (expr-p32-lt (zonk a) (zonk b))]
+    [(expr-p32-le a b) (expr-p32-le (zonk a) (zonk b))]
+    [(expr-p32-from-nat n) (expr-p32-from-nat (zonk n))]
+    [(expr-p32-if-nar t nc vc v)
+     (expr-p32-if-nar (zonk t) (zonk nc) (zonk vc) (zonk v))]
+
+    ;; Posit64 (all non-binding)
+    [(expr-Posit64) e]
+    [(expr-posit64 _) e]
+    [(expr-p64-add a b) (expr-p64-add (zonk a) (zonk b))]
+    [(expr-p64-sub a b) (expr-p64-sub (zonk a) (zonk b))]
+    [(expr-p64-mul a b) (expr-p64-mul (zonk a) (zonk b))]
+    [(expr-p64-div a b) (expr-p64-div (zonk a) (zonk b))]
+    [(expr-p64-neg a) (expr-p64-neg (zonk a))]
+    [(expr-p64-abs a) (expr-p64-abs (zonk a))]
+    [(expr-p64-sqrt a) (expr-p64-sqrt (zonk a))]
+    [(expr-p64-lt a b) (expr-p64-lt (zonk a) (zonk b))]
+    [(expr-p64-le a b) (expr-p64-le (zonk a) (zonk b))]
+    [(expr-p64-from-nat n) (expr-p64-from-nat (zonk n))]
+    [(expr-p64-if-nar t nc vc v)
+     (expr-p64-if-nar (zonk t) (zonk nc) (zonk vc) (zonk v))]
+
     ;; Int
     [(expr-Int) e]
     [(expr-int _) e]
@@ -248,6 +296,57 @@
      (expr-p8-if-nar (zonk-at-depth depth t) (zonk-at-depth depth nc)
                      (zonk-at-depth depth vc) (zonk-at-depth depth v))]
 
+    ;; Posit16 (all non-binding)
+    [(expr-Posit16) e]
+    [(expr-posit16 _) e]
+    [(expr-p16-add a b) (expr-p16-add (zonk-at-depth depth a) (zonk-at-depth depth b))]
+    [(expr-p16-sub a b) (expr-p16-sub (zonk-at-depth depth a) (zonk-at-depth depth b))]
+    [(expr-p16-mul a b) (expr-p16-mul (zonk-at-depth depth a) (zonk-at-depth depth b))]
+    [(expr-p16-div a b) (expr-p16-div (zonk-at-depth depth a) (zonk-at-depth depth b))]
+    [(expr-p16-neg a) (expr-p16-neg (zonk-at-depth depth a))]
+    [(expr-p16-abs a) (expr-p16-abs (zonk-at-depth depth a))]
+    [(expr-p16-sqrt a) (expr-p16-sqrt (zonk-at-depth depth a))]
+    [(expr-p16-lt a b) (expr-p16-lt (zonk-at-depth depth a) (zonk-at-depth depth b))]
+    [(expr-p16-le a b) (expr-p16-le (zonk-at-depth depth a) (zonk-at-depth depth b))]
+    [(expr-p16-from-nat n) (expr-p16-from-nat (zonk-at-depth depth n))]
+    [(expr-p16-if-nar t nc vc v)
+     (expr-p16-if-nar (zonk-at-depth depth t) (zonk-at-depth depth nc)
+                      (zonk-at-depth depth vc) (zonk-at-depth depth v))]
+
+    ;; Posit32 (all non-binding)
+    [(expr-Posit32) e]
+    [(expr-posit32 _) e]
+    [(expr-p32-add a b) (expr-p32-add (zonk-at-depth depth a) (zonk-at-depth depth b))]
+    [(expr-p32-sub a b) (expr-p32-sub (zonk-at-depth depth a) (zonk-at-depth depth b))]
+    [(expr-p32-mul a b) (expr-p32-mul (zonk-at-depth depth a) (zonk-at-depth depth b))]
+    [(expr-p32-div a b) (expr-p32-div (zonk-at-depth depth a) (zonk-at-depth depth b))]
+    [(expr-p32-neg a) (expr-p32-neg (zonk-at-depth depth a))]
+    [(expr-p32-abs a) (expr-p32-abs (zonk-at-depth depth a))]
+    [(expr-p32-sqrt a) (expr-p32-sqrt (zonk-at-depth depth a))]
+    [(expr-p32-lt a b) (expr-p32-lt (zonk-at-depth depth a) (zonk-at-depth depth b))]
+    [(expr-p32-le a b) (expr-p32-le (zonk-at-depth depth a) (zonk-at-depth depth b))]
+    [(expr-p32-from-nat n) (expr-p32-from-nat (zonk-at-depth depth n))]
+    [(expr-p32-if-nar t nc vc v)
+     (expr-p32-if-nar (zonk-at-depth depth t) (zonk-at-depth depth nc)
+                      (zonk-at-depth depth vc) (zonk-at-depth depth v))]
+
+    ;; Posit64 (all non-binding)
+    [(expr-Posit64) e]
+    [(expr-posit64 _) e]
+    [(expr-p64-add a b) (expr-p64-add (zonk-at-depth depth a) (zonk-at-depth depth b))]
+    [(expr-p64-sub a b) (expr-p64-sub (zonk-at-depth depth a) (zonk-at-depth depth b))]
+    [(expr-p64-mul a b) (expr-p64-mul (zonk-at-depth depth a) (zonk-at-depth depth b))]
+    [(expr-p64-div a b) (expr-p64-div (zonk-at-depth depth a) (zonk-at-depth depth b))]
+    [(expr-p64-neg a) (expr-p64-neg (zonk-at-depth depth a))]
+    [(expr-p64-abs a) (expr-p64-abs (zonk-at-depth depth a))]
+    [(expr-p64-sqrt a) (expr-p64-sqrt (zonk-at-depth depth a))]
+    [(expr-p64-lt a b) (expr-p64-lt (zonk-at-depth depth a) (zonk-at-depth depth b))]
+    [(expr-p64-le a b) (expr-p64-le (zonk-at-depth depth a) (zonk-at-depth depth b))]
+    [(expr-p64-from-nat n) (expr-p64-from-nat (zonk-at-depth depth n))]
+    [(expr-p64-if-nar t nc vc v)
+     (expr-p64-if-nar (zonk-at-depth depth t) (zonk-at-depth depth nc)
+                      (zonk-at-depth depth vc) (zonk-at-depth depth v))]
+
     ;; Int
     [(expr-Int) e]
     [(expr-int _) e]
@@ -373,6 +472,54 @@
     [(expr-p8-if-nar t nc vc v)
      (expr-p8-if-nar (default-metas t) (default-metas nc)
                      (default-metas vc) (default-metas v))]
+    ;; Posit16 (all non-binding)
+    [(expr-Posit16) e]
+    [(expr-posit16 _) e]
+    [(expr-p16-add a b) (expr-p16-add (default-metas a) (default-metas b))]
+    [(expr-p16-sub a b) (expr-p16-sub (default-metas a) (default-metas b))]
+    [(expr-p16-mul a b) (expr-p16-mul (default-metas a) (default-metas b))]
+    [(expr-p16-div a b) (expr-p16-div (default-metas a) (default-metas b))]
+    [(expr-p16-neg a) (expr-p16-neg (default-metas a))]
+    [(expr-p16-abs a) (expr-p16-abs (default-metas a))]
+    [(expr-p16-sqrt a) (expr-p16-sqrt (default-metas a))]
+    [(expr-p16-lt a b) (expr-p16-lt (default-metas a) (default-metas b))]
+    [(expr-p16-le a b) (expr-p16-le (default-metas a) (default-metas b))]
+    [(expr-p16-from-nat n) (expr-p16-from-nat (default-metas n))]
+    [(expr-p16-if-nar t nc vc v)
+     (expr-p16-if-nar (default-metas t) (default-metas nc)
+                      (default-metas vc) (default-metas v))]
+    ;; Posit32 (all non-binding)
+    [(expr-Posit32) e]
+    [(expr-posit32 _) e]
+    [(expr-p32-add a b) (expr-p32-add (default-metas a) (default-metas b))]
+    [(expr-p32-sub a b) (expr-p32-sub (default-metas a) (default-metas b))]
+    [(expr-p32-mul a b) (expr-p32-mul (default-metas a) (default-metas b))]
+    [(expr-p32-div a b) (expr-p32-div (default-metas a) (default-metas b))]
+    [(expr-p32-neg a) (expr-p32-neg (default-metas a))]
+    [(expr-p32-abs a) (expr-p32-abs (default-metas a))]
+    [(expr-p32-sqrt a) (expr-p32-sqrt (default-metas a))]
+    [(expr-p32-lt a b) (expr-p32-lt (default-metas a) (default-metas b))]
+    [(expr-p32-le a b) (expr-p32-le (default-metas a) (default-metas b))]
+    [(expr-p32-from-nat n) (expr-p32-from-nat (default-metas n))]
+    [(expr-p32-if-nar t nc vc v)
+     (expr-p32-if-nar (default-metas t) (default-metas nc)
+                      (default-metas vc) (default-metas v))]
+    ;; Posit64 (all non-binding)
+    [(expr-Posit64) e]
+    [(expr-posit64 _) e]
+    [(expr-p64-add a b) (expr-p64-add (default-metas a) (default-metas b))]
+    [(expr-p64-sub a b) (expr-p64-sub (default-metas a) (default-metas b))]
+    [(expr-p64-mul a b) (expr-p64-mul (default-metas a) (default-metas b))]
+    [(expr-p64-div a b) (expr-p64-div (default-metas a) (default-metas b))]
+    [(expr-p64-neg a) (expr-p64-neg (default-metas a))]
+    [(expr-p64-abs a) (expr-p64-abs (default-metas a))]
+    [(expr-p64-sqrt a) (expr-p64-sqrt (default-metas a))]
+    [(expr-p64-lt a b) (expr-p64-lt (default-metas a) (default-metas b))]
+    [(expr-p64-le a b) (expr-p64-le (default-metas a) (default-metas b))]
+    [(expr-p64-from-nat n) (expr-p64-from-nat (default-metas n))]
+    [(expr-p64-if-nar t nc vc v)
+     (expr-p64-if-nar (default-metas t) (default-metas nc)
+                      (default-metas vc) (default-metas v))]
     [(expr-Int) e]
     [(expr-int _) e]
     [(expr-int-add a b) (expr-int-add (default-metas a) (default-metas b))]

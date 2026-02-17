@@ -29,6 +29,9 @@
     Int int int+ int- int* int/ int-mod int-neg int-abs int-lt int-le int-eq from-nat
     Rat rat rat+ rat- rat* rat/ rat-neg rat-abs rat-lt rat-le rat-eq from-int rat-numer rat-denom
     Posit8 posit8 p8+ p8- p8* p8/ p8-neg p8-abs p8-sqrt p8-lt p8-le p8-from-nat p8-if-nar
+    Posit16 posit16 p16+ p16- p16* p16/ p16-neg p16-abs p16-sqrt p16-lt p16-le p16-from-nat p16-if-nar
+    Posit32 posit32 p32+ p32- p32* p32/ p32-neg p32-abs p32-sqrt p32-lt p32-le p32-from-nat p32-if-nar
+    Posit64 posit64 p64+ p64- p64* p64/ p64-neg p64-abs p64-sqrt p64-lt p64-le p64-from-nat p64-if-nar
     def defn check eval infer expand parse elaborate match
     ;; Pre-parse macros — should be expanded before reaching parser
     defmacro let do if deftype data spec trait impl
@@ -331,6 +334,9 @@
     [(Bool)   (surf-bool-type loc)]
     [(Unit)   (surf-unit-type loc)]
     [(Posit8) (surf-posit8-type loc)]
+    [(Posit16) (surf-posit16-type loc)]
+    [(Posit32) (surf-posit32-type loc)]
+    [(Posit64) (surf-posit64-type loc)]
     [(Type)   (surf-type #f loc)]     ;; bare Type → infer level (Sprint 6)
     [(zero)   (surf-zero loc)]
     [(true)   (surf-true loc)]
@@ -1002,6 +1008,246 @@
                     [(prologos-error? vc) vc]
                     [(prologos-error? v) v]
                     [else (surf-p8-if-nar tp nc vc v loc)])))]
+
+       ;; ---- Posit16 operations ----
+       [(Posit16)
+        (or (check-arity 'Posit16 args 0 loc)
+            (surf-posit16-type loc))]
+       [(posit16)
+        (or (check-arity 'posit16 args 1 loc)
+            (let ([v (stx->datum (car args))])
+              (if (and (exact-integer? v) (<= 0 v 65535))
+                  (surf-posit16 v loc)
+                  (parse-error loc "posit16 literal must be an integer 0–65535, got ~a" v))))]
+       [(p16+)
+        (or (check-arity 'p16+ args 2 loc)
+            (let ([a (parse-datum (car args))]
+                  [b (parse-datum (cadr args))])
+              (cond [(prologos-error? a) a]
+                    [(prologos-error? b) b]
+                    [else (surf-p16-add a b loc)])))]
+       [(p16-)
+        (or (check-arity 'p16- args 2 loc)
+            (let ([a (parse-datum (car args))]
+                  [b (parse-datum (cadr args))])
+              (cond [(prologos-error? a) a]
+                    [(prologos-error? b) b]
+                    [else (surf-p16-sub a b loc)])))]
+       [(p16*)
+        (or (check-arity 'p16* args 2 loc)
+            (let ([a (parse-datum (car args))]
+                  [b (parse-datum (cadr args))])
+              (cond [(prologos-error? a) a]
+                    [(prologos-error? b) b]
+                    [else (surf-p16-mul a b loc)])))]
+       [(p16/)
+        (or (check-arity 'p16/ args 2 loc)
+            (let ([a (parse-datum (car args))]
+                  [b (parse-datum (cadr args))])
+              (cond [(prologos-error? a) a]
+                    [(prologos-error? b) b]
+                    [else (surf-p16-div a b loc)])))]
+       [(p16-neg)
+        (or (check-arity 'p16-neg args 1 loc)
+            (let ([a (parse-datum (car args))])
+              (if (prologos-error? a) a (surf-p16-neg a loc))))]
+       [(p16-abs)
+        (or (check-arity 'p16-abs args 1 loc)
+            (let ([a (parse-datum (car args))])
+              (if (prologos-error? a) a (surf-p16-abs a loc))))]
+       [(p16-sqrt)
+        (or (check-arity 'p16-sqrt args 1 loc)
+            (let ([a (parse-datum (car args))])
+              (if (prologos-error? a) a (surf-p16-sqrt a loc))))]
+       [(p16-lt)
+        (or (check-arity 'p16-lt args 2 loc)
+            (let ([a (parse-datum (car args))]
+                  [b (parse-datum (cadr args))])
+              (cond [(prologos-error? a) a]
+                    [(prologos-error? b) b]
+                    [else (surf-p16-lt a b loc)])))]
+       [(p16-le)
+        (or (check-arity 'p16-le args 2 loc)
+            (let ([a (parse-datum (car args))]
+                  [b (parse-datum (cadr args))])
+              (cond [(prologos-error? a) a]
+                    [(prologos-error? b) b]
+                    [else (surf-p16-le a b loc)])))]
+       [(p16-from-nat)
+        (or (check-arity 'p16-from-nat args 1 loc)
+            (let ([n (parse-datum (car args))])
+              (if (prologos-error? n) n (surf-p16-from-nat n loc))))]
+       [(p16-if-nar)
+        (or (check-arity 'p16-if-nar args 4 loc)
+            (let ([tp (parse-datum (car args))]
+                  [nc (parse-datum (cadr args))]
+                  [vc (parse-datum (caddr args))]
+                  [v (parse-datum (cadddr args))])
+              (cond [(prologos-error? tp) tp]
+                    [(prologos-error? nc) nc]
+                    [(prologos-error? vc) vc]
+                    [(prologos-error? v) v]
+                    [else (surf-p16-if-nar tp nc vc v loc)])))]
+
+       ;; ---- Posit32 operations ----
+       [(Posit32)
+        (or (check-arity 'Posit32 args 0 loc)
+            (surf-posit32-type loc))]
+       [(posit32)
+        (or (check-arity 'posit32 args 1 loc)
+            (let ([v (stx->datum (car args))])
+              (if (and (exact-integer? v) (<= 0 v 4294967295))
+                  (surf-posit32 v loc)
+                  (parse-error loc "posit32 literal must be an integer 0–4294967295, got ~a" v))))]
+       [(p32+)
+        (or (check-arity 'p32+ args 2 loc)
+            (let ([a (parse-datum (car args))]
+                  [b (parse-datum (cadr args))])
+              (cond [(prologos-error? a) a]
+                    [(prologos-error? b) b]
+                    [else (surf-p32-add a b loc)])))]
+       [(p32-)
+        (or (check-arity 'p32- args 2 loc)
+            (let ([a (parse-datum (car args))]
+                  [b (parse-datum (cadr args))])
+              (cond [(prologos-error? a) a]
+                    [(prologos-error? b) b]
+                    [else (surf-p32-sub a b loc)])))]
+       [(p32*)
+        (or (check-arity 'p32* args 2 loc)
+            (let ([a (parse-datum (car args))]
+                  [b (parse-datum (cadr args))])
+              (cond [(prologos-error? a) a]
+                    [(prologos-error? b) b]
+                    [else (surf-p32-mul a b loc)])))]
+       [(p32/)
+        (or (check-arity 'p32/ args 2 loc)
+            (let ([a (parse-datum (car args))]
+                  [b (parse-datum (cadr args))])
+              (cond [(prologos-error? a) a]
+                    [(prologos-error? b) b]
+                    [else (surf-p32-div a b loc)])))]
+       [(p32-neg)
+        (or (check-arity 'p32-neg args 1 loc)
+            (let ([a (parse-datum (car args))])
+              (if (prologos-error? a) a (surf-p32-neg a loc))))]
+       [(p32-abs)
+        (or (check-arity 'p32-abs args 1 loc)
+            (let ([a (parse-datum (car args))])
+              (if (prologos-error? a) a (surf-p32-abs a loc))))]
+       [(p32-sqrt)
+        (or (check-arity 'p32-sqrt args 1 loc)
+            (let ([a (parse-datum (car args))])
+              (if (prologos-error? a) a (surf-p32-sqrt a loc))))]
+       [(p32-lt)
+        (or (check-arity 'p32-lt args 2 loc)
+            (let ([a (parse-datum (car args))]
+                  [b (parse-datum (cadr args))])
+              (cond [(prologos-error? a) a]
+                    [(prologos-error? b) b]
+                    [else (surf-p32-lt a b loc)])))]
+       [(p32-le)
+        (or (check-arity 'p32-le args 2 loc)
+            (let ([a (parse-datum (car args))]
+                  [b (parse-datum (cadr args))])
+              (cond [(prologos-error? a) a]
+                    [(prologos-error? b) b]
+                    [else (surf-p32-le a b loc)])))]
+       [(p32-from-nat)
+        (or (check-arity 'p32-from-nat args 1 loc)
+            (let ([n (parse-datum (car args))])
+              (if (prologos-error? n) n (surf-p32-from-nat n loc))))]
+       [(p32-if-nar)
+        (or (check-arity 'p32-if-nar args 4 loc)
+            (let ([tp (parse-datum (car args))]
+                  [nc (parse-datum (cadr args))]
+                  [vc (parse-datum (caddr args))]
+                  [v (parse-datum (cadddr args))])
+              (cond [(prologos-error? tp) tp]
+                    [(prologos-error? nc) nc]
+                    [(prologos-error? vc) vc]
+                    [(prologos-error? v) v]
+                    [else (surf-p32-if-nar tp nc vc v loc)])))]
+
+       ;; ---- Posit64 operations ----
+       [(Posit64)
+        (or (check-arity 'Posit64 args 0 loc)
+            (surf-posit64-type loc))]
+       [(posit64)
+        (or (check-arity 'posit64 args 1 loc)
+            (let ([v (stx->datum (car args))])
+              (if (and (exact-integer? v) (<= 0 v 18446744073709551615))
+                  (surf-posit64 v loc)
+                  (parse-error loc "posit64 literal must be an integer 0–18446744073709551615, got ~a" v))))]
+       [(p64+)
+        (or (check-arity 'p64+ args 2 loc)
+            (let ([a (parse-datum (car args))]
+                  [b (parse-datum (cadr args))])
+              (cond [(prologos-error? a) a]
+                    [(prologos-error? b) b]
+                    [else (surf-p64-add a b loc)])))]
+       [(p64-)
+        (or (check-arity 'p64- args 2 loc)
+            (let ([a (parse-datum (car args))]
+                  [b (parse-datum (cadr args))])
+              (cond [(prologos-error? a) a]
+                    [(prologos-error? b) b]
+                    [else (surf-p64-sub a b loc)])))]
+       [(p64*)
+        (or (check-arity 'p64* args 2 loc)
+            (let ([a (parse-datum (car args))]
+                  [b (parse-datum (cadr args))])
+              (cond [(prologos-error? a) a]
+                    [(prologos-error? b) b]
+                    [else (surf-p64-mul a b loc)])))]
+       [(p64/)
+        (or (check-arity 'p64/ args 2 loc)
+            (let ([a (parse-datum (car args))]
+                  [b (parse-datum (cadr args))])
+              (cond [(prologos-error? a) a]
+                    [(prologos-error? b) b]
+                    [else (surf-p64-div a b loc)])))]
+       [(p64-neg)
+        (or (check-arity 'p64-neg args 1 loc)
+            (let ([a (parse-datum (car args))])
+              (if (prologos-error? a) a (surf-p64-neg a loc))))]
+       [(p64-abs)
+        (or (check-arity 'p64-abs args 1 loc)
+            (let ([a (parse-datum (car args))])
+              (if (prologos-error? a) a (surf-p64-abs a loc))))]
+       [(p64-sqrt)
+        (or (check-arity 'p64-sqrt args 1 loc)
+            (let ([a (parse-datum (car args))])
+              (if (prologos-error? a) a (surf-p64-sqrt a loc))))]
+       [(p64-lt)
+        (or (check-arity 'p64-lt args 2 loc)
+            (let ([a (parse-datum (car args))]
+                  [b (parse-datum (cadr args))])
+              (cond [(prologos-error? a) a]
+                    [(prologos-error? b) b]
+                    [else (surf-p64-lt a b loc)])))]
+       [(p64-le)
+        (or (check-arity 'p64-le args 2 loc)
+            (let ([a (parse-datum (car args))]
+                  [b (parse-datum (cadr args))])
+              (cond [(prologos-error? a) a]
+                    [(prologos-error? b) b]
+                    [else (surf-p64-le a b loc)])))]
+       [(p64-from-nat)
+        (or (check-arity 'p64-from-nat args 1 loc)
+            (let ([n (parse-datum (car args))])
+              (if (prologos-error? n) n (surf-p64-from-nat n loc))))]
+       [(p64-if-nar)
+        (or (check-arity 'p64-if-nar args 4 loc)
+            (let ([tp (parse-datum (car args))]
+                  [nc (parse-datum (cadr args))]
+                  [vc (parse-datum (caddr args))]
+                  [v (parse-datum (cadddr args))])
+              (cond [(prologos-error? tp) tp]
+                    [(prologos-error? nc) nc]
+                    [(prologos-error? vc) vc]
+                    [(prologos-error? v) v]
+                    [else (surf-p64-if-nar tp nc vc v loc)])))]
 
        ;; (the-fn type [params...] body)
        [(the-fn)

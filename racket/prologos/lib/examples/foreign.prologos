@@ -249,7 +249,10 @@ check ten : Nat
 ;; Operator symbols can be imported directly: +, *, /, =, etc.
 ;; Characters like < > | are reserved delimiters — use :as aliasing instead.
 ;; Both curried (Nat -> Nat -> Nat) and uncurried (Nat Nat -> Nat) syntax work.
-foreign racket "racket/base" :as base [+ : Nat Nat -> Nat] [* : Nat Nat -> Nat] [- : Nat Nat -> Nat]
+foreign racket "racket/base" :as base
+  + : Nat Nat -> Nat
+  * : Nat Nat -> Nat
+  - : Nat Nat -> Nat
 
 check base/+ : Nat -> Nat -> Nat
 check base/* : Nat -> Nat -> Nat
@@ -258,7 +261,16 @@ check base/- : Nat -> Nat -> Nat
 base/+ 1 200
 ;; => 201 : Nat
 
-base/* 3 100
-;; => 300 : Nat
+base/* 3 21
+
+
+spec factorial Nat -> Nat
+defn factorial [n]
+  match n
+    | zero  -> inc zero
+    | inc k -> base/* n [factorial k]
+
+
+factorial 4
 
 

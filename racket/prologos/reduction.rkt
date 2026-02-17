@@ -86,6 +86,57 @@
         (ctor a)   ; stuck
         (whnf (ctor a*)))))
 
+;; Reduce a binary Posit16 operation: try reducing left, then right.
+(define (reduce-p16-binary ctor a b)
+  (let ([a* (whnf a)])
+    (if (equal? a* a)
+        (let ([b* (whnf b)])
+          (if (equal? b* b)
+              (ctor a b)   ; stuck — both operands in WHNF
+              (whnf (ctor a b*))))
+        (whnf (ctor a* b)))))
+
+;; Reduce a unary Posit16 operation: try reducing the operand.
+(define (reduce-p16-unary ctor a)
+  (let ([a* (whnf a)])
+    (if (equal? a* a)
+        (ctor a)   ; stuck
+        (whnf (ctor a*)))))
+
+;; Reduce a binary Posit32 operation: try reducing left, then right.
+(define (reduce-p32-binary ctor a b)
+  (let ([a* (whnf a)])
+    (if (equal? a* a)
+        (let ([b* (whnf b)])
+          (if (equal? b* b)
+              (ctor a b)   ; stuck — both operands in WHNF
+              (whnf (ctor a b*))))
+        (whnf (ctor a* b)))))
+
+;; Reduce a unary Posit32 operation: try reducing the operand.
+(define (reduce-p32-unary ctor a)
+  (let ([a* (whnf a)])
+    (if (equal? a* a)
+        (ctor a)   ; stuck
+        (whnf (ctor a*)))))
+
+;; Reduce a binary Posit64 operation: try reducing left, then right.
+(define (reduce-p64-binary ctor a b)
+  (let ([a* (whnf a)])
+    (if (equal? a* a)
+        (let ([b* (whnf b)])
+          (if (equal? b* b)
+              (ctor a b)   ; stuck — both operands in WHNF
+              (whnf (ctor a b*))))
+        (whnf (ctor a* b)))))
+
+;; Reduce a unary Posit64 operation: try reducing the operand.
+(define (reduce-p64-unary ctor a)
+  (let ([a* (whnf a)])
+    (if (equal? a* a)
+        (ctor a)   ; stuck
+        (whnf (ctor a*)))))
+
 ;; ========================================
 ;; Structural pattern matching for reduce
 ;; ========================================
@@ -417,6 +468,162 @@
      (let ([v* (whnf v)])
        (if (equal? v* v) e (whnf (expr-p8-if-nar t nc vc v*))))]
 
+    ;; ---- Posit16 iota rules: compute when arguments are posit16 literals ----
+
+    ;; Binary arithmetic on literals
+    [(expr-p16-add (expr-posit16 a) (expr-posit16 b)) (expr-posit16 (posit16-add a b))]
+    [(expr-p16-sub (expr-posit16 a) (expr-posit16 b)) (expr-posit16 (posit16-sub a b))]
+    [(expr-p16-mul (expr-posit16 a) (expr-posit16 b)) (expr-posit16 (posit16-mul a b))]
+    [(expr-p16-div (expr-posit16 a) (expr-posit16 b)) (expr-posit16 (posit16-div a b))]
+
+    ;; Unary ops on literals
+    [(expr-p16-neg (expr-posit16 a)) (expr-posit16 (posit16-neg a))]
+    [(expr-p16-abs (expr-posit16 a)) (expr-posit16 (posit16-abs a))]
+    [(expr-p16-sqrt (expr-posit16 a)) (expr-posit16 (posit16-sqrt a))]
+
+    ;; Comparison on literals → Bool
+    [(expr-p16-lt (expr-posit16 a) (expr-posit16 b))
+     (if (posit16-lt? a b) (expr-true) (expr-false))]
+    [(expr-p16-le (expr-posit16 a) (expr-posit16 b))
+     (if (posit16-le? a b) (expr-true) (expr-false))]
+
+    ;; from-nat: compute when arg is a Nat numeral
+    [(expr-p16-from-nat n)
+     (let ([n* (whnf n)])
+       (let ([k (nat-value n*)])
+         (cond
+           [k (expr-posit16 (posit16-from-nat k))]
+           [(equal? n* n) e]    ; stuck
+           [else (whnf (expr-p16-from-nat n*))])))]
+
+    ;; p16-if-nar: branch when val is a literal
+    [(expr-p16-if-nar _ nc _ (expr-posit16 32768)) (whnf nc)]    ; NaR = 0x8000 = 32768
+    [(expr-p16-if-nar _ _ vc (expr-posit16 _)) (whnf vc)]        ; any non-NaR literal
+
+    ;; ---- Posit16 stuck-term reduction ----
+
+    ;; Binary ops: reduce operands
+    [(expr-p16-add a b) (reduce-p16-binary expr-p16-add a b)]
+    [(expr-p16-sub a b) (reduce-p16-binary expr-p16-sub a b)]
+    [(expr-p16-mul a b) (reduce-p16-binary expr-p16-mul a b)]
+    [(expr-p16-div a b) (reduce-p16-binary expr-p16-div a b)]
+    [(expr-p16-lt a b) (reduce-p16-binary expr-p16-lt a b)]
+    [(expr-p16-le a b) (reduce-p16-binary expr-p16-le a b)]
+
+    ;; Unary ops: reduce operand
+    [(expr-p16-neg a) (reduce-p16-unary expr-p16-neg a)]
+    [(expr-p16-abs a) (reduce-p16-unary expr-p16-abs a)]
+    [(expr-p16-sqrt a) (reduce-p16-unary expr-p16-sqrt a)]
+
+    ;; p16-if-nar: reduce the value argument
+    [(expr-p16-if-nar t nc vc v)
+     (let ([v* (whnf v)])
+       (if (equal? v* v) e (whnf (expr-p16-if-nar t nc vc v*))))]
+
+    ;; ---- Posit32 iota rules: compute when arguments are posit32 literals ----
+
+    ;; Binary arithmetic on literals
+    [(expr-p32-add (expr-posit32 a) (expr-posit32 b)) (expr-posit32 (posit32-add a b))]
+    [(expr-p32-sub (expr-posit32 a) (expr-posit32 b)) (expr-posit32 (posit32-sub a b))]
+    [(expr-p32-mul (expr-posit32 a) (expr-posit32 b)) (expr-posit32 (posit32-mul a b))]
+    [(expr-p32-div (expr-posit32 a) (expr-posit32 b)) (expr-posit32 (posit32-div a b))]
+
+    ;; Unary ops on literals
+    [(expr-p32-neg (expr-posit32 a)) (expr-posit32 (posit32-neg a))]
+    [(expr-p32-abs (expr-posit32 a)) (expr-posit32 (posit32-abs a))]
+    [(expr-p32-sqrt (expr-posit32 a)) (expr-posit32 (posit32-sqrt a))]
+
+    ;; Comparison on literals → Bool
+    [(expr-p32-lt (expr-posit32 a) (expr-posit32 b))
+     (if (posit32-lt? a b) (expr-true) (expr-false))]
+    [(expr-p32-le (expr-posit32 a) (expr-posit32 b))
+     (if (posit32-le? a b) (expr-true) (expr-false))]
+
+    ;; from-nat: compute when arg is a Nat numeral
+    [(expr-p32-from-nat n)
+     (let ([n* (whnf n)])
+       (let ([k (nat-value n*)])
+         (cond
+           [k (expr-posit32 (posit32-from-nat k))]
+           [(equal? n* n) e]    ; stuck
+           [else (whnf (expr-p32-from-nat n*))])))]
+
+    ;; p32-if-nar: branch when val is a literal
+    [(expr-p32-if-nar _ nc _ (expr-posit32 2147483648)) (whnf nc)]    ; NaR = 0x80000000 = 2147483648
+    [(expr-p32-if-nar _ _ vc (expr-posit32 _)) (whnf vc)]             ; any non-NaR literal
+
+    ;; ---- Posit32 stuck-term reduction ----
+
+    ;; Binary ops: reduce operands
+    [(expr-p32-add a b) (reduce-p32-binary expr-p32-add a b)]
+    [(expr-p32-sub a b) (reduce-p32-binary expr-p32-sub a b)]
+    [(expr-p32-mul a b) (reduce-p32-binary expr-p32-mul a b)]
+    [(expr-p32-div a b) (reduce-p32-binary expr-p32-div a b)]
+    [(expr-p32-lt a b) (reduce-p32-binary expr-p32-lt a b)]
+    [(expr-p32-le a b) (reduce-p32-binary expr-p32-le a b)]
+
+    ;; Unary ops: reduce operand
+    [(expr-p32-neg a) (reduce-p32-unary expr-p32-neg a)]
+    [(expr-p32-abs a) (reduce-p32-unary expr-p32-abs a)]
+    [(expr-p32-sqrt a) (reduce-p32-unary expr-p32-sqrt a)]
+
+    ;; p32-if-nar: reduce the value argument
+    [(expr-p32-if-nar t nc vc v)
+     (let ([v* (whnf v)])
+       (if (equal? v* v) e (whnf (expr-p32-if-nar t nc vc v*))))]
+
+    ;; ---- Posit64 iota rules: compute when arguments are posit64 literals ----
+
+    ;; Binary arithmetic on literals
+    [(expr-p64-add (expr-posit64 a) (expr-posit64 b)) (expr-posit64 (posit64-add a b))]
+    [(expr-p64-sub (expr-posit64 a) (expr-posit64 b)) (expr-posit64 (posit64-sub a b))]
+    [(expr-p64-mul (expr-posit64 a) (expr-posit64 b)) (expr-posit64 (posit64-mul a b))]
+    [(expr-p64-div (expr-posit64 a) (expr-posit64 b)) (expr-posit64 (posit64-div a b))]
+
+    ;; Unary ops on literals
+    [(expr-p64-neg (expr-posit64 a)) (expr-posit64 (posit64-neg a))]
+    [(expr-p64-abs (expr-posit64 a)) (expr-posit64 (posit64-abs a))]
+    [(expr-p64-sqrt (expr-posit64 a)) (expr-posit64 (posit64-sqrt a))]
+
+    ;; Comparison on literals → Bool
+    [(expr-p64-lt (expr-posit64 a) (expr-posit64 b))
+     (if (posit64-lt? a b) (expr-true) (expr-false))]
+    [(expr-p64-le (expr-posit64 a) (expr-posit64 b))
+     (if (posit64-le? a b) (expr-true) (expr-false))]
+
+    ;; from-nat: compute when arg is a Nat numeral
+    [(expr-p64-from-nat n)
+     (let ([n* (whnf n)])
+       (let ([k (nat-value n*)])
+         (cond
+           [k (expr-posit64 (posit64-from-nat k))]
+           [(equal? n* n) e]    ; stuck
+           [else (whnf (expr-p64-from-nat n*))])))]
+
+    ;; p64-if-nar: branch when val is a literal
+    [(expr-p64-if-nar _ nc _ (expr-posit64 9223372036854775808)) (whnf nc)]    ; NaR = 0x8000000000000000
+    [(expr-p64-if-nar _ _ vc (expr-posit64 _)) (whnf vc)]                      ; any non-NaR literal
+
+    ;; ---- Posit64 stuck-term reduction ----
+
+    ;; Binary ops: reduce operands
+    [(expr-p64-add a b) (reduce-p64-binary expr-p64-add a b)]
+    [(expr-p64-sub a b) (reduce-p64-binary expr-p64-sub a b)]
+    [(expr-p64-mul a b) (reduce-p64-binary expr-p64-mul a b)]
+    [(expr-p64-div a b) (reduce-p64-binary expr-p64-div a b)]
+    [(expr-p64-lt a b) (reduce-p64-binary expr-p64-lt a b)]
+    [(expr-p64-le a b) (reduce-p64-binary expr-p64-le a b)]
+
+    ;; Unary ops: reduce operand
+    [(expr-p64-neg a) (reduce-p64-unary expr-p64-neg a)]
+    [(expr-p64-abs a) (reduce-p64-unary expr-p64-abs a)]
+    [(expr-p64-sqrt a) (reduce-p64-unary expr-p64-sqrt a)]
+
+    ;; p64-if-nar: reduce the value argument
+    [(expr-p64-if-nar t nc vc v)
+     (let ([v* (whnf v)])
+       (if (equal? v* v) e (whnf (expr-p64-if-nar t nc vc v*))))]
+
     ;; Union types: pass through (types don't reduce)
     [(expr-union _ _) e]
 
@@ -574,6 +781,54 @@
     [(expr-p8-from-nat n) (expr-p8-from-nat (nf n))]
     [(expr-p8-if-nar t nc vc v)
      (expr-p8-if-nar (nf t) (nf nc) (nf vc) (nf v))]
+
+    ;; Posit16 normalization
+    [(expr-Posit16) e]
+    [(expr-posit16 _) e]
+    [(expr-p16-add a b) (expr-p16-add (nf a) (nf b))]
+    [(expr-p16-sub a b) (expr-p16-sub (nf a) (nf b))]
+    [(expr-p16-mul a b) (expr-p16-mul (nf a) (nf b))]
+    [(expr-p16-div a b) (expr-p16-div (nf a) (nf b))]
+    [(expr-p16-neg a) (expr-p16-neg (nf a))]
+    [(expr-p16-abs a) (expr-p16-abs (nf a))]
+    [(expr-p16-sqrt a) (expr-p16-sqrt (nf a))]
+    [(expr-p16-lt a b) (expr-p16-lt (nf a) (nf b))]
+    [(expr-p16-le a b) (expr-p16-le (nf a) (nf b))]
+    [(expr-p16-from-nat n) (expr-p16-from-nat (nf n))]
+    [(expr-p16-if-nar t nc vc v)
+     (expr-p16-if-nar (nf t) (nf nc) (nf vc) (nf v))]
+
+    ;; Posit32 normalization
+    [(expr-Posit32) e]
+    [(expr-posit32 _) e]
+    [(expr-p32-add a b) (expr-p32-add (nf a) (nf b))]
+    [(expr-p32-sub a b) (expr-p32-sub (nf a) (nf b))]
+    [(expr-p32-mul a b) (expr-p32-mul (nf a) (nf b))]
+    [(expr-p32-div a b) (expr-p32-div (nf a) (nf b))]
+    [(expr-p32-neg a) (expr-p32-neg (nf a))]
+    [(expr-p32-abs a) (expr-p32-abs (nf a))]
+    [(expr-p32-sqrt a) (expr-p32-sqrt (nf a))]
+    [(expr-p32-lt a b) (expr-p32-lt (nf a) (nf b))]
+    [(expr-p32-le a b) (expr-p32-le (nf a) (nf b))]
+    [(expr-p32-from-nat n) (expr-p32-from-nat (nf n))]
+    [(expr-p32-if-nar t nc vc v)
+     (expr-p32-if-nar (nf t) (nf nc) (nf vc) (nf v))]
+
+    ;; Posit64 normalization
+    [(expr-Posit64) e]
+    [(expr-posit64 _) e]
+    [(expr-p64-add a b) (expr-p64-add (nf a) (nf b))]
+    [(expr-p64-sub a b) (expr-p64-sub (nf a) (nf b))]
+    [(expr-p64-mul a b) (expr-p64-mul (nf a) (nf b))]
+    [(expr-p64-div a b) (expr-p64-div (nf a) (nf b))]
+    [(expr-p64-neg a) (expr-p64-neg (nf a))]
+    [(expr-p64-abs a) (expr-p64-abs (nf a))]
+    [(expr-p64-sqrt a) (expr-p64-sqrt (nf a))]
+    [(expr-p64-lt a b) (expr-p64-lt (nf a) (nf b))]
+    [(expr-p64-le a b) (expr-p64-le (nf a) (nf b))]
+    [(expr-p64-from-nat n) (expr-p64-from-nat (nf n))]
+    [(expr-p64-if-nar t nc vc v)
+     (expr-p64-if-nar (nf t) (nf nc) (nf vc) (nf v))]
 
     ;; Foreign function: opaque leaf (already in WHNF)
     [(expr-foreign-fn _ _ _ _ _ _) e]

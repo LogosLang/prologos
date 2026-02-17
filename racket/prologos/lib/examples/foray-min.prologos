@@ -22,8 +22,6 @@ defn factorial [n]
     | inc k -> mult n [factorial k]
 
 
-
-
 map [add 1 _] [list::range 10]
 
 

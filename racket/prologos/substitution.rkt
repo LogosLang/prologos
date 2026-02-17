@@ -117,6 +117,57 @@
      (expr-p8-if-nar (shift delta cutoff t) (shift delta cutoff nc)
                      (shift delta cutoff vc) (shift delta cutoff v))]
 
+    ;; Posit16 (all non-binding)
+    [(expr-Posit16) e]
+    [(expr-posit16 _) e]
+    [(expr-p16-add a b) (expr-p16-add (shift delta cutoff a) (shift delta cutoff b))]
+    [(expr-p16-sub a b) (expr-p16-sub (shift delta cutoff a) (shift delta cutoff b))]
+    [(expr-p16-mul a b) (expr-p16-mul (shift delta cutoff a) (shift delta cutoff b))]
+    [(expr-p16-div a b) (expr-p16-div (shift delta cutoff a) (shift delta cutoff b))]
+    [(expr-p16-neg a) (expr-p16-neg (shift delta cutoff a))]
+    [(expr-p16-abs a) (expr-p16-abs (shift delta cutoff a))]
+    [(expr-p16-sqrt a) (expr-p16-sqrt (shift delta cutoff a))]
+    [(expr-p16-lt a b) (expr-p16-lt (shift delta cutoff a) (shift delta cutoff b))]
+    [(expr-p16-le a b) (expr-p16-le (shift delta cutoff a) (shift delta cutoff b))]
+    [(expr-p16-from-nat n) (expr-p16-from-nat (shift delta cutoff n))]
+    [(expr-p16-if-nar t nc vc v)
+     (expr-p16-if-nar (shift delta cutoff t) (shift delta cutoff nc)
+                      (shift delta cutoff vc) (shift delta cutoff v))]
+
+    ;; Posit32 (all non-binding)
+    [(expr-Posit32) e]
+    [(expr-posit32 _) e]
+    [(expr-p32-add a b) (expr-p32-add (shift delta cutoff a) (shift delta cutoff b))]
+    [(expr-p32-sub a b) (expr-p32-sub (shift delta cutoff a) (shift delta cutoff b))]
+    [(expr-p32-mul a b) (expr-p32-mul (shift delta cutoff a) (shift delta cutoff b))]
+    [(expr-p32-div a b) (expr-p32-div (shift delta cutoff a) (shift delta cutoff b))]
+    [(expr-p32-neg a) (expr-p32-neg (shift delta cutoff a))]
+    [(expr-p32-abs a) (expr-p32-abs (shift delta cutoff a))]
+    [(expr-p32-sqrt a) (expr-p32-sqrt (shift delta cutoff a))]
+    [(expr-p32-lt a b) (expr-p32-lt (shift delta cutoff a) (shift delta cutoff b))]
+    [(expr-p32-le a b) (expr-p32-le (shift delta cutoff a) (shift delta cutoff b))]
+    [(expr-p32-from-nat n) (expr-p32-from-nat (shift delta cutoff n))]
+    [(expr-p32-if-nar t nc vc v)
+     (expr-p32-if-nar (shift delta cutoff t) (shift delta cutoff nc)
+                      (shift delta cutoff vc) (shift delta cutoff v))]
+
+    ;; Posit64 (all non-binding)
+    [(expr-Posit64) e]
+    [(expr-posit64 _) e]
+    [(expr-p64-add a b) (expr-p64-add (shift delta cutoff a) (shift delta cutoff b))]
+    [(expr-p64-sub a b) (expr-p64-sub (shift delta cutoff a) (shift delta cutoff b))]
+    [(expr-p64-mul a b) (expr-p64-mul (shift delta cutoff a) (shift delta cutoff b))]
+    [(expr-p64-div a b) (expr-p64-div (shift delta cutoff a) (shift delta cutoff b))]
+    [(expr-p64-neg a) (expr-p64-neg (shift delta cutoff a))]
+    [(expr-p64-abs a) (expr-p64-abs (shift delta cutoff a))]
+    [(expr-p64-sqrt a) (expr-p64-sqrt (shift delta cutoff a))]
+    [(expr-p64-lt a b) (expr-p64-lt (shift delta cutoff a) (shift delta cutoff b))]
+    [(expr-p64-le a b) (expr-p64-le (shift delta cutoff a) (shift delta cutoff b))]
+    [(expr-p64-from-nat n) (expr-p64-from-nat (shift delta cutoff n))]
+    [(expr-p64-if-nar t nc vc v)
+     (expr-p64-if-nar (shift delta cutoff t) (shift delta cutoff nc)
+                      (shift delta cutoff vc) (shift delta cutoff v))]
+
     ;; Int (all non-binding)
     [(expr-Int) e]
     [(expr-int _) e]
@@ -268,6 +319,57 @@
     [(expr-p8-if-nar t nc vc v)
      (expr-p8-if-nar (subst k s t) (subst k s nc)
                      (subst k s vc) (subst k s v))]
+
+    ;; Posit16 (all non-binding)
+    [(expr-Posit16) e]
+    [(expr-posit16 _) e]
+    [(expr-p16-add a b) (expr-p16-add (subst k s a) (subst k s b))]
+    [(expr-p16-sub a b) (expr-p16-sub (subst k s a) (subst k s b))]
+    [(expr-p16-mul a b) (expr-p16-mul (subst k s a) (subst k s b))]
+    [(expr-p16-div a b) (expr-p16-div (subst k s a) (subst k s b))]
+    [(expr-p16-neg a) (expr-p16-neg (subst k s a))]
+    [(expr-p16-abs a) (expr-p16-abs (subst k s a))]
+    [(expr-p16-sqrt a) (expr-p16-sqrt (subst k s a))]
+    [(expr-p16-lt a b) (expr-p16-lt (subst k s a) (subst k s b))]
+    [(expr-p16-le a b) (expr-p16-le (subst k s a) (subst k s b))]
+    [(expr-p16-from-nat n) (expr-p16-from-nat (subst k s n))]
+    [(expr-p16-if-nar t nc vc v)
+     (expr-p16-if-nar (subst k s t) (subst k s nc)
+                      (subst k s vc) (subst k s v))]
+
+    ;; Posit32 (all non-binding)
+    [(expr-Posit32) e]
+    [(expr-posit32 _) e]
+    [(expr-p32-add a b) (expr-p32-add (subst k s a) (subst k s b))]
+    [(expr-p32-sub a b) (expr-p32-sub (subst k s a) (subst k s b))]
+    [(expr-p32-mul a b) (expr-p32-mul (subst k s a) (subst k s b))]
+    [(expr-p32-div a b) (expr-p32-div (subst k s a) (subst k s b))]
+    [(expr-p32-neg a) (expr-p32-neg (subst k s a))]
+    [(expr-p32-abs a) (expr-p32-abs (subst k s a))]
+    [(expr-p32-sqrt a) (expr-p32-sqrt (subst k s a))]
+    [(expr-p32-lt a b) (expr-p32-lt (subst k s a) (subst k s b))]
+    [(expr-p32-le a b) (expr-p32-le (subst k s a) (subst k s b))]
+    [(expr-p32-from-nat n) (expr-p32-from-nat (subst k s n))]
+    [(expr-p32-if-nar t nc vc v)
+     (expr-p32-if-nar (subst k s t) (subst k s nc)
+                      (subst k s vc) (subst k s v))]
+
+    ;; Posit64 (all non-binding)
+    [(expr-Posit64) e]
+    [(expr-posit64 _) e]
+    [(expr-p64-add a b) (expr-p64-add (subst k s a) (subst k s b))]
+    [(expr-p64-sub a b) (expr-p64-sub (subst k s a) (subst k s b))]
+    [(expr-p64-mul a b) (expr-p64-mul (subst k s a) (subst k s b))]
+    [(expr-p64-div a b) (expr-p64-div (subst k s a) (subst k s b))]
+    [(expr-p64-neg a) (expr-p64-neg (subst k s a))]
+    [(expr-p64-abs a) (expr-p64-abs (subst k s a))]
+    [(expr-p64-sqrt a) (expr-p64-sqrt (subst k s a))]
+    [(expr-p64-lt a b) (expr-p64-lt (subst k s a) (subst k s b))]
+    [(expr-p64-le a b) (expr-p64-le (subst k s a) (subst k s b))]
+    [(expr-p64-from-nat n) (expr-p64-from-nat (subst k s n))]
+    [(expr-p64-if-nar t nc vc v)
+     (expr-p64-if-nar (subst k s t) (subst k s nc)
+                      (subst k s vc) (subst k s v))]
 
     ;; Int (all non-binding)
     [(expr-Int) e]

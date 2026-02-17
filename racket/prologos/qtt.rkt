@@ -131,6 +131,15 @@
     [(expr-rat _) (tu (expr-Rat) (zero-usage n))]
     [(expr-Posit8) (tu (expr-Type (lzero)) (zero-usage n))]
     [(expr-posit8 _) (tu (expr-Posit8) (zero-usage n))]
+    ;; Posit16
+    [(expr-Posit16) (tu (expr-Type (lzero)) (zero-usage n))]
+    [(expr-posit16 _) (tu (expr-Posit16) (zero-usage n))]
+    ;; Posit32
+    [(expr-Posit32) (tu (expr-Type (lzero)) (zero-usage n))]
+    [(expr-posit32 _) (tu (expr-Posit32) (zero-usage n))]
+    ;; Posit64
+    [(expr-Posit64) (tu (expr-Type (lzero)) (zero-usage n))]
+    [(expr-posit64 _) (tu (expr-Posit64) (zero-usage n))]
 
     ;; ---- Type formers: Pi, Sigma, Eq ----
     ;; Type formers inhabit Type. Usage comes from sub-terms.
@@ -475,6 +484,225 @@
     ;; Posit8 NaR eliminator: p8-if-nar(A, nar-case, normal-case, val)
     [(expr-p8-if-nar ty nar-case normal-case val)
      (let ([r4 (checkQ ctx val (expr-Posit8))])
+       (match r4
+         [(bu #t u4)
+          (let ([r2 (checkQ ctx nar-case ty)])
+            (match r2
+              [(bu #t u2)
+               (let ([r3 (checkQ ctx normal-case ty)])
+                 (match r3
+                   [(bu #t u3)
+                    (tu ty (add-usage u4 (add-usage u2 u3)))]
+                   [_ (tu-error)]))]
+              [_ (tu-error)]))]
+         [_ (tu-error)]))]
+
+    ;; ---- Posit16 binary operations ----
+    ;; Binary ops: Posit16 -> Posit16 -> Posit16
+    [(expr-p16-add a b)
+     (let ([r1 (checkQ ctx a (expr-Posit16))]
+           [r2 (checkQ ctx b (expr-Posit16))])
+       (match* (r1 r2)
+         [((bu #t u1) (bu #t u2)) (tu (expr-Posit16) (add-usage u1 u2))]
+         [(_ _) (tu-error)]))]
+    [(expr-p16-sub a b)
+     (let ([r1 (checkQ ctx a (expr-Posit16))]
+           [r2 (checkQ ctx b (expr-Posit16))])
+       (match* (r1 r2)
+         [((bu #t u1) (bu #t u2)) (tu (expr-Posit16) (add-usage u1 u2))]
+         [(_ _) (tu-error)]))]
+    [(expr-p16-mul a b)
+     (let ([r1 (checkQ ctx a (expr-Posit16))]
+           [r2 (checkQ ctx b (expr-Posit16))])
+       (match* (r1 r2)
+         [((bu #t u1) (bu #t u2)) (tu (expr-Posit16) (add-usage u1 u2))]
+         [(_ _) (tu-error)]))]
+    [(expr-p16-div a b)
+     (let ([r1 (checkQ ctx a (expr-Posit16))]
+           [r2 (checkQ ctx b (expr-Posit16))])
+       (match* (r1 r2)
+         [((bu #t u1) (bu #t u2)) (tu (expr-Posit16) (add-usage u1 u2))]
+         [(_ _) (tu-error)]))]
+
+    ;; Unary Posit16 ops: Posit16 -> Posit16
+    [(expr-p16-neg a)
+     (let ([r (inferQ ctx a)])
+       (match r [(tu (expr-Posit16) u) (tu (expr-Posit16) u)] [_ (tu-error)]))]
+    [(expr-p16-abs a)
+     (let ([r (inferQ ctx a)])
+       (match r [(tu (expr-Posit16) u) (tu (expr-Posit16) u)] [_ (tu-error)]))]
+    [(expr-p16-sqrt a)
+     (let ([r (inferQ ctx a)])
+       (match r [(tu (expr-Posit16) u) (tu (expr-Posit16) u)] [_ (tu-error)]))]
+
+    ;; Posit16 comparisons: Posit16 -> Posit16 -> Bool
+    [(expr-p16-lt a b)
+     (let ([r1 (checkQ ctx a (expr-Posit16))]
+           [r2 (checkQ ctx b (expr-Posit16))])
+       (match* (r1 r2)
+         [((bu #t u1) (bu #t u2)) (tu (expr-Bool) (add-usage u1 u2))]
+         [(_ _) (tu-error)]))]
+    [(expr-p16-le a b)
+     (let ([r1 (checkQ ctx a (expr-Posit16))]
+           [r2 (checkQ ctx b (expr-Posit16))])
+       (match* (r1 r2)
+         [((bu #t u1) (bu #t u2)) (tu (expr-Bool) (add-usage u1 u2))]
+         [(_ _) (tu-error)]))]
+
+    ;; Posit16 conversion: Nat -> Posit16
+    [(expr-p16-from-nat e1)
+     (let ([r (checkQ ctx e1 (expr-Nat))])
+       (match r [(bu #t u) (tu (expr-Posit16) u)] [_ (tu-error)]))]
+
+    ;; Posit16 NaR eliminator: p16-if-nar(A, nar-case, normal-case, val)
+    [(expr-p16-if-nar ty nar-case normal-case val)
+     (let ([r4 (checkQ ctx val (expr-Posit16))])
+       (match r4
+         [(bu #t u4)
+          (let ([r2 (checkQ ctx nar-case ty)])
+            (match r2
+              [(bu #t u2)
+               (let ([r3 (checkQ ctx normal-case ty)])
+                 (match r3
+                   [(bu #t u3)
+                    (tu ty (add-usage u4 (add-usage u2 u3)))]
+                   [_ (tu-error)]))]
+              [_ (tu-error)]))]
+         [_ (tu-error)]))]
+
+    ;; ---- Posit32 binary operations ----
+    ;; Binary ops: Posit32 -> Posit32 -> Posit32
+    [(expr-p32-add a b)
+     (let ([r1 (checkQ ctx a (expr-Posit32))]
+           [r2 (checkQ ctx b (expr-Posit32))])
+       (match* (r1 r2)
+         [((bu #t u1) (bu #t u2)) (tu (expr-Posit32) (add-usage u1 u2))]
+         [(_ _) (tu-error)]))]
+    [(expr-p32-sub a b)
+     (let ([r1 (checkQ ctx a (expr-Posit32))]
+           [r2 (checkQ ctx b (expr-Posit32))])
+       (match* (r1 r2)
+         [((bu #t u1) (bu #t u2)) (tu (expr-Posit32) (add-usage u1 u2))]
+         [(_ _) (tu-error)]))]
+    [(expr-p32-mul a b)
+     (let ([r1 (checkQ ctx a (expr-Posit32))]
+           [r2 (checkQ ctx b (expr-Posit32))])
+       (match* (r1 r2)
+         [((bu #t u1) (bu #t u2)) (tu (expr-Posit32) (add-usage u1 u2))]
+         [(_ _) (tu-error)]))]
+    [(expr-p32-div a b)
+     (let ([r1 (checkQ ctx a (expr-Posit32))]
+           [r2 (checkQ ctx b (expr-Posit32))])
+       (match* (r1 r2)
+         [((bu #t u1) (bu #t u2)) (tu (expr-Posit32) (add-usage u1 u2))]
+         [(_ _) (tu-error)]))]
+
+    ;; Unary Posit32 ops: Posit32 -> Posit32
+    [(expr-p32-neg a)
+     (let ([r (inferQ ctx a)])
+       (match r [(tu (expr-Posit32) u) (tu (expr-Posit32) u)] [_ (tu-error)]))]
+    [(expr-p32-abs a)
+     (let ([r (inferQ ctx a)])
+       (match r [(tu (expr-Posit32) u) (tu (expr-Posit32) u)] [_ (tu-error)]))]
+    [(expr-p32-sqrt a)
+     (let ([r (inferQ ctx a)])
+       (match r [(tu (expr-Posit32) u) (tu (expr-Posit32) u)] [_ (tu-error)]))]
+
+    ;; Posit32 comparisons: Posit32 -> Posit32 -> Bool
+    [(expr-p32-lt a b)
+     (let ([r1 (checkQ ctx a (expr-Posit32))]
+           [r2 (checkQ ctx b (expr-Posit32))])
+       (match* (r1 r2)
+         [((bu #t u1) (bu #t u2)) (tu (expr-Bool) (add-usage u1 u2))]
+         [(_ _) (tu-error)]))]
+    [(expr-p32-le a b)
+     (let ([r1 (checkQ ctx a (expr-Posit32))]
+           [r2 (checkQ ctx b (expr-Posit32))])
+       (match* (r1 r2)
+         [((bu #t u1) (bu #t u2)) (tu (expr-Bool) (add-usage u1 u2))]
+         [(_ _) (tu-error)]))]
+
+    ;; Posit32 conversion: Nat -> Posit32
+    [(expr-p32-from-nat e1)
+     (let ([r (checkQ ctx e1 (expr-Nat))])
+       (match r [(bu #t u) (tu (expr-Posit32) u)] [_ (tu-error)]))]
+
+    ;; Posit32 NaR eliminator: p32-if-nar(A, nar-case, normal-case, val)
+    [(expr-p32-if-nar ty nar-case normal-case val)
+     (let ([r4 (checkQ ctx val (expr-Posit32))])
+       (match r4
+         [(bu #t u4)
+          (let ([r2 (checkQ ctx nar-case ty)])
+            (match r2
+              [(bu #t u2)
+               (let ([r3 (checkQ ctx normal-case ty)])
+                 (match r3
+                   [(bu #t u3)
+                    (tu ty (add-usage u4 (add-usage u2 u3)))]
+                   [_ (tu-error)]))]
+              [_ (tu-error)]))]
+         [_ (tu-error)]))]
+
+    ;; ---- Posit64 binary operations ----
+    ;; Binary ops: Posit64 -> Posit64 -> Posit64
+    [(expr-p64-add a b)
+     (let ([r1 (checkQ ctx a (expr-Posit64))]
+           [r2 (checkQ ctx b (expr-Posit64))])
+       (match* (r1 r2)
+         [((bu #t u1) (bu #t u2)) (tu (expr-Posit64) (add-usage u1 u2))]
+         [(_ _) (tu-error)]))]
+    [(expr-p64-sub a b)
+     (let ([r1 (checkQ ctx a (expr-Posit64))]
+           [r2 (checkQ ctx b (expr-Posit64))])
+       (match* (r1 r2)
+         [((bu #t u1) (bu #t u2)) (tu (expr-Posit64) (add-usage u1 u2))]
+         [(_ _) (tu-error)]))]
+    [(expr-p64-mul a b)
+     (let ([r1 (checkQ ctx a (expr-Posit64))]
+           [r2 (checkQ ctx b (expr-Posit64))])
+       (match* (r1 r2)
+         [((bu #t u1) (bu #t u2)) (tu (expr-Posit64) (add-usage u1 u2))]
+         [(_ _) (tu-error)]))]
+    [(expr-p64-div a b)
+     (let ([r1 (checkQ ctx a (expr-Posit64))]
+           [r2 (checkQ ctx b (expr-Posit64))])
+       (match* (r1 r2)
+         [((bu #t u1) (bu #t u2)) (tu (expr-Posit64) (add-usage u1 u2))]
+         [(_ _) (tu-error)]))]
+
+    ;; Unary Posit64 ops: Posit64 -> Posit64
+    [(expr-p64-neg a)
+     (let ([r (inferQ ctx a)])
+       (match r [(tu (expr-Posit64) u) (tu (expr-Posit64) u)] [_ (tu-error)]))]
+    [(expr-p64-abs a)
+     (let ([r (inferQ ctx a)])
+       (match r [(tu (expr-Posit64) u) (tu (expr-Posit64) u)] [_ (tu-error)]))]
+    [(expr-p64-sqrt a)
+     (let ([r (inferQ ctx a)])
+       (match r [(tu (expr-Posit64) u) (tu (expr-Posit64) u)] [_ (tu-error)]))]
+
+    ;; Posit64 comparisons: Posit64 -> Posit64 -> Bool
+    [(expr-p64-lt a b)
+     (let ([r1 (checkQ ctx a (expr-Posit64))]
+           [r2 (checkQ ctx b (expr-Posit64))])
+       (match* (r1 r2)
+         [((bu #t u1) (bu #t u2)) (tu (expr-Bool) (add-usage u1 u2))]
+         [(_ _) (tu-error)]))]
+    [(expr-p64-le a b)
+     (let ([r1 (checkQ ctx a (expr-Posit64))]
+           [r2 (checkQ ctx b (expr-Posit64))])
+       (match* (r1 r2)
+         [((bu #t u1) (bu #t u2)) (tu (expr-Bool) (add-usage u1 u2))]
+         [(_ _) (tu-error)]))]
+
+    ;; Posit64 conversion: Nat -> Posit64
+    [(expr-p64-from-nat e1)
+     (let ([r (checkQ ctx e1 (expr-Nat))])
+       (match r [(bu #t u) (tu (expr-Posit64) u)] [_ (tu-error)]))]
+
+    ;; Posit64 NaR eliminator: p64-if-nar(A, nar-case, normal-case, val)
+    [(expr-p64-if-nar ty nar-case normal-case val)
+     (let ([r4 (checkQ ctx val (expr-Posit64))])
        (match r4
          [(bu #t u4)
           (let ([r2 (checkQ ctx nar-case ty)])

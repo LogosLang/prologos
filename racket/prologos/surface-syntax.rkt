@@ -88,6 +88,48 @@
  (struct-out surf-p8-le)
  (struct-out surf-p8-from-nat)
  (struct-out surf-p8-if-nar)
+ ;; Posit16 surface forms
+ (struct-out surf-posit16-type)
+ (struct-out surf-posit16)
+ (struct-out surf-p16-add)
+ (struct-out surf-p16-sub)
+ (struct-out surf-p16-mul)
+ (struct-out surf-p16-div)
+ (struct-out surf-p16-neg)
+ (struct-out surf-p16-abs)
+ (struct-out surf-p16-sqrt)
+ (struct-out surf-p16-lt)
+ (struct-out surf-p16-le)
+ (struct-out surf-p16-from-nat)
+ (struct-out surf-p16-if-nar)
+ ;; Posit32 surface forms
+ (struct-out surf-posit32-type)
+ (struct-out surf-posit32)
+ (struct-out surf-p32-add)
+ (struct-out surf-p32-sub)
+ (struct-out surf-p32-mul)
+ (struct-out surf-p32-div)
+ (struct-out surf-p32-neg)
+ (struct-out surf-p32-abs)
+ (struct-out surf-p32-sqrt)
+ (struct-out surf-p32-lt)
+ (struct-out surf-p32-le)
+ (struct-out surf-p32-from-nat)
+ (struct-out surf-p32-if-nar)
+ ;; Posit64 surface forms
+ (struct-out surf-posit64-type)
+ (struct-out surf-posit64)
+ (struct-out surf-p64-add)
+ (struct-out surf-p64-sub)
+ (struct-out surf-p64-mul)
+ (struct-out surf-p64-div)
+ (struct-out surf-p64-neg)
+ (struct-out surf-p64-abs)
+ (struct-out surf-p64-sqrt)
+ (struct-out surf-p64-lt)
+ (struct-out surf-p64-le)
+ (struct-out surf-p64-from-nat)
+ (struct-out surf-p64-if-nar)
  ;; Top-level commands
  (struct-out surf-def)
  (struct-out surf-defn)
@@ -328,6 +370,99 @@
 
 ;; Eliminator: (p8-if-nar A nar-case normal-case val)
 (struct surf-p8-if-nar (type nar-case normal-case val srcloc) #:transparent)
+
+;; ========================================
+;; Posit16 surface forms (16-bit posit, es=2, 2022 Standard)
+;; ========================================
+
+;; Posit16 type: Posit16
+(struct surf-posit16-type (srcloc) #:transparent)
+
+;; Posit16 literal: (posit16 <integer>)
+(struct surf-posit16 (val srcloc) #:transparent)
+
+;; Binary arithmetic: (p16+ a b), (p16- a b), (p16* a b), (p16/ a b)
+(struct surf-p16-add (a b srcloc) #:transparent)
+(struct surf-p16-sub (a b srcloc) #:transparent)
+(struct surf-p16-mul (a b srcloc) #:transparent)
+(struct surf-p16-div (a b srcloc) #:transparent)
+
+;; Unary ops: (p16-neg a), (p16-abs a), (p16-sqrt a)
+(struct surf-p16-neg (a srcloc) #:transparent)
+(struct surf-p16-abs (a srcloc) #:transparent)
+(struct surf-p16-sqrt (a srcloc) #:transparent)
+
+;; Comparison: (p16< a b), (p16<= a b)
+(struct surf-p16-lt (a b srcloc) #:transparent)
+(struct surf-p16-le (a b srcloc) #:transparent)
+
+;; Conversion: (p16-from-nat n)
+(struct surf-p16-from-nat (n srcloc) #:transparent)
+
+;; Eliminator: (p16-if-nar A nar-case normal-case val)
+(struct surf-p16-if-nar (type nar-case normal-case val srcloc) #:transparent)
+
+;; ========================================
+;; Posit32 surface forms (32-bit posit, es=2, 2022 Standard)
+;; ========================================
+
+;; Posit32 type: Posit32
+(struct surf-posit32-type (srcloc) #:transparent)
+
+;; Posit32 literal: (posit32 <integer>)
+(struct surf-posit32 (val srcloc) #:transparent)
+
+;; Binary arithmetic: (p32+ a b), (p32- a b), (p32* a b), (p32/ a b)
+(struct surf-p32-add (a b srcloc) #:transparent)
+(struct surf-p32-sub (a b srcloc) #:transparent)
+(struct surf-p32-mul (a b srcloc) #:transparent)
+(struct surf-p32-div (a b srcloc) #:transparent)
+
+;; Unary ops: (p32-neg a), (p32-abs a), (p32-sqrt a)
+(struct surf-p32-neg (a srcloc) #:transparent)
+(struct surf-p32-abs (a srcloc) #:transparent)
+(struct surf-p32-sqrt (a srcloc) #:transparent)
+
+;; Comparison: (p32< a b), (p32<= a b)
+(struct surf-p32-lt (a b srcloc) #:transparent)
+(struct surf-p32-le (a b srcloc) #:transparent)
+
+;; Conversion: (p32-from-nat n)
+(struct surf-p32-from-nat (n srcloc) #:transparent)
+
+;; Eliminator: (p32-if-nar A nar-case normal-case val)
+(struct surf-p32-if-nar (type nar-case normal-case val srcloc) #:transparent)
+
+;; ========================================
+;; Posit64 surface forms (64-bit posit, es=2, 2022 Standard)
+;; ========================================
+
+;; Posit64 type: Posit64
+(struct surf-posit64-type (srcloc) #:transparent)
+
+;; Posit64 literal: (posit64 <integer>)
+(struct surf-posit64 (val srcloc) #:transparent)
+
+;; Binary arithmetic: (p64+ a b), (p64- a b), (p64* a b), (p64/ a b)
+(struct surf-p64-add (a b srcloc) #:transparent)
+(struct surf-p64-sub (a b srcloc) #:transparent)
+(struct surf-p64-mul (a b srcloc) #:transparent)
+(struct surf-p64-div (a b srcloc) #:transparent)
+
+;; Unary ops: (p64-neg a), (p64-abs a), (p64-sqrt a)
+(struct surf-p64-neg (a srcloc) #:transparent)
+(struct surf-p64-abs (a srcloc) #:transparent)
+(struct surf-p64-sqrt (a srcloc) #:transparent)
+
+;; Comparison: (p64< a b), (p64<= a b)
+(struct surf-p64-lt (a b srcloc) #:transparent)
+(struct surf-p64-le (a b srcloc) #:transparent)
+
+;; Conversion: (p64-from-nat n)
+(struct surf-p64-from-nat (n srcloc) #:transparent)
+
+;; Eliminator: (p64-if-nar A nar-case normal-case val)
+(struct surf-p64-if-nar (type nar-case normal-case val srcloc) #:transparent)
 
 ;; ========================================
 ;; Top-level commands

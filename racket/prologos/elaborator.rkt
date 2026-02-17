@@ -648,6 +648,192 @@
              [(prologos-error? ev) ev]
              [else (expr-p8-if-nar etp enc evc ev)]))]
 
+    ;; ---- Posit16 ----
+    [(surf-posit16-type loc) (expr-Posit16)]
+    [(surf-posit16 v loc) (expr-posit16 v)]
+    [(surf-p16-add a b loc)
+     (let ([ea (elaborate a env depth)]
+           [eb (elaborate b env depth)])
+       (cond [(prologos-error? ea) ea]
+             [(prologos-error? eb) eb]
+             [else (expr-p16-add ea eb)]))]
+    [(surf-p16-sub a b loc)
+     (let ([ea (elaborate a env depth)]
+           [eb (elaborate b env depth)])
+       (cond [(prologos-error? ea) ea]
+             [(prologos-error? eb) eb]
+             [else (expr-p16-sub ea eb)]))]
+    [(surf-p16-mul a b loc)
+     (let ([ea (elaborate a env depth)]
+           [eb (elaborate b env depth)])
+       (cond [(prologos-error? ea) ea]
+             [(prologos-error? eb) eb]
+             [else (expr-p16-mul ea eb)]))]
+    [(surf-p16-div a b loc)
+     (let ([ea (elaborate a env depth)]
+           [eb (elaborate b env depth)])
+       (cond [(prologos-error? ea) ea]
+             [(prologos-error? eb) eb]
+             [else (expr-p16-div ea eb)]))]
+    [(surf-p16-neg a loc)
+     (let ([ea (elaborate a env depth)])
+       (if (prologos-error? ea) ea (expr-p16-neg ea)))]
+    [(surf-p16-abs a loc)
+     (let ([ea (elaborate a env depth)])
+       (if (prologos-error? ea) ea (expr-p16-abs ea)))]
+    [(surf-p16-sqrt a loc)
+     (let ([ea (elaborate a env depth)])
+       (if (prologos-error? ea) ea (expr-p16-sqrt ea)))]
+    [(surf-p16-lt a b loc)
+     (let ([ea (elaborate a env depth)]
+           [eb (elaborate b env depth)])
+       (cond [(prologos-error? ea) ea]
+             [(prologos-error? eb) eb]
+             [else (expr-p16-lt ea eb)]))]
+    [(surf-p16-le a b loc)
+     (let ([ea (elaborate a env depth)]
+           [eb (elaborate b env depth)])
+       (cond [(prologos-error? ea) ea]
+             [(prologos-error? eb) eb]
+             [else (expr-p16-le ea eb)]))]
+    [(surf-p16-from-nat n loc)
+     (let ([en (elaborate n env depth)])
+       (if (prologos-error? en) en (expr-p16-from-nat en)))]
+    [(surf-p16-if-nar tp nc vc v loc)
+     (let ([etp (elaborate tp env depth)]
+           [enc (elaborate nc env depth)]
+           [evc (elaborate vc env depth)]
+           [ev (elaborate v env depth)])
+       (cond [(prologos-error? etp) etp]
+             [(prologos-error? enc) enc]
+             [(prologos-error? evc) evc]
+             [(prologos-error? ev) ev]
+             [else (expr-p16-if-nar etp enc evc ev)]))]
+
+    ;; ---- Posit32 ----
+    [(surf-posit32-type loc) (expr-Posit32)]
+    [(surf-posit32 v loc) (expr-posit32 v)]
+    [(surf-p32-add a b loc)
+     (let ([ea (elaborate a env depth)]
+           [eb (elaborate b env depth)])
+       (cond [(prologos-error? ea) ea]
+             [(prologos-error? eb) eb]
+             [else (expr-p32-add ea eb)]))]
+    [(surf-p32-sub a b loc)
+     (let ([ea (elaborate a env depth)]
+           [eb (elaborate b env depth)])
+       (cond [(prologos-error? ea) ea]
+             [(prologos-error? eb) eb]
+             [else (expr-p32-sub ea eb)]))]
+    [(surf-p32-mul a b loc)
+     (let ([ea (elaborate a env depth)]
+           [eb (elaborate b env depth)])
+       (cond [(prologos-error? ea) ea]
+             [(prologos-error? eb) eb]
+             [else (expr-p32-mul ea eb)]))]
+    [(surf-p32-div a b loc)
+     (let ([ea (elaborate a env depth)]
+           [eb (elaborate b env depth)])
+       (cond [(prologos-error? ea) ea]
+             [(prologos-error? eb) eb]
+             [else (expr-p32-div ea eb)]))]
+    [(surf-p32-neg a loc)
+     (let ([ea (elaborate a env depth)])
+       (if (prologos-error? ea) ea (expr-p32-neg ea)))]
+    [(surf-p32-abs a loc)
+     (let ([ea (elaborate a env depth)])
+       (if (prologos-error? ea) ea (expr-p32-abs ea)))]
+    [(surf-p32-sqrt a loc)
+     (let ([ea (elaborate a env depth)])
+       (if (prologos-error? ea) ea (expr-p32-sqrt ea)))]
+    [(surf-p32-lt a b loc)
+     (let ([ea (elaborate a env depth)]
+           [eb (elaborate b env depth)])
+       (cond [(prologos-error? ea) ea]
+             [(prologos-error? eb) eb]
+             [else (expr-p32-lt ea eb)]))]
+    [(surf-p32-le a b loc)
+     (let ([ea (elaborate a env depth)]
+           [eb (elaborate b env depth)])
+       (cond [(prologos-error? ea) ea]
+             [(prologos-error? eb) eb]
+             [else (expr-p32-le ea eb)]))]
+    [(surf-p32-from-nat n loc)
+     (let ([en (elaborate n env depth)])
+       (if (prologos-error? en) en (expr-p32-from-nat en)))]
+    [(surf-p32-if-nar tp nc vc v loc)
+     (let ([etp (elaborate tp env depth)]
+           [enc (elaborate nc env depth)]
+           [evc (elaborate vc env depth)]
+           [ev (elaborate v env depth)])
+       (cond [(prologos-error? etp) etp]
+             [(prologos-error? enc) enc]
+             [(prologos-error? evc) evc]
+             [(prologos-error? ev) ev]
+             [else (expr-p32-if-nar etp enc evc ev)]))]
+
+    ;; ---- Posit64 ----
+    [(surf-posit64-type loc) (expr-Posit64)]
+    [(surf-posit64 v loc) (expr-posit64 v)]
+    [(surf-p64-add a b loc)
+     (let ([ea (elaborate a env depth)]
+           [eb (elaborate b env depth)])
+       (cond [(prologos-error? ea) ea]
+             [(prologos-error? eb) eb]
+             [else (expr-p64-add ea eb)]))]
+    [(surf-p64-sub a b loc)
+     (let ([ea (elaborate a env depth)]
+           [eb (elaborate b env depth)])
+       (cond [(prologos-error? ea) ea]
+             [(prologos-error? eb) eb]
+             [else (expr-p64-sub ea eb)]))]
+    [(surf-p64-mul a b loc)
+     (let ([ea (elaborate a env depth)]
+           [eb (elaborate b env depth)])
+       (cond [(prologos-error? ea) ea]
+             [(prologos-error? eb) eb]
+             [else (expr-p64-mul ea eb)]))]
+    [(surf-p64-div a b loc)
+     (let ([ea (elaborate a env depth)]
+           [eb (elaborate b env depth)])
+       (cond [(prologos-error? ea) ea]
+             [(prologos-error? eb) eb]
+             [else (expr-p64-div ea eb)]))]
+    [(surf-p64-neg a loc)
+     (let ([ea (elaborate a env depth)])
+       (if (prologos-error? ea) ea (expr-p64-neg ea)))]
+    [(surf-p64-abs a loc)
+     (let ([ea (elaborate a env depth)])
+       (if (prologos-error? ea) ea (expr-p64-abs ea)))]
+    [(surf-p64-sqrt a loc)
+     (let ([ea (elaborate a env depth)])
+       (if (prologos-error? ea) ea (expr-p64-sqrt ea)))]
+    [(surf-p64-lt a b loc)
+     (let ([ea (elaborate a env depth)]
+           [eb (elaborate b env depth)])
+       (cond [(prologos-error? ea) ea]
+             [(prologos-error? eb) eb]
+             [else (expr-p64-lt ea eb)]))]
+    [(surf-p64-le a b loc)
+     (let ([ea (elaborate a env depth)]
+           [eb (elaborate b env depth)])
+       (cond [(prologos-error? ea) ea]
+             [(prologos-error? eb) eb]
+             [else (expr-p64-le ea eb)]))]
+    [(surf-p64-from-nat n loc)
+     (let ([en (elaborate n env depth)])
+       (if (prologos-error? en) en (expr-p64-from-nat en)))]
+    [(surf-p64-if-nar tp nc vc v loc)
+     (let ([etp (elaborate tp env depth)]
+           [enc (elaborate nc env depth)]
+           [evc (elaborate vc env depth)]
+           [ev (elaborate v env depth)])
+       (cond [(prologos-error? etp) etp]
+             [(prologos-error? enc) enc]
+             [(prologos-error? evc) evc]
+             [(prologos-error? ev) ev]
+             [else (expr-p64-if-nar etp enc evc ev)]))]
+
     ;; Reduce: ML-style pattern matching
     ;; Each arm's body must be elaborated with binding names in scope.
     ;; We add dummy binders (the actual types come from the type checker).

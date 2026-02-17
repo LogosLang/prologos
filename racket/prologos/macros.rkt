@@ -2513,6 +2513,9 @@
       [(surf-nat-type _) (void)]
       [(surf-bool-type _) (void)]
       [(surf-posit8-type _) (void)]
+      [(surf-posit16-type _) (void)]
+      [(surf-posit32-type _) (void)]
+      [(surf-posit64-type _) (void)]
       [(surf-zero _) (void)]
       [(surf-true _) (void)]
       [(surf-false _) (void)]
@@ -2533,7 +2536,12 @@
   '(Nat Bool Type Posit8 zero true false refl inc
     Pi Sigma Eq Vec Fin natrec boolrec J pair fst snd
     vnil vcons vhead vtail vindex fzero fsuc
-    posit8 p8+ p8- p8* p8/ p8-neg p8-abs p8-sqrt p8< p8<= p8-from-nat p8-if-nar))
+    posit8 p8+ p8- p8* p8/ p8-neg p8-abs p8-sqrt p8< p8<= p8-from-nat p8-if-nar
+    Posit16 posit16 p16+ p16- p16* p16/ p16-neg p16-abs p16-sqrt p16-lt p16-le p16-from-nat p16-if-nar
+    Posit32 posit32 p32+ p32- p32* p32/ p32-neg p32-abs p32-sqrt p32-lt p32-le p32-from-nat p32-if-nar
+    Posit64 posit64 p64+ p64- p64* p64/ p64-neg p64-abs p64-sqrt p64-lt p64-le p64-from-nat p64-if-nar
+    Int int int+ int- int* int/ int-mod int-neg int-abs int-lt int-le int-eq from-nat
+    Rat rat rat+ rat- rat* rat/ rat-neg rat-abs rat-lt rat-le rat-eq from-int rat-numer rat-denom))
 
 ;; Check if a symbol is a "known name" — should NOT be treated as a free type variable.
 (define (known-name? name)

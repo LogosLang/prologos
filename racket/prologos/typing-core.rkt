@@ -420,6 +420,159 @@
               (check ctx v (expr-Posit8)))
          tp (expr-error))]
 
+    ;; ---- Posit16 ----
+    [(expr-Posit16) (expr-Type (lzero))]
+
+    ;; posit16 literal
+    [(expr-posit16 v)
+     (if (and (exact-integer? v) (<= 0 v 65535))
+         (expr-Posit16)
+         (expr-error))]
+
+    ;; Binary arithmetic: Posit16 -> Posit16 -> Posit16
+    [(expr-p16-add a b)
+     (if (and (check ctx a (expr-Posit16)) (check ctx b (expr-Posit16)))
+         (expr-Posit16) (expr-error))]
+    [(expr-p16-sub a b)
+     (if (and (check ctx a (expr-Posit16)) (check ctx b (expr-Posit16)))
+         (expr-Posit16) (expr-error))]
+    [(expr-p16-mul a b)
+     (if (and (check ctx a (expr-Posit16)) (check ctx b (expr-Posit16)))
+         (expr-Posit16) (expr-error))]
+    [(expr-p16-div a b)
+     (if (and (check ctx a (expr-Posit16)) (check ctx b (expr-Posit16)))
+         (expr-Posit16) (expr-error))]
+
+    ;; Unary ops: Posit16 -> Posit16
+    [(expr-p16-neg a)
+     (if (check ctx a (expr-Posit16)) (expr-Posit16) (expr-error))]
+    [(expr-p16-abs a)
+     (if (check ctx a (expr-Posit16)) (expr-Posit16) (expr-error))]
+    [(expr-p16-sqrt a)
+     (if (check ctx a (expr-Posit16)) (expr-Posit16) (expr-error))]
+
+    ;; Comparison: Posit16 -> Posit16 -> Bool
+    [(expr-p16-lt a b)
+     (if (and (check ctx a (expr-Posit16)) (check ctx b (expr-Posit16)))
+         (expr-Bool) (expr-error))]
+    [(expr-p16-le a b)
+     (if (and (check ctx a (expr-Posit16)) (check ctx b (expr-Posit16)))
+         (expr-Bool) (expr-error))]
+
+    ;; Conversion: Nat -> Posit16
+    [(expr-p16-from-nat n)
+     (if (check ctx n (expr-Nat)) (expr-Posit16) (expr-error))]
+
+    ;; p16-if-nar(A, nar-case, normal-case, val) : A
+    [(expr-p16-if-nar tp nc vc v)
+     (if (and (is-type ctx tp)
+              (check ctx nc tp)
+              (check ctx vc tp)
+              (check ctx v (expr-Posit16)))
+         tp (expr-error))]
+
+    ;; ---- Posit32 ----
+    [(expr-Posit32) (expr-Type (lzero))]
+
+    ;; posit32 literal
+    [(expr-posit32 v)
+     (if (and (exact-integer? v) (<= 0 v 4294967295))
+         (expr-Posit32)
+         (expr-error))]
+
+    ;; Binary arithmetic: Posit32 -> Posit32 -> Posit32
+    [(expr-p32-add a b)
+     (if (and (check ctx a (expr-Posit32)) (check ctx b (expr-Posit32)))
+         (expr-Posit32) (expr-error))]
+    [(expr-p32-sub a b)
+     (if (and (check ctx a (expr-Posit32)) (check ctx b (expr-Posit32)))
+         (expr-Posit32) (expr-error))]
+    [(expr-p32-mul a b)
+     (if (and (check ctx a (expr-Posit32)) (check ctx b (expr-Posit32)))
+         (expr-Posit32) (expr-error))]
+    [(expr-p32-div a b)
+     (if (and (check ctx a (expr-Posit32)) (check ctx b (expr-Posit32)))
+         (expr-Posit32) (expr-error))]
+
+    ;; Unary ops: Posit32 -> Posit32
+    [(expr-p32-neg a)
+     (if (check ctx a (expr-Posit32)) (expr-Posit32) (expr-error))]
+    [(expr-p32-abs a)
+     (if (check ctx a (expr-Posit32)) (expr-Posit32) (expr-error))]
+    [(expr-p32-sqrt a)
+     (if (check ctx a (expr-Posit32)) (expr-Posit32) (expr-error))]
+
+    ;; Comparison: Posit32 -> Posit32 -> Bool
+    [(expr-p32-lt a b)
+     (if (and (check ctx a (expr-Posit32)) (check ctx b (expr-Posit32)))
+         (expr-Bool) (expr-error))]
+    [(expr-p32-le a b)
+     (if (and (check ctx a (expr-Posit32)) (check ctx b (expr-Posit32)))
+         (expr-Bool) (expr-error))]
+
+    ;; Conversion: Nat -> Posit32
+    [(expr-p32-from-nat n)
+     (if (check ctx n (expr-Nat)) (expr-Posit32) (expr-error))]
+
+    ;; p32-if-nar(A, nar-case, normal-case, val) : A
+    [(expr-p32-if-nar tp nc vc v)
+     (if (and (is-type ctx tp)
+              (check ctx nc tp)
+              (check ctx vc tp)
+              (check ctx v (expr-Posit32)))
+         tp (expr-error))]
+
+    ;; ---- Posit64 ----
+    [(expr-Posit64) (expr-Type (lzero))]
+
+    ;; posit64 literal
+    [(expr-posit64 v)
+     (if (and (exact-integer? v) (<= 0 v 18446744073709551615))
+         (expr-Posit64)
+         (expr-error))]
+
+    ;; Binary arithmetic: Posit64 -> Posit64 -> Posit64
+    [(expr-p64-add a b)
+     (if (and (check ctx a (expr-Posit64)) (check ctx b (expr-Posit64)))
+         (expr-Posit64) (expr-error))]
+    [(expr-p64-sub a b)
+     (if (and (check ctx a (expr-Posit64)) (check ctx b (expr-Posit64)))
+         (expr-Posit64) (expr-error))]
+    [(expr-p64-mul a b)
+     (if (and (check ctx a (expr-Posit64)) (check ctx b (expr-Posit64)))
+         (expr-Posit64) (expr-error))]
+    [(expr-p64-div a b)
+     (if (and (check ctx a (expr-Posit64)) (check ctx b (expr-Posit64)))
+         (expr-Posit64) (expr-error))]
+
+    ;; Unary ops: Posit64 -> Posit64
+    [(expr-p64-neg a)
+     (if (check ctx a (expr-Posit64)) (expr-Posit64) (expr-error))]
+    [(expr-p64-abs a)
+     (if (check ctx a (expr-Posit64)) (expr-Posit64) (expr-error))]
+    [(expr-p64-sqrt a)
+     (if (check ctx a (expr-Posit64)) (expr-Posit64) (expr-error))]
+
+    ;; Comparison: Posit64 -> Posit64 -> Bool
+    [(expr-p64-lt a b)
+     (if (and (check ctx a (expr-Posit64)) (check ctx b (expr-Posit64)))
+         (expr-Bool) (expr-error))]
+    [(expr-p64-le a b)
+     (if (and (check ctx a (expr-Posit64)) (check ctx b (expr-Posit64)))
+         (expr-Bool) (expr-error))]
+
+    ;; Conversion: Nat -> Posit64
+    [(expr-p64-from-nat n)
+     (if (check ctx n (expr-Nat)) (expr-Posit64) (expr-error))]
+
+    ;; p64-if-nar(A, nar-case, normal-case, val) : A
+    [(expr-p64-if-nar tp nc vc v)
+     (if (and (is-type ctx tp)
+              (check ctx nc tp)
+              (check ctx vc tp)
+              (check ctx v (expr-Posit64)))
+         tp (expr-error))]
+
     ;; ---- Foreign function: look up type from global env ----
     [(expr-foreign-fn name _ _ _ _ _)
      (or (global-env-lookup-type name) (expr-error))]
@@ -510,6 +663,18 @@
     ;; ---- Posit8 literal check ----
     [((expr-posit8 v) (expr-Posit8))
      (and (exact-integer? v) (<= 0 v 255))]
+
+    ;; ---- Posit16 literal check ----
+    [((expr-posit16 v) (expr-Posit16))
+     (and (exact-integer? v) (<= 0 v 65535))]
+
+    ;; ---- Posit32 literal check ----
+    [((expr-posit32 v) (expr-Posit32))
+     (and (exact-integer? v) (<= 0 v 4294967295))]
+
+    ;; ---- Posit64 literal check ----
+    [((expr-posit64 v) (expr-Posit64))
+     (and (exact-integer? v) (<= 0 v 18446744073709551615))]
 
     ;; ---- Reduce: ML-style Church elimination ----
     ;; check(G, reduce(scrutinee, arms), T)
@@ -754,6 +919,15 @@
 
     ;; Posit8 formation: Posit8 : Type(0)
     [(expr-Posit8) (just-level (lzero))]
+
+    ;; Posit16 formation: Posit16 : Type(0)
+    [(expr-Posit16) (just-level (lzero))]
+
+    ;; Posit32 formation: Posit32 : Type(0)
+    [(expr-Posit32) (just-level (lzero))]
+
+    ;; Posit64 formation: Posit64 : Type(0)
+    [(expr-Posit64) (just-level (lzero))]
 
     ;; Union formation: A | B : Type(max(level(A), level(B)))
     [(expr-union l r)
