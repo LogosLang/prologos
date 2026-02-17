@@ -745,19 +745,30 @@
 
 ;; Convert foreign type tokens to a parseable sexp.
 ;; Transforms infix (Nat -> Nat -> Bool) to prefix (-> Nat (-> Nat Bool)).
-;; Also handles bare types (Nat) and type constructors.
+;; Supports uncurried syntax: (Nat Nat -> Bool) → (-> Nat (-> Nat Bool))
+;; where multiple tokens before the last -> are expanded into separate domains.
+;; The last segment is never expanded (multi-token = type application, e.g. List Nat).
 (define (foreign-type-tokens->sexp tokens)
   (cond
     ;; Single token: bare type like Nat, Bool, Unit
     [(= (length tokens) 1) (car tokens)]
-    ;; Multi-token with ->: split on arrows
+    ;; Multi-token with ->: split on arrows, expand uncurried segments
     [(memq '-> tokens)
      (define parts (split-on-arrow tokens))
+     ;; Expand multi-token non-final segments (uncurried syntax).
+     ;; (Nat Nat -> Bool) splits to ((Nat Nat) Bool), expand to (Nat Nat Bool).
+     ;; Last segment stays as-is (multi-token = type application like List Nat).
+     (define expanded
+       (let ([non-final (drop-right parts 1)]
+             [final     (last parts)])
+         (append
+          (append-map (lambda (p) (if (list? p) p (list p))) non-final)
+          (list final))))
      (define (build parts)
        (cond
          [(= (length parts) 1) (car parts)]
          [else (list '-> (car parts) (build (cdr parts)))]))
-     (build parts)]
+     (build expanded)]
     ;; No arrows: just a single type expression (shouldn't happen with well-formed input)
     [else (error 'foreign "Cannot parse foreign type tokens: ~a" tokens)]))
 

@@ -87,7 +87,11 @@
   (and (char? c)
        (or (char-alphabetic? c)
            (char=? c #\_)
-           (char=? c #\-)))) ; for ->
+           (char=? c #\-)    ; for ->
+           (char=? c #\+)    ; operator symbols (foreign interop)
+           (char=? c #\*)    ; product type and operator
+           (char=? c #\/)    ; division operator
+           (char=? c #\=)))) ; equality operator
 
 (define (ident-continue? c)
   (and (char? c)
@@ -420,10 +424,8 @@
       [(ident-start? c)
        (read-ident-token! tok ln cl ps)]
 
-      ;; Star — product type operator (only when freestanding, not inside identifier)
-      [(char=? c #\*)
-       (tok-read! tok)
-       (token 'symbol '$star ln cl ps 1)]
+      ;; NOTE: Star (*) is now handled by ident-start? above, producing the
+      ;; symbol '* instead of '$star. The parser's star-symbol? accepts both.
 
       [else
        (tok-read! tok)

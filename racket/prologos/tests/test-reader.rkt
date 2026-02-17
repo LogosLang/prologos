@@ -353,6 +353,86 @@
   (check-equal? (length forms) 1)
   (check-equal? (car forms) '(let x : Nat := 42 body)))
 
+;; ================================================================
+;; OPERATOR SYMBOL TESTS
+;; ================================================================
+
+(test-case "tokenize: plus operator as identifier"
+  (define toks (tokenize-string "+"))
+  (check-equal? (tok-type toks 1) 'symbol)
+  (check-equal? (tok-val toks 1) '+))
+
+(test-case "tokenize: star as identifier (not $star)"
+  (define toks (tokenize-string "*"))
+  (check-equal? (tok-type toks 1) 'symbol)
+  (check-equal? (tok-val toks 1) '*))
+
+(test-case "tokenize: slash operator as identifier"
+  (define toks (tokenize-string "/"))
+  (check-equal? (tok-type toks 1) 'symbol)
+  (check-equal? (tok-val toks 1) '/))
+
+(test-case "tokenize: equals operator as identifier"
+  (define toks (tokenize-string "="))
+  (check-equal? (tok-type toks 1) 'symbol)
+  (check-equal? (tok-val toks 1) '=))
+
+(test-case "tokenize: compound operator +="
+  ;; + starts ident, = continues ident → single symbol +=
+  (define toks (tokenize-string "+="))
+  (check-equal? (tok-type toks 1) 'symbol)
+  (check-equal? (tok-val toks 1) '+=))
+
+(test-case "tokenize: operator in brackets [+ : Nat]"
+  (define toks (tokenize-string "[+ : Nat]"))
+  (check-equal? (tok-type toks 1) 'lbracket)
+  (check-equal? (tok-val toks 2) '+)
+  (check-equal? (tok-type toks 3) 'colon)
+  (check-equal? (tok-val toks 4) 'Nat)
+  (check-equal? (tok-type toks 5) 'rbracket))
+
+(test-case "tokenize: product type A * B still works"
+  ;; * is now a regular identifier, but product types still parse correctly
+  ;; because star-symbol? accepts both '* and '$star
+  (define toks (tokenize-string "A * B"))
+  (check-equal? (tok-val toks 1) 'A)
+  (check-equal? (tok-val toks 2) '*)
+  (check-equal? (tok-val toks 3) 'B))
+
+(test-case "parse: foreign import with + operator"
+  (define forms (read-all-forms-string
+    "foreign racket \"racket/base\" [+ : Nat -> Nat -> Nat]"))
+  (check-equal? forms
+    '((foreign racket "racket/base" (+ : Nat -> Nat -> Nat)))))
+
+(test-case "parse: foreign import with * operator"
+  (define forms (read-all-forms-string
+    "foreign racket \"racket/base\" [* : Nat -> Nat -> Nat]"))
+  (check-equal? forms
+    '((foreign racket "racket/base" (* : Nat -> Nat -> Nat)))))
+
+(test-case "parse: foreign import with / operator"
+  (define forms (read-all-forms-string
+    "foreign racket \"racket/base\" [/ : Nat -> Nat -> Nat]"))
+  (check-equal? forms
+    '((foreign racket "racket/base" (/ : Nat -> Nat -> Nat)))))
+
+(test-case "parse: foreign import with = operator"
+  (define forms (read-all-forms-string
+    "foreign racket \"racket/base\" [= : Nat -> Nat -> Bool]"))
+  (check-equal? forms
+    '((foreign racket "racket/base" (= : Nat -> Nat -> Bool)))))
+
+(test-case "parse: arrow -> still works (not consumed by ident-start)"
+  ;; - is ident-start but -> dispatch runs first
+  (define forms (read-all-forms-string "Nat -> Nat"))
+  (check-equal? forms '((Nat -> Nat))))
+
+(test-case "parse: multiplied arrows still work"
+  ;; -0>, -1>, -w> dispatch runs before ident-start
+  (define forms (read-all-forms-string "Nat -0> Nat"))
+  (check-equal? forms '((Nat -0> Nat))))
+
 (test-case "source locations: second form has correct line"
   (define port (open-input-string "eval zero\neval one"))
   (port-count-lines! port)

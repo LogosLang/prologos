@@ -46,8 +46,10 @@ zero? 1
 
 
 ;; --- Multiple declarations ---
+;; Uncurried syntax: list args before the single return arrow.
+;; `Nat Nat -> Nat` expands to the curried `Nat -> Nat -> Nat`.
 
-foreign racket "racket/base" [modulo : Nat -> Nat -> Nat] [quotient : Nat -> Nat -> Nat]
+foreign racket "racket/base" [modulo : Nat Nat -> Nat] [quotient : Nat Nat -> Nat]
 
 modulo 7 3
 ;; => 1 : Nat   (7 mod 3)
@@ -117,7 +119,6 @@ math/inc1 4
 ;; => 5 : Nat
 
 math/mod 7 3
-;; => 1 : Nat   (7 mod 3)
 
 math/div 10 3
 ;; => 3 : Nat   (10 / 3)
@@ -243,3 +244,21 @@ inc [inc ten]
 check the-answer : Nat
 check is-empty : Bool
 check ten : Nat
+
+
+;; Operator symbols can be imported directly: +, *, /, =, etc.
+;; Characters like < > | are reserved delimiters — use :as aliasing instead.
+;; Both curried (Nat -> Nat -> Nat) and uncurried (Nat Nat -> Nat) syntax work.
+foreign racket "racket/base" :as base [+ : Nat Nat -> Nat] [* : Nat Nat -> Nat] [- : Nat Nat -> Nat]
+
+check base/+ : Nat -> Nat -> Nat
+check base/* : Nat -> Nat -> Nat
+check base/- : Nat -> Nat -> Nat
+
+base/+ 1 200
+;; => 201 : Nat
+
+base/* 3 100
+;; => 300 : Nat
+
+

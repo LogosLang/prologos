@@ -306,6 +306,68 @@
    "2 : Nat"))
 
 ;; ========================================
+;; Uncurried type syntax tests
+;; ========================================
+
+(test-case "foreign/uncurried-two-args"
+  ;; Nat Nat -> Nat is equivalent to Nat -> Nat -> Nat
+  (check-contains
+   (run-ns-last
+    "(foreign racket \"racket/base\" (+ : Nat Nat -> Nat))
+     (eval (+ (inc (inc zero)) (inc (inc (inc zero)))))")
+   "5 : Nat"))
+
+(test-case "foreign/uncurried-three-args"
+  ;; Nat Nat Nat -> Nat uncurries to Nat -> Nat -> Nat -> Nat
+  ;; Use a Racket fn that takes 3 args (+ handles variable arity)
+  (check-contains
+   (run-ns-last
+    "(foreign racket \"racket/base\" (+ : Nat Nat Nat -> Nat))
+     (eval (+ (inc zero) (inc (inc zero)) (inc (inc (inc zero)))))")
+   "6 : Nat"))
+
+(test-case "foreign/uncurried-partial-application"
+  ;; Uncurried Nat Nat -> Nat should allow partial application
+  (define result
+    (run-ns-last
+     "(foreign racket \"racket/base\" (+ : Nat Nat -> Nat))
+      (def add2 : (-> Nat Nat) (+ (inc (inc zero))))
+      (eval (add2 (inc (inc (inc zero)))))"))
+  (check-contains result "5 : Nat"))
+
+(test-case "foreign/uncurried-with-alias"
+  ;; Uncurried syntax works with :as alias
+  (check-contains
+   (run-ns-last
+    "(foreign racket \"racket/base\" (+ :as plus : Nat Nat -> Nat))
+     (eval (plus (inc zero) (inc (inc zero))))")
+   "3 : Nat"))
+
+(test-case "foreign/uncurried-with-module-alias"
+  ;; Uncurried syntax works with module-level :as alias
+  (check-contains
+   (run-ns-last
+    "(foreign racket \"racket/base\" :as math (+ : Nat Nat -> Nat))
+     (eval (math/+ (inc zero) (inc (inc zero))))")
+   "3 : Nat"))
+
+(test-case "foreign/uncurried-bool-return"
+  ;; Nat Nat -> Bool
+  (check-contains
+   (run-ns-last
+    "(foreign racket \"racket/base\" (= : Nat Nat -> Bool))
+     (eval (= (inc (inc zero)) (inc (inc zero))))")
+   "true : Bool"))
+
+(test-case "foreign/curried-still-works"
+  ;; Existing curried syntax unchanged
+  (check-contains
+   (run-ns-last
+    "(foreign racket \"racket/base\" (+ : Nat -> Nat -> Nat))
+     (eval (+ (inc (inc zero)) (inc (inc (inc zero)))))")
+   "5 : Nat"))
+
+;; ========================================
 ;; Error cases
 ;; ========================================
 
