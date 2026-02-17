@@ -270,6 +270,7 @@
     [(expr-Bool) "0:Bool"]
     [(expr-Unit) "0:Unit"]
     [(expr-Int) "0:Int"]
+    [(expr-Rat) "0:Rat"]
     [(expr-Posit8) "0:Posit8"]
     [(expr-Type l) (format "0:Type~a" l)]
     [(expr-fvar name) (format "1:~a" name)]

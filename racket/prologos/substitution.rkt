@@ -132,6 +132,22 @@
     [(expr-int-eq a b) (expr-int-eq (shift delta cutoff a) (shift delta cutoff b))]
     [(expr-from-nat n) (expr-from-nat (shift delta cutoff n))]
 
+    ;; Rat (all non-binding)
+    [(expr-Rat) e]
+    [(expr-rat _) e]
+    [(expr-rat-add a b) (expr-rat-add (shift delta cutoff a) (shift delta cutoff b))]
+    [(expr-rat-sub a b) (expr-rat-sub (shift delta cutoff a) (shift delta cutoff b))]
+    [(expr-rat-mul a b) (expr-rat-mul (shift delta cutoff a) (shift delta cutoff b))]
+    [(expr-rat-div a b) (expr-rat-div (shift delta cutoff a) (shift delta cutoff b))]
+    [(expr-rat-neg a) (expr-rat-neg (shift delta cutoff a))]
+    [(expr-rat-abs a) (expr-rat-abs (shift delta cutoff a))]
+    [(expr-rat-lt a b) (expr-rat-lt (shift delta cutoff a) (shift delta cutoff b))]
+    [(expr-rat-le a b) (expr-rat-le (shift delta cutoff a) (shift delta cutoff b))]
+    [(expr-rat-eq a b) (expr-rat-eq (shift delta cutoff a) (shift delta cutoff b))]
+    [(expr-from-int n) (expr-from-int (shift delta cutoff n))]
+    [(expr-rat-numer a) (expr-rat-numer (shift delta cutoff a))]
+    [(expr-rat-denom a) (expr-rat-denom (shift delta cutoff a))]
+
     ;; Union types (non-binding)
     [(expr-union l r)
      (expr-union (shift delta cutoff l) (shift delta cutoff r))]
@@ -267,6 +283,22 @@
     [(expr-int-le a b) (expr-int-le (subst k s a) (subst k s b))]
     [(expr-int-eq a b) (expr-int-eq (subst k s a) (subst k s b))]
     [(expr-from-nat n) (expr-from-nat (subst k s n))]
+
+    ;; Rat (all non-binding)
+    [(expr-Rat) e]
+    [(expr-rat _) e]
+    [(expr-rat-add a b) (expr-rat-add (subst k s a) (subst k s b))]
+    [(expr-rat-sub a b) (expr-rat-sub (subst k s a) (subst k s b))]
+    [(expr-rat-mul a b) (expr-rat-mul (subst k s a) (subst k s b))]
+    [(expr-rat-div a b) (expr-rat-div (subst k s a) (subst k s b))]
+    [(expr-rat-neg a) (expr-rat-neg (subst k s a))]
+    [(expr-rat-abs a) (expr-rat-abs (subst k s a))]
+    [(expr-rat-lt a b) (expr-rat-lt (subst k s a) (subst k s b))]
+    [(expr-rat-le a b) (expr-rat-le (subst k s a) (subst k s b))]
+    [(expr-rat-eq a b) (expr-rat-eq (subst k s a) (subst k s b))]
+    [(expr-from-int n) (expr-from-int (subst k s n))]
+    [(expr-rat-numer a) (expr-rat-numer (subst k s a))]
+    [(expr-rat-denom a) (expr-rat-denom (subst k s a))]
 
     ;; Union types (non-binding)
     [(expr-union l r)

@@ -77,6 +77,21 @@
  (struct-out expr-int-le)
  (struct-out expr-int-eq)
  (struct-out expr-from-nat)
+ ;; Rat (exact rationals)
+ (struct-out expr-Rat)
+ (struct-out expr-rat)
+ (struct-out expr-rat-add)
+ (struct-out expr-rat-sub)
+ (struct-out expr-rat-mul)
+ (struct-out expr-rat-div)
+ (struct-out expr-rat-neg)
+ (struct-out expr-rat-abs)
+ (struct-out expr-rat-lt)
+ (struct-out expr-rat-le)
+ (struct-out expr-rat-eq)
+ (struct-out expr-from-int)
+ (struct-out expr-rat-numer)
+ (struct-out expr-rat-denom)
  ;; Foreign function binding
  (struct-out expr-foreign-fn)
  ;; Type hole (to be inferred during checking)
@@ -265,6 +280,36 @@
 (struct expr-from-nat (n) #:transparent)
 
 ;; ========================================
+;; Rat (exact rationals, backed by Racket exact rationals)
+;; ========================================
+
+;; Type
+(struct expr-Rat () #:transparent)                             ; Rat : Type 0
+
+;; Value (val is a Racket exact rational)
+(struct expr-rat (val) #:transparent)                          ; rat literal
+
+;; Binary arithmetic (Rat -> Rat -> Rat)
+(struct expr-rat-add (a b) #:transparent)
+(struct expr-rat-sub (a b) #:transparent)
+(struct expr-rat-mul (a b) #:transparent)
+(struct expr-rat-div (a b) #:transparent)                      ; exact division
+
+;; Unary operations (Rat -> Rat)
+(struct expr-rat-neg (a) #:transparent)
+(struct expr-rat-abs (a) #:transparent)
+
+;; Comparison (Rat -> Rat -> Bool)
+(struct expr-rat-lt (a b) #:transparent)
+(struct expr-rat-le (a b) #:transparent)
+(struct expr-rat-eq (a b) #:transparent)
+
+;; Conversions
+(struct expr-from-int (n) #:transparent)                       ; Int -> Rat (lossless)
+(struct expr-rat-numer (a) #:transparent)                      ; Rat -> Int (numerator)
+(struct expr-rat-denom (a) #:transparent)                      ; Rat -> Int (denominator, always > 0)
+
+;; ========================================
 ;; Foreign function binding
 ;; ========================================
 ;; name:        symbol (the Prologos binding name)
@@ -337,6 +382,11 @@
       (expr-int-neg? x) (expr-int-abs? x)
       (expr-int-lt? x) (expr-int-le? x) (expr-int-eq? x)
       (expr-from-nat? x)
+      (expr-Rat? x) (expr-rat? x)
+      (expr-rat-add? x) (expr-rat-sub? x) (expr-rat-mul? x) (expr-rat-div? x)
+      (expr-rat-neg? x) (expr-rat-abs? x)
+      (expr-rat-lt? x) (expr-rat-le? x) (expr-rat-eq? x)
+      (expr-from-int? x) (expr-rat-numer? x) (expr-rat-denom? x)
       (expr-hole? x) (expr-meta? x) (expr-reduce? x)
       (expr-union? x) (expr-error? x)))
 

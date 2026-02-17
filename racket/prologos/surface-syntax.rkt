@@ -59,6 +59,21 @@
  (struct-out surf-int-le)
  (struct-out surf-int-eq)
  (struct-out surf-from-nat)
+ ;; Rat surface forms
+ (struct-out surf-rat-type)
+ (struct-out surf-rat-lit)
+ (struct-out surf-rat-add)
+ (struct-out surf-rat-sub)
+ (struct-out surf-rat-mul)
+ (struct-out surf-rat-div)
+ (struct-out surf-rat-neg)
+ (struct-out surf-rat-abs)
+ (struct-out surf-rat-lt)
+ (struct-out surf-rat-le)
+ (struct-out surf-rat-eq)
+ (struct-out surf-from-int)
+ (struct-out surf-rat-numer)
+ (struct-out surf-rat-denom)
  ;; Posit8 surface forms
  (struct-out surf-posit8-type)
  (struct-out surf-posit8)
@@ -250,6 +265,38 @@
 
 ;; Conversion: (from-nat n)
 (struct surf-from-nat (n srcloc) #:transparent)
+
+;; ========================================
+;; Rat surface forms (exact rationals)
+;; ========================================
+
+;; Rat type: Rat
+(struct surf-rat-type (srcloc) #:transparent)
+
+;; Rat literal: bare rational (e.g., 3/7, -1/2)
+(struct surf-rat-lit (value srcloc) #:transparent)
+
+;; Binary arithmetic: (rat+ a b), (rat- a b), (rat* a b), (rat/ a b)
+(struct surf-rat-add (a b srcloc) #:transparent)
+(struct surf-rat-sub (a b srcloc) #:transparent)
+(struct surf-rat-mul (a b srcloc) #:transparent)
+(struct surf-rat-div (a b srcloc) #:transparent)
+
+;; Unary ops: (rat-neg a), (rat-abs a)
+(struct surf-rat-neg (a srcloc) #:transparent)
+(struct surf-rat-abs (a srcloc) #:transparent)
+
+;; Comparison: (rat-lt a b), (rat-le a b), (rat-eq a b)
+(struct surf-rat-lt (a b srcloc) #:transparent)
+(struct surf-rat-le (a b srcloc) #:transparent)
+(struct surf-rat-eq (a b srcloc) #:transparent)
+
+;; Conversion: (from-int n)
+(struct surf-from-int (n srcloc) #:transparent)
+
+;; Projections: (rat-numer a), (rat-denom a)
+(struct surf-rat-numer (a srcloc) #:transparent)
+(struct surf-rat-denom (a srcloc) #:transparent)
 
 ;; ========================================
 ;; Posit8 surface forms (8-bit posit, es=2, 2022 Standard)

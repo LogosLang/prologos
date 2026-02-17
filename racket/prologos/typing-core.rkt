@@ -319,6 +319,56 @@
     [(expr-from-nat n)
      (if (check ctx n (expr-Nat)) (expr-Int) (expr-error))]
 
+    ;; ---- Rat (exact rationals) ----
+    [(expr-Rat) (expr-Type (lzero))]
+
+    ;; rat literal: val must be a Racket exact rational
+    [(expr-rat v)
+     (if (and (exact? v) (rational? v))
+         (expr-Rat)
+         (expr-error))]
+
+    ;; Binary arithmetic: Rat -> Rat -> Rat
+    [(expr-rat-add a b)
+     (if (and (check ctx a (expr-Rat)) (check ctx b (expr-Rat)))
+         (expr-Rat) (expr-error))]
+    [(expr-rat-sub a b)
+     (if (and (check ctx a (expr-Rat)) (check ctx b (expr-Rat)))
+         (expr-Rat) (expr-error))]
+    [(expr-rat-mul a b)
+     (if (and (check ctx a (expr-Rat)) (check ctx b (expr-Rat)))
+         (expr-Rat) (expr-error))]
+    [(expr-rat-div a b)
+     (if (and (check ctx a (expr-Rat)) (check ctx b (expr-Rat)))
+         (expr-Rat) (expr-error))]
+
+    ;; Unary ops: Rat -> Rat
+    [(expr-rat-neg a)
+     (if (check ctx a (expr-Rat)) (expr-Rat) (expr-error))]
+    [(expr-rat-abs a)
+     (if (check ctx a (expr-Rat)) (expr-Rat) (expr-error))]
+
+    ;; Comparison: Rat -> Rat -> Bool
+    [(expr-rat-lt a b)
+     (if (and (check ctx a (expr-Rat)) (check ctx b (expr-Rat)))
+         (expr-Bool) (expr-error))]
+    [(expr-rat-le a b)
+     (if (and (check ctx a (expr-Rat)) (check ctx b (expr-Rat)))
+         (expr-Bool) (expr-error))]
+    [(expr-rat-eq a b)
+     (if (and (check ctx a (expr-Rat)) (check ctx b (expr-Rat)))
+         (expr-Bool) (expr-error))]
+
+    ;; Conversion: Int -> Rat
+    [(expr-from-int n)
+     (if (check ctx n (expr-Int)) (expr-Rat) (expr-error))]
+
+    ;; Projections: Rat -> Int
+    [(expr-rat-numer a)
+     (if (check ctx a (expr-Rat)) (expr-Int) (expr-error))]
+    [(expr-rat-denom a)
+     (if (check ctx a (expr-Rat)) (expr-Int) (expr-error))]
+
     ;; ---- Posit8 ----
     [(expr-Posit8) (expr-Type (lzero))]
 
@@ -452,6 +502,10 @@
     ;; ---- Int literal check ----
     [((expr-int v) (expr-Int))
      (exact-integer? v)]
+
+    ;; ---- Rat literal check ----
+    [((expr-rat v) (expr-Rat))
+     (and (exact? v) (rational? v))]
 
     ;; ---- Posit8 literal check ----
     [((expr-posit8 v) (expr-Posit8))
@@ -694,6 +748,9 @@
 
     ;; Int formation: Int : Type(0)
     [(expr-Int) (just-level (lzero))]
+
+    ;; Rat formation: Rat : Type(0)
+    [(expr-Rat) (just-level (lzero))]
 
     ;; Posit8 formation: Posit8 : Type(0)
     [(expr-Posit8) (just-level (lzero))]

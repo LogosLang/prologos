@@ -127,6 +127,8 @@
     [(expr-unit) (tu (expr-Unit) (zero-usage n))]
     [(expr-Int) (tu (expr-Type (lzero)) (zero-usage n))]
     [(expr-int _) (tu (expr-Int) (zero-usage n))]
+    [(expr-Rat) (tu (expr-Type (lzero)) (zero-usage n))]
+    [(expr-rat _) (tu (expr-Rat) (zero-usage n))]
     [(expr-Posit8) (tu (expr-Type (lzero)) (zero-usage n))]
     [(expr-posit8 _) (tu (expr-Posit8) (zero-usage n))]
 
@@ -344,6 +346,74 @@
     [(expr-from-nat e1)
      (let ([r (checkQ ctx e1 (expr-Nat))])
        (match r [(bu #t u) (tu (expr-Int) u)] [_ (tu-error)]))]
+
+    ;; ---- Rat binary operations ----
+    ;; Binary ops: Rat -> Rat -> Rat
+    [(expr-rat-add a b)
+     (let ([r1 (checkQ ctx a (expr-Rat))]
+           [r2 (checkQ ctx b (expr-Rat))])
+       (match* (r1 r2)
+         [((bu #t u1) (bu #t u2)) (tu (expr-Rat) (add-usage u1 u2))]
+         [(_ _) (tu-error)]))]
+    [(expr-rat-sub a b)
+     (let ([r1 (checkQ ctx a (expr-Rat))]
+           [r2 (checkQ ctx b (expr-Rat))])
+       (match* (r1 r2)
+         [((bu #t u1) (bu #t u2)) (tu (expr-Rat) (add-usage u1 u2))]
+         [(_ _) (tu-error)]))]
+    [(expr-rat-mul a b)
+     (let ([r1 (checkQ ctx a (expr-Rat))]
+           [r2 (checkQ ctx b (expr-Rat))])
+       (match* (r1 r2)
+         [((bu #t u1) (bu #t u2)) (tu (expr-Rat) (add-usage u1 u2))]
+         [(_ _) (tu-error)]))]
+    [(expr-rat-div a b)
+     (let ([r1 (checkQ ctx a (expr-Rat))]
+           [r2 (checkQ ctx b (expr-Rat))])
+       (match* (r1 r2)
+         [((bu #t u1) (bu #t u2)) (tu (expr-Rat) (add-usage u1 u2))]
+         [(_ _) (tu-error)]))]
+
+    ;; Unary Rat ops: Rat -> Rat
+    [(expr-rat-neg a)
+     (let ([r (inferQ ctx a)])
+       (match r [(tu (expr-Rat) u) (tu (expr-Rat) u)] [_ (tu-error)]))]
+    [(expr-rat-abs a)
+     (let ([r (inferQ ctx a)])
+       (match r [(tu (expr-Rat) u) (tu (expr-Rat) u)] [_ (tu-error)]))]
+
+    ;; Rat comparisons: Rat -> Rat -> Bool
+    [(expr-rat-lt a b)
+     (let ([r1 (checkQ ctx a (expr-Rat))]
+           [r2 (checkQ ctx b (expr-Rat))])
+       (match* (r1 r2)
+         [((bu #t u1) (bu #t u2)) (tu (expr-Bool) (add-usage u1 u2))]
+         [(_ _) (tu-error)]))]
+    [(expr-rat-le a b)
+     (let ([r1 (checkQ ctx a (expr-Rat))]
+           [r2 (checkQ ctx b (expr-Rat))])
+       (match* (r1 r2)
+         [((bu #t u1) (bu #t u2)) (tu (expr-Bool) (add-usage u1 u2))]
+         [(_ _) (tu-error)]))]
+    [(expr-rat-eq a b)
+     (let ([r1 (checkQ ctx a (expr-Rat))]
+           [r2 (checkQ ctx b (expr-Rat))])
+       (match* (r1 r2)
+         [((bu #t u1) (bu #t u2)) (tu (expr-Bool) (add-usage u1 u2))]
+         [(_ _) (tu-error)]))]
+
+    ;; Rat conversion: Int -> Rat
+    [(expr-from-int e1)
+     (let ([r (checkQ ctx e1 (expr-Int))])
+       (match r [(bu #t u) (tu (expr-Rat) u)] [_ (tu-error)]))]
+
+    ;; Rat projections: Rat -> Int
+    [(expr-rat-numer a)
+     (let ([r (inferQ ctx a)])
+       (match r [(tu (expr-Rat) u) (tu (expr-Int) u)] [_ (tu-error)]))]
+    [(expr-rat-denom a)
+     (let ([r (inferQ ctx a)])
+       (match r [(tu (expr-Rat) u) (tu (expr-Int) u)] [_ (tu-error)]))]
 
     ;; ---- Posit8 binary operations ----
     ;; Binary ops: Posit8 -> Posit8 -> Posit8

@@ -462,12 +462,32 @@
   (token 'symbol (string->symbol s) ln cl ps (string-length s)))
 
 (define (read-number-token! tok ln cl ps)
+  ;; Read integer digits, then check for / followed by digits (fraction literal)
   (let loop ([chars '()])
     (define c (tok-peek tok))
     (if (and (char? c) (char-numeric? c))
         (begin (tok-read! tok) (loop (cons c chars)))
-        (let ([s (list->string (reverse chars))])
-          (token 'number (string->number s) ln cl ps (string-length s))))))
+        ;; Integer digits consumed. Check for fraction: N/D
+        ;; Use peek-char with skip to look 1 ahead without consuming /
+        (let ([int-chars (reverse chars)]
+              [port (tokenizer-port tok)])
+          (if (and (char? c) (char=? c #\/)
+                   (let ([d (peek-char port 1)])
+                     (and (char? d) (char-numeric? d))))
+              ;; Fraction: consume / then read denominator digits
+              (begin
+                (tok-read! tok) ; consume /
+                (let dloop ([dchars '()])
+                  (define dc (tok-peek tok))
+                  (if (and (char? dc) (char-numeric? dc))
+                      (begin (tok-read! tok) (dloop (cons dc dchars)))
+                      (let* ([s (string-append (list->string int-chars) "/"
+                                               (list->string (reverse dchars)))]
+                             [v (string->number s)])
+                        (token 'number v ln cl ps (string-length s))))))
+              ;; No fraction — plain integer
+              (let ([s (list->string int-chars)])
+                (token 'number (string->number s) ln cl ps (string-length s))))))))
 
 (define (read-string-token! tok ln cl ps)
   (tok-read! tok) ; consume opening "

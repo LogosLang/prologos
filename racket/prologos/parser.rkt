@@ -27,6 +27,7 @@
     Vec Fin vnil vcons vhead vtail vindex fzero fsuc
     natrec J pair first second boolrec
     Int int int+ int- int* int/ int-mod int-neg int-abs int-lt int-le int-eq from-nat
+    Rat rat rat+ rat- rat* rat/ rat-neg rat-abs rat-lt rat-le rat-eq from-int rat-numer rat-denom
     Posit8 posit8 p8+ p8- p8* p8/ p8-neg p8-abs p8-sqrt p8-lt p8-le p8-from-nat p8-if-nar
     def defn check eval infer expand parse elaborate match
     ;; Pre-parse macros — should be expanded before reaching parser
@@ -307,6 +308,10 @@
          (surf-zero loc)
          (surf-nat-lit d loc))]
 
+    ;; Bare fraction (rational literal, e.g. 3/7)
+    [(and (number? d) (exact? d) (rational? d) (not (integer? d)))
+     (surf-rat-lit d loc)]
+
     ;; List form
     [(pair? d)
      (parse-list d loc stx)]
@@ -322,6 +327,7 @@
     [(_)      (surf-hole loc)]
     [(Nat)    (surf-nat-type loc)]
     [(Int)    (surf-int-type loc)]
+    [(Rat)    (surf-rat-type loc)]
     [(Bool)   (surf-bool-type loc)]
     [(Unit)   (surf-unit-type loc)]
     [(Posit8) (surf-posit8-type loc)]
@@ -830,6 +836,92 @@
         (or (check-arity 'from-nat args 1 loc)
             (let ([n (parse-datum (car args))])
               (if (prologos-error? n) n (surf-from-nat n loc))))]
+
+       ;; ---- Rat literal and operations ----
+       [(rat)
+        (or (check-arity 'rat args 1 loc)
+            (let ([v (stx->datum (car args))])
+              (cond
+                ;; Bare rational: (rat 3/7) or (rat 42)
+                [(and (exact? v) (rational? v))
+                 (surf-rat-lit v loc)]
+                ;; Symbol like -3/7: (rat -3/7)
+                [(symbol? v)
+                 (let ([n (string->number (symbol->string v))])
+                   (if (and n (exact? n) (rational? n))
+                       (surf-rat-lit n loc)
+                       (parse-error loc "rat literal must be an exact rational, got ~a" v)))]
+                [else
+                 (parse-error loc "rat literal must be an exact rational, got ~a" v)])))]
+       [(rat+)
+        (or (check-arity 'rat+ args 2 loc)
+            (let ([a (parse-datum (car args))]
+                  [b (parse-datum (cadr args))])
+              (cond [(prologos-error? a) a]
+                    [(prologos-error? b) b]
+                    [else (surf-rat-add a b loc)])))]
+       [(rat-)
+        (or (check-arity 'rat- args 2 loc)
+            (let ([a (parse-datum (car args))]
+                  [b (parse-datum (cadr args))])
+              (cond [(prologos-error? a) a]
+                    [(prologos-error? b) b]
+                    [else (surf-rat-sub a b loc)])))]
+       [(rat*)
+        (or (check-arity 'rat* args 2 loc)
+            (let ([a (parse-datum (car args))]
+                  [b (parse-datum (cadr args))])
+              (cond [(prologos-error? a) a]
+                    [(prologos-error? b) b]
+                    [else (surf-rat-mul a b loc)])))]
+       [(rat/)
+        (or (check-arity 'rat/ args 2 loc)
+            (let ([a (parse-datum (car args))]
+                  [b (parse-datum (cadr args))])
+              (cond [(prologos-error? a) a]
+                    [(prologos-error? b) b]
+                    [else (surf-rat-div a b loc)])))]
+       [(rat-neg)
+        (or (check-arity 'rat-neg args 1 loc)
+            (let ([a (parse-datum (car args))])
+              (if (prologos-error? a) a (surf-rat-neg a loc))))]
+       [(rat-abs)
+        (or (check-arity 'rat-abs args 1 loc)
+            (let ([a (parse-datum (car args))])
+              (if (prologos-error? a) a (surf-rat-abs a loc))))]
+       [(rat-lt)
+        (or (check-arity 'rat-lt args 2 loc)
+            (let ([a (parse-datum (car args))]
+                  [b (parse-datum (cadr args))])
+              (cond [(prologos-error? a) a]
+                    [(prologos-error? b) b]
+                    [else (surf-rat-lt a b loc)])))]
+       [(rat-le)
+        (or (check-arity 'rat-le args 2 loc)
+            (let ([a (parse-datum (car args))]
+                  [b (parse-datum (cadr args))])
+              (cond [(prologos-error? a) a]
+                    [(prologos-error? b) b]
+                    [else (surf-rat-le a b loc)])))]
+       [(rat-eq)
+        (or (check-arity 'rat-eq args 2 loc)
+            (let ([a (parse-datum (car args))]
+                  [b (parse-datum (cadr args))])
+              (cond [(prologos-error? a) a]
+                    [(prologos-error? b) b]
+                    [else (surf-rat-eq a b loc)])))]
+       [(from-int)
+        (or (check-arity 'from-int args 1 loc)
+            (let ([n (parse-datum (car args))])
+              (if (prologos-error? n) n (surf-from-int n loc))))]
+       [(rat-numer)
+        (or (check-arity 'rat-numer args 1 loc)
+            (let ([a (parse-datum (car args))])
+              (if (prologos-error? a) a (surf-rat-numer a loc))))]
+       [(rat-denom)
+        (or (check-arity 'rat-denom args 1 loc)
+            (let ([a (parse-datum (car args))])
+              (if (prologos-error? a) a (surf-rat-denom a loc))))]
 
        ;; ---- Posit8 operations ----
        [(Posit8)

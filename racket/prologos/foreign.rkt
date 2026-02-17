@@ -48,10 +48,17 @@
     [(expr-int v) v]
     [_ (error 'foreign "Cannot marshal to integer — not an Int literal: ~a" e)]))
 
+;; Convert a Prologos Rat to a Racket exact rational
+(define (rat->rational e)
+  (match e
+    [(expr-rat v) v]
+    [_ (error 'foreign "Cannot marshal to rational — not a Rat literal: ~a" e)]))
+
 (define (marshal-prologos->racket base-type val)
   (case base-type
     [(Nat)  (nat->integer val)]
     [(Int)  (int->integer val)]
+    [(Rat)  (rat->rational val)]
     [(Bool) (bool->boolean val)]
     [(Unit) (void)]
     [else (error 'foreign "Unsupported marshal-in type: ~a" base-type)]))
@@ -74,10 +81,17 @@
     (error 'foreign "Cannot marshal from Racket: expected exact integer, got ~a" n))
   (expr-int n))
 
+;; Convert a Racket exact rational to a Prologos Rat
+(define (rational->rat n)
+  (unless (and (exact? n) (rational? n))
+    (error 'foreign "Cannot marshal from Racket: expected exact rational, got ~a" n))
+  (expr-rat n))
+
 (define (marshal-racket->prologos base-type val)
   (case base-type
     [(Nat)  (integer->nat val)]
     [(Int)  (integer->int val)]
+    [(Rat)  (rational->rat val)]
     [(Bool) (if val (expr-true) (expr-false))]
     [(Unit) (expr-unit)]
     [else (error 'foreign "Unsupported marshal-out type: ~a" base-type)]))
@@ -95,6 +109,7 @@
     [(expr-Unit)   'Unit]
     [(expr-Posit8) 'Posit8]
     [(expr-Int)    'Int]
+    [(expr-Rat)    'Rat]
     [_ (error 'foreign "Unsupported foreign type component: ~a" e)]))
 
 ;; Parse a Prologos core type expression into a marshalling descriptor.

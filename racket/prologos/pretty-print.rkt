@@ -227,6 +227,22 @@
     [(expr-int-eq a b) (format "[int= ~a ~a]" (pp-expr a names) (pp-expr b names))]
     [(expr-from-nat n) (format "[from-nat ~a]" (pp-expr n names))]
 
+    ;; Rat
+    [(expr-Rat) "Rat"]
+    [(expr-rat v) (number->string v)]
+    [(expr-rat-add a b) (format "[rat+ ~a ~a]" (pp-expr a names) (pp-expr b names))]
+    [(expr-rat-sub a b) (format "[rat- ~a ~a]" (pp-expr a names) (pp-expr b names))]
+    [(expr-rat-mul a b) (format "[rat* ~a ~a]" (pp-expr a names) (pp-expr b names))]
+    [(expr-rat-div a b) (format "[rat/ ~a ~a]" (pp-expr a names) (pp-expr b names))]
+    [(expr-rat-neg a) (format "[rat-neg ~a]" (pp-expr a names))]
+    [(expr-rat-abs a) (format "[rat-abs ~a]" (pp-expr a names))]
+    [(expr-rat-lt a b) (format "[rat< ~a ~a]" (pp-expr a names) (pp-expr b names))]
+    [(expr-rat-le a b) (format "[rat<= ~a ~a]" (pp-expr a names) (pp-expr b names))]
+    [(expr-rat-eq a b) (format "[rat= ~a ~a]" (pp-expr a names) (pp-expr b names))]
+    [(expr-from-int n) (format "[from-int ~a]" (pp-expr n names))]
+    [(expr-rat-numer a) (format "[rat-numer ~a]" (pp-expr a names))]
+    [(expr-rat-denom a) (format "[rat-denom ~a]" (pp-expr a names))]
+
     ;; Foreign function
     [(expr-foreign-fn name _ arity args _ _)
      (if (null? args)
@@ -446,6 +462,20 @@
     [(expr-int-le a b) (or (uses-bvar0? a) (uses-bvar0? b))]
     [(expr-int-eq a b) (or (uses-bvar0? a) (uses-bvar0? b))]
     [(expr-from-nat n) (uses-bvar0? n)]
+    [(expr-Rat) #f]
+    [(expr-rat _) #f]
+    [(expr-rat-add a b) (or (uses-bvar0? a) (uses-bvar0? b))]
+    [(expr-rat-sub a b) (or (uses-bvar0? a) (uses-bvar0? b))]
+    [(expr-rat-mul a b) (or (uses-bvar0? a) (uses-bvar0? b))]
+    [(expr-rat-div a b) (or (uses-bvar0? a) (uses-bvar0? b))]
+    [(expr-rat-neg a) (uses-bvar0? a)]
+    [(expr-rat-abs a) (uses-bvar0? a)]
+    [(expr-rat-lt a b) (or (uses-bvar0? a) (uses-bvar0? b))]
+    [(expr-rat-le a b) (or (uses-bvar0? a) (uses-bvar0? b))]
+    [(expr-rat-eq a b) (or (uses-bvar0? a) (uses-bvar0? b))]
+    [(expr-from-int n) (uses-bvar0? n)]
+    [(expr-rat-numer a) (uses-bvar0? a)]
+    [(expr-rat-denom a) (uses-bvar0? a)]
     [(expr-foreign-fn _ _ _ _ _ _) #f]
     [(expr-reduce scrut arms _)
      (or (uses-bvar0? scrut)

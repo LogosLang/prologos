@@ -116,6 +116,22 @@
     [(expr-int-eq a b) (expr-int-eq (zonk a) (zonk b))]
     [(expr-from-nat n) (expr-from-nat (zonk n))]
 
+    ;; Rat
+    [(expr-Rat) e]
+    [(expr-rat _) e]
+    [(expr-rat-add a b) (expr-rat-add (zonk a) (zonk b))]
+    [(expr-rat-sub a b) (expr-rat-sub (zonk a) (zonk b))]
+    [(expr-rat-mul a b) (expr-rat-mul (zonk a) (zonk b))]
+    [(expr-rat-div a b) (expr-rat-div (zonk a) (zonk b))]
+    [(expr-rat-neg a) (expr-rat-neg (zonk a))]
+    [(expr-rat-abs a) (expr-rat-abs (zonk a))]
+    [(expr-rat-lt a b) (expr-rat-lt (zonk a) (zonk b))]
+    [(expr-rat-le a b) (expr-rat-le (zonk a) (zonk b))]
+    [(expr-rat-eq a b) (expr-rat-eq (zonk a) (zonk b))]
+    [(expr-from-int n) (expr-from-int (zonk n))]
+    [(expr-rat-numer a) (expr-rat-numer (zonk a))]
+    [(expr-rat-denom a) (expr-rat-denom (zonk a))]
+
     ;; Union types
     [(expr-union l r) (expr-union (zonk l) (zonk r))]
 
@@ -247,6 +263,22 @@
     [(expr-int-eq a b) (expr-int-eq (zonk-at-depth depth a) (zonk-at-depth depth b))]
     [(expr-from-nat n) (expr-from-nat (zonk-at-depth depth n))]
 
+    ;; Rat
+    [(expr-Rat) e]
+    [(expr-rat _) e]
+    [(expr-rat-add a b) (expr-rat-add (zonk-at-depth depth a) (zonk-at-depth depth b))]
+    [(expr-rat-sub a b) (expr-rat-sub (zonk-at-depth depth a) (zonk-at-depth depth b))]
+    [(expr-rat-mul a b) (expr-rat-mul (zonk-at-depth depth a) (zonk-at-depth depth b))]
+    [(expr-rat-div a b) (expr-rat-div (zonk-at-depth depth a) (zonk-at-depth depth b))]
+    [(expr-rat-neg a) (expr-rat-neg (zonk-at-depth depth a))]
+    [(expr-rat-abs a) (expr-rat-abs (zonk-at-depth depth a))]
+    [(expr-rat-lt a b) (expr-rat-lt (zonk-at-depth depth a) (zonk-at-depth depth b))]
+    [(expr-rat-le a b) (expr-rat-le (zonk-at-depth depth a) (zonk-at-depth depth b))]
+    [(expr-rat-eq a b) (expr-rat-eq (zonk-at-depth depth a) (zonk-at-depth depth b))]
+    [(expr-from-int n) (expr-from-int (zonk-at-depth depth n))]
+    [(expr-rat-numer a) (expr-rat-numer (zonk-at-depth depth a))]
+    [(expr-rat-denom a) (expr-rat-denom (zonk-at-depth depth a))]
+
     ;; Union types
     [(expr-union l r) (expr-union (zonk-at-depth depth l) (zonk-at-depth depth r))]
 
@@ -354,6 +386,20 @@
     [(expr-int-le a b) (expr-int-le (default-metas a) (default-metas b))]
     [(expr-int-eq a b) (expr-int-eq (default-metas a) (default-metas b))]
     [(expr-from-nat n) (expr-from-nat (default-metas n))]
+    [(expr-Rat) e]
+    [(expr-rat _) e]
+    [(expr-rat-add a b) (expr-rat-add (default-metas a) (default-metas b))]
+    [(expr-rat-sub a b) (expr-rat-sub (default-metas a) (default-metas b))]
+    [(expr-rat-mul a b) (expr-rat-mul (default-metas a) (default-metas b))]
+    [(expr-rat-div a b) (expr-rat-div (default-metas a) (default-metas b))]
+    [(expr-rat-neg a) (expr-rat-neg (default-metas a))]
+    [(expr-rat-abs a) (expr-rat-abs (default-metas a))]
+    [(expr-rat-lt a b) (expr-rat-lt (default-metas a) (default-metas b))]
+    [(expr-rat-le a b) (expr-rat-le (default-metas a) (default-metas b))]
+    [(expr-rat-eq a b) (expr-rat-eq (default-metas a) (default-metas b))]
+    [(expr-from-int n) (expr-from-int (default-metas n))]
+    [(expr-rat-numer a) (expr-rat-numer (default-metas a))]
+    [(expr-rat-denom a) (expr-rat-denom (default-metas a))]
     [(expr-union l r) (expr-union (default-metas l) (default-metas r))]
     ;; Foreign function (opaque leaf)
     [(expr-foreign-fn _ _ _ _ _ _) e]

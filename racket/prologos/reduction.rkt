@@ -52,6 +52,23 @@
         (ctor a)   ; stuck
         (whnf (ctor a*)))))
 
+;; Reduce a binary Rat operation: try reducing left, then right.
+(define (reduce-rat-binary ctor a b)
+  (let ([a* (whnf a)])
+    (if (equal? a* a)
+        (let ([b* (whnf b)])
+          (if (equal? b* b)
+              (ctor a b)   ; stuck — both operands in WHNF
+              (whnf (ctor a b*))))
+        (whnf (ctor a* b)))))
+
+;; Reduce a unary Rat operation: try reducing the operand.
+(define (reduce-rat-unary ctor a)
+  (let ([a* (whnf a)])
+    (if (equal? a* a)
+        (ctor a)   ; stuck
+        (whnf (ctor a*)))))
+
 ;; Reduce a binary Posit8 operation: try reducing left, then right.
 (define (reduce-p8-binary ctor a b)
   (let ([a* (whnf a)])
@@ -296,6 +313,58 @@
     [(expr-int-neg a) (reduce-int-unary expr-int-neg a)]
     [(expr-int-abs a) (reduce-int-unary expr-int-abs a)]
 
+    ;; ---- Rat iota rules: compute when arguments are rat literals ----
+
+    ;; Binary arithmetic on literals
+    [(expr-rat-add (expr-rat a) (expr-rat b)) (expr-rat (+ a b))]
+    [(expr-rat-sub (expr-rat a) (expr-rat b)) (expr-rat (- a b))]
+    [(expr-rat-mul (expr-rat a) (expr-rat b)) (expr-rat (* a b))]
+    [(expr-rat-div (expr-rat a) (expr-rat b))
+     (if (zero? b) e (expr-rat (/ a b)))]
+
+    ;; Unary ops on literals
+    [(expr-rat-neg (expr-rat a)) (expr-rat (- a))]
+    [(expr-rat-abs (expr-rat a)) (expr-rat (abs a))]
+
+    ;; Comparison on literals → Bool
+    [(expr-rat-lt (expr-rat a) (expr-rat b))
+     (if (< a b) (expr-true) (expr-false))]
+    [(expr-rat-le (expr-rat a) (expr-rat b))
+     (if (<= a b) (expr-true) (expr-false))]
+    [(expr-rat-eq (expr-rat a) (expr-rat b))
+     (if (= a b) (expr-true) (expr-false))]
+
+    ;; from-int: compute when arg is an int literal
+    [(expr-from-int n)
+     (let ([n* (whnf n)])
+       (cond
+         [(expr-int? n*) (expr-rat (expr-int-val n*))]
+         [(equal? n* n) e]    ; stuck
+         [else (whnf (expr-from-int n*))]))]
+
+    ;; rat-numer: extract numerator when arg is a rat literal
+    [(expr-rat-numer (expr-rat v)) (expr-int (numerator v))]
+
+    ;; rat-denom: extract denominator when arg is a rat literal
+    [(expr-rat-denom (expr-rat v)) (expr-int (denominator v))]
+
+    ;; ---- Rat stuck-term reduction ----
+
+    ;; Binary ops: reduce operands
+    [(expr-rat-add a b) (reduce-rat-binary expr-rat-add a b)]
+    [(expr-rat-sub a b) (reduce-rat-binary expr-rat-sub a b)]
+    [(expr-rat-mul a b) (reduce-rat-binary expr-rat-mul a b)]
+    [(expr-rat-div a b) (reduce-rat-binary expr-rat-div a b)]
+    [(expr-rat-lt a b) (reduce-rat-binary expr-rat-lt a b)]
+    [(expr-rat-le a b) (reduce-rat-binary expr-rat-le a b)]
+    [(expr-rat-eq a b) (reduce-rat-binary expr-rat-eq a b)]
+
+    ;; Unary ops: reduce operand
+    [(expr-rat-neg a) (reduce-rat-unary expr-rat-neg a)]
+    [(expr-rat-abs a) (reduce-rat-unary expr-rat-abs a)]
+    [(expr-rat-numer a) (reduce-rat-unary expr-rat-numer a)]
+    [(expr-rat-denom a) (reduce-rat-unary expr-rat-denom a)]
+
     ;; ---- Posit8 iota rules: compute when arguments are posit8 literals ----
 
     ;; Binary arithmetic on literals
@@ -473,6 +542,22 @@
     [(expr-int-le a b) (expr-int-le (nf a) (nf b))]
     [(expr-int-eq a b) (expr-int-eq (nf a) (nf b))]
     [(expr-from-nat n) (expr-from-nat (nf n))]
+
+    ;; Rat normalization
+    [(expr-Rat) e]
+    [(expr-rat _) e]
+    [(expr-rat-add a b) (expr-rat-add (nf a) (nf b))]
+    [(expr-rat-sub a b) (expr-rat-sub (nf a) (nf b))]
+    [(expr-rat-mul a b) (expr-rat-mul (nf a) (nf b))]
+    [(expr-rat-div a b) (expr-rat-div (nf a) (nf b))]
+    [(expr-rat-neg a) (expr-rat-neg (nf a))]
+    [(expr-rat-abs a) (expr-rat-abs (nf a))]
+    [(expr-rat-lt a b) (expr-rat-lt (nf a) (nf b))]
+    [(expr-rat-le a b) (expr-rat-le (nf a) (nf b))]
+    [(expr-rat-eq a b) (expr-rat-eq (nf a) (nf b))]
+    [(expr-from-int n) (expr-from-int (nf n))]
+    [(expr-rat-numer a) (expr-rat-numer (nf a))]
+    [(expr-rat-denom a) (expr-rat-denom (nf a))]
 
     ;; Posit8 normalization
     [(expr-Posit8) e]
