@@ -278,7 +278,7 @@
 
 (test-case "spec: register-spec! stores entry"
   (parameterize ([current-spec-store (hasheq)])
-    (register-spec! 'foo (spec-entry '((Nat -> Nat)) #f #f srcloc-unknown '()))
+    (register-spec! 'foo (spec-entry '((Nat -> Nat)) #f #f srcloc-unknown '() '()))
     (define entry (lookup-spec 'foo))
     (check-true (spec-entry? entry))
     (check-equal? (spec-entry-type-datums entry) '((Nat -> Nat)))
@@ -287,7 +287,7 @@
 
 (test-case "spec: register with docstring"
   (parameterize ([current-spec-store (hasheq)])
-    (register-spec! 'bar (spec-entry '((Nat Nat -> Nat)) "Adds numbers" #f srcloc-unknown '()))
+    (register-spec! 'bar (spec-entry '((Nat Nat -> Nat)) "Adds numbers" #f srcloc-unknown '() '()))
     (define entry (lookup-spec 'bar))
     (check-equal? (spec-entry-docstring entry) "Adds numbers")))
 

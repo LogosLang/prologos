@@ -10,44 +10,35 @@ require [prologos.data.list             :refer [List]]
 ;; Generic Collection Operations (List-specialized)
 ;; ========================================
 ;; These functions demonstrate the Seq-centric architecture:
-;;   convert to LSeq → transform → convert back
+;;   convert to LSeq -> transform -> convert back
 ;;
 ;; Currently specialized for List since HKT type parameters (C : Type -> Type)
 ;; can't be passed at call sites due to type constructor vs type-level function
 ;; distinction. When implicit resolution is added, these become fully generic
 ;; via trait dispatch.
 ;;
-;; The pattern is: to-seq → lseq-op → from-seq
+;; The pattern is: to-seq -> lseq-op -> from-seq
 
 ;; coll-map : (A -> B) -> List A -> List B
 ;; Converts to LSeq, maps, then rebuilds.
-(def coll-map : [Pi [A :0 <Type>] [Pi [B :0 <Type>] [-> [-> A B] [-> [List A] [List B]]]]]
-  (fn (A :0 (Type 0))
-    (fn (B :0 (Type 0))
-      (fn (f : (-> A B))
-        (fn (xs : (List A))
-          (List--Buildable--from-seq B
-            (lseq-map A B f (List--Seqable--dict A xs))))))))
+spec coll-map {A B : Type} [A -> B] -> [List A] -> [List B]
+defn coll-map [f xs]
+  List--Buildable--from-seq B [lseq-map A B f [List--Seqable--dict A xs]]
 
 ;; coll-filter : (A -> Bool) -> List A -> List A
 ;; Converts to LSeq, filters, then rebuilds.
-(def coll-filter : [Pi [A :0 <Type>] [-> [-> A Bool] [-> [List A] [List A]]]]
-  (fn (A :0 (Type 0))
-    (fn (pred : (-> A Bool))
-      (fn (xs : (List A))
-        (List--Buildable--from-seq A
-          (lseq-filter A pred (List--Seqable--dict A xs)))))))
+spec coll-filter {A : Type} [A -> Bool] -> [List A] -> [List A]
+defn coll-filter [pred xs]
+  List--Buildable--from-seq A [lseq-filter A pred [List--Seqable--dict A xs]]
 
 ;; coll-length : List A -> Nat
 ;; Converts to LSeq and computes length.
-(def coll-length : [Pi [A :0 <Type>] [-> [List A] Nat]]
-  (fn (A :0 (Type 0))
-    (fn (xs : (List A))
-      (lseq-length A (List--Seqable--dict A xs)))))
+spec coll-length {A : Type} [List A] -> Nat
+defn coll-length [xs]
+  lseq-length A [List--Seqable--dict A xs]
 
 ;; coll-to-list : List A -> List A
 ;; Identity for List; demonstrates the Seq roundtrip.
-(def coll-to-list : [Pi [A :0 <Type>] [-> [List A] [List A]]]
-  (fn (A :0 (Type 0))
-    (fn (xs : (List A))
-      (lseq-to-list A (List--Seqable--dict A xs)))))
+spec coll-to-list {A : Type} [List A] -> [List A]
+defn coll-to-list [xs]
+  lseq-to-list A [List--Seqable--dict A xs]

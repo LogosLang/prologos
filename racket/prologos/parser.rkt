@@ -115,17 +115,99 @@
     [else #f]))
 
 (define (unwrap-brace-params stx loc)
-  ;; Extract the symbols from ($brace-params A B C)
-  ;; Returns a list of binder-info structs, each with :0 multiplicity and Type 0
+  ;; Extract implicit type parameters from ($brace-params ...)
+  ;; Supports:
+  ;;   {A B C}           → all with :0 multiplicity and Type 0
+  ;;   {A : Type}        → A with :0 and parsed Type
+  ;;   {A :0 Type}       → A with :0 and parsed Type (explicit mult)
+  ;;   {A B : Type}      → both A, B with :0 and parsed Type
+  ;;   {A B : Type -> Type} → both A, B with :0 and parsed (Type -> Type)
+  ;; Returns a list of binder-info structs
   (define d (stx->datum stx))
   (define contents (cdr d)) ; skip $brace-params sentinel
   (define parts
     (if (syntax? stx) (cdr (syntax->list stx)) contents))
-  (for/list ([p (in-list parts)])
-    (define name (if (syntax? p) (syntax-e p) p))
-    (unless (symbol? name)
-      (parse-error loc (format "Implicit type parameter must be a symbol, got ~a" name) name))
-    (binder-info name 'm0 (surf-type #f loc))))
+  ;; Check if contents contain ':' or multiplicity annotations
+  (define has-colon?
+    (ormap (lambda (p) (let ([v (if (syntax? p) (syntax-e p) p)])
+                         (eq? v ':)))
+           parts))
+  (define has-mult?
+    (ormap (lambda (p) (let ([v (if (syntax? p) (syntax-e p) p)])
+                         (memq v '(:0 :1 :w))))
+           parts))
+  (cond
+    ;; Simple case: all bare symbols {A B C} — existing behavior
+    [(and (not has-colon?) (not has-mult?))
+     (for/list ([p (in-list parts)])
+       (define name (if (syntax? p) (syntax-e p) p))
+       (unless (symbol? name)
+         (parse-error loc (format "Implicit type parameter must be a symbol, got ~a" name) name))
+       (binder-info name 'm0 (surf-type #f loc)))]
+    ;; Typed binders: parse name(s), optional multiplicity, colon, type
+    [else
+     (parse-brace-typed-binders parts loc)]))
+
+;; Parse typed implicit binder contents: A : Type, A :0 Type, A B : Type, etc.
+;; Format: names... [:mult] : type-atoms...
+;; Returns a list of binder-info structs, one per name.
+(define (parse-brace-typed-binders parts loc)
+  (define datums (map (lambda (p) (if (syntax? p) (syntax-e p) p)) parts))
+  (define stx-parts (if (andmap syntax? parts) parts
+                        (map (lambda (d) (if (syntax? d) d (datum->syntax #f d))) parts)))
+  ;; Find the position of ':' (not :0/:1/:w)
+  (define colon-idx
+    (for/or ([i (in-naturals)]
+             [d (in-list datums)])
+      (and (eq? d ':) i)))
+  ;; Find multiplicity annotation (:0, :1, :w) — must be right before ':'
+  (define-values (mult names-end)
+    (cond
+      [(and colon-idx (> colon-idx 0)
+            (memq (list-ref datums (- colon-idx 1)) '(:0 :1 :w)))
+       (values (list-ref datums (- colon-idx 1))
+               (- colon-idx 1))]
+      [colon-idx
+       (values ':0 colon-idx)]  ;; default multiplicity for implicits
+      [else
+       ;; No colon found — check for mult followed by type atoms
+       ;; e.g., {A :0 Type} without explicit ':'
+       (define mult-idx
+         (for/or ([i (in-naturals)]
+                  [d (in-list datums)])
+           (and (memq d '(:0 :1 :w)) i)))
+       (if mult-idx
+           (values (list-ref datums mult-idx) mult-idx)
+           (parse-error loc "Implicit binder must have ':' or multiplicity annotation" #f))]))
+  ;; Extract names (everything before multiplicity/colon)
+  (define name-datums (take datums names-end))
+  ;; Extract type atoms (everything after ':')
+  (define type-start (if colon-idx (+ colon-idx 1) (+ names-end 1)))
+  (define type-atoms-stx (drop stx-parts type-start))
+  ;; Validate names
+  (for ([n (in-list name-datums)])
+    (unless (symbol? n)
+      (parse-error loc (format "Implicit binder name must be a symbol, got ~a" n) n)))
+  ;; Parse the type
+  (define parsed-type
+    (cond
+      [(null? type-atoms-stx)
+       (surf-type #f loc)]  ;; default to Type
+      [(= (length type-atoms-stx) 1)
+       (parse-datum (car type-atoms-stx))]
+      [else
+       (parse-infix-type type-atoms-stx loc)]))
+  (when (prologos-error? parsed-type)
+    (values parsed-type))
+  ;; Convert multiplicity symbol to binder-info format
+  (define m (case mult
+              [(:0) 'm0]
+              [(:1) 'm1]
+              [(:w) 'mw]
+              [else 'm0]))
+  ;; Build binder-info for each name
+  (for/list ([n (in-list name-datums)])
+    (binder-info n m parsed-type)))
 
 (define (unwrap-angle-type stx loc)
   ;; Extract and parse the type from ($angle-type content...)
@@ -159,11 +241,14 @@
      (parse-infix-type parts loc)]))
 
 ;; Check if a datum looks like a paren-grouped binder: (x : A) or (x :m A)
-;; Requires that the list contains a ':' symbol.
+;; Requires that the list contains a ':' or multiplicity annotation (:0, :1, :w).
 (define (paren-binder-group? stx)
   (define d (stx->datum stx))
   (and (list? d) (pair? d)
-       (ormap (lambda (x) (eq? (if (syntax? x) (syntax-e x) x) ':))
+       (ormap (lambda (x)
+                (let ([v (if (syntax? x) (syntax-e x) x)])
+                  (or (eq? v ':)
+                      (memq v '(:0 :1 :w)))))
               (if (syntax? stx) (syntax->list stx) d))))
 
 ;; Parse <(x : A, y : B) -> C> or <(x : A) * B> dependent type in angle brackets.
@@ -189,24 +274,39 @@
        [(prologos-error? body) body]
        [(arrow-symbol? op)
         ;; Dependent Pi: fold binders right-to-left
-        (define m (arrow-mult op))
+        ;; Each bnd is (name . type) or (name mult-sym type)
+        (define default-m (arrow-mult op))
         (foldr (lambda (bnd rest)
-                 (surf-pi (binder-info (car bnd) m (cdr bnd)) rest loc))
+                 (cond
+                   ;; 3-element list: (name mult-sym type) — explicit multiplicity
+                   [(and (list? bnd) (= (length bnd) 3))
+                    (define bnd-m (case (cadr bnd)
+                                    [(:0) 'm0] [(:1) 'm1] [(:w) 'mw]
+                                    [else default-m]))
+                    (surf-pi (binder-info (car bnd) bnd-m (caddr bnd)) rest loc)]
+                   ;; Pair: (name . type) — use arrow's multiplicity
+                   [else
+                    (surf-pi (binder-info (car bnd) default-m (cdr bnd)) rest loc)]))
                body binders)]
        [(star-symbol? op)
         ;; Dependent Sigma: fold binders right-to-left
         (foldr (lambda (bnd rest)
-                 (surf-sigma (binder-info (car bnd) #f (cdr bnd)) rest loc))
+                 (cond
+                   [(and (list? bnd) (= (length bnd) 3))
+                    (surf-sigma (binder-info (car bnd) #f (caddr bnd)) rest loc)]
+                   [else
+                    (surf-sigma (binder-info (car bnd) #f (cdr bnd)) rest loc)]))
                body binders)]
        [else (parse-error loc "Expected -> or * after binder group" #f)])]))
 
-;; Parse binder group from paren form: (x : A, y : B) → list of (name . parsed-type)
+;; Parse binder group from paren form: (x : A, y : B) or (x :0 A) → list of (name . parsed-type)
+;; Also returns multiplicity info when :0/:1/:w is used instead of plain :.
 ;; Commas are stripped by both readers. Flat sequence: x : A y : B
 (define (parse-angle-binder-group stx loc)
   (define parts (if (syntax? stx) (syntax->list stx) (stx->datum stx)))
   ;; Parse as sequence of name : type binders, separated by commas (already stripped)
-  ;; Format: name : type-atoms... [, name : type-atoms...]*
-  ;; We split on ':' to find binder boundaries.
+  ;; Format: name :[:0|:1|:w] type-atoms... [, name :[:0|:1|:w] type-atoms...]*
+  ;; We split on ':' or mult annotations to find binder boundaries.
   (let loop ([remaining parts] [result '()])
     (cond
       [(null? remaining) (reverse result)]
@@ -219,11 +319,8 @@
           (parse-error loc (format "Expected variable name in binder, got ~a" name) name)]
          [(null? (cdr remaining))
           (parse-error loc (format "Expected ':' after variable name ~a" name) name)]
-         [(not (eq? (stx->datum (cadr remaining)) ':))
-          (parse-error loc (format "Expected ':' after variable name ~a, got ~a"
-                                   name (stx->datum (cadr remaining))) name)]
-         [else
-          ;; Collect type atoms until next name-colon pair or end
+         ;; Plain colon: name : type-atoms...
+         [(eq? (stx->datum (cadr remaining)) ':)
           (define after-colon (cddr remaining))
           (define-values (type-atoms rest)
             (collect-type-atoms-in-binder after-colon))
@@ -235,19 +332,45 @@
                             (parse-datum (car type-atoms))
                             (parse-infix-type type-atoms loc)))
              (if (prologos-error? ty) ty
-                 (loop rest (cons (cons name ty) result)))])])])))
+                 (loop rest (cons (cons name ty) result)))])]
+         ;; Multiplicity annotation: name :0/:1/:w type-atoms...
+         [(memq (stx->datum (cadr remaining)) '(:0 :1 :w))
+          (define mult-sym (stx->datum (cadr remaining)))
+          (define after-mult (cddr remaining))
+          (define-values (type-atoms rest)
+            (collect-type-atoms-in-binder after-mult))
+          (cond
+            [(null? type-atoms)
+             (parse-error loc (format "Missing type after '~a' for variable ~a" mult-sym name) name)]
+            [else
+             (define ty (if (= (length type-atoms) 1)
+                            (parse-datum (car type-atoms))
+                            (parse-infix-type type-atoms loc)))
+             (if (prologos-error? ty) ty
+                 ;; Store multiplicity: use a pair where car = name, cdr = type
+                 ;; but also record mult. We'll use a 3-element list: (name mult . type)
+                 ;; Actually, to keep compat, we return (name . type) and let parse-dependent-angle
+                 ;; extract mult from the original stx. OR we extend the return format.
+                 ;; Simplest: return (cons name ty) and use mult in the Pi construction.
+                 ;; We need to thread mult into the binder-info. Let's use a struct-like triple.
+                 (loop rest (cons (list name mult-sym ty) result)))])]
+         [else
+          (parse-error loc (format "Expected ':' or multiplicity after variable name ~a, got ~a"
+                                   name (stx->datum (cadr remaining))) name)])])))
 
-;; Collect type atoms in a binder group until we hit another name : pattern or end.
+;; Collect type atoms in a binder group until we hit another name : or name :m pattern or end.
 ;; Returns (values type-atoms remaining-atoms).
 (define (collect-type-atoms-in-binder atoms)
   (let loop ([remaining atoms] [acc '()])
     (cond
       [(null? remaining)
        (values (reverse acc) '())]
-      ;; Look for "name :" pattern — peek ahead
+      ;; Look for "name :" or "name :0/:1/:w" pattern — peek ahead
       [(and (>= (length remaining) 2)
             (symbol? (stx->datum (car remaining)))
-            (eq? (stx->datum (cadr remaining)) ':)
+            (let ([next (stx->datum (cadr remaining))])
+              (or (eq? next ':)
+                  (memq next '(:0 :1 :w))))
             ;; Make sure this isn't an arrow operator being confused
             (not (arrow-symbol? (stx->datum (car remaining))))
             (not (star-symbol? (stx->datum (car remaining)))))
@@ -486,6 +609,39 @@
                   (foldr (lambda (bnd inner) (surf-lam bnd inner loc))
                          body binders))
                 (surf-ann full-type nested-lam loc)]))]
+          ;; Multi-binder-group: (fn [binders1] [binders2] ... body)
+          ;; ≥3 args, all-but-last are bracket-group binder lists, last is body.
+          ;; Desugars to nested lambdas: (fn [b1] (fn [b2] ... body))
+          ;; Each bracket group is parsed via parse-fn-binders.
+          [(and (>= (length args) 3)
+                (let ([params (drop-right args 1)])
+                  (andmap (lambda (a) (pair? (stx->datum a))) params))
+                ;; Exclude the case where second arg is angle-type (already handled above)
+                (not (and (= (length args) 3) (angle-type-stx? (cadr args))))
+                ;; Exclude the colon-return-type case (already handled above)
+                (not (and (>= (length args) 4) (eq? (stx->datum (cadr args)) ':))))
+           (let ()
+             (define param-groups (drop-right args 1))
+             (define body-stx (last args))
+             ;; Parse each bracket group as a binder list
+             (define all-binders
+               (let loop ([groups param-groups] [acc '()])
+                 (cond
+                   [(null? groups) (reverse acc)]
+                   [else
+                    (define binders (parse-fn-binders (car groups) loc))
+                    (if (prologos-error? binders)
+                        binders
+                        (loop (cdr groups) (cons binders acc)))])))
+             (cond
+               [(prologos-error? all-binders) all-binders]
+               [else
+                (define body (parse-datum body-stx))
+                (if (prologos-error? body) body
+                    ;; Flatten all binder groups and fold into nested lambdas
+                    (let ([flat-binders (apply append all-binders)])
+                      (foldr (lambda (bnd inner) (surf-lam bnd inner loc))
+                             body flat-binders)))]))]
           ;; Standard: (fn binder body) — exactly 2 args, first is a binder (pair)
           [(and (= (length args) 2)
                 (pair? (stx->datum (car args))))

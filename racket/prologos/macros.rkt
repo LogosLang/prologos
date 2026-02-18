@@ -123,11 +123,13 @@
          spec-entry-multi?
          spec-entry-srcloc
          spec-entry-where-constraints
+         spec-entry-implicit-binders
          register-spec!
          lookup-spec
          process-spec
          extract-where-clause
-         maybe-inject-where)
+         maybe-inject-where
+         param-type->angle-type)
 
 ;; ================================================================
 ;; LAYER 1: PRE-PARSE MACRO SYSTEM
@@ -162,7 +164,7 @@
 ;; where-constraints: (listof (listof symbol)) — trait constraints from `where` clause.
 ;;   e.g., ((Eq A) (Ord A)) for `where (Eq A) (Ord A)`.
 ;;   '() if no where clause. Constraints are prepended to type-datums as leading params.
-(struct spec-entry (type-datums docstring multi? srcloc where-constraints) #:transparent)
+(struct spec-entry (type-datums docstring multi? srcloc where-constraints implicit-binders) #:transparent)
 
 ;; Spec store: symbol → spec-entry
 (define current-spec-store (make-parameter (hasheq)))
@@ -608,16 +610,28 @@
 ;; Also merges consecutive bodyless let forms (sibling lets) before expansion.
 ;; Also combines foreign escape blocks (racket { ... } [captures] -> [exports]).
 (define (preparse-expand-subforms datum reg depth)
-  (define grouped (maybe-group-pipe-body datum))
-  (define foreign-combined (combine-foreign-blocks grouped))
-  (define merged (merge-sibling-lets foreign-combined))
-  (define expanded
-    (map (lambda (sub) (preparse-expand-form sub reg depth))
-         merged))
-  ;; Return expanded if any transformation changed the datum.
-  ;; Compare against original datum (not intermediate) to preserve
-  ;; changes from combining passes (foreign blocks, pipe grouping, let merging).
-  (if (equal? expanded datum) datum expanded))
+  ;; First: rewrite infix operators (|>, >>) before other expansions
+  (define infix-rewritten (rewrite-infix-operators datum))
+  (when (not (equal? infix-rewritten datum))
+    ;; Infix operator was rewritten — re-expand the result through preparse
+    ;; (return early to avoid double-processing)
+    (void))
+  (cond
+    [(not (equal? infix-rewritten datum))
+     ;; Infix rewrite happened — re-expand the result
+     (preparse-expand-form infix-rewritten reg depth)]
+    [else
+     ;; No infix rewrite — proceed with normal subform expansion
+     (define grouped (maybe-group-pipe-body datum))
+     (define foreign-combined (combine-foreign-blocks grouped))
+     (define merged (merge-sibling-lets foreign-combined))
+     (define expanded
+       (map (lambda (sub) (preparse-expand-form sub reg depth))
+            merged))
+     ;; Return expanded if any transformation changed the datum.
+     ;; Compare against original datum (not intermediate) to preserve
+     ;; changes from combining passes (foreign blocks, pipe grouping, let merging).
+     (if (equal? expanded datum) datum expanded)]))
 
 ;; For $pipe forms (WS match arms), group body elements after -> into a single list.
 ;; ($pipe ctor args... -> e1 e2 e3) → ($pipe ctor args... -> (e1 e2 e3))
@@ -966,6 +980,35 @@
       (values tokens '())))
 
 ;; ========================================
+;; extract-implicit-binders: extract leading {A B : Type} from spec tokens
+;; ========================================
+;; Scans for leading ($brace-params ...) groups in spec body tokens.
+;; Returns (values implicit-binders remaining-tokens)
+;; implicit-binders: alist of ((name . kind) ...) — same format as parse-brace-param-list
+;; remaining-tokens: the type tokens with brace groups removed
+;;
+;; Example: (($brace-params A B) ($brace-params R : Type) Nat -> Nat)
+;;        → (values ((A . (Type 0)) (B . (Type 0)) (R . (Type 0))) (Nat -> Nat))
+(define (extract-implicit-binders tokens spec-name)
+  (let loop ([remaining tokens] [binders '()])
+    (cond
+      [(null? remaining)
+       (values (reverse binders) remaining)]
+      [(and (pair? (car remaining))
+            (let ([h (car (car remaining))])
+              (cond
+                [(symbol? h) (eq? h '$brace-params)]
+                [(syntax? h) (eq? (syntax-e h) '$brace-params)]
+                [else #f])))
+       ;; Found a ($brace-params ...) group — parse it
+       (define brace-datum (car remaining))
+       (define symbols (cdr brace-datum))
+       (define parsed (parse-brace-param-list symbols spec-name))
+       (loop (cdr remaining) (append (reverse parsed) binders))]
+      [else
+       (values (reverse binders) remaining)])))
+
+;; ========================================
 ;; process-spec: register a type specification
 ;; ========================================
 ;; Syntax variants:
@@ -988,8 +1031,11 @@
         (values #f rest)))
   (when (null? body-tokens)
     (error 'spec "spec ~a: missing type signature" name))
+  ;; Extract leading {A B : Type} implicit binders (zero or more $brace-params groups)
+  (define-values (implicit-binders after-implicits)
+    (extract-implicit-binders body-tokens name))
   ;; Extract where clause (if present)
-  (define-values (type-tokens raw-where-constraints) (extract-where-clause body-tokens))
+  (define-values (type-tokens raw-where-constraints) (extract-where-clause after-implicits))
   ;; Expand bundle references in where constraints (e.g., (Comparable A) → (Eq A) (Ord A))
   (define where-constraints
     (if (null? raw-where-constraints)
@@ -1010,10 +1056,10 @@
     [has-pipes?
      ;; Split on $pipe to get branches
      (define branches (split-on-pipe effective-tokens))
-     (register-spec! name (spec-entry branches docstring #t srcloc-unknown where-constraints))]
+     (register-spec! name (spec-entry branches docstring #t srcloc-unknown where-constraints implicit-binders))]
     [else
      ;; Single-arity: the entire effective-tokens is the type datum
-     (register-spec! name (spec-entry (list effective-tokens) docstring #f srcloc-unknown where-constraints))]))
+     (register-spec! name (spec-entry (list effective-tokens) docstring #f srcloc-unknown where-constraints implicit-binders))]))
 
 ;; Split a token list on '$pipe boundaries.
 ;; Handles two forms:
@@ -1125,8 +1171,12 @@
 ;; - plain atom Nat → ($angle-type Nat)
 ;; - grouped list [List A] → ($angle-type List A)
 ;; - dependent binder (n : Nat) → just Nat (the type part, binder name ignored)
+;; - already $angle-type → pass through (higher-rank Pi parameter)
 (define (param-type->angle-type ptype)
   (cond
+    ;; Already an $angle-type form (e.g. from <(S :0 Type) -> ...> in spec) — pass through
+    [(and (list? ptype) (pair? ptype) (eq? (car ptype) '$angle-type))
+     ptype]
     ;; Dependent binder: (name : type-atoms...)
     [(and (list? ptype) (>= (length ptype) 3) (eq? (cadr ptype) ':))
      `($angle-type ,@(cddr ptype))]
@@ -1148,7 +1198,9 @@
 ;; datum: (defn name [x y] body)  OR  (defn name [x y] body1 body2 ...)
 ;; spec-tokens: (Nat Nat -> Nat)
 ;; Returns: (defn name [x ($angle-type Nat) y ($angle-type Nat)] ($angle-type Nat) body)
-(define (inject-spec-into-defn datum spec-tokens [where-constraints '()])
+;; When implicit-binders is non-empty, prepends ($brace-params ...) so the parser
+;; handles implicit type parameters: (defn name ($brace-params A B) [typed-bracket] ret body)
+(define (inject-spec-into-defn datum spec-tokens [where-constraints '()] [implicit-binders '()])
   (define name (cadr datum))
   (define rest (cddr datum))  ;; ([x y] body ...)
   (define param-bracket (car rest))
@@ -1215,13 +1267,37 @@
              (list pname (param-type->angle-type ptype)))))
   ;; Build return type angle form
   (define ret-angle `($angle-type ,@return-type-tokens))
+  ;; Build implicit binder form if needed
+  ;; implicit-binders: alist of ((name . kind) ...) from spec's {A B : Type}
+  ;; Becomes ($brace-params A B) or ($brace-params A : Type -> Type B) depending on kind
+  (define brace-form
+    (if (null? implicit-binders)
+        #f
+        ;; Build ($brace-params name1 name2 ...) for bare Type binders
+        ;; or ($brace-params name1 : kind1 name2 : kind2 ...) for kinded binders
+        (let ([parts
+               (apply append
+                 (for/list ([bnd (in-list implicit-binders)])
+                   (define bname (car bnd))
+                   (define bkind (cdr bnd))
+                   (if (equal? bkind '(Type 0))
+                       (list bname)  ;; bare — default kind
+                       (list bname ': bkind))))])  ;; kinded
+          `($brace-params ,@parts))))
   ;; Assemble: (defn name [typed-bracket...] ($angle-type ret) body-forms...)
+  ;; With implicits: (defn name ($brace-params ...) [typed-bracket...] ($angle-type ret) body-forms...)
   ;; If constraints were stripped, append `where` so maybe-inject-where adds them back.
-  (cond
-    [(or (null? where-constraints) user-provides-dicts?)
-     `(defn ,name ,typed-bracket ,ret-angle ,@body-forms)]
-    [else
-     `(defn ,name ,typed-bracket ,ret-angle where ,@where-constraints ,@body-forms)]))
+  (define base-defn
+    (cond
+      [(or (null? where-constraints) user-provides-dicts?)
+       `(defn ,name ,typed-bracket ,ret-angle ,@body-forms)]
+      [else
+       `(defn ,name ,typed-bracket ,ret-angle where ,@where-constraints ,@body-forms)]))
+  ;; Prepend brace-form after name if present
+  (if brace-form
+      (let ([after-name (cddr base-defn)])
+        `(defn ,name ,brace-form ,@after-name))
+      base-defn))
 
 ;; Inject spec types into a multi-arity defn datum.
 ;; Each $pipe clause gets its corresponding spec branch type.
@@ -1289,7 +1365,8 @@
                   name name)]
           [else
            (inject-spec-into-defn datum (car (spec-entry-type-datums spec))
-                                  (spec-entry-where-constraints spec))])]
+                                  (spec-entry-where-constraints spec)
+                                  (spec-entry-implicit-binders spec))])]
        ;; Defn has inline types — conflict with spec
        [(defn-has-type-annotation? rest)
         (error 'spec "defn ~a has both a spec and inline type annotations" name)]
@@ -1779,12 +1856,169 @@
          'lseq-nil
          elems))
 
+;; ========================================
+;; Pipe (|>) and Compose (>>) Operators
+;; ========================================
+;; |> threads a value through a pipeline of function applications (left-fold).
+;; >> composes functions/transducers left-to-right.
+;;
+;; WS reader produces: (data $pipe-gt map f $pipe-gt filter p)
+;; Sexp mode uses head-symbol: (|> data (map f) (filter p))
+;;
+;; Desugaring rules for |>:
+;;   (data $pipe-gt f)             → (f data)
+;;   (data $pipe-gt f a b)         → (f a b data)          ;; multi-arg: last position
+;;   (data $pipe-gt insert _ table) → (insert data table)   ;; _ placeholder
+;;   (data $pipe-gt f $pipe-gt g)  → (g (f data))          ;; chaining
+;;
+;; Desugaring rules for >>:
+;;   (f $compose g)               → (fn ($>>0 : _) (g (f $>>0)))
+;;   (f $compose g $compose h)    → (fn ($>>0 : _) (h (g (f $>>0))))
+
+;; Split a flat list on occurrences of a symbol.
+;; Returns list of segments (each a list of the elements between the symbol).
+(define (split-on-infix-symbol sym lst)
+  (let loop ([remaining lst] [current '()] [result '()])
+    (cond
+      [(null? remaining)
+       (reverse (cons (reverse current) result))]
+      [(eq? (car remaining) sym)
+       (loop (cdr remaining) '() (cons (reverse current) result))]
+      [else
+       (loop (cdr remaining) (cons (car remaining) current) result)])))
+
+;; Count bare _ at the top level of a list (not inside sub-lists).
+(define (count-top-level-underscores atoms)
+  (for/sum ([x (in-list atoms)])
+    (if (eq? x '_) 1 0)))
+
+;; Apply a pipe step to an accumulated value.
+;; step is a list of atoms (the segment between |> markers).
+;; acc is the accumulated expression from the left.
+(define (apply-pipe-step acc step)
+  (cond
+    ;; Empty step — error
+    [(null? step)
+     (error 'pipe "|> pipe step cannot be empty")]
+    ;; Single element — bare function name: (f acc)
+    [(and (= (length step) 1) (not (list? (car step))))
+     `(,(car step) ,acc)]
+    [else
+     (define n-holes (count-top-level-underscores step))
+     (cond
+       [(= n-holes 0)
+        ;; No _: append accumulated value to end → (f args... acc)
+        (append step (list acc))]
+       [(= n-holes 1)
+        ;; One _: substitute _ with accumulated value
+        (map (lambda (x) (if (eq? x '_) acc x)) step)]
+       [else
+        (error 'pipe "Multiple _ placeholders in pipe step — use explicit lambda instead")])]))
+
+;; Rewrite |> pipe operator in a flat datum.
+;; (data $pipe-gt step1 $pipe-gt step2 ...) → nested application
+(define (rewrite-pipe datum)
+  (define segments (split-on-infix-symbol '$pipe-gt datum))
+  (when (< (length segments) 2)
+    (error 'pipe "|> requires at least a value and one step"))
+  ;; First segment is the initial value (may be multi-atom → application)
+  (define init
+    (let ([seg (car segments)])
+      (if (= (length seg) 1)
+          (car seg)
+          seg)))  ; multi-atom first segment stays as-is (an application)
+  ;; Left-fold subsequent segments
+  (foldl (lambda (step acc) (apply-pipe-step acc step))
+         init
+         (cdr segments)))
+
+;; Apply a compose step: wrap fn around the accumulated expression.
+(define (make-compose-step step acc)
+  (cond
+    [(null? step)
+     (error '>> ">> compose step cannot be empty")]
+    [(and (= (length step) 1) (not (list? (car step))))
+     `(,(car step) ,acc)]
+    [else
+     (define n-holes (count-top-level-underscores step))
+     (cond
+       [(= n-holes 0)
+        (append step (list acc))]
+       [(= n-holes 1)
+        (map (lambda (x) (if (eq? x '_) acc x)) step)]
+       [else
+        (error '>> "Multiple _ placeholders in compose step — use explicit lambda")])]))
+
+;; Rewrite >> compose operator in a flat datum.
+;; (f $compose g $compose h) → (fn ($>>0 : _) (h (g (f $>>0))))
+(define (rewrite-compose datum)
+  (define segments (split-on-infix-symbol '$compose datum))
+  (when (< (length segments) 2)
+    (error '>> ">> requires at least two functions"))
+  (define var '$>>0)
+  ;; Build the innermost application from the first segment
+  (define inner
+    (let ([seg (car segments)])
+      (if (and (= (length seg) 1) (not (list? (car seg))))
+          `(,(car seg) ,var)
+          (append seg (list var)))))
+  ;; Left-fold outward: each step wraps around the accumulated expression
+  (define body
+    (foldl (lambda (step acc) (make-compose-step step acc))
+           inner
+           (cdr segments)))
+  ;; Wrap in lambda
+  `(fn (,var : _) ,body))
+
+;; Rewrite infix operators ($pipe-gt, $compose) in a datum.
+;; Called from preparse-expand-subforms before recursing into subexpressions.
+(define (rewrite-infix-operators datum)
+  (cond
+    [(not (list? datum)) datum]
+    ;; Check for $pipe-gt (|>) anywhere in the flat list
+    [(memq '$pipe-gt datum) (rewrite-pipe datum)]
+    ;; Check for $compose (>>) anywhere in the flat list
+    [(memq '$compose datum) (rewrite-compose datum)]
+    [else datum]))
+
+;; Sexp-mode handler: (|> data step1 step2 ...)
+;; Each step is already a sub-list (from Racket's reader).
+(define (expand-pipe-sexp datum)
+  (define parts (cdr datum))  ; everything after |>
+  (when (< (length parts) 2)
+    (error 'pipe "|> requires at least a value and one step"))
+  (define init (car parts))
+  (foldl (lambda (step acc)
+           (cond
+             [(list? step) (apply-pipe-step acc step)]
+             [else `(,step ,acc)]))
+         init
+         (cdr parts)))
+
+;; Sexp-mode handler: (>> f g h ...)
+(define (expand-compose-sexp datum)
+  (define fns (cdr datum))
+  (when (< (length fns) 2)
+    (error '>> ">> requires at least two functions"))
+  (define var '$>>0)
+  (define inner
+    (let ([f (car fns)])
+      (if (list? f) (append f (list var)) `(,f ,var))))
+  (define body
+    (foldl (lambda (step acc)
+             (if (list? step) (append step (list acc)) `(,step ,acc)))
+           inner
+           (cdr fns)))
+  `(fn (,var : _) ,body))
+
 ;; Register built-in pre-parse macros at module load time
 (register-preparse-macro! 'let expand-let)
 (register-preparse-macro! 'do expand-do)
 (register-preparse-macro! 'if expand-if)
 (register-preparse-macro! '$list-literal expand-list-literal)
 (register-preparse-macro! '$lseq-literal expand-lseq-literal)
+(register-preparse-macro! '$pipe-gt expand-pipe-sexp)
+(register-preparse-macro! '$compose expand-compose-sexp)
 
 
 ;; ========================================
