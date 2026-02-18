@@ -21,7 +21,9 @@
          "multi-dispatch.rkt"
          "foreign.rkt"
          "posit-impl.rkt"
-         "champ.rkt")
+         "champ.rkt"
+         "macros.rkt"             ;; Phase C: for lookup-trait (trait constraint detection)
+         "substitution.rkt")     ;; Phase C: for subst (Pi codomain substitution)
 
 (provide elaborate
          elaborate-top-level)
@@ -65,6 +67,143 @@
 (define (leading-m0-count mults)
   (length (takef mults (lambda (m) (eq? m 'm0)))))
 
+;; ========================================
+;; Trait constraint detection helpers (Phase C)
+;; ========================================
+
+;; Extract the head of a core expression (strips applications).
+;; (app (app (fvar 'Eq) X) Y) → (fvar 'Eq)
+(define (expr-head e)
+  (match e
+    [(expr-app f _) (expr-head f)]
+    [_ e]))
+
+;; Decompose a core expression into head and arguments.
+;; (app (app (fvar 'Eq) X) Y) → (values (fvar 'Eq) (list X Y))
+(define (decompose-app-acc e acc)
+  (match e
+    [(expr-app f a) (decompose-app-acc f (cons a acc))]
+    [_ (values e acc)]))
+
+;; Check if a core type expression is a trait application.
+;; A type is a trait application if its head is an fvar whose name
+;; is registered as a trait in the trait registry.
+(define (is-trait-type? dom)
+  (define head (expr-head dom))
+  (and (expr-fvar? head)
+       (lookup-trait (expr-fvar-name head))
+       #t))
+
+;; Decompose a trait type into its trait name and type argument expressions.
+;; (app (fvar 'Eq) (fvar 'Nat)) → (values 'Eq (list (fvar 'Nat)))
+(define (decompose-trait-type dom)
+  (define-values (head args) (decompose-app-acc dom '()))
+  (values (expr-fvar-name head) args))
+
+;; Insert N implicit metas for a function, walking the Pi chain to detect
+;; and tag trait-constraint metas. Uses substitution to correctly compute
+;; codomain types as each meta is created.
+;; Returns the expression with N implicit args applied.
+;;
+;; Trait constraint detection strategy:
+;; 1. First check is-trait-type? on the Pi domain (works for multi-method traits).
+;; 2. If that fails, check if the function has a spec with where-constraints.
+;;    For a function with N m0 binders and C where-constraints, the last C
+;;    m0 binders are trait constraint params (the first N-C are type variable binders).
+(define (insert-implicits-with-tagging base-expr func-type n-holes fname loc env
+                                       #:default-kind [default-kind 'implicit-app])
+  ;; Look up spec where-constraints for position-based trait detection.
+  ;; The function name may be namespace-qualified (e.g., 'ns::my-neq),
+  ;; but specs are registered with bare names. Strip the NS prefix.
+  (define bare-fname
+    (let ([s (symbol->string fname)])
+      (define idx (let loop ([i (- (string-length s) 1)])
+                    (cond [(< i 1) #f]
+                          [(and (char=? (string-ref s i) #\:)
+                                (char=? (string-ref s (sub1 i)) #\:))
+                           i]
+                          [else (loop (sub1 i))])))
+      (if idx (string->symbol (substring s (add1 idx))) fname)))
+  (define spec-entry (lookup-spec bare-fname))
+  (define where-constraints
+    (if (and spec-entry (spec-entry? spec-entry))
+        (spec-entry-where-constraints spec-entry)
+        '()))
+  (define n-constraints (length where-constraints))
+  ;; Trait constraint positions: the last n-constraints of the n-holes implicit metas.
+  ;; Position index starts at 0 for the first m0 binder.
+  ;; Positions [n-holes - n-constraints, n-holes) are trait constraints.
+  (define constraint-start (- n-holes n-constraints))
+  ;; Collect type-variable metas by position for spec-based constraint type-arg lookup.
+  ;; The first (n-holes - n-constraints) m0 binders are type variables;
+  ;; the last n-constraints are trait constraints.
+  (define type-var-metas (make-vector (max 0 constraint-start) #f))
+  (let loop ([acc base-expr] [ty func-type] [remaining n-holes] [pos 0])
+    (cond
+      [(zero? remaining) acc]
+      [(expr-Pi? ty)
+       (define dom (expr-Pi-domain ty))
+       (define cod (expr-Pi-codomain ty))
+       ;; Is this position a trait constraint?
+       ;; Method 1: domain type is a trait application (works for multi-method traits)
+       ;; Method 2: position matches where-constraint index (works for single-method traits too)
+       (define constraint-idx (- pos constraint-start))
+       (define trait-from-dom? (is-trait-type? dom))
+       (define trait-from-spec? (and (>= constraint-idx 0)
+                                     (< constraint-idx n-constraints)))
+       (define trait? (or trait-from-dom? trait-from-spec?))
+       (define meta-expr
+         (fresh-meta ctx-empty (expr-hole)
+           (meta-source-info loc
+             (if trait? 'trait-constraint default-kind)
+             (format "implicit argument for ~a" fname)
+             #f (env->name-stack env))))
+       ;; Track type-variable metas by position
+       (when (< pos constraint-start)
+         (vector-set! type-var-metas pos meta-expr))
+       ;; Tag trait constraints in the auxiliary map
+       (when trait?
+         (cond
+           ;; From domain type: decompose the application to get trait name + type args
+           [trait-from-dom?
+            (define-values (trait-name type-args) (decompose-trait-type dom))
+            (register-trait-constraint!
+              (expr-meta-id meta-expr)
+              (trait-constraint-info trait-name type-args))]
+           ;; From spec position: use the where-constraint to get trait name + type arg metas
+           ;; The where-constraint is e.g. (Eq A) — trait name 'Eq, type vars '(A).
+           ;; The type vars correspond to auto-implicit positions.
+           ;; Simple approach: for (Eq A), the type arg is the meta at position 0 (first type var).
+           ;; For (Eq A, Ord B), the first constraint has type arg at pos 0, second at pos 1.
+           [trait-from-spec?
+            (define wc (list-ref where-constraints constraint-idx))
+            (define trait-name (car wc))
+            (define type-var-names (cdr wc))  ;; e.g., '(A) for (Eq A)
+            ;; Map each type var name to its corresponding meta.
+            ;; Type vars are the first `constraint-start` m0 positions (0, 1, ..., constraint-start-1).
+            ;; We map by positional index: for single type var, position 0.
+            ;; For now: just take the first N type-var metas matching the constraint's arity.
+            (define type-arg-metas
+              (for/list ([tv-name (in-list type-var-names)]
+                         [i (in-naturals)])
+                (if (< i (vector-length type-var-metas))
+                    (vector-ref type-var-metas i)
+                    (expr-hole))))  ;; shouldn't happen — fallback
+            (register-trait-constraint!
+              (expr-meta-id meta-expr)
+              (trait-constraint-info trait-name type-arg-metas))]))
+       ;; Substitute meta into codomain for next iteration
+       ;; (shift and replace de Bruijn index 0 with the new meta)
+       (define next-ty (subst 0 meta-expr cod))
+       (loop (expr-app acc meta-expr) next-ty (sub1 remaining) (add1 pos))]
+      [else
+       ;; Type isn't a Pi — shouldn't happen, but safe fallback
+       (for/fold ([a acc]) ([_ (in-range remaining)])
+         (expr-app a (fresh-meta ctx-empty (expr-hole)
+                       (meta-source-info loc default-kind
+                         (format "implicit argument for ~a" fname)
+                         #f (env->name-stack env)))))])))
+
 ;; Auto-apply holes for a bare variable whose type has ALL m0 parameters.
 ;; e.g., nil : Pi(A :0 Type 0, List A) → (app (fvar nil) hole)
 ;; Only applies when ALL Pi binders are m0 (fully implicit).
@@ -76,13 +215,10 @@
       (let ([mults (collect-pi-mults ftype)])
         (if (and (not (null? mults))
                  (andmap (lambda (m) (eq? m 'm0)) mults))
-            ;; All params are implicit → auto-apply with fresh metavariables
-            (for/fold ([acc fvar-expr])
-                      ([_ (in-range (length mults))])
-              (expr-app acc (fresh-meta ctx-empty (expr-hole)
-                              (meta-source-info loc 'implicit
-                                (format "implicit type argument for ~a" resolved-name)
-                                #f (env->name-stack env)))))
+            ;; All params are implicit → auto-apply with Pi-chain-walking tagging
+            (insert-implicits-with-tagging fvar-expr ftype (length mults)
+                                           resolved-name loc env
+                                           #:default-kind 'implicit)
             fvar-expr))
       fvar-expr))
 
@@ -95,16 +231,53 @@
 ;;   - If user provides n-explicit args → prepend n-implicit holes
 ;;   - If user provides total-arity args → no insertion (backward compat)
 ;;   - Otherwise → no insertion (let type checker report arity error)
-(define (implicit-holes-needed func-type n-user-args)
+;; Count "implicit" params for a function: leading m0 binders PLUS
+;; any immediately following where-constraint params (which may be mw).
+;; The fname is used to look up the spec's where-constraints.
+(define (implicit-param-count func-type fname)
+  (define mults (collect-pi-mults func-type))
+  (define n-m0 (leading-m0-count mults))
+  ;; Check if function has spec with where-constraints
+  (define bare-name
+    (let ([s (symbol->string fname)])
+      (define idx (let loop ([i (- (string-length s) 1)])
+                    (cond [(< i 1) #f]
+                          [(and (char=? (string-ref s i) #\:)
+                                (char=? (string-ref s (sub1 i)) #\:))
+                           i]
+                          [else (loop (sub1 i))])))
+      (if idx (string->symbol (substring s (add1 idx))) fname)))
+  (define spec (lookup-spec bare-name))
+  (define n-constraints
+    (if (and spec (spec-entry? spec))
+        (length (spec-entry-where-constraints spec))
+        0))
+  ;; Total implicit: leading m0 binders + where-constraint params that follow
+  ;; (The where-constraints follow the auto-implicit type vars)
+  (+ n-m0 n-constraints))
+
+(define (implicit-holes-needed func-type n-user-args [fname #f])
   (define mults (collect-pi-mults func-type))
   (define total (length mults))
-  (define n-imp (leading-m0-count mults))
+  (define n-m0 (leading-m0-count mults))
+  (define n-imp
+    (if fname
+        (implicit-param-count func-type fname)
+        n-m0))
   (define n-exp (- total n-imp))
+  ;; Three valid argument counts:
+  ;; 1. total: user provides everything → no insertion
+  ;; 2. total - n-imp: user provides only explicit args → insert all implicit (m0 + where-constraints)
+  ;; 3. total - n-m0: user provides explicit + dict args → insert only m0 type-var binders
+  ;;    (only when n-imp > n-m0, i.e., there are where-constraints beyond type vars)
   (cond
     [(= n-user-args total) 0]         ; user gave all args → backward compat, no insertion
     [(and (> n-imp 0)                 ; has implicit params
           (= n-user-args n-exp))      ; user gave explicit-only count
-     n-imp]                           ; → insert implicits
+     n-imp]                           ; → insert all implicits (type vars + constraint dicts)
+    [(and (> n-imp n-m0)              ; has where-constraints beyond leading m0
+          (= n-user-args (- total n-m0)))  ; user gave explicit + dict args
+     n-m0]                            ; → insert only type-var m0 binders
     [else 0]))                        ; mismatch → don't insert, let checker error
 
 ;; ========================================
@@ -298,28 +471,27 @@
                                [n-user-args (length args)]
                                [mults (collect-pi-mults ftype)]
                                [n-total (length mults)]
-                               [n-imp (leading-m0-count mults)]
+                               [n-m0 (leading-m0-count mults)]
+                               [n-imp (implicit-param-count ftype fname)]
                                [n-exp (- n-total n-imp)]
-                               [n-holes (implicit-holes-needed ftype n-user-args)])
+                               [n-holes (implicit-holes-needed ftype n-user-args fname)])
                           ;; Arity check: reject over-application for known globals
+                          ;; Valid arg counts: n-exp, (total - n-m0) if where-constraints, total
                           (cond
-                            ;; Too many args (more than explicit count, and not total count)
+                            ;; Too many args: more than explicit count, and not a valid count
                             [(and (> n-user-args n-exp)
                                   (not (= n-user-args n-total))
+                                  (not (= n-user-args (- n-total n-m0)))  ;; explicit + dict args
                                   (> n-total 0))
                              (arity-error loc
                                (format "Too many arguments to '~a'" fname)
                                fname n-exp n-user-args
                                (pp-function-signature ftype))]
-                            ;; Insert implicits if needed
+                            ;; Insert implicits if needed (Pi-chain-walking for trait tagging)
                             [(> n-holes 0)
                              (let ([with-metas
-                                    (for/fold ([acc ef])
-                                              ([_ (in-range n-holes)])
-                                      (expr-app acc (fresh-meta ctx-empty (expr-hole)
-                                                      (meta-source-info loc 'implicit-app
-                                                        (format "implicit argument for ~a" fname)
-                                                        #f (env->name-stack env)))))])
+                                    (insert-implicits-with-tagging ef ftype n-holes
+                                                                    fname loc env)])
                                (elaborate-args with-metas args env depth loc))]
                             ;; Normal case: no insertion needed, proceed
                             [else

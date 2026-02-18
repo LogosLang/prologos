@@ -81,7 +81,12 @@
  (struct-out meta-source-info)
  (struct-out constraint-provenance)
  meta-category
- primary-unsolved-metas)
+ primary-unsolved-metas
+ ;; Phase C: Trait constraint tracking
+ (struct-out trait-constraint-info)
+ current-trait-constraint-map
+ register-trait-constraint!
+ lookup-trait-constraint)
 
 ;; ========================================
 ;; Meta-info: everything about a single metavariable
@@ -135,6 +140,31 @@
    description  ;; string — human-readable
    meta-source) ;; meta-source-info or #f — the meta that triggered this constraint
   #:transparent)
+
+;; ========================================
+;; Trait constraint tracking (Phase C)
+;; ========================================
+;; When the elaborator inserts implicit metas for trait-constraint
+;; parameters (e.g., the Eq A dict in a where (Eq A) function),
+;; we tag those metas with trait-constraint-info so the resolution
+;; engine can solve them to dictionary expressions after type-checking.
+
+(struct trait-constraint-info
+  (trait-name       ;; symbol — e.g., 'Eq
+   type-arg-exprs)  ;; (listof Expr) — elaborated type args (may contain metas initially)
+  #:transparent)
+
+;; Auxiliary map: meta-id → trait-constraint-info
+;; Keyed by meta-id (symbol), cleared by reset-meta-store!.
+;; Separate from meta-info to avoid extending that struct (which would
+;; require touching every fresh-meta call site).
+(define current-trait-constraint-map (make-parameter (make-hasheq)))
+
+(define (register-trait-constraint! meta-id info)
+  (hash-set! (current-trait-constraint-map) meta-id info))
+
+(define (lookup-trait-constraint meta-id)
+  (hash-ref (current-trait-constraint-map) meta-id #f))
 
 ;; Global constraint store: list of all constraints
 (define current-constraint-store (make-parameter '()))
@@ -438,6 +468,7 @@
   (hash-clear! (current-level-meta-store))
   (hash-clear! (current-mult-meta-store))
   (hash-clear! (current-sess-meta-store))
+  (hash-clear! (current-trait-constraint-map))
   (reset-constraint-store!))
 
 ;; ========================================

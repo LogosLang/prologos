@@ -83,6 +83,17 @@
          impl-entry-dict-name
          register-impl!
          lookup-impl
+         ;; Parametric impl metadata registry
+         current-param-impl-registry
+         param-impl-entry
+         param-impl-entry?
+         param-impl-entry-trait-name
+         param-impl-entry-type-pattern
+         param-impl-entry-pattern-vars
+         param-impl-entry-dict-name
+         param-impl-entry-where-constraints
+         register-param-impl!
+         lookup-param-impls
          ;; Shared
          extract-pi-binders
          ;; Sibling let merging (for testing)
@@ -1111,7 +1122,7 @@
 ;; datum: (defn name [x y] body)  OR  (defn name [x y] body1 body2 ...)
 ;; spec-tokens: (Nat Nat -> Nat)
 ;; Returns: (defn name [x ($angle-type Nat) y ($angle-type Nat)] ($angle-type Nat) body)
-(define (inject-spec-into-defn datum spec-tokens)
+(define (inject-spec-into-defn datum spec-tokens [where-constraints '()])
   (define name (cadr datum))
   (define rest (cddr datum))  ;; ([x y] body ...)
   (define param-bracket (car rest))
@@ -1119,10 +1130,35 @@
   (define param-names
     (if (list? param-bracket) param-bracket
         (error 'spec "Expected parameter list, got ~a" param-bracket)))
-  ;; Decompose spec type into param types + return type
+  ;; When spec has where-constraints, check if the user provides:
+  ;; a) ALL params (including constraint dicts) → use full spec-tokens, no where rewrite
+  ;; b) Only regular params (without dicts) → strip constraints, re-add `where`
+  (define n-constraints (length where-constraints))
+  ;; Count total param types in full spec
+  (define full-segments (split-on-arrow-datum spec-tokens))
+  (define full-non-last (if (> (length full-segments) 1) (drop-right full-segments 1) '()))
+  (define full-flat-params (append-map (lambda (x) x) full-non-last))
+  (define n-full-params (length full-flat-params))
+  (define n-regular-params (- n-full-params n-constraints))
+  ;; Detect: does the user's param count match the full spec or the regular-only count?
+  (define user-provides-dicts?
+    (and (> n-constraints 0)
+         (= (length param-names) n-full-params)))
+  (define effective-spec-tokens
+    (cond
+      [(= n-constraints 0) spec-tokens]  ;; no constraints
+      [user-provides-dicts? spec-tokens]  ;; user provides all params including dicts
+      [else
+       ;; Strip leading N constraint types
+       (define remaining-params (drop full-flat-params n-constraints))
+       (define last-seg (last full-segments))
+       (if (null? remaining-params)
+           last-seg
+           (append remaining-params (list '->) last-seg))]))
+  ;; Decompose the effective spec type into param types + return type
   (define-values (param-types return-type-tokens)
-    (decompose-spec-type spec-tokens (length param-names) name))
-  ;; Build typed bracket: [x ($angle-type T1) y ($angle-type T2)]
+    (decompose-spec-type effective-spec-tokens (length param-names) name))
+  ;; Build typed bracket for user params: [x ($angle-type T1) y ($angle-type T2)]
   (define typed-bracket
     (apply append
            (for/list ([pname (in-list param-names)]
@@ -1131,7 +1167,12 @@
   ;; Build return type angle form
   (define ret-angle `($angle-type ,@return-type-tokens))
   ;; Assemble: (defn name [typed-bracket...] ($angle-type ret) body-forms...)
-  `(defn ,name ,typed-bracket ,ret-angle ,@body-forms))
+  ;; If constraints were stripped, append `where` so maybe-inject-where adds them back.
+  (cond
+    [(or (null? where-constraints) user-provides-dicts?)
+     `(defn ,name ,typed-bracket ,ret-angle ,@body-forms)]
+    [else
+     `(defn ,name ,typed-bracket ,ret-angle where ,@where-constraints ,@body-forms)]))
 
 ;; Inject spec types into a multi-arity defn datum.
 ;; Each $pipe clause gets its corresponding spec branch type.
@@ -1198,7 +1239,8 @@
            (error 'spec "spec for ~a is multi-arity but defn ~a is single-body"
                   name name)]
           [else
-           (inject-spec-into-defn datum (car (spec-entry-type-datums spec)))])]
+           (inject-spec-into-defn datum (car (spec-entry-type-datums spec))
+                                  (spec-entry-where-constraints spec))])]
        ;; Defn has inline types — conflict with spec
        [(defn-has-type-annotation? rest)
         (error 'spec "defn ~a has both a spec and inline type annotations" name)]
@@ -1276,15 +1318,19 @@
            [else (values (reverse cs) remaining)])))
      (when (null? constraints)
        (error 'where "defn ~a: where clause has no valid trait constraints" name))
-     ;; Generate synthetic dict parameter names and type annotations
-     ;; Each (TraitName TypeVars...) → [$TraitName-TypeVar1-... ($angle-type (TraitName TypeVars...))]
+     ;; Generate synthetic dict parameter names and type annotations.
+     ;; Dict params are runtime-relevant (carry actual functions), so they use mw (not m0).
+     ;; The implicit insertion mechanism is extended to also count these params
+     ;; via the spec's where-constraints, even though they are mw.
      (define dict-params
        (for/list ([c (in-list constraints)])
          (define param-name
            (string->symbol
             (string-append "$"
                            (string-join (map symbol->string c) "-"))))
-         ;; Type annotation: ($angle-type (TraitName TypeVars...))
+         ;; No explicit mult annotation → defaults to mult-meta → solved to mw based on usage.
+         ;; The implicit-holes-needed function is extended to count leading m0 binders
+         ;; PLUS immediately-following where-constraint params (even if they're mw).
          (list param-name `($angle-type ,c))))
      ;; Reconstruct: (defn name dict-param1 dict-param2 ... before-where... body-forms...)
      ;; The dict params are interleaved as [name ($angle-type type)] pairs in the param list
@@ -1769,6 +1815,33 @@
 
 (define (lookup-impl key)
   (hash-ref (current-impl-registry) key #f))
+
+;; ========================================
+;; Parametric impl registry (for impls with `where` constraints)
+;; ========================================
+;; Parametric impl: impl Eq (List A) where (Eq A) ...
+;; dict is a FUNCTION: Pi(A :0 Type) -> Eq A -> Eq (List A)
+
+;; param-impl-entry: stores metadata for parametric impls
+(struct param-impl-entry
+  (trait-name        ;; symbol — e.g., 'Eq
+   type-pattern      ;; (listof datum) — e.g., '((List A))
+   pattern-vars      ;; (listof symbol) — e.g., '(A)
+   dict-name         ;; symbol — e.g., 'List--Eq--dict
+   where-constraints ;; (listof (listof symbol)) — e.g., '((Eq A))
+  ) #:transparent)
+
+;; Registry: trait-name (symbol) → (listof param-impl-entry)
+;; Keyed by trait name (not impl key) because lookup requires pattern matching.
+(define current-param-impl-registry (make-parameter (hasheq)))
+
+(define (register-param-impl! trait-name entry)
+  (define existing (hash-ref (current-param-impl-registry) trait-name '()))
+  (current-param-impl-registry
+    (hash-set (current-param-impl-registry) trait-name (cons entry existing))))
+
+(define (lookup-param-impls trait-name)
+  (hash-ref (current-param-impl-registry) trait-name '()))
 
 ;; ========================================
 ;; process-data: algebraic data types with native constructors
@@ -2511,21 +2584,53 @@
   ;; Method defns are lists starting with 'defn.
   (define rest-after-trait (cddr datum))
 
-  ;; Split into type-args and method-defns
-  (define-values (type-args method-defns)
+  ;; Split into type-args, where-constraints, and method-defns.
+  ;; Type args are symbols/lists that are NOT defn forms and NOT 'where.
+  ;; 'where marks the start of constraints.
+  ;; Method defns are lists starting with 'defn.
+  (define-values (type-args where-constraints method-defns)
     (let loop ([remaining rest-after-trait]
                [targs '()])
       (cond
         [(null? remaining)
-         (values (reverse targs) '())]
+         (values (reverse targs) '() '())]
+        ;; Hit 'where — extract constraints then method defns
+        [(eq? (car remaining) 'where)
+         (define after-where (cdr remaining))
+         ;; Constraints are parenthesized lists; method defns start with 'defn
+         (define-values (constraints methods)
+           (let cloop ([rem after-where] [cs '()])
+             (cond
+               [(null? rem) (values (reverse cs) '())]
+               [(and (pair? (car rem))
+                     (not (null? (car rem)))
+                     (eq? (caar rem) 'defn))
+                (values (reverse cs) rem)]
+               [(list? (car rem))
+                (cloop (cdr rem) (cons (car rem) cs))]
+               [else
+                (error 'impl "impl ~a: unexpected token after where: ~a" trait-name (car rem))])))
+         (values (reverse targs) constraints methods)]
+        ;; Hit a defn — no where clause
         [(and (pair? (car remaining))
               (eq? (caar remaining) 'defn))
-         (values (reverse targs) remaining)]
+         (values (reverse targs) '() remaining)]
         [else
          (loop (cdr remaining) (cons (car remaining) targs))])))
 
   (when (null? type-args)
     (error 'impl "impl ~a: must specify at least one type argument" trait-name))
+
+  ;; Dispatch: parametric impl (has where-constraints) vs monomorphic impl
+  (if (not (null? where-constraints))
+      (process-parametric-impl trait-name tm type-args where-constraints method-defns)
+      (process-monomorphic-impl trait-name tm type-args method-defns)))
+
+;; Monomorphic impl: impl Eq Nat (defn eq? ...)
+;; This is the existing behavior, extracted into a helper.
+(define (process-monomorphic-impl trait-name tm type-args method-defns)
+  (define expected-methods (trait-meta-methods tm))
+  (define n-expected (length expected-methods))
 
   ;; Validate method count
   (unless (= (length method-defns) n-expected)
@@ -2599,6 +2704,158 @@
 
   ;; Return all definitions: helper defns + dict def
   ;; For single-method, still emit the helper defn too (for direct use by name)
+  (append method-helper-defns (list dict-def)))
+
+;; Parametric impl: impl Eq (List A) where (Eq A) (defn eq? ...)
+;; Dict is a function that takes type params + constraint dicts → trait dict.
+;; For single-method: dict IS the method helper (which takes constraint dicts).
+;; For multi-method: dict wraps method helpers in a pair.
+(define (process-parametric-impl trait-name tm type-args where-constraints method-defns)
+  (define expected-methods (trait-meta-methods tm))
+  (define n-expected (length expected-methods))
+
+  ;; Validate method count
+  (unless (= (length method-defns) n-expected)
+    (error 'impl "impl ~a: expected ~a method(s), got ~a"
+           trait-name n-expected (length method-defns)))
+
+  ;; Validate method names match trait declaration
+  (for ([defn-d (in-list method-defns)]
+        [expected-m (in-list expected-methods)]
+        [i (in-naturals)])
+    (define defn-name (and (list? defn-d) (>= (length defn-d) 2) (cadr defn-d)))
+    (define expected-name (trait-method-name expected-m))
+    (unless (eq? defn-name expected-name)
+      (error 'impl "impl ~a: method ~a at position ~a should be '~a', got '~a'"
+             trait-name trait-name i expected-name defn-name)))
+
+  ;; Identify pattern variables: symbols in type-args that are NOT type constructors.
+  ;; In a compound type like (List A), the head (List) is a type constructor,
+  ;; and the arguments (A) are potential pattern variables.
+  ;; A bare symbol like Nat is a concrete type (not a pattern variable).
+  ;; A bare uppercase-starting symbol like A that isn't a known type is a pattern variable.
+  (define (collect-pattern-var-candidates ta)
+    (cond
+      [(symbol? ta) (list ta)]         ;; bare type arg — candidate
+      [(and (list? ta) (>= (length ta) 2))
+       ;; Compound: (Constructor Arg1 Arg2 ...) — head is constructor, args are candidates
+       (apply append (map collect-pattern-var-candidates (cdr ta)))]
+      [(list? ta) '()]                 ;; empty or single-element list
+      [else '()]))
+  (define all-pvar-candidates
+    (apply append (map collect-pattern-var-candidates type-args)))
+  (define pattern-vars
+    (remove-duplicates
+     (filter (lambda (s) (not (known-name? s))) all-pvar-candidates)))
+
+  ;; Generate type-arg-str for naming (flattens compound type args)
+  (define type-arg-str
+    (string-join
+     (map (lambda (ta)
+            (cond
+              [(symbol? ta) (symbol->string ta)]
+              [(list? ta) (string-join (map (lambda (x) (format "~a" x)) ta) "-")]
+              [else (format "~a" ta)]))
+          type-args)
+     "-"))
+  (define dict-name
+    (string->symbol
+     (string-append type-arg-str "--" (symbol->string trait-name) "--dict")))
+
+  ;; Generate method helper names
+  (define method-helper-names
+    (for/list ([defn-d (in-list method-defns)])
+      (define method-name (cadr defn-d))
+      (string->symbol
+       (string-append type-arg-str "--" (symbol->string trait-name)
+                      "--" (symbol->string method-name)))))
+
+  ;; Detect the param format used by the method defns:
+  ;; - colon-style: [name : Type, ...] — params have ':' symbol
+  ;; - angle-style: [name <Type> ...] — params have ($angle-type ...)
+  ;; Generate constraint params in the same style.
+  (define uses-colon-style?
+    (let ([first-defn (and (not (null? method-defns)) (car method-defns))])
+      (and first-defn
+           (let ([params-flat (cddr first-defn)]) ;; everything after (defn name ...)
+             ;; Find the parameter bracket
+             (let loop ([items params-flat])
+               (cond
+                 [(null? items) #f]
+                 [(and (list? (car items)) (not (null? (car items)))
+                       (symbol? (caar items)))
+                  ;; This is the bracket — check for ':'
+                  (memq ': (car items))]
+                 [else (loop (cdr items))]))))))
+
+  ;; Generate synthetic constraint dict param names and type annotations
+  ;; Each (Eq A) → parameter formatted to match existing style.
+  ;; Colon-style: $Eq-A : (Eq A) → items: ($Eq-A : (Eq A))
+  ;; Angle-style: $Eq-A <(Eq A)> → items: ($Eq-A ($angle-type (Eq A)))
+  (define constraint-param-pairs
+    (for/list ([c (in-list where-constraints)])
+      (define param-name
+        (string->symbol
+         (string-append "$"
+                        (string-join (map symbol->string c) "-"))))
+      (if uses-colon-style?
+          (list param-name ': c)
+          (list param-name `($angle-type ,c)))))
+
+  ;; Flatten constraint params for injection
+  (define constraint-param-items
+    (apply append constraint-param-pairs))
+
+  ;; Rewrite each method defn with scoped name AND constraint dict params prepended
+  ;; The constraint params are injected at the front of the parameter bracket.
+  (define method-helper-defns
+    (for/list ([defn-d (in-list method-defns)]
+               [helper-name (in-list method-helper-names)])
+      (define original-params (cddr defn-d))  ;; everything after (defn name ...)
+      ;; Find the parameter bracket (first list with symbol as first element)
+      (define (find-param-bracket items)
+        (let loop ([items items] [idx 0])
+          (cond
+            [(null? items) #f]
+            [(and (list? (car items))
+                  (not (null? (car items)))
+                  (symbol? (caar items)))
+             idx]
+            [else (loop (cdr items) (add1 idx))])))
+      (define bracket-idx (find-param-bracket original-params))
+      (define new-params
+        (cond
+          [bracket-idx
+           ;; Splice constraint params into existing bracket
+           (define old-bracket (list-ref original-params bracket-idx))
+           (define new-bracket (append constraint-param-items old-bracket))
+           (list-set original-params bracket-idx new-bracket)]
+          [else
+           ;; No bracket found — create one with just constraint params
+           (cons constraint-param-items original-params)]))
+      `(defn ,helper-name ,@new-params)))
+
+  ;; For single-method traits, dict = method helper (alias via def).
+  ;; For multi-method, dict wraps helpers: (defn dict-name [$Eq-A ...] (pair (h1 $Eq-A) (h2 $Eq-A)))
+  (define dict-def
+    (if (= n-expected 1)
+        ;; Single-method: dict IS the method helper.
+        ;; Just alias: (def dict-name helper-name)
+        `(def ,dict-name ,(car method-helper-names))
+        ;; Multi-method: generate a wrapper that takes constraint params and builds the pair.
+        (let* ([constraint-param-names (map car constraint-param-pairs)]
+               [helper-calls
+                (for/list ([hn (in-list method-helper-names)])
+                  `(,hn ,@constraint-param-names))]
+               [dict-body (build-nested-pair helper-calls)]
+               [param-bracket (apply append constraint-param-pairs)])
+          `(defn ,dict-name ,param-bracket ,dict-body))))
+
+  ;; Register in parametric impl registry
+  (register-param-impl! trait-name
+    (param-impl-entry trait-name type-args pattern-vars dict-name where-constraints))
+
+  ;; Return all definitions: method helper defns + dict def
   (append method-helper-defns (list dict-def)))
 
 

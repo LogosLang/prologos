@@ -27,6 +27,7 @@
  (struct-out cannot-infer-param-error)
  (struct-out conflicting-constraints-error)
  (struct-out unsolved-implicit-error)
+ (struct-out no-instance-error)
  ;; Predicates
  prologos-error?
  ;; Formatting
@@ -78,6 +79,11 @@
 
 ;; Sprint 9: Unsolved implicit argument (E1003)
 (struct unsolved-implicit-error prologos-error (func-name meta-id hint) #:transparent)
+
+;; Phase C: No trait instance found for a constraint (E1004)
+;; trait-name: symbol (e.g., 'Eq)
+;; type-args-str: string representation of the type arguments (e.g., "Foo")
+(struct no-instance-error prologos-error (trait-name type-args-str) #:transparent)
 
 ;; ========================================
 ;; Error Formatting
@@ -187,6 +193,16 @@
              (format "  = could not determine implicit argument~a"
                      (if func-name (format " for '~a'" func-name) ""))
              (if hint (format "  = help: ~a" hint) "")))
+      "\n")]
+    ;; Phase C: E1004 — No trait instance found
+    [(no-instance-error _ _ trait-name type-args-str)
+     (string-join
+      (list (format "error[E1004]: no instance found for (~a ~a)"
+                    trait-name type-args-str)
+            (format "  --> ~a" loc-str)
+            (format "  ~a" msg)
+            (format "  = help: add an impl for (~a ~a) or pass the dictionary explicitly"
+                    trait-name type-args-str))
       "\n")]
     [_ ;; base prologos-error
      (string-join

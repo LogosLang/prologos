@@ -35,6 +35,7 @@
          "metavar-store.rkt"
          "zonk.rkt"
          "multi-dispatch.rkt"
+         "trait-resolution.rkt"
          (for-template racket/base
                       "repl-support.rkt"))
 
@@ -88,6 +89,10 @@
        (let ([ty-ok (is-type/err ctx-empty inferred-type loc)])
          (when (prologos-error? ty-ok)
            (raise-prologos-error ty-ok))
+         (resolve-trait-constraints!)
+         (let ([te (check-unresolved-trait-constraints)])
+           (when (not (null? te))
+             (raise-prologos-error (car te))))
          (let ([z-type (zonk-final inferred-type)]
                [z-body (zonk-final body)])
            (current-global-env
@@ -105,6 +110,10 @@
        (let ([chk (check/err ctx-empty body type loc)])
          (when (prologos-error? chk)
            (raise-prologos-error chk))
+         (resolve-trait-constraints!)
+         (let ([te (check-unresolved-trait-constraints)])
+           (when (not (null? te))
+             (raise-prologos-error (car te))))
          ;; Zonk for storage and display (defaults unsolved level/mult-metas)
          (let ([z-type (zonk-final type)]
                [z-body (zonk-final body)])
@@ -125,6 +134,10 @@
      (let ([ty (infer/err ctx-empty expr loc)])
        (when (prologos-error? ty)
          (raise-prologos-error ty))
+       (resolve-trait-constraints!)
+       (let ([te (check-unresolved-trait-constraints)])
+         (when (not (null? te))
+           (raise-prologos-error (car te))))
        (let ([val (nf (zonk-final expr))]
              [ty-nf (nf (zonk-final ty))])
          (list 'output (format "~a : ~a" (pp-expr val) (pp-expr ty-nf)))))]
@@ -134,6 +147,10 @@
      (let ([ty (infer/err ctx-empty expr loc)])
        (when (prologos-error? ty)
          (raise-prologos-error ty))
+       (resolve-trait-constraints!)
+       (let ([te (check-unresolved-trait-constraints)])
+         (when (not (null? te))
+           (raise-prologos-error (car te))))
        (list 'output (pp-expr (zonk-final ty))))]
 
     ;; (expand datum) — show preparse expansion

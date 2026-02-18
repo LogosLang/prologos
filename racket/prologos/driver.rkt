@@ -33,7 +33,8 @@
          "zonk.rkt"
          "qtt.rkt"
          "multi-dispatch.rkt"
-         "foreign.rkt")
+         "foreign.rkt"
+         "trait-resolution.rkt")
 
 (provide process-command
          process-file
@@ -171,15 +172,25 @@
                   [(list 'eval expr)
                    (let ([ty (infer/err ctx-empty expr)])
                      (if (prologos-error? ty) ty
-                         (let ([val (nf (zonk-final expr))]
-                               [ty-nf (nf (zonk-final ty))])
-                           (format "~a : ~a" (pp-expr val) (pp-expr ty-nf)))))]
+                         (begin
+                           (resolve-trait-constraints!)
+                           (let ([te (check-unresolved-trait-constraints)])
+                             (if (not (null? te))
+                                 (car te)
+                                 (let ([val (nf (zonk-final expr))]
+                                       [ty-nf (nf (zonk-final ty))])
+                                   (format "~a : ~a" (pp-expr val) (pp-expr ty-nf))))))))]
 
                   ;; (infer expr)
                   [(list 'infer expr)
                    (let ([ty (infer/err ctx-empty expr)])
                      (if (prologos-error? ty) ty
-                         (pp-expr (zonk-final ty))))]
+                         (begin
+                           (resolve-trait-constraints!)
+                           (let ([te (check-unresolved-trait-constraints)])
+                             (if (not (null? te))
+                                 (car te)
+                                 (pp-expr (zonk-final ty)))))))]
 
                   ;; (expand datum) — show preparse expansion
                   [(list 'expand datum)
@@ -220,6 +231,14 @@
            (cond
              [(prologos-error? ty-ok) ty-ok]
              [else
+              ;; Phase C: resolve trait-constraint metas to dictionary expressions
+              (resolve-trait-constraints!)
+              ;; Phase C.6: Check for unresolved trait constraints
+              (define trait-errors (check-unresolved-trait-constraints))
+              (cond
+                [(not (null? trait-errors))
+                 (car trait-errors)]  ;; Return the first unresolved trait error
+                [else
               ;; Check for failed constraints (Sprint 5)
               (define failed (all-failed-constraints))
               (cond
@@ -261,7 +280,7 @@
                                     (ns-context-current-ns (current-ns-context))))
                       (current-global-env
                        (global-env-add (current-global-env) fqn zonked-type zonked-body)))
-                    (format "~a : ~a defined." name (pp-expr zonked-type))])])])])])]
+                    (format "~a : ~a defined." name (pp-expr zonked-type))])])])])])])]
     ;; Existing annotated path (type annotation present)
     [else
      ;; 1. Elaborate type
@@ -329,6 +348,15 @@
                     (current-global-env (hash-remove (current-global-env) name))
                     chk]
                    [else
+                    ;; Phase C: resolve trait-constraint metas to dictionary expressions
+                    (resolve-trait-constraints!)
+                    ;; Phase C.6: Check for unresolved trait constraints
+                    (define trait-errors-ann (check-unresolved-trait-constraints))
+                    (cond
+                      [(not (null? trait-errors-ann))
+                       (current-global-env (hash-remove (current-global-env) name))
+                       (car trait-errors-ann)]
+                      [else
                     ;; 5.5. Check for failed constraints (Sprint 5)
                     (define failed (all-failed-constraints))
                     (cond
@@ -380,7 +408,7 @@
                              (global-env-add (current-global-env) fqn zonked-type zonked-body)))
                           (format "~a : ~a defined."
                                   name (pp-expr zonked-type))])]
-                      )])])])])])]))
+                      )])])])])])])]))
 
 ;; ========================================
 ;; Process a multi-body defn group

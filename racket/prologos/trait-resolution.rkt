@@ -1,0 +1,261 @@
+#lang racket/base
+
+;;;
+;;; PROLOGOS TRAIT RESOLUTION
+;;; Resolves trait-constraint metavariables to concrete dictionary expressions.
+;;; After type-checking, walks the trait-constraint map and solves metas
+;;; whose type arguments are fully ground.
+;;;
+
+(require racket/match
+         racket/list
+         racket/string
+         "syntax.rkt"
+         "prelude.rkt"
+         "metavar-store.rkt"
+         "macros.rkt"
+         "zonk.rkt"
+         "errors.rkt"
+         "source-location.rkt")
+
+(provide resolve-trait-constraints!
+         check-unresolved-trait-constraints
+         ;; Exposed for testing
+         try-monomorphic-resolve
+         try-parametric-resolve
+         expr->impl-key-str
+         ground-expr?
+         match-type-pattern
+         build-parametric-dict-expr)
+
+;; ========================================
+;; Ground expression check
+;; ========================================
+
+;; Check whether an expression contains no unsolved metavariables.
+;; Uses structural recursion on the common expression forms.
+(define (ground-expr? e)
+  (match e
+    [(expr-meta id) (and (meta-solved? id) (ground-expr? (meta-solution id)))]
+    [(expr-app f a) (and (ground-expr? f) (ground-expr? a))]
+    [(expr-Pi m d c) (and (ground-expr? d) (ground-expr? c))]
+    [(expr-lam m d b) (and (ground-expr? d) (ground-expr? b))]
+    [(expr-Sigma d c) (and (ground-expr? d) (ground-expr? c))]
+    [(expr-pair e1 e2) (and (ground-expr? e1) (ground-expr? e2))]
+    [(expr-fvar _) #t]
+    [(expr-bvar _) #t]
+    [(expr-Nat) #t]
+    [(expr-Bool) #t]
+    [(expr-zero) #t]
+    [(expr-true) #t]
+    [(expr-false) #t]
+    [(expr-Type _) #t]
+    [(expr-hole) #t]
+    [_ #t]))  ;; conservative: treat unknown nodes as ground
+
+;; ========================================
+;; Core expression → impl key string
+;; ========================================
+
+;; Convert a core expression to the string format used by process-impl's
+;; key generation (e.g., expr-Nat → "Nat", (app (fvar List) Nat) → "List-Nat")
+(define (expr->impl-key-str e)
+  (match e
+    [(expr-Nat) "Nat"]
+    [(expr-Bool) "Bool"]
+    [(expr-fvar name) (symbol->string name)]
+    [(expr-app f a)
+     (string-append (expr->impl-key-str f) "-" (expr->impl-key-str a))]
+    [(expr-meta id)
+     ;; If solved, chase the solution
+     (if (meta-solved? id)
+         (expr->impl-key-str (meta-solution id))
+         (format "?~a" id))]
+    [_ (format "~a" e)]))
+
+;; ========================================
+;; Monomorphic resolution
+;; ========================================
+
+;; Try to resolve a trait constraint to a concrete (monomorphic) impl dict.
+;; Returns (expr-fvar dict-name) on success, #f on failure.
+(define (try-monomorphic-resolve trait-name type-args)
+  (define type-arg-str
+    (string-join (map expr->impl-key-str type-args) "-"))
+  (define impl-key
+    (string->symbol (string-append type-arg-str "--" (symbol->string trait-name))))
+  (define entry (lookup-impl impl-key))
+  (and entry (expr-fvar (impl-entry-dict-name entry))))
+
+;; ========================================
+;; Parametric resolution (pattern matching)
+;; ========================================
+
+;; Helper: decompose a core expression application into head + args.
+(define (decompose-app-core e acc)
+  (match e
+    [(expr-app f a) (decompose-app-core f (cons a acc))]
+    [_ (values e acc)]))
+
+;; Strip namespace qualifier from a symbol: 'ns::name → 'name
+(define (strip-ns sym)
+  (define s (symbol->string sym))
+  (define idx (let loop ([i (- (string-length s) 1)])
+                (cond [(< i 1) #f]
+                      [(and (char=? (string-ref s i) #\:)
+                            (char=? (string-ref s (sub1 i)) #\:))
+                       i]
+                      [else (loop (sub1 i))])))
+  (if idx (string->symbol (substring s (add1 idx))) sym))
+
+;; Match a symbol against a pattern symbol, considering namespace qualifiers.
+;; 'prologos.data.list::List matches pattern 'List
+(define (symbol-matches? pattern name)
+  (or (eq? pattern name)
+      (eq? pattern (strip-ns name))))
+
+;; Match a single core expression against a single datum pattern.
+;; pvars: list of pattern variable symbols.
+;; bindings: hasheq of pattern-var → core-expr.
+;; Returns updated bindings on success, #f on failure.
+(define (match-one core-expr pattern pvars bindings)
+  (cond
+    ;; Pattern variable: bind or check consistency
+    [(and (symbol? pattern) (memq pattern pvars))
+     (define existing (hash-ref bindings pattern #f))
+     (if existing
+         (and (expr-equal? existing core-expr) bindings)
+         (hash-set bindings pattern core-expr))]
+    ;; Concrete symbol: match builtin or fvar
+    [(symbol? pattern)
+     (match core-expr
+       [(expr-Nat) (and (eq? pattern 'Nat) bindings)]
+       [(expr-Bool) (and (eq? pattern 'Bool) bindings)]
+       [(expr-fvar n) (and (symbol-matches? pattern n) bindings)]
+       [_ #f])]
+    ;; Compound pattern: (Constructor Args...)
+    [(list? pattern)
+     (define-values (head args) (decompose-app-core core-expr '()))
+     (define phead (car pattern))
+     (define pargs (cdr pattern))
+     (and (= (length args) (length pargs))
+          (let ([hb (match-one head phead pvars bindings)])
+            (and hb
+                 (let loop ([as args] [ps pargs] [bs hb])
+                   (cond
+                     [(null? as) bs]
+                     [else
+                      (define nb (match-one (car as) (car ps) pvars bs))
+                      (and nb (loop (cdr as) (cdr ps) nb))])))))]
+    [else #f]))
+
+;; Structural expression equality (simple, no alpha-equivalence needed here
+;; since we're comparing ground types).
+(define (expr-equal? a b)
+  (equal? a b))  ;; #:transparent structs → structural equality via equal?
+
+;; Match core type-arg expressions against a param-impl-entry's type patterns.
+;; Returns hasheq of (pattern-var → core-expr) on success, #f on failure.
+(define (match-type-pattern type-args pentry)
+  (define patterns (param-impl-entry-type-pattern pentry))
+  (define pvars (param-impl-entry-pattern-vars pentry))
+  (and (= (length type-args) (length patterns))
+       (let loop ([cs type-args] [ps patterns] [bindings (hasheq)])
+         (cond
+           [(null? cs) bindings]
+           [else
+            (define nb (match-one (car cs) (car ps) pvars bindings))
+            (and nb (loop (cdr cs) (cdr ps) nb))]))))
+
+;; Resolve sub-constraints from a parametric impl's where clause.
+;; Returns (listof dict-expr) or #f if any unresolvable.
+(define (resolve-sub-constraints where-constraints bindings)
+  (let loop ([remaining where-constraints] [acc '()])
+    (cond
+      [(null? remaining) (reverse acc)]
+      [else
+       (define c (car remaining))
+       (define trait (car c))
+       (define type-vars (cdr c))
+       ;; Look up concrete type args from bindings
+       (define concrete-args
+         (for/list ([tv (in-list type-vars)])
+           (hash-ref bindings tv #f)))
+       ;; If any binding is missing, can't resolve
+       (if (ormap not concrete-args)
+           #f
+           (let ([resolved
+                  (or (try-monomorphic-resolve trait concrete-args)
+                      (try-parametric-resolve trait concrete-args))])
+             (if resolved
+                 (loop (cdr remaining) (cons resolved acc))
+                 #f)))])))
+
+;; Build the parametric dict expression:
+;; (app (app ... (app (fvar dict-fn) type-arg1) type-arg2) ... sub-dict1) ... sub-dictN)
+(define (build-parametric-dict-expr pentry bindings sub-dicts)
+  (define base (expr-fvar (param-impl-entry-dict-name pentry)))
+  ;; Apply pattern-var bindings as type args
+  (define with-types
+    (for/fold ([acc base]) ([pv (in-list (param-impl-entry-pattern-vars pentry))])
+      (expr-app acc (hash-ref bindings pv))))
+  ;; Apply sub-constraint dicts
+  (for/fold ([acc with-types]) ([sd (in-list sub-dicts)])
+    (expr-app acc sd)))
+
+;; Try to resolve a trait constraint using parametric impl entries.
+;; Returns a dict expression on success, #f on failure.
+(define (try-parametric-resolve trait-name type-args)
+  (define param-impls (lookup-param-impls trait-name))
+  (for/or ([pentry (in-list param-impls)])
+    (define bindings (match-type-pattern type-args pentry))
+    (and bindings
+         (let ([sub-dicts (resolve-sub-constraints
+                            (param-impl-entry-where-constraints pentry)
+                            bindings)])
+           (and sub-dicts
+                (build-parametric-dict-expr pentry bindings sub-dicts))))))
+
+;; ========================================
+;; Main resolution entry point
+;; ========================================
+
+;; Walk all trait-constraint metas and resolve those with ground type args.
+(define (resolve-trait-constraints!)
+  (for ([(meta-id tc-info) (in-hash (current-trait-constraint-map))])
+    (unless (meta-solved? meta-id)
+      (define trait-name (trait-constraint-info-trait-name tc-info))
+      (define type-args (map zonk (trait-constraint-info-type-arg-exprs tc-info)))
+      (when (andmap ground-expr? type-args)
+        (define dict-expr
+          (or (try-monomorphic-resolve trait-name type-args)
+              (try-parametric-resolve trait-name type-args)))
+        (when dict-expr
+          (solve-meta! meta-id dict-expr))))))
+
+;; ========================================
+;; Unresolved constraint checking
+;; ========================================
+
+;; Return a list of no-instance-error structs for trait constraints that
+;; have ground type args but remain unsolved (i.e., no matching impl found).
+;; Each error includes the source location from the meta that created it.
+(define (check-unresolved-trait-constraints)
+  (for/list ([(meta-id tc-info) (in-hash (current-trait-constraint-map))]
+             #:when (not (meta-solved? meta-id))
+             #:when (andmap ground-expr?
+                           (map zonk (trait-constraint-info-type-arg-exprs tc-info))))
+    (define trait-name (trait-constraint-info-trait-name tc-info))
+    (define type-args (map zonk (trait-constraint-info-type-arg-exprs tc-info)))
+    (define type-args-str
+      (string-join (map expr->impl-key-str type-args) " "))
+    ;; Recover source location from the meta's source info
+    (define minfo (meta-lookup meta-id))
+    (define src (and minfo (meta-info-source minfo)))
+    (define loc
+      (if (and src (meta-source-info? src))
+          (meta-source-info-loc src)
+          srcloc-unknown))
+    (no-instance-error loc
+      (format "No instance of ~a for ~a" trait-name type-args-str)
+      trait-name type-args-str)))
