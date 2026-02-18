@@ -63,6 +63,13 @@
   (match e
     [(expr-Nat) "Nat"]
     [(expr-Bool) "Bool"]
+    [(expr-Int) "Int"]
+    [(expr-Rat) "Rat"]
+    [(expr-Posit8) "Posit8"]
+    [(expr-Posit16) "Posit16"]
+    [(expr-Posit32) "Posit32"]
+    [(expr-Posit64) "Posit64"]
+    [(expr-Keyword) "Keyword"]
     [(expr-fvar name) (symbol->string name)]
     [(expr-app f a)
      (string-append (expr->impl-key-str f) "-" (expr->impl-key-str a))]

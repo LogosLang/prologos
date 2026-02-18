@@ -1,0 +1,15 @@
+ns prologos.core.abs-trait
+
+;; ========================================
+;; Abs Trait — absolute value
+;; ========================================
+;; Abs A = A -> A (single-method: dict IS the function)
+;; No Nat instance (Nat is always non-negative).
+
+trait Abs {A}
+  abs : A -> A
+
+;; Int instance
+impl Abs Int
+  defn abs [x : Int] <Int>
+    int-abs x

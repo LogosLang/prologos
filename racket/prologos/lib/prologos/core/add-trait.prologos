@@ -1,0 +1,18 @@
+ns prologos.core.add-trait
+
+require [prologos.data.nat :refer [add]]
+
+;; ========================================
+;; Add Trait — binary addition
+;; ========================================
+;; Add A = A -> A -> A (single-method: dict IS the function)
+;; Generated: deftype Add, accessor Add-add
+;; Instance: Nat--Add--dict, Nat--Add--add
+
+trait Add {A}
+  add : A -> A -> A
+
+;; Nat instance — delegates to prologos.data.nat/add
+impl Add Nat
+  defn add [x y] <Nat>
+    add x y

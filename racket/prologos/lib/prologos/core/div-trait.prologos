@@ -1,0 +1,15 @@
+ns prologos.core.div-trait
+
+;; ========================================
+;; Div Trait — binary division
+;; ========================================
+;; Div A = A -> A -> A (single-method: dict IS the function)
+;; No Nat instance (no integer division primitive).
+
+trait Div {A}
+  div : A -> A -> A
+
+;; Int instance — integer division
+impl Div Int
+  defn div [x : Int  y : Int] <Int>
+    int/ x y

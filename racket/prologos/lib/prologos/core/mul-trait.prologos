@@ -1,0 +1,16 @@
+ns prologos.core.mul-trait
+
+require [prologos.data.nat :refer [mult]]
+
+;; ========================================
+;; Mul Trait — binary multiplication
+;; ========================================
+;; Mul A = A -> A -> A (single-method: dict IS the function)
+
+trait Mul {A}
+  mul : A -> A -> A
+
+;; Nat instance — delegates to prologos.data.nat/mult
+impl Mul Nat
+  defn mul [x y] <Nat>
+    mult x y

@@ -1,0 +1,45 @@
+ns prologos.core.div-instances
+
+require [prologos.core.div-trait :refer [Div Div-div]]
+
+;; ========================================
+;; Div Rat
+;; ========================================
+;; Int impl already in div-trait.prologos.
+;; No Nat impl (no integer division primitive).
+
+impl Div Rat
+  defn div [x : Rat  y : Rat] <Rat>
+    rat/ x y
+
+;; ========================================
+;; Div Posit8
+;; ========================================
+
+impl Div Posit8
+  defn div [x : Posit8  y : Posit8] <Posit8>
+    p8/ x y
+
+;; ========================================
+;; Div Posit16
+;; ========================================
+
+impl Div Posit16
+  defn div [x : Posit16  y : Posit16] <Posit16>
+    p16/ x y
+
+;; ========================================
+;; Div Posit32
+;; ========================================
+
+impl Div Posit32
+  defn div [x : Posit32  y : Posit32] <Posit32>
+    p32/ x y
+
+;; ========================================
+;; Div Posit64
+;; ========================================
+
+impl Div Posit64
+  defn div [x : Posit64  y : Posit64] <Posit64>
+    p64/ x y

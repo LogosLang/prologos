@@ -1,0 +1,54 @@
+ns prologos.core.eq-numeric-instances
+
+require [prologos.core.eq-trait :refer [Eq Eq-eq?]]
+require [prologos.data.bool     :refer [and]]
+
+;; ========================================
+;; Eq Int
+;; ========================================
+
+impl Eq Int
+  defn eq? [x : Int  y : Int] <Bool>
+    int-eq x y
+
+;; ========================================
+;; Eq Rat
+;; ========================================
+
+impl Eq Rat
+  defn eq? [x : Rat  y : Rat] <Bool>
+    rat-eq x y
+
+;; ========================================
+;; Eq Posit8
+;; ========================================
+;; No p8-eq primitive; derive from p8-le:
+;; eq?(x,y) = and(le(x,y), le(y,x))
+
+impl Eq Posit8
+  defn eq? [x : Posit8  y : Posit8] <Bool>
+    and [p8-le x y] [p8-le y x]
+
+;; ========================================
+;; Eq Posit16
+;; ========================================
+
+impl Eq Posit16
+  defn eq? [x : Posit16  y : Posit16] <Bool>
+    and [p16-le x y] [p16-le y x]
+
+;; ========================================
+;; Eq Posit32
+;; ========================================
+
+impl Eq Posit32
+  defn eq? [x : Posit32  y : Posit32] <Bool>
+    and [p32-le x y] [p32-le y x]
+
+;; ========================================
+;; Eq Posit64
+;; ========================================
+
+impl Eq Posit64
+  defn eq? [x : Posit64  y : Posit64] <Bool>
+    and [p64-le x y] [p64-le y x]

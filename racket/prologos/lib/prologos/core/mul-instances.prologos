@@ -1,0 +1,51 @@
+ns prologos.core.mul-instances
+
+require [prologos.core.mul-trait :refer [Mul Mul-mul]]
+
+;; ========================================
+;; Mul Int
+;; ========================================
+
+impl Mul Int
+  defn mul [x : Int  y : Int] <Int>
+    int* x y
+
+;; ========================================
+;; Mul Rat
+;; ========================================
+
+impl Mul Rat
+  defn mul [x : Rat  y : Rat] <Rat>
+    rat* x y
+
+;; ========================================
+;; Mul Posit8
+;; ========================================
+
+impl Mul Posit8
+  defn mul [x : Posit8  y : Posit8] <Posit8>
+    p8* x y
+
+;; ========================================
+;; Mul Posit16
+;; ========================================
+
+impl Mul Posit16
+  defn mul [x : Posit16  y : Posit16] <Posit16>
+    p16* x y
+
+;; ========================================
+;; Mul Posit32
+;; ========================================
+
+impl Mul Posit32
+  defn mul [x : Posit32  y : Posit32] <Posit32>
+    p32* x y
+
+;; ========================================
+;; Mul Posit64
+;; ========================================
+
+impl Mul Posit64
+  defn mul [x : Posit64  y : Posit64] <Posit64>
+    p64* x y

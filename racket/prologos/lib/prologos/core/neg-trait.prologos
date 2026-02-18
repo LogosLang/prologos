@@ -1,0 +1,15 @@
+ns prologos.core.neg-trait
+
+;; ========================================
+;; Neg Trait — unary negation
+;; ========================================
+;; Neg A = A -> A (single-method: dict IS the function)
+;; No Nat instance (negation leaves Nat domain).
+
+trait Neg {A}
+  neg : A -> A
+
+;; Int instance
+impl Neg Int
+  defn neg [x : Int] <Int>
+    int-neg x

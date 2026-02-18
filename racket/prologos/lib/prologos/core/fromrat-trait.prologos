@@ -1,0 +1,15 @@
+ns prologos.core.fromrat-trait
+
+;; ========================================
+;; FromRat Trait — convert Rat to A
+;; ========================================
+;; FromRat A = Rat -> A (single-method: dict IS the function)
+;; Only Rat instance (identity). Posit impls deferred to Phase 3f.
+
+trait FromRat {A}
+  from-rational : Rat -> A
+
+;; Rat instance — identity
+impl FromRat Rat
+  defn from-rational [x : Rat] <Rat>
+    x

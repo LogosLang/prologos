@@ -1,0 +1,20 @@
+ns prologos.core.fromint-trait
+
+;; ========================================
+;; FromInt Trait — convert Int to A
+;; ========================================
+;; FromInt A = Int -> A (single-method: dict IS the function)
+;; Method is "from-integer" (not "from-int" — that's a parser keyword).
+
+trait FromInt {A}
+  from-integer : Int -> A
+
+;; Int instance — identity
+impl FromInt Int
+  defn from-integer [x : Int] <Int>
+    x
+
+;; Rat instance — uses the from-int parser keyword (Int->Rat primitive)
+impl FromInt Rat
+  defn from-integer [x : Int] <Rat>
+    from-int x

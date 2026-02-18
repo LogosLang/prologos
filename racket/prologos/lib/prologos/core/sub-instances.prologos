@@ -1,0 +1,51 @@
+ns prologos.core.sub-instances
+
+require [prologos.core.sub-trait :refer [Sub Sub-sub]]
+
+;; ========================================
+;; Sub Int
+;; ========================================
+
+impl Sub Int
+  defn sub [x : Int  y : Int] <Int>
+    int- x y
+
+;; ========================================
+;; Sub Rat
+;; ========================================
+
+impl Sub Rat
+  defn sub [x : Rat  y : Rat] <Rat>
+    rat- x y
+
+;; ========================================
+;; Sub Posit8
+;; ========================================
+
+impl Sub Posit8
+  defn sub [x : Posit8  y : Posit8] <Posit8>
+    p8- x y
+
+;; ========================================
+;; Sub Posit16
+;; ========================================
+
+impl Sub Posit16
+  defn sub [x : Posit16  y : Posit16] <Posit16>
+    p16- x y
+
+;; ========================================
+;; Sub Posit32
+;; ========================================
+
+impl Sub Posit32
+  defn sub [x : Posit32  y : Posit32] <Posit32>
+    p32- x y
+
+;; ========================================
+;; Sub Posit64
+;; ========================================
+
+impl Sub Posit64
+  defn sub [x : Posit64  y : Posit64] <Posit64>
+    p64- x y
