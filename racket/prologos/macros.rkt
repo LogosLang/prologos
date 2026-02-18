@@ -100,9 +100,12 @@
          spec-entry-docstring
          spec-entry-multi?
          spec-entry-srcloc
+         spec-entry-where-constraints
          register-spec!
          lookup-spec
-         process-spec)
+         process-spec
+         extract-where-clause
+         maybe-inject-where)
 
 ;; ================================================================
 ;; LAYER 1: PRE-PARSE MACRO SYSTEM
@@ -134,7 +137,10 @@
 ;; docstring: (or/c string? #f)
 ;; multi?: #t if declared with | branches
 ;; srcloc: source location of the spec form
-(struct spec-entry (type-datums docstring multi? srcloc) #:transparent)
+;; where-constraints: (listof (listof symbol)) — trait constraints from `where` clause.
+;;   e.g., ((Eq A) (Ord A)) for `where (Eq A) (Ord A)`.
+;;   '() if no where clause. Constraints are prepended to type-datums as leading params.
+(struct spec-entry (type-datums docstring multi? srcloc where-constraints) #:transparent)
 
 ;; Spec store: symbol → spec-entry
 (define current-spec-store (make-parameter (hasheq)))
@@ -739,9 +745,16 @@
                  (define maybe-injected
                    (let ([d (syntax->datum new-stx)])
                      (if (eq? base 'defn) (maybe-inject-spec d) d)))
-                 (define expanded (preparse-expand-form maybe-injected))
-                 (if (equal? expanded maybe-injected)
-                     (cons (datum->syntax #f maybe-injected stx) acc)
+                 ;; Inject where-clause constraints (defn only)
+                 (define maybe-where-injected
+                   (if (and (pair? maybe-injected)
+                            (eq? (car maybe-injected) 'defn)
+                            (memq 'where maybe-injected))
+                       (maybe-inject-where maybe-injected)
+                       maybe-injected))
+                 (define expanded (preparse-expand-form maybe-where-injected))
+                 (if (equal? expanded maybe-where-injected)
+                     (cons (datum->syntax #f maybe-where-injected stx) acc)
                      (cons (datum->syntax #f expanded stx) acc))]))]
 
         ;; ---- Public defmacro — register, consume, AND auto-export ----
@@ -813,11 +826,18 @@
              [(eq? (car pre-datum) 'defn) (maybe-inject-spec pre-datum)]
              [(eq? (car pre-datum) 'def)  (maybe-inject-spec-def pre-datum)]
              [else pre-datum]))
-         (define expanded (preparse-expand-form maybe-injected))
-         (if (equal? expanded maybe-injected)
-             (if (equal? maybe-injected datum)
+         ;; Step 3: inject where-clause constraints (defn only)
+         (define maybe-where-injected
+           (if (and (pair? maybe-injected)
+                    (eq? (car maybe-injected) 'defn)
+                    (memq 'where maybe-injected))
+               (maybe-inject-where maybe-injected)
+               maybe-injected))
+         (define expanded (preparse-expand-form maybe-where-injected))
+         (if (equal? expanded maybe-where-injected)
+             (if (equal? maybe-where-injected datum)
                  (cons stx acc)
-                 (cons (datum->syntax #f maybe-injected stx) acc))
+                 (cons (datum->syntax #f maybe-where-injected stx) acc))
              (cons (datum->syntax #f expanded stx) acc))]
         ;; Regular form — expand
         [else
@@ -883,6 +903,37 @@
      (error 'deftype "deftype: expected name or (name params...) pattern")]))
 
 ;; ========================================
+;; extract-where-clause: split tokens on 'where keyword
+;; ========================================
+;; Returns (values type-tokens where-constraints)
+;; where-constraints: list of parenthesized constraint forms, e.g., ((Eq A) (Ord A))
+;; type-tokens: everything before 'where
+;; If no 'where found, returns the original tokens and '().
+;;
+;; Handles:
+;;   spec eq-neq A A -> Bool where (Eq A)
+;;   spec sort List A -> List A where (Ord A) (Eq A)
+;;   spec foo Nat -> Nat                                  ← no where
+(define (extract-where-clause tokens)
+  (define idx (index-where tokens (lambda (t) (eq? t 'where))))
+  (if idx
+      (let ([type-part (take tokens idx)]
+            [where-part (drop tokens (add1 idx))])
+        ;; where-part should be a sequence of parenthesized constraint forms
+        ;; Each constraint is a list like (Eq A) or (Ord A B)
+        (define constraints
+          (filter list? where-part))
+        (when (null? constraints)
+          (error 'where "where clause has no constraints"))
+        ;; Check for non-list tokens after where (error)
+        (define non-list-tokens (filter (lambda (t) (not (list? t))) where-part))
+        (when (not (null? non-list-tokens))
+          (error 'where "unexpected tokens after where: ~a (constraints must be parenthesized)"
+                 non-list-tokens))
+        (values type-part constraints))
+      (values tokens '())))
+
+;; ========================================
 ;; process-spec: register a type specification
 ;; ========================================
 ;; Syntax variants:
@@ -890,6 +941,7 @@
 ;;   (spec name "docstring" type-atoms...)          — with docstring
 ;;   (spec name ($pipe type-atoms...) ($pipe ...))  — multi-arity
 ;;   (spec name "docstring" ($pipe ...) ($pipe ...)) — multi with docstring
+;;   (spec name type-atoms... where (Constraint1) (Constraint2))  — with where clause
 (define (process-spec datum)
   (unless (and (list? datum) (>= (length datum) 3))
     (error 'spec "spec requires: (spec name type-signature)"))
@@ -904,19 +956,27 @@
         (values #f rest)))
   (when (null? body-tokens)
     (error 'spec "spec ~a: missing type signature" name))
-  ;; Check for multi-arity: body-tokens contain $pipe forms
+  ;; Extract where clause (if present)
+  (define-values (type-tokens where-constraints) (extract-where-clause body-tokens))
+  ;; Prepend where-constraints as leading parameter types
+  ;; (Eq A) becomes a leading param type [Eq A], just like existing explicit dict style
+  (define effective-tokens
+    (if (null? where-constraints)
+        type-tokens
+        (append where-constraints (list '->) type-tokens)))
+  ;; Check for multi-arity: effective-tokens contain $pipe forms
   (define has-pipes?
     (ormap (lambda (t) (or (eq? t '$pipe)
                            (and (pair? t) (eq? (car t) '$pipe))))
-           body-tokens))
+           effective-tokens))
   (cond
     [has-pipes?
      ;; Split on $pipe to get branches
-     (define branches (split-on-pipe body-tokens))
-     (register-spec! name (spec-entry branches docstring #t srcloc-unknown))]
+     (define branches (split-on-pipe effective-tokens))
+     (register-spec! name (spec-entry branches docstring #t srcloc-unknown where-constraints))]
     [else
-     ;; Single-arity: the entire body-tokens is the type datum
-     (register-spec! name (spec-entry (list body-tokens) docstring #f srcloc-unknown))]))
+     ;; Single-arity: the entire effective-tokens is the type datum
+     (register-spec! name (spec-entry (list effective-tokens) docstring #f srcloc-unknown where-constraints))]))
 
 ;; Split a token list on '$pipe boundaries.
 ;; Handles two forms:
@@ -1174,6 +1234,92 @@
         (error 'spec "def ~a has both a spec and inline type annotation" name)]
        [else
         (inject-spec-into-def datum (car (spec-entry-type-datums spec)))])]))
+
+;; ========================================
+;; maybe-inject-where: extract where-clause from defn and desugar
+;; ========================================
+;; Detects `where` keyword in a defn datum and rewrites by prepending
+;; trait constraint parameters to the parameter list.
+;;
+;; Input:  (defn sum [xs ($angle-type List A)] ($angle-type A) where (Add A) body)
+;; Output: (defn sum [$Add-A ($angle-type (Add A))] [xs ($angle-type List A)] ($angle-type A) body)
+;;
+;; The prepended parameters become m0 (implicit) Pi binders after auto-implicit
+;; inference adds the type variable binders. This means the existing
+;; implicit-holes-needed machinery will insert fresh metas for them at call sites.
+(define (maybe-inject-where datum)
+  (unless (and (list? datum) (>= (length datum) 3) (eq? (car datum) 'defn))
+    (error 'where "maybe-inject-where called on non-defn: ~a" datum))
+  (define name (cadr datum))
+  (define rest (cddr datum))  ;; everything after name
+  ;; Scan for 'where in the flat datum list
+  (define where-idx (index-where rest (lambda (t) (eq? t 'where))))
+  (cond
+    [(not where-idx) datum]  ;; no where clause — return unchanged
+    [else
+     (define before-where (take rest where-idx))
+     (define after-where (drop rest (add1 where-idx)))
+     ;; Extract parenthesized constraint forms from after-where
+     ;; Constraints are leading parenthesized lists; the rest is body
+     (define-values (constraints body-forms)
+       (let loop ([remaining after-where] [cs '()])
+         (cond
+           [(null? remaining) (values (reverse cs) '())]
+           [(and (list? (car remaining))
+                 ;; A constraint is a list like (Eq A) or (Add A)
+                 ;; NOT a $angle-type, NOT a defn, NOT a match arm
+                 (not (null? (car remaining)))
+                 (symbol? (caar remaining))
+                 ;; Must be a known trait (validate)
+                 (lookup-trait (caar remaining)))
+            (loop (cdr remaining) (cons (car remaining) cs))]
+           [else (values (reverse cs) remaining)])))
+     (when (null? constraints)
+       (error 'where "defn ~a: where clause has no valid trait constraints" name))
+     ;; Generate synthetic dict parameter names and type annotations
+     ;; Each (TraitName TypeVars...) → [$TraitName-TypeVar1-... ($angle-type (TraitName TypeVars...))]
+     (define dict-params
+       (for/list ([c (in-list constraints)])
+         (define param-name
+           (string->symbol
+            (string-append "$"
+                           (string-join (map symbol->string c) "-"))))
+         ;; Type annotation: ($angle-type (TraitName TypeVars...))
+         (list param-name `($angle-type ,c))))
+     ;; Reconstruct: (defn name dict-param1 dict-param2 ... before-where... body-forms...)
+     ;; The dict params are interleaved as [name ($angle-type type)] pairs in the param list
+     ;; We need to splice them before the existing params
+     ;;
+     ;; before-where might be: [xs ($angle-type List A)] ($angle-type A)
+     ;; or: [xs <List A>] <A>
+     ;; The existing param list is the first bracket in before-where
+     ;; We prepend our dict params to that bracket
+     (define (find-param-bracket items)
+       ;; Find the first element that is a list with square-bracket paren-shape,
+       ;; or just the first list that looks like a parameter list
+       (let loop ([items items] [idx 0])
+         (cond
+           [(null? items) #f]
+           [(and (list? (car items))
+                 (not (null? (car items)))
+                 ;; A param bracket contains symbol names (possibly with type annotations)
+                 (symbol? (caar items)))
+            idx]
+           [else (loop (cdr items) (add1 idx))])))
+     (define bracket-idx (find-param-bracket before-where))
+     (cond
+       [bracket-idx
+        ;; Splice dict params into the parameter bracket
+        (define old-bracket (list-ref before-where bracket-idx))
+        (define dict-param-items
+          (apply append dict-params))  ;; flatten: ($Add-A ($angle-type (Add A)) $Ord-B ...)
+        (define new-bracket (append dict-param-items old-bracket))
+        (define new-before (list-set before-where bracket-idx new-bracket))
+        `(defn ,name ,@new-before ,@body-forms)]
+       [else
+        ;; No existing param bracket found — create one with just the dict params
+        (define dict-param-items (apply append dict-params))
+        `(defn ,name ,dict-param-items ,@before-where ,@body-forms)])]))
 
 ;; Expand def := assignment syntax into standard def form.
 ;; (def name := value) → (def name value)

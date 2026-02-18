@@ -41,7 +41,7 @@
     PVec pvec-empty pvec-push pvec-nth pvec-update pvec-length pvec-pop pvec-concat pvec-slice
     def defn check eval infer expand parse elaborate match
     ;; Pre-parse macros — should be expanded before reaching parser
-    defmacro let do if deftype data spec trait impl
+    defmacro let do if deftype data spec trait impl where
     ;; Private-suffix forms — consumed in preparse, rewritten to base form
     defn- def- data- deftype- defmacro- spec- trait- impl-
     ;; Pre-parse namespace directives — consumed before reaching parser
