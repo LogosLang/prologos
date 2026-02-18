@@ -1148,11 +1148,17 @@
             (checkQ ctx e r)])))]
 
     ;; ---- Conversion fallback ----
+    ;; Phase 3e: added cumulativity + within-family subtyping (consistent with check)
     [(_ _)
      (let ([r (inferQ ctx e)])
        (match r
          [(tu t1 u)
-          (if (and (not (expr-error? t1)) (unify-ok? (unify ctx t t1)))
+          (if (and (not (expr-error? t1))
+                   (or (unify-ok? (unify ctx t t1))
+                       (match* ((whnf t) (whnf t1))
+                         [((expr-Type l1) (expr-Type l2))
+                          (level<=? l2 l1)]
+                         [(t-w t1-w) (subtype? t1-w t-w)])))
               (bu #t u)
               (bu #f (zero-usage n)))]
          [_ (bu #f (zero-usage n))]))]))

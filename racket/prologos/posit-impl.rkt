@@ -67,7 +67,9 @@
  quire8-fma quire8-to
  quire16-fma quire16-to
  quire32-fma quire32-to
- quire64-fma quire64-to)
+ quire64-fma quire64-to
+ ;; ---- Widening (Phase 3e) ----
+ posit-widen)
 
 ;; ========================================
 ;; Global parameters (2022 Standard)
@@ -270,6 +272,16 @@
             [frac-plus-one (/ remainder-val (expt 2 exp-val))]
             [frac-val (- frac-plus-one 1)])
        (encode-bits n sign regime exp-val frac-val))]))
+
+;; ========================================
+;; Posit widening (Phase 3e)
+;; ========================================
+;; Convert a posit value from a narrower width to a wider width.
+;; Uses decode→encode: lossless in the widening direction (wider format
+;; has strictly more precision/range). Handles NaR correctly (posit-decode
+;; returns 'nar for NaR, and posit-encode maps 'nar back to NaR).
+(define (posit-widen from-width to-width bits)
+  (posit-encode to-width (posit-decode from-width bits)))
 
 ;; ========================================
 ;; Width-parameterized arithmetic

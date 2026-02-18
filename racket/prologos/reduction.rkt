@@ -37,41 +37,99 @@
     [(expr-suc e1) (let ([v (nat-value e1)]) (and v (+ v 1)))]
     [_ #f]))
 
-;; Reduce a binary Int operation: try reducing left, then right.
+;; ========================================
+;; Phase 3e: Subtype coercion helpers for stuck-term reduction
+;; ========================================
+;; When an operation (e.g., int-add) has operands in WHNF but of a narrower
+;; type (e.g., expr-suc/expr-zero instead of expr-int), these helpers coerce
+;; to the target type. Returns the coerced value, or #f if not coercible.
+
+;; Try to coerce a WHNF value to Int. Nat → Int.
+(define (try-coerce-to-int e)
+  (let ([k (nat-value e)])
+    (and k (expr-int k))))
+
+;; Try to coerce a WHNF value to Rat. Nat → Rat, Int → Rat.
+(define (try-coerce-to-rat e)
+  (cond
+    [(expr-int? e) (expr-rat (expr-int-val e))]
+    [else (let ([k (nat-value e)])
+            (and k (expr-rat k)))]))
+
+;; Try to coerce a WHNF posit value to a wider width. Returns wider posit or #f.
+(define (try-coerce-to-posit target-width e)
+  (cond
+    [(and (expr-posit8? e) (> target-width 8))
+     (case target-width
+       [(16) (expr-posit16 (posit-widen 8 16 (expr-posit8-val e)))]
+       [(32) (expr-posit32 (posit-widen 8 32 (expr-posit8-val e)))]
+       [(64) (expr-posit64 (posit-widen 8 64 (expr-posit8-val e)))]
+       [else #f])]
+    [(and (expr-posit16? e) (> target-width 16))
+     (case target-width
+       [(32) (expr-posit32 (posit-widen 16 32 (expr-posit16-val e)))]
+       [(64) (expr-posit64 (posit-widen 16 64 (expr-posit16-val e)))]
+       [else #f])]
+    [(and (expr-posit32? e) (> target-width 32))
+     (case target-width
+       [(64) (expr-posit64 (posit-widen 32 64 (expr-posit32-val e)))]
+       [else #f])]
+    [else #f]))
+
+;; ========================================
+;; Stuck-term reduction helpers
+;; ========================================
+;; Phase 3e: Each helper now attempts subtype coercion before declaring stuck.
+;; If coercion changes an operand, rebuild the expression and retry whnf.
+
+;; Reduce a binary Int operation: Nat operands coerce to Int.
 (define (reduce-int-binary ctor a b)
-  (let ([a* (whnf a)])
-    (if (equal? a* a)
-        (let ([b* (whnf b)])
-          (if (equal? b* b)
-              (ctor a b)   ; stuck — both operands in WHNF
-              (whnf (ctor a b*))))
-        (whnf (ctor a* b)))))
+  (let* ([a* (whnf a)]
+         [b* (whnf b)])
+    (let ([ca (or (try-coerce-to-int a*) a*)]
+          [cb (or (try-coerce-to-int b*) b*)])
+      (cond
+        ;; Coercion changed something → retry with coerced operands
+        [(or (not (eq? ca a*)) (not (eq? cb b*)))
+         (whnf (ctor ca cb))]
+        ;; Standard: one operand reduced → retry
+        [(not (equal? a* a)) (whnf (ctor a* b))]
+        [(not (equal? b* b)) (whnf (ctor a b*))]
+        ;; Stuck
+        [else (ctor a b)]))))
 
-;; Reduce a unary Int operation: try reducing the operand.
+;; Reduce a unary Int operation: Nat operand coerces to Int.
 (define (reduce-int-unary ctor a)
-  (let ([a* (whnf a)])
-    (if (equal? a* a)
-        (ctor a)   ; stuck
-        (whnf (ctor a*)))))
+  (let* ([a* (whnf a)]
+         [ca (or (try-coerce-to-int a*) a*)])
+    (cond
+      [(not (eq? ca a*)) (whnf (ctor ca))]
+      [(not (equal? a* a)) (whnf (ctor a*))]
+      [else (ctor a)])))
 
-;; Reduce a binary Rat operation: try reducing left, then right.
+;; Reduce a binary Rat operation: Nat/Int operands coerce to Rat.
 (define (reduce-rat-binary ctor a b)
-  (let ([a* (whnf a)])
-    (if (equal? a* a)
-        (let ([b* (whnf b)])
-          (if (equal? b* b)
-              (ctor a b)   ; stuck — both operands in WHNF
-              (whnf (ctor a b*))))
-        (whnf (ctor a* b)))))
+  (let* ([a* (whnf a)]
+         [b* (whnf b)])
+    (let ([ca (or (try-coerce-to-rat a*) a*)]
+          [cb (or (try-coerce-to-rat b*) b*)])
+      (cond
+        [(or (not (eq? ca a*)) (not (eq? cb b*)))
+         (whnf (ctor ca cb))]
+        [(not (equal? a* a)) (whnf (ctor a* b))]
+        [(not (equal? b* b)) (whnf (ctor a b*))]
+        [else (ctor a b)]))))
 
-;; Reduce a unary Rat operation: try reducing the operand.
+;; Reduce a unary Rat operation: Nat/Int operand coerces to Rat.
 (define (reduce-rat-unary ctor a)
-  (let ([a* (whnf a)])
-    (if (equal? a* a)
-        (ctor a)   ; stuck
-        (whnf (ctor a*)))))
+  (let* ([a* (whnf a)]
+         [ca (or (try-coerce-to-rat a*) a*)])
+    (cond
+      [(not (eq? ca a*)) (whnf (ctor ca))]
+      [(not (equal? a* a)) (whnf (ctor a*))]
+      [else (ctor a)])))
 
-;; Reduce a binary Posit8 operation: try reducing left, then right.
+;; Reduce a binary Posit8 operation: no narrower type → no coercion.
 (define (reduce-p8-binary ctor a b)
   (let ([a* (whnf a)])
     (if (equal? a* a)
@@ -81,63 +139,78 @@
               (whnf (ctor a b*))))
         (whnf (ctor a* b)))))
 
-;; Reduce a unary Posit8 operation: try reducing the operand.
+;; Reduce a unary Posit8 operation: no narrower type → no coercion.
 (define (reduce-p8-unary ctor a)
   (let ([a* (whnf a)])
     (if (equal? a* a)
         (ctor a)   ; stuck
         (whnf (ctor a*)))))
 
-;; Reduce a binary Posit16 operation: try reducing left, then right.
+;; Reduce a binary Posit16 operation: Posit8 operands coerce to Posit16.
 (define (reduce-p16-binary ctor a b)
-  (let ([a* (whnf a)])
-    (if (equal? a* a)
-        (let ([b* (whnf b)])
-          (if (equal? b* b)
-              (ctor a b)   ; stuck — both operands in WHNF
-              (whnf (ctor a b*))))
-        (whnf (ctor a* b)))))
+  (let* ([a* (whnf a)]
+         [b* (whnf b)])
+    (let ([ca (or (try-coerce-to-posit 16 a*) a*)]
+          [cb (or (try-coerce-to-posit 16 b*) b*)])
+      (cond
+        [(or (not (eq? ca a*)) (not (eq? cb b*)))
+         (whnf (ctor ca cb))]
+        [(not (equal? a* a)) (whnf (ctor a* b))]
+        [(not (equal? b* b)) (whnf (ctor a b*))]
+        [else (ctor a b)]))))
 
-;; Reduce a unary Posit16 operation: try reducing the operand.
+;; Reduce a unary Posit16 operation: Posit8 operand coerces to Posit16.
 (define (reduce-p16-unary ctor a)
-  (let ([a* (whnf a)])
-    (if (equal? a* a)
-        (ctor a)   ; stuck
-        (whnf (ctor a*)))))
+  (let* ([a* (whnf a)]
+         [ca (or (try-coerce-to-posit 16 a*) a*)])
+    (cond
+      [(not (eq? ca a*)) (whnf (ctor ca))]
+      [(not (equal? a* a)) (whnf (ctor a*))]
+      [else (ctor a)])))
 
-;; Reduce a binary Posit32 operation: try reducing left, then right.
+;; Reduce a binary Posit32 operation: Posit8/16 operands coerce to Posit32.
 (define (reduce-p32-binary ctor a b)
-  (let ([a* (whnf a)])
-    (if (equal? a* a)
-        (let ([b* (whnf b)])
-          (if (equal? b* b)
-              (ctor a b)   ; stuck — both operands in WHNF
-              (whnf (ctor a b*))))
-        (whnf (ctor a* b)))))
+  (let* ([a* (whnf a)]
+         [b* (whnf b)])
+    (let ([ca (or (try-coerce-to-posit 32 a*) a*)]
+          [cb (or (try-coerce-to-posit 32 b*) b*)])
+      (cond
+        [(or (not (eq? ca a*)) (not (eq? cb b*)))
+         (whnf (ctor ca cb))]
+        [(not (equal? a* a)) (whnf (ctor a* b))]
+        [(not (equal? b* b)) (whnf (ctor a b*))]
+        [else (ctor a b)]))))
 
-;; Reduce a unary Posit32 operation: try reducing the operand.
+;; Reduce a unary Posit32 operation: Posit8/16 operand coerces to Posit32.
 (define (reduce-p32-unary ctor a)
-  (let ([a* (whnf a)])
-    (if (equal? a* a)
-        (ctor a)   ; stuck
-        (whnf (ctor a*)))))
+  (let* ([a* (whnf a)]
+         [ca (or (try-coerce-to-posit 32 a*) a*)])
+    (cond
+      [(not (eq? ca a*)) (whnf (ctor ca))]
+      [(not (equal? a* a)) (whnf (ctor a*))]
+      [else (ctor a)])))
 
-;; Reduce a binary Posit64 operation: try reducing left, then right.
+;; Reduce a binary Posit64 operation: Posit8/16/32 operands coerce to Posit64.
 (define (reduce-p64-binary ctor a b)
-  (let ([a* (whnf a)])
-    (if (equal? a* a)
-        (let ([b* (whnf b)])
-          (if (equal? b* b)
-              (ctor a b)   ; stuck — both operands in WHNF
-              (whnf (ctor a b*))))
-        (whnf (ctor a* b)))))
+  (let* ([a* (whnf a)]
+         [b* (whnf b)])
+    (let ([ca (or (try-coerce-to-posit 64 a*) a*)]
+          [cb (or (try-coerce-to-posit 64 b*) b*)])
+      (cond
+        [(or (not (eq? ca a*)) (not (eq? cb b*)))
+         (whnf (ctor ca cb))]
+        [(not (equal? a* a)) (whnf (ctor a* b))]
+        [(not (equal? b* b)) (whnf (ctor a b*))]
+        [else (ctor a b)]))))
 
-;; Reduce a unary Posit64 operation: try reducing the operand.
+;; Reduce a unary Posit64 operation: Posit8/16/32 operand coerces to Posit64.
 (define (reduce-p64-unary ctor a)
-  (let ([a* (whnf a)])
-    (if (equal? a* a)
-        (ctor a)   ; stuck
-        (whnf (ctor a*)))))
+  (let* ([a* (whnf a)]
+         [ca (or (try-coerce-to-posit 64 a*) a*)])
+    (cond
+      [(not (eq? ca a*)) (whnf (ctor ca))]
+      [(not (equal? a* a)) (whnf (ctor a*))]
+      [else (ctor a)])))
 
 ;; ========================================
 ;; Structural pattern matching for reduce
@@ -654,33 +727,40 @@
                    (if (equal? b* b) e (whnf (expr-quire8-fma q a b*))))
                  (whnf (expr-quire8-fma q a* b))))
            (whnf (expr-quire8-fma q* a b))))]
+    ;; Phase 3e: quire16/32/64 FMA — coerce posit operands a, b (not quire accumulator q)
     [(expr-quire16-fma q a b)
-     (let ([q* (whnf q)])
-       (if (equal? q* q)
-           (let ([a* (whnf a)])
-             (if (equal? a* a)
-                 (let ([b* (whnf b)])
-                   (if (equal? b* b) e (whnf (expr-quire16-fma q a b*))))
-                 (whnf (expr-quire16-fma q a* b))))
-           (whnf (expr-quire16-fma q* a b))))]
+     (let* ([q* (whnf q)] [a* (whnf a)] [b* (whnf b)]
+            [ca (or (try-coerce-to-posit 16 a*) a*)]
+            [cb (or (try-coerce-to-posit 16 b*) b*)])
+       (cond
+         [(or (not (eq? ca a*)) (not (eq? cb b*)))
+          (whnf (expr-quire16-fma q* ca cb))]
+         [(not (equal? q* q)) (whnf (expr-quire16-fma q* a b))]
+         [(not (equal? a* a)) (whnf (expr-quire16-fma q a* b))]
+         [(not (equal? b* b)) (whnf (expr-quire16-fma q a b*))]
+         [else e]))]
     [(expr-quire32-fma q a b)
-     (let ([q* (whnf q)])
-       (if (equal? q* q)
-           (let ([a* (whnf a)])
-             (if (equal? a* a)
-                 (let ([b* (whnf b)])
-                   (if (equal? b* b) e (whnf (expr-quire32-fma q a b*))))
-                 (whnf (expr-quire32-fma q a* b))))
-           (whnf (expr-quire32-fma q* a b))))]
+     (let* ([q* (whnf q)] [a* (whnf a)] [b* (whnf b)]
+            [ca (or (try-coerce-to-posit 32 a*) a*)]
+            [cb (or (try-coerce-to-posit 32 b*) b*)])
+       (cond
+         [(or (not (eq? ca a*)) (not (eq? cb b*)))
+          (whnf (expr-quire32-fma q* ca cb))]
+         [(not (equal? q* q)) (whnf (expr-quire32-fma q* a b))]
+         [(not (equal? a* a)) (whnf (expr-quire32-fma q a* b))]
+         [(not (equal? b* b)) (whnf (expr-quire32-fma q a b*))]
+         [else e]))]
     [(expr-quire64-fma q a b)
-     (let ([q* (whnf q)])
-       (if (equal? q* q)
-           (let ([a* (whnf a)])
-             (if (equal? a* a)
-                 (let ([b* (whnf b)])
-                   (if (equal? b* b) e (whnf (expr-quire64-fma q a b*))))
-                 (whnf (expr-quire64-fma q a* b))))
-           (whnf (expr-quire64-fma q* a b))))]
+     (let* ([q* (whnf q)] [a* (whnf a)] [b* (whnf b)]
+            [ca (or (try-coerce-to-posit 64 a*) a*)]
+            [cb (or (try-coerce-to-posit 64 b*) b*)])
+       (cond
+         [(or (not (eq? ca a*)) (not (eq? cb b*)))
+          (whnf (expr-quire64-fma q* ca cb))]
+         [(not (equal? q* q)) (whnf (expr-quire64-fma q* a b))]
+         [(not (equal? a* a)) (whnf (expr-quire64-fma q a* b))]
+         [(not (equal? b* b)) (whnf (expr-quire64-fma q a b*))]
+         [else e]))]
     ;; to: try reducing q
     [(expr-quire8-to q)
      (let ([q* (whnf q)]) (if (equal? q* q) e (whnf (expr-quire8-to q*))))]

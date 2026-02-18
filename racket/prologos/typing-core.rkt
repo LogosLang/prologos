@@ -30,7 +30,8 @@
 
 (provide infer check is-type infer-level
          (struct-out no-level) (struct-out just-level)
-         mark-structural-reduce! structural-reduce? structural-reduce-set)
+         mark-structural-reduce! structural-reduce? structural-reduce-set
+         subtype?)
 
 ;; ========================================
 ;; Structural reduce tracking
@@ -51,6 +52,29 @@
 ;; ========================================
 (struct no-level () #:transparent)
 (struct just-level (level) #:transparent)
+
+;; ========================================
+;; Within-family subtype predicate (Phase 3e)
+;; ========================================
+;; Automatic widening within two type families:
+;;   Exact:  Nat <: Int <: Rat
+;;   Posit:  Posit8 <: Posit16 <: Posit32 <: Posit64
+;; All 9 edges enumerated directly (small, fixed relation — no transitive closure needed).
+;; Arguments: (subtype? inferred expected) — is inferred a subtype of expected?
+(define (subtype? t1 t2)
+  (match* (t1 t2)
+    ;; Exact: Nat <: Int <: Rat
+    [((expr-Nat) (expr-Int)) #t]
+    [((expr-Nat) (expr-Rat)) #t]
+    [((expr-Int) (expr-Rat)) #t]
+    ;; Posit: 8 <: 16 <: 32 <: 64
+    [((expr-Posit8)  (expr-Posit16)) #t]
+    [((expr-Posit8)  (expr-Posit32)) #t]
+    [((expr-Posit8)  (expr-Posit64)) #t]
+    [((expr-Posit16) (expr-Posit32)) #t]
+    [((expr-Posit16) (expr-Posit64)) #t]
+    [((expr-Posit32) (expr-Posit64)) #t]
+    [(_ _) #f]))
 
 ;; ========================================
 ;; Forward declarations for mutual recursion
@@ -944,11 +968,12 @@
      (let ([t1 (infer ctx e)])
        (and (not (expr-error? t1))
             (or (unify-ok? (unify ctx t t1))
-                ;; Cumulativity: Type(m) ≤ Type(n) when m ≤ n
                 (match* ((whnf t) (whnf t1))
+                  ;; Cumulativity: Type(m) ≤ Type(n) when m ≤ n
                   [((expr-Type l1) (expr-Type l2))
                    (level<=? l2 l1)]
-                  [(_ _) #f]))))]))
+                  ;; Phase 3e: within-family subtyping
+                  [(t-w t1-w) (subtype? t1-w t-w)]))))]))
 
 ;; ========================================
 ;; check-reduce: type-check a reduce (match) expression
