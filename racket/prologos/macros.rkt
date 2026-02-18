@@ -1126,7 +1126,29 @@
   (define name (cadr datum))
   (define rest (cddr datum))  ;; ([x y] body ...)
   (define param-bracket (car rest))
-  (define body-forms (cdr rest))  ;; could be multiple body forms
+  ;; Strip any existing `where` clause from body-forms — inject-spec-into-defn
+  ;; re-adds constraints from the spec, so a user-supplied `where` in the defn
+  ;; would cause duplication if not removed here.
+  (define raw-body-forms (cdr rest))
+  (define body-forms
+    (let ([widx (index-where raw-body-forms (lambda (t) (eq? t 'where)))])
+      (if (not widx)
+          raw-body-forms
+          ;; Skip 'where + any parenthesized constraint forms that follow it
+          (let ([before (take raw-body-forms widx)]
+                [after (drop raw-body-forms (add1 widx))])
+            ;; Skip leading parenthesized forms that are trait constraints
+            (define remaining
+              (let loop ([items after])
+                (cond
+                  [(null? items) '()]
+                  [(and (list? (car items))
+                        (not (null? (car items)))
+                        (symbol? (caar items))
+                        (lookup-trait (caar items)))
+                   (loop (cdr items))]
+                  [else items])))
+            (append before remaining)))))
   (define param-names
     (if (list? param-bracket) param-bracket
         (error 'spec "Expected parameter list, got ~a" param-bracket)))

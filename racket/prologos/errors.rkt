@@ -28,6 +28,7 @@
  (struct-out conflicting-constraints-error)
  (struct-out unsolved-implicit-error)
  (struct-out no-instance-error)
+ (struct-out ambiguous-method-error)
  ;; Predicates
  prologos-error?
  ;; Formatting
@@ -84,6 +85,11 @@
 ;; trait-name: symbol (e.g., 'Eq)
 ;; type-args-str: string representation of the type arguments (e.g., "Foo")
 (struct no-instance-error prologos-error (trait-name type-args-str) #:transparent)
+
+;; Phase D: Ambiguous trait method name
+;; method-name: symbol — the ambiguous method name (e.g., 'eq?)
+;; trait-names: (listof symbol) — all traits that define this method
+(struct ambiguous-method-error prologos-error (method-name trait-names) #:transparent)
 
 ;; ========================================
 ;; Error Formatting
@@ -203,6 +209,18 @@
             (format "  ~a" msg)
             (format "  = help: add an impl for (~a ~a) or pass the dictionary explicitly"
                     trait-name type-args-str))
+      "\n")]
+    ;; Phase D: E1005 — Ambiguous trait method name
+    [(ambiguous-method-error _ _ method-name trait-names)
+     (string-join
+      (list (format "error[E1005]: ambiguous trait method '~a'" method-name)
+            (format "  --> ~a" loc-str)
+            (format "  ~a" msg)
+            (format "  = method '~a' is defined by multiple traits in scope: ~a"
+                    method-name
+                    (string-join (map symbol->string trait-names) ", "))
+            (format "  = help: use the qualified accessor name to disambiguate (e.g., ~a-~a)"
+                    (car trait-names) method-name))
       "\n")]
     [_ ;; base prologos-error
      (string-join

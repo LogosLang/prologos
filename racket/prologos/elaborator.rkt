@@ -26,7 +26,20 @@
          "substitution.rkt")     ;; Phase C: for subst (Pi codomain substitution)
 
 (provide elaborate
-         elaborate-top-level)
+         elaborate-top-level
+         ;; Phase D: method name resolution in bodies
+         where-method-entry
+         where-method-entry?
+         where-method-entry-method-name
+         where-method-entry-accessor-name
+         where-method-entry-trait-name
+         where-method-entry-type-var-names
+         where-method-entry-dict-param-name
+         current-where-context
+         is-dict-param-name?
+         parse-dict-param-name
+         dict-param->where-entries
+         resolve-method-from-where)
 
 ;; ========================================
 ;; Elaboration environment
@@ -51,6 +64,105 @@
 ;; The env stores (name . depth), most recent first — same order as pp-expr's names.
 (define (env->name-stack env)
   (map (lambda (pair) (symbol->string (car pair))) env))
+
+;; ========================================
+;; Phase D: Method name resolution in bodies
+;; ========================================
+;; When a function has `where (Eq A)`, the elaborator detects the dict param
+;; `$Eq-A` and populates a context so bare method names like `eq?` resolve
+;; to partially-applied accessor calls: (Eq-eq? A $Eq-A).
+
+(struct where-method-entry
+  (method-name      ;; symbol — bare method name, e.g., 'eq?
+   accessor-name    ;; symbol — full accessor name, e.g., 'Eq-eq?
+   trait-name       ;; symbol — the trait, e.g., 'Eq
+   type-var-names   ;; (listof symbol) — type params, e.g., '(A)
+   dict-param-name  ;; symbol — dict param name, e.g., '$Eq-A
+  ) #:transparent)
+
+;; Active where-constraint context for method name resolution.
+;; Populated when entering lambda bodies whose binders are dict params.
+(define current-where-context (make-parameter '()))
+
+;; Check if a symbol looks like a dict param name: starts with $
+(define (is-dict-param-name? name)
+  (let ([s (symbol->string name)])
+    (and (> (string-length s) 1)
+         (char=? (string-ref s 0) #\$))))
+
+;; Parse a dict param name into trait name + type var names.
+;; "$Eq-A" → (list 'Eq 'A)
+;; "$Convertible-A-B" → (list 'Convertible 'A 'B)
+;; Tries progressively longer hyphen-joined prefixes as the trait name.
+;; Returns (cons trait-name type-var-names) or #f.
+(define (parse-dict-param-name name)
+  (define parts (string-split (substring (symbol->string name) 1) "-"))
+  (let loop ([n 1])
+    (cond
+      [(> n (length parts)) #f]
+      [else
+       (define trait-sym (string->symbol (string-join (take parts n) "-")))
+       (if (lookup-trait trait-sym)
+           (let ([tvs (drop parts n)])
+             (if (null? tvs) #f
+                 (cons trait-sym (map string->symbol tvs))))
+           (loop (add1 n)))])))
+
+;; Build where-method-entry list from a dict param name. Returns list or #f.
+(define (dict-param->where-entries dict-param-name)
+  (define parsed (parse-dict-param-name dict-param-name))
+  (if (not parsed)
+      #f
+      (let ([trait-name (car parsed)]
+            [type-var-names (cdr parsed)])
+        (define tm (lookup-trait trait-name))
+        (if (not tm)
+            #f
+            (for/list ([method (in-list (trait-meta-methods tm))])
+              (where-method-entry
+                (trait-method-name method)
+                (string->symbol
+                 (string-append (symbol->string trait-name)
+                                "-"
+                                (symbol->string (trait-method-name method))))
+                trait-name type-var-names dict-param-name))))))
+
+;; Resolve a bare method name to a partially-applied accessor expression
+;; using the active where-context.
+;; Returns an expr, a prologos-error, or #f.
+(define (resolve-method-from-where name env depth)
+  (define ctx (current-where-context))
+  ;; Find all matching entries (for ambiguity detection)
+  (define matches
+    (filter (lambda (e) (eq? (where-method-entry-method-name e) name)) ctx))
+  (cond
+    [(null? matches) #f]
+    [(> (length matches) 1)
+     ;; Ambiguous: same method name in multiple traits
+     (ambiguous-method-error #f
+       (format "Ambiguous method '~a'" name)
+       name (map where-method-entry-trait-name matches))]
+    [else
+     (define entry (car matches))
+     (define type-var-names (where-method-entry-type-var-names entry))
+     (define dict-param-name (where-method-entry-dict-param-name entry))
+     (define accessor-name (where-method-entry-accessor-name entry))
+     ;; Look up de Bruijn indices for type vars and dict param
+     (define tv-indices
+       (for/list ([tv (in-list type-var-names)])
+         (env-lookup env tv depth)))
+     (define dict-idx (env-lookup env dict-param-name depth))
+     ;; All must be found in the environment
+     (if (and (andmap (lambda (x) x) tv-indices) dict-idx)
+         ;; Build: (app ... (app (fvar accessor) (bvar tv1)) ... (bvar dict))
+         (let* ([base (expr-fvar accessor-name)]
+                [with-types
+                 (foldl (lambda (idx acc) (expr-app acc (expr-bvar idx)))
+                        base tv-indices)]
+                [with-dict (expr-app with-types (expr-bvar dict-idx))])
+           with-dict)
+         ;; Type vars or dict not in scope — fall through
+         #f)]))
 
 ;; ========================================
 ;; Implicit argument helpers
@@ -333,6 +445,9 @@
             (prologos-error loc
               (format "Multi-body function '~a' must be applied; available arities: ~a"
                       name (string-join (map number->string (multi-defn-info-arities info)) ", "))))]
+      ;; Phase D: resolve bare trait method names from where-context
+      [(resolve-method-from-where name env depth)
+       => (lambda (resolved) resolved)]
       [else (unbound-variable-error loc "Unbound variable" name)])))
 
 ;; elaborate: surface-expr, env, depth -> (or/c expr? prologos-error?)
@@ -413,7 +528,15 @@
        (if (prologos-error? ty) ty
            (let* ([new-env (env-extend env name depth)]
                   [new-depth (+ depth 1)]
-                  [bod (elaborate body new-env new-depth)])
+                  ;; Phase D: detect dict param binders and populate where-context
+                  [body-ctx (if (is-dict-param-name? name)
+                                (let ([entries (dict-param->where-entries name)])
+                                  (if entries
+                                      (append (current-where-context) entries)
+                                      (current-where-context)))
+                                (current-where-context))]
+                  [bod (parameterize ([current-where-context body-ctx])
+                         (elaborate body new-env new-depth))])
              (if (prologos-error? bod) bod
                  (expr-lam mult ty bod)))))]
 
