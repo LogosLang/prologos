@@ -94,6 +94,17 @@
          param-impl-entry-where-constraints
          register-param-impl!
          lookup-param-impls
+         ;; Bundle registry
+         current-bundle-registry
+         bundle-entry
+         bundle-entry?
+         bundle-entry-name
+         bundle-entry-params
+         bundle-entry-constraints
+         register-bundle!
+         lookup-bundle
+         process-bundle
+         expand-bundle-constraints
          ;; Shared
          extract-pi-binders
          ;; Sibling let merging (for testing)
@@ -654,6 +665,7 @@
     [(spec-)    'spec]
     [(trait-)   'trait]
     [(impl-)    'impl]
+    [(bundle-)  'bundle]
     [else #f]))
 
 ;; Helper: extract the defined name(s) from a top-level form datum.
@@ -739,6 +751,9 @@
                    (for/list ([d (in-list defs)])
                      (datum->syntax #f (preparse-expand-form d) stx)))
                  (append (reverse new-stxs) acc)]
+                [(eq? base 'bundle)
+                 (process-bundle rewritten)
+                 acc]
                 ;; def- or defn- — rewrite head, preserving child syntax properties
                 [else
                  ;; Replace just the head symbol in the syntax list to preserve
@@ -823,6 +838,12 @@
            (for/list ([d (in-list defs)])
              (datum->syntax #f (preparse-expand-form d) stx)))
          (append (reverse new-stxs) acc)]
+        ;; ---- Public bundle — register, consume, AND auto-export name ----
+        [(and (pair? datum) (eq? head 'bundle))
+         (process-bundle datum)
+         (when (and (list? datum) (>= (length datum) 2) (symbol? (cadr datum)))
+           (auto-export-name! (cadr datum)))
+         acc]
         ;; ---- Public defn/def — auto-export the name ----
         [(and (pair? datum) (memq head '(defn def)))
          (auto-export-names! (extract-defined-name datum head))
@@ -968,7 +989,12 @@
   (when (null? body-tokens)
     (error 'spec "spec ~a: missing type signature" name))
   ;; Extract where clause (if present)
-  (define-values (type-tokens where-constraints) (extract-where-clause body-tokens))
+  (define-values (type-tokens raw-where-constraints) (extract-where-clause body-tokens))
+  ;; Expand bundle references in where constraints (e.g., (Comparable A) → (Eq A) (Ord A))
+  (define where-constraints
+    (if (null? raw-where-constraints)
+        '()
+        (expand-bundle-constraints raw-where-constraints)))
   ;; Prepend where-constraints as leading parameter types
   ;; (Eq A) becomes a leading param type [Eq A], just like existing explicit dict style
   (define effective-tokens
@@ -1145,7 +1171,8 @@
                   [(and (list? (car items))
                         (not (null? (car items)))
                         (symbol? (caar items))
-                        (lookup-trait (caar items)))
+                        (or (lookup-trait (caar items))
+                            (lookup-bundle (caar items))))
                    (loop (cdr items))]
                   [else items])))
             (append before remaining)))))
@@ -1325,21 +1352,24 @@
      (define after-where (drop rest (add1 where-idx)))
      ;; Extract parenthesized constraint forms from after-where
      ;; Constraints are leading parenthesized lists; the rest is body
-     (define-values (constraints body-forms)
+     (define-values (raw-constraints body-forms)
        (let loop ([remaining after-where] [cs '()])
          (cond
            [(null? remaining) (values (reverse cs) '())]
            [(and (list? (car remaining))
-                 ;; A constraint is a list like (Eq A) or (Add A)
+                 ;; A constraint is a list like (Eq A) or (Add A) or (Comparable A)
                  ;; NOT a $angle-type, NOT a defn, NOT a match arm
                  (not (null? (car remaining)))
                  (symbol? (caar remaining))
-                 ;; Must be a known trait (validate)
-                 (lookup-trait (caar remaining)))
+                 ;; Must be a known trait or bundle (validate)
+                 (or (lookup-trait (caar remaining))
+                     (lookup-bundle (caar remaining))))
             (loop (cdr remaining) (cons (car remaining) cs))]
            [else (values (reverse cs) remaining)])))
-     (when (null? constraints)
+     (when (null? raw-constraints)
        (error 'where "defn ~a: where clause has no valid trait constraints" name))
+     ;; Expand bundle references to flat trait constraints
+     (define constraints (expand-bundle-constraints raw-constraints))
      ;; Generate synthetic dict parameter names and type annotations.
      ;; Dict params are runtime-relevant (carry actual functions), so they use mw (not m0).
      ;; The implicit insertion mechanism is extended to also count these params
@@ -1864,6 +1894,185 @@
 
 (define (lookup-param-impls trait-name)
   (hash-ref (current-param-impl-registry) trait-name '()))
+
+;; ========================================
+;; Bundle registry (named constraint conjunctions)
+;; ========================================
+;; A bundle is a named conjunction of trait constraints, expanded at desugar time.
+;; `bundle Comparable := (Eq, Ord)` → `where (Comparable A)` expands to `where (Eq A) (Ord A)`.
+;; Zero runtime overhead — purely syntactic sugar.
+
+(struct bundle-entry (name params constraints) #:transparent)
+;; name: symbol — e.g., 'Comparable
+;; params: (listof symbol) — type var params, e.g., '(A)
+;; constraints: (listof (listof symbol)) — e.g., '((Eq A) (Ord A))
+
+(define current-bundle-registry (make-parameter (hasheq)))
+
+(define (register-bundle! name entry)
+  (current-bundle-registry (hash-set (current-bundle-registry) name entry)))
+
+(define (lookup-bundle name)
+  (hash-ref (current-bundle-registry) name #f))
+
+;; ========================================
+;; process-bundle: parse and register a bundle definition
+;; ========================================
+;; Syntax (after WS reader):
+;;   (bundle Name := (Eq Ord))                   — flat shorthand, 1-param traits
+;;   (bundle Name := ((Eq A) (Ord A)))           — bracketed sub-lists (from [Eq A] [Ord A])
+;;   (bundle Name (Eq A) (Ord A))                — positional form (no :=)
+;;
+;; WS reader: commas are whitespace, brackets [...] → parens (...).
+;; So `bundle Comparable := (Eq, Ord)` → datum `(bundle Comparable := (Eq Ord))`
+;;    `bundle Conv := ([From A B] [Into B A])` → datum `(bundle Conv := ((From A B) (Into B A)))`
+(define (process-bundle datum)
+  (unless (and (list? datum) (>= (length datum) 3) (eq? (car datum) 'bundle))
+    (error 'bundle "bundle requires: (bundle Name body)"))
+  (define name (cadr datum))
+  (unless (symbol? name)
+    (error 'bundle "bundle name must be a symbol, got ~a" name))
+  (define rest (cddr datum))
+  ;; Skip optional ':=' token
+  (define body-tokens
+    (if (and (pair? rest) (eq? (car rest) ':=))
+        (cdr rest)
+        rest))
+  (when (null? body-tokens)
+    (error 'bundle "bundle ~a: missing body" name))
+  ;; Parse the bundle body into constraints
+  (define-values (params constraints) (parse-bundle-body name body-tokens))
+  (register-bundle! name (bundle-entry name params constraints)))
+
+;; parse-bundle-body: extract type params and constraint list from bundle body
+;; Returns (values params constraints) where
+;;   params: (listof symbol) — inferred type var params
+;;   constraints: (listof (listof symbol)) — e.g., '((Eq A) (Ord A))
+;;
+;; Two body forms after WS reader:
+;; 1. Single parenthesized list — the bundle body:
+;;    (Eq Ord)         → all bare symbols → flat shorthand, each is 1-param trait
+;;    ((Eq A) (Ord A)) → has sub-lists → explicit constraints
+;; 2. Multiple top-level parenthesized forms — positional (no :=):
+;;    (Eq A) (Ord A)   → each is a constraint
+(define (parse-bundle-body name body-tokens)
+  (cond
+    ;; Case 1: Single parenthesized list — the bundle body
+    [(and (= (length body-tokens) 1) (list? (car body-tokens)))
+     (define body (car body-tokens))
+     (when (null? body)
+       (error 'bundle "bundle ~a: empty body" name))
+     (cond
+       ;; All bare symbols → flat shorthand (1-param traits with implicit param A)
+       [(andmap symbol? body)
+        (define constraints (map (lambda (s) (list s 'A)) body))
+        (values '(A) constraints)]
+       ;; Mix or all sub-lists → explicit constraints
+       [else
+        (define constraints
+          (for/list ([item (in-list body)])
+            (cond
+              [(and (list? item) (>= (length item) 2) (symbol? (car item)))
+               item]
+              [(symbol? item)
+               ;; Bare symbol in a mixed body → 1-param trait with implicit A
+               (list item 'A)]
+              [else
+               (error 'bundle "bundle ~a: invalid constraint ~a" name item)])))
+        ;; Infer params: all symbols that appear in constraints but are not known
+        ;; type names or trait/bundle names
+        (define all-syms (remove-duplicates (append-map cdr constraints)))
+        (define params (filter (lambda (s) (not (known-type-name? s))) all-syms))
+        (values params constraints)])]
+    ;; Case 2: Multiple top-level parenthesized forms (positional)
+    [(andmap list? body-tokens)
+     (define constraints
+       (for/list ([item (in-list body-tokens)])
+         (unless (and (>= (length item) 2) (symbol? (car item)))
+           (error 'bundle "bundle ~a: invalid constraint ~a" name item))
+         item))
+     (define all-syms (remove-duplicates (append-map cdr constraints)))
+     (define params (filter (lambda (s) (not (known-type-name? s))) all-syms))
+     (values params constraints)]
+    [else
+     (error 'bundle "bundle ~a: invalid body syntax" name)]))
+
+;; Helper: check if a symbol is a known concrete type name (not a type variable)
+(define (known-type-name? sym)
+  (or (memq sym '(Nat Bool Type))
+      (lookup-ctor sym)       ;; user-defined constructor → known
+      (lookup-type-ctors sym) ;; user-defined type → known
+      (lookup-trait sym)      ;; trait → known (not a variable)
+      (lookup-bundle sym)))   ;; bundle → known (not a variable)
+
+;; ========================================
+;; expand-bundle-constraints: recursive expansion with cycle detection
+;; ========================================
+;; Given a list of constraints (which may reference bundles), expand all bundle
+;; references to their constituent trait constraints. Returns a flat, deduplicated
+;; list of trait constraints.
+;;
+;; Example:
+;;   (expand-bundle-constraints '((Comparable A)))
+;;   where Comparable = (Eq Ord)
+;;   → '((Eq A) (Ord A))
+(define (expand-bundle-constraints raw-constraints [seen '()])
+  (define expanded
+    (append-map (lambda (c) (expand-one-constraint c seen)) raw-constraints))
+  (dedup-constraints expanded))
+
+;; Expand a single constraint: if it's a bundle reference, substitute and recurse.
+;; If it's a trait, return as-is (leaf).
+(define (expand-one-constraint constraint seen)
+  (define head (car constraint))
+  (define args (cdr constraint))
+  (cond
+    ;; Known trait → leaf case, return as-is
+    [(lookup-trait head) (list constraint)]
+    ;; Known bundle → expand
+    [(lookup-bundle head)
+     => (lambda (bentry)
+          ;; Cycle detection
+          (when (memq head seen)
+            (error 'bundle "circular bundle reference: ~a (path: ~a)"
+                   head (reverse (cons head seen))))
+          ;; Arity check
+          (define expected-params (bundle-entry-params bentry))
+          (unless (= (length args) (length expected-params))
+            (error 'bundle "bundle ~a expects ~a type params (~a), got ~a (~a)"
+                   head (length expected-params) expected-params
+                   (length args) args))
+          ;; Build substitution map: param → arg
+          (define subst-map
+            (for/hasheq ([p (in-list expected-params)]
+                         [a (in-list args)])
+              (values p a)))
+          ;; Substitute and recursively expand
+          (define substituted
+            (for/list ([c (in-list (bundle-entry-constraints bentry))])
+              (subst-constraint c subst-map)))
+          (expand-bundle-constraints substituted (cons head seen)))]
+    [else
+     ;; Unknown head — pass through as-is. It may be a trait that isn't registered yet
+     ;; (e.g., defined in another module or later in the file). Validation happens
+     ;; downstream when the constraint is actually used (e.g., in maybe-inject-where).
+     (list constraint)]))
+
+;; Apply symbol→symbol substitution to a constraint list.
+(define (subst-constraint constraint subst-map)
+  (for/list ([sym (in-list constraint)])
+    (hash-ref subst-map sym sym)))
+
+;; Remove duplicate constraints, preserving first-appearance order.
+(define (dedup-constraints constraints)
+  (let loop ([remaining constraints] [seen '()] [acc '()])
+    (cond
+      [(null? remaining) (reverse acc)]
+      [(member (car remaining) seen)
+       (loop (cdr remaining) seen acc)]
+      [else
+       (loop (cdr remaining) (cons (car remaining) seen)
+             (cons (car remaining) acc))])))
 
 ;; ========================================
 ;; process-data: algebraic data types with native constructors
