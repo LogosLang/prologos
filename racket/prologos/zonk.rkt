@@ -98,6 +98,9 @@
     [(expr-p8-lt a b) (expr-p8-lt (zonk a) (zonk b))]
     [(expr-p8-le a b) (expr-p8-le (zonk a) (zonk b))]
     [(expr-p8-from-nat n) (expr-p8-from-nat (zonk n))]
+    [(expr-p8-to-rat a) (expr-p8-to-rat (zonk a))]
+    [(expr-p8-from-rat a) (expr-p8-from-rat (zonk a))]
+    [(expr-p8-from-int a) (expr-p8-from-int (zonk a))]
     [(expr-p8-if-nar t nc vc v)
      (expr-p8-if-nar (zonk t) (zonk nc) (zonk vc) (zonk v))]
 
@@ -114,6 +117,9 @@
     [(expr-p16-lt a b) (expr-p16-lt (zonk a) (zonk b))]
     [(expr-p16-le a b) (expr-p16-le (zonk a) (zonk b))]
     [(expr-p16-from-nat n) (expr-p16-from-nat (zonk n))]
+    [(expr-p16-to-rat a) (expr-p16-to-rat (zonk a))]
+    [(expr-p16-from-rat a) (expr-p16-from-rat (zonk a))]
+    [(expr-p16-from-int a) (expr-p16-from-int (zonk a))]
     [(expr-p16-if-nar t nc vc v)
      (expr-p16-if-nar (zonk t) (zonk nc) (zonk vc) (zonk v))]
 
@@ -130,6 +136,9 @@
     [(expr-p32-lt a b) (expr-p32-lt (zonk a) (zonk b))]
     [(expr-p32-le a b) (expr-p32-le (zonk a) (zonk b))]
     [(expr-p32-from-nat n) (expr-p32-from-nat (zonk n))]
+    [(expr-p32-to-rat a) (expr-p32-to-rat (zonk a))]
+    [(expr-p32-from-rat a) (expr-p32-from-rat (zonk a))]
+    [(expr-p32-from-int a) (expr-p32-from-int (zonk a))]
     [(expr-p32-if-nar t nc vc v)
      (expr-p32-if-nar (zonk t) (zonk nc) (zonk vc) (zonk v))]
 
@@ -146,6 +155,9 @@
     [(expr-p64-lt a b) (expr-p64-lt (zonk a) (zonk b))]
     [(expr-p64-le a b) (expr-p64-le (zonk a) (zonk b))]
     [(expr-p64-from-nat n) (expr-p64-from-nat (zonk n))]
+    [(expr-p64-to-rat a) (expr-p64-to-rat (zonk a))]
+    [(expr-p64-from-rat a) (expr-p64-from-rat (zonk a))]
+    [(expr-p64-from-int a) (expr-p64-from-int (zonk a))]
     [(expr-p64-if-nar t nc vc v)
      (expr-p64-if-nar (zonk t) (zonk nc) (zonk vc) (zonk v))]
 
@@ -355,6 +367,9 @@
     [(expr-p8-lt a b) (expr-p8-lt (zonk-at-depth depth a) (zonk-at-depth depth b))]
     [(expr-p8-le a b) (expr-p8-le (zonk-at-depth depth a) (zonk-at-depth depth b))]
     [(expr-p8-from-nat n) (expr-p8-from-nat (zonk-at-depth depth n))]
+    [(expr-p8-to-rat a) (expr-p8-to-rat (zonk-at-depth depth a))]
+    [(expr-p8-from-rat a) (expr-p8-from-rat (zonk-at-depth depth a))]
+    [(expr-p8-from-int a) (expr-p8-from-int (zonk-at-depth depth a))]
     [(expr-p8-if-nar t nc vc v)
      (expr-p8-if-nar (zonk-at-depth depth t) (zonk-at-depth depth nc)
                      (zonk-at-depth depth vc) (zonk-at-depth depth v))]
@@ -372,6 +387,9 @@
     [(expr-p16-lt a b) (expr-p16-lt (zonk-at-depth depth a) (zonk-at-depth depth b))]
     [(expr-p16-le a b) (expr-p16-le (zonk-at-depth depth a) (zonk-at-depth depth b))]
     [(expr-p16-from-nat n) (expr-p16-from-nat (zonk-at-depth depth n))]
+    [(expr-p16-to-rat a) (expr-p16-to-rat (zonk-at-depth depth a))]
+    [(expr-p16-from-rat a) (expr-p16-from-rat (zonk-at-depth depth a))]
+    [(expr-p16-from-int a) (expr-p16-from-int (zonk-at-depth depth a))]
     [(expr-p16-if-nar t nc vc v)
      (expr-p16-if-nar (zonk-at-depth depth t) (zonk-at-depth depth nc)
                       (zonk-at-depth depth vc) (zonk-at-depth depth v))]
@@ -389,6 +407,9 @@
     [(expr-p32-lt a b) (expr-p32-lt (zonk-at-depth depth a) (zonk-at-depth depth b))]
     [(expr-p32-le a b) (expr-p32-le (zonk-at-depth depth a) (zonk-at-depth depth b))]
     [(expr-p32-from-nat n) (expr-p32-from-nat (zonk-at-depth depth n))]
+    [(expr-p32-to-rat a) (expr-p32-to-rat (zonk-at-depth depth a))]
+    [(expr-p32-from-rat a) (expr-p32-from-rat (zonk-at-depth depth a))]
+    [(expr-p32-from-int a) (expr-p32-from-int (zonk-at-depth depth a))]
     [(expr-p32-if-nar t nc vc v)
      (expr-p32-if-nar (zonk-at-depth depth t) (zonk-at-depth depth nc)
                       (zonk-at-depth depth vc) (zonk-at-depth depth v))]
@@ -406,6 +427,9 @@
     [(expr-p64-lt a b) (expr-p64-lt (zonk-at-depth depth a) (zonk-at-depth depth b))]
     [(expr-p64-le a b) (expr-p64-le (zonk-at-depth depth a) (zonk-at-depth depth b))]
     [(expr-p64-from-nat n) (expr-p64-from-nat (zonk-at-depth depth n))]
+    [(expr-p64-to-rat a) (expr-p64-to-rat (zonk-at-depth depth a))]
+    [(expr-p64-from-rat a) (expr-p64-from-rat (zonk-at-depth depth a))]
+    [(expr-p64-from-int a) (expr-p64-from-int (zonk-at-depth depth a))]
     [(expr-p64-if-nar t nc vc v)
      (expr-p64-if-nar (zonk-at-depth depth t) (zonk-at-depth depth nc)
                       (zonk-at-depth depth vc) (zonk-at-depth depth v))]
@@ -595,6 +619,9 @@
     [(expr-p8-lt a b) (expr-p8-lt (default-metas a) (default-metas b))]
     [(expr-p8-le a b) (expr-p8-le (default-metas a) (default-metas b))]
     [(expr-p8-from-nat n) (expr-p8-from-nat (default-metas n))]
+    [(expr-p8-to-rat a) (expr-p8-to-rat (default-metas a))]
+    [(expr-p8-from-rat a) (expr-p8-from-rat (default-metas a))]
+    [(expr-p8-from-int a) (expr-p8-from-int (default-metas a))]
     [(expr-p8-if-nar t nc vc v)
      (expr-p8-if-nar (default-metas t) (default-metas nc)
                      (default-metas vc) (default-metas v))]
@@ -611,6 +638,9 @@
     [(expr-p16-lt a b) (expr-p16-lt (default-metas a) (default-metas b))]
     [(expr-p16-le a b) (expr-p16-le (default-metas a) (default-metas b))]
     [(expr-p16-from-nat n) (expr-p16-from-nat (default-metas n))]
+    [(expr-p16-to-rat a) (expr-p16-to-rat (default-metas a))]
+    [(expr-p16-from-rat a) (expr-p16-from-rat (default-metas a))]
+    [(expr-p16-from-int a) (expr-p16-from-int (default-metas a))]
     [(expr-p16-if-nar t nc vc v)
      (expr-p16-if-nar (default-metas t) (default-metas nc)
                       (default-metas vc) (default-metas v))]
@@ -627,6 +657,9 @@
     [(expr-p32-lt a b) (expr-p32-lt (default-metas a) (default-metas b))]
     [(expr-p32-le a b) (expr-p32-le (default-metas a) (default-metas b))]
     [(expr-p32-from-nat n) (expr-p32-from-nat (default-metas n))]
+    [(expr-p32-to-rat a) (expr-p32-to-rat (default-metas a))]
+    [(expr-p32-from-rat a) (expr-p32-from-rat (default-metas a))]
+    [(expr-p32-from-int a) (expr-p32-from-int (default-metas a))]
     [(expr-p32-if-nar t nc vc v)
      (expr-p32-if-nar (default-metas t) (default-metas nc)
                       (default-metas vc) (default-metas v))]
@@ -643,6 +676,9 @@
     [(expr-p64-lt a b) (expr-p64-lt (default-metas a) (default-metas b))]
     [(expr-p64-le a b) (expr-p64-le (default-metas a) (default-metas b))]
     [(expr-p64-from-nat n) (expr-p64-from-nat (default-metas n))]
+    [(expr-p64-to-rat a) (expr-p64-to-rat (default-metas a))]
+    [(expr-p64-from-rat a) (expr-p64-from-rat (default-metas a))]
+    [(expr-p64-from-int a) (expr-p64-from-int (default-metas a))]
     [(expr-p64-if-nar t nc vc v)
      (expr-p64-if-nar (default-metas t) (default-metas nc)
                       (default-metas vc) (default-metas v))]

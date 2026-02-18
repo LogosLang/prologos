@@ -1,0 +1,19 @@
+ns prologos.core.into-trait
+
+require [prologos.core.from-trait :refer [From From-from]]
+
+;; ========================================
+;; Into Trait — reversed From (convenience)
+;; ========================================
+;; Into A B = A -> B (single-method: dict IS the function)
+;; Generated: deftype Into, accessor Into-into
+;; Derived automatically from From: if From A B exists, Into A B exists.
+
+trait Into {A B}
+  into : A -> B
+
+;; Blanket parametric impl: Into A B whenever From A B
+;; Phase D method resolution resolves bare `from` to (From-from A B dict x)
+impl Into A B where (From A B)
+  defn into [x : A] <B>
+    from x

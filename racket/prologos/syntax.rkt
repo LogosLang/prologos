@@ -62,6 +62,7 @@
  (struct-out expr-p8-lt)
  (struct-out expr-p8-le)
  (struct-out expr-p8-from-nat)
+ (struct-out expr-p8-to-rat) (struct-out expr-p8-from-rat) (struct-out expr-p8-from-int)
  (struct-out expr-p8-if-nar)
  ;; Posit16 (16-bit posit, es=2, 2022 Standard)
  (struct-out expr-Posit16)
@@ -76,6 +77,7 @@
  (struct-out expr-p16-lt)
  (struct-out expr-p16-le)
  (struct-out expr-p16-from-nat)
+ (struct-out expr-p16-to-rat) (struct-out expr-p16-from-rat) (struct-out expr-p16-from-int)
  (struct-out expr-p16-if-nar)
  ;; Posit32 (32-bit posit, es=2, 2022 Standard)
  (struct-out expr-Posit32)
@@ -90,6 +92,7 @@
  (struct-out expr-p32-lt)
  (struct-out expr-p32-le)
  (struct-out expr-p32-from-nat)
+ (struct-out expr-p32-to-rat) (struct-out expr-p32-from-rat) (struct-out expr-p32-from-int)
  (struct-out expr-p32-if-nar)
  ;; Posit64 (64-bit posit, es=2, 2022 Standard)
  (struct-out expr-Posit64)
@@ -104,6 +107,7 @@
  (struct-out expr-p64-lt)
  (struct-out expr-p64-le)
  (struct-out expr-p64-from-nat)
+ (struct-out expr-p64-to-rat) (struct-out expr-p64-from-rat) (struct-out expr-p64-from-int)
  (struct-out expr-p64-if-nar)
  ;; Quire accumulators (exact product sums for posit types)
  (struct-out expr-Quire8) (struct-out expr-quire8-val)
@@ -315,6 +319,10 @@
 
 ;; Conversion (Nat -> Posit8)
 (struct expr-p8-from-nat (n) #:transparent)
+;; Phase 3f: Cross-family conversions
+(struct expr-p8-to-rat (a) #:transparent)     ; Posit8 -> Rat
+(struct expr-p8-from-rat (a) #:transparent)   ; Rat -> Posit8
+(struct expr-p8-from-int (a) #:transparent)   ; Int -> Posit8
 
 ;; Eliminator: branch on NaR
 ;; p8-if-nar(A, nar-case, normal-case, x) : A
@@ -337,6 +345,9 @@
 (struct expr-p16-lt (a b) #:transparent)
 (struct expr-p16-le (a b) #:transparent)
 (struct expr-p16-from-nat (n) #:transparent)
+(struct expr-p16-to-rat (a) #:transparent)     ; Posit16 -> Rat
+(struct expr-p16-from-rat (a) #:transparent)   ; Rat -> Posit16
+(struct expr-p16-from-int (a) #:transparent)   ; Int -> Posit16
 (struct expr-p16-if-nar (type nar-case normal-case val) #:transparent)
 
 ;; ========================================
@@ -355,6 +366,9 @@
 (struct expr-p32-lt (a b) #:transparent)
 (struct expr-p32-le (a b) #:transparent)
 (struct expr-p32-from-nat (n) #:transparent)
+(struct expr-p32-to-rat (a) #:transparent)     ; Posit32 -> Rat
+(struct expr-p32-from-rat (a) #:transparent)   ; Rat -> Posit32
+(struct expr-p32-from-int (a) #:transparent)   ; Int -> Posit32
 (struct expr-p32-if-nar (type nar-case normal-case val) #:transparent)
 
 ;; ========================================
@@ -373,6 +387,9 @@
 (struct expr-p64-lt (a b) #:transparent)
 (struct expr-p64-le (a b) #:transparent)
 (struct expr-p64-from-nat (n) #:transparent)
+(struct expr-p64-to-rat (a) #:transparent)     ; Posit64 -> Rat
+(struct expr-p64-from-rat (a) #:transparent)   ; Rat -> Posit64
+(struct expr-p64-from-int (a) #:transparent)   ; Int -> Posit64
 (struct expr-p64-if-nar (type nar-case normal-case val) #:transparent)
 
 ;; ========================================
@@ -596,22 +613,22 @@
       (expr-p8-add? x) (expr-p8-sub? x) (expr-p8-mul? x) (expr-p8-div? x)
       (expr-p8-neg? x) (expr-p8-abs? x) (expr-p8-sqrt? x)
       (expr-p8-lt? x) (expr-p8-le? x)
-      (expr-p8-from-nat? x) (expr-p8-if-nar? x)
+      (expr-p8-from-nat? x) (expr-p8-to-rat? x) (expr-p8-from-rat? x) (expr-p8-from-int? x) (expr-p8-if-nar? x)
       (expr-Posit16? x) (expr-posit16? x)
       (expr-p16-add? x) (expr-p16-sub? x) (expr-p16-mul? x) (expr-p16-div? x)
       (expr-p16-neg? x) (expr-p16-abs? x) (expr-p16-sqrt? x)
       (expr-p16-lt? x) (expr-p16-le? x)
-      (expr-p16-from-nat? x) (expr-p16-if-nar? x)
+      (expr-p16-from-nat? x) (expr-p16-to-rat? x) (expr-p16-from-rat? x) (expr-p16-from-int? x) (expr-p16-if-nar? x)
       (expr-Posit32? x) (expr-posit32? x)
       (expr-p32-add? x) (expr-p32-sub? x) (expr-p32-mul? x) (expr-p32-div? x)
       (expr-p32-neg? x) (expr-p32-abs? x) (expr-p32-sqrt? x)
       (expr-p32-lt? x) (expr-p32-le? x)
-      (expr-p32-from-nat? x) (expr-p32-if-nar? x)
+      (expr-p32-from-nat? x) (expr-p32-to-rat? x) (expr-p32-from-rat? x) (expr-p32-from-int? x) (expr-p32-if-nar? x)
       (expr-Posit64? x) (expr-posit64? x)
       (expr-p64-add? x) (expr-p64-sub? x) (expr-p64-mul? x) (expr-p64-div? x)
       (expr-p64-neg? x) (expr-p64-abs? x) (expr-p64-sqrt? x)
       (expr-p64-lt? x) (expr-p64-le? x)
-      (expr-p64-from-nat? x) (expr-p64-if-nar? x)
+      (expr-p64-from-nat? x) (expr-p64-to-rat? x) (expr-p64-from-rat? x) (expr-p64-from-int? x) (expr-p64-if-nar? x)
       (expr-Int? x) (expr-int? x)
       (expr-int-add? x) (expr-int-sub? x) (expr-int-mul? x)
       (expr-int-div? x) (expr-int-mod? x)

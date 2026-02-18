@@ -934,6 +934,15 @@
     [(surf-p8-from-nat n loc)
      (let ([en (elaborate n env depth)])
        (if (prologos-error? en) en (expr-p8-from-nat en)))]
+    [(surf-p8-to-rat a loc)
+     (let ([ea (elaborate a env depth)])
+       (if (prologos-error? ea) ea (expr-p8-to-rat ea)))]
+    [(surf-p8-from-rat a loc)
+     (let ([ea (elaborate a env depth)])
+       (if (prologos-error? ea) ea (expr-p8-from-rat ea)))]
+    [(surf-p8-from-int a loc)
+     (let ([ea (elaborate a env depth)])
+       (if (prologos-error? ea) ea (expr-p8-from-int ea)))]
     [(surf-p8-if-nar tp nc vc v loc)
      (let ([etp (elaborate tp env depth)]
            [enc (elaborate nc env depth)]
@@ -996,6 +1005,15 @@
     [(surf-p16-from-nat n loc)
      (let ([en (elaborate n env depth)])
        (if (prologos-error? en) en (expr-p16-from-nat en)))]
+    [(surf-p16-to-rat a loc)
+     (let ([ea (elaborate a env depth)])
+       (if (prologos-error? ea) ea (expr-p16-to-rat ea)))]
+    [(surf-p16-from-rat a loc)
+     (let ([ea (elaborate a env depth)])
+       (if (prologos-error? ea) ea (expr-p16-from-rat ea)))]
+    [(surf-p16-from-int a loc)
+     (let ([ea (elaborate a env depth)])
+       (if (prologos-error? ea) ea (expr-p16-from-int ea)))]
     [(surf-p16-if-nar tp nc vc v loc)
      (let ([etp (elaborate tp env depth)]
            [enc (elaborate nc env depth)]
@@ -1058,6 +1076,15 @@
     [(surf-p32-from-nat n loc)
      (let ([en (elaborate n env depth)])
        (if (prologos-error? en) en (expr-p32-from-nat en)))]
+    [(surf-p32-to-rat a loc)
+     (let ([ea (elaborate a env depth)])
+       (if (prologos-error? ea) ea (expr-p32-to-rat ea)))]
+    [(surf-p32-from-rat a loc)
+     (let ([ea (elaborate a env depth)])
+       (if (prologos-error? ea) ea (expr-p32-from-rat ea)))]
+    [(surf-p32-from-int a loc)
+     (let ([ea (elaborate a env depth)])
+       (if (prologos-error? ea) ea (expr-p32-from-int ea)))]
     [(surf-p32-if-nar tp nc vc v loc)
      (let ([etp (elaborate tp env depth)]
            [enc (elaborate nc env depth)]
@@ -1120,6 +1147,15 @@
     [(surf-p64-from-nat n loc)
      (let ([en (elaborate n env depth)])
        (if (prologos-error? en) en (expr-p64-from-nat en)))]
+    [(surf-p64-to-rat a loc)
+     (let ([ea (elaborate a env depth)])
+       (if (prologos-error? ea) ea (expr-p64-to-rat ea)))]
+    [(surf-p64-from-rat a loc)
+     (let ([ea (elaborate a env depth)])
+       (if (prologos-error? ea) ea (expr-p64-from-rat ea)))]
+    [(surf-p64-from-int a loc)
+     (let ([ea (elaborate a env depth)])
+       (if (prologos-error? ea) ea (expr-p64-from-int ea)))]
     [(surf-p64-if-nar tp nc vc v loc)
      (let ([etp (elaborate tp env depth)]
            [enc (elaborate nc env depth)]

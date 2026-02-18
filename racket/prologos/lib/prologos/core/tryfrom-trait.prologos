@@ -1,0 +1,14 @@
+ns prologos.core.tryfrom-trait
+
+require [prologos.data.option :refer [Option some none]]
+
+;; ========================================
+;; TryFrom Trait — fallible conversion from A to B
+;; ========================================
+;; TryFrom A B = A -> Option B (single-method: dict IS the function)
+;; Generated: deftype TryFrom, accessor TryFrom-try-from
+;; For conversions that may lose precision or fail.
+;; Returns (some result) on success, none on failure.
+
+trait TryFrom {A B}
+  try-from : A -> Option B

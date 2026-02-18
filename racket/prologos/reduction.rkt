@@ -519,6 +519,22 @@
            [(equal? n* n) e]    ; stuck
            [else (whnf (expr-p8-from-nat n*))])))]
 
+    ;; Phase 3f: p8-to-rat -- Posit8 -> Rat
+    [(expr-p8-to-rat (expr-posit8 v))
+     (let ([r (posit8-to-rational v)])
+       (if (eq? r 'nar) (expr-error) (expr-rat r)))]
+    [(expr-p8-to-rat a) (reduce-p8-unary expr-p8-to-rat a)]
+
+    ;; Phase 3f: p8-from-rat -- Rat -> Posit8
+    [(expr-p8-from-rat (expr-rat v))
+     (expr-posit8 (posit8-encode v))]
+    [(expr-p8-from-rat a) (reduce-rat-unary expr-p8-from-rat a)]
+
+    ;; Phase 3f: p8-from-int -- Int -> Posit8
+    [(expr-p8-from-int (expr-int v))
+     (expr-posit8 (posit8-encode v))]
+    [(expr-p8-from-int a) (reduce-int-unary expr-p8-from-int a)]
+
     ;; p8-if-nar: branch when val is a literal
     [(expr-p8-if-nar _ nc _ (expr-posit8 128)) (whnf nc)]    ; NaR = 0x80 = 128
     [(expr-p8-if-nar _ _ vc (expr-posit8 _)) (whnf vc)]      ; any non-NaR literal
@@ -570,6 +586,22 @@
            [k (expr-posit16 (posit16-from-nat k))]
            [(equal? n* n) e]    ; stuck
            [else (whnf (expr-p16-from-nat n*))])))]
+
+    ;; Phase 3f: p16-to-rat -- Posit16 -> Rat
+    [(expr-p16-to-rat (expr-posit16 v))
+     (let ([r (posit16-to-rational v)])
+       (if (eq? r 'nar) (expr-error) (expr-rat r)))]
+    [(expr-p16-to-rat a) (reduce-p16-unary expr-p16-to-rat a)]
+
+    ;; Phase 3f: p16-from-rat -- Rat -> Posit16
+    [(expr-p16-from-rat (expr-rat v))
+     (expr-posit16 (posit16-encode v))]
+    [(expr-p16-from-rat a) (reduce-rat-unary expr-p16-from-rat a)]
+
+    ;; Phase 3f: p16-from-int -- Int -> Posit16
+    [(expr-p16-from-int (expr-int v))
+     (expr-posit16 (posit16-encode v))]
+    [(expr-p16-from-int a) (reduce-int-unary expr-p16-from-int a)]
 
     ;; p16-if-nar: branch when val is a literal
     [(expr-p16-if-nar _ nc _ (expr-posit16 32768)) (whnf nc)]    ; NaR = 0x8000 = 32768
@@ -623,6 +655,22 @@
            [(equal? n* n) e]    ; stuck
            [else (whnf (expr-p32-from-nat n*))])))]
 
+    ;; Phase 3f: p32-to-rat -- Posit32 -> Rat
+    [(expr-p32-to-rat (expr-posit32 v))
+     (let ([r (posit32-to-rational v)])
+       (if (eq? r 'nar) (expr-error) (expr-rat r)))]
+    [(expr-p32-to-rat a) (reduce-p32-unary expr-p32-to-rat a)]
+
+    ;; Phase 3f: p32-from-rat -- Rat -> Posit32
+    [(expr-p32-from-rat (expr-rat v))
+     (expr-posit32 (posit32-encode v))]
+    [(expr-p32-from-rat a) (reduce-rat-unary expr-p32-from-rat a)]
+
+    ;; Phase 3f: p32-from-int -- Int -> Posit32
+    [(expr-p32-from-int (expr-int v))
+     (expr-posit32 (posit32-encode v))]
+    [(expr-p32-from-int a) (reduce-int-unary expr-p32-from-int a)]
+
     ;; p32-if-nar: branch when val is a literal
     [(expr-p32-if-nar _ nc _ (expr-posit32 2147483648)) (whnf nc)]    ; NaR = 0x80000000 = 2147483648
     [(expr-p32-if-nar _ _ vc (expr-posit32 _)) (whnf vc)]             ; any non-NaR literal
@@ -674,6 +722,22 @@
            [k (expr-posit64 (posit64-from-nat k))]
            [(equal? n* n) e]    ; stuck
            [else (whnf (expr-p64-from-nat n*))])))]
+
+    ;; Phase 3f: p64-to-rat -- Posit64 -> Rat
+    [(expr-p64-to-rat (expr-posit64 v))
+     (let ([r (posit64-to-rational v)])
+       (if (eq? r 'nar) (expr-error) (expr-rat r)))]
+    [(expr-p64-to-rat a) (reduce-p64-unary expr-p64-to-rat a)]
+
+    ;; Phase 3f: p64-from-rat -- Rat -> Posit64
+    [(expr-p64-from-rat (expr-rat v))
+     (expr-posit64 (posit64-encode v))]
+    [(expr-p64-from-rat a) (reduce-rat-unary expr-p64-from-rat a)]
+
+    ;; Phase 3f: p64-from-int -- Int -> Posit64
+    [(expr-p64-from-int (expr-int v))
+     (expr-posit64 (posit64-encode v))]
+    [(expr-p64-from-int a) (reduce-int-unary expr-p64-from-int a)]
 
     ;; p64-if-nar: branch when val is a literal
     [(expr-p64-if-nar _ nc _ (expr-posit64 9223372036854775808)) (whnf nc)]    ; NaR = 0x8000000000000000
@@ -1118,6 +1182,9 @@
     [(expr-p8-lt a b) (expr-p8-lt (nf a) (nf b))]
     [(expr-p8-le a b) (expr-p8-le (nf a) (nf b))]
     [(expr-p8-from-nat n) (expr-p8-from-nat (nf n))]
+    [(expr-p8-to-rat a) (expr-p8-to-rat (nf a))]
+    [(expr-p8-from-rat a) (expr-p8-from-rat (nf a))]
+    [(expr-p8-from-int a) (expr-p8-from-int (nf a))]
     [(expr-p8-if-nar t nc vc v)
      (expr-p8-if-nar (nf t) (nf nc) (nf vc) (nf v))]
 
@@ -1134,6 +1201,9 @@
     [(expr-p16-lt a b) (expr-p16-lt (nf a) (nf b))]
     [(expr-p16-le a b) (expr-p16-le (nf a) (nf b))]
     [(expr-p16-from-nat n) (expr-p16-from-nat (nf n))]
+    [(expr-p16-to-rat a) (expr-p16-to-rat (nf a))]
+    [(expr-p16-from-rat a) (expr-p16-from-rat (nf a))]
+    [(expr-p16-from-int a) (expr-p16-from-int (nf a))]
     [(expr-p16-if-nar t nc vc v)
      (expr-p16-if-nar (nf t) (nf nc) (nf vc) (nf v))]
 
@@ -1150,6 +1220,9 @@
     [(expr-p32-lt a b) (expr-p32-lt (nf a) (nf b))]
     [(expr-p32-le a b) (expr-p32-le (nf a) (nf b))]
     [(expr-p32-from-nat n) (expr-p32-from-nat (nf n))]
+    [(expr-p32-to-rat a) (expr-p32-to-rat (nf a))]
+    [(expr-p32-from-rat a) (expr-p32-from-rat (nf a))]
+    [(expr-p32-from-int a) (expr-p32-from-int (nf a))]
     [(expr-p32-if-nar t nc vc v)
      (expr-p32-if-nar (nf t) (nf nc) (nf vc) (nf v))]
 
@@ -1166,6 +1239,9 @@
     [(expr-p64-lt a b) (expr-p64-lt (nf a) (nf b))]
     [(expr-p64-le a b) (expr-p64-le (nf a) (nf b))]
     [(expr-p64-from-nat n) (expr-p64-from-nat (nf n))]
+    [(expr-p64-to-rat a) (expr-p64-to-rat (nf a))]
+    [(expr-p64-from-rat a) (expr-p64-from-rat (nf a))]
+    [(expr-p64-from-int a) (expr-p64-from-int (nf a))]
     [(expr-p64-if-nar t nc vc v)
      (expr-p64-if-nar (nf t) (nf nc) (nf vc) (nf v))]
 

@@ -28,10 +28,10 @@
     natrec J pair first second boolrec
     Int int int+ int- int* int/ int-mod int-neg int-abs int-lt int-le int-eq from-nat
     Rat rat rat+ rat- rat* rat/ rat-neg rat-abs rat-lt rat-le rat-eq from-int rat-numer rat-denom
-    Posit8 posit8 p8+ p8- p8* p8/ p8-neg p8-abs p8-sqrt p8-lt p8-le p8-from-nat p8-if-nar
-    Posit16 posit16 p16+ p16- p16* p16/ p16-neg p16-abs p16-sqrt p16-lt p16-le p16-from-nat p16-if-nar
-    Posit32 posit32 p32+ p32- p32* p32/ p32-neg p32-abs p32-sqrt p32-lt p32-le p32-from-nat p32-if-nar
-    Posit64 posit64 p64+ p64- p64* p64/ p64-neg p64-abs p64-sqrt p64-lt p64-le p64-from-nat p64-if-nar
+    Posit8 posit8 p8+ p8- p8* p8/ p8-neg p8-abs p8-sqrt p8-lt p8-le p8-from-nat p8-to-rat p8-from-rat p8-from-int p8-if-nar
+    Posit16 posit16 p16+ p16- p16* p16/ p16-neg p16-abs p16-sqrt p16-lt p16-le p16-from-nat p16-to-rat p16-from-rat p16-from-int p16-if-nar
+    Posit32 posit32 p32+ p32- p32* p32/ p32-neg p32-abs p32-sqrt p32-lt p32-le p32-from-nat p32-to-rat p32-from-rat p32-from-int p32-if-nar
+    Posit64 posit64 p64+ p64- p64* p64/ p64-neg p64-abs p64-sqrt p64-lt p64-le p64-from-nat p64-to-rat p64-from-rat p64-from-int p64-if-nar
     Quire8 q8-zero q8-fma q8-to
     Quire16 q16-zero q16-fma q16-to
     Quire32 q32-zero q32-fma q32-to
@@ -1039,6 +1039,18 @@
         (or (check-arity 'p8-from-nat args 1 loc)
             (let ([n (parse-datum (car args))])
               (if (prologos-error? n) n (surf-p8-from-nat n loc))))]
+       [(p8-to-rat)
+        (or (check-arity 'p8-to-rat args 1 loc)
+            (let ([a (parse-datum (car args))])
+              (if (prologos-error? a) a (surf-p8-to-rat a loc))))]
+       [(p8-from-rat)
+        (or (check-arity 'p8-from-rat args 1 loc)
+            (let ([a (parse-datum (car args))])
+              (if (prologos-error? a) a (surf-p8-from-rat a loc))))]
+       [(p8-from-int)
+        (or (check-arity 'p8-from-int args 1 loc)
+            (let ([a (parse-datum (car args))])
+              (if (prologos-error? a) a (surf-p8-from-int a loc))))]
        [(p8-if-nar)
         (or (check-arity 'p8-if-nar args 4 loc)
             (let ([tp (parse-datum (car args))]
@@ -1119,6 +1131,18 @@
         (or (check-arity 'p16-from-nat args 1 loc)
             (let ([n (parse-datum (car args))])
               (if (prologos-error? n) n (surf-p16-from-nat n loc))))]
+       [(p16-to-rat)
+        (or (check-arity 'p16-to-rat args 1 loc)
+            (let ([a (parse-datum (car args))])
+              (if (prologos-error? a) a (surf-p16-to-rat a loc))))]
+       [(p16-from-rat)
+        (or (check-arity 'p16-from-rat args 1 loc)
+            (let ([a (parse-datum (car args))])
+              (if (prologos-error? a) a (surf-p16-from-rat a loc))))]
+       [(p16-from-int)
+        (or (check-arity 'p16-from-int args 1 loc)
+            (let ([a (parse-datum (car args))])
+              (if (prologos-error? a) a (surf-p16-from-int a loc))))]
        [(p16-if-nar)
         (or (check-arity 'p16-if-nar args 4 loc)
             (let ([tp (parse-datum (car args))]
@@ -1199,6 +1223,18 @@
         (or (check-arity 'p32-from-nat args 1 loc)
             (let ([n (parse-datum (car args))])
               (if (prologos-error? n) n (surf-p32-from-nat n loc))))]
+       [(p32-to-rat)
+        (or (check-arity 'p32-to-rat args 1 loc)
+            (let ([a (parse-datum (car args))])
+              (if (prologos-error? a) a (surf-p32-to-rat a loc))))]
+       [(p32-from-rat)
+        (or (check-arity 'p32-from-rat args 1 loc)
+            (let ([a (parse-datum (car args))])
+              (if (prologos-error? a) a (surf-p32-from-rat a loc))))]
+       [(p32-from-int)
+        (or (check-arity 'p32-from-int args 1 loc)
+            (let ([a (parse-datum (car args))])
+              (if (prologos-error? a) a (surf-p32-from-int a loc))))]
        [(p32-if-nar)
         (or (check-arity 'p32-if-nar args 4 loc)
             (let ([tp (parse-datum (car args))]
@@ -1279,6 +1315,18 @@
         (or (check-arity 'p64-from-nat args 1 loc)
             (let ([n (parse-datum (car args))])
               (if (prologos-error? n) n (surf-p64-from-nat n loc))))]
+       [(p64-to-rat)
+        (or (check-arity 'p64-to-rat args 1 loc)
+            (let ([a (parse-datum (car args))])
+              (if (prologos-error? a) a (surf-p64-to-rat a loc))))]
+       [(p64-from-rat)
+        (or (check-arity 'p64-from-rat args 1 loc)
+            (let ([a (parse-datum (car args))])
+              (if (prologos-error? a) a (surf-p64-from-rat a loc))))]
+       [(p64-from-int)
+        (or (check-arity 'p64-from-int args 1 loc)
+            (let ([a (parse-datum (car args))])
+              (if (prologos-error? a) a (surf-p64-from-int a loc))))]
        [(p64-if-nar)
         (or (check-arity 'p64-if-nar args 4 loc)
             (let ([tp (parse-datum (car args))]

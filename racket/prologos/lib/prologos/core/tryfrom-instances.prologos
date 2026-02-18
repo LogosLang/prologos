@@ -1,0 +1,55 @@
+ns prologos.core.tryfrom-instances
+
+require [prologos.core.tryfrom-trait :refer [TryFrom TryFrom-try-from]]
+require [prologos.data.option :refer [Option some none]]
+
+;; ========================================
+;; TryFrom Instances — potentially lossy cross-family conversions
+;; ========================================
+;; Each TryFrom A B instance provides `try-from : A -> Option B`.
+;; Instance key: SourceType-TargetType--TryFrom
+;;
+;; Note: posit-encode always returns valid posit bits for finite rationals
+;; (clamped to representable range, never NaR), so these always return `some`.
+;; The `TryFrom` interface is chosen because the conversion is lossy
+;; (precision may be lost), even though it never fails at runtime.
+
+;; ========================================
+;; Rat → Posit (lossy: clamped to representable range)
+;; ========================================
+
+impl TryFrom Rat Posit8
+  defn try-from [r : Rat] <Option Posit8>
+    some Posit8 [p8-from-rat r]
+
+impl TryFrom Rat Posit16
+  defn try-from [r : Rat] <Option Posit16>
+    some Posit16 [p16-from-rat r]
+
+impl TryFrom Rat Posit32
+  defn try-from [r : Rat] <Option Posit32>
+    some Posit32 [p32-from-rat r]
+
+impl TryFrom Rat Posit64
+  defn try-from [r : Rat] <Option Posit64>
+    some Posit64 [p64-from-rat r]
+
+;; ========================================
+;; Int → Posit (lossy: large integers lose precision)
+;; ========================================
+
+impl TryFrom Int Posit8
+  defn try-from [i : Int] <Option Posit8>
+    some Posit8 [p8-from-int i]
+
+impl TryFrom Int Posit16
+  defn try-from [i : Int] <Option Posit16>
+    some Posit16 [p16-from-int i]
+
+impl TryFrom Int Posit32
+  defn try-from [i : Int] <Option Posit32>
+    some Posit32 [p32-from-int i]
+
+impl TryFrom Int Posit64
+  defn try-from [i : Int] <Option Posit64>
+    some Posit64 [p64-from-int i]

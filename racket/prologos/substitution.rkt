@@ -113,6 +113,9 @@
     [(expr-p8-lt a b) (expr-p8-lt (shift delta cutoff a) (shift delta cutoff b))]
     [(expr-p8-le a b) (expr-p8-le (shift delta cutoff a) (shift delta cutoff b))]
     [(expr-p8-from-nat n) (expr-p8-from-nat (shift delta cutoff n))]
+    [(expr-p8-to-rat a) (expr-p8-to-rat (shift delta cutoff a))]
+    [(expr-p8-from-rat a) (expr-p8-from-rat (shift delta cutoff a))]
+    [(expr-p8-from-int a) (expr-p8-from-int (shift delta cutoff a))]
     [(expr-p8-if-nar t nc vc v)
      (expr-p8-if-nar (shift delta cutoff t) (shift delta cutoff nc)
                      (shift delta cutoff vc) (shift delta cutoff v))]
@@ -130,6 +133,9 @@
     [(expr-p16-lt a b) (expr-p16-lt (shift delta cutoff a) (shift delta cutoff b))]
     [(expr-p16-le a b) (expr-p16-le (shift delta cutoff a) (shift delta cutoff b))]
     [(expr-p16-from-nat n) (expr-p16-from-nat (shift delta cutoff n))]
+    [(expr-p16-to-rat a) (expr-p16-to-rat (shift delta cutoff a))]
+    [(expr-p16-from-rat a) (expr-p16-from-rat (shift delta cutoff a))]
+    [(expr-p16-from-int a) (expr-p16-from-int (shift delta cutoff a))]
     [(expr-p16-if-nar t nc vc v)
      (expr-p16-if-nar (shift delta cutoff t) (shift delta cutoff nc)
                       (shift delta cutoff vc) (shift delta cutoff v))]
@@ -147,6 +153,9 @@
     [(expr-p32-lt a b) (expr-p32-lt (shift delta cutoff a) (shift delta cutoff b))]
     [(expr-p32-le a b) (expr-p32-le (shift delta cutoff a) (shift delta cutoff b))]
     [(expr-p32-from-nat n) (expr-p32-from-nat (shift delta cutoff n))]
+    [(expr-p32-to-rat a) (expr-p32-to-rat (shift delta cutoff a))]
+    [(expr-p32-from-rat a) (expr-p32-from-rat (shift delta cutoff a))]
+    [(expr-p32-from-int a) (expr-p32-from-int (shift delta cutoff a))]
     [(expr-p32-if-nar t nc vc v)
      (expr-p32-if-nar (shift delta cutoff t) (shift delta cutoff nc)
                       (shift delta cutoff vc) (shift delta cutoff v))]
@@ -164,6 +173,9 @@
     [(expr-p64-lt a b) (expr-p64-lt (shift delta cutoff a) (shift delta cutoff b))]
     [(expr-p64-le a b) (expr-p64-le (shift delta cutoff a) (shift delta cutoff b))]
     [(expr-p64-from-nat n) (expr-p64-from-nat (shift delta cutoff n))]
+    [(expr-p64-to-rat a) (expr-p64-to-rat (shift delta cutoff a))]
+    [(expr-p64-from-rat a) (expr-p64-from-rat (shift delta cutoff a))]
+    [(expr-p64-from-int a) (expr-p64-from-int (shift delta cutoff a))]
     [(expr-p64-if-nar t nc vc v)
      (expr-p64-if-nar (shift delta cutoff t) (shift delta cutoff nc)
                       (shift delta cutoff vc) (shift delta cutoff v))]
@@ -375,6 +387,9 @@
     [(expr-p8-lt a b) (expr-p8-lt (subst k s a) (subst k s b))]
     [(expr-p8-le a b) (expr-p8-le (subst k s a) (subst k s b))]
     [(expr-p8-from-nat n) (expr-p8-from-nat (subst k s n))]
+    [(expr-p8-to-rat a) (expr-p8-to-rat (subst k s a))]
+    [(expr-p8-from-rat a) (expr-p8-from-rat (subst k s a))]
+    [(expr-p8-from-int a) (expr-p8-from-int (subst k s a))]
     [(expr-p8-if-nar t nc vc v)
      (expr-p8-if-nar (subst k s t) (subst k s nc)
                      (subst k s vc) (subst k s v))]
@@ -392,6 +407,9 @@
     [(expr-p16-lt a b) (expr-p16-lt (subst k s a) (subst k s b))]
     [(expr-p16-le a b) (expr-p16-le (subst k s a) (subst k s b))]
     [(expr-p16-from-nat n) (expr-p16-from-nat (subst k s n))]
+    [(expr-p16-to-rat a) (expr-p16-to-rat (subst k s a))]
+    [(expr-p16-from-rat a) (expr-p16-from-rat (subst k s a))]
+    [(expr-p16-from-int a) (expr-p16-from-int (subst k s a))]
     [(expr-p16-if-nar t nc vc v)
      (expr-p16-if-nar (subst k s t) (subst k s nc)
                       (subst k s vc) (subst k s v))]
@@ -409,6 +427,9 @@
     [(expr-p32-lt a b) (expr-p32-lt (subst k s a) (subst k s b))]
     [(expr-p32-le a b) (expr-p32-le (subst k s a) (subst k s b))]
     [(expr-p32-from-nat n) (expr-p32-from-nat (subst k s n))]
+    [(expr-p32-to-rat a) (expr-p32-to-rat (subst k s a))]
+    [(expr-p32-from-rat a) (expr-p32-from-rat (subst k s a))]
+    [(expr-p32-from-int a) (expr-p32-from-int (subst k s a))]
     [(expr-p32-if-nar t nc vc v)
      (expr-p32-if-nar (subst k s t) (subst k s nc)
                       (subst k s vc) (subst k s v))]
@@ -426,6 +447,9 @@
     [(expr-p64-lt a b) (expr-p64-lt (subst k s a) (subst k s b))]
     [(expr-p64-le a b) (expr-p64-le (subst k s a) (subst k s b))]
     [(expr-p64-from-nat n) (expr-p64-from-nat (subst k s n))]
+    [(expr-p64-to-rat a) (expr-p64-to-rat (subst k s a))]
+    [(expr-p64-from-rat a) (expr-p64-from-rat (subst k s a))]
+    [(expr-p64-from-int a) (expr-p64-from-int (subst k s a))]
     [(expr-p64-if-nar t nc vc v)
      (expr-p64-if-nar (subst k s t) (subst k s nc)
                       (subst k s vc) (subst k s v))]

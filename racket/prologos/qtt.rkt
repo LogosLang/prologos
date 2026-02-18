@@ -490,6 +490,17 @@
      (let ([r (checkQ ctx e1 (expr-Nat))])
        (match r [(bu #t u) (tu (expr-Posit8) u)] [_ (tu-error)]))]
 
+    ;; Phase 3f: Cross-family conversions for Posit8
+    [(expr-p8-to-rat e1)
+     (let ([r (checkQ ctx e1 (expr-Posit8))])
+       (match r [(bu #t u) (tu (expr-Rat) u)] [_ (tu-error)]))]
+    [(expr-p8-from-rat e1)
+     (let ([r (checkQ ctx e1 (expr-Rat))])
+       (match r [(bu #t u) (tu (expr-Posit8) u)] [_ (tu-error)]))]
+    [(expr-p8-from-int e1)
+     (let ([r (checkQ ctx e1 (expr-Int))])
+       (match r [(bu #t u) (tu (expr-Posit8) u)] [_ (tu-error)]))]
+
     ;; Posit8 NaR eliminator: p8-if-nar(A, nar-case, normal-case, val)
     [(expr-p8-if-nar ty nar-case normal-case val)
      (let ([r4 (checkQ ctx val (expr-Posit8))])
@@ -561,6 +572,17 @@
     ;; Posit16 conversion: Nat -> Posit16
     [(expr-p16-from-nat e1)
      (let ([r (checkQ ctx e1 (expr-Nat))])
+       (match r [(bu #t u) (tu (expr-Posit16) u)] [_ (tu-error)]))]
+
+    ;; Phase 3f: Cross-family conversions for Posit16
+    [(expr-p16-to-rat e1)
+     (let ([r (checkQ ctx e1 (expr-Posit16))])
+       (match r [(bu #t u) (tu (expr-Rat) u)] [_ (tu-error)]))]
+    [(expr-p16-from-rat e1)
+     (let ([r (checkQ ctx e1 (expr-Rat))])
+       (match r [(bu #t u) (tu (expr-Posit16) u)] [_ (tu-error)]))]
+    [(expr-p16-from-int e1)
+     (let ([r (checkQ ctx e1 (expr-Int))])
        (match r [(bu #t u) (tu (expr-Posit16) u)] [_ (tu-error)]))]
 
     ;; Posit16 NaR eliminator: p16-if-nar(A, nar-case, normal-case, val)
@@ -636,6 +658,17 @@
      (let ([r (checkQ ctx e1 (expr-Nat))])
        (match r [(bu #t u) (tu (expr-Posit32) u)] [_ (tu-error)]))]
 
+    ;; Phase 3f: Cross-family conversions for Posit32
+    [(expr-p32-to-rat e1)
+     (let ([r (checkQ ctx e1 (expr-Posit32))])
+       (match r [(bu #t u) (tu (expr-Rat) u)] [_ (tu-error)]))]
+    [(expr-p32-from-rat e1)
+     (let ([r (checkQ ctx e1 (expr-Rat))])
+       (match r [(bu #t u) (tu (expr-Posit32) u)] [_ (tu-error)]))]
+    [(expr-p32-from-int e1)
+     (let ([r (checkQ ctx e1 (expr-Int))])
+       (match r [(bu #t u) (tu (expr-Posit32) u)] [_ (tu-error)]))]
+
     ;; Posit32 NaR eliminator: p32-if-nar(A, nar-case, normal-case, val)
     [(expr-p32-if-nar ty nar-case normal-case val)
      (let ([r4 (checkQ ctx val (expr-Posit32))])
@@ -707,6 +740,17 @@
     ;; Posit64 conversion: Nat -> Posit64
     [(expr-p64-from-nat e1)
      (let ([r (checkQ ctx e1 (expr-Nat))])
+       (match r [(bu #t u) (tu (expr-Posit64) u)] [_ (tu-error)]))]
+
+    ;; Phase 3f: Cross-family conversions for Posit64
+    [(expr-p64-to-rat e1)
+     (let ([r (checkQ ctx e1 (expr-Posit64))])
+       (match r [(bu #t u) (tu (expr-Rat) u)] [_ (tu-error)]))]
+    [(expr-p64-from-rat e1)
+     (let ([r (checkQ ctx e1 (expr-Rat))])
+       (match r [(bu #t u) (tu (expr-Posit64) u)] [_ (tu-error)]))]
+    [(expr-p64-from-int e1)
+     (let ([r (checkQ ctx e1 (expr-Int))])
        (match r [(bu #t u) (tu (expr-Posit64) u)] [_ (tu-error)]))]
 
     ;; Posit64 NaR eliminator: p64-if-nar(A, nar-case, normal-case, val)

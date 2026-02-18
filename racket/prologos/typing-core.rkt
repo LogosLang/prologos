@@ -436,6 +436,14 @@
     [(expr-p8-from-nat n)
      (if (check ctx n (expr-Nat)) (expr-Posit8) (expr-error))]
 
+    ;; Phase 3f: Cross-family conversions for Posit8
+    [(expr-p8-to-rat a)
+     (if (check ctx a (expr-Posit8)) (expr-Rat) (expr-error))]
+    [(expr-p8-from-rat a)
+     (if (check ctx a (expr-Rat)) (expr-Posit8) (expr-error))]
+    [(expr-p8-from-int a)
+     (if (check ctx a (expr-Int)) (expr-Posit8) (expr-error))]
+
     ;; p8-if-nar(A, nar-case, normal-case, val) : A
     [(expr-p8-if-nar tp nc vc v)
      (if (and (is-type ctx tp)
@@ -486,6 +494,14 @@
     ;; Conversion: Nat -> Posit16
     [(expr-p16-from-nat n)
      (if (check ctx n (expr-Nat)) (expr-Posit16) (expr-error))]
+
+    ;; Phase 3f: Cross-family conversions for Posit16
+    [(expr-p16-to-rat a)
+     (if (check ctx a (expr-Posit16)) (expr-Rat) (expr-error))]
+    [(expr-p16-from-rat a)
+     (if (check ctx a (expr-Rat)) (expr-Posit16) (expr-error))]
+    [(expr-p16-from-int a)
+     (if (check ctx a (expr-Int)) (expr-Posit16) (expr-error))]
 
     ;; p16-if-nar(A, nar-case, normal-case, val) : A
     [(expr-p16-if-nar tp nc vc v)
@@ -538,6 +554,14 @@
     [(expr-p32-from-nat n)
      (if (check ctx n (expr-Nat)) (expr-Posit32) (expr-error))]
 
+    ;; Phase 3f: Cross-family conversions for Posit32
+    [(expr-p32-to-rat a)
+     (if (check ctx a (expr-Posit32)) (expr-Rat) (expr-error))]
+    [(expr-p32-from-rat a)
+     (if (check ctx a (expr-Rat)) (expr-Posit32) (expr-error))]
+    [(expr-p32-from-int a)
+     (if (check ctx a (expr-Int)) (expr-Posit32) (expr-error))]
+
     ;; p32-if-nar(A, nar-case, normal-case, val) : A
     [(expr-p32-if-nar tp nc vc v)
      (if (and (is-type ctx tp)
@@ -588,6 +612,14 @@
     ;; Conversion: Nat -> Posit64
     [(expr-p64-from-nat n)
      (if (check ctx n (expr-Nat)) (expr-Posit64) (expr-error))]
+
+    ;; Phase 3f: Cross-family conversions for Posit64
+    [(expr-p64-to-rat a)
+     (if (check ctx a (expr-Posit64)) (expr-Rat) (expr-error))]
+    [(expr-p64-from-rat a)
+     (if (check ctx a (expr-Rat)) (expr-Posit64) (expr-error))]
+    [(expr-p64-from-int a)
+     (if (check ctx a (expr-Int)) (expr-Posit64) (expr-error))]
 
     ;; p64-if-nar(A, nar-case, normal-case, val) : A
     [(expr-p64-if-nar tp nc vc v)

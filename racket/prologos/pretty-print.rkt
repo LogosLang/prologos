@@ -215,6 +215,9 @@
     [(expr-p8-lt a b) (format "[p8-lt ~a ~a]" (pp-expr a names) (pp-expr b names))]
     [(expr-p8-le a b) (format "[p8-le ~a ~a]" (pp-expr a names) (pp-expr b names))]
     [(expr-p8-from-nat n) (format "[p8-from-nat ~a]" (pp-expr n names))]
+    [(expr-p8-to-rat a) (format "[p8-to-rat ~a]" (pp-expr a names))]
+    [(expr-p8-from-rat a) (format "[p8-from-rat ~a]" (pp-expr a names))]
+    [(expr-p8-from-int a) (format "[p8-from-int ~a]" (pp-expr a names))]
     [(expr-p8-if-nar t nc vc v)
      (format "[p8-if-nar ~a ~a ~a ~a]"
              (pp-expr t names) (pp-expr nc names) (pp-expr vc names) (pp-expr v names))]
@@ -232,6 +235,9 @@
     [(expr-p16-lt a b) (format "[p16-lt ~a ~a]" (pp-expr a names) (pp-expr b names))]
     [(expr-p16-le a b) (format "[p16-le ~a ~a]" (pp-expr a names) (pp-expr b names))]
     [(expr-p16-from-nat n) (format "[p16-from-nat ~a]" (pp-expr n names))]
+    [(expr-p16-to-rat a) (format "[p16-to-rat ~a]" (pp-expr a names))]
+    [(expr-p16-from-rat a) (format "[p16-from-rat ~a]" (pp-expr a names))]
+    [(expr-p16-from-int a) (format "[p16-from-int ~a]" (pp-expr a names))]
     [(expr-p16-if-nar t nc vc v)
      (format "[p16-if-nar ~a ~a ~a ~a]"
              (pp-expr t names) (pp-expr nc names) (pp-expr vc names) (pp-expr v names))]
@@ -249,6 +255,9 @@
     [(expr-p32-lt a b) (format "[p32-lt ~a ~a]" (pp-expr a names) (pp-expr b names))]
     [(expr-p32-le a b) (format "[p32-le ~a ~a]" (pp-expr a names) (pp-expr b names))]
     [(expr-p32-from-nat n) (format "[p32-from-nat ~a]" (pp-expr n names))]
+    [(expr-p32-to-rat a) (format "[p32-to-rat ~a]" (pp-expr a names))]
+    [(expr-p32-from-rat a) (format "[p32-from-rat ~a]" (pp-expr a names))]
+    [(expr-p32-from-int a) (format "[p32-from-int ~a]" (pp-expr a names))]
     [(expr-p32-if-nar t nc vc v)
      (format "[p32-if-nar ~a ~a ~a ~a]"
              (pp-expr t names) (pp-expr nc names) (pp-expr vc names) (pp-expr v names))]
@@ -266,6 +275,9 @@
     [(expr-p64-lt a b) (format "[p64-lt ~a ~a]" (pp-expr a names) (pp-expr b names))]
     [(expr-p64-le a b) (format "[p64-le ~a ~a]" (pp-expr a names) (pp-expr b names))]
     [(expr-p64-from-nat n) (format "[p64-from-nat ~a]" (pp-expr n names))]
+    [(expr-p64-to-rat a) (format "[p64-to-rat ~a]" (pp-expr a names))]
+    [(expr-p64-from-rat a) (format "[p64-from-rat ~a]" (pp-expr a names))]
+    [(expr-p64-from-int a) (format "[p64-from-int ~a]" (pp-expr a names))]
     [(expr-p64-if-nar t nc vc v)
      (format "[p64-if-nar ~a ~a ~a ~a]"
              (pp-expr t names) (pp-expr nc names) (pp-expr vc names) (pp-expr v names))]
@@ -648,6 +660,9 @@
     [(expr-p8-lt a b) (or (uses-bvar0? a) (uses-bvar0? b))]
     [(expr-p8-le a b) (or (uses-bvar0? a) (uses-bvar0? b))]
     [(expr-p8-from-nat n) (uses-bvar0? n)]
+    [(expr-p8-to-rat a) (uses-bvar0? a)]
+    [(expr-p8-from-rat a) (uses-bvar0? a)]
+    [(expr-p8-from-int a) (uses-bvar0? a)]
     [(expr-p8-if-nar t nc vc v) (or (uses-bvar0? t) (uses-bvar0? nc) (uses-bvar0? vc) (uses-bvar0? v))]
     [(expr-Posit16) #f]
     [(expr-posit16 _) #f]
@@ -661,6 +676,9 @@
     [(expr-p16-lt a b) (or (uses-bvar0? a) (uses-bvar0? b))]
     [(expr-p16-le a b) (or (uses-bvar0? a) (uses-bvar0? b))]
     [(expr-p16-from-nat n) (uses-bvar0? n)]
+    [(expr-p16-to-rat a) (uses-bvar0? a)]
+    [(expr-p16-from-rat a) (uses-bvar0? a)]
+    [(expr-p16-from-int a) (uses-bvar0? a)]
     [(expr-p16-if-nar t nc vc v) (or (uses-bvar0? t) (uses-bvar0? nc) (uses-bvar0? vc) (uses-bvar0? v))]
     [(expr-Posit32) #f]
     [(expr-posit32 _) #f]
@@ -674,6 +692,9 @@
     [(expr-p32-lt a b) (or (uses-bvar0? a) (uses-bvar0? b))]
     [(expr-p32-le a b) (or (uses-bvar0? a) (uses-bvar0? b))]
     [(expr-p32-from-nat n) (uses-bvar0? n)]
+    [(expr-p32-to-rat a) (uses-bvar0? a)]
+    [(expr-p32-from-rat a) (uses-bvar0? a)]
+    [(expr-p32-from-int a) (uses-bvar0? a)]
     [(expr-p32-if-nar t nc vc v) (or (uses-bvar0? t) (uses-bvar0? nc) (uses-bvar0? vc) (uses-bvar0? v))]
     [(expr-Posit64) #f]
     [(expr-posit64 _) #f]
@@ -687,6 +708,9 @@
     [(expr-p64-lt a b) (or (uses-bvar0? a) (uses-bvar0? b))]
     [(expr-p64-le a b) (or (uses-bvar0? a) (uses-bvar0? b))]
     [(expr-p64-from-nat n) (uses-bvar0? n)]
+    [(expr-p64-to-rat a) (uses-bvar0? a)]
+    [(expr-p64-from-rat a) (uses-bvar0? a)]
+    [(expr-p64-from-int a) (uses-bvar0? a)]
     [(expr-p64-if-nar t nc vc v) (or (uses-bvar0? t) (uses-bvar0? nc) (uses-bvar0? vc) (uses-bvar0? v))]
     ;; Quire8
     [(expr-Quire8) #f]

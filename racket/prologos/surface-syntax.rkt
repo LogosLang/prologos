@@ -87,6 +87,9 @@
  (struct-out surf-p8-lt)
  (struct-out surf-p8-le)
  (struct-out surf-p8-from-nat)
+ (struct-out surf-p8-to-rat)
+ (struct-out surf-p8-from-rat)
+ (struct-out surf-p8-from-int)
  (struct-out surf-p8-if-nar)
  ;; Posit16 surface forms
  (struct-out surf-posit16-type)
@@ -101,6 +104,9 @@
  (struct-out surf-p16-lt)
  (struct-out surf-p16-le)
  (struct-out surf-p16-from-nat)
+ (struct-out surf-p16-to-rat)
+ (struct-out surf-p16-from-rat)
+ (struct-out surf-p16-from-int)
  (struct-out surf-p16-if-nar)
  ;; Posit32 surface forms
  (struct-out surf-posit32-type)
@@ -115,6 +121,9 @@
  (struct-out surf-p32-lt)
  (struct-out surf-p32-le)
  (struct-out surf-p32-from-nat)
+ (struct-out surf-p32-to-rat)
+ (struct-out surf-p32-from-rat)
+ (struct-out surf-p32-from-int)
  (struct-out surf-p32-if-nar)
  ;; Posit64 surface forms
  (struct-out surf-posit64-type)
@@ -129,6 +138,9 @@
  (struct-out surf-p64-lt)
  (struct-out surf-p64-le)
  (struct-out surf-p64-from-nat)
+ (struct-out surf-p64-to-rat)
+ (struct-out surf-p64-from-rat)
+ (struct-out surf-p64-from-int)
  (struct-out surf-p64-if-nar)
  ;; Quire surface forms (exact accumulators)
  (struct-out surf-quire8-type)
@@ -419,6 +431,11 @@
 ;; Conversion: (p8-from-nat n)
 (struct surf-p8-from-nat (n srcloc) #:transparent)
 
+;; Cross-family conversions
+(struct surf-p8-to-rat (a srcloc) #:transparent)
+(struct surf-p8-from-rat (a srcloc) #:transparent)
+(struct surf-p8-from-int (a srcloc) #:transparent)
+
 ;; Eliminator: (p8-if-nar A nar-case normal-case val)
 (struct surf-p8-if-nar (type nar-case normal-case val srcloc) #:transparent)
 
@@ -449,6 +466,11 @@
 
 ;; Conversion: (p16-from-nat n)
 (struct surf-p16-from-nat (n srcloc) #:transparent)
+
+;; Cross-family conversions
+(struct surf-p16-to-rat (a srcloc) #:transparent)
+(struct surf-p16-from-rat (a srcloc) #:transparent)
+(struct surf-p16-from-int (a srcloc) #:transparent)
 
 ;; Eliminator: (p16-if-nar A nar-case normal-case val)
 (struct surf-p16-if-nar (type nar-case normal-case val srcloc) #:transparent)
@@ -481,6 +503,11 @@
 ;; Conversion: (p32-from-nat n)
 (struct surf-p32-from-nat (n srcloc) #:transparent)
 
+;; Cross-family conversions
+(struct surf-p32-to-rat (a srcloc) #:transparent)
+(struct surf-p32-from-rat (a srcloc) #:transparent)
+(struct surf-p32-from-int (a srcloc) #:transparent)
+
 ;; Eliminator: (p32-if-nar A nar-case normal-case val)
 (struct surf-p32-if-nar (type nar-case normal-case val srcloc) #:transparent)
 
@@ -511,6 +538,11 @@
 
 ;; Conversion: (p64-from-nat n)
 (struct surf-p64-from-nat (n srcloc) #:transparent)
+
+;; Cross-family conversions
+(struct surf-p64-to-rat (a srcloc) #:transparent)
+(struct surf-p64-from-rat (a srcloc) #:transparent)
+(struct surf-p64-from-int (a srcloc) #:transparent)
 
 ;; Eliminator: (p64-if-nar A nar-case normal-case val)
 (struct surf-p64-if-nar (type nar-case normal-case val srcloc) #:transparent)
