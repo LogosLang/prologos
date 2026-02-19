@@ -172,17 +172,72 @@ The `classify-path` function handles all cases including `info.rkt` (triggers ru
 
 ---
 
-## Expected Impact
+## Measured Performance (Benchmarked 2026-02-19)
 
-| Changed file | Tests affected | Est. time |
-|---|---|---|
-| `pretty-print.rkt` | ~8 tests | ~10s |
-| `reduction.rkt` | ~20 tests | ~30s |
-| `parser.rkt` | ~25 tests | ~40s |
-| Single `.prologos` lib | ~5-15 tests | ~15s |
-| Single test file | 1 test | ~3s |
-| `prelude.rkt` | ~70 tests | ~full |
-| `driver.rkt` | ~55 tests | ~90s |
+**Environment**: macOS (Apple Silicon), Racket v9.0, `raco test -j 10`, warm bytecode cache
+**DAG query overhead**: ~0.5s (Racket startup + module load dominates; BFS itself < 1ms)
+
+### Actual DAG Fan-Out (corrected from original estimates)
+
+The original estimates for tests affected were significantly off for some modules:
+
+| Changed input | Original estimate | Actual DAG count | Notes |
+|---|---|---|---|
+| `pretty-print.rkt` | ~8 | **64** | Transitively affects nearly everything via elaborator/driver |
+| `parser.rkt` | ~25 | **62** | Feeds into elaborator → driver → most integration tests |
+| `driver.rkt` | ~55 | **60** | Close to original estimate |
+| `prelude.rkt` | ~70 | **77** | Close to original estimate |
+| Single `.prologos` lib | ~5-15 | **1-2** | Correct range for leaf modules |
+| Single test file | 1 | **1** | Always exact |
+
+### Wall-Clock Benchmarks
+
+All scenarios run sequentially (no contention), median of 3 runs for small scenarios, single run for large.
+
+| Scenario | Changed input | Tests run | Wall-clock | % of full suite | Savings |
+|---|---|---|---|---|---|
+| **Full suite** | `--all` (excl. pipe†) | 81/82 | **429s** (7.2 min) | 100% | — |
+| **Near-full source** | `prelude.rkt` | 76/82 | **422s** (7.0 min) | 98% | 2% |
+| **High-impact source** | `driver.rkt` | 59/82 | **405s** (6.8 min) | 94% | 6% |
+| **Mid-impact source** | `parser.rkt` | 61/82 | **404s** (6.7 min) | 94% | 6% |
+| **2 tests (.prologos lib)** | `prologos.data.datum` | 2/82 | **27s** | 6% | **94%** |
+| **Single test** | `test-quote.rkt` | 1/82 | **14s** | 3% | **97%** |
+
+†`test-pipe-compose.rkt` excluded from all timings — see Performance Outlier below.
+
+### Key Findings
+
+1. **Massive savings for leaf changes**: Editing a `.prologos` library or a single test file yields 94-97% time savings (14-27s vs 429s). This is the primary use case during iterative development.
+
+2. **Minimal savings for core module changes**: `prelude.rkt`, `parser.rkt`, and `driver.rkt` all trigger 59-77 tests, yielding only 2-6% savings. The `-j 10` parallelism means that once you exceed ~10 files, additional files add negligible wall-clock time.
+
+3. **Per-test overhead is ~14s**: Even a single test takes ~14s due to Racket module loading/compilation overhead. This is a fixed cost regardless of the scenario.
+
+4. **Parallelism saturation**: With `-j 10`, the wall-clock difference between 59 tests (405s) and 81 tests (429s) is only ~24s — the long pole is the slowest individual test in each batch.
+
+### Performance Outlier: `test-pipe-compose.rkt`
+
+`test-pipe-compose.rkt` (88 test checks) is a severe performance outlier:
+- **Alone**: >5 min (timed out at 300s), >2.4 GB memory, 94% CPU
+- **In full suite**: >60 min observed before kill (blocks the entire `-j 10` pool)
+- **Impact**: This single test dominates full-suite timing. Excluding it, the full suite completes in ~429s. Including it, the suite takes 60+ minutes.
+
+This is a separate performance issue (likely the transducer loop-fusion pipe tests involve expensive type-checking or reduction). The targeted test runner's biggest practical value may be **avoiding this test** when editing unrelated code — only 5 scenarios in the DAG include `test-pipe-compose.rkt`.
+
+### Original Estimates (for comparison)
+
+The pre-benchmark estimates were based on rough fan-out counts without timing:
+
+| Changed file | Est. tests | Est. time | Actual tests | Actual time |
+|---|---|---|---|---|
+| `pretty-print.rkt` | ~8 | ~10s | 64 | ~405s |
+| `parser.rkt` | ~25 | ~40s | 62 | ~404s |
+| `driver.rkt` | ~55 | ~90s | 60 | ~405s |
+| Single `.prologos` lib | ~5-15 | ~15s | 2 | ~27s |
+| Single test file | 1 | ~3s | 1 | ~14s |
+| `prelude.rkt` | ~70 | ~full | 77 | ~422s |
+
+The fan-out estimates for `pretty-print.rkt` and `parser.rkt` were severely undercounted — transitive closure through the DAG reveals much higher actual dependency.
 
 ---
 
@@ -223,4 +278,5 @@ racket tools/update-deps.rkt --check
 
 - `update-deps.rkt --write` mode (auto-update `dep-graph.rkt` data section)
 - CI integration (run `--check` as pre-commit hook)
-- Performance metrics logging (actual vs estimated time savings)
+- **Investigate `test-pipe-compose.rkt` performance** — 88 checks take >5 min / >2 GB RAM; likely transducer loop-fusion type-checking or reduction is pathological
+- Correct DAG fan-out for `pretty-print.rkt` (64 actual, not ~8 estimated) — consider whether `pretty-print.rkt` deps are truly needed by all those tests or if the DAG is over-counting
