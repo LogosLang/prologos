@@ -45,31 +45,31 @@ require [prologos.data.datum  :refer [Datum datum-sym datum-kw datum-nat
 ;; shorthand.
 
 ;; A symbol — the name of a function:
-(def my-sym : Datum (datum-sym (symbol-lit add)))
+def my-sym : Datum [datum-sym (symbol-lit add)]
 
 ;; A number wrapped as data:
-(def my-num : Datum (datum-nat 42))
+def my-num : Datum [datum-nat 42]
 
 ;; A keyword:
-(def my-kw : Datum (datum-kw :hello))
+def my-kw : Datum [datum-kw :hello]
 
 ;; A boolean:
-(def my-bool : Datum (datum-bool true))
+def my-bool : Datum [datum-bool true]
 
 ;; The empty list — datum-nil represents ():
-(def my-empty : Datum datum-nil)
+def my-empty : Datum := datum-nil
 
 ;; A pair — (datum-cons head tail) is like cons for data:
-(def my-pair : Datum
-  (datum-cons (datum-nat 1) (datum-cons (datum-nat 2) datum-nil)))
+def my-pair : Datum
+  [datum-cons [datum-nat 1] [datum-cons [datum-nat 2] datum-nil]]
 
 ;; Let's see what these look like:
-eval my-sym
-eval my-num
-eval my-kw
-eval my-bool
-eval my-empty
-eval my-pair
+my-sym
+my-num
+my-kw
+my-bool
+my-empty
+my-pair
 
 
 ;; ========================================================================
@@ -90,17 +90,17 @@ eval my-pair
 ;; Quote turns code into data. This is the heart of homoiconicity.
 
 ;; Atoms:
-eval 'foo
-eval '42
-eval ':hello
-eval 'true
-eval '()
+'foo
+'42
+':hello
+'true
+'()
 
 ;; A list — notice how (add 1 2) becomes a 3-element cons chain:
-eval '(add 1 2)
+'(add 1 2)
 
 ;; Nested structure — code trees are just nested cons cells:
-eval '(factorial (add 2 3))
+'(factorial (add 2 3))
 
 
 ;; ========================================================================
@@ -112,13 +112,13 @@ eval '(factorial (add 2 3))
 ;; reveals the constructor chain:
 
 ;; Simple atom — '42 desugars to (datum-nat 42):
-(expand-1 '42)
+expand-1 '42
 
 ;; Symbol — 'foo desugars to (datum-sym (symbol-lit foo)):
-(expand-1 'foo)
+expand-1 'foo
 
 ;; List — '(add 1 2) desugars to a datum-cons chain:
-(expand-1 '(add 1 2))
+expand-1 '(add 1 2)
 
 
 ;; ========================================================================
@@ -129,42 +129,42 @@ eval '(factorial (add 2 3))
 ;; This lets us write functions that inspect and transform code.
 
 ;; Extract a number from quoted data:
-(def extract-nat : [-> Datum Nat]
-  (fn (d : Datum)
-    (the Nat (match d
-      (datum-nat n -> n)
-      (datum-nil -> zero)
-      (datum-sym s -> zero)
-      (datum-bool b -> zero)))))
+spec extract-nat Datum -> Nat
+defn extract-nat [d]
+  match d
+    | datum-nat n  -> n
+    | datum-nil    -> zero
+    | datum-sym s  -> zero
+    | datum-bool b -> zero
 
 ;; Pull the number out of quoted 42:
-eval [extract-nat '42]
+extract-nat '42
 
 ;; Check if a datum is a symbol:
-(def is-sym? : [-> Datum Bool]
-  (fn (d : Datum)
-    (the Bool (match d
-      (datum-sym s -> true)
-      (datum-nat n -> false)
-      (datum-kw k -> false)
-      (datum-bool b -> false)
-      (datum-nil -> false)
-      (datum-cons h t -> false)))))
+spec is-sym? Datum -> Bool
+defn is-sym? [d]
+  match d
+    | datum-sym s    -> true
+    | datum-nat n    -> false
+    | datum-kw k     -> false
+    | datum-bool b   -> false
+    | datum-nil      -> false
+    | datum-cons h t -> false
 
-eval [is-sym? 'foo]
-eval [is-sym? '42]
+is-sym? 'foo
+is-sym? '42
 
 ;; Extract the head of a quoted list:
-(def datum-head : [-> Datum Datum]
-  (fn (d : Datum)
-    (the Datum (match d
-      (datum-cons h t -> h)
-      (datum-nil -> datum-nil)
-      (datum-nat n -> datum-nil)
-      (datum-sym s -> datum-nil)))))
+spec datum-head Datum -> Datum
+defn datum-head [d]
+  match d
+    | datum-cons h t -> h
+    | datum-nil      -> datum-nil
+    | datum-nat n    -> datum-nil
+    | datum-sym s    -> datum-nil
 
 ;; The head of '(add 1 2) is the symbol 'add:
-eval [datum-head '(add 1 2)]
+datum-head '(add 1 2)
 
 
 ;; ========================================================================
@@ -182,20 +182,20 @@ eval [datum-head '(add 1 2)]
 ;; unquote we build templates with Datum constructors (Section 11).
 
 ;; Without unquote — backtick is the same as single quote:
-eval `(add 10 20)
-eval '(add 10 20)
+`(add 10 20)
+'(add 10 20)
 
 ;; Top-level unquote splices a Datum value through the template:
-(def val-a : Datum (datum-nat 10))
-(def val-b : Datum (datum-nat 20))
+def val-a : Datum [datum-nat 10]
+def val-b : Datum [datum-nat 20]
 
 ;; `,expr passes through a Datum value unchanged:
-eval `,val-a
-eval `,val-b
+`,val-a
+`,val-b
 
 ;; You can also splice a symbol:
-(def x : Datum (datum-sym (symbol-lit result)))
-eval `,x
+def x : Datum [datum-sym [symbol-lit result]]
+`,x
 
 
 ;; ========================================================================
@@ -263,10 +263,10 @@ when-nonzero zero [double 5]
 zero |> inc |> inc |> inc
 
 ;; Compose two functions and apply:
-eval [[inc >> inc] zero]
+[inc >> inc] zero
 
 ;; Pipe into a composed function:
-eval [zero |> [inc >> double]]
+zero |> [inc >> double]
 
 
 ;; ========================================================================
@@ -278,19 +278,17 @@ eval [zero |> [inc >> double]]
 ;; followed by a terminal (reduce, sum, length, count).
 
 ;; Helper definitions:
+;; (These use sexp (def ...) because constructor bodies like `inc x`
+;; need explicit type annotations to resolve constructors.)
 (def inc-fn : [-> Nat Nat] (fn (x : Nat) (inc x)))
 (def is-positive : [-> Nat Bool]
   (fn (x : Nat) (match x (zero -> false) (inc _ -> true))))
 (def sum-rf : [-> Nat [-> Nat Nat]]
   (fn (acc : Nat) (fn (x : Nat) (add acc x))))
 
-;; Sample data: [1, 2, 3, 4]
-(def nums : [List Nat]
-  (cons Nat (inc zero)
-    (cons Nat (inc (inc zero))
-      (cons Nat (inc (inc (inc zero)))
-        (cons Nat (inc (inc (inc (inc zero))))
-          (nil Nat))))))
+;; Sample data: '(1 2 3 4)
+def nums : [List Nat]
+  cons Nat 1 [cons Nat 2 [cons Nat 3 [cons Nat 4 [nil Nat]]]]
 
 ;; Block pipe: map then reduce → fused O(n) single pass
 ;; [1,2,3,4] → map inc → [2,3,4,5] → reduce + 0 → 14
@@ -356,50 +354,50 @@ count-them
 ;; we build runtime code templates using Datum constructors directly.
 
 ;; Build an addition expression as data: (add a b)
-(def make-add : [-> Datum [-> Datum Datum]]
-  (fn (a : Datum) (fn (b : Datum)
-    (datum-cons 'add (datum-cons a (datum-cons b datum-nil))))))
+spec make-add Datum -> Datum -> Datum
+defn make-add [a b]
+  datum-cons 'add [datum-cons a [datum-cons b datum-nil]]
 
-eval [make-add '1 '2]
-eval [make-add '10 '20]
+make-add '1 '2
+make-add '10 '20
 
 ;; Build any 2-arg call as data: (f a b)
-(def make-call : [-> Datum [-> Datum [-> Datum Datum]]]
-  (fn (f : Datum) (fn (a : Datum) (fn (b : Datum)
-    (datum-cons f (datum-cons a (datum-cons b datum-nil)))))))
+spec make-call Datum -> Datum -> Datum -> Datum
+defn make-call [f a b]
+  datum-cons f [datum-cons a [datum-cons b datum-nil]]
 
-eval [make-call 'add '1 '2]
-eval [make-call 'mult '6 '7]
+make-call 'add '1 '2
+make-call 'mult '6 '7
 
 ;; Wrap any expression in a function call: (func-name arg)
-(def wrap-in : [-> Datum [-> Datum Datum]]
-  (fn (func-name : Datum) (fn (arg : Datum)
-    (datum-cons func-name (datum-cons arg datum-nil)))))
+spec wrap-in Datum -> Datum -> Datum
+defn wrap-in [func-name arg]
+  datum-cons func-name [datum-cons arg datum-nil]
 
-eval [wrap-in 'inc '42]
-eval [wrap-in 'double '(add 1 2)]
+wrap-in 'inc '42
+wrap-in 'double '(add 1 2)
 
 ;; Compose code transformations:
 ;; Start with '5, wrap in 'inc, then wrap in 'double
-(def code : Datum '5)
-(def step1 : Datum [wrap-in 'inc code])
-(def step2 : Datum [wrap-in 'double step1])
+def code : Datum := '5
+def step1 : Datum [wrap-in 'inc code]
+def step2 : Datum [wrap-in 'double step1]
 
 ;; Watch the code tree grow:
 ;; '5 → (inc 5) → (double (inc 5))
-eval code
-eval step1
-eval step2
+code
+step1
+step2
 
 ;; Extract and re-wrap — datum surgery:
-(def original : Datum '(add 1 2))
-(def op : Datum [datum-head original])
+def original : Datum := '(add 1 2)
+def op : Datum [datum-head original]
 
 ;; The head of (add 1 2) is the symbol 'add:
-eval op
+op
 
 ;; Use it to build a NEW expression — (add 99):
-eval [wrap-in op '99]
+wrap-in op '99
 
 
 ;; ========================================================================
@@ -432,13 +430,13 @@ apply-twice-macro inc 3
 apply-twice-macro double 2
 
 ;; Quote the macro call itself — it's just data:
-eval '(apply-twice-macro inc 3)
+'(apply-twice-macro inc 3)
 
 ;; We can inspect the quoted macro call:
-eval [datum-head '(apply-twice-macro inc 3)]
+datum-head '(apply-twice-macro inc 3)
 
 ;; Final flourish: build a datum, extract its pieces, wrap them up:
-(def expr : Datum '(mult 6 7))
-(def head-sym : Datum [datum-head expr])
-eval head-sym
-eval expr
+def expr : Datum := '(mult 6 7)
+def head-sym : Datum [datum-head expr]
+head-sym
+expr
