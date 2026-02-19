@@ -201,6 +201,8 @@
  (struct-out surf-infer)
  ;; Inspection commands
  (struct-out surf-expand)
+ (struct-out surf-expand-1)
+ (struct-out surf-expand-full)
  (struct-out surf-parse)
  (struct-out surf-elaborate)
  ;; Annotated lambda
@@ -656,6 +658,12 @@
 
 ;; Inspection: (elaborate form) — show elaborated core AST
 (struct surf-elaborate (expr srcloc) #:transparent)
+
+;; Inspection: (expand-1 form) — show single preparse expansion step
+(struct surf-expand-1 (datum srcloc) #:transparent)
+
+;; Inspection: (expand-full form) — show all preparse transforms with labels
+(struct surf-expand-full (datum srcloc) #:transparent)
 
 ;; Annotated lambda: (the-fn type [params...] body)
 ;; Desugars to (the type (fn (p1:T1) (fn (p2:T2) ... body)))

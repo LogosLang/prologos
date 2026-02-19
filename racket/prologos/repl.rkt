@@ -32,7 +32,7 @@
 ;; ========================================
 (define (run-repl)
   (displayln "Prologos v0.3.0")
-  (displayln ":quit to exit | :env | :load \"path\"")
+  (displayln ":quit to exit | :env | :load | :type | :expand | :macros | :specs")
   (newline)
   ;; Start with empty global env
   (parameterize ([current-global-env (hasheq)])
@@ -228,6 +228,79 @@
                (if (prologos-error? result)
                    (displayln (format-error result))
                    (displayln result))))))]
+    ;; :expand-full must come before :expand (string-prefix? overlap)
+    [(string-prefix? cmd ":expand-full")
+     (let ([expr-str (string-trim (substring cmd 12))])
+       (with-handlers ([exn:fail? (lambda (e)
+                                    (displayln (format "Error: ~a" (exn-message e))))])
+         (define port (open-input-string (format "(expand-full ~a)" expr-str)))
+         (port-count-lines! port)
+         (define stx (prologos-sexp-read-syntax "<repl>" port))
+         (unless (eof-object? stx)
+           (define surf (parse-datum stx))
+           (if (prologos-error? surf)
+               (displayln (format-error surf))
+               (let ([result (process-command surf)])
+                 (if (prologos-error? result)
+                     (displayln (format-error result))
+                     (displayln result)))))))]
+    ;; :expand-1 must come before :expand (string-prefix? overlap)
+    [(string-prefix? cmd ":expand-1")
+     (let ([expr-str (string-trim (substring cmd 9))])
+       (with-handlers ([exn:fail? (lambda (e)
+                                    (displayln (format "Error: ~a" (exn-message e))))])
+         (define port (open-input-string (format "(expand-1 ~a)" expr-str)))
+         (port-count-lines! port)
+         (define stx (prologos-sexp-read-syntax "<repl>" port))
+         (unless (eof-object? stx)
+           (define surf (parse-datum stx))
+           (if (prologos-error? surf)
+               (displayln (format-error surf))
+               (let ([result (process-command surf)])
+                 (if (prologos-error? result)
+                     (displayln (format-error result))
+                     (displayln result)))))))]
+    [(string-prefix? cmd ":expand")
+     (let ([expr-str (string-trim (substring cmd 7))])
+       (with-handlers ([exn:fail? (lambda (e)
+                                    (displayln (format "Error: ~a" (exn-message e))))])
+         (define port (open-input-string (format "(expand ~a)" expr-str)))
+         (port-count-lines! port)
+         (define stx (prologos-sexp-read-syntax "<repl>" port))
+         (unless (eof-object? stx)
+           (define surf (parse-datum stx))
+           (if (prologos-error? surf)
+               (displayln (format-error surf))
+               (let ([result (process-command surf)])
+                 (if (prologos-error? result)
+                     (displayln (format-error result))
+                     (displayln result)))))))]
+    [(string=? cmd ":macros")
+     (define reg (current-preparse-registry))
+     (if (hash-empty? reg)
+         (displayln "  (no macros registered)")
+         (for ([(name entry) (in-hash reg)])
+           (cond
+             [(preparse-macro? entry)
+              (displayln (format "  ~a  (pattern -> template)" name))]
+             [(procedure? entry)
+              (displayln (format "  ~a  (procedural)" name))]
+             [else
+              (displayln (format "  ~a" name))])))]
+    [(string=? cmd ":specs")
+     (define store (current-spec-store))
+     (if (hash-empty? store)
+         (displayln "  (no specs registered)")
+         (for ([(name entry) (in-hash store)])
+           (define types (spec-entry-type-datums entry))
+           (displayln
+            (format "  spec ~a ~a"
+                    name
+                    (string-join
+                     (map (lambda (clause)
+                            (string-join (map (lambda (t) (format "~s" t)) clause) " "))
+                          types)
+                     " | ")))))]
     [else
      (displayln (format "Unknown command: ~a" cmd))]))
 

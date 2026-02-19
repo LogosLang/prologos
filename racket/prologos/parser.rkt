@@ -39,7 +39,7 @@
     Keyword Map map-empty map-assoc map-get map-dissoc map-size map-has-key? map-keys map-vals
     Set set-empty set-insert set-member? set-delete set-size set-union set-intersect set-diff set-to-list
     PVec pvec-empty pvec-push pvec-nth pvec-update pvec-length pvec-pop pvec-concat pvec-slice
-    def defn check eval infer expand parse elaborate match
+    def defn check eval infer expand expand-1 expand-full parse elaborate match
     ;; Pre-parse macros — should be expanded before reaching parser
     defmacro let do if deftype data spec trait impl where bundle
     ;; Private-suffix forms — consumed in preparse, rewritten to base form
@@ -1862,6 +1862,18 @@
         (or (check-arity 'expand args 1 loc)
             (let ([raw (car args)])
               (surf-expand (if (syntax? raw) (syntax->datum raw) raw) loc)))]
+
+       ;; (expand-1 form) — single-step preparse expansion
+       [(expand-1)
+        (or (check-arity 'expand-1 args 1 loc)
+            (let ([raw (car args)])
+              (surf-expand-1 (if (syntax? raw) (syntax->datum raw) raw) loc)))]
+
+       ;; (expand-full form) — all preparse transforms with labels
+       [(expand-full)
+        (or (check-arity 'expand-full args 1 loc)
+            (let ([raw (car args)])
+              (surf-expand-full (if (syntax? raw) (syntax->datum raw) raw) loc)))]
 
        ;; (parse form) — parsed surface AST
        [(parse)

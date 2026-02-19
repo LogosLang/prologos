@@ -1782,6 +1782,14 @@
     [(surf-expand datum loc)
      (list 'expand datum)]
 
+    ;; Inspection: expand-1 — single-step expansion, datum passes through
+    [(surf-expand-1 datum loc)
+     (list 'expand-1 datum)]
+
+    ;; Inspection: expand-full — all transforms, datum passes through
+    [(surf-expand-full datum loc)
+     (list 'expand-full datum)]
+
     ;; Inspection: parse — surface AST passes through, shown directly
     [(surf-parse expr-surf loc)
      (list 'parse expr-surf)]

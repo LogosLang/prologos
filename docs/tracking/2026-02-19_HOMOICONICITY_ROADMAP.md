@@ -78,14 +78,53 @@ The inner readtable for `<...>` still overrides `|` with its own handler (produc
 **Estimated effort**: 2–3 sessions, ~40 tests
 **Dependencies**: None (Phase I helpful but not required)
 
+### Completed
+
+| ID | Feature | Date | Notes |
+|----|---------|------|-------|
+| C1 | `expand-1` — single-step macro expansion | 2026-02-19 | New `preparse-expand-1` function, `surf-expand-1` struct, parser/elaborator/driver integration |
+| C7 | `expand-full` — show ALL preparse transforms | 2026-02-19 | New `preparse-expand-full` returns labeled steps: input, def-assign, spec-inject, where-inject, infix-rewrite, macro-expand |
+| C8 | REPL shortcuts: `:expand`, `:expand-1`, `:expand-full`, `:macros`, `:specs` | 2026-02-19 | 5 new REPL commands. `:macros` lists preparse registry (procedural vs pattern-template). `:specs` lists spec store. |
+
+### Remaining
+
 | ID | Feature | Status | Notes |
 |----|---------|--------|-------|
-| C1 | `expand-1` — single-step macro expansion | ⬚ | Currently `(expand datum)` shows only final result |
-| C7 | `expand-full` — show ALL preparse transforms (including spec/where injection, infix canonicalization, let merging) | ⬚ | Currently these 5 non-macro rewrites (B1–B5) are invisible |
-| C8 | REPL shortcuts: `:expand`, `:parse`, `:elaborate`, `:macros`, `:specs` | ⬚ | Currently only `:type`, `:env`, `:load`, `:quit` |
 | C6 | Round-trippable pretty-printer (`pp-datum` mode) | ⬚ | Current pretty-printer produces human-readable but non-parseable output |
 
-### Non-Macro Rewrites to Make Visible (via C7)
+#### Design Notes — C1 (expand-1)
+
+`preparse-expand-1` performs exactly one expansion step at the outermost level. No recursion into subforms, no fixpoint loop. Returns the datum unchanged if no macro matches. Handles both procedural macros (do, let, if, $list-literal) and pattern-template macros (user `defmacro` definitions).
+
+**Files changed**: `macros.rkt` (new function + provide), `surface-syntax.rkt` (new struct), `parser.rkt` (keyword + parsing), `elaborator.rkt` (passthrough), `driver.rkt` (dispatch)
+
+#### Design Notes — C7 (expand-full)
+
+`preparse-expand-full` applies all preparse transforms in explicit sequence, recording each step that produces a change:
+1. **def-assign** — `:=` syntax expansion
+2. **spec-inject** — `maybe-inject-spec`/`maybe-inject-spec-def` for def/defn
+3. **where-inject** — `maybe-inject-where` for def/defn (guarded)
+4. **infix-rewrite** — `rewrite-infix-operators` for `>>` → `$compose`, `|>` canonicalization
+5. **macro-expand** — `preparse-expand-form` to fixpoint
+
+**Key insight**: When used inline as `(expand-full expr)`, the expr is pre-expanded by the pipeline before `expand-full` sees it, so macro-expansion steps may not appear. The feature is most useful via unit tests, REPL `:expand-full`, or for showing spec/where injection steps on `defn` forms.
+
+**Files changed**: `macros.rkt` (new function + provide + exports for internal helpers), `surface-syntax.rkt`, `parser.rkt`, `elaborator.rkt`, `driver.rkt`
+
+#### Design Notes — C8 (REPL Shortcuts)
+
+New REPL commands added to `handle-repl-command` in `repl.rkt`:
+- `:expand expr` — wraps as `(expand expr)`, shows full preparse expansion
+- `:expand-1 expr` — wraps as `(expand-1 expr)`, shows single-step
+- `:expand-full expr` — wraps as `(expand-full expr)`, shows all transform steps with labels
+- `:macros` — lists all entries in `current-preparse-registry` with type (procedural vs pattern→template)
+- `:specs` — lists all entries in `current-spec-store` with type signatures
+
+**Ordering constraint**: `:expand-full` and `:expand-1` use `string-prefix?` matching, so they must appear before `:expand` in the cond chain.
+
+**Files changed**: `repl.rkt`
+
+### Non-Macro Rewrites Made Visible (via C7)
 
 | ID | Rewrite | Location | What It Does |
 |----|---------|----------|-------------|
@@ -94,6 +133,8 @@ The inner readtable for `<...>` still overrides `|` with its own handler (produc
 | B3 | Where-clause injection | `maybe-inject-where` | Desugars trait constraints into synthetic dict params |
 | B4 | Let merging | `merge-sibling-lets` | Combines consecutive let bindings |
 | B5 | Foreign block combining | `combine-foreign-blocks` | Merges consecutive `$foreign` forms |
+
+**Note**: B4 (let merging) and B5 (foreign combining) happen in `preparse-expand-subforms` during recursive expansion. They are made visible by the macro-expand step in `expand-full` (the final expanded result reflects their effect). They are not individually labeled because they operate on sibling elements within a form, not at the top level.
 
 ---
 
@@ -172,3 +213,14 @@ The inner readtable for `<...>` still overrides `|` with its own handler (produc
 - **21 new tests**: `test-sexp-reader-parity.rkt` — datum-level + end-to-end for all three operators
 - **Test count**: 2613 (2592 + 21 new), all passing
 - **Files changed**: `macros.rkt`, `sexp-readtable.rkt`, new `tests/test-sexp-reader-parity.rkt`
+
+### 2026-02-19 — Phase II: Introspection Tooling (COMPLETE)
+
+- **C1 implemented**: `expand-1` — new `preparse-expand-1` function (single-step, no recursion), `surf-expand-1` struct, full pipeline integration
+- **C7 implemented**: `expand-full` — new `preparse-expand-full` function returning labeled `(label . datum)` pairs showing each transform step (input, def-assign, spec-inject, where-inject, infix-rewrite, macro-expand)
+- **C8 implemented**: 5 new REPL commands — `:expand`, `:expand-1`, `:expand-full`, `:macros`, `:specs`
+- **C6 deferred**: Round-trip pretty-printer — large effort, not critical for Phase 0
+- **Newly exported**: `rewrite-infix-operators`, `maybe-inject-spec`, `maybe-inject-spec-def`, `expand-def-assign` from macros.rkt for external introspection use
+- **34 new tests**: `test-introspection.rkt` — expand-1 unit (11), expand-full unit (8), e2e sexp (6), regression (3), registry (6)
+- **Test count**: 2647 (2613 + 34 new), all passing
+- **Files changed**: `macros.rkt`, `surface-syntax.rkt`, `parser.rkt`, `elaborator.rkt`, `driver.rkt`, `repl.rkt`, new `tests/test-introspection.rkt`

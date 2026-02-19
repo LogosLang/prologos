@@ -36,6 +36,8 @@
          preparse-expand-form
          preparse-expand-all
          preparse-expand-single
+         preparse-expand-1
+         preparse-expand-full
          preparse-macro
          preparse-macro?
          expand-lseq-literal
@@ -130,7 +132,12 @@
          process-spec
          extract-where-clause
          maybe-inject-where
-         param-type->angle-type)
+         param-type->angle-type
+         ;; Introspection helpers (Phase II)
+         rewrite-infix-operators
+         maybe-inject-spec
+         maybe-inject-spec-def
+         expand-def-assign)
 
 ;; ================================================================
 ;; LAYER 1: PRE-PARSE MACRO SYSTEM
@@ -345,6 +352,32 @@
      (preparse-expand-subforms datum reg depth)]
     [else datum]))
 
+;; Single-step macro expansion. Returns the result of exactly one expansion.
+;; If no expansion applies, returns the datum unchanged.
+;; Does NOT recurse into subforms — shows only the outermost rewrite.
+;; Used by the `expand-1` inspection command.
+(define (preparse-expand-1 datum [registry #f])
+  (define reg (or registry (current-preparse-registry)))
+  (cond
+    [(symbol? datum)
+     (define entry (hash-ref reg datum #f))
+     (cond
+       [(procedure? entry) (entry datum)]
+       [else datum])]
+    [(and (pair? datum) (eq? (car datum) '$foreign-block))
+     datum]
+    [(and (pair? datum) (symbol? (car datum)))
+     (define entry (hash-ref reg (car datum) #f))
+     (cond
+       [(preparse-macro? entry)
+        (define bindings (datum-match (preparse-macro-pattern entry) datum))
+        (if bindings
+            (datum-subst (preparse-macro-template entry) bindings)
+            datum)]
+       [(procedure? entry) (entry datum)]
+       [else datum])]
+    [else datum]))
+
 ;; Expand a single top-level datum through all preparse stages.
 ;; Applies: def := expansion, spec injection, then preparse-expand-form.
 ;; Used by the `expand` inspection command.
@@ -369,6 +402,59 @@
        ;; Everything else — standard preparse
        [else (preparse-expand-form datum)])]
     [else (preparse-expand-form datum)]))
+
+;; Full preparse expansion with all intermediate steps visible.
+;; Returns a list of (label . datum) pairs showing each transformation.
+;; Shows: def-assign expansion, spec injection, where-clause injection,
+;; infix rewriting, and macro expansion — making all "invisible" rewrites visible.
+;; Used by the `expand-full` inspection command.
+(define (preparse-expand-full datum)
+  (define steps '())
+  (define (record! label d)
+    (set! steps (cons (cons label d) steps)))
+
+  (record! "input" datum)
+
+  ;; Step 1: def := expansion
+  (define after-assign
+    (if (and (pair? datum) (symbol? (car datum))
+             (eq? (car datum) 'def) (memq ':= datum))
+        (let ([r (expand-def-assign datum)])
+          (unless (equal? r datum) (record! "def-assign" r)) r)
+        datum))
+
+  ;; Step 2: spec injection (for def/defn)
+  (define after-spec
+    (cond
+      [(and (pair? after-assign) (eq? (car after-assign) 'defn))
+       (let ([r (maybe-inject-spec after-assign)])
+         (unless (equal? r after-assign) (record! "spec-inject" r)) r)]
+      [(and (pair? after-assign) (eq? (car after-assign) 'def))
+       (let ([r (maybe-inject-spec-def after-assign)])
+         (unless (equal? r after-assign) (record! "spec-inject" r)) r)]
+      [else after-assign]))
+
+  ;; Step 3: where-clause injection (only for def/defn forms)
+  (define after-where
+    (if (and (pair? after-spec) (symbol? (car after-spec))
+             (memq (car after-spec) '(def defn)))
+        (let ([r (maybe-inject-where after-spec)])
+          (unless (equal? r after-spec) (record! "where-inject" r)) r)
+        after-spec))
+
+  ;; Step 4: infix rewriting
+  (define after-infix
+    (if (pair? after-where)
+        (let ([r (rewrite-infix-operators after-where)])
+          (unless (equal? r after-where) (record! "infix-rewrite" r)) r)
+        after-where))
+
+  ;; Step 5: macro expansion (to fixpoint)
+  (define after-macros (preparse-expand-form after-infix))
+  (unless (equal? after-macros after-infix)
+    (record! "macro-expand" after-macros))
+
+  (reverse steps))
 
 ;; Merge consecutive bodyless let forms into a single let with bracket bindings.
 ;; Input: list of elements (siblings in a form).
@@ -4077,6 +4163,8 @@
     ;; Inspection commands — expand/parse pass through as-is,
     ;; elaborate expands its sub-expression (consistent with eval/infer)
     [(surf-expand? surf) surf]
+    [(surf-expand-1? surf) surf]
+    [(surf-expand-full? surf) surf]
     [(surf-parse? surf) surf]
     [(surf-elaborate? surf)
      (surf-elaborate (expand-expression (surf-elaborate-expr surf))
