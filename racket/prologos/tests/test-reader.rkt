@@ -98,9 +98,11 @@
   (check-equal? (tok-val toks 2) 'x)
   (check-equal? (tok-type toks 3) 'rparen))
 
-(test-case "tokenize: dollar sign"
+(test-case "tokenize: dollar sign is identifier prefix"
+  ;; $ is now an identifier start character — $x is a single symbol token
   (define toks (tokenize-string "$x"))
-  (check-equal? (tok-type toks 1) 'dollar))
+  (check-equal? (tok-type toks 1) 'symbol)
+  (check-equal? (tok-val toks 1) '$x))
 
 (test-case "tokenize: string literal"
   (define toks (tokenize-string "\"hello world\""))

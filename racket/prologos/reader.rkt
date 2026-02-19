@@ -95,7 +95,8 @@
            (char=? c #\+)    ; operator symbols (foreign interop)
            (char=? c #\*)    ; product type and operator
            (char=? c #\/)    ; division operator
-           (char=? c #\=)))) ; equality operator
+           (char=? c #\=)    ; equality operator
+           (char=? c #\$)))) ; pattern variable prefix ($x in defmacro)
 
 (define (ident-continue? c)
   (and (char? c)
@@ -110,7 +111,8 @@
            (char=? c #\')
            (char=? c #\/)    ; qualified names
            (char=? c #\.)    ; namespace dots
-           (char=? c #\=)))) ; for => and similar
+           (char=? c #\=)    ; for => and similar
+           (char=? c #\$)))) ; for $-prefixed identifiers
 
 (define (delimiter? c)
   (and (char? c)
@@ -347,12 +349,10 @@
           (error 'prologos-reader "~a:~a:~a: Unexpected >"
                  (tokenizer-source tok) ln (+ cl 1))])]
 
-      ;; Dollar — quote operator
-      [(char=? c #\$)
-       (tok-read! tok)
-       (token 'dollar #f ln cl ps 1)]
+      ;; NOTE: Dollar ($) is now handled as an identifier prefix via ident-start?
+      ;; $foo reads as the symbol $foo (used for defmacro pattern variables).
 
-      ;; Single quote — list literal '[ ... ]
+      ;; Single quote — list literal '[ ... ] or quote operator 'expr
       [(char=? c #\')
        (tok-read! tok)
        (define next (tok-peek tok))
@@ -361,9 +361,8 @@
           ;; '[ — list literal opener; [ will be consumed by parse-list-literal-form
           (token 'quote-lbracket #f ln cl ps 1)]
          [else
-          (error 'prologos-reader
-                 "~a:~a:~a: Unexpected ' — use '[...] for list literals or $expr for quoting"
-                 (tokenizer-source tok) ln (+ cl 1))])]
+          ;; 'expr — quote operator; expr will be parsed by parse-inline-element
+          (token 'quote #f ln cl ps 1)])]
 
       ;; At-sign — PVec literal @[ ... ]
       [(char=? c #\@)
@@ -998,9 +997,9 @@
     [(eq? tt 'hash-lbrace)
      ;; #{ ... } — Set literal
      (parse-set-literal-form p)]
-    [(eq? tt 'dollar)
-     ;; $expr — quote operator
-     (define d (parser-next! p)) ; consume $
+    [(eq? tt 'quote)
+     ;; 'expr — quote operator
+     (define d (parser-next! p)) ; consume '
      (define inner (parse-inline-element p))
      (define src (parser-source p))
      (make-stx (list (make-stx '$quote src

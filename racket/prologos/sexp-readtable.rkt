@@ -248,12 +248,12 @@
      (define span (- end-pos pos))
      (datum->syntax #f (cons '$list-literal elements)
                     (list src line col pos span))]
-    ;; Not '[ — fall back to standard quote
+    ;; Not '[ — quote operator: 'expr → ($quote expr)
     [else
      (define inner
        (parameterize ([current-readtable prologos-readtable])
          (read-syntax src port)))
-     (datum->syntax #f (list 'quote inner)
+     (datum->syntax #f (list '$quote inner)
                     (list src line col pos (max 1 (- (file-position port) pos))))]))
 
 (define (read-quote-datum ch port)

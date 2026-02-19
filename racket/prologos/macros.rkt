@@ -898,34 +898,19 @@
   (reverse result))
 
 ;; ========================================
-;; WS reader normalization for pattern variables
-;; ========================================
-;; The WS reader converts $X to ($quote X). For defmacro/deftype patterns
-;; and templates, we need to convert these back to the $X symbol form.
-(define (normalize-quote-vars datum)
-  (cond
-    ;; ($quote X) → $X
-    [(and (list? datum) (= (length datum) 2)
-          (eq? (car datum) '$quote) (symbol? (cadr datum)))
-     (string->symbol (string-append "$" (symbol->string (cadr datum))))]
-    ;; Recurse into lists
-    [(list? datum)
-     (map normalize-quote-vars datum)]
-    ;; Pass through atoms
-    [else datum]))
-
-;; ========================================
 ;; process-defmacro: register a user macro
 ;; ========================================
 ;; (defmacro name ($param ...) template)
+;; Pattern variables use $-prefixed symbols: $x, $body, $args
+;; These are read as plain symbols by the reader (no normalization needed).
 (define (process-defmacro datum)
   (unless (and (list? datum) (= (length datum) 4))
     (error 'defmacro "defmacro requires: (defmacro name ($params...) template)"))
   (define macro-name (cadr datum))
   (unless (symbol? macro-name)
     (error 'defmacro "defmacro: name must be a symbol, got ~a" macro-name))
-  (define params (normalize-quote-vars (caddr datum)))
-  (define template (normalize-quote-vars (cadddr datum)))
+  (define params (caddr datum))
+  (define template (cadddr datum))
   (define pattern (if (list? params) (cons macro-name params) (list macro-name params)))
   (register-preparse-macro! macro-name (preparse-macro macro-name pattern template)))
 
@@ -934,11 +919,12 @@
 ;; ========================================
 ;; (deftype Name body) — simple alias
 ;; (deftype (Name $A $B ...) body) — parameterized alias
+;; Pattern variables use $-prefixed symbols: $A, $B
 (define (process-deftype datum)
   (unless (and (list? datum) (= (length datum) 3))
     (error 'deftype "deftype requires: (deftype name-or-pattern body)"))
-  (define pattern (normalize-quote-vars (cadr datum)))
-  (define body (normalize-quote-vars (caddr datum)))
+  (define pattern (cadr datum))
+  (define body (caddr datum))
   (cond
     [(symbol? pattern)
      ;; Simple alias: bare symbol expands to body
@@ -2291,6 +2277,9 @@
 (register-preparse-macro! '$lseq-literal expand-lseq-literal)
 (register-preparse-macro! '$pipe-gt expand-pipe-block)
 (register-preparse-macro! '$compose expand-compose-sexp)
+;; $quote: identity strip — 'expr → ($quote expr) → expr
+;; Full runtime quote (code-as-data producing values) is deferred to Phase III.
+(register-preparse-macro! '$quote (lambda (datum) (cadr datum)))
 
 
 ;; ========================================

@@ -57,9 +57,11 @@
   (define types (map (lambda (t) (vector-ref (struct->vector t) 1)) toks))
   (check-not-false (member 'quote-lbracket types)))
 
-(test-case "tokenize: standalone ' without [ produces error"
-  (check-exn exn:fail?
-    (lambda () (tokenize-string "'x"))))
+(test-case "tokenize: standalone ' without [ produces quote token"
+  ;; 'x now produces a 'quote token (quote operator), not an error
+  (define toks (tokenize-string "'x"))
+  (define types (map (lambda (t) (vector-ref (struct->vector t) 1)) toks))
+  (check-not-false (member 'quote types)))
 
 ;; ================================================================
 ;; WS READER PARSE TESTS
@@ -151,15 +153,17 @@
   (define result (prologos-sexp-read in))
   (check-equal? result '($list-literal 1 2 3)))
 
-(test-case "sexp: regular 'foo still produces quote"
+(test-case "sexp: regular 'foo produces $quote"
+  ;; 'foo in sexp mode now produces ($quote foo) for parity with WS mode
   (define in (open-input-string "'foo"))
   (define result (prologos-sexp-read in))
-  (check-equal? result '(quote foo)))
+  (check-equal? result '($quote foo)))
 
-(test-case "sexp: '(1 2) still produces quote (regular parens)"
+(test-case "sexp: '(1 2) produces $quote (regular parens)"
+  ;; '(1 2) in sexp mode now produces ($quote (1 2)) for parity with WS mode
   (define in (open-input-string "'(1 2)"))
   (define result (prologos-sexp-read in))
-  (check-equal? result '(quote (1 2))))
+  (check-equal? result '($quote (1 2))))
 
 ;; ================================================================
 ;; PRETTY PRINTER TESTS
