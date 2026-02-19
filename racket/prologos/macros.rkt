@@ -2024,30 +2024,248 @@
   ;; Wrap in lambda
   `(fn (,var : _) ,body))
 
+;; Canonicalize infix |> in a flat datum to block form ($pipe-gt init step1 step2 ...).
+;; (x $pipe-gt f a $pipe-gt g b) → ($pipe-gt x (f a) (g b))
+;; This routes through the registered $pipe-gt macro for unified expansion.
+(define (canonicalize-infix-pipe datum)
+  (define segments (split-on-infix-symbol '$pipe-gt datum))
+  (when (< (length segments) 2)
+    (error 'pipe "|> requires at least a value and one step"))
+  ;; First segment is the initial value
+  (define init-seg (car segments))
+  (define init (if (= (length init-seg) 1) (car init-seg) init-seg))
+  ;; Subsequent segments stay as-is — each segment is already a list of
+  ;; the atoms/forms between |> markers. This preserves the semantics that
+  ;; apply-pipe-step expects: (f a b) is a multi-element step.
+  ;; A single-element segment like ((fn ...)) stays as ((fn ...)) so that
+  ;; apply-pipe-step sees a one-element list whose car is a list → application.
+  `($pipe-gt ,init ,@(cdr segments)))
+
 ;; Rewrite infix operators ($pipe-gt, $compose) in a datum.
 ;; Called from preparse-expand-subforms before recursing into subexpressions.
+;; For |>: canonicalizes to block form ($pipe-gt init step1 ...) so the registered
+;; macro handles fusion uniformly for both infix and block syntax.
 (define (rewrite-infix-operators datum)
   (cond
     [(not (list? datum)) datum]
-    ;; Check for $pipe-gt (|>) anywhere in the flat list
-    [(memq '$pipe-gt datum) (rewrite-pipe datum)]
+    ;; Check for $pipe-gt (|>) as infix in the flat list (not at head position)
+    [(and (memq '$pipe-gt datum)
+          (not (eq? (car datum) '$pipe-gt)))
+     (canonicalize-infix-pipe datum)]
     ;; Check for $compose (>>) anywhere in the flat list
     [(memq '$compose datum) (rewrite-compose datum)]
     [else datum]))
 
-;; Sexp-mode handler: (|> data step1 step2 ...)
-;; Each step is already a sub-list (from Racket's reader).
-(define (expand-pipe-sexp datum)
-  (define parts (cdr datum))  ; everything after |>
-  (when (< (length parts) 2)
-    (error 'pipe "|> requires at least a value and one step"))
+;; ========================================
+;; Block-form pipe macro with loop fusion
+;; ========================================
+;; ($pipe-gt init step1 step2 ...) — block-form pipe with automatic fusion.
+;; Consecutive fusible operations (map, filter, remove) are composed into a
+;; single transducer pass via xf-compose + transduce/into-list.
+;; Non-fusible operations act as barriers that materialize intermediate results.
+
+;; --- Step classification tables ---
+(define pipe-fusible-ops '(map filter remove))
+(define pipe-terminal-ops '(reduce sum length count))
+(define pipe-barrier-ops '(sort reverse partition zip zip-with dedup scanl foldr
+                           foldr1 concat concat-map take drop take-while drop-while
+                           append intersperse span break))
+
+;; Classify a pipe step: 'fusible, 'terminal, 'barrier, or 'plain.
+(define (classify-pipe-step step)
+  (cond
+    [(not (list? step)) 'plain]
+    [(null? step) (error 'pipe "|> pipe step cannot be empty")]
+    [else
+     (define head (car step))
+     (define has-underscore (> (count-top-level-underscores step) 0))
+     (cond
+       ;; _ in the step → positional application, not fusible
+       [has-underscore 'plain]
+       ;; Fusible: exactly (op arg) with no extra args
+       [(and (memq head pipe-fusible-ops) (= (length step) 2)) 'fusible]
+       ;; Terminal: consumes the pipeline
+       [(memq head pipe-terminal-ops) 'terminal]
+       ;; Barrier: materializes intermediate list
+       [(memq head pipe-barrier-ops) 'barrier]
+       [else 'plain])]))
+
+;; ---- Inline reducer composition for loop fusion ----
+;; Instead of emitting transducer API calls (which need explicit type args),
+;; we build composed reducers inline. This achieves O(n) single-pass
+;; using only `reduce` (which works with implicit type inference).
+;;
+;; A fusible chain [map f, filter p, map g] with reducer rf and init z produces:
+;;   (reduce (fn ($a : _) (fn ($x0 : _)
+;;     (let $x1 := (f $x0)
+;;       (if (p $x1)
+;;           (let $x2 := (g $x1)
+;;             (rf $a $x2))
+;;           $a))))
+;;     z xs)
+;;
+;; Each fusible step wraps the body:
+;;   map f    → let $xN := (f $xPrev) ... continue with $xN
+;;   filter p → if (p $xPrev) ... continue ... else $acc
+;;   remove p → if (p $xPrev) $acc else ... continue ...
+
+;; Generate a unique symbol for the Nth element variable in the fused reducer.
+(define (pipe-var n) (string->symbol (format "$x~a" n)))
+
+;; Build a fused inline reducer from a chain of fusible steps.
+;; Returns a lambda: (fn ($a : _) (fn ($x0 : _) body))
+;; where body composes all the fusible transforms in a single pass.
+;;
+;; The function tracks the "current element" variable. Map steps introduce
+;; a new let-binding (transforming the element), while filter/remove steps
+;; conditionally pass through the current element unchanged.
+;;
+;; make-inner: procedure (current-var -> expr) that produces the innermost
+;;   expression using the final element variable.
+;;   For reduce terminal: (lambda (v) `(rf $a ,v))
+;;   For materialization: (lambda (v) `(cons _ ,v $a))
+;; acc-sym: the accumulator variable name (e.g., '$a)
+(define (build-fused-reducer fusible-steps make-inner acc-sym)
+  (define x0 (pipe-var 0))
+  ;; Walk steps left-to-right, building the body by nesting.
+  ;; Each step either wraps a let (map) or wraps an if (filter/remove).
+  ;; The "current variable" tracks what name holds the current element.
+  (define body
+    (let loop ([steps fusible-steps]
+               [cur-var x0]       ;; current element variable
+               [var-counter 1])   ;; next variable index for map bindings
+      (if (null? steps)
+          ;; All steps consumed → emit the inner rf call with current element
+          (make-inner cur-var)
+          (let* ([step (car steps)]
+                 [head (car step)]
+                 [arg (cadr step)])
+            (case head
+              [(map)
+               ;; Bind new variable: let $xN := (f cur-var) ... continue with $xN
+               (define new-var (pipe-var var-counter))
+               `(let ,new-var := (,arg ,cur-var)
+                  ,(loop (cdr steps) new-var (+ var-counter 1)))]
+              [(filter)
+               ;; Guard: if (p cur-var) continue else $acc
+               `(if (,arg ,cur-var)
+                    ,(loop (cdr steps) cur-var var-counter)
+                    ,acc-sym)]
+              [(remove)
+               ;; Guard: if (p cur-var) $acc else continue
+               `(if (,arg ,cur-var)
+                    ,acc-sym
+                    ,(loop (cdr steps) cur-var var-counter))])))))
+  ;; Wrap in lambda: (fn ($a : _) (fn ($x0 : _) body))
+  `(fn (,acc-sym : _) (fn (,x0 : _) ,body)))
+
+;; Flush a pending fusible chain by materializing into a list.
+;; Emits sequential applications: (filter p (map f xs)).
+;; Terminal steps use inline fusion (single-pass O(n)) via build-fused-reducer.
+;; Materialization uses sequential function calls, which is multi-pass but correct
+;; and avoids needing explicit type args on cons/nil/reverse.
+;; If chain is empty, return acc unchanged.
+(define (flush-xf-chain xf-chain acc)
+  (if (null? xf-chain)
+      acc
+      ;; Build sequential: (filter p (map f acc))
+      (foldl (lambda (step result)
+               (apply-pipe-step result step))
+             acc
+             xf-chain)))
+
+;; Expand a terminal step, optionally fusing with pending fusible chain.
+(define (expand-terminal step xf-chain acc)
+  (define head (car step))
+  (case head
+    [(reduce)
+     (unless (= (length step) 3)
+       (error 'pipe "|> reduce requires exactly 2 arguments: reduce <rf> <init>"))
+     (define rf (cadr step))
+     (define init-val (caddr step))
+     (if (null? xf-chain)
+         `(reduce ,rf ,init-val ,acc)
+         ;; Fuse: build inline reducer that composes fusible ops with rf
+         (let* ([acc-sym '$a]
+                [make-inner (lambda (v) `(,rf ,acc-sym ,v))]
+                [fused-rf (build-fused-reducer xf-chain make-inner acc-sym)])
+           `(reduce ,fused-rf ,init-val ,acc)))]
+    [(sum)
+     (unless (= (length step) 1)
+       (error 'pipe "|> sum takes no arguments"))
+     (if (null? xf-chain)
+         `(sum ,acc)
+         ;; Fuse: sum = reduce add zero
+         (let* ([acc-sym '$a]
+                [make-inner (lambda (v) `(add ,acc-sym ,v))]
+                [fused-rf (build-fused-reducer xf-chain make-inner acc-sym)])
+           `(reduce ,fused-rf zero ,acc)))]
+    [(length)
+     (unless (= (length step) 1)
+       (error 'pipe "|> length takes no arguments"))
+     (if (null? xf-chain)
+         `(length _ ,acc)
+         ;; Fuse: length = reduce (fn [n _] inc n) zero (ignore element)
+         (let* ([acc-sym '$a]
+                [make-inner (lambda (_v) `(inc ,acc-sym))]
+                [fused-rf (build-fused-reducer xf-chain make-inner acc-sym)])
+           `(reduce ,fused-rf zero ,acc)))]
+    [(count)
+     (unless (= (length step) 2)
+       (error 'pipe "|> count requires exactly 1 argument: count <pred>"))
+     (define pred (cadr step))
+     ;; Fuse count p = filter p then count = length
+     ;; Add filter to the chain, then use length reducer
+     (define all-steps (append xf-chain (list `(filter ,pred))))
+     (let* ([acc-sym '$a]
+            [make-inner (lambda (_v) `(inc ,acc-sym))]
+            [fused-rf (build-fused-reducer all-steps make-inner acc-sym)])
+       `(reduce ,fused-rf zero ,acc))]
+    [else
+     ;; Unknown terminal — flush and apply as plain step
+     (define flushed-acc (flush-xf-chain xf-chain acc))
+     (apply-pipe-step flushed-acc step)]))
+
+;; Main block-form pipe expander with loop fusion.
+;; ($pipe-gt init step1 step2 ...) → fused pipeline
+(define (expand-pipe-block datum)
+  (define parts (cdr datum))  ; everything after $pipe-gt
+  (when (null? parts)
+    (error 'pipe "|> requires at least a value"))
   (define init (car parts))
-  (foldl (lambda (step acc)
-           (cond
-             [(list? step) (apply-pipe-step acc step)]
-             [else `(,step ,acc)]))
-         init
-         (cdr parts)))
+  (define steps (cdr parts))
+
+  ;; Normalize: bare symbols become 1-element lists
+  (define normalized-steps
+    (map (lambda (s) (if (list? s) s (list s))) steps))
+
+  ;; No steps → return init unchanged
+  (if (null? normalized-steps)
+      init
+      ;; Process steps with fusion
+      (let loop ([remaining normalized-steps]
+                 [acc init]
+                 [xf-chain '()])
+        (if (null? remaining)
+            ;; End of pipeline: flush any pending transducers
+            (flush-xf-chain xf-chain acc)
+            (let* ([step (car remaining)]
+                   [rest (cdr remaining)]
+                   [class (classify-pipe-step step)])
+              (case class
+                [(fusible)
+                 ;; Accumulate raw step datum — build-fused-reducer handles it
+                 (loop rest acc (append xf-chain (list step)))]
+                [(terminal)
+                 ;; Error if more steps follow a terminal
+                 (unless (null? rest)
+                   (error 'pipe "|> terminal step (~a) must be the last step" (car step)))
+                 (expand-terminal step xf-chain acc)]
+                [(barrier plain)
+                 ;; Flush pending transducers, apply this step
+                 (define flushed-acc (flush-xf-chain xf-chain acc))
+                 (define new-acc (apply-pipe-step flushed-acc step))
+                 (loop rest new-acc '())]))))))
 
 ;; Sexp-mode handler: (>> f g h ...)
 (define (expand-compose-sexp datum)
@@ -2071,7 +2289,7 @@
 (register-preparse-macro! 'if expand-if)
 (register-preparse-macro! '$list-literal expand-list-literal)
 (register-preparse-macro! '$lseq-literal expand-lseq-literal)
-(register-preparse-macro! '$pipe-gt expand-pipe-sexp)
+(register-preparse-macro! '$pipe-gt expand-pipe-block)
 (register-preparse-macro! '$compose expand-compose-sexp)
 
 

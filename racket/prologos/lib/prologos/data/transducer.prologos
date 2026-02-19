@@ -2,7 +2,7 @@ ns prologos.data.transducer
 
 require [prologos.data.lseq     :refer [LSeq lseq-nil lseq-cell lseq-head lseq-rest lseq-empty?]]
         [prologos.data.lseq-ops :refer [lseq-fold list-to-lseq lseq-to-list]]
-        [prologos.data.list     :refer [List nil cons]]
+        [prologos.data.list     :refer [List nil cons reverse]]
 
 ;; ========================================
 ;; Transducer Infrastructure
@@ -85,3 +85,10 @@ defn transduce [xf rf init xs]
 spec into-list-rev {A B : Type} <(S :0 Type) -> [S -> B -> S] -> S -> A -> S> [List A] -> [List B]
 defn into-list-rev [xf xs]
   lseq-fold [List B] A [xf [List B] [list-conj B]] [nil B] [list-to-lseq A xs]
+
+;; into-list : transduce into a correctly-ordered list.
+;; Uses into-list-rev then reverses for correct element order.
+;; One extra O(n) reverse, but fusion saves N-1 intermediate list allocations.
+spec into-list {A B : Type} <(S :0 Type) -> [S -> B -> S] -> S -> A -> S> [List A] -> [List B]
+defn into-list [xf xs]
+  reverse B [into-list-rev xf xs]
