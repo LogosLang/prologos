@@ -13,17 +13,23 @@ require [prologos.data.list :refer [List nil cons reduce]]
 ;; This module provides derived set-algebra operations.
 
 ;; Create a singleton set containing one element.
-spec set-singleton A -> Set A
-defn set-singleton [a]
-  set-insert (set-empty) a
+;; (Uses sexp def: set-empty needs the type arg at runtime for the CHAMP trie,
+;; so A must be :w not :0.)
+(def set-singleton : (Pi (A :w (Type 0)) (-> A (Set A)))
+  (fn (A :w (Type 0)) (fn (a : A) (set-insert (set-empty A) a))))
 
 ;; Build a set from a list of elements.
-spec set-from-list [List A] -> Set A
-defn set-from-list [xs]
-  reduce (\ [acc <(Set A)>] [a <A>] -> <(Set A)> (set-insert acc a)) (set-empty) xs
+;; (Uses sexp def: same :w requirement for A, plus match-based fold avoids
+;; implicit-arg complications with reduce.)
+(def set-from-list : (Pi (A :w (Type 0)) (-> (List A) (Set A)))
+  (fn (A :w (Type 0)) (fn (xs : (List A))
+    (the (Set A)
+      (match xs
+        (nil -> (set-empty A))
+        (cons hd tl -> (set-insert (set-from-list A tl) hd)))))))
 
 ;; Symmetric difference: elements in exactly one of the two sets.
 ;; set-symmetric-diff s1 s2 = union (diff s1 s2) (diff s2 s1)
-spec set-symmetric-diff [Set A] [Set A] -> Set A
+spec set-symmetric-diff [Set A] [Set A] -> [Set A]
 defn set-symmetric-diff [s1 s2]
-  set-union (set-diff s1 s2) (set-diff s2 s1)
+  set-union [set-diff s1 s2] [set-diff s2 s1]

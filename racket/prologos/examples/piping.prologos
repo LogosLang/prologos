@@ -25,11 +25,11 @@ zero |> inc
 zero |> inc |> inc
 
 ;; Longer chains: zero |> inc |> inc |> inc → 3
-eval [zero |> inc |> inc |> inc]
+zero |> inc |> inc |> inc
 
 ;; Pipe with multi-argument functions:
 ;; x |> f a b → f a b x (appends to end)
-eval [zero |> add [inc zero]]
+zero |> add [inc zero]
 
 ;; ========================================
 ;; Section 2: The >> Compose Operator
@@ -38,13 +38,13 @@ eval [zero |> add [inc zero]]
 ;; This is the opposite of mathematical composition (g . f).
 
 ;; Basic compose: (inc >> inc) applied to zero → 2
-eval [[inc >> inc] zero]
+[inc >> inc] zero
 
 ;; Triple compose: (inc >> inc >> inc) zero → 3
-eval [[inc >> inc >> inc] zero]
+[inc >> inc >> inc] zero
 
 ;; Compose with double: (double >> inc) 2 → 5
-eval [[double >> inc] [inc [inc zero]]]
+[double >> inc] [inc [inc zero]]
 
 ;; ========================================
 ;; Section 3: Pipe + Compose Together
@@ -53,15 +53,17 @@ eval [[double >> inc] [inc [inc zero]]]
 
 ;; Pipe into composed function:
 ;; zero |> [inc >> inc] → 2
-eval [zero |> [inc >> inc]]
+zero |> [inc >> inc]
 
 ;; Multiple composed steps in a pipe:
 ;; zero |> [inc >> inc] |> [inc >> inc >> inc] → 5
-eval [zero |> [inc >> inc] |> [inc >> inc >> inc]]
+zero |> [inc >> inc] |> [inc >> inc >> inc]
 
 ;; ========================================
 ;; Section 4: Helper Definitions
 ;; ========================================
+;; (These use sexp (def ...) because constructor bodies like `inc x`
+;; need explicit type annotations to resolve constructors.)
 
 ;; Incrementer function
 (def inc-fn : [-> Nat Nat] (fn (x : Nat) (inc x)))
@@ -127,23 +129,23 @@ eval [zero |> [inc >> inc] |> [inc >> inc >> inc]]
 ;; --- map-xf: transform each element ---
 
 ;; Map inc over [1,2,3] → [4,3,2] (reversed, since fold-left with cons)
-eval [transduce Nat Nat [List Nat] [map-xf Nat Nat inc-fn] [list-conj Nat] [nil Nat] nums3]
+transduce Nat Nat [List Nat] [map-xf Nat Nat inc-fn] [list-conj Nat] [nil Nat] nums3
 
 ;; Map inc over [1,2,3] using into-list-rev (convenience wrapper)
-eval [into-list-rev Nat Nat [map-xf Nat Nat inc-fn] nums3]
+into-list-rev Nat Nat [map-xf Nat Nat inc-fn] nums3
 
 ;; --- filter-xf: keep matching elements ---
 
 ;; Filter positives from [0,1,2,3,4] → [4,3,2,1] (reversed)
-eval [transduce Nat Nat [List Nat] [filter-xf Nat positive?] [list-conj Nat] [nil Nat] nums5]
+transduce Nat Nat [List Nat] [filter-xf Nat positive?] [list-conj Nat] [nil Nat] nums5
 
 ;; Filter > 1 from [0,1,2,3,4] → [4,3,2] (reversed)
-eval [into-list-rev Nat Nat [filter-xf Nat gt1?] nums5]
+into-list-rev Nat Nat [filter-xf Nat gt1?] nums5
 
 ;; --- remove-xf: discard matching elements ---
 
 ;; Remove zeros from [0,1,2,3,4] → [4,3,2,1] (reversed)
-eval [transduce Nat Nat [List Nat] [remove-xf Nat is-zero] [list-conj Nat] [nil Nat] nums5]
+transduce Nat Nat [List Nat] [remove-xf Nat is-zero] [list-conj Nat] [nil Nat] nums5
 
 ;; ========================================
 ;; Section 7: Composing Transducers
@@ -153,16 +155,16 @@ eval [transduce Nat Nat [List Nat] [remove-xf Nat is-zero] [list-conj Nat] [nil 
 ;; All processing happens in ONE traversal — no intermediate lists!
 
 ;; Filter positives then map inc: [0,1,2,3,4] → filter → [1,2,3,4] → map inc → [5,4,3,2] (reversed)
-eval [transduce Nat Nat [List Nat] [xf-compose Nat Nat Nat [filter-xf Nat positive?] [map-xf Nat Nat inc-fn]] [list-conj Nat] [nil Nat] nums5]
+transduce Nat Nat [List Nat] [xf-compose Nat Nat Nat [filter-xf Nat positive?] [map-xf Nat Nat inc-fn]] [list-conj Nat] [nil Nat] nums5
 
 ;; Map inc then filter > 1: [0,1,2,3,4] → map inc → [1,2,3,4,5] → filter > 1 → [5,4,3,2] (reversed)
-eval [transduce Nat Nat [List Nat] [xf-compose Nat Nat Nat [map-xf Nat Nat inc-fn] [filter-xf Nat gt1?]] [list-conj Nat] [nil Nat] nums5]
+transduce Nat Nat [List Nat] [xf-compose Nat Nat Nat [map-xf Nat Nat inc-fn] [filter-xf Nat gt1?]] [list-conj Nat] [nil Nat] nums5
 
 ;; Remove zeros then map double: [0,1,2,3,4] → remove zeros → [1,2,3,4] → double → [8,6,4,2] (reversed)
-eval [transduce Nat Nat [List Nat] [xf-compose Nat Nat Nat [remove-xf Nat is-zero] [map-xf Nat Nat double]] [list-conj Nat] [nil Nat] nums5]
+transduce Nat Nat [List Nat] [xf-compose Nat Nat Nat [remove-xf Nat is-zero] [map-xf Nat Nat double]] [list-conj Nat] [nil Nat] nums5
 
 ;; Composed xf with into-list-rev:
-eval [into-list-rev Nat Nat [xf-compose Nat Nat Nat [filter-xf Nat positive?] [map-xf Nat Nat inc-fn]] nums5]
+into-list-rev Nat Nat [xf-compose Nat Nat Nat [filter-xf Nat positive?] [map-xf Nat Nat inc-fn]] nums5
 
 ;; ========================================
 ;; Section 8: Custom Reducers with Transducers
@@ -170,10 +172,10 @@ eval [into-list-rev Nat Nat [xf-compose Nat Nat Nat [filter-xf Nat positive?] [m
 ;; transduce isn't limited to building lists — any reducer works.
 
 ;; Count positives in [0,1,2,3,4] → 4
-eval [transduce Nat Nat Nat [filter-xf Nat positive?] count-rf zero nums5]
+transduce Nat Nat Nat [filter-xf Nat positive?] count-rf zero nums5
 
 ;; Sum all of [1,2,3] → 6
-eval [transduce Nat Nat Nat [map-xf Nat Nat [fn [x] x]] sum-rf zero nums3]
+transduce Nat Nat Nat [map-xf Nat Nat [fn [x] x]] sum-rf zero nums3
 
 ;; Sum of doubled positives: [0,1,2,3,4] → filter → [1,2,3,4] → double → [2,4,6,8] → sum → 20
-eval [transduce Nat Nat Nat [xf-compose Nat Nat Nat [filter-xf Nat positive?] [map-xf Nat Nat double]] sum-rf zero nums5]
+transduce Nat Nat Nat [xf-compose Nat Nat Nat [filter-xf Nat positive?] [map-xf Nat Nat double]] sum-rf zero nums5

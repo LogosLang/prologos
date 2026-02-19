@@ -19,11 +19,7 @@ trait Hashable {A}
 ;; hash-combine: Boost-style combiner: h1*31 + h2
 ;; The constant 31 is a commonly-used prime for hash combining.
 ;; (For Church-encoded Nat this is slow, but correct for prototype.)
-(def nat31 : Nat
-  (inc (inc (inc (inc (inc (inc (inc (inc (inc (inc
-  (inc (inc (inc (inc (inc (inc (inc (inc (inc (inc
-  (inc (inc (inc (inc (inc (inc (inc (inc (inc (inc
-  (inc zero))))))))))))))))))))))))))))))))
+def nat31 : Nat := 31
 
 spec hash-combine Nat Nat -> Nat
 defn hash-combine [h1 h2]
