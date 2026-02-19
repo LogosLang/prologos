@@ -23,10 +23,10 @@
 
 ### Completed
 
-| ID | Issue | Date | Notes |
-|----|-------|------|-------|
-| A1 | `$` quote asymmetry | 2026-02-18 | `$` is now an identifier prefix in both readers. `$foo` reads as plain symbol `$foo`. Removed `normalize-quote-vars` from macros.rkt. |
-| A5 | `'expr` behavior difference | 2026-02-18 | `'expr` now produces `($quote expr)` in both WS and sexp modes. Was: WS mode errored on bare `'`, sexp mode produced Racket `(quote expr)`. |
+| ID | Issue | Status | Notes |
+|----|-------|--------|-------|
+| A1 | `$` quote asymmetry | ✅ 2026-02-18 | `$` is now an identifier prefix in both readers. `$foo` reads as plain symbol `$foo`. Removed `normalize-quote-vars` from macros.rkt. |
+| A5 | `'expr` behavior difference | ✅ 2026-02-18 | `'expr` now produces `($quote expr)` in both WS and sexp modes. Was: WS mode errored on bare `'`, sexp mode produced Racket `(quote expr)`. |
 
 #### Design Notes — A1/A5 (Quote Syntax Redesign)
 
@@ -80,13 +80,12 @@ The inner readtable for `<...>` still overrides `|` with its own handler (produc
 
 ### Completed
 
-| ID | Feature | Date | Notes |
-|----|---------|------|-------|
-| C1 | `expand-1` — single-step macro expansion | 2026-02-19 | New `preparse-expand-1` function, `surf-expand-1` struct, parser/elaborator/driver integration |
-| C7 | `expand-full` — show ALL preparse transforms | 2026-02-19 | New `preparse-expand-full` returns labeled steps: input, def-assign, spec-inject, where-inject, infix-rewrite, macro-expand |
-| C8 | REPL shortcuts: `:expand`, `:expand-1`, `:expand-full`, `:macros`, `:specs` | 2026-02-19 | 5 new REPL commands. `:macros` lists preparse registry (procedural vs pattern-template). `:specs` lists spec store. |
-
-| C6 | `pp-datum` — round-trippable datum pretty-printer | 2026-02-19 | New `pp-datum` function in `pretty-print.rkt`, wired into `expand`/`expand-1`/`expand-full` output in `driver.rkt` |
+| ID | Feature | Status | Notes |
+|----|---------|--------|-------|
+| C1 | `expand-1` — single-step macro expansion | ✅ 2026-02-19 | New `preparse-expand-1` function, `surf-expand-1` struct, parser/elaborator/driver integration |
+| C7 | `expand-full` — show ALL preparse transforms | ✅ 2026-02-19 | New `preparse-expand-full` returns labeled steps: input, def-assign, spec-inject, where-inject, infix-rewrite, macro-expand |
+| C8 | REPL shortcuts: `:expand`, `:expand-1`, `:expand-full`, `:macros`, `:specs` | ✅ 2026-02-19 | 5 new REPL commands. `:macros` lists preparse registry (procedural vs pattern-template). `:specs` lists spec store. |
+| C6 | `pp-datum` — round-trippable datum pretty-printer | ✅ 2026-02-19 | New `pp-datum` function in `pretty-print.rkt`, wired into `expand`/`expand-1`/`expand-full` output in `driver.rkt` |
 
 #### Design Notes — C1 (expand-1)
 
@@ -178,10 +177,10 @@ Wired into `driver.rkt`: `expand`, `expand-1`, and `expand-full` handlers now us
 
 ### Completed
 
-| ID | Feature | Date | Notes |
-|----|---------|------|-------|
-| C2 | Full runtime `quote` — `'expr` produces `Datum` values | 2026-02-19 | New `Symbol` primitive type (8-file pipeline), `Datum` algebraic data type (stdlib), `$quote` preparse macro desugars to datum constructors |
-| C5 | Quasiquote / unquote — `` `(expr ,hole) `` | 2026-02-19 | `` ` `` and `,` readers in both sexp and WS modes, `$quasiquote` preparse macro with `($unquote expr)` passthrough |
+| ID | Feature | Status | Notes |
+|----|---------|--------|-------|
+| C2 | Full runtime `quote` — `'expr` produces `Datum` values | ✅ 2026-02-19 | New `Symbol` primitive type (8-file pipeline), `Datum` algebraic data type (stdlib), `$quote` preparse macro desugars to datum constructors |
+| C5 | Quasiquote / unquote — `` `(expr ,hole) `` | ✅ 2026-02-19 | `` ` `` and `,` readers in both sexp and WS modes, `$quasiquote` preparse macro with `($unquote expr)` passthrough |
 
 ### Design Decisions — Quote
 

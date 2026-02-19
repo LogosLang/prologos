@@ -1,0 +1,444 @@
+ns examples.homoiconicity
+
+;; ========================================================================
+;; Homoiconicity in Prologos: A Spiral Tour
+;; ========================================================================
+;;
+;; Prologos is homoiconic: code and data share the same representation.
+;; This file spirals from simple values through quotation, quasiquote,
+;; pattern matching on code, user macros, introspection tools, pipes,
+;; and code generation — all in pure Prologos.
+;;
+;; Each section builds on the last. Run this file to see every expression
+;; evaluated in order.
+;;
+;; Prerequisites: Phase III (Quote & Quasiquote) of the Homoiconicity
+;; Roadmap. See docs/tracking/2026-02-19_HOMOICONICITY_ROADMAP.md.
+
+require [prologos.data.datum  :refer [Datum datum-sym datum-kw datum-nat
+                                       datum-int datum-rat datum-bool
+                                       datum-nil datum-cons]]
+        [prologos.data.list   :refer [List nil cons map filter reduce
+                                       sum length reverse append]]
+        [prologos.data.nat    :refer [add mult double sub zero? le?]]
+        [prologos.data.option :refer [Option none some]]
+        [prologos.data.bool   :refer [not and or]]
+
+
+;; ========================================================================
+;; 1. THE DATUM TYPE — Code Has a Shape
+;; ========================================================================
+;;
+;; In Prologos, code-as-data is represented by the Datum algebraic type:
+;;
+;;   data Datum
+;;     datum-sym  : Symbol      -- identifiers like 'add, 'x, 'factorial
+;;     datum-kw   : Keyword     -- keywords like ':name, ':age
+;;     datum-nat  : Nat         -- natural numbers
+;;     datum-int  : Int         -- integers (negative)
+;;     datum-rat  : Rat         -- exact rationals
+;;     datum-bool : Bool        -- true/false
+;;     datum-nil                -- empty list ()
+;;     datum-cons : Datum -> Datum  -- pair/cons cell
+;;
+;; Let's build some Datum values by hand first, before we learn the
+;; shorthand.
+
+;; A symbol — the name of a function:
+(def my-sym : Datum (datum-sym (symbol-lit add)))
+
+;; A number wrapped as data:
+(def my-num : Datum (datum-nat 42))
+
+;; A keyword:
+(def my-kw : Datum (datum-kw :hello))
+
+;; A boolean:
+(def my-bool : Datum (datum-bool true))
+
+;; The empty list — datum-nil represents ():
+(def my-empty : Datum datum-nil)
+
+;; A pair — (datum-cons head tail) is like cons for data:
+(def my-pair : Datum
+  (datum-cons (datum-nat 1) (datum-cons (datum-nat 2) datum-nil)))
+
+;; Let's see what these look like:
+eval my-sym
+eval my-num
+eval my-kw
+eval my-bool
+eval my-empty
+eval my-pair
+
+
+;; ========================================================================
+;; 2. QUOTE — The ' Shorthand
+;; ========================================================================
+;;
+;; Writing datum-cons chains by hand is tedious. The quote operator '
+;; does it for you: it converts any expression into its Datum
+;; representation at compile time.
+;;
+;;   'foo       --> (datum-sym (symbol-lit foo))
+;;   '42        --> (datum-nat 42)
+;;   ':hello    --> (datum-kw :hello)
+;;   'true      --> (datum-bool true)
+;;   '()        --> datum-nil
+;;   '(add 1 2) --> (datum-cons (datum-sym ...) (datum-cons ...))
+;;
+;; Quote turns code into data. This is the heart of homoiconicity.
+
+;; Atoms:
+eval 'foo
+eval '42
+eval ':hello
+eval 'true
+eval '()
+
+;; A list — notice how (add 1 2) becomes a 3-element cons chain:
+eval '(add 1 2)
+
+;; Nested structure — code trees are just nested cons cells:
+eval '(factorial (add 2 3))
+
+
+;; ========================================================================
+;; 3. EXPAND-1 — See What Quote Actually Does
+;; ========================================================================
+;;
+;; The expand-1 command shows a single step of macro expansion.
+;; Since ' (quote) is a macro that emits Datum constructors, expand-1
+;; reveals the constructor chain:
+
+;; Simple atom — '42 desugars to (datum-nat 42):
+(expand-1 '42)
+
+;; Symbol — 'foo desugars to (datum-sym (symbol-lit foo)):
+(expand-1 'foo)
+
+;; List — '(add 1 2) desugars to a datum-cons chain:
+(expand-1 '(add 1 2))
+
+
+;; ========================================================================
+;; 4. PATTERN MATCHING ON DATUM — Inspecting Code
+;; ========================================================================
+;;
+;; Since Datum is an algebraic type, we can pattern match on it.
+;; This lets us write functions that inspect and transform code.
+
+;; Extract a number from quoted data:
+(def extract-nat : [-> Datum Nat]
+  (fn (d : Datum)
+    (the Nat (match d
+      (datum-nat n -> n)
+      (datum-nil -> zero)
+      (datum-sym s -> zero)
+      (datum-bool b -> zero)))))
+
+;; Pull the number out of quoted 42:
+eval [extract-nat '42]
+
+;; Check if a datum is a symbol:
+(def is-sym? : [-> Datum Bool]
+  (fn (d : Datum)
+    (the Bool (match d
+      (datum-sym s -> true)
+      (datum-nat n -> false)
+      (datum-kw k -> false)
+      (datum-bool b -> false)
+      (datum-nil -> false)
+      (datum-cons h t -> false)))))
+
+eval [is-sym? 'foo]
+eval [is-sym? '42]
+
+;; Extract the head of a quoted list:
+(def datum-head : [-> Datum Datum]
+  (fn (d : Datum)
+    (the Datum (match d
+      (datum-cons h t -> h)
+      (datum-nil -> datum-nil)
+      (datum-nat n -> datum-nil)
+      (datum-sym s -> datum-nil)))))
+
+;; The head of '(add 1 2) is the symbol 'add:
+eval [datum-head '(add 1 2)]
+
+
+;; ========================================================================
+;; 5. QUASIQUOTE — Templates with Holes
+;; ========================================================================
+;;
+;; Quote (') turns EVERYTHING into data. But what if you want to build
+;; a code template with some parts computed at runtime?
+;;
+;; Quasiquote (`) works like quote, but ,expr (unquote) splices in a
+;; live Datum value instead of quoting it.
+;;
+;; In WS mode (.prologos files), unquote (,) works at the top level.
+;; Inside brackets and parens, commas are separators, so for nested
+;; unquote we build templates with Datum constructors (Section 11).
+
+;; Without unquote — backtick is the same as single quote:
+eval `(add 10 20)
+eval '(add 10 20)
+
+;; Top-level unquote splices a Datum value through the template:
+(def val-a : Datum (datum-nat 10))
+(def val-b : Datum (datum-nat 20))
+
+;; `,expr passes through a Datum value unchanged:
+eval `,val-a
+eval `,val-b
+
+;; You can also splice a symbol:
+(def x : Datum (datum-sym (symbol-lit result)))
+eval `,x
+
+
+;; ========================================================================
+;; 6. DEFMACRO — User-Defined Macros
+;; ========================================================================
+;;
+;; Prologos macros are pattern-template rewrites. They operate on
+;; the pre-parsed datum level — after whitespace resolution, before
+;; type checking. Pattern variables use $ prefix.
+;;
+;; defmacro name [pattern] [template]
+;;
+;; When the macro name is invoked, the pattern is matched against the
+;; arguments, and the template is emitted with $-variables substituted.
+
+;; A simple macro: (double-it x) --> (add x x)
+defmacro double-it [$x] [add $x $x]
+
+;; Use it:
+double-it 3
+double-it [inc zero]
+
+;; The twice macro (from core): (twice f x) --> f(f(x))
+;; Already loaded from core.prologos. Let's use it:
+twice inc zero
+twice inc [inc [inc zero]]
+twice double 3
+
+;; A conditional macro: when-nonzero checks and branches
+defmacro when-nonzero [$n $body] [if [not [zero? $n]] $body zero]
+
+when-nonzero 5 [double 5]
+when-nonzero zero [double 5]
+
+
+;; ========================================================================
+;; 7. EXPAND — Watching Macros Work
+;; ========================================================================
+;;
+;; expand shows the FULL expansion of a macro (recursively).
+;; expand-1 shows just ONE step.
+;; expand-full shows ALL preparse transforms with labels.
+
+;; See what double-it expands to:
+(expand (double-it 5))
+(expand-1 (double-it 5))
+
+;; Watch how 'when' (from core) desugars step by step:
+(expand (when true [inc zero]))
+
+;; Full trace — see every transform step by step:
+(expand-full (when true [inc zero]))
+
+
+;; ========================================================================
+;; 8. PIPES — Data Flow as Syntax
+;; ========================================================================
+;;
+;; The |> operator threads a value left-to-right through functions.
+;; The >> operator composes functions left-to-right.
+;; Both are syntactic sugar that desugar during preparse — you can
+;; expand them just like any other macro!
+
+;; Simple pipe: thread zero through three increments
+zero |> inc |> inc |> inc
+
+;; Compose two functions and apply:
+eval [[inc >> inc] zero]
+
+;; Pipe into a composed function:
+eval [zero |> [inc >> double]]
+
+
+;; ========================================================================
+;; 9. BLOCK PIPES + LOOP FUSION
+;; ========================================================================
+;;
+;; Block-form |> with indented steps enables automatic loop fusion.
+;; Consecutive map/filter steps fuse into a single-pass reducer when
+;; followed by a terminal (reduce, sum, length, count).
+
+;; Helper definitions:
+(def inc-fn : [-> Nat Nat] (fn (x : Nat) (inc x)))
+(def is-positive : [-> Nat Bool]
+  (fn (x : Nat) (match x (zero -> false) (inc _ -> true))))
+(def sum-rf : [-> Nat [-> Nat Nat]]
+  (fn (acc : Nat) (fn (x : Nat) (add acc x))))
+
+;; Sample data: [1, 2, 3, 4]
+(def nums : [List Nat]
+  (cons Nat (inc zero)
+    (cons Nat (inc (inc zero))
+      (cons Nat (inc (inc (inc zero)))
+        (cons Nat (inc (inc (inc (inc zero))))
+          (nil Nat))))))
+
+;; Block pipe: map then reduce → fused O(n) single pass
+;; [1,2,3,4] → map inc → [2,3,4,5] → reduce + 0 → 14
+|> nums
+  map inc-fn
+  reduce sum-rf zero
+
+;; Filter then map then reduce → all fused:
+;; [1,2,3,4] → filter pos? → [1,2,3,4] → map inc → reduce + 0 → 14
+|> nums
+  filter is-positive
+  map inc-fn
+  reduce sum-rf zero
+
+;; Without a terminal, fusible steps materialize a list:
+;; [1,2,3,4] → map inc → filter pos? → [2,3,4,5]
+|> nums
+  map inc-fn
+  filter is-positive
+
+
+;; ========================================================================
+;; 10. VARARGS — Flexible Argument Lists
+;; ========================================================================
+;;
+;; The ... in a spec marks the preceding type as variadic.
+;; At the call site, excess args are collected into a List.
+;; In defn, ...name binds the collected list.
+
+spec sum-all Nat ... -> Nat
+defn sum-all [...xs]
+  sum xs
+
+;; Any number of arguments:
+sum-all 1 2 3
+sum-all 1 2 3 4 5 6 7 8 9 10
+
+;; Mixed fixed + varargs:
+spec first-plus-rest Nat Nat ... -> Nat
+defn first-plus-rest [first ...rest]
+  add first [sum rest]
+
+first-plus-rest 100 1 2 3 4 5
+
+;; Zero varargs → empty list:
+spec count-them {A : Type} A ... -> Nat
+defn count-them [...xs]
+  length A xs
+
+count-them 1 2 3
+count-them
+
+
+;; ========================================================================
+;; 11. PUTTING IT ALL TOGETHER — Code That Builds Code
+;; ========================================================================
+;;
+;; The real power of homoiconicity: we can write functions that
+;; construct, inspect, and transform Datum values — building code
+;; as first-class data.
+;;
+;; Since quasiquote expands at compile time (before lambda binding),
+;; we build runtime code templates using Datum constructors directly.
+
+;; Build an addition expression as data: (add a b)
+(def make-add : [-> Datum [-> Datum Datum]]
+  (fn (a : Datum) (fn (b : Datum)
+    (datum-cons 'add (datum-cons a (datum-cons b datum-nil))))))
+
+eval [make-add '1 '2]
+eval [make-add '10 '20]
+
+;; Build any 2-arg call as data: (f a b)
+(def make-call : [-> Datum [-> Datum [-> Datum Datum]]]
+  (fn (f : Datum) (fn (a : Datum) (fn (b : Datum)
+    (datum-cons f (datum-cons a (datum-cons b datum-nil)))))))
+
+eval [make-call 'add '1 '2]
+eval [make-call 'mult '6 '7]
+
+;; Wrap any expression in a function call: (func-name arg)
+(def wrap-in : [-> Datum [-> Datum Datum]]
+  (fn (func-name : Datum) (fn (arg : Datum)
+    (datum-cons func-name (datum-cons arg datum-nil)))))
+
+eval [wrap-in 'inc '42]
+eval [wrap-in 'double '(add 1 2)]
+
+;; Compose code transformations:
+;; Start with '5, wrap in 'inc, then wrap in 'double
+(def code : Datum '5)
+(def step1 : Datum [wrap-in 'inc code])
+(def step2 : Datum [wrap-in 'double step1])
+
+;; Watch the code tree grow:
+;; '5 → (inc 5) → (double (inc 5))
+eval code
+eval step1
+eval step2
+
+;; Extract and re-wrap — datum surgery:
+(def original : Datum '(add 1 2))
+(def op : Datum [datum-head original])
+
+;; The head of (add 1 2) is the symbol 'add:
+eval op
+
+;; Use it to build a NEW expression — (add 99):
+eval [wrap-in op '99]
+
+
+;; ========================================================================
+;; 12. THE FULL PICTURE
+;; ========================================================================
+;;
+;; Let's combine everything we've learned:
+;;
+;; 1. Quote (') turns code → Datum
+;; 2. Quasiquote (`) builds templates with ,holes
+;; 3. Pattern matching destructures Datum
+;; 4. defmacro defines pattern-template rewrites
+;; 5. expand/expand-1/expand-full inspect the macro pipeline
+;; 6. |> and >> provide ergonomic data flow
+;; 7. Varargs collect flexible argument lists
+;; 8. All of these work together because code IS data
+;;
+;; The same uniform s-expression structure underlies everything:
+;; what you see in the macro expander is what you get at runtime.
+;; No hidden rewrites, no magic — just data all the way down.
+
+;; A macro that applies a function twice:
+defmacro apply-twice-macro [$f $x] [$f [$f $x]]
+
+;; expand shows us exactly what happens:
+(expand (apply-twice-macro inc 3))
+
+;; And it evaluates to what we expect:
+apply-twice-macro inc 3
+apply-twice-macro double 2
+
+;; Quote the macro call itself — it's just data:
+eval '(apply-twice-macro inc 3)
+
+;; We can inspect the quoted macro call:
+eval [datum-head '(apply-twice-macro inc 3)]
+
+;; Final flourish: build a datum, extract its pieces, wrap them up:
+(def expr : Datum '(mult 6 7))
+(def head-sym : Datum [datum-head expr])
+eval head-sym
+eval expr
