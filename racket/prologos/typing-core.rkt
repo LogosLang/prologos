@@ -674,6 +674,10 @@
     [(expr-quire64-to q)
      (if (check ctx q (expr-Quire64)) (expr-Posit64) (expr-error))]
 
+    ;; ---- Symbol type and literals ----
+    [(expr-Symbol) (expr-Type (lzero))]
+    [(expr-symbol _) (expr-Symbol)]
+
     ;; ---- Keyword type and literals ----
     [(expr-Keyword) (expr-Type (lzero))]
     [(expr-keyword _) (expr-Keyword)]
@@ -922,6 +926,9 @@
     ;; ---- Posit64 literal check ----
     [((expr-posit64 v) (expr-Posit64))
      (and (exact-integer? v) (<= 0 v 18446744073709551615))]
+
+    ;; ---- Symbol literal check ----
+    [((expr-symbol _) (expr-Symbol)) #t]
 
     ;; ---- Keyword literal check ----
     [((expr-keyword _) (expr-Keyword)) #t]
@@ -1217,6 +1224,9 @@
     [(expr-Quire16) (just-level (lzero))]
     [(expr-Quire32) (just-level (lzero))]
     [(expr-Quire64) (just-level (lzero))]
+
+    ;; Symbol formation: Symbol : Type(0)
+    [(expr-Symbol) (just-level (lzero))]
 
     ;; Keyword formation: Keyword : Type(0)
     [(expr-Keyword) (just-level (lzero))]

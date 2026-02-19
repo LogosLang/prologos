@@ -161,6 +161,9 @@
  (struct-out surf-quire64-to)
  ;; Approximate literal (~N)
  (struct-out surf-approx-literal)
+ ;; Symbol surface forms
+ (struct-out surf-symbol-type)
+ (struct-out surf-symbol)
  ;; Keyword surface forms
  (struct-out surf-keyword-type)
  (struct-out surf-keyword)
@@ -580,6 +583,12 @@
 ;; Approximate literal: ~N → nearest Posit32 (default), width-aware in check context
 ;; val is an exact rational (integer or fraction)
 (struct surf-approx-literal (val srcloc) #:transparent)
+
+;; ========================================
+;; Symbol type and literal (for code-as-data)
+;; ========================================
+(struct surf-symbol-type (srcloc) #:transparent)           ; Symbol type
+(struct surf-symbol (name srcloc) #:transparent)           ; symbol literal, name is a Racket symbol
 
 ;; ========================================
 ;; Keyword type and literal

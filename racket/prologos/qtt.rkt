@@ -819,6 +819,9 @@
      (let ([r (checkQ ctx q (expr-Quire64))])
        (match r [(bu #t u) (tu (expr-Posit64) u)] [_ (tu-error)]))]
 
+    ;; Symbol
+    [(expr-Symbol) (tu (expr-Type (lzero)) (zero-usage n))]
+    [(expr-symbol _) (tu (expr-Symbol) (zero-usage n))]
     ;; Keyword
     [(expr-Keyword) (tu (expr-Type (lzero)) (zero-usage n))]
     [(expr-keyword _) (tu (expr-Keyword) (zero-usage n))]
@@ -1127,6 +1130,9 @@
     ;; ---- Meta expression: optimistically succeed with zero usage ----
     ;; A metavariable (from implicit arg insertion) doesn't consume resources.
     [((expr-meta _) _) (bu #t (zero-usage n))]
+
+    ;; ---- Symbol literal: check against Symbol type ----
+    [((expr-symbol _) (expr-Symbol)) (bu #t (zero-usage n))]
 
     ;; ---- Keyword literal: check against Keyword type ----
     [((expr-keyword _) (expr-Keyword)) (bu #t (zero-usage n))]

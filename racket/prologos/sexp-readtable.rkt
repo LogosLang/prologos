@@ -405,6 +405,50 @@
   (if (syntax? stx) (syntax->datum stx) stx))
 
 ;; ========================================
+;; Backtick reader: `expr → ($quasiquote expr)
+;; ========================================
+;; Quasiquote. Reads one form under a readtable where , produces ($unquote expr).
+;; `(add ,x 2) → ($quasiquote (add ($unquote x) 2))
+;; `,@x (splice) is NOT supported yet — just ,x for unquote.
+
+;; Forward declaration: prologos-readtable is needed by the qq readtable,
+;; and the qq readtable is needed by the backtick handler registered in
+;; prologos-readtable. We break the cycle by making the qq readtable lazily.
+(define prologos-qq-readtable #f)
+
+(define (ensure-qq-readtable!)
+  (unless prologos-qq-readtable
+    (set! prologos-qq-readtable
+      (make-readtable prologos-readtable
+        #\, 'terminating-macro read-unquote-syntax))))
+
+;; Comma inside quasiquote context → ($unquote expr)
+(define (read-unquote-syntax ch port src line col pos)
+  ;; Read one form using the quasiquote readtable (so nested , still works)
+  (define inner
+    (parameterize ([current-readtable prologos-qq-readtable])
+      (read-syntax src port)))
+  (datum->syntax #f (list '$unquote inner)
+                 (list src line col pos (max 1 (- (file-position port) pos)))))
+
+(define (read-backtick-syntax ch port src line col pos)
+  (ensure-qq-readtable!)
+  (define next (peek-char port))
+  (cond
+    ;; `, — direct unquote after backtick (edge case: `,(foo))
+    ;; Read one form under qq readtable
+    [else
+     (define inner
+       (parameterize ([current-readtable prologos-qq-readtable])
+         (read-syntax src port)))
+     (datum->syntax #f (list '$quasiquote inner)
+                    (list src line col pos (max 1 (- (file-position port) pos))))]))
+
+(define (read-backtick-datum ch port)
+  (define stx (read-backtick-syntax ch port "<unknown>" #f #f (file-position port)))
+  (if (syntax? stx) (syntax->datum stx) stx))
+
+;; ========================================
 ;; The custom readtable
 ;; ========================================
 ;; ========================================
@@ -465,7 +509,8 @@
     #\~ 'terminating-macro read-tilde-syntax
     #\@ 'terminating-macro read-at-bracket-syntax
     #\| 'terminating-macro read-pipe-syntax
-    #\# 'terminating-macro read-hash-dispatch-syntax))
+    #\# 'terminating-macro read-hash-dispatch-syntax
+    #\` 'terminating-macro read-backtick-syntax))
 
 ;; ========================================
 ;; Convenience read functions

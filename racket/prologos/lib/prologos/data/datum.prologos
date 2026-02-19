@@ -1,0 +1,17 @@
+ns prologos.data.datum
+
+;; ========================================
+;; Prologos Datum Type
+;; Runtime representation of quoted code (code-as-data).
+;; Used by quote (') and quasiquote (`) to produce values.
+;; ========================================
+
+data Datum
+  datum-sym  : Symbol
+  datum-kw   : Keyword
+  datum-nat  : Nat
+  datum-int  : Int
+  datum-rat  : Rat
+  datum-bool : Bool
+  datum-nil
+  datum-cons : Datum -> Datum

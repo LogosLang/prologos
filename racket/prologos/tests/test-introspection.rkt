@@ -346,3 +346,112 @@
     (check-not-false entry)
     (define types (spec-entry-type-datums entry))
     (check-true (pair? types))))
+
+;; ========================================
+;; Section F: pp-datum unit tests (C6)
+;; ========================================
+
+(test-case "pp-datum: plain symbol"
+  (check-equal? (pp-datum 'foo) "foo"))
+
+(test-case "pp-datum: plain number"
+  (check-equal? (pp-datum 42) "42"))
+
+(test-case "pp-datum: rational"
+  (check-equal? (pp-datum 1/3) "1/3"))
+
+(test-case "pp-datum: boolean"
+  (check-equal? (pp-datum #t) "true")
+  (check-equal? (pp-datum #f) "false"))
+
+(test-case "pp-datum: null"
+  (check-equal? (pp-datum '()) "()"))
+
+(test-case "pp-datum: string"
+  (check-equal? (pp-datum "hello") "\"hello\""))
+
+(test-case "pp-datum: $quote sentinel"
+  (check-equal? (pp-datum '($quote foo)) "'foo"))
+
+(test-case "pp-datum: $angle-type sentinel"
+  (check-equal? (pp-datum '($angle-type Nat -> Bool)) "<Nat -> Bool>"))
+
+(test-case "pp-datum: $brace-params sentinel"
+  (check-equal? (pp-datum '($brace-params A B)) "{A B}"))
+
+(test-case "pp-datum: $pipe-gt sentinel symbol"
+  (check-equal? (pp-datum '$pipe-gt) "|>"))
+
+(test-case "pp-datum: $compose sentinel symbol"
+  (check-equal? (pp-datum '$compose) ">>"))
+
+(test-case "pp-datum: $pipe sentinel symbol"
+  (check-equal? (pp-datum '$pipe) "|"))
+
+(test-case "pp-datum: $list-literal sentinel"
+  (check-equal? (pp-datum '($list-literal 1 2 3)) "'[1 2 3]"))
+
+(test-case "pp-datum: $list-literal with $list-tail"
+  (check-equal? (pp-datum '($list-literal 1 2 ($list-tail xs))) "'[1 2 | xs]"))
+
+(test-case "pp-datum: $set-literal sentinel"
+  (check-equal? (pp-datum '($set-literal 1 2 3)) "#{1 2 3}"))
+
+(test-case "pp-datum: $vec-literal sentinel"
+  (check-equal? (pp-datum '($vec-literal 1 2 3)) "@[1 2 3]"))
+
+(test-case "pp-datum: $lseq-literal sentinel"
+  (check-equal? (pp-datum '($lseq-literal 1 2 3)) "~[1 2 3]"))
+
+(test-case "pp-datum: $rest sentinel"
+  (check-equal? (pp-datum '$rest) "..."))
+
+(test-case "pp-datum: $rest-param sentinel"
+  (check-equal? (pp-datum '($rest-param xs)) "...xs"))
+
+(test-case "pp-datum: $approx-literal sentinel"
+  (check-equal? (pp-datum '($approx-literal 3.14)) "~3.14"))
+
+(test-case "pp-datum: regular list"
+  (check-equal? (pp-datum '(add 1 2)) "(add 1 2)"))
+
+(test-case "pp-datum: nested sentinels"
+  (check-equal? (pp-datum '($quote ($angle-type Nat -> Bool)))
+                "'<Nat -> Bool>"))
+
+(test-case "pp-datum: nested list"
+  (check-equal? (pp-datum '(defn foo (x) (add x 1)))
+                "(defn foo (x) (add x 1))"))
+
+(test-case "pp-datum: $quasiquote sentinel"
+  (check-equal? (pp-datum '($quasiquote (add 1 2))) "`(add 1 2)"))
+
+(test-case "pp-datum: $unquote sentinel"
+  (check-equal? (pp-datum '($unquote x)) ",x"))
+
+(test-case "pp-datum: quasiquote with unquote"
+  (check-equal? (pp-datum '($quasiquote (add ($unquote x) 2)))
+                "`(add ,x 2)"))
+
+;; ========================================
+;; Section G: pp-datum integration with expand (C6)
+;; ========================================
+
+(test-case "pp-datum/e2e: expand uses pp-datum output"
+  (define result
+    (run-last (string-append
+      "(ns t-intr-pp1)\n"
+      "(expand (if True zero zero))")))
+  ;; expand output now uses pp-datum, not Racket ~s
+  ;; The if macro expands to boolrec — check it's readable
+  (check-true (string? result))
+  (check-true (string-contains? result "boolrec")))
+
+(test-case "pp-datum/e2e: expand-1 uses pp-datum output"
+  (define result
+    (run-last (string-append
+      "(ns t-intr-pp2)\n"
+      "(expand-1 (if True zero zero))")))
+  (check-true (string? result))
+  ;; pp-datum output: no $ prefixes on sentinel symbols in standard expansions
+  (check-true (string-contains? result "boolrec")))

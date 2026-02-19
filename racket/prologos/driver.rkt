@@ -194,18 +194,18 @@
 
                   ;; (expand datum) — show preparse expansion
                   [(list 'expand datum)
-                   (format "~s" (preparse-expand-single datum))]
+                   (pp-datum (preparse-expand-single datum))]
 
                   ;; (expand-1 datum) — show single-step preparse expansion
                   [(list 'expand-1 datum)
-                   (format "~s" (preparse-expand-1 datum))]
+                   (pp-datum (preparse-expand-1 datum))]
 
                   ;; (expand-full datum) — show all preparse transforms with labels
                   [(list 'expand-full datum)
                    (let ([steps (preparse-expand-full datum)])
                      (string-join
                       (map (lambda (step)
-                             (format "~a: ~s" (car step) (cdr step)))
+                             (format "~a: ~a" (car step) (pp-datum (cdr step))))
                            steps)
                       "\n"))]
 

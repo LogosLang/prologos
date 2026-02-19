@@ -137,7 +137,10 @@
          rewrite-infix-operators
          maybe-inject-spec
          maybe-inject-spec-def
-         expand-def-assign)
+         expand-def-assign
+         datum->datum-expr
+         qq->datum-expr
+         keyword-like-symbol?)
 
 ;; ================================================================
 ;; LAYER 1: PRE-PARSE MACRO SYSTEM
@@ -2388,9 +2391,88 @@
 (register-preparse-macro! '$lseq-literal expand-lseq-literal)
 (register-preparse-macro! '$pipe-gt expand-pipe-block)
 (register-preparse-macro! '$compose expand-compose-sexp)
-;; $quote: identity strip — 'expr → ($quote expr) → expr
-;; Full runtime quote (code-as-data producing values) is deferred to Phase III.
-(register-preparse-macro! '$quote (lambda (datum) (cadr datum)))
+;; $quote: code-as-data — 'expr → ($quote expr) → Datum constructor chain
+;; Walks the quoted datum and emits Datum constructor calls.
+;; Requires prologos.data.datum to be loaded for the constructors to resolve.
+
+;; Helper: check if a symbol is a keyword literal (starts with :)
+(define (keyword-like-symbol? s)
+  (and (symbol? s)
+       (let ([str (symbol->string s)])
+         (and (> (string-length str) 1)
+              (char=? (string-ref str 0) #\:)))))
+
+;; Convert a raw datum to Datum constructor calls
+(define (datum->datum-expr d)
+  (cond
+    ;; Keyword-like symbols (:foo) → (datum-kw :foo)
+    [(keyword-like-symbol? d) `(datum-kw ,d)]
+    ;; Regular symbols → (datum-sym (symbol-lit name))
+    [(symbol? d) `(datum-sym (symbol-lit ,d))]
+    ;; Natural numbers (non-negative integers) → (datum-nat n)
+    [(and (exact-integer? d) (>= d 0)) `(datum-nat ,d)]
+    ;; Negative integers → (datum-int n)
+    [(exact-integer? d) `(datum-int ,d)]
+    ;; Rationals → (datum-rat n)
+    [(rational? d) `(datum-rat ,d)]
+    ;; Booleans → (datum-bool true/false)
+    [(boolean? d) (if d '(datum-bool true) '(datum-bool false))]
+    ;; Empty list → datum-nil
+    [(null? d) 'datum-nil]
+    ;; Pairs/lists → (datum-cons car cdr)
+    [(pair? d) `(datum-cons ,(datum->datum-expr (car d))
+                            ,(datum->datum-expr (cdr d)))]
+    ;; Fallback: treat as symbol
+    [else `(datum-sym (symbol-lit ,d))]))
+
+(define (expand-quote datum)
+  (datum->datum-expr (cadr datum)))
+
+(register-preparse-macro! '$quote expand-quote)
+
+;; ========================================
+;; Quasiquote macro: $quasiquote
+;; ========================================
+;; ($quasiquote datum) walks the datum like datum->datum-expr, but
+;; ($unquote expr) nodes are passed through raw (expr must be of type Datum).
+;; This allows splicing live expressions into quoted data templates.
+;;
+;; Example: `(add ,x 2) → ($quasiquote (add ($unquote x) 2))
+;; Expands to: (datum-cons (datum-sym (symbol-lit add))
+;;               (datum-cons x
+;;                 (datum-cons (datum-nat 2) datum-nil)))
+;;
+;; Where x is passed through as-is (must be Datum at runtime).
+
+(define (qq->datum-expr d)
+  (cond
+    ;; ($unquote expr) — pass expr through raw
+    [(and (pair? d) (eq? (car d) '$unquote) (pair? (cdr d)) (null? (cddr d)))
+     (cadr d)]
+    ;; Keyword-like symbols (:foo) → (datum-kw :foo)
+    [(keyword-like-symbol? d) `(datum-kw ,d)]
+    ;; Regular symbols → (datum-sym (symbol-lit name))
+    [(symbol? d) `(datum-sym (symbol-lit ,d))]
+    ;; Natural numbers → (datum-nat n)
+    [(and (exact-integer? d) (>= d 0)) `(datum-nat ,d)]
+    ;; Negative integers → (datum-int n)
+    [(exact-integer? d) `(datum-int ,d)]
+    ;; Rationals → (datum-rat n)
+    [(rational? d) `(datum-rat ,d)]
+    ;; Booleans → (datum-bool true/false)
+    [(boolean? d) (if d '(datum-bool true) '(datum-bool false))]
+    ;; Empty list → datum-nil
+    [(null? d) 'datum-nil]
+    ;; Pairs/lists → (datum-cons car cdr), recursing into elements
+    [(pair? d) `(datum-cons ,(qq->datum-expr (car d))
+                            ,(qq->datum-expr (cdr d)))]
+    ;; Fallback: treat as symbol
+    [else `(datum-sym (symbol-lit ,d))]))
+
+(define (expand-quasiquote datum)
+  (qq->datum-expr (cadr datum)))
+
+(register-preparse-macro! '$quasiquote expand-quasiquote)
 
 
 ;; ========================================
@@ -3779,6 +3861,8 @@
       [(surf-quire16-type _) (void)]
       [(surf-quire32-type _) (void)]
       [(surf-quire64-type _) (void)]
+      [(surf-symbol-type _) (void)]
+      [(surf-symbol _ _) (void)]
       [(surf-keyword-type _) (void)]
       [(surf-keyword _ _) (void)]
       ;; Map type: walk key and value type sub-expressions

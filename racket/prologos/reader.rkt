@@ -388,6 +388,16 @@
          [else
           (token 'symbol '$pipe ln cl ps 1)])]
 
+      ;; Backtick — quasiquote operator `expr
+      [(char=? c #\`)
+       (tok-read! tok)
+       (token 'backtick #f ln cl ps 1)]
+
+      ;; Comma — unquote inside quasiquote, or ignored separator
+      [(char=? c #\,)
+       (tok-read! tok)
+       (token 'comma #f ln cl ps 1)]
+
       ;; Colon
       [(char=? c #\:)
        (tok-read! tok)
@@ -1003,6 +1013,26 @@
      (define inner (parse-inline-element p))
      (define src (parser-source p))
      (make-stx (list (make-stx '$quote src
+                               (token-line d) (token-col d) (token-pos d) 1)
+                     inner)
+               src (token-line d) (token-col d) (token-pos d)
+               (token-span d))]
+    [(eq? tt 'backtick)
+     ;; `expr — quasiquote operator
+     (define d (parser-next! p)) ; consume `
+     (define inner (parse-inline-element p))
+     (define src (parser-source p))
+     (make-stx (list (make-stx '$quasiquote src
+                               (token-line d) (token-col d) (token-pos d) 1)
+                     inner)
+               src (token-line d) (token-col d) (token-pos d)
+               (token-span d))]
+    [(eq? tt 'comma)
+     ;; ,expr — unquote operator
+     (define d (parser-next! p)) ; consume ,
+     (define inner (parse-inline-element p))
+     (define src (parser-source p))
+     (make-stx (list (make-stx '$unquote src
                                (token-line d) (token-col d) (token-pos d) 1)
                      inner)
                src (token-line d) (token-col d) (token-pos d)

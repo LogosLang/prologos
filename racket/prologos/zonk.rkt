@@ -185,6 +185,9 @@
     [(expr-quire64-fma q a b) (expr-quire64-fma (zonk q) (zonk a) (zonk b))]
     [(expr-quire64-to q) (expr-quire64-to (zonk q))]
 
+    ;; Symbol
+    [(expr-Symbol) e]
+    [(expr-symbol _) e]
     ;; Keyword
     [(expr-Keyword) e]
     [(expr-keyword _) e]
@@ -458,6 +461,9 @@
     [(expr-quire64-fma q a b) (expr-quire64-fma (zonk-at-depth depth q) (zonk-at-depth depth a) (zonk-at-depth depth b))]
     [(expr-quire64-to q) (expr-quire64-to (zonk-at-depth depth q))]
 
+    ;; Symbol
+    [(expr-Symbol) e]
+    [(expr-symbol _) e]
     ;; Keyword
     [(expr-Keyword) e]
     [(expr-keyword _) e]
@@ -702,6 +708,9 @@
     [(expr-quire64-val _) e]
     [(expr-quire64-fma q a b) (expr-quire64-fma (default-metas q) (default-metas a) (default-metas b))]
     [(expr-quire64-to q) (expr-quire64-to (default-metas q))]
+    ;; Symbol
+    [(expr-Symbol) e]
+    [(expr-symbol _) e]
     ;; Keyword
     [(expr-Keyword) e]
     [(expr-keyword _) e]

@@ -118,6 +118,8 @@
  (struct-out expr-quire32-fma) (struct-out expr-quire32-to)
  (struct-out expr-Quire64) (struct-out expr-quire64-val)
  (struct-out expr-quire64-fma) (struct-out expr-quire64-to)
+ ;; Symbol type (opaque atomic type for code-as-data)
+ (struct-out expr-Symbol) (struct-out expr-symbol)
  ;; Keyword type (opaque atomic type for map keys)
  (struct-out expr-Keyword) (struct-out expr-keyword)
  ;; Map (persistent hash map)
@@ -423,6 +425,15 @@
 (struct expr-quire64-to (q) #:transparent)
 
 ;; ========================================
+;; Symbol (opaque atomic type for code-as-data)
+;; ========================================
+
+;; Type
+(struct expr-Symbol () #:transparent)                         ; Symbol : Type 0
+;; Value (name is a Racket symbol, e.g. 'foo)
+(struct expr-symbol (name) #:transparent)                     ; symbol literal
+
+;; ========================================
 ;; Keyword (opaque atomic type for map keys)
 ;; ========================================
 
@@ -640,6 +651,7 @@
       (expr-rat-neg? x) (expr-rat-abs? x)
       (expr-rat-lt? x) (expr-rat-le? x) (expr-rat-eq? x)
       (expr-from-int? x) (expr-rat-numer? x) (expr-rat-denom? x)
+      (expr-Symbol? x) (expr-symbol? x)
       (expr-Keyword? x) (expr-keyword? x)
       (expr-Map? x) (expr-champ? x) (expr-map-empty? x)
       (expr-map-assoc? x) (expr-map-get? x) (expr-map-dissoc? x)

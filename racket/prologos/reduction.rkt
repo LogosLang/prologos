@@ -835,6 +835,9 @@
     [(expr-quire64-to q)
      (let ([q* (whnf q)]) (if (equal? q* q) e (whnf (expr-quire64-to q*))))]
 
+    ;; Symbol — no reduction (atoms are values)
+    ;; (no clauses needed for expr-Symbol or expr-symbol — they're values)
+
     ;; Keyword — no reduction (atoms are values)
     ;; (no clauses needed for expr-Keyword or expr-keyword — they're values)
 
@@ -1262,6 +1265,10 @@
     [(expr-quire64-val _) e]
     [(expr-quire64-fma q a b) (expr-quire64-fma (nf q) (nf a) (nf b))]
     [(expr-quire64-to q) (expr-quire64-to (nf q))]
+
+    ;; Symbol normalization
+    [(expr-Symbol) e]
+    [(expr-symbol _) e]
 
     ;; Keyword normalization
     [(expr-Keyword) e]

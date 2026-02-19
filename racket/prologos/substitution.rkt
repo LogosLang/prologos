@@ -198,6 +198,10 @@
     [(expr-quire64-fma q a b) (expr-quire64-fma (shift delta cutoff q) (shift delta cutoff a) (shift delta cutoff b))]
     [(expr-quire64-to q) (expr-quire64-to (shift delta cutoff q))]
 
+    ;; Symbol (no subexpressions)
+    [(expr-Symbol) e]
+    [(expr-symbol _) e]
+
     ;; Keyword (all non-binding, no subexpressions with de Bruijn vars)
     [(expr-Keyword) e]
     [(expr-keyword _) e]
@@ -471,6 +475,10 @@
     [(expr-quire64-val _) e]
     [(expr-quire64-fma q a b) (expr-quire64-fma (subst k s q) (subst k s a) (subst k s b))]
     [(expr-quire64-to q) (expr-quire64-to (subst k s q))]
+
+    ;; Symbol (no subexpressions)
+    [(expr-Symbol) e]
+    [(expr-symbol _) e]
 
     ;; Keyword (no subexpressions)
     [(expr-Keyword) e]

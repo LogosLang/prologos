@@ -1279,6 +1279,12 @@
     [(surf-approx-literal v loc)
      (expr-posit32 (posit32-encode (if (exact? v) v (inexact->exact v))))]
 
+    ;; ---- Symbol type and literal ----
+    [(surf-symbol-type loc)
+     (expr-Symbol)]
+    [(surf-symbol name loc)
+     (expr-symbol name)]
+
     ;; ---- Keyword type and literal ----
     [(surf-keyword-type loc)
      (expr-Keyword)]

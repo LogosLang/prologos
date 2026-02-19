@@ -36,6 +36,7 @@
     Quire16 q16-zero q16-fma q16-to
     Quire32 q32-zero q32-fma q32-to
     Quire64 q64-zero q64-fma q64-to
+    Symbol symbol-lit
     Keyword Map map-empty map-assoc map-get map-dissoc map-size map-has-key? map-keys map-vals
     Set set-empty set-insert set-member? set-delete set-size set-union set-intersect set-diff set-to-list
     PVec pvec-empty pvec-push pvec-nth pvec-update pvec-length pvec-pop pvec-concat pvec-slice
@@ -475,6 +476,7 @@
     [(q16-zero) (surf-quire16-zero loc)]
     [(q32-zero) (surf-quire32-zero loc)]
     [(q64-zero) (surf-quire64-zero loc)]
+    [(Symbol) (surf-symbol-type loc)]
     [(Keyword) (surf-keyword-type loc)]
     [(Type)   (surf-type #f loc)]     ;; bare Type → infer level (Sprint 6)
     [(zero)   (surf-zero loc)]
@@ -1568,6 +1570,23 @@
         (or (check-arity 'q64-to args 1 loc)
             (let ([q (parse-datum (car args))])
               (if (prologos-error? q) q (surf-quire64-to q loc))))]
+
+       ;; ---- Symbol operations ----
+
+       ;; Symbol type: (Symbol)
+       [(Symbol)
+        (if (null? args)
+            (surf-symbol-type loc)
+            (parse-error loc "Symbol takes no arguments" #f))]
+
+       ;; Symbol literal: (symbol-lit name)
+       [(symbol-lit)
+        (or (check-arity 'symbol-lit args 1 loc)
+            (let ([raw (car args)])
+              (define name (if (syntax? raw) (syntax-e raw) raw))
+              (if (symbol? name)
+                  (surf-symbol name loc)
+                  (parse-error loc (format "symbol-lit expects a symbol, got ~a" name) #f))))]
 
        ;; ---- Keyword / Map operations ----
 

@@ -17,7 +17,8 @@
 (provide pp-expr
          pp-session
          pp-mult
-         pp-function-signature)
+         pp-function-signature
+         pp-datum)
 
 ;; ========================================
 ;; Name supply for de Bruijn -> named variables
@@ -306,6 +307,9 @@
     [(expr-quire64-fma q a b) (format "[q64-fma ~a ~a ~a]" (pp-expr q names) (pp-expr a names) (pp-expr b names))]
     [(expr-quire64-to q) (format "[q64-to ~a]" (pp-expr q names))]
 
+    ;; Symbol
+    [(expr-Symbol) "Symbol"]
+    [(expr-symbol name) (format "'~a" name)]
     ;; Keyword
     [(expr-Keyword) "Keyword"]
     [(expr-keyword name) (format ":~a" name)]
@@ -732,6 +736,9 @@
     [(expr-quire64-val _) #f]
     [(expr-quire64-fma q a b) (or (uses-bvar0? q) (uses-bvar0? a) (uses-bvar0? b))]
     [(expr-quire64-to q) (uses-bvar0? q)]
+    ;; Symbol
+    [(expr-Symbol) #f]
+    [(expr-symbol _) #f]
     ;; Keyword
     [(expr-Keyword) #f]
     [(expr-keyword _) #f]
@@ -893,3 +900,133 @@
    (map (lambda (b) (format "~a: ~a" (car b) (pp-session (cdr b) names)))
         bl)
    ", "))
+
+;; ========================================
+;; Datum-level pretty-printer (preparse layer)
+;; ========================================
+;;
+;; pp-datum converts preparse-level datums (with sentinel symbols like
+;; $quote, $angle-type, $brace-params, etc.) into readable Prologos
+;; syntax strings. Unlike pp-expr which works on core AST Expr structs,
+;; pp-datum works at the raw datum level — lists, symbols, numbers.
+;;
+
+(define (pp-datum d)
+  (cond
+    ;; Null
+    [(null? d) "()"]
+
+    ;; Boolean
+    [(boolean? d) (if d "true" "false")]
+
+    ;; Number (integer, rational)
+    [(number? d) (format "~a" d)]
+
+    ;; Sentinel symbols
+    [(eq? d '$pipe-gt) "|>"]
+    [(eq? d '$compose) ">>"]
+    [(eq? d '$pipe) "|"]
+    [(eq? d '$rest) "..."]
+
+    ;; Regular symbol
+    [(symbol? d) (symbol->string d)]
+
+    ;; String
+    [(string? d) (format "~s" d)]  ; uses Racket quoting for strings
+
+    ;; Keyword (Racket keyword)
+    [(keyword? d) (format ":~a" (keyword->string d))]
+
+    ;; Pairs / lists — check for sentinel heads
+    [(pair? d)
+     (let ([h (car d)])
+       (cond
+         ;; ($quote expr) → 'expr
+         [(and (eq? h '$quote) (pair? (cdr d)) (null? (cddr d)))
+          (format "'~a" (pp-datum (cadr d)))]
+
+         ;; ($angle-type content ...) → <content ...>
+         [(eq? h '$angle-type)
+          (format "<~a>" (pp-datum-list (cdr d)))]
+
+         ;; ($brace-params A B C) → {A B C}
+         [(eq? h '$brace-params)
+          (format "{~a}" (pp-datum-list (cdr d)))]
+
+         ;; ($list-literal e1 e2 ...) → '[e1 e2 ...]
+         ;; handles ($list-tail tail) as last element → '[e1 e2 | tail]
+         [(eq? h '$list-literal)
+          (let-values ([(elems tail) (split-list-literal (cdr d))])
+            (if tail
+                (format "'[~a | ~a]"
+                        (pp-datum-list elems)
+                        (pp-datum tail))
+                (format "'[~a]" (pp-datum-list elems))))]
+
+         ;; ($set-literal e1 e2 ...) → #{e1 e2 ...}
+         [(eq? h '$set-literal)
+          (format "#{~a}" (pp-datum-list (cdr d)))]
+
+         ;; ($vec-literal e1 e2 ...) → @[e1 e2 ...]
+         [(eq? h '$vec-literal)
+          (format "@[~a]" (pp-datum-list (cdr d)))]
+
+         ;; ($lseq-literal e1 e2 ...) → ~[e1 e2 ...]
+         [(eq? h '$lseq-literal)
+          (format "~~[~a]" (pp-datum-list (cdr d)))]
+
+         ;; ($rest-param name) → ...name
+         [(and (eq? h '$rest-param) (pair? (cdr d)) (null? (cddr d)))
+          (format "...~a" (pp-datum (cadr d)))]
+
+         ;; ($approx-literal val) → ~val
+         [(and (eq? h '$approx-literal) (pair? (cdr d)) (null? (cddr d)))
+          (format "~~~a" (pp-datum (cadr d)))]
+
+         ;; ($list-tail expr) — standalone (shouldn't appear outside $list-literal)
+         [(and (eq? h '$list-tail) (pair? (cdr d)) (null? (cddr d)))
+          (format "| ~a" (pp-datum (cadr d)))]
+
+         ;; ($quasiquote expr) → `expr
+         [(and (eq? h '$quasiquote) (pair? (cdr d)) (null? (cddr d)))
+          (format "`~a" (pp-datum (cadr d)))]
+
+         ;; ($unquote expr) → ,expr
+         [(and (eq? h '$unquote) (pair? (cdr d)) (null? (cddr d)))
+          (format ",~a" (pp-datum (cadr d)))]
+
+         ;; Regular list
+         [else
+          (format "(~a)" (pp-datum-list d))]))]
+
+    ;; Fallback
+    [else (format "~s" d)]))
+
+;; Pretty-print a list of datums, space-separated
+(define (pp-datum-list ds)
+  (cond
+    [(null? ds) ""]
+    [(pair? ds)
+     (string-join (map pp-datum ds) " ")]
+    ;; Improper list (dotted pair at end)
+    [else (format ". ~a" (pp-datum ds))]))
+
+;; Split $list-literal arguments into regular elements and optional tail.
+;; The last element may be ($list-tail expr) indicating an improper list.
+(define (split-list-literal args)
+  (cond
+    [(null? args) (values '() #f)]
+    [(and (pair? (car args))
+          (pair? (car (car args)))  ; safety
+          (eq? (caar args) '$list-tail)
+          (null? (cdr args)))
+     ;; Last element is ($list-tail expr)
+     (values '() (cadar args))]
+    [(and (pair? args) (null? (cdr args))
+          (pair? (car args))
+          (eq? (car (car args)) '$list-tail))
+     ;; Last element is ($list-tail expr)
+     (values '() (cadr (car args)))]
+    [else
+     (let-values ([(rest tail) (split-list-literal (cdr args))])
+       (values (cons (car args) rest) tail))]))
