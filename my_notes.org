@@ -86,7 +86,7 @@ A /relation that produces proofs/, defined /locally/ inside a /function/, return
   * LISP
     * Clojure
       - "Hosted language",
-        - allows for seamless interop, especially on the JVM with Java
+        - allows for seamless inte rop, especially on the JVM with Java
         - Large reach, can reuse pre-existing libraries in ecosystem
         - multiple hosts, JVM and javascript... even more reach
       - Immutable datastructures
@@ -122,6 +122,7 @@ A /relation that produces proofs/, defined /locally/ inside a /function/, return
   - [X] load file, proper library path loading
   - [ ] tab on argument vectors, let-binding vectors, align to first var
   - [ ] rather than send last sym-expr to repl, send surfer-highlight region
+  - [ ] `:=` syntax breaks highlighting
   - [ ] Surfer Mode QoL
     - [ ] timer issue 🐞
     - [ ] forward-back tree gets occasional stuck... just jump to next tree node if misaligned
@@ -130,6 +131,7 @@ A /relation that produces proofs/, defined /locally/ inside a /function/, return
   - [ ] Documentation
     - [ ] Doc Completion Keep currying in the core, add arity checking in the surface language
     - [ ] Docstrings: Store documentation strings with definitions
+  - quasiquote unquote `,` being stripped
   - Interactivity
     - Hole-Driven Development Features
 ** Language Features
@@ -140,6 +142,10 @@ A /relation that produces proofs/, defined /locally/ inside a /function/, return
     - Any complex grouped types, Function, Pi, Sigma use `()`
       - [X] 👩‍🔬🦆 Syntax Workshop!
         - We repurpose  `<...>` to unify Pi and Sigma dependent types
+  - [ ] if *must* take 3 args, let's write a version that can take 2
+  - [ ] Map with key access syntax
+    - Make Example in Syntax Lab
+    - Implicit Map syntax
   - [ ] ‼️🦆 Workshop Session Syntax
     - [ ] Syntax Notes
   - [ ] +Anonymous Relation `?()`... but also `rel`+  DEFER
@@ -151,9 +157,16 @@ A /relation that produces proofs/, defined /locally/ inside a /function/, return
     - [ ] Syntax Notes
   - [X] +Deprecate `<>` (but keep, for now)+
     - [X] Repurpose `<>` For Pi and Sigma Types
+  - Macro Stuff
+    - When displaying list, use '[] display instead of cons
+  - [ ] Return `suc` and `pred` to operate on Nat; `inc` and `dec` on Int  🌱
+    - [ ] In fact `inc` and `dec` should work on any Num type with trait and impl
+    - [ ] Map integer number literals to Int; 56N to Nat
+    - [ ] datum-sym -> sym?
+  - [X] Update memory to indicate var-name? convention for predicate functions that return Bool
   - [X] Multi-arity defn: Case-split syntax with multiple arities (original feature request)
   - [X] Partial function application with wildcards
-  - [ ] 📝 variable argument support `...name` syntax?
+  - [X] 📝 variable argument support `...name` syntax?
   - [ ] List head tail syntax '[x1 x2 _ | xs]
   - [X] Migrate Groupings syntax from `()` to `[]`
   - [X] define sigil syntax for common data structures (see Syntax Studies below)
@@ -172,17 +185,14 @@ A /relation that produces proofs/, defined /locally/ inside a /function/, return
   - With Map key access, what does it mean for a collection to be an operator in the first position?
     - m.key
     - also with Vec[indx] syntax?
-  - [ ] [[*Bundles][BUNDLES!!!]]
 
+  - [ ] [[*Bundles][BUNDLES!!!]]
   - [X] Return types arity style `A B C -> D` *NOT* curry style: `A -> B -> C -> D`
   - [X] `defn` default public `defn-` default private -- deprecate `provide`
   - [X] `require` QoL - `:as`
   - [X] `let` block vs in-line `let`s
     - We support both... sibling in-line lets share same local scope
     - Design research/🦆
-  - [ ] Map with key access syntax
-    - Make Example in Syntax Lab
-    - Implicit Map syntax
   - [X] foreign/ffi syntax
   - Metadata with ^{...} ???
   - [X] ensure foreign symbols import cleanly
@@ -563,12 +573,14 @@ defn compose [f g]
 #+end_src
 
 
+** !!!!!!!Narrowing
 
 
 
 
+** Map Syntax
 
-** Free standing hash-map: The Implicit HashMap Syntax
+*** Free standing hash-map: The Implicit HashMap Syntax
   * Keys on same level implicit Hashmap
   * 
 
@@ -584,6 +596,2113 @@ spec add
     [add x y] = [add y x]   ;; commutativity
 
 #+end_src
+
+*** Map Key Accessor Pattern Syntax
+
+
+
+
+** Head Tail List Syntax
+*** I'm thinking of adding support for prolog style [E1, _, E3 | Rest] head|tail style syntax in lists. Would this keep homoiconicity? Does this work well on other collection types? Does it make sense? Maps? `{:name "Alice" :age 42" | _}`. Can be used for unification/structural pattern-matching?
+
+- Head|Tail Syntax: Analysis
+
+Let me explore this thoroughly.
+
+---
+
+- The Prolog Pattern
+
+#+begin_src prolog
+% Prolog: [H|T] destructures list
+append([], Ys, Ys).
+append([X|Xs], Ys, [X|Zs]) :- append(Xs, Ys, Zs).
+
+% With holes
+[A, _, C | Rest]  % matches list with at least 3 elements
+#+end_src
+
+---
+
+- Prologos Adaptation
+
+#+begin_src prologos
+;; ========================================
+;; List destructuring
+;; ========================================
+
+'[H | T]              ;; head and tail
+'[A, B | Rest]        ;; first two, then rest
+'[A, _, C | Rest]     ;; first, skip, third, rest
+'[A, B, C]            ;; exactly three elements
+
+;; ========================================
+;; In pattern matching
+;; ========================================
+
+match xs
+  | '[] -> "empty"
+  | '[x] -> "singleton"
+  | '[x, y] -> "pair"
+  | '[x | rest] -> format "head: ~a, tail length: ~a" x (length rest)
+
+;; ========================================
+;; In relations (unification)
+;; ========================================
+
+defr append (?xs ?ys ?zs)
+  &> (= ?xs '[])
+     (= ?zs ?ys)
+  &> (= ?xs '[?h | ?t])
+     (= ?zs '[?h | ?r])
+     (append ?t ?ys ?r)
+#+end_src
+
+---
+
+- Homoiconicity Check
+
+#+begin_src prologos
+;; ========================================
+;; Surface syntax
+;; ========================================
+
+'[A, B | Rest]
+
+;; ========================================
+;; AST representation
+;; ========================================
+
+;; Option A: Special cons-pattern node
+[list-pattern A B [rest Rest]]
+
+;; Option B: Nested cons
+[cons A [cons B Rest]]
+
+;; Option C: Splice-like syntax
+[list A B [splice Rest]]
+
+;; ========================================
+;; Quoting behavior
+;; ========================================
+
+$'[A, B | Rest]
+;; Should produce:
+[quote [list-pattern A B [rest Rest]]]
+
+;; ========================================
+;; Is it homoiconic?
+;; ========================================
+
+;; YES, if:
+;; 1. The | syntax desugars to a consistent AST node
+;; 2. That node can be quoted, manipulated, evaluated
+;; 3. Round-trip works: parse → AST → print → same syntax
+#+end_src
+
+---
+
+- Vec (RRB-Tree) Considerations
+
+#+begin_src prologos
+;; ========================================
+;; Does head|tail make sense for Vec?
+;; ========================================
+
+@[A, B | Rest]
+
+;; Semantically: first two elements, rest as Vec
+
+;; ========================================
+;; Problem: Vec is not cons-based
+;; ========================================
+
+;; List: '[H | T] is O(1) - just pointer to cons cell
+;; Vec:  @[H | T] is O(log n) - must slice
+
+;; ========================================
+;; But still useful for pattern matching!
+;; ========================================
+
+match vec
+  | @[] -> "empty"
+  | @[x] -> "singleton"
+  | @[x | rest] -> process x rest
+
+;; Compiler generates:
+match vec
+  | (if (= 0 (length vec)) ...) -> "empty"
+  | (if (= 1 (length vec)) (let x = (nth vec 0)) ...) -> "singleton"
+  | (let x = (nth vec 0)
+         rest = (slice vec 1))
+    -> (process x rest)
+
+;; ========================================
+;; Performance caveat
+;; ========================================
+
+;; User should know:
+;; - '[H | T] on List: O(1)
+;; - @[H | T] on Vec: O(log n) for slice
+
+;; Maybe warn? Or just document?
+#+end_src
+
+---
+
+- Map Destructuring
+
+#+begin_src prologos
+;; ========================================
+;; What would {... | Rest} mean?
+;; ========================================
+
+{:name "Alice" :age 42 | Rest}
+
+;; Possible interpretations:
+
+;; A: Extract specified keys, Rest = remaining keys
+{:name n :age a | Rest}
+;; n = "Alice", a = 42, Rest = {:other-key "value" ...}
+
+;; B: Match these keys, ignore rest (like Elixir)
+{:name n :age a | _}
+;; n = "Alice", a = 42, don't bind rest
+
+;; ========================================
+;; This is actually useful!
+;; ========================================
+
+match user
+  | {:name n :age a | _} -> format "~a is ~a years old" n a
+  | {:name n | _} -> format "~a (age unknown)" n
+  | _ -> "unknown user"
+
+;; ========================================
+;; In relations
+;; ========================================
+
+defr adult? (?user)
+  &> (= ?user {:age ?a | _})
+     (>= ?a 18)
+
+defr named? (?user ?name)
+  &> (= ?user {:name ?name | _})
+#+end_src
+
+---
+
+- Syntax Variations
+
+#+begin_src prologos
+;; ========================================
+;; Option A: | for all collections
+;; ========================================
+
+'[a, b | rest]        ;; list
+@[a, b | rest]        ;; vec
+{:k v | rest}         ;; map
+
+;; ========================================
+;; Option B: Different syntax per collection
+;; ========================================
+
+'[a, b | rest]        ;; list (Prolog-style)
+@[a, b .. rest]       ;; vec (slice-like)
+{:k v, ... rest}      ;; map (spread-like)
+
+;; ========================================
+;; Option C: | everywhere (consistent)
+;; ========================================
+
+;; Use | uniformly, semantics differ by type
+;; List: cons/tail
+;; Vec: slice
+;; Map: split by keys
+#+end_src
+
+---
+
+- Unification Semantics
+
+#+begin_src prologos
+;; ========================================
+;; List unification
+;; ========================================
+
+(= '[1, 2, 3] '[?h | ?t])
+;; ?h = 1, ?t = '[2, 3]
+
+(= '[1, 2, 3] '[?a, ?b | ?rest])
+;; ?a = 1, ?b = 2, ?rest = '[3]
+
+(= '[1, 2] '[?a, ?b, ?c | ?rest])
+;; FAIL: list too short
+
+;; ========================================
+;; Vec unification
+;; ========================================
+
+(= @[1, 2, 3] @[?h | ?t])
+;; ?h = 1, ?t = @[2, 3]
+
+;; ========================================
+;; Map unification
+;; ========================================
+
+(= {:name "Alice" :age 42} {:name ?n | ?rest})
+;; ?n = "Alice", ?rest = {:age 42}
+
+(= {:name "Alice" :age 42} {:name ?n :age ?a | _})
+;; ?n = "Alice", ?a = 42
+
+(= {:name "Alice"} {:name ?n :age ?a | _})
+;; FAIL: no :age key (unless ?a is optional?)
+
+;; ========================================
+;; Partial map matching (with optional)
+;; ========================================
+
+(= {:name "Alice"} {:name ?n :age (?a :default nil) | _})
+;; ?n = "Alice", ?a = nil
+
+;; Or use different syntax for optional:
+(= {:name "Alice"} {:name ?n :age? ?a | _})
+;; ?n = "Alice", ?a = nil
+#+end_src
+
+---
+
+- Pattern Matching Integration
+
+#+begin_src prologos
+;; ========================================
+;; Full pattern matching syntax
+;; ========================================
+
+match expr
+  ;; Literal
+  | 42 -> "forty-two"
+
+  ;; Variable
+  | x -> use x
+
+  ;; List patterns
+  | '[] -> "empty list"
+  | '[x] -> "singleton"
+  | '[x, y] -> "pair"
+  | '[x | xs] -> "cons"
+  | '[_, _, z | _] -> "third element"
+
+  ;; Vec patterns
+  | @[] -> "empty vec"
+  | @[x] -> "singleton vec"
+  | @[x | xs] -> "head and rest"
+
+  ;; Map patterns
+  | {} -> "empty map"
+  | {:type :user :name n | _} -> "user named ~a" n
+  | {:type :admin | rest} -> "admin with ~a" rest
+  | {| _} -> "any map"  ;; or just `{_}`?
+
+  ;; Nested
+  | {:users '[first | _] | _} -> "has users, first is ~a" first
+
+  ;; With guards
+  | '[x | _] if (> x 0) -> "starts with positive"
+#+end_src
+
+---
+
+- AST Representation
+
+#+begin_src prologos
+;; ========================================
+;; List pattern AST
+;; ========================================
+
+;; Surface: '[a, b | rest]
+;; AST:
+[list-pattern
+  [elements a b]
+  [rest rest]]
+
+;; Surface: '[a, b, c]
+;; AST:
+[list-pattern
+  [elements a b c]
+  [rest nil]]  ;; no rest = exact match
+
+;; ========================================
+;; Vec pattern AST
+;; ========================================
+
+;; Surface: @[a, b | rest]
+;; AST:
+[vec-pattern
+  [elements a b]
+  [rest rest]]
+
+;; ========================================
+;; Map pattern AST
+;; ========================================
+
+;; Surface: {:name n :age a | rest}
+;; AST:
+[map-pattern
+  [entries [:name n] [:age a]]
+  [rest rest]]
+
+;; Surface: {:name n | _}
+;; AST:
+[map-pattern
+  [entries [:name n]]
+  [rest _]]  ;; wildcard rest
+
+;; ========================================
+;; Quoting preserves structure
+;; ========================================
+
+$'[a | b]
+;; => [list-pattern [elements a] [rest b]]
+
+${:k v | r}
+;; => [map-pattern [entries [:k v]] [rest r]]
+#+end_src
+
+---
+
+- Implementation Considerations
+
+#+begin_src racket
+;; ========================================
+;; Pattern compilation
+;; ========================================
+
+(define (compile-pattern pat)
+  (match pat
+    ;; List with rest
+    [`(list-pattern (elements ,elems ...) (rest ,rest-var))
+     (define n (length elems))
+     `(and (list? val)
+           (>= (length val) ,n)
+           ,@(for/list ([e elems] [i (in-naturals)])
+               (compile-pattern-at e `(list-ref val ,i)))
+           ,(if rest-var
+                `(let ([,rest-var (drop val ,n)]) #t)
+                `(= (length val) ,n)))]
+
+    ;; Vec with rest
+    [`(vec-pattern (elements ,elems ...) (rest ,rest-var))
+     (define n (length elems))
+     `(and (vec? val)
+           (>= (vec-length val) ,n)
+           ,@(for/list ([e elems] [i (in-naturals)])
+               (compile-pattern-at e `(vec-ref val ,i)))
+           ,(if rest-var
+                `(let ([,rest-var (vec-slice val ,n)]) #t)
+                `(= (vec-length val) ,n)))]
+
+    ;; Map with rest
+    [`(map-pattern (entries ,entries ...) (rest ,rest-var))
+     (define keys (map first entries))
+     `(and (map? val)
+           ,@(for/list ([e entries])
+               (match-define (list k v) e)
+               `(let ([,v (map-ref val ',k)])
+                  ,(compile-pattern v v)))
+           ,(cond
+              [(eq? rest-var '_) #t]
+              [rest-var `(let ([,rest-var (map-dissoc-keys val ',keys)]) #t)]
+              [else `(= (map-count val) ,(length entries))]))]))
+#+end_src
+
+---
+
+- Summary
+
+| Collection | Syntax             | Semantics              | Cost     |
+|------------+--------------------+------------------------+----------|
+| List       | ='[h \vert t]=     | cons destructure       | O(1)     |
+| Vec        | =@[h \vert t]=     | head + slice           | O(log n) |
+| Map        | ={:k v \vert r}=   | extract keys + rest    | O(k)     |
+
+| Question                        | Answer                               |
+|---------------------------------+--------------------------------------|
+| Homoiconic?                     | Yes, desugars to pattern AST nodes   |
+| Works for all collections?      | Yes, with type-appropriate semantics |
+| Good for pattern matching?      | Yes, very expressive                 |
+| Good for unification?           | Yes, natural fit for relations       |
+| Performance concerns?           | Vec slice is O(log n), document this |
+| Map rest semantics?             | Extract named keys, rest = remaining |
+
+#+begin_src prologos
+;; ========================================
+;; Final syntax
+;; ========================================
+
+;; Lists
+'[h | t]              ;; head, tail
+'[a, b | rest]        ;; first two, rest
+'[a, _, c | _]        ;; first, skip, third, ignore rest
+
+;; Vecs
+@[h | t]              ;; head, rest (slice)
+@[a, b | rest]        ;; first two, rest
+
+;; Maps
+{:key val | rest}     ;; extract key, rest = remaining
+{:k1 v1 :k2 v2 | _}   ;; extract multiple, ignore rest
+{| _}                 ;; match any map (or just `{_}`)
+
+;; In match
+match data
+  | '[x | xs] -> ...
+  | @[x, y | _] -> ...
+  | {:name n | _} -> ...
+
+;; In relations
+defr member (?x ?xs)
+  &> (= ?xs '[?x | _])
+  &> (= ?xs '[_ | ?rest]) (member ?x ?rest)
+#+end_src
+
+
+
+
+
+
+
+
+
+#+begin_src prologos
+
+  
+
+
+#+end_src
+
+** Range Syntax
+*** I'm also thinking of supporting "Range Syntax" for lists and vectors. '[1..5] expands to '[1 2 3 4 5]; also '[1.10 :by 2] expands to '[1 3 5 7 9], '[10..0 :by -2] expands to '[10 8 6 4 2 0], and so on. Should also work on vectors, lazy lists?
+
+- Range Syntax for Collections
+
+This is a great ergonomic addition. Let me explore the design space.
+
+---
+
+- Core Syntax
+
+#+begin_src prologos
+;; ========================================
+;; Basic range: start..end (inclusive)
+;; ========================================
+
+'[1..5]           ;; => '[1 2 3 4 5]
+@[1..5]           ;; => @[1 2 3 4 5]
+~[1..5]           ;; => ~[1 2 3 4 5] (lazy)
+
+;; ========================================
+;; With step: start..end :by step
+;; ========================================
+
+'[1..10 :by 2]    ;; => '[1 3 5 7 9]
+'[10..1 :by -2]   ;; => '[10 8 6 4 2]
+@[0..100 :by 10]  ;; => @[0 10 20 30 40 50 60 70 80 90 100]
+
+;; ========================================
+;; Exclusive end: start..<end
+;; ========================================
+
+'[1..<5]          ;; => '[1 2 3 4]
+@[0..<10]         ;; => @[0 1 2 3 4 5 6 7 8 9]
+'[0..<10 :by 2]   ;; => '[0 2 4 6 8]
+
+;; ========================================
+;; Infinite (lazy only)
+;; ========================================
+
+~[1..]            ;; => ~[1 2 3 4 5 ...] (infinite)
+~[0.. :by 2]      ;; => ~[0 2 4 6 8 ...] (infinite evens)
+~[10.. :by -1]    ;; => ~[10 9 8 7 6 ...] (infinite countdown)
+#+end_src
+
+---
+
+- Syntax Variations
+
+| Syntax          | Meaning                    | Result             |
+|-----------------+----------------------------+--------------------|
+| =1..5=          | 1 to 5 inclusive           | 1, 2, 3, 4, 5      |
+| =1..<5=         | 1 to 5 exclusive           | 1, 2, 3, 4         |
+| =1..5 :by 2=    | 1 to 5 step 2              | 1, 3, 5            |
+| =5..1 :by -1=   | 5 down to 1                | 5, 4, 3, 2, 1      |
+| =1..=           | 1 to infinity              | 1, 2, 3, ... (lazy)|
+
+---
+
+- Collection Type Determines Behavior
+
+#+begin_src prologos
+;; ========================================
+;; List '[...] - eager, linked
+;; ========================================
+
+'[1..5]           ;; eager evaluation, linked list
+'[1..1000000]     ;; builds entire list (expensive!)
+
+;; ========================================
+;; Vec @[...] - eager, indexed
+;; ========================================
+
+@[1..5]           ;; eager evaluation, vector
+@[1..1000000]     ;; builds entire vector (expensive!)
+
+;; ========================================
+;; Seq ~[...] - lazy, streaming
+;; ========================================
+
+~[1..5]           ;; lazy, computed on demand
+~[1..1000000]     ;; cheap! only computed as needed
+~[1..]            ;; infinite! only possible with lazy
+
+;; ========================================
+;; Set #{...} - eager, unique (if meaningful)
+;; ========================================
+
+#{1..5}           ;; => #{1 2 3 4 5}
+;; Note: step must not create duplicates
+#+end_src
+
+---
+
+- Desugaring
+
+#+begin_src prologos
+;; ========================================
+;; Surface syntax desugars to range calls
+;; ========================================
+
+'[1..5]
+;; => [into '[] [range 1 5]]
+
+@[1..10 :by 2]
+;; => [into @[] [range 1 10 :by 2]]
+
+~[1..]
+;; => [range-lazy 1 inf]
+
+'[1..<5]
+;; => [into '[] [range-exclusive 1 5]]
+
+;; ========================================
+;; Core range functions
+;; ========================================
+
+spec range
+  | Nat Nat -> Seq Nat                    ;; range 1 5
+  | Nat Nat :by Int -> Seq Int            ;; range 1 10 :by 2
+  | Nat -> Seq Nat                        ;; range 1 (infinite)
+
+spec range-exclusive
+  | Nat Nat -> Seq Nat
+  | Nat Nat :by Int -> Seq Int
+#+end_src
+
+---
+
+- Edge Cases
+
+#+begin_src prologos
+;; ========================================
+;; Empty ranges
+;; ========================================
+
+'[5..1]           ;; => '[] (empty, start > end with positive step)
+'[1..5 :by -1]    ;; => '[] (empty, wrong direction)
+
+;; ========================================
+;; Single element
+;; ========================================
+
+'[5..5]           ;; => '[5]
+'[5..<5]          ;; => '[] (exclusive, empty)
+
+;; ========================================
+;; Type inference
+;; ========================================
+
+'[1..5]           ;; Nat range
+'[-5..5]          ;; Int range (negative start)
+'[1.5..5.5]       ;; Rat range? Or error?
+
+;; Recommendation: integer ranges only for simplicity
+;; Use explicit for non-integer: [range 1.5 5.5 :by 0.5]
+
+;; ========================================
+;; Variables in ranges
+;; ========================================
+
+'[1..n]           ;; range from 1 to n
+@[start..end :by step]  ;; fully parameterized
+~[x..]            ;; infinite from x
+
+;; ========================================
+;; Expressions in ranges
+;; ========================================
+
+'[1..[length xs]]        ;; range to length of xs
+@[[+ 1 start]..[- end 1]]  ;; computed bounds
+#+end_src
+
+---
+
+- Implementation
+
+#+begin_src racket
+;; ========================================
+;; Reader/Parser Phase
+;; ========================================
+
+;; Detect range syntax in collection literals
+;; '[1..5]  =>  (list-from-range (range 1 5 #:inclusive #t))
+;; @[1..5]  =>  (vec-from-range (range 1 5 #:inclusive #t))
+;; ~[1..5]  =>  (range-lazy 1 5)
+
+(define (parse-collection-literal sigil contents)
+  (match contents
+    ;; Range pattern: start..end or start..<end
+    [(list (? range-expr? r))
+     (desugar-range sigil r)]
+
+    ;; Range with step: start..end :by step
+    [(list (? range-expr? r) ':by step)
+     (desugar-range sigil r step)]
+
+    ;; Normal collection
+    [elements
+     (make-collection sigil elements)]))
+
+(define (range-expr? e)
+  (and (symbol? e)
+       (or (regexp-match? #rx"\\.\\." (symbol->string e))
+           (regexp-match? #rx"\\.\\.<" (symbol->string e)))))
+
+;; ========================================
+;; Range Function (Lazy Core)
+;; ========================================
+
+(define (range start end #:by [step 1] #:inclusive [incl #t])
+  (define cmp (if (positive? step) <= >=))
+  (define limit (if incl end (- end (sgn step))))
+
+  (lazy-seq
+    (if (cmp start limit)
+        (cons start (range (+ start step) end #:by step #:inclusive incl))
+        '())))
+
+;; ========================================
+;; Infinite Range
+;; ========================================
+
+(define (range-infinite start #:by [step 1])
+  (lazy-seq
+    (cons start (range-infinite (+ start step) #:by step))))
+
+;; ========================================
+;; Materialization
+;; ========================================
+
+(define (into-list seq)
+  (if (empty-seq? seq)
+      '()
+      (cons (seq-first seq) (into-list (seq-rest seq)))))
+
+(define (into-vec seq)
+  (list->vector (into-list seq)))
+#+end_src
+
+---
+
+- Full Examples
+
+#+begin_src prologos
+;; ========================================
+;; Common Use Cases
+;; ========================================
+
+;; Indices
+@[0..<[length xs]]        ;; @[0 1 2 ... n-1]
+
+;; Enumerate with index
+|> @[0..<[length xs]]
+  map (fn [i] (pair i (nth xs i)))
+
+;; Countdown
+'[10..1 :by -1]           ;; '[10 9 8 7 6 5 4 3 2 1]
+
+;; Alphabet (if char ranges supported)
+'[:a..:z]                 ;; '[:a :b :c ... :z]
+
+;; ========================================
+;; With Pipes and Transducers
+;; ========================================
+
+;; First 10 squares
+|> ~[1..]
+  map [* _ _]
+  take 10
+  into @[]
+;; => @[1 4 9 16 25 36 49 64 81 100]
+
+;; Sum of even numbers up to 100
+|> ~[2..100 :by 2]
+  reduce + 0
+;; => 2550
+
+;; Fizzbuzz
+|> ~[1..100]
+  map (fn [n]
+        cond
+          [divisible? n 15] -> "FizzBuzz"
+          [divisible? n 3]  -> "Fizz"
+          [divisible? n 5]  -> "Buzz"
+          else              -> [str n])
+  into @[]
+
+;; ========================================
+;; Nested Ranges
+;; ========================================
+
+;; Multiplication table
+|> @[1..10]
+  map (fn [x]
+        |> @[1..10]
+          map [* x _])
+
+;; Coordinates
+|> ~[0..<width]
+  mapcat (fn [x]
+           |> ~[0..<height]
+             map (fn [y] (point x y)))
+  into @[]
+
+;; ========================================
+;; Lazy Infinite
+;; ========================================
+
+;; Primes (using lazy)
+def primes
+  let sieve = fn [s]
+    let p = first s
+    ~[p | sieve (filter [not [divisible? _ p]] (rest s))]
+  sieve ~[2..]
+
+take 10 primes
+;; => ~[2 3 5 7 11 13 17 19 23 29]
+
+;; Fibonacci (using lazy)
+def fibs
+  ~[0 1 | map + fibs (rest fibs)]
+
+take 10 fibs
+;; => ~[0 1 1 2 3 5 8 13 21 34]
+#+end_src
+
+---
+
+- Syntax Summary
+
+| Syntax              | Collection | Meaning                  |
+|---------------------+------------+--------------------------|
+| ='[1..5]=           | List       | Eager, inclusive         |
+| =@[1..5]=           | Vec        | Eager, inclusive         |
+| =~[1..5]=           | Seq        | Lazy, inclusive          |
+| ='[1..<5]=          | List       | Eager, exclusive         |
+| ='[1..10 :by 2]=    | List       | Eager, with step         |
+| =~[1..]=            | Seq        | Lazy, infinite           |
+| =~[1.. :by 2]=      | Seq        | Lazy, infinite, step     |
+
+---
+
+- Design Decisions
+
+| Decision                  | Choice                  | Rationale                |
+|---------------------------+-------------------------+--------------------------|
+| Inclusive vs exclusive    | =..= vs =..<= syntax    | Clear, familiar (Rust)   |
+| Step syntax               | =:by step=              | Keyword arg, readable    |
+| Infinite allowed?         | Only for =~[]=          | Prevents accidental hang |
+| Empty range behavior      | Empty collection        | No error, just empty     |
+| Non-integer ranges        | Explicit function only  | Keep syntax simple       |
+| Variables in ranges       | Allowed                 | Useful for dynamic bounds|
+
+Does this range syntax design feel right for Prologos?
+
+*** Oh! Another idea is to include predicate functions as filter with lazy lists `~[1.. even?]`, `~[1.. [< _ 100]`
+
+- Predicate Filters in Range Syntax
+
+This is elegant! It makes lazy sequences read like set-builder notation.
+
+---
+
+- The Concept
+
+#+begin_src prologos
+;; ========================================
+;; Set-builder notation feel
+;; ========================================
+
+;; Math: { x ∈ ℕ | x is even }
+;; Prologos:
+~[1.. even?]              ;; => ~[2 4 6 8 10 ...]
+
+;; Math: { x ∈ ℕ | x < 100 }
+;; Prologos:
+~[1.. [< _ 100]]          ;; => ~[1 2 3 ... 99]
+
+;; Math: { x ∈ ℕ | x is even ∧ x < 100 }
+;; Prologos:
+~[1.. even? [< _ 100]]    ;; => ~[2 4 6 ... 98]
+#+end_src
+
+---
+
+- Extended Syntax
+
+#+begin_src prologos
+;; ========================================
+;; Basic: range with predicate
+;; ========================================
+
+~[1.. even?]              ;; infinite evens from 1
+~[1.. odd?]               ;; infinite odds from 1
+~[1.. prime?]             ;; infinite primes from 1
+
+;; ========================================
+;; With termination predicate
+;; ========================================
+
+~[1.. [< _ 100]]          ;; 1..99 (stops when predicate fails)
+~[1.. [<= _ 100]]         ;; 1..100
+
+;; ========================================
+;; Multiple predicates (conjunction)
+;; ========================================
+
+~[1.. even? [< _ 100]]    ;; even numbers under 100
+~[1.. [> _ 10] [< _ 50] prime?]  ;; primes between 10 and 50
+
+;; ========================================
+;; With step
+;; ========================================
+
+~[1.. :by 3 [< _ 100]]    ;; 1, 4, 7, 10, ... under 100
+~[0.. :by 2 [< _ 20]]     ;; 0, 2, 4, ... 18
+
+;; ========================================
+;; Filter vs Terminator distinction?
+;; ========================================
+
+;; Option A: All predicates are filters (keeps going)
+~[1.. even?]              ;; skips odds, never stops
+
+;; Option B: Last predicate can be terminator
+~[1.. even? [< _ 100]]    ;; filter even, stop at 100
+
+;; Option C: Explicit distinction
+~[1.. :where even? :until [>= _ 100]]
+~[1.. :filter even? :take-while [< _ 100]]
+#+end_src
+
+---
+
+- Syntax Options
+
+- Option A: Positional (Simple)
+
+#+begin_src prologos
+;; All trailing expressions are filters
+~[start.. pred1 pred2 pred3]
+
+~[1.. even?]              ;; filter: keep evens
+~[1.. [< _ 100]]          ;; filter: keep < 100 (but infinite!)
+
+;; Problem: [< _ 100] as filter never terminates!
+;; It keeps checking forever, just returns nothing after 99
+#+end_src
+
+- Option B: Distinguished Terminator
+
+#+begin_src prologos
+;; :while for termination, :where for filter
+~[start.. :while term-pred :where filter-pred]
+
+~[1.. :while [< _ 100]]              ;; 1..99
+~[1.. :while [< _ 100] :where even?] ;; 2,4,6,...98
+~[1.. :where even?]                  ;; infinite evens
+
+;; Or reversed order
+~[1.. :where even? :while [< _ 100]]
+#+end_src
+
+- Option C: Take-While is Default for Comparison Predicates
+
+#+begin_src prologos
+;; Heuristic: comparison predicates terminate, others filter
+
+~[1.. [< _ 100]]          ;; terminates (comparison detected)
+~[1.. even?]              ;; filters (not a comparison)
+~[1.. even? [< _ 100]]    ;; filters even, terminates at 100
+
+;; Smart desugaring based on predicate shape
+;; [< _ n], [<= _ n], [> _ n], [>= _ n] → take-while
+;; Other predicates → filter
+#+end_src
+
+- Option D: Explicit Keywords (Most Clear)
+
+#+begin_src prologos
+;; Be explicit about intent
+~[1..]                                ;; infinite naturals
+~[1.. | even?]                        ;; infinite evens (filter)
+~[1.. | [< _ 100]]                    ;; 1..99 (take-while)
+~[1.. | even?, [< _ 100]]             ;; even AND < 100
+
+;; The | separates range from predicates
+;; Comma combines predicates (conjunction)
+#+end_src
+
+---
+
+- My Recommendation: Option D (Pipe Separator)
+
+#+begin_src prologos
+;; ========================================
+;; Syntax: ~[range | predicates]
+;; ========================================
+
+;; Infinite with filter
+~[1.. | even?]            ;; infinite evens
+
+;; Bounded (take-while behavior)
+~[1.. | [< _ 100]]        ;; 1 to 99
+
+;; Combined (filter AND bound)
+~[1.. | even?, [< _ 100]] ;; even numbers under 100
+
+;; Multiple filters
+~[1.. | [> _ 10], [< _ 50], prime?]  ;; primes between 10 and 50
+
+;; With step
+~[0.. :by 2 | [< _ 20]]   ;; 0, 2, 4, ..., 18
+
+;; ========================================
+;; The | reads as "such that" or "where"
+;; ========================================
+
+;; ~[1.. | even?]
+;; "sequence from 1 WHERE even"
+
+;; ~[1.. | [< _ 100]]
+;; "sequence from 1 WHERE less than 100"
+#+end_src
+
+---
+
+- Semantics: Filter vs Take-While
+
+#+begin_src prologos
+;; ========================================
+;; Key question: when does predicate terminate?
+;; ========================================
+
+;; Option 1: All predicates are filters (lazy, may not terminate)
+~[1.. | even?]
+;; Keeps generating, skips odds
+;; Never terminates on its own
+
+;; Option 2: Comparison predicates auto-terminate
+~[1.. | [< _ 100]]
+;; Generates 1, 2, 3... stops at 100
+;; Because [< _ 100] fails, we stop (take-while)
+
+;; ========================================
+;; Recommendation: Smart behavior
+;; ========================================
+
+;; If ALL predicates are monotonic-failing on ascending sequence,
+;; use take-while semantics (terminates)
+
+;; Otherwise, use filter semantics (may not terminate)
+
+;; Monotonic-failing: once false, stays false
+;; [< _ 100]: once x >= 100, always false → terminates
+;; even?: alternates true/false → filters
+
+;; Combined:
+~[1.. | even?, [< _ 100]]
+;; even? is filter (non-monotonic)
+;; [< _ 100] is terminator (monotonic)
+;; Result: filter evens, stop at 100
+#+end_src
+
+---
+
+- Desugaring
+
+#+begin_src prologos
+;; ========================================
+;; Simple range
+;; ========================================
+
+~[1..5]
+;; => [range 1 5]
+
+;; ========================================
+;; Infinite range
+;; ========================================
+
+~[1..]
+;; => [range-from 1]
+
+;; ========================================
+;; With filter predicates
+;; ========================================
+
+~[1.. | even?]
+;; => [filter even? [range-from 1]]
+
+~[1.. | even?, odd?]
+;; => [filter (both even? odd?) [range-from 1]]
+;; (always empty, but valid)
+
+;; ========================================
+;; With terminating predicate
+;; ========================================
+
+~[1.. | [< _ 100]]
+;; => [take-while [< _ 100] [range-from 1]]
+
+;; ========================================
+;; Mixed
+;; ========================================
+
+~[1.. | even?, [< _ 100]]
+;; => [take-while [< _ 100] [filter even? [range-from 1]]]
+;; Or equivalently:
+;; => [filter even? [take-while [< _ 100] [range-from 1]]]
+;; (order matters for efficiency!)
+
+;; Optimal: take-while OUTER (stops generation)
+;; => [take-while [< _ 100] [filter even? [range-from 1]]]
+#+end_src
+
+---
+
+- Full Examples
+
+#+begin_src prologos
+;; ========================================
+;; Mathematical sequences
+;; ========================================
+
+;; Evens under 100
+~[2.. :by 2 | [< _ 100]]
+;; => ~[2 4 6 8 ... 98]
+
+;; Alternative
+~[1.. | even?, [< _ 100]]
+;; => ~[2 4 6 8 ... 98]
+
+;; Primes under 1000
+~[2.. | prime?, [< _ 1000]]
+;; => ~[2 3 5 7 11 ... 997]
+
+;; Squares under 500
+~[1.. | [< [* _ _] 500]]
+;; Hmm, predicate uses transformed value
+;; Maybe: ~[1.. | [< (square _) 500]]
+;; Or use pipe:
+|> ~[1..]
+  map square
+  take-while [< _ 500]
+
+;; ========================================
+;; Fizzbuzz numbers
+;; ========================================
+
+;; Numbers divisible by 3 or 5
+~[1..100 | (either [divisible? _ 3] [divisible? _ 5])]
+
+;; ========================================
+;; Working with data
+;; ========================================
+
+;; IDs of active users
+~[1.. | [< _ max-user-id], (fn [id] (active? (get-user id)))]
+
+;; ========================================
+;; Nested predicates
+;; ========================================
+
+;; Numbers where digit sum is even
+~[1.. | (fn [n] (even? (digit-sum n))), [< _ 1000]]
+;; => ~[2 4 6 8 11 13 15 17 19 20 22 ...]
+
+;; ========================================
+;; Combining with pipes
+;; ========================================
+
+|> ~[1.. | prime?]
+  take 100
+  reduce + 0
+;; Sum of first 100 primes
+
+|> ~[1.. | [< _ 1000000], [= 0 [mod _ 7]]]
+  filter [= 0 [mod _ 13]]
+  take 10
+;; First 10 numbers divisible by both 7 and 13
+#+end_src
+
+---
+
+- Works Across Collection Types?
+
+#+begin_src prologos
+;; ========================================
+;; Lazy (natural fit)
+;; ========================================
+
+~[1.. | even?]            ;; infinite lazy evens
+
+;; ========================================
+;; Eager collections (must be bounded!)
+;; ========================================
+
+'[1.. | even?, [< _ 20]]  ;; '[2 4 6 8 10 12 14 16 18]
+@[1.. | even?, [< _ 20]]  ;; @[2 4 6 8 10 12 14 16 18]
+
+;; Error or warning for unbounded eager:
+'[1.. | even?]            ;; ERROR: unbounded range in eager collection
+@[1.. | even?]            ;; ERROR: unbounded range in eager collection
+
+;; ========================================
+;; Alternative: bounded range with filter
+;; ========================================
+
+'[1..100 | even?]         ;; OK: bounded range, filter applied
+@[1..1000 | prime?]       ;; OK: bounded range, filter applied
+#+end_src
+
+---
+
+- Syntax Summary
+
+| Syntax                        | Meaning                           |
+|-------------------------------+-----------------------------------|
+| =~[1..]=                      | Infinite naturals from 1          |
+| =~[1.. \| even?]=             | Infinite evens                    |
+| =~[1.. \| [< _ 100]]=         | 1 to 99 (terminates)              |
+| =~[1.. \| even?, [< _ 100]]=  | Evens under 100                   |
+| =~[1.. :by 2 \| [< _ 50]]=    | 1, 3, 5, ... 49                   |
+| ='[1..100 \| prime?]=         | Primes up to 100 (eager list)     |
+| =@[1..50 \| odd?]=            | Odd numbers 1-49 (eager vec)      |
+
+---
+
+- Grammar
+
+#+begin_src
+RangeExpr ::= '[' Start RangeOp End? Step? Preds? ']'
+
+Start     ::= Expr
+RangeOp   ::= '..' | '..<'
+End       ::= Expr | ε (infinite)
+Step      ::= ':by' Expr
+Preds     ::= '|' Pred (',' Pred)/
+Pred      ::= Expr  ;; must be A -> Bool
+#+end_src
+
+---
+
+- Final Comparison
+
+#+begin_src prologos
+;; ========================================
+;; Without predicate syntax
+;; ========================================
+
+|> ~[1..]
+  filter even?
+  take-while [< _ 100]
+  into @[]
+
+;; ========================================
+;; With predicate syntax
+;; ========================================
+
+@[1.. | even?, [< _ 100]]
+
+;; Much cleaner!
+;; Reads like: "integers from 1 where even and less than 100"
+#+end_src
+
+This feels like a natural extension of the range syntax. The =|= separator clearly marks "such that" and multiple predicates combine naturally.
+
+Does this feel right?
+
+*** Two issues with the pipe operator to raise: 1. Clarify, does this prevent the nontermination issue? 2. We also have prolog [head | tail] syntax planned out, which uses the same `|`... but because the range syntax uses .., would the set-builder like `|` still work?
+
+- Addressing Pipe Ambiguity and Non-Termination
+
+Let me tackle both issues.
+
+---
+
+- Issue 1: Non-Termination
+
+The =|= syntax alone does /not/ prevent non-termination. Let me clarify:
+
+#+begin_src prologos
+;; ========================================
+;; Problem: filter never terminates on infinite seq
+;; ========================================
+
+~[1.. | even?]
+;; This is FINE: generates evens lazily forever
+;; Consumer decides when to stop: (take 10 ~[1.. | even?])
+
+~[1.. | [> _ 100]]
+;; This is PROBLEMATIC as filter!
+;; Generates 1, 2, 3... filters out 1-100... then emits 101, 102...
+;; Actually terminates (eventually emits values)
+;; But: (take 1 ~[1.. | [> _ 100]]) must skip 100 elements first
+
+~[1.. | [< _ 100]]
+;; As FILTER: generates 1-99, then infinite stream of nothing
+;; Lazily "works" but never emits after 99
+;; (take 200 ~[1.. | [< _ 100]]) hangs after 99 elements!
+
+;; ========================================
+;; The semantic question
+;; ========================================
+
+;; Is [< _ 100] a:
+;;   A) FILTER: keep elements where pred is true (may produce gaps)
+;;   B) TAKE-WHILE: stop when pred becomes false (terminates)
+
+;; For bounded iteration, we want TAKE-WHILE
+;; For sparse selection, we want FILTER
+#+end_src
+
+- Solution: Distinguish Filter from Terminator
+
+#+begin_src prologos
+;; ========================================
+;; Option A: Separate syntax
+;; ========================================
+
+;; | for filter (keeps checking forever)
+~[1.. | even?]            ;; filter: infinite evens
+
+;; || or |! or |. for take-while (stops when false)
+~[1.. || [< _ 100]]       ;; take-while: 1..99
+~[1.. |. [< _ 100]]       ;; alternative
+~[1.. |! [< _ 100]]       ;; alternative
+
+;; Combined
+~[1.. | even? || [< _ 100]]  ;; filter evens, stop at 100
+
+;; ========================================
+;; Option B: Keywords
+;; ========================================
+
+~[1.. :where even?]                    ;; filter
+~[1.. :while [< _ 100]]                ;; take-while
+~[1.. :where even? :while [< _ 100]]   ;; both
+
+;; ========================================
+;; Option C: Smart default based on position
+;; ========================================
+
+;; Last predicate is take-while, others are filter
+~[1.. | even?, [< _ 100]]
+;;       ^^^^^ filter
+;;              ^^^^^^^^^^^ take-while (last)
+
+;; Single predicate needs explicit marker for take-while
+~[1.. | even?]            ;; filter (infinite)
+~[1.. |. [< _ 100]]       ;; take-while (terminates)
+#+end_src
+
+- My Recommendation: Keywords for Clarity
+
+#+begin_src prologos
+;; ========================================
+;; Clear, unambiguous syntax
+;; ========================================
+
+;; :where = filter (may not terminate)
+~[1.. :where even?]       ;; infinite evens
+
+;; :while = take-while (terminates when false)
+~[1.. :while [< _ 100]]   ;; 1..99, terminates
+
+;; Both
+~[1.. :where even? :while [< _ 100]]  ;; evens under 100
+
+;; ========================================
+;; This is explicit about behavior
+;; ========================================
+
+;; No ambiguity about termination
+;; Reader knows exactly what to expect
+#+end_src
+
+---
+
+- Issue 2: Conflict with Prolog Head|Tail Syntax
+
+#+begin_src prologos
+;; ========================================
+;; Prolog-style list pattern
+;; ========================================
+
+'[head | tail]            ;; destructure: first element and rest
+
+match xs
+  | '[h | t] -> ...       ;; head and tail
+  | '[] -> ...            ;; empty
+
+;; ========================================
+;; Proposed range predicate
+;; ========================================
+
+~[1.. | even?]            ;; range with predicate
+
+;; ========================================
+;; Are these ambiguous?
+;; ========================================
+#+end_src
+
+- Analyzing the Conflict
+
+#+begin_src prologos
+;; ========================================
+;; Context 1: Pattern matching (in match/destructure)
+;; ========================================
+
+match xs
+  | '[h | t] -> ...
+
+;; Here '[h | t] is a PATTERN
+;; h and t are binding variables
+;; | means "cons" or "head|tail"
+
+;; ========================================
+;; Context 2: Range literal (in expression position)
+;; ========================================
+
+let evens = ~[1.. | even?]
+
+;; Here ~[1.. | even?] is an EXPRESSION
+;; 1.. is a range
+;; | even? is a predicate clause
+
+;; ========================================
+;; Key difference: .. in range
+;; ========================================
+
+'[h | t]         ;; NO dots, this is pattern
+~[1.. | even?]   ;; HAS dots, this is range
+
+'[1 | rest]      ;; Pattern: 1 consed onto rest
+~[1.. | even?]   ;; Range: 1.. with filter even?
+
+;; The .. makes it unambiguous!
+#+end_src
+
+- When Could It Be Ambiguous?
+
+#+begin_src prologos
+;; ========================================
+;; Potentially confusing cases
+;; ========================================
+
+;; Case 1: Range without ..
+'[1 | rest]               ;; Pattern: cons 1 onto rest
+;; vs
+'[1 | even?]              ;; ??? Range with filter? Or pattern?
+
+;; If we only allow | filter with .., no ambiguity:
+'[1.. | even?]            ;; Range (has ..)
+'[1 | rest]               ;; Pattern (no ..)
+
+;; ========================================
+;; Case 2: Variable that looks like predicate
+;; ========================================
+
+let even? = some-list
+'[1 | even?]              ;; Pattern: cons 1 onto even?
+
+;; This is clearly pattern because no ..
+
+;; ========================================
+;; Case 3: Bounded range with predicate
+;; ========================================
+
+'[1..10 | even?]          ;; Range 1..10, filter even? (has ..)
+'[1 | 10]                 ;; Pattern? Cons 1 onto 10? (weird but valid)
+
+;; Still unambiguous: .. triggers range interpretation
+#+end_src
+
+- The Rule
+
+#+begin_src
+RULE:
+  If collection literal contains .., it's a RANGE expression
+  If no .., | means head|tail (cons pattern)
+
+'[1..5]           ;; Range: 1 to 5
+'[1.. | even?]    ;; Range: 1.. filtered by even?
+'[1..10 | prime?] ;; Range: 1..10 filtered by prime?
+
+'[h | t]          ;; Pattern: head and tail
+'[1 | xs]         ;; Pattern: 1 consed onto xs
+'[1 2 | rest]     ;; Pattern: 1, 2, then rest
+#+end_src
+
+---
+
+- Full Syntax Summary
+
+#+begin_src prologos
+;; ========================================
+;; Range Syntax (has ..)
+;; ========================================
+
+;; Basic
+~[1..5]                   ;; 1 to 5
+~[1..<5]                  ;; 1 to 4 (exclusive)
+~[1..]                    ;; 1 to infinity
+
+;; With step
+~[1..10 :by 2]            ;; 1, 3, 5, 7, 9
+~[10..1 :by -1]           ;; 10, 9, 8, ..., 1
+
+;; With filter (:where)
+~[1.. :where even?]       ;; infinite evens
+
+;; With terminator (:while)
+~[1.. :while [< _ 100]]   ;; 1..99
+
+;; Combined
+~[1.. :where even? :while [< _ 100]]  ;; evens under 100
+
+;; ========================================
+;; Pattern Syntax (no ..)
+;; ========================================
+
+'[h | t]                  ;; head and tail
+'[a b | rest]             ;; first two and rest
+'[x | '[y | z]]           ;; nested destructure
+
+;; In match
+match xs
+  | '[] -> "empty"
+  | '[x] -> "single"
+  | '[x | rest] -> "multiple"
+
+;; ========================================
+;; NO AMBIGUITY
+;; ========================================
+
+;; .. present → range
+;; .. absent → pattern (if | present) or literal (if | absent)
+
+'[1 2 3]                  ;; literal list (no .. no |)
+'[h | t]                  ;; pattern (no .., has |)
+'[1..3]                   ;; range (has ..)
+'[1.. :where odd?]        ;; range with filter (has ..)
+#+end_src
+
+---
+
+- Alternative: Different Syntax for Predicates
+
+If you want to avoid any =|= overloading concern:
+
+#+begin_src prologos
+;; ========================================
+;; Option: Use ? for predicates
+;; ========================================
+
+~[1..? even?]             ;; range where even?
+~[1..? [< _ 100]]         ;; range while < 100
+
+;; ========================================
+;; Option: Use // for predicates
+;; ========================================
+
+~[1.. // even?]           ;; range where even?
+~[1.. // [< _ 100]]       ;; range while < 100
+
+;; ========================================
+;; Option: Use :| for predicates
+;; ========================================
+
+~[1.. :| even?]           ;; range where even?
+~[1.. :| [< _ 100]]       ;; range while < 100
+
+;; ========================================
+;; Option: Keywords only (no special symbol)
+;; ========================================
+
+~[1.. :where even?]       ;; filter
+~[1.. :while [< _ 100]]   ;; take-while
+#+end_src
+
+---
+
+- Final Recommendation
+
+#+begin_src prologos
+;; ========================================
+;; Use keywords for predicate clauses
+;; ========================================
+
+;; This avoids ALL ambiguity with head|tail
+
+;; Range with filter
+~[1.. :where even?]
+
+;; Range with terminator
+~[1.. :while [< _ 100]]
+
+;; Both
+~[1.. :where even? :while [< _ 100]]
+
+;; ========================================
+;; Head|tail is unchanged
+;; ========================================
+
+'[h | t]                  ;; pattern: head and tail
+
+;; ========================================
+;; Clear, unambiguous, readable
+;; ========================================
+
+;; ~[1.. :where even? :while [< _ 100]]
+;; Reads: "lazy seq from 1, WHERE even, WHILE under 100"
+
+;; No conflict with:
+;; '[h | t]
+;; Reads: "list pattern: head h, tail t"
+#+end_src
+
+---
+
+- Summary
+
+| Issue               | Solution                                                 |                                             |            |
+|---------------------+----------------------------------------------------------+---------------------------------------------+------------|
+| Non-termination     | Distinguish =:where= (filter) from =:while= (terminates) |                                             |            |
+| Conflict with head\ | tail                                                     | =..= triggers range mode; keywords avoid =\ | = entirely |
+| Clarity             | Keywords =:where= and =:while= are explicit              |                                             |            |
+
+Does this resolve both concerns?
+
+*** Let's make a short summary of our recommendations for Range Syntax (using keywords on predicates). Be concise, give examples.
+
+- Range Syntax Summary
+
+---
+
+- Basic Ranges
+
+#+begin_src prologos
+'[1..5]                   ;; '[1 2 3 4 5] (inclusive)
+'[1..<5]                  ;; '[1 2 3 4] (exclusive)
+@[0..10 :by 2]            ;; @[0 2 4 6 8 10] (with step)
+~[1..]                    ;; ~[1 2 3 ...] (infinite, lazy only)
+#+end_src
+
+---
+
+- With Predicates
+
+#+begin_src prologos
+;; :where = filter (keeps checking)
+~[1.. :where even?]                    ;; ~[2 4 6 8 ...] infinite evens
+
+;; :while = take-while (stops when false)  
+~[1.. :while [< _ 100]]                ;; ~[1 2 3 ... 99] terminates
+
+;; Combined
+~[1.. :where even? :while [< _ 100]]   ;; ~[2 4 6 ... 98] evens under 100
+
+;; With step
+~[1.. :by 3 :while [< _ 50]]           ;; ~[1 4 7 10 ... 49]
+#+end_src
+
+---
+
+- Eager Collections (Must Be Bounded)
+
+#+begin_src prologos
+'[1..100 :where prime?]   ;; primes up to 100 (list)
+@[1..50 :where odd?]      ;; odd numbers 1-49 (vector)
+
+;; ERROR: unbounded eager
+'[1.. :where even?]       ;; Error! Use ~[] for infinite
+#+end_src
+
+---
+
+- No Conflict with Head|Tail
+
+#+begin_src prologos
+;; .. present → range
+~[1.. :where even?]       ;; range with predicate
+
+;; .. absent → pattern  
+'[h | t]                  ;; head|tail pattern
+#+end_src
+
+---
+
+- Quick Reference
+
+| Syntax                                | Result                |
+|---------------------------------------+-----------------------|
+| ='[1..5]=                             | ='[1 2 3 4 5]=        |
+| ='[1..<5]=                            | ='[1 2 3 4]=          |
+| =@[0..10 :by 2]=                      | =@[0 2 4 6 8 10]=     |
+| =~[1..]=                              | Infinite naturals     |
+| =~[1.. :where even?]=                 | Infinite evens        |
+| =~[1.. :while [< _ 100]]=             | 1 to 99               |
+| =~[1.. :where even? :while [< _ 50]]= | Even numbers under 50 |
+
+
+
+
+
+
+
+
+
+
+
+
+*** Let's summarize our syntax conclusions from above for `|>` and `>>` with default last position piping, with considerations for `_` magic holes. Let's provide concise but full examples to an implementer, and some considerations for implementing this as O(n) automatically at compiler.
+
+- Pipe and Compose Operators: Syntax Summary
+
+---
+
+- Core Operators
+
+| Operator | Name    | Purpose                                     |
+|----------+---------+---------------------------------------------|
+| =\vert>= | Pipe    | Thread value through sequence of operations |
+| =>>=     | Compose | Compose functions/transducers left-to-right |
+
+---
+
+- Pipe Operator =|>=
+
+- Rules
+
+1. Default: pipes to /last argument position/
+2. Override: use =_= for explicit position
+3. =_= inside =[...]= is a closure hole (different!)
+4. =_= bare in pipe step is pipe position
+
+- Examples
+
+#+begin_src prologos
+;; ========================================
+;; Basic: pipes to last position
+;; ========================================
+
+|> @[1 2 3 4 5]
+  map inc               ;; [map inc @[1 2 3 4 5]]
+  filter even?          ;; [filter even? <prev>]
+  take 3                ;; [take 3 <prev>]
+
+;; Result: @[2 4 6]
+
+;; ========================================
+;; Explicit position with _
+;; ========================================
+
+|> user
+  get _ :name           ;; [get user :name] (first position)
+  str/upper             ;; [str/upper <prev>] (last position)
+  str/take 10           ;; [str/take 10 <prev>] (last position)
+
+;; ========================================
+;; Closure holes vs pipe position
+;; ========================================
+
+|> @[1 2 3 4 5]
+  map [+ _ 10]          ;; [+ _ 10] is closure: (fn [x] (+ x 10))
+                        ;; piped to last position of map
+  filter [> _ 12]       ;; [> _ 12] is closure: (fn [x] (> x 12))
+  get-in _ [:0]         ;; bare _ is pipe position
+
+;; ========================================
+;; Multi-line with complex transforms
+;; ========================================
+
+|> raw-data
+  parse-json
+  get _ :results        ;; pipe to first
+  map _.name            ;; point-free accessor
+  filter [str/starts? _ "A"]
+  sort
+  take 10
+  into @[]
+#+end_src
+
+---
+
+- Compose Operator =>>
+
+- Rules
+
+1. Composes functions/transducers left-to-right
+2. Returns a new function/transducer
+3. Used for building reusable transforms
+
+- Examples
+
+#+begin_src prologos
+;; ========================================
+;; Function composition
+;; ========================================
+
+def process = >> parse-int inc double str
+
+;; Equivalent to:
+;; (fn [x] (str (double (inc (parse-int x)))))
+
+process "5"   ;; => "12"
+
+;; ========================================
+;; Transducer composition
+;; ========================================
+
+def xf = >>
+  map inc
+  filter even?
+  take 5
+
+;; Apply transducer
+into @[] xf @[1 2 3 4 5 6 7 8 9 10]
+;; => @[2 4 6 8 10]
+
+transduce xf + 0 @[1 2 3 4 5 6 7 8 9 10]
+;; => 30
+
+;; ========================================
+;; With point-free accessors
+;; ========================================
+
+def extract-names >>
+  filter _.active
+  map _.profile.name
+  distinct
+
+into @[] extract-names users
+#+end_src
+
+---
+
+- Disambiguation Summary
+
+| Context               | Syntax       | Meaning           |
+|-----------------------+--------------+-------------------|
+| Bare =_= in pipe step | =get _ :key= | Pipe position     |
+| =_= inside =[...]=    | =[+ _ 10]=   | Closure hole      |
+| =_.foo=               | =_.name=     | Point-free getter |
+| No =_= in pipe step   | =map f=      | Pipes to last arg |
+
+#+begin_src prologos
+;; Unambiguous examples:
+
+|> xs
+  map [* _ 2]           ;; _ in [...] = closure hole
+  get-in _ [:a :b]      ;; bare _ = pipe position
+  filter _.active       ;; _.foo = point-free getter
+  take 10               ;; no _ = last position
+#+end_src
+
+---
+
+- Automatic O(n) Fusion
+
+- What the Compiler Sees
+
+#+begin_src prologos
+;; User writes:
+|> users
+  filter _.active
+  map _.name
+  filter [str/starts? _ "A"]
+  take 10
+  into @[]
+#+end_src
+
+- Compiler Recognition
+
+#+begin_src
+1. Recognize fusible pattern:
+   - filter, map, filter, take are all transducer-compatible
+   - into is a terminal operation
+
+2. Check all operations are:
+   - Stateless (filter, map) or
+   - Bounded stateful (take, drop, distinct)
+   - No side effects
+
+3. Convert to transducer composition
+#+end_src
+
+- Compiler Emits
+
+#+begin_src prologos
+;; Rewrites to:
+let xf = >>
+  filter _.active
+  map _.name
+  filter [str/starts? _ "A"]
+  take 10
+
+into @[] xf users
+#+end_src
+
+- Implementation Considerations
+
+#+begin_src racket
+;; ========================================
+;; 1. Identify Fusible Operations
+;; ========================================
+
+(define fusible-ops
+  '(map filter remove take drop take-while drop-while
+    distinct dedupe mapcat flatten partition interpose))
+
+(define terminal-ops
+  '(into transduce reduce fold first last nth count))
+
+;; ========================================
+;; 2. Pattern Match Pipe Sequence
+;; ========================================
+
+(define (analyze-pipe steps)
+  (match steps
+    ;; All fusible, ends with terminal
+    [(list (list (? fusible-op?) _ ...) ...
+           (list (? terminal-op?) _ ...))
+     'fusible]
+
+    ;; Has non-fusible in middle
+    [_ 'not-fusible]))
+
+;; ========================================
+;; 3. Rewrite to Transducer
+;; ========================================
+
+(define (fuse-pipe input steps)
+  (define-values (xf-steps terminal) (split-at-terminal steps))
+  (define xf (compose-transducers xf-steps))
+  (apply-terminal terminal xf input))
+
+;; ========================================
+;; 4. Transducer Composition
+;; ========================================
+
+;; Each transducer: (reducer → reducer)
+;; Composition is function composition
+
+(define ((map-xf f) rf)
+  (λ (acc x) (rf acc (f x))))
+
+(define ((filter-xf pred) rf)
+  (λ (acc x) (if (pred x) (rf acc x) acc)))
+
+(define ((take-xf n) rf)
+  (define count (box 0))
+  (λ (acc x)
+    (if (< (unbox count) n)
+        (begin (set-box! count (add1 (unbox count)))
+               (rf acc x))
+        (reduced acc))))
+
+;; ========================================
+;; 5. Single-Pass Execution
+;; ========================================
+
+(define (transduce xf rf init coll)
+  (define xrf (xf rf))  ;; composed reducer
+  (for/fold ([acc init])
+            ([x coll])
+    (define result (xrf acc x))
+    (if (reduced? result)
+        (reduced-val result)
+        result)))
+#+end_src
+
+---
+
+- Fusion Example: Before and After
+
+#+begin_src prologos
+;; ========================================
+;; BEFORE (naive, multi-pass)
+;; ========================================
+
+;; Pass 1: filter active
+let step1 = filter _.active users    ;; O(n), allocates
+
+;; Pass 2: map name
+let step2 = map _.name step1         ;; O(n), allocates
+
+;; Pass 3: filter starts with A
+let step3 = filter [...] step2       ;; O(n), allocates
+
+;; Pass 4: take 10
+let step4 = take 10 step3            ;; O(n) worst case
+
+;; Pass 5: into vector
+let result = into @[] step4          ;; O(n), allocates
+
+;; Total: 5 passes, 4 intermediate collections
+
+;; ========================================
+;; AFTER (fused, single-pass)
+;; ========================================
+
+;; Single composed transducer
+let xf = >> (filter _.active)
+            (map _.name)
+            (filter [str/starts? _ "A"])
+            (take 10)
+
+;; Single pass, no intermediate collections
+let result = into @[] xf users
+
+;; Total: 1 pass, 0 intermediate collections
+;; Also: early termination at 10 items!
+#+end_src
+
+---
+
+- Edge Cases
+
+#+begin_src prologos
+;; ========================================
+;; NOT fusible: side effects
+;; ========================================
+
+|> xs
+  map (fn [x] (print x) x)  ;; side effect!
+  filter even?
+
+;; Compiler should NOT fuse (order of effects matters)
+;; Or: warn user
+
+;; ========================================
+;; NOT fusible: non-transducer op in middle
+;; ========================================
+
+|> xs
+  map inc
+  reverse              ;; reverse needs full collection!
+  filter even?
+
+;; Cannot fuse across reverse
+;; Compiler: fuse before reverse, fuse after, run reverse between
+
+;; ========================================
+;; Fusible: stateful but bounded
+;; ========================================
+
+|> xs
+  distinct             ;; stateful (tracks seen elements)
+  take 10              ;; stateful (tracks count)
+
+;; Still fusible! State is per-transducer
+#+end_src
+
+---
+
+- Full Implementation Skeleton
+
+#+begin_src racket
+;; ========================================
+;; pipe-transform : Syntax -> Syntax
+;; ========================================
+
+(define (pipe-transform stx)
+  (syntax-parse stx
+    [(_ init step ...)
+     (define steps (syntax->list #'(step ...)))
+     (define analyzed (analyze-steps steps))
+
+     (match analyzed
+       [(fusible-sequence xf-steps terminal)
+        ;; Emit fused version
+        #`(let ([xf (compose-xf #,@xf-steps)])
+            (#,(terminal-fn terminal) xf #,#'init))]
+
+       [(mixed-sequence segments)
+        ;; Emit partially fused
+        (emit-mixed segments #'init)]
+
+       [(unfusible-sequence)
+        ;; Emit sequential (original semantics)
+        (emit-sequential #'init steps)])]))
+
+;; ========================================
+;; compose-xf : (Listof Transducer) -> Transducer
+;; ========================================
+
+(define (compose-xf . xfs)
+  (λ (rf)
+    (foldr (λ (xf acc) (xf acc)) rf xfs)))
+
+;; ========================================
+;; into : Collection Transducer Collection -> Collection
+;; ========================================
+
+(define (into target xf source)
+  (define rf (buildable-rf target))     ;; get reducer for target type
+  (transduce xf rf (empty target) source))
+#+end_src
+
+---
+
+- Summary
+
+| Feature | Syntax | Notes |
+|---------|--------|-------|
+| Pipe to last | =\vert> x (f) (g)= | Default |
+| Pipe to position | =\vert> x (get _ :k)= | Bare =_= |
+| Closure hole | =[+ _ 10]= | =_= inside brackets |
+| Point-free | =_.name= | Accessor |
+| Compose | =>> f g h= | Left-to-right |
+| Transducer | =(map f)= | 1-arity returns xf |
+| Apply xf | =into @[] xf xs= | Terminal |
+| Fusion | Automatic | Compiler rewrites pipe |
+
+
+
+
+
 
 
 
@@ -791,6 +2910,10 @@ Example:
   * Should we keep Prolog's use of `=` for unification
     - +use `unify` keyword?+
     - We're going with the classic `=` is unify! 🎉
+
+
+
+
 
 
 
