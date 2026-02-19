@@ -1,5 +1,9 @@
 ns examples.foreign
 
+
+require [prologos.core.abs-trait :refer [Abs Abs-abs]]
+
+
 ;; ========================================
 ;; Foreign Interop: Racket <-> Prologos
 ;; ========================================
@@ -250,27 +254,22 @@ check ten : Nat
 ;; Characters like < > | are reserved delimiters — use :as aliasing instead.
 ;; Both curried (Nat -> Nat -> Nat) and uncurried (Nat Nat -> Nat) syntax work.
 foreign racket "racket/base" :as base
-  + : Nat Nat -> Nat
-  * : Nat Nat -> Nat
-  - : Nat Nat -> Nat
-
-check base/+ : Nat -> Nat -> Nat
-check base/* : Nat -> Nat -> Nat
-check base/- : Nat -> Nat -> Nat
-
-base/+ 1 200
-;; => 201 : Nat
-
-base/* 3 21
+  + : Int Int -> Int
+  * : Int Int -> Int
+  - : Int Int -> Int
 
 
-spec factorial Nat -> Nat
+
+spec factorial Int -> Int
 defn factorial [n]
   match n
-    | zero  -> inc zero
+    | 0     -> inc 0
     | inc k -> base/* n [factorial k]
 
 
-factorial 4
+
+
+factorial 3
+
 
 
