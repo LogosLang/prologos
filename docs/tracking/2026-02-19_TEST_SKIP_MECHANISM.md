@@ -1,7 +1,7 @@
 # Test Skip/Bypass Mechanism — Design Document
 
 **Created**: 2026-02-19
-**Status**: ⬚ Not Started
+**Status**: ✅ Complete
 **Purpose**: Design a robust, user-configurable mechanism to bypass known pathological tests without code changes.
 
 ---
@@ -188,4 +188,23 @@ Would run 15 test files.
 
 ## Implementation Log
 
-*(To be filled during implementation)*
+### 2026-02-19: Initial Implementation
+
+**Changes**:
+- Created `tests/.skip-tests` with `test-pipe-compose.rkt` entry
+- Modified `tools/run-affected-tests.rkt`:
+  - Added `read-skip-list` function (~20 lines) — parses `.skip-tests`, returns `(symbol . reason)` pairs
+  - Added `apply-skip-filter` function (~20 lines) — filters test lists, reports to stderr, handles `--skip-only` inversion
+  - Added 3 CLI parameters: `no-skip?`, `skip-only?`, `extra-skips`
+  - Added 3 CLI flags: `--no-skip`, `--skip-only`, `--skip FILE`
+  - Applied filter in all 3 code paths: `--all`, `force-all?`, normal targeted
+
+**Verification**:
+- `--all --dry-run`: 81 of 82 (1 skipped) ✅
+- `--all --dry-run --no-skip`: 82 of 82 ✅
+- `--all --dry-run --skip-only`: 1 of 82 (only pipe-compose) ✅
+- `--all --dry-run --skip test-quote.rkt`: 80 of 82 (2 skipped) ✅
+- Missing skip file: 82 of 82, no error ✅
+- Normal targeted mode: skip filter applies to affected set ✅
+
+**Note**: Used `filter-map` instead of `for/list` with `#:let`/`#:when` because `racket/base`'s `for/list` doesn't support these clause types (only `racket` does).
