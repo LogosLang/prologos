@@ -412,6 +412,34 @@
     [_ 0]))
 
 ;; ========================================
+;; Varargs: build surface-level list literal from excess args
+;; ========================================
+;; Constructs nested cons/nil at the surface level:
+;;   (make-varargs-list-literal (list a b c) loc)
+;;   → (surf-app cons (list a (surf-app cons (list b (surf-app cons (list c (surf-var nil)))))))
+;; The elaborator will insert implicit type args for cons/nil automatically.
+(define (make-varargs-list-literal surf-args loc)
+  (foldr (lambda (arg rest)
+           (surf-app (surf-var 'cons loc) (list arg rest) loc))
+         (surf-var 'nil loc)
+         surf-args))
+
+;; Check if a function name has a variadic spec (rest-type non-#f).
+;; Strips namespace prefix to find the bare name for lookup.
+(define (varargs-spec-info fname)
+  (define bare-name
+    (let ([s (symbol->string fname)])
+      (define idx (let loop ([i (- (string-length s) 1)])
+                    (cond [(< i 1) #f]
+                          [(and (char=? (string-ref s i) #\:)
+                                (char=? (string-ref s (sub1 i)) #\:))
+                           i]
+                          [else (loop (sub1 i))])))
+      (if idx (string->symbol (substring s (add1 idx))) fname)))
+  (define spec (lookup-spec bare-name))
+  (and spec (spec-entry? spec) (spec-entry-rest-type spec) spec))
+
+;; ========================================
 ;; Main elaboration: surface -> core
 ;; ========================================
 
@@ -597,14 +625,34 @@
                                [n-m0 (leading-m0-count mults)]
                                [n-imp (implicit-param-count ftype fname)]
                                [n-exp (- n-total n-imp)]
-                               [n-holes (implicit-holes-needed ftype n-user-args fname)])
+                               ;; Varargs: check if this function is variadic
+                               [vspec (and (> n-total 0)
+                                           (varargs-spec-info fname))]
+                               ;; Collect args into list literal for variadic functions
+                               ;; n-fixed = n-exp - 1 (the last explicit param is the List param)
+                               [effective-args
+                                (if vspec
+                                    (let ([n-fixed (- n-exp 1)])
+                                      (cond
+                                        ;; Too few args for even the fixed params
+                                        [(< n-user-args n-fixed)
+                                         args]  ;; let arity check handle it
+                                        ;; Exactly n-fixed or more: collect rest into list
+                                        [else
+                                         (let ([fixed (take args n-fixed)]
+                                               [rest-args (drop args n-fixed)])
+                                           (append fixed
+                                                   (list (make-varargs-list-literal rest-args loc))))]))
+                                    args)]
+                               [n-effective (length effective-args)]
+                               [n-holes (implicit-holes-needed ftype n-effective fname)])
                           ;; Arity check: reject over-application for known globals
                           ;; Valid arg counts: n-exp, (total - n-m0) if where-constraints, total
                           (cond
                             ;; Too many args: more than explicit count, and not a valid count
-                            [(and (> n-user-args n-exp)
-                                  (not (= n-user-args n-total))
-                                  (not (= n-user-args (- n-total n-m0)))  ;; explicit + dict args
+                            [(and (> n-effective n-exp)
+                                  (not (= n-effective n-total))
+                                  (not (= n-effective (- n-total n-m0)))  ;; explicit + dict args
                                   (> n-total 0))
                              (arity-error loc
                                (format "Too many arguments to '~a'" fname)
@@ -615,10 +663,10 @@
                              (let ([with-metas
                                     (insert-implicits-with-tagging ef ftype n-holes
                                                                     fname loc env)])
-                               (elaborate-args with-metas args env depth loc))]
+                               (elaborate-args with-metas effective-args env depth loc))]
                             ;; Normal case: no insertion needed, proceed
                             [else
-                             (elaborate-args ef args env depth loc)]))
+                             (elaborate-args ef effective-args env depth loc)]))
                         (elaborate-args ef args env depth loc)))
                   (elaborate-args ef args env depth loc))))])]
 

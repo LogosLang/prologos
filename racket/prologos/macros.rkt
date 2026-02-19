@@ -124,6 +124,7 @@
          spec-entry-srcloc
          spec-entry-where-constraints
          spec-entry-implicit-binders
+         spec-entry-rest-type
          register-spec!
          lookup-spec
          process-spec
@@ -164,7 +165,9 @@
 ;; where-constraints: (listof (listof symbol)) — trait constraints from `where` clause.
 ;;   e.g., ((Eq A) (Ord A)) for `where (Eq A) (Ord A)`.
 ;;   '() if no where clause. Constraints are prepended to type-datums as leading params.
-(struct spec-entry (type-datums docstring multi? srcloc where-constraints implicit-binders) #:transparent)
+;; - rest-type: #f for normal functions, or the element type datum for variadic functions.
+;;   e.g., 'Nat for `spec add Nat ... -> Nat`, meaning the last param is List Nat.
+(struct spec-entry (type-datums docstring multi? srcloc where-constraints implicit-binders rest-type) #:transparent)
 
 ;; Spec store: symbol → spec-entry
 (define current-spec-store (make-parameter (hasheq)))
@@ -1009,6 +1012,43 @@
        (values (reverse binders) remaining)])))
 
 ;; ========================================
+;; desugar-rest-type: detect $rest in spec tokens and desugar to List
+;; ========================================
+;; Scans type tokens for the `$rest` sentinel (from `...` in the spec).
+;; When found, the token BEFORE $rest is the variadic element type.
+;; Replaces `<elem-type> $rest` with `(List <elem-type>)` in the tokens.
+;; Returns (values desugared-tokens rest-element-type-or-#f).
+;;
+;; Examples:
+;;   (Nat $rest -> Nat) → (values ((List Nat) -> Nat) Nat)
+;;   (Nat Nat $rest -> Nat) → (values (Nat (List Nat) -> Nat) Nat)
+;;   ({A} A $rest -> Nat) → (values ((List A) -> Nat) A)
+;;   (Nat -> Nat) → (values (Nat -> Nat) #f)
+(define (desugar-rest-type tokens name)
+  (define rest-idx
+    (let loop ([i 0] [remaining tokens])
+      (cond
+        [(null? remaining) #f]
+        [(eq? (car remaining) '$rest) i]
+        [else (loop (add1 i) (cdr remaining))])))
+  (cond
+    [(not rest-idx) (values tokens #f)]
+    [(= rest-idx 0)
+     (error 'spec "spec ~a: `...` must follow an element type (e.g., `Nat ...`)" name)]
+    [else
+     (define before-rest (take tokens (sub1 rest-idx)))
+     (define elem-type (list-ref tokens (sub1 rest-idx)))
+     (define after-rest (drop tokens (add1 rest-idx)))
+     ;; Build (List <elem-type>) as the replacement
+     (define list-type
+       (if (and (list? elem-type) (pair? elem-type))
+           ;; Grouped type like [A] or (Pair A B) → (List A) or (List (Pair A B))
+           `(List ,@elem-type)
+           ;; Bare symbol like Nat or A → (List Nat) or (List A)
+           `(List ,elem-type)))
+     (values (append before-rest (list list-type) after-rest) elem-type)]))
+
+;; ========================================
 ;; process-spec: register a type specification
 ;; ========================================
 ;; Syntax variants:
@@ -1041,12 +1081,16 @@
     (if (null? raw-where-constraints)
         '()
         (expand-bundle-constraints raw-where-constraints)))
+  ;; Detect and desugar variadic rest type: `A $rest` → `(List A)`
+  ;; The $rest sentinel marks the preceding type as variadic.
+  (define-values (desugared-type-tokens rest-type)
+    (desugar-rest-type type-tokens name))
   ;; Prepend where-constraints as leading parameter types
   ;; (Eq A) becomes a leading param type [Eq A], just like existing explicit dict style
   (define effective-tokens
     (if (null? where-constraints)
-        type-tokens
-        (append where-constraints (list '->) type-tokens)))
+        desugared-type-tokens
+        (append where-constraints (list '->) desugared-type-tokens)))
   ;; Check for multi-arity: effective-tokens contain $pipe forms
   (define has-pipes?
     (ormap (lambda (t) (or (eq? t '$pipe)
@@ -1056,10 +1100,10 @@
     [has-pipes?
      ;; Split on $pipe to get branches
      (define branches (split-on-pipe effective-tokens))
-     (register-spec! name (spec-entry branches docstring #t srcloc-unknown where-constraints implicit-binders))]
+     (register-spec! name (spec-entry branches docstring #t srcloc-unknown where-constraints implicit-binders rest-type))]
     [else
      ;; Single-arity: the entire effective-tokens is the type datum
-     (register-spec! name (spec-entry (list effective-tokens) docstring #f srcloc-unknown where-constraints implicit-binders))]))
+     (register-spec! name (spec-entry (list effective-tokens) docstring #f srcloc-unknown where-constraints implicit-binders rest-type))]))
 
 ;; Split a token list on '$pipe boundaries.
 ;; Handles two forms:
@@ -1096,11 +1140,14 @@
 ;; handles it as a typed defn.
 
 ;; Check if a parameter list contains only bare symbols (no type annotations).
+;; Also accepts ($rest-param name) for varargs rest parameters.
 (define (spec-bare-param-list? lst)
   (and (list? lst) (not (null? lst))
        (andmap (lambda (x)
-                 (and (symbol? x)
-                      (not (memq x '(: :0 :1 :w)))))
+                 (or (and (symbol? x)
+                          (not (memq x '(: :0 :1 :w))))
+                     ;; ($rest-param name) — varargs rest parameter
+                     (and (list? x) (= (length x) 2) (eq? (car x) '$rest-param))))
                lst)
        (not (ormap (lambda (x) (and (pair? x) (eq? (car x) '$angle-type))) lst))))
 
@@ -1228,8 +1275,15 @@
                    (loop (cdr items))]
                   [else items])))
             (append before remaining)))))
+  ;; Extract param names, stripping $rest-param wrappers:
+  ;; (x y ($rest-param xs)) → (x y xs)
   (define param-names
-    (if (list? param-bracket) param-bracket
+    (if (list? param-bracket)
+        (map (lambda (x)
+               (if (and (list? x) (= (length x) 2) (eq? (car x) '$rest-param))
+                   (cadr x)
+                   x))
+             param-bracket)
         (error 'spec "Expected parameter list, got ~a" param-bracket)))
   ;; When spec has where-constraints, check if the user provides:
   ;; a) ALL params (including constraint dicts) → use full spec-tokens, no where rewrite

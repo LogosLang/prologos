@@ -1,0 +1,49 @@
+ns prologos.examples.varargs
+
+require [prologos.data.list :refer [List nil cons length sum reduce foldr]]
+require [prologos.data.nat  :refer [add max]]
+
+;; ========================================
+;; Homogeneous Varargs
+;; ========================================
+;; A `...` in a spec marks the preceding type as variadic.
+;; At the call site, extra arguments are collected into a List.
+;; `...name` in a defn binds the collected list.
+
+;; sum-all: sum any number of Nats
+spec sum-all Nat ... -> Nat
+defn sum-all [...xs]
+  sum xs
+
+sum-all 1 2 3 4 5
+
+;; max-of: find the max of at least one Nat
+spec max-of Nat Nat ... -> Nat
+defn max-of [first ...rest]
+  reduce max first rest
+
+max-of 3 1 4 1 5 9
+
+;; list-of: build a list from arguments (identity on rest)
+spec list-of {A : Type} A ... -> [List A]
+defn list-of [...xs]
+  xs
+
+list-of 10 20 30
+
+;; count-args: count the number of arguments
+spec count-args {A : Type} A ... -> Nat
+defn count-args [...xs]
+  length A xs
+
+count-args 1 2 3 4 5 6
+
+;; foldr-all: fold over varargs with a function and initial value
+spec foldr-all {A B : Type} [A -> B -> B] B A ... -> B
+defn foldr-all [f z ...xs]
+  foldr f z xs
+
+foldr-all add 0 1 2 3 4 5
+
+;; zero varargs → empty list
+count-args

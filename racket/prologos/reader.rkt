@@ -26,7 +26,9 @@
          prologos-read-syntax-all
          ;; For testing:
          tokenize-string
-         read-all-forms-string)
+         read-all-forms-string
+         token-type
+         token-value)
 
 ;; ========================================
 ;; Token structure
@@ -43,6 +45,7 @@
    source         ; source name (string or path)
    indent-stack   ; (mutable) list of column numbers
    bracket-depth  ; (mutable) nesting depth of () [] {}
+   angle-depth    ; (mutable) nesting depth of <> (separate for >> disambiguation)
    pending        ; (mutable) list of pending tokens (for INDENT/DEDENT)
    line           ; (mutable) current line
    col            ; (mutable) current column
@@ -57,6 +60,7 @@
   (tokenizer port source
              (list 0)   ; indent-stack starts at column 0
              0           ; bracket-depth
+             0           ; angle-depth
              '()         ; pending tokens
              1           ; line
              0           ; col
@@ -323,16 +327,25 @@
       [(char=? c #\<)
        (tok-read! tok)
        (set-tokenizer-bracket-depth! tok (+ 1 (tokenizer-bracket-depth tok)))
+       (set-tokenizer-angle-depth! tok (+ 1 (tokenizer-angle-depth tok)))
        (token 'langle #f ln cl ps 1)]
 
       [(char=? c #\>)
        (tok-read! tok)
-       (define depth (tokenizer-bracket-depth tok))
-       (when (= depth 0)
-         (error 'prologos-reader "~a:~a:~a: Unexpected >"
-                (tokenizer-source tok) ln (+ cl 1)))
-       (set-tokenizer-bracket-depth! tok (- depth 1))
-       (token 'rangle #f ln cl ps 1)]
+       (define adepth (tokenizer-angle-depth tok))
+       (cond
+         ;; Inside angle brackets: close the angle bracket
+         [(> adepth 0)
+          (set-tokenizer-bracket-depth! tok (- (tokenizer-bracket-depth tok) 1))
+          (set-tokenizer-angle-depth! tok (- adepth 1))
+          (token 'rangle #f ln cl ps 1)]
+         ;; Outside angle brackets: check for >> compose operator
+         [(and (char? (tok-peek tok)) (char=? (tok-peek tok) #\>))
+          (tok-read! tok)  ; consume second >
+          (token 'symbol '$compose ln cl ps 2)]
+         [else
+          (error 'prologos-reader "~a:~a:~a: Unexpected >"
+                 (tokenizer-source tok) ln (+ cl 1))])]
 
       ;; Dollar — quote operator
       [(char=? c #\$)
@@ -365,10 +378,16 @@
                  "~a:~a:~a: Unexpected @ — use @[...] for PVec literals"
                  (tokenizer-source tok) ln (+ cl 1))])]
 
-      ;; Pipe — reduce arm separator
+      ;; Pipe — reduce arm separator, or |> pipe operator
       [(char=? c #\|)
        (tok-read! tok)
-       (token 'symbol '$pipe ln cl ps 1)]
+       (define next (tok-peek tok))
+       (cond
+         [(and (char? next) (char=? next #\>))
+          (tok-read! tok)  ; consume >
+          (token 'symbol '$pipe-gt ln cl ps 2)]
+         [else
+          (token 'symbol '$pipe ln cl ps 1)])]
 
       ;; Colon
       [(char=? c #\:)
@@ -465,6 +484,27 @@
           (error 'prologos-reader
                  "~a:~a:~a: ~ must be followed by [ (LSeq literal) or a number (approximate literal)"
                  (tokenizer-source tok) ln (+ cl 1))])]
+
+      ;; ... rest/varargs: ... → $rest symbol, ...name → rest-param token
+      [(char=? c #\.)
+       (let ([c2 (peek-char (tokenizer-port tok) 1)]
+             [c3 (peek-char (tokenizer-port tok) 2)])
+         (cond
+           [(and (char? c2) (char=? c2 #\.) (char? c3) (char=? c3 #\.))
+            ;; Consume three dots
+            (tok-read! tok) (tok-read! tok) (tok-read! tok)
+            ;; Check if followed by identifier chars → ...name (rest param)
+            (define next (tok-peek tok))
+            (if (and (char? next) (ident-start? next))
+                (let ([rest-name (read-ident-chars! tok)])
+                  (token 'rest-param (string->symbol rest-name) ln cl ps
+                         (+ 3 (string-length rest-name))))
+                ;; Bare ... → $rest sentinel symbol
+                (token 'symbol '$rest ln cl ps 3))]
+           [else
+            (tok-read! tok)
+            (error 'prologos-reader "~a:~a:~a: Unexpected character: ."
+                   (tokenizer-source tok) ln (+ cl 1))]))]
 
       ;; Identifier
       [(ident-start? c)
@@ -993,6 +1033,16 @@
      (define sp (token-span t))
      (make-stx (list (make-stx '$approx-literal src ln cl ps 0)
                      (make-stx (token-value t) src ln (+ cl 1) (+ ps 1) (- sp 1)))
+               src ln cl ps sp)]
+    [(eq? tt 'rest-param)
+     ;; ...name — produce ($rest-param name) as syntax list
+     (define t (parser-next! p))
+     (define ln (token-line t))
+     (define cl (token-col t))
+     (define ps (token-pos t))
+     (define sp (token-span t))
+     (make-stx (list (make-stx '$rest-param src ln cl ps 0)
+                     (make-stx (token-value t) src ln (+ cl 3) (+ ps 3) (- sp 3)))
                src ln cl ps sp)]
     [else
      (define t (parser-peek p))
