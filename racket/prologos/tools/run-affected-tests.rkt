@@ -184,8 +184,8 @@
             [(changed-example? c)
              (printf "  example: ~a\n" (changed-example-name c))]))
 
-        ;; Compute affected tests
-        (define affected (compute-affected-tests changes))
+        ;; Compute affected tests (pass project-root for auto-scan of new files)
+        (define affected (compute-affected-tests changes #:project-root project-root))
 
         (cond
           [(null? affected)

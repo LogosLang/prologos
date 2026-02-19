@@ -8,7 +8,8 @@
 ;;
 ;; Plus: reverse-dep computation and affected-test-set algorithm.
 
-(require racket/hash racket/list racket/set racket/string)
+(require racket/file racket/hash racket/list racket/path
+         racket/port racket/set racket/string)
 
 (provide compute-affected-tests
          all-test-files
@@ -24,7 +25,13 @@
          (struct-out changed-source)
          (struct-out changed-test)
          (struct-out changed-prologos)
-         (struct-out changed-example))
+         (struct-out changed-example)
+         ;; Scanning functions (shared with update-deps.rkt)
+         scan-rkt-requires
+         scan-test-source-deps
+         scan-test-prologos-deps
+         scan-prologos-requires
+         test-uses-driver?)
 
 ;; ============================================================
 ;; Change classification structs
@@ -598,6 +605,123 @@
    'test-implicit-inference.rkt  '(prologos.data.nat)))
 
 ;; ============================================================
+;; File scanning functions (used for auto-scan of unknown modules)
+;; Also shared with update-deps.rkt for --check mode.
+;; ============================================================
+
+;; Read a .rkt file and extract local require deps ("foo.rkt" or "../foo.rkt" patterns)
+;; Handles #lang line by reading it first via read-language
+(define (scan-rkt-requires filepath)
+  (with-handlers ([exn:fail? (λ (e) '())])
+    (define port (open-input-file filepath))
+    (port-count-lines! port)
+    (read-language port (λ () (void)))
+    (define forms
+      (let loop ([acc '()])
+        (define form (read port))
+        (if (eof-object? form)
+            (reverse acc)
+            (loop (cons form acc)))))
+    (close-input-port port)
+    (define deps (mutable-seteq))
+    (for ([form (in-list forms)])
+      (when (and (pair? form) (eq? (car form) 'require))
+        (extract-string-requires (cdr form) deps)))
+    (sort (set->list deps) symbol<?)))
+
+;; Walk a require spec extracting string paths that reference local .rkt files
+(define (extract-string-requires specs deps)
+  (for ([spec (in-list specs)])
+    (cond
+      [(string? spec)
+       (define base (last (string-split spec "/")))
+       (when (string-suffix? base ".rkt")
+         (set-add! deps (string->symbol base)))]
+      [(and (pair? spec)
+            (memq (car spec) '(only-in except-in prefix-in rename-in combine-in
+                               relative-in for-syntax for-template for-label)))
+       (extract-string-requires (cdr spec) deps)]
+      [(and (pair? spec) (eq? (car spec) 'file)
+            (pair? (cdr spec)) (string? (cadr spec)))
+       (define base (last (string-split (cadr spec) "/")))
+       (when (string-suffix? base ".rkt")
+         (set-add! deps (string->symbol base)))])))
+
+;; Scan a test file for its source module requires (../foo.rkt patterns)
+(define (scan-test-source-deps filepath)
+  (with-handlers ([exn:fail? (λ (e) '())])
+    (define port (open-input-file filepath))
+    (port-count-lines! port)
+    (read-language port (λ () (void)))
+    (define forms
+      (let loop ([acc '()])
+        (define form (read port))
+        (if (eof-object? form)
+            (reverse acc)
+            (loop (cons form acc)))))
+    (close-input-port port)
+    (define deps (mutable-seteq))
+    (for ([form (in-list forms)])
+      (when (and (pair? form) (eq? (car form) 'require))
+        (extract-test-source-requires (cdr form) deps)))
+    (sort (set->list deps) symbol<?)))
+
+(define (extract-test-source-requires specs deps)
+  (for ([spec (in-list specs)])
+    (cond
+      [(string? spec)
+       (when (string-prefix? spec "../")
+         (define base (substring spec 3))
+         (when (and (string-suffix? base ".rkt")
+                    (not (string-contains? base "/")))
+           (set-add! deps (string->symbol base))))]
+      [(and (pair? spec)
+            (memq (car spec) '(only-in except-in prefix-in rename-in combine-in
+                               relative-in for-syntax for-template for-label)))
+       (extract-test-source-requires (cdr spec) deps)])))
+
+;; Check if a test file uses the driver (run-ns, run-last, run-ws, etc.)
+(define (test-uses-driver? filepath)
+  (with-handlers ([exn:fail? (λ (e) #f)])
+    (define content (file->string filepath))
+    (or (string-contains? content "run-ns")
+        (string-contains? content "run-last")
+        (string-contains? content "run-ws")
+        (string-contains? content "run-lang")
+        (string-contains? content "run-sexp"))))
+
+;; Scan a test file for .prologos runtime module loads
+(define (scan-test-prologos-deps filepath)
+  (with-handlers ([exn:fail? (λ (e) '())])
+    (define content (file->string filepath))
+    (define deps (mutable-seteq))
+    (for ([m (in-list (regexp-match* #rx"prologos\\.[a-z][a-z0-9._-]*[a-z0-9]" content))])
+      (set-add! deps (string->symbol m)))
+    (sort (set->list deps) symbol<?)))
+
+;; Scan a .prologos file for require deps
+(define (scan-prologos-requires filepath)
+  (with-handlers ([exn:fail? (λ (e) '())])
+    (define content (file->string filepath))
+    (define deps (mutable-seteq))
+    (for ([m (in-list (regexp-match* #rx"require +\\[?(prologos\\.[a-z][a-z0-9._-]*)" content))])
+      (define match-result (regexp-match #rx"(prologos\\.[a-z][a-z0-9._-]*)" m))
+      (when match-result
+        (set-add! deps (string->symbol (cadr match-result)))))
+    (sort (set->list deps) symbol<?)))
+
+;; Convert a prologos module name to its filesystem path
+;; e.g., 'prologos.data.nat + project-root → project-root/lib/prologos/data/nat.prologos
+(define (prologos-mod->path mod-sym project-root)
+  (define parts (string-split (symbol->string mod-sym) "."))
+  ;; prologos.data.nat → lib/prologos/data/nat.prologos
+  (define rel-parts (cdr parts))  ; drop leading "prologos"
+  (define dir-parts (drop-right rel-parts 1))
+  (define filename (string-append (last rel-parts) ".prologos"))
+  (apply build-path project-root "lib" "prologos"
+         (append dir-parts (list filename))))
+
+;; ============================================================
 ;; Graph algorithms
 ;; ============================================================
 
@@ -652,12 +776,16 @@
 ;; Main algorithm: compute-affected-tests
 ;; ============================================================
 
-(define (compute-affected-tests changed-files)
+;; Main entry point.
+;; #:project-root — if provided, unknown modules are auto-scanned from disk
+;;   instead of falling back to "run all". Pass the prologos/ directory path.
+(define (compute-affected-tests changed-files #:project-root [project-root #f])
   (define affected-tests (mutable-seteq))
 
   ;; Classify changed files
   (define changed-sources (mutable-seteq))
   (define changed-prologos-mods (mutable-seteq))
+  (define changed-tests-list (mutable-seteq))
 
   (for ([cf (in-list changed-files)])
     (cond
@@ -665,7 +793,8 @@
        (set-add! changed-sources (changed-source-name cf))]
       [(changed-test? cf)
        ;; Always re-run a changed test
-       (set-add! affected-tests (changed-test-name cf))]
+       (set-add! affected-tests (changed-test-name cf))
+       (set-add! changed-tests-list (changed-test-name cf))]
       [(changed-prologos? cf)
        (set-add! changed-prologos-mods (changed-prologos-name cf))]
       [(changed-example? cf)
@@ -674,14 +803,110 @@
        (for ([t (in-list tests)])
          (set-add! affected-tests t))]))
 
+  ;; Detect unknown modules not in DAG
+  (define unknown-sources
+    (for/list ([s (in-set changed-sources)]
+               #:when (not (hash-has-key? source-deps s)))
+      s))
+  (define unknown-prologos
+    (for/list ([p (in-set changed-prologos-mods)]
+               #:when (not (hash-has-key? prologos-lib-deps p)))
+      p))
+  (define unknown-tests
+    (for/list ([t (in-set changed-tests-list)]
+               #:when (not (hash-has-key? test-deps t)))
+      t))
+
+  ;; Build working copies of DAG data, possibly patched with auto-scanned entries
+  (define effective-source-deps source-deps)
+  (define effective-test-deps test-deps)
+  (define effective-prologos-deps prologos-lib-deps)
+  (define effective-test-prologos test-prologos-deps)
+
+  ;; Auto-scan unknown modules if project-root is available
+  (define has-unknowns?
+    (or (pair? unknown-sources) (pair? unknown-prologos) (pair? unknown-tests)))
+
+  (when (and has-unknowns? project-root)
+    (eprintf "Auto-scanning ~a new module(s) not in dep-graph.rkt:\n"
+             (+ (length unknown-sources) (length unknown-prologos) (length unknown-tests)))
+
+    ;; Auto-scan unknown source modules
+    (for ([s (in-list unknown-sources)])
+      (define filepath (build-path project-root (symbol->string s)))
+      (cond
+        [(file-exists? filepath)
+         (define deps (scan-rkt-requires filepath))
+         ;; Filter to known source modules only
+         (define known (list->seteq (hash-keys effective-source-deps)))
+         (define filtered (filter (λ (d) (set-member? known d)) deps))
+         (eprintf "  source: ~a → deps: ~a\n" s filtered)
+         (set! effective-source-deps
+               (hash-set effective-source-deps s filtered))]
+        [else
+         (eprintf "  source: ~a (file not found, using empty deps)\n" s)
+         (set! effective-source-deps
+               (hash-set effective-source-deps s '()))]))
+
+    ;; Auto-scan unknown .prologos modules
+    (for ([p (in-list unknown-prologos)])
+      (define filepath (prologos-mod->path p project-root))
+      (cond
+        [(file-exists? filepath)
+         (define deps (scan-prologos-requires (path->string filepath)))
+         (eprintf "  prologos: ~a → deps: ~a\n" p deps)
+         (set! effective-prologos-deps
+               (hash-set effective-prologos-deps p deps))]
+        [else
+         (eprintf "  prologos: ~a (file not found, using empty deps)\n" p)
+         (set! effective-prologos-deps
+               (hash-set effective-prologos-deps p '()))]))
+
+    ;; Auto-scan unknown test files
+    (for ([t (in-list unknown-tests)])
+      (define filepath (build-path project-root "tests" (symbol->string t)))
+      (cond
+        [(file-exists? filepath)
+         (define src-deps (scan-test-source-deps filepath))
+         (define driver? (test-uses-driver? filepath))
+         (eprintf "  test: ~a → src-deps: ~a, driver?: ~a\n" t src-deps driver?)
+         (set! effective-test-deps
+               (hash-set effective-test-deps t (test-dep src-deps driver?)))
+         ;; Also scan prologos deps if it uses the driver
+         (when driver?
+           (define pl-deps (scan-test-prologos-deps filepath))
+           (unless (null? pl-deps)
+             (set! effective-test-prologos
+                   (hash-set effective-test-prologos t pl-deps))))]
+        [else
+         (eprintf "  test: ~a (file not found, skipping)\n" t)])))
+
+  ;; If unknowns exist but no project-root provided, fall back to all tests
+  (when (and has-unknowns? (not project-root))
+    (eprintf "WARNING: Unknown modules detected (not in dep-graph.rkt):\n")
+    (for ([s (in-list unknown-sources)])
+      (eprintf "  source: ~a\n" s))
+    (for ([p (in-list unknown-prologos)])
+      (eprintf "  prologos: ~a\n" p))
+    (for ([t (in-list unknown-tests)])
+      (eprintf "  test: ~a\n" t))
+    (eprintf "Running ALL tests (no project-root for auto-scan).\n")
+    (eprintf "Pass #:project-root or update dep-graph.rkt manually.\n")
+    (for ([t (in-list (all-test-files))])
+      (set-add! affected-tests t)))
+
+  ;; Compute reverse-deps from effective (possibly patched) data
+  (define eff-source-reverse (compute-reverse-closure effective-source-deps))
+  (define eff-prologos-reverse (compute-reverse-closure effective-prologos-deps))
+
   ;; Step 1: Expand source changes to transitive dependents
   (define source-closure
     (if (set-empty? changed-sources)
         (seteq)
-        (transitive-closure source-reverse-deps changed-sources)))
+        (transitive-closure eff-source-reverse changed-sources)))
 
   ;; Step 2: Map source closure to affected tests
-  (for ([(test-name td) (in-hash test-deps)])
+  (for ([(test-name td) (in-hash effective-test-deps)])
     (define test-mods (test-dep-source-modules td))
     (when (for/or ([m (in-list test-mods)])
             (set-member? source-closure m))
@@ -691,11 +916,11 @@
   (define prologos-closure
     (if (set-empty? changed-prologos-mods)
         (seteq)
-        (transitive-closure prologos-reverse-deps changed-prologos-mods)))
+        (transitive-closure eff-prologos-reverse changed-prologos-mods)))
 
   ;; Step 4: Map .prologos closure to affected tests
   (unless (set-empty? prologos-closure)
-    (for ([(test-name prologos-mods) (in-hash test-prologos-deps)])
+    (for ([(test-name prologos-mods) (in-hash effective-test-prologos)])
       (when (for/or ([m (in-list prologos-mods)])
               (set-member? prologos-closure m))
         (set-add! affected-tests test-name))))

@@ -34,50 +34,10 @@
 (define lib-dir    (build-path project-root "lib" "prologos"))
 
 ;; ============================================================
-;; Source module dependency scanning (.rkt files)
+;; Source module dependency scanning
+;; (scan-rkt-requires, scan-test-source-deps, scan-test-prologos-deps,
+;;  scan-prologos-requires, test-uses-driver? are imported from dep-graph.rkt)
 ;; ============================================================
-
-;; Read a .rkt file and extract local require deps ("foo.rkt" or "../foo.rkt" patterns)
-;; Handles #lang line by reading it first via read-language
-(define (scan-rkt-requires filepath)
-  (with-handlers ([exn:fail? (λ (e) '())])
-    (define port (open-input-file filepath))
-    (port-count-lines! port)
-    ;; Skip #lang line
-    (read-language port (λ () (void)))
-    (define forms
-      (let loop ([acc '()])
-        (define form (read port))
-        (if (eof-object? form)
-            (reverse acc)
-            (loop (cons form acc)))))
-    (close-input-port port)
-    ;; Walk top-level forms looking for (require ...) with string paths
-    (define deps (mutable-seteq))
-    (for ([form (in-list forms)])
-      (when (and (pair? form) (eq? (car form) 'require))
-        (extract-string-requires (cdr form) deps)))
-    (sort (set->list deps) symbol<?)))
-
-;; Walk a require spec extracting string paths that reference local .rkt files
-(define (extract-string-requires specs deps)
-  (for ([spec (in-list specs)])
-    (cond
-      ;; Direct string require: "foo.rkt" or "../bar.rkt"
-      [(string? spec)
-       (define base (last (string-split spec "/")))
-       (when (string-suffix? base ".rkt")
-         (set-add! deps (string->symbol base)))]
-      ;; (only-in "foo.rkt" ...), (except-in "foo.rkt" ...), etc.
-      [(and (pair? spec)
-            (memq (car spec) '(only-in except-in prefix-in rename-in combine-in
-                               relative-in for-syntax for-template for-label)))
-       (extract-string-requires (cdr spec) deps)]
-      ;; (file "path")
-      [(and (pair? spec) (eq? (car spec) 'file) (string? (cadr spec)))
-       (define base (last (string-split (cadr spec) "/")))
-       (when (string-suffix? base ".rkt")
-         (set-add! deps (string->symbol base)))])))
 
 ;; Scan all source .rkt files in the project root (not in subdirs)
 (define (discover-source-deps)
@@ -99,70 +59,10 @@
     (values (string->symbol fname) filtered)))
 
 ;; ============================================================
-;; Test file dependency scanning
+;; Test file dependency discovery
+;; (uses scan-test-source-deps, test-uses-driver?, scan-test-prologos-deps
+;;  from dep-graph.rkt)
 ;; ============================================================
-
-;; Scan a test file for its source module requires
-(define (scan-test-source-deps filepath)
-  (with-handlers ([exn:fail? (λ (e) '())])
-    (define port (open-input-file filepath))
-    (port-count-lines! port)
-    ;; Skip #lang line
-    (read-language port (λ () (void)))
-    (define forms
-      (let loop ([acc '()])
-        (define form (read port))
-        (if (eof-object? form)
-            (reverse acc)
-            (loop (cons form acc)))))
-    (close-input-port port)
-    ;; Walk forms looking for requires that reference ../foo.rkt
-    (define deps (mutable-seteq))
-    (for ([form (in-list forms)])
-      (when (and (pair? form) (eq? (car form) 'require))
-        (extract-test-source-requires (cdr form) deps)))
-    (sort (set->list deps) symbol<?)))
-
-(define (extract-test-source-requires specs deps)
-  (for ([spec (in-list specs)])
-    (cond
-      [(string? spec)
-       ;; Test files use "../foo.rkt" to reference source modules
-       (when (string-prefix? spec "../")
-         (define base (substring spec 3))
-         (when (and (string-suffix? base ".rkt")
-                    (not (string-contains? base "/")))
-           (set-add! deps (string->symbol base))))]
-      [(and (pair? spec)
-            (memq (car spec) '(only-in except-in prefix-in rename-in combine-in
-                               relative-in for-syntax for-template for-label)))
-       (extract-test-source-requires (cdr spec) deps)])))
-
-;; Check if a test file uses the driver (run-ns, run-last, run-ws, etc.)
-(define (test-uses-driver? filepath)
-  (with-handlers ([exn:fail? (λ (e) #f)])
-    (define content (file->string filepath))
-    (or (string-contains? content "run-ns")
-        (string-contains? content "run-last")
-        (string-contains? content "run-ws")
-        (string-contains? content "run-lang")
-        (string-contains? content "run-sexp"))))
-
-;; Scan a test file for .prologos runtime module loads
-;; Module names appear in various contexts:
-;;   'prologos.data.nat          (quoted symbol in load-module calls)
-;;   [prologos.data.nat :refer]  (inside Prologos code strings)
-;;   "prologos.data.nat"         (string form)
-(define (scan-test-prologos-deps filepath)
-  (with-handlers ([exn:fail? (λ (e) '())])
-    (define content (file->string filepath))
-    (define deps (mutable-seteq))
-    ;; Match any occurrence of prologos.<word>.<word> (captures dotted module names)
-    ;; Use word boundary: preceded by non-alphanumeric or start of line
-    (for ([m (in-list (regexp-match* #rx"prologos\\.[a-z][a-z0-9._-]*[a-z0-9]" content))])
-      ;; Filter out comment-only references and partial matches
-      (set-add! deps (string->symbol m)))
-    (sort (set->list deps) symbol<?)))
 
 ;; Discover all test dependencies
 (define (discover-test-deps)
@@ -198,18 +98,6 @@
 ;; ============================================================
 ;; .prologos library dependency scanning
 ;; ============================================================
-
-(define (scan-prologos-requires filepath)
-  (with-handlers ([exn:fail? (λ (e) '())])
-    (define content (file->string filepath))
-    ;; Match lines like: require [prologos.data.nat :refer [...]]
-    ;; or: require prologos.data.nat
-    (define deps (mutable-seteq))
-    (for ([m (in-list (regexp-match* #rx"require +\\[?(prologos\\.[a-z][a-z0-9._-]*)" content))])
-      (define match-result (regexp-match #rx"(prologos\\.[a-z][a-z0-9._-]*)" m))
-      (when match-result
-        (set-add! deps (string->symbol (cadr match-result)))))
-    (sort (set->list deps) symbol<?)))
 
 ;; Walk lib/prologos/ recursively to find all .prologos files
 (define (discover-prologos-lib-deps)
