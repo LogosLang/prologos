@@ -382,6 +382,29 @@
   (if (syntax? stx) (syntax->datum stx) stx))
 
 ;; ========================================
+;; Pipe reader: |> → $pipe-gt, bare | → $pipe
+;; ========================================
+;; When | is followed by >, read as $pipe-gt sentinel (pipe operator).
+;; Otherwise, read as $pipe sentinel (union type separator / match arm).
+;; This mirrors the WS reader's handling of |> and |.
+
+(define (read-pipe-syntax ch port src line col pos)
+  (define next (peek-char port))
+  (cond
+    ;; |> — pipe operator
+    [(and (char? next) (char=? next #\>))
+     (read-char port) ; consume >
+     (define end-pos (file-position port))
+     (datum->syntax #f '$pipe-gt (list src line col pos (- end-pos pos)))]
+    ;; | — pipe sentinel (union type separator / match arm)
+    [else
+     (datum->syntax #f '$pipe (list src line col pos 1))]))
+
+(define (read-pipe-datum ch port)
+  (define stx (read-pipe-syntax ch port "<unknown>" #f #f (file-position port)))
+  (if (syntax? stx) (syntax->datum stx) stx))
+
+;; ========================================
 ;; The custom readtable
 ;; ========================================
 ;; ========================================
@@ -441,6 +464,7 @@
     #\' 'terminating-macro read-quote-syntax
     #\~ 'terminating-macro read-tilde-syntax
     #\@ 'terminating-macro read-at-bracket-syntax
+    #\| 'terminating-macro read-pipe-syntax
     #\# 'terminating-macro read-hash-dispatch-syntax))
 
 ;; ========================================

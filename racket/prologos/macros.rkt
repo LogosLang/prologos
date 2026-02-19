@@ -1005,17 +1005,21 @@
 ;; Replaces `<elem-type> $rest` with `(List <elem-type>)` in the tokens.
 ;; Returns (values desugared-tokens rest-element-type-or-#f).
 ;;
+;; Sexp reader parity: also recognizes bare `...` (Racket symbol) as alias for $rest.
+;;
 ;; Examples:
 ;;   (Nat $rest -> Nat) → (values ((List Nat) -> Nat) Nat)
+;;   (Nat ... -> Nat)   → (values ((List Nat) -> Nat) Nat)  [sexp mode]
 ;;   (Nat Nat $rest -> Nat) → (values (Nat (List Nat) -> Nat) Nat)
 ;;   ({A} A $rest -> Nat) → (values ((List A) -> Nat) A)
 ;;   (Nat -> Nat) → (values (Nat -> Nat) #f)
 (define (desugar-rest-type tokens name)
+  (define (rest-sentinel? x) (or (eq? x '$rest) (eq? x '...)))
   (define rest-idx
     (let loop ([i 0] [remaining tokens])
       (cond
         [(null? remaining) #f]
-        [(eq? (car remaining) '$rest) i]
+        [(rest-sentinel? (car remaining)) i]
         [else (loop (add1 i) (cdr remaining))])))
   (cond
     [(not rest-idx) (values tokens #f)]
@@ -1125,15 +1129,28 @@
 ;; exists, inject the spec type into the defn datum so the existing parser
 ;; handles it as a typed defn.
 
+;; Check if a symbol represents a sexp-mode rest parameter: ...name (e.g., ...xs)
+;; Returns the name part (e.g., xs) or #f.
+(define (sexp-rest-param-sym? x)
+  (and (symbol? x)
+       (let ([s (symbol->string x)])
+         (and (> (string-length s) 3)
+              (string-prefix? s "...")
+              (string->symbol (substring s 3))))))
+
 ;; Check if a parameter list contains only bare symbols (no type annotations).
-;; Also accepts ($rest-param name) for varargs rest parameters.
+;; Also accepts ($rest-param name) and ...name for varargs rest parameters.
 (define (spec-bare-param-list? lst)
   (and (list? lst) (not (null? lst))
        (andmap (lambda (x)
                  (or (and (symbol? x)
-                          (not (memq x '(: :0 :1 :w))))
-                     ;; ($rest-param name) — varargs rest parameter
-                     (and (list? x) (= (length x) 2) (eq? (car x) '$rest-param))))
+                          (not (memq x '(: :0 :1 :w)))
+                          ;; Bare ... is not a param name
+                          (not (eq? x '...)))
+                     ;; ($rest-param name) — varargs rest parameter (WS reader)
+                     (and (list? x) (= (length x) 2) (eq? (car x) '$rest-param))
+                     ;; ...name — varargs rest parameter (sexp reader)
+                     (sexp-rest-param-sym? x)))
                lst)
        (not (ormap (lambda (x) (and (pair? x) (eq? (car x) '$angle-type))) lst))))
 
@@ -1261,14 +1278,17 @@
                    (loop (cdr items))]
                   [else items])))
             (append before remaining)))))
-  ;; Extract param names, stripping $rest-param wrappers:
-  ;; (x y ($rest-param xs)) → (x y xs)
+  ;; Extract param names, stripping $rest-param wrappers and ...name symbols:
+  ;; (x y ($rest-param xs)) → (x y xs)  [WS reader]
+  ;; (x y ...xs)            → (x y xs)  [sexp reader]
   (define param-names
     (if (list? param-bracket)
         (map (lambda (x)
-               (if (and (list? x) (= (length x) 2) (eq? (car x) '$rest-param))
-                   (cadr x)
-                   x))
+               (cond
+                 [(and (list? x) (= (length x) 2) (eq? (car x) '$rest-param))
+                  (cadr x)]
+                 [(sexp-rest-param-sym? x) => values]
+                 [else x]))
              param-bracket)
         (error 'spec "Expected parameter list, got ~a" param-bracket)))
   ;; When spec has where-constraints, check if the user provides:
@@ -2031,9 +2051,14 @@
 ;; Called from preparse-expand-subforms before recursing into subexpressions.
 ;; For |>: canonicalizes to block form ($pipe-gt init step1 ...) so the registered
 ;; macro handles fusion uniformly for both infix and block syntax.
+;; Sexp reader parity: also recognizes >> (bare Racket symbol) as alias for $compose.
 (define (rewrite-infix-operators datum)
   (cond
     [(not (list? datum)) datum]
+    ;; Normalize >> → $compose for reader parity (sexp mode reads >> as symbol >>)
+    [(memq '>> datum)
+     (rewrite-infix-operators
+      (map (lambda (x) (if (eq? x '>>) '$compose x)) datum))]
     ;; Check for $pipe-gt (|>) as infix in the flat list (not at head position)
     [(and (memq '$pipe-gt datum)
           (not (eq? (car datum) '$pipe-gt)))
