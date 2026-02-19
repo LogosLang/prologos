@@ -180,37 +180,37 @@
   ;; (fn [x] x) against (-> Nat Nat): arrow has 'mw, lambda mult-meta solved to 'mw
   (check-equal?
    (run-last "(ns mi1)\n(def id <(-> Nat Nat)> (fn [x <Nat>] x))\n(eval (id zero))")
-   "zero : Nat"))
+   "0N : Nat"))
 
 (test-case "mult-inference/linear-pi-fn-omitted-mult"
   ;; Lambda with omitted mult checked against Pi :1 — mult-meta solved to m1
   (check-equal?
    (run-last "(ns mi2)\n(def linear-id <(Pi [x :1 <Nat>] Nat)> (fn [x <Nat>] x))\n(eval (linear-id zero))")
-   "zero : Nat"))
+   "0N : Nat"))
 
 (test-case "mult-inference/explicit-m1-still-works"
   ;; Explicit :1 on lambda should still work
   (check-equal?
    (run-last "(ns mi3)\n(def linear-id <(Pi [x :1 <Nat>] Nat)> (fn [x :1 <Nat>] x))\n(eval (linear-id zero))")
-   "zero : Nat"))
+   "0N : Nat"))
 
 (test-case "mult-inference/explicit-m0-still-works"
   ;; Explicit :0 on Pi/lambda should still work
   (check-equal?
-   (run-last "(ns mi4)\n(def const-zero <(Pi [x :0 <Nat>] Nat)> (fn [x :0 <Nat>] zero))\n(eval (const-zero (inc zero)))")
-   "zero : Nat"))
+   (run-last "(ns mi4)\n(def const-zero <(Pi [x :0 <Nat>] Nat)> (fn [x :0 <Nat>] zero))\n(eval (const-zero (suc zero)))")
+   "0N : Nat"))
 
 (test-case "mult-inference/stdlib-id-still-works"
   ;; id from stdlib uses implicit params — should still work
   (check-equal?
    (run-last "(ns mi5)\n(require [prologos.core :refer [id]])\n(eval (id zero))")
-   "zero : Nat"))
+   "0N : Nat"))
 
 (test-case "mult-inference/stdlib-add-still-works"
   ;; add from stdlib — should still work with level + mult inference
   (check-equal?
-   (run-last "(ns mi6)\n(require [prologos.data.nat :refer [add]])\n(eval (add 2 3))")
-   "5 : Nat"))
+   (run-last "(ns mi6)\n(require [prologos.data.nat :refer [add]])\n(eval (add 2N 3N))")
+   "5N : Nat"))
 
 (test-case "mult-inference/defn-type-display"
   ;; defn: omitted mult in defn params should display with (-> ...) or (Pi ...)

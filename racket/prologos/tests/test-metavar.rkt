@@ -257,7 +257,7 @@
   (parameterize ([current-meta-store (make-hasheq)])
     (define m (fresh-meta ctx-empty (expr-Nat) "test"))
     (solve-meta! (expr-meta-id m) (expr-zero))
-    (check-equal? (pp-expr m) "zero")))
+    (check-equal? (pp-expr m) "0N")))
 
 ;; ========================================
 ;; expr? predicate

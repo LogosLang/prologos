@@ -1,7 +1,7 @@
 ns prologos.core.seq-functions
 
 require [prologos.core.seq-trait :refer [Seq seq-first seq-rest seq-empty?]]
-require [prologos.data.option :refer [Option some none is-some unwrap-or map]]
+require [prologos.data.option :refer [Option some none some? unwrap-or map]]
 require [prologos.data.list :refer [List cons nil]]
 
 ;; ========================================
@@ -16,7 +16,7 @@ spec seq-length [Seq S] [S A] -> Nat
 defn seq-length [dict xs]
   if [seq-empty? dict xs]
     zero
-    inc [seq-length dict [seq-rest dict xs]]
+    suc [seq-length dict [seq-rest dict xs]]
 
 ;; seq-drop : Seq S -> Nat -> S A -> S A
 ;; Drop the first n elements
@@ -24,7 +24,7 @@ spec seq-drop [Seq S] Nat [S A] -> [S A]
 defn seq-drop [dict n xs]
   match n
     | zero   -> xs
-    | inc k  ->
+    | suc k  ->
         if [seq-empty? dict xs]
           xs
           seq-drop dict k [seq-rest dict xs]
@@ -55,7 +55,7 @@ spec seq-find [Seq S] [A -> Bool] [S A] -> [Option A]
 defn seq-find [dict pred xs]
   if [seq-empty? dict xs]
     none A
-    if [is-some [seq-first dict xs]]
+    if [some? [seq-first dict xs]]
       if [unwrap-or false [map pred [seq-first dict xs]]]
         seq-first dict xs
         seq-find dict pred [seq-rest dict xs]

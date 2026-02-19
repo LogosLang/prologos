@@ -8,5 +8,5 @@ def id <[Pi [A :0 <[Type 0]>] [-> A A]]>
 ;; Apply id to specific values (implicit type inference for A)
 eval [id zero]
 infer [id zero]
-eval [id [inc [inc zero]]]
+eval [id [suc [suc zero]]]
 eval [id true]

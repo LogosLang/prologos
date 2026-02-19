@@ -112,8 +112,8 @@
   (check-contains
    (run-ns-last
     "(foreign racket \"racket/base\" (add1 : Nat -> Nat))
-     (eval (add1 (inc (inc zero))))")
-   "3 : Nat"))
+     (eval (add1 (suc (suc zero))))")
+   "3N : Nat"))
 
 (test-case "foreign/add1-type"
   ;; add1 should have type Nat -> Nat
@@ -137,16 +137,16 @@
   (check-contains
    (run-ns-last
     "(foreign racket \"racket/base\" (sub1 : Nat -> Nat))
-     (eval (sub1 (inc (inc (inc zero)))))")
-   "2 : Nat"))
+     (eval (sub1 (suc (suc (suc zero)))))")
+   "2N : Nat"))
 
 (test-case "foreign/multi-arg-plus"
   ;; Import Racket's + as a 2-arg function: Nat -> Nat -> Nat
   (check-contains
    (run-ns-last
     "(foreign racket \"racket/base\" (+ : Nat -> Nat -> Nat))
-     (eval (+ (inc (inc zero)) (inc (inc (inc zero)))))")
-   "5 : Nat"))
+     (eval (+ (suc (suc zero)) (suc (suc (suc zero)))))")
+   "5N : Nat"))
 
 (test-case "foreign/zero?-true"
   ;; Import Racket's zero? : Nat -> Bool
@@ -160,7 +160,7 @@
   (check-contains
    (run-ns-last
     "(foreign racket \"racket/base\" (zero? : Nat -> Bool))
-     (eval (zero? (inc (inc zero))))")
+     (eval (zero? (suc (suc zero))))")
    "false : Bool"))
 
 (test-case "foreign/multiple-decls"
@@ -168,34 +168,34 @@
   (check-contains
    (run-ns-last
     "(foreign racket \"racket/base\" (add1 : Nat -> Nat) (sub1 : Nat -> Nat))
-     (eval (sub1 (add1 (inc (inc zero)))))")
-   "2 : Nat"))
+     (eval (sub1 (add1 (suc (suc zero)))))")
+   "2N : Nat"))
 
 (test-case "foreign/partial-application"
   ;; Partially apply a 2-arg foreign fn, then apply the rest
   (define result
     (run-ns-last
      "(foreign racket \"racket/base\" (+ : Nat -> Nat -> Nat))
-      (def add2 : (-> Nat Nat) (+ (inc (inc zero))))
-      (eval (add2 (inc (inc (inc zero)))))"))
-  (check-contains result "5 : Nat"))
+      (def add2 : (-> Nat Nat) (+ (suc (suc zero))))
+      (eval (add2 (suc (suc (suc zero)))))"))
+  (check-contains result "5N : Nat"))
 
 (test-case "foreign/used-in-def"
   ;; Foreign fn used in a regular def body
   (check-contains
    (run-ns-last
     "(foreign racket \"racket/base\" (add1 : Nat -> Nat))
-     (def three : Nat (add1 (inc (inc zero))))
+     (def three : Nat (add1 (suc (suc zero))))
      (eval three)")
-   "3 : Nat"))
+   "3N : Nat"))
 
 (test-case "foreign/compose-with-native"
-  ;; Compose foreign add1 with native inc
+  ;; Compose foreign add1 with native suc
   (check-contains
    (run-ns-last
     "(foreign racket \"racket/base\" (add1 : Nat -> Nat))
-     (eval (add1 (inc (add1 zero))))")
-   "3 : Nat"))
+     (eval (add1 (suc (add1 zero))))")
+   "3N : Nat"))
 
 ;; ========================================
 ;; Symbol-level :as alias tests
@@ -206,8 +206,8 @@
   (check-contains
    (run-ns-last
     "(foreign racket \"racket/base\" (add1 :as increment : Nat -> Nat))
-     (eval (increment (inc (inc zero))))")
-   "3 : Nat"))
+     (eval (increment (suc (suc zero))))")
+   "3N : Nat"))
 
 (test-case "foreign/symbol-alias-type"
   ;; Aliased name has correct type
@@ -244,16 +244,16 @@
   (check-contains
    (run-ns-last
     "(foreign racket \"racket/base\" :as rkt (add1 : Nat -> Nat))
-     (eval (rkt/add1 (inc (inc zero))))")
-   "3 : Nat"))
+     (eval (rkt/add1 (suc (suc zero))))")
+   "3N : Nat"))
 
 (test-case "foreign/module-alias-multiple"
   ;; Multiple declarations with module alias, compose them
   (check-contains
    (run-ns-last
     "(foreign racket \"racket/base\" :as rkt (add1 : Nat -> Nat) (sub1 : Nat -> Nat))
-     (eval (rkt/sub1 (rkt/add1 (inc (inc zero)))))")
-   "2 : Nat"))
+     (eval (rkt/sub1 (rkt/add1 (suc (suc zero)))))")
+   "2N : Nat"))
 
 (test-case "foreign/module-alias-type"
   ;; Module-aliased name has correct type
@@ -282,16 +282,16 @@
   (check-contains
    (run-ns-last
     "(foreign racket \"racket/base\" :as rkt (add1 :as increment : Nat -> Nat))
-     (eval (rkt/increment (inc (inc zero))))")
-   "3 : Nat"))
+     (eval (rkt/increment (suc (suc zero))))")
+   "3N : Nat"))
 
 (test-case "foreign/combined-mixed"
   ;; Module alias with one symbol aliased, one not
   (check-contains
    (run-ns-last
     "(foreign racket \"racket/base\" :as rkt (add1 :as increment : Nat -> Nat) (sub1 : Nat -> Nat))
-     (eval (rkt/increment (rkt/sub1 (inc (inc (inc zero))))))")
-   "3 : Nat"))
+     (eval (rkt/increment (rkt/sub1 (suc (suc (suc zero))))))")
+   "3N : Nat"))
 
 ;; ========================================
 ;; Backward compatibility
@@ -302,8 +302,8 @@
   (check-contains
    (run-ns-last
     "(foreign racket \"racket/base\" (add1 : Nat -> Nat))
-     (eval (add1 (inc zero)))")
-   "2 : Nat"))
+     (eval (add1 (suc zero)))")
+   "2N : Nat"))
 
 ;; ========================================
 ;; Uncurried type syntax tests
@@ -314,8 +314,8 @@
   (check-contains
    (run-ns-last
     "(foreign racket \"racket/base\" (+ : Nat Nat -> Nat))
-     (eval (+ (inc (inc zero)) (inc (inc (inc zero)))))")
-   "5 : Nat"))
+     (eval (+ (suc (suc zero)) (suc (suc (suc zero)))))")
+   "5N : Nat"))
 
 (test-case "foreign/uncurried-three-args"
   ;; Nat Nat Nat -> Nat uncurries to Nat -> Nat -> Nat -> Nat
@@ -323,40 +323,40 @@
   (check-contains
    (run-ns-last
     "(foreign racket \"racket/base\" (+ : Nat Nat Nat -> Nat))
-     (eval (+ (inc zero) (inc (inc zero)) (inc (inc (inc zero)))))")
-   "6 : Nat"))
+     (eval (+ (suc zero) (suc (suc zero)) (suc (suc (suc zero)))))")
+   "6N : Nat"))
 
 (test-case "foreign/uncurried-partial-application"
   ;; Uncurried Nat Nat -> Nat should allow partial application
   (define result
     (run-ns-last
      "(foreign racket \"racket/base\" (+ : Nat Nat -> Nat))
-      (def add2 : (-> Nat Nat) (+ (inc (inc zero))))
-      (eval (add2 (inc (inc (inc zero)))))"))
-  (check-contains result "5 : Nat"))
+      (def add2 : (-> Nat Nat) (+ (suc (suc zero))))
+      (eval (add2 (suc (suc (suc zero)))))"))
+  (check-contains result "5N : Nat"))
 
 (test-case "foreign/uncurried-with-alias"
   ;; Uncurried syntax works with :as alias
   (check-contains
    (run-ns-last
     "(foreign racket \"racket/base\" (+ :as plus : Nat Nat -> Nat))
-     (eval (plus (inc zero) (inc (inc zero))))")
-   "3 : Nat"))
+     (eval (plus (suc zero) (suc (suc zero))))")
+   "3N : Nat"))
 
 (test-case "foreign/uncurried-with-module-alias"
   ;; Uncurried syntax works with module-level :as alias
   (check-contains
    (run-ns-last
     "(foreign racket \"racket/base\" :as math (+ : Nat Nat -> Nat))
-     (eval (math/+ (inc zero) (inc (inc zero))))")
-   "3 : Nat"))
+     (eval (math/+ (suc zero) (suc (suc zero))))")
+   "3N : Nat"))
 
 (test-case "foreign/uncurried-bool-return"
   ;; Nat Nat -> Bool
   (check-contains
    (run-ns-last
     "(foreign racket \"racket/base\" (= : Nat Nat -> Bool))
-     (eval (= (inc (inc zero)) (inc (inc zero))))")
+     (eval (= (suc (suc zero)) (suc (suc zero))))")
    "true : Bool"))
 
 (test-case "foreign/curried-still-works"
@@ -364,8 +364,8 @@
   (check-contains
    (run-ns-last
     "(foreign racket \"racket/base\" (+ : Nat -> Nat -> Nat))
-     (eval (+ (inc (inc zero)) (inc (inc (inc zero)))))")
-   "5 : Nat"))
+     (eval (+ (suc (suc zero)) (suc (suc (suc zero)))))")
+   "5N : Nat"))
 
 ;; ========================================
 ;; Error cases

@@ -4,7 +4,7 @@
 ;;; Tests for Underscore Placeholder Partial Application
 ;;;
 ;;; Verifies that _ in function application argument positions desugars
-;;; to anonymous lambdas: (add 1 _) → (fn [$_0] (add 1 $_0))
+;;; to anonymous lambdas: (add 1N _) → (fn [$_0] (add 1N $_0))
 ;;;
 
 (require rackunit
@@ -82,15 +82,15 @@
 
 (test-case "placeholder/single-arg-applied"
   ;; Define a 2-arg function, use _ for partial application, then apply
-  ;; (myadd x y) = natrec x y (fn [_ r] (inc r))
+  ;; (myadd x y) = natrec x y (fn [_ r] (suc r))
   (check-equal?
    (run-last
     (string-join
      (list "(def myadd <(-> Nat (-> Nat Nat))>"
-           "  (fn [x <Nat>] (fn [y <Nat>] (natrec (fn [_ <Nat>] Nat) x (fn [_ <Nat>] (fn [r <Nat>] (inc r))) y))))"
-           "(eval ((the (-> Nat Nat) (myadd (inc zero) _)) (inc (inc zero))))")
+           "  (fn [x <Nat>] (fn [y <Nat>] (natrec (fn [_ <Nat>] Nat) x (fn [_ <Nat>] (fn [r <Nat>] (suc r))) y))))"
+           "(eval ((the (-> Nat Nat) (myadd (suc zero) _)) (suc (suc zero))))")
      "\n"))
-   "3 : Nat"))
+   "3N : Nat"))
 
 (test-case "placeholder/in-check-context"
   ;; Placeholder in a checking context — type drives inference
@@ -98,8 +98,8 @@
    (run-last
     (string-join
      (list "(def myadd <(-> Nat (-> Nat Nat))>"
-           "  (fn [x <Nat>] (fn [y <Nat>] (natrec (fn [_ <Nat>] Nat) x (fn [_ <Nat>] (fn [r <Nat>] (inc r))) y))))"
-           "(check (myadd (inc zero) _) <(-> Nat Nat)>)")
+           "  (fn [x <Nat>] (fn [y <Nat>] (natrec (fn [_ <Nat>] Nat) x (fn [_ <Nat>] (fn [r <Nat>] (suc r))) y))))"
+           "(check (myadd (suc zero) _) <(-> Nat Nat)>)")
      "\n"))
    "OK"))
 
@@ -111,15 +111,15 @@
     (string-join
      (list "(def choose <(-> Nat (-> Nat (-> Nat Nat)))>"
            "  (fn [a <Nat>] (fn [b <Nat>] (fn [c <Nat>] b))))"
-           "(eval ((the (-> Nat (-> Nat Nat)) (choose _ zero _)) (inc zero) (inc (inc zero))))")
+           "(eval ((the (-> Nat (-> Nat Nat)) (choose _ zero _)) (suc zero) (suc (suc zero))))")
      "\n"))
-   "zero : Nat"))
+   "0N : Nat"))
 
 (test-case "placeholder/no-holes-unchanged"
   ;; No holes — no desugaring, works as normal application
   (check-equal?
-   (run-first "(eval (inc (inc zero)))")
-   "2 : Nat"))
+   (run-first "(eval (suc (suc zero)))")
+   "2N : Nat"))
 
 (test-case "placeholder/type-hole-not-affected"
   ;; _ in type position is a type hole, not a placeholder
@@ -131,23 +131,23 @@
   ;; _ in match pattern is a binding wildcard, not a placeholder
   (check-equal?
    (run-first
-    "(eval (the Bool (match (inc zero) (zero -> false) (inc _ -> true))))")
+    "(eval (the Bool (match (suc zero) (zero -> false) (suc _ -> true))))")
    "true : Bool"))
 
 (test-case "placeholder/nested-in-arg"
   ;; Placeholder in a nested application argument
-  ;; The inner (myadd _ (inc zero)) desugars to (fn [$_0] (myadd $_0 (inc zero)))
+  ;; The inner (myadd _ (suc zero)) desugars to (fn [$_0] (myadd $_0 (suc zero)))
   ;; The outer application applies it
   (check-equal?
    (run-last
     (string-join
      (list "(def myadd <(-> Nat (-> Nat Nat))>"
-           "  (fn [x <Nat>] (fn [y <Nat>] (natrec (fn [_ <Nat>] Nat) x (fn [_ <Nat>] (fn [r <Nat>] (inc r))) y))))"
+           "  (fn [x <Nat>] (fn [y <Nat>] (natrec (fn [_ <Nat>] Nat) x (fn [_ <Nat>] (fn [r <Nat>] (suc r))) y))))"
            "(def apply-fn <(-> (-> Nat Nat) (-> Nat Nat))>"
            "  (fn [f <(-> Nat Nat)>] (fn [x <Nat>] (f x))))"
-           "(eval (apply-fn (the (-> Nat Nat) (myadd _ (inc zero))) (inc (inc zero))))")
+           "(eval (apply-fn (the (-> Nat Nat) (myadd _ (suc zero))) (suc (suc zero))))")
      "\n"))
-   "3 : Nat"))
+   "3N : Nat"))
 
 ;; ========================================
 ;; Unit tests: numbered placeholder (_N) desugaring
@@ -221,29 +221,29 @@
 ;; ========================================
 
 (test-case "numbered-placeholder/single-_1-applied"
-  ;; (myadd (inc zero) _1) applied to (inc (inc zero)) → 3
+  ;; (myadd (suc zero) _1) applied to (suc (suc zero)) → 3
   (check-equal?
    (run-last
     (string-join
      (list "(def myadd <(-> Nat (-> Nat Nat))>"
-           "  (fn [x <Nat>] (fn [y <Nat>] (natrec (fn [_ <Nat>] Nat) x (fn [_ <Nat>] (fn [r <Nat>] (inc r))) y))))"
-           "(eval ((the (-> Nat Nat) (myadd (inc zero) _1)) (inc (inc zero))))")
+           "  (fn [x <Nat>] (fn [y <Nat>] (natrec (fn [_ <Nat>] Nat) x (fn [_ <Nat>] (fn [r <Nat>] (suc r))) y))))"
+           "(eval ((the (-> Nat Nat) (myadd (suc zero) _1)) (suc (suc zero))))")
      "\n"))
-   "3 : Nat"))
+   "3N : Nat"))
 
 (test-case "numbered-placeholder/reorder-args"
   ;; Use _2 and _1 to swap argument order
   ;; choose : Nat → Nat → Nat → Nat, returns second arg
-  ;; (choose _2 _1 zero) called with (inc zero) (inc (inc zero))
-  ;; = (choose (inc (inc zero)) (inc zero) zero) = inc zero = 1
+  ;; (choose _2 _1 zero) called with (suc zero) (suc (suc zero))
+  ;; = (choose (suc (suc zero)) (suc zero) zero) = suc zero = 1
   (check-equal?
    (run-last
     (string-join
      (list "(def choose <(-> Nat (-> Nat (-> Nat Nat)))>"
            "  (fn [a <Nat>] (fn [b <Nat>] (fn [c <Nat>] b))))"
-           "(eval ((the (-> Nat (-> Nat Nat)) (choose _2 _1 zero)) (inc zero) (inc (inc zero))))")
+           "(eval ((the (-> Nat (-> Nat Nat)) (choose _2 _1 zero)) (suc zero) (suc (suc zero))))")
      "\n"))
-   "1 : Nat"))
+   "1N : Nat"))
 
 (test-case "numbered-placeholder/type-check-reordered"
   ;; Type-checking: (choose _2 _1 zero) should have type (-> Nat (-> Nat Nat))
@@ -262,20 +262,20 @@
    (run-last
     (string-join
      (list "(def myadd <(-> Nat (-> Nat Nat))>"
-           "  (fn [x <Nat>] (fn [y <Nat>] (natrec (fn [_ <Nat>] Nat) x (fn [_ <Nat>] (fn [r <Nat>] (inc r))) y))))"
-           "(eval ((the (-> Nat Nat) (myadd _ (inc zero))) (inc (inc zero))))")
+           "  (fn [x <Nat>] (fn [y <Nat>] (natrec (fn [_ <Nat>] Nat) x (fn [_ <Nat>] (fn [r <Nat>] (suc r))) y))))"
+           "(eval ((the (-> Nat Nat) (myadd _ (suc zero))) (suc (suc zero))))")
      "\n"))
-   "3 : Nat"))
+   "3N : Nat"))
 
 (test-case "numbered-placeholder/same-order-as-plain"
   ;; _1 _2 in order should behave same as _ _ for argument passing
-  ;; (choose _1 _2 zero) called with (inc zero) (inc (inc zero))
-  ;; = choose (inc zero) (inc (inc zero)) zero = (inc (inc zero)) = 2
+  ;; (choose _1 _2 zero) called with (suc zero) (suc (suc zero))
+  ;; = choose (suc zero) (suc (suc zero)) zero = (suc (suc zero)) = 2
   (check-equal?
    (run-last
     (string-join
      (list "(def choose <(-> Nat (-> Nat (-> Nat Nat)))>"
            "  (fn [a <Nat>] (fn [b <Nat>] (fn [c <Nat>] b))))"
-           "(eval ((the (-> Nat (-> Nat Nat)) (choose _1 _2 zero)) (inc zero) (inc (inc zero))))")
+           "(eval ((the (-> Nat (-> Nat Nat)) (choose _1 _2 zero)) (suc zero) (suc (suc zero))))")
      "\n"))
-   "2 : Nat"))
+   "2N : Nat"))

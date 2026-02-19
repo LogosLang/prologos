@@ -225,16 +225,16 @@
                 '("true : Bool")))
 
 (test-case "posit16 surface: from-nat"
-  (check-equal? (run "(eval (p16-from-nat (inc (inc zero))))")
+  (check-equal? (run "(eval (p16-from-nat (suc (suc zero))))")
                 '("[posit16 18432] : Posit16")))
 
 (test-case "posit16 surface: if-nar on NaR"
-  (check-equal? (run "(eval (p16-if-nar Nat zero (inc zero) (posit16 32768)))")
-                '("zero : Nat")))
+  (check-equal? (run "(eval (p16-if-nar Nat zero (suc zero) (posit16 32768)))")
+                '("0N : Nat")))
 
 (test-case "posit16 surface: if-nar on non-NaR"
-  (check-equal? (run "(eval (p16-if-nar Nat zero (inc zero) (posit16 16384)))")
-                '("1 : Nat")))
+  (check-equal? (run "(eval (p16-if-nar Nat zero (suc zero) (posit16 16384)))")
+                '("1N : Nat")))
 
 (test-case "posit16 surface: NaR propagation"
   (check-equal? (run "(eval (p16+ (posit16 32768) (posit16 16384)))")

@@ -298,7 +298,7 @@
     ;; id zero should succeed (it infers the type argument)
     (define last-result (last results))
     (check-false (prologos-error? last-result))
-    (check-true (string-contains? last-result "zero"))))
+    (check-true (string-contains? last-result "0N"))))
 
 ;; ========================================
 ;; Integration: stdlib regression
@@ -307,12 +307,12 @@
 (test-case "error-message/stdlib-id-still-works"
   (check-equal?
    (run-ns-last "(ns emt1)\n(require [prologos.core :refer [id]])\n(eval (id zero))")
-   "zero : Nat"))
+   "0N : Nat"))
 
 (test-case "error-message/stdlib-add-still-works"
   (check-equal?
-   (run-ns-last "(ns emt2)\n(require [prologos.data.nat :refer [add]])\n(eval (add 2 3))")
-   "5 : Nat"))
+   (run-ns-last "(ns emt2)\n(require [prologos.data.nat :refer [add]])\n(eval (add 2N 3N))")
+   "5N : Nat"))
 
 ;; ========================================
 ;; Integration: pp-expr with name stack in errors

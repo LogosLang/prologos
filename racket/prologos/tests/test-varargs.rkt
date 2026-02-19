@@ -194,8 +194,8 @@
           "(require [prologos.data.list :refer [List nil cons length]])\n"
           "(spec count-args Nat $rest -> Nat)\n"
           "(defn count-args [xs] (length Nat xs))\n"
-          "(eval (count-args 1 2 3))")))
-  (check-equal? (last result) "3 : Nat"))
+          "(eval (count-args 1N 2N 3N))")))
+  (check-equal? (last result) "3N : Nat"))
 
 (test-case "varargs sexp: zero varargs — empty list"
   (define result
@@ -205,7 +205,7 @@
           "(spec count-args Nat $rest -> Nat)\n"
           "(defn count-args [xs] (length Nat xs))\n"
           "(eval (count-args))")))
-  (check-equal? (last result) "zero : Nat"))
+  (check-equal? (last result) "0N : Nat"))
 
 (test-case "varargs sexp: one vararg"
   (define result
@@ -214,8 +214,8 @@
           "(require [prologos.data.list :refer [List nil cons length]])\n"
           "(spec count-args Nat $rest -> Nat)\n"
           "(defn count-args [xs] (length Nat xs))\n"
-          "(eval (count-args 42))")))
-  (check-equal? (last result) "1 : Nat"))
+          "(eval (count-args 42N))")))
+  (check-equal? (last result) "1N : Nat"))
 
 (test-case "varargs sexp: single vararg treated as element, not list"
   ;; A single arg is wrapped in a list (not treated as pre-built list)
@@ -225,8 +225,8 @@
           "(require [prologos.data.list :refer [List nil cons length]])\n"
           "(spec count-args Nat $rest -> Nat)\n"
           "(defn count-args [xs] (length Nat xs))\n"
-          "(eval (count-args 42))")))
-  (check-equal? (last result) "1 : Nat"))
+          "(eval (count-args 42N))")))
+  (check-equal? (last result) "1N : Nat"))
 
 (test-case "varargs sexp: mixed fixed + varargs"
   (define result
@@ -235,8 +235,8 @@
           "(require [prologos.data.list :refer [List nil cons length]])\n"
           "(spec count-rest Nat Nat $rest -> Nat)\n"
           "(defn count-rest [first xs] (length Nat xs))\n"
-          "(eval (count-rest 99 1 2 3))")))
-  (check-equal? (last result) "3 : Nat"))
+          "(eval (count-rest 99N 1N 2N 3N))")))
+  (check-equal? (last result) "3N : Nat"))
 
 (test-case "varargs sexp: mixed fixed + zero varargs"
   (define result
@@ -245,8 +245,8 @@
           "(require [prologos.data.list :refer [List nil cons length]])\n"
           "(spec count-rest Nat Nat $rest -> Nat)\n"
           "(defn count-rest [first xs] (length Nat xs))\n"
-          "(eval (count-rest 99))")))
-  (check-equal? (last result) "zero : Nat"))
+          "(eval (count-rest 99N))")))
+  (check-equal? (last result) "0N : Nat"))
 
 (test-case "varargs sexp: with implicit binder {A}"
   (define result
@@ -256,7 +256,7 @@
           "(spec count-any ($brace-params A) A $rest -> Nat)\n"
           "(defn count-any [xs] (length A xs))\n"
           "(eval (count-any 1 2 3 4))")))
-  (check-equal? (last result) "4 : Nat"))
+  (check-equal? (last result) "4N : Nat"))
 
 ;; ========================================
 ;; E. WS-mode end-to-end tests
@@ -272,8 +272,8 @@
              "defn count-args [...xs]\n"
              "  length Nat xs\n"
              "\n"
-             "count-args 1 2 3\n")))
-  (check-equal? (last result) "3 : Nat"))
+             "count-args 1N 2N 3N\n")))
+  (check-equal? (last result) "3N : Nat"))
 
 (test-case "varargs ws: mixed fixed + varargs"
   (define result
@@ -285,8 +285,8 @@
              "defn count-rest [first ...rest]\n"
              "  length Nat rest\n"
              "\n"
-             "count-rest 99 1 2 3\n")))
-  (check-equal? (last result) "3 : Nat"))
+             "count-rest 99N 1N 2N 3N\n")))
+  (check-equal? (last result) "3N : Nat"))
 
 (test-case "varargs ws: with implicit binder"
   (define result
@@ -299,7 +299,7 @@
              "  length A xs\n"
              "\n"
              "count-any 1 2 3 4 5\n")))
-  (check-equal? (last result) "5 : Nat"))
+  (check-equal? (last result) "5N : Nat"))
 
 (test-case "varargs ws: zero varargs"
   (define result
@@ -312,7 +312,7 @@
              "  length Nat xs\n"
              "\n"
              "count-args\n")))
-  (check-equal? (last result) "zero : Nat"))
+  (check-equal? (last result) "0N : Nat"))
 
 (test-case "varargs ws: identity on rest list"
   (define result
@@ -324,8 +324,8 @@
              "defn list-of [...xs]\n"
              "  xs\n"
              "\n"
-             "list-of 1 2 3\n")))
+             "list-of 1N 2N 3N\n")))
   (define r (last result))
   (check-true (string? r))
-  ;; Pretty printer renders list as '[1 2 3]
-  (check-contains r "'[1 2 3]"))
+  ;; Pretty printer renders list as '[1N 2N 3N]
+  (check-contains r "'[1N 2N 3N]"))

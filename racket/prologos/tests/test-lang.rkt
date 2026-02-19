@@ -34,7 +34,7 @@
   (check-true (string-contains? output "one : Nat defined."))
   (check-true (string-contains? output "two : Nat defined."))
   (check-true (string-contains? output "OK"))
-  (check-true (string-contains? output "2 : Nat")))
+  (check-true (string-contains? output "2N : Nat")))
 
 ;; ================================================================
 ;; 2. identity.rkt — polymorphic identity with Pi types
@@ -45,9 +45,9 @@
   (check-true (string-contains? output "id"))
   (check-true (string-contains? output "defined"))
   ;; id Nat zero should evaluate to zero
-  (check-true (string-contains? output "zero : Nat"))
+  (check-true (string-contains? output "0N : Nat"))
   ;; id Nat 2 should evaluate to 2
-  (check-true (string-contains? output "2 : Nat"))
+  (check-true (string-contains? output "2N : Nat"))
   ;; id Bool true should evaluate to true
   (check-true (string-contains? output "true : Bool")))
 
@@ -63,7 +63,7 @@
   (check-true (>= ok-count 3)
               (format "Expected at least 3 OK lines, got ~a" ok-count))
   ;; vhead should produce 1
-  (check-true (string-contains? output "1 : Nat")))
+  (check-true (string-contains? output "1N : Nat")))
 
 ;; ================================================================
 ;; 4. pairs.rkt — Sigma types and dependent pairs
@@ -73,7 +73,7 @@
   ;; All checks should pass
   (check-true (string-contains? output "OK"))
   ;; fst should yield zero
-  (check-true (string-contains? output "zero : Nat"))
+  (check-true (string-contains? output "0N : Nat"))
   ;; snd should yield true
   (check-true (string-contains? output "true : Bool")))
 
@@ -95,14 +95,14 @@
   (check-true (string-contains? output "one : Nat defined."))
   (check-true (string-contains? output "two : Nat defined."))
   (check-true (string-contains? output "OK"))
-  (check-true (string-contains? output "2 : Nat")))
+  (check-true (string-contains? output "2N : Nat")))
 
 (test-case "identity-ws.rkt: polymorphic identity"
   (define output (run-prologos-file "identity-ws.rkt"))
   (check-true (string-contains? output "id"))
   (check-true (string-contains? output "defined"))
-  (check-true (string-contains? output "zero : Nat"))
-  (check-true (string-contains? output "2 : Nat"))
+  (check-true (string-contains? output "0N : Nat"))
+  (check-true (string-contains? output "2N : Nat"))
   (check-true (string-contains? output "true : Bool")))
 
 (test-case "vectors-ws.rkt: Vec and Fin types"
@@ -112,12 +112,12 @@
                     (string-split output "\n"))))
   (check-true (>= ok-count 3)
               (format "Expected at least 3 OK lines, got ~a" ok-count))
-  (check-true (string-contains? output "1 : Nat")))
+  (check-true (string-contains? output "1N : Nat")))
 
 (test-case "pairs-ws.rkt: Sigma types"
   (define output (run-prologos-file "pairs-ws.rkt"))
   (check-true (string-contains? output "OK"))
-  (check-true (string-contains? output "zero : Nat"))
+  (check-true (string-contains? output "0N : Nat"))
   (check-true (string-contains? output "true : Bool")))
 
 (test-case "hello-ws.rkt: definitions can reference earlier definitions"
@@ -131,19 +131,19 @@
 (test-case "defn.rkt: sexp defn macro"
   (define output (run-prologos-file "defn.rkt"))
   (check-true (string-contains? output "increment") "should define increment")
-  (check-true (string-contains? output "1 : Nat") "increment zero = 1")
-  (check-true (string-contains? output "2 : Nat") "increment (inc zero) = 2")
+  (check-true (string-contains? output "1N : Nat") "increment zero = 1")
+  (check-true (string-contains? output "2N : Nat") "increment (suc zero) = 2")
   (check-true (string-contains? output "id") "should define id")
-  (check-true (string-contains? output "zero : Nat") "id Nat zero")
+  (check-true (string-contains? output "0N : Nat") "id Nat zero")
   (check-true (string-contains? output "true : Bool") "id Bool true"))
 
 (test-case "defn-ws.rkt: whitespace defn macro"
   (define output (run-prologos-file "defn-ws.rkt"))
   (check-true (string-contains? output "increment") "should define increment")
-  (check-true (string-contains? output "1 : Nat") "increment zero = 1")
-  (check-true (string-contains? output "2 : Nat") "increment (inc zero) = 2")
+  (check-true (string-contains? output "1N : Nat") "increment zero = 1")
+  (check-true (string-contains? output "2N : Nat") "increment (suc zero) = 2")
   (check-true (string-contains? output "id") "should define id")
-  (check-true (string-contains? output "zero : Nat") "id Nat zero")
+  (check-true (string-contains? output "0N : Nat") "id Nat zero")
   (check-true (string-contains? output "true : Bool") "id Bool true"))
 
 ;; ========================================
@@ -155,22 +155,22 @@
   ;; double should be defined
   (check-true (string-contains? output "double : Nat -> Nat defined.")
               "should define double")
-  ;; double (inc (inc zero)) = 4
-  (check-true (string-contains? output "4 : Nat")
+  ;; double (suc (suc zero)) = 4
+  (check-true (string-contains? output "4N : Nat")
               "double 2 = 4")
   ;; not true = false, not false = true
   (check-true (string-contains? output "false : Bool")
               "not true = false")
   (check-true (string-contains? output "true : Bool")
               "not false = true")
-  ;; let with double and inc
-  (check-true (string-contains? output "3 : Nat")
+  ;; let with double and suc
+  (check-true (string-contains? output "3N : Nat")
               "let result = 3")
-  ;; if true (inc zero) zero = 1
-  (check-true (string-contains? output "1 : Nat")
+  ;; if true (suc zero) zero = 1
+  (check-true (string-contains? output "1N : Nat")
               "if true = 1")
-  ;; if false (inc zero) zero = zero
-  (check-true (string-contains? output "zero : Nat")
+  ;; if false (suc zero) zero = zero
+  (check-true (string-contains? output "0N : Nat")
               "if false = zero")
   ;; check pair against Pair alias = OK
   (check-true (string-contains? output "OK")
@@ -181,16 +181,16 @@
   ;; double should be defined
   (check-true (string-contains? output "double : Nat -> Nat defined.")
               "should define double")
-  ;; double (inc (inc zero)) = 4
-  (check-true (string-contains? output "4 : Nat")
+  ;; double (suc (suc zero)) = 4
+  (check-true (string-contains? output "4N : Nat")
               "double 2 = 4")
   ;; if true = 1, if false = zero
-  (check-true (string-contains? output "1 : Nat")
+  (check-true (string-contains? output "1N : Nat")
               "if true = 1")
-  (check-true (string-contains? output "zero : Nat")
+  (check-true (string-contains? output "0N : Nat")
               "if false / boolrec true = zero")
   ;; let result = 3
-  (check-true (string-contains? output "3 : Nat")
+  (check-true (string-contains? output "3N : Nat")
               "let result = 3"))
 
 ;; ========================================
@@ -228,7 +228,7 @@
 
 (test-case "REPL: eval expression using file definitions"
   (define result (repl-eval-after-file "defn.rkt" "(eval (increment zero))"))
-  (check-true (string-contains? result "1 : Nat")
+  (check-true (string-contains? result "1N : Nat")
               (format "Expected '1 : Nat', got: ~a" result)))
 
 (test-case "REPL: infer type of file definition"
@@ -241,8 +241,8 @@
   (check-equal? result "OK"))
 
 (test-case "REPL: implicit eval of bare expression"
-  (define result (repl-eval-after-file "hello.rkt" "(inc zero)"))
-  (check-true (string-contains? result "1 : Nat")
+  (define result (repl-eval-after-file "hello.rkt" "(suc zero)"))
+  (check-true (string-contains? result "1N : Nat")
               (format "Expected '1 : Nat', got: ~a" result)))
 
 ;; ========================================
@@ -254,12 +254,12 @@
   ;; let := basic: one = 1
   (check-true (string-contains? output "one : Nat defined.")
               "should define one")
-  (check-true (string-contains? output "1 : Nat")
+  (check-true (string-contains? output "1N : Nat")
               "one = 1")
   ;; sibling lets: three = 3
   (check-true (string-contains? output "three : Nat defined.")
               "should define three")
-  (check-true (string-contains? output "3 : Nat")
+  (check-true (string-contains? output "3N : Nat")
               "three = 3 via sibling lets")
   ;; uncurried arrow: add has Nat Nat -> Nat type
   (check-true (string-contains? output "add : Nat Nat -> Nat defined.")
@@ -275,7 +275,7 @@
   ;; add with spec: Nat Nat -> Nat
   (check-true (string-contains? output "add : Nat Nat -> Nat defined.")
               "spec'd add should have uncurried arrow type")
-  (check-true (string-contains? output "3 : Nat")
+  (check-true (string-contains? output "3N : Nat")
               "add 1 2 = 3")
   ;; inc2 with docstring spec
   (check-true (string-contains? output "inc2 : Nat -> Nat defined.")
@@ -283,5 +283,5 @@
   ;; HOF apply-fn
   (check-true (string-contains? output "apply-fn : [Nat -> Nat] Nat -> Nat defined.")
               "spec'd apply-fn should wrap HOF domain in brackets")
-  (check-true (string-contains? output "2 : Nat")
+  (check-true (string-contains? output "2N : Nat")
               "apply-fn inc2 zero = 2"))

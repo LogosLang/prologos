@@ -1099,7 +1099,7 @@
 (define (builtin-ctor-type ctor-name)
   (case ctor-name
     [(zero) (expr-Nat)]
-    [(inc)  (expr-Pi 'mw (expr-Nat) (expr-Nat))]
+    [(suc)  (expr-Pi 'mw (expr-Nat) (expr-Nat))]
     [(true) (expr-Bool)]
     [(false) (expr-Bool)]
     [(unit) (expr-Unit)]

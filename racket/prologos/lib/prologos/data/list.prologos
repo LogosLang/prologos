@@ -2,7 +2,7 @@ ns prologos.data.list
 
 require [prologos.core.eq-trait :refer [nat-eq]]
         [prologos.data.option   :refer [Option none some]]
-        [prologos.data.nat      :refer [add mult dec zero?]]
+        [prologos.data.nat      :refer [add mult pred zero?]]
 
 ;; ========================================
 ;; Prologos List Type
@@ -41,7 +41,7 @@ spec length [List A] -> Nat
 defn length [xs]
   match xs
     | nil      -> zero
-    | cons _ as -> inc [length as]
+    | cons _ as -> suc [length as]
 
 ;; Map a function over the list.
 spec map [A -> B] [List A] -> List B
@@ -117,7 +117,7 @@ defn sum [xs]
 ;; Product of a list of naturals.
 spec product [List Nat] -> Nat
 defn product [xs]
-  reduce mult [inc zero] xs
+  reduce mult [suc zero] xs
 
 ;; ========================================
 ;; Predicates and Search
@@ -161,7 +161,7 @@ defn nth [n xs]
     | nil       -> none
     | cons a as -> match [zero? n]
       | true  -> some a
-      | false -> nth [dec n] as
+      | false -> nth [pred n] as
 
 ;; Last element of a list.
 spec last [List A] -> Option A
@@ -181,14 +181,14 @@ spec replicate Nat A -> List A
 defn replicate [n x]
   match n
     | zero  -> nil
-    | inc k -> cons x [replicate k x]
+    | suc k -> cons x [replicate k x]
 
 ;; Helper for range: builds [0..n-1] via accumulator.
 spec range-helper Nat [List Nat] -> List Nat
 defn range-helper [n acc]
   match n
     | zero  -> acc
-    | inc k -> range-helper k [cons k acc]
+    | suc k -> range-helper k [cons k acc]
 
 ;; List of naturals [0, 1, ..., n-1].
 spec range Nat -> List Nat
@@ -216,7 +216,7 @@ spec take Nat [List A] -> List A
 defn take [n xs]
   match n
     | zero  -> nil
-    | inc k -> match xs
+    | suc k -> match xs
       | nil       -> nil
       | cons a as -> cons a [take k as]
 
@@ -225,7 +225,7 @@ spec drop Nat [List A] -> List A
 defn drop [n xs]
   match n
     | zero  -> xs
-    | inc k -> match xs
+    | suc k -> match xs
       | nil       -> nil
       | cons _ as -> drop k as
 
@@ -442,22 +442,22 @@ defn dedup [eq xs]
     | cons a as -> cons a [dedup-helper eq a as]
 
 ;; Check if one list is a prefix of another.
-;; is-prefix-of nat-eq [1,2] [1,2,3] = true
-spec is-prefix-of [A -> A -> Bool] [List A] [List A] -> Bool
-defn is-prefix-of [eq prefix xs]
+;; prefix-of? nat-eq [1,2] [1,2,3] = true
+spec prefix-of? [A -> A -> Bool] [List A] [List A] -> Bool
+defn prefix-of? [eq prefix xs]
   match prefix
     | nil       -> true
     | cons p ps -> match xs
       | nil       -> false
       | cons x rest -> match [eq p x]
-        | true  -> is-prefix-of eq ps rest
+        | true  -> prefix-of? eq ps rest
         | false -> false
 
 ;; Check if one list is a suffix of another.
-;; is-suffix-of nat-eq [2,3] [1,2,3] = true
-spec is-suffix-of [A -> A -> Bool] [List A] [List A] -> Bool
-defn is-suffix-of [eq suffix xs]
-  is-prefix-of eq [reverse suffix] [reverse xs]
+;; suffix-of? nat-eq [2,3] [1,2,3] = true
+spec suffix-of? [A -> A -> Bool] [List A] [List A] -> Bool
+defn suffix-of? [eq suffix xs]
+  prefix-of? eq [reverse suffix] [reverse xs]
 
 ;; Remove first occurrence of an element.
 ;; delete nat-eq 2 [1,2,3,2] = [1,3,2]
@@ -481,7 +481,7 @@ defn find-index-helper [p n xs]
     | nil       -> none
     | cons a as -> match [p a]
       | true  -> some n
-      | false -> find-index-helper p [inc n] as
+      | false -> find-index-helper p [suc n] as
 
 spec find-index [A -> Bool] [List A] -> Option Nat
 defn find-index [p xs]
@@ -494,7 +494,7 @@ defn count-helper [p n xs]
   match xs
     | nil       -> n
     | cons a as -> match [p a]
-      | true  -> count-helper p [inc n] as
+      | true  -> count-helper p [suc n] as
       | false -> count-helper p n as
 
 spec count [A -> Bool] [List A] -> Nat
@@ -514,12 +514,12 @@ defn scanl [f z xs]
     | cons a as -> cons z [scanl f [f z a] as]
 
 ;; Generate N values by repeated function application.
-;; iterate-n 4 inc 0 = [0,1,2,3]
+;; iterate-n 4 suc 0 = [0,1,2,3]
 spec iterate-n Nat [A -> A] A -> List A
 defn iterate-n [n f x]
   match n
     | zero  -> nil
-    | inc k -> cons x [iterate-n k f [f x]]
+    | suc k -> cons x [iterate-n k f [f x]]
 
 ;; Concat with separator list between each sublist.
 ;; intercalate [0] [[1,2],[3,4]] = [1,2,0,3,4]

@@ -12,8 +12,8 @@ require [prologos.data.nat    :as nat  :refer [add mult zero?]]
 ;; --- Placeholders (_ partial application) ---
 
 ;; Increment every element
-defn inc-all [xs : List Nat] : List Nat
-  map [add _ [inc zero]] xs
+defn suc-all [xs : List Nat] : List Nat
+  map [add _ [suc zero]] xs
 
 ;; Double every element (qualified access: nat::double not in :refer)
 defn double-all [xs : List Nat] : List Nat
@@ -29,8 +29,8 @@ defn evens [xs : List Nat] : List Nat
 spec factorial Nat -> Nat
 defn factorial [n]
   match n
-    | zero  -> inc zero
-    | inc k -> mult n [factorial k]
+    | zero  -> suc zero
+    | suc k -> mult n [factorial k]
 
 ;; Square: n * n
 defn square [n : Nat] : Nat
@@ -66,23 +66,23 @@ defn keep-positive [xs : List Nat] : List Nat
 
 ;; --- Try them out ---
 
-inc-all [cons [inc zero] [cons [inc [inc zero]] [cons [inc [inc [inc zero]]] nil]]]
-factorial [inc [inc [inc [inc [inc zero]]]]]
-double-all [list::range [inc [inc [inc zero]]]]
-sum [list::range [inc [inc [inc [inc [inc zero]]]]]]
-dot-product [cons [inc zero] [cons [inc [inc zero]] nil]] [cons [inc [inc [inc zero]]] [cons [inc [inc [inc [inc zero]]]] nil]]
-apply-twice nat::double [inc [inc zero]]
+suc-all [cons [suc zero] [cons [suc [suc zero]] [cons [suc [suc [suc zero]]] nil]]]
+factorial [suc [suc [suc [suc [suc zero]]]]]
+double-all [list::range [suc [suc [suc zero]]]]
+sum [list::range [suc [suc [suc [suc [suc zero]]]]]]
+dot-product [cons [suc zero] [cons [suc [suc zero]] nil]] [cons [suc [suc [suc zero]]] [cons [suc [suc [suc [suc zero]]]] nil]]
+apply-twice nat::double [suc [suc zero]]
 
 ;; --- Point-free style with partial application ---
 
 spec my-sum [List Nat] -> Nat
-def  my-sum := [reduce add 0 _]
+def  my-sum := [reduce add 0N _]
 
-my-sum '[1 2 3]
-my-sum '[1 2 3 4 5]
+my-sum '[1N 2N 3N]
+my-sum '[1N 2N 3N 4N 5N]
 
 ;; Inline partial application:
-[reduce add 0 _] '[1 2 3 4 5 6 7 8 9 10]
+[reduce add 0N _] '[1N 2N 3N 4N 5N 6N 7N 8N 9N 10N]
 
 ;; --- Clamp with partial application ---
 
@@ -92,5 +92,5 @@ defn clamp [x low high]
 
 ;;         x  partial function... very flexible!
 ;;--------\/-----
-map [clamp _ 5 15] [list::range [inc 20]]
+map [clamp _ 5N 15N] [list::range [suc 20N]]
 ;; => '[5 5 5 5 5 5 6 7 8 9 10 11 12 13 14 15 15 15 15 15 15]

@@ -162,8 +162,8 @@
   ;; List--Seqable--dict IS list-to-lseq, convert list to lseq then back
   (check-contains
    (run-ns-last (string-append preamble
-     "(eval (lseq-to-list Nat (List--Seqable--dict Nat (cons Nat (inc zero) (cons Nat (inc (inc zero)) (nil Nat))))))"))
-   "'[1 2]"))
+     "(eval (lseq-to-list Nat (List--Seqable--dict Nat (cons Nat (suc zero) (cons Nat (suc (suc zero)) (nil Nat))))))"))
+   "'[1N 2N]"))
 
 (test-case "collection/seqable-list-empty"
   ;; to-seq on empty list → lseq-nil → nil
@@ -180,8 +180,8 @@
   ;; from-seq materializes an lseq back to a list
   (check-contains
    (run-ns-last (string-append preamble
-     "(eval (List--Buildable--from-seq Nat (list-to-lseq Nat (cons Nat (inc zero) (cons Nat (inc (inc zero)) (nil Nat))))))"))
-   "'[1 2]"))
+     "(eval (List--Buildable--from-seq Nat (list-to-lseq Nat (cons Nat (suc zero) (cons Nat (suc (suc zero)) (nil Nat))))))"))
+   "'[1N 2N]"))
 
 (test-case "collection/buildable-list-from-seq-empty"
   (check-contains
@@ -200,8 +200,8 @@
   ;; from-seq (to-seq xs) = xs
   (check-contains
    (run-ns-last (string-append preamble
-     "(eval (List--Buildable--from-seq Nat (List--Seqable--dict Nat (cons Nat (inc zero) (cons Nat (inc (inc zero)) (cons Nat (inc (inc (inc zero))) (nil Nat)))))))"))
-   "'[1 2 3]"))
+     "(eval (List--Buildable--from-seq Nat (List--Seqable--dict Nat (cons Nat (suc zero) (cons Nat (suc (suc zero)) (cons Nat (suc (suc (suc zero))) (nil Nat)))))))"))
+   "'[1N 2N 3N]"))
 
 ;; ========================================
 ;; Indexed List — functional tests
@@ -211,27 +211,27 @@
   ;; idx-nth [1,2,3] 0 = some 1
   (check-contains
    (run-ns-last (string-append preamble
-     "(eval (list-idx-nth Nat (cons Nat (inc zero) (cons Nat (inc (inc zero)) (cons Nat (inc (inc (inc zero))) (nil Nat)))) zero))"))
+     "(eval (list-idx-nth Nat (cons Nat (suc zero) (cons Nat (suc (suc zero)) (cons Nat (suc (suc (suc zero))) (nil Nat)))) zero))"))
    "some"))
 
 (test-case "collection/indexed-list-nth-first-value"
   (check-contains
    (run-ns-last (string-append preamble
-     "(eval (list-idx-nth Nat (cons Nat (inc zero) (cons Nat (inc (inc zero)) (cons Nat (inc (inc (inc zero))) (nil Nat)))) zero))"))
+     "(eval (list-idx-nth Nat (cons Nat (suc zero) (cons Nat (suc (suc zero)) (cons Nat (suc (suc (suc zero))) (nil Nat)))) zero))"))
    "1"))
 
 (test-case "collection/indexed-list-nth-middle"
   ;; idx-nth [1,2,3] 1 = some 2
   (check-contains
    (run-ns-last (string-append preamble
-     "(eval (list-idx-nth Nat (cons Nat (inc zero) (cons Nat (inc (inc zero)) (cons Nat (inc (inc (inc zero))) (nil Nat)))) (inc zero)))"))
+     "(eval (list-idx-nth Nat (cons Nat (suc zero) (cons Nat (suc (suc zero)) (cons Nat (suc (suc (suc zero))) (nil Nat)))) (suc zero)))"))
    "2"))
 
 (test-case "collection/indexed-list-nth-out-of-bounds"
   ;; idx-nth [1,2,3] 5 = none
   (check-contains
    (run-ns-last (string-append preamble
-     "(eval (list-idx-nth Nat (cons Nat (inc zero) (nil Nat)) (inc (inc (inc (inc (inc zero)))))))"))
+     "(eval (list-idx-nth Nat (cons Nat (suc zero) (nil Nat)) (suc (suc (suc (suc (suc zero)))))))"))
    "none"))
 
 (test-case "collection/indexed-list-nth-empty"
@@ -246,19 +246,19 @@
   (check-contains
    (run-ns-last (string-append preamble
      "(eval (list-idx-length Nat (nil Nat)))"))
-   "zero"))
+   "0N"))
 
 (test-case "collection/indexed-list-length-nonempty"
   ;; length [1,2,3] = 3
   (check-contains
    (run-ns-last (string-append preamble
-     "(eval (list-idx-length Nat (cons Nat (inc zero) (cons Nat (inc (inc zero)) (cons Nat (inc (inc (inc zero))) (nil Nat))))))"))
+     "(eval (list-idx-length Nat (cons Nat (suc zero) (cons Nat (suc (suc zero)) (cons Nat (suc (suc (suc zero))) (nil Nat))))))"))
    "3"))
 
 (test-case "collection/indexed-list-update-first"
   ;; update [1,2,3] 0 7 → [7,2,3]
   (define result (run-ns-last (string-append preamble
-    "(eval (list-idx-update Nat (cons Nat (inc zero) (cons Nat (inc (inc zero)) (cons Nat (inc (inc (inc zero))) (nil Nat)))) zero (inc (inc (inc (inc (inc (inc (inc zero)))))))))")))
+    "(eval (list-idx-update Nat (cons Nat (suc zero) (cons Nat (suc (suc zero)) (cons Nat (suc (suc (suc zero))) (nil Nat)))) zero (suc (suc (suc (suc (suc (suc (suc zero)))))))))")))
   (check-contains result "7")
   (check-contains result "List"))
 
@@ -266,8 +266,8 @@
   ;; update [1] 5 7 → [1] (unchanged, index out of bounds)
   (check-contains
    (run-ns-last (string-append preamble
-     "(eval (list-idx-update Nat (cons Nat (inc zero) (nil Nat)) (inc (inc (inc (inc (inc zero))))) (inc (inc (inc (inc (inc (inc (inc zero)))))))))"))
-   "'[1]"))
+     "(eval (list-idx-update Nat (cons Nat (suc zero) (nil Nat)) (suc (suc (suc (suc (suc zero))))) (suc (suc (suc (suc (suc (suc (suc zero)))))))))"))
+   "'[1N]"))
 
 ;; ========================================
 ;; Indexed dict — accessor usage

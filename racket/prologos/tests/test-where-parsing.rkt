@@ -238,6 +238,6 @@
              ;; We test that process-spec handles it correctly
              "(spec ws-neq A A -> Bool where (Eq A))\n"
              "(defn ws-neq [d x y] (not (d x y)))\n"
-             "(eval (ws-neq nat-eq zero (inc zero)))\n")))
-  ;; nat-eq zero (inc zero) = false, so not false = true
+             "(eval (ws-neq nat-eq zero (suc zero)))\n")))
+  ;; nat-eq zero (suc zero) = false, so not false = true
   (check-equal? (last results) "true : Bool"))

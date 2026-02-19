@@ -94,7 +94,7 @@
           "(spec id ($brace-params A : Type) A -> A)\n"
           "(defn id [x] x)\n"
           "(eval (id Nat zero))")))
-  (check-equal? (last result) "zero : Nat"))
+  (check-equal? (last result) "0N : Nat"))
 
 (test-case "higher-rank: spec {A} bare implicit (default kind)"
   ;; spec id {A} A -> A  — bare {A} means {A : Type}
@@ -102,8 +102,8 @@
     (run (string-append
           "(spec id ($brace-params A) A -> A)\n"
           "(defn id [x] x)\n"
-          "(eval (id Nat (inc zero)))")))
-  (check-equal? (last result) "1 : Nat"))
+          "(eval (id Nat (suc zero)))")))
+  (check-equal? (last result) "1N : Nat"))
 
 (test-case "higher-rank: spec {A B : Type} multi-name group"
   ;; spec const {A B : Type} A -> B -> A
@@ -111,8 +111,8 @@
     (run (string-append
           "(spec const ($brace-params A B : Type) A -> B -> A)\n"
           "(defn const [x y] x)\n"
-          "(eval (const Nat Bool (inc zero) true))")))
-  (check-equal? (last result) "1 : Nat"))
+          "(eval (const Nat Bool (suc zero) true))")))
+  (check-equal? (last result) "1N : Nat"))
 
 (test-case "higher-rank: spec {A} {B} multiple brace groups"
   ;; spec const {A} {B} A -> B -> A
@@ -120,8 +120,8 @@
     (run (string-append
           "(spec const ($brace-params A) ($brace-params B) A -> B -> A)\n"
           "(defn const [x y] x)\n"
-          "(eval (const Nat Bool (inc zero) true))")))
-  (check-equal? (last result) "1 : Nat"))
+          "(eval (const Nat Bool (suc zero) true))")))
+  (check-equal? (last result) "1N : Nat"))
 
 ;; ========================================
 ;; B. Implicit binders with body usage
@@ -133,7 +133,7 @@
     (run (string-append
           "(spec wrap ($brace-params A : Type) A -> (Sigma (_ : A) A))\n"
           "(defn wrap [x] (pair x x))\n"
-          "(eval (wrap Nat (inc zero)))")))
+          "(eval (wrap Nat (suc zero)))")))
   (check-contains (last result) "1"))
 
 ;; ========================================
@@ -147,8 +147,8 @@
     (run (string-append
           "(spec apply-poly ($angle-type (A :0 Type) -> A -> A) -> Nat -> Nat)\n"
           "(defn apply-poly [f n] (f Nat n))\n"
-          "(eval (apply-poly (fn (A :0 (Type 0)) (fn (x : A) x)) (inc zero)))")))
-  (check-equal? (last result) "1 : Nat"))
+          "(eval (apply-poly (fn (A :0 (Type 0)) (fn (x : A) x)) (suc zero)))")))
+  (check-equal? (last result) "1N : Nat"))
 
 ;; ========================================
 ;; D. WS mode integration
@@ -164,7 +164,7 @@
                    ""
                    "eval [id Nat zero]")
              "\n")))
-  (check-equal? (last result) "zero : Nat"))
+  (check-equal? (last result) "0N : Nat"))
 
 (test-case "higher-rank: WS mode — spec with {A B : Type} bare implicits"
   (define result
@@ -174,9 +174,9 @@
                    "spec const {A B : Type} A -> B -> A"
                    "defn const [x y] x"
                    ""
-                   "eval [const Nat Bool [inc zero] true]")
+                   "eval [const Nat Bool [suc zero] true]")
              "\n")))
-  (check-equal? (last result) "1 : Nat"))
+  (check-equal? (last result) "1N : Nat"))
 
 (test-case "higher-rank: WS mode — spec with angle-Pi param type-checks"
   ;; Validate that spec with <(A :0 Type) -> ...> compiles and defines correctly
@@ -201,7 +201,7 @@
                    "defn list-conj [acc x]"
                    "  cons A x acc"
                    ""
-                   "eval [list-conj Nat [nil Nat] [inc zero]]")
+                   "eval [list-conj Nat [nil Nat] [suc zero]]")
              "\n")))
   (check-contains (last result) "1"))
 
@@ -260,9 +260,9 @@
   (define result
     (run (string-append
           "(spec add Nat Nat -> Nat)\n"
-          "(defn add [x y] (match x (zero -> y) (inc k -> (inc (add k y)))))\n"
-          "(eval (add (inc zero) (inc zero)))")))
-  (check-equal? (last result) "2 : Nat"))
+          "(defn add [x y] (match x (zero -> y) (suc k -> (suc (add k y)))))\n"
+          "(eval (add (suc zero) (suc zero)))")))
+  (check-equal? (last result) "2N : Nat"))
 
 (test-case "higher-rank: existing WS spec/defn without implicits"
   (define result
@@ -273,8 +273,8 @@
                    "defn double [x]"
                    "  match x"
                    "    zero -> zero"
-                   "    inc k -> inc [inc [double k]]"
+                   "    suc k -> suc [suc [double k]]"
                    ""
-                   "eval [double [inc [inc zero]]]")
+                   "eval [double [suc [suc zero]]]")
              "\n")))
-  (check-equal? (last result) "4 : Nat"))
+  (check-equal? (last result) "4N : Nat"))

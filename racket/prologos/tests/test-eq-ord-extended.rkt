@@ -157,13 +157,13 @@
 (test-case "eq-derived/option-some-eq"
   (check-contains
    (run-ns-last (string-append preamble
-     "(eval (option-eq Nat--Eq--dict (some Nat (inc (inc (inc zero)))) (some Nat (inc (inc (inc zero))))))"))
+     "(eval (option-eq Nat--Eq--dict (some Nat (suc (suc (suc zero)))) (some Nat (suc (suc (suc zero))))))"))
    "true : Bool"))
 
 (test-case "eq-derived/option-some-neq"
   (check-contains
    (run-ns-last (string-append preamble
-     "(eval (option-eq Nat--Eq--dict (some Nat (inc zero)) (some Nat (inc (inc zero)))))"))
+     "(eval (option-eq Nat--Eq--dict (some Nat (suc zero)) (some Nat (suc (suc zero)))))"))
    "false : Bool"))
 
 (test-case "eq-derived/option-none-none"
@@ -184,13 +184,13 @@
 (test-case "eq-derived/list-eq-equal"
   (check-contains
    (run-ns-last (string-append preamble
-     "(eval (list-eq Nat--Eq--dict (cons Nat (inc zero) (cons Nat (inc (inc zero)) (nil Nat))) (cons Nat (inc zero) (cons Nat (inc (inc zero)) (nil Nat)))))"))
+     "(eval (list-eq Nat--Eq--dict (cons Nat (suc zero) (cons Nat (suc (suc zero)) (nil Nat))) (cons Nat (suc zero) (cons Nat (suc (suc zero)) (nil Nat)))))"))
    "true : Bool"))
 
 (test-case "eq-derived/list-eq-diff-elem"
   (check-contains
    (run-ns-last (string-append preamble
-     "(eval (list-eq Nat--Eq--dict (cons Nat (inc zero) (nil Nat)) (cons Nat (inc (inc zero)) (nil Nat))))"))
+     "(eval (list-eq Nat--Eq--dict (cons Nat (suc zero) (nil Nat)) (cons Nat (suc (suc zero)) (nil Nat))))"))
    "false : Bool"))
 
 (test-case "eq-derived/list-eq-nil-nil"

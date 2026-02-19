@@ -69,7 +69,7 @@
 
 (test-case "expand-1: if macro expands one step to boolrec"
   ;; (if cond then else) → (boolrec _ then else cond)
-  (define result (preparse-expand-1 '(if True (inc zero) zero)))
+  (define result (preparse-expand-1 '(if True (suc zero) zero)))
   (check-true (pair? result))
   (check-equal? (car result) 'boolrec))
 
@@ -139,7 +139,7 @@
   (check-equal? (cdar steps) '(add 1 2)))
 
 (test-case "expand-full: if macro shows macro-expand step"
-  (define steps (preparse-expand-full '(if True (inc zero) zero)))
+  (define steps (preparse-expand-full '(if True (suc zero) zero)))
   (define labels (map car steps))
   (check-not-false (member "input" labels))
   (check-not-false (member "macro-expand" labels)))
@@ -200,7 +200,7 @@
 ;; C. End-to-end sexp-mode tests
 ;; ========================================
 
-(test-case "introspection/e2e: (expand (do (add 1 2))) works"
+(test-case "introspection/e2e: (expand (do (add 1N 2))) works"
   (define result
     (run-last (string-append
       "(ns t-intr-1)\n"
@@ -218,7 +218,7 @@
   ;; if → boolrec in one step
   (check-true (string-contains? result "boolrec")))
 
-(test-case "introspection/e2e: (expand-1 (add 1 2)) unchanged"
+(test-case "introspection/e2e: (expand-1 (add 1N 2)) unchanged"
   (define result
     (run-last (string-append
       "(ns t-intr-3)\n"
@@ -240,7 +240,7 @@
   ;; The input is already boolrec (pre-expanded by pipeline)
   (check-true (string-contains? result "boolrec")))
 
-(test-case "introspection/e2e: (expand-full (add 1 2)) only input step"
+(test-case "introspection/e2e: (expand-full (add 1N 2)) only input step"
   (define result
     (run-last (string-append
       "(ns t-intr-5)\n"
@@ -254,8 +254,8 @@
   (define result
     (run-last (string-append
       "(ns t-intr-6)\n"
-      "(spec my-inc Nat -> Nat)\n"
-      "(expand-full (defn my-inc [x] (inc x)))")))
+      "(spec my-suc Nat -> Nat)\n"
+      "(expand-full (defn my-suc [x] (suc x)))")))
   (check-true (string? result))
   (check-true (string-contains? result "input:"))
   (check-true (string-contains? result "spec-inject:")))
@@ -286,7 +286,7 @@
   (define result
     (run-last (string-append
       "(ns t-intr-r3)\n"
-      "(elaborate (inc zero))")))
+      "(elaborate (suc zero))")))
   (check-true (string? result)))
 
 ;; ========================================

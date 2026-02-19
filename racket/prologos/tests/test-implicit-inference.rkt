@@ -43,7 +43,7 @@
   ;; (id zero) infers A = Nat
   (check-equal?
    (run-last "(ns imp1)\n(require [prologos.core :refer [id]])\n(eval (id zero))")
-   "zero : Nat"))
+   "0N : Nat"))
 
 (test-case "implicit/id-bool"
   ;; (id true) infers A = Bool
@@ -54,8 +54,8 @@
 (test-case "implicit/id-suc"
   ;; (id (suc zero)) infers A = Nat
   (check-equal?
-   (run-last "(ns imp3)\n(require [prologos.core :refer [id]])\n(eval (id (inc zero)))")
-   "1 : Nat"))
+   (run-last "(ns imp3)\n(require [prologos.core :refer [id]])\n(eval (id (suc zero)))")
+   "1N : Nat"))
 
 ;; ========================================
 ;; Const function: two implicit type args
@@ -65,7 +65,7 @@
   ;; (const zero true) infers A = Nat, B = Bool
   (check-equal?
    (run-last "(ns imp4)\n(require [prologos.core :refer [const]])\n(eval (const zero true))")
-   "zero : Nat"))
+   "0N : Nat"))
 
 ;; ========================================
 ;; List operations with implicit inference
@@ -75,25 +75,25 @@
   ;; (singleton zero) infers A = Nat, produces a 1-element list
   (check-equal?
    (run-last "(ns imp5)\n(require [prologos.data.list :refer [singleton length]])\n(eval (length Nat (singleton Nat zero)))")
-   "1 : Nat"))
+   "1N : Nat"))
 
-(test-case "implicit/map-inc"
-  ;; map inc [0, 1] then foldr add → 3
+(test-case "implicit/map-suc"
+  ;; map suc [0, 1] then foldr add → 3
   (check-equal?
-   (run-last "(ns imp6)\n(require [prologos.data.list :refer [List nil cons map foldr]])\n(require [prologos.data.nat :refer [add]])\n(eval (foldr Nat Nat add zero (map Nat Nat (fn (x : Nat) (inc x)) (cons Nat zero (cons Nat (inc zero) (nil Nat))))))")
-   "3 : Nat"))
+   (run-last "(ns imp6)\n(require [prologos.data.list :refer [List nil cons map foldr]])\n(require [prologos.data.nat :refer [add]])\n(eval (foldr Nat Nat add zero (map Nat Nat (fn (x : Nat) (suc x)) (cons Nat zero (cons Nat (suc zero) (nil Nat))))))")
+   "3N : Nat"))
 
 (test-case "implicit/append"
   ;; append [1] [2] then length → 2
   (check-equal?
-   (run-last "(ns imp7)\n(require [prologos.data.list :refer [List nil cons append length]])\n(eval (length Nat (append Nat (cons Nat (inc zero) (nil Nat)) (cons Nat (inc (inc zero)) (nil Nat)))))")
-   "2 : Nat"))
+   (run-last "(ns imp7)\n(require [prologos.data.list :refer [List nil cons append length]])\n(eval (length Nat (append Nat (cons Nat (suc zero) (nil Nat)) (cons Nat (suc (suc zero)) (nil Nat)))))")
+   "2N : Nat"))
 
 (test-case "implicit/head"
   ;; head with default
   (check-equal?
-   (run-last "(ns imp8)\n(require [prologos.data.list :refer [List nil cons head]])\n(eval (head Nat zero (cons Nat (inc (inc zero)) (nil Nat))))")
-   "2 : Nat"))
+   (run-last "(ns imp8)\n(require [prologos.data.list :refer [List nil cons head]])\n(eval (head Nat zero (cons Nat (suc (suc zero)) (nil Nat))))")
+   "2N : Nat"))
 
 ;; ========================================
 ;; Option with implicit inference
@@ -101,8 +101,8 @@
 
 (test-case "implicit/option-some"
   (check-equal?
-   (run-last "(ns imp9)\n(require [prologos.data.option :refer [some unwrap-or]])\n(eval (unwrap-or Nat zero (some Nat (inc zero))))")
-   "1 : Nat"))
+   (run-last "(ns imp9)\n(require [prologos.data.option :refer [some unwrap-or]])\n(eval (unwrap-or Nat zero (some Nat (suc zero))))")
+   "1N : Nat"))
 
 ;; ========================================
 ;; Explicit args still work (backward compat)
@@ -113,7 +113,7 @@
   ;; id with 2 args = explicit type + value — no implicit insertion needed
   (check-equal?
    (run-last "(ns imp10)\n(def id <(Pi [A :0 <(Type 0)>] (-> A A))>\n  (fn [A :0 <(Type 0)>] (fn [x <A>] x)))\n(eval (id Nat zero))")
-   "zero : Nat"))
+   "0N : Nat"))
 
 ;; ========================================
 ;; Zonked output: no ?meta in results
@@ -133,5 +133,5 @@
 (test-case "implicit/local-def-with-implicits"
   ;; Define a polymorphic function locally and use with inference
   (check-equal?
-   (run-last "(ns imp12)\n(def myid <(Pi [A :0 <(Type 0)>] (-> A A))>\n  (fn [A :0 <(Type 0)>] (fn [x <A>] x)))\n(eval (myid (inc (inc zero))))")
-   "2 : Nat"))
+   (run-last "(ns imp12)\n(def myid <(Pi [A :0 <(Type 0)>] (-> A A))>\n  (fn [A :0 <(Type 0)>] (fn [x <A>] x)))\n(eval (myid (suc (suc zero))))")
+   "2N : Nat"))

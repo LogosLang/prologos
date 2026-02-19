@@ -102,7 +102,7 @@
   (check-true (ormap (lambda (t) (eq? (token-type t) 'rangle)) toks)))
 
 (test-case "reader/>>-in-brackets: >> works inside [] brackets"
-  (define toks (tokenize-string "[inc >> inc]"))
+  (define toks (tokenize-string "[suc >> suc]"))
   (check-true (ormap (lambda (t) (eq? (token-value t) '$compose)) toks)))
 
 (test-case "reader/mixed: |> and >> coexist with <>"
@@ -151,60 +151,60 @@
 ;; C. Pipe E2E — Sexp Mode (8 tests)
 ;; ========================================
 
-(test-case "e2e/pipe-basic: zero |> inc → 1"
-  (check-equal? (run-last "(eval ($pipe-gt zero inc))") "1 : Nat"))
+(test-case "e2e/pipe-basic: zero |> suc → 1"
+  (check-equal? (run-last "(eval ($pipe-gt zero suc))") "1N : Nat"))
 
-(test-case "e2e/pipe-chain: zero |> inc |> inc → 2"
-  (check-equal? (run-last "(eval ($pipe-gt zero inc inc))") "2 : Nat"))
+(test-case "e2e/pipe-chain: zero |> suc |> suc → 2"
+  (check-equal? (run-last "(eval ($pipe-gt zero suc suc))") "2N : Nat"))
 
-(test-case "e2e/pipe-chain-3: zero |> inc |> inc |> inc → 3"
-  (check-equal? (run-last "(eval ($pipe-gt zero inc inc inc))") "3 : Nat"))
+(test-case "e2e/pipe-chain-3: zero |> suc |> suc |> suc → 3"
+  (check-equal? (run-last "(eval ($pipe-gt zero suc suc suc))") "3N : Nat"))
 
-(test-case "e2e/pipe-4-deep: zero |> inc |> inc |> inc |> inc → 4"
-  (check-equal? (run-last "(eval ($pipe-gt zero inc inc inc inc))") "4 : Nat"))
+(test-case "e2e/pipe-4-deep: zero |> suc |> suc |> suc |> suc → 4"
+  (check-equal? (run-last "(eval ($pipe-gt zero suc suc suc suc))") "4N : Nat"))
 
-(test-case "e2e/pipe-preserves-type: zero |> inc preserves types"
+(test-case "e2e/pipe-preserves-type: zero |> suc preserves types"
   ;; Pipeline result should have correct type
-  (check-equal? (run-last "(eval ($pipe-gt zero inc))") "1 : Nat"))
+  (check-equal? (run-last "(eval ($pipe-gt zero suc))") "1N : Nat"))
 
 ;; ========================================
 ;; D. Compose E2E — Sexp Mode (4 tests)
 ;; ========================================
 
-(test-case "e2e/compose-basic: (inc >> inc) zero → 2"
-  (check-equal? (run-last "(eval (($compose inc inc) zero))") "2 : Nat"))
+(test-case "e2e/compose-basic: (suc >> suc) zero → 2"
+  (check-equal? (run-last "(eval (($compose suc suc) zero))") "2N : Nat"))
 
-(test-case "e2e/compose-chain: (inc >> inc >> inc) zero → 3"
-  (check-equal? (run-last "(eval (($compose inc inc inc) zero))") "3 : Nat"))
+(test-case "e2e/compose-chain: (suc >> suc >> suc) zero → 3"
+  (check-equal? (run-last "(eval (($compose suc suc suc) zero))") "3N : Nat"))
 
-(test-case "e2e/compose-4: (inc >> inc >> inc >> inc) zero → 4"
-  (check-equal? (run-last "(eval (($compose inc inc inc inc) zero))") "4 : Nat"))
+(test-case "e2e/compose-4: (suc >> suc >> suc >> suc) zero → 4"
+  (check-equal? (run-last "(eval (($compose suc suc suc suc) zero))") "4N : Nat"))
 
 (test-case "e2e/compose-applied: composed fn applied twice"
-  (define double-inc "($compose inc inc)")
-  (check-equal? (run-last (format "(eval (~a (~a zero)))" double-inc double-inc)) "4 : Nat"))
+  (define double-suc "($compose suc suc)")
+  (check-equal? (run-last (format "(eval (~a (~a zero)))" double-suc double-suc)) "4N : Nat"))
 
 ;; ========================================
 ;; E. WS Mode E2E (6 tests)
 ;; ========================================
 
-(test-case "ws/pipe-basic: zero |> inc"
-  (check-equal? (run-ws-last "eval [zero |> inc]") "1 : Nat"))
+(test-case "ws/pipe-basic: zero |> suc"
+  (check-equal? (run-ws-last "eval [zero |> suc]") "1N : Nat"))
 
-(test-case "ws/pipe-chain: zero |> inc |> inc"
-  (check-equal? (run-ws-last "eval [zero |> inc |> inc]") "2 : Nat"))
+(test-case "ws/pipe-chain: zero |> suc |> suc"
+  (check-equal? (run-ws-last "eval [zero |> suc |> suc]") "2N : Nat"))
 
-(test-case "ws/compose-basic: [inc >> inc] zero"
-  (check-equal? (run-ws-last "eval [[inc >> inc] zero]") "2 : Nat"))
+(test-case "ws/compose-basic: [suc >> suc] zero"
+  (check-equal? (run-ws-last "eval [[suc >> suc] zero]") "2N : Nat"))
 
-(test-case "ws/compose-chain: [inc >> inc >> inc] zero"
-  (check-equal? (run-ws-last "eval [[inc >> inc >> inc] zero]") "3 : Nat"))
+(test-case "ws/compose-chain: [suc >> suc >> suc] zero"
+  (check-equal? (run-ws-last "eval [[suc >> suc >> suc] zero]") "3N : Nat"))
 
-(test-case "ws/pipe-compose: zero |> [inc >> inc]"
-  (check-equal? (run-ws-last "eval [zero |> [inc >> inc]]") "2 : Nat"))
+(test-case "ws/pipe-compose: zero |> [suc >> suc]"
+  (check-equal? (run-ws-last "eval [zero |> [suc >> suc]]") "2N : Nat"))
 
-(test-case "ws/pipe-compose-chain: zero |> [inc >> inc >> inc]"
-  (check-equal? (run-ws-last "eval [zero |> [inc >> inc >> inc]]") "3 : Nat"))
+(test-case "ws/pipe-compose-chain: zero |> [suc >> suc >> suc]"
+  (check-equal? (run-ws-last "eval [zero |> [suc >> suc >> suc]]") "3N : Nat"))
 
 ;; ========================================
 ;; F. Underscore Placeholder in Pipe (4 tests)
@@ -251,9 +251,9 @@
 
 (test-case "e2e/pipe-with-compose: apply composed fn via pipe"
   ;; In sexp mode, the composed function must be wrapped in a sub-application
-  ;; ($pipe-gt zero ($compose inc inc)) applies ($compose inc inc) as fn to zero
-  ;; But $compose expands to a lambda, so the result is ((fn x (inc (inc x))) zero)
-  (check-equal? (run-last "(eval (($compose inc inc) zero))") "2 : Nat"))
+  ;; ($pipe-gt zero ($compose suc suc)) applies ($compose suc suc) as fn to zero
+  ;; But $compose expands to a lambda, so the result is ((fn x (suc (suc x))) zero)
+  (check-equal? (run-last "(eval (($compose suc suc) zero))") "2N : Nat"))
 
 ;; ========================================
 ;; H. Backward Compatibility (3 tests)
@@ -267,14 +267,14 @@
 
 (test-case "compat/bare-pipe-match: bare | in match arms"
   ;; Match arms use $pipe for case separation
-  (define toks (tokenize-string "match x\n  zero -> true\n  | inc n -> false"))
+  (define toks (tokenize-string "match x\n  zero -> true\n  | suc n -> false"))
   ;; The | should be $pipe, not $pipe-gt
   (define pipe-toks (filter (lambda (t) (eq? (token-value t) '$pipe)) toks))
   (check-true (>= (length pipe-toks) 1)))
 
 (test-case "compat/angle-brackets-with-compose: <Nat> and >> coexist"
   ;; Angle brackets should still work when >> is also present
-  (define toks (tokenize-string "x <Nat> |> [inc >> inc]"))
+  (define toks (tokenize-string "x <Nat> |> [suc >> suc]"))
   (check-true (ormap (lambda (t) (eq? (token-type t) 'langle)) toks))
   (check-true (ormap (lambda (t) (eq? (token-type t) 'rangle)) toks))
   (check-true (ormap (lambda (t) (eq? (token-value t) '$pipe-gt)) toks))
@@ -364,9 +364,9 @@
   (define result (preparse-expand-form '($pipe-gt xs (get-in _ path))))
   (check-equal? result '(get-in xs path)))
 
-(test-case "preparse/block-pipe-bare-symbol: ($pipe-gt xs inc) → (inc xs)"
-  (define result (preparse-expand-form '($pipe-gt xs inc)))
-  (check-equal? result '(inc xs)))
+(test-case "preparse/block-pipe-bare-symbol: ($pipe-gt xs suc) → (suc xs)"
+  (define result (preparse-expand-form '($pipe-gt xs suc)))
+  (check-equal? result '(suc xs)))
 
 (test-case "preparse/block-pipe-mixed: fusible + barrier + fusible → sequential"
   (define result (preparse-expand-form '($pipe-gt xs (map f) (reverse) (filter p))))
@@ -375,8 +375,8 @@
 (test-case "preparse/block-pipe-count-terminal: fusible + count → fused reduce"
   (define result (preparse-expand-form '($pipe-gt xs (map f) (count p))))
   (check-equal? (car result) 'reduce)
-  ;; count fuses as filter + inc reducer
-  (check-true (datum-contains? result 'inc))
+  ;; count fuses as filter + suc reducer
+  (check-true (datum-contains? result 'suc))
   (check-equal? (caddr result) 'zero))
 
 (test-case "preparse/block-pipe-length-no-fusion: length without fusible → plain apply"
@@ -412,21 +412,21 @@
 ;; Helper definitions for sexp mode E2E tests
 (define (pipe-helpers-sexp)
   (string-append
-   "(def inc-fn : [-> Nat Nat] (fn (x : Nat) (inc x)))\n"
-   "(def positive? : [-> Nat Bool] (fn (x : Nat) (match x (zero -> false) (inc _ -> true))))\n"
+   "(def suc-fn : [-> Nat Nat] (fn (x : Nat) (suc x)))\n"
+   "(def positive? : [-> Nat Bool] (fn (x : Nat) (match x (zero -> false) (suc _ -> true))))\n"
    "(def sum-rf : [-> Nat [-> Nat Nat]] (fn (acc : Nat) (fn (x : Nat) (add acc x))))\n"
    "(def nums3 : [List Nat] (cons Nat 1 (cons Nat 2 (cons Nat 3 (nil Nat)))))\n"
    "(def nums5 : [List Nat] (cons Nat 0 (cons Nat 1 (cons Nat 2 (cons Nat 3 (cons Nat 4 (nil Nat)))))))\n"))
 
 (test-case "e2e/block-pipe-map-reduce: map + reduce → transduce"
-  ;; ($pipe-gt nums3 (map inc-fn) (reduce sum-rf zero))
-  ;; [1,2,3] → map inc → [2,3,4] → reduce + 0 → 9
+  ;; ($pipe-gt nums3 (map suc-fn) (reduce sum-rf zero))
+  ;; [1,2,3] → map suc → [2,3,4] → reduce + 0 → 9
   (define result
     (run-last
      (string-append
       (pipe-preamble-sexp) (pipe-helpers-sexp)
-      "(eval ($pipe-gt nums3 (map inc-fn) (reduce sum-rf zero)))")))
-  (check-equal? result "9 : Nat"))
+      "(eval ($pipe-gt nums3 (map suc-fn) (reduce sum-rf zero)))")))
+  (check-equal? result "9N : Nat"))
 
 (test-case "e2e/block-pipe-filter-reduce: filter + reduce → transduce"
   ;; ($pipe-gt nums5 (filter positive?) (reduce sum-rf zero))
@@ -436,20 +436,20 @@
      (string-append
       (pipe-preamble-sexp) (pipe-helpers-sexp)
       "(eval ($pipe-gt nums5 (filter positive?) (reduce sum-rf zero)))")))
-  (check-equal? result "10 : Nat"))
+  (check-equal? result "10N : Nat"))
 
 (test-case "e2e/block-pipe-fuse-three: map + filter + map materialized"
-  ;; ($pipe-gt nums5 (map inc-fn) (filter positive?) (map inc-fn))
-  ;; [0,1,2,3,4] → map inc → [1,2,3,4,5] → filter positive? → [1,2,3,4,5] → map inc → [2,3,4,5,6]
+  ;; ($pipe-gt nums5 (map suc-fn) (filter positive?) (map suc-fn))
+  ;; [0,1,2,3,4] → map suc → [1,2,3,4,5] → filter positive? → [1,2,3,4,5] → map suc → [2,3,4,5,6]
   (define result
     (run-last
      (string-append
       (pipe-preamble-sexp) (pipe-helpers-sexp)
-      "(eval ($pipe-gt nums5 (map inc-fn) (filter positive?) (map inc-fn)))")))
+      "(eval ($pipe-gt nums5 (map suc-fn) (filter positive?) (map suc-fn)))")))
   ;; into-list produces correct-order list
   (define r result)
   (check-true (string? r))
-  (check-true (string-contains? r "'[2 3 4 5 6]")))
+  (check-true (string-contains? r "'[2N 3N 4N 5N 6N]")))
 
 (test-case "e2e/block-pipe-no-steps: ($pipe-gt zero) → zero"
   (define result
@@ -457,16 +457,16 @@
      (string-append
       (pipe-preamble-sexp)
       "(eval ($pipe-gt zero))")))
-  (check-equal? result "zero : Nat"))
+  (check-equal? result "0N : Nat"))
 
-(test-case "e2e/block-pipe-plain-step: ($pipe-gt zero inc inc) → 2"
+(test-case "e2e/block-pipe-plain-step: ($pipe-gt zero suc suc) → 2"
   ;; Non-fusible bare function steps
   (define result
     (run-last
      (string-append
       (pipe-preamble-sexp)
-      "(eval ($pipe-gt zero inc inc))")))
-  (check-equal? result "2 : Nat"))
+      "(eval ($pipe-gt zero suc suc))")))
+  (check-equal? result "2N : Nat"))
 
 ;; ========================================
 ;; K. Block-Form Pipe: E2E Tests (WS Mode)
@@ -482,8 +482,8 @@
 
 (define (pipe-helpers-ws)
   (string-append
-   "(def inc-fn : [-> Nat Nat] (fn (x : Nat) (inc x)))\n"
-   "(def positive? : [-> Nat Bool] (fn (x : Nat) (match x (zero -> false) (inc _ -> true))))\n"
+   "(def suc-fn : [-> Nat Nat] (fn (x : Nat) (suc x)))\n"
+   "(def positive? : [-> Nat Bool] (fn (x : Nat) (match x (zero -> false) (suc _ -> true))))\n"
    "(def sum-rf : [-> Nat [-> Nat Nat]] (fn (acc : Nat) (fn (x : Nat) (add acc x))))\n"
    "(def nums3 : [List Nat] (cons Nat 1 (cons Nat 2 (cons Nat 3 (nil Nat)))))\n"
    "\n"))
@@ -495,9 +495,9 @@
       (pipe-preamble-ws) (pipe-helpers-ws)
       ;; Block form: |> as first token, indented body
       "|> nums3\n"
-      "  map inc-fn\n"
+      "  map suc-fn\n"
       "  reduce sum-rf zero\n")))
-  (check-equal? result "9 : Nat"))
+  (check-equal? result "9N : Nat"))
 
 (test-case "ws/block-pipe-fuse-materialize: block form materializes"
   (define result
@@ -505,17 +505,17 @@
      (string-append
       (pipe-preamble-ws) (pipe-helpers-ws)
       "|> nums3\n"
-      "  map inc-fn\n"
+      "  map suc-fn\n"
       "  filter positive?\n")))
-  ;; [1,2,3] → map inc → [2,3,4] → filter positive? → [2,3,4]
+  ;; [1,2,3] → map suc → [2,3,4] → filter positive? → [2,3,4]
   (define r result)
   (check-true (string? r))
-  (check-true (string-contains? r "'[2 3 4]")))
+  (check-true (string-contains? r "'[2N 3N 4N]")))
 
 (test-case "ws/block-pipe-inline-compat: inline |> still works in WS"
   (define result
     (run-ws-last
      (string-append
       (pipe-preamble-ws)
-      "eval [zero |> inc |> inc]\n")))
-  (check-equal? result "2 : Nat"))
+      "eval [zero |> suc |> suc]\n")))
+  (check-equal? result "2N : Nat"))

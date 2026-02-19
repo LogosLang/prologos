@@ -44,15 +44,15 @@ defn or-else [f r]
     | err e -> f e
 
 ;; True if ok.
-spec is-ok [Result A E] -> Bool
-defn is-ok [r]
+spec ok? [Result A E] -> Bool
+defn ok? [r]
   match r
     | ok _  -> true
     | err _ -> false
 
 ;; True if err.
-spec is-err [Result A E] -> Bool
-defn is-err [r]
+spec err? [Result A E] -> Bool
+defn err? [r]
   match r
     | ok _  -> false
     | err _ -> true

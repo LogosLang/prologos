@@ -15,3 +15,106 @@ data Datum
   datum-bool : Bool
   datum-nil
   datum-cons : Datum -> Datum
+
+;; ========================================
+;; Datum Predicates
+;; ========================================
+;; Note: Explicit exhaustive patterns used instead of wildcard _ because
+;; match with wildcard on user data types triggers a type-inference limitation
+;; that causes module loading to fail.
+
+spec sym? Datum -> Bool
+defn sym? [d]
+  match d
+    | datum-sym _    -> true
+    | datum-kw _     -> false
+    | datum-nat _    -> false
+    | datum-int _    -> false
+    | datum-rat _    -> false
+    | datum-bool _   -> false
+    | datum-nil      -> false
+    | datum-cons _ _ -> false
+
+spec kw? Datum -> Bool
+defn kw? [d]
+  match d
+    | datum-sym _    -> false
+    | datum-kw _     -> true
+    | datum-nat _    -> false
+    | datum-int _    -> false
+    | datum-rat _    -> false
+    | datum-bool _   -> false
+    | datum-nil      -> false
+    | datum-cons _ _ -> false
+
+spec nat? Datum -> Bool
+defn nat? [d]
+  match d
+    | datum-sym _    -> false
+    | datum-kw _     -> false
+    | datum-nat _    -> true
+    | datum-int _    -> false
+    | datum-rat _    -> false
+    | datum-bool _   -> false
+    | datum-nil      -> false
+    | datum-cons _ _ -> false
+
+spec int? Datum -> Bool
+defn int? [d]
+  match d
+    | datum-sym _    -> false
+    | datum-kw _     -> false
+    | datum-nat _    -> false
+    | datum-int _    -> true
+    | datum-rat _    -> false
+    | datum-bool _   -> false
+    | datum-nil      -> false
+    | datum-cons _ _ -> false
+
+spec rat? Datum -> Bool
+defn rat? [d]
+  match d
+    | datum-sym _    -> false
+    | datum-kw _     -> false
+    | datum-nat _    -> false
+    | datum-int _    -> false
+    | datum-rat _    -> true
+    | datum-bool _   -> false
+    | datum-nil      -> false
+    | datum-cons _ _ -> false
+
+spec bool? Datum -> Bool
+defn bool? [d]
+  match d
+    | datum-sym _    -> false
+    | datum-kw _     -> false
+    | datum-nat _    -> false
+    | datum-int _    -> false
+    | datum-rat _    -> false
+    | datum-bool _   -> true
+    | datum-nil      -> false
+    | datum-cons _ _ -> false
+
+spec nil? Datum -> Bool
+defn nil? [d]
+  match d
+    | datum-sym _    -> false
+    | datum-kw _     -> false
+    | datum-nat _    -> false
+    | datum-int _    -> false
+    | datum-rat _    -> false
+    | datum-bool _   -> false
+    | datum-nil      -> true
+    | datum-cons _ _ -> false
+
+spec cons? Datum -> Bool
+defn cons? [d]
+  match d
+    | datum-sym _    -> false
+    | datum-kw _     -> false
+    | datum-nat _    -> false
+    | datum-int _    -> false
+    | datum-rat _    -> false
+    | datum-bool _   -> false
+    | datum-nil      -> false
+    | datum-cons _ _ -> true

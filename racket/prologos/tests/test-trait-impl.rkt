@@ -251,8 +251,8 @@
       "(deftype (Showable $A) (-> $A Nat))\n"
       ;; Use it as a function: the dictionary IS the function
       "(def nat-show : (Showable Nat) (fn [x <Nat>] x))\n"
-      "(eval (nat-show (inc (inc zero))))")))
-  (check-equal? result "2 : Nat"))
+      "(eval (nat-show (suc (suc zero))))")))
+  (check-equal? result "2N : Nat"))
 
 (test-case "trait/multi-method-dict-through-pipeline"
   ;; Multi-method trait: dictionary is a Sigma pair, using projections
@@ -303,8 +303,8 @@
     (run-ns-last
      (string-append
       "(ns either-t1)\n"
-      "(require [prologos.data.either :refer [Either left right is-left is-right]])\n"
-      "(eval (is-left (left Nat Bool (inc zero))))")))
+      "(require [prologos.data.either :refer [Either left right left? right?]])\n"
+      "(eval (left? (left Nat Bool (suc zero))))")))
   (check-equal? result "true : Bool"))
 
 (test-case "b1/either-map"
@@ -314,7 +314,7 @@
      (string-append
       "(ns either-t2)\n"
       "(require [prologos.data.either :refer [Either left right map]])\n"
-      "(eval (map (fn [x <Nat>] (inc x)) (right Bool Nat zero)))")))
+      "(eval (map (fn [x <Nat>] (suc x)) (right Bool Nat zero)))")))
   ;; Output has qualified names: [prologos.data.either::right Bool Nat 1]
   (check-true (string-contains? result "right"))
   (check-true (string-contains? result "Either")))
@@ -327,7 +327,7 @@
       "(ns either-t3)\n"
       "(require [prologos.data.either :refer [Either left right to-option]])\n"
       "(require [prologos.data.option :refer [Option none some]])\n"
-      "(eval (to-option Nat Nat (right Nat Nat (inc zero))))")))
+      "(eval (to-option Nat Nat (right Nat Nat (suc zero))))")))
   (check-true (string-contains? result "some"))
   (check-true (string-contains? result "1")))
 
@@ -354,22 +354,22 @@
 ;; Phase D.1: Extended Option/Result/Pair Combinators
 ;; ========================================
 
-(test-case "d1/option-is-some"
+(test-case "d1/option-some?"
   (define result
     (run-ns-last
      (string-append
       "(ns opt-t1)\n"
-      "(require [prologos.data.option :refer [some none is-some]])\n"
-      "(eval (is-some (some Nat zero)))")))
+      "(require [prologos.data.option :refer [some none some?]])\n"
+      "(eval (some? (some Nat zero)))")))
   (check-equal? result "true : Bool"))
 
-(test-case "d1/option-is-none"
+(test-case "d1/option-none?"
   (define result
     (run-ns-last
      (string-append
       "(ns opt-t2)\n"
-      "(require [prologos.data.option :refer [some none is-none]])\n"
-      "(eval (is-none (none Nat)))")))
+      "(require [prologos.data.option :refer [some none none?]])\n"
+      "(eval (none? (none Nat)))")))
   (check-equal? result "true : Bool"))
 
 (test-case "d1/option-flatten"
@@ -380,24 +380,24 @@
       "(require [prologos.data.option :refer [Option some none flatten]])\n"
       "(eval (flatten (some (Option Nat) (some Nat zero))))")))
   (check-true (string-contains? result "some"))
-  (check-true (string-contains? result "zero")))
+  (check-true (string-contains? result "0N")))
 
-(test-case "d1/result-is-ok"
+(test-case "d1/result-ok?"
   (define result
     (run-ns-last
      (string-append
       "(ns res-t1)\n"
-      "(require [prologos.data.result :refer [ok err is-ok]])\n"
-      "(eval (is-ok (ok Nat Bool zero)))")))
+      "(require [prologos.data.result :refer [ok err ok?]])\n"
+      "(eval (ok? (ok Nat Bool zero)))")))
   (check-equal? result "true : Bool"))
 
-(test-case "d1/result-is-err"
+(test-case "d1/result-err?"
   (define result
     (run-ns-last
      (string-append
       "(ns res-t2)\n"
-      "(require [prologos.data.result :refer [ok err is-err]])\n"
-      "(eval (is-err (err Nat Bool true)))")))
+      "(require [prologos.data.result :refer [ok err err?]])\n"
+      "(eval (err? (err Nat Bool true)))")))
   (check-equal? result "true : Bool"))
 
 (test-case "d1/result-to-option"
@@ -406,7 +406,7 @@
      (string-append
       "(ns res-t3)\n"
       "(require [prologos.data.result :refer [ok err to-option]])\n"
-      "(eval (to-option (ok Nat Bool (inc zero))))")))
+      "(eval (to-option (ok Nat Bool (suc zero))))")))
   (check-true (string-contains? result "some")))
 
 (test-case "d1/pair-dup"
@@ -416,7 +416,7 @@
       "(ns pair-t1)\n"
       "(require [prologos.data.pair :refer [dup]])\n"
       "(eval (first (dup Nat zero)))")))
-  (check-equal? result "zero : Nat"))
+  (check-equal? result "0N : Nat"))
 
 (test-case "d1/pair-uncurry"
   (define result
@@ -425,8 +425,8 @@
       "(ns pair-t2)\n"
       "(require [prologos.data.nat :refer [add]])\n"
       "(require [prologos.data.pair :refer [uncurry]])\n"
-      "(eval (uncurry add (pair (inc zero) (inc (inc zero)))))")))
-  (check-equal? result "3 : Nat"))
+      "(eval (uncurry add (pair (suc zero) (suc (suc zero)))))")))
+  (check-equal? result "3N : Nat"))
 
 ;; ========================================
 ;; WS Pipeline Integration: trait + impl end-to-end
@@ -443,8 +443,8 @@
       ;; Implement for Nat (identity)
       "(impl Stringify Nat (defn show (x : Nat) : Nat x))\n"
       ;; Use the dictionary
-      "(eval (Nat--Stringify--show (inc (inc zero))))")))
-  (check-equal? result "2 : Nat"))
+      "(eval (Nat--Stringify--show (suc (suc zero))))")))
+  (check-equal? result "2N : Nat"))
 
 (test-case "ws/trait-accessor-projects-correctly"
   ;; Single-method: accessor is identity, so accessor applied to dict = dict
@@ -455,8 +455,8 @@
       "(trait (Stringify (A : (Type 0))) (show : A -> Nat))\n"
       "(impl Stringify Nat (defn show (x : Nat) : Nat x))\n"
       ;; Accessor should work on the dict
-      "(eval (Stringify-show Nat Nat--Stringify--dict (inc (inc (inc zero)))))")))
-  (check-equal? result "3 : Nat"))
+      "(eval (Stringify-show Nat Nat--Stringify--dict (suc (suc (suc zero)))))")))
+  (check-equal? result "3N : Nat"))
 
 ;; ========================================
 ;; Phase A.2: Impl Declarations — Macro Level
@@ -619,7 +619,7 @@
      (string-append
       "(ns d2t2)\n"
       "(require [prologos.core.eq-trait :refer [nat-eq eq-neq]])\n"
-      "(eval (eq-neq Nat nat-eq (inc zero) (inc (inc zero))))")))
+      "(eval (eq-neq Nat nat-eq (suc zero) (suc (suc zero))))")))
   (check-equal? result "true : Bool"))
 
 (test-case "d2/ord-trait-loads-via-trait-syntax"
@@ -629,7 +629,7 @@
      (string-append
       "(ns d2t3)\n"
       "(require [prologos.core.ord-trait :refer [nat-ord ord-lt]])\n"
-      "(eval (ord-lt Nat nat-ord (inc zero) (inc (inc (inc zero)))))")))
+      "(eval (ord-lt Nat nat-ord (suc zero) (suc (suc (suc zero)))))")))
   (check-equal? result "true : Bool"))
 
 (test-case "d2/ord-min-works"
@@ -638,8 +638,8 @@
      (string-append
       "(ns d2t4)\n"
       "(require [prologos.core.ord-trait :refer [nat-ord ord-min]])\n"
-      "(eval (ord-min Nat nat-ord (inc (inc (inc zero))) (inc zero)))")))
-  (check-equal? result "1 : Nat"))
+      "(eval (ord-min Nat nat-ord (suc (suc (suc zero))) (suc zero)))")))
+  (check-equal? result "1N : Nat"))
 
 (test-case "d2/eq-dict-is-callable"
   ;; The dict itself should be the eq? function (single-method trait)
@@ -648,7 +648,7 @@
      (string-append
       "(ns d2t5)\n"
       "(require [prologos.core.eq-trait :refer [Nat--Eq--dict]])\n"
-      "(eval (Nat--Eq--dict (inc (inc zero)) (inc (inc zero))))")))
+      "(eval (Nat--Eq--dict (suc (suc zero)) (suc (suc zero))))")))
   (check-equal? result "true : Bool"))
 
 (test-case "d2/ord-dict-is-callable"
@@ -659,8 +659,8 @@
       "(ns d2t6)\n"
       "(require [prologos.core.ord-trait :refer [Nat--Ord--dict]])\n"
       "(require [prologos.data.ordering :refer [Ordering lt-ord eq-ord gt-ord]])\n"
-      "(eval (the Nat (match (Nat--Ord--dict (inc zero) (inc (inc zero))) (lt-ord -> zero) (eq-ord -> (inc zero)) (gt-ord -> (inc (inc zero))))))")))
-  (check-equal? result "zero : Nat"))
+      "(eval (the Nat (match (Nat--Ord--dict (suc zero) (suc (suc zero))) (lt-ord -> zero) (eq-ord -> (suc zero)) (gt-ord -> (suc (suc zero))))))")))
+  (check-equal? result "0N : Nat"))
 
 ;; ========================================
 ;; Phase C.1: Functor and Foldable Traits
@@ -675,8 +675,8 @@
       "(require [prologos.core.functor-list :refer [list-functor]])\n"
       "(require [prologos.data.list :refer [List nil cons]])\n"
       "(require [prologos.data.nat :refer [double]])\n"
-      "(eval (list-functor Nat Nat double (cons Nat (inc zero) (cons Nat (inc (inc zero)) (cons Nat (inc (inc (inc zero))) (nil Nat))))))")))
-  (check-equal? result "'[2 4 6] : [prologos.data.list::List Nat]"))
+      "(eval (list-functor Nat Nat double (cons Nat (suc zero) (cons Nat (suc (suc zero)) (cons Nat (suc (suc (suc zero))) (nil Nat))))))")))
+  (check-equal? result "'[2N 4N 6N] : [prologos.data.list::List Nat]"))
 
 (test-case "c1/functor-list-empty"
   ;; list-functor double [] = []
@@ -699,7 +699,7 @@
       "(require [prologos.core.functor-list :refer [list-functor]])\n"
       "(require [prologos.data.list :refer [List nil cons]])\n"
       "(require [prologos.data.nat :refer [zero?]])\n"
-      "(eval (list-functor Nat Bool zero? (cons Nat zero (cons Nat (inc zero) (cons Nat (inc (inc zero)) (nil Nat))))))")))
+      "(eval (list-functor Nat Bool zero? (cons Nat zero (cons Nat (suc zero) (cons Nat (suc (suc zero)) (nil Nat))))))")))
   (check-equal? result "'[true false false] : [prologos.data.list::List Bool]"))
 
 (test-case "c1/foldable-list-sum"
@@ -711,8 +711,8 @@
       "(require [prologos.core.foldable-list :refer [list-foldable]])\n"
       "(require [prologos.data.list :refer [List nil cons]])\n"
       "(require [prologos.data.nat :refer [add]])\n"
-      "(eval (list-foldable Nat Nat add zero (cons Nat (inc zero) (cons Nat (inc (inc zero)) (cons Nat (inc (inc (inc zero))) (nil Nat))))))")))
-  (check-equal? result "6 : Nat"))
+      "(eval (list-foldable Nat Nat add zero (cons Nat (suc zero) (cons Nat (suc (suc zero)) (cons Nat (suc (suc (suc zero))) (nil Nat))))))")))
+  (check-equal? result "6N : Nat"))
 
 (test-case "c1/foldable-list-empty"
   ;; list-foldable add 0 [] = 0
@@ -724,18 +724,18 @@
       "(require [prologos.data.list :refer [List nil]])\n"
       "(require [prologos.data.nat :refer [add]])\n"
       "(eval (list-foldable Nat Nat add zero (nil Nat)))")))
-  (check-equal? result "zero : Nat"))
+  (check-equal? result "0N : Nat"))
 
 (test-case "c1/foldable-list-count"
-  ;; Count elements: foldr (\_ n -> inc n) 0 [a, b, c] = 3
+  ;; Count elements: foldr (\_ n -> suc n) 0 [a, b, c] = 3
   (define result
     (run-ns-last
      (string-append
       "(ns c1t6)\n"
       "(require [prologos.core.foldable-list :refer [list-foldable]])\n"
       "(require [prologos.data.list :refer [List nil cons]])\n"
-      "(eval (list-foldable Nat Nat (fn (_ : Nat) (fn (n : Nat) (inc n))) zero (cons Nat (inc zero) (cons Nat (inc (inc zero)) (cons Nat (inc (inc (inc zero))) (nil Nat))))))")))
-  (check-equal? result "3 : Nat"))
+      "(eval (list-foldable Nat Nat (fn (_ : Nat) (fn (n : Nat) (suc n))) zero (cons Nat (suc zero) (cons Nat (suc (suc zero)) (cons Nat (suc (suc (suc zero))) (nil Nat))))))")))
+  (check-equal? result "3N : Nat"))
 
 (test-case "c1/functor-type-check"
   ;; list-functor : Functor List
@@ -784,8 +784,8 @@
       "(require [prologos.core.seq-trait :refer [seq-first]])\n"
       "(require [prologos.core.seq-list :refer [list-seq]])\n"
       "(require [prologos.data.list :refer [cons nil]])\n"
-      "(eval (seq-first list-seq (cons Nat (inc zero) (cons Nat zero (nil Nat)))))")))
-  (check-equal? result "[prologos.data.option::some Nat 1] : [prologos.data.option::Option Nat]"))
+      "(eval (seq-first list-seq (cons Nat (suc zero) (cons Nat zero (nil Nat)))))")))
+  (check-equal? result "[prologos.data.option::some Nat 1N] : [prologos.data.option::Option Nat]"))
 
 (test-case "c2/seq-first-empty"
   ;; seq-first on empty list gives none
@@ -808,8 +808,8 @@
       "(require [prologos.core.seq-trait :refer [seq-rest]])\n"
       "(require [prologos.core.seq-list :refer [list-seq]])\n"
       "(require [prologos.data.list :refer [cons nil]])\n"
-      "(eval (seq-rest list-seq (cons Nat (inc zero) (cons Nat zero (nil Nat)))))")))
-  (check-equal? result "'[zero] : [prologos.data.list::List Nat]"))
+      "(eval (seq-rest list-seq (cons Nat (suc zero) (cons Nat zero (nil Nat)))))")))
+  (check-equal? result "'[0N] : [prologos.data.list::List Nat]"))
 
 (test-case "c2/seq-empty-false"
   ;; seq-empty? on non-empty list gives false
@@ -845,8 +845,8 @@
       "(require [prologos.core.seq-functions :refer [seq-length]])\n"
       "(require [prologos.core.seq-list :refer [list-seq]])\n"
       "(require [prologos.data.list :refer [cons nil]])\n"
-      "(eval (seq-length list-seq (cons Nat (inc zero) (cons Nat (inc (inc zero)) (cons Nat (inc (inc (inc zero))) (nil Nat))))))")))
-  (check-equal? result "3 : Nat"))
+      "(eval (seq-length list-seq (cons Nat (suc zero) (cons Nat (suc (suc zero)) (cons Nat (suc (suc (suc zero))) (nil Nat))))))")))
+  (check-equal? result "3N : Nat"))
 
 (test-case "c2/seq-length-empty"
   (define result
@@ -857,7 +857,7 @@
       "(require [prologos.core.seq-list :refer [list-seq]])\n"
       "(require [prologos.data.list :refer [nil]])\n"
       "(eval (seq-length list-seq (nil Nat)))")))
-  (check-equal? result "zero : Nat"))
+  (check-equal? result "0N : Nat"))
 
 (test-case "c2/seq-drop"
   (define result
@@ -867,8 +867,8 @@
       "(require [prologos.core.seq-functions :refer [seq-drop]])\n"
       "(require [prologos.core.seq-list :refer [list-seq]])\n"
       "(require [prologos.data.list :refer [cons nil]])\n"
-      "(eval (seq-drop list-seq (inc zero) (cons Nat (inc zero) (cons Nat (inc (inc zero)) (cons Nat (inc (inc (inc zero))) (nil Nat))))))")))
-  (check-equal? result "'[2 3] : [prologos.data.list::List Nat]"))
+      "(eval (seq-drop list-seq (suc zero) (cons Nat (suc zero) (cons Nat (suc (suc zero)) (cons Nat (suc (suc (suc zero))) (nil Nat))))))")))
+  (check-equal? result "'[2N 3N] : [prologos.data.list::List Nat]"))
 
 (test-case "c2/seq-any-true"
   (define result
@@ -879,7 +879,7 @@
       "(require [prologos.core.seq-list :refer [list-seq]])\n"
       "(require [prologos.data.list :refer [cons nil]])\n"
       "(require [prologos.data.nat :refer [zero?]])\n"
-      "(eval (seq-any? list-seq zero? (cons Nat (inc zero) (cons Nat zero (nil Nat)))))")))
+      "(eval (seq-any? list-seq zero? (cons Nat (suc zero) (cons Nat zero (nil Nat)))))")))
   (check-equal? result "true : Bool"))
 
 (test-case "c2/seq-any-false"
@@ -891,7 +891,7 @@
       "(require [prologos.core.seq-list :refer [list-seq]])\n"
       "(require [prologos.data.list :refer [cons nil]])\n"
       "(require [prologos.data.nat :refer [zero?]])\n"
-      "(eval (seq-any? list-seq zero? (cons Nat (inc zero) (cons Nat (inc (inc zero)) (nil Nat)))))")))
+      "(eval (seq-any? list-seq zero? (cons Nat (suc zero) (cons Nat (suc (suc zero)) (nil Nat)))))")))
   (check-equal? result "false : Bool"))
 
 (test-case "c2/seq-all-true"
@@ -915,7 +915,7 @@
       "(require [prologos.core.seq-list :refer [list-seq]])\n"
       "(require [prologos.data.list :refer [cons nil]])\n"
       "(require [prologos.data.nat :refer [zero?]])\n"
-      "(eval (seq-all? list-seq zero? (cons Nat zero (cons Nat (inc zero) (nil Nat)))))")))
+      "(eval (seq-all? list-seq zero? (cons Nat zero (cons Nat (suc zero) (nil Nat)))))")))
   (check-equal? result "false : Bool"))
 
 (test-case "c2/seq-find-found"
@@ -927,8 +927,8 @@
       "(require [prologos.core.seq-list :refer [list-seq]])\n"
       "(require [prologos.data.list :refer [cons nil]])\n"
       "(require [prologos.data.nat :refer [zero?]])\n"
-      "(eval (seq-find list-seq zero? (cons Nat (inc zero) (cons Nat zero (nil Nat)))))")))
-  (check-equal? result "[prologos.data.option::some Nat zero] : [prologos.data.option::Option Nat]"))
+      "(eval (seq-find list-seq zero? (cons Nat (suc zero) (cons Nat zero (nil Nat)))))")))
+  (check-equal? result "[prologos.data.option::some Nat 0N] : [prologos.data.option::Option Nat]"))
 
 (test-case "c2/seq-find-not-found"
   (define result
@@ -939,5 +939,5 @@
       "(require [prologos.core.seq-list :refer [list-seq]])\n"
       "(require [prologos.data.list :refer [cons nil]])\n"
       "(require [prologos.data.nat :refer [zero?]])\n"
-      "(eval (seq-find list-seq zero? (cons Nat (inc zero) (cons Nat (inc (inc zero)) (nil Nat)))))")))
+      "(eval (seq-find list-seq zero? (cons Nat (suc zero) (cons Nat (suc (suc zero)) (nil Nat)))))")))
   (check-equal? result "[prologos.data.option::none Nat] : [prologos.data.option::Option Nat]"))

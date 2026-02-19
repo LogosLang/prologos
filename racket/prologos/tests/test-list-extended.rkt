@@ -43,11 +43,11 @@
    "   partition zip-with zip unzip intersperse halve merge sort\n"
    "   reduce1 foldr1 foldr1-step init init-helper\n"
    "   span span-helper break break-helper intercalate\n"
-   "   dedup dedup-helper is-prefix-of is-suffix-of delete\n"
+   "   dedup dedup-helper prefix-of? suffix-of? delete\n"
    "   find-index find-index-helper count count-helper\n"
    "   scanl iterate-n sort-on]])\n"
    "(require [prologos.data.option :refer [Option none some unwrap-or]])\n"
-   "(require [prologos.data.nat :refer [add mult dec zero?]])\n"
+   "(require [prologos.data.nat :refer [add mult pred zero?]])\n"
    "(require [prologos.core.eq-trait :refer [nat-eq]])\n"))
 
 ;; ========================================
@@ -63,14 +63,14 @@
 (test-case "reduce1/single"
   (check-equal?
    (last (run-ns (string-append "(ns tle2)\n" preamble
-     "(eval (unwrap-or zero (reduce1 add '[5])))")))
-   "5 : Nat"))
+     "(eval (unwrap-or zero (reduce1 add '[5N])))")))
+   "5N : Nat"))
 
 (test-case "reduce1/multi"
   (check-equal?
    (last (run-ns (string-append "(ns tle3)\n" preamble
-     "(eval (unwrap-or zero (reduce1 add '[1 2 3])))")))
-   "6 : Nat"))
+     "(eval (unwrap-or zero (reduce1 add '[1N 2N 3N])))")))
+   "6N : Nat"))
 
 ;; ========================================
 ;; foldr1 — Non-empty right fold
@@ -85,14 +85,14 @@
 (test-case "foldr1/single"
   (check-equal?
    (last (run-ns (string-append "(ns tle5)\n" preamble
-     "(eval (unwrap-or zero (foldr1 add '[5])))")))
-   "5 : Nat"))
+     "(eval (unwrap-or zero (foldr1 add '[5N])))")))
+   "5N : Nat"))
 
 (test-case "foldr1/multi"
   (check-equal?
    (last (run-ns (string-append "(ns tle6)\n" preamble
-     "(eval (unwrap-or zero (foldr1 add '[1 2 3])))")))
-   "6 : Nat"))
+     "(eval (unwrap-or zero (foldr1 add '[1N 2N 3N])))")))
+   "6N : Nat"))
 
 ;; ========================================
 ;; init — All elements except last
@@ -107,15 +107,15 @@
 (test-case "init/single"
   (check-equal?
    (last (run-ns (string-append "(ns tle8)\n" preamble
-     "(eval (length (unwrap-or nil (init '[1]))))")))
-   "zero : Nat"))
+     "(eval (length (unwrap-or nil (init '[1N]))))")))
+   "0N : Nat"))
 
 (test-case "init/multi"
-  ;; init '[1 2 3] = some '[1 2], sum = 3
+  ;; init '[1N 2N 3N] = some '[1N 2N], sum = 3
   (check-equal?
    (last (run-ns (string-append "(ns tle9)\n" preamble
-     "(eval (sum (unwrap-or nil (init '[1 2 3]))))")))
-   "3 : Nat"))
+     "(eval (sum (unwrap-or nil (init '[1N 2N 3N]))))")))
+   "3N : Nat"))
 
 ;; ========================================
 ;; scanl — Fold with intermediate results
@@ -126,21 +126,21 @@
   (check-equal?
    (last (run-ns (string-append "(ns tle10)\n" preamble
      "(eval (length (scanl add zero '[])))")))
-   "1 : Nat"))
+   "1N : Nat"))
 
 (test-case "scanl/running-sum"
   ;; scanl add 0 [1 2 3] = [0 1 3 6], sum = 10
   (check-equal?
    (last (run-ns (string-append "(ns tle11)\n" preamble
-     "(eval (sum (scanl add zero '[1 2 3])))")))
-   "10 : Nat"))
+     "(eval (sum (scanl add zero '[1N 2N 3N])))")))
+   "10N : Nat"))
 
 (test-case "scanl/length"
   ;; scanl add 0 [1 2 3] has 4 elements
   (check-equal?
    (last (run-ns (string-append "(ns tle12)\n" preamble
-     "(eval (length (scanl add zero '[1 2 3])))")))
-   "4 : Nat"))
+     "(eval (length (scanl add zero '[1N 2N 3N])))")))
+   "4N : Nat"))
 
 ;; ========================================
 ;; iterate-n — Repeated function application
@@ -149,24 +149,24 @@
 (test-case "iterate-n/zero"
   (check-equal?
    (last (run-ns (string-append "(ns tle13)\n" preamble
-     "(defn succ [n <Nat>] <Nat> (inc n))\n"
+     "(defn succ [n <Nat>] <Nat> (suc n))\n"
      "(eval (length (iterate-n zero succ zero)))")))
-   "zero : Nat"))
+   "0N : Nat"))
 
 (test-case "iterate-n/four"
   ;; iterate-n 4 succ 0 = [0 1 2 3], sum = 6
   (check-equal?
    (last (run-ns (string-append "(ns tle14)\n" preamble
-     "(defn succ [n <Nat>] <Nat> (inc n))\n"
-     "(eval (sum (iterate-n (inc (inc (inc (inc zero)))) succ zero)))")))
-   "6 : Nat"))
+     "(defn succ [n <Nat>] <Nat> (suc n))\n"
+     "(eval (sum (iterate-n (suc (suc (suc (suc zero)))) succ zero)))")))
+   "6N : Nat"))
 
 (test-case "iterate-n/length"
   (check-equal?
    (last (run-ns (string-append "(ns tle15)\n" preamble
-     "(defn succ [n <Nat>] <Nat> (inc n))\n"
-     "(eval (length (iterate-n (inc (inc (inc zero))) succ zero)))")))
-   "3 : Nat"))
+     "(defn succ [n <Nat>] <Nat> (suc n))\n"
+     "(eval (length (iterate-n (suc (suc (suc zero))) succ zero)))")))
+   "3N : Nat"))
 
 ;; ========================================
 ;; span — Split where predicate first fails
@@ -176,26 +176,26 @@
   ;; span zero? [0 0 0] = pair [0 0 0] []
   (check-equal?
    (last (run-ns (string-append "(ns tle16)\n" preamble
-     "(eval (length (first (span zero? '[0 0 0]))))")))
-   "3 : Nat"))
+     "(eval (length (first (span zero? '[0N 0N 0N]))))")))
+   "3N : Nat"))
 
 (test-case "span/none-pass"
   ;; span zero? [1 2 3] = pair [] [1 2 3]
   (check-equal?
    (last (run-ns (string-append "(ns tle17)\n" preamble
-     "(eval (length (first (span zero? '[1 2 3]))))")))
-   "zero : Nat"))
+     "(eval (length (first (span zero? '[1N 2N 3N]))))")))
+   "0N : Nat"))
 
 (test-case "span/mid-split"
   ;; span zero? [0 0 1 2] — prefix length 2, suffix sum 3
   (check-equal?
    (last (run-ns (string-append "(ns tle18)\n" preamble
-     "(eval (length (first (span zero? '[0 0 1 2]))))")))
-   "2 : Nat")
+     "(eval (length (first (span zero? '[0N 0N 1N 2N]))))")))
+   "2N : Nat")
   (check-equal?
    (last (run-ns (string-append "(ns tle18b)\n" preamble
-     "(eval (sum (second (span zero? '[0 0 1 2]))))")))
-   "3 : Nat"))
+     "(eval (sum (second (span zero? '[0N 0N 1N 2N]))))")))
+   "3N : Nat"))
 
 ;; ========================================
 ;; break — Split where predicate first succeeds
@@ -205,26 +205,26 @@
   ;; break zero? [1 2 3] = pair [1 2 3] []
   (check-equal?
    (last (run-ns (string-append "(ns tle19)\n" preamble
-     "(eval (sum (first (break zero? '[1 2 3]))))")))
-   "6 : Nat"))
+     "(eval (sum (first (break zero? '[1N 2N 3N]))))")))
+   "6N : Nat"))
 
 (test-case "break/immediate-match"
   ;; break zero? [0 1 2] = pair [] [0 1 2]
   (check-equal?
    (last (run-ns (string-append "(ns tle20)\n" preamble
-     "(eval (length (first (break zero? '[0 1 2]))))")))
-   "zero : Nat"))
+     "(eval (length (first (break zero? '[0N 1N 2N]))))")))
+   "0N : Nat"))
 
 (test-case "break/mid-split"
   ;; break zero? [1 2 0 3] — prefix sum 3, suffix length 2
   (check-equal?
    (last (run-ns (string-append "(ns tle21)\n" preamble
-     "(eval (sum (first (break zero? '[1 2 0 3]))))")))
-   "3 : Nat")
+     "(eval (sum (first (break zero? '[1N 2N 0N 3N]))))")))
+   "3N : Nat")
   (check-equal?
    (last (run-ns (string-append "(ns tle21b)\n" preamble
-     "(eval (length (second (break zero? '[1 2 0 3]))))")))
-   "2 : Nat"))
+     "(eval (length (second (break zero? '[1N 2N 0N 3N]))))")))
+   "2N : Nat"))
 
 ;; ========================================
 ;; intercalate — Concat with separator
@@ -234,22 +234,22 @@
   ;; intercalate [0] [] = []
   (check-equal?
    (last (run-ns (string-append "(ns tle22)\n" preamble
-     "(eval (length (intercalate '[0] '[])))")))
-   "zero : Nat"))
+     "(eval (length (intercalate '[0N] '[])))")))
+   "0N : Nat"))
 
 (test-case "intercalate/single-list"
   ;; intercalate [0] [[1 2]] = [1 2]
   (check-equal?
    (last (run-ns (string-append "(ns tle23)\n" preamble
-     "(eval (sum (intercalate '[0] (cons '[1 2] nil))))")))
-   "3 : Nat"))
+     "(eval (sum (intercalate '[0N] (cons '[1N 2N] nil))))")))
+   "3N : Nat"))
 
 (test-case "intercalate/multi-list"
   ;; intercalate [0] [[1],[2],[3]] = [1,0,2,0,3], sum = 6
   (check-equal?
    (last (run-ns (string-append "(ns tle24)\n" preamble
-     "(eval (sum (intercalate '[0] (cons '[1] (cons '[2] (cons '[3] nil))))))")))
-   "6 : Nat"))
+     "(eval (sum (intercalate '[0N] (cons '[1N] (cons '[2N] (cons '[3N] nil))))))")))
+   "6N : Nat"))
 
 ;; ========================================
 ;; dedup — Remove consecutive duplicates
@@ -259,76 +259,76 @@
   (check-equal?
    (last (run-ns (string-append "(ns tle25)\n" preamble
      "(eval (length (dedup nat-eq '[])))")))
-   "zero : Nat"))
+   "0N : Nat"))
 
 (test-case "dedup/no-duplicates"
   (check-equal?
    (last (run-ns (string-append "(ns tle26)\n" preamble
-     "(eval (length (dedup nat-eq '[1 2 3])))")))
-   "3 : Nat"))
+     "(eval (length (dedup nat-eq '[1N 2N 3N])))")))
+   "3N : Nat"))
 
 (test-case "dedup/with-duplicates"
   ;; [1 1 2 2 2 3] → [1 2 3], length 3
   (check-equal?
    (last (run-ns (string-append "(ns tle27)\n" preamble
-     "(eval (length (dedup nat-eq '[1 1 2 2 2 3])))")))
-   "3 : Nat"))
+     "(eval (length (dedup nat-eq '[1N 1N 2N 2N 2N 3N])))")))
+   "3N : Nat"))
 
 (test-case "dedup/all-same"
   ;; [5 5 5 5] → [5], length 1
   (check-equal?
    (last (run-ns (string-append "(ns tle28)\n" preamble
-     "(eval (length (dedup nat-eq '[5 5 5 5])))")))
-   "1 : Nat"))
+     "(eval (length (dedup nat-eq '[5N 5N 5N 5N])))")))
+   "1N : Nat"))
 
 ;; ========================================
-;; is-prefix-of — Prefix check
+;; prefix-of? — Prefix check
 ;; ========================================
 
-(test-case "is-prefix-of/empty-prefix"
+(test-case "prefix-of?/empty-prefix"
   (check-equal?
    (last (run-ns (string-append "(ns tle29)\n" preamble
-     "(eval (is-prefix-of nat-eq '[] '[1 2 3]))")))
+     "(eval (prefix-of? nat-eq '[] '[1N 2N 3N]))")))
    "true : Bool"))
 
-(test-case "is-prefix-of/match"
+(test-case "prefix-of?/match"
   (check-equal?
    (last (run-ns (string-append "(ns tle30)\n" preamble
-     "(eval (is-prefix-of nat-eq '[1 2] '[1 2 3]))")))
+     "(eval (prefix-of? nat-eq '[1N 2N] '[1N 2N 3N]))")))
    "true : Bool"))
 
-(test-case "is-prefix-of/no-match"
+(test-case "prefix-of?/no-match"
   (check-equal?
    (last (run-ns (string-append "(ns tle31)\n" preamble
-     "(eval (is-prefix-of nat-eq '[1 3] '[1 2 3]))")))
+     "(eval (prefix-of? nat-eq '[1N 3N] '[1N 2N 3N]))")))
    "false : Bool"))
 
-(test-case "is-prefix-of/longer-prefix"
+(test-case "prefix-of?/longer-prefix"
   (check-equal?
    (last (run-ns (string-append "(ns tle32)\n" preamble
-     "(eval (is-prefix-of nat-eq '[1 2 3 4] '[1 2 3]))")))
+     "(eval (prefix-of? nat-eq '[1N 2N 3N 4N] '[1N 2N 3N]))")))
    "false : Bool"))
 
 ;; ========================================
-;; is-suffix-of — Suffix check
+;; suffix-of? — Suffix check
 ;; ========================================
 
-(test-case "is-suffix-of/empty-suffix"
+(test-case "suffix-of?/empty-suffix"
   (check-equal?
    (last (run-ns (string-append "(ns tle33)\n" preamble
-     "(eval (is-suffix-of nat-eq '[] '[1 2 3]))")))
+     "(eval (suffix-of? nat-eq '[] '[1N 2N 3N]))")))
    "true : Bool"))
 
-(test-case "is-suffix-of/match"
+(test-case "suffix-of?/match"
   (check-equal?
    (last (run-ns (string-append "(ns tle34)\n" preamble
-     "(eval (is-suffix-of nat-eq '[2 3] '[1 2 3]))")))
+     "(eval (suffix-of? nat-eq '[2N 3N] '[1N 2N 3N]))")))
    "true : Bool"))
 
-(test-case "is-suffix-of/no-match"
+(test-case "suffix-of?/no-match"
   (check-equal?
    (last (run-ns (string-append "(ns tle35)\n" preamble
-     "(eval (is-suffix-of nat-eq '[1 3] '[1 2 3]))")))
+     "(eval (suffix-of? nat-eq '[1N 3N] '[1N 2N 3N]))")))
    "false : Bool"))
 
 ;; ========================================
@@ -338,29 +338,29 @@
 (test-case "delete/empty"
   (check-equal?
    (last (run-ns (string-append "(ns tle36)\n" preamble
-     "(eval (length (delete nat-eq (inc (inc zero)) '[])))")))
-   "zero : Nat"))
+     "(eval (length (delete nat-eq (suc (suc zero)) '[])))")))
+   "0N : Nat"))
 
 (test-case "delete/found"
   ;; delete 2 from [1 2 3 2] = [1 3 2], sum = 6
   (check-equal?
    (last (run-ns (string-append "(ns tle37)\n" preamble
-     "(eval (sum (delete nat-eq (inc (inc zero)) '[1 2 3 2])))")))
-   "6 : Nat"))
+     "(eval (sum (delete nat-eq (suc (suc zero)) '[1N 2N 3N 2N])))")))
+   "6N : Nat"))
 
 (test-case "delete/not-found"
   ;; delete 5 from [1 2 3] = [1 2 3], length 3
   (check-equal?
    (last (run-ns (string-append "(ns tle38)\n" preamble
-     "(eval (length (delete nat-eq (inc (inc (inc (inc (inc zero))))) '[1 2 3])))")))
-   "3 : Nat"))
+     "(eval (length (delete nat-eq (suc (suc (suc (suc (suc zero))))) '[1N 2N 3N])))")))
+   "3N : Nat"))
 
 (test-case "delete/removes-only-first"
   ;; delete 2 from [2 2 2] = [2 2], length 2
   (check-equal?
    (last (run-ns (string-append "(ns tle39)\n" preamble
-     "(eval (length (delete nat-eq (inc (inc zero)) '[2 2 2])))")))
-   "2 : Nat"))
+     "(eval (length (delete nat-eq (suc (suc zero)) '[2N 2N 2N])))")))
+   "2N : Nat"))
 
 ;; ========================================
 ;; find-index — Index of first match
@@ -376,20 +376,20 @@
   ;; find-index zero? [3 2 0 1] = some 2
   (check-equal?
    (last (run-ns (string-append "(ns tle41)\n" preamble
-     "(eval (unwrap-or zero (find-index zero? '[3 2 0 1])))")))
-   "2 : Nat"))
+     "(eval (unwrap-or zero (find-index zero? '[3N 2N 0N 1N])))")))
+   "2N : Nat"))
 
 (test-case "find-index/not-found"
   (check-equal?
    (last (run-ns (string-append "(ns tle42)\n" preamble
-     "(eval (find-index zero? '[1 2 3]))")))
+     "(eval (find-index zero? '[1N 2N 3N]))")))
    "[prologos.data.option::none Nat] : [prologos.data.option::Option Nat]"))
 
 (test-case "find-index/first-element"
   (check-equal?
    (last (run-ns (string-append "(ns tle43)\n" preamble
-     "(eval (unwrap-or (inc (inc (inc zero))) (find-index zero? '[0 1 2])))")))
-   "zero : Nat"))
+     "(eval (unwrap-or (suc (suc (suc zero))) (find-index zero? '[0N 1N 2N])))")))
+   "0N : Nat"))
 
 ;; ========================================
 ;; count — Count matching elements
@@ -399,25 +399,25 @@
   (check-equal?
    (last (run-ns (string-append "(ns tle44)\n" preamble
      "(eval (count zero? '[]))")))
-   "zero : Nat"))
+   "0N : Nat"))
 
 (test-case "count/all-match"
   (check-equal?
    (last (run-ns (string-append "(ns tle45)\n" preamble
-     "(eval (count zero? '[0 0 0]))")))
-   "3 : Nat"))
+     "(eval (count zero? '[0N 0N 0N]))")))
+   "3N : Nat"))
 
 (test-case "count/some-match"
   (check-equal?
    (last (run-ns (string-append "(ns tle46)\n" preamble
-     "(eval (count zero? '[0 1 0 2 0]))")))
-   "3 : Nat"))
+     "(eval (count zero? '[0N 1N 0N 2N 0N]))")))
+   "3N : Nat"))
 
 (test-case "count/none-match"
   (check-equal?
    (last (run-ns (string-append "(ns tle47)\n" preamble
-     "(eval (count zero? '[1 2 3]))")))
-   "zero : Nat"))
+     "(eval (count zero? '[1N 2N 3N]))")))
+   "0N : Nat"))
 
 ;; ========================================
 ;; sort-on — Sort by derived key
@@ -431,12 +431,12 @@
    (last (run-ns (string-append "(ns tle48)\n" preamble
      "(require [prologos.data.nat :refer [le?]])\n"
      "(eval (length (sort-on le? (fn (x : Nat) x) '[])))")))
-   "zero : Nat"))
+   "0N : Nat"))
 
 (test-case "sort-on/identity-key"
   ;; sort-on le? id [3 1 2] = [1 2 3], head = 1
   (check-equal?
    (last (run-ns (string-append "(ns tle49)\n" preamble
      "(require [prologos.data.nat :refer [le?]])\n"
-     "(eval (head zero (sort-on le? (fn (x : Nat) x) '[3 1 2])))")))
-   "1 : Nat"))
+     "(eval (head zero (sort-on le? (fn (x : Nat) x) '[3N 1N 2N])))")))
+   "1N : Nat"))

@@ -284,7 +284,7 @@
               (format "Expected 'false' in: ~a" result-strings)))
 
 (test-case "resolution/monomorphic-eq-nat-unequal-values"
-  ;; (my-neq zero (inc zero)) → true (they are NOT equal)
+  ;; (my-neq zero (suc zero)) → true (they are NOT equal)
   (define results (run-ns
     (string-append
       "(ns eq-neq-diff-test)\n"
@@ -293,7 +293,7 @@
       "(spec my-neq A A -> Bool where (Eq A))\n"
       "(defn my-neq [x y]\n"
       "  (not (Eq-eq? A $Eq-A x y)))\n"
-      "(eval (my-neq zero (inc zero)))\n")))
+      "(eval (my-neq zero (suc zero)))\n")))
   (define result-strings (filter string? results))
   (check-true (not (null? result-strings))
               (format "Expected results, got: ~a" results))

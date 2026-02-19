@@ -23,7 +23,7 @@
 ;; Keywords: forms with special parsing rules
 ;; ========================================
 (define keywords
-  '(inc fn Pi Sigma -> -0> -1> -w> Eq the the-fn Type
+  '(suc fn Pi Sigma -> -0> -1> -w> Eq the the-fn Type
     Vec Fin vnil vcons vhead vtail vindex fzero fsuc
     natrec J pair first second boolrec
     Int int int+ int- int* int/ int-mod int-neg int-abs int-lt int-le int-eq from-nat
@@ -436,11 +436,10 @@
     [(symbol? d)
      (parse-symbol d loc)]
 
-    ;; Bare number (natural literal)
+    ;; Bare number → Int (integer literal)
+    ;; Note: 42N → Nat is handled via $nat-literal sentinel (WS) or symbol pattern (sexp)
     [(and (exact-nonnegative-integer? d) (integer? d))
-     (if (= d 0)
-         (surf-zero loc)
-         (surf-nat-lit d loc))]
+     (surf-int-lit d loc)]
 
     ;; Bare fraction (rational literal, e.g. 3/7)
     [(and (number? d) (exact? d) (rational? d) (not (integer? d)))
@@ -497,6 +496,15 @@
              (for/and ([c (in-string (substring s 1))])
                (char-numeric? c)))
         (surf-numbered-hole (string->number (substring s 1)) loc)]
+       ;; Nat literal: 42N (digits followed by N suffix) — for sexp mode
+       [(and (> (string-length s) 1)
+             (char=? (string-ref s (- (string-length s) 1)) #\N)
+             (for/and ([c (in-string (substring s 0 (- (string-length s) 1)))])
+               (char-numeric? c)))
+        (let ([v (string->number (substring s 0 (- (string-length s) 1)))])
+          (if (= v 0)
+              (surf-zero loc)
+              (surf-nat-lit v loc)))]
        [else (surf-var sym loc)])]))
 
 ;; ========================================
@@ -521,6 +529,17 @@
     ;; $angle-type sentinel: unwrap as type annotation
     [(and (symbol? head) (eq? head '$angle-type))
      (unwrap-angle-type stx loc)]
+
+    ;; $nat-literal sentinel: 42N → surf-nat-lit (Nat suc-chain)
+    [(and (symbol? head) (eq? head '$nat-literal))
+     (if (= (length args) 1)
+         (let ([v (stx->datum (car args))])
+           (if (and (exact-nonnegative-integer? v) (integer? v))
+               (if (= v 0)
+                   (surf-zero loc)
+                   (surf-nat-lit v loc))
+               (parse-error loc (format "N suffix requires a non-negative integer, got: ~a" v) #f)))
+         (parse-error loc "N suffix requires exactly one argument" #f))]
 
     ;; $approx-literal sentinel: ~N → surf-approx-literal
     [(and (symbol? head) (eq? head '$approx-literal))
@@ -551,9 +570,9 @@
     ;; Keyword-headed forms
     [(symbol? head)
      (case head
-       ;; (inc e)
-       [(inc)
-        (or (check-arity 'inc args 1 loc)
+       ;; (suc e)
+       [(suc)
+        (or (check-arity 'suc args 1 loc)
             (let ([e (parse-datum (car args))])
               (if (prologos-error? e) e
                   (surf-suc e loc))))]
@@ -3019,12 +3038,12 @@
 ;; then splice the desugared arm(s) back into the arm list at the position of
 ;; the first numeric arm.
 ;;
-;; Example: | 0 -> A | 1 -> B | 2 -> C | inc k -> D
-;; Desugars to: | zero -> A | inc $v -> (match $v | zero -> B | inc $v2 -> (match $v2 | zero -> C | inc k -> D))
+;; Example: | 0 -> A | 1 -> B | 2 -> C | suc k -> D
+;; Desugars to: | zero -> A | suc $v -> (match $v | zero -> B | suc $v2 -> (match $v2 | zero -> C | suc k -> D))
 ;;
-;; The cascading match peels one layer of `inc` per numeric level, trying the
+;; The cascading match peels one layer of `suc` per numeric level, trying the
 ;; numeric arms from smallest to largest before falling through to user-written
-;; `inc` arms.
+;; `suc` arms.
 (define (desugar-numeric-arms arms)
   ;; Separate numeric-literal arms from normal arms
   (define numeric-arms
@@ -3039,23 +3058,23 @@
   (define sorted-numeric
     (sort numeric-arms < #:key reduce-arm-ctor-name))
 
-  ;; Find the existing 'inc arm and 'zero arm from normal arms (if any)
+  ;; Find the existing 'suc arm and 'zero arm from normal arms (if any)
   (define user-zero-arm
     (findf (lambda (a) (eq? (reduce-arm-ctor-name a) 'zero)) normal-arms))
-  (define user-inc-arm
-    (findf (lambda (a) (eq? (reduce-arm-ctor-name a) 'inc)) normal-arms))
+  (define user-suc-arm
+    (findf (lambda (a) (eq? (reduce-arm-ctor-name a) 'suc)) normal-arms))
 
-  ;; Normal arms that are NOT zero or inc (e.g., for other types — shouldn't
+  ;; Normal arms that are NOT zero or suc (e.g., for other types — shouldn't
   ;; happen for Nat, but be safe)
   (define other-arms
     (filter (lambda (a)
               (and (not (integer? (reduce-arm-ctor-name a)))
                    (not (eq? (reduce-arm-ctor-name a) 'zero))
-                   (not (eq? (reduce-arm-ctor-name a) 'inc))))
+                   (not (eq? (reduce-arm-ctor-name a) 'suc))))
             arms))
 
   ;; Build the desugared arm list.
-  ;; Numeric arms produce: zero arms (for N=0) and a cascading inc arm (for N>0)
+  ;; Numeric arms produce: zero arms (for N=0) and a cascading suc arm (for N>0)
   (define zero-numeric (filter (lambda (a) (= (reduce-arm-ctor-name a) 0)) sorted-numeric))
   (define positive-numeric (filter (lambda (a) (> (reduce-arm-ctor-name a) 0)) sorted-numeric))
 
@@ -3070,38 +3089,38 @@
       [else #f]))
 
   ;; Build cascading nested match for positive numeric patterns.
-  ;; Each level peels one `inc` and dispatches on the predecessor.
-  ;; At the bottom, fall through to the user's `inc k -> ...` arm if present.
+  ;; Each level peels one `suc` and dispatches on the predecessor.
+  ;; At the bottom, fall through to the user's `suc k -> ...` arm if present.
   ;;
-  ;; For N=1: match pred | zero -> body1 | inc k -> <user-inc-body or next-level>
+  ;; For N=1: match pred | zero -> body1 | suc k -> <user-suc-body or next-level>
   ;; For N=2 after peeling to pred:
-  ;;   match pred | zero -> body1 | inc $v -> match $v | zero -> body2 | inc k -> ...
+  ;;   match pred | zero -> body1 | suc $v -> match $v | zero -> body2 | suc k -> ...
   ;;
   ;; We build this inside-out: start with the deepest level and work outward.
-  (define final-inc-arm
+  (define final-suc-arm
     (if (null? positive-numeric)
-        user-inc-arm  ;; no positive numeric arms, keep user's inc arm
+        user-suc-arm  ;; no positive numeric arms, keep user's suc arm
         (let ()
           ;; Group positive-numeric by depth (value - 1 = depth of predecessor match)
           ;; Build a tree: at depth d, match the d-th predecessor
           ;; Approach: recursively build from the highest numeric value down
           ;;
           ;; We organize by value: for each N, at nesting depth N-1, we match zero.
-          ;; Between levels, we match inc and recurse.
+          ;; Between levels, we match suc and recurse.
           ;;
           ;; Build a function that creates the nested match for a range of values.
           ;; Given a list of (value . body) pairs sorted ascending and a fallthrough arm,
-          ;; produce a reduce-arm for 'inc that dispatches.
+          ;; produce a reduce-arm for 'suc that dispatches.
 
-          (define (build-dispatch remaining-pairs fallthrough-inc-arm depth loc)
+          (define (build-dispatch remaining-pairs fallthrough-suc-arm depth loc)
             ;; remaining-pairs: list of (value . body) sorted ascending, all > depth
-            ;; depth: current nesting depth (0 = matching pred of outermost inc)
-            ;; fallthrough-inc-arm: user's inc arm to use when no numeric match
+            ;; depth: current nesting depth (0 = matching pred of outermost suc)
+            ;; fallthrough-suc-arm: user's suc arm to use when no numeric match
             (cond
               [(null? remaining-pairs)
                ;; No more numeric patterns at this level or deeper
-               ;; Use the user's inc arm if available, else no arm
-               fallthrough-inc-arm]
+               ;; Use the user's suc arm if available, else no arm
+               fallthrough-suc-arm]
               [else
                (define next-val (car (car remaining-pairs)))
                (define next-body (cdr (car remaining-pairs)))
@@ -3110,28 +3129,28 @@
                  [(= next-val (+ depth 1))
                   ;; This pattern matches zero at this level (i.e., value = depth+1
                   ;; means after peeling depth+1 incs total, we find zero at this pred)
-                  ;; Build: match pred | zero -> body | inc $v -> <recurse>
+                  ;; Build: match pred | zero -> body | suc $v -> <recurse>
                   (define var (gensym '$np-))
                   (define deeper
-                    (build-dispatch rest-pairs fallthrough-inc-arm (+ depth 1) loc))
+                    (build-dispatch rest-pairs fallthrough-suc-arm (+ depth 1) loc))
                   (define inner-arms
                     (append
                      (list (reduce-arm 'zero '() next-body loc))
                      (if deeper (list deeper) '())))
-                  ;; Return an inc arm at this level
-                  (reduce-arm 'inc (list var)
+                  ;; Return an suc arm at this level
+                  (reduce-arm 'suc (list var)
                               (surf-reduce (surf-var var loc) inner-arms loc)
                               loc)]
                  [else
                   ;; next-val > depth+1: no pattern at this level, just peel and recurse
                   (define var (gensym '$np-))
                   (define deeper
-                    (build-dispatch remaining-pairs fallthrough-inc-arm (+ depth 1) loc))
+                    (build-dispatch remaining-pairs fallthrough-suc-arm (+ depth 1) loc))
                   (define inner-arms
                     (if deeper (list deeper) '()))
                   (if (null? inner-arms)
-                      fallthrough-inc-arm  ;; nothing to dispatch, fall through
-                      (reduce-arm 'inc (list var)
+                      fallthrough-suc-arm  ;; nothing to dispatch, fall through
+                      (reduce-arm 'suc (list var)
                                   (surf-reduce (surf-var var loc) inner-arms loc)
                                   loc))])]))
 
@@ -3140,12 +3159,12 @@
                  positive-numeric))
           (define loc (reduce-arm-srcloc (car positive-numeric)))
 
-          (build-dispatch pairs user-inc-arm 0 loc))))
+          (build-dispatch pairs user-suc-arm 0 loc))))
 
-  ;; Assemble final arm list: zero arm, inc arm, then other arms
+  ;; Assemble final arm list: zero arm, suc arm, then other arms
   (append
    (if final-zero-arm (list final-zero-arm) '())
-   (if final-inc-arm (list final-inc-arm) '())
+   (if final-suc-arm (list final-suc-arm) '())
    other-arms))
 
 (define (parse-reduce-arm arm-stx loc)
@@ -3219,6 +3238,26 @@
        ;; desugar-numeric-arms will convert these to proper constructor arms
        [else
         (reduce-arm ctor-name '() body loc)])]
+
+    ;; Nat-suffix literal pattern: 0N, 3N, etc. (sexp mode reads these as symbols)
+    [(and (symbol? ctor-name)
+          (let ([s (symbol->string ctor-name)])
+            (and (> (string-length s) 1)
+                 (char=? (string-ref s (- (string-length s) 1)) #\N)
+                 (for/and ([c (in-string (substring s 0 (- (string-length s) 1)))])
+                   (char-numeric? c)))))
+     (let ([v (string->number
+               (substring (symbol->string ctor-name) 0
+                          (- (string-length (symbol->string ctor-name)) 1)))])
+       (cond
+         [(not (null? binding-names))
+          (parse-error loc
+            (format "reduce arm: numeric literal pattern ~aN cannot have bindings" v) #f)]
+         [(> v 20)
+          (parse-error loc
+            (format "reduce arm: numeric literal pattern ~aN is too large (max 20)" v) #f)]
+         [else
+          (reduce-arm v '() body loc)]))]
 
     ;; Non-numeric, non-symbol constructor name: error (fixes latent unless bug)
     [(not (symbol? ctor-name))

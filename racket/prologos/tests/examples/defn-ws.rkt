@@ -2,11 +2,11 @@
 
 ;; Simple function with defn
 defn increment [x <Nat>] <Nat>
-    inc x
+    suc x
 
 increment zero
-increment [inc zero]
-increment [inc [inc zero]]
+increment [suc zero]
+increment [suc [suc zero]]
 
 
 ;; Polymorphic identity with defn

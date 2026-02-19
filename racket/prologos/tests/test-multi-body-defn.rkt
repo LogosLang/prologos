@@ -41,9 +41,9 @@
 
 (test-case "multi/parse-two-clauses"
   ;; sexp-mode multi-body with $pipe markers
-  ;; Parser sees: (defn f ($pipe [x <Nat>] <Nat> (inc x)) ($pipe [x <Nat> y <Nat>] <Nat> x))
+  ;; Parser sees: (defn f ($pipe [x <Nat>] <Nat> (suc x)) ($pipe [x <Nat> y <Nat>] <Nat> x))
   (define parsed
-    (parse-string "(defn f ($pipe [x <Nat>] <Nat> (inc x)) ($pipe [x <Nat> y <Nat>] <Nat> x))"))
+    (parse-string "(defn f ($pipe [x <Nat>] <Nat> (suc x)) ($pipe [x <Nat> y <Nat>] <Nat> x))"))
   (check-true (surf-defn-multi? parsed))
   (check-equal? (surf-defn-multi-name parsed) 'f)
   (check-false (surf-defn-multi-docstring parsed))
@@ -67,7 +67,7 @@
 
 (test-case "multi/expand-to-def-group"
   (define parsed
-    (parse-string "(defn f ($pipe [x <Nat>] <Nat> (inc x)) ($pipe [x <Nat> y <Nat>] <Nat> x))"))
+    (parse-string "(defn f ($pipe [x <Nat>] <Nat> (suc x)) ($pipe [x <Nat> y <Nat>] <Nat> x))"))
   (define expanded (expand-top-level parsed))
   (check-true (surf-def-group? expanded))
   (check-equal? (surf-def-group-name expanded) 'f)
@@ -81,19 +81,19 @@
 (test-case "multi/dispatch-1-arg"
   ;; Define f with 1-arg and 2-arg clauses, call with 1 arg
   (define results
-    (run "(defn f ($pipe [x <Nat>] <Nat> (inc x)) ($pipe [x <Nat> y <Nat>] <Nat> x))\n(eval (f zero))"))
-  (check-equal? (last results) "1 : Nat"))
+    (run "(defn f ($pipe [x <Nat>] <Nat> (suc x)) ($pipe [x <Nat> y <Nat>] <Nat> x))\n(eval (f zero))"))
+  (check-equal? (last results) "1N : Nat"))
 
 (test-case "multi/dispatch-2-args"
   ;; Same definition, call with 2 args
   (define results
-    (run "(defn f ($pipe [x <Nat>] <Nat> (inc x)) ($pipe [x <Nat> y <Nat>] <Nat> x))\n(eval (f (inc zero) zero))"))
-  (check-equal? (last results) "1 : Nat"))
+    (run "(defn f ($pipe [x <Nat>] <Nat> (suc x)) ($pipe [x <Nat> y <Nat>] <Nat> x))\n(eval (f (suc zero) zero))"))
+  (check-equal? (last results) "1N : Nat"))
 
 (test-case "multi/dispatch-wrong-arity-error"
   ;; Call with 3 args — no matching clause
   (define results
-    (run "(defn f ($pipe [x <Nat>] <Nat> (inc x)) ($pipe [x <Nat> y <Nat>] <Nat> x))\n(eval (f zero zero zero))"))
+    (run "(defn f ($pipe [x <Nat>] <Nat> (suc x)) ($pipe [x <Nat> y <Nat>] <Nat> x))\n(eval (f zero zero zero))"))
   (define err (last results))
   (check-true (prologos-error? err))
   (check-true (multi-arity-error? err))
@@ -103,7 +103,7 @@
 (test-case "multi/dispatch-zero-arg-not-matched"
   ;; Call with 0 args — bare reference to multi-body name
   (define results
-    (run "(defn f ($pipe [x <Nat>] <Nat> (inc x)) ($pipe [x <Nat> y <Nat>] <Nat> x))\n(eval f)"))
+    (run "(defn f ($pipe [x <Nat>] <Nat> (suc x)) ($pipe [x <Nat> y <Nat>] <Nat> x))\n(eval f)"))
   (define err (last results))
   (check-true (prologos-error? err)))
 
@@ -115,7 +115,7 @@
   ;; After defining multi-body f, f::1 and f::2 should be in global env
   (parameterize ([current-global-env (hasheq)]
                  [current-multi-defn-registry (hasheq)])
-    (process-string "(defn f ($pipe [x <Nat>] <Nat> (inc x)) ($pipe [x <Nat> y <Nat>] <Nat> x))")
+    (process-string "(defn f ($pipe [x <Nat>] <Nat> (suc x)) ($pipe [x <Nat> y <Nat>] <Nat> x))")
     (check-not-false (global-env-lookup-type 'f::1))
     (check-not-false (global-env-lookup-type 'f::2))
     ;; Base name should NOT be in global env
@@ -127,7 +127,7 @@
 
 (test-case "multi/output-message"
   (define results
-    (run "(defn f ($pipe [x <Nat>] <Nat> (inc x)) ($pipe [x <Nat> y <Nat>] <Nat> x))"))
+    (run "(defn f ($pipe [x <Nat>] <Nat> (suc x)) ($pipe [x <Nat> y <Nat>] <Nat> x))"))
   ;; First result should mention "defined" and arities
   (define msg (car results))
   (check-true (string? msg))
@@ -142,7 +142,7 @@
 (test-case "multi/duplicate-arity-error"
   ;; Two clauses with the same arity should produce an error
   (define results
-    (run "(defn f ($pipe [x <Nat>] <Nat> (inc x)) ($pipe [y <Nat>] <Nat> y))"))
+    (run "(defn f ($pipe [x <Nat>] <Nat> (suc x)) ($pipe [y <Nat>] <Nat> y))"))
   (define err (car results))
   (check-true (prologos-error? err)))
 
@@ -153,9 +153,9 @@
 (test-case "multi/type-check-independent"
   ;; Clauses with different param types should both type-check
   (define results
-    (run "(defn g ($pipe [x <Nat>] <Nat> (inc x)) ($pipe [x <Nat> y <Bool>] <Nat> x))\n(eval (g zero))\n(eval (g zero true))"))
-  (check-equal? (second results) "1 : Nat")
-  (check-equal? (third results) "zero : Nat"))
+    (run "(defn g ($pipe [x <Nat>] <Nat> (suc x)) ($pipe [x <Nat> y <Bool>] <Nat> x))\n(eval (g zero))\n(eval (g zero true))"))
+  (check-equal? (second results) "1N : Nat")
+  (check-equal? (third results) "0N : Nat"))
 
 ;; ========================================
 ;; Self-recursion within a clause
@@ -167,10 +167,10 @@
     (run (string-append
       "(defn double"
       " ($pipe [x <Nat>] <Nat>"
-      "   (natrec Nat zero (fn [k <Nat>] (fn [r <Nat>] (inc (inc r)))) x)))"
-      "\n(eval (double (inc (inc zero))))"))  ;; double 2 = 4
+      "   (natrec Nat zero (fn [k <Nat>] (fn [r <Nat>] (suc (suc r)))) x)))"
+      "\n(eval (double (suc (suc zero))))"))  ;; double 2 = 4
   )
-  (check-equal? (last results) "4 : Nat"))
+  (check-equal? (last results) "4N : Nat"))
 
 ;; ========================================
 ;; Error message quality
@@ -193,5 +193,5 @@
 (test-case "multi/sexp-single-body-unchanged"
   ;; Regular single-body defn still works
   (define results
-    (run "(defn double [x <Nat>] <Nat> (inc (inc x)))\n(eval (double zero))"))
-  (check-equal? (last results) "2 : Nat"))
+    (run "(defn double [x <Nat>] <Nat> (suc (suc x)))\n(eval (double zero))"))
+  (check-equal? (last results) "2N : Nat"))

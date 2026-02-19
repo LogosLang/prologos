@@ -31,10 +31,10 @@ require [prologos.core.abs-trait :refer [Abs Abs-abs]]
 foreign racket "racket/base" [add1 : Nat -> Nat]
 foreign racket "racket/base" [sub1 : Nat -> Nat]
 
-add1 2
+add1 2N
 ;; => 3 : Nat
 
-sub1 3
+sub1 3N
 ;; => 2 : Nat
 
 
@@ -42,10 +42,10 @@ sub1 3
 
 foreign racket "racket/base" [zero? : Nat -> Bool]
 
-zero? 0
+zero? 0N
 ;; => true : Bool
 
-zero? 1
+zero? 1N
 ;; => false : Bool
 
 
@@ -55,10 +55,10 @@ zero? 1
 
 foreign racket "racket/base" [modulo : Nat Nat -> Nat] [quotient : Nat Nat -> Nat]
 
-modulo 7 3
+modulo 7N 3N
 ;; => 1 : Nat   (7 mod 3)
 
-quotient 10 3
+quotient 10N 3N
 ;; => 3 : Nat   (10 / 3)
 
 
@@ -73,13 +73,13 @@ foreign racket "racket/base" [add1 :as increment : Nat -> Nat]
 foreign racket "racket/base" [sub1 :as decrement : Nat -> Nat]
 foreign racket "racket/base" [zero? :as is-zero : Nat -> Bool]
 
-increment 2
+increment 2N
 ;; => 3 : Nat
 
-decrement 3
+decrement 3N
 ;; => 2 : Nat
 
-is-zero 0
+is-zero 0N
 ;; => true : Bool
 
 
@@ -93,13 +93,13 @@ is-zero 0
 
 foreign racket "racket/base" :as rkt [add1 : Nat -> Nat] [sub1 : Nat -> Nat] [zero? : Nat -> Bool]
 
-rkt/add1 2
+rkt/add1 2N
 ;; => 3 : Nat
 
-rkt/sub1 3
+rkt/sub1 3N
 ;; => 2 : Nat
 
-rkt/zero? 0
+rkt/zero? 0N
 ;; => true : Bool
 
 ;; Module alias avoids name conflicts with Prologos builtins
@@ -119,12 +119,12 @@ foreign racket "racket/base" :as math
   [modulo :as mod : Nat -> Nat -> Nat]
   [quotient :as div : Nat -> Nat -> Nat]
 
-math/inc1 4
+math/inc1 4N
 ;; => 5 : Nat
 
-math/mod 7 3
+math/mod 7N 3N
 
-math/div 10 3
+math/div 10N 3N
 ;; => 3 : Nat   (10 / 3)
 
 
@@ -191,7 +191,7 @@ repeated-len
 
 ;; --- Single capture ---
 
-def n : Nat 3
+def n : Nat 3N
 
 def n-plus-one : Nat racket{(add1 n)} [n : Nat] -> [n-plus-one : Nat]
 
@@ -201,8 +201,8 @@ n-plus-one
 
 ;; --- Multiple captures ---
 
-def a : Nat 2
-def b : Nat 5
+def a : Nat 2N
+def b : Nat 5N
 
 def remainder-ab : Nat racket{(modulo b a)} [a : Nat b : Nat] -> [remainder-ab : Nat]
 
@@ -212,7 +212,7 @@ remainder-ab
 
 ;; --- Boolean return with capture ---
 
-def v : Nat 0
+def v : Nat 0N
 
 def v-is-zero : Bool racket{(zero? v)} [v : Nat] -> [v-is-zero : Bool]
 
@@ -228,7 +228,7 @@ v-is-zero
 ;; Prologos values. Mix them freely with native operations.
 
 ;; Use an aliased import to build a value, then capture into an escape block.
-def base : Nat [math/inc1 [math/inc1 2]]
+def base : Nat [math/inc1 [math/inc1 2N]]
 
 base
 ;; => 4 : Nat
@@ -238,10 +238,10 @@ def bumped : Nat racket{(add1 (add1 base))} [base : Nat] -> [bumped : Nat]
 bumped
 ;; => 6 : Nat
 
-;; Escape block result used with native inc
+;; Escape block result used with native suc
 def ten : Nat racket{10}
 
-inc [inc ten]
+suc [suc ten]
 ;; => 12 : Nat
 
 ;; Type checking works for all foreign values
@@ -263,8 +263,8 @@ foreign racket "racket/base" :as base
 spec factorial Int -> Int
 defn factorial [n]
   match n
-    | 0     -> inc 0
-    | inc k -> base/* n [factorial k]
+    | 0     -> suc 0
+    | suc k -> base/* n [factorial k]
 
 
 

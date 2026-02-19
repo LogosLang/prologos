@@ -1,9 +1,9 @@
 #lang prologos/sexp
 
 ;; Simple function with defn
-(defn increment [x <Nat>] <Nat> (inc x))
+(defn increment [x <Nat>] <Nat> (suc x))
 (eval (increment zero))
-(eval (increment (inc zero)))
+(eval (increment (suc zero)))
 
 ;; Polymorphic identity with defn
 (defn id [A :0 <(Type 0)> x <A>] <A> x)

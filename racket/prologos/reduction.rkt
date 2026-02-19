@@ -270,9 +270,9 @@
      (let ([arm (findf (lambda (a) (eq? (expr-reduce-arm-ctor-name a) 'zero)) arms)])
        (and arm (= (expr-reduce-arm-binding-count arm) 0)
             (expr-reduce-arm-body arm)))]
-    ;; Nat: suc/inc (one field: the predecessor)
+    ;; Nat: suc/suc (one field: the predecessor)
     [(expr-suc? scrut)
-     (let ([arm (findf (lambda (a) (eq? (expr-reduce-arm-ctor-name a) 'inc)) arms)])
+     (let ([arm (findf (lambda (a) (eq? (expr-reduce-arm-ctor-name a) 'suc)) arms)])
        (and arm (= (expr-reduce-arm-binding-count arm) 1)
             (subst 0 (expr-suc-pred scrut) (expr-reduce-arm-body arm))))]
     ;; Bool: true (nullary)

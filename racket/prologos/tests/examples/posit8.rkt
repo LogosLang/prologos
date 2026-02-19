@@ -37,15 +37,15 @@
 (eval (p8-le one one))         ;; => true : Bool
 
 ;; Conversion from Nat
-(eval (p8-from-nat (inc (inc (inc zero)))))   ;; => (posit8 ...) : Posit8  [3]
+(eval (p8-from-nat (suc (suc (suc zero)))))   ;; => (posit8 ...) : Posit8  [3]
 
 ;; Type checking
 (check one <Posit8>)
 (check Posit8 <(Type 0)>)
 
 ;; Branch on NaR
-(eval (p8-if-nar Nat zero (inc zero) one))    ;; => 1 : Nat  [one is not NaR]
-(eval (p8-if-nar Nat zero (inc zero) nar))    ;; => zero : Nat  [nar IS NaR]
+(eval (p8-if-nar Nat zero (suc zero) one))    ;; => 1 : Nat  [one is not NaR]
+(eval (p8-if-nar Nat zero (suc zero) nar))    ;; => zero : Nat  [nar IS NaR]
 
 ;; Define a function using Posit8
 (defn p8-double [x <Posit8>] <Posit8>

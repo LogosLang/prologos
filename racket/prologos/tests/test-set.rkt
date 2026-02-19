@@ -270,7 +270,7 @@
 ;; ========================================
 
 (test-case "surface: set-insert + set-member?"
-  (check-equal? (run "(eval (set-member? (set-insert (set-empty Nat) (inc zero)) (inc zero)))")
+  (check-equal? (run "(eval (set-member? (set-insert (set-empty Nat) (suc zero)) (suc zero)))")
                 '("true : Bool"))
   (check-equal? (run "(eval (set-member? (set-empty Nat) zero))")
                 '("false : Bool")))
@@ -289,9 +289,9 @@
 
 (test-case "surface: set-size"
   (check-equal? (run "(eval (set-size (set-empty Nat)))")
-                '("zero : Nat"))
+                '("0N : Nat"))
   (check-equal? (run "(eval (set-size (set-insert (set-empty Nat) zero)))")
-                '("1 : Nat")))
+                '("1N : Nat")))
 
 ;; ========================================
 ;; Surface syntax: set-union
@@ -299,8 +299,8 @@
 
 (test-case "surface: set-union"
   (check-equal?
-    (run "(eval (set-size (set-union (set-insert (set-empty Nat) zero) (set-insert (set-empty Nat) (inc zero)))))")
-    '("2 : Nat")))
+    (run "(eval (set-size (set-union (set-insert (set-empty Nat) zero) (set-insert (set-empty Nat) (suc zero)))))")
+    '("2N : Nat")))
 
 ;; ========================================
 ;; Surface syntax: set-intersect
@@ -309,8 +309,8 @@
 (test-case "surface: set-intersect"
   ;; {0,1} ∩ {1,2} → size 1
   (check-equal?
-    (run "(eval (set-size (set-intersect (set-insert (set-insert (set-empty Nat) zero) (inc zero)) (set-insert (set-insert (set-empty Nat) (inc zero)) (inc (inc zero))))))")
-    '("1 : Nat")))
+    (run "(eval (set-size (set-intersect (set-insert (set-insert (set-empty Nat) zero) (suc zero)) (set-insert (set-insert (set-empty Nat) (suc zero)) (suc (suc zero))))))")
+    '("1N : Nat")))
 
 ;; ========================================
 ;; Surface syntax: set-diff
@@ -319,8 +319,8 @@
 (test-case "surface: set-diff"
   ;; {0,1} \ {1} → size 1
   (check-equal?
-    (run "(eval (set-size (set-diff (set-insert (set-insert (set-empty Nat) zero) (inc zero)) (set-insert (set-empty Nat) (inc zero)))))")
-    '("1 : Nat")))
+    (run "(eval (set-size (set-diff (set-insert (set-insert (set-empty Nat) zero) (suc zero)) (set-insert (set-empty Nat) (suc zero)))))")
+    '("1N : Nat")))
 
 ;; ========================================
 ;; Surface syntax: def + eval with Set
@@ -328,7 +328,7 @@
 
 (test-case "surface: def + eval with Set"
   (parameterize ([current-global-env (hasheq)])
-    (let ([result (process-string "(def s <(Set Nat)> (set-insert (set-empty Nat) (inc (inc zero))))\n(eval (set-member? s (inc (inc zero))))")])
+    (let ([result (process-string "(def s <(Set Nat)> (set-insert (set-empty Nat) (suc (suc zero))))\n(eval (set-member? s (suc (suc zero))))")])
       (check-equal? (length result) 2)
       (check-true (string-contains? (car result) "s : (Set Nat) defined"))
       (check-equal? (cadr result) "true : Bool"))))
@@ -359,7 +359,7 @@
 ;; ========================================
 
 (test-case "surface: #{...} literal with check"
-  (check-equal? (run "(check #{zero (inc zero)} <(Set Nat)>)")
+  (check-equal? (run "(check #{zero (suc zero)} <(Set Nat)>)")
                 '("OK")))
 
 ;; ========================================
@@ -368,9 +368,9 @@
 
 (test-case "surface: #{...} literal via def"
   (parameterize ([current-global-env (hasheq)])
-    (let ([result (process-string "(def s <(Set Nat)> #{zero (inc zero) (inc (inc zero))})\n(eval (set-size s))")])
+    (let ([result (process-string "(def s <(Set Nat)> #{zero (suc zero) (suc (suc zero))})\n(eval (set-size s))")])
       (check-equal? (length result) 2)
-      (check-equal? (cadr result) "3 : Nat"))))
+      (check-equal? (cadr result) "3N : Nat"))))
 
 ;; ========================================
 ;; #{...} literal syntax: member? on literal
@@ -378,7 +378,7 @@
 
 (test-case "surface: set-member? on #{...} literal via def"
   (parameterize ([current-global-env (hasheq)])
-    (let ([result (process-string "(def s <(Set Nat)> #{zero (inc zero) (inc (inc zero))})\n(eval (set-member? s (inc zero)))")])
+    (let ([result (process-string "(def s <(Set Nat)> #{zero (suc zero) (suc (suc zero))})\n(eval (set-member? s (suc zero)))")])
       (check-equal? (length result) 2)
       (check-equal? (cadr result) "true : Bool"))))
 

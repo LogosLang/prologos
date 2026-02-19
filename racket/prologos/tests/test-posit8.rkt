@@ -245,16 +245,16 @@
                 '("true : Bool")))
 
 (test-case "posit8 surface: from-nat"
-  (check-equal? (run "(eval (p8-from-nat (inc (inc zero))))")
+  (check-equal? (run "(eval (p8-from-nat (suc (suc zero))))")
                 '("[posit8 72] : Posit8")))
 
 (test-case "posit8 surface: if-nar on NaR"
-  (check-equal? (run "(eval (p8-if-nar Nat zero (inc zero) (posit8 128)))")
-                '("zero : Nat")))
+  (check-equal? (run "(eval (p8-if-nar Nat zero (suc zero) (posit8 128)))")
+                '("0N : Nat")))
 
 (test-case "posit8 surface: if-nar on non-NaR"
-  (check-equal? (run "(eval (p8-if-nar Nat zero (inc zero) (posit8 64)))")
-                '("1 : Nat")))
+  (check-equal? (run "(eval (p8-if-nar Nat zero (suc zero) (posit8 64)))")
+                '("1N : Nat")))
 
 (test-case "posit8 surface: NaR propagation"
   (check-equal? (run "(eval (p8+ (posit8 128) (posit8 64)))")

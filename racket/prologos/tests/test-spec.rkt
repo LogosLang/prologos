@@ -41,40 +41,40 @@
     (run (string-append
           "(spec add Nat Nat -> Nat)\n"
           "(defn add [x y]\n"
-          "  (natrec Nat x (fn (k : Nat) (fn (r : Nat) (inc r))) y))\n"
-          "(eval (add (inc zero) (inc (inc zero))))")))
+          "  (natrec Nat x (fn (k : Nat) (fn (r : Nat) (suc r))) y))\n"
+          "(eval (add (suc zero) (suc (suc zero))))")))
   ;; spec is consumed, defn produces 1 result, eval produces 1 result
   (check-equal? (length results) 2)
   (check-true (string-contains? (car results) "add"))
   (check-true (string-contains? (car results) "defined"))
-  (check-equal? (cadr results) "3 : Nat"))
+  (check-equal? (cadr results) "3N : Nat"))
 
 (test-case "spec: single param Nat -> Nat"
   (define results
     (run (string-append
           "(spec inc2 Nat -> Nat)\n"
-          "(defn inc2 [x] (inc (inc x)))\n"
-          "(eval (inc2 (inc zero)))")))
+          "(defn inc2 [x] (suc (suc x)))\n"
+          "(eval (inc2 (suc zero)))")))
   (check-equal? (length results) 2)
-  (check-equal? (cadr results) "3 : Nat"))
+  (check-equal? (cadr results) "3N : Nat"))
 
 (test-case "spec: constant function Nat Nat -> Nat"
   (define results
     (run (string-append
           "(spec const Nat Nat -> Nat)\n"
           "(defn const [x y] x)\n"
-          "(eval (const (inc zero) zero))")))
-  (check-equal? (cadr results) "1 : Nat"))
+          "(eval (const (suc zero) zero))")))
+  (check-equal? (cadr results) "1N : Nat"))
 
 (test-case "spec: with docstring"
   (define results
     (run (string-append
           "(spec add \"Adds two natural numbers.\" Nat Nat -> Nat)\n"
           "(defn add [x y]\n"
-          "  (natrec Nat x (fn (k : Nat) (fn (r : Nat) (inc r))) y))\n"
-          "(eval (add (inc zero) (inc zero)))")))
+          "  (natrec Nat x (fn (k : Nat) (fn (r : Nat) (suc r))) y))\n"
+          "(eval (add (suc zero) (suc zero)))")))
   (check-equal? (length results) 2)
-  (check-equal? (cadr results) "2 : Nat"))
+  (check-equal? (cadr results) "2N : Nat"))
 
 ;; ========================================
 ;; 2. HOF (higher-order function) spec
@@ -85,9 +85,9 @@
     (run (string-append
           "(spec apply-fn (-> Nat Nat) Nat -> Nat)\n"
           "(defn apply-fn [f x] (f x))\n"
-          "(defn inc2 [x : Nat] : Nat (inc (inc x)))\n"
+          "(defn inc2 [x : Nat] : Nat (suc (suc x)))\n"
           "(eval (apply-fn inc2 zero))")))
-  (check-equal? (last results) "2 : Nat"))
+  (check-equal? (last results) "2N : Nat"))
 
 ;; ========================================
 ;; 3. Auto-implicit inference with spec
@@ -103,7 +103,7 @@
   (check-equal? (length results) 3)
   ;; id should have implicit A
   (check-true (string-contains? (car results) "id"))
-  (check-equal? (cadr results) "zero : Nat")
+  (check-equal? (cadr results) "0N : Nat")
   (check-equal? (caddr results) "true : Bool"))
 
 ;; ========================================
@@ -115,10 +115,10 @@
     (run (string-append
           "(spec adder Nat -> Nat -> Nat)\n"
           "(defn adder [x]\n"
-          "  (fn (y : Nat) (natrec Nat x (fn (k : Nat) (fn (r : Nat) (inc r))) y)))\n"
-          "(eval ((adder (inc zero)) (inc (inc zero))))")))
+          "  (fn (y : Nat) (natrec Nat x (fn (k : Nat) (fn (r : Nat) (suc r))) y)))\n"
+          "(eval ((adder (suc zero)) (suc (suc zero))))")))
   (check-equal? (length results) 2)
-  (check-equal? (cadr results) "3 : Nat"))
+  (check-equal? (cadr results) "3N : Nat"))
 
 ;; ========================================
 ;; 5. Pretty printer output
@@ -129,7 +129,7 @@
     (run (string-append
           "(spec add Nat Nat -> Nat)\n"
           "(defn add [x y]\n"
-          "  (natrec Nat x (fn (k : Nat) (fn (r : Nat) (inc r))) y))")))
+          "  (natrec Nat x (fn (k : Nat) (fn (r : Nat) (suc r))) y))")))
   (check-equal? (car results) "add : Nat Nat -> Nat defined."))
 
 (test-case "spec: HOF type wraps domain in brackets"
@@ -143,7 +143,7 @@
   (define results
     (run (string-append
           "(spec inc2 Nat -> Nat)\n"
-          "(defn inc2 [x] (inc (inc x)))")))
+          "(defn inc2 [x] (suc (suc x)))")))
   (check-equal? (car results) "inc2 : Nat -> Nat defined."))
 
 ;; ========================================
@@ -157,7 +157,7 @@
      (run (string-append
            "(spec add Nat Nat -> Nat)\n"
            "(defn add [x : Nat y : Nat] : Nat\n"
-           "  (natrec Nat x (fn (k : Nat) (fn (r : Nat) (inc r))) y))")))))
+           "  (natrec Nat x (fn (k : Nat) (fn (r : Nat) (suc r))) y))")))))
 
 (test-case "spec: error when defn has angle-bracket return type AND spec"
   (check-exn
@@ -165,7 +165,7 @@
    (lambda ()
      (run (string-append
            "(spec inc2 Nat -> Nat)\n"
-           "(defn inc2 [x] <Nat> (inc (inc x)))")))))
+           "(defn inc2 [x] <Nat> (suc (suc x)))")))))
 
 ;; ========================================
 ;; 7. No-spec cases (existing behavior unchanged)
@@ -174,16 +174,16 @@
 (test-case "spec: defn without spec + bare params + return type still works"
   (define results
     (run (string-append
-          "(defn inc2 [x] <Nat> (inc (inc x)))\n"
+          "(defn inc2 [x] <Nat> (suc (suc x)))\n"
           "(eval (inc2 zero))")))
-  (check-equal? (cadr results) "2 : Nat"))
+  (check-equal? (cadr results) "2N : Nat"))
 
 (test-case "spec: defn without spec + fully typed still works"
   (define results
     (run (string-append
-          "(defn inc2 [x : Nat] : Nat (inc (inc x)))\n"
+          "(defn inc2 [x : Nat] : Nat (suc (suc x)))\n"
           "(eval (inc2 zero))")))
-  (check-equal? (cadr results) "2 : Nat"))
+  (check-equal? (cadr results) "2N : Nat"))
 
 (test-case "spec: orphan spec without defn → no error"
   (define results
@@ -204,8 +204,8 @@
     (run (string-append
           "(spec apply-fn (-> Nat Nat) Nat -> Nat)\n"
           "(defn apply-fn [f x] (f x))\n"
-          "(eval (apply-fn (fn (n : Nat) (inc n)) zero))")))
-  (check-equal? (last results) "1 : Nat"))
+          "(eval (apply-fn (fn (n : Nat) (suc n)) zero))")))
+  (check-equal? (last results) "1N : Nat"))
 
 ;; ========================================
 ;; 9. Multi-arity spec + multi-body defn
@@ -215,13 +215,13 @@
   (define results
     (run (string-append
           "(spec greet ($pipe Nat -> Nat) ($pipe Nat Nat -> Nat))\n"
-          "(defn greet ($pipe [x] (inc x)) ($pipe [x y] (natrec Nat x (fn (k : Nat) (fn (r : Nat) (inc r))) y)))\n"
-          "(eval (greet (inc zero)))\n"
-          "(eval (greet (inc zero) (inc (inc zero))))")))
+          "(defn greet ($pipe [x] (suc x)) ($pipe [x y] (natrec Nat x (fn (k : Nat) (fn (r : Nat) (suc r))) y)))\n"
+          "(eval (greet (suc zero)))\n"
+          "(eval (greet (suc zero) (suc (suc zero))))")))
   ;; Multi-body defn produces multiple defs + dispatch, then 2 evals
   (check-true (string-contains? (last (take results (- (length results) 2))) "defined"))
-  (check-equal? (list-ref results (- (length results) 2)) "2 : Nat")
-  (check-equal? (last results) "3 : Nat"))
+  (check-equal? (list-ref results (- (length results) 2)) "2N : Nat")
+  (check-equal? (last results) "3N : Nat"))
 
 (test-case "spec: multi-arity branch count mismatch → error"
   (check-exn
@@ -229,7 +229,7 @@
    (lambda ()
      (run (string-append
            "(spec greet ($pipe Nat -> Nat) ($pipe Nat Nat -> Nat))\n"
-           "(defn greet ($pipe [x] (inc x)))")))))
+           "(defn greet ($pipe [x] (suc x)))")))))
 
 (test-case "spec: single spec with multi-body defn → error"
   (check-exn
@@ -237,7 +237,7 @@
    (lambda ()
      (run (string-append
            "(spec greet Nat -> Nat)\n"
-           "(defn greet ($pipe [x] (inc x)) ($pipe [x y] x))")))))
+           "(defn greet ($pipe [x] (suc x)) ($pipe [x y] x))")))))
 
 ;; ========================================
 ;; 10. Dependent parameter syntax
@@ -252,9 +252,9 @@
     (run (string-append
           "(spec add (n : Nat) Nat -> Nat)\n"
           "(defn add [x y]\n"
-          "  (natrec Nat x (fn (k : Nat) (fn (r : Nat) (inc r))) y))\n"
-          "(eval (add (inc zero) (inc zero)))")))
-  (check-equal? (last results) "2 : Nat"))
+          "  (natrec Nat x (fn (k : Nat) (fn (r : Nat) (suc r))) y))\n"
+          "(eval (add (suc zero) (suc zero)))")))
+  (check-equal? (last results) "2N : Nat"))
 
 ;; ========================================
 ;; 11. Private spec-
@@ -266,11 +266,11 @@
   (define results
     (run (string-append
           "(spec- internal Nat -> Nat)\n"
-          "(defn internal [x] (inc x))\n"
+          "(defn internal [x] (suc x))\n"
           "(eval (internal zero))")))
   ;; 1 def result + 1 eval result
   (check-equal? (length results) 2)
-  (check-equal? (cadr results) "1 : Nat"))
+  (check-equal? (cadr results) "1N : Nat"))
 
 ;; ========================================
 ;; 12. Spec store registration
@@ -347,22 +347,22 @@
 
 (test-case "spec: def with spec type (simple value)"
   (define results
-    (run "(spec one Nat)\n(def one := (inc zero))\n(eval one)"))
-  (check-equal? (last results) "1 : Nat"))
+    (run "(spec one Nat)\n(def one := (suc zero))\n(eval one)"))
+  (check-equal? (last results) "1N : Nat"))
 
 (test-case "spec: def with spec function type"
   (define results
     (run (string-append
           "(spec double Nat -> Nat)\n"
-          "(def double := (fn [x] (inc (inc x))))\n"
-          "(eval (double (inc zero)))")))
-  (check-equal? (last results) "3 : Nat"))
+          "(def double := (fn [x] (suc (suc x))))\n"
+          "(eval (double (suc zero)))")))
+  (check-equal? (last results) "3N : Nat"))
 
 (test-case "spec: def with spec type, no :="
   ;; spec + def without :=  (bare def name body)
   (define results
-    (run "(spec two Nat)\n(def two (inc (inc zero)))\n(eval two)"))
-  (check-equal? (last results) "2 : Nat"))
+    (run "(spec two Nat)\n(def two (suc (suc zero)))\n(eval two)"))
+  (check-equal? (last results) "2N : Nat"))
 
 (test-case "spec: def with spec AND inline type errors"
   (check-exn

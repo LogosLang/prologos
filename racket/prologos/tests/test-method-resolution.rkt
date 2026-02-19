@@ -232,7 +232,7 @@
               (format "Expected true in: ~a" (last result-strings))))
 
 (test-case "e2e/eq?-in-where-body-unequal"
-  ;; (my-eq zero (inc zero)) → false
+  ;; (my-eq zero (suc zero)) → false
   (define results (run-ns
     (string-append
       "(ns method-test-2)\n"
@@ -240,7 +240,7 @@
       "(spec my-eq A A -> Bool where (Eq A))\n"
       "(defn my-eq [x y] where (Eq A)\n"
       "  (eq? x y))\n"
-      "(eval (my-eq zero (inc zero)))\n")))
+      "(eval (my-eq zero (suc zero)))\n")))
   (define result-strings (filter string? results))
   (check-true (not (null? result-strings)))
   (check-true (string-contains? (last result-strings) "false")
@@ -299,7 +299,7 @@
       "(spec same? A A -> Bool where (Eq A))\n"
       "(defn same? [x y] where (Eq A)\n"
       "  (eq? x y))\n"
-      "(eval (same? (inc zero) (inc zero)))\n")))
+      "(eval (same? (suc zero) (suc zero)))\n")))
   (define result-strings (filter string? results))
   (check-true (not (null? result-strings)))
   (check-true (string-contains? (last result-strings) "true")

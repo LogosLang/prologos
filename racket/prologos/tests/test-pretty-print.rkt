@@ -16,7 +16,7 @@
 ;; ========================================
 
 (test-case "pp: zero"
-  (check-equal? (pp-expr (expr-zero)) "zero"))
+  (check-equal? (pp-expr (expr-zero)) "0N"))
 
 (test-case "pp: Nat"
   (check-equal? (pp-expr (expr-Nat)) "Nat"))
@@ -41,16 +41,16 @@
 ;; ========================================
 
 (test-case "pp: suc(zero) -> 1"
-  (check-equal? (pp-expr (expr-suc (expr-zero))) "1"))
+  (check-equal? (pp-expr (expr-suc (expr-zero))) "1N"))
 
 (test-case "pp: suc(suc(zero)) -> 2"
-  (check-equal? (pp-expr (expr-suc (expr-suc (expr-zero)))) "2"))
+  (check-equal? (pp-expr (expr-suc (expr-suc (expr-zero)))) "2N"))
 
 (test-case "pp: nat->expr 5 -> 5"
-  (check-equal? (pp-expr (nat->expr 5)) "5"))
+  (check-equal? (pp-expr (nat->expr 5)) "5N"))
 
 (test-case "pp: suc(bvar(0)) — not a literal"
-  (check-equal? (pp-expr (expr-suc (expr-bvar 0)) '("n")) "[inc n]"))
+  (check-equal? (pp-expr (expr-suc (expr-bvar 0)) '("n")) "[suc n]"))
 
 ;; ========================================
 ;; Variables
@@ -102,7 +102,7 @@
   (let ([result (pp-expr (expr-lam 'mw (expr-Nat) (expr-suc (expr-bvar 0))))])
     (check-true (string-contains? result "fn"))
     (check-true (string-contains? result "Nat"))
-    (check-true (string-contains? result "inc"))))
+    (check-true (string-contains? result "suc"))))
 
 (test-case "pp: linear lambda"
   (let ([result (pp-expr (expr-lam 'm1 (expr-Nat) (expr-bvar 0)))])
@@ -114,11 +114,11 @@
 
 (test-case "pp: simple app"
   (let ([result (pp-expr (expr-app (expr-fvar 'f) (expr-zero)))])
-    (check-equal? result "[f zero]")))
+    (check-equal? result "[f 0N]")))
 
 (test-case "pp: multi-arg app flattened"
   (let ([result (pp-expr (expr-app (expr-app (expr-fvar 'f) (expr-zero)) (expr-true)))])
-    (check-equal? result "[f zero true]")))
+    (check-equal? result "[f 0N true]")))
 
 ;; ========================================
 ;; Pair, fst, snd
@@ -126,7 +126,7 @@
 
 (test-case "pp: pair"
   (check-equal? (pp-expr (expr-pair (expr-zero) (expr-refl)))
-                "[pair zero refl]"))
+                "[pair 0N refl]"))
 
 (test-case "pp: first"
   (check-equal? (pp-expr (expr-fst (expr-fvar 'p)))
@@ -142,7 +142,7 @@
 
 (test-case "pp: annotation"
   (check-equal? (pp-expr (expr-ann (expr-zero) (expr-Nat)))
-                "[the Nat zero]"))
+                "[the Nat 0N]"))
 
 ;; ========================================
 ;; Eq
@@ -150,7 +150,7 @@
 
 (test-case "pp: Eq"
   (check-equal? (pp-expr (expr-Eq (expr-Nat) (expr-zero) (expr-zero)))
-                "[Eq Nat zero zero]"))
+                "[Eq Nat 0N 0N]"))
 
 ;; ========================================
 ;; Vec/Fin
@@ -158,7 +158,7 @@
 
 (test-case "pp: Vec"
   (check-equal? (pp-expr (expr-Vec (expr-Nat) (expr-suc (expr-zero))))
-                "[Vec Nat 1]"))
+                "[Vec Nat 1N]"))
 
 (test-case "pp: vnil"
   (check-equal? (pp-expr (expr-vnil (expr-Nat)))
@@ -166,7 +166,7 @@
 
 (test-case "pp: Fin"
   (check-equal? (pp-expr (expr-Fin (expr-suc (expr-suc (expr-zero)))))
-                "[Fin 2]"))
+                "[Fin 2N]"))
 
 ;; ========================================
 ;; Multiplicity formatting

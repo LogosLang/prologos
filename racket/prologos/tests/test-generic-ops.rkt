@@ -64,7 +64,7 @@
 (require (prologos.core.collection-ops :refer (coll-map coll-filter coll-length coll-to-list)))
 (require (prologos.data.list :refer (List nil cons)))
 (require (prologos.data.nat :refer (zero?)))
-(def my-inc : (-> Nat Nat) (fn (n : Nat) (inc n)))
+(def my-suc : (-> Nat Nat) (fn (n : Nat) (suc n)))
 ")
 
 ;; ========================================
@@ -96,25 +96,25 @@
 ;; coll-map tests
 ;; ========================================
 
-(test-case "generic-ops/map-inc"
-  ;; coll-map inc [1,2,3] = [2,3,4]
+(test-case "generic-ops/map-suc"
+  ;; coll-map suc [1,2,3] = [2,3,4]
   (check-contains
    (run-ns-last (string-append preamble
-     "(eval (coll-map Nat Nat my-inc (cons Nat (inc zero) (cons Nat (inc (inc zero)) (cons Nat (inc (inc (inc zero))) (nil Nat))))))"))
-   "'[2 3 4]"))
+     "(eval (coll-map Nat Nat my-suc (cons Nat (suc zero) (cons Nat (suc (suc zero)) (cons Nat (suc (suc (suc zero))) (nil Nat))))))"))
+   "'[2N 3N 4N]"))
 
 (test-case "generic-ops/map-empty"
-  ;; coll-map inc [] = []
+  ;; coll-map suc [] = []
   (check-contains
    (run-ns-last (string-append preamble
-     "(eval (coll-map Nat Nat my-inc (nil Nat)))"))
+     "(eval (coll-map Nat Nat my-suc (nil Nat)))"))
    "nil"))
 
 (test-case "generic-ops/map-singleton"
-  ;; coll-map inc [5] = [6]
+  ;; coll-map suc [5] = [6]
   (check-contains
    (run-ns-last (string-append preamble
-     "(eval (coll-map Nat Nat my-inc (cons Nat (inc (inc (inc (inc (inc zero))))) (nil Nat))))"))
+     "(eval (coll-map Nat Nat my-suc (cons Nat (suc (suc (suc (suc (suc zero))))) (nil Nat))))"))
    "6"))
 
 ;; ========================================
@@ -125,21 +125,21 @@
   ;; coll-filter zero? [0,1,2,0] = [0,0]
   (check-contains
    (run-ns-last (string-append preamble
-     "(eval (coll-filter Nat zero? (cons Nat zero (cons Nat (inc zero) (cons Nat (inc (inc zero)) (cons Nat zero (nil Nat)))))))"))
-   "zero"))
+     "(eval (coll-filter Nat zero? (cons Nat zero (cons Nat (suc zero) (cons Nat (suc (suc zero)) (cons Nat zero (nil Nat)))))))"))
+   "0N"))
 
 (test-case "generic-ops/filter-all-pass"
   ;; coll-filter zero? [0,0] = [0,0]
   (check-contains
    (run-ns-last (string-append preamble
      "(eval (coll-filter Nat zero? (cons Nat zero (cons Nat zero (nil Nat)))))"))
-   "zero"))
+   "0N"))
 
 (test-case "generic-ops/filter-none-pass"
   ;; coll-filter zero? [1,2] = []
   (check-contains
    (run-ns-last (string-append preamble
-     "(eval (coll-filter Nat zero? (cons Nat (inc zero) (cons Nat (inc (inc zero)) (nil Nat)))))"))
+     "(eval (coll-filter Nat zero? (cons Nat (suc zero) (cons Nat (suc (suc zero)) (nil Nat)))))"))
    "nil"))
 
 (test-case "generic-ops/filter-empty"
@@ -157,7 +157,7 @@
   ;; coll-length [1,2,3] = 3
   (check-contains
    (run-ns-last (string-append preamble
-     "(eval (coll-length Nat (cons Nat (inc zero) (cons Nat (inc (inc zero)) (cons Nat (inc (inc (inc zero))) (nil Nat))))))"))
+     "(eval (coll-length Nat (cons Nat (suc zero) (cons Nat (suc (suc zero)) (cons Nat (suc (suc (suc zero))) (nil Nat))))))"))
    "3"))
 
 (test-case "generic-ops/length-empty"
@@ -165,7 +165,7 @@
   (check-contains
    (run-ns-last (string-append preamble
      "(eval (coll-length Nat (nil Nat)))"))
-   "zero"))
+   "0N"))
 
 (test-case "generic-ops/length-singleton"
   ;; coll-length [42] = 1
@@ -182,8 +182,8 @@
   ;; coll-to-list [1,2,3] = [1,2,3]
   (check-contains
    (run-ns-last (string-append preamble
-     "(eval (coll-to-list Nat (cons Nat (inc zero) (cons Nat (inc (inc zero)) (cons Nat (inc (inc (inc zero))) (nil Nat))))))"))
-   "'[1 2 3]"))
+     "(eval (coll-to-list Nat (cons Nat (suc zero) (cons Nat (suc (suc zero)) (cons Nat (suc (suc (suc zero))) (nil Nat))))))"))
+   "'[1N 2N 3N]"))
 
 (test-case "generic-ops/to-list-empty"
   ;; coll-to-list [] = []

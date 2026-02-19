@@ -580,9 +580,17 @@
                                                (list->string (reverse dchars)))]
                              [v (string->number s)])
                         (token 'number v ln cl ps (string-length s))))))
-              ;; No fraction — plain integer
-              (let ([s (list->string int-chars)])
-                (token 'number (string->number s) ln cl ps (string-length s))))))))
+              ;; No fraction — check for N suffix (Nat literal: 42N)
+              (let ([next-c (tok-peek tok)])
+                (if (and (char? next-c) (char=? next-c #\N))
+                    ;; N suffix → Nat literal
+                    (begin
+                      (tok-read! tok) ; consume N
+                      (let ([s (list->string int-chars)])
+                        (token 'nat-literal (string->number s) ln cl ps (+ (string-length s) 1))))
+                    ;; No N → plain integer (will become Int)
+                    (let ([s (list->string int-chars)])
+                      (token 'number (string->number s) ln cl ps (string-length s))))))))))
 
 (define (read-string-token! tok ln cl ps)
   (tok-read! tok) ; consume opening "
@@ -1043,6 +1051,14 @@
     [(eq? tt 'number)
      (define t (parser-next! p))
      (token->stx t src)]
+    [(eq? tt 'nat-literal)
+     ;; 42N → ($nat-literal 42) sentinel for parser
+     (define t (parser-next! p))
+     (make-stx (list (make-stx '$nat-literal src
+                                (token-line t) (token-col t) (token-pos t) 1)
+                      (make-stx (token-value t) src
+                                (token-line t) (token-col t) (token-pos t) (token-span t)))
+               src (token-line t) (token-col t) (token-pos t) (token-span t))]
     [(eq? tt 'colon)
      ;; Freestanding : becomes the symbol ':
      (define t (parser-next! p))

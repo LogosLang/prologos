@@ -54,14 +54,14 @@
 ;; Numeric literals
 ;; ========================================
 
-(test-case "elab: 0 -> zero"
-  (check-equal? (elab "0") (expr-zero)))
+(test-case "elab: 0 -> int 0"
+  (check-equal? (elab "0") (expr-int 0)))
 
-(test-case "elab: 3 -> suc(suc(suc(zero)))"
-  (check-equal? (elab "3") (nat->expr 3)))
+(test-case "elab: 3 -> int 3"
+  (check-equal? (elab "3") (expr-int 3)))
 
-(test-case "elab: (inc zero)"
-  (check-equal? (elab "(inc zero)") (expr-suc (expr-zero))))
+(test-case "elab: (suc zero)"
+  (check-equal? (elab "(suc zero)") (expr-suc (expr-zero))))
 
 ;; ========================================
 ;; Arrow (non-dependent)
@@ -86,9 +86,9 @@
     (check-equal? (expr-lam-type r) (expr-Nat))
     (check-equal? (expr-lam-body r) (expr-bvar 0))))
 
-(test-case "elab: (fn (x : Nat) (inc x))"
+(test-case "elab: (fn (x : Nat) (suc x))"
   ;; Sprint 7: omitted mult → mult-meta
-  (let ([r (elab "(fn (x : Nat) (inc x))")])
+  (let ([r (elab "(fn (x : Nat) (suc x))")])
     (check-true (expr-lam? r))
     (check-true (mult-meta? (expr-lam-mult r)))
     (check-equal? (expr-lam-type r) (expr-Nat))
@@ -213,14 +213,14 @@
 ;; Vec/Fin
 ;; ========================================
 
-(test-case "elab: (Vec Nat (inc zero))"
-  (check-equal? (elab "(Vec Nat (inc zero))") (expr-Vec (expr-Nat) (expr-suc (expr-zero)))))
+(test-case "elab: (Vec Nat (suc zero))"
+  (check-equal? (elab "(Vec Nat (suc zero))") (expr-Vec (expr-Nat) (expr-suc (expr-zero)))))
 
 (test-case "elab: (vnil Nat)"
   (check-equal? (elab "(vnil Nat)") (expr-vnil (expr-Nat))))
 
-(test-case "elab: (Fin (inc zero))"
-  (check-equal? (elab "(Fin (inc zero))") (expr-Fin (expr-suc (expr-zero)))))
+(test-case "elab: (Fin (suc zero))"
+  (check-equal? (elab "(Fin (suc zero))") (expr-Fin (expr-suc (expr-zero)))))
 
 ;; ========================================
 ;; Shadowing
@@ -278,7 +278,7 @@
 
 (test-case "elab-top: eval"
   (let ([result (elaborate-top-level
-                 (parse-string "(eval (inc zero))"))])
+                 (parse-string "(eval (suc zero))"))])
     (check-false (prologos-error? result))
     (check-equal? (car result) 'eval)
     (check-equal? (cadr result) (expr-suc (expr-zero)))))

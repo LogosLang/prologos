@@ -17,7 +17,8 @@ ns examples.homoiconicity
 
 require [prologos.data.datum  :refer [Datum datum-sym datum-kw datum-nat
                                        datum-int datum-rat datum-bool
-                                       datum-nil datum-cons]]
+                                       datum-nil datum-cons
+                                       sym? kw? nat? int? rat? bool? nil? cons?]]
         [prologos.data.list   :refer [List nil cons map filter reduce
                                        sum length reverse append]]
         [prologos.data.nat    :refer [add mult double sub zero? le?]]
@@ -140,19 +141,9 @@ defn extract-nat [d]
 ;; Pull the number out of quoted 42:
 extract-nat '42
 
-;; Check if a datum is a symbol:
-spec is-sym? Datum -> Bool
-defn is-sym? [d]
-  match d
-    | datum-sym s    -> true
-    | datum-nat n    -> false
-    | datum-kw k     -> false
-    | datum-bool b   -> false
-    | datum-nil      -> false
-    | datum-cons h t -> false
-
-is-sym? 'foo
-is-sym? '42
+;; Check if a datum is a symbol (using datum predicate from stdlib):
+sym? 'foo
+sym? '42
 
 ;; Extract the head of a quoted list:
 spec datum-head Datum -> Datum
@@ -216,12 +207,12 @@ defmacro double-it [$x] [add $x $x]
 
 ;; Use it:
 double-it 3
-double-it [inc zero]
+double-it [suc zero]
 
 ;; The twice macro (from core): (twice f x) --> f(f(x))
 ;; Already loaded from core.prologos. Let's use it:
-twice inc zero
-twice inc [inc [inc zero]]
+twice suc zero
+twice suc [suc [suc zero]]
 twice double 3
 
 ;; A conditional macro: when-nonzero checks and branches
@@ -244,10 +235,10 @@ when-nonzero zero [double 5]
 (expand-1 (double-it 5))
 
 ;; Watch how 'when' (from core) desugars step by step:
-(expand (when true [inc zero]))
+(expand (when true [suc zero]))
 
 ;; Full trace — see every transform step by step:
-(expand-full (when true [inc zero]))
+(expand-full (when true [suc zero]))
 
 
 ;; ========================================================================
@@ -260,13 +251,13 @@ when-nonzero zero [double 5]
 ;; expand them just like any other macro!
 
 ;; Simple pipe: thread zero through three increments
-zero |> inc |> inc |> inc
+zero |> suc |> suc |> suc
 
 ;; Compose two functions and apply:
-[inc >> inc] zero
+[suc >> suc] zero
 
 ;; Pipe into a composed function:
-zero |> [inc >> double]
+zero |> [suc >> double]
 
 
 ;; ========================================================================
@@ -278,11 +269,11 @@ zero |> [inc >> double]
 ;; followed by a terminal (reduce, sum, length, count).
 
 ;; Helper definitions:
-;; (These use sexp (def ...) because constructor bodies like `inc x`
+;; (These use sexp (def ...) because constructor bodies like `suc x`
 ;; need explicit type annotations to resolve constructors.)
-(def inc-fn : [-> Nat Nat] (fn (x : Nat) (inc x)))
+(def suc-fn : [-> Nat Nat] (fn (x : Nat) (suc x)))
 (def is-positive : [-> Nat Bool]
-  (fn (x : Nat) (match x (zero -> false) (inc _ -> true))))
+  (fn (x : Nat) (match x (zero -> false) (suc _ -> true))))
 (def sum-rf : [-> Nat [-> Nat Nat]]
   (fn (acc : Nat) (fn (x : Nat) (add acc x))))
 
@@ -291,22 +282,22 @@ def nums : [List Nat]
   cons Nat 1 [cons Nat 2 [cons Nat 3 [cons Nat 4 [nil Nat]]]]
 
 ;; Block pipe: map then reduce → fused O(n) single pass
-;; [1,2,3,4] → map inc → [2,3,4,5] → reduce + 0 → 14
+;; [1,2,3,4] → map suc → [2,3,4,5] → reduce + 0 → 14
 |> nums
-  map inc-fn
+  map suc-fn
   reduce sum-rf zero
 
 ;; Filter then map then reduce → all fused:
-;; [1,2,3,4] → filter pos? → [1,2,3,4] → map inc → reduce + 0 → 14
+;; [1,2,3,4] → filter pos? → [1,2,3,4] → map suc → reduce + 0 → 14
 |> nums
   filter is-positive
-  map inc-fn
+  map suc-fn
   reduce sum-rf zero
 
 ;; Without a terminal, fusible steps materialize a list:
-;; [1,2,3,4] → map inc → filter pos? → [2,3,4,5]
+;; [1,2,3,4] → map suc → filter pos? → [2,3,4,5]
 |> nums
-  map inc-fn
+  map suc-fn
   filter is-positive
 
 
@@ -374,17 +365,17 @@ spec wrap-in Datum -> Datum -> Datum
 defn wrap-in [func-name arg]
   datum-cons func-name [datum-cons arg datum-nil]
 
-wrap-in 'inc '42
+wrap-in 'suc '42
 wrap-in 'double '(add 1 2)
 
 ;; Compose code transformations:
-;; Start with '5, wrap in 'inc, then wrap in 'double
+;; Start with '5, wrap in 'suc, then wrap in 'double
 def code : Datum := '5
-def step1 : Datum [wrap-in 'inc code]
+def step1 : Datum [wrap-in 'suc code]
 def step2 : Datum [wrap-in 'double step1]
 
 ;; Watch the code tree grow:
-;; '5 → (inc 5) → (double (inc 5))
+;; '5 → (suc 5) → (double (suc 5))
 code
 step1
 step2
@@ -423,17 +414,17 @@ wrap-in op '99
 defmacro apply-twice-macro [$f $x] [$f [$f $x]]
 
 ;; expand shows us exactly what happens:
-(expand (apply-twice-macro inc 3))
+(expand (apply-twice-macro suc 3))
 
 ;; And it evaluates to what we expect:
-apply-twice-macro inc 3
+apply-twice-macro suc 3
 apply-twice-macro double 2
 
 ;; Quote the macro call itself — it's just data:
-'(apply-twice-macro inc 3)
+'(apply-twice-macro suc 3)
 
 ;; We can inspect the quoted macro call:
-datum-head '(apply-twice-macro inc 3)
+datum-head '(apply-twice-macro suc 3)
 
 ;; Final flourish: build a datum, extract its pieces, wrap them up:
 def expr : Datum := '(mult 6 7)

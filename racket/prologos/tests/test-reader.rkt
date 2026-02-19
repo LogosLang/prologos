@@ -161,8 +161,8 @@
                 '((eval zero))))
 
 (test-case "parse: single-line with grouping"
-  (check-equal? (read-all-forms-string "eval [inc zero]")
-                '((eval (inc zero)))))
+  (check-equal? (read-all-forms-string "eval [suc zero]")
+                '((eval (suc zero)))))
 
 (test-case "parse: multi-token indented child"
   (check-equal? (read-all-forms-string "eval\n  id Nat zero")
@@ -190,18 +190,18 @@
 
 (test-case "parse: def form with body"
   (check-equal?
-   (read-all-forms-string "def one : Nat [inc zero]")
-   '((def one : Nat (inc zero)))))
+   (read-all-forms-string "def one : Nat [suc zero]")
+   '((def one : Nat (suc zero)))))
 
 (test-case "parse: multiple top-level forms"
   (check-equal?
-   (read-all-forms-string "eval zero\neval [inc zero]")
-   '((eval zero) (eval (inc zero)))))
+   (read-all-forms-string "eval zero\neval [suc zero]")
+   '((eval zero) (eval (suc zero)))))
 
 (test-case "parse: blank lines between top-level forms"
   (check-equal?
-   (read-all-forms-string "eval zero\n\n\neval [inc zero]")
-   '((eval zero) (eval (inc zero)))))
+   (read-all-forms-string "eval zero\n\n\neval [suc zero]")
+   '((eval zero) (eval (suc zero)))))
 
 (test-case "parse: nested indentation back to column 0"
   (check-equal?
@@ -216,8 +216,8 @@
 
 (test-case "parse: grouping inside grouping"
   (check-equal?
-   (read-all-forms-string "eval [id [inc zero]]")
-   '((eval (id (inc zero))))))
+   (read-all-forms-string "eval [id [suc zero]]")
+   '((eval (id (suc zero))))))
 
 (test-case "parse: indentation inside brackets ignored"
   ;; Newlines inside [] don't create indent/dedent
@@ -286,10 +286,10 @@
 
 (test-case "round-trip: hello"
   (define ws-forms (read-all-forms-string
-   "def one : Nat [inc zero]\ndef two : Nat [inc one]\ncheck two : Nat\neval two"))
+   "def one : Nat [suc zero]\ndef two : Nat [suc one]\ncheck two : Nat\neval two"))
   (check-equal? ws-forms
-   '((def one : Nat (inc zero))
-     (def two : Nat (inc one))
+   '((def one : Nat (suc zero))
+     (def two : Nat (suc one))
      (check two : Nat)
      (eval two))))
 

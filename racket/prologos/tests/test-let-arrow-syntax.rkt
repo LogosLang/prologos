@@ -40,13 +40,13 @@
 
 (test-case "e2e: let := with typed binding evaluates"
   (check-equal?
-   (run-first "(eval (let x : Nat := (inc zero) x))")
-   "1 : Nat"))
+   (run-first "(eval (let x : Nat := (suc zero) x))")
+   "1N : Nat"))
 
 (test-case "e2e: let := in def body"
   (define results
-    (run "(def r : Nat (let a : Nat := (inc (inc zero)) a))\n(eval r)"))
-  (check-equal? (second results) "2 : Nat"))
+    (run "(def r : Nat (let a : Nat := (suc (suc zero)) a))\n(eval r)"))
+  (check-equal? (second results) "2N : Nat"))
 
 ;; ========================================
 ;; 2. Let := with type type-checks
@@ -54,7 +54,7 @@
 
 (test-case "e2e: let := preserves type annotation"
   (check-equal?
-   (run-first "(check (let x : Nat := zero (inc x)) : Nat)")
+   (run-first "(check (let x : Nat := zero (suc x)) : Nat)")
    "OK"))
 
 (test-case "e2e: let := type mismatch caught"
@@ -69,35 +69,35 @@
   (define results
     (run (string-append
           "(def answer : Nat "
-          "  (let a : Nat := (inc zero))"
-          "  (let b : Nat := (inc a))"
-          "  (let c : Nat := (inc b) c))\n"
+          "  (let a : Nat := (suc zero))"
+          "  (let b : Nat := (suc a))"
+          "  (let c : Nat := (suc b) c))\n"
           "(eval answer)")))
-  (check-equal? (second results) "3 : Nat"))
+  (check-equal? (second results) "3N : Nat"))
 
 (test-case "e2e: sibling lets in defn body"
   (define results
     (run (string-append
           "(defn add-three [x : Nat] : Nat "
-          "  (let a : Nat := (inc x))"
-          "  (let b : Nat := (inc a))"
-          "  (let c : Nat := (inc b) c))\n"
+          "  (let a : Nat := (suc x))"
+          "  (let b : Nat := (suc a))"
+          "  (let c : Nat := (suc b) c))\n"
           "(eval (add-three zero))")))
-  (check-equal? (second results) "3 : Nat"))
+  (check-equal? (second results) "3N : Nat"))
 
 (test-case "e2e: sibling lets with trailing body (all bodyless)"
   ;; When body is a sibling (same level), not indented under last let:
-  ;; (def r : Nat (let x := 10) (let y := 20) (let z := (inc x)) z)
+  ;; (def r : Nat (let x := 10) (let y := 20) (let z := (suc x)) z)
   ;; All lets are bodyless; trailing `z` is the body.
   (define results
     (run (string-append
           "(def r : Nat "
-          "  (let x := (inc zero))"
-          "  (let y := (inc (inc zero)))"
-          "  (let z := (inc x))"
+          "  (let x := (suc zero))"
+          "  (let y := (suc (suc zero)))"
+          "  (let z := (suc x))"
           "  z)\n"
           "(eval r)")))
-  (check-equal? (second results) "2 : Nat"))
+  (check-equal? (second results) "2N : Nat"))
 
 (test-case "e2e: sibling lets with multi-token value and trailing body"
   ;; Multi-token value: the value is (add x y), not separate tokens.
@@ -105,14 +105,14 @@
   (define results
     (run (string-append
           "(defn add [x : Nat y : Nat] : Nat"
-          "  (natrec Nat x (fn (k : Nat) (fn (r : Nat) (inc r))) y))\n"
+          "  (natrec Nat x (fn (k : Nat) (fn (r : Nat) (suc r))) y))\n"
           "(def r : Nat "
-          "  (let x := (inc (inc (inc zero))))"
-          "  (let y := (inc (inc zero)))"
+          "  (let x := (suc (suc (suc zero))))"
+          "  (let y := (suc (suc zero)))"
           "  (let z := (add x y))"
           "  z)\n"
           "(eval r)")))
-  (check-equal? (third results) "5 : Nat"))
+  (check-equal? (third results) "5N : Nat"))
 
 ;; ========================================
 ;; 4. Inline [let ...] in expression position
@@ -120,8 +120,8 @@
 
 (test-case "e2e: inline let in application"
   (check-equal?
-   (run-first "(eval (inc (let x : Nat := (inc zero) x)))")
-   "2 : Nat"))
+   (run-first "(eval (suc (let x : Nat := (suc zero) x)))")
+   "2N : Nat"))
 
 ;; ========================================
 ;; 5. Defn with uncurried arrow return type
@@ -131,7 +131,7 @@
   (define results
     (run (string-append
           "(defn add [x <Nat> y <Nat>] <Nat>\n"
-          "  (natrec Nat x (fn (k : Nat) (fn (r : Nat) (inc r))) y))\n"
+          "  (natrec Nat x (fn (k : Nat) (fn (r : Nat) (suc r))) y))\n"
           "(check add <Nat Nat -> Nat>)")))
   (check-equal? (last results) "OK"))
 
@@ -157,9 +157,9 @@
   (define results
     (run (string-append
           "(defn apply-fn [f : (-> Nat Nat) x : Nat] : Nat (f x))\n"
-          "(defn inc2 [n : Nat] : Nat (inc (inc n)))\n"
-          "(eval (apply-fn inc2 (inc zero)))")))
-  (check-equal? (last results) "3 : Nat"))
+          "(defn inc2 [n : Nat] : Nat (suc (suc n)))\n"
+          "(eval (apply-fn inc2 (suc zero)))")))
+  (check-equal? (last results) "3N : Nat"))
 
 ;; ========================================
 ;; 7. Combined: let with arrow type annotation
@@ -169,10 +169,10 @@
   (define results
     (run (string-append
           "(def result : Nat\n"
-          "  (let f : (-> Nat Nat) := (fn (x : Nat) (inc x))\n"
+          "  (let f : (-> Nat Nat) := (fn (x : Nat) (suc x))\n"
           "    (f zero)))\n"
           "(eval result)")))
-  (check-equal? (second results) "1 : Nat"))
+  (check-equal? (second results) "1N : Nat"))
 
 ;; ========================================
 ;; 8. Block let with mixed := and typed bindings
@@ -180,8 +180,8 @@
 
 (test-case "e2e: bracket let with multiple typed := bindings"
   (define results
-    (run "(def r : Nat (let (a : Nat := zero b : Nat := (inc a)) (inc b)))\n(eval r)"))
-  (check-equal? (second results) "2 : Nat"))
+    (run "(def r : Nat (let (a : Nat := zero b : Nat := (suc a)) (suc b)))\n(eval r)"))
+  (check-equal? (second results) "2N : Nat"))
 
 ;; ========================================
 ;; 9. Pretty printer outputs uncurried arrows
@@ -191,7 +191,7 @@
   (define results
     (run (string-append
           "(defn add [x : Nat y : Nat] : Nat\n"
-          "  (natrec Nat x (fn (k : Nat) (fn (r : Nat) (inc r))) y))\n")))
+          "  (natrec Nat x (fn (k : Nat) (fn (r : Nat) (suc r))) y))\n")))
   ;; Should print "add : Nat Nat -> Nat defined." (uncurried)
   (check-equal? (car results) "add : Nat Nat -> Nat defined."))
 
@@ -205,7 +205,7 @@
 (test-case "e2e: pp single arrow unchanged"
   (define results
     (run (string-append
-          "(defn inc2 [x : Nat] : Nat (inc (inc x)))\n")))
+          "(defn inc2 [x : Nat] : Nat (suc (suc x)))\n")))
   (check-equal? (car results) "inc2 : Nat -> Nat defined."))
 
 ;; ========================================
@@ -221,13 +221,13 @@
 
 (test-case "e2e: existing let bracket format works"
   (check-equal?
-   (run-first "(eval (let ([x : Nat (inc zero)]) (inc x)))")
-   "2 : Nat"))
+   (run-first "(eval (let ([x : Nat (suc zero)]) (suc x)))")
+   "2N : Nat"))
 
 (test-case "e2e: existing angle-type let format works"
   (check-equal?
-   (run-first "(eval (let x <Nat> (inc zero) x))")
-   "1 : Nat"))
+   (run-first "(eval (let x <Nat> (suc zero) x))")
+   "1N : Nat"))
 
 ;; ========================================
 ;; 9. Let bracket binding with inferred type
@@ -235,18 +235,18 @@
 
 (test-case "e2e: let bracket binding with inferred type (single)"
   (check-equal?
-   (run-first "(eval (let ([x (inc zero)]) (inc x)))")
-   "2 : Nat"))
+   (run-first "(eval (let ([x (suc zero)]) (suc x)))")
+   "2N : Nat"))
 
 (test-case "e2e: let bracket binding with inferred type (multiple)"
   (check-equal?
-   (run-first "(eval (let ([x (inc zero)] [y (inc x)]) (inc y)))")
-   "3 : Nat"))
+   (run-first "(eval (let ([x (suc zero)] [y (suc x)]) (suc y)))")
+   "3N : Nat"))
 
 (test-case "e2e: let bracket binding mixed inferred and annotated"
   (check-equal?
-   (run-first "(eval (let ([x (inc zero)] [y : Nat (inc x)]) (inc y)))")
-   "3 : Nat"))
+   (run-first "(eval (let ([x (suc zero)] [y : Nat (suc x)]) (suc y)))")
+   "3N : Nat"))
 
 ;; ========================================
 ;; 10. def := assignment syntax
@@ -254,18 +254,18 @@
 
 (test-case "e2e: def := with inferred type"
   (define results
-    (run "(def one := (inc zero))\n(eval one)"))
-  (check-equal? (last results) "1 : Nat"))
+    (run "(def one := (suc zero))\n(eval one)"))
+  (check-equal? (last results) "1N : Nat"))
 
 (test-case "e2e: def := with type annotation"
   (define results
-    (run "(def one : Nat := (inc zero))\n(eval one)"))
-  (check-equal? (last results) "1 : Nat"))
+    (run "(def one : Nat := (suc zero))\n(eval one)"))
+  (check-equal? (last results) "1N : Nat"))
 
 (test-case "e2e: def := with multi-token type"
   (define results
-    (run "(def id : Nat -> Nat := (fn [x <Nat>] x))\n(eval (id (inc zero)))"))
-  (check-equal? (last results) "1 : Nat"))
+    (run "(def id : Nat -> Nat := (fn [x <Nat>] x))\n(eval (id (suc zero)))"))
+  (check-equal? (last results) "1N : Nat"))
 
 ;; ========================================
 ;; 11. expand / parse / elaborate inspection commands
@@ -273,18 +273,18 @@
 
 (test-case "e2e: expand shows def := expansion"
   (check-equal?
-   (run-first "(expand (def one := (inc zero)))")
-   "(def one (inc zero))"))
+   (run-first "(expand (def one := (suc zero)))")
+   "(def one (suc zero))"))
 
 (test-case "e2e: expand shows let expansion"
   (check-equal?
-   (run-first "(expand (let x (inc zero) x))")
-   "((fn (x : _) x) (inc zero))"))
+   (run-first "(expand (let x (suc zero) x))")
+   "((fn (x : _) x) (suc zero))"))
 
 (test-case "e2e: expand passes through plain expression"
   (check-equal?
-   (run-first "(expand (inc zero))")
-   "(inc zero)"))
+   (run-first "(expand (suc zero))")
+   "(suc zero)"))
 
 (test-case "e2e: parse shows surface AST"
   (check-true
@@ -292,14 +292,14 @@
 
 (test-case "e2e: parse shows surface AST for application"
   (check-true
-   (string-contains? (run-first "(parse (inc zero))") "surf-suc")))
+   (string-contains? (run-first "(parse (suc zero))") "surf-suc")))
 
-(test-case "e2e: elaborate shows core AST for inc zero"
+(test-case "e2e: elaborate shows core AST for suc zero"
   (check-equal?
-   (run-first "(elaborate (inc zero))")
-   "1"))
+   (run-first "(elaborate (suc zero))")
+   "1N"))
 
 (test-case "e2e: elaborate shows core AST for zero"
   (check-equal?
    (run-first "(elaborate zero)")
-   "zero"))
+   "0N"))

@@ -10,35 +10,35 @@ spec add Nat Nat -> Nat
 defn add [x y]
   match y
     | zero  -> x
-    | inc k -> inc [add x k]
+    | suc k -> suc [add x k]
 
 ;; Multiplication: mult x y = x * y (by recursion on y)
 spec mult Nat Nat -> Nat
 defn mult [x y]
   match y
     | zero  -> zero
-    | inc k -> add x [mult x k]
+    | suc k -> add x [mult x k]
 
 ;; Double: double n = n + n
 spec double Nat -> Nat
 defn double [n]
   match n
     | zero  -> zero
-    | inc k -> inc [inc [double k]]
+    | suc k -> suc [suc [double k]]
 
 ;; Predecessor: pred(0) = 0, pred(suc(k)) = k
-spec dec Nat -> Nat
-defn dec [n]
+spec pred Nat -> Nat
+defn pred [n]
   match n
     | zero  -> zero
-    | inc k -> k
+    | suc k -> k
 
 ;; Zero predicate: zero?(0) = true, zero?(suc(k)) = false
 spec zero? Nat -> Bool
 defn zero? [n]
   match n
     | zero  -> true
-    | inc _ -> false
+    | suc _ -> false
 
 ;; ========================================
 ;; Arithmetic
@@ -50,14 +50,14 @@ spec sub Nat Nat -> Nat
 defn sub [x y]
   match y
     | zero  -> x
-    | inc k -> dec [sub x k]
+    | suc k -> pred [sub x k]
 
 ;; Exponentiation: power(base, exp) = base^exp
 spec pow Nat Nat -> Nat
 defn pow [base exp]
   match exp
-    | zero  -> inc zero
-    | inc k -> mult base [pow base k]
+    | zero  -> suc zero
+    | suc k -> mult base [pow base k]
 
 ;; ========================================
 ;; Comparison
@@ -118,7 +118,7 @@ defn max [x y]
 spec bool-to-nat Bool -> Nat
 defn bool-to-nat [b]
   match b
-    | true  -> inc zero
+    | true  -> suc zero
     | false -> zero
 
 ;; Clamp: clamp low high returns a function that clamps x to [low, high]

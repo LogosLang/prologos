@@ -23,7 +23,7 @@ impl Hashable Nat
 
 impl Hashable Bool
   defn hash [b : Bool] <Nat>
-    if b [inc zero] zero
+    if b [suc zero] zero
 
 ;; ========================================
 ;; Hashable Ordering — lt=0, eq=1, gt=2
@@ -33,8 +33,8 @@ impl Hashable Ordering
   defn hash [o : Ordering] <Nat>
     match o
       | lt-ord -> zero
-      | eq-ord -> inc zero
-      | gt-ord -> inc [inc zero]
+      | eq-ord -> suc zero
+      | gt-ord -> suc [suc zero]
 
 ;; ========================================
 ;; Parameterized hash functions (explicit dict)
@@ -48,7 +48,7 @@ spec hash-option [Hashable A] [Option A] -> Nat
 defn hash-option [hash-a opt]
   match opt
     | none   -> zero
-    | some a -> hash-combine [inc zero] [hash-a a]
+    | some a -> hash-combine [suc zero] [hash-a a]
 
 ;; hash-list: hash a List A using a Hashable A dict.
 ;; nil → 0, cons a as → hash-combine (hash a) (hash-list as)

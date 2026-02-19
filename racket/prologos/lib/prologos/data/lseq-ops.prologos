@@ -46,7 +46,7 @@ require [prologos.data.lseq   :refer [LSeq lseq-nil lseq-cell lseq-head lseq-res
   (fn (A :0 (Type 0)) (fn (n : Nat) (fn (xs : (LSeq A))
     (match n
       (zero -> (lseq-nil A))
-      (inc k -> (match xs
+      (suc k -> (match xs
         (lseq-nil -> (lseq-nil A))
         (lseq-cell a t -> (lseq-cell A a (fn (_ : Unit) (lseq-take A k (t unit))))))))))))
 
@@ -55,7 +55,7 @@ require [prologos.data.lseq   :refer [LSeq lseq-nil lseq-cell lseq-head lseq-res
   (fn (A :0 (Type 0)) (fn (n : Nat) (fn (xs : (LSeq A))
     (match n
       (zero -> xs)
-      (inc k -> (match xs
+      (suc k -> (match xs
         (lseq-nil -> (lseq-nil A))
         (lseq-cell _ t -> (lseq-drop A k (t unit))))))))))
 
@@ -76,4 +76,4 @@ require [prologos.data.lseq   :refer [LSeq lseq-nil lseq-cell lseq-head lseq-res
 ;; Length (strict — forces all elements).
 (def lseq-length : [Pi [A :0 <Type>] [-> [LSeq A] Nat]]
   (fn (A :0 (Type 0)) (fn (xs : (LSeq A))
-    (lseq-fold Nat A (fn (n : Nat) (fn (_ : A) (inc n))) zero xs))))
+    (lseq-fold Nat A (fn (n : Nat) (fn (_ : A) (suc n))) zero xs))))

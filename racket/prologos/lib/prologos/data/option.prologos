@@ -62,15 +62,15 @@ defn zip [oa ob]
   zip-with A B [Sigma [_ <A>] B] [fn a b [pair a b]] oa ob
 
 ;; True if some.
-spec is-some [Option A] -> Bool
-defn is-some [opt]
+spec some? [Option A] -> Bool
+defn some? [opt]
   match opt
     | none   -> false
     | some _ -> true
 
 ;; True if none.
-spec is-none [Option A] -> Bool
-defn is-none [opt]
+spec none? [Option A] -> Bool
+defn none? [opt]
   match opt
     | none   -> true
     | some _ -> false

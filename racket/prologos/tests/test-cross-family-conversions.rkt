@@ -340,5 +340,5 @@
   (check-true (string-contains? (last r) "42 : Rat")))
 
 (test-case "compat/p8-from-nat-still-works"
-  (define r (run-ns-strings "(ns t)(eval (p8-from-nat (inc zero)))"))
+  (define r (run-ns-strings "(ns t)(eval (p8-from-nat (suc zero)))"))
   (check-true (string-contains? (last r) "Posit8")))

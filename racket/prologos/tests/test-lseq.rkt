@@ -104,7 +104,7 @@
 (test-case "lseq/lseq-head-cell"
   ;; lseq-head on cell → some 1
   (define result (run-ns-last (string-append preamble
-     "(eval (lseq-head Nat (lseq-cell Nat (inc zero) (fn (_ : Unit) (lseq-nil Nat)))))")))
+     "(eval (lseq-head Nat (lseq-cell Nat (suc zero) (fn (_ : Unit) (lseq-nil Nat)))))")))
   (check-contains result "some")
   (check-contains result "1"))
 
@@ -117,7 +117,7 @@
 (test-case "lseq/lseq-rest-cell"
   ;; lseq-rest on cell → forced tail (should be nil)
   (define result (run-ns-last (string-append preamble
-     "(eval (lseq-rest Nat (lseq-cell Nat (inc zero) (fn (_ : Unit) (lseq-nil Nat)))))")))
+     "(eval (lseq-rest Nat (lseq-cell Nat (suc zero) (fn (_ : Unit) (lseq-nil Nat)))))")))
   (check-contains result "lseq-nil")
   (check-contains result "LSeq Nat"))
 
@@ -135,9 +135,9 @@
 (test-case "lseq-ops/round-trip"
   ;; Convert list → lseq → list preserves structure
   (define result (run-ns-last (string-append preamble
-     "(def list123 : (List Nat) (cons Nat (inc zero) (cons Nat (inc (inc zero)) (cons Nat (inc (inc (inc zero))) (nil Nat)))))
+     "(def list123 : (List Nat) (cons Nat (suc zero) (cons Nat (suc (suc zero)) (cons Nat (suc (suc (suc zero))) (nil Nat)))))
       (eval (lseq-to-list Nat (list-to-lseq Nat list123)))")))
-  (check-contains result "'[1 2 3]")
+  (check-contains result "'[1N 2N 3N]")
   (check-contains result "List Nat"))
 
 (test-case "lseq-ops/round-trip-empty"
@@ -151,20 +151,20 @@
 ;; LSeq-Ops — Map
 ;; ========================================
 
-(test-case "lseq-ops/map-inc"
+(test-case "lseq-ops/map-suc"
   ;; Map (x + 1) over [1,2,3] → [2,3,4]
   (define result (run-ns-last (string-append preamble
-     "(def list123 : (List Nat) (cons Nat (inc zero) (cons Nat (inc (inc zero)) (cons Nat (inc (inc (inc zero))) (nil Nat)))))
-      (def inc-fn : (-> Nat Nat) (fn (x : Nat) (inc x)))
-      (eval (lseq-to-list Nat (lseq-map Nat Nat inc-fn (list-to-lseq Nat list123))))")))
-  (check-contains result "'[2 3 4]")
+     "(def list123 : (List Nat) (cons Nat (suc zero) (cons Nat (suc (suc zero)) (cons Nat (suc (suc (suc zero))) (nil Nat)))))
+      (def suc-fn : (-> Nat Nat) (fn (x : Nat) (suc x)))
+      (eval (lseq-to-list Nat (lseq-map Nat Nat suc-fn (list-to-lseq Nat list123))))")))
+  (check-contains result "'[2N 3N 4N]")
   (check-contains result "List Nat"))
 
 (test-case "lseq-ops/map-empty"
   ;; Map over empty → empty
   (define result (run-ns-last (string-append preamble
-     "(def inc-fn : (-> Nat Nat) (fn (x : Nat) (inc x)))
-      (eval (lseq-to-list Nat (lseq-map Nat Nat inc-fn (lseq-nil Nat))))")))
+     "(def suc-fn : (-> Nat Nat) (fn (x : Nat) (suc x)))
+      (eval (lseq-to-list Nat (lseq-map Nat Nat suc-fn (lseq-nil Nat))))")))
   (check-contains result "nil")
   (check-contains result "List Nat"))
 
@@ -176,9 +176,9 @@
   ;; Filter keeps only zeros from [0, 1, 0, 2]
   (define result (run-ns-last (string-append preamble
      "(require (prologos.data.nat :refer (zero?)))
-      (def xs : (List Nat) (cons Nat zero (cons Nat (inc zero) (cons Nat zero (cons Nat (inc (inc zero)) (nil Nat))))))
+      (def xs : (List Nat) (cons Nat zero (cons Nat (suc zero) (cons Nat zero (cons Nat (suc (suc zero)) (nil Nat))))))
       (eval (lseq-to-list Nat (lseq-filter Nat zero? (list-to-lseq Nat xs))))")))
-  (check-contains result "'[zero zero]")
+  (check-contains result "'[0N 0N]")
   (check-contains result "List Nat"))
 
 (test-case "lseq-ops/filter-empty"
@@ -196,15 +196,15 @@
 (test-case "lseq-ops/take-2-from-3"
   ;; Take 2 from [1,2,3] → [1,2]
   (define result (run-ns-last (string-append preamble
-     "(def list123 : (List Nat) (cons Nat (inc zero) (cons Nat (inc (inc zero)) (cons Nat (inc (inc (inc zero))) (nil Nat)))))
-      (eval (lseq-to-list Nat (lseq-take Nat (inc (inc zero)) (list-to-lseq Nat list123))))")))
-  (check-contains result "'[1 2]")
+     "(def list123 : (List Nat) (cons Nat (suc zero) (cons Nat (suc (suc zero)) (cons Nat (suc (suc (suc zero))) (nil Nat)))))
+      (eval (lseq-to-list Nat (lseq-take Nat (suc (suc zero)) (list-to-lseq Nat list123))))")))
+  (check-contains result "'[1N 2N]")
   (check-contains result "List Nat"))
 
 (test-case "lseq-ops/take-0"
   ;; Take 0 → empty
   (define result (run-ns-last (string-append preamble
-     "(def list123 : (List Nat) (cons Nat (inc zero) (nil Nat)))
+     "(def list123 : (List Nat) (cons Nat (suc zero) (nil Nat)))
       (eval (lseq-to-list Nat (lseq-take Nat zero (list-to-lseq Nat list123))))")))
   (check-contains result "nil")
   (check-contains result "List Nat"))
@@ -212,17 +212,17 @@
 (test-case "lseq-ops/drop-1-from-3"
   ;; Drop 1 from [1,2,3] → [2,3]
   (define result (run-ns-last (string-append preamble
-     "(def list123 : (List Nat) (cons Nat (inc zero) (cons Nat (inc (inc zero)) (cons Nat (inc (inc (inc zero))) (nil Nat)))))
-      (eval (lseq-to-list Nat (lseq-drop Nat (inc zero) (list-to-lseq Nat list123))))")))
-  (check-contains result "'[2 3]")
+     "(def list123 : (List Nat) (cons Nat (suc zero) (cons Nat (suc (suc zero)) (cons Nat (suc (suc (suc zero))) (nil Nat)))))
+      (eval (lseq-to-list Nat (lseq-drop Nat (suc zero) (list-to-lseq Nat list123))))")))
+  (check-contains result "'[2N 3N]")
   (check-contains result "List Nat"))
 
 (test-case "lseq-ops/drop-0"
   ;; Drop 0 → unchanged
   (define result (run-ns-last (string-append preamble
-     "(def list123 : (List Nat) (cons Nat (inc zero) (cons Nat (inc (inc zero)) (nil Nat))))
+     "(def list123 : (List Nat) (cons Nat (suc zero) (cons Nat (suc (suc zero)) (nil Nat))))
       (eval (lseq-to-list Nat (lseq-drop Nat zero (list-to-lseq Nat list123))))")))
-  (check-contains result "'[1 2]")
+  (check-contains result "'[1N 2N]")
   (check-contains result "List Nat"))
 
 ;; ========================================
@@ -232,18 +232,18 @@
 (test-case "lseq-ops/append"
   ;; Append [1] [2,3] → [1,2,3]
   (define result (run-ns-last (string-append preamble
-     "(def xs : (LSeq Nat) (list-to-lseq Nat (cons Nat (inc zero) (nil Nat))))
-      (def ys : (LSeq Nat) (list-to-lseq Nat (cons Nat (inc (inc zero)) (cons Nat (inc (inc (inc zero))) (nil Nat)))))
+     "(def xs : (LSeq Nat) (list-to-lseq Nat (cons Nat (suc zero) (nil Nat))))
+      (def ys : (LSeq Nat) (list-to-lseq Nat (cons Nat (suc (suc zero)) (cons Nat (suc (suc (suc zero))) (nil Nat)))))
       (eval (lseq-to-list Nat (lseq-append Nat xs ys)))")))
-  (check-contains result "'[1 2 3]")
+  (check-contains result "'[1N 2N 3N]")
   (check-contains result "List Nat"))
 
 (test-case "lseq-ops/append-empty-left"
   ;; Append [] [1] → [1]
   (define result (run-ns-last (string-append preamble
-     "(def ys : (LSeq Nat) (list-to-lseq Nat (cons Nat (inc zero) (nil Nat))))
+     "(def ys : (LSeq Nat) (list-to-lseq Nat (cons Nat (suc zero) (nil Nat))))
       (eval (lseq-to-list Nat (lseq-append Nat (lseq-nil Nat) ys)))")))
-  (check-contains result "'[1]")
+  (check-contains result "'[1N]")
   (check-contains result "List Nat"))
 
 ;; ========================================
@@ -254,31 +254,31 @@
   ;; Fold with add over [1,2,3], init 0 → 6
   (check-contains
    (run-ns-last (string-append preamble
-     "(def list123 : (List Nat) (cons Nat (inc zero) (cons Nat (inc (inc zero)) (cons Nat (inc (inc (inc zero))) (nil Nat)))))
+     "(def list123 : (List Nat) (cons Nat (suc zero) (cons Nat (suc (suc zero)) (cons Nat (suc (suc (suc zero))) (nil Nat)))))
       (eval (lseq-fold Nat Nat (fn (acc : Nat) (fn (b : Nat) (add acc b))) zero (list-to-lseq Nat list123)))"))
-   "6 : Nat"))
+   "6N : Nat"))
 
 (test-case "lseq-ops/fold-empty"
   ;; Fold over empty → initial value
   (check-contains
    (run-ns-last (string-append preamble
      "(eval (lseq-fold Nat Nat (fn (acc : Nat) (fn (b : Nat) (add acc b))) zero (lseq-nil Nat)))"))
-   "zero : Nat"))
+   "0N : Nat"))
 
 (test-case "lseq-ops/length-3"
   ;; Length of [1,2,3] → 3
   (check-contains
    (run-ns-last (string-append preamble
-     "(def list123 : (List Nat) (cons Nat (inc zero) (cons Nat (inc (inc zero)) (cons Nat (inc (inc (inc zero))) (nil Nat)))))
+     "(def list123 : (List Nat) (cons Nat (suc zero) (cons Nat (suc (suc zero)) (cons Nat (suc (suc (suc zero))) (nil Nat)))))
       (eval (lseq-length Nat (list-to-lseq Nat list123)))"))
-   "3 : Nat"))
+   "3N : Nat"))
 
 (test-case "lseq-ops/length-0"
   ;; Length of [] → 0
   (check-contains
    (run-ns-last (string-append preamble
      "(eval (lseq-length Nat (lseq-nil Nat)))"))
-   "zero : Nat"))
+   "0N : Nat"))
 
 ;; ========================================
 ;; Laziness test — lseq-head doesn't force tail
@@ -287,7 +287,7 @@
 (test-case "lseq/laziness-head-doesnt-force-tail"
   ;; lseq-head on a cell returns head without forcing the thunk.
   (define result (run-ns-last (string-append preamble
-     "(eval (lseq-head Nat (lseq-cell Nat (inc (inc zero)) (fn (_ : Unit) (lseq-nil Nat)))))")))
+     "(eval (lseq-head Nat (lseq-cell Nat (suc (suc zero)) (fn (_ : Unit) (lseq-nil Nat)))))")))
   (check-contains result "some")
   (check-contains result "2"))
 

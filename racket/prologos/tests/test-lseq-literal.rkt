@@ -138,15 +138,15 @@
   (check-contains result "OK"))
 
 (test-case "lseq-literal/check-singleton"
-  ;; (check ~[(inc zero)] <LSeq Nat>) should type-check → "OK"
+  ;; (check ~[(suc zero)] <LSeq Nat>) should type-check → "OK"
   (define result (run-ns-last (string-append preamble
-    "(check ~[(inc zero)] <LSeq Nat>)")))
+    "(check ~[(suc zero)] <LSeq Nat>)")))
   (check-contains result "OK"))
 
 (test-case "lseq-literal/check-multi"
-  ;; (check ~[(inc zero) (inc (inc zero)) (inc (inc (inc zero)))] <LSeq Nat>)
+  ;; (check ~[(suc zero) (suc (suc zero)) (suc (suc (suc zero)))] <LSeq Nat>)
   (define result (run-ns-last (string-append preamble
-    "(check ~[(inc zero) (inc (inc zero)) (inc (inc (inc zero)))] <LSeq Nat>)")))
+    "(check ~[(suc zero) (suc (suc zero)) (suc (suc (suc zero)))] <LSeq Nat>)")))
   (check-contains result "OK"))
 
 ;; ========================================
@@ -163,14 +163,14 @@
 (test-case "lseq-literal/def-multi"
   ;; Define a 3-element LSeq via literal, convert to list to verify
   (define result (run-ns-last (string-append preamble
-    "(def xs <LSeq Nat> ~[(inc zero) (inc (inc zero)) (inc (inc (inc zero)))])
+    "(def xs <LSeq Nat> ~[(suc zero) (suc (suc zero)) (suc (suc (suc zero)))])
      (eval (lseq-to-list Nat xs))")))
-  (check-contains result "'[1 2 3]"))
+  (check-contains result "'[1N 2N 3N]"))
 
 (test-case "lseq-literal/head"
   ;; Head of ~[1 2 3] should be some 1
   (define result (run-ns-last (string-append preamble
-    "(def xs <LSeq Nat> ~[(inc zero) (inc (inc zero))])
+    "(def xs <LSeq Nat> ~[(suc zero) (suc (suc zero))])
      (eval (lseq-head Nat xs))")))
   (check-contains result "some")
   (check-contains result "1"))
@@ -185,7 +185,7 @@
 (test-case "lseq-literal/length"
   ;; Length of ~[0 1 2] should be 3
   (define result (run-ns-last (string-append preamble
-    "(def xs <LSeq Nat> ~[zero (inc zero) (inc (inc zero))])
+    "(def xs <LSeq Nat> ~[zero (suc zero) (suc (suc zero))])
      (eval (lseq-length Nat xs))")))
   (check-contains result "3"))
 
@@ -195,39 +195,39 @@
 
 (test-case "lseq-literal/round-trip-singleton"
   (define result (run-ns-last (string-append preamble
-    "(def xs <LSeq Nat> ~[(inc zero)])
+    "(def xs <LSeq Nat> ~[(suc zero)])
      (eval (lseq-to-list Nat xs))")))
-  (check-contains result "'[1]"))
+  (check-contains result "'[1N]"))
 
 (test-case "lseq-literal/round-trip-5-elements"
   (define result (run-ns-last (string-append preamble
-    "(def xs <LSeq Nat> ~[(inc zero) (inc (inc zero)) (inc (inc (inc zero))) (inc (inc (inc (inc zero)))) (inc (inc (inc (inc (inc zero)))))])
+    "(def xs <LSeq Nat> ~[(suc zero) (suc (suc zero)) (suc (suc (suc zero))) (suc (suc (suc (suc zero)))) (suc (suc (suc (suc (suc zero)))))])
      (eval (lseq-to-list Nat xs))")))
-  (check-contains result "'[1 2 3 4 5]"))
+  (check-contains result "'[1N 2N 3N 4N 5N]"))
 
 ;; ========================================
 ;; Operations on ~[...] literals
 ;; ========================================
 
 (test-case "lseq-literal/map-over-literal"
-  ;; Map inc over ~[1 2 3] → ~[2 3 4] → convert to list
+  ;; Map suc over ~[1 2 3] → ~[2 3 4] → convert to list
   (define result (run-ns-last (string-append preamble
-    "(def inc-fn : (-> Nat Nat) (fn (x : Nat) (inc x)))
-     (def xs <LSeq Nat> ~[(inc zero) (inc (inc zero)) (inc (inc (inc zero)))])
-     (eval (lseq-to-list Nat (lseq-map Nat Nat inc-fn xs)))")))
-  (check-contains result "'[2 3 4]"))
+    "(def suc-fn : (-> Nat Nat) (fn (x : Nat) (suc x)))
+     (def xs <LSeq Nat> ~[(suc zero) (suc (suc zero)) (suc (suc (suc zero)))])
+     (eval (lseq-to-list Nat (lseq-map Nat Nat suc-fn xs)))")))
+  (check-contains result "'[2N 3N 4N]"))
 
 (test-case "lseq-literal/take-from-literal"
   ;; Take 2 from ~[1 2 3] → ~[1 2] → convert to list
   (define result (run-ns-last (string-append preamble
-    "(def xs <LSeq Nat> ~[(inc zero) (inc (inc zero)) (inc (inc (inc zero)))])
-     (eval (lseq-to-list Nat (lseq-take Nat (inc (inc zero)) xs)))")))
-  (check-contains result "'[1 2]"))
+    "(def xs <LSeq Nat> ~[(suc zero) (suc (suc zero)) (suc (suc (suc zero)))])
+     (eval (lseq-to-list Nat (lseq-take Nat (suc (suc zero)) xs)))")))
+  (check-contains result "'[1N 2N]"))
 
 (test-case "lseq-literal/fold-sum"
   ;; Fold (sum) over ~[1 2 3] → 6
   (define result (run-ns-last (string-append preamble
-    "(def xs <LSeq Nat> ~[(inc zero) (inc (inc zero)) (inc (inc (inc zero)))])
+    "(def xs <LSeq Nat> ~[(suc zero) (suc (suc zero)) (suc (suc (suc zero)))])
      (eval (lseq-fold Nat Nat (fn (acc : Nat) (fn (x : Nat) (add acc x))) zero xs))")))
   (check-contains result "6"))
 
@@ -238,12 +238,12 @@
 (test-case "lseq-literal/pretty-print-multi"
   ;; Eval should display as ~[...] via try-as-lseq detection
   (define result (run-ns-last (string-append preamble
-    "(def xs <LSeq Nat> ~[(inc zero) (inc (inc zero)) (inc (inc (inc zero)))])
+    "(def xs <LSeq Nat> ~[(suc zero) (suc (suc zero)) (suc (suc (suc zero)))])
      (eval xs)")))
-  (check-contains result "~[1 2 3]"))
+  (check-contains result "~[1N 2N 3N]"))
 
 (test-case "lseq-literal/pretty-print-singleton"
   (define result (run-ns-last (string-append preamble
-    "(def xs <LSeq Nat> ~[(inc zero)])
+    "(def xs <LSeq Nat> ~[(suc zero)])
      (eval xs)")))
-  (check-contains result "~[1]"))
+  (check-contains result "~[1N]"))

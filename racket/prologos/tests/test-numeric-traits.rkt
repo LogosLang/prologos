@@ -59,7 +59,7 @@
   (define r (run-ns-last (string-append
     "(ns t)\n"
     "(require [prologos.core.add-trait :refer [Add Add-add]])\n"
-    "(eval (Add-add Nat Nat--Add--dict (inc zero) (inc (inc zero))))\n")))
+    "(eval (Add-add Nat Nat--Add--dict (suc zero) (suc (suc zero))))\n")))
   (check-true (string-contains? (format "~a" r) "3")))
 
 (test-case "add/int-direct"
@@ -82,7 +82,7 @@
   (define r (run-ns-last (string-append
     "(ns t)\n"
     "(require [prologos.core.sub-trait :refer [Sub Sub-sub]])\n"
-    "(eval (Sub-sub Nat Nat--Sub--dict (inc (inc (inc zero))) (inc zero)))\n")))
+    "(eval (Sub-sub Nat Nat--Sub--dict (suc (suc (suc zero))) (suc zero)))\n")))
   (check-true (string-contains? (format "~a" r) "2")))
 
 (test-case "sub/int-direct"
@@ -97,7 +97,7 @@
   (define r (run-ns-last (string-append
     "(ns t)\n"
     "(require [prologos.core.mul-trait :refer [Mul Mul-mul]])\n"
-    "(eval (Mul-mul Nat Nat--Mul--dict (inc (inc zero)) (inc (inc (inc zero)))))\n")))
+    "(eval (Mul-mul Nat Nat--Mul--dict (suc (suc zero)) (suc (suc (suc zero)))))\n")))
   (check-true (string-contains? (format "~a" r) "6")))
 
 (test-case "mul/rat-direct"
@@ -186,8 +186,8 @@
     "(spec generic-add A A -> A where (Add A))\n"
     "(defn generic-add [x y] where (Add A)\n"
     "  (Add-add A $Add-A x y))\n"
-    "(eval (generic-add zero (inc zero)))\n")))
-  (check-true (string-contains? (last results) "1 : Nat")))
+    "(eval (generic-add zero (suc zero)))\n")))
+  (check-true (string-contains? (last results) "1N : Nat")))
 
 (test-case "where/mul-int-auto-resolution"
   (define results (run-ns-strings (string-append
@@ -370,7 +370,7 @@
     "(spec num-add A A -> A where (Num A))\n"
     "(defn num-add [x y] where (Num A)\n"
     "  (Add-add A $Add-A x y))\n"
-    "(eval (num-add zero (inc zero)))\n")))
+    "(eval (num-add zero (suc zero)))\n")))
   ;; Should produce a no-instance-error for one of: Neg, Abs, or FromInt
   (check-true (ormap (lambda (r) (no-instance-error? r)) results)
               (format "Expected no-instance-error for Nat, got: ~a" results)))
@@ -404,7 +404,7 @@
   (define r (run-ns-last (string-append
     "(ns t)\n"
     "(require [prologos.data.nat :refer [add]])\n"
-    "(eval (add zero (inc zero)))\n")))
+    "(eval (add zero (suc zero)))\n")))
   (check-true (string-contains? (format "~a" r) "1")))
 
 (test-case "backward-compat/nat-sub-still-works"
@@ -412,5 +412,5 @@
   (define r (run-ns-last (string-append
     "(ns t)\n"
     "(require [prologos.data.nat :refer [sub]])\n"
-    "(eval (sub (inc (inc (inc zero))) (inc zero)))\n")))
+    "(eval (sub (suc (suc (suc zero))) (suc zero)))\n")))
   (check-true (string-contains? (format "~a" r) "2")))

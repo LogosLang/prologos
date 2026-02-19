@@ -67,11 +67,11 @@
 
 (test-case "quote/preparse: natural number becomes datum-nat"
   (define result (datum->datum-expr 42))
-  (check-equal? result '(datum-nat 42)))
+  (check-equal? result '(datum-nat ($nat-literal 42))))
 
 (test-case "quote/preparse: negative integer becomes datum-int"
   (define result (datum->datum-expr -5))
-  (check-equal? result '(datum-int -5)))
+  (check-equal? result '(datum-int (int -5))))
 
 (test-case "quote/preparse: rational becomes datum-rat"
   (define result (datum->datum-expr 1/3))
@@ -92,7 +92,7 @@
   (check-equal? (car result) 'datum-cons)
   (check-equal? (cadr result) '(datum-sym (symbol-lit add)))
   (check-equal? (car (caddr result)) 'datum-cons)
-  (check-equal? (cadr (caddr result)) '(datum-nat 1)))
+  (check-equal? (cadr (caddr result)) '(datum-nat ($nat-literal 1))))
 
 (test-case "quote/preparse: $quote macro emits datum constructor chain"
   (define result (preparse-expand-1 '($quote foo)))
@@ -150,7 +150,7 @@
     (run-last (string-append
       "(ns t-q-d2)\n"
       "(require [prologos.data.datum :refer [Datum datum-sym datum-kw datum-nat datum-int datum-rat datum-bool datum-nil datum-cons]])\n"
-      "(infer (datum-nat 42))")))
+      "(infer (datum-nat 42N))")))
   (check-true (string? result))
   (check-true (string-contains? result "Datum")))
 
@@ -168,7 +168,7 @@
     (run-last (string-append
       "(ns t-q-d4)\n"
       "(require [prologos.data.datum :refer [Datum datum-sym datum-kw datum-nat datum-int datum-rat datum-bool datum-nil datum-cons]])\n"
-      "(infer (datum-cons (datum-nat 1) datum-nil))")))
+      "(infer (datum-cons (datum-nat 1N) datum-nil))")))
   (check-true (string? result))
   (check-true (string-contains? result "Datum")))
 
@@ -245,7 +245,7 @@
     (run-last (string-append
       "(ns t-q-p1)\n"
       "(require [prologos.data.datum :refer [Datum datum-sym datum-kw datum-nat datum-int datum-rat datum-bool datum-nil datum-cons]])\n"
-      "(eval (the Nat (match (datum-nat 42) (datum-nat n -> n))))")))
+      "(eval (the Nat (match (datum-nat 42N) (datum-nat n -> n))))")))
   (check-true (string? result))
   (check-true (string-contains? result "42")))
 
@@ -256,7 +256,7 @@
       "(require [prologos.data.datum :refer [Datum datum-sym datum-kw datum-nat datum-int datum-rat datum-bool datum-nil datum-cons]])\n"
       "(eval (the Nat (match datum-nil (datum-nil -> zero) (datum-nat n -> n))))")))
   (check-true (string? result))
-  (check-true (string-contains? result "zero")))
+  (check-true (string-contains? result "0N")))
 
 ;; ========================================
 ;; E. Quasiquote reader tests (sexp mode)
@@ -405,7 +405,7 @@
     (run-last (string-append
       "(ns t-q-qq5)\n"
       "(require [prologos.data.datum :refer [Datum datum-sym datum-kw datum-nat datum-int datum-rat datum-bool datum-nil datum-cons]])\n"
-      "(def x : Datum (datum-nat 99))\n"
+      "(def x : Datum (datum-nat 99N))\n"
       "(def result : Datum (the Datum (match `(,x) (datum-cons hd tl -> hd))))\n"
       "(eval (the Nat (match result (datum-nat n -> n))))")))
   (check-true (string? result))

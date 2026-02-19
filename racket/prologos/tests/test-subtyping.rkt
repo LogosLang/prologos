@@ -208,18 +208,18 @@
 ;; ========================================
 
 (test-case "e2e/nat-def-as-int"
-  ;; (def x <Int> (inc zero)) — Nat accepted where Int expected
+  ;; (def x <Int> (suc zero)) — Nat accepted where Int expected
   (define results (run-ns-strings (string-append
     "(ns t)\n"
-    "(def x <Int> (inc zero))\n"
+    "(def x <Int> (suc zero))\n"
     "(eval x)\n")))
-  (check-not-false (findf (lambda (s) (string-contains? s "1 : Int")) results)))
+  (check-not-false (findf (lambda (s) (string-contains? s "1N : Int")) results)))
 
 (test-case "e2e/nat-in-int-add-surface"
-  ;; (eval (int+ (inc zero) (int 3))) → 4 : Int
+  ;; (eval (int+ (suc zero) (int 3))) → 4 : Int
   (define results (run-ns-strings (string-append
     "(ns t)\n"
-    "(eval (int+ (inc zero) (int 3)))\n")))
+    "(eval (int+ (suc zero) (int 3)))\n")))
   (check-not-false (findf (lambda (s) (string-contains? s "4 : Int")) results)))
 
 (test-case "e2e/int-def-as-rat"
@@ -231,18 +231,18 @@
   (check-not-false (findf (lambda (s) (string-contains? s "42 : Rat")) results)))
 
 (test-case "e2e/nat-def-as-rat-transitive"
-  ;; (def z <Rat> (inc zero)) — Nat→Rat transitive
+  ;; (def z <Rat> (suc zero)) — Nat→Rat transitive
   (define results (run-ns-strings (string-append
     "(ns t)\n"
-    "(def z <Rat> (inc zero))\n"
+    "(def z <Rat> (suc zero))\n"
     "(eval z)\n")))
-  (check-not-false (findf (lambda (s) (string-contains? s "1 : Rat")) results)))
+  (check-not-false (findf (lambda (s) (string-contains? s "1N : Rat")) results)))
 
 (test-case "e2e/check-nat-as-int"
-  ;; (check (inc zero) <Int>) → succeeds (outputs "OK")
+  ;; (check (suc zero) <Int>) → succeeds (outputs "OK")
   (define results (run-ns-strings (string-append
     "(ns t)\n"
-    "(check (inc zero) <Int>)\n")))
+    "(check (suc zero) <Int>)\n")))
   (check-not-false (findf (lambda (s) (or (string-contains? s "✓") (string-contains? s "OK"))) results)))
 
 (test-case "e2e/defn-accepts-nat-for-int-param"
@@ -253,8 +253,8 @@
     "require [prologos.data.nat :refer [add]]\n"
     "(defn nat-to-int [x : Int] <Int>\n"
     "  x)\n"
-    "(eval (nat-to-int (inc (inc zero))))\n")))
-  (check-not-false (findf (lambda (s) (string-contains? s "2 : Int")) results)))
+    "(eval (nat-to-int (suc (suc zero))))\n")))
+  (check-not-false (findf (lambda (s) (string-contains? s "2N : Int")) results)))
 
 (test-case "e2e/check-posit8-as-posit16"
   ;; (check (posit8 64) <Posit16>) → succeeds (outputs "OK")
@@ -264,10 +264,10 @@
   (check-not-false (findf (lambda (s) (or (string-contains? s "✓") (string-contains? s "OK"))) results)))
 
 (test-case "e2e/cross-family-rejected"
-  ;; (check (inc zero) <Posit8>) → type error
+  ;; (check (suc zero) <Posit8>) → type error
   (define results (run-ns (string-append
     "(ns t)\n"
-    "(check (inc zero) <Posit8>)\n")))
+    "(check (suc zero) <Posit8>)\n")))
   ;; Should NOT have ✓ or OK
   (check-false (findf (lambda (s) (and (string? s) (or (string-contains? s "✓") (string-contains? s "OK")))) results)))
 
@@ -279,7 +279,7 @@
   ;; Explicit from-nat converts Nat → Int (unchanged by subtyping)
   (define results (run-ns-strings (string-append
     "(ns t)\n"
-    "(eval (from-nat (inc (inc zero))))\n")))
+    "(eval (from-nat (suc (suc zero))))\n")))
   (check-not-false (findf (lambda (s) (string-contains? s "2 : Int")) results)))
 
 (test-case "backward-compat/from-int-still-works"

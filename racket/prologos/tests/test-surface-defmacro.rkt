@@ -37,23 +37,23 @@
 ;; 2a. Core macro smoke tests
 ;; ========================================
 
-(test-case "core-macro/twice-inc"
-  ;; twice inc zero → inc(inc(zero)) = 2
+(test-case "core-macro/twice-suc"
+  ;; twice suc zero → suc(suc(zero)) = 2
   (check-equal?
-   (run-last "(ns dm1)\n(eval (the Nat (twice inc zero)))")
-   "2 : Nat"))
+   (run-last "(ns dm1)\n(eval (the Nat (twice suc zero)))")
+   "2N : Nat"))
 
 (test-case "core-macro/pipe2"
-  ;; pipe2 zero inc inc → inc(inc(zero)) = 2
+  ;; pipe2 zero suc suc → suc(suc(zero)) = 2
   (check-equal?
-   (run-last "(ns dm2)\n(eval (the Nat (pipe2 zero inc inc)))")
-   "2 : Nat"))
+   (run-last "(ns dm2)\n(eval (the Nat (pipe2 zero suc suc)))")
+   "2N : Nat"))
 
 (test-case "core-macro/pipe3"
-  ;; pipe3 zero inc inc inc → inc(inc(inc(zero))) = 3
+  ;; pipe3 zero suc suc suc → suc(suc(suc(zero))) = 3
   (check-equal?
-   (run-last "(ns dm3)\n(eval (the Nat (pipe3 zero inc inc inc)))")
-   "3 : Nat"))
+   (run-last "(ns dm3)\n(eval (the Nat (pipe3 zero suc suc suc)))")
+   "3N : Nat"))
 
 (test-case "core-macro/when-true"
   ;; when true unit → if true unit unit → unit
@@ -74,23 +74,23 @@
 (test-case "inline-macro/inc2"
   ;; defmacro inc2 — increment twice
   (check-equal?
-   (run-last "(ns dm6)\n(defmacro inc2 ($x) (inc (inc $x)))\n(eval (the Nat (inc2 zero)))")
-   "2 : Nat"))
+   (run-last "(ns dm6)\n(defmacro inc2 ($x) (suc (suc $x)))\n(eval (the Nat (inc2 zero)))")
+   "2N : Nat"))
 
 (test-case "inline-macro/constant"
   ;; defmacro with no pattern vars — constant replacement
   (check-equal?
    (run-last "(ns dm7)\n(defmacro my-zero () zero)\n(eval (the Nat (my-zero)))")
-   "zero : Nat"))
+   "0N : Nat"))
 
 (test-case "inline-macro/chain"
   ;; macro calling macro: inc2 then inc4
   (check-equal?
    (run-last (string-append "(ns dm8)\n"
-                            "(defmacro inc2 ($x) (inc (inc $x)))\n"
+                            "(defmacro inc2 ($x) (suc (suc $x)))\n"
                             "(defmacro inc4 ($x) (inc2 (inc2 $x)))\n"
                             "(eval (the Nat (inc4 zero)))"))
-   "4 : Nat"))
+   "4N : Nat"))
 
 (test-case "inline-macro/multi-arg"
   ;; defmacro with multiple arguments
@@ -98,8 +98,8 @@
    (run-last (string-append "(ns dm9)\n"
                             "(require (prologos.data.nat :refer (add)))\n"
                             "(defmacro add3 ($a $b $c) (add $a (add $b $c)))\n"
-                            "(eval (add3 (the Nat (inc zero)) (the Nat (inc zero)) (the Nat (inc zero))))"))
-   "3 : Nat"))
+                            "(eval (add3 (the Nat (suc zero)) (the Nat (suc zero)) (the Nat (suc zero))))"))
+   "3N : Nat"))
 
 (test-case "inline-macro/apply2"
   ;; macro that applies a function to two arguments
@@ -107,16 +107,16 @@
    (run-last (string-append "(ns dm10)\n"
                             "(require (prologos.data.nat :refer (add)))\n"
                             "(defmacro apply2 ($f $x $y) ($f $x $y))\n"
-                            "(eval (apply2 add (the Nat (inc zero)) (the Nat (inc zero))))"))
-   "2 : Nat"))
+                            "(eval (apply2 add (the Nat (suc zero)) (the Nat (suc zero))))"))
+   "2N : Nat"))
 
 (test-case "inline-macro/nested-body"
   ;; macro with nested expression in body
   (check-equal?
    (run-last (string-append "(ns dm11)\n"
-                            "(defmacro suc3 ($x) (inc (inc (inc $x))))\n"
+                            "(defmacro suc3 ($x) (suc (suc (suc $x))))\n"
                             "(eval (the Nat (suc3 zero)))"))
-   "3 : Nat"))
+   "3N : Nat"))
 
 ;; ========================================
 ;; 2c. Cross-module macro import
@@ -126,14 +126,14 @@
   ;; core macros are auto-imported via prologos.core
   ;; twice should be available without explicit require
   (check-equal?
-   (run-last "(ns dm12)\n(eval (the Nat (twice inc zero)))")
-   "2 : Nat"))
+   (run-last "(ns dm12)\n(eval (the Nat (twice suc zero)))")
+   "2N : Nat"))
 
 (test-case "cross-module/pipe2-auto-import"
   ;; pipe2 should be available via auto-imported core
   (check-equal?
-   (run-last "(ns dm13)\n(eval (the Nat (pipe2 zero inc inc)))")
-   "2 : Nat"))
+   (run-last "(ns dm13)\n(eval (the Nat (pipe2 zero suc suc)))")
+   "2N : Nat"))
 
 (test-case "cross-module/when-auto-import"
   ;; when should be available via auto-imported core
@@ -149,9 +149,9 @@
   ;; defmacro- defines a macro that works locally
   (check-equal?
    (run-last (string-append "(ns dm15)\n"
-                            "(defmacro- my-inc ($x) (inc $x))\n"
-                            "(eval (the Nat (my-inc zero)))"))
-   "1 : Nat"))
+                            "(defmacro- my-suc ($x) (suc $x))\n"
+                            "(eval (the Nat (my-suc zero)))"))
+   "1N : Nat"))
 
 (test-case "private-macro/not-exported"
   ;; defmacro- should NOT add to auto-exports
@@ -165,14 +165,14 @@
     (install-module-loader!)
     ;; Process a namespace with a private macro
     (process-string (string-append "(ns dm16)\n"
-                                   "(defmacro- secret-inc ($x) (inc $x))\n"
-                                   "(def pub : Nat (secret-inc zero))"))
-    ;; Check auto-exports: 'pub should be there but 'secret-inc should not
+                                   "(defmacro- secret-suc ($x) (suc $x))\n"
+                                   "(def pub : Nat (secret-suc zero))"))
+    ;; Check auto-exports: 'pub should be there but 'secret-suc should not
     (define ctx (current-ns-context))
     (when ctx
       (define autos (ns-context-auto-exports ctx))
       (check-not-false (memq 'pub autos))
-      (check-false (memq 'secret-inc autos)))))
+      (check-false (memq 'secret-suc autos)))))
 
 ;; ========================================
 ;; 2e. Pattern language features
@@ -182,9 +182,9 @@
   ;; Macro applied recursively (calling a macro-defined form multiple times)
   (check-equal?
    (run-last (string-append "(ns dm17)\n"
-                            "(defmacro wrap-inc ($x) (inc $x))\n"
-                            "(eval (the Nat (wrap-inc (wrap-inc zero))))"))
-   "2 : Nat"))
+                            "(defmacro wrap-suc ($x) (suc $x))\n"
+                            "(eval (the Nat (wrap-suc (wrap-suc zero))))"))
+   "2N : Nat"))
 
 (test-case "pattern/multi-use-same-var"
   ;; Pattern variable used multiple times in template
@@ -192,8 +192,8 @@
    (run-last (string-append "(ns dm18)\n"
                             "(require (prologos.data.nat :refer (add)))\n"
                             "(defmacro double-add ($x) (add $x $x))\n"
-                            "(eval (double-add (the Nat (inc zero))))"))
-   "2 : Nat"))
+                            "(eval (double-add (the Nat (suc zero))))"))
+   "2N : Nat"))
 
 (test-case "pattern/ellipsis-rest"
   ;; Rest capture with ... — works at the datum level
@@ -201,8 +201,8 @@
   (check-equal?
    (run-last (string-append "(ns dm19)\n"
                             "(defmacro first-of ($x $rest ...) $x)\n"
-                            "(eval (the Nat (first-of zero (inc zero) (inc (inc zero)))))"))
-   "zero : Nat"))
+                            "(eval (the Nat (first-of zero (suc zero) (suc (suc zero)))))"))
+   "0N : Nat"))
 
 (test-case "pattern/ellipsis-splice"
   ;; Splice rest args into template
@@ -211,8 +211,8 @@
    (run-last (string-append "(ns dm20)\n"
                             "(require (prologos.data.nat :refer (add)))\n"
                             "(defmacro call-with ($f $args ...) ($f $args ...))\n"
-                            "(eval (call-with add (the Nat (inc zero)) (the Nat (inc zero))))"))
-   "2 : Nat"))
+                            "(eval (call-with add (the Nat (suc zero)) (the Nat (suc zero))))"))
+   "2N : Nat"))
 
 ;; ========================================
 ;; 2f. when/unless with Unit type
@@ -261,15 +261,15 @@
 ;; ========================================
 
 (test-case "macro/type-check-twice"
-  ;; twice inc zero type-checks as Nat (check returns "OK")
+  ;; twice suc zero type-checks as Nat (check returns "OK")
   (check-equal?
-   (run-last "(ns dm27)\n(check (twice inc zero) : Nat)")
+   (run-last "(ns dm27)\n(check (twice suc zero) : Nat)")
    "OK"))
 
 (test-case "macro/type-check-pipe2"
   ;; pipe2 with typed functions type-checks
   (check-equal?
-   (run-last "(ns dm28)\n(check (pipe2 zero inc inc) : Nat)")
+   (run-last "(ns dm28)\n(check (pipe2 zero suc suc) : Nat)")
    "OK"))
 
 (test-case "macro/type-check-when"
@@ -281,6 +281,6 @@
 (test-case "macro/expansion-visible"
   ;; Use expand command to see the macro expansion
   (define results
-    (run-ns "(ns dm30)\n(defmacro my-double ($x) (inc (inc $x)))\n(expand (my-double zero))"))
+    (run-ns "(ns dm30)\n(defmacro my-double ($x) (suc (suc $x)))\n(expand (my-double zero))"))
   ;; expand should show the expanded form
   (check-true (> (length results) 0)))

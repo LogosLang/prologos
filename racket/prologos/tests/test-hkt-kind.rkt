@@ -229,7 +229,7 @@
      (string-append
       "(ns hkt-compat1)\n"
       "(require [prologos.core.eq-trait :refer [Nat--Eq--dict]])\n"
-      "(eval (Nat--Eq--dict (inc (inc zero)) (inc (inc zero))))")))
+      "(eval (Nat--Eq--dict (suc (suc zero)) (suc (suc zero))))")))
   (check-equal? result "true : Bool"))
 
 (test-case "hkt/existing-ord-trait-unaffected"
@@ -239,7 +239,7 @@
      (string-append
       "(ns hkt-compat2)\n"
       "(require [prologos.core.ord-trait :refer [nat-ord ord-lt]])\n"
-      "(eval (ord-lt Nat nat-ord zero (inc zero)))")))
+      "(eval (ord-lt Nat nat-ord zero (suc zero)))")))
   (check-equal? result "true : Bool"))
 
 (test-case "hkt/existing-data-option-unaffected"
@@ -248,8 +248,8 @@
     (run-ns-last
      (string-append
       "(ns hkt-compat3)\n"
-      "(require [prologos.data.option :refer [some none is-some]])\n"
-      "(eval (is-some (some Nat (inc zero))))")))
+      "(require [prologos.data.option :refer [some none some?]])\n"
+      "(eval (some? (some Nat (suc zero))))")))
   (check-equal? result "true : Bool"))
 
 (test-case "hkt/existing-data-list-unaffected"
@@ -259,5 +259,5 @@
      (string-append
       "(ns hkt-compat4)\n"
       "(require [prologos.data.list :refer [cons nil length]])\n"
-      "(eval (length (cons Nat (inc zero) (cons Nat zero (nil Nat)))))")))
-  (check-equal? result "2 : Nat"))
+      "(eval (length (cons Nat (suc zero) (cons Nat zero (nil Nat)))))")))
+  (check-equal? result "2N : Nat"))

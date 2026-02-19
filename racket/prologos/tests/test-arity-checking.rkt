@@ -57,8 +57,8 @@
 ;; ========================================
 
 (test-case "arity/too-many-args-builtin"
-  ;; inc takes 1 arg, giving 2 should error
-  (define result (run-first "(eval (inc zero zero))"))
+  ;; suc takes 1 arg, giving 2 should error
+  (define result (run-first "(eval (suc zero zero))"))
   (check-true (prologos-error? result))
   (check-true (arity-error? result))
   (check-equal? (arity-error-expected result) 1)
@@ -66,7 +66,7 @@
 
 (test-case "arity/too-many-args-user-defn"
   ;; Define a 2-arg function, call with 3
-  (define results (run "(def double <(-> Nat Nat)> (fn [x <Nat>] (inc (inc x))))\n(eval (double zero zero))"))
+  (define results (run "(def double <(-> Nat Nat)> (fn [x <Nat>] (suc (suc x))))\n(eval (double zero zero))"))
   (define last-result (last results))
   (check-true (prologos-error? last-result))
   (check-true (arity-error? last-result))
@@ -88,14 +88,14 @@
 ;; ========================================
 
 (test-case "arity/correct-args-builtin"
-  ;; inc zero should work fine
-  (define result (run-first "(eval (inc zero))"))
+  ;; suc zero should work fine
+  (define result (run-first "(eval (suc zero))"))
   (check-false (prologos-error? result))
-  (check-true (string-contains? result "1 : Nat")))
+  (check-true (string-contains? result "1N : Nat")))
 
 (test-case "arity/correct-args-multi-param"
   ;; natrec with correct arity should work
-  (define result (run-first "(eval (natrec Nat zero (fn [k <Nat>] (fn [r <Nat>] (inc r))) (inc zero)))"))
+  (define result (run-first "(eval (natrec Nat zero (fn [k <Nat>] (fn [r <Nat>] (suc r))) (suc zero)))"))
   (check-false (prologos-error? result)))
 
 ;; ========================================
@@ -138,17 +138,17 @@
 ;; ========================================
 
 (test-case "arity/error-message-shows-function-name"
-  (define result (run-first "(eval (inc zero zero))"))
+  (define result (run-first "(eval (suc zero zero))"))
   (check-true (arity-error? result))
   (define formatted (format-error result))
-  (check-true (string-contains? formatted "inc"))
+  (check-true (string-contains? formatted "suc"))
   (check-true (string-contains? formatted "1"))  ;; expected 1
   (check-true (string-contains? formatted "2"))) ;; got 2
 
 (test-case "arity/error-message-shows-type-signature"
   ;; Use a user-defined function so the elaborator (not parser) catches the arity error
   ;; and includes the type signature in the error message
-  (define results (run "(def double <(-> Nat Nat)> (fn [x <Nat>] (inc (inc x))))\n(eval (double zero zero))"))
+  (define results (run "(def double <(-> Nat Nat)> (fn [x <Nat>] (suc (suc x))))\n(eval (double zero zero))"))
   (define last-result (last results))
   (check-true (arity-error? last-result))
   (define formatted (format-error last-result))
@@ -162,12 +162,12 @@
 
 (test-case "arity/stdlib-add-correct"
   (define result
-    (run-ns-last "(ns ar4)\n(require [prologos.data.nat :refer [add]])\n(eval (add (inc zero) (inc (inc zero))))"))
-  (check-equal? result "3 : Nat"))
+    (run-ns-last "(ns ar4)\n(require [prologos.data.nat :refer [add]])\n(eval (add (suc zero) (suc (suc zero))))"))
+  (check-equal? result "3N : Nat"))
 
 (test-case "arity/stdlib-map-correct"
   (define result
-    (run-ns-last "(ns ar5)\n(require [prologos.data.list :refer [List nil cons map]])\n(eval (map Nat Nat (fn [x <Nat>] (inc x)) (cons Nat zero (nil Nat))))"))
+    (run-ns-last "(ns ar5)\n(require [prologos.data.list :refer [List nil cons map]])\n(eval (map Nat Nat (fn [x <Nat>] (suc x)) (cons Nat zero (nil Nat))))"))
   (check-false (prologos-error? result)))
 
 ;; ========================================

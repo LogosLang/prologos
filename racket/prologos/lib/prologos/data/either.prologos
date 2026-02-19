@@ -40,15 +40,15 @@ defn to-option [e]
     | right b -> some b
 
 ;; True if Left.
-spec is-left [Either A B] -> Bool
-defn is-left [e]
+spec left? [Either A B] -> Bool
+defn left? [e]
   match e
     | left _  -> true
     | right _ -> false
 
 ;; True if Right.
-spec is-right [Either A B] -> Bool
-defn is-right [e]
+spec right? [Either A B] -> Bool
+defn right? [e]
   match e
     | left _  -> false
     | right _ -> true

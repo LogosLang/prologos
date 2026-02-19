@@ -113,12 +113,12 @@
 (test-case "preparse-expand-form: pattern-template macro"
   (define reg (hasheq 'double
                       (preparse-macro 'double '(double $x) '(pair $x $x))))
-  (check-equal? (preparse-expand-form '(double 42) reg) '(pair 42 42)))
+  (check-equal? (preparse-expand-form '(double 42N) reg) '(pair 42N 42N)))
 
 (test-case "preparse-expand-form: procedural macro"
-  (define reg (hasheq 'inc-lit
+  (define reg (hasheq 'suc-lit
                       (lambda (datum) (list 'result (+ (cadr datum) 1)))))
-  (check-equal? (preparse-expand-form '(inc-lit 5) reg) '(result 6)))
+  (check-equal? (preparse-expand-form '(suc-lit 5) reg) '(result 6)))
 
 (test-case "preparse-expand-form: depth limit"
   (define reg (hasheq 'loop
@@ -131,14 +131,14 @@
 ;; ========================================
 
 (test-case "let: single binding"
-  (define result (preparse-expand-form '(let ([x : Nat zero]) (inc x))))
-  ;; Should produce ((fn (x : Nat) (inc x)) zero)
-  (check-equal? result '((fn (x : Nat) (inc x)) zero)))
+  (define result (preparse-expand-form '(let ([x : Nat zero]) (suc x))))
+  ;; Should produce ((fn (x : Nat) (suc x)) zero)
+  (check-equal? result '((fn (x : Nat) (suc x)) zero)))
 
 (test-case "let: two bindings (sequential)"
-  (define result (preparse-expand-form '(let ([x : Nat zero] [y : Nat (inc x)]) (inc y))))
-  ;; Should produce ((fn (x : Nat) ((fn (y : Nat) (inc y)) (inc x))) zero)
-  (check-equal? result '((fn (x : Nat) ((fn (y : Nat) (inc y)) (inc x))) zero)))
+  (define result (preparse-expand-form '(let ([x : Nat zero] [y : Nat (suc x)]) (suc y))))
+  ;; Should produce ((fn (x : Nat) ((fn (y : Nat) (suc y)) (suc x))) zero)
+  (check-equal? result '((fn (x : Nat) ((fn (y : Nat) (suc y)) (suc x))) zero)))
 
 (test-case "let: wrong arity"
   (check-exn exn:fail?
@@ -164,14 +164,14 @@
   (check-equal? result '((fn (xs : (List Nat)) body) nil)))
 
 (test-case "let :=: bracket multi-binding"
-  ;; (let [x := zero y := (inc zero)] body) → nested fns
-  (define result (preparse-expand-form '(let (x := zero y := (inc zero)) body)))
-  (check-equal? result '((fn (x : _) ((fn (y : _) body) (inc zero))) zero)))
+  ;; (let [x := zero y := (suc zero)] body) → nested fns
+  (define result (preparse-expand-form '(let (x := zero y := (suc zero)) body)))
+  (check-equal? result '((fn (x : _) ((fn (y : _) body) (suc zero))) zero)))
 
 (test-case "let :=: bracket with types"
-  ;; (let [x : Nat := zero y : Nat := (inc x)] body) → nested fns with types
-  (define result (preparse-expand-form '(let (x : Nat := zero y : Nat := (inc x)) body)))
-  (check-equal? result '((fn (x : Nat) ((fn (y : Nat) body) (inc x))) zero)))
+  ;; (let [x : Nat := zero y : Nat := (suc x)] body) → nested fns with types
+  (define result (preparse-expand-form '(let (x : Nat := zero y : Nat := (suc x)) body)))
+  (check-equal? result '((fn (x : Nat) ((fn (y : Nat) body) (suc x))) zero)))
 
 (test-case "let :=: with -> in type"
   ;; (let f : Nat -> Nat := (fn (x : Nat) x) body) — type contains ->
@@ -221,43 +221,43 @@
 
 (test-case "sibling let: merge in preparse context"
   ;; Simulate what def body looks like: (def name : type (let a ...) (let b ... body))
-  (define datum '(def result : Nat (let a : Nat := zero) (let b : Nat := (inc a) (inc b))))
+  (define datum '(def result : Nat (let a : Nat := zero) (let b : Nat := (suc a) (suc b))))
   (define expanded (preparse-expand-form datum))
   ;; Should merge lets, then expand to nested fn/app
-  (check-equal? expanded '(def result : Nat ((fn (a : Nat) ((fn (b : Nat) (inc b)) (inc a))) zero))))
+  (check-equal? expanded '(def result : Nat ((fn (a : Nat) ((fn (b : Nat) (suc b)) (suc a))) zero))))
 
 ;; ========================================
 ;; Built-in do expansion
 ;; ========================================
 
 (test-case "do: single binding"
-  (define result (preparse-expand-form '(do [x : Nat = zero] (inc x))))
+  (define result (preparse-expand-form '(do [x : Nat = zero] (suc x))))
   ;; do expands to let first, then let expands to fn/app
-  ;; First expansion: (let ([x : Nat zero]) (inc x))
-  ;; Second expansion: ((fn (x : Nat) (inc x)) zero)
-  (check-equal? result '((fn (x : Nat) (inc x)) zero)))
+  ;; First expansion: (let ([x : Nat zero]) (suc x))
+  ;; Second expansion: ((fn (x : Nat) (suc x)) zero)
+  (check-equal? result '((fn (x : Nat) (suc x)) zero)))
 
 (test-case "do: just body (no bindings)"
-  (define result (preparse-expand-form '(do (inc zero))))
+  (define result (preparse-expand-form '(do (suc zero))))
   ;; No bindings, just the body
-  (check-equal? result '(inc zero)))
+  (check-equal? result '(suc zero)))
 
 ;; ========================================
 ;; Built-in if expansion
 ;; ========================================
 
 (test-case "if: expands to boolrec"
-  (define result (preparse-expand-form '(if Nat true zero (inc zero))))
-  ;; (if Nat true zero (inc zero))
-  ;; → (boolrec Nat zero (inc zero) true)
+  (define result (preparse-expand-form '(if Nat true zero (suc zero))))
+  ;; (if Nat true zero (suc zero))
+  ;; → (boolrec Nat zero (suc zero) true)
   ;; The parser's constant motive shorthand wraps the bare Nat type.
-  (check-equal? result '(boolrec Nat zero (inc zero) true)))
+  (check-equal? result '(boolrec Nat zero (suc zero) true)))
 
 (test-case "if: 3-arg form expands to boolrec with hole motive"
   ;; Sprint 10: (if cond then else) — motive inferred via hole
-  (define result (preparse-expand-form '(if true zero (inc zero))))
-  ;; → (boolrec _ zero (inc zero) true)
-  (check-equal? result '(boolrec _ zero (inc zero) true)))
+  (define result (preparse-expand-form '(if true zero (suc zero))))
+  ;; → (boolrec _ zero (suc zero) true)
+  (check-equal? result '(boolrec _ zero (suc zero) true)))
 
 (test-case "if: wrong arity"
   ;; Sprint 10: 3-arg form is now valid — (if cond then else)

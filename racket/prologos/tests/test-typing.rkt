@@ -220,20 +220,20 @@
    (expr-lam 'mw (expr-Bool) (expr-Nat))
    (expr-Pi 'mw (expr-Bool) (expr-Type (lzero)))))
 
-(test-case "infer: boolrec(motive, zero, (inc zero), true) : Nat"
+(test-case "infer: boolrec(motive, zero, (suc zero), true) : Nat"
   (define result
     (tc:infer ctx-empty
       (expr-boolrec boolrec-motive (expr-zero) (expr-suc (expr-zero)) (expr-true))))
   ;; Result is app(motive, true) which normalizes to Nat
   (check-true (conv result (expr-Nat))))
 
-(test-case "infer: boolrec(motive, zero, (inc zero), false) : Nat"
+(test-case "infer: boolrec(motive, zero, (suc zero), false) : Nat"
   (define result
     (tc:infer ctx-empty
       (expr-boolrec boolrec-motive (expr-zero) (expr-suc (expr-zero)) (expr-false))))
   (check-true (conv result (expr-Nat))))
 
-(test-case "check: boolrec(motive, zero, (inc zero), true) : Nat"
+(test-case "check: boolrec(motive, zero, (suc zero), true) : Nat"
   (check-true
    (tc:check ctx-empty
      (expr-boolrec boolrec-motive (expr-zero) (expr-suc (expr-zero)) (expr-true))

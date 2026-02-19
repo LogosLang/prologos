@@ -194,22 +194,22 @@
   ;; id uses {A} which now gets level-meta instead of Type 0
   (check-equal?
    (run-last "(ns lvl1)\n(require [prologos.core :refer [id]])\n(eval (id zero))")
-   "zero : Nat"))
+   "0N : Nat"))
 
 (test-case "implicit/const-with-inferred-level"
   (check-equal?
    (run-last "(ns lvl2)\n(require [prologos.core :refer [const]])\n(eval (const zero true))")
-   "zero : Nat"))
+   "0N : Nat"))
 
 (test-case "implicit/compose-with-inferred-level"
   (check-equal?
-   (run-last "(ns lvl3)\n(require [prologos.core :refer [compose]])\n(require [prologos.data.nat :refer [double dec]])\n(eval (compose double dec 3))")
-   "4 : Nat"))
+   (run-last "(ns lvl3)\n(require [prologos.core :refer [compose]])\n(require [prologos.data.nat :refer [double pred]])\n(eval (compose double pred 3N))")
+   "4N : Nat"))
 
 (test-case "explicit-type-0-still-works"
   (check-equal?
    (run-last "(ns lvl4)\n(def id <(Pi [A :0 <(Type 0)>] (-> A A))>\n  (fn [A :0 <(Type 0)>] (fn [x <A>] x)))\n(eval (id Nat zero))")
-   "zero : Nat"))
+   "0N : Nat"))
 
 (test-case "infer-bare-Type"
   ;; Bare Type should infer as Type, and (infer Type) should give (Type 1)
@@ -221,8 +221,8 @@
 (test-case "implicit/stdlib-nat-with-inferred-level"
   ;; add 2 3 = 5 — stdlib still works with level inference
   (check-equal?
-   (run-last "(ns lvl6)\n(require [prologos.data.nat :refer [add]])\n(eval (add 2 3))")
-   "5 : Nat"))
+   (run-last "(ns lvl6)\n(require [prologos.data.nat :refer [add]])\n(eval (add 2N 3N))")
+   "5N : Nat"))
 
 (test-case "implicit/stdlib-bool-with-inferred-level"
   ;; not true = false

@@ -56,7 +56,7 @@
     [(expr-fvar name) (symbol->string name)]
 
     ;; Atoms
-    [(expr-zero) "zero"]
+    [(expr-zero) "0N"]
     [(expr-refl) "refl"]
     [(expr-Nat) "Nat"]
     [(expr-Bool) "Bool"]
@@ -79,8 +79,8 @@
     [(expr-suc _)
      (let ([n (try-as-nat e)])
        (if n
-           (number->string n)
-           (format "[inc ~a]" (pp-expr (expr-suc-pred e) names))))]
+           (format "~aN" n)
+           (format "[suc ~a]" (pp-expr (expr-suc-pred e) names))))]
 
     ;; Lambda
     [(expr-lam m t body)

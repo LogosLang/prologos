@@ -2305,9 +2305,9 @@
        (error 'pipe "|> length takes no arguments"))
      (if (null? xf-chain)
          `(length _ ,acc)
-         ;; Fuse: length = reduce (fn [n _] inc n) zero (ignore element)
+         ;; Fuse: length = reduce (fn [n _] suc n) zero (ignore element)
          (let* ([acc-sym '$a]
-                [make-inner (lambda (_v) `(inc ,acc-sym))]
+                [make-inner (lambda (_v) `(suc ,acc-sym))]
                 [fused-rf (build-fused-reducer xf-chain make-inner acc-sym)])
            `(reduce ,fused-rf zero ,acc)))]
     [(count)
@@ -2318,7 +2318,7 @@
      ;; Add filter to the chain, then use length reducer
      (define all-steps (append xf-chain (list `(filter ,pred))))
      (let* ([acc-sym '$a]
-            [make-inner (lambda (_v) `(inc ,acc-sym))]
+            [make-inner (lambda (_v) `(suc ,acc-sym))]
             [fused-rf (build-fused-reducer all-steps make-inner acc-sym)])
        `(reduce ,fused-rf zero ,acc))]
     [else
@@ -2410,9 +2410,10 @@
     ;; Regular symbols → (datum-sym (symbol-lit name))
     [(symbol? d) `(datum-sym (symbol-lit ,d))]
     ;; Natural numbers (non-negative integers) → (datum-nat n)
-    [(and (exact-integer? d) (>= d 0)) `(datum-nat ,d)]
+    ;; Use ($nat-literal n) so bare n parses as Nat, not Int
+    [(and (exact-integer? d) (>= d 0)) `(datum-nat ($nat-literal ,d))]
     ;; Negative integers → (datum-int n)
-    [(exact-integer? d) `(datum-int ,d)]
+    [(exact-integer? d) `(datum-int (int ,d))]
     ;; Rationals → (datum-rat n)
     [(rational? d) `(datum-rat ,d)]
     ;; Booleans → (datum-bool true/false)
@@ -2454,9 +2455,10 @@
     ;; Regular symbols → (datum-sym (symbol-lit name))
     [(symbol? d) `(datum-sym (symbol-lit ,d))]
     ;; Natural numbers → (datum-nat n)
-    [(and (exact-integer? d) (>= d 0)) `(datum-nat ,d)]
+    ;; Use ($nat-literal n) so bare n parses as Nat, not Int
+    [(and (exact-integer? d) (>= d 0)) `(datum-nat ($nat-literal ,d))]
     ;; Negative integers → (datum-int n)
-    [(exact-integer? d) `(datum-int ,d)]
+    [(exact-integer? d) `(datum-int (int ,d))]
     ;; Rationals → (datum-rat n)
     [(rational? d) `(datum-rat ,d)]
     ;; Booleans → (datum-bool true/false)
@@ -2505,10 +2507,10 @@
 ;; Register Nat and Bool constructors so match/reduce works on them.
 ;; These are built-in types with no type parameters.
 
-;; Nat: zero (nullary), inc (one recursive Nat field)
+;; Nat: zero (nullary), suc (one recursive Nat field)
 (register-ctor! 'zero (ctor-meta 'Nat '() '() '() 0))
-(register-ctor! 'inc  (ctor-meta 'Nat '() (list 'Nat) (list #t) 1))
-(current-type-meta (hash-set (current-type-meta) 'Nat '(zero inc)))
+(register-ctor! 'suc  (ctor-meta 'Nat '() (list 'Nat) (list #t) 1))
+(current-type-meta (hash-set (current-type-meta) 'Nat '(zero suc)))
 
 ;; Bool: true (nullary), false (nullary)
 (register-ctor! 'true  (ctor-meta 'Bool '() '() '() 0))
@@ -3893,7 +3895,7 @@
 ;; Built-in type/constructor names that should never become auto-implicits.
 ;; These are symbols recognized by parse-symbol in parser.rkt.
 (define builtin-names
-  '(Nat Bool Type Posit8 zero true false refl inc
+  '(Nat Bool Type Posit8 zero true false refl suc
     Pi Sigma Eq Vec Fin natrec boolrec J pair fst snd
     vnil vcons vhead vtail vindex fzero fsuc
     posit8 p8+ p8- p8* p8/ p8-neg p8-abs p8-sqrt p8< p8<= p8-from-nat p8-if-nar

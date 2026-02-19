@@ -59,7 +59,7 @@
     (run-ns "(ns test.auto-import)\n(eval (id Nat zero))"))
   ;; Should have one result: zero : Nat
   (check-equal? (length result) 1)
-  (check-equal? (car result) "zero : Nat"))
+  (check-equal? (car result) "0N : Nat"))
 
 ;; ========================================
 ;; Test: id function
@@ -69,15 +69,15 @@
   ;; id Nat zero -> zero
   (check-equal?
    (run-ns "(ns test.id)\n(eval (id Nat zero))")
-   '("zero : Nat"))
+   '("0N : Nat"))
   ;; id Bool true -> true
   (check-equal?
    (run-ns "(ns test.id2)\n(eval (id Bool true))")
    '("true : Bool"))
   ;; id Nat 2 -> 2
   (check-equal?
-   (run-ns "(ns test.id3)\n(eval (id Nat (inc (inc zero))))")
-   '("2 : Nat")))
+   (run-ns "(ns test.id3)\n(eval (id Nat (suc (suc zero))))")
+   '("2N : Nat")))
 
 ;; ========================================
 ;; Test: const function
@@ -87,7 +87,7 @@
   ;; const Nat Bool zero true -> zero
   (check-equal?
    (run-ns "(ns test.const)\n(eval (const Nat Bool zero true))")
-   '("zero : Nat"))
+   '("0N : Nat"))
   ;; const Bool Nat true zero -> true
   (check-equal?
    (run-ns "(ns test.const2)\n(eval (const Bool Nat true zero))")
@@ -99,14 +99,14 @@
 
 (test-case "prologos.core/compose function composition"
   ;; compose Nat Nat Nat suc suc zero -> 2
-  ;; Note: inc/suc is syntax, not first-class. We wrap it in a lambda.
+  ;; Note: suc/suc is syntax, not first-class. We wrap it in a lambda.
   (check-equal?
-   (run-ns "(ns test.compose)\n(def suc-fn <(-> Nat Nat)> (fn [n <Nat>] (inc n)))\n(eval (compose Nat Nat Nat suc-fn suc-fn zero))")
-   '("suc-fn : Nat -> Nat defined." "2 : Nat"))
+   (run-ns "(ns test.compose)\n(def suc-fn <(-> Nat Nat)> (fn [n <Nat>] (suc n)))\n(eval (compose Nat Nat Nat suc-fn suc-fn zero))")
+   '("suc-fn : Nat -> Nat defined." "2N : Nat"))
   ;; compose Nat Nat Nat suc-fn suc-fn 1 -> 3
   (check-equal?
-   (run-ns "(ns test.compose2)\n(def suc-fn <(-> Nat Nat)> (fn [n <Nat>] (inc n)))\n(eval (compose Nat Nat Nat suc-fn suc-fn (inc zero)))")
-   '("suc-fn : Nat -> Nat defined." "3 : Nat")))
+   (run-ns "(ns test.compose2)\n(def suc-fn <(-> Nat Nat)> (fn [n <Nat>] (suc n)))\n(eval (compose Nat Nat Nat suc-fn suc-fn (suc zero)))")
+   '("suc-fn : Nat -> Nat defined." "3N : Nat")))
 
 ;; ========================================
 ;; Test: apply function
@@ -115,8 +115,8 @@
 (test-case "prologos.core/apply function application"
   ;; apply Nat Nat suc-fn zero -> 1
   (check-equal?
-   (run-ns "(ns test.apply)\n(def suc-fn <(-> Nat Nat)> (fn [n <Nat>] (inc n)))\n(eval (apply Nat Nat suc-fn zero))")
-   '("suc-fn : Nat -> Nat defined." "1 : Nat")))
+   (run-ns "(ns test.apply)\n(def suc-fn <(-> Nat Nat)> (fn [n <Nat>] (suc n)))\n(eval (apply Nat Nat suc-fn zero))")
+   '("suc-fn : Nat -> Nat defined." "1N : Nat")))
 
 ;; ========================================
 ;; Test: flip function
@@ -127,7 +127,7 @@
   ;; const Nat Bool zero true -> zero, so flip should give same result
   (check-equal?
    (run-ns "(ns test.flip)\n(eval (flip Nat Bool Nat (fn (a : Nat) (fn (b : Bool) a)) true zero))")
-   '("zero : Nat")))
+   '("0N : Nat")))
 
 ;; ========================================
 ;; Test: explicit require of prologos.core
@@ -136,12 +136,12 @@
 (test-case "explicit require prologos.core with :as alias"
   (check-equal?
    (run-ns "(ns test.alias)\n(require [prologos.core :as core])\n(eval (core::id Nat zero))")
-   '("zero : Nat")))
+   '("0N : Nat")))
 
 (test-case "explicit require prologos.core with :refer"
   (check-equal?
-   (run-ns "(ns test.refer)\n(require [prologos.core :refer [compose]])\n(def suc-fn <(-> Nat Nat)> (fn [n <Nat>] (inc n)))\n(eval (compose Nat Nat Nat suc-fn suc-fn zero))")
-   '("suc-fn : Nat -> Nat defined." "2 : Nat")))
+   (run-ns "(ns test.refer)\n(require [prologos.core :refer [compose]])\n(def suc-fn <(-> Nat Nat)> (fn [n <Nat>] (suc n)))\n(eval (compose Nat Nat Nat suc-fn suc-fn zero))")
+   '("suc-fn : Nat -> Nat defined." "2N : Nat")))
 
 ;; ========================================
 ;; Test: type checking of core definitions
@@ -168,5 +168,5 @@
                  [current-lib-paths (list lib-dir)])
     (install-module-loader!)
     ;; Plain code without (ns ...) should work fine
-    (define result (process-string "(eval (inc zero))"))
-    (check-equal? result '("1 : Nat"))))
+    (define result (process-string "(eval (suc zero))"))
+    (check-equal? result '("1N : Nat"))))

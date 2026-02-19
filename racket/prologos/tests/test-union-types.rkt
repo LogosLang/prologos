@@ -208,8 +208,8 @@
 (test-case "surface: (check true : <Nat | Bool>)"
   (check-equal? (run-first "(check true : <Nat | Bool>)") "OK"))
 
-(test-case "surface: (check (inc zero) : <Bool | Nat>)"
-  (check-equal? (run-first "(check (inc zero) : <Bool | Nat>)") "OK"))
+(test-case "surface: (check (suc zero) : <Bool | Nat>)"
+  (check-equal? (run-first "(check (suc zero) : <Bool | Nat>)") "OK"))
 
 (test-case "surface: (check unit : <Unit | Nat | Bool>)"
   (check-equal? (run-first "(check unit : <Unit | Nat | Bool>)") "OK"))

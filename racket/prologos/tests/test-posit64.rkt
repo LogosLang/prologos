@@ -232,16 +232,16 @@
                 '("true : Bool")))
 
 (test-case "posit64 surface: from-nat"
-  (check-equal? (run "(eval (p64-from-nat (inc (inc zero))))")
+  (check-equal? (run "(eval (p64-from-nat (suc (suc zero))))")
                 '("[posit64 5188146770730811392] : Posit64")))
 
 (test-case "posit64 surface: if-nar on NaR"
-  (check-equal? (run "(eval (p64-if-nar Nat zero (inc zero) (posit64 9223372036854775808)))")
-                '("zero : Nat")))
+  (check-equal? (run "(eval (p64-if-nar Nat zero (suc zero) (posit64 9223372036854775808)))")
+                '("0N : Nat")))
 
 (test-case "posit64 surface: if-nar on non-NaR"
-  (check-equal? (run "(eval (p64-if-nar Nat zero (inc zero) (posit64 4611686018427387904)))")
-                '("1 : Nat")))
+  (check-equal? (run "(eval (p64-if-nar Nat zero (suc zero) (posit64 4611686018427387904)))")
+                '("1N : Nat")))
 
 (test-case "posit64 surface: NaR propagation"
   (check-equal? (run "(eval (p64+ (posit64 9223372036854775808) (posit64 4611686018427387904)))")

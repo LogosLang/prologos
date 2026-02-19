@@ -266,8 +266,8 @@
 
 ;; Regression: all existing patterns still work
 
-(test-case "regression: (def one <Nat> (inc zero)) still works"
-  (check-equal? (run-first "(def one <Nat> (inc zero))") "one : Nat defined."))
+(test-case "regression: (def one <Nat> (suc zero)) still works"
+  (check-equal? (run-first "(def one <Nat> (suc zero))") "one : Nat defined."))
 
 (test-case "regression: (check zero : <Nat | Bool>) still works"
   (check-equal? (run-first "(check zero : <Nat | Bool>)") "OK"))

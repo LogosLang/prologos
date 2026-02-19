@@ -232,16 +232,16 @@
                 '("true : Bool")))
 
 (test-case "posit32 surface: from-nat"
-  (check-equal? (run "(eval (p32-from-nat (inc (inc zero))))")
+  (check-equal? (run "(eval (p32-from-nat (suc (suc zero))))")
                 '("[posit32 1207959552] : Posit32")))
 
 (test-case "posit32 surface: if-nar on NaR"
-  (check-equal? (run "(eval (p32-if-nar Nat zero (inc zero) (posit32 2147483648)))")
-                '("zero : Nat")))
+  (check-equal? (run "(eval (p32-if-nar Nat zero (suc zero) (posit32 2147483648)))")
+                '("0N : Nat")))
 
 (test-case "posit32 surface: if-nar on non-NaR"
-  (check-equal? (run "(eval (p32-if-nar Nat zero (inc zero) (posit32 1073741824)))")
-                '("1 : Nat")))
+  (check-equal? (run "(eval (p32-if-nar Nat zero (suc zero) (posit32 1073741824)))")
+                '("1N : Nat")))
 
 (test-case "posit32 surface: NaR propagation"
   (check-equal? (run "(eval (p32+ (posit32 2147483648) (posit32 1073741824)))")

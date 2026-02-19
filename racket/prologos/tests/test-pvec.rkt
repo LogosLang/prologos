@@ -218,49 +218,49 @@
 ;; ========================================
 
 (test-case "surface: pvec-push + pvec-nth"
-  (let ([result (run "(eval (pvec-nth (pvec-push (pvec-empty Nat) (inc zero)) zero))")])
+  (let ([result (run "(eval (pvec-nth (pvec-push (pvec-empty Nat) (suc zero)) zero))")])
     (check-equal? (length result) 1)
-    (check-equal? (car result) "1 : Nat")))
+    (check-equal? (car result) "1N : Nat")))
 
 ;; ========================================
 ;; Surface syntax: pvec-update
 ;; ========================================
 
 (test-case "surface: pvec-update"
-  (let ([result (run "(eval (pvec-nth (pvec-update (pvec-push (pvec-empty Nat) zero) zero (inc zero)) zero))")])
-    (check-equal? (car result) "1 : Nat")))
+  (let ([result (run "(eval (pvec-nth (pvec-update (pvec-push (pvec-empty Nat) zero) zero (suc zero)) zero))")])
+    (check-equal? (car result) "1N : Nat")))
 
 ;; ========================================
 ;; Surface syntax: pvec-length
 ;; ========================================
 
 (test-case "surface: pvec-length"
-  (let ([result (run "(eval (pvec-length (pvec-push (pvec-push (pvec-empty Nat) zero) (inc zero))))")])
-    (check-equal? (car result) "2 : Nat")))
+  (let ([result (run "(eval (pvec-length (pvec-push (pvec-push (pvec-empty Nat) zero) (suc zero))))")])
+    (check-equal? (car result) "2N : Nat")))
 
 ;; ========================================
 ;; Surface syntax: pvec-pop
 ;; ========================================
 
 (test-case "surface: pvec-pop"
-  (let ([result (run "(eval (pvec-length (pvec-pop (pvec-push (pvec-push (pvec-empty Nat) zero) (inc zero)))))")])
-    (check-equal? (car result) "1 : Nat")))
+  (let ([result (run "(eval (pvec-length (pvec-pop (pvec-push (pvec-push (pvec-empty Nat) zero) (suc zero)))))")])
+    (check-equal? (car result) "1N : Nat")))
 
 ;; ========================================
 ;; Surface syntax: pvec-concat
 ;; ========================================
 
 (test-case "surface: pvec-concat"
-  (let ([result (run "(eval (pvec-length (pvec-concat (pvec-push (pvec-empty Nat) zero) (pvec-push (pvec-empty Nat) (inc zero)))))")])
-    (check-equal? (car result) "2 : Nat")))
+  (let ([result (run "(eval (pvec-length (pvec-concat (pvec-push (pvec-empty Nat) zero) (pvec-push (pvec-empty Nat) (suc zero)))))")])
+    (check-equal? (car result) "2N : Nat")))
 
 ;; ========================================
 ;; Surface syntax: pvec-slice
 ;; ========================================
 
 (test-case "surface: pvec-slice"
-  (let ([result (run "(eval (pvec-length (pvec-slice (pvec-push (pvec-push (pvec-push (pvec-empty Nat) zero) (inc zero)) (inc (inc zero))) (inc zero) (inc (inc (inc zero))))))")])
-    (check-equal? (car result) "2 : Nat")))
+  (let ([result (run "(eval (pvec-length (pvec-slice (pvec-push (pvec-push (pvec-push (pvec-empty Nat) zero) (suc zero)) (suc (suc zero))) (suc zero) (suc (suc (suc zero))))))")])
+    (check-equal? (car result) "2N : Nat")))
 
 ;; ========================================
 ;; Surface syntax: def + eval with PVec
@@ -268,10 +268,10 @@
 
 (test-case "surface: def + eval with PVec"
   (parameterize ([current-global-env (hasheq)])
-    (let ([result (process-string "(def v <(PVec Nat)> (pvec-push (pvec-empty Nat) (inc (inc zero))))\n(eval (pvec-nth v zero))")])
+    (let ([result (process-string "(def v <(PVec Nat)> (pvec-push (pvec-empty Nat) (suc (suc zero))))\n(eval (pvec-nth v zero))")])
       (check-equal? (length result) 2)
       (check-true (string-contains? (car result) "v : (PVec Nat) defined"))
-      (check-equal? (cadr result) "2 : Nat"))))
+      (check-equal? (cadr result) "2N : Nat"))))
 
 ;; ========================================
 ;; Surface syntax: defn with PVec parameter
@@ -279,9 +279,9 @@
 
 (test-case "surface: defn with PVec parameter"
   (parameterize ([current-global-env (hasheq)])
-    (let ([result (process-string "(defn first-elem [v <(PVec Nat)>] <Nat> (pvec-nth v zero))\n(eval (first-elem (pvec-push (pvec-empty Nat) (inc (inc (inc zero))))))")])
+    (let ([result (process-string "(defn first-elem [v <(PVec Nat)>] <Nat> (pvec-nth v zero))\n(eval (first-elem (pvec-push (pvec-empty Nat) (suc (suc (suc zero))))))")])
       (check-equal? (length result) 2)
-      (check-equal? (cadr result) "3 : Nat"))))
+      (check-equal? (cadr result) "3N : Nat"))))
 
 ;; ========================================
 ;; @[...] literal syntax: empty
@@ -297,7 +297,7 @@
 ;; ========================================
 
 (test-case "surface: @[...] literal with check"
-  (check-equal? (run "(check @[zero (inc zero)] <(PVec Nat)>)")
+  (check-equal? (run "(check @[zero (suc zero)] <(PVec Nat)>)")
                 '("OK")))
 
 ;; ========================================
@@ -306,9 +306,9 @@
 
 (test-case "surface: @[...] literal via def"
   (parameterize ([current-global-env (hasheq)])
-    (let ([result (process-string "(def v <(PVec Nat)> @[zero (inc zero) (inc (inc zero))])\n(eval (pvec-nth v (inc zero)))")])
+    (let ([result (process-string "(def v <(PVec Nat)> @[zero (suc zero) (suc (suc zero))])\n(eval (pvec-nth v (suc zero)))")])
       (check-equal? (length result) 2)
-      (check-equal? (cadr result) "1 : Nat"))))
+      (check-equal? (cadr result) "1N : Nat"))))
 
 ;; ========================================
 ;; @[...] literal syntax: pvec-nth on literal
@@ -317,9 +317,9 @@
 (test-case "surface: pvec-nth on @[...] literal via def"
   ;; @[...] literals need checking context to resolve element type metas
   (parameterize ([current-global-env (hasheq)])
-    (let ([result (process-string "(def v <(PVec Nat)> @[zero (inc zero) (inc (inc zero))])\n(eval (pvec-nth v (inc (inc zero))))")])
+    (let ([result (process-string "(def v <(PVec Nat)> @[zero (suc zero) (suc (suc zero))])\n(eval (pvec-nth v (suc (suc zero))))")])
       (check-equal? (length result) 2)
-      (check-equal? (cadr result) "2 : Nat"))))
+      (check-equal? (cadr result) "2N : Nat"))))
 
 ;; ========================================
 ;; Reader tests: WS reader @[] tokenization

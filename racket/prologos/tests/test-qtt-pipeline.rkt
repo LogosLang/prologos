@@ -67,24 +67,24 @@
   ;; Default multiplicity (mw) — any usage is fine
   (check-equal?
    (run-last "(def id <(-> Nat Nat)> (fn [x <Nat>] x))\n(eval (id zero))")
-   "zero : Nat"))
+   "0N : Nat"))
 
 (test-case "qtt-pipeline/linear-identity"
   ;; Linear (:1) used exactly once — correct
   (check-equal?
    (run-last "(def lin-id <(Pi [x :1 <Nat>] Nat)> (fn [x :1 <Nat>] x))\n(eval (lin-id zero))")
-   "zero : Nat"))
+   "0N : Nat"))
 
 (test-case "qtt-pipeline/erased-const"
   ;; Erased (:0) not used in body — correct
   (check-equal?
    (run-last "(def erased-c <(Pi [x :0 <Nat>] Nat)> (fn [x :0 <Nat>] zero))\n(eval (erased-c zero))")
-   "zero : Nat"))
+   "0N : Nat"))
 
 (test-case "qtt-pipeline/unrestricted-used-twice"
   ;; Unrestricted (mw) can be used any number of times — use natrec to reference x twice
   (check-equal?
-   (run-first "(def use-twice <(-> Nat Nat)> (fn [x <Nat>] (natrec (fn [_ <Nat>] Nat) x (fn [_ <Nat>] (fn [r <Nat>] (inc r))) x)))")
+   (run-first "(def use-twice <(-> Nat Nat)> (fn [x <Nat>] (natrec (fn [_ <Nat>] Nat) x (fn [_ <Nat>] (fn [r <Nat>] (suc r))) x)))")
    "use-twice : Nat -> Nat defined."))
 
 (test-case "qtt-pipeline/unrestricted-used-zero"
@@ -96,21 +96,21 @@
 (test-case "qtt-pipeline/inferred-path-simple"
   ;; Type-inferred def (no annotation) — should pass QTT
   (check-equal?
-   (run-last "(def one (inc zero))\n(eval one)")
-   "1 : Nat"))
+   (run-last "(def one (suc zero))\n(eval one)")
+   "1N : Nat"))
 
 (test-case "qtt-pipeline/defn-natrec-based"
   ;; defn with natrec — uses bare match on Nat
   ;; spec+defn goes through process-def-group → process-def
   (check-equal?
-   (run-last "(def double <(-> Nat Nat)> (fn [n <Nat>] (natrec (fn [_ <Nat>] Nat) zero (fn [_ <Nat>] (fn [r <Nat>] (inc (inc r)))) n)))\n(eval (double (inc (inc zero))))")
-   "4 : Nat"))
+   (run-last "(def double <(-> Nat Nat)> (fn [n <Nat>] (natrec (fn [_ <Nat>] Nat) zero (fn [_ <Nat>] (fn [r <Nat>] (suc (suc r)))) n)))\n(eval (double (suc (suc zero))))")
+   "4N : Nat"))
 
 (test-case "qtt-pipeline/let-in-def"
   ;; Let expressions elaborate to app(lam, arg) — QTT beta-typed app handles this
   (check-equal?
-   (run-last "(def r <Nat> (let a : Nat := (inc zero) a))\n(eval r)")
-   "1 : Nat"))
+   (run-last "(def r <Nat> (let a : Nat := (suc zero) a))\n(eval r)")
+   "1N : Nat"))
 
 ;; ========================================
 ;; Negative tests: multiplicity violations produce errors
@@ -121,7 +121,7 @@
   ;; natrec uses the target twice (base=x, step uses x again implicitly via the recursion)
   ;; But simpler: add x x uses x twice
   (define result
-    (run-first "(def dup <(Pi [x :1 <Nat>] Nat)> (fn [x :1 <Nat>] (natrec (fn [_ <Nat>] Nat) x (fn [_ <Nat>] (fn [r <Nat>] (inc r))) x)))"))
+    (run-first "(def dup <(Pi [x :1 <Nat>] Nat)> (fn [x :1 <Nat>] (natrec (fn [_ <Nat>] Nat) x (fn [_ <Nat>] (fn [r <Nat>] (suc r))) x)))"))
   (check-true (multiplicity-error? result)
               "Expected multiplicity-error for linear variable used twice"))
 
@@ -142,7 +142,7 @@
 (test-case "qtt-pipeline/erased-used-in-suc-is-error"
   ;; Erased (:0) used in suc — multiplicity violation
   (define result
-    (run-first "(def inc-erased <(Pi [x :0 <Nat>] Nat)> (fn [x :0 <Nat>] (inc x)))"))
+    (run-first "(def suc-erased <(Pi [x :0 <Nat>] Nat)> (fn [x :0 <Nat>] (suc x)))"))
   (check-true (multiplicity-error? result)
               "Expected multiplicity-error for erased variable used in suc"))
 
@@ -172,8 +172,8 @@
 (test-case "qtt-pipeline/stdlib-nat-loads"
   ;; The nat stdlib loads and add works
   (check-equal?
-   (run-ns-last "(ns qtt-r1)\n(require [prologos.data.nat :refer [add]])\n(eval (add (inc (inc zero)) (inc (inc (inc zero)))))")
-   "5 : Nat"))
+   (run-ns-last "(ns qtt-r1)\n(require [prologos.data.nat :refer [add]])\n(eval (add (suc (suc zero)) (suc (suc (suc zero)))))")
+   "5N : Nat"))
 
 (test-case "qtt-pipeline/stdlib-bool-loads"
   ;; The bool stdlib loads
@@ -184,18 +184,18 @@
 (test-case "qtt-pipeline/mult-inference-still-works"
   ;; Omitted multiplicities still default to mw and work
   (check-equal?
-   (run-last "(def id <(-> Nat Nat)> (fn [x <Nat>] x))\n(eval (id (inc zero)))")
-   "1 : Nat"))
+   (run-last "(def id <(-> Nat Nat)> (fn [x <Nat>] x))\n(eval (id (suc zero)))")
+   "1N : Nat"))
 
 (test-case "qtt-pipeline/posit8-basic"
   ;; Posit8 operations pass QTT
   (check-equal?
-   (run-first "(def one <Posit8> (p8-from-nat (inc zero)))")
+   (run-first "(def one <Posit8> (p8-from-nat (suc zero)))")
    "one : Posit8 defined."))
 
 (test-case "qtt-pipeline/eval-command-not-qtt-checked"
   ;; eval commands don't go through QTT — they're ephemeral
   ;; This verifies that eval path is unaffected
   (check-equal?
-   (run-first "(eval (inc (inc zero)))")
-   "2 : Nat"))
+   (run-first "(eval (suc (suc zero)))")
+   "2N : Nat"))

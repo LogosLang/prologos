@@ -3,21 +3,21 @@ ns examples.foray-min
 require [prologos.data.list :as list :refer [List nil cons map length]]
 require [prologos.data.nat  :refer [add]]
 
-defn inc-all [xs : List Nat] : List Nat
-  map [add _ [inc zero]] xs
+defn suc-all [xs : List Nat] : List Nat
+  map [add _ [suc zero]] xs
 
-inc-all [cons [inc zero] [cons [inc [inc zero]] nil]]
+suc-all [cons [suc zero] [cons [suc [suc zero]] nil]]
 
-map [add 1 _] '[1 2 3 4 5]
+map [add 1N _] '[1N 2N 3N 4N 5N]
 
-reduce add 0 [map [add 1 _] '[1 2 3 4 5]]
+reduce add 0N [map [add 1N _] '[1N 2N 3N 4N 5N]]
 
 spec factorial Nat -> Nat
 defn factorial [n]
   match n
-    | zero  -> inc zero
-    | inc k -> mult n [factorial k]
+    | zero  -> suc zero
+    | suc k -> mult n [factorial k]
 
-map [add 1 _] [list::range 10]
+map [add 1N _] [list::range 10N]
 
-reduce mult 1 [map [add 1 _] [list::range 5]]
+reduce mult 1N [map [add 1N _] [list::range 5N]]

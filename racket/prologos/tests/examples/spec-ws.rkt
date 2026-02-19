@@ -4,16 +4,16 @@
 
 spec add Nat Nat -> Nat
 defn add [x y]
-    natrec Nat x [fn [k : Nat] [fn [r : Nat] [inc r]]] y
+    natrec Nat x [fn [k : Nat] [fn [r : Nat] [suc r]]] y
 
-eval [add [inc zero] [inc [inc zero]]]
+eval [add [suc zero] [suc [suc zero]]]
 
 ;; Spec with docstring
 spec inc2 "Increments twice." Nat -> Nat
 defn inc2 [x]
-    inc [inc x]
+    suc [suc x]
 
-eval [inc2 [inc zero]]
+eval [inc2 [suc zero]]
 
 ;; HOF spec
 spec apply-fn [-> Nat Nat] Nat -> Nat

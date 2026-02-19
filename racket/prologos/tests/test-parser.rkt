@@ -44,25 +44,25 @@
 ;; Number literals
 ;; ========================================
 
-(test-case "parse: 0 -> surf-zero"
-  (check-true (surf-zero? (p "0"))))
+(test-case "parse: 0 -> surf-int-lit"
+  (check-true (surf-int-lit? (p "0"))))
 
-(test-case "parse: 3 -> surf-nat-lit"
+(test-case "parse: 3 -> surf-int-lit"
   (let ([r (p "3")])
-    (check-true (surf-nat-lit? r))
-    (check-equal? (surf-nat-lit-value r) 3)))
+    (check-true (surf-int-lit? r))
+    (check-equal? (surf-int-lit-value r) 3)))
 
 ;; ========================================
-;; inc
+;; suc
 ;; ========================================
 
-(test-case "parse: (inc zero)"
-  (let ([r (p "(inc zero)")])
+(test-case "parse: (suc zero)"
+  (let ([r (p "(suc zero)")])
     (check-true (surf-suc? r))
     (check-true (surf-zero? (surf-suc-pred r)))))
 
-(test-case "parse: (inc (inc zero))"
-  (let ([r (p "(inc (inc zero))")])
+(test-case "parse: (suc (suc zero))"
+  (let ([r (p "(suc (suc zero))")])
     (check-true (surf-suc? r))
     (check-true (surf-suc? (surf-suc-pred r)))))
 
@@ -212,8 +212,8 @@
 ;; Vec/Fin
 ;; ========================================
 
-(test-case "parse: (Vec Nat (inc zero))"
-  (let ([r (p "(Vec Nat (inc zero))")])
+(test-case "parse: (Vec Nat (suc zero))"
+  (let ([r (p "(Vec Nat (suc zero))")])
     (check-true (surf-vec-type? r))
     (check-true (surf-nat-type? (surf-vec-type-elem-type r)))
     (check-true (surf-suc? (surf-vec-type-length r)))))
@@ -221,18 +221,18 @@
 (test-case "parse: (vnil Nat)"
   (check-true (surf-vnil? (p "(vnil Nat)"))))
 
-(test-case "parse: (vcons Nat (inc zero) zero (vnil Nat))"
-  (let ([r (p "(vcons Nat (inc zero) zero (vnil Nat))")])
+(test-case "parse: (vcons Nat (suc zero) zero (vnil Nat))"
+  (let ([r (p "(vcons Nat (suc zero) zero (vnil Nat))")])
     (check-true (surf-vcons? r))))
 
-(test-case "parse: (Fin (inc zero))"
-  (check-true (surf-fin-type? (p "(Fin (inc zero))"))))
+(test-case "parse: (Fin (suc zero))"
+  (check-true (surf-fin-type? (p "(Fin (suc zero))"))))
 
 (test-case "parse: (fzero zero)"
   (check-true (surf-fzero? (p "(fzero zero)"))))
 
-(test-case "parse: (fsuc (inc zero) (fzero zero))"
-  (check-true (surf-fsuc? (p "(fsuc (inc zero) (fzero zero))"))))
+(test-case "parse: (fsuc (suc zero) (fzero zero))"
+  (check-true (surf-fsuc? (p "(fsuc (suc zero) (fzero zero))"))))
 
 (test-case "parse: (vhead Nat zero v)"
   (check-true (surf-vhead? (p "(vhead Nat zero v)"))))
@@ -240,8 +240,8 @@
 (test-case "parse: (vtail Nat zero v)"
   (check-true (surf-vtail? (p "(vtail Nat zero v)"))))
 
-(test-case "parse: (vindex Nat (inc zero) i v)"
-  (check-true (surf-vindex? (p "(vindex Nat (inc zero) i v)"))))
+(test-case "parse: (vindex Nat (suc zero) i v)"
+  (check-true (surf-vindex? (p "(vindex Nat (suc zero) i v)"))))
 
 ;; ========================================
 ;; Application
@@ -294,11 +294,11 @@
 ;; Error cases
 ;; ========================================
 
-(test-case "parse: (inc) — wrong arity"
-  (check-true (prologos-error? (p "(inc)"))))
+(test-case "parse: (suc) — wrong arity"
+  (check-true (prologos-error? (p "(suc)"))))
 
-(test-case "parse: (inc a b) — wrong arity"
-  (check-true (prologos-error? (p "(inc a b)"))))
+(test-case "parse: (suc a b) — wrong arity"
+  (check-true (prologos-error? (p "(suc a b)"))))
 
 (test-case "parse: (Type x) — non-numeric level"
   (check-true (prologos-error? (p "(Type x)"))))
@@ -336,7 +336,7 @@
 ;; ========================================
 
 (test-case "parse: defn simple (-> Nat Nat)"
-  (let ([r (p "(defn increment : (-> Nat Nat) [x] (inc x))")])
+  (let ([r (p "(defn increment : (-> Nat Nat) [x] (suc x))")])
     (check-true (surf-defn? r))
     (check-equal? (surf-defn-name r) 'increment)
     (check-true (surf-arrow? (surf-defn-type r)))
@@ -383,7 +383,7 @@
   (check-equal? (binder-info-mult (surf-lam-binder result)) 'm0))
 
 (test-case "parse: angle-bracket def"
-  (define result (p "(def one <Nat> (inc zero))"))
+  (define result (p "(def one <Nat> (suc zero))"))
   (check-true (surf-def? result))
   (check-equal? (surf-def-name result) 'one))
 
@@ -393,7 +393,7 @@
   (check-true (surf-nat-type? (surf-check-type result))))
 
 (test-case "parse: angle-bracket defn with typed binders"
-  (define result (p "(defn inc2 [x <Nat>] <Nat> (inc x))"))
+  (define result (p "(defn inc2 [x <Nat>] <Nat> (suc x))"))
   (check-true (surf-defn? result))
   (check-equal? (surf-defn-name result) 'inc2)
   (check-equal? (surf-defn-param-names result) '(x)))
@@ -418,7 +418,7 @@
   (check-equal? (binder-info-name (surf-sigma-binder result)) 'x))
 
 (test-case "parse: angle-bracket complex type"
-  (define result (p "(def f <(-> Nat Nat)> (fn [x <Nat>] (inc x)))"))
+  (define result (p "(def f <(-> Nat Nat)> (fn [x <Nat>] (suc x)))"))
   (check-true (surf-def? result))
   (check-true (surf-arrow? (surf-def-type result))))
 
@@ -427,7 +427,7 @@
 ;; ========================================
 
 (test-case "parse: colon binder [x : Nat]"
-  (define result (p "(defn inc2 [x : Nat] <Nat> (inc x))"))
+  (define result (p "(defn inc2 [x : Nat] <Nat> (suc x))"))
   (check-true (surf-defn? result))
   (check-equal? (surf-defn-name result) 'inc2)
   (check-equal? (surf-defn-param-names result) '(x))
@@ -456,7 +456,7 @@
   (check-equal? (binder-info-mult (surf-pi-binder pi-type)) 'm0))
 
 (test-case "parse: colon return type : Nat"
-  (define result (p "(defn inc2 [x : Nat] : Nat (inc x))"))
+  (define result (p "(defn inc2 [x : Nat] : Nat (suc x))"))
   (check-true (surf-defn? result))
   (check-equal? (surf-defn-name result) 'inc2)
   (check-equal? (surf-defn-param-names result) '(x))
@@ -506,7 +506,7 @@
 
 (test-case "parse: colon binder with commas [x : Nat, y : Nat]"
   ;; Commas are now supported in sexp mode via readtable
-  (define result (p "(defn add [x : Nat, y : Nat] <Nat> (natrec Nat y (fn (_ : Nat) (fn (acc : Nat) (inc acc))) x))"))
+  (define result (p "(defn add [x : Nat, y : Nat] <Nat> (natrec Nat y (fn (_ : Nat) (fn (acc : Nat) (suc acc))) x))"))
   (check-true (surf-defn? result))
   (check-equal? (surf-defn-param-names result) '(x y)))
 

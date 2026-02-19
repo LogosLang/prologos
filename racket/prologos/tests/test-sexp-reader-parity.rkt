@@ -189,8 +189,8 @@
   (check-equal?
     (run-last (string-append
       "(ns sp-pipe-1)\n"
-      "(eval (($pipe-gt zero (inc)) ))"))
-    "1 : Nat"))
+      "(eval (($pipe-gt zero (suc)) ))"))
+    "1N : Nat"))
 
 ;; --- >> compose end-to-end ---
 
@@ -199,15 +199,15 @@
   (check-equal?
     (run-last (string-append
       "(ns sp-comp-1)\n"
-      "(eval ((inc >> inc) zero))"))
-    "2 : Nat"))
+      "(eval ((suc >> suc) zero))"))
+    "2N : Nat"))
 
 (test-case "sexp-parity/e2e/compose: (f >> g >> h) triple compose"
   (check-equal?
     (run-last (string-append
       "(ns sp-comp-2)\n"
-      "(eval ((inc >> inc >> inc) zero))"))
-    "3 : Nat"))
+      "(eval ((suc >> suc >> suc) zero))"))
+    "3N : Nat"))
 
 ;; --- ... varargs end-to-end ---
 
@@ -218,8 +218,8 @@
       "(require [prologos.data.list :refer [List nil cons length]])\n"
       "(spec count-args Nat ... -> Nat)\n"
       "(defn count-args [xs] (length Nat xs))\n"
-      "(eval (count-args 1 2 3))")))
-  (check-equal? (last result) "3 : Nat"))
+      "(eval (count-args 1N 2N 3N))")))
+  (check-equal? (last result) "3N : Nat"))
 
 (test-case "sexp-parity/e2e/varargs: zero args with ..."
   (define result
@@ -229,7 +229,7 @@
       "(spec count-args Nat ... -> Nat)\n"
       "(defn count-args [xs] (length Nat xs))\n"
       "(eval (count-args))")))
-  (check-equal? (last result) "zero : Nat"))
+  (check-equal? (last result) "0N : Nat"))
 
 (test-case "sexp-parity/e2e/varargs: ...xs rest param in defn"
   (define result
@@ -238,8 +238,8 @@
       "(require [prologos.data.list :refer [List nil cons length]])\n"
       "(spec count-args Nat ... -> Nat)\n"
       "(defn count-args [...xs] (length Nat xs))\n"
-      "(eval (count-args 1 2 3))")))
-  (check-equal? (last result) "3 : Nat"))
+      "(eval (count-args 1N 2N 3N))")))
+  (check-equal? (last result) "3N : Nat"))
 
 (test-case "sexp-parity/e2e/varargs: mixed fixed + ... rest"
   (define result
@@ -248,5 +248,5 @@
       "(require [prologos.data.list :refer [List nil cons length]])\n"
       "(spec count-rest Nat Nat ... -> Nat)\n"
       "(defn count-rest [first ...rest] (length Nat rest))\n"
-      "(eval (count-rest 99 1 2 3))")))
-  (check-equal? (last result) "3 : Nat"))
+      "(eval (count-rest 99N 1N 2N 3N))")))
+  (check-equal? (last result) "3N : Nat"))

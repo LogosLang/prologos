@@ -53,7 +53,7 @@
 ;; ================================================================
 
 (test-case "tokenize: '[ produces quote-lbracket token"
-  (define toks (tokenize-string "'[1 2 3]"))
+  (define toks (tokenize-string "'[1N 2N 3N]"))
   (define types (map (lambda (t) (vector-ref (struct->vector t) 1)) toks))
   (check-not-false (member 'quote-lbracket types)))
 
@@ -67,9 +67,9 @@
 ;; WS READER PARSE TESTS
 ;; ================================================================
 
-(test-case "parse: '[1 2 3] produces $list-literal"
-  (define forms (read-all-forms-string "eval '[1 2 3]"))
-  (check-equal? forms '((eval ($list-literal 1 2 3)))))
+(test-case "parse: '[1N 2N 3N] produces $list-literal"
+  (define forms (read-all-forms-string "eval '[1N 2N 3N]"))
+  (check-equal? forms '((eval ($list-literal ($nat-literal 1) ($nat-literal 2) ($nat-literal 3))))))
 
 (test-case "parse: '[] produces empty $list-literal"
   (define forms (read-all-forms-string "eval '[]"))
@@ -84,8 +84,8 @@
   (check-equal? forms '((eval ($list-literal x)))))
 
 (test-case "parse: '[ with nested grouping"
-  (define forms (read-all-forms-string "eval '[[inc zero] 2 3]"))
-  (check-equal? forms '((eval ($list-literal (inc zero) 2 3)))))
+  (define forms (read-all-forms-string "eval '[[suc zero] 2 3]"))
+  (check-equal? forms '((eval ($list-literal (suc zero) 2 3)))))
 
 (test-case "parse: '[ with commas stripped"
   (define forms (read-all-forms-string "eval '[1, 2, 3]"))
@@ -133,10 +133,10 @@
 ;; SEXP READTABLE TESTS
 ;; ================================================================
 
-(test-case "sexp: '[1 2 3] produces $list-literal"
-  (define in (open-input-string "'[1 2 3]"))
+(test-case "sexp: '[1N 2N 3N] produces $list-literal"
+  (define in (open-input-string "'[1N 2N 3N]"))
   (define result (prologos-sexp-read in))
-  (check-equal? result '($list-literal 1 2 3)))
+  (check-equal? result '($list-literal 1N 2N 3N)))
 
 (test-case "sexp: '[] produces empty $list-literal"
   (define in (open-input-string "'[]"))
@@ -176,14 +176,14 @@
               (expr-app (expr-app (expr-fvar 'cons) (expr-suc (expr-suc (expr-zero))))
                         (expr-app (expr-app (expr-fvar 'cons) (expr-suc (expr-suc (expr-suc (expr-zero)))))
                                   (expr-fvar 'nil)))))
-  (check-equal? (pp-expr e) "'[1 2 3]"))
+  (check-equal? (pp-expr e) "'[1N 2N 3N]"))
 
 (test-case "pp: cons with non-nil tail -> '[... | tail]"
   ;; cons 1 xs
   (define e
     (expr-app (expr-app (expr-fvar 'cons) (expr-suc (expr-zero)))
               (expr-fvar 'xs)))
-  (check-equal? (pp-expr e) "'[1 | xs]"))
+  (check-equal? (pp-expr e) "'[1N | xs]"))
 
 (test-case "pp: single element list -> '[x]"
   (define e
@@ -200,7 +200,7 @@
     (expr-app (expr-app (expr-fvar 'cons) (expr-suc (expr-zero)))
               (expr-app (expr-app (expr-fvar 'cons) (expr-suc (expr-suc (expr-zero))))
                         (expr-fvar 'xs))))
-  (check-equal? (pp-expr e) "'[1 2 | xs]"))
+  (check-equal? (pp-expr e) "'[1N 2N | xs]"))
 
 ;; ================================================================
 ;; INTEGRATION TESTS — Full Pipeline
@@ -211,7 +211,7 @@
     (run-ns (string-append
              "(ns t-list-1)\n"
              "(require [prologos.data.list :refer [List nil cons]])\n"
-             "(check '[1 2 3] : (List Nat))")))
+             "(check '[1N 2N 3N] : (List Nat))")))
   (check-not-false results)
   ;; Should not contain any errors
   (for ([r (in-list results)])
@@ -234,22 +234,22 @@
     (run-ns (string-append
              "(ns t-list-3)\n"
              "(require [prologos.data.list :refer [List nil cons map]])\n"
-             "(eval (map (fn (x : Nat) (inc x)) '[1 2 3]))")))
+             "(eval (map (fn (x : Nat) (suc x)) '[1N 2N 3N]))")))
   ;; Should produce a list [2, 3, 4]
   (check-not-false results)
-  ;; Result should be a cons chain: '[2 3 4]
+  ;; Result should be a cons chain: '[2N 3N 4N]
   (define result-str (last results))
   (check-true (string? result-str)
               (format "Expected string result, got: ~a" result-str))
-  (check-true (string-contains? result-str "'[2 3 4]")
-              (format "Expected '[2 3 4] in output, got: ~a" result-str)))
+  (check-true (string-contains? result-str "'[2N 3N 4N]")
+              (format "Expected '[2N 3N 4N] in output, got: ~a" result-str)))
 
 (test-case "integration: length of list literal"
   (define results
     (run-ns (string-append
              "(ns t-list-4)\n"
              "(require [prologos.data.list :refer [List nil cons length]])\n"
-             "(eval (length '[1 2 3]))")))
+             "(eval (length '[1N 2N 3N]))")))
   (check-not-false results)
   (define result-str (last results))
   (check-true (string? result-str)
@@ -262,7 +262,7 @@
     (run-ns (string-append
              "(ns t-list-5)\n"
              "(require [prologos.data.list :refer [List nil cons length]])\n"
-             "(def my-list : (List Nat) '[1 2 3])\n"
+             "(def my-list : (List Nat) '[1N 2N 3N])\n"
              "(eval (length my-list))")))
   (check-not-false results)
   (define result-str (last results))

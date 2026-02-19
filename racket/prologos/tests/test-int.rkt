@@ -308,7 +308,7 @@
                 '("true : Bool")))
 
 (test-case "int surface: from-nat"
-  (check-equal? (run "(eval (from-nat (inc (inc zero))))")
+  (check-equal? (run "(eval (from-nat (suc (suc zero))))")
                 '("2 : Int")))
 
 (test-case "int surface: check type"

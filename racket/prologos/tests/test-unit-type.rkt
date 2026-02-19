@@ -56,7 +56,7 @@
   ;; match unit | unit -> zero  →  zero : Nat
   (check-equal?
    (run-last "(ns ut3)\n(eval (the Nat (match unit (unit -> zero))))")
-   "zero : Nat"))
+   "0N : Nat"))
 
 (test-case "match-unit/to-true"
   ;; match unit | unit -> true  →  true : Bool
@@ -72,7 +72,7 @@
   ;; defn discard [x : Unit] <Nat> zero
   (check-equal?
    (run-last "(ns ut5)\n(defn discard (x : Unit) <Nat> zero)\n(eval (discard unit))")
-   "zero : Nat"))
+   "0N : Nat"))
 
 (test-case "unit-type/function-returning-unit"
   ;; defn make-unit [x : Nat] <Unit> unit
