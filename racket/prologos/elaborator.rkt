@@ -1549,6 +1549,16 @@
              [(prologos-error? ehi) ehi]
              [else (expr-pvec-slice ev elo ehi)]))]
 
+    [(surf-pvec-to-list v loc)
+     (let ([ev (elaborate v env depth)])
+       (cond [(prologos-error? ev) ev]
+             [else (expr-pvec-to-list ev)]))]
+
+    [(surf-pvec-from-list v loc)
+     (let ([ev (elaborate v env depth)])
+       (cond [(prologos-error? ev) ev]
+             [else (expr-pvec-from-list ev)]))]
+
     ;; ---- Transient Builders ----
     ;; Transient type constructors: (TVec A), (TMap K V), (TSet A)
     [(surf-transient-type kind args loc)

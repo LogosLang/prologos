@@ -5,6 +5,8 @@
 ;;;
 
 (require racket/string
+         racket/list
+         racket/path
          rackunit
          "../syntax.rkt"
          "../prelude.rkt"
@@ -14,13 +16,29 @@
          "../pretty-print.rkt"
          "../driver.rkt"
          "../global-env.rkt"
+         "../namespace.rkt"
+         "../macros.rkt"
          "../rrb.rkt"
          "../reader.rkt"
          "../sexp-readtable.rkt")
 
+;; Compute the lib directory path for namespace loading
+(define here (path->string (path-only (syntax-source #'here))))
+(define lib-dir (simplify-path (build-path here ".." "lib")))
+
 ;; Helper to run with clean global env
 (define (run s)
   (parameterize ([current-global-env (hasheq)])
+    (process-string s)))
+
+;; Helper to run with namespace system (prelude) active
+(define (run-ns s)
+  (parameterize ([current-global-env (hasheq)]
+                 [current-ns-context #f]
+                 [current-module-registry (hasheq)]
+                 [current-lib-paths (list lib-dir)]
+                 [current-preparse-registry (current-preparse-registry)])
+    (install-module-loader!)
     (process-string s)))
 
 ;; ========================================
@@ -350,3 +368,68 @@
   (define in (open-input-string "@[]"))
   (define result (prologos-sexp-read in))
   (check-equal? result '($vec-literal)))
+
+;; ========================================
+;; pvec-to-list: PVec A → List A
+;; ========================================
+
+(test-case "pvec-to-list: empty vector"
+  (let ([result (run "(eval (pvec-to-list (pvec-empty Nat)))")])
+    (check-equal? (length result) 1)
+    (check-true (string-contains? (car result) "nil"))))
+
+(test-case "pvec-to-list: singleton vector"
+  (let ([result (run "(eval (pvec-to-list (pvec-push (pvec-empty Nat) zero)))")])
+    (check-equal? (length result) 1)
+    (check-true (string-contains? (car result) "0N"))))
+
+(test-case "pvec-to-list: multi-element vector"
+  (parameterize ([current-global-env (hasheq)])
+    (let ([result (process-string
+                   (string-append
+                    "(def v <(PVec Nat)> (pvec-push (pvec-push (pvec-empty Nat) zero) (suc zero)))\n"
+                    "(eval (pvec-to-list v))"))])
+      (check-equal? (length result) 2)
+      ;; Second result is the list with 0N and 1N
+      (check-true (string-contains? (cadr result) "0N"))
+      (check-true (string-contains? (cadr result) "1N")))))
+
+(test-case "pvec-to-list: type inferred as List A"
+  (let ([result (run "(infer (pvec-to-list (pvec-empty Nat)))")])
+    (check-equal? (length result) 1)
+    (check-true (string-contains? (car result) "List"))
+    (check-true (string-contains? (car result) "Nat"))))
+
+;; ========================================
+;; pvec-from-list: List A → PVec A
+;; ========================================
+
+(test-case "pvec-from-list: empty list"
+  (let ([result (run-ns
+                 (string-append
+                  "(ns pvec-from-list-test-1)\n"
+                  "(eval (pvec-length (pvec-from-list (nil Nat))))"))])
+    (check-true (string-contains? (last result) "0N"))))
+
+(test-case "pvec-from-list: singleton list"
+  (let ([result (run-ns
+                 (string-append
+                  "(ns pvec-from-list-test-2)\n"
+                  "(eval (pvec-length (pvec-from-list (cons zero (nil Nat)))))"))])
+    (check-true (string-contains? (last result) "1N"))))
+
+(test-case "pvec-from-list: roundtrip pvec→list→pvec"
+  (let ([result (run-ns
+                 (string-append
+                  "(ns pvec-from-list-test-3)\n"
+                  "(def v <(PVec Nat)> (pvec-push (pvec-push (pvec-empty Nat) zero) (suc zero)))\n"
+                  "(eval (pvec-length (pvec-from-list (pvec-to-list v))))"))])
+    (check-true (string-contains? (last result) "2N"))))
+
+(test-case "pvec-from-list: type inferred as PVec A"
+  (let ([result (run-ns
+                 (string-append
+                  "(ns pvec-from-list-test-4)\n"
+                  "(infer (pvec-from-list (nil Nat)))"))])
+    (check-true (string-contains? (last result) "PVec"))
+    (check-true (string-contains? (last result) "Nat"))))

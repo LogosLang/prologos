@@ -835,6 +835,26 @@
          [(expr-PVec a) (if (and (check ctx lo (expr-Nat)) (check ctx hi (expr-Nat)))
                             (expr-PVec a) (expr-error))]
          [_ (expr-error)]))]
+    ;; pvec-to-list : PVec A → List A
+    [(expr-pvec-to-list v)
+     (let ([tv (infer ctx v)])
+       (match tv
+         [(expr-PVec a) (expr-app (expr-fvar 'List) a)]
+         [_ (expr-error)]))]
+    ;; pvec-from-list : List A → PVec A
+    ;; List constructor name may be 'List or 'prologos.data.list::List (qualified)
+    [(expr-pvec-from-list v)
+     (let ([tv (whnf (infer ctx v))])
+       (match tv
+         [(expr-app (? (lambda (f)
+                         (and (expr-fvar? f)
+                              (let* ([n (symbol->string (expr-fvar-name f))]
+                                     [len (string-length n)])
+                                (or (string=? n "List")
+                                    (and (>= len 6)
+                                         (string=? (substring n (- len 6)) "::List"))))))) a)
+          (expr-PVec a)]
+         [_ (expr-error)]))]
 
     ;; ---- Transient Builders ----
     ;; Generic transient: dispatch on collection type

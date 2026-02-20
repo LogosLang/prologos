@@ -196,6 +196,7 @@
  (struct-out surf-pvec-nth) (struct-out surf-pvec-update)
  (struct-out surf-pvec-length) (struct-out surf-pvec-pop)
  (struct-out surf-pvec-concat) (struct-out surf-pvec-slice)
+ (struct-out surf-pvec-to-list) (struct-out surf-pvec-from-list)
  ;; Transient Builders
  (struct-out surf-transient-type)
  (struct-out surf-transient) (struct-out surf-persist)
@@ -644,6 +645,8 @@
 (struct surf-pvec-pop (v srcloc) #:transparent)              ; (pvec-pop v)
 (struct surf-pvec-concat (v1 v2 srcloc) #:transparent)       ; (pvec-concat v1 v2)
 (struct surf-pvec-slice (v lo hi srcloc) #:transparent)      ; (pvec-slice v lo hi)
+(struct surf-pvec-to-list (v srcloc) #:transparent)          ; (pvec-to-list v)
+(struct surf-pvec-from-list (v srcloc) #:transparent)        ; (pvec-from-list v)
 
 ;; ---- Transient Builders ----
 (struct surf-transient-type (kind args srcloc) #:transparent) ; (TVec A), (TMap K V), (TSet A) — kind is 'TVec/'TMap/'TSet

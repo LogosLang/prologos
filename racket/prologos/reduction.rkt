@@ -48,6 +48,54 @@
           (expr-app (expr-app (expr-fvar 'pair) (car p)) (cdr p)))
         pairs)))
 
+;; Helper: check if an fvar name matches 'nil or '...::nil (qualified)
+(define (nil-name? name)
+  (let ([s (symbol->string name)])
+    (or (string=? s "nil")
+        (let ([len (string-length s)])
+          (and (>= len 5) (string=? (substring s (- len 5)) "::nil"))))))
+
+;; Helper: check if an fvar name matches 'cons or '...::cons (qualified)
+(define (cons-name? name)
+  (let ([s (symbol->string name)])
+    (or (string=? s "cons")
+        (let ([len (string-length s)])
+          (and (>= len 6) (string=? (substring s (- len 6)) "::cons"))))))
+
+;; Convert a Prologos List value (nil/cons chain) → Racket list of AST exprs, or #f if stuck
+(define (prologos-list->racket-list e)
+  (let loop ([cur (whnf e)] [acc '()])
+    (cond
+      ;; nil — end of list
+      [(and (expr-fvar? cur) (nil-name? (expr-fvar-name cur)))
+       (reverse acc)]
+      ;; (nil A) — nil applied to type argument
+      [(and (expr-app? cur)
+            (let ([f (expr-app-func cur)])
+              (and (expr-fvar? f) (nil-name? (expr-fvar-name f)))))
+       (reverse acc)]
+      ;; (cons x xs) — two-arg constructor applied as ((cons x) xs)
+      [(and (expr-app? cur)
+            (expr-app? (expr-app-func cur))
+            (let ([inner (expr-app-func (expr-app-func cur))])
+              (or (and (expr-fvar? inner) (cons-name? (expr-fvar-name inner)))
+                  ;; (cons A x xs) — cons applied to type arg first: (((cons A) x) xs)
+                  (and (expr-app? inner)
+                       (let ([innermost (expr-app-func inner)])
+                         (and (expr-fvar? innermost) (cons-name? (expr-fvar-name innermost))))))))
+       (let* ([xs (expr-app-arg cur)]
+              ;; head is trickier: could be ((cons x) ...) or (((cons A) x) ...)
+              [head-app (expr-app-func cur)]
+              [head (if (and (expr-app? (expr-app-func head-app))
+                             (let ([f (expr-app-func (expr-app-func head-app))])
+                               (and (expr-fvar? f) (cons-name? (expr-fvar-name f)))))
+                        ;; (((cons A) x) xs) — skip the type arg, head = x
+                        (expr-app-arg head-app)
+                        ;; ((cons x) xs) — head = x
+                        (expr-app-arg head-app))])
+         (loop (whnf xs) (cons head acc)))]
+      [else #f])))
+
 ;; ========================================
 ;; Helpers for Posit8 reduction
 ;; ========================================
@@ -918,6 +966,17 @@
     [(expr-pvec-length (expr-rrb r))
      (nat->expr (rrb-size r))]
 
+    [(expr-pvec-to-list (expr-rrb r))
+     (racket-list->prologos-list (rrb-to-list r))]
+
+    [(expr-pvec-from-list v)
+     (let ([elems (prologos-list->racket-list v)])
+       (if elems
+           (expr-rrb (rrb-from-list elems))
+           ;; try reducing v first
+           (let ([v* (whnf v)])
+             (if (equal? v* v) e (whnf (expr-pvec-from-list v*))))))]
+
     [(expr-pvec-pop (expr-rrb r))
      (with-handlers ([exn:fail? (lambda (_) e)])
        (expr-rrb (rrb-pop r)))]
@@ -945,6 +1004,9 @@
     [(expr-pvec-length v)
      (let ([v* (whnf v)])
        (if (equal? v* v) e (whnf (expr-pvec-length v*))))]
+    [(expr-pvec-to-list v)
+     (let ([v* (whnf v)])
+       (if (equal? v* v) e (whnf (expr-pvec-to-list v*))))]
     [(expr-pvec-pop v)
      (let ([v* (whnf v)])
        (if (equal? v* v) e (whnf (expr-pvec-pop v*))))]
@@ -1434,6 +1496,8 @@
     [(expr-pvec-nth v i) (expr-pvec-nth (nf v) (nf i))]
     [(expr-pvec-update v i x) (expr-pvec-update (nf v) (nf i) (nf x))]
     [(expr-pvec-length v) (expr-pvec-length (nf v))]
+    [(expr-pvec-to-list v) (expr-pvec-to-list (nf v))]
+    [(expr-pvec-from-list v) (expr-pvec-from-list (nf v))]
     [(expr-pvec-pop v) (expr-pvec-pop (nf v))]
     [(expr-pvec-concat v1 v2) (expr-pvec-concat (nf v1) (nf v2))]
     [(expr-pvec-slice v lo hi) (expr-pvec-slice (nf v) (nf lo) (nf hi))]

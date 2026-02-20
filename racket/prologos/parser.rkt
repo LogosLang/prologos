@@ -39,7 +39,7 @@
     Symbol symbol-lit
     Keyword Map map-empty map-assoc map-get map-dissoc map-size map-has-key? map-keys map-vals
     Set set-empty set-insert set-member? set-delete set-size set-union set-intersect set-diff set-to-list
-    PVec pvec-empty pvec-push pvec-nth pvec-update pvec-length pvec-pop pvec-concat pvec-slice
+    PVec pvec-empty pvec-push pvec-nth pvec-update pvec-length pvec-pop pvec-concat pvec-slice pvec-to-list pvec-from-list
     TVec TMap TSet transient persist! tvec-push! tvec-update! tmap-assoc! tmap-dissoc! tset-insert! tset-delete!
     def defn check eval infer expand expand-1 expand-full parse elaborate match
     ;; Pre-parse macros — should be expanded before reaching parser
@@ -1845,6 +1845,18 @@
                     [(prologos-error? lo) lo]
                     [(prologos-error? hi) hi]
                     [else (surf-pvec-slice v lo hi loc)])))]
+       ;; (pvec-to-list v)
+       [(pvec-to-list)
+        (or (check-arity 'pvec-to-list args 1 loc)
+            (let ([v (parse-datum (car args))])
+              (if (prologos-error? v) v
+                  (surf-pvec-to-list v loc))))]
+       ;; (pvec-from-list v)
+       [(pvec-from-list)
+        (or (check-arity 'pvec-from-list args 1 loc)
+            (let ([v (parse-datum (car args))])
+              (if (prologos-error? v) v
+                  (surf-pvec-from-list v loc))))]
 
        ;; ---- Transient Builder types ----
        ;; (TVec A)

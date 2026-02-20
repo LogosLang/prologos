@@ -1047,6 +1047,19 @@
          [((tu _ u1) (tu _ u2) (tu _ u3))
           (tu (tu-type r1) (add-usage u1 (add-usage u2 u3)))]
          [(_ _ _) (tu-error)]))]
+    ;; pvec-to-list : PVec A → List A
+    [(expr-pvec-to-list v)
+     (let ([r (inferQ ctx v)])
+       (match r
+         [(tu (expr-PVec a) u) (tu (expr-app (expr-fvar 'List) a) u)]
+         [(tu _ u) (tu (tu-type r) u)]  ;; fallback if type not fully resolved
+         [_ (tu-error)]))]
+    ;; pvec-from-list : List A → PVec A
+    [(expr-pvec-from-list v)
+     (let ([r (inferQ ctx v)])
+       (match r
+         [(tu _ u) (tu (tu-type r) u)]  ;; type comes from typing-core
+         [_ (tu-error)]))]
 
     ;; ---- Transient Builders ----
     ;; Generic transient/persist: dispatch on inferred type, combine usage
