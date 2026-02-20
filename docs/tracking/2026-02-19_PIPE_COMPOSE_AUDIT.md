@@ -1,7 +1,7 @@
 # Pipe-Compose Performance Audit — Root Cause & Mitigation Plan
 
 **Created**: 2026-02-19
-**Status**: ⬚ Not Started (audit complete, fix not started)
+**Status**: ✅ Tier 1 Complete (split + shared fixture), Tiers 2-3 tracked for future
 **Purpose**: Document the root cause of `test-pipe-compose.rkt` pathological performance (>60 min, >2.4 GB RAM) and the plan to fix it.
 
 ---
@@ -235,4 +235,21 @@ In `test-pipe-compose-e2e.rkt`, load modules **once** at top level:
 
 ## Implementation Log
 
-*(To be filled during implementation)*
+### 2026-02-19: Split + Shared Fixture Implementation
+
+**Changes**:
+- Split `test-pipe-compose.rkt` into two files:
+  - `test-pipe-compose.rkt`: 45 fast unit/preparse tests, requires only `macros.rkt` + `reader.rkt`
+  - `test-pipe-compose-e2e.rkt`: 24 E2E tests with shared fixture (module loaded once at file level)
+- Updated `tools/dep-graph.rkt`: reduced deps for fast file, added E2E file with full deps
+- Updated `tests/.skip-tests`: skip E2E file (not fast file)
+
+**Results**:
+- `test-pipe-compose.rkt`: **3.3s** (was >60 min mixed with E2E)
+- `test-pipe-compose-e2e.rkt`: **~10-15 min** (shared fixture loads modules once, but each module load through full pipeline is inherently expensive)
+- Full suite with skip: **82 of 83 files** run, pipe-compose-e2e skipped
+
+**Key Finding During Implementation**:
+The original audit attributed all slowness to "8 × redundant module loading." Investigation revealed that even a **single** heavy E2E test (loading modules once + evaluating one fused pipe expression) takes >10 min. The bottleneck is the module loading itself (full 8-phase pipeline for 536-line list.prologos + cascade), not redundancy. The shared fixture helps (1 load vs 8), but the fundamental cost per load is ~10 min.
+
+This shifts the priority toward Tier 2 (compiled module cache) for further improvement. The Tier 1 fix still achieves the primary goal: unblocking the fast tests from the slow E2E tests.

@@ -362,6 +362,8 @@
                errors.rkt metavar-store.rkt parser.rkt elaborator.rkt pretty-print.rkt
                global-env.rkt driver.rkt namespace.rkt multi-dispatch.rkt foreign.rkt) #t)
    'test-pipe-compose.rkt
+   (test-dep '(macros.rkt reader.rkt) #f)  ; Fast unit/preparse tests only (split from E2E)
+   'test-pipe-compose-e2e.rkt
    (test-dep '(macros.rkt prelude.rkt syntax.rkt source-location.rkt surface-syntax.rkt
                errors.rkt metavar-store.rkt parser.rkt elaborator.rkt pretty-print.rkt
                global-env.rkt driver.rkt reduction.rkt typing-core.rkt namespace.rkt
@@ -580,7 +582,10 @@
    'test-lseq-literal.rkt       '(prologos.data.lseq prologos.data.list prologos.data.nat)
    'test-foreign.rkt            '(prologos.data.nat)
    'test-foreign-block.rkt      '(prologos.data.nat)
-   'test-pipe-compose.rkt       '(prologos.data.nat prologos.data.list)
+   'test-pipe-compose.rkt       '()  ; Fast tests only — no .prologos deps
+   'test-pipe-compose-e2e.rkt   '(prologos.data.nat prologos.data.list
+                                  prologos.data.transducer prologos.data.lseq
+                                  prologos.data.lseq-ops)
    'test-transducer.rkt         '(prologos.data.nat prologos.data.list prologos.data.lseq
                                   prologos.data.transducer)
    'test-higher-rank.rkt        '(prologos.data.nat prologos.data.list)

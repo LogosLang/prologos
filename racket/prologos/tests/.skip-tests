@@ -4,4 +4,4 @@
 # Tests listed here are skipped by run-affected-tests.rkt by default.
 # Use --no-skip to override, --skip-only to run only these tests.
 
-test-pipe-compose.rkt  # >60min, quadratic module reload — see 2026-02-19_PIPE_COMPOSE_AUDIT.md
+test-pipe-compose-e2e.rkt  # ~10-15min, module loading + fused pipe type-checking — see 2026-02-19_PIPE_COMPOSE_AUDIT.md
