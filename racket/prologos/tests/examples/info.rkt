@@ -1,7 +1,7 @@
 #lang info
 
 ;; These files are example #lang prologos programs, not test suites.
-;; They are exercised by ../test-lang.rkt and ../test-lang-errors.rkt.
+;; They are exercised by ../test-lang-*.rkt and ../test-lang-errors-*.rkt.
 ;; Some (type-error.rkt, unbound-var.rkt) intentionally raise errors.
 (define test-omit-paths '("hello.rkt"
                           "identity.rkt"

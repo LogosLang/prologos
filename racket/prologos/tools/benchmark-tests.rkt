@@ -12,8 +12,7 @@
 ;;   racket tools/benchmark-tests.rkt --trend test-a.rkt  # timing history for one file
 ;;   racket tools/benchmark-tests.rkt --timeout 300       # per-test timeout in seconds (default: 600)
 ;;   racket tools/benchmark-tests.rkt --regression-threshold 15  # flag >15% regressions (default: 10)
-;;   racket tools/benchmark-tests.rkt --split-threshold 60000    # split slow files (ms, 0=off)
-;;   racket tools/benchmark-tests.rkt --split-min-tests 10      # min test count for splitting
+;;   racket tools/benchmark-tests.rkt --no-precompile           # skip bytecode pre-compilation
 ;;
 ;; Results are appended to data/benchmarks/timings.jsonl (one JSON object per run).
 ;; After each run, automatically compares against previous run and flags regressions.
@@ -29,6 +28,8 @@
          json
          "dep-graph.rkt"
          "bench-lib.rkt")
+
+(define do-precompile? (make-parameter #t))
 
 ;; ============================================================
 ;; Path anchoring
@@ -47,34 +48,26 @@
 (define timings-file (make-timings-path project-root))
 
 ;; ============================================================
-;; Parallel benchmark suite (supports per-test splitting)
+;; Parallel benchmark suite
 ;; ============================================================
 
-(define (run-benchmark test-names timeout-secs num-jobs reg-threshold split-thresh split-min-tests)
+(define (run-benchmark test-names timeout-secs num-jobs reg-threshold)
   (define file-count (length test-names))
   (define test-paths
     (for/list ([name (in-list test-names)])
       (path->string (build-path tests-dir (symbol->string name)))))
 
-  ;; Prepare work items — splits whale files into per-test-case items
-  (define-values (items cleanup!)
-    (parameterize ([split-threshold-ms split-thresh]
-                   [split-min-test-count split-min-tests])
-      (prepare-work-items test-paths project-root)))
+  ;; Pre-compile modules to bytecode (reduces per-subprocess overhead from ~22s to ~1s)
+  (when (do-precompile?)
+    (printf "Pre-compiling modules...\n")
+    (define precomp-t0 (current-inexact-monotonic-milliseconds))
+    (precompile-modules! project-root)
+    (define precomp-ms (- (current-inexact-monotonic-milliseconds) precomp-t0))
+    (printf "Pre-compiled in ~as\n\n"
+            (real->decimal-string (/ precomp-ms 1000.0) 1)))
 
-  (define total (length items))
-  (define split-items (filter (λ (wi) (eq? (work-item-kind wi) 'split)) items))
-  (define whale-count
-    (length (remove-duplicates (map work-item-original-file split-items))))
-
-  (printf "Benchmarking ~a work items (~a files~a, ~a parallel, timeout: ~as per test)...\n\n"
-          total file-count
-          (if (> whale-count 0)
-              (format ", ~a tests split from ~a whale file~a"
-                      (length split-items) whale-count
-                      (if (= whale-count 1) "" "s"))
-              "")
-          num-jobs timeout-secs)
+  (printf "Benchmarking ~a files (~a parallel, timeout: ~as per test)...\n\n"
+          file-count num-jobs timeout-secs)
 
   (define work-ch (make-async-channel))
   (define result-ch (make-async-channel))
@@ -85,53 +78,38 @@
       (thread
        (λ ()
          (let loop ()
-           (define item (async-channel-get work-ch))
-           (unless (eq? item 'done)
-             (define result (benchmark-one-test (work-item-path item) timeout-secs))
-             ;; Tag result with work-item for aggregation
-             (async-channel-put result-ch (cons item result))
+           (define path (async-channel-get work-ch))
+           (unless (eq? path 'done)
+             (define result (benchmark-one-test path timeout-secs))
+             (async-channel-put result-ch result)
              (loop)))))))
 
-  ;; Enqueue all work items
+  ;; Enqueue all test paths
   (define t0-total (current-inexact-monotonic-milliseconds))
-  (for ([wi (in-list items)])
-    (async-channel-put work-ch wi))
+  (for ([p (in-list test-paths)])
+    (async-channel-put work-ch p))
 
   ;; Signal workers to stop (after all work is enqueued)
   (for ([_ (in-range num-jobs)])
     (async-channel-put work-ch 'done))
 
   ;; Collect results, print progress as they arrive
-  (define raw-results
-    (for/list ([i (in-range total)])
-      (define pair (async-channel-get result-ch))
-      (define wi (car pair))
-      (define r (cdr pair))
+  (define file-results
+    (for/list ([i (in-range file-count)])
+      (define r (async-channel-get result-ch))
       (define ms (hash-ref r 'wall_ms))
       (define status (hash-ref r 'status))
-      ;; Format: split items show "file # test-name", whole items show "file"
-      (define label
-        (if (eq? (work-item-kind wi) 'split)
-            (format "~a # ~a" (work-item-original-file wi) (work-item-test-name wi))
-            (work-item-original-file wi)))
       (printf "[~a/~a] ~a ~a (~as)\n"
-              (add1 i) total
-              label
+              (add1 i) file-count
+              (hash-ref r 'file)
               (status-label status)
               (real->decimal-string (/ ms 1000.0) 1))
       (flush-output)
-      pair))
+      r))
 
   ;; Wait for all worker threads to finish
   (for ([w (in-list workers)])
     (thread-wait w))
-
-  ;; Cleanup temp files
-  (cleanup!)
-
-  ;; Aggregate split results back to per-file records
-  (define raw-result-hashes (map cdr raw-results))
-  (define file-results (aggregate-split-results raw-result-hashes items))
 
   (define t1-total (current-inexact-monotonic-milliseconds))
   (define total-wall-ms (inexact->exact (round (- t1-total t0-total))))
@@ -159,10 +137,9 @@
 
   ;; Print summary
   (printf "\n--- Summary ---\n")
-  (printf "Total: ~as (~a files, ~a work items, ~a tests, ~a jobs, ~a)\n"
+  (printf "Total: ~as (~a files, ~a tests, ~a jobs, ~a)\n"
           (real->decimal-string (/ total-wall-ms 1000.0) 1)
           file-count
-          total
           total-tests
           num-jobs
           (if all-pass? "all pass" "SOME FAILURES"))
@@ -194,7 +171,7 @@
 
 (define (detect-regressions current-run prev-run threshold-pct)
   (define prev-by-file
-    (for/hasheq ([r (in-list (hash-ref prev-run 'results))])
+    (for/hash ([r (in-list (hash-ref prev-run 'results))])
       (values (hash-ref r 'file) r)))
   (filter-map
    (λ (r)
@@ -275,7 +252,7 @@
           (hash-ref target-run 'commit))
   ;; Build lookup for target results
   (define target-by-file
-    (for/hasheq ([r (in-list (hash-ref target-run 'results))])
+    (for/hash ([r (in-list (hash-ref target-run 'results))])
       (values (hash-ref r 'file) r)))
   ;; Compare each file in current run
   (for ([r (in-list (sort (hash-ref current-run 'results) > #:key (λ (r) (hash-ref r 'wall_ms))))])
@@ -376,8 +353,6 @@
 (define regression-threshold (make-parameter 10))
 (define trend-file (make-parameter #f))
 (define trend-depth (make-parameter 10))
-(define cli-split-threshold (make-parameter 60000))
-(define cli-split-min-tests (make-parameter 10))
 
 (define (main)
   (command-line
@@ -400,10 +375,8 @@
     (regression-threshold (string->number pct))]
    ["--depth" n "Number of runs for --trend (default: 10)"
     (trend-depth (string->number n))]
-   ["--split-threshold" ms "Split files slower than this (ms, default: 60000; 0=off)"
-    (cli-split-threshold (string->number ms))]
-   ["--split-min-tests" n "Minimum test count for splitting (default: 10)"
-    (cli-split-min-tests (string->number n))]
+   ["--no-precompile" "Skip bytecode pre-compilation step"
+    (do-precompile? #f)]
    #:multi
    ["--files" file "Benchmark specific test file(s)"
     (file-list (cons (string->symbol file) (file-list)))])
@@ -418,7 +391,7 @@
        (if (null? (file-list))
            (sort (all-test-files) symbol<?)
            (reverse (file-list))))
-     (define ok? (run-benchmark test-names (timeout-secs) (num-jobs) (regression-threshold) (cli-split-threshold) (cli-split-min-tests)))
+     (define ok? (run-benchmark test-names (timeout-secs) (num-jobs) (regression-threshold)))
      (unless ok? (exit 1))]))
 
 (main)

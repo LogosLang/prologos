@@ -219,9 +219,15 @@
                driver.rkt global-env.rkt posit-impl.rkt) #f)
 
    ;; === Driver/integration tests (driver=yes) ===
-   'test-stdlib.rkt
+   'test-stdlib-01-data.rkt
    (test-dep '(driver.rkt global-env.rkt namespace.rkt macros.rkt) #t)
-   'test-list-extended.rkt
+   'test-stdlib-02-traits.rkt
+   (test-dep '(driver.rkt global-env.rkt namespace.rkt macros.rkt) #t)
+   'test-stdlib-03-list.rkt
+   (test-dep '(driver.rkt global-env.rkt namespace.rkt macros.rkt) #t)
+   'test-list-extended-01.rkt
+   (test-dep '(errors.rkt driver.rkt global-env.rkt namespace.rkt macros.rkt) #t)
+   'test-list-extended-02.rkt
    (test-dep '(errors.rkt driver.rkt global-env.rkt namespace.rkt macros.rkt) #t)
    'test-core-prelude.rkt
    (test-dep '(driver.rkt global-env.rkt namespace.rkt macros.rkt) #t)
@@ -400,9 +406,17 @@
                trait-resolution.rkt) #t)
 
    ;; === #lang tests ===
-   'test-lang.rkt
+   'test-lang-01-sexp.rkt
    (test-dep '(main.rkt sexp.rkt expander.rkt) #t)
-   'test-lang-errors.rkt
+   'test-lang-02-ws.rkt
+   (test-dep '(main.rkt sexp.rkt expander.rkt) #t)
+   'test-lang-03-macros.rkt
+   (test-dep '(main.rkt sexp.rkt expander.rkt) #t)
+   'test-lang-04-repl.rkt
+   (test-dep '(main.rkt sexp.rkt expander.rkt) #t)
+   'test-lang-errors-01-sexp.rkt
+   (test-dep '(main.rkt sexp.rkt expander.rkt) #t)
+   'test-lang-errors-02-ws.rkt
    (test-dep '(main.rkt sexp.rkt expander.rkt) #t)))
 
 ;; ============================================================
@@ -411,26 +425,26 @@
 
 (define example-test-map
   (hasheq
-   'hello.rkt           '(test-lang.rkt)
-   'hello-ws.rkt        '(test-lang.rkt)
-   'identity.rkt        '(test-lang.rkt)
-   'identity-ws.rkt     '(test-lang.rkt)
-   'defn.rkt            '(test-lang.rkt)
-   'defn-ws.rkt         '(test-lang.rkt)
-   'pairs.rkt           '(test-lang.rkt)
-   'pairs-ws.rkt        '(test-lang.rkt)
-   'vectors.rkt         '(test-lang.rkt)
-   'vectors-ws.rkt      '(test-lang.rkt)
-   'spec-ws.rkt         '(test-lang.rkt)
-   'posit8.rkt          '(test-lang.rkt)
-   'posit8-ws.rkt       '(test-lang.rkt)
-   'macros.rkt          '(test-lang.rkt)
-   'macros-ws.rkt       '(test-lang.rkt)
-   'let-arrow-ws.rkt    '(test-lang.rkt)
-   'type-error.rkt      '(test-lang-errors.rkt)
-   'type-error-ws.rkt   '(test-lang-errors.rkt)
-   'unbound-var.rkt     '(test-lang-errors.rkt)
-   'unbound-var-ws.rkt  '(test-lang-errors.rkt)))
+   'hello.rkt           '(test-lang-01-sexp.rkt test-lang-04-repl.rkt)
+   'hello-ws.rkt        '(test-lang-02-ws.rkt)
+   'identity.rkt        '(test-lang-01-sexp.rkt)
+   'identity-ws.rkt     '(test-lang-02-ws.rkt)
+   'defn.rkt            '(test-lang-03-macros.rkt test-lang-04-repl.rkt)
+   'defn-ws.rkt         '(test-lang-03-macros.rkt)
+   'pairs.rkt           '(test-lang-01-sexp.rkt)
+   'pairs-ws.rkt        '(test-lang-02-ws.rkt)
+   'vectors.rkt         '(test-lang-01-sexp.rkt)
+   'vectors-ws.rkt      '(test-lang-02-ws.rkt)
+   'spec-ws.rkt         '(test-lang-03-macros.rkt)
+   'posit8.rkt          '(test-lang-01-sexp.rkt)
+   'posit8-ws.rkt       '(test-lang-02-ws.rkt)
+   'macros.rkt          '(test-lang-03-macros.rkt)
+   'macros-ws.rkt       '(test-lang-03-macros.rkt)
+   'let-arrow-ws.rkt    '(test-lang-03-macros.rkt)
+   'type-error.rkt      '(test-lang-errors-01-sexp.rkt)
+   'type-error-ws.rkt   '(test-lang-errors-02-ws.rkt)
+   'unbound-var.rkt     '(test-lang-errors-01-sexp.rkt)
+   'unbound-var-ws.rkt  '(test-lang-errors-02-ws.rkt)))
 
 ;; ============================================================
 ;; Layer 3: .prologos library forward-deps
@@ -541,10 +555,18 @@
   (hasheq
    ;; Tests that load specific .prologos modules at runtime
    ;; (extracted from require strings in test files)
-   'test-stdlib.rkt             '(prologos.data.nat prologos.data.bool prologos.data.list
-                                  prologos.data.option prologos.core.eq-trait
-                                  prologos.core.ord-trait prologos.data.ordering)
-   'test-list-extended.rkt      '(prologos.data.list prologos.data.nat prologos.data.option
+   'test-stdlib-01-data.rkt     '(prologos.data.nat prologos.data.bool prologos.data.list
+                                  prologos.data.option prologos.data.result
+                                  prologos.data.ordering prologos.data.pair prologos.data.eq)
+   'test-stdlib-02-traits.rkt   '(prologos.data.nat prologos.data.bool prologos.data.list
+                                  prologos.data.option prologos.data.result
+                                  prologos.core.eq-trait prologos.core.ord-trait
+                                  prologos.data.ordering)
+   'test-stdlib-03-list.rkt     '(prologos.data.nat prologos.data.bool prologos.data.list
+                                  prologos.data.option prologos.core.eq-trait)
+   'test-list-extended-01.rkt   '(prologos.data.list prologos.data.nat prologos.data.option
+                                  prologos.core.eq-trait)
+   'test-list-extended-02.rkt   '(prologos.data.list prologos.data.nat prologos.data.option
                                   prologos.core.eq-trait)
    'test-trait-impl.rkt         '(prologos.data.nat prologos.data.bool prologos.data.option
                                   prologos.data.either prologos.data.list

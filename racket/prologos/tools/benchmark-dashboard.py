@@ -146,6 +146,53 @@ def get_commit_label(run, idx):
     return commit[:7] if commit else f"#{idx}"
 
 
+def parse_error_output(error_text):
+    """Parse raco test error output into structured failures.
+
+    raco test stderr uses '--------------------' separators between test failures.
+    Each block starts with the test name, then FAILURE, then key: value lines.
+    The final block is a summary like '1/2 test failures'.
+    """
+    if not error_text:
+        return []
+    failures = []
+    blocks = error_text.split("--------------------")
+    for block in blocks:
+        block = block.strip()
+        if not block:
+            continue
+        # Skip summary lines like "1/2 test failures"
+        if "test failure" in block.lower():
+            continue
+        lines = block.split("\n")
+        if not lines:
+            continue
+        name = lines[0].strip()
+        details = "\n".join(lines[1:]).strip()
+        failures.append({"name": name, "details": details})
+    return failures
+
+
+def get_run_errors(run):
+    """Extract all error outputs from a run's results.
+
+    Returns list of {file, tests, error_output, failures} dicts for
+    failed/timed-out results that have error_output.
+    """
+    errors = []
+    for r in run.get("results", []):
+        if r.get("status") in ("fail", "timeout") and r.get("error_output"):
+            failures = parse_error_output(r["error_output"])
+            errors.append({
+                "file": r["file"],
+                "tests": r.get("tests", 0),
+                "status": r["status"],
+                "error_output": r["error_output"],
+                "failures": failures,
+            })
+    return errors
+
+
 # ============================================================
 # Sample data generator
 # ============================================================
@@ -154,8 +201,9 @@ SAMPLE_FILES = [
     "test-prelude.rkt", "test-syntax.rkt", "test-parser.rkt",
     "test-elaborator.rkt", "test-typing.rkt", "test-qtt.rkt",
     "test-reduction.rkt", "test-unify.rkt", "test-trait-impl.rkt",
-    "test-stdlib.rkt", "test-quote.rkt", "test-introspection.rkt",
-    "test-pipe-compose.rkt", "test-numerics.rkt", "test-lang.rkt",
+    "test-stdlib-01-data.rkt", "test-stdlib-02-traits.rkt",
+    "test-stdlib-03-list.rkt", "test-quote.rkt", "test-introspection.rkt",
+    "test-pipe-compose.rkt", "test-numerics.rkt", "test-lang-01-sexp.rkt",
 ]
 
 
@@ -180,8 +228,8 @@ def generate_sample_data(target_file, n_runs=20, n_files=None):
                 # Normal jitter +-8%
                 jitter = random.uniform(-0.08, 0.08)
                 wall_ms = int(base * (1 + jitter))
-                # Intentional regression spike at run 12 for test-stdlib.rkt
-                if run_idx == 12 and f == "test-stdlib.rkt":
+                # Intentional regression spike at run 12 for test-stdlib-01-data.rkt
+                if run_idx == 12 and f == "test-stdlib-01-data.rkt":
                     wall_ms = int(base * 1.45)
                 # Occasional failure
                 status = "pass"
@@ -481,6 +529,20 @@ def build_run_breakdown():
             dpg.add_button(label=">", callback=_on_breakdown_next,
                            tag="breakdown_next",
                            enabled=current_breakdown_idx < len(runs) - 1)
+            # Error log button — only enabled when run has errors
+            has_errors = any(
+                r.get("error_output")
+                for r in results
+                if r.get("status") in ("fail", "timeout")
+            )
+            dpg.add_button(label="Errors", callback=_on_toggle_errors,
+                           tag="breakdown_errors_btn",
+                           enabled=has_errors)
+
+        # Error log panel (hidden by default, toggled by Errors button)
+        with dpg.child_window(tag="error_log_panel", height=0, show=False,
+                               border=True):
+            pass  # content built dynamically by _on_toggle_errors
 
         with dpg.plot(label="Per-File Timing", height=plot_height, width=-1,
                       tag="latest_plot", crosshairs=True):
@@ -530,11 +592,88 @@ def _on_breakdown_next(sender=None, app_data=None):
 
 def _rebuild_breakdown_tab():
     """Clear and rebuild only the breakdown tab."""
+    global error_log_visible
+    error_log_visible = False
     children = dpg.get_item_children("tab_latest", 1)
     if children:
         for child in children:
             dpg.delete_item(child)
     build_run_breakdown()
+
+
+error_log_visible = False
+
+
+def _on_toggle_errors(sender=None, app_data=None):
+    """Toggle the error log panel visibility and populate it."""
+    global error_log_visible
+    if not dpg.does_item_exist("error_log_panel"):
+        return
+
+    error_log_visible = not error_log_visible
+
+    if error_log_visible:
+        # Populate error content
+        _build_error_log_content()
+        dpg.configure_item("error_log_panel", show=True, height=300)
+        dpg.configure_item("breakdown_errors_btn", label="Hide Errors")
+    else:
+        dpg.configure_item("error_log_panel", show=False, height=0)
+        dpg.configure_item("breakdown_errors_btn", label="Errors")
+
+
+def _build_error_log_content():
+    """Build the error log tree view inside error_log_panel."""
+    # Clear existing content
+    children = dpg.get_item_children("error_log_panel", 1)
+    if children:
+        for child in children:
+            dpg.delete_item(child)
+
+    run = runs[current_breakdown_idx]
+    errors = get_run_errors(run)
+
+    if not errors:
+        dpg.add_text("No error details available for this run.",
+                      parent="error_log_panel", color=LIGHT_GRAY)
+        return
+
+    total_failures = sum(len(e["failures"]) for e in errors)
+    dpg.add_text(
+        f"{len(errors)} failed file(s), {total_failures} failure(s)",
+        parent="error_log_panel", color=RED)
+    dpg.add_separator(parent="error_log_panel")
+
+    for err in errors:
+        file_label = err["file"]
+        n_failures = len(err["failures"])
+        status_tag = "FAIL" if err["status"] == "fail" else "TIMEOUT"
+
+        with dpg.tree_node(
+            label=f"{file_label} [{status_tag}] ({n_failures} failure(s))",
+            parent="error_log_panel",
+            default_open=len(errors) == 1,
+        ):
+            if err["failures"]:
+                for failure in err["failures"]:
+                    with dpg.tree_node(label=failure["name"],
+                                        default_open=False):
+                        if failure["details"]:
+                            # Show details as monospace-style text
+                            for detail_line in failure["details"].split("\n"):
+                                dpg.add_text(detail_line, color=LIGHT_GRAY,
+                                              bullet=False)
+                        else:
+                            dpg.add_text("(no details)", color=LIGHT_GRAY)
+            else:
+                # No parsed failures — show raw error output
+                dpg.add_text("Raw error output:", color=ORANGE)
+                raw_lines = err["error_output"].split("\n")
+                for line in raw_lines[:50]:  # cap at 50 lines
+                    dpg.add_text(line, color=LIGHT_GRAY)
+                if len(raw_lines) > 50:
+                    dpg.add_text(f"... ({len(raw_lines) - 50} more lines)",
+                                  color=LIGHT_GRAY)
 
 
 # ============================================================

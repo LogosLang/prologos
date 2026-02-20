@@ -11,8 +11,7 @@
          racket/path
          racket/list
          json
-         racket/date
-         "test-splitter.rkt")
+         racket/date)
 
 (provide benchmark-one-test
          extract-test-count
@@ -27,13 +26,7 @@
          make-timings-path
          read-all-runs
          append-run-record
-         ;; Per-test splitting
-         (struct-out work-item)
-         split-threshold-ms
-         split-min-per-test-ms
-         split-min-test-count
-         prepare-work-items
-         aggregate-split-results)
+         precompile-modules!)
 
 ;; ============================================================
 ;; Benchmark one test file via subprocess
@@ -53,23 +46,36 @@
     [completed?
      ;; Process finished
      (define output (port->string stdout-port))
+     (define err-output (port->string stderr-port))
      (close-input-port stdout-port)
      (close-input-port stderr-port)
      (define ok? (zero? (subprocess-status proc)))
      (define test-count (extract-test-count output))
-     (hasheq 'file (filename-from-path test-path)
-             'wall_ms wall-ms
-             'status (if ok? "pass" "fail")
-             'tests test-count)]
+     (define result
+       (hasheq 'file (filename-from-path test-path)
+               'wall_ms wall-ms
+               'status (if ok? "pass" "fail")
+               'tests test-count))
+     ;; Attach error output only on failure (saves space in JSONL)
+     (if (and (not ok?) (not (string=? err-output "")))
+         (hash-set result 'error_output err-output)
+         result)]
     [else
      ;; Timeout — kill the process
+     (define err-output
+       (with-handlers ([exn:fail? (λ (_) "")])
+         (port->string stderr-port)))
      (subprocess-kill proc #t)
      (close-input-port stdout-port)
      (close-input-port stderr-port)
-     (hasheq 'file (filename-from-path test-path)
-             'wall_ms wall-ms
-             'status "timeout"
-             'tests 0)]))
+     (define result
+       (hasheq 'file (filename-from-path test-path)
+               'wall_ms wall-ms
+               'status "timeout"
+               'tests 0))
+     (if (not (string=? err-output ""))
+         (hash-set result 'error_output err-output)
+         result)]))
 
 ;; Extract "N tests passed" from raco test output
 (define (extract-test-count output)
@@ -153,166 +159,20 @@
     [else (string-append s (make-string padding pad-char))]))
 
 ;; ============================================================
-;; Per-test splitting for CPU saturation
+;; Bytecode pre-compilation
 ;; ============================================================
 
-;; A work-item represents one unit of work for the thread pool.
-;; kind: 'whole (run entire file) or 'split (run single test-case temp file)
-;; path: the file to run (original for whole, temp file for split)
-;; original-file: original test filename (same as filename-from-path for whole)
-;; test-name: #f for whole, string for split
-(struct work-item (path original-file test-name kind) #:transparent)
-
-;; Default threshold: only split files historically slower than 60s
-(define split-threshold-ms (make-parameter 60000))
-
-;; Minimum per-test time (ms) to justify splitting.
-;; If a file's per-test time (wall_ms / tests) is below this, the subprocess
-;; preamble overhead dominates and splitting would be counterproductive.
-;; Set to ~20s based on observed preamble compilation time.
-(define split-min-per-test-ms (make-parameter 10000))
-
-;; Minimum number of test-cases in a file to consider splitting.
-;; Files with fewer tests are run monolithically even if they exceed the time
-;; thresholds. Prevents splitting files where the small number of tests cannot
-;; overcome preamble overhead through parallelism.
-(define split-min-test-count (make-parameter 10))
-
-;; prepare-work-items : (listof string) string -> (values (listof work-item) (-> void))
-;; Takes test paths and project root, returns a flat list of work items
-;; plus a cleanup thunk that removes any generated temp files.
-;;
-;; Splitting criteria: a file is split when ALL of:
-;;   1. split-threshold-ms > 0 (splitting not disabled)
-;;   2. Historical wall_ms > split-threshold-ms (file is slow overall)
-;;   3. Historical per-test time > split-min-per-test-ms (each test is slow enough
-;;      that subprocess preamble overhead doesn't dominate)
-;;   4. Historical test count >= split-min-test-count (enough tests for
-;;      parallelism to overcome per-subprocess preamble overhead)
-(define (prepare-work-items test-paths project-root)
-  (define threshold (split-threshold-ms))
-  (define min-per-test (split-min-per-test-ms))
-  (define min-tests (split-min-test-count))
-  (define historical (load-historical-times project-root))
-  (define all-split-infos '())
-
-  (define items
-    (apply append
-      (for/list ([tp (in-list test-paths)])
-        (define fname (filename-from-path tp))
-        (define hist (hash-ref historical fname #f))
-        (define hist-ms (and hist (car hist)))
-        (define hist-tests (and hist (cdr hist)))
-        (define per-test-ms
-          (and hist-ms hist-tests (> hist-tests 0)
-               (/ hist-ms hist-tests)))
-        (cond
-          ;; Split if file is slow overall AND each test is slow enough
-          ;; AND the file has enough tests for parallelism to help
-          [(and (> threshold 0)
-                hist-ms (> hist-ms threshold)
-                per-test-ms (> per-test-ms min-per-test)
-                hist-tests (>= hist-tests min-tests))
-           (define infos (split-test-file tp))
-           (set! all-split-infos (append all-split-infos infos))
-           (for/list ([info (in-list infos)])
-             (work-item (split-info-temp-path info)
-                        fname
-                        (split-info-test-name info)
-                        'split))]
-          ;; No split: run as whole file
-          [else
-           (list (work-item tp fname #f 'whole))]))))
-
-  (define (cleanup!)
-    (cleanup-split-files all-split-infos))
-
-  (values items cleanup!))
-
-;; Load per-file timings from the most recent full-suite run in timings.jsonl.
-;; Uses the run with the highest file_count to avoid being misled by partial runs.
-;; Returns hash: filename -> (cons wall_ms test-count)
-(define (load-historical-times project-root)
-  (define timings-file (make-timings-path project-root))
-  (define runs (read-all-runs timings-file))
-  (cond
-    [(null? runs) (hash)]
-    [else
-     ;; Find the max file_count across all runs
-     (define max-fc
-       (apply max (map (λ (r) (hash-ref r 'file_count 0)) runs)))
-     ;; Pick the most recent run with that file count
-     (define full-runs
-       (filter (λ (r) (= (hash-ref r 'file_count 0) max-fc)) runs))
-     (define best-run (last full-runs))
-     (define results (hash-ref best-run 'results '()))
-     (for/hash ([r (in-list results)])
-       (values (hash-ref r 'file)
-               (cons (hash-ref r 'wall_ms)
-                     (hash-ref r 'tests 0))))]))
-
-;; aggregate-split-results : (listof hasheq) (listof work-item) -> (listof hasheq)
-;; Groups raw benchmark results back to per-file records.
-;; Whole-file results pass through unchanged.
-;; Split results are aggregated into a single file-level record with test_details.
-(define (aggregate-split-results raw-results work-items)
-  ;; Build a map from temp-file path to work-item for quick lookup
-  (define wi-by-path
-    (for/hash ([wi (in-list work-items)])
-      (values (work-item-path wi) wi)))
-
-  ;; Tag each raw result with its work-item info
-  (define tagged
-    (for/list ([r (in-list raw-results)])
-      ;; Find the work-item by matching the file field back to the work-item
-      ;; The 'file field from benchmark-one-test is the temp filename for splits
-      (define result-file (hash-ref r 'file))
-      ;; Search work-items for one whose path ends with this filename
-      (define wi
-        (for/first ([w (in-list work-items)]
-                    #:when (string=? (filename-from-path (work-item-path w))
-                                     result-file))
-          w))
-      (cons (or wi (work-item "" result-file #f 'whole)) r)))
-
-  ;; Group by original-file
-  (define groups (make-hash))
-  (for ([pair (in-list tagged)])
-    (define wi (car pair))
-    (define r (cdr pair))
-    (define key (work-item-original-file wi))
-    (hash-update! groups key (λ (acc) (cons (cons wi r) acc)) '()))
-
-  ;; Build aggregated results
-  (for/list ([(orig-file entries) (in-hash groups)])
-    (define kind (work-item-kind (car (car entries))))
-    (cond
-      [(eq? kind 'whole)
-       ;; Single whole-file result — pass through
-       (cdr (car entries))]
-      [else
-       ;; Split results — aggregate
-       (define total-ms
-         (apply + (map (λ (e) (hash-ref (cdr e) 'wall_ms)) entries)))
-       (define total-tests
-         (apply + (map (λ (e) (hash-ref (cdr e) 'tests)) entries)))
-       (define statuses (map (λ (e) (hash-ref (cdr e) 'status)) entries))
-       (define agg-status
-         (cond
-           [(member "timeout" statuses) "timeout"]
-           [(member "fail" statuses) "fail"]
-           [else "pass"]))
-       (define test-details
-         (for/list ([e (in-list entries)])
-           (define wi (car e))
-           (define r (cdr e))
-           (hasheq 'name (or (work-item-test-name wi) "unknown")
-                   'wall_ms (hash-ref r 'wall_ms)
-                   'status (hash-ref r 'status))))
-       (hasheq 'file orig-file
-               'wall_ms total-ms
-               'status agg-status
-               'tests total-tests
-               'split #t
-               'test_details test-details)])))
+;; Pre-compile all Prologos modules to .zo bytecode via `raco make`.
+;; This reduces per-subprocess preamble overhead from ~22s to ~1s.
+;; Returns #t on success.
+(define (precompile-modules! project-root)
+  (define driver-path (path->string (build-path project-root "driver.rkt")))
+  (define raco-path (find-executable-path "raco"))
+  (define-values (proc out in err)
+    (subprocess #f #f #f raco-path "make" driver-path))
+  (close-output-port in)
+  (subprocess-wait proc)
+  (close-input-port out)
+  (close-input-port err)
+  (zero? (subprocess-status proc)))
 
