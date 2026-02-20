@@ -196,6 +196,12 @@
  (struct-out surf-pvec-nth) (struct-out surf-pvec-update)
  (struct-out surf-pvec-length) (struct-out surf-pvec-pop)
  (struct-out surf-pvec-concat) (struct-out surf-pvec-slice)
+ ;; Transient Builders
+ (struct-out surf-transient-type)
+ (struct-out surf-transient) (struct-out surf-persist)
+ (struct-out surf-tvec-push!) (struct-out surf-tvec-update!)
+ (struct-out surf-tmap-assoc!) (struct-out surf-tmap-dissoc!)
+ (struct-out surf-tset-insert!) (struct-out surf-tset-delete!)
  ;; Top-level commands
  (struct-out surf-def)
  (struct-out surf-defn)
@@ -638,6 +644,17 @@
 (struct surf-pvec-pop (v srcloc) #:transparent)              ; (pvec-pop v)
 (struct surf-pvec-concat (v1 v2 srcloc) #:transparent)       ; (pvec-concat v1 v2)
 (struct surf-pvec-slice (v lo hi srcloc) #:transparent)      ; (pvec-slice v lo hi)
+
+;; ---- Transient Builders ----
+(struct surf-transient-type (kind args srcloc) #:transparent) ; (TVec A), (TMap K V), (TSet A) — kind is 'TVec/'TMap/'TSet
+(struct surf-transient    (coll srcloc) #:transparent)       ; (transient coll) — generic, dispatch on collection type
+(struct surf-persist      (coll srcloc) #:transparent)       ; (persist! coll) — generic, dispatch on transient type
+(struct surf-tvec-push!   (t x srcloc) #:transparent)        ; (tvec-push! t x)
+(struct surf-tvec-update! (t i x srcloc) #:transparent)      ; (tvec-update! t i x)
+(struct surf-tmap-assoc!  (t k v srcloc) #:transparent)      ; (tmap-assoc! t k v)
+(struct surf-tmap-dissoc! (t k srcloc) #:transparent)        ; (tmap-dissoc! t k)
+(struct surf-tset-insert! (t a srcloc) #:transparent)        ; (tset-insert! t a)
+(struct surf-tset-delete! (t a srcloc) #:transparent)        ; (tset-delete! t a)
 
 ;; ========================================
 ;; Top-level commands

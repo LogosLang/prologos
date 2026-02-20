@@ -291,6 +291,9 @@
     [(expr-Map _ _) "3:Map"]
     [(expr-PVec _) "3:PVec"]
     [(expr-Set _) "3:Set"]
+    [(expr-TVec _) "3:TVec"]
+    [(expr-TMap _ _) "3:TMap"]
+    [(expr-TSet _) "3:TSet"]
     [(expr-app _ _) "4:app"]
     [(expr-meta id) (format "5:?~a" id)]
     [_ "9:other"]))

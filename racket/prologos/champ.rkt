@@ -20,7 +20,15 @@
          champ-keys
          champ-vals
          champ-entries
-         champ-equal?)
+         champ-equal?
+         ;; Transient builder
+         (struct-out tchamp-root)
+         champ-transient
+         tchamp-insert!
+         tchamp-delete!
+         tchamp-freeze
+         tchamp-size*
+         tchamp-lookup)
 
 (require racket/vector)
 
@@ -426,6 +434,59 @@
   (vec-insert arr2 clamped-idx sub-node))
 
 ;; ========================================
+;; Transient Builder — Mutable hash table
+;; ========================================
+;; A transient CHAMP uses a Racket mutable hash table for O(1) amortized
+;; insert/delete. Freezing rebuilds the persistent CHAMP from hash entries.
+;; This is simpler than Clojure's owner-id approach but achieves O(n) total
+;; for batch construction. The owner-id optimization can be added later.
+
+(struct tchamp-root (entries size) #:mutable #:transparent)
+;; entries: mutable Racket hash table (equal?-keyed)
+;; size:    element count (tracked separately for O(1) access)
+
+;; champ-transient : champ-root -> tchamp-root
+;; Create a transient from a persistent map.
+(define (champ-transient root)
+  (define ht (make-hash))
+  (champ-fold root (lambda (k v _) (hash-set! ht k v)) (void))
+  (tchamp-root ht (champ-root-size root)))
+
+;; tchamp-insert! : tchamp-root hash key val -> tchamp-root
+;; Insert or update a key. Returns the same tchamp-root.
+(define (tchamp-insert! troot hash key val)
+  (define ht (tchamp-root-entries troot))
+  (unless (hash-has-key? ht key)
+    (set-tchamp-root-size! troot (+ (tchamp-root-size troot) 1)))
+  (hash-set! ht key val)
+  troot)
+
+;; tchamp-delete! : tchamp-root hash key -> tchamp-root
+;; Delete a key. Returns the same tchamp-root.
+(define (tchamp-delete! troot hash key)
+  (define ht (tchamp-root-entries troot))
+  (when (hash-has-key? ht key)
+    (set-tchamp-root-size! troot (- (tchamp-root-size troot) 1)))
+  (hash-remove! ht key)
+  troot)
+
+;; tchamp-freeze : tchamp-root -> champ-root
+;; Freeze the transient into a persistent map.
+(define (tchamp-freeze troot)
+  (define ht (tchamp-root-entries troot))
+  (for/fold ([m champ-empty])
+            ([(k v) (in-hash ht)])
+    (champ-insert m (equal-hash-code k) k v)))
+
+;; tchamp-size* : tchamp-root -> exact-nonneg-integer
+(define (tchamp-size* troot)
+  (tchamp-root-size troot))
+
+;; tchamp-lookup : tchamp-root hash key -> val or 'none
+(define (tchamp-lookup troot hash key)
+  (hash-ref (tchamp-root-entries troot) key 'none))
+
+;; ========================================
 ;; Module tests
 ;; ========================================
 
@@ -517,4 +578,77 @@
                              (equal-hash-code 'a) 'a 1))
     (check-true (champ-equal? m1 m2))
     (check-false (champ-equal? m1 champ-empty)))
+
+  ;; ---- Transient builder tests ----
+
+  (test-case "tchamp: empty roundtrip"
+    (let* ([t (champ-transient champ-empty)]
+           [m (tchamp-freeze t)])
+      (check-true (champ-empty? m))))
+
+  (test-case "tchamp: insert and freeze"
+    (let ([t (champ-transient champ-empty)])
+      (tchamp-insert! t (equal-hash-code 'a) 'a 1)
+      (tchamp-insert! t (equal-hash-code 'b) 'b 2)
+      (tchamp-insert! t (equal-hash-code 'c) 'c 3)
+      (let ([m (tchamp-freeze t)])
+        (check-equal? (champ-size m) 3)
+        (check-equal? (champ-lookup m (equal-hash-code 'a) 'a) 1)
+        (check-equal? (champ-lookup m (equal-hash-code 'b) 'b) 2)
+        (check-equal? (champ-lookup m (equal-hash-code 'c) 'c) 3))))
+
+  (test-case "tchamp: from non-empty persistent"
+    (let* ([m0 (champ-insert champ-empty (equal-hash-code 'x) 'x 10)]
+           [t  (champ-transient m0)])
+      (tchamp-insert! t (equal-hash-code 'y) 'y 20)
+      (let ([m1 (tchamp-freeze t)])
+        (check-equal? (champ-size m1) 2)
+        (check-equal? (champ-lookup m1 (equal-hash-code 'x) 'x) 10)
+        (check-equal? (champ-lookup m1 (equal-hash-code 'y) 'y) 20)
+        ;; Original unmodified
+        (check-equal? (champ-size m0) 1))))
+
+  (test-case "tchamp: delete in transient"
+    (let* ([m0 (champ-insert (champ-insert champ-empty
+                                (equal-hash-code 'a) 'a 1)
+                              (equal-hash-code 'b) 'b 2)]
+           [t  (champ-transient m0)])
+      (tchamp-delete! t (equal-hash-code 'a) 'a)
+      (let ([m1 (tchamp-freeze t)])
+        (check-equal? (champ-size m1) 1)
+        (check-equal? (champ-lookup m1 (equal-hash-code 'a) 'a) 'none)
+        (check-equal? (champ-lookup m1 (equal-hash-code 'b) 'b) 2))))
+
+  (test-case "tchamp: update existing key"
+    (let ([t (champ-transient champ-empty)])
+      (tchamp-insert! t (equal-hash-code 'a) 'a 1)
+      (tchamp-insert! t (equal-hash-code 'a) 'a 99)
+      (let ([m (tchamp-freeze t)])
+        (check-equal? (champ-size m) 1)
+        (check-equal? (champ-lookup m (equal-hash-code 'a) 'a) 99))))
+
+  (test-case "tchamp: size tracking"
+    (let ([t (champ-transient champ-empty)])
+      (check-equal? (tchamp-size* t) 0)
+      (tchamp-insert! t (equal-hash-code 'a) 'a 1)
+      (check-equal? (tchamp-size* t) 1)
+      (tchamp-insert! t (equal-hash-code 'b) 'b 2)
+      (check-equal? (tchamp-size* t) 2)
+      (tchamp-delete! t (equal-hash-code 'a) 'a)
+      (check-equal? (tchamp-size* t) 1)))
+
+  (test-case "tchamp: lookup in transient"
+    (let ([t (champ-transient champ-empty)])
+      (tchamp-insert! t (equal-hash-code 'a) 'a 42)
+      (check-equal? (tchamp-lookup t (equal-hash-code 'a) 'a) 42)
+      (check-equal? (tchamp-lookup t (equal-hash-code 'z) 'z) 'none)))
+
+  (test-case "tchamp: 100 entries"
+    (let ([t (champ-transient champ-empty)])
+      (for ([i (in-range 100)])
+        (tchamp-insert! t (equal-hash-code i) i (* i i)))
+      (let ([m (tchamp-freeze t)])
+        (check-equal? (champ-size m) 100)
+        (for ([i (in-range 100)])
+          (check-equal? (champ-lookup m (equal-hash-code i) i) (* i i))))))
 )

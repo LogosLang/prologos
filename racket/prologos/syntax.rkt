@@ -140,6 +140,17 @@
  (struct-out expr-pvec-push) (struct-out expr-pvec-nth) (struct-out expr-pvec-update)
  (struct-out expr-pvec-length) (struct-out expr-pvec-pop)
  (struct-out expr-pvec-concat) (struct-out expr-pvec-slice)
+ ;; Transient Builders (mutable versions for batch construction)
+ (struct-out expr-transient) (struct-out expr-persist)
+ (struct-out expr-TVec) (struct-out expr-trrb)
+ (struct-out expr-TMap) (struct-out expr-tchamp)
+ (struct-out expr-TSet) (struct-out expr-thset)
+ (struct-out expr-transient-vec) (struct-out expr-persist-vec)
+ (struct-out expr-transient-map) (struct-out expr-persist-map)
+ (struct-out expr-transient-set) (struct-out expr-persist-set)
+ (struct-out expr-tvec-push!) (struct-out expr-tvec-update!)
+ (struct-out expr-tmap-assoc!) (struct-out expr-tmap-dissoc!)
+ (struct-out expr-tset-insert!) (struct-out expr-tset-delete!)
  ;; Int (arbitrary-precision integers)
  (struct-out expr-Int)
  (struct-out expr-int)
@@ -499,6 +510,38 @@
 (struct expr-pvec-concat (v1 v2) #:transparent)               ; pvec-concat : PVec A → PVec A → PVec A
 (struct expr-pvec-slice (v lo hi) #:transparent)              ; pvec-slice : PVec A → Nat → Nat → PVec A
 
+;; ---- Transient Builders (mutable versions for batch construction) ----
+
+;; Transient type constructors
+(struct expr-TVec (elem-type) #:transparent)                   ; TVec A : Type(level(A))
+(struct expr-TMap (k-type v-type) #:transparent)               ; TMap K V : Type(max(level(K),level(V)))
+(struct expr-TSet (elem-type) #:transparent)                   ; TSet A : Type(level(A))
+
+;; Runtime wrappers (opaque Racket values)
+(struct expr-trrb (racket-trrb) #:transparent)                 ; transient PVec value
+(struct expr-tchamp (racket-tchamp) #:transparent)             ; transient Map value
+(struct expr-thset (racket-tchamp) #:transparent)              ; transient Set value (uses tchamp with val=#t)
+
+;; Generic conversion (resolved by type checker into specific node)
+(struct expr-transient (coll) #:transparent)                   ; generic transient
+(struct expr-persist (coll) #:transparent)                     ; generic persist!
+
+;; Conversion operations
+(struct expr-transient-vec (v) #:transparent)                  ; PVec A → TVec A
+(struct expr-persist-vec (t) #:transparent)                    ; TVec A → PVec A
+(struct expr-transient-map (m) #:transparent)                  ; Map K V → TMap K V
+(struct expr-persist-map (t) #:transparent)                    ; TMap K V → Map K V
+(struct expr-transient-set (s) #:transparent)                  ; Set A → TSet A
+(struct expr-persist-set (t) #:transparent)                    ; TSet A → Set A
+
+;; Mutation operations (return transient for linear threading)
+(struct expr-tvec-push! (t x) #:transparent)                   ; TVec A → A → TVec A
+(struct expr-tvec-update! (t i x) #:transparent)               ; TVec A → Nat → A → TVec A
+(struct expr-tmap-assoc! (t k v) #:transparent)                ; TMap K V → K → V → TMap K V
+(struct expr-tmap-dissoc! (t k) #:transparent)                 ; TMap K V → K → TMap K V
+(struct expr-tset-insert! (t a) #:transparent)                 ; TSet A → A → TSet A
+(struct expr-tset-delete! (t a) #:transparent)                 ; TSet A → A → TSet A
+
 ;; ========================================
 ;; Int (arbitrary-precision integers, backed by Racket exact integers)
 ;; ========================================
@@ -666,6 +709,15 @@
       (expr-pvec-push? x) (expr-pvec-nth? x) (expr-pvec-update? x)
       (expr-pvec-length? x) (expr-pvec-pop? x)
       (expr-pvec-concat? x) (expr-pvec-slice? x)
+      (expr-transient? x) (expr-persist? x)
+      (expr-TVec? x) (expr-TMap? x) (expr-TSet? x)
+      (expr-trrb? x) (expr-tchamp? x) (expr-thset? x)
+      (expr-transient-vec? x) (expr-persist-vec? x)
+      (expr-transient-map? x) (expr-persist-map? x)
+      (expr-transient-set? x) (expr-persist-set? x)
+      (expr-tvec-push!? x) (expr-tvec-update!? x)
+      (expr-tmap-assoc!? x) (expr-tmap-dissoc!? x)
+      (expr-tset-insert!? x) (expr-tset-delete!? x)
       (expr-hole? x) (expr-meta? x) (expr-reduce? x)
       (expr-union? x) (expr-error? x)))
 

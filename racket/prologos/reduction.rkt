@@ -936,6 +936,108 @@
      (let ([v* (whnf v)])
        (if (equal? v* v) e (whnf (expr-pvec-slice v* lo hi))))]
 
+    ;; ---- Transient Builder iota rules ----
+    ;; Generic transient: dispatch on underlying value
+    [(expr-transient (expr-rrb r))
+     (expr-trrb (rrb-transient r))]
+    [(expr-transient (expr-champ c))
+     (expr-tchamp (champ-transient c))]
+    [(expr-transient (expr-hset c))
+     (expr-thset (champ-transient c))]
+    ;; Generic persist: dispatch on transient value
+    [(expr-persist (expr-trrb t))
+     (expr-rrb (trrb-freeze t))]
+    [(expr-persist (expr-tchamp t))
+     (expr-champ (tchamp-freeze t))]
+    [(expr-persist (expr-thset t))
+     (expr-hset (tchamp-freeze t))]
+    ;; Generic stuck-term reduction
+    [(expr-transient c)
+     (let ([c* (whnf c)])
+       (if (equal? c* c) e (whnf (expr-transient c*))))]
+    [(expr-persist c)
+     (let ([c* (whnf c)])
+       (if (equal? c* c) e (whnf (expr-persist c*))))]
+    ;; Vec: transient/persist (specific)
+    [(expr-transient-vec (expr-rrb r))
+     (expr-trrb (rrb-transient r))]
+    [(expr-persist-vec (expr-trrb t))
+     (expr-rrb (trrb-freeze t))]
+    ;; Vec: mutation
+    [(expr-tvec-push! (expr-trrb t) x)
+     (let ([x* (whnf x)])
+       (expr-trrb (trrb-push! t x*)))]
+    [(expr-tvec-update! (expr-trrb t) i x)
+     (let* ([i* (whnf i)]
+            [n (nat-value i*)]
+            [x* (whnf x)])
+       (if n
+           (with-handlers ([exn:fail? (lambda (_) e)])
+             (expr-trrb (trrb-update! t n x*)))
+           e))]
+    ;; Map: transient/persist
+    [(expr-transient-map (expr-champ c))
+     (expr-tchamp (champ-transient c))]
+    [(expr-persist-map (expr-tchamp t))
+     (expr-champ (tchamp-freeze t))]
+    ;; Map: mutation
+    [(expr-tmap-assoc! (expr-tchamp t) k v)
+     (let ([k* (nf k)] [v* (whnf v)])
+       (expr-tchamp (tchamp-insert! t (equal-hash-code k*) k* v*)))]
+    [(expr-tmap-dissoc! (expr-tchamp t) k)
+     (let ([k* (nf k)])
+       (expr-tchamp (tchamp-delete! t (equal-hash-code k*) k*)))]
+    ;; Set: transient/persist (set uses tchamp with val=#t)
+    [(expr-transient-set (expr-hset c))
+     (expr-thset (champ-transient c))]
+    [(expr-persist-set (expr-thset t))
+     (expr-hset (tchamp-freeze t))]
+    ;; Set: mutation
+    [(expr-tset-insert! (expr-thset t) a)
+     (let ([a* (nf a)])
+       (expr-thset (tchamp-insert! t (equal-hash-code a*) a* #t)))]
+    [(expr-tset-delete! (expr-thset t) a)
+     (let ([a* (nf a)])
+       (expr-thset (tchamp-delete! t (equal-hash-code a*) a*)))]
+
+    ;; ---- Transient Builder stuck-term reduction ----
+    [(expr-transient-vec v)
+     (let ([v* (whnf v)])
+       (if (equal? v* v) e (whnf (expr-transient-vec v*))))]
+    [(expr-persist-vec t)
+     (let ([t* (whnf t)])
+       (if (equal? t* t) e (whnf (expr-persist-vec t*))))]
+    [(expr-tvec-push! t x)
+     (let ([t* (whnf t)])
+       (if (equal? t* t) e (whnf (expr-tvec-push! t* x))))]
+    [(expr-tvec-update! t i x)
+     (let ([t* (whnf t)])
+       (if (equal? t* t) e (whnf (expr-tvec-update! t* i x))))]
+    [(expr-transient-map m)
+     (let ([m* (whnf m)])
+       (if (equal? m* m) e (whnf (expr-transient-map m*))))]
+    [(expr-persist-map t)
+     (let ([t* (whnf t)])
+       (if (equal? t* t) e (whnf (expr-persist-map t*))))]
+    [(expr-tmap-assoc! t k v)
+     (let ([t* (whnf t)])
+       (if (equal? t* t) e (whnf (expr-tmap-assoc! t* k v))))]
+    [(expr-tmap-dissoc! t k)
+     (let ([t* (whnf t)])
+       (if (equal? t* t) e (whnf (expr-tmap-dissoc! t* k))))]
+    [(expr-transient-set s)
+     (let ([s* (whnf s)])
+       (if (equal? s* s) e (whnf (expr-transient-set s*))))]
+    [(expr-persist-set t)
+     (let ([t* (whnf t)])
+       (if (equal? t* t) e (whnf (expr-persist-set t*))))]
+    [(expr-tset-insert! t a)
+     (let ([t* (whnf t)])
+       (if (equal? t* t) e (whnf (expr-tset-insert! t* a))))]
+    [(expr-tset-delete! t a)
+     (let ([t* (whnf t)])
+       (if (equal? t* t) e (whnf (expr-tset-delete! t* a))))]
+
     ;; ---- Map stuck-term reduction (try reducing subexpressions) ----
     [(expr-map-assoc m k v)
      (let ([m* (whnf m)])
@@ -1310,6 +1412,28 @@
     [(expr-pvec-pop v) (expr-pvec-pop (nf v))]
     [(expr-pvec-concat v1 v2) (expr-pvec-concat (nf v1) (nf v2))]
     [(expr-pvec-slice v lo hi) (expr-pvec-slice (nf v) (nf lo) (nf hi))]
+
+    ;; Transient Builder normalization
+    [(expr-transient c) (expr-transient (nf c))]
+    [(expr-persist c) (expr-persist (nf c))]
+    [(expr-TVec a) (expr-TVec (nf a))]
+    [(expr-TMap k v) (expr-TMap (nf k) (nf v))]
+    [(expr-TSet a) (expr-TSet (nf a))]
+    [(expr-trrb _) e]
+    [(expr-tchamp _) e]
+    [(expr-thset _) e]
+    [(expr-transient-vec v) (expr-transient-vec (nf v))]
+    [(expr-persist-vec t) (expr-persist-vec (nf t))]
+    [(expr-transient-map m) (expr-transient-map (nf m))]
+    [(expr-persist-map t) (expr-persist-map (nf t))]
+    [(expr-transient-set s) (expr-transient-set (nf s))]
+    [(expr-persist-set t) (expr-persist-set (nf t))]
+    [(expr-tvec-push! t x) (expr-tvec-push! (nf t) (nf x))]
+    [(expr-tvec-update! t i x) (expr-tvec-update! (nf t) (nf i) (nf x))]
+    [(expr-tmap-assoc! t k v) (expr-tmap-assoc! (nf t) (nf k) (nf v))]
+    [(expr-tmap-dissoc! t k) (expr-tmap-dissoc! (nf t) (nf k))]
+    [(expr-tset-insert! t a) (expr-tset-insert! (nf t) (nf a))]
+    [(expr-tset-delete! t a) (expr-tset-delete! (nf t) (nf a))]
 
     ;; Foreign function: opaque leaf (already in WHNF)
     [(expr-foreign-fn _ _ _ _ _ _) e]

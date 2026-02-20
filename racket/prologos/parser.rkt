@@ -40,9 +40,10 @@
     Keyword Map map-empty map-assoc map-get map-dissoc map-size map-has-key? map-keys map-vals
     Set set-empty set-insert set-member? set-delete set-size set-union set-intersect set-diff set-to-list
     PVec pvec-empty pvec-push pvec-nth pvec-update pvec-length pvec-pop pvec-concat pvec-slice
+    TVec TMap TSet transient persist! tvec-push! tvec-update! tmap-assoc! tmap-dissoc! tset-insert! tset-delete!
     def defn check eval infer expand expand-1 expand-full parse elaborate match
     ;; Pre-parse macros — should be expanded before reaching parser
-    defmacro let do if deftype data spec trait impl where bundle
+    defmacro let do if deftype data spec trait impl where bundle with-transient
     ;; Private-suffix forms — consumed in preparse, rewritten to base form
     defn- def- data- deftype- defmacro- spec- trait- impl- bundle-
     ;; Pre-parse namespace directives — consumed before reaching parser
@@ -1845,6 +1846,94 @@
                     [(prologos-error? hi) hi]
                     [else (surf-pvec-slice v lo hi loc)])))]
 
+       ;; ---- Transient Builder types ----
+       ;; (TVec A)
+       [(TVec)
+        (or (check-arity 'TVec args 1 loc)
+            (let ([a (parse-datum (car args))])
+              (if (prologos-error? a) a
+                  (surf-transient-type 'TVec a loc))))]
+       ;; (TMap K V)
+       [(TMap)
+        (or (check-arity 'TMap args 2 loc)
+            (let ([k (parse-datum (car args))]
+                  [v (parse-datum (cadr args))])
+              (cond [(prologos-error? k) k]
+                    [(prologos-error? v) v]
+                    [else (surf-transient-type 'TMap (list k v) loc)])))]
+       ;; (TSet A)
+       [(TSet)
+        (or (check-arity 'TSet args 1 loc)
+            (let ([a (parse-datum (car args))])
+              (if (prologos-error? a) a
+                  (surf-transient-type 'TSet a loc))))]
+
+       ;; ---- Transient Builder keywords ----
+       ;; (transient coll)
+       [(transient)
+        (or (check-arity 'transient args 1 loc)
+            (let ([c (parse-datum (car args))])
+              (if (prologos-error? c) c
+                  (surf-transient c loc))))]
+       ;; (persist! coll)
+       [(|persist!|)
+        (or (check-arity '|persist!| args 1 loc)
+            (let ([c (parse-datum (car args))])
+              (if (prologos-error? c) c
+                  (surf-persist c loc))))]
+       ;; (tvec-push! t x)
+       [(|tvec-push!|)
+        (or (check-arity '|tvec-push!| args 2 loc)
+            (let ([t (parse-datum (car args))]
+                  [x (parse-datum (cadr args))])
+              (cond [(prologos-error? t) t]
+                    [(prologos-error? x) x]
+                    [else (surf-tvec-push! t x loc)])))]
+       ;; (tvec-update! t i x)
+       [(|tvec-update!|)
+        (or (check-arity '|tvec-update!| args 3 loc)
+            (let ([t (parse-datum (car args))]
+                  [i (parse-datum (cadr args))]
+                  [x (parse-datum (caddr args))])
+              (cond [(prologos-error? t) t]
+                    [(prologos-error? i) i]
+                    [(prologos-error? x) x]
+                    [else (surf-tvec-update! t i x loc)])))]
+       ;; (tmap-assoc! t k v)
+       [(|tmap-assoc!|)
+        (or (check-arity '|tmap-assoc!| args 3 loc)
+            (let ([t (parse-datum (car args))]
+                  [k (parse-datum (cadr args))]
+                  [v (parse-datum (caddr args))])
+              (cond [(prologos-error? t) t]
+                    [(prologos-error? k) k]
+                    [(prologos-error? v) v]
+                    [else (surf-tmap-assoc! t k v loc)])))]
+       ;; (tmap-dissoc! t k)
+       [(|tmap-dissoc!|)
+        (or (check-arity '|tmap-dissoc!| args 2 loc)
+            (let ([t (parse-datum (car args))]
+                  [k (parse-datum (cadr args))])
+              (cond [(prologos-error? t) t]
+                    [(prologos-error? k) k]
+                    [else (surf-tmap-dissoc! t k loc)])))]
+       ;; (tset-insert! t a)
+       [(|tset-insert!|)
+        (or (check-arity '|tset-insert!| args 2 loc)
+            (let ([t (parse-datum (car args))]
+                  [a (parse-datum (cadr args))])
+              (cond [(prologos-error? t) t]
+                    [(prologos-error? a) a]
+                    [else (surf-tset-insert! t a loc)])))]
+       ;; (tset-delete! t a)
+       [(|tset-delete!|)
+        (or (check-arity '|tset-delete!| args 2 loc)
+            (let ([t (parse-datum (car args))]
+                  [a (parse-datum (cadr args))])
+              (cond [(prologos-error? t) t]
+                    [(prologos-error? a) a]
+                    [else (surf-tset-delete! t a loc)])))]
+
        ;; (the-fn type [params...] body)
        [(the-fn)
         (parse-the-fn args loc)]
@@ -1862,6 +1951,8 @@
         (parse-error loc "do should have been expanded before parsing" #f)]
        [(if)
         (parse-error loc "if should have been expanded before parsing" #f)]
+       [(with-transient)
+        (parse-error loc "with-transient should have been expanded before parsing" #f)]
        [(deftype)
         (parse-error loc "deftype should have been expanded before parsing" #f)]
        [(ns)

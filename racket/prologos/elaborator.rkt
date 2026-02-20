@@ -1549,6 +1549,86 @@
              [(prologos-error? ehi) ehi]
              [else (expr-pvec-slice ev elo ehi)]))]
 
+    ;; ---- Transient Builders ----
+    ;; Transient type constructors: (TVec A), (TMap K V), (TSet A)
+    [(surf-transient-type kind args loc)
+     (case kind
+       [(TVec)
+        (let ([ea (elaborate args env depth)])
+          (cond [(prologos-error? ea) ea]
+                [else (expr-TVec ea)]))]
+       [(TMap)
+        (let ([ek (elaborate (car args) env depth)]
+              [ev (elaborate (cadr args) env depth)])
+          (cond [(prologos-error? ek) ek]
+                [(prologos-error? ev) ev]
+                [else (expr-TMap ek ev)]))]
+       [(TSet)
+        (let ([ea (elaborate args env depth)])
+          (cond [(prologos-error? ea) ea]
+                [else (expr-TSet ea)]))]
+       [else (prologos-error loc (format "Unknown transient type: ~a" kind) #f)])]
+
+    ;; `transient` is generic: elaborator produces expr-transient,
+    ;; type checker resolves to expr-transient-vec/map/set based on arg type
+    [(surf-transient coll loc)
+     (let ([ec (elaborate coll env depth)])
+       (cond [(prologos-error? ec) ec]
+             [else (expr-transient ec)]))]
+
+    ;; `persist!` is generic: elaborator produces expr-persist,
+    ;; type checker resolves to expr-persist-vec/map/set based on arg type
+    [(surf-persist coll loc)
+     (let ([ec (elaborate coll env depth)])
+       (cond [(prologos-error? ec) ec]
+             [else (expr-persist ec)]))]
+
+    [(surf-tvec-push! t x loc)
+     (let ([et (elaborate t env depth)]
+           [ex (elaborate x env depth)])
+       (cond [(prologos-error? et) et]
+             [(prologos-error? ex) ex]
+             [else (expr-tvec-push! et ex)]))]
+
+    [(surf-tvec-update! t i x loc)
+     (let ([et (elaborate t env depth)]
+           [ei (elaborate i env depth)]
+           [ex (elaborate x env depth)])
+       (cond [(prologos-error? et) et]
+             [(prologos-error? ei) ei]
+             [(prologos-error? ex) ex]
+             [else (expr-tvec-update! et ei ex)]))]
+
+    [(surf-tmap-assoc! t k v loc)
+     (let ([et (elaborate t env depth)]
+           [ek (elaborate k env depth)]
+           [ev (elaborate v env depth)])
+       (cond [(prologos-error? et) et]
+             [(prologos-error? ek) ek]
+             [(prologos-error? ev) ev]
+             [else (expr-tmap-assoc! et ek ev)]))]
+
+    [(surf-tmap-dissoc! t k loc)
+     (let ([et (elaborate t env depth)]
+           [ek (elaborate k env depth)])
+       (cond [(prologos-error? et) et]
+             [(prologos-error? ek) ek]
+             [else (expr-tmap-dissoc! et ek)]))]
+
+    [(surf-tset-insert! t a loc)
+     (let ([et (elaborate t env depth)]
+           [ea (elaborate a env depth)])
+       (cond [(prologos-error? et) et]
+             [(prologos-error? ea) ea]
+             [else (expr-tset-insert! et ea)]))]
+
+    [(surf-tset-delete! t a loc)
+     (let ([et (elaborate t env depth)]
+           [ea (elaborate a env depth)])
+       (cond [(prologos-error? et) et]
+             [(prologos-error? ea) ea]
+             [else (expr-tset-delete! et ea)]))]
+
     ;; Reduce: ML-style pattern matching
     ;; Each arm's body must be elaborated with binding names in scope.
     ;; We add dummy binders (the actual types come from the type checker).

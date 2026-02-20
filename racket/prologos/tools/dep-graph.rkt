@@ -214,6 +214,10 @@
    'test-map.rkt
    (test-dep '(syntax.rkt prelude.rkt substitution.rkt reduction.rkt typing-core.rkt
                pretty-print.rkt driver.rkt global-env.rkt champ.rkt) #f)
+   'test-transient.rkt
+   (test-dep '(syntax.rkt prelude.rkt substitution.rkt reduction.rkt typing-core.rkt
+               pretty-print.rkt driver.rkt global-env.rkt rrb.rkt champ.rkt
+               namespace.rkt macros.rkt errors.rkt) #f)
    'test-approx-literal.rkt
    (test-dep '(syntax.rkt prelude.rkt surface-syntax.rkt reader.rkt parser.rkt
                driver.rkt global-env.rkt posit-impl.rkt) #f)

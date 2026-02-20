@@ -2476,6 +2476,29 @@
 
 (register-preparse-macro! '$quasiquote expand-quasiquote)
 
+;; ========================================
+;; with-transient macro
+;; ========================================
+;; (with-transient coll (fn [t] body))
+;; → (persist! ((fn [t] body) (transient coll)))
+;;
+;; Enables idiomatic batch construction:
+;;   with-transient @[]
+;;     fn [t]
+;;       let t = [tvec-push! t 1N]
+;;       let t = [tvec-push! t 2N]
+;;       t
+;;   ;; => @[1N 2N]
+(define (expand-with-transient datum)
+  (unless (and (list? datum) (= (length datum) 3))
+    (error 'with-transient
+           "expected (with-transient coll fn-expr), got ~v" datum))
+  (let ([coll (cadr datum)]
+        [fn-expr (caddr datum)])
+    ;; (persist! ((fn-expr) (transient coll)))
+    `(|persist!| (,fn-expr (transient ,coll)))))
+
+(register-preparse-macro! 'with-transient expand-with-transient)
 
 ;; ========================================
 ;; Constructor metadata registry (for reduce)

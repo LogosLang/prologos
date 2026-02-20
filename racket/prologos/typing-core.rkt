@@ -824,6 +824,99 @@
                             (expr-PVec a) (expr-error))]
          [_ (expr-error)]))]
 
+    ;; ---- Transient Builders ----
+    ;; Generic transient: dispatch on collection type
+    [(expr-transient coll)
+     (let ([tc (infer ctx coll)])
+       (match (whnf tc)
+         [(expr-PVec a) (expr-TVec a)]
+         [(expr-Map k v) (expr-TMap k v)]
+         [(expr-Set a) (expr-TSet a)]
+         [_ (expr-error)]))]
+    ;; Generic persist: dispatch on transient type
+    [(expr-persist coll)
+     (let ([tc (infer ctx coll)])
+       (match (whnf tc)
+         [(expr-TVec a) (expr-PVec a)]
+         [(expr-TMap k v) (expr-Map k v)]
+         [(expr-TSet a) (expr-Set a)]
+         [_ (expr-error)]))]
+    [(expr-TVec a)
+     (if (is-type ctx a) (expr-Type (lzero)) (expr-error))]
+    [(expr-TMap k v)
+     (if (and (is-type ctx k) (is-type ctx v)) (expr-Type (lzero)) (expr-error))]
+    [(expr-TSet a)
+     (if (is-type ctx a) (expr-Type (lzero)) (expr-error))]
+    [(expr-trrb _) (expr-error)]   ;; trrb needs checking context
+    [(expr-tchamp _) (expr-error)]  ;; tchamp needs checking context
+    [(expr-thset _) (expr-error)]   ;; thset needs checking context
+    [(expr-transient-vec v)
+     (let ([tv (infer ctx v)])
+       (match tv
+         [(expr-PVec a) (expr-TVec a)]
+         [_ (expr-error)]))]
+    [(expr-persist-vec t)
+     (let ([tt (infer ctx t)])
+       (match tt
+         [(expr-TVec a) (expr-PVec a)]
+         [_ (expr-error)]))]
+    [(expr-transient-map m)
+     (let ([tm (infer ctx m)])
+       (match tm
+         [(expr-Map k v) (expr-TMap k v)]
+         [_ (expr-error)]))]
+    [(expr-persist-map t)
+     (let ([tt (infer ctx t)])
+       (match tt
+         [(expr-TMap k v) (expr-Map k v)]
+         [_ (expr-error)]))]
+    [(expr-transient-set s)
+     (let ([ts (infer ctx s)])
+       (match ts
+         [(expr-Set a) (expr-TSet a)]
+         [_ (expr-error)]))]
+    [(expr-persist-set t)
+     (let ([tt (infer ctx t)])
+       (match tt
+         [(expr-TSet a) (expr-Set a)]
+         [_ (expr-error)]))]
+    [(expr-tvec-push! t x)
+     (let ([tt (infer ctx t)])
+       (match tt
+         [(expr-TVec a) (if (check ctx x a) (expr-TVec a) (expr-error))]
+         [_ (expr-error)]))]
+    [(expr-tvec-update! t i x)
+     (let ([tt (infer ctx t)])
+       (match tt
+         [(expr-TVec a) (if (and (check ctx i (expr-Nat)) (check ctx x a))
+                            (expr-TVec a) (expr-error))]
+         [_ (expr-error)]))]
+    [(expr-tmap-assoc! t k v)
+     (let ([tt (infer ctx t)])
+       (match tt
+         [(expr-TMap kt vt)
+          (if (and (check ctx k kt) (check ctx v vt))
+              (expr-TMap kt vt) (expr-error))]
+         [_ (expr-error)]))]
+    [(expr-tmap-dissoc! t k)
+     (let ([tt (infer ctx t)])
+       (match tt
+         [(expr-TMap kt vt)
+          (if (check ctx k kt) (expr-TMap kt vt) (expr-error))]
+         [_ (expr-error)]))]
+    [(expr-tset-insert! t a)
+     (let ([tt (infer ctx t)])
+       (match tt
+         [(expr-TSet a-ty)
+          (if (check ctx a a-ty) (expr-TSet a-ty) (expr-error))]
+         [_ (expr-error)]))]
+    [(expr-tset-delete! t a)
+     (let ([tt (infer ctx t)])
+       (match tt
+         [(expr-TSet a-ty)
+          (if (check ctx a a-ty) (expr-TSet a-ty) (expr-error))]
+         [_ (expr-error)]))]
+
     ;; ---- Foreign function: look up type from global env ----
     [(expr-foreign-fn name _ _ _ _ _)
      (or (global-env-lookup-type name) (expr-error))]
@@ -964,6 +1057,37 @@
     [((expr-pvec-push v x) (expr-PVec a))
      (and (check ctx v (expr-PVec a))
           (check ctx x a))]
+
+    ;; ---- Transient Builder checks ----
+    [((expr-trrb _) (expr-TVec _)) #t]
+    [((expr-tchamp _) (expr-TMap _ _)) #t]
+    [((expr-thset _) (expr-TSet _)) #t]
+    [((expr-persist-vec t) (expr-PVec a))
+     (check ctx t (expr-TVec a))]
+    [((expr-persist-map t) (expr-Map k v))
+     (check ctx t (expr-TMap k v))]
+    [((expr-persist-set t) (expr-Set a))
+     (check ctx t (expr-TSet a))]
+    [((expr-tvec-push! t x) (expr-TVec a))
+     (and (check ctx t (expr-TVec a))
+          (check ctx x a))]
+    [((expr-tvec-update! t i x) (expr-TVec a))
+     (and (check ctx t (expr-TVec a))
+          (check ctx i (expr-Nat))
+          (check ctx x a))]
+    [((expr-tmap-assoc! t k v) (expr-TMap kt vt))
+     (and (check ctx t (expr-TMap kt vt))
+          (check ctx k kt)
+          (check ctx v vt))]
+    [((expr-tmap-dissoc! t k) (expr-TMap kt vt))
+     (and (check ctx t (expr-TMap kt vt))
+          (check ctx k kt))]
+    [((expr-tset-insert! t a) (expr-TSet a-ty))
+     (and (check ctx t (expr-TSet a-ty))
+          (check ctx a a-ty))]
+    [((expr-tset-delete! t a) (expr-TSet a-ty))
+     (and (check ctx t (expr-TSet a-ty))
+          (check ctx a a-ty))]
 
     ;; ---- Reduce: ML-style Church elimination ----
     ;; check(G, reduce(scrutinee, arms), T)
@@ -1245,6 +1369,19 @@
 
     ;; PVec formation: PVec A : Type(level(A))
     [(expr-PVec a) (infer-level ctx a)]
+
+    ;; Transient type formations
+    [(expr-TVec a) (infer-level ctx a)]
+    [(expr-TMap k v)
+     (let ([lk (infer-level ctx k)])
+       (match lk
+         [(just-level lk*)
+          (let ([lv (infer-level ctx v)])
+            (match lv
+              [(just-level lv*) (just-level (lmax lk* lv*))]
+              [_ (no-level)]))]
+         [_ (no-level)]))]
+    [(expr-TSet a) (infer-level ctx a)]
 
     ;; Union formation: A | B : Type(max(level(A), level(B)))
     [(expr-union l r)

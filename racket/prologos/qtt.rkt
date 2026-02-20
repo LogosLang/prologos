@@ -1044,6 +1044,133 @@
           (tu (tu-type r1) (add-usage u1 (add-usage u2 u3)))]
          [(_ _ _) (tu-error)]))]
 
+    ;; ---- Transient Builders ----
+    ;; Generic transient/persist: dispatch on inferred type, combine usage
+    [(expr-transient coll)
+     (let ([r (inferQ ctx coll)])
+       (match r
+         [(tu tc u) (match tc
+                      [(expr-PVec a) (tu (expr-TVec a) u)]
+                      [(expr-Map k v) (tu (expr-TMap k v) u)]
+                      [(expr-Set a) (tu (expr-TSet a) u)]
+                      [_ (tu-error)])]
+         [_ (tu-error)]))]
+    [(expr-persist coll)
+     (let ([r (inferQ ctx coll)])
+       (match r
+         [(tu tc u) (match tc
+                      [(expr-TVec a) (tu (expr-PVec a) u)]
+                      [(expr-TMap k v) (tu (expr-Map k v) u)]
+                      [(expr-TSet a) (tu (expr-Set a) u)]
+                      [_ (tu-error)])]
+         [_ (tu-error)]))]
+    [(expr-TVec a)
+     (let ([r (inferQ ctx a)])
+       (match r
+         [(tu _ u) (tu (expr-Type (lzero)) u)]
+         [_ (tu-error)]))]
+    [(expr-TMap k v)
+     (let ([r1 (inferQ ctx k)]
+           [r2 (inferQ ctx v)])
+       (match* (r1 r2)
+         [((tu _ u1) (tu _ u2))
+          (tu (expr-Type (lzero)) (add-usage u1 u2))]
+         [(_ _) (tu-error)]))]
+    [(expr-TSet a)
+     (let ([r (inferQ ctx a)])
+       (match r
+         [(tu _ u) (tu (expr-Type (lzero)) u)]
+         [_ (tu-error)]))]
+    [(expr-trrb _) (tu (expr-TVec (expr-hole)) (zero-usage n))]
+    [(expr-tchamp _) (tu (expr-TMap (expr-hole) (expr-hole)) (zero-usage n))]
+    [(expr-thset _) (tu (expr-TSet (expr-hole)) (zero-usage n))]
+    [(expr-transient-vec v)
+     (let ([r (inferQ ctx v)])
+       (match r
+         [(tu tv u) (match tv
+                      [(expr-PVec a) (tu (expr-TVec a) u)]
+                      [_ (tu-error)])]
+         [_ (tu-error)]))]
+    [(expr-persist-vec t)
+     (let ([r (inferQ ctx t)])
+       (match r
+         [(tu tt u) (match tt
+                      [(expr-TVec a) (tu (expr-PVec a) u)]
+                      [_ (tu-error)])]
+         [_ (tu-error)]))]
+    [(expr-transient-map m)
+     (let ([r (inferQ ctx m)])
+       (match r
+         [(tu tm u) (match tm
+                      [(expr-Map k v) (tu (expr-TMap k v) u)]
+                      [_ (tu-error)])]
+         [_ (tu-error)]))]
+    [(expr-persist-map t)
+     (let ([r (inferQ ctx t)])
+       (match r
+         [(tu tt u) (match tt
+                      [(expr-TMap k v) (tu (expr-Map k v) u)]
+                      [_ (tu-error)])]
+         [_ (tu-error)]))]
+    [(expr-transient-set s)
+     (let ([r (inferQ ctx s)])
+       (match r
+         [(tu ts u) (match ts
+                      [(expr-Set a) (tu (expr-TSet a) u)]
+                      [_ (tu-error)])]
+         [_ (tu-error)]))]
+    [(expr-persist-set t)
+     (let ([r (inferQ ctx t)])
+       (match r
+         [(tu tt u) (match tt
+                      [(expr-TSet a) (tu (expr-Set a) u)]
+                      [_ (tu-error)])]
+         [_ (tu-error)]))]
+    [(expr-tvec-push! t x)
+     (let ([r1 (inferQ ctx t)]
+           [r2 (inferQ ctx x)])
+       (match* (r1 r2)
+         [((tu _ u1) (tu _ u2))
+          (tu (tu-type r1) (add-usage u1 u2))]
+         [(_ _) (tu-error)]))]
+    [(expr-tvec-update! t i x)
+     (let ([r1 (inferQ ctx t)]
+           [r2 (inferQ ctx i)]
+           [r3 (inferQ ctx x)])
+       (match* (r1 r2 r3)
+         [((tu _ u1) (tu _ u2) (tu _ u3))
+          (tu (tu-type r1) (add-usage u1 (add-usage u2 u3)))]
+         [(_ _ _) (tu-error)]))]
+    [(expr-tmap-assoc! t k v)
+     (let ([r1 (inferQ ctx t)]
+           [r2 (inferQ ctx k)]
+           [r3 (inferQ ctx v)])
+       (match* (r1 r2 r3)
+         [((tu _ u1) (tu _ u2) (tu _ u3))
+          (tu (tu-type r1) (add-usage u1 (add-usage u2 u3)))]
+         [(_ _ _) (tu-error)]))]
+    [(expr-tmap-dissoc! t k)
+     (let ([r1 (inferQ ctx t)]
+           [r2 (inferQ ctx k)])
+       (match* (r1 r2)
+         [((tu _ u1) (tu _ u2))
+          (tu (tu-type r1) (add-usage u1 u2))]
+         [(_ _) (tu-error)]))]
+    [(expr-tset-insert! t a)
+     (let ([r1 (inferQ ctx t)]
+           [r2 (inferQ ctx a)])
+       (match* (r1 r2)
+         [((tu _ u1) (tu _ u2))
+          (tu (tu-type r1) (add-usage u1 u2))]
+         [(_ _) (tu-error)]))]
+    [(expr-tset-delete! t a)
+     (let ([r1 (inferQ ctx t)]
+           [r2 (inferQ ctx a)])
+       (match* (r1 r2)
+         [((tu _ u1) (tu _ u2))
+          (tu (tu-type r1) (add-usage u1 u2))]
+         [(_ _) (tu-error)]))]
+
     ;; ---- J eliminator ----
     ;; Usage from proof, base, motive arguments
     [(expr-J mot base left right proof)
@@ -1182,6 +1309,48 @@
      (let ([rv (checkQ ctx v (expr-PVec a))]
            [rx (checkQ ctx x a)])
        (match* (rv rx)
+         [((bu #t u1) (bu #t u2))
+          (bu #t (add-usage u1 u2))]
+         [(_ _) (bu #f (zero-usage n))]))]
+
+    ;; ---- Transient Builder constructors: check against transient types ----
+    [((expr-trrb _) (expr-TVec _)) (bu #t (zero-usage n))]
+    [((expr-tchamp _) (expr-TMap _ _)) (bu #t (zero-usage n))]
+    [((expr-thset _) (expr-TSet _)) (bu #t (zero-usage n))]
+    [((expr-persist-vec t) (expr-PVec a))
+     (let ([r (checkQ ctx t (expr-TVec a))])
+       (match r
+         [(bu #t u) (bu #t u)]
+         [_ (bu #f (zero-usage n))]))]
+    [((expr-persist-map t) (expr-Map k v))
+     (let ([r (checkQ ctx t (expr-TMap k v))])
+       (match r
+         [(bu #t u) (bu #t u)]
+         [_ (bu #f (zero-usage n))]))]
+    [((expr-persist-set t) (expr-Set a))
+     (let ([r (checkQ ctx t (expr-TSet a))])
+       (match r
+         [(bu #t u) (bu #t u)]
+         [_ (bu #f (zero-usage n))]))]
+    [((expr-tvec-push! t x) (expr-TVec a))
+     (let ([rt (checkQ ctx t (expr-TVec a))]
+           [rx (checkQ ctx x a)])
+       (match* (rt rx)
+         [((bu #t u1) (bu #t u2))
+          (bu #t (add-usage u1 u2))]
+         [(_ _) (bu #f (zero-usage n))]))]
+    [((expr-tmap-assoc! t k v) (expr-TMap kt vt))
+     (let ([rt (checkQ ctx t (expr-TMap kt vt))]
+           [rk (checkQ ctx k kt)]
+           [rv (checkQ ctx v vt)])
+       (match* (rt rk rv)
+         [((bu #t u1) (bu #t u2) (bu #t u3))
+          (bu #t (add-usage u1 (add-usage u2 u3)))]
+         [(_ _ _) (bu #f (zero-usage n))]))]
+    [((expr-tset-insert! t a) (expr-TSet a-ty))
+     (let ([rt (checkQ ctx t (expr-TSet a-ty))]
+           [ra (checkQ ctx a a-ty)])
+       (match* (rt ra)
          [((bu #t u1) (bu #t u2))
           (bu #t (add-usage u1 u2))]
          [(_ _) (bu #f (zero-usage n))]))]

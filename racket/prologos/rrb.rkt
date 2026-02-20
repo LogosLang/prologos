@@ -28,7 +28,14 @@
          rrb-to-list
          rrb-from-list
          rrb-equal?
-         rrb-root?)
+         rrb-root?
+         ;; Transient builder
+         (struct-out trrb)
+         rrb-transient
+         trrb-push!
+         trrb-update!
+         trrb-freeze
+         trrb-size*)
 
 ;; ========================================
 ;; Constants
@@ -370,6 +377,72 @@
                   #f))))))
 
 ;; ========================================
+;; Transient Builder — Mutable flat vector
+;; ========================================
+;; A transient PVec uses a mutable Racket vector with amortized
+;; doubling for O(1) push. Freezing rebuilds the persistent tree.
+
+(struct trrb (buf size) #:mutable #:transparent)
+;; buf:  mutable Racket vector (capacity >= size)
+;; size: number of live elements
+
+;; rrb-transient : rrb-root -> trrb
+;; Create a transient builder from a persistent vector.
+;; Copies all elements into a flat mutable vector.
+(define (rrb-transient r)
+  (define cnt (rrb-root-count r))
+  (define capacity (max 16 (* 2 cnt)))
+  (define buf (make-vector capacity #f))
+  ;; Fill buffer by folding over the persistent vector
+  (define idx 0)
+  (rrb-fold r (lambda (elem _)
+                (vector-set! buf idx elem)
+                (set! idx (+ idx 1))
+                #f)
+            #f)
+  (trrb buf cnt))
+
+;; trrb-push! : trrb value -> trrb
+;; Append an element. Doubles buffer capacity if needed.
+;; Returns the same trrb for linear threading.
+(define (trrb-push! t val)
+  (define sz (trrb-size t))
+  (define buf (trrb-buf t))
+  (when (>= sz (vector-length buf))
+    ;; Double the buffer
+    (define new-buf (make-vector (* 2 (vector-length buf)) #f))
+    (vector-copy! new-buf 0 buf)
+    (set-trrb-buf! t new-buf))
+  (vector-set! (trrb-buf t) sz val)
+  (set-trrb-size! t (+ sz 1))
+  t)
+
+;; trrb-update! : trrb index value -> trrb
+;; In-place update at index. Returns the same trrb.
+(define (trrb-update! t idx val)
+  (define sz (trrb-size t))
+  (unless (and (>= idx 0) (< idx sz))
+    (error 'trrb-update! "index ~a out of bounds (size ~a)" idx sz))
+  (vector-set! (trrb-buf t) idx val)
+  t)
+
+;; trrb-freeze : trrb -> rrb-root
+;; Convert transient back to persistent vector.
+;; Rebuilds the persistent tree from the flat buffer.
+(define (trrb-freeze t)
+  (define sz (trrb-size t))
+  (define buf (trrb-buf t))
+  (let loop ([i 0] [acc rrb-empty])
+    (if (>= i sz)
+        acc
+        (loop (+ i 1) (rrb-push acc (vector-ref buf i))))))
+
+;; trrb-size* : trrb -> exact-nonneg-integer
+;; (named trrb-size* to avoid conflict with rrb-size)
+(define (trrb-size* t)
+  (trrb-size t))
+
+;; ========================================
 ;; Tests
 ;; ========================================
 
@@ -480,4 +553,67 @@
       (check-equal? (rrb-get v 0) 0)
       (check-equal? (rrb-get v 1999) 19990)
       (check-equal? (rrb-get v 1000) 10000)))
+
+  ;; ---- Transient builder tests ----
+
+  (test-case "transient: empty roundtrip"
+    (let* ([t (rrb-transient rrb-empty)]
+           [v (trrb-freeze t)])
+      (check-true (rrb-empty? v))))
+
+  (test-case "transient: push and freeze"
+    (let ([t (rrb-transient rrb-empty)])
+      (trrb-push! t 10)
+      (trrb-push! t 20)
+      (trrb-push! t 30)
+      (let ([v (trrb-freeze t)])
+        (check-equal? (rrb-size v) 3)
+        (check-equal? (rrb-get v 0) 10)
+        (check-equal? (rrb-get v 1) 20)
+        (check-equal? (rrb-get v 2) 30))))
+
+  (test-case "transient: from non-empty persistent"
+    (let* ([v0 (rrb-from-list '(1 2 3))]
+           [t  (rrb-transient v0)])
+      (trrb-push! t 4)
+      (trrb-push! t 5)
+      (let ([v1 (trrb-freeze t)])
+        (check-equal? (rrb-size v1) 5)
+        (check-equal? (rrb-get v1 3) 4)
+        (check-equal? (rrb-get v1 4) 5)
+        ;; Original unmodified
+        (check-equal? (rrb-size v0) 3))))
+
+  (test-case "transient: update in transient"
+    (let* ([v0 (rrb-from-list '(10 20 30))]
+           [t  (rrb-transient v0)])
+      (trrb-update! t 1 99)
+      (let ([v1 (trrb-freeze t)])
+        (check-equal? (rrb-get v1 0) 10)
+        (check-equal? (rrb-get v1 1) 99)
+        (check-equal? (rrb-get v1 2) 30)
+        ;; Original unmodified
+        (check-equal? (rrb-get v0 1) 20))))
+
+  (test-case "transient: 100 elements"
+    (let ([t (rrb-transient rrb-empty)])
+      (for ([i 100])
+        (trrb-push! t i))
+      (let ([v (trrb-freeze t)])
+        (check-equal? (rrb-size v) 100)
+        (for ([i 100])
+          (check-equal? (rrb-get v i) i)))))
+
+  (test-case "transient: trrb-size*"
+    (let ([t (rrb-transient rrb-empty)])
+      (check-equal? (trrb-size* t) 0)
+      (trrb-push! t 'a)
+      (check-equal? (trrb-size* t) 1)
+      (trrb-push! t 'b)
+      (check-equal? (trrb-size* t) 2)))
+
+  (test-case "transient: update out-of-bounds error"
+    (let ([t (rrb-transient rrb-empty)])
+      (trrb-push! t 42)
+      (check-exn exn:fail? (lambda () (trrb-update! t 5 99)))))
 )
