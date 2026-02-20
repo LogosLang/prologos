@@ -448,13 +448,13 @@
   ;; Should produce a no-instance-error, not leave an unsolved meta.
   (define results (run-ns
     (string-append
-      "(ns missing-instance-test)\n"
+      "(ns missing-instance-test :no-prelude)\n"
       "(require [prologos.core.eq-trait :refer [Eq Eq-eq?]])\n"
       "(require [prologos.data.bool :refer [not]])\n"
       "(spec my-neq A A -> Bool where (Eq A))\n"
       "(defn my-neq [x y]\n"
       "  (not (Eq-eq? A $Eq-A x y)))\n"
-      ;; Posit8 has no Eq instance — should error
+      ;; Posit8 has no Eq instance (no prelude) — should error
       "(eval (my-neq (posit8 72) (posit8 72)))\n")))
   (define last-result (last results))
   (check-true (no-instance-error? last-result)
@@ -465,7 +465,7 @@
   ;; Verify the formatted error message includes trait name and type
   (define results (run-ns
     (string-append
-      "(ns error-format-test)\n"
+      "(ns error-format-test :no-prelude)\n"
       "(require [prologos.core.eq-trait :refer [Eq Eq-eq?]])\n"
       "(require [prologos.data.bool :refer [not]])\n"
       "(spec my-neq A A -> Bool where (Eq A))\n"

@@ -231,6 +231,8 @@
    (test-dep '(errors.rkt driver.rkt global-env.rkt namespace.rkt macros.rkt) #t)
    'test-core-prelude.rkt
    (test-dep '(driver.rkt global-env.rkt namespace.rkt macros.rkt) #t)
+   'test-prelude-system.rkt
+   (test-dep '(driver.rkt global-env.rkt namespace.rkt macros.rkt errors.rkt elaborator.rkt) #t)
    'test-auto-implicits.rkt
    (test-dep '(errors.rkt global-env.rkt driver.rkt namespace.rkt macros.rkt
                metavar-store.rkt) #t)
@@ -619,6 +621,19 @@
    'test-match-builtins.rkt     '(prologos.data.nat)
    'test-list-literals.rkt      '(prologos.data.nat prologos.data.list)
    'test-core-prelude.rkt       '(prologos.data.nat)
+   'test-prelude-system.rkt     '(prologos.core prologos.data.nat prologos.data.bool
+                                  prologos.data.pair prologos.data.ordering prologos.data.eq
+                                  prologos.data.list prologos.data.option prologos.data.result
+                                  prologos.core.eq-trait prologos.core.ord-trait
+                                  prologos.core.add-trait prologos.core.sub-trait
+                                  prologos.core.mul-trait prologos.core.neg-trait
+                                  prologos.core.abs-trait prologos.core.fromint-trait
+                                  prologos.core.numeric-bundles
+                                  prologos.core.eq-instances prologos.core.eq-numeric-instances
+                                  prologos.core.ord-instances prologos.core.ord-numeric-instances
+                                  prologos.core.add-instances prologos.core.sub-instances
+                                  prologos.core.mul-instances prologos.core.neg-instances
+                                  prologos.core.abs-instances)
    'test-auto-implicits.rkt     '(prologos.data.nat)
    'test-sprint10.rkt           '(prologos.data.nat prologos.data.bool)
    'test-surface-defmacro.rkt   '(prologos.data.nat)

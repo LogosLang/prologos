@@ -282,6 +282,82 @@
 (define current-module-loader (make-parameter #f))
 
 ;; ========================================
+;; Prelude System
+;; ========================================
+;; When a user module declares (ns foo), the prelude auto-imports a curated
+;; set of modules — data types, list ops, traits, and numeric instances.
+;; Library modules (prologos.data.* and prologos.core.*) skip the prelude
+;; to avoid circular loading and only get prologos.core.
+;;
+;; Modeled after: Haskell Prelude, Idris Prelude, Clojure core.
+;; Name conflicts resolved: List ops win unqualified; Option/Result via aliases.
+
+;; Modules that are direct/transitive dependencies of the prelude.
+;; These must NOT auto-import the prelude (would cause circular loading).
+;; They get prologos.core instead (the pre-prelude behavior).
+(define (prelude-dependency? ns-sym)
+  (define s (symbol->string ns-sym))
+  (or (string-prefix? s "prologos.data.")
+      (string-prefix? s "prologos.core.")))
+
+;; The prelude: a curated list of require specs emitted into user namespaces.
+;; Organized in tiers by dependency order.
+(define prelude-requires
+  '(;; ---- Tier 0: prologos.core (combinators + macros) ----
+    (require [prologos.core :refer-all])
+
+    ;; ---- Tier 0: Foundation data types ----
+    (require [prologos.data.ordering :refer [Ordering lt-ord eq-ord gt-ord]])
+    (require [prologos.data.bool     :refer [not and or xor bool-eq implies nand nor]])
+    (require [prologos.data.nat      :refer [add mult double pred zero? sub pow
+                                              le? lt? gt? ge? nat-eq? min max
+                                              bool-to-nat clamp]])
+    (require [prologos.data.pair     :refer [swap map-fst map-snd bimap dup uncurry]])
+    (require [prologos.data.eq       :refer [sym cong trans]])
+
+    ;; ---- Tier 1: Container data types ----
+    ;; Option: types + predicates unqualified; ops via opt:: alias
+    (require [prologos.data.option :as opt :refer [Option none some some? none? flatten]])
+    ;; Result: types + predicates unqualified; ops via result:: alias
+    (require [prologos.data.result :as result :refer [Result ok err ok? err?]])
+    ;; List: full API unqualified (wins all name-conflict tiebreaks)
+    (require [prologos.data.list :refer [List nil cons foldr reduce length
+                                          map filter append head tail singleton
+                                          reverse sum product any? all? find
+                                          nth last replicate range concat
+                                          concat-map take drop split-at
+                                          take-while drop-while partition
+                                          zip-with zip unzip intersperse sort
+                                          elem dedup count scanl iterate-n
+                                          intercalate sort-on reduce1 foldr1
+                                          init span break prefix-of? suffix-of?
+                                          delete find-index]])
+
+    ;; ---- Tier 2: Core traits (type class definitions) ----
+    (require [prologos.core.eq-trait  :refer [Eq eq-neq nat-eq]])
+    (require [prologos.core.ord-trait :refer [Ord nat-ord ord-lt ord-le
+                                              ord-gt ord-ge ord-eq
+                                              ord-min ord-max]])
+    (require [prologos.core.add-trait      :refer [Add]])
+    (require [prologos.core.sub-trait      :refer [Sub]])
+    (require [prologos.core.mul-trait      :refer [Mul]])
+    (require [prologos.core.neg-trait      :refer [Neg]])
+    (require [prologos.core.abs-trait      :refer [Abs]])
+    (require [prologos.core.fromint-trait  :refer [FromInt]])
+    (require [prologos.core.numeric-bundles :refer [Num Fractional]])
+
+    ;; ---- Tier 3: Instance registration (side-effect only, :refer []) ----
+    (require [prologos.core.eq-instances         :refer []])
+    (require [prologos.core.eq-numeric-instances  :refer []])
+    (require [prologos.core.ord-instances         :refer []])
+    (require [prologos.core.ord-numeric-instances :refer []])
+    (require [prologos.core.add-instances         :refer []])
+    (require [prologos.core.sub-instances         :refer []])
+    (require [prologos.core.mul-instances         :refer []])
+    (require [prologos.core.neg-instances         :refer []])
+    (require [prologos.core.abs-instances         :refer []])))
+
+;; ========================================
 ;; Pre-parse Directive Processing
 ;; ========================================
 ;; These functions are called from macros.rkt during preparse-expand-all.
@@ -289,20 +365,36 @@
 ;; current-ns-context, current-global-env, and current-module-registry.
 
 ;; (ns namespace-sym)
+;; (ns namespace-sym :no-prelude)
 ;; Sets the current namespace context.
-;; If not prologos.core, auto-imports prologos.core.
+;; Auto-imports the full prelude for user modules, or just prologos.core
+;; for library modules and :no-prelude opt-outs.
 (define (process-ns-declaration datum)
-  (unless (and (list? datum) (= (length datum) 2) (symbol? (cadr datum)))
-    (error 'ns "ns requires: (ns namespace-name)"))
+  (unless (and (list? datum) (>= (length datum) 2) (symbol? (cadr datum)))
+    (error 'ns "ns requires: (ns namespace-name) or (ns namespace-name :no-prelude)"))
   (define ns-sym (cadr datum))
+  (define no-prelude?
+    (and (>= (length datum) 3)
+         (memq ':no-prelude (cddr datum))))
   (current-ns-context (make-empty-ns-context ns-sym))
-  ;; Auto-import prologos.core (unless we ARE prologos.core)
-  (unless (eq? ns-sym 'prologos.core)
-    (when (current-module-loader)
-      (with-handlers ([exn:fail? (lambda (e)
-                                   ;; prologos.core might not exist yet during bootstrap
-                                   (void))])
-        (process-require `(require [prologos.core :refer-all]))))))
+  ;; Decide what to auto-import
+  (define skip-prelude?
+    (or no-prelude?
+        (eq? ns-sym 'prologos.core)
+        (prelude-dependency? ns-sym)))
+  (when (current-module-loader)
+    (with-handlers ([exn:fail? (lambda (e)
+                                 ;; Modules might not exist yet during bootstrap
+                                 (void))])
+      (cond
+        [skip-prelude?
+         ;; Library modules and :no-prelude: just get prologos.core
+         (unless (eq? ns-sym 'prologos.core)
+           (process-require '(require [prologos.core :refer-all])))]
+        [else
+         ;; User modules: get the full prelude
+         (for ([req (in-list prelude-requires)])
+           (process-require req))]))))
 
 ;; (provide name ...)
 ;; (provide :all)

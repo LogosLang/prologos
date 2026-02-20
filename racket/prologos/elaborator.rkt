@@ -450,7 +450,18 @@
   (let ([idx (env-lookup env name depth)])
     (cond
       [idx (expr-bvar idx)]
-      ;; When namespace context is active, try FQN resolution FIRST.
+      ;; Own-namespace definition takes priority over imports (including prelude).
+      ;; This ensures `def map ...` in `ns foo` resolves to `foo::map`, not the
+      ;; prelude's `prologos.data.list::map`.
+      [(and (current-ns-context)
+            (let ([own-fqn (qualify-name name
+                             (ns-context-current-ns (current-ns-context)))])
+              (and (global-env-lookup-type own-fqn) own-fqn)))
+       => (lambda (own-fqn)
+            (if auto-apply?
+                (maybe-auto-apply-implicits (expr-fvar own-fqn) own-fqn loc env)
+                (expr-fvar own-fqn)))]
+      ;; When namespace context is active, try FQN resolution (imports, refer-map).
       [(and (current-ns-context)
             (let ([resolved (resolve-name name (current-ns-context))])
               (and resolved

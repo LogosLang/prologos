@@ -20,6 +20,10 @@ syntax.rkt -> surface-syntax.rkt -> parser.rkt -> elaborator.rkt -> typing-core.
 
 elaborate -> type-check -> resolve-trait-constraints! -> check-unresolved -> all-failed-constraints -> zonk-final
 
+### Prelude System
+
+`ns foo` auto-imports a Haskell/Clojure-style prelude (Nat, Bool, List, Option, Result, Pair ops, Eq/Ord/Add/Sub/Mul/Neg/Abs/FromInt/Num/Fractional traits + instances). Defined as a Racket-side requires list in `namespace.rkt`. Use `ns foo :no-prelude` for bare behavior. Library modules (`prologos.data.*`, `prologos.core.*`) skip the prelude to avoid circularity.
+
 ### Key Patterns
 
 - **Two-phase zonking**: intermediate (preserves unsolved metas) vs final (defaults to lzero/mw)
