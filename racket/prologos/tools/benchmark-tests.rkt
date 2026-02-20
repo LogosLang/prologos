@@ -12,6 +12,7 @@
 ;;   racket tools/benchmark-tests.rkt --trend test-a.rkt  # timing history for one file
 ;;   racket tools/benchmark-tests.rkt --timeout 300       # per-test timeout in seconds (default: 600)
 ;;   racket tools/benchmark-tests.rkt --regression-threshold 15  # flag >15% regressions (default: 10)
+;;   racket tools/benchmark-tests.rkt --split-threshold 60000    # split slow files (ms, 0=off)
 ;;
 ;; Results are appended to data/benchmarks/timings.jsonl (one JSON object per run).
 ;; After each run, automatically compares against previous run and flags regressions.
@@ -45,13 +46,33 @@
 (define timings-file (make-timings-path project-root))
 
 ;; ============================================================
-;; Parallel benchmark suite
+;; Parallel benchmark suite (supports per-test splitting)
 ;; ============================================================
 
-(define (run-benchmark test-names timeout-secs num-jobs reg-threshold)
-  (define total (length test-names))
-  (printf "Benchmarking ~a test files (~a parallel, timeout: ~as per test)...\n\n"
-          total num-jobs timeout-secs)
+(define (run-benchmark test-names timeout-secs num-jobs reg-threshold split-thresh)
+  (define file-count (length test-names))
+  (define test-paths
+    (for/list ([name (in-list test-names)])
+      (path->string (build-path tests-dir (symbol->string name)))))
+
+  ;; Prepare work items — splits whale files into per-test-case items
+  (define-values (items cleanup!)
+    (parameterize ([split-threshold-ms split-thresh])
+      (prepare-work-items test-paths project-root)))
+
+  (define total (length items))
+  (define split-items (filter (λ (wi) (eq? (work-item-kind wi) 'split)) items))
+  (define whale-count
+    (length (remove-duplicates (map work-item-original-file split-items))))
+
+  (printf "Benchmarking ~a work items (~a files~a, ~a parallel, timeout: ~as per test)...\n\n"
+          total file-count
+          (if (> whale-count 0)
+              (format ", ~a tests split from ~a whale file~a"
+                      (length split-items) whale-count
+                      (if (= whale-count 1) "" "s"))
+              "")
+          num-jobs timeout-secs)
 
   (define work-ch (make-async-channel))
   (define result-ch (make-async-channel))
@@ -64,43 +85,56 @@
          (let loop ()
            (define item (async-channel-get work-ch))
            (unless (eq? item 'done)
-             (define test-path (cdr item))
-             (define result (benchmark-one-test test-path timeout-secs))
-             (async-channel-put result-ch result)
+             (define result (benchmark-one-test (work-item-path item) timeout-secs))
+             ;; Tag result with work-item for aggregation
+             (async-channel-put result-ch (cons item result))
              (loop)))))))
 
   ;; Enqueue all work items
   (define t0-total (current-inexact-monotonic-milliseconds))
-  (for ([name (in-list test-names)])
-    (async-channel-put work-ch
-      (cons name (path->string (build-path tests-dir (symbol->string name))))))
+  (for ([wi (in-list items)])
+    (async-channel-put work-ch wi))
 
   ;; Signal workers to stop (after all work is enqueued)
   (for ([_ (in-range num-jobs)])
     (async-channel-put work-ch 'done))
 
   ;; Collect results, print progress as they arrive
-  (define results
+  (define raw-results
     (for/list ([i (in-range total)])
-      (define result (async-channel-get result-ch))
-      (define ms (hash-ref result 'wall_ms))
-      (define status (hash-ref result 'status))
+      (define pair (async-channel-get result-ch))
+      (define wi (car pair))
+      (define r (cdr pair))
+      (define ms (hash-ref r 'wall_ms))
+      (define status (hash-ref r 'status))
+      ;; Format: split items show "file # test-name", whole items show "file"
+      (define label
+        (if (eq? (work-item-kind wi) 'split)
+            (format "~a # ~a" (work-item-original-file wi) (work-item-test-name wi))
+            (work-item-original-file wi)))
       (printf "[~a/~a] ~a ~a (~as)\n"
               (add1 i) total
-              (hash-ref result 'file)
+              label
               (status-label status)
               (real->decimal-string (/ ms 1000.0) 1))
       (flush-output)
-      result))
+      pair))
 
   ;; Wait for all worker threads to finish
   (for ([w (in-list workers)])
     (thread-wait w))
 
+  ;; Cleanup temp files
+  (cleanup!)
+
+  ;; Aggregate split results back to per-file records
+  (define raw-result-hashes (map cdr raw-results))
+  (define file-results (aggregate-split-results raw-result-hashes items))
+
   (define t1-total (current-inexact-monotonic-milliseconds))
   (define total-wall-ms (inexact->exact (round (- t1-total t0-total))))
-  (define total-tests (apply + (map (λ (r) (hash-ref r 'tests)) results)))
-  (define all-pass? (andmap (λ (r) (string=? (hash-ref r 'status) "pass")) results))
+  (define total-tests (apply + (map (λ (r) (hash-ref r 'tests)) file-results)))
+  (define all-pass? (andmap (λ (r) (string=? (hash-ref r 'status) "pass")) file-results))
 
   ;; Build run record
   (define record
@@ -113,18 +147,19 @@
             'jobs num-jobs
             'total_wall_ms total-wall-ms
             'total_tests total-tests
-            'file_count total
+            'file_count file-count
             'all_pass all-pass?
             'source "benchmark"
-            'results results))
+            'results file-results))
 
   ;; Append to JSONL file
   (append-run-record timings-file record)
 
   ;; Print summary
   (printf "\n--- Summary ---\n")
-  (printf "Total: ~as (~a files, ~a tests, ~a jobs, ~a)\n"
+  (printf "Total: ~as (~a files, ~a work items, ~a tests, ~a jobs, ~a)\n"
           (real->decimal-string (/ total-wall-ms 1000.0) 1)
+          file-count
           total
           total-tests
           num-jobs
@@ -339,6 +374,7 @@
 (define regression-threshold (make-parameter 10))
 (define trend-file (make-parameter #f))
 (define trend-depth (make-parameter 10))
+(define cli-split-threshold (make-parameter 60000))
 
 (define (main)
   (command-line
@@ -361,6 +397,8 @@
     (regression-threshold (string->number pct))]
    ["--depth" n "Number of runs for --trend (default: 10)"
     (trend-depth (string->number n))]
+   ["--split-threshold" ms "Split files slower than this (ms, default: 60000; 0=off)"
+    (cli-split-threshold (string->number ms))]
    #:multi
    ["--files" file "Benchmark specific test file(s)"
     (file-list (cons (string->symbol file) (file-list)))])
@@ -375,7 +413,7 @@
        (if (null? (file-list))
            (sort (all-test-files) symbol<?)
            (reverse (file-list))))
-     (define ok? (run-benchmark test-names (timeout-secs) (num-jobs) (regression-threshold)))
+     (define ok? (run-benchmark test-names (timeout-secs) (num-jobs) (regression-threshold) (cli-split-threshold)))
      (unless ok? (exit 1))]))
 
 (main)

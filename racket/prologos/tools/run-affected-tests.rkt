@@ -12,6 +12,7 @@
 ;;   racket tools/run-affected-tests.rkt --skip-only # run ONLY the normally-skipped tests
 ;;   racket tools/run-affected-tests.rkt --no-record # skip JSONL timing recording
 ;;   racket tools/run-affected-tests.rkt --timeout 300  # per-test timeout (default: 600)
+;;   racket tools/run-affected-tests.rkt --split-threshold 60000  # split slow files (ms, 0=off)
 ;;
 ;; Automatically records per-file timing data to data/benchmarks/timings.jsonl.
 ;; Use benchmark-tests.rkt for reporting (--report, --trend, --compare, --slowest).
@@ -167,6 +168,7 @@
 (define extra-skips (make-parameter '()))
 (define record-timings? (make-parameter #t))
 (define timeout-secs (make-parameter 600))
+(define cli-split-threshold (make-parameter 60000))
 
 (define (main)
   (command-line
@@ -188,6 +190,8 @@
     (record-timings? #f)]
    ["--timeout" secs "Per-test timeout in seconds (default: 600)"
     (timeout-secs (string->number secs))]
+   ["--split-threshold" ms "Split files slower than this (ms, default: 60000; 0=off)"
+    (cli-split-threshold (string->number ms))]
    #:multi
    ["--skip" file "Skip an additional test file (additive with .skip-tests)"
     (extra-skips (cons (string->symbol file) (extra-skips)))])
@@ -302,13 +306,29 @@
              (run-tests test-paths project-root))])])]))
 
 ;; ============================================================
-;; Per-file test execution with timing
+;; Per-file test execution with timing (supports per-test splitting)
 ;; ============================================================
 
 (define (run-tests test-paths project-root)
-  (define total (length test-paths))
-  (printf "\n--- Running ~a test files (~a parallel, timeout: ~as) ---\n"
-          total (num-jobs) (timeout-secs))
+  (define file-count (length test-paths))
+
+  ;; Prepare work items — splits whale files into per-test-case items
+  (define-values (items cleanup!)
+    (parameterize ([split-threshold-ms (cli-split-threshold)])
+      (prepare-work-items test-paths project-root)))
+
+  (define total (length items))
+  (define split-items (filter (λ (wi) (eq? (work-item-kind wi) 'split)) items))
+  (define whale-count
+    (length (remove-duplicates (map work-item-original-file split-items))))
+  (printf "\n--- Running ~a work items (~a files~a, ~a parallel, timeout: ~as) ---\n"
+          total file-count
+          (if (> whale-count 0)
+              (format ", ~a tests split from ~a whale file~a"
+                      (length split-items) whale-count
+                      (if (= whale-count 1) "" "s"))
+              "")
+          (num-jobs) (timeout-secs))
 
   (define work-ch (make-async-channel))
   (define result-ch (make-async-channel))
@@ -321,46 +341,62 @@
          (let loop ()
            (define item (async-channel-get work-ch))
            (unless (eq? item 'done)
-             (define result (benchmark-one-test item (timeout-secs)))
-             (async-channel-put result-ch result)
+             (define result (benchmark-one-test (work-item-path item) (timeout-secs)))
+             ;; Tag result with work-item for aggregation
+             (async-channel-put result-ch (cons item result))
              (loop)))))))
 
   ;; Enqueue all work items
   (define t0 (current-inexact-monotonic-milliseconds))
-  (for ([p (in-list test-paths)])
-    (async-channel-put work-ch p))
+  (for ([wi (in-list items)])
+    (async-channel-put work-ch wi))
 
   ;; Signal workers to stop
   (for ([_ (in-range (num-jobs))])
     (async-channel-put work-ch 'done))
 
   ;; Collect results with progress output
-  (define results
+  (define raw-results
     (for/list ([i (in-range total)])
-      (define r (async-channel-get result-ch))
+      (define pair (async-channel-get result-ch))
+      (define wi (car pair))
+      (define r (cdr pair))
       (define ms (hash-ref r 'wall_ms))
       (define status (hash-ref r 'status))
+      ;; Format: split items show "file # test-name", whole items show "file"
+      (define label
+        (if (eq? (work-item-kind wi) 'split)
+            (format "~a # ~a" (work-item-original-file wi) (work-item-test-name wi))
+            (work-item-original-file wi)))
       (printf "[~a/~a] ~a ~a (~as)\n"
               (add1 i) total
-              (hash-ref r 'file)
+              label
               (status-label status)
               (real->decimal-string (/ ms 1000.0) 1))
       (flush-output)
-      r))
+      pair))
 
   ;; Wait for all workers
   (for ([w (in-list workers)])
     (thread-wait w))
 
+  ;; Cleanup temp files
+  (cleanup!)
+
+  ;; Aggregate split results back to per-file records
+  (define raw-result-hashes (map cdr raw-results))
+  (define file-results (aggregate-split-results raw-result-hashes items))
+
   (define t1 (current-inexact-monotonic-milliseconds))
   (define total-wall-ms (inexact->exact (round (- t1 t0))))
-  (define total-tests (apply + (map (λ (r) (hash-ref r 'tests)) results)))
-  (define all-pass? (andmap (λ (r) (string=? (hash-ref r 'status) "pass")) results))
+  (define total-tests (apply + (map (λ (r) (hash-ref r 'tests)) file-results)))
+  (define all-pass? (andmap (λ (r) (string=? (hash-ref r 'status) "pass")) file-results))
 
   ;; Print summary
-  (printf "\n~a tests in ~as (~a files, ~a jobs, ~a)\n"
+  (printf "\n~a tests in ~as (~a files, ~a work items, ~a jobs, ~a)\n"
           total-tests
           (real->decimal-string (/ total-wall-ms 1000.0) 1)
+          file-count
           total
           (num-jobs)
           (if all-pass? "all pass" "SOME FAILURES"))
@@ -378,10 +414,10 @@
               'jobs (num-jobs)
               'total_wall_ms total-wall-ms
               'total_tests total-tests
-              'file_count total
+              'file_count file-count
               'all_pass all-pass?
               'source "affected"
-              'results results))
+              'results file-results))
     (append-run-record timings-file record)
     (printf "Timings recorded to ~a\n" (path->string timings-file)))
 
