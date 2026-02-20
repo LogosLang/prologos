@@ -258,3 +258,38 @@
     (let ([result (process-string "(def m <(Map Keyword Nat)> {:x (suc zero)})\n(eval (map-get m :x))")])
       (check-equal? (length result) 2)
       (check-equal? (cadr result) "1N : Nat"))))
+
+;; ========================================
+;; map-keys and map-vals reduction (Phase 3a)
+;; ========================================
+
+(test-case "map-keys: empty map"
+  (let ([result (run "(eval (map-keys (map-empty Keyword Nat)))")])
+    (check-equal? (length result) 1)
+    (check-true (string-contains? (car result) "nil"))))
+
+(test-case "map-keys: single-entry map"
+  (let ([result (run "(eval (map-keys (map-assoc (map-empty Keyword Nat) :x zero)))")])
+    (check-equal? (length result) 1)
+    (check-true (string-contains? (car result) ":x"))))
+
+(test-case "map-keys: multi-entry map has correct count"
+  (parameterize ([current-global-env (hasheq)])
+    (let ([result (process-string
+                   (string-append
+                    "(def m <(Map Keyword Nat)> (map-assoc (map-assoc (map-empty Keyword Nat) :a zero) :b (suc zero)))\n"
+                    "(eval (map-keys m))"))])
+      (check-equal? (length result) 2)
+      ;; Second result is the keys list — should mention :a and :b
+      (check-true (string-contains? (cadr result) ":a"))
+      (check-true (string-contains? (cadr result) ":b")))))
+
+(test-case "map-vals: single-entry map"
+  (let ([result (run "(eval (map-vals (map-assoc (map-empty Keyword Nat) :x (suc (suc zero)))))")])
+    (check-equal? (length result) 1)
+    (check-true (string-contains? (car result) "2N"))))
+
+(test-case "map-vals: empty map"
+  (let ([result (run "(eval (map-vals (map-empty Keyword Nat)))")])
+    (check-equal? (length result) 1)
+    (check-true (string-contains? (car result) "nil"))))

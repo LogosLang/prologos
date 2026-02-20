@@ -27,6 +27,28 @@
 (provide whnf nf nf-whnf conv conv-nf current-nf-cache)
 
 ;; ========================================
+;; Helpers for building Prologos List values in reduction
+;; ========================================
+;; List constructors (nil, cons) are inductive-type fvars registered by
+;; `data List {A}` in prologos.data.list.  At the reduction level they
+;; appear as (expr-fvar 'nil) and (expr-app (expr-app (expr-fvar 'cons) elem) rest).
+;; These helpers convert Racket-level lists of AST exprs into Prologos Lists.
+
+;; Convert a Racket list of AST expressions → Prologos List value
+(define (racket-list->prologos-list elems)
+  (foldr (lambda (e acc)
+           (expr-app (expr-app (expr-fvar 'cons) e) acc))
+         (expr-fvar 'nil)
+         elems))
+
+;; Convert a Racket list of (cons key val) pairs → Prologos List of (pair k v)
+(define (racket-pairs->prologos-pair-list pairs)
+  (racket-list->prologos-list
+   (map (lambda (p)
+          (expr-app (expr-app (expr-fvar 'pair) (car p)) (cdr p)))
+        pairs)))
+
+;; ========================================
 ;; Helpers for Posit8 reduction
 ;; ========================================
 
@@ -864,8 +886,10 @@
        (if (champ-has-key? c (equal-hash-code k*) k*)
            (expr-true)
            (expr-false)))]
-    [(expr-map-keys (expr-champ c)) e]   ;; stub — will be completed when List is a core type
-    [(expr-map-vals (expr-champ c)) e]   ;; stub — will be completed when List is a core type
+    [(expr-map-keys (expr-champ c))
+     (racket-list->prologos-list (champ-keys c))]
+    [(expr-map-vals (expr-champ c))
+     (racket-list->prologos-list (champ-vals c))]
 
     ;; ---- PVec iota rules ----
     [(expr-pvec-empty _) (expr-rrb rrb-empty)]
@@ -1129,7 +1153,8 @@
     [(expr-set-to-list s)
      (define s* (whnf s))
      (match s*
-       [(expr-hset c) e]   ;; stub — will be completed when List is a core type
+       [(expr-hset c)
+        (racket-list->prologos-list (champ-keys c))]  ;; Set stores keys with #t sentinel
        [_ (expr-set-to-list s*)])]
 
     ;; Union types: pass through (types don't reduce)

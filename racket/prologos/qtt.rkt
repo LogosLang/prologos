@@ -978,8 +978,12 @@
                  (tu-error))]
             [_ (tu-error)])]
          [(_ _) (tu-error)]))]
-    ;; set-to-list: no core expr-List type, fall through to error
-    [(expr-set-to-list _) (tu-error)]
+    ;; set-to-list: Set A → List A
+    [(expr-set-to-list s)
+     (let ([r (inferQ ctx s)])
+       (match r
+         [(tu _ u) (tu (tu-type r) u)]
+         [_ (tu-error)]))]
 
     ;; ---- PVec type and operations ----
     [(expr-PVec a)

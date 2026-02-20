@@ -723,10 +723,18 @@
          [(expr-Map kt _)
           (if (check ctx k kt) (expr-Bool) (expr-error))]
          [_ (expr-error)]))]
-    ;; map-keys and map-vals: no core expr-List type, fall through to error
-    ;; These will be typed at the surface level when List integration is available
-    [(expr-map-keys _) (expr-error)]
-    [(expr-map-vals _) (expr-error)]
+    ;; map-keys: Map K V → List K
+    [(expr-map-keys m)
+     (let ([tm (infer ctx m)])
+       (match tm
+         [(expr-Map kt _) (expr-app (expr-fvar 'List) kt)]
+         [_ (expr-error)]))]
+    ;; map-vals: Map K V → List V
+    [(expr-map-vals m)
+     (let ([tm (infer ctx m)])
+       (match tm
+         [(expr-Map _ vt) (expr-app (expr-fvar 'List) vt)]
+         [_ (expr-error)]))]
 
     ;; ---- Set type and operations ----
     [(expr-Set a)
@@ -777,8 +785,12 @@
          [(expr-Set a-ty)
           (if (check ctx s2 (expr-Set a-ty)) (expr-Set a-ty) (expr-error))]
          [_ (expr-error)]))]
-    ;; set-to-list: no core expr-List type, fall through to error
-    [(expr-set-to-list _) (expr-error)]
+    ;; set-to-list: Set A → List A
+    [(expr-set-to-list s)
+     (let ([ts (infer ctx s)])
+       (match ts
+         [(expr-Set a) (expr-app (expr-fvar 'List) a)]
+         [_ (expr-error)]))]
 
     ;; ---- PVec type and operations ----
     [(expr-PVec a)

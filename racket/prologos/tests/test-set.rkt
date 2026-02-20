@@ -411,3 +411,28 @@
   (define in (open-input-string "#{}"))
   (define result (prologos-sexp-read in))
   (check-equal? result '($set-literal)))
+
+;; ========================================
+;; set-to-list reduction (Phase 3a)
+;; ========================================
+
+(test-case "set-to-list: empty set"
+  (let ([result (run "(eval (set-to-list (set-empty Nat)))")])
+    (check-equal? (length result) 1)
+    (check-true (string-contains? (car result) "nil"))))
+
+(test-case "set-to-list: singleton set"
+  (let ([result (run "(eval (set-to-list (set-insert (set-empty Nat) (suc zero))))")])
+    (check-equal? (length result) 1)
+    (check-true (string-contains? (car result) "1N"))))
+
+(test-case "set-to-list: multi-element set has correct count"
+  (parameterize ([current-global-env (hasheq)])
+    (let ([result (process-string
+                   (string-append
+                    "(def s <(Set Nat)> (set-insert (set-insert (set-empty Nat) zero) (suc zero)))\n"
+                    "(eval (set-to-list s))"))])
+      (check-equal? (length result) 2)
+      ;; Second result is the list — should mention both 0N and 1N
+      (check-true (string-contains? (cadr result) "0N"))
+      (check-true (string-contains? (cadr result) "1N")))))
