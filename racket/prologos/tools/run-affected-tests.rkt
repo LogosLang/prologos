@@ -10,6 +10,11 @@
 ;;   racket tools/run-affected-tests.rkt --jobs 4     # override parallelism (default 10)
 ;;   racket tools/run-affected-tests.rkt --no-skip   # ignore .skip-tests, run everything
 ;;   racket tools/run-affected-tests.rkt --skip-only # run ONLY the normally-skipped tests
+;;   racket tools/run-affected-tests.rkt --no-record # skip JSONL timing recording
+;;   racket tools/run-affected-tests.rkt --timeout 300  # per-test timeout (default: 600)
+;;
+;; Automatically records per-file timing data to data/benchmarks/timings.jsonl.
+;; Use benchmark-tests.rkt for reporting (--report, --trend, --compare, --slowest).
 
 (require racket/cmdline
          racket/list
@@ -18,7 +23,11 @@
          racket/set
          racket/string
          racket/system
-         "dep-graph.rkt")
+         racket/async-channel
+         racket/future
+         json
+         "dep-graph.rkt"
+         "bench-lib.rkt")
 
 ;; ============================================================
 ;; Skip list support
@@ -156,6 +165,8 @@
 (define no-skip? (make-parameter #f))
 (define skip-only? (make-parameter #f))
 (define extra-skips (make-parameter '()))
+(define record-timings? (make-parameter #t))
+(define timeout-secs (make-parameter 600))
 
 (define (main)
   (command-line
@@ -173,6 +184,10 @@
     (no-skip? #t)]
    ["--skip-only" "Run ONLY the normally-skipped tests"
     (skip-only? #t)]
+   ["--no-record" "Skip JSONL timing recording"
+    (record-timings? #f)]
+   ["--timeout" secs "Per-test timeout in seconds (default: 600)"
+    (timeout-secs (string->number secs))]
    #:multi
    ["--skip" file "Skip an additional test file (additive with .skip-tests)"
     (extra-skips (cons (string->symbol file) (extra-skips)))])
@@ -208,7 +223,7 @@
           (define test-paths
             (for/list ([t (in-list to-run)])
               (path->string (build-path tests-dir (symbol->string t)))))
-          (run-tests test-paths))])]
+          (run-tests test-paths project-root))])]
 
     ;; Normal mode: compute affected tests from git diff
     [else
@@ -237,7 +252,7 @@
           (define test-paths
             (for/list ([t (in-list to-run)])
               (path->string (build-path tests-dir (symbol->string t)))))
-          (run-tests test-paths))]
+          (run-tests test-paths project-root))]
 
        [else
         ;; Filter out 'run-all from classified list (shouldn't be there but safety)
@@ -284,19 +299,92 @@
              (define test-paths
                (for/list ([t (in-list to-run)])
                  (path->string (build-path tests-dir (symbol->string t)))))
-             (run-tests test-paths))])])]))
+             (run-tests test-paths project-root))])])]))
 
-(define (run-tests test-paths)
-  (printf "\n--- Running ~a test files with -j ~a ---\n"
-          (length test-paths) (num-jobs))
-  (define cmd
-    (string-join
-     (append (list "raco" "test"
-                   "-j" (number->string (num-jobs)))
-             test-paths)
-     " "))
-  (define ok? (system cmd))
-  (unless ok?
-    (exit 1)))
+;; ============================================================
+;; Per-file test execution with timing
+;; ============================================================
+
+(define (run-tests test-paths project-root)
+  (define total (length test-paths))
+  (printf "\n--- Running ~a test files (~a parallel, timeout: ~as) ---\n"
+          total (num-jobs) (timeout-secs))
+
+  (define work-ch (make-async-channel))
+  (define result-ch (make-async-channel))
+
+  ;; Spawn worker threads
+  (define workers
+    (for/list ([_ (in-range (num-jobs))])
+      (thread
+       (λ ()
+         (let loop ()
+           (define item (async-channel-get work-ch))
+           (unless (eq? item 'done)
+             (define result (benchmark-one-test item (timeout-secs)))
+             (async-channel-put result-ch result)
+             (loop)))))))
+
+  ;; Enqueue all work items
+  (define t0 (current-inexact-monotonic-milliseconds))
+  (for ([p (in-list test-paths)])
+    (async-channel-put work-ch p))
+
+  ;; Signal workers to stop
+  (for ([_ (in-range (num-jobs))])
+    (async-channel-put work-ch 'done))
+
+  ;; Collect results with progress output
+  (define results
+    (for/list ([i (in-range total)])
+      (define r (async-channel-get result-ch))
+      (define ms (hash-ref r 'wall_ms))
+      (define status (hash-ref r 'status))
+      (printf "[~a/~a] ~a ~a (~as)\n"
+              (add1 i) total
+              (hash-ref r 'file)
+              (status-label status)
+              (real->decimal-string (/ ms 1000.0) 1))
+      (flush-output)
+      r))
+
+  ;; Wait for all workers
+  (for ([w (in-list workers)])
+    (thread-wait w))
+
+  (define t1 (current-inexact-monotonic-milliseconds))
+  (define total-wall-ms (inexact->exact (round (- t1 t0))))
+  (define total-tests (apply + (map (λ (r) (hash-ref r 'tests)) results)))
+  (define all-pass? (andmap (λ (r) (string=? (hash-ref r 'status) "pass")) results))
+
+  ;; Print summary
+  (printf "\n~a tests in ~as (~a files, ~a jobs, ~a)\n"
+          total-tests
+          (real->decimal-string (/ total-wall-ms 1000.0) 1)
+          total
+          (num-jobs)
+          (if all-pass? "all pass" "SOME FAILURES"))
+
+  ;; Record to JSONL (unless --no-record)
+  (when (record-timings?)
+    (define timings-file (make-timings-path project-root))
+    (define record
+      (hasheq 'timestamp (current-iso-timestamp)
+              'commit (current-commit)
+              'branch (current-branch)
+              'machine (string-append (symbol->string (system-type 'os))
+                                      "-"
+                                      (symbol->string (system-type 'arch)))
+              'jobs (num-jobs)
+              'total_wall_ms total-wall-ms
+              'total_tests total-tests
+              'file_count total
+              'all_pass all-pass?
+              'source "affected"
+              'results results))
+    (append-run-record timings-file record)
+    (printf "Timings recorded to ~a\n" (path->string timings-file)))
+
+  (unless all-pass? (exit 1)))
 
 (main)

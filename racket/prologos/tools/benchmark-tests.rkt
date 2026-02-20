@@ -20,14 +20,13 @@
 (require racket/cmdline
          racket/list
          racket/path
-         racket/port
          racket/string
          racket/system
          racket/async-channel
          racket/future  ;; for processor-count
          json
-         racket/date
-         "dep-graph.rkt")
+         "dep-graph.rkt"
+         "bench-lib.rkt")
 
 ;; ============================================================
 ;; Path anchoring
@@ -43,75 +42,11 @@
   (path->string (simplify-path (build-path tools-dir ".."))))
 
 (define tests-dir (build-path project-root "tests"))
-(define timings-file (build-path project-root "data" "benchmarks" "timings.jsonl"))
-
-;; ============================================================
-;; Git metadata
-;; ============================================================
-
-(define (git-output . args)
-  (define cmd (string-join (cons "git" args) " "))
-  (string-trim (with-output-to-string (λ () (system cmd)))))
-
-(define (current-commit) (git-output "rev-parse" "--short" "HEAD"))
-(define (current-branch) (git-output "rev-parse" "--abbrev-ref" "HEAD"))
-
-;; ============================================================
-;; Benchmark one test file
-;; ============================================================
-
-(define (benchmark-one-test test-path timeout-secs)
-  (define t0 (current-inexact-monotonic-milliseconds))
-  (define raco-path (find-executable-path "raco"))
-  (define-values (proc stdout-port stdin-port stderr-port)
-    (subprocess #f #f #f raco-path "test" test-path))
-  (close-output-port stdin-port)
-  ;; Wait with event-based timeout (no polling)
-  (define completed? (sync/timeout timeout-secs proc))
-  (define t1 (current-inexact-monotonic-milliseconds))
-  (define wall-ms (inexact->exact (round (- t1 t0))))
-  (cond
-    [completed?
-     ;; Process finished
-     (define output (port->string stdout-port))
-     (close-input-port stdout-port)
-     (close-input-port stderr-port)
-     (define ok? (zero? (subprocess-status proc)))
-     (define test-count (extract-test-count output))
-     (hasheq 'file (filename-from-path test-path)
-             'wall_ms wall-ms
-             'status (if ok? "pass" "fail")
-             'tests test-count)]
-    [else
-     ;; Timeout — kill the process
-     (subprocess-kill proc #t)
-     (close-input-port stdout-port)
-     (close-input-port stderr-port)
-     (hasheq 'file (filename-from-path test-path)
-             'wall_ms wall-ms
-             'status "timeout"
-             'tests 0)]))
-
-(define (filename-from-path test-path)
-  (path->string (file-name-from-path (string->path test-path))))
-
-;; Extract "N tests passed" from raco test output
-(define (extract-test-count output)
-  (define lines (string-split output "\n"))
-  (for/fold ([count 0]) ([line (in-list lines)])
-    (cond
-      [(regexp-match #rx"([0-9]+) tests? passed" line)
-       => (λ (m) (string->number (cadr m)))]
-      [else count])))
+(define timings-file (make-timings-path project-root))
 
 ;; ============================================================
 ;; Parallel benchmark suite
 ;; ============================================================
-
-(define (status-label s)
-  (cond [(string=? s "pass") "PASS"]
-        [(string=? s "fail") "FAIL"]
-        [else "TIMEOUT"]))
 
 (define (run-benchmark test-names timeout-secs num-jobs reg-threshold)
   (define total (length test-names))
@@ -180,13 +115,11 @@
             'total_tests total-tests
             'file_count total
             'all_pass all-pass?
+            'source "benchmark"
             'results results))
 
   ;; Append to JSONL file
-  (call-with-output-file timings-file #:exists 'append
-    (λ (out)
-      (write-json record out)
-      (newline out)))
+  (append-run-record timings-file record)
 
   ;; Print summary
   (printf "\n--- Summary ---\n")
@@ -200,7 +133,7 @@
 
   ;; Auto-detect regressions against previous run
   (define has-regressions? #f)
-  (define runs (read-all-runs))
+  (define runs (read-all-runs timings-file))
   (when (>= (length runs) 2)
     (define prev-run (list-ref runs (- (length runs) 2)))
     (define regressions (detect-regressions record prev-run reg-threshold))
@@ -245,17 +178,8 @@
 ;; Reporting
 ;; ============================================================
 
-(define (read-all-runs)
-  (if (file-exists? timings-file)
-      (call-with-input-file timings-file
-        (λ (in)
-          (for/list ([line (in-lines in)]
-                     #:when (not (string=? (string-trim line) "")))
-            (with-input-from-string line read-json))))
-      '()))
-
 (define (report-last)
-  (define runs (read-all-runs))
+  (define runs (read-all-runs timings-file))
   (when (null? runs)
     (printf "No benchmark data found in ~a\n" (path->string timings-file))
     (exit 0))
@@ -285,7 +209,7 @@
             (hash-ref r 'status))))
 
 (define (report-slowest n)
-  (define runs (read-all-runs))
+  (define runs (read-all-runs timings-file))
   (when (null? runs)
     (printf "No benchmark data found.\n")
     (exit 0))
@@ -295,7 +219,7 @@
 
 (define (report-compare ref)
   (define target-commit (string-trim (git-output "rev-parse" "--short" ref)))
-  (define runs (read-all-runs))
+  (define runs (read-all-runs timings-file))
   (define current-run (and (not (null? runs)) (last runs)))
   (define target-run
     (for/first ([r (in-list (reverse runs))]
@@ -344,7 +268,7 @@
 ;; ============================================================
 
 (define (report-trend test-file depth)
-  (define runs (read-all-runs))
+  (define runs (read-all-runs timings-file))
   (when (null? runs)
     (printf "No benchmark data found.\n")
     (exit 0))
@@ -401,34 +325,6 @@
             tests
             status
             delta-str)))
-
-;; ============================================================
-;; Helpers
-;; ============================================================
-
-(define (current-iso-timestamp)
-  (define now (current-seconds))
-  (define d (seconds->date now #t))  ; UTC
-  (format "~a-~a-~aT~a:~a:~aZ"
-          (date-year d)
-          (pad-num (date-month d) 2)
-          (pad-num (date-day d) 2)
-          (pad-num (date-hour d) 2)
-          (pad-num (date-minute d) 2)
-          (pad-num (date-second d) 2)))
-
-(define (pad-num n width)
-  (define s (number->string n))
-  (define padding (max 0 (- width (string-length s))))
-  (string-append (make-string padding #\0) s))
-
-(define (pad-str val min-width [align 'left] [pad-char #\space])
-  (define s (format "~a" val))
-  (define padding (max 0 (- min-width (string-length s))))
-  (cond
-    [(zero? padding) s]
-    [(eq? align 'right) (string-append (make-string padding pad-char) s)]
-    [else (string-append s (make-string padding pad-char))]))
 
 ;; ============================================================
 ;; CLI
