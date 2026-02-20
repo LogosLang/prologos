@@ -232,6 +232,12 @@
                macros.rkt qtt.rkt)
              '(prologos.core.seq-lseq prologos.core.foldable-lseq
                prologos.core.seqable-lseq prologos.core.buildable-lseq))
+   'test-identity-generic-ops.rkt
+   (test-dep '(syntax.rkt prelude.rkt substitution.rkt reduction.rkt typing-core.rkt
+               pretty-print.rkt driver.rkt global-env.rkt namespace.rkt
+               macros.rkt qtt.rkt)
+             '(prologos.core.additive-identity-trait prologos.core.multiplicative-identity-trait
+               prologos.core.identity-instances prologos.core.generic-numeric-ops))
    'test-map.rkt
    (test-dep '(syntax.rkt prelude.rkt substitution.rkt reduction.rkt typing-core.rkt
                pretty-print.rkt driver.rkt global-env.rkt champ.rkt) #f)

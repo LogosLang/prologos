@@ -1,0 +1,10 @@
+ns prologos.core.additive-identity-trait
+
+;; ========================================
+;; AdditiveIdentity Trait — additive zero
+;; ========================================
+;; AdditiveIdentity A = A (single-method: dict IS the zero element)
+;; Generated: deftype AdditiveIdentity, accessor AdditiveIdentity-zero
+
+trait AdditiveIdentity {A}
+  zero : A

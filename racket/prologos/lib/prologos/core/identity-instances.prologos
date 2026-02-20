@@ -1,0 +1,22 @@
+ns prologos.core.identity-instances
+
+require [prologos.core.additive-identity-trait       :refer [AdditiveIdentity]]
+require [prologos.core.multiplicative-identity-trait  :refer [MultiplicativeIdentity]]
+
+;; ========================================
+;; AdditiveIdentity Instances (zero)
+;; ========================================
+;; The dict IS the zero element (single-method trait where method = value).
+
+(def Int--AdditiveIdentity--dict : [AdditiveIdentity Int] 0)
+(def Rat--AdditiveIdentity--dict : [AdditiveIdentity Rat] 0/1)
+(def Nat--AdditiveIdentity--dict : [AdditiveIdentity Nat] 0N)
+
+;; ========================================
+;; MultiplicativeIdentity Instances (one)
+;; ========================================
+;; The dict IS the one element.
+
+(def Int--MultiplicativeIdentity--dict : [MultiplicativeIdentity Int] 1)
+(def Rat--MultiplicativeIdentity--dict : [MultiplicativeIdentity Rat] 1/1)
+(def Nat--MultiplicativeIdentity--dict : [MultiplicativeIdentity Nat] 1N)

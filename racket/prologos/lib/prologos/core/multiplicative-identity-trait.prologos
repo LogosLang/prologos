@@ -1,0 +1,10 @@
+ns prologos.core.multiplicative-identity-trait
+
+;; ========================================
+;; MultiplicativeIdentity Trait — multiplicative one
+;; ========================================
+;; MultiplicativeIdentity A = A (single-method: dict IS the one element)
+;; Generated: deftype MultiplicativeIdentity, accessor MultiplicativeIdentity-one
+
+trait MultiplicativeIdentity {A}
+  one : A
