@@ -238,6 +238,11 @@
                macros.rkt qtt.rkt)
              '(prologos.core.additive-identity-trait prologos.core.multiplicative-identity-trait
                prologos.core.identity-instances prologos.core.generic-numeric-ops))
+   'test-collection-conversions.rkt
+   (test-dep '(syntax.rkt prelude.rkt substitution.rkt reduction.rkt typing-core.rkt
+               pretty-print.rkt driver.rkt global-env.rkt namespace.rkt
+               macros.rkt qtt.rkt)
+             '(prologos.core.collection-conversions))
    'test-map.rkt
    (test-dep '(syntax.rkt prelude.rkt substitution.rkt reduction.rkt typing-core.rkt
                pretty-print.rkt driver.rkt global-env.rkt champ.rkt) #f)

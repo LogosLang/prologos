@@ -1,0 +1,61 @@
+ns prologos.core.collection-conversions
+
+require [prologos.data.list     :refer [List nil cons foldr]]
+require [prologos.data.lseq     :refer [LSeq lseq-nil]]
+require [prologos.data.lseq-ops :refer [list-to-lseq lseq-to-list]]
+
+;; ========================================
+;; Collection Conversion Functions
+;; ========================================
+;; Named conversion utilities between List, PVec, LSeq, and Set.
+;; No HKT dispatch — explicit named functions for each direction.
+
+;; ========================================
+;; List → PVec
+;; ========================================
+
+;; vec : List A -> PVec A
+;; Converts a List to a PVec (persistent vector).
+spec vec {A : Type} [List A] -> [PVec A]
+defn vec [xs]
+  pvec-from-list xs
+
+;; ========================================
+;; Any → LSeq (lazy sequence)
+;; ========================================
+
+;; list-to-seq : List A -> LSeq A
+spec list-to-seq {A : Type} [List A] -> [LSeq A]
+defn list-to-seq [xs]
+  list-to-lseq A xs
+
+;; pvec-to-seq : PVec A -> LSeq A
+spec pvec-to-seq {A : Type} [PVec A] -> [LSeq A]
+defn pvec-to-seq [v]
+  list-to-lseq A [pvec-to-list v]
+
+;; set-to-seq : Set A -> LSeq A
+spec set-to-seq {A : Type} [Set A] -> [LSeq A]
+defn set-to-seq [s]
+  list-to-lseq A [set-to-list s]
+
+;; ========================================
+;; LSeq → specific collections (into-*)
+;; ========================================
+
+;; into-list : LSeq A -> List A
+spec into-list {A : Type} [LSeq A] -> [List A]
+defn into-list [xs]
+  lseq-to-list A xs
+
+;; into-vec : LSeq A -> PVec A
+spec into-vec {A : Type} [LSeq A] -> [PVec A]
+defn into-vec [xs]
+  pvec-from-list [lseq-to-list A xs]
+
+;; into-set : LSeq A -> Set A
+;; Folds the lazy sequence into a Set via set-insert.
+;; (Can't call set-from-list due to :w/:0 multiplicity mismatch.)
+spec into-set {A : Type} [LSeq A] -> [Set A]
+defn into-set [xs]
+  foldr A [Set A] [fn a acc [set-insert acc a]] [set-empty A] [lseq-to-list A xs]
