@@ -13,6 +13,7 @@
 ;;   racket tools/run-affected-tests.rkt --no-record # skip JSONL timing recording
 ;;   racket tools/run-affected-tests.rkt --timeout 300  # per-test timeout (default: 600)
 ;;   racket tools/run-affected-tests.rkt --split-threshold 60000  # split slow files (ms, 0=off)
+;;   racket tools/run-affected-tests.rkt --split-min-tests 10    # min test count for splitting
 ;;
 ;; Automatically records per-file timing data to data/benchmarks/timings.jsonl.
 ;; Use benchmark-tests.rkt for reporting (--report, --trend, --compare, --slowest).
@@ -169,6 +170,7 @@
 (define record-timings? (make-parameter #t))
 (define timeout-secs (make-parameter 600))
 (define cli-split-threshold (make-parameter 60000))
+(define cli-split-min-tests (make-parameter 10))
 
 (define (main)
   (command-line
@@ -192,6 +194,8 @@
     (timeout-secs (string->number secs))]
    ["--split-threshold" ms "Split files slower than this (ms, default: 60000; 0=off)"
     (cli-split-threshold (string->number ms))]
+   ["--split-min-tests" n "Minimum test count for splitting (default: 10)"
+    (cli-split-min-tests (string->number n))]
    #:multi
    ["--skip" file "Skip an additional test file (additive with .skip-tests)"
     (extra-skips (cons (string->symbol file) (extra-skips)))])
@@ -314,7 +318,8 @@
 
   ;; Prepare work items — splits whale files into per-test-case items
   (define-values (items cleanup!)
-    (parameterize ([split-threshold-ms (cli-split-threshold)])
+    (parameterize ([split-threshold-ms (cli-split-threshold)]
+                   [split-min-test-count (cli-split-min-tests)])
       (prepare-work-items test-paths project-root)))
 
   (define total (length items))

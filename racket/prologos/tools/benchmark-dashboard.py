@@ -316,8 +316,19 @@ def build_suite_overview():
             _set_suite_xticks(xs)
 
 
+def _format_short_datetime(iso_ts):
+    """Format ISO 8601 timestamp to 'MM-DD HH:MM' for tick labels."""
+    if not iso_ts:
+        return ""
+    try:
+        dt = datetime.fromisoformat(iso_ts.replace("Z", "+00:00"))
+        return dt.strftime("%m-%d %H:%M")
+    except (ValueError, AttributeError):
+        return ""
+
+
 def _set_suite_xticks(xs):
-    """Set x-axis ticks to commit hashes for full-suite runs."""
+    """Set x-axis ticks to datetime + commit hashes for full-suite runs."""
     if not suite_run_indices:
         return
     n = max(1, len(suite_run_indices) // 15)
@@ -325,7 +336,10 @@ def _set_suite_xticks(xs):
     for si in xs:
         ri = suite_run_indices[si]
         if si % n == 0 or si == len(suite_run_indices) - 1:
-            ticks.append((get_commit_label(runs[ri], ri), float(si)))
+            commit = get_commit_label(runs[ri], ri)
+            date_str = _format_short_datetime(runs[ri].get("timestamp", ""))
+            label = f"{date_str}\n{commit}" if date_str else commit
+            ticks.append((label, float(si)))
     if ticks:
         dpg.set_axis_ticks("suite_xaxis", tuple(ticks))
 
@@ -448,23 +462,25 @@ def build_run_breakdown():
 
     commit = get_commit_label(run, current_breakdown_idx)
     ts = run.get("timestamp", "")[:10]
+    total_tests = run.get("total_tests",
+                          sum(r.get("tests", 0) for r in results))
 
     plot_height = max(500, len(results) * 22)
 
     with dpg.group(parent="tab_latest"):
-        # Navigation controls
+        # Navigation controls — metadata on left, nav buttons pushed right
         with dpg.group(horizontal=True):
+            dpg.add_text(
+                f"Run {current_breakdown_idx + 1}/{len(runs)}: "
+                f"{commit} ({ts}) — {len(results)} files, {total_tests} tests",
+                tag="breakdown_label")
+            dpg.add_spacer(width=-1)
             dpg.add_button(label="<", callback=_on_breakdown_prev,
                            tag="breakdown_prev",
                            enabled=current_breakdown_idx > 0)
             dpg.add_button(label=">", callback=_on_breakdown_next,
                            tag="breakdown_next",
                            enabled=current_breakdown_idx < len(runs) - 1)
-            dpg.add_spacer(width=15)
-            dpg.add_text(
-                f"Run {current_breakdown_idx + 1}/{len(runs)}: "
-                f"{commit} ({ts}) — {len(results)} files",
-                tag="breakdown_label")
 
         with dpg.plot(label="Per-File Timing", height=plot_height, width=-1,
                       tag="latest_plot", crosshairs=True):
@@ -712,11 +728,8 @@ def main():
                              callback=lambda s, a: _toggle_auto_reload(a),
                              tag="auto_reload_cb")
 
-        # Status text and coordinate readout
-        with dpg.group(horizontal=True):
-            dpg.add_text("Loading...", tag="status_text")
-            dpg.add_spacer(width=-1)
-            dpg.add_text("", tag="coord_readout", color=LIGHT_GRAY)
+        # Status text
+        dpg.add_text("Loading...", tag="status_text")
         dpg.add_separator()
 
         # Run Tests controls (collapsible)
@@ -773,23 +786,52 @@ def main():
                 pass
         if frame_counter % 10 == 0:
             _poll_active_process()
-            _update_coord_readout()
+            _update_crosshair_annotations()
         dpg.render_dearpygui_frame()
 
     dpg.destroy_context()
 
 
-def _update_coord_readout():
-    """Update coordinate display when mouse is over a plot."""
-    for plot_tag in ["suite_plot", "trend_plot", "latest_plot"]:
+# Annotation tags for crosshair value display (one per plot)
+_CROSSHAIR_TAGS = {
+    "suite_plot": "suite_crosshair_ann",
+    "trend_plot": "trend_crosshair_ann",
+    "latest_plot": "latest_crosshair_ann",
+}
+
+
+def _update_crosshair_annotations():
+    """Show value annotation at crosshair position on hovered plots."""
+    for plot_tag, ann_tag in _CROSSHAIR_TAGS.items():
         try:
-            if dpg.does_item_exist(plot_tag) and dpg.is_item_hovered(plot_tag):
-                mx, my = dpg.get_plot_mouse_pos()
-                dpg.set_value("coord_readout", f"x: {mx:.2f}  y: {my:.2f}")
-                return
+            # Clean up previous annotation
+            if dpg.does_item_exist(ann_tag):
+                dpg.delete_item(ann_tag)
+
+            if not dpg.does_item_exist(plot_tag):
+                continue
+            if not dpg.is_item_hovered(plot_tag):
+                continue
+
+            mx, my = dpg.get_plot_mouse_pos()
+
+            # Run Breakdown: horizontal bars, x = time
+            # Suite Overview / Per-File Trend: y = time
+            if plot_tag == "latest_plot":
+                label = f"{mx:.1f}s"
+            else:
+                label = f"{my:.1f}s"
+
+            dpg.add_plot_annotation(
+                label=label,
+                default_value=(mx, my),
+                color=LIGHT_GRAY,
+                offset=(10, -15),
+                parent=plot_tag,
+                tag=ann_tag,
+            )
         except Exception:
             pass
-    dpg.set_value("coord_readout", "")
 
 
 def _toggle_auto_reload(value):

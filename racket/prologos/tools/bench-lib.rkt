@@ -31,6 +31,7 @@
          (struct-out work-item)
          split-threshold-ms
          split-min-per-test-ms
+         split-min-test-count
          prepare-work-items
          aggregate-split-results)
 
@@ -171,6 +172,12 @@
 ;; Set to ~20s based on observed preamble compilation time.
 (define split-min-per-test-ms (make-parameter 10000))
 
+;; Minimum number of test-cases in a file to consider splitting.
+;; Files with fewer tests are run monolithically even if they exceed the time
+;; thresholds. Prevents splitting files where the small number of tests cannot
+;; overcome preamble overhead through parallelism.
+(define split-min-test-count (make-parameter 10))
+
 ;; prepare-work-items : (listof string) string -> (values (listof work-item) (-> void))
 ;; Takes test paths and project root, returns a flat list of work items
 ;; plus a cleanup thunk that removes any generated temp files.
@@ -180,9 +187,12 @@
 ;;   2. Historical wall_ms > split-threshold-ms (file is slow overall)
 ;;   3. Historical per-test time > split-min-per-test-ms (each test is slow enough
 ;;      that subprocess preamble overhead doesn't dominate)
+;;   4. Historical test count >= split-min-test-count (enough tests for
+;;      parallelism to overcome per-subprocess preamble overhead)
 (define (prepare-work-items test-paths project-root)
   (define threshold (split-threshold-ms))
   (define min-per-test (split-min-per-test-ms))
+  (define min-tests (split-min-test-count))
   (define historical (load-historical-times project-root))
   (define all-split-infos '())
 
@@ -198,9 +208,11 @@
                (/ hist-ms hist-tests)))
         (cond
           ;; Split if file is slow overall AND each test is slow enough
+          ;; AND the file has enough tests for parallelism to help
           [(and (> threshold 0)
                 hist-ms (> hist-ms threshold)
-                per-test-ms (> per-test-ms min-per-test))
+                per-test-ms (> per-test-ms min-per-test)
+                hist-tests (>= hist-tests min-tests))
            (define infos (split-test-file tp))
            (set! all-split-infos (append all-split-infos infos))
            (for/list ([info (in-list infos)])

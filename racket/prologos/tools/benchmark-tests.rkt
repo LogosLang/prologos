@@ -13,6 +13,7 @@
 ;;   racket tools/benchmark-tests.rkt --timeout 300       # per-test timeout in seconds (default: 600)
 ;;   racket tools/benchmark-tests.rkt --regression-threshold 15  # flag >15% regressions (default: 10)
 ;;   racket tools/benchmark-tests.rkt --split-threshold 60000    # split slow files (ms, 0=off)
+;;   racket tools/benchmark-tests.rkt --split-min-tests 10      # min test count for splitting
 ;;
 ;; Results are appended to data/benchmarks/timings.jsonl (one JSON object per run).
 ;; After each run, automatically compares against previous run and flags regressions.
@@ -49,7 +50,7 @@
 ;; Parallel benchmark suite (supports per-test splitting)
 ;; ============================================================
 
-(define (run-benchmark test-names timeout-secs num-jobs reg-threshold split-thresh)
+(define (run-benchmark test-names timeout-secs num-jobs reg-threshold split-thresh split-min-tests)
   (define file-count (length test-names))
   (define test-paths
     (for/list ([name (in-list test-names)])
@@ -57,7 +58,8 @@
 
   ;; Prepare work items — splits whale files into per-test-case items
   (define-values (items cleanup!)
-    (parameterize ([split-threshold-ms split-thresh])
+    (parameterize ([split-threshold-ms split-thresh]
+                   [split-min-test-count split-min-tests])
       (prepare-work-items test-paths project-root)))
 
   (define total (length items))
@@ -375,6 +377,7 @@
 (define trend-file (make-parameter #f))
 (define trend-depth (make-parameter 10))
 (define cli-split-threshold (make-parameter 60000))
+(define cli-split-min-tests (make-parameter 10))
 
 (define (main)
   (command-line
@@ -399,6 +402,8 @@
     (trend-depth (string->number n))]
    ["--split-threshold" ms "Split files slower than this (ms, default: 60000; 0=off)"
     (cli-split-threshold (string->number ms))]
+   ["--split-min-tests" n "Minimum test count for splitting (default: 10)"
+    (cli-split-min-tests (string->number n))]
    #:multi
    ["--files" file "Benchmark specific test file(s)"
     (file-list (cons (string->symbol file) (file-list)))])
@@ -413,7 +418,7 @@
        (if (null? (file-list))
            (sort (all-test-files) symbol<?)
            (reverse (file-list))))
-     (define ok? (run-benchmark test-names (timeout-secs) (num-jobs) (regression-threshold) (cli-split-threshold)))
+     (define ok? (run-benchmark test-names (timeout-secs) (num-jobs) (regression-threshold) (cli-split-threshold) (cli-split-min-tests)))
      (unless ok? (exit 1))]))
 
 (main)
