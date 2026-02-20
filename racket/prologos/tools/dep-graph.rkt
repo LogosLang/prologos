@@ -211,6 +211,13 @@
    (test-dep '(syntax.rkt prelude.rkt substitution.rkt reduction.rkt typing-core.rkt
                pretty-print.rkt driver.rkt global-env.rkt rrb.rkt reader.rkt
                sexp-readtable.rkt) #f)
+   'test-pvec-traits.rkt
+   (test-dep '(syntax.rkt prelude.rkt substitution.rkt reduction.rkt typing-core.rkt
+               pretty-print.rkt driver.rkt global-env.rkt rrb.rkt namespace.rkt
+               macros.rkt qtt.rkt)
+             '(prologos.core.seqable-pvec prologos.core.buildable-pvec
+               prologos.core.foldable-pvec prologos.core.functor-pvec
+               prologos.core.indexed-pvec prologos.core.pvec-ops))
    'test-map.rkt
    (test-dep '(syntax.rkt prelude.rkt substitution.rkt reduction.rkt typing-core.rkt
                pretty-print.rkt driver.rkt global-env.rkt champ.rkt) #f)
@@ -537,6 +544,16 @@
                                    prologos.data.list prologos.data.nat)
    'prologos.core.foldable-list  '(prologos.core.foldable-trait prologos.data.list)
    'prologos.core.functor-list   '(prologos.core.functor-trait prologos.data.list)
+   ;; PVec trait instances
+   'prologos.core.seqable-pvec   '(prologos.core.seqable-trait prologos.data.lseq
+                                    prologos.data.lseq-ops prologos.data.list)
+   'prologos.core.buildable-pvec '(prologos.core.buildable-trait prologos.data.lseq
+                                    prologos.data.lseq-ops prologos.data.list)
+   'prologos.core.indexed-pvec   '(prologos.core.indexed-trait prologos.data.option
+                                    prologos.data.nat)
+   'prologos.core.foldable-pvec  '(prologos.core.foldable-trait prologos.data.list)
+   'prologos.core.functor-pvec   '(prologos.core.functor-trait prologos.data.list)
+   'prologos.core.pvec-ops       '(prologos.data.list prologos.data.option)
    'prologos.core.seq-functions  '(prologos.core.seq-trait prologos.data.option
                                    prologos.data.list)
 

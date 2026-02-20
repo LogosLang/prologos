@@ -1,0 +1,15 @@
+ns prologos.core.foldable-pvec
+
+require [prologos.core.foldable-trait :refer [Foldable]]
+require [prologos.data.list :refer [List foldr]]
+
+;; ========================================
+;; Foldable instance for PVec
+;; ========================================
+;; Converts to List first, then delegates to list foldr.
+;; pvec-foldable : Foldable PVec
+;; = Pi(A :0 Type) Pi(B :0 Type) (A -> B -> B) -> B -> PVec A -> B
+
+(def pvec-foldable : [Foldable PVec]
+  (fn (A :0 (Type 0)) (fn (B :0 (Type 0)) (fn (f : (-> A (-> B B))) (fn (z : B) (fn (v : (PVec A))
+    (foldr A B f z (pvec-to-list v))))))))

@@ -31,7 +31,8 @@
 (provide infer check is-type infer-level
          (struct-out no-level) (struct-out just-level)
          mark-structural-reduce! structural-reduce? structural-reduce-set
-         subtype?)
+         subtype?
+         list-type-fvar)
 
 ;; ========================================
 ;; Structural reduce tracking
@@ -81,6 +82,18 @@
 ;; ========================================
 ;; infer, check, is-type, infer-level are all mutually recursive.
 ;; In Racket, top-level defines can reference each other, so no forward decl needed.
+
+;; ========================================
+;; List type fvar resolution
+;; ========================================
+;; In module contexts, 'List' is qualified as 'prologos.data.list::List'.
+;; In bare (no-prelude) contexts, it's just 'List'.
+;; This helper returns the correct expr-fvar for constructing List types
+;; in typing rules for map-keys, map-vals, set-to-list, pvec-to-list.
+(define (list-type-fvar)
+  (if (global-env-lookup-type 'prologos.data.list::List)
+      (expr-fvar 'prologos.data.list::List)
+      (expr-fvar 'List)))
 
 ;; ========================================
 ;; Type inference (synthesis mode)
@@ -727,13 +740,13 @@
     [(expr-map-keys m)
      (let ([tm (infer ctx m)])
        (match tm
-         [(expr-Map kt _) (expr-app (expr-fvar 'List) kt)]
+         [(expr-Map kt _) (expr-app (list-type-fvar) kt)]
          [_ (expr-error)]))]
     ;; map-vals: Map K V → List V
     [(expr-map-vals m)
      (let ([tm (infer ctx m)])
        (match tm
-         [(expr-Map _ vt) (expr-app (expr-fvar 'List) vt)]
+         [(expr-Map _ vt) (expr-app (list-type-fvar) vt)]
          [_ (expr-error)]))]
 
     ;; ---- Set type and operations ----
@@ -789,7 +802,7 @@
     [(expr-set-to-list s)
      (let ([ts (infer ctx s)])
        (match ts
-         [(expr-Set a) (expr-app (expr-fvar 'List) a)]
+         [(expr-Set a) (expr-app (list-type-fvar) a)]
          [_ (expr-error)]))]
 
     ;; ---- PVec type and operations ----
@@ -839,7 +852,7 @@
     [(expr-pvec-to-list v)
      (let ([tv (infer ctx v)])
        (match tv
-         [(expr-PVec a) (expr-app (expr-fvar 'List) a)]
+         [(expr-PVec a) (expr-app (list-type-fvar) a)]
          [_ (expr-error)]))]
     ;; pvec-from-list : List A → PVec A
     ;; List constructor name may be 'List or 'prologos.data.list::List (qualified)

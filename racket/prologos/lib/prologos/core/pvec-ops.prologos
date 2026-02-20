@@ -1,0 +1,45 @@
+ns prologos.core.pvec-ops
+
+require [prologos.data.list    :refer [List nil cons map filter foldr]]
+require [prologos.data.option  :refer [Option some none]]
+
+;; ========================================
+;; PVec Operations Module
+;; ========================================
+;; Convenience functions for PVec that work via List conversion.
+
+;; pvec-map : (A -> B) -> PVec A -> PVec B
+spec pvec-map {A B : Type} [-> A B] -> [PVec A] -> [PVec B]
+defn pvec-map [f v]
+  pvec-from-list [map A B f [pvec-to-list v]]
+
+;; pvec-filter : (A -> Bool) -> PVec A -> PVec A
+spec pvec-filter {A : Type} [-> A Bool] -> [PVec A] -> [PVec A]
+defn pvec-filter [pred v]
+  pvec-from-list [filter A pred [pvec-to-list v]]
+
+;; pvec-fold : (B -> A -> B) -> B -> PVec A -> B
+;; Left fold over PVec elements (converts to list, folds right with flipped accumulator)
+spec pvec-fold {A B : Type} [-> B [-> A B]] -> B -> [PVec A] -> B
+defn pvec-fold [f z v]
+  foldr A B [fn a acc [f acc a]] z [pvec-to-list v]
+
+;; pvec-any? : (A -> Bool) -> PVec A -> Bool
+spec pvec-any? {A : Type} [-> A Bool] -> [PVec A] -> Bool
+defn pvec-any? [pred v]
+  foldr A Bool [fn a acc [if [pred a] true acc]] false [pvec-to-list v]
+
+;; pvec-all? : (A -> Bool) -> PVec A -> Bool
+spec pvec-all? {A : Type} [-> A Bool] -> [PVec A] -> Bool
+defn pvec-all? [pred v]
+  foldr A Bool [fn a acc [if [pred a] acc false]] true [pvec-to-list v]
+
+;; pvec-from-list-fn : List A -> PVec A  (wraps AST pvec-from-list as a function)
+spec pvec-from-list-fn {A : Type} [List A] -> [PVec A]
+defn pvec-from-list-fn [xs]
+  pvec-from-list xs
+
+;; pvec-to-list-fn : PVec A -> List A  (wraps AST pvec-to-list as a function)
+spec pvec-to-list-fn {A : Type} [PVec A] -> [List A]
+defn pvec-to-list-fn [v]
+  pvec-to-list v

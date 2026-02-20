@@ -839,7 +839,7 @@
            [r2 (inferQ ctx v)])
        (match* (r1 r2)
          [((tu _ u1) (tu _ u2))
-          (tu (expr-Map k v) (add-usage u1 u2))]
+          (tu (expr-Map k v) (scale-usage 'm0 (add-usage u1 u2)))]  ;; type args are erased
          [(_ _) (tu-error)]))]
     [(expr-map-assoc m k v)
      (let ([r1 (inferQ ctx m)]
@@ -899,7 +899,7 @@
     [(expr-set-empty a)
      (let ([r (inferQ ctx a)])
        (match r
-         [(tu _ u) (tu (expr-Set a) u)]
+         [(tu _ u) (tu (expr-Set a) (scale-usage 'm0 u))]  ;; type arg is erased
          [_ (tu-error)]))]
     [(expr-set-insert s a)
      (let ([r1 (inferQ ctx s)]
@@ -995,7 +995,7 @@
     [(expr-pvec-empty a)
      (let ([r (inferQ ctx a)])
        (match r
-         [(tu _ u) (tu (expr-PVec a) u)]
+         [(tu _ u) (tu (expr-PVec a) (scale-usage 'm0 u))]  ;; type arg is erased
          [_ (tu-error)]))]
     [(expr-pvec-push v x)
      (let ([r1 (inferQ ctx v)]
@@ -1051,14 +1051,15 @@
     [(expr-pvec-to-list v)
      (let ([r (inferQ ctx v)])
        (match r
-         [(tu (expr-PVec a) u) (tu (expr-app (expr-fvar 'List) a) u)]
+         [(tu (expr-PVec a) u) (tu (expr-app (list-type-fvar) a) u)]
          [(tu _ u) (tu (tu-type r) u)]  ;; fallback if type not fully resolved
          [_ (tu-error)]))]
     ;; pvec-from-list : List A → PVec A
+    ;; Infer the argument, match List A (qualified or unqualified), produce PVec A
     [(expr-pvec-from-list v)
      (let ([r (inferQ ctx v)])
        (match r
-         [(tu _ u) (tu (tu-type r) u)]  ;; type comes from typing-core
+         [(tu _ u) (tu (infer ctx (expr-pvec-from-list v)) u)]
          [_ (tu-error)]))]
 
     ;; ---- Transient Builders ----
@@ -1288,7 +1289,7 @@
            [r2 (inferQ ctx v)])
        (match* (r1 r2)
          [((tu _ u1) (tu _ u2))
-          (bu #t (add-usage u1 u2))]
+          (bu #t (scale-usage 'm0 (add-usage u1 u2)))]  ;; type args are erased
          [(_ _) (bu #f (zero-usage n))]))]
     ;; map-assoc checked against Map K V — propagate expected type
     [((expr-map-assoc m k v) (expr-Map kt vt))
@@ -1305,7 +1306,7 @@
     [((expr-set-empty a) (expr-Set _))
      (let ([r (inferQ ctx a)])
        (match r
-         [(tu _ u) (bu #t u)]
+         [(tu _ u) (bu #t (scale-usage 'm0 u))]  ;; type arg is erased
          [_ (bu #f (zero-usage n))]))]
     [((expr-set-insert s a) (expr-Set a-ty))
      (let ([rs (checkQ ctx s (expr-Set a-ty))]
@@ -1320,7 +1321,7 @@
     [((expr-pvec-empty a) (expr-PVec _))
      (let ([r (inferQ ctx a)])
        (match r
-         [(tu _ u) (bu #t u)]
+         [(tu _ u) (bu #t (scale-usage 'm0 u))]  ;; type arg is erased
          [_ (bu #f (zero-usage n))]))]
     [((expr-pvec-push v x) (expr-PVec a))
      (let ([rv (checkQ ctx v (expr-PVec a))]

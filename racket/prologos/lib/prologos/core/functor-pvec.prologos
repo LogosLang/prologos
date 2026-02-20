@@ -1,0 +1,15 @@
+ns prologos.core.functor-pvec
+
+require [prologos.core.functor-trait :refer [Functor]]
+require [prologos.data.list :refer [List map]]
+
+;; ========================================
+;; Functor instance for PVec
+;; ========================================
+;; Converts to List, maps, converts back to PVec.
+;; pvec-functor : Functor PVec
+;; = Pi(A :0 Type) Pi(B :0 Type) (A -> B) -> PVec A -> PVec B
+
+(def pvec-functor : [Functor PVec]
+  (fn (A :0 (Type 0)) (fn (B :0 (Type 0)) (fn (f : (-> A B)) (fn (v : (PVec A))
+    (pvec-from-list (map A B f (pvec-to-list v))))))))

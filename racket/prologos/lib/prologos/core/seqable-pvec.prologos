@@ -1,0 +1,16 @@
+ns prologos.core.seqable-pvec
+
+require [prologos.core.seqable-trait :refer [Seqable]]
+require [prologos.data.lseq          :refer [LSeq]]
+require [prologos.data.lseq-ops      :refer [list-to-lseq]]
+require [prologos.data.list           :refer [List]]
+
+;; ========================================
+;; Seqable PVec Instance
+;; ========================================
+;; Convert a PVec to an LSeq via pvec-to-list -> list-to-lseq.
+;; The Seqable dict IS the function (single-method trait).
+
+(def PVec--Seqable--dict : [Seqable PVec]
+  (fn (A :0 (Type 0)) (fn (v : (PVec A))
+    (list-to-lseq A (pvec-to-list v)))))

@@ -1,0 +1,21 @@
+ns prologos.core.buildable-pvec
+
+require [prologos.core.buildable-trait :refer [Buildable]]
+require [prologos.data.lseq            :refer [LSeq]]
+require [prologos.data.lseq-ops        :refer [lseq-to-list]]
+require [prologos.data.list             :refer [List]]
+
+;; ========================================
+;; Buildable PVec Instance
+;; ========================================
+;; from-seq   : LSeq A -> PVec A  (via lseq-to-list -> pvec-from-list)
+;; empty-coll : PVec A             (via pvec-empty)
+;;
+;; Buildable is a two-method trait, so the dict is a Sigma pair.
+
+(spec PVec--Buildable--dict (Buildable PVec))
+(def PVec--Buildable--dict
+  (pair
+    (fn (A :0 (Type 0)) (fn (xs : (LSeq A))
+      (pvec-from-list (lseq-to-list A xs))))
+    (fn (A :0 (Type 0)) (pvec-empty A))))
