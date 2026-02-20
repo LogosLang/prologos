@@ -1,0 +1,18 @@
+ns prologos.core.buildable-lseq
+
+require [prologos.core.buildable-trait :refer [Buildable]]
+require [prologos.data.lseq            :refer [LSeq lseq-nil]]
+
+;; ========================================
+;; Buildable instance for LSeq (identity)
+;; ========================================
+;; from-seq for LSeq is the identity function — input is already LSeq.
+;; empty-coll returns lseq-nil.
+;;
+;; Buildable is a two-method trait, so the dict is a Sigma pair.
+
+(spec LSeq--Buildable--dict (Buildable LSeq))
+(def LSeq--Buildable--dict
+  (pair
+    (fn (A :0 (Type 0)) (fn (xs : (LSeq A)) xs))
+    (fn (A :0 (Type 0)) (lseq-nil A))))

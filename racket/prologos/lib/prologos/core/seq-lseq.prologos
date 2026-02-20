@@ -1,0 +1,33 @@
+ns prologos.core.seq-lseq
+
+require [prologos.core.seq-trait  :refer [Seq]]
+require [prologos.data.lseq       :refer [LSeq lseq-nil lseq-cell lseq-head lseq-rest lseq-empty?]]
+require [prologos.data.option     :refer [Option some none]]
+
+;; ========================================
+;; Seq instance for LSeq
+;; ========================================
+;; first  : LSeq A -> Option A  (delegates to lseq-head wrapped in Option)
+;; rest   : LSeq A -> LSeq A    (delegates to lseq-rest)
+;; empty? : LSeq A -> Bool      (delegates to lseq-empty?)
+;;
+;; Seq is a three-method trait via deftype (nested Sigma):
+;; (pair first-fn (pair rest-fn empty?-fn))
+
+(spec LSeq--Seq--dict (Seq LSeq))
+(def LSeq--Seq--dict
+  (pair
+    ;; first : Pi(A :0 Type) LSeq A -> Option A
+    (fn (A :0 (Type 0)) (fn (xs : (LSeq A))
+      (match xs
+        (lseq-nil -> (none A))
+        (lseq-cell a _ -> (some A a)))))
+    (pair
+      ;; rest : Pi(A :0 Type) LSeq A -> LSeq A
+      (fn (A :0 (Type 0)) (fn (xs : (LSeq A))
+        (match xs
+          (lseq-nil -> (lseq-nil A))
+          (lseq-cell _ t -> (t unit)))))
+      ;; empty? : Pi(A :0 Type) LSeq A -> Bool
+      (fn (A :0 (Type 0)) (fn (xs : (LSeq A))
+        (lseq-empty? A xs))))))

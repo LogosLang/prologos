@@ -226,6 +226,12 @@
                prologos.core.seqable-set prologos.core.buildable-set
                prologos.core.foldable-set prologos.core.set-ops
                prologos.core.map-ops))
+   'test-lseq-traits.rkt
+   (test-dep '(syntax.rkt prelude.rkt substitution.rkt reduction.rkt typing-core.rkt
+               pretty-print.rkt driver.rkt global-env.rkt namespace.rkt
+               macros.rkt qtt.rkt)
+             '(prologos.core.seq-lseq prologos.core.foldable-lseq
+               prologos.core.seqable-lseq prologos.core.buildable-lseq))
    'test-map.rkt
    (test-dep '(syntax.rkt prelude.rkt substitution.rkt reduction.rkt typing-core.rkt
                pretty-print.rkt driver.rkt global-env.rkt champ.rkt) #f)

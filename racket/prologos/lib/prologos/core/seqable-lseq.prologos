@@ -1,0 +1,13 @@
+ns prologos.core.seqable-lseq
+
+require [prologos.core.seqable-trait :refer [Seqable]]
+require [prologos.data.lseq          :refer [LSeq]]
+
+;; ========================================
+;; Seqable instance for LSeq (identity)
+;; ========================================
+;; to-seq for LSeq is the identity function — LSeq is already a
+;; lazy sequence, so no conversion needed.
+
+(def LSeq--Seqable--dict : [Seqable LSeq]
+  (fn (A :0 (Type 0)) (fn (xs : (LSeq A)) xs)))
