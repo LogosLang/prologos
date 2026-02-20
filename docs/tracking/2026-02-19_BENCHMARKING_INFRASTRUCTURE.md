@@ -1,7 +1,7 @@
 # Persistent Benchmarking Infrastructure — Design Document
 
 **Created**: 2026-02-19
-**Status**: ⬚ Not Started
+**Status**: ✅ Complete
 **Purpose**: Design a persistent, per-file test timing system to track performance over time and catch regressions.
 
 ---
@@ -141,4 +141,28 @@ Flag regressions >10% as warnings.
 
 ## Implementation Log
 
-*(To be filled during implementation)*
+### 2026-02-19: Initial Implementation
+
+**Created**: `tools/benchmark-tests.rkt` (~230 lines)
+
+**Features implemented**:
+- Per-file benchmarking via `subprocess` with `current-inexact-milliseconds` timing
+- Configurable per-test timeout (default 600s, `--timeout` flag)
+- JSONL recording to `data/benchmarks/timings.jsonl` (append-only)
+- `--report`: Print summary of last benchmark run (slowest N)
+- `--compare REF`: Compare last run vs a previous commit (delta %, regression/improvement flags)
+- `--slowest N`: Print top N slowest tests from last run
+- `--files FILE`: Benchmark specific files (multiple allowed)
+- Captures git commit, branch, machine info, timestamp per run
+
+**Technical notes**:
+- Uses polling loop with `subprocess-status` for timeout (not `subprocess-status-evt` which is unavailable in `racket/base`)
+- Uses `racket/date` for ISO timestamp formatting
+- Custom `pad-str` helper for column-aligned output (avoids `~a` naming conflict)
+- Test count extracted from `raco test` stdout via regex `([0-9]+) tests? passed`
+
+**Verification**:
+- `--files test-pipe-compose.rkt`: 45 tests, 3.5s, valid JSONL output ✅
+- `--report`: Reads and summarizes last run ✅
+- `--files` with multiple files: Correct per-file + total timing ✅
+- JSONL format: Valid JSON objects, append-only, self-describing ✅
