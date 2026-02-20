@@ -1317,17 +1317,13 @@
     ;; Union types: normalize components
     [(expr-union l r) (expr-union (nf l) (nf r))]
 
-    ;; Reduce: should be desugared by type checker before reaching nf,
-    ;; but handle it defensively by normalizing sub-terms
+    ;; Reduce: if we reach here, whnf couldn't fire any arm (scrutinee is stuck).
+    ;; Only normalize the scrutinee. Do NOT normalize arm bodies — they may
+    ;; contain recursive function calls that produce infinite unfolding when
+    ;; the scrutinee is neutral (e.g., an unresolvable fvar). Since no arm
+    ;; will be selected, normalizing arm bodies is wasteful and risks divergence.
     [(expr-reduce scrut arms structural?)
-     (expr-reduce (nf scrut)
-                  (map (lambda (arm)
-                         (expr-reduce-arm
-                          (expr-reduce-arm-ctor-name arm)
-                          (expr-reduce-arm-binding-count arm)
-                          (nf (expr-reduce-arm-body arm))))
-                       arms)
-                  structural?)]))
+     (expr-reduce (nf scrut) arms structural?)]))
 
 ;; ========================================
 ;; Definitional Equality (conversion)

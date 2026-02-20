@@ -1,7 +1,7 @@
 # Pipe-Compose Performance Audit — Root Cause & Mitigation Plan
 
 **Created**: 2026-02-19
-**Status**: ✅ Tier 1 Complete (split + shared fixture), Tiers 2-3 tracked for future
+**Status**: ✅ FULLY RESOLVED — root cause was numeric literal bug in test fixture (not module loading)
 **Purpose**: Document the root cause of `test-pipe-compose.rkt` pathological performance (>60 min, >2.4 GB RAM) and the plan to fix it.
 
 ---
@@ -249,7 +249,42 @@ In `test-pipe-compose-e2e.rkt`, load modules **once** at top level:
 - `test-pipe-compose-e2e.rkt`: **~10-15 min** (shared fixture loads modules once, but each module load through full pipeline is inherently expensive)
 - Full suite with skip: **82 of 83 files** run, pipe-compose-e2e skipped
 
-**Key Finding During Implementation**:
-The original audit attributed all slowness to "8 × redundant module loading." Investigation revealed that even a **single** heavy E2E test (loading modules once + evaluating one fused pipe expression) takes >10 min. The bottleneck is the module loading itself (full 8-phase pipeline for 536-line list.prologos + cascade), not redundancy. The shared fixture helps (1 load vs 8), but the fundamental cost per load is ~10 min.
+**Key Finding During Implementation** (later corrected — see Root Cause Resolution below):
+The original audit attributed all slowness to "8 × redundant module loading." Investigation at the time revealed that even a single heavy E2E test takes >10 min. The shared fixture helps (1 load vs 8), but the fundamental cost per load appeared to be ~10 min.
 
-This shifts the priority toward Tier 2 (compiled module cache) for further improvement. The Tier 1 fix still achieves the primary goal: unblocking the fast tests from the slow E2E tests.
+### 2026-02-19: Root Cause Resolution — Numeric Literal Bug
+
+**The previous audit's root cause analysis was wrong.** The module loading is NOT the bottleneck. Systematic profiling revealed:
+
+- Fixture initialization (loading all modules): **731ms**
+- Individual sexp tests: **~4ms each**
+- `test-transducer.rkt` loading the SAME modules with fresh registry PER TEST: **50.8s for 28 tests** (~1.8s per load)
+
+**Actual root cause**: `pipe-helpers-sexp` defined `nums3` and `nums5` using **Racket numeric literals** in sexp-mode constructor calls:
+
+```racket
+;; BROKEN — numeric literal 1 is not a valid Nat in sexp mode:
+"(def nums3 : [List Nat] (cons Nat 1 (cons Nat 2 (cons Nat 3 (nil Nat)))))\n"
+```
+
+This caused a **silent type-check failure**: `Type mismatch [List Nat] <could not infer> '[1 2 3]`. The error was returned by `process-string` but never checked. The pre-registered type-only entry (from `global-env-add-type-only` in the recursive-def pre-registration step) persisted with `value = #f`.
+
+When tests evaluated `(eval (reduce ... nums3))`, `nf` couldn't unfold `nums3` (no value stored), the `expr-reduce` (match) inside `reduce`'s body was stuck, and `nf-whnf` tried to normalize recursive arm bodies → infinite loop.
+
+**Evidence**:
+- `(eval (cons Nat 1 (nil Nat)))` → error: "Could not infer type"
+- `(eval (cons Nat (suc zero) (nil Nat)))` → `'[1N] : [List Nat]` ✅
+- With suc chains: `(eval (reduce add zero nums3))` → `6N : Nat` in **15ms** ✅
+- With suc chains: `(eval ($pipe-gt nums3 (map suc-fn) (reduce sum-rf zero)))` → `9N : Nat` in **21ms** ✅
+
+**Fixes applied**:
+1. Replaced numeric literals with explicit suc chains in `pipe-helpers-sexp` and `pipe-helpers-ws`
+2. Added error checking for fixture helper definitions (fail-fast on silent errors)
+3. Defensive guard in `reduction.rkt`: `nf-whnf` no longer normalizes arm bodies of stuck `expr-reduce` (prevents infinite recursion on neutral scrutinees)
+4. Removed `test-pipe-compose-e2e.rkt` from `.skip-tests`
+
+**Result**: `test-pipe-compose-e2e.rkt` now runs **24 tests in ~14s** (was 600s+ timeout with 0 tests)
+
+**Why the first audit missed this**: The audit focused on module loading cost (which IS slow: ~1.8s per load) and assumed the >600s timeout was simply 8× that cost. It didn't examine the actual test failures because `process-string` silently returns errors mixed with successes, and the shared fixture pattern was assumed to work correctly. The benchmark's `"tests": 0` was interpreted as "no tests started" rather than "tests hung during evaluation."
+
+**Tier status update**: Tier 2 (compiled module cache) and Tier 3 (bytecode) are no longer critical for pipe-compose. They remain useful for general test suite speedup but are not blocking.

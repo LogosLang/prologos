@@ -59,8 +59,11 @@
    "(def suc-fn : [-> Nat Nat] (fn (x : Nat) (suc x)))\n"
    "(def positive? : [-> Nat Bool] (fn (x : Nat) (match x (zero -> false) (suc _ -> true))))\n"
    "(def sum-rf : [-> Nat [-> Nat Nat]] (fn (acc : Nat) (fn (x : Nat) (add acc x))))\n"
-   "(def nums3 : [List Nat] (cons Nat 1 (cons Nat 2 (cons Nat 3 (nil Nat)))))\n"
-   "(def nums5 : [List Nat] (cons Nat 0 (cons Nat 1 (cons Nat 2 (cons Nat 3 (cons Nat 4 (nil Nat)))))))\n"))
+   ;; NOTE: Must use explicit suc chains, NOT Racket numeric literals.
+   ;; Numeric literals (1, 2, 3) are not valid Nat values in sexp mode —
+   ;; they cause silent type-check failures leaving value=#f in global env.
+   "(def nums3 : [List Nat] (cons Nat (suc zero) (cons Nat (suc (suc zero)) (cons Nat (suc (suc (suc zero))) (nil Nat)))))\n"
+   "(def nums5 : [List Nat] (cons Nat zero (cons Nat (suc zero) (cons Nat (suc (suc zero)) (cons Nat (suc (suc (suc zero))) (cons Nat (suc (suc (suc (suc zero)))) (nil Nat)))))))\n"))
 
 ;; Load modules and helpers once, capture all registries
 (define-values (shared-global-env
@@ -82,7 +85,11 @@
                  [current-bundle-registry (current-bundle-registry)])
     (install-module-loader!)
     (process-string (pipe-preamble-sexp))
-    (process-string (pipe-helpers-sexp))
+    ;; Check for silent failures in helper definitions
+    (let ([results (process-string (pipe-helpers-sexp))])
+      (for ([r (in-list results)])
+        (when (prologos-error? r)
+          (error 'fixture "Helper definition failed: ~a" (prologos-error-message r)))))
     (values (current-global-env)
             (current-ns-context)
             (current-module-registry)
@@ -251,7 +258,7 @@
    "(def suc-fn : [-> Nat Nat] (fn (x : Nat) (suc x)))\n"
    "(def positive? : [-> Nat Bool] (fn (x : Nat) (match x (zero -> false) (suc _ -> true))))\n"
    "(def sum-rf : [-> Nat [-> Nat Nat]] (fn (acc : Nat) (fn (x : Nat) (add acc x))))\n"
-   "(def nums3 : [List Nat] (cons Nat 1 (cons Nat 2 (cons Nat 3 (nil Nat)))))\n"
+   "(def nums3 : [List Nat] (cons Nat (suc zero) (cons Nat (suc (suc zero)) (cons Nat (suc (suc (suc zero))) (nil Nat)))))\n"
    "\n"))
 
 (test-case "ws/block-pipe-basic: block form with indented steps"
