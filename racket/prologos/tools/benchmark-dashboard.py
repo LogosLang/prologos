@@ -52,6 +52,7 @@ runs = []
 all_files = []
 test_counts = {}
 regression_map = {}
+suite_run_indices = []
 timings_file = DEFAULT_TIMINGS
 reg_threshold = 10
 current_breakdown_idx = -1
@@ -245,30 +246,36 @@ def make_bar_theme(color):
 # ============================================================
 
 def build_suite_overview():
-    """Tab 1: Total wall time per run with regression annotations."""
-    if not runs:
-        dpg.add_text("No benchmark data. Run benchmark-tests.rkt or --generate-sample.",
+    """Tab 1: Total wall time per full-suite run with regression annotations."""
+    if not suite_run_indices:
+        dpg.add_text("No full-suite benchmark data. Run benchmark-tests.rkt or --generate-sample.",
                       parent="tab_suite")
         return
 
-    xs = list(range(len(runs)))
-    ys = [r["total_wall_ms"] / 1000.0 for r in runs]
+    n_suite = len(suite_run_indices)
+    xs = list(range(n_suite))
+    ys = [runs[ri]["total_wall_ms"] / 1000.0 for ri in suite_run_indices]
 
-    # Split by pass/fail
-    pass_xs = [i for i, r in enumerate(runs) if r.get("all_pass", True)]
-    pass_ys = [runs[i]["total_wall_ms"] / 1000.0 for i in pass_xs]
-    fail_xs = [i for i, r in enumerate(runs) if not r.get("all_pass", True)]
-    fail_ys = [runs[i]["total_wall_ms"] / 1000.0 for i in fail_xs]
+    # Split by pass/fail (using sequential suite indices)
+    pass_xs = [si for si, ri in enumerate(suite_run_indices)
+               if runs[ri].get("all_pass", True)]
+    pass_ys = [runs[suite_run_indices[si]]["total_wall_ms"] / 1000.0
+               for si in pass_xs]
+    fail_xs = [si for si, ri in enumerate(suite_run_indices)
+               if not runs[ri].get("all_pass", True)]
+    fail_ys = [runs[suite_run_indices[si]]["total_wall_ms"] / 1000.0
+               for si in fail_xs]
 
     with dpg.group(parent="tab_suite"):
         # Slider for "show last N runs"
         dpg.add_slider_int(label="Show last N runs", min_value=3,
-                           max_value=max(len(runs), 3),
-                           default_value=min(50, len(runs)),
+                           max_value=max(n_suite, 3),
+                           default_value=min(50, n_suite),
                            callback=_on_suite_slider, tag="suite_slider",
                            width=300)
 
-        with dpg.plot(label="Total Suite Wall Time", height=-1, width=-1,
+        with dpg.plot(label="Total Suite Wall Time (full-suite runs only)",
+                      height=-1, width=-1,
                       tag="suite_plot", crosshairs=True):
             dpg.add_plot_legend()
             sx = dpg.add_plot_axis(dpg.mvXAxis, label="Run", tag="suite_xaxis")
@@ -294,37 +301,42 @@ def build_suite_overview():
                                             parent=sy, tag="suite_fail")
                 dpg.bind_item_theme(fs, make_scatter_theme(RED))
 
-            # Regression annotations
+            # Regression annotations (only for suite runs)
+            suite_set = set(suite_run_indices)
             for idx, regs in regression_map.items():
-                worst = max(regs, key=lambda r: r["delta_pct"])
-                dpg.add_plot_annotation(
-                    label=f"+{worst['delta_pct']:.0f}%",
-                    default_value=(float(idx), runs[idx]["total_wall_ms"] / 1000.0),
-                    color=RED, offset=(0, -20), parent="suite_plot")
+                if idx in suite_set:
+                    si = suite_run_indices.index(idx)
+                    worst = max(regs, key=lambda r: r["delta_pct"])
+                    dpg.add_plot_annotation(
+                        label=f"+{worst['delta_pct']:.0f}%",
+                        default_value=(float(si), runs[idx]["total_wall_ms"] / 1000.0),
+                        color=RED, offset=(0, -20), parent="suite_plot")
 
             # X-axis tick labels with commit hashes
             _set_suite_xticks(xs)
 
 
 def _set_suite_xticks(xs):
-    """Set x-axis ticks to commit hashes, showing every Nth for readability."""
-    if not runs:
+    """Set x-axis ticks to commit hashes for full-suite runs."""
+    if not suite_run_indices:
         return
-    n = max(1, len(runs) // 15)
+    n = max(1, len(suite_run_indices) // 15)
     ticks = []
-    for i in xs:
-        if i % n == 0 or i == len(runs) - 1:
-            ticks.append((get_commit_label(runs[i], i), float(i)))
+    for si in xs:
+        ri = suite_run_indices[si]
+        if si % n == 0 or si == len(suite_run_indices) - 1:
+            ticks.append((get_commit_label(runs[ri], ri), float(si)))
     if ticks:
         dpg.set_axis_ticks("suite_xaxis", tuple(ticks))
 
 
 def _on_suite_slider(sender, app_data):
-    """Filter suite overview to show last N runs."""
+    """Filter suite overview to show last N full-suite runs."""
     n = app_data
-    start = max(0, len(runs) - n)
-    xs = list(range(start, len(runs)))
-    ys = [runs[i]["total_wall_ms"] / 1000.0 for i in xs]
+    n_suite = len(suite_run_indices)
+    start = max(0, n_suite - n)
+    xs = list(range(start, n_suite))
+    ys = [runs[suite_run_indices[si]]["total_wall_ms"] / 1000.0 for si in xs]
     dpg.set_value("suite_line", [[float(x) for x in xs], ys])
     dpg.fit_axis_data("suite_xaxis")
     dpg.fit_axis_data("suite_yaxis")
@@ -445,13 +457,14 @@ def build_run_breakdown():
             dpg.add_button(label="<", callback=_on_breakdown_prev,
                            tag="breakdown_prev",
                            enabled=current_breakdown_idx > 0)
+            dpg.add_button(label=">", callback=_on_breakdown_next,
+                           tag="breakdown_next",
+                           enabled=current_breakdown_idx < len(runs) - 1)
+            dpg.add_spacer(width=15)
             dpg.add_text(
                 f"Run {current_breakdown_idx + 1}/{len(runs)}: "
                 f"{commit} ({ts}) — {len(results)} files",
                 tag="breakdown_label")
-            dpg.add_button(label=">", callback=_on_breakdown_next,
-                           tag="breakdown_next",
-                           enabled=current_breakdown_idx < len(runs) - 1)
 
         with dpg.plot(label="Per-File Timing", height=plot_height, width=-1,
                       tag="latest_plot", crosshairs=True):
@@ -514,12 +527,19 @@ def _rebuild_breakdown_tab():
 
 def reload_data():
     """Reload JSONL data and recompute derived state."""
-    global runs, all_files, test_counts, regression_map, current_breakdown_idx
-    global last_mtime
+    global runs, all_files, test_counts, regression_map, suite_run_indices
+    global current_breakdown_idx, last_mtime
     runs = load_runs()
     all_files = derive_all_files(runs)
     test_counts = derive_test_counts(runs)
     regression_map = detect_regressions(runs, reg_threshold)
+    # Identify full-suite runs (file_count == max observed)
+    if runs:
+        max_fc = max(r.get("file_count", 0) for r in runs)
+        suite_run_indices = [i for i, r in enumerate(runs)
+                            if r.get("file_count", 0) == max_fc]
+    else:
+        suite_run_indices = []
     if current_breakdown_idx < 0 or current_breakdown_idx >= len(runs):
         current_breakdown_idx = max(0, len(runs) - 1)
     try:
@@ -562,7 +582,8 @@ def update_status_text():
         n_files = last.get("file_count", 0)
         n_tests = last.get("total_tests", 0)
         n_regs = sum(len(v) for v in regression_map.values())
-        text = (f"{len(runs)} runs loaded | Last: {commit} ({ts}) | "
+        text = (f"{len(suite_run_indices)}/{len(runs)} full-suite runs | "
+                f"Last: {commit} ({ts}) | "
                 f"{n_files} files, {n_tests} tests")
         if n_regs:
             text += f" | {n_regs} regressions detected"
@@ -691,8 +712,11 @@ def main():
                              callback=lambda s, a: _toggle_auto_reload(a),
                              tag="auto_reload_cb")
 
-        # Status text
-        dpg.add_text("Loading...", tag="status_text")
+        # Status text and coordinate readout
+        with dpg.group(horizontal=True):
+            dpg.add_text("Loading...", tag="status_text")
+            dpg.add_spacer(width=-1)
+            dpg.add_text("", tag="coord_readout", color=LIGHT_GRAY)
         dpg.add_separator()
 
         # Run Tests controls (collapsible)
@@ -749,9 +773,23 @@ def main():
                 pass
         if frame_counter % 10 == 0:
             _poll_active_process()
+            _update_coord_readout()
         dpg.render_dearpygui_frame()
 
     dpg.destroy_context()
+
+
+def _update_coord_readout():
+    """Update coordinate display when mouse is over a plot."""
+    for plot_tag in ["suite_plot", "trend_plot", "latest_plot"]:
+        try:
+            if dpg.does_item_exist(plot_tag) and dpg.is_item_hovered(plot_tag):
+                mx, my = dpg.get_plot_mouse_pos()
+                dpg.set_value("coord_readout", f"x: {mx:.2f}  y: {my:.2f}")
+                return
+        except Exception:
+            pass
+    dpg.set_value("coord_readout", "")
 
 
 def _toggle_auto_reload(value):
