@@ -205,3 +205,32 @@ Main thread ←── [async-channel] ←── per-file timing results
 **Why `sync/timeout` not polling**: Eliminates 0.5s polling granularity and wasted CPU. `sync/timeout secs proc` blocks efficiently until process exits or timeout elapses.
 
 **Timing accuracy in parallel mode**: Per-file wall-clock times are captured independently per worker thread using `current-inexact-monotonic-milliseconds`. On multi-core machines, each subprocess gets its own core(s). Timing variance is comparable to sequential mode because we measure wallclock per-subprocess, not shared CPU time. The `jobs` field ensures fair comparisons (only compare runs with same parallelism level).
+
+### 2026-02-19: DearPyGui Visualization Dashboard
+
+**Created**: `tools/benchmark-dashboard.py` (~586 lines)
+
+**Architecture**: Self-contained desktop GUI using DearPyGui (GPU-accelerated, ImGui-based). Reads `data/benchmarks/timings.jsonl` directly. No web server, no external deps beyond `pip install dearpygui`.
+
+**Features**:
+- **Tab 1 — Suite Overview**: Line + scatter plot of total wall time per run. Green dots = all pass, red = failures. Red annotations on regression runs showing worst `+N%`. "Show last N runs" slider. X-axis ticks show commit hashes.
+- **Tab 2 — Per-File Trend**: Left panel with searchable file listbox (filter input), right panel with line plot of selected file's timing across runs. Orange threshold line at `mean * 1.1`. Red scatter marks on regressions.
+- **Tab 3 — Latest Run Breakdown**: Horizontal bar chart sorted by duration. Color-coded: green=pass, red=fail, orange=timeout. Scales to 82+ files.
+- **Reload**: Manual button + auto-reload checkbox (polls file mtime every ~1s)
+- **`--generate-sample`**: Writes 20 synthetic runs for testing without real data
+
+**CLI**:
+```bash
+python tools/benchmark-dashboard.py                      # open with real data
+python tools/benchmark-dashboard.py --generate-sample    # synthetic data
+python tools/benchmark-dashboard.py --threshold 15       # regression %
+python tools/benchmark-dashboard.py --file path.jsonl    # explicit file
+```
+
+**Dependencies**: `pip install dearpygui` (only external; rest is Python stdlib)
+
+**Verification**:
+- `--generate-sample`: 20 runs × 15 files, valid JSONL ✅
+- Data layer: regression detection, file trends, file list derivation all correct ✅
+- GUI launch: No errors, renders 3 tabs with interactive plots ✅
+- Real data: 2 benchmark runs recorded, dashboard displays both ✅
