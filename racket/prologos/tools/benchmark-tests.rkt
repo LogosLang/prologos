@@ -1,16 +1,20 @@
 #lang racket/base
 
-;; benchmark-tests.rkt — Per-file test timing with persistent recording
+;; benchmark-tests.rkt — Parallel per-file test timing with persistent recording
 ;;
 ;; Usage:
-;;   racket tools/benchmark-tests.rkt                     # benchmark all tests
+;;   racket tools/benchmark-tests.rkt                     # benchmark all tests (parallel)
+;;   racket tools/benchmark-tests.rkt --jobs 1            # sequential mode
 ;;   racket tools/benchmark-tests.rkt --files test-a.rkt test-b.rkt  # specific files
 ;;   racket tools/benchmark-tests.rkt --report            # summarize last run
 ;;   racket tools/benchmark-tests.rkt --compare HEAD~1    # compare vs previous commit
 ;;   racket tools/benchmark-tests.rkt --slowest 10        # top N slowest from last run
+;;   racket tools/benchmark-tests.rkt --trend test-a.rkt  # timing history for one file
 ;;   racket tools/benchmark-tests.rkt --timeout 300       # per-test timeout in seconds (default: 600)
+;;   racket tools/benchmark-tests.rkt --regression-threshold 15  # flag >15% regressions (default: 10)
 ;;
 ;; Results are appended to data/benchmarks/timings.jsonl (one JSON object per run).
+;; After each run, automatically compares against previous run and flags regressions.
 ;; See docs/tracking/2026-02-19_BENCHMARKING_INFRASTRUCTURE.md
 
 (require racket/cmdline
@@ -19,6 +23,8 @@
          racket/port
          racket/string
          racket/system
+         racket/async-channel
+         racket/future  ;; for processor-count
          json
          racket/date
          "dep-graph.rkt")
@@ -55,43 +61,39 @@
 ;; ============================================================
 
 (define (benchmark-one-test test-path timeout-secs)
-  (define t0 (current-inexact-milliseconds))
+  (define t0 (current-inexact-monotonic-milliseconds))
   (define raco-path (find-executable-path "raco"))
   (define-values (proc stdout-port stdin-port stderr-port)
     (subprocess #f #f #f raco-path "test" test-path))
   (close-output-port stdin-port)
-  ;; Wait with timeout via polling
-  (define deadline (+ t0 (* timeout-secs 1000.0)))
-  (let loop ()
-    (define status (subprocess-status proc))
-    (cond
-      [(not (eq? status 'running))
-       ;; Process finished
-       (define output (port->string stdout-port))
-       (close-input-port stdout-port)
-       (close-input-port stderr-port)
-       (define t1 (current-inexact-milliseconds))
-       (define wall-ms (inexact->exact (round (- t1 t0))))
-       (define ok? (zero? status))
-       (define test-count (extract-test-count output))
-       (hasheq 'file (path->string (file-name-from-path (string->path test-path)))
-               'wall_ms wall-ms
-               'status (if ok? "pass" "fail")
-               'tests test-count)]
-      [(> (current-inexact-milliseconds) deadline)
-       ;; Timeout — kill the process
-       (subprocess-kill proc #t)
-       (close-input-port stdout-port)
-       (close-input-port stderr-port)
-       (define t1 (current-inexact-milliseconds))
-       (define wall-ms (inexact->exact (round (- t1 t0))))
-       (hasheq 'file (path->string (file-name-from-path (string->path test-path)))
-               'wall_ms wall-ms
-               'status "timeout"
-               'tests 0)]
-      [else
-       (sleep 0.5)
-       (loop)])))
+  ;; Wait with event-based timeout (no polling)
+  (define completed? (sync/timeout timeout-secs proc))
+  (define t1 (current-inexact-monotonic-milliseconds))
+  (define wall-ms (inexact->exact (round (- t1 t0))))
+  (cond
+    [completed?
+     ;; Process finished
+     (define output (port->string stdout-port))
+     (close-input-port stdout-port)
+     (close-input-port stderr-port)
+     (define ok? (zero? (subprocess-status proc)))
+     (define test-count (extract-test-count output))
+     (hasheq 'file (filename-from-path test-path)
+             'wall_ms wall-ms
+             'status (if ok? "pass" "fail")
+             'tests test-count)]
+    [else
+     ;; Timeout — kill the process
+     (subprocess-kill proc #t)
+     (close-input-port stdout-port)
+     (close-input-port stderr-port)
+     (hasheq 'file (filename-from-path test-path)
+             'wall_ms wall-ms
+             'status "timeout"
+             'tests 0)]))
+
+(define (filename-from-path test-path)
+  (path->string (file-name-from-path (string->path test-path))))
 
 ;; Extract "N tests passed" from raco test output
 (define (extract-test-count output)
@@ -103,30 +105,64 @@
       [else count])))
 
 ;; ============================================================
-;; Run benchmark suite
+;; Parallel benchmark suite
 ;; ============================================================
 
-(define (run-benchmark test-names timeout-secs)
+(define (status-label s)
+  (cond [(string=? s "pass") "PASS"]
+        [(string=? s "fail") "FAIL"]
+        [else "TIMEOUT"]))
+
+(define (run-benchmark test-names timeout-secs num-jobs reg-threshold)
   (define total (length test-names))
-  (printf "Benchmarking ~a test files (timeout: ~as per test)...\n\n" total timeout-secs)
-  (define t0-total (current-inexact-milliseconds))
+  (printf "Benchmarking ~a test files (~a parallel, timeout: ~as per test)...\n\n"
+          total num-jobs timeout-secs)
+
+  (define work-ch (make-async-channel))
+  (define result-ch (make-async-channel))
+
+  ;; Spawn worker threads
+  (define workers
+    (for/list ([_ (in-range num-jobs)])
+      (thread
+       (λ ()
+         (let loop ()
+           (define item (async-channel-get work-ch))
+           (unless (eq? item 'done)
+             (define test-path (cdr item))
+             (define result (benchmark-one-test test-path timeout-secs))
+             (async-channel-put result-ch result)
+             (loop)))))))
+
+  ;; Enqueue all work items
+  (define t0-total (current-inexact-monotonic-milliseconds))
+  (for ([name (in-list test-names)])
+    (async-channel-put work-ch
+      (cons name (path->string (build-path tests-dir (symbol->string name))))))
+
+  ;; Signal workers to stop (after all work is enqueued)
+  (for ([_ (in-range num-jobs)])
+    (async-channel-put work-ch 'done))
+
+  ;; Collect results, print progress as they arrive
   (define results
-    (for/list ([name (in-list test-names)]
-               [i (in-naturals 1)])
-      (define test-path (path->string (build-path tests-dir (symbol->string name))))
-      (printf "[~a/~a] ~a ... " i total name)
-      (flush-output)
-      (define result (benchmark-one-test test-path timeout-secs))
+    (for/list ([i (in-range total)])
+      (define result (async-channel-get result-ch))
       (define ms (hash-ref result 'wall_ms))
       (define status (hash-ref result 'status))
-      (printf "~a (~as)\n"
-              (cond [(string=? status "pass") "PASS"]
-                    [(string=? status "fail") "FAIL"]
-                    [else "TIMEOUT"])
+      (printf "[~a/~a] ~a ~a (~as)\n"
+              (add1 i) total
+              (hash-ref result 'file)
+              (status-label status)
               (real->decimal-string (/ ms 1000.0) 1))
       (flush-output)
       result))
-  (define t1-total (current-inexact-milliseconds))
+
+  ;; Wait for all worker threads to finish
+  (for ([w (in-list workers)])
+    (thread-wait w))
+
+  (define t1-total (current-inexact-monotonic-milliseconds))
   (define total-wall-ms (inexact->exact (round (- t1-total t0-total))))
   (define total-tests (apply + (map (λ (r) (hash-ref r 'tests)) results)))
   (define all-pass? (andmap (λ (r) (string=? (hash-ref r 'status) "pass")) results))
@@ -136,7 +172,10 @@
     (hasheq 'timestamp (current-iso-timestamp)
             'commit (current-commit)
             'branch (current-branch)
-            'machine (string-append (symbol->string (system-type 'os)) "-" (symbol->string (system-type 'arch)))
+            'machine (string-append (symbol->string (system-type 'os))
+                                    "-"
+                                    (symbol->string (system-type 'arch)))
+            'jobs num-jobs
             'total_wall_ms total-wall-ms
             'total_tests total-tests
             'file_count total
@@ -151,15 +190,56 @@
 
   ;; Print summary
   (printf "\n--- Summary ---\n")
-  (printf "Total: ~as (~a files, ~a tests, ~a)\n"
+  (printf "Total: ~as (~a files, ~a tests, ~a jobs, ~a)\n"
           (real->decimal-string (/ total-wall-ms 1000.0) 1)
           total
           total-tests
+          num-jobs
           (if all-pass? "all pass" "SOME FAILURES"))
   (printf "Results appended to ~a\n" (path->string timings-file))
 
-  ;; Return success status
-  all-pass?)
+  ;; Auto-detect regressions against previous run
+  (define has-regressions? #f)
+  (define runs (read-all-runs))
+  (when (>= (length runs) 2)
+    (define prev-run (list-ref runs (- (length runs) 2)))
+    (define regressions (detect-regressions record prev-run reg-threshold))
+    (unless (null? regressions)
+      (set! has-regressions? #t)
+      (printf "\nRegressions detected (>~a% vs ~a):\n"
+              reg-threshold (hash-ref prev-run 'commit))
+      (for ([reg (in-list regressions)])
+        (printf "  ~a  ~as -> ~as (+~a%)\n"
+                (pad-str (hash-ref reg 'file) 35)
+                (pad-str (real->decimal-string (/ (hash-ref reg 'prev_ms) 1000.0) 1) 7 'right)
+                (pad-str (real->decimal-string (/ (hash-ref reg 'curr_ms) 1000.0) 1) 7 'right)
+                (real->decimal-string (hash-ref reg 'delta_pct) 0)))))
+
+  ;; Return success status (pass + no regressions)
+  (and all-pass? (not has-regressions?)))
+
+;; ============================================================
+;; Regression detection
+;; ============================================================
+
+(define (detect-regressions current-run prev-run threshold-pct)
+  (define prev-by-file
+    (for/hasheq ([r (in-list (hash-ref prev-run 'results))])
+      (values (hash-ref r 'file) r)))
+  (filter-map
+   (λ (r)
+     (define file (hash-ref r 'file))
+     (define prev (hash-ref prev-by-file file #f))
+     (and prev
+          (let* ([cur-ms (hash-ref r 'wall_ms)]
+                 [prev-ms (hash-ref prev 'wall_ms)]
+                 [pct (if (zero? prev-ms) 0 (* 100.0 (/ (- cur-ms prev-ms) prev-ms)))])
+            (and (> pct threshold-pct)
+                 (hasheq 'file file
+                         'prev_ms prev-ms
+                         'curr_ms cur-ms
+                         'delta_pct pct)))))
+   (hash-ref current-run 'results)))
 
 ;; ============================================================
 ;; Reporting
@@ -184,10 +264,12 @@
           (hash-ref last-run 'commit)
           (hash-ref last-run 'branch)
           (hash-ref last-run 'timestamp))
-  (printf "  Total: ~as (~a files, ~a tests, ~a)\n\n"
+  (define jobs (hash-ref last-run 'jobs 1))
+  (printf "  Total: ~as (~a files, ~a tests, ~a jobs, ~a)\n\n"
           (real->decimal-string (/ (hash-ref last-run 'total_wall_ms) 1000.0) 1)
           (hash-ref last-run 'file_count)
           (hash-ref last-run 'total_tests)
+          jobs
           (if (hash-ref last-run 'all_pass) "all pass" "SOME FAILURES"))
   (print-slowest-n (hash-ref last-run 'results) 10))
 
@@ -258,6 +340,69 @@
                (pad-str (real->decimal-string (/ cur-ms 1000.0) 1) 7 'right))])))
 
 ;; ============================================================
+;; Trend reporting
+;; ============================================================
+
+(define (report-trend test-file depth)
+  (define runs (read-all-runs))
+  (when (null? runs)
+    (printf "No benchmark data found.\n")
+    (exit 0))
+  (define recent (take-right runs (min depth (length runs))))
+  ;; Find entries for this file across recent runs
+  (define entries
+    (filter-map
+     (λ (run)
+       (define result
+         (for/first ([r (in-list (hash-ref run 'results))]
+                     #:when (string=? (hash-ref r 'file) test-file))
+           r))
+       (and result (list run result)))
+     recent))
+  (when (null? entries)
+    (printf "No data found for ~a in last ~a runs.\n" test-file depth)
+    (printf "Available files: ~a\n"
+            (string-join
+             (sort (remove-duplicates
+                    (apply append
+                           (map (λ (run) (map (λ (r) (hash-ref r 'file))
+                                              (hash-ref run 'results)))
+                                (take-right runs (min 3 (length runs))))))
+                   string<?)
+             ", "))
+    (exit 0))
+  (printf "Trend for ~a (last ~a runs):\n\n" test-file (length entries))
+  ;; Print entries with delta vs next (chronologically)
+  (for ([entry (in-list entries)]
+        [i (in-naturals)])
+    (define run (first entry))
+    (define result (second entry))
+    (define ms (hash-ref result 'wall_ms))
+    (define ts (hash-ref run 'timestamp))
+    (define commit (hash-ref run 'commit))
+    (define tests (hash-ref result 'tests))
+    (define status (hash-ref result 'status))
+    ;; Compare vs next entry (if exists)
+    (define delta-str
+      (cond
+        [(< (add1 i) (length entries))
+         (define next-ms (hash-ref (second (list-ref entries (add1 i))) 'wall_ms))
+         (define pct (if (zero? next-ms) 0 (* 100.0 (/ (- ms next-ms) next-ms))))
+         (cond [(> pct 10)
+                (format "  +~a% vs next" (real->decimal-string pct 0))]
+               [(< pct -10)
+                (format "  ~a% vs next" (real->decimal-string pct 0))]
+               [else ""])]
+        [else ""]))
+    (printf "  ~a  ~a  ~as  (~a tests, ~a)~a\n"
+            (pad-str ts 20)
+            (pad-str commit 8)
+            (pad-str (real->decimal-string (/ ms 1000.0) 1) 7 'right)
+            tests
+            status
+            delta-str)))
+
+;; ============================================================
 ;; Helpers
 ;; ============================================================
 
@@ -294,6 +439,10 @@
 (define slowest-n (make-parameter 10))
 (define compare-ref (make-parameter #f))
 (define timeout-secs (make-parameter 600))
+(define num-jobs (make-parameter (processor-count)))
+(define regression-threshold (make-parameter 10))
+(define trend-file (make-parameter #f))
+(define trend-depth (make-parameter 10))
 
 (define (main)
   (command-line
@@ -305,9 +454,17 @@
     (mode 'compare) (compare-ref ref)]
    ["--slowest" n "Print top N slowest tests from last run"
     (mode 'slowest) (slowest-n (string->number n))]
+   ["--trend" file "Show timing history for a test file"
+    (mode 'trend) (trend-file file)]
    #:once-each
    ["--timeout" secs "Per-test timeout in seconds (default: 600)"
     (timeout-secs (string->number secs))]
+   ["--jobs" n "Number of parallel workers (default: processor-count)"
+    (num-jobs (string->number n))]
+   ["--regression-threshold" pct "Flag regressions above this % (default: 10)"
+    (regression-threshold (string->number pct))]
+   ["--depth" n "Number of runs for --trend (default: 10)"
+    (trend-depth (string->number n))]
    #:multi
    ["--files" file "Benchmark specific test file(s)"
     (file-list (cons (string->symbol file) (file-list)))])
@@ -316,12 +473,13 @@
     [(report) (report-last)]
     [(compare) (report-compare (compare-ref))]
     [(slowest) (report-slowest (slowest-n))]
+    [(trend) (report-trend (trend-file) (trend-depth))]
     [(run)
      (define test-names
        (if (null? (file-list))
            (sort (all-test-files) symbol<?)
            (reverse (file-list))))
-     (define ok? (run-benchmark test-names (timeout-secs)))
+     (define ok? (run-benchmark test-names (timeout-secs) (num-jobs) (regression-threshold)))
      (unless ok? (exit 1))]))
 
 (main)

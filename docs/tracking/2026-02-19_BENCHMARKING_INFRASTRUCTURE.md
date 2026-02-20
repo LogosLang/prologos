@@ -166,3 +166,42 @@ Flag regressions >10% as warnings.
 - `--report`: Reads and summarizes last run ✅
 - `--files` with multiple files: Correct per-file + total timing ✅
 - JSONL format: Valid JSON objects, append-only, self-describing ✅
+
+### 2026-02-19: Parallel Execution + Auto-Regression + Trend Reporting
+
+**Architecture change**: Thread pool with async channels for parallel subprocess execution.
+
+```
+Main thread ──→ [async-channel] ──→ N worker threads ──→ subprocesses
+                                                              ↓
+Main thread ←── [async-channel] ←── per-file timing results
+```
+
+**Key primitives** (all in `racket/base` or standard libs):
+- `racket/async-channel`: Unbounded buffered channels for work queue / result collection
+- `sync/timeout`: Event-based subprocess wait (replaces 0.5s polling loop)
+- `current-inexact-monotonic-milliseconds`: Clock-drift-immune timing
+- `racket/future` → `processor-count`: Auto-detect available cores
+
+**New features**:
+- **`--jobs N`**: Parallel worker count (default: `(processor-count)` = 10 on dev machine)
+- **Auto-regression detection**: After every run, compares against previous run in JSONL. Flags regressions >threshold%. Exit code 1 if regressions found.
+- **`--regression-threshold N`**: Percentage threshold for flagging (default: 10)
+- **`--trend FILE`**: Shows timing history for one test file over last N runs
+- **`--depth N`**: Number of runs for `--trend` (default: 10)
+- **JSONL `jobs` field**: Records parallelism level per run for fair cross-run comparisons
+
+**Verification**:
+- 6 files parallel (`--jobs 10`): 14.6s wall (sequential sum: 39.5s) → **2.7x speedup** ✅
+- Sequential (`--jobs 1`): 5.9s = sum of individual times (correct) ✅
+- Two stable runs: no false regressions detected ✅
+- `--report`: Shows jobs count correctly ✅
+- `--trend test-quote.rkt`: Shows history with timestamps ✅
+- Timeout (`--timeout 2 --files test-pipe-compose-e2e.rkt`): Clean 2.0s timeout ✅
+- JSONL schema: `jobs` field present, backward-compatible ✅
+
+**Why `async-channel` not `channel`**: Synchronous `channel-put` blocks if no reader is ready. With M tasks and N workers (M > N), the main thread would deadlock after enqueueing N items. `async-channel` has an unbounded buffer — main thread enqueues all items immediately.
+
+**Why `sync/timeout` not polling**: Eliminates 0.5s polling granularity and wasted CPU. `sync/timeout secs proc` blocks efficiently until process exits or timeout elapses.
+
+**Timing accuracy in parallel mode**: Per-file wall-clock times are captured independently per worker thread using `current-inexact-monotonic-milliseconds`. On multi-core machines, each subprocess gets its own core(s). Timing variance is comparable to sequential mode because we measure wallclock per-subprocess, not shared CPU time. The `jobs` field ensures fair comparisons (only compare runs with same parallelism level).
