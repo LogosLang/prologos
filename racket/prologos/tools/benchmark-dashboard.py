@@ -16,7 +16,9 @@ import argparse
 import json
 import os
 import random
+import subprocess
 import sys
+import time
 from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -48,12 +50,17 @@ LIGHT_GRAY = [180, 180, 180, 100]
 
 runs = []
 all_files = []
+test_counts = {}
 regression_map = {}
 timings_file = DEFAULT_TIMINGS
 reg_threshold = 10
+current_breakdown_idx = -1
 last_mtime = 0.0
 auto_reload = False
 frame_counter = 0
+active_process = None
+active_process_label = ""
+active_process_start = 0.0
 
 # ============================================================
 # Data layer
@@ -120,6 +127,16 @@ def get_file_trend(runs_data, filename):
                 statuses.append(r["status"])
                 break
     return xs, ys, statuses
+
+
+def derive_test_counts(runs_data):
+    """Extract test count per file from the latest run that includes each file."""
+    counts = {}
+    for run in reversed(runs_data):
+        for r in run.get("results", []):
+            if r["file"] not in counts:
+                counts[r["file"]] = r.get("tests", 0)
+    return counts
 
 
 def get_commit_label(run, idx):
@@ -252,7 +269,7 @@ def build_suite_overview():
                            width=300)
 
         with dpg.plot(label="Total Suite Wall Time", height=-1, width=-1,
-                      tag="suite_plot"):
+                      tag="suite_plot", crosshairs=True):
             dpg.add_plot_legend()
             sx = dpg.add_plot_axis(dpg.mvXAxis, label="Run", tag="suite_xaxis")
             sy = dpg.add_plot_axis(dpg.mvYAxis, label="Wall Time (s)", tag="suite_yaxis")
@@ -313,6 +330,18 @@ def _on_suite_slider(sender, app_data):
     dpg.fit_axis_data("suite_yaxis")
 
 
+def _file_label(filename):
+    """Format file name with test count for display."""
+    count = test_counts.get(filename, 0)
+    return f"{filename} ({count})" if count else filename
+
+
+def _file_from_label(label):
+    """Extract filename from a display label like 'test-foo.rkt (42)'."""
+    idx = label.rfind(" (")
+    return label[:idx] if idx > 0 and label.endswith(")") else label
+
+
 def build_file_trend_tab():
     """Tab 2: Per-file trend with file selector."""
     with dpg.group(horizontal=True, parent="tab_trend"):
@@ -320,7 +349,7 @@ def build_file_trend_tab():
         with dpg.child_window(width=270, tag="trend_left_panel"):
             dpg.add_input_text(label="Filter", callback=_on_filter_files,
                                tag="file_filter", width=200)
-            items = all_files if all_files else ["(no data)"]
+            items = [_file_label(f) for f in all_files] if all_files else ["(no data)"]
             dpg.add_listbox(items=items, num_items=30,
                             callback=_on_file_selected,
                             tag="file_selector", width=250)
@@ -331,7 +360,7 @@ def build_file_trend_tab():
                 dpg.add_text("No benchmark data available.")
                 return
             with dpg.plot(label="Per-File Trend", height=-1, width=-1,
-                          tag="trend_plot"):
+                          tag="trend_plot", crosshairs=True):
                 dpg.add_plot_legend()
                 dpg.add_plot_axis(dpg.mvXAxis, label="Run #", tag="trend_xaxis")
                 ty = dpg.add_plot_axis(dpg.mvYAxis, label="Wall Time (s)",
@@ -353,13 +382,13 @@ def build_file_trend_tab():
 def _on_filter_files(sender, app_data):
     """Filter file listbox by substring."""
     query = app_data.lower()
-    filtered = [f for f in all_files if query in f.lower()]
+    filtered = [_file_label(f) for f in all_files if query in f.lower()]
     dpg.configure_item("file_selector", items=filtered if filtered else ["(no match)"])
 
 
 def _on_file_selected(sender, app_data):
     """Update per-file trend chart when a file is selected."""
-    selected = app_data
+    selected = _file_from_label(app_data)
     if selected.startswith("("):
         return  # placeholder
 
@@ -393,34 +422,49 @@ def _on_file_selected(sender, app_data):
     dpg.fit_axis_data("trend_yaxis")
 
 
-def build_latest_breakdown():
-    """Tab 3: Horizontal bar chart of latest run's per-file timings."""
+def build_run_breakdown():
+    """Tab 3: Horizontal bar chart with navigation through all runs."""
     if not runs:
         dpg.add_text("No benchmark data available.", parent="tab_latest")
         return
 
-    latest = runs[-1]
-    results = sorted(latest.get("results", []), key=lambda r: r["wall_ms"])
+    run = runs[current_breakdown_idx]
+    results = sorted(run.get("results", []), key=lambda r: r["wall_ms"])
     files = [r["file"] for r in results]
     times = [r["wall_ms"] / 1000.0 for r in results]
     statuses = [r["status"] for r in results]
 
-    commit = get_commit_label(latest, len(runs) - 1)
-    ts = latest.get("timestamp", "")[:10]
+    commit = get_commit_label(run, current_breakdown_idx)
+    ts = run.get("timestamp", "")[:10]
 
     plot_height = max(500, len(results) * 22)
 
     with dpg.group(parent="tab_latest"):
-        dpg.add_text(f"Latest run: {commit} ({ts}) — {len(results)} files")
+        # Navigation controls
+        with dpg.group(horizontal=True):
+            dpg.add_button(label="<", callback=_on_breakdown_prev,
+                           tag="breakdown_prev",
+                           enabled=current_breakdown_idx > 0)
+            dpg.add_text(
+                f"Run {current_breakdown_idx + 1}/{len(runs)}: "
+                f"{commit} ({ts}) — {len(results)} files",
+                tag="breakdown_label")
+            dpg.add_button(label=">", callback=_on_breakdown_next,
+                           tag="breakdown_next",
+                           enabled=current_breakdown_idx < len(runs) - 1)
+
         with dpg.plot(label="Per-File Timing", height=plot_height, width=-1,
-                      tag="latest_plot"):
+                      tag="latest_plot", crosshairs=True):
             dpg.add_plot_legend()
             lx = dpg.add_plot_axis(dpg.mvXAxis, label="Wall Time (s)",
                                     tag="latest_xaxis")
             ly = dpg.add_plot_axis(dpg.mvYAxis, label="", tag="latest_yaxis")
 
-            # Y-axis ticks = file names
-            ticks = tuple((f, float(i)) for i, f in enumerate(files))
+            # Y-axis ticks = file names with test counts
+            ticks = tuple(
+                (f"{f} ({r.get('tests', '')})", float(i))
+                for i, (f, r) in enumerate(zip(files, results))
+            )
             dpg.set_axis_ticks(ly, ticks)
 
             # Group by status for color-coded bar series
@@ -439,16 +483,45 @@ def build_latest_breakdown():
                     dpg.bind_item_theme(series, make_bar_theme(color))
 
 
+def _on_breakdown_prev(sender=None, app_data=None):
+    """Navigate to previous run in breakdown tab."""
+    global current_breakdown_idx
+    if current_breakdown_idx > 0:
+        current_breakdown_idx -= 1
+        _rebuild_breakdown_tab()
+
+
+def _on_breakdown_next(sender=None, app_data=None):
+    """Navigate to next run in breakdown tab."""
+    global current_breakdown_idx
+    if current_breakdown_idx < len(runs) - 1:
+        current_breakdown_idx += 1
+        _rebuild_breakdown_tab()
+
+
+def _rebuild_breakdown_tab():
+    """Clear and rebuild only the breakdown tab."""
+    children = dpg.get_item_children("tab_latest", 1)
+    if children:
+        for child in children:
+            dpg.delete_item(child)
+    build_run_breakdown()
+
+
 # ============================================================
 # Reload
 # ============================================================
 
 def reload_data():
     """Reload JSONL data and recompute derived state."""
-    global runs, all_files, regression_map, last_mtime
+    global runs, all_files, test_counts, regression_map, current_breakdown_idx
+    global last_mtime
     runs = load_runs()
     all_files = derive_all_files(runs)
+    test_counts = derive_test_counts(runs)
     regression_map = detect_regressions(runs, reg_threshold)
+    if current_breakdown_idx < 0 or current_breakdown_idx >= len(runs):
+        current_breakdown_idx = max(0, len(runs) - 1)
     try:
         last_mtime = os.path.getmtime(timings_file)
     except FileNotFoundError:
@@ -466,7 +539,7 @@ def rebuild_ui():
 
     build_suite_overview()
     build_file_trend_tab()
-    build_latest_breakdown()
+    build_run_breakdown()
     update_status_text()
 
 
@@ -494,6 +567,85 @@ def update_status_text():
         if n_regs:
             text += f" | {n_regs} regressions detected"
     dpg.set_value("status_text", text)
+
+
+# ============================================================
+# Subprocess controls
+# ============================================================
+
+def _start_process(mode):
+    """Launch a benchmark or test subprocess."""
+    global active_process, active_process_label, active_process_start
+    if active_process is not None:
+        return  # already running
+
+    jobs = dpg.get_value("jobs_input")
+    timeout = dpg.get_value("timeout_input")
+
+    if mode == "benchmark":
+        cmd = ["racket", str(SCRIPT_DIR / "benchmark-tests.rkt"),
+               "--jobs", str(jobs), "--timeout", str(timeout)]
+        active_process_label = "Full Benchmark"
+    else:
+        cmd = ["racket", str(SCRIPT_DIR / "run-affected-tests.rkt"),
+               "--all", "--jobs", str(jobs), "--timeout", str(timeout)]
+        active_process_label = "Affected Tests"
+
+    active_process = subprocess.Popen(
+        cmd, cwd=str(PROJECT_ROOT),
+        stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    active_process_start = time.time()
+
+    dpg.configure_item("btn_benchmark", enabled=False)
+    dpg.configure_item("btn_affected", enabled=False)
+    dpg.configure_item("btn_cancel", show=True)
+    dpg.set_value("process_status", f"Running {active_process_label}...")
+
+
+def _on_run_benchmark(sender=None, app_data=None):
+    _start_process("benchmark")
+
+
+def _on_run_affected(sender=None, app_data=None):
+    _start_process("affected")
+
+
+def _on_cancel_process(sender=None, app_data=None):
+    """Terminate running subprocess."""
+    global active_process
+    if active_process is not None:
+        active_process.terminate()
+        active_process = None
+        _reset_process_ui("Cancelled.")
+
+
+def _reset_process_ui(msg):
+    """Re-enable run buttons and update status."""
+    dpg.configure_item("btn_benchmark", enabled=True)
+    dpg.configure_item("btn_affected", enabled=True)
+    dpg.configure_item("btn_cancel", show=False)
+    dpg.set_value("process_status", msg)
+
+
+def _poll_active_process():
+    """Check if subprocess completed; auto-reload on finish."""
+    global active_process
+    if active_process is None:
+        return
+    retcode = active_process.poll()
+    if retcode is not None:
+        elapsed = time.time() - active_process_start
+        if retcode == 0:
+            msg = f"{active_process_label} completed in {elapsed:.1f}s"
+        else:
+            msg = f"{active_process_label} failed (exit {retcode}) after {elapsed:.1f}s"
+        active_process = None
+        _reset_process_ui(msg)
+        on_reload()
+    else:
+        elapsed = time.time() - active_process_start
+        dpg.set_value("process_status",
+                      f"Running {active_process_label}... ({elapsed:.0f}s)")
 
 
 # ============================================================
@@ -543,26 +695,49 @@ def main():
         dpg.add_text("Loading...", tag="status_text")
         dpg.add_separator()
 
+        # Run Tests controls (collapsible)
+        with dpg.collapsing_header(label="Run Tests", default_open=False):
+            with dpg.group(horizontal=True):
+                dpg.add_text("Jobs:")
+                dpg.add_input_int(tag="jobs_input", default_value=10,
+                                  width=80, min_value=1, max_value=20,
+                                  min_clamped=True, max_clamped=True)
+                dpg.add_spacer(width=10)
+                dpg.add_text("Timeout (s):")
+                dpg.add_input_int(tag="timeout_input", default_value=600,
+                                  width=80, min_value=10, min_clamped=True)
+            with dpg.group(horizontal=True):
+                dpg.add_button(label="Run Full Benchmark",
+                               callback=_on_run_benchmark,
+                               tag="btn_benchmark")
+                dpg.add_button(label="Run Affected Tests",
+                               callback=_on_run_affected,
+                               tag="btn_affected")
+                dpg.add_button(label="Cancel",
+                               callback=_on_cancel_process,
+                               tag="btn_cancel", show=False)
+            dpg.add_text("", tag="process_status")
+
         # Tab bar
         with dpg.tab_bar():
             with dpg.tab(label="Suite Overview", tag="tab_suite"):
                 pass
             with dpg.tab(label="Per-File Trend", tag="tab_trend"):
                 pass
-            with dpg.tab(label="Latest Run Breakdown", tag="tab_latest"):
+            with dpg.tab(label="Run Breakdown", tag="tab_latest"):
                 pass
 
     # Build chart content
     build_suite_overview()
     build_file_trend_tab()
-    build_latest_breakdown()
+    build_run_breakdown()
     update_status_text()
 
     dpg.set_primary_window("main_window", True)
     dpg.setup_dearpygui()
     dpg.show_viewport()
 
-    # Custom render loop with auto-reload polling
+    # Custom render loop with auto-reload polling and subprocess management
     while dpg.is_dearpygui_running():
         frame_counter += 1
         if auto_reload and frame_counter % 60 == 0:
@@ -572,6 +747,8 @@ def main():
                     on_reload()
             except FileNotFoundError:
                 pass
+        if frame_counter % 10 == 0:
+            _poll_active_process()
         dpg.render_dearpygui_frame()
 
     dpg.destroy_context()
