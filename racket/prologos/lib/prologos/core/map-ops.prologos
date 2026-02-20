@@ -1,0 +1,59 @@
+ns prologos.core.map-ops
+
+require [prologos.data.list    :refer [List nil cons map filter foldr]]
+require [prologos.data.option  :refer [Option some none]]
+
+;; ========================================
+;; Map Operations Module
+;; ========================================
+;; Convenience functions for Map that work via key-list conversion.
+;; Since Map has two type params (K, V), it can't use Seqable/Foldable
+;; traits (which require Type -> Type). These standalone functions
+;; provide the same capabilities.
+
+;; map-map-vals : (V -> W) -> Map K V -> Map K W
+;; Applies f to every value, preserving keys.
+;; Implementation: fold over keys, build new map.
+spec map-map-vals {K V W : Type} [-> V W] -> [Map K V] -> [Map K W]
+defn map-map-vals [f m]
+  foldr K [Map K W]
+    [fn k acc [map-assoc acc k [f [map-get m k]]]]
+    [map-empty K W]
+    [map-keys m]
+
+;; map-filter-vals : (V -> Bool) -> Map K V -> Map K V
+;; Keeps only entries whose value satisfies pred.
+spec map-filter-vals {K V : Type} [-> V Bool] -> [Map K V] -> [Map K V]
+defn map-filter-vals [pred m]
+  foldr K [Map K V]
+    [fn k acc [if [pred [map-get m k]] [map-assoc acc k [map-get m k]] acc]]
+    [map-empty K V]
+    [map-keys m]
+
+;; map-fold-entries : (B -> K -> V -> B) -> B -> Map K V -> B
+;; Left fold over key-value pairs.
+spec map-fold-entries {K V B : Type} [-> B [-> K [-> V B]]] -> B -> [Map K V] -> B
+defn map-fold-entries [f z m]
+  foldr K B
+    [fn k acc [f acc k [map-get m k]]]
+    z
+    [map-keys m]
+
+;; map-keys-list : Map K V -> List K  (wraps AST map-keys as a function)
+spec map-keys-list {K V : Type} [Map K V] -> [List K]
+defn map-keys-list [m]
+  map-keys m
+
+;; map-vals-list : Map K V -> List V  (wraps AST map-vals as a function)
+spec map-vals-list {K V : Type} [Map K V] -> [List V]
+defn map-vals-list [m]
+  map-vals m
+
+;; map-merge : Map K V -> Map K V -> Map K V
+;; Merge two maps. Right map wins on key collision.
+spec map-merge {K V : Type} [Map K V] -> [Map K V] -> [Map K V]
+defn map-merge [m1 m2]
+  foldr K [Map K V]
+    [fn k acc [map-assoc acc k [map-get m2 k]]]
+    m1
+    [map-keys m2]

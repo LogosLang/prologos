@@ -881,12 +881,12 @@
     [(expr-map-keys m)
      (let ([r (inferQ ctx m)])
        (match r
-         [(tu _ u) (tu (tu-type r) u)]
+         [(tu _ u) (tu (infer ctx (expr-map-keys m)) u)]
          [_ (tu-error)]))]
     [(expr-map-vals m)
      (let ([r (inferQ ctx m)])
        (match r
-         [(tu _ u) (tu (tu-type r) u)]
+         [(tu _ u) (tu (infer ctx (expr-map-vals m)) u)]
          [_ (tu-error)]))]
 
     ;; ---- Set type and operations ----
@@ -982,7 +982,7 @@
     [(expr-set-to-list s)
      (let ([r (inferQ ctx s)])
        (match r
-         [(tu _ u) (tu (tu-type r) u)]
+         [(tu _ u) (tu (infer ctx (expr-set-to-list s)) u)]
          [_ (tu-error)]))]
 
     ;; ---- PVec type and operations ----

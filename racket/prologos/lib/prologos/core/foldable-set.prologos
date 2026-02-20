@@ -1,0 +1,15 @@
+ns prologos.core.foldable-set
+
+require [prologos.core.foldable-trait :refer [Foldable]]
+require [prologos.data.list :refer [List foldr]]
+
+;; ========================================
+;; Foldable instance for Set
+;; ========================================
+;; Converts to List first, then delegates to list foldr.
+;; set-foldable : Foldable Set
+;; = Pi(A :0 Type) Pi(B :0 Type) (A -> B -> B) -> B -> Set A -> B
+
+(def set-foldable : [Foldable Set]
+  (fn (A :0 (Type 0)) (fn (B :0 (Type 0)) (fn (f : (-> A (-> B B))) (fn (z : B) (fn (s : (Set A))
+    (foldr A B f z (set-to-list s))))))))

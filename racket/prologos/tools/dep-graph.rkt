@@ -218,6 +218,14 @@
              '(prologos.core.seqable-pvec prologos.core.buildable-pvec
                prologos.core.foldable-pvec prologos.core.functor-pvec
                prologos.core.indexed-pvec prologos.core.pvec-ops))
+   'test-map-set-traits.rkt
+   (test-dep '(syntax.rkt prelude.rkt substitution.rkt reduction.rkt typing-core.rkt
+               pretty-print.rkt driver.rkt global-env.rkt namespace.rkt
+               macros.rkt qtt.rkt champ.rkt)
+             '(prologos.core.keyed-map prologos.core.setlike-set
+               prologos.core.seqable-set prologos.core.buildable-set
+               prologos.core.foldable-set prologos.core.set-ops
+               prologos.core.map-ops))
    'test-map.rkt
    (test-dep '(syntax.rkt prelude.rkt substitution.rkt reduction.rkt typing-core.rkt
                pretty-print.rkt driver.rkt global-env.rkt champ.rkt) #f)

@@ -1,0 +1,27 @@
+ns prologos.core.setlike-set
+
+require [prologos.core.setlike-trait :refer [Setlike]]
+
+;; ========================================
+;; Setlike instance for Set
+;; ========================================
+;; set-member? : Set A -> A -> Bool   (delegates to AST set-member?)
+;; set-insert  : Set A -> A -> Set A  (delegates to AST set-insert)
+;; set-remove  : Set A -> A -> Set A  (delegates to AST set-delete)
+;;
+;; Setlike is a three-method trait, so the dict is a nested Sigma:
+;; (pair set-member? (pair set-insert set-remove))
+
+(spec Set--Setlike--dict (Setlike Set))
+(def Set--Setlike--dict
+  (pair
+    ;; set-member? : Pi(A :0 Type) Set A -> A -> Bool
+    (fn (A :0 (Type 0)) (fn (s : (Set A)) (fn (a : A)
+      (set-member? s a))))
+    (pair
+      ;; set-insert : Pi(A :0 Type) Set A -> A -> Set A
+      (fn (A :0 (Type 0)) (fn (s : (Set A)) (fn (a : A)
+        (set-insert s a))))
+      ;; set-remove : Pi(A :0 Type) Set A -> A -> Set A
+      (fn (A :0 (Type 0)) (fn (s : (Set A)) (fn (a : A)
+        (set-delete s a)))))))

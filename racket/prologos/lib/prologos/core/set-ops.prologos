@@ -1,0 +1,53 @@
+ns prologos.core.set-ops
+
+require [prologos.data.list    :refer [List nil cons map filter foldr]]
+require [prologos.data.option  :refer [Option some none]]
+
+;; ========================================
+;; Set Operations Module
+;; ========================================
+;; Convenience functions for Set that work via List conversion.
+;; Note: We avoid calling set-from-list directly because it declares A :w,
+;; but spec/defn generates A :0 (erased). Instead we fold with set-insert.
+
+;; Helper: build a Set from a List by folding with set-insert
+;; (Private — not exported, used by set-map and set-filter.)
+(def list-to-set : (Pi (A :0 (Type 0)) (-> (List A) (Set A)))
+  (fn (A :0 (Type 0)) (fn (xs : (List A))
+    (foldr A (Set A) (fn (a : A) (fn (acc : (Set A)) (set-insert acc a))) (set-empty A) xs))))
+
+;; set-map : (A -> B) -> Set A -> Set B
+spec set-map {A B : Type} [-> A B] -> [Set A] -> [Set B]
+defn set-map [f s]
+  list-to-set B [map A B f [set-to-list s]]
+
+;; set-filter : (A -> Bool) -> Set A -> Set A
+spec set-filter {A : Type} [-> A Bool] -> [Set A] -> [Set A]
+defn set-filter [pred s]
+  list-to-set A [filter A pred [set-to-list s]]
+
+;; set-fold : (B -> A -> B) -> B -> Set A -> B
+;; Left fold over Set elements (converts to list, folds right with flipped accumulator)
+spec set-fold {A B : Type} [-> B [-> A B]] -> B -> [Set A] -> B
+defn set-fold [f z s]
+  foldr A B [fn a acc [f acc a]] z [set-to-list s]
+
+;; set-any? : (A -> Bool) -> Set A -> Bool
+spec set-any? {A : Type} [-> A Bool] -> [Set A] -> Bool
+defn set-any? [pred s]
+  foldr A Bool [fn a acc [if [pred a] true acc]] false [set-to-list s]
+
+;; set-all? : (A -> Bool) -> Set A -> Bool
+spec set-all? {A : Type} [-> A Bool] -> [Set A] -> Bool
+defn set-all? [pred s]
+  foldr A Bool [fn a acc [if [pred a] acc false]] true [set-to-list s]
+
+;; set-to-list-fn : Set A -> List A  (wraps AST set-to-list as a function)
+spec set-to-list-fn {A : Type} [Set A] -> [List A]
+defn set-to-list-fn [s]
+  set-to-list s
+
+;; set-from-list-fn : List A -> Set A  (wraps via fold, erased type arg)
+spec set-from-list-fn {A : Type} [List A] -> [Set A]
+defn set-from-list-fn [xs]
+  list-to-set A xs
