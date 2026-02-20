@@ -11,3 +11,6 @@ ltximg/
 
 # macOS
 .DS_Store
+
+# Claude Code local memory (personal, not shared)
+CLAUDE.local.md
