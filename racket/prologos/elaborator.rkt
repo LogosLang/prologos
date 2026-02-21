@@ -39,7 +39,16 @@
          is-dict-param-name?
          parse-dict-param-name
          dict-param->where-entries
-         resolve-method-from-where)
+         resolve-method-from-where
+         ;; HKT-9: Constraint inference from usage
+         current-infer-constraints-mode?
+         build-method-reverse-index
+         method-reverse-index-entry
+         method-reverse-index-entry?
+         method-reverse-index-entry-trait-name
+         method-reverse-index-entry-method-name
+         method-reverse-index-entry-accessor-name
+         method-reverse-index-entry-trait-params)
 
 ;; ========================================
 ;; Elaboration environment
@@ -163,6 +172,101 @@
            with-dict)
          ;; Type vars or dict not in scope — fall through
          #f)]))
+
+;; ========================================
+;; HKT-9: Constraint inference from usage
+;; ========================================
+;; When enabled, bare trait method names (like `eq?`, `to-seq`) that are
+;; NOT in the current where-context can trigger automatic constraint generation.
+;; This is gated behind a feature flag because no mainstream language does this
+;; and it adds complexity to the elaboration process.
+
+;; Feature flag — off by default. Enable with (current-infer-constraints-mode? #t).
+(define current-infer-constraints-mode? (make-parameter #f))
+
+;; Reverse index entry: method-name → trait info
+(struct method-reverse-index-entry
+  (trait-name       ;; symbol — e.g., 'Eq
+   method-name      ;; symbol — e.g., 'eq?
+   accessor-name    ;; symbol — e.g., 'Eq-eq?
+   trait-params     ;; list of (name . kind-datum) pairs from trait-meta-params
+  ) #:transparent)
+
+;; Build a reverse index from method names → list of traits that define them.
+;; Uses the current trait registry. Returns a hasheq: symbol → (listof method-reverse-index-entry).
+(define (build-method-reverse-index)
+  (for/fold ([idx (hasheq)])
+            ([(trait-name tm) (in-hash (current-trait-registry))])
+    (for/fold ([idx idx])
+              ([method (in-list (trait-meta-methods tm))])
+      (define mname (trait-method-name method))
+      (define accessor-name
+        (string->symbol
+          (string-append (symbol->string trait-name)
+                         "-"
+                         (symbol->string mname))))
+      (define entry
+        (method-reverse-index-entry trait-name mname accessor-name
+                                     (trait-meta-params tm)))
+      (hash-set idx mname
+        (cons entry (hash-ref idx mname '()))))))
+
+;; Try to generate a constraint from a bare method name.
+;; Returns an expr (the resolved accessor application) or #f.
+;; This is called when:
+;;   1. current-infer-constraints-mode? is #t
+;;   2. The name wasn't found in env, global env, or where-context
+;;   3. The name exists in the method reverse index
+;;
+;; For now, this is a minimal implementation that only works when the
+;; method maps to exactly one trait (no ambiguity). It creates fresh metas
+;; for the type variables and a dict meta, registers the trait constraint,
+;; and returns the accessor expression applied to those metas.
+(define (try-infer-constraint-from-method name loc env depth)
+  (define idx (build-method-reverse-index))
+  (define entries (hash-ref idx name #f))
+  (cond
+    [(not entries) #f]
+    [(null? entries) #f]
+    [(> (length entries) 1)
+     ;; Ambiguous — same method name in multiple traits
+     (ambiguous-method-error loc
+       (format "Ambiguous method '~a' found in traits: ~a. Use a spec with explicit where-clause."
+               name
+               (string-join (map (lambda (e) (symbol->string (method-reverse-index-entry-trait-name e)))
+                                 entries)
+                            ", "))
+       name (map method-reverse-index-entry-trait-name entries))]
+    [else
+     ;; Unique match — generate constraint
+     (define entry (car entries))
+     (define trait-name (method-reverse-index-entry-trait-name entry))
+     (define accessor-name (method-reverse-index-entry-accessor-name entry))
+     (define trait-params (method-reverse-index-entry-trait-params entry))
+     ;; Create fresh metas for each trait type parameter
+     (define type-var-metas
+       (for/list ([p (in-list trait-params)])
+         (fresh-meta ctx-empty (expr-hole)
+           (meta-source-info loc 'inferred-type-var
+             (format "inferred type var for ~a from method ~a" trait-name name)
+             #f (env->name-stack env)))))
+     ;; Create a fresh meta for the dict parameter
+     (define dict-meta
+       (fresh-meta ctx-empty (expr-hole)
+         (meta-source-info loc 'trait-constraint
+           (format "inferred ~a constraint from method ~a" trait-name name)
+           #f (env->name-stack env))))
+     ;; Register the trait constraint
+     (register-trait-constraint!
+       (expr-meta-id dict-meta)
+       (trait-constraint-info trait-name type-var-metas))
+     ;; Build the accessor application: (Trait-method TypeVar1 ... DictMeta)
+     (let* ([base (expr-fvar accessor-name)]
+            [with-types
+             (foldl (lambda (m acc) (expr-app acc m))
+                    base type-var-metas)]
+            [with-dict (expr-app with-types dict-meta)])
+       with-dict)]))
 
 ;; ========================================
 ;; Implicit argument helpers
@@ -499,6 +603,12 @@
                       name (string-join (map number->string (multi-defn-info-arities info)) ", "))))]
       ;; Phase D: resolve bare trait method names from where-context
       [(resolve-method-from-where name env depth)
+       => (lambda (resolved) resolved)]
+      ;; HKT-9: Constraint inference from usage (feature-flagged)
+      ;; If enabled, try to resolve the name as a trait method and generate
+      ;; a constraint automatically. This is gated by current-infer-constraints-mode?.
+      [(and (current-infer-constraints-mode?)
+            (try-infer-constraint-from-method name loc env depth))
        => (lambda (resolved) resolved)]
       [else (unbound-variable-error loc "Unbound variable" name)])))
 
