@@ -346,6 +346,36 @@
     (require [prologos.core.fromint-trait  :refer [FromInt]])
     (require [prologos.core.numeric-bundles :refer [Num Fractional]])
 
+    ;; ---- Tier 1b: Additional container types + operations ----
+    (require [prologos.data.lseq     :as lseq :refer [LSeq lseq-nil lseq-cell]])
+    (require [prologos.data.lseq-ops :refer [list-to-lseq lseq-to-list lseq-map
+                                              lseq-filter lseq-take lseq-drop
+                                              lseq-append lseq-fold lseq-length]])
+    (require [prologos.data.set      :refer [set-singleton set-from-list set-symmetric-diff]])
+
+    ;; ---- Tier 2b: Trait definitions (additional) ----
+    (require [prologos.core.additive-identity-trait       :refer-all])
+    (require [prologos.core.multiplicative-identity-trait  :refer-all])
+
+    ;; ---- Tier 2c: Collection operation modules ----
+    (require [prologos.core.pvec-ops :refer [pvec-map pvec-filter pvec-fold
+                                              pvec-any? pvec-all?
+                                              pvec-from-list-fn pvec-to-list-fn]])
+    (require [prologos.core.map-ops  :refer [map-map-vals map-filter-vals
+                                              map-fold-entries map-keys-list
+                                              map-vals-list map-merge]])
+    (require [prologos.core.set-ops  :refer [set-map set-filter set-fold
+                                              set-any? set-all?
+                                              set-to-list-fn set-from-list-fn]])
+
+    ;; ---- Tier 2d: Collection conversions ----
+    (require [prologos.core.collection-conversions :refer [vec list-to-seq pvec-to-seq
+                                                            set-to-seq into-vec
+                                                            into-list into-set]])
+
+    ;; ---- Tier 2e: Generic numeric operations ----
+    (require [prologos.core.generic-numeric-ops :refer [sum product int-range]])
+
     ;; ---- Tier 3: Instance registration (side-effect only, :refer []) ----
     (require [prologos.core.eq-instances         :refer []])
     (require [prologos.core.eq-numeric-instances  :refer []])
@@ -355,7 +385,31 @@
     (require [prologos.core.sub-instances         :refer []])
     (require [prologos.core.mul-instances         :refer []])
     (require [prologos.core.neg-instances         :refer []])
-    (require [prologos.core.abs-instances         :refer []])))
+    (require [prologos.core.abs-instances         :refer []])
+
+    ;; ---- Tier 3b: Collection trait instances (side-effect only) ----
+    (require [prologos.core.seqable-list    :refer []])
+    (require [prologos.core.buildable-list  :refer []])
+    (require [prologos.core.foldable-list   :refer []])
+    (require [prologos.core.indexed-list    :refer []])
+    (require [prologos.core.functor-list    :refer []])
+    (require [prologos.core.seqable-pvec    :refer []])
+    (require [prologos.core.buildable-pvec  :refer []])
+    (require [prologos.core.indexed-pvec    :refer []])
+    (require [prologos.core.foldable-pvec   :refer []])
+    (require [prologos.core.functor-pvec    :refer []])
+    (require [prologos.core.keyed-map       :refer []])
+    (require [prologos.core.setlike-set     :refer []])
+    (require [prologos.core.seqable-set     :refer []])
+    (require [prologos.core.buildable-set   :refer []])
+    (require [prologos.core.foldable-set    :refer []])
+    (require [prologos.core.seq-lseq        :refer []])
+    (require [prologos.core.foldable-lseq   :refer []])
+    (require [prologos.core.seqable-lseq    :refer []])
+    (require [prologos.core.buildable-lseq  :refer []])
+
+    ;; ---- Tier 3c: Identity trait instances (side-effect only) ----
+    (require [prologos.core.identity-instances :refer []])))
 
 ;; ========================================
 ;; Pre-parse Directive Processing

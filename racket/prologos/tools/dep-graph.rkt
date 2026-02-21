@@ -243,6 +243,11 @@
                pretty-print.rkt driver.rkt global-env.rkt namespace.rkt
                macros.rkt qtt.rkt)
              '(prologos.core.collection-conversions))
+   'test-prelude-collections.rkt
+   (test-dep '(syntax.rkt prelude.rkt substitution.rkt reduction.rkt typing-core.rkt
+               pretty-print.rkt driver.rkt global-env.rkt namespace.rkt
+               macros.rkt qtt.rkt)
+             #f)
    'test-map.rkt
    (test-dep '(syntax.rkt prelude.rkt substitution.rkt reduction.rkt typing-core.rkt
                pretty-print.rkt driver.rkt global-env.rkt champ.rkt) #f)
