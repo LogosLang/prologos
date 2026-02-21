@@ -1,0 +1,66 @@
+ns prologos.core.generic-ops
+
+require [prologos.core.seqable-trait    :refer [Seqable]]
+require [prologos.core.buildable-trait  :refer [Buildable Buildable-from-seq]]
+require [prologos.core.foldable-trait   :refer [Foldable]]
+require [prologos.data.lseq             :refer [LSeq]]
+require [prologos.data.lseq-ops         :refer [lseq-map lseq-filter lseq-length
+                                                  lseq-append lseq-to-list]]
+require [prologos.data.list             :refer [List]]
+
+;; ========================================
+;; Generic Collection Operations (HKT-dispatched)
+;; ========================================
+;; These operate on any collection type that implements the appropriate
+;; HKT traits (Seqable, Buildable, Foldable). The compiler automatically
+;; resolves the type constructor C from the argument type and dispatches
+;; to the correct trait instance.
+;;
+;; The pattern is: to-seq -> lseq-op -> from-seq
+;;
+;; Implementation note: Single-method trait dicts ($seq, $foldable) are
+;; called directly with explicit type args because the elaborator only
+;; auto-inserts implicit args for global fvars, not local lambda params.
+;; Multi-method trait accessors (Buildable-from-seq) are global fvars
+;; and get C auto-inserted, but need the element type A passed explicitly
+;; since it comes after the dict param (not a leading m0 position).
+
+;; gmap : (A -> B) -> C A -> C B
+spec gmap {A B : Type} {C : Type -> Type} [Seqable C] -> [Buildable C] -> [A -> B] -> [C A] -> [C B]
+defn gmap [$seq $build f xs]
+  Buildable-from-seq $build B [lseq-map A B f [$seq A xs]]
+
+;; gfilter : (A -> Bool) -> C A -> C A
+spec gfilter {A : Type} {C : Type -> Type} [Seqable C] -> [Buildable C] -> [A -> Bool] -> [C A] -> [C A]
+defn gfilter [$seq $build pred xs]
+  Buildable-from-seq $build A [lseq-filter A pred [$seq A xs]]
+
+;; gfold : (A -> B -> B) -> B -> C A -> B
+spec gfold {A B : Type} {C : Type -> Type} [Foldable C] -> [A -> B -> B] -> B -> [C A] -> B
+defn gfold [$foldable f z xs]
+  $foldable A B f z xs
+
+;; glength : C A -> Nat
+spec glength {A : Type} {C : Type -> Type} [Seqable C] -> [C A] -> Nat
+defn glength [$seq xs]
+  lseq-length [$seq A xs]
+
+;; gconcat : C A -> C A -> C A
+spec gconcat {A : Type} {C : Type -> Type} [Seqable C] -> [Buildable C] -> [C A] -> [C A] -> [C A]
+defn gconcat [$seq $build xs ys]
+  Buildable-from-seq $build A [lseq-append A [$seq A xs] [$seq A ys]]
+
+;; gany? : (A -> Bool) -> C A -> Bool
+spec gany? {A : Type} {C : Type -> Type} [Foldable C] -> [A -> Bool] -> [C A] -> Bool
+defn gany? [$foldable pred xs]
+  $foldable A Bool (fn [a] [acc] (if [pred a] true acc)) false xs
+
+;; gall? : (A -> Bool) -> C A -> Bool
+spec gall? {A : Type} {C : Type -> Type} [Foldable C] -> [A -> Bool] -> [C A] -> Bool
+defn gall? [$foldable pred xs]
+  $foldable A Bool (fn [a] [acc] (if [pred a] acc false)) true xs
+
+;; gto-list : C A -> List A
+spec gto-list {A : Type} {C : Type -> Type} [Seqable C] -> [C A] -> [List A]
+defn gto-list [$seq xs]
+  lseq-to-list [$seq A xs]

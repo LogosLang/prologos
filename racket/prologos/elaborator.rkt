@@ -250,6 +250,18 @@
   ;; The first (n-holes - n-constraints) m0 binders are type variables;
   ;; the last n-constraints are trait constraints.
   (define type-var-metas (make-vector (max 0 constraint-start) #f))
+  ;; Build name→position mapping from implicit binders for constraint type-arg resolution.
+  ;; E.g., for spec {A : Type} {C : Type -> Type} (Seqable C) -> ...,
+  ;; implicit-binder-names = (A C), so type-var-name→pos = {A → 0, C → 1}.
+  ;; This is critical for HKT: constraint (Seqable C) must map C to position 1 (not 0).
+  (define type-var-name->pos
+    (if (and spec-entry (spec-entry? spec-entry)
+             (spec-entry-implicit-binders spec-entry))
+        (let ([ib (spec-entry-implicit-binders spec-entry)])
+          (for/hasheq ([bp (in-list ib)]
+                       [i (in-naturals)])
+            (values (car bp) i)))
+        (hasheq)))
   (let loop ([acc base-expr] [ty func-type] [remaining n-holes] [pos 0])
     (cond
       [(zero? remaining) acc]
@@ -290,16 +302,17 @@
            [trait-from-spec?
             (define wc (list-ref where-constraints constraint-idx))
             (define trait-name (car wc))
-            (define type-var-names (cdr wc))  ;; e.g., '(A) for (Eq A)
-            ;; Map each type var name to its corresponding meta.
-            ;; Type vars are the first `constraint-start` m0 positions (0, 1, ..., constraint-start-1).
-            ;; We map by positional index: for single type var, position 0.
-            ;; For now: just take the first N type-var metas matching the constraint's arity.
+            (define type-var-names (cdr wc))  ;; e.g., '(A) for (Eq A), '(C) for (Seqable C)
+            ;; Map each type var name to its corresponding meta using name→position mapping.
+            ;; For (Seqable C) with {A : Type} {C : Type -> Type}, C maps to position 1.
+            ;; Falls back to positional index if name not found (backward compatibility).
             (define type-arg-metas
               (for/list ([tv-name (in-list type-var-names)]
                          [i (in-naturals)])
-                (if (< i (vector-length type-var-metas))
-                    (vector-ref type-var-metas i)
+                (define pos (hash-ref type-var-name->pos tv-name #f))
+                (define effective-pos (or pos i))
+                (if (< effective-pos (vector-length type-var-metas))
+                    (vector-ref type-var-metas effective-pos)
                     (expr-hole))))  ;; shouldn't happen — fallback
             (register-trait-constraint!
               (expr-meta-id meta-expr)

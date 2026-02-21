@@ -90,7 +90,7 @@
     [(expr-PVec _) "PVec"]
     [(expr-Set _) "Set"]
     [(expr-Map _ _) "Map"]
-    [(expr-fvar name) (symbol->string name)]
+    [(expr-fvar name) (symbol->string (strip-ns name))]
     [(expr-app f a)
      (string-append (expr->impl-key-str f) "-" (expr->impl-key-str a))]
     [(expr-meta id)

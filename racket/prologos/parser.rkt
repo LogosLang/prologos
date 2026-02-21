@@ -2405,13 +2405,17 @@
   (when (not (symbol? name))
     (parse-error loc (format "defn: expected name, got ~a" name) name))
 
-  ;; Extract implicit binders from {A B}
-  (define implicit-binders (unwrap-brace-params (cadr args) loc))
-  (when (prologos-error? implicit-binders)
-    (values implicit-binders))
-
-  ;; Remaining args after {A B}: [params...] <RetType> body (or [params...] : RetType body)
-  (define rest-after-braces (cddr args))
+  ;; Extract implicit binders from one or more leading {A B} {C : Type -> Type} groups
+  (define-values (implicit-binders rest-after-braces)
+    (let loop ([remaining (cdr args)] [binders '()])
+      (cond
+        [(and (pair? remaining) (brace-params-stx? (car remaining)))
+         (define parsed (unwrap-brace-params (car remaining) loc))
+         (when (prologos-error? parsed)
+           (values parsed '()))
+         (loop (cdr remaining) (append binders parsed))]
+        [else
+         (values binders remaining)])))
 
   ;; The next arg should be the explicit params bracket
   (define params-stx (car rest-after-braces))

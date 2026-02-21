@@ -1545,25 +1545,32 @@
              (list pname (param-type->angle-type ptype)))))
   ;; Build return type angle form
   (define ret-angle `($angle-type ,@return-type-tokens))
-  ;; Build implicit binder form if needed
+  ;; Build implicit binder forms if needed
   ;; implicit-binders: alist of ((name . kind) ...) from spec's {A B : Type}
-  ;; Becomes ($brace-params A B) or ($brace-params A : Type -> Type B) depending on kind
-  (define brace-form
+  ;; Group consecutive binders with the same kind into separate $brace-params forms.
+  ;; This is critical because the parser's parse-brace-typed-binders only supports
+  ;; ONE colon per $brace-params group — all names share the same type.
+  ;; So {A} {C : Type -> Type} must become two separate groups, not one flat list.
+  (define brace-forms
     (if (null? implicit-binders)
-        #f
-        ;; Build ($brace-params name1 name2 ...) for bare Type binders
-        ;; or ($brace-params name1 : kind1 name2 : kind2 ...) for kinded binders
-        (let ([parts
-               (apply append
-                 (for/list ([bnd (in-list implicit-binders)])
-                   (define bname (car bnd))
-                   (define bkind (cdr bnd))
-                   (if (equal? bkind '(Type 0))
-                       (list bname)  ;; bare — default kind
-                       (list bname ': bkind))))])  ;; kinded
-          `($brace-params ,@parts))))
+        '()
+        ;; Group consecutive binders with the same kind
+        (let loop ([remaining implicit-binders] [groups '()])
+          (cond
+            [(null? remaining) (reverse groups)]
+            [else
+             (define current-kind (cdr (car remaining)))
+             ;; Collect consecutive binders with the same kind
+             (define-values (same-kind rest)
+               (splitf-at remaining (lambda (bnd) (equal? (cdr bnd) current-kind))))
+             (define names (map car same-kind))
+             (define form
+               (if (equal? current-kind '(Type 0))
+                   `($brace-params ,@names)
+                   `($brace-params ,@names : ,current-kind)))
+             (loop rest (cons form groups))]))))
   ;; Assemble: (defn name [typed-bracket...] ($angle-type ret) body-forms...)
-  ;; With implicits: (defn name ($brace-params ...) [typed-bracket...] ($angle-type ret) body-forms...)
+  ;; With implicits: (defn name ($brace-params ...) ... [typed-bracket...] ($angle-type ret) body-forms...)
   ;; If constraints were stripped, append `where` so maybe-inject-where adds them back.
   (define base-defn
     (cond
@@ -1571,11 +1578,11 @@
        `(defn ,name ,typed-bracket ,ret-angle ,@body-forms)]
       [else
        `(defn ,name ,typed-bracket ,ret-angle where ,@where-constraints ,@body-forms)]))
-  ;; Prepend brace-form after name if present
-  (if brace-form
+  ;; Prepend brace-forms after name if present
+  (if (null? brace-forms)
+      base-defn
       (let ([after-name (cddr base-defn)])
-        `(defn ,name ,brace-form ,@after-name))
-      base-defn))
+        `(defn ,name ,@brace-forms ,@after-name))))
 
 ;; Inject spec types into a multi-arity defn datum.
 ;; Each $pipe clause gets its corresponding spec branch type.
