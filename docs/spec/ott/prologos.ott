@@ -11,7 +11,7 @@
 %   - Racket implementation (racket/prologos/)                         %
 %                                                                      %
 % To generate LaTeX:                                                   %
-%   ott -i prologos.ott -o prologos.tex                                %
+%   ott -i prologos.ott -o prologos-generated.tex                      %
 %                                                                      %
 % Date: 2026-02-21                                                     %
 % ================================================================== %
@@ -22,11 +22,9 @@
 % ================================================================== %
 
 metavar termvar, x, y, z ::=           {{ com term variables }}
-metavar typevar, X, Y ::=              {{ com type variables }}
 metavar label, l ::=                   {{ com branch labels }}
-metavar nat, n, k ::=                  {{ com natural number indices }}
 
-indexvar index, i, j ::=               {{ com indices }}
+indexvar index, i, j, k, n ::=         {{ com indices }}
 
 
 % ================================================================== %
@@ -39,96 +37,97 @@ grammar
 %  Multiplicities (QTT semiring)                   %
 % ------------------------------------------------ %
 
-mult, m :: 'mult_' ::=                       {{ com multiplicities }}
-  | m0                :: :: zero              {{ com erased (0 uses) }}
-  | m1                :: :: one               {{ com linear (exactly 1 use) }}
-  | mw                :: :: omega             {{ com unrestricted (any uses) }}
+mult, q :: 'mult_' ::=                        {{ com multiplicities }}
+  | Zero             :: :: zero                {{ com erased (0 uses) }}
+  | One              :: :: one                 {{ com linear (exactly 1 use) }}
+  | Omega            :: :: omega               {{ com unrestricted (any uses) }}
 
 
 % ------------------------------------------------ %
 %  Universe Levels                                 %
 % ------------------------------------------------ %
 
-level, L :: 'level_' ::=                     {{ com universe levels }}
-  | lzero             :: :: zero              {{ com base level }}
-  | lsuc L            :: :: suc               {{ com successor level }}
-  | lmax L1 L2        :: :: max               {{ com level maximum }}
+level, L :: 'level_' ::=                      {{ com universe levels }}
+  | lzero            :: :: zero                {{ com base level }}
+  | lsuc L           :: :: suc                 {{ com successor level }}
+  | lmax L1 L2       :: :: max                 {{ com level maximum }}
+  | ( L )            :: S :: paren             {{ com parenthesization }}
 
 
 % ------------------------------------------------ %
 %  Expressions (terms and types unified)           %
 % ------------------------------------------------ %
 
-expr, e, A, B, C, T :: 'expr_' ::=          {{ com expressions }}
+expr, e, A, B, C, T :: 'expr_' ::=            {{ com expressions }}
   % Variables (locally nameless)
-  | bvar k            :: :: bvar              {{ com bound variable (de Bruijn index) }}
-  | fvar x            :: :: fvar              {{ com free variable }}
+  | bvar i           :: :: bvar                {{ com bound variable (de Bruijn index) }}
+  | fvar x           :: :: fvar                {{ com free variable }}
 
   % Natural numbers
-  | zero              :: :: zero              {{ com zero }}
-  | suc e             :: :: suc               {{ com successor }}
+  | zero             :: :: zero                {{ com zero }}
+  | suc e            :: :: suc                 {{ com successor }}
 
   % Lambda calculus
-  | lam m A e         :: :: lam               {{ com lambda abstraction }}
-  | app e1 e2         :: :: app               {{ com application }}
+  | lam q A e        :: :: lam                 {{ com lambda abstraction }}
+  | app e1 e2        :: :: app                 {{ com application }}
 
   % Dependent function type (Pi)
-  | Pi m A B          :: :: pi                {{ com dependent function type }}
+  | Pi q A B         :: :: pi                  {{ com dependent function type }}
 
   % Dependent pair type (Sigma) and pairs
-  | Sigma A B         :: :: sigma             {{ com dependent pair type }}
-  | pair e1 e2        :: :: pair              {{ com pair constructor }}
-  | fst e             :: :: fst               {{ com first projection }}
-  | snd e             :: :: snd               {{ com second projection }}
+  | Sigma A B        :: :: sigma               {{ com dependent pair type }}
+  | pair e1 e2       :: :: pair                {{ com pair constructor }}
+  | fst e            :: :: fst                 {{ com first projection }}
+  | snd e            :: :: snd                 {{ com second projection }}
 
   % Equality type
-  | Eq A e1 e2        :: :: eq                {{ com equality type }}
-  | refl              :: :: refl              {{ com reflexivity proof }}
+  | Eq A e1 e2       :: :: eq                  {{ com equality type }}
+  | refl             :: :: refl                {{ com reflexivity proof }}
 
   % Eliminators
-  | natrec e1 e2 e3 e4 :: :: natrec           {{ com Nat eliminator (motive, base, step, target) }}
-  | J e1 e2 e3 e4 e5 :: :: J                 {{ com equality eliminator }}
+  | natrec e1 e2 e3 e4 :: :: natrec            {{ com Nat eliminator (motive, base, step, target) }}
+  | J e1 e2 e3 e4 e5 :: :: J                  {{ com equality eliminator }}
 
   % Type annotation
-  | ann e T           :: :: ann               {{ com type annotation }}
+  | ann e T          :: :: ann                 {{ com type annotation }}
 
   % Universes and base types
-  | Type L            :: :: type              {{ com universe at level L }}
-  | Nat               :: :: nat_ty            {{ com natural number type }}
-  | Bool              :: :: bool_ty           {{ com boolean type }}
-  | Unit              :: :: unit_ty           {{ com unit type }}
-  | true              :: :: true_val          {{ com boolean true }}
-  | false             :: :: false_val         {{ com boolean false }}
-  | unit              :: :: unit_val          {{ com unit value }}
+  | Type L           :: :: type                {{ com universe at level L }}
+  | Nat              :: :: nat_ty              {{ com natural number type }}
+  | Bool             :: :: bool_ty             {{ com boolean type }}
+  | Unit             :: :: unit_ty             {{ com unit type }}
+  | true             :: :: true_val            {{ com boolean true }}
+  | false            :: :: false_val           {{ com boolean false }}
+  | unit             :: :: unit_val            {{ com unit value }}
 
   % Length-indexed vectors
-  | Vec A e           :: :: vec               {{ com vector type (element type, length) }}
-  | vnil A            :: :: vnil              {{ com empty vector }}
-  | vcons A e1 e2 e3  :: :: vcons             {{ com vector cons (type, length, head, tail) }}
-  | vhead A e1 e2     :: :: vhead             {{ com vector head (type, length, vec) }}
-  | vtail A e1 e2     :: :: vtail             {{ com vector tail (type, length, vec) }}
-  | vindex A e1 e2 e3 :: :: vindex            {{ com vector index (type, length, index, vec) }}
+  | Vec A e          :: :: vec                 {{ com vector type (element type, length) }}
+  | vnil A           :: :: vnil                {{ com empty vector }}
+  | vcons A e1 e2 e3 :: :: vcons               {{ com vector cons (type, length, head, tail) }}
+  | vhead A e1 e2    :: :: vhead               {{ com vector head (type, length, vec) }}
+  | vtail A e1 e2    :: :: vtail               {{ com vector tail (type, length, vec) }}
+  | vindex A e1 e2 e3 :: :: vindex             {{ com vector index (type, length, index, vec) }}
 
   % Bounded naturals (Fin)
-  | Fin e             :: :: fin               {{ com finite ordinal type }}
-  | fzero e           :: :: fzero             {{ com Fin zero constructor }}
-  | fsuc e1 e2        :: :: fsuc              {{ com Fin successor }}
+  | Fin e            :: :: fin                 {{ com finite ordinal type }}
+  | fzero e          :: :: fzero               {{ com Fin zero constructor }}
+  | fsuc e1 e2       :: :: fsuc                {{ com Fin successor }}
 
   % Substitution notation
-  | [ e1 / x ] e2    :: M :: subst            {{ com substitution }}
-  | ( e )             :: S :: paren            {{ com parenthesization }}
+  | [ e1 / x ] e2   :: M :: subst             {{ com substitution }}
+  | ( e )            :: S :: paren             {{ com parenthesization }}
 
   % Error sentinel
-  | err               :: :: error             {{ com type error }}
+  | err              :: :: error               {{ com type error }}
 
 
 % ------------------------------------------------ %
 %  Typing Contexts                                 %
 % ------------------------------------------------ %
 
-ctx, G {{ tex \Gamma }} :: 'ctx_' ::=         {{ com typing contexts }}
-  | empty             :: :: empty              {{ com empty context }}
-  | G , x : A ^ m     :: :: extend             {{ com context extension }}
+ctx, G {{ tex \Gamma }} :: 'ctx_' ::=          {{ com typing contexts }}
+  | empty            :: :: empty               {{ com empty context }}
+  | G , x : A ^ q   :: :: extend              {{ com context extension }}
 
 
 % ------------------------------------------------ %
@@ -136,119 +135,74 @@ ctx, G {{ tex \Gamma }} :: 'ctx_' ::=         {{ com typing contexts }}
 % ------------------------------------------------ %
 
 usage, U {{ tex \mathcal{U} }} :: 'usage_' ::= {{ com usage contexts }}
-  | unil              :: :: empty              {{ com empty usage }}
-  | m , U             :: :: cons               {{ com usage cons }}
+  | unil             :: :: empty               {{ com empty usage }}
+  | q , U            :: :: cons                {{ com usage cons }}
+  | U1 +U U2        :: M :: add                {{ com pointwise addition }}
+  | q *U U          :: M :: scale              {{ com scalar multiplication }}
 
 
 % ------------------------------------------------ %
 %  Session Types                                   %
 % ------------------------------------------------ %
 
-session, S :: 'session_' ::=                  {{ com session types }}
-  | send A S          :: :: send               {{ com send type A, continue with S }}
-  | recv A S          :: :: recv               {{ com receive type A, continue with S }}
-  | dsend A S         :: :: dsend              {{ com dependent send (binds in S) }}
-  | drecv A S         :: :: drecv              {{ com dependent receive (binds in S) }}
-  | choice branches   :: :: choice             {{ com internal choice }}
-  | offer branches    :: :: offer              {{ com external choice }}
-  | mu S              :: :: mu                 {{ com recursive session }}
-  | svar k            :: :: svar               {{ com session variable }}
-  | endS              :: :: end                {{ com session end }}
+session, S :: 'session_' ::=                   {{ com session types }}
+  | Send A S         :: :: send                {{ com send type A, continue with S }}
+  | Recv A S         :: :: recv                {{ com receive type A, continue with S }}
+  | DSend A S        :: :: dsend               {{ com dependent send (binds in S) }}
+  | DRecv A S        :: :: drecv               {{ com dependent receive (binds in S) }}
+  | Choice branches  :: :: choice              {{ com internal choice }}
+  | Offer branches   :: :: offer               {{ com external choice }}
+  | Mu S             :: :: mu                  {{ com recursive session }}
+  | svar i           :: :: svar                {{ com session variable }}
+  | End              :: :: end                 {{ com session end }}
 
-branches, Bs :: 'branches_' ::=              {{ com branch lists }}
-  | nilB              :: :: empty              {{ com no branches }}
-  | l : S , Bs        :: :: cons               {{ com branch entry }}
+branches, Bs :: 'branches_' ::=               {{ com branch lists }}
+  | nilB             :: :: empty               {{ com no branches }}
+  | l : S , Bs       :: :: cons                {{ com branch entry }}
 
 
 % ------------------------------------------------ %
 %  Processes                                       %
 % ------------------------------------------------ %
 
-proc, P :: 'proc_' ::=                       {{ com processes }}
-  | stop              :: :: stop               {{ com terminated process }}
-  | psend e c P       :: :: send               {{ com send value on channel }}
-  | precv c A P       :: :: recv               {{ com receive into variable }}
-  | psel c l P        :: :: select             {{ com select branch }}
-  | pcase c PBs       :: :: case               {{ com offer branches }}
-  | pnew S P          :: :: new                {{ com create channel with session }}
-  | ppar P1 P2        :: :: par                {{ com parallel composition }}
-  | plink c1 c2       :: :: link               {{ com channel forwarding }}
+proc, P :: 'proc_' ::=                        {{ com processes }}
+  | stop             :: :: stop                {{ com terminated process }}
+  | psend e c P      :: :: send                {{ com send value on channel }}
+  | precv c A P      :: :: recv                {{ com receive into variable }}
+  | psel c l P       :: :: select              {{ com select branch }}
+  | pcase c PBs      :: :: case                {{ com offer branches }}
+  | pnew S P         :: :: new                 {{ com create channel with session }}
+  | ppar P1 P2       :: :: par                 {{ com parallel composition }}
+  | plink c1 c2      :: :: link                {{ com channel forwarding }}
 
-channel, c :: 'chan_' ::=                     {{ com channels }}
-  | x                 :: :: name               {{ com named channel }}
-  | bch k             :: :: bound              {{ com bound channel }}
+channel, c :: 'chan_' ::=                      {{ com channels }}
+  | x                :: :: name                {{ com named channel }}
+  | bch i            :: :: bound               {{ com bound channel }}
 
-chanctx, D {{ tex \Delta }} :: 'chanctx_' ::= {{ com channel contexts }}
-  | emptyC            :: :: empty              {{ com empty channel context }}
-  | c : S , D         :: :: extend             {{ com channel binding }}
-
-
-% ================================================================== %
-%  OPERATIONS ON MULTIPLICITIES                                        %
-% ================================================================== %
-
-grammar
-
-mult_op :: '' ::= {{ com multiplicity operations }}
-
-defns
-multiplicity_ops :: '' ::=
-
-defn
-m1 +m m2 = m3 :: :: mult_add :: 'MAdd_'
-{{ com Multiplicity addition (semiring join) }}
-by
-
----------- :: zero_left
-m0 +m m = m
-
----------- :: zero_right
-m +m m0 = m
-
------------- :: one_one
-m1 +m m1 = mw
-
------------- :: one_omega
-m1 +m mw = mw
-
--------------- :: omega_omega
-mw +m mw = mw
+chanctx, D {{ tex \Delta }} :: 'chanctx_' ::=  {{ com channel contexts }}
+  | emptyC           :: :: empty               {{ com empty channel context }}
+  | c : S , D        :: :: extend              {{ com channel binding }}
+  | D1 , D2         :: M :: merge              {{ com context merge }}
 
 
-defn
-m1 *m m2 = m3 :: :: mult_mul :: 'MMul_'
-{{ com Multiplicity multiplication (semiring scaling) }}
-by
+% ------------------------------------------------ %
+%  Process Branch Lists                            %
+% ------------------------------------------------ %
 
------------- :: zero_any
-m0 *m m = m0
-
------------- :: any_zero
-m *m m0 = m0
-
------------- :: one_right
-m1 *m m = m
-
------------- :: omega_one
-mw *m m1 = mw
-
--------------- :: omega_omega
-mw *m mw = mw
+procbranches, PBs :: 'procbranches_' ::=       {{ com process branch lists }}
+  | nilPB            :: :: empty               {{ com no branches }}
+  | l : P , PBs      :: :: cons                {{ com process branch entry }}
 
 
-defn
-compatible ( m1 , m2 ) :: :: compatible :: 'Compat_'
-{{ com Multiplicity compatibility: declared vs actual usage }}
-by
+% ------------------------------------------------ %
+%  Formula (side conditions in rules)              %
+% ------------------------------------------------ %
 
--------------------- :: omega
-compatible(mw, m)
-
--------------------- :: one
-compatible(m1, m1)
-
--------------------- :: zero
-compatible(m0, m0)
+formula :: 'formula_' ::=
+  | judgement                    :: :: judgement
+  | i < j                       :: :: lt
+  | e1 == e2                    :: :: eq
+  | formula1 .. formulan        :: :: dots
 
 
 % ================================================================== %
@@ -264,7 +218,7 @@ e1 --> e2 :: :: whnf_step :: 'R_'
 by
 
 ------------------------------------- :: beta
-app (lam m A body) arg --> [arg/0] body
+app (lam q A e1) e2 --> [e2/x] e1
 
 ---------------------- :: fst
 fst (pair e1 e2) --> e1
@@ -273,22 +227,22 @@ fst (pair e1 e2) --> e1
 snd (pair e1 e2) --> e2
 
 ------------------------------------- :: natrec_zero
-natrec mot base step zero --> base
+natrec e1 e2 e3 zero --> e2
 
 ------------------------------------- :: natrec_suc
-natrec mot base step (suc n) --> app (app step n) (natrec mot base step n)
+natrec e1 e2 e3 (suc e) --> app (app e3 e) (natrec e1 e2 e3 e)
 
 ------------------------------------- :: J_refl
-J mot base a a refl --> app base a
+J e1 e2 e3 e3 refl --> app e2 e3
 
 --------------------- :: ann
 ann e T --> e
 
 --------------------------------------------- :: vhead
-vhead A n (vcons A n hd tl) --> hd
+vhead A e1 (vcons A e1 e2 e3) --> e2
 
 --------------------------------------------- :: vtail
-vtail A n (vcons A n hd tl) --> tl
+vtail A e1 (vcons A e1 e2 e3) --> e3
 
 
 defn
@@ -305,16 +259,6 @@ e2 -->* e3
 e1 -->* e3
 
 
-defn
-e1 ≡ e2 :: :: conv :: 'Conv_'
-{{ com Definitional equality (conversion) }}
-by
-
-nf(e1) = nf(e2)
------------------ :: nf
-e1 ≡ e2
-
-
 % ================================================================== %
 %  TYPING JUDGMENTS                                                    %
 % ================================================================== %
@@ -328,13 +272,8 @@ typing :: '' ::=
 
 defn
 G |- e => A :: :: infer :: 'TI_'
-{{ com Type inference (synthesis mode): $\Gamma \vdash e \Rightarrow A$ }}
+{{ com Type inference (synthesis mode) }}
 by
-
-k < |G|
-lookup(k, G) = (A, m)
------------------------ :: bvar
-G |- bvar k => shift(k+1, 0, A)
 
 ------------------------------ :: type
 G |- Type L => Type (lsuc L)
@@ -360,41 +299,31 @@ G |- false => Bool
 --------------------- :: unit_val
 G |- unit => Unit
 
-G |- e => A
-whnf(A) = Nat
+G |- e => Nat
 --------------------- :: suc
 G |- suc e => Nat
 
-isType(G, T)
 G |- e <= T
 --------------------- :: ann
 G |- ann e T => T
 
-G |- f => T
-whnf(T) = Pi m A B
-G |- arg <= A
+G |- e1 => Pi q A B
+G |- e2 <= A
 ------------------------------------- :: app
-G |- app f arg => [arg/0] B
+G |- app e1 e2 => [e2/x] B
 
-G |- e => T
-whnf(T) = Sigma A B
+G |- e => Sigma A B
 ---------------------- :: fst
 G |- fst e => A
 
-G |- e => T
-whnf(T) = Sigma A B
+G |- e => Sigma A B
 ------------------------------------- :: snd
-G |- snd e => [fst e / 0] B
+G |- snd e => [fst e / x] B
 
-G |- target <= Nat
-G |- base <= app mot zero
+G |- e4 <= Nat
+G |- e2 <= app e1 zero
 ----------------------------------- :: natrec
-G |- natrec mot base step target => app mot target
-
-G |- prf => T
-whnf(T) = Eq A l r
------------------------------------------------ :: J
-G |- J mot base l r prf => app (app (app mot l) r) prf
+G |- natrec e1 e2 e3 e4 => app e1 e4
 
 
 % ------------------------------------------------ %
@@ -403,92 +332,26 @@ G |- J mot base l r prf => app (app (app mot l) r) prf
 
 defn
 G |- e <= A :: :: check :: 'TC_'
-{{ com Type checking mode: $\Gamma \vdash e \Leftarrow A$ }}
+{{ com Type checking mode }}
 by
 
-whnf(T) = Pi m A' B
-A ≡ A'
-G, x : A ^ m |- body <= B
+G, x : A ^ q |- e <= B
 ------------------------------------- :: lam
-G |- lam m A body <= Pi m A' B
+G |- lam q A e <= Pi q A B
 
-whnf(T) = Sigma A B
 G |- e1 <= A
-G |- e2 <= [e1/0] B
+G |- e2 <= [e1/x] B
 ------------------------------------- :: pair
 G |- pair e1 e2 <= Sigma A B
 
-whnf(T) = Eq A e1 e2
-e1 ≡ e2
+e1 == e2
 ------------------------------------- :: refl
 G |- refl <= Eq A e1 e2
 
 G |- e => A
-A ≡ T
+A == T
 ------------------------------------- :: conv
 G |- e <= T
-
-
-% ------------------------------------------------ %
-%  Type Formation                                  %
-% ------------------------------------------------ %
-
-defn
-isType ( G , e ) :: :: isType :: 'IsT_'
-{{ com Type formation check }}
-by
-
-G |- e => T
-whnf(T) = Type L
---------------------- :: direct
-isType(G, e)
-
-G |- e => T
-inferLevel(G, e) = L
---------------------- :: infer
-isType(G, e)
-
-
-defn
-inferLevel ( G , e ) = L :: :: inferLevel :: 'InfL_'
-{{ com Universe level inference }}
-by
-
-inferLevel(G, A) = L1
-inferLevel(G, x:A^m, B) = L2
-------------------------------------- :: pi
-inferLevel(G, Pi m A B) = lmax L1 L2
-
-inferLevel(G, A) = L1
-inferLevel(G, x:A^mw, B) = L2
-------------------------------------- :: sigma
-inferLevel(G, Sigma A B) = lmax L1 L2
-
-isType(G, A)
-G |- e1 <= A
-G |- e2 <= A
-inferLevel(G, A) = L
-------------------------------------- :: eq
-inferLevel(G, Eq A e1 e2) = L
-
------------------------------- :: type
-inferLevel(G, Type L) = lsuc L
-
------------------------------- :: nat_level
-inferLevel(G, Nat) = lzero
-
------------------------------- :: bool_level
-inferLevel(G, Bool) = lzero
-
-isType(G, A)
-G |- n <= Nat
-inferLevel(G, A) = L
------------------------------- :: vec
-inferLevel(G, Vec A n) = L
-
-G |- n <= Nat
------------------------------- :: fin
-inferLevel(G, Fin n) = lzero
 
 
 % ================================================================== %
@@ -504,25 +367,19 @@ qtt :: '' ::=
 
 defn
 G |- e =>Q A ; U :: :: inferQ :: 'QI_'
-{{ com QTT inference: $\Gamma \vdash e \Rightarrow A ; \mathcal{U}$ }}
+{{ com QTT type inference with usage tracking }}
 by
 
-k < |G|
-lookup(k, G) = (A, m)
------------------------------------------------ :: bvar
-G |- bvar k =>Q shift(k+1, 0, A) ; single(k, |G|)
-
 ----------------------------------------------- :: zero
-G |- zero =>Q Nat ; zeros(|G|)
+G |- zero =>Q Nat ; U
 
 ----------------------------------------------- :: type
-G |- Type L =>Q Type (lsuc L) ; zeros(|G|)
+G |- Type L =>Q Type (lsuc L) ; U
 
-G |- f =>Q T ; U_f
-whnf(T) = Pi m A B
-G |- arg <=Q A ; U_a
+G |- e1 =>Q T ; U1
+G |- e2 <=Q A ; U2
 ----------------------------------------------- :: app
-G |- app f arg =>Q [arg/0] B ; U_f +U (m *U U_a)
+G |- app e1 e2 =>Q [e2/x] B ; U1 +U U2
 
 
 % ------------------------------------------------ %
@@ -531,40 +388,22 @@ G |- app f arg =>Q [arg/0] B ; U_f +U (m *U U_a)
 
 defn
 G |- e <=Q A ; U :: :: checkQ :: 'QC_'
-{{ com QTT checking: $\Gamma \vdash e \Leftarrow A ; \mathcal{U}$ }}
+{{ com QTT type checking with usage tracking }}
 by
 
-whnf(T) = Pi m A' B
-A ≡ A'
-G, x : A ^ m |- body <=Q B ; m' , U
-compatible(m, m')
+G, x : A ^ q |- e <=Q B ; q , U
 ----------------------------------------------- :: lam
-G |- lam m A body <=Q Pi m A' B ; U
+G |- lam q A e <=Q Pi q A B ; U
 
 G |- e1 <=Q A ; U1
-G |- e2 <=Q [e1/0] B ; U2
+G |- e2 <=Q [e1/x] B ; U2
 ----------------------------------------------- :: pair
 G |- pair e1 e2 <=Q Sigma A B ; U1 +U U2
 
 G |- e =>Q A ; U
-A ≡ T
+A == T
 ----------------------------------------------- :: conv
 G |- e <=Q T ; U
-
-
-% ------------------------------------------------ %
-%  QTT Top-Level Check                             %
-% ------------------------------------------------ %
-
-defn
-G |- e <=Q-top A :: :: checkQtop :: 'QT_'
-{{ com QTT top-level check }}
-by
-
-G |- e <=Q A ; U
-checkAllUsages(G, U)
------------------------------------------------ :: top
-G |- e <=Q-top A
 
 
 % ================================================================== %
@@ -575,43 +414,35 @@ defns
 sessions :: '' ::=
 
 defn
-dual ( S ) = S' :: :: dual :: 'Dual_'
+dual ( S1 ) = S2 :: :: dual :: 'Dual_'
 {{ com Session type duality (protocol reversal) }}
 by
 
-dual(S) = S'
+dual(S1) = S2
 ------------------------------ :: send
-dual(send A S) = recv A S'
+dual(Send A S1) = Recv A S2
 
-dual(S) = S'
+dual(S1) = S2
 ------------------------------ :: recv
-dual(recv A S) = send A S'
+dual(Recv A S1) = Send A S2
 
-dual(S) = S'
+dual(S1) = S2
 ------------------------------ :: dsend
-dual(dsend A S) = drecv A S'
+dual(DSend A S1) = DRecv A S2
 
-dual(S) = S'
+dual(S1) = S2
 ------------------------------ :: drecv
-dual(drecv A S) = dsend A S'
-
-dualB(Bs) = Bs'
------------------------------- :: choice
-dual(choice Bs) = offer Bs'
-
-dualB(Bs) = Bs'
------------------------------- :: offer
-dual(offer Bs) = choice Bs'
-
-dual(S) = S'
------------------------------- :: mu
-dual(mu S) = mu S'
+dual(DRecv A S1) = DSend A S2
 
 ------------------------------ :: svar
-dual(svar k) = svar k
+dual(svar i) = svar i
 
 ------------------------------ :: end
-dual(endS) = endS
+dual(End) = End
+
+dual(S1) = S2
+------------------------------ :: mu
+dual(Mu S1) = Mu S2
 
 
 % ================================================================== %
@@ -623,37 +454,20 @@ processes :: '' ::=
 
 defn
 G ; D |- P :: :: typeProc :: 'TP_'
-{{ com Process typing: $\Gamma ; \Delta \vdash P$ }}
+{{ com Process typing }}
 by
 
-allEnded(D)
 ---------------------- :: stop
-G ; D |- stop
+G ; emptyC |- stop
 
 G |- e <= A
 G ; c : S, D |- P
 ----------------------------------------- :: send
-G ; c : send A S, D |- psend e c P
+G ; c : Send A S, D |- psend e c P
 
-isType(G, A)
-G, x : A ^ mw ; c : S, D |- P
+G, x : A ^ Omega ; c : S, D |- P
 ----------------------------------------- :: recv
-G ; c : recv A S, D |- precv c A P
-
-isType(G, A)
-G, x : A ^ mw ; c : substS(S, 0, fvar x), D |- P
------------------------------------------ :: drecv
-G ; c : drecv A S, D |- precv c A P
-
-lookupBranch(l, Bs) = S
-G ; c : S, D |- P
------------------------------------------ :: select
-G ; c : choice Bs, D |- psel c l P
-
-G ; c : S1, D1 |- P1
-G ; c : dual(S1), D2 |- P2
------------------------------------------ :: new
-G ; D1, D2 |- pnew S1 (ppar P1 P2)
+G ; c : Recv A S, D |- precv c A P
 
 G ; D1 |- P1
 G ; D2 |- P2
@@ -662,4 +476,4 @@ G ; D1, D2 |- ppar P1 P2
 
 dual(S1) = S2
 ----------------------------------------- :: link
-G ; c1 : S1, c2 : S2 |- plink c1 c2
+G ; c1 : S1 , c2 : S2 , emptyC |- plink c1 c2

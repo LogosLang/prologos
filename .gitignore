@@ -9,6 +9,13 @@
 # LaTeX image previews
 ltximg/
 
+# Ott-generated files
+docs/spec/ott/prologos-generated.tex
+docs/spec/ott/*.aux
+docs/spec/ott/*.log
+docs/spec/ott/*.out
+docs/spec/ott/*.pdf
+
 # macOS
 .DS_Store
 

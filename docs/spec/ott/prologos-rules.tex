@@ -39,7 +39,7 @@ bound variables are de~Bruijn indices ($\mathit{bvar}~k$), while free
 variables are named ($\mathit{fvar}~x$). This avoids $\alpha$-equivalence
 issues in the metatheory.
 
-\subsection{Grammar}
+\subsection{Expressions}
 
 \ottgrammartabular{ottexpr\ottinterrule}
 
@@ -47,9 +47,9 @@ issues in the metatheory.
 
 The multiplicity semiring $\{0, 1, \omega\}$ governs resource usage:
 \begin{itemize}
-  \item $\mathtt{m0}$: erased (compile-time only, 0 runtime uses)
-  \item $\mathtt{m1}$: linear (exactly 1 runtime use)
-  \item $\mathtt{mw}$: unrestricted (any number of uses)
+  \item \textbf{Zero}: erased (compile-time only, 0 runtime uses)
+  \item \textbf{One}: linear (exactly 1 runtime use)
+  \item \textbf{Omega}: unrestricted (any number of uses)
 \end{itemize}
 
 \ottgrammartabular{ottmult\ottinterrule}
@@ -66,13 +66,31 @@ Session types describe communication protocols on channels:
 
 \ottgrammartabular{ottsession\ottinterrule}
 
+\subsection{Branches}
+
+\ottgrammartabular{ottbranches\ottinterrule}
+
 \subsection{Typing Contexts}
 
 \ottgrammartabular{ottctx\ottinterrule}
 
-\section{Multiplicity Operations}
+\subsection{Usage Contexts (QTT)}
 
-\ottdefnsmultiplicityXops
+\ottgrammartabular{ottusage\ottinterrule}
+
+\subsection{Processes}
+
+\ottgrammartabular{ottproc\ottinterrule}
+
+\subsection{Channels and Channel Contexts}
+
+\ottgrammartabular{ottchannel\ottinterrule}
+\ottgrammartabular{ottchanctx\ottinterrule}
+
+\subsection{Process Branches}
+
+\ottgrammartabular{ottprocbranches\ottinterrule}
+
 
 \section{Reduction}
 
@@ -81,12 +99,17 @@ type checking, and \emph{full normalization} (NF) for definitional equality.
 
 \subsection{Single-Step WHNF Reduction}
 
-\ottdefnswhnfXstep
+\ottdefnwhnfXXstep{}
+
+\subsection{Weak Head Normal Form (Transitive Closure)}
+
+\ottdefnwhnf{}
 
 \subsection{Definitional Equality}
 
 Two terms are definitionally equal ($e_1 \equiv e_2$) iff their full normal
 forms are syntactically identical: $\mathit{nf}(e_1) = \mathit{nf}(e_2)$.
+
 
 \section{Typing}
 
@@ -98,19 +121,12 @@ Prologos uses a \emph{bidirectional} type system with two modes:
 
 \subsection{Type Inference (Synthesis)}
 
-\ottdefnsinfer
+\ottdefninfer{}
 
 \subsection{Type Checking}
 
-\ottdefnscheck
+\ottdefncheck{}
 
-\subsection{Type Formation}
-
-\ottdefnsisType
-
-\subsection{Universe Level Inference}
-
-\ottdefnsinferLevel
 
 \section{Quantitative Type Theory (QTT)}
 
@@ -119,25 +135,22 @@ a \emph{usage context} $\mathcal{U}$ recording how many times each
 variable was used:
 
 \begin{itemize}
-  \item \textbf{QTT Inference}: $\Gamma \vdash e \Rightarrow A ; \mathcal{U}$
-  \item \textbf{QTT Checking}: $\Gamma \vdash e \Leftarrow A ; \mathcal{U}$
+  \item \textbf{QTT Inference}: $\Gamma \vdash e \Rightarrow_Q A \;;\; \mathcal{U}$
+  \item \textbf{QTT Checking}: $\Gamma \vdash e \Leftarrow_Q A \;;\; \mathcal{U}$
 \end{itemize}
 
 Usage contexts compose via pointwise semiring operations:
-$\mathcal{U}_1 \oplus \mathcal{U}_2$ (addition) and
-$m \otimes \mathcal{U}$ (scalar multiplication).
+$\mathcal{U}_1 + \mathcal{U}_2$ (addition) and
+$q \cdot \mathcal{U}$ (scalar multiplication).
 
 \subsection{QTT Inference}
 
-\ottdefnsinferQ
+\ottdefninferQ{}
 
 \subsection{QTT Checking}
 
-\ottdefnscheckQ
+\ottdefncheckQ{}
 
-\subsection{QTT Top-Level Check}
-
-\ottdefnscheckQtop
 
 \section{Session Types}
 
@@ -147,7 +160,8 @@ has $\overline{S}$.
 
 \subsection{Duality}
 
-\ottdefnsdual
+\ottdefndual{}
+
 
 \section{Process Typing}
 
@@ -156,7 +170,8 @@ to their session types:
 
 $$\Gamma ; \Delta \vdash P$$
 
-\ottdefnstypeProc
+\ottdefntypeProc{}
+
 
 \section{Metatheoretic Properties}
 
