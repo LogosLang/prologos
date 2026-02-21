@@ -22,7 +22,7 @@ PDF_OUT = prologos-rules.pdf
 all: $(TEX_OUT)
 
 $(TEX_OUT): $(SOURCES)
-	$(OTT) -i $< -o $@
+	$(OTT) -tex_wrap false -i $< -o $@
 
 pdf: $(TEX_OUT) $(WRAPPER)
 	$(PDFLATEX) $(WRAPPER)
