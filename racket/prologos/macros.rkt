@@ -154,7 +154,8 @@
          extract-where-clause
          maybe-inject-where
          param-type->angle-type
-         ;; Introspection helpers (Phase II)
+         ;; Dot-access and introspection helpers
+         rewrite-dot-access
          rewrite-infix-operators
          maybe-inject-spec
          maybe-inject-spec-def
@@ -731,7 +732,18 @@
 ;; Also merges consecutive bodyless let forms (sibling lets) before expansion.
 ;; Also combines foreign escape blocks (racket { ... } [captures] -> [exports]).
 (define (preparse-expand-subforms datum reg depth)
-  ;; First: rewrite infix operators (|>, >>) before other expansions
+  ;; First: rewrite dot-access sentinels (.field, .:kw) before infix operators,
+  ;; so that `user.name |> f` first desugars to `(map-get user :name)` then pipes.
+  (define dot-rewritten (rewrite-dot-access datum))
+  (cond
+    [(not (equal? dot-rewritten datum))
+     ;; Dot-access rewrite happened — re-expand the result through preparse
+     ;; (this will re-enter preparse-expand-subforms for further rewrites)
+     (if (list? dot-rewritten)
+         (preparse-expand-form dot-rewritten reg depth)
+         dot-rewritten)]
+    [else
+  ;; Second: rewrite infix operators (|>, >>) before other expansions
   (define infix-rewritten (rewrite-infix-operators datum))
   (when (not (equal? infix-rewritten datum))
     ;; Infix operator was rewritten — re-expand the result through preparse
@@ -752,7 +764,7 @@
      ;; Return expanded if any transformation changed the datum.
      ;; Compare against original datum (not intermediate) to preserve
      ;; changes from combining passes (foreign blocks, pipe grouping, let merging).
-     (if (equal? expanded datum) datum expanded)]))
+     (if (equal? expanded datum) datum expanded)])]))
 
 ;; For $pipe forms (WS match arms), group body elements after -> into a single list.
 ;; ($pipe ctor args... -> e1 e2 e3) → ($pipe ctor args... -> (e1 e2 e3))
@@ -2334,6 +2346,74 @@
   ;; A single-element segment like ((fn ...)) stays as ((fn ...)) so that
   ;; apply-pipe-step sees a one-element list whose car is a list → application.
   `($pipe-gt ,init ,@(cdr segments)))
+
+;; ============================================================
+;; Dot-access rewriting
+;; ============================================================
+;; Rewrites ($dot-access field) and ($dot-key :kw) sentinels into map-get calls.
+;; Called from preparse-expand-subforms BEFORE infix operator rewriting, so that
+;; `user.name |> string-length` first becomes `(map-get user :name)` then pipes.
+
+;; Check if a datum element is a ($dot-access field) sentinel
+(define (dot-access? x)
+  (and (list? x) (= (length x) 2) (eq? (car x) '$dot-access)))
+
+;; Check if a datum element is a ($dot-key :kw) sentinel
+(define (dot-key? x)
+  (and (list? x) (= (length x) 2) (eq? (car x) '$dot-key)))
+
+;; Rewrite dot-access sentinels in a flat datum list.
+;; Pattern 1: (expr ($dot-access f1) ($dot-access f2) ...)
+;;   → (map-get (map-get expr :f1) :f2)  (left-to-right chaining)
+;; Pattern 2: (($dot-key :kw) expr) at head position
+;;   → (map-get expr :kw)
+;; Pattern 3: ($dot-key :kw) standalone (length=1 after splitting)
+;;   → (fn ($x : _) (map-get $x :kw))  (partial application for piping)
+(define (rewrite-dot-access datum)
+  (cond
+    [(not (list? datum)) datum]
+    [(null? datum) datum]
+    ;; Check for any dot-access or dot-key sentinels in the list
+    [(not (or (ormap dot-access? datum) (ormap dot-key? datum)))
+     datum]
+    ;; Pattern 2: ($dot-key :kw) at head, with at least one more element
+    [(and (dot-key? (car datum)) (>= (length datum) 2))
+     (define kw (cadr (car datum)))
+     (define expr (cadr datum))
+     (define rest-elems (cddr datum))
+     ;; Build (map-get expr :kw), then handle any remaining elements
+     (define rewritten `(map-get ,expr ,kw))
+     (if (null? rest-elems)
+         rewritten
+         ;; If there are more elements, recur on the rebuilt list
+         (rewrite-dot-access (cons rewritten rest-elems)))]
+    ;; Pattern 3: standalone ($dot-key :kw) — single element list
+    [(and (= (length datum) 1) (dot-key? (car datum)))
+     (define kw (cadr (car datum)))
+     `(fn ($x : _) (map-get $x ,kw))]
+    ;; Pattern 1: scan for ($dot-access ...) sentinels, fold left
+    [else
+     (define result
+       (let loop ([elems datum] [acc '()])
+         (cond
+           [(null? elems) (reverse acc)]
+           [(dot-access? (car elems))
+            ;; Must have a preceding element to attach to
+            (if (null? acc)
+                ;; No preceding element — just leave sentinel as-is (error case)
+                (loop (cdr elems) (cons (car elems) acc))
+                ;; Fold: wrap preceding element with map-get
+                (let* ([field (cadr (car elems))]
+                       [target (car acc)]
+                       [wrapped `(map-get ,target ,(string->symbol
+                                                     (string-append ":" (symbol->string field))))])
+                  (loop (cdr elems) (cons wrapped (cdr acc)))))]
+           [else
+            (loop (cdr elems) (cons (car elems) acc))])))
+     ;; If result is a single-element list, unwrap it
+     (if (and (pair? result) (null? (cdr result)))
+         (car result)
+         result)]))
 
 ;; Rewrite infix operators ($pipe-gt, $compose) in a datum.
 ;; Called from preparse-expand-subforms before recursing into subexpressions.
