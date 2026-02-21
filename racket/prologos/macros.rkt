@@ -154,7 +154,8 @@
          extract-where-clause
          maybe-inject-where
          param-type->angle-type
-         ;; Dot-access and introspection helpers
+         ;; Implicit map, dot-access, and introspection helpers
+         rewrite-implicit-map
          rewrite-dot-access
          rewrite-infix-operators
          maybe-inject-spec
@@ -732,6 +733,13 @@
 ;; Also merges consecutive bodyless let forms (sibling lets) before expansion.
 ;; Also combines foreign escape blocks (racket { ... } [captures] -> [exports]).
 (define (preparse-expand-subforms datum reg depth)
+  ;; Zero: rewrite implicit map blocks (:key value children → $brace-params)
+  ;; before dot-access/infix, since it reshapes the overall form structure.
+  (define map-rewritten (rewrite-implicit-map datum))
+  (cond
+    [(not (equal? map-rewritten datum))
+     (preparse-expand-form map-rewritten reg depth)]
+    [else
   ;; First: rewrite dot-access sentinels (.field, .:kw) before infix operators,
   ;; so that `user.name |> f` first desugars to `(map-get user :name)` then pipes.
   (define dot-rewritten (rewrite-dot-access datum))
@@ -764,7 +772,7 @@
      ;; Return expanded if any transformation changed the datum.
      ;; Compare against original datum (not intermediate) to preserve
      ;; changes from combining passes (foreign blocks, pipe grouping, let merging).
-     (if (equal? expanded datum) datum expanded)])]))
+     (if (equal? expanded datum) datum expanded)])])]))
 
 ;; For $pipe forms (WS match arms), group body elements after -> into a single list.
 ;; ($pipe ctor args... -> e1 e2 e3) → ($pipe ctor args... -> (e1 e2 e3))
@@ -2346,6 +2354,107 @@
   ;; A single-element segment like ((fn ...)) stays as ((fn ...)) so that
   ;; apply-pipe-step sees a one-element list whose car is a list → application.
   `($pipe-gt ,init ,@(cdr segments)))
+
+;; ============================================================
+;; Implicit map rewriting
+;; ============================================================
+;; Rewrites keyword-headed tails in def/defn forms into $brace-params map literals.
+;; (def m (:name "Alice") (:age 25N)) → (def m ($brace-params :name "Alice" :age 25N))
+;; Nested: (:server (:host "h") (:port 8080)) → :server ($brace-params :host "h" :port 8080)
+;; Dash children: (:items (- (:k1 v1)) (- (:k2 v2))) → :items ($vec-literal ...)
+
+;; Is x a list whose car is a keyword-like symbol (starts with :)?
+(define (keyword-headed? x)
+  (and (pair? x) (keyword-like-symbol? (car x))))
+
+;; Is x a list whose car is the symbol '-'?
+(define (dash-headed? x)
+  (and (pair? x) (eq? (car x) '-)))
+
+;; Are all elements in lst keyword-headed or dash-headed?
+(define (all-keyword-or-dash-headed? lst)
+  (and (pair? lst)
+       (andmap (lambda (x) (or (keyword-headed? x) (dash-headed? x))) lst)))
+
+;; Does datum have a non-empty keyword-headed tail?
+(define (has-keyword-tail? datum)
+  (and (pair? datum)
+       (>= (length datum) 2)
+       (let loop ([elems (cdr datum)])
+         (cond
+           [(null? elems) #f]
+           [(and (pair? elems) (or (keyword-headed? (car elems)) (dash-headed? (car elems)))
+                 (all-keyword-or-dash-headed? elems))
+            #t]
+           [else (loop (cdr elems))]))))
+
+;; Split datum into prefix + keyword tail.
+;; Returns (values prefix keyword-tail) where keyword-tail is the longest
+;; suffix of keyword-headed/dash-headed elements.
+(define (split-keyword-tail datum)
+  (define len (length datum))
+  ;; Find the first index from which all remaining are keyword/dash-headed
+  (define start-idx
+    (let loop ([i (- len 1)])
+      (cond
+        [(< i 0) 0]
+        [(or (keyword-headed? (list-ref datum i))
+             (dash-headed? (list-ref datum i)))
+         (loop (- i 1))]
+        [else (+ i 1)])))
+  (values (take datum start-idx) (drop datum start-idx)))
+
+;; Process one keyword-headed child (:key val1 val2 ...) into key + processed value.
+;; Returns a list of elements to splice into $brace-params.
+(define (process-implicit-map-child child)
+  (define key (car child))
+  (define vals (cdr child))
+  (cond
+    ;; (:key) — keyword with no value (error, but pass through)
+    [(null? vals) (list key)]
+    ;; (:key val) — single value
+    [(and (= (length vals) 1) (not (keyword-headed? (car vals))) (not (dash-headed? (car vals))))
+     (list key (car vals))]
+    ;; (:key (- ...) (- ...) ...) — all dash-headed → PVec of processed elements
+    [(andmap dash-headed? vals)
+     (list key `($vec-literal ,@(map process-dash-child vals)))]
+    ;; (:key (:k2 v2) (:k3 v3) ...) — nested keyword children → recursive map
+    [(all-keyword-or-dash-headed? vals)
+     (list key (implicit-map-children->brace-params vals))]
+    ;; Fallback: multiple values that aren't all keyword-headed — leave as-is
+    [else (list key (if (= (length vals) 1) (car vals) vals))]))
+
+;; Process one dash-headed child (- child1 child2 ...) into a PVec element.
+(define (process-dash-child child)
+  (define vals (cdr child))
+  (cond
+    ;; (- (:k1 v1) (:k2 v2)) — keyword children → nested map
+    [(and (pair? vals) (all-keyword-or-dash-headed? vals))
+     (implicit-map-children->brace-params vals)]
+    ;; (- val) — single value
+    [(and (pair? vals) (null? (cdr vals)))
+     (car vals)]
+    ;; (- v1 v2 ...) — multiple non-keyword values, wrap in list
+    [else `(,@vals)]))
+
+;; Convert a list of keyword-headed children to ($brace-params k1 v1 k2 v2 ...).
+(define (implicit-map-children->brace-params children)
+  `($brace-params ,@(apply append (map process-implicit-map-child
+                                       (filter keyword-headed? children)))))
+
+;; Top-level: detect def/defn forms with keyword-headed tails, rewrite.
+(define (rewrite-implicit-map datum)
+  (cond
+    [(not (list? datum)) datum]
+    [(null? datum) datum]
+    ;; Scope: only def/defn head forms that have a keyword tail
+    [(and (pair? datum)
+          (memq (car datum) '(def defn))
+          (has-keyword-tail? datum))
+     (define-values (prefix keyword-tail) (split-keyword-tail datum))
+     (define brace-contents (implicit-map-children->brace-params keyword-tail))
+     (append prefix (list brace-contents))]
+    [else datum]))
 
 ;; ============================================================
 ;; Dot-access rewriting
