@@ -192,6 +192,9 @@
  (struct-out expr-reduce-arm)
  ;; Union types
  (struct-out expr-union)
+ ;; Unapplied type constructor (HKT support)
+ (struct-out expr-tycon)
+ builtin-tycon-arity
  ;; Error marker
  (struct-out expr-error)
  ;; Expr predicate
@@ -645,6 +648,28 @@
 (struct expr-union (left right) #:transparent)
 
 ;; ========================================
+;; Unapplied type constructor (HKT support)
+;; ========================================
+;; Represents a type constructor as a first-class entity, e.g., PVec as kind Type -> Type.
+;; Created by normalize-for-resolution during trait resolution; not user-facing syntax.
+;; name : symbol — e.g., 'PVec, 'Map, 'Set, 'List, 'LSeq
+(struct expr-tycon (name) #:transparent)
+
+;; Kind table: maps type constructor names to their arity (number of type arguments).
+;; Used for normalization and kind inference.
+(define builtin-tycon-arity
+  (hasheq 'PVec 1    ;; PVec : Type -> Type
+          'Set  1    ;; Set  : Type -> Type
+          'Map  2    ;; Map  : Type -> Type -> Type
+          'List 1    ;; List : Type -> Type (user-defined but known)
+          'LSeq 1    ;; LSeq : Type -> Type
+          'Vec  2    ;; Vec  : Type -> Nat -> Type
+          'TVec 1    ;; TVec : Type -> Type
+          'TMap 2    ;; TMap : Type -> Type -> Type
+          'TSet 1))  ;; TSet : Type -> Type
+
+
+;; ========================================
 ;; Error marker (for failed inference)
 ;; ========================================
 (struct expr-error () #:transparent)
@@ -723,7 +748,7 @@
       (expr-tmap-assoc!? x) (expr-tmap-dissoc!? x)
       (expr-tset-insert!? x) (expr-tset-delete!? x)
       (expr-hole? x) (expr-meta? x) (expr-reduce? x)
-      (expr-union? x) (expr-error? x)))
+      (expr-union? x) (expr-tycon? x) (expr-error? x)))
 
 ;; ========================================
 ;; Convenience: convert Racket natural to Prologos numerals

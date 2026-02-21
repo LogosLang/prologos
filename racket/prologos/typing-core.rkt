@@ -143,6 +143,18 @@
        [(just-level lv) (expr-Type lv)]
        [_ (expr-error)])]
 
+    ;; ---- Unapplied type constructor (HKT) ----
+    ;; Returns the kind as a curried Pi type: Type -> Type -> ... -> Type
+    ;; Arity from builtin-tycon-arity table
+    [(expr-tycon name)
+     (let ([arity (hash-ref builtin-tycon-arity name #f)])
+       (if arity
+           (let loop ([n arity])
+             (if (= n 0)
+                 (expr-Type (lzero))
+                 (expr-Pi 'm0 (expr-Type (lzero)) (loop (sub1 n)))))
+           (expr-error)))]
+
     ;; ---- Natural numbers ----
     [(expr-Nat) (expr-Type (lzero))]
     [(expr-zero) (expr-Nat)]

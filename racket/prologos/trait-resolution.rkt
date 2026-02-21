@@ -15,6 +15,7 @@
          "metavar-store.rkt"
          "macros.rkt"
          "zonk.rkt"
+         "unify.rkt"
          "errors.rkt"
          "source-location.rkt")
 
@@ -26,6 +27,7 @@
          expr->impl-key-str
          ground-expr?
          match-type-pattern
+         match-one
          build-parametric-dict-expr)
 
 ;; ========================================
@@ -44,13 +46,25 @@
     [(expr-pair e1 e2) (and (ground-expr? e1) (ground-expr? e2))]
     [(expr-fvar _) #t]
     [(expr-bvar _) #t]
+    [(expr-tycon _) #t]
     [(expr-Nat) #t]
     [(expr-Bool) #t]
+    [(expr-Int) #t]
+    [(expr-Rat) #t]
+    [(expr-Posit8) #t]
+    [(expr-Posit16) #t]
+    [(expr-Posit32) #t]
+    [(expr-Posit64) #t]
+    [(expr-Keyword) #t]
     [(expr-zero) #t]
     [(expr-true) #t]
     [(expr-false) #t]
     [(expr-Type _) #t]
     [(expr-hole) #t]
+    ;; Built-in parameterized types: check their sub-expressions
+    [(expr-PVec a) (ground-expr? a)]
+    [(expr-Set a) (ground-expr? a)]
+    [(expr-Map k v) (and (ground-expr? k) (ground-expr? v))]
     [_ #t]))  ;; conservative: treat unknown nodes as ground
 
 ;; ========================================
@@ -70,6 +84,12 @@
     [(expr-Posit32) "Posit32"]
     [(expr-Posit64) "Posit64"]
     [(expr-Keyword) "Keyword"]
+    ;; HKT: unapplied type constructor
+    [(expr-tycon name) (symbol->string name)]
+    ;; Built-in parameterized types: extract constructor name
+    [(expr-PVec _) "PVec"]
+    [(expr-Set _) "Set"]
+    [(expr-Map _ _) "Map"]
     [(expr-fvar name) (symbol->string name)]
     [(expr-app f a)
      (string-append (expr->impl-key-str f) "-" (expr->impl-key-str a))]
@@ -133,11 +153,20 @@
      (if existing
          (and (expr-equal? existing core-expr) bindings)
          (hash-set bindings pattern core-expr))]
-    ;; Concrete symbol: match builtin or fvar
+    ;; Concrete symbol: match builtin or fvar or tycon
     [(symbol? pattern)
      (match core-expr
        [(expr-Nat) (and (eq? pattern 'Nat) bindings)]
        [(expr-Bool) (and (eq? pattern 'Bool) bindings)]
+       [(expr-Int) (and (eq? pattern 'Int) bindings)]
+       [(expr-Rat) (and (eq? pattern 'Rat) bindings)]
+       [(expr-Posit8) (and (eq? pattern 'Posit8) bindings)]
+       [(expr-Posit16) (and (eq? pattern 'Posit16) bindings)]
+       [(expr-Posit32) (and (eq? pattern 'Posit32) bindings)]
+       [(expr-Posit64) (and (eq? pattern 'Posit64) bindings)]
+       [(expr-Keyword) (and (eq? pattern 'Keyword) bindings)]
+       ;; HKT: unapplied type constructor matches its name
+       [(expr-tycon name) (and (symbol-matches? pattern name) bindings)]
        [(expr-fvar n) (and (symbol-matches? pattern n) bindings)]
        [_ #f])]
     ;; Compound pattern: (Constructor Args...)
@@ -228,11 +257,15 @@
 ;; ========================================
 
 ;; Walk all trait-constraint metas and resolve those with ground type args.
+;; HKT: normalize type args via normalize-for-resolution so that built-in
+;; types like (expr-PVec A) are converted to (expr-app (expr-tycon 'PVec) A)
+;; and type constructor fvars like (expr-fvar 'List) become (expr-tycon 'List).
 (define (resolve-trait-constraints!)
   (for ([(meta-id tc-info) (in-hash (current-trait-constraint-map))])
     (unless (meta-solved? meta-id)
       (define trait-name (trait-constraint-info-trait-name tc-info))
-      (define type-args (map zonk (trait-constraint-info-type-arg-exprs tc-info)))
+      (define type-args (map (lambda (e) (normalize-for-resolution (zonk e)))
+                             (trait-constraint-info-type-arg-exprs tc-info)))
       (when (andmap ground-expr? type-args)
         (define dict-expr
           (or (try-monomorphic-resolve trait-name type-args)
@@ -251,9 +284,11 @@
   (for/list ([(meta-id tc-info) (in-hash (current-trait-constraint-map))]
              #:when (not (meta-solved? meta-id))
              #:when (andmap ground-expr?
-                           (map zonk (trait-constraint-info-type-arg-exprs tc-info))))
+                           (map (lambda (e) (normalize-for-resolution (zonk e)))
+                                (trait-constraint-info-type-arg-exprs tc-info))))
     (define trait-name (trait-constraint-info-trait-name tc-info))
-    (define type-args (map zonk (trait-constraint-info-type-arg-exprs tc-info)))
+    (define type-args (map (lambda (e) (normalize-for-resolution (zonk e)))
+                           (trait-constraint-info-type-arg-exprs tc-info)))
     (define type-args-str
       (string-join (map expr->impl-key-str type-args) " "))
     ;; Recover source location from the meta's source info

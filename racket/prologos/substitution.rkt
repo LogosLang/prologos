@@ -302,6 +302,9 @@
     [(expr-union l r)
      (expr-union (shift delta cutoff l) (shift delta cutoff r))]
 
+    ;; Unapplied type constructor (HKT) — no bound variables inside
+    [(expr-tycon _) e]
+
     ;; Foreign function (opaque leaf — no Prologos sub-expressions)
     [(expr-foreign-fn _ _ _ _ _ _) e]
 
@@ -603,6 +606,9 @@
     ;; Union types (non-binding)
     [(expr-union l r)
      (expr-union (subst k s l) (subst k s r))]
+
+    ;; Unapplied type constructor (HKT) — no bound variables inside
+    [(expr-tycon _) e]
 
     ;; Foreign function (opaque leaf — no Prologos sub-expressions)
     [(expr-foreign-fn _ _ _ _ _ _) e]

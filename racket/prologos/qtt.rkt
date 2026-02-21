@@ -150,6 +150,9 @@
     [(expr-Quire64) (tu (expr-Type (lzero)) (zero-usage n))]
     [(expr-quire64-val _) (tu (expr-Quire64) (zero-usage n))]
 
+    ;; Unapplied type constructor (HKT) — zero usage, kind from kind table
+    [(expr-tycon _) (tu (infer ctx e) (zero-usage n))]
+
     ;; ---- Type formers: Pi, Sigma, Eq ----
     ;; Type formers inhabit Type. Usage comes from sub-terms.
     ;; For top-level QTT checking of closed terms, these will have zero usage.

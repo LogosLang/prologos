@@ -363,6 +363,10 @@
    (test-dep '(macros.rkt prelude.rkt syntax.rkt source-location.rkt surface-syntax.rkt
                errors.rkt metavar-store.rkt parser.rkt elaborator.rkt pretty-print.rkt
                global-env.rkt driver.rkt namespace.rkt) #t)
+   'test-tycon.rkt
+   (test-dep '(syntax.rkt prelude.rkt metavar-store.rkt substitution.rkt zonk.rkt
+               reduction.rkt typing-core.rkt pretty-print.rkt unify.rkt
+               trait-resolution.rkt global-env.rkt) #f)
    'test-numeric-traits.rkt
    (test-dep '(macros.rkt prelude.rkt syntax.rkt source-location.rkt surface-syntax.rkt
                errors.rkt metavar-store.rkt parser.rkt elaborator.rkt pretty-print.rkt

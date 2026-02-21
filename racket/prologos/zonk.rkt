@@ -285,6 +285,9 @@
     ;; Union types
     [(expr-union l r) (expr-union (zonk l) (zonk r))]
 
+    ;; Unapplied type constructor (HKT) — no metas inside
+    [(expr-tycon _) e]
+
     ;; Foreign function (opaque leaf)
     [(expr-foreign-fn _ _ _ _ _ _) e]
 
@@ -585,6 +588,9 @@
     ;; Union types
     [(expr-union l r) (expr-union (zonk-at-depth depth l) (zonk-at-depth depth r))]
 
+    ;; Unapplied type constructor (HKT) — no metas inside
+    [(expr-tycon _) e]
+
     ;; Foreign function (opaque leaf)
     [(expr-foreign-fn _ _ _ _ _ _) e]
 
@@ -849,6 +855,8 @@
     [(expr-rat-numer a) (expr-rat-numer (default-metas a))]
     [(expr-rat-denom a) (expr-rat-denom (default-metas a))]
     [(expr-union l r) (expr-union (default-metas l) (default-metas r))]
+    ;; Unapplied type constructor (HKT) — no metas inside
+    [(expr-tycon _) e]
     ;; Foreign function (opaque leaf)
     [(expr-foreign-fn _ _ _ _ _ _) e]
     [(expr-reduce scrut arms structural?)

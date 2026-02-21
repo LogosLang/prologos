@@ -35,7 +35,9 @@
          ;; Sprint 2b exports
          decompose-meta-app pattern-check invert-args
          ;; Union type helpers
-         flatten-union)
+         flatten-union
+         ;; HKT normalization
+         normalize-for-resolution normalizable-builtin?)
 
 ;; ========================================
 ;; Sprint 5: Three-valued result helper
@@ -44,6 +46,49 @@
 ;; Callers that need boolean semantics (e.g., (and ... (unify ...)))
 ;; should use (unify-ok? (unify ...)) instead of bare (unify ...).
 (define (unify-ok? result) (not (eq? result #f)))
+
+;; ========================================
+;; HKT: Built-in type normalization for unification
+;; ========================================
+;; Check whether an expression is a built-in parameterized type (e.g., expr-PVec,
+;; expr-Map, expr-Set) that can be normalized to expr-app/expr-tycon form.
+;; This enables the unifier to decompose (expr-PVec A) vs (expr-app ?F A).
+(define (normalizable-builtin? e)
+  (or (expr-PVec? e) (expr-Set? e) (expr-Map? e)
+      (expr-TVec? e) (expr-TSet? e) (expr-TMap? e)))
+
+;; Normalize a core expression to expr-app/expr-tycon form for HKT unification.
+;; Built-in type applications are converted to curried app chains:
+;;   (expr-PVec A)   → (expr-app (expr-tycon 'PVec) A)
+;;   (expr-Map K V)  → (expr-app (expr-app (expr-tycon 'Map) K) V)
+;;   (expr-Set A)    → (expr-app (expr-tycon 'Set) A)
+;; Recursively normalizes sub-expressions so nested types are also converted.
+;; Also promotes known type constructor fvars (e.g., List, LSeq) to expr-tycon.
+(define (normalize-for-resolution e)
+  (match e
+    ;; Built-in parameterized types → expr-app of expr-tycon
+    [(expr-PVec a)   (expr-app (expr-tycon 'PVec) (normalize-for-resolution a))]
+    [(expr-Set a)    (expr-app (expr-tycon 'Set)  (normalize-for-resolution a))]
+    [(expr-Map k v)  (expr-app (expr-app (expr-tycon 'Map) (normalize-for-resolution k))
+                               (normalize-for-resolution v))]
+    [(expr-TVec a)   (expr-app (expr-tycon 'TVec) (normalize-for-resolution a))]
+    [(expr-TSet a)   (expr-app (expr-tycon 'TSet) (normalize-for-resolution a))]
+    [(expr-TMap k v) (expr-app (expr-app (expr-tycon 'TMap) (normalize-for-resolution k))
+                               (normalize-for-resolution v))]
+    ;; Recursive cases
+    [(expr-app f a)  (expr-app (normalize-for-resolution f) (normalize-for-resolution a))]
+    ;; Promote known type constructor fvars to expr-tycon
+    [(expr-fvar name)
+     (if (hash-has-key? builtin-tycon-arity name)
+         (expr-tycon name)
+         e)]
+    ;; Chase solved metas
+    [(expr-meta id)
+     (if (meta-solved? id)
+         (normalize-for-resolution (meta-solution id))
+         e)]
+    ;; Everything else: leave unchanged
+    [_ e]))
 
 ;; ========================================
 ;; Occur Check
@@ -121,6 +166,7 @@
   (match e
     [(expr-app f _) (spine-head f)]
     [(expr-fvar _) e]
+    [(expr-tycon _) e]
     [_ #f]))
 
 (define (unify-spine ctx a b)
@@ -187,6 +233,27 @@
       ;; suc vs suc
       [(and (expr-suc? a) (expr-suc? b))
        (unify ctx (expr-suc-pred a) (expr-suc-pred b))]
+
+      ;; tycon vs tycon (HKT): same name = equal
+      [(and (expr-tycon? a) (expr-tycon? b))
+       (eq? (expr-tycon-name a) (expr-tycon-name b))]
+
+      ;; --- HKT normalization: built-in type vs app ---
+      ;; When one side is a built-in type application (e.g., (expr-PVec A)) and the
+      ;; other is an expr-app (e.g., (expr-app ?F A)), normalize the built-in to
+      ;; expr-app/expr-tycon form so structural decomposition can solve ?F = (expr-tycon 'PVec).
+      [(and (normalizable-builtin? a) (expr-app? b))
+       (unify-whnf ctx (normalize-for-resolution a) b)]
+      [(and (expr-app? a) (normalizable-builtin? b))
+       (unify-whnf ctx a (normalize-for-resolution b))]
+      ;; Both sides are normalizable built-in types: normalize both
+      [(and (normalizable-builtin? a) (normalizable-builtin? b))
+       (unify-whnf ctx (normalize-for-resolution a) (normalize-for-resolution b))]
+      ;; Built-in type vs flex-app (meta-headed app): normalize built-in first
+      [(and (normalizable-builtin? a) (flex-app? b))
+       (unify-whnf ctx (normalize-for-resolution a) b)]
+      [(and (flex-app? a) (normalizable-builtin? b))
+       (unify-whnf ctx a (normalize-for-resolution b))]
 
       ;; app vs app (rigid-rigid): try structural decomposition first
       [(and (expr-app? a) (expr-app? b))
@@ -294,6 +361,7 @@
     [(expr-TVec _) "3:TVec"]
     [(expr-TMap _ _) "3:TMap"]
     [(expr-TSet _) "3:TSet"]
+    [(expr-tycon name) (format "1:tycon:~a" name)]
     [(expr-app _ _) "4:app"]
     [(expr-meta id) (format "5:?~a" id)]
     [_ "9:other"]))

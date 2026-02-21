@@ -1293,6 +1293,7 @@
     [(expr-hole) e]
     [(expr-meta _) e]
     [(expr-error) e]
+    [(expr-tycon _) e]  ;; Unapplied type constructor (HKT) — already normal
 
     ;; Structured terms: normalize subterms
     [(expr-suc e1) (expr-suc (nf e1))]

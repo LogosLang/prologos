@@ -72,6 +72,9 @@
            (format "?~a" id)))]
     [(expr-error) "<error>"]
 
+    ;; Unapplied type constructor (HKT)
+    [(expr-tycon name) (symbol->string name)]
+
     ;; Universes
     [(expr-Type l) (format "[Type ~a]" (pp-level l))]
 
@@ -654,6 +657,7 @@
     [(expr-hole) #f]
     [(expr-meta _) #f]
     [(expr-error) #f]
+    [(expr-tycon _) #f]
     [(expr-suc e1) (uses-bvar0? e1)]
     [(expr-lam _ t body) (or (uses-bvar0? t) (uses-bvar0? body))]
     [(expr-Pi _ dom cod) (or (uses-bvar0? dom) (uses-bvar0? cod))]
