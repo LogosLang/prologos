@@ -375,6 +375,10 @@
    (test-dep '(macros.rkt prelude.rkt syntax.rkt source-location.rkt surface-syntax.rkt
                errors.rkt metavar-store.rkt parser.rkt elaborator.rkt pretty-print.rkt
                global-env.rkt driver.rkt namespace.rkt trait-resolution.rkt) #t)
+   'test-bare-methods.rkt
+   (test-dep '(macros.rkt prelude.rkt syntax.rkt source-location.rkt surface-syntax.rkt
+               errors.rkt metavar-store.rkt parser.rkt elaborator.rkt pretty-print.rkt
+               global-env.rkt driver.rkt namespace.rkt) #t)
    'test-tycon.rkt
    (test-dep '(syntax.rkt prelude.rkt metavar-store.rkt substitution.rkt zonk.rkt
                reduction.rkt typing-core.rkt pretty-print.rkt unify.rkt
@@ -695,6 +699,8 @@
                                   prologos.core.functor-list prologos.core.functor-pvec
                                   prologos.data.nat prologos.data.list prologos.data.lseq)
    'test-coherence.rkt          '(prologos.core.eq-trait prologos.data.nat)
+   'test-bare-methods.rkt       '(prologos.core.eq-trait prologos.core.ord-trait
+                                  prologos.core.add-trait prologos.data.nat)
    'test-hkt-kind.rkt           '(prologos.data.nat prologos.data.option prologos.data.list)
    'test-match-builtins.rkt     '(prologos.data.nat)
    'test-list-literals.rkt      '(prologos.data.nat prologos.data.list)

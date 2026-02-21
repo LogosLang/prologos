@@ -1137,11 +1137,16 @@
 ;; Example: ((Seqable C) (Buildable C) -> ...) → ((Seqable C) (Buildable C))
 ;; Example: (Nat -> Nat) → ()
 (define (extract-inline-constraints tokens)
+  ;; Scan leading tokens, collecting trait-constraint forms.
+  ;; Constraint forms like (Eq A) may be separated by -> arrows:
+  ;;   (Eq A) -> (Add A) -> A -> A -> Bool
+  ;; We skip over -> arrows and keep collecting constraints until we
+  ;; see a non-constraint form after an arrow.
   (let loop ([remaining tokens] [constraints '()])
     (cond
       [(null? remaining) (reverse constraints)]
-      ;; Stop at first arrow
-      [(eq? (car remaining) '->) (reverse constraints)]
+      ;; Skip arrow tokens — constraints may be separated by ->
+      [(eq? (car remaining) '->) (loop (cdr remaining) constraints)]
       ;; Check if this token is a list form (TraitName Var ...)
       [(and (pair? (car remaining))
             (let ([head (car (car remaining))])
@@ -1149,7 +1154,7 @@
                    ;; Check if head is a registered trait
                    (lookup-trait head))))
        (loop (cdr remaining) (cons (car remaining) constraints))]
-      ;; Non-constraint leading token — stop scanning
+      ;; Non-constraint form — stop scanning
       ;; (don't look past non-constraint forms)
       [else (reverse constraints)])))
 
@@ -1285,10 +1290,15 @@
     (desugar-rest-type type-tokens name))
   ;; Prepend where-constraints as leading parameter types
   ;; (Eq A) becomes a leading param type [Eq A], just like existing explicit dict style
+  ;; Note: inline-constraints are ALREADY in desugared-type-tokens, only explicit
+  ;; where-constraints need prepending.
   (define effective-tokens
     (if (null? where-constraints)
         desugared-type-tokens
         (append where-constraints (list '->) desugared-type-tokens)))
+  ;; Store all-constraints (explicit where + inline) in spec entry so that
+  ;; inject-spec-into-defn knows about inline constraints for dict param generation.
+  (define stored-constraints all-constraints)
   ;; Check for multi-arity: effective-tokens contain $pipe forms
   (define has-pipes?
     (ormap (lambda (t) (or (eq? t '$pipe)
@@ -1298,10 +1308,10 @@
     [has-pipes?
      ;; Split on $pipe to get branches
      (define branches (split-on-pipe effective-tokens))
-     (register-spec! name (spec-entry branches docstring #t srcloc-unknown where-constraints refined-implicit-binders rest-type))]
+     (register-spec! name (spec-entry branches docstring #t srcloc-unknown stored-constraints refined-implicit-binders rest-type))]
     [else
      ;; Single-arity: the entire effective-tokens is the type datum
-     (register-spec! name (spec-entry (list effective-tokens) docstring #f srcloc-unknown where-constraints refined-implicit-binders rest-type))]))
+     (register-spec! name (spec-entry (list effective-tokens) docstring #f srcloc-unknown stored-constraints refined-implicit-binders rest-type))]))
 
 ;; Split a token list on '$pipe boundaries.
 ;; Handles two forms:
@@ -1746,7 +1756,10 @@
            [(and (list? (car items))
                  (not (null? (car items)))
                  ;; A param bracket contains symbol names (possibly with type annotations)
-                 (symbol? (caar items)))
+                 (symbol? (caar items))
+                 ;; Skip $brace-params and $angle-type — not parameter brackets
+                 (not (eq? (caar items) '$brace-params))
+                 (not (eq? (caar items) '$angle-type)))
             idx]
            [else (loop (cdr items) (add1 idx))])))
      (define bracket-idx (find-param-bracket before-where))

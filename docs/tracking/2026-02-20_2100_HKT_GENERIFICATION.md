@@ -23,7 +23,7 @@
 | HKT-2 | Kind inference from trait constraints | Done | 22 | — |
 | HKT-3 | Convert Foldable/Functor to `trait`; auto-register manual dict defs in impl registry | Done | 20 | — |
 | HKT-4 | Coherence rules (duplicate detection, most-specific-wins, overlap warnings) | Done | 15 | test-coherence.rkt |
-| HKT-5 | Elaborator: bare method name resolution for implicit dict params | Pending | ~20 | — |
+| HKT-5 | Elaborator: bare method name resolution for implicit dict params | Done | 13 | test-bare-methods.rkt |
 | HKT-6 | Generic ops (gmap, gfilter, gfold, etc.) + Collection bundle + prelude integration | Pending | ~30 | — |
 | HKT-7 | Error messages (no-instance, kind-mismatch, ambiguity, not-in-scope) | Pending | ~12 | — |
 | HKT-8 | Specialization framework (macro + registry, call-site rewriting deferred) | Pending | ~10 | — |
