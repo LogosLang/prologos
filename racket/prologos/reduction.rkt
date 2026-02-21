@@ -1464,6 +1464,14 @@
     [(expr-Keyword) e]
     [(expr-keyword _) e]
 
+    ;; Char normalization
+    [(expr-Char) e]
+    [(expr-char _) e]
+
+    ;; String normalization
+    [(expr-String) e]
+    [(expr-string _) e]
+
     ;; Map normalization
     [(expr-Map k v) (expr-Map (nf k) (nf v))]
     [(expr-champ _) e]

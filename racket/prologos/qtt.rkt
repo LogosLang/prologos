@@ -828,6 +828,12 @@
     ;; Keyword
     [(expr-Keyword) (tu (expr-Type (lzero)) (zero-usage n))]
     [(expr-keyword _) (tu (expr-Keyword) (zero-usage n))]
+    ;; Char
+    [(expr-Char) (tu (expr-Type (lzero)) (zero-usage n))]
+    [(expr-char _) (tu (expr-Char) (zero-usage n))]
+    ;; String
+    [(expr-String) (tu (expr-Type (lzero)) (zero-usage n))]
+    [(expr-string _) (tu (expr-String) (zero-usage n))]
     ;; Map
     [(expr-Map k v)
      (let ([r1 (inferQ ctx k)]
@@ -1284,6 +1290,12 @@
 
     ;; ---- Keyword literal: check against Keyword type ----
     [((expr-keyword _) (expr-Keyword)) (bu #t (zero-usage n))]
+
+    ;; ---- Char literal: check against Char type ----
+    [((expr-char _) (expr-Char)) (bu #t (zero-usage n))]
+
+    ;; ---- String literal: check against String type ----
+    [((expr-string _) (expr-String)) (bu #t (zero-usage n))]
 
     ;; ---- Map constructors: check against Map type ----
     [((expr-champ _) (expr-Map _ _)) (bu #t (zero-usage n))]

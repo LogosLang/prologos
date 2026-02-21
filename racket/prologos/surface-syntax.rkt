@@ -167,6 +167,12 @@
  ;; Keyword surface forms
  (struct-out surf-keyword-type)
  (struct-out surf-keyword)
+ ;; Char surface forms
+ (struct-out surf-char-type)
+ (struct-out surf-char)
+ ;; String surface forms
+ (struct-out surf-string-type)
+ (struct-out surf-string)
  ;; Map surface forms
  (struct-out surf-map-type)
  (struct-out surf-map-literal)
@@ -602,6 +608,18 @@
 ;; ========================================
 (struct surf-keyword-type (srcloc) #:transparent)          ; Keyword type
 (struct surf-keyword (name srcloc) #:transparent)          ; keyword literal, name is a symbol
+
+;; ========================================
+;; Char type and literal
+;; ========================================
+(struct surf-char-type (srcloc) #:transparent)              ; Char type
+(struct surf-char (val srcloc) #:transparent)               ; char literal, val is a Racket char
+
+;; ========================================
+;; String type and literal
+;; ========================================
+(struct surf-string-type (srcloc) #:transparent)            ; String type
+(struct surf-string (val srcloc) #:transparent)             ; string literal, val is a Racket string
 
 ;; ========================================
 ;; Map (CHAMP-backed persistent hash map)

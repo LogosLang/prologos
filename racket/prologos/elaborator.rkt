@@ -1425,6 +1425,18 @@
     [(surf-keyword name loc)
      (expr-keyword name)]
 
+    ;; ---- Char type and literal ----
+    [(surf-char-type loc)
+     (expr-Char)]
+    [(surf-char val loc)
+     (expr-char val)]
+
+    ;; ---- String type and literal ----
+    [(surf-string-type loc)
+     (expr-String)]
+    [(surf-string val loc)
+     (expr-string val)]
+
     ;; ---- Map type and operations ----
     [(surf-map-type k v loc)
      (let ([ek (elaborate k env depth)]

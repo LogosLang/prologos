@@ -191,6 +191,12 @@
     ;; Keyword
     [(expr-Keyword) e]
     [(expr-keyword _) e]
+    ;; Char
+    [(expr-Char) e]
+    [(expr-char _) e]
+    ;; String
+    [(expr-String) e]
+    [(expr-string _) e]
     ;; Map
     [(expr-Map k v) (expr-Map (zonk k) (zonk v))]
     [(expr-champ _) e]
@@ -494,6 +500,12 @@
     ;; Keyword
     [(expr-Keyword) e]
     [(expr-keyword _) e]
+    ;; Char
+    [(expr-Char) e]
+    [(expr-char _) e]
+    ;; String
+    [(expr-String) e]
+    [(expr-string _) e]
     ;; Map
     [(expr-Map k v) (expr-Map (zonk-at-depth depth k) (zonk-at-depth depth v))]
     [(expr-champ _) e]
@@ -768,6 +780,12 @@
     ;; Keyword
     [(expr-Keyword) e]
     [(expr-keyword _) e]
+    ;; Char
+    [(expr-Char) e]
+    [(expr-char _) e]
+    ;; String
+    [(expr-String) e]
+    [(expr-string _) e]
     ;; Map
     [(expr-Map k v) (expr-Map (default-metas k) (default-metas v))]
     [(expr-champ _) e]

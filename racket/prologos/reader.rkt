@@ -539,6 +539,68 @@
       ;; NOTE: Star (*) is now handled by ident-start? above, producing the
       ;; symbol '* instead of '$star. The parser's star-symbol? accepts both.
 
+      ;; Character literal: \a, \newline, \space, \tab, \return, \uXXXX
+      [(char=? c #\\)
+       (tok-read! tok)  ; consume the backslash
+       (define next (tok-peek tok))
+       (cond
+         ;; Unicode escape: \uXXXX — check BEFORE alphabetic branch
+         ;; because 'u' is alphabetic and read-ident-chars! would consume 'u0041' as a name
+         [(and (char? next) (char=? next #\u))
+          ;; Peek ahead to see if next 4 chars after 'u' are hex digits
+          (define port (tokenizer-port tok))
+          (define h1 (peek-char port 1))
+          (cond
+            [(and (char? h1)
+                  (or (char-numeric? h1)
+                      (memv (char-downcase h1) '(#\a #\b #\c #\d #\e #\f))))
+             ;; Looks like \uXXXX — consume 'u' and read 4 hex digits
+             (tok-read! tok)  ; consume 'u'
+             (define hex-chars
+               (let loop ([i 0] [acc '()])
+                 (if (= i 4) (list->string (reverse acc))
+                     (let ([h (tok-peek tok)])
+                       (if (and (char? h)
+                                (or (char-numeric? h)
+                                    (memv (char-downcase h) '(#\a #\b #\c #\d #\e #\f))))
+                           (begin (tok-read! tok) (loop (+ i 1) (cons h acc)))
+                           (error 'prologos-reader
+                                  "~a:~a:~a: Expected 4 hex digits after \\u, got ~a"
+                                  (tokenizer-source tok) ln (+ cl 1) i))))))
+             (define code-point (string->number hex-chars 16))
+             (token 'char (integer->char code-point) ln cl ps (+ 2 (string-length hex-chars)))]
+            [else
+             ;; \u followed by non-hex → single char literal 'u'
+             (tok-read! tok)
+             (token 'char #\u ln cl ps 2)])]
+         ;; Named characters or single alpha char
+         [(and (char? next) (char-alphabetic? next))
+          (define start-pos (+ ps 1))
+          ;; Read all identifier-like chars
+          (define name (read-ident-chars! tok))
+          (define total-len (+ 1 (string-length name)))
+          (cond
+            ;; Single character: \a, \A, \z etc.
+            [(= (string-length name) 1)
+             (token 'char (string-ref name 0) ln cl ps total-len)]
+            ;; Named characters
+            [(string=? name "newline")   (token 'char #\newline ln cl ps total-len)]
+            [(string=? name "space")     (token 'char #\space ln cl ps total-len)]
+            [(string=? name "tab")       (token 'char #\tab ln cl ps total-len)]
+            [(string=? name "return")    (token 'char #\return ln cl ps total-len)]
+            [(string=? name "backspace") (token 'char #\backspace ln cl ps total-len)]
+            [(string=? name "formfeed")  (token 'char (integer->char 12) ln cl ps total-len)]
+            [else
+             (error 'prologos-reader "~a:~a:~a: Unknown named character: \\~a"
+                    (tokenizer-source tok) ln (+ cl 1) name)])]
+         ;; Single non-alpha character: \!, \?, \0 etc.
+         [(char? next)
+          (tok-read! tok)
+          (token 'char next ln cl ps 2)]
+         [else
+          (error 'prologos-reader "~a:~a:~a: Expected character after \\"
+                 (tokenizer-source tok) ln (+ cl 1))])]
+
       [else
        (tok-read! tok)
        (error 'prologos-reader "~a:~a:~a: Unexpected character: ~a"
@@ -1084,6 +1146,9 @@
      (define t (parser-next! p))
      (token->stx t src)]
     [(eq? tt 'keyword)
+     (define t (parser-next! p))
+     (token->stx t src)]
+    [(eq? tt 'char)
      (define t (parser-next! p))
      (token->stx t src)]
     [(eq? tt 'approx-literal)

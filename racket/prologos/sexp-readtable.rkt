@@ -491,8 +491,57 @@
      (define span (- end-pos pos))
      (datum->syntax #f (cons '$set-literal elements)
                     (list src line col pos span))]
+    ;; #\ — Character literal (Racket-style, for sexp mode compatibility)
+    [(and (char? next) (char=? next #\\))
+     (read-char port) ; consume backslash
+     (define c2 (peek-char port))
+     (cond
+       ;; Named character or single alpha char
+       [(and (char? c2) (char-alphabetic? c2))
+        ;; Read all identifier-like chars
+        (define name
+          (let loop ([chars '()])
+            (define c (peek-char port))
+            (cond
+              [(and (char? c) (or (char-alphabetic? c) (char-numeric? c)))
+               (read-char port)
+               (loop (cons c chars))]
+              [else (list->string (reverse chars))])))
+        (define char-val
+          (cond
+            [(= (string-length name) 1) (string-ref name 0)]
+            [(string=? name "newline")   #\newline]
+            [(string=? name "space")     #\space]
+            [(string=? name "tab")       #\tab]
+            [(string=? name "return")    #\return]
+            [(string=? name "backspace") #\backspace]
+            [(string=? name "formfeed")  (integer->char 12)]
+            ;; Unicode escape: uXXXX (consumed as part of name)
+            [(and (> (string-length name) 1)
+                  (char=? (string-ref name 0) #\u)
+                  (= (string-length name) 5)
+                  (for/and ([i (in-range 1 5)])
+                    (let ([c (string-ref name i)])
+                      (or (char-numeric? c)
+                          (memv (char-downcase c) '(#\a #\b #\c #\d #\e #\f))))))
+             (integer->char (string->number (substring name 1) 16))]
+            [else
+             (error 'prologos-reader "~a:~a:~a: Unknown named character: #\\~a"
+                    src (or line 0) (or col 0) name)]))
+        (define end-pos (file-position port))
+        (define span (- end-pos pos))
+        (datum->syntax #f char-val (list src line col pos span))]
+       ;; Single non-alpha character: #\!, #\0, etc.
+       [(char? c2)
+        (read-char port)
+        (define end-pos (file-position port))
+        (define span (- end-pos pos))
+        (datum->syntax #f c2 (list src line col pos span))]
+       [else
+        (error 'prologos-reader "~a:~a:~a: Expected character after #\\"
+               src (or line 0) (or col 0))])]
     [else
-     (error 'prologos-reader "~a:~a:~a: # must be followed by { for Set literal (#{...})"
+     (error 'prologos-reader "~a:~a:~a: # must be followed by { for Set literal (#{...}) or \\ for char literal (#\\a)"
             src (or line 0) (or col 0))]))
 
 ;; Datum-level reader for #{ (used by prologos-sexp-read)

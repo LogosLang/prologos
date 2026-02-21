@@ -347,6 +347,8 @@
     [(expr-Quire32) "0:Quire32"]
     [(expr-Quire64) "0:Quire64"]
     [(expr-Keyword) "0:Keyword"]
+    [(expr-Char) "0:Char"]
+    [(expr-String) "0:String"]
     [(expr-Type l) (format "0:Type~a" l)]
     [(expr-fvar name) (format "1:~a" name)]
     [(expr-bvar idx) (format "2:~a" idx)]

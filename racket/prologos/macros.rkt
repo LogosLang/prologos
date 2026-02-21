@@ -3233,7 +3233,11 @@
 
 ;; Helper: check if a symbol is a known concrete type name (not a type variable)
 (define (known-type-name? sym)
-  (or (memq sym '(Nat Bool Type))
+  (or (memq sym '(Nat Bool Type Int Rat Unit Symbol Keyword Char String
+                  Posit8 Posit16 Posit32 Posit64
+                  Quire8 Quire16 Quire32 Quire64
+                  List Option Result Either Pair
+                  Map Set PVec LSeq Vec Fin Datum Ordering))
       (lookup-ctor sym)       ;; user-defined constructor → known
       (lookup-type-ctors sym) ;; user-defined type → known
       (lookup-trait sym)      ;; trait → known (not a variable)

@@ -316,6 +316,18 @@
     ;; Keyword
     [(expr-Keyword) "Keyword"]
     [(expr-keyword name) (format ":~a" name)]
+    ;; Char
+    [(expr-Char) "Char"]
+    [(expr-char val)
+     (cond
+       [(char=? val #\newline) "\\newline"]
+       [(char=? val #\space)   "\\space"]
+       [(char=? val #\tab)     "\\tab"]
+       [(char=? val #\return)  "\\return"]
+       [else (format "\\~a" val)])]
+    ;; String
+    [(expr-String) "String"]
+    [(expr-string val) (format "~s" val)]
     ;; Map
     [(expr-Map k v) (format "(Map ~a ~a)" (pp-expr k names) (pp-expr v names))]
     [(expr-champ c) "{map ...}"]
@@ -770,6 +782,12 @@
     ;; Keyword
     [(expr-Keyword) #f]
     [(expr-keyword _) #f]
+    ;; Char
+    [(expr-Char) #f]
+    [(expr-char _) #f]
+    ;; String
+    [(expr-String) #f]
+    [(expr-string _) #f]
     ;; Map
     [(expr-Map k v) (or (uses-bvar0? k) (uses-bvar0? v))]
     [(expr-champ _) #f]

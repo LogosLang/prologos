@@ -37,7 +37,8 @@
     Quire32 q32-zero q32-fma q32-to
     Quire64 q64-zero q64-fma q64-to
     Symbol symbol-lit
-    Keyword Map map-empty map-assoc map-get map-dissoc map-size map-has-key? map-keys map-vals
+    Keyword Char String
+    Map map-empty map-assoc map-get map-dissoc map-size map-has-key? map-keys map-vals
     Set set-empty set-insert set-member? set-delete set-size set-union set-intersect set-diff set-to-list
     PVec pvec-empty pvec-push pvec-nth pvec-update pvec-length pvec-pop pvec-concat pvec-slice pvec-to-list pvec-from-list
     TVec TMap TSet transient persist! tvec-push! tvec-update! tmap-assoc! tmap-dissoc! tset-insert! tset-delete!
@@ -446,6 +447,14 @@
     [(and (number? d) (exact? d) (rational? d) (not (integer? d)))
      (surf-rat-lit d loc)]
 
+    ;; String literal → surf-string
+    [(string? d)
+     (surf-string d loc)]
+
+    ;; Char literal → surf-char
+    [(char? d)
+     (surf-char d loc)]
+
     ;; List form
     [(pair? d)
      (parse-list d loc stx)]
@@ -478,6 +487,8 @@
     [(q64-zero) (surf-quire64-zero loc)]
     [(Symbol) (surf-symbol-type loc)]
     [(Keyword) (surf-keyword-type loc)]
+    [(Char) (surf-char-type loc)]
+    [(String) (surf-string-type loc)]
     [(Type)   (surf-type #f loc)]     ;; bare Type → infer level (Sprint 6)
     [(zero)   (surf-zero loc)]
     [(true)   (surf-true loc)]

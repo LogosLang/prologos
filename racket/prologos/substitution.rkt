@@ -206,6 +206,14 @@
     [(expr-Keyword) e]
     [(expr-keyword _) e]
 
+    ;; Char (atom, no subexpressions)
+    [(expr-Char) e]
+    [(expr-char _) e]
+
+    ;; String (atom, no subexpressions)
+    [(expr-String) e]
+    [(expr-string _) e]
+
     ;; Map (all non-binding)
     [(expr-Map k v) (expr-Map (shift delta cutoff k) (shift delta cutoff v))]
     [(expr-champ _) e]  ; Racket value, no de Bruijn vars
@@ -510,6 +518,14 @@
     ;; Keyword (no subexpressions)
     [(expr-Keyword) e]
     [(expr-keyword _) e]
+
+    ;; Char (no subexpressions)
+    [(expr-Char) e]
+    [(expr-char _) e]
+
+    ;; String (no subexpressions)
+    [(expr-String) e]
+    [(expr-string _) e]
 
     ;; Map (all non-binding)
     [(expr-Map kt vt) (expr-Map (subst k s kt) (subst k s vt))]

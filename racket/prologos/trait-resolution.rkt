@@ -56,6 +56,8 @@
     [(expr-Posit32) #t]
     [(expr-Posit64) #t]
     [(expr-Keyword) #t]
+    [(expr-Char) #t]
+    [(expr-String) #t]
     [(expr-zero) #t]
     [(expr-true) #t]
     [(expr-false) #t]
@@ -84,6 +86,8 @@
     [(expr-Posit32) "Posit32"]
     [(expr-Posit64) "Posit64"]
     [(expr-Keyword) "Keyword"]
+    [(expr-Char) "Char"]
+    [(expr-String) "String"]
     ;; HKT: unapplied type constructor
     [(expr-tycon name) (symbol->string name)]
     ;; Built-in parameterized types: extract constructor name
@@ -165,6 +169,8 @@
        [(expr-Posit32) (and (eq? pattern 'Posit32) bindings)]
        [(expr-Posit64) (and (eq? pattern 'Posit64) bindings)]
        [(expr-Keyword) (and (eq? pattern 'Keyword) bindings)]
+       [(expr-Char) (and (eq? pattern 'Char) bindings)]
+       [(expr-String) (and (eq? pattern 'String) bindings)]
        ;; HKT: unapplied type constructor matches its name
        [(expr-tycon name) (and (symbol-matches? pattern name) bindings)]
        [(expr-fvar n) (and (symbol-matches? pattern n) bindings)]

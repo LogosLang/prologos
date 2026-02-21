@@ -707,6 +707,14 @@
     [(expr-Keyword) (expr-Type (lzero))]
     [(expr-keyword _) (expr-Keyword)]
 
+    ;; ---- Char type and literals ----
+    [(expr-Char) (expr-Type (lzero))]
+    [(expr-char _) (expr-Char)]
+
+    ;; ---- String type and literals ----
+    [(expr-String) (expr-Type (lzero))]
+    [(expr-string _) (expr-String)]
+
     ;; ---- Map type and operations ----
     [(expr-Map k v)
      (if (and (is-type ctx k) (is-type ctx v))
@@ -1083,6 +1091,12 @@
     ;; ---- Keyword literal check ----
     [((expr-keyword _) (expr-Keyword)) #t]
 
+    ;; ---- Char literal check ----
+    [((expr-char _) (expr-Char)) #t]
+
+    ;; ---- String literal check ----
+    [((expr-string _) (expr-String)) #t]
+
     ;; ---- Map checks ----
     ;; champ checked against Map K V
     [((expr-champ _) (expr-Map _ _)) #t]
@@ -1411,6 +1425,12 @@
 
     ;; Keyword formation: Keyword : Type(0)
     [(expr-Keyword) (just-level (lzero))]
+
+    ;; Char formation: Char : Type(0)
+    [(expr-Char) (just-level (lzero))]
+
+    ;; String formation: String : Type(0)
+    [(expr-String) (just-level (lzero))]
 
     ;; Map formation: Map K V : Type(max(level(K), level(V)))
     [(expr-Map k v)

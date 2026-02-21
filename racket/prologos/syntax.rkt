@@ -122,6 +122,10 @@
  (struct-out expr-Symbol) (struct-out expr-symbol)
  ;; Keyword type (opaque atomic type for map keys)
  (struct-out expr-Keyword) (struct-out expr-keyword)
+ ;; Char type (opaque atomic type for Unicode codepoints)
+ (struct-out expr-Char) (struct-out expr-char)
+ ;; String type (opaque atomic type for UTF-8 text)
+ (struct-out expr-String) (struct-out expr-string)
  ;; Map (persistent hash map)
  (struct-out expr-Map) (struct-out expr-champ)
  (struct-out expr-map-empty) (struct-out expr-map-assoc)
@@ -458,6 +462,24 @@
 (struct expr-keyword (name) #:transparent)                    ; keyword literal
 
 ;; ========================================
+;; Char (opaque atomic type for Unicode codepoints)
+;; ========================================
+
+;; Type
+(struct expr-Char () #:transparent)                          ; Char : Type 0
+;; Value (val is a Racket character, e.g. #\a)
+(struct expr-char (val) #:transparent)                       ; char literal
+
+;; ========================================
+;; String (opaque atomic type for UTF-8 text)
+;; ========================================
+
+;; Type
+(struct expr-String () #:transparent)                        ; String : Type 0
+;; Value (val is a Racket string, e.g. "hello")
+(struct expr-string (val) #:transparent)                     ; string literal
+
+;; ========================================
 ;; Map (persistent hash map, backed by CHAMP)
 ;; ========================================
 
@@ -724,6 +746,8 @@
       (expr-from-int? x) (expr-rat-numer? x) (expr-rat-denom? x)
       (expr-Symbol? x) (expr-symbol? x)
       (expr-Keyword? x) (expr-keyword? x)
+      (expr-Char? x) (expr-char? x)
+      (expr-String? x) (expr-string? x)
       (expr-Map? x) (expr-champ? x) (expr-map-empty? x)
       (expr-map-assoc? x) (expr-map-get? x) (expr-map-dissoc? x)
       (expr-map-size? x) (expr-map-has-key? x)
