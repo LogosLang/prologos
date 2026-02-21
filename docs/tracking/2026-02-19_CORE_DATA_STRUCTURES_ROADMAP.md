@@ -33,13 +33,13 @@ The Prologos data structure system follows a **Seq-centric** architecture:
 
 **Literal syntax:**
 
-| Syntax | Type | Example |
-|--------|------|---------|
-| `'[1 2 3]` | `List Nat` | List literal (cons/nil) |
-| `@[1 2 3]` | `PVec Nat` | Persistent vector literal |
-| `{:name "Alice" :age 30}` | `Map Keyword Nat` | Hash map literal |
-| `#{1 2 3}` | `Set Nat` | Hash set literal |
-| `~[1 2 3]` | `LSeq Nat` | Lazy sequence literal |
+| Syntax                    | Type              | Example                   |
+|---------------------------|-------------------|---------------------------|
+| `'[1 2 3]`                | `List Nat`        | List literal (cons/nil)   |
+| `@[1 2 3]`                | `PVec Nat`        | Persistent vector literal |
+| `{:name "Alice" :age 30}` | `Map Keyword Nat` | Hash map literal          |
+| `#{1 2 3}`                | `Set Nat`         | Hash set literal          |
+| `~[1 2 3]`                | `LSeq Nat`        | Lazy sequence literal     |
 
 ---
 
@@ -282,40 +282,40 @@ The Prologos data structure system follows a **Seq-centric** architecture:
 
 ## Phase 3: Specialized Structures ⬜ NOT STARTED
 
-| Sub-phase | Structure | Backend | Guide | Notes |
-|-----------|-----------|---------|-------|-------|
-| 3a | SortedMap + SortedSet | B+ Tree | Section 6.1 | Ordered key-value / ordered set |
-| 3b | Deque | Finger Tree | Section 6.2 | Double-ended queue |
-| 3c | PriorityQueue | Pairing Heap | Section 6.3 | Min/max extraction |
-| 3d | LVars + Logical Variables | — | Section 8.1 | Monotonic lattice variables |
-| 3e | LVar-Map + LVar-Set | — | Section 8.2, 8.3 | Lattice-compatible collections |
-| 3f | Propagator Network | — | Section 8.4 | Constraint propagation cells |
-| 3g | Length-Indexed Vec | — | Section 9.1 | Dependent types over collections |
+| Sub-phase | Structure                 | Backend      | Guide            | Notes                            |
+|-----------|---------------------------|--------------|------------------|----------------------------------|
+| 3a        | SortedMap + SortedSet     | B+ Tree      | Section 6.1      | Ordered key-value / ordered set  |
+| 3b        | Deque                     | Finger Tree  | Section 6.2      | Double-ended queue               |
+| 3c        | PriorityQueue             | Pairing Heap | Section 6.3      | Min/max extraction               |
+| 3d        | LVars + Logical Variables | —            | Section 8.1      | Monotonic lattice variables      |
+| 3e        | LVar-Map + LVar-Set       | —            | Section 8.2, 8.3 | Lattice-compatible collections   |
+| 3f        | Propagator Network        | —            | Section 8.4      | Constraint propagation cells     |
+| 3g        | Length-Indexed Vec        | —            | Section 9.1      | Dependent types over collections |
 
 ---
 
 ## Phase 4: Integration + Advanced ⬜ NOT STARTED
 
-| Sub-phase | Feature | Guide | Notes |
-|-----------|---------|-------|-------|
-| 4a | QTT Proof Erasure | Section 9.4 | Erase type-level proofs at runtime |
-| 4b | CRDT Collections | Section 8.5 | Conflict-free replicated data types |
-| 4c | Actor/Place Integration | Section 11.4 | Cross-actor persistent collections |
-| 4d | ConcurrentMap (Ctrie) | Section 6.4 | Lock-free concurrent hash map |
-| 4e | SymbolTable (ART) | Section 6.5 | Adaptive Radix Tree for string keys |
-| 4f | UnionFind (Persistent) | Section 6.6 | Persistent union-find |
+| Sub-phase | Feature                 | Guide        | Notes                               |
+|-----------|-------------------------|--------------|-------------------------------------|
+| 4a        | QTT Proof Erasure       | Section 9.4  | Erase type-level proofs at runtime  |
+| 4b        | CRDT Collections        | Section 8.5  | Conflict-free replicated data types |
+| 4c        | Actor/Place Integration | Section 11.4 | Cross-actor persistent collections  |
+| 4d        | ConcurrentMap (Ctrie)   | Section 6.4  | Lock-free concurrent hash map       |
+| 4e        | SymbolTable (ART)       | Section 6.5  | Adaptive Radix Tree for string keys |
+| 4f        | UnionFind (Persistent)  | Section 6.6  | Persistent union-find               |
 
 ---
 
 ## AST Node Inventory
 
-| Type | Nodes | Description |
-|------|-------|-------------|
-| PVec | 9 | Type, literal, empty, get, set, push, pop, length, to-list |
-| Map | 11 | Type, literal, empty, get, set, delete, has-key?, size, keys, vals, to-list |
-| Set | 11 | Type, literal, empty, insert, member?, delete, size, union, intersect, diff, to-list |
-| Keyword | 2 | Type, literal |
-| LSeq | — | Defined via `data` declaration (lseq-nil, lseq-cell) — no AST nodes |
+| Type    | Nodes | Description                                                                          |
+|---------|-------|--------------------------------------------------------------------------------------|
+| PVec    | 9     | Type, literal, empty, get, set, push, pop, length, to-list                           |
+| Map     | 11    | Type, literal, empty, get, set, delete, has-key?, size, keys, vals, to-list          |
+| Set     | 11    | Type, literal, empty, insert, member?, delete, size, union, intersect, diff, to-list |
+| Keyword | 2     | Type, literal                                                                        |
+| LSeq    | —     | Defined via `data` declaration (lseq-nil, lseq-cell) — no AST nodes                  |
 
 **Total data structure AST nodes: ~33** (plus ~20 from collection trait infrastructure)
 
@@ -343,20 +343,20 @@ Phase 0 (Trait + Seq) ✅
 
 ## Test Summary
 
-| Test File | Count | Phase | Purpose |
-|-----------|-------|-------|---------|
-| `test-lseq.rkt` | 28 | 0 | LSeq lazy sequences |
-| `test-hashable.rkt` | ~15 | 0 | Hashable trait + instances |
-| `test-collection-traits.rkt` | 26 | 0 | Collection trait hierarchy |
-| `test-generic-ops.rkt` | ~18 | 0 | Generic coll-map/filter/length |
-| `test-pvec.rkt` | ~30 | 1a | Persistent vector (RRB-Tree) |
-| `test-map.rkt` | ~30 | 1b | Hash map (CHAMP) + Keyword |
-| `test-lseq-literal.rkt` | 25 | 1c | `~[...]` literal syntax |
-| `test-set.rkt` | 45 | 2a | Hash set (CHAMP-backed) |
-| `test-list-extended.rkt` | 49 | 2b | Extended list stdlib |
-| `test-list-literals.rkt` | ~15 | — | `'[...]` list literal syntax |
-| `test-pipe-compose.rkt` | 69 | 2c | Pipe, compose, transducers |
-| `test-transducer.rkt` | ~10 | 2c | Transducer operations |
+| Test File                    | Count | Phase | Purpose                        |
+|------------------------------|-------|-------|--------------------------------|
+| `test-lseq.rkt`              | 28    | 0     | LSeq lazy sequences            |
+| `test-hashable.rkt`          | ~15   | 0     | Hashable trait + instances     |
+| `test-collection-traits.rkt` | 26    | 0     | Collection trait hierarchy     |
+| `test-generic-ops.rkt`       | ~18   | 0     | Generic coll-map/filter/length |
+| `test-pvec.rkt`              | ~30   | 1a    | Persistent vector (RRB-Tree)   |
+| `test-map.rkt`               | ~30   | 1b    | Hash map (CHAMP) + Keyword     |
+| `test-lseq-literal.rkt`      | 25    | 1c    | `~[...]` literal syntax        |
+| `test-set.rkt`               | 45    | 2a    | Hash set (CHAMP-backed)        |
+| `test-list-extended.rkt`     | 49    | 2b    | Extended list stdlib           |
+| `test-list-literals.rkt`     | ~15   | —     | `'[...]` list literal syntax   |
+| `test-pipe-compose.rkt`      | 69    | 2c    | Pipe, compose, transducers     |
+| `test-transducer.rkt`        | ~10   | 2c    | Transducer operations          |
 
 **Total data-structure-specific tests: ~360**
 
@@ -396,41 +396,41 @@ Phase 0 (Trait + Seq) ✅
 
 ### List Instances (`lib/prologos/core/`)
 
-| File | Trait Implemented |
-|------|-------------------|
-| `seqable-list.prologos` | Seqable for List |
+| File                      | Trait Implemented  |
+|---------------------------|--------------------|
+| `seqable-list.prologos`   | Seqable for List   |
 | `buildable-list.prologos` | Buildable for List |
-| `indexed-list.prologos` | Indexed for List |
-| `functor-list.prologos` | Functor for List |
-| `foldable-list.prologos` | Foldable for List |
+| `indexed-list.prologos`   | Indexed for List   |
+| `functor-list.prologos`   | Functor for List   |
+| `foldable-list.prologos`  | Foldable for List  |
 
 ---
 
 ## Key Implementation Files
 
-| File | Size | Purpose |
-|------|------|---------|
-| `rrb.rkt` | 18 KB | RRB-Tree implementation for PVec |
-| `champ.rkt` | 19 KB | CHAMP trie implementation for Map/Set |
-| `syntax.rkt` | — | All collection AST node definitions |
-| `reduction.rkt` | — | Collection operation reduction rules |
-| `typing-core.rkt` | — | Type rules for collection operations |
-| `macros.rkt` | — | `$vec-literal`, `$set-literal`, `$lseq-literal`, `$pipe-gt`, `$compose` preparse macros |
-| `reader.rkt` | — | `@[`, `~[`, `#{`, `{` token handlers |
-| `sexp-readtable.rkt` | — | `@`, `~`, `#`, `{` readtable handlers |
+| File                 | Size  | Purpose                                                                                 |
+|----------------------|-------|-----------------------------------------------------------------------------------------|
+| `rrb.rkt`            | 18 KB | RRB-Tree implementation for PVec                                                        |
+| `champ.rkt`          | 19 KB | CHAMP trie implementation for Map/Set                                                   |
+| `syntax.rkt`         | —     | All collection AST node definitions                                                     |
+| `reduction.rkt`      | —     | Collection operation reduction rules                                                    |
+| `typing-core.rkt`    | —     | Type rules for collection operations                                                    |
+| `macros.rkt`         | —     | `$vec-literal`, `$set-literal`, `$lseq-literal`, `$pipe-gt`, `$compose` preparse macros |
+| `reader.rkt`         | —     | `@[`, `~[`, `#{`, `{` token handlers                                                    |
+| `sexp-readtable.rkt` | —     | `@`, `~`, `#`, `{` readtable handlers                                                   |
 
 ---
 
 ## Cross-References
 
-| Document | Contents |
-|----------|----------|
-| `IMPLEMENTATION_GUIDE_CORE_DS_PROLOGOS.md` | Full specification — 14 sections, 1768 lines |
-| `memory/core-ds-roadmap.md` | Concise phase status + dependency graph |
-| `MEMORY.md` | Living project state — test counts, architectural patterns |
-| `docs/tracking/2026-02-19_NUMERICS_TOWER_ROADMAP.md` | Companion tracking doc for numerics |
-| `docs/tracking/2026-02-19_HOMOICONICITY_ROADMAP.md` | Homoiconicity roadmap (related: literal syntax sentinels) |
-| `memory/sprint1.1-lessons.md` | Sprint 1.1 extended list stdlib lessons |
+| Document                                             | Contents                                                   |
+|------------------------------------------------------|------------------------------------------------------------|
+| `IMPLEMENTATION_GUIDE_CORE_DS_PROLOGOS.md`           | Full specification — 14 sections, 1768 lines               |
+| `memory/core-ds-roadmap.md`                          | Concise phase status + dependency graph                    |
+| `MEMORY.md`                                          | Living project state — test counts, architectural patterns |
+| `docs/tracking/2026-02-19_NUMERICS_TOWER_ROADMAP.md` | Companion tracking doc for numerics                        |
+| `docs/tracking/2026-02-19_HOMOICONICITY_ROADMAP.md`  | Homoiconicity roadmap (related: literal syntax sentinels)  |
+| `memory/sprint1.1-lessons.md`                        | Sprint 1.1 extended list stdlib lessons                    |
 
 ---
 

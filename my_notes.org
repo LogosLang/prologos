@@ -47,7 +47,7 @@
 
 * primitives
   * (:= varName [: type] expr) inline let variable binding, attached to parent scope
-  * 
+  *
 
 * Logic Language
 ** Runs on Propagator Infrastructure rather than typical SLD/SLG Resolution
@@ -185,8 +185,9 @@ A /relation that produces proofs/, defined /locally/ inside a /function/, return
   - With Map key access, what does it mean for a collection to be an operator in the first position?
     - m.key
     - also with Vec[indx] syntax?
+    - key as first position is functional accessor to map `:key {:key "a"} => "a"`
 
-  - [ ] [[*Bundles][BUNDLES!!!]]
+  - [X] [[*Bundles][BUNDLES!!!]]
   - [X] Return types arity style `A B C -> D` *NOT* curry style: `A -> B -> C -> D`
   - [X] `defn` default public `defn-` default private -- deprecate `provide`
   - [X] `require` QoL - `:as`
@@ -202,11 +203,29 @@ A /relation that produces proofs/, defined /locally/ inside a /function/, return
   - add a javascript foreign import
     - spin up a v8 vm when there's a js import/block, run against that as sibling runtime
 
-** optmiizations
+** optmiizations/audits
   - [ ] loop fusion with |> >>
     - [ ] fusion only on pipe with reduce termination, needs further optimization
   - [ ] Type inference audit
     - we know there's places for improvement
+  - [ ] match desurgering -- do we have proper structural pattern matching?
+    - [ ] audit
+  - [X] claude memory architecture
+  - [ ] narrowing research document
+  - [ ] revisit transients for full full pipeline implementation option
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 ** Array Language!
   - <f g h> Point Free combinators, Combinator Logic
@@ -582,7 +601,7 @@ defn compose [f g]
 
 *** Free standing hash-map: The Implicit HashMap Syntax
   * Keys on same level implicit Hashmap
-  * 
+  *
 
 #+begin_src prologos
 
@@ -597,7 +616,1900 @@ spec add
 
 #+end_src
 
+
+
+
+**** I've also been thinking through this concept of "implicit maps" syntax, something like:
+
+#+begin_src prologos
+def my-map
+  :name "Alice"
+  :age  42
+  :address
+    :city "Springfield"
+    :zip  12345
+    :street
+      :street-name "Main"
+      :street-type "Ave"
+      :street-number 256
+  :friends
+    "Bob" "Candy"
+    "Derick" "Epiphany"
+
+;; parses to =>
+{:name "Alice" :age 42 :address {:city "Springfield" :street {:street-name "Main" :street-type "Ave" :street-number 256 :friends @["Bod" "Candy" "Derick" "Epiphany"]}}}
+
+
+At first I was thinking that we could maintain `[]` as a vector as in Clojure/EDN style, but on second thought, commands as dynamic values could be powerfully useful so we`d need to maintain specificity with the `@[]` syntax ... then we could write `:friends [get-friend-list "Alice"]`
+
+- Implicit Map Syntax: Significant Whitespace for Data
+
+This is a fascinating idea—using indentation to express nested structure.
+
+---
+
+- The Core Concept
+
+#+begin_src prologos
+;; Implicit map: indentation defines nesting
+def config
+  :host "localhost"
+  :port 8080
+  :database
+    :name "mydb"
+    :user "admin"
+    :pool-size 10
+
+;; Equivalent to:
+def config {:host "localhost"
+            :port 8080
+            :database {:name "mydb"
+                       :user "admin"
+                       :pool-size 10}}
+#+end_src
+
+---
+
+- Parsing Rules
+
+#+begin_src
+1. Keyword at start of line + value on same line = key-value pair
+2. Keyword at start of line + indented block = nested map
+3. Non-keyword values in sequence = vector/list
+4. [] is command (evaluation), @[] is vector literal
+5. Deeper indentation = deeper nesting
+#+end_src
+
+---
+
+- Your Example Refined
+
+#+begin_src prologos
+def my-map
+  :name "Alice"
+  :age 42
+  :address
+    :city "Springfield"
+    :zip 12345
+    :street
+      :street-name "Main"
+      :street-type "Ave"
+      :street-number 256
+  :friends
+    "Bob" "Candy"
+    "Derick" "Epiphany"
+
+;; Parses to:
+{:name "Alice"
+ :age 42
+ :address {:city "Springfield"
+           :zip 12345
+           :street {:street-name "Main"
+                    :street-type "Ave"
+                    :street-number 256}}
+ :friends @["Bob" "Candy" "Derick" "Epiphany"]}
+#+end_src
+
+---
+
+- Distinguishing Commands from Data
+
+#+begin_src prologos
+;; [] is COMMAND (evaluated)
+;; @[] is VECTOR LITERAL (data)
+
+def user-record
+  :name "Alice"
+  :friends @["Bob" "Candy"]           ;; literal vector
+  :friend-count [length friends]      ;; computed!
+  :created-at [now]                   ;; evaluated!
+  :tags @[:admin :active]             ;; literal vector of keywords
+  :permissions [get-permissions :admin]  ;; function call
+
+;; Parses to:
+{:name "Alice"
+ :friends @["Bob" "Candy"]
+ :friend-count [length friends]       ;; this gets evaluated
+ :created-at [now]                    ;; this gets evaluated
+ :tags @[:admin :active]
+ :permissions [get-permissions :admin]}
+#+end_src
+
+---
+
+- Ambiguity Resolution
+
+Some cases need clear rules:
+
+#+begin_src prologos
+;; ========================================
+;; Case 1: Values on same line
+;; ========================================
+
+def point
+  :x 10 :y 20        ;; two pairs on one line?
+
+;; Option A: Error (one pair per line)
+;; Option B: Allow, parse as {:x 10 :y 20}
+
+;; Recommendation: One pair per line (cleaner)
+def point
+  :x 10
+  :y 20
+
+;; ========================================
+;; Case 2: Bare values (no keyword)
+;; ========================================
+
+def items
+  "apple"
+  "banana"
+  "cherry"
+
+;; This is a vector, not a map!
+;; => @["apple" "banana" "cherry"]
+
+;; ========================================
+;; Case 3: Mixed keywords and bare values
+;; ========================================
+
+def mixed
+  :header "Title"
+  "body text"
+  "more text"
+  :footer "End"
+
+;; Error? Or special handling?
+;; Recommendation: Error - must be consistent
+
+;; ========================================
+;; Case 4: Nested command
+;; ========================================
+
+def computed
+  :data
+    [fetch-from-db "users"]     ;; command, not nested map
+
+;; Indented [] is still a command
+;; Returns result of fetch-from-db
+
+;; ========================================
+;; Case 5: List of maps
+;; ========================================
+
+def users
+  -
+    :name "Alice"
+    :age 30
+  -
+    :name "Bob"
+    :age 25
+
+;; Using - as item separator (YAML-like)
+;; => @[{:name "Alice" :age 30} {:name "Bob" :age 25}]
+#+end_src
+
+---
+
+- Full Syntax Proposal
+
+#+begin_src prologos
+;; ========================================
+;; Simple map
+;; ========================================
+
+def config
+  :key1 value1
+  :key2 value2
+  :key3 value3
+
+;; => {:key1 value1 :key2 value2 :key3 value3}
+
+;; ========================================
+;; Nested map (indentation)
+;; ========================================
+
+def nested
+  :level1
+    :level2a "value"
+    :level2b
+      :level3 "deep"
+
+;; => {:level1 {:level2a "value" :level2b {:level3 "deep"}}}
+
+;; ========================================
+;; Vector value (explicit @[])
+;; ========================================
+
+def with-vec
+  :items @[1 2 3 4 5]
+  :names @["Alice" "Bob"]
+
+;; => {:items @[1 2 3 4 5] :names @["Alice" "Bob"]}
+
+;; ========================================
+;; Computed value ([] command)
+;; ========================================
+
+def computed
+  :timestamp [now]
+  :user-count [count-users]
+  :config [load-config "app.toml"]
+
+;; => {:timestamp <evaluated> :user-count <evaluated> ...}
+
+;; ========================================
+;; Inline vector of values (bare, same indent)
+;; ========================================
+
+def with-inline
+  :tags
+    :admin :user :guest    ;; multiple keywords = vec of keywords?
+
+;; Ambiguous! Better to be explicit:
+def with-inline
+  :tags @[:admin :user :guest]
+
+;; ========================================
+;; List of maps (- separator)
+;; ========================================
+
+def users
+  -
+    :name "Alice"
+    :role :admin
+  -
+    :name "Bob"
+    :role :user
+  -
+    :name "Carol"
+    :role :guest
+
+;; => @[{:name "Alice" :role :admin}
+;;      {:name "Bob" :role :user}
+;;      {:name "Carol" :role :guest}]
+
+;; ========================================
+;; Mixed: map with list of maps
+;; ========================================
+
+def app-config
+  :name "MyApp"
+  :version "1.0"
+  :endpoints
+    -
+      :path "/users"
+      :method :get
+    -
+      :path "/users"
+      :method :post
+  :database
+    :host "localhost"
+    :port 5432
+
+;; => {:name "MyApp"
+;;     :version "1.0"
+;;     :endpoints @[{:path "/users" :method :get}
+;;                  {:path "/users" :method :post}]
+;;     :database {:host "localhost" :port 5432}}
+#+end_src
+
+---
+
+- Comparison with Other Formats
+
+| Format   | Nesting     | Lists        | Commands | Prologos Equivalent  |
+|----------+-------------+--------------+----------+----------------------|
+| JSON     | ={}=        | =[]=         | None     | ={:k v}=, =@[]=      |
+| EDN      | ={}=        | =[]=, =()=   | None     | ={:k v}=, =@[]=      |
+| YAML     | Indentation | =- item=     | None     | Indentation + =-=    |
+| TOML     | =[section]= | =[]=         | None     | Different            |
+| Prologos | Indentation | =-= or =@[]= | =[]=     | /Best of all worlds/ |
+
+---
+
+- Power of Commands in Data
+
+#+begin_src prologos
+;; ========================================
+;; Dynamic configuration
+;; ========================================
+
+def server-config
+  :host [env "SERVER_HOST" ?: "localhost"]
+  :port [env "SERVER_PORT" |> int ?: 8080]
+  :debug [env "DEBUG" |> bool ?: false]
+  :db
+    :url [env "DATABASE_URL"]
+    :pool-size [env "DB_POOL" |> int ?: 5]
+
+;; ========================================
+;; Computed relationships
+;; ========================================
+
+def user
+  :name "Alice"
+  :email "alice@example.com"
+  :friends [get-friend-list "Alice"]
+  :friend-count [length [get-friend-list "Alice"]]
+  :is-admin [has-role? "Alice" :admin]
+
+;; ========================================
+;; Template-like structures
+;; ========================================
+
+def html-page
+  :doctype "html"
+  :html
+    :head
+      :title [page-title]
+      :meta @[{:charset "utf-8"}]
+    :body
+      :div
+        :class "container"
+        :content [render-content]
+
+;; ========================================
+;; Test fixtures with setup
+;; ========================================
+
+def test-context
+  :db [setup-test-db]
+  :user [create-test-user "test@example.com"]
+  :token [generate-auth-token user]
+  :cleanup [fn [] [teardown-test-db db]]
+#+end_src
+
+---
+
+- Homoiconicity: What's the AST?
+
+#+begin_src prologos
+;; Source (implicit map)
+def config
+  :host "localhost"
+  :port 8080
+  :db
+    :name "mydb"
+
+;; AST (explicit form)
+[def config
+  {:host "localhost"
+   :port 8080
+   :db {:name "mydb"}}]
+
+;; Or if we want implicit-map as its own node:
+[def config
+  [implicit-map
+    [:host "localhost"]
+    [:port 8080]
+    [:db [implicit-map
+           [:name "mydb"]]]]]
+
+;; Quote captures implicit structure
+$[def config
+    :host "localhost"
+    :port 8080]
+
+;; => [def config [implicit-map [:host "localhost"] [:port 8080]]]
+#+end_src
+
+---
+
+- When to Use Which Syntax?
+
+| Syntax         | Use Case                    | Example                      |
+|----------------+-----------------------------+------------------------------|
+| Implicit map   | Config, specs, large data   | =def config :key val ...=    |
+| Explicit ={...}= | Inline, small, one-liners | ={:x 1 :y 2}=                |
+| =@[...]=       | Vector literals             | =@[1 2 3]=                   |
+| =[...]=        | Commands, function calls    | =[get user :name]=           |
+
+#+begin_src prologos
+;; ========================================
+;; Implicit: large, multi-line configs
+;; ========================================
+
+def app-manifest
+  :name "My Application"
+  :version "2.1.0"
+  :description "A sample application"
+  :author
+    :name "Alice Developer"
+    :email "alice@example.com"
+  :dependencies
+    -
+      :name "core-lib"
+      :version "^1.0"
+    -
+      :name "http-client"
+      :version "^2.3"
+  :scripts
+    :build [concat "prologos build " target]
+    :test "prologos test"
+    :deploy [deploy-script env]
+
+;; ========================================
+;; Explicit: inline, in expressions
+;; ========================================
+
+[map (fn [x] {:value x :squared (* x x)}) numbers]
+
+[assoc user :address {:city "NYC" :zip 10001}]
+
+let point = {:x 10 :y 20}
+#+end_src
+
+---
+
+- Potential Issues and Solutions
+
+| Issue                        | Solution                                |
+|------------------------------+-----------------------------------------|
+| Ambiguous: keyword or value? | Keywords start with =:=, always         |
+| Mixed map and list?          | Error: must be consistent per block     |
+| Inline vs nested?            | Same line = value, indented = nested    |
+| Command vs literal?          | =[]= = command, =@[]= = literal         |
+| Empty map/list?              | =:key {}= or =:key @[]=                 |
+
+---
+
+- Final Recommendation
+
+#+begin_src prologos
+;; ========================================
+;; Summary: Data Syntax
+;; ========================================
+
+;; Explicit map (inline, small)
+{:key "value" :other 42}
+
+;; Explicit vector (literal)
+@[1 2 3 4 5]
+@[:a :b :c]
+
+;; Command (evaluated)
+[function arg1 arg2]
+
+;; Implicit map (multi-line, config-like)
+def my-data
+  :key1 "value1"
+  :key2 42
+  :nested
+    :inner "data"
+  :list @[1 2 3]
+  :computed [some-function arg]
+
+;; List of maps (- separator)
+def items
+  -
+    :name "first"
+  -
+    :name "second"
+
+;; ========================================
+;; Rules
+;; ========================================
+
+;; 1. :keyword value     => map entry
+;; 2. Indented block     => nested map
+;; 3. @[...]             => literal vector
+;; 4. [...]              => command (evaluated)
+;; 5. - starts item      => list of items
+;; 6. One entry per line => cleaner, less ambiguous
+#+end_src
+
+This gives you YAML's readability with Lisp's power (commands in data) while maintaining homoiconicity.
+
+Does this capture what you're envisioning?
+
+****
+
+
+
+
+
+#+end_src
+
+
+- Implicit Map Syntax: Indentation-Based Maps
+
+This is a lovely idea. It leverages your significant whitespace and creates a very clean, YAML-like syntax for data.
+
+---
+
+- The Concept
+
+#+begin_src prologos
+;; ========================================
+;; Implicit map: keyword at line start = key
+;; ========================================
+
+def my-map
+  :name "Alice"
+  :age 42
+  :active true
+
+;; Parses to:
+{:name "Alice" :age 42 :active true}
+
+;; ========================================
+;; Nested: indentation = nesting
+;; ========================================
+
+def user
+  :name "Alice"
+  :address
+    :city "Springfield"
+    :zip 12345
+
+;; Parses to:
+{:name "Alice" :address {:city "Springfield" :zip 12345}}
+
+;; ========================================
+;; Deep nesting
+;; ========================================
+
+def config
+  :server
+    :host "localhost"
+    :port 8080
+    :ssl
+      :enabled true
+      :cert "/path/to/cert"
+  :database
+    :url "postgres://..."
+    :pool-size 10
+
+;; Parses to:
+{:server {:host "localhost"
+          :port 8080
+          :ssl {:enabled true :cert "/path/to/cert"}}
+ :database {:url "postgres://..." :pool-size 10}}
+#+end_src
+
+---
+
+- Parsing Rules
+
+#+begin_src
+1. Line starts with keyword → key-value pair
+2. Same indentation as sibling → same map
+3. Deeper indentation after keyword-only line → nested map
+4. Value on same line as keyword → leaf value
+5. No value after keyword → nested map follows
+#+end_src
+
+#+begin_src prologos
+;; Rule 4: value on same line = leaf
+:name "Alice"        ;; {:name "Alice"}
+
+;; Rule 5: no value = nested map
+:address             ;; {:address {...}}
+  :city "NYC"        ;;   nested content
+#+end_src
+
+---
+
+- Grammar Sketch
+
+#+begin_src
+ImplicitMap ::= ImplicitEntry+
+
+ImplicitEntry ::= Keyword Value Newline           ;; leaf
+                | Keyword Newline Indent ImplicitMap Dedent  ;; nested
+
+Value ::= Literal | Expr | ImplicitVec | InlineMap
+
+Indent ::= increase in indentation
+Dedent ::= decrease in indentation
+#+end_src
+
+---
+
+- Edge Cases and Extensions
+
+- Lists/Vectors in Implicit Maps
+
+#+begin_src prologos
+;; Option A: inline
+def user
+  :name "Alice"
+  :tags @[:admin :active]
+  :scores @[95 87 92]
+
+;; Option B: implicit list with -
+def user
+  :name "Alice"
+  :tags
+    - :admin
+    - :active
+  :scores
+    - 95
+    - 87
+    - 92
+
+;; Parses to:
+{:name "Alice" :tags @[:admin :active] :scores @[95 87 92]}
+#+end_src
+
+- Mixed: Inline and Implicit
+
+#+begin_src prologos
+;; Can mix inline and implicit
+def config
+  :server {:host "localhost" :port 8080}  ;; inline map
+  :database
+    :url "postgres://..."
+    :pool-size 10
+
+;; Parses to:
+{:server {:host "localhost" :port 8080}
+ :database {:url "postgres://..." :pool-size 10}}
+#+end_src
+
+- Expressions as Values
+
+#+begin_src prologos
+def computed
+  :timestamp [now]
+  :sum [+ 1 2 3]
+  :greeting [format "Hello, ~a" name]
+
+;; Parses to:
+{:timestamp [now] :sum [+ 1 2 3] :greeting [format "Hello, ~a" name]}
+#+end_src
+
+- String Keys (Non-Keyword)
+
+#+begin_src prologos
+;; What if key isn't a keyword?
+def headers
+  "Content-Type" "application/json"
+  "Authorization" [format "Bearer ~a" token]
+
+;; Could use different syntax
+def headers
+  ="Content-Type" "application/json"    ;; = prefix for string key?
+  ="Authorization" [format "Bearer ~a" token]
+#+end_src
+
+---
+
+- Comparison: Explicit vs Implicit
+
+#+begin_src prologos
+;; ========================================
+;; Explicit (EDN-style)
+;; ========================================
+
+def user {:name "Alice"
+          :age 42
+          :address {:city "Springfield"
+                    :zip 12345
+                    :street {:name "Main"
+                             :type "Ave"
+                             :number 256}}}
+
+;; ========================================
+;; Implicit (indentation-based)
+;; ========================================
+
+def user
+  :name "Alice"
+  :age 42
+  :address
+    :city "Springfield"
+    :zip 12345
+    :street
+      :name "Main"
+      :type "Ave"
+      :number 256
+#+end_src
+
+| Aspect            | Explicit          | Implicit           |
+|-------------------+-------------------+--------------------|
+| Verbosity         | More punctuation  | Less punctuation   |
+| Nesting clarity   | Brackets          | Indentation        |
+| Diff-friendliness | Poor (brackets)   | Excellent          |
+| Copy-paste        | Works anywhere    | Whitespace matters |
+| Homoiconic        | Obvious           | After parsing      |
+
+---
+
+- When to Use Which
+
+#+begin_src prologos
+;; ========================================
+;; Implicit: config, data definitions
+;; ========================================
+
+def app-config
+  :server
+    :host "0.0.0.0"
+    :port 8080
+  :logging
+    :level :info
+    :format :json
+
+;; ========================================
+;; Explicit: inline, small maps
+;; ========================================
+
+let point = {:x 10 :y 20}
+let user = {:name n :age a}
+[assoc m :key {:nested "value"}]
+
+;; ========================================
+;; Both work, user chooses
+;; ========================================
+#+end_src
+
+---
+
+- Integration with Schema
+
+#+begin_src prologos
+;; ========================================
+;; Schema definition
+;; ========================================
+
+schema User
+  :name String
+  :age Nat
+  :address Address
+
+schema Address
+  :city String
+  :zip Nat
+  :street Street
+
+schema Street
+  :name String
+  :type StreetType
+  :number Nat
+
+;; ========================================
+;; Instance using implicit map
+;; ========================================
+
+def alice : User
+  :name "Alice"
+  :age 42
+  :address
+    :city "Springfield"
+    :zip 12345
+    :street
+      :name "Main"
+      :type :ave
+      :number 256
+
+;; Type-checked against schema!
+#+end_src
+
+---
+
+- Implementation Considerations
+
+- Reader Phase
+
+#+begin_src racket
+;; Reader tracks indentation stack
+;; When it sees:
+;;   :key value   → (cons :key value)
+;;   :key\n       → (cons :key (read-implicit-map deeper-indent))
+
+(define (read-implicit-map current-indent)
+  (let loop ([pairs '()])
+    (let ([line-indent (peek-indent)])
+      (cond
+        [(< line-indent current-indent)
+         ;; dedent: done with this map
+         (make-map (reverse pairs))]
+        [(= line-indent current-indent)
+         ;; same level: read key-value
+         (let* ([key (read-keyword)]
+                [val (read-value-or-nested)])
+           (loop (cons (cons key val) pairs)))]
+        [else
+         ;; deeper indent: shouldn't happen at map start
+         (error "unexpected indent")]))))
+#+end_src
+
+- AST Representation
+
+#+begin_src prologos
+;; Source
+def user
+  :name "Alice"
+  :address
+    :city "NYC"
+
+;; AST (same as explicit map)
+[def user
+  [map
+    [:name "Alice"]
+    [:address
+      [map
+        [:city "NYC"]]]]]
+
+;; Homoiconic: both syntaxes produce same AST
+#+end_src
+
+---
+
+- Implicit Vec Syntax?
+
+Should we also have implicit vectors?
+
+#+begin_src prologos
+;; ========================================
+;; Option A: - prefix (YAML-style)
+;; ========================================
+
+def numbers
+  - 1
+  - 2
+  - 3
+
+;; Parses to: @[1 2 3]
+
+def users
+  -
+    :name "Alice"
+    :age 30
+  -
+    :name "Bob"
+    :age 25
+
+;; Parses to: @[{:name "Alice" :age 30} {:name "Bob" :age 25}]
+
+;; ========================================
+;; Option B: no implicit vec, use inline
+;; ========================================
+
+def user
+  :name "Alice"
+  :scores @[95 87 92]      ;; inline vec
+  :tags #{:admin :active}  ;; inline set
+#+end_src
+
+---
+
+- Full Example: Config File
+
+#+begin_src prologos
+;; ========================================
+;; app-config.prol
+;; ========================================
+
+def config
+  :app
+    :name "MyApp"
+    :version "1.0.0"
+    :env :production
+
+  :server
+    :host "0.0.0.0"
+    :port 8080
+    :ssl
+      :enabled true
+      :cert "/etc/ssl/cert.pem"
+      :key "/etc/ssl/key.pem"
+
+  :database
+    :primary
+      :url "postgres://localhost:5432/myapp"
+      :pool-size 20
+      :timeout 30000
+    :replica
+      :url "postgres://replica:5432/myapp"
+      :pool-size 10
+
+  :logging
+    :level :info
+    :format :json
+    :outputs
+      - :stdout
+      - :file "/var/log/myapp.log"
+
+  :features
+    :new-dashboard true
+    :beta-api false
+    :allowed-origins
+      - "https://example.com"
+      - "https://app.example.com"
+#+end_src
+
+---
+
+- Summary
+
+| Feature                    | Syntax                   |
+|----------------------------+--------------------------|
+| Key-value (leaf)           | =:key value=             |
+| Nested map                 | =:key= + indent          |
+| List in implicit map       | =- item= or inline       |
+| Inline map                 | ={:k1 v1 :k2 v2}=        |
+| Mixed                      | Freely combine           |
+
+| Benefit                    | Description                              |
+|----------------------------+------------------------------------------|
+| Readable                   | No bracket noise                         |
+| Diff-friendly              | One key-value per line                   |
+| Config-friendly            | Feels like YAML/TOML                     |
+| Homoiconic                 | Parses to same AST as explicit           |
+| Type-safe                  | Can validate against schema              |
+
+Does this implicit map syntax feel right for Prologos?
+
+
+
+
 *** Map Key Accessor Pattern Syntax
+**** Conversation: I've also been thinking through this concept of "implicit maps" syntax, something like:
+
+#+begin_src prologos
+def my-map
+  :name "Alice"
+  :age  42
+  :address
+    :city "Springfield"
+    :zip  12345
+    :street
+      :street-name "Main"
+      :street-type "Ave"
+      :street-number 256
+  :friends
+    "Bob" "Candy"
+    "Derick" "Epiphany"
+
+;; parses to =>
+{:name "Alice" :age 42 :address {:city "Springfield" :street {:street-name "Main" :street-type "Ave" :street-number 256 :friends @["Bod" "Candy" "Derick" "Epiphany"]}}}
+
+
+At first I was thinking that we could maintain `[]` as a vector as in Clojure/EDN style, but on second thought, commands as dynamic values could be powerfully useful so we`d need to maintain specificity with the `@[]` syntax ... then we could write `:friends [get-friend-list "Alice"]`
+
+- Implicit Map Syntax: Significant Whitespace for Data
+
+This is a fascinating idea—using indentation to express nested structure.
+
+---
+
+- The Core Concept
+
+#+begin_src prologos
+;; Implicit map: indentation defines nesting
+def config
+  :host "localhost"
+  :port 8080
+  :database
+    :name "mydb"
+    :user "admin"
+    :pool-size 10
+
+;; Equivalent to:
+def config {:host "localhost"
+            :port 8080
+            :database {:name "mydb"
+                       :user "admin"
+                       :pool-size 10}}
+#+end_src
+
+---
+
+- Parsing Rules
+
+#+begin_src
+1. Keyword at start of line + value on same line = key-value pair
+2. Keyword at start of line + indented block = nested map
+3. Non-keyword values in sequence = vector/list
+4. [] is command (evaluation), @[] is vector literal
+5. Deeper indentation = deeper nesting
+#+end_src
+
+---
+
+- Your Example Refined
+
+#+begin_src prologos
+def my-map
+  :name "Alice"
+  :age 42
+  :address
+    :city "Springfield"
+    :zip 12345
+    :street
+      :street-name "Main"
+      :street-type "Ave"
+      :street-number 256
+  :friends
+    "Bob" "Candy"
+    "Derick" "Epiphany"
+
+;; Parses to:
+{:name "Alice"
+ :age 42
+ :address {:city "Springfield"
+           :zip 12345
+           :street {:street-name "Main"
+                    :street-type "Ave"
+                    :street-number 256}}
+ :friends @["Bob" "Candy" "Derick" "Epiphany"]}
+#+end_src
+
+---
+
+- Distinguishing Commands from Data
+
+#+begin_src prologos
+;; [] is COMMAND (evaluated)
+;; @[] is VECTOR LITERAL (data)
+
+def user-record
+  :name "Alice"
+  :friends @["Bob" "Candy"]           ;; literal vector
+  :friend-count [length friends]      ;; computed!
+  :created-at [now]                   ;; evaluated!
+  :tags @[:admin :active]             ;; literal vector of keywords
+  :permissions [get-permissions :admin]  ;; function call
+
+;; Parses to:
+{:name "Alice"
+ :friends @["Bob" "Candy"]
+ :friend-count [length friends]       ;; this gets evaluated
+ :created-at [now]                    ;; this gets evaluated
+ :tags @[:admin :active]
+ :permissions [get-permissions :admin]}
+#+end_src
+
+---
+
+- Ambiguity Resolution
+
+Some cases need clear rules:
+
+#+begin_src prologos
+;; ========================================
+;; Case 1: Values on same line
+;; ========================================
+
+def point
+  :x 10 :y 20        ;; two pairs on one line?
+
+;; Option A: Error (one pair per line)
+;; Option B: Allow, parse as {:x 10 :y 20}
+
+;; Recommendation: One pair per line (cleaner)
+def point
+  :x 10
+  :y 20
+
+;; ========================================
+;; Case 2: Bare values (no keyword)
+;; ========================================
+
+def items
+  "apple"
+  "banana"
+  "cherry"
+
+;; This is a vector, not a map!
+;; => @["apple" "banana" "cherry"]
+
+;; ========================================
+;; Case 3: Mixed keywords and bare values
+;; ========================================
+
+def mixed
+  :header "Title"
+  "body text"
+  "more text"
+  :footer "End"
+
+;; Error? Or special handling?
+;; Recommendation: Error - must be consistent
+
+;; ========================================
+;; Case 4: Nested command
+;; ========================================
+
+def computed
+  :data
+    [fetch-from-db "users"]     ;; command, not nested map
+
+;; Indented [] is still a command
+;; Returns result of fetch-from-db
+
+;; ========================================
+;; Case 5: List of maps
+;; ========================================
+
+def users
+  -
+    :name "Alice"
+    :age 30
+  -
+    :name "Bob"
+    :age 25
+
+;; Using - as item separator (YAML-like)
+;; => @[{:name "Alice" :age 30} {:name "Bob" :age 25}]
+#+end_src
+
+---
+
+- Full Syntax Proposal
+
+#+begin_src prologos
+;; ========================================
+;; Simple map
+;; ========================================
+
+def config
+  :key1 value1
+  :key2 value2
+  :key3 value3
+
+;; => {:key1 value1 :key2 value2 :key3 value3}
+
+;; ========================================
+;; Nested map (indentation)
+;; ========================================
+
+def nested
+  :level1
+    :level2a "value"
+    :level2b
+      :level3 "deep"
+
+;; => {:level1 {:level2a "value" :level2b {:level3 "deep"}}}
+
+;; ========================================
+;; Vector value (explicit @[])
+;; ========================================
+
+def with-vec
+  :items @[1 2 3 4 5]
+  :names @["Alice" "Bob"]
+
+;; => {:items @[1 2 3 4 5] :names @["Alice" "Bob"]}
+
+;; ========================================
+;; Computed value ([] command)
+;; ========================================
+
+def computed
+  :timestamp [now]
+  :user-count [count-users]
+  :config [load-config "app.toml"]
+
+;; => {:timestamp <evaluated> :user-count <evaluated> ...}
+
+;; ========================================
+;; Inline vector of values (bare, same indent)
+;; ========================================
+
+def with-inline
+  :tags
+    :admin :user :guest    ;; multiple keywords = vec of keywords?
+
+;; Ambiguous! Better to be explicit:
+def with-inline
+  :tags @[:admin :user :guest]
+
+;; ========================================
+;; List of maps (- separator)
+;; ========================================
+
+def users
+  -
+    :name "Alice"
+    :role :admin
+  -
+    :name "Bob"
+    :role :user
+  -
+    :name "Carol"
+    :role :guest
+
+;; => @[{:name "Alice" :role :admin}
+;;      {:name "Bob" :role :user}
+;;      {:name "Carol" :role :guest}]
+
+;; ========================================
+;; Mixed: map with list of maps
+;; ========================================
+
+def app-config
+  :name "MyApp"
+  :version "1.0"
+  :endpoints
+    -
+      :path "/users"
+      :method :get
+    -
+      :path "/users"
+      :method :post
+  :database
+    :host "localhost"
+    :port 5432
+
+;; => {:name "MyApp"
+;;     :version "1.0"
+;;     :endpoints @[{:path "/users" :method :get}
+;;                  {:path "/users" :method :post}]
+;;     :database {:host "localhost" :port 5432}}
+#+end_src
+
+---
+
+- Comparison with Other Formats
+
+| Format   | Nesting     | Lists        | Commands | Prologos Equivalent  |
+|----------+-------------+--------------+----------+----------------------|
+| JSON     | ={}=        | =[]=         | None     | ={:k v}=, =@[]=      |
+| EDN      | ={}=        | =[]=, =()=   | None     | ={:k v}=, =@[]=      |
+| YAML     | Indentation | =- item=     | None     | Indentation + =-=    |
+| TOML     | =[section]= | =[]=         | None     | Different            |
+| Prologos | Indentation | =-= or =@[]= | =[]=     | /Best of all worlds/ |
+
+---
+
+- Power of Commands in Data
+
+#+begin_src prologos
+;; ========================================
+;; Dynamic configuration
+;; ========================================
+
+def server-config
+  :host [env "SERVER_HOST" ?: "localhost"]
+  :port [env "SERVER_PORT" |> int ?: 8080]
+  :debug [env "DEBUG" |> bool ?: false]
+  :db
+    :url [env "DATABASE_URL"]
+    :pool-size [env "DB_POOL" |> int ?: 5]
+
+;; ========================================
+;; Computed relationships
+;; ========================================
+
+def user
+  :name "Alice"
+  :email "alice@example.com"
+  :friends [get-friend-list "Alice"]
+  :friend-count [length [get-friend-list "Alice"]]
+  :is-admin [has-role? "Alice" :admin]
+
+;; ========================================
+;; Template-like structures
+;; ========================================
+
+def html-page
+  :doctype "html"
+  :html
+    :head
+      :title [page-title]
+      :meta @[{:charset "utf-8"}]
+    :body
+      :div
+        :class "container"
+        :content [render-content]
+
+;; ========================================
+;; Test fixtures with setup
+;; ========================================
+
+def test-context
+  :db [setup-test-db]
+  :user [create-test-user "test@example.com"]
+  :token [generate-auth-token user]
+  :cleanup [fn [] [teardown-test-db db]]
+#+end_src
+
+---
+
+- Homoiconicity: What's the AST?
+
+#+begin_src prologos
+;; Source (implicit map)
+def config
+  :host "localhost"
+  :port 8080
+  :db
+    :name "mydb"
+
+;; AST (explicit form)
+[def config
+  {:host "localhost"
+   :port 8080
+   :db {:name "mydb"}}]
+
+;; Or if we want implicit-map as its own node:
+[def config
+  [implicit-map
+    [:host "localhost"]
+    [:port 8080]
+    [:db [implicit-map
+           [:name "mydb"]]]]]
+
+;; Quote captures implicit structure
+$[def config
+    :host "localhost"
+    :port 8080]
+
+;; => [def config [implicit-map [:host "localhost"] [:port 8080]]]
+#+end_src
+
+---
+
+- When to Use Which Syntax?
+
+| Syntax         | Use Case                    | Example                      |
+|----------------+-----------------------------+------------------------------|
+| Implicit map   | Config, specs, large data   | =def config :key val ...=    |
+| Explicit ={...}= | Inline, small, one-liners | ={:x 1 :y 2}=                |
+| =@[...]=       | Vector literals             | =@[1 2 3]=                   |
+| =[...]=        | Commands, function calls    | =[get user :name]=           |
+
+#+begin_src prologos
+;; ========================================
+;; Implicit: large, multi-line configs
+;; ========================================
+
+def app-manifest
+  :name "My Application"
+  :version "2.1.0"
+  :description "A sample application"
+  :author
+    :name "Alice Developer"
+    :email "alice@example.com"
+  :dependencies
+    -
+      :name "core-lib"
+      :version "^1.0"
+    -
+      :name "http-client"
+      :version "^2.3"
+  :scripts
+    :build [concat "prologos build " target]
+    :test "prologos test"
+    :deploy [deploy-script env]
+
+;; ========================================
+;; Explicit: inline, in expressions
+;; ========================================
+
+[map (fn [x] {:value x :squared (* x x)}) numbers]
+
+[assoc user :address {:city "NYC" :zip 10001}]
+
+let point = {:x 10 :y 20}
+#+end_src
+
+---
+
+- Potential Issues and Solutions
+
+| Issue                        | Solution                                |
+|------------------------------+-----------------------------------------|
+| Ambiguous: keyword or value? | Keywords start with =:=, always         |
+| Mixed map and list?          | Error: must be consistent per block     |
+| Inline vs nested?            | Same line = value, indented = nested    |
+| Command vs literal?          | =[]= = command, =@[]= = literal         |
+| Empty map/list?              | =:key {}= or =:key @[]=                 |
+
+---
+
+- Final Recommendation
+
+#+begin_src prologos
+;; ========================================
+;; Summary: Data Syntax
+;; ========================================
+
+;; Explicit map (inline, small)
+{:key "value" :other 42}
+
+;; Explicit vector (literal)
+@[1 2 3 4 5]
+@[:a :b :c]
+
+;; Command (evaluated)
+[function arg1 arg2]
+
+;; Implicit map (multi-line, config-like)
+def my-data
+  :key1 "value1"
+  :key2 42
+  :nested
+    :inner "data"
+  :list @[1 2 3]
+  :computed [some-function arg]
+
+;; List of maps (- separator)
+def items
+  -
+    :name "first"
+  -
+    :name "second"
+
+;; ========================================
+;; Rules
+;; ========================================
+
+;; 1. :keyword value     => map entry
+;; 2. Indented block     => nested map
+;; 3. @[...]             => literal vector
+;; 4. [...]              => command (evaluated)
+;; 5. - starts item      => list of items
+;; 6. One entry per line => cleaner, less ambiguous
+#+end_src
+
+This gives you YAML's readability with Lisp's power (commands in data) while maintaining homoiconicity.
+
+Does this capture what you're envisioning?
+
+**** Conversation:
+
+
+
+
+
+#+end_src
+
+
+- Implicit Map Syntax: Indentation-Based Maps
+
+This is a lovely idea. It leverages your significant whitespace and creates a very clean, YAML-like syntax for data.
+
+---
+
+- The Concept
+
+#+begin_src prologos
+;; ========================================
+;; Implicit map: keyword at line start = key
+;; ========================================
+
+def my-map
+  :name "Alice"
+  :age 42
+  :active true
+
+;; Parses to:
+{:name "Alice" :age 42 :active true}
+
+;; ========================================
+;; Nested: indentation = nesting
+;; ========================================
+
+def user
+  :name "Alice"
+  :address
+    :city "Springfield"
+    :zip 12345
+
+;; Parses to:
+{:name "Alice" :address {:city "Springfield" :zip 12345}}
+
+;; ========================================
+;; Deep nesting
+;; ========================================
+
+def config
+  :server
+    :host "localhost"
+    :port 8080
+    :ssl
+      :enabled true
+      :cert "/path/to/cert"
+  :database
+    :url "postgres://..."
+    :pool-size 10
+
+;; Parses to:
+{:server {:host "localhost"
+          :port 8080
+          :ssl {:enabled true :cert "/path/to/cert"}}
+ :database {:url "postgres://..." :pool-size 10}}
+#+end_src
+
+---
+
+- Parsing Rules
+
+#+begin_src
+1. Line starts with keyword → key-value pair
+2. Same indentation as sibling → same map
+3. Deeper indentation after keyword-only line → nested map
+4. Value on same line as keyword → leaf value
+5. No value after keyword → nested map follows
+#+end_src
+
+#+begin_src prologos
+;; Rule 4: value on same line = leaf
+:name "Alice"        ;; {:name "Alice"}
+
+;; Rule 5: no value = nested map
+:address             ;; {:address {...}}
+  :city "NYC"        ;;   nested content
+#+end_src
+
+---
+
+- Grammar Sketch
+
+#+begin_src
+ImplicitMap ::= ImplicitEntry+
+
+ImplicitEntry ::= Keyword Value Newline           ;; leaf
+                | Keyword Newline Indent ImplicitMap Dedent  ;; nested
+
+Value ::= Literal | Expr | ImplicitVec | InlineMap
+
+Indent ::= increase in indentation
+Dedent ::= decrease in indentation
+#+end_src
+
+---
+
+- Edge Cases and Extensions
+
+- Lists/Vectors in Implicit Maps
+
+#+begin_src prologos
+;; Option A: inline
+def user
+  :name "Alice"
+  :tags @[:admin :active]
+  :scores @[95 87 92]
+
+;; Option B: implicit list with -
+def user
+  :name "Alice"
+  :tags
+    - :admin
+    - :active
+  :scores
+    - 95
+    - 87
+    - 92
+
+;; Parses to:
+{:name "Alice" :tags @[:admin :active] :scores @[95 87 92]}
+#+end_src
+
+- Mixed: Inline and Implicit
+
+#+begin_src prologos
+;; Can mix inline and implicit
+def config
+  :server {:host "localhost" :port 8080}  ;; inline map
+  :database
+    :url "postgres://..."
+    :pool-size 10
+
+;; Parses to:
+{:server {:host "localhost" :port 8080}
+ :database {:url "postgres://..." :pool-size 10}}
+#+end_src
+
+- Expressions as Values
+
+#+begin_src prologos
+def computed
+  :timestamp [now]
+  :sum [+ 1 2 3]
+  :greeting [format "Hello, ~a" name]
+
+;; Parses to:
+{:timestamp [now] :sum [+ 1 2 3] :greeting [format "Hello, ~a" name]}
+#+end_src
+
+- String Keys (Non-Keyword)
+
+#+begin_src prologos
+;; What if key isn't a keyword?
+def headers
+  "Content-Type" "application/json"
+  "Authorization" [format "Bearer ~a" token]
+
+;; Could use different syntax
+def headers
+  ="Content-Type" "application/json"    ;; = prefix for string key?
+  ="Authorization" [format "Bearer ~a" token]
+#+end_src
+
+---
+
+- Comparison: Explicit vs Implicit
+
+#+begin_src prologos
+;; ========================================
+;; Explicit (EDN-style)
+;; ========================================
+
+def user {:name "Alice"
+          :age 42
+          :address {:city "Springfield"
+                    :zip 12345
+                    :street {:name "Main"
+                             :type "Ave"
+                             :number 256}}}
+
+;; ========================================
+;; Implicit (indentation-based)
+;; ========================================
+
+def user
+  :name "Alice"
+  :age 42
+  :address
+    :city "Springfield"
+    :zip 12345
+    :street
+      :name "Main"
+      :type "Ave"
+      :number 256
+#+end_src
+
+| Aspect            | Explicit          | Implicit           |
+|-------------------+-------------------+--------------------|
+| Verbosity         | More punctuation  | Less punctuation   |
+| Nesting clarity   | Brackets          | Indentation        |
+| Diff-friendliness | Poor (brackets)   | Excellent          |
+| Copy-paste        | Works anywhere    | Whitespace matters |
+| Homoiconic        | Obvious           | After parsing      |
+
+---
+
+- When to Use Which
+
+#+begin_src prologos
+;; ========================================
+;; Implicit: config, data definitions
+;; ========================================
+
+def app-config
+  :server
+    :host "0.0.0.0"
+    :port 8080
+  :logging
+    :level :info
+    :format :json
+
+;; ========================================
+;; Explicit: inline, small maps
+;; ========================================
+
+let point = {:x 10 :y 20}
+let user = {:name n :age a}
+[assoc m :key {:nested "value"}]
+
+;; ========================================
+;; Both work, user chooses
+;; ========================================
+#+end_src
+
+---
+
+- Integration with Schema
+
+#+begin_src prologos
+;; ========================================
+;; Schema definition
+;; ========================================
+
+schema User
+  :name String
+  :age Nat
+  :address Address
+
+schema Address
+  :city String
+  :zip Nat
+  :street Street
+
+schema Street
+  :name String
+  :type StreetType
+  :number Nat
+
+;; ========================================
+;; Instance using implicit map
+;; ========================================
+
+def alice : User
+  :name "Alice"
+  :age 42
+  :address
+    :city "Springfield"
+    :zip 12345
+    :street
+      :name "Main"
+      :type :ave
+      :number 256
+
+;; Type-checked against schema!
+#+end_src
+
+---
+
+- Implementation Considerations
+
+- Reader Phase
+
+#+begin_src racket
+;; Reader tracks indentation stack
+;; When it sees:
+;;   :key value   → (cons :key value)
+;;   :key\n       → (cons :key (read-implicit-map deeper-indent))
+
+(define (read-implicit-map current-indent)
+  (let loop ([pairs '()])
+    (let ([line-indent (peek-indent)])
+      (cond
+        [(< line-indent current-indent)
+         ;; dedent: done with this map
+         (make-map (reverse pairs))]
+        [(= line-indent current-indent)
+         ;; same level: read key-value
+         (let* ([key (read-keyword)]
+                [val (read-value-or-nested)])
+           (loop (cons (cons key val) pairs)))]
+        [else
+         ;; deeper indent: shouldn't happen at map start
+         (error "unexpected indent")]))))
+#+end_src
+
+- AST Representation
+
+#+begin_src prologos
+;; Source
+def user
+  :name "Alice"
+  :address
+    :city "NYC"
+
+;; AST (same as explicit map)
+[def user
+  [map
+    [:name "Alice"]
+    [:address
+      [map
+        [:city "NYC"]]]]]
+
+;; Homoiconic: both syntaxes produce same AST
+#+end_src
+
+---
+
+- Implicit Vec Syntax?
+
+Should we also have implicit vectors?
+
+#+begin_src prologos
+;; ========================================
+;; Option A: - prefix (YAML-style)
+;; ========================================
+
+def numbers
+  - 1
+  - 2
+  - 3
+
+;; Parses to: @[1 2 3]
+
+def users
+  -
+    :name "Alice"
+    :age 30
+  -
+    :name "Bob"
+    :age 25
+
+;; Parses to: @[{:name "Alice" :age 30} {:name "Bob" :age 25}]
+
+;; ========================================
+;; Option B: no implicit vec, use inline
+;; ========================================
+
+def user
+  :name "Alice"
+  :scores @[95 87 92]      ;; inline vec
+  :tags #{:admin :active}  ;; inline set
+#+end_src
+
+---
+
+- Full Example: Config File
+
+#+begin_src prologos
+;; ========================================
+;; app-config.prol
+;; ========================================
+
+def config
+  :app
+    :name "MyApp"
+    :version "1.0.0"
+    :env :production
+
+  :server
+    :host "0.0.0.0"
+    :port 8080
+    :ssl
+      :enabled true
+      :cert "/etc/ssl/cert.pem"
+      :key "/etc/ssl/key.pem"
+
+  :database
+    :primary
+      :url "postgres://localhost:5432/myapp"
+      :pool-size 20
+      :timeout 30000
+    :replica
+      :url "postgres://replica:5432/myapp"
+      :pool-size 10
+
+  :logging
+    :level :info
+    :format :json
+    :outputs
+      - :stdout
+      - :file "/var/log/myapp.log"
+
+  :features
+    :new-dashboard true
+    :beta-api false
+    :allowed-origins
+      - "https://example.com"
+      - "https://app.example.com"
+#+end_src
+
+---
+
+- Summary
+
+| Feature                    | Syntax                   |
+|----------------------------+--------------------------|
+| Key-value (leaf)           | =:key value=             |
+| Nested map                 | =:key= + indent          |
+| List in implicit map       | =- item= or inline       |
+| Inline map                 | ={:k1 v1 :k2 v2}=        |
+| Mixed                      | Freely combine           |
+
+| Benefit                    | Description                              |
+|----------------------------+------------------------------------------|
+| Readable                   | No bracket noise                         |
+| Diff-friendly              | One key-value per line                   |
+| Config-friendly            | Feels like YAML/TOML                     |
+| Homoiconic                 | Parses to same AST as explicit           |
+| Type-safe                  | Can validate against schema              |
+
+Does this implicit map syntax feel right for Prologos?
 
 
 
@@ -1077,7 +2989,7 @@ defr member (?x ?xs)
 
 #+begin_src prologos
 
-  
+
 
 
 #+end_src
@@ -2237,7 +4149,7 @@ Does this resolve both concerns?
 ;; :where = filter (keeps checking)
 ~[1.. :where even?]                    ;; ~[2 4 6 8 ...] infinite evens
 
-;; :while = take-while (stops when false)  
+;; :while = take-while (stops when false)
 ~[1.. :while [< _ 100]]                ;; ~[1 2 3 ... 99] terminates
 
 ;; Combined
@@ -2267,7 +4179,7 @@ Does this resolve both concerns?
 ;; .. present → range
 ~[1.. :where even?]       ;; range with predicate
 
-;; .. absent → pattern  
+;; .. absent → pattern
 '[h | t]                  ;; head|tail pattern
 #+end_src
 
@@ -2768,15 +4680,16 @@ let result = into @[] xf users
 
 ** Sigil Design
 #+begin_src quote
-| Collection        | Sigil    | Mnemonic              | Example          |
-|-------------------+----------+-----------------------+------------------|
-| Grouping          |  `[...]`  | "Expression"         | =[add 1 2]=      |
-| Persistent Vec    | `@[...]` | "At" = indexed access | =@[1 2 3]=       |
-| Linked List       | `'[...]` | "Quote" = literal     | ='[1 2 3]=       |
-| Lazy Seq          | `~[...]` | "Tilde" = lazy/wave   | =~[1 2 3]=       |
-| Set               | `#{...}` | EDN-style             | =#{1 2 3}=       |
-| Map               |  `{...}` | EDN-style            | ={:a 1 :b 2}=     |
-| Tuple (if needed) | =(...)=  | Traditional           | =(1, "a", true)= |
+| Collection        | Sigil    | Mnemonic              | Example           |
+|-------------------+----------+-----------------------+-------------------|
+| Grouping          |  [...]  | "Expression"           |  [add 1 2]        |
+| Grouping          |  (...)  | "Relational Clause"    | (edge ?from ?to)  |
+| Persistent Vec    | @[...]  | "At" = indexed access  | @[1 2 3]          |
+| Linked List       | '[...]  | "Quote" = literal      | '[1 2 3]          |
+| Lazy Seq          | ~[...]  | "Tilde" = lazy/wave    | ~[1 2 3]          |
+| Set               | #{...}  | EDN-style              | #{1 2 3}          |
+| Map               |  {...}  | EDN-style              |  {:a 1 :b 2}      |
+| Tuple (if needed) |  (...)  | Traditional            | (1, "a", true)    |
 #+end_src
 
 
@@ -2910,6 +4823,8 @@ Example:
   * Should we keep Prolog's use of `=` for unification
     - +use `unify` keyword?+
     - We're going with the classic `=` is unify! 🎉
+
+
 
 
 
@@ -3506,7 +5421,7 @@ They should be *prefix* notation. We are aiming to be a homoiconic language with
 
 
 
-Both of these operators should take a list of expressions 
+Both of these operators should take a list of expressions
 
 
 
@@ -3525,5 +5440,3 @@ In our memory file, let us emphasis a core invariant of Prologos:
      - clear, visible AST available
 
 After we note this in our memory, let's do a full language design audit looking out for issues that may threaten this invariant. Let's identify gaps and opportunities to improve on this promise, and design and plan out tooling and infrastructure that will help us improve on this promise, and can be used for further development.
-
-
