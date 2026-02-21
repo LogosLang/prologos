@@ -333,6 +333,12 @@
     (require [prologos::data::pair     :refer [swap map-fst map-snd bimap dup uncurry]])
     (require [prologos::data::eq       :refer [sym cong trans]])
 
+    ;; ---- Tier 0b: Char & String data operations ----
+    ;; Most operations accessed via module alias: char::code, str::length, etc.
+    ;; Only non-conflicting names imported unqualified.
+    (require [prologos::data::char   :as char :refer []])
+    (require [prologos::data::string :as str  :refer []])
+
     ;; ---- Tier 1: Container data types ----
     ;; Option: types + predicates unqualified; ops via opt:: alias
     (require [prologos::data::option :as opt :refer [Option none some some? none? flatten]])
@@ -404,6 +410,15 @@
     (require [prologos::core::mul-instances         :refer []])
     (require [prologos::core::neg-instances         :refer []])
     (require [prologos::core::abs-instances         :refer []])
+
+    ;; ---- Tier 3a: Char/String trait instances (side-effect only) ----
+    (require [prologos::core::eq-char-instance        :refer []])
+    (require [prologos::core::ord-char-instance       :refer []])
+    (require [prologos::core::hashable-char-instance  :refer []])
+    (require [prologos::core::eq-string-instance      :refer []])
+    (require [prologos::core::ord-string-instance     :refer []])
+    (require [prologos::core::hashable-string-instance :refer []])
+    (require [prologos::core::add-string-instance     :refer []])
 
     ;; ---- Tier 3b: Collection trait instances (side-effect only) ----
     (require [prologos::core::seqable-list    :refer []])

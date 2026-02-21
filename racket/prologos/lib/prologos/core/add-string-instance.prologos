@@ -1,0 +1,12 @@
+ns prologos::core::add-string-instance
+
+require [prologos::core::add-trait :refer [Add]]
+require [prologos::data::string    :as str :refer []]
+
+;; ========================================
+;; Add String — concatenation
+;; ========================================
+
+impl Add String
+  defn add [x : String  y : String] <String>
+    str::append x y

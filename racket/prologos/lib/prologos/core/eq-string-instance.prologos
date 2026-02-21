@@ -1,0 +1,12 @@
+ns prologos::core::eq-string-instance
+
+require [prologos::core::eq-trait :refer [Eq]]
+require [prologos::data::string   :as str :refer []]
+
+;; ========================================
+;; Eq String
+;; ========================================
+
+impl Eq String
+  defn eq? [x : String  y : String] <Bool>
+    str::eq x y

@@ -735,8 +735,16 @@
 ;;
 ;; module-alias: optional symbol prefix (e.g., 'rkt → registers as rkt/name)
 (define (handle-foreign-decl module-path-str decl [module-alias #f])
-  (unless (and (list? decl) (>= (length decl) 3) (symbol? (car decl)))
+  (unless (and (list? decl) (>= (length decl) 3)
+               (or (symbol? (car decl)) (string? (car decl))))
     (error 'foreign "Expected: (name [:as alias] : type), got: ~a" decl))
+
+  ;; Normalize: if Racket name is a string (for names with <, > chars
+  ;; that the WS reader can't tokenize), convert to symbol
+  (define raw-racket-name
+    (if (string? (car decl))
+        (string->symbol (car decl))
+        (car decl)))
 
   ;; Parse symbol-level alias: (name :as alias : type...) or (name : type...)
   (define-values (racket-name local-name type-tokens)
@@ -746,10 +754,10 @@
             (memq (cadr decl) '(:as as))
             (symbol? (caddr decl))
             (eq? (cadddr decl) ':))
-       (values (car decl) (caddr decl) (cddddr decl))]
+       (values raw-racket-name (caddr decl) (cddddr decl))]
       ;; (name : type...) — no alias
       [(eq? (cadr decl) ':)
-       (values (car decl) (car decl) (cddr decl))]
+       (values raw-racket-name raw-racket-name (cddr decl))]
       [else
        (error 'foreign "Expected: (name : type) or (name :as alias : type), got: ~a" decl)]))
 

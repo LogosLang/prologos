@@ -5,9 +5,11 @@
 ;;; Converts between Prologos values (Church/Peano encoded) and Racket values.
 ;;;
 ;;; Supported base types:
-;;;   Nat  ↔ exact non-negative integer
-;;;   Bool ↔ boolean
-;;;   Unit ↔ void
+;;;   Nat    ↔ exact non-negative integer
+;;;   Bool   ↔ boolean
+;;;   Unit   ↔ void
+;;;   Char   ↔ char
+;;;   String ↔ string
 ;;;
 
 (require racket/match
@@ -54,13 +56,27 @@
     [(expr-rat v) v]
     [_ (error 'foreign "Cannot marshal to rational — not a Rat literal: ~a" e)]))
 
+;; Convert a Prologos Char to a Racket char
+(define (char->rkt-char e)
+  (match e
+    [(expr-char v) v]
+    [_ (error 'foreign "Cannot marshal to char — not a Char literal: ~a" e)]))
+
+;; Convert a Prologos String to a Racket string
+(define (string->rkt-string e)
+  (match e
+    [(expr-string v) v]
+    [_ (error 'foreign "Cannot marshal to string — not a String literal: ~a" e)]))
+
 (define (marshal-prologos->racket base-type val)
   (case base-type
-    [(Nat)  (nat->integer val)]
-    [(Int)  (int->integer val)]
-    [(Rat)  (rat->rational val)]
-    [(Bool) (bool->boolean val)]
-    [(Unit) (void)]
+    [(Nat)    (nat->integer val)]
+    [(Int)    (int->integer val)]
+    [(Rat)    (rat->rational val)]
+    [(Bool)   (bool->boolean val)]
+    [(Unit)   (void)]
+    [(Char)   (char->rkt-char val)]
+    [(String) (string->rkt-string val)]
     [else (error 'foreign "Unsupported marshal-in type: ~a" base-type)]))
 
 ;; ========================================
@@ -89,11 +105,13 @@
 
 (define (marshal-racket->prologos base-type val)
   (case base-type
-    [(Nat)  (integer->nat val)]
-    [(Int)  (integer->int val)]
-    [(Rat)  (rational->rat val)]
-    [(Bool) (if val (expr-true) (expr-false))]
-    [(Unit) (expr-unit)]
+    [(Nat)    (integer->nat val)]
+    [(Int)    (integer->int val)]
+    [(Rat)    (rational->rat val)]
+    [(Bool)   (if val (expr-true) (expr-false))]
+    [(Unit)   (expr-unit)]
+    [(Char)   (expr-char val)]
+    [(String) (expr-string val)]
     [else (error 'foreign "Unsupported marshal-out type: ~a" base-type)]))
 
 ;; ========================================
@@ -113,6 +131,8 @@
     [(expr-Posit64) 'Posit64]
     [(expr-Int)    'Int]
     [(expr-Rat)    'Rat]
+    [(expr-Char)   'Char]
+    [(expr-String) 'String]
     [_ (error 'foreign "Unsupported foreign type component: ~a" e)]))
 
 ;; Parse a Prologos core type expression into a marshalling descriptor.

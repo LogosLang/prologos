@@ -1,0 +1,17 @@
+ns prologos::core::ord-string-instance
+
+require [prologos::core::ord-trait :refer [Ord]]
+require [prologos::data::string    :as str :refer []]
+require [prologos::data::ordering  :refer [Ordering lt-ord eq-ord gt-ord]]
+
+;; ========================================
+;; Ord String — lexicographic ordering
+;; ========================================
+
+impl Ord String
+  defn compare [x : String  y : String] <Ordering>
+    if [str::lt x y]
+      lt-ord
+      [if [str::eq x y]
+        eq-ord
+        gt-ord]

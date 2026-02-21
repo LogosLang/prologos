@@ -1,0 +1,14 @@
+ns prologos::core::hashable-char-instance
+
+require [prologos::core::hashable-trait :refer [Hashable]]
+
+;; ========================================
+;; Hashable Char — hash by code point
+;; ========================================
+;; Use char->integer marshalled as Nat for the hash value.
+
+foreign racket "racket/base" ["char->integer" :as char-hash-nat : Char -> Nat]
+
+impl Hashable Char
+  defn hash [c : Char] <Nat>
+    char-hash-nat c

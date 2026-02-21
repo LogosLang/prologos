@@ -1,0 +1,25 @@
+ns prologos::data::string
+
+;; ========================================
+;; Prologos String Library
+;; Foreign imports for string operations from Racket.
+;; ========================================
+;; Note: Racket function names with <, > chars use string-quoted names
+;; since the WS reader treats < and > as bracket syntax.
+
+;; --- Comparison ---
+foreign racket "racket/base" [string=? :as eq : String -> String -> Bool]
+foreign racket "racket/base" ["string<?" :as lt : String -> String -> Bool]
+
+;; --- Length & access ---
+foreign racket "racket/base" [string-length :as length : String -> Int]
+foreign racket "racket/base" [string-ref :as ref : String -> Int -> Char]
+
+;; --- Construction ---
+foreign racket "racket/base" [string-append :as append : String -> String -> String]
+foreign racket "racket/base" [substring :as slice : String -> Int -> Int -> String]
+foreign racket "racket/base" [make-string :as repeat-char : Int -> Char -> String]
+
+;; --- Conversion ---
+foreign racket "racket/base" [string :as from-char : Char -> String]
+foreign racket "racket/base" ["number->string" :as from-int : Int -> String]

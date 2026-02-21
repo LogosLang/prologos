@@ -548,7 +548,7 @@
                errors.rkt metavar-store.rkt parser.rkt elaborator.rkt pretty-print.rkt
                global-env.rkt driver.rkt reduction.rkt typing-core.rkt namespace.rkt
                trait-resolution.rkt reader.rkt zonk.rkt substitution.rkt qtt.rkt
-               unify.rkt) #t)
+               unify.rkt foreign.rkt) #t)
    'test-transducer.rkt
    (test-dep '(macros.rkt prelude.rkt syntax.rkt source-location.rkt surface-syntax.rkt
                errors.rkt metavar-store.rkt parser.rkt elaborator.rkt pretty-print.rkt
@@ -694,6 +694,21 @@
    'prologos::core::hashable-instances    '(prologos::core::hashable-trait prologos::data::nat
                                           prologos::data::option prologos::data::list
                                           prologos::data::ordering)
+
+   ;; Char/String data modules
+   'prologos::data::char         '()
+   'prologos::data::string       '()
+
+   ;; Char/String trait instances
+   'prologos::core::eq-char-instance        '(prologos::core::eq-trait prologos::data::char)
+   'prologos::core::ord-char-instance       '(prologos::core::ord-trait prologos::data::char
+                                             prologos::data::ordering)
+   'prologos::core::hashable-char-instance  '(prologos::core::hashable-trait)
+   'prologos::core::eq-string-instance      '(prologos::core::eq-trait prologos::data::string)
+   'prologos::core::ord-string-instance     '(prologos::core::ord-trait prologos::data::string
+                                             prologos::data::ordering)
+   'prologos::core::hashable-string-instance '(prologos::core::hashable-trait)
+   'prologos::core::add-string-instance     '(prologos::core::add-trait prologos::data::string)
 
    ;; Collection trait instances
    'prologos::core::seq-list       '(prologos::core::seq-trait prologos::data::list

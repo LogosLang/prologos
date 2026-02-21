@@ -1,0 +1,27 @@
+ns prologos::data::char
+
+;; ========================================
+;; Prologos Char Library
+;; Foreign imports for character operations from Racket.
+;; ========================================
+;; Note: Racket function names with <, > chars use string-quoted names
+;; since the WS reader treats < and > as bracket syntax.
+
+;; --- Comparison ---
+foreign racket "racket/base" [char=? :as eq : Char -> Char -> Bool]
+foreign racket "racket/base" ["char<?" :as lt : Char -> Char -> Bool]
+
+;; --- Conversion ---
+foreign racket "racket/base" ["char->integer" :as code : Char -> Int]
+foreign racket "racket/base" ["integer->char" :as from-code : Int -> Char]
+
+;; --- Classification ---
+foreign racket "racket/base" [char-alphabetic? :as alpha? : Char -> Bool]
+foreign racket "racket/base" [char-numeric? :as numeric? : Char -> Bool]
+foreign racket "racket/base" [char-whitespace? :as whitespace? : Char -> Bool]
+foreign racket "racket/base" [char-upper-case? :as upper? : Char -> Bool]
+foreign racket "racket/base" [char-lower-case? :as lower? : Char -> Bool]
+
+;; --- Case conversion ---
+foreign racket "racket/base" [char-upcase :as upper : Char -> Char]
+foreign racket "racket/base" [char-downcase :as lower : Char -> Char]

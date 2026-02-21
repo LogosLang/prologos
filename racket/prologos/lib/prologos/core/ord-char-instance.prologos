@@ -1,0 +1,17 @@
+ns prologos::core::ord-char-instance
+
+require [prologos::core::ord-trait :refer [Ord]]
+require [prologos::data::char      :as char :refer []]
+require [prologos::data::ordering  :refer [Ordering lt-ord eq-ord gt-ord]]
+
+;; ========================================
+;; Ord Char — by Unicode code point
+;; ========================================
+
+impl Ord Char
+  defn compare [x : Char  y : Char] <Ordering>
+    if [char::lt x y]
+      lt-ord
+      [if [char::eq x y]
+        eq-ord
+        gt-ord]
