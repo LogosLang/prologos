@@ -1,4 +1,4 @@
-ns prologos.data.eq
+ns prologos::data::eq
 
 ;; ========================================
 ;; Prologos Propositional Equality Library

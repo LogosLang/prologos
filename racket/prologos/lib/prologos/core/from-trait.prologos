@@ -1,4 +1,4 @@
-ns prologos.core.from-trait
+ns prologos::core::from-trait
 
 ;; ========================================
 ;; From Trait — lossless conversion from A to B

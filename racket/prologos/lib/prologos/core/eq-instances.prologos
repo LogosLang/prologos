@@ -1,13 +1,13 @@
-ns prologos.core.eq-instances
+ns prologos::core::eq-instances
 
-require [prologos.core.eq-trait   :refer [Eq Eq-eq?]]
-require [prologos.data.bool       :refer [bool-eq not]]
-require [prologos.data.ordering   :refer [Ordering lt-ord eq-ord gt-ord]]
+require [prologos::core::eq-trait   :refer [Eq Eq-eq?]]
+require [prologos::data::bool       :refer [bool-eq not]]
+require [prologos::data::ordering   :refer [Ordering lt-ord eq-ord gt-ord]]
 
 ;; ========================================
 ;; Eq Bool
 ;; ========================================
-;; Reuses bool-eq from prologos.data.bool.
+;; Reuses bool-eq from prologos::data::bool.
 
 impl Eq Bool
   defn eq? [x : Bool y : Bool] <Bool>

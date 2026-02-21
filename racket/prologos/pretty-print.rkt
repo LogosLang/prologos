@@ -493,7 +493,7 @@
 ;; Try to interpret an expr as a cons-chain (linked list).
 ;; cons is a user-defined data type represented as (expr-app (expr-app (expr-fvar 'cons) head) tail).
 ;; nil is (expr-fvar 'nil).
-;; Handles both bare names (cons, nil) and qualified names (prologos.data.list::cons, etc.)
+;; Handles both bare names (cons, nil) and qualified names (prologos::data::list::cons, etc.)
 ;; Returns (list elements tail) where:
 ;;   - elements is a list of Expr items
 ;;   - tail is either #f (proper list ending in nil) or an Expr (improper tail)

@@ -1,6 +1,6 @@
-ns prologos.core.fromrat-posit-instances
+ns prologos::core::fromrat-posit-instances
 
-require [prologos.core.fromrat-trait :refer [FromRat FromRat-from-rational]]
+require [prologos::core::fromrat-trait :refer [FromRat FromRat-from-rational]]
 
 ;; ========================================
 ;; FromRat Posit instances — Rat → Posit{N}

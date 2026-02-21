@@ -38,7 +38,7 @@
 ;; Common preamble for tests
 (define preamble
   (string-append
-   "(require [prologos.data.list :refer [List nil cons reduce foldr length map filter append\n"
+   "(require [prologos::data::list :refer [List nil cons reduce foldr length map filter append\n"
    "   head tail singleton elem reverse sum product any? all? find nth last\n"
    "   replicate range concat concat-map take drop split-at take-while drop-while\n"
    "   partition zip-with zip unzip intersperse halve merge sort\n"
@@ -47,9 +47,9 @@
    "   dedup dedup-helper prefix-of? suffix-of? delete\n"
    "   find-index find-index-helper count count-helper\n"
    "   scanl iterate-n sort-on]])\n"
-   "(require [prologos.data.option :refer [Option none some unwrap-or]])\n"
-   "(require [prologos.data.nat :refer [add mult pred zero?]])\n"
-   "(require [prologos.core.eq-trait :refer [nat-eq]])\n"))
+   "(require [prologos::data::option :refer [Option none some unwrap-or]])\n"
+   "(require [prologos::data::nat :refer [add mult pred zero?]])\n"
+   "(require [prologos::core::eq-trait :refer [nat-eq]])\n"))
 
 
 ;; ========================================
@@ -95,7 +95,7 @@
   (check-equal?
    (last (run-ns (string-append "(ns tle40)\n" preamble
      "(eval (find-index zero? '[]))")))
-   "[prologos.data.option::none Nat] : [prologos.data.option::Option Nat]"))
+   "[prologos::data::option::none Nat] : [prologos::data::option::Option Nat]"))
 
 
 (test-case "find-index/found"
@@ -110,7 +110,7 @@
   (check-equal?
    (last (run-ns (string-append "(ns tle42)\n" preamble
      "(eval (find-index zero? '[1N 2N 3N]))")))
-   "[prologos.data.option::none Nat] : [prologos.data.option::Option Nat]"))
+   "[prologos::data::option::none Nat] : [prologos::data::option::Option Nat]"))
 
 
 (test-case "find-index/first-element"
@@ -157,12 +157,12 @@
 ;; ========================================
 
 ;; Test sort-on with identity key (equivalent to plain sort).
-;; Uses le? from prologos.data.nat as the comparator.
+;; Uses le? from prologos::data::nat as the comparator.
 
 (test-case "sort-on/empty"
   (check-equal?
    (last (run-ns (string-append "(ns tle48)\n" preamble
-     "(require [prologos.data.nat :refer [le?]])\n"
+     "(require [prologos::data::nat :refer [le?]])\n"
      "(eval (length (sort-on le? (fn (x : Nat) x) '[])))")))
    "0N : Nat"))
 
@@ -171,6 +171,6 @@
   ;; sort-on le? id [3 1 2] = [1 2 3], head = 1
   (check-equal?
    (last (run-ns (string-append "(ns tle49)\n" preamble
-     "(require [prologos.data.nat :refer [le?]])\n"
+     "(require [prologos::data::nat :refer [le?]])\n"
      "(eval (head zero (sort-on le? (fn (x : Nat) x) '[3N 1N 2N])))")))
    "1N : Nat"))

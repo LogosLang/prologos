@@ -1,6 +1,6 @@
-ns prologos.core.fromint-posit-instances
+ns prologos::core::fromint-posit-instances
 
-require [prologos.core.fromint-trait :refer [FromInt FromInt-from-integer]]
+require [prologos::core::fromint-trait :refer [FromInt FromInt-from-integer]]
 
 ;; ========================================
 ;; FromInt Posit instances — Int → Posit{N}

@@ -1,4 +1,4 @@
-ns prologos.data.datum
+ns prologos::data::datum
 
 ;; ========================================
 ;; Prologos Datum Type

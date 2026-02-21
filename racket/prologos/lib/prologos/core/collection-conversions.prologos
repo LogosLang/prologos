@@ -1,8 +1,8 @@
-ns prologos.core.collection-conversions
+ns prologos::core::collection-conversions
 
-require [prologos.data.list     :refer [List nil cons foldr]]
-require [prologos.data.lseq     :refer [LSeq lseq-nil]]
-require [prologos.data.lseq-ops :refer [list-to-lseq lseq-to-list]]
+require [prologos::data::list     :refer [List nil cons foldr]]
+require [prologos::data::lseq     :refer [LSeq lseq-nil]]
+require [prologos::data::lseq-ops :refer [list-to-lseq lseq-to-list]]
 
 ;; ========================================
 ;; Collection Conversion Functions

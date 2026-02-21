@@ -109,12 +109,12 @@
        [(and (string-prefix? rel "lib/prologos/")
              (string-suffix? rel ".prologos"))
         ;; Convert path to module name:
-        ;; lib/prologos/data/nat.prologos → prologos.data.nat
+        ;; lib/prologos/data/nat.prologos → prologos::data::nat
         (define without-prefix (substring rel (string-length "lib/")))
         (define without-ext (substring without-prefix 0
                               (- (string-length without-prefix)
                                  (string-length ".prologos"))))
-        (define mod-name (string-replace without-ext "/" "."))
+        (define mod-name (string-replace without-ext "/" "::"))
         (changed-prologos (string->symbol mod-name))]
        ;; lib/examples/**/*.prologos — example .prologos files
        ;; These are tested via the test-lang-*.rkt files (they load through the driver)

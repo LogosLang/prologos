@@ -1,6 +1,6 @@
-ns prologos.core.tryfrom-trait
+ns prologos::core::tryfrom-trait
 
-require [prologos.data.option :refer [Option some none]]
+require [prologos::data::option :refer [Option some none]]
 
 ;; ========================================
 ;; TryFrom Trait — fallible conversion from A to B

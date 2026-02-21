@@ -15,15 +15,15 @@ ns examples.homoiconicity
 ;; Prerequisites: Phase III (Quote & Quasiquote) of the Homoiconicity
 ;; Roadmap. See docs/tracking/2026-02-19_HOMOICONICITY_ROADMAP.md.
 
-require [prologos.data.datum  :refer [Datum datum-sym datum-kw datum-nat
+require [prologos::data::datum  :refer [Datum datum-sym datum-kw datum-nat
                                        datum-int datum-rat datum-bool
                                        datum-nil datum-cons
                                        sym? kw? nat? int? rat? bool? nil? cons?]]
-        [prologos.data.list   :refer [List nil cons map filter reduce
+        [prologos::data::list   :refer [List nil cons map filter reduce
                                        sum length reverse append]]
-        [prologos.data.nat    :refer [add mult double sub zero? le?]]
-        [prologos.data.option :refer [Option none some]]
-        [prologos.data.bool   :refer [not and or]]
+        [prologos::data::nat    :refer [add mult double sub zero? le?]]
+        [prologos::data::option :refer [Option none some]]
+        [prologos::data::bool   :refer [not and or]]
 
 
 ;; ========================================================================

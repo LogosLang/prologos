@@ -569,7 +569,7 @@
       [idx (expr-bvar idx)]
       ;; Own-namespace definition takes priority over imports (including prelude).
       ;; This ensures `def map ...` in `ns foo` resolves to `foo::map`, not the
-      ;; prelude's `prologos.data.list::map`.
+      ;; prelude's `prologos::data::list::map`.
       [(and (current-ns-context)
             (let ([own-fqn (qualify-name name
                              (ns-context-current-ns (current-ns-context)))])

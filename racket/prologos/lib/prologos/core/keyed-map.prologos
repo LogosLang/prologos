@@ -1,7 +1,7 @@
-ns prologos.core.keyed-map
+ns prologos::core::keyed-map
 
-require [prologos.core.keyed-trait :refer [Keyed]]
-require [prologos.data.option      :refer [Option some none]]
+require [prologos::core::keyed-trait :refer [Keyed]]
+require [prologos::data::option      :refer [Option some none]]
 
 ;; ========================================
 ;; Keyed instance for Map

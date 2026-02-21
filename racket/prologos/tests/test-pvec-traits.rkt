@@ -61,16 +61,16 @@
 
 (define preamble
   "(ns test)
-(require (prologos.core.seqable-pvec    :refer (PVec--Seqable--dict)))
-(require (prologos.core.buildable-pvec  :refer (PVec--Buildable--dict)))
-(require (prologos.core.foldable-pvec   :refer (pvec-foldable)))
-(require (prologos.core.functor-pvec    :refer (pvec-functor)))
-(require (prologos.core.indexed-pvec    :refer (PVec--Indexed--dict pvec-idx-nth pvec-idx-length pvec-idx-update)))
-(require (prologos.core.pvec-ops        :refer (pvec-map pvec-filter pvec-fold pvec-any? pvec-all? pvec-from-list-fn pvec-to-list-fn)))
-(require (prologos.data.lseq            :refer (LSeq lseq-nil lseq-cell)))
-(require (prologos.data.lseq-ops        :refer (lseq-to-list list-to-lseq)))
-(require (prologos.data.option          :refer (Option some none)))
-(require (prologos.data.list            :refer (List nil cons)))
+(require (prologos::core::seqable-pvec    :refer (PVec--Seqable--dict)))
+(require (prologos::core::buildable-pvec  :refer (PVec--Buildable--dict)))
+(require (prologos::core::foldable-pvec   :refer (pvec-foldable)))
+(require (prologos::core::functor-pvec    :refer (pvec-functor)))
+(require (prologos::core::indexed-pvec    :refer (PVec--Indexed--dict pvec-idx-nth pvec-idx-length pvec-idx-update)))
+(require (prologos::core::pvec-ops        :refer (pvec-map pvec-filter pvec-fold pvec-any? pvec-all? pvec-from-list-fn pvec-to-list-fn)))
+(require (prologos::data::lseq            :refer (LSeq lseq-nil lseq-cell)))
+(require (prologos::data::lseq-ops        :refer (lseq-to-list list-to-lseq)))
+(require (prologos::data::option          :refer (Option some none)))
+(require (prologos::data::list            :refer (List nil cons)))
 ")
 
 ;; ========================================
@@ -112,7 +112,7 @@
 (test-case "pvec-traits/foldable-eval"
   ;; foldr on PVec returns correct type
   (define result (run-ns-last (string-append preamble
-    "(require (prologos.data.nat :refer (add)))
+    "(require (prologos::data::nat :refer (add)))
      (def v <(PVec Nat)> (pvec-push (pvec-push (pvec-push (pvec-empty Nat) (suc zero)) (suc (suc zero))) (suc (suc (suc zero)))))
      (infer (pvec-foldable Nat Nat (fn (a : Nat) (fn (b : Nat) (add b a))) zero v))")))
   (check-contains result "Nat"))

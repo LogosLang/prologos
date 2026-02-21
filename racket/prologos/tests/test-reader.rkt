@@ -58,8 +58,8 @@
   (check-equal? (tok-val toks 1) 'std::append))
 
 (test-case "tokenize: nested qualified name with ::"
-  (define toks (tokenize-string "prologos.data.nat::add"))
-  (check-equal? (tok-val toks 1) 'prologos.data.nat::add))
+  (define toks (tokenize-string "prologos::data::nat::add"))
+  (check-equal? (tok-val toks 1) 'prologos::data::nat::add))
 
 (test-case "tokenize: freestanding colon"
   (define toks (tokenize-string "x : Nat"))

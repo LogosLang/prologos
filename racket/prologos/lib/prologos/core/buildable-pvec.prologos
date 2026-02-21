@@ -1,9 +1,9 @@
-ns prologos.core.buildable-pvec
+ns prologos::core::buildable-pvec
 
-require [prologos.core.buildable-trait :refer [Buildable]]
-require [prologos.data.lseq            :refer [LSeq]]
-require [prologos.data.lseq-ops        :refer [lseq-to-list]]
-require [prologos.data.list             :refer [List]]
+require [prologos::core::buildable-trait :refer [Buildable]]
+require [prologos::data::lseq            :refer [LSeq]]
+require [prologos::data::lseq-ops        :refer [lseq-to-list]]
+require [prologos::data::list             :refer [List]]
 
 ;; ========================================
 ;; Buildable PVec Instance

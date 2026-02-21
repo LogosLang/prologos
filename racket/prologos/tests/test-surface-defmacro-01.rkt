@@ -105,7 +105,7 @@
   ;; defmacro with multiple arguments
   (check-equal?
    (run-last (string-append "(ns dm9)\n"
-                            "(require (prologos.data.nat :refer (add)))\n"
+                            "(require (prologos::data::nat :refer (add)))\n"
                             "(defmacro add3 ($a $b $c) (add $a (add $b $c)))\n"
                             "(eval (add3 (the Nat (suc zero)) (the Nat (suc zero)) (the Nat (suc zero))))"))
    "3N : Nat"))
@@ -115,7 +115,7 @@
   ;; macro that applies a function to two arguments
   (check-equal?
    (run-last (string-append "(ns dm10)\n"
-                            "(require (prologos.data.nat :refer (add)))\n"
+                            "(require (prologos::data::nat :refer (add)))\n"
                             "(defmacro apply2 ($f $x $y) ($f $x $y))\n"
                             "(eval (apply2 add (the Nat (suc zero)) (the Nat (suc zero))))"))
    "2N : Nat"))
@@ -135,7 +135,7 @@
 ;; ========================================
 
 (test-case "cross-module/twice-auto-import"
-  ;; core macros are auto-imported via prologos.core
+  ;; core macros are auto-imported via prologos::core
   ;; twice should be available without explicit require
   (check-equal?
    (run-last "(ns dm12)\n(eval (the Nat (twice suc zero)))")

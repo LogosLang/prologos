@@ -1,6 +1,6 @@
-ns prologos.core.abs-instances
+ns prologos::core::abs-instances
 
-require [prologos.core.abs-trait :refer [Abs Abs-abs]]
+require [prologos::core::abs-trait :refer [Abs Abs-abs]]
 
 ;; ========================================
 ;; Abs Rat

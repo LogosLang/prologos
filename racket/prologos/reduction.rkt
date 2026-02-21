@@ -30,7 +30,7 @@
 ;; Helpers for building Prologos List values in reduction
 ;; ========================================
 ;; List constructors (nil, cons) are inductive-type fvars registered by
-;; `data List {A}` in prologos.data.list.  At the reduction level they
+;; `data List {A}` in prologos::data::list.  At the reduction level they
 ;; appear as (expr-fvar 'nil) and (expr-app (expr-app (expr-fvar 'cons) elem) rest).
 ;; These helpers convert Racket-level lists of AST exprs into Prologos Lists.
 
@@ -325,7 +325,7 @@
                            #f))))))))
 
 ;; Extract the short (bare) name from a potentially FQN symbol.
-;; 'prologos.data.list::cons → 'cons, 'cons → 'cons
+;; 'prologos::data::list::cons → 'cons, 'cons → 'cons
 (define (ctor-short-name fqn)
   (define parts (string-split (symbol->string fqn) "::"))
   (string->symbol (last parts)))

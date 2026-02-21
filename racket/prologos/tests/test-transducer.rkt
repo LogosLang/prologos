@@ -91,10 +91,10 @@
 ;; Standard preamble: load transducer + list + lseq modules
 (define preamble
   "(ns test)
-(require (prologos.data.list :refer (List nil cons))
-         (prologos.data.lseq :refer (LSeq lseq-nil lseq-cell lseq-head lseq-rest lseq-empty?))
-         (prologos.data.lseq-ops :refer (list-to-lseq lseq-to-list lseq-map lseq-filter lseq-fold lseq-length))
-         (prologos.data.transducer :refer (transduce map-xf filter-xf remove-xf xf-compose list-conj into-list-rev)))
+(require (prologos::data::list :refer (List nil cons))
+         (prologos::data::lseq :refer (LSeq lseq-nil lseq-cell lseq-head lseq-rest lseq-empty?))
+         (prologos::data::lseq-ops :refer (list-to-lseq lseq-to-list lseq-map lseq-filter lseq-fold lseq-length))
+         (prologos::data::transducer :refer (transduce map-xf filter-xf remove-xf xf-compose list-conj into-list-rev)))
 ")
 
 ;; Helper: make a list of Nat: '(1 2 3)
@@ -282,7 +282,7 @@
 (test-case "xf/transduce-sum: sum with map"
   ;; Sum of suc-mapped [1,2,3] = sum of [2,3,4] = 9
   (define result (run-last (string-append preamble list123 helpers
-    "(require (prologos.data.nat :refer (add)))
+    "(require (prologos::data::nat :refer (add)))
      (def sum-rf : (-> Nat (-> Nat Nat))
        (fn (acc : Nat) (fn (x : Nat) (add acc x))))
      (eval (transduce Nat Nat Nat (map-xf Nat Nat suc-fn) sum-rf zero list123))")))
@@ -291,7 +291,7 @@
 (test-case "xf/transduce-sum-filtered: sum positives only"
   ;; Sum of positives in [0,1,2,3] = 1+2+3 = 6
   (define result (run-last (string-append preamble helpers
-    "(require (prologos.data.nat :refer (add)))
+    "(require (prologos::data::nat :refer (add)))
      (def list0123 : (List Nat)
        (cons Nat zero (cons Nat (suc zero) (cons Nat (suc (suc zero)) (cons Nat (suc (suc (suc zero))) (nil Nat))))))
      (def sum-rf : (-> Nat (-> Nat Nat))
@@ -302,7 +302,7 @@
 (test-case "xf/transduce-composed-sum: sum of suc-mapped positives"
   ;; On [0,1,2,3]: filter positive → [1,2,3], map suc → [2,3,4], sum → 9
   (define result (run-last (string-append preamble helpers
-    "(require (prologos.data.nat :refer (add)))
+    "(require (prologos::data::nat :refer (add)))
      (def list0123 : (List Nat)
        (cons Nat zero (cons Nat (suc zero) (cons Nat (suc (suc zero)) (cons Nat (suc (suc (suc zero))) (nil Nat))))))
      (def sum-rf : (-> Nat (-> Nat Nat))
@@ -340,14 +340,14 @@
 (test-case "ws/transducer-module-loads: transducer module loads via WS"
   ;; Just verify the module can be loaded and a def type-checks
   (define results (run-ws
-    "ns test\nrequire [prologos.data.transducer :refer [map-xf filter-xf transduce list-conj]]\ninfer [map-xf Nat Nat]"))
+    "ns test\nrequire [prologos::data::transducer :refer [map-xf filter-xf transduce list-conj]]\ninfer [map-xf Nat Nat]"))
   (check-contains (last results) "->"))
 
 (test-case "ws/transducer-map: transduce with map-xf in WS mode"
   (define result (run-ws-last
     "ns test
-require [prologos.data.list :refer [List nil cons]]
-require [prologos.data.transducer :refer [transduce map-xf list-conj]]
+require [prologos::data::list :refer [List nil cons]]
+require [prologos::data::transducer :refer [transduce map-xf list-conj]]
 
 (def list12 : [List Nat] (cons Nat (suc zero) (cons Nat (suc (suc zero)) (nil Nat))))
 (def suc-fn : [-> Nat Nat] (fn (x : Nat) (suc x)))
@@ -358,8 +358,8 @@ eval [transduce Nat Nat [List Nat] [map-xf Nat Nat suc-fn] [list-conj Nat] [nil 
 (test-case "ws/xf-compose: xf-compose in WS mode"
   (define result (run-ws-last
     "ns test
-require [prologos.data.list :refer [List nil cons]]
-require [prologos.data.transducer :refer [transduce map-xf filter-xf xf-compose list-conj]]
+require [prologos::data::list :refer [List nil cons]]
+require [prologos::data::transducer :refer [transduce map-xf filter-xf xf-compose list-conj]]
 
 (def list012 : [List Nat] (cons Nat zero (cons Nat (suc zero) (cons Nat (suc (suc zero)) (nil Nat)))))
 (def suc-fn : [-> Nat Nat] (fn (x : Nat) (suc x)))
@@ -371,8 +371,8 @@ eval [transduce Nat Nat [List Nat] [xf-compose Nat Nat Nat [filter-xf Nat is-pos
 (test-case "ws/into-list-rev-ws: into-list-rev in WS mode"
   (define result (run-ws-last
     "ns test
-require [prologos.data.list :refer [List nil cons]]
-require [prologos.data.transducer :refer [into-list-rev map-xf]]
+require [prologos::data::list :refer [List nil cons]]
+require [prologos::data::transducer :refer [into-list-rev map-xf]]
 
 (def list12 : [List Nat] (cons Nat (suc zero) (cons Nat (suc (suc zero)) (nil Nat))))
 (def suc-fn : [-> Nat Nat] (fn (x : Nat) (suc x)))

@@ -1,7 +1,7 @@
-ns prologos.core.identity-instances
+ns prologos::core::identity-instances
 
-require [prologos.core.additive-identity-trait       :refer [AdditiveIdentity]]
-require [prologos.core.multiplicative-identity-trait  :refer [MultiplicativeIdentity]]
+require [prologos::core::additive-identity-trait       :refer [AdditiveIdentity]]
+require [prologos::core::multiplicative-identity-trait  :refer [MultiplicativeIdentity]]
 
 ;; ========================================
 ;; AdditiveIdentity Instances (zero)

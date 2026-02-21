@@ -1,7 +1,7 @@
-ns prologos.core.buildable-lseq
+ns prologos::core::buildable-lseq
 
-require [prologos.core.buildable-trait :refer [Buildable]]
-require [prologos.data.lseq            :refer [LSeq lseq-nil]]
+require [prologos::core::buildable-trait :refer [Buildable]]
+require [prologos::data::lseq            :refer [LSeq lseq-nil]]
 
 ;; ========================================
 ;; Buildable instance for LSeq (identity)

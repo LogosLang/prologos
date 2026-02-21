@@ -1,6 +1,6 @@
-ns prologos.core.keyed-trait
+ns prologos::core::keyed-trait
 
-require [prologos.data.option :refer [Option]]
+require [prologos::data::option :refer [Option]]
 
 ;; ========================================
 ;; Keyed Trait — Key-Value Access

@@ -2592,7 +2592,7 @@
 (register-preparse-macro! '$compose expand-compose-sexp)
 ;; $quote: code-as-data — 'expr → ($quote expr) → Datum constructor chain
 ;; Walks the quoted datum and emits Datum constructor calls.
-;; Requires prologos.data.datum to be loaded for the constructors to resolve.
+;; Requires prologos::data::datum to be loaded for the constructors to resolve.
 
 ;; Helper: check if a symbol is a keyword literal (starts with :)
 (define (keyword-like-symbol? s)

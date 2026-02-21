@@ -1,4 +1,4 @@
-ns prologos.core.div-trait
+ns prologos::core::div-trait
 
 ;; ========================================
 ;; Div Trait — binary division

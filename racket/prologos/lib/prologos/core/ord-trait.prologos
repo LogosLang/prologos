@@ -1,8 +1,8 @@
-ns prologos.core.ord-trait
+ns prologos::core::ord-trait
 
-require [prologos.data.ordering :refer [Ordering lt-ord eq-ord gt-ord]]
-require [prologos.data.nat :refer [lt? nat-eq?]]
-require [prologos.data.bool :refer [not]]
+require [prologos::data::ordering :refer [Ordering lt-ord eq-ord gt-ord]]
+require [prologos::data::nat :refer [lt? nat-eq?]]
+require [prologos::data::bool :refer [not]]
 
 ;; ========================================
 ;; Ord Trait — via trait/impl system

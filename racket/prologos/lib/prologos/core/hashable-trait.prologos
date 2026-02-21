@@ -1,6 +1,6 @@
-ns prologos.core.hashable-trait
+ns prologos::core::hashable-trait
 
-require [prologos.data.nat :refer [add mult]]
+require [prologos::data::nat :refer [add mult]]
 
 ;; ========================================
 ;; Hashable Trait

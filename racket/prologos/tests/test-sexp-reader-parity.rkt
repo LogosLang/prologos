@@ -215,7 +215,7 @@
   (define result
     (run (string-append
       "(ns sp-va-1)\n"
-      "(require [prologos.data.list :refer [List nil cons length]])\n"
+      "(require [prologos::data::list :refer [List nil cons length]])\n"
       "(spec count-args Nat ... -> Nat)\n"
       "(defn count-args [xs] (length Nat xs))\n"
       "(eval (count-args 1N 2N 3N))")))
@@ -225,7 +225,7 @@
   (define result
     (run (string-append
       "(ns sp-va-2)\n"
-      "(require [prologos.data.list :refer [List nil cons length]])\n"
+      "(require [prologos::data::list :refer [List nil cons length]])\n"
       "(spec count-args Nat ... -> Nat)\n"
       "(defn count-args [xs] (length Nat xs))\n"
       "(eval (count-args))")))
@@ -235,7 +235,7 @@
   (define result
     (run (string-append
       "(ns sp-va-3)\n"
-      "(require [prologos.data.list :refer [List nil cons length]])\n"
+      "(require [prologos::data::list :refer [List nil cons length]])\n"
       "(spec count-args Nat ... -> Nat)\n"
       "(defn count-args [...xs] (length Nat xs))\n"
       "(eval (count-args 1N 2N 3N))")))
@@ -245,7 +245,7 @@
   (define result
     (run (string-append
       "(ns sp-va-4)\n"
-      "(require [prologos.data.list :refer [List nil cons length]])\n"
+      "(require [prologos::data::list :refer [List nil cons length]])\n"
       "(spec count-rest Nat Nat ... -> Nat)\n"
       "(defn count-rest [first ...rest] (length Nat rest))\n"
       "(eval (count-rest 99N 1N 2N 3N))")))

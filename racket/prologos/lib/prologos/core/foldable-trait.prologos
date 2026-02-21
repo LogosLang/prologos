@@ -1,4 +1,4 @@
-ns prologos.core.foldable-trait
+ns prologos::core::foldable-trait
 
 ;; ========================================
 ;; Foldable Trait

@@ -1,8 +1,8 @@
-ns prologos.core.seq-lseq
+ns prologos::core::seq-lseq
 
-require [prologos.core.seq-trait  :refer [Seq]]
-require [prologos.data.lseq       :refer [LSeq lseq-nil lseq-cell lseq-head lseq-rest lseq-empty?]]
-require [prologos.data.option     :refer [Option some none]]
+require [prologos::core::seq-trait  :refer [Seq]]
+require [prologos::data::lseq       :refer [LSeq lseq-nil lseq-cell lseq-head lseq-rest lseq-empty?]]
+require [prologos::data::option     :refer [Option some none]]
 
 ;; ========================================
 ;; Seq instance for LSeq

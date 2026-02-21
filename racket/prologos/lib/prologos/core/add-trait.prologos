@@ -1,6 +1,6 @@
-ns prologos.core.add-trait
+ns prologos::core::add-trait
 
-require [prologos.data.nat :refer [add]]
+require [prologos::data::nat :refer [add]]
 
 ;; ========================================
 ;; Add Trait — binary addition
@@ -12,7 +12,7 @@ require [prologos.data.nat :refer [add]]
 trait Add {A}
   add : A -> A -> A
 
-;; Nat instance — delegates to prologos.data.nat/add
+;; Nat instance — delegates to prologos::data::nat/add
 impl Add Nat
   defn add [x y] <Nat>
     add x y

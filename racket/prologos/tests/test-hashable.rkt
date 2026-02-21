@@ -53,11 +53,11 @@
 
 (define preamble
   "(ns test)
-(require (prologos.core.hashable-trait :refer (Hashable Hashable-hash hash-combine nat31)))
-(require (prologos.core.hashable-instances :refer (hash-option hash-list)))
-(require (prologos.data.option :refer (Option some none)))
-(require (prologos.data.list :refer (List nil cons)))
-(require (prologos.data.ordering :refer (Ordering lt-ord eq-ord gt-ord)))
+(require (prologos::core::hashable-trait :refer (Hashable Hashable-hash hash-combine nat31)))
+(require (prologos::core::hashable-instances :refer (hash-option hash-list)))
+(require (prologos::data::option :refer (Option some none)))
+(require (prologos::data::list :refer (List nil cons)))
+(require (prologos::data::ordering :refer (Ordering lt-ord eq-ord gt-ord)))
 ")
 
 (define (check-contains actual substr [msg #f])

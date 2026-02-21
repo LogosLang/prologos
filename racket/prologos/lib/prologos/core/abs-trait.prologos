@@ -1,4 +1,4 @@
-ns prologos.core.abs-trait
+ns prologos::core::abs-trait
 
 ;; ========================================
 ;; Abs Trait — absolute value

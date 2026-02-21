@@ -86,13 +86,13 @@
 ;; ========================================
 ;; List type fvar resolution
 ;; ========================================
-;; In module contexts, 'List' is qualified as 'prologos.data.list::List'.
+;; In module contexts, 'List' is qualified as 'prologos::data::list::List'.
 ;; In bare (no-prelude) contexts, it's just 'List'.
 ;; This helper returns the correct expr-fvar for constructing List types
 ;; in typing rules for map-keys, map-vals, set-to-list, pvec-to-list.
 (define (list-type-fvar)
-  (if (global-env-lookup-type 'prologos.data.list::List)
-      (expr-fvar 'prologos.data.list::List)
+  (if (global-env-lookup-type 'prologos::data::list::List)
+      (expr-fvar 'prologos::data::list::List)
       (expr-fvar 'List)))
 
 ;; ========================================
@@ -867,7 +867,7 @@
          [(expr-PVec a) (expr-app (list-type-fvar) a)]
          [_ (expr-error)]))]
     ;; pvec-from-list : List A → PVec A
-    ;; List constructor name may be 'List or 'prologos.data.list::List (qualified)
+    ;; List constructor name may be 'List or 'prologos::data::list::List (qualified)
     [(expr-pvec-from-list v)
      (let ([tv (whnf (infer ctx v))])
        (match tv
@@ -1218,7 +1218,7 @@
       [(expr-Unit) (values 'Unit args)]
       [_ (values #f #f)])))
 
-;; 'prologos.data.list::List → 'List, 'List → 'List
+;; 'prologos::data::list::List → 'List, 'List → 'List
 (define (bare-name sym)
   (define-values (_prefix short) (split-qualified-name sym))
   (or short sym))
@@ -1245,7 +1245,7 @@
           [_ ctx]))))
 
 ;; Qualify a bare ctor name using the type constructor's FQN prefix.
-;; e.g., ctor='cons, type-fqn='prologos.data.list::List → 'prologos.data.list::cons
+;; e.g., ctor='cons, type-fqn='prologos::data::list::List → 'prologos::data::list::cons
 (define (qualify-ctor-name ctor-name type-ctor-fqn)
   (define-values (prefix _short) (split-qualified-name type-ctor-fqn))
   (if prefix

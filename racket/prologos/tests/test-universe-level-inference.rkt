@@ -193,17 +193,17 @@
 (test-case "implicit/id-with-inferred-level"
   ;; id uses {A} which now gets level-meta instead of Type 0
   (check-equal?
-   (run-last "(ns lvl1)\n(require [prologos.core :refer [id]])\n(eval (id zero))")
+   (run-last "(ns lvl1)\n(require [prologos::core :refer [id]])\n(eval (id zero))")
    "0N : Nat"))
 
 (test-case "implicit/const-with-inferred-level"
   (check-equal?
-   (run-last "(ns lvl2)\n(require [prologos.core :refer [const]])\n(eval (const zero true))")
+   (run-last "(ns lvl2)\n(require [prologos::core :refer [const]])\n(eval (const zero true))")
    "0N : Nat"))
 
 (test-case "implicit/compose-with-inferred-level"
   (check-equal?
-   (run-last "(ns lvl3)\n(require [prologos.core :refer [compose]])\n(require [prologos.data.nat :refer [double pred]])\n(eval (compose double pred 3N))")
+   (run-last "(ns lvl3)\n(require [prologos::core :refer [compose]])\n(require [prologos::data::nat :refer [double pred]])\n(eval (compose double pred 3N))")
    "4N : Nat"))
 
 (test-case "explicit-type-0-still-works"
@@ -221,11 +221,11 @@
 (test-case "implicit/stdlib-nat-with-inferred-level"
   ;; add 2 3 = 5 — stdlib still works with level inference
   (check-equal?
-   (run-last "(ns lvl6)\n(require [prologos.data.nat :refer [add]])\n(eval (add 2N 3N))")
+   (run-last "(ns lvl6)\n(require [prologos::data::nat :refer [add]])\n(eval (add 2N 3N))")
    "5N : Nat"))
 
 (test-case "implicit/stdlib-bool-with-inferred-level"
   ;; not true = false
   (check-equal?
-   (run-last "(ns lvl7)\n(require [prologos.data.bool :refer [not]])\n(eval (not true))")
+   (run-last "(ns lvl7)\n(require [prologos::data::bool :refer [not]])\n(eval (not true))")
    "false : Bool"))

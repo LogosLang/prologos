@@ -1,4 +1,4 @@
-ns prologos.data.never
+ns prologos::data::never
 
 ;; ========================================
 ;; Prologos Never Type (Uninhabited)

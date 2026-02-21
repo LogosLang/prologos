@@ -60,36 +60,36 @@
 
 (test-case "tryfrom/rat-to-posit8"
   (define r (run-ns-strings (string-append
-    "(ns t)(require [prologos.core.tryfrom-trait :refer [TryFrom TryFrom-try-from]])"
-    "(require [prologos.data.option :refer [Option some none]])"
-    "(require [prologos.core.tryfrom-instances :refer []])"
+    "(ns t)(require [prologos::core::tryfrom-trait :refer [TryFrom TryFrom-try-from]])"
+    "(require [prologos::data::option :refer [Option some none]])"
+    "(require [prologos::core::tryfrom-instances :refer []])"
     "(eval (TryFrom-try-from Rat Posit8 Rat-Posit8--TryFrom--dict (rat 1/2)))")))
   (check-true (string-contains? (last r) "some")))
 
 
 (test-case "tryfrom/rat-to-posit32"
   (define r (run-ns-strings (string-append
-    "(ns t)(require [prologos.core.tryfrom-trait :refer [TryFrom TryFrom-try-from]])"
-    "(require [prologos.data.option :refer [Option some none]])"
-    "(require [prologos.core.tryfrom-instances :refer []])"
+    "(ns t)(require [prologos::core::tryfrom-trait :refer [TryFrom TryFrom-try-from]])"
+    "(require [prologos::data::option :refer [Option some none]])"
+    "(require [prologos::core::tryfrom-instances :refer []])"
     "(eval (TryFrom-try-from Rat Posit32 Rat-Posit32--TryFrom--dict (rat 3/7)))")))
   (check-true (string-contains? (last r) "some")))
 
 
 (test-case "tryfrom/int-to-posit16"
   (define r (run-ns-strings (string-append
-    "(ns t)(require [prologos.core.tryfrom-trait :refer [TryFrom TryFrom-try-from]])"
-    "(require [prologos.data.option :refer [Option some none]])"
-    "(require [prologos.core.tryfrom-instances :refer []])"
+    "(ns t)(require [prologos::core::tryfrom-trait :refer [TryFrom TryFrom-try-from]])"
+    "(require [prologos::data::option :refer [Option some none]])"
+    "(require [prologos::core::tryfrom-instances :refer []])"
     "(eval (TryFrom-try-from Int Posit16 Int-Posit16--TryFrom--dict (int 42)))")))
   (check-true (string-contains? (last r) "some")))
 
 
 (test-case "tryfrom/int-to-posit64"
   (define r (run-ns-strings (string-append
-    "(ns t)(require [prologos.core.tryfrom-trait :refer [TryFrom TryFrom-try-from]])"
-    "(require [prologos.data.option :refer [Option some none]])"
-    "(require [prologos.core.tryfrom-instances :refer []])"
+    "(ns t)(require [prologos::core::tryfrom-trait :refer [TryFrom TryFrom-try-from]])"
+    "(require [prologos::data::option :refer [Option some none]])"
+    "(require [prologos::core::tryfrom-instances :refer []])"
     "(eval (TryFrom-try-from Int Posit64 Int-Posit64--TryFrom--dict (int 100)))")))
   (check-true (string-contains? (last r) "some")))
 
@@ -102,8 +102,8 @@
   ;; Into trait definition + parametric impl registers correctly via WS loading
   (define r (run-ns-strings (string-append
     "(ns t)"
-    "(require [prologos.core.from-trait :refer [From From-from]])"
-    "(require [prologos.core.into-trait :refer [Into Into-into]])"
+    "(require [prologos::core::from-trait :refer [From From-from]])"
+    "(require [prologos::core::into-trait :refer [Into Into-into]])"
     "(infer Into-into)")))
   (check-true (not (null? r)))
   (check-true (string-contains? (last r) "Pi")))
@@ -113,9 +113,9 @@
   ;; Define From Nat Int, then resolve Into Nat Int parametrically
   (define r (run-ns (string-append
     "(ns t)"
-    "(require [prologos.core.from-trait :refer [From From-from]])"
-    "(require [prologos.core.into-trait :refer [Into Into-into]])"
-    "(require [prologos.core.from-instances :refer []])"
+    "(require [prologos::core::from-trait :refer [From From-from]])"
+    "(require [prologos::core::into-trait :refer [Into Into-into]])"
+    "(require [prologos::core::from-instances :refer []])"
     ;; Into-into with explicit dict: should typecheck
     "(check (Into-into Nat Int Nat-Int--From--dict zero) : Int)")))
   (define strs (filter string? r))
@@ -129,32 +129,32 @@
 
 (test-case "fromint/posit32"
   (define r (run-ns-strings (string-append
-    "(ns t)(require [prologos.core.fromint-trait :refer [FromInt FromInt-from-integer]])"
-    "(require [prologos.core.fromint-posit-instances :refer []])"
+    "(ns t)(require [prologos::core::fromint-trait :refer [FromInt FromInt-from-integer]])"
+    "(require [prologos::core::fromint-posit-instances :refer []])"
     "(eval (FromInt-from-integer Posit32 Posit32--FromInt--dict (int 42)))")))
   (check-true (string-contains? (last r) "Posit32")))
 
 
 (test-case "fromint/posit8"
   (define r (run-ns-strings (string-append
-    "(ns t)(require [prologos.core.fromint-trait :refer [FromInt FromInt-from-integer]])"
-    "(require [prologos.core.fromint-posit-instances :refer []])"
+    "(ns t)(require [prologos::core::fromint-trait :refer [FromInt FromInt-from-integer]])"
+    "(require [prologos::core::fromint-posit-instances :refer []])"
     "(eval (FromInt-from-integer Posit8 Posit8--FromInt--dict (int 1)))")))
   (check-true (string-contains? (last r) "Posit8")))
 
 
 (test-case "fromrat/posit32"
   (define r (run-ns-strings (string-append
-    "(ns t)(require [prologos.core.fromrat-trait :refer [FromRat FromRat-from-rational]])"
-    "(require [prologos.core.fromrat-posit-instances :refer []])"
+    "(ns t)(require [prologos::core::fromrat-trait :refer [FromRat FromRat-from-rational]])"
+    "(require [prologos::core::fromrat-posit-instances :refer []])"
     "(eval (FromRat-from-rational Posit32 Posit32--FromRat--dict (rat 3/7)))")))
   (check-true (string-contains? (last r) "Posit32")))
 
 
 (test-case "fromrat/posit64"
   (define r (run-ns-strings (string-append
-    "(ns t)(require [prologos.core.fromrat-trait :refer [FromRat FromRat-from-rational]])"
-    "(require [prologos.core.fromrat-posit-instances :refer []])"
+    "(ns t)(require [prologos::core::fromrat-trait :refer [FromRat FromRat-from-rational]])"
+    "(require [prologos::core::fromrat-posit-instances :refer []])"
     "(eval (FromRat-from-rational Posit64 Posit64--FromRat--dict (rat 1/3)))")))
   (check-true (string-contains? (last r) "Posit64")))
 

@@ -38,7 +38,7 @@
 ;; Common preamble for tests
 (define preamble
   (string-append
-   "(require [prologos.data.list :refer [List nil cons reduce foldr length map filter append\n"
+   "(require [prologos::data::list :refer [List nil cons reduce foldr length map filter append\n"
    "   head tail singleton elem reverse sum product any? all? find nth last\n"
    "   replicate range concat concat-map take drop split-at take-while drop-while\n"
    "   partition zip-with zip unzip intersperse halve merge sort\n"
@@ -47,9 +47,9 @@
    "   dedup dedup-helper prefix-of? suffix-of? delete\n"
    "   find-index find-index-helper count count-helper\n"
    "   scanl iterate-n sort-on]])\n"
-   "(require [prologos.data.option :refer [Option none some unwrap-or]])\n"
-   "(require [prologos.data.nat :refer [add mult pred zero?]])\n"
-   "(require [prologos.core.eq-trait :refer [nat-eq]])\n"))
+   "(require [prologos::data::option :refer [Option none some unwrap-or]])\n"
+   "(require [prologos::data::nat :refer [add mult pred zero?]])\n"
+   "(require [prologos::core::eq-trait :refer [nat-eq]])\n"))
 
 
 ;; ========================================

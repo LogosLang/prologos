@@ -1,7 +1,7 @@
-ns prologos.core.eq-numeric-instances
+ns prologos::core::eq-numeric-instances
 
-require [prologos.core.eq-trait :refer [Eq Eq-eq?]]
-require [prologos.data.bool     :refer [and]]
+require [prologos::core::eq-trait :refer [Eq Eq-eq?]]
+require [prologos::data::bool     :refer [and]]
 
 ;; ========================================
 ;; Eq Int

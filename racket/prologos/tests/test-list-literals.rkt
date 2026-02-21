@@ -210,7 +210,7 @@
   (define results
     (run-ns (string-append
              "(ns t-list-1)\n"
-             "(require [prologos.data.list :refer [List nil cons]])\n"
+             "(require [prologos::data::list :refer [List nil cons]])\n"
              "(check '[1N 2N 3N] : (List Nat))")))
   (check-not-false results)
   ;; Should not contain any errors
@@ -222,7 +222,7 @@
   (define results
     (run-ns (string-append
              "(ns t-list-2)\n"
-             "(require [prologos.data.list :refer [List nil cons]])\n"
+             "(require [prologos::data::list :refer [List nil cons]])\n"
              "(check '[] : (List Nat))")))
   (check-not-false results)
   (for ([r (in-list results)])
@@ -233,7 +233,7 @@
   (define results
     (run-ns (string-append
              "(ns t-list-3)\n"
-             "(require [prologos.data.list :refer [List nil cons map]])\n"
+             "(require [prologos::data::list :refer [List nil cons map]])\n"
              "(eval (map (fn (x : Nat) (suc x)) '[1N 2N 3N]))")))
   ;; Should produce a list [2, 3, 4]
   (check-not-false results)
@@ -248,7 +248,7 @@
   (define results
     (run-ns (string-append
              "(ns t-list-4)\n"
-             "(require [prologos.data.list :refer [List nil cons length]])\n"
+             "(require [prologos::data::list :refer [List nil cons length]])\n"
              "(eval (length '[1N 2N 3N]))")))
   (check-not-false results)
   (define result-str (last results))
@@ -261,7 +261,7 @@
   (define results
     (run-ns (string-append
              "(ns t-list-5)\n"
-             "(require [prologos.data.list :refer [List nil cons length]])\n"
+             "(require [prologos::data::list :refer [List nil cons length]])\n"
              "(def my-list : (List Nat) '[1N 2N 3N])\n"
              "(eval (length my-list))")))
   (check-not-false results)

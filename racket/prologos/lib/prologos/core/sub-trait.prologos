@@ -1,6 +1,6 @@
-ns prologos.core.sub-trait
+ns prologos::core::sub-trait
 
-require [prologos.data.nat :refer [sub]]
+require [prologos::data::nat :refer [sub]]
 
 ;; ========================================
 ;; Sub Trait — binary subtraction

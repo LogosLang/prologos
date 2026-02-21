@@ -191,7 +191,7 @@
   (define result
     (run (string-append
           "(ns t-va-1)\n"
-          "(require [prologos.data.list :refer [List nil cons length]])\n"
+          "(require [prologos::data::list :refer [List nil cons length]])\n"
           "(spec count-args Nat $rest -> Nat)\n"
           "(defn count-args [xs] (length Nat xs))\n"
           "(eval (count-args 1N 2N 3N))")))
@@ -201,7 +201,7 @@
   (define result
     (run (string-append
           "(ns t-va-2)\n"
-          "(require [prologos.data.list :refer [List nil cons length]])\n"
+          "(require [prologos::data::list :refer [List nil cons length]])\n"
           "(spec count-args Nat $rest -> Nat)\n"
           "(defn count-args [xs] (length Nat xs))\n"
           "(eval (count-args))")))
@@ -211,7 +211,7 @@
   (define result
     (run (string-append
           "(ns t-va-3)\n"
-          "(require [prologos.data.list :refer [List nil cons length]])\n"
+          "(require [prologos::data::list :refer [List nil cons length]])\n"
           "(spec count-args Nat $rest -> Nat)\n"
           "(defn count-args [xs] (length Nat xs))\n"
           "(eval (count-args 42N))")))
@@ -222,7 +222,7 @@
   (define result
     (run (string-append
           "(ns t-va-4)\n"
-          "(require [prologos.data.list :refer [List nil cons length]])\n"
+          "(require [prologos::data::list :refer [List nil cons length]])\n"
           "(spec count-args Nat $rest -> Nat)\n"
           "(defn count-args [xs] (length Nat xs))\n"
           "(eval (count-args 42N))")))
@@ -232,7 +232,7 @@
   (define result
     (run (string-append
           "(ns t-va-5)\n"
-          "(require [prologos.data.list :refer [List nil cons length]])\n"
+          "(require [prologos::data::list :refer [List nil cons length]])\n"
           "(spec count-rest Nat Nat $rest -> Nat)\n"
           "(defn count-rest [first xs] (length Nat xs))\n"
           "(eval (count-rest 99N 1N 2N 3N))")))
@@ -242,7 +242,7 @@
   (define result
     (run (string-append
           "(ns t-va-6)\n"
-          "(require [prologos.data.list :refer [List nil cons length]])\n"
+          "(require [prologos::data::list :refer [List nil cons length]])\n"
           "(spec count-rest Nat Nat $rest -> Nat)\n"
           "(defn count-rest [first xs] (length Nat xs))\n"
           "(eval (count-rest 99N))")))
@@ -252,7 +252,7 @@
   (define result
     (run (string-append
           "(ns t-va-7)\n"
-          "(require [prologos.data.list :refer [List nil cons length]])\n"
+          "(require [prologos::data::list :refer [List nil cons length]])\n"
           "(spec count-any ($brace-params A) A $rest -> Nat)\n"
           "(defn count-any [xs] (length A xs))\n"
           "(eval (count-any 1 2 3 4))")))
@@ -266,7 +266,7 @@
   (define result
     (run-ws (string-append
              "ns t-va-ws-1\n"
-             "require [prologos.data.list :refer [List nil cons length]]\n"
+             "require [prologos::data::list :refer [List nil cons length]]\n"
              "\n"
              "spec count-args Nat ... -> Nat\n"
              "defn count-args [...xs]\n"
@@ -279,7 +279,7 @@
   (define result
     (run-ws (string-append
              "ns t-va-ws-2\n"
-             "require [prologos.data.list :refer [List nil cons length]]\n"
+             "require [prologos::data::list :refer [List nil cons length]]\n"
              "\n"
              "spec count-rest Nat Nat ... -> Nat\n"
              "defn count-rest [first ...rest]\n"
@@ -292,7 +292,7 @@
   (define result
     (run-ws (string-append
              "ns t-va-ws-3\n"
-             "require [prologos.data.list :refer [List nil cons length]]\n"
+             "require [prologos::data::list :refer [List nil cons length]]\n"
              "\n"
              "spec count-any {A : Type} A ... -> Nat\n"
              "defn count-any [...xs]\n"
@@ -305,7 +305,7 @@
   (define result
     (run-ws (string-append
              "ns t-va-ws-4\n"
-             "require [prologos.data.list :refer [List nil cons length]]\n"
+             "require [prologos::data::list :refer [List nil cons length]]\n"
              "\n"
              "spec count-args Nat ... -> Nat\n"
              "defn count-args [...xs]\n"
@@ -318,7 +318,7 @@
   (define result
     (run-ws (string-append
              "ns t-va-ws-5\n"
-             "require [prologos.data.list :refer [List nil cons]]\n"
+             "require [prologos::data::list :refer [List nil cons]]\n"
              "\n"
              "spec list-of {A : Type} A ... -> [List A]\n"
              "defn list-of [...xs]\n"

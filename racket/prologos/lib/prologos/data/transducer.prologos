@@ -1,8 +1,8 @@
-ns prologos.data.transducer
+ns prologos::data::transducer
 
-require [prologos.data.lseq     :refer [LSeq lseq-nil lseq-cell lseq-head lseq-rest lseq-empty?]]
-        [prologos.data.lseq-ops :refer [lseq-fold list-to-lseq lseq-to-list]]
-        [prologos.data.list     :refer [List nil cons reverse]]
+require [prologos::data::lseq     :refer [LSeq lseq-nil lseq-cell lseq-head lseq-rest lseq-empty?]]
+        [prologos::data::lseq-ops :refer [lseq-fold list-to-lseq lseq-to-list]]
+        [prologos::data::list     :refer [List nil cons reverse]]
 
 ;; ========================================
 ;; Transducer Infrastructure

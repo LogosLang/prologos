@@ -1,6 +1,6 @@
-ns prologos.core.neg-instances
+ns prologos::core::neg-instances
 
-require [prologos.core.neg-trait :refer [Neg Neg-neg]]
+require [prologos::core::neg-trait :refer [Neg Neg-neg]]
 
 ;; ========================================
 ;; Neg Rat

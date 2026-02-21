@@ -243,7 +243,7 @@
     (run-ns-last
      (string-append
       "(ns d2t1)\n"
-      "(require [prologos.core.eq-trait :refer [nat-eq]])\n"
+      "(require [prologos::core::eq-trait :refer [nat-eq]])\n"
       "(eval (nat-eq zero zero))")))
   (check-equal? result "true : Bool"))
 
@@ -253,7 +253,7 @@
     (run-ns-last
      (string-append
       "(ns d2t2)\n"
-      "(require [prologos.core.eq-trait :refer [nat-eq eq-neq]])\n"
+      "(require [prologos::core::eq-trait :refer [nat-eq eq-neq]])\n"
       "(eval (eq-neq Nat nat-eq (suc zero) (suc (suc zero))))")))
   (check-equal? result "true : Bool"))
 
@@ -264,7 +264,7 @@
     (run-ns-last
      (string-append
       "(ns d2t3)\n"
-      "(require [prologos.core.ord-trait :refer [nat-ord ord-lt]])\n"
+      "(require [prologos::core::ord-trait :refer [nat-ord ord-lt]])\n"
       "(eval (ord-lt Nat nat-ord (suc zero) (suc (suc (suc zero)))))")))
   (check-equal? result "true : Bool"))
 
@@ -274,7 +274,7 @@
     (run-ns-last
      (string-append
       "(ns d2t4)\n"
-      "(require [prologos.core.ord-trait :refer [nat-ord ord-min]])\n"
+      "(require [prologos::core::ord-trait :refer [nat-ord ord-min]])\n"
       "(eval (ord-min Nat nat-ord (suc (suc (suc zero))) (suc zero)))")))
   (check-equal? result "1N : Nat"))
 
@@ -285,7 +285,7 @@
     (run-ns-last
      (string-append
       "(ns d2t5)\n"
-      "(require [prologos.core.eq-trait :refer [Nat--Eq--dict]])\n"
+      "(require [prologos::core::eq-trait :refer [Nat--Eq--dict]])\n"
       "(eval (Nat--Eq--dict (suc (suc zero)) (suc (suc zero))))")))
   (check-equal? result "true : Bool"))
 
@@ -296,7 +296,7 @@
     (run-ns-last
      (string-append
       "(ns d2t6)\n"
-      "(require [prologos.core.ord-trait :refer [Nat--Ord--dict]])\n"
-      "(require [prologos.data.ordering :refer [Ordering lt-ord eq-ord gt-ord]])\n"
+      "(require [prologos::core::ord-trait :refer [Nat--Ord--dict]])\n"
+      "(require [prologos::data::ordering :refer [Ordering lt-ord eq-ord gt-ord]])\n"
       "(eval (the Nat (match (Nat--Ord--dict (suc zero) (suc (suc zero))) (lt-ord -> zero) (eq-ord -> (suc zero)) (gt-ord -> (suc (suc zero))))))")))
   (check-equal? result "0N : Nat"))

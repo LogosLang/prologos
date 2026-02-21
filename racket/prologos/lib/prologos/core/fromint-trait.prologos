@@ -1,4 +1,4 @@
-ns prologos.core.fromint-trait
+ns prologos::core::fromint-trait
 
 ;; ========================================
 ;; FromInt Trait — convert Int to A

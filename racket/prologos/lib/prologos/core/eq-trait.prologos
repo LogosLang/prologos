@@ -1,7 +1,7 @@
-ns prologos.core.eq-trait
+ns prologos::core::eq-trait
 
-require [prologos.data.nat :refer [nat-eq?]]
-require [prologos.data.bool :refer [not]]
+require [prologos::data::nat :refer [nat-eq?]]
+require [prologos::data::bool :refer [not]]
 
 ;; ========================================
 ;; Eq Trait — via trait/impl system

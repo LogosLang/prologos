@@ -1,15 +1,15 @@
-ns prologos.core.numeric-bundles
+ns prologos::core::numeric-bundles
 
-require [prologos.core.add-trait     :refer [Add]]
-require [prologos.core.sub-trait     :refer [Sub]]
-require [prologos.core.mul-trait     :refer [Mul]]
-require [prologos.core.div-trait     :refer [Div]]
-require [prologos.core.neg-trait     :refer [Neg]]
-require [prologos.core.abs-trait     :refer [Abs]]
-require [prologos.core.eq-trait      :refer [Eq]]
-require [prologos.core.ord-trait     :refer [Ord]]
-require [prologos.core.fromint-trait :refer [FromInt]]
-require [prologos.core.fromrat-trait :refer [FromRat]]
+require [prologos::core::add-trait     :refer [Add]]
+require [prologos::core::sub-trait     :refer [Sub]]
+require [prologos::core::mul-trait     :refer [Mul]]
+require [prologos::core::div-trait     :refer [Div]]
+require [prologos::core::neg-trait     :refer [Neg]]
+require [prologos::core::abs-trait     :refer [Abs]]
+require [prologos::core::eq-trait      :refer [Eq]]
+require [prologos::core::ord-trait     :refer [Ord]]
+require [prologos::core::fromint-trait :refer [FromInt]]
+require [prologos::core::fromrat-trait :refer [FromRat]]
 
 ;; ========================================
 ;; Num Bundle

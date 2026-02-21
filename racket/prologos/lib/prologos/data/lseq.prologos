@@ -1,6 +1,6 @@
-ns prologos.data.lseq
+ns prologos::data::lseq
 
-require [prologos.data.option :refer [Option none some]]
+require [prologos::data::option :refer [Option none some]]
 
 ;; ========================================
 ;; Prologos LSeq — Lazy Sequence

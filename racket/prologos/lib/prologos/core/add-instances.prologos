@@ -1,6 +1,6 @@
-ns prologos.core.add-instances
+ns prologos::core::add-instances
 
-require [prologos.core.add-trait :refer [Add Add-add]]
+require [prologos::core::add-trait :refer [Add Add-add]]
 
 ;; ========================================
 ;; Add Int

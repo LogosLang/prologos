@@ -54,11 +54,11 @@
 ;; Standard preamble for tests: load lseq + lseq-ops + list + option + nat
 (define preamble
   "(ns test)
-(require (prologos.data.lseq :refer (LSeq lseq-nil lseq-cell lseq-head lseq-rest lseq-empty?))
-         (prologos.data.lseq-ops :refer (list-to-lseq lseq-to-list lseq-map lseq-filter lseq-take lseq-drop lseq-append lseq-fold lseq-length))
-         (prologos.data.list :refer (List nil cons))
-         (prologos.data.option :refer (Option some none))
-         (prologos.data.nat :refer (add mult)))
+(require (prologos::data::lseq :refer (LSeq lseq-nil lseq-cell lseq-head lseq-rest lseq-empty?))
+         (prologos::data::lseq-ops :refer (list-to-lseq lseq-to-list lseq-map lseq-filter lseq-take lseq-drop lseq-append lseq-fold lseq-length))
+         (prologos::data::list :refer (List nil cons))
+         (prologos::data::option :refer (Option some none))
+         (prologos::data::nat :refer (add mult)))
 ")
 
 ;; Helper: check that a result string contains a substring
@@ -97,7 +97,7 @@
 (test-case "lseq-ops/filter-zero?"
   ;; Filter keeps only zeros from [0, 1, 0, 2]
   (define result (run-ns-last (string-append preamble
-     "(require (prologos.data.nat :refer (zero?)))
+     "(require (prologos::data::nat :refer (zero?)))
       (def xs : (List Nat) (cons Nat zero (cons Nat (suc zero) (cons Nat zero (cons Nat (suc (suc zero)) (nil Nat))))))
       (eval (lseq-to-list Nat (lseq-filter Nat zero? (list-to-lseq Nat xs))))")))
   (check-contains result "'[0N 0N]")
@@ -107,7 +107,7 @@
 (test-case "lseq-ops/filter-empty"
   ;; Filter on empty → empty
   (define result (run-ns-last (string-append preamble
-     "(require (prologos.data.nat :refer (zero?)))
+     "(require (prologos::data::nat :refer (zero?)))
       (eval (lseq-to-list Nat (lseq-filter Nat zero? (lseq-nil Nat))))")))
   (check-contains result "nil")
   (check-contains result "List Nat"))

@@ -1,6 +1,6 @@
-ns prologos.data.set
+ns prologos::data::set
 
-require [prologos.data.list :refer [List nil cons reduce]]
+require [prologos::data::list :refer [List nil cons reduce]]
 
 ;; ========================================
 ;; Prologos Set — Persistent Hash Set

@@ -1,9 +1,9 @@
-ns prologos.core.foldable-lseq
+ns prologos::core::foldable-lseq
 
-require [prologos.core.foldable-trait :refer [Foldable]]
-require [prologos.data.lseq           :refer [LSeq]]
-require [prologos.data.lseq-ops       :refer [lseq-to-list]]
-require [prologos.data.list            :refer [List foldr]]
+require [prologos::core::foldable-trait :refer [Foldable]]
+require [prologos::data::lseq           :refer [LSeq]]
+require [prologos::data::lseq-ops       :refer [lseq-to-list]]
+require [prologos::data::list            :refer [List foldr]]
 
 ;; ========================================
 ;; Foldable instance for LSeq

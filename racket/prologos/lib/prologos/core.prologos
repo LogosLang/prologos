@@ -1,4 +1,4 @@
-ns prologos.core
+ns prologos::core
 
 ;; ========================================
 ;; Prologos Core Library

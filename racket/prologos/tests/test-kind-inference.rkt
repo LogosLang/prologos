@@ -257,8 +257,8 @@
     (run-ns-last
       (string-append
         "(ns test-kind-e2e1)\n"
-        "(require [prologos.core.seqable-trait :refer [Seqable]])\n"
-        "(require [prologos.data.lseq :refer [LSeq]])\n"
+        "(require [prologos::core::seqable-trait :refer [Seqable]])\n"
+        "(require [prologos::data::lseq :refer [LSeq]])\n"
         "(spec my-to-seq ($brace-params C) ($brace-params A)"
         "  (Seqable C) -> (C A) -> (LSeq A))\n"
         "(eval (suc zero))\n")))
@@ -269,8 +269,8 @@
     (run-ns-last
       (string-append
         "(ns test-kind-e2e2)\n"
-        "(require [prologos.core.buildable-trait :refer [Buildable]])\n"
-        "(require [prologos.data.lseq :refer [LSeq]])\n"
+        "(require [prologos::core::buildable-trait :refer [Buildable]])\n"
+        "(require [prologos::data::lseq :refer [LSeq]])\n"
         "(spec my-from-seq ($brace-params C) ($brace-params A)"
         "  (Buildable C) -> (LSeq A) -> (C A))\n"
         "(eval (suc zero))\n")))
@@ -281,9 +281,9 @@
     (run-ns-last
       (string-append
         "(ns test-kind-e2e3)\n"
-        "(require [prologos.core.seqable-trait :refer [Seqable]])\n"
-        "(require [prologos.core.buildable-trait :refer [Buildable]])\n"
-        "(require [prologos.data.lseq :refer [LSeq]])\n"
+        "(require [prologos::core::seqable-trait :refer [Seqable]])\n"
+        "(require [prologos::core::buildable-trait :refer [Buildable]])\n"
+        "(require [prologos::data::lseq :refer [LSeq]])\n"
         "(spec my-transform ($brace-params C) ($brace-params A B)"
         "  (Seqable C) -> (Buildable C) -> (-> A B) -> (C A) -> (C B))\n"
         "(eval (suc zero))\n")))
@@ -307,7 +307,7 @@
                  [current-spec-store (hasheq)])
     (install-module-loader!)
     ;; Load Seqable trait so it's in the trait registry
-    (process-string "(ns test-kind-spec1)\n(require [prologos.core.seqable-trait :refer [Seqable]])\n")
+    (process-string "(ns test-kind-spec1)\n(require [prologos::core::seqable-trait :refer [Seqable]])\n")
     ;; Now process a spec with inline constraint
     (process-string "(spec my-to-seq ($brace-params C) ($brace-params A) (Seqable C) -> (C A) -> (LSeq A))\n")
     ;; Check the stored spec entry

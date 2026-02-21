@@ -1,7 +1,7 @@
 ns examples.foreign
 
 
-require [prologos.core.abs-trait :refer [Abs Abs-abs]]
+require [prologos::core::abs-trait :refer [Abs Abs-abs]]
 
 
 ;; ========================================
@@ -250,26 +250,37 @@ check is-empty : Bool
 check ten : Nat
 
 
+
+require [prologos::data::list :as list]
+
+
 ;; Operator symbols can be imported directly: +, *, /, =, etc.
 ;; Characters like < > | are reserved delimiters — use :as aliasing instead.
 ;; Both curried (Nat -> Nat -> Nat) and uncurried (Nat Nat -> Nat) syntax work.
 foreign racket "racket/base" :as base
-  + : Int Int -> Int
-  * : Int Int -> Int
-  - : Int Int -> Int
+  + : Nat Nat -> Nat
+  * : Nat Nat -> Nat
+  - : Nat Nat -> Nat
 
 
 
-spec factorial Int -> Int
-defn factorial [n]
-  match n
-    | 0     -> suc 0
-    | suc k -> base/* n [factorial k]
+list::reduce  base/* 1N '[1N 2N 3N 4N]
 
 
 
 
-factorial 3
+
+;; spec factorial Nat -> Nat
+;; defn factorial [n]
+;;   match n
+;;     | zero  -> suc zero
+;;     | inc k -> base/* n [factorial k]
+
+
+
+
+
+;; factorial 4N
 
 
 

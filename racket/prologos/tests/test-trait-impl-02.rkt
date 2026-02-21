@@ -91,7 +91,7 @@
     (run-ns-last
      (string-append
       "(ns either-t1)\n"
-      "(require [prologos.data.either :refer [Either left right left? right?]])\n"
+      "(require [prologos::data::either :refer [Either left right left? right?]])\n"
       "(eval (left? (left Nat Bool (suc zero))))")))
   (check-equal? result "true : Bool"))
 
@@ -102,9 +102,9 @@
     (run-ns-last
      (string-append
       "(ns either-t2)\n"
-      "(require [prologos.data.either :refer [Either left right map]])\n"
+      "(require [prologos::data::either :refer [Either left right map]])\n"
       "(eval (map (fn [x <Nat>] (suc x)) (right Bool Nat zero)))")))
-  ;; Output has qualified names: [prologos.data.either::right Bool Nat 1]
+  ;; Output has qualified names: [prologos::data::either::right Bool Nat 1]
   (check-true (string-contains? result "right"))
   (check-true (string-contains? result "Either")))
 
@@ -115,8 +115,8 @@
     (run-ns-last
      (string-append
       "(ns either-t3)\n"
-      "(require [prologos.data.either :refer [Either left right to-option]])\n"
-      "(require [prologos.data.option :refer [Option none some]])\n"
+      "(require [prologos::data::either :refer [Either left right to-option]])\n"
+      "(require [prologos::data::option :refer [Option none some]])\n"
       "(eval (to-option Nat Nat (right Nat Nat (suc zero))))")))
   (check-true (string-contains? result "some"))
   (check-true (string-contains? result "1")))
@@ -128,7 +128,7 @@
     (run-ns-last
      (string-append
       "(ns never-t1)\n"
-      "(require [prologos.data.never :refer [Never]])\n"
+      "(require [prologos::data::never :refer [Never]])\n"
       "(check Never : (Type 0))")))
   (check-equal? result "OK"))
 
@@ -152,7 +152,7 @@
     (run-ns-last
      (string-append
       "(ns opt-t1)\n"
-      "(require [prologos.data.option :refer [some none some?]])\n"
+      "(require [prologos::data::option :refer [some none some?]])\n"
       "(eval (some? (some Nat zero)))")))
   (check-equal? result "true : Bool"))
 
@@ -162,7 +162,7 @@
     (run-ns-last
      (string-append
       "(ns opt-t2)\n"
-      "(require [prologos.data.option :refer [some none none?]])\n"
+      "(require [prologos::data::option :refer [some none none?]])\n"
       "(eval (none? (none Nat)))")))
   (check-equal? result "true : Bool"))
 
@@ -172,7 +172,7 @@
     (run-ns-last
      (string-append
       "(ns opt-t3)\n"
-      "(require [prologos.data.option :refer [Option some none flatten]])\n"
+      "(require [prologos::data::option :refer [Option some none flatten]])\n"
       "(eval (flatten (some (Option Nat) (some Nat zero))))")))
   (check-true (string-contains? result "some"))
   (check-true (string-contains? result "0N")))
@@ -183,7 +183,7 @@
     (run-ns-last
      (string-append
       "(ns res-t1)\n"
-      "(require [prologos.data.result :refer [ok err ok?]])\n"
+      "(require [prologos::data::result :refer [ok err ok?]])\n"
       "(eval (ok? (ok Nat Bool zero)))")))
   (check-equal? result "true : Bool"))
 
@@ -193,7 +193,7 @@
     (run-ns-last
      (string-append
       "(ns res-t2)\n"
-      "(require [prologos.data.result :refer [ok err err?]])\n"
+      "(require [prologos::data::result :refer [ok err err?]])\n"
       "(eval (err? (err Nat Bool true)))")))
   (check-equal? result "true : Bool"))
 
@@ -203,7 +203,7 @@
     (run-ns-last
      (string-append
       "(ns res-t3)\n"
-      "(require [prologos.data.result :refer [ok err to-option]])\n"
+      "(require [prologos::data::result :refer [ok err to-option]])\n"
       "(eval (to-option (ok Nat Bool (suc zero))))")))
   (check-true (string-contains? result "some")))
 
@@ -213,7 +213,7 @@
     (run-ns-last
      (string-append
       "(ns pair-t1)\n"
-      "(require [prologos.data.pair :refer [dup]])\n"
+      "(require [prologos::data::pair :refer [dup]])\n"
       "(eval (first (dup Nat zero)))")))
   (check-equal? result "0N : Nat"))
 
@@ -223,7 +223,7 @@
     (run-ns-last
      (string-append
       "(ns pair-t2)\n"
-      "(require [prologos.data.nat :refer [add]])\n"
-      "(require [prologos.data.pair :refer [uncurry]])\n"
+      "(require [prologos::data::nat :refer [add]])\n"
+      "(require [prologos::data::pair :refer [uncurry]])\n"
       "(eval (uncurry add (pair (suc zero) (suc (suc zero)))))")))
   (check-equal? result "3N : Nat"))

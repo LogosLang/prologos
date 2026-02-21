@@ -70,28 +70,28 @@
 (test-case "list/intersperse-sum"
   ;; intersperse 10 [1,2,3] = [1,10,2,10,3], sum = 26
   (check-equal?
-   (last (run-ns "(ns lst172)\n(require [prologos.data.list :refer [List nil cons intersperse sum]])\n(eval (sum (intersperse Nat (suc (suc (suc (suc (suc (suc (suc (suc (suc (suc zero)))))))))) (cons Nat (suc zero) (cons Nat (suc (suc zero)) (cons Nat (suc (suc (suc zero))) (nil Nat)))))))"))
+   (last (run-ns "(ns lst172)\n(require [prologos::data::list :refer [List nil cons intersperse sum]])\n(eval (sum (intersperse Nat (suc (suc (suc (suc (suc (suc (suc (suc (suc (suc zero)))))))))) (cons Nat (suc zero) (cons Nat (suc (suc zero)) (cons Nat (suc (suc (suc zero))) (nil Nat)))))))"))
    "26N : Nat"))
 
 
 (test-case "list/replicate-length"
   ;; replicate 4 0 = [0,0,0,0], length = 4
   (check-equal?
-   (last (run-ns "(ns lst173)\n(require [prologos.data.list :refer [List replicate length]])\n(eval (length Nat (replicate Nat (suc (suc (suc (suc zero)))) zero)))"))
+   (last (run-ns "(ns lst173)\n(require [prologos::data::list :refer [List replicate length]])\n(eval (length Nat (replicate Nat (suc (suc (suc (suc zero)))) zero)))"))
    "4N : Nat"))
 
 
 (test-case "list/range-length"
   ;; range 5 has length 5
   (check-equal?
-   (last (run-ns "(ns lst174)\n(require [prologos.data.list :refer [List range length]])\n(eval (length Nat (range (suc (suc (suc (suc (suc zero))))))))"))
+   (last (run-ns "(ns lst174)\n(require [prologos::data::list :refer [List range length]])\n(eval (length Nat (range (suc (suc (suc (suc (suc zero))))))))"))
    "5N : Nat"))
 
 
 (test-case "list/range-head"
   ;; range 3 = [0,1,2], head = 0
   (check-equal?
-   (last (run-ns "(ns lst175)\n(require [prologos.data.list :refer [List range head]])\n(eval (head Nat (suc (suc (suc zero))) (range (suc (suc (suc zero))))))"))
+   (last (run-ns "(ns lst175)\n(require [prologos::data::list :refer [List range head]])\n(eval (head Nat (suc (suc (suc zero))) (range (suc (suc (suc zero))))))"))
    "0N : Nat"))
 
 
@@ -194,7 +194,7 @@
                  [current-module-registry (hasheq)]
                  [current-lib-paths (list lib-dir)])
     (install-module-loader!)
-    (define mod (load-module 'prologos.data.nat #f))
+    (define mod (load-module 'prologos::data::nat #f))
     (define exports (module-info-exports mod))
     ;; All previously-provided names should still be exported via auto-export
     (check-not-false (member 'add exports) "auto-exports add")

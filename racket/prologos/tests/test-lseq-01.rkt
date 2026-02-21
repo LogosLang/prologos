@@ -54,11 +54,11 @@
 ;; Standard preamble for tests: load lseq + lseq-ops + list + option + nat
 (define preamble
   "(ns test)
-(require (prologos.data.lseq :refer (LSeq lseq-nil lseq-cell lseq-head lseq-rest lseq-empty?))
-         (prologos.data.lseq-ops :refer (list-to-lseq lseq-to-list lseq-map lseq-filter lseq-take lseq-drop lseq-append lseq-fold lseq-length))
-         (prologos.data.list :refer (List nil cons))
-         (prologos.data.option :refer (Option some none))
-         (prologos.data.nat :refer (add mult)))
+(require (prologos::data::lseq :refer (LSeq lseq-nil lseq-cell lseq-head lseq-rest lseq-empty?))
+         (prologos::data::lseq-ops :refer (list-to-lseq lseq-to-list lseq-map lseq-filter lseq-take lseq-drop lseq-append lseq-fold lseq-length))
+         (prologos::data::list :refer (List nil cons))
+         (prologos::data::option :refer (Option some none))
+         (prologos::data::nat :refer (add mult)))
 ")
 
 ;; Helper: check that a result string contains a substring

@@ -1,4 +1,4 @@
-ns prologos.data.nat
+ns prologos::data::nat
 
 ;; ========================================
 ;; Prologos Natural Number Library

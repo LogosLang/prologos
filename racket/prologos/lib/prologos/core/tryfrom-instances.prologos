@@ -1,7 +1,7 @@
-ns prologos.core.tryfrom-instances
+ns prologos::core::tryfrom-instances
 
-require [prologos.core.tryfrom-trait :refer [TryFrom TryFrom-try-from]]
-require [prologos.data.option :refer [Option some none]]
+require [prologos::core::tryfrom-trait :refer [TryFrom TryFrom-try-from]]
+require [prologos::data::option :refer [Option some none]]
 
 ;; ========================================
 ;; TryFrom Instances — potentially lossy cross-family conversions

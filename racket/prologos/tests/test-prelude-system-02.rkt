@@ -131,14 +131,14 @@
 ;; ================================================================
 
 (test-case "no-prelude: core still available"
-  ;; :no-prelude falls back to prologos.core only
+  ;; :no-prelude falls back to prologos::core only
   (check-equal?
    (run-ns "(ns test.pre36 :no-prelude)\n(eval (id Nat zero))")
    '("0N : Nat")))
 
 
 (test-case "no-prelude: library names unbound"
-  ;; add is from prologos.data.nat, should NOT be available with :no-prelude.
+  ;; add is from prologos::data::nat, should NOT be available with :no-prelude.
   ;; process-string returns error structs (not Racket exceptions).
   (check-true
    (result-has-error?
@@ -158,29 +158,29 @@
 
 
 ;; ================================================================
-;; Prelude deps get only prologos.core (no circularity)
+;; Prelude deps get only prologos::core (no circularity)
 ;; ================================================================
 
 (test-case "prelude dependency gets core only"
-  ;; A namespace starting with prologos.data.* should NOT get the full prelude
-  ;; (would cause circular loading). It should still get prologos.core.
+  ;; A namespace starting with prologos::data::* should NOT get the full prelude
+  ;; (would cause circular loading). It should still get prologos::core::
   (check-equal?
-   (run-ns "(ns prologos.data.test-dep)\n(eval (id Nat zero))")
+   (run-ns "(ns prologos::data::test-dep)\n(eval (id Nat zero))")
    '("0N : Nat")))
 
 
 (test-case "prelude dependency does not get prelude names"
-  ;; prologos.data.* namespace should NOT have `add` auto-imported
+  ;; prologos::data::* namespace should NOT have `add` auto-imported
   (check-true
    (result-has-error?
-    (run-ns "(ns prologos.data.test-dep2)\n(eval (add zero zero))"))))
+    (run-ns "(ns prologos::data::test-dep2)\n(eval (add zero zero))"))))
 
 
 (test-case "core dependency gets core only"
-  ;; prologos.core.* should also only get core, not full prelude
+  ;; prologos::core::* should also only get core, not full prelude
   (check-true
    (result-has-error?
-    (run-ns "(ns prologos.core.test-dep)\n(eval (add zero zero))"))))
+    (run-ns "(ns prologos::core::test-dep)\n(eval (add zero zero))"))))
 
 
 ;; ================================================================

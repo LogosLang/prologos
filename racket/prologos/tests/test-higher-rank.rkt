@@ -195,7 +195,7 @@
     (run-ws (string-join
              (list "ns test.hr4"
                    ""
-                   "require [prologos.data.list :refer [List nil cons]]"
+                   "require [prologos::data::list :refer [List nil cons]]"
                    ""
                    "spec list-conj {A : Type} [List A] -> A -> [List A]"
                    "defn list-conj [acc x]"

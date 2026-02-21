@@ -1,8 +1,8 @@
-ns prologos.core.ord-numeric-instances
+ns prologos::core::ord-numeric-instances
 
-require [prologos.core.ord-trait  :refer [Ord Ord-compare]]
-require [prologos.data.ordering   :refer [Ordering lt-ord eq-ord gt-ord]]
-require [prologos.data.bool       :refer [and]]
+require [prologos::core::ord-trait  :refer [Ord Ord-compare]]
+require [prologos::data::ordering   :refer [Ordering lt-ord eq-ord gt-ord]]
+require [prologos::data::bool       :refer [and]]
 
 ;; ========================================
 ;; Ord Int

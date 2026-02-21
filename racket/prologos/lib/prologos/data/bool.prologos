@@ -1,4 +1,4 @@
-ns prologos.data.bool
+ns prologos::data::bool
 
 ;; ========================================
 ;; Prologos Boolean Library

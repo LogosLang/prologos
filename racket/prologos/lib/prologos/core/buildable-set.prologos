@@ -1,9 +1,9 @@
-ns prologos.core.buildable-set
+ns prologos::core::buildable-set
 
-require [prologos.core.buildable-trait :refer [Buildable]]
-require [prologos.data.lseq            :refer [LSeq]]
-require [prologos.data.lseq-ops        :refer [lseq-to-list]]
-require [prologos.data.list             :refer [List foldr]]
+require [prologos::core::buildable-trait :refer [Buildable]]
+require [prologos::data::lseq            :refer [LSeq]]
+require [prologos::data::lseq-ops        :refer [lseq-to-list]]
+require [prologos::data::list             :refer [List foldr]]
 
 ;; ========================================
 ;; Buildable Set Instance

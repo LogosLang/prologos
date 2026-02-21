@@ -1,6 +1,6 @@
-ns prologos.core.sub-instances
+ns prologos::core::sub-instances
 
-require [prologos.core.sub-trait :refer [Sub Sub-sub]]
+require [prologos::core::sub-trait :refer [Sub Sub-sub]]
 
 ;; ========================================
 ;; Sub Int

@@ -146,7 +146,7 @@
   (check-equal?
    (run-last (string-append
      "(ns ai11)\n"
-     "(require [prologos.data.list :refer [List nil cons head]])\n"
+     "(require [prologos::data::list :refer [List nil cons head]])\n"
      "(defn my-head [default <A> xs <(List A)>] <A>\n"
      "  (head default xs))\n"
      "(eval (my-head zero (cons (suc zero) nil)))"))

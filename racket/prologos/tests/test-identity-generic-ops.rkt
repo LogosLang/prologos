@@ -61,15 +61,15 @@
 
 (define preamble
   "(ns test)
-(require (prologos.core.additive-identity-trait       :refer (AdditiveIdentity AdditiveIdentity-zero)))
-(require (prologos.core.multiplicative-identity-trait  :refer (MultiplicativeIdentity MultiplicativeIdentity-one)))
-(require (prologos.core.identity-instances             :refer ()))
-(require (prologos.core.add-trait                      :refer (Add Add-add)))
-(require (prologos.core.mul-trait                      :refer (Mul Mul-mul)))
-(require (prologos.core.add-instances                  :refer ()))
-(require (prologos.core.mul-instances                  :refer ()))
-(require (prologos.core.generic-numeric-ops            :refer (sum product int-range)))
-(require (prologos.data.list                           :refer (List nil cons)))
+(require (prologos::core::additive-identity-trait       :refer (AdditiveIdentity AdditiveIdentity-zero)))
+(require (prologos::core::multiplicative-identity-trait  :refer (MultiplicativeIdentity MultiplicativeIdentity-one)))
+(require (prologos::core::identity-instances             :refer ()))
+(require (prologos::core::add-trait                      :refer (Add Add-add)))
+(require (prologos::core::mul-trait                      :refer (Mul Mul-mul)))
+(require (prologos::core::add-instances                  :refer ()))
+(require (prologos::core::mul-instances                  :refer ()))
+(require (prologos::core::generic-numeric-ops            :refer (sum product int-range)))
+(require (prologos::data::list                           :refer (List nil cons)))
 ")
 
 ;; ========================================
@@ -81,23 +81,23 @@
     (lambda ()
       (run-ns
         "(ns test)
-         (require (prologos.core.additive-identity-trait :refer (AdditiveIdentity)))"))))
+         (require (prologos::core::additive-identity-trait :refer (AdditiveIdentity)))"))))
 
 (test-case "identity/multiplicative-identity-trait-loads"
   (check-not-exn
     (lambda ()
       (run-ns
         "(ns test)
-         (require (prologos.core.multiplicative-identity-trait :refer (MultiplicativeIdentity)))"))))
+         (require (prologos::core::multiplicative-identity-trait :refer (MultiplicativeIdentity)))"))))
 
 (test-case "identity/identity-instances-load"
   (check-not-exn
     (lambda ()
       (run-ns
         "(ns test)
-         (require (prologos.core.additive-identity-trait      :refer (AdditiveIdentity)))
-         (require (prologos.core.multiplicative-identity-trait :refer (MultiplicativeIdentity)))
-         (require (prologos.core.identity-instances            :refer ()))"))))
+         (require (prologos::core::additive-identity-trait      :refer (AdditiveIdentity)))
+         (require (prologos::core::multiplicative-identity-trait :refer (MultiplicativeIdentity)))
+         (require (prologos::core::identity-instances            :refer ()))"))))
 
 (test-case "identity/generic-numeric-ops-loads"
   (check-not-exn

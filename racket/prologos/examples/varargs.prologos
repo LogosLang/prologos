@@ -1,7 +1,7 @@
-ns prologos.examples.varargs
+ns prologos::examples::varargs
 
-require [prologos.data.list :refer [List nil cons length sum reduce foldr]]
-require [prologos.data.nat  :refer [add max]]
+require [prologos::data::list :refer [List nil cons length sum reduce foldr]]
+require [prologos::data::nat  :refer [add max]]
 
 ;; ========================================
 ;; Homogeneous Varargs

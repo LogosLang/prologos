@@ -1,4 +1,4 @@
-ns prologos.data.ordering
+ns prologos::data::ordering
 
 ;; ========================================
 ;; Prologos Ordering Type

@@ -1,8 +1,8 @@
-ns prologos.core.seq-functions
+ns prologos::core::seq-functions
 
-require [prologos.core.seq-trait :refer [Seq seq-first seq-rest seq-empty?]]
-require [prologos.data.option :refer [Option some none some? unwrap-or map]]
-require [prologos.data.list :refer [List cons nil]]
+require [prologos::core::seq-trait :refer [Seq seq-first seq-rest seq-empty?]]
+require [prologos::data::option :refer [Option some none some? unwrap-or map]]
+require [prologos::data::list :refer [List cons nil]]
 
 ;; ========================================
 ;; Generic Seq Functions

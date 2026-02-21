@@ -6,11 +6,11 @@ ns examples.piping
 ;; Demonstrates |> (pipe), >> (compose), and the transducer
 ;; infrastructure for single-pass collection processing.
 
-require [prologos.data.list       :refer [List nil cons map filter reduce sum length reverse]]
-        [prologos.data.nat        :refer [add double pred zero? le? sub]]
-        [prologos.data.lseq       :refer [LSeq lseq-nil lseq-cell]]
-        [prologos.data.lseq-ops   :refer [lseq-fold list-to-lseq lseq-to-list lseq-map lseq-filter]]
-        [prologos.data.transducer :refer [transduce map-xf filter-xf remove-xf xf-compose list-conj into-list-rev into-list]]
+require [prologos::data::list       :refer [List nil cons map filter reduce sum length reverse]]
+        [prologos::data::nat        :refer [add double pred zero? le? sub]]
+        [prologos::data::lseq       :refer [LSeq lseq-nil lseq-cell]]
+        [prologos::data::lseq-ops   :refer [lseq-fold list-to-lseq lseq-to-list lseq-map lseq-filter]]
+        [prologos::data::transducer :refer [transduce map-xf filter-xf remove-xf xf-compose list-conj into-list-rev into-list]]
 
 ;; ========================================
 ;; Section 1: The |> Pipe Operator

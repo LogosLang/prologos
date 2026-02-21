@@ -60,18 +60,18 @@
 
 (define preamble
   "(ns test)
-(require (prologos.core.seq-trait      :refer (Seq seq-first seq-rest seq-empty?)))
-(require (prologos.core.seqable-trait  :refer (Seqable)))
-(require (prologos.core.buildable-trait :refer (Buildable)))
-(require (prologos.core.foldable-trait  :refer (Foldable)))
-(require (prologos.core.seq-lseq       :refer (LSeq--Seq--dict)))
-(require (prologos.core.foldable-lseq  :refer (lseq-foldable)))
-(require (prologos.core.seqable-lseq   :refer (LSeq--Seqable--dict)))
-(require (prologos.core.buildable-lseq :refer (LSeq--Buildable--dict)))
-(require (prologos.data.lseq           :refer (LSeq lseq-nil lseq-cell)))
-(require (prologos.data.lseq-ops       :refer (lseq-to-list list-to-lseq)))
-(require (prologos.data.option         :refer (Option some none)))
-(require (prologos.data.list           :refer (List nil cons)))
+(require (prologos::core::seq-trait      :refer (Seq seq-first seq-rest seq-empty?)))
+(require (prologos::core::seqable-trait  :refer (Seqable)))
+(require (prologos::core::buildable-trait :refer (Buildable)))
+(require (prologos::core::foldable-trait  :refer (Foldable)))
+(require (prologos::core::seq-lseq       :refer (LSeq--Seq--dict)))
+(require (prologos::core::foldable-lseq  :refer (lseq-foldable)))
+(require (prologos::core::seqable-lseq   :refer (LSeq--Seqable--dict)))
+(require (prologos::core::buildable-lseq :refer (LSeq--Buildable--dict)))
+(require (prologos::data::lseq           :refer (LSeq lseq-nil lseq-cell)))
+(require (prologos::data::lseq-ops       :refer (lseq-to-list list-to-lseq)))
+(require (prologos::data::option         :refer (Option some none)))
+(require (prologos::data::list           :refer (List nil cons)))
 ")
 
 ;; ========================================
@@ -83,32 +83,32 @@
     (lambda ()
       (run-ns
         "(ns test)
-         (require (prologos.core.seq-trait :refer (Seq)))
-         (require (prologos.core.seq-lseq  :refer (LSeq--Seq--dict)))"))))
+         (require (prologos::core::seq-trait :refer (Seq)))
+         (require (prologos::core::seq-lseq  :refer (LSeq--Seq--dict)))"))))
 
 (test-case "lseq-traits/foldable-lseq-loads"
   (check-not-exn
     (lambda ()
       (run-ns
         "(ns test)
-         (require (prologos.core.foldable-trait :refer (Foldable)))
-         (require (prologos.core.foldable-lseq  :refer (lseq-foldable)))"))))
+         (require (prologos::core::foldable-trait :refer (Foldable)))
+         (require (prologos::core::foldable-lseq  :refer (lseq-foldable)))"))))
 
 (test-case "lseq-traits/seqable-lseq-loads"
   (check-not-exn
     (lambda ()
       (run-ns
         "(ns test)
-         (require (prologos.core.seqable-trait :refer (Seqable)))
-         (require (prologos.core.seqable-lseq  :refer (LSeq--Seqable--dict)))"))))
+         (require (prologos::core::seqable-trait :refer (Seqable)))
+         (require (prologos::core::seqable-lseq  :refer (LSeq--Seqable--dict)))"))))
 
 (test-case "lseq-traits/buildable-lseq-loads"
   (check-not-exn
     (lambda ()
       (run-ns
         "(ns test)
-         (require (prologos.core.buildable-trait :refer (Buildable)))
-         (require (prologos.core.buildable-lseq  :refer (LSeq--Buildable--dict)))"))))
+         (require (prologos::core::buildable-trait :refer (Buildable)))
+         (require (prologos::core::buildable-lseq  :refer (LSeq--Buildable--dict)))"))))
 
 ;; ========================================
 ;; Seq LSeq — type inference

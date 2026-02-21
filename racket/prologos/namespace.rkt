@@ -5,7 +5,7 @@
 ;;; Module registry, namespace contexts, and name resolution.
 ;;;
 ;;; Namespaces use Clojure-style naming:
-;;;   prologos.data.nat::add — dots for hierarchy, :: for name
+;;;   prologos::data::nat::add — :: for both hierarchy and qualified names
 ;;;
 ;;; The module registry caches loaded modules.
 ;;; The namespace context tracks per-file imports, aliases, and exports.
@@ -62,7 +62,7 @@
 ;; ========================================
 
 (struct module-info
-  (namespace      ; symbol: e.g., 'prologos.data.nat
+  (namespace      ; symbol: e.g., 'prologos::data::nat
    exports        ; (listof symbol): short names exported, e.g., '(add mult zero)
    env-snapshot   ; hasheq: fully-qualified-symbol → (cons type value)
    file-path      ; path-string or #f (for built-in modules)
@@ -96,11 +96,11 @@
 ;; ========================================
 
 (struct ns-context
-  (current-ns      ; symbol: this file's namespace (e.g., 'prologos.data.nat)
+  (current-ns      ; symbol: this file's namespace (e.g., 'prologos::data::nat)
    alias-map       ; hasheq: alias-symbol → namespace-symbol
-                   ;   e.g., 'nat → 'prologos.data.nat
+                   ;   e.g., 'nat → 'prologos::data::nat
    refer-map       ; hasheq: short-name → fully-qualified-name
-                   ;   e.g., 'add → 'prologos.data.nat::add
+                   ;   e.g., 'add → 'prologos::data::nat::add
    refer-all-nses  ; (listof symbol): namespaces where all exports are available unqualified
    exports         ; (listof symbol): names this module provides (short names) — from explicit provide
    auto-exports)   ; (listof symbol): names auto-exported by public def/defn/data/deftype/defmacro
@@ -114,13 +114,13 @@
 (define (make-empty-ns-context ns-sym)
   (ns-context ns-sym (hasheq) (hasheq) '() '() '()))
 
-;; Add an alias: (require [prologos.data.nat :as nat])
+;; Add an alias: (require [prologos::data::nat :as nat])
 ;; Maps alias → namespace-symbol
 (define (ns-context-add-alias ctx alias ns-sym)
   (struct-copy ns-context ctx
     [alias-map (hash-set (ns-context-alias-map ctx) alias ns-sym)]))
 
-;; Add specific referred names: (require [prologos.data.nat :refer [add mult]])
+;; Add specific referred names: (require [prologos::data::nat :refer [add mult]])
 ;; Maps each short name → fully-qualified name
 (define (ns-context-add-refer ctx ns-sym names)
   (define new-refer
@@ -151,29 +151,38 @@
 ;; ========================================
 
 ;; Create a fully-qualified name: short-name + namespace → fqn
-;; e.g., 'add + 'prologos.data.nat → 'prologos.data.nat::add
+;; e.g., 'add + 'prologos::data::nat → 'prologos::data::nat::add
 (define (qualify-name short-name ns-sym)
   (string->symbol
    (string-append (symbol->string ns-sym) "::" (symbol->string short-name))))
 
 ;; Split a qualified name into prefix and short-name
+;; Splits on the LAST :: so that hierarchical paths work:
 ;; 'nat::add → (values 'nat 'add)
-;; 'prologos.data.nat::add → (values 'prologos.data.nat 'add)
+;; 'prologos::data::nat::add → (values 'prologos::data::nat 'add)
 ;; 'add (no ::) → (values #f 'add)
 (define (split-qualified-name sym)
   (define s (symbol->string sym))
-  (define idx (string-find-substring s "::"))
+  (define idx (string-find-last-substring s "::"))
   (if idx
       (values (string->symbol (substring s 0 idx))
               (string->symbol (substring s (+ idx 2))))
       (values #f sym)))
 
-;; Helper: find the index of a substring in a string, or #f
+;; Helper: find the index of the FIRST occurrence of a substring, or #f
 (define (string-find-substring s sub)
   (define sub-len (string-length sub))
   (define s-len (string-length s))
   (for/first ([i (in-range (+ 1 (- s-len sub-len)))]
               #:when (string=? (substring s i (+ i sub-len)) sub))
+    i))
+
+;; Helper: find the index of the LAST occurrence of a substring, or #f
+(define (string-find-last-substring s sub)
+  (define sub-len (string-length sub))
+  (define s-len (string-length s))
+  (for/last ([i (in-range (+ 1 (- s-len sub-len)))]
+             #:when (string=? (substring s i (+ i sub-len)) sub))
     i))
 
 ;; ========================================
@@ -239,9 +248,9 @@
 ;; ========================================
 
 ;; Convert a namespace symbol to path segments
-;; 'prologos.data.nat → '("prologos" "data" "nat")
+;; 'prologos::data::nat → '("prologos" "data" "nat")
 (define (ns->path-segments ns-sym)
-  (string-split (symbol->string ns-sym) "."))
+  (string-split (symbol->string ns-sym) "::"))
 
 ;; Library search paths (list of directories)
 ;; First path is the standard library, additional paths can be added
@@ -295,42 +304,42 @@
 ;; ========================================
 ;; When a user module declares (ns foo), the prelude auto-imports a curated
 ;; set of modules — data types, list ops, traits, and numeric instances.
-;; Library modules (prologos.data.* and prologos.core.*) skip the prelude
-;; to avoid circular loading and only get prologos.core.
+;; Library modules (prologos::data::* and prologos::core::*) skip the prelude
+;; to avoid circular loading and only get prologos::core::
 ;;
 ;; Modeled after: Haskell Prelude, Idris Prelude, Clojure core.
 ;; Name conflicts resolved: List ops win unqualified; Option/Result via aliases.
 
 ;; Modules that are direct/transitive dependencies of the prelude.
 ;; These must NOT auto-import the prelude (would cause circular loading).
-;; They get prologos.core instead (the pre-prelude behavior).
+;; They get prologos::core instead (the pre-prelude behavior).
 (define (prelude-dependency? ns-sym)
   (define s (symbol->string ns-sym))
-  (or (string-prefix? s "prologos.data.")
-      (string-prefix? s "prologos.core.")))
+  (or (string-prefix? s "prologos::data::")
+      (string-prefix? s "prologos::core::")))
 
 ;; The prelude: a curated list of require specs emitted into user namespaces.
 ;; Organized in tiers by dependency order.
 (define prelude-requires
-  '(;; ---- Tier 0: prologos.core (combinators + macros) ----
-    (require [prologos.core :refer-all])
+  '(;; ---- Tier 0: prologos::core (combinators + macros) ----
+    (require [prologos::core :refer-all])
 
     ;; ---- Tier 0: Foundation data types ----
-    (require [prologos.data.ordering :refer [Ordering lt-ord eq-ord gt-ord]])
-    (require [prologos.data.bool     :refer [not and or xor bool-eq implies nand nor]])
-    (require [prologos.data.nat      :refer [add mult double pred zero? sub pow
+    (require [prologos::data::ordering :refer [Ordering lt-ord eq-ord gt-ord]])
+    (require [prologos::data::bool     :refer [not and or xor bool-eq implies nand nor]])
+    (require [prologos::data::nat      :refer [add mult double pred zero? sub pow
                                               le? lt? gt? ge? nat-eq? min max
                                               bool-to-nat clamp]])
-    (require [prologos.data.pair     :refer [swap map-fst map-snd bimap dup uncurry]])
-    (require [prologos.data.eq       :refer [sym cong trans]])
+    (require [prologos::data::pair     :refer [swap map-fst map-snd bimap dup uncurry]])
+    (require [prologos::data::eq       :refer [sym cong trans]])
 
     ;; ---- Tier 1: Container data types ----
     ;; Option: types + predicates unqualified; ops via opt:: alias
-    (require [prologos.data.option :as opt :refer [Option none some some? none? flatten]])
+    (require [prologos::data::option :as opt :refer [Option none some some? none? flatten]])
     ;; Result: types + predicates unqualified; ops via result:: alias
-    (require [prologos.data.result :as result :refer [Result ok err ok? err?]])
+    (require [prologos::data::result :as result :refer [Result ok err ok? err?]])
     ;; List: full API unqualified (wins all name-conflict tiebreaks)
-    (require [prologos.data.list :refer [List nil cons foldr reduce length
+    (require [prologos::data::list :refer [List nil cons foldr reduce length
                                           map filter append head tail singleton
                                           reverse sum product any? all? find
                                           nth last replicate range concat
@@ -343,86 +352,86 @@
                                           delete find-index]])
 
     ;; ---- Tier 2: Core traits (type class definitions) ----
-    (require [prologos.core.eq-trait  :refer [Eq eq-neq nat-eq]])
-    (require [prologos.core.ord-trait :refer [Ord nat-ord ord-lt ord-le
+    (require [prologos::core::eq-trait  :refer [Eq eq-neq nat-eq]])
+    (require [prologos::core::ord-trait :refer [Ord nat-ord ord-lt ord-le
                                               ord-gt ord-ge ord-eq
                                               ord-min ord-max]])
-    (require [prologos.core.add-trait      :refer [Add]])
-    (require [prologos.core.sub-trait      :refer [Sub]])
-    (require [prologos.core.mul-trait      :refer [Mul]])
-    (require [prologos.core.neg-trait      :refer [Neg]])
-    (require [prologos.core.abs-trait      :refer [Abs]])
-    (require [prologos.core.fromint-trait  :refer [FromInt]])
-    (require [prologos.core.numeric-bundles :refer [Num Fractional]])
+    (require [prologos::core::add-trait      :refer [Add]])
+    (require [prologos::core::sub-trait      :refer [Sub]])
+    (require [prologos::core::mul-trait      :refer [Mul]])
+    (require [prologos::core::neg-trait      :refer [Neg]])
+    (require [prologos::core::abs-trait      :refer [Abs]])
+    (require [prologos::core::fromint-trait  :refer [FromInt]])
+    (require [prologos::core::numeric-bundles :refer [Num Fractional]])
 
     ;; ---- Tier 1b: Additional container types + operations ----
-    (require [prologos.data.lseq     :as lseq :refer [LSeq lseq-nil lseq-cell]])
-    (require [prologos.data.lseq-ops :refer [list-to-lseq lseq-to-list lseq-map
+    (require [prologos::data::lseq     :as lseq :refer [LSeq lseq-nil lseq-cell]])
+    (require [prologos::data::lseq-ops :refer [list-to-lseq lseq-to-list lseq-map
                                               lseq-filter lseq-take lseq-drop
                                               lseq-append lseq-fold lseq-length]])
-    (require [prologos.data.set      :refer [set-singleton set-from-list set-symmetric-diff]])
+    (require [prologos::data::set      :refer [set-singleton set-from-list set-symmetric-diff]])
 
     ;; ---- Tier 2b: Trait definitions (additional) ----
-    (require [prologos.core.additive-identity-trait       :refer-all])
-    (require [prologos.core.multiplicative-identity-trait  :refer-all])
+    (require [prologos::core::additive-identity-trait       :refer-all])
+    (require [prologos::core::multiplicative-identity-trait  :refer-all])
 
     ;; ---- Tier 2c: Collection operation modules ----
-    (require [prologos.core.pvec-ops :refer [pvec-map pvec-filter pvec-fold
+    (require [prologos::core::pvec-ops :refer [pvec-map pvec-filter pvec-fold
                                               pvec-any? pvec-all?
                                               pvec-from-list-fn pvec-to-list-fn]])
-    (require [prologos.core.map-ops  :refer [map-map-vals map-filter-vals
+    (require [prologos::core::map-ops  :refer [map-map-vals map-filter-vals
                                               map-fold-entries map-keys-list
                                               map-vals-list map-merge]])
-    (require [prologos.core.set-ops  :refer [set-map set-filter set-fold
+    (require [prologos::core::set-ops  :refer [set-map set-filter set-fold
                                               set-any? set-all?
                                               set-to-list-fn set-from-list-fn]])
 
     ;; ---- Tier 2d: Collection conversions ----
-    (require [prologos.core.collection-conversions :refer [vec list-to-seq pvec-to-seq
+    (require [prologos::core::collection-conversions :refer [vec list-to-seq pvec-to-seq
                                                             set-to-seq into-vec
                                                             into-list into-set]])
 
     ;; ---- Tier 2e: Generic numeric operations ----
-    (require [prologos.core.generic-numeric-ops :refer [sum product int-range]])
+    (require [prologos::core::generic-numeric-ops :refer [sum product int-range]])
 
     ;; ---- Tier 3: Instance registration (side-effect only, :refer []) ----
-    (require [prologos.core.eq-instances         :refer []])
-    (require [prologos.core.eq-numeric-instances  :refer []])
-    (require [prologos.core.ord-instances         :refer []])
-    (require [prologos.core.ord-numeric-instances :refer []])
-    (require [prologos.core.add-instances         :refer []])
-    (require [prologos.core.sub-instances         :refer []])
-    (require [prologos.core.mul-instances         :refer []])
-    (require [prologos.core.neg-instances         :refer []])
-    (require [prologos.core.abs-instances         :refer []])
+    (require [prologos::core::eq-instances         :refer []])
+    (require [prologos::core::eq-numeric-instances  :refer []])
+    (require [prologos::core::ord-instances         :refer []])
+    (require [prologos::core::ord-numeric-instances :refer []])
+    (require [prologos::core::add-instances         :refer []])
+    (require [prologos::core::sub-instances         :refer []])
+    (require [prologos::core::mul-instances         :refer []])
+    (require [prologos::core::neg-instances         :refer []])
+    (require [prologos::core::abs-instances         :refer []])
 
     ;; ---- Tier 3b: Collection trait instances (side-effect only) ----
-    (require [prologos.core.seqable-list    :refer []])
-    (require [prologos.core.buildable-list  :refer []])
-    (require [prologos.core.foldable-list   :refer []])
-    (require [prologos.core.indexed-list    :refer []])
-    (require [prologos.core.functor-list    :refer []])
-    (require [prologos.core.seqable-pvec    :refer []])
-    (require [prologos.core.buildable-pvec  :refer []])
-    (require [prologos.core.indexed-pvec    :refer []])
-    (require [prologos.core.foldable-pvec   :refer []])
-    (require [prologos.core.functor-pvec    :refer []])
-    (require [prologos.core.keyed-map       :refer []])
-    (require [prologos.core.setlike-set     :refer []])
-    (require [prologos.core.seqable-set     :refer []])
-    (require [prologos.core.buildable-set   :refer []])
-    (require [prologos.core.foldable-set    :refer []])
-    (require [prologos.core.seq-lseq        :refer []])
-    (require [prologos.core.foldable-lseq   :refer []])
-    (require [prologos.core.seqable-lseq    :refer []])
-    (require [prologos.core.buildable-lseq  :refer []])
+    (require [prologos::core::seqable-list    :refer []])
+    (require [prologos::core::buildable-list  :refer []])
+    (require [prologos::core::foldable-list   :refer []])
+    (require [prologos::core::indexed-list    :refer []])
+    (require [prologos::core::functor-list    :refer []])
+    (require [prologos::core::seqable-pvec    :refer []])
+    (require [prologos::core::buildable-pvec  :refer []])
+    (require [prologos::core::indexed-pvec    :refer []])
+    (require [prologos::core::foldable-pvec   :refer []])
+    (require [prologos::core::functor-pvec    :refer []])
+    (require [prologos::core::keyed-map       :refer []])
+    (require [prologos::core::setlike-set     :refer []])
+    (require [prologos::core::seqable-set     :refer []])
+    (require [prologos::core::buildable-set   :refer []])
+    (require [prologos::core::foldable-set    :refer []])
+    (require [prologos::core::seq-lseq        :refer []])
+    (require [prologos::core::foldable-lseq   :refer []])
+    (require [prologos::core::seqable-lseq    :refer []])
+    (require [prologos::core::buildable-lseq  :refer []])
 
     ;; ---- Tier 3c: Identity trait instances (side-effect only) ----
-    (require [prologos.core.identity-instances :refer []])
+    (require [prologos::core::identity-instances :refer []])
 
     ;; ---- Tier 3d: Generic collection operations (HKT-dispatched) ----
-    (require [prologos.core.collection-bundle :refer [Collection]])
-    (require [prologos.core.generic-ops :refer [gmap gfilter gfold glength
+    (require [prologos::core::collection-bundle :refer [Collection]])
+    (require [prologos::core::generic-ops :refer [gmap gfilter gfold glength
                                                  gconcat gany? gall? gto-list]])))
 
 ;; ========================================
@@ -435,7 +444,7 @@
 ;; (ns namespace-sym)
 ;; (ns namespace-sym :no-prelude)
 ;; Sets the current namespace context.
-;; Auto-imports the full prelude for user modules, or just prologos.core
+;; Auto-imports the full prelude for user modules, or just prologos::core
 ;; for library modules and :no-prelude opt-outs.
 (define (process-ns-declaration datum)
   (unless (and (list? datum) (>= (length datum) 2) (symbol? (cadr datum)))
@@ -448,7 +457,7 @@
   ;; Decide what to auto-import
   (define skip-prelude?
     (or no-prelude?
-        (eq? ns-sym 'prologos.core)
+        (eq? ns-sym 'prologos::core)
         (prelude-dependency? ns-sym)))
   (when (current-module-loader)
     (with-handlers ([exn:fail? (lambda (e)
@@ -456,9 +465,9 @@
                                  (void))])
       (cond
         [skip-prelude?
-         ;; Library modules and :no-prelude: just get prologos.core
-         (unless (eq? ns-sym 'prologos.core)
-           (process-require '(require [prologos.core :refer-all])))]
+         ;; Library modules and :no-prelude: just get prologos::core
+         (unless (eq? ns-sym 'prologos::core)
+           (process-require '(require [prologos::core :refer-all])))]
         [else
          ;; User modules: get the full prelude
          (for ([req (in-list prelude-requires)])
@@ -498,7 +507,7 @@
 ;; Process a single require spec
 (define (process-require-spec spec)
   (cond
-    ;; Bare symbol: (require prologos.data.nat) → shorthand for :refer-all
+    ;; Bare symbol: (require prologos::data::nat) → shorthand for :refer-all
     [(symbol? spec)
      (process-require-spec (list spec ':refer-all))]
 

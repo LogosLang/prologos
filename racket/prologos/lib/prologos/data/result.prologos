@@ -1,4 +1,4 @@
-ns prologos.data.result
+ns prologos::data::result
 
 ;; ========================================
 ;; Prologos Result Type
@@ -58,7 +58,7 @@ defn err? [r]
     | err _ -> true
 
 ;; Convert Result to Option, discarding error info.
-require [prologos.data.option :refer [Option none some]]
+require [prologos::data::option :refer [Option none some]]
 
 spec to-option [Result A E] -> Option A
 defn to-option [r]

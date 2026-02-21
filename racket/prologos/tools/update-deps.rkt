@@ -117,11 +117,11 @@
         (define name (path->string f))
         (cond
           [(directory-exists? full)
-           (walk full (string-append prefix "." name))]
+           (walk full (string-append prefix "::" name))]
           [(string-suffix? name ".prologos")
            (define mod-name
              (string->symbol
-              (string-append prefix "."
+              (string-append prefix "::"
                              (substring name 0
                                         (- (string-length name)
                                            (string-length ".prologos"))))))

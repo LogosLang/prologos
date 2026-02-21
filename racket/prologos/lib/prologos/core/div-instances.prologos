@@ -1,6 +1,6 @@
-ns prologos.core.div-instances
+ns prologos::core::div-instances
 
-require [prologos.core.div-trait :refer [Div Div-div]]
+require [prologos::core::div-trait :refer [Div Div-div]]
 
 ;; ========================================
 ;; Div Rat

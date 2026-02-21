@@ -1,4 +1,4 @@
-ns prologos.core.additive-identity-trait
+ns prologos::core::additive-identity-trait
 
 ;; ========================================
 ;; AdditiveIdentity Trait — additive zero

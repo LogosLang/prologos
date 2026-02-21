@@ -1,6 +1,6 @@
-ns prologos.core.seqable-trait
+ns prologos::core::seqable-trait
 
-require [prologos.data.lseq :refer [LSeq]]
+require [prologos::data::lseq :refer [LSeq]]
 
 ;; ========================================
 ;; Seqable Trait — Convert to LSeq

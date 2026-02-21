@@ -1,7 +1,7 @@
-ns prologos.core.map-ops
+ns prologos::core::map-ops
 
-require [prologos.data.list    :refer [List nil cons map filter foldr]]
-require [prologos.data.option  :refer [Option some none]]
+require [prologos::data::list    :refer [List nil cons map filter foldr]]
+require [prologos::data::option  :refer [Option some none]]
 
 ;; ========================================
 ;; Map Operations Module

@@ -1,9 +1,9 @@
-ns prologos.core.indexed-list
+ns prologos::core::indexed-list
 
-require [prologos.core.indexed-trait :refer [Indexed Indexed-idx-nth Indexed-idx-length Indexed-idx-update]]
-require [prologos.data.option        :refer [Option some none]]
-require [prologos.data.list           :refer [List nil cons]]
-require [prologos.data.nat            :refer [zero?]]
+require [prologos::core::indexed-trait :refer [Indexed Indexed-idx-nth Indexed-idx-length Indexed-idx-update]]
+require [prologos::data::option        :refer [Option some none]]
+require [prologos::data::list           :refer [List nil cons]]
+require [prologos::data::nat            :refer [zero?]]
 
 ;; ========================================
 ;; Indexed List Instance

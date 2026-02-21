@@ -1,7 +1,7 @@
-ns prologos.core.foldable-set
+ns prologos::core::foldable-set
 
-require [prologos.core.foldable-trait :refer [Foldable]]
-require [prologos.data.list :refer [List foldr]]
+require [prologos::core::foldable-trait :refer [Foldable]]
+require [prologos::data::list :refer [List foldr]]
 
 ;; ========================================
 ;; Foldable instance for Set

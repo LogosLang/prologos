@@ -112,7 +112,7 @@
 
 
 ;; ================================================================
-;; Tier 0: Foundation — prologos.core (id, const, compose)
+;; Tier 0: Foundation — prologos::core (id, const, compose)
 ;; ================================================================
 
 (test-case "prelude: core id available"

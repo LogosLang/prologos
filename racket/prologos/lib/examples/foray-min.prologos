@@ -1,7 +1,7 @@
 ns examples.foray-min
 
-require [prologos.data.list :as list :refer [List nil cons map length]]
-require [prologos.data.nat  :refer [add]]
+require [prologos::data::list :as list :refer [List nil cons map length]]
+require [prologos::data::nat  :refer [add]]
 
 defn suc-all [xs : List Nat] : List Nat
   map [add _ [suc zero]] xs
@@ -18,6 +18,5 @@ defn factorial [n]
     | zero  -> suc zero
     | suc k -> mult n [factorial k]
 
-map [add 1N _] [list::range 10N]
 
-reduce mult 1N [map [add 1N _] [list::range 5N]]
+reduce mult 1N [map [add 1N _] [list::range 4N]]

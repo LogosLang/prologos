@@ -1,4 +1,4 @@
-ns prologos.data.option
+ns prologos::data::option
 
 ;; ========================================
 ;; Prologos Option Type

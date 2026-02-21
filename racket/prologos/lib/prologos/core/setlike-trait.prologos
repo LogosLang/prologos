@@ -1,4 +1,4 @@
-ns prologos.core.setlike-trait
+ns prologos::core::setlike-trait
 
 ;; ========================================
 ;; Setlike Trait — Set Operations

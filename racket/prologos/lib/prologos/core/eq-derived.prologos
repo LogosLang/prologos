@@ -1,9 +1,9 @@
-ns prologos.core.eq-derived
+ns prologos::core::eq-derived
 
-require [prologos.core.eq-trait  :refer [Eq Eq-eq?]]
-require [prologos.data.option    :refer [Option some none]]
-require [prologos.data.list      :refer [List nil cons]]
-require [prologos.data.bool      :refer [and]]
+require [prologos::core::eq-trait  :refer [Eq Eq-eq?]]
+require [prologos::data::option    :refer [Option some none]]
+require [prologos::data::list      :refer [List nil cons]]
+require [prologos::data::bool      :refer [and]]
 
 ;; ========================================
 ;; Derived Eq for parameterized types

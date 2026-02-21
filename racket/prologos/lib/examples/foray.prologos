@@ -1,9 +1,9 @@
 ns examples.foray
 
-require [prologos.data.nat    :as nat  :refer [add mult zero?]]
-        [prologos.data.bool   :as bool :refer [not]]
-        [prologos.data.list   :as list :refer [List nil cons map filter length zip-with reduce]]
-        [prologos.data.option :as opt  :refer [Option none some]]
+require [prologos::data::nat    :as nat  :refer [add mult zero?]]
+        [prologos::data::bool   :as bool :refer [not]]
+        [prologos::data::list   :as list :refer [List nil cons map filter length zip-with reduce]]
+        [prologos::data::option :as opt  :refer [Option none some]]
 
 ;; ========================================
 ;; Foray: a kitchen-sink tour of Prologos
@@ -27,70 +27,88 @@ defn evens [xs : List Nat] : List Nat
 
 ;; Factorial via match
 spec factorial Nat -> Nat
+;; defn factorial [n]
+;;   match n
+;;     | zero  -> suc zero
+;;     | suc k -> mult n [factorial k]
+
+
 defn factorial [n]
-  match n
-    | zero  -> suc zero
-    | suc k -> mult n [factorial k]
+  list::reduce mult 1 [list::range n]
+
+
+
+
+
+
 
 ;; Square: n * n
-defn square [n : Nat] : Nat
+spec square Nat -> Nat
+defn square [n]
   mult n n
+
+
+
+
+
+
+
 
 ;; --- Composition and higher-order ---
 
-;; Dot product of two lists
-defn dot-product [xs : List Nat, ys : List Nat] : Nat
-  sum [zip-with mult xs ys]
+;; ;; Dot product of two lists
+;; defn dot-product [xs : List Nat, ys : List Nat] : Nat
+;;   sum [zip-with mult xs ys]
 
-;; Count elements satisfying a predicate
-defn count-if {A} [p : A -> Bool, xs : List A] : Nat
-  length [filter p xs]
+;; ;; Count elements satisfying a predicate
+;; defn count-if {A} [p : A -> Bool, xs : List A] : Nat
+;;   length [filter p xs]
 
-;; Apply a function twice: f(f(x))
-defn apply-twice {A} [f : A -> A, x : A] : A
-  f [f x]
+;; ;; Apply a function twice: f(f(x))
+;; defn apply-twice {A} [f : A -> A, x : A] : A
+;;   f [f x]
 
-;; --- Placeholder + higher-order combos ---
+;; ;; --- Placeholder + higher-order combos ---
 
-;; Partial: add n to every element
-defn add-to [n : Nat, xs : List Nat] : List Nat
-  map [add n _] xs
+;; ;; Partial: add n to every element
+;; defn add-to [n : Nat, xs : List Nat] : List Nat
+;;   map [add n _] xs
 
-;; Negate a boolean list
-defn negate [xs : List Bool] : List Bool
-  map [not _] xs
+;; ;; Negate a boolean list
+;; defn negate [xs : List Bool] : List Bool
+;;   map [not _] xs
 
-;; Keep positive (nonzero) naturals
-defn keep-positive [xs : List Nat] : List Nat
-  filter [fn [n : Nat] [not [zero? n]]] xs
+;; ;; Keep positive (nonzero) naturals
+;; defn keep-positive [xs : List Nat] : List Nat
+;;   filter [fn [n : Nat] [not [zero? n]]] xs
 
-;; --- Try them out ---
+;; ;; --- Try them out ---
 
-suc-all [cons [suc zero] [cons [suc [suc zero]] [cons [suc [suc [suc zero]]] nil]]]
-factorial [suc [suc [suc [suc [suc zero]]]]]
-double-all [list::range [suc [suc [suc zero]]]]
-sum [list::range [suc [suc [suc [suc [suc zero]]]]]]
-dot-product [cons [suc zero] [cons [suc [suc zero]] nil]] [cons [suc [suc [suc zero]]] [cons [suc [suc [suc [suc zero]]]] nil]]
-apply-twice nat::double [suc [suc zero]]
+;; suc-all [cons [suc zero] [cons [suc [suc zero]] [cons [suc [suc [suc zero]]] nil]]]
+;; factorial [suc [suc [suc [suc [suc zero]]]]]
+;; double-all [list::range [suc [suc [suc zero]]]]
+;; sum [list::range [suc [suc [suc [suc [suc zero]]]]]]
+;; dot-product [cons [suc zero] [cons [suc [suc zero]] nil]] [cons [suc [suc [suc zero]]] [cons [suc [suc [suc [suc zero]]]] nil]]
+;; apply-twice nat::double [suc [suc zero]]
 
-;; --- Point-free style with partial application ---
+;; ;; --- Point-free style with partial application ---
 
-spec my-sum [List Nat] -> Nat
-def  my-sum := [reduce add 0N _]
+;; spec my-sum [List Nat] -> Nat
+;; def  my-sum := [reduce add 0N _]
 
-my-sum '[1N 2N 3N]
-my-sum '[1N 2N 3N 4N 5N]
+;; my-sum '[1N 2N 3N]
+;; my-sum '[1N 2N 3N 4N 5N]
 
-;; Inline partial application:
-[reduce add 0N _] '[1N 2N 3N 4N 5N 6N 7N 8N 9N 10N]
+;; ;; Inline partial application:
+;; [reduce add 0N _] '[1N 2N 3N 4N 5N 6N 7N 8N 9N 10N]
 
-;; --- Clamp with partial application ---
+;; ;; --- Clamp with partial application ---
 
-spec clamp Nat Nat Nat -> Nat
-defn clamp [x low high]
-  nat::max low [nat::min x high]
+;; spec clamp Nat Nat Nat -> Nat
+;; defn clamp [x low high]
+;;   nat::max low [nat::min x high]
 
-;;         x  partial function... very flexible!
-;;--------\/-----
-map [clamp _ 5N 15N] [list::range [suc 20N]]
-;; => '[5 5 5 5 5 5 6 7 8 9 10 11 12 13 14 15 15 15 15 15 15]
+;; ;;         x  partial function... very flexible!
+;; ;;--------\/-----
+;; map [clamp _ 5N 15N] [list::range [suc 20N]]
+;; ;; => '[5 5 5 5 5 5 6 7 8 9 10 11 12 13 14 15 15 15 15 15 15]

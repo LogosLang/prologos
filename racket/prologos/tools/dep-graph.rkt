@@ -39,7 +39,7 @@
 
 (struct changed-source  (name) #:transparent)   ; symbol like 'syntax.rkt
 (struct changed-test    (name) #:transparent)   ; symbol like 'test-parser.rkt
-(struct changed-prologos (name) #:transparent)  ; symbol like 'prologos.data.nat
+(struct changed-prologos (name) #:transparent)  ; symbol like 'prologos::data::nat
 (struct changed-example (name) #:transparent)   ; symbol like 'hello.rkt
 
 ;; ============================================================
@@ -215,42 +215,42 @@
    (test-dep '(syntax.rkt prelude.rkt substitution.rkt reduction.rkt typing-core.rkt
                pretty-print.rkt driver.rkt global-env.rkt rrb.rkt namespace.rkt
                macros.rkt qtt.rkt)
-             '(prologos.core.seqable-pvec prologos.core.buildable-pvec
-               prologos.core.foldable-pvec prologos.core.functor-pvec
-               prologos.core.indexed-pvec prologos.core.pvec-ops))
+             '(prologos::core::seqable-pvec prologos::core::buildable-pvec
+               prologos::core::foldable-pvec prologos::core::functor-pvec
+               prologos::core::indexed-pvec prologos::core::pvec-ops))
    'test-map-set-traits-01.rkt
    (test-dep '(syntax.rkt prelude.rkt substitution.rkt reduction.rkt typing-core.rkt
                pretty-print.rkt driver.rkt global-env.rkt namespace.rkt
                macros.rkt qtt.rkt champ.rkt)
-             '(prologos.core.keyed-map prologos.core.setlike-set
-               prologos.core.seqable-set prologos.core.buildable-set
-               prologos.core.foldable-set prologos.core.set-ops
-               prologos.core.map-ops))
+             '(prologos::core::keyed-map prologos::core::setlike-set
+               prologos::core::seqable-set prologos::core::buildable-set
+               prologos::core::foldable-set prologos::core::set-ops
+               prologos::core::map-ops))
    'test-map-set-traits-02.rkt
    (test-dep '(syntax.rkt prelude.rkt substitution.rkt reduction.rkt typing-core.rkt
                pretty-print.rkt driver.rkt global-env.rkt namespace.rkt
                macros.rkt qtt.rkt champ.rkt)
-             '(prologos.core.keyed-map prologos.core.setlike-set
-               prologos.core.seqable-set prologos.core.buildable-set
-               prologos.core.foldable-set prologos.core.set-ops
-               prologos.core.map-ops))
+             '(prologos::core::keyed-map prologos::core::setlike-set
+               prologos::core::seqable-set prologos::core::buildable-set
+               prologos::core::foldable-set prologos::core::set-ops
+               prologos::core::map-ops))
    'test-lseq-traits.rkt
    (test-dep '(syntax.rkt prelude.rkt substitution.rkt reduction.rkt typing-core.rkt
                pretty-print.rkt driver.rkt global-env.rkt namespace.rkt
                macros.rkt qtt.rkt)
-             '(prologos.core.seq-lseq prologos.core.foldable-lseq
-               prologos.core.seqable-lseq prologos.core.buildable-lseq))
+             '(prologos::core::seq-lseq prologos::core::foldable-lseq
+               prologos::core::seqable-lseq prologos::core::buildable-lseq))
    'test-identity-generic-ops.rkt
    (test-dep '(syntax.rkt prelude.rkt substitution.rkt reduction.rkt typing-core.rkt
                pretty-print.rkt driver.rkt global-env.rkt namespace.rkt
                macros.rkt qtt.rkt)
-             '(prologos.core.additive-identity-trait prologos.core.multiplicative-identity-trait
-               prologos.core.identity-instances prologos.core.generic-numeric-ops))
+             '(prologos::core::additive-identity-trait prologos::core::multiplicative-identity-trait
+               prologos::core::identity-instances prologos::core::generic-numeric-ops))
    'test-collection-conversions.rkt
    (test-dep '(syntax.rkt prelude.rkt substitution.rkt reduction.rkt typing-core.rkt
                pretty-print.rkt driver.rkt global-env.rkt namespace.rkt
                macros.rkt qtt.rkt)
-             '(prologos.core.collection-conversions))
+             '(prologos::core::collection-conversions))
    'test-prelude-collections.rkt
    (test-dep '(syntax.rkt prelude.rkt substitution.rkt reduction.rkt typing-core.rkt
                pretty-print.rkt driver.rkt global-env.rkt namespace.rkt
@@ -612,111 +612,111 @@
 (define prologos-lib-deps
   (hasheq
    ;; Foundation types (no deps)
-   'prologos.core             '()
-   'prologos.data.nat         '()
-   'prologos.data.bool        '()
-   'prologos.data.option      '()
-   'prologos.data.ordering    '()
-   'prologos.data.pair        '()
-   'prologos.data.never       '()
-   'prologos.data.eq          '()
-   'prologos.data.datum       '()
+   'prologos::core             '()
+   'prologos::data::nat         '()
+   'prologos::data::bool        '()
+   'prologos::data::option      '()
+   'prologos::data::ordering    '()
+   'prologos::data::pair        '()
+   'prologos::data::never       '()
+   'prologos::data::eq          '()
+   'prologos::data::datum       '()
 
    ;; Data structures layer 1
-   'prologos.data.lseq        '(prologos.data.option)
-   'prologos.data.list        '(prologos.core.eq-trait prologos.data.option prologos.data.nat)
-   'prologos.data.either      '(prologos.data.option)
-   'prologos.data.result      '(prologos.data.option)
-   'prologos.data.set         '(prologos.data.list)
-   'prologos.data.lseq-ops    '(prologos.data.lseq)
-   'prologos.data.transducer  '(prologos.data.lseq)
+   'prologos::data::lseq        '(prologos::data::option)
+   'prologos::data::list        '(prologos::core::eq-trait prologos::data::option prologos::data::nat)
+   'prologos::data::either      '(prologos::data::option)
+   'prologos::data::result      '(prologos::data::option)
+   'prologos::data::set         '(prologos::data::list)
+   'prologos::data::lseq-ops    '(prologos::data::lseq)
+   'prologos::data::transducer  '(prologos::data::lseq)
 
    ;; Trait definitions
-   'prologos.core.eq-trait         '(prologos.data.nat prologos.data.bool)
-   'prologos.core.ord-trait        '(prologos.data.ordering prologos.data.nat prologos.data.bool)
-   'prologos.core.add-trait        '(prologos.data.nat)
-   'prologos.core.sub-trait        '(prologos.data.nat)
-   'prologos.core.mul-trait        '(prologos.data.nat)
-   'prologos.core.div-trait        '()
-   'prologos.core.neg-trait        '()
-   'prologos.core.abs-trait        '()
-   'prologos.core.fromint-trait    '()
-   'prologos.core.fromrat-trait    '()
-   'prologos.core.from-trait       '()
-   'prologos.core.into-trait       '(prologos.core.from-trait)
-   'prologos.core.tryfrom-trait    '(prologos.data.option)
-   'prologos.core.hashable-trait   '(prologos.data.nat)
-   'prologos.core.seq-trait        '(prologos.data.option)
-   'prologos.core.seqable-trait    '(prologos.data.lseq)
-   'prologos.core.buildable-trait  '(prologos.data.lseq)
-   'prologos.core.foldable-trait   '()
-   'prologos.core.functor-trait    '()
-   'prologos.core.indexed-trait    '(prologos.data.option)
-   'prologos.core.keyed-trait      '(prologos.data.option)
-   'prologos.core.setlike-trait    '()
-   'prologos.core.partialord-trait '(prologos.data.option prologos.data.ordering)
+   'prologos::core::eq-trait         '(prologos::data::nat prologos::data::bool)
+   'prologos::core::ord-trait        '(prologos::data::ordering prologos::data::nat prologos::data::bool)
+   'prologos::core::add-trait        '(prologos::data::nat)
+   'prologos::core::sub-trait        '(prologos::data::nat)
+   'prologos::core::mul-trait        '(prologos::data::nat)
+   'prologos::core::div-trait        '()
+   'prologos::core::neg-trait        '()
+   'prologos::core::abs-trait        '()
+   'prologos::core::fromint-trait    '()
+   'prologos::core::fromrat-trait    '()
+   'prologos::core::from-trait       '()
+   'prologos::core::into-trait       '(prologos::core::from-trait)
+   'prologos::core::tryfrom-trait    '(prologos::data::option)
+   'prologos::core::hashable-trait   '(prologos::data::nat)
+   'prologos::core::seq-trait        '(prologos::data::option)
+   'prologos::core::seqable-trait    '(prologos::data::lseq)
+   'prologos::core::buildable-trait  '(prologos::data::lseq)
+   'prologos::core::foldable-trait   '()
+   'prologos::core::functor-trait    '()
+   'prologos::core::indexed-trait    '(prologos::data::option)
+   'prologos::core::keyed-trait      '(prologos::data::option)
+   'prologos::core::setlike-trait    '()
+   'prologos::core::partialord-trait '(prologos::data::option prologos::data::ordering)
 
    ;; Trait instances
-   'prologos.core.eq-instances          '(prologos.core.eq-trait prologos.data.bool
-                                          prologos.data.ordering)
-   'prologos.core.ord-instances         '(prologos.core.ord-trait prologos.data.ordering)
-   'prologos.core.eq-derived            '(prologos.core.eq-trait prologos.data.option
-                                          prologos.data.list prologos.data.bool)
-   'prologos.core.eq-numeric-instances  '(prologos.core.eq-trait prologos.data.bool)
-   'prologos.core.ord-numeric-instances '(prologos.core.ord-trait prologos.data.ordering
-                                          prologos.data.bool)
-   'prologos.core.add-instances         '(prologos.core.add-trait)
-   'prologos.core.sub-instances         '(prologos.core.sub-trait)
-   'prologos.core.mul-instances         '(prologos.core.mul-trait)
-   'prologos.core.div-instances         '(prologos.core.div-trait)
-   'prologos.core.neg-instances         '(prologos.core.neg-trait)
-   'prologos.core.abs-instances         '(prologos.core.abs-trait)
-   'prologos.core.from-instances        '(prologos.core.from-trait)
-   'prologos.core.tryfrom-instances     '(prologos.core.tryfrom-trait prologos.data.option)
-   'prologos.core.fromint-posit-instances '(prologos.core.fromint-trait)
-   'prologos.core.fromrat-posit-instances '(prologos.core.fromrat-trait)
-   'prologos.core.hashable-instances    '(prologos.core.hashable-trait prologos.data.nat
-                                          prologos.data.option prologos.data.list
-                                          prologos.data.ordering)
+   'prologos::core::eq-instances          '(prologos::core::eq-trait prologos::data::bool
+                                          prologos::data::ordering)
+   'prologos::core::ord-instances         '(prologos::core::ord-trait prologos::data::ordering)
+   'prologos::core::eq-derived            '(prologos::core::eq-trait prologos::data::option
+                                          prologos::data::list prologos::data::bool)
+   'prologos::core::eq-numeric-instances  '(prologos::core::eq-trait prologos::data::bool)
+   'prologos::core::ord-numeric-instances '(prologos::core::ord-trait prologos::data::ordering
+                                          prologos::data::bool)
+   'prologos::core::add-instances         '(prologos::core::add-trait)
+   'prologos::core::sub-instances         '(prologos::core::sub-trait)
+   'prologos::core::mul-instances         '(prologos::core::mul-trait)
+   'prologos::core::div-instances         '(prologos::core::div-trait)
+   'prologos::core::neg-instances         '(prologos::core::neg-trait)
+   'prologos::core::abs-instances         '(prologos::core::abs-trait)
+   'prologos::core::from-instances        '(prologos::core::from-trait)
+   'prologos::core::tryfrom-instances     '(prologos::core::tryfrom-trait prologos::data::option)
+   'prologos::core::fromint-posit-instances '(prologos::core::fromint-trait)
+   'prologos::core::fromrat-posit-instances '(prologos::core::fromrat-trait)
+   'prologos::core::hashable-instances    '(prologos::core::hashable-trait prologos::data::nat
+                                          prologos::data::option prologos::data::list
+                                          prologos::data::ordering)
 
    ;; Collection trait instances
-   'prologos.core.seq-list       '(prologos.core.seq-trait prologos.data.list
-                                   prologos.data.option)
-   'prologos.core.seqable-list   '(prologos.core.seqable-trait prologos.data.lseq
-                                   prologos.data.lseq-ops prologos.data.list)
-   'prologos.core.buildable-list '(prologos.core.buildable-trait prologos.data.lseq
-                                   prologos.data.lseq-ops prologos.data.list)
-   'prologos.core.indexed-list   '(prologos.core.indexed-trait prologos.data.option
-                                   prologos.data.list prologos.data.nat)
-   'prologos.core.foldable-list  '(prologos.core.foldable-trait prologos.data.list)
-   'prologos.core.functor-list   '(prologos.core.functor-trait prologos.data.list)
+   'prologos::core::seq-list       '(prologos::core::seq-trait prologos::data::list
+                                   prologos::data::option)
+   'prologos::core::seqable-list   '(prologos::core::seqable-trait prologos::data::lseq
+                                   prologos::data::lseq-ops prologos::data::list)
+   'prologos::core::buildable-list '(prologos::core::buildable-trait prologos::data::lseq
+                                   prologos::data::lseq-ops prologos::data::list)
+   'prologos::core::indexed-list   '(prologos::core::indexed-trait prologos::data::option
+                                   prologos::data::list prologos::data::nat)
+   'prologos::core::foldable-list  '(prologos::core::foldable-trait prologos::data::list)
+   'prologos::core::functor-list   '(prologos::core::functor-trait prologos::data::list)
    ;; PVec trait instances
-   'prologos.core.seqable-pvec   '(prologos.core.seqable-trait prologos.data.lseq
-                                    prologos.data.lseq-ops prologos.data.list)
-   'prologos.core.buildable-pvec '(prologos.core.buildable-trait prologos.data.lseq
-                                    prologos.data.lseq-ops prologos.data.list)
-   'prologos.core.indexed-pvec   '(prologos.core.indexed-trait prologos.data.option
-                                    prologos.data.nat)
-   'prologos.core.foldable-pvec  '(prologos.core.foldable-trait prologos.data.list)
-   'prologos.core.functor-pvec   '(prologos.core.functor-trait prologos.data.list)
-   'prologos.core.pvec-ops       '(prologos.data.list prologos.data.option)
-   'prologos.core.seq-functions  '(prologos.core.seq-trait prologos.data.option
-                                   prologos.data.list)
+   'prologos::core::seqable-pvec   '(prologos::core::seqable-trait prologos::data::lseq
+                                    prologos::data::lseq-ops prologos::data::list)
+   'prologos::core::buildable-pvec '(prologos::core::buildable-trait prologos::data::lseq
+                                    prologos::data::lseq-ops prologos::data::list)
+   'prologos::core::indexed-pvec   '(prologos::core::indexed-trait prologos::data::option
+                                    prologos::data::nat)
+   'prologos::core::foldable-pvec  '(prologos::core::foldable-trait prologos::data::list)
+   'prologos::core::functor-pvec   '(prologos::core::functor-trait prologos::data::list)
+   'prologos::core::pvec-ops       '(prologos::data::list prologos::data::option)
+   'prologos::core::seq-functions  '(prologos::core::seq-trait prologos::data::option
+                                   prologos::data::list)
 
    ;; Higher-level abstractions
-   'prologos.core.numeric-bundles '(prologos.core.add-trait prologos.core.sub-trait
-                                    prologos.core.mul-trait prologos.core.div-trait
-                                    prologos.core.neg-trait prologos.core.abs-trait
-                                    prologos.core.eq-trait prologos.core.ord-trait
-                                    prologos.core.fromint-trait prologos.core.fromrat-trait)
-   'prologos.core.collection-ops '(prologos.core.seqable-list prologos.core.buildable-list
-                                   prologos.data.lseq prologos.data.lseq-ops
-                                   prologos.data.list)))
+   'prologos::core::numeric-bundles '(prologos::core::add-trait prologos::core::sub-trait
+                                    prologos::core::mul-trait prologos::core::div-trait
+                                    prologos::core::neg-trait prologos::core::abs-trait
+                                    prologos::core::eq-trait prologos::core::ord-trait
+                                    prologos::core::fromint-trait prologos::core::fromrat-trait)
+   'prologos::core::collection-ops '(prologos::core::seqable-list prologos::core::buildable-list
+                                   prologos::data::lseq prologos::data::lseq-ops
+                                   prologos::data::list)))
 
 ;; ============================================================
 ;; Layer 3b: Test → .prologos runtime dependencies
 ;; Which .prologos modules each driver-using test loads via string require
-;; Conservative: if a test loads prologos.data.list, it transitively depends on
+;; Conservative: if a test loads prologos::data::list, it transitively depends on
 ;; all of list's deps too (handled by transitive closure)
 ;; ============================================================
 
@@ -724,204 +724,204 @@
   (hasheq
    ;; Tests that load specific .prologos modules at runtime
    ;; (extracted from require strings in test files)
-   'test-stdlib-01-data-01.rkt   '(prologos.data.nat prologos.data.bool prologos.data.list
-                                  prologos.data.option prologos.data.result
-                                  prologos.data.ordering prologos.data.pair prologos.data.eq)
-   'test-stdlib-01-data-02.rkt   '(prologos.data.nat prologos.data.bool prologos.data.list
-                                  prologos.data.option prologos.data.result
-                                  prologos.data.ordering prologos.data.pair prologos.data.eq)
-   'test-stdlib-01-data-03.rkt   '(prologos.data.nat prologos.data.bool prologos.data.list
-                                  prologos.data.option prologos.data.result
-                                  prologos.data.ordering prologos.data.pair prologos.data.eq)
-   'test-stdlib-01-data-04.rkt   '(prologos.data.nat prologos.data.bool prologos.data.list
-                                  prologos.data.option prologos.data.result
-                                  prologos.data.ordering prologos.data.pair prologos.data.eq)
-   'test-stdlib-02-traits-01.rkt '(prologos.data.nat prologos.data.bool prologos.data.list
-                                  prologos.data.option prologos.data.result
-                                  prologos.core.eq-trait prologos.core.ord-trait
-                                  prologos.data.ordering)
-   'test-stdlib-02-traits-02.rkt '(prologos.data.nat prologos.data.bool prologos.data.list
-                                  prologos.data.option prologos.data.result
-                                  prologos.core.eq-trait prologos.core.ord-trait
-                                  prologos.data.ordering)
-   'test-stdlib-02-traits-03.rkt '(prologos.data.nat prologos.data.bool prologos.data.list
-                                  prologos.data.option prologos.data.result
-                                  prologos.core.eq-trait prologos.core.ord-trait
-                                  prologos.data.ordering)
-   'test-stdlib-02-traits-04.rkt '(prologos.data.nat prologos.data.bool prologos.data.list
-                                  prologos.data.option prologos.data.result
-                                  prologos.core.eq-trait prologos.core.ord-trait
-                                  prologos.data.ordering)
-   'test-stdlib-02-traits-05.rkt '(prologos.data.nat prologos.data.bool prologos.data.list
-                                  prologos.data.option prologos.data.result
-                                  prologos.core.eq-trait prologos.core.ord-trait
-                                  prologos.data.ordering)
-   'test-stdlib-02-traits-06.rkt '(prologos.data.nat prologos.data.bool prologos.data.list
-                                  prologos.data.option prologos.data.result
-                                  prologos.core.eq-trait prologos.core.ord-trait
-                                  prologos.data.ordering)
-   'test-stdlib-02-traits-07.rkt '(prologos.data.nat prologos.data.bool prologos.data.list
-                                  prologos.data.option prologos.data.result
-                                  prologos.core.eq-trait prologos.core.ord-trait
-                                  prologos.data.ordering)
-   'test-stdlib-03-list-01.rkt   '(prologos.data.nat prologos.data.bool prologos.data.list
-                                  prologos.data.option prologos.core.eq-trait)
-   'test-stdlib-03-list-02.rkt   '(prologos.data.nat prologos.data.bool prologos.data.list
-                                  prologos.data.option prologos.core.eq-trait)
-   'test-stdlib-03-list-03.rkt   '(prologos.data.nat prologos.data.bool prologos.data.list
-                                  prologos.data.option prologos.core.eq-trait)
-   'test-stdlib-03-list-04.rkt   '(prologos.data.nat prologos.data.bool prologos.data.list
-                                  prologos.data.option prologos.core.eq-trait)
-   'test-stdlib-03-list-05.rkt   '(prologos.data.nat prologos.data.bool prologos.data.list
-                                  prologos.data.option prologos.core.eq-trait)
-   'test-list-extended-01-01.rkt '(prologos.data.list prologos.data.nat prologos.data.option
-                                  prologos.core.eq-trait)
-   'test-list-extended-01-02.rkt '(prologos.data.list prologos.data.nat prologos.data.option
-                                  prologos.core.eq-trait)
-   'test-list-extended-02-01.rkt '(prologos.data.list prologos.data.nat prologos.data.option
-                                  prologos.core.eq-trait)
-   'test-list-extended-02-02.rkt '(prologos.data.list prologos.data.nat prologos.data.option
-                                  prologos.core.eq-trait)
-   'test-trait-impl-01.rkt       '(prologos.data.nat prologos.data.bool prologos.data.option
-                                  prologos.data.either prologos.data.list
-                                  prologos.core.eq-trait prologos.core.seq-trait
-                                  prologos.core.seq-list prologos.core.seq-functions)
-   'test-trait-impl-02.rkt       '(prologos.data.nat prologos.data.bool prologos.data.option
-                                  prologos.data.either prologos.data.list
-                                  prologos.core.eq-trait prologos.core.seq-trait
-                                  prologos.core.seq-list prologos.core.seq-functions)
-   'test-trait-impl-03.rkt       '(prologos.data.nat prologos.data.bool prologos.data.option
-                                  prologos.data.either prologos.data.list
-                                  prologos.core.eq-trait prologos.core.seq-trait
-                                  prologos.core.seq-list prologos.core.seq-functions)
-   'test-trait-impl-04.rkt       '(prologos.data.nat prologos.data.bool prologos.data.option
-                                  prologos.data.either prologos.data.list
-                                  prologos.core.eq-trait prologos.core.seq-trait
-                                  prologos.core.seq-list prologos.core.seq-functions)
-   'test-trait-resolution.rkt   '(prologos.data.nat prologos.data.bool prologos.core.eq-trait)
-   'test-method-resolution.rkt  '(prologos.data.nat prologos.data.bool prologos.core.eq-trait
-                                  prologos.core.add-trait)
-   'test-bundles.rkt            '(prologos.data.nat prologos.data.bool prologos.core.eq-trait
-                                  prologos.core.add-trait prologos.core.numeric-bundles)
-   'test-numeric-traits-01.rkt   '(prologos.data.nat prologos.core.add-trait
-                                  prologos.core.sub-trait prologos.core.mul-trait
-                                  prologos.core.eq-trait prologos.core.ord-trait)
-   'test-numeric-traits-02.rkt   '(prologos.data.nat prologos.core.add-trait
-                                  prologos.core.sub-trait prologos.core.mul-trait
-                                  prologos.core.eq-trait prologos.core.ord-trait)
-   'test-cross-family-conversions-01.rkt '(prologos.core.from-trait prologos.core.tryfrom-trait
-                                        prologos.core.fromint-trait prologos.core.fromrat-trait
-                                        prologos.data.nat prologos.data.option)
-   'test-cross-family-conversions-02.rkt '(prologos.core.from-trait prologos.core.tryfrom-trait
-                                        prologos.core.fromint-trait prologos.core.fromrat-trait
-                                        prologos.data.nat prologos.data.option)
-   'test-cross-family-conversions-03.rkt '(prologos.core.from-trait prologos.core.tryfrom-trait
-                                        prologos.core.fromint-trait prologos.core.fromrat-trait
-                                        prologos.data.nat prologos.data.option)
-   'test-subtyping.rkt          '(prologos.data.nat)
-   'test-eq-ord-extended-01.rkt  '(prologos.data.nat prologos.data.bool prologos.data.ordering
-                                  prologos.data.option prologos.data.list
-                                  prologos.core.eq-trait prologos.core.ord-trait
-                                  prologos.core.eq-derived)
-   'test-eq-ord-extended-02.rkt  '(prologos.data.nat prologos.data.bool prologos.data.ordering
-                                  prologos.data.option prologos.data.list
-                                  prologos.core.eq-trait prologos.core.ord-trait
-                                  prologos.core.eq-derived)
-   'test-hashable.rkt           '(prologos.core.hashable-trait prologos.core.hashable-instances
-                                  prologos.data.nat prologos.data.bool prologos.data.ordering
-                                  prologos.data.option prologos.data.list)
-   'test-collection-traits-01.rkt '(prologos.data.list prologos.data.nat prologos.data.option
-                                  prologos.core.indexed-list prologos.core.foldable-list
-                                  prologos.core.functor-list prologos.core.seq-list
-                                  prologos.core.seqable-list prologos.core.buildable-list
-                                  prologos.core.collection-ops)
-   'test-collection-traits-02.rkt '(prologos.data.list prologos.data.nat prologos.data.option
-                                  prologos.core.indexed-list prologos.core.foldable-list
-                                  prologos.core.functor-list prologos.core.seq-list
-                                  prologos.core.seqable-list prologos.core.buildable-list
-                                  prologos.core.collection-ops)
-   'test-generic-ops-01.rkt      '(prologos.data.list prologos.data.nat prologos.data.option
-                                  prologos.core.seq-trait prologos.core.seq-functions
-                                  prologos.core.collection-ops)
-   'test-generic-ops-02.rkt      '(prologos.data.list prologos.data.nat prologos.data.option
-                                  prologos.core.seq-trait prologos.core.seq-functions
-                                  prologos.core.collection-ops)
+   'test-stdlib-01-data-01.rkt   '(prologos::data::nat prologos::data::bool prologos::data::list
+                                  prologos::data::option prologos::data::result
+                                  prologos::data::ordering prologos::data::pair prologos::data::eq)
+   'test-stdlib-01-data-02.rkt   '(prologos::data::nat prologos::data::bool prologos::data::list
+                                  prologos::data::option prologos::data::result
+                                  prologos::data::ordering prologos::data::pair prologos::data::eq)
+   'test-stdlib-01-data-03.rkt   '(prologos::data::nat prologos::data::bool prologos::data::list
+                                  prologos::data::option prologos::data::result
+                                  prologos::data::ordering prologos::data::pair prologos::data::eq)
+   'test-stdlib-01-data-04.rkt   '(prologos::data::nat prologos::data::bool prologos::data::list
+                                  prologos::data::option prologos::data::result
+                                  prologos::data::ordering prologos::data::pair prologos::data::eq)
+   'test-stdlib-02-traits-01.rkt '(prologos::data::nat prologos::data::bool prologos::data::list
+                                  prologos::data::option prologos::data::result
+                                  prologos::core::eq-trait prologos::core::ord-trait
+                                  prologos::data::ordering)
+   'test-stdlib-02-traits-02.rkt '(prologos::data::nat prologos::data::bool prologos::data::list
+                                  prologos::data::option prologos::data::result
+                                  prologos::core::eq-trait prologos::core::ord-trait
+                                  prologos::data::ordering)
+   'test-stdlib-02-traits-03.rkt '(prologos::data::nat prologos::data::bool prologos::data::list
+                                  prologos::data::option prologos::data::result
+                                  prologos::core::eq-trait prologos::core::ord-trait
+                                  prologos::data::ordering)
+   'test-stdlib-02-traits-04.rkt '(prologos::data::nat prologos::data::bool prologos::data::list
+                                  prologos::data::option prologos::data::result
+                                  prologos::core::eq-trait prologos::core::ord-trait
+                                  prologos::data::ordering)
+   'test-stdlib-02-traits-05.rkt '(prologos::data::nat prologos::data::bool prologos::data::list
+                                  prologos::data::option prologos::data::result
+                                  prologos::core::eq-trait prologos::core::ord-trait
+                                  prologos::data::ordering)
+   'test-stdlib-02-traits-06.rkt '(prologos::data::nat prologos::data::bool prologos::data::list
+                                  prologos::data::option prologos::data::result
+                                  prologos::core::eq-trait prologos::core::ord-trait
+                                  prologos::data::ordering)
+   'test-stdlib-02-traits-07.rkt '(prologos::data::nat prologos::data::bool prologos::data::list
+                                  prologos::data::option prologos::data::result
+                                  prologos::core::eq-trait prologos::core::ord-trait
+                                  prologos::data::ordering)
+   'test-stdlib-03-list-01.rkt   '(prologos::data::nat prologos::data::bool prologos::data::list
+                                  prologos::data::option prologos::core::eq-trait)
+   'test-stdlib-03-list-02.rkt   '(prologos::data::nat prologos::data::bool prologos::data::list
+                                  prologos::data::option prologos::core::eq-trait)
+   'test-stdlib-03-list-03.rkt   '(prologos::data::nat prologos::data::bool prologos::data::list
+                                  prologos::data::option prologos::core::eq-trait)
+   'test-stdlib-03-list-04.rkt   '(prologos::data::nat prologos::data::bool prologos::data::list
+                                  prologos::data::option prologos::core::eq-trait)
+   'test-stdlib-03-list-05.rkt   '(prologos::data::nat prologos::data::bool prologos::data::list
+                                  prologos::data::option prologos::core::eq-trait)
+   'test-list-extended-01-01.rkt '(prologos::data::list prologos::data::nat prologos::data::option
+                                  prologos::core::eq-trait)
+   'test-list-extended-01-02.rkt '(prologos::data::list prologos::data::nat prologos::data::option
+                                  prologos::core::eq-trait)
+   'test-list-extended-02-01.rkt '(prologos::data::list prologos::data::nat prologos::data::option
+                                  prologos::core::eq-trait)
+   'test-list-extended-02-02.rkt '(prologos::data::list prologos::data::nat prologos::data::option
+                                  prologos::core::eq-trait)
+   'test-trait-impl-01.rkt       '(prologos::data::nat prologos::data::bool prologos::data::option
+                                  prologos::data::either prologos::data::list
+                                  prologos::core::eq-trait prologos::core::seq-trait
+                                  prologos::core::seq-list prologos::core::seq-functions)
+   'test-trait-impl-02.rkt       '(prologos::data::nat prologos::data::bool prologos::data::option
+                                  prologos::data::either prologos::data::list
+                                  prologos::core::eq-trait prologos::core::seq-trait
+                                  prologos::core::seq-list prologos::core::seq-functions)
+   'test-trait-impl-03.rkt       '(prologos::data::nat prologos::data::bool prologos::data::option
+                                  prologos::data::either prologos::data::list
+                                  prologos::core::eq-trait prologos::core::seq-trait
+                                  prologos::core::seq-list prologos::core::seq-functions)
+   'test-trait-impl-04.rkt       '(prologos::data::nat prologos::data::bool prologos::data::option
+                                  prologos::data::either prologos::data::list
+                                  prologos::core::eq-trait prologos::core::seq-trait
+                                  prologos::core::seq-list prologos::core::seq-functions)
+   'test-trait-resolution.rkt   '(prologos::data::nat prologos::data::bool prologos::core::eq-trait)
+   'test-method-resolution.rkt  '(prologos::data::nat prologos::data::bool prologos::core::eq-trait
+                                  prologos::core::add-trait)
+   'test-bundles.rkt            '(prologos::data::nat prologos::data::bool prologos::core::eq-trait
+                                  prologos::core::add-trait prologos::core::numeric-bundles)
+   'test-numeric-traits-01.rkt   '(prologos::data::nat prologos::core::add-trait
+                                  prologos::core::sub-trait prologos::core::mul-trait
+                                  prologos::core::eq-trait prologos::core::ord-trait)
+   'test-numeric-traits-02.rkt   '(prologos::data::nat prologos::core::add-trait
+                                  prologos::core::sub-trait prologos::core::mul-trait
+                                  prologos::core::eq-trait prologos::core::ord-trait)
+   'test-cross-family-conversions-01.rkt '(prologos::core::from-trait prologos::core::tryfrom-trait
+                                        prologos::core::fromint-trait prologos::core::fromrat-trait
+                                        prologos::data::nat prologos::data::option)
+   'test-cross-family-conversions-02.rkt '(prologos::core::from-trait prologos::core::tryfrom-trait
+                                        prologos::core::fromint-trait prologos::core::fromrat-trait
+                                        prologos::data::nat prologos::data::option)
+   'test-cross-family-conversions-03.rkt '(prologos::core::from-trait prologos::core::tryfrom-trait
+                                        prologos::core::fromint-trait prologos::core::fromrat-trait
+                                        prologos::data::nat prologos::data::option)
+   'test-subtyping.rkt          '(prologos::data::nat)
+   'test-eq-ord-extended-01.rkt  '(prologos::data::nat prologos::data::bool prologos::data::ordering
+                                  prologos::data::option prologos::data::list
+                                  prologos::core::eq-trait prologos::core::ord-trait
+                                  prologos::core::eq-derived)
+   'test-eq-ord-extended-02.rkt  '(prologos::data::nat prologos::data::bool prologos::data::ordering
+                                  prologos::data::option prologos::data::list
+                                  prologos::core::eq-trait prologos::core::ord-trait
+                                  prologos::core::eq-derived)
+   'test-hashable.rkt           '(prologos::core::hashable-trait prologos::core::hashable-instances
+                                  prologos::data::nat prologos::data::bool prologos::data::ordering
+                                  prologos::data::option prologos::data::list)
+   'test-collection-traits-01.rkt '(prologos::data::list prologos::data::nat prologos::data::option
+                                  prologos::core::indexed-list prologos::core::foldable-list
+                                  prologos::core::functor-list prologos::core::seq-list
+                                  prologos::core::seqable-list prologos::core::buildable-list
+                                  prologos::core::collection-ops)
+   'test-collection-traits-02.rkt '(prologos::data::list prologos::data::nat prologos::data::option
+                                  prologos::core::indexed-list prologos::core::foldable-list
+                                  prologos::core::functor-list prologos::core::seq-list
+                                  prologos::core::seqable-list prologos::core::buildable-list
+                                  prologos::core::collection-ops)
+   'test-generic-ops-01.rkt      '(prologos::data::list prologos::data::nat prologos::data::option
+                                  prologos::core::seq-trait prologos::core::seq-functions
+                                  prologos::core::collection-ops)
+   'test-generic-ops-02.rkt      '(prologos::data::list prologos::data::nat prologos::data::option
+                                  prologos::core::seq-trait prologos::core::seq-functions
+                                  prologos::core::collection-ops)
    'test-hkt-errors.rkt         '()  ; Uses ns/prelude — no extra lib deps
    'test-specialization.rkt     '()  ; Uses ns/prelude — no extra lib deps
    'test-constraint-inference.rkt '() ; Uses ns/prelude — no extra lib deps
-   'test-lseq-01.rkt             '(prologos.data.lseq prologos.data.lseq-ops prologos.data.list
-                                  prologos.data.nat prologos.data.option)
-   'test-lseq-02.rkt             '(prologos.data.lseq prologos.data.lseq-ops prologos.data.list
-                                  prologos.data.nat prologos.data.option)
-   'test-lseq-literal.rkt       '(prologos.data.lseq prologos.data.list prologos.data.nat)
-   'test-foreign.rkt            '(prologos.data.nat)
-   'test-foreign-block.rkt      '(prologos.data.nat)
+   'test-lseq-01.rkt             '(prologos::data::lseq prologos::data::lseq-ops prologos::data::list
+                                  prologos::data::nat prologos::data::option)
+   'test-lseq-02.rkt             '(prologos::data::lseq prologos::data::lseq-ops prologos::data::list
+                                  prologos::data::nat prologos::data::option)
+   'test-lseq-literal.rkt       '(prologos::data::lseq prologos::data::list prologos::data::nat)
+   'test-foreign.rkt            '(prologos::data::nat)
+   'test-foreign-block.rkt      '(prologos::data::nat)
    'test-pipe-compose.rkt       '()  ; Fast tests only — no .prologos deps
-   'test-pipe-compose-e2e.rkt   '(prologos.data.nat prologos.data.list
-                                  prologos.data.transducer prologos.data.lseq
-                                  prologos.data.lseq-ops)
-   'test-transducer.rkt         '(prologos.data.nat prologos.data.list prologos.data.lseq
-                                  prologos.data.transducer)
-   'test-higher-rank.rkt        '(prologos.data.nat prologos.data.list)
-   'test-varargs.rkt            '(prologos.data.nat prologos.data.list)
-   'test-sexp-reader-parity.rkt '(prologos.data.nat prologos.data.list)
-   'test-introspection.rkt      '(prologos.data.datum)
-   'test-quote.rkt              '(prologos.data.datum)
-   'test-kind-inference.rkt     '(prologos.core.seqable-trait prologos.core.buildable-trait
-                                  prologos.data.lseq prologos.data.nat)
-   'test-hkt-impl.rkt           '(prologos.core.foldable-trait prologos.core.functor-trait
-                                  prologos.core.seqable-trait prologos.core.buildable-trait
-                                  prologos.core.seqable-list prologos.core.seqable-pvec
-                                  prologos.core.seqable-lseq prologos.core.seqable-set
-                                  prologos.core.buildable-list prologos.core.buildable-pvec
-                                  prologos.core.foldable-list prologos.core.foldable-pvec
-                                  prologos.core.functor-list prologos.core.functor-pvec
-                                  prologos.data.nat prologos.data.list prologos.data.lseq)
-   'test-coherence.rkt          '(prologos.core.eq-trait prologos.data.nat)
-   'test-bare-methods.rkt       '(prologos.core.eq-trait prologos.core.ord-trait
-                                  prologos.core.add-trait prologos.data.nat)
-   'test-hkt-kind.rkt           '(prologos.data.nat prologos.data.option prologos.data.list)
-   'test-match-builtins.rkt     '(prologos.data.nat)
-   'test-list-literals.rkt      '(prologos.data.nat prologos.data.list)
-   'test-core-prelude.rkt       '(prologos.data.nat)
-   'test-prelude-system-01.rkt   '(prologos.core prologos.data.nat prologos.data.bool
-                                  prologos.data.pair prologos.data.ordering prologos.data.eq
-                                  prologos.data.list prologos.data.option prologos.data.result
-                                  prologos.core.eq-trait prologos.core.ord-trait
-                                  prologos.core.add-trait prologos.core.sub-trait
-                                  prologos.core.mul-trait prologos.core.neg-trait
-                                  prologos.core.abs-trait prologos.core.fromint-trait
-                                  prologos.core.numeric-bundles
-                                  prologos.core.eq-instances prologos.core.eq-numeric-instances
-                                  prologos.core.ord-instances prologos.core.ord-numeric-instances
-                                  prologos.core.add-instances prologos.core.sub-instances
-                                  prologos.core.mul-instances prologos.core.neg-instances
-                                  prologos.core.abs-instances)
-   'test-prelude-system-02.rkt   '(prologos.core prologos.data.nat prologos.data.bool
-                                  prologos.data.pair prologos.data.ordering prologos.data.eq
-                                  prologos.data.list prologos.data.option prologos.data.result
-                                  prologos.core.eq-trait prologos.core.ord-trait
-                                  prologos.core.add-trait prologos.core.sub-trait
-                                  prologos.core.mul-trait prologos.core.neg-trait
-                                  prologos.core.abs-trait prologos.core.fromint-trait
-                                  prologos.core.numeric-bundles
-                                  prologos.core.eq-instances prologos.core.eq-numeric-instances
-                                  prologos.core.ord-instances prologos.core.ord-numeric-instances
-                                  prologos.core.add-instances prologos.core.sub-instances
-                                  prologos.core.mul-instances prologos.core.neg-instances
-                                  prologos.core.abs-instances)
-   'test-auto-implicits.rkt     '(prologos.data.nat)
-   'test-sprint10.rkt           '(prologos.data.nat prologos.data.bool)
-   'test-surface-defmacro-01.rkt '(prologos.data.nat)
-   'test-surface-defmacro-02.rkt '(prologos.data.nat)
-   'test-where-parsing.rkt      '(prologos.data.nat prologos.data.bool prologos.core.eq-trait)
-   'test-error-messages.rkt     '(prologos.data.nat prologos.core.eq-trait)
-   'test-constraint-postponement.rkt '(prologos.data.nat prologos.core)
-   'test-mult-inference.rkt     '(prologos.data.nat)
-   'test-universe-level-inference.rkt '(prologos.data.nat prologos.core)
-   'test-unit-type.rkt          '(prologos.data.nat)
-   'test-qtt-pipeline.rkt       '(prologos.data.nat)
-   'test-implicit-inference.rkt  '(prologos.data.nat)))
+   'test-pipe-compose-e2e.rkt   '(prologos::data::nat prologos::data::list
+                                  prologos::data::transducer prologos::data::lseq
+                                  prologos::data::lseq-ops)
+   'test-transducer.rkt         '(prologos::data::nat prologos::data::list prologos::data::lseq
+                                  prologos::data::transducer)
+   'test-higher-rank.rkt        '(prologos::data::nat prologos::data::list)
+   'test-varargs.rkt            '(prologos::data::nat prologos::data::list)
+   'test-sexp-reader-parity.rkt '(prologos::data::nat prologos::data::list)
+   'test-introspection.rkt      '(prologos::data::datum)
+   'test-quote.rkt              '(prologos::data::datum)
+   'test-kind-inference.rkt     '(prologos::core::seqable-trait prologos::core::buildable-trait
+                                  prologos::data::lseq prologos::data::nat)
+   'test-hkt-impl.rkt           '(prologos::core::foldable-trait prologos::core::functor-trait
+                                  prologos::core::seqable-trait prologos::core::buildable-trait
+                                  prologos::core::seqable-list prologos::core::seqable-pvec
+                                  prologos::core::seqable-lseq prologos::core::seqable-set
+                                  prologos::core::buildable-list prologos::core::buildable-pvec
+                                  prologos::core::foldable-list prologos::core::foldable-pvec
+                                  prologos::core::functor-list prologos::core::functor-pvec
+                                  prologos::data::nat prologos::data::list prologos::data::lseq)
+   'test-coherence.rkt          '(prologos::core::eq-trait prologos::data::nat)
+   'test-bare-methods.rkt       '(prologos::core::eq-trait prologos::core::ord-trait
+                                  prologos::core::add-trait prologos::data::nat)
+   'test-hkt-kind.rkt           '(prologos::data::nat prologos::data::option prologos::data::list)
+   'test-match-builtins.rkt     '(prologos::data::nat)
+   'test-list-literals.rkt      '(prologos::data::nat prologos::data::list)
+   'test-core-prelude.rkt       '(prologos::data::nat)
+   'test-prelude-system-01.rkt   '(prologos::core prologos::data::nat prologos::data::bool
+                                  prologos::data::pair prologos::data::ordering prologos::data::eq
+                                  prologos::data::list prologos::data::option prologos::data::result
+                                  prologos::core::eq-trait prologos::core::ord-trait
+                                  prologos::core::add-trait prologos::core::sub-trait
+                                  prologos::core::mul-trait prologos::core::neg-trait
+                                  prologos::core::abs-trait prologos::core::fromint-trait
+                                  prologos::core::numeric-bundles
+                                  prologos::core::eq-instances prologos::core::eq-numeric-instances
+                                  prologos::core::ord-instances prologos::core::ord-numeric-instances
+                                  prologos::core::add-instances prologos::core::sub-instances
+                                  prologos::core::mul-instances prologos::core::neg-instances
+                                  prologos::core::abs-instances)
+   'test-prelude-system-02.rkt   '(prologos::core prologos::data::nat prologos::data::bool
+                                  prologos::data::pair prologos::data::ordering prologos::data::eq
+                                  prologos::data::list prologos::data::option prologos::data::result
+                                  prologos::core::eq-trait prologos::core::ord-trait
+                                  prologos::core::add-trait prologos::core::sub-trait
+                                  prologos::core::mul-trait prologos::core::neg-trait
+                                  prologos::core::abs-trait prologos::core::fromint-trait
+                                  prologos::core::numeric-bundles
+                                  prologos::core::eq-instances prologos::core::eq-numeric-instances
+                                  prologos::core::ord-instances prologos::core::ord-numeric-instances
+                                  prologos::core::add-instances prologos::core::sub-instances
+                                  prologos::core::mul-instances prologos::core::neg-instances
+                                  prologos::core::abs-instances)
+   'test-auto-implicits.rkt     '(prologos::data::nat)
+   'test-sprint10.rkt           '(prologos::data::nat prologos::data::bool)
+   'test-surface-defmacro-01.rkt '(prologos::data::nat)
+   'test-surface-defmacro-02.rkt '(prologos::data::nat)
+   'test-where-parsing.rkt      '(prologos::data::nat prologos::data::bool prologos::core::eq-trait)
+   'test-error-messages.rkt     '(prologos::data::nat prologos::core::eq-trait)
+   'test-constraint-postponement.rkt '(prologos::data::nat prologos::core)
+   'test-mult-inference.rkt     '(prologos::data::nat)
+   'test-universe-level-inference.rkt '(prologos::data::nat prologos::core)
+   'test-unit-type.rkt          '(prologos::data::nat)
+   'test-qtt-pipeline.rkt       '(prologos::data::nat)
+   'test-implicit-inference.rkt  '(prologos::data::nat)))
 
 ;; ============================================================
 ;; File scanning functions (used for auto-scan of unknown modules)
@@ -1014,7 +1014,7 @@
   (with-handlers ([exn:fail? (λ (e) '())])
     (define content (file->string filepath))
     (define deps (mutable-seteq))
-    (for ([m (in-list (regexp-match* #rx"prologos\\.[a-z][a-z0-9._-]*[a-z0-9]" content))])
+    (for ([m (in-list (regexp-match* #rx"prologos::[a-z][a-z0-9:_-]*[a-z0-9]" content))])
       (set-add! deps (string->symbol m)))
     (sort (set->list deps) symbol<?)))
 
@@ -1023,17 +1023,17 @@
   (with-handlers ([exn:fail? (λ (e) '())])
     (define content (file->string filepath))
     (define deps (mutable-seteq))
-    (for ([m (in-list (regexp-match* #rx"require +\\[?(prologos\\.[a-z][a-z0-9._-]*)" content))])
-      (define match-result (regexp-match #rx"(prologos\\.[a-z][a-z0-9._-]*)" m))
+    (for ([m (in-list (regexp-match* #rx"require +\\[?(prologos::[a-z][a-z0-9:_-]*)" content))])
+      (define match-result (regexp-match #rx"(prologos::[a-z][a-z0-9:_-]*)" m))
       (when match-result
         (set-add! deps (string->symbol (cadr match-result)))))
     (sort (set->list deps) symbol<?)))
 
 ;; Convert a prologos module name to its filesystem path
-;; e.g., 'prologos.data.nat + project-root → project-root/lib/prologos/data/nat.prologos
+;; e.g., 'prologos::data::nat + project-root → project-root/lib/prologos/data/nat.prologos
 (define (prologos-mod->path mod-sym project-root)
-  (define parts (string-split (symbol->string mod-sym) "."))
-  ;; prologos.data.nat → lib/prologos/data/nat.prologos
+  (define parts (string-split (symbol->string mod-sym) "::"))
+  ;; prologos::data::nat → lib/prologos/data/nat.prologos
   (define rel-parts (cdr parts))  ; drop leading "prologos"
   (define dir-parts (drop-right rel-parts 1))
   (define filename (string-append (last rel-parts) ".prologos"))

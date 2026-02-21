@@ -1,6 +1,6 @@
-ns prologos.core.into-trait
+ns prologos::core::into-trait
 
-require [prologos.core.from-trait :refer [From From-from]]
+require [prologos::core::from-trait :refer [From From-from]]
 
 ;; ========================================
 ;; Into Trait — reversed From (convenience)

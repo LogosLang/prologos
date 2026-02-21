@@ -203,13 +203,13 @@
 (test-case "mult-inference/stdlib-id-still-works"
   ;; id from stdlib uses implicit params — should still work
   (check-equal?
-   (run-last "(ns mi5)\n(require [prologos.core :refer [id]])\n(eval (id zero))")
+   (run-last "(ns mi5)\n(require [prologos::core :refer [id]])\n(eval (id zero))")
    "0N : Nat"))
 
 (test-case "mult-inference/stdlib-add-still-works"
   ;; add from stdlib — should still work with level + mult inference
   (check-equal?
-   (run-last "(ns mi6)\n(require [prologos.data.nat :refer [add]])\n(eval (add 2N 3N))")
+   (run-last "(ns mi6)\n(require [prologos::data::nat :refer [add]])\n(eval (add 2N 3N))")
    "5N : Nat"))
 
 (test-case "mult-inference/defn-type-display"

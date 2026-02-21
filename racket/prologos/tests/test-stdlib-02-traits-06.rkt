@@ -72,41 +72,41 @@
 ;; match on Option — some case (sexp mode)
 (test-case "match/option-some"
   (check-equal?
-   (last (run-ns "(ns ro1)\n(require [prologos.data.option :refer [Option none some]])\n(eval (the Nat (match (some Nat zero) (none -> (suc zero)) (some x -> x))))"))
+   (last (run-ns "(ns ro1)\n(require [prologos::data::option :refer [Option none some]])\n(eval (the Nat (match (some Nat zero) (none -> (suc zero)) (some x -> x))))"))
    "0N : Nat"))
 
 
 ;; match on Option — none case
 (test-case "match/option-none"
   (check-equal?
-   (last (run-ns "(ns ro2)\n(require [prologos.data.option :refer [Option none some]])\n(eval (the Nat (match (none Nat) (none -> (suc zero)) (some x -> x))))"))
+   (last (run-ns "(ns ro2)\n(require [prologos::data::option :refer [Option none some]])\n(eval (the Nat (match (none Nat) (none -> (suc zero)) (some x -> x))))"))
    "1N : Nat"))
 
 
 ;; match on Ordering — nullary constructors
 (test-case "match/ordering-lt"
   (check-equal?
-   (last (run-ns "(ns ro3)\n(require [prologos.data.ordering :refer [Ordering lt-ord eq-ord gt-ord]])\n(eval (the Nat (match (lt-ord) (lt-ord -> zero) (eq-ord -> (suc zero)) (gt-ord -> (suc (suc zero))))))"))
+   (last (run-ns "(ns ro3)\n(require [prologos::data::ordering :refer [Ordering lt-ord eq-ord gt-ord]])\n(eval (the Nat (match (lt-ord) (lt-ord -> zero) (eq-ord -> (suc zero)) (gt-ord -> (suc (suc zero))))))"))
    "0N : Nat"))
 
 
 (test-case "match/ordering-gt"
   (check-equal?
-   (last (run-ns "(ns ro4)\n(require [prologos.data.ordering :refer [Ordering lt-ord eq-ord gt-ord]])\n(eval (the Nat (match (gt-ord) (lt-ord -> zero) (eq-ord -> (suc zero)) (gt-ord -> (suc (suc zero))))))"))
+   (last (run-ns "(ns ro4)\n(require [prologos::data::ordering :refer [Ordering lt-ord eq-ord gt-ord]])\n(eval (the Nat (match (gt-ord) (lt-ord -> zero) (eq-ord -> (suc zero)) (gt-ord -> (suc (suc zero))))))"))
    "2N : Nat"))
 
 
 ;; match on Result — ok case
 (test-case "match/result-ok"
   (check-equal?
-   (last (run-ns "(ns ro5)\n(require [prologos.data.result :refer [Result ok err]])\n(eval (the Nat (match (ok Nat Bool zero) (ok x -> x) (err _ -> (suc zero)))))"))
+   (last (run-ns "(ns ro5)\n(require [prologos::data::result :refer [Result ok err]])\n(eval (the Nat (match (ok Nat Bool zero) (ok x -> x) (err _ -> (suc zero)))))"))
    "0N : Nat"))
 
 
 ;; match on Result — err case
 (test-case "match/result-err"
   (check-equal?
-   (last (run-ns "(ns ro6)\n(require [prologos.data.result :refer [Result ok err]])\n(eval (the Nat (match (err Nat Bool true) (ok x -> (suc zero)) (err _ -> zero))))"))
+   (last (run-ns "(ns ro6)\n(require [prologos::data::result :refer [Result ok err]])\n(eval (the Nat (match (err Nat Bool true) (ok x -> (suc zero)) (err _ -> zero))))"))
    "0N : Nat"))
 
 
@@ -114,14 +114,14 @@
 (test-case "match/list-nil"
   ;; Match on nil list returns nil-branch value
   (check-equal?
-   (last (run-ns "(ns ro7)\n(require [prologos.data.list :refer [List nil cons]])\n(eval (the Nat (match (nil Nat) (nil -> zero) (cons _ rest -> zero))))"))
+   (last (run-ns "(ns ro7)\n(require [prologos::data::list :refer [List nil cons]])\n(eval (the Nat (match (nil Nat) (nil -> zero) (cons _ rest -> zero))))"))
    "0N : Nat"))
 
 
 ;; match on List — structural PM: cons gives raw tail, need explicit recursion for length
 (test-case "match/length-via-match"
   (check-equal?
-   (last (run-ns "(ns ro8)\n(require [prologos.data.list :refer [List nil cons length]])\n(eval (length Nat (cons Nat zero (cons Nat (suc zero) (nil Nat)))))"))
+   (last (run-ns "(ns ro8)\n(require [prologos::data::list :refer [List nil cons length]])\n(eval (length Nat (cons Nat zero (cons Nat (suc zero) (nil Nat)))))"))
    "2N : Nat"))
 
 
@@ -141,11 +141,11 @@
 ;; fact 0 = 1, fact (suc k) = (suc k) * fact(k)
 (test-case "recursive-defn/factorial"
   (check-equal?
-   (last (run-ns "(ns rec2)\n(require [prologos.data.nat :refer [mult]])\n(def fact : (-> Nat Nat)\n  (fn (n : Nat) (natrec Nat (suc zero) (fn (k : Nat) (fn (_ : Nat) (mult (suc k) (fact k)))) n)))\n(eval (fact (suc (suc (suc zero)))))"))
+   (last (run-ns "(ns rec2)\n(require [prologos::data::nat :refer [mult]])\n(def fact : (-> Nat Nat)\n  (fn (n : Nat) (natrec Nat (suc zero) (fn (k : Nat) (fn (_ : Nat) (mult (suc k) (fact k)))) n)))\n(eval (fact (suc (suc (suc zero)))))"))
    "6N : Nat")
   ;; fact(4) = 24
   (check-equal?
-   (last (run-ns "(ns rec2b)\n(require [prologos.data.nat :refer [mult]])\n(def fact : (-> Nat Nat)\n  (fn (n : Nat) (natrec Nat (suc zero) (fn (k : Nat) (fn (_ : Nat) (mult (suc k) (fact k)))) n)))\n(eval (fact (suc (suc (suc (suc zero))))))"))
+   (last (run-ns "(ns rec2b)\n(require [prologos::data::nat :refer [mult]])\n(def fact : (-> Nat Nat)\n  (fn (n : Nat) (natrec Nat (suc zero) (fn (k : Nat) (fn (_ : Nat) (mult (suc k) (fact k)))) n)))\n(eval (fact (suc (suc (suc (suc zero))))))"))
    "24N : Nat"))
 
 
@@ -162,7 +162,7 @@
 (test-case "recursive-defn/list-sum-with-match"
   ;; Structural match: cons gives raw tail, need explicit recursion
   (check-equal?
-   (last (run-ns "(ns rec4)\n(require [prologos.data.list :refer [List nil cons]])\n(require [prologos.data.nat :refer [add]])\n(defn my-sum [xs : List Nat] : Nat\n  (match xs (nil -> zero) (cons a rest -> (add a (my-sum rest)))))\n(eval (my-sum (cons Nat (suc zero) (cons Nat (suc (suc zero)) (cons Nat (suc (suc (suc zero))) (nil Nat))))))"))
+   (last (run-ns "(ns rec4)\n(require [prologos::data::list :refer [List nil cons]])\n(require [prologos::data::nat :refer [add]])\n(defn my-sum [xs : List Nat] : Nat\n  (match xs (nil -> zero) (cons a rest -> (add a (my-sum rest)))))\n(eval (my-sum (cons Nat (suc zero) (cons Nat (suc (suc zero)) (cons Nat (suc (suc (suc zero))) (nil Nat))))))"))
    "6N : Nat"))
 
 
@@ -184,40 +184,40 @@
 (test-case "native-ctor/list-type-0"
   ;; List Nat : Type 0 (not Type 1 from Church encoding)
   (check-equal?
-   (last (run-ns "(ns nc1)\n(require [prologos.data.list :refer [List]])\n(check (List Nat) : (Type 0))"))
+   (last (run-ns "(ns nc1)\n(require [prologos::data::list :refer [List]])\n(check (List Nat) : (Type 0))"))
    "OK"))
 
 
 (test-case "native-ctor/option-type-0"
   ;; Option Nat : Type 0
   (check-equal?
-   (last (run-ns "(ns nc2)\n(require [prologos.data.option :refer [Option]])\n(check (Option Nat) : (Type 0))"))
+   (last (run-ns "(ns nc2)\n(require [prologos::data::option :refer [Option]])\n(check (Option Nat) : (Type 0))"))
    "OK"))
 
 
 (test-case "native-ctor/option-list-nat"
   ;; Option (List Nat) is well-typed — was ill-typed before due to universe inflation
   (check-equal?
-   (last (run-ns "(ns nc3)\n(require [prologos.data.list :refer [List nil cons]])\n(require [prologos.data.option :refer [Option some none]])\n(check (some (List Nat) (cons Nat zero (nil Nat))) : (Option (List Nat)))"))
+   (last (run-ns "(ns nc3)\n(require [prologos::data::list :refer [List nil cons]])\n(require [prologos::data::option :refer [Option some none]])\n(check (some (List Nat) (cons Nat zero (nil Nat))) : (Option (List Nat)))"))
    "OK"))
 
 
 (test-case "native-ctor/list-list-nat"
   ;; List (List Nat) is well-typed — was ill-typed before due to universe inflation
   (check-equal?
-   (last (run-ns "(ns nc4)\n(require [prologos.data.list :refer [List nil cons]])\n(check (cons (List Nat) (cons Nat zero (nil Nat)) (nil (List Nat))) : (List (List Nat)))"))
+   (last (run-ns "(ns nc4)\n(require [prologos::data::list :refer [List nil cons]])\n(check (cons (List Nat) (cons Nat zero (nil Nat)) (nil (List Nat))) : (List (List Nat)))"))
    "OK"))
 
 
 (test-case "native-ctor/compose-sum-reverse"
   ;; sum (reverse [1,2,3]) = 6 — composition works without reification
   (check-equal?
-   (last (run-ns "(ns nc5)\n(require [prologos.data.list :refer [List nil cons sum reverse]])\n(eval (sum (reverse Nat (cons Nat (suc zero) (cons Nat (suc (suc zero)) (cons Nat (suc (suc (suc zero))) (nil Nat)))))))"))
+   (last (run-ns "(ns nc5)\n(require [prologos::data::list :refer [List nil cons sum reverse]])\n(eval (sum (reverse Nat (cons Nat (suc zero) (cons Nat (suc (suc zero)) (cons Nat (suc (suc (suc zero))) (nil Nat)))))))"))
    "6N : Nat"))
 
 
 (test-case "native-ctor/compose-sum-map"
   ;; sum (map suc [1,2,3]) = 9 — composition works without reification
   (check-equal?
-   (last (run-ns "(ns nc6)\n(require [prologos.data.list :refer [List nil cons sum map]])\n(require [prologos.data.nat :refer [add]])\n(def my-suc : (-> Nat Nat) (fn (n : Nat) (suc n)))\n(eval (sum (map Nat Nat my-suc (cons Nat (suc zero) (cons Nat (suc (suc zero)) (cons Nat (suc (suc (suc zero))) (nil Nat)))))))"))
+   (last (run-ns "(ns nc6)\n(require [prologos::data::list :refer [List nil cons sum map]])\n(require [prologos::data::nat :refer [add]])\n(def my-suc : (-> Nat Nat) (fn (n : Nat) (suc n)))\n(eval (sum (map Nat Nat my-suc (cons Nat (suc zero) (cons Nat (suc (suc zero)) (cons Nat (suc (suc (suc zero))) (nil Nat)))))))"))
    "9N : Nat"))

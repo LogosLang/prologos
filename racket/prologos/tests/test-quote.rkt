@@ -140,7 +140,7 @@
   (define result
     (run-last (string-append
       "(ns t-q-d1)\n"
-      "(require [prologos.data.datum :refer [Datum datum-sym datum-kw datum-nat datum-int datum-rat datum-bool datum-nil datum-cons]])\n"
+      "(require [prologos::data::datum :refer [Datum datum-sym datum-kw datum-nat datum-int datum-rat datum-bool datum-nil datum-cons]])\n"
       "(infer datum-nil)")))
   (check-true (string? result))
   (check-true (string-contains? result "Datum")))
@@ -149,7 +149,7 @@
   (define result
     (run-last (string-append
       "(ns t-q-d2)\n"
-      "(require [prologos.data.datum :refer [Datum datum-sym datum-kw datum-nat datum-int datum-rat datum-bool datum-nil datum-cons]])\n"
+      "(require [prologos::data::datum :refer [Datum datum-sym datum-kw datum-nat datum-int datum-rat datum-bool datum-nil datum-cons]])\n"
       "(infer (datum-nat 42N))")))
   (check-true (string? result))
   (check-true (string-contains? result "Datum")))
@@ -158,7 +158,7 @@
   (define result
     (run-last (string-append
       "(ns t-q-d3)\n"
-      "(require [prologos.data.datum :refer [Datum datum-sym datum-kw datum-nat datum-int datum-rat datum-bool datum-nil datum-cons]])\n"
+      "(require [prologos::data::datum :refer [Datum datum-sym datum-kw datum-nat datum-int datum-rat datum-bool datum-nil datum-cons]])\n"
       "(infer (datum-sym (symbol-lit foo)))")))
   (check-true (string? result))
   (check-true (string-contains? result "Datum")))
@@ -167,7 +167,7 @@
   (define result
     (run-last (string-append
       "(ns t-q-d4)\n"
-      "(require [prologos.data.datum :refer [Datum datum-sym datum-kw datum-nat datum-int datum-rat datum-bool datum-nil datum-cons]])\n"
+      "(require [prologos::data::datum :refer [Datum datum-sym datum-kw datum-nat datum-int datum-rat datum-bool datum-nil datum-cons]])\n"
       "(infer (datum-cons (datum-nat 1N) datum-nil))")))
   (check-true (string? result))
   (check-true (string-contains? result "Datum")))
@@ -176,7 +176,7 @@
   (define result
     (run-last (string-append
       "(ns t-q-d5)\n"
-      "(require [prologos.data.datum :refer [Datum datum-sym datum-kw datum-nat datum-int datum-rat datum-bool datum-nil datum-cons]])\n"
+      "(require [prologos::data::datum :refer [Datum datum-sym datum-kw datum-nat datum-int datum-rat datum-bool datum-nil datum-cons]])\n"
       "(infer '42)")))
   (check-true (string? result))
   (check-true (string-contains? result "Datum")))
@@ -185,7 +185,7 @@
   (define result
     (run-last (string-append
       "(ns t-q-d6)\n"
-      "(require [prologos.data.datum :refer [Datum datum-sym datum-kw datum-nat datum-int datum-rat datum-bool datum-nil datum-cons]])\n"
+      "(require [prologos::data::datum :refer [Datum datum-sym datum-kw datum-nat datum-int datum-rat datum-bool datum-nil datum-cons]])\n"
       "(infer 'foo)")))
   (check-true (string? result))
   (check-true (string-contains? result "Datum")))
@@ -194,7 +194,7 @@
   (define result
     (run-last (string-append
       "(ns t-q-d7)\n"
-      "(require [prologos.data.datum :refer [Datum datum-sym datum-kw datum-nat datum-int datum-rat datum-bool datum-nil datum-cons]])\n"
+      "(require [prologos::data::datum :refer [Datum datum-sym datum-kw datum-nat datum-int datum-rat datum-bool datum-nil datum-cons]])\n"
       "(infer '(add 1 2))")))
   (check-true (string? result))
   (check-true (string-contains? result "Datum")))
@@ -203,7 +203,7 @@
   (define result
     (run-last (string-append
       "(ns t-q-d8)\n"
-      "(require [prologos.data.datum :refer [Datum datum-sym datum-kw datum-nat datum-int datum-rat datum-bool datum-nil datum-cons]])\n"
+      "(require [prologos::data::datum :refer [Datum datum-sym datum-kw datum-nat datum-int datum-rat datum-bool datum-nil datum-cons]])\n"
       "(eval '())")))
   (check-true (string? result))
   ;; Should reduce to datum-nil
@@ -213,7 +213,7 @@
   (define result
     (run-last (string-append
       "(ns t-q-d9)\n"
-      "(require [prologos.data.datum :refer [Datum datum-sym datum-kw datum-nat datum-int datum-rat datum-bool datum-nil datum-cons]])\n"
+      "(require [prologos::data::datum :refer [Datum datum-sym datum-kw datum-nat datum-int datum-rat datum-bool datum-nil datum-cons]])\n"
       "(eval ':foo)")))
   (check-true (string? result))
   (check-true (string-contains? result "datum-kw")))
@@ -244,7 +244,7 @@
   (define result
     (run-last (string-append
       "(ns t-q-p1)\n"
-      "(require [prologos.data.datum :refer [Datum datum-sym datum-kw datum-nat datum-int datum-rat datum-bool datum-nil datum-cons]])\n"
+      "(require [prologos::data::datum :refer [Datum datum-sym datum-kw datum-nat datum-int datum-rat datum-bool datum-nil datum-cons]])\n"
       "(eval (the Nat (match (datum-nat 42N) (datum-nat n -> n))))")))
   (check-true (string? result))
   (check-true (string-contains? result "42")))
@@ -253,7 +253,7 @@
   (define result
     (run-last (string-append
       "(ns t-q-p2)\n"
-      "(require [prologos.data.datum :refer [Datum datum-sym datum-kw datum-nat datum-int datum-rat datum-bool datum-nil datum-cons]])\n"
+      "(require [prologos::data::datum :refer [Datum datum-sym datum-kw datum-nat datum-int datum-rat datum-bool datum-nil datum-cons]])\n"
       "(eval (the Nat (match datum-nil (datum-nil -> zero) (datum-nat n -> n))))")))
   (check-true (string? result))
   (check-true (string-contains? result "0N")))
@@ -361,7 +361,7 @@
   (define result
     (run-last (string-append
       "(ns t-q-qq1)\n"
-      "(require [prologos.data.datum :refer [Datum datum-sym datum-kw datum-nat datum-int datum-rat datum-bool datum-nil datum-cons]])\n"
+      "(require [prologos::data::datum :refer [Datum datum-sym datum-kw datum-nat datum-int datum-rat datum-bool datum-nil datum-cons]])\n"
       "(infer `42)")))
   (check-true (string? result))
   (check-true (string-contains? result "Datum")))
@@ -370,7 +370,7 @@
   (define result
     (run-last (string-append
       "(ns t-q-qq2)\n"
-      "(require [prologos.data.datum :refer [Datum datum-sym datum-kw datum-nat datum-int datum-rat datum-bool datum-nil datum-cons]])\n"
+      "(require [prologos::data::datum :refer [Datum datum-sym datum-kw datum-nat datum-int datum-rat datum-bool datum-nil datum-cons]])\n"
       "(infer `(add 1 2))")))
   (check-true (string? result))
   (check-true (string-contains? result "Datum")))
@@ -379,7 +379,7 @@
   (define result
     (run-last (string-append
       "(ns t-q-qq3)\n"
-      "(require [prologos.data.datum :refer [Datum datum-sym datum-kw datum-nat datum-int datum-rat datum-bool datum-nil datum-cons]])\n"
+      "(require [prologos::data::datum :refer [Datum datum-sym datum-kw datum-nat datum-int datum-rat datum-bool datum-nil datum-cons]])\n"
       "(def x : Datum datum-nil)\n"
       "(infer `(add ,x 2))")))
   (check-true (string? result))
@@ -389,12 +389,12 @@
   (define result-qq
     (run-last (string-append
       "(ns t-q-qq4a)\n"
-      "(require [prologos.data.datum :refer [Datum datum-sym datum-kw datum-nat datum-int datum-rat datum-bool datum-nil datum-cons]])\n"
+      "(require [prologos::data::datum :refer [Datum datum-sym datum-kw datum-nat datum-int datum-rat datum-bool datum-nil datum-cons]])\n"
       "(eval `foo)")))
   (define result-q
     (run-last (string-append
       "(ns t-q-qq4b)\n"
-      "(require [prologos.data.datum :refer [Datum datum-sym datum-kw datum-nat datum-int datum-rat datum-bool datum-nil datum-cons]])\n"
+      "(require [prologos::data::datum :refer [Datum datum-sym datum-kw datum-nat datum-int datum-rat datum-bool datum-nil datum-cons]])\n"
       "(eval 'foo)")))
   (check-equal? result-qq result-q))
 
@@ -404,7 +404,7 @@
   (define result
     (run-last (string-append
       "(ns t-q-qq5)\n"
-      "(require [prologos.data.datum :refer [Datum datum-sym datum-kw datum-nat datum-int datum-rat datum-bool datum-nil datum-cons]])\n"
+      "(require [prologos::data::datum :refer [Datum datum-sym datum-kw datum-nat datum-int datum-rat datum-bool datum-nil datum-cons]])\n"
       "(def x : Datum (datum-nat 99N))\n"
       "(def result : Datum (the Datum (match `(,x) (datum-cons hd tl -> hd))))\n"
       "(eval (the Nat (match result (datum-nat n -> n))))")))

@@ -1,6 +1,6 @@
-ns prologos.core.mul-instances
+ns prologos::core::mul-instances
 
-require [prologos.core.mul-trait :refer [Mul Mul-mul]]
+require [prologos::core::mul-trait :refer [Mul Mul-mul]]
 
 ;; ========================================
 ;; Mul Int

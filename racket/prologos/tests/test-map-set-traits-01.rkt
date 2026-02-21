@@ -61,23 +61,23 @@
 
 (define preamble
   "(ns test)
-(require (prologos.core.keyed-trait    :refer (Keyed)))
-(require (prologos.core.setlike-trait  :refer (Setlike)))
-(require (prologos.core.seqable-trait  :refer (Seqable)))
-(require (prologos.core.buildable-trait :refer (Buildable Buildable-from-seq Buildable-empty-coll)))
-(require (prologos.core.foldable-trait  :refer (Foldable)))
-(require (prologos.core.keyed-map      :refer (Map--Keyed--dict)))
-(require (prologos.core.setlike-set    :refer (Set--Setlike--dict)))
-(require (prologos.core.seqable-set    :refer (Set--Seqable--dict)))
-(require (prologos.core.buildable-set  :refer (Set--Buildable--dict)))
-(require (prologos.core.foldable-set   :refer (set-foldable)))
-(require (prologos.core.set-ops        :refer (set-map set-filter set-fold set-any? set-all? set-to-list-fn set-from-list-fn)))
-(require (prologos.core.map-ops        :refer (map-map-vals map-filter-vals map-fold-entries map-keys-list map-vals-list map-merge)))
-(require (prologos.data.lseq           :refer (LSeq lseq-nil lseq-cell)))
-(require (prologos.data.lseq-ops       :refer (lseq-to-list list-to-lseq)))
-(require (prologos.data.option         :refer (Option some none)))
-(require (prologos.data.list           :refer (List nil cons)))
-(require (prologos.data.set            :refer (set-singleton set-from-list)))
+(require (prologos::core::keyed-trait    :refer (Keyed)))
+(require (prologos::core::setlike-trait  :refer (Setlike)))
+(require (prologos::core::seqable-trait  :refer (Seqable)))
+(require (prologos::core::buildable-trait :refer (Buildable Buildable-from-seq Buildable-empty-coll)))
+(require (prologos::core::foldable-trait  :refer (Foldable)))
+(require (prologos::core::keyed-map      :refer (Map--Keyed--dict)))
+(require (prologos::core::setlike-set    :refer (Set--Setlike--dict)))
+(require (prologos::core::seqable-set    :refer (Set--Seqable--dict)))
+(require (prologos::core::buildable-set  :refer (Set--Buildable--dict)))
+(require (prologos::core::foldable-set   :refer (set-foldable)))
+(require (prologos::core::set-ops        :refer (set-map set-filter set-fold set-any? set-all? set-to-list-fn set-from-list-fn)))
+(require (prologos::core::map-ops        :refer (map-map-vals map-filter-vals map-fold-entries map-keys-list map-vals-list map-merge)))
+(require (prologos::data::lseq           :refer (LSeq lseq-nil lseq-cell)))
+(require (prologos::data::lseq-ops       :refer (lseq-to-list list-to-lseq)))
+(require (prologos::data::option         :refer (Option some none)))
+(require (prologos::data::list           :refer (List nil cons)))
+(require (prologos::data::set            :refer (set-singleton set-from-list)))
 ")
 
 
@@ -90,8 +90,8 @@
     (lambda ()
       (run-ns
         "(ns test)
-         (require (prologos.core.keyed-trait :refer (Keyed)))
-         (require (prologos.core.keyed-map   :refer (Map--Keyed--dict)))"))))
+         (require (prologos::core::keyed-trait :refer (Keyed)))
+         (require (prologos::core::keyed-map   :refer (Map--Keyed--dict)))"))))
 
 
 (test-case "map-set-traits/setlike-set-loads"
@@ -99,8 +99,8 @@
     (lambda ()
       (run-ns
         "(ns test)
-         (require (prologos.core.setlike-trait :refer (Setlike)))
-         (require (prologos.core.setlike-set   :refer (Set--Setlike--dict)))"))))
+         (require (prologos::core::setlike-trait :refer (Setlike)))
+         (require (prologos::core::setlike-set   :refer (Set--Setlike--dict)))"))))
 
 
 (test-case "map-set-traits/seqable-set-loads"
@@ -108,8 +108,8 @@
     (lambda ()
       (run-ns
         "(ns test)
-         (require (prologos.core.seqable-trait :refer (Seqable)))
-         (require (prologos.core.seqable-set   :refer (Set--Seqable--dict)))"))))
+         (require (prologos::core::seqable-trait :refer (Seqable)))
+         (require (prologos::core::seqable-set   :refer (Set--Seqable--dict)))"))))
 
 
 (test-case "map-set-traits/buildable-set-loads"
@@ -117,8 +117,8 @@
     (lambda ()
       (run-ns
         "(ns test)
-         (require (prologos.core.buildable-trait :refer (Buildable)))
-         (require (prologos.core.buildable-set   :refer (Set--Buildable--dict)))"))))
+         (require (prologos::core::buildable-trait :refer (Buildable)))
+         (require (prologos::core::buildable-set   :refer (Set--Buildable--dict)))"))))
 
 
 (test-case "map-set-traits/foldable-set-loads"
@@ -126,8 +126,8 @@
     (lambda ()
       (run-ns
         "(ns test)
-         (require (prologos.core.foldable-trait :refer (Foldable)))
-         (require (prologos.core.foldable-set   :refer (set-foldable)))"))))
+         (require (prologos::core::foldable-trait :refer (Foldable)))
+         (require (prologos::core::foldable-set   :refer (set-foldable)))"))))
 
 
 (test-case "map-set-traits/set-ops-loads"
@@ -135,7 +135,7 @@
     (lambda ()
       (run-ns
         "(ns test)
-         (require (prologos.core.set-ops :refer (set-map set-filter set-fold set-any? set-all? set-to-list-fn set-from-list-fn)))"))))
+         (require (prologos::core::set-ops :refer (set-map set-filter set-fold set-any? set-all? set-to-list-fn set-from-list-fn)))"))))
 
 
 (test-case "map-set-traits/map-ops-loads"
@@ -143,7 +143,7 @@
     (lambda ()
       (run-ns
         "(ns test)
-         (require (prologos.core.map-ops :refer (map-map-vals map-filter-vals map-fold-entries map-keys-list map-vals-list map-merge)))"))))
+         (require (prologos::core::map-ops :refer (map-map-vals map-filter-vals map-fold-entries map-keys-list map-vals-list map-merge)))"))))
 
 
 ;; ========================================

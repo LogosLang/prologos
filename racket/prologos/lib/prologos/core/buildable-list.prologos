@@ -1,9 +1,9 @@
-ns prologos.core.buildable-list
+ns prologos::core::buildable-list
 
-require [prologos.core.buildable-trait :refer [Buildable Buildable-from-seq Buildable-empty-coll]]
-require [prologos.data.lseq            :refer [LSeq]]
-require [prologos.data.lseq-ops        :refer [lseq-to-list]]
-require [prologos.data.list             :refer [List nil]]
+require [prologos::core::buildable-trait :refer [Buildable Buildable-from-seq Buildable-empty-coll]]
+require [prologos::data::lseq            :refer [LSeq]]
+require [prologos::data::lseq-ops        :refer [lseq-to-list]]
+require [prologos::data::list             :refer [List nil]]
 
 ;; ========================================
 ;; Buildable List Instance

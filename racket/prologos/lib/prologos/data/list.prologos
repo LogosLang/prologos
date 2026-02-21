@@ -1,8 +1,8 @@
-ns prologos.data.list
+ns prologos::data::list
 
-require [prologos.core.eq-trait :refer [nat-eq]]
-        [prologos.data.option   :refer [Option none some]]
-        [prologos.data.nat      :refer [add mult pred zero?]]
+require [prologos::core::eq-trait :refer [nat-eq]]
+        [prologos::data::option   :refer [Option none some]]
+        [prologos::data::nat      :refer [add mult pred zero?]]
 
 ;; ========================================
 ;; Prologos List Type

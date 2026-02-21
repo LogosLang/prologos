@@ -250,7 +250,7 @@
   ;; then pass it to an Int-accepting function via from-nat identity
   (define results (run-ns-strings (string-append
     "(ns t)\n"
-    "require [prologos.data.nat :refer [add]]\n"
+    "require [prologos::data::nat :refer [add]]\n"
     "(defn nat-to-int [x : Int] <Int>\n"
     "  x)\n"
     "(eval (nat-to-int (suc (suc zero))))\n")))

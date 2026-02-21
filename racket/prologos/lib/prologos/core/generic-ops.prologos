@@ -1,12 +1,12 @@
-ns prologos.core.generic-ops
+ns prologos::core::generic-ops
 
-require [prologos.core.seqable-trait    :refer [Seqable]]
-require [prologos.core.buildable-trait  :refer [Buildable Buildable-from-seq]]
-require [prologos.core.foldable-trait   :refer [Foldable]]
-require [prologos.data.lseq             :refer [LSeq]]
-require [prologos.data.lseq-ops         :refer [lseq-map lseq-filter lseq-length
+require [prologos::core::seqable-trait    :refer [Seqable]]
+require [prologos::core::buildable-trait  :refer [Buildable Buildable-from-seq]]
+require [prologos::core::foldable-trait   :refer [Foldable]]
+require [prologos::data::lseq             :refer [LSeq]]
+require [prologos::data::lseq-ops         :refer [lseq-map lseq-filter lseq-length
                                                   lseq-append lseq-to-list]]
-require [prologos.data.list             :refer [List]]
+require [prologos::data::list             :refer [List]]
 
 ;; ========================================
 ;; Generic Collection Operations (HKT-dispatched)

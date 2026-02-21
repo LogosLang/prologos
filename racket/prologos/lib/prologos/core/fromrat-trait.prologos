@@ -1,4 +1,4 @@
-ns prologos.core.fromrat-trait
+ns prologos::core::fromrat-trait
 
 ;; ========================================
 ;; FromRat Trait — convert Rat to A

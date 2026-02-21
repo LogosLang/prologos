@@ -1,8 +1,8 @@
-ns prologos.core.seq-list
+ns prologos::core::seq-list
 
-require [prologos.core.seq-trait :refer [Seq]]
-require [prologos.data.list :refer [List nil cons]]
-require [prologos.data.option :refer [Option some none]]
+require [prologos::core::seq-trait :refer [Seq]]
+require [prologos::data::list :refer [List nil cons]]
+require [prologos::data::option :refer [Option some none]]
 
 ;; ========================================
 ;; Seq instance for List

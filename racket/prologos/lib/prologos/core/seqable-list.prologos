@@ -1,9 +1,9 @@
-ns prologos.core.seqable-list
+ns prologos::core::seqable-list
 
-require [prologos.core.seqable-trait :refer [Seqable Seqable-to-seq]]
-require [prologos.data.lseq          :refer [LSeq]]
-require [prologos.data.lseq-ops      :refer [list-to-lseq]]
-require [prologos.data.list           :refer [List]]
+require [prologos::core::seqable-trait :refer [Seqable Seqable-to-seq]]
+require [prologos::data::lseq          :refer [LSeq]]
+require [prologos::data::lseq-ops      :refer [list-to-lseq]]
+require [prologos::data::list           :refer [List]]
 
 ;; ========================================
 ;; Seqable List Instance

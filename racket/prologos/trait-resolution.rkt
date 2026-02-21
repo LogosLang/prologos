@@ -136,7 +136,7 @@
   (if idx (string->symbol (substring s (add1 idx))) sym))
 
 ;; Match a symbol against a pattern symbol, considering namespace qualifiers.
-;; 'prologos.data.list::List matches pattern 'List
+;; 'prologos::data::list::List matches pattern 'List
 (define (symbol-matches? pattern name)
   (or (eq? pattern name)
       (eq? pattern (strip-ns name))))

@@ -1,4 +1,4 @@
-ns prologos.data.pair
+ns prologos::data::pair
 
 ;; ========================================
 ;; Prologos Pair Library

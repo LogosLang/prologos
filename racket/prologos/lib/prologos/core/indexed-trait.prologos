@@ -1,6 +1,6 @@
-ns prologos.core.indexed-trait
+ns prologos::core::indexed-trait
 
-require [prologos.data.option :refer [Option]]
+require [prologos::data::option :refer [Option]]
 
 ;; ========================================
 ;; Indexed Trait — Positional Access

@@ -50,9 +50,9 @@
 (define (pipe-preamble-sexp)
   (string-append
    "(ns test-pipe-e2e)\n"
-   "(require [prologos.data.list :refer [List nil cons map filter reduce sum length reverse]])\n"
-   "(require [prologos.data.nat :refer [add]])\n"
-   "(require [prologos.data.transducer :refer [map-xf filter-xf remove-xf xf-compose transduce into-list-rev into-list list-conj]])\n"))
+   "(require [prologos::data::list :refer [List nil cons map filter reduce sum length reverse]])\n"
+   "(require [prologos::data::nat :refer [add]])\n"
+   "(require [prologos::data::transducer :refer [map-xf filter-xf remove-xf xf-compose transduce into-list-rev into-list list-conj]])\n"))
 
 (define (pipe-helpers-sexp)
   (string-append
@@ -248,9 +248,9 @@
 (define (pipe-preamble-ws)
   (string-append
    "ns test-pipe-ws\n"
-   "require [prologos.data.list :refer [List nil cons map filter reduce sum length reverse]]\n"
-   "        [prologos.data.nat :refer [add]]\n"
-   "        [prologos.data.transducer :refer [map-xf filter-xf remove-xf xf-compose transduce into-list-rev into-list list-conj]]\n"
+   "require [prologos::data::list :refer [List nil cons map filter reduce sum length reverse]]\n"
+   "        [prologos::data::nat :refer [add]]\n"
+   "        [prologos::data::transducer :refer [map-xf filter-xf remove-xf xf-compose transduce into-list-rev into-list list-conj]]\n"
    "\n"))
 
 (define (pipe-helpers-ws)
