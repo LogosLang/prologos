@@ -405,6 +405,10 @@
    (test-dep '(macros.rkt prelude.rkt syntax.rkt source-location.rkt surface-syntax.rkt
                errors.rkt metavar-store.rkt parser.rkt elaborator.rkt pretty-print.rkt
                global-env.rkt driver.rkt namespace.rkt multi-dispatch.rkt) #t)
+   'test-hkt-errors.rkt
+   (test-dep '(macros.rkt prelude.rkt syntax.rkt source-location.rkt surface-syntax.rkt
+               errors.rkt metavar-store.rkt parser.rkt elaborator.rkt pretty-print.rkt
+               global-env.rkt driver.rkt namespace.rkt trait-resolution.rkt) #t)
    'test-eq-ord-extended.rkt
    (test-dep '(macros.rkt prelude.rkt syntax.rkt source-location.rkt surface-syntax.rkt
                errors.rkt metavar-store.rkt parser.rkt elaborator.rkt pretty-print.rkt
@@ -672,6 +676,7 @@
    'test-generic-ops.rkt        '(prologos.data.list prologos.data.nat prologos.data.option
                                   prologos.core.seq-trait prologos.core.seq-functions
                                   prologos.core.collection-ops)
+   'test-hkt-errors.rkt         '()  ; Uses ns/prelude — no extra lib deps
    'test-lseq.rkt               '(prologos.data.lseq prologos.data.lseq-ops prologos.data.list
                                   prologos.data.nat prologos.data.option)
    'test-lseq-literal.rkt       '(prologos.data.lseq prologos.data.list prologos.data.nat)

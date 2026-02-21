@@ -26,7 +26,7 @@
 | HKT-5 | Elaborator: bare method name resolution for implicit dict params | Done | 13 | test-bare-methods.rkt |
 | HKT-6 | Generic ops (gmap, gfilter, gfold, etc.) + Collection bundle + prelude integration | Done | 23 | 9b7dad6 |
 | HKT-6d | Spec propagation across modules for prelude HKT ops | Done | 8 | — |
-| HKT-7 | Error messages (no-instance, kind-mismatch, ambiguity, not-in-scope) | Pending | ~12 | — |
+| HKT-7 | Error messages (no-instance, kind-mismatch, ambiguity, not-in-scope) | Done | 10 | — |
 | HKT-8 | Specialization framework (macro + registry, call-site rewriting deferred) | Pending | ~10 | — |
 | HKT-9 | Constraint inference from usage (optional, feature-flagged) | Pending | ~15 | — |
 

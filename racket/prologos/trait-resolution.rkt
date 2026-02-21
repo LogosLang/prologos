@@ -299,6 +299,7 @@
 ;; Return a list of no-instance-error structs for trait constraints that
 ;; have ground type args but remain unsolved (i.e., no matching impl found).
 ;; Each error includes the source location from the meta that created it.
+;; Enhanced with available instance listing, kind mismatch detection, and hints.
 (define (check-unresolved-trait-constraints)
   (for/list ([(meta-id tc-info) (in-hash (current-trait-constraint-map))]
              #:when (not (meta-solved? meta-id))
@@ -317,6 +318,84 @@
       (if (and src (meta-source-info? src))
           (meta-source-info-loc src)
           srcloc-unknown))
-    (no-instance-error loc
-      (format "No instance of ~a for ~a" trait-name type-args-str)
-      trait-name type-args-str)))
+
+    ;; Enhanced error: detect kind mismatch and list available instances
+    (define kind-mismatch (detect-kind-mismatch trait-name type-args))
+    (define available (collect-available-instances trait-name))
+
+    (define message
+      (cond
+        ;; Kind mismatch — e.g., (Seqable Int) when Seqable expects Type -> Type
+        [kind-mismatch
+         (format "Kind mismatch in constraint (~a ~a): ~a"
+                 trait-name type-args-str kind-mismatch)]
+        ;; No instance — list available instances and provide hint
+        [else
+         (define avail-str
+           (if (null? available)
+               ""
+               (format "\n  Available instances: ~a"
+                       (string-join
+                        (map (lambda (i) (format "~a ~a" trait-name i))
+                             available)
+                        ", "))))
+         (define hint
+           (let ([tm (lookup-trait trait-name)])
+             (if tm
+                 (let ([methods (trait-meta-methods tm)])
+                   (format "\n  Hint: Define 'impl ~a ~a' with method~a ~a."
+                           trait-name type-args-str
+                           (if (> (length methods) 1) "s" "")
+                           (string-join (map (lambda (m) (format "'~a'" (trait-method-name m))) methods)
+                                        ", ")))
+                 "")))
+         (format "No instance of ~a for ~a~a~a"
+                 trait-name type-args-str avail-str hint)]))
+
+    (no-instance-error loc message trait-name type-args-str)))
+
+;; Collect all registered instances for a trait, returning short display strings.
+;; Checks both monomorphic registry (e.g., "Nat--Eq" → "Nat") and
+;; parametric registry (e.g., param-impl for "(List A)" → "(List A)").
+(define (collect-available-instances trait-name)
+  (define trait-str (symbol->string trait-name))
+  (define suffix (string-append "--" trait-str))
+  ;; Monomorphic instances: extract type name from "TypeName--TraitName" keys
+  (define mono-instances
+    (for/list ([(k _v) (in-hash (current-impl-registry))]
+               #:when (let ([ks (symbol->string k)])
+                        (and (> (string-length ks) (string-length suffix))
+                             (string-suffix? ks suffix))))
+      (define ks (symbol->string k))
+      (substring ks 0 (- (string-length ks) (string-length suffix)))))
+  ;; Parametric instances: show the type pattern
+  (define param-instances
+    (for/list ([pe (in-list (lookup-param-impls trait-name))])
+      (define pat (param-impl-entry-type-pattern pe))
+      (if (and (list? pat) (= (length pat) 1))
+          (format "~a" (car pat))
+          (format "(~a)" (string-join (map (lambda (x) (format "~a" x)) pat) " ")))))
+  (append mono-instances param-instances))
+
+;; Detect kind mismatch: returns a descriptive string or #f.
+;; A kind mismatch occurs when a trait expects a higher-kinded argument
+;; (e.g., Type -> Type) but receives a ground type (e.g., Nat, Int).
+(define (detect-kind-mismatch trait-name type-args)
+  (define tm (lookup-trait trait-name))
+  (and tm
+       (not (null? (trait-meta-params tm)))
+       (let ([expected-kind (cdr (car (trait-meta-params tm)))])
+         ;; Check if trait expects a type constructor (kind includes ->)
+         (and (list? expected-kind)
+              (memq '-> expected-kind)
+              (not (null? type-args))
+              (let ([ta (car type-args)])
+                ;; Ground types that are NOT type constructors
+                (and (not (expr-tycon? ta))
+                     (not (expr-fvar? ta))
+                     (not (expr-app? ta))
+                     ;; It's a concrete ground type like Nat, Int, Bool
+                     (let ([ta-str (expr->impl-key-str ta)]
+                           [expected-str (format "~a" expected-kind)])
+                       (format "~a expects a type constructor (kind ~a), but ~a has kind Type"
+                               trait-name expected-str ta-str))))))))
