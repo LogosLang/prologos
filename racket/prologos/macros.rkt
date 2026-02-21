@@ -121,6 +121,9 @@
          datum->kind-string
          ;; HKT-3: Auto-registration of trait dict defs
          maybe-register-trait-dict-def
+         ;; HKT-4: Overlap detection helpers (for testing)
+         parametric-impls-could-overlap?
+         format-param-impl-entry
          ;; Spec store
          current-spec-store
          spec-entry
@@ -2691,7 +2694,16 @@
 ;; Registry: key (symbol, e.g. "Nat--Eq") → impl-entry
 (define current-impl-registry (make-parameter (hasheq)))
 
+;; HKT-4: Duplicate detection — error if same key with different dict name.
+;; Benign re-registration (same key, same dict name) is allowed because the
+;; prelude may load the same instance module multiple times.
 (define (register-impl! key entry)
+  (define existing (hash-ref (current-impl-registry) key #f))
+  (when (and existing
+             (not (eq? (impl-entry-dict-name existing) (impl-entry-dict-name entry))))
+    (error 'impl
+      "Duplicate instance: ~a already registered (dict ~a), cannot re-register (dict ~a)"
+      key (impl-entry-dict-name existing) (impl-entry-dict-name entry)))
   (current-impl-registry (hash-set (current-impl-registry) key entry)))
 
 (define (lookup-impl key)
@@ -2772,10 +2784,54 @@
 ;; Keyed by trait name (not impl key) because lookup requires pattern matching.
 (define current-param-impl-registry (make-parameter (hasheq)))
 
+;; HKT-4: Overlap detection — warn if a new parametric impl could overlap with existing ones.
 (define (register-param-impl! trait-name entry)
   (define existing (hash-ref (current-param-impl-registry) trait-name '()))
+  ;; Check for potential overlap with existing entries
+  (for ([ex (in-list existing)])
+    (when (parametric-impls-could-overlap? entry ex)
+      (eprintf "Warning: Potentially overlapping instances for ~a:\n  ~a\n  ~a\n"
+               trait-name
+               (format-param-impl-entry entry)
+               (format-param-impl-entry ex))))
   (current-param-impl-registry
     (hash-set (current-param-impl-registry) trait-name (cons entry existing))))
+
+;; Check if two parametric impls could overlap.
+;; Two impls overlap if their type patterns could unify (i.e., there exists a type
+;; that matches both patterns). Conservative: if any position has a variable on at least
+;; one side or the patterns are structurally equal, they could unify.
+(define (parametric-impls-could-overlap? e1 e2)
+  (define vars1 (param-impl-entry-pattern-vars e1))
+  (define vars2 (param-impl-entry-pattern-vars e2))
+  (define (could-unify? a b)
+    (cond
+      ;; A pattern variable on either side → could match anything
+      [(and (symbol? a) (memq a vars1)) #t]
+      [(and (symbol? b) (memq b vars2)) #t]
+      ;; Both are lists → must have same length and all elements could unify
+      [(and (list? a) (list? b))
+       (and (= (length a) (length b))
+            (andmap could-unify? a b))]
+      ;; Otherwise must be structurally equal
+      [else (equal? a b)]))
+  (define p1 (param-impl-entry-type-pattern e1))
+  (define p2 (param-impl-entry-type-pattern e2))
+  (and (= (length p1) (length p2))
+       (andmap could-unify? p1 p2)))
+
+;; Format a param-impl-entry for warning messages
+(define (format-param-impl-entry entry)
+  (format "impl ~a ~a~a"
+    (param-impl-entry-trait-name entry)
+    (string-join (map (lambda (p) (format "~a" p)) (param-impl-entry-type-pattern entry)) " ")
+    (if (null? (param-impl-entry-where-constraints entry))
+        ""
+        (format " where ~a"
+          (string-join
+            (map (lambda (wc) (format "(~a)" (string-join (map symbol->string wc) " ")))
+                 (param-impl-entry-where-constraints entry))
+            " ")))))
 
 (define (lookup-param-impls trait-name)
   (hash-ref (current-param-impl-registry) trait-name '()))

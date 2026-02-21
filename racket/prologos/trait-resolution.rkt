@@ -241,16 +241,35 @@
 
 ;; Try to resolve a trait constraint using parametric impl entries.
 ;; Returns a dict expression on success, #f on failure.
+;; HKT-4: Most-specific-wins resolution for parametric impls.
+;; Collects ALL matching entries and picks the most specific (fewest pattern vars).
+;; If multiple matches have the same specificity, picks the first (future: ambiguity error in HKT-7).
 (define (try-parametric-resolve trait-name type-args)
   (define param-impls (lookup-param-impls trait-name))
-  (for/or ([pentry (in-list param-impls)])
-    (define bindings (match-type-pattern type-args pentry))
-    (and bindings
-         (let ([sub-dicts (resolve-sub-constraints
-                            (param-impl-entry-where-constraints pentry)
-                            bindings)])
-           (and sub-dicts
-                (build-parametric-dict-expr pentry bindings sub-dicts))))))
+  ;; Collect ALL matching entries with their bindings and sub-dicts
+  (define matches
+    (for/fold ([acc '()])
+              ([pentry (in-list param-impls)])
+      (define bindings (match-type-pattern type-args pentry))
+      (if (not bindings)
+          acc
+          (let ([sub-dicts (resolve-sub-constraints
+                             (param-impl-entry-where-constraints pentry)
+                             bindings)])
+            (if (not sub-dicts)
+                acc
+                (cons (list pentry bindings sub-dicts) acc))))))
+  (cond
+    [(null? matches) #f]
+    [(= (length matches) 1)
+     (apply build-parametric-dict-expr (car matches))]
+    [else
+     ;; Multiple matches: pick most specific (fewest pattern vars)
+     (define sorted
+       (sort matches <
+         #:key (lambda (m)
+                 (length (param-impl-entry-pattern-vars (car m))))))
+     (apply build-parametric-dict-expr (car sorted))]))
 
 ;; ========================================
 ;; Main resolution entry point
