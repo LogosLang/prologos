@@ -66,86 +66,6 @@
   (check-true (string-contains? actual substr)
               (or msg (format "Expected ~s to contain ~s" actual substr))))
 
-;; ========================================
-;; LSeq Data Type — Basic Tests
-;; ========================================
-
-(test-case "lseq/type-check"
-  ;; (LSeq Nat) should be a Type
-  (check-contains
-   (run-ns-last (string-append preamble "(infer (LSeq Nat))"))
-   "Type"))
-
-(test-case "lseq/lseq-nil-type"
-  ;; lseq-nil Nat : LSeq Nat
-  (define result (run-ns-last (string-append preamble "(eval (lseq-nil Nat))")))
-  (check-contains result "lseq-nil")
-  (check-contains result "LSeq Nat"))
-
-(test-case "lseq/lseq-empty?-nil"
-  ;; lseq-empty? on nil → true
-  (check-contains
-   (run-ns-last (string-append preamble "(eval (lseq-empty? Nat (lseq-nil Nat)))"))
-   "true : Bool"))
-
-(test-case "lseq/lseq-empty?-cell"
-  ;; lseq-empty? on cell → false
-  (check-contains
-   (run-ns-last (string-append preamble
-     "(eval (lseq-empty? Nat (lseq-cell Nat zero (fn (_ : Unit) (lseq-nil Nat)))))"))
-   "false : Bool"))
-
-(test-case "lseq/lseq-head-nil"
-  ;; lseq-head on nil → none
-  (define result (run-ns-last (string-append preamble "(eval (lseq-head Nat (lseq-nil Nat)))")))
-  (check-contains result "none")
-  (check-contains result "Option Nat"))
-
-(test-case "lseq/lseq-head-cell"
-  ;; lseq-head on cell → some 1
-  (define result (run-ns-last (string-append preamble
-     "(eval (lseq-head Nat (lseq-cell Nat (suc zero) (fn (_ : Unit) (lseq-nil Nat)))))")))
-  (check-contains result "some")
-  (check-contains result "1"))
-
-(test-case "lseq/lseq-rest-nil"
-  ;; lseq-rest on nil → nil
-  (define result (run-ns-last (string-append preamble "(eval (lseq-rest Nat (lseq-nil Nat)))")))
-  (check-contains result "lseq-nil")
-  (check-contains result "LSeq Nat"))
-
-(test-case "lseq/lseq-rest-cell"
-  ;; lseq-rest on cell → forced tail (should be nil)
-  (define result (run-ns-last (string-append preamble
-     "(eval (lseq-rest Nat (lseq-cell Nat (suc zero) (fn (_ : Unit) (lseq-nil Nat)))))")))
-  (check-contains result "lseq-nil")
-  (check-contains result "LSeq Nat"))
-
-;; ========================================
-;; LSeq-Ops — Conversion
-;; ========================================
-
-(test-case "lseq-ops/list-to-lseq-nil"
-  ;; Empty list → empty lseq
-  (check-contains
-   (run-ns-last (string-append preamble
-     "(eval (lseq-empty? Nat (list-to-lseq Nat (nil Nat))))"))
-   "true : Bool"))
-
-(test-case "lseq-ops/round-trip"
-  ;; Convert list → lseq → list preserves structure
-  (define result (run-ns-last (string-append preamble
-     "(def list123 : (List Nat) (cons Nat (suc zero) (cons Nat (suc (suc zero)) (cons Nat (suc (suc (suc zero))) (nil Nat)))))
-      (eval (lseq-to-list Nat (list-to-lseq Nat list123)))")))
-  (check-contains result "'[1N 2N 3N]")
-  (check-contains result "List Nat"))
-
-(test-case "lseq-ops/round-trip-empty"
-  ;; Empty round-trip
-  (define result (run-ns-last (string-append preamble
-     "(eval (lseq-to-list Nat (list-to-lseq Nat (nil Nat))))")))
-  (check-contains result "nil")
-  (check-contains result "List Nat"))
 
 ;; ========================================
 ;; LSeq-Ops — Map
@@ -160,6 +80,7 @@
   (check-contains result "'[2N 3N 4N]")
   (check-contains result "List Nat"))
 
+
 (test-case "lseq-ops/map-empty"
   ;; Map over empty → empty
   (define result (run-ns-last (string-append preamble
@@ -167,6 +88,7 @@
       (eval (lseq-to-list Nat (lseq-map Nat Nat suc-fn (lseq-nil Nat))))")))
   (check-contains result "nil")
   (check-contains result "List Nat"))
+
 
 ;; ========================================
 ;; LSeq-Ops — Filter
@@ -181,6 +103,7 @@
   (check-contains result "'[0N 0N]")
   (check-contains result "List Nat"))
 
+
 (test-case "lseq-ops/filter-empty"
   ;; Filter on empty → empty
   (define result (run-ns-last (string-append preamble
@@ -188,6 +111,7 @@
       (eval (lseq-to-list Nat (lseq-filter Nat zero? (lseq-nil Nat))))")))
   (check-contains result "nil")
   (check-contains result "List Nat"))
+
 
 ;; ========================================
 ;; LSeq-Ops — Take / Drop
@@ -201,6 +125,7 @@
   (check-contains result "'[1N 2N]")
   (check-contains result "List Nat"))
 
+
 (test-case "lseq-ops/take-0"
   ;; Take 0 → empty
   (define result (run-ns-last (string-append preamble
@@ -208,6 +133,7 @@
       (eval (lseq-to-list Nat (lseq-take Nat zero (list-to-lseq Nat list123))))")))
   (check-contains result "nil")
   (check-contains result "List Nat"))
+
 
 (test-case "lseq-ops/drop-1-from-3"
   ;; Drop 1 from [1,2,3] → [2,3]
@@ -217,6 +143,7 @@
   (check-contains result "'[2N 3N]")
   (check-contains result "List Nat"))
 
+
 (test-case "lseq-ops/drop-0"
   ;; Drop 0 → unchanged
   (define result (run-ns-last (string-append preamble
@@ -224,6 +151,7 @@
       (eval (lseq-to-list Nat (lseq-drop Nat zero (list-to-lseq Nat list123))))")))
   (check-contains result "'[1N 2N]")
   (check-contains result "List Nat"))
+
 
 ;; ========================================
 ;; LSeq-Ops — Append
@@ -238,6 +166,7 @@
   (check-contains result "'[1N 2N 3N]")
   (check-contains result "List Nat"))
 
+
 (test-case "lseq-ops/append-empty-left"
   ;; Append [] [1] → [1]
   (define result (run-ns-last (string-append preamble
@@ -245,6 +174,7 @@
       (eval (lseq-to-list Nat (lseq-append Nat (lseq-nil Nat) ys)))")))
   (check-contains result "'[1N]")
   (check-contains result "List Nat"))
+
 
 ;; ========================================
 ;; LSeq-Ops — Fold / Length
@@ -258,12 +188,14 @@
       (eval (lseq-fold Nat Nat (fn (acc : Nat) (fn (b : Nat) (add acc b))) zero (list-to-lseq Nat list123)))"))
    "6N : Nat"))
 
+
 (test-case "lseq-ops/fold-empty"
   ;; Fold over empty → initial value
   (check-contains
    (run-ns-last (string-append preamble
      "(eval (lseq-fold Nat Nat (fn (acc : Nat) (fn (b : Nat) (add acc b))) zero (lseq-nil Nat)))"))
    "0N : Nat"))
+
 
 (test-case "lseq-ops/length-3"
   ;; Length of [1,2,3] → 3
@@ -273,12 +205,14 @@
       (eval (lseq-length Nat (list-to-lseq Nat list123)))"))
    "3N : Nat"))
 
+
 (test-case "lseq-ops/length-0"
   ;; Length of [] → 0
   (check-contains
    (run-ns-last (string-append preamble
      "(eval (lseq-length Nat (lseq-nil Nat)))"))
    "0N : Nat"))
+
 
 ;; ========================================
 ;; Laziness test — lseq-head doesn't force tail
@@ -290,6 +224,7 @@
      "(eval (lseq-head Nat (lseq-cell Nat (suc (suc zero)) (fn (_ : Unit) (lseq-nil Nat)))))")))
   (check-contains result "some")
   (check-contains result "2"))
+
 
 ;; ========================================
 ;; Module loading tests
@@ -306,6 +241,7 @@
   (define type-results (filter string? results))
   (check-true (>= (length type-results) 4)
               "Expected at least 4 type-string results"))
+
 
 (test-case "lseq-ops/module-load"
   ;; Verify that lseq-ops module loads with all expected exports

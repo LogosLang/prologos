@@ -67,77 +67,6 @@
   (check-true (string-contains? actual substr)
               (or msg (format "Expected ~s to contain ~s" actual substr))))
 
-;; ========================================
-;; Eq Bool
-;; ========================================
-
-(test-case "eq-ext/bool-true-true"
-  (check-contains
-   (run-ns-last (string-append preamble "(eval (Bool--Eq--eq? true true))"))
-   "true : Bool"))
-
-(test-case "eq-ext/bool-true-false"
-  (check-contains
-   (run-ns-last (string-append preamble "(eval (Bool--Eq--eq? true false))"))
-   "false : Bool"))
-
-(test-case "eq-ext/bool-false-false"
-  (check-contains
-   (run-ns-last (string-append preamble "(eval (Bool--Eq--eq? false false))"))
-   "true : Bool"))
-
-(test-case "eq-ext/bool-false-true"
-  (check-contains
-   (run-ns-last (string-append preamble "(eval (Bool--Eq--eq? false true))"))
-   "false : Bool"))
-
-;; ========================================
-;; Eq Ordering
-;; ========================================
-
-(test-case "eq-ext/ordering-lt-lt"
-  (check-contains
-   (run-ns-last (string-append preamble "(eval (Ordering--Eq--eq? lt-ord lt-ord))"))
-   "true : Bool"))
-
-(test-case "eq-ext/ordering-lt-gt"
-  (check-contains
-   (run-ns-last (string-append preamble "(eval (Ordering--Eq--eq? lt-ord gt-ord))"))
-   "false : Bool"))
-
-(test-case "eq-ext/ordering-eq-eq"
-  (check-contains
-   (run-ns-last (string-append preamble "(eval (Ordering--Eq--eq? eq-ord eq-ord))"))
-   "true : Bool"))
-
-(test-case "eq-ext/ordering-gt-gt"
-  (check-contains
-   (run-ns-last (string-append preamble "(eval (Ordering--Eq--eq? gt-ord gt-ord))"))
-   "true : Bool"))
-
-;; ========================================
-;; Ord Bool — false < true
-;; ========================================
-
-(test-case "ord-ext/bool-false-true"
-  (check-contains
-   (run-ns-last (string-append preamble "(eval (Bool--Ord--compare false true))"))
-   "lt-ord"))
-
-(test-case "ord-ext/bool-true-true"
-  (check-contains
-   (run-ns-last (string-append preamble "(eval (Bool--Ord--compare true true))"))
-   "eq-ord"))
-
-(test-case "ord-ext/bool-true-false"
-  (check-contains
-   (run-ns-last (string-append preamble "(eval (Bool--Ord--compare true false))"))
-   "gt-ord"))
-
-(test-case "ord-ext/bool-false-false"
-  (check-contains
-   (run-ns-last (string-append preamble "(eval (Bool--Ord--compare false false))"))
-   "eq-ord"))
 
 ;; Derived ord operations on Bool
 (test-case "ord-ext/bool-lt"
@@ -145,10 +74,12 @@
    (run-ns-last (string-append preamble "(eval (ord-lt Bool--Ord--dict false true))"))
    "true : Bool"))
 
+
 (test-case "ord-ext/bool-le"
   (check-contains
    (run-ns-last (string-append preamble "(eval (ord-le Bool--Ord--dict false true))"))
    "true : Bool"))
+
 
 ;; ========================================
 ;; Derived option-eq
@@ -160,22 +91,26 @@
      "(eval (option-eq Nat--Eq--dict (some Nat (suc (suc (suc zero)))) (some Nat (suc (suc (suc zero))))))"))
    "true : Bool"))
 
+
 (test-case "eq-derived/option-some-neq"
   (check-contains
    (run-ns-last (string-append preamble
      "(eval (option-eq Nat--Eq--dict (some Nat (suc zero)) (some Nat (suc (suc zero)))))"))
    "false : Bool"))
 
+
 (test-case "eq-derived/option-none-none"
   (check-contains
    (run-ns-last (string-append preamble "(eval (option-eq Nat--Eq--dict (none Nat) (none Nat)))"))
    "true : Bool"))
+
 
 (test-case "eq-derived/option-some-none"
   (check-contains
    (run-ns-last (string-append preamble
      "(eval (option-eq Nat--Eq--dict (some Nat zero) (none Nat)))"))
    "false : Bool"))
+
 
 ;; ========================================
 ;; Derived list-eq
@@ -187,22 +122,26 @@
      "(eval (list-eq Nat--Eq--dict (cons Nat (suc zero) (cons Nat (suc (suc zero)) (nil Nat))) (cons Nat (suc zero) (cons Nat (suc (suc zero)) (nil Nat)))))"))
    "true : Bool"))
 
+
 (test-case "eq-derived/list-eq-diff-elem"
   (check-contains
    (run-ns-last (string-append preamble
      "(eval (list-eq Nat--Eq--dict (cons Nat (suc zero) (nil Nat)) (cons Nat (suc (suc zero)) (nil Nat))))"))
    "false : Bool"))
 
+
 (test-case "eq-derived/list-eq-nil-nil"
   (check-contains
    (run-ns-last (string-append preamble "(eval (list-eq Nat--Eq--dict (nil Nat) (nil Nat)))"))
    "true : Bool"))
+
 
 (test-case "eq-derived/list-eq-diff-length"
   (check-contains
    (run-ns-last (string-append preamble
      "(eval (list-eq Nat--Eq--dict (cons Nat zero (nil Nat)) (nil Nat)))"))
    "false : Bool"))
+
 
 ;; ========================================
 ;; PartialOrd trait
@@ -214,6 +153,7 @@
   (check-contains result "->")
   (check-contains result "Option")
   (check-contains result "Ordering"))
+
 
 ;; ========================================
 ;; Module loading

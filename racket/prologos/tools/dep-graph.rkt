@@ -218,7 +218,15 @@
              '(prologos.core.seqable-pvec prologos.core.buildable-pvec
                prologos.core.foldable-pvec prologos.core.functor-pvec
                prologos.core.indexed-pvec prologos.core.pvec-ops))
-   'test-map-set-traits.rkt
+   'test-map-set-traits-01.rkt
+   (test-dep '(syntax.rkt prelude.rkt substitution.rkt reduction.rkt typing-core.rkt
+               pretty-print.rkt driver.rkt global-env.rkt namespace.rkt
+               macros.rkt qtt.rkt champ.rkt)
+             '(prologos.core.keyed-map prologos.core.setlike-set
+               prologos.core.seqable-set prologos.core.buildable-set
+               prologos.core.foldable-set prologos.core.set-ops
+               prologos.core.map-ops))
+   'test-map-set-traits-02.rkt
    (test-dep '(syntax.rkt prelude.rkt substitution.rkt reduction.rkt typing-core.rkt
                pretty-print.rkt driver.rkt global-env.rkt namespace.rkt
                macros.rkt qtt.rkt champ.rkt)
@@ -260,19 +268,51 @@
                driver.rkt global-env.rkt posit-impl.rkt) #f)
 
    ;; === Driver/integration tests (driver=yes) ===
-   'test-stdlib-01-data.rkt
+   'test-stdlib-01-data-01.rkt
    (test-dep '(driver.rkt global-env.rkt namespace.rkt macros.rkt) #t)
-   'test-stdlib-02-traits.rkt
+   'test-stdlib-01-data-02.rkt
    (test-dep '(driver.rkt global-env.rkt namespace.rkt macros.rkt) #t)
-   'test-stdlib-03-list.rkt
+   'test-stdlib-01-data-03.rkt
    (test-dep '(driver.rkt global-env.rkt namespace.rkt macros.rkt) #t)
-   'test-list-extended-01.rkt
+   'test-stdlib-01-data-04.rkt
+   (test-dep '(driver.rkt global-env.rkt namespace.rkt macros.rkt) #t)
+   'test-stdlib-02-traits-01.rkt
+   (test-dep '(driver.rkt global-env.rkt namespace.rkt macros.rkt) #t)
+   'test-stdlib-02-traits-02.rkt
+   (test-dep '(driver.rkt global-env.rkt namespace.rkt macros.rkt) #t)
+   'test-stdlib-02-traits-03.rkt
+   (test-dep '(driver.rkt global-env.rkt namespace.rkt macros.rkt) #t)
+   'test-stdlib-02-traits-04.rkt
+   (test-dep '(driver.rkt global-env.rkt namespace.rkt macros.rkt) #t)
+   'test-stdlib-02-traits-05.rkt
+   (test-dep '(driver.rkt global-env.rkt namespace.rkt macros.rkt) #t)
+   'test-stdlib-02-traits-06.rkt
+   (test-dep '(driver.rkt global-env.rkt namespace.rkt macros.rkt) #t)
+   'test-stdlib-02-traits-07.rkt
+   (test-dep '(driver.rkt global-env.rkt namespace.rkt macros.rkt) #t)
+   'test-stdlib-03-list-01.rkt
+   (test-dep '(driver.rkt global-env.rkt namespace.rkt macros.rkt) #t)
+   'test-stdlib-03-list-02.rkt
+   (test-dep '(driver.rkt global-env.rkt namespace.rkt macros.rkt) #t)
+   'test-stdlib-03-list-03.rkt
+   (test-dep '(driver.rkt global-env.rkt namespace.rkt macros.rkt) #t)
+   'test-stdlib-03-list-04.rkt
+   (test-dep '(driver.rkt global-env.rkt namespace.rkt macros.rkt) #t)
+   'test-stdlib-03-list-05.rkt
+   (test-dep '(driver.rkt global-env.rkt namespace.rkt macros.rkt) #t)
+   'test-list-extended-01-01.rkt
    (test-dep '(errors.rkt driver.rkt global-env.rkt namespace.rkt macros.rkt) #t)
-   'test-list-extended-02.rkt
+   'test-list-extended-01-02.rkt
+   (test-dep '(errors.rkt driver.rkt global-env.rkt namespace.rkt macros.rkt) #t)
+   'test-list-extended-02-01.rkt
+   (test-dep '(errors.rkt driver.rkt global-env.rkt namespace.rkt macros.rkt) #t)
+   'test-list-extended-02-02.rkt
    (test-dep '(errors.rkt driver.rkt global-env.rkt namespace.rkt macros.rkt) #t)
    'test-core-prelude.rkt
    (test-dep '(driver.rkt global-env.rkt namespace.rkt macros.rkt) #t)
-   'test-prelude-system.rkt
+   'test-prelude-system-01.rkt
+   (test-dep '(driver.rkt global-env.rkt namespace.rkt macros.rkt errors.rkt elaborator.rkt) #t)
+   'test-prelude-system-02.rkt
    (test-dep '(driver.rkt global-env.rkt namespace.rkt macros.rkt errors.rkt elaborator.rkt) #t)
    'test-auto-implicits.rkt
    (test-dep '(errors.rkt global-env.rkt driver.rkt namespace.rkt macros.rkt
@@ -280,7 +320,9 @@
    'test-sprint10.rkt
    (test-dep '(errors.rkt global-env.rkt driver.rkt namespace.rkt macros.rkt
                metavar-store.rkt) #t)
-   'test-surface-defmacro.rkt
+   'test-surface-defmacro-01.rkt
+   (test-dep '(driver.rkt global-env.rkt namespace.rkt macros.rkt metavar-store.rkt) #t)
+   'test-surface-defmacro-02.rkt
    (test-dep '(driver.rkt global-env.rkt namespace.rkt macros.rkt metavar-store.rkt) #t)
    'test-match-builtins.rkt
    (test-dep '(driver.rkt global-env.rkt namespace.rkt macros.rkt metavar-store.rkt) #t)
@@ -339,7 +381,19 @@
    'test-list-literals.rkt
    (test-dep '(reader.rkt macros.rkt sexp-readtable.rkt pretty-print.rkt syntax.rkt
                errors.rkt driver.rkt global-env.rkt namespace.rkt) #t)
-   'test-trait-impl.rkt
+   'test-trait-impl-01.rkt
+   (test-dep '(macros.rkt prelude.rkt syntax.rkt source-location.rkt surface-syntax.rkt
+               errors.rkt metavar-store.rkt parser.rkt elaborator.rkt pretty-print.rkt
+               global-env.rkt driver.rkt namespace.rkt) #t)
+   'test-trait-impl-02.rkt
+   (test-dep '(macros.rkt prelude.rkt syntax.rkt source-location.rkt surface-syntax.rkt
+               errors.rkt metavar-store.rkt parser.rkt elaborator.rkt pretty-print.rkt
+               global-env.rkt driver.rkt namespace.rkt) #t)
+   'test-trait-impl-03.rkt
+   (test-dep '(macros.rkt prelude.rkt syntax.rkt source-location.rkt surface-syntax.rkt
+               errors.rkt metavar-store.rkt parser.rkt elaborator.rkt pretty-print.rkt
+               global-env.rkt driver.rkt namespace.rkt) #t)
+   'test-trait-impl-04.rkt
    (test-dep '(macros.rkt prelude.rkt syntax.rkt source-location.rkt surface-syntax.rkt
                errors.rkt metavar-store.rkt parser.rkt elaborator.rkt pretty-print.rkt
                global-env.rkt driver.rkt namespace.rkt) #t)
@@ -383,11 +437,25 @@
    (test-dep '(syntax.rkt prelude.rkt metavar-store.rkt substitution.rkt zonk.rkt
                reduction.rkt typing-core.rkt pretty-print.rkt unify.rkt
                trait-resolution.rkt global-env.rkt) #f)
-   'test-numeric-traits.rkt
+   'test-numeric-traits-01.rkt
    (test-dep '(macros.rkt prelude.rkt syntax.rkt source-location.rkt surface-syntax.rkt
                errors.rkt metavar-store.rkt parser.rkt elaborator.rkt pretty-print.rkt
                global-env.rkt driver.rkt namespace.rkt trait-resolution.rkt) #t)
-   'test-cross-family-conversions.rkt
+   'test-numeric-traits-02.rkt
+   (test-dep '(macros.rkt prelude.rkt syntax.rkt source-location.rkt surface-syntax.rkt
+               errors.rkt metavar-store.rkt parser.rkt elaborator.rkt pretty-print.rkt
+               global-env.rkt driver.rkt namespace.rkt trait-resolution.rkt) #t)
+   'test-cross-family-conversions-01.rkt
+   (test-dep '(macros.rkt prelude.rkt syntax.rkt source-location.rkt surface-syntax.rkt
+               errors.rkt metavar-store.rkt parser.rkt elaborator.rkt pretty-print.rkt
+               global-env.rkt driver.rkt reduction.rkt typing-core.rkt namespace.rkt
+               trait-resolution.rkt posit-impl.rkt) #t)
+   'test-cross-family-conversions-02.rkt
+   (test-dep '(macros.rkt prelude.rkt syntax.rkt source-location.rkt surface-syntax.rkt
+               errors.rkt metavar-store.rkt parser.rkt elaborator.rkt pretty-print.rkt
+               global-env.rkt driver.rkt reduction.rkt typing-core.rkt namespace.rkt
+               trait-resolution.rkt posit-impl.rkt) #t)
+   'test-cross-family-conversions-03.rkt
    (test-dep '(macros.rkt prelude.rkt syntax.rkt source-location.rkt surface-syntax.rkt
                errors.rkt metavar-store.rkt parser.rkt elaborator.rkt pretty-print.rkt
                global-env.rkt driver.rkt reduction.rkt typing-core.rkt namespace.rkt
@@ -397,11 +465,19 @@
                errors.rkt metavar-store.rkt parser.rkt elaborator.rkt pretty-print.rkt
                global-env.rkt driver.rkt reduction.rkt typing-core.rkt namespace.rkt
                trait-resolution.rkt posit-impl.rkt) #t)
-   'test-collection-traits.rkt
+   'test-collection-traits-01.rkt
    (test-dep '(macros.rkt prelude.rkt syntax.rkt source-location.rkt surface-syntax.rkt
                errors.rkt metavar-store.rkt parser.rkt elaborator.rkt pretty-print.rkt
                global-env.rkt driver.rkt namespace.rkt multi-dispatch.rkt) #t)
-   'test-generic-ops.rkt
+   'test-collection-traits-02.rkt
+   (test-dep '(macros.rkt prelude.rkt syntax.rkt source-location.rkt surface-syntax.rkt
+               errors.rkt metavar-store.rkt parser.rkt elaborator.rkt pretty-print.rkt
+               global-env.rkt driver.rkt namespace.rkt multi-dispatch.rkt) #t)
+   'test-generic-ops-01.rkt
+   (test-dep '(macros.rkt prelude.rkt syntax.rkt source-location.rkt surface-syntax.rkt
+               errors.rkt metavar-store.rkt parser.rkt elaborator.rkt pretty-print.rkt
+               global-env.rkt driver.rkt namespace.rkt multi-dispatch.rkt) #t)
+   'test-generic-ops-02.rkt
    (test-dep '(macros.rkt prelude.rkt syntax.rkt source-location.rkt surface-syntax.rkt
                errors.rkt metavar-store.rkt parser.rkt elaborator.rkt pretty-print.rkt
                global-env.rkt driver.rkt namespace.rkt multi-dispatch.rkt) #t)
@@ -417,7 +493,11 @@
    (test-dep '(macros.rkt prelude.rkt syntax.rkt source-location.rkt surface-syntax.rkt
                errors.rkt metavar-store.rkt parser.rkt elaborator.rkt pretty-print.rkt
                global-env.rkt driver.rkt namespace.rkt) #t)
-   'test-eq-ord-extended.rkt
+   'test-eq-ord-extended-01.rkt
+   (test-dep '(macros.rkt prelude.rkt syntax.rkt source-location.rkt surface-syntax.rkt
+               errors.rkt metavar-store.rkt parser.rkt elaborator.rkt pretty-print.rkt
+               global-env.rkt driver.rkt namespace.rkt multi-dispatch.rkt) #t)
+   'test-eq-ord-extended-02.rkt
    (test-dep '(macros.rkt prelude.rkt syntax.rkt source-location.rkt surface-syntax.rkt
                errors.rkt metavar-store.rkt parser.rkt elaborator.rkt pretty-print.rkt
                global-env.rkt driver.rkt namespace.rkt multi-dispatch.rkt) #t)
@@ -425,7 +505,11 @@
    (test-dep '(macros.rkt prelude.rkt syntax.rkt source-location.rkt surface-syntax.rkt
                errors.rkt metavar-store.rkt parser.rkt elaborator.rkt pretty-print.rkt
                global-env.rkt driver.rkt namespace.rkt multi-dispatch.rkt) #t)
-   'test-lseq.rkt
+   'test-lseq-01.rkt
+   (test-dep '(macros.rkt prelude.rkt syntax.rkt source-location.rkt surface-syntax.rkt
+               errors.rkt metavar-store.rkt parser.rkt elaborator.rkt pretty-print.rkt
+               global-env.rkt driver.rkt namespace.rkt multi-dispatch.rkt) #t)
+   'test-lseq-02.rkt
    (test-dep '(macros.rkt prelude.rkt syntax.rkt source-location.rkt surface-syntax.rkt
                errors.rkt metavar-store.rkt parser.rkt elaborator.rkt pretty-print.rkt
                global-env.rkt driver.rkt namespace.rkt multi-dispatch.rkt) #t)
@@ -640,20 +724,77 @@
   (hasheq
    ;; Tests that load specific .prologos modules at runtime
    ;; (extracted from require strings in test files)
-   'test-stdlib-01-data.rkt     '(prologos.data.nat prologos.data.bool prologos.data.list
+   'test-stdlib-01-data-01.rkt   '(prologos.data.nat prologos.data.bool prologos.data.list
                                   prologos.data.option prologos.data.result
                                   prologos.data.ordering prologos.data.pair prologos.data.eq)
-   'test-stdlib-02-traits.rkt   '(prologos.data.nat prologos.data.bool prologos.data.list
+   'test-stdlib-01-data-02.rkt   '(prologos.data.nat prologos.data.bool prologos.data.list
+                                  prologos.data.option prologos.data.result
+                                  prologos.data.ordering prologos.data.pair prologos.data.eq)
+   'test-stdlib-01-data-03.rkt   '(prologos.data.nat prologos.data.bool prologos.data.list
+                                  prologos.data.option prologos.data.result
+                                  prologos.data.ordering prologos.data.pair prologos.data.eq)
+   'test-stdlib-01-data-04.rkt   '(prologos.data.nat prologos.data.bool prologos.data.list
+                                  prologos.data.option prologos.data.result
+                                  prologos.data.ordering prologos.data.pair prologos.data.eq)
+   'test-stdlib-02-traits-01.rkt '(prologos.data.nat prologos.data.bool prologos.data.list
                                   prologos.data.option prologos.data.result
                                   prologos.core.eq-trait prologos.core.ord-trait
                                   prologos.data.ordering)
-   'test-stdlib-03-list.rkt     '(prologos.data.nat prologos.data.bool prologos.data.list
+   'test-stdlib-02-traits-02.rkt '(prologos.data.nat prologos.data.bool prologos.data.list
+                                  prologos.data.option prologos.data.result
+                                  prologos.core.eq-trait prologos.core.ord-trait
+                                  prologos.data.ordering)
+   'test-stdlib-02-traits-03.rkt '(prologos.data.nat prologos.data.bool prologos.data.list
+                                  prologos.data.option prologos.data.result
+                                  prologos.core.eq-trait prologos.core.ord-trait
+                                  prologos.data.ordering)
+   'test-stdlib-02-traits-04.rkt '(prologos.data.nat prologos.data.bool prologos.data.list
+                                  prologos.data.option prologos.data.result
+                                  prologos.core.eq-trait prologos.core.ord-trait
+                                  prologos.data.ordering)
+   'test-stdlib-02-traits-05.rkt '(prologos.data.nat prologos.data.bool prologos.data.list
+                                  prologos.data.option prologos.data.result
+                                  prologos.core.eq-trait prologos.core.ord-trait
+                                  prologos.data.ordering)
+   'test-stdlib-02-traits-06.rkt '(prologos.data.nat prologos.data.bool prologos.data.list
+                                  prologos.data.option prologos.data.result
+                                  prologos.core.eq-trait prologos.core.ord-trait
+                                  prologos.data.ordering)
+   'test-stdlib-02-traits-07.rkt '(prologos.data.nat prologos.data.bool prologos.data.list
+                                  prologos.data.option prologos.data.result
+                                  prologos.core.eq-trait prologos.core.ord-trait
+                                  prologos.data.ordering)
+   'test-stdlib-03-list-01.rkt   '(prologos.data.nat prologos.data.bool prologos.data.list
                                   prologos.data.option prologos.core.eq-trait)
-   'test-list-extended-01.rkt   '(prologos.data.list prologos.data.nat prologos.data.option
+   'test-stdlib-03-list-02.rkt   '(prologos.data.nat prologos.data.bool prologos.data.list
+                                  prologos.data.option prologos.core.eq-trait)
+   'test-stdlib-03-list-03.rkt   '(prologos.data.nat prologos.data.bool prologos.data.list
+                                  prologos.data.option prologos.core.eq-trait)
+   'test-stdlib-03-list-04.rkt   '(prologos.data.nat prologos.data.bool prologos.data.list
+                                  prologos.data.option prologos.core.eq-trait)
+   'test-stdlib-03-list-05.rkt   '(prologos.data.nat prologos.data.bool prologos.data.list
+                                  prologos.data.option prologos.core.eq-trait)
+   'test-list-extended-01-01.rkt '(prologos.data.list prologos.data.nat prologos.data.option
                                   prologos.core.eq-trait)
-   'test-list-extended-02.rkt   '(prologos.data.list prologos.data.nat prologos.data.option
+   'test-list-extended-01-02.rkt '(prologos.data.list prologos.data.nat prologos.data.option
                                   prologos.core.eq-trait)
-   'test-trait-impl.rkt         '(prologos.data.nat prologos.data.bool prologos.data.option
+   'test-list-extended-02-01.rkt '(prologos.data.list prologos.data.nat prologos.data.option
+                                  prologos.core.eq-trait)
+   'test-list-extended-02-02.rkt '(prologos.data.list prologos.data.nat prologos.data.option
+                                  prologos.core.eq-trait)
+   'test-trait-impl-01.rkt       '(prologos.data.nat prologos.data.bool prologos.data.option
+                                  prologos.data.either prologos.data.list
+                                  prologos.core.eq-trait prologos.core.seq-trait
+                                  prologos.core.seq-list prologos.core.seq-functions)
+   'test-trait-impl-02.rkt       '(prologos.data.nat prologos.data.bool prologos.data.option
+                                  prologos.data.either prologos.data.list
+                                  prologos.core.eq-trait prologos.core.seq-trait
+                                  prologos.core.seq-list prologos.core.seq-functions)
+   'test-trait-impl-03.rkt       '(prologos.data.nat prologos.data.bool prologos.data.option
+                                  prologos.data.either prologos.data.list
+                                  prologos.core.eq-trait prologos.core.seq-trait
+                                  prologos.core.seq-list prologos.core.seq-functions)
+   'test-trait-impl-04.rkt       '(prologos.data.nat prologos.data.bool prologos.data.option
                                   prologos.data.either prologos.data.list
                                   prologos.core.eq-trait prologos.core.seq-trait
                                   prologos.core.seq-list prologos.core.seq-functions)
@@ -662,32 +803,55 @@
                                   prologos.core.add-trait)
    'test-bundles.rkt            '(prologos.data.nat prologos.data.bool prologos.core.eq-trait
                                   prologos.core.add-trait prologos.core.numeric-bundles)
-   'test-numeric-traits.rkt     '(prologos.data.nat prologos.core.add-trait
+   'test-numeric-traits-01.rkt   '(prologos.data.nat prologos.core.add-trait
                                   prologos.core.sub-trait prologos.core.mul-trait
                                   prologos.core.eq-trait prologos.core.ord-trait)
-   'test-cross-family-conversions.rkt '(prologos.core.from-trait prologos.core.tryfrom-trait
+   'test-numeric-traits-02.rkt   '(prologos.data.nat prologos.core.add-trait
+                                  prologos.core.sub-trait prologos.core.mul-trait
+                                  prologos.core.eq-trait prologos.core.ord-trait)
+   'test-cross-family-conversions-01.rkt '(prologos.core.from-trait prologos.core.tryfrom-trait
+                                        prologos.core.fromint-trait prologos.core.fromrat-trait
+                                        prologos.data.nat prologos.data.option)
+   'test-cross-family-conversions-02.rkt '(prologos.core.from-trait prologos.core.tryfrom-trait
+                                        prologos.core.fromint-trait prologos.core.fromrat-trait
+                                        prologos.data.nat prologos.data.option)
+   'test-cross-family-conversions-03.rkt '(prologos.core.from-trait prologos.core.tryfrom-trait
                                         prologos.core.fromint-trait prologos.core.fromrat-trait
                                         prologos.data.nat prologos.data.option)
    'test-subtyping.rkt          '(prologos.data.nat)
-   'test-eq-ord-extended.rkt    '(prologos.data.nat prologos.data.bool prologos.data.ordering
+   'test-eq-ord-extended-01.rkt  '(prologos.data.nat prologos.data.bool prologos.data.ordering
+                                  prologos.data.option prologos.data.list
+                                  prologos.core.eq-trait prologos.core.ord-trait
+                                  prologos.core.eq-derived)
+   'test-eq-ord-extended-02.rkt  '(prologos.data.nat prologos.data.bool prologos.data.ordering
                                   prologos.data.option prologos.data.list
                                   prologos.core.eq-trait prologos.core.ord-trait
                                   prologos.core.eq-derived)
    'test-hashable.rkt           '(prologos.core.hashable-trait prologos.core.hashable-instances
                                   prologos.data.nat prologos.data.bool prologos.data.ordering
                                   prologos.data.option prologos.data.list)
-   'test-collection-traits.rkt  '(prologos.data.list prologos.data.nat prologos.data.option
+   'test-collection-traits-01.rkt '(prologos.data.list prologos.data.nat prologos.data.option
                                   prologos.core.indexed-list prologos.core.foldable-list
                                   prologos.core.functor-list prologos.core.seq-list
                                   prologos.core.seqable-list prologos.core.buildable-list
                                   prologos.core.collection-ops)
-   'test-generic-ops.rkt        '(prologos.data.list prologos.data.nat prologos.data.option
+   'test-collection-traits-02.rkt '(prologos.data.list prologos.data.nat prologos.data.option
+                                  prologos.core.indexed-list prologos.core.foldable-list
+                                  prologos.core.functor-list prologos.core.seq-list
+                                  prologos.core.seqable-list prologos.core.buildable-list
+                                  prologos.core.collection-ops)
+   'test-generic-ops-01.rkt      '(prologos.data.list prologos.data.nat prologos.data.option
+                                  prologos.core.seq-trait prologos.core.seq-functions
+                                  prologos.core.collection-ops)
+   'test-generic-ops-02.rkt      '(prologos.data.list prologos.data.nat prologos.data.option
                                   prologos.core.seq-trait prologos.core.seq-functions
                                   prologos.core.collection-ops)
    'test-hkt-errors.rkt         '()  ; Uses ns/prelude — no extra lib deps
    'test-specialization.rkt     '()  ; Uses ns/prelude — no extra lib deps
    'test-constraint-inference.rkt '() ; Uses ns/prelude — no extra lib deps
-   'test-lseq.rkt               '(prologos.data.lseq prologos.data.lseq-ops prologos.data.list
+   'test-lseq-01.rkt             '(prologos.data.lseq prologos.data.lseq-ops prologos.data.list
+                                  prologos.data.nat prologos.data.option)
+   'test-lseq-02.rkt             '(prologos.data.lseq prologos.data.lseq-ops prologos.data.list
                                   prologos.data.nat prologos.data.option)
    'test-lseq-literal.rkt       '(prologos.data.lseq prologos.data.list prologos.data.nat)
    'test-foreign.rkt            '(prologos.data.nat)
@@ -720,7 +884,20 @@
    'test-match-builtins.rkt     '(prologos.data.nat)
    'test-list-literals.rkt      '(prologos.data.nat prologos.data.list)
    'test-core-prelude.rkt       '(prologos.data.nat)
-   'test-prelude-system.rkt     '(prologos.core prologos.data.nat prologos.data.bool
+   'test-prelude-system-01.rkt   '(prologos.core prologos.data.nat prologos.data.bool
+                                  prologos.data.pair prologos.data.ordering prologos.data.eq
+                                  prologos.data.list prologos.data.option prologos.data.result
+                                  prologos.core.eq-trait prologos.core.ord-trait
+                                  prologos.core.add-trait prologos.core.sub-trait
+                                  prologos.core.mul-trait prologos.core.neg-trait
+                                  prologos.core.abs-trait prologos.core.fromint-trait
+                                  prologos.core.numeric-bundles
+                                  prologos.core.eq-instances prologos.core.eq-numeric-instances
+                                  prologos.core.ord-instances prologos.core.ord-numeric-instances
+                                  prologos.core.add-instances prologos.core.sub-instances
+                                  prologos.core.mul-instances prologos.core.neg-instances
+                                  prologos.core.abs-instances)
+   'test-prelude-system-02.rkt   '(prologos.core prologos.data.nat prologos.data.bool
                                   prologos.data.pair prologos.data.ordering prologos.data.eq
                                   prologos.data.list prologos.data.option prologos.data.result
                                   prologos.core.eq-trait prologos.core.ord-trait
@@ -735,7 +912,8 @@
                                   prologos.core.abs-instances)
    'test-auto-implicits.rkt     '(prologos.data.nat)
    'test-sprint10.rkt           '(prologos.data.nat prologos.data.bool)
-   'test-surface-defmacro.rkt   '(prologos.data.nat)
+   'test-surface-defmacro-01.rkt '(prologos.data.nat)
+   'test-surface-defmacro-02.rkt '(prologos.data.nat)
    'test-where-parsing.rkt      '(prologos.data.nat prologos.data.bool prologos.core.eq-trait)
    'test-error-messages.rkt     '(prologos.data.nat prologos.core.eq-trait)
    'test-constraint-postponement.rkt '(prologos.data.nat prologos.core)
