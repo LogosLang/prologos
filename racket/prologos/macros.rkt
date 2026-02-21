@@ -108,6 +108,16 @@
          lookup-bundle
          process-bundle
          expand-bundle-constraints
+         ;; HKT-8: Specialization registry
+         current-specialization-registry
+         specialization-entry
+         specialization-entry?
+         specialization-entry-generic-name
+         specialization-entry-type-con
+         specialization-entry-specialized-name
+         register-specialization!
+         lookup-specialization
+         process-specialize
          ;; Shared
          extract-pi-binders
          ;; Sibling let merging (for testing)
@@ -881,6 +891,16 @@
                 [(eq? base 'bundle)
                  (process-bundle rewritten)
                  acc]
+                [(eq? base 'specialize)
+                 (define defs (process-specialize rewritten))
+                 ;; Process each output defn through spec injection + preparse
+                 (define new-stxs
+                   (for/list ([d (in-list defs)])
+                     (define injected (if (and (pair? d) (eq? (car d) 'defn))
+                                          (maybe-inject-spec d)
+                                          d))
+                     (datum->syntax #f (preparse-expand-form injected) stx)))
+                 (append (reverse new-stxs) acc)]
                 ;; def- or defn- — rewrite head, preserving child syntax properties
                 [else
                  ;; HKT-3: Auto-register trait dict defs
@@ -975,6 +995,21 @@
          (when (and (list? datum) (>= (length datum) 2) (symbol? (cadr datum)))
            (auto-export-name! (cadr datum)))
          acc]
+        ;; ---- Public specialize — register specialization, emit specialized defn ----
+        [(and (pair? datum) (eq? head 'specialize))
+         (define defs (process-specialize datum))
+         ;; Auto-export the specialized function name
+         (for ([d (in-list defs)])
+           (when (and (list? d) (>= (length d) 2) (symbol? (cadr d)))
+             (auto-export-name! (cadr d))))
+         ;; Process each output defn through spec injection + preparse
+         (define new-stxs
+           (for/list ([d (in-list defs)])
+             (define injected (if (and (pair? d) (eq? (car d) 'defn))
+                                  (maybe-inject-spec d)
+                                  d))
+             (datum->syntax #f (preparse-expand-form injected) stx)))
+         (append (reverse new-stxs) acc)]
         ;; ---- Public defn/def — auto-export the name ----
         [(and (pair? datum) (memq head '(defn def)))
          (auto-export-names! (extract-defined-name datum head))
@@ -2902,6 +2937,30 @@
   (hash-ref (current-bundle-registry) name #f))
 
 ;; ========================================
+;; HKT-8: Specialization registry
+;; ========================================
+;; Maps (cons generic-fn-name type-con-name) → specialized-fn-name.
+;; E.g., (cons 'gmap 'List) → 'gmap--List--specialized
+;; The specialization registry is populated by `process-specialize` and
+;; can be queried during a future call-site rewriting optimization pass.
+;; Phase HKT-8 implements the registry and macro only; call-site rewriting
+;; is deferred to a performance optimization sprint.
+
+(struct specialization-entry (generic-name type-con specialized-name) #:transparent)
+
+;; Uses `hash` (equal?-based) because keys are cons pairs (not symbols)
+(define current-specialization-registry (make-parameter (hash)))
+
+(define (register-specialization! generic-name type-con specialized-name)
+  (define key (cons generic-name type-con))
+  (current-specialization-registry
+    (hash-set (current-specialization-registry) key
+              (specialization-entry generic-name type-con specialized-name))))
+
+(define (lookup-specialization generic-name type-con)
+  (hash-ref (current-specialization-registry) (cons generic-name type-con) #f))
+
+;; ========================================
 ;; process-bundle: parse and register a bundle definition
 ;; ========================================
 ;; Syntax (after WS reader):
@@ -4074,6 +4133,66 @@
 
   ;; Return all definitions: method helper defns + dict def
   (append method-helper-defns (list dict-def)))
+
+;; ========================================
+;; HKT-8: process-specialize — register a specialization
+;; ========================================
+;; Surface syntax (after WS reader):
+;;   (specialize gmap for List
+;;     (defn gmap [f xs] (list-map f xs)))
+;;
+;; Generates:
+;;   1. A specialized defn with a unique name (gmap--List--specialized)
+;;   2. A registry entry: (gmap, List) → gmap--List--specialized
+;;
+;; The specialized function definition is returned as output; the registry
+;; entry is stored for future call-site rewriting optimization.
+(define (process-specialize datum)
+  (unless (and (list? datum) (>= (length datum) 4))
+    (error 'specialize
+      "specialize requires: (specialize fn-name for TypeCon defn-body...)"))
+
+  (define fn-name (cadr datum))
+  (unless (symbol? fn-name)
+    (error 'specialize "specialize: function name must be a symbol, got ~a" fn-name))
+
+  ;; Skip 'for' keyword
+  (define rest-after-name (cddr datum))
+  (unless (and (pair? rest-after-name) (eq? (car rest-after-name) 'for))
+    (error 'specialize "specialize: expected 'for' keyword after function name"))
+
+  (define rest-after-for (cdr rest-after-name))
+  (unless (and (pair? rest-after-for) (symbol? (car rest-after-for)))
+    (error 'specialize "specialize: expected type constructor name after 'for'"))
+
+  (define type-con (car rest-after-for))
+  (define body-forms (cdr rest-after-for))
+
+  ;; Generate specialized function name
+  (define spec-name
+    (string->symbol
+      (string-append (symbol->string fn-name) "--"
+                     (symbol->string type-con) "--specialized")))
+
+  ;; Parse the body — expect exactly one defn form
+  (unless (and (pair? body-forms)
+               (pair? (car body-forms))
+               (eq? (caar body-forms) 'defn))
+    (error 'specialize
+      "specialize ~a for ~a: body must contain a defn form" fn-name type-con))
+
+  (define defn-form (car body-forms))
+  ;; Rewrite the defn to use the specialized name
+  ;; Original: (defn gmap [f xs] body)
+  ;; Rewritten: (defn gmap--List--specialized [f xs] body)
+  (define spec-defn
+    (cons 'defn (cons spec-name (cddr defn-form))))
+
+  ;; Register in the specialization registry
+  (register-specialization! fn-name type-con spec-name)
+
+  ;; Return the specialized defn as output
+  (list spec-defn))
 
 
 ;; ================================================================
