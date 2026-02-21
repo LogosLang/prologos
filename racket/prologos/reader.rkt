@@ -110,7 +110,6 @@
            (char=? c #\+)    ; for p8+ etc.
            (char=? c #\')
            (char=? c #\/)    ; qualified names
-           (char=? c #\.)    ; namespace dots
            (char=? c #\=)    ; for => and similar
            (char=? c #\$)))) ; for $-prefixed identifiers
 
@@ -494,7 +493,12 @@
                  "~a:~a:~a: ~ must be followed by [ (LSeq literal) or a number (approximate literal)"
                  (tokenizer-source tok) ln (+ cl 1))])]
 
-      ;; ... rest/varargs: ... → $rest symbol, ...name → rest-param token
+      ;; Dot handling:
+      ;;   ...      → $rest sentinel symbol
+      ;;   ...name  → rest-param token
+      ;;   .:kw     → dot-key token (for .:name prefix syntax)
+      ;;   .ident   → dot-access token (for user.name postfix syntax)
+      ;;   .        → error
       [(char=? c #\.)
        (let ([c2 (peek-char (tokenizer-port tok) 1)]
              [c3 (peek-char (tokenizer-port tok) 2)])
@@ -510,6 +514,19 @@
                          (+ 3 (string-length rest-name))))
                 ;; Bare ... → $rest sentinel symbol
                 (token 'symbol '$rest ln cl ps 3))]
+           ;; .:keyword → dot-key token
+           [(and (char? c2) (char=? c2 #\:)
+                 (char? c3) (ident-start? c3))
+            (tok-read! tok) (tok-read! tok) ; consume . and :
+            (define field-name (read-ident-chars! tok))
+            (token 'dot-key (string->symbol (string-append ":" field-name))
+                   ln cl ps (+ 2 (string-length field-name)))]
+           ;; .ident → dot-access token
+           [(and (char? c2) (ident-start? c2))
+            (tok-read! tok) ; consume .
+            (define field-name (read-ident-chars! tok))
+            (token 'dot-access (string->symbol field-name)
+                   ln cl ps (+ 1 (string-length field-name)))]
            [else
             (tok-read! tok)
             (error 'prologos-reader "~a:~a:~a: Unexpected character: ."
@@ -1088,6 +1105,26 @@
      (define sp (token-span t))
      (make-stx (list (make-stx '$rest-param src ln cl ps 0)
                      (make-stx (token-value t) src ln (+ cl 3) (+ ps 3) (- sp 3)))
+               src ln cl ps sp)]
+    [(eq? tt 'dot-access)
+     ;; .field — produce ($dot-access field) sentinel for preparse macro
+     (define t (parser-next! p))
+     (define ln (token-line t))
+     (define cl (token-col t))
+     (define ps (token-pos t))
+     (define sp (token-span t))
+     (make-stx (list (make-stx '$dot-access src ln cl ps 0)
+                     (make-stx (token-value t) src ln (+ cl 1) (+ ps 1) (- sp 1)))
+               src ln cl ps sp)]
+    [(eq? tt 'dot-key)
+     ;; .:keyword — produce ($dot-key :keyword) sentinel for preparse macro
+     (define t (parser-next! p))
+     (define ln (token-line t))
+     (define cl (token-col t))
+     (define ps (token-pos t))
+     (define sp (token-span t))
+     (make-stx (list (make-stx '$dot-key src ln cl ps 0)
+                     (make-stx (token-value t) src ln (+ cl 1) (+ ps 1) (- sp 1)))
                src ln cl ps sp)]
     [else
      (define t (parser-peek p))
