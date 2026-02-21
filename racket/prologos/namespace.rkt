@@ -53,7 +53,9 @@
  process-provide
  ;; Foreign import handler (callback set by driver.rkt)
  current-foreign-handler
- process-foreign)
+ process-foreign
+ ;; Spec propagation callback (set by driver.rkt for HKT implicit arg insertion)
+ current-spec-propagation-handler)
 
 ;; ========================================
 ;; Module Info — describes a loaded module
@@ -65,7 +67,8 @@
    env-snapshot   ; hasheq: fully-qualified-symbol → (cons type value)
    file-path      ; path-string or #f (for built-in modules)
    macros         ; hasheq: short-name → preparse-macro or procedure
-   type-aliases)  ; hasheq: short-name → alias body
+   type-aliases   ; hasheq: short-name → alias body
+   specs)         ; hasheq: short-name → spec-entry (for implicit arg insertion)
   #:transparent)
 
 ;; ========================================
@@ -281,6 +284,12 @@
 ;; When #f, require will error (module loading not available).
 (define current-module-loader (make-parameter #f))
 
+;; Callback for propagating specs from imported modules.
+;; Signature: (module-info (listof symbol)) → void
+;; Called when :refer or :refer-all imports names that may have specs.
+;; Set by driver.rkt to bridge namespace.rkt ↔ current-spec-store.
+(define current-spec-propagation-handler (make-parameter #f))
+
 ;; ========================================
 ;; Prelude System
 ;; ========================================
@@ -409,7 +418,12 @@
     (require [prologos.core.buildable-lseq  :refer []])
 
     ;; ---- Tier 3c: Identity trait instances (side-effect only) ----
-    (require [prologos.core.identity-instances :refer []])))
+    (require [prologos.core.identity-instances :refer []])
+
+    ;; ---- Tier 3d: Generic collection operations (HKT-dispatched) ----
+    (require [prologos.core.collection-bundle :refer [Collection]])
+    (require [prologos.core.generic-ops :refer [gmap gfilter gfold glength
+                                                 gconcat gany? gall? gto-list]])))
 
 ;; ========================================
 ;; Pre-parse Directive Processing
@@ -522,6 +536,10 @@
                        ns-sym name exports))))
           (current-ns-context
            (ns-context-add-refer (current-ns-context) ns-sym names))
+          ;; Propagate specs for imported names (needed for implicit arg insertion
+          ;; of where-constraint dicts in HKT generic functions)
+          (when (and mod (current-spec-propagation-handler))
+            ((current-spec-propagation-handler) mod names))
           (loop (cddr dirs))]
 
          ;; :refer-all (WS reader may strip colon: 'refer-all or ':refer-all)
@@ -533,7 +551,10 @@
             (define exports (module-info-exports mod))
             (unless (and (pair? exports) (eq? (car exports) ':all))
               (current-ns-context
-               (ns-context-add-refer (current-ns-context) ns-sym exports))))
+               (ns-context-add-refer (current-ns-context) ns-sym exports)))
+            ;; Propagate specs for all exported names
+            (when (current-spec-propagation-handler)
+              ((current-spec-propagation-handler) mod exports)))
           (loop (cdr dirs))]
 
          [else

@@ -19,6 +19,7 @@
 (require racket/match
          racket/list
          racket/string
+         racket/set
          "surface-syntax.rkt"
          "source-location.rkt"
          "errors.rkt"
@@ -126,6 +127,8 @@
          format-param-impl-entry
          ;; Spec store
          current-spec-store
+         current-propagated-specs
+         spec-propagated?
          spec-entry
          spec-entry?
          spec-entry-type-datums
@@ -190,11 +193,19 @@
 ;; Spec store: symbol → spec-entry
 (define current-spec-store (make-parameter (hasheq)))
 
+;; Set of spec names that were propagated from required modules
+;; (not defined in the current module). Used to allow inline type
+;; annotations to silently override propagated specs.
+(define current-propagated-specs (make-parameter (seteq)))
+
 (define (register-spec! name entry)
   (current-spec-store (hash-set (current-spec-store) name entry)))
 
 (define (lookup-spec name)
   (hash-ref (current-spec-store) name #f))
+
+(define (spec-propagated? name)
+  (set-member? (current-propagated-specs) name))
 
 ;; ========================================
 ;; Pattern variables: symbols starting with $
@@ -1373,10 +1384,20 @@
        (not (ormap (lambda (x) (and (pair? x) (eq? (car x) '$angle-type))) lst))))
 
 ;; Check if defn rest (after name) has any type annotation indicators.
-;; rest = (param-bracket possibly-more...)
+;; rest = (param-bracket possibly-more...) or
+;;         (($brace-params ...) param-bracket possibly-more...)
+;; Must skip leading $brace-params groups to find the real param bracket.
 (define (defn-has-type-annotation? rest)
-  (and (pair? rest)
-       (let ([params (car rest)])
+  ;; Skip leading $brace-params groups
+  (define effective-rest
+    (let loop ([r rest])
+      (cond
+        [(null? r) r]
+        [(and (pair? (car r)) (eq? (caar r) '$brace-params))
+         (loop (cdr r))]
+        [else r])))
+  (and (pair? effective-rest)
+       (let ([params (car effective-rest)])
          (or
           ;; Params contain type markers
           (and (list? params)
@@ -1386,8 +1407,8 @@
                             (memq x '(:0 :1 :w))))
                       params))
           ;; Has angle-type or colon after params (return type)
-          (and (pair? (cdr rest))
-               (let ([after (cadr rest)])
+          (and (pair? (cdr effective-rest))
+               (let ([after (cadr effective-rest)])
                  (or (and (pair? after) (eq? (car after) '$angle-type))
                      (eq? after ':))))))))
 
@@ -1628,13 +1649,10 @@
        [(defn-has-pipes? rest)
         (cond
           [(defn-has-type-annotation? rest)
-           ;; Error: defn has inline types AND spec
-           ;; But multi-body pipes may have types per-clause; check first clause
-           ;; For now, attempt injection — if clauses have bare params, inject
-           ;; If not, error.
-           ;; Actually, for multi-body, check each clause individually
-           ;; For simplicity: if any clause has type annotations, error
-           (error 'spec "defn ~a has both a spec and inline type annotations" name)]
+           ;; Defn has inline types AND a spec. If propagated, override silently.
+           (if (spec-propagated? name)
+               datum
+               (error 'spec "defn ~a has both a spec and inline type annotations" name))]
           [(not (spec-entry-multi? spec))
            (error 'spec "spec for ~a is single-arity but defn ~a has multiple clauses"
                   name name)]
@@ -1652,9 +1670,12 @@
            (inject-spec-into-defn datum (car (spec-entry-type-datums spec))
                                   (spec-entry-where-constraints spec)
                                   (spec-entry-implicit-binders spec))])]
-       ;; Defn has inline types — conflict with spec
+       ;; Defn has inline types — if propagated spec, override silently;
+       ;; if own-module spec, error (user mistake).
        [(defn-has-type-annotation? rest)
-        (error 'spec "defn ~a has both a spec and inline type annotations" name)]
+        (if (spec-propagated? name)
+            datum
+            (error 'spec "defn ~a has both a spec and inline type annotations" name))]
        ;; No injection needed (e.g., no params bracket)
        [else datum])]))
 
@@ -1679,12 +1700,16 @@
        [(not spec) datum]
        [(spec-entry-multi? spec)
         (error 'spec "spec for ~a is multi-arity but used with def" name)]
-       ;; Check if def already has a type annotation (angle-type or colon)
+       ;; Check if def already has a type annotation (angle-type or colon).
+       ;; If the spec was propagated from a required module, the inline
+       ;; annotation silently takes precedence. If own-module, error.
        [(and (>= (length datum) 4)
              (let ([third (caddr datum)])
                (or (and (pair? third) (eq? (car third) '$angle-type))
                    (eq? third ':))))
-        (error 'spec "def ~a has both a spec and inline type annotation" name)]
+        (if (spec-propagated? name)
+            datum
+            (error 'spec "def ~a has both a spec and inline type annotation" name))]
        [else
         (inject-spec-into-def datum (car (spec-entry-type-datums spec)))])]))
 

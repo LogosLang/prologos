@@ -559,6 +559,7 @@
      (define mod-ctor-reg #f)
      (define mod-type-meta #f)
      (define mod-multi-defn-reg #f)
+     (define mod-spec-store #f)
      (parameterize ([current-global-env (hasheq)]
                     [current-ns-context #f]
                     [current-meta-store (make-hasheq)]
@@ -571,6 +572,7 @@
                     [current-type-meta (current-type-meta)]
                     [current-multi-defn-registry (current-multi-defn-registry)]
                     [current-spec-store (hasheq)]  ;; fresh — specs are module-local
+                    [current-propagated-specs (seteq)]  ;; fresh propagated tracking
                     [current-loading-set (set-add (current-loading-set) ns-sym)])
        ;; Read and process the file
        ;; Use WS reader for .prologos files, sexp reader otherwise
@@ -596,7 +598,8 @@
        (set! mod-preparse-reg (current-preparse-registry))
        (set! mod-ctor-reg (current-ctor-registry))
        (set! mod-type-meta (current-type-meta))
-       (set! mod-multi-defn-reg (current-multi-defn-registry)))
+       (set! mod-multi-defn-reg (current-multi-defn-registry))
+       (set! mod-spec-store (current-spec-store)))
 
      ;; Propagate preparse registry changes (deftype/defmacro) to the caller.
      ;; This ensures type aliases and macros defined in loaded modules are
@@ -610,7 +613,8 @@
      ;; Propagate multi-defn dispatch tables to the caller.
      (current-multi-defn-registry mod-multi-defn-reg)
 
-     ;; Note: spec store is NOT propagated — specs are module-local.
+     ;; Note: spec store is NOT globally propagated — it's carried in module-info
+     ;; for selective propagation via process-require-spec.
 
      ;; 5. Build module-info
      ;; Export determination priority:
@@ -644,7 +648,8 @@
                              mod-env
                              file-path
                              (hasheq)
-                             (hasheq)))
+                             (hasheq)
+                             mod-spec-store))
 
      ;; 6. Register
      (register-module! ns-sym mi)
@@ -667,6 +672,22 @@
 (define (install-module-loader!)
   (current-module-loader load-module)
   (current-foreign-handler handle-foreign)
+  ;; Install spec propagation handler: imports module specs into current spec store.
+  ;; This enables implicit arg insertion for HKT generic functions (which have
+  ;; where-constraints that the elaborator needs specs to count correctly).
+  (current-spec-propagation-handler
+    (lambda (mod names)
+      (define mod-specs (module-info-specs mod))
+      (for ([name (in-list (if (and (pair? names) (eq? (car names) ':all))
+                                (hash-keys mod-specs)
+                                names))])
+        (define spec-entry (hash-ref mod-specs name #f))
+        (when spec-entry
+          (current-spec-store
+            (hash-set (current-spec-store) name spec-entry))
+          ;; Mark as propagated so own-module defs can override silently
+          (current-propagated-specs
+            (set-add (current-propagated-specs) name))))))
   (when (null? (current-lib-paths))
     (current-lib-paths (list prologos-lib-dir))))
 

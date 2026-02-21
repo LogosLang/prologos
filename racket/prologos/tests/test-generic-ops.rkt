@@ -239,3 +239,73 @@
         "(ns go-compat-3)\n"
         "(eval (Eq-eq? Nat Nat--Eq--dict zero zero))\n")))
   (check-equal? result "true : Bool"))
+
+;; ========================================
+;; 9. Prelude integration (HKT-6d)
+;; ========================================
+
+(test-case "generic-ops/prelude: gmap from prelude"
+  (define result
+    (run-ns-last
+      (string-append
+        "(ns go-prelude-1)\n"
+        "(spec inc Nat -> Nat)\n"
+        "(defn inc [x] (suc x))\n"
+        "(eval (gmap inc '[0N 1N]))\n")))
+  (check-true (string-contains? result "'[1N 2N]")))
+
+(test-case "generic-ops/prelude: glength from prelude"
+  (define result
+    (run-ns-last
+      (string-append
+        "(ns go-prelude-2)\n"
+        "(eval (glength '[0N 1N 2N]))\n")))
+  (check-equal? result "3N : Nat"))
+
+(test-case "generic-ops/prelude: gfold sum from prelude"
+  (define result
+    (run-ns-last
+      (string-append
+        "(ns go-prelude-3)\n"
+        "(eval (gfold (fn [x] [acc] (add acc x)) zero '[1N 2N 3N]))\n")))
+  (check-equal? result "6N : Nat"))
+
+(test-case "generic-ops/prelude: gto-list from prelude"
+  (define result
+    (run-ns-last
+      (string-append
+        "(ns go-prelude-4)\n"
+        "(eval (gto-list '[0N]))\n")))
+  (check-true (string-contains? result "'[0N]")))
+
+(test-case "generic-ops/prelude: gfilter from prelude"
+  (define result
+    (run-ns-last
+      (string-append
+        "(ns go-prelude-5)\n"
+        "(eval (gfilter zero? '[0N 1N 0N]))\n")))
+  (check-true (string-contains? result "'[0N 0N]")))
+
+(test-case "generic-ops/prelude: gconcat from prelude"
+  (define result
+    (run-ns-last
+      (string-append
+        "(ns go-prelude-6)\n"
+        "(eval (gconcat '[1N] '[2N]))\n")))
+  (check-true (string-contains? result "'[1N 2N]")))
+
+(test-case "generic-ops/prelude: gany? from prelude"
+  (define result
+    (run-ns-last
+      (string-append
+        "(ns go-prelude-7)\n"
+        "(eval (gany? zero? '[0N 1N]))\n")))
+  (check-true (string-contains? result "true")))
+
+(test-case "generic-ops/prelude: gall? from prelude"
+  (define result
+    (run-ns-last
+      (string-append
+        "(ns go-prelude-8)\n"
+        "(eval (gall? zero? '[0N 1N]))\n")))
+  (check-true (string-contains? result "false")))
