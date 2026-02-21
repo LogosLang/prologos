@@ -119,6 +119,8 @@
          propagate-kinds-from-constraints
          extract-inline-constraints
          datum->kind-string
+         ;; HKT-3: Auto-registration of trait dict defs
+         maybe-register-trait-dict-def
          ;; Spec store
          current-spec-store
          spec-entry
@@ -841,6 +843,8 @@
                  acc]
                 [(eq? base 'spec)
                  (process-spec rewritten)
+                 ;; HKT-3: Auto-register trait dict specs
+                 (maybe-register-trait-dict-def rewritten)
                  acc]
                 [(eq? base 'data)
                  (define defs (process-data rewritten))
@@ -865,6 +869,8 @@
                  acc]
                 ;; def- or defn- — rewrite head, preserving child syntax properties
                 [else
+                 ;; HKT-3: Auto-register trait dict defs
+                 (maybe-register-trait-dict-def rewritten)
                  ;; Replace just the head symbol in the syntax list to preserve
                  ;; properties like paren-shape on child nodes (e.g., [params]).
                  (define children (if (syntax? stx) (syntax->list stx) #f))
@@ -905,6 +911,8 @@
         ;; ---- Public spec — register type spec, consume, AND auto-export ----
         [(and (pair? datum) (eq? head 'spec))
          (process-spec datum)
+         ;; HKT-3: Auto-register trait dict specs in impl registry
+         (maybe-register-trait-dict-def datum)
          (when (and (list? datum) (>= (length datum) 2) (symbol? (cadr datum)))
            (auto-export-name! (cadr datum)))
          acc]
@@ -956,6 +964,8 @@
         ;; ---- Public defn/def — auto-export the name ----
         [(and (pair? datum) (memq head '(defn def)))
          (auto-export-names! (extract-defined-name datum head))
+         ;; HKT-3: Auto-register trait dict defs in impl registry
+         (maybe-register-trait-dict-def datum)
          ;; Step 1: expand := syntax for def (before spec injection)
          (define pre-datum
            (if (and (eq? head 'def) (memq ':= datum))
@@ -2686,6 +2696,62 @@
 
 (define (lookup-impl key)
   (hash-ref (current-impl-registry) key #f))
+
+;; ========================================
+;; HKT-3: Auto-register trait dict defs in impl registry
+;; ========================================
+;; When a def has a type annotation matching (TraitName TypeArg1 ...),
+;; and TraitName is a registered trait, automatically register the impl entry.
+;; This lets manual `def Type--Trait--dict : [Trait Type] body` forms get
+;; registered for trait resolution without requiring `impl` syntax.
+;;
+;; Examples detected:
+;;   (def List--Seqable--dict : (Seqable List) body) → register "List--Seqable" → impl-entry
+;;   (spec List--Seqable--dict (Seqable List)) → register from spec annotation
+;;   (def pvec-foldable : (Foldable PVec) body) → register "PVec--Foldable"
+(define (maybe-register-trait-dict-def datum)
+  ;; Extract name and type from def: (def name : type body) or (spec name type)
+  (define-values (def-name type-datum)
+    (cond
+      ;; (def name : type body) or (def name : type := body)
+      [(and (pair? datum) (memq (car datum) '(def spec))
+            (>= (length datum) 3))
+       (define name (cadr datum))
+       (define rest (cddr datum))
+       (cond
+         ;; (spec name type) — just name + type
+         [(and (eq? (car datum) 'spec) (= (length rest) 1) (list? (car rest)))
+          (values name (car rest))]
+         ;; (def name : type ...) — look for colon
+         [(and (pair? rest) (eq? (car rest) ':) (pair? (cdr rest)) (list? (cadr rest)))
+          (values name (cadr rest))]
+         [else (values #f #f)])]
+      [else (values #f #f)]))
+  (when (and def-name type-datum (symbol? def-name)
+             (pair? type-datum) (symbol? (car type-datum))
+             (>= (length type-datum) 2))
+    (define trait-name (car type-datum))
+    (define type-args (cdr type-datum))
+    (define tm (lookup-trait trait-name))
+    (when (and tm
+               ;; Check that the number of type args matches trait params
+               (= (length type-args) (length (trait-meta-params tm)))
+               ;; All type args are symbols (ground types or type constructors)
+               (andmap symbol? type-args)
+               ;; Not already registered via impl
+               (let* ([type-arg-str
+                       (string-join (map symbol->string type-args) "-")]
+                      [impl-key
+                       (string->symbol
+                        (string-append type-arg-str "--" (symbol->string trait-name)))])
+                 (not (lookup-impl impl-key))))
+      ;; Register the impl entry
+      (define type-arg-str
+        (string-join (map symbol->string type-args) "-"))
+      (define impl-key
+        (string->symbol
+         (string-append type-arg-str "--" (symbol->string trait-name))))
+      (register-impl! impl-key (impl-entry trait-name type-args def-name)))))
 
 ;; ========================================
 ;; Parametric impl registry (for impls with `where` constraints)
