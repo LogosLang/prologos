@@ -363,6 +363,10 @@
    (test-dep '(macros.rkt prelude.rkt syntax.rkt source-location.rkt surface-syntax.rkt
                errors.rkt metavar-store.rkt parser.rkt elaborator.rkt pretty-print.rkt
                global-env.rkt driver.rkt namespace.rkt) #t)
+   'test-kind-inference.rkt
+   (test-dep '(macros.rkt prelude.rkt syntax.rkt source-location.rkt surface-syntax.rkt
+               errors.rkt metavar-store.rkt parser.rkt elaborator.rkt pretty-print.rkt
+               global-env.rkt driver.rkt namespace.rkt) #t)
    'test-tycon.rkt
    (test-dep '(syntax.rkt prelude.rkt metavar-store.rkt substitution.rkt zonk.rkt
                reduction.rkt typing-core.rkt pretty-print.rkt unify.rkt
@@ -672,6 +676,8 @@
    'test-sexp-reader-parity.rkt '(prologos.data.nat prologos.data.list)
    'test-introspection.rkt      '(prologos.data.datum)
    'test-quote.rkt              '(prologos.data.datum)
+   'test-kind-inference.rkt     '(prologos.core.seqable-trait prologos.core.buildable-trait
+                                  prologos.data.lseq prologos.data.nat)
    'test-hkt-kind.rkt           '(prologos.data.nat prologos.data.option prologos.data.list)
    'test-match-builtins.rkt     '(prologos.data.nat)
    'test-list-literals.rkt      '(prologos.data.nat prologos.data.list)

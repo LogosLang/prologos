@@ -20,7 +20,7 @@
 | Phase | Goal | Status | Tests | Commit |
 |-------|------|--------|-------|--------|
 | HKT-1 | `expr-tycon` AST + normalization + trait resolution extensions | Done | 30 | — |
-| HKT-2 | Kind inference from trait constraints | Pending | ~15 | — |
+| HKT-2 | Kind inference from trait constraints | Done | 22 | — |
 | HKT-3 | Convert Foldable/Functor to `trait`; rewrite all manual instances to `impl`; extend `impl` macro for type constructors | Pending | ~25 | — |
 | HKT-4 | Coherence rules (duplicate detection, most-specific-wins, overlap warnings) | Pending | ~15 | — |
 | HKT-5 | Elaborator: bare method name resolution for implicit dict params | Pending | ~20 | — |

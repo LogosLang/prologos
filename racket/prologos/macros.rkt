@@ -113,9 +113,12 @@
          merge-sibling-lets
          ;; Foreign escape block combining (for testing)
          combine-foreign-blocks
-         ;; HKT brace-param parsing
+         ;; HKT brace-param parsing + kind propagation
          parse-brace-param-list
          group-brace-params
+         propagate-kinds-from-constraints
+         extract-inline-constraints
+         datum->kind-string
          ;; Spec store
          current-spec-store
          spec-entry
@@ -1058,6 +1061,94 @@
       (values tokens '())))
 
 ;; ========================================
+;; HKT-2: Kind propagation from where-constraints to implicit binders
+;; ========================================
+;; When a spec has {C} and [Seqable C] in its where clause, and Seqable is
+;; registered as a trait with {C : Type -> Type}, we refine C's kind from
+;; the default (Type 0) to (-> (Type 0) (Type 0)).
+;;
+;; Algorithm:
+;; 1. For each where-constraint (TraitName Var1 Var2 ...):
+;;    a. Look up TraitName in the trait registry
+;;    b. Get the trait's declared params: ((C . kind) ...)
+;;    c. For each (Var_i, TraitParam_i), if Var_i is in brace-params
+;;       and its current kind is the default (Type 0), upgrade to trait's kind
+;; 2. If the same variable gets different kinds from different constraints, error.
+
+(define (propagate-kinds-from-constraints brace-params where-constraints spec-name)
+  ;; Build a mutable table from brace-params
+  (define param-table (make-hasheq))
+  (for ([bp (in-list brace-params)])
+    (hash-set! param-table (car bp) (cdr bp)))
+
+  (for ([wc (in-list where-constraints)])
+    (when (and (pair? wc) (>= (length wc) 2))
+      (define trait-name (car wc))
+      (define constraint-vars (cdr wc))
+      (define tm (lookup-trait trait-name))
+      (when tm
+        (define trait-params (trait-meta-params tm))
+        ;; Match constraint vars to trait params positionally
+        (for ([cv (in-list constraint-vars)]
+              [tp (in-list trait-params)]
+              #:when (and (symbol? cv) (hash-has-key? param-table cv)))
+          (define current-kind (hash-ref param-table cv))
+          (define trait-kind (cdr tp))
+          (cond
+            ;; Current kind is default (Type 0) — upgrade to trait's kind
+            [(equal? current-kind '(Type 0))
+             (hash-set! param-table cv trait-kind)]
+            ;; Current kind already set and matches — no action
+            [(equal? current-kind trait-kind)
+             (void)]
+            ;; Current kind conflicts — error
+            [else
+             (error 'spec
+               "~a: kind mismatch for ~a: constraint ~a requires kind ~a, but ~a"
+               spec-name cv trait-name
+               (datum->kind-string trait-kind)
+               (if (equal? current-kind '(Type 0))
+                   "default is Type"
+                   (format "already inferred ~a" (datum->kind-string current-kind))))])))))
+
+  ;; Rebuild brace-params list with updated kinds (preserving order)
+  (for/list ([bp (in-list brace-params)])
+    (cons (car bp) (hash-ref param-table (car bp)))))
+
+;; Extract inline constraint forms from type tokens.
+;; Scans leading list forms before the first -> that look like trait constraints.
+;; A constraint has the form (TraitName Var ...) where TraitName is a registered trait.
+;; Returns a list of constraint forms suitable for propagate-kinds-from-constraints.
+;;
+;; Example: ((Seqable C) -> (C A) -> (LSeq A)) → ((Seqable C))
+;; Example: ((Seqable C) (Buildable C) -> ...) → ((Seqable C) (Buildable C))
+;; Example: (Nat -> Nat) → ()
+(define (extract-inline-constraints tokens)
+  (let loop ([remaining tokens] [constraints '()])
+    (cond
+      [(null? remaining) (reverse constraints)]
+      ;; Stop at first arrow
+      [(eq? (car remaining) '->) (reverse constraints)]
+      ;; Check if this token is a list form (TraitName Var ...)
+      [(and (pair? (car remaining))
+            (let ([head (car (car remaining))])
+              (and (symbol? head)
+                   ;; Check if head is a registered trait
+                   (lookup-trait head))))
+       (loop (cdr remaining) (cons (car remaining) constraints))]
+      ;; Non-constraint leading token — stop scanning
+      ;; (don't look past non-constraint forms)
+      [else (reverse constraints)])))
+
+;; Format a kind datum as a readable string for error messages
+(define (datum->kind-string d)
+  (cond
+    [(equal? d '(Type 0)) "Type"]
+    [(and (list? d) (eq? (car d) '->) (= (length d) 3))
+     (format "~a -> ~a" (datum->kind-string (cadr d)) (datum->kind-string (caddr d)))]
+    [else (format "~a" d)]))
+
+;; ========================================
 ;; extract-implicit-binders: extract leading {A B : Type} from spec tokens
 ;; ========================================
 ;; Scans for leading ($brace-params ...) groups in spec body tokens.
@@ -1160,6 +1251,21 @@
     (if (null? raw-where-constraints)
         '()
         (expand-bundle-constraints raw-where-constraints)))
+  ;; HKT-2: Propagate kinds from where-constraints AND inline constraints to implicit binders.
+  ;; If {C} appears with [Seqable C] in where or as a leading inline param, and Seqable
+  ;; expects {C : Type -> Type}, then C's kind is refined from (Type 0) to (-> (Type 0) (Type 0)).
+  ;;
+  ;; Two sources of constraints:
+  ;; 1. Explicit where-clause: spec foo {C} ... where (Seqable C)
+  ;; 2. Inline leading params: spec foo {C} (Seqable C) -> (C A) -> ...
+  ;;    These are parenthesized forms before the first -> whose head is a known trait.
+  (define inline-constraints
+    (extract-inline-constraints type-tokens))
+  (define all-constraints (append where-constraints inline-constraints))
+  (define refined-implicit-binders
+    (if (or (null? implicit-binders) (null? all-constraints))
+        implicit-binders
+        (propagate-kinds-from-constraints implicit-binders all-constraints name)))
   ;; Detect and desugar variadic rest type: `A $rest` → `(List A)`
   ;; The $rest sentinel marks the preceding type as variadic.
   (define-values (desugared-type-tokens rest-type)
@@ -1179,10 +1285,10 @@
     [has-pipes?
      ;; Split on $pipe to get branches
      (define branches (split-on-pipe effective-tokens))
-     (register-spec! name (spec-entry branches docstring #t srcloc-unknown where-constraints implicit-binders rest-type))]
+     (register-spec! name (spec-entry branches docstring #t srcloc-unknown where-constraints refined-implicit-binders rest-type))]
     [else
      ;; Single-arity: the entire effective-tokens is the type datum
-     (register-spec! name (spec-entry (list effective-tokens) docstring #f srcloc-unknown where-constraints implicit-binders rest-type))]))
+     (register-spec! name (spec-entry (list effective-tokens) docstring #f srcloc-unknown where-constraints refined-implicit-binders rest-type))]))
 
 ;; Split a token list on '$pipe boundaries.
 ;; Handles two forms:
