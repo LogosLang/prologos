@@ -1,0 +1,993 @@
+(* ================================================================== *)
+(* Prologos — W3C EBNF Grammar Specification                          *)
+(* ================================================================== *)
+(*                                                                     *)
+(* A functional-logic language unifying dependent types, session types, *)
+(* linear types (QTT), logic programming, and propagators.             *)
+(*                                                                     *)
+(* This grammar describes the SURFACE SYNTAX as written in .prologos   *)
+(* files (whitespace-sensitive mode). The s-expression fallback is     *)
+(* described in a separate section at the end.                         *)
+(*                                                                     *)
+(* Conventions:                                                        *)
+(*   - W3C EBNF notation (ISO 14977 variant)                          *)
+(*   - (* comments *) for prose annotations                           *)
+(*   - 'terminal' for literal tokens                                  *)
+(*   - ? special-sequence ? for lexer-level constructs                 *)
+(*   - [...] for optional, {...} for repetition, (...) for grouping   *)
+(*                                                                     *)
+(* Date: 2026-02-21                                                    *)
+(* ================================================================== *)
+
+
+(* ================================================================== *)
+(* 1. LEXICAL GRAMMAR                                                  *)
+(* ================================================================== *)
+
+(* ------------------------------------------------ *)
+(* 1.1 Characters and Whitespace                    *)
+(* ------------------------------------------------ *)
+
+letter          = ? Unicode letter or '_' ? ;
+digit           = '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' ;
+alpha-char      = letter | digit ;
+
+(* Significant whitespace: newlines trigger INDENT/DEDENT tokens.
+   Inside brackets [], (), {}, <>, newlines are treated as spaces. *)
+ws-space        = ' ' | '\t' ;
+newline         = '\n' | '\r\n' ;
+comment         = ';' , { ? any char except newline ? } ;
+
+(* ------------------------------------------------ *)
+(* 1.2 Identifiers and Symbols                     *)
+(* ------------------------------------------------ *)
+
+(* Identifiers may contain letters, digits, hyphens, question marks,
+   exclamation marks, and primes. They must start with a letter or
+   allowed special character (not a digit or hyphen). *)
+ident-start     = letter | '_' | '+' | '*' | '/' | '!' | '?' | '<' | '>' | '=' ;
+ident-char      = ident-start | digit | '-' | "'" ;
+identifier      = ident-start , { ident-char }
+                | '-'    (* bare minus — special case *)
+                ;
+
+(* Qualified names use :: as separator *)
+qualified-name  = identifier , '::' , identifier ;
+
+(* Operator identifiers get desugared to sentinel symbols *)
+op-pipe-gt      = '|>' ;          (* desugars to $pipe-gt *)
+op-compose      = '>>' ;          (* desugars to $compose *)
+op-pipe         = '|'  ;          (* desugars to $pipe    *)
+
+(* ------------------------------------------------ *)
+(* 1.3 Numeric Literals                             *)
+(* ------------------------------------------------ *)
+
+(* Plain integers — parsed as Int *)
+int-literal     = [ '-' ] , digit , { digit } ;
+
+(* Rational literals — parsed as Rat *)
+rat-literal     = [ '-' ] , digit , { digit } , '/' , digit , { digit } ;
+
+(* Natural number literals — N suffix *)
+nat-literal     = digit , { digit } , 'N' ;
+
+(* Approximate (posit) literals — ~ prefix *)
+approx-literal  = '~' , ( int-literal | rat-literal ) ;
+
+(* ------------------------------------------------ *)
+(* 1.4 String Literals                              *)
+(* ------------------------------------------------ *)
+
+string-literal  = '"' , { string-char } , '"' ;
+string-char     = ? any char except '"' and '\' ?
+                | '\n' | '\t' | '\\' | '\"'
+                ;
+
+(* ------------------------------------------------ *)
+(* 1.5 Keywords (Keyword literals for map keys etc) *)
+(* ------------------------------------------------ *)
+
+(* Keywords start with : followed by identifier chars *)
+keyword-literal = ':' , identifier ;
+
+(* ------------------------------------------------ *)
+(* 1.6 Symbol Literals                              *)
+(* ------------------------------------------------ *)
+
+(* Created via (symbol-lit name) built-in form *)
+symbol-lit-form = '(' , 'symbol-lit' , identifier , ')' ;
+
+(* ------------------------------------------------ *)
+(* 1.7 Boolean Literals                             *)
+(* ------------------------------------------------ *)
+
+bool-literal    = 'true' | 'false' ;
+
+(* ------------------------------------------------ *)
+(* 1.8 Wildcard and Holes                           *)
+(* ------------------------------------------------ *)
+
+wildcard        = '_' ;
+numbered-hole   = '_' , digit , { digit } ;
+
+(* ------------------------------------------------ *)
+(* 1.9 Multiplicity Annotations                     *)
+(* ------------------------------------------------ *)
+
+multiplicity    = ':0' | ':1' | ':w' ;
+
+
+(* ================================================================== *)
+(* 2. MODULE SYSTEM                                                    *)
+(* ================================================================== *)
+
+(* ------------------------------------------------ *)
+(* 2.1 Namespace Declaration                        *)
+(* ------------------------------------------------ *)
+
+(* Must be the first form in a file. Controls module identity,
+   prelude loading, and qualified name resolution. *)
+ns-decl         = 'ns' , module-path , [ ns-options ] ;
+module-path     = identifier , { '.' , identifier } ;
+ns-options      = ':no-prelude'    (* opt out of automatic prelude import *)
+                ;
+
+(* ------------------------------------------------ *)
+(* 2.2 Require (Module Import)                      *)
+(* ------------------------------------------------ *)
+
+require-decl    = 'require' , require-spec , { require-spec } ;
+require-spec    = '[' , module-path , require-clauses , ']' ;
+require-clauses = { require-clause } ;
+require-clause  = ':as' , identifier                    (* alias prefix *)
+                | ':refer' , '[' , { identifier } , ']' (* named imports *)
+                | ':refer-all'                          (* import everything *)
+                ;
+
+(* ------------------------------------------------ *)
+(* 2.3 Provide (Module Export)                      *)
+(* ------------------------------------------------ *)
+
+provide-decl    = 'provide' , '[' , { identifier } , ']' ;
+
+(* Note: By default, all top-level def/defn/data/spec/trait/impl
+   forms are auto-exported. Use defn-/def-/data- for private forms.
+   Explicit provide overrides auto-export. *)
+
+
+(* ================================================================== *)
+(* 3. TOP-LEVEL DECLARATIONS                                           *)
+(* ================================================================== *)
+
+(* A .prologos file is a sequence of top-level forms, separated by
+   newlines at column 0 (or by NEWLINE tokens in the WS reader). *)
+program         = [ ns-decl ] , { top-level-form } ;
+
+top-level-form  = require-decl
+                | provide-decl
+                | def-form
+                | defn-form
+                | spec-form
+                | data-form
+                | trait-form
+                | impl-form
+                | bundle-form
+                | defmacro-form
+                | check-form
+                | eval-form
+                | infer-form
+                | expand-form
+                | foreign-form
+                | let-form
+                | expr              (* bare expression → implicit eval *)
+                ;
+
+(* ------------------------------------------------ *)
+(* 3.1 Value Definition (def)                       *)
+(* ------------------------------------------------ *)
+
+(* def binds a name to a value with optional type annotation *)
+def-form        = 'def' , identifier , def-body ;
+def-body        = ':' , type-expr , expr           (* typed: def x : T body *)
+                | ':=' , expr                      (* shorthand: def x := body *)
+                | type-expr , expr                 (* juxtaposed type and body *)
+                ;
+
+(* Private variant: not auto-exported *)
+def-private     = 'def-' , identifier , def-body ;
+
+(* ------------------------------------------------ *)
+(* 3.2 Function Definition (defn)                   *)
+(* ------------------------------------------------ *)
+
+(* defn is sugar for def + fn. Supports multi-arity via | separator. *)
+defn-form       = 'defn' , identifier , defn-sig , defn-clauses ;
+defn-sig        = [ ':' , type-expr ]              (* optional inline type *)
+                | (* empty — rely on separate spec *)
+                ;
+defn-clauses    = defn-clause , { '|' , defn-clause }  (* multi-arity *)
+                ;
+defn-clause     = param-list , [ return-annot ] , expr ;
+param-list      = '[' , { param } , ']' ;
+param           = identifier                       (* bare param *)
+                | identifier , ':' , type-expr     (* typed param *)
+                | identifier , multiplicity , type-expr  (* multiplicity-annotated *)
+                | '...' , identifier               (* rest/vararg param *)
+                ;
+return-annot    = '<' , type-expr , '>'            (* angle-bracket return type *)
+                | ':' , type-expr                  (* colon return type *)
+                ;
+
+(* Private variant *)
+defn-private    = 'defn-' , identifier , defn-sig , defn-clauses ;
+
+(* ------------------------------------------------ *)
+(* 3.3 Type Signature (spec)                        *)
+(* ------------------------------------------------ *)
+
+(* spec declares a type signature separately from the definition.
+   Supports implicit binders via {}, constraints, and varargs. *)
+spec-form       = 'spec' , identifier , spec-body ;
+spec-body       = { spec-element } ;
+spec-element    = implicit-binders                 (* {A B : Type} *)
+                | constraint                       (* (Eq A) or [Eq A] *)
+                | type-atom                        (* part of the type *)
+                | '...'                            (* vararg marker *)
+                | '->'  | '-0>' | '-1>' | '-w>'    (* arrow operators *)
+                ;
+
+implicit-binders = '{' , { implicit-group } , '}' ;
+implicit-group  = identifier , { identifier } , [ ':' , type-expr ] ;
+
+constraint      = '(' , identifier , { type-atom } , ')'
+                | '[' , identifier , { type-atom } , ']'
+                ;
+
+(* Constraints can also appear via where clause *)
+where-clause    = 'where' , constraint , { ',' , constraint } ;
+
+(* Private variant *)
+spec-private    = 'spec-' , identifier , spec-body ;
+
+(* ------------------------------------------------ *)
+(* 3.4 Algebraic Data Type (data)                   *)
+(* ------------------------------------------------ *)
+
+(* data defines an algebraic data type with constructors.
+   Constructors are listed on indented lines. *)
+data-form       = 'data' , identifier , [ data-params ] , data-ctors ;
+data-params     = '{' , { implicit-group } , '}'   (* implicit type params *)
+                | param-list                       (* explicit type params *)
+                ;
+data-ctors      = { data-ctor } ;                  (* one per indented line *)
+data-ctor       = identifier                       (* nullary constructor *)
+                | identifier , ':' , type-expr     (* constructor with fields *)
+                ;
+
+(* Private variant *)
+data-private    = 'data-' , identifier , [ data-params ] , data-ctors ;
+
+(* deftype is a synonym for data (pre-parse macro) *)
+deftype-form    = 'deftype' , identifier , [ data-params ] , data-ctors ;
+
+(* ------------------------------------------------ *)
+(* 3.5 Trait Definition                             *)
+(* ------------------------------------------------ *)
+
+(* trait declares an abstract interface with method signatures *)
+trait-form      = 'trait' , identifier , implicit-binders , trait-methods ;
+trait-methods   = { trait-method } ;               (* indented method sigs *)
+trait-method    = identifier , ':' , type-expr ;
+
+(* Private variant *)
+trait-private   = 'trait-' , identifier , implicit-binders , trait-methods ;
+
+(* ------------------------------------------------ *)
+(* 3.6 Trait Implementation                         *)
+(* ------------------------------------------------ *)
+
+(* impl provides concrete method implementations for a type *)
+impl-form       = 'impl' , identifier , type-expr , impl-methods ;
+impl-methods    = { impl-method } ;               (* indented method defs *)
+impl-method     = defn-form ;                      (* each method is a defn *)
+
+(* Private variant *)
+impl-private    = 'impl-' , identifier , type-expr , impl-methods ;
+
+(* ------------------------------------------------ *)
+(* 3.7 Bundle (Trait Combination)                   *)
+(* ------------------------------------------------ *)
+
+(* bundle names a combination of traits for convenience *)
+bundle-form     = 'bundle' , identifier , ':=' , '(' , identifier ,
+                  { ',' , identifier } , ')' ;
+
+(* ------------------------------------------------ *)
+(* 3.8 User Macro                                   *)
+(* ------------------------------------------------ *)
+
+(* defmacro defines a pattern-template rewrite rule.
+   Pattern variables use $ prefix. Operates post-parse, pre-type-check. *)
+defmacro-form   = 'defmacro' , identifier , macro-pattern , macro-template ;
+macro-pattern   = '[' , { macro-pat-elem } , ']' ;
+macro-template  = '[' , { macro-tmpl-elem } , ']' ;
+macro-pat-elem  = '$' , identifier                 (* pattern variable *)
+                | identifier                       (* literal match *)
+                | '[' , { macro-pat-elem } , ']'   (* nested pattern *)
+                ;
+macro-tmpl-elem = '$' , identifier                 (* substitution variable *)
+                | identifier                       (* literal symbol *)
+                | '[' , { macro-tmpl-elem } , ']'  (* nested template *)
+                ;
+
+(* Private variant *)
+defmacro-private = 'defmacro-' , identifier , macro-pattern , macro-template ;
+
+(* ------------------------------------------------ *)
+(* 3.9 Introspection Commands                       *)
+(* ------------------------------------------------ *)
+
+(* These are top-level commands for interactive development *)
+check-form      = 'check' , expr , ':' , type-expr ;  (* verify type *)
+eval-form       = 'eval' , expr ;                      (* evaluate *)
+infer-form      = 'infer' , expr ;                     (* infer type *)
+expand-form     = 'expand' , expr                      (* full macro expansion *)
+                | 'expand-1' , expr                    (* one expansion step *)
+                | 'expand-full' , expr                 (* all steps with labels *)
+                | 'parse' , expr                       (* show parsed AST *)
+                | 'elaborate' , expr                   (* show elaborated AST *)
+                ;
+
+(* ------------------------------------------------ *)
+(* 3.10 Foreign Escape Block                        *)
+(* ------------------------------------------------ *)
+
+(* foreign embeds raw Racket code for FFI interop *)
+foreign-form    = 'foreign' , foreign-block ;
+foreign-block   = ? Racket s-expression block ? ;
+
+
+(* ================================================================== *)
+(* 4. TYPE EXPRESSIONS                                                 *)
+(* ================================================================== *)
+
+(* Types and terms share the same expression grammar in a dependently-
+   typed language. These productions highlight type-specific forms. *)
+
+type-expr       = type-infix ;
+
+(* ------------------------------------------------ *)
+(* 4.1 Infix Type Operators (right-associative)     *)
+(* ------------------------------------------------ *)
+
+(* Arrows and product bind right-to-left:
+     A -> B -> C  parses as  A -> (B -> C)
+     A * B * C    parses as  A * (B * C)
+   Union binds right-to-left:
+     A | B | C    parses as  A | (B | C)
+*)
+type-infix      = type-union , [ arrow-op , type-infix ] ;
+arrow-op        = '->'  | '-0>' | '-1>' | '-w>' ;
+
+type-union      = type-product , { '|' , type-product } ;
+type-product    = type-app , { '*' , type-app } ;
+
+(* ------------------------------------------------ *)
+(* 4.2 Type Application                             *)
+(* ------------------------------------------------ *)
+
+type-app        = type-atom , { type-atom } ;      (* juxtaposition = application *)
+
+(* ------------------------------------------------ *)
+(* 4.3 Atomic Types                                 *)
+(* ------------------------------------------------ *)
+
+type-atom       = 'Type'                           (* universe, level inferred *)
+                | '(' , 'Type' , level-expr , ')'  (* explicit universe level *)
+                | 'Nat' | 'Int' | 'Rat' | 'Bool' | 'Unit'
+                | 'Symbol' | 'Keyword'
+                | 'Posit8' | 'Posit16' | 'Posit32' | 'Posit64'
+                | 'Quire8' | 'Quire16' | 'Quire32' | 'Quire64'
+                | 'Map' | 'Set' | 'PVec' | 'Vec' | 'Fin'
+                | 'TVec' | 'TMap' | 'TSet'
+                | 'List' | 'Option' | 'Result' | 'Either'
+                | 'LSeq' | 'Datum'
+                | identifier                       (* type variable or user type *)
+                | qualified-name                   (* qualified type name *)
+                | '(' , type-expr , ')'            (* parenthesized type *)
+                | '[' , type-expr , { type-expr } , ']'  (* bracketed app *)
+                | dependent-type                   (* angle-bracket Pi/Sigma *)
+                | '_'                              (* type hole / inferred *)
+                ;
+
+(* ------------------------------------------------ *)
+(* 4.4 Dependent Types (Angle Bracket Syntax)       *)
+(* ------------------------------------------------ *)
+
+(* Angle brackets delimit dependent Pi and Sigma types:
+     <(x : A) -> B>   dependent Pi
+     <(x : A) * B>    dependent Sigma
+     <x : A -> B>     shorthand dependent Pi (single binder) *)
+dependent-type  = '<' , dep-binders , dep-body , '>' ;
+dep-binders     = '(' , identifier , ':' , type-expr , ')' , { dep-binder }
+                | identifier , ':' , type-expr     (* shorthand *)
+                ;
+dep-binder      = '(' , identifier , ':' , type-expr , ')' ;
+dep-body        = '->' , type-expr                 (* Pi body *)
+                | '*' , type-expr                  (* Sigma body *)
+                ;
+
+(* ------------------------------------------------ *)
+(* 4.5 Equality Type                                *)
+(* ------------------------------------------------ *)
+
+eq-type         = '(' , 'Eq' , type-expr , expr , expr , ')' ;
+
+(* ------------------------------------------------ *)
+(* 4.6 Sigma Type (non-dependent form)              *)
+(* ------------------------------------------------ *)
+
+(* Non-dependent Sigma uses infix * or explicit Sigma keyword *)
+sigma-type      = '(' , 'Sigma' , '(' , identifier , ':' , type-expr , ')' , type-expr , ')' ;
+
+(* A common surface pattern for Sigma return types: *)
+sigma-surface   = '[' , 'Sigma' , '[' , '_' , '<' , type-expr , '>' , ']' , type-expr , ']' ;
+
+
+(* ================================================================== *)
+(* 5. EXPRESSIONS                                                      *)
+(* ================================================================== *)
+
+expr            = pipe-expr ;
+
+(* ------------------------------------------------ *)
+(* 5.1 Pipe Expressions (lowest precedence)         *)
+(* ------------------------------------------------ *)
+
+(* Binary pipe threads a value left-to-right through functions:
+     x |> f |> g   ===   g(f(x))
+   Block pipe uses indentation for multi-step pipelines. *)
+pipe-expr       = compose-expr , { '|>' , compose-expr }
+                | block-pipe
+                ;
+
+block-pipe      = '|>' , expr , pipe-steps ;
+pipe-steps      = { pipe-step } ;                  (* indented steps *)
+pipe-step       = identifier , { expr-atom }       (* function application step *)
+                ;
+
+(* ------------------------------------------------ *)
+(* 5.2 Compose Expressions                          *)
+(* ------------------------------------------------ *)
+
+(* Left-to-right function composition:
+     f >> g   ===   fn x -> g(f(x)) *)
+compose-expr    = app-expr , { '>>' , app-expr } ;
+
+(* ------------------------------------------------ *)
+(* 5.3 Application Expressions                      *)
+(* ------------------------------------------------ *)
+
+(* Function application is juxtaposition in brackets:
+     [f a b c]   ===   ((f a) b) c
+   Or bare juxtaposition at top level of a line. *)
+app-expr        = expr-atom , { expr-atom } ;
+
+(* ------------------------------------------------ *)
+(* 5.4 Atomic Expressions                           *)
+(* ------------------------------------------------ *)
+
+expr-atom       = literal
+                | identifier
+                | qualified-name
+                | wildcard                         (* _ as expression hole *)
+                | numbered-hole                    (* _1, _2 for partial app *)
+                | bracketed-expr
+                | paren-expr
+                | lambda-expr
+                | match-expr
+                | reduce-expr
+                | if-expr
+                | let-expr
+                | do-expr
+                | the-expr
+                | pair-expr
+                | proj-expr
+                | quote-expr
+                | quasiquote-expr
+                | collection-literal
+                | constructor-expr
+                | eliminator-expr
+                | with-transient-expr
+                ;
+
+(* ------------------------------------------------ *)
+(* 5.5 Literals                                     *)
+(* ------------------------------------------------ *)
+
+literal         = nat-literal                      (* 42N, 0N *)
+                | int-literal                      (* 42, -7 *)
+                | rat-literal                      (* 3/7, -1/3 *)
+                | approx-literal                   (* ~42, ~3/7 *)
+                | string-literal                   (* "hello" *)
+                | keyword-literal                  (* :name, :age *)
+                | bool-literal                     (* true, false *)
+                | 'zero'                           (* Nat zero *)
+                | 'unit'                           (* Unit value *)
+                | 'refl'                           (* equality proof *)
+                ;
+
+(* ------------------------------------------------ *)
+(* 5.6 Bracketed and Parenthesized Expressions      *)
+(* ------------------------------------------------ *)
+
+(* Brackets [] are the primary grouping delimiter for application *)
+bracketed-expr  = '[' , expr , { expr } , ']' ;
+
+(* Parentheses () are used for special forms and type grouping *)
+paren-expr      = '(' , special-form , ')' ;
+
+special-form    = 'fn' , fn-body
+                | 'match' , match-body
+                | 'reduce' , reduce-body
+                | 'the' , type-expr , expr
+                | 'def' , def-body
+                | 'defn' , identifier , defn-sig , defn-clauses
+                | 'let' , let-bindings , expr
+                | 'do' , do-body
+                | 'if' , expr , expr , expr
+                | 'check' , expr , ':' , type-expr
+                | 'eval' , expr
+                | 'infer' , expr
+                | 'expand' , expr
+                | 'expand-1' , expr
+                | 'expand-full' , expr
+                | 'parse' , expr
+                | 'elaborate' , expr
+                | expr , { expr }                  (* fall-through: application *)
+                ;
+
+(* ------------------------------------------------ *)
+(* 5.7 Lambda Expressions                           *)
+(* ------------------------------------------------ *)
+
+(* In WS mode, fn uses indentation for body.
+   Supports multi-bracket binder groups: fn [b1] [b2] body *)
+lambda-expr     = 'fn' , fn-binders , expr ;
+
+(* In sexp mode *)
+fn-body         = fn-binders , expr ;
+
+fn-binders      = fn-binder , { fn-binder } ;
+fn-binder       = '(' , identifier , [ ':' , type-expr ] , ')'  (* typed *)
+                | '(' , identifier , multiplicity , type-expr , ')'  (* with mult *)
+                | identifier                       (* bare param — WS mode *)
+                | '[' , { param } , ']'            (* bracketed param group — WS mode *)
+                ;
+
+(* ------------------------------------------------ *)
+(* 5.8 Pattern Matching                             *)
+(* ------------------------------------------------ *)
+
+(* match is the primary pattern matching form. Uses | for arm separation. *)
+match-expr      = 'match' , expr , match-arms ;
+match-arms      = { match-arm } ;
+match-arm       = '|' , pattern , '->' , expr ;
+
+(* reduce is the lower-level elimination form *)
+reduce-expr     = 'reduce' , expr , reduce-arms ;
+reduce-body     = expr , reduce-arms ;
+reduce-arms     = { reduce-arm } ;
+reduce-arm      = '(' , pattern , '->' , expr , ')'    (* sexp mode *)
+                | '|' , pattern , '->' , expr          (* WS mode *)
+                ;
+
+(* ------------------------------------------------ *)
+(* 5.9 Patterns                                     *)
+(* ------------------------------------------------ *)
+
+(* Patterns in match/reduce arms *)
+pattern         = pat-atom , { pat-atom } ;        (* constructor + bindings *)
+
+pat-atom        = identifier                       (* variable binding or nullary ctor *)
+                | wildcard                         (* _ discard *)
+                | nat-literal                      (* numeric pattern *)
+                | 'zero' | 'true' | 'false'       (* builtin constructors *)
+                | 'nil' | 'unit' | 'refl'
+                | 'none' | 'datum-nil'
+                | '[' , pattern , ']'              (* nested/grouped pattern *)
+                ;
+
+(* Note: Constructor patterns are distinguished from variable bindings
+   contextually — known constructors (from data declarations in scope)
+   are treated as patterns; unknown names become variable bindings. *)
+
+(* ------------------------------------------------ *)
+(* 5.10 Conditional (if)                            *)
+(* ------------------------------------------------ *)
+
+(* if is a pre-parse macro that desugars to match on Bool *)
+if-expr         = 'if' , expr , expr , expr ;
+
+(* ------------------------------------------------ *)
+(* 5.11 Local Bindings (let)                        *)
+(* ------------------------------------------------ *)
+
+(* let is a pre-parse macro that desugars to application *)
+let-expr        = 'let' , let-bindings , expr ;
+let-bindings    = '[' , { let-binding } , ']'
+                | let-binding                      (* single binding *)
+                ;
+let-binding     = identifier , [ ':' , type-expr ] , '=' , expr ;
+
+(* ------------------------------------------------ *)
+(* 5.12 Sequencing (do)                             *)
+(* ------------------------------------------------ *)
+
+(* do sequences effectful expressions via let-chain desugaring *)
+do-expr         = 'do' , { do-step } ;
+do-step         = expr                             (* expression for effect *)
+                | identifier , '<-' , expr         (* bind result *)
+                ;
+
+(* ------------------------------------------------ *)
+(* 5.13 Type Annotation (the)                       *)
+(* ------------------------------------------------ *)
+
+(* the provides an explicit type annotation on an expression *)
+the-expr        = '(' , 'the' , type-expr , expr , ')' ;
+
+(* ------------------------------------------------ *)
+(* 5.14 Pair Construction and Projection            *)
+(* ------------------------------------------------ *)
+
+pair-expr       = 'pair' , expr , expr ;
+proj-expr       = 'first' , expr                   (* = fst *)
+                | 'second' , expr                  (* = snd *)
+                | 'fst' , expr
+                | 'snd' , expr
+                ;
+
+(* ------------------------------------------------ *)
+(* 5.15 Quote and Quasiquote                        *)
+(* ------------------------------------------------ *)
+
+(* Quote converts code to Datum (code-as-data).
+   ' prefix in WS mode, ($quote ...) in sexp mode. *)
+quote-expr      = "'" , quotable ;
+quotable        = identifier                       (* -> datum-sym *)
+                | int-literal                      (* -> datum-nat for non-negative, datum-int *)
+                | keyword-literal                  (* -> datum-kw *)
+                | bool-literal                     (* -> datum-bool *)
+                | '(' , ')'                        (* -> datum-nil *)
+                | '(' , quotable , { quotable } , ')'  (* -> datum-cons chain *)
+                ;
+
+(* Quasiquote: like quote but ,expr splices in live Datum values *)
+quasiquote-expr = '`' , quotable ;
+unquote-expr    = ',' , expr ;                     (* only at top level in WS mode *)
+
+(* ------------------------------------------------ *)
+(* 5.16 Collection Literals                         *)
+(* ------------------------------------------------ *)
+
+(* List literal: linked list (cons chain) *)
+list-literal    = "'" , '[' , { expr } , [ '|' , expr ] , ']' ;
+                  (* '|' for cons-tail: '[1 2 | ys] *)
+
+(* Persistent vector literal *)
+pvec-literal    = '@[' , { expr } , ']' ;
+
+(* Lazy sequence literal *)
+lseq-literal    = '~[' , { expr } , ']' ;
+
+(* Set literal *)
+set-literal     = '#{' , { expr } , '}' ;
+
+(* Map literal (key-value pairs) *)
+map-literal     = '{' , { expr , expr } , '}' ;
+
+collection-literal = list-literal
+                   | pvec-literal
+                   | lseq-literal
+                   | set-literal
+                   | map-literal
+                   ;
+
+(* ------------------------------------------------ *)
+(* 5.17 Constructors (Built-in)                     *)
+(* ------------------------------------------------ *)
+
+constructor-expr = 'suc' , expr                    (* Nat successor *)
+                 | 'cons' , [ type-expr ] , expr , expr  (* List cons *)
+                 | 'nil'  , [ type-expr ]          (* List nil *)
+                 | 'some' , [ type-expr ] , expr   (* Option some *)
+                 | 'none' , [ type-expr ]          (* Option none *)
+                 | 'ok' , expr                     (* Result ok *)
+                 | 'err' , expr                    (* Result err *)
+                 | 'left' , expr                   (* Either left *)
+                 | 'right' , expr                  (* Either right *)
+                 ;
+
+(* ------------------------------------------------ *)
+(* 5.18 Eliminators (Low-Level)                     *)
+(* ------------------------------------------------ *)
+
+(* These are the core elimination forms from the Maude/Redex spec.
+   In practice, match is preferred over these. *)
+eliminator-expr = 'natrec' , expr , expr , expr , expr
+                            (* motive, base, step, target *)
+                | 'boolrec' , expr , expr , expr , expr
+                            (* motive, true-case, false-case, target *)
+                | 'J' , expr , expr , expr , expr , expr
+                            (* motive, base, left, right, proof *)
+                ;
+
+(* ------------------------------------------------ *)
+(* 5.19 Dependent Vector Operations                 *)
+(* ------------------------------------------------ *)
+
+vec-expr        = 'vnil' , type-expr               (* empty Vec *)
+                | 'vcons' , type-expr , expr , expr , expr
+                            (* type, length, head, tail *)
+                | 'vhead' , type-expr , expr , expr
+                            (* type, length, vec *)
+                | 'vtail' , type-expr , expr , expr
+                            (* type, length, vec *)
+                | 'vindex' , type-expr , expr , expr , expr
+                            (* type, length, index, vec *)
+                ;
+
+fin-expr        = 'fzero' , expr                   (* Fin constructor *)
+                | 'fsuc' , expr , expr             (* Fin successor *)
+                ;
+
+(* ------------------------------------------------ *)
+(* 5.20 Numeric Operations (Built-in)               *)
+(* ------------------------------------------------ *)
+
+(* Int operations *)
+int-ops         = 'int' , expr                     (* from-nat: Nat -> Int *)
+                | 'int+' , expr , expr
+                | 'int-' , expr , expr
+                | 'int*' , expr , expr
+                | 'int/' , expr , expr
+                | 'int-mod' , expr , expr
+                | 'int-neg' , expr
+                | 'int-abs' , expr
+                | 'int-lt' , expr , expr
+                | 'int-le' , expr , expr
+                | 'int-eq' , expr , expr
+                | 'from-nat' , expr
+                ;
+
+(* Rat operations follow same pattern: rat+, rat-, rat*, rat/, etc. *)
+(* Posit operations: p8+, p8-, ..., p16+, p16-, ..., p32+, p64+, etc. *)
+(* Quire operations: q8-zero, q8-fma, q8-to, etc. *)
+
+(* ------------------------------------------------ *)
+(* 5.21 Collection Operations (Built-in)            *)
+(* ------------------------------------------------ *)
+
+(* Map operations *)
+map-ops         = 'map-empty' , type-expr , type-expr
+                | 'map-assoc' , expr , expr , expr
+                | 'map-get' , expr , expr
+                | 'map-dissoc' , expr , expr
+                | 'map-size' , expr
+                | 'map-has-key?' , expr , expr
+                | 'map-keys' , expr
+                | 'map-vals' , expr
+                ;
+
+(* Set operations *)
+set-ops         = 'set-empty' , type-expr
+                | 'set-insert' , expr , expr
+                | 'set-member?' , expr , expr
+                | 'set-delete' , expr , expr
+                | 'set-size' , expr
+                | 'set-union' , expr , expr
+                | 'set-intersect' , expr , expr
+                | 'set-diff' , expr , expr
+                | 'set-to-list' , expr
+                ;
+
+(* PVec operations *)
+pvec-ops        = 'pvec-empty' , type-expr
+                | 'pvec-push' , expr , expr
+                | 'pvec-nth' , expr , expr
+                | 'pvec-update' , expr , expr , expr
+                | 'pvec-length' , expr
+                | 'pvec-pop' , expr
+                | 'pvec-concat' , expr , expr
+                | 'pvec-slice' , expr , expr , expr
+                | 'pvec-to-list' , expr
+                | 'pvec-from-list' , expr
+                ;
+
+(* ------------------------------------------------ *)
+(* 5.22 Transient (Mutable Builder) Operations      *)
+(* ------------------------------------------------ *)
+
+transient-expr  = 'transient' , expr               (* create transient from persistent *)
+                | 'persist!' , expr                (* persist transient to persistent *)
+                | 'tvec-push!' , expr , expr
+                | 'tvec-update!' , expr , expr , expr
+                | 'tmap-assoc!' , expr , expr , expr
+                | 'tmap-dissoc!' , expr , expr
+                | 'tset-insert!' , expr , expr
+                | 'tset-delete!' , expr , expr
+                ;
+
+(* with-transient macro: scoped transient builder *)
+with-transient-expr = 'with-transient' , identifier , expr , { expr } ;
+
+(* ------------------------------------------------ *)
+(* 5.23 Datum Constructors and Predicates           *)
+(* ------------------------------------------------ *)
+
+(* Datum is the code-as-data type for homoiconicity *)
+datum-expr      = 'datum-sym' , expr               (* Symbol -> Datum *)
+                | 'datum-kw' , expr                (* Keyword -> Datum *)
+                | 'datum-nat' , expr               (* Nat -> Datum *)
+                | 'datum-int' , expr               (* Int -> Datum *)
+                | 'datum-rat' , expr               (* Rat -> Datum *)
+                | 'datum-bool' , expr              (* Bool -> Datum *)
+                | 'datum-nil'                      (* empty datum list *)
+                | 'datum-cons' , expr , expr       (* datum pair/cons *)
+                ;
+
+datum-preds     = 'sym?' , expr
+                | 'kw?' , expr
+                | 'nat?' , expr
+                | 'int?' , expr
+                | 'rat?' , expr
+                | 'bool?' , expr
+                | 'nil?' , expr
+                | 'cons?' , expr
+                ;
+
+
+(* ================================================================== *)
+(* 6. SESSION TYPES (Process Calculus)                                 *)
+(* ================================================================== *)
+
+(* Note: Session types are defined in the Maude spec and PLT Redex
+   formalization. Surface syntax for sessions is not yet fully
+   exposed in the Racket implementation. The forms below reflect
+   the formal specification's intended surface. *)
+
+session-type    = '(' , 'Send' , type-expr , session-type , ')'
+                | '(' , 'Recv' , type-expr , session-type , ')'
+                | '(' , 'DSend' , '(' , identifier , ':' , type-expr , ')' , session-type , ')'
+                | '(' , 'DRecv' , '(' , identifier , ':' , type-expr , ')' , session-type , ')'
+                | '(' , 'Choice' , { branch } , ')'
+                | '(' , 'Offer' , { branch } , ')'
+                | '(' , 'Mu' , session-type , ')'
+                | 'End'
+                ;
+
+branch          = '(' , identifier , session-type , ')' ;
+
+(* Process expressions — formal spec only, not yet in surface syntax *)
+process-expr    = '(' , 'stop' , ')'
+                | '(' , 'send' , expr , identifier , process-expr , ')'
+                | '(' , 'recv' , identifier , type-expr , process-expr , ')'
+                | '(' , 'select' , identifier , identifier , process-expr , ')'
+                | '(' , 'case' , identifier , { proc-branch } , ')'
+                | '(' , 'new' , session-type , process-expr , ')'
+                | '(' , 'par' , process-expr , process-expr , ')'
+                | '(' , 'link' , identifier , identifier , ')'
+                ;
+
+proc-branch     = '(' , identifier , process-expr , ')' ;
+
+
+(* ================================================================== *)
+(* 7. S-EXPRESSION MODE (Fallback)                                     *)
+(* ================================================================== *)
+
+(* Every WS-mode form has a canonical s-expression representation.
+   In sexp mode, all forms are parenthesized and whitespace is
+   not significant for grouping. *)
+
+(* Key differences from WS mode:
+   - All grouping via parentheses ()
+   - No indentation significance
+   - Keywords in first position of a list
+   - Commas used as separators inside brackets/parens
+   - match uses (pattern -> body) arms instead of | pattern -> body *)
+
+sexp-program    = { sexp-form } ;
+sexp-form       = '(' , 'ns' , module-path , [ ns-options ] , ')'
+                | '(' , 'def' , identifier , [ ':' , type-expr ] , expr , ')'
+                | '(' , 'defn' , identifier , [ ':' , type-expr ] ,
+                        '(' , { param } , ')' , expr , ')'
+                | '(' , 'spec' , identifier , spec-body , ')'
+                | '(' , 'data' , identifier , { data-ctor } , ')'
+                | '(' , 'trait' , identifier , '{' , { implicit-group } , '}' ,
+                        { trait-method } , ')'
+                | '(' , 'impl' , identifier , type-expr , { impl-method } , ')'
+                | '(' , 'fn' , fn-binders , expr , ')'
+                | '(' , 'match' , expr , { sexp-match-arm } , ')'
+                | '(' , 'reduce' , expr , { sexp-reduce-arm } , ')'
+                | '(' , 'the' , type-expr , expr , ')'
+                | '(' , 'let' , '(' , { sexp-let-binding } , ')' , expr , ')'
+                | '(' , 'if' , expr , expr , expr , ')'
+                | '(' , 'check' , expr , ':' , type-expr , ')'
+                | '(' , 'eval' , expr , ')'
+                | '(' , 'infer' , expr , ')'
+                | '(' , expr , { expr } , ')'      (* application *)
+                ;
+
+sexp-match-arm  = '(' , pattern , '->' , expr , ')' ;
+sexp-reduce-arm = '(' , pattern , '->' , expr , ')' ;
+sexp-let-binding = '(' , identifier , [ ':' , type-expr ] , expr , ')' ;
+
+
+(* ================================================================== *)
+(* 8. WHITESPACE-SENSITIVE READER RULES                                *)
+(* ================================================================== *)
+
+(* The WS reader converts indentation into explicit structure:
+
+   1. At the start of a line, compare indentation to current level:
+      - Same level → NEWLINE token (separates sibling forms)
+      - Deeper → INDENT token (begins child block)
+      - Shallower → one or more DEDENT tokens (ends child blocks)
+
+   2. Inside brackets [], (), {}, <> :
+      - Newlines are treated as whitespace (no INDENT/DEDENT)
+      - Indentation is not significant
+
+   3. Blank lines and comment-only lines are ignored for indentation.
+
+   4. Top-level forms start at column 0. Each NEWLINE at column 0
+      separates top-level forms.
+
+   5. INDENT creates a sub-list in the parsed output.
+      The indented block becomes the body/continuation of the form
+      that precedes the INDENT.
+*)
+
+(* Reader-level special prefix handling:
+     'expr     → ($quote expr)
+     `expr     → ($quasiquote expr)
+     ,expr     → ($unquote expr)    [top-level only in WS mode]
+     :name     → keyword token
+     42N       → ($nat-literal 42)
+     ~42       → ($approx-literal 42)
+     ...name   → ($rest-param name)
+     @[...]    → ($vec-literal ...)
+     ~[...]    → ($lseq-literal ...)
+     '[...]    → ($list-literal ...)
+     #{...}    → ($set-literal ...)
+*)
+
+
+(* ================================================================== *)
+(* 9. OPERATOR DESUGARING                                              *)
+(* ================================================================== *)
+
+(* The following operators are desugared by the reader/pre-parser
+   before the main parser sees them:
+
+   |>   →  ($pipe-gt ...)     pipe left-to-right
+   >>   →  ($compose ...)     compose left-to-right
+   |    →  ($pipe ...)        in match: arm separator
+   :=   →  ($assign ...)      in def: shorthand binding
+
+   Block-form |> with indented steps:
+     |> initial
+       step1
+       step2
+   desugars to: ($pipe-gt initial (step1 (step2 ...)))
+
+   Fusible steps (map, filter, remove) followed by a terminal
+   (reduce, sum, length) are fused into a single-pass transducer. *)
+
+
+(* ================================================================== *)
+(* END OF GRAMMAR                                                      *)
+(* ================================================================== *)

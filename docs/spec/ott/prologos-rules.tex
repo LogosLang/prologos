@@ -1,0 +1,178 @@
+% Prologos Type System — LaTeX Wrapper for Ott-Generated Rules
+%
+% Usage: make pdf   (generates prologos-rules.pdf)
+
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{mathpartir}
+\usepackage{supertabular}
+\usepackage{hyperref}
+\usepackage{xcolor}
+
+% Ott-generated definitions
+\input{prologos-generated.tex}
+
+\title{Prologos Type System\\[0.3em]
+\large Inference Rules and Formal Specification}
+\author{Prologos Project}
+\date{February 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This document presents the formal type system specification for Prologos,
+a functional-logic language unifying dependent types, session types,
+linear types (QTT), logic programming, and propagators. The specification
+is generated from the Ott source in \texttt{prologos.ott}.
+\end{abstract}
+
+\tableofcontents
+\newpage
+
+\section{Syntax}
+
+The syntax of Prologos uses a \emph{locally-nameless} representation:
+bound variables are de~Bruijn indices ($\mathit{bvar}~k$), while free
+variables are named ($\mathit{fvar}~x$). This avoids $\alpha$-equivalence
+issues in the metatheory.
+
+\subsection{Grammar}
+
+\ottgrammartabular{ottexpr\ottinterrule}
+
+\subsection{Multiplicities (QTT)}
+
+The multiplicity semiring $\{0, 1, \omega\}$ governs resource usage:
+\begin{itemize}
+  \item $\mathtt{m0}$: erased (compile-time only, 0 runtime uses)
+  \item $\mathtt{m1}$: linear (exactly 1 runtime use)
+  \item $\mathtt{mw}$: unrestricted (any number of uses)
+\end{itemize}
+
+\ottgrammartabular{ottmult\ottinterrule}
+
+\subsection{Universe Levels}
+
+Universes are stratified: $\mathsf{Type}~\ell : \mathsf{Type}~(\mathsf{lsuc}~\ell)$.
+
+\ottgrammartabular{ottlevel\ottinterrule}
+
+\subsection{Session Types}
+
+Session types describe communication protocols on channels:
+
+\ottgrammartabular{ottsession\ottinterrule}
+
+\subsection{Typing Contexts}
+
+\ottgrammartabular{ottctx\ottinterrule}
+
+\section{Multiplicity Operations}
+
+\ottdefnsmultiplicityXops
+
+\section{Reduction}
+
+Reduction proceeds in two phases: \emph{weak-head normal form} (WHNF) for
+type checking, and \emph{full normalization} (NF) for definitional equality.
+
+\subsection{Single-Step WHNF Reduction}
+
+\ottdefnswhnfXstep
+
+\subsection{Definitional Equality}
+
+Two terms are definitionally equal ($e_1 \equiv e_2$) iff their full normal
+forms are syntactically identical: $\mathit{nf}(e_1) = \mathit{nf}(e_2)$.
+
+\section{Typing}
+
+Prologos uses a \emph{bidirectional} type system with two modes:
+\begin{itemize}
+  \item \textbf{Synthesis} ($\Gamma \vdash e \Rightarrow A$): infer the type of $e$
+  \item \textbf{Checking} ($\Gamma \vdash e \Leftarrow A$): check $e$ against expected type $A$
+\end{itemize}
+
+\subsection{Type Inference (Synthesis)}
+
+\ottdefnsinfer
+
+\subsection{Type Checking}
+
+\ottdefnscheck
+
+\subsection{Type Formation}
+
+\ottdefnsisType
+
+\subsection{Universe Level Inference}
+
+\ottdefnsinferLevel
+
+\section{Quantitative Type Theory (QTT)}
+
+QTT extends the type system with usage tracking. Each judgment returns
+a \emph{usage context} $\mathcal{U}$ recording how many times each
+variable was used:
+
+\begin{itemize}
+  \item \textbf{QTT Inference}: $\Gamma \vdash e \Rightarrow A ; \mathcal{U}$
+  \item \textbf{QTT Checking}: $\Gamma \vdash e \Leftarrow A ; \mathcal{U}$
+\end{itemize}
+
+Usage contexts compose via pointwise semiring operations:
+$\mathcal{U}_1 \oplus \mathcal{U}_2$ (addition) and
+$m \otimes \mathcal{U}$ (scalar multiplication).
+
+\subsection{QTT Inference}
+
+\ottdefnsinferQ
+
+\subsection{QTT Checking}
+
+\ottdefnscheckQ
+
+\subsection{QTT Top-Level Check}
+
+\ottdefnscheckQtop
+
+\section{Session Types}
+
+Session types describe bidirectional communication protocols. The key
+operation is \emph{duality}: if one endpoint has session $S$, the other
+has $\overline{S}$.
+
+\subsection{Duality}
+
+\ottdefnsdual
+
+\section{Process Typing}
+
+Processes are typed against channel contexts $\Delta$ mapping channels
+to their session types:
+
+$$\Gamma ; \Delta \vdash P$$
+
+\ottdefnstypeProc
+
+\section{Metatheoretic Properties}
+
+The following properties are verified by the PLT Redex formalization
+(\texttt{racket/prologos/redex/properties.rkt}) via randomized testing:
+
+\begin{enumerate}
+  \item \textbf{Type Preservation}: If $\vdash e \Rightarrow T$ and $e \to e'$,
+        then $\vdash e' \Rightarrow T'$ with $T \equiv T'$.
+  \item \textbf{Progress}: If $\vdash e \Rightarrow T$ (closed), then $e$ is a
+        value or $e \to e'$.
+  \item \textbf{Determinism}: WHNF reduction is deterministic.
+  \item \textbf{Conversion is an Equivalence}: Reflexive, symmetric, transitive.
+  \item \textbf{Shift Identity}: $\mathit{shift}(0, c, e) = e$.
+  \item \textbf{Duality Involution}: $\overline{\overline{S}} = S$.
+  \item \textbf{QTT Soundness}: QTT checking refines standard type checking.
+\end{enumerate}
+
+\end{document}
