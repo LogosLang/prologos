@@ -1,0 +1,340 @@
+ns prologos::core::string-ops
+
+require [prologos::data::string  :as str :refer []]
+require [prologos::data::char    :as char :refer []]
+require [prologos::data::list    :refer [List nil cons foldr]]
+require [prologos::data::option  :refer [Option some none]]
+require [prologos::data::pair    :refer []]
+
+;; ========================================
+;; String Operations Module
+;; ========================================
+;; Pure Prologos string operations built on FFI primitives.
+;; Rules for .prologos WS mode:
+;;   - Helpers BEFORE callers (no forward references)
+;;   - Single-line [if c t e] inside brackets OK; multi-line NOT
+;;   - int-lt / int-eq (not int< / int=) — < is WS delimiter
+;;   - [int-neg 1] not -1 — negative literals unsupported
+;;   - pair takes 2 args (no type args); Sigma for pair types
+
+;; ================ Folding & Predicates ================
+
+;; all? : (Char -> Bool) -> String -> Bool
+spec all-loop [-> Char Bool] -> String -> Int -> Int -> Bool
+defn all-loop [pred s len i]
+  if [int-eq i len] true [if [pred [str::ref s i]] [all-loop pred s len [int+ i 1]] false]
+
+spec all? [-> Char Bool] -> String -> Bool
+defn all? [pred s]
+  all-loop pred s [str::length s] 0
+
+;; any? : (Char -> Bool) -> String -> Bool
+spec any-loop [-> Char Bool] -> String -> Int -> Int -> Bool
+defn any-loop [pred s len i]
+  if [int-eq i len] false [if [pred [str::ref s i]] true [any-loop pred s len [int+ i 1]]]
+
+spec any? [-> Char Bool] -> String -> Bool
+defn any? [pred s]
+  any-loop pred s [str::length s] 0
+
+;; ================ Predicates ================
+
+spec empty? String -> Bool
+defn empty? [s]
+  int-eq [str::length s] 0
+
+spec blank? String -> Bool
+defn blank? [s]
+  if [empty? s] true [all? char::whitespace? s]
+
+;; ================ Search ================
+
+spec index-of-loop String -> String -> Int -> Int -> Int -> [Option Int]
+defn index-of-loop [haystack needle nlen limit i]
+  if [int-lt limit i] [none Int] [if [str::eq [str::slice haystack i [int+ i nlen]] needle] [some Int i] [index-of-loop haystack needle nlen limit [int+ i 1]]]
+
+spec index-of-dispatch String -> String -> Int -> Int -> [Option Int]
+defn index-of-dispatch [haystack needle nlen hlen]
+  if [int-eq nlen 0] [some Int 0] [if [int-lt hlen nlen] [none Int] [index-of-loop haystack needle nlen [int- hlen nlen] 0]]
+
+spec index-of String -> String -> [Option Int]
+defn index-of [haystack needle]
+  index-of-dispatch haystack needle [str::length needle] [str::length haystack]
+
+;; ================ Trimming ================
+
+spec trim-start-idx String -> Int -> Int -> Int
+defn trim-start-idx [s len i]
+  if [int-eq i len] len [if [char::whitespace? [str::ref s i]] [trim-start-idx s len [int+ i 1]] i]
+
+spec trim-start-apply String -> Int -> String
+defn trim-start-apply [s len]
+  str::slice s [trim-start-idx s len 0] len
+
+spec trim-start String -> String
+defn trim-start [s]
+  trim-start-apply s [str::length s]
+
+spec trim-end-idx String -> Int -> Int
+defn trim-end-idx [s i]
+  if [int-lt i 0] [int-neg 1] [if [char::whitespace? [str::ref s i]] [trim-end-idx s [int- i 1]] i]
+
+spec trim-end-apply String -> Int -> String
+defn trim-end-apply [s len]
+  str::slice s 0 [int+ [trim-end-idx s [int- len 1]] 1]
+
+spec trim-end String -> String
+defn trim-end [s]
+  trim-end-apply s [str::length s]
+
+spec trim String -> String
+defn trim [s]
+  trim-end [trim-start s]
+
+;; strip-prefix : String -> String -> Option String
+spec strip-prefix String -> String -> [Option String]
+defn strip-prefix [prefix s]
+  if [str::starts-with? s prefix]
+    [some String [str::slice s [str::length prefix] [str::length s]]]
+    [none String]
+
+;; strip-suffix : String -> String -> Option String
+spec strip-suffix String -> String -> [Option String]
+defn strip-suffix [suffix s]
+  if [str::ends-with? s suffix]
+    [some String [str::slice s 0 [int- [str::length s] [str::length suffix]]]]
+    [none String]
+
+;; ================ Splitting & Joining ================
+
+;; find-from helpers
+spec find-from-loop String -> String -> Int -> Int -> Int -> [Option Int]
+defn find-from-loop [haystack needle nlen limit i]
+  if [int-lt limit i] [none Int] [if [str::eq [str::slice haystack i [int+ i nlen]] needle] [some Int i] [find-from-loop haystack needle nlen limit [int+ i 1]]]
+
+spec find-from String -> String -> Int -> Int -> Int -> [Option Int]
+defn find-from [haystack needle nlen hlen start]
+  if [int-lt [int- hlen nlen] start]
+    [none Int]
+    [find-from-loop haystack needle nlen [int- hlen nlen] start]
+
+;; split : String -> String -> List String
+spec split-chars String -> Int -> Int -> [List String]
+defn split-chars [s len i]
+  if [int-eq i len]
+    [nil String]
+    [cons String [str::from-char [str::ref s i]] [split-chars s len [int+ i 1]]]
+
+spec split-loop String -> String -> Int -> Int -> Int -> [List String]
+defn split-loop [sep s seplen slen start]
+  match [find-from s sep seplen slen start]
+    | none   -> cons String [str::slice s start slen] [nil String]
+    | some i -> cons String [str::slice s start i] [split-loop sep s seplen slen [int+ i seplen]]
+
+spec split-dispatch String -> String -> Int -> Int -> [List String]
+defn split-dispatch [sep s seplen slen]
+  if [int-eq seplen 0]
+    [split-chars s slen 0]
+    [split-loop sep s seplen slen 0]
+
+spec split String -> String -> [List String]
+defn split [sep s]
+  split-dispatch sep s [str::length sep] [str::length s]
+
+;; join : String -> List String -> String
+spec join-rest String -> String -> [List String] -> String
+defn join-rest [sep acc xs]
+  match xs
+    | nil      -> acc
+    | cons h t -> join-rest sep [str::append acc [str::append sep h]] t
+
+spec join String -> [List String] -> String
+defn join [sep xs]
+  match xs
+    | nil      -> ""
+    | cons h t -> join-rest sep h t
+
+;; lines : String -> List String
+spec lines String -> [List String]
+defn lines [s]
+  split "\n" s
+
+;; words : String -> List String
+spec words-filter [List String] -> [List String]
+defn words-filter [xs]
+  match xs
+    | nil      -> nil String
+    | cons h t -> if [empty? h] [words-filter t] [cons String h [words-filter t]]
+
+spec words String -> [List String]
+defn words [s]
+  words-filter [split " " [trim s]]
+
+;; unlines : List String -> String
+spec unlines [List String] -> String
+defn unlines [xs]
+  join "\n" xs
+
+;; unwords : List String -> String
+spec unwords [List String] -> String
+defn unwords [xs]
+  join " " xs
+
+;; split-once : String -> String -> Option (Sigma String String)
+spec split-once-with-found String -> String -> [Option Int] -> [Option [Sigma [_ <String>] String]]
+defn split-once-with-found [sep s found]
+  match found
+    | none   -> none [Sigma [_ <String>] String]
+    | some i -> some [Sigma [_ <String>] String] [pair [str::slice s 0 i] [str::slice s [int+ i [str::length sep]] [str::length s]]]
+
+spec split-once String -> String -> [Option [Sigma [_ <String>] String]]
+defn split-once [sep s]
+  split-once-with-found sep s [index-of s sep]
+
+;; ================ Replacement ================
+
+;; replace : String -> String -> String -> String
+spec replace String -> String -> String -> String
+defn replace [pat repl s]
+  join repl [split pat s]
+
+;; replace-first : String -> String -> String -> String
+spec replace-first-with-found String -> String -> String -> [Option Int] -> String
+defn replace-first-with-found [pat repl s found]
+  match found
+    | none   -> s
+    | some i -> str::append [str::slice s 0 i] [str::append repl [str::slice s [int+ i [str::length pat]] [str::length s]]]
+
+spec replace-first String -> String -> String -> String
+defn replace-first [pat repl s]
+  replace-first-with-found pat repl s [index-of s pat]
+
+;; ================ Transformation ================
+
+;; str-map : (Char -> Char) -> String -> String
+spec str-map-loop [-> Char Char] -> String -> Int -> Int -> String -> String
+defn str-map-loop [f s len i acc]
+  if [int-eq i len]
+    acc
+    [str-map-loop f s len [int+ i 1] [str::append acc [str::from-char [f [str::ref s i]]]]]
+
+spec str-map [-> Char Char] -> String -> String
+defn str-map [f s]
+  str-map-loop f s [str::length s] 0 ""
+
+;; str-filter : (Char -> Bool) -> String -> String
+spec str-filter-loop [-> Char Bool] -> String -> Int -> Int -> String -> String
+defn str-filter-loop [pred s len i acc]
+  if [int-eq i len] acc [if [pred [str::ref s i]] [str-filter-loop pred s len [int+ i 1] [str::append acc [str::from-char [str::ref s i]]]] [str-filter-loop pred s len [int+ i 1] acc]]
+
+spec str-filter [-> Char Bool] -> String -> String
+defn str-filter [pred s]
+  str-filter-loop pred s [str::length s] 0 ""
+
+;; str-reverse : String -> String
+spec str-reverse-loop String -> Int -> String -> String
+defn str-reverse-loop [s i acc]
+  if [int-lt i 0]
+    acc
+    [str-reverse-loop s [int- i 1] [str::append acc [str::from-char [str::ref s i]]]]
+
+spec str-reverse String -> String
+defn str-reverse [s]
+  str-reverse-loop s [int- [str::length s] 1] ""
+
+;; str-repeat : Int -> String -> String
+spec str-repeat-loop Int -> String -> Int -> String -> String
+defn str-repeat-loop [n s i acc]
+  if [int-eq i n]
+    acc
+    [str-repeat-loop n s [int+ i 1] [str::append acc s]]
+
+spec str-repeat Int -> String -> String
+defn str-repeat [n s]
+  str-repeat-loop n s 0 ""
+
+;; pad-start : Int -> Char -> String -> String
+spec pad-start-with-len Int -> Char -> String -> Int -> String
+defn pad-start-with-len [n c s len]
+  if [int-lt len n]
+    [str::append [str::repeat-char [int- n len] c] s]
+    s
+
+spec pad-start Int -> Char -> String -> String
+defn pad-start [n c s]
+  pad-start-with-len n c s [str::length s]
+
+;; pad-end : Int -> Char -> String -> String
+spec pad-end-with-len Int -> Char -> String -> Int -> String
+defn pad-end-with-len [n c s len]
+  if [int-lt len n]
+    [str::append s [str::repeat-char [int- n len] c]]
+    s
+
+spec pad-end Int -> Char -> String -> String
+defn pad-end [n c s]
+  pad-end-with-len n c s [str::length s]
+
+;; ================ Folding ================
+
+;; str-foldl : (A -> Char -> A) -> A -> String -> A
+spec str-foldl-loop {A : Type} [-> A [-> Char A]] -> A -> String -> Int -> Int -> A
+defn str-foldl-loop [f acc s len i]
+  if [int-eq i len]
+    acc
+    [str-foldl-loop f [f acc [str::ref s i]] s len [int+ i 1]]
+
+spec str-foldl {A : Type} [-> A [-> Char A]] -> A -> String -> A
+defn str-foldl [f z s]
+  str-foldl-loop f z s [str::length s] 0
+
+;; ================ Conversion ================
+
+;; to-list : String -> List Char
+spec to-list-loop String -> Int -> Int -> [List Char]
+defn to-list-loop [s len i]
+  if [int-eq i len]
+    [nil Char]
+    [cons Char [str::ref s i] [to-list-loop s len [int+ i 1]]]
+
+spec to-list String -> [List Char]
+defn to-list [s]
+  to-list-loop s [str::length s] 0
+
+;; from-list : List Char -> String
+spec from-list [List Char] -> String
+defn from-list [xs]
+  foldr Char String [fn [c : Char] [acc : String] [str::append [str::from-char c] acc]] "" xs
+
+;; take : Int -> String -> String
+spec take-with-len Int -> String -> Int -> String
+defn take-with-len [n s len]
+  if [int-lt len n] s [str::slice s 0 n]
+
+spec take Int -> String -> String
+defn take [n s]
+  take-with-len n s [str::length s]
+
+;; drop : Int -> String -> String
+spec drop-with-len Int -> String -> Int -> String
+defn drop-with-len [n s len]
+  if [int-lt len n] "" [str::slice s n len]
+
+spec drop Int -> String -> String
+defn drop [n s]
+  drop-with-len n s [str::length s]
+
+;; chunks : Int -> String -> List String
+spec chunks-loop Int -> String -> Int -> Int -> [List String]
+defn chunks-loop [n s len i]
+  if [int-lt len [int+ i 1]] [nil String] [if [int-lt len [int+ i n]] [cons String [str::slice s i len] [nil String]] [cons String [str::slice s i [int+ i n]] [chunks-loop n s len [int+ i n]]]]
+
+spec chunks-dispatch Int -> String -> Int -> [List String]
+defn chunks-dispatch [n s len]
+  if [int-eq len 0]
+    [nil String]
+    [chunks-loop n s len 0]
+
+spec chunks Int -> String -> [List String]
+defn chunks [n s]
+  chunks-dispatch n s [str::length s]

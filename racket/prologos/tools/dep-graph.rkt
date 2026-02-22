@@ -549,6 +549,11 @@
                global-env.rkt driver.rkt reduction.rkt typing-core.rkt namespace.rkt
                trait-resolution.rkt reader.rkt zonk.rkt substitution.rkt qtt.rkt
                unify.rkt foreign.rkt) #t)
+   'test-string-ops.rkt
+   (test-dep '(macros.rkt prelude.rkt syntax.rkt source-location.rkt surface-syntax.rkt
+               errors.rkt metavar-store.rkt parser.rkt elaborator.rkt pretty-print.rkt
+               global-env.rkt driver.rkt reduction.rkt typing-core.rkt namespace.rkt
+               trait-resolution.rkt reader.rkt foreign.rkt) #t)
    'test-transducer.rkt
    (test-dep '(macros.rkt prelude.rkt syntax.rkt source-location.rkt surface-syntax.rkt
                errors.rkt metavar-store.rkt parser.rkt elaborator.rkt pretty-print.rkt
@@ -709,6 +714,11 @@
                                              prologos::data::ordering)
    'prologos::core::hashable-string-instance '(prologos::core::hashable-trait)
    'prologos::core::add-string-instance     '(prologos::core::add-trait prologos::data::string)
+
+   ;; String operations
+   'prologos::core::string-ops    '(prologos::data::string prologos::data::char
+                                    prologos::data::list prologos::data::option
+                                    prologos::data::pair)
 
    ;; Collection trait instances
    'prologos::core::seq-list       '(prologos::core::seq-trait prologos::data::list
@@ -952,7 +962,17 @@
    'test-universe-level-inference.rkt '(prologos::data::nat prologos::core)
    'test-unit-type.rkt          '(prologos::data::nat)
    'test-qtt-pipeline.rkt       '(prologos::data::nat)
-   'test-implicit-inference.rkt  '(prologos::data::nat)))
+   'test-implicit-inference.rkt  '(prologos::data::nat)
+   'test-char-string.rkt         '(prologos::data::char prologos::data::string
+                                   prologos::core::eq-char-instance prologos::core::ord-char-instance
+                                   prologos::core::hashable-char-instance
+                                   prologos::core::eq-string-instance prologos::core::ord-string-instance
+                                   prologos::core::hashable-string-instance
+                                   prologos::core::add-string-instance)
+   'test-string-ops.rkt          '(prologos::data::char prologos::data::string
+                                   prologos::core::string-ops
+                                   prologos::data::list prologos::data::option
+                                   prologos::data::pair)))
 
 ;; ============================================================
 ;; File scanning functions (used for auto-scan of unknown modules)

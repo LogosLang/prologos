@@ -381,6 +381,10 @@
     (require [prologos::core::additive-identity-trait       :refer-all])
     (require [prologos::core::multiplicative-identity-trait  :refer-all])
 
+    ;; ---- Tier 2c-str: String operation module ----
+    ;; Most ops via str-ops:: alias to avoid conflicts with List names.
+    (require [prologos::core::string-ops :as str-ops :refer []])
+
     ;; ---- Tier 2c: Collection operation modules ----
     (require [prologos::core::pvec-ops :refer [pvec-map pvec-filter pvec-fold
                                               pvec-any? pvec-all?

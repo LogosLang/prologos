@@ -23,3 +23,13 @@ foreign racket "racket/base" [make-string :as repeat-char : Int -> Char -> Strin
 ;; --- Conversion ---
 foreign racket "racket/base" [string :as from-char : Char -> String]
 foreign racket "racket/base" ["number->string" :as from-int : Int -> String]
+
+;; --- Search (racket/string) ---
+foreign racket "racket/string" [string-contains? :as contains? : String -> String -> Bool]
+foreign racket "racket/string" [string-prefix? :as starts-with? : String -> String -> Bool]
+foreign racket "racket/string" [string-suffix? :as ends-with? : String -> String -> Bool]
+
+;; --- Case conversion (racket/base) ---
+foreign racket "racket/base" [string-upcase :as upper : String -> String]
+foreign racket "racket/base" [string-downcase :as lower : String -> String]
+foreign racket "racket/base" [string-titlecase :as capitalize : String -> String]
