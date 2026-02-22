@@ -24,7 +24,9 @@
          "champ.rkt"
          "rrb.rkt")
 
-(provide whnf nf nf-whnf conv conv-nf current-nf-cache)
+(provide whnf nf nf-whnf conv conv-nf
+         current-nf-cache current-whnf-cache
+         current-reduction-fuel current-nat-value-cache)
 
 ;; ========================================
 ;; Helpers for building Prologos List values in reduction
@@ -101,11 +103,22 @@
 ;; ========================================
 
 ;; Extract a Racket natural number from an expr-zero/expr-suc chain, or #f if not a numeral.
+;; Per-command memoization avoids O(N^2) re-traversal during coercion.
+(define current-nat-value-cache (make-parameter #f))
+
 (define (nat-value e)
-  (match e
-    [(expr-zero) 0]
-    [(expr-suc e1) (let ([v (nat-value e1)]) (and v (+ v 1)))]
-    [_ #f]))
+  (define cache (current-nat-value-cache))
+  (cond
+    [(and cache (hash-ref cache e #f)) => values]
+    [else
+     (define result
+       (match e
+         [(expr-zero) 0]
+         [(expr-suc e1) (let ([v (nat-value e1)]) (and v (+ v 1)))]
+         [_ #f]))
+     (when (and cache result)
+       (hash-set! cache e result))
+     result]))
 
 ;; ========================================
 ;; Phase 3e: Subtype coercion helpers for stuck-term reduction
@@ -199,88 +212,37 @@
       [(not (equal? a* a)) (whnf (ctor a*))]
       [else (ctor a)])))
 
-;; Reduce a binary Posit8 operation: no narrower type → no coercion.
-(define (reduce-p8-binary ctor a b)
+;; Unified posit binary reducer. target-width: 8, 16, 32, or 64.
+;; Posit8 has no narrower type; Posit16/32/64 coerce from narrower widths.
+(define (reduce-posit-binary target-width ctor a b)
+  (let* ([a* (whnf a)]
+         [b* (whnf b)])
+    (if (= target-width 8)
+        ;; Posit8: no coercion possible
+        (cond
+          [(not (equal? a* a)) (whnf (ctor a* b))]
+          [(not (equal? b* b)) (whnf (ctor a b*))]
+          [else (ctor a b)])
+        ;; Posit16/32/64: try coercion from narrower widths
+        (let ([ca (or (try-coerce-to-posit target-width a*) a*)]
+              [cb (or (try-coerce-to-posit target-width b*) b*)])
+          (cond
+            [(or (not (eq? ca a*)) (not (eq? cb b*)))
+             (whnf (ctor ca cb))]
+            [(not (equal? a* a)) (whnf (ctor a* b))]
+            [(not (equal? b* b)) (whnf (ctor a b*))]
+            [else (ctor a b)])))))
+
+;; Unified posit unary reducer.
+(define (reduce-posit-unary target-width ctor a)
   (let ([a* (whnf a)])
-    (if (equal? a* a)
-        (let ([b* (whnf b)])
-          (if (equal? b* b)
-              (ctor a b)   ; stuck — both operands in WHNF
-              (whnf (ctor a b*))))
-        (whnf (ctor a* b)))))
-
-;; Reduce a unary Posit8 operation: no narrower type → no coercion.
-(define (reduce-p8-unary ctor a)
-  (let ([a* (whnf a)])
-    (if (equal? a* a)
-        (ctor a)   ; stuck
-        (whnf (ctor a*)))))
-
-;; Reduce a binary Posit16 operation: Posit8 operands coerce to Posit16.
-(define (reduce-p16-binary ctor a b)
-  (let* ([a* (whnf a)]
-         [b* (whnf b)])
-    (let ([ca (or (try-coerce-to-posit 16 a*) a*)]
-          [cb (or (try-coerce-to-posit 16 b*) b*)])
-      (cond
-        [(or (not (eq? ca a*)) (not (eq? cb b*)))
-         (whnf (ctor ca cb))]
-        [(not (equal? a* a)) (whnf (ctor a* b))]
-        [(not (equal? b* b)) (whnf (ctor a b*))]
-        [else (ctor a b)]))))
-
-;; Reduce a unary Posit16 operation: Posit8 operand coerces to Posit16.
-(define (reduce-p16-unary ctor a)
-  (let* ([a* (whnf a)]
-         [ca (or (try-coerce-to-posit 16 a*) a*)])
-    (cond
-      [(not (eq? ca a*)) (whnf (ctor ca))]
-      [(not (equal? a* a)) (whnf (ctor a*))]
-      [else (ctor a)])))
-
-;; Reduce a binary Posit32 operation: Posit8/16 operands coerce to Posit32.
-(define (reduce-p32-binary ctor a b)
-  (let* ([a* (whnf a)]
-         [b* (whnf b)])
-    (let ([ca (or (try-coerce-to-posit 32 a*) a*)]
-          [cb (or (try-coerce-to-posit 32 b*) b*)])
-      (cond
-        [(or (not (eq? ca a*)) (not (eq? cb b*)))
-         (whnf (ctor ca cb))]
-        [(not (equal? a* a)) (whnf (ctor a* b))]
-        [(not (equal? b* b)) (whnf (ctor a b*))]
-        [else (ctor a b)]))))
-
-;; Reduce a unary Posit32 operation: Posit8/16 operand coerces to Posit32.
-(define (reduce-p32-unary ctor a)
-  (let* ([a* (whnf a)]
-         [ca (or (try-coerce-to-posit 32 a*) a*)])
-    (cond
-      [(not (eq? ca a*)) (whnf (ctor ca))]
-      [(not (equal? a* a)) (whnf (ctor a*))]
-      [else (ctor a)])))
-
-;; Reduce a binary Posit64 operation: Posit8/16/32 operands coerce to Posit64.
-(define (reduce-p64-binary ctor a b)
-  (let* ([a* (whnf a)]
-         [b* (whnf b)])
-    (let ([ca (or (try-coerce-to-posit 64 a*) a*)]
-          [cb (or (try-coerce-to-posit 64 b*) b*)])
-      (cond
-        [(or (not (eq? ca a*)) (not (eq? cb b*)))
-         (whnf (ctor ca cb))]
-        [(not (equal? a* a)) (whnf (ctor a* b))]
-        [(not (equal? b* b)) (whnf (ctor a b*))]
-        [else (ctor a b)]))))
-
-;; Reduce a unary Posit64 operation: Posit8/16/32 operand coerces to Posit64.
-(define (reduce-p64-unary ctor a)
-  (let* ([a* (whnf a)]
-         [ca (or (try-coerce-to-posit 64 a*) a*)])
-    (cond
-      [(not (eq? ca a*)) (whnf (ctor ca))]
-      [(not (equal? a* a)) (whnf (ctor a*))]
-      [else (ctor a)])))
+    (if (= target-width 8)
+        (if (equal? a* a) (ctor a) (whnf (ctor a*)))
+        (let ([ca (or (try-coerce-to-posit target-width a*) a*)])
+          (cond
+            [(not (eq? ca a*)) (whnf (ctor ca))]
+            [(not (equal? a* a)) (whnf (ctor a*))]
+            [else (ctor a)])))))
 
 ;; ========================================
 ;; Structural pattern matching for reduce
@@ -365,8 +327,32 @@
 
 ;; ========================================
 ;; Weak Head Normal Form
+;; Per-command memoization: when current-whnf-cache is active,
+;; cache whnf results keyed by expr.
 ;; ========================================
+(define current-whnf-cache (make-parameter #f))
+;; Fuel: #f = unlimited, or a box containing remaining step count.
+;; Use (box N) to set a limit; whnf-impl decrements on each call.
+(define current-reduction-fuel (make-parameter #f))
+
 (define (whnf e)
+  (define cache (current-whnf-cache))
+  (cond
+    [(and cache (hash-ref cache e #f))
+     => values]
+    [else
+     (define result (whnf-impl e))
+     (when cache
+       (hash-set! cache e result))
+     result]))
+
+(define (whnf-impl e)
+  ;; Check fuel
+  (let ([fuel (current-reduction-fuel)])
+    (when fuel
+      (when (<= (unbox fuel) 0)
+        (error 'reduction "fuel exhausted after too many reduction steps"))
+      (set-box! fuel (sub1 (unbox fuel)))))
   (match e
     ;; Beta reduction: app(lam(m, A, body), arg) -> whnf(subst(0, arg, body))
     [(expr-app (expr-lam _ _ body) arg)
@@ -593,7 +579,7 @@
     [(expr-p8-to-rat (expr-posit8 v))
      (let ([r (posit8-to-rational v)])
        (if (eq? r 'nar) (expr-error) (expr-rat r)))]
-    [(expr-p8-to-rat a) (reduce-p8-unary expr-p8-to-rat a)]
+    [(expr-p8-to-rat a) (reduce-posit-unary 8 expr-p8-to-rat a)]
 
     ;; Phase 3f: p8-from-rat -- Rat -> Posit8
     [(expr-p8-from-rat (expr-rat v))
@@ -612,17 +598,17 @@
     ;; ---- Posit8 stuck-term reduction ----
 
     ;; Binary ops: reduce operands
-    [(expr-p8-add a b) (reduce-p8-binary expr-p8-add a b)]
-    [(expr-p8-sub a b) (reduce-p8-binary expr-p8-sub a b)]
-    [(expr-p8-mul a b) (reduce-p8-binary expr-p8-mul a b)]
-    [(expr-p8-div a b) (reduce-p8-binary expr-p8-div a b)]
-    [(expr-p8-lt a b) (reduce-p8-binary expr-p8-lt a b)]
-    [(expr-p8-le a b) (reduce-p8-binary expr-p8-le a b)]
+    [(expr-p8-add a b) (reduce-posit-binary 8 expr-p8-add a b)]
+    [(expr-p8-sub a b) (reduce-posit-binary 8 expr-p8-sub a b)]
+    [(expr-p8-mul a b) (reduce-posit-binary 8 expr-p8-mul a b)]
+    [(expr-p8-div a b) (reduce-posit-binary 8 expr-p8-div a b)]
+    [(expr-p8-lt a b) (reduce-posit-binary 8 expr-p8-lt a b)]
+    [(expr-p8-le a b) (reduce-posit-binary 8 expr-p8-le a b)]
 
     ;; Unary ops: reduce operand
-    [(expr-p8-neg a) (reduce-p8-unary expr-p8-neg a)]
-    [(expr-p8-abs a) (reduce-p8-unary expr-p8-abs a)]
-    [(expr-p8-sqrt a) (reduce-p8-unary expr-p8-sqrt a)]
+    [(expr-p8-neg a) (reduce-posit-unary 8 expr-p8-neg a)]
+    [(expr-p8-abs a) (reduce-posit-unary 8 expr-p8-abs a)]
+    [(expr-p8-sqrt a) (reduce-posit-unary 8 expr-p8-sqrt a)]
 
     ;; p8-if-nar: reduce the value argument
     [(expr-p8-if-nar t nc vc v)
@@ -661,7 +647,7 @@
     [(expr-p16-to-rat (expr-posit16 v))
      (let ([r (posit16-to-rational v)])
        (if (eq? r 'nar) (expr-error) (expr-rat r)))]
-    [(expr-p16-to-rat a) (reduce-p16-unary expr-p16-to-rat a)]
+    [(expr-p16-to-rat a) (reduce-posit-unary 16 expr-p16-to-rat a)]
 
     ;; Phase 3f: p16-from-rat -- Rat -> Posit16
     [(expr-p16-from-rat (expr-rat v))
@@ -680,17 +666,17 @@
     ;; ---- Posit16 stuck-term reduction ----
 
     ;; Binary ops: reduce operands
-    [(expr-p16-add a b) (reduce-p16-binary expr-p16-add a b)]
-    [(expr-p16-sub a b) (reduce-p16-binary expr-p16-sub a b)]
-    [(expr-p16-mul a b) (reduce-p16-binary expr-p16-mul a b)]
-    [(expr-p16-div a b) (reduce-p16-binary expr-p16-div a b)]
-    [(expr-p16-lt a b) (reduce-p16-binary expr-p16-lt a b)]
-    [(expr-p16-le a b) (reduce-p16-binary expr-p16-le a b)]
+    [(expr-p16-add a b) (reduce-posit-binary 16 expr-p16-add a b)]
+    [(expr-p16-sub a b) (reduce-posit-binary 16 expr-p16-sub a b)]
+    [(expr-p16-mul a b) (reduce-posit-binary 16 expr-p16-mul a b)]
+    [(expr-p16-div a b) (reduce-posit-binary 16 expr-p16-div a b)]
+    [(expr-p16-lt a b) (reduce-posit-binary 16 expr-p16-lt a b)]
+    [(expr-p16-le a b) (reduce-posit-binary 16 expr-p16-le a b)]
 
     ;; Unary ops: reduce operand
-    [(expr-p16-neg a) (reduce-p16-unary expr-p16-neg a)]
-    [(expr-p16-abs a) (reduce-p16-unary expr-p16-abs a)]
-    [(expr-p16-sqrt a) (reduce-p16-unary expr-p16-sqrt a)]
+    [(expr-p16-neg a) (reduce-posit-unary 16 expr-p16-neg a)]
+    [(expr-p16-abs a) (reduce-posit-unary 16 expr-p16-abs a)]
+    [(expr-p16-sqrt a) (reduce-posit-unary 16 expr-p16-sqrt a)]
 
     ;; p16-if-nar: reduce the value argument
     [(expr-p16-if-nar t nc vc v)
@@ -729,7 +715,7 @@
     [(expr-p32-to-rat (expr-posit32 v))
      (let ([r (posit32-to-rational v)])
        (if (eq? r 'nar) (expr-error) (expr-rat r)))]
-    [(expr-p32-to-rat a) (reduce-p32-unary expr-p32-to-rat a)]
+    [(expr-p32-to-rat a) (reduce-posit-unary 32 expr-p32-to-rat a)]
 
     ;; Phase 3f: p32-from-rat -- Rat -> Posit32
     [(expr-p32-from-rat (expr-rat v))
@@ -748,17 +734,17 @@
     ;; ---- Posit32 stuck-term reduction ----
 
     ;; Binary ops: reduce operands
-    [(expr-p32-add a b) (reduce-p32-binary expr-p32-add a b)]
-    [(expr-p32-sub a b) (reduce-p32-binary expr-p32-sub a b)]
-    [(expr-p32-mul a b) (reduce-p32-binary expr-p32-mul a b)]
-    [(expr-p32-div a b) (reduce-p32-binary expr-p32-div a b)]
-    [(expr-p32-lt a b) (reduce-p32-binary expr-p32-lt a b)]
-    [(expr-p32-le a b) (reduce-p32-binary expr-p32-le a b)]
+    [(expr-p32-add a b) (reduce-posit-binary 32 expr-p32-add a b)]
+    [(expr-p32-sub a b) (reduce-posit-binary 32 expr-p32-sub a b)]
+    [(expr-p32-mul a b) (reduce-posit-binary 32 expr-p32-mul a b)]
+    [(expr-p32-div a b) (reduce-posit-binary 32 expr-p32-div a b)]
+    [(expr-p32-lt a b) (reduce-posit-binary 32 expr-p32-lt a b)]
+    [(expr-p32-le a b) (reduce-posit-binary 32 expr-p32-le a b)]
 
     ;; Unary ops: reduce operand
-    [(expr-p32-neg a) (reduce-p32-unary expr-p32-neg a)]
-    [(expr-p32-abs a) (reduce-p32-unary expr-p32-abs a)]
-    [(expr-p32-sqrt a) (reduce-p32-unary expr-p32-sqrt a)]
+    [(expr-p32-neg a) (reduce-posit-unary 32 expr-p32-neg a)]
+    [(expr-p32-abs a) (reduce-posit-unary 32 expr-p32-abs a)]
+    [(expr-p32-sqrt a) (reduce-posit-unary 32 expr-p32-sqrt a)]
 
     ;; p32-if-nar: reduce the value argument
     [(expr-p32-if-nar t nc vc v)
@@ -797,7 +783,7 @@
     [(expr-p64-to-rat (expr-posit64 v))
      (let ([r (posit64-to-rational v)])
        (if (eq? r 'nar) (expr-error) (expr-rat r)))]
-    [(expr-p64-to-rat a) (reduce-p64-unary expr-p64-to-rat a)]
+    [(expr-p64-to-rat a) (reduce-posit-unary 64 expr-p64-to-rat a)]
 
     ;; Phase 3f: p64-from-rat -- Rat -> Posit64
     [(expr-p64-from-rat (expr-rat v))
@@ -816,17 +802,17 @@
     ;; ---- Posit64 stuck-term reduction ----
 
     ;; Binary ops: reduce operands
-    [(expr-p64-add a b) (reduce-p64-binary expr-p64-add a b)]
-    [(expr-p64-sub a b) (reduce-p64-binary expr-p64-sub a b)]
-    [(expr-p64-mul a b) (reduce-p64-binary expr-p64-mul a b)]
-    [(expr-p64-div a b) (reduce-p64-binary expr-p64-div a b)]
-    [(expr-p64-lt a b) (reduce-p64-binary expr-p64-lt a b)]
-    [(expr-p64-le a b) (reduce-p64-binary expr-p64-le a b)]
+    [(expr-p64-add a b) (reduce-posit-binary 64 expr-p64-add a b)]
+    [(expr-p64-sub a b) (reduce-posit-binary 64 expr-p64-sub a b)]
+    [(expr-p64-mul a b) (reduce-posit-binary 64 expr-p64-mul a b)]
+    [(expr-p64-div a b) (reduce-posit-binary 64 expr-p64-div a b)]
+    [(expr-p64-lt a b) (reduce-posit-binary 64 expr-p64-lt a b)]
+    [(expr-p64-le a b) (reduce-posit-binary 64 expr-p64-le a b)]
 
     ;; Unary ops: reduce operand
-    [(expr-p64-neg a) (reduce-p64-unary expr-p64-neg a)]
-    [(expr-p64-abs a) (reduce-p64-unary expr-p64-abs a)]
-    [(expr-p64-sqrt a) (reduce-p64-unary expr-p64-sqrt a)]
+    [(expr-p64-neg a) (reduce-posit-unary 64 expr-p64-neg a)]
+    [(expr-p64-abs a) (reduce-posit-unary 64 expr-p64-abs a)]
+    [(expr-p64-sqrt a) (reduce-posit-unary 64 expr-p64-sqrt a)]
 
     ;; p64-if-nar: reduce the value argument
     [(expr-p64-if-nar t nc vc v)
@@ -1312,13 +1298,27 @@
     ;; Annotation erasure (shouldn't usually appear in WHNF, but handle it)
     [(expr-ann e1 _) (nf e1)]
 
-    ;; Eliminators stuck on neutral
+    ;; Eliminators stuck on neutral — lazy branch normalization
+    ;; Only normalize the scrutinee (target/proof); if it resolves, take the
+    ;; appropriate branch. Otherwise leave branches unnormalized to avoid
+    ;; exponential unfolding of recursive functions.
     [(expr-natrec mot base step target)
-     (expr-natrec (nf mot) (nf base) (nf step) (nf target))]
+     (let ([target* (nf target)])
+       (match target*
+         [(expr-zero) (nf base)]
+         [(expr-suc n) (nf (expr-app (expr-app step n) (expr-natrec mot base step n)))]
+         [_ (expr-natrec (nf mot) base step target*)]))]
     [(expr-J mot base left right proof)
-     (expr-J (nf mot) (nf base) (nf left) (nf right) (nf proof))]
+     (let ([proof* (nf proof)])
+       (match proof*
+         [(expr-refl) (nf (expr-app base left))]
+         [_ (expr-J (nf mot) (nf base) (nf left) (nf right) proof*)]))]
     [(expr-boolrec mot tc fc target)
-     (expr-boolrec (nf mot) (nf tc) (nf fc) (nf target))]
+     (let ([target* (nf target)])
+       (match target*
+         [(expr-true)  (nf tc)]
+         [(expr-false) (nf fc)]
+         [_ (expr-boolrec (nf mot) tc fc target*)]))]
 
     ;; Vec/Fin normalization
     [(expr-Vec t n) (expr-Vec (nf t) (nf n))]

@@ -72,8 +72,11 @@ rat-literal     = [ '-' ] , digit , { digit } , '/' , digit , { digit } ;
 (* Natural number literals — N suffix *)
 nat-literal     = digit , { digit } , 'N' ;
 
+(* Decimal literals — parsed as exact rational *)
+decimal-literal = [ '-' ] , digit , { digit } , '.' , digit , { digit } ;
+
 (* Approximate (posit) literals — ~ prefix *)
-approx-literal  = '~' , ( int-literal | rat-literal ) ;
+approx-literal  = '~' , ( int-literal | rat-literal | decimal-literal ) ;
 
 (* ------------------------------------------------ *)
 (* 1.4 String Literals                              *)

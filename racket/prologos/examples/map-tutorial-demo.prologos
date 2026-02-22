@@ -1,0 +1,531 @@
+ns examples.map-tutorial-demo
+
+;; ========================================================================
+;;
+;;     ╔═══════════════════════════════════════════════════════╗
+;;     ║   M A P S   I N   P R O L O G O S                    ║
+;;     ║   An Interactive Spiral Tutorial                      ║
+;;     ╚═══════════════════════════════════════════════════════╝
+;;
+;; ========================================================================
+;;
+;; Welcome! This is a literate, executable tutorial on Maps — Prologos's
+;; persistent, immutable, hash-based dictionaries. Every expression in
+;; this file evaluates. Run the whole thing and follow the output, or
+;; evaluate sections one at a time in your editor.
+;;
+;; We'll spiral through the topic:
+;;
+;;   🌀 Pass 1 — Build your first map, look things up
+;;   🌀 Pass 2 — Grow, shrink, and query maps
+;;   🌀 Pass 3 — Map literals & implicit syntax
+;;   🌀 Pass 4 — Dot-access: the ergonomic shortcut
+;;   🌀 Pass 5 — Working with keys and values as lists
+;;   🌀 Pass 6 — Higher-order map operations
+;;   🌀 Pass 7 — Nesting and real-world patterns
+;;   🌀 Pass 8 — Putting it all together
+;;
+;; Prerequisites: basic familiarity with Prologos (Nat, Bool, List,
+;; keywords, pattern matching). If you haven't seen those yet, check
+;; out the prelude — `(ns foo)` gives you everything.
+;;
+;; Let's go!
+
+require [prologos::data::list   :refer [List nil cons map filter foldr
+                                        length sum reverse append head]]
+        [prologos::data::nat    :refer [add mult double sub zero? le?]]
+        [prologos::data::option :refer [Option some none unwrap-or]]
+        [prologos::data::bool   :refer [not and or]]
+        [prologos::core::map-ops :refer [map-map-vals map-filter-vals
+                                         map-fold-entries map-keys-list
+                                         map-vals-list map-merge]]
+
+
+;; ========================================================================
+;; 🌀 PASS 1 — Your First Map
+;; ========================================================================
+;;
+;; A Map in Prologos is a persistent hash map. It maps keys to values,
+;; both fully typed. The most common shape is `Map Keyword V` — keywords
+;; like :name, :age, :score as keys, with some value type V.
+;;
+;; The type is: Map K V
+;;   K = the key type   (usually Keyword, but can be Nat, String, etc.)
+;;   V = the value type  (any type you like)
+;;
+;; Let's start from nothing and build up.
+
+;; An empty map of keywords to natural numbers:
+def empty-map : [Map Keyword Nat]
+  [map-empty Keyword Nat]
+
+;; Not very exciting! But it's fully typed — the compiler knows this
+;; is a Map from keywords to Nats.
+;;
+;; Now let's add an entry. `map-assoc` takes a map, a key, and a value,
+;; and returns a NEW map with that entry added. The original is unchanged
+;; — maps are immutable!
+
+def scores : [Map Keyword Nat]
+  [map-assoc [map-empty Keyword Nat] :alice 95N]
+
+;; And look something up with `map-get`:
+[map-get scores :alice]
+
+;; ↑ That evaluates to 95N : Nat
+;; Try changing 95N to your own score and re-evaluating!
+
+;; We can chain assoc calls to build larger maps:
+def more-scores : [Map Keyword Nat]
+  [map-assoc [map-assoc [map-assoc [map-empty Keyword Nat]
+    :alice 95N]
+    :bob 87N]
+    :carol 92N]
+
+[map-get more-scores :bob]
+;; → 87N : Nat
+
+;; 📝 YOUR TURN: Add a fourth entry :dave with score 78N to more-scores,
+;;    bind it to `all-scores`, and look up :dave.
+;;    (Hint: [map-assoc more-scores :dave 78N])
+
+
+;; ========================================================================
+;; 🌀 PASS 2 — Growing, Shrinking, and Querying
+;; ========================================================================
+;;
+;; Now that we can build maps and look things up, let's explore the
+;; full toolkit of primitive operations.
+;;
+;; Built-in operations (parser keywords, always available):
+;;   map-empty   K V          → empty map
+;;   map-assoc   m k v        → map with k↦v added/updated
+;;   map-get     m k          → value at k (error if missing!)
+;;   map-dissoc  m k          → map with k removed
+;;   map-size    m            → number of entries (Nat)
+;;   map-has-key? m k         → Bool: is k present?
+;;   map-keys    m            → List K: all keys
+;;   map-vals    m            → List V: all values
+
+;; --- Updating a value ---
+;; map-assoc on an existing key REPLACES the value:
+def updated : [Map Keyword Nat]
+  [map-assoc more-scores :alice 99N]
+
+[map-get updated :alice]
+;; → 99N : Nat  (was 95N before)
+
+;; The original is untouched — persistent data structure!
+[map-get more-scores :alice]
+;; → 95N : Nat  (still the old value)
+
+;; --- Removing an entry ---
+def without-bob : [Map Keyword Nat]
+  [map-dissoc more-scores :bob]
+
+[map-has-key? without-bob :bob]
+;; → false : Bool
+
+[map-has-key? without-bob :alice]
+;; → true : Bool
+
+;; --- Counting entries ---
+[map-size more-scores]
+;; → 3N : Nat
+
+[map-size without-bob]
+;; → 2N : Nat
+
+[map-size [map-empty Keyword Nat]]
+;; → 0N : Nat
+
+;; --- Safe lookup: check before you get ---
+;; map-get on a missing key is an error! Always guard with map-has-key?
+;; Or better yet, use the Keyed trait's kv-get (returns Option) —
+;; we'll see that in Pass 6.
+
+;; 📝 YOUR TURN: Starting from more-scores, dissoc :carol, then assoc
+;;    :eve 100N. What's the size of the resulting map?
+
+
+;; ========================================================================
+;; 🌀 PASS 3 — Map Literals: Less Ceremony, More Joy
+;; ========================================================================
+;;
+;; Chaining map-assoc calls is correct but verbose. Prologos offers
+;; two shortcuts:
+;;
+;; 1. BRACE LITERALS: {:key1 val1 :key2 val2}
+;;    Familiar from Clojure, Ruby, JSON — just curly braces.
+;;
+;; 2. IMPLICIT MAP SYNTAX: indented keyword blocks under a def
+;;    Write it like YAML, get a map for free!
+;;
+;; Let's see both.
+
+;; --- Brace literals ---
+def team : [Map Keyword Nat]
+  {:alice 95N :bob 87N :carol 92N}
+
+[map-get team :carol]
+;; → 92N : Nat
+
+;; That's the same as our more-scores above, in one line!
+
+;; --- Implicit map syntax ---
+;; When a `def` has indented keyword-value lines, Prologos automatically
+;; treats them as a map literal:
+
+def roster : [Map Keyword Nat]
+  :alice 95N
+  :bob   87N
+  :carol 92N
+
+[map-get roster :alice]
+;; → 95N : Nat
+
+;; It reads like a config file, but it's a fully-typed immutable map.
+;; Under the hood, the reader turns the indented block into the same
+;; $brace-params structure as {:alice 95N :bob 87N :carol 92N}.
+;;
+;; 💡 TIP: The implicit syntax only fires for `def`/`defn` forms
+;; with keyword-headed children. Function calls like [f :x 1 :y 2]
+;; won't be rewritten — no surprises!
+
+;; --- Empty map literal ---
+;; {} also works but needs a type annotation since there's no content
+;; to infer the types from:
+def nothing : [Map Keyword Nat] := {}
+
+[map-size nothing]
+;; → 0N : Nat
+
+;; 📝 YOUR TURN: Rewrite this verbose version using a map literal:
+;;   [map-assoc [map-assoc [map-empty Keyword Nat] :x 10N] :y 20N]
+;;   →  {:x 10N :y 20N}   — try it!
+
+
+;; ========================================================================
+;; 🌀 PASS 4 — Dot-Access: The Ergonomic Shortcut
+;; ========================================================================
+;;
+;; Prologos has dot-access syntax for keyword maps:
+;;
+;;   m.name   ≡   [map-get m :name]
+;;
+;; The reader sees `.name` and rewrites it to a map-get with the
+;; corresponding keyword. It's purely syntactic sugar — no runtime cost.
+
+def player : [Map Keyword Nat]
+  :health 100N
+  :mana   50N
+  :level   7N
+
+;; Dot-access — clean and readable:
+player.health
+;; → 100N : Nat
+
+player.mana
+;; → 50N : Nat
+
+player.level
+;; → 7N : Nat
+
+;; Compare with the explicit form:
+[map-get player :level]
+;; → 7N : Nat  (same result)
+
+;; Dot-access works on any expression that returns a map, not just
+;; names. You can chain operations:
+def leveled-up : [Map Keyword Nat]
+  [map-assoc player :level 8N]
+
+leveled-up.level
+;; → 8N : Nat
+
+;; 💡 TIP: Dot-access uses map-get under the hood, so it will error
+;; on missing keys — just like map-get. Use map-has-key? first if unsure.
+
+;; 📝 YOUR TURN: Define a `spell` map with :damage 30N, :cost 5N,
+;;    and :range 10N. Look up each field using dot-access.
+
+
+;; ========================================================================
+;; 🌀 PASS 5 — Keys, Values, and List Interop
+;; ========================================================================
+;;
+;; Maps aren't islands — they connect to the rest of the collection
+;; ecosystem. You can extract keys and values as Lists, then use all
+;; the familiar List operations on them.
+
+;; Extract the keys:
+[map-keys roster]
+;; → a List of keywords: :alice, :bob, :carol (order may vary)
+
+;; Extract the values:
+[map-vals roster]
+;; → a List of Nats: 95N, 87N, 92N (same order as keys)
+
+;; Count entries — use the built-in map-size for a clean result:
+[map-size roster]
+;; → 3N : Nat
+
+;; 💡 TIP: You can also do [length Keyword [map-keys roster]] but
+;; map-size is preferred — it's a built-in primitive and always fully
+;; reduces.
+
+;; The map-ops module also provides functional wrappers:
+;; map-keys-list and map-vals-list — same behavior but as regular
+;; functions (useful for passing to higher-order functions):
+[map-keys-list roster]
+[map-vals-list roster]
+
+;; 📝 YOUR TURN: Try [map-keys player] and [map-vals player] to see
+;;    the contents of the player map from Pass 4. What order are they in?
+
+
+;; ========================================================================
+;; 🌀 PASS 6 — Higher-Order Map Operations
+;; ========================================================================
+;;
+;; This is where maps get really powerful. The map-ops module provides
+;; higher-order functions that transform maps in one shot.
+;;
+;; Available from map-ops (already required at the top):
+;;   map-map-vals     : (V -> W) -> Map K V -> Map K W
+;;   map-filter-vals  : (V -> Bool) -> Map K V -> Map K V
+;;   map-fold-entries : (B -> K -> V -> B) -> B -> Map K V -> B
+;;   map-merge        : Map K V -> Map K V -> Map K V
+
+;; 💡 NOTE: map-ops functions build new maps by folding over key lists.
+;; When you bind the result to a def and use map-get, you'll see the
+;; correct type but the evaluator may show the foldr expression rather
+;; than a fully-reduced Nat. This is normal — the type system verifies
+;; correctness at compile time. In a compiled program or REPL with
+;; full evaluation, these reduce completely.
+
+;; --- Transform every value ---
+;; Double all scores:
+def doubled-scores : [Map Keyword Nat]
+  [map-map-vals double roster]
+
+;; The type checker confirms this is Map Keyword Nat:
+[map-size doubled-scores]
+
+;; --- Filter entries by value ---
+;; Keep only scores above 90.
+;; Nat literals like 91N are syntactic sugar for the corresponding
+;; Peano number — much nicer than writing 91 nested (suc ...) calls!
+(def passes? : [-> Nat Bool] (fn (n : Nat) (le? 91N n)))
+
+def honor-roll : [Map Keyword Nat]
+  [map-filter-vals passes? roster]
+
+[map-size honor-roll]
+;; The filtered map should contain 2 entries (alice & carol pass; bob doesn't)
+
+;; --- Fold over all entries ---
+;; Sum all values using map-fold-entries:
+(def sum-vals : [-> Nat [-> Keyword [-> Nat Nat]]]
+  (fn (acc : Nat) (fn (_ : Keyword) (fn (v : Nat) (add acc v)))))
+
+[map-fold-entries sum-vals 0N roster]
+;; Folds over all entries, accumulating the sum of values.
+
+;; --- Merging maps ---
+;; map-merge combines two maps. The RIGHT map wins on key conflicts:
+def base-stats : [Map Keyword Nat]
+  {:health 100N :mana 50N}
+
+def buff : [Map Keyword Nat]
+  {:mana 75N :shield 30N}
+
+def buffed : [Map Keyword Nat]
+  [map-merge base-stats buff]
+
+;; After merging: :mana updated (buff wins), :shield added, :health stays.
+;; Let's verify the size:
+[map-size buffed]
+
+;; 💡 TIP: Think of map-merge as "overlay" — the second map overlays
+;; the first. Perfect for default configs + user overrides.
+;; In a full REPL, buffed.health → 100N, buffed.mana → 75N,
+;; buffed.shield → 30N.
+
+;; 📝 YOUR TURN: Use map-map-vals with `suc` to increment every value
+;;    in `roster` by 1. Then check alice's new score.
+
+
+;; ========================================================================
+;; 🌀 PASS 7 — Nesting and Real-World Patterns
+;; ========================================================================
+;;
+;; Maps can contain other maps — this is how you model structured data
+;; like configs, game entities, or API responses.
+
+;; --- Nested maps ---
+;; A game character as a nested map:
+def warrior-stats : [Map Keyword Nat]
+  {:hp 120N :atk 45N :def 30N}
+
+def warrior-equip : [Map Keyword Nat]
+  {:weapon 15N :armor 10N}
+
+;; We can't directly nest Map Keyword Nat inside Map Keyword Nat
+;; (same value type), but we can build layered structures:
+
+;; A "poor man's record" — two named maps for different concerns:
+warrior-stats.hp
+;; → 120N : Nat
+
+warrior-equip.weapon
+;; → 15N : Nat
+
+;; --- Pattern: Config with defaults ---
+;; Define defaults, then merge user overrides:
+def default-config : [Map Keyword Nat]
+  {:timeout 30N :retries 3N :port 8080N}
+
+def user-config : [Map Keyword Nat]
+  {:timeout 60N :port 3000N}
+
+def final-config : [Map Keyword Nat]
+  [map-merge default-config user-config]
+
+;; In full evaluation: final-config.timeout → 60N (user override),
+;; final-config.retries → 3N (default preserved),
+;; final-config.port → 3000N (user override).
+[map-size final-config]
+
+;; --- Pattern: Counting occurrences ---
+;; Update-or-insert pattern using map-has-key? + map-assoc:
+;;
+;; Since maps are immutable, "updating" means creating a new map
+;; with the changed value. Here's a helper to increment a counter:
+
+spec bump-count [Map Keyword Nat] -> Keyword -> [Map Keyword Nat]
+defn bump-count [m k]
+  if [map-has-key? m k]
+    [map-assoc m k [add [map-get m k] 1N]]
+    [map-assoc m k 1N]
+
+def counts : [Map Keyword Nat] := [map-empty Keyword Nat]
+def counts1 : [Map Keyword Nat] [bump-count counts :apple]
+def counts2 : [Map Keyword Nat] [bump-count counts1 :banana]
+def counts3 : [Map Keyword Nat] [bump-count counts2 :apple]
+def counts4 : [Map Keyword Nat] [bump-count counts3 :apple]
+
+counts4.apple
+;; → 3N : Nat (bumped three times)
+
+counts4.banana
+;; → 1N : Nat (bumped once)
+
+;; 📝 YOUR TURN: Write a `decrement-count` function that decreases
+;;    a key's value by 1 (with sub), or does nothing if the key is
+;;    missing. Test it on counts4!
+
+
+;; ========================================================================
+;; 🌀 PASS 8 — Putting It All Together
+;; ========================================================================
+;;
+;; Let's combine everything into a small worked example: a gradebook.
+
+;; --- The data ---
+def gradebook : [Map Keyword Nat]
+  :alice  95N
+  :bob    87N
+  :carol  92N
+  :dave   78N
+  :eve   100N
+
+;; --- Query it ---
+;; Who's in the gradebook?
+[map-keys gradebook]
+
+;; How many students?
+[map-size gradebook]
+;; → 5N : Nat
+
+;; Eve's score via dot-access:
+gradebook.eve
+;; → 100N : Nat
+
+;; --- Transform it ---
+;; Curve: add 5 to every score
+(def add5 : [-> Nat Nat] (fn (n : Nat) (add n 5N)))
+
+def curved : [Map Keyword Nat]
+  [map-map-vals add5 gradebook]
+
+;; In full evaluation: curved.bob → 92N (was 87), curved.dave → 83N (was 78)
+
+;; --- Filter it ---
+;; Who scored 90+? (using our `passes?` predicate from Pass 6)
+def top-students : [Map Keyword Nat]
+  [map-filter-vals passes? gradebook]
+
+[map-size top-students]
+;; Should be 3 (alice 95, carol 92, eve 100)
+
+;; --- Merge in late submissions ---
+def late-submissions : [Map Keyword Nat]
+  {:frank 88N :dave 82N}
+
+def final-grades : [Map Keyword Nat]
+  [map-merge gradebook late-submissions]
+
+;; In full evaluation: final-grades.frank → 88N (new student),
+;; final-grades.dave → 82N (updated from 78).
+[map-size final-grades]
+;; Should be 6 (5 original + 1 new; dave updated in place)
+
+
+;; ========================================================================
+;; ✨ RECAP & CONNECTIONS
+;; ========================================================================
+;;
+;; You've now seen the full Map toolkit in Prologos:
+;;
+;; CREATION
+;;   [map-empty K V]              — empty typed map
+;;   {:k1 v1 :k2 v2}             — brace literal
+;;   def m : [Map K V]            — implicit map syntax
+;;     :k1 v1                       (indentation-based)
+;;
+;; LOOKUP & MUTATION (immutable — returns new maps)
+;;   [map-get m k]       or  m.k  — get value (error if missing)
+;;   [map-assoc m k v]            — add/update entry
+;;   [map-dissoc m k]             — remove entry
+;;
+;; QUERYING
+;;   [map-has-key? m k]           — check if key present
+;;   [map-size m]                 — count entries
+;;   [map-keys m]                 — all keys as List
+;;   [map-vals m]                 — all values as List
+;;
+;; HIGHER-ORDER (from map-ops)
+;;   [map-map-vals f m]           — transform every value
+;;   [map-filter-vals pred m]     — keep entries matching predicate
+;;   [map-fold-entries f z m]     — fold over all entries
+;;   [map-merge m1 m2]            — combine maps (right wins)
+;;
+;; CONNECTIONS TO EXPLORE
+;;   - PVec (@[...]) for indexed collections — similar persistent model
+;;   - Set for unordered unique elements — see prologos::data::set
+;;   - Keyed trait for generic key-value access — works on Map
+;;   - String ops (str-ops::*) for text processing with maps of config
+;;   - Pipes (|>) for chaining map operations fluently
+;;   - The Option type for safe lookups via kv-get
+;;
+;; DESIGN PHILOSOPHY
+;;   Maps in Prologos are persistent (immutable, structural sharing),
+;;   fully typed (both keys and values), and integrate with the trait
+;;   system. They're not special — they follow the same algebraic data
+;;   type patterns as List, Option, and PVec. The type checker ensures
+;;   you can't accidentally put a String where a Nat should be, and
+;;   the persistent model means you can fearlessly "modify" maps
+;;   knowing the original is always preserved.
+;;
+;; Happy mapping! 🗺️

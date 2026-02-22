@@ -210,7 +210,17 @@
   (cond
     ;; --all: run everything (subject to skip filter)
     [(run-all?)
-     (define all-tests (all-test-files))
+     ;; Merge dep-graph entries with any test files on disk not yet in dep-graph
+     (define known-tests (all-test-files))
+     (define disk-tests
+       (if (directory-exists? tests-dir)
+           (for/list ([p (in-list (directory-list tests-dir))]
+                      #:when (let ([s (path->string p)])
+                               (and (string-prefix? s "test-")
+                                    (string-suffix? s ".rkt"))))
+             (string->symbol (path->string p)))
+           '()))
+     (define all-tests (sort (remove-duplicates (append known-tests disk-tests)) symbol<?))
      (define-values (to-run skipped) (apply-skip-filter all-tests tests-dir))
      (cond
        [(null? to-run)

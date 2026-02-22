@@ -143,7 +143,10 @@
 ;; bare symbols (for local use) and as fully-qualified names (for export).
 (define (process-command surf)
   (reset-meta-store!)  ;; clear metavariables from previous command
-  (parameterize ([current-nf-cache (make-hash)])  ;; per-command nf memoization
+  (parameterize ([current-nf-cache (make-hash)]         ;; per-command nf memoization
+                 [current-whnf-cache (make-hash)]       ;; per-command whnf memoization
+                 [current-reduction-fuel (box 1000000)]  ;; 1M step limit
+                 [current-nat-value-cache (make-hash)]) ;; per-command nat-value memoization
   (define expanded (expand-top-level surf))
   (if (prologos-error? expanded)
       expanded

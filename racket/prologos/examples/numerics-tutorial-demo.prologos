@@ -1,0 +1,1285 @@
+ns examples.numerics-tutorial-demo
+
+;; ========================================================================
+;;
+;;     ╔═══════════════════════════════════════════════════════╗
+;;     ║   T H E   N U M E R I C   T O W E R   I N           ║
+;;     ║           P R O L O G O S                             ║
+;;     ║   An Interactive Spiral Tutorial                      ║
+;;     ╚═══════════════════════════════════════════════════════╝
+;;
+;; ========================================================================
+;;
+;; Prologos has a rich numeric tower with four families:
+;;
+;;   Nat       — Peano naturals (type infrastructure: indices, lengths, proofs)
+;;   Int       — exact integers (…, -2, -1, 0, 1, 2, …) — primary computation
+;;   Rat       — exact rationals (1/3, -7/2, 355/113, …)
+;;   Posit8/16/32/64 — hardware posit arithmetic (variable precision)
+;;
+;; Plus a trait layer that makes generic numeric programming a breeze:
+;;
+;;   Eq, Ord, Add, Sub, Mul, Neg, Abs, Div
+;;   FromInt, FromRat, From, TryFrom
+;;   AdditiveIdentity, MultiplicativeIdentity
+;;   Num bundle, Fractional bundle
+;;   Generic sum, product, int-range
+;;
+;; Every expression in this file evaluates. Run the whole thing, or
+;; explore section by section in your editor. Let's count things!
+;;
+;; We'll spiral through:
+;;
+;;   🌀 Pass 1  — Natural Numbers: counting from zero
+;;   🌀 Pass 2  — Integers: going negative
+;;   🌀 Pass 3  — Rationals: exact fractions
+;;   🌀 Pass 4  — Cross-family conversions
+;;   🌀 Pass 5  — Traits: polymorphic arithmetic
+;;   🌀 Pass 6  — Posits: hardware floating point
+;;   🌀 Pass 7  — Generic numeric programming
+;;   🌀 Pass 8  — Building with numbers
+;;   🌀 Pass 9  — Putting it all together
+;;
+;; Prerequisites: basic Prologos (Bool, List, Option, pattern matching).
+;; The prelude gives you everything via `(ns foo)`.
+
+require [prologos::data::list   :refer [List nil cons length head map
+                                        foldr reduce filter reverse append]]
+        [prologos::data::nat    :refer [add mult pred sub pow double
+                                        zero? le? lt? gt? ge? nat-eq?
+                                        min max bool-to-nat clamp]]
+        [prologos::data::option :refer [Option some none unwrap-or]]
+        [prologos::data::bool   :refer [not and or]]
+
+
+;; ========================================================================
+;; 🌀 PASS 1 — Natural Numbers: Type Infrastructure
+;; ========================================================================
+;;
+;; Naturals are Peano numbers: zero, suc zero, suc (suc zero), ...
+;; They live at Type 0 and serve as **type-level infrastructure**:
+;; indices for Vec lengths, inductive proofs, type-level computation.
+;;
+;; The literal `42N` desugars to 42 nested `suc` constructors around `zero`.
+;; No negative values. No fractions. For general computation, use Int/Rat.
+;;
+;; NOTE: Nat is NOT intended for general numerical computation.
+;; Use Int for arithmetic, Rat for fractions, Posit for approximation.
+
+;; --- Literals and the N suffix ---
+
+0N
+;; => 0N : Nat
+
+1N
+;; => 1N : Nat
+
+42N
+;; => 42N : Nat
+
+;; TIP: Always write the N suffix for Nat literals. Without it,
+;; bare `42` is an Int!
+
+
+;; --- Basic Arithmetic ---
+
+;; Addition: add x y = x + y
+[add 3N 4N]
+;; => 7N : Nat
+
+;; Multiplication: mult x y = x * y
+[mult 6N 7N]
+;; => 42N : Nat
+
+;; Doubling: double n = n + n
+[double 5N]
+;; => 10N : Nat
+
+;; Predecessor: pred(0) = 0, pred(suc k) = k
+[pred 5N]
+;; => 4N : Nat
+
+[pred 0N]
+;; => 0N : Nat  (can't go below zero!)
+
+;; Saturating subtraction: sub x y = max(x - y, 0)
+[sub 10N 3N]
+;; => 7N : Nat
+
+[sub 3N 10N]
+;; => 0N : Nat  (saturates at zero, never negative)
+
+;; Exponentiation: pow base exp = base^exp
+[pow 2N 8N]
+;; => 256N : Nat
+
+[pow 3N 4N]
+;; => 81N : Nat
+
+
+;; --- Predicates and Comparison ---
+
+[zero? 0N]
+;; => true : Bool
+
+[zero? 5N]
+;; => false : Bool
+
+[le? 3N 5N]
+;; => true : Bool  (3 ≤ 5)
+
+[lt? 3N 5N]
+;; => true : Bool  (3 < 5)
+
+[gt? 7N 3N]
+;; => true : Bool  (7 > 3)
+
+[ge? 5N 5N]
+;; => true : Bool  (5 ≥ 5)
+
+[nat-eq? 3N 3N]
+;; => true : Bool
+
+[nat-eq? 3N 4N]
+;; => false : Bool
+
+
+;; --- Min, Max, Clamp ---
+
+[min 3N 7N]
+;; => 3N : Nat
+
+[max 3N 7N]
+;; => 7N : Nat
+
+;; clamp returns a clamping function: clamp low high → (Nat → Nat)
+[[clamp 2N 8N] 10N]
+;; => 8N : Nat  (clamped down to 8)
+
+[[clamp 2N 8N] 1N]
+;; => 2N : Nat  (clamped up to 2)
+
+[[clamp 2N 8N] 5N]
+;; => 5N : Nat  (already in range)
+
+
+;; --- Conversion ---
+
+[bool-to-nat true]
+;; => 1N : Nat
+
+[bool-to-nat false]
+;; => 0N : Nat
+
+
+;; ────────────────────────────────────────────────────────────
+;; YOUR TURN: Compute 10! (factorial of 10) using pow and mult.
+;; Hint: there's no built-in factorial, but you can build one!
+;; Try: [mult [pow 2N 3N] [pow 3N 2N]]  — what does that give?
+;; ────────────────────────────────────────────────────────────
+
+mult [pow 2N 3N] [pow 3N 2N]
+;; => 72N : Nat
+
+
+;; ========================================================================
+;; 🌀 PASS 2 — Integers: Going Negative
+;; ========================================================================
+;;
+;; Int is the type of exact, arbitrary-precision integers.
+;; Unlike Nat, Int supports negative values and is a built-in type
+;; with fast FFI primitives from Racket's exact integer arithmetic.
+;;
+;; Literals: bare numbers like 42, -7, 0 are Int (not Nat!).
+;; Use `(the Int 42)` or `(int 42)` for explicitness.
+
+;; --- Literals ---
+
+(the Int 42)
+;; => 42 : Int
+
+(the Int 0)
+;; => 0 : Int
+
+;; TIP: In Prologos, bare number literals (42, -7, 0) default to Int
+;; in most contexts. Use 42N for Nat, 3/7 for Rat.
+
+
+;; --- Arithmetic Primitives ---
+
+;; All Int operations are parser keywords (built-in, fast).
+
+[int+ 3 4]
+;; => 7 : Int
+
+[int- 10 3]
+;; => 7 : Int
+
+[int- 5 8]
+;; => -3 : Int  (integers can go negative!)
+
+[int* 6 7]
+;; => 42 : Int
+
+;; Integer division (truncates toward zero)
+[int/ 17 5]
+;; => 3 : Int
+
+;; Modulus (remainder)
+[int-mod 17 5]
+;; => 2 : Int
+
+;; Negation
+[int-neg 7]
+;; => -7 : Int
+
+;; Absolute value
+[int-abs 7]
+;; => 7 : Int
+
+[int-abs (int-neg 7)]
+;; => 7 : Int
+
+
+;; --- Comparison ---
+
+[int-lt 3 5]
+;; => true : Bool
+
+[int-le 3 5]
+;; => true : Bool
+
+[int-eq 3 3]
+;; => true : Bool
+
+[int-eq 3 4]
+;; => false : Bool
+
+
+;; --- Binding and Using ---
+
+(def answer : Int 42)
+
+answer
+;; => 42 : Int
+
+[int+ answer 8]
+;; => 50 : Int
+
+[int* answer answer]
+;; => 1764 : Int
+
+
+;; --- Functions over Int ---
+
+spec square-int Int -> Int
+defn square-int [x]
+  [int* x x]
+
+[square-int 7]
+;; => 49 : Int
+
+[square-int (int-neg 5)]
+;; => 25 : Int
+
+spec abs-diff Int Int -> Int
+defn abs-diff [x y]
+  [int-abs [int- x y]]
+
+[abs-diff 3 10]
+;; => 7 : Int
+
+[abs-diff 10 3]
+;; => 7 : Int
+
+
+;; ────────────────────────────────────────────────────────────
+;; YOUR TURN: Write `is-even?` that checks if an Int is even.
+;; Hint: [int-mod x 2] gives the remainder.
+;; Then [int-eq [int-mod x 2] 0] tests if it's zero.
+;; ────────────────────────────────────────────────────────────
+
+spec is-even? Int -> Bool
+defn is-even? [n]
+  [int-eq [int-mod n 2] 0]
+
+[is-even? 4]
+;; => true : Bool
+
+[is-even? 7]
+;; => false : Bool
+
+
+
+;; ========================================================================
+;; 🌀 PASS 3 — Rationals: Exact Fractions
+;; ========================================================================
+;;
+;; Rat is the type of exact, arbitrary-precision rationals.
+;; Backed by Racket's exact rational arithmetic — no rounding, ever.
+;;
+;; Literals: slash notation like 3/7, 1/2, -5/3.
+;; Integer rationals auto-simplify: 4/2 → 2, 6/3 → 2.
+;; Denominator is always positive.
+
+;; --- Literals ---
+
+(the Rat 3/7)
+;; => 3/7 : Rat
+
+(the Rat 1/2)
+;; => 1/2 : Rat
+
+;; Integer-valued rationals simplify:
+(the Rat 4/2)
+;; => 2 : Rat
+
+;; TIP: Rat values with integer results display without a denominator:
+;; 4/2 becomes "2 : Rat". It's still a Rat, just a whole one!
+
+
+;; --- Arithmetic ---
+
+;; Addition
+[rat+ 1/3 2/3]
+;; => 1 : Rat
+
+[rat+ 1/4 1/3]
+;; => 7/12 : Rat
+
+;; Subtraction
+[rat- 5/6 1/3]
+;; => 1/2 : Rat
+
+;; Multiplication
+[rat* 2/3 3/4]
+;; => 1/2 : Rat
+
+;; Division
+[rat/ 1/2 1/3]
+;; => 3/2 : Rat
+
+;; Negation
+[rat-neg 3/7]
+;; => -3/7 : Rat
+
+;; Absolute value
+[rat-abs (rat-neg 3/7)]
+;; => 3/7 : Rat
+
+
+;; --- Decomposition ---
+
+;; Numerator and denominator (always in lowest terms)
+[rat-numer 3/7]
+;; => 3 : Int
+
+[rat-denom 3/7]
+;; => 7 : Int
+
+[rat-numer 6/4]
+;; => 3 : Int  (auto-simplified to 3/2)
+
+[rat-denom 6/4]
+;; => 2 : Int
+
+
+;; --- Comparison ---
+
+[rat-lt 1/3 1/2]
+;; => true : Bool
+
+[rat-le 1/3 1/2]
+;; => true : Bool
+
+[rat-eq 1/2 2/4]
+;; => true : Bool  (1/2 == 2/4 after simplification)
+
+[rat-eq 1/3 1/2]
+;; => false : Bool
+
+
+;; --- Binding and Functions ---
+
+(def pi-approx : Rat 355/113)
+
+pi-approx
+;; => 355/113 : Rat
+
+;; How close is this to the real π? The error is less than 3e-7!
+[rat-numer pi-approx]
+;; => 355 : Int
+
+[rat-denom pi-approx]
+;; => 113 : Int
+
+spec recip Rat -> Rat
+defn recip [x]
+  [rat/ 1/1 x]
+
+[recip 3/7]
+;; => 7/3 : Rat
+
+[recip 1/2]
+;; => 2 : Rat
+
+;; Harmonic sum: 1 + 1/2 + 1/3
+[rat+ 1/1 [rat+ 1/2 1/3]]
+;; => 11/6 : Rat
+
+
+;; ────────────────────────────────────────────────────────────
+;; YOUR TURN: Compute the harmonic series 1 + 1/2 + 1/3 + 1/4.
+;; What fraction do you get? Hint: chain rat+ calls.
+;; Bonus: What's [rat* pi-approx pi-approx]? (π² ≈ 9.87)
+;; ────────────────────────────────────────────────────────────
+
+
+;; ========================================================================
+;; 🌀 PASS 4 — Cross-Family Conversions
+;; ========================================================================
+;;
+;; Numbers can flow between families:
+;;
+;;   Nat → Int     from-nat    (lossless: every natural is an integer)
+;;   Int → Rat     from-int    (lossless: every integer is a rational)
+;;   Nat → Rat     from-int ∘ from-nat  (composed)
+;;
+;; These are parser keywords — fast, built-in conversions.
+
+;; --- Nat → Int ---
+
+[from-nat 42N]
+;; => 42 : Int
+
+[from-nat 0N]
+;; => 0 : Int
+
+;; Now we can mix Nat and Int by converting explicitly:
+[int+ [from-nat 10N] 5]
+;; => 15 : Int
+
+
+;; --- Int → Rat ---
+
+[from-int 42]
+;; => 42 : Rat
+
+[from-int (int-neg 7)]
+;; => -7 : Rat
+
+;; Mix Int and Rat:
+[rat+ [from-int 3] 1/2]
+;; => 7/2 : Rat
+
+
+;; --- Nat → Rat (composed) ---
+
+[from-int [from-nat 10N]]
+;; => 10 : Rat
+
+
+;; TIP: Prologos does NOT have implicit coercions between number types.
+;; You must convert explicitly. This prevents subtle precision bugs:
+;;   [int+ 3N 4]     — ERROR! Nat ≠ Int
+;;   [int+ [from-nat 3N] 4]  — ✓ correct
+
+
+;; --- Posit ↔ Rat (preview, more in Pass 6) ---
+
+;; Posit to Rat is lossless (every posit has an exact rational):
+[p8-to-rat (posit8 64)]
+;; => 1 : Rat
+
+;; Rat to Posit may lose precision (clamped to representable range):
+[p8-from-rat 1/2]
+;; => [posit8 56] : Posit8
+
+;; Nat/Int to Posit:
+[p8-from-nat 1N]
+;; => [posit8 64] : Posit8
+
+[p8-from-int 2]
+;; => [posit8 72] : Posit8
+
+
+;; ────────────────────────────────────────────────────────────
+;; YOUR TURN: Convert 100N to a Rat. What do you get?
+;; Then compute [rat+ [from-int [from-nat 100N]] 1/7].
+;; ────────────────────────────────────────────────────────────
+
+
+;; ========================================================================
+;; 🌀 PASS 5 — Traits: Polymorphic Arithmetic
+;; ========================================================================
+;;
+;; Each numeric operation (add, sub, mul, ...) has a corresponding trait.
+;; Traits let you write GENERIC code that works across number types.
+;;
+;;   trait Add {A}     →  add : A → A → A
+;;   trait Sub {A}     →  sub : A → A → A
+;;   trait Mul {A}     →  mul : A → A → A
+;;   trait Neg {A}     →  neg : A → A
+;;   trait Abs {A}     →  abs : A → A
+;;   trait Div {A}     →  div : A → A → A
+;;   trait Eq  {A}     →  eq? : A → A → Bool
+;;   trait Ord {A}     →  compare : A → A → Ordering
+;;
+;; Single-method traits: the dict IS the function!
+;; E.g., Int--Add--dict : Int → Int → Int
+
+;; --- Direct Trait Calls ---
+
+;; Add for different types:
+[Add-add Int Int--Add--dict 10 20]
+;; => 30 : Int
+
+[Add-add Rat Rat--Add--dict 1/3 1/6]
+;; => 1/2 : Rat
+
+[Add-add Nat Nat--Add--dict 3N 4N]
+;; => 7N : Nat
+
+;; Sub, Mul:
+[Sub-sub Int Int--Sub--dict 10 3]
+;; => 7 : Int
+
+[Mul-mul Int Int--Mul--dict 6 7]
+;; => 42 : Int
+
+;; Neg and Abs (not available for Nat — naturals are always ≥ 0):
+[Neg-neg Int Int--Neg--dict 7]
+;; => -7 : Int
+
+[Abs-abs Int Int--Abs--dict (int-neg 7)]
+;; => 7 : Int
+
+;; Div:
+[Div-div Int Int--Div--dict 17 5]
+;; => 3 : Int
+
+
+;; --- Eq and Ord ---
+
+[Eq-eq? Int Int--Eq--dict 3 3]
+;; => true : Bool
+
+[Eq-eq? Int Int--Eq--dict 3 4]
+;; => false : Bool
+
+[Eq-eq? Rat Rat--Eq--dict 1/2 2/4]
+;; => true : Bool
+
+;; Ordering: lt-ord, eq-ord, gt-ord
+[Ord-compare Int Int--Ord--dict 3 5]
+;; => prologos::data::ordering::lt-ord : prologos::data::ordering::Ordering
+
+[Ord-compare Int Int--Ord--dict 5 5]
+;; => prologos::data::ordering::eq-ord : prologos::data::ordering::Ordering
+
+[Ord-compare Int Int--Ord--dict 7 5]
+;; => prologos::data::ordering::gt-ord : prologos::data::ordering::Ordering
+
+[Ord-compare Nat Nat--Ord--dict 3N 5N]
+;; => prologos::data::ordering::lt-ord : prologos::data::ordering::Ordering
+
+
+;; --- Writing Generic Functions ---
+
+;; A function that doubles any addable value:
+spec generic-double {A : Type} [Add A] -> A -> A
+defn generic-double [add-d x]
+  [Add-add add-d x x]
+
+;; Call it with different types — the trait dict is resolved automatically:
+[generic-double 21]
+;; => 42 : Int
+
+[generic-double 1/4]
+;; => 1/2 : Rat
+
+[generic-double (posit8 64)]
+;; => [posit8 72] : Posit8
+
+[generic-double 5N]
+;; => 10N : Nat
+
+;; A generic negate-and-add:
+spec negate-add {A : Type} [Add A] -> [Neg A] -> A -> A -> A
+defn negate-add [add-d neg-d x y]
+  [Add-add add-d x [Neg-neg neg-d y]]
+
+[negate-add 10 3]
+;; => 7 : Int
+
+[negate-add 5/6 1/3]
+;; => 1/2 : Rat
+
+;; TIP: Nat has Add, Sub, Mul, Eq, Ord — but NOT Neg, Abs, FromInt.
+;; That's why Nat doesn't satisfy the Num bundle (more in Pass 7).
+
+
+;; ────────────────────────────────────────────────────────────
+;; YOUR TURN: Write a generic `generic-square` that takes
+;; a Mul dict and a value, returning x * x.
+;; spec generic-square {A : Type} [Mul A] -> A -> A
+;; Then test it with Int, Rat, and Nat values.
+;; ────────────────────────────────────────────────────────────
+
+
+;; ========================================================================
+;; 🌀 PASS 6 — Posits: Hardware Floating Point
+;; ========================================================================
+;;
+;; Posit numbers are a modern alternative to IEEE 754 floats.
+;; They offer:
+;;   • No NaN — only NaR (Not a Real) for 0/0, ∞-∞
+;;   • Symmetric around zero — better dynamic range
+;;   • Exact conversion to/from rationals
+;;
+;; Four widths: Posit8, Posit16, Posit32, Posit64
+;; Literals use raw bit-pattern encoding: (posit8 64) means
+;; the Posit8 value whose 8-bit encoding is 64 (= 1.0).
+
+;; --- Posit8: 8-bit posits ---
+
+;; Key encodings: 0 = zero, 64 = 1.0, 72 = 2.0, 128 = NaR
+
+(the Posit8 (posit8 0))
+;; => [posit8 0] : Posit8  — zero
+
+(the Posit8 (posit8 64))
+;; => [posit8 64] : Posit8  — 1.0
+
+(the Posit8 (posit8 72))
+;; => [posit8 72] : Posit8  — 2.0
+
+(the Posit8 (posit8 128))
+;; => [posit8 128] : Posit8  — NaR (Not a Real)
+
+
+;; --- Arithmetic ---
+
+;; 1.0 + 1.0 = 2.0
+[p8+ (posit8 64) (posit8 64)]
+;; => [posit8 72] : Posit8
+
+;; 1.0 * 2.0 = 2.0
+[p8* (posit8 64) (posit8 72)]
+;; => [posit8 72] : Posit8
+
+;; 2.0 - 1.0 = 1.0
+[p8- (posit8 72) (posit8 64)]
+;; => [posit8 64] : Posit8
+
+;; 2.0 / 1.0 = 2.0
+[p8/ (posit8 72) (posit8 64)]
+;; => [posit8 72] : Posit8
+
+;; Negation: neg(1.0) = -1.0
+[p8-neg (posit8 64)]
+;; => [posit8 192] : Posit8
+
+;; Absolute value: abs(-1.0) = 1.0
+[p8-abs (posit8 192)]
+;; => [posit8 64] : Posit8
+
+;; Square root: sqrt(4.0)
+;; 76 ≈ 2.828... in Posit8, so sqrt is approximate.
+;; Let's try sqrt(1.0):
+[p8-sqrt (posit8 64)]
+;; => [posit8 64] : Posit8
+
+
+;; --- Comparison ---
+
+[p8-lt (posit8 64) (posit8 72)]
+;; => true : Bool  (1.0 < 2.0)
+
+[p8-le (posit8 64) (posit8 64)]
+;; => true : Bool  (1.0 ≤ 1.0)
+
+
+;; --- Conversion: Posit ↔ Rat (the exact bridge) ---
+
+;; Every finite posit has an exact rational representation:
+[p8-to-rat (posit8 64)]
+;; => 1 : Rat  (posit8 64 = exactly 1)
+
+[p8-to-rat (posit8 72)]
+;; => 2 : Rat  (posit8 72 = exactly 2)
+
+[p8-to-rat (posit8 56)]
+;; => 1/2 : Rat  (posit8 56 = exactly 1/2)
+
+;; Going back: Rat → Posit (may lose precision)
+[p8-from-rat 1/2]
+;; => [posit8 56] : Posit8
+
+[p8-from-rat 1/3]
+;; => [posit8 51] : Posit8  (rounded to nearest representable)
+
+
+;; --- From Nat and Int ---
+
+[p8-from-nat 1N]
+;; => [posit8 64] : Posit8
+
+[p8-from-int 2]
+;; => [posit8 72] : Posit8
+
+
+;; --- Wider Posits ---
+
+;; Posit16: 16-bit, more precision
+[p16-from-nat 1N]
+;; => [posit16 16384] : Posit16
+
+[p16+ (posit16 16384) (posit16 16384)]
+;; => [posit16 18432] : Posit16
+
+[p16-to-rat (posit16 16384)]
+;; => 1 : Rat
+
+;; Posit32: 32-bit, even more precision
+[p32-from-nat 1N]
+;; => [posit32 1073741824] : Posit32
+
+[p32-from-int 2]
+;; => [posit32 1207959552] : Posit32
+
+[p32-to-rat (posit32 1073741824)]
+;; => 1 : Rat
+
+
+;; TIP: The bit-pattern encoding is the internal representation.
+;; Use p8-to-rat / p8-from-rat to work with human-readable values.
+;; The posit ↔ rational bridge is the key to understanding posit values.
+
+
+;; --- Decimal Posit Literals: ~3.14 ---
+;;
+;; The ~ prefix creates approximate (Posit32) literals.
+;; With decimal syntax, you can write familiar constants:
+
+~3.14
+;; => [posit32 1284463657] : Posit32  (π approximation)
+
+~2.718
+;; => [posit32 1256143716] : Posit32  (e approximation)
+
+~0.5
+;; => [posit32 939524096] : Posit32  (1/2 exactly)
+
+;; Decimal syntax converts to exact rationals internally:
+;; ~3.14 → exact 157/50, then encoded as nearest Posit32.
+;; This means no floating-point rounding during parsing!
+
+;; Arithmetic with decimal posits:
+[p32+ ~1.5 ~2.5]
+;; => [posit32 1342177280] : Posit32  (4.0)
+
+[p32* ~3.14 ~3.14]
+;; => [posit32 1507593919] : Posit32  (≈ 9.86, π²)
+
+;; Mix with integer/fraction posit literals:
+[p32+ ~42 ~0.5]
+;; => [posit32 1699741696] : Posit32  (42.5)
+
+
+;; ---- Trait instances for Posits ---
+
+;; Posits have Eq, Ord, Add, Sub, Mul, Neg, Abs, Div trait instances!
+[Eq-eq? Posit8 Posit8--Eq--dict (posit8 64) (posit8 64)]
+;; => true : Bool
+
+[Eq-eq? Posit8 Posit8--Eq--dict (posit8 64) (posit8 72)]
+;; => false : Bool
+
+[Add-add Posit8 Posit8--Add--dict (posit8 64) (posit8 64)]
+;; => [posit8 72] : Posit8
+
+
+;; ────────────────────────────────────────────────────────────
+;; YOUR TURN: Convert 1/3 to Posit8, then back to Rat.
+;; Is the round-trip exact? Try: [p8-to-rat [p8-from-rat 1/3]]
+;; What about 1/2? And 1/7? Explore which fractions survive!
+;; ────────────────────────────────────────────────────────────
+
+
+;; ========================================================================
+;; 🌀 PASS 7 — Generic Numeric Programming
+;; ========================================================================
+;;
+;; The Num and Fractional bundles group multiple traits together,
+;; making it easy to write functions that work across numeric types.
+;;
+;;   Num A := (Add Sub Mul Neg Eq Ord Abs FromInt)  — 8 constraints
+;;     ✓ Int, Rat, Posit8/16/32/64
+;;     ✗ Nat (lacks Neg, Abs, FromInt)
+;;
+;;   Fractional A := (Num Div FromRat) — 10 constraints
+;;     ✓ Rat, Posit8/16/32/64
+;;     ✗ Int (lacks Div-as-exact, FromRat)
+;;
+;; The prelude also provides:
+;;   AdditiveIdentity    — the "zero" for a type
+;;   MultiplicativeIdentity — the "one" for a type
+;;   sum / product — generic folds over lists
+;;   int-range — generate [start..end) as List Int
+
+;; --- Identity Elements ---
+
+;; The zero element:
+[AdditiveIdentity-zero Int Int--AdditiveIdentity--dict]
+;; => 0 : Int
+
+[AdditiveIdentity-zero Nat Nat--AdditiveIdentity--dict]
+;; => 0N : Nat
+
+;; The one element:
+[MultiplicativeIdentity-one Int Int--MultiplicativeIdentity--dict]
+;; => 1 : Int
+
+[MultiplicativeIdentity-one Nat Nat--MultiplicativeIdentity--dict]
+;; => 1N : Nat
+
+
+;; --- sum and product ---
+
+;; sum folds addition over a list, starting from the additive identity:
+(def int-list : [List Int] (cons Int 1 (cons Int 2 (cons Int 3 (cons Int 4 (cons Int 5 (nil Int)))))))
+
+[sum int-list]
+;; => 15 : Int
+
+[product int-list]
+;; => 120 : Int  (5! = 120)
+
+
+;; --- int-range: generating integer lists ---
+
+[int-range 1 6]
+;; => '[1 2 3 4 5] : [prologos::data::list::List Int]
+
+[int-range 0 4]
+;; => '[0 1 2 3] : [prologos::data::list::List Int]
+
+;; Combine with sum:
+[sum [int-range 1 11]]
+;; => 55 : Int  (1 + 2 + ... + 10 = 55)
+
+[product [int-range 1 6]]
+;; => 120 : Int  (5! = 120)
+
+
+;; --- map over number lists ---
+
+;; Square every element:
+[map Int Int (fn [x : Int] [int* x x]) [int-range 1 6]]
+;; => '[1 4 9 16 25] : [prologos::data::list::List Int]
+
+;; Sum of squares:
+[sum [map Int Int (fn [x : Int] [int* x x]) [int-range 1 6]]]
+;; => 55 : Int  (1² + 2² + 3² + 4² + 5² = 55)
+
+;; Length of a range:
+[length Int [int-range 1 11]]
+;; => 10N : Nat
+
+
+;; --- Nat lists with foldr ---
+
+(def nat-list : [List Nat] (cons Nat 1N (cons Nat 2N (cons Nat 3N (cons Nat 4N (cons Nat 5N (nil Nat)))))))
+
+[foldr Nat Nat (fn [x : Nat] [acc : Nat] [add x acc]) 0N nat-list]
+;; => 15N : Nat
+
+;; map doubles:
+[map Nat Nat (fn [n : Nat] [double n]) nat-list]
+;; => '[2N 4N 6N 8N 10N] : [prologos::data::list::List Nat]
+
+;; Reduce for Nat product:
+[foldr Nat Nat (fn [x : Nat] [acc : Nat] [mult x acc]) 1N nat-list]
+;; => 120N : Nat  (5! = 120)
+
+
+;; ────────────────────────────────────────────────────────────
+;; YOUR TURN: Compute the sum of the first 100 integers.
+;; Hint: [sum [int-range 1 101]]
+;; The answer should be 5050 (Gauss's famous formula: n(n+1)/2).
+;; Can you verify? [int/ [int* 100 101] 2]
+;; ────────────────────────────────────────────────────────────
+
+
+;; ========================================================================
+;; 🌀 PASS 8 — Building with Numbers
+;; ========================================================================
+;;
+;; Let's use our numeric tower for practical computations.
+
+;; --- GCD via Euclidean algorithm ---
+
+spec gcd Int -> Int -> Int
+defn gcd [a b]
+  if [int-eq b 0]
+    a
+    [gcd b [int-mod a b]]
+
+[gcd 12 8]
+;; => 4 : Int
+
+[gcd 35 14]
+;; => 7 : Int
+
+[gcd 17 13]
+;; => 1 : Int  (coprime!)
+
+
+;; --- Fibonacci (Int version, fast) ---
+
+spec fib-helper Int -> Int -> Int -> Int
+defn fib-helper [a b n]
+  if [int-le n 0]
+    a
+    [fib-helper b [int+ a b] [int- n 1]]
+
+spec fib Int -> Int
+defn fib [n]
+  [fib-helper 0 1 n]
+
+[fib 0]
+;; => 0 : Int
+
+[fib 1]
+;; => 1 : Int
+
+[fib 10]
+;; => 55 : Int
+
+[fib 20]
+;; => 6765 : Int
+
+[fib 30]
+;; => 832040 : Int
+
+;; Map fib over a range:
+[map Int Int fib [int-range 0 11]]
+;; => '[0 1 1 2 3 5 8 13 21 34 55] : [prologos::data::list::List Int]
+
+
+;; --- Factorial (Int version) ---
+
+spec fact Int -> Int
+defn fact [n]
+  if [int-le n 1]
+    1
+    [int* n [fact [int- n 1]]]
+
+[fact 5]
+;; => 120 : Int
+
+[fact 10]
+;; => 3628800 : Int
+
+[fact 20]
+;; => 2432902008176640000 : Int
+
+
+;; --- Rational approximation via factorial ---
+
+;; We can compute individual terms of the series for e:
+;; e-term(n) = 1/n!
+
+spec e-term Int -> Rat
+defn e-term [n]
+  [rat/ 1/1 [from-int [fact n]]]
+
+[e-term 0]
+;; => 1 : Rat
+
+[e-term 1]
+;; => 1 : Rat
+
+[e-term 2]
+;; => 1/2 : Rat
+
+[e-term 3]
+;; => 1/6 : Rat
+
+[e-term 4]
+;; => 1/24 : Rat
+
+[e-term 5]
+;; => 1/120 : Rat
+
+;; The sum 1 + 1 + 1/2 + 1/6 + 1/24 + 1/120 ≈ 2.71667
+;; (the first 6 terms give a good approximation of e!)
+
+;; Let's compute e with 8 terms:
+spec e-approx Int -> Rat
+defn e-approx [n]
+  if [int-le n 0]
+    [e-term 0]
+    [rat+ [e-term n] [e-approx [int- n 1]]]
+
+[e-approx 7]
+;; => 685/252 : Rat  (≈ 2.71825... vs e ≈ 2.71828...)
+
+
+;; --- Power function for Int ---
+
+spec int-pow Int -> Int -> Int
+defn int-pow [base exp]
+  if [int-le exp 0]
+    1
+    [int* base [int-pow base [int- exp 1]]]
+
+[int-pow 2 10]
+;; => 1024 : Int
+
+[int-pow 3 5]
+;; => 243 : Int
+
+
+;; --- Collatz sequence length ---
+
+spec collatz-len Int -> Int -> Int
+defn collatz-len [n steps]
+  if [int-eq n 1]
+    steps
+    [if [int-eq [int-mod n 2] 0]
+      [collatz-len [int/ n 2] [int+ steps 1]]
+      [collatz-len [int+ [int* 3 n] 1] [int+ steps 1]]]
+
+;; How many steps to reach 1?
+[collatz-len 7 0]
+;; => 16 : Int
+
+[collatz-len 6 0]
+;; => 8 : Int
+
+[collatz-len 12 0]
+;; => 9 : Int
+
+;; The famous 27 — takes 111 steps!
+[collatz-len 27 0]
+;; => 111 : Int
+
+;; TIP: The Collatz conjecture says every positive integer eventually
+;; reaches 1. Nobody has proven it — try bigger numbers!
+
+
+;; ────────────────────────────────────────────────────────────
+;; YOUR TURN:
+;; 1. What does [collatz-len 3 0] give? Trace it by hand:
+;;    3 → 10 → 5 → 16 → 8 → 4 → 2 → 1 (7 steps)
+;; 2. Write an `is-even?` function: [int-eq [int-mod n 2] 0]
+;; 3. Compute [fact 7]. What's 7!?
+;; ────────────────────────────────────────────────────────────
+
+
+;; ========================================================================
+;; 🌀 PASS 9 — Putting It All Together
+;; ========================================================================
+;;
+;; Let's combine everything in more complex examples.
+
+;; --- Pythagorean check with Rat ---
+;; Does a² + b² = c²?
+
+spec pythagorean? Int -> Int -> Int -> Bool
+defn pythagorean? [a b c]
+  [int-eq [int+ [int* a a] [int* b b]] [int* c c]]
+
+[pythagorean? 3 4 5]
+;; => true : Bool
+
+[pythagorean? 5 12 13]
+;; => true : Bool
+
+[pythagorean? 3 4 6]
+;; => false : Bool
+
+
+;; --- Golden ratio via Fibonacci ratios ---
+
+spec golden-approx Int -> Rat
+defn golden-approx [n]
+  [rat/ [from-int [fib [int+ n 1]]] [from-int [fib n]]]
+
+;; The ratio fib(n+1)/fib(n) → φ as n grows:
+[golden-approx 5]
+;; => 8/5 : Rat  (= 1.6)
+
+[golden-approx 8]
+;; => 34/21 : Rat  (≈ 1.619... approaching φ = 1.6180339...)
+
+[golden-approx 15]
+;; => 987/610 : Rat  (≈ 1.618032... very close to φ!)
+
+
+;; --- Posit round-trip fidelity check ---
+;; Which simple fractions survive a Posit8 round-trip?
+
+spec p8-roundtrip-exact? Rat -> Bool
+defn p8-roundtrip-exact? [r]
+  [rat-eq r [p8-to-rat [p8-from-rat r]]]
+
+;; Powers of 2 are always exact:
+[p8-roundtrip-exact? 1/2]
+;; => true : Bool
+
+[p8-roundtrip-exact? 1/4]
+;; => true : Bool
+
+;; Non-powers-of-2 may not be:
+[p8-roundtrip-exact? 1/3]
+;; => false : Bool
+
+[p8-roundtrip-exact? 1/5]
+;; => false : Bool
+
+;; What did 1/3 become?
+[p8-to-rat [p8-from-rat 1/3]]
+;; => 11/32 : Rat  (close to 1/3 ≈ 0.333, but 11/32 = 0.34375)
+
+
+;; --- Number theory: perfect numbers ---
+;; A perfect number equals the sum of its proper divisors.
+
+spec sum-divisors Int -> Int -> Int -> Int
+defn sum-divisors [n i acc]
+  if [int-lt i n]
+    [if [int-eq [int-mod n i] 0]
+      [sum-divisors n [int+ i 1] [int+ acc i]]
+      [sum-divisors n [int+ i 1] acc]]
+    acc
+
+spec perfect? Int -> Bool
+defn perfect? [n]
+  [int-eq n [sum-divisors n 1 0]]
+
+[perfect? 6]
+;; => true : Bool  (1 + 2 + 3 = 6)
+
+[perfect? 28]
+;; => true : Bool  (1 + 2 + 4 + 7 + 14 = 28)
+
+[perfect? 12]
+;; => false : Bool
+
+
+;; --- The whole tower in one expression ---
+;; Let's compute with all four families:
+
+;; Start with a Nat:
+(def start : Nat 6N)
+
+;; Convert to Int, square it:
+(def as-int : Int [int* [from-nat start] [from-nat start]])
+
+as-int
+;; => 36 : Int
+
+;; Convert to Rat, take reciprocal:
+(def as-rat : Rat [rat/ 1/1 [from-int as-int]])
+
+as-rat
+;; => 1/36 : Rat
+
+;; Convert to Posit8, see the approximation:
+(def as-posit : Posit8 [p8-from-rat as-rat])
+
+as-posit
+;; => [posit8 27] : Posit8
+
+;; And back to Rat to see what we got:
+[p8-to-rat as-posit]
+;; => 7/256 : Rat  (1/36 ≈ 0.0278, nearest Posit8 is 7/256 ≈ 0.0273)
+
+
+;; ────────────────────────────────────────────────────────────
+;; YOUR TURN:
+;; 1. Find the next perfect number after 28. Hint: try [perfect? 496].
+;; 2. Write a function that converts a Nat to a Posit32 via
+;;    the full chain: Nat → Int → Rat → Posit32.
+;; 3. Try [p8-roundtrip-exact? 1/8]. What about 1/16? 3/8?
+;; ────────────────────────────────────────────────────────────
+
+
+;; ========================================================================
+;;  CONNECTIONS — Where to go next
+;; ========================================================================
+;;
+;; You've seen the whole numeric tower! Here's where each piece
+;; connects to the rest of the Prologos ecosystem:
+;;
+;; • prologos::data::nat      — Pure Prologos Nat ops (add, mult, pow, ...)
+;; • Int/Rat/Posit primitives  — Built-in, fast (int+, rat*, p8-sqrt, ...)
+;; • prologos::core::*-trait   — Eq, Ord, Add, Sub, Mul, Neg, Abs, Div
+;; • prologos::core::from-trait / tryfrom-trait — Cross-family conversions
+;; • prologos::core::fromint-trait / fromrat-trait — FromInt, FromRat
+;; • prologos::core::numeric-bundles — Num, Fractional bundles
+;; • prologos::core::additive-identity-trait — zero for a type
+;; • prologos::core::multiplicative-identity-trait — one for a type
+;; • prologos::core::generic-numeric-ops — sum, product, int-range
+;; • prologos::core::identity-instances — zero/one for Nat, Int, Rat
+;;
+;; The From/TryFrom traits (not in prelude, require explicitly):
+;;   From Nat Int, From Int Rat, From Nat Rat  — lossless
+;;   From Posit8 Posit16/32/64                 — widening
+;;   From Posit8/16/32/64 Rat                  — exact decode
+;;   TryFrom Rat Posit8/16/32/64               — lossy encode
+;;   TryFrom Int Posit8/16/32/64               — lossy encode
+;;
+;; Trait compatibility grid:
+;;
+;;   Trait     | Nat | Int | Rat | Posit*
+;;   ----------+-----+-----+-----+-------
+;;   Eq        |  ✓  |  ✓  |  ✓  |  ✓
+;;   Ord       |  ✓  |  ✓  |  ✓  |  ✓
+;;   Add       |  ✓  |  ✓  |  ✓  |  ✓
+;;   Sub       |  ✓* |  ✓  |  ✓  |  ✓
+;;   Mul       |  ✓  |  ✓  |  ✓  |  ✓
+;;   Neg       |  ✗  |  ✓  |  ✓  |  ✓
+;;   Abs       |  ✗  |  ✓  |  ✓  |  ✓
+;;   Div       |  ✗  |  ✓† |  ✓  |  ✓
+;;   FromInt   |  ✗  |  ✓  |  ✓  |  ✓
+;;   FromRat   |  ✗  |  ✗  |  ✓  |  ✓
+;;   Num       |  ✗  |  ✓  |  ✓  |  ✓
+;;   Fractional|  ✗  |  ✗  |  ✓  |  ✓
+;;
+;;   * Nat Sub is saturating (min 0)
+;;   † Int Div is truncating
+;;
+;; Explore: strings-tutorial-demo.prologos, map-tutorial-demo.prologos
+;;
+;; ========================================================================
+;;  RECAP — The Numeric Tower at a Glance
+;; ========================================================================
+;;
+;; Nat   42N             add mult pred sub pow double zero? le? lt?
+;;                       gt? ge? nat-eq? min max clamp bool-to-nat
+;;
+;; Int   42              int+ int- int* int/ int-mod int-neg int-abs
+;;                       int-lt int-le int-eq from-nat
+;;
+;; Rat   3/7             rat+ rat- rat* rat/ rat-neg rat-abs
+;;                       rat-numer rat-denom rat-lt rat-le rat-eq from-int
+;;
+;; Posit (posit8 64)     p{N}+ p{N}- p{N}* p{N}/ p{N}-neg p{N}-abs
+;;       ~3.14           p{N}-sqrt p{N}-lt p{N}-le
+;;       ~2.718          p{N}-from-nat p{N}-from-int p{N}-from-rat p{N}-to-rat
+;;                       (where N = 8, 16, 32, 64)
+;;                       ~N syntax: ~42, ~3/7, ~3.14 (decimal → exact rational → Posit32)
+;;
+;; Traits  Add Sub Mul Neg Abs Div Eq Ord FromInt FromRat From TryFrom
+;;         AdditiveIdentity MultiplicativeIdentity
+;;
+;; Bundles  Num := (Add Sub Mul Neg Eq Ord Abs FromInt)
+;;          Fractional := (Num Div FromRat)
+;;
+;; Generics  sum product int-range generic functions via trait dicts
+;;
+;; Happy counting! 🔢

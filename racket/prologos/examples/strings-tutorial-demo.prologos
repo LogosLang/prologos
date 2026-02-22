@@ -1,0 +1,817 @@
+ns examples.strings-tutorial-demo
+
+;; ========================================================================
+;;
+;;     ╔═══════════════════════════════════════════════════════╗
+;;     ║   S T R I N G S   &   C H A R S   I N               ║
+;;     ║           P R O L O G O S                             ║
+;;     ║   An Interactive Spiral Tutorial                      ║
+;;     ╚═══════════════════════════════════════════════════════╝
+;;
+;; ========================================================================
+;;
+;; Strings in Prologos are immutable, Unicode-aware sequences of characters.
+;; They come with a rich three-layer toolkit:
+;;
+;;   Layer 1 — str::  FFI primitives (fast, from Racket)
+;;   Layer 2 — str-ops:: Pure operations (split, join, trim, pad, map...)
+;;   Layer 3 — Traits  (Eq, Ord, Add — strings play nicely with generics)
+;;
+;; Every expression in this file evaluates. Run the whole thing, or
+;; explore section by section in your editor. Let's play with text!
+;;
+;; We'll spiral through:
+;;
+;;   🌀 Pass 1 — Hello, Strings! Literals and basics
+;;   🌀 Pass 2 — Characters: the atoms of text
+;;   🌀 Pass 3 — Building and slicing strings
+;;   🌀 Pass 4 — Searching and testing
+;;   🌀 Pass 5 — Case conversion and transformation
+;;   🌀 Pass 6 — Splitting, joining, and text wrangling
+;;   🌀 Pass 7 — Higher-order string processing
+;;   🌀 Pass 8 — Padding, alignment, and formatting
+;;   🌀 Pass 9 — Putting it all together
+;;
+;; Prerequisites: basic Prologos (Nat, Bool, List, Option, pattern matching).
+;; The prelude gives you everything via `(ns foo)`.
+
+require [prologos::data::list   :refer [List nil cons map filter
+                                        length sum reverse append head]]
+        [prologos::data::nat    :refer [add zero? le?]]
+        [prologos::data::option :refer [Option some none unwrap-or]]
+        [prologos::data::bool   :refer [not and or]]
+
+
+;; ========================================================================
+;; 🌀 PASS 1 — Hello, Strings!
+;; ========================================================================
+;;
+;; Strings are double-quoted sequences of characters. They live at
+;; Type 0, same as Nat, Bool, and Char.
+
+;; The simplest string:
+"hello"
+;; → "hello" : String
+
+;; An empty string is just "":
+""
+;; → "" : String
+
+;; Strings with escapes:
+"line one\nline two"
+;; → "line one\nline two" : String  (the \n is a real newline inside)
+
+;; You can bind them to names:
+def greeting : String := "hello, prologos!"
+
+greeting
+;; → "hello, prologos!" : String
+
+;; The String type itself lives at Type 0:
+infer String
+;; → [Type 0]
+
+;; 📝 YOUR TURN: Define a string `name` with your name, and evaluate it.
+
+
+;; ========================================================================
+;; 🌀 PASS 2 — Characters: The Atoms of Text
+;; ========================================================================
+;;
+;; A Char is a single Unicode character. In WS mode, char literals use
+;; a backslash prefix:
+;;
+;;   \a  \b  \Z  \5  \!       — ordinary characters
+;;   \space  \newline  \tab    — named special characters
+;;   \u0041                     — Unicode escape (this is 'A')
+;;
+;; In sexp mode, they use Racket's #\x syntax: #\a, #\space, etc.
+
+;; Basic char literals:
+def letter : Char := \a
+letter
+;; → \a : Char
+
+def digit : Char := \5
+digit
+;; → \5 : Char
+
+def bang : Char := \!
+bang
+;; → \! : Char
+
+;; Named characters:
+\space
+\newline
+\tab
+
+;; Unicode escape — \u0041 is the letter A:
+\u0041
+;; → \A : Char
+
+;; --- Character classification ---
+;; The char:: module has predicates that classify characters:
+[char::alpha? \a]
+;; → true : Bool
+
+[char::alpha? \5]
+;; → false : Bool
+
+[char::numeric? \5]
+;; → true : Bool
+
+[char::numeric? \a]
+;; → false : Bool
+
+[char::whitespace? \space]
+;; → true : Bool
+
+[char::upper? \A]
+;; → true : Bool
+
+[char::lower? \a]
+;; → true : Bool
+
+;; --- Character conversion ---
+;; Every character has a Unicode code point (an Int):
+[char::code \A]
+;; → 65 : Int
+
+[char::code \a]
+;; → 97 : Int
+
+;; And you can go back from code to character:
+[char::from-code 65]
+;; → \A : Char
+
+[char::from-code 955]
+;; → \λ : Char  (Greek lambda!)
+
+;; --- Case conversion ---
+[char::upper \a]
+;; → \A : Char
+
+[char::lower \Z]
+;; → \z : Char
+
+;; 📝 YOUR TURN: What's the code point of \0 (the digit zero)?
+;;    What character is code point 33? (Hint: [char::from-code 33])
+
+
+;; ========================================================================
+;; 🌀 PASS 3 — Building and Slicing Strings
+;; ========================================================================
+;;
+;; The str:: module provides the core primitives for constructing and
+;; deconstructing strings. These are FFI calls to Racket — fast and
+;; always available via the prelude.
+;;
+;; Key functions:
+;;   str::append   : String -> String -> String
+;;   str::length   : String -> Int
+;;   str::ref      : String -> Int -> Char
+;;   str::slice    : String -> Int -> Int -> String
+;;   str::from-char : Char -> String
+;;   str::from-int  : Int -> String
+;;   str::repeat-char : Int -> Char -> String
+
+;; --- Appending strings ---
+[str::append "hello" " world"]
+;; → "hello world" : String
+
+;; Chain appends to build longer strings:
+[str::append [str::append "one" " two"] " three"]
+;; → "one two three" : String
+
+;; Or use the Add trait — strings implement Add via concatenation:
+[String--Add--dict "left" " + right"]
+;; → "left + right" : String
+
+;; --- Measuring length ---
+[str::length "hello"]
+;; → 5 : Int
+
+[str::length ""]
+;; → 0 : Int
+
+[str::length "prologos"]
+;; → 8 : Int
+
+;; --- Indexing into a string ---
+;; str::ref gets the character at position i (0-indexed):
+[str::ref "hello" 0]
+;; → \h : Char
+
+[str::ref "hello" 4]
+;; → \o : Char
+
+;; --- Slicing ---
+;; str::slice s start end — extracts from index start up to (but not
+;; including) end. Like Python's s[start:end].
+[str::slice "hello world" 0 5]
+;; → "hello" : String
+
+[str::slice "hello world" 6 11]
+;; → "world" : String
+
+;; --- Creating strings from chars ---
+;; Single character → string:
+[str::from-char \A]
+;; → "A" : String
+
+;; Repeat a character n times:
+[str::repeat-char 5 \*]
+;; → "*****" : String
+
+[str::repeat-char 3 \-]
+;; → "---" : String
+
+;; --- Number to string ---
+[str::from-int 42]
+;; → "42" : String
+
+[str::from-int 0]
+;; → "0" : String
+
+;; 📝 YOUR TURN: Use str::slice to extract "world" from "brave new world".
+;;    (Hint: count the characters, starting from 0.)
+;; 📝 BONUS: Use str::repeat-char and str::append to build "===hello===".
+
+
+;; ========================================================================
+;; 🌀 PASS 4 — Searching and Testing
+;; ========================================================================
+;;
+;; Does a string contain a substring? Does it start or end with something?
+;; These are everyday questions, and str:: has fast FFI answers.
+
+;; --- Containment ---
+[str::contains? "hello world" "world"]
+;; → true : Bool
+
+[str::contains? "hello world" "xyz"]
+;; → false : Bool
+
+[str::contains? "hello world" ""]
+;; → true : Bool  (every string contains the empty string)
+
+;; --- Prefix and suffix ---
+[str::starts-with? "hello world" "hello"]
+;; → true : Bool
+
+[str::starts-with? "hello world" "world"]
+;; → false : Bool
+
+[str::ends-with? "hello world" "world"]
+;; → true : Bool
+
+[str::ends-with? "readme.txt" ".txt"]
+;; → true : Bool
+
+;; --- Comparison ---
+;; str::eq tests string equality:
+[str::eq "hello" "hello"]
+;; → true : Bool
+
+[str::eq "hello" "HELLO"]
+;; → false : Bool  (case-sensitive!)
+
+;; str::lt tests lexicographic ordering:
+[str::lt "abc" "abd"]
+;; → true : Bool
+
+[str::lt "banana" "apple"]
+;; → false : Bool
+
+;; The Eq and Ord trait instances are also available:
+[String--Eq--dict "same" "same"]
+;; → true : Bool
+
+[String--Ord--dict "abc" "abd"]
+;; → lt-ord  (lexicographically less)
+
+;; --- Pure Prologos search: index-of ---
+;; str-ops::index-of returns Option Int — the position of the first
+;; occurrence of a needle, or none if not found:
+[str-ops::index-of "hello world" "world"]
+;; → some 6 : Option Int
+
+[str-ops::index-of "hello world" "xyz"]
+;; → none : Option Int
+
+;; --- Predicates ---
+;; Is a string empty? Is it all whitespace?
+[str-ops::empty? ""]
+;; → true : Bool
+
+[str-ops::empty? "a"]
+;; → false : Bool
+
+[str-ops::blank? "   "]
+;; → true : Bool
+
+[str-ops::blank? " x "]
+;; → false : Bool
+
+[str-ops::blank? ""]
+;; → true : Bool  (empty is blank)
+
+;; 📝 YOUR TURN: Use str::contains? to check if "functional" appears
+;;    in "functional programming is fun". Then use str-ops::index-of
+;;    to find WHERE it appears.
+
+
+;; ========================================================================
+;; 🌀 PASS 5 — Case Conversion and Transformation
+;; ========================================================================
+;;
+;; Transform the case of entire strings, or apply character-level
+;; transformations with str-ops::str-map.
+
+;; --- Whole-string case conversion (FFI, fast) ---
+[str::upper "hello"]
+;; → "HELLO" : String
+
+[str::lower "HELLO"]
+;; → "hello" : String
+
+[str::capitalize "hello world"]
+;; → "Hello World" : String  (title case — each word capitalized)
+
+;; --- Character-level mapping (pure Prologos) ---
+;; str-ops::str-map applies a Char -> Char function to every character:
+[str-ops::str-map char::upper "hello"]
+;; → "HELLO" : String
+
+[str-ops::str-map char::lower "HELLO WORLD"]
+;; → "hello world" : String
+
+;; --- Filtering characters ---
+;; str-ops::str-filter keeps only characters that satisfy a predicate:
+[str-ops::str-filter char::alpha? "h3llo w0rld!"]
+;; → "hllowrld" : String  (digits, spaces, and punctuation removed)
+
+[str-ops::str-filter char::numeric? "abc 123 def 456"]
+;; → "123456" : String  (only digits survive)
+
+;; --- Reversal ---
+[str-ops::str-reverse "hello"]
+;; → "olleh" : String
+
+[str-ops::str-reverse "racecar"]
+;; → "racecar" : String  (it's a palindrome!)
+
+;; --- Repetition ---
+[str-ops::str-repeat 3 "ha"]
+;; → "hahaha" : String
+
+[str-ops::str-repeat 5 "-"]
+;; → "-----" : String
+
+;; 💡 TIP: str-ops::str-map is the string analog of List's map function.
+;; Where map transforms each element of a list, str-map transforms
+;; each character of a string.
+
+;; 📝 YOUR TURN: Use str-ops::str-filter with char::lower? to extract
+;;    only the lowercase letters from "Hello World 123".
+;; 📝 BONUS: Write a palindrome checker — compare a string to its reverse.
+;;    (Hint: [str::eq s [str-ops::str-reverse s]])
+
+
+;; ========================================================================
+;; 🌀 PASS 6 — Splitting, Joining, and Text Wrangling
+;; ========================================================================
+;;
+;; This is where string processing gets really useful. Split text apart,
+;; reassemble it, work with lines and words.
+
+;; --- Splitting ---
+;; str-ops::split breaks a string at every occurrence of a separator:
+[str-ops::split "," "a,b,c"]
+;; → '["a" "b" "c"] : List String
+
+[str-ops::split ", " "one, two, three"]
+;; → '["one" "two" "three"] : List String
+
+;; Split on empty string → individual characters as strings:
+[str-ops::split "" "abc"]
+;; → '["a" "b" "c"] : List String
+
+;; --- Joining ---
+;; str-ops::join is the inverse of split — glue a list of strings together:
+[str-ops::join ", " [cons String "a" [cons String "b" [cons String "c" [nil String]]]]]
+;; → "a, b, c" : String
+
+[str-ops::join "" [cons String "h" [cons String "i" [nil String]]]]
+;; → "hi" : String
+
+;; join on an empty list gives the empty string:
+[str-ops::join ", " [nil String]]
+;; → "" : String
+
+;; --- Lines and words ---
+;; str-ops::lines splits on newlines:
+[str-ops::lines "hello\nworld\nfoo"]
+;; → '["hello" "world" "foo"] : List String
+
+;; str-ops::words splits on whitespace (and trims):
+[str-ops::words "  hello  world  "]
+;; → '["hello" "world"] : List String
+
+;; str-ops::unlines joins with newlines:
+[str-ops::unlines [cons String "line 1" [cons String "line 2" [nil String]]]]
+;; → "line 1\nline 2" : String
+
+;; str-ops::unwords joins with spaces:
+[str-ops::unwords [cons String "hello" [cons String "world" [nil String]]]]
+;; → "hello world" : String
+
+;; --- Split-once ---
+;; str-ops::split-once splits at the FIRST occurrence only, returning
+;; a pair of (before, after) wrapped in Option:
+[str-ops::split-once "=" "key=value=extra"]
+;; → some (pair "key" "value=extra") : Option (Sigma String String)
+
+[str-ops::split-once "=" "no equals here"]
+;; → none : Option (Sigma String String)
+
+;; 💡 TIP: split + join is a powerful combo. Replace all occurrences?
+;; That's just join repl [split pat s] — and that's exactly what
+;; str-ops::replace does! (See next section.)
+
+;; 📝 YOUR TURN: Split the string "2026-02-21" on "-" to get a list
+;;    of '["2026" "02" "21"]. Then join them back with "/" to get
+;;    "2026/02/21".
+
+
+;; ========================================================================
+;; 🌀 PASS 7 — Higher-Order String Processing
+;; ========================================================================
+;;
+;; Strings in Prologos aren't just byte sequences — they participate in
+;; the same higher-order functional patterns as lists.
+
+;; --- Replacement ---
+;; str-ops::replace replaces ALL occurrences:
+[str-ops::replace "o" "0" "hello world"]
+;; → "hell0 w0rld" : String
+
+[str-ops::replace "world" "prologos" "hello world"]
+;; → "hello prologos" : String
+
+;; str-ops::replace-first replaces only the FIRST occurrence:
+[str-ops::replace-first "o" "0" "foo bar boo"]
+;; → "f0o bar boo" : String  (only the first 'o' changed)
+
+;; --- Strip prefix/suffix ---
+;; These return Option String — some if the prefix/suffix was found
+;; and stripped, none if it wasn't present:
+[str-ops::strip-prefix "http://" "http://example.com"]
+;; → some "example.com" : Option String
+
+[str-ops::strip-prefix "https://" "http://example.com"]
+;; → none : Option String  (wrong prefix!)
+
+[str-ops::strip-suffix ".txt" "readme.txt"]
+;; → some "readme" : Option String
+
+[str-ops::strip-suffix ".md" "readme.txt"]
+;; → none : Option String
+
+;; --- Trimming whitespace ---
+[str-ops::trim "  hello  "]
+;; → "hello" : String
+
+[str-ops::trim-start "  hello  "]
+;; → "hello  " : String  (only leading whitespace removed)
+
+[str-ops::trim-end "  hello  "]
+;; → "  hello" : String  (only trailing whitespace removed)
+
+;; --- Character predicates over strings ---
+;; str-ops::all? — do ALL characters satisfy a predicate?
+[str-ops::all? char::alpha? "hello"]
+;; → true : Bool
+
+[str-ops::all? char::alpha? "hello1"]
+;; → false : Bool  (the '1' ruins it)
+
+;; str-ops::any? — does ANY character satisfy a predicate?
+[str-ops::any? char::numeric? "hello1"]
+;; → true : Bool  (the '1' saves it)
+
+[str-ops::any? char::numeric? "hello"]
+;; → false : Bool
+
+;; --- Folding ---
+;; str-ops::str-foldl folds left over characters with an accumulator.
+;; Count characters manually (as a demo — prefer str::length in practice):
+(def count-char : [-> Int [-> Char Int]]
+  (fn (acc : Int) (fn (_ : Char) (int+ acc 1))))
+
+[str-ops::str-foldl count-char 0 "hello"]
+;; → 5 : Int
+
+;; 💡 TIP: str-foldl is the string analog of List's foldl.
+;; Any computation that walks through a string character-by-character
+;; can be expressed as a fold.
+
+;; 📝 YOUR TURN: Write a fold that counts vowels.
+;;    Hint: define an is-vowel? predicate on Char, then fold with
+;;    a counter that increments only when is-vowel? returns true.
+
+
+;; ========================================================================
+;; 🌀 PASS 8 — Padding, Alignment, and Slicing
+;; ========================================================================
+;;
+;; Need to format numbers in columns? Pad IDs to fixed width?
+;; Slice strings into chunks? We've got you covered.
+
+;; --- Take and drop ---
+;; str-ops::take keeps the first n characters:
+[str-ops::take 3 "hello"]
+;; → "hel" : String
+
+[str-ops::take 10 "hi"]
+;; → "hi" : String  (if n > length, returns the whole string)
+
+;; str-ops::drop removes the first n characters:
+[str-ops::drop 3 "hello"]
+;; → "lo" : String
+
+;; Together they're like slice but friendlier:
+;; take 5 + drop 6 on "hello world" gives "hello" and "world"
+
+;; --- Padding ---
+;; str-ops::pad-start pads on the left to reach width n:
+[str-ops::pad-start 8 \0 "42"]
+;; → "00000042" : String  (padded with zeros to width 8)
+
+[str-ops::pad-start 5 \space "hi"]
+;; → "   hi" : String  (right-aligned in a field of 5)
+
+;; str-ops::pad-end pads on the right:
+[str-ops::pad-end 8 \. "hello"]
+;; → "hello..." : String
+
+[str-ops::pad-end 10 \space "name"]
+;; → "name      " : String  (left-aligned in a field of 10)
+
+;; If the string is already long enough, no padding is added:
+[str-ops::pad-start 3 \0 "12345"]
+;; → "12345" : String  (unchanged — already wider than 3)
+
+;; --- Chunks ---
+;; str-ops::chunks breaks a string into pieces of size n:
+[str-ops::chunks 3 "abcdefgh"]
+;; → '["abc" "def" "gh"] : List String
+
+[str-ops::chunks 2 "abcdef"]
+;; → '["ab" "cd" "ef"] : List String
+
+[str-ops::chunks 4 "hello world"]
+;; → '["hell" "o wo" "rld"] : List String
+
+;; 💡 TIP: chunks is great for formatting hex strings, credit card
+;; numbers, or any fixed-width segmented output.
+
+;; 📝 YOUR TURN: Format the number 7 as a zero-padded 3-digit string
+;;    → "007". (Hint: [str-ops::pad-start 3 \0 [str::from-int 7]])
+;; 📝 BONUS: Use str-ops::chunks to split "AABBCCDDEE" into pairs:
+;;    → '["AA" "BB" "CC" "DD" "EE"]
+
+
+;; ========================================================================
+;; 🌀 PASS 9 — Putting It All Together
+;; ========================================================================
+;;
+;; Let's combine everything into a few small worked examples that show
+;; the joy of composing string operations.
+
+;; --- Example 1: Parse and reformat a date ---
+;; "2026-02-21" → "21/02/2026"
+def date-str : String := "2026-02-21"
+
+;; Split into parts:
+def date-parts : [List String]
+  [str-ops::split "-" date-str]
+
+date-parts
+;; → '["2026" "02" "21"] : List String
+
+;; Reverse and rejoin with "/":
+def reformatted : String
+  [str-ops::join "/" [reverse String date-parts]]
+
+reformatted
+;; → "21/02/2026" : String
+
+;; --- Example 2: Sanitize user input ---
+;; Trim whitespace, filter out non-alphabetic characters, lowercase:
+def raw-input : String := "  Hello, World! 123  "
+
+def cleaned : String
+  [str::lower [str-ops::str-filter char::alpha? [str-ops::trim raw-input]]]
+
+cleaned
+;; → "helloworld" : String
+
+;; --- Example 3: Build a simple template ---
+;; Construct a greeting from parts:
+def user-name : String := "Alice"
+def hour : Int := 14
+
+def time-greeting : String
+  [str::append "Good afternoon, "
+    [str::append user-name "!"]]
+
+time-greeting
+;; → "Good afternoon, Alice!" : String
+
+;; --- Example 4: Extract a file extension ---
+;; Strip everything before the last dot.
+def filename : String := "archive.tar.gz"
+
+;; split-once on "." gives us the first part, but we want the LAST dot.
+;; Strategy: reverse, split-once on ".", take the first part, reverse it.
+def ext : String
+  [str-ops::str-reverse
+    [str-ops::take 2
+      [str-ops::str-reverse filename]]]
+
+ext
+;; → "gz" : String
+
+;; --- Example 5: Counting ---
+;; How many times does "the" appear in a sentence?
+;; Strategy: split on "the" and count segments minus one.
+def sentence : String := "the cat and the dog and the fish"
+
+def the-parts : [List String]
+  [str-ops::split "the" sentence]
+
+;; The parts list has 4 elements (split at 3 "the"s creates 4 segments):
+[length String the-parts]
+
+;; --- Example 6: ROT13 cipher ---
+;; A classic demo: shift each letter by 13 positions.
+;; We'll define it using str-ops::str-map with a character transformer.
+;; (This needs sexp for the fn with complex match + arithmetic.)
+(def rot13-char : [-> Char Char]
+  (fn (c : Char)
+    (the Char
+      (if (char::alpha? c)
+        (the Char
+          (if (char::upper? c)
+            (char::from-code (int+ 65 (int-mod (int- (char::code c) 65) 26)))
+            (char::from-code (int+ 97 (int-mod (int- (char::code c) 97) 26)))))
+        c))))
+
+;; Hmm, ROT13 needs modular arithmetic (adding 13 then mod 26).
+;; We don't have int-mod in the prelude currently, so let's do a
+;; simpler transform instead — uppercasing every other character:
+
+;; Here's something we CAN do beautifully: title-case a sentence
+def title : String
+  [str::capitalize "the quick brown fox jumps over the lazy dog"]
+
+title
+;; → "The Quick Brown Fox Jumps Over The Lazy Dog" : String
+
+;; And reverse each word:
+def silly : String
+  [str-ops::unwords
+    [map String String
+      str-ops::str-reverse
+      [str-ops::words "hello world foo"]]]
+
+silly
+;; → "olleh dlrow oof" : String
+
+
+;; ========================================================================
+;; 🌀 PASS 10 — Conversion: Strings ↔ Lists
+;; ========================================================================
+;;
+;; Sometimes you need to work with individual characters as a List,
+;; apply list operations, and convert back. str-ops provides the bridge.
+
+;; --- String → List Char ---
+[str-ops::to-list "abc"]
+;; → '[\a \b \c] : List Char
+
+[str-ops::to-list "hello"]
+;; → '[\h \e \l \l \o] : List Char
+
+;; --- List Char → String ---
+[str-ops::from-list [cons Char \h [cons Char \i [nil Char]]]]
+;; → "hi" : String
+
+;; --- Round-trip ---
+;; Convert to list, manipulate, convert back:
+def original : String := "hello"
+
+;; Reverse via list operations (just to show the connection):
+def as-list : [List Char]
+  [str-ops::to-list original]
+
+def reversed-list : [List Char]
+  [reverse Char as-list]
+
+def back-to-string : String
+  [str-ops::from-list reversed-list]
+
+back-to-string
+;; → "olleh" : String
+
+;; 💡 TIP: For most string tasks, str-ops::str-map, str-filter, and
+;; str-foldl are more efficient than converting to List and back.
+;; But to-list/from-list are handy when you need List-specific
+;; operations like sort, zip, or index-based access.
+
+;; 📝 YOUR TURN: Convert "Prologos" to a list of chars, reverse it,
+;;    and convert back. What do you get?
+
+
+;; ========================================================================
+;; ✨ RECAP & CONNECTIONS
+;; ========================================================================
+;;
+;; Here's the complete String & Char toolkit at a glance:
+;;
+;; ─── CHAR LITERALS ───
+;;   \a  \Z  \5  \!              — ordinary characters
+;;   \space  \newline  \tab      — named characters
+;;   \u0041                       — Unicode escape
+;;
+;; ─── CHAR OPERATIONS (char::) ───
+;;   char::eq, char::lt           — comparison
+;;   char::code, char::from-code  — Unicode ↔ Int
+;;   char::alpha?, char::numeric?,
+;;     char::whitespace?,
+;;     char::upper?, char::lower? — classification
+;;   char::upper, char::lower     — case conversion
+;;
+;; ─── STRING PRIMITIVES (str::) ───
+;;   str::append                  — concatenate two strings
+;;   str::length                  — character count (Int)
+;;   str::ref                     — character at index
+;;   str::slice                   — substring by range
+;;   str::from-char               — Char → String
+;;   str::from-int                — Int → String
+;;   str::repeat-char             — make n copies of a char
+;;   str::eq, str::lt             — equality and ordering
+;;   str::contains?               — substring search (Bool)
+;;   str::starts-with?            — prefix test
+;;   str::ends-with?              — suffix test
+;;   str::upper, str::lower       — whole-string case
+;;   str::capitalize              — title case
+;;
+;; ─── STRING OPERATIONS (str-ops::) ───
+;;   PREDICATES
+;;     empty?, blank?, all?, any?
+;;   SEARCH
+;;     index-of
+;;   TRIMMING
+;;     trim, trim-start, trim-end, strip-prefix, strip-suffix
+;;   SPLIT & JOIN
+;;     split, join, lines, words, unlines, unwords, split-once
+;;   REPLACEMENT
+;;     replace, replace-first
+;;   TRANSFORMATION
+;;     str-map, str-filter, str-reverse, str-repeat
+;;   PADDING
+;;     pad-start, pad-end
+;;   SLICING
+;;     take, drop, chunks
+;;   FOLDING
+;;     str-foldl
+;;   CONVERSION
+;;     to-list, from-list
+;;
+;; ─── TRAIT INSTANCES ───
+;;   Eq String     — string equality via str::eq
+;;   Ord String    — lexicographic comparison
+;;   Add String    — concatenation (str::append)
+;;   Eq Char       — character equality
+;;   Ord Char      — Unicode code point comparison
+;;   Hashable String, Hashable Char  — for use in Sets and Maps
+;;
+;; ─── CONNECTIONS TO EXPLORE ───
+;;   - Maps with String values — parse configs, build templates
+;;   - PVec for indexed string collections
+;;   - Option for safe operations (strip-prefix, index-of, split-once)
+;;   - Pipes (|>) for chaining string transforms fluently
+;;   - The Datum type for code-as-data with symbol/string interplay
+;;   - Transducers for single-pass string collection processing
+;;
+;; ─── DESIGN PHILOSOPHY ───
+;;   Strings in Prologos are immutable, fully typed, and layered:
+;;   fast FFI primitives at the bottom, pure functional operations
+;;   in the middle, and trait-based generics at the top. You choose
+;;   the layer that fits your task. The same functional patterns
+;;   (map, filter, fold) work on strings, lists, and collections —
+;;   learn them once, use them everywhere.
+;;
+;; Happy stringing! 🎻

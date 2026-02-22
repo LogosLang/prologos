@@ -659,17 +659,35 @@
                                                (list->string (reverse dchars)))]
                              [v (string->number s)])
                         (token 'number v ln cl ps (string-length s))))))
-              ;; No fraction — check for N suffix (Nat literal: 42N)
-              (let ([next-c (tok-peek tok)])
-                (if (and (char? next-c) (char=? next-c #\N))
-                    ;; N suffix → Nat literal
-                    (begin
-                      (tok-read! tok) ; consume N
-                      (let ([s (list->string int-chars)])
-                        (token 'nat-literal (string->number s) ln cl ps (+ (string-length s) 1))))
-                    ;; No N → plain integer (will become Int)
-                    (let ([s (list->string int-chars)])
-                      (token 'number (string->number s) ln cl ps (string-length s))))))))))
+              ;; No fraction — check for decimal point: N.D
+              (if (and (char? c) (char=? c #\.)
+                       (let ([d (peek-char port 1)])
+                         (and (char? d) (char-numeric? d))))
+                  ;; Decimal: consume . then read fractional digits → exact rational
+                  (begin
+                    (tok-read! tok) ; consume .
+                    (let dloop ([dchars '()])
+                      (define dc (tok-peek tok))
+                      (if (and (char? dc) (char-numeric? dc))
+                          (begin (tok-read! tok) (dloop (cons dc dchars)))
+                          (let* ([frac-str (list->string (reverse dchars))]
+                                 [int-val (string->number (list->string int-chars))]
+                                 [frac-val (string->number frac-str)]
+                                 [denom (expt 10 (string-length frac-str))]
+                                 [v (+ int-val (/ frac-val denom))]  ;; exact rational
+                                 [total-len (+ (length int-chars) 1 (string-length frac-str))])
+                            (token 'number v ln cl ps total-len)))))
+                  ;; No decimal — check for N suffix (Nat literal: 42N)
+                  (let ([next-c (tok-peek tok)])
+                    (if (and (char? next-c) (char=? next-c #\N))
+                        ;; N suffix → Nat literal
+                        (begin
+                          (tok-read! tok) ; consume N
+                          (let ([s (list->string int-chars)])
+                            (token 'nat-literal (string->number s) ln cl ps (+ (string-length s) 1))))
+                        ;; No N → plain integer (will become Int)
+                        (let ([s (list->string int-chars)])
+                          (token 'number (string->number s) ln cl ps (string-length s)))))))))))
 
 (define (read-string-token! tok ln cl ps)
   (tok-read! tok) ; consume opening "

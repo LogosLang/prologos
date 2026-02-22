@@ -130,6 +130,40 @@
                     (format "[posit32 ~a] : Posit32" (posit32-encode 43))))))
 
 ;; ========================================
+;; Decimal literal syntax: ~3.14
+;; ========================================
+
+(test-case "tilde reader: tokenize ~3.14 (decimal)"
+  (define tokens (tokenize-string "~3.14"))
+  (define approx-tok (findf (lambda (t) (eq? (tok-type t) 'approx-literal)) tokens))
+  (check-not-false approx-tok "should produce approx-literal token")
+  (check-equal? (tok-val approx-tok) 157/50 "~3.14 should be exact rational 157/50"))
+
+(test-case "tilde reader: tokenize ~0.5 (decimal)"
+  (define tokens (tokenize-string "~0.5"))
+  (define approx-tok (findf (lambda (t) (eq? (tok-type t) 'approx-literal)) tokens))
+  (check-not-false approx-tok "should produce approx-literal token")
+  (check-equal? (tok-val approx-tok) 1/2 "~0.5 should be exact rational 1/2"))
+
+(test-case "tilde reader: tokenize ~100.001 (decimal)"
+  (define tokens (tokenize-string "~100.001"))
+  (define approx-tok (findf (lambda (t) (eq? (tok-type t) 'approx-literal)) tokens))
+  (check-not-false approx-tok "should produce approx-literal token")
+  (check-equal? (tok-val approx-tok) 100001/1000 "~100.001 should be exact rational 100001/1000"))
+
+(test-case "tilde reader: WS round-trip produces $approx-literal for decimal"
+  (check-equal? (read-all-forms-string "eval ~3.14")
+                '((eval ($approx-literal 157/50)))))
+
+(test-case "approx-literal surface: ~3.14 infers as Posit32"
+  (check-equal? (run "(eval ~3.14)")
+                (list (format "[posit32 ~a] : Posit32" (posit32-encode 157/50)))))
+
+(test-case "approx-literal surface: ~0.5 infers as Posit32"
+  (check-equal? (run "(eval ~0.5)")
+                (list (format "[posit32 ~a] : Posit32" (posit32-encode 1/2)))))
+
+;; ========================================
 ;; Verification: encoding correctness
 ;; ========================================
 
