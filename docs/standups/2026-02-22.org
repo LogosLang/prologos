@@ -1,0 +1,86 @@
+#+TITLE: Standup — 2026-02-22
+#+DATE: 2026-02-22
+
+* Yesterday (Feb 21–22)
+
+** Dot-Access Map Syntax — Complete
+Migrated module paths from =.= to =::= separators (=prologos::data::list=), reclaimed =.= for field access. Implemented dot-access preparse macro:
+- =user.name= desugars to =[map-get user :name]=
+- =.:name user= desugars to =[map-get user :name]=
+- End-to-end tests passing
+
+** Implicit Map Syntax — Complete
+Indentation-based keyword blocks desugar to map literals at preparse level:
+#+begin_example
+def m
+  :name "Alice"
+  :age 30
+#+end_example
+desugars to =(def m {:name "Alice" :age 30})=. Nested maps, dash children (PVec), inline vectors, computed values all work.
+
+** Char and String Types — Complete (Core + Extended Ops)
+Full pipeline for Char and String:
+- AST pipeline (14 files), reader, typing, pretty-printing
+- Char/String foreign libraries + trait instances (Eq, Ord, Add for String)
+- Prelude registration
+- Extended string operations: FFI search/case primitives + pure Prologos =string-ops= module
+- Advanced phases (grapheme clusters, Unicode normalization, regex, ropes) deferred to =DEFERRED.md=
+
+** Numerics Performance & Decimal Posit Literals — Complete (8 phases)
+Root-caused and fixed exponential reduction blowup in recursive functions:
+| Phase | Description | Status |
+|-------+---------------------------------------------------+--------|
+|     1 | Fix =nf-whnf= boolrec/natrec eager normalization | DONE   |
+|     2 | Add WHNF cache (=current-whnf-cache=)             | DONE   |
+|     3 | Add reduction fuel/step limit (1M steps)          | DONE   |
+|     4 | Memoize =nat-value= (internal infrastructure)     | DONE   |
+|     5 | Deduplicate posit reduction helpers (8 \to 2 fns) | DONE   |
+|     6 | Decimal posit literal syntax (=~3.14=)            | DONE   |
+|     7 | Rewrite numerics tutorial (229 results, 0 errors) | DONE   |
+|     8 | Tests and verification (128/128, 2784 tests)      | DONE   |
+
+Previously-failing computations now work:
+- =fib 20= = 6765, =fib 30= = 832040 (previously hung at fib 15+)
+- =fact 20= = 2432902008176640000
+- =collatz-len 27= = 111 steps
+- =e-approx 7= = 685/252
+- =golden-approx 15= = 987/610
+
+Key changes: lazy branch normalization in =nf-whnf=, WHNF/NF/nat-value triple cache, 1M reduction fuel, posit helper dedup, =~3.14= decimal reader syntax.
+
+** Tutorial Demos Created
+Three spiral-curriculum interactive tutorials in =examples/=:
+- =numerics-tutorial-demo.prologos= — full numeric tower (229 results)
+- =strings-tutorial-demo.prologos= — Char/String operations
+- =map-tutorial-demo.prologos= — Map data structure
+
+** Grammar & Spec Updates
+- Grammar EBNF: added =decimal-literal= rule, updated =approx-literal=
+- Grammar org/md/pdf: decimal literal documentation
+- Ott type system spec updates
+
+** Numbers
+- Latest commit: =6d8555e= (26 files changed, +6927/-378 lines)
+- Test count: 3039 \to *3081* (+42) across *137* test files
+- =test-reduction-perf.rkt=: 10 new performance regression tests (untracked, needs commit)
+
+* Today (Feb 22)
+
+** Carry-Forward (not done from Feb 21)
+
+- [ ] Review remaining items in generification roadmap (Phase 4: Numerics Tower not started)
+- [ ] Create =general-collections-tutorial-demo.prologos= (spiral tutorial for generic collection operations)
+- [ ] Make docs in =./docs/tracking/principles/=
+  - [ ] PATTERNS_AND_CONVENTIONS.org
+  - [ ] DESIGN_PRINCIPLES.org
+  - [ ] LANGUAGE_VISION.org
+  - [ ] LANGUAGE_DESIGN.org
+  - [ ] ERGONOMICS.org
+  - [ ] README
+  - [ ] DEVELOPMENT_LESSONS.org
+- [ ] Range syntax design (=🤔= from Feb 21)
+
+** Housekeeping
+
+- [ ] Commit =test-reduction-perf.rkt= (currently untracked)
+- [ ] Run full test suite + whale file check
