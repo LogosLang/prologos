@@ -18,5 +18,5 @@
 - Trait methods: short names (`eq?`, `from`, `add`)
 
 ## Reference examples
-- Pure WS: `lseq.prologos`, `nat.prologos`, `transducer.prologos`, `collection-ops.prologos`
-- Sexp fallback: `lseq-ops.prologos` (recursive functions with match+constructors)
+<!-- - Pure WS:  -->
+<!-- - Sexp fallback: -->
