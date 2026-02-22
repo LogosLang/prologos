@@ -598,10 +598,13 @@
    (test-dep '(main.rkt sexp.rkt expander.rkt) #t)
    'test-lang-errors-02-ws.rkt
    (test-dep '(main.rkt sexp.rkt expander.rkt) #t)
-   'test-reduction-perf.rkt
+   'test-reduction-perf-01.rkt
    (test-dep '(syntax.rkt prelude.rkt surface-syntax.rkt reader.rkt parser.rkt
                driver.rkt global-env.rkt reduction.rkt namespace.rkt macros.rkt
-               posit-impl.rkt) #t)))
+               posit-impl.rkt) #t)
+   'test-reduction-perf-02.rkt
+   (test-dep '(syntax.rkt prelude.rkt surface-syntax.rkt reader.rkt parser.rkt
+               driver.rkt global-env.rkt reduction.rkt namespace.rkt macros.rkt) #t)))
 
 ;; ============================================================
 ;; Layer 2b: Example file → test file mapping
