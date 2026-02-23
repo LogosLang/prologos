@@ -1,0 +1,39 @@
+ns prologos::core::generic-arith
+
+require [prologos::core::add-trait :refer [Add Add-add]]
+require [prologos::core::sub-trait :refer [Sub Sub-sub]]
+require [prologos::core::mul-trait :refer [Mul Mul-mul]]
+require [prologos::core::div-trait :refer [Div Div-div]]
+require [prologos::core::neg-trait :refer [Neg Neg-neg]]
+require [prologos::core::abs-trait :refer [Abs Abs-abs]]
+
+;; ========================================
+;; First-Class Generic Arithmetic
+;; ========================================
+;; Parser keywords (+, -, *, /, negate, abs) dispatch at the AST level
+;; and can't be passed to higher-order functions like reduce, map, fold.
+;; These wrappers are proper first-class values.
+
+spec plus [Add A] A -> A -> A
+defn plus [dict x y]
+  Add-add dict x y
+
+spec minus [Sub A] A -> A -> A
+defn minus [dict x y]
+  Sub-sub dict x y
+
+spec times [Mul A] A -> A -> A
+defn times [dict x y]
+  Mul-mul dict x y
+
+spec divide [Div A] A -> A -> A
+defn divide [dict x y]
+  Div-div dict x y
+
+spec negate-fn [Neg A] A -> A
+defn negate-fn [dict x]
+  Neg-neg dict x
+
+spec abs-fn [Abs A] A -> A
+defn abs-fn [dict x]
+  Abs-abs dict x

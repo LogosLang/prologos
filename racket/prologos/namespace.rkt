@@ -406,6 +406,9 @@
     ;; ---- Tier 2e: Generic numeric operations ----
     (require [prologos::core::generic-numeric-ops :refer [sum product int-range]])
 
+    ;; ---- Tier 2f: First-class generic arithmetic ----
+    (require [prologos::core::generic-arith :refer [plus minus times divide negate-fn abs-fn]])
+
     ;; ---- Tier 3: Instance registration (side-effect only, :refer []) ----
     (require [prologos::core::eq-instances         :refer []])
     (require [prologos::core::eq-numeric-instances  :refer []])
