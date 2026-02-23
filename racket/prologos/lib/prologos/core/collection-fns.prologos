@@ -3,7 +3,7 @@
 (require (prologos::core::seqable-trait    :refer (Seqable))
          (prologos::core::buildable-trait  :refer (Buildable Buildable-from-seq))
          (prologos::core::foldable-trait   :refer (Foldable))
-         (prologos::data::lseq            :refer (LSeq))
+         (prologos::data::lseq            :refer (LSeq lseq-nil lseq-cell lseq-head lseq-rest lseq-empty?))
          (prologos::data::lseq-ops        :refer (lseq-map lseq-filter lseq-take lseq-drop
                                                   lseq-append lseq-fold lseq-length lseq-to-list))
          (prologos::data::list            :refer (List))
@@ -37,6 +37,15 @@
 (spec reduce {A B : Type} {C : Type -> Type} (Seqable C) -> (-> B (-> A B)) -> B -> (C A) -> B)
 (defn reduce [$seq f z xs]
   (lseq-fold B A f z ($seq A xs)))
+
+;; reduce1 : (A -> A -> A) -> C A -> Option A   [first element as initial]
+;; Like Clojure's (reduce f coll): uses first element as accumulator.
+;; Returns none for empty collections, some result for non-empty.
+(spec reduce1 {A : Type} {C : Type -> Type} (Seqable C) -> (-> A (-> A A)) -> (C A) -> (Option A))
+(defn reduce1 [$seq f xs]
+  (match ($seq A xs)
+    (lseq-nil -> (none A))
+    (lseq-cell a t -> (some A (lseq-fold A A f a (t unit))))))
 
 ;; length : C A -> Nat
 (spec length {A : Type} {C : Type -> Type} (Seqable C) -> (C A) -> Nat)
@@ -83,3 +92,36 @@
 (spec drop {A : Type} {C : Type -> Type} (Seqable C) -> (Buildable C) -> Nat -> (C A) -> (C A))
 (defn drop [$seq $build n xs]
   (Buildable-from-seq $build A (lseq-drop A n ($seq A xs))))
+
+;; into : T A -> S A -> T A
+;; Converts a source collection into the target collection type.
+;; The target arg determines the output type (its value is discarded).
+;; Usage: (into @[] '[1 2 3]) → @[1 2 3]
+;;        (into #{} @[1 2 3]) → #{1 2 3}
+;;        |> '[1 2 3] (into @[])   ;; in pipe context
+(spec into {A : Type} {S : Type -> Type} {T : Type -> Type} (Seqable S) -> (Buildable T) -> (T A) -> (S A) -> (T A))
+(defn into [$seq $build _target source]
+  (Buildable-from-seq $build A ($seq A source)))
+
+;; head : C A -> Option A
+;; Get the first element of any collection, or none if empty.
+;; Converts to LSeq via Seqable, then extracts the head.
+;; Note: named `head` not `first` because `first` is a parser keyword
+;; (Sigma pair projection).
+(spec head {A : Type} {C : Type -> Type} (Seqable C) -> (C A) -> (Option A))
+(defn head [$seq xs]
+  (lseq-head A ($seq A xs)))
+
+;; empty? : C A -> Bool
+;; Check if a collection is empty.
+(spec empty? {A : Type} {C : Type -> Type} (Seqable C) -> (C A) -> Bool)
+(defn empty? [$seq xs]
+  (lseq-empty? A ($seq A xs)))
+
+;; rest-seq : C A -> LSeq A
+;; Get the remaining elements as a lazy sequence.
+;; The return type is always LSeq (not the original collection type)
+;; since this streams the tail without materializing a new collection.
+(spec rest-seq {A : Type} {C : Type -> Type} (Seqable C) -> (C A) -> (LSeq A))
+(defn rest-seq [$seq xs]
+  (lseq-rest A ($seq A xs)))

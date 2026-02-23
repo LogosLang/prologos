@@ -467,9 +467,11 @@
     ;; These shadow List-specific names (map, filter, reduce, etc.) with
     ;; generic versions that work on any Seqable/Buildable/Foldable collection.
     ;; Users can still access List-specific versions via fully qualified names.
-    (require [prologos::core::collection-fns :refer [map filter reduce length
-                                                     concat any? all? to-list
-                                                     find take drop]])))
+    (require [prologos::core::collection-fns :refer [map filter reduce reduce1
+                                                     length concat any? all?
+                                                     to-list find take drop
+                                                     into head empty?
+                                                     rest-seq]])))
 
 ;; ========================================
 ;; Pre-parse Directive Processing

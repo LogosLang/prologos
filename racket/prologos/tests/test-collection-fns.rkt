@@ -105,6 +105,40 @@
   (check-true (string-contains? result "6N")))
 
 ;; ========================================
+;; Generic reduce1 — first-element-as-init
+;; ========================================
+
+(test-case "collection-fns/reduce1-list-some"
+  (define result
+    (run-ns-last
+      "(ns cfn-reduce1-1)
+       (require (prologos::core::collection-fns :refer (reduce1)))
+       (require (prologos::data::nat :refer (add)))
+       (eval (reduce1 add '[1N 2N 3N]))"))
+  (check-true (string-contains? result "some"))
+  (check-true (string-contains? result "6N")))
+
+(test-case "collection-fns/reduce1-list-none"
+  (define result
+    (run-ns-last
+      "(ns cfn-reduce1-2)
+       (require (prologos::core::collection-fns :refer (reduce1)))
+       (require (prologos::data::nat :refer (add)))
+       (eval (reduce1 add (the (List Nat) (nil Nat))))"))
+  (check-true (string-contains? result "none")))
+
+(test-case "collection-fns/reduce1-pvec"
+  (define result
+    (run-ns-last
+      "(ns cfn-reduce1-3)
+       (require (prologos::core::collection-fns :refer (reduce1)))
+       (require (prologos::data::nat :refer (add)))
+       (def v : (PVec Nat) (pvec-push (pvec-push (pvec-push (pvec-empty Nat) 1N) 2N) 3N))
+       (eval (reduce1 add v))"))
+  (check-true (string-contains? result "some"))
+  (check-true (string-contains? result "6N")))
+
+;; ========================================
 ;; Generic length
 ;; ========================================
 
@@ -205,3 +239,97 @@
        (require (prologos::core::collection-fns :refer (drop)))
        (eval (drop (suc (suc zero)) '[1N 2N 3N 4N]))"))
   (check-true (string-contains? result "'[3N 4N]")))
+
+;; ========================================
+;; Generic into — collection conversion
+;; ========================================
+
+(test-case "collection-fns/into-list-to-pvec"
+  (define result
+    (run-ns-last
+      "(ns cfn-into-1)
+       (require (prologos::core::collection-fns :refer (into)))
+       (eval (into (pvec-empty Nat) '[1N 2N 3N]))"))
+  (check-true (string-contains? result "@[1N 2N 3N]")))
+
+(test-case "collection-fns/into-pvec-to-list"
+  (define result
+    (run-ns-last
+      "(ns cfn-into-2)
+       (require (prologos::core::collection-fns :refer (into)))
+       (def v : (PVec Nat) (pvec-push (pvec-push (pvec-push (pvec-empty Nat) 1N) 2N) 3N))
+       (eval (into (the (List Nat) (nil Nat)) v))"))
+  (check-true (string-contains? result "'[1N 2N 3N]")))
+
+(test-case "collection-fns/into-list-to-set"
+  (define result
+    (run-ns-last
+      "(ns cfn-into-3)
+       (require (prologos::core::collection-fns :refer (into)))
+       (eval (into (set-empty Nat) '[1N 2N 3N]))"))
+  (check-true (string-contains? result "#{")))
+
+(test-case "collection-fns/into-type-inference"
+  ;; Verify the return type matches the target collection type
+  (define result
+    (run-ns-last
+      "(ns cfn-into-4)
+       (require (prologos::core::collection-fns :refer (into)))
+       (infer (into (pvec-empty Nat) '[1N 2N 3N]))"))
+  (check-true (string-contains? result "PVec"))
+  (check-true (string-contains? result "Nat")))
+
+;; ========================================
+;; Generic first / empty? / rest-seq
+;; ========================================
+
+(test-case "collection-fns/head-list-some"
+  (define result
+    (run-ns-last
+      "(ns cfn-first-1)
+       (require (prologos::core::collection-fns :refer (head)))
+       (eval (head'[1N 2N 3N]))"))
+  (check-true (string-contains? result "some"))
+  (check-true (string-contains? result "1N")))
+
+(test-case "collection-fns/head-list-none"
+  (define result
+    (run-ns-last
+      "(ns cfn-first-2)
+       (require (prologos::core::collection-fns :refer (head)))
+       (eval (head(the (List Nat) (nil Nat))))"))
+  (check-true (string-contains? result "none")))
+
+(test-case "collection-fns/head-pvec"
+  (define result
+    (run-ns-last
+      "(ns cfn-first-3)
+       (require (prologos::core::collection-fns :refer (head)))
+       (def v : (PVec Nat) (pvec-push (pvec-push (pvec-empty Nat) 1N) 2N))
+       (eval (head v))"))
+  (check-true (string-contains? result "some"))
+  (check-true (string-contains? result "1N")))
+
+(test-case "collection-fns/empty?-list-true"
+  (define result
+    (run-ns-last
+      "(ns cfn-empty-1)
+       (require (prologos::core::collection-fns :refer (empty?)))
+       (eval (empty? (the (List Nat) (nil Nat))))"))
+  (check-true (string-contains? result "true")))
+
+(test-case "collection-fns/empty?-list-false"
+  (define result
+    (run-ns-last
+      "(ns cfn-empty-2)
+       (require (prologos::core::collection-fns :refer (empty?)))
+       (eval (empty? '[1N]))"))
+  (check-true (string-contains? result "false")))
+
+(test-case "collection-fns/empty?-pvec"
+  (define result
+    (run-ns-last
+      "(ns cfn-empty-3)
+       (require (prologos::core::collection-fns :refer (empty?)))
+       (eval (empty? (pvec-empty Nat)))"))
+  (check-true (string-contains? result "true")))
