@@ -389,15 +389,15 @@
     (require [prologos::core::string-ops :as str-ops :refer []])
 
     ;; ---- Tier 2c: Collection operation modules ----
-    (require [prologos::core::pvec-ops :refer [pvec-map pvec-filter pvec-fold
-                                              pvec-any? pvec-all?
+    ;; Note: pvec-map, pvec-filter, pvec-fold, set-fold, set-filter,
+    ;; map-fold-entries, map-filter-entries, map-map-vals are now native
+    ;; parser keywords — no need to import from ops modules.
+    (require [prologos::core::pvec-ops :refer [pvec-any? pvec-all?
                                               pvec-from-list-fn pvec-to-list-fn]])
-    (require [prologos::core::map-ops  :refer [map-map-vals map-filter-vals
-                                              map-fold-entries map-keys-list
+    (require [prologos::core::map-ops  :refer [map-filter-vals map-keys-list
                                               map-vals-list map-merge
                                               map-to-entry-list map-seq map-from-seq]])
-    (require [prologos::core::set-ops  :refer [set-map set-filter set-fold
-                                              set-any? set-all?
+    (require [prologos::core::set-ops  :refer [set-map set-any? set-all?
                                               set-to-list-fn set-from-list-fn]])
 
     ;; ---- Tier 2d: Collection conversions ----
@@ -461,7 +461,15 @@
     ;; ---- Tier 3d: Generic collection operations (HKT-dispatched) ----
     (require [prologos::core::collection-bundle :refer [Collection]])
     (require [prologos::core::generic-ops :refer [gmap gfilter gfold glength
-                                                 gconcat gany? gall? gto-list]])))
+                                                 gconcat gany? gall? gto-list]])
+
+    ;; ---- Tier 3e: Generic collection functions (clean names) ----
+    ;; These shadow List-specific names (map, filter, reduce, etc.) with
+    ;; generic versions that work on any Seqable/Buildable/Foldable collection.
+    ;; Users can still access List-specific versions via fully qualified names.
+    (require [prologos::core::collection-fns :refer [map filter reduce length
+                                                     concat any? all? to-list
+                                                     find take drop]])))
 
 ;; ========================================
 ;; Pre-parse Directive Processing

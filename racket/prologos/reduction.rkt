@@ -386,7 +386,6 @@
                        (lookup-ctor (ctor-short-name head-name)))])
          (and meta
               (let* ([n-type-params (length (ctor-meta-params meta))]
-                     [field-values (drop all-args n-type-params)]
                      [short-name (ctor-short-name head-name)]
                      ;; Find matching arm
                      [matching-arm
@@ -394,17 +393,30 @@
                                (eq? (expr-reduce-arm-ctor-name arm) short-name))
                              arms)])
                 (and matching-arm
-                     (let ([bc (expr-reduce-arm-binding-count matching-arm)]
-                           [body (expr-reduce-arm-body matching-arm)])
-                       (if (= (length field-values) bc)
-                           ;; Substitute field values for bindings.
-                           ;; bindings: bvar(0) = last field, bvar(1) = second-to-last, etc.
-                           ;; We substitute bvar(0) first with last field, which decrements
-                           ;; higher indices, then repeat for the next.
-                           (for/fold ([result body])
-                                     ([fv (in-list (reverse field-values))])
-                             (subst 0 fv result))
-                           #f))))))))
+                     (let* ([bc (expr-reduce-arm-binding-count matching-arm)]
+                            [body (expr-reduce-arm-body matching-arm)]
+                            ;; Compute field-values: handle both WITH and WITHOUT type args.
+                            ;; racket-list->prologos-list creates cons/nil chains without
+                            ;; type args. When (length all-args) == bc, type args are absent;
+                            ;; when (length all-args) == bc + n-type-params, they're present.
+                            [n-args (length all-args)]
+                            [field-values
+                             (cond
+                               [(= n-args (+ bc n-type-params))
+                                ;; Full args: skip type params
+                                (drop all-args n-type-params)]
+                               [(= n-args bc)
+                                ;; No type args present (e.g., from racket-list->prologos-list)
+                                all-args]
+                               [else #f])])
+                       (and field-values
+                            ;; Substitute field values for bindings.
+                            ;; bindings: bvar(0) = last field, bvar(1) = second-to-last, etc.
+                            ;; We substitute bvar(0) first with last field, which decrements
+                            ;; higher indices, then repeat for the next.
+                            (for/fold ([result body])
+                                      ([fv (in-list (reverse field-values))])
+                              (subst 0 fv result))))))))))
 
 ;; Extract the short (bare) name from a potentially FQN symbol.
 ;; 'prologos::data::list::cons → 'cons, 'cons → 'cons
@@ -1913,7 +1925,9 @@
 
     ;; PVec normalization
     [(expr-PVec a) (expr-PVec (nf a))]
-    [(expr-rrb _) e]
+    [(expr-rrb r)
+     ;; Normalize all elements inside the RRB tree
+     (expr-rrb (rrb-from-list (map nf (rrb-to-list r))))]
     [(expr-pvec-empty a) (expr-pvec-empty (nf a))]
     [(expr-pvec-push v x) (expr-pvec-push (nf v) (nf x))]
     [(expr-pvec-nth v i) (expr-pvec-nth (nf v) (nf i))]

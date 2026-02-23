@@ -1,7 +1,6 @@
 ns prologos::core::map-ops
 
-require [prologos::data::list      :refer [List nil cons map filter foldr]]
-require [prologos::data::option    :refer [Option some none]]
+require [prologos::data::list      :refer [List nil cons foldr]]
 require [prologos::data::map-entry :refer [MapEntry mk-entry entry-key entry-val]]
 require [prologos::data::lseq      :refer [LSeq lseq-nil]]
 require [prologos::data::lseq-ops  :refer [list-to-lseq lseq-to-list]]
@@ -9,38 +8,18 @@ require [prologos::data::lseq-ops  :refer [list-to-lseq lseq-to-list]]
 ;; ========================================
 ;; Map Operations Module
 ;; ========================================
-;; Convenience functions for Map that work via key-list conversion.
-;; Since Map has two type params (K, V), it can't use Seqable/Foldable
-;; traits (which require Type -> Type). These standalone functions
-;; provide the same capabilities.
-
-;; map-map-vals : (V -> W) -> Map K V -> Map K W
-;; Applies f to every value, preserving keys.
-;; Implementation: fold over keys, build new map.
-spec map-map-vals {K V W : Type} [-> V W] -> [Map K V] -> [Map K W]
-defn map-map-vals [f m]
-  foldr K [Map K W]
-    [fn k acc [map-assoc acc k [f [map-get m k]]]]
-    [map-empty K W]
-    [map-keys m]
+;; map-map-vals, map-fold-entries, map-filter-entries are now native AST
+;; primitives (parser keywords). They reduce via champ-fold in the
+;; reduction engine.
+;;
+;; Remaining functions use native primitives where possible.
 
 ;; map-filter-vals : (V -> Bool) -> Map K V -> Map K V
 ;; Keeps only entries whose value satisfies pred.
+;; Uses native map-filter-entries with a key-ignoring predicate.
 spec map-filter-vals {K V : Type} [-> V Bool] -> [Map K V] -> [Map K V]
 defn map-filter-vals [pred m]
-  foldr K [Map K V]
-    [fn k acc [if [pred [map-get m k]] [map-assoc acc k [map-get m k]] acc]]
-    [map-empty K V]
-    [map-keys m]
-
-;; map-fold-entries : (B -> K -> V -> B) -> B -> Map K V -> B
-;; Left fold over key-value pairs.
-spec map-fold-entries {K V B : Type} [-> B [-> K [-> V B]]] -> B -> [Map K V] -> B
-defn map-fold-entries [f z m]
-  foldr K B
-    [fn k acc [f acc k [map-get m k]]]
-    z
-    [map-keys m]
+  map-filter-entries [fn k v [pred v]] m
 
 ;; map-keys-list : Map K V -> List K  (wraps AST map-keys as a function)
 spec map-keys-list {K V : Type} [Map K V] -> [List K]
@@ -54,12 +33,10 @@ defn map-vals-list [m]
 
 ;; map-merge : Map K V -> Map K V -> Map K V
 ;; Merge two maps. Right map wins on key collision.
+;; Uses native map-fold-entries to fold over m2's entries.
 spec map-merge {K V : Type} [Map K V] -> [Map K V] -> [Map K V]
 defn map-merge [m1 m2]
-  foldr K [Map K V]
-    [fn k acc [map-assoc acc k [map-get m2 k]]]
-    m1
-    [map-keys m2]
+  map-fold-entries [fn acc k v [map-assoc acc k v]] m1 m2
 
 
 ;; ========================================
@@ -73,13 +50,14 @@ defn map-merge [m1 m2]
 
 ;; map-to-entry-list : Map K V -> List (MapEntry K V)
 ;; Convert a map to a list of key-value entries.
+;; Uses native map-fold-entries to avoid key-list intermediary.
 (def map-to-entry-list : [Pi [K :0 <Type>] [Pi [V :0 <Type>] [-> [Map K V] [List [MapEntry K V]]]]]
   (fn (K :0 (Type 0)) (fn (V :0 (Type 0)) (fn (m : (Map K V))
-    (foldr K (List (MapEntry K V))
-      (fn (k : K) (fn (acc : (List (MapEntry K V)))
-        (cons (MapEntry K V) (mk-entry K V k (map-get m k)) acc)))
+    (map-fold-entries
+      (fn (acc : (List (MapEntry K V))) (fn (k : K) (fn (v : V)
+        (cons (MapEntry K V) (mk-entry K V k v) acc))))
       (nil (MapEntry K V))
-      (map-keys m))))))
+      m)))))
 
 ;; map-seq : Map K V -> LSeq (MapEntry K V)
 ;; Convert a map to a lazy sequence of key-value entries.

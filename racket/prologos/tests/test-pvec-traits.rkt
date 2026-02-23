@@ -64,7 +64,7 @@
 (require (prologos::core::foldable-pvec   :refer (pvec-foldable)))
 (require (prologos::core::functor-pvec    :refer (pvec-functor)))
 (require (prologos::core::indexed-pvec    :refer (PVec--Indexed--dict pvec-idx-nth pvec-idx-length pvec-idx-update)))
-(require (prologos::core::pvec-ops        :refer (pvec-map pvec-filter pvec-fold pvec-any? pvec-all? pvec-from-list-fn pvec-to-list-fn)))
+(require (prologos::core::pvec-ops        :refer (pvec-any? pvec-all? pvec-from-list-fn pvec-to-list-fn)))
 (require (prologos::data::lseq            :refer (LSeq lseq-nil lseq-cell)))
 (require (prologos::data::lseq-ops        :refer (lseq-to-list list-to-lseq)))
 (require (prologos::data::option          :refer (Option some none)))
@@ -157,21 +157,29 @@
 ;; PVec Ops — convenience functions
 ;; ========================================
 
+;; pvec-map, pvec-filter, pvec-fold are now native parser keywords.
+;; Test them in applied form rather than via (infer name).
+
 (test-case "pvec-traits/pvec-map-type"
-  (define result (run-ns-last (string-append preamble "(infer pvec-map)")))
-  (check-contains result "Pi")
-  (check-contains result "PVec"))
+  (define result (run-ns-last (string-append preamble
+    "(def v <(PVec Nat)> (pvec-push (pvec-empty Nat) zero))
+     (infer (pvec-map (fn (x : Nat) (suc x)) v))")))
+  (check-contains result "PVec")
+  (check-contains result "Nat"))
 
 (test-case "pvec-traits/pvec-filter-type"
-  (define result (run-ns-last (string-append preamble "(infer pvec-filter)")))
-  (check-contains result "Pi")
+  (define result (run-ns-last (string-append preamble
+    "(def v <(PVec Nat)> (pvec-push (pvec-empty Nat) zero))
+     (infer (pvec-filter (fn (x : Nat) true) v))")))
   (check-contains result "PVec")
-  (check-contains result "Bool"))
+  (check-contains result "Nat"))
 
 (test-case "pvec-traits/pvec-fold-type"
-  (define result (run-ns-last (string-append preamble "(infer pvec-fold)")))
-  (check-contains result "Pi")
-  (check-contains result "PVec"))
+  (define result (run-ns-last (string-append preamble
+    "(require (prologos::data::nat :refer (add)))
+     (def v <(PVec Nat)> (pvec-push (pvec-empty Nat) zero))
+     (infer (pvec-fold add zero v))")))
+  (check-contains result "Nat"))
 
 (test-case "pvec-traits/pvec-any-type"
   (define result (run-ns-last (string-append preamble "(infer pvec-any?)")))

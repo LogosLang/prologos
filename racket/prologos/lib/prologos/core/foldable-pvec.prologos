@@ -1,15 +1,18 @@
 ns prologos::core::foldable-pvec
 
 require [prologos::core::foldable-trait :refer [Foldable]]
-require [prologos::data::list :refer [List foldr]]
 
 ;; ========================================
 ;; Foldable instance for PVec
 ;; ========================================
-;; Converts to List first, then delegates to list foldr.
-;; pvec-foldable : Foldable PVec
-;; = Pi(A :0 Type) Pi(B :0 Type) (A -> B -> B) -> B -> PVec A -> B
+;; Uses native pvec-fold (left fold via rrb-fold) for O(n) traversal
+;; without List conversion.
+;;
+;; Note: pvec-fold is accumulator-first (B -> A -> B), but Foldable's
+;; fold method is element-first (A -> B -> B). We flip the arguments.
+;; This changes semantics from right-fold to left-fold, which is
+;; acceptable for PVec (indexed, left-to-right is natural).
 
 (def pvec-foldable : [Foldable PVec]
   (fn (A :0 (Type 0)) (fn (B :0 (Type 0)) (fn (f : (-> A (-> B B))) (fn (z : B) (fn (v : (PVec A))
-    (foldr A B f z (pvec-to-list v))))))))
+    (pvec-fold (fn (acc : B) (fn (elem : A) (f elem acc))) z v)))))))

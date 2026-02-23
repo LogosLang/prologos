@@ -78,22 +78,30 @@
 ;; PVec operations accessible
 ;; ========================================
 
+;; pvec-map, pvec-filter are now native parser keywords — test in applied form.
+
 (test-case "prelude/pvec-map-accessible"
-  (define result (run-ns-last (string-append preamble "(infer pvec-map)")))
+  (define result (run-ns-last (string-append preamble
+    "(def v : (PVec Nat) (pvec-push (pvec-empty Nat) zero))
+     (infer (pvec-map (fn (x : Nat) (suc x)) v))")))
   (check-contains result "PVec"))
 
 (test-case "prelude/pvec-filter-accessible"
-  (define result (run-ns-last (string-append preamble "(infer pvec-filter)")))
-  (check-contains result "PVec")
-  (check-contains result "Bool"))
+  (define result (run-ns-last (string-append preamble
+    "(def v : (PVec Nat) (pvec-push (pvec-empty Nat) zero))
+     (infer (pvec-filter (fn (x : Nat) true) v))")))
+  (check-contains result "PVec"))
 
 ;; ========================================
 ;; Map operations accessible
 ;; ========================================
 
+;; map-fold-entries is now a native parser keyword — test in applied form.
 (test-case "prelude/map-fold-entries-accessible"
-  (define result (run-ns-last (string-append preamble "(infer map-fold-entries)")))
-  (check-contains result "Map"))
+  (define result (run-ns-last (string-append preamble
+    "(def m : (Map Nat Nat) (map-assoc (map-empty Nat Nat) zero (suc zero)))
+     (infer (map-fold-entries (fn (acc : Nat) (fn (k : Nat) (fn (v : Nat) acc))) zero m))")))
+  (check-contains result "Nat"))
 
 (test-case "prelude/map-merge-accessible"
   (define result (run-ns-last (string-append preamble "(infer map-merge)")))
@@ -107,10 +115,12 @@
   (define result (run-ns-last (string-append preamble "(infer set-map)")))
   (check-contains result "Set"))
 
+;; set-filter is now a native parser keyword — test in applied form.
 (test-case "prelude/set-filter-accessible"
-  (define result (run-ns-last (string-append preamble "(infer set-filter)")))
-  (check-contains result "Set")
-  (check-contains result "Bool"))
+  (define result (run-ns-last (string-append preamble
+    "(def s : (Set Nat) (set-insert (set-empty Nat) zero))
+     (infer (set-filter (fn (x : Nat) true) s))")))
+  (check-contains result "Set"))
 
 ;; ========================================
 ;; Collection conversions accessible

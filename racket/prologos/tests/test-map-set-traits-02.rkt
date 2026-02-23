@@ -69,8 +69,8 @@
 (require (prologos::core::seqable-set    :refer (Set--Seqable--dict)))
 (require (prologos::core::buildable-set  :refer (Set--Buildable--dict)))
 (require (prologos::core::foldable-set   :refer (set-foldable)))
-(require (prologos::core::set-ops        :refer (set-map set-filter set-fold set-any? set-all? set-to-list-fn set-from-list-fn)))
-(require (prologos::core::map-ops        :refer (map-map-vals map-filter-vals map-fold-entries map-keys-list map-vals-list map-merge)))
+(require (prologos::core::set-ops        :refer (set-map set-any? set-all? set-to-list-fn set-from-list-fn)))
+(require (prologos::core::map-ops        :refer (map-filter-vals map-keys-list map-vals-list map-merge)))
 (require (prologos::data::lseq           :refer (LSeq lseq-nil lseq-cell)))
 (require (prologos::data::lseq-ops       :refer (lseq-to-list list-to-lseq)))
 (require (prologos::data::option         :refer (Option some none)))
@@ -137,17 +137,23 @@
   (check-contains result "Set"))
 
 
+;; set-filter and set-fold are now native parser keywords.
+;; Test them in applied form.
+
 (test-case "map-set-traits/set-filter-type"
-  (define result (run-ns-last (string-append preamble "(infer set-filter)")))
-  (check-contains result "Pi")
+  (define result (run-ns-last (string-append preamble
+    "(def s <(Set Nat)> (set-insert (set-empty Nat) zero))
+     (infer (set-filter (fn (x : Nat) true) s))")))
   (check-contains result "Set")
-  (check-contains result "Bool"))
+  (check-contains result "Nat"))
 
 
 (test-case "map-set-traits/set-fold-type"
-  (define result (run-ns-last (string-append preamble "(infer set-fold)")))
-  (check-contains result "Pi")
-  (check-contains result "Set"))
+  (define result (run-ns-last (string-append preamble
+    "(require (prologos::data::nat :refer (add)))
+     (def s <(Set Nat)> (set-insert (set-empty Nat) zero))
+     (infer (set-fold add zero s))")))
+  (check-contains result "Nat"))
 
 
 (test-case "map-set-traits/set-any-type"
@@ -168,16 +174,22 @@
 ;; Map Ops — type inference
 ;; ========================================
 
+;; map-map-vals and map-fold-entries are now native parser keywords.
+;; Test them in applied form.
+
 (test-case "map-set-traits/map-map-vals-type"
-  (define result (run-ns-last (string-append preamble "(infer map-map-vals)")))
-  (check-contains result "Pi")
-  (check-contains result "Map"))
+  (define result (run-ns-last (string-append preamble
+    "(def m : (Map Nat Nat) (map-assoc (map-empty Nat Nat) zero (suc zero)))
+     (infer (map-map-vals (fn (v : Nat) (suc v)) m))")))
+  (check-contains result "Map")
+  (check-contains result "Nat"))
 
 
 (test-case "map-set-traits/map-fold-entries-type"
-  (define result (run-ns-last (string-append preamble "(infer map-fold-entries)")))
-  (check-contains result "Pi")
-  (check-contains result "Map"))
+  (define result (run-ns-last (string-append preamble
+    "(def m : (Map Nat Nat) (map-assoc (map-empty Nat Nat) zero (suc zero)))
+     (infer (map-fold-entries (fn (acc : Nat) (fn (k : Nat) (fn (v : Nat) acc))) zero m))")))
+  (check-contains result "Nat"))
 
 
 (test-case "map-set-traits/map-keys-list-type"

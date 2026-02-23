@@ -17,15 +17,21 @@
          "../global-env.rkt"
          "../namespace.rkt"
          "../macros.rkt"
+         "../metavar-store.rkt"
          "../errors.rkt")
 
 ;; Helper: run prologos code with namespace system active
+;; Includes trait/impl registries for generic function resolution.
 (define (run-ns s)
   (parameterize ([current-global-env (hasheq)]
                  [current-ns-context #f]
                  [current-module-registry prelude-module-registry]
                  [current-lib-paths (list prelude-lib-dir)]
+                 [current-mult-meta-store (make-hasheq)]
                  [current-preparse-registry prelude-preparse-registry]
+                 [current-trait-registry prelude-trait-registry]
+                 [current-impl-registry prelude-impl-registry]
+                 [current-param-impl-registry prelude-param-impl-registry]
                  [current-ctor-registry (current-ctor-registry)]
                  [current-type-meta (current-type-meta)])
     (install-module-loader!)
@@ -135,24 +141,26 @@
 
 
 (test-case "prelude: list map available"
+  ;; map/filter/length are now generic (from collection-fns);
+  ;; they auto-resolve Seqable/Buildable dicts without explicit type args.
   (check-equal?
-   (run-ns "(ns test.pre15)\n(eval (length Nat (map Nat Nat (fn (x : Nat) (suc x)) (cons Nat zero (nil Nat)))))")
+   (run-ns "(ns test.pre15)\n(eval (length (map (fn (x : Nat) (suc x)) (cons Nat zero (nil Nat)))))")
    '("1N : Nat")))
 
 
 (test-case "prelude: list filter available"
   (check-equal?
-   (run-ns "(ns test.pre16)\n(eval (length Nat (filter Nat zero? (cons Nat zero (cons Nat (suc zero) (nil Nat))))))")
+   (run-ns "(ns test.pre16)\n(eval (length (filter zero? (cons Nat zero (cons Nat (suc zero) (nil Nat))))))")
    '("1N : Nat")))
 
 
 (test-case "prelude: list length available"
   (check-equal?
-   (run-ns "(ns test.pre17)\n(eval (length Nat (cons Nat zero (cons Nat (suc zero) (nil Nat)))))")
+   (run-ns "(ns test.pre17)\n(eval (length (cons Nat zero (cons Nat (suc zero) (nil Nat)))))")
    '("2N : Nat")))
 
 
 (test-case "prelude: list reverse available"
   (check-equal?
-   (run-ns "(ns test.pre18)\n(eval (length Nat (reverse Nat (cons Nat zero (cons Nat (suc zero) (nil Nat))))))")
+   (run-ns "(ns test.pre18)\n(eval (length (reverse Nat (cons Nat zero (cons Nat (suc zero) (nil Nat))))))")
    '("2N : Nat")))

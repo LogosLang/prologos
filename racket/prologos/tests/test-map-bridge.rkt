@@ -58,7 +58,7 @@
     "         (prologos::data::lseq :refer (LSeq lseq-nil lseq-cell))\n"
     "         (prologos::data::lseq-ops :refer (list-to-lseq lseq-to-list))\n"
     "         (prologos::core::map-ops :refer (map-to-entry-list map-seq map-from-seq\n"
-    "                                          map-map-vals map-fold-entries map-merge)))\n"))
+    "                                          map-filter-vals map-merge)))\n"))
 
 ;; Helper: build a 1-entry map {0 -> 1}
 (define mk-map1

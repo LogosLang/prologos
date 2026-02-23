@@ -1095,12 +1095,13 @@
          [_ (expr-error)]))]
     ;; pvec-fold : (B → A → B) → B → PVec A → B
     ;; Left fold over a PVec: f takes (accumulator, element), returns accumulator.
+    ;; Pi codomain types are shifted to account for the binder (de Bruijn convention).
     [(expr-pvec-fold f init vec)
      (let ([tv (infer ctx vec)]
            [tb (infer ctx init)])
        (match tv
          [(expr-PVec a)
-          (let ([expected-f (expr-Pi 'mw tb (expr-Pi 'mw a tb))])
+          (let ([expected-f (expr-Pi 'mw tb (expr-Pi 'mw (shift 1 0 a) (shift 2 0 tb)))])
             (if (check ctx f expected-f)
                 tb
                 (expr-error)))]
@@ -1123,14 +1124,15 @@
                          (let ([b (infer (cons (cons actual-dom 'mw) ctx) body)])
                            (if (equal? b (expr-error))
                                (expr-error)
-                               (expr-PVec (whnf b))))
+                               ;; b is at extended depth; un-shift via subst
+                               (expr-PVec (whnf (subst 0 (expr-zero) b)))))
                          (expr-error)))]
                   [_ (expr-error)])
-                ;; Normal path: f inferred to Pi
+                ;; Normal path: f inferred to Pi — un-shift codomain via subst
                 (match (whnf tf)
                   [(expr-Pi _ dom cod)
                    (if (unify-ok? (unify ctx dom a))
-                       (expr-PVec (whnf cod))
+                       (expr-PVec (whnf (subst 0 (expr-zero) cod)))
                        (expr-error))]
                   [_ (expr-error)])))]
          [_ (expr-error)]))]
@@ -1151,7 +1153,7 @@
            [tb (infer ctx init)])
        (match ts
          [(expr-Set a)
-          (let ([expected-f (expr-Pi 'mw tb (expr-Pi 'mw a tb))])
+          (let ([expected-f (expr-Pi 'mw tb (expr-Pi 'mw (shift 1 0 a) (shift 2 0 tb)))])
             (if (check ctx f expected-f)
                 tb
                 (expr-error)))]
@@ -1173,7 +1175,9 @@
            [tb (infer ctx init)])
        (match tm
          [(expr-Map k v)
-          (let ([expected-f (expr-Pi 'mw tb (expr-Pi 'mw k (expr-Pi 'mw v tb)))])
+          (let ([expected-f (expr-Pi 'mw tb
+                              (expr-Pi 'mw (shift 1 0 k)
+                                (expr-Pi 'mw (shift 2 0 v) (shift 3 0 tb))))])
             (if (check ctx f expected-f)
                 tb
                 (expr-error)))]
@@ -1184,7 +1188,7 @@
      (let ([tm (infer ctx map)])
        (match tm
          [(expr-Map k v)
-          (if (check ctx pred (expr-Pi 'mw k (expr-Pi 'mw v (expr-Bool))))
+          (if (check ctx pred (expr-Pi 'mw k (expr-Pi 'mw (shift 1 0 v) (expr-Bool))))
               (expr-Map k v)
               (expr-error))]
          [_ (expr-error)]))]
@@ -1205,14 +1209,15 @@
                          (let ([w (infer (cons (cons actual-dom 'mw) ctx) body)])
                            (if (equal? w (expr-error))
                                (expr-error)
-                               (expr-Map k (whnf w))))
+                               ;; w is at extended depth; un-shift via subst
+                               (expr-Map k (whnf (subst 0 (expr-zero) w)))))
                          (expr-error)))]
                   [_ (expr-error)])
-                ;; Normal path
+                ;; Normal path — un-shift codomain via subst
                 (match (whnf tf)
                   [(expr-Pi _ dom cod)
                    (if (unify-ok? (unify ctx dom v))
-                       (expr-Map k (whnf cod))
+                       (expr-Map k (whnf (subst 0 (expr-zero) cod)))
                        (expr-error))]
                   [_ (expr-error)])))]
          [_ (expr-error)]))]
@@ -1472,19 +1477,21 @@
      (and (check ctx v (expr-PVec a))
           (check ctx x a))]
     ;; pvec-fold : check against result type B
+    ;; Pi codomains shifted for de Bruijn convention.
     [((expr-pvec-fold f init vec) expected-type)
      (let ([tv (infer ctx vec)])
        (match tv
          [(expr-PVec a)
           (and (check ctx init expected-type)
-               (check ctx f (expr-Pi 'mw expected-type (expr-Pi 'mw a expected-type))))]
+               (check ctx f (expr-Pi 'mw expected-type
+                              (expr-Pi 'mw (shift 1 0 a) (shift 2 0 expected-type)))))]
          [_ #f]))]
     ;; pvec-map : check against PVec B
     [((expr-pvec-map f vec) (expr-PVec b))
      (let ([tv (infer ctx vec)])
        (match tv
          [(expr-PVec a)
-          (check ctx f (expr-Pi 'mw a b))]
+          (check ctx f (expr-Pi 'mw a (shift 1 0 b)))]
          [_ #f]))]
     ;; pvec-filter : check against PVec A
     [((expr-pvec-filter pred vec) (expr-PVec a))
@@ -1496,7 +1503,8 @@
        (match ts
          [(expr-Set a)
           (and (check ctx init expected-type)
-               (check ctx f (expr-Pi 'mw expected-type (expr-Pi 'mw a expected-type))))]
+               (check ctx f (expr-Pi 'mw expected-type
+                              (expr-Pi 'mw (shift 1 0 a) (shift 2 0 expected-type)))))]
          [_ #f]))]
     ;; set-filter : check against Set A
     [((expr-set-filter pred set) (expr-Set a))
@@ -1508,11 +1516,13 @@
        (match tm
          [(expr-Map k v)
           (and (check ctx init expected-type)
-               (check ctx f (expr-Pi 'mw expected-type (expr-Pi 'mw k (expr-Pi 'mw v expected-type)))))]
+               (check ctx f (expr-Pi 'mw expected-type
+                              (expr-Pi 'mw (shift 1 0 k)
+                                (expr-Pi 'mw (shift 2 0 v) (shift 3 0 expected-type))))))]
          [_ #f]))]
     ;; map-filter-entries : check against Map K V
     [((expr-map-filter-entries pred map) (expr-Map k v))
-     (and (check ctx pred (expr-Pi 'mw k (expr-Pi 'mw v (expr-Bool))))
+     (and (check ctx pred (expr-Pi 'mw k (expr-Pi 'mw (shift 1 0 v) (expr-Bool))))
           (check ctx map (expr-Map k v)))]
     ;; map-map-vals : check against Map K W
     [((expr-map-map-vals f map) (expr-Map k w))
@@ -1520,7 +1530,7 @@
        (match tm
          [(expr-Map k2 v)
           (and (unify-ok? (unify ctx k k2))
-               (check ctx f (expr-Pi 'mw v w)))]
+               (check ctx f (expr-Pi 'mw v (shift 1 0 w))))]
          [_ #f]))]
 
     ;; ---- Transient Builder checks ----
