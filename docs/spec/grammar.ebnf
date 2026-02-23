@@ -114,6 +114,7 @@ bool-literal    = 'true' | 'false' ;
 
 wildcard        = '_' ;
 numbered-hole   = '_' , digit , { digit } ;
+typed-hole      = '??' , [ identifier ] ;              (* interactive development hole *)
 
 (* ------------------------------------------------ *)
 (* 1.9 Multiplicity Annotations                     *)
@@ -231,8 +232,9 @@ defn-private    = 'defn-' , identifier , defn-sig , defn-clauses ;
 (* ------------------------------------------------ *)
 
 (* spec declares a type signature separately from the definition.
-   Supports implicit binders via {}, constraints, and varargs. *)
-spec-form       = 'spec' , identifier , spec-body ;
+   Supports implicit binders via {}, constraints, varargs, and
+   an optional trailing metadata map (via implicit map syntax). *)
+spec-form       = 'spec' , identifier , spec-body , [ spec-metadata ] ;
 spec-body       = { spec-element } ;
 spec-element    = implicit-binders                 (* {A B : Type} *)
                 | constraint                       (* (Eq A) or [Eq A] *)
@@ -251,8 +253,19 @@ constraint      = '(' , identifier , { type-atom } , ')'
 (* Constraints can also appear via where clause *)
 where-clause    = 'where' , constraint , { ',' , constraint } ;
 
+(* Optional metadata map — keyword-headed children after the type signature.
+   Uses the same implicit map syntax as def/defn. Recognized keys include
+   :where, :doc, :examples, :properties, :see-also, :pre, :post, :refines.
+   Unrecognized keys are stored but not acted upon (forward-compatible). *)
+spec-metadata   = spec-meta-entry , { spec-meta-entry } ;
+spec-meta-entry = keyword-literal , spec-meta-value ;
+spec-meta-value = expr
+                | dash-list                        (* YAML-like list via - children *)
+                | nested-keyword-map               (* nested keyword : value pairs *)
+                ;
+
 (* Private variant *)
-spec-private    = 'spec-' , identifier , spec-body ;
+spec-private    = 'spec-' , identifier , spec-body , [ spec-metadata ] ;
 
 (* ------------------------------------------------ *)
 (* 3.4 Algebraic Data Type (data)                   *)
@@ -487,6 +500,7 @@ expr-atom       = literal
                 | qualified-name
                 | wildcard                         (* _ as expression hole *)
                 | numbered-hole                    (* _1, _2 for partial app *)
+                | typed-hole                       (* ?? interactive dev hole *)
                 | bracketed-expr
                 | paren-expr
                 | lambda-expr
@@ -908,7 +922,7 @@ sexp-form       = '(' , 'ns' , module-path , [ ns-options ] , ')'
                 | '(' , 'def' , identifier , [ ':' , type-expr ] , expr , ')'
                 | '(' , 'defn' , identifier , [ ':' , type-expr ] ,
                         '(' , { param } , ')' , expr , ')'
-                | '(' , 'spec' , identifier , spec-body , ')'
+                | '(' , 'spec' , identifier , spec-body , { '(' , spec-meta-entry , ')' } , ')'
                 | '(' , 'data' , identifier , { data-ctor } , ')'
                 | '(' , 'trait' , identifier , '{' , { implicit-group } , '}' ,
                         { trait-method } , ')'

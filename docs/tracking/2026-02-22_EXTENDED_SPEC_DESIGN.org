@@ -1,0 +1,868 @@
+#+TITLE: Extended Spec Language Design
+#+SUBTITLE: Toward Editor-Assisted Interactive Development
+#+AUTHOR: Prologos Project
+#+DATE: 2026-02-22
+#+PROPERTY: Status RESEARCH/DESIGN
+
+* Executive Summary
+
+This document proposes extending Prologos's ~spec~ form to accept an optional
+metadata map --- using the language's existing implicit map syntax --- with keys
+for documentation, examples, properties, contracts, and refinements. The
+extended spec becomes the primary interface between the programmer and the type
+system: where all function metadata converges and from which tests, proofs, and
+documentation can be auto-generated.
+
+The design is informed by a survey of Clojure Spec, Malli, PropEr, Agda, Idris,
+Lean, Liquid Haskell, F*, and Racket contracts. Property-based testing and
+interactive theorem proving are explicit design /targets/ (we design syntax to
+support them) but not implementation targets (we do not build the engines yet).
+
+A companion feature --- ~??~ typed holes for interactive development --- is
+proposed alongside the extended spec, providing the syntactic basis for
+Agda/Idris-style hole-driven programming.
+
+* Part I: Research Survey
+
+** 1. Clojure Spec & Malli
+
+*** Clojure Spec
+
+Clojure Spec (~clojure.spec.alpha~) is /predicate-first/: every spec is
+fundamentally a predicate function. The key insight for Prologos is the three
+facets of ~s/fdef~:
+
+#+begin_src clojure
+(s/fdef ranged-rand
+  :args (s/cat :start int? :end int?)
+  :ret  int?
+  :fn   (fn [{:keys [args ret]}]
+          (and (>= ret (:start args))
+               (<  ret (:end args)))))
+#+end_src
+
+- *=:args=*: regex spec for function arguments (~s/cat~, ~s/alt~)
+- *=:ret=*: spec for the return value
+- *=:fn=*: predicate relating ~{:args conformed-args :ret conformed-ret}~
+
+The =:fn= relation is the most interesting for Prologos --- it expresses
+/properties/ that must hold between inputs and outputs. In a dependently-typed
+language, this corresponds directly to a dependent Pi type.
+
+*Generative testing*: ~stest/check~ generates random inputs from ~:args~,
+invokes the function, and checks both ~:ret~ and ~:fn~. Specs /are/ generators
+--- no separate test-writing step required. This is QuickCheck-style property
+testing with zero user-written generators.
+
+*Instrument vs check*: ~instrument~ validates ~:args~ at call sites
+(development-time contract enforcement). ~check~ validates ~:ret~ and ~:fn~ via
+generative testing (test-time property verification). This separation is
+important: /contracts at dev time, properties at test time/.
+
+*Composition*: ~s/keys~ for entity maps, ~s/cat~ for sequential concatenation,
+~s/alt~ for alternatives, ~s/and~ for conjunctive refinement. Specs compose
+algebraically.
+
+*** Malli
+
+Malli is /schema-first/ (data-driven): schemas are plain data structures, not
+opaque predicate objects. This enables schema transformation, generation,
+serialization.
+
+#+begin_src clojure
+(def MyFunction
+  [:=> [:cat :int :int] :int])
+
+;; Schema-as-data enables programmatic manipulation:
+(m/children MyFunction) ;; => [[:cat :int :int] :int]
+#+end_src
+
+*Key lesson*: In a homoiconic language like Prologos, spec metadata should be
+data --- quotable, inspectable, transformable. This is naturally satisfied by
+using maps.
+
+*** Insight for Prologos
+
+In a dependently-typed language, types already subsume specs. Clojure's =:fn=
+relation corresponds to a dependent Pi type:
+
+#+begin_src prologos
+;; Clojure spec's :fn relation for ranged-rand:
+;; (fn [{:keys [args ret]}] (and (>= ret start) (< ret end)))
+
+;; Is expressible as the dependent type:
+;; <(start : Int) -> (end : Int) -> {v : Int | v >= start, v < end}>
+#+end_src
+
+Runtime property testing remains valuable even when types encode the invariant:
+the type checker catches /logical/ errors at compile time; property testing
+catches /implementation/ bugs.
+
+** 2. PropEr (Erlang Property-Based Testing)
+
+PropEr is notable for its /type-driven generator synthesis/. If a function has a
+Dialyzer type spec, PropEr constructs generators automatically:
+
+#+begin_src erlang
+-spec foo(integer(), string()) -> boolean().
+%% PropEr generates random (integer, string) pairs and checks boolean result
+#+end_src
+
+*Compositional shrinking*: When custom generators are built from other
+generators, shrinking behavior inherits automatically. Data structures
+containing other data "tend to empty themselves."
+
+*Property patterns*: ~?FORALL(Xs, Generator, Property)~ is the canonical form.
+~?IMPLIES~ for conditional properties. ~aggregate/collect~ for coverage.
+
+*Insight for Prologos*: Our types are richer than Dialyzer specs. A ~spec~ with
+dependent types gives enough information to auto-generate random inputs. The
+generator infrastructure should be type-directed: ~Gen : Type -> Generator~ as a
+trait, with automatic derivation for algebraic data types.
+
+** 3. Agda/Idris Interactive Development
+
+*** Agda
+
+Agda's hole-driven development is the gold standard for interactive type-driven
+programming:
+
+- *Holes*: ~?~ in code creates a /hole/ (placeholder for incomplete code). The
+  type checker reports the expected type and available local bindings.
+
+- *Commands*:
+  | Key | Action | Description |
+  |-------+--------+-----------------------------------------|
+  | ~C-c C-r~ | Refine | Fill hole with expression + new sub-holes |
+  | ~C-c C-c~ | Case | Split on a variable (pattern match) |
+  | ~C-c C-a~ | Auto | Proof search (try constructors) |
+  | ~C-c C-,~ | Goal | Show expected type and context |
+
+- *Auto proof search*: Completely rewritten in Agda 2.7.0. Searches for type
+  inhabitants by trying constructors and projections. Works for "small enough
+  problems of almost any kind." Users provide hints via constants or scope.
+
+*** Idris 2
+
+Idris's interactive editing provides similar capabilities with a different
+flavor:
+
+- *Holes*: ~?name~ syntax. The REPL shows expected type and context.
+
+- *Commands*:
+  | Command | Description |
+  |---------+----------------------------------------------|
+  | ~:ac~ | Add clause template for a function |
+  | ~:cs~ | Case split on variable (removes impossible cases) |
+  | ~:am~ | Add missing clauses |
+  | ~:ps~ | Proof search |
+  | ~:mw~ | Make with clause |
+
+- *Case splitting* (~:cs~): Removes /impossible/ cases due to unification ---
+  this is type-directed case analysis. When a constructor can't unify with the
+  expected type, the case is silently omitted.
+
+*** Insight for Prologos
+
+The ~??~ syntax naturally maps to our existing ~expr-hole~ infrastructure
+(~syntax.rkt~ line 688). The type checker already handles ~expr-hole~ --- it
+accepts any type. The missing piece is the /interactive protocol/: the editor
+asks "what type is expected here, what bindings are in scope?" and the type
+checker reports back.
+
+Key distinction: ~_~ means "infer this for me automatically" (silent, automatic).
+~??~ means "I don't know what goes here, please help me" (interactive,
+informational). The former is for the machine; the latter is for the human.
+
+** 4. Dependent Type Ergonomics
+
+*** How Languages Present Pi Types
+
+| Language | Pi syntax | Implicit | Instance |
+|----------+-----------------------------------+-----------+------------|
+| Agda | ~(x : A) -> B~ | ~{x : A}~ | ~{{x : A}}~ |
+| Idris 2 | ~(x : A) -> B~ | ~{x : A}~ | ~{auto x : A}~ |
+| Lean 4 | ~(x : A) -> B~ | ~{x : A}~ | ~[x : A]~ |
+| Prologos | ~<(x : A) -> B>~ | ~{A : Type}~ | where clause |
+
+*The ergonomic tension*: Pi types with many parameters become hard to read.
+All dependently-typed languages solve this the same way: separate the
+/signature/ from the /definition/. Prologos's ~spec~/~defn~ split already
+achieves this. The extended spec pushes further by structuring the metadata
+around the signature.
+
+*** Lean's Instance Search
+
+Lean uses three kinds of implicit arguments:
+- ~{x : A}~ --- unified by unification (Prologos: ~{A : Type}~)
+- ~[x : A]~ --- found by type class synthesis (Prologos: ~where (Trait A)~)
+- ~(x : A)~ --- explicit
+
+Lean's ~outParam~ marks parameters that should be determined by the search.
+Known issue: when a class depends on another class with output parameters,
+typeclass synthesis frequently gets stuck. Prologos should keep instance search
+shallow and predictable.
+
+*** Insight for Prologos
+
+Our existing implicit argument inference (Sprint 3) and trait resolution (Phases
+A--E) provide the core mechanisms. The ergonomic challenge is /presentation/ ---
+how to show complex Pi types without overwhelming users. ~spec~ is already the
+answer; extended spec makes it better by providing structured metadata alongside
+the type.
+
+** 5. Refinement Types (Liquid Haskell, F*)
+
+*** Liquid Haskell
+
+Refinement types refine base types with logical predicates:
+
+#+begin_example
+{v : T | predicate}
+#+end_example
+
+For functions, the return type can reference the input:
+
+#+begin_example
+incr :: x:Int -> {v:Int | v = x + 1}
+#+end_example
+
+Type checking reduces to SMT validity queries (static verification, not runtime
+testing). Refinement reflection allows the SMT solver to reason about recursive
+function implementations.
+
+*** F*
+
+Combines ML-like programming with dependent types, monadic effects, and
+refinement types. Uses Z3 for automated verification. Programs extract to
+OCaml, F#, or C.
+
+*** Insight for Prologos
+
+Prologos already has full dependent types, which /subsume/ refinement types:
+~{v : Int | v > 0}~ in Liquid Haskell is expressible as
+~<(v : Int) * (GT v 0)>~ (Sigma type pairing value with proof) in Prologos.
+
+The ergonomic question: should we offer a lighter-weight refinement syntax
+(~:refines~ key) that /compiles/ to Sigma types? Yes --- for pragmatism. Users
+write ~:refines (fn [r] [>= r 0])~ and the compiler generates the Sigma type.
+
+** 6. Contract Systems & Spec Language Design Patterns
+
+*** Racket Contracts
+
+~->i~ for dependent contracts with ~#:pre~ and ~#:post~ conditions. ~define/contract~
+establishes a contract boundary. Blame tracking identifies which party violated
+the contract.
+
+*** Composability Patterns
+
+- The Specification Pattern (Fowler) composes predicates via AND/OR/NOT combinators.
+- The "schema explosion" problem occurs when specs grow combinatorially. Solution:
+  keep specs /open/ (new keys without modifying existing specs) and /compositional/
+  (specs combine via simple operations). Clojure handles this via ~s/merge~ and ~s/and~.
+
+*** Insight for Prologos
+
+The map argument to ~spec~ is inherently open and composable. New keys can be added
+in future versions without breaking existing code. Unrecognized keys are stored
+but not acted upon (/Postel principle/: liberal in what you accept, conservative
+in what you emit). Spec metadata should be first-class data (homoiconicity
+principle) --- quotable, inspectable, transformable.
+
+* Part II: Syntax Design
+
+** Current Spec Syntax
+
+#+begin_src prologos
+;; Basic:
+spec add Nat Nat -> Nat
+
+;; With implicit binders:
+spec id {A : Type} A -> A
+
+;; With trait constraints (where clause):
+spec sort {A : Type} [List A] -> [List A] where (Ord A)
+
+;; With inline constraints:
+spec elem {A} [Eq A] A [List A] -> Bool
+
+;; Multi-arity:
+spec zip
+  | {A B : Type} [List A] [List B] -> [List [Pair A B]]
+  | {A B C : Type} [A -> B -> C] [List A] [List B] -> [List C]
+#+end_src
+
+The ~spec-entry~ struct (macros.rkt line 203) stores: =type-datums=,
+=docstring=, =multi?=, =srcloc=, =where-constraints=, =implicit-binders=,
+=rest-type=.
+
+** Extended Spec Syntax
+
+The extension uses Prologos's existing implicit map syntax. Keyword-headed
+children after the type signature are collected into a metadata map:
+
+#+begin_src prologos
+spec sort {A : Type} [List A] -> [List A]
+  :where (Ord A)
+  :doc "Sorts a list in ascending order using merge sort"
+  :examples
+    - [sort '[3N 1N 2N]] => '[1N 2N 3N]
+    - [sort '[]] => '[]
+  :properties
+    - :name "idempotent"
+      :forall {xs : [List Nat]}
+      :holds [eq? [sort [sort xs]] [sort xs]]
+    - :name "length-preserving"
+      :forall {xs : [List Nat]}
+      :holds [eq? [length [sort xs]] [length xs]]
+  :see-also [reverse filter]
+#+end_src
+
+*** Sexp Mode Equivalent
+
+#+begin_src racket
+(spec sort {A : Type} [List A] -> [List A]
+  (:where (Ord A))
+  (:doc "Sorts a list in ascending order using merge sort")
+  (:examples (([sort '[3N 1N 2N]] => [1N 2N 3N])
+              ([sort '[]] => [])))
+  (:properties
+    ((:name "idempotent")
+     (:forall {xs : [List Nat]})
+     (:holds (eq? (sort (sort xs)) (sort xs))))))
+#+end_src
+
+*** How Parsing Works
+
+1. The WS reader produces the outer form with keyword-headed children as nested
+   s-expressions.
+
+2. ~rewrite-implicit-map~ (macros.rkt line 2452) is extended to recognize ~spec~
+   as a trigger head alongside ~def~/~defn~. The function detects keyword-headed
+   children /after/ the type signature and wraps them into a ~$brace-params~
+   (map literal) node.
+
+3. ~process-spec~ (macros.rkt line 1314) is extended to look for a trailing map
+   after extracting the type signature. Recognized keys are extracted; the entire
+   map is stored in a new ~metadata~ field on ~spec-entry~.
+
+4. Backward compatibility: specs without keyword children parse identically to
+   today. The existing positional ~where~ keyword still works; ~:where~ in the
+   map augments it.
+
+** Supported Keys
+
+*** Phase 1 (Near-term: syntax + storage)
+
+| Key | Type | Semantics |
+|------------+------------------------------+-------------------------------------------|
+| ~:where~ | =(listof constraint)= | Trait constraints (migrated from positional) |
+| ~:doc~ | =string= | Documentation string |
+| ~:examples~ | =(listof (datum => datum))= | Input/output pairs for auto-test generation |
+| ~:see-also~ | =(listof symbol)= | Cross-references to related specs |
+| ~:since~ | =string= | Version/date introduced |
+| ~:deprecated~ | =string= or =#t= | Deprecation notice |
+
+*** Phase 2 (Medium-term: property checking)
+
+| Key | Type | Semantics |
+|---------------+------------------------+---------------------------------------------|
+| ~:properties~ | =(listof property)= | QuickCheck-style properties (see below) |
+| ~:pre~ | =datum= (args -> Bool) | Precondition (contract on arguments) |
+| ~:post~ | =datum= (args ret -> Bool) | Postcondition (contract on return) |
+| ~:invariant~ | =datum= ({args ret} -> Bool) | Relation between args and return (Clojure ~:fn~) |
+
+Each /property/ entry has three keys:
+
+#+begin_src prologos
+:properties
+  - :name "commutativity"     ;; human-readable label
+    :forall {x y : Nat}       ;; universally quantified variables
+    :holds [eq? [add x y] [add y x]]  ;; boolean expression
+#+end_src
+
+*** Phase 3 (Long-term: verification)
+
+| Key | Type | Semantics |
+|-------------+---------------------------+--------------------------------------------|
+| ~:refines~ | =datum= (result -> Bool) | Refinement predicate, compiles to Sigma type |
+| ~:measure~ | =datum= (args -> Nat) | Termination measure for recursion |
+| ~:decreases~ | =symbol= or =datum= | What decreases on recursive calls |
+| ~:proof~ | =datum= or ~:auto~ | Proof strategy hint for verification |
+
+** Mapping Spec Keys to Dependent Types
+
+This is the deep theoretical connection between spec metadata and Prologos's
+type system. Every metadata key has a /type-theoretic interpretation/.
+
+*** Properties as Dependent Types
+
+A property "for all x : Nat, add x 0 = x" is a Pi type:
+
+#+begin_src prologos
+;; The property:
+:properties
+  - :name "right-identity"
+    :forall {x : Nat}
+    :holds [eq? [add x 0N] x]
+
+;; Corresponds to the dependent type:
+;; <(x : Nat) -> [Eq Nat [add x 0N] x]>
+;; A function from any Nat to a proof of equality
+#+end_src
+
+*** Preconditions as Refined Arguments
+
+#+begin_src prologos
+;; The contract:
+spec divide Int Int -> Int
+  :pre (fn [x y] [not [eq? y 0]])
+
+;; Maps to the dependent type:
+;; <(x : Int) -> (y : Int) -> [Not [Eq Int y 0]] -> Int>
+;; Third argument is a proof that y /= 0
+#+end_src
+
+*** Postconditions as Refined Return Types
+
+#+begin_src prologos
+;; The contract:
+spec abs Int -> Int
+  :post (fn [x result] [>= result 0])
+
+;; Maps to:
+;; <(x : Int) -> <(result : Int) * [GTE result 0]>>
+;; Return type is a Sigma pair: the result AND a proof it's non-negative
+#+end_src
+
+*** Invariants as Dependent Function Types
+
+#+begin_src prologos
+;; Clojure spec's :fn relation:
+spec ranged-rand Int Int -> Int
+  :invariant (fn [start end result]
+    [and [>= result start] [< result end]])
+
+;; Maps to:
+;; <(start : Int) -> (end : Int) -> {v : Int | v >= start, v < end}>
+#+end_src
+
+*** The Graduation Path
+
+The key design insight: /the same spec syntax upgrades from testing to proving
+without modification/. At Phase 2, properties/contracts are runtime checks
+(QuickCheck generators from types, contract wrappers at call boundaries). At
+Phase 3, the same properties become proof obligations that the type checker
+verifies statically. The syntax is identical; the verification backend upgrades.
+
+| Phase | =:properties= | =:pre= / =:post= | =:refines= |
+|-------+---------------------+--------------------+----------------------|
+| 2 | Runtime QuickCheck | Runtime contracts | Runtime assertion |
+| 3 | Proof obligation | Refined Pi type | Sigma compilation |
+
+* Part III: Typed Holes (=??=)
+
+** Motivation
+
+Agda and Idris demonstrate that /holes/ are the foundation of interactive
+development in dependently-typed languages. The programmer writes what they know,
+marks what they don't with a hole, and the type system reports what's needed.
+
+Prologos already has ~_~ (inference hole / wildcard), which means "infer this
+for me automatically." The ~??~ typed hole means something fundamentally
+different: "I don't know what goes here --- show me what's possible."
+
+** Syntax
+
+#+begin_src prologos
+;; Unnamed hole:
+defn reverse
+  | [nil]        -> nil
+  | [[cons h t]] -> ??
+
+;; Named hole:
+defn zip-with [f xs ys]
+  match [xs ys]
+    | [nil _]              -> nil
+    | [_ nil]              -> nil
+    | [[cons x xs'] [cons y ys']] -> [cons ??combine ??recurse]
+#+end_src
+
+*** Reader
+
+The WS reader recognizes ~??~ (and ~??identifier~) as a token type
+~'typed-hole~. The form-builder emits ~($typed-hole)~ or ~($typed-hole name)~
+sentinel. The parser converts this to ~expr-typed-hole~ (new AST node).
+
+*** Distinction from ~_~
+
+| Feature | ~_~ (inference hole) | ~??~ (typed hole) |
+|---------+--------------------------+--------------------------|
+| Intent | "Infer this for me" | "Help me fill this in" |
+| Behavior | Silent, automatic | Interactive, diagnostic |
+| Output | Resolved type/value | Hole report to editor |
+| Use case | Type inference | Development workflow |
+
+*** Hole Report
+
+When the type checker encounters ~expr-typed-hole~, it produces a diagnostic
+(not an error) containing:
+
+#+begin_example
+Hole ??combine : [List A]
+Context:
+  x  : A
+  xs' : [List A]
+  y  : B
+  ys' : [List B]
+  f  : A -> B -> C
+  zip-with : [A -> B -> C] -> [List A] -> [List B] -> [List C]
+Suggestions:
+  [f x y]            -- from applying f to available arguments
+  [cons [f x y] ...]  -- from matching the expected List type
+#+end_example
+
+The editor protocol (future work) would transmit this as structured data.
+
+** "The What?What?" Interaction Model
+
+The envisioned workflow:
+
+1. Write ~spec~ with type signature, properties, examples
+2. Write ~defn~ skeleton with ~??~ holes for unknown parts
+3. Press key command --- the type system reports what each hole needs
+4. Select a suggestion or refine manually
+5. Repeat until all holes are filled and properties hold
+
+This is fundamentally the Agda/Idris interaction model, but using Prologos's
+structured spec metadata to provide richer suggestions (e.g., if a property says
+the function is commutative, the case-split suggestions can leverage that).
+
+* Part IV: Expressing Higher-Kinded Pi Types Ergonomically
+
+A key concern is making dependent types /approachable/ for developers
+unfamiliar with the theory. The extended spec is the primary ergonomic lever.
+
+** Progressive Complexity
+
+*** Level 0: No types (inference only)
+
+#+begin_src prologos
+defn add [x y] [nat-add x y]
+#+end_src
+
+*** Level 1: Simple spec (monomorphic)
+
+#+begin_src prologos
+spec add Nat Nat -> Nat
+defn add [x y] [nat-add x y]
+#+end_src
+
+*** Level 2: Polymorphic spec
+
+#+begin_src prologos
+spec id {A : Type} A -> A
+defn id [x] x
+#+end_src
+
+*** Level 3: Constrained polymorphism
+
+#+begin_src prologos
+spec sort {A : Type} [List A] -> [List A]
+  :where (Ord A)
+defn sort [xs] ...
+#+end_src
+
+*** Level 4: Higher-kinded polymorphism
+
+#+begin_src prologos
+spec fmap {F : Type -> Type} {A B : Type} [A -> B] [F A] -> [F B]
+  :where (Functor F)
+  :doc "Apply a function inside a functor"
+  :properties
+    - :name "identity"
+      :forall {xs : [F A]}
+      :holds [eq? [fmap id xs] xs]
+    - :name "composition"
+      :forall {f : [A -> B]} {g : [B -> C]} {xs : [F A]}
+      :holds [eq? [fmap [compose g f] xs] [fmap g [fmap f xs]]]
+#+end_src
+
+*** Level 5: Dependent types (Pi)
+
+#+begin_src prologos
+spec replicate {A : Type} <(n : Nat) -> A -> [Vec A n]>
+  :doc "Create a vector of n copies of a value"
+  :examples
+    - [replicate 3N :x] => @[:x :x :x]
+  :properties
+    - :name "correct-length"
+      :forall {n : Nat} {a : A}
+      :holds [eq? [length [replicate n a]] n]
+#+end_src
+
+*** Level 6: Dependent types (Sigma / existential)
+
+#+begin_src prologos
+spec filter {A : Type} [A -> Bool] [List A] -> <(result : [List A]) * [SubList result xs]>
+  :doc "Filter elements, with proof that result is a sublist"
+#+end_src
+
+** Key Ergonomic Decisions
+
+1. *Angle brackets contain the complexity*: ~<...>~ delimits the dependent part
+   of a type. Everything outside angle brackets is familiar ML-style syntax.
+
+2. *Metadata explains the theory*: The ~:doc~ key provides human-readable
+   explanation. Properties double as documentation and specification.
+
+3. *Examples ground the abstraction*: Every complex type should have concrete
+   examples. The ~:examples~ key makes this a first-class concern.
+
+4. *Where-clauses read as English*: "sort takes a list of A where A has ordering"
+   is near-English. The trait constraint system hides the dictionary-passing
+   mechanism.
+
+5. *Properties express what the function /means/*: Rather than encoding
+   everything in the type (which can be opaque), properties express semantic
+   invariants in a universally readable format.
+
+* Part V: Implementation Considerations
+
+** spec-entry Struct Extension
+
+The recommended approach: add a single ~metadata~ field that stores the entire
+keyword map as a hash table. Individual accessors extract from the metadata hash.
+This avoids struct migration pain:
+
+#+begin_src racket
+(struct spec-entry
+  (type-datums docstring multi? srcloc where-constraints
+   implicit-binders rest-type
+   metadata)  ;; <-- one new field: hasheq of keyword -> datum
+  #:transparent)
+
+;; Accessor helpers:
+(define (spec-entry-examples e)
+  (hash-ref (or (spec-entry-metadata e) (hasheq)) ':examples '()))
+(define (spec-entry-properties e)
+  (hash-ref (or (spec-entry-metadata e) (hasheq)) ':properties '()))
+#+end_src
+
+** rewrite-implicit-map Extension
+
+Currently scoped to ~def~ and ~defn~ heads (macros.rkt line 2452). Extending to
+~spec~ is a one-line change in the ~memq~ check. However, the spec head requires
+special handling: the type signature tokens must be separated from the trailing
+keyword map. This can be done by scanning for the first keyword-headed child
+whose indentation matches the spec's indentation level.
+
+** Typed Hole AST Node
+
+#+begin_src racket
+(struct expr-typed-hole (name) #:transparent)  ;; name is #f or symbol
+#+end_src
+
+Type checker (typing-core.rkt): when encountering ~expr-typed-hole~, compute
+the expected type from the context and emit a diagnostic report rather than
+returning ~(expr-error)~.
+
+** Grammar Extension
+
+Additions to ~grammar.ebnf~:
+
+#+begin_src ebnf
+(* Typed holes for interactive development *)
+typed-hole      = '??' , [ identifier ] ;
+
+(* Extended spec with optional metadata *)
+spec-form       = 'spec' , identifier , spec-body , [ spec-metadata ] ;
+spec-metadata   = spec-meta-entry , { spec-meta-entry } ;
+spec-meta-entry = keyword-literal , spec-meta-value ;
+spec-meta-value = expr
+                | dash-list
+                | spec-meta-map
+                ;
+#+end_src
+
+* Part VI: Worked Examples
+
+** Example 1: Simple spec with documentation and examples
+
+#+begin_src prologos
+spec head {A : Type} [List A] -> A?
+  :doc "Returns the first element, or nothing if empty"
+  :examples
+    - [head '[1N 2N 3N]] => [just 1N]
+    - [head '[]] => nothing
+  :properties
+    - :name "head-of-cons"
+      :forall {x : A} {xs : [List A]}
+      :holds [eq? [head [cons x xs]] [just x]]
+
+defn head
+  | [nil]        -> nothing
+  | [[cons h _]] -> [just h]
+#+end_src
+
+** Example 2: Contract-style spec
+
+#+begin_src prologos
+spec divide Int Int -> Int
+  :pre (fn [_ y] [not [eq? y 0]])
+  :post (fn [x y r] [eq? [+ [* r y] [int-mod x y]] x])
+  :doc "Integer division; undefined for zero divisor"
+
+defn divide [x y] [int-div x y]
+#+end_src
+
+** Example 3: Higher-kinded functor laws
+
+#+begin_src prologos
+spec fmap {F : Type -> Type} {A B : Type} [A -> B] [F A] -> [F B]
+  :where (Functor F)
+  :properties
+    - :name "identity-law"
+      :forall {xs : [F A]}
+      :holds [eq? [fmap id xs] xs]
+    - :name "composition-law"
+      :forall {f : [A -> B]} {g : [B -> C]} {xs : [F A]}
+      :holds [eq? [fmap [>> f g] xs] [fmap g [fmap f xs]]]
+#+end_src
+
+** Example 4: Interactive development with ??
+
+#+begin_src prologos
+spec reverse {A : Type} [List A] -> [List A]
+  :properties
+    - :name "involution"
+      :forall {xs : [List Nat]}
+      :holds [eq? [reverse [reverse xs]] xs]
+    - :name "length-preserving"
+      :forall {xs : [List Nat]}
+      :holds [eq? [length [reverse xs]] [length xs]]
+
+defn reverse
+  | [nil]        -> nil
+  | [[cons h t]] -> ??
+  ;; Type system reports:
+  ;;   Hole ?? : [List A]
+  ;;   Context: h : A, t : [List A], reverse : [List A] -> [List A]
+  ;;   Suggestions: [append [reverse t] [cons h nil]]
+#+end_src
+
+** Example 5: Refinement type (future)
+
+#+begin_src prologos
+spec abs Int -> Int
+  :refines (fn [r] [>= r 0])
+  :doc "Absolute value --- result is always non-negative"
+
+;; Internally, :refines compiles to return type:
+;; <(r : Int) * [GTE r 0]>
+;; The function returns a pair: the result AND a proof of non-negativity
+#+end_src
+
+** Example 6: Dependent-type-heavy spec
+
+#+begin_src prologos
+spec zip-with-vec {A B C : Type}
+  <(n : Nat) -> [A -> B -> C] -> [Vec A n] -> [Vec B n] -> [Vec C n]>
+  :doc "Zip two vectors of the same length with a combining function"
+  :examples
+    - [zip-with-vec 3N + @[1 2 3] @[10 20 30]] => @[11 22 33]
+  :properties
+    - :name "preserves-length"
+      :forall {n : Nat} {f : [Int -> Int -> Int]}
+              {xs : [Vec Int n]} {ys : [Vec Int n]}
+      :holds [eq? [vec-length [zip-with-vec n f xs ys]] n]
+#+end_src
+
+* Part VII: Phased Roadmap
+
+** Phase 1: Syntax and Storage (Near-term)
+
+*In scope now*:
+- Extend ~rewrite-implicit-map~ to trigger on ~spec~ heads
+- Extend ~process-spec~ to extract keyword entries into metadata hash
+- Add ~metadata~ field to ~spec-entry~
+- ~:doc~ replaces positional docstring; ~:where~ augments positional ~where~
+- Store ~:examples~, ~:see-also~ in metadata
+- ~??~ reader token and ~expr-typed-hole~ AST node (report-only)
+- Grammar updates (grammar.ebnf, grammar.org)
+
+** Phase 2: Example and Property Checking (Medium-term)
+
+- Parse ~:examples~ entries, type-check them, run them as tests
+- ~Gen~ trait for type-directed random value generation
+- Parse ~:properties~, generate random inputs from types, check ~:holds~
+- Contract wrapping: ~:pre~/~:post~ generate runtime checks at function
+  boundaries (Racket-contract style blame tracking)
+
+** Phase 3: Refinement and Verification (Long-term)
+
+- ~:refines~ compiles to Sigma types (return type is ~<(r : T) * P(r)>~)
+- ~:properties~ become compile-time proof obligations
+- Proof search integration: ~:proof :auto~ triggers the logic engine
+- ~:measure~ for termination checking
+
+** Phase 4: Interactive Theorem Proving (Far future)
+
+- Editor protocol for ~??~ hole interaction
+- Case splitting via type information (Agda ~C-c C-c~)
+- Proof search (Agda ~C-c C-a~) via propagator-based logic engine
+- Refinement reflection (Liquid Haskell style)
+
+* Part VIII: Open Questions
+
+1. *Should ~:where~ in the map replace or augment positional ~where~?*
+   Recommendation: augment (union of both constraint sets). Positional form
+   remains for backward compatibility; map form is preferred going forward.
+
+2. *Should examples use ~=>~ or ~->~ as the separator?*
+   Recommendation: ~=>~ to avoid confusion with the arrow in type signatures.
+
+3. *How should multi-arity specs handle metadata?*
+   Recommendation: metadata is shared across all arities. Each ~|~ branch
+   defines its own type; the metadata applies to the function as a whole.
+
+4. *Should ~:properties~ quantified variables shadow spec's implicit binders?*
+   Recommendation: yes, with a warning. The property is a self-contained
+   expression; it should be readable without consulting the outer spec.
+
+5. *What happens to unrecognized keys?*
+   Recommendation: store silently (forward-compatibility). Tool-specific keys
+   (e.g., ~:editor-hint~, ~:benchmark~) can be added without language changes.
+
+* References
+
+** Clojure Spec
+- [[https://clojure.org/guides/spec][Clojure Spec Guide]]
+- [[https://clojuredocs.org/clojure.spec.alpha/fdef][s/fdef Reference]]
+- [[https://clojure.org/about/spec][Spec Rationale and Overview]]
+
+** Malli
+- [[https://github.com/metosin/malli][Malli GitHub]]
+- [[https://github.com/metosin/malli/blob/master/docs/function-schemas.md][Malli Function Schemas]]
+
+** PropEr
+- [[https://github.com/proper-testing/proper][PropEr GitHub]]
+- [[https://proper-testing.github.io/tutorials/PropEr_introduction_to_Property-Based_Testing.html][PropEr Tutorial]]
+
+** Agda
+- [[https://agda.readthedocs.io/en/latest/tools/auto.html][Agda Auto Proof Search]]
+- [[https://agda.readthedocs.io/en/latest/getting-started/a-taste-of-agda.html][A Taste of Agda]]
+
+** Idris 2
+- [[https://idris2.readthedocs.io/en/latest/tutorial/interactive.html][Idris 2 Interactive Editing]]
+
+** Lean 4
+- [[https://lean-lang.org/theorem_proving_in_lean4/type_classes.html][Lean 4 Type Classes]]
+
+** Liquid Haskell
+- [[https://nikivazou.github.io/lh-course/Lecture_01_RefinementTypes.html][Refinement Types Tutorial]]
+- [[https://goto.ucsd.edu/~nvazou/refinement_types_for_haskell.pdf][Refinement Types for Haskell (paper)]]
+
+** Racket Contracts
+- [[https://docs.racket-lang.org/guide/contracts.html][Racket Contracts Guide]]

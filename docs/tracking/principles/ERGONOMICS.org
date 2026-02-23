@@ -1,0 +1,319 @@
+#+TITLE: Prologos Ergonomics
+#+AUTHOR: Prologos Project
+#+DATE: 2026-02-22
+
+* Guiding Principle: Disappearing Features
+
+The most important ergonomic principle in Prologos is /progressive
+disclosure/. Features should disappear until you need them. A beginner
+should be able to write:
+
+#+begin_src prologos
+ns hello
+
+defn greet [name]
+  string-append "Hello, " name
+
+[greet "world"]
+#+end_src
+
+...and never encounter dependent types, session types, linear types, or
+logic programming until they choose to. The same language scales from
+this to formally verified protocols, but the complexity is opt-in.
+
+* Surface Syntax Ergonomics
+
+** Minimal Punctuation
+Prologos requires far less punctuation than most typed languages:
+
+| Feature         | Haskell   | Rust          | Prologos     |    |            |
+|-----------------+-----------+---------------+--------------+----+------------|
+| Function call   | ~f x y~   | ~f(x, y)~     | ~f x y~      |    |            |
+| Type annotation | ~x :: T~  | ~x: T~        | ~x : T~      |    |            |
+| Lambda          | ~\x -> e~ | ~\            | x\           | e~ | ~fn [x] e~ |
+| Pattern match   | ~case...~ | ~match...~    | ~match...~   |    |            |
+| Generic type    | ~f :: a~  | ~f<T>~        | ~{A : Type}~ |    |            |
+| List literal    | ~[1,2,3]~ | ~vec![1,2,3]~ | ~'[1 2 3]~   |    |            |
+
+No commas between arguments. No semicolons. No curly braces for blocks.
+Whitespace and indentation do the work.
+
+** YAML-Like Data Literals
+Keyword maps are the most common data structure. The implicit map syntax
+makes data entry feel natural:
+
+#+begin_src prologos
+def user
+  :name "Alice"
+  :age 42
+  :roles
+    - :admin
+    - :editor
+  :preferences
+    :theme "dark"
+    :lang "en"
+#+end_src
+
+This is still homoiconic --- it desugars to an explicit map literal that
+can be quoted, transformed, and inspected.
+
+** Dot-Access for Maps
+The most common operation on maps is field access. Dot syntax makes this
+feel like struct access in other languages:
+
+#+begin_src prologos
+user.name          ;; => "Alice"
+user.preferences   ;; => {:theme "dark" :lang "en"}
+
+;; Chaining (deferred: Phase D)
+;; user.preferences.theme  => "dark"
+
+;; Piping with dot-key prefix
+|> users
+  filter [fn [u] [eq? u.role :admin]]
+  map .:name
+#+end_src
+
+** Short Spec/Defn Pairs
+The spec/defn pattern keeps type signatures close to implementations
+without being verbose:
+
+#+begin_src prologos
+spec clamp : Int Int Int -> Int
+defn clamp [lo hi x]
+  if [< x lo] lo [if [> x hi] hi x]
+#+end_src
+
+Two lines for the type, two lines for the definition. Implicit type
+parameters (~{A : Type}~) hide from call sites.
+
+* Type System Ergonomics
+
+** Inference Does the Heavy Lifting
+Most types are inferred. Users annotate only where they want to --- at
+module boundaries (~spec~), ambiguous call sites, and for documentation:
+
+#+begin_src prologos
+;; Type inferred: List Int -> Int
+defn sum-list
+  | [nil]        -> 0
+  | [[cons h t]] -> [+ h [sum-list t]]
+
+;; Only needs spec if exported or if inference is ambiguous
+spec sum-list : [List Int] -> Int
+#+end_src
+
+** Trait Constraints Read Like English
+
+#+begin_src prologos
+spec sort : {A : Type} where (Ord A) [List A] -> [List A]
+;; "sort takes a list of any type A that has ordering, and returns a sorted list"
+
+spec merge-maps : {K V : Type} where (Eq K) [Map K V] [Map K V] -> [Map K V]
+;; "merge two maps where keys can be compared for equality"
+#+end_src
+
+** Bundle Shortcuts
+Bundles let users express common constraint combinations concisely:
+
+#+begin_src prologos
+;; Instead of: where (Add A) (Sub A) (Mul A) (Neg A) (Abs A) (FromInt A) (Eq A) (Ord A)
+spec mean : {A : Type} where (Num A) (Fractional A) [List A] -> A
+#+end_src
+
+** Nilable Types Are Lightweight
+~A?~ is less ceremony than ~Option A~ for the common case:
+
+#+begin_src prologos
+spec lookup : Key -> A?              ;; vs. Key -> Option A
+spec first : [List A] -> A?          ;; vs. List A -> Option A
+spec find : [A -> Bool] [List A] -> A?
+#+end_src
+
+* Collection Ergonomics
+
+** Literal Syntax for All Collection Types
+No builder functions needed for common cases:
+
+#+begin_src prologos
+'[1N 2N 3N]           ;; List
+@[1 2 3]              ;; PVec (persistent vector)
+#{:a :b :c}           ;; Set
+{:name "Ada" :age 36} ;; Map
+~[1 2 3]              ;; Lazy sequence
+#+end_src
+
+** Range Syntax
+
+#+begin_src prologos
+'[1..5]                  ;; [1 2 3 4 5]
+'[1..<5]                 ;; [1 2 3 4] (exclusive upper)
+@[0..100 :by 10]         ;; [0 10 20 ... 100] (step)
+~[1..]                   ;; infinite lazy range
+~[1.. :where even?]      ;; infinite filtered range
+~[1.. :while [< _ 100]]  ;; take-while
+#+end_src
+
+** Head | Tail Destructuring
+Pattern matching works across all collection types:
+
+#+begin_src prologos
+'[h | t]         ;; List: head and tail
+'[a b | rest]    ;; List: first two, then rest
+@[x | xs]        ;; PVec: first element, rest (O(log n))
+{:name n | _}    ;; Map: extract :name, ignore rest
+#+end_src
+
+* Pipe Ergonomics
+
+** Left-to-Right Data Flow
+~|>~ threads data left-to-right, matching how humans read transformations:
+
+#+begin_src prologos
+|> users
+  filter [fn [u] [> u.age 18]]
+  map .:name
+  sort
+  take 10
+#+end_src
+
+Compare the equivalent without pipe:
+
+#+begin_src prologos
+[take 10 [sort [map .:name [filter [fn [u] [> u.age 18]] users]]]]
+#+end_src
+
+** Block Form Enables Loop Fusion
+The block form of ~|>~ is not just syntactic sugar --- consecutive
+map/filter operations automatically fuse into a single pass:
+
+#+begin_src prologos
+;; This runs in O(n), not O(3n):
+|> @[1 2 3 4 5]
+  map inc
+  filter even?
+  sum
+#+end_src
+
+* Error Message Ergonomics
+
+** Structured Error Codes
+Every error has a searchable code:
+
+| Code | Category |
+|-------+--------------------------------------------|
+| E1001 | Implicit argument inference failure |
+| E1002 | Constraint postponement (unsolved meta) |
+| E1003 | QTT linearity violation |
+| E2xxx | Session type errors (future) |
+| E3xxx | Logic programming errors (future) |
+
+** Contextual Suggestions
+Errors suggest fixes when mechanically derivable:
+
+- Type mismatch: show expected vs. actual, suggest coercion if available
+- Unbound variable: suggest similarly-named bindings (Jaro distance)
+- Missing trait instance: list available instances, suggest ~impl~
+- Linear variable reused: show both use sites, suggest ~:w~
+
+** Human-Readable Type Display
+Types are printed in surface syntax, not internal representation:
+
+#+begin_src
+;; Good: surface syntax
+Expected: <(n : Nat) -> Vec String n>
+Actual:   <(n : Nat) -> Vec Int n>
+
+;; Bad: internal representation (never shown to user)
+Expected: (expr-Pi 'n (expr-Nat) (expr-app (expr-app (expr-fvar 'Vec) ...)))
+#+end_src
+
+* REPL Ergonomics
+
+** Interactive Exploration
+The REPL supports both WS-mode and sexp-mode input. Key features:
+
+- ~(infer expr)~ --- show the inferred type of an expression
+- ~(check expr : Type)~ --- verify that an expression has a type
+- ~(eval expr)~ --- evaluate and print result
+- Top-level ~defn~/~def~/~spec~ persist across REPL interactions
+- ~ns~ switching for namespace exploration
+
+** Implicit Eval
+Bare expressions at the top level are implicitly evaluated:
+
+#+begin_src prologos
+[add 2 3]    ;; => 5 : Nat (no explicit "eval" needed)
+#+end_src
+
+* Extended Spec Ergonomics
+
+** Metadata as Implicit Map
+
+The extended ~spec~ form accepts an optional trailing map using the language's
+existing implicit map syntax. This means spec metadata looks like natural
+keyword configuration --- no special syntax learning required:
+
+#+begin_src prologos
+spec sort {A : Type} [List A] -> [List A]
+  :where (Ord A)
+  :doc "Sorts a list in ascending order"
+  :examples
+    - [sort '[3N 1N 2N]] => '[1N 2N 3N]
+    - [sort '[]] => '[]
+  :properties
+    - :name "idempotent"
+      :forall {xs : [List Nat]}
+      :holds [eq? [sort [sort xs]] [sort xs]]
+#+end_src
+
+This reads top-to-bottom: name, type, constraints, documentation, examples,
+properties. Each key is optional; the simplest spec remains ~spec add Nat Nat -> Nat~.
+
+** Progressive Metadata
+
+Just as types are progressively disclosed (bare ~defn~ → ~spec~ → implicit
+binders → dependent types), spec metadata is progressively adopted:
+
+| Level | Spec style | Audience |
+|-------+-----------------------------------+-------------------|
+| 0 | ~spec add Nat Nat -> Nat~ | Everyday functions |
+| 1 | + ~:doc~ + ~:examples~ | Public API |
+| 2 | + ~:where~ + ~:properties~ | Library code |
+| 3 | + ~:pre~ + ~:post~ | Safety-critical |
+| 4 | + ~:refines~ + ~:measure~ | Verified code |
+
+No level is mandatory. A team can adopt documentation keys without ever
+touching properties or contracts.
+
+** Typed Holes as Development Aid
+
+The ~??~ syntax provides a low-ceremony way to ask the type system for help:
+
+#+begin_src prologos
+defn reverse
+  | [nil]        -> nil
+  | [[cons h t]] -> ??    ;; "What goes here?"
+#+end_src
+
+Unlike ~_~ (which silently infers), ~??~ produces a /report/: expected type,
+local bindings, and suggestions. This makes the type system an active
+collaborator rather than a silent judge.
+
+Named holes (~??combine~, ~??recurse~) allow tracking multiple holes in
+the same function body.
+
+* Editor Support
+
+** Emacs Integration (149 ERT tests)
+Four Emacs packages provide:
+- Syntax highlighting (font-lock)
+- Indentation (SMIE-based)
+- REPL integration (comint)
+- Surfer mode for interactive development
+
+** Structural Editing
+The homoiconic AST makes structural editing natural:
+- Slurp/barf brackets
+- Wrap/unwrap expressions
+- Navigate by AST node, not by character

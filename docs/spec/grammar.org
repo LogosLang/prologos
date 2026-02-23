@@ -124,6 +124,8 @@ false
 |-----------+----------------------------------------------|
 | =_=       | Wildcard / type hole (inferred)              |
 | =_1= =_2= | Numbered placeholders for partial application |
+| =??=      | Typed hole (interactive development)          |
+| =??name=  | Named typed hole                              |
 | =:0=      | Erased multiplicity (use 0 times)            |
 | =:1=      | Linear multiplicity (use exactly 1 time)     |
 | =:w=      | Unrestricted multiplicity (use any times)    |
@@ -280,6 +282,33 @@ The wildcard =_= stands for an inferred type:
 def x : _ zero    ;; type inferred as Nat
 map _ xs          ;; type argument inferred
 #+end_src
+
+** Typed Holes (Interactive Development)
+
+The =??= token is a /typed hole/ --- distinct from =_= (inference hole). Where
+=_= means "infer this for me silently," =??= means "I don't know what goes here
+--- show me what's possible." The type checker produces a diagnostic report with
+the expected type, local context, and suggestions.
+
+#+begin_src prologos
+defn reverse
+  | [nil]        -> nil
+  | [[cons h t]] -> ??
+  ;; Report: Hole ?? : [List A]
+  ;;   h : A, t : [List A], reverse : [List A] -> [List A]
+#+end_src
+
+Named holes label specific incomplete positions:
+
+#+begin_src prologos
+defn zip-with [f xs ys]
+  match [xs ys]
+    | [[cons x xs'] [cons y ys']] -> [cons ??combine ??recurse]
+#+end_src
+
+=??= is the syntactic foundation for Editor-Assisted Interactive Development
+(Agda/Idris-style hole-driven programming). See the Extended Spec Design
+document for the full vision.
 
 * Expressions
 
@@ -606,6 +635,48 @@ spec sum-all Nat ... -> Nat
 ;; With multiple implicits and constraints
 spec sort-on {A B : Type} [B -> B -> Bool] [A -> B] [List A] -> List A
 #+end_src
+
+*** Extended Spec with Metadata
+
+=spec= optionally accepts a trailing metadata map using the implicit map
+syntax. Keyword-headed children after the type signature are collected into a
+metadata hash. Recognized keys include =:where=, =:doc=, =:examples=,
+=:properties=, =:see-also=, =:pre=, =:post=, =:refines=. Unrecognized keys
+are stored but not acted upon (forward-compatible).
+
+#+begin_src prologos
+spec sort {A : Type} [List A] -> [List A]
+  :where (Ord A)
+  :doc "Sorts a list in ascending order"
+  :examples
+    - [sort '[3N 1N 2N]] => '[1N 2N 3N]
+    - [sort '[]] => '[]
+  :properties
+    - :name "idempotent"
+      :forall {xs : [List Nat]}
+      :holds [eq? [sort [sort xs]] [sort xs]]
+    - :name "length-preserving"
+      :forall {xs : [List Nat]}
+      :holds [eq? [length [sort xs]] [length xs]]
+  :see-also [reverse filter]
+#+end_src
+
+The metadata is entirely optional. A simple =spec add Nat Nat -> Nat= is
+unchanged. Metadata keys follow the principle of progressive disclosure: add
+=:doc= and =:examples= for public APIs, =:properties= for libraries,
+=:pre=/=:post= for safety-critical code, =:refines= for verified code.
+
+Each =:properties= entry is a map with three keys:
+
+| Key | Meaning |
+|-----------+---------------------------------------------|
+| =:name= | Human-readable label for the property |
+| =:forall= | Universally quantified variables (binders) |
+| =:holds= | Boolean expression that must be true |
+
+See the Extended Spec Design document
+(=docs/tracking/2026-02-22_EXTENDED_SPEC_DESIGN.org=) for the full research
+survey and design rationale.
 
 ** Function Definition (defn)
 
