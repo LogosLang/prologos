@@ -450,6 +450,10 @@
    (test-dep '(macros.rkt prelude.rkt syntax.rkt source-location.rkt surface-syntax.rkt
                errors.rkt metavar-store.rkt parser.rkt elaborator.rkt pretty-print.rkt
                global-env.rkt driver.rkt namespace.rkt trait-resolution.rkt) #t)
+   'test-prelude-numerics.rkt
+   (test-dep '(macros.rkt prelude.rkt syntax.rkt source-location.rkt surface-syntax.rkt
+               errors.rkt metavar-store.rkt parser.rkt elaborator.rkt pretty-print.rkt
+               global-env.rkt driver.rkt namespace.rkt trait-resolution.rkt) #t)
    'test-where-parsing.rkt
    (test-dep '(macros.rkt prelude.rkt syntax.rkt source-location.rkt surface-syntax.rkt
                errors.rkt metavar-store.rkt parser.rkt elaborator.rkt pretty-print.rkt
@@ -892,6 +896,10 @@
                                   prologos::core::add-trait)
    'test-bundles.rkt            '(prologos::data::nat prologos::data::bool prologos::core::eq-trait
                                   prologos::core::add-trait prologos::core::numeric-bundles)
+   'test-prelude-numerics.rkt   '(prologos::core::div-trait prologos::core::div-instances
+                                  prologos::core::fromint-trait prologos::core::fromint-posit-instances
+                                  prologos::core::fromrat-trait prologos::core::fromrat-posit-instances
+                                  prologos::core::numeric-bundles)
    'test-numeric-traits-01.rkt   '(prologos::data::nat prologos::core::add-trait
                                   prologos::core::sub-trait prologos::core::mul-trait
                                   prologos::core::eq-trait prologos::core::ord-trait)

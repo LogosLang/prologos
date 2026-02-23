@@ -365,9 +365,11 @@
     (require [prologos::core::add-trait      :refer [Add]])
     (require [prologos::core::sub-trait      :refer [Sub]])
     (require [prologos::core::mul-trait      :refer [Mul]])
+    (require [prologos::core::div-trait      :refer [Div]])
     (require [prologos::core::neg-trait      :refer [Neg]])
     (require [prologos::core::abs-trait      :refer [Abs]])
     (require [prologos::core::fromint-trait  :refer [FromInt]])
+    (require [prologos::core::fromrat-trait  :refer [FromRat]])
     (require [prologos::core::numeric-bundles :refer [Num Fractional]])
 
     ;; ---- Tier 1b: Additional container types + operations ----
@@ -412,6 +414,9 @@
     (require [prologos::core::add-instances         :refer []])
     (require [prologos::core::sub-instances         :refer []])
     (require [prologos::core::mul-instances         :refer []])
+    (require [prologos::core::div-instances           :refer []])
+    (require [prologos::core::fromint-posit-instances  :refer []])
+    (require [prologos::core::fromrat-posit-instances  :refer []])
     (require [prologos::core::neg-instances         :refer []])
     (require [prologos::core::abs-instances         :refer []])
 
