@@ -1203,6 +1203,72 @@
               (add-usage (add-usage u1 u2) u3))]
          [(_ _ _) (tu-error)]))]
 
+    ;; pvec-map : (A → B) → PVec A → PVec B
+    [(expr-pvec-map f vec)
+     (let ([rf (inferQ ctx f)]
+           [rv (inferQ ctx vec)])
+       (match* (rf rv)
+         [((tu _ u1) (tu _ u2))
+          (tu (infer ctx (expr-pvec-map f vec))
+              (add-usage u1 u2))]
+         [(_ _) (tu-error)]))]
+    ;; pvec-filter : (A → Bool) → PVec A → PVec A
+    [(expr-pvec-filter pred vec)
+     (let ([rp (inferQ ctx pred)]
+           [rv (inferQ ctx vec)])
+       (match* (rp rv)
+         [((tu _ u1) (tu _ u2))
+          (tu (infer ctx (expr-pvec-filter pred vec))
+              (add-usage u1 u2))]
+         [(_ _) (tu-error)]))]
+    ;; set-fold : (B → A → B) → B → Set A → B
+    [(expr-set-fold f init set)
+     (let ([rf (inferQ ctx f)]
+           [ri (inferQ ctx init)]
+           [rs (inferQ ctx set)])
+       (match* (rf ri rs)
+         [((tu _ u1) (tu _ u2) (tu _ u3))
+          (tu (infer ctx (expr-set-fold f init set))
+              (add-usage (add-usage u1 u2) u3))]
+         [(_ _ _) (tu-error)]))]
+    ;; set-filter : (A → Bool) → Set A → Set A
+    [(expr-set-filter pred set)
+     (let ([rp (inferQ ctx pred)]
+           [rs (inferQ ctx set)])
+       (match* (rp rs)
+         [((tu _ u1) (tu _ u2))
+          (tu (infer ctx (expr-set-filter pred set))
+              (add-usage u1 u2))]
+         [(_ _) (tu-error)]))]
+    ;; map-fold-entries : (B → K → V → B) → B → Map K V → B
+    [(expr-map-fold-entries f init map)
+     (let ([rf (inferQ ctx f)]
+           [ri (inferQ ctx init)]
+           [rm (inferQ ctx map)])
+       (match* (rf ri rm)
+         [((tu _ u1) (tu _ u2) (tu _ u3))
+          (tu (infer ctx (expr-map-fold-entries f init map))
+              (add-usage (add-usage u1 u2) u3))]
+         [(_ _ _) (tu-error)]))]
+    ;; map-filter-entries : (K → V → Bool) → Map K V → Map K V
+    [(expr-map-filter-entries pred map)
+     (let ([rp (inferQ ctx pred)]
+           [rm (inferQ ctx map)])
+       (match* (rp rm)
+         [((tu _ u1) (tu _ u2))
+          (tu (infer ctx (expr-map-filter-entries pred map))
+              (add-usage u1 u2))]
+         [(_ _) (tu-error)]))]
+    ;; map-map-vals : (V → W) → Map K V → Map K W
+    [(expr-map-map-vals f map)
+     (let ([rf (inferQ ctx f)]
+           [rm (inferQ ctx map)])
+       (match* (rf rm)
+         [((tu _ u1) (tu _ u2))
+          (tu (infer ctx (expr-map-map-vals f map))
+              (add-usage u1 u2))]
+         [(_ _) (tu-error)]))]
+
     ;; ---- Transient Builders ----
     ;; Generic transient/persist: dispatch on inferred type, combine usage
     [(expr-transient coll)
@@ -1486,6 +1552,64 @@
          [((tu _ u1) (bu #t u2) (tu _ u3))
           (bu #t (add-usage (add-usage u1 u2) u3))]
          [(_ _ _) (bu #f (zero-usage n))]))]
+    ;; pvec-map : check against PVec B
+    [((expr-pvec-map f vec) expected-type)
+     (let ([rf (inferQ ctx f)]
+           [rv (inferQ ctx vec)])
+       (match* (rf rv)
+         [((tu _ u1) (tu _ u2))
+          (bu (check ctx (expr-pvec-map f vec) expected-type) (add-usage u1 u2))]
+         [(_ _) (bu #f (zero-usage n))]))]
+    ;; pvec-filter : check against PVec A
+    [((expr-pvec-filter pred vec) expected-type)
+     (let ([rp (inferQ ctx pred)]
+           [rv (inferQ ctx vec)])
+       (match* (rp rv)
+         [((tu _ u1) (tu _ u2))
+          (bu (check ctx (expr-pvec-filter pred vec) expected-type) (add-usage u1 u2))]
+         [(_ _) (bu #f (zero-usage n))]))]
+    ;; set-fold : check
+    [((expr-set-fold f init set) expected-type)
+     (let ([rf (inferQ ctx f)]
+           [ri (checkQ ctx init expected-type)]
+           [rs (inferQ ctx set)])
+       (match* (rf ri rs)
+         [((tu _ u1) (bu #t u2) (tu _ u3))
+          (bu #t (add-usage (add-usage u1 u2) u3))]
+         [(_ _ _) (bu #f (zero-usage n))]))]
+    ;; set-filter : check against Set A
+    [((expr-set-filter pred set) expected-type)
+     (let ([rp (inferQ ctx pred)]
+           [rs (inferQ ctx set)])
+       (match* (rp rs)
+         [((tu _ u1) (tu _ u2))
+          (bu (check ctx (expr-set-filter pred set) expected-type) (add-usage u1 u2))]
+         [(_ _) (bu #f (zero-usage n))]))]
+    ;; map-fold-entries : check
+    [((expr-map-fold-entries f init map) expected-type)
+     (let ([rf (inferQ ctx f)]
+           [ri (checkQ ctx init expected-type)]
+           [rm (inferQ ctx map)])
+       (match* (rf ri rm)
+         [((tu _ u1) (bu #t u2) (tu _ u3))
+          (bu #t (add-usage (add-usage u1 u2) u3))]
+         [(_ _ _) (bu #f (zero-usage n))]))]
+    ;; map-filter-entries : check against Map K V
+    [((expr-map-filter-entries pred map) expected-type)
+     (let ([rp (inferQ ctx pred)]
+           [rm (inferQ ctx map)])
+       (match* (rp rm)
+         [((tu _ u1) (tu _ u2))
+          (bu (check ctx (expr-map-filter-entries pred map) expected-type) (add-usage u1 u2))]
+         [(_ _) (bu #f (zero-usage n))]))]
+    ;; map-map-vals : check against Map K W
+    [((expr-map-map-vals f map) expected-type)
+     (let ([rf (inferQ ctx f)]
+           [rm (inferQ ctx map)])
+       (match* (rf rm)
+         [((tu _ u1) (tu _ u2))
+          (bu (check ctx (expr-map-map-vals f map) expected-type) (add-usage u1 u2))]
+         [(_ _) (bu #f (zero-usage n))]))]
 
     ;; ---- Transient Builder constructors: check against transient types ----
     [((expr-trrb _) (expr-TVec _)) (bu #t (zero-usage n))]

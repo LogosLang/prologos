@@ -240,6 +240,13 @@
     [(expr-pvec-concat v1 v2) (expr-pvec-concat (zonk v1) (zonk v2))]
     [(expr-pvec-slice v lo hi) (expr-pvec-slice (zonk v) (zonk lo) (zonk hi))]
     [(expr-pvec-fold f init vec) (expr-pvec-fold (zonk f) (zonk init) (zonk vec))]
+    [(expr-pvec-map f vec) (expr-pvec-map (zonk f) (zonk vec))]
+    [(expr-pvec-filter pred vec) (expr-pvec-filter (zonk pred) (zonk vec))]
+    [(expr-set-fold f init set) (expr-set-fold (zonk f) (zonk init) (zonk set))]
+    [(expr-set-filter pred set) (expr-set-filter (zonk pred) (zonk set))]
+    [(expr-map-fold-entries f init map) (expr-map-fold-entries (zonk f) (zonk init) (zonk map))]
+    [(expr-map-filter-entries pred map) (expr-map-filter-entries (zonk pred) (zonk map))]
+    [(expr-map-map-vals f map) (expr-map-map-vals (zonk f) (zonk map))]
 
     ;; Transient Builders
     [(expr-transient c) (expr-transient (zonk c))]
@@ -568,6 +575,13 @@
     [(expr-pvec-concat v1 v2) (expr-pvec-concat (zonk-at-depth depth v1) (zonk-at-depth depth v2))]
     [(expr-pvec-slice v lo hi) (expr-pvec-slice (zonk-at-depth depth v) (zonk-at-depth depth lo) (zonk-at-depth depth hi))]
     [(expr-pvec-fold f init vec) (expr-pvec-fold (zonk-at-depth depth f) (zonk-at-depth depth init) (zonk-at-depth depth vec))]
+    [(expr-pvec-map f vec) (expr-pvec-map (zonk-at-depth depth f) (zonk-at-depth depth vec))]
+    [(expr-pvec-filter pred vec) (expr-pvec-filter (zonk-at-depth depth pred) (zonk-at-depth depth vec))]
+    [(expr-set-fold f init set) (expr-set-fold (zonk-at-depth depth f) (zonk-at-depth depth init) (zonk-at-depth depth set))]
+    [(expr-set-filter pred set) (expr-set-filter (zonk-at-depth depth pred) (zonk-at-depth depth set))]
+    [(expr-map-fold-entries f init map) (expr-map-fold-entries (zonk-at-depth depth f) (zonk-at-depth depth init) (zonk-at-depth depth map))]
+    [(expr-map-filter-entries pred map) (expr-map-filter-entries (zonk-at-depth depth pred) (zonk-at-depth depth map))]
+    [(expr-map-map-vals f map) (expr-map-map-vals (zonk-at-depth depth f) (zonk-at-depth depth map))]
 
     ;; Transient Builders
     [(expr-transient c) (expr-transient (zonk-at-depth depth c))]
@@ -866,6 +880,13 @@
     [(expr-pvec-concat v1 v2) (expr-pvec-concat (default-metas v1) (default-metas v2))]
     [(expr-pvec-slice v lo hi) (expr-pvec-slice (default-metas v) (default-metas lo) (default-metas hi))]
     [(expr-pvec-fold f init vec) (expr-pvec-fold (default-metas f) (default-metas init) (default-metas vec))]
+    [(expr-pvec-map f vec) (expr-pvec-map (default-metas f) (default-metas vec))]
+    [(expr-pvec-filter pred vec) (expr-pvec-filter (default-metas pred) (default-metas vec))]
+    [(expr-set-fold f init set) (expr-set-fold (default-metas f) (default-metas init) (default-metas set))]
+    [(expr-set-filter pred set) (expr-set-filter (default-metas pred) (default-metas set))]
+    [(expr-map-fold-entries f init map) (expr-map-fold-entries (default-metas f) (default-metas init) (default-metas map))]
+    [(expr-map-filter-entries pred map) (expr-map-filter-entries (default-metas pred) (default-metas map))]
+    [(expr-map-map-vals f map) (expr-map-map-vals (default-metas f) (default-metas map))]
 
     ;; Transient Builders
     [(expr-transient c) (expr-transient (default-metas c))]

@@ -244,6 +244,11 @@
                pretty-print.rkt driver.rkt global-env.rkt rrb.rkt namespace.rkt
                macros.rkt qtt.rkt parser.rkt elaborator.rkt zonk.rkt)
              '())
+   'test-native-collection-ops.rkt
+   (test-dep '(syntax.rkt prelude.rkt substitution.rkt reduction.rkt typing-core.rkt
+               pretty-print.rkt driver.rkt global-env.rkt rrb.rkt champ.rkt namespace.rkt
+               macros.rkt qtt.rkt parser.rkt elaborator.rkt zonk.rkt)
+             '())
    'test-set-ops-eval.rkt
    (test-dep '(syntax.rkt prelude.rkt substitution.rkt reduction.rkt typing-core.rkt
                pretty-print.rkt driver.rkt global-env.rkt namespace.rkt

@@ -258,6 +258,13 @@
     [(expr-pvec-concat v1 v2) (expr-pvec-concat (shift delta cutoff v1) (shift delta cutoff v2))]
     [(expr-pvec-slice v lo hi) (expr-pvec-slice (shift delta cutoff v) (shift delta cutoff lo) (shift delta cutoff hi))]
     [(expr-pvec-fold f init vec) (expr-pvec-fold (shift delta cutoff f) (shift delta cutoff init) (shift delta cutoff vec))]
+    [(expr-pvec-map f vec) (expr-pvec-map (shift delta cutoff f) (shift delta cutoff vec))]
+    [(expr-pvec-filter pred vec) (expr-pvec-filter (shift delta cutoff pred) (shift delta cutoff vec))]
+    [(expr-set-fold f init set) (expr-set-fold (shift delta cutoff f) (shift delta cutoff init) (shift delta cutoff set))]
+    [(expr-set-filter pred set) (expr-set-filter (shift delta cutoff pred) (shift delta cutoff set))]
+    [(expr-map-fold-entries f init map) (expr-map-fold-entries (shift delta cutoff f) (shift delta cutoff init) (shift delta cutoff map))]
+    [(expr-map-filter-entries pred map) (expr-map-filter-entries (shift delta cutoff pred) (shift delta cutoff map))]
+    [(expr-map-map-vals f map) (expr-map-map-vals (shift delta cutoff f) (shift delta cutoff map))]
 
     ;; Transient Builders (all non-binding)
     [(expr-transient c) (expr-transient (shift delta cutoff c))]
@@ -590,6 +597,13 @@
     [(expr-pvec-concat v1 v2) (expr-pvec-concat (subst k s v1) (subst k s v2))]
     [(expr-pvec-slice v lo hi) (expr-pvec-slice (subst k s v) (subst k s lo) (subst k s hi))]
     [(expr-pvec-fold f init vec) (expr-pvec-fold (subst k s f) (subst k s init) (subst k s vec))]
+    [(expr-pvec-map f vec) (expr-pvec-map (subst k s f) (subst k s vec))]
+    [(expr-pvec-filter pred vec) (expr-pvec-filter (subst k s pred) (subst k s vec))]
+    [(expr-set-fold f init set) (expr-set-fold (subst k s f) (subst k s init) (subst k s set))]
+    [(expr-set-filter pred set) (expr-set-filter (subst k s pred) (subst k s set))]
+    [(expr-map-fold-entries f init map) (expr-map-fold-entries (subst k s f) (subst k s init) (subst k s map))]
+    [(expr-map-filter-entries pred map) (expr-map-filter-entries (subst k s pred) (subst k s map))]
+    [(expr-map-map-vals f map) (expr-map-map-vals (subst k s f) (subst k s map))]
 
     ;; Transient Builders (all non-binding)
     [(expr-transient c) (expr-transient (subst k s c))]

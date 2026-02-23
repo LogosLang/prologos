@@ -149,7 +149,9 @@
  (struct-out expr-pvec-length) (struct-out expr-pvec-pop)
  (struct-out expr-pvec-concat) (struct-out expr-pvec-slice)
  (struct-out expr-pvec-to-list) (struct-out expr-pvec-from-list)
- (struct-out expr-pvec-fold)
+ (struct-out expr-pvec-fold) (struct-out expr-pvec-map) (struct-out expr-pvec-filter)
+ (struct-out expr-set-fold) (struct-out expr-set-filter)
+ (struct-out expr-map-fold-entries) (struct-out expr-map-filter-entries) (struct-out expr-map-map-vals)
  ;; Transient Builders (mutable versions for batch construction)
  (struct-out expr-transient) (struct-out expr-persist)
  (struct-out expr-TVec) (struct-out expr-trrb)
@@ -561,7 +563,14 @@
 (struct expr-pvec-slice (v lo hi) #:transparent)              ; pvec-slice : PVec A → Nat → Nat → PVec A
 (struct expr-pvec-to-list (v) #:transparent)                  ; pvec-to-list : PVec A → List A
 (struct expr-pvec-from-list (v) #:transparent)                ; pvec-from-list : List A → PVec A
-(struct expr-pvec-fold (f init vec) #:transparent)            ; pvec-fold : (A → B → B) → B → PVec A → B
+(struct expr-pvec-fold (f init vec) #:transparent)            ; pvec-fold : (B → A → B) → B → PVec A → B
+(struct expr-pvec-map (f vec) #:transparent)                  ; pvec-map : (A → B) → PVec A → PVec B
+(struct expr-pvec-filter (pred vec) #:transparent)            ; pvec-filter : (A → Bool) → PVec A → PVec A
+(struct expr-set-fold (f init set) #:transparent)             ; set-fold : (B → A → B) → B → Set A → B
+(struct expr-set-filter (pred set) #:transparent)             ; set-filter : (A → Bool) → Set A → Set A
+(struct expr-map-fold-entries (f init map) #:transparent)     ; map-fold-entries : (B → K → V → B) → B → Map K V → B
+(struct expr-map-filter-entries (pred map) #:transparent)     ; map-filter-entries : (K → V → Bool) → Map K V → Map K V
+(struct expr-map-map-vals (f map) #:transparent)              ; map-map-vals : (V → W) → Map K V → Map K W
 
 ;; ---- Transient Builders (mutable versions for batch construction) ----
 
@@ -818,7 +827,9 @@
       (expr-pvec-length? x) (expr-pvec-pop? x)
       (expr-pvec-concat? x) (expr-pvec-slice? x)
       (expr-pvec-to-list? x) (expr-pvec-from-list? x)
-      (expr-pvec-fold? x)
+      (expr-pvec-fold? x) (expr-pvec-map? x) (expr-pvec-filter? x)
+      (expr-set-fold? x) (expr-set-filter? x)
+      (expr-map-fold-entries? x) (expr-map-filter-entries? x) (expr-map-map-vals? x)
       (expr-transient? x) (expr-persist? x)
       (expr-TVec? x) (expr-TMap? x) (expr-TSet? x)
       (expr-trrb? x) (expr-tchamp? x) (expr-thset? x)

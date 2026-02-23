@@ -197,7 +197,7 @@
   (check-equal? (pp-expr (expr-PVec (expr-Nat)) '()) "(PVec Nat)"))
 
 (test-case "pretty-print: rrb value"
-  (check-equal? (pp-expr (expr-rrb rrb-empty) '()) "@[...]"))
+  (check-equal? (pp-expr (expr-rrb rrb-empty) '()) "@[]"))
 
 ;; ========================================
 ;; Core AST: Check cases

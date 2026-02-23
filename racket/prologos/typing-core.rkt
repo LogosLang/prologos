@@ -1106,6 +1106,117 @@
                 (expr-error)))]
          [_ (expr-error)]))]
 
+    ;; pvec-map : (A → B) → PVec A → PVec B
+    ;; Infers B from f's return type. Handles both named functions and lambdas.
+    [(expr-pvec-map f vec)
+     (let ([tv (infer ctx vec)])
+       (match tv
+         [(expr-PVec a)
+          ;; Try to infer f's type first (works for named functions)
+          (let ([tf (infer ctx f)])
+            (if (equal? tf (expr-error))
+                ;; Fallback for lambdas: check f against A → ?B by extending ctx
+                (match f
+                  [(expr-lam m dom body)
+                   (let* ([actual-dom (if (expr-hole? dom) a (whnf dom))])
+                     (if (or (expr-hole? dom) (unify-ok? (unify ctx actual-dom a)))
+                         (let ([b (infer (cons (cons actual-dom 'mw) ctx) body)])
+                           (if (equal? b (expr-error))
+                               (expr-error)
+                               (expr-PVec (whnf b))))
+                         (expr-error)))]
+                  [_ (expr-error)])
+                ;; Normal path: f inferred to Pi
+                (match (whnf tf)
+                  [(expr-Pi _ dom cod)
+                   (if (unify-ok? (unify ctx dom a))
+                       (expr-PVec (whnf cod))
+                       (expr-error))]
+                  [_ (expr-error)])))]
+         [_ (expr-error)]))]
+
+    ;; pvec-filter : (A → Bool) → PVec A → PVec A
+    [(expr-pvec-filter pred vec)
+     (let ([tv (infer ctx vec)])
+       (match tv
+         [(expr-PVec a)
+          (if (check ctx pred (expr-Pi 'mw a (expr-Bool)))
+              (expr-PVec a)
+              (expr-error))]
+         [_ (expr-error)]))]
+
+    ;; set-fold : (B → A → B) → B → Set A → B
+    [(expr-set-fold f init set)
+     (let ([ts (infer ctx set)]
+           [tb (infer ctx init)])
+       (match ts
+         [(expr-Set a)
+          (let ([expected-f (expr-Pi 'mw tb (expr-Pi 'mw a tb))])
+            (if (check ctx f expected-f)
+                tb
+                (expr-error)))]
+         [_ (expr-error)]))]
+
+    ;; set-filter : (A → Bool) → Set A → Set A
+    [(expr-set-filter pred set)
+     (let ([ts (infer ctx set)])
+       (match ts
+         [(expr-Set a)
+          (if (check ctx pred (expr-Pi 'mw a (expr-Bool)))
+              (expr-Set a)
+              (expr-error))]
+         [_ (expr-error)]))]
+
+    ;; map-fold-entries : (B → K → V → B) → B → Map K V → B
+    [(expr-map-fold-entries f init map)
+     (let ([tm (infer ctx map)]
+           [tb (infer ctx init)])
+       (match tm
+         [(expr-Map k v)
+          (let ([expected-f (expr-Pi 'mw tb (expr-Pi 'mw k (expr-Pi 'mw v tb)))])
+            (if (check ctx f expected-f)
+                tb
+                (expr-error)))]
+         [_ (expr-error)]))]
+
+    ;; map-filter-entries : (K → V → Bool) → Map K V → Map K V
+    [(expr-map-filter-entries pred map)
+     (let ([tm (infer ctx map)])
+       (match tm
+         [(expr-Map k v)
+          (if (check ctx pred (expr-Pi 'mw k (expr-Pi 'mw v (expr-Bool))))
+              (expr-Map k v)
+              (expr-error))]
+         [_ (expr-error)]))]
+
+    ;; map-map-vals : (V → W) → Map K V → Map K W
+    ;; Handles both named functions and lambdas for f.
+    [(expr-map-map-vals f map)
+     (let ([tm (infer ctx map)])
+       (match tm
+         [(expr-Map k v)
+          (let ([tf (infer ctx f)])
+            (if (equal? tf (expr-error))
+                ;; Fallback for lambdas
+                (match f
+                  [(expr-lam m dom body)
+                   (let* ([actual-dom (if (expr-hole? dom) v (whnf dom))])
+                     (if (or (expr-hole? dom) (unify-ok? (unify ctx actual-dom v)))
+                         (let ([w (infer (cons (cons actual-dom 'mw) ctx) body)])
+                           (if (equal? w (expr-error))
+                               (expr-error)
+                               (expr-Map k (whnf w))))
+                         (expr-error)))]
+                  [_ (expr-error)])
+                ;; Normal path
+                (match (whnf tf)
+                  [(expr-Pi _ dom cod)
+                   (if (unify-ok? (unify ctx dom v))
+                       (expr-Map k (whnf cod))
+                       (expr-error))]
+                  [_ (expr-error)])))]
+         [_ (expr-error)]))]
+
     ;; pvec-from-list : List A → PVec A
     ;; List constructor name may be 'List or 'prologos::data::list::List (qualified)
     [(expr-pvec-from-list v)
@@ -1367,6 +1478,49 @@
          [(expr-PVec a)
           (and (check ctx init expected-type)
                (check ctx f (expr-Pi 'mw expected-type (expr-Pi 'mw a expected-type))))]
+         [_ #f]))]
+    ;; pvec-map : check against PVec B
+    [((expr-pvec-map f vec) (expr-PVec b))
+     (let ([tv (infer ctx vec)])
+       (match tv
+         [(expr-PVec a)
+          (check ctx f (expr-Pi 'mw a b))]
+         [_ #f]))]
+    ;; pvec-filter : check against PVec A
+    [((expr-pvec-filter pred vec) (expr-PVec a))
+     (and (check ctx pred (expr-Pi 'mw a (expr-Bool)))
+          (check ctx vec (expr-PVec a)))]
+    ;; set-fold : check against result type B
+    [((expr-set-fold f init set) expected-type)
+     (let ([ts (infer ctx set)])
+       (match ts
+         [(expr-Set a)
+          (and (check ctx init expected-type)
+               (check ctx f (expr-Pi 'mw expected-type (expr-Pi 'mw a expected-type))))]
+         [_ #f]))]
+    ;; set-filter : check against Set A
+    [((expr-set-filter pred set) (expr-Set a))
+     (and (check ctx pred (expr-Pi 'mw a (expr-Bool)))
+          (check ctx set (expr-Set a)))]
+    ;; map-fold-entries : check against result type B
+    [((expr-map-fold-entries f init map) expected-type)
+     (let ([tm (infer ctx map)])
+       (match tm
+         [(expr-Map k v)
+          (and (check ctx init expected-type)
+               (check ctx f (expr-Pi 'mw expected-type (expr-Pi 'mw k (expr-Pi 'mw v expected-type)))))]
+         [_ #f]))]
+    ;; map-filter-entries : check against Map K V
+    [((expr-map-filter-entries pred map) (expr-Map k v))
+     (and (check ctx pred (expr-Pi 'mw k (expr-Pi 'mw v (expr-Bool))))
+          (check ctx map (expr-Map k v)))]
+    ;; map-map-vals : check against Map K W
+    [((expr-map-map-vals f map) (expr-Map k w))
+     (let ([tm (infer ctx map)])
+       (match tm
+         [(expr-Map k2 v)
+          (and (unify-ok? (unify ctx k k2))
+               (check ctx f (expr-Pi 'mw v w)))]
          [_ #f]))]
 
     ;; ---- Transient Builder checks ----

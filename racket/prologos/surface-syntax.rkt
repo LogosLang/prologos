@@ -220,7 +220,9 @@
  (struct-out surf-pvec-length) (struct-out surf-pvec-pop)
  (struct-out surf-pvec-concat) (struct-out surf-pvec-slice)
  (struct-out surf-pvec-to-list) (struct-out surf-pvec-from-list)
- (struct-out surf-pvec-fold)
+ (struct-out surf-pvec-fold) (struct-out surf-pvec-map) (struct-out surf-pvec-filter)
+ (struct-out surf-set-fold) (struct-out surf-set-filter)
+ (struct-out surf-map-fold-entries) (struct-out surf-map-filter-entries) (struct-out surf-map-map-vals)
  ;; Transient Builders
  (struct-out surf-transient-type)
  (struct-out surf-transient) (struct-out surf-persist)
@@ -719,6 +721,13 @@
 (struct surf-pvec-to-list (v srcloc) #:transparent)          ; (pvec-to-list v)
 (struct surf-pvec-from-list (v srcloc) #:transparent)        ; (pvec-from-list v)
 (struct surf-pvec-fold (f init vec srcloc) #:transparent)    ; (pvec-fold f init vec)
+(struct surf-pvec-map (f vec srcloc) #:transparent)          ; (pvec-map f vec)
+(struct surf-pvec-filter (pred vec srcloc) #:transparent)    ; (pvec-filter pred vec)
+(struct surf-set-fold (f init set srcloc) #:transparent)     ; (set-fold f init set)
+(struct surf-set-filter (pred set srcloc) #:transparent)     ; (set-filter pred set)
+(struct surf-map-fold-entries (f init map srcloc) #:transparent)   ; (map-fold-entries f init map)
+(struct surf-map-filter-entries (pred map srcloc) #:transparent)   ; (map-filter-entries pred map)
+(struct surf-map-map-vals (f map srcloc) #:transparent)      ; (map-map-vals f map)
 
 ;; ---- Transient Builders ----
 (struct surf-transient-type (kind args srcloc) #:transparent) ; (TVec A), (TMap K V), (TSet A) — kind is 'TVec/'TMap/'TSet

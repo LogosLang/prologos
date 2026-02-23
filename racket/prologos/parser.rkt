@@ -42,7 +42,9 @@
     Keyword Char String
     Map map-empty map-assoc map-get map-dissoc map-size map-has-key? map-keys map-vals
     Set set-empty set-insert set-member? set-delete set-size set-union set-intersect set-diff set-to-list
-    PVec pvec-empty pvec-push pvec-nth pvec-update pvec-length pvec-pop pvec-concat pvec-slice pvec-to-list pvec-from-list pvec-fold
+    PVec pvec-empty pvec-push pvec-nth pvec-update pvec-length pvec-pop pvec-concat pvec-slice pvec-to-list pvec-from-list pvec-fold pvec-map pvec-filter
+    set-fold set-filter
+    map-fold-entries map-filter-entries map-map-vals
     TVec TMap TSet transient persist! tvec-push! tvec-update! tmap-assoc! tmap-dissoc! tset-insert! tset-delete!
     def defn check eval infer expand expand-1 expand-full parse elaborate match
     ;; Pre-parse macros — should be expanded before reaching parser
@@ -2022,6 +2024,66 @@
                     [(prologos-error? init) init]
                     [(prologos-error? vec)  vec]
                     [else (surf-pvec-fold f init vec loc)])))]
+       ;; (pvec-map f vec)
+       [(pvec-map)
+        (or (check-arity 'pvec-map args 2 loc)
+            (let ([f   (parse-datum (car args))]
+                  [vec (parse-datum (cadr args))])
+              (cond [(prologos-error? f)   f]
+                    [(prologos-error? vec) vec]
+                    [else (surf-pvec-map f vec loc)])))]
+       ;; (pvec-filter pred vec)
+       [(pvec-filter)
+        (or (check-arity 'pvec-filter args 2 loc)
+            (let ([pred (parse-datum (car args))]
+                  [vec  (parse-datum (cadr args))])
+              (cond [(prologos-error? pred) pred]
+                    [(prologos-error? vec)  vec]
+                    [else (surf-pvec-filter pred vec loc)])))]
+       ;; (set-fold f init set)
+       [(set-fold)
+        (or (check-arity 'set-fold args 3 loc)
+            (let ([f    (parse-datum (car args))]
+                  [init (parse-datum (cadr args))]
+                  [s    (parse-datum (caddr args))])
+              (cond [(prologos-error? f)    f]
+                    [(prologos-error? init) init]
+                    [(prologos-error? s)    s]
+                    [else (surf-set-fold f init s loc)])))]
+       ;; (set-filter pred set)
+       [(set-filter)
+        (or (check-arity 'set-filter args 2 loc)
+            (let ([pred (parse-datum (car args))]
+                  [s    (parse-datum (cadr args))])
+              (cond [(prologos-error? pred) pred]
+                    [(prologos-error? s)    s]
+                    [else (surf-set-filter pred s loc)])))]
+       ;; (map-fold-entries f init map)
+       [(map-fold-entries)
+        (or (check-arity 'map-fold-entries args 3 loc)
+            (let ([f    (parse-datum (car args))]
+                  [init (parse-datum (cadr args))]
+                  [m    (parse-datum (caddr args))])
+              (cond [(prologos-error? f)    f]
+                    [(prologos-error? init) init]
+                    [(prologos-error? m)    m]
+                    [else (surf-map-fold-entries f init m loc)])))]
+       ;; (map-filter-entries pred map)
+       [(map-filter-entries)
+        (or (check-arity 'map-filter-entries args 2 loc)
+            (let ([pred (parse-datum (car args))]
+                  [m    (parse-datum (cadr args))])
+              (cond [(prologos-error? pred) pred]
+                    [(prologos-error? m)    m]
+                    [else (surf-map-filter-entries pred m loc)])))]
+       ;; (map-map-vals f map)
+       [(map-map-vals)
+        (or (check-arity 'map-map-vals args 2 loc)
+            (let ([f (parse-datum (car args))]
+                  [m (parse-datum (cadr args))])
+              (cond [(prologos-error? f) f]
+                    [(prologos-error? m) m]
+                    [else (surf-map-map-vals f m loc)])))]
 
        ;; ---- Transient Builder types ----
        ;; (TVec A)

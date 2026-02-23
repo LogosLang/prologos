@@ -12,7 +12,8 @@
          "syntax.rkt"
          "sessions.rkt"
          "metavar-store.rkt"
-         "champ.rkt")
+         "champ.rkt"
+         "rrb.rkt")
 
 (provide pp-expr
          pp-session
@@ -363,10 +364,21 @@
 
     ;; PVec
     [(expr-PVec a) (format "(PVec ~a)" (pp-expr a names))]
-    [(expr-rrb _) "@[...]"]
+    [(expr-rrb r)
+     (let ([elems (reverse (rrb-fold r (lambda (v acc) (cons (pp-expr v names) acc)) '()))])
+       (if (null? elems)
+           "@[]"
+           (string-append "@[" (string-join elems " ") "]")))]
     [(expr-pvec-empty a) (format "@[] : (PVec ~a)" (pp-expr a names))]
     [(expr-pvec-push v x) (format "[pvec-push ~a ~a]" (pp-expr v names) (pp-expr x names))]
     [(expr-pvec-fold f init vec) (format "[pvec-fold ~a ~a ~a]" (pp-expr f names) (pp-expr init names) (pp-expr vec names))]
+    [(expr-pvec-map f vec) (format "[pvec-map ~a ~a]" (pp-expr f names) (pp-expr vec names))]
+    [(expr-pvec-filter pred vec) (format "[pvec-filter ~a ~a]" (pp-expr pred names) (pp-expr vec names))]
+    [(expr-set-fold f init set) (format "[set-fold ~a ~a ~a]" (pp-expr f names) (pp-expr init names) (pp-expr set names))]
+    [(expr-set-filter pred set) (format "[set-filter ~a ~a]" (pp-expr pred names) (pp-expr set names))]
+    [(expr-map-fold-entries f init map) (format "[map-fold-entries ~a ~a ~a]" (pp-expr f names) (pp-expr init names) (pp-expr map names))]
+    [(expr-map-filter-entries pred map) (format "[map-filter-entries ~a ~a]" (pp-expr pred names) (pp-expr map names))]
+    [(expr-map-map-vals f map) (format "[map-map-vals ~a ~a]" (pp-expr f names) (pp-expr map names))]
     [(expr-pvec-nth v i) (format "[pvec-nth ~a ~a]" (pp-expr v names) (pp-expr i names))]
     [(expr-pvec-update v i x) (format "[pvec-update ~a ~a ~a]" (pp-expr v names) (pp-expr i names) (pp-expr x names))]
     [(expr-pvec-length v) (format "[pvec-length ~a]" (pp-expr v names))]
@@ -841,6 +853,13 @@
     [(expr-pvec-empty a) (uses-bvar0? a)]
     [(expr-pvec-push v x) (or (uses-bvar0? v) (uses-bvar0? x))]
     [(expr-pvec-fold f init vec) (or (uses-bvar0? f) (uses-bvar0? init) (uses-bvar0? vec))]
+    [(expr-pvec-map f vec) (or (uses-bvar0? f) (uses-bvar0? vec))]
+    [(expr-pvec-filter pred vec) (or (uses-bvar0? pred) (uses-bvar0? vec))]
+    [(expr-set-fold f init set) (or (uses-bvar0? f) (uses-bvar0? init) (uses-bvar0? set))]
+    [(expr-set-filter pred set) (or (uses-bvar0? pred) (uses-bvar0? set))]
+    [(expr-map-fold-entries f init map) (or (uses-bvar0? f) (uses-bvar0? init) (uses-bvar0? map))]
+    [(expr-map-filter-entries pred map) (or (uses-bvar0? pred) (uses-bvar0? map))]
+    [(expr-map-map-vals f map) (or (uses-bvar0? f) (uses-bvar0? map))]
     [(expr-pvec-nth v i) (or (uses-bvar0? v) (uses-bvar0? i))]
     [(expr-pvec-update v i x) (or (uses-bvar0? v) (uses-bvar0? i) (uses-bvar0? x))]
     [(expr-pvec-length v) (uses-bvar0? v)]

@@ -1269,6 +1269,81 @@
                    (whnf (expr-app (expr-app f* acc) elem)))
                  init*))]
 
+    ;; pvec-map : map over RRB via fold + transient push
+    [(expr-pvec-map f (expr-rrb r))
+     (let ([f* (whnf f)])
+       (let ([t (rrb-transient rrb-empty)])
+         (rrb-fold r
+                   (lambda (elem _acc)
+                     (trrb-push! t (whnf (expr-app f* elem))))
+                   (void))
+         (expr-rrb (trrb-freeze t))))]
+
+    ;; pvec-filter : filter over RRB via fold + conditional transient push
+    [(expr-pvec-filter pred (expr-rrb r))
+     (let ([pred* (whnf pred)])
+       (let ([t (rrb-transient rrb-empty)])
+         (rrb-fold r
+                   (lambda (elem _acc)
+                     (let ([result (whnf (expr-app pred* elem))])
+                       (when (expr-true? result)
+                         (trrb-push! t elem))))
+                   (void))
+         (expr-rrb (trrb-freeze t))))]
+
+    ;; set-fold : left fold over CHAMP set — f takes (accumulator, element)
+    ;; champ-fold passes (key, #t, acc); for sets we ignore the value
+    [(expr-set-fold f init (expr-hset c))
+     (let ([init* (whnf init)]
+           [f* (whnf f)])
+       (champ-fold c
+                   (lambda (k _v acc)
+                     (whnf (expr-app (expr-app f* acc) k)))
+                   init*))]
+
+    ;; set-filter : filter over CHAMP set
+    [(expr-set-filter pred (expr-hset c))
+     (let ([pred* (whnf pred)])
+       (let ([t (champ-transient champ-empty)])
+         (champ-fold c
+                     (lambda (k _v _acc)
+                       (let ([result (whnf (expr-app pred* k))])
+                         (when (expr-true? result)
+                           (tchamp-insert! t (equal-hash-code k) k #t))))
+                     (void))
+         (expr-hset (tchamp-freeze t))))]
+
+    ;; map-fold-entries : left fold over CHAMP map — f takes (accumulator, key, value)
+    [(expr-map-fold-entries f init (expr-champ c))
+     (let ([init* (whnf init)]
+           [f* (whnf f)])
+       (champ-fold c
+                   (lambda (k v acc)
+                     (whnf (expr-app (expr-app (expr-app f* acc) k) v)))
+                   init*))]
+
+    ;; map-filter-entries : filter map entries via fold + conditional insert
+    [(expr-map-filter-entries pred (expr-champ c))
+     (let ([pred* (whnf pred)])
+       (let ([t (champ-transient champ-empty)])
+         (champ-fold c
+                     (lambda (k v _acc)
+                       (let ([result (whnf (expr-app (expr-app pred* k) v))])
+                         (when (expr-true? result)
+                           (tchamp-insert! t (equal-hash-code k) k v))))
+                     (void))
+         (expr-champ (tchamp-freeze t))))]
+
+    ;; map-map-vals : map values via fold + insert with new value
+    [(expr-map-map-vals f (expr-champ c))
+     (let ([f* (whnf f)])
+       (let ([t (champ-transient champ-empty)])
+         (champ-fold c
+                     (lambda (k v _acc)
+                       (tchamp-insert! t (equal-hash-code k) k (whnf (expr-app f* v))))
+                     (void))
+         (expr-champ (tchamp-freeze t))))]
+
     ;; ---- PVec stuck-term reduction ----
     [(expr-pvec-push v x)
      (let ([v* (whnf v)])
@@ -1302,6 +1377,27 @@
     [(expr-pvec-fold f init vec)
      (let ([vec* (whnf vec)])
        (if (equal? vec* vec) e (whnf (expr-pvec-fold f init vec*))))]
+    [(expr-pvec-map f vec)
+     (let ([vec* (whnf vec)])
+       (if (equal? vec* vec) e (whnf (expr-pvec-map f vec*))))]
+    [(expr-pvec-filter pred vec)
+     (let ([vec* (whnf vec)])
+       (if (equal? vec* vec) e (whnf (expr-pvec-filter pred vec*))))]
+    [(expr-set-fold f init set)
+     (let ([set* (whnf set)])
+       (if (equal? set* set) e (whnf (expr-set-fold f init set*))))]
+    [(expr-set-filter pred set)
+     (let ([set* (whnf set)])
+       (if (equal? set* set) e (whnf (expr-set-filter pred set*))))]
+    [(expr-map-fold-entries f init map)
+     (let ([map* (whnf map)])
+       (if (equal? map* map) e (whnf (expr-map-fold-entries f init map*))))]
+    [(expr-map-filter-entries pred map)
+     (let ([map* (whnf map)])
+       (if (equal? map* map) e (whnf (expr-map-filter-entries pred map*))))]
+    [(expr-map-map-vals f map)
+     (let ([map* (whnf map)])
+       (if (equal? map* map) e (whnf (expr-map-map-vals f map*))))]
 
     ;; ---- Transient Builder iota rules ----
     ;; Generic transient: dispatch on underlying value
@@ -1829,6 +1925,13 @@
     [(expr-pvec-concat v1 v2) (expr-pvec-concat (nf v1) (nf v2))]
     [(expr-pvec-slice v lo hi) (expr-pvec-slice (nf v) (nf lo) (nf hi))]
     [(expr-pvec-fold f init vec) (expr-pvec-fold (nf f) (nf init) (nf vec))]
+    [(expr-pvec-map f vec) (expr-pvec-map (nf f) (nf vec))]
+    [(expr-pvec-filter pred vec) (expr-pvec-filter (nf pred) (nf vec))]
+    [(expr-set-fold f init set) (expr-set-fold (nf f) (nf init) (nf set))]
+    [(expr-set-filter pred set) (expr-set-filter (nf pred) (nf set))]
+    [(expr-map-fold-entries f init map) (expr-map-fold-entries (nf f) (nf init) (nf map))]
+    [(expr-map-filter-entries pred map) (expr-map-filter-entries (nf pred) (nf map))]
+    [(expr-map-map-vals f map) (expr-map-map-vals (nf f) (nf map))]
 
     ;; Transient Builder normalization
     [(expr-transient c) (expr-transient (nf c))]

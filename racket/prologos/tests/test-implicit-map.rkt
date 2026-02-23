@@ -243,7 +243,7 @@
       "def m : [Map Keyword [PVec Keyword]]\n"
       "  :tags @[:admin :active]\n"
       "eval m.tags\n")))
-  (check-equal? result "@[...] : (PVec Keyword)"))
+  (check-equal? result "@[:admin :active] : (PVec Keyword)"))
 
 (test-case "e2e/ws: implicit map with computed value"
   (define result

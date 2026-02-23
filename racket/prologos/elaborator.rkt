@@ -1796,6 +1796,59 @@
              [(prologos-error? evec)  evec]
              [else (expr-pvec-fold ef einit evec)]))]
 
+    [(surf-pvec-map f vec loc)
+     (let ([ef   (elaborate f   env depth)]
+           [evec (elaborate vec env depth)])
+       (cond [(prologos-error? ef)   ef]
+             [(prologos-error? evec) evec]
+             [else (expr-pvec-map ef evec)]))]
+
+    [(surf-pvec-filter pred vec loc)
+     (let ([ep   (elaborate pred env depth)]
+           [evec (elaborate vec  env depth)])
+       (cond [(prologos-error? ep)   ep]
+             [(prologos-error? evec) evec]
+             [else (expr-pvec-filter ep evec)]))]
+
+    [(surf-set-fold f init set loc)
+     (let ([ef    (elaborate f    env depth)]
+           [einit (elaborate init env depth)]
+           [eset  (elaborate set  env depth)])
+       (cond [(prologos-error? ef)    ef]
+             [(prologos-error? einit) einit]
+             [(prologos-error? eset)  eset]
+             [else (expr-set-fold ef einit eset)]))]
+
+    [(surf-set-filter pred set loc)
+     (let ([ep   (elaborate pred env depth)]
+           [eset (elaborate set  env depth)])
+       (cond [(prologos-error? ep)   ep]
+             [(prologos-error? eset) eset]
+             [else (expr-set-filter ep eset)]))]
+
+    [(surf-map-fold-entries f init map loc)
+     (let ([ef    (elaborate f    env depth)]
+           [einit (elaborate init env depth)]
+           [emap  (elaborate map  env depth)])
+       (cond [(prologos-error? ef)    ef]
+             [(prologos-error? einit) einit]
+             [(prologos-error? emap)  emap]
+             [else (expr-map-fold-entries ef einit emap)]))]
+
+    [(surf-map-filter-entries pred map loc)
+     (let ([ep   (elaborate pred env depth)]
+           [emap (elaborate map  env depth)])
+       (cond [(prologos-error? ep)   ep]
+             [(prologos-error? emap) emap]
+             [else (expr-map-filter-entries ep emap)]))]
+
+    [(surf-map-map-vals f map loc)
+     (let ([ef   (elaborate f   env depth)]
+           [emap (elaborate map env depth)])
+       (cond [(prologos-error? ef)   ef]
+             [(prologos-error? emap) emap]
+             [else (expr-map-map-vals ef emap)]))]
+
     ;; ---- Transient Builders ----
     ;; Transient type constructors: (TVec A), (TMap K V), (TSet A)
     [(surf-transient-type kind args loc)
