@@ -496,6 +496,7 @@
       ;; Dot handling:
       ;;   ...      → $rest sentinel symbol
       ;;   ...name  → rest-param token
+      ;;   .{       → dot-lbrace token (mixfix syntax)
       ;;   .:kw     → dot-key token (for .:name prefix syntax)
       ;;   .ident   → dot-access token (for user.name postfix syntax)
       ;;   .        → error
@@ -514,6 +515,11 @@
                          (+ 3 (string-length rest-name))))
                 ;; Bare ... → $rest sentinel symbol
                 (token 'symbol '$rest ln cl ps 3))]
+           ;; .{ → dot-lbrace token (mixfix syntax)
+           [(and (char? c2) (char=? c2 #\{))
+            (tok-read! tok) (tok-read! tok) ; consume . and {
+            (set-tokenizer-bracket-depth! tok (+ 1 (tokenizer-bracket-depth tok)))
+            (token 'dot-lbrace #f ln cl ps 2)]
            ;; .:keyword → dot-key token
            [(and (char? c2) (char=? c2 #\:)
                  (char? c3) (ident-start? c3))
@@ -972,6 +978,104 @@
   (make-stx all src ln cl ps
             (max 1 (- (+ (token-pos (parser-peek p)) 1) ps))))
 
+;; --- Parse a mixfix form: .{ ... } ---
+;; Wraps contents with $mixfix sentinel.
+;; .{a + b} → ($mixfix a + b)
+;; .{1 + 2 * 3} → ($mixfix 1 + 2 * 3)
+;; Inside .{...}, angle bracket tokens (< >) are treated as operator symbols,
+;; not as type annotation delimiters. Also handles <= >= as two-char operators.
+
+(define (parse-mixfix-element p base-angle-depth base-bracket-depth)
+  (define tt (parser-peek-type p))
+  (define tok-obj (parser-tok p))  ; underlying tokenizer
+  (cond
+    ;; < inside mixfix: treat as operator, not angle bracket
+    [(eq? tt 'langle)
+     (define ang-tok (parser-next! p))  ; consume langle
+     ;; Restore depths to base (undo tokenizer's increment)
+     (set-tokenizer-angle-depth! tok-obj base-angle-depth)
+     (set-tokenizer-bracket-depth! tok-obj base-bracket-depth)
+     ;; Check for <= (langle followed by = symbol)
+     (define next-tt (parser-peek-type p))
+     (define next-val (and (not (eq? next-tt 'eof)) (token-value (parser-peek p))))
+     (if (and (eq? next-tt 'symbol) (eq? next-val '=))
+         ;; <= operator
+         (begin (parser-next! p)  ; consume =
+                (make-stx '<= (parser-source p) (token-line ang-tok) (token-col ang-tok) (token-pos ang-tok) 2))
+         ;; bare < operator
+         (make-stx '< (parser-source p) (token-line ang-tok) (token-col ang-tok) (token-pos ang-tok) 1))]
+    ;; > inside mixfix: rangle token → treat as operator
+    [(eq? tt 'rangle)
+     (define ang-tok (parser-next! p))  ; consume rangle
+     ;; Restore depths to base (undo tokenizer's decrement)
+     (set-tokenizer-angle-depth! tok-obj base-angle-depth)
+     (set-tokenizer-bracket-depth! tok-obj base-bracket-depth)
+     ;; Check for >= (rangle followed by = symbol)
+     (define next-tt (parser-peek-type p))
+     (define next-val (and (not (eq? next-tt 'eof)) (token-value (parser-peek p))))
+     (if (and (eq? next-tt 'symbol) (eq? next-val '=))
+         ;; >= operator
+         (begin (parser-next! p)  ; consume =
+                (make-stx '>= (parser-source p) (token-line ang-tok) (token-col ang-tok) (token-pos ang-tok) 2))
+         ;; bare > operator
+         (make-stx '> (parser-source p) (token-line ang-tok) (token-col ang-tok) (token-pos ang-tok) 1))]
+    ;; :: inside mixfix: two consecutive colons → :: cons operator
+    [(eq? tt 'colon)
+     (define colon-tok (parser-next! p))  ; consume first colon
+     (define next-tt (parser-peek-type p))
+     (if (eq? next-tt 'colon)
+         (begin (parser-next! p)  ; consume second colon
+                (make-stx ':: (parser-source p) (token-line colon-tok) (token-col colon-tok) (token-pos colon-tok) 2))
+         ;; Single colon — pass through as : symbol (for type annotations)
+         (make-stx ': (parser-source p) (token-line colon-tok) (token-col colon-tok) (token-pos colon-tok) 1))]
+    [else (parse-inline-element p)]))
+
+(define (parse-mixfix-form p)
+  (define dot-tok (parser-next! p))   ; consume dot-lbrace (the .{)
+  (define ln (token-line dot-tok))
+  (define cl (token-col dot-tok))
+  (define ps (token-pos dot-tok))
+  (define src (parser-source p))
+  (define tok-obj (parser-tok p))
+
+  ;; Pre-increment angle depth so bare > tokenizes as rangle (not error).
+  ;; We'll convert both langle and rangle back to operator symbols in parse-mixfix-element.
+  (define saved-angle-depth (tokenizer-angle-depth tok-obj))
+  (define base-angle-depth (+ saved-angle-depth 1))
+  (set-tokenizer-angle-depth! tok-obj base-angle-depth)
+  ;; Also increment bracket depth to match (angle-depth is nested within bracket-depth)
+  (define saved-bracket-depth (tokenizer-bracket-depth tok-obj))
+  (define base-bracket-depth (+ saved-bracket-depth 1))
+  (set-tokenizer-bracket-depth! tok-obj base-bracket-depth)
+
+  (define elements
+    (let loop ([elems '()])
+      (define tt (parser-peek-type p))
+      (cond
+        [(eq? tt 'rbrace)
+         (parser-next! p) ; consume rbrace
+         (reverse elems)]
+        [(eq? tt 'eof)
+         (error 'prologos-reader "~a:~a:~a: Unclosed mixfix form .{..."
+                src ln cl)]
+        ;; Skip commas
+        [(eq? tt 'comma)
+         (parser-next! p)
+         (loop elems)]
+        [else
+         (define elem (parse-mixfix-element p base-angle-depth base-bracket-depth))
+         (loop (cons elem elems))])))
+
+  ;; Restore angle/bracket depths
+  (set-tokenizer-angle-depth! tok-obj saved-angle-depth)
+  (set-tokenizer-bracket-depth! tok-obj saved-bracket-depth)
+
+  ;; Wrap with $mixfix sentinel
+  (define sentinel (make-stx '$mixfix src ln cl ps 0))
+  (define all (cons sentinel elements))
+  (make-stx all src ln cl ps
+            (max 1 (- (+ (token-pos (parser-peek p)) 1) ps))))
+
 ;; --- Parse an LSeq literal form: ~[ ... ] ---
 ;; Wraps contents with $lseq-literal sentinel.
 ;; ~[] → ($lseq-literal)
@@ -1121,6 +1225,9 @@
      (parse-angle-form p)]
     [(eq? tt 'lbrace)
      (parse-brace-form p)]
+    [(eq? tt 'dot-lbrace)
+     ;; .{ ... } — mixfix form
+     (parse-mixfix-form p)]
     [(eq? tt 'quote-lbracket)
      ;; '[ ... ] — list literal
      (parse-list-literal-form p)]
