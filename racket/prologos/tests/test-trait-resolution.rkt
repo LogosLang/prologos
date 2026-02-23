@@ -10,6 +10,7 @@
          racket/list
          racket/path
          racket/string
+         "test-support.rkt"
          "../macros.rkt"
          "../prelude.rkt"
          "../syntax.rkt"
@@ -40,23 +41,37 @@
 (define (run-first s) (car (run s)))
 (define (run-last s) (last (run s)))
 
-(define here (path->string (path-only (syntax-source #'here))))
-(define lib-dir (simplify-path (build-path here ".." "lib")))
-
 (define (run-ns s)
   (parameterize ([current-global-env (hasheq)]
                  [current-ns-context #f]
-                 [current-module-registry (hasheq)]
-                 [current-lib-paths (list lib-dir)]
+                 [current-module-registry prelude-module-registry]
+                 [current-lib-paths (list prelude-lib-dir)]
                  [current-mult-meta-store (make-hasheq)]
-                 [current-preparse-registry (current-preparse-registry)]
-                 [current-trait-registry (current-trait-registry)]
-                 [current-impl-registry (current-impl-registry)]
-                 [current-param-impl-registry (current-param-impl-registry)])
+                 [current-preparse-registry prelude-preparse-registry]
+                 [current-trait-registry prelude-trait-registry]
+                 [current-impl-registry prelude-impl-registry]
+                 [current-param-impl-registry prelude-param-impl-registry])
     (install-module-loader!)
     (process-string s)))
 
 (define (run-ns-last s) (last (run-ns s)))
+
+;; Like run-ns but with empty impl registries — for tests that need
+;; :no-prelude to truly mean "no instances available".
+;; Trait definitions (metadata) are kept so `where (Eq A)` parses,
+;; but concrete instances are cleared so resolution fails as expected.
+(define (run-ns-bare s)
+  (parameterize ([current-global-env (hasheq)]
+                 [current-ns-context #f]
+                 [current-module-registry prelude-module-registry]
+                 [current-lib-paths (list prelude-lib-dir)]
+                 [current-mult-meta-store (make-hasheq)]
+                 [current-preparse-registry prelude-preparse-registry]
+                 [current-trait-registry prelude-trait-registry]
+                 [current-impl-registry (hasheq)]
+                 [current-param-impl-registry (hasheq)])
+    (install-module-loader!)
+    (process-string s)))
 
 ;; ========================================
 ;; Phase B.1: Parametric impl registry unit tests
@@ -100,7 +115,7 @@
   (parameterize ([current-trait-registry (hasheq)]
                  [current-impl-registry (hasheq)]
                  [current-param-impl-registry (hasheq)]
-                 [current-preparse-registry (current-preparse-registry)])
+                 [current-preparse-registry prelude-preparse-registry])
     ;; Define Eq trait
     (process-trait '(trait (Eq (A : (Type 0))) (eq? : A -> A -> Bool)))
     ;; Define monomorphic impl for Nat
@@ -116,7 +131,7 @@
   (parameterize ([current-trait-registry (hasheq)]
                  [current-impl-registry (hasheq)]
                  [current-param-impl-registry (hasheq)]
-                 [current-preparse-registry (current-preparse-registry)])
+                 [current-preparse-registry prelude-preparse-registry])
     ;; Define Eq trait
     (process-trait '(trait (Eq (A : (Type 0))) (eq? : A -> A -> Bool)))
     ;; Define parametric impl: impl Eq (List A) where (Eq A)
@@ -139,7 +154,7 @@
   (parameterize ([current-trait-registry (hasheq)]
                  [current-impl-registry (hasheq)]
                  [current-param-impl-registry (hasheq)]
-                 [current-preparse-registry (current-preparse-registry)])
+                 [current-preparse-registry prelude-preparse-registry])
     (process-trait '(trait (Eq (A : (Type 0))) (eq? : A -> A -> Bool)))
     (define defs
       (process-impl '(impl Eq (List A) where (Eq A)
@@ -161,7 +176,7 @@
   (parameterize ([current-trait-registry (hasheq)]
                  [current-impl-registry (hasheq)]
                  [current-param-impl-registry (hasheq)]
-                 [current-preparse-registry (current-preparse-registry)])
+                 [current-preparse-registry prelude-preparse-registry])
     (process-trait '(trait (Eq (A : (Type 0))) (eq? : A -> A -> Bool)))
     (define defs
       (process-impl '(impl Eq (List A) where (Eq A)
@@ -446,7 +461,7 @@
 (test-case "resolution/missing-instance-produces-no-instance-error"
   ;; Call a where-constrained function with a type that has no Eq instance.
   ;; Should produce a no-instance-error, not leave an unsolved meta.
-  (define results (run-ns
+  (define results (run-ns-bare
     (string-append
       "(ns missing-instance-test :no-prelude)\n"
       "(require [prologos::core::eq-trait :refer [Eq Eq-eq?]])\n"
@@ -463,7 +478,7 @@
 
 (test-case "resolution/error-format-is-helpful"
   ;; Verify the formatted error message includes trait name and type
-  (define results (run-ns
+  (define results (run-ns-bare
     (string-append
       "(ns error-format-test :no-prelude)\n"
       "(require [prologos::core::eq-trait :refer [Eq Eq-eq?]])\n"

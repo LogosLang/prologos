@@ -9,23 +9,20 @@
          racket/path
          racket/string
          racket/list
+         "test-support.rkt"
          "../driver.rkt"
          "../global-env.rkt"
          "../namespace.rkt"
          "../macros.rkt"
          "../metavar-store.rkt")
 
-;; Compute the lib directory path
-(define here (path->string (path-only (syntax-source #'here))))
-(define lib-dir (simplify-path (build-path here ".." "lib")))
-
 ;; Helper: run prologos code with namespace system active
 (define (run-ns s)
   (parameterize ([current-global-env (hasheq)]
                  [current-ns-context #f]
-                 [current-module-registry (hasheq)]
-                 [current-lib-paths (list lib-dir)]
-                 [current-preparse-registry (current-preparse-registry)])
+                 [current-module-registry prelude-module-registry]
+                 [current-lib-paths (list prelude-lib-dir)]
+                 [current-preparse-registry prelude-preparse-registry])
     (install-module-loader!)
     (process-string s)))
 
@@ -53,9 +50,9 @@
   ;; but isn't in auto-exports. This is a structural test.
   (parameterize ([current-global-env (hasheq)]
                  [current-ns-context #f]
-                 [current-module-registry (hasheq)]
-                 [current-lib-paths (list lib-dir)]
-                 [current-preparse-registry (current-preparse-registry)])
+                 [current-module-registry prelude-module-registry]
+                 [current-lib-paths (list prelude-lib-dir)]
+                 [current-preparse-registry prelude-preparse-registry])
     (install-module-loader!)
     ;; Process a namespace with a private macro
     (process-string (string-append "(ns dm16)\n"

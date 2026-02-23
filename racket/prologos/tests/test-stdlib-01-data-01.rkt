@@ -13,22 +13,19 @@
          racket/path
          racket/string
          racket/list
+         "test-support.rkt"
          "../driver.rkt"
          "../global-env.rkt"
          "../namespace.rkt"
          "../macros.rkt")
 
-;; Compute the lib directory path
-(define here (path->string (path-only (syntax-source #'here))))
-(define lib-dir (simplify-path (build-path here ".." "lib")))
-
 ;; Helper: run prologos code with namespace system active
 (define (run-ns s)
   (parameterize ([current-global-env (hasheq)]
                  [current-ns-context #f]
-                 [current-module-registry (hasheq)]
-                 [current-lib-paths (list lib-dir)]
-                 [current-preparse-registry (current-preparse-registry)]
+                 [current-module-registry prelude-module-registry]
+                 [current-lib-paths (list prelude-lib-dir)]
+                 [current-preparse-registry prelude-preparse-registry]
                  [current-ctor-registry (current-ctor-registry)]
                  [current-type-meta (current-type-meta)])
     (install-module-loader!)
@@ -40,9 +37,9 @@
 (define (run-ns-pair s1 s2)
   (parameterize ([current-global-env (hasheq)]
                  [current-ns-context #f]
-                 [current-module-registry (hasheq)]
-                 [current-lib-paths (list lib-dir)]
-                 [current-preparse-registry (current-preparse-registry)]
+                 [current-module-registry prelude-module-registry]
+                 [current-lib-paths (list prelude-lib-dir)]
+                 [current-preparse-registry prelude-preparse-registry]
                  [current-ctor-registry (current-ctor-registry)]
                  [current-type-meta (current-type-meta)])
     (install-module-loader!)
@@ -73,8 +70,8 @@
 (test-case "load prologos::data::nat"
   (parameterize ([current-global-env (hasheq)]
                  [current-ns-context #f]
-                 [current-module-registry (hasheq)]
-                 [current-lib-paths (list lib-dir)])
+                 [current-module-registry prelude-module-registry]
+                 [current-lib-paths (list prelude-lib-dir)])
     (install-module-loader!)
     (define mod (load-module 'prologos::data::nat #f))
     (check-not-false (module-info? mod))
@@ -203,8 +200,8 @@
 (test-case "load prologos::data::bool"
   (parameterize ([current-global-env (hasheq)]
                  [current-ns-context #f]
-                 [current-module-registry (hasheq)]
-                 [current-lib-paths (list lib-dir)])
+                 [current-module-registry prelude-module-registry]
+                 [current-lib-paths (list prelude-lib-dir)])
     (install-module-loader!)
     (define mod (load-module 'prologos::data::bool #f))
     (check-not-false (module-info? mod))

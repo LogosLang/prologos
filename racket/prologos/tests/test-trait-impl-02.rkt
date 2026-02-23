@@ -10,6 +10,7 @@
          racket/list
          racket/path
          racket/string
+         "test-support.rkt"
          "../macros.rkt"
          "../prelude.rkt"
          "../syntax.rkt"
@@ -34,18 +35,15 @@
 
 (define (run-first s) (car (run s)))
 
-(define here (path->string (path-only (syntax-source #'here))))
-(define lib-dir (simplify-path (build-path here ".." "lib")))
-
 (define (run-ns s)
   (parameterize ([current-global-env (hasheq)]
                  [current-ns-context #f]
-                 [current-module-registry (hasheq)]
-                 [current-lib-paths (list lib-dir)]
+                 [current-module-registry prelude-module-registry]
+                 [current-lib-paths (list prelude-lib-dir)]
                  [current-mult-meta-store (make-hasheq)]
-                 [current-preparse-registry (current-preparse-registry)]
-                 [current-trait-registry (current-trait-registry)]
-                 [current-impl-registry (current-impl-registry)])
+                 [current-preparse-registry prelude-preparse-registry]
+                 [current-trait-registry prelude-trait-registry]
+                 [current-impl-registry prelude-impl-registry])
     (install-module-loader!)
     (process-string s)))
 
@@ -58,7 +56,7 @@
 
 (test-case "trait/method-type-parsing-arrow"
   ;; Verify that A -> A -> Bool becomes (-> A (-> A Bool))
-  (parameterize ([current-preparse-registry (current-preparse-registry)]
+  (parameterize ([current-preparse-registry prelude-preparse-registry]
                  [current-trait-registry (hasheq)])
     (define m (parse-trait-method '(== : A -> A -> Bool) 'Eq))
     (check-equal? (trait-method-name m) '==)
@@ -67,7 +65,7 @@
 
 (test-case "trait/method-type-parsing-no-arrow"
   ;; Bare type: (count : Nat)
-  (parameterize ([current-preparse-registry (current-preparse-registry)]
+  (parameterize ([current-preparse-registry prelude-preparse-registry]
                  [current-trait-registry (hasheq)])
     (define m (parse-trait-method '(count : Nat) 'Counter))
     (check-equal? (trait-method-type-datum m) 'Nat)))
@@ -75,7 +73,7 @@
 
 (test-case "trait/method-type-parsing-applied"
   ;; Applied type in return: (first : S A -> A)
-  (parameterize ([current-preparse-registry (current-preparse-registry)]
+  (parameterize ([current-preparse-registry prelude-preparse-registry]
                  [current-trait-registry (hasheq)])
     (define m (parse-trait-method '(toList : A -> (List A)) 'ToList))
     (check-equal? (trait-method-type-datum m) '(-> A (List A)))))
@@ -135,7 +133,7 @@
 
 (test-case "b1/zero-ctor-data"
   ;; Zero-constructor data produces just the type def
-  (parameterize ([current-preparse-registry (current-preparse-registry)]
+  (parameterize ([current-preparse-registry prelude-preparse-registry]
                  [current-ctor-registry (current-ctor-registry)]
                  [current-type-meta (current-type-meta)])
     (define defs (process-data '(data Void)))

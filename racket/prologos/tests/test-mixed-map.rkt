@@ -12,6 +12,7 @@
          racket/string
          racket/list
          racket/path
+         "test-support.rkt"
          "../syntax.rkt"
          "../prelude.rkt"
          "../substitution.rkt"
@@ -31,17 +32,13 @@
   (parameterize ([current-global-env (hasheq)])
     (process-string s)))
 
-;; Compute the lib directory path
-(define here (path->string (path-only (syntax-source #'here))))
-(define lib-dir (simplify-path (build-path here ".." "lib")))
-
 ;; Helper: run prologos code with namespace system active
 (define (run-ns s)
   (parameterize ([current-global-env (hasheq)]
                  [current-ns-context #f]
-                 [current-module-registry (hasheq)]
-                 [current-lib-paths (list lib-dir)]
-                 [current-preparse-registry (current-preparse-registry)]
+                 [current-module-registry prelude-module-registry]
+                 [current-lib-paths (list prelude-lib-dir)]
+                 [current-preparse-registry prelude-preparse-registry]
                  [current-ctor-registry (current-ctor-registry)]
                  [current-type-meta (current-type-meta)])
     (install-module-loader!)

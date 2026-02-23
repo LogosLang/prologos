@@ -9,6 +9,7 @@
          racket/list
          racket/path
          racket/string
+         "test-support.rkt"
          "../macros.rkt"
          "../prelude.rkt"
          "../syntax.rkt"
@@ -27,18 +28,15 @@
 ;; Helpers
 ;; ========================================
 
-(define here (path->string (path-only (syntax-source #'here))))
-(define lib-dir (simplify-path (build-path here ".." "lib")))
-
 (define (run-ns-last s)
   (parameterize ([current-global-env (hasheq)]
                  [current-ns-context #f]
-                 [current-module-registry (hasheq)]
-                 [current-lib-paths (list lib-dir)]
+                 [current-module-registry prelude-module-registry]
+                 [current-lib-paths (list prelude-lib-dir)]
                  [current-mult-meta-store (make-hasheq)]
-                 [current-preparse-registry (current-preparse-registry)]
-                 [current-trait-registry (current-trait-registry)]
-                 [current-impl-registry (current-impl-registry)])
+                 [current-preparse-registry prelude-preparse-registry]
+                 [current-trait-registry prelude-trait-registry]
+                 [current-impl-registry prelude-impl-registry])
     (install-module-loader!)
     (last (process-string s))))
 
@@ -151,7 +149,7 @@
 (test-case "hkt/trait-hkt-brace-params-macro"
   ;; (trait Mappable ($brace-params F : Type -> Type) (fmap : (-> Nat Nat) -> (F Nat) -> (F Nat)))
   ;; Should parse correctly and register trait with HKT param
-  (parameterize ([current-preparse-registry (current-preparse-registry)]
+  (parameterize ([current-preparse-registry prelude-preparse-registry]
                  [current-trait-registry (hasheq)])
     (define defs
       (process-trait '(trait Mappable ($brace-params F : Type -> Type)
@@ -170,7 +168,7 @@
 
 (test-case "hkt/trait-bare-backward-compat"
   ;; Existing bare {A} trait still works
-  (parameterize ([current-preparse-registry (current-preparse-registry)]
+  (parameterize ([current-preparse-registry prelude-preparse-registry]
                  [current-trait-registry (hasheq)])
     (define defs
       (process-trait '(trait Eq ($brace-params A) (eq? : A -> A -> Bool))))
@@ -183,7 +181,7 @@
 
 (test-case "hkt/trait-multi-bare-backward-compat"
   ;; {A B} still works
-  (parameterize ([current-preparse-registry (current-preparse-registry)]
+  (parameterize ([current-preparse-registry prelude-preparse-registry]
                  [current-trait-registry (hasheq)])
     (process-trait '(trait Conv ($brace-params A B) (convert : A -> B)))
     (define tm (lookup-trait 'Conv))
@@ -199,7 +197,7 @@
 (test-case "hkt/data-hkt-brace-params-macro"
   ;; data with HKT param: (data Wrapper ($brace-params F : Type -> Type) (wrap : (F Nat)))
   ;; This is a contrived example but tests the macro parsing
-  (parameterize ([current-preparse-registry (current-preparse-registry)]
+  (parameterize ([current-preparse-registry prelude-preparse-registry]
                  [current-ctor-registry (current-ctor-registry)]
                  [current-type-meta (current-type-meta)])
     (define defs
@@ -211,7 +209,7 @@
 
 (test-case "hkt/data-bare-backward-compat"
   ;; Existing {A} data still works
-  (parameterize ([current-preparse-registry (current-preparse-registry)]
+  (parameterize ([current-preparse-registry prelude-preparse-registry]
                  [current-ctor-registry (current-ctor-registry)]
                  [current-type-meta (current-type-meta)])
     (define defs (process-data '(data Box ($brace-params A) (box : A))))
