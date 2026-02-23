@@ -386,7 +386,11 @@ def _set_suite_xticks(xs):
         if si % n == 0 or si == len(suite_run_indices) - 1:
             commit = get_commit_label(runs[ri], ri)
             date_str = _format_short_datetime(runs[ri].get("timestamp", ""))
-            label = f"{date_str}\n{commit}" if date_str else commit
+            fc = runs[ri].get("file_count", 0)
+            if date_str:
+                label = f"{date_str}\n{commit} ({fc}f)"
+            else:
+                label = f"{commit} ({fc}f)"
             ticks.append((label, float(si)))
     if ticks:
         dpg.set_axis_ticks("suite_xaxis", tuple(ticks))
@@ -400,6 +404,15 @@ def _on_suite_slider(sender, app_data):
     xs = list(range(start, n_suite))
     ys = [runs[suite_run_indices[si]]["total_wall_ms"] / 1000.0 for si in xs]
     dpg.set_value("suite_line", [[float(x) for x in xs], ys])
+    # Update pass/fail scatter to match visible range
+    pass_xs = [si for si in xs if runs[suite_run_indices[si]].get("all_pass", True)]
+    pass_ys = [runs[suite_run_indices[si]]["total_wall_ms"] / 1000.0 for si in pass_xs]
+    fail_xs = [si for si in xs if not runs[suite_run_indices[si]].get("all_pass", True)]
+    fail_ys = [runs[suite_run_indices[si]]["total_wall_ms"] / 1000.0 for si in fail_xs]
+    if dpg.does_item_exist("suite_pass"):
+        dpg.set_value("suite_pass", [[float(x) for x in pass_xs], pass_ys])
+    if dpg.does_item_exist("suite_fail"):
+        dpg.set_value("suite_fail", [[float(x) for x in fail_xs], fail_ys])
     dpg.fit_axis_data("suite_xaxis")
     dpg.fit_axis_data("suite_yaxis")
 
@@ -513,65 +526,101 @@ def build_run_breakdown():
     total_tests = run.get("total_tests",
                           sum(r.get("tests", 0) for r in results))
 
-    plot_height = max(500, len(results) * 22)
+    has_errors = any(
+        r.get("error_output")
+        for r in results
+        if r.get("status") in ("fail", "timeout")
+    )
+
+    max_time = max(times) * 1.1 if times else 60.0
+    n_files = len(results)
+    plot_height = max(500, n_files * 22)
 
     with dpg.group(parent="tab_latest"):
-        # Navigation controls — metadata on left, nav buttons pushed right
-        with dpg.group(horizontal=True):
-            dpg.add_text(
-                f"Run {current_breakdown_idx + 1}/{len(runs)}: "
-                f"{commit} ({ts}) — {len(results)} files, {total_tests} tests",
-                tag="breakdown_label")
-            dpg.add_spacer(width=-1)
-            dpg.add_button(label="<", callback=_on_breakdown_prev,
-                           tag="breakdown_prev",
-                           enabled=current_breakdown_idx > 0)
-            dpg.add_button(label=">", callback=_on_breakdown_next,
-                           tag="breakdown_next",
-                           enabled=current_breakdown_idx < len(runs) - 1)
-            # Error log button — only enabled when run has errors
-            has_errors = any(
-                r.get("error_output")
-                for r in results
-                if r.get("status") in ("fail", "timeout")
-            )
-            dpg.add_button(label="Errors", callback=_on_toggle_errors,
-                           tag="breakdown_errors_btn",
-                           enabled=has_errors)
+        # ---- Centered navigation controls (table layout) ----
+        with dpg.table(header_row=False, borders_innerH=False,
+                       borders_outerH=False, borders_innerV=False,
+                       borders_outerV=False):
+            dpg.add_table_column(width_stretch=True, init_width_or_weight=1.0)
+            dpg.add_table_column(width_fixed=True)
+            dpg.add_table_column(width_stretch=True, init_width_or_weight=1.0)
+            with dpg.table_row():
+                dpg.add_spacer()
+                with dpg.group(horizontal=True):
+                    dpg.add_button(label="<", callback=_on_breakdown_prev,
+                                   tag="breakdown_prev",
+                                   enabled=current_breakdown_idx > 0)
+                    dpg.add_text(
+                        f"  Run {current_breakdown_idx + 1}/{len(runs)}  ",
+                        tag="breakdown_run_label")
+                    dpg.add_button(label=">", callback=_on_breakdown_next,
+                                   tag="breakdown_next",
+                                   enabled=current_breakdown_idx < len(runs) - 1)
+                    dpg.add_spacer(width=20)
+                    dpg.add_button(label="Errors", callback=_on_toggle_errors,
+                                   tag="breakdown_errors_btn",
+                                   enabled=has_errors)
+                dpg.add_spacer()
+
+        # Metadata line
+        dpg.add_text(
+            f"{commit} ({ts}) — {n_files} files, {total_tests} tests",
+            tag="breakdown_label", color=LIGHT_GRAY)
 
         # Error log panel (hidden by default, toggled by Errors button)
         with dpg.child_window(tag="error_log_panel", height=0, show=False,
                                border=True):
             pass  # content built dynamically by _on_toggle_errors
 
-        with dpg.plot(label="Per-File Timing", height=plot_height, width=-1,
-                      tag="latest_plot", crosshairs=True):
-            dpg.add_plot_legend()
-            lx = dpg.add_plot_axis(dpg.mvXAxis, label="Wall Time (s)",
-                                    tag="latest_xaxis")
-            ly = dpg.add_plot_axis(dpg.mvYAxis, label="", tag="latest_yaxis")
+        # ---- Fixed ruler at top (stays visible while scrolling bars) ----
+        dpg.add_text("Per-File Timing", color=BLUE)
+        with dpg.plot(height=45, width=-1, tag="ruler_plot",
+                      no_title=True, no_mouse_pos=True):
+            rx = dpg.add_plot_axis(dpg.mvXAxis, label="seconds",
+                                    tag="ruler_xaxis")
+            ry = dpg.add_plot_axis(dpg.mvYAxis, label="",
+                                    tag="ruler_yaxis",
+                                    no_tick_marks=True,
+                                    no_tick_labels=True,
+                                    no_gridlines=True)
+            dpg.set_axis_limits("ruler_xaxis", 0, max_time)
+            dpg.set_axis_limits("ruler_yaxis", 0, 1)
 
-            # Y-axis ticks = file names with test counts
-            ticks = tuple(
-                (f"{f} ({r.get('tests', '')})", float(i))
-                for i, (f, r) in enumerate(zip(files, results))
-            )
-            dpg.set_axis_ticks(ly, ticks)
+        # ---- Scrollable bar chart (ruler stays fixed above) ----
+        with dpg.child_window(height=-1, horizontal_scrollbar=False):
+            with dpg.plot(height=plot_height, width=-1,
+                          tag="latest_plot", crosshairs=True,
+                          no_title=True):
+                dpg.add_plot_legend()
+                lx = dpg.add_plot_axis(dpg.mvXAxis, label="Wall Time (s)",
+                                        tag="latest_xaxis")
+                ly = dpg.add_plot_axis(dpg.mvYAxis, label="",
+                                        tag="latest_yaxis")
 
-            # Group by status for color-coded bar series
-            for status, color, label in [
-                ("pass", GREEN, "Pass"),
-                ("fail", RED, "Fail"),
-                ("timeout", ORANGE, "Timeout"),
-            ]:
-                idxs = [i for i, s in enumerate(statuses) if s == status]
-                if idxs:
-                    bar_x = [times[i] for i in idxs]
-                    bar_y = [float(i) for i in idxs]
-                    series = dpg.add_bar_series(bar_x, bar_y, label=label,
-                                                parent=ly, horizontal=True,
-                                                tag=f"latest_bar_{status}")
-                    dpg.bind_item_theme(series, make_bar_theme(color))
+                # Glue x-axis to 0 and match ruler scale
+                dpg.set_axis_limits(lx, 0, max_time)
+
+                # Y-axis ticks = file names with test counts
+                ticks = tuple(
+                    (f"{f} ({r.get('tests', '')})", float(i))
+                    for i, (f, r) in enumerate(zip(files, results))
+                )
+                dpg.set_axis_ticks(ly, ticks)
+
+                # Group by status for color-coded bar series
+                for status, color, label in [
+                    ("pass", GREEN, "Pass"),
+                    ("fail", RED, "Fail"),
+                    ("timeout", ORANGE, "Timeout"),
+                ]:
+                    idxs = [i for i, s in enumerate(statuses) if s == status]
+                    if idxs:
+                        bar_x = [times[i] for i in idxs]
+                        bar_y = [float(i) for i in idxs]
+                        series = dpg.add_bar_series(bar_x, bar_y, label=label,
+                                                    parent=ly, horizontal=True,
+                                                    tag=f"latest_bar_{status}")
+                        dpg.bind_item_theme(series, make_bar_theme(color))
 
 
 def _on_breakdown_prev(sender=None, app_data=None):
@@ -688,11 +737,14 @@ def reload_data():
     all_files = derive_all_files(runs)
     test_counts = derive_test_counts(runs)
     regression_map = detect_regressions(runs, reg_threshold)
-    # Identify full-suite runs (file_count == max observed)
+    # Identify full-suite runs: any run with >=50% of max file_count.
+    # This captures historical full-suite runs even as the suite grows
+    # (e.g. 91 files -> 137 -> 144), while excluding small affected-tests runs.
     if runs:
         max_fc = max(r.get("file_count", 0) for r in runs)
+        suite_threshold = max(1, int(max_fc * 0.5))
         suite_run_indices = [i for i, r in enumerate(runs)
-                            if r.get("file_count", 0) == max_fc]
+                            if r.get("file_count", 0) >= suite_threshold]
     else:
         suite_run_indices = []
     if current_breakdown_idx < 0 or current_breakdown_idx >= len(runs):
