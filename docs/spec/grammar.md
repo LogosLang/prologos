@@ -1,60 +1,60 @@
-- [Introduction](#orge7f5df0)
-- [Lexical Grammar](#org21a4b49)
-  - [Comments](#orgb88b950)
-  - [Identifiers](#org1a76aa3)
-  - [Numeric Literals](#org51d6b97)
-  - [String Literals](#orgccefed9)
-  - [Keyword Literals](#org98f2384)
-  - [Boolean Literals](#orge29740e)
-  - [Special Tokens](#org8e28543)
-  - [Bracket Types](#org1fa5088)
-  - [Collection Literal Prefixes](#org85cf6ac)
-- [Type Expressions](#org35ba0c8)
-  - [Base Types](#org2b8773d)
-  - [Parameterized Types](#org67466f7)
-  - [Function Types (Arrows)](#org068c90d)
-  - [Dependent Types (Angle Brackets)](#orgb83cc61)
-  - [Sigma Types (Product / Pair Types)](#org45cc0ba)
-  - [Equality Type](#orgbc0ccf2)
-  - [Union Types](#orgd1a756d)
-  - [Universe Levels](#org5b288ef)
-  - [Type Holes](#orgfd1242b)
-- [Expressions](#orgbfcdb70)
-  - [Function Application](#org7a1146e)
-  - [Lambda Expressions](#orgb67bf4e)
-  - [Pattern Matching](#org1a1ffec)
-  - [If (Conditional)](#org1951326)
-  - [Let (Local Binding)](#org1da081e)
-  - [Pipe Operator (|>)](#orgd575927)
-  - [Compose Operator (>>)](#orgf426575)
-  - [Type Annotations (the)](#org1acae6c)
-  - [Pairs](#org712a2e3)
-  - [Quote and Quasiquote](#org2945522)
-  - [Collection Literals](#org0d42d7d)
-  - [Partial Application](#orgc525de7)
-  - [Varargs](#orge6665fd)
-- [Declarations](#orgc134043)
-  - [Namespace (ns)](#orgef47d53)
-  - [Require](#orgf4b397a)
-  - [Value Definition (def)](#orgc4afd69)
-  - [Type Signature (spec)](#org4897979)
-  - [Function Definition (defn)](#org020670f)
-  - [Algebraic Data Types (data)](#orgd57f8fc)
-  - [Traits and Implementations](#orgf87a83d)
-  - [User-Defined Macros](#org734c6c9)
-- [Multiplicity (QTT)](#orgf686b4a)
-- [Dependent Types and Eliminators](#orgc022aff)
-  - [Natural Number Elimination (natrec)](#org795c346)
-  - [Equality Elimination (J)](#org606cf58)
-  - [Length-Indexed Vectors](#org6f195fe)
-- [Full Program Example](#org9dc40a6)
-- [Appendix: S-Expression Mode](#org45a0987)
-- [Appendix: Whitespace Reader Rules](#org060ccd6)
-- [Appendix: Reader Desugaring Table](#org7bd86d1)
+- [Introduction](#org353c80f)
+- [Lexical Grammar](#org4392204)
+  - [Comments](#orgb1e123e)
+  - [Identifiers](#orge8c856b)
+  - [Numeric Literals](#org5910a98)
+  - [String Literals](#orgfd66575)
+  - [Keyword Literals](#orgec4938a)
+  - [Boolean Literals](#orga8afb2b)
+  - [Special Tokens](#org30a24cf)
+  - [Bracket Types](#org8792cb9)
+  - [Collection Literal Prefixes](#org367fc3d)
+- [Type Expressions](#org3676e06)
+  - [Base Types](#orgdbff88b)
+  - [Parameterized Types](#org96181da)
+  - [Function Types (Arrows)](#orgfeda93b)
+  - [Dependent Types (Angle Brackets)](#org143540c)
+  - [Sigma Types (Product / Pair Types)](#orge10c275)
+  - [Equality Type](#org0c5b808)
+  - [Union Types](#orga5c51d2)
+  - [Universe Levels](#org7f60464)
+  - [Type Holes](#orgee22f7d)
+- [Expressions](#org0b7d71e)
+  - [Function Application](#orgf5b7243)
+  - [Lambda Expressions](#org80122a5)
+  - [Pattern Matching](#orgc1975c5)
+  - [If (Conditional)](#org21f9fee)
+  - [Let (Local Binding)](#orgb6977b8)
+  - [Pipe Operator (|>)](#org8467ab5)
+  - [Compose Operator (>>)](#orgb2a0189)
+  - [Type Annotations (the)](#orga75b36e)
+  - [Pairs](#orgaec6805)
+  - [Quote and Quasiquote](#org5506af7)
+  - [Collection Literals](#orgf6f15dd)
+  - [Partial Application](#org2ca19ad)
+  - [Varargs](#orga526ae2)
+- [Declarations](#org1a90f35)
+  - [Namespace (ns)](#orgc6841f8)
+  - [Require](#org8de9855)
+  - [Value Definition (def)](#orgcf204e0)
+  - [Type Signature (spec)](#org704420f)
+  - [Function Definition (defn)](#org05b9b9b)
+  - [Algebraic Data Types (data)](#orgb0d13ac)
+  - [Traits and Implementations](#orgfd65fe8)
+  - [User-Defined Macros](#orge38e516)
+- [Multiplicity (QTT)](#org74b35c0)
+- [Dependent Types and Eliminators](#orgf1e9310)
+  - [Natural Number Elimination (natrec)](#org560bad3)
+  - [Equality Elimination (J)](#org057bd4a)
+  - [Length-Indexed Vectors](#orgda652e6)
+- [Full Program Example](#org39bc426)
+- [Appendix: S-Expression Mode](#orgc2dfc33)
+- [Appendix: Whitespace Reader Rules](#org4f4d510)
+- [Appendix: Reader Desugaring Table](#orgb139532)
 
 
 
-<a id="orge7f5df0"></a>
+<a id="org353c80f"></a>
 
 # Introduction
 
@@ -70,12 +70,12 @@ The grammar is organized bottom-up: lexical elements, then types, then expressio
 > **Design Principle**: Prologos is *homoiconic* &#x2014; code and data share the same representation. All syntactic sugar desugars to s-expressions. Macros operate on the post-parse representation, making code-as-data a first-class concept.
 
 
-<a id="org21a4b49"></a>
+<a id="org4392204"></a>
 
 # Lexical Grammar
 
 
-<a id="orgb88b950"></a>
+<a id="orgb1e123e"></a>
 
 ## Comments
 
@@ -87,7 +87,7 @@ def x : Nat zero  ; inline comment
 ```
 
 
-<a id="org1a76aa3"></a>
+<a id="orge8c856b"></a>
 
 ## Identifiers
 
@@ -115,7 +115,7 @@ opt::unwrap-or  ;; qualified reference to option module's unwrap-or
 ```
 
 
-<a id="org51d6b97"></a>
+<a id="org5910a98"></a>
 
 ## Numeric Literals
 
@@ -133,14 +133,17 @@ approx-literal  ::= '~' (int | rat | decimal) (* Posit approx: ~42, ~3/7, ~3.14 
 42N          ;; Nat literal (Church-encoded natural — type infrastructure only)
 42           ;; Int literal (arbitrary-precision integer)
 3/7          ;; Rat literal (exact rational)
+3.14         ;; Posit32 literal (approximate — same as ~3.14)
 ~3/7         ;; approximate Posit literal (from fraction)
 ~3.14        ;; approximate Posit literal (from decimal, stored as exact rational 157/50)
 ```
 
-Decimal literals in `~` context are converted to exact rationals: `~3.14` → `157/50` → nearest Posit32. Nat is intended for type-level infrastructure (indices, lengths, proofs), not general computation.
+Bare decimal literals (`3.14`, `0.5`) produce Posit32 values, the same as their tilde-prefixed equivalents (`~3.14`, `~0.5`). Internally, the decimal is stored as an exact rational (`157/50`) and encoded to the nearest Posit32 bit pattern.
+
+Nat is intended for type-level infrastructure (indices, lengths, proofs), not general computation.
 
 
-<a id="orgccefed9"></a>
+<a id="orgfd66575"></a>
 
 ## String Literals
 
@@ -152,7 +155,7 @@ Double-quoted with standard escape sequences (`\n`, `\t`, `\\`, `\"`).
 ```
 
 
-<a id="org98f2384"></a>
+<a id="orgec4938a"></a>
 
 ## Keyword Literals
 
@@ -165,7 +168,7 @@ Keywords start with `:` and are used as map keys and enum-like values:
 ```
 
 
-<a id="orge29740e"></a>
+<a id="orga8afb2b"></a>
 
 ## Boolean Literals
 
@@ -175,7 +178,7 @@ false
 ```
 
 
-<a id="org8e28543"></a>
+<a id="org30a24cf"></a>
 
 ## Special Tokens
 
@@ -191,7 +194,7 @@ false
 | `refl`    | Equality reflexivity proof                    |
 
 
-<a id="org1fa5088"></a>
+<a id="org8792cb9"></a>
 
 ## Bracket Types
 
@@ -207,7 +210,7 @@ Prologos uses four bracket types, each with distinct semantics:
 Inside any bracket pair, newlines are treated as whitespace (indentation is not significant).
 
 
-<a id="org85cf6ac"></a>
+<a id="org367fc3d"></a>
 
 ## Collection Literal Prefixes
 
@@ -220,14 +223,14 @@ Inside any bracket pair, newlines are treated as whitespace (indentation is not 
 | `{k v}`  | `Map`  | `{:name "Ada"}` |
 
 
-<a id="org35ba0c8"></a>
+<a id="org3676e06"></a>
 
 # Type Expressions
 
 In a dependently-typed language, types and terms share the same expression syntax. This section highlights type-specific forms.
 
 
-<a id="org2b8773d"></a>
+<a id="orgdbff88b"></a>
 
 ## Base Types
 
@@ -250,7 +253,7 @@ def u : Unit unit
 ```
 
 
-<a id="org67466f7"></a>
+<a id="org96181da"></a>
 
 ## Parameterized Types
 
@@ -266,7 +269,7 @@ PVec Nat            ;; persistent vector of Nats
 ```
 
 
-<a id="org068c90d"></a>
+<a id="orgfeda93b"></a>
 
 ## Function Types (Arrows)
 
@@ -287,7 +290,7 @@ Nat -> Nat -> Bool        ;; curried: Nat -> (Nat -> Bool)
 ```
 
 
-<a id="orgb83cc61"></a>
+<a id="org143540c"></a>
 
 ## Dependent Types (Angle Brackets)
 
@@ -311,7 +314,7 @@ dependent-type ::= '<' '(' ident ':' type ')' '->' type '>'  (* dependent Pi   *
 ```
 
 
-<a id="org45cc0ba"></a>
+<a id="orge10c275"></a>
 
 ## Sigma Types (Product / Pair Types)
 
@@ -329,7 +332,7 @@ Nat * Bool
 ```
 
 
-<a id="orgbc0ccf2"></a>
+<a id="org0c5b808"></a>
 
 ## Equality Type
 
@@ -340,7 +343,7 @@ Nat * Bool
 ```
 
 
-<a id="orgd1a756d"></a>
+<a id="orga5c51d2"></a>
 
 ## Union Types
 
@@ -352,7 +355,7 @@ Int | Rat | Nat    ;; right-associative: Int | (Rat | Nat)
 ```
 
 
-<a id="org5b288ef"></a>
+<a id="org7f60464"></a>
 
 ## Universe Levels
 
@@ -363,7 +366,7 @@ Type           ;; universe, level inferred
 ```
 
 
-<a id="orgfd1242b"></a>
+<a id="orgee22f7d"></a>
 
 ## Type Holes
 
@@ -375,12 +378,12 @@ map _ xs          ;; type argument inferred
 ```
 
 
-<a id="orgbfcdb70"></a>
+<a id="org0b7d71e"></a>
 
 # Expressions
 
 
-<a id="org7a1146e"></a>
+<a id="orgf5b7243"></a>
 
 ## Function Application
 
@@ -402,7 +405,7 @@ map [add 1N _] '[1N 2N 3N]  ;; map with partial application
 ```
 
 
-<a id="orgb67bf4e"></a>
+<a id="org80122a5"></a>
 
 ## Lambda Expressions
 
@@ -430,7 +433,7 @@ fn x [suc x]
 ```
 
 
-<a id="org1a1ffec"></a>
+<a id="orgc1975c5"></a>
 
 ## Pattern Matching
 
@@ -478,7 +481,7 @@ Available patterns:
 -   **Nested**: `[cons x nil]` &#x2013; grouped pattern in brackets
 
 
-<a id="org1951326"></a>
+<a id="org21f9fee"></a>
 
 ## If (Conditional)
 
@@ -495,7 +498,7 @@ match [zero? n]
 ```
 
 
-<a id="org1da081e"></a>
+<a id="orgb6977b8"></a>
 
 ## Let (Local Binding)
 
@@ -512,7 +515,7 @@ let x : Nat = [add 1N 2N]
 ```
 
 
-<a id="orgd575927"></a>
+<a id="org8467ab5"></a>
 
 ## Pipe Operator (|>)
 
@@ -534,7 +537,7 @@ zero |> suc |> suc |> suc    ;; = suc(suc(suc(zero))) = 3
 ```
 
 
-<a id="orgf426575"></a>
+<a id="orgb2a0189"></a>
 
 ## Compose Operator (>>)
 
@@ -549,7 +552,7 @@ zero |> [suc >> double]     ;; = double(suc(zero))
 ```
 
 
-<a id="org1acae6c"></a>
+<a id="orga75b36e"></a>
 
 ## Type Annotations (the)
 
@@ -562,7 +565,7 @@ Explicit type annotation on an expression:
 ```
 
 
-<a id="org712a2e3"></a>
+<a id="orgaec6805"></a>
 
 ## Pairs
 
@@ -580,7 +583,7 @@ snd [pair x y]
 ```
 
 
-<a id="org2945522"></a>
+<a id="org5506af7"></a>
 
 ## Quote and Quasiquote
 
@@ -601,7 +604,7 @@ def val : Datum [datum-nat 10]
 ```
 
 
-<a id="org0d42d7d"></a>
+<a id="orgf6f15dd"></a>
 
 ## Collection Literals
 
@@ -623,10 +626,15 @@ def val : Datum [datum-nat 10]
 
 ;; Map (key-value pairs)
 {:name "Ada" :age 36}
+
+;; Mixed-type map: value type auto-inferred as union
+;; {:name "Alice" :age zero} : Map Keyword (Nat | String)
+;; map-assoc widens: (map-assoc nat-map :k "s") : Map Keyword (Nat | String)
+{:name "Alice" :age zero}
 ```
 
 
-<a id="orgc525de7"></a>
+<a id="org2ca19ad"></a>
 
 ## Partial Application
 
@@ -641,7 +649,7 @@ Numbered placeholders `_1`, `_2` enable positional reordering:
 ```
 
 
-<a id="orge6665fd"></a>
+<a id="orga526ae2"></a>
 
 ## Varargs
 
@@ -664,12 +672,12 @@ first-plus-rest 100 1 2 3  ;; = 106
 ```
 
 
-<a id="orgc134043"></a>
+<a id="org1a90f35"></a>
 
 # Declarations
 
 
-<a id="orgef47d53"></a>
+<a id="orgc6841f8"></a>
 
 ## Namespace (ns)
 
@@ -686,7 +694,7 @@ ns prologos.data.list :no-prelude
 The prelude automatically provides: `Nat`, `Bool`, `List`, `Option`, `Result`, `Pair` operations, `Eq=/=Ord=/=Add=/=Sub=/=Mul=/=Neg=/=Abs=/=FromInt=/=Num=/ =Fractional` traits and instances.
 
 
-<a id="orgf4b397a"></a>
+<a id="org8de9855"></a>
 
 ## Require
 
@@ -706,7 +714,7 @@ require [prologos.data.list   :refer [List nil cons map]]
 ```
 
 
-<a id="orgc4afd69"></a>
+<a id="orgcf204e0"></a>
 
 ## Value Definition (def)
 
@@ -726,7 +734,7 @@ def- internal-state : Nat zero
 ```
 
 
-<a id="org4897979"></a>
+<a id="org704420f"></a>
 
 ## Type Signature (spec)
 
@@ -750,7 +758,7 @@ spec sort-on {A B : Type} [B -> B -> Bool] [A -> B] [List A] -> List A
 ```
 
 
-<a id="org020670f"></a>
+<a id="org05b9b9b"></a>
 
 ## Function Definition (defn)
 
@@ -782,7 +790,7 @@ defn- helper [x]
 ```
 
 
-<a id="orgd57f8fc"></a>
+<a id="orgb0d13ac"></a>
 
 ## Algebraic Data Types (data)
 
@@ -815,7 +823,7 @@ data- InternalTree {A}
 ```
 
 
-<a id="orgf87a83d"></a>
+<a id="orgfd65fe8"></a>
 
 ## Traits and Implementations
 
@@ -843,7 +851,7 @@ bundle Num := (Add, Sub, Mul, Neg, Abs, FromInt)
 ```
 
 
-<a id="org734c6c9"></a>
+<a id="orge38e516"></a>
 
 ## User-Defined Macros
 
@@ -867,7 +875,7 @@ when-nonzero zero [double 5]  ;; = 0
 ```
 
 
-<a id="orgf686b4a"></a>
+<a id="org74b35c0"></a>
 
 # Multiplicity (QTT)
 
@@ -897,12 +905,12 @@ Nat -w> Nat           ;; unrestricted: explicit
 ```
 
 
-<a id="orgc022aff"></a>
+<a id="orgf1e9310"></a>
 
 # Dependent Types and Eliminators
 
 
-<a id="org795c346"></a>
+<a id="org560bad3"></a>
 
 ## Natural Number Elimination (natrec)
 
@@ -928,7 +936,7 @@ defn double [n]
 ```
 
 
-<a id="org606cf58"></a>
+<a id="org057bd4a"></a>
 
 ## Equality Elimination (J)
 
@@ -940,7 +948,7 @@ J motive base left right refl
 ```
 
 
-<a id="org6f195fe"></a>
+<a id="orgda652e6"></a>
 
 ## Length-Indexed Vectors
 
@@ -956,7 +964,7 @@ vindex Nat 3N [fzero 2N] v      ;; safe index via Fin
 ```
 
 
-<a id="org9dc40a6"></a>
+<a id="org39bc426"></a>
 
 # Full Program Example
 
@@ -1007,7 +1015,7 @@ unless [zero? 5] [factorial 5]
 ```
 
 
-<a id="org45a0987"></a>
+<a id="orgc2dfc33"></a>
 
 # Appendix: S-Expression Mode
 
@@ -1034,7 +1042,7 @@ spec map {A B : Type} [A -> B] [List A] -> List B
 ```
 
 
-<a id="org060ccd6"></a>
+<a id="org4f4d510"></a>
 
 # Appendix: Whitespace Reader Rules
 
@@ -1048,22 +1056,23 @@ The WS reader converts indentation to explicit structure:
 6.  **Column 0**: always starts a new top-level form
 
 
-<a id="org7bd86d1"></a>
+<a id="orgb139532"></a>
 
 # Appendix: Reader Desugaring Table
 
-| Surface syntax | Reader output           | Meaning                     |
-|-------------- |----------------------- |--------------------------- |
-| `'expr`        | `($quote expr)`         | Quote to Datum              |
-| `` `expr ``    | `($quasiquote expr)`    | Quasiquote template         |
-| `,expr`        | `($unquote expr)`       | Unquote (splice into QQ)    |
-| `42N`          | `($nat-literal 42)`     | Natural number literal      |
-| `~42`          | `($approx-literal 42)`  | Approximate (Posit) literal |
-| `:name`        | `keyword token`         | Keyword literal             |
-| `'[1 2 3]`     | `($list-literal 1 2 3)` | List literal                |
-| `@[1 2 3]`     | `($vec-literal 1 2 3)`  | PVec literal                |
-| `~[1 2 3]`     | `($lseq-literal 1 2 3)` | Lazy sequence literal       |
-| `#{1 2 3}`     | `($set-literal 1 2 3)`  | Set literal                 |
-| `...name`      | `($rest-param name)`    | Rest/vararg parameter       |
-| `x \vert> f`   | `($pipe-gt x f)`        | Pipe left-to-right          |
-| `f >> g`       | `($compose f g)`        | Compose left-to-right       |
+| Surface syntax | Reader output               | Meaning                     |
+|-------------- |--------------------------- |--------------------------- |
+| `'expr`        | `($quote expr)`             | Quote to Datum              |
+| `` `expr ``    | `($quasiquote expr)`        | Quasiquote template         |
+| `,expr`        | `($unquote expr)`           | Unquote (splice into QQ)    |
+| `42N`          | `($nat-literal 42)`         | Natural number literal      |
+| `~42`          | `($approx-literal 42)`      | Approximate (Posit) literal |
+| `3.14`         | `($decimal-literal 157/50)` | Bare decimal → Posit32      |
+| `:name`        | `keyword token`             | Keyword literal             |
+| `'[1 2 3]`     | `($list-literal 1 2 3)`     | List literal                |
+| `@[1 2 3]`     | `($vec-literal 1 2 3)`      | PVec literal                |
+| `~[1 2 3]`     | `($lseq-literal 1 2 3)`     | Lazy sequence literal       |
+| `#{1 2 3}`     | `($set-literal 1 2 3)`      | Set literal                 |
+| `...name`      | `($rest-param name)`        | Rest/vararg parameter       |
+| `x \vert> f`   | `($pipe-gt x f)`            | Pipe left-to-right          |
+| `f >> g`       | `($compose f g)`            | Compose left-to-right       |

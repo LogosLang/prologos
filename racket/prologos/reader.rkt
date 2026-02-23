@@ -676,7 +676,7 @@
                                  [denom (expt 10 (string-length frac-str))]
                                  [v (+ int-val (/ frac-val denom))]  ;; exact rational
                                  [total-len (+ (length int-chars) 1 (string-length frac-str))])
-                            (token 'number v ln cl ps total-len)))))
+                            (token 'decimal-literal v ln cl ps total-len)))))
                   ;; No decimal — check for N suffix (Nat literal: 42N)
                   (let ([next-c (tok-peek tok)])
                     (if (and (char? next-c) (char=? next-c #\N))
@@ -1178,6 +1178,16 @@
      (define sp (token-span t))
      (make-stx (list (make-stx '$approx-literal src ln cl ps 0)
                      (make-stx (token-value t) src ln (+ cl 1) (+ ps 1) (- sp 1)))
+               src ln cl ps sp)]
+    [(eq? tt 'decimal-literal)
+     ;; 3.14 — bare decimal → Posit32 (produce ($decimal-literal 157/50) sentinel)
+     (define t (parser-next! p))
+     (define ln (token-line t))
+     (define cl (token-col t))
+     (define ps (token-pos t))
+     (define sp (token-span t))
+     (make-stx (list (make-stx '$decimal-literal src ln cl ps 0)
+                     (make-stx (token-value t) src ln cl ps sp))
                src ln cl ps sp)]
     [(eq? tt 'rest-param)
      ;; ...name — produce ($rest-param name) as syntax list

@@ -72,7 +72,8 @@ rat-literal     = [ '-' ] , digit , { digit } , '/' , digit , { digit } ;
 (* Natural number literals — N suffix *)
 nat-literal     = digit , { digit } , 'N' ;
 
-(* Decimal literals — parsed as exact rational *)
+(* Decimal literals — parsed as Posit32 (approximate) *)
+(* Bare 3.14 is equivalent to ~3.14: both produce Posit32. *)
 decimal-literal = [ '-' ] , digit , { digit } , '.' , digit , { digit } ;
 
 (* Approximate (posit) literals — ~ prefix *)
@@ -961,6 +962,7 @@ sexp-let-binding = '(' , identifier , [ ':' , type-expr ] , expr , ')' ;
      :name     → keyword token
      42N       → ($nat-literal 42)
      ~42       → ($approx-literal 42)
+     3.14      → ($decimal-literal 157/50)
      ...name   → ($rest-param name)
      @[...]    → ($vec-literal ...)
      ~[...]    → ($lseq-literal ...)

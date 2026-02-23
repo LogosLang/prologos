@@ -447,6 +447,11 @@
     [(and (number? d) (exact? d) (rational? d) (not (integer? d)))
      (surf-rat-lit d loc)]
 
+    ;; Inexact number (e.g. 3.14 from sexp mode) → Posit32 (approximate)
+    ;; Racket's reader produces inexact floats for decimals; convert to exact for Posit encoding.
+    [(and (number? d) (inexact? d))
+     (surf-approx-literal (inexact->exact d) loc)]
+
     ;; String literal → surf-string
     [(string? d)
      (surf-string d loc)]
@@ -561,6 +566,15 @@
                (surf-approx-literal (if (exact? v) v (inexact->exact v)) loc)
                (parse-error loc (format "~~ requires a numeric argument, got: ~a" v) #f)))
          (parse-error loc "~~ requires exactly one argument" #f))]
+
+    ;; $decimal-literal sentinel: 3.14 → surf-approx-literal (bare decimal = Posit32)
+    [(and (symbol? head) (eq? head '$decimal-literal))
+     (if (= (length args) 1)
+         (let ([v (stx->datum (car args))])
+           (if (and (number? v) (exact? v) (rational? v))
+               (surf-approx-literal v loc)
+               (parse-error loc (format "decimal literal requires a numeric argument, got: ~a" v) #f)))
+         (parse-error loc "decimal literal requires exactly one argument" #f))]
 
     ;; $foreign-block sentinel: foreign escape block
     ;; ($foreign-block racket (code-datums...) (captures...) (exports...))

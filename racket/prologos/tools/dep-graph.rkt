@@ -282,6 +282,9 @@
    'test-approx-literal.rkt
    (test-dep '(syntax.rkt prelude.rkt surface-syntax.rkt reader.rkt parser.rkt
                driver.rkt global-env.rkt posit-impl.rkt) #f)
+   'test-decimal-literal.rkt
+   (test-dep '(syntax.rkt prelude.rkt surface-syntax.rkt reader.rkt parser.rkt
+               driver.rkt global-env.rkt posit-impl.rkt) #f)
 
    ;; === Driver/integration tests (driver=yes) ===
    'test-stdlib-01-data-01.rkt

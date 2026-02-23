@@ -81,11 +81,15 @@ approx-literal  ::= '~' (int | rat | decimal) (* Posit approx: ~42, ~3/7, ~3.14 
 42N          ;; Nat literal (Church-encoded natural — type infrastructure only)
 42           ;; Int literal (arbitrary-precision integer)
 3/7          ;; Rat literal (exact rational)
+3.14         ;; Posit32 literal (approximate — same as ~3.14)
 ~3/7         ;; approximate Posit literal (from fraction)
 ~3.14        ;; approximate Posit literal (from decimal, stored as exact rational 157/50)
 #+end_src
 
-Decimal literals in =~= context are converted to exact rationals: =~3.14= → =157/50= → nearest Posit32.
+Bare decimal literals (=3.14=, =0.5=) produce Posit32 values, the same as their tilde-prefixed
+equivalents (=~3.14=, =~0.5=). Internally, the decimal is stored as an exact rational (=157/50=)
+and encoded to the nearest Posit32 bit pattern.
+
 Nat is intended for type-level infrastructure (indices, lengths, proofs), not general computation.
 
 ** String Literals
@@ -490,6 +494,11 @@ def val : Datum [datum-nat 10]
 
 ;; Map (key-value pairs)
 {:name "Ada" :age 36}
+
+;; Mixed-type map: value type auto-inferred as union
+;; {:name "Alice" :age zero} : Map Keyword (Nat | String)
+;; map-assoc widens: (map-assoc nat-map :k "s") : Map Keyword (Nat | String)
+{:name "Alice" :age zero}
 #+end_src
 
 ** Partial Application
@@ -871,6 +880,7 @@ The WS reader converts indentation to explicit structure:
 | =,expr=         | =($unquote expr)=        | Unquote (splice into QQ)     |
 | =42N=           | =($nat-literal 42)=      | Natural number literal       |
 | =~42=           | =($approx-literal 42)=   | Approximate (Posit) literal  |
+| =3.14=          | =($decimal-literal 157/50)= | Bare decimal → Posit32    |
 | =:name=         | =keyword token=          | Keyword literal              |
 | ='[1 2 3]=      | =($list-literal 1 2 3)=  | List literal                 |
 | =@[1 2 3]=      | =($vec-literal 1 2 3)=   | PVec literal                 |
