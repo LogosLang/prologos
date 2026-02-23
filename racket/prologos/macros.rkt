@@ -1230,7 +1230,8 @@
               [tp (in-list trait-params)]
               #:when (and (symbol? cv) (hash-has-key? param-table cv)))
           (define current-kind (hash-ref param-table cv))
-          (define trait-kind (cdr tp))
+          ;; trait-params may be (name . kind) pairs or bare symbols
+          (define trait-kind (if (pair? tp) (cdr tp) '(Type 0)))
           (cond
             ;; Current kind is default (Type 0) — upgrade to trait's kind
             [(equal? current-kind '(Type 0))
@@ -1589,8 +1590,11 @@
            [all-datums (append type-tokens constraint-arg-datums)]
            [candidates (collect-free-type-vars-from-datums all-datums)]
            [existing-names (map car merged-implicit-binders)]
+           ;; Exclude names locally bound in higher-rank Pi binders (e.g. S in <(S :0 Type) -> ...>)
+           [local-pi-names (collect-local-pi-binder-names type-tokens)]
            [new-vars (filter (lambda (v)
                                (and (not (memq v existing-names))
+                                    (not (memq v local-pi-names))
                                     (not (known-type-name? v))))
                              candidates)])
       (map (lambda (v) (cons v '(Type 0))) new-vars)))
@@ -3502,6 +3506,7 @@
                   Posit8 Posit16 Posit32 Posit64
                   Quire8 Quire16 Quire32 Quire64
                   List Option Result Either Pair
+                  Pi Sigma Eq J
                   Map Set PVec LSeq Vec Fin Datum Ordering))
       (lookup-ctor sym)       ;; user-defined constructor → known
       (lookup-type-ctors sym) ;; user-defined type → known
@@ -3515,6 +3520,36 @@
          (char-upper-case? (string-ref s 0)))))
 
 ;; Phase 1b: Collect free type variable candidates from datum tokens.
+;; Collect locally-bound Pi binder names from within $angle-type forms.
+;; These are names like S in <(S :0 Type) -> ...> that are quantified inside
+;; a higher-rank Pi type and should NOT become auto-implicit type parameters.
+(define (collect-local-pi-binder-names datums)
+  (define result '())
+  (define (walk d)
+    (cond
+      [(and (pair? d) (or (eq? (car d) '$angle-type)
+                          (and (syntax? (car d))
+                               (eq? (syntax-e (car d)) '$angle-type))))
+       ;; Inside an angle-type: look for (name :0 type...) Pi binder patterns
+       (extract-pi-binder-names (cdr d))]
+      [(pair? d)
+       (walk (car d))
+       (walk (cdr d))]
+      [(syntax? d) (walk (syntax-e d))]
+      [else (void)]))
+  (define (extract-pi-binder-names tokens)
+    (for ([tok (in-list (if (list? tokens) tokens '()))])
+      (cond
+        ;; (name :0 type...) or (name : type...) — Pi binder within angle-type
+        [(and (list? tok) (>= (length tok) 3)
+              (symbol? (car tok))
+              (memq (cadr tok) '(: :0 :1 :w)))
+         (set! result (cons (car tok) result))]
+        [(pair? tok) (walk tok)]
+        [else (void)])))
+  (for-each walk datums)
+  result)
+
 ;; Walks the token tree and collects symbols that start with an uppercase letter,
 ;; excluding special syntax sentinels. Returns a deduplicated list in first-occurrence order.
 (define (collect-free-type-vars-from-datums datums)

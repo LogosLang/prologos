@@ -365,6 +365,10 @@
                 [(prologos-error? body)
                  ;; Remove pre-registered entry on elaboration failure
                  (current-global-env (hash-remove (current-global-env) name))
+                 (when (current-ns-context)
+                   (current-global-env
+                    (hash-remove (current-global-env)
+                     (qualify-name name (ns-context-current-ns (current-ns-context))))))
                  body]
                 [else
                  ;; 5. Check body against type (use type which has metas instead of holes)
@@ -374,6 +378,10 @@
                    [(prologos-error? chk)
                     ;; Remove pre-registered entry on type-check failure
                     (current-global-env (hash-remove (current-global-env) name))
+                    (when (current-ns-context)
+                      (current-global-env
+                       (hash-remove (current-global-env)
+                        (qualify-name name (ns-context-current-ns (current-ns-context))))))
                     chk]
                    [else
                     ;; Phase C: resolve trait-constraint metas to dictionary expressions
@@ -383,6 +391,10 @@
                     (cond
                       [(not (null? trait-errors-ann))
                        (current-global-env (hash-remove (current-global-env) name))
+                       (when (current-ns-context)
+                         (current-global-env
+                          (hash-remove (current-global-env)
+                           (qualify-name name (ns-context-current-ns (current-ns-context))))))
                        (car trait-errors-ann)]
                       [else
                     ;; 5.5. Check for failed constraints (Sprint 5)
@@ -391,6 +403,10 @@
                       [(not (null? failed))
                        ;; Remove pre-registered entry on constraint failure
                        (current-global-env (hash-remove (current-global-env) name))
+                       (when (current-ns-context)
+                         (current-global-env
+                          (hash-remove (current-global-env)
+                           (qualify-name name (ns-context-current-ns (current-ns-context))))))
                        ;; Sprint 9: structured constraint failure with provenance
                        (define c (car failed))
                        (define prov (constraint-source c))
@@ -425,6 +441,10 @@
                          [(prologos-error? qtt-ok)
                           ;; Remove pre-registered entry on QTT failure
                           (current-global-env (hash-remove (current-global-env) name))
+                          (when (current-ns-context)
+                            (current-global-env
+                             (hash-remove (current-global-env)
+                              (qualify-name name (ns-context-current-ns (current-ns-context))))))
                           qtt-ok]
                          [else
                           (current-global-env

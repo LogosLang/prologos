@@ -87,12 +87,12 @@ defn singleton [x]
 
 spec elem [Eq A] A [List A] -> Bool
   :doc "Check if an element is in the list using equality"
-defn elem [eq x xs]
+defn elem [eqf x xs]
   match xs
     | nil       -> false
-    | cons a as -> match [eq x a]
+    | cons a as -> match [eqf x a]
                      | true  -> true
-                     | false -> elem eq x as
+                     | false -> elem eqf x as
 
 ;; ========================================
 ;; Derived from foldl
@@ -429,46 +429,46 @@ defn break [p xs]
 ;; Remove consecutive duplicates (like Unix uniq).
 ;; dedup nat-eq [1,1,2,2,3] = [1,2,3]
 spec dedup-helper [A -> A -> Bool] A [List A] -> List A
-defn dedup-helper [eq prev xs]
+defn dedup-helper [eqf prev xs]
   match xs
     | nil       -> nil
-    | cons a as -> match [eq prev a]
-      | true  -> dedup-helper eq prev as
-      | false -> cons a [dedup-helper eq a as]
+    | cons a as -> match [eqf prev a]
+      | true  -> dedup-helper eqf prev as
+      | false -> cons a [dedup-helper eqf a as]
 
 spec dedup [A -> A -> Bool] [List A] -> List A
-defn dedup [eq xs]
+defn dedup [eqf xs]
   match xs
     | nil       -> nil
-    | cons a as -> cons a [dedup-helper eq a as]
+    | cons a as -> cons a [dedup-helper eqf a as]
 
 ;; Check if one list is a prefix of another.
 ;; prefix-of? nat-eq [1,2] [1,2,3] = true
 spec prefix-of? [A -> A -> Bool] [List A] [List A] -> Bool
-defn prefix-of? [eq prefix xs]
+defn prefix-of? [eqf prefix xs]
   match prefix
     | nil       -> true
     | cons p ps -> match xs
       | nil       -> false
-      | cons x rest -> match [eq p x]
-        | true  -> prefix-of? eq ps rest
+      | cons x rest -> match [eqf p x]
+        | true  -> prefix-of? eqf ps rest
         | false -> false
 
 ;; Check if one list is a suffix of another.
 ;; suffix-of? nat-eq [2,3] [1,2,3] = true
 spec suffix-of? [A -> A -> Bool] [List A] [List A] -> Bool
-defn suffix-of? [eq suffix xs]
-  prefix-of? eq [reverse suffix] [reverse xs]
+defn suffix-of? [eqf suffix xs]
+  prefix-of? eqf [reverse suffix] [reverse xs]
 
 ;; Remove first occurrence of an element.
 ;; delete nat-eq 2 [1,2,3,2] = [1,3,2]
 spec delete [A -> A -> Bool] A [List A] -> List A
-defn delete [eq x xs]
+defn delete [eqf x xs]
   match xs
     | nil       -> nil
-    | cons a as -> match [eq x a]
+    | cons a as -> match [eqf x a]
       | true  -> as
-      | false -> cons a [delete eq x as]
+      | false -> cons a [delete eqf x as]
 
 ;; ========================================
 ;; Search and Counting
