@@ -1114,6 +1114,18 @@
     [(surf-generic-abs a loc)
      (let ([ea (elaborate a env depth)])
        (if (prologos-error? ea) ea (expr-generic-abs ea)))]
+    [(surf-generic-from-int target-type arg loc)
+     (let ([et (elaborate target-type env depth)]
+           [ea (elaborate arg env depth)])
+       (cond [(prologos-error? et) et]
+             [(prologos-error? ea) ea]
+             [else (expr-generic-from-int et ea)]))]
+    [(surf-generic-from-rat target-type arg loc)
+     (let ([et (elaborate target-type env depth)]
+           [ea (elaborate arg env depth)])
+       (cond [(prologos-error? et) et]
+             [(prologos-error? ea) ea]
+             [else (expr-generic-from-rat et ea)]))]
 
     ;; ---- Posit8 ----
     [(surf-posit8-type loc) (expr-Posit8)]

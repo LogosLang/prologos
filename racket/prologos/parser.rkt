@@ -1713,6 +1713,22 @@
             (let ([a (parse-datum (car args))])
               (if (prologos-error? a) a (surf-generic-abs a loc))))]
 
+       ;; Generic conversion: (from-integer TargetType val), (from-rational TargetType val)
+       [(from-integer)
+        (or (check-arity 'from-integer args 2 loc)
+            (let ([target (parse-datum (car args))]
+                  [a (parse-datum (cadr args))])
+              (cond [(prologos-error? target) target]
+                    [(prologos-error? a) a]
+                    [else (surf-generic-from-int target a loc)])))]
+       [(from-rational)
+        (or (check-arity 'from-rational args 2 loc)
+            (let ([target (parse-datum (car args))]
+                  [a (parse-datum (cadr args))])
+              (cond [(prologos-error? target) target]
+                    [(prologos-error? a) a]
+                    [else (surf-generic-from-rat target a loc)])))]
+
        ;; ---- Symbol operations ----
 
        ;; Symbol type: (Symbol)

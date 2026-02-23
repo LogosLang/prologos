@@ -437,6 +437,8 @@
     [(expr-generic-eq a b) (format "[= ~a ~a]" (pp-expr a names) (pp-expr b names))]
     [(expr-generic-negate a) (format "[negate ~a]" (pp-expr a names))]
     [(expr-generic-abs a) (format "[abs ~a]" (pp-expr a names))]
+    [(expr-generic-from-int t a) (format "[from-integer ~a ~a]" (pp-expr t names) (pp-expr a names))]
+    [(expr-generic-from-rat t a) (format "[from-rational ~a ~a]" (pp-expr t names) (pp-expr a names))]
 
     ;; Foreign function
     [(expr-foreign-fn name _ arity args _ _)
@@ -903,6 +905,8 @@
     [(expr-generic-eq a b) (or (uses-bvar0? a) (uses-bvar0? b))]
     [(expr-generic-negate a) (uses-bvar0? a)]
     [(expr-generic-abs a) (uses-bvar0? a)]
+    [(expr-generic-from-int t a) (or (uses-bvar0? t) (uses-bvar0? a))]
+    [(expr-generic-from-rat t a) (or (uses-bvar0? t) (uses-bvar0? a))]
     [(expr-foreign-fn _ _ _ _ _ _) #f]
     [(expr-reduce scrut arms _)
      (or (uses-bvar0? scrut)

@@ -320,6 +320,8 @@
     [(expr-generic-eq a b) (expr-generic-eq (shift delta cutoff a) (shift delta cutoff b))]
     [(expr-generic-negate a) (expr-generic-negate (shift delta cutoff a))]
     [(expr-generic-abs a) (expr-generic-abs (shift delta cutoff a))]
+    [(expr-generic-from-int t a) (expr-generic-from-int (shift delta cutoff t) (shift delta cutoff a))]
+    [(expr-generic-from-rat t a) (expr-generic-from-rat (shift delta cutoff t) (shift delta cutoff a))]
 
     ;; Union types (non-binding)
     [(expr-union l r)
@@ -648,6 +650,8 @@
     [(expr-generic-eq a b) (expr-generic-eq (subst k s a) (subst k s b))]
     [(expr-generic-negate a) (expr-generic-negate (subst k s a))]
     [(expr-generic-abs a) (expr-generic-abs (subst k s a))]
+    [(expr-generic-from-int t a) (expr-generic-from-int (subst k s t) (subst k s a))]
+    [(expr-generic-from-rat t a) (expr-generic-from-rat (subst k s t) (subst k s a))]
 
     ;; Union types (non-binding)
     [(expr-union l r)

@@ -199,6 +199,9 @@
  (struct-out expr-generic-eq)
  (struct-out expr-generic-negate)
  (struct-out expr-generic-abs)
+ ;; Generic conversion operators (type-directed)
+ (struct-out expr-generic-from-int)
+ (struct-out expr-generic-from-rat)
  ;; Foreign function binding
  (struct-out expr-foreign-fn)
  ;; Type hole (to be inferred during checking)
@@ -663,6 +666,10 @@
 ;; Unary: T -> T
 (struct expr-generic-negate (a) #:transparent)
 (struct expr-generic-abs (a) #:transparent)
+;; Generic conversion: (from-integer TargetType val) and (from-rational TargetType val)
+;; target-type is a numeric type expr, arg is the value to convert
+(struct expr-generic-from-int (target-type arg) #:transparent)
+(struct expr-generic-from-rat (target-type arg) #:transparent)
 
 ;; ========================================
 ;; Foreign function binding
@@ -782,6 +789,7 @@
       (expr-generic-add? x) (expr-generic-sub? x) (expr-generic-mul? x) (expr-generic-div? x)
       (expr-generic-lt? x) (expr-generic-le? x) (expr-generic-eq? x)
       (expr-generic-negate? x) (expr-generic-abs? x)
+      (expr-generic-from-int? x) (expr-generic-from-rat? x)
       (expr-Symbol? x) (expr-symbol? x)
       (expr-Keyword? x) (expr-keyword? x)
       (expr-Char? x) (expr-char? x)

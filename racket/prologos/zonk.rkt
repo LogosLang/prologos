@@ -302,6 +302,8 @@
     [(expr-generic-eq a b) (expr-generic-eq (zonk a) (zonk b))]
     [(expr-generic-negate a) (expr-generic-negate (zonk a))]
     [(expr-generic-abs a) (expr-generic-abs (zonk a))]
+    [(expr-generic-from-int t a) (expr-generic-from-int (zonk t) (zonk a))]
+    [(expr-generic-from-rat t a) (expr-generic-from-rat (zonk t) (zonk a))]
 
     ;; Union types
     [(expr-union l r) (expr-union (zonk l) (zonk r))]
@@ -626,6 +628,8 @@
     [(expr-generic-eq a b) (expr-generic-eq (zonk-at-depth depth a) (zonk-at-depth depth b))]
     [(expr-generic-negate a) (expr-generic-negate (zonk-at-depth depth a))]
     [(expr-generic-abs a) (expr-generic-abs (zonk-at-depth depth a))]
+    [(expr-generic-from-int t a) (expr-generic-from-int (zonk-at-depth depth t) (zonk-at-depth depth a))]
+    [(expr-generic-from-rat t a) (expr-generic-from-rat (zonk-at-depth depth t) (zonk-at-depth depth a))]
 
     ;; Union types
     [(expr-union l r) (expr-union (zonk-at-depth depth l) (zonk-at-depth depth r))]
@@ -916,6 +920,8 @@
     [(expr-generic-eq a b) (expr-generic-eq (default-metas a) (default-metas b))]
     [(expr-generic-negate a) (expr-generic-negate (default-metas a))]
     [(expr-generic-abs a) (expr-generic-abs (default-metas a))]
+    [(expr-generic-from-int t a) (expr-generic-from-int (default-metas t) (default-metas a))]
+    [(expr-generic-from-rat t a) (expr-generic-from-rat (default-metas t) (default-metas a))]
     [(expr-union l r) (expr-union (default-metas l) (default-metas r))]
     ;; Unapplied type constructor (HKT) — no metas inside
     [(expr-tycon _) e]

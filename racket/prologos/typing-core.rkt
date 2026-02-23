@@ -33,7 +33,8 @@
          mark-structural-reduce! structural-reduce? structural-reduce-set
          subtype?
          list-type-fvar
-         concrete-numeric-type? divisible-numeric-type? negatable-numeric-type?)
+         concrete-numeric-type? divisible-numeric-type? negatable-numeric-type?
+         from-int-target-type? from-rat-target-type?)
 
 ;; ========================================
 ;; Structural reduce tracking
@@ -114,6 +115,18 @@
 ;; Types that support negation (excludes Nat).
 (define (negatable-numeric-type? t)
   (or (expr-Int? t) (expr-Rat? t)
+      (expr-Posit8? t) (expr-Posit16? t)
+      (expr-Posit32? t) (expr-Posit64? t)))
+
+;; Valid target types for from-integer (Int -> T): Int, Rat, Posit8-64.
+(define (from-int-target-type? t)
+  (or (expr-Int? t) (expr-Rat? t)
+      (expr-Posit8? t) (expr-Posit16? t)
+      (expr-Posit32? t) (expr-Posit64? t)))
+
+;; Valid target types for from-rational (Rat -> T): Rat, Posit8-64.
+(define (from-rat-target-type? t)
+  (or (expr-Rat? t)
       (expr-Posit8? t) (expr-Posit16? t)
       (expr-Posit32? t) (expr-Posit64? t)))
 
@@ -480,6 +493,23 @@
     [(expr-generic-abs a)
      (let ([ta (infer ctx a)])
        (if (concrete-numeric-type? ta) ta (expr-error)))]
+
+    ;; Generic conversion: from-integer TargetType val (Int -> T)
+    [(expr-generic-from-int target-type arg)
+     (let ([tt (infer ctx target-type)])
+       (cond
+         [(not (expr-Type? tt)) (expr-error)]   ; target must be a type
+         [(not (from-int-target-type? target-type)) (expr-error)]
+         [(not (check ctx arg (expr-Int))) (expr-error)]
+         [else target-type]))]
+    ;; Generic conversion: from-rational TargetType val (Rat -> T)
+    [(expr-generic-from-rat target-type arg)
+     (let ([tt (infer ctx target-type)])
+       (cond
+         [(not (expr-Type? tt)) (expr-error)]   ; target must be a type
+         [(not (from-rat-target-type? target-type)) (expr-error)]
+         [(not (check ctx arg (expr-Rat))) (expr-error)]
+         [else target-type]))]
 
     ;; ---- Posit8 ----
     [(expr-Posit8) (expr-Type (lzero))]

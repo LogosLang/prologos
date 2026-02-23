@@ -1056,6 +1056,21 @@
     [(expr-generic-abs (expr-posit32 a)) (expr-posit32 (posit32-abs a))]
     [(expr-generic-abs (expr-posit64 a)) (expr-posit64 (posit64-abs a))]
 
+    ;; generic-from-int: Int -> TargetType conversion based on target type
+    [(expr-generic-from-int (expr-Int) (expr-int v))  (expr-int v)]             ; identity
+    [(expr-generic-from-int (expr-Rat) (expr-int v))  (expr-rat v)]             ; Int -> Rat
+    [(expr-generic-from-int (expr-Posit8) (expr-int v))  (expr-posit8 (posit8-encode v))]
+    [(expr-generic-from-int (expr-Posit16) (expr-int v)) (expr-posit16 (posit16-encode v))]
+    [(expr-generic-from-int (expr-Posit32) (expr-int v)) (expr-posit32 (posit32-encode v))]
+    [(expr-generic-from-int (expr-Posit64) (expr-int v)) (expr-posit64 (posit64-encode v))]
+
+    ;; generic-from-rat: Rat -> TargetType conversion based on target type
+    [(expr-generic-from-rat (expr-Rat) (expr-rat v))  (expr-rat v)]             ; identity
+    [(expr-generic-from-rat (expr-Posit8) (expr-rat v))  (expr-posit8 (posit8-encode v))]
+    [(expr-generic-from-rat (expr-Posit16) (expr-rat v)) (expr-posit16 (posit16-encode v))]
+    [(expr-generic-from-rat (expr-Posit32) (expr-rat v)) (expr-posit32 (posit32-encode v))]
+    [(expr-generic-from-rat (expr-Posit64) (expr-rat v)) (expr-posit64 (posit64-encode v))]
+
     ;; ---- Generic arithmetic stuck-term reduction ----
     ;; Binary ops: reduce operands
     [(expr-generic-add a b) (reduce-generic-binary expr-generic-add a b)]
@@ -1068,6 +1083,13 @@
     ;; Unary ops: reduce operand
     [(expr-generic-negate a) (reduce-generic-unary expr-generic-negate a)]
     [(expr-generic-abs a) (reduce-generic-unary expr-generic-abs a)]
+    ;; Generic conversion stuck-term: reduce arg, retry
+    [(expr-generic-from-int t a)
+     (let ([a* (whnf a)])
+       (if (equal? a* a) e (whnf (expr-generic-from-int t a*))))]
+    [(expr-generic-from-rat t a)
+     (let ([a* (whnf a)])
+       (if (equal? a* a) e (whnf (expr-generic-from-rat t a*))))]
 
     ;; Symbol — no reduction (atoms are values)
     ;; (no clauses needed for expr-Symbol or expr-symbol — they're values)
@@ -1653,6 +1675,8 @@
     [(expr-generic-eq a b) (expr-generic-eq (nf a) (nf b))]
     [(expr-generic-negate a) (expr-generic-negate (nf a))]
     [(expr-generic-abs a) (expr-generic-abs (nf a))]
+    [(expr-generic-from-int t a) (expr-generic-from-int (nf t) (nf a))]
+    [(expr-generic-from-rat t a) (expr-generic-from-rat (nf t) (nf a))]
 
     ;; Symbol normalization
     [(expr-Symbol) e]

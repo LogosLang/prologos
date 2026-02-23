@@ -516,6 +516,23 @@
          [(tu t u) (if (concrete-numeric-type? t) (tu t u) (tu-error))]
          [_ (tu-error)]))]
 
+    ;; Generic conversion: from-integer TargetType val, from-rational TargetType val
+    ;; target-type is erased (it's a type), usage comes from the arg
+    [(expr-generic-from-int target-type arg)
+     (let ([r (checkQ ctx arg (expr-Int))])
+       (match r
+         [(bu #t u) (if (from-int-target-type? target-type)
+                        (tu target-type u)
+                        (tu-error))]
+         [_ (tu-error)]))]
+    [(expr-generic-from-rat target-type arg)
+     (let ([r (checkQ ctx arg (expr-Rat))])
+       (match r
+         [(bu #t u) (if (from-rat-target-type? target-type)
+                        (tu target-type u)
+                        (tu-error))]
+         [_ (tu-error)]))]
+
     ;; ---- Posit8 binary operations ----
     ;; Binary ops: Posit8 -> Posit8 -> Posit8
     [(expr-p8-add a b)

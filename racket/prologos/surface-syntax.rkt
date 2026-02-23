@@ -84,6 +84,9 @@
  (struct-out surf-generic-eq)
  (struct-out surf-generic-negate)
  (struct-out surf-generic-abs)
+ ;; Generic conversion surface forms
+ (struct-out surf-generic-from-int)
+ (struct-out surf-generic-from-rat)
  ;; Posit8 surface forms
  (struct-out surf-posit8-type)
  (struct-out surf-posit8)
@@ -448,6 +451,10 @@
 ;; Unary ops: (negate a), (abs a)
 (struct surf-generic-negate (a srcloc) #:transparent)
 (struct surf-generic-abs (a srcloc) #:transparent)
+
+;; Generic conversion: (from-integer TargetType val), (from-rational TargetType val)
+(struct surf-generic-from-int (target-type arg srcloc) #:transparent)
+(struct surf-generic-from-rat (target-type arg srcloc) #:transparent)
 
 ;; Comparison: (< a b), (<= a b), (= a b)
 (struct surf-generic-lt (a b srcloc) #:transparent)
