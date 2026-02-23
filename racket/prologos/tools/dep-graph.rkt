@@ -253,6 +253,11 @@
              '(prologos::core::additive-identity-trait prologos::core::multiplicative-identity-trait
                prologos::core::identity-instances prologos::core::generic-numeric-ops
                prologos::core::add-instances prologos::core::mul-instances))
+   'test-posit-eq.rkt
+   (test-dep '(syntax.rkt prelude.rkt substitution.rkt reduction.rkt typing-core.rkt
+               pretty-print.rkt driver.rkt global-env.rkt namespace.rkt
+               macros.rkt qtt.rkt posit-impl.rkt)
+             '(prologos::core::eq-numeric-instances))
    'test-collection-conversions.rkt
    (test-dep '(syntax.rkt prelude.rkt substitution.rkt reduction.rkt typing-core.rkt
                pretty-print.rkt driver.rkt global-env.rkt namespace.rkt

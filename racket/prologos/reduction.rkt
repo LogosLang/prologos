@@ -326,6 +326,25 @@
 
 
 ;; ========================================
+;; Value classification for map-get graceful degradation
+;; ========================================
+;; A value is "definitely not a map" if it cannot possibly be a CHAMP map
+;; at runtime. Used by map-get to return none instead of a stuck term
+;; when applied to non-map values from union-typed expressions.
+(define (definitely-not-map? e)
+  (not (or (expr-champ? e)          ;; IS a map runtime value
+           (expr-fvar? e)           ;; could resolve to a map
+           (expr-bvar? e)           ;; bound variable, unknown
+           (expr-meta? e)           ;; unsolved meta, unknown
+           (expr-app? e)            ;; application, could produce a map
+           (expr-hole? e)           ;; hole, unknown
+           (expr-map-empty? e)      ;; map constructor
+           (expr-map-assoc? e)      ;; map operation
+           (expr-map-get? e)        ;; nested map-get
+           (expr-map-dissoc? e)     ;; map operation
+           (expr-error? e))))       ;; error propagation
+
+;; ========================================
 ;; Weak Head Normal Form
 ;; Per-command memoization: when current-whnf-cache is active,
 ;; cache whnf results keyed by expr.
@@ -565,6 +584,8 @@
      (if (posit8-lt? a b) (expr-true) (expr-false))]
     [(expr-p8-le (expr-posit8 a) (expr-posit8 b))
      (if (posit8-le? a b) (expr-true) (expr-false))]
+    [(expr-p8-eq (expr-posit8 a) (expr-posit8 b))
+     (if (posit8-eq? a b) (expr-true) (expr-false))]
 
     ;; from-nat: compute when arg is a Nat numeral
     [(expr-p8-from-nat n)
@@ -604,6 +625,7 @@
     [(expr-p8-div a b) (reduce-posit-binary 8 expr-p8-div a b)]
     [(expr-p8-lt a b) (reduce-posit-binary 8 expr-p8-lt a b)]
     [(expr-p8-le a b) (reduce-posit-binary 8 expr-p8-le a b)]
+    [(expr-p8-eq a b) (reduce-posit-binary 8 expr-p8-eq a b)]
 
     ;; Unary ops: reduce operand
     [(expr-p8-neg a) (reduce-posit-unary 8 expr-p8-neg a)]
@@ -633,6 +655,8 @@
      (if (posit16-lt? a b) (expr-true) (expr-false))]
     [(expr-p16-le (expr-posit16 a) (expr-posit16 b))
      (if (posit16-le? a b) (expr-true) (expr-false))]
+    [(expr-p16-eq (expr-posit16 a) (expr-posit16 b))
+     (if (posit16-eq? a b) (expr-true) (expr-false))]
 
     ;; from-nat: compute when arg is a Nat numeral
     [(expr-p16-from-nat n)
@@ -672,6 +696,7 @@
     [(expr-p16-div a b) (reduce-posit-binary 16 expr-p16-div a b)]
     [(expr-p16-lt a b) (reduce-posit-binary 16 expr-p16-lt a b)]
     [(expr-p16-le a b) (reduce-posit-binary 16 expr-p16-le a b)]
+    [(expr-p16-eq a b) (reduce-posit-binary 16 expr-p16-eq a b)]
 
     ;; Unary ops: reduce operand
     [(expr-p16-neg a) (reduce-posit-unary 16 expr-p16-neg a)]
@@ -701,6 +726,8 @@
      (if (posit32-lt? a b) (expr-true) (expr-false))]
     [(expr-p32-le (expr-posit32 a) (expr-posit32 b))
      (if (posit32-le? a b) (expr-true) (expr-false))]
+    [(expr-p32-eq (expr-posit32 a) (expr-posit32 b))
+     (if (posit32-eq? a b) (expr-true) (expr-false))]
 
     ;; from-nat: compute when arg is a Nat numeral
     [(expr-p32-from-nat n)
@@ -740,6 +767,7 @@
     [(expr-p32-div a b) (reduce-posit-binary 32 expr-p32-div a b)]
     [(expr-p32-lt a b) (reduce-posit-binary 32 expr-p32-lt a b)]
     [(expr-p32-le a b) (reduce-posit-binary 32 expr-p32-le a b)]
+    [(expr-p32-eq a b) (reduce-posit-binary 32 expr-p32-eq a b)]
 
     ;; Unary ops: reduce operand
     [(expr-p32-neg a) (reduce-posit-unary 32 expr-p32-neg a)]
@@ -769,6 +797,8 @@
      (if (posit64-lt? a b) (expr-true) (expr-false))]
     [(expr-p64-le (expr-posit64 a) (expr-posit64 b))
      (if (posit64-le? a b) (expr-true) (expr-false))]
+    [(expr-p64-eq (expr-posit64 a) (expr-posit64 b))
+     (if (posit64-eq? a b) (expr-true) (expr-false))]
 
     ;; from-nat: compute when arg is a Nat numeral
     [(expr-p64-from-nat n)
@@ -808,6 +838,7 @@
     [(expr-p64-div a b) (reduce-posit-binary 64 expr-p64-div a b)]
     [(expr-p64-lt a b) (reduce-posit-binary 64 expr-p64-lt a b)]
     [(expr-p64-le a b) (reduce-posit-binary 64 expr-p64-le a b)]
+    [(expr-p64-eq a b) (reduce-posit-binary 64 expr-p64-eq a b)]
 
     ;; Unary ops: reduce operand
     [(expr-p64-neg a) (reduce-posit-unary 64 expr-p64-neg a)]
@@ -1116,7 +1147,12 @@
        (if (equal? m* m) e (whnf (expr-map-assoc m* k v))))]
     [(expr-map-get m k)
      (let ([m* (whnf m)])
-       (if (equal? m* m) e (whnf (expr-map-get m* k))))]
+       (cond
+         [(not (equal? m* m)) (whnf (expr-map-get m* k))]
+         ;; If m* is a concrete non-map value, return none (graceful degradation).
+         ;; This handles cases like map-get on an Int from a mixed-type union.
+         [(definitely-not-map? m*) (expr-fvar 'none)]
+         [else e]))]
     [(expr-map-dissoc m k)
      (let ([m* (whnf m)])
        (if (equal? m* m) e (whnf (expr-map-dissoc m* k))))]
@@ -1374,6 +1410,7 @@
     [(expr-p8-sqrt a) (expr-p8-sqrt (nf a))]
     [(expr-p8-lt a b) (expr-p8-lt (nf a) (nf b))]
     [(expr-p8-le a b) (expr-p8-le (nf a) (nf b))]
+    [(expr-p8-eq a b) (expr-p8-eq (nf a) (nf b))]
     [(expr-p8-from-nat n) (expr-p8-from-nat (nf n))]
     [(expr-p8-to-rat a) (expr-p8-to-rat (nf a))]
     [(expr-p8-from-rat a) (expr-p8-from-rat (nf a))]
@@ -1393,6 +1430,7 @@
     [(expr-p16-sqrt a) (expr-p16-sqrt (nf a))]
     [(expr-p16-lt a b) (expr-p16-lt (nf a) (nf b))]
     [(expr-p16-le a b) (expr-p16-le (nf a) (nf b))]
+    [(expr-p16-eq a b) (expr-p16-eq (nf a) (nf b))]
     [(expr-p16-from-nat n) (expr-p16-from-nat (nf n))]
     [(expr-p16-to-rat a) (expr-p16-to-rat (nf a))]
     [(expr-p16-from-rat a) (expr-p16-from-rat (nf a))]
@@ -1412,6 +1450,7 @@
     [(expr-p32-sqrt a) (expr-p32-sqrt (nf a))]
     [(expr-p32-lt a b) (expr-p32-lt (nf a) (nf b))]
     [(expr-p32-le a b) (expr-p32-le (nf a) (nf b))]
+    [(expr-p32-eq a b) (expr-p32-eq (nf a) (nf b))]
     [(expr-p32-from-nat n) (expr-p32-from-nat (nf n))]
     [(expr-p32-to-rat a) (expr-p32-to-rat (nf a))]
     [(expr-p32-from-rat a) (expr-p32-from-rat (nf a))]
@@ -1431,6 +1470,7 @@
     [(expr-p64-sqrt a) (expr-p64-sqrt (nf a))]
     [(expr-p64-lt a b) (expr-p64-lt (nf a) (nf b))]
     [(expr-p64-le a b) (expr-p64-le (nf a) (nf b))]
+    [(expr-p64-eq a b) (expr-p64-eq (nf a) (nf b))]
     [(expr-p64-from-nat n) (expr-p64-from-nat (nf n))]
     [(expr-p64-to-rat a) (expr-p64-to-rat (nf a))]
     [(expr-p64-from-rat a) (expr-p64-from-rat (nf a))]

@@ -487,6 +487,12 @@
        (match* (r1 r2)
          [((bu #t u1) (bu #t u2)) (tu (expr-Bool) (add-usage u1 u2))]
          [(_ _) (tu-error)]))]
+    [(expr-p8-eq a b)
+     (let ([r1 (checkQ ctx a (expr-Posit8))]
+           [r2 (checkQ ctx b (expr-Posit8))])
+       (match* (r1 r2)
+         [((bu #t u1) (bu #t u2)) (tu (expr-Bool) (add-usage u1 u2))]
+         [(_ _) (tu-error)]))]
 
     ;; Posit8 conversion: Nat -> Posit8
     [(expr-p8-from-nat e1)
@@ -566,6 +572,12 @@
          [((bu #t u1) (bu #t u2)) (tu (expr-Bool) (add-usage u1 u2))]
          [(_ _) (tu-error)]))]
     [(expr-p16-le a b)
+     (let ([r1 (checkQ ctx a (expr-Posit16))]
+           [r2 (checkQ ctx b (expr-Posit16))])
+       (match* (r1 r2)
+         [((bu #t u1) (bu #t u2)) (tu (expr-Bool) (add-usage u1 u2))]
+         [(_ _) (tu-error)]))]
+    [(expr-p16-eq a b)
      (let ([r1 (checkQ ctx a (expr-Posit16))]
            [r2 (checkQ ctx b (expr-Posit16))])
        (match* (r1 r2)
@@ -655,6 +667,12 @@
        (match* (r1 r2)
          [((bu #t u1) (bu #t u2)) (tu (expr-Bool) (add-usage u1 u2))]
          [(_ _) (tu-error)]))]
+    [(expr-p32-eq a b)
+     (let ([r1 (checkQ ctx a (expr-Posit32))]
+           [r2 (checkQ ctx b (expr-Posit32))])
+       (match* (r1 r2)
+         [((bu #t u1) (bu #t u2)) (tu (expr-Bool) (add-usage u1 u2))]
+         [(_ _) (tu-error)]))]
 
     ;; Posit32 conversion: Nat -> Posit32
     [(expr-p32-from-nat e1)
@@ -734,6 +752,12 @@
          [((bu #t u1) (bu #t u2)) (tu (expr-Bool) (add-usage u1 u2))]
          [(_ _) (tu-error)]))]
     [(expr-p64-le a b)
+     (let ([r1 (checkQ ctx a (expr-Posit64))]
+           [r2 (checkQ ctx b (expr-Posit64))])
+       (match* (r1 r2)
+         [((bu #t u1) (bu #t u2)) (tu (expr-Bool) (add-usage u1 u2))]
+         [(_ _) (tu-error)]))]
+    [(expr-p64-eq a b)
      (let ([r1 (checkQ ctx a (expr-Posit64))]
            [r2 (checkQ ctx b (expr-Posit64))])
        (match* (r1 r2)

@@ -1113,6 +1113,12 @@
        (cond [(prologos-error? ea) ea]
              [(prologos-error? eb) eb]
              [else (expr-p8-le ea eb)]))]
+    [(surf-p8-eq a b loc)
+     (let ([ea (elaborate a env depth)]
+           [eb (elaborate b env depth)])
+       (cond [(prologos-error? ea) ea]
+             [(prologos-error? eb) eb]
+             [else (expr-p8-eq ea eb)]))]
     [(surf-p8-from-nat n loc)
      (let ([en (elaborate n env depth)])
        (if (prologos-error? en) en (expr-p8-from-nat en)))]
@@ -1184,6 +1190,12 @@
        (cond [(prologos-error? ea) ea]
              [(prologos-error? eb) eb]
              [else (expr-p16-le ea eb)]))]
+    [(surf-p16-eq a b loc)
+     (let ([ea (elaborate a env depth)]
+           [eb (elaborate b env depth)])
+       (cond [(prologos-error? ea) ea]
+             [(prologos-error? eb) eb]
+             [else (expr-p16-eq ea eb)]))]
     [(surf-p16-from-nat n loc)
      (let ([en (elaborate n env depth)])
        (if (prologos-error? en) en (expr-p16-from-nat en)))]
@@ -1255,6 +1267,12 @@
        (cond [(prologos-error? ea) ea]
              [(prologos-error? eb) eb]
              [else (expr-p32-le ea eb)]))]
+    [(surf-p32-eq a b loc)
+     (let ([ea (elaborate a env depth)]
+           [eb (elaborate b env depth)])
+       (cond [(prologos-error? ea) ea]
+             [(prologos-error? eb) eb]
+             [else (expr-p32-eq ea eb)]))]
     [(surf-p32-from-nat n loc)
      (let ([en (elaborate n env depth)])
        (if (prologos-error? en) en (expr-p32-from-nat en)))]
@@ -1326,6 +1344,12 @@
        (cond [(prologos-error? ea) ea]
              [(prologos-error? eb) eb]
              [else (expr-p64-le ea eb)]))]
+    [(surf-p64-eq a b loc)
+     (let ([ea (elaborate a env depth)]
+           [eb (elaborate b env depth)])
+       (cond [(prologos-error? ea) ea]
+             [(prologos-error? eb) eb]
+             [else (expr-p64-eq ea eb)]))]
     [(surf-p64-from-nat n loc)
      (let ([en (elaborate n env depth)])
        (if (prologos-error? en) en (expr-p64-from-nat en)))]

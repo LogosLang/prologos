@@ -86,6 +86,7 @@
  (struct-out surf-p8-sqrt)
  (struct-out surf-p8-lt)
  (struct-out surf-p8-le)
+ (struct-out surf-p8-eq)
  (struct-out surf-p8-from-nat)
  (struct-out surf-p8-to-rat)
  (struct-out surf-p8-from-rat)
@@ -103,6 +104,7 @@
  (struct-out surf-p16-sqrt)
  (struct-out surf-p16-lt)
  (struct-out surf-p16-le)
+ (struct-out surf-p16-eq)
  (struct-out surf-p16-from-nat)
  (struct-out surf-p16-to-rat)
  (struct-out surf-p16-from-rat)
@@ -120,6 +122,7 @@
  (struct-out surf-p32-sqrt)
  (struct-out surf-p32-lt)
  (struct-out surf-p32-le)
+ (struct-out surf-p32-eq)
  (struct-out surf-p32-from-nat)
  (struct-out surf-p32-to-rat)
  (struct-out surf-p32-from-rat)
@@ -137,6 +140,7 @@
  (struct-out surf-p64-sqrt)
  (struct-out surf-p64-lt)
  (struct-out surf-p64-le)
+ (struct-out surf-p64-eq)
  (struct-out surf-p64-from-nat)
  (struct-out surf-p64-to-rat)
  (struct-out surf-p64-from-rat)
@@ -445,6 +449,7 @@
 ;; Comparison: (p8< a b), (p8<= a b)
 (struct surf-p8-lt (a b srcloc) #:transparent)
 (struct surf-p8-le (a b srcloc) #:transparent)
+(struct surf-p8-eq (a b srcloc) #:transparent)
 
 ;; Conversion: (p8-from-nat n)
 (struct surf-p8-from-nat (n srcloc) #:transparent)
@@ -481,6 +486,7 @@
 ;; Comparison: (p16< a b), (p16<= a b)
 (struct surf-p16-lt (a b srcloc) #:transparent)
 (struct surf-p16-le (a b srcloc) #:transparent)
+(struct surf-p16-eq (a b srcloc) #:transparent)
 
 ;; Conversion: (p16-from-nat n)
 (struct surf-p16-from-nat (n srcloc) #:transparent)
@@ -517,6 +523,7 @@
 ;; Comparison: (p32< a b), (p32<= a b)
 (struct surf-p32-lt (a b srcloc) #:transparent)
 (struct surf-p32-le (a b srcloc) #:transparent)
+(struct surf-p32-eq (a b srcloc) #:transparent)
 
 ;; Conversion: (p32-from-nat n)
 (struct surf-p32-from-nat (n srcloc) #:transparent)
@@ -553,6 +560,7 @@
 ;; Comparison: (p64< a b), (p64<= a b)
 (struct surf-p64-lt (a b srcloc) #:transparent)
 (struct surf-p64-le (a b srcloc) #:transparent)
+(struct surf-p64-eq (a b srcloc) #:transparent)
 
 ;; Conversion: (p64-from-nat n)
 (struct surf-p64-from-nat (n srcloc) #:transparent)

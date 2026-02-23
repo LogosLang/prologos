@@ -456,6 +456,9 @@
     [(expr-p8-le a b)
      (if (and (check ctx a (expr-Posit8)) (check ctx b (expr-Posit8)))
          (expr-Bool) (expr-error))]
+    [(expr-p8-eq a b)
+     (if (and (check ctx a (expr-Posit8)) (check ctx b (expr-Posit8)))
+         (expr-Bool) (expr-error))]
 
     ;; Conversion: Nat -> Posit8
     [(expr-p8-from-nat n)
@@ -513,6 +516,9 @@
      (if (and (check ctx a (expr-Posit16)) (check ctx b (expr-Posit16)))
          (expr-Bool) (expr-error))]
     [(expr-p16-le a b)
+     (if (and (check ctx a (expr-Posit16)) (check ctx b (expr-Posit16)))
+         (expr-Bool) (expr-error))]
+    [(expr-p16-eq a b)
      (if (and (check ctx a (expr-Posit16)) (check ctx b (expr-Posit16)))
          (expr-Bool) (expr-error))]
 
@@ -574,6 +580,9 @@
     [(expr-p32-le a b)
      (if (and (check ctx a (expr-Posit32)) (check ctx b (expr-Posit32)))
          (expr-Bool) (expr-error))]
+    [(expr-p32-eq a b)
+     (if (and (check ctx a (expr-Posit32)) (check ctx b (expr-Posit32)))
+         (expr-Bool) (expr-error))]
 
     ;; Conversion: Nat -> Posit32
     [(expr-p32-from-nat n)
@@ -631,6 +640,9 @@
      (if (and (check ctx a (expr-Posit64)) (check ctx b (expr-Posit64)))
          (expr-Bool) (expr-error))]
     [(expr-p64-le a b)
+     (if (and (check ctx a (expr-Posit64)) (check ctx b (expr-Posit64)))
+         (expr-Bool) (expr-error))]
+    [(expr-p64-eq a b)
      (if (and (check ctx a (expr-Posit64)) (check ctx b (expr-Posit64)))
          (expr-Bool) (expr-error))]
 
@@ -729,15 +741,47 @@
      (let ([tm (infer ctx m)])
        (match tm
          [(expr-Map kt vt)
-          (if (and (check ctx k kt) (check ctx v vt))
-              (expr-Map kt vt)
-              (expr-error))]
+          (cond
+            ;; Key must check against key type
+            [(not (check ctx k kt)) (expr-error)]
+            ;; Value fits existing value type — no widening needed
+            [(let ([saved (save-meta-state)])
+               (if (check ctx v vt)
+                   #t
+                   (begin (restore-meta-state! saved) #f)))
+             (expr-Map kt vt)]
+            ;; Value doesn't fit — widen via union
+            [else
+             (let ([tv (infer ctx v)])
+               (if (expr-error? tv)
+                   (expr-error)
+                   ;; whnf resolves solved metas so build-union-type
+                   ;; sees concrete types, not raw meta references
+                   (expr-Map kt (build-union-type (list (whnf vt) tv)))))])]
          [_ (expr-error)]))]
     [(expr-map-get m k)
-     (let ([tm (infer ctx m)])
+     (let ([tm (whnf (infer ctx m))])
        (match tm
          [(expr-Map kt vt)
           (if (check ctx k kt) vt (expr-error))]
+         [(expr-union _ _)
+          ;; Union type: extract Map components, check key, collect value types
+          (let* ([components (flatten-union tm)]
+                 [map-vts
+                  (let loop ([cs components] [acc '()])
+                    (if (null? cs)
+                        (reverse acc)
+                        (let ([c* (whnf (car cs))])
+                          (if (expr-Map? c*)
+                              (let ([saved (save-meta-state)])
+                                (if (check ctx k (expr-Map-k-type c*))
+                                    (loop (cdr cs) (cons (expr-Map-v-type c*) acc))
+                                    (begin (restore-meta-state! saved)
+                                           (loop (cdr cs) acc))))
+                              (loop (cdr cs) acc)))))])
+            (if (null? map-vts)
+                (expr-error)
+                (build-union-type map-vts)))]
          [_ (expr-error)]))]
     [(expr-map-dissoc m k)
      (let ([tm (infer ctx m)])
@@ -1470,6 +1514,15 @@
               [(just-level l2) (just-level (lmax l1 l2))]
               [_ (no-level)]))]
          [_ (no-level)]))]
+
+    ;; Metavariable: if solved, follow solution; if unsolved, assume Type(lzero).
+    ;; Unsolved metas in type position (e.g. map-empty key/value types) will be
+    ;; resolved later via unification. This mirrors check's [(expr-meta _) _) #t].
+    [(expr-meta id)
+     (let ([sol (meta-solution id)])
+       (if sol
+           (infer-level ctx sol)
+           (just-level (lzero))))]
 
     ;; Fallback: try to infer and match Type(L)
     [_
