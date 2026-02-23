@@ -20,3 +20,31 @@ require [prologos::core::multiplicative-identity-trait  :refer [MultiplicativeId
 (def Int--MultiplicativeIdentity--dict : [MultiplicativeIdentity Int] 1)
 (def Rat--MultiplicativeIdentity--dict : [MultiplicativeIdentity Rat] 1/1)
 (def Nat--MultiplicativeIdentity--dict : [MultiplicativeIdentity Nat] 1N)
+
+;; ========================================
+;; Posit8 Identity Instances
+;; ========================================
+
+(def Posit8--AdditiveIdentity--dict : [AdditiveIdentity Posit8] [posit8 0])
+(def Posit8--MultiplicativeIdentity--dict : [MultiplicativeIdentity Posit8] [posit8 64])
+
+;; ========================================
+;; Posit16 Identity Instances
+;; ========================================
+
+(def Posit16--AdditiveIdentity--dict : [AdditiveIdentity Posit16] [posit16 0])
+(def Posit16--MultiplicativeIdentity--dict : [MultiplicativeIdentity Posit16] [posit16 16384])
+
+;; ========================================
+;; Posit32 Identity Instances
+;; ========================================
+
+(def Posit32--AdditiveIdentity--dict : [AdditiveIdentity Posit32] [posit32 0])
+(def Posit32--MultiplicativeIdentity--dict : [MultiplicativeIdentity Posit32] [posit32 1073741824])
+
+;; ========================================
+;; Posit64 Identity Instances
+;; ========================================
+
+(def Posit64--AdditiveIdentity--dict : [AdditiveIdentity Posit64] [posit64 0])
+(def Posit64--MultiplicativeIdentity--dict : [MultiplicativeIdentity Posit64] [posit64 4611686018427387904])

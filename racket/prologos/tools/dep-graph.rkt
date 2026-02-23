@@ -246,6 +246,13 @@
                macros.rkt qtt.rkt)
              '(prologos::core::additive-identity-trait prologos::core::multiplicative-identity-trait
                prologos::core::identity-instances prologos::core::generic-numeric-ops))
+   'test-posit-identity.rkt
+   (test-dep '(syntax.rkt prelude.rkt substitution.rkt reduction.rkt typing-core.rkt
+               pretty-print.rkt driver.rkt global-env.rkt namespace.rkt
+               macros.rkt qtt.rkt)
+             '(prologos::core::additive-identity-trait prologos::core::multiplicative-identity-trait
+               prologos::core::identity-instances prologos::core::generic-numeric-ops
+               prologos::core::add-instances prologos::core::mul-instances))
    'test-collection-conversions.rkt
    (test-dep '(syntax.rkt prelude.rkt substitution.rkt reduction.rkt typing-core.rkt
                pretty-print.rkt driver.rkt global-env.rkt namespace.rkt
@@ -259,6 +266,10 @@
    'test-map.rkt
    (test-dep '(syntax.rkt prelude.rkt substitution.rkt reduction.rkt typing-core.rkt
                pretty-print.rkt driver.rkt global-env.rkt champ.rkt) #f)
+   'test-mixed-map.rkt
+   (test-dep '(syntax.rkt prelude.rkt substitution.rkt reduction.rkt typing-core.rkt
+               unify.rkt pretty-print.rkt driver.rkt global-env.rkt metavar-store.rkt
+               namespace.rkt macros.rkt champ.rkt) #f)
    'test-transient.rkt
    (test-dep '(syntax.rkt prelude.rkt substitution.rkt reduction.rkt typing-core.rkt
                pretty-print.rkt driver.rkt global-env.rkt rrb.rkt champ.rkt
