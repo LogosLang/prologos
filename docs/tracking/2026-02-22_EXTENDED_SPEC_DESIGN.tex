@@ -1,0 +1,1819 @@
+% Created 2026-02-22 Sun 22:25
+% Intended LaTeX compiler: pdflatex
+\documentclass[11pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{graphicx}
+\usepackage{longtable}
+\usepackage{wrapfig}
+\usepackage{rotating}
+\usepackage[normalem]{ulem}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{capt-of}
+\usepackage{hyperref}
+\author{Prologos Project — from Zachary Larson}
+\date{2026-02-22}
+\title{Extended Spec Language Design\\\medskip
+\large Toward Editor-Assisted Interactive Development}
+\hypersetup{
+ pdfauthor={Prologos Project — from Zachary Larson},
+ pdftitle={Extended Spec Language Design},
+ pdfkeywords={},
+ pdfsubject={},
+ pdfcreator={Emacs 30.2 (Org mode 9.7.39)}, 
+ pdflang={English}}
+\begin{document}
+
+\maketitle
+\tableofcontents
+
+\section{Executive Summary}
+\label{sec:org9c2dd4c}
+
+This document proposes extending Prologos's surface language with three
+coordinated features that make dependent types, properties, and higher-kinded
+abstractions approachable without sacrificing formal rigor:
+
+\begin{enumerate}
+\item \textbf{Extended \texttt{spec}} with keyword metadata (\texttt{:implicits}, \texttt{:where}, \texttt{:doc},
+\texttt{:examples}, \texttt{:properties}, contracts, refinements)
+\item \textbf{\texttt{property} keyword} for reusable, composable proposition groups (analogous
+to \texttt{bundle} for traits), with \texttt{:includes} composition and \texttt{:laws} on traits
+\item \textbf{\texttt{functor} keyword} for named type abstractions with category-theoretic
+metadata (\texttt{:unfolds}, \texttt{:compose}, \texttt{:identity}, \texttt{:laws}) --- eliminating
+raw Pi/Sigma types from the surface language
+\item \textbf{\texttt{??} typed holes} for interactive, hole-driven development
+\end{enumerate}
+
+The design philosophy: \emph{dependent types are the implementation substrate; the
+surface language speaks in domain terms}. Pi types, Sigma types, universe
+levels, and multiplicity annotations exist in \texttt{:unfolds} blocks, in the
+elaborator, and in the type checker. The primary programmer interface is
+structured metadata expressed through keywords.
+
+The design is informed by a survey of Clojure Spec, Malli, PropEr, Agda, Idris,
+Lean 4, Haskell, F*, Koka, and Racket contracts. Property-based testing and
+interactive theorem proving are explicit design \emph{targets} (we design syntax to
+support them) but not implementation targets (we do not build the engines yet).
+\subsection{Keyword Symmetry Table}
+\label{sec:orgcbaef95}
+
+\begin{center}
+\begin{tabular}{llll}
+Abstraction layer & Keyword & What it names & Analogous to\\
+\hline
+Function interface & \texttt{spec} & Function type + metadata & ML type signatures\\
+Method requirement & \texttt{trait} & A single method signature & Haskell typeclass method\\
+Requirement group & \texttt{bundle} & Conjunction of traits & Haskell superclass constraint\\
+Proposition group & \texttt{property} & Conjunction of \texttt{:holds} clauses & QuickCheck property suites\\
+Type abstraction & \texttt{functor} & Parameterized type + algebraic structure & CT functor / Lean \texttt{abbrev}, but richer\\
+\end{tabular}
+\end{center}
+\section{Part I: Research Survey}
+\label{sec:org527adb9}
+
+\subsection{1. Clojure Spec \& Malli}
+\label{sec:orga562454}
+
+\subsubsection{Clojure Spec}
+\label{sec:org99aa5bc}
+
+Clojure Spec (\texttt{clojure.spec.alpha}) is \emph{predicate-first}: every spec is
+fundamentally a predicate function. The key insight for Prologos is the three
+facets of \texttt{s/fdef}:
+
+\begin{verbatim}
+(s/fdef ranged-rand
+  :args (s/cat :start int? :end int?)
+  :ret  int?
+  :fn   (fn [{:keys [args ret]}]
+          (and (>= ret (:start args))
+               (<  ret (:end args)))))
+\end{verbatim}
+
+\begin{itemize}
+\item \textbf{\texttt{:args}}: regex spec for function arguments (\texttt{s/cat}, \texttt{s/alt})
+\item \textbf{\texttt{:ret}}: spec for the return value
+\item \textbf{\texttt{:fn}}: predicate relating \texttt{\{:args conformed-args :ret conformed-ret\}}
+\end{itemize}
+
+The \texttt{:fn} relation is the most interesting for Prologos --- it expresses
+\emph{properties} that must hold between inputs and outputs. In a dependently-typed
+language, this corresponds directly to a dependent Pi type.
+
+\textbf{Generative testing}: \texttt{stest/check} generates random inputs from \texttt{:args},
+invokes the function, and checks both \texttt{:ret} and \texttt{:fn}. Specs \emph{are} generators
+--- no separate test-writing step required. This is QuickCheck-style property
+testing with zero user-written generators.
+
+\textbf{Instrument vs check}: \texttt{instrument} validates \texttt{:args} at call sites
+(development-time contract enforcement). \texttt{check} validates \texttt{:ret} and \texttt{:fn} via
+generative testing (test-time property verification). This separation is
+important: \emph{contracts at dev time, properties at test time}.
+
+\textbf{Composition}: \texttt{s/keys} for entity maps, \texttt{s/cat} for sequential concatenation,
+\texttt{s/alt} for alternatives, \texttt{s/and} for conjunctive refinement. Specs compose
+algebraically.
+\subsubsection{Malli}
+\label{sec:org8d95780}
+
+Malli is \emph{schema-first} (data-driven): schemas are plain data structures, not
+opaque predicate objects. This enables schema transformation, generation,
+serialization.
+
+\begin{verbatim}
+(def MyFunction
+  [:=> [:cat :int :int] :int])
+
+;; Schema-as-data enables programmatic manipulation:
+(m/children MyFunction) ;; => [[:cat :int :int] :int]
+\end{verbatim}
+
+\textbf{Key lesson}: In a homoiconic language like Prologos, spec metadata should be
+data --- quotable, inspectable, transformable. This is naturally satisfied by
+using maps.
+\subsubsection{Insight for Prologos}
+\label{sec:orgd66419d}
+
+In a dependently-typed language, types already subsume specs. Clojure's \texttt{:fn}
+relation corresponds to a dependent Pi type:
+
+\begin{verbatim}
+;; Clojure spec's :fn relation for ranged-rand:
+;; (fn [{:keys [args ret]}] (and (>= ret start) (< ret end)))
+
+;; Is expressible as the dependent type:
+;; <(start : Int) -> (end : Int) -> {v : Int | v >= start, v < end}>
+\end{verbatim}
+
+Runtime property testing remains valuable even when types encode the invariant:
+the type checker catches \emph{logical} errors at compile time; property testing
+catches \emph{implementation} bugs.
+\subsection{2. PropEr (Erlang Property-Based Testing)}
+\label{sec:org5592240}
+
+PropEr is notable for its \emph{type-driven generator synthesis}. If a function has a
+Dialyzer type spec, PropEr constructs generators automatically:
+
+\begin{verbatim}
+-spec foo(integer(), string()) -> boolean().
+%% PropEr generates random (integer, string) pairs and checks boolean result
+\end{verbatim}
+
+\textbf{Compositional shrinking}: When custom generators are built from other
+generators, shrinking behavior inherits automatically. Data structures
+containing other data "tend to empty themselves."
+
+\textbf{Property patterns}: \texttt{?FORALL(Xs, Generator, Property)} is the canonical form.
+\texttt{?IMPLIES} for conditional properties. \texttt{aggregate/collect} for coverage.
+
+\textbf{Insight for Prologos}: Our types are richer than Dialyzer specs. A \texttt{spec} with
+dependent types gives enough information to auto-generate random inputs. The
+generator infrastructure should be type-directed: \texttt{Gen : Type -> Generator} as a
+trait, with automatic derivation for algebraic data types.
+\subsection{3. Agda/Idris Interactive Development}
+\label{sec:org558e5a3}
+
+\subsubsection{Agda}
+\label{sec:org6f69a3e}
+
+Agda's hole-driven development is the gold standard for interactive type-driven
+programming:
+
+\begin{itemize}
+\item \textbf{Holes}: \texttt{?} in code creates a \emph{hole} (placeholder for incomplete code). The
+type checker reports the expected type and available local bindings.
+
+\item \textbf{Commands}:
+\begin{center}
+\begin{tabular}{lll}
+Key & Action & Description\\
+\hline
+\texttt{C-c C-r} & Refine & Fill hole with expression + new sub-holes\\
+\texttt{C-c C-c} & Case & Split on a variable (pattern match)\\
+\texttt{C-c C-a} & Auto & Proof search (try constructors)\\
+\texttt{C-c C-,} & Goal & Show expected type and context\\
+\end{tabular}
+\end{center}
+
+\item \textbf{Auto proof search}: Completely rewritten in Agda 2.7.0. Searches for type
+inhabitants by trying constructors and projections. Works for "small enough
+problems of almost any kind." Users provide hints via constants or scope.
+\end{itemize}
+\subsubsection{Idris 2}
+\label{sec:org099d2d2}
+
+Idris's interactive editing provides similar capabilities with a different
+flavor:
+
+\begin{itemize}
+\item \textbf{Holes}: \texttt{?name} syntax. The REPL shows expected type and context.
+
+\item \textbf{Commands}:
+\begin{center}
+\begin{tabular}{ll}
+Command & Description\\
+\hline
+\texttt{:ac} & Add clause template for a function\\
+\texttt{:cs} & Case split on variable (removes impossible cases)\\
+\texttt{:am} & Add missing clauses\\
+\texttt{:ps} & Proof search\\
+\texttt{:mw} & Make with clause\\
+\end{tabular}
+\end{center}
+
+\item \textbf{Case splitting} (\texttt{:cs}): Removes \emph{impossible} cases due to unification ---
+this is type-directed case analysis. When a constructor can't unify with the
+expected type, the case is silently omitted.
+\end{itemize}
+\subsubsection{Insight for Prologos}
+\label{sec:org2e45f04}
+
+The \texttt{??} syntax naturally maps to our existing \texttt{expr-hole} infrastructure
+(\texttt{syntax.rkt} line 688). The type checker already handles \texttt{expr-hole} --- it
+accepts any type. The missing piece is the \emph{interactive protocol}: the editor
+asks "what type is expected here, what bindings are in scope?" and the type
+checker reports back.
+
+Key distinction: \texttt{\_} means "infer this for me automatically" (silent, automatic).
+\texttt{??} means "I don't know what goes here, please help me" (interactive,
+informational). The former is for the machine; the latter is for the human.
+\subsection{4. Dependent Type Ergonomics}
+\label{sec:orgd0ed6d4}
+
+\subsubsection{How Languages Present Pi Types}
+\label{sec:orgbc0ab8a}
+
+\begin{center}
+\begin{tabular}{llll}
+Language & Pi syntax & Implicit & Instance\\
+\hline
+Agda & \texttt{(x : A) -> B} & \texttt{\{x : A\}} & \texttt{\{\{x : A\}\}}\\
+Idris 2 & \texttt{(x : A) -> B} & \texttt{\{x : A\}} & \texttt{\{auto x : A\}}\\
+Lean 4 & \texttt{(x : A) -> B} & \texttt{\{x : A\}} & \texttt{[x : A]}\\
+Prologos & \texttt{<(x : A) -> B>} & \texttt{\{A : Type\}} & where clause\\
+\end{tabular}
+\end{center}
+
+\textbf{The ergonomic tension}: Pi types with many parameters become hard to read.
+All dependently-typed languages solve this the same way: separate the
+\emph{signature} from the \emph{definition}. Prologos's \texttt{spec\textasciitilde{}/\textasciitilde{}defn} split already
+achieves this. The extended spec pushes further by structuring the metadata
+around the signature.
+\subsubsection{Lean's \texttt{abbrev} vs \texttt{def} Distinction}
+\label{sec:org8db01bb}
+
+Lean 4 distinguishes transparent abbreviations from opaque definitions:
+
+\begin{itemize}
+\item \texttt{abbrev} is tagged \texttt{@[reducible]} --- unfolded during elaboration, instance
+synthesis, and definitional equality checks. \texttt{abbrev MyMonad := ReaderT Env IO}
+means \texttt{Monad MyMonad} resolves automatically via \texttt{Monad (ReaderT ...)}.
+\item \texttt{def} (semireducible) is \emph{not} unfolded by instance synthesis. You need
+explicit instances for opaque type definitions.
+\end{itemize}
+
+This distinction is critical for type aliases that should "carry through" trait
+instances vs abstract types that deliberately hide their representation.
+\subsubsection{Type-Level Functions in Dependently-Typed Languages}
+\label{sec:orgad9ce56}
+
+In Agda, Idris, and Lean, type synonyms are ordinary functions returning \texttt{Type}.
+No special mechanism needed. The tradeoff: full type-level computation makes
+inference harder and error messages may show fully-reduced forms rather than the
+user's abbreviation name.
+
+Haskell's \texttt{type} synonyms are transparent but \emph{cannot be partially applied} ---
+a fundamental restriction. Prologos should avoid this limitation.
+\subsubsection{Insight for Prologos}
+\label{sec:orgd1994f9}
+
+Our existing implicit argument inference (Sprint 3) and trait resolution (Phases
+A--E) provide the core mechanisms. The ergonomic challenge is \emph{presentation} ---
+how to show complex Pi types without overwhelming users. The extended \texttt{spec}
+addresses function-level presentation; the \texttt{functor} keyword (Part VII)
+addresses type-level presentation.
+\subsection{5. Refinement Types (Liquid Haskell, F*)}
+\label{sec:org3acded3}
+
+\subsubsection{Liquid Haskell}
+\label{sec:org38eba1d}
+
+Refinement types refine base types with logical predicates:
+
+\begin{verbatim}
+{v : T | predicate}
+\end{verbatim}
+
+For functions, the return type can reference the input:
+
+\begin{verbatim}
+incr :: x:Int -> {v:Int | v = x + 1}
+\end{verbatim}
+
+Type checking reduces to SMT validity queries (static verification, not runtime
+testing). Refinement reflection allows the SMT solver to reason about recursive
+function implementations.
+\subsubsection{F*}
+\label{sec:org39f13fd}
+
+Combines ML-like programming with dependent types, monadic effects, and
+refinement types. Uses Z3 for automated verification. Programs extract to
+OCaml, F\#, or C.
+
+F* provides fine-grained unfolding control: \texttt{unfold} (always reduce),
+\texttt{unfold\_for\_unification\_and\_vcgen} (reduce only during unification and VC
+generation), or opaque (default). This three-tier system gives precise control
+over where abbreviations are transparent.
+\subsubsection{Insight for Prologos}
+\label{sec:orgeb03883}
+
+Prologos already has full dependent types, which \emph{subsume} refinement types:
+\texttt{\{v : Int | v > 0\}} in Liquid Haskell is expressible as
+\texttt{<(v : Int) * (GT v 0)>} (Sigma type pairing value with proof) in Prologos.
+
+The ergonomic question: should we offer a lighter-weight refinement syntax
+(\texttt{:refines} key) that \emph{compiles} to Sigma types? Yes --- for pragmatism. Users
+write \texttt{:refines (fn [r] [>= r 0])} and the compiler generates the Sigma type.
+\subsection{6. Contract Systems \& Spec Language Design Patterns}
+\label{sec:org5fdfeba}
+
+\subsubsection{Racket Contracts}
+\label{sec:orga7e7e90}
+
+\texttt{->i} for dependent contracts with \texttt{\#:pre} and \texttt{\#:post} conditions. \texttt{define/contract}
+establishes a contract boundary. Blame tracking identifies which party violated
+the contract.
+\subsubsection{Composability Patterns}
+\label{sec:org94d7b6a}
+
+\begin{itemize}
+\item The Specification Pattern (Fowler) composes predicates via AND/OR/NOT combinators.
+\item The "schema explosion" problem occurs when specs grow combinatorially. Solution:
+keep specs \emph{open} (new keys without modifying existing specs) and \emph{compositional}
+(specs combine via simple operations). Clojure handles this via \texttt{s/merge} and \texttt{s/and}.
+\end{itemize}
+\subsubsection{Koka Effect Aliases}
+\label{sec:org57ffbc6}
+
+Koka's \texttt{alias pure = <div,exn>} abbreviates a row of effects. This demonstrates
+the general principle: named groupings of constraints improve readability.
+Prologos's \texttt{bundle} already does this for trait constraints; \texttt{property} will do
+this for propositions; \texttt{functor} will do this for type structure.
+\subsubsection{Insight for Prologos}
+\label{sec:orgb8a7d98}
+
+The map argument to \texttt{spec} is inherently open and composable. New keys can be added
+in future versions without breaking existing code. Unrecognized keys are stored
+but not acted upon (\emph{Postel principle}: liberal in what you accept, conservative
+in what you emit). Spec metadata should be first-class data (homoiconicity
+principle) --- quotable, inspectable, transformable.
+\subsection{7. Type Abbreviation Mechanisms (Cross-Language Survey)}
+\label{sec:org86b98e3}
+
+\subsubsection{Transparent Aliases}
+\label{sec:org2d0c29d}
+
+Haskell \texttt{type}, Rust \texttt{type}, Koka \texttt{alias}. Fully expanded before type checking;
+zero impact on inference. Haskell's limitation: type synonyms cannot be partially
+applied. Rust and Koka do not share this restriction.
+\subsubsection{Opaque / Controlled-Reducibility Aliases}
+\label{sec:org68ad41c}
+
+Lean 4's \texttt{abbrev} (reducible, instances carry through) vs \texttt{def} (semireducible,
+opaque to instance search). Scala 3's \texttt{opaque type} (transparent inside defining
+scope, opaque outside). Haskell's \texttt{newtype} (distinct type, zero-cost at runtime).
+\subsubsection{Module-Level Abstraction}
+\label{sec:orgf845975}
+
+OCaml modules control type visibility through signatures: same \texttt{type t = int}
+can be exposed transparently or abstractly depending on the \texttt{.mli} file. 1ML
+(Rossberg) unifies core and module language so type abbreviations are ordinary
+first-class functions.
+\subsubsection{Insight for Prologos}
+\label{sec:org1f5afa5}
+
+The \texttt{functor} keyword (Part VII) takes the Lean \texttt{abbrev} approach --- transparent
+by default, with the added richness of category-theoretic metadata. Unlike bare
+abbreviations, a \texttt{functor} declares what the type \emph{means} through its operations,
+not just what it expands to.
+\section{Part II: Syntax Design}
+\label{sec:orga409653}
+
+\subsection{Current Spec Syntax}
+\label{sec:orgf7c6e8f}
+
+\begin{verbatim}
+;; Basic:
+spec add Nat Nat -> Nat
+
+;; With implicit binders:
+spec id {A : Type} A -> A
+
+;; With trait constraints (where clause):
+spec sort {A : Type} [List A] -> [List A] where (Ord A)
+
+;; With inline constraints:
+spec elem {A} [Eq A] A [List A] -> Bool
+
+;; Multi-arity:
+spec zip
+  | {A B : Type} [List A] [List B] -> [List [Pair A B]]
+  | {A B C : Type} [A -> B -> C] [List A] [List B] -> [List C]
+\end{verbatim}
+
+The \texttt{spec-entry} struct (macros.rkt line 203) stores: \texttt{type-datums},
+\texttt{docstring}, \texttt{multi?}, \texttt{srcloc}, \texttt{where-constraints}, \texttt{implicit-binders},
+\texttt{rest-type}.
+\subsection{Extended Spec Syntax}
+\label{sec:orga45539c}
+
+The extension uses Prologos's existing implicit map syntax. Keyword-headed
+children after the type signature are collected into a metadata map:
+
+\begin{verbatim}
+spec sort [List A] -> [List A]
+  :implicits {A : Type}
+  :where (Ord A)
+  :doc "Sorts a list in ascending order using merge sort"
+  :examples
+    - [sort '[3N 1N 2N]] => '[1N 2N 3N]
+    - [sort '[]] => '[]
+  :properties (sortable-laws A)
+  :see-also [reverse filter]
+\end{verbatim}
+\subsubsection{The \texttt{:implicits} Key}
+\label{sec:orge7189f4}
+
+The \texttt{:implicits} key lifts implicit binders out of the type signature into
+metadata, freeing the signature to express pure function shape:
+
+\begin{verbatim}
+;; Current (inline implicits):
+spec gmap {A B : Type} {C : Type -> Type} (Seqable C) -> (Buildable C) -> [A -> B] -> [C A] -> [C B]
+
+;; With :implicits + :where:
+spec gmap [A -> B] -> [C A] -> [C B]
+  :implicits {A B : Type} {C : Type -> Type}
+  :where (Seqable C) (Buildable C)
+\end{verbatim}
+
+All three forms coexist:
+\begin{enumerate}
+\item Inline \texttt{\{A : Type\}} --- for quick one-liners
+\item \texttt{:implicits} key --- for clean multi-line specs
+\item Omitted entirely --- when inference handles it (already works for kind \texttt{Type})
+\end{enumerate}
+
+\textbf{Implementation}: In \texttt{process-spec}, extract \texttt{:implicits} from the metadata map
+and merge with any inline \texttt{\{...\}} binders. The \texttt{extract-implicit-binders}
+function already returns \texttt{(values implicit-binders remaining-tokens)} --- union
+the two sources. Duplicate binders (same name in both) emit a warning and
+deduplicate.
+\subsubsection{Multi-Arity Specs with Metadata}
+\label{sec:orgbdade3f}
+
+\textbf{Decision}: metadata is function-level (shared across all arities). Each \texttt{|}
+branch defines its own type; the metadata applies to the function as a whole.
+
+\begin{verbatim}
+spec greet
+  | Nat -> String
+  | String Nat -> String
+  :doc "Greet someone"
+  :examples
+    - [greet 42N] => "hello 42"
+    - [greet "world" 3N] => "hello world world world"
+  :properties
+    - :name "greet-nat-positive"
+      :forall {n : Nat}
+      :holds [str-length [greet n] > 0N]
+\end{verbatim}
+
+Rationale: properties have \texttt{:forall} binders whose types determine which
+branch they exercise. Examples are concrete calls whose argument types
+determine dispatch. Per-branch metadata is theoretically more precise but
+practically redundant --- the types already carry the dispatch information.
+\subsubsection{Sexp Mode Equivalent}
+\label{sec:org0e1cc49}
+
+\begin{verbatim}
+(spec sort [List A] -> [List A]
+  (:implicits {A : Type})
+  (:where (Ord A))
+  (:doc "Sorts a list in ascending order using merge sort")
+  (:examples (([sort '[3N 1N 2N]] => [1N 2N 3N])
+              ([sort '[]] => [])))
+  (:properties (sortable-laws A)))
+\end{verbatim}
+\subsubsection{How Parsing Works}
+\label{sec:org05fda01}
+
+\begin{enumerate}
+\item The WS reader produces the outer form with keyword-headed children as nested
+s-expressions.
+
+\item \texttt{rewrite-implicit-map} (macros.rkt line 2452) is extended to recognize \texttt{spec}
+as a trigger head alongside \texttt{def\textasciitilde{}/\textasciitilde{}defn}. The function detects keyword-headed
+children \emph{after} the type signature and wraps them into a \texttt{\$brace-params}
+(map literal) node.
+
+\item \texttt{process-spec} (macros.rkt line 1314) is extended to look for a trailing map
+after extracting the type signature. Recognized keys are extracted; the entire
+map is stored in a new \texttt{metadata} field on \texttt{spec-entry}.
+
+\item Backward compatibility: specs without keyword children parse identically to
+today. The existing positional \texttt{where} keyword still works; \texttt{:where} in the
+map augments it (union of both constraint sets).
+\end{enumerate}
+\subsection{Supported Keys}
+\label{sec:org6df9fa7}
+
+\subsubsection{Phase 1 (Near-term: syntax + storage)}
+\label{sec:org3643dee}
+
+\begin{center}
+\begin{tabular}{lll}
+Key & Type & Semantics\\
+\hline
+\texttt{:implicits} & \texttt{(listof brace-param-group)} & Implicit type binders (moved from inline)\\
+\texttt{:where} & \texttt{(listof constraint)} & Trait constraints (migrated from positional)\\
+\texttt{:doc} & \texttt{string} & Documentation string\\
+\texttt{:examples} & \texttt{(listof (datum => datum))} & Input/output pairs for auto-test generation\\
+\texttt{:see-also} & \texttt{(listof symbol)} & Cross-references to related specs\\
+\texttt{:since} & \texttt{string} & Version/date introduced\\
+\texttt{:deprecated} & \texttt{string} or \texttt{\#t} & Deprecation notice\\
+\end{tabular}
+\end{center}
+\subsubsection{Phase 2 (Medium-term: property checking)}
+\label{sec:org0add3e9}
+
+\begin{center}
+\begin{tabular}{lll}
+Key & Type & Semantics\\
+\hline
+\texttt{:properties} & \texttt{(listof property-ref)} & Property references or inline property clauses\\
+\texttt{:pre} & \texttt{datum} (args -> Bool) & Precondition (contract on arguments)\\
+\texttt{:post} & \texttt{datum} (args ret -> Bool) & Postcondition (contract on return)\\
+\texttt{:invariant} & \texttt{datum} (\{args ret\} -> Bool) & Relation between args and return (Clojure \texttt{:fn})\\
+\end{tabular}
+\end{center}
+\subsubsection{Phase 3 (Long-term: verification)}
+\label{sec:org03776c9}
+
+\begin{center}
+\begin{tabular}{lll}
+Key & Type & Semantics\\
+\hline
+\texttt{:refines} & \texttt{datum} (result -> Bool) & Refinement predicate, compiles to Sigma type\\
+\texttt{:measure} & \texttt{datum} (args -> Nat) & Termination measure for recursion\\
+\texttt{:decreases} & \texttt{symbol} or \texttt{datum} & What decreases on recursive calls\\
+\texttt{:proof} & \texttt{datum} or \texttt{:auto} & Proof strategy hint for verification\\
+\end{tabular}
+\end{center}
+\subsection{Mapping Spec Keys to Dependent Types}
+\label{sec:org5069bc2}
+
+This is the deep theoretical connection between spec metadata and Prologos's
+type system. Every metadata key has a \emph{type-theoretic interpretation}.
+\subsubsection{Properties as Dependent Types}
+\label{sec:orgf369ca8}
+
+A property "for all x : Nat, add x 0 = x" is a Pi type:
+
+\begin{verbatim}
+;; The property:
+:properties
+  - :name "right-identity"
+    :forall {x : Nat}
+    :holds [eq? [add x 0N] x]
+
+;; Corresponds to the dependent type:
+;; <(x : Nat) -> [Eq Nat [add x 0N] x]>
+;; A function from any Nat to a proof of equality
+\end{verbatim}
+\subsubsection{Preconditions as Refined Arguments}
+\label{sec:org43938ab}
+
+\begin{verbatim}
+;; The contract:
+spec divide Int Int -> Int
+  :pre (fn [x y] [not [eq? y 0]])
+
+;; Maps to the dependent type:
+;; <(x : Int) -> (y : Int) -> [Not [Eq Int y 0]] -> Int>
+;; Third argument is a proof that y /= 0
+\end{verbatim}
+\subsubsection{Postconditions as Refined Return Types}
+\label{sec:org96f074c}
+
+\begin{verbatim}
+;; The contract:
+spec abs Int -> Int
+  :post (fn [x result] [>= result 0])
+
+;; Maps to:
+;; <(x : Int) -> <(result : Int) * [GTE result 0]>>
+;; Return type is a Sigma pair: the result AND a proof it's non-negative
+\end{verbatim}
+\subsubsection{Invariants as Dependent Function Types}
+\label{sec:org39e4f41}
+
+\begin{verbatim}
+;; Clojure spec's :fn relation:
+spec ranged-rand Int Int -> Int
+  :invariant (fn [start end result]
+    [and [>= result start] [< result end]])
+
+;; Maps to:
+;; <(start : Int) -> (end : Int) -> {v : Int | v >= start, v < end}>
+\end{verbatim}
+\subsubsection{The Graduation Path}
+\label{sec:orge6b6e58}
+
+The key design insight: \emph{the same spec syntax upgrades from testing to proving
+without modification}. At Phase 2, properties/contracts are runtime checks
+(QuickCheck generators from types, contract wrappers at call boundaries). At
+Phase 3, the same properties become proof obligations that the type checker
+verifies statically. The syntax is identical; the verification backend upgrades.
+
+\begin{center}
+\begin{tabular}{rlll}
+Phase & \texttt{:properties} & \texttt{:pre} / \texttt{:post} & \texttt{:refines}\\
+\hline
+2 & Runtime QuickCheck & Runtime contracts & Runtime assertion\\
+3 & Proof obligation & Refined Pi type & Sigma compilation\\
+\end{tabular}
+\end{center}
+\section{Part III: Typed Holes (\texttt{??})}
+\label{sec:orga27a4ca}
+
+\subsection{Motivation}
+\label{sec:org8ee21f8}
+
+Agda and Idris demonstrate that \emph{holes} are the foundation of interactive
+development in dependently-typed languages. The programmer writes what they know,
+marks what they don't with a hole, and the type system reports what's needed.
+
+Prologos already has \texttt{\_} (inference hole / wildcard), which means "infer this
+for me automatically." The \texttt{??} typed hole means something fundamentally
+different: "I don't know what goes here --- show me what's possible."
+\subsection{Syntax}
+\label{sec:org9947416}
+
+\begin{verbatim}
+;; Unnamed hole:
+defn reverse
+  | [nil]        -> nil
+  | [[cons h t]] -> ??
+
+;; Named hole:
+defn zip-with [f xs ys]
+  match [xs ys]
+    | [nil _]              -> nil
+    | [_ nil]              -> nil
+    | [[cons x xs'] [cons y ys']] -> [cons ??combine ??recurse]
+\end{verbatim}
+\subsubsection{Reader}
+\label{sec:org2a8b72a}
+
+The WS reader recognizes \texttt{??} (and \texttt{??identifier}) as a token type
+\texttt{'typed-hole}. The form-builder emits \texttt{(\$typed-hole)} or \texttt{(\$typed-hole name)}
+sentinel. The parser converts this to \texttt{expr-typed-hole} (new AST node).
+\subsubsection{Distinction from \texttt{\_}}
+\label{sec:orgf283c31}
+
+\begin{center}
+\begin{tabular}{lll}
+Feature & \texttt{\_} (inference hole) & \texttt{??} (typed hole)\\
+\hline
+Intent & "Infer this for me" & "Help me fill this in"\\
+Behavior & Silent, automatic & Interactive, diagnostic\\
+Output & Resolved type/value & Hole report to editor\\
+Use case & Type inference & Development workflow\\
+\end{tabular}
+\end{center}
+\subsubsection{Hole Report}
+\label{sec:orge5242be}
+
+When the type checker encounters \texttt{expr-typed-hole}, it produces a diagnostic
+(not an error) containing:
+
+\begin{verbatim}
+Hole ??combine : [List A]
+Context:
+  x  : A
+  xs' : [List A]
+  y  : B
+  ys' : [List B]
+  f  : A -> B -> C
+  zip-with : [A -> B -> C] -> [List A] -> [List B] -> [List C]
+Suggestions:
+  [f x y]            -- from applying f to available arguments
+  [cons [f x y] ...]  -- from matching the expected List type
+\end{verbatim}
+
+The editor protocol (future work) would transmit this as structured data.
+\subsection{"The What?What?" Interaction Model}
+\label{sec:org01d7ed4}
+
+The envisioned workflow:
+
+\begin{enumerate}
+\item Write \texttt{spec} with type signature, properties, examples
+\item Write \texttt{defn} skeleton with \texttt{??} holes for unknown parts
+\item Press key command --- the type system reports what each hole needs
+\item Select a suggestion or refine manually
+\item Repeat until all holes are filled and properties hold
+\end{enumerate}
+
+This is fundamentally the Agda/Idris interaction model, but using Prologos's
+structured spec metadata to provide richer suggestions (e.g., if a property says
+the function is commutative, the case-split suggestions can leverage that).
+\section{Part IV: The \texttt{property} Keyword}
+\label{sec:org0e1a952}
+
+\subsection{Motivation}
+\label{sec:org4772d74}
+
+Many functions share the same properties. Sorting functions are idempotent.
+Monoids have identity and associativity. Functors preserve composition. Writing
+these properties inline on every \texttt{spec} is repetitive and error-prone.
+
+The \texttt{property} keyword provides reusable, composable proposition groups ---
+analogous to \texttt{bundle} for traits. The parallel is exact:
+
+\begin{center}
+\begin{tabular}{lll}
+Concept & For methods & For propositions\\
+\hline
+Single declaration & \texttt{trait} & individual \texttt{:holds} clause\\
+Named group & \texttt{bundle} & \texttt{property}\\
+Composition & \texttt{bundle} includes traits/bundles & \texttt{property} includes properties\\
+Attachment to spec & \texttt{:where (Ord A)} & \texttt{:properties (sortable-laws A)}\\
+Attachment to trait & (implicit) & \texttt{:laws (functor-laws F)}\\
+\end{tabular}
+\end{center}
+\subsection{Syntax}
+\label{sec:org81e4d5a}
+
+\subsubsection{Basic Declaration}
+\label{sec:org1de4fc8}
+
+\begin{verbatim}
+property sortable-laws {A : Type}
+  :where (Ord A)
+  - :name "idempotent"
+    :forall {xs : [List A]}
+    :holds [eq? [sort [sort xs]] [sort xs]]
+  - :name "length-preserving"
+    :forall {xs : [List A]}
+    :holds [eq? [length [sort xs]] [length xs]]
+  - :name "ordered-output"
+    :forall {xs : [List A]}
+    :holds [sorted? [sort xs]]
+\end{verbatim}
+
+A \texttt{property} is a named, parameterized conjunction of propositions. Each clause
+is a universally quantified boolean assertion. The \texttt{:where} constrains what
+types the property is meaningful for.
+\subsubsection{Usage in \texttt{spec}}
+\label{sec:orgfc98e01}
+
+\begin{verbatim}
+spec sort [List A] -> [List A]
+  :implicits {A : Type}
+  :where (Ord A)
+  :properties (sortable-laws A)
+\end{verbatim}
+
+The \texttt{(sortable-laws A)} reference is like \texttt{(Ord A)} in a \texttt{:where} --- a named
+requirement, parameterized by type variables from the spec.
+\subsection{Composition via \texttt{:includes}}
+\label{sec:org95991e5}
+
+Properties compose via conjunction, paralleling \texttt{bundle}:
+
+\begin{verbatim}
+property semigroup-laws {A : Type}
+  :where (Add A)
+  - :name "associativity"
+    :forall {x y z : A}
+    :holds [eq? [add [add x y] z] [add x [add y z]]]
+
+property monoid-laws {A : Type}
+  :where (Add A) (AdditiveIdentity A)
+  :includes (semigroup-laws A)
+  - :name "left-identity"
+    :forall {x : A}
+    :holds [eq? [add additive-identity x] x]
+  - :name "right-identity"
+    :forall {x : A}
+    :holds [eq? [add x additive-identity] x]
+
+property group-laws {A : Type}
+  :where (Add A) (AdditiveIdentity A) (Neg A)
+  :includes (monoid-laws A)
+  - :name "left-inverse"
+    :forall {x : A}
+    :holds [eq? [add [neg x] x] additive-identity]
+  - :name "right-inverse"
+    :forall {x : A}
+    :holds [eq? [add x [neg x]] additive-identity]
+\end{verbatim}
+
+\texttt{group-laws} includes \texttt{monoid-laws} which includes \texttt{semigroup-laws}. Flattened:
+\texttt{group-laws} is the conjunction of all six properties.
+\subsection{The Logic Programming Reading}
+\label{sec:org3c61716}
+
+From the sequent calculus perspective:
+
+\begin{verbatim}
+property P {A} :where (C₁ A) (C₂ A) :includes (Q A) =
+  Γ, C₁(A), C₂(A) ⊢ Q(A) ∧ p₁(A) ∧ p₂(A) ∧ ...
+\end{verbatim}
+
+Each \texttt{:holds} clause is a proposition. \texttt{:includes} is conjunction. The whole
+\texttt{property} is a universally quantified sequent: "for all A satisfying C₁ and C₂,
+the conjunction of all these propositions holds."
+
+When attached to a spec with \texttt{:properties (P A)}, you assert that your
+implementation satisfies that sequent. At Phase 2 (QuickCheck), each conjunct
+becomes a test. At Phase 3 (verification), each conjunct becomes a proof
+obligation.
+
+The composability is clean because conjunction is associative and commutative ---
+the order and nesting of \texttt{:includes} don't matter; the result is always a flat
+set of propositions.
+\subsection{Parameterized Properties (Higher-Order)}
+\label{sec:org04619f5}
+
+Properties can be parameterized over functions, not just types:
+
+\begin{verbatim}
+;; Properties about ANY sorting function
+property sorting-properties {A : Type} {f : [List A] -> [List A]}
+  :where (Ord A)
+  - :name "idempotent"
+    :forall {xs : [List A]}
+    :holds [eq? [f [f xs]] [f xs]]
+  - :name "permutation"
+    :forall {xs : [List A]}
+    :holds [same-elements? xs [f xs]]
+  - :name "ordered"
+    :forall {xs : [List A]}
+    :holds [sorted? [f xs]]
+
+;; Attach to multiple implementations:
+spec sort [List A] -> [List A]
+  :implicits {A : Type}
+  :where (Ord A)
+  :properties (sorting-properties A sort)
+
+spec merge-sort [List A] -> [List A]
+  :implicits {A : Type}
+  :where (Ord A)
+  :properties (sorting-properties A merge-sort)
+\end{verbatim}
+
+Define the contract once, attach it to any implementation.
+\subsection{\texttt{:laws} on Traits}
+\label{sec:org2a67970}
+
+A trait can reference its laws:
+
+\begin{verbatim}
+property functor-laws {F : Type -> Type}
+  :where (Functor F)
+  - :name "identity"
+    :forall {xs : [F A]}
+    :holds [eq? [fmap id xs] xs]
+  - :name "composition"
+    :forall {f : [A -> B]} {g : [B -> C]} {xs : [F A]}
+    :holds [eq? [fmap [>> f g] xs] [fmap g [fmap f xs]]]
+
+trait Functor {F : Type -> Type}
+  :laws (functor-laws F)
+  spec fmap {A B : Type} [A -> B] -> [F A] -> [F B]
+\end{verbatim}
+
+\texttt{:laws} says "any instance of this trait is expected to satisfy these
+properties." When you write \texttt{instance Functor List}, the system knows to check
+\texttt{(functor-laws List)}. At Phase 2: generate \texttt{List}-specialized QuickCheck tests.
+At Phase 3: proof obligations.
+\subsection{Hierarchical Laws (Functor → Applicative → Monad)}
+\label{sec:org56b910a}
+
+\begin{verbatim}
+property applicative-laws {F : Type -> Type}
+  :where (Applicative F)
+  :includes (functor-laws F)
+  - :name "identity"
+    :forall {xs : [F A]}
+    :holds [eq? [ap [pure id] xs] xs]
+  - :name "homomorphism"
+    :forall {f : [A -> B]} {x : A}
+    :holds [eq? [ap [pure f] [pure x]] [pure [f x]]]
+
+property monad-laws {M : Type -> Type}
+  :where (Monad M)
+  :includes (applicative-laws M)
+  - :name "left-identity"
+    :forall {a : A} {f : [A -> [M B]]}
+    :holds [eq? [bind [pure a] f] [f a]]
+  - :name "right-identity"
+    :forall {ma : [M A]}
+    :holds [eq? [bind ma pure] ma]
+  - :name "associativity"
+    :forall {ma : [M A]} {f : [A -> [M B]]} {g : [B -> [M C]]}
+    :holds [eq? [bind [bind ma f] g] [bind ma [fn [a] [bind [f a] g]]]]
+\end{verbatim}
+\subsection{Name Scoping in \texttt{:includes}}
+\label{sec:orgef070df}
+
+When \texttt{monad-laws} includes \texttt{applicative-laws} which includes \texttt{functor-laws},
+and both \texttt{monad-laws} and \texttt{functor-laws} define a property named \texttt{"identity"}:
+names are scoped to their declaring \texttt{property} block.
+
+Flattened property names use \texttt{/} qualification:
+\texttt{functor-laws/identity}, \texttt{applicative-laws/identity}, \texttt{monad-laws/left-identity}.
+
+This parallels how trait methods are scoped to their trait.
+\subsection{The Symmetry}
+\label{sec:org7b72b98}
+
+\begin{verbatim}
+trait     : Type → Set of method signatures     (what you must implement)
+bundle    : conjunction of traits                (shorthand for multiple traits)
+property  : Type → Set of propositions           (what must be true)
+  includes: conjunction of properties            (shorthand for multiple properties)
+
+spec      : function → type + metadata
+  :where  : trait constraints                    (what the types must support)
+  :properties : property constraints             (what the function must satisfy)
+
+instance  : Type → method implementations        (how you implement)
+  (auto)  : Type → property evidence             (how you prove / test)
+\end{verbatim}
+
+Traits say what operations exist. Properties say what laws they obey. Today only
+the first is checked; this design gives us a path to checking the second.
+\section{Part V: Expressing Higher-Kinded Pi Types Ergonomically}
+\label{sec:orgeeb260e}
+
+\subsection{The Problem}
+\label{sec:orgae55810}
+
+Complex higher-kinded and higher-rank types are unreadable:
+
+\begin{verbatim}
+;; Current xf-compose signature:
+spec xf-compose {A B C : Type} <(S :0 Type) -> [S -> B -> S] -> S -> A -> S> <(S :0 Type) -> [S -> C -> S] -> S -> B -> S> -> <(S :0 Type) -> [S -> C -> S] -> S -> A -> S>
+\end{verbatim}
+
+The transducer module already identifies the abstraction in a comment:
+\texttt{Type: Xf A B = forall R. (R -> B -> R) -> (R -> A -> R)}. With the right name,
+the signature becomes: \texttt{[Xf A B] -> [Xf B C] -> [Xf A C]} --- category-theoretic
+composition, instantly readable.
+\subsection{Progressive Complexity Levels}
+\label{sec:org0cad009}
+
+\subsubsection{Level 0: No types (inference only)}
+\label{sec:orgf108ba9}
+
+\begin{verbatim}
+defn add [x y] [nat-add x y]
+\end{verbatim}
+\subsubsection{Level 1: Simple spec (monomorphic)}
+\label{sec:org1f36fc0}
+
+\begin{verbatim}
+spec add Nat Nat -> Nat
+defn add [x y] [nat-add x y]
+\end{verbatim}
+\subsubsection{Level 2: Polymorphic spec}
+\label{sec:orgb11e810}
+
+\begin{verbatim}
+spec id A -> A
+defn id [x] x
+\end{verbatim}
+
+(\texttt{\{A : Type\}} inferred from \texttt{A} appearing free in signature)
+\subsubsection{Level 3: Constrained polymorphism}
+\label{sec:orgdaba1b2}
+
+\begin{verbatim}
+spec sort [List A] -> [List A]
+  :where (Ord A)
+defn sort [xs] ...
+\end{verbatim}
+\subsubsection{Level 4: Higher-kinded polymorphism}
+\label{sec:org38b8e50}
+
+\begin{verbatim}
+spec fmap [A -> B] -> [F A] -> [F B]
+  :where (Functor F)
+  :doc "Apply a function inside a functor"
+  :properties (functor-laws F)
+defn fmap [f xs] ...
+\end{verbatim}
+
+(\texttt{\{A B : Type\}} inferred; \texttt{\{F : Type -> Type\}} inferred from \texttt{(Functor F)}
+where clause --- the trait declares the kind)
+\subsubsection{Level 5: Named type abstractions (functor)}
+\label{sec:org9f24479}
+
+\begin{verbatim}
+spec xf-compose [Xf A B] -> [Xf B C] -> [Xf A C]
+  :implicits {A B C : Type}
+  :properties (transducer-fusion-laws A B C)
+\end{verbatim}
+
+(\texttt{Xf} defined via \texttt{functor} --- see Part VII)
+\subsubsection{Level 6: Dependent types (Pi)}
+\label{sec:org037b864}
+
+\begin{verbatim}
+spec replicate <(n : Nat) -> A -> [Vec A n]>
+  :implicits {A : Type}
+  :doc "Create a vector of n copies of a value"
+  :examples
+    - [replicate 3N :x] => @[:x :x :x]
+  :properties
+    - :name "correct-length"
+      :forall {n : Nat} {a : A}
+      :holds [eq? [length [replicate n a]] n]
+\end{verbatim}
+\subsubsection{Level 7: Dependent types (Sigma / existential)}
+\label{sec:org7e6c38f}
+
+\begin{verbatim}
+spec filter [A -> Bool] -> [List A] -> <(result : [List A]) * [SubList result xs]>
+  :implicits {A : Type}
+  :doc "Filter elements, with proof that result is a sublist"
+\end{verbatim}
+\subsection{Key Ergonomic Decisions}
+\label{sec:orgcdf26c6}
+
+\begin{enumerate}
+\item \textbf{Pi/Sigma types never need to leak to the surface}: \texttt{functor} declarations
+name complex type abstractions with approachable metadata. The underlying
+Pi type lives in \texttt{:unfolds}, consulted only when needed.
+
+\item \textbf{Angle brackets contain the complexity}: \texttt{<...>} delimits the dependent part
+of a type. Everything outside angle brackets is familiar ML-style syntax.
+
+\item \textbf{Metadata explains the theory}: The \texttt{:doc} key provides human-readable
+explanation. Properties double as documentation and specification.
+
+\item \textbf{Examples ground the abstraction}: Every complex type should have concrete
+examples. The \texttt{:examples} key makes this a first-class concern.
+
+\item \textbf{Where-clauses read as English}: "sort takes a list of A where A has ordering"
+is near-English. The trait constraint system hides the dictionary-passing
+mechanism.
+
+\item \textbf{Properties express what the function \emph{means}}: Rather than encoding
+everything in the type (which can be opaque), properties express semantic
+invariants in a universally readable format.
+
+\item \textbf{\texttt{:implicits} declutters signatures}: Implicit binders move to metadata when
+they would add visual weight to the type signature.
+\end{enumerate}
+\section{Part VI: Improved Implicit Inference}
+\label{sec:org1651ace}
+
+Today, \texttt{\{A : Type\}} is required even when \texttt{A} appears in the type signature
+(e.g., \texttt{[List A] -> Nat}). The type checker can already infer this in many
+cases. Two improvements are proposed:
+\subsection{Direction 1: Auto-introduce unbound type variables}
+\label{sec:orgc330027}
+
+If a capitalized identifier \texttt{A} appears free in the type signature and is not
+bound by any explicit binder, auto-introduce \texttt{\{A : Type\}}. This already works
+for simple cases; the proposal is to make it the documented, reliable behavior.
+
+\begin{verbatim}
+;; These would be equivalent:
+spec length {A : Type} [List A] -> Nat
+spec length [List A] -> Nat
+\end{verbatim}
+\subsection{Direction 2: Kind inference from \texttt{:where} clauses}
+\label{sec:org01efac9}
+
+If \texttt{C} appears in \texttt{:where (Seqable C)} and \texttt{Seqable} is declared over
+\texttt{\{C : Type -> Type\}}, infer \texttt{C}'s kind from the where clause. This eliminates
+the most annoying case --- having to write \texttt{\{C : Type -> Type\}} just because
+you use an HKT trait.
+
+\begin{verbatim}
+;; These would be equivalent:
+spec gmap {A B : Type} {C : Type -> Type} [A -> B] -> [C A] -> [C B]
+  :where (Seqable C) (Buildable C)
+
+spec gmap [A -> B] -> [C A] -> [C B]
+  :where (Seqable C) (Buildable C)
+\end{verbatim}
+
+Note: \texttt{propagate-kinds-from-constraints} already does this internally. The
+proposal is to make it work when explicit \texttt{\{...\}} binders are omitted entirely.
+\subsection{Explicit Always Available}
+\label{sec:orge509b73}
+
+Explicit binders remain for: pedagogic clarity, disambiguation when inference
+produces unexpected results, and the rare cases where no constraining position
+exists (e.g., \texttt{spec empty \{A : Type\} [List A]}).
+\section{Part VII: The \texttt{functor} Keyword}
+\label{sec:org643c950}
+
+\subsection{Motivation}
+\label{sec:org8ecdc2a}
+
+The \texttt{functor} keyword provides named type abstractions with category-theoretic
+metadata. It solves the fundamental readability problem of higher-kinded and
+higher-rank types by giving them \emph{meaning through structure}, not just through
+their expansion.
+
+The design philosophy: you understand \texttt{Xf A B} by knowing what it \emph{does} (":doc
+A transducer"), how it \emph{combines} (":compose xf-compose"), and what \emph{rules} it
+follows (":laws transducer-fusion-laws"). The Pi type it unfolds to is available
+but is consulted last, not first.
+\subsection{Syntax}
+\label{sec:org58e0864}
+
+\begin{verbatim}
+functor Xf {A B : Type}
+  :doc "A transducer: transforms A-reductions into B-reductions"
+  :compose xf-compose
+  :identity id-xf
+  :laws (transducer-fusion-laws A B)
+  :unfolds <(S :0 Type) -> [S -> B -> S] -> S -> A -> S>
+\end{verbatim}
+\subsection{Progressive Disclosure}
+\label{sec:org96ac7a6}
+
+Like \texttt{spec}, the metadata keys are progressive. Simple synonyms are minimal:
+
+\begin{verbatim}
+functor FilePath
+  :unfolds String
+\end{verbatim}
+
+Parameterized synonyms add type parameters:
+
+\begin{verbatim}
+functor Result {A}
+  :unfolds [Either String A]
+  :doc "A computation that may fail with a string error"
+\end{verbatim}
+
+Algebraically structured types add operations:
+
+\begin{verbatim}
+functor Xf {A B : Type}
+  :doc "A transducer: transforms A-reductions into B-reductions"
+  :compose xf-compose
+  :identity id-xf
+  :unfolds <(S :0 Type) -> [S -> B -> S] -> S -> A -> S>
+\end{verbatim}
+
+Full category-theoretic treatment adds laws:
+
+\begin{verbatim}
+functor Lens {S T A B : Type}
+  :doc "A bidirectional accessor: view and update a part of a structure"
+  :compose lens-compose
+  :identity lens-id
+  :laws (lens-laws S T A B)
+  :see-also [Prism Traversal Iso]
+  :unfolds <{F : Type -> Type} -> (Functor F) -> [A -> [F B]] -> S -> [F T]>
+\end{verbatim}
+\subsection{Category-Theoretic Metadata Keys}
+\label{sec:orgf638b8b}
+
+The keys map CT concepts to approachable language:
+
+\begin{center}
+\begin{tabular}{lll}
+CT concept & Key & Meaning in plain English\\
+\hline
+Object mapping & \texttt{:unfolds} & "What this actually expands to under the hood"\\
+Morphism composition & \texttt{:compose} & "How to chain two of these together"\\
+Identity morphism & \texttt{:identity} & "The do-nothing version"\\
+Laws & \texttt{:laws} & "What rules these always follow"\\
+Documentation & \texttt{:doc} & "What this means in human terms"\\
+Natural transformation & \texttt{:transforms} & "How to convert between different functors" (future)\\
+Adjunction & \texttt{:adjoint} & "What functor is this paired with" (far future)\\
+\end{tabular}
+\end{center}
+
+Only \texttt{:unfolds} is required (for Phase 1). The rest are progressive. A user
+who never thinks about category theory writes:
+
+\begin{verbatim}
+functor Xf {A B : Type}
+  :doc "A transducer"
+  :unfolds <(S :0 Type) -> [S -> B -> S] -> S -> A -> S>
+\end{verbatim}
+
+A user who cares about algebraic structure adds \texttt{:compose} and \texttt{:identity}. A
+user who wants verification adds \texttt{:laws}. The CT is always there but only
+surfaces when you reach for it.
+\subsection{Why \texttt{functor} and Not \texttt{abbrev} or \texttt{type}}
+\label{sec:org026124d}
+
+\texttt{abbrev} doesn't capture the ambition. An abbreviation is just a shorter name
+for the same thing. What we're proposing is a \emph{named abstraction with declared
+structure} --- the operations, laws, documentation are first-class. \texttt{abbrev}
+makes you think of \texttt{typedef} --- mechanical shortening. \texttt{functor} makes you
+think of structure-preserving mappings --- which is what these actually are.
+
+\texttt{type} clashes with \texttt{deftype} (which creates algebraic data types with
+constructors). A \texttt{functor} doesn't create constructors; it names a type with
+structure.
+
+The \texttt{functor} (keyword) vs \texttt{Functor} (trait) naming is consistent with Prologos's
+existing pattern: all keywords are lowercase (\texttt{spec}, \texttt{defn}, \texttt{trait}, \texttt{bundle});
+all type/trait names are capitalized. The relationship: a \texttt{functor} declaration
+might \emph{itself} be a \texttt{Functor} instance (in the trait sense). The keyword names
+the concept; the trait constrains it.
+\subsection{Transparency Model}
+\label{sec:org33b0c02}
+
+\texttt{functor} declarations are transparent by default (like Lean's \texttt{abbrev}). The
+type checker unfolds \texttt{Xf A B} to its \texttt{:unfolds} form during elaboration. Trait
+instances carry through: if \texttt{Eq (Xf Nat Bool)} is needed and \texttt{Eq} has an
+instance for the expanded type, it resolves.
+
+Future consideration: opaque functors (no \texttt{:unfolds}, only described by
+operations) for abstract type boundaries. Deferred to post-Phase 1.
+\subsection{Error Messages}
+\label{sec:orgcad4477}
+
+Error messages show the \texttt{functor} name by default:
+
+\begin{verbatim}
+Error: Expected [Xf Nat Bool], got [Xf Nat Nat]
+\end{verbatim}
+
+Not the expanded form. An \texttt{-{}-{}expand-types} flag or editor hover reveals the
+full type when needed.
+\subsection{How \texttt{functor} Composes with \texttt{spec}, \texttt{property}, and \texttt{trait}}
+\label{sec:org8323b77}
+
+\begin{verbatim}
+;; The type abstraction
+functor Xf {A B : Type}
+  :doc "A transducer: transforms A-reductions into B-reductions"
+  :compose xf-compose
+  :identity id-xf
+  :laws (transducer-fusion-laws A B)
+  :unfolds <(S :0 Type) -> [S -> B -> S] -> S -> A -> S>
+
+;; Reusable properties (using the functor name!)
+property transducer-fusion-laws {A B C : Type}
+  - :name "compose-associativity"
+    :forall {f : [Xf A B]} {g : [Xf B C]} {h : [Xf C D]}
+    :holds [eq? [xf-compose [xf-compose f g] h] [xf-compose f [xf-compose g h]]]
+  - :name "left-identity"
+    :forall {f : [Xf A B]}
+    :holds [eq? [xf-compose id-xf f] f]
+  - :name "right-identity"
+    :forall {f : [Xf A B]}
+    :holds [eq? [xf-compose f id-xf] f]
+
+;; Function specs using the functor name
+spec xf-compose [Xf A B] -> [Xf B C] -> [Xf A C]
+  :implicits {A B C : Type}
+  :doc "Compose two transducers (apply first argument first)"
+  :properties (transducer-fusion-laws A B C)
+
+spec map-xf [A -> B] -> [Xf A B]
+  :implicits {A B : Type}
+  :doc "Transform each element through f before passing to reducer"
+
+spec filter-xf [A -> Bool] -> [Xf A A]
+  :implicits {A : Type}
+  :doc "Only pass elements satisfying pred to the reducer"
+
+spec transduce [Xf A B] -> [R -> B -> R] -> R -> [List A] -> R
+  :implicits {A B R : Type}
+  :doc "Apply a transducer to a list with a reducer and initial accumulator"
+
+spec into-list [Xf A B] -> [List A] -> [List B]
+  :implicits {A B : Type}
+  :doc "Transduce into a correctly-ordered list"
+  :examples
+    - [into-list [map-xf suc] '[1N 2N 3N]] => '[2N 3N 4N]
+\end{verbatim}
+
+The \texttt{functor} names the type. The \texttt{property} states its laws. The \texttt{spec} uses
+both. Everything is readable. The Pi types are present exactly once, in
+\texttt{:unfolds}, consulted only when necessary.
+\section{Part VIII: Implementation Considerations}
+\label{sec:orgf1312d7}
+
+\subsection{spec-entry Struct Extension}
+\label{sec:org319a199}
+
+The recommended approach: add a single \texttt{metadata} field that stores the entire
+keyword map as a hash table. Individual accessors extract from the metadata hash.
+This avoids struct migration pain:
+
+\begin{verbatim}
+(struct spec-entry
+  (type-datums docstring multi? srcloc where-constraints
+   implicit-binders rest-type
+   metadata)  ;; <-- one new field: hasheq of keyword -> datum
+  #:transparent)
+
+;; Accessor helpers:
+(define (spec-entry-examples e)
+  (hash-ref (or (spec-entry-metadata e) (hasheq)) ':examples '()))
+(define (spec-entry-properties e)
+  (hash-ref (or (spec-entry-metadata e) (hasheq)) ':properties '()))
+(define (spec-entry-implicits-meta e)
+  (hash-ref (or (spec-entry-metadata e) (hasheq)) ':implicits #f))
+\end{verbatim}
+\subsection{rewrite-implicit-map Extension}
+\label{sec:orgd4ef215}
+
+Currently scoped to \texttt{def} and \texttt{defn} heads (macros.rkt line 2452). Extending to
+\texttt{spec} is a one-line change in the \texttt{memq} check. However, the spec head requires
+special handling: the type signature tokens must be separated from the trailing
+keyword map. This can be done by scanning for the first keyword-headed child
+whose indentation matches the spec's indentation level.
+\subsection{Typed Hole AST Node}
+\label{sec:org4961345}
+
+\begin{verbatim}
+(struct expr-typed-hole (name) #:transparent)  ;; name is #f or symbol
+\end{verbatim}
+
+Type checker (typing-core.rkt): when encountering \texttt{expr-typed-hole}, compute
+the expected type from the context and emit a diagnostic report rather than
+returning \texttt{(expr-error)}.
+\subsection{property-entry Store}
+\label{sec:org40de4d9}
+
+\begin{verbatim}
+(struct property-entry
+  (name           ;; symbol
+   params         ;; alist of ((name . kind) ...)
+   where-clauses  ;; (listof constraint)
+   includes       ;; (listof (property-ref ...))
+   clauses        ;; (listof property-clause)
+   metadata)      ;; hasheq for extensibility
+  #:transparent)
+
+(struct property-clause
+  (name           ;; string (human-readable label)
+   forall-binders ;; alist of ((name . type) ...)
+   holds-expr)    ;; datum (boolean expression)
+  #:transparent)
+
+(define current-property-store (make-parameter (hasheq)))
+\end{verbatim}
+
+\texttt{:includes} references are resolved at registration time by looking up the
+included property in the store and appending its (flattened) clauses. Clause
+names are prefixed with the declaring property's name and \texttt{/}.
+\subsection{functor-entry Store}
+\label{sec:orgc69b8df}
+
+\begin{verbatim}
+(struct functor-entry
+  (name         ;; symbol (capitalized)
+   params       ;; alist of ((name . kind) ...)
+   unfolds      ;; type datum (the expansion)
+   metadata)    ;; hasheq (:compose, :identity, :laws, :doc, etc.)
+  #:transparent)
+
+(define current-functor-store (make-parameter (hasheq)))
+\end{verbatim}
+
+During elaboration, when the elaborator encounters a capitalized identifier
+followed by arguments that matches a registered functor, it expands to the
+\texttt{unfolds} form with parameters substituted.
+\subsection{\texttt{:implicits} Merging in process-spec}
+\label{sec:orgdc7080a}
+
+\begin{verbatim}
+;; In process-spec, after extracting metadata:
+(define meta-implicits
+  (if metadata
+      (extract-binders-from-implicits-key metadata)
+      '()))
+(define merged-implicits
+  (deduplicate-binders (append inline-implicits meta-implicits)))
+;; Warn on duplicates between inline and :implicits
+\end{verbatim}
+\subsection{Grammar Extensions}
+\label{sec:org93369ee}
+
+Additions to \texttt{grammar.ebnf}:
+
+\begin{verbatim}
+(* Typed holes for interactive development *)
+typed-hole      = '??' , [ identifier ] ;
+
+(* Extended spec with optional metadata *)
+spec-form       = 'spec' , identifier , spec-body , [ spec-metadata ] ;
+spec-metadata   = spec-meta-entry , { spec-meta-entry } ;
+spec-meta-entry = keyword-literal , spec-meta-value ;
+spec-meta-value = expr
+                | dash-list
+                | spec-meta-map
+                ;
+
+(* Property declarations *)
+property-form   = 'property' , identifier , [ implicit-binders ]
+                , [ property-metadata ] , { property-clause } ;
+property-metadata = property-meta-entry , { property-meta-entry } ;
+property-meta-entry = ':where' , '(' , constraint , { constraint } , ')'
+                    | ':includes' , '(' , property-ref , { property-ref } , ')'
+                    ;
+property-clause = '-' , ':name' , string-literal
+                , ':forall' , '{' , binder , { binder } , '}'
+                , ':holds' , expr ;
+
+(* Functor declarations *)
+functor-form    = 'functor' , identifier , [ implicit-binders ]
+                , functor-metadata ;
+functor-metadata = functor-meta-entry , { functor-meta-entry } ;
+functor-meta-entry = ':unfolds' , type-expr
+                   | ':compose' , identifier
+                   | ':identity' , identifier
+                   | ':laws' , '(' , property-ref , { property-ref } , ')'
+                   | ':doc' , string-literal
+                   | ':see-also' , '[' , identifier , { identifier } , ']'
+                   ;
+\end{verbatim}
+\section{Part IX: Worked Examples}
+\label{sec:orge0fe50e}
+
+\subsection{Example 1: Simple spec with documentation, examples, and reusable properties}
+\label{sec:org6554574}
+
+\begin{verbatim}
+property cons-head-law {A : Type}
+  - :name "head-of-cons"
+    :forall {x : A} {xs : [List A]}
+    :holds [eq? [head [cons x xs]] [just x]]
+
+spec head [List A] -> A?
+  :implicits {A : Type}
+  :doc "Returns the first element, or nothing if empty"
+  :examples
+    - [head '[1N 2N 3N]] => [just 1N]
+    - [head '[]] => nothing
+  :properties (cons-head-law A)
+
+defn head
+  | [nil]        -> nothing
+  | [[cons h _]] -> [just h]
+\end{verbatim}
+\subsection{Example 2: Contract-style spec}
+\label{sec:orgd624775}
+
+\begin{verbatim}
+spec divide Int Int -> Int
+  :pre (fn [_ y] [not [eq? y 0]])
+  :post (fn [x y r] [eq? [+ [* r y] [int-mod x y]] x])
+  :doc "Integer division; undefined for zero divisor"
+
+defn divide [x y] [int-div x y]
+\end{verbatim}
+\subsection{Example 3: Higher-kinded functor laws (using property + :laws)}
+\label{sec:org4402f63}
+
+\begin{verbatim}
+property functor-laws {F : Type -> Type}
+  :where (Functor F)
+  - :name "identity-law"
+    :forall {xs : [F A]}
+    :holds [eq? [fmap id xs] xs]
+  - :name "composition-law"
+    :forall {f : [A -> B]} {g : [B -> C]} {xs : [F A]}
+    :holds [eq? [fmap [>> f g] xs] [fmap g [fmap f xs]]]
+
+trait Functor {F : Type -> Type}
+  :laws (functor-laws F)
+  spec fmap {A B : Type} [A -> B] -> [F A] -> [F B]
+
+spec fmap [A -> B] -> [F A] -> [F B]
+  :where (Functor F)
+  :properties (functor-laws F)
+\end{verbatim}
+\subsection{Example 4: Transducer module (functor + property + spec)}
+\label{sec:orge98cc3f}
+
+\begin{verbatim}
+ns prologos::data::transducer
+
+functor Xf {A B : Type}
+  :doc "A transducer: transforms A-reductions into B-reductions"
+  :compose xf-compose
+  :identity id-xf
+  :laws (transducer-fusion-laws A B)
+  :unfolds <(S :0 Type) -> [S -> B -> S] -> S -> A -> S>
+
+property transducer-fusion-laws {A B C : Type}
+  - :name "compose-associativity"
+    :forall {f : [Xf A B]} {g : [Xf B C]} {h : [Xf C D]}
+    :holds [eq? [xf-compose [xf-compose f g] h] [xf-compose f [xf-compose g h]]]
+  - :name "left-identity"
+    :forall {f : [Xf A B]}
+    :holds [eq? [xf-compose id-xf f] f]
+  - :name "right-identity"
+    :forall {f : [Xf A B]}
+    :holds [eq? [xf-compose f id-xf] f]
+
+spec map-xf [A -> B] -> [Xf A B]
+  :implicits {A B : Type}
+  :doc "Transform each element through f before passing to reducer"
+
+spec filter-xf [A -> Bool] -> [Xf A A]
+  :implicits {A : Type}
+  :doc "Only pass elements satisfying pred to the reducer"
+
+spec xf-compose [Xf A B] -> [Xf B C] -> [Xf A C]
+  :implicits {A B C : Type}
+  :doc "Compose two transducers (apply first argument first)"
+  :properties (transducer-fusion-laws A B C)
+
+spec transduce [Xf A B] -> [R -> B -> R] -> R -> [List A] -> R
+  :implicits {A B R : Type}
+  :doc "Apply a transducer to a list with a reducer and initial accumulator"
+
+spec into-list [Xf A B] -> [List A] -> [List B]
+  :implicits {A B : Type}
+  :doc "Transduce into a correctly-ordered list"
+  :examples
+    - [into-list [map-xf suc] '[1N 2N 3N]] => '[2N 3N 4N]
+\end{verbatim}
+\subsection{Example 5: Interactive development with ??}
+\label{sec:orge80ea14}
+
+\begin{verbatim}
+spec reverse [List A] -> [List A]
+  :implicits {A : Type}
+  :properties
+    - :name "involution"
+      :forall {xs : [List Nat]}
+      :holds [eq? [reverse [reverse xs]] xs]
+    - :name "length-preserving"
+      :forall {xs : [List Nat]}
+      :holds [eq? [length [reverse xs]] [length xs]]
+
+defn reverse
+  | [nil]        -> nil
+  | [[cons h t]] -> ??
+  ;; Type system reports:
+  ;;   Hole ?? : [List A]
+  ;;   Context: h : A, t : [List A], reverse : [List A] -> [List A]
+  ;;   Suggestions: [append [reverse t] [cons h nil]]
+\end{verbatim}
+\subsection{Example 6: Algebraic property hierarchy}
+\label{sec:org245c983}
+
+\begin{verbatim}
+property semigroup-laws {A : Type}
+  :where (Add A)
+  - :name "associativity"
+    :forall {x y z : A}
+    :holds [eq? [add [add x y] z] [add x [add y z]]]
+
+property monoid-laws {A : Type}
+  :where (Add A) (AdditiveIdentity A)
+  :includes (semigroup-laws A)
+  - :name "left-identity"
+    :forall {x : A}
+    :holds [eq? [add additive-identity x] x]
+  - :name "right-identity"
+    :forall {x : A}
+    :holds [eq? [add x additive-identity] x]
+
+;; Usage:
+spec fold [A -> A -> A] -> A -> [List A] -> A
+  :implicits {A : Type}
+  :where (Add A) (AdditiveIdentity A)
+  :properties (monoid-laws A)
+\end{verbatim}
+\subsection{Example 7: Optics (functor for Lens)}
+\label{sec:org7d8861f}
+
+\begin{verbatim}
+functor Lens {S T A B : Type}
+  :doc "A bidirectional accessor: view and update a part of a structure"
+  :compose lens-compose
+  :identity lens-id
+  :laws (lens-laws S T A B)
+  :see-also [Prism Traversal Iso]
+  :unfolds <{F : Type -> Type} -> (Functor F) -> [A -> [F B]] -> S -> [F T]>
+
+spec lens-view [Lens S S A A] -> S -> A
+  :doc "Extract the focus from a structure"
+
+spec lens-set [Lens S S A A] -> A -> S -> S
+  :doc "Replace the focus in a structure"
+  :properties
+    - :name "set-get"
+      :forall {l : [Lens S S A A]} {s : S} {a : A}
+      :holds [eq? [lens-view l [lens-set l a s]] a]
+\end{verbatim}
+\subsection{Example 8: Refinement type (future)}
+\label{sec:org2f6bdb2}
+
+\begin{verbatim}
+spec abs Int -> Int
+  :refines (fn [r] [>= r 0])
+  :doc "Absolute value --- result is always non-negative"
+
+;; Internally, :refines compiles to return type:
+;; <(r : Int) * [GTE r 0]>
+;; The function returns a pair: the result AND a proof of non-negativity
+\end{verbatim}
+\subsection{Example 9: Dependent-type-heavy spec}
+\label{sec:org0fe95e4}
+
+\begin{verbatim}
+spec zip-with-vec <(n : Nat) -> [A -> B -> C] -> [Vec A n] -> [Vec B n] -> [Vec C n]>
+  :implicits {A B C : Type}
+  :doc "Zip two vectors of the same length with a combining function"
+  :examples
+    - [zip-with-vec 3N + @[1 2 3] @[10 20 30]] => @[11 22 33]
+  :properties
+    - :name "preserves-length"
+      :forall {n : Nat} {f : [Int -> Int -> Int]}
+              {xs : [Vec Int n]} {ys : [Vec Int n]}
+      :holds [eq? [vec-length [zip-with-vec n f xs ys]] n]
+\end{verbatim}
+\section{Part X: Phased Roadmap}
+\label{sec:org69b00ad}
+
+\subsection{Phase 1: Syntax and Storage (Near-term)}
+\label{sec:org173d39b}
+
+\textbf{In scope now}:
+\begin{itemize}
+\item Extend \texttt{rewrite-implicit-map} to trigger on \texttt{spec} heads
+\item Extend \texttt{process-spec} to extract keyword entries into metadata hash
+\item Add \texttt{metadata} field to \texttt{spec-entry}
+\item \texttt{:implicits} key: extract from metadata, merge with inline binders
+\item \texttt{:doc} replaces positional docstring; \texttt{:where} augments positional \texttt{where}
+\item Store \texttt{:examples}, \texttt{:see-also} in metadata
+\item \texttt{??} reader token and \texttt{expr-typed-hole} AST node (report-only)
+\item \texttt{property} keyword: parser, store, \texttt{:includes} flattening, name-scoped clauses
+\item \texttt{:laws} key on \texttt{trait} declarations
+\item \texttt{functor} keyword: parser, store, transparent expansion during elaboration
+\item Grammar updates (grammar.ebnf, grammar.org)
+\end{itemize}
+\subsection{Phase 1b: Improved Implicit Inference}
+\label{sec:org84cbb25}
+
+\begin{itemize}
+\item Auto-introduce unbound type variables as \texttt{\{X : Type\}}
+\item Kind inference from \texttt{:where} clauses (extend \texttt{propagate-kinds-from-constraints}
+to work when no explicit binders are present)
+\item Goal: \texttt{\{A : Type\}} almost never needed for kind-\texttt{Type} variables;
+\texttt{\{C : Type -> Type\}} unnecessary when \texttt{:where} pins the kind
+\end{itemize}
+\subsection{Phase 2: Example and Property Checking (Medium-term)}
+\label{sec:org42f4b34}
+
+\begin{itemize}
+\item Parse \texttt{:examples} entries, type-check them, run them as tests
+\item \texttt{Gen} trait for type-directed random value generation
+\item Parse \texttt{:properties}, generate random inputs from types, check \texttt{:holds}
+\item Property checking for \texttt{:laws} on trait instances
+\item Contract wrapping: \texttt{:pre\textasciitilde{}/}:post\textasciitilde{} generate runtime checks at function
+boundaries (Racket-contract style blame tracking)
+\end{itemize}
+\subsection{Phase 3: Refinement and Verification (Long-term)}
+\label{sec:orgb81e8ed}
+
+\begin{itemize}
+\item \texttt{:refines} compiles to Sigma types (return type is \texttt{<(r : T) * P(r)>})
+\item \texttt{:properties} become compile-time proof obligations
+\item Proof search integration: \texttt{:proof :auto} triggers the logic engine
+\item \texttt{:measure} for termination checking
+\item Opaque functors (no \texttt{:unfolds}) for abstract type boundaries
+\end{itemize}
+\subsection{Phase 4: Interactive Theorem Proving (Far future)}
+\label{sec:org90b3558}
+
+\begin{itemize}
+\item Editor protocol for \texttt{??} hole interaction
+\item Case splitting via type information (Agda \texttt{C-c C-c})
+\item Proof search (Agda \texttt{C-c C-a}) via propagator-based logic engine
+\item Refinement reflection (Liquid Haskell style)
+\item \texttt{:transforms} and \texttt{:adjoint} keys on \texttt{functor} for natural transformations
+\end{itemize}
+\section{Part XI: Resolved Design Questions}
+\label{sec:org34386d9}
+
+\begin{enumerate}
+\item \textbf{Should \texttt{:where} in the map replace or augment positional \texttt{where}?}
+\textbf{Decision}: augment (union of both constraint sets). Positional form
+remains for backward compatibility; map form is preferred going forward.
+
+\item \textbf{Should examples use \texttt{=>} or \texttt{->} as the separator?}
+\textbf{Decision}: \texttt{=>} to avoid confusion with the arrow in type signatures.
+
+\item \textbf{How should multi-arity specs handle metadata?}
+\textbf{Decision}: metadata is function-level (shared across all arities). Each
+\texttt{|} branch defines its own type; the metadata applies to the function as a
+whole. Properties' \texttt{:forall} types determine which branch is exercised.
+Examples' argument types determine dispatch.
+
+\item \textbf{Should \texttt{:properties} quantified variables shadow spec's implicit binders?}
+\textbf{Decision}: yes, with a warning. The property is a self-contained
+expression; it should be readable without consulting the outer spec.
+
+\item \textbf{What happens to unrecognized keys?}
+\textbf{Decision}: store silently (forward-compatibility). Tool-specific keys
+(e.g., \texttt{:editor-hint}, \texttt{:benchmark}) can be added without language changes.
+
+\item \textbf{Is \texttt{:unfolds} always required on \texttt{functor}?}
+\textbf{Decision}: yes, for Phase 1. Opaque functors (no \texttt{:unfolds}) deferred to
+Phase 3.
+
+\item \textbf{Should \texttt{functor} handle non-CT uses (plain type synonyms)?}
+\textbf{Decision}: yes --- \texttt{functor} is the single keyword for "I'm naming a type
+concept." Progressive metadata: no \texttt{:compose} means no algebraic structure.
+\end{enumerate}
+\section{References}
+\label{sec:org9941de5}
+
+\subsection{Clojure Spec}
+\label{sec:orgd4d199e}
+\begin{itemize}
+\item \href{https://clojure.org/guides/spec}{Clojure Spec Guide}
+\item \href{https://clojuredocs.org/clojure.spec.alpha/fdef}{s/fdef Reference}
+\item \href{https://clojure.org/about/spec}{Spec Rationale and Overview}
+\end{itemize}
+\subsection{Malli}
+\label{sec:org0d6918d}
+\begin{itemize}
+\item \href{https://github.com/metosin/malli}{Malli GitHub}
+\item \href{https://github.com/metosin/malli/blob/master/docs/function-schemas.md}{Malli Function Schemas}
+\end{itemize}
+\subsection{PropEr}
+\label{sec:org219b434}
+\begin{itemize}
+\item \href{https://github.com/proper-testing/proper}{PropEr GitHub}
+\item \href{https://proper-testing.github.io/tutorials/PropEr\_introduction\_to\_Property-Based\_Testing.html}{PropEr Tutorial}
+\end{itemize}
+\subsection{Agda}
+\label{sec:orge075587}
+\begin{itemize}
+\item \href{https://agda.readthedocs.io/en/latest/tools/auto.html}{Agda Auto Proof Search}
+\item \href{https://agda.readthedocs.io/en/latest/getting-started/a-taste-of-agda.html}{A Taste of Agda}
+\end{itemize}
+\subsection{Idris 2}
+\label{sec:org6842a4c}
+\begin{itemize}
+\item \href{https://idris2.readthedocs.io/en/latest/tutorial/interactive.html}{Idris 2 Interactive Editing}
+\end{itemize}
+\subsection{Lean 4}
+\label{sec:org56182c0}
+\begin{itemize}
+\item \href{https://lean-lang.org/theorem\_proving\_in\_lean4/type\_classes.html}{Lean 4 Type Classes}
+\item \href{https://lean-lang.org/doc/reference/latest/Type-Classes/Instance-Synthesis/}{Lean 4 Instance Synthesis}
+\end{itemize}
+\subsection{Liquid Haskell}
+\label{sec:orgbff9176}
+\begin{itemize}
+\item \href{https://nikivazou.github.io/lh-course/Lecture\_01\_RefinementTypes.html}{Refinement Types Tutorial}
+\item \href{https://goto.ucsd.edu/\~nvazou/refinement\_types\_for\_haskell.pdf}{Refinement Types for Haskell (paper)}
+\end{itemize}
+\subsection{Haskell Type Synonyms}
+\label{sec:orgb1a9154}
+\begin{itemize}
+\item \href{https://wiki.haskell.org/Type\_synonym}{GHC Type Synonyms}
+\end{itemize}
+\subsection{Koka}
+\label{sec:org027bd7d}
+\begin{itemize}
+\item \href{https://koka-lang.github.io/koka/doc/book.html}{Koka Language Book}
+\end{itemize}
+\subsection{F*}
+\label{sec:org66dd166}
+\begin{itemize}
+\item \href{https://github.com/FStarLang/FStar/wiki/Qualifiers-for-definitions-and-declarations}{F* Qualifier Wiki}
+\end{itemize}
+\subsection{1ML}
+\label{sec:org364a6ef}
+\begin{itemize}
+\item \href{https://people.mpi-sws.org/\~rossberg/1ml/1ml-extended.pdf}{1ML (Rossberg) — Core and Modules United}
+\end{itemize}
+\subsection{Racket Contracts}
+\label{sec:orgd6ded2b}
+\begin{itemize}
+\item \href{https://docs.racket-lang.org/guide/contracts.html}{Racket Contracts Guide}
+\end{itemize}
+\end{document}

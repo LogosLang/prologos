@@ -1,0 +1,252 @@
+#+TITLE: Prologos Language Design
+#+AUTHOR: Prologos Project
+#+DATE: 2026-02-22
+
+* Syntax Innovations
+
+** Bracket Sigils Distinguish Paradigms
+Each bracket type signals a different evaluation mode, making the paradigm
+fusion visible at the character level:
+
+| Bracket | Paradigm | Semantics | Example |
+|---------+-------------+-------------------+------------------------------|
+| ~[...]~ | Functional | Evaluate (command) | ~[map inc xs]~ |
+| ~(...)~ | Relational | Resolve (logic) | ~(edge ?from ?to)~ |
+| ~<...>~ | Dependent | Pi/Sigma types | ~<(n : Nat) -> Vec A n>~ |
+| ~@[..]~ | PVec | Persistent vector | ~@[1 2 3]~ |
+| ~'[..]~ | List | Linked list | ~'[1N 2N 3N]~ |
+| ~#{}~ | Set | Hash set | ~#{:a :b :c}~ |
+| ~{}~ | Map | Hash map | ~{:name "Ada" :age 36}~ |
+| ~$~ | Quote | Code-as-data | ~$Foo~ -> ~($quote Foo)~ |
+
+This is not mere syntax coloring --- the reader dispatches differently
+based on the opening delimiter. Each paradigm gets its own visual identity
+while sharing a single underlying AST.
+
+** Significant Whitespace Without Paren Soup
+Prologos achieves homoiconicity with significant whitespace:
+
+- *New line, same indent*: implicit list of arguments
+- *New line, deeper indent*: implicit tree depth (child node)
+- *Bare operator on first line*: implicit evaluation
+
+The result reads like Python but desugars to s-expressions:
+
+#+begin_src prologos
+;; Whitespace mode (primary)
+spec find : {A : Type} [A -> Bool] [List A] -> [Option A]
+defn find [pred xs]
+  match xs
+    | nil -> none
+    | [cons h t] -> if [pred h] [some h] [find pred t]
+
+;; Equivalent s-expression mode (fallback)
+(spec find ({A : Type}) ((-> A Bool) (List A)) (Option A))
+(defn find (pred xs)
+  (match xs
+    (nil none)
+    ((cons h t) (if (pred h) (some h) (find pred t)))))
+#+end_src
+
+Both modes produce identical ASTs. The s-expression mode exists for
+machine generation, testing, and cases where whitespace is ambiguous.
+
+** Dot-Access for Map Fields
+~user.name~ desugars to ~[map-get user :name]~. Module paths use ~::~
+(e.g., ~prologos::data::list~) to avoid ambiguity. The ~.:name~ prefix
+form enables piping: ~|> user .:name~.
+
+** Implicit Map Syntax
+YAML-like indentation-based maps for data literals:
+
+#+begin_src prologos
+def config
+  :name "Alice"
+  :age 42
+  :address
+    :city "Springfield"
+    :state "IL"
+#+end_src
+
+Desugars to ~(def config {:name "Alice" :age 42 :address {:city "Springfield" :state "IL"}})~.
+Only fires for ~def~/~defn~ heads with keyword-started tails --- no false
+positives on function calls.
+
+* Logic/Function Fusion Interface
+
+The anonymous relation (~rel~) is Prologos's key innovation for
+logic-functional fusion. It is to logic programming what ~fn~ (lambda) is to
+functional programming: a first-class, passable, composable value.
+
+#+begin_src prologos
+;; Anonymous relation --- first-class, bindable, passable
+let reachable := (rel [?from ?to ?path]
+  &> (= ?from ?to) (= ?path '[?to | nil])
+  &> (edge ?from ?mid)
+     (reachable ?mid ?to ?rest)
+     (= ?path '[?from | ?rest]))
+
+;; Bridge back to functional world via solve
+match (solve [reachable start end ?p])
+  | [some path] -> path
+  | none -> '[]
+#+end_src
+
+No existing logical or logical-functional language has a true anonymous
+relation that can be bound to names and passed between contexts like a
+lambda.
+
+** Mode Annotations
+Logic variables carry optional mode hints for optimization:
+
+| Mode | Symbol | Meaning |
+|------+--------+-------------------------------|
+| Free | ~?var~ | May be bound or unbound |
+| In | ~-var~ | Must be bound on entry |
+| Out | ~+var~ | Unbound, will be bound by goal |
+
+Mercury-inspired, but optional --- the default ~?~ works for all cases.
+Modes enable the solver to choose more efficient strategies.
+
+* Trait Bundles
+
+Bundles are named conjunctions of trait constraints. They solve the
+diamond problem and superclass brittleness that plague Haskell type classes
+and Rust supertraits.
+
+#+begin_src prologos
+bundle Comparable := (Eq, Ord)
+bundle Numeric := (Add, Sub, Mul, Neg, Abs, FromInt)
+bundle Num := (Numeric, Comparable)
+
+;; Usage in specs
+spec sort : {A : Type} where (Comparable A) [List A] -> [List A]
+#+end_src
+
+** Why Conjunctive, Not Implicative
+Traditional supertraits create hard dependencies:
+- Haskell: ~class Eq a => Ord a~ means Ord /implies/ Eq
+- If the superclass hierarchy changes, all downstream code breaks
+
+Bundles are pure sugar --- expanded at parse time into flat conjunctions:
+- ~(Num A)~ expands to ~(Add A) (Sub A) (Mul A) (Neg A) (Abs A) (FromInt A) (Eq A) (Ord A)~
+- No runtime overhead, no diamond ambiguity, no coupling between traits
+- Users define domain bundles freely without language support
+
+** Single-Method Trait Optimization
+When a trait has exactly one method, the dictionary /is/ the function:
+~(Add Nat)~ resolves to the Nat addition function directly, with zero
+wrapper overhead.
+
+* Favor Nilable Union Types ~A?~ over ~Option A~
+
+Design choice: everyday nullable values should use ~A?~ (sugar for ~A | Nil~)
+rather than ~Option A~. Rationale:
+
+| Property | ~A?~ (Nilable) | ~Option A~ |
+|-------------------+--------------------------+------------------------------|
+| Syntax overhead | ~String?~ | ~Option String~ |
+| Wrapping | None (union, not wrapper) | ~some~, ~none~ constructors |
+| Unwrapping | Pattern match or ~.val~ | ~match~ / ~unwrap~ |
+| Composition | Flat union (~A? | B?~ ok) | Nested ~Option (Option A)~ |
+| Familiarity | TypeScript, Swift, Kotlin | Haskell, Rust, OCaml |
+
+~Option~ remains available for cases where nesting matters (e.g., caches
+where ~none~ means "key exists, value absent" vs. "key missing"). But the
+default ergonomic choice for "might be absent" is ~A?~.
+
+The compiler enforces explicit nil-handling --- ~A?~ values cannot be used
+where ~A~ is expected without a check, providing the same safety as ~Option~
+with less syntactic noise.
+
+* Homoiconicity: The Strong Invariant
+
+Every syntactic form in Prologos has a canonical s-expression
+representation, and this mapping is /bijective/ (round-trips perfectly):
+
+| Surface Syntax | Canonical Sexp |
+|-----------------------------+--------------------------------------|
+| ~'[1 2 3]~ | ~($list-literal 1 2 3)~ |
+| ~@[1 2 3]~ | ~($vec-literal 1 2 3)~ |
+| ~{:a 1}~ | ~($brace-params :a 1)~ |
+| ~user.name~ | ~($dot-access name)~ applied to user |
+| ~|> x f g~ | ~($pipe-gt x f g)~ |
+| ~>> f g~ | ~($compose f g)~ |
+| ~'expr~ | ~($quote expr)~ |
+| ~<(x : A) -> B>~ | ~($angle ($Pi (x : A) B))~ |
+
+The quote operator (~'~) produces first-class ~Datum~ values with 8
+constructors (~datum-sym~, ~datum-kw~, ~datum-nat~, ~datum-cons~, etc.),
+enabling full metaprogramming. Quasiquote (~`~) with comma (~,~) for
+splicing enables template-based code generation.
+
+Macros operate at the post-parse level (after whitespace resolution),
+ensuring they work identically in both WS and sexp modes.
+
+* Numeric Tower: Exact by Default
+
+| Type | Literal | Semantics |
+|------------+---------+--------------------------------------|
+| ~Nat~ | ~42N~ | Peano natural (type-level arithmetic) |
+| ~Int~ | ~42~ | Arbitrary-precision integer |
+| ~Rat~ | ~3/7~ | Exact rational |
+| ~Posit32~ | ~~3.14~ | Tapered-precision approximate |
+| ~Posit8~ | ~~3.14p8~ | 8-bit posit |
+| ~Float64~ | -- | FFI only (IEEE 754) |
+
+Automatic widening: ~Nat <: Int <: Rat~ (lossless). Posit widening goes
+through exact rational: ~p8-to-rat~ then ~p32-from-rat~.
+
+The ~~ prefix signals "approximate" --- a visual reminder that precision
+is being traded. No implicit coercion between exact and approximate families.
+
+* Session Types as Protocol Specifications
+
+A ~session~ declaration is a typed protocol specification:
+
+#+begin_src prologos
+session DatabaseService
+  rec Loop
+    offer
+      | :query  recv q : Query  send result : QueryResult  Loop
+      | :close  end
+#+end_src
+
+Key features:
+- *Duality*: each session has a dual (client sees opposite of server)
+- *Dependent sessions*: protocol shape can depend on exchanged values
+- *Recursive sessions*: ~rec Loop~ / ~Loop~ for repeating protocols
+- *Choice*: ~offer~ (server) / ~select~ (client) for branching protocols
+- *Linearity*: channels are linear (~:1~) --- cannot be duplicated or dropped
+- *Deadlock freedom*: guaranteed for binary sessions by construction
+
+** Async Primitives
+| Primitive | Meaning |
+|-----------+----------------------------------------------|
+| ~send~ | Blocking send |
+| ~recv~ | Blocking receive |
+| ~!!~ | Eventual send (non-blocking, returns promise) |
+| ~recv!~ | Eventual receive (non-blocking) |
+| ~cell~ | Propagator cell (LVar interface) |
+| ~put~ | Lattice join on cell |
+| ~get~ | Read current cell value |
+
+* The Type System Stack
+
+Five type system features compose into a unified whole:
+
+1. *Bidirectional type checking* --- synthesis (infer) and checking (check)
+   modes with metavariable unification
+2. *Implicit argument inference* --- ~{A : Type}~ binders resolved at call sites
+3. *Constraint postponement* --- non-pattern constraints stored, retried
+   after more information available
+4. *Universe polymorphism* --- ~Type : Type_1 : Type_2 : ...~ with level
+   inference and ~lzero~ defaults
+5. *QTT multiplicity inference* --- usage-driven multiplicity assignment
+   with ~mw~ defaults for unsolved metas
+
+The pipeline:
+~elaborate -> type-check -> resolve-trait-constraints! -> check-unresolved -> zonk-final~
+
+Two-phase zonking ensures intermediate results preserve unsolved metas
+(for error reporting) while final zonking defaults everything.

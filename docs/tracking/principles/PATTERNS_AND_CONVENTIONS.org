@@ -1,0 +1,290 @@
+#+TITLE: Prologos Patterns and Conventions
+#+AUTHOR: Prologos Project
+#+DATE: 2026-02-22
+
+* Naming Conventions
+
+** Functions and Values
+- Lowercase with hyphens: ~find-index~, ~sort-on~, ~map-get~
+- Predicates end in ~?~: ~zero?~, ~empty?~, ~member?~, ~even?~
+- Destructive / side-effecting operations end in ~!~: ~persist!~, ~tvec-push!~
+- Transducers end in ~-xf~: ~map-xf~, ~filter-xf~, ~take-xf~
+
+** Types and Constructors
+- Capitalized: ~Nat~, ~List~, ~Option~, ~Bool~, ~Map~
+- Multi-word types: PascalCase: ~QueryResult~, ~AdditiveIdentity~
+- Constructors: lowercase of their type: ~some~, ~none~, ~cons~, ~nil~
+
+** Modules and Namespaces
+- Separated by ~::~: ~prologos::data::list~, ~prologos::core::map-ops~
+- Module aliases with ~:as~: ~require [prologos::core::map-ops :as m]~
+- Selective import: ~:refer [merge fold-entries keys vals]~
+- Side-effect import: ~:refer []~ (triggers instance registration)
+
+** Library Functions Should Not Repeat the Library Name
+By convention, users import libraries with an alias. This means library
+functions should use short, unqualified names:
+
+#+begin_src prologos
+;; GOOD: short names, users alias the module
+;; In prologos::core::map-ops:
+spec keys : {K V : Type} [Map K V] -> [List K]
+spec vals : {K V : Type} [Map K V] -> [List V]
+spec merge : {K V : Type} [Map K V] [Map K V] -> [Map K V]
+
+;; Usage: qualified access prevents collision
+require [prologos::core::map-ops :as m :refer [merge]]
+m::keys my-map
+m::vals my-map
+merge m1 m2
+
+;; BAD: redundant prefix
+spec map-keys-list ...   ;; "map" is already in the module name
+spec map-vals-list ...   ;; user would write m::map-vals-list (double "map")
+#+end_src
+
+When a library function name collides with a parser keyword or another
+prelude name, use the module alias for disambiguation rather than
+lengthening the function name.
+
+** Trait Methods
+Short, action-oriented names: ~eq?~, ~from~, ~add~, ~sub~, ~compare~.
+The trait name provides context: ~(Eq A)~ implies ~eq?~ compares for
+equality within type ~A~.
+
+* Nat vs Int: When to Use Each
+
+~Nat~ (Peano naturals: ~zero~, ~suc~) is /type-level machinery/ --- it
+exists for dependent type indexing, structural induction, and proof
+terms. It is NOT for general-purpose arithmetic.
+
+~Int~ (arbitrary-precision integers) is the default numeric type for
+computation. ~Rat~ for exact rationals. ~Posit32~ for approximate.
+
+| Use Case | Type | Example |
+|-------------------------------+-----------+-------------------------------------|
+| General arithmetic | ~Int~ | ~[+ 3 4]~ => ~7 : Int~ |
+| Exact fractions | ~Rat~ | ~3/7 : Rat~ |
+| Approximate computation | ~Posit32~ | ~~3.14 : Posit32~ |
+| Type-level vector length | ~Nat~ | ~<(n : Nat) -> Vec A n>~ |
+| Structural induction / proofs | ~Nat~ | ~defn by-induction \| [zero] ...~ |
+| List length (structural) | ~Nat~ | ~spec length : [List A] -> Nat~ |
+| Indexing (nth, take, drop) | ~Nat~ | ~spec nth : Nat [List A] -> A?~ |
+
+#+begin_src prologos
+;; GOOD: Int for computation
+spec factorial : Int -> Int
+defn factorial [n]
+  if [<= n 1] 1 [* n [factorial [- n 1]]]
+
+;; GOOD: Nat for type-level indexing
+spec safe-head : {A : Type} (xs : [List A]) {pf : [NonEmpty xs]} -> A
+
+;; BAD: Nat for general computation
+;; spec factorial : Nat -> Nat   -- Nat is for types, not computation
+#+end_src
+
+* Function Definition Patterns
+
+** Prefer ~spec~ / ~defn~ Over ~def~ With Lambda
+
+#+begin_src prologos
+;; GOOD: spec + defn
+spec factorial : Int -> Int
+defn factorial [n]
+  if [<= n 1] 1
+    [* n [factorial [- n 1]]]
+
+;; ACCEPTABLE but less idiomatic:
+def factorial : [Int -> Int]
+  fn [n] (if (<= n 1) 1 (* n (factorial (- n 1))))
+#+end_src
+
+** Prefer Multi-Arity Over Helper Functions
+Use the ~|~ separator for pattern-matching arities rather than defining
+separate helper functions. Note that Nat multi-arity is appropriate for
+structural/type-level functions (like ~length~), while computational
+functions use ~Int~:
+
+#+begin_src prologos
+;; GOOD: multi-arity for structural recursion (Nat is appropriate here)
+spec length : {A : Type} [List A] -> Nat
+defn length
+  | [nil]        -> 0N
+  | [[cons _ t]] -> [suc [length t]]
+
+;; GOOD: Int for computational functions
+spec sum-list : [List Int] -> Int
+defn sum-list
+  | [nil]        -> 0
+  | [[cons h t]] -> [+ h [sum-list t]]
+#+end_src
+
+Multi-arity definitions keep related logic together, are more readable,
+and let the compiler see the full pattern space for exhaustiveness checking.
+
+** Uncurried Arguments, Curried Results
+Functions take arguments as a flat group, not curried:
+
+#+begin_src prologos
+;; GOOD: uncurried
+spec fold : {A B : Type} [B -> A -> B] B [List A] -> B
+defn fold [f z xs] ...
+
+;; AVOID: fully curried (Haskell style)
+spec fold : {A B : Type} [B -> A -> B] -> B -> [List A] -> B
+#+end_src
+
+The uncurried convention matches the ~[f x y z]~ call syntax and avoids
+partial application confusion. When currying is desired, use explicit
+lambda: ~[fn [x] [fold f x]]~.
+
+* Bracket Usage Rules
+
+| Context | Use | Example |
+|--------------------+---------+------------------------------|
+| Function call | ~[...]~ | ~[map inc xs]~ |
+| Logic clause | ~(...)~ | ~(edge ?from ?to)~ |
+| Type grouping | ~<...>~ | ~<(n : Nat) -> Vec A n>~ |
+| Parser keywords | ~(...)~ | ~(match ...)~, ~(fn ...)~ |
+| Implicit binders | ~{...}~ | ~{A B : Type}~ |
+| Map literal | ~{...}~ | ~{:name "Ada"}~ |
+| PVec literal | ~@[..]~ | ~@[1 2 3]~ |
+| List literal | ~'[..]~ | ~'[1 2 3]~ |
+| Set literal | ~#{..}~ | ~#{:a :b}~ |
+| Lazy seq literal | ~~[..]~ | ~~[1 2 3]~ |
+
+Key rule: *outer trees are implicit* --- top-level forms don't need
+wrapping brackets. Write ~defn foo [x] body~, not ~[defn foo [x] body]~.
+
+* Collection Conventions
+
+** Seq as Universal Hub
+All collection operations go through ~LSeq~ (lazy sequence) as the
+universal intermediate representation:
+
+#+begin_example
+Any Collection → to-seq → transform (map/filter/fold) → to-seq → Any Collection
+#+end_example
+
+Use ~Seqable~, ~Buildable~, and ~Foldable~ traits for generic code.
+Use collection-specific modules (~pvec-ops~, ~set-ops~, ~map-ops~) for
+type-specific operations.
+
+
+** Map as Two-Param Type
+~Map K V~ has two type parameters, which means it cannot implement the
+standard one-param traits (~Seqable~, ~Foldable~, ~Buildable~). Instead,
+use standalone functions from ~map-ops~:
+
+#+begin_src prologos
+;; These are standalone functions, not trait methods
+[m::fold-entries f z my-map]   ;; fold over (K, V) pairs
+[m::map-vals f my-map]         ;; map over values
+[m::keys my-map]               ;; extract key list
+#+end_src
+
+* Import and Module Patterns
+
+** Standard Import Forms
+
+#+begin_src prologos
+;; Import with alias (preferred for libraries)
+require [prologos::core::map-ops :as m :refer [merge]]
+
+;; Import specific names
+require [prologos::data::list :refer [List nil cons map filter]]
+
+;; Side-effect only (registers trait instances)
+require [prologos::core::eq-nat :refer []]
+
+;; Full prelude
+ns my-module
+
+;; Bare mode (no prelude)
+ns my-module :no-prelude
+#+end_src
+
+** Library Modules Skip Prelude
+Library modules under ~prologos::data::*~ and ~prologos::core::*~ must
+use ~:no-prelude~ (or the equivalent Racket-side mechanism) to avoid
+circular dependencies. They import only what they need explicitly.
+
+** Prelude Exports
+The prelude (~ns foo~) provides:
+- Core types: ~Nat~, ~Bool~, ~List~, ~Option~, ~Result~, ~Pair~
+- Collections: ~PVec~, ~Map~, ~Set~, ~LSeq~
+- All traits and instances: ~Eq~, ~Ord~, ~Add~, ~Sub~, etc.
+- Collection operations and conversions
+- Generic numeric functions: ~sum~, ~product~, ~int-range~
+
+Own-definition priority: a user's ~def map~ shadows the prelude's
+~list::map~.
+
+* Type Annotation Patterns
+
+** Spec for Public Functions
+Every exported function should have a ~spec~:
+
+#+begin_src prologos
+spec sort : {A : Type} where (Ord A) [List A] -> [List A]
+defn sort [xs] ...
+#+end_src
+
+** Inline Annotation for Local Bindings
+Use ~(the Type expr)~ or ~(def x : Type val)~ for local type ascription:
+
+#+begin_src prologos
+def xs : [List Int] '[1 2 3]
+(the [List Int] '[1 2 3])
+#+end_src
+
+** Implicit vs. Explicit Type Parameters
+- ~{A : Type}~ in ~spec~ --- implicit, inferred at call site
+- ~(A : Type)~ in ~spec~ --- explicit, must be provided
+- Convention: type parameters are implicit unless the caller needs to
+  specify them (e.g., ~map-empty K V~ where both must be explicit)
+
+* Error Handling Conventions
+
+** Use ~A?~ (Nilable) for Simple Absence
+
+#+begin_src prologos
+spec find : {A : Type} [A -> Bool] [List A] -> A?
+#+end_src
+
+** Use ~Result E A~ for Recoverable Errors
+
+#+begin_src prologos
+spec parse-int : String -> [Result ParseError Int]
+#+end_src
+
+** Use Dependent Types for Preconditions
+
+#+begin_src prologos
+spec head : {A : Type} (xs : [List A]) -> {pf : [NonEmpty xs]} -> A
+#+end_src
+
+* Pipe and Composition
+
+** ~|>~ for Value Threading (Last Argument Position)
+
+#+begin_src prologos
+|> @[1 2 3 4 5]
+  pvec-filter even?
+  pvec-map inc
+  pvec-fold add 0
+#+end_src
+
+Default: value goes to last argument position. Use ~_~ for explicit
+placement: ~|> x [f _ y]~ threads ~x~ into the ~_~ position.
+
+** ~>>~ for Function Composition (Left-to-Right)
+
+#+begin_src prologos
+def process := >> parse validate transform serialize
+#+end_src
+
+** Block-Form ~|>~ Enables Loop Fusion
+Consecutive ~map~/~filter~ steps in a block-form pipe fuse into a
+single pass when followed by a terminal (~fold~, ~sum~, ~reduce~).

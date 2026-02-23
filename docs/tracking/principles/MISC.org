@@ -1,0 +1,57 @@
+#+TITLE: Prologos Miscellaneous Notes
+#+AUTHOR: Prologos Project
+#+DATE: 2026-02-22
+
+* Documentation Format Preferences
+
+- Prefer ~.org~ (Org-mode) over ~.md~ (Markdown) for authored documents
+- Org-mode is canonical; ~.md~ and ~.pdf~ are generated artifacts when needed
+- Tables, code blocks, and cross-references are better supported in Org
+- Tracking documents (~docs/tracking/~) use ~.md~ by convention (git-friendly,
+  widely viewable), but canonical prose should be ~.org~
+
+* Naming: Prologos and Logos
+
+- /Πρόλογος/ (Prologos): the current prototype / Phase 0 implementation
+- /Logos/: the envisioned production language (simpler name for wider adoption)
+- The name "Prologos" means "prologue" --- this implementation is the
+  prologue to the real thing
+
+* Editor and Tooling Preferences
+
+- Primary editor: Emacs (with ~prologos-mode~, ~prologos-surfer~,
+  ~prologos-repl~, ~prologos-test~)
+- 149 ERT tests across 4 Emacs packages
+- REPL-driven development is the primary workflow
+
+* Production Aspirations
+
+- Phase 0 prototype: Racket (~#lang racket/base~)
+- Future production compiler: self-hosted in Prologos, targeting
+  native code (via LLVM or similar)
+- Embeddable logic engine: ship as a C-compatible library callable from
+  Python, JavaScript, Rust (like Lua/SQLite)
+
+* Philosophical Influences
+
+| Thinker / System | Contribution to Prologos |
+|-------------------+-----------------------------------------------|
+| Rich Hickey | Decomplection, immutable data, seq abstraction |
+| Gerald Sussman | Propagator model, constraint networks |
+| Per Martin-Lof | Dependent type theory foundations |
+| Robin Milner | Pi calculus, session types |
+| Conor McBride | QTT, Idris design sensibility |
+| Robert Harper | Practical dependent types, bidirectional typing |
+| Honda / Yoshida | Binary and multiparty session types |
+| Gustafson | Posit arithmetic (unum alternative to IEEE) |
+
+* Key Mantras
+
+- "Decomplect" --- unbraid tightly coupled concepts
+- "Disappear features" --- make simple the default, complexity optional
+- "Make layers discoverable" --- same codebase readable at multiple depths
+- "Let pain drive design" --- don't add features until needed
+- "Agents first" --- design for AI thinking, not just human typing
+- "Logical OR grows" --- adding to a union/bundle/variant never breaks priors
+- "Code is data" --- homoiconicity is a non-negotiable invariant
+- "Proofs are values" --- derivation trees are first-class, inspectable data

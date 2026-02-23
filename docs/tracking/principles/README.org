@@ -1,0 +1,49 @@
+#+TITLE: Prologos Principles Directory
+#+AUTHOR: Prologos Project
+#+DATE: 2026-02-22
+
+* Overview
+
+This directory contains the canonical articulation of Prologos's design
+philosophy, conventions, and accumulated wisdom. These documents are
+/living/ --- they should be updated as the language evolves.
+
+* Documents
+
+| File | Purpose |
+|-------------------------------+--------------------------------------------------|
+| [[file:DESIGN_PRINCIPLES.org]] | Core values, decomplection, layered architecture |
+| [[file:LANGUAGE_VISION.org]] | What Prologos is, why it exists, where it's going |
+| [[file:LANGUAGE_DESIGN.org]] | Syntax innovations, type system, session types |
+| [[file:PATTERNS_AND_CONVENTIONS.org]] | Naming, coding style, import patterns |
+| [[file:ERGONOMICS.org]] | Progressive disclosure, surface syntax, UX |
+| [[file:DEVELOPMENT_LESSONS.org]] | Accumulated implementation wisdom |
+| [[file:MISC.org]] | Miscellaneous notes and preferences |
+
+* How These Relate to Other Docs
+
+- *~CLAUDE.md~ + ~.claude/rules/~*: Machine-readable instructions for AI
+  assistants. Terse, prescriptive. These principles docs explain the /why/
+  behind those rules.
+
+- *~docs/spec/grammar.org~*: The formal syntax specification. The
+  LANGUAGE_DESIGN doc explains the design /rationale/ for syntax choices;
+  the grammar is the /specification/.
+
+- *~docs/tracking/*.md~*: Phase-specific tracking documents for individual
+  features. The DEVELOPMENT_LESSONS doc distills cross-cutting lessons
+  from those efforts.
+
+- *~docs/research/*.md~*: Deep technical research reports. The LANGUAGE_VISION
+  doc synthesizes the vision that those research reports inform.
+
+- *~my_notes.org~*: Personal working notes (read-only reference). These
+  principles docs are the cleaned-up, canonical distillation.
+
+* Maintenance
+
+When making significant design decisions:
+1. Check if the decision aligns with DESIGN_PRINCIPLES
+2. If it introduces a new pattern, add it to PATTERNS_AND_CONVENTIONS
+3. If it teaches a lesson, add it to DEVELOPMENT_LESSONS
+4. If it changes the language's direction, update LANGUAGE_VISION

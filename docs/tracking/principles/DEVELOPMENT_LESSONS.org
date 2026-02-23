@@ -1,0 +1,232 @@
+#+TITLE: Prologos Development Lessons
+#+AUTHOR: Prologos Project
+#+DATE: 2026-02-22
+
+* Why We Track and Document Efforts
+
+Language implementation is a long journey with compounding decisions.
+Every design choice constrains future choices. Every bug reveals an
+assumption. Every workaround reveals an abstraction gap. By tracking
+lessons systematically, we:
+
+1. *Avoid repeating mistakes* --- the same meta-variable pitfall doesn't
+   bite twice
+2. *Preserve institutional knowledge* --- when context windows reset, the
+   lessons survive
+3. *Inform future design* --- patterns that recur across subsystems
+   suggest deeper abstractions
+4. *Measure progress* --- timing data, test counts, and phase completions
+   give concrete signals
+
+* Workflow Lessons
+
+** Phase-Gated Implementation
+Break large features into lettered sub-phases (a, b, c...) with explicit
+"done" vs. "remaining" tracking. This:
+- Prevents scope creep within a single session
+- Creates natural commit points
+- Makes it easy to resume after interruption
+
+** Tracking Documents Before Code
+Create ~docs/tracking/YYYY-MM-DD_HHMM_TOPIC.md~ /before/ implementation.
+Write down what you plan to build, what the phases are, and what success
+looks like. Update after completion with lessons learned.
+
+** Deferred Work Is Real Work
+When something is deferred, immediately add it to ~docs/tracking/DEFERRED.md~.
+Deferred work that isn't tracked is forgotten work. The DEFERRED file is
+the single source of truth for all postponed tasks.
+
+** Targeted Testing During Development
+Run only affected tests (~racket tools/run-affected-tests.rkt~), not the
+full suite. The full suite is for end-of-day regression. This keeps the
+feedback loop tight (seconds, not minutes).
+
+** Whale File Splitting
+Test files exceeding 30s wall time bottleneck the parallel runner. Split
+into ~-01~, ~-02~ parts with ~20 test-cases each. Check with
+~racket tools/benchmark-tests.rkt --slowest 10~ after full runs.
+
+* Type System Lessons
+
+** Two-Phase Zonking
+Intermediate zonking must NOT default unsolved metas --- it would commit
+to wrong answers before all information is available. Only final zonking
+(after type-checking completes) defaults metas to ~lzero~ / ~mw~.
+
+This was a painful lesson: defaulting too early caused "spooky action at
+a distance" where solving one meta would silently lock in defaults for
+unrelated metas.
+
+** Speculative Type-Checking
+~save-meta-state~ / ~restore-meta-state!~ enables try-and-backtrack:
+attempt a type check, and if it fails, restore the meta-variable store
+to its prior state. Critical for:
+- Church fold type inference (try fold interpretation, fall back to list)
+- Union type widening (try homogeneous, widen if mismatched)
+- Trait resolution (try one instance, backtrack to another)
+
+** Dict Params Use ~:w~, Not ~:0~
+Trait dictionary parameters must have unrestricted (~:w~) multiplicity.
+If they're erased (~:0~), the body can't call the dict's methods at
+runtime. This caused cryptic QTT violations until the invariant was
+established.
+
+** Meta Variables in ~infer-level~
+Every AST node that appears in type position must have an ~infer-level~
+case. When we added mixed-type maps, unsolved metas appeared in
+~expr-map-empty~ type annotations, and ~infer-level~ had no case for
+~expr-meta~. The fix: unsolved metas default to ~just-level(lzero)~,
+matching zonk-final's behavior.
+
+** Pattern Unification Boundaries
+Miller's pattern fragment (the decidable subset of higher-order
+unification) handles most practical cases, but higher-rank types push
+beyond it. The workaround for higher-rank polymorphism: use explicit
+~def ... : Type body~ instead of ~spec~/~defn~ when the type is too
+complex for inference.
+
+* Parser and Syntax Lessons
+
+** Parser Keywords Are Sacred
+Names like ~map-vals~, ~set-member?~ are parser keywords --- the parser
+recognizes them at read time before name resolution. A library function
+with the same name will be shadowed in unqualified usage. Solutions:
+- Use qualified access: ~m::map-vals~
+- Choose a non-conflicting name for the library function
+
+** WS Reader ~$~ Is Quote
+The ~$~ prefix in whitespace mode is the quote operator: ~$Foo~ desugars
+to ~($quote Foo)~. It is NOT a sigil for variable names. This tripped up
+dict parameter naming when traits were first implemented.
+
+** Nested Bracket Arrow Syntax
+~[B -> [K -> [V -> B]]]~ fails to parse (inner brackets create separate
+argument groups). The flattened form ~[B -> K -> V -> B]~ works correctly.
+This is a consequence of Prologos's uncurried convention.
+
+** Consumer-Side Normalization
+When special characters (~...~, ~>>~, ~|~) have readtable conflicts,
+normalize on the consumer side (parser/elaborator) rather than hacking
+the readtable. This is safer and keeps the reader simple.
+
+* Trait and Instance Lessons
+
+** Single-Method Trait = The Function
+When a trait has exactly one method, the dict IS the function. No wrapper
+struct, no field access. ~(Add Nat)~ resolves directly to the Nat addition
+function. This gives zero-overhead dispatch for the common case.
+
+** Instance Registration Is a Side Effect
+~(require [prologos::core::eq-nat :refer []])~ loads the module for its
+side effect (registering the Eq instance for Nat). The empty ~:refer []~
+signals "I don't need any names, just register the instances."
+
+** Own-Definition Priority
+When the user defines ~def map ...~ in their module, it shadows the
+prelude's ~list::map~. This is intentional: user definitions always win.
+Qualified access (~list::map~) remains available.
+
+** Prelude Errors Are Silently Swallowed
+~process-ns-declaration~ wraps module loading in ~with-handlers~ that
+silently catches errors. When a prelude module fails to load, the only
+signal is that its names are missing. This made debugging prelude changes
+extremely difficult. Future improvement: log prelude loading errors.
+
+* Collection and Library Lessons
+
+** Map Can't Use Standard Traits
+~Map K V~ has two type parameters, but ~Seqable~, ~Foldable~, and
+~Buildable~ expect ~{C : Type -> Type}~ (one parameter). This is a
+fundamental HKT limitation. The workaround: standalone functions in
+~map-ops~ that operate directly on ~Map K V~.
+
+** Type Constructors Aren't Terms
+~(infer Add)~ doesn't work because ~Add~ is a type constructor (deftype),
+not a term. To test type constructors, use a typed binding:
+~(def x : (Add Nat) val)~.
+
+** ~inferQ~ Returns Result Type
+For AST keyword nodes (like ~expr-map-get~, ~expr-set-insert~),
+~inferQ~ must return the RESULT type, not the input type. Getting this
+wrong causes the QTT checker to track multiplicities against the wrong
+type, leading to phantom violations.
+
+** Library Function Names Don't Repeat Module Names
+When ~prologos::core::map-ops~ exports ~map-keys-list~, the user writes
+~m::map-keys-list~ --- "map" appears twice. Better: export ~keys~, user
+writes ~m::keys~. This lesson drove the map-ops rename.
+
+* Numerics Lessons
+
+** ~expr->impl-key-str~ Must Handle All Types
+The trait instance dispatch function must have cases for every numeric
+type (~Int~, ~Rat~, ~Posit8~, ~Posit16~, ~Posit32~, ~Posit64~,
+~Keyword~). A missing case causes silent dispatch failure with an
+unhelpful error.
+
+** Posit Widening Through Exact
+Converting between posit sizes goes through exact rational:
+~p16-from-rat (p8-to-rat x)~. This preserves as much precision as
+the target format allows.
+
+** Into Blanket Impl Pattern
+~impl Into A B where (From A B)~ provides the reverse direction
+automatically using parametric constraint resolution. This halves the
+number of conversion instances needed.
+
+* Homoiconicity Lessons
+
+** Both Modes Must Produce Identical ASTs
+The whitespace reader and the s-expression reader must produce
+bit-identical ASTs. This is tested extensively and is a hard invariant.
+Any divergence means macros behave differently depending on input mode.
+
+** Quote Roundtrips Must Preserve Structure
+~'[fn [x] [add x 1N]]~ must produce a ~Datum~ value that, when
+reconstructed, yields the original expression. This is the foundation
+for code-as-data metaprogramming.
+
+** Quasiquote Comma Conflict
+Racket's reader consumes commas before our readtable sees them. The
+solution: a nested readtable (~prologos-qq-readtable~) that handles
+unquoting within quasiquoted expressions.
+
+* Architecture Lessons
+
+** 14-File AST Pipeline
+Adding a new AST node requires touching 14 files (syntax, surface-syntax,
+parser, elaborator, typing-core, qtt, reduction, substitution, zonk,
+pretty-print, and sometimes unify, macros, foreign). This is the cost
+of a uniform AST representation --- but the benefit is that every
+subsystem handles every node consistently.
+
+** Callback Pattern for Circular Dependencies
+When module A needs to call module B, but B already requires A, use a
+callback parameter: B exposes a function that takes a callback, and A
+provides the implementation at the call site. This avoids Racket's
+circular require limitation.
+
+** Sentinel AST Nodes
+The reader emits sentinel nodes (~$dot-access~, ~$dot-key~, ~$pipe-gt~)
+that are rewritten by preparse into standard AST forms. This keeps the
+reader simple (it doesn't need to understand semantics) and the preparse
+predictable (it transforms known sentinels).
+
+* Meta-Lessons
+
+** Let Pain Drive Design
+Don't add features until they're needed. Every deferred item in
+~DEFERRED.md~ was deferred because the pain wasn't yet sufficient to
+justify the complexity. When the pain arrives, the solution is better
+informed by real usage.
+
+** Tests Are Documentation
+The test suite (3000+ tests) is the most accurate documentation of what
+the language actually does. When docs and tests disagree, tests win.
+New features aren't done until they have tests.
+
+** Grammar Is Living
+~docs/spec/grammar.ebnf~ and ~docs/spec/grammar.org~ are canonical and
+must be updated whenever syntax changes. Stale grammar docs cause more
+confusion than no grammar docs.

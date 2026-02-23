@@ -1,0 +1,145 @@
+#+TITLE: Standup — 2026-02-23
+#+DATE: 2026-02-23
+
+
+* Yesterday (Feb 22)
+
+** Numerics Ergonomics Audit & Generic Arithmetic — Complete (Phases 1a–3c)
+Full implementation of ergonomic generic numerics, motivated by a language audit on how numeric types interact:
+| Phase | Description                                                  |
+|-------+--------------------------------------------------------------|
+|    1a | Posit identity instances (all 4 widths)                      |
+|    1b | Posit equality primitives (p8-eq through p64-eq)             |
+|    1d | Bare decimal literals as Posit32 (~3.14~)                    |
+|    2a | Generic arithmetic operators (+, -, *, /, lt, le, eq, etc.)  |
+|    2b | Generic from-integer / from-rational conversion keywords     |
+|    3a | Numeric type join function (type lattice for mixed-type ops) |
+|    3b | Coercion in generic operators (Posit dominance rule)         |
+|    3c | Coercion warnings for exact→approximate conversions          |
+
+Key design decision: *Posit dominance* — when mixing exact (Int/Nat/Rat) with approximate (Posit) types in generic operators, the result coerces to Posit. Matches mainstream language behavior (Python, Haskell, etc.). Type-specific keywords (=int+=, =p32+=) remain strict for when exact types are required.
+
+** Extended Spec Language Design — Complete (Design v2 + Phase 1 Implementation)
+Major research and design effort for the =spec= metadata language:
+- Research survey: Clojure Spec, Malli, PropEr, Idris/Agda interactive provers, Lean =abbrev=, Racket contracts
+- Design v2 incorporates: =:implicits=, =:where=, =:doc=, =:examples=, =:properties=, =:laws=
+- New =property= keyword for reusable, composable proposition groups (parallel to =bundle= for traits)
+- New =functor= keyword for named type abstractions with CT-flavored metadata (=:compose=, =:identity=, =:unfolds=, =:laws=) — goal: Pi/Sigma types never leak to the surface
+- Phase 1 implementation: extended spec syntax parsing and storage
+- Phase 1b: auto-introduce free type variables and kind inference from =:where= clauses
+
+** Prelude Gaps Fixed
+- Added =Div= and =FromRat= traits with missing instance modules
+- Added first-class generic arithmetic wrappers (=plus=, =minus=, =times=, =divide=, =negate-fn=, =abs-fn=)
+
+** Trait & Spec Metadata — Complete
+- =:doc= and =:laws= metadata on traits and core data specs
+- Fixed inline WS-mode metadata parsing
+
+** Benchmark Dashboard Improvements
+- Historical suite-level timing graph
+- Centered navigation, fixed ruler alignment
+
+** Housekeeping
+- Reduction performance regression tests committed
+- =test-reduction-perf.rkt= split (was 227s whale file)
+- Ott grammar, docs, memoization/recursion improvements
+
+* Uncommitted Work in Progress
+- =driver.rkt= — 20 lines added
+- =list.prologos= — 34 lines changed
+- =macros.rkt= — 37 lines added
+
+* Carry-Forward
+
+** From Feb 22
+- [ ] Ergonomics: quoted literal support (='person= → Symbol, ='42= → Int, ='#{:a 1}= → Map)
+- [ ] Research/design =foreign= support for =c{...}= blocks
+- [ ] Add Design Process approach to =principles/=
+- [ ] Better implicit inference (roadmap exists, Phase 1b auto-intro done; further phases remain)
+
+** Ongoing
+- [ ] Generification roadmap: Phase 4 (Numerics Tower Float32/Float64) not started
+- [ ] =general-collections-tutorial-demo.prologos= (spiral tutorial for generic collection ops)
+- [ ] Range syntax design
+
+* Today (Feb 23)
+
+** Collection Ergonomics
+#+ATTR_ORG: :tag prompt
+#+begin_src quote
+Let's do a language audit on the ergonomics of our collections, and seek to uphold our language design goal of supporting most-generic operations efficiently.
+
+  Let's look to rewrite our collections functions using the common super-typ `Seq`, against which all other collections implement, and dispatching to efficient versions.
+
+  A function over a collection of type C should return the same collection type C. Conversion should be explicit.
+
+  Clojure should also be an inspiration in part of nice generalization of higher order functions over collections.
+
+  This is an audit, and the output is a report document in `tracking`, identifying opportunities to fulfill our vision, design decision/tradeoffs, critiques, gaps in our infrastructure, and recommendations for adoption and phased implementation.
+
+#+end_src
+
+** Range Syntax
+
+
+** Research And Design Mix-Fix Syntax `.{}`
+*** Design parameters for `.{}`
+#+ATTR_ORG: :tag prompt
+#+begin_src quote
+  I'm thinking of syntax to easily support and integrate mixed-fix syntax using `.{}`
+
+  If there is a wildcard in the form, it should work just as our partail funtion syntax
+
+  `map [* _ _] xs` is the same as `map .{_ * _} xs`
+
+  The intent is to provide a light-weight alternative, in part to newcomers, but also--even as an experienced Lisper adapt at unfolding paren-trees--it still takes a second longer for the human to parse heavily nested arithmetic. I'm inspired by the `expr` sublanguage in TCL--another homoiconic language without heavy paren-groupings.
+
+  I would like for us to do a comprehensive research on the design of mixfix precedent tables and design. I'm familiar with both Maude and Prolog's user-defined operator precedence, and would likewise like to enable user-definable infix precedence. I'm thinking to support this feature through a new key in `spec` ":mixfix" whose value is a Map {:assoc _ :}, with the convention of this map being in the compact EDN-like syntax. I know we want to support a key for associativity (:left | :right), and another key (perhaps with the name `:precedence`) for the number ordering? (I think)
+
+  Again, the design of this is contingent on what we find during our extensive web-search research. Is there a clear pattern that other mix-fix languages take? Are there know gotchas? Or lessons learned? How can we take the best learnings on developing a sane precedence table that allows for users to--as intuitively as possible (perhaps we have excellent documentation and recommendations for them?)--create their own operator precedence within our custom Mixfix Syntax.
+
+  I would like for our own library functions to use the same system that a user would in defining common mixfix operator precedences as an intended netx step towards implementation.
+
+  But first! We're in a research and design phase, following the successful patterns of our Ergonomics Audit and design, and Extended spec design from yesterday (found in our `tracking` directory). Let us create a research and design document that compares and contrasts different language's approaches, highlights key learnings, offers critiques, and recommends options.
+
+  Then I shall review and we can discuss how we want to go ahead with implementation.
+
+  Your output from this should be "Mixfix Syntax Design.org" in our `tracking` directory.
+
+#+end_src
+*** [[/Users/avanti/dev/projects/prologos/docs/tracking/2026-02-23_MIXFIX_SYNTAX_DESIGN.org][Mixfix Design Doc]]
+
+*** Critique, Feedback
+#+ATTR_ORG: :tag prompt
+#+begin_src quote
+  So our proposale has a new syntax `precedence-group` that takes a name and a map (implicit style by convention). What keys should be here? What if the binding is same as something else, with different associativity? What are some scenarios that would trigger a compiler/error?
+
+  Can we see some examples of what an imported mixfix from another library that has no relation to the imported context's DAG--and what groupings would have to look like?
+
+  I'm liking this DAG approach as opposed to have to remember or lookup precedent numbers. This also seems to prevent a larger class of potential conflicts...
+
+  Can we see a printout of what an example DAG would be, with proposed Core Prologos, some user defined, and a user import?
+
+  Fringe question: Would this mixfix notation support defining true-to-form APL parsing (right-to-left, with caveats)? (You can do a quick websearch if that helps build context.)
+
+  This is just discussion, so respones only.
+
+-- Open questions
+  1. *Should =.{...}= support statement-like forms?* E.g., =.{x = y + 1}= for assignment. Recommendation: No in Phase 1. Keep =.{...}= purely for expressions. Assignment remains =def x [add y 1]=.
+
+2. *Should we support =.{...}= in =match= patterns?* E.g., =match n | .{_ + 1} => ...=. This requires extending patterns with infix sugar. Defer to Phase 4.
+
+3. *What about =do= notation inside =.{...}=?* E.g., =.{x >>= fn [a] .{a + 1}}=. This is syntactically possible but may be too clever. Prefer =do= blocks for monadic code.
+
+4. *Should =functor= =:compose= auto-register a mixfix symbol?* E.g., =functor Xf ... :compose xf-compose= could auto-generate =:mixfix {:symbol >> :group composition}=. Appealing but adds coupling.
+
+
+  1. No on inner assignments
+  2. yes for pattern matching (Phase 4)
+  3. no on do blocks
+  4. no on functor :compose
+
+
+#+end_src
+
