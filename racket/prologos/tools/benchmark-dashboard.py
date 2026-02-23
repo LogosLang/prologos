@@ -16,6 +16,7 @@ import argparse
 import json
 import os
 import random
+import statistics
 import subprocess
 import sys
 import time
@@ -43,6 +44,9 @@ ORANGE = [255, 165, 0, 255]
 BLUE = [70, 130, 210, 255]
 YELLOW_THRESHOLD = [255, 200, 0, 180]
 LIGHT_GRAY = [180, 180, 180, 100]
+PURPLE = [180, 100, 220, 200]
+TEAL = [0, 190, 190, 200]
+PINK = [230, 100, 150, 200]
 
 # ============================================================
 # Global state
@@ -293,6 +297,20 @@ def make_bar_theme(color):
 # Chart builders
 # ============================================================
 
+def _compute_linear_trend(xs, ys):
+    """Simple linear regression: returns (slope, intercept)."""
+    n = len(xs)
+    if n < 2:
+        return 0.0, (ys[0] if ys else 0.0)
+    mean_x = sum(xs) / n
+    mean_y = sum(ys) / n
+    ss_xy = sum((x - mean_x) * (y - mean_y) for x, y in zip(xs, ys))
+    ss_xx = sum((x - mean_x) ** 2 for x in xs)
+    slope = ss_xy / ss_xx if ss_xx != 0 else 0.0
+    intercept = mean_y - slope * mean_x
+    return slope, intercept
+
+
 def build_suite_overview():
     """Tab 1: Total wall time per full-suite run with regression annotations."""
     if not suite_run_indices:
@@ -315,18 +333,26 @@ def build_suite_overview():
                for si in fail_xs]
 
     with dpg.group(parent="tab_suite"):
-        # Slider for "show last N runs"
-        dpg.add_slider_int(label="Show last N runs", min_value=3,
-                           max_value=max(n_suite, 3),
-                           default_value=min(50, n_suite),
-                           callback=_on_suite_slider, tag="suite_slider",
-                           width=300)
+        # Controls row: slider + toggle buttons
+        with dpg.group(horizontal=True):
+            dpg.add_slider_int(label="Show last N runs", min_value=3,
+                               max_value=max(n_suite, 3),
+                               default_value=min(50, n_suite),
+                               callback=_on_suite_slider, tag="suite_slider",
+                               width=300)
+            dpg.add_spacer(width=30)
+            dpg.add_checkbox(label="Average", tag="suite_avg_cb",
+                             callback=_on_suite_stat_toggle)
+            dpg.add_checkbox(label="Median", tag="suite_median_cb",
+                             callback=_on_suite_stat_toggle)
+            dpg.add_checkbox(label="Trend", tag="suite_trend_cb",
+                             callback=_on_suite_stat_toggle)
 
         with dpg.plot(label="Total Suite Wall Time (full-suite runs only)",
                       height=-1, width=-1,
                       tag="suite_plot", crosshairs=True):
             dpg.add_plot_legend()
-            sx = dpg.add_plot_axis(dpg.mvXAxis, label="Run", tag="suite_xaxis")
+            sx = dpg.add_plot_axis(dpg.mvXAxis, label="Run #", tag="suite_xaxis")
             sy = dpg.add_plot_axis(dpg.mvYAxis, label="Wall Time (s)", tag="suite_yaxis")
 
             # Line series
@@ -349,6 +375,22 @@ def build_suite_overview():
                                             parent=sy, tag="suite_fail")
                 dpg.bind_item_theme(fs, make_scatter_theme(RED))
 
+            # Statistical overlay lines (hidden initially, empty data)
+            avg_l = dpg.add_line_series([], [], label="Average",
+                                        parent=sy, tag="suite_avg_line")
+            dpg.bind_item_theme(avg_l, make_line_theme(PURPLE))
+            dpg.configure_item(avg_l, show=False)
+
+            med_l = dpg.add_line_series([], [], label="Median",
+                                        parent=sy, tag="suite_median_line")
+            dpg.bind_item_theme(med_l, make_line_theme(TEAL))
+            dpg.configure_item(med_l, show=False)
+
+            trend_l = dpg.add_line_series([], [], label="Trend",
+                                          parent=sy, tag="suite_trend_line")
+            dpg.bind_item_theme(trend_l, make_line_theme(PINK))
+            dpg.configure_item(trend_l, show=False)
+
             # Regression annotations (only for suite runs)
             suite_set = set(suite_run_indices)
             for idx, regs in regression_map.items():
@@ -360,7 +402,7 @@ def build_suite_overview():
                         default_value=(float(si), runs[idx]["total_wall_ms"] / 1000.0),
                         color=RED, offset=(0, -20), parent="suite_plot")
 
-            # X-axis tick labels with commit hashes
+            # X-axis tick labels: sequential run numbers
             _set_suite_xticks(xs)
 
 
@@ -376,22 +418,15 @@ def _format_short_datetime(iso_ts):
 
 
 def _set_suite_xticks(xs):
-    """Set x-axis ticks to datetime + commit hashes for full-suite runs."""
+    """Set x-axis ticks to simple run numbers. Hover provides details."""
     if not suite_run_indices:
         return
-    n = max(1, len(suite_run_indices) // 15)
+    # Use simple N-based labels — hover tooltip shows datetime/commit
+    n = max(1, len(xs) // 20)
     ticks = []
     for si in xs:
-        ri = suite_run_indices[si]
-        if si % n == 0 or si == len(suite_run_indices) - 1:
-            commit = get_commit_label(runs[ri], ri)
-            date_str = _format_short_datetime(runs[ri].get("timestamp", ""))
-            fc = runs[ri].get("file_count", 0)
-            if date_str:
-                label = f"{date_str}\n{commit} ({fc}f)"
-            else:
-                label = f"{commit} ({fc}f)"
-            ticks.append((label, float(si)))
+        if si % n == 0 or si == xs[-1]:
+            ticks.append((str(si + 1), float(si)))
     if ticks:
         dpg.set_axis_ticks("suite_xaxis", tuple(ticks))
 
@@ -413,8 +448,72 @@ def _on_suite_slider(sender, app_data):
         dpg.set_value("suite_pass", [[float(x) for x in pass_xs], pass_ys])
     if dpg.does_item_exist("suite_fail"):
         dpg.set_value("suite_fail", [[float(x) for x in fail_xs], fail_ys])
+    # Update statistical overlay lines
+    _update_suite_stat_lines(xs, ys)
+    # Update x-axis ticks for visible range
+    _set_suite_xticks(xs)
     dpg.fit_axis_data("suite_xaxis")
     dpg.fit_axis_data("suite_yaxis")
+
+
+def _on_suite_stat_toggle(sender=None, app_data=None):
+    """Toggle visibility of statistical overlay lines."""
+    _update_suite_stat_visibility()
+
+
+def _update_suite_stat_visibility():
+    """Show/hide stat lines based on checkbox state, and recompute data."""
+    if not dpg.does_item_exist("suite_avg_line"):
+        return
+
+    # Get current visible data from the slider
+    n = dpg.get_value("suite_slider")
+    n_suite = len(suite_run_indices)
+    start = max(0, n_suite - n)
+    xs = list(range(start, n_suite))
+    ys = [runs[suite_run_indices[si]]["total_wall_ms"] / 1000.0 for si in xs]
+
+    _update_suite_stat_lines(xs, ys)
+
+
+def _update_suite_stat_lines(xs, ys):
+    """Recompute and update statistical overlay lines for visible data."""
+    if not xs or not ys:
+        return
+
+    show_avg = dpg.get_value("suite_avg_cb") if dpg.does_item_exist("suite_avg_cb") else False
+    show_med = dpg.get_value("suite_median_cb") if dpg.does_item_exist("suite_median_cb") else False
+    show_trend = dpg.get_value("suite_trend_cb") if dpg.does_item_exist("suite_trend_cb") else False
+
+    fxs = [float(x) for x in xs]
+
+    # Average line
+    if dpg.does_item_exist("suite_avg_line"):
+        if show_avg and len(ys) > 0:
+            avg_val = sum(ys) / len(ys)
+            dpg.set_value("suite_avg_line", [[fxs[0], fxs[-1]], [avg_val, avg_val]])
+            dpg.configure_item("suite_avg_line", show=True)
+        else:
+            dpg.configure_item("suite_avg_line", show=False)
+
+    # Median line
+    if dpg.does_item_exist("suite_median_line"):
+        if show_med and len(ys) > 0:
+            med_val = statistics.median(ys)
+            dpg.set_value("suite_median_line", [[fxs[0], fxs[-1]], [med_val, med_val]])
+            dpg.configure_item("suite_median_line", show=True)
+        else:
+            dpg.configure_item("suite_median_line", show=False)
+
+    # Trend (linear regression) line
+    if dpg.does_item_exist("suite_trend_line"):
+        if show_trend and len(ys) >= 2:
+            slope, intercept = _compute_linear_trend(fxs, ys)
+            trend_ys = [slope * x + intercept for x in fxs]
+            dpg.set_value("suite_trend_line", [fxs, trend_ys])
+            dpg.configure_item("suite_trend_line", show=True)
+        else:
+            dpg.configure_item("suite_trend_line", show=False)
 
 
 def _file_label(filename):
@@ -737,14 +836,14 @@ def reload_data():
     all_files = derive_all_files(runs)
     test_counts = derive_test_counts(runs)
     regression_map = detect_regressions(runs, reg_threshold)
-    # Identify full-suite runs: any run with >=50% of max file_count.
-    # This captures historical full-suite runs even as the suite grows
-    # (e.g. 91 files -> 137 -> 144), while excluding small affected-tests runs.
+    # Identify full-suite runs: any run with >=50% of max file_count AND
+    # total_tests > 0 (exclude broken/empty runs from the overview chart).
     if runs:
         max_fc = max(r.get("file_count", 0) for r in runs)
         suite_threshold = max(1, int(max_fc * 0.5))
         suite_run_indices = [i for i, r in enumerate(runs)
-                            if r.get("file_count", 0) >= suite_threshold]
+                            if r.get("file_count", 0) >= suite_threshold
+                            and r.get("total_tests", 0) > 0]
     else:
         suite_run_indices = []
     if current_breakdown_idx < 0 or current_breakdown_idx >= len(runs):
@@ -991,6 +1090,27 @@ _CROSSHAIR_TAGS = {
 }
 
 
+def _get_suite_hover_label(mx, my):
+    """Build a rich hover label for suite overview showing run details."""
+    # Find nearest suite run index
+    si = int(round(mx))
+    if 0 <= si < len(suite_run_indices):
+        ri = suite_run_indices[si]
+        run = runs[ri]
+        commit = get_commit_label(run, ri)
+        date_str = _format_short_datetime(run.get("timestamp", ""))
+        fc = run.get("file_count", 0)
+        tc = run.get("total_tests", 0)
+        wall = run["total_wall_ms"] / 1000.0
+        parts = [f"{wall:.1f}s"]
+        if date_str:
+            parts.append(date_str)
+        parts.append(commit)
+        parts.append(f"{fc}f/{tc}t")
+        return " | ".join(parts)
+    return f"{my:.1f}s"
+
+
 def _update_crosshair_annotations():
     """Show value annotation at crosshair position on hovered plots."""
     for plot_tag, ann_tag in _CROSSHAIR_TAGS.items():
@@ -1006,10 +1126,13 @@ def _update_crosshair_annotations():
 
             mx, my = dpg.get_plot_mouse_pos()
 
+            # Suite Overview: rich hover with run details
+            if plot_tag == "suite_plot":
+                label = _get_suite_hover_label(mx, my)
             # Run Breakdown: horizontal bars, x = time
-            # Suite Overview / Per-File Trend: y = time
-            if plot_tag == "latest_plot":
+            elif plot_tag == "latest_plot":
                 label = f"{mx:.1f}s"
+            # Per-File Trend: y = time
             else:
                 label = f"{my:.1f}s"
 
