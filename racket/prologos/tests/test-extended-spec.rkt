@@ -433,3 +433,116 @@
   (define md (spec-entry-metadata se))
   (check-true (hash? md))
   (check-equal? (hash-ref md ':doc) "Add two"))
+
+;; ========================================
+;; 8. Phase 1b: Auto-introduce free type variables
+;; ========================================
+
+(test-case "capitalized-symbol?: uppercase vs lowercase"
+  (check-true (capitalized-symbol? 'Foo))
+  (check-true (capitalized-symbol? 'A))
+  (check-true (capitalized-symbol? 'List))
+  (check-false (capitalized-symbol? 'foo))
+  (check-false (capitalized-symbol? '->))
+  (check-false (capitalized-symbol? '$brace-params))
+  (check-false (capitalized-symbol? ':doc)))
+
+(test-case "collect-free-type-vars: collects capitalized symbols from datums"
+  (check-equal? (collect-free-type-vars-from-datums '(Nat -> Nat)) '(Nat))
+  (check-equal? (collect-free-type-vars-from-datums '((List A) -> Nat))
+                '(List A Nat))
+  (check-equal? (collect-free-type-vars-from-datums '((List A) -> (List B)))
+                '(List A B)))
+
+(test-case "collect-free-type-vars: deduplicates"
+  (check-equal? (collect-free-type-vars-from-datums '(A -> A)) '(A)))
+
+(test-case "collect-free-type-vars: ignores non-symbol datums"
+  (check-equal? (collect-free-type-vars-from-datums '(42 "hello" A)) '(A)))
+
+(test-case "spec: auto-introduces free type variable A"
+  (define se (spec-for 'mylen "(spec mylen (List A) -> Nat)"))
+  (check-true (spec-entry? se))
+  (define binders (spec-entry-implicit-binders se))
+  (check-true (pair? binders))
+  ;; A should be auto-detected (List is known, Nat is known)
+  (define a-binder (assq 'A binders))
+  (check-true (pair? a-binder))
+  (check-equal? (cdr a-binder) '(Type 0)))
+
+(test-case "spec: auto-introduces multiple free type vars"
+  (define se (spec-for 'myfoo "(spec myfoo A -> B -> A)"))
+  (check-true (spec-entry? se))
+  (define binders (spec-entry-implicit-binders se))
+  ;; Both A and B should be auto-detected
+  (check-true (pair? (assq 'A binders)))
+  (check-true (pair? (assq 'B binders))))
+
+(test-case "spec: doesn't auto-introduce known types like Nat, List"
+  (define se (spec-for 'myid "(spec myid A -> A)"))
+  (define binders (spec-entry-implicit-binders se))
+  ;; Only A, not builtins
+  (check-equal? (length binders) 1)
+  (check-equal? (caar binders) 'A))
+
+(test-case "spec: explicit binders not duplicated by auto-detection"
+  (define se (spec-for 'myfoo2 "(spec myfoo2 ($brace-params A : Type) A -> A)"))
+  (define binders (spec-entry-implicit-binders se))
+  ;; Only one A, not duplicated
+  (check-equal? (length binders) 1)
+  (check-equal? (caar binders) 'A))
+
+(test-case "spec: auto-introduced vars with explicit binder coexist"
+  (define se (spec-for 'mypair "(spec mypair ($brace-params A : Type) A -> B -> (A B))"))
+  (define binders (spec-entry-implicit-binders se))
+  ;; A is explicit, B is auto-detected
+  (check-equal? (length binders) 2)
+  (check-true (pair? (assq 'A binders)))
+  (check-true (pair? (assq 'B binders))))
+
+;; ========================================
+;; 9. Phase 1b: Kind inference from :where
+;; ========================================
+
+(test-case "spec: kind refined from :where constraint (HKT)"
+  (parameterize ([current-global-env (hasheq)]
+                 [current-spec-store (hasheq)]
+                 [current-property-store (hasheq)]
+                 [current-functor-store (hasheq)]
+                 [current-preparse-registry (current-preparse-registry)]
+                 [current-trait-registry (hasheq)]
+                 [current-trait-laws (hasheq)])
+    ;; Register a trait with Type -> Type param
+    (process-string "(trait (MySeq (C : (-> (Type 0) (Type 0)))) (first : (C Nat) -> Nat))")
+    ;; Now spec without explicit binder for C
+    (process-string "(spec gmap (C A) -> (C A) where (MySeq C))")
+    (define se (lookup-spec 'gmap))
+    (check-true (spec-entry? se))
+    (define binders (spec-entry-implicit-binders se))
+    ;; C should be auto-detected and refined to (-> (Type 0) (Type 0))
+    (define c-binder (assq 'C binders))
+    (check-true (pair? c-binder))
+    (check-equal? (cdr c-binder) '(-> (Type 0) (Type 0)))
+    ;; A should remain at default kind (Type 0)
+    (define a-binder (assq 'A binders))
+    (check-true (pair? a-binder))
+    (check-equal? (cdr a-binder) '(Type 0))))
+
+(test-case "spec: auto-detect from where-only variable"
+  (parameterize ([current-global-env (hasheq)]
+                 [current-spec-store (hasheq)]
+                 [current-property-store (hasheq)]
+                 [current-functor-store (hasheq)]
+                 [current-preparse-registry (current-preparse-registry)]
+                 [current-trait-registry (hasheq)]
+                 [current-trait-laws (hasheq)])
+    ;; Register trait
+    (process-string "(trait (MyEq (A : (Type 0))) (eq? : A -> A -> Bool))")
+    ;; B appears only in where clause, not in type signature
+    (process-string "(spec mydefault Nat where (MyEq B))")
+    (define se (lookup-spec 'mydefault))
+    (check-true (spec-entry? se))
+    (define binders (spec-entry-implicit-binders se))
+    ;; B should be auto-detected from the constraint args
+    (define b-binder (assq 'B binders))
+    (check-true (pair? b-binder))))

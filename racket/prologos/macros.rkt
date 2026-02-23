@@ -153,6 +153,10 @@
          lookup-spec
          process-spec
          extract-where-clause
+         ;; Phase 1b: Auto-implicit detection
+         capitalized-symbol?
+         collect-free-type-vars-from-datums
+         known-type-name?
          maybe-inject-where
          param-type->angle-type
          ;; Property registry
@@ -1555,10 +1559,25 @@
   (define inline-constraints
     (extract-inline-constraints type-tokens))
   (define all-constraints (append where-constraints inline-constraints))
+  ;; Phase 1b: Auto-introduce free type variables from type signature and constraints.
+  ;; Collect capitalized symbols that aren't already in implicit binders or known type names.
+  ;; These become {X : Type} binders, which propagate-kinds-from-constraints may refine.
+  (define auto-detected-binders
+    (let* ([constraint-arg-datums (apply append (map cdr all-constraints))]
+           [all-datums (append type-tokens constraint-arg-datums)]
+           [candidates (collect-free-type-vars-from-datums all-datums)]
+           [existing-names (map car merged-implicit-binders)]
+           [new-vars (filter (lambda (v)
+                               (and (not (memq v existing-names))
+                                    (not (known-type-name? v))))
+                             candidates)])
+      (map (lambda (v) (cons v '(Type 0))) new-vars)))
+  (define all-implicit-binders
+    (append merged-implicit-binders auto-detected-binders))
   (define refined-implicit-binders
-    (if (or (null? merged-implicit-binders) (null? all-constraints))
-        merged-implicit-binders
-        (propagate-kinds-from-constraints merged-implicit-binders all-constraints name)))
+    (if (or (null? all-implicit-binders) (null? all-constraints))
+        all-implicit-binders
+        (propagate-kinds-from-constraints all-implicit-binders all-constraints name)))
   ;; Detect and desugar variadic rest type: `A $rest` → `(List A)`
   ;; The $rest sentinel marks the preceding type as variadic.
   (define-values (desugared-type-tokens rest-type)
@@ -3466,6 +3485,33 @@
       (lookup-type-ctors sym) ;; user-defined type → known
       (lookup-trait sym)      ;; trait → known (not a variable)
       (lookup-bundle sym)))   ;; bundle → known (not a variable)
+
+;; Phase 1b: Check if a symbol starts with an uppercase letter (type variable candidate)
+(define (capitalized-symbol? sym)
+  (let ([s (symbol->string sym)])
+    (and (> (string-length s) 0)
+         (char-upper-case? (string-ref s 0)))))
+
+;; Phase 1b: Collect free type variable candidates from datum tokens.
+;; Walks the token tree and collects symbols that start with an uppercase letter,
+;; excluding special syntax sentinels. Returns a deduplicated list in first-occurrence order.
+(define (collect-free-type-vars-from-datums datums)
+  (define seen (make-hasheq))
+  (define result '())
+  (define (walk d)
+    (cond
+      [(symbol? d)
+       (when (and (capitalized-symbol? d)
+                  (not (hash-has-key? seen d)))
+         (hash-set! seen d #t)
+         (set! result (cons d result)))]
+      [(pair? d)
+       (walk (car d))
+       (walk (cdr d))]
+      [(syntax? d) (walk (syntax-e d))]
+      [else (void)]))
+  (for-each walk datums)
+  (reverse result))
 
 ;; ========================================
 ;; expand-bundle-constraints: recursive expansion with cycle detection
