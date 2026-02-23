@@ -222,6 +222,7 @@
          op-info-assoc
          op-info-left-bp
          op-info-right-bp
+         op-info-swap?
          builtin-operators
          builtin-precedence-groups
          effective-operator-table
@@ -3080,7 +3081,7 @@
 ;; tighter-than: (listof symbol) — names of groups this is tighter than
 
 ;; --- Operator info ---
-(struct op-info (symbol fn-name group assoc left-bp right-bp) #:transparent)
+(struct op-info (symbol fn-name group assoc left-bp right-bp swap?) #:transparent)
 ;; symbol: the operator symbol as it appears in .{...} (e.g., '+)
 ;; fn-name: the prefix function name to desugar to (e.g., 'add)
 ;; group: symbol name of the precedence group
@@ -3150,10 +3151,10 @@
 ;; --- Built-in operator table ---
 (define builtin-operators
   (let ([bps builtin-binding-powers])
-    (define (make-op sym fn grp)
+    (define (make-op sym fn grp [swap? #f])
       (define bp-pair (hash-ref bps grp))
       (define g (hash-ref builtin-precedence-groups grp))
-      (cons sym (op-info sym fn grp (prec-group-assoc g) (car bp-pair) (cdr bp-pair))))
+      (cons sym (op-info sym fn grp (prec-group-assoc g) (car bp-pair) (cdr bp-pair) swap?)))
     (make-hasheq
      (list
       ;; Arithmetic — fn-names are parser keywords that produce surf-generic-* AST nodes
@@ -3164,12 +3165,13 @@
       (make-op '%  'mod     'multiplicative)
       (make-op '** 'pow     'exponential)
       ;; Comparison — parser keywords lt/le/eq produce surf-generic-* AST nodes
+      ;; > and >= rewrite to (lt b a) and (le b a) via swap? flag
       (make-op '== 'eq      'comparison)
       (make-op '/= 'neq     'comparison)
       (make-op '<  'lt      'comparison)
       (make-op '<= 'le      'comparison)
-      (make-op '>  'gt      'comparison)
-      (make-op '>= 'ge      'comparison)
+      (make-op '>  'lt      'comparison #t)   ; > a b → (lt b a)
+      (make-op '>= 'le      'comparison #t)   ; >= a b → (le b a)
       ;; Logical — use the identifier names (& and | aren't valid token chars)
       (make-op 'and 'and    'logical-and)
       (make-op 'or  'or     'logical-or)
@@ -3254,10 +3256,49 @@
       [else
        (error 'mixfix "Expected expression, got operator: ~a" tok)]))
 
-  ;; Parse expression with minimum binding power
-  (define (parse-expr min-bp)
+  ;; Build operator result, respecting swap? flag for > and >=
+  (define (make-op-result op lhs rhs)
+    (if (op-info-swap? op)
+        (list (op-info-fn-name op) rhs lhs)
+        (list (op-info-fn-name op) lhs rhs)))
+
+  ;; Check if an operator is in the comparison group
+  (define (comparison-op? op)
+    (and op (eq? (op-info-group op) 'comparison)))
+
+  ;; Check if a fn-name corresponds to a comparison operator
+  (define comparison-fn-names
+    (for/seteq ([(sym info) (in-hash op-table)]
+                #:when (comparison-op? info))
+      (op-info-fn-name info)))
+
+  (define (comparison-form? form)
+    (and (pair? form) (= (length form) 3)
+         (set-member? comparison-fn-names (car form))))
+
+  ;; Extract the shared operand (rightmost RHS) from a comparison chain.
+  ;; Returns #f if the form is not a valid comparison chain.
+  ;; - (lt a b) → b
+  ;; - (and (lt a b) (le b c)) → c
+  ;; - (and (and ...) (gt c d)) → d
+  (define (extract-chain-shared form)
+    (cond
+      [(comparison-form? form) (caddr form)]
+      [(and (pair? form) (eq? (car form) 'and) (= (length form) 3))
+       ;; (and left right) — extract from the rightmost comparison
+       (define right (caddr form))
+       (and (comparison-form? right) (caddr right))]
+      [else #f]))
+
+  ;; Parse expression with minimum binding power.
+  ;; context-group: the group of the operator that set this binding power context (or #f at top-level).
+  ;; Used for incomparable-group detection.
+  (define (parse-expr min-bp [context-group #f])
     (define lhs (parse-primary))
-    (let loop ([lhs lhs])
+    ;; last-chain-rhs tracks the actual RHS operand of the last comparison in a chain.
+    ;; This is needed because swap? operators reorder args, so we can't extract
+    ;; the shared operand from the output form alone.
+    (let loop ([lhs lhs] [last-chain-rhs #f])
       (define op-tok (peek))
       (cond
         [(or (not op-tok) (at-end?))
@@ -3270,7 +3311,25 @@
             lhs]
            [else
             (define op-left-bp (op-info-left-bp op))
+            (define op-grp (op-info-group op))
+            ;; Incomparable-group check: if there's a context group and the current
+            ;; operator's group is incomparable, error with guidance.
+            (when (and context-group (not (eq? context-group op-grp)))
+              (define cmp (compare-groups op-grp context-group groups))
+              (when (eq? cmp 'incomparable)
+                (error 'mixfix
+                       (format "Operators from groups '~a' and '~a' have no defined precedence relationship — use [] for explicit grouping"
+                               op-grp context-group))))
+            ;; Chained comparison detection: if we have a last-chain-rhs (from a previous
+            ;; comparison) and the current op is also comparison, chain.
             (cond
+              [(and last-chain-rhs (comparison-op? op) (>= op-left-bp min-bp))
+               ;; Chained comparison: shared operand = last-chain-rhs
+               ;; Desugar: (and lhs (new-cmp shared rhs))
+               (advance!) ; consume operator
+               (define rhs (parse-expr (op-info-right-bp op) op-grp))
+               (define new-cmp (make-op-result op last-chain-rhs rhs))
+               (loop (list 'and lhs new-cmp) rhs)]
               [(< op-left-bp min-bp)
                ;; Operator binds less tightly — return lhs
                lhs]
@@ -3279,9 +3338,9 @@
                (case (op-info-assoc op)
                  [(right) ;; Right-assoc: allow (continue with same min-bp)
                   (advance!) ; consume operator
-                  (define rhs (parse-expr (op-info-right-bp op)))
-                  (define result (list (op-info-fn-name op) lhs rhs))
-                  (loop result)]
+                  (define rhs (parse-expr (op-info-right-bp op) op-grp))
+                  (define result (make-op-result op lhs rhs))
+                  (loop result #f)]
                  [(left) ;; Left-assoc: we already collected lhs, don't recurse further
                   lhs]
                  [(none) ;; Non-associative: error on chaining
@@ -3292,9 +3351,11 @@
               [else
                ;; Operator binds tighter — consume and recurse
                (advance!) ; consume operator
-               (define rhs (parse-expr (op-info-right-bp op)))
-               (define result (list (op-info-fn-name op) lhs rhs))
-               (loop result)])])])))
+               (define rhs (parse-expr (op-info-right-bp op) op-grp))
+               (define result (make-op-result op lhs rhs))
+               ;; Track chain-rhs for comparison operators
+               (define new-chain-rhs (and (comparison-op? op) rhs))
+               (loop result new-chain-rhs)])])])))
 
   (if (= len 0)
       (error 'mixfix "Empty .{} expression")
@@ -5041,7 +5102,7 @@
       ;; otherwise use fn-name as a regular function application
       (define assoc-val (prec-group-assoc grp))
       (register-user-operator! op-sym
-        (op-info op-sym fn-name grp-name assoc-val (car bp-pair) (cdr bp-pair))))))
+        (op-info op-sym fn-name grp-name assoc-val (car bp-pair) (cdr bp-pair) #f)))))
 
 ;; ========================================
 ;; process-impl: trait implementation

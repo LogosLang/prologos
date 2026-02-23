@@ -145,8 +145,8 @@
   (define result (preparse-expand-form '($mixfix a < b and c > d or e == f)))
   ;; or is loosest, then and, then < > ==
   ;; a < b and c > d or e == f
-  ;; = (or (and (lt a b) (gt c d)) (eq e f))
-  (check-equal? result '(or (and (lt a b) (gt c d)) (eq e f))))
+  ;; = (or (and (lt a b) (lt d c)) (eq e f))   [> desugars to swapped lt]
+  (check-equal? result '(or (and (lt a b) (lt d c)) (eq e f))))
 
 (test-case "pratt: unary minus"
   (define result (preparse-expand-form '($mixfix - a)))
@@ -395,14 +395,91 @@
     (define result (pratt-parse '(a ~= b) (effective-operator-table) (effective-precedence-groups)))
     (check-equal? result '(my-approx a b))))
 
-(test-case "pratt: user-defined op mixed with builtins"
+(test-case "pratt: user-defined op in builtin group"
   (parameterize ([current-user-precedence-groups (hasheq)]
                  [current-user-operators (hasheq)]
                  [current-spec-store (current-spec-store)])
-    ;; Register a custom operator in the additive group
-    (process-precedence-group '(precedence-group my-add ($brace-params :assoc left :tighter-than comparison)))
-    (process-spec '(spec my-plus A -> A -> A ($brace-params :mixfix ($brace-params :symbol +++ :group my-add))))
+    ;; Register a custom operator in the existing additive group (alongside +, -, ++)
+    (process-spec '(spec my-plus A -> A -> A ($brace-params :mixfix ($brace-params :symbol +++ :group additive))))
     ;; +++ at additive level, * is multiplicative (tighter)
     ;; a +++ b * c → (my-plus a (* b c))
     (define result (pratt-parse '(a +++ b * c) (effective-operator-table) (effective-precedence-groups)))
     (check-equal? result '(my-plus a (* b c)))))
+
+;; ========================================
+;; H. Phase 3 tests: chained comparisons + diagnostics
+;; ========================================
+
+;; --- Chained comparisons (Pratt parser) ---
+
+(test-case "pratt: chained a < b <= c"
+  (define result (preparse-expand-form '($mixfix a < b <= c)))
+  (check-equal? result '(and (lt a b) (le b c))))
+
+(test-case "pratt: chained a > b > c"
+  (define result (preparse-expand-form '($mixfix a > b > c)))
+  ;; > desugars to swapped lt: (gt a b) → (lt b a)
+  (check-equal? result '(and (lt b a) (lt c b))))
+
+(test-case "pratt: chained a < b < c < d (3-way)"
+  (define result (preparse-expand-form '($mixfix a < b < c < d)))
+  ;; (and (and (lt a b) (lt b c)) (lt c d))
+  (check-equal? result '(and (and (lt a b) (lt b c)) (lt c d))))
+
+(test-case "pratt: chained a == b == c"
+  (define result (preparse-expand-form '($mixfix a == b == c)))
+  (check-equal? result '(and (eq a b) (eq b c))))
+
+(test-case "pratt: mixed chain a < b >= c"
+  (define result (preparse-expand-form '($mixfix a < b >= c)))
+  ;; >= desugars to swapped le: (ge a b) → (le b a)
+  (check-equal? result '(and (lt a b) (le c b))))
+
+;; --- Chained comparisons E2E ---
+
+;; Note: In sexp mode, < and > are readtable macro characters (angle brackets),
+;; so sexp E2E tests with < / > are only possible via WS mode's .{...} syntax.
+;; The Pratt parser correctly handles them at the datum level (see unit tests above).
+
+(test-case "e2e/ws: chained .{1 < 2 <= 3}"
+  (define result
+    (run-ws-last "eval .{1N < 2N <= 3N}\n"))
+  (check-equal? result "true : Bool"))
+
+(test-case "e2e/ws: chained .{3 > 2 > 1}"
+  (define result
+    (run-ws-last "eval .{3N > 2N > 1N}\n"))
+  (check-equal? result "true : Bool"))
+
+(test-case "e2e/ws: chained .{1 < 3 > 2} (mixed)"
+  (define result
+    (run-ws-last "eval .{1N < 3N > 2N}\n"))
+  (check-equal? result "true : Bool"))
+
+(test-case "e2e/sexp: chained == (no angle issues)"
+  (define result
+    (run-last "(eval ($mixfix 3N == 3N == 3N))"))
+  (check-equal? result "true : Bool"))
+
+;; --- Incomparable-group error ---
+
+(test-case "pratt: incomparable groups error"
+  ;; + (additive) and :: (cons) are incomparable in the DAG
+  ;; However, the error only fires in a recursive context where the context-group is set.
+  ;; At top level, they silently resolve by binding power.
+  ;; To test properly, we need a nested scenario.
+  ;; a :: b + c — :: has right-bp = 20, + has left-bp = 20
+  ;; parse: a as lhs, see :: (bp 20 > 0), consume, recurse with min-bp=20, context-group=cons
+  ;;   in recursion: parse b, see + (bp 20, context-group=cons), incomparable → error!
+  (check-exn #rx"no defined precedence relationship"
+    (lambda () (preparse-expand-form '($mixfix a :: b + c)))))
+
+;; --- Error diagnostics ---
+
+(test-case "pratt: error on empty mixfix"
+  (check-exn #rx"Empty"
+    (lambda () (preparse-expand-form '($mixfix)))))
+
+(test-case "pratt: error on trailing operator"
+  (check-exn #rx"Unexpected end"
+    (lambda () (preparse-expand-form '($mixfix a +)))))
