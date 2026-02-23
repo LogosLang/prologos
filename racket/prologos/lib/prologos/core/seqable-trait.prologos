@@ -13,3 +13,4 @@ require [prologos::data::lseq :refer [LSeq]]
 
 trait Seqable {C : Type -> Type}
   to-seq : [Pi [A :0 <Type>] [-> [C A] [LSeq A]]]
+  :doc "Convert a collection to a lazy sequence (LSeq)"

@@ -14,3 +14,4 @@ require [prologos::data::lseq :refer [LSeq]]
 trait Buildable {C : Type -> Type}
   from-seq   : [Pi [A :0 <Type>] [-> [LSeq A] [C A]]]
   empty-coll : [Pi [A :0 <Type>] [C A]]
+  :doc "Construct a collection from a lazy sequence"

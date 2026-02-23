@@ -15,25 +15,31 @@ require [prologos::core::abs-trait :refer [Abs Abs-abs]]
 ;; These wrappers are proper first-class values.
 
 spec plus [Add A] A -> A -> A
+  :doc "First-class addition — pass to higher-order functions like reduce, map"
 defn plus [dict x y]
   Add-add dict x y
 
 spec minus [Sub A] A -> A -> A
+  :doc "First-class subtraction"
 defn minus [dict x y]
   Sub-sub dict x y
 
 spec times [Mul A] A -> A -> A
+  :doc "First-class multiplication"
 defn times [dict x y]
   Mul-mul dict x y
 
 spec divide [Div A] A -> A -> A
+  :doc "First-class division"
 defn divide [dict x y]
   Div-div dict x y
 
 spec negate-fn [Neg A] A -> A
+  :doc "First-class negation"
 defn negate-fn [dict x]
   Neg-neg dict x
 
 spec abs-fn [Abs A] A -> A
+  :doc "First-class absolute value"
 defn abs-fn [dict x]
   Abs-abs dict x

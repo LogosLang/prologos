@@ -10,3 +10,11 @@ ns prologos::core::functor-trait
 
 trait Functor {F : Type -> Type}
   fmap : [Pi [A :0 <Type>] [Pi [B :0 <Type>] [-> [-> A B] [-> [F A] [F B]]]]]
+  :doc "Functor: map a function over a container while preserving structure"
+  :laws
+    - :name "identity"
+      :forall {xs : [F A]}
+      :holds [eq? [fmap id xs] xs]
+    - :name "composition"
+      :forall {f : [B -> C]} {g : [A -> B]} {xs : [F A]}
+      :holds [eq? [fmap [compose f g] xs] [fmap f [fmap g xs]]]

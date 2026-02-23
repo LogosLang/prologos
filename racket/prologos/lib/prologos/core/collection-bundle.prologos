@@ -10,5 +10,7 @@ require [prologos::core::foldable-trait   :refer [Foldable]]
 ;; Expands to (Seqable C, Buildable C, Foldable C) when used in a spec.
 ;; A Collection is any type constructor that can be converted to/from
 ;; lazy sequences and supports fold.
+;;
+;; Note: bundles do not yet support :doc/:laws metadata.
 
 bundle Collection := (Seqable, Buildable, Foldable)

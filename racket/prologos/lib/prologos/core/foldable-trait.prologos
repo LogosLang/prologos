@@ -10,3 +10,4 @@ ns prologos::core::foldable-trait
 
 trait Foldable {F : Type -> Type}
   fold : [Pi [A :0 <Type>] [Pi [B :0 <Type>] [-> [-> A [-> B B]] [-> B [-> [F A] B]]]]]
+  :doc "Fold a collection to a single value"

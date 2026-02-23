@@ -8,6 +8,14 @@ ns prologos::core::abs-trait
 
 trait Abs {A}
   abs : A -> A
+  :doc "Absolute value over type A"
+  :laws
+    - :name "non-negative"
+      :forall {x : A}
+      :holds [gte? [abs x] 0]
+    - :name "idempotent"
+      :forall {x : A}
+      :holds [eq? [abs [abs x]] [abs x]]
 
 ;; Int instance
 impl Abs Int

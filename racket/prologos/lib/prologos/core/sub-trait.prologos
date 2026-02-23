@@ -10,6 +10,7 @@ require [prologos::data::nat :refer [sub]]
 
 trait Sub {A}
   sub : A -> A -> A
+  :doc "Binary subtraction over type A"
 
 ;; Nat instance — saturating subtraction
 impl Sub Nat

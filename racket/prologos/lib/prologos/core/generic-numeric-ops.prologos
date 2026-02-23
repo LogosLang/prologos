@@ -13,7 +13,8 @@ require [prologos::core::multiplicative-identity-trait   :refer [MultiplicativeI
 ;; Uses the AdditiveIdentity dict as the zero element and Add-add for accumulation.
 ;; Left fold (reduce) for efficiency.
 
-spec sum {A : Type} [Add A] -> [AdditiveIdentity A] -> [List A] -> A
+spec sum [Add A] -> [AdditiveIdentity A] -> [List A] -> A
+  :doc "Sum a list using generic addition and an additive identity as zero"
 defn sum [add-dict id-dict xs]
   reduce A A [fn acc x [Add-add add-dict acc x]] [AdditiveIdentity-zero id-dict] xs
 
@@ -23,7 +24,8 @@ defn sum [add-dict id-dict xs]
 ;; product [Mul A] [MultiplicativeIdentity A] (List A) -> A
 ;; Uses MultiplicativeIdentity dict as one, Mul-mul for accumulation.
 
-spec product {A : Type} [Mul A] -> [MultiplicativeIdentity A] -> [List A] -> A
+spec product [Mul A] -> [MultiplicativeIdentity A] -> [List A] -> A
+  :doc "Multiply a list using generic multiplication and a multiplicative identity as one"
 defn product [mul-dict id-dict xs]
   reduce A A [fn acc x [Mul-mul mul-dict acc x]] [MultiplicativeIdentity-one id-dict] xs
 
@@ -33,6 +35,7 @@ defn product [mul-dict id-dict xs]
 ;; int-range : Int -> Int -> List Int
 
 spec int-range Int -> Int -> [List Int]
+  :doc "Generate a list of integers from start (inclusive) to end (exclusive)"
 defn int-range [start end]
   if [int-lt start end]
     cons Int start [int-range [int+ start 1] end]

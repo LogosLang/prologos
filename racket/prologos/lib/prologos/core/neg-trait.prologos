@@ -8,6 +8,11 @@ ns prologos::core::neg-trait
 
 trait Neg {A}
   neg : A -> A
+  :doc "Unary negation over type A"
+  :laws
+    - :name "involution"
+      :forall {x : A}
+      :holds [eq? [neg [neg x]] x]
 
 ;; Int instance
 impl Neg Int

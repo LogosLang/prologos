@@ -9,6 +9,14 @@ require [prologos::data::nat :refer [mult]]
 
 trait Mul {A}
   mul : A -> A -> A
+  :doc "Binary multiplication over type A"
+  :laws
+    - :name "commutative"
+      :forall {x y : A}
+      :holds [eq? [mul x y] [mul y x]]
+    - :name "associative"
+      :forall {x y z : A}
+      :holds [eq? [mul [mul x y] z] [mul x [mul y z]]]
 
 ;; Nat instance — delegates to prologos::data::nat/mult
 impl Mul Nat

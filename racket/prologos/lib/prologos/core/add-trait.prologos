@@ -11,6 +11,14 @@ require [prologos::data::nat :refer [add]]
 
 trait Add {A}
   add : A -> A -> A
+  :doc "Binary addition over type A"
+  :laws
+    - :name "commutative"
+      :forall {x y : A}
+      :holds [eq? [add x y] [add y x]]
+    - :name "associative"
+      :forall {x y z : A}
+      :holds [eq? [add [add x y] z] [add x [add y z]]]
 
 ;; Nat instance — delegates to prologos::data::nat/add
 impl Add Nat

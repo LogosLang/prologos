@@ -8,6 +8,7 @@ ns prologos::core::fromrat-trait
 
 trait FromRat {A}
   from-rational : Rat -> A
+  :doc "Convert from Rat to type A"
 
 ;; Rat instance — identity
 impl FromRat Rat

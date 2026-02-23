@@ -4,14 +4,22 @@ require [prologos::data::nat :refer [nat-eq?]]
 require [prologos::data::bool :refer [not]]
 
 ;; ========================================
-;; Eq Trait — via trait/impl system
+;; Eq Trait — structural equality
 ;; ========================================
-;; Eq A = A -> A -> Bool (single-method: dict IS the function)
-;; Generated: deftype Eq, accessor Eq-eq?
-;; Instance: Nat--Eq--dict, Nat--Eq--eq?
 
 trait Eq {A}
   eq? : A -> A -> Bool
+  :doc "Structural equality: returns true when two values of the same type are equal"
+  :laws
+    - :name "reflexive"
+      :forall {x : A}
+      :holds [eq? x x]
+    - :name "symmetric"
+      :forall {x y : A}
+      :holds [eq? [eq? x y] [eq? y x]]
+    - :name "transitive"
+      :forall {x y z : A}
+      :holds [if [and [eq? x y] [eq? y z]] [eq? x z] true]
 
 ;; Nat instance
 impl Eq Nat
@@ -23,5 +31,6 @@ def nat-eq Nat--Eq--dict
 
 ;; Generic neq: negate equality
 spec eq-neq [Eq A] A A -> Bool
+  :doc "Not-equal: negation of eq?"
 defn eq-neq [dict x y]
   not [dict x y]

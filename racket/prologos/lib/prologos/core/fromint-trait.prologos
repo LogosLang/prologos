@@ -8,6 +8,7 @@ ns prologos::core::fromint-trait
 
 trait FromInt {A}
   from-integer : Int -> A
+  :doc "Convert from Int to type A"
 
 ;; Int instance — identity
 impl FromInt Int

@@ -17,16 +17,16 @@ data List {A}
 ;; Folds
 ;; ========================================
 
-;; Right fold over the list.
 spec foldr [A -> B -> B] B [List A] -> B
+  :doc "Right fold: combine elements right-to-left with an accumulator"
 defn foldr [f z xs]
   match xs
     | nil       -> z
     | cons a as -> f a [foldr f z as]
 
-;; Left fold (reduce) over the list (tail-recursive).
 ;; reduce f z [a,b,c] = f (f (f z a) b) c
 spec reduce [B -> A -> B] B [List A] -> B
+  :doc "Left fold: combine elements left-to-right (tail-recursive)"
 defn reduce [f z xs]
   match xs
     | nil       -> z
@@ -36,22 +36,22 @@ defn reduce [f z xs]
 ;; Basic Operations
 ;; ========================================
 
-;; Length of a list.
 spec length [List A] -> Nat
+  :doc "Number of elements in the list"
 defn length [xs]
   match xs
     | nil      -> zero
     | cons _ as -> suc [length as]
 
-;; Map a function over the list.
 spec map [A -> B] [List A] -> List B
+  :doc "Apply a function to every element of a list"
 defn map [f xs]
   match xs
     | nil       -> nil
     | cons a as -> cons [f a] [map f as]
 
-;; Filter: keep elements satisfying the predicate.
 spec filter [A -> Bool] [List A] -> List A
+  :doc "Keep only elements satisfying the predicate"
 defn filter [pred xs]
   match xs
     | nil       -> nil
@@ -59,22 +59,22 @@ defn filter [pred xs]
       | true  -> cons a [filter pred as]
       | false -> filter pred as
 
-;; Append two lists.
 spec append [List A] [List A] -> List A
+  :doc "Concatenate two lists"
 defn append [xs ys]
   match xs
     | nil       -> ys
     | cons a as -> cons a [append as ys]
 
-;; Head of a list with a default value.
 spec head A [List A] -> A
+  :doc "First element of a list, or the default if empty"
 defn head [default xs]
   match xs
     | nil      -> default
     | cons a _ -> a
 
-;; Tail: returns Option (List A) -- none if empty, some of tail if non-empty.
 spec tail [List A] -> Option [List A]
+  :doc "All elements except the first, or None if empty"
 defn tail [xs]
   match xs
     | nil       -> none
@@ -85,8 +85,8 @@ spec singleton A -> List A
 defn singleton [x]
   cons x nil
 
-;; Element membership: check if x is in the list using Eq dictionary.
 spec elem [Eq A] A [List A] -> Bool
+  :doc "Check if an element is in the list using equality"
 defn elem [eq x xs]
   match xs
     | nil       -> false
@@ -106,6 +106,7 @@ defn reverse-acc [acc xs]
     | cons a as -> reverse-acc [cons a acc] as
 
 spec reverse [List A] -> List A
+  :doc "Reverse the order of elements"
 defn reverse [xs]
   reverse-acc nil xs
 
@@ -141,8 +142,8 @@ defn all? [p xs]
       | true  -> all? p as
       | false -> false
 
-;; Find the first element satisfying the predicate.
 spec find [A -> Bool] [List A] -> Option A
+  :doc "Find the first element satisfying the predicate"
 defn find [p xs]
   match xs
     | nil       -> none
@@ -195,8 +196,8 @@ spec range Nat -> List Nat
 defn range [n]
   range-helper n nil
 
-;; Flatten a list of lists.
 spec concat [List [List A]] -> List A
+  :doc "Flatten a list of lists into a single list"
 defn concat [xss]
   match xss
     | nil        -> nil
@@ -211,8 +212,8 @@ defn concat-map [f xs]
 ;; Slicing
 ;; ========================================
 
-;; Take the first n elements.
 spec take Nat [List A] -> List A
+  :doc "Take the first n elements"
 defn take [n xs]
   match n
     | zero  -> nil
@@ -220,8 +221,8 @@ defn take [n xs]
       | nil       -> nil
       | cons a as -> cons a [take k as]
 
-;; Drop the first n elements.
 spec drop Nat [List A] -> List A
+  :doc "Drop the first n elements"
 defn drop [n xs]
   match n
     | zero  -> xs
@@ -273,8 +274,8 @@ defn partition [p xs]
 ;; Zipping
 ;; ========================================
 
-;; Zip two lists with a function.
 spec zip-with [A -> B -> C] [List A] [List B] -> List C
+  :doc "Combine two lists element-wise with a function"
 defn zip-with [f xs ys]
   match xs
     | nil       -> nil
@@ -282,8 +283,8 @@ defn zip-with [f xs ys]
       | nil       -> nil
       | cons b bs -> cons [f a b] [zip-with f as bs]
 
-;; Zip two lists into pairs.
 spec zip [List A] [List B] -> List [Sigma [_ <A>] B]
+  :doc "Pair corresponding elements of two lists"
 defn zip [xs ys]
   zip-with A B [Sigma [_ <A>] B] [fn a b [pair a b]] xs ys
 
@@ -340,8 +341,8 @@ defn merge [lte xs ys]
         | true  -> cons x [merge lte xs2 ys]
         | false -> cons y [merge lte xs ys2]
 
-;; Merge sort using a comparator.
 spec sort [A -> A -> Bool] [List A] -> List A
+  :doc "Sort a list using a less-than-or-equal comparator (merge sort)"
 defn sort [lte xs]
   match xs
     | nil       -> nil

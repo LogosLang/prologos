@@ -8,6 +8,7 @@ ns prologos::core::div-trait
 
 trait Div {A}
   div : A -> A -> A
+  :doc "Binary division over type A"
 
 ;; Int instance — integer division
 impl Div Int

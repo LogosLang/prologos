@@ -10,6 +10,7 @@ data Result {A E}
 
 ;; Map a function over the ok value.
 spec map [A -> B] [Result A E] -> Result B E
+  :doc "Apply a function to the success value, pass through errors"
 defn map [f r]
   match r
     | ok x  -> ok [f x]
@@ -17,6 +18,7 @@ defn map [f r]
 
 ;; Map a function over the error value.
 spec map-err [E -> F] [Result A E] -> Result A F
+  :doc "Apply a function to the error value, pass through successes"
 defn map-err [f r]
   match r
     | ok x  -> ok x
@@ -24,6 +26,7 @@ defn map-err [f r]
 
 ;; Unwrap with a default value.
 spec unwrap-or A [Result A E] -> A
+  :doc "Extract the success value or return a default on error"
 defn unwrap-or [default r]
   match r
     | ok x  -> x
@@ -31,6 +34,7 @@ defn unwrap-or [default r]
 
 ;; Chain a computation on the ok value (monadic bind).
 spec and-then [A -> Result B E] [Result A E] -> Result B E
+  :doc "Monadic bind: chain computations that may fail with errors"
 defn and-then [f r]
   match r
     | ok x  -> f x
@@ -38,6 +42,7 @@ defn and-then [f r]
 
 ;; Chain a computation on the error value (recover from errors).
 spec or-else [E -> Result A F] [Result A E] -> Result A F
+  :doc "Attempt error recovery by transforming the error"
 defn or-else [f r]
   match r
     | ok x  -> ok x
@@ -45,6 +50,7 @@ defn or-else [f r]
 
 ;; True if ok.
 spec ok? [Result A E] -> Bool
+  :doc "Returns true if the Result is a success"
 defn ok? [r]
   match r
     | ok _  -> true
@@ -52,6 +58,7 @@ defn ok? [r]
 
 ;; True if err.
 spec err? [Result A E] -> Bool
+  :doc "Returns true if the Result is an error"
 defn err? [r]
   match r
     | ok _  -> false
@@ -61,6 +68,7 @@ defn err? [r]
 require [prologos::data::option :refer [Option none some]]
 
 spec to-option [Result A E] -> Option A
+  :doc "Convert to Option, discarding error information"
 defn to-option [r]
   match r
     | ok x  -> some x
@@ -68,6 +76,7 @@ defn to-option [r]
 
 ;; Apply a 2-argument function to two Results. Returns first error.
 spec map2 [A -> B -> C] [Result A E] [Result B E] -> Result C E
+  :doc "Apply a binary function to two Results; short-circuits on first error"
 defn map2 [f ra rb]
   match ra
     | err e -> err e

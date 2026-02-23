@@ -1507,7 +1507,7 @@
   (when (null? body-tokens)
     (error 'spec "spec ~a: missing type signature" name))
   ;; Extract trailing metadata block: check if last token is ($brace-params :key ...)
-  (define-values (pre-meta-tokens metadata)
+  (define-values (pre-meta-tokens-0 metadata-0)
     (let* ([last-tok (last body-tokens)]
            [is-meta? (and (pair? last-tok)
                           (let ([h (car last-tok)])
@@ -1520,6 +1520,28 @@
       (if is-meta?
           (values (drop-right body-tokens 1) (parse-spec-metadata last-tok))
           (values body-tokens #f))))
+  ;; Also handle inline keyword-headed children from WS mode
+  ;; e.g. (:doc "...") as a direct child of the spec form
+  (define-values (pre-meta-tokens metadata)
+    (let loop ([remaining pre-meta-tokens-0]
+               [kept '()]
+               [meta (or metadata-0 (hasheq))])
+      (cond
+        [(null? remaining)
+         (values (reverse kept)
+                 (if (hash-empty? meta) (and metadata-0 meta) meta))]
+        [(and (pair? (car remaining)) (keyword-like-symbol? (caar remaining)))
+         (define entry (car remaining))
+         (define key (car entry))
+         (define val (cdr entry))
+         (define merged-val
+           (cond
+             [(and (= (length val) 1) (string? (car val))) (car val)]
+             [(= (length val) 1) (car val)]
+             [else val]))
+         (loop (cdr remaining) kept (hash-set meta key merged-val))]
+        [else
+         (loop (cdr remaining) (cons (car remaining) kept) meta)])))
   ;; Merge :doc from metadata with positional docstring (metadata wins)
   (define merged-docstring
     (or (and metadata (hash-ref metadata ':doc #f)) docstring))
@@ -4151,7 +4173,7 @@
 
   ;; Separate trailing metadata block from method specs
   ;; A trailing ($brace-params :key ...) is trait metadata, not a method
-  (define-values (method-specs trait-metadata)
+  (define-values (method-specs-0 trait-metadata-0)
     (if (and (not (null? raw-methods))
              (let ([last-elem (last raw-methods)])
                (and (pair? last-elem)
@@ -4164,6 +4186,33 @@
                     (keyword-like-symbol? (cadr last-elem)))))
         (values (drop-right raw-methods 1) (parse-spec-metadata (last raw-methods)))
         (values raw-methods (hasheq))))
+
+  ;; Also handle inline keyword-headed children from WS mode
+  ;; e.g. (:doc "...") and (:laws ...) as direct children of the trait body
+  (define-values (method-specs trait-metadata)
+    (let loop ([remaining method-specs-0]
+               [methods '()]
+               [meta trait-metadata-0])
+      (cond
+        [(null? remaining) (values (reverse methods) meta)]
+        [(and (pair? (car remaining)) (keyword-like-symbol? (caar remaining)))
+         ;; This is a keyword-headed entry like (:doc "...") or (:laws ...)
+         (define entry (car remaining))
+         (define key (car entry))
+         (define val (cdr entry))
+         (define merged-val
+           (cond
+             ;; (:doc "string") → just the string
+             [(and (= (length val) 1) (string? (car val))) (car val)]
+             ;; (:laws (- ...) (- ...) ...) → list of law entries
+             [(and (pair? val) (pair? (car val))) val]
+             ;; Single value
+             [(= (length val) 1) (car val)]
+             ;; Multiple values → keep as list
+             [else val]))
+         (loop (cdr remaining) methods (hash-set meta key merged-val))]
+        [else
+         (loop (cdr remaining) (cons (car remaining) methods) meta)])))
 
   (when (null? method-specs)
     (error 'trait "trait ~a: must have at least one method" trait-name))
