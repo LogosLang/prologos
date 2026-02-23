@@ -6,21 +6,39 @@
 
 * Executive Summary
 
-This document proposes extending Prologos's ~spec~ form to accept an optional
-metadata map --- using the language's existing implicit map syntax --- with keys
-for documentation, examples, properties, contracts, and refinements. The
-extended spec becomes the primary interface between the programmer and the type
-system: where all function metadata converges and from which tests, proofs, and
-documentation can be auto-generated.
+This document proposes extending Prologos's surface language with three
+coordinated features that make dependent types, properties, and higher-kinded
+abstractions approachable without sacrificing formal rigor:
+
+1. *Extended ~spec~* with keyword metadata (~:implicits~, ~:where~, ~:doc~,
+   ~:examples~, ~:properties~, contracts, refinements)
+2. *~property~ keyword* for reusable, composable proposition groups (analogous
+   to ~bundle~ for traits), with ~:includes~ composition and ~:laws~ on traits
+3. *~functor~ keyword* for named type abstractions with category-theoretic
+   metadata (~:unfolds~, ~:compose~, ~:identity~, ~:laws~) --- eliminating
+   raw Pi/Sigma types from the surface language
+4. *~??~ typed holes* for interactive, hole-driven development
+
+The design philosophy: /dependent types are the implementation substrate; the
+surface language speaks in domain terms/. Pi types, Sigma types, universe
+levels, and multiplicity annotations exist in ~:unfolds~ blocks, in the
+elaborator, and in the type checker. The primary programmer interface is
+structured metadata expressed through keywords.
 
 The design is informed by a survey of Clojure Spec, Malli, PropEr, Agda, Idris,
-Lean, Liquid Haskell, F*, and Racket contracts. Property-based testing and
+Lean 4, Haskell, F*, Koka, and Racket contracts. Property-based testing and
 interactive theorem proving are explicit design /targets/ (we design syntax to
 support them) but not implementation targets (we do not build the engines yet).
 
-A companion feature --- ~??~ typed holes for interactive development --- is
-proposed alongside the extended spec, providing the syntactic basis for
-Agda/Idris-style hole-driven programming.
+** Keyword Symmetry Table
+
+| Abstraction layer | Keyword | What it names | Analogous to |
+|-------------------+------------+--------------------------------------+--------------------------------------|
+| Function interface | ~spec~ | Function type + metadata | ML type signatures |
+| Method requirement | ~trait~ | A single method signature | Haskell typeclass method |
+| Requirement group | ~bundle~ | Conjunction of traits | Haskell superclass constraint |
+| Proposition group | ~property~ | Conjunction of ~:holds~ clauses | QuickCheck property suites |
+| Type abstraction | ~functor~ | Parameterized type + algebraic structure | CT functor / Lean ~abbrev~, but richer |
 
 * Part I: Research Survey
 
@@ -191,25 +209,36 @@ All dependently-typed languages solve this the same way: separate the
 achieves this. The extended spec pushes further by structuring the metadata
 around the signature.
 
-*** Lean's Instance Search
+*** Lean's ~abbrev~ vs ~def~ Distinction
 
-Lean uses three kinds of implicit arguments:
-- ~{x : A}~ --- unified by unification (Prologos: ~{A : Type}~)
-- ~[x : A]~ --- found by type class synthesis (Prologos: ~where (Trait A)~)
-- ~(x : A)~ --- explicit
+Lean 4 distinguishes transparent abbreviations from opaque definitions:
 
-Lean's ~outParam~ marks parameters that should be determined by the search.
-Known issue: when a class depends on another class with output parameters,
-typeclass synthesis frequently gets stuck. Prologos should keep instance search
-shallow and predictable.
+- ~abbrev~ is tagged ~@[reducible]~ --- unfolded during elaboration, instance
+  synthesis, and definitional equality checks. ~abbrev MyMonad := ReaderT Env IO~
+  means ~Monad MyMonad~ resolves automatically via ~Monad (ReaderT ...)~.
+- ~def~ (semireducible) is /not/ unfolded by instance synthesis. You need
+  explicit instances for opaque type definitions.
+
+This distinction is critical for type aliases that should "carry through" trait
+instances vs abstract types that deliberately hide their representation.
+
+*** Type-Level Functions in Dependently-Typed Languages
+
+In Agda, Idris, and Lean, type synonyms are ordinary functions returning ~Type~.
+No special mechanism needed. The tradeoff: full type-level computation makes
+inference harder and error messages may show fully-reduced forms rather than the
+user's abbreviation name.
+
+Haskell's ~type~ synonyms are transparent but /cannot be partially applied/ ---
+a fundamental restriction. Prologos should avoid this limitation.
 
 *** Insight for Prologos
 
 Our existing implicit argument inference (Sprint 3) and trait resolution (Phases
 A--E) provide the core mechanisms. The ergonomic challenge is /presentation/ ---
-how to show complex Pi types without overwhelming users. ~spec~ is already the
-answer; extended spec makes it better by providing structured metadata alongside
-the type.
+how to show complex Pi types without overwhelming users. The extended ~spec~
+addresses function-level presentation; the ~functor~ keyword (Part VII)
+addresses type-level presentation.
 
 ** 5. Refinement Types (Liquid Haskell, F*)
 
@@ -237,6 +266,11 @@ Combines ML-like programming with dependent types, monadic effects, and
 refinement types. Uses Z3 for automated verification. Programs extract to
 OCaml, F#, or C.
 
+F* provides fine-grained unfolding control: ~unfold~ (always reduce),
+~unfold_for_unification_and_vcgen~ (reduce only during unification and VC
+generation), or opaque (default). This three-tier system gives precise control
+over where abbreviations are transparent.
+
 *** Insight for Prologos
 
 Prologos already has full dependent types, which /subsume/ refinement types:
@@ -262,6 +296,13 @@ the contract.
   keep specs /open/ (new keys without modifying existing specs) and /compositional/
   (specs combine via simple operations). Clojure handles this via ~s/merge~ and ~s/and~.
 
+*** Koka Effect Aliases
+
+Koka's ~alias pure = <div,exn>~ abbreviates a row of effects. This demonstrates
+the general principle: named groupings of constraints improve readability.
+Prologos's ~bundle~ already does this for trait constraints; ~property~ will do
+this for propositions; ~functor~ will do this for type structure.
+
 *** Insight for Prologos
 
 The map argument to ~spec~ is inherently open and composable. New keys can be added
@@ -269,6 +310,34 @@ in future versions without breaking existing code. Unrecognized keys are stored
 but not acted upon (/Postel principle/: liberal in what you accept, conservative
 in what you emit). Spec metadata should be first-class data (homoiconicity
 principle) --- quotable, inspectable, transformable.
+
+** 7. Type Abbreviation Mechanisms (Cross-Language Survey)
+
+*** Transparent Aliases
+
+Haskell ~type~, Rust ~type~, Koka ~alias~. Fully expanded before type checking;
+zero impact on inference. Haskell's limitation: type synonyms cannot be partially
+applied. Rust and Koka do not share this restriction.
+
+*** Opaque / Controlled-Reducibility Aliases
+
+Lean 4's ~abbrev~ (reducible, instances carry through) vs ~def~ (semireducible,
+opaque to instance search). Scala 3's ~opaque type~ (transparent inside defining
+scope, opaque outside). Haskell's ~newtype~ (distinct type, zero-cost at runtime).
+
+*** Module-Level Abstraction
+
+OCaml modules control type visibility through signatures: same ~type t = int~
+can be exposed transparently or abstractly depending on the ~.mli~ file. 1ML
+(Rossberg) unifies core and module language so type abbreviations are ordinary
+first-class functions.
+
+*** Insight for Prologos
+
+The ~functor~ keyword (Part VII) takes the Lean ~abbrev~ approach --- transparent
+by default, with the added richness of category-theoretic metadata. Unlike bare
+abbreviations, a ~functor~ declares what the type /means/ through its operations,
+not just what it expands to.
 
 * Part II: Syntax Design
 
@@ -303,34 +372,77 @@ The extension uses Prologos's existing implicit map syntax. Keyword-headed
 children after the type signature are collected into a metadata map:
 
 #+begin_src prologos
-spec sort {A : Type} [List A] -> [List A]
+spec sort [List A] -> [List A]
+  :implicits {A : Type}
   :where (Ord A)
   :doc "Sorts a list in ascending order using merge sort"
   :examples
     - [sort '[3N 1N 2N]] => '[1N 2N 3N]
     - [sort '[]] => '[]
-  :properties
-    - :name "idempotent"
-      :forall {xs : [List Nat]}
-      :holds [eq? [sort [sort xs]] [sort xs]]
-    - :name "length-preserving"
-      :forall {xs : [List Nat]}
-      :holds [eq? [length [sort xs]] [length xs]]
+  :properties (sortable-laws A)
   :see-also [reverse filter]
 #+end_src
+
+*** The ~:implicits~ Key
+
+The ~:implicits~ key lifts implicit binders out of the type signature into
+metadata, freeing the signature to express pure function shape:
+
+#+begin_src prologos
+;; Current (inline implicits):
+spec gmap {A B : Type} {C : Type -> Type} (Seqable C) -> (Buildable C) -> [A -> B] -> [C A] -> [C B]
+
+;; With :implicits + :where:
+spec gmap [A -> B] -> [C A] -> [C B]
+  :implicits {A B : Type} {C : Type -> Type}
+  :where (Seqable C) (Buildable C)
+#+end_src
+
+All three forms coexist:
+1. Inline ~{A : Type}~ --- for quick one-liners
+2. ~:implicits~ key --- for clean multi-line specs
+3. Omitted entirely --- when inference handles it (already works for kind ~Type~)
+
+*Implementation*: In ~process-spec~, extract ~:implicits~ from the metadata map
+and merge with any inline ~{...}~ binders. The ~extract-implicit-binders~
+function already returns ~(values implicit-binders remaining-tokens)~ --- union
+the two sources. Duplicate binders (same name in both) emit a warning and
+deduplicate.
+
+*** Multi-Arity Specs with Metadata
+
+*Decision*: metadata is function-level (shared across all arities). Each ~|~
+branch defines its own type; the metadata applies to the function as a whole.
+
+#+begin_src prologos
+spec greet
+  | Nat -> String
+  | String Nat -> String
+  :doc "Greet someone"
+  :examples
+    - [greet 42N] => "hello 42"
+    - [greet "world" 3N] => "hello world world world"
+  :properties
+    - :name "greet-nat-positive"
+      :forall {n : Nat}
+      :holds [str-length [greet n] > 0N]
+#+end_src
+
+Rationale: properties have ~:forall~ binders whose types determine which
+branch they exercise. Examples are concrete calls whose argument types
+determine dispatch. Per-branch metadata is theoretically more precise but
+practically redundant --- the types already carry the dispatch information.
 
 *** Sexp Mode Equivalent
 
 #+begin_src racket
-(spec sort {A : Type} [List A] -> [List A]
+(spec sort [List A] -> [List A]
+  (:implicits {A : Type})
   (:where (Ord A))
   (:doc "Sorts a list in ascending order using merge sort")
   (:examples (([sort '[3N 1N 2N]] => [1N 2N 3N])
               ([sort '[]] => [])))
-  (:properties
-    ((:name "idempotent")
-     (:forall {xs : [List Nat]})
-     (:holds (eq? (sort (sort xs)) (sort xs))))))
+  (:properties (sortable-laws A)))
 #+end_src
 
 *** How Parsing Works
@@ -349,14 +461,15 @@ spec sort {A : Type} [List A] -> [List A]
 
 4. Backward compatibility: specs without keyword children parse identically to
    today. The existing positional ~where~ keyword still works; ~:where~ in the
-   map augments it.
+   map augments it (union of both constraint sets).
 
 ** Supported Keys
 
 *** Phase 1 (Near-term: syntax + storage)
 
 | Key | Type | Semantics |
-|------------+------------------------------+-------------------------------------------|
+|--------------+------------------------------+-------------------------------------------|
+| ~:implicits~ | =(listof brace-param-group)= | Implicit type binders (moved from inline) |
 | ~:where~ | =(listof constraint)= | Trait constraints (migrated from positional) |
 | ~:doc~ | =string= | Documentation string |
 | ~:examples~ | =(listof (datum => datum))= | Input/output pairs for auto-test generation |
@@ -368,19 +481,10 @@ spec sort {A : Type} [List A] -> [List A]
 
 | Key | Type | Semantics |
 |---------------+------------------------+---------------------------------------------|
-| ~:properties~ | =(listof property)= | QuickCheck-style properties (see below) |
+| ~:properties~ | =(listof property-ref)= | Property references or inline property clauses |
 | ~:pre~ | =datum= (args -> Bool) | Precondition (contract on arguments) |
 | ~:post~ | =datum= (args ret -> Bool) | Postcondition (contract on return) |
 | ~:invariant~ | =datum= ({args ret} -> Bool) | Relation between args and return (Clojure ~:fn~) |
-
-Each /property/ entry has three keys:
-
-#+begin_src prologos
-:properties
-  - :name "commutativity"     ;; human-readable label
-    :forall {x y : Nat}       ;; universally quantified variables
-    :holds [eq? [add x y] [add y x]]  ;; boolean expression
-#+end_src
 
 *** Phase 3 (Long-term: verification)
 
@@ -539,12 +643,246 @@ This is fundamentally the Agda/Idris interaction model, but using Prologos's
 structured spec metadata to provide richer suggestions (e.g., if a property says
 the function is commutative, the case-split suggestions can leverage that).
 
-* Part IV: Expressing Higher-Kinded Pi Types Ergonomically
+* Part IV: The ~property~ Keyword
 
-A key concern is making dependent types /approachable/ for developers
-unfamiliar with the theory. The extended spec is the primary ergonomic lever.
+** Motivation
 
-** Progressive Complexity
+Many functions share the same properties. Sorting functions are idempotent.
+Monoids have identity and associativity. Functors preserve composition. Writing
+these properties inline on every ~spec~ is repetitive and error-prone.
+
+The ~property~ keyword provides reusable, composable proposition groups ---
+analogous to ~bundle~ for traits. The parallel is exact:
+
+| Concept | For methods | For propositions |
+|---------+-------------+------------------|
+| Single declaration | ~trait~ | individual ~:holds~ clause |
+| Named group | ~bundle~ | ~property~ |
+| Composition | ~bundle~ includes traits/bundles | ~property~ includes properties |
+| Attachment to spec | ~:where (Ord A)~ | ~:properties (sortable-laws A)~ |
+| Attachment to trait | (implicit) | ~:laws (functor-laws F)~ |
+
+** Syntax
+
+*** Basic Declaration
+
+#+begin_src prologos
+property sortable-laws {A : Type}
+  :where (Ord A)
+  - :name "idempotent"
+    :forall {xs : [List A]}
+    :holds [eq? [sort [sort xs]] [sort xs]]
+  - :name "length-preserving"
+    :forall {xs : [List A]}
+    :holds [eq? [length [sort xs]] [length xs]]
+  - :name "ordered-output"
+    :forall {xs : [List A]}
+    :holds [sorted? [sort xs]]
+#+end_src
+
+A ~property~ is a named, parameterized conjunction of propositions. Each clause
+is a universally quantified boolean assertion. The ~:where~ constrains what
+types the property is meaningful for.
+
+*** Usage in ~spec~
+
+#+begin_src prologos
+spec sort [List A] -> [List A]
+  :implicits {A : Type}
+  :where (Ord A)
+  :properties (sortable-laws A)
+#+end_src
+
+The ~(sortable-laws A)~ reference is like ~(Ord A)~ in a ~:where~ --- a named
+requirement, parameterized by type variables from the spec.
+
+** Composition via ~:includes~
+
+Properties compose via conjunction, paralleling ~bundle~:
+
+#+begin_src prologos
+property semigroup-laws {A : Type}
+  :where (Add A)
+  - :name "associativity"
+    :forall {x y z : A}
+    :holds [eq? [add [add x y] z] [add x [add y z]]]
+
+property monoid-laws {A : Type}
+  :where (Add A) (AdditiveIdentity A)
+  :includes (semigroup-laws A)
+  - :name "left-identity"
+    :forall {x : A}
+    :holds [eq? [add additive-identity x] x]
+  - :name "right-identity"
+    :forall {x : A}
+    :holds [eq? [add x additive-identity] x]
+
+property group-laws {A : Type}
+  :where (Add A) (AdditiveIdentity A) (Neg A)
+  :includes (monoid-laws A)
+  - :name "left-inverse"
+    :forall {x : A}
+    :holds [eq? [add [neg x] x] additive-identity]
+  - :name "right-inverse"
+    :forall {x : A}
+    :holds [eq? [add x [neg x]] additive-identity]
+#+end_src
+
+~group-laws~ includes ~monoid-laws~ which includes ~semigroup-laws~. Flattened:
+~group-laws~ is the conjunction of all six properties.
+
+** The Logic Programming Reading
+
+From the sequent calculus perspective:
+
+#+begin_example
+property P {A} :where (C₁ A) (C₂ A) :includes (Q A) =
+  Γ, C₁(A), C₂(A) ⊢ Q(A) ∧ p₁(A) ∧ p₂(A) ∧ ...
+#+end_example
+
+Each ~:holds~ clause is a proposition. ~:includes~ is conjunction. The whole
+~property~ is a universally quantified sequent: "for all A satisfying C₁ and C₂,
+the conjunction of all these propositions holds."
+
+When attached to a spec with ~:properties (P A)~, you assert that your
+implementation satisfies that sequent. At Phase 2 (QuickCheck), each conjunct
+becomes a test. At Phase 3 (verification), each conjunct becomes a proof
+obligation.
+
+The composability is clean because conjunction is associative and commutative ---
+the order and nesting of ~:includes~ don't matter; the result is always a flat
+set of propositions.
+
+** Parameterized Properties (Higher-Order)
+
+Properties can be parameterized over functions, not just types:
+
+#+begin_src prologos
+;; Properties about ANY sorting function
+property sorting-properties {A : Type} {f : [List A] -> [List A]}
+  :where (Ord A)
+  - :name "idempotent"
+    :forall {xs : [List A]}
+    :holds [eq? [f [f xs]] [f xs]]
+  - :name "permutation"
+    :forall {xs : [List A]}
+    :holds [same-elements? xs [f xs]]
+  - :name "ordered"
+    :forall {xs : [List A]}
+    :holds [sorted? [f xs]]
+
+;; Attach to multiple implementations:
+spec sort [List A] -> [List A]
+  :implicits {A : Type}
+  :where (Ord A)
+  :properties (sorting-properties A sort)
+
+spec merge-sort [List A] -> [List A]
+  :implicits {A : Type}
+  :where (Ord A)
+  :properties (sorting-properties A merge-sort)
+#+end_src
+
+Define the contract once, attach it to any implementation.
+
+** ~:laws~ on Traits
+
+A trait can reference its laws:
+
+#+begin_src prologos
+property functor-laws {F : Type -> Type}
+  :where (Functor F)
+  - :name "identity"
+    :forall {xs : [F A]}
+    :holds [eq? [fmap id xs] xs]
+  - :name "composition"
+    :forall {f : [A -> B]} {g : [B -> C]} {xs : [F A]}
+    :holds [eq? [fmap [>> f g] xs] [fmap g [fmap f xs]]]
+
+trait Functor {F : Type -> Type}
+  :laws (functor-laws F)
+  spec fmap {A B : Type} [A -> B] -> [F A] -> [F B]
+#+end_src
+
+~:laws~ says "any instance of this trait is expected to satisfy these
+properties." When you write ~instance Functor List~, the system knows to check
+~(functor-laws List)~. At Phase 2: generate ~List~-specialized QuickCheck tests.
+At Phase 3: proof obligations.
+
+** Hierarchical Laws (Functor → Applicative → Monad)
+
+#+begin_src prologos
+property applicative-laws {F : Type -> Type}
+  :where (Applicative F)
+  :includes (functor-laws F)
+  - :name "identity"
+    :forall {xs : [F A]}
+    :holds [eq? [ap [pure id] xs] xs]
+  - :name "homomorphism"
+    :forall {f : [A -> B]} {x : A}
+    :holds [eq? [ap [pure f] [pure x]] [pure [f x]]]
+
+property monad-laws {M : Type -> Type}
+  :where (Monad M)
+  :includes (applicative-laws M)
+  - :name "left-identity"
+    :forall {a : A} {f : [A -> [M B]]}
+    :holds [eq? [bind [pure a] f] [f a]]
+  - :name "right-identity"
+    :forall {ma : [M A]}
+    :holds [eq? [bind ma pure] ma]
+  - :name "associativity"
+    :forall {ma : [M A]} {f : [A -> [M B]]} {g : [B -> [M C]]}
+    :holds [eq? [bind [bind ma f] g] [bind ma [fn [a] [bind [f a] g]]]]
+#+end_src
+
+** Name Scoping in ~:includes~
+
+When ~monad-laws~ includes ~applicative-laws~ which includes ~functor-laws~,
+and both ~monad-laws~ and ~functor-laws~ define a property named ~"identity"~:
+names are scoped to their declaring ~property~ block.
+
+Flattened property names use ~/~ qualification:
+~functor-laws/identity~, ~applicative-laws/identity~, ~monad-laws/left-identity~.
+
+This parallels how trait methods are scoped to their trait.
+
+** The Symmetry
+
+#+begin_example
+trait     : Type → Set of method signatures     (what you must implement)
+bundle    : conjunction of traits                (shorthand for multiple traits)
+property  : Type → Set of propositions           (what must be true)
+  includes: conjunction of properties            (shorthand for multiple properties)
+
+spec      : function → type + metadata
+  :where  : trait constraints                    (what the types must support)
+  :properties : property constraints             (what the function must satisfy)
+
+instance  : Type → method implementations        (how you implement)
+  (auto)  : Type → property evidence             (how you prove / test)
+#+end_example
+
+Traits say what operations exist. Properties say what laws they obey. Today only
+the first is checked; this design gives us a path to checking the second.
+
+* Part V: Expressing Higher-Kinded Pi Types Ergonomically
+
+** The Problem
+
+Complex higher-kinded and higher-rank types are unreadable:
+
+#+begin_src prologos
+;; Current xf-compose signature:
+spec xf-compose {A B C : Type} <(S :0 Type) -> [S -> B -> S] -> S -> A -> S> <(S :0 Type) -> [S -> C -> S] -> S -> B -> S> -> <(S :0 Type) -> [S -> C -> S] -> S -> A -> S>
+#+end_src
+
+The transducer module already identifies the abstraction in a comment:
+~Type: Xf A B = forall R. (R -> B -> R) -> (R -> A -> R)~. With the right name,
+the signature becomes: ~[Xf A B] -> [Xf B C] -> [Xf A C]~ --- category-theoretic
+composition, instantly readable.
+
+** Progressive Complexity Levels
 
 *** Level 0: No types (inference only)
 
@@ -562,14 +900,16 @@ defn add [x y] [nat-add x y]
 *** Level 2: Polymorphic spec
 
 #+begin_src prologos
-spec id {A : Type} A -> A
+spec id A -> A
 defn id [x] x
 #+end_src
+
+(~{A : Type}~ inferred from ~A~ appearing free in signature)
 
 *** Level 3: Constrained polymorphism
 
 #+begin_src prologos
-spec sort {A : Type} [List A] -> [List A]
+spec sort [List A] -> [List A]
   :where (Ord A)
 defn sort [xs] ...
 #+end_src
@@ -577,22 +917,31 @@ defn sort [xs] ...
 *** Level 4: Higher-kinded polymorphism
 
 #+begin_src prologos
-spec fmap {F : Type -> Type} {A B : Type} [A -> B] [F A] -> [F B]
+spec fmap [A -> B] -> [F A] -> [F B]
   :where (Functor F)
   :doc "Apply a function inside a functor"
-  :properties
-    - :name "identity"
-      :forall {xs : [F A]}
-      :holds [eq? [fmap id xs] xs]
-    - :name "composition"
-      :forall {f : [A -> B]} {g : [B -> C]} {xs : [F A]}
-      :holds [eq? [fmap [compose g f] xs] [fmap g [fmap f xs]]]
+  :properties (functor-laws F)
+defn fmap [f xs] ...
 #+end_src
 
-*** Level 5: Dependent types (Pi)
+(~{A B : Type}~ inferred; ~{F : Type -> Type}~ inferred from ~(Functor F)~
+where clause --- the trait declares the kind)
+
+*** Level 5: Named type abstractions (functor)
 
 #+begin_src prologos
-spec replicate {A : Type} <(n : Nat) -> A -> [Vec A n]>
+spec xf-compose [Xf A B] -> [Xf B C] -> [Xf A C]
+  :implicits {A B C : Type}
+  :properties (transducer-fusion-laws A B C)
+#+end_src
+
+(~Xf~ defined via ~functor~ --- see Part VII)
+
+*** Level 6: Dependent types (Pi)
+
+#+begin_src prologos
+spec replicate <(n : Nat) -> A -> [Vec A n]>
+  :implicits {A : Type}
   :doc "Create a vector of n copies of a value"
   :examples
     - [replicate 3N :x] => @[:x :x :x]
@@ -602,33 +951,266 @@ spec replicate {A : Type} <(n : Nat) -> A -> [Vec A n]>
       :holds [eq? [length [replicate n a]] n]
 #+end_src
 
-*** Level 6: Dependent types (Sigma / existential)
+*** Level 7: Dependent types (Sigma / existential)
 
 #+begin_src prologos
-spec filter {A : Type} [A -> Bool] [List A] -> <(result : [List A]) * [SubList result xs]>
+spec filter [A -> Bool] -> [List A] -> <(result : [List A]) * [SubList result xs]>
+  :implicits {A : Type}
   :doc "Filter elements, with proof that result is a sublist"
 #+end_src
 
 ** Key Ergonomic Decisions
 
-1. *Angle brackets contain the complexity*: ~<...>~ delimits the dependent part
+1. *Pi/Sigma types never need to leak to the surface*: ~functor~ declarations
+   name complex type abstractions with approachable metadata. The underlying
+   Pi type lives in ~:unfolds~, consulted only when needed.
+
+2. *Angle brackets contain the complexity*: ~<...>~ delimits the dependent part
    of a type. Everything outside angle brackets is familiar ML-style syntax.
 
-2. *Metadata explains the theory*: The ~:doc~ key provides human-readable
+3. *Metadata explains the theory*: The ~:doc~ key provides human-readable
    explanation. Properties double as documentation and specification.
 
-3. *Examples ground the abstraction*: Every complex type should have concrete
+4. *Examples ground the abstraction*: Every complex type should have concrete
    examples. The ~:examples~ key makes this a first-class concern.
 
-4. *Where-clauses read as English*: "sort takes a list of A where A has ordering"
+5. *Where-clauses read as English*: "sort takes a list of A where A has ordering"
    is near-English. The trait constraint system hides the dictionary-passing
    mechanism.
 
-5. *Properties express what the function /means/*: Rather than encoding
+6. *Properties express what the function /means/*: Rather than encoding
    everything in the type (which can be opaque), properties express semantic
    invariants in a universally readable format.
 
-* Part V: Implementation Considerations
+7. *~:implicits~ declutters signatures*: Implicit binders move to metadata when
+   they would add visual weight to the type signature.
+
+* Part VI: Improved Implicit Inference
+
+Today, ~{A : Type}~ is required even when ~A~ appears in the type signature
+(e.g., ~[List A] -> Nat~). The type checker can already infer this in many
+cases. Two improvements are proposed:
+
+** Direction 1: Auto-introduce unbound type variables
+
+If a capitalized identifier ~A~ appears free in the type signature and is not
+bound by any explicit binder, auto-introduce ~{A : Type}~. This already works
+for simple cases; the proposal is to make it the documented, reliable behavior.
+
+#+begin_src prologos
+;; These would be equivalent:
+spec length {A : Type} [List A] -> Nat
+spec length [List A] -> Nat
+#+end_src
+
+** Direction 2: Kind inference from ~:where~ clauses
+
+If ~C~ appears in ~:where (Seqable C)~ and ~Seqable~ is declared over
+~{C : Type -> Type}~, infer ~C~'s kind from the where clause. This eliminates
+the most annoying case --- having to write ~{C : Type -> Type}~ just because
+you use an HKT trait.
+
+#+begin_src prologos
+;; These would be equivalent:
+spec gmap {A B : Type} {C : Type -> Type} [A -> B] -> [C A] -> [C B]
+  :where (Seqable C) (Buildable C)
+
+spec gmap [A -> B] -> [C A] -> [C B]
+  :where (Seqable C) (Buildable C)
+#+end_src
+
+Note: ~propagate-kinds-from-constraints~ already does this internally. The
+proposal is to make it work when explicit ~{...}~ binders are omitted entirely.
+
+** Explicit Always Available
+
+Explicit binders remain for: pedagogic clarity, disambiguation when inference
+produces unexpected results, and the rare cases where no constraining position
+exists (e.g., ~spec empty {A : Type} [List A]~).
+
+* Part VII: The ~functor~ Keyword
+
+** Motivation
+
+The ~functor~ keyword provides named type abstractions with category-theoretic
+metadata. It solves the fundamental readability problem of higher-kinded and
+higher-rank types by giving them /meaning through structure/, not just through
+their expansion.
+
+The design philosophy: you understand ~Xf A B~ by knowing what it /does/ (":doc
+A transducer"), how it /combines/ (":compose xf-compose"), and what /rules/ it
+follows (":laws transducer-fusion-laws"). The Pi type it unfolds to is available
+but is consulted last, not first.
+
+** Syntax
+
+#+begin_src prologos
+functor Xf {A B : Type}
+  :doc "A transducer: transforms A-reductions into B-reductions"
+  :compose xf-compose
+  :identity id-xf
+  :laws (transducer-fusion-laws A B)
+  :unfolds <(S :0 Type) -> [S -> B -> S] -> S -> A -> S>
+#+end_src
+
+** Progressive Disclosure
+
+Like ~spec~, the metadata keys are progressive. Simple synonyms are minimal:
+
+#+begin_src prologos
+functor FilePath
+  :unfolds String
+#+end_src
+
+Parameterized synonyms add type parameters:
+
+#+begin_src prologos
+functor Result {A}
+  :unfolds [Either String A]
+  :doc "A computation that may fail with a string error"
+#+end_src
+
+Algebraically structured types add operations:
+
+#+begin_src prologos
+functor Xf {A B : Type}
+  :doc "A transducer: transforms A-reductions into B-reductions"
+  :compose xf-compose
+  :identity id-xf
+  :unfolds <(S :0 Type) -> [S -> B -> S] -> S -> A -> S>
+#+end_src
+
+Full category-theoretic treatment adds laws:
+
+#+begin_src prologos
+functor Lens {S T A B : Type}
+  :doc "A bidirectional accessor: view and update a part of a structure"
+  :compose lens-compose
+  :identity lens-id
+  :laws (lens-laws S T A B)
+  :see-also [Prism Traversal Iso]
+  :unfolds <{F : Type -> Type} -> (Functor F) -> [A -> [F B]] -> S -> [F T]>
+#+end_src
+
+** Category-Theoretic Metadata Keys
+
+The keys map CT concepts to approachable language:
+
+| CT concept | Key | Meaning in plain English |
+|---------------------+--------------+------------------------------------------------|
+| Object mapping | ~:unfolds~ | "What this actually expands to under the hood" |
+| Morphism composition | ~:compose~ | "How to chain two of these together" |
+| Identity morphism | ~:identity~ | "The do-nothing version" |
+| Laws | ~:laws~ | "What rules these always follow" |
+| Documentation | ~:doc~ | "What this means in human terms" |
+| Natural transformation | ~:transforms~ | "How to convert between different functors" (future) |
+| Adjunction | ~:adjoint~ | "What functor is this paired with" (far future) |
+
+Only ~:unfolds~ is required (for Phase 1). The rest are progressive. A user
+who never thinks about category theory writes:
+
+#+begin_src prologos
+functor Xf {A B : Type}
+  :doc "A transducer"
+  :unfolds <(S :0 Type) -> [S -> B -> S] -> S -> A -> S>
+#+end_src
+
+A user who cares about algebraic structure adds ~:compose~ and ~:identity~. A
+user who wants verification adds ~:laws~. The CT is always there but only
+surfaces when you reach for it.
+
+** Why ~functor~ and Not ~abbrev~ or ~type~
+
+~abbrev~ doesn't capture the ambition. An abbreviation is just a shorter name
+for the same thing. What we're proposing is a /named abstraction with declared
+structure/ --- the operations, laws, documentation are first-class. ~abbrev~
+makes you think of ~typedef~ --- mechanical shortening. ~functor~ makes you
+think of structure-preserving mappings --- which is what these actually are.
+
+~type~ clashes with ~deftype~ (which creates algebraic data types with
+constructors). A ~functor~ doesn't create constructors; it names a type with
+structure.
+
+The ~functor~ (keyword) vs ~Functor~ (trait) naming is consistent with Prologos's
+existing pattern: all keywords are lowercase (~spec~, ~defn~, ~trait~, ~bundle~);
+all type/trait names are capitalized. The relationship: a ~functor~ declaration
+might /itself/ be a ~Functor~ instance (in the trait sense). The keyword names
+the concept; the trait constrains it.
+
+** Transparency Model
+
+~functor~ declarations are transparent by default (like Lean's ~abbrev~). The
+type checker unfolds ~Xf A B~ to its ~:unfolds~ form during elaboration. Trait
+instances carry through: if ~Eq (Xf Nat Bool)~ is needed and ~Eq~ has an
+instance for the expanded type, it resolves.
+
+Future consideration: opaque functors (no ~:unfolds~, only described by
+operations) for abstract type boundaries. Deferred to post-Phase 1.
+
+** Error Messages
+
+Error messages show the ~functor~ name by default:
+
+#+begin_example
+Error: Expected [Xf Nat Bool], got [Xf Nat Nat]
+#+end_example
+
+Not the expanded form. An ~--expand-types~ flag or editor hover reveals the
+full type when needed.
+
+** How ~functor~ Composes with ~spec~, ~property~, and ~trait~
+
+#+begin_src prologos
+;; The type abstraction
+functor Xf {A B : Type}
+  :doc "A transducer: transforms A-reductions into B-reductions"
+  :compose xf-compose
+  :identity id-xf
+  :laws (transducer-fusion-laws A B)
+  :unfolds <(S :0 Type) -> [S -> B -> S] -> S -> A -> S>
+
+;; Reusable properties (using the functor name!)
+property transducer-fusion-laws {A B C : Type}
+  - :name "compose-associativity"
+    :forall {f : [Xf A B]} {g : [Xf B C]} {h : [Xf C D]}
+    :holds [eq? [xf-compose [xf-compose f g] h] [xf-compose f [xf-compose g h]]]
+  - :name "left-identity"
+    :forall {f : [Xf A B]}
+    :holds [eq? [xf-compose id-xf f] f]
+  - :name "right-identity"
+    :forall {f : [Xf A B]}
+    :holds [eq? [xf-compose f id-xf] f]
+
+;; Function specs using the functor name
+spec xf-compose [Xf A B] -> [Xf B C] -> [Xf A C]
+  :implicits {A B C : Type}
+  :doc "Compose two transducers (apply first argument first)"
+  :properties (transducer-fusion-laws A B C)
+
+spec map-xf [A -> B] -> [Xf A B]
+  :implicits {A B : Type}
+  :doc "Transform each element through f before passing to reducer"
+
+spec filter-xf [A -> Bool] -> [Xf A A]
+  :implicits {A : Type}
+  :doc "Only pass elements satisfying pred to the reducer"
+
+spec transduce [Xf A B] -> [R -> B -> R] -> R -> [List A] -> R
+  :implicits {A B R : Type}
+  :doc "Apply a transducer to a list with a reducer and initial accumulator"
+
+spec into-list [Xf A B] -> [List A] -> [List B]
+  :implicits {A B : Type}
+  :doc "Transduce into a correctly-ordered list"
+  :examples
+    - [into-list [map-xf suc] '[1N 2N 3N]] => '[2N 3N 4N]
+#+end_src
+
+The ~functor~ names the type. The ~property~ states its laws. The ~spec~ uses
+both. Everything is readable. The Pi types are present exactly once, in
+~:unfolds~, consulted only when necessary.
+
+* Part VIII: Implementation Considerations
 
 ** spec-entry Struct Extension
 
@@ -648,6 +1230,8 @@ This avoids struct migration pain:
   (hash-ref (or (spec-entry-metadata e) (hasheq)) ':examples '()))
 (define (spec-entry-properties e)
   (hash-ref (or (spec-entry-metadata e) (hasheq)) ':properties '()))
+(define (spec-entry-implicits-meta e)
+  (hash-ref (or (spec-entry-metadata e) (hasheq)) ':implicits #f))
 #+end_src
 
 ** rewrite-implicit-map Extension
@@ -668,7 +1252,62 @@ Type checker (typing-core.rkt): when encountering ~expr-typed-hole~, compute
 the expected type from the context and emit a diagnostic report rather than
 returning ~(expr-error)~.
 
-** Grammar Extension
+** property-entry Store
+
+#+begin_src racket
+(struct property-entry
+  (name           ;; symbol
+   params         ;; alist of ((name . kind) ...)
+   where-clauses  ;; (listof constraint)
+   includes       ;; (listof (property-ref ...))
+   clauses        ;; (listof property-clause)
+   metadata)      ;; hasheq for extensibility
+  #:transparent)
+
+(struct property-clause
+  (name           ;; string (human-readable label)
+   forall-binders ;; alist of ((name . type) ...)
+   holds-expr)    ;; datum (boolean expression)
+  #:transparent)
+
+(define current-property-store (make-parameter (hasheq)))
+#+end_src
+
+~:includes~ references are resolved at registration time by looking up the
+included property in the store and appending its (flattened) clauses. Clause
+names are prefixed with the declaring property's name and ~/~.
+
+** functor-entry Store
+
+#+begin_src racket
+(struct functor-entry
+  (name         ;; symbol (capitalized)
+   params       ;; alist of ((name . kind) ...)
+   unfolds      ;; type datum (the expansion)
+   metadata)    ;; hasheq (:compose, :identity, :laws, :doc, etc.)
+  #:transparent)
+
+(define current-functor-store (make-parameter (hasheq)))
+#+end_src
+
+During elaboration, when the elaborator encounters a capitalized identifier
+followed by arguments that matches a registered functor, it expands to the
+~unfolds~ form with parameters substituted.
+
+** ~:implicits~ Merging in process-spec
+
+#+begin_src racket
+;; In process-spec, after extracting metadata:
+(define meta-implicits
+  (if metadata
+      (extract-binders-from-implicits-key metadata)
+      '()))
+(define merged-implicits
+  (deduplicate-binders (append inline-implicits meta-implicits)))
+;; Warn on duplicates between inline and :implicits
+#+end_src
+
+** Grammar Extensions
 
 Additions to ~grammar.ebnf~:
 
@@ -684,22 +1323,48 @@ spec-meta-value = expr
                 | dash-list
                 | spec-meta-map
                 ;
+
+(* Property declarations *)
+property-form   = 'property' , identifier , [ implicit-binders ]
+                , [ property-metadata ] , { property-clause } ;
+property-metadata = property-meta-entry , { property-meta-entry } ;
+property-meta-entry = ':where' , '(' , constraint , { constraint } , ')'
+                    | ':includes' , '(' , property-ref , { property-ref } , ')'
+                    ;
+property-clause = '-' , ':name' , string-literal
+                , ':forall' , '{' , binder , { binder } , '}'
+                , ':holds' , expr ;
+
+(* Functor declarations *)
+functor-form    = 'functor' , identifier , [ implicit-binders ]
+                , functor-metadata ;
+functor-metadata = functor-meta-entry , { functor-meta-entry } ;
+functor-meta-entry = ':unfolds' , type-expr
+                   | ':compose' , identifier
+                   | ':identity' , identifier
+                   | ':laws' , '(' , property-ref , { property-ref } , ')'
+                   | ':doc' , string-literal
+                   | ':see-also' , '[' , identifier , { identifier } , ']'
+                   ;
 #+end_src
 
-* Part VI: Worked Examples
+* Part IX: Worked Examples
 
-** Example 1: Simple spec with documentation and examples
+** Example 1: Simple spec with documentation, examples, and reusable properties
 
 #+begin_src prologos
-spec head {A : Type} [List A] -> A?
+property cons-head-law {A : Type}
+  - :name "head-of-cons"
+    :forall {x : A} {xs : [List A]}
+    :holds [eq? [head [cons x xs]] [just x]]
+
+spec head [List A] -> A?
+  :implicits {A : Type}
   :doc "Returns the first element, or nothing if empty"
   :examples
     - [head '[1N 2N 3N]] => [just 1N]
     - [head '[]] => nothing
-  :properties
-    - :name "head-of-cons"
-      :forall {x : A} {xs : [List A]}
-      :holds [eq? [head [cons x xs]] [just x]]
+  :properties (cons-head-law A)
 
 defn head
   | [nil]        -> nothing
@@ -717,24 +1382,79 @@ spec divide Int Int -> Int
 defn divide [x y] [int-div x y]
 #+end_src
 
-** Example 3: Higher-kinded functor laws
+** Example 3: Higher-kinded functor laws (using property + :laws)
 
 #+begin_src prologos
-spec fmap {F : Type -> Type} {A B : Type} [A -> B] [F A] -> [F B]
+property functor-laws {F : Type -> Type}
   :where (Functor F)
-  :properties
-    - :name "identity-law"
-      :forall {xs : [F A]}
-      :holds [eq? [fmap id xs] xs]
-    - :name "composition-law"
-      :forall {f : [A -> B]} {g : [B -> C]} {xs : [F A]}
-      :holds [eq? [fmap [>> f g] xs] [fmap g [fmap f xs]]]
+  - :name "identity-law"
+    :forall {xs : [F A]}
+    :holds [eq? [fmap id xs] xs]
+  - :name "composition-law"
+    :forall {f : [A -> B]} {g : [B -> C]} {xs : [F A]}
+    :holds [eq? [fmap [>> f g] xs] [fmap g [fmap f xs]]]
+
+trait Functor {F : Type -> Type}
+  :laws (functor-laws F)
+  spec fmap {A B : Type} [A -> B] -> [F A] -> [F B]
+
+spec fmap [A -> B] -> [F A] -> [F B]
+  :where (Functor F)
+  :properties (functor-laws F)
 #+end_src
 
-** Example 4: Interactive development with ??
+** Example 4: Transducer module (functor + property + spec)
 
 #+begin_src prologos
-spec reverse {A : Type} [List A] -> [List A]
+ns prologos::data::transducer
+
+functor Xf {A B : Type}
+  :doc "A transducer: transforms A-reductions into B-reductions"
+  :compose xf-compose
+  :identity id-xf
+  :laws (transducer-fusion-laws A B)
+  :unfolds <(S :0 Type) -> [S -> B -> S] -> S -> A -> S>
+
+property transducer-fusion-laws {A B C : Type}
+  - :name "compose-associativity"
+    :forall {f : [Xf A B]} {g : [Xf B C]} {h : [Xf C D]}
+    :holds [eq? [xf-compose [xf-compose f g] h] [xf-compose f [xf-compose g h]]]
+  - :name "left-identity"
+    :forall {f : [Xf A B]}
+    :holds [eq? [xf-compose id-xf f] f]
+  - :name "right-identity"
+    :forall {f : [Xf A B]}
+    :holds [eq? [xf-compose f id-xf] f]
+
+spec map-xf [A -> B] -> [Xf A B]
+  :implicits {A B : Type}
+  :doc "Transform each element through f before passing to reducer"
+
+spec filter-xf [A -> Bool] -> [Xf A A]
+  :implicits {A : Type}
+  :doc "Only pass elements satisfying pred to the reducer"
+
+spec xf-compose [Xf A B] -> [Xf B C] -> [Xf A C]
+  :implicits {A B C : Type}
+  :doc "Compose two transducers (apply first argument first)"
+  :properties (transducer-fusion-laws A B C)
+
+spec transduce [Xf A B] -> [R -> B -> R] -> R -> [List A] -> R
+  :implicits {A B R : Type}
+  :doc "Apply a transducer to a list with a reducer and initial accumulator"
+
+spec into-list [Xf A B] -> [List A] -> [List B]
+  :implicits {A B : Type}
+  :doc "Transduce into a correctly-ordered list"
+  :examples
+    - [into-list [map-xf suc] '[1N 2N 3N]] => '[2N 3N 4N]
+#+end_src
+
+** Example 5: Interactive development with ??
+
+#+begin_src prologos
+spec reverse [List A] -> [List A]
+  :implicits {A : Type}
   :properties
     - :name "involution"
       :forall {xs : [List Nat]}
@@ -752,7 +1472,55 @@ defn reverse
   ;;   Suggestions: [append [reverse t] [cons h nil]]
 #+end_src
 
-** Example 5: Refinement type (future)
+** Example 6: Algebraic property hierarchy
+
+#+begin_src prologos
+property semigroup-laws {A : Type}
+  :where (Add A)
+  - :name "associativity"
+    :forall {x y z : A}
+    :holds [eq? [add [add x y] z] [add x [add y z]]]
+
+property monoid-laws {A : Type}
+  :where (Add A) (AdditiveIdentity A)
+  :includes (semigroup-laws A)
+  - :name "left-identity"
+    :forall {x : A}
+    :holds [eq? [add additive-identity x] x]
+  - :name "right-identity"
+    :forall {x : A}
+    :holds [eq? [add x additive-identity] x]
+
+;; Usage:
+spec fold [A -> A -> A] -> A -> [List A] -> A
+  :implicits {A : Type}
+  :where (Add A) (AdditiveIdentity A)
+  :properties (monoid-laws A)
+#+end_src
+
+** Example 7: Optics (functor for Lens)
+
+#+begin_src prologos
+functor Lens {S T A B : Type}
+  :doc "A bidirectional accessor: view and update a part of a structure"
+  :compose lens-compose
+  :identity lens-id
+  :laws (lens-laws S T A B)
+  :see-also [Prism Traversal Iso]
+  :unfolds <{F : Type -> Type} -> (Functor F) -> [A -> [F B]] -> S -> [F T]>
+
+spec lens-view [Lens S S A A] -> S -> A
+  :doc "Extract the focus from a structure"
+
+spec lens-set [Lens S S A A] -> A -> S -> S
+  :doc "Replace the focus in a structure"
+  :properties
+    - :name "set-get"
+      :forall {l : [Lens S S A A]} {s : S} {a : A}
+      :holds [eq? [lens-view l [lens-set l a s]] a]
+#+end_src
+
+** Example 8: Refinement type (future)
 
 #+begin_src prologos
 spec abs Int -> Int
@@ -764,11 +1532,11 @@ spec abs Int -> Int
 ;; The function returns a pair: the result AND a proof of non-negativity
 #+end_src
 
-** Example 6: Dependent-type-heavy spec
+** Example 9: Dependent-type-heavy spec
 
 #+begin_src prologos
-spec zip-with-vec {A B C : Type}
-  <(n : Nat) -> [A -> B -> C] -> [Vec A n] -> [Vec B n] -> [Vec C n]>
+spec zip-with-vec <(n : Nat) -> [A -> B -> C] -> [Vec A n] -> [Vec B n] -> [Vec C n]>
+  :implicits {A B C : Type}
   :doc "Zip two vectors of the same length with a combining function"
   :examples
     - [zip-with-vec 3N + @[1 2 3] @[10 20 30]] => @[11 22 33]
@@ -779,7 +1547,7 @@ spec zip-with-vec {A B C : Type}
       :holds [eq? [vec-length [zip-with-vec n f xs ys]] n]
 #+end_src
 
-* Part VII: Phased Roadmap
+* Part X: Phased Roadmap
 
 ** Phase 1: Syntax and Storage (Near-term)
 
@@ -787,16 +1555,29 @@ spec zip-with-vec {A B C : Type}
 - Extend ~rewrite-implicit-map~ to trigger on ~spec~ heads
 - Extend ~process-spec~ to extract keyword entries into metadata hash
 - Add ~metadata~ field to ~spec-entry~
+- ~:implicits~ key: extract from metadata, merge with inline binders
 - ~:doc~ replaces positional docstring; ~:where~ augments positional ~where~
 - Store ~:examples~, ~:see-also~ in metadata
 - ~??~ reader token and ~expr-typed-hole~ AST node (report-only)
+- ~property~ keyword: parser, store, ~:includes~ flattening, name-scoped clauses
+- ~:laws~ key on ~trait~ declarations
+- ~functor~ keyword: parser, store, transparent expansion during elaboration
 - Grammar updates (grammar.ebnf, grammar.org)
+
+** Phase 1b: Improved Implicit Inference
+
+- Auto-introduce unbound type variables as ~{X : Type}~
+- Kind inference from ~:where~ clauses (extend ~propagate-kinds-from-constraints~
+  to work when no explicit binders are present)
+- Goal: ~{A : Type}~ almost never needed for kind-~Type~ variables;
+  ~{C : Type -> Type}~ unnecessary when ~:where~ pins the kind
 
 ** Phase 2: Example and Property Checking (Medium-term)
 
 - Parse ~:examples~ entries, type-check them, run them as tests
 - ~Gen~ trait for type-directed random value generation
 - Parse ~:properties~, generate random inputs from types, check ~:holds~
+- Property checking for ~:laws~ on trait instances
 - Contract wrapping: ~:pre~/~:post~ generate runtime checks at function
   boundaries (Racket-contract style blame tracking)
 
@@ -806,6 +1587,7 @@ spec zip-with-vec {A B C : Type}
 - ~:properties~ become compile-time proof obligations
 - Proof search integration: ~:proof :auto~ triggers the logic engine
 - ~:measure~ for termination checking
+- Opaque functors (no ~:unfolds~) for abstract type boundaries
 
 ** Phase 4: Interactive Theorem Proving (Far future)
 
@@ -813,27 +1595,38 @@ spec zip-with-vec {A B C : Type}
 - Case splitting via type information (Agda ~C-c C-c~)
 - Proof search (Agda ~C-c C-a~) via propagator-based logic engine
 - Refinement reflection (Liquid Haskell style)
+- ~:transforms~ and ~:adjoint~ keys on ~functor~ for natural transformations
 
-* Part VIII: Open Questions
+* Part XI: Resolved Design Questions
 
 1. *Should ~:where~ in the map replace or augment positional ~where~?*
-   Recommendation: augment (union of both constraint sets). Positional form
+   *Decision*: augment (union of both constraint sets). Positional form
    remains for backward compatibility; map form is preferred going forward.
 
 2. *Should examples use ~=>~ or ~->~ as the separator?*
-   Recommendation: ~=>~ to avoid confusion with the arrow in type signatures.
+   *Decision*: ~=>~ to avoid confusion with the arrow in type signatures.
 
 3. *How should multi-arity specs handle metadata?*
-   Recommendation: metadata is shared across all arities. Each ~|~ branch
-   defines its own type; the metadata applies to the function as a whole.
+   *Decision*: metadata is function-level (shared across all arities). Each
+   ~|~ branch defines its own type; the metadata applies to the function as a
+   whole. Properties' ~:forall~ types determine which branch is exercised.
+   Examples' argument types determine dispatch.
 
 4. *Should ~:properties~ quantified variables shadow spec's implicit binders?*
-   Recommendation: yes, with a warning. The property is a self-contained
+   *Decision*: yes, with a warning. The property is a self-contained
    expression; it should be readable without consulting the outer spec.
 
 5. *What happens to unrecognized keys?*
-   Recommendation: store silently (forward-compatibility). Tool-specific keys
+   *Decision*: store silently (forward-compatibility). Tool-specific keys
    (e.g., ~:editor-hint~, ~:benchmark~) can be added without language changes.
+
+6. *Is ~:unfolds~ always required on ~functor~?*
+   *Decision*: yes, for Phase 1. Opaque functors (no ~:unfolds~) deferred to
+   Phase 3.
+
+7. *Should ~functor~ handle non-CT uses (plain type synonyms)?*
+   *Decision*: yes --- ~functor~ is the single keyword for "I'm naming a type
+   concept." Progressive metadata: no ~:compose~ means no algebraic structure.
 
 * References
 
@@ -859,10 +1652,23 @@ spec zip-with-vec {A B C : Type}
 
 ** Lean 4
 - [[https://lean-lang.org/theorem_proving_in_lean4/type_classes.html][Lean 4 Type Classes]]
+- [[https://lean-lang.org/doc/reference/latest/Type-Classes/Instance-Synthesis/][Lean 4 Instance Synthesis]]
 
 ** Liquid Haskell
 - [[https://nikivazou.github.io/lh-course/Lecture_01_RefinementTypes.html][Refinement Types Tutorial]]
 - [[https://goto.ucsd.edu/~nvazou/refinement_types_for_haskell.pdf][Refinement Types for Haskell (paper)]]
+
+** Haskell Type Synonyms
+- [[https://wiki.haskell.org/Type_synonym][GHC Type Synonyms]]
+
+** Koka
+- [[https://koka-lang.github.io/koka/doc/book.html][Koka Language Book]]
+
+** F*
+- [[https://github.com/FStarLang/FStar/wiki/Qualifiers-for-definitions-and-declarations][F* Qualifier Wiki]]
+
+** 1ML
+- [[https://people.mpi-sws.org/~rossberg/1ml/1ml-extended.pdf][1ML (Rossberg) — Core and Modules United]]
 
 ** Racket Contracts
 - [[https://docs.racket-lang.org/guide/contracts.html][Racket Contracts Guide]]

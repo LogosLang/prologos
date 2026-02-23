@@ -274,6 +274,22 @@ defn reverse
   ;;   [cons h nil] : [List A], [append _ _] : [List A] -> [List A] -> [List A]
 #+end_src
 
+** Surface Language as Domain Vocabulary
+
+The ultimate goal: programmers never need to see Pi or Sigma types unless they
+choose to. The surface language provides five abstraction keywords that together
+cover the full design space:
+
+- ~spec~ describes functions through metadata
+- ~trait~ / ~bundle~ describe interfaces and their groupings
+- ~property~ describes propositions and their compositions
+- ~functor~ describes type abstractions and their algebraic structure
+
+Each keyword carries structured metadata. The formal type theory (Pi, Sigma,
+universe levels, multiplicities) exists in ~:unfolds~ blocks, in the elaborator,
+and in error messages (on demand). The programmer's daily interface is domain
+vocabulary expressed through keywords and maps.
+
 * Long-Term Aspirations
 
 ** Self-Hosting

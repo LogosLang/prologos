@@ -176,6 +176,38 @@ this for me automatically" (for the machine). ~??~ says "I don't know what goes
 here --- help me" (for the human). The former is silent; the latter is a
 conversation.
 
+** Keyword Symmetry
+
+The language's abstraction keywords form a symmetric system:
+
+| Abstraction | Keyword | What it names | Composition |
+|-------------------+------------+-------------------------------+--------------------------------------|
+| Function interface | ~spec~ | Type + metadata | Multi-arity via ~\vert~ |
+| Method requirement | ~trait~ | Method signature | ~:laws~ via ~property~ |
+| Requirement group | ~bundle~ | Conjunction of traits | Bundle includes traits/bundles |
+| Proposition group | ~property~ | Conjunction of ~:holds~ clauses | ~:includes~ other properties |
+| Type abstraction | ~functor~ | Parameterized type + structure | ~:compose~, ~:identity~, ~:laws~ |
+
+Each keyword names a different kind of thing; metadata keys describe it
+progressively. The same design pattern (keyword + structured metadata) scales
+uniformly across the entire system.
+
+** Pi Types as Implementation Detail
+
+Dependent types are the /implementation substrate/ --- they give the type system
+its power. But the surface language speaks in domain terms:
+
+- "This function sorts lists" → ~spec sort [List A] -> [List A]~
+- "Sorting requires ordering" → ~:where (Ord A)~
+- "Sorting is idempotent" → ~:properties (sortable-laws A)~
+- "A transducer transforms reductions" → ~functor Xf {A B}~
+- "Transducers compose" → ~:compose xf-compose~
+
+Pi types, Sigma types, universe levels, and multiplicity annotations exist in
+~:unfolds~ blocks, in the elaborator, and in the type checker. They are
+/available/ when needed, but the primary interface is structured metadata
+expressed through keywords.
+
 * Open Extension, Closed Verification
 
 New types, traits, instances, and bundles can always be added (open world).

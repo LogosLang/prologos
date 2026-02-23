@@ -286,6 +286,63 @@ binders → dependent types), spec metadata is progressively adopted:
 No level is mandatory. A team can adopt documentation keys without ever
 touching properties or contracts.
 
+** ~:implicits~ Declutters Signatures
+
+The ~:implicits~ key moves implicit binders from the type signature into
+metadata, leaving the signature to express pure function shape:
+
+#+begin_src prologos
+;; Before — implicit binders clutter the signature:
+spec gmap {A B : Type} {C : Type -> Type} (Seqable C) -> (Buildable C) -> [A -> B] -> [C A] -> [C B]
+
+;; After — clean function shape, machinery in metadata:
+spec gmap [A -> B] -> [C A] -> [C B]
+  :implicits {A B : Type} {C : Type -> Type}
+  :where (Seqable C) (Buildable C)
+#+end_src
+
+** Reusable Properties via ~property~
+
+The ~property~ keyword provides named, composable proposition groups ---
+analogous to ~bundle~ for traits. Define a contract once, attach it to any
+implementation:
+
+#+begin_src prologos
+property sorting-properties {A : Type} {f : [List A] -> [List A]}
+  :where (Ord A)
+  - :name "idempotent"
+    :forall {xs : [List A]}
+    :holds [eq? [f [f xs]] [f xs]]
+
+spec sort [List A] -> [List A]
+  :where (Ord A)
+  :properties (sorting-properties A sort)
+#+end_src
+
+Properties compose via ~:includes~ (conjunction), paralleling how bundles
+compose traits. The algebraic hierarchy (semigroup → monoid → group) maps
+directly to property inclusion chains.
+
+** Named Type Abstractions via ~functor~
+
+The ~functor~ keyword names complex types via approachable metadata. Category-
+theoretic structure is available but never required:
+
+#+begin_src prologos
+functor Xf {A B : Type}
+  :doc "A transducer: transforms A-reductions into B-reductions"
+  :compose xf-compose
+  :identity id-xf
+  :unfolds <(S :0 Type) -> [S -> B -> S] -> S -> A -> S>
+
+;; Specs become instantly readable:
+spec xf-compose [Xf A B] -> [Xf B C] -> [Xf A C]
+  :implicits {A B C : Type}
+#+end_src
+
+The principle: most users read ~:doc~ and ~:compose~ and understand the type.
+The Pi type in ~:unfolds~ is consulted only by implementers and debuggers.
+
 ** Typed Holes as Development Aid
 
 The ~??~ syntax provides a low-ceremony way to ask the type system for help:

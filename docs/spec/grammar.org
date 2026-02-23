@@ -640,25 +640,35 @@ spec sort-on {A B : Type} [B -> B -> Bool] [A -> B] [List A] -> List A
 
 =spec= optionally accepts a trailing metadata map using the implicit map
 syntax. Keyword-headed children after the type signature are collected into a
-metadata hash. Recognized keys include =:where=, =:doc=, =:examples=,
-=:properties=, =:see-also=, =:pre=, =:post=, =:refines=. Unrecognized keys
-are stored but not acted upon (forward-compatible).
+metadata hash. Recognized keys include =:implicits=, =:where=, =:doc=,
+=:examples=, =:properties=, =:see-also=, =:pre=, =:post=, =:refines=.
+Unrecognized keys are stored but not acted upon (forward-compatible).
+
+The =:implicits= key lifts implicit binders out of the type signature into
+metadata, freeing the signature to express pure function shape. Inline
+={A : Type}= and =:implicits= coexist; both are merged.
 
 #+begin_src prologos
-spec sort {A : Type} [List A] -> [List A]
+;; With :implicits — clean signature:
+spec sort [List A] -> [List A]
+  :implicits {A : Type}
   :where (Ord A)
   :doc "Sorts a list in ascending order"
   :examples
     - [sort '[3N 1N 2N]] => '[1N 2N 3N]
     - [sort '[]] => '[]
-  :properties
-    - :name "idempotent"
-      :forall {xs : [List Nat]}
-      :holds [eq? [sort [sort xs]] [sort xs]]
-    - :name "length-preserving"
-      :forall {xs : [List Nat]}
-      :holds [eq? [length [sort xs]] [length xs]]
+  :properties (sortable-laws A)
   :see-also [reverse filter]
+
+;; HKT case — :implicits dramatically improves readability:
+spec gmap [A -> B] -> [C A] -> [C B]
+  :implicits {A B : Type} {C : Type -> Type}
+  :where (Seqable C) (Buildable C)
+
+;; With functor — Pi types hidden entirely:
+spec xf-compose [Xf A B] -> [Xf B C] -> [Xf A C]
+  :implicits {A B C : Type}
+  :properties (transducer-fusion-laws A B C)
 #+end_src
 
 The metadata is entirely optional. A simple =spec add Nat Nat -> Nat= is
@@ -760,7 +770,120 @@ defn eq-neq [dict x y]
 
 ;; Bundle: named trait combination
 bundle Num := (Add, Sub, Mul, Neg, Abs, FromInt)
+
+;; Trait with :laws reference
+trait Functor {F : Type -> Type}
+  :laws (functor-laws F)
+  fmap : {A B : Type} [A -> B] -> [F A] -> [F B]
 #+end_src
+
+** Property Declarations
+
+A =property= declares a named, composable group of propositions --- analogous
+to =bundle= for traits. Properties compose via =:includes= (conjunction) and
+attach to specs via =:properties= or to traits via =:laws=.
+
+#+begin_src prologos
+;; Basic property declaration
+property sortable-laws {A : Type}
+  :where (Ord A)
+  - :name "idempotent"
+    :forall {xs : [List A]}
+    :holds [eq? [sort [sort xs]] [sort xs]]
+  - :name "length-preserving"
+    :forall {xs : [List A]}
+    :holds [eq? [length [sort xs]] [length xs]]
+
+;; Composition via :includes (like bundle for traits)
+property monoid-laws {A : Type}
+  :where (Add A) (AdditiveIdentity A)
+  :includes (semigroup-laws A)
+  - :name "left-identity"
+    :forall {x : A}
+    :holds [eq? [add additive-identity x] x]
+  - :name "right-identity"
+    :forall {x : A}
+    :holds [eq? [add x additive-identity] x]
+
+;; Hierarchical: monad includes applicative includes functor
+property monad-laws {M : Type -> Type}
+  :where (Monad M)
+  :includes (applicative-laws M)
+  - :name "left-identity"
+    :forall {a : A} {f : [A -> [M B]]}
+    :holds [eq? [bind [pure a] f] [f a]]
+
+;; Usage in spec
+spec sort [List A] -> [List A]
+  :implicits {A : Type}
+  :where (Ord A)
+  :properties (sortable-laws A)
+
+;; Higher-order: parameterized over functions
+property sorting-properties {A : Type} {f : [List A] -> [List A]}
+  :where (Ord A)
+  - :name "idempotent"
+    :forall {xs : [List A]}
+    :holds [eq? [f [f xs]] [f xs]]
+
+spec sort [List A] -> [List A]
+  :where (Ord A)
+  :properties (sorting-properties A sort)
+#+end_src
+
+Property clause names are scoped to their declaring block. When =:includes=
+flattens a hierarchy, names are qualified with =/=:
+=functor-laws/identity=, =monad-laws/left-identity=, etc.
+
+** Functor Declarations (Named Type Abstractions)
+
+A =functor= declares a named, parameterized type abstraction with optional
+category-theoretic metadata. Transparent by default --- the type checker unfolds
+to the =:unfolds= form during elaboration. Metadata keys map CT concepts to
+approachable language.
+
+#+begin_src prologos
+;; Simple type synonym
+functor FilePath
+  :unfolds String
+
+;; Parameterized synonym with documentation
+functor Result {A}
+  :unfolds [Either String A]
+  :doc "A computation that may fail with a string error"
+
+;; Full category-theoretic treatment
+functor Xf {A B : Type}
+  :doc "A transducer: transforms A-reductions into B-reductions"
+  :compose xf-compose
+  :identity id-xf
+  :laws (transducer-fusion-laws A B)
+  :unfolds <(S :0 Type) -> [S -> B -> S] -> S -> A -> S>
+
+;; Optics
+functor Lens {S T A B : Type}
+  :doc "A bidirectional accessor: view and update a part of a structure"
+  :compose lens-compose
+  :identity lens-id
+  :laws (lens-laws S T A B)
+  :see-also [Prism Traversal Iso]
+  :unfolds <{F : Type -> Type} -> (Functor F) -> [A -> [F B]] -> S -> [F T]>
+
+;; Usage in specs — the functor name replaces raw Pi types:
+spec xf-compose [Xf A B] -> [Xf B C] -> [Xf A C]
+  :implicits {A B C : Type}
+spec into-list [Xf A B] -> [List A] -> [List B]
+  :implicits {A B : Type}
+#+end_src
+
+| CT concept | Key | Meaning in plain English |
+|---------------------+---------------+------------------------------------------------|
+| Object mapping | =:unfolds= | "What this expands to under the hood" |
+| Morphism composition | =:compose= | "How to chain two of these together" |
+| Identity morphism | =:identity= | "The do-nothing version" |
+| Laws | =:laws= | "What rules these always follow" |
+
+Only =:unfolds= is required. The rest are progressive.
 
 ** User-Defined Macros
 

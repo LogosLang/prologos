@@ -178,6 +178,8 @@ top-level-form  = require-decl
                 | trait-form
                 | impl-form
                 | bundle-form
+                | property-form
+                | functor-form
                 | defmacro-form
                 | check-form
                 | eval-form
@@ -255,8 +257,8 @@ where-clause    = 'where' , constraint , { ',' , constraint } ;
 
 (* Optional metadata map — keyword-headed children after the type signature.
    Uses the same implicit map syntax as def/defn. Recognized keys include
-   :where, :doc, :examples, :properties, :see-also, :pre, :post, :refines.
-   Unrecognized keys are stored but not acted upon (forward-compatible). *)
+   :implicits, :where, :doc, :examples, :properties, :see-also, :pre, :post,
+   :refines. Unrecognized keys are stored but not acted upon (forward-compatible). *)
 spec-metadata   = spec-meta-entry , { spec-meta-entry } ;
 spec-meta-entry = keyword-literal , spec-meta-value ;
 spec-meta-value = expr
@@ -292,13 +294,17 @@ deftype-form    = 'deftype' , identifier , [ data-params ] , data-ctors ;
 (* 3.5 Trait Definition                             *)
 (* ------------------------------------------------ *)
 
-(* trait declares an abstract interface with method signatures *)
-trait-form      = 'trait' , identifier , implicit-binders , trait-methods ;
+(* trait declares an abstract interface with method signatures.
+   Optional :laws key references a property declaration for the trait's laws. *)
+trait-form      = 'trait' , identifier , implicit-binders ,
+                  [ trait-metadata ] , trait-methods ;
+trait-metadata  = ':laws' , '(' , property-ref , { property-ref } , ')' ;
 trait-methods   = { trait-method } ;               (* indented method sigs *)
 trait-method    = identifier , ':' , type-expr ;
 
 (* Private variant *)
-trait-private   = 'trait-' , identifier , implicit-binders , trait-methods ;
+trait-private   = 'trait-' , identifier , implicit-binders ,
+                  [ trait-metadata ] , trait-methods ;
 
 (* ------------------------------------------------ *)
 (* 3.6 Trait Implementation                         *)
@@ -321,7 +327,44 @@ bundle-form     = 'bundle' , identifier , ':=' , '(' , identifier ,
                   { ',' , identifier } , ')' ;
 
 (* ------------------------------------------------ *)
-(* 3.8 User Macro                                   *)
+(* 3.8 Property Declaration                         *)
+(* ------------------------------------------------ *)
+
+(* property declares a named, composable group of propositions.
+   Analogous to bundle for traits. Properties compose via :includes
+   and attach to specs via :properties or to traits via :laws. *)
+property-form   = 'property' , identifier , [ implicit-binders ] ,
+                  [ property-meta ] , { property-clause } ;
+property-meta   = { property-meta-entry } ;
+property-meta-entry = ':where' , '(' , constraint , { constraint } , ')'
+                    | ':includes' , '(' , property-ref , { property-ref } , ')'
+                    ;
+property-ref    = '(' , identifier , { type-atom } , ')' ;
+property-clause = '-' , ':name' , string-literal ,
+                  ':forall' , implicit-binders ,
+                  ':holds' , expr ;
+
+(* ------------------------------------------------ *)
+(* 3.9 Functor Declaration (Named Type Abstraction) *)
+(* ------------------------------------------------ *)
+
+(* functor declares a named, parameterized type abstraction with
+   category-theoretic metadata. Transparent by default — the type
+   checker unfolds to the :unfolds form during elaboration.
+   Metadata keys map to CT concepts in approachable language. *)
+functor-form    = 'functor' , identifier , [ implicit-binders ] ,
+                  functor-meta ;
+functor-meta    = { functor-meta-entry } ;
+functor-meta-entry = ':unfolds' , type-expr
+                   | ':compose' , identifier
+                   | ':identity' , identifier
+                   | ':laws' , '(' , property-ref , { property-ref } , ')'
+                   | ':doc' , string-literal
+                   | ':see-also' , '[' , identifier , { identifier } , ']'
+                   ;
+
+(* ------------------------------------------------ *)
+(* 3.10 User Macro                                  *)
 (* ------------------------------------------------ *)
 
 (* defmacro defines a pattern-template rewrite rule.
