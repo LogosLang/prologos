@@ -244,26 +244,107 @@
             [(not (equal? a* a)) (whnf (ctor a*))]
             [else (ctor a)])))))
 
+;; Extract the Racket-level exact rational value from a concrete numeric literal.
+;; Returns #f for non-literal/non-numeric expressions.
+(define (literal->rational e)
+  (cond
+    [(expr-int? e) (expr-int-val e)]
+    [(expr-rat? e) (expr-rat-val e)]
+    [(expr-posit8? e) (posit8-decode (expr-posit8-val e))]
+    [(expr-posit16? e) (posit16-decode (expr-posit16-val e))]
+    [(expr-posit32? e) (posit32-decode (expr-posit32-val e))]
+    [(expr-posit64? e) (posit64-decode (expr-posit64-val e))]
+    [else
+     (let ([nv (nat-value e)])
+       (and nv nv))]))
+
+;; Classify a concrete numeric literal: 'nat, 'int, 'rat, 'p8, 'p16, 'p32, 'p64, or #f
+(define (literal-type-tag e)
+  (cond
+    [(nat-value e) 'nat]
+    [(expr-int? e) 'int]
+    [(expr-rat? e) 'rat]
+    [(expr-posit8? e) 'p8]
+    [(expr-posit16? e) 'p16]
+    [(expr-posit32? e) 'p32]
+    [(expr-posit64? e) 'p64]
+    [else #f]))
+
+;; Coerce a Racket rational value to a target type tag, returning an AST literal.
+(define (rational->literal val tag)
+  (case tag
+    [(nat) (nat->expr (max 0 (inexact->exact (floor val))))]
+    [(int) (expr-int (inexact->exact (floor val)))]
+    [(rat) (expr-rat val)]
+    [(p8)  (expr-posit8 (posit8-encode val))]
+    [(p16) (expr-posit16 (posit16-encode val))]
+    [(p32) (expr-posit32 (posit32-encode val))]
+    [(p64) (expr-posit64 (posit64-encode val))]
+    [else #f]))
+
+;; Type-tag ranking for numeric-join at reduction level.
+;; Exact: nat(0) < int(1) < rat(2). Posit: p8(10) < p16(11) < p32(12) < p64(13).
+(define (type-tag-rank tag)
+  (case tag
+    [(nat) 0] [(int) 1] [(rat) 2]
+    [(p8) 10] [(p16) 11] [(p32) 12] [(p64) 13]
+    [else -1]))
+
+;; Compute the join type tag for two type tags.
+(define (type-tag-join t1 t2)
+  (cond
+    [(eq? t1 t2) t1]
+    ;; Both exact
+    [(and (memq t1 '(nat int rat)) (memq t2 '(nat int rat)))
+     (if (> (type-tag-rank t1) (type-tag-rank t2)) t1 t2)]
+    ;; Both posit
+    [(and (memq t1 '(p8 p16 p32 p64)) (memq t2 '(p8 p16 p32 p64)))
+     (if (> (type-tag-rank t1) (type-tag-rank t2)) t1 t2)]
+    ;; Cross-family: posit dominates, minimum p32
+    [(and (memq t1 '(nat int rat)) (memq t2 '(p8 p16 p32 p64)))
+     (if (>= (type-tag-rank t2) (type-tag-rank 'p32)) t2 'p32)]
+    [(and (memq t1 '(p8 p16 p32 p64)) (memq t2 '(nat int rat)))
+     (if (>= (type-tag-rank t1) (type-tag-rank 'p32)) t1 'p32)]
+    [else #f]))
+
 ;; Reduce a generic binary operation: reduce both operands, retry.
-;; Also handles Nat operands (which can't be pattern-matched as a single struct).
+;; Handles Nat operands and cross-type coercion via numeric-join.
 (define (reduce-generic-binary ctor a b)
   (let ([a* (whnf a)]
         [b* (whnf b)])
-    ;; Try Nat: both operands are Nat numerals?
-    (define na (nat-value a*))
-    (define nb (nat-value b*))
+    ;; Classify both operands
+    (define ta (literal-type-tag a*))
+    (define tb (literal-type-tag b*))
     (cond
-      [(and na nb)
-       ;; Both are Nat literals — dispatch by operator
-       (cond
-         [(eq? ctor expr-generic-add) (nat->expr (+ na nb))]
-         [(eq? ctor expr-generic-sub) (nat->expr (max 0 (- na nb)))]
-         [(eq? ctor expr-generic-mul) (nat->expr (* na nb))]
-         [(eq? ctor expr-generic-lt)  (if (< na nb) (expr-true) (expr-false))]
-         [(eq? ctor expr-generic-le)  (if (<= na nb) (expr-true) (expr-false))]
-         [(eq? ctor expr-generic-eq)  (if (= na nb) (expr-true) (expr-false))]
-         ;; div and negate not valid for Nat (excluded at type level), but handle gracefully
-         [else (ctor a b)])]
+      ;; Both are concrete numeric literals
+      [(and ta tb)
+       (let ([join (type-tag-join ta tb)])
+         (cond
+           [(not join) (ctor a* b*)]  ;; shouldn't happen (type error caught earlier)
+           ;; Same type — compute directly
+           [(eq? ta tb)
+            (cond
+              ;; Nat — delegate to nat-specific dispatch
+              [(eq? ta 'nat)
+               (let ([na (nat-value a*)] [nb (nat-value b*)])
+                 (cond
+                   [(eq? ctor expr-generic-add) (nat->expr (+ na nb))]
+                   [(eq? ctor expr-generic-sub) (nat->expr (max 0 (- na nb)))]
+                   [(eq? ctor expr-generic-mul) (nat->expr (* na nb))]
+                   [(eq? ctor expr-generic-lt)  (if (< na nb) (expr-true) (expr-false))]
+                   [(eq? ctor expr-generic-le)  (if (<= na nb) (expr-true) (expr-false))]
+                   [(eq? ctor expr-generic-eq)  (if (= na nb) (expr-true) (expr-false))]
+                   [else (ctor a* b*)]))]
+              ;; Non-Nat same type: the same-type iota rules in whnf will handle it.
+              ;; Retry via whnf so the pattern-match iota rules fire.
+              [else (whnf (ctor a* b*))])]
+           ;; Different types — coerce both to join type, retry
+           [else
+            (let ([ca (rational->literal (literal->rational a*) join)]
+                  [cb (rational->literal (literal->rational b*) join)])
+              (if (and ca cb)
+                  (whnf (ctor ca cb))
+                  (ctor a* b*)))]))]
       ;; One operand reduced → retry
       [(not (equal? a* a)) (whnf (ctor a* b))]
       [(not (equal? b* b)) (whnf (ctor a b*))]

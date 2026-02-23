@@ -508,37 +508,37 @@
      (if (check ctx a (expr-Rat)) (expr-Int) (expr-error))]
 
     ;; ---- Generic arithmetic operators ----
-    ;; Binary arithmetic: T -> T -> T (same concrete numeric type)
+    ;; Binary arithmetic: T1 -> T2 -> join(T1,T2) (coercion via numeric-join)
     [(expr-generic-add a b)
-     (let ([ta (infer ctx a)])
-       (if (and (concrete-numeric-type? ta) (check ctx b ta))
-           ta (expr-error)))]
+     (let* ([ta (infer ctx a)] [tb (infer ctx b)]
+            [j (numeric-join ta tb)])
+       (if j j (expr-error)))]
     [(expr-generic-sub a b)
-     (let ([ta (infer ctx a)])
-       (if (and (concrete-numeric-type? ta) (check ctx b ta))
-           ta (expr-error)))]
+     (let* ([ta (infer ctx a)] [tb (infer ctx b)]
+            [j (numeric-join ta tb)])
+       (if j j (expr-error)))]
     [(expr-generic-mul a b)
-     (let ([ta (infer ctx a)])
-       (if (and (concrete-numeric-type? ta) (check ctx b ta))
-           ta (expr-error)))]
+     (let* ([ta (infer ctx a)] [tb (infer ctx b)]
+            [j (numeric-join ta tb)])
+       (if j j (expr-error)))]
     [(expr-generic-div a b)
-     (let ([ta (infer ctx a)])
-       (if (and (divisible-numeric-type? ta) (check ctx b ta))
-           ta (expr-error)))]
+     (let* ([ta (infer ctx a)] [tb (infer ctx b)]
+            [j (numeric-join ta tb)])
+       (if (and j (divisible-numeric-type? j)) j (expr-error)))]
 
-    ;; Binary comparison: T -> T -> Bool (same concrete numeric type)
+    ;; Binary comparison: T1 -> T2 -> Bool (coercion via numeric-join)
     [(expr-generic-lt a b)
-     (let ([ta (infer ctx a)])
-       (if (and (concrete-numeric-type? ta) (check ctx b ta))
-           (expr-Bool) (expr-error)))]
+     (let* ([ta (infer ctx a)] [tb (infer ctx b)]
+            [j (numeric-join ta tb)])
+       (if j (expr-Bool) (expr-error)))]
     [(expr-generic-le a b)
-     (let ([ta (infer ctx a)])
-       (if (and (concrete-numeric-type? ta) (check ctx b ta))
-           (expr-Bool) (expr-error)))]
+     (let* ([ta (infer ctx a)] [tb (infer ctx b)]
+            [j (numeric-join ta tb)])
+       (if j (expr-Bool) (expr-error)))]
     [(expr-generic-eq a b)
-     (let ([ta (infer ctx a)])
-       (if (and (concrete-numeric-type? ta) (check ctx b ta))
-           (expr-Bool) (expr-error)))]
+     (let* ([ta (infer ctx a)] [tb (infer ctx b)]
+            [j (numeric-join ta tb)])
+       (if j (expr-Bool) (expr-error)))]
 
     ;; Unary: T -> T
     [(expr-generic-negate a)
