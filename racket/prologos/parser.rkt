@@ -3474,9 +3474,22 @@
                        (map stx->datum body-parts)
                        (car body-parts))))
 
-  (define ctor-name (stx->datum (car pattern)))
+  ;; Flatten single-element list patterns from $mixfix expansion:
+  ;; If pattern is ((cons h t)), flatten to (cons h t) for ctor-name + bindings.
+  ;; This handles .{h :: t} in match arms.
+  ;; Note: stx->datum (syntax-e) does shallow unwrap — use syntax->datum for deep.
+  (define effective-pattern
+    (let* ([first-stx (car pattern)]
+           [first-deep (if (syntax? first-stx) (syntax->datum first-stx) first-stx)])
+      (if (and (= (length pattern) 1) (pair? first-deep) (symbol? (car first-deep)))
+          ;; Single list element that is a constructor application: flatten it
+          ;; Get inner syntax objects via syntax->list, or reconstruct
+          (or (and (syntax? first-stx) (syntax->list first-stx))
+              (map (lambda (x) (datum->syntax #f x)) first-deep))
+          pattern)))
+  (define ctor-name (stx->datum (car effective-pattern)))
   (define binding-names
-    (for/list ([p (in-list (cdr pattern))])
+    (for/list ([p (in-list (cdr effective-pattern))])
       (stx->datum p)))
 
   ;; Parse body first (needed by all paths)

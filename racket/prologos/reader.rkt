@@ -1043,10 +1043,9 @@
   (define saved-angle-depth (tokenizer-angle-depth tok-obj))
   (define base-angle-depth (+ saved-angle-depth 1))
   (set-tokenizer-angle-depth! tok-obj base-angle-depth)
-  ;; Also increment bracket depth to match (angle-depth is nested within bracket-depth)
-  (define saved-bracket-depth (tokenizer-bracket-depth tok-obj))
-  (define base-bracket-depth (+ saved-bracket-depth 1))
-  (set-tokenizer-bracket-depth! tok-obj base-bracket-depth)
+  ;; Bracket depth is already incremented by the tokenizer when producing dot-lbrace.
+  ;; Use the current depth as base for parse-mixfix-element angle bracket handling.
+  (define base-bracket-depth (tokenizer-bracket-depth tok-obj))
 
   (define elements
     (let loop ([elems '()])
@@ -1066,9 +1065,8 @@
          (define elem (parse-mixfix-element p base-angle-depth base-bracket-depth))
          (loop (cons elem elems))])))
 
-  ;; Restore angle/bracket depths
+  ;; Restore angle depth (bracket depth is handled by tokenizer's } decrement)
   (set-tokenizer-angle-depth! tok-obj saved-angle-depth)
-  (set-tokenizer-bracket-depth! tok-obj saved-bracket-depth)
 
   ;; Wrap with $mixfix sentinel
   (define sentinel (make-stx '$mixfix src ln cl ps 0))

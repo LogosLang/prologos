@@ -483,3 +483,68 @@
 (test-case "pratt: error on trailing operator"
   (check-exn #rx"Unexpected end"
     (lambda () (preparse-expand-form '($mixfix a +)))))
+
+;; ========================================
+;; I. Phase 4 tests: pattern matching with .{...}
+;; ========================================
+
+;; --- Unit test: $mixfix expansion of :: produces cons (already works) ---
+
+(test-case "pratt: :: in pattern produces cons"
+  (define result (preparse-expand-form '($mixfix h :: t)))
+  (check-equal? result '(cons h t)))
+
+(test-case "pratt: nested :: produces right-assoc cons"
+  (define result (preparse-expand-form '($mixfix a :: b :: c)))
+  (check-equal? result '(cons a (cons b c))))
+
+;; --- E2E: match with .{h :: t} patterns (sexp mode) ---
+
+(test-case "e2e/sexp: match with $mixfix cons pattern"
+  (define result
+    (run-last
+     (string-append
+      "(eval (the Nat (match '[1N 2N 3N] (($mixfix h :: t) -> h) (nil -> 0N))))")))
+  (check-equal? result "1N : Nat"))
+
+(test-case "e2e/sexp: match $mixfix cons pattern — tail"
+  (define result
+    (run-last
+     (string-append
+      "(eval (the (List Nat) (match '[10N] (($mixfix h :: t) -> t) (nil -> nil))))")))
+  (check-true (string-contains? result "nil") (format "Expected nil in: ~a" result)))
+
+;; --- E2E: match with .{h :: t} patterns (WS mode) ---
+
+(test-case "e2e/ws: match with .{h :: t} pattern"
+  (define result
+    (run-ws-last
+     (string-append
+      "eval\n"
+      "  the Nat\n"
+      "    match '[1N 2N 3N]\n"
+      "      | .{h :: t} -> h\n"
+      "      | nil -> 0N\n")))
+  (check-equal? result "1N : Nat"))
+
+(test-case "e2e/ws: match with .{h :: t} — access tail"
+  (define result
+    (run-ws-last
+     (string-append
+      "eval\n"
+      "  the [List Nat]\n"
+      "    match '[5N 6N]\n"
+      "      | .{h :: t} -> t\n"
+      "      | nil -> nil\n")))
+  (check-true (string-contains? result "6N") (format "Expected 6N in tail: ~a" result)))
+
+(test-case "e2e/ws: match with nil literal"
+  (define result
+    (run-ws-last
+     (string-append
+      "eval\n"
+      "  the Nat\n"
+      "    match (the [List Nat] nil)\n"
+      "      | .{h :: t} -> h\n"
+      "      | nil -> 99N\n")))
+  (check-equal? result "99N : Nat"))
