@@ -201,7 +201,32 @@
          expand-def-assign
          datum->datum-expr
          qq->datum-expr
-         keyword-like-symbol?)
+         keyword-like-symbol?
+         ;; Mixfix / precedence groups (Phase 2)
+         current-user-precedence-groups
+         current-user-operators
+         register-precedence-group!
+         lookup-precedence-group
+         register-user-operator!
+         process-precedence-group
+         prec-group
+         prec-group?
+         prec-group-name
+         prec-group-assoc
+         prec-group-tighter-than
+         op-info
+         op-info?
+         op-info-symbol
+         op-info-fn-name
+         op-info-group
+         op-info-assoc
+         op-info-left-bp
+         op-info-right-bp
+         builtin-operators
+         builtin-precedence-groups
+         effective-operator-table
+         effective-precedence-groups
+         pratt-parse)
 
 ;; ================================================================
 ;; LAYER 1: PRE-PARSE MACRO SYSTEM
@@ -1073,6 +1098,10 @@
          (when (and (list? datum) (>= (length datum) 2) (symbol? (cadr datum)))
            (auto-export-name! (cadr datum)))
          acc]
+        ;; ---- precedence-group — register, consume ----
+        [(and (pair? datum) (eq? head 'precedence-group))
+         (process-precedence-group datum)
+         acc]
         ;; ---- Public specialize — register specialization, emit specialized defn ----
         [(and (pair? datum) (eq? head 'specialize))
          (define defs (process-specialize datum))
@@ -1397,6 +1426,15 @@
          [(eq? key ':includes)
           (define-values (constraints rest) (collect-constraint-values tail))
           (loop rest (hash-set result key constraints))]
+         ;; :mixfix → next value should be a $brace-params map {:symbol op :group grp}
+         [(eq? key ':mixfix)
+          (if (and (pair? tail) (pair? (car tail))
+                   (eq? (caar tail) '$brace-params))
+              ;; Parse the mixfix metadata map
+              (let ([mixfix-map (parse-spec-metadata (car tail))])
+                (loop (cdr tail) (hash-set result key mixfix-map)))
+              ;; Take next value as-is (fallback)
+              (loop (cdr tail) (hash-set result key (car tail))))]
          ;; Key with no following value (or next is also a keyword) → boolean flag
          [(or (null? tail) (keyword-like-symbol? (car tail)))
           (loop tail (hash-set result key #t))]
@@ -1631,7 +1669,10 @@
      (register-spec! name (spec-entry branches merged-docstring #t srcloc-unknown stored-constraints refined-implicit-binders rest-type metadata))]
     [else
      ;; Single-arity: the entire effective-tokens is the type datum
-     (register-spec! name (spec-entry (list effective-tokens) merged-docstring #f srcloc-unknown stored-constraints refined-implicit-binders rest-type metadata))]))
+     (register-spec! name (spec-entry (list effective-tokens) merged-docstring #f srcloc-unknown stored-constraints refined-implicit-binders rest-type metadata))])
+  ;; Phase 2: If spec has :mixfix metadata, auto-register as user operator
+  (when (and metadata (hash? metadata) (hash-ref metadata ':mixfix #f))
+    (maybe-register-mixfix-operator name metadata)))
 
 ;; Split a token list on '$pipe boundaries.
 ;; Handles two forms:
@@ -3262,13 +3303,35 @@
           (error 'mixfix "Unexpected token after expression: ~a" (peek)))
         result)))
 
+;; --- Effective operator table (merges builtin + user-defined) ---
+;; builtin-operators is a mutable hash; user-operators is immutable.
+;; We copy user entries into the mutable table (or return builtin as-is).
+(define (effective-operator-table)
+  (define user-ops (current-user-operators))
+  (if (hash-empty? user-ops)
+      builtin-operators
+      ;; Create merged mutable hash
+      (let ([merged (hash-copy builtin-operators)])
+        (for ([(k v) (in-hash user-ops)])
+          (hash-set! merged k v))
+        merged)))
+
+;; --- Effective precedence groups (merges builtin + user-defined) ---
+(define (effective-precedence-groups)
+  (define user-groups (current-user-precedence-groups))
+  (if (hash-empty? user-groups)
+      builtin-precedence-groups
+      (for/fold ([h builtin-precedence-groups])
+                ([(k v) (in-hash user-groups)])
+        (hash-set h k v))))
+
 ;; --- Preparse macro for $mixfix ---
 (define (expand-mixfix-form datum)
   ;; datum is ($mixfix token1 token2 ...)
   (define tokens (cdr datum))
   (if (null? tokens)
       (error 'mixfix "Empty .{} expression")
-      (pratt-parse tokens)))
+      (pratt-parse tokens (effective-operator-table) (effective-precedence-groups))))
 
 ;; Register built-in pre-parse macros at module load time
 (register-preparse-macro! 'let expand-let)
@@ -4881,6 +4944,104 @@
     (process-deftype `(deftype ,deftype-pattern ,deftype-body)))
   ;; Functors are metadata-only in Phase 1 — no additional code generation
   '())
+
+;; ========================================
+;; User-defined precedence groups (Phase 2)
+;; ========================================
+;; precedence-group name :assoc left :tighter-than additive
+;; Stores user-defined groups in current-user-precedence-groups.
+;; The Pratt parser merges these with builtin-precedence-groups at lookup time.
+
+(define current-user-precedence-groups (make-parameter (hasheq)))
+
+(define (register-precedence-group! name entry)
+  (current-user-precedence-groups
+   (hash-set (current-user-precedence-groups) name entry)))
+
+(define (lookup-precedence-group name)
+  (or (hash-ref (current-user-precedence-groups) name #f)
+      (hash-ref builtin-precedence-groups name #f)))
+
+;; User-defined mixfix operators: symbol → op-info
+;; Populated from :mixfix metadata on spec entries
+(define current-user-operators (make-parameter (hasheq)))
+
+(define (register-user-operator! sym info)
+  (current-user-operators
+   (hash-set (current-user-operators) sym info)))
+
+;; process-precedence-group: parse and register a precedence-group declaration
+;; Syntax (WS mode): precedence-group mygroup :assoc left :tighter-than additive
+;; After reader: (precedence-group mygroup ($brace-params :assoc left :tighter-than additive))
+;;   or positional: (precedence-group mygroup :assoc left :tighter-than additive)
+(define (process-precedence-group datum)
+  (unless (and (list? datum) (>= (length datum) 2))
+    (error 'precedence-group "precedence-group requires at least a name"))
+  (define name (cadr datum))
+  (unless (symbol? name)
+    (error 'precedence-group "precedence-group name must be a symbol, got: ~a" name))
+  (define rest (cddr datum))
+  ;; Parse metadata: either a $brace-params map or inline keyword args
+  (define metadata
+    (cond
+      [(and (pair? rest) (pair? (car rest))
+            (eq? (caar rest) '$brace-params))
+       ;; Brace-params map
+       (parse-spec-metadata (car rest))]
+      [(pair? rest)
+       ;; Inline keyword args: :assoc left :tighter-than additive ...
+       (parse-spec-metadata (cons '$brace-params rest))]
+      [else (hasheq)]))
+  ;; Extract fields
+  (define assoc-val (hash-ref metadata ':assoc 'left))
+  (define assoc-sym
+    (cond
+      [(memq assoc-val '(left right none)) assoc-val]
+      [else (error 'precedence-group
+                   "~a: :assoc must be left, right, or none; got: ~a" name assoc-val)]))
+  ;; :tighter-than can be a single symbol or a list of symbols
+  (define tighter-raw (hash-ref metadata ':tighter-than '()))
+  (define tighter-than
+    (cond
+      [(null? tighter-raw) '()]
+      [(symbol? tighter-raw) (list tighter-raw)]
+      [(list? tighter-raw) tighter-raw]
+      [else (list tighter-raw)]))
+  ;; Validate that all referenced groups exist
+  (for ([g (in-list tighter-than)])
+    (unless (or (hash-ref builtin-precedence-groups g #f)
+                (hash-ref (current-user-precedence-groups) g #f))
+      (error 'precedence-group
+             "~a: :tighter-than references unknown group '~a'" name g)))
+  ;; Register
+  (register-precedence-group! name (prec-group name assoc-sym tighter-than)))
+
+;; maybe-register-mixfix-operator: extract :mixfix metadata from spec and register operator
+;; :mixfix metadata is a hash with :symbol and :group keys
+;; e.g. spec plus ... :mixfix {:symbol + :group additive}
+(define (maybe-register-mixfix-operator fn-name metadata)
+  (define mixfix-meta (hash-ref metadata ':mixfix #f))
+  (when (and mixfix-meta (hash? mixfix-meta))
+    (define op-sym (hash-ref mixfix-meta ':symbol #f))
+    (define grp-name (hash-ref mixfix-meta ':group #f))
+    (when (and op-sym grp-name (symbol? op-sym) (symbol? grp-name))
+      ;; Resolve group from builtin or user-defined groups
+      (define grp (or (hash-ref builtin-precedence-groups grp-name #f)
+                      (hash-ref (current-user-precedence-groups) grp-name #f)))
+      (unless grp
+        (error 'spec ":mixfix on '~a': unknown precedence group '~a'" fn-name grp-name))
+      ;; Compute binding powers — merge all groups for the computation
+      (define all-groups
+        (for/fold ([h builtin-precedence-groups])
+                  ([(k v) (in-hash (current-user-precedence-groups))])
+          (hash-set h k v)))
+      (define bps (compute-binding-powers all-groups))
+      (define bp-pair (hash-ref bps grp-name))
+      ;; Determine the function name to emit — if fn-name is a parser keyword, use it directly;
+      ;; otherwise use fn-name as a regular function application
+      (define assoc-val (prec-group-assoc grp))
+      (register-user-operator! op-sym
+        (op-info op-sym fn-name grp-name assoc-val (car bp-pair) (cdr bp-pair))))))
 
 ;; ========================================
 ;; process-impl: trait implementation

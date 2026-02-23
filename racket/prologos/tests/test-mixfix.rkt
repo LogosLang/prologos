@@ -309,3 +309,100 @@
   (define result
     (run-ws-last "eval .{3N == 3N}\n"))
   (check-equal? result "true : Bool"))
+
+;; ========================================
+;; G. Phase 2 tests: precedence-group + :mixfix metadata
+;; ========================================
+
+;; --- Unit tests: precedence-group registration ---
+
+(test-case "precedence-group: basic registration"
+  (parameterize ([current-user-precedence-groups (hasheq)])
+    (process-precedence-group '(precedence-group my-group ($brace-params :assoc left :tighter-than additive)))
+    (define g (lookup-precedence-group 'my-group))
+    (check-true (prec-group? g))
+    (check-equal? (prec-group-name g) 'my-group)
+    (check-equal? (prec-group-assoc g) 'left)
+    (check-equal? (prec-group-tighter-than g) '(additive))))
+
+(test-case "precedence-group: right-associative"
+  (parameterize ([current-user-precedence-groups (hasheq)])
+    (process-precedence-group '(precedence-group my-exp ($brace-params :assoc right :tighter-than multiplicative)))
+    (define g (lookup-precedence-group 'my-exp))
+    (check-equal? (prec-group-assoc g) 'right)))
+
+(test-case "precedence-group: none-associative"
+  (parameterize ([current-user-precedence-groups (hasheq)])
+    (process-precedence-group '(precedence-group my-cmp ($brace-params :assoc none :tighter-than logical-and)))
+    (define g (lookup-precedence-group 'my-cmp))
+    (check-equal? (prec-group-assoc g) 'none)))
+
+(test-case "precedence-group: error on unknown tighter-than"
+  (parameterize ([current-user-precedence-groups (hasheq)])
+    (check-exn exn:fail?
+      (lambda ()
+        (process-precedence-group '(precedence-group bad ($brace-params :assoc left :tighter-than nonexistent)))))))
+
+(test-case "precedence-group: error on invalid assoc"
+  (parameterize ([current-user-precedence-groups (hasheq)])
+    (check-exn exn:fail?
+      (lambda ()
+        (process-precedence-group '(precedence-group bad ($brace-params :assoc upward :tighter-than additive)))))))
+
+(test-case "precedence-group: user group references another user group"
+  (parameterize ([current-user-precedence-groups (hasheq)])
+    ;; First register a base group
+    (process-precedence-group '(precedence-group my-base ($brace-params :assoc left :tighter-than additive)))
+    ;; Then register a group tighter than it
+    (process-precedence-group '(precedence-group my-tight ($brace-params :assoc left :tighter-than my-base)))
+    (define g (lookup-precedence-group 'my-tight))
+    (check-equal? (prec-group-tighter-than g) '(my-base))))
+
+;; --- Unit tests: :mixfix metadata on spec → auto-registration ---
+
+(test-case "spec :mixfix auto-registers user operator"
+  (parameterize ([current-user-precedence-groups (hasheq)]
+                 [current-user-operators (hasheq)]
+                 [current-spec-store (current-spec-store)])
+    ;; Register a spec with :mixfix metadata
+    (process-spec '(spec my-xor A -> A -> A ($brace-params :mixfix ($brace-params :symbol xor :group logical-and))))
+    ;; The operator should now be registered
+    (define op (hash-ref (current-user-operators) 'xor #f))
+    (check-true (op-info? op))
+    (check-equal? (op-info-symbol op) 'xor)
+    (check-equal? (op-info-fn-name op) 'my-xor)
+    (check-equal? (op-info-group op) 'logical-and)))
+
+(test-case "spec :mixfix error on unknown group"
+  (parameterize ([current-user-precedence-groups (hasheq)]
+                 [current-user-operators (hasheq)]
+                 [current-spec-store (current-spec-store)])
+    (check-exn exn:fail?
+      (lambda ()
+        (process-spec '(spec my-op A -> A -> A ($brace-params :mixfix ($brace-params :symbol @@ :group nonexistent))))))))
+
+;; --- Unit tests: user-defined operator used in Pratt parser ---
+
+(test-case "pratt: user-defined operator in .{...}"
+  (parameterize ([current-user-precedence-groups (hasheq)]
+                 [current-user-operators (hasheq)]
+                 [current-spec-store (current-spec-store)])
+    ;; Register a custom precedence group
+    (process-precedence-group '(precedence-group my-cmp ($brace-params :assoc none :tighter-than logical-and)))
+    ;; Register a spec with :mixfix metadata pointing to the custom group
+    (process-spec '(spec my-approx A -> A -> A ($brace-params :mixfix ($brace-params :symbol ~= :group my-cmp))))
+    ;; Now parse a mixfix expression using the custom operator
+    (define result (pratt-parse '(a ~= b) (effective-operator-table) (effective-precedence-groups)))
+    (check-equal? result '(my-approx a b))))
+
+(test-case "pratt: user-defined op mixed with builtins"
+  (parameterize ([current-user-precedence-groups (hasheq)]
+                 [current-user-operators (hasheq)]
+                 [current-spec-store (current-spec-store)])
+    ;; Register a custom operator in the additive group
+    (process-precedence-group '(precedence-group my-add ($brace-params :assoc left :tighter-than comparison)))
+    (process-spec '(spec my-plus A -> A -> A ($brace-params :mixfix ($brace-params :symbol +++ :group my-add))))
+    ;; +++ at additive level, * is multiplicative (tighter)
+    ;; a +++ b * c → (my-plus a (* b c))
+    (define result (pratt-parse '(a +++ b * c) (effective-operator-table) (effective-precedence-groups)))
+    (check-equal? result '(my-plus a (* b c)))))
