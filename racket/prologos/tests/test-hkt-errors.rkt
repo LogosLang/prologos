@@ -80,14 +80,15 @@
   (check-true (string-contains? msg "eq?")))
 
 (test-case "hkt-errors/no-instance: error includes trait name"
+  ;; Ord's method is `compare`, not `lt?`
   (define result
     (run-ns-last
       (string-append
         "(ns hkt-err-3)\n"
         "(data Baz | mk-baz)\n"
-        "(spec my-lt A A -> Bool where (Ord A))\n"
-        "(defn my-lt [x y] (lt? x y))\n"
-        "(eval (my-lt mk-baz mk-baz))\n")))
+        "(spec my-cmp A A -> Ordering where (Ord A))\n"
+        "(defn my-cmp [x y] (compare x y))\n"
+        "(eval (my-cmp mk-baz mk-baz))\n")))
   (check-true (no-instance-error? result))
   (check-equal? (no-instance-error-trait-name result) 'Ord)
   (check-true (string-contains? (no-instance-error-type-args-str result) "Baz")))
@@ -107,13 +108,14 @@
   (check-true (string-contains? result "true")))
 
 (test-case "hkt-errors/compat: Ord Nat resolves"
+  ;; Ord's method is `compare`, not `lt?`
   (define result
     (run-ns-last
       (string-append
         "(ns hkt-err-5)\n"
-        "(spec my-lt A A -> Bool where (Ord A))\n"
-        "(defn my-lt [x y] (lt? x y))\n"
-        "(eval (my-lt zero (suc zero)))\n")))
+        "(spec my-cmp A A -> Ordering where (Ord A))\n"
+        "(defn my-cmp [x y] (compare x y))\n"
+        "(eval (my-cmp zero (suc zero)))\n")))
   (check-true (string? result)))
 
 ;; ========================================

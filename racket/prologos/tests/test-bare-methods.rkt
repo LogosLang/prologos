@@ -118,13 +118,14 @@
   (check-true (string-contains? result "true")))
 
 (test-case "bare-methods/inline: Ord constraint"
+  ;; Ord's method is `compare : A -> A -> Ordering`, not `lt?`
   (define result
     (run-ns-last
       (string-append
         "(ns bm-test-6)\n"
-        "(spec my-lt ($brace-params A) (Ord A) -> A -> A -> Bool)\n"
-        "(defn my-lt [x y] (lt? x y))\n"
-        "(eval (my-lt zero (suc zero)))\n")))
+        "(spec my-cmp ($brace-params A) (Ord A) -> A -> A -> Ordering)\n"
+        "(defn my-cmp [x y] (compare x y))\n"
+        "(eval (my-cmp zero (suc zero)))\n")))
   (check-true (string? result)))
 
 (test-case "bare-methods/inline: two constraints"
@@ -135,9 +136,7 @@
         "(spec my-fn ($brace-params A) (Eq A) -> (Add A) -> A -> A -> Bool)\n"
         "(defn my-fn [x y] (eq? (add x y) x))\n"
         "(eval (my-fn zero zero))\n")))
-  ;; Should produce Bool result (even if partially reduced due to Add dict)
-  (check-true (string? result))
-  (check-true (string-contains? result "Bool")))
+  (check-true (string-contains? result "true")))
 
 ;; ========================================
 ;; 5. Backward compatibility
