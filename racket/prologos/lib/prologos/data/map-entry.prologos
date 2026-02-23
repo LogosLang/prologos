@@ -1,0 +1,32 @@
+ns prologos::data::map-entry
+
+;; ========================================
+;; Prologos MapEntry — Key-Value Entry Type
+;; ========================================
+;; A simple product type representing a key-value pair.
+;; Used as the element type when iterating over Maps
+;; via Seqable/Foldable traits, bridging the 2-type-param
+;; Map K V to the 1-type-param trait world:
+;;   Map K V  -->  Seqable over (MapEntry K V)
+;;
+;; Constructors:
+;;   mk-entry : K -> V -> MapEntry K V
+;;
+;; Accessors:
+;;   entry-key : MapEntry K V -> K
+;;   entry-val : MapEntry K V -> V
+
+data MapEntry {K V}
+  mk-entry : K -> V
+
+;; Extract the key from a MapEntry.
+spec entry-key {K V : Type} [MapEntry K V] -> K
+defn entry-key [e]
+  match e
+    | mk-entry k _ -> k
+
+;; Extract the value from a MapEntry.
+spec entry-val {K V : Type} [MapEntry K V] -> V
+defn entry-val [e]
+  match e
+    | mk-entry _ v -> v

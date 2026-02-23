@@ -1093,6 +1093,19 @@
        (match tv
          [(expr-PVec a) (expr-app (list-type-fvar) a)]
          [_ (expr-error)]))]
+    ;; pvec-fold : (B → A → B) → B → PVec A → B
+    ;; Left fold over a PVec: f takes (accumulator, element), returns accumulator.
+    [(expr-pvec-fold f init vec)
+     (let ([tv (infer ctx vec)]
+           [tb (infer ctx init)])
+       (match tv
+         [(expr-PVec a)
+          (let ([expected-f (expr-Pi 'mw tb (expr-Pi 'mw a tb))])
+            (if (check ctx f expected-f)
+                tb
+                (expr-error)))]
+         [_ (expr-error)]))]
+
     ;; pvec-from-list : List A → PVec A
     ;; List constructor name may be 'List or 'prologos::data::list::List (qualified)
     [(expr-pvec-from-list v)
@@ -1347,6 +1360,14 @@
     [((expr-pvec-push v x) (expr-PVec a))
      (and (check ctx v (expr-PVec a))
           (check ctx x a))]
+    ;; pvec-fold : check against result type B
+    [((expr-pvec-fold f init vec) expected-type)
+     (let ([tv (infer ctx vec)])
+       (match tv
+         [(expr-PVec a)
+          (and (check ctx init expected-type)
+               (check ctx f (expr-Pi 'mw expected-type (expr-Pi 'mw a expected-type))))]
+         [_ #f]))]
 
     ;; ---- Transient Builder checks ----
     [((expr-trrb _) (expr-TVec _)) #t]

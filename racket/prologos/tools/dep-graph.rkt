@@ -234,6 +234,36 @@
                prologos::core::seqable-set prologos::core::buildable-set
                prologos::core::foldable-set prologos::core::set-ops
                prologos::core::map-ops))
+   'test-pvec-ops-eval.rkt
+   (test-dep '(syntax.rkt prelude.rkt substitution.rkt reduction.rkt typing-core.rkt
+               pretty-print.rkt driver.rkt global-env.rkt rrb.rkt namespace.rkt
+               macros.rkt qtt.rkt)
+             '(prologos::core::pvec-ops))
+   'test-pvec-fold.rkt
+   (test-dep '(syntax.rkt prelude.rkt substitution.rkt reduction.rkt typing-core.rkt
+               pretty-print.rkt driver.rkt global-env.rkt rrb.rkt namespace.rkt
+               macros.rkt qtt.rkt parser.rkt elaborator.rkt zonk.rkt)
+             '())
+   'test-set-ops-eval.rkt
+   (test-dep '(syntax.rkt prelude.rkt substitution.rkt reduction.rkt typing-core.rkt
+               pretty-print.rkt driver.rkt global-env.rkt namespace.rkt
+               macros.rkt qtt.rkt champ.rkt)
+             '(prologos::core::set-ops))
+   'test-map-ops-eval.rkt
+   (test-dep '(syntax.rkt prelude.rkt substitution.rkt reduction.rkt typing-core.rkt
+               pretty-print.rkt driver.rkt global-env.rkt namespace.rkt
+               macros.rkt qtt.rkt champ.rkt)
+             '(prologos::core::map-ops))
+   'test-map-entry.rkt
+   (test-dep '(syntax.rkt prelude.rkt substitution.rkt reduction.rkt typing-core.rkt
+               pretty-print.rkt driver.rkt global-env.rkt namespace.rkt
+               macros.rkt qtt.rkt)
+             '(prologos::data::map-entry))
+   'test-map-bridge.rkt
+   (test-dep '(syntax.rkt prelude.rkt substitution.rkt reduction.rkt typing-core.rkt
+               pretty-print.rkt driver.rkt global-env.rkt namespace.rkt
+               macros.rkt qtt.rkt champ.rkt)
+             '(prologos::data::map-entry prologos::core::map-ops))
    'test-lseq-traits.rkt
    (test-dep '(syntax.rkt prelude.rkt substitution.rkt reduction.rkt typing-core.rkt
                pretty-print.rkt driver.rkt global-env.rkt namespace.rkt

@@ -46,8 +46,9 @@
 (define (run-ns-last s)
   (last (run-ns s)))
 
-;; Generic ops preamble — defines all generic functions inline
-;; since generic-ops.prologos module is not yet in the prelude.
+;; Generic ops preamble — defines all generic functions inline.
+;; NOTE: generic-ops.prologos IS now in the prelude (namespace.rkt Tier 3d).
+;; These inline definitions are kept for test isolation and explicit dict passing.
 ;; Uses sexp-mode parens for inline constraint syntax.
 (define gen-ops-preamble
   (string-append

@@ -1,7 +1,10 @@
 ns prologos::core::map-ops
 
-require [prologos::data::list    :refer [List nil cons map filter foldr]]
-require [prologos::data::option  :refer [Option some none]]
+require [prologos::data::list      :refer [List nil cons map filter foldr]]
+require [prologos::data::option    :refer [Option some none]]
+require [prologos::data::map-entry :refer [MapEntry mk-entry entry-key entry-val]]
+require [prologos::data::lseq      :refer [LSeq lseq-nil]]
+require [prologos::data::lseq-ops  :refer [list-to-lseq lseq-to-list]]
 
 ;; ========================================
 ;; Map Operations Module
@@ -57,3 +60,40 @@ defn map-merge [m1 m2]
     [fn k acc [map-assoc acc k [map-get m2 k]]]
     m1
     [map-keys m2]
+
+
+;; ========================================
+;; Map <-> LSeq Bridge Functions
+;; ========================================
+;; Bridge the 2-type-param Map K V to the 1-type-param Seqable/Buildable
+;; world via MapEntry K V as the element type.
+;;
+;; Uses sexp-mode bodies (like lseq-ops.prologos) because constructing
+;; MapEntry/LSeq/List values requires explicit type arguments.
+
+;; map-to-entry-list : Map K V -> List (MapEntry K V)
+;; Convert a map to a list of key-value entries.
+(def map-to-entry-list : [Pi [K :0 <Type>] [Pi [V :0 <Type>] [-> [Map K V] [List [MapEntry K V]]]]]
+  (fn (K :0 (Type 0)) (fn (V :0 (Type 0)) (fn (m : (Map K V))
+    (foldr K (List (MapEntry K V))
+      (fn (k : K) (fn (acc : (List (MapEntry K V)))
+        (cons (MapEntry K V) (mk-entry K V k (map-get m k)) acc)))
+      (nil (MapEntry K V))
+      (map-keys m))))))
+
+;; map-seq : Map K V -> LSeq (MapEntry K V)
+;; Convert a map to a lazy sequence of key-value entries.
+(def map-seq : [Pi [K :0 <Type>] [Pi [V :0 <Type>] [-> [Map K V] [LSeq [MapEntry K V]]]]]
+  (fn (K :0 (Type 0)) (fn (V :0 (Type 0)) (fn (m : (Map K V))
+    (list-to-lseq (MapEntry K V) (map-to-entry-list K V m))))))
+
+;; map-from-seq : LSeq (MapEntry K V) -> Map K V
+;; Build a map from a lazy sequence of key-value entries.
+(def map-from-seq : [Pi [K :0 <Type>] [Pi [V :0 <Type>] [-> [LSeq [MapEntry K V]] [Map K V]]]]
+  (fn (K :0 (Type 0)) (fn (V :0 (Type 0)) (fn (entries : (LSeq (MapEntry K V)))
+    (foldr (MapEntry K V) (Map K V)
+      (fn (e : (MapEntry K V)) (fn (acc : (Map K V))
+        (match e
+          (mk-entry k v -> (map-assoc acc k v)))))
+      (map-empty K V)
+      (lseq-to-list (MapEntry K V) entries))))))

@@ -257,6 +257,7 @@
     [(expr-pvec-pop v) (expr-pvec-pop (shift delta cutoff v))]
     [(expr-pvec-concat v1 v2) (expr-pvec-concat (shift delta cutoff v1) (shift delta cutoff v2))]
     [(expr-pvec-slice v lo hi) (expr-pvec-slice (shift delta cutoff v) (shift delta cutoff lo) (shift delta cutoff hi))]
+    [(expr-pvec-fold f init vec) (expr-pvec-fold (shift delta cutoff f) (shift delta cutoff init) (shift delta cutoff vec))]
 
     ;; Transient Builders (all non-binding)
     [(expr-transient c) (expr-transient (shift delta cutoff c))]
@@ -588,6 +589,7 @@
     [(expr-pvec-pop v) (expr-pvec-pop (subst k s v))]
     [(expr-pvec-concat v1 v2) (expr-pvec-concat (subst k s v1) (subst k s v2))]
     [(expr-pvec-slice v lo hi) (expr-pvec-slice (subst k s v) (subst k s lo) (subst k s hi))]
+    [(expr-pvec-fold f init vec) (expr-pvec-fold (subst k s f) (subst k s init) (subst k s vec))]
 
     ;; Transient Builders (all non-binding)
     [(expr-transient c) (expr-transient (subst k s c))]

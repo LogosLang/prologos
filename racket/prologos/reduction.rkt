@@ -1259,6 +1259,16 @@
            (expr-rrb (rrb-slice r lo-n hi-n))
            e))]
 
+    ;; pvec-fold : left fold over RRB — f takes (accumulator, element)
+    ;; rrb-fold passes (value, acc), so we call f(acc, elem)
+    [(expr-pvec-fold f init (expr-rrb r))
+     (let ([init* (whnf init)]
+           [f* (whnf f)])
+       (rrb-fold r
+                 (lambda (elem acc)
+                   (whnf (expr-app (expr-app f* acc) elem)))
+                 init*))]
+
     ;; ---- PVec stuck-term reduction ----
     [(expr-pvec-push v x)
      (let ([v* (whnf v)])
@@ -1289,6 +1299,9 @@
     [(expr-pvec-slice v lo hi)
      (let ([v* (whnf v)])
        (if (equal? v* v) e (whnf (expr-pvec-slice v* lo hi))))]
+    [(expr-pvec-fold f init vec)
+     (let ([vec* (whnf vec)])
+       (if (equal? vec* vec) e (whnf (expr-pvec-fold f init vec*))))]
 
     ;; ---- Transient Builder iota rules ----
     ;; Generic transient: dispatch on underlying value
@@ -1815,6 +1828,7 @@
     [(expr-pvec-pop v) (expr-pvec-pop (nf v))]
     [(expr-pvec-concat v1 v2) (expr-pvec-concat (nf v1) (nf v2))]
     [(expr-pvec-slice v lo hi) (expr-pvec-slice (nf v) (nf lo) (nf hi))]
+    [(expr-pvec-fold f init vec) (expr-pvec-fold (nf f) (nf init) (nf vec))]
 
     ;; Transient Builder normalization
     [(expr-transient c) (expr-transient (nf c))]

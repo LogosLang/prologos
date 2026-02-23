@@ -42,7 +42,7 @@
     Keyword Char String
     Map map-empty map-assoc map-get map-dissoc map-size map-has-key? map-keys map-vals
     Set set-empty set-insert set-member? set-delete set-size set-union set-intersect set-diff set-to-list
-    PVec pvec-empty pvec-push pvec-nth pvec-update pvec-length pvec-pop pvec-concat pvec-slice pvec-to-list pvec-from-list
+    PVec pvec-empty pvec-push pvec-nth pvec-update pvec-length pvec-pop pvec-concat pvec-slice pvec-to-list pvec-from-list pvec-fold
     TVec TMap TSet transient persist! tvec-push! tvec-update! tmap-assoc! tmap-dissoc! tset-insert! tset-delete!
     def defn check eval infer expand expand-1 expand-full parse elaborate match
     ;; Pre-parse macros — should be expanded before reaching parser
@@ -2012,6 +2012,16 @@
             (let ([v (parse-datum (car args))])
               (if (prologos-error? v) v
                   (surf-pvec-from-list v loc))))]
+       ;; (pvec-fold f init vec)
+       [(pvec-fold)
+        (or (check-arity 'pvec-fold args 3 loc)
+            (let ([f    (parse-datum (car args))]
+                  [init (parse-datum (cadr args))]
+                  [vec  (parse-datum (caddr args))])
+              (cond [(prologos-error? f)    f]
+                    [(prologos-error? init) init]
+                    [(prologos-error? vec)  vec]
+                    [else (surf-pvec-fold f init vec loc)])))]
 
        ;; ---- Transient Builder types ----
        ;; (TVec A)

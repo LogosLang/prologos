@@ -149,6 +149,7 @@
  (struct-out expr-pvec-length) (struct-out expr-pvec-pop)
  (struct-out expr-pvec-concat) (struct-out expr-pvec-slice)
  (struct-out expr-pvec-to-list) (struct-out expr-pvec-from-list)
+ (struct-out expr-pvec-fold)
  ;; Transient Builders (mutable versions for batch construction)
  (struct-out expr-transient) (struct-out expr-persist)
  (struct-out expr-TVec) (struct-out expr-trrb)
@@ -560,6 +561,7 @@
 (struct expr-pvec-slice (v lo hi) #:transparent)              ; pvec-slice : PVec A → Nat → Nat → PVec A
 (struct expr-pvec-to-list (v) #:transparent)                  ; pvec-to-list : PVec A → List A
 (struct expr-pvec-from-list (v) #:transparent)                ; pvec-from-list : List A → PVec A
+(struct expr-pvec-fold (f init vec) #:transparent)            ; pvec-fold : (A → B → B) → B → PVec A → B
 
 ;; ---- Transient Builders (mutable versions for batch construction) ----
 
@@ -816,6 +818,7 @@
       (expr-pvec-length? x) (expr-pvec-pop? x)
       (expr-pvec-concat? x) (expr-pvec-slice? x)
       (expr-pvec-to-list? x) (expr-pvec-from-list? x)
+      (expr-pvec-fold? x)
       (expr-transient? x) (expr-persist? x)
       (expr-TVec? x) (expr-TMap? x) (expr-TSet? x)
       (expr-trrb? x) (expr-tchamp? x) (expr-thset? x)

@@ -1192,6 +1192,17 @@
          [(tu _ u) (tu (infer ctx (expr-pvec-from-list v)) u)]
          [_ (tu-error)]))]
 
+    ;; pvec-fold : (B → A → B) → B → PVec A → B
+    [(expr-pvec-fold f init vec)
+     (let ([rf (inferQ ctx f)]
+           [ri (inferQ ctx init)]
+           [rv (inferQ ctx vec)])
+       (match* (rf ri rv)
+         [((tu _ u1) (tu _ u2) (tu _ u3))
+          (tu (infer ctx (expr-pvec-fold f init vec))
+              (add-usage (add-usage u1 u2) u3))]
+         [(_ _ _) (tu-error)]))]
+
     ;; ---- Transient Builders ----
     ;; Generic transient/persist: dispatch on inferred type, combine usage
     [(expr-transient coll)
@@ -1466,6 +1477,15 @@
          [((bu #t u1) (bu #t u2))
           (bu #t (add-usage u1 u2))]
          [(_ _) (bu #f (zero-usage n))]))]
+    ;; pvec-fold : check f, init, vec — result type is expected-type
+    [((expr-pvec-fold f init vec) expected-type)
+     (let ([rf (inferQ ctx f)]
+           [ri (checkQ ctx init expected-type)]
+           [rv (inferQ ctx vec)])
+       (match* (rf ri rv)
+         [((tu _ u1) (bu #t u2) (tu _ u3))
+          (bu #t (add-usage (add-usage u1 u2) u3))]
+         [(_ _ _) (bu #f (zero-usage n))]))]
 
     ;; ---- Transient Builder constructors: check against transient types ----
     [((expr-trrb _) (expr-TVec _)) (bu #t (zero-usage n))]

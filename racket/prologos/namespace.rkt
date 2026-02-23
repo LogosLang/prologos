@@ -373,6 +373,7 @@
     (require [prologos::core::numeric-bundles :refer [Num Fractional]])
 
     ;; ---- Tier 1b: Additional container types + operations ----
+    (require [prologos::data::map-entry :refer [MapEntry mk-entry entry-key entry-val]])
     (require [prologos::data::lseq     :as lseq :refer [LSeq lseq-nil lseq-cell]])
     (require [prologos::data::lseq-ops :refer [list-to-lseq lseq-to-list lseq-map
                                               lseq-filter lseq-take lseq-drop
@@ -393,7 +394,8 @@
                                               pvec-from-list-fn pvec-to-list-fn]])
     (require [prologos::core::map-ops  :refer [map-map-vals map-filter-vals
                                               map-fold-entries map-keys-list
-                                              map-vals-list map-merge]])
+                                              map-vals-list map-merge
+                                              map-to-entry-list map-seq map-from-seq]])
     (require [prologos::core::set-ops  :refer [set-map set-filter set-fold
                                               set-any? set-all?
                                               set-to-list-fn set-from-list-fn]])
