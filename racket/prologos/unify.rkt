@@ -35,7 +35,7 @@
          ;; Sprint 2b exports
          decompose-meta-app pattern-check invert-args
          ;; Union type helpers
-         flatten-union
+         flatten-union build-union-type
          ;; HKT normalization
          normalize-for-resolution normalizable-builtin?)
 
@@ -187,6 +187,8 @@
       ;; expr-hole wildcard (preserves existing conv behavior)
       [(expr-hole? a) #t]
       [(expr-hole? b) #t]
+      [(expr-typed-hole? a) #t]
+      [(expr-typed-hole? b) #t]
 
       ;; Both are the same unsolved metavariable
       [(and (expr-meta? a) (expr-meta? b)
@@ -379,6 +381,19 @@
            (loop prev (cdr rest) acc)]
           [else
            (loop (car rest) (cdr rest) (cons (car rest) acc))]))))
+
+;; Build a canonical union type from a list of types.
+;; Flattens any nested unions, deduplicates, sorts by union-sort-key,
+;; and builds a right-associated expr-union chain.
+;; Single type → identity (no wrapping).
+(define (build-union-type types)
+  (define flat (append-map flatten-union types))
+  (define sorted (sort flat string<? #:key union-sort-key))
+  (define deduped (dedup-union-components sorted))
+  (cond
+    [(null? deduped) (expr-error)]
+    [(= (length deduped) 1) (car deduped)]
+    [else (foldr expr-union (last deduped) (drop-right deduped 1))]))
 
 ;; Unify two lists of union components.
 ;; After flattening, sorting, and dedup, the lists should have the same

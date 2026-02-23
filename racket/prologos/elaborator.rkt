@@ -643,6 +643,10 @@
     [(surf-hole loc)
      (expr-hole)]
 
+    ;; Typed hole (?? or ??name — reports expected type)
+    [(surf-typed-hole name _)
+     (expr-typed-hole name)]
+
     ;; Type universe — Sprint 6: #f means infer level
     [(surf-type n loc)
      (if n

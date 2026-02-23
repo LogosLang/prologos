@@ -65,6 +65,7 @@
     [(expr-Unit) "Unit"]
     [(expr-unit) "unit"]
     [(expr-hole) "_"]
+    [(expr-typed-hole name) (if name (format "??~a" name) "??")]
     [(expr-meta id)
      (let ([sol (meta-solution id)])
        (if sol
@@ -684,6 +685,7 @@
     [(expr-false) #f]
     [(expr-Type _) #f]
     [(expr-hole) #f]
+    [(expr-typed-hole _) #f]
     [(expr-meta _) #f]
     [(expr-error) #f]
     [(expr-tycon _) #f]

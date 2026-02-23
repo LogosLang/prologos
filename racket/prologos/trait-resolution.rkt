@@ -63,6 +63,7 @@
     [(expr-false) #t]
     [(expr-Type _) #t]
     [(expr-hole) #t]
+    [(expr-typed-hole _) #t]
     ;; Built-in parameterized types: check their sub-expressions
     [(expr-PVec a) (ground-expr? a)]
     [(expr-Set a) (ground-expr? a)]

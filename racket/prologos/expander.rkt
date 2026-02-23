@@ -63,6 +63,7 @@
 (define (type-contains-hole? e)
   (match e
     [(expr-hole) #t]
+    [(expr-typed-hole _) #t]
     [(expr-Pi _ a b) (or (type-contains-hole? a) (type-contains-hole? b))]
     [(expr-Sigma a b) (or (type-contains-hole? a) (type-contains-hole? b))]
     [(expr-app f x) (or (type-contains-hole? f) (type-contains-hole? x))]

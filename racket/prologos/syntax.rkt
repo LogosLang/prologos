@@ -206,6 +206,8 @@
  (struct-out expr-foreign-fn)
  ;; Type hole (to be inferred during checking)
  (struct-out expr-hole)
+ ;; Typed hole (?? or ??name — reports expected type)
+ (struct-out expr-typed-hole)
  ;; Metavariable (to be solved during elaboration/unification)
  (struct-out expr-meta)
  ;; Reduce (ML-style pattern matching — desugared in type checker)
@@ -688,6 +690,12 @@
 (struct expr-hole () #:transparent)
 
 ;; ========================================
+;; Typed hole (?? or ??name — reports expected type to stderr)
+;; ========================================
+;; name is #f (unnamed ??) or a symbol (named ??goal)
+(struct expr-typed-hole (name) #:transparent)
+
+;; ========================================
 ;; Metavariable (placeholder to be solved by unification)
 ;; ========================================
 (struct expr-meta (id) #:transparent)    ; id is a gensym symbol
@@ -817,7 +825,7 @@
       (expr-tvec-push!? x) (expr-tvec-update!? x)
       (expr-tmap-assoc!? x) (expr-tmap-dissoc!? x)
       (expr-tset-insert!? x) (expr-tset-delete!? x)
-      (expr-hole? x) (expr-meta? x) (expr-reduce? x)
+      (expr-hole? x) (expr-typed-hole? x) (expr-meta? x) (expr-reduce? x)
       (expr-union? x) (expr-tycon? x) (expr-error? x)))
 
 ;; ========================================

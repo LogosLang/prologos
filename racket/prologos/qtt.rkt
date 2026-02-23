@@ -208,7 +208,7 @@
        ;; Special case: app(lam(m, dom, body), arg) — beta-typed application
        ;; This supports let-expansion: (let x := v body) = app(lam(m, dom, body), v)
        [(expr-lam m dom body)
-        (let ([arg-dom (if (expr-hole? dom)
+        (let ([arg-dom (if (or (expr-hole? dom) (expr-typed-hole? dom))
                            ;; Infer arg type for hole domain
                            (let ([ri (inferQ ctx e2)])
                              (match ri [(tu t _) t] [_ #f]))

@@ -45,6 +45,7 @@
     [(expr-unit) e]
     [(expr-Type l) (expr-Type (zonk-level l))]
     [(expr-hole) e]
+    [(expr-typed-hole _) e]
     [(expr-error) e]
 
     ;; Binding forms (Sprint 7: zonk mult field for mult-metas)
@@ -362,6 +363,7 @@
     [(expr-unit) e]
     [(expr-Type l) (expr-Type (zonk-level l))]
     [(expr-hole) e]
+    [(expr-typed-hole _) e]
     [(expr-error) e]
 
     ;; Binding forms: increment depth for codomains/bodies
@@ -680,6 +682,7 @@
     [(expr-Unit) e]
     [(expr-unit) e]
     [(expr-hole) e]
+    [(expr-typed-hole _) e]
     [(expr-error) e]
     [(expr-lam m t body) (expr-lam (zonk-mult-default m) (default-metas t) (default-metas body))]
     [(expr-Pi m dom cod) (expr-Pi (zonk-mult-default m) (default-metas dom) (default-metas cod))]

@@ -148,12 +148,46 @@
          spec-entry-where-constraints
          spec-entry-implicit-binders
          spec-entry-rest-type
+         spec-entry-metadata
          register-spec!
          lookup-spec
          process-spec
          extract-where-clause
          maybe-inject-where
          param-type->angle-type
+         ;; Property registry
+         current-property-store
+         property-entry
+         property-entry?
+         property-entry-name
+         property-entry-params
+         property-entry-where-clauses
+         property-entry-includes
+         property-entry-clauses
+         property-entry-metadata
+         property-clause
+         property-clause?
+         property-clause-name
+         property-clause-forall-binders
+         property-clause-holds-expr
+         register-property!
+         lookup-property
+         process-property
+         ;; Functor registry
+         current-functor-store
+         functor-entry
+         functor-entry?
+         functor-entry-name
+         functor-entry-params
+         functor-entry-unfolds
+         functor-entry-metadata
+         register-functor!
+         lookup-functor
+         process-functor
+         ;; Trait laws
+         current-trait-laws
+         register-trait-laws!
+         lookup-trait-laws
          ;; Implicit map, dot-access, and introspection helpers
          rewrite-implicit-map
          rewrite-dot-access
@@ -200,7 +234,7 @@
 ;;   '() if no where clause. Constraints are prepended to type-datums as leading params.
 ;; - rest-type: #f for normal functions, or the element type datum for variadic functions.
 ;;   e.g., 'Nat for `spec add Nat ... -> Nat`, meaning the last param is List Nat.
-(struct spec-entry (type-datums docstring multi? srcloc where-constraints implicit-binders rest-type) #:transparent)
+(struct spec-entry (type-datums docstring multi? srcloc where-constraints implicit-binders rest-type metadata) #:transparent)
 
 ;; Spec store: symbol → spec-entry
 (define current-spec-store (make-parameter (hasheq)))
@@ -821,6 +855,8 @@
     [(trait-)   'trait]
     [(impl-)    'impl]
     [(bundle-)  'bundle]
+    [(property-) 'property]
+    [(functor-)  'functor]
     [else #f]))
 
 ;; Helper: extract the defined name(s) from a top-level form datum.
@@ -910,6 +946,12 @@
                  (append (reverse new-stxs) acc)]
                 [(eq? base 'bundle)
                  (process-bundle rewritten)
+                 acc]
+                [(eq? base 'property)
+                 (process-property rewritten)
+                 acc]
+                [(eq? base 'functor)
+                 (process-functor rewritten)
                  acc]
                 [(eq? base 'specialize)
                  (define defs (process-specialize rewritten))
@@ -1012,6 +1054,18 @@
         ;; ---- Public bundle — register, consume, AND auto-export name ----
         [(and (pair? datum) (eq? head 'bundle))
          (process-bundle datum)
+         (when (and (list? datum) (>= (length datum) 2) (symbol? (cadr datum)))
+           (auto-export-name! (cadr datum)))
+         acc]
+        ;; ---- Public property — register, consume, AND auto-export name ----
+        [(and (pair? datum) (eq? head 'property))
+         (process-property datum)
+         (when (and (list? datum) (>= (length datum) 2) (symbol? (cadr datum)))
+           (auto-export-name! (cadr datum)))
+         acc]
+        ;; ---- Public functor — register, consume, AND auto-export name ----
+        [(and (pair? datum) (eq? head 'functor))
+         (process-functor datum)
          (when (and (list? datum) (>= (length datum) 2) (symbol? (cadr datum)))
            (auto-export-name! (cadr datum)))
          acc]
@@ -1253,13 +1307,136 @@
                 [(symbol? h) (eq? h '$brace-params)]
                 [(syntax? h) (eq? (syntax-e h) '$brace-params)]
                 [else #f])))
-       ;; Found a ($brace-params ...) group — parse it
+       ;; Found a ($brace-params ...) group — check if it's a metadata block
        (define brace-datum (car remaining))
        (define symbols (cdr brace-datum))
-       (define parsed (parse-brace-param-list symbols spec-name))
-       (loop (cdr remaining) (append (reverse parsed) binders))]
+       (if (and (pair? symbols) (keyword-like-symbol? (car symbols)))
+           ;; This is a metadata block, not implicit binders — stop here
+           (values (reverse binders) remaining)
+           ;; Normal brace-params group — parse as implicit binders
+           (let ([parsed (parse-brace-param-list symbols spec-name)])
+             (loop (cdr remaining) (append (reverse parsed) binders))))]
       [else
        (values (reverse binders) remaining)])))
+
+;; ========================================
+;; parse-spec-metadata: parse trailing {kw val ...} block into hasheq
+;; ========================================
+;; Parses a ($brace-params ...) form containing keyword-value pairs into a hash.
+;; Recognized keys:
+;;   :where   → collect parenthesized constraint forms via collect-constraint-values
+;;   :implicits → collect $brace-params groups via collect-brace-groups
+;;   :properties → collect parenthesized constraint forms via collect-constraint-values
+;;   :see-also → stored as-is
+;;   default  → stored as-is
+;;   key with no value → #t (boolean flag)
+
+;; collect-constraint-values: collect parenthesized forms from a kv tail until next keyword.
+;; Example: (:where (Eq A) (Ord A) :doc "foo") → (values ((Eq A) (Ord A)) (:doc "foo"))
+(define (collect-constraint-values tail)
+  (let loop ([rest tail] [acc '()])
+    (cond
+      [(null? rest)
+       (values (reverse acc) '())]
+      [(and (pair? (car rest)) (not (keyword-like-symbol? (car rest))))
+       (loop (cdr rest) (cons (car rest) acc))]
+      [else
+       (values (reverse acc) rest)])))
+
+;; collect-brace-groups: collect ($brace-params ...) groups from a kv tail until next keyword.
+;; Example: (:implicits ($brace-params A B) ($brace-params C : Type) :doc "foo")
+;;        → (values (($brace-params A B) ($brace-params C : Type)) (:doc "foo"))
+(define (collect-brace-groups tail)
+  (let loop ([rest tail] [acc '()])
+    (cond
+      [(null? rest)
+       (values (reverse acc) '())]
+      [(and (pair? (car rest))
+            ;; Check for $brace-params sentinel at head of the form
+            (let ([h (car (car rest))])
+              (cond
+                [(symbol? h) (eq? h '$brace-params)]
+                [(syntax? h) (eq? (syntax-e h) '$brace-params)]
+                [else #f])))
+       (loop (cdr rest) (cons (car rest) acc))]
+      [else
+       (values (reverse acc) rest)])))
+
+(define (parse-spec-metadata brace-datum)
+  ;; brace-datum is ($brace-params :key1 val1 :key2 val2 ...)
+  (define kv-list (cdr brace-datum))
+  (let loop ([remaining kv-list] [result (hasheq)])
+    (cond
+      [(null? remaining) result]
+      [(keyword-like-symbol? (car remaining))
+       (define key (car remaining))
+       (define tail (cdr remaining))
+       (cond
+         ;; :where → collect constraint values
+         [(eq? key ':where)
+          (define-values (constraints rest) (collect-constraint-values tail))
+          (loop rest (hash-set result key constraints))]
+         ;; :implicits → collect brace groups
+         [(eq? key ':implicits)
+          (define-values (groups rest) (collect-brace-groups tail))
+          (loop rest (hash-set result key groups))]
+         ;; :properties → collect constraint values
+         [(eq? key ':properties)
+          (define-values (constraints rest) (collect-constraint-values tail))
+          (loop rest (hash-set result key constraints))]
+         ;; :laws → collect constraint values (law references are parenthesized forms)
+         [(eq? key ':laws)
+          (define-values (constraints rest) (collect-constraint-values tail))
+          (loop rest (hash-set result key constraints))]
+         ;; :includes → collect constraint values (included property references)
+         [(eq? key ':includes)
+          (define-values (constraints rest) (collect-constraint-values tail))
+          (loop rest (hash-set result key constraints))]
+         ;; Key with no following value (or next is also a keyword) → boolean flag
+         [(or (null? tail) (keyword-like-symbol? (car tail)))
+          (loop tail (hash-set result key #t))]
+         ;; Default: take next value as-is
+         [else
+          (loop (cdr tail) (hash-set result key (car tail)))])]
+      ;; Skip non-keyword elements (shouldn't happen in well-formed metadata)
+      [else (loop (cdr remaining) result)])))
+
+;; ========================================
+;; extract-implicits-from-metadata: parse :implicits into binder alist
+;; ========================================
+;; Takes the :implicits value (list of $brace-params groups) from metadata
+;; and converts to the same binder alist format as extract-implicit-binders.
+(define (extract-implicits-from-metadata groups name)
+  (apply append
+         (for/list ([g (in-list groups)])
+           (define symbols
+             (if (and (pair? g) (let ([h (car g)])
+                                  (cond
+                                    [(symbol? h) (eq? h '$brace-params)]
+                                    [(syntax? h) (eq? (syntax-e h) '$brace-params)]
+                                    [else #f])))
+                 (cdr g)
+                 ;; Bare group without sentinel — treat as raw symbols
+                 (list g)))
+           (parse-brace-param-list symbols name))))
+
+;; ========================================
+;; deduplicate-binders: merge inline + metadata binders with dedup
+;; ========================================
+;; If a binder appears in both inline and metadata, keep the inline one
+;; and warn to stderr about the duplicate.
+(define (deduplicate-binders inline-binders meta-binders)
+  (define inline-names (map car inline-binders))
+  (define unique-meta
+    (filter (lambda (b)
+              (if (memq (car b) inline-names)
+                  (begin
+                    (eprintf "warning: duplicate implicit binder ~a in metadata (using inline version)~n"
+                             (car b))
+                    #f)
+                  #t))
+            meta-binders))
+  (append inline-binders unique-meta))
 
 ;; ========================================
 ;; desugar-rest-type: detect $rest in spec tokens and desugar to List
@@ -1325,16 +1502,48 @@
         (values #f rest)))
   (when (null? body-tokens)
     (error 'spec "spec ~a: missing type signature" name))
+  ;; Extract trailing metadata block: check if last token is ($brace-params :key ...)
+  (define-values (pre-meta-tokens metadata)
+    (let* ([last-tok (last body-tokens)]
+           [is-meta? (and (pair? last-tok)
+                          (let ([h (car last-tok)])
+                            (cond
+                              [(symbol? h) (eq? h '$brace-params)]
+                              [(syntax? h) (eq? (syntax-e h) '$brace-params)]
+                              [else #f]))
+                          (pair? (cdr last-tok))
+                          (keyword-like-symbol? (cadr last-tok)))])
+      (if is-meta?
+          (values (drop-right body-tokens 1) (parse-spec-metadata last-tok))
+          (values body-tokens #f))))
+  ;; Merge :doc from metadata with positional docstring (metadata wins)
+  (define merged-docstring
+    (or (and metadata (hash-ref metadata ':doc #f)) docstring))
   ;; Extract leading {A B : Type} implicit binders (zero or more $brace-params groups)
   (define-values (implicit-binders after-implicits)
-    (extract-implicit-binders body-tokens name))
-  ;; Extract where clause (if present)
+    (extract-implicit-binders pre-meta-tokens name))
+  ;; Extract :implicits from metadata and merge with inline binders
+  (define meta-implicits-raw (and metadata (hash-ref metadata ':implicits #f)))
+  (define meta-implicits
+    (if meta-implicits-raw
+        (extract-implicits-from-metadata meta-implicits-raw name)
+        '()))
+  (define merged-implicit-binders
+    (if (null? meta-implicits)
+        implicit-binders
+        (deduplicate-binders implicit-binders meta-implicits)))
+  ;; Extract where clause (if present) — both positional and from metadata
   (define-values (type-tokens raw-where-constraints) (extract-where-clause after-implicits))
+  (define meta-where (and metadata (hash-ref metadata ':where #f)))
+  (define combined-raw-where
+    (if meta-where
+        (append raw-where-constraints meta-where)
+        raw-where-constraints))
   ;; Expand bundle references in where constraints (e.g., (Comparable A) → (Eq A) (Ord A))
   (define where-constraints
-    (if (null? raw-where-constraints)
+    (if (null? combined-raw-where)
         '()
-        (expand-bundle-constraints raw-where-constraints)))
+        (expand-bundle-constraints combined-raw-where)))
   ;; HKT-2: Propagate kinds from where-constraints AND inline constraints to implicit binders.
   ;; If {C} appears with [Seqable C] in where or as a leading inline param, and Seqable
   ;; expects {C : Type -> Type}, then C's kind is refined from (Type 0) to (-> (Type 0) (Type 0)).
@@ -1347,9 +1556,9 @@
     (extract-inline-constraints type-tokens))
   (define all-constraints (append where-constraints inline-constraints))
   (define refined-implicit-binders
-    (if (or (null? implicit-binders) (null? all-constraints))
-        implicit-binders
-        (propagate-kinds-from-constraints implicit-binders all-constraints name)))
+    (if (or (null? merged-implicit-binders) (null? all-constraints))
+        merged-implicit-binders
+        (propagate-kinds-from-constraints merged-implicit-binders all-constraints name)))
   ;; Detect and desugar variadic rest type: `A $rest` → `(List A)`
   ;; The $rest sentinel marks the preceding type as variadic.
   (define-values (desugared-type-tokens rest-type)
@@ -1374,10 +1583,10 @@
     [has-pipes?
      ;; Split on $pipe to get branches
      (define branches (split-on-pipe effective-tokens))
-     (register-spec! name (spec-entry branches docstring #t srcloc-unknown stored-constraints refined-implicit-binders rest-type))]
+     (register-spec! name (spec-entry branches merged-docstring #t srcloc-unknown stored-constraints refined-implicit-binders rest-type metadata))]
     [else
      ;; Single-arity: the entire effective-tokens is the type datum
-     (register-spec! name (spec-entry (list effective-tokens) docstring #f srcloc-unknown stored-constraints refined-implicit-binders rest-type))]))
+     (register-spec! name (spec-entry (list effective-tokens) merged-docstring #f srcloc-unknown stored-constraints refined-implicit-binders rest-type metadata))]))
 
 ;; Split a token list on '$pipe boundaries.
 ;; Handles two forms:
@@ -2447,9 +2656,9 @@
   (cond
     [(not (list? datum)) datum]
     [(null? datum) datum]
-    ;; Scope: only def/defn head forms that have a keyword tail
+    ;; Scope: only def/defn/spec/trait/property/functor head forms that have a keyword tail
     [(and (pair? datum)
-          (memq (car datum) '(def defn))
+          (memq (car datum) '(def defn spec trait property functor))
           (has-keyword-tail? datum))
      (define-values (prefix keyword-tail) (split-keyword-tail datum))
      (define brace-contents (implicit-map-children->brace-params keyword-tail))
@@ -2951,6 +3160,21 @@
 
 (define (lookup-trait name)
   (hash-ref (current-trait-registry) name #f))
+
+;; ========================================
+;; Trait laws store
+;; ========================================
+;; Stores property laws associated with traits (declared via :laws in trait metadata).
+;; Separate from trait-meta to keep the core registry lightweight.
+;; Registry: trait-name (symbol) → list of law datums (s-expression property references)
+
+(define current-trait-laws (make-parameter (hasheq)))
+
+(define (register-trait-laws! name laws)
+  (current-trait-laws (hash-set (current-trait-laws) name laws)))
+
+(define (lookup-trait-laws name)
+  (hash-ref (current-trait-laws) name '()))
 
 ;; ========================================
 ;; Impl metadata registry
@@ -3879,12 +4103,33 @@
          (define-values (tn ps) (parse-data-params head))
          (values tn ps rest)])))
 
-  (when (null? raw-methods)
+  ;; Separate trailing metadata block from method specs
+  ;; A trailing ($brace-params :key ...) is trait metadata, not a method
+  (define-values (method-specs trait-metadata)
+    (if (and (not (null? raw-methods))
+             (let ([last-elem (last raw-methods)])
+               (and (pair? last-elem)
+                    (let ([h (car last-elem)])
+                      (cond
+                        [(symbol? h) (eq? h '$brace-params)]
+                        [(syntax? h) (eq? (syntax-e h) '$brace-params)]
+                        [else #f]))
+                    (pair? (cdr last-elem))
+                    (keyword-like-symbol? (cadr last-elem)))))
+        (values (drop-right raw-methods 1) (parse-spec-metadata (last raw-methods)))
+        (values raw-methods (hasheq))))
+
+  (when (null? method-specs)
     (error 'trait "trait ~a: must have at least one method" trait-name))
+
+  ;; Extract :laws from metadata and register
+  (define raw-laws (hash-ref trait-metadata ':laws #f))
+  (when (and raw-laws (pair? raw-laws))
+    (register-trait-laws! trait-name raw-laws))
 
   ;; Parse methods
   (define methods
-    (map (lambda (m) (parse-trait-method m trait-name)) raw-methods))
+    (map (lambda (m) (parse-trait-method m trait-name)) method-specs))
 
   ;; Register trait metadata
   (register-trait! trait-name (trait-meta trait-name params methods))
@@ -3986,6 +4231,280 @@
 
   ;; Return the accessor defs (deftype was already processed via process-deftype)
   accessor-defs)
+
+;; ========================================
+;; Property declarations
+;; ========================================
+;; Syntax:
+;;   (property PropertyName ($brace-params A)
+;;     :where (Eq A)
+;;     :includes (SomeOtherProp A)
+;;     (reflexivity :holds (forall (x : A) [eq? x x]))
+;;     (symmetry :holds (forall (x : A) (y : A) [eq? x y] -> [eq? y x])))
+;;
+;; A property groups reusable propositions. Like bundle for traits,
+;; property is for proposition groups.
+
+;; property-clause: a single proposition within a property
+;; name: symbol (e.g., reflexivity)
+;; forall-binders: the forall expression if present, or #f
+;; holds-expr: the proposition expression
+(struct property-clause (name forall-binders holds-expr) #:transparent)
+
+;; property-entry: stores a property declaration
+;; name: symbol
+;; params: alist of ((name . kind) ...) from $brace-params
+;; where-clauses: list of constraint datums
+;; includes: list of property references (for composition)
+;; clauses: list of property-clause structs
+;; metadata: hasheq of extra metadata
+(struct property-entry (name params where-clauses includes clauses metadata) #:transparent)
+
+;; Registry: property-name → property-entry
+(define current-property-store (make-parameter (hasheq)))
+
+(define (register-property! name entry)
+  (current-property-store (hash-set (current-property-store) name entry)))
+
+(define (lookup-property name)
+  (hash-ref (current-property-store) name #f))
+
+;; Parse a single property clause datum.
+;; Input: (- :name "law-name" :forall ($brace-params x : A) :holds expr)
+;; The head symbol is - (dash), followed by keyword-value pairs.
+;; Returns: property-clause struct
+(define (parse-property-clause clause-datum prop-name)
+  (unless (and (pair? clause-datum) (eq? (car clause-datum) '-))
+    (error 'property "property ~a: clause must start with -, got ~a" prop-name clause-datum))
+  (define kv-list (cdr clause-datum))
+  ;; Parse keyword-value pairs
+  (let loop ([remaining kv-list] [cname #f] [forall-binders #f] [holds-expr #f])
+    (cond
+      [(null? remaining)
+       (unless cname
+         (error 'property "property ~a: clause missing :name" prop-name))
+       (unless holds-expr
+         (error 'property "property ~a: clause ~a missing :holds" prop-name cname))
+       (property-clause cname forall-binders holds-expr)]
+      [(eq? (car remaining) ':name)
+       (when (null? (cdr remaining))
+         (error 'property "property ~a: :name missing value" prop-name))
+       (loop (cddr remaining) (cadr remaining) forall-binders holds-expr)]
+      [(eq? (car remaining) ':forall)
+       ;; Collect binder groups (could be $brace-params or plain forms) until next keyword
+       (define-values (binder-forms rest)
+         (let bloop ([r (cdr remaining)] [acc '()])
+           (cond
+             [(null? r) (values (reverse acc) '())]
+             [(keyword-like-symbol? (car r)) (values (reverse acc) r)]
+             [else (bloop (cdr r) (cons (car r) acc))])))
+       (loop rest cname binder-forms holds-expr)]
+      [(eq? (car remaining) ':holds)
+       ;; Collect expression(s) until next keyword
+       (define-values (expr-forms rest)
+         (let bloop ([r (cdr remaining)] [acc '()])
+           (cond
+             [(null? r) (values (reverse acc) '())]
+             [(keyword-like-symbol? (car r)) (values (reverse acc) r)]
+             [else (bloop (cdr r) (cons (car r) acc))])))
+       (define expr
+         (if (= (length expr-forms) 1)
+             (car expr-forms)
+             expr-forms))
+       (loop rest cname forall-binders expr)]
+      [else
+       ;; Skip unknown keywords
+       (if (and (pair? (cdr remaining)) (not (keyword-like-symbol? (cadr remaining))))
+           (loop (cddr remaining) cname forall-binders holds-expr)
+           (loop (cdr remaining) cname forall-binders holds-expr))])))
+
+;; process-property: parse and register a property declaration
+;; Returns '() (property is metadata-only, no code generation)
+(define (process-property datum)
+  (unless (and (list? datum) (>= (length datum) 3))
+    (error 'property "property requires: (property PropName {params} clause1 ...)"))
+  (define head (cadr datum))
+  (define rest (cddr datum))
+  ;; Parse name and params (similar to trait)
+  (define-values (prop-name params remaining)
+    (cond
+      ;; Brace-params: (property PropName ($brace-params A) ...)
+      [(and (symbol? head)
+            (not (null? rest))
+            (let ([maybe-braces (car rest)])
+              (and (pair? maybe-braces)
+                   (eq? (car maybe-braces) '$brace-params)
+                   ;; Must NOT be a metadata block
+                   (or (null? (cdr maybe-braces))
+                       (not (keyword-like-symbol? (cadr maybe-braces)))))))
+       (define brace-element (car rest))
+       (define symbols (cdr brace-element))
+       (define brace-params (parse-brace-param-list symbols 'property))
+       (values head brace-params (cdr rest))]
+      ;; No params
+      [(symbol? head)
+       (values head '() rest)]
+      [else
+       (error 'property "property: invalid name/params: ~a" head)]))
+  ;; Separate trailing metadata from clauses
+  (define-values (body-forms metadata)
+    (if (and (not (null? remaining))
+             (let ([last-elem (last remaining)])
+               (and (pair? last-elem)
+                    (let ([h (car last-elem)])
+                      (cond
+                        [(symbol? h) (eq? h '$brace-params)]
+                        [(syntax? h) (eq? (syntax-e h) '$brace-params)]
+                        [else #f]))
+                    (pair? (cdr last-elem))
+                    (keyword-like-symbol? (cadr last-elem)))))
+        (values (drop-right remaining 1) (parse-spec-metadata (last remaining)))
+        (values remaining (hasheq))))
+  ;; Extract :where constraints (from keyword position or metadata)
+  (define-values (non-where-forms positional-where)
+    (let loop ([rest body-forms] [before '()] [after-where '()] [in-where? #f])
+      (cond
+        [(null? rest) (values (reverse before) (reverse after-where))]
+        [(and (not in-where?) (eq? (car rest) ':where))
+         (loop (cdr rest) before after-where #t)]
+        [in-where?
+         (if (and (pair? (car rest)) (not (keyword-like-symbol? (car rest))))
+             (loop (cdr rest) before (cons (car rest) after-where) #t)
+             (loop rest before after-where #f))]
+        [else (loop (cdr rest) (cons (car rest) before) after-where in-where?)])))
+  (define meta-where (hash-ref metadata ':where #f))
+  (define where-clauses
+    (append positional-where (or meta-where '())))
+  ;; Extract :includes (from keyword position or metadata)
+  (define-values (clause-forms positional-includes)
+    (let loop ([rest non-where-forms] [before '()] [after-inc '()] [in-inc? #f])
+      (cond
+        [(null? rest) (values (reverse before) (reverse after-inc))]
+        [(and (not in-inc?) (eq? (car rest) ':includes))
+         (loop (cdr rest) before after-inc #t)]
+        [in-inc?
+         (if (and (pair? (car rest)) (not (keyword-like-symbol? (car rest))))
+             (loop (cdr rest) before (cons (car rest) after-inc) #t)
+             (loop rest before after-inc #f))]
+        [else (loop (cdr rest) (cons (car rest) before) after-inc in-inc?)])))
+  (define meta-includes (hash-ref metadata ':includes #f))
+  (define includes
+    (append positional-includes (or meta-includes '())))
+  ;; Parse property clauses (forms starting with -)
+  (define clauses
+    (map (lambda (c) (parse-property-clause c prop-name))
+         (filter (lambda (x) (and (pair? x) (eq? (car x) '-))) clause-forms)))
+  ;; Register
+  (register-property! prop-name
+                      (property-entry prop-name params where-clauses includes clauses metadata))
+  ;; Properties are metadata-only — no code generation in Phase 1
+  '())
+
+;; ========================================
+;; Functor declarations
+;; ========================================
+;; Syntax:
+;;   (functor Maybe ($brace-params A)
+;;     :unfolds <(A : Type) -> Type>
+;;     {$brace-params metadata...})
+;;
+;; A functor names a type abstraction with optional category-theoretic metadata.
+;; In Phase 1, it registers as a deftype for transparent expansion.
+
+;; functor-entry: stores a functor declaration
+;; name: symbol
+;; params: alist of ((name . kind) ...) from $brace-params
+;; unfolds: the type expression it expands to (from :unfolds), or #f
+;; metadata: hasheq of extra metadata
+(struct functor-entry (name params unfolds metadata) #:transparent)
+
+;; Registry: functor-name → functor-entry
+(define current-functor-store (make-parameter (hasheq)))
+
+(define (register-functor! name entry)
+  (current-functor-store (hash-set (current-functor-store) name entry)))
+
+(define (lookup-functor name)
+  (hash-ref (current-functor-store) name #f))
+
+;; process-functor: parse and register a functor declaration
+;; Also registers as a deftype for transparent expansion.
+;; Returns '() (functor is metadata-only in Phase 1)
+(define (process-functor datum)
+  (unless (and (list? datum) (>= (length datum) 3))
+    (error 'functor "functor requires: (functor Name {params} ...)"))
+  (define head (cadr datum))
+  (define rest (cddr datum))
+  ;; Parse name and params (similar to trait)
+  (define-values (func-name params remaining)
+    (cond
+      ;; Brace-params: (functor Maybe ($brace-params A) ...)
+      [(and (symbol? head)
+            (not (null? rest))
+            (let ([maybe-braces (car rest)])
+              (and (pair? maybe-braces)
+                   (eq? (car maybe-braces) '$brace-params)
+                   ;; Must NOT be a metadata block
+                   (or (null? (cdr maybe-braces))
+                       (not (keyword-like-symbol? (cadr maybe-braces)))))))
+       (define brace-element (car rest))
+       (define symbols (cdr brace-element))
+       (define brace-params (parse-brace-param-list symbols 'functor))
+       (values head brace-params (cdr rest))]
+      ;; No params
+      [(symbol? head)
+       (values head '() rest)]
+      [else
+       (error 'functor "functor: invalid name/params: ~a" head)]))
+  ;; Separate trailing metadata from body
+  (define-values (body-forms metadata)
+    (if (and (not (null? remaining))
+             (let ([last-elem (last remaining)])
+               (and (pair? last-elem)
+                    (let ([h (car last-elem)])
+                      (cond
+                        [(symbol? h) (eq? h '$brace-params)]
+                        [(syntax? h) (eq? (syntax-e h) '$brace-params)]
+                        [else #f]))
+                    (pair? (cdr last-elem))
+                    (keyword-like-symbol? (cadr last-elem)))))
+        (values (drop-right remaining 1) (parse-spec-metadata (last remaining)))
+        (values remaining (hasheq))))
+  ;; Extract :unfolds from positional body or metadata
+  (define unfolds-expr
+    (or (hash-ref metadata ':unfolds #f)
+        ;; Check positional: (:unfolds expr ...) in body-forms
+        (let loop ([rest body-forms])
+          (cond
+            [(null? rest) #f]
+            [(eq? (car rest) ':unfolds)
+             (if (null? (cdr rest)) #f
+                 (cadr rest))]
+            [else (loop (cdr rest))]))))
+  ;; :unfolds is required for functors
+  (unless unfolds-expr
+    (error 'functor "functor ~a: requires :unfolds type expression" func-name))
+  ;; Register functor entry
+  (register-functor! func-name
+                     (functor-entry func-name params unfolds-expr metadata))
+  ;; Also register as deftype for transparent expansion (if unfolds is provided and params exist)
+  (when (and unfolds-expr (not (null? params)))
+    ;; Build a deftype: (deftype (Name $A $B ...) unfolds-body)
+    (define param-name->pvar
+      (for/hasheq ([p (in-list params)])
+        (values (car p)
+                (string->symbol (string-append "$" (symbol->string (car p)))))))
+    (define (pvarify d)
+      (cond
+        [(symbol? d) (hash-ref param-name->pvar d d)]
+        [(pair? d) (map pvarify d)]
+        [else d]))
+    (define deftype-pattern
+      `(,func-name ,@(map (lambda (p) (hash-ref param-name->pvar (car p))) params)))
+    (define deftype-body (pvarify unfolds-expr))
+    (process-deftype `(deftype ,deftype-pattern ,deftype-body)))
+  ;; Functors are metadata-only in Phase 1 — no additional code generation
+  '())
 
 ;; ========================================
 ;; process-impl: trait implementation

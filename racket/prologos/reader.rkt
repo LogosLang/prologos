@@ -532,6 +532,27 @@
             (error 'prologos-reader "~a:~a:~a: Unexpected character: ."
                    (tokenizer-source tok) ln (+ cl 1))]))]
 
+      ;; Typed hole: ?? or ??name
+      [(char=? c #\?)
+       (tok-read! tok) ; consume first ?
+       (define c2 (tok-peek tok))
+       (cond
+         [(and (char? c2) (char=? c2 #\?))
+          (tok-read! tok) ; consume second ?
+          (define c3 (tok-peek tok))
+          (if (and (char? c3) (or (char-alphabetic? c3) (char=? c3 #\_)))
+              ;; ??name — read the name
+              (let ([name-str (read-ident-chars! tok)])
+                (token 'typed-hole (string->symbol name-str) ln cl ps
+                       (+ 2 (string-length name-str))))
+              ;; bare ?? — unnamed typed hole
+              (token 'typed-hole #f ln cl ps 2))]
+         [else
+          ;; Lone ? — treat as identifier character, read rest
+          (let ([rest (read-ident-rest! tok)])
+            (token 'symbol (string->symbol (string-append "?" rest)) ln cl ps
+                   (+ 1 (string-length rest))))])]
+
       ;; Identifier
       [(ident-start? c)
        (read-ident-token! tok ln cl ps)]
@@ -1219,6 +1240,20 @@
      (make-stx (list (make-stx '$dot-key src ln cl ps 0)
                      (make-stx (token-value t) src ln (+ cl 1) (+ ps 1) (- sp 1)))
                src ln cl ps sp)]
+    [(eq? tt 'typed-hole)
+     ;; ?? or ??name — produce ($typed-hole) or ($typed-hole name) sentinel
+     (define t (parser-next! p))
+     (define hole-name (token-value t))
+     (define ln (token-line t))
+     (define cl (token-col t))
+     (define ps (token-pos t))
+     (define sp (token-span t))
+     (if hole-name
+         (make-stx (list (make-stx '$typed-hole src ln cl ps 0)
+                         (make-stx hole-name src ln (+ cl 2) (+ ps 2) (- sp 2)))
+                   src ln cl ps sp)
+         (make-stx (list (make-stx '$typed-hole src ln cl ps 0))
+                   src ln cl ps sp))]
     [else
      (define t (parser-peek p))
      (error 'prologos-reader

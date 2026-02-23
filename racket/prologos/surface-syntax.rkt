@@ -242,6 +242,8 @@
  (struct-out surf-the-fn)
  ;; Type hole (inferred)
  (struct-out surf-hole)
+ ;; Typed hole (?? or ??name — reports expected type)
+ (struct-out surf-typed-hole)
  ;; Numbered placeholder (_1, _2, etc.)
  (struct-out surf-numbered-hole)
  ;; Union type
@@ -262,6 +264,12 @@
 ;; Type hole (to be inferred by the type checker)
 ;; ========================================
 (struct surf-hole (srcloc) #:transparent)
+
+;; ========================================
+;; Typed hole (?? or ??name — reports expected type at check time)
+;; ========================================
+;; name is #f (unnamed ??) or a symbol (named ??goal)
+(struct surf-typed-hole (name srcloc) #:transparent)
 
 ;; ========================================
 ;; Numbered placeholder: _N where N is a positive integer (1-based)

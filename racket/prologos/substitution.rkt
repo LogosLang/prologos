@@ -41,6 +41,7 @@
     [(expr-unit) e]
     [(expr-Type _) e]
     [(expr-hole) e]
+    [(expr-typed-hole _) e]
     [(expr-meta _) e]
     [(expr-error) e]
 
@@ -371,6 +372,7 @@
     [(expr-unit) e]
     [(expr-Type _) e]
     [(expr-hole) e]
+    [(expr-typed-hole _) e]
     [(expr-meta _) e]
     [(expr-error) e]
 

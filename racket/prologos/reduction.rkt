@@ -458,6 +458,7 @@
            (expr-meta? e)           ;; unsolved meta, unknown
            (expr-app? e)            ;; application, could produce a map
            (expr-hole? e)           ;; hole, unknown
+           (expr-typed-hole? e)    ;; typed hole, unknown
            (expr-map-empty? e)      ;; map constructor
            (expr-map-assoc? e)      ;; map operation
            (expr-map-get? e)        ;; nested map-get
@@ -1563,6 +1564,7 @@
     [(expr-unit) e]
     [(expr-Type _) e]
     [(expr-hole) e]
+    [(expr-typed-hole _) e]
     [(expr-meta _) e]
     [(expr-error) e]
     [(expr-tycon _) e]  ;; Unapplied type constructor (HKT) — already normal
@@ -1866,6 +1868,8 @@
   (cond
     [(expr-hole? a) #t]
     [(expr-hole? b) #t]
+    [(expr-typed-hole? a) #t]
+    [(expr-typed-hole? b) #t]
     ;; Unsolved metavariables: equal only if same ID
     ;; (solved metas are already eliminated by nf→whnf)
     [(expr-meta? a)

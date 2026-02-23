@@ -1391,6 +1391,12 @@
     ;; An expr-hole is a placeholder that will be filled by type inference.
     [((expr-hole) _) #t]
 
+    ;; ---- Typed hole: reports expected type to stderr, then succeeds ----
+    [((expr-typed-hole name) expected)
+     (define hole-label (if name (format "??~a" name) "??"))
+     (fprintf (current-error-port) "Hole ~a : ~a\n" hole-label (format "~a" expected))
+     #t]
+
     ;; ---- Meta expression: optimistically succeed ----
     ;; A metavariable in expression position (e.g., implicit argument)
     ;; will be solved by unification constraints from other arguments.

@@ -595,6 +595,11 @@
     [(and (symbol? head) (eq? head '$vec-literal))
      (parse-pvec-literal args loc)]
 
+    ;; $typed-hole sentinel: ?? or ??name → surf-typed-hole
+    [(and (symbol? head) (eq? head '$typed-hole))
+     (define hole-name (if (pair? args) (stx->datum (car args)) #f))
+     (surf-typed-hole hole-name loc)]
+
     ;; Keyword-headed forms
     [(symbol? head)
      (case head
