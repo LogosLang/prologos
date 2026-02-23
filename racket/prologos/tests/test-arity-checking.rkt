@@ -12,6 +12,7 @@
          racket/string
          racket/list
          racket/path
+         "test-support.rkt"
          "../prelude.rkt"
          "../syntax.rkt"
          "../source-location.rkt"
@@ -36,16 +37,13 @@
 
 (define (run-first s) (car (run s)))
 
-(define here (path->string (path-only (syntax-source #'here))))
-(define lib-dir (simplify-path (build-path here ".." "lib")))
-
 (define (run-ns s)
   (parameterize ([current-global-env (hasheq)]
                  [current-ns-context #f]
-                 [current-module-registry (hasheq)]
-                 [current-lib-paths (list lib-dir)]
+                 [current-module-registry prelude-module-registry]
+                 [current-lib-paths (list prelude-lib-dir)]
                  [current-mult-meta-store (make-hasheq)]
-                 [current-preparse-registry (current-preparse-registry)])
+                 [current-preparse-registry prelude-preparse-registry])
     (install-module-loader!)
     (process-string s)))
 

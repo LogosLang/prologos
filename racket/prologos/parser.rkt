@@ -1654,69 +1654,81 @@
        ;; ---- Generic arithmetic operators ----
 
        ;; Binary: (+ a b), (- a b), (* a b), (/ a b)
+       ;; When arity doesn't match (e.g., foreign + with 1 or 3 args),
+       ;; fall through to regular function application.
        [(+)
-        (or (check-arity '+ args 2 loc)
+        (if (= (length args) 2)
             (let ([a (parse-datum (car args))]
                   [b (parse-datum (cadr args))])
               (cond [(prologos-error? a) a]
                     [(prologos-error? b) b]
-                    [else (surf-generic-add a b loc)])))]
+                    [else (surf-generic-add a b loc)]))
+            (parse-application head-stx args loc))]
        [(-)
-        (or (check-arity '- args 2 loc)
+        (if (= (length args) 2)
             (let ([a (parse-datum (car args))]
                   [b (parse-datum (cadr args))])
               (cond [(prologos-error? a) a]
                     [(prologos-error? b) b]
-                    [else (surf-generic-sub a b loc)])))]
+                    [else (surf-generic-sub a b loc)]))
+            (parse-application head-stx args loc))]
        [(*)
-        (or (check-arity '* args 2 loc)
+        (if (= (length args) 2)
             (let ([a (parse-datum (car args))]
                   [b (parse-datum (cadr args))])
               (cond [(prologos-error? a) a]
                     [(prologos-error? b) b]
-                    [else (surf-generic-mul a b loc)])))]
+                    [else (surf-generic-mul a b loc)]))
+            (parse-application head-stx args loc))]
        [(/)
-        (or (check-arity '/ args 2 loc)
+        (if (= (length args) 2)
             (let ([a (parse-datum (car args))]
                   [b (parse-datum (cadr args))])
               (cond [(prologos-error? a) a]
                     [(prologos-error? b) b]
-                    [else (surf-generic-div a b loc)])))]
+                    [else (surf-generic-div a b loc)]))
+            (parse-application head-stx args loc))]
 
        ;; Comparison: (lt a b), (le a b), (eq a b)
        ;; Note: < and <= conflict with angle-bracket syntax in both reader modes.
        ;; Use lt/le/eq matching the existing int-lt/int-le/int-eq naming pattern.
        [(lt)
-        (or (check-arity 'lt args 2 loc)
+        (if (= (length args) 2)
             (let ([a (parse-datum (car args))]
                   [b (parse-datum (cadr args))])
               (cond [(prologos-error? a) a]
                     [(prologos-error? b) b]
-                    [else (surf-generic-lt a b loc)])))]
+                    [else (surf-generic-lt a b loc)]))
+            (parse-application head-stx args loc))]
        [(le)
-        (or (check-arity 'le args 2 loc)
+        (if (= (length args) 2)
             (let ([a (parse-datum (car args))]
                   [b (parse-datum (cadr args))])
               (cond [(prologos-error? a) a]
                     [(prologos-error? b) b]
-                    [else (surf-generic-le a b loc)])))]
+                    [else (surf-generic-le a b loc)]))
+            (parse-application head-stx args loc))]
        [(eq)
-        (or (check-arity 'eq args 2 loc)
+        (if (= (length args) 2)
             (let ([a (parse-datum (car args))]
                   [b (parse-datum (cadr args))])
               (cond [(prologos-error? a) a]
                     [(prologos-error? b) b]
-                    [else (surf-generic-eq a b loc)])))]
+                    [else (surf-generic-eq a b loc)]))
+            (parse-application head-stx args loc))]
 
        ;; Unary: (negate a), (abs a)
+       ;; When arity doesn't match, fall through to regular function application.
        [(negate)
-        (or (check-arity 'negate args 1 loc)
+        (if (= (length args) 1)
             (let ([a (parse-datum (car args))])
-              (if (prologos-error? a) a (surf-generic-negate a loc))))]
+              (if (prologos-error? a) a (surf-generic-negate a loc)))
+            (parse-application head-stx args loc))]
        [(abs)
-        (or (check-arity 'abs args 1 loc)
+        (if (= (length args) 1)
             (let ([a (parse-datum (car args))])
-              (if (prologos-error? a) a (surf-generic-abs a loc))))]
+              (if (prologos-error? a) a (surf-generic-abs a loc)))
+            (parse-application head-stx args loc))]
 
        ;; Generic conversion: (from-integer TargetType val), (from-rational TargetType val)
        [(from-integer)
@@ -3462,9 +3474,22 @@
                        (map stx->datum body-parts)
                        (car body-parts))))
 
-  (define ctor-name (stx->datum (car pattern)))
+  ;; Flatten single-element list patterns from $mixfix expansion:
+  ;; If pattern is ((cons h t)), flatten to (cons h t) for ctor-name + bindings.
+  ;; This handles .{h :: t} in match arms.
+  ;; Note: stx->datum (syntax-e) does shallow unwrap — use syntax->datum for deep.
+  (define effective-pattern
+    (let* ([first-stx (car pattern)]
+           [first-deep (if (syntax? first-stx) (syntax->datum first-stx) first-stx)])
+      (if (and (= (length pattern) 1) (pair? first-deep) (symbol? (car first-deep)))
+          ;; Single list element that is a constructor application: flatten it
+          ;; Get inner syntax objects via syntax->list, or reconstruct
+          (or (and (syntax? first-stx) (syntax->list first-stx))
+              (map (lambda (x) (datum->syntax #f x)) first-deep))
+          pattern)))
+  (define ctor-name (stx->datum (car effective-pattern)))
   (define binding-names
-    (for/list ([p (in-list (cdr pattern))])
+    (for/list ([p (in-list (cdr effective-pattern))])
       (stx->datum p)))
 
   ;; Parse body first (needed by all paths)

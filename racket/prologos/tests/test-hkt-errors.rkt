@@ -11,6 +11,7 @@
          racket/path
          racket/string
          racket/port
+         "test-support.rkt"
          "../macros.rkt"
          "../prelude.rkt"
          "../syntax.rkt"
@@ -29,19 +30,16 @@
 ;; Helpers
 ;; ========================================
 
-(define here (path->string (path-only (syntax-source #'here))))
-(define lib-dir (simplify-path (build-path here ".." "lib")))
-
 (define (run-ns-last s)
   (parameterize ([current-global-env (hasheq)]
                  [current-ns-context #f]
-                 [current-module-registry (hasheq)]
-                 [current-lib-paths (list lib-dir)]
+                 [current-module-registry prelude-module-registry]
+                 [current-lib-paths (list prelude-lib-dir)]
                  [current-mult-meta-store (make-hasheq)]
-                 [current-preparse-registry (current-preparse-registry)]
-                 [current-trait-registry (current-trait-registry)]
-                 [current-impl-registry (current-impl-registry)]
-                 [current-param-impl-registry (current-param-impl-registry)])
+                 [current-preparse-registry prelude-preparse-registry]
+                 [current-trait-registry prelude-trait-registry]
+                 [current-impl-registry prelude-impl-registry]
+                 [current-param-impl-registry prelude-param-impl-registry])
     (install-module-loader!)
     (last (process-string s))))
 
@@ -80,14 +78,15 @@
   (check-true (string-contains? msg "eq?")))
 
 (test-case "hkt-errors/no-instance: error includes trait name"
+  ;; Ord's method is `compare`, not `lt?`
   (define result
     (run-ns-last
       (string-append
         "(ns hkt-err-3)\n"
         "(data Baz | mk-baz)\n"
-        "(spec my-lt A A -> Bool where (Ord A))\n"
-        "(defn my-lt [x y] (lt? x y))\n"
-        "(eval (my-lt mk-baz mk-baz))\n")))
+        "(spec my-cmp A A -> Ordering where (Ord A))\n"
+        "(defn my-cmp [x y] (compare x y))\n"
+        "(eval (my-cmp mk-baz mk-baz))\n")))
   (check-true (no-instance-error? result))
   (check-equal? (no-instance-error-trait-name result) 'Ord)
   (check-true (string-contains? (no-instance-error-type-args-str result) "Baz")))
@@ -107,13 +106,14 @@
   (check-true (string-contains? result "true")))
 
 (test-case "hkt-errors/compat: Ord Nat resolves"
+  ;; Ord's method is `compare`, not `lt?`
   (define result
     (run-ns-last
       (string-append
         "(ns hkt-err-5)\n"
-        "(spec my-lt A A -> Bool where (Ord A))\n"
-        "(defn my-lt [x y] (lt? x y))\n"
-        "(eval (my-lt zero (suc zero)))\n")))
+        "(spec my-cmp A A -> Ordering where (Ord A))\n"
+        "(defn my-cmp [x y] (compare x y))\n"
+        "(eval (my-cmp zero (suc zero)))\n")))
   (check-true (string? result)))
 
 ;; ========================================

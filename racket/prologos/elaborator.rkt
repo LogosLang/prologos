@@ -578,6 +578,12 @@
             (if auto-apply?
                 (maybe-auto-apply-implicits (expr-fvar own-fqn) own-fqn loc env)
                 (expr-fvar own-fqn)))]
+      ;; Phase D: resolve bare trait method names from where-context.
+      ;; This MUST come before namespace/global resolution so that `add` inside
+      ;; a `where (Add A)` body resolves through the dict parameter, not the
+      ;; concrete global `prologos::data::nat::add`.
+      [(resolve-method-from-where name env depth)
+       => (lambda (resolved) resolved)]
       ;; When namespace context is active, try FQN resolution (imports, refer-map).
       [(and (current-ns-context)
             (let ([resolved (resolve-name name (current-ns-context))])
@@ -601,9 +607,6 @@
             (prologos-error loc
               (format "Multi-body function '~a' must be applied; available arities: ~a"
                       name (string-join (map number->string (multi-defn-info-arities info)) ", "))))]
-      ;; Phase D: resolve bare trait method names from where-context
-      [(resolve-method-from-where name env depth)
-       => (lambda (resolved) resolved)]
       ;; HKT-9: Constraint inference from usage (feature-flagged)
       ;; If enabled, try to resolve the name as a trait method and generate
       ;; a constraint automatically. This is gated by current-infer-constraints-mode?.

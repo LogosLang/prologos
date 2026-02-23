@@ -11,6 +11,7 @@
          racket/path
          racket/string
          racket/port
+         "test-support.rkt"
          "../macros.rkt"
          "../prelude.rkt"
          "../syntax.rkt"
@@ -29,19 +30,16 @@
 ;; Helpers
 ;; ========================================
 
-(define here (path->string (path-only (syntax-source #'here))))
-(define lib-dir (simplify-path (build-path here ".." "lib")))
-
 (define (run-ns-last s)
   (parameterize ([current-global-env (hasheq)]
                  [current-ns-context #f]
-                 [current-module-registry (hasheq)]
-                 [current-lib-paths (list lib-dir)]
+                 [current-module-registry prelude-module-registry]
+                 [current-lib-paths (list prelude-lib-dir)]
                  [current-mult-meta-store (make-hasheq)]
-                 [current-preparse-registry (current-preparse-registry)]
-                 [current-trait-registry (current-trait-registry)]
-                 [current-impl-registry (current-impl-registry)]
-                 [current-param-impl-registry (current-param-impl-registry)])
+                 [current-preparse-registry prelude-preparse-registry]
+                 [current-trait-registry prelude-trait-registry]
+                 [current-impl-registry prelude-impl-registry]
+                 [current-param-impl-registry prelude-param-impl-registry])
     (install-module-loader!)
     (last (process-string s))))
 
@@ -118,13 +116,14 @@
   (check-true (string-contains? result "true")))
 
 (test-case "bare-methods/inline: Ord constraint"
+  ;; Ord's method is `compare : A -> A -> Ordering`, not `lt?`
   (define result
     (run-ns-last
       (string-append
         "(ns bm-test-6)\n"
-        "(spec my-lt ($brace-params A) (Ord A) -> A -> A -> Bool)\n"
-        "(defn my-lt [x y] (lt? x y))\n"
-        "(eval (my-lt zero (suc zero)))\n")))
+        "(spec my-cmp ($brace-params A) (Ord A) -> A -> A -> Ordering)\n"
+        "(defn my-cmp [x y] (compare x y))\n"
+        "(eval (my-cmp zero (suc zero)))\n")))
   (check-true (string? result)))
 
 (test-case "bare-methods/inline: two constraints"
@@ -135,9 +134,7 @@
         "(spec my-fn ($brace-params A) (Eq A) -> (Add A) -> A -> A -> Bool)\n"
         "(defn my-fn [x y] (eq? (add x y) x))\n"
         "(eval (my-fn zero zero))\n")))
-  ;; Should produce Bool result (even if partially reduced due to Add dict)
-  (check-true (string? result))
-  (check-true (string-contains? result "Bool")))
+  (check-true (string-contains? result "true")))
 
 ;; ========================================
 ;; 5. Backward compatibility

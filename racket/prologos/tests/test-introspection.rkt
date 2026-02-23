@@ -14,6 +14,7 @@
          racket/string
          racket/file
          racket/path
+         "test-support.rkt"
          "../sexp-readtable.rkt"
          "../reader.rkt"
          "../macros.rkt"
@@ -36,20 +37,17 @@
 ;; Helpers
 ;; ========================================
 
-(define here (path->string (path-only (syntax-source #'here))))
-(define lib-dir (simplify-path (build-path here ".." "lib")))
-
 ;; Run sexp-mode code
 (define (run s)
   (parameterize ([current-global-env (hasheq)]
                  [current-ns-context #f]
-                 [current-module-registry (hasheq)]
-                 [current-lib-paths (list lib-dir)]
+                 [current-module-registry prelude-module-registry]
+                 [current-lib-paths (list prelude-lib-dir)]
                  [current-mult-meta-store (make-hasheq)]
-                 [current-preparse-registry (current-preparse-registry)]
-                 [current-trait-registry (current-trait-registry)]
-                 [current-impl-registry (current-impl-registry)]
-                 [current-param-impl-registry (current-param-impl-registry)]
+                 [current-preparse-registry prelude-preparse-registry]
+                 [current-trait-registry prelude-trait-registry]
+                 [current-impl-registry prelude-impl-registry]
+                 [current-param-impl-registry prelude-param-impl-registry]
                  [current-bundle-registry (current-bundle-registry)]
                  [current-spec-store (hasheq)])
     (install-module-loader!)
@@ -115,13 +113,13 @@
 (test-case "expand-1: user defmacro (pattern-template) works"
   ;; Register a user macro and test single-step expansion
   ;; defmacro expects: (defmacro name (params...) template)
-  (parameterize ([current-preparse-registry (current-preparse-registry)])
+  (parameterize ([current-preparse-registry prelude-preparse-registry])
     (process-defmacro '(defmacro my-double ($x) (add $x $x)))
     (define result (preparse-expand-1 '(my-double zero)))
     (check-equal? result '(add zero zero))))
 
 (test-case "expand-1: user defmacro non-matching pattern unchanged"
-  (parameterize ([current-preparse-registry (current-preparse-registry)])
+  (parameterize ([current-preparse-registry prelude-preparse-registry])
     (process-defmacro '(defmacro my-double ($x) (add $x $x)))
     ;; Too many args — pattern won't match
     (define result (preparse-expand-1 '(my-double a b)))
@@ -159,7 +157,7 @@
 (test-case "expand-full: defn with spec shows spec-inject step"
   (parameterize ([current-spec-store (hasheq)]
                  [current-global-env (hasheq)]
-                 [current-preparse-registry (current-preparse-registry)])
+                 [current-preparse-registry prelude-preparse-registry])
     (process-spec '(spec my-id Nat -> Nat))
     (define steps (preparse-expand-full '(defn my-id [x] x)))
     (define labels (map car steps))
@@ -180,10 +178,10 @@
   ;; Set up a trait and spec with where clause
   (parameterize ([current-spec-store (hasheq)]
                  [current-global-env (hasheq)]
-                 [current-preparse-registry (current-preparse-registry)]
-                 [current-trait-registry (current-trait-registry)]
-                 [current-impl-registry (current-impl-registry)]
-                 [current-param-impl-registry (current-param-impl-registry)]
+                 [current-preparse-registry prelude-preparse-registry]
+                 [current-trait-registry prelude-trait-registry]
+                 [current-impl-registry prelude-impl-registry]
+                 [current-param-impl-registry prelude-param-impl-registry]
                  [current-bundle-registry (current-bundle-registry)])
     ;; Register a trait — use brace-params format, method with colon annotation
     (process-trait '(trait Eq ($brace-params A) (eq-method : A A -> Bool)))
@@ -322,7 +320,7 @@
   (check-true (procedure? entry)))
 
 (test-case "introspection/macros: user defmacro creates preparse-macro struct"
-  (parameterize ([current-preparse-registry (current-preparse-registry)])
+  (parameterize ([current-preparse-registry prelude-preparse-registry])
     (process-defmacro '(defmacro my-double ($x) (add $x $x)))
     (define entry (hash-ref (current-preparse-registry) 'my-double #f))
     (check-not-false entry)
@@ -331,7 +329,7 @@
 (test-case "introspection/specs: spec store accessible"
   (parameterize ([current-spec-store (hasheq)]
                  [current-global-env (hasheq)]
-                 [current-preparse-registry (current-preparse-registry)])
+                 [current-preparse-registry prelude-preparse-registry])
     (process-spec '(spec test-fn Nat -> Nat))
     (define store (current-spec-store))
     (check-false (hash-empty? store))
@@ -340,7 +338,7 @@
 (test-case "introspection/specs: spec-entry-type-datums accessible"
   (parameterize ([current-spec-store (hasheq)]
                  [current-global-env (hasheq)]
-                 [current-preparse-registry (current-preparse-registry)])
+                 [current-preparse-registry prelude-preparse-registry])
     (process-spec '(spec test-fn Nat Nat -> Bool))
     (define entry (lookup-spec 'test-fn))
     (check-not-false entry)

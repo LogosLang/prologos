@@ -69,3 +69,4 @@ add an entry here immediately.
 ### Phase 4: Advanced Numeric Features
 - Deferred from numerics tower (Phases 1-3f complete)
 - See `numerics-tower-roadmap.md`
+

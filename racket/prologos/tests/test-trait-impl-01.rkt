@@ -10,6 +10,7 @@
          racket/list
          racket/path
          racket/string
+         "test-support.rkt"
          "../macros.rkt"
          "../prelude.rkt"
          "../syntax.rkt"
@@ -34,18 +35,15 @@
 
 (define (run-first s) (car (run s)))
 
-(define here (path->string (path-only (syntax-source #'here))))
-(define lib-dir (simplify-path (build-path here ".." "lib")))
-
 (define (run-ns s)
   (parameterize ([current-global-env (hasheq)]
                  [current-ns-context #f]
-                 [current-module-registry (hasheq)]
-                 [current-lib-paths (list lib-dir)]
+                 [current-module-registry prelude-module-registry]
+                 [current-lib-paths (list prelude-lib-dir)]
                  [current-mult-meta-store (make-hasheq)]
-                 [current-preparse-registry (current-preparse-registry)]
-                 [current-trait-registry (current-trait-registry)]
-                 [current-impl-registry (current-impl-registry)])
+                 [current-preparse-registry prelude-preparse-registry]
+                 [current-trait-registry prelude-trait-registry]
+                 [current-impl-registry prelude-impl-registry])
     (install-module-loader!)
     (process-string s)))
 
@@ -59,7 +57,7 @@
 (test-case "trait/parse-single-method"
   ;; (trait (Showable (A : (Type 0))) (show : A -> Nat))
   ;; Should register trait and produce accessor defs
-  (parameterize ([current-preparse-registry (current-preparse-registry)]
+  (parameterize ([current-preparse-registry prelude-preparse-registry]
                  [current-trait-registry (hasheq)])
     (define defs
       (process-trait '(trait (Showable (A : (Type 0))) (show : A -> Nat))))
@@ -78,7 +76,7 @@
 
 (test-case "trait/parse-multi-method"
   ;; (trait (Eq (A : (Type 0))) (== : A -> A -> Bool) (/= : A -> A -> Bool))
-  (parameterize ([current-preparse-registry (current-preparse-registry)]
+  (parameterize ([current-preparse-registry prelude-preparse-registry]
                  [current-trait-registry (hasheq)])
     (define defs
       (process-trait '(trait (Eq (A : (Type 0))) (== : A -> A -> Bool) (/= : A -> A -> Bool))))
@@ -93,7 +91,7 @@
 
 (test-case "trait/single-method-deftype-is-bare"
   ;; Single-method trait: dictionary type is the bare method type (no Sigma)
-  (parameterize ([current-preparse-registry (current-preparse-registry)]
+  (parameterize ([current-preparse-registry prelude-preparse-registry]
                  [current-trait-registry (hasheq)])
     (process-trait '(trait (Showable (A : (Type 0))) (show : A -> Nat)))
     ;; The deftype should have been registered. Verify by expanding it.
@@ -104,7 +102,7 @@
 
 (test-case "trait/multi-method-deftype-is-sigma"
   ;; Multi-method: dictionary type is nested Sigma
-  (parameterize ([current-preparse-registry (current-preparse-registry)]
+  (parameterize ([current-preparse-registry prelude-preparse-registry]
                  [current-trait-registry (hasheq)])
     (process-trait '(trait (Eq (A : (Type 0))) (== : A -> A -> Bool) (/= : A -> A -> Bool)))
     (define expanded (preparse-expand-form '(Eq Nat)))
@@ -114,7 +112,7 @@
 
 (test-case "trait/brace-params-syntax"
   ;; WS-style: (trait Eq ($brace-params A) (== : A -> A -> Bool))
-  (parameterize ([current-preparse-registry (current-preparse-registry)]
+  (parameterize ([current-preparse-registry prelude-preparse-registry]
                  [current-trait-registry (hasheq)])
     (define defs
       (process-trait '(trait Eq ($brace-params A) (== : A -> A -> Bool))))
@@ -127,7 +125,7 @@
 
 (test-case "trait/multi-param"
   ;; Trait with multiple type params
-  (parameterize ([current-preparse-registry (current-preparse-registry)]
+  (parameterize ([current-preparse-registry prelude-preparse-registry]
                  [current-trait-registry (hasheq)])
     (define defs
       (process-trait '(trait Convertible ($brace-params A B)
@@ -139,7 +137,7 @@
 
 (test-case "trait/accessor-body-single-method"
   ;; Single-method accessor body: outer lambda for type param, inner for dict
-  (parameterize ([current-preparse-registry (current-preparse-registry)]
+  (parameterize ([current-preparse-registry prelude-preparse-registry]
                  [current-trait-registry (hasheq)])
     (define defs
       (process-trait '(trait (Showable (A : (Type 0))) (show : A -> Nat))))
@@ -155,7 +153,7 @@
 
 (test-case "trait/accessor-body-multi-method-first"
   ;; Multi-method: first accessor should project via (first dict)
-  (parameterize ([current-preparse-registry (current-preparse-registry)]
+  (parameterize ([current-preparse-registry prelude-preparse-registry]
                  [current-trait-registry (hasheq)])
     (define defs
       (process-trait '(trait (Eq (A : (Type 0))) (== : A -> A -> Bool) (/= : A -> A -> Bool))))
@@ -168,7 +166,7 @@
 
 (test-case "trait/accessor-body-multi-method-second"
   ;; Multi-method: second accessor should project via (second dict)
-  (parameterize ([current-preparse-registry (current-preparse-registry)]
+  (parameterize ([current-preparse-registry prelude-preparse-registry]
                  [current-trait-registry (hasheq)])
     (define defs
       (process-trait '(trait (Eq (A : (Type 0))) (== : A -> A -> Bool) (/= : A -> A -> Bool))))
@@ -181,7 +179,7 @@
 
 (test-case "trait/three-methods-sigma-nesting"
   ;; Three methods: (Sigma (_ T1) (Sigma (_ T2) T3))
-  (parameterize ([current-preparse-registry (current-preparse-registry)]
+  (parameterize ([current-preparse-registry prelude-preparse-registry]
                  [current-trait-registry (hasheq)])
     (define defs
       (process-trait '(trait (Arith (A : (Type 0)))
@@ -200,7 +198,7 @@
 
 (test-case "trait/three-methods-accessor-projections"
   ;; Three methods: verify projection bodies
-  (parameterize ([current-preparse-registry (current-preparse-registry)]
+  (parameterize ([current-preparse-registry prelude-preparse-registry]
                  [current-trait-registry (hasheq)])
     (define defs
       (process-trait '(trait (Arith (A : (Type 0)))
@@ -218,7 +216,7 @@
 
 (test-case "trait/error-no-methods"
   ;; Trait with no methods should error
-  (parameterize ([current-preparse-registry (current-preparse-registry)]
+  (parameterize ([current-preparse-registry prelude-preparse-registry]
                  [current-trait-registry (hasheq)])
     (check-exn
      exn:fail?
@@ -228,7 +226,7 @@
 
 (test-case "trait/error-bad-method"
   ;; Method without type annotation should error
-  (parameterize ([current-preparse-registry (current-preparse-registry)]
+  (parameterize ([current-preparse-registry prelude-preparse-registry]
                  [current-trait-registry (hasheq)])
     (check-exn
      exn:fail?
@@ -238,7 +236,7 @@
 
 (test-case "trait/preparse-expand-all-integration"
   ;; Verify trait is handled by preparse-expand-all
-  (parameterize ([current-preparse-registry (current-preparse-registry)]
+  (parameterize ([current-preparse-registry prelude-preparse-registry]
                  [current-trait-registry (hasheq)]
                  [current-ns-context #f])
     (define stxs

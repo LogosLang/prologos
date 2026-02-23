@@ -587,6 +587,11 @@
                errors.rkt metavar-store.rkt parser.rkt elaborator.rkt pretty-print.rkt
                global-env.rkt driver.rkt reduction.rkt typing-core.rkt namespace.rkt
                trait-resolution.rkt reader.rkt) #t)
+   'test-mixfix.rkt
+   (test-dep '(macros.rkt prelude.rkt syntax.rkt source-location.rkt surface-syntax.rkt
+               errors.rkt metavar-store.rkt parser.rkt elaborator.rkt pretty-print.rkt
+               global-env.rkt driver.rkt reduction.rkt typing-core.rkt namespace.rkt
+               trait-resolution.rkt reader.rkt) #t)
    'test-implicit-map.rkt
    (test-dep '(macros.rkt prelude.rkt syntax.rkt source-location.rkt surface-syntax.rkt
                errors.rkt metavar-store.rkt parser.rkt elaborator.rkt pretty-print.rkt
@@ -972,6 +977,7 @@
                                   prologos::data::transducer)
    'test-higher-rank.rkt        '(prologos::data::nat prologos::data::list)
    'test-varargs.rkt            '(prologos::data::nat prologos::data::list)
+   'test-mixfix.rkt             '(prologos::data::nat prologos::data::list)
    'test-sexp-reader-parity.rkt '(prologos::data::nat prologos::data::list)
    'test-introspection.rkt      '(prologos::data::datum)
    'test-quote.rkt              '(prologos::data::datum)

@@ -10,6 +10,7 @@
          racket/list
          racket/path
          racket/string
+         "test-support.rkt"
          "../macros.rkt"
          "../prelude.rkt"
          "../syntax.rkt"
@@ -34,18 +35,15 @@
 
 (define (run-first s) (car (run s)))
 
-(define here (path->string (path-only (syntax-source #'here))))
-(define lib-dir (simplify-path (build-path here ".." "lib")))
-
 (define (run-ns s)
   (parameterize ([current-global-env (hasheq)]
                  [current-ns-context #f]
-                 [current-module-registry (hasheq)]
-                 [current-lib-paths (list lib-dir)]
+                 [current-module-registry prelude-module-registry]
+                 [current-lib-paths (list prelude-lib-dir)]
                  [current-mult-meta-store (make-hasheq)]
-                 [current-preparse-registry (current-preparse-registry)]
-                 [current-trait-registry (current-trait-registry)]
-                 [current-impl-registry (current-impl-registry)])
+                 [current-preparse-registry prelude-preparse-registry]
+                 [current-trait-registry prelude-trait-registry]
+                 [current-impl-registry prelude-impl-registry])
     (install-module-loader!)
     (process-string s)))
 
@@ -90,7 +88,7 @@
 
 (test-case "impl/single-method-generates-dict"
   ;; impl for a single-method trait produces a dict def
-  (parameterize ([current-preparse-registry (current-preparse-registry)]
+  (parameterize ([current-preparse-registry prelude-preparse-registry]
                  [current-trait-registry (hasheq)]
                  [current-impl-registry (hasheq)])
     ;; First register the trait
@@ -116,7 +114,7 @@
 
 (test-case "impl/multi-method-generates-pair"
   ;; impl for a multi-method trait produces paired dict
-  (parameterize ([current-preparse-registry (current-preparse-registry)]
+  (parameterize ([current-preparse-registry prelude-preparse-registry]
                  [current-trait-registry (hasheq)]
                  [current-impl-registry (hasheq)])
     ;; Register 2-method trait
@@ -140,7 +138,7 @@
 
 (test-case "impl/registers-in-impl-registry"
   ;; impl registers in the impl registry
-  (parameterize ([current-preparse-registry (current-preparse-registry)]
+  (parameterize ([current-preparse-registry prelude-preparse-registry]
                  [current-trait-registry (hasheq)]
                  [current-impl-registry (hasheq)])
     (process-trait '(trait (Showable (A : (Type 0))) (show : A -> Nat)))
@@ -155,7 +153,7 @@
 
 (test-case "impl/error-unknown-trait"
   ;; impl for unregistered trait should error
-  (parameterize ([current-preparse-registry (current-preparse-registry)]
+  (parameterize ([current-preparse-registry prelude-preparse-registry]
                  [current-trait-registry (hasheq)]
                  [current-impl-registry (hasheq)])
     (check-exn
@@ -166,7 +164,7 @@
 
 (test-case "impl/error-wrong-method-count"
   ;; impl with wrong number of methods
-  (parameterize ([current-preparse-registry (current-preparse-registry)]
+  (parameterize ([current-preparse-registry prelude-preparse-registry]
                  [current-trait-registry (hasheq)]
                  [current-impl-registry (hasheq)])
     (process-trait '(trait (Eq (A : (Type 0)))
@@ -181,7 +179,7 @@
 
 (test-case "impl/error-wrong-method-name"
   ;; impl with wrong method name
-  (parameterize ([current-preparse-registry (current-preparse-registry)]
+  (parameterize ([current-preparse-registry prelude-preparse-registry]
                  [current-trait-registry (hasheq)]
                  [current-impl-registry (hasheq)])
     (process-trait '(trait (Showable (A : (Type 0))) (show : A -> Nat)))
@@ -194,7 +192,7 @@
 
 (test-case "impl/three-methods-nested-pair"
   ;; Three methods should produce nested pair
-  (parameterize ([current-preparse-registry (current-preparse-registry)]
+  (parameterize ([current-preparse-registry prelude-preparse-registry]
                  [current-trait-registry (hasheq)]
                  [current-impl-registry (hasheq)])
     (process-trait '(trait (Arith (A : (Type 0)))
@@ -216,7 +214,7 @@
 
 (test-case "impl/preparse-expand-all-integration"
   ;; Verify impl is handled by preparse-expand-all
-  (parameterize ([current-preparse-registry (current-preparse-registry)]
+  (parameterize ([current-preparse-registry prelude-preparse-registry]
                  [current-trait-registry (hasheq)]
                  [current-impl-registry (hasheq)]
                  [current-ns-context #f])
