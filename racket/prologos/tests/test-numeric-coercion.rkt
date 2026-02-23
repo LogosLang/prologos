@@ -87,33 +87,37 @@
 ;; ========================================
 
 (test-case "coercion/int+p32"
-  ;; 42 + ~1.0 → Posit32
+  ;; 42 + ~1.0 → Posit32, with coercion warning
   (define result (run "(eval (+ 42 ~1.0))"))
   (check-equal? result
-                (list (format "[posit32 ~a] : Posit32" (posit32-encode 43)))))
+                (list (format "[posit32 ~a] : Posit32\nwarning: implicit coercion from Int to Posit32 (loss of exactness)"
+                              (posit32-encode 43)))))
 
 (test-case "coercion/rat+p32"
-  ;; 1/2 + ~0.5 → Posit32
+  ;; 1/2 + ~0.5 → Posit32, with coercion warning
   (define result (run "(eval (+ 1/2 ~0.5))"))
   (check-equal? result
-                (list (format "[posit32 ~a] : Posit32" (posit32-encode 1)))))
+                (list (format "[posit32 ~a] : Posit32\nwarning: implicit coercion from Rat to Posit32 (loss of exactness)"
+                              (posit32-encode 1)))))
 
 (test-case "coercion/nat+p32"
-  ;; 3N + ~1.0 → Posit32
+  ;; 3N + ~1.0 → Posit32, with coercion warning
   (define result (run "(eval (+ 3N ~1.0))"))
   (check-equal? result
-                (list (format "[posit32 ~a] : Posit32" (posit32-encode 4)))))
+                (list (format "[posit32 ~a] : Posit32\nwarning: implicit coercion from Nat to Posit32 (loss of exactness)"
+                              (posit32-encode 4)))))
 
 ;; ========================================
 ;; Cross-family: exact + Posit64 → Posit64
 ;; ========================================
 
 (test-case "coercion/int+p64"
-  ;; 42 + p64-literal → Posit64
+  ;; 42 + p64-literal → Posit64, with coercion warning
   ;; Use from-integer to get a p64 value, then add
   (define result (run "(eval (+ 10 (from-integer <Posit64> 5)))"))
   (check-equal? result
-                (list (format "[posit64 ~a] : Posit64" (posit64-encode 15)))))
+                (list (format "[posit64 ~a] : Posit64\nwarning: implicit coercion from Int to Posit64 (loss of exactness)"
+                              (posit64-encode 15)))))
 
 ;; ========================================
 ;; Within posit family: P8 + P32 → P32
@@ -152,7 +156,8 @@
 (test-case "coercion/nat*p32"
   (define result (run "(eval (* 2N ~3.0))"))
   (check-equal? result
-                (list (format "[posit32 ~a] : Posit32" (posit32-encode 6)))))
+                (list (format "[posit32 ~a] : Posit32\nwarning: implicit coercion from Nat to Posit32 (loss of exactness)"
+                              (posit32-encode 6)))))
 
 ;; ========================================
 ;; Division with coercion

@@ -34,7 +34,8 @@
          "qtt.rkt"
          "multi-dispatch.rkt"
          "foreign.rkt"
-         "trait-resolution.rkt")
+         "trait-resolution.rkt"
+         "warnings.rkt")
 
 (provide process-command
          process-file
@@ -146,7 +147,10 @@
   (parameterize ([current-nf-cache (make-hash)]         ;; per-command nf memoization
                  [current-whnf-cache (make-hash)]       ;; per-command whnf memoization
                  [current-reduction-fuel (box 1000000)]  ;; 1M step limit
-                 [current-nat-value-cache (make-hash)]) ;; per-command nat-value memoization
+                 [current-nat-value-cache (make-hash)]  ;; per-command nat-value memoization
+                 [current-coercion-warnings '()])        ;; per-command coercion warnings
+  (define result
+  (let ()
   (define expanded (expand-top-level surf))
   (if (prologos-error? expanded)
       expanded
@@ -221,6 +225,13 @@
                    (pp-expr (zonk-final expr))]
 
                   [_ (prologos-error srcloc-unknown (format "Unknown command: ~a" elab-result))])))]))))
+  ;; Append coercion warnings to result string (if any)
+  (define warnings (reverse (current-coercion-warnings)))
+  (if (or (null? warnings) (prologos-error? result))
+      result
+      (string-join
+       (cons result (map format-coercion-warning warnings))
+       "\n"))))
 
 ;; Process a def command with split elaboration for recursive support.
 ;; 1. Elaborate type first

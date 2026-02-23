@@ -26,6 +26,7 @@
          "macros.rkt"
          "namespace.rkt"
          "metavar-store.rkt"
+         "warnings.rkt"
 )
 
 (provide infer check is-type infer-level
@@ -183,6 +184,33 @@
      (posit-type-at-rank (max 2 (posit-rank t1)))]
     ;; Not numeric types
     [else #f]))
+
+;; Human-readable name for a numeric type expression (for warnings).
+(define (numeric-type-name t)
+  (cond
+    [(expr-Nat? t) "Nat"] [(expr-Int? t) "Int"] [(expr-Rat? t) "Rat"]
+    [(expr-Posit8? t) "Posit8"] [(expr-Posit16? t) "Posit16"]
+    [(expr-Posit32? t) "Posit32"] [(expr-Posit64? t) "Posit64"]
+    [else "?"]))
+
+;; numeric-join with coercion warning: emit a warning when exact→posit coercion occurs.
+(define (numeric-join/warn! t1 t2)
+  (define j (numeric-join t1 t2))
+  (when (and j (not (equal? t1 t2)))
+    ;; Cross-family: one exact, one posit → loss of exactness
+    (when (or (and (exact-numeric-type? t1) (posit-type? t2))
+              (and (posit-type? t1) (exact-numeric-type? t2))
+              ;; Also warn if both exact but result is approximate (shouldn't happen,
+              ;; but guard anyway)
+              )
+      ;; Determine which operand is exact
+      (define exact-t (cond [(exact-numeric-type? t1) t1]
+                            [(exact-numeric-type? t2) t2]
+                            [else #f]))
+      (when exact-t
+        (emit-coercion-warning! (numeric-type-name exact-t)
+                                (numeric-type-name j)))))
+  j)
 
 ;; ========================================
 ;; Type inference (synthesis mode)
@@ -511,33 +539,33 @@
     ;; Binary arithmetic: T1 -> T2 -> join(T1,T2) (coercion via numeric-join)
     [(expr-generic-add a b)
      (let* ([ta (infer ctx a)] [tb (infer ctx b)]
-            [j (numeric-join ta tb)])
+            [j (numeric-join/warn! ta tb)])
        (if j j (expr-error)))]
     [(expr-generic-sub a b)
      (let* ([ta (infer ctx a)] [tb (infer ctx b)]
-            [j (numeric-join ta tb)])
+            [j (numeric-join/warn! ta tb)])
        (if j j (expr-error)))]
     [(expr-generic-mul a b)
      (let* ([ta (infer ctx a)] [tb (infer ctx b)]
-            [j (numeric-join ta tb)])
+            [j (numeric-join/warn! ta tb)])
        (if j j (expr-error)))]
     [(expr-generic-div a b)
      (let* ([ta (infer ctx a)] [tb (infer ctx b)]
-            [j (numeric-join ta tb)])
+            [j (numeric-join/warn! ta tb)])
        (if (and j (divisible-numeric-type? j)) j (expr-error)))]
 
     ;; Binary comparison: T1 -> T2 -> Bool (coercion via numeric-join)
     [(expr-generic-lt a b)
      (let* ([ta (infer ctx a)] [tb (infer ctx b)]
-            [j (numeric-join ta tb)])
+            [j (numeric-join/warn! ta tb)])
        (if j (expr-Bool) (expr-error)))]
     [(expr-generic-le a b)
      (let* ([ta (infer ctx a)] [tb (infer ctx b)]
-            [j (numeric-join ta tb)])
+            [j (numeric-join/warn! ta tb)])
        (if j (expr-Bool) (expr-error)))]
     [(expr-generic-eq a b)
      (let* ([ta (infer ctx a)] [tb (infer ctx b)]
-            [j (numeric-join ta tb)])
+            [j (numeric-join/warn! ta tb)])
        (if j (expr-Bool) (expr-error)))]
 
     ;; Unary: T -> T
