@@ -34,7 +34,8 @@
          subtype?
          list-type-fvar
          concrete-numeric-type? divisible-numeric-type? negatable-numeric-type?
-         from-int-target-type? from-rat-target-type?)
+         from-int-target-type? from-rat-target-type?
+         numeric-join exact-numeric-type? posit-type?)
 
 ;; ========================================
 ;; Structural reduce tracking
@@ -129,6 +130,59 @@
   (or (expr-Rat? t)
       (expr-Posit8? t) (expr-Posit16? t)
       (expr-Posit32? t) (expr-Posit64? t)))
+
+;; ========================================
+;; Numeric type join (least upper bound)
+;; ========================================
+;; exact-numeric-type? — Nat, Int, Rat (exact family)
+(define (exact-numeric-type? t)
+  (or (expr-Nat? t) (expr-Int? t) (expr-Rat? t)))
+
+;; posit-type? — Posit8, Posit16, Posit32, Posit64 (approximate family)
+(define (posit-type? t)
+  (or (expr-Posit8? t) (expr-Posit16? t) (expr-Posit32? t) (expr-Posit64? t)))
+
+;; Rank within exact family: Nat < Int < Rat
+(define (exact-rank t)
+  (cond [(expr-Nat? t) 0] [(expr-Int? t) 1] [(expr-Rat? t) 2] [else -1]))
+
+;; Rank within posit family: P8 < P16 < P32 < P64
+(define (posit-rank t)
+  (cond [(expr-Posit8? t) 0] [(expr-Posit16? t) 1]
+        [(expr-Posit32? t) 2] [(expr-Posit64? t) 3] [else -1]))
+
+;; Type at a given exact rank
+(define (exact-type-at-rank r)
+  (case r [(0) (expr-Nat)] [(1) (expr-Int)] [(2) (expr-Rat)] [else #f]))
+
+;; Type at a given posit rank
+(define (posit-type-at-rank r)
+  (case r [(0) (expr-Posit8)] [(1) (expr-Posit16)]
+          [(2) (expr-Posit32)] [(3) (expr-Posit64)] [else #f]))
+
+;; numeric-join: least upper bound of two numeric types.
+;; Returns the wider type, or #f if not numeric types.
+;; Within-family: wider wins (Nat < Int < Rat; P8 < P16 < P32 < P64).
+;; Cross-family: posit wins (approximate dominates exact).
+;; The resulting posit width is max(P32, posit operand width) for cross-family.
+(define (numeric-join t1 t2)
+  (cond
+    ;; Same numeric type
+    [(and (equal? t1 t2) (concrete-numeric-type? t1)) t1]
+    ;; Both exact
+    [(and (exact-numeric-type? t1) (exact-numeric-type? t2))
+     (exact-type-at-rank (max (exact-rank t1) (exact-rank t2)))]
+    ;; Both posit
+    [(and (posit-type? t1) (posit-type? t2))
+     (posit-type-at-rank (max (posit-rank t1) (posit-rank t2)))]
+    ;; Cross-family: posit wins
+    [(and (exact-numeric-type? t1) (posit-type? t2))
+     ;; Posit dominates; ensure at least P32 for precision
+     (posit-type-at-rank (max 2 (posit-rank t2)))]
+    [(and (posit-type? t1) (exact-numeric-type? t2))
+     (posit-type-at-rank (max 2 (posit-rank t1)))]
+    ;; Not numeric types
+    [else #f]))
 
 ;; ========================================
 ;; Type inference (synthesis mode)

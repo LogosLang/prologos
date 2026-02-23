@@ -293,6 +293,8 @@
    (test-dep '(syntax.rkt prelude.rkt surface-syntax.rkt parser.rkt elaborator.rkt
                typing-core.rkt qtt.rkt reduction.rkt substitution.rkt zonk.rkt
                pretty-print.rkt driver.rkt global-env.rkt posit-impl.rkt) #f)
+   'test-numeric-join.rkt
+   (test-dep '(syntax.rkt typing-core.rkt) #f)
 
    ;; === Driver/integration tests (driver=yes) ===
    'test-stdlib-01-data-01.rkt
