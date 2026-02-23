@@ -32,7 +32,8 @@
          (struct-out no-level) (struct-out just-level)
          mark-structural-reduce! structural-reduce? structural-reduce-set
          subtype?
-         list-type-fvar)
+         list-type-fvar
+         concrete-numeric-type? divisible-numeric-type? negatable-numeric-type?)
 
 ;; ========================================
 ;; Structural reduce tracking
@@ -94,6 +95,27 @@
   (if (global-env-lookup-type 'prologos::data::list::List)
       (expr-fvar 'prologos::data::list::List)
       (expr-fvar 'List)))
+
+;; ========================================
+;; Generic arithmetic type helpers
+;; ========================================
+;; Concrete numeric types for which generic operators are valid.
+(define (concrete-numeric-type? t)
+  (or (expr-Nat? t) (expr-Int? t) (expr-Rat? t)
+      (expr-Posit8? t) (expr-Posit16? t)
+      (expr-Posit32? t) (expr-Posit64? t)))
+
+;; Types that support division (excludes Nat).
+(define (divisible-numeric-type? t)
+  (or (expr-Int? t) (expr-Rat? t)
+      (expr-Posit8? t) (expr-Posit16? t)
+      (expr-Posit32? t) (expr-Posit64? t)))
+
+;; Types that support negation (excludes Nat).
+(define (negatable-numeric-type? t)
+  (or (expr-Int? t) (expr-Rat? t)
+      (expr-Posit8? t) (expr-Posit16? t)
+      (expr-Posit32? t) (expr-Posit64? t)))
 
 ;; ========================================
 ;; Type inference (synthesis mode)
@@ -417,6 +439,47 @@
      (if (check ctx a (expr-Rat)) (expr-Int) (expr-error))]
     [(expr-rat-denom a)
      (if (check ctx a (expr-Rat)) (expr-Int) (expr-error))]
+
+    ;; ---- Generic arithmetic operators ----
+    ;; Binary arithmetic: T -> T -> T (same concrete numeric type)
+    [(expr-generic-add a b)
+     (let ([ta (infer ctx a)])
+       (if (and (concrete-numeric-type? ta) (check ctx b ta))
+           ta (expr-error)))]
+    [(expr-generic-sub a b)
+     (let ([ta (infer ctx a)])
+       (if (and (concrete-numeric-type? ta) (check ctx b ta))
+           ta (expr-error)))]
+    [(expr-generic-mul a b)
+     (let ([ta (infer ctx a)])
+       (if (and (concrete-numeric-type? ta) (check ctx b ta))
+           ta (expr-error)))]
+    [(expr-generic-div a b)
+     (let ([ta (infer ctx a)])
+       (if (and (divisible-numeric-type? ta) (check ctx b ta))
+           ta (expr-error)))]
+
+    ;; Binary comparison: T -> T -> Bool (same concrete numeric type)
+    [(expr-generic-lt a b)
+     (let ([ta (infer ctx a)])
+       (if (and (concrete-numeric-type? ta) (check ctx b ta))
+           (expr-Bool) (expr-error)))]
+    [(expr-generic-le a b)
+     (let ([ta (infer ctx a)])
+       (if (and (concrete-numeric-type? ta) (check ctx b ta))
+           (expr-Bool) (expr-error)))]
+    [(expr-generic-eq a b)
+     (let ([ta (infer ctx a)])
+       (if (and (concrete-numeric-type? ta) (check ctx b ta))
+           (expr-Bool) (expr-error)))]
+
+    ;; Unary: T -> T
+    [(expr-generic-negate a)
+     (let ([ta (infer ctx a)])
+       (if (negatable-numeric-type? ta) ta (expr-error)))]
+    [(expr-generic-abs a)
+     (let ([ta (infer ctx a)])
+       (if (concrete-numeric-type? ta) ta (expr-error)))]
 
     ;; ---- Posit8 ----
     [(expr-Posit8) (expr-Type (lzero))]

@@ -427,6 +427,17 @@
     [(expr-rat-numer a) (format "[rat-numer ~a]" (pp-expr a names))]
     [(expr-rat-denom a) (format "[rat-denom ~a]" (pp-expr a names))]
 
+    ;; Generic arithmetic
+    [(expr-generic-add a b) (format "[+ ~a ~a]" (pp-expr a names) (pp-expr b names))]
+    [(expr-generic-sub a b) (format "[- ~a ~a]" (pp-expr a names) (pp-expr b names))]
+    [(expr-generic-mul a b) (format "[* ~a ~a]" (pp-expr a names) (pp-expr b names))]
+    [(expr-generic-div a b) (format "[/ ~a ~a]" (pp-expr a names) (pp-expr b names))]
+    [(expr-generic-lt a b) (format "[< ~a ~a]" (pp-expr a names) (pp-expr b names))]
+    [(expr-generic-le a b) (format "[<= ~a ~a]" (pp-expr a names) (pp-expr b names))]
+    [(expr-generic-eq a b) (format "[= ~a ~a]" (pp-expr a names) (pp-expr b names))]
+    [(expr-generic-negate a) (format "[negate ~a]" (pp-expr a names))]
+    [(expr-generic-abs a) (format "[abs ~a]" (pp-expr a names))]
+
     ;; Foreign function
     [(expr-foreign-fn name _ arity args _ _)
      (if (null? args)
@@ -882,6 +893,16 @@
     [(expr-from-int n) (uses-bvar0? n)]
     [(expr-rat-numer a) (uses-bvar0? a)]
     [(expr-rat-denom a) (uses-bvar0? a)]
+    ;; Generic arithmetic
+    [(expr-generic-add a b) (or (uses-bvar0? a) (uses-bvar0? b))]
+    [(expr-generic-sub a b) (or (uses-bvar0? a) (uses-bvar0? b))]
+    [(expr-generic-mul a b) (or (uses-bvar0? a) (uses-bvar0? b))]
+    [(expr-generic-div a b) (or (uses-bvar0? a) (uses-bvar0? b))]
+    [(expr-generic-lt a b) (or (uses-bvar0? a) (uses-bvar0? b))]
+    [(expr-generic-le a b) (or (uses-bvar0? a) (uses-bvar0? b))]
+    [(expr-generic-eq a b) (or (uses-bvar0? a) (uses-bvar0? b))]
+    [(expr-generic-negate a) (uses-bvar0? a)]
+    [(expr-generic-abs a) (uses-bvar0? a)]
     [(expr-foreign-fn _ _ _ _ _ _) #f]
     [(expr-reduce scrut arms _)
      (or (uses-bvar0? scrut)

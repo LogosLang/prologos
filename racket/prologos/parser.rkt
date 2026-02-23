@@ -36,6 +36,8 @@
     Quire16 q16-zero q16-fma q16-to
     Quire32 q32-zero q32-fma q32-to
     Quire64 q64-zero q64-fma q64-to
+    ;; Generic arithmetic operators
+    + - * / < <= = negate abs
     Symbol symbol-lit
     Keyword Char String
     Map map-empty map-assoc map-get map-dissoc map-size map-has-key? map-keys map-vals
@@ -1643,6 +1645,73 @@
         (or (check-arity 'q64-to args 1 loc)
             (let ([q (parse-datum (car args))])
               (if (prologos-error? q) q (surf-quire64-to q loc))))]
+
+       ;; ---- Generic arithmetic operators ----
+
+       ;; Binary: (+ a b), (- a b), (* a b), (/ a b)
+       [(+)
+        (or (check-arity '+ args 2 loc)
+            (let ([a (parse-datum (car args))]
+                  [b (parse-datum (cadr args))])
+              (cond [(prologos-error? a) a]
+                    [(prologos-error? b) b]
+                    [else (surf-generic-add a b loc)])))]
+       [(-)
+        (or (check-arity '- args 2 loc)
+            (let ([a (parse-datum (car args))]
+                  [b (parse-datum (cadr args))])
+              (cond [(prologos-error? a) a]
+                    [(prologos-error? b) b]
+                    [else (surf-generic-sub a b loc)])))]
+       [(*)
+        (or (check-arity '* args 2 loc)
+            (let ([a (parse-datum (car args))]
+                  [b (parse-datum (cadr args))])
+              (cond [(prologos-error? a) a]
+                    [(prologos-error? b) b]
+                    [else (surf-generic-mul a b loc)])))]
+       [(/)
+        (or (check-arity '/ args 2 loc)
+            (let ([a (parse-datum (car args))]
+                  [b (parse-datum (cadr args))])
+              (cond [(prologos-error? a) a]
+                    [(prologos-error? b) b]
+                    [else (surf-generic-div a b loc)])))]
+
+       ;; Comparison: (lt a b), (le a b), (eq a b)
+       ;; Note: < and <= conflict with angle-bracket syntax in both reader modes.
+       ;; Use lt/le/eq matching the existing int-lt/int-le/int-eq naming pattern.
+       [(lt)
+        (or (check-arity 'lt args 2 loc)
+            (let ([a (parse-datum (car args))]
+                  [b (parse-datum (cadr args))])
+              (cond [(prologos-error? a) a]
+                    [(prologos-error? b) b]
+                    [else (surf-generic-lt a b loc)])))]
+       [(le)
+        (or (check-arity 'le args 2 loc)
+            (let ([a (parse-datum (car args))]
+                  [b (parse-datum (cadr args))])
+              (cond [(prologos-error? a) a]
+                    [(prologos-error? b) b]
+                    [else (surf-generic-le a b loc)])))]
+       [(eq)
+        (or (check-arity 'eq args 2 loc)
+            (let ([a (parse-datum (car args))]
+                  [b (parse-datum (cadr args))])
+              (cond [(prologos-error? a) a]
+                    [(prologos-error? b) b]
+                    [else (surf-generic-eq a b loc)])))]
+
+       ;; Unary: (negate a), (abs a)
+       [(negate)
+        (or (check-arity 'negate args 1 loc)
+            (let ([a (parse-datum (car args))])
+              (if (prologos-error? a) a (surf-generic-negate a loc))))]
+       [(abs)
+        (or (check-arity 'abs args 1 loc)
+            (let ([a (parse-datum (car args))])
+              (if (prologos-error? a) a (surf-generic-abs a loc))))]
 
        ;; ---- Symbol operations ----
 

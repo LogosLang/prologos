@@ -310,6 +310,17 @@
     [(expr-rat-numer a) (expr-rat-numer (shift delta cutoff a))]
     [(expr-rat-denom a) (expr-rat-denom (shift delta cutoff a))]
 
+    ;; Generic arithmetic (all non-binding)
+    [(expr-generic-add a b) (expr-generic-add (shift delta cutoff a) (shift delta cutoff b))]
+    [(expr-generic-sub a b) (expr-generic-sub (shift delta cutoff a) (shift delta cutoff b))]
+    [(expr-generic-mul a b) (expr-generic-mul (shift delta cutoff a) (shift delta cutoff b))]
+    [(expr-generic-div a b) (expr-generic-div (shift delta cutoff a) (shift delta cutoff b))]
+    [(expr-generic-lt a b) (expr-generic-lt (shift delta cutoff a) (shift delta cutoff b))]
+    [(expr-generic-le a b) (expr-generic-le (shift delta cutoff a) (shift delta cutoff b))]
+    [(expr-generic-eq a b) (expr-generic-eq (shift delta cutoff a) (shift delta cutoff b))]
+    [(expr-generic-negate a) (expr-generic-negate (shift delta cutoff a))]
+    [(expr-generic-abs a) (expr-generic-abs (shift delta cutoff a))]
+
     ;; Union types (non-binding)
     [(expr-union l r)
      (expr-union (shift delta cutoff l) (shift delta cutoff r))]
@@ -626,6 +637,17 @@
     [(expr-from-int n) (expr-from-int (subst k s n))]
     [(expr-rat-numer a) (expr-rat-numer (subst k s a))]
     [(expr-rat-denom a) (expr-rat-denom (subst k s a))]
+
+    ;; Generic arithmetic (all non-binding)
+    [(expr-generic-add a b) (expr-generic-add (subst k s a) (subst k s b))]
+    [(expr-generic-sub a b) (expr-generic-sub (subst k s a) (subst k s b))]
+    [(expr-generic-mul a b) (expr-generic-mul (subst k s a) (subst k s b))]
+    [(expr-generic-div a b) (expr-generic-div (subst k s a) (subst k s b))]
+    [(expr-generic-lt a b) (expr-generic-lt (subst k s a) (subst k s b))]
+    [(expr-generic-le a b) (expr-generic-le (subst k s a) (subst k s b))]
+    [(expr-generic-eq a b) (expr-generic-eq (subst k s a) (subst k s b))]
+    [(expr-generic-negate a) (expr-generic-negate (subst k s a))]
+    [(expr-generic-abs a) (expr-generic-abs (subst k s a))]
 
     ;; Union types (non-binding)
     [(expr-union l r)

@@ -74,6 +74,16 @@
  (struct-out surf-from-int)
  (struct-out surf-rat-numer)
  (struct-out surf-rat-denom)
+ ;; Generic arithmetic surface forms
+ (struct-out surf-generic-add)
+ (struct-out surf-generic-sub)
+ (struct-out surf-generic-mul)
+ (struct-out surf-generic-div)
+ (struct-out surf-generic-lt)
+ (struct-out surf-generic-le)
+ (struct-out surf-generic-eq)
+ (struct-out surf-generic-negate)
+ (struct-out surf-generic-abs)
  ;; Posit8 surface forms
  (struct-out surf-posit8-type)
  (struct-out surf-posit8)
@@ -424,6 +434,25 @@
 ;; Projections: (rat-numer a), (rat-denom a)
 (struct surf-rat-numer (a srcloc) #:transparent)
 (struct surf-rat-denom (a srcloc) #:transparent)
+
+;; ========================================
+;; Generic arithmetic surface forms (type-polymorphic operators)
+;; ========================================
+
+;; Binary arithmetic: (+ a b), (- a b), (* a b), (/ a b)
+(struct surf-generic-add (a b srcloc) #:transparent)
+(struct surf-generic-sub (a b srcloc) #:transparent)
+(struct surf-generic-mul (a b srcloc) #:transparent)
+(struct surf-generic-div (a b srcloc) #:transparent)
+
+;; Unary ops: (negate a), (abs a)
+(struct surf-generic-negate (a srcloc) #:transparent)
+(struct surf-generic-abs (a srcloc) #:transparent)
+
+;; Comparison: (< a b), (<= a b), (= a b)
+(struct surf-generic-lt (a b srcloc) #:transparent)
+(struct surf-generic-le (a b srcloc) #:transparent)
+(struct surf-generic-eq (a b srcloc) #:transparent)
 
 ;; ========================================
 ;; Posit8 surface forms (8-bit posit, es=2, 2022 Standard)

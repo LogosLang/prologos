@@ -244,6 +244,45 @@
             [(not (equal? a* a)) (whnf (ctor a*))]
             [else (ctor a)])))))
 
+;; Reduce a generic binary operation: reduce both operands, retry.
+;; Also handles Nat operands (which can't be pattern-matched as a single struct).
+(define (reduce-generic-binary ctor a b)
+  (let ([a* (whnf a)]
+        [b* (whnf b)])
+    ;; Try Nat: both operands are Nat numerals?
+    (define na (nat-value a*))
+    (define nb (nat-value b*))
+    (cond
+      [(and na nb)
+       ;; Both are Nat literals — dispatch by operator
+       (cond
+         [(eq? ctor expr-generic-add) (nat->expr (+ na nb))]
+         [(eq? ctor expr-generic-sub) (nat->expr (max 0 (- na nb)))]
+         [(eq? ctor expr-generic-mul) (nat->expr (* na nb))]
+         [(eq? ctor expr-generic-lt)  (if (< na nb) (expr-true) (expr-false))]
+         [(eq? ctor expr-generic-le)  (if (<= na nb) (expr-true) (expr-false))]
+         [(eq? ctor expr-generic-eq)  (if (= na nb) (expr-true) (expr-false))]
+         ;; div and negate not valid for Nat (excluded at type level), but handle gracefully
+         [else (ctor a b)])]
+      ;; One operand reduced → retry
+      [(not (equal? a* a)) (whnf (ctor a* b))]
+      [(not (equal? b* b)) (whnf (ctor a b*))]
+      ;; Stuck
+      [else (ctor a b)])))
+
+;; Reduce a generic unary operation: reduce operand, retry.
+;; Also handles Nat operands for abs (identity).
+(define (reduce-generic-unary ctor a)
+  (let ([a* (whnf a)])
+    ;; Try Nat: operand is Nat numeral?
+    (define na (nat-value a*))
+    (cond
+      [(and na (eq? ctor expr-generic-abs))
+       ;; abs on Nat is identity
+       a*]
+      [(not (equal? a* a)) (whnf (ctor a*))]
+      [else (ctor a)])))
+
 ;; ========================================
 ;; Structural pattern matching for reduce
 ;; ========================================
@@ -922,6 +961,114 @@
     [(expr-quire64-to q)
      (let ([q* (whnf q)]) (if (equal? q* q) e (whnf (expr-quire64-to q*))))]
 
+    ;; ---- Generic arithmetic iota rules ----
+    ;; Dispatch on concrete operand types at reduction time.
+
+    ;; generic-add: compute when both operands are same-type literals
+    [(expr-generic-add (expr-int a) (expr-int b)) (expr-int (+ a b))]
+    [(expr-generic-add (expr-rat a) (expr-rat b)) (expr-rat (+ a b))]
+    [(expr-generic-add (expr-posit8 a) (expr-posit8 b)) (expr-posit8 (posit8-add a b))]
+    [(expr-generic-add (expr-posit16 a) (expr-posit16 b)) (expr-posit16 (posit16-add a b))]
+    [(expr-generic-add (expr-posit32 a) (expr-posit32 b)) (expr-posit32 (posit32-add a b))]
+    [(expr-generic-add (expr-posit64 a) (expr-posit64 b)) (expr-posit64 (posit64-add a b))]
+
+    ;; generic-sub
+    [(expr-generic-sub (expr-int a) (expr-int b)) (expr-int (- a b))]
+    [(expr-generic-sub (expr-rat a) (expr-rat b)) (expr-rat (- a b))]
+    [(expr-generic-sub (expr-posit8 a) (expr-posit8 b)) (expr-posit8 (posit8-sub a b))]
+    [(expr-generic-sub (expr-posit16 a) (expr-posit16 b)) (expr-posit16 (posit16-sub a b))]
+    [(expr-generic-sub (expr-posit32 a) (expr-posit32 b)) (expr-posit32 (posit32-sub a b))]
+    [(expr-generic-sub (expr-posit64 a) (expr-posit64 b)) (expr-posit64 (posit64-sub a b))]
+
+    ;; generic-mul
+    [(expr-generic-mul (expr-int a) (expr-int b)) (expr-int (* a b))]
+    [(expr-generic-mul (expr-rat a) (expr-rat b)) (expr-rat (* a b))]
+    [(expr-generic-mul (expr-posit8 a) (expr-posit8 b)) (expr-posit8 (posit8-mul a b))]
+    [(expr-generic-mul (expr-posit16 a) (expr-posit16 b)) (expr-posit16 (posit16-mul a b))]
+    [(expr-generic-mul (expr-posit32 a) (expr-posit32 b)) (expr-posit32 (posit32-mul a b))]
+    [(expr-generic-mul (expr-posit64 a) (expr-posit64 b)) (expr-posit64 (posit64-mul a b))]
+
+    ;; generic-div (no Nat — Nat excluded at type level)
+    [(expr-generic-div (expr-int a) (expr-int b))
+     (if (zero? b) e (expr-int (quotient a b)))]
+    [(expr-generic-div (expr-rat a) (expr-rat b))
+     (if (zero? b) e (expr-rat (/ a b)))]
+    [(expr-generic-div (expr-posit8 a) (expr-posit8 b)) (expr-posit8 (posit8-div a b))]
+    [(expr-generic-div (expr-posit16 a) (expr-posit16 b)) (expr-posit16 (posit16-div a b))]
+    [(expr-generic-div (expr-posit32 a) (expr-posit32 b)) (expr-posit32 (posit32-div a b))]
+    [(expr-generic-div (expr-posit64 a) (expr-posit64 b)) (expr-posit64 (posit64-div a b))]
+
+    ;; generic-lt
+    [(expr-generic-lt (expr-int a) (expr-int b))
+     (if (< a b) (expr-true) (expr-false))]
+    [(expr-generic-lt (expr-rat a) (expr-rat b))
+     (if (< a b) (expr-true) (expr-false))]
+    [(expr-generic-lt (expr-posit8 a) (expr-posit8 b))
+     (if (posit8-lt? a b) (expr-true) (expr-false))]
+    [(expr-generic-lt (expr-posit16 a) (expr-posit16 b))
+     (if (posit16-lt? a b) (expr-true) (expr-false))]
+    [(expr-generic-lt (expr-posit32 a) (expr-posit32 b))
+     (if (posit32-lt? a b) (expr-true) (expr-false))]
+    [(expr-generic-lt (expr-posit64 a) (expr-posit64 b))
+     (if (posit64-lt? a b) (expr-true) (expr-false))]
+
+    ;; generic-le
+    [(expr-generic-le (expr-int a) (expr-int b))
+     (if (<= a b) (expr-true) (expr-false))]
+    [(expr-generic-le (expr-rat a) (expr-rat b))
+     (if (<= a b) (expr-true) (expr-false))]
+    [(expr-generic-le (expr-posit8 a) (expr-posit8 b))
+     (if (posit8-le? a b) (expr-true) (expr-false))]
+    [(expr-generic-le (expr-posit16 a) (expr-posit16 b))
+     (if (posit16-le? a b) (expr-true) (expr-false))]
+    [(expr-generic-le (expr-posit32 a) (expr-posit32 b))
+     (if (posit32-le? a b) (expr-true) (expr-false))]
+    [(expr-generic-le (expr-posit64 a) (expr-posit64 b))
+     (if (posit64-le? a b) (expr-true) (expr-false))]
+
+    ;; generic-eq
+    [(expr-generic-eq (expr-int a) (expr-int b))
+     (if (= a b) (expr-true) (expr-false))]
+    [(expr-generic-eq (expr-rat a) (expr-rat b))
+     (if (= a b) (expr-true) (expr-false))]
+    [(expr-generic-eq (expr-posit8 a) (expr-posit8 b))
+     (if (posit8-eq? a b) (expr-true) (expr-false))]
+    [(expr-generic-eq (expr-posit16 a) (expr-posit16 b))
+     (if (posit16-eq? a b) (expr-true) (expr-false))]
+    [(expr-generic-eq (expr-posit32 a) (expr-posit32 b))
+     (if (posit32-eq? a b) (expr-true) (expr-false))]
+    [(expr-generic-eq (expr-posit64 a) (expr-posit64 b))
+     (if (posit64-eq? a b) (expr-true) (expr-false))]
+
+    ;; generic-negate (no Nat — excluded at type level)
+    [(expr-generic-negate (expr-int a)) (expr-int (- a))]
+    [(expr-generic-negate (expr-rat a)) (expr-rat (- a))]
+    [(expr-generic-negate (expr-posit8 a)) (expr-posit8 (posit8-neg a))]
+    [(expr-generic-negate (expr-posit16 a)) (expr-posit16 (posit16-neg a))]
+    [(expr-generic-negate (expr-posit32 a)) (expr-posit32 (posit32-neg a))]
+    [(expr-generic-negate (expr-posit64 a)) (expr-posit64 (posit64-neg a))]
+
+    ;; generic-abs
+    [(expr-generic-abs (expr-int a)) (expr-int (abs a))]
+    [(expr-generic-abs (expr-rat a)) (expr-rat (abs a))]
+    [(expr-generic-abs (expr-posit8 a)) (expr-posit8 (posit8-abs a))]
+    [(expr-generic-abs (expr-posit16 a)) (expr-posit16 (posit16-abs a))]
+    [(expr-generic-abs (expr-posit32 a)) (expr-posit32 (posit32-abs a))]
+    [(expr-generic-abs (expr-posit64 a)) (expr-posit64 (posit64-abs a))]
+
+    ;; ---- Generic arithmetic stuck-term reduction ----
+    ;; Binary ops: reduce operands
+    [(expr-generic-add a b) (reduce-generic-binary expr-generic-add a b)]
+    [(expr-generic-sub a b) (reduce-generic-binary expr-generic-sub a b)]
+    [(expr-generic-mul a b) (reduce-generic-binary expr-generic-mul a b)]
+    [(expr-generic-div a b) (reduce-generic-binary expr-generic-div a b)]
+    [(expr-generic-lt a b) (reduce-generic-binary expr-generic-lt a b)]
+    [(expr-generic-le a b) (reduce-generic-binary expr-generic-le a b)]
+    [(expr-generic-eq a b) (reduce-generic-binary expr-generic-eq a b)]
+    ;; Unary ops: reduce operand
+    [(expr-generic-negate a) (reduce-generic-unary expr-generic-negate a)]
+    [(expr-generic-abs a) (reduce-generic-unary expr-generic-abs a)]
+
     ;; Symbol — no reduction (atoms are values)
     ;; (no clauses needed for expr-Symbol or expr-symbol — they're values)
 
@@ -1495,6 +1642,17 @@
     [(expr-quire64-val _) e]
     [(expr-quire64-fma q a b) (expr-quire64-fma (nf q) (nf a) (nf b))]
     [(expr-quire64-to q) (expr-quire64-to (nf q))]
+
+    ;; Generic arithmetic normalization
+    [(expr-generic-add a b) (expr-generic-add (nf a) (nf b))]
+    [(expr-generic-sub a b) (expr-generic-sub (nf a) (nf b))]
+    [(expr-generic-mul a b) (expr-generic-mul (nf a) (nf b))]
+    [(expr-generic-div a b) (expr-generic-div (nf a) (nf b))]
+    [(expr-generic-lt a b) (expr-generic-lt (nf a) (nf b))]
+    [(expr-generic-le a b) (expr-generic-le (nf a) (nf b))]
+    [(expr-generic-eq a b) (expr-generic-eq (nf a) (nf b))]
+    [(expr-generic-negate a) (expr-generic-negate (nf a))]
+    [(expr-generic-abs a) (expr-generic-abs (nf a))]
 
     ;; Symbol normalization
     [(expr-Symbol) e]

@@ -436,6 +436,86 @@
      (let ([r (inferQ ctx a)])
        (match r [(tu (expr-Rat) u) (tu (expr-Int) u)] [_ (tu-error)]))]
 
+    ;; ---- Generic arithmetic operators ----
+    ;; Binary arithmetic: infer both args, return same type
+    [(expr-generic-add a b)
+     (let ([r1 (inferQ ctx a)]
+           [r2 (inferQ ctx b)])
+       (match* (r1 r2)
+         [((tu t1 u1) (tu t2 u2))
+          (if (and (equal? t1 t2) (concrete-numeric-type? t1))
+              (tu t1 (add-usage u1 u2))
+              (tu-error))]
+         [(_ _) (tu-error)]))]
+    [(expr-generic-sub a b)
+     (let ([r1 (inferQ ctx a)]
+           [r2 (inferQ ctx b)])
+       (match* (r1 r2)
+         [((tu t1 u1) (tu t2 u2))
+          (if (and (equal? t1 t2) (concrete-numeric-type? t1))
+              (tu t1 (add-usage u1 u2))
+              (tu-error))]
+         [(_ _) (tu-error)]))]
+    [(expr-generic-mul a b)
+     (let ([r1 (inferQ ctx a)]
+           [r2 (inferQ ctx b)])
+       (match* (r1 r2)
+         [((tu t1 u1) (tu t2 u2))
+          (if (and (equal? t1 t2) (concrete-numeric-type? t1))
+              (tu t1 (add-usage u1 u2))
+              (tu-error))]
+         [(_ _) (tu-error)]))]
+    [(expr-generic-div a b)
+     (let ([r1 (inferQ ctx a)]
+           [r2 (inferQ ctx b)])
+       (match* (r1 r2)
+         [((tu t1 u1) (tu t2 u2))
+          (if (and (equal? t1 t2) (divisible-numeric-type? t1))
+              (tu t1 (add-usage u1 u2))
+              (tu-error))]
+         [(_ _) (tu-error)]))]
+
+    ;; Binary comparison: infer both args, return Bool
+    [(expr-generic-lt a b)
+     (let ([r1 (inferQ ctx a)]
+           [r2 (inferQ ctx b)])
+       (match* (r1 r2)
+         [((tu t1 u1) (tu t2 u2))
+          (if (and (equal? t1 t2) (concrete-numeric-type? t1))
+              (tu (expr-Bool) (add-usage u1 u2))
+              (tu-error))]
+         [(_ _) (tu-error)]))]
+    [(expr-generic-le a b)
+     (let ([r1 (inferQ ctx a)]
+           [r2 (inferQ ctx b)])
+       (match* (r1 r2)
+         [((tu t1 u1) (tu t2 u2))
+          (if (and (equal? t1 t2) (concrete-numeric-type? t1))
+              (tu (expr-Bool) (add-usage u1 u2))
+              (tu-error))]
+         [(_ _) (tu-error)]))]
+    [(expr-generic-eq a b)
+     (let ([r1 (inferQ ctx a)]
+           [r2 (inferQ ctx b)])
+       (match* (r1 r2)
+         [((tu t1 u1) (tu t2 u2))
+          (if (and (equal? t1 t2) (concrete-numeric-type? t1))
+              (tu (expr-Bool) (add-usage u1 u2))
+              (tu-error))]
+         [(_ _) (tu-error)]))]
+
+    ;; Unary: infer arg, return same type
+    [(expr-generic-negate a)
+     (let ([r (inferQ ctx a)])
+       (match r
+         [(tu t u) (if (negatable-numeric-type? t) (tu t u) (tu-error))]
+         [_ (tu-error)]))]
+    [(expr-generic-abs a)
+     (let ([r (inferQ ctx a)])
+       (match r
+         [(tu t u) (if (concrete-numeric-type? t) (tu t u) (tu-error))]
+         [_ (tu-error)]))]
+
     ;; ---- Posit8 binary operations ----
     ;; Binary ops: Posit8 -> Posit8 -> Posit8
     [(expr-p8-add a b)

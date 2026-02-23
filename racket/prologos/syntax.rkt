@@ -189,6 +189,16 @@
  (struct-out expr-from-int)
  (struct-out expr-rat-numer)
  (struct-out expr-rat-denom)
+ ;; Generic arithmetic operators (type-polymorphic over all numeric types)
+ (struct-out expr-generic-add)
+ (struct-out expr-generic-sub)
+ (struct-out expr-generic-mul)
+ (struct-out expr-generic-div)
+ (struct-out expr-generic-lt)
+ (struct-out expr-generic-le)
+ (struct-out expr-generic-eq)
+ (struct-out expr-generic-negate)
+ (struct-out expr-generic-abs)
  ;; Foreign function binding
  (struct-out expr-foreign-fn)
  ;; Type hole (to be inferred during checking)
@@ -638,6 +648,23 @@
 (struct expr-rat-denom (a) #:transparent)                      ; Rat -> Int (denominator, always > 0)
 
 ;; ========================================
+;; Generic arithmetic operators (type-polymorphic over all numeric types)
+;; ========================================
+;; These dispatch on argument types at reduction time.
+;; Binary arithmetic: T -> T -> T (where T is any concrete numeric type)
+(struct expr-generic-add (a b) #:transparent)
+(struct expr-generic-sub (a b) #:transparent)
+(struct expr-generic-mul (a b) #:transparent)
+(struct expr-generic-div (a b) #:transparent)
+;; Binary comparison: T -> T -> Bool
+(struct expr-generic-lt (a b) #:transparent)
+(struct expr-generic-le (a b) #:transparent)
+(struct expr-generic-eq (a b) #:transparent)
+;; Unary: T -> T
+(struct expr-generic-negate (a) #:transparent)
+(struct expr-generic-abs (a) #:transparent)
+
+;; ========================================
 ;; Foreign function binding
 ;; ========================================
 ;; name:        symbol (the Prologos binding name)
@@ -752,6 +779,9 @@
       (expr-rat-neg? x) (expr-rat-abs? x)
       (expr-rat-lt? x) (expr-rat-le? x) (expr-rat-eq? x)
       (expr-from-int? x) (expr-rat-numer? x) (expr-rat-denom? x)
+      (expr-generic-add? x) (expr-generic-sub? x) (expr-generic-mul? x) (expr-generic-div? x)
+      (expr-generic-lt? x) (expr-generic-le? x) (expr-generic-eq? x)
+      (expr-generic-negate? x) (expr-generic-abs? x)
       (expr-Symbol? x) (expr-symbol? x)
       (expr-Keyword? x) (expr-keyword? x)
       (expr-Char? x) (expr-char? x)

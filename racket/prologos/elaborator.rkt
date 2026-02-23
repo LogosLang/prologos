@@ -1065,6 +1065,56 @@
      (let ([ea (elaborate a env depth)])
        (if (prologos-error? ea) ea (expr-rat-denom ea)))]
 
+    ;; ---- Generic arithmetic operators ----
+    [(surf-generic-add a b loc)
+     (let ([ea (elaborate a env depth)]
+           [eb (elaborate b env depth)])
+       (cond [(prologos-error? ea) ea]
+             [(prologos-error? eb) eb]
+             [else (expr-generic-add ea eb)]))]
+    [(surf-generic-sub a b loc)
+     (let ([ea (elaborate a env depth)]
+           [eb (elaborate b env depth)])
+       (cond [(prologos-error? ea) ea]
+             [(prologos-error? eb) eb]
+             [else (expr-generic-sub ea eb)]))]
+    [(surf-generic-mul a b loc)
+     (let ([ea (elaborate a env depth)]
+           [eb (elaborate b env depth)])
+       (cond [(prologos-error? ea) ea]
+             [(prologos-error? eb) eb]
+             [else (expr-generic-mul ea eb)]))]
+    [(surf-generic-div a b loc)
+     (let ([ea (elaborate a env depth)]
+           [eb (elaborate b env depth)])
+       (cond [(prologos-error? ea) ea]
+             [(prologos-error? eb) eb]
+             [else (expr-generic-div ea eb)]))]
+    [(surf-generic-lt a b loc)
+     (let ([ea (elaborate a env depth)]
+           [eb (elaborate b env depth)])
+       (cond [(prologos-error? ea) ea]
+             [(prologos-error? eb) eb]
+             [else (expr-generic-lt ea eb)]))]
+    [(surf-generic-le a b loc)
+     (let ([ea (elaborate a env depth)]
+           [eb (elaborate b env depth)])
+       (cond [(prologos-error? ea) ea]
+             [(prologos-error? eb) eb]
+             [else (expr-generic-le ea eb)]))]
+    [(surf-generic-eq a b loc)
+     (let ([ea (elaborate a env depth)]
+           [eb (elaborate b env depth)])
+       (cond [(prologos-error? ea) ea]
+             [(prologos-error? eb) eb]
+             [else (expr-generic-eq ea eb)]))]
+    [(surf-generic-negate a loc)
+     (let ([ea (elaborate a env depth)])
+       (if (prologos-error? ea) ea (expr-generic-negate ea)))]
+    [(surf-generic-abs a loc)
+     (let ([ea (elaborate a env depth)])
+       (if (prologos-error? ea) ea (expr-generic-abs ea)))]
+
     ;; ---- Posit8 ----
     [(surf-posit8-type loc) (expr-Posit8)]
     [(surf-posit8 v loc) (expr-posit8 v)]

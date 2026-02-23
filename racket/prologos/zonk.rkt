@@ -292,6 +292,17 @@
     [(expr-rat-numer a) (expr-rat-numer (zonk a))]
     [(expr-rat-denom a) (expr-rat-denom (zonk a))]
 
+    ;; Generic arithmetic
+    [(expr-generic-add a b) (expr-generic-add (zonk a) (zonk b))]
+    [(expr-generic-sub a b) (expr-generic-sub (zonk a) (zonk b))]
+    [(expr-generic-mul a b) (expr-generic-mul (zonk a) (zonk b))]
+    [(expr-generic-div a b) (expr-generic-div (zonk a) (zonk b))]
+    [(expr-generic-lt a b) (expr-generic-lt (zonk a) (zonk b))]
+    [(expr-generic-le a b) (expr-generic-le (zonk a) (zonk b))]
+    [(expr-generic-eq a b) (expr-generic-eq (zonk a) (zonk b))]
+    [(expr-generic-negate a) (expr-generic-negate (zonk a))]
+    [(expr-generic-abs a) (expr-generic-abs (zonk a))]
+
     ;; Union types
     [(expr-union l r) (expr-union (zonk l) (zonk r))]
 
@@ -605,6 +616,17 @@
     [(expr-rat-numer a) (expr-rat-numer (zonk-at-depth depth a))]
     [(expr-rat-denom a) (expr-rat-denom (zonk-at-depth depth a))]
 
+    ;; Generic arithmetic
+    [(expr-generic-add a b) (expr-generic-add (zonk-at-depth depth a) (zonk-at-depth depth b))]
+    [(expr-generic-sub a b) (expr-generic-sub (zonk-at-depth depth a) (zonk-at-depth depth b))]
+    [(expr-generic-mul a b) (expr-generic-mul (zonk-at-depth depth a) (zonk-at-depth depth b))]
+    [(expr-generic-div a b) (expr-generic-div (zonk-at-depth depth a) (zonk-at-depth depth b))]
+    [(expr-generic-lt a b) (expr-generic-lt (zonk-at-depth depth a) (zonk-at-depth depth b))]
+    [(expr-generic-le a b) (expr-generic-le (zonk-at-depth depth a) (zonk-at-depth depth b))]
+    [(expr-generic-eq a b) (expr-generic-eq (zonk-at-depth depth a) (zonk-at-depth depth b))]
+    [(expr-generic-negate a) (expr-generic-negate (zonk-at-depth depth a))]
+    [(expr-generic-abs a) (expr-generic-abs (zonk-at-depth depth a))]
+
     ;; Union types
     [(expr-union l r) (expr-union (zonk-at-depth depth l) (zonk-at-depth depth r))]
 
@@ -884,6 +906,16 @@
     [(expr-from-int n) (expr-from-int (default-metas n))]
     [(expr-rat-numer a) (expr-rat-numer (default-metas a))]
     [(expr-rat-denom a) (expr-rat-denom (default-metas a))]
+    ;; Generic arithmetic
+    [(expr-generic-add a b) (expr-generic-add (default-metas a) (default-metas b))]
+    [(expr-generic-sub a b) (expr-generic-sub (default-metas a) (default-metas b))]
+    [(expr-generic-mul a b) (expr-generic-mul (default-metas a) (default-metas b))]
+    [(expr-generic-div a b) (expr-generic-div (default-metas a) (default-metas b))]
+    [(expr-generic-lt a b) (expr-generic-lt (default-metas a) (default-metas b))]
+    [(expr-generic-le a b) (expr-generic-le (default-metas a) (default-metas b))]
+    [(expr-generic-eq a b) (expr-generic-eq (default-metas a) (default-metas b))]
+    [(expr-generic-negate a) (expr-generic-negate (default-metas a))]
+    [(expr-generic-abs a) (expr-generic-abs (default-metas a))]
     [(expr-union l r) (expr-union (default-metas l) (default-metas r))]
     ;; Unapplied type constructor (HKT) — no metas inside
     [(expr-tycon _) e]
