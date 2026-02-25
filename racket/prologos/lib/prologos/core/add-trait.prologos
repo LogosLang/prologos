@@ -5,12 +5,12 @@ require [prologos::data::nat :refer [add]]
 ;; ========================================
 ;; Add Trait — binary addition
 ;; ========================================
-;; Add A = A -> A -> A (single-method: dict IS the function)
+;; Add A = A A -> A (single-method: dict IS the function)
 ;; Generated: deftype Add, accessor Add-add
 ;; Instance: Nat--Add--dict, Nat--Add--add
 
 trait Add {A}
-  add : A -> A -> A
+  add : A A -> A
   :doc "Binary addition over type A"
   :laws
     - :name "commutative"

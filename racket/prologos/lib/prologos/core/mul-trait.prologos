@@ -5,10 +5,10 @@ require [prologos::data::nat :refer [mult]]
 ;; ========================================
 ;; Mul Trait — binary multiplication
 ;; ========================================
-;; Mul A = A -> A -> A (single-method: dict IS the function)
+;; Mul A = A A -> A (single-method: dict IS the function)
 
 trait Mul {A}
-  mul : A -> A -> A
+  mul : A A -> A
   :doc "Binary multiplication over type A"
   :laws
     - :name "commutative"

@@ -8,7 +8,7 @@ require [prologos::data::bool :refer [not]]
 ;; ========================================
 
 trait Eq {A}
-  eq? : A -> A -> Bool
+  eq? : A A -> Bool
   :doc "Structural equality: returns true when two values of the same type are equal"
   :laws
     - :name "reflexive"

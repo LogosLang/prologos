@@ -4549,10 +4549,11 @@
                  [codomain-seg (last segments)])
              (define codomain
                (if (= (length codomain-seg) 1) (car codomain-seg) codomain-seg))
+             ;; Flatten: each atom in each segment is a separate param type.
+             ;; Bracket-grouped types like [Option A] arrive as single list
+             ;; elements, so they stay grouped.  Matches decompose-spec-type.
              (define domain-types
-               (map (lambda (seg)
-                      (if (= (length seg) 1) (car seg) seg))
-                    domains))
+               (append-map (lambda (seg) seg) domains))
              (build-arrow-type domain-types codomain))))
      (trait-method name method-type)]
     ;; Angle-bracket (WS reader): (method ($angle-type T1) ...)

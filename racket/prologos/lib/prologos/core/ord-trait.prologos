@@ -9,7 +9,7 @@ require [prologos::data::bool :refer [not]]
 ;; ========================================
 
 trait Ord {A}
-  compare : A -> A -> Ordering
+  compare : A A -> Ordering
   :doc "Total ordering: compares two values and returns lt-ord, eq-ord, or gt-ord"
   :laws
     - :name "reflexive"

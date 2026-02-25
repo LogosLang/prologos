@@ -5,11 +5,11 @@ require [prologos::data::nat :refer [sub]]
 ;; ========================================
 ;; Sub Trait — binary subtraction
 ;; ========================================
-;; Sub A = A -> A -> A (single-method: dict IS the function)
+;; Sub A = A A -> A (single-method: dict IS the function)
 ;; Nat sub is saturating: sub(x, y) = max(x - y, 0)
 
 trait Sub {A}
-  sub : A -> A -> A
+  sub : A A -> A
   :doc "Binary subtraction over type A"
 
 ;; Nat instance — saturating subtraction
