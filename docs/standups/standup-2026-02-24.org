@@ -102,7 +102,7 @@ Precompute prelude registries once at module load time; tests parameterize with 
 
 ** Logic Engine - Design and Implementation
   * [[/Users/avanti/dev/projects/prologos/docs/tracking/2026-02-24_TOWARDS_A_GENERAL_LOGIC_ENGINE_ON_PROPAGATORS.org][Towards a General Logic Engine on Propagators]]
-*** 🗣️
+*** 🗣️ Relational Language syntax clarification and Modular Solver architecture Vision
 #+ATTR_ORG: :tag prompt
 #+begin_src quote
 Let's consider `/Users/avanti/dev/projects/prologos/docs/tracking/2026-02-24_TOWARDS_A_GENERAL_LOGIC_ENGINE_ON_PROPAGATORS.org`. 
@@ -313,7 +313,7 @@ Yes, I think a `docs/tracking/principles/RELATIONAL_LANGUAGE_VISION.org` documen
 
 This is shaping up to be a genuinely novel synthesis: relational programming with dependent types, session types for distributed propagation, and provenance tracking throughout. The "Relational Language" framing is right — it positions the logic programming aspects not as "Prolog bolted on" but as a native mode of computation within Prologos.
 #+end_src
-*** 🗣️
+*** 🗣️ Create Design Doc
 #+ATTR_ORG: :tag prompt
 #+begin_src quote
   Alright, let's update our `principles` directory with this information.
@@ -325,9 +325,8 @@ This is shaping up to be a genuinely novel synthesis: relational programming wit
   Let's identify all gaps in our infrastructure, all datastructures needed, and develop out a design and implementation guide for us to work through on a complete logic engine on which we can run our relational language, similar to our extended spec design.
 
 #+end_src
-
+*** [[/Users/avanti/dev/projects/prologos/docs/tracking/2026-02-24_LOGIC_ENGINE_DESIGN.org][LOGIC_ENGINE_DESIGN Document]]
 *** 🗣️ Design critique
-
 #+begin_src markdown
   Let's consider this critique:
 
@@ -658,6 +657,38 @@ With that said, let's refine our design doc one last time with the critiques tha
 
 #+end_src
 
+
+
+
+
+
+** Design Benchmarking suite -> track changes
+** migrate type inference/meta var to propagator infrastructure - compare benchmarks
+
+** Include Design Methodology in `principles` directory
+#+begin_src quote
+  I would like for us to document our general methodolgy for design and implementation, for future consultation and guidance.
+
+  The phases that I have in mind are:
+    1. We start with deep research on fundamental topics, grounding ourselves with best techniques, cutting edge and well-proven, with comprehensive surveys of the landscape in question.
+    2. We move to a research and design phase, where we
+      - further refine our research
+      - identify gaps in our current infrastructure as it relates to implementation
+      - consider tradeoffs to various approaches
+      - identify opportunities that uphold our core principles
+      - based on our findings from deep research, core principles, and a careful consideration of different approaches and tradeoffs, make qualified recommendations
+    3. Design Iteration
+      - We work on a design for concrete implementation, complete with an as-detailed-as-possible roadmap for phased implementation
+      - We carefully consider the proposal, offering critique and feedback, or ask questions to further understanding of key design choices proposed in earlier drafts
+      - We make adjustments or make justifications based on the critique and feedback
+      - We repeat until there is full clarity on the proposal, and careful consideration to all aspects of the design
+      - We finalize a final roadmap for implementation
+    4. We work on Implementation through the phases, raising any design issues discovered through the process. We prefer to ship complete and sound solutions now, rather than do quick fixes that meet design criteria, partially. If gaps are discovered in the process that require backtracking and designing or implementing a deeper core piece of infrastructure, we raise issue and address the core concern to delivering a complete solution. We ensure that our implementation aligns with our principles of clean, modular, layered design and good ergonomics, and other principles documents.
+    5. We enjoy the well-thought out design and how it composes with our multi-level, modular, extensible language--confident that we can continue to extend--and allow other users to contribute their own extensions--well into the future, on firm theoretical grounds.
+
+  Let's document this design methodology in our `principles` directory, taking these phases as a basis. You can also review our conversation back-and-forths in today's standup on the Logic Engine Design, and previous day's standups on Extended Spec Design as a good example of this process in motion, to take any other lessons or patterns that are worth noting in this document. Let's create DESIGN_METHODOLOGY.org, and annotate in any other appropriate places in `principles` of this process.
+
+#+end_src
 
 
 

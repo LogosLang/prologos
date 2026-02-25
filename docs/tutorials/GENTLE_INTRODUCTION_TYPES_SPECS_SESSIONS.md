@@ -1,55 +1,55 @@
-- [Who This Is For](#org4f9d587)
-- [Spiral 1: Just Write Functions](#org8aaf921)
-  - [1.1 Your First Prologos Function](#orge84f7aa)
-  - [1.2 Pattern Matching](#orgce80d72)
-  - [1.3 Collections Work Like You'd Expect](#org8145317)
-- [Spiral 2: Adding Type Signatures with `spec`](#org19db2a8)
-  - [2.1 Why Bother?](#orgb60ba91)
-  - [2.2 Level 1: Simple Types](#org1339439)
-  - [2.3 Level 2: Generics (Polymorphism)](#orgf25fcc7)
-  - [2.4 Level 3: Constrained Generics](#org2ebb9a0)
-- [Spiral 3: `spec` as Self-Documenting Metadata](#org69cfc21)
-  - [3.1 Beyond Types: Specs as Rich Descriptions](#org5347484)
-  - [3.2 Why This Matters](#orgb9dac16)
-  - [3.3 The Graduation Path](#org452378f)
-- [Spiral 4: Higher-Kinded Types (Without the Jargon)](#org18ff835)
-  - [4.1 The Problem: Writing Generic Code Over Containers](#orgcf2fc10)
-  - [4.2 Prologos: Traits Over Containers](#orgf4e8192)
-  - [4.3 You Already Know This Pattern](#org474cafe)
-- [Spiral 5: `functor` &#x2014; Naming Complex Types](#org7d545c6)
-  - [5.1 The Problem: Type Signatures Get Long](#orge943fe1)
-  - [5.2 The Solution: Name It](#orgd58742d)
-  - [5.3 Progressive Metadata on `functor`](#org7ed7b50)
-  - [5.4 The Key Insight](#org7409596)
-- [Spiral 6: Channels and Protocols (Session Types)](#org0fabf64)
-  - [6.1 The Problem: Communication Goes Wrong](#orgc95bfc9)
-  - [6.2 Session Types: Protocols as Types](#org5da2629)
-  - [6.3 Branching Protocols: Choice and Offer](#org2edf51d)
-  - [6.4 Dependent Sessions: Protocols That Depend on Values](#org6588810)
-- [Spiral 7: Capabilities and the Eventual Send](#org5d10890)
-  - [7.1 A Quick Grounding: What Are Capabilities?](#org936251e)
-  - [7.2 Channels as Capabilities](#orge2b3ee0)
-  - [7.3 Linear Types Prevent Capability Duplication](#orgfe68fd7)
-  - [7.4 The Eventual Send](#orgeb4a8f0)
-  - [7.5 How This Compares to OCapN](#orge0eb2af)
-- [Spiral 8: Dependent Types (The Deeper Layer)](#org660b047)
-  - [8.1 You've Already Used Them](#org5ab3a1f)
-  - [8.2 The Full Progressive Complexity Ladder](#orgbb0c3cc)
-  - [8.3 `??` : The "What Goes Here?" Hole](#org301560d)
-- [Spiral 9: The Big Picture &#x2014; `spec`, `functor`, `session`](#orgbfeed49)
-  - [9.1 The Keyword Symmetry](#orgad69224)
-  - [9.2 They All Compose](#org4c26e21)
-- [Where To Go From Here](#orge24cccb)
-  - [The Progressive Complexity Promise](#orgb93c6f1)
-- [Further Reading](#org19c8c85)
-  - [Prologos Design Documents](#org22acb56)
-  - [The Codebase](#orgc963199)
-  - [Capability-Based Security](#org897a2d1)
+- [Who This Is For](#org36b431d)
+- [Spiral 1: Just Write Functions](#orgacb91cd)
+  - [1.1 Your First Prologos Function](#org45c4586)
+  - [1.2 Pattern Matching](#org7ad70f4)
+  - [1.3 Collections Work Like You'd Expect](#org2132350)
+- [Spiral 2: Adding Type Signatures with `spec`](#org87bace3)
+  - [2.1 Why Bother?](#orgef25f24)
+  - [2.2 Level 1: Simple Types](#org11ea974)
+  - [2.3 Level 2: Generics (Polymorphism)](#orgb1303ac)
+  - [2.4 Level 3: Constrained Generics](#org05cd61a)
+- [Spiral 3: `spec` as Self-Documenting Metadata](#org6a020c9)
+  - [3.1 Beyond Types: Specs as Rich Descriptions](#org78ea03a)
+  - [3.2 Why This Matters](#orgf29f031)
+  - [3.3 The Graduation Path](#orgb461d21)
+- [Spiral 4: Higher-Kinded Types (Without the Jargon)](#org0a619f3)
+  - [4.1 The Problem: Writing Generic Code Over Containers](#org9ac3d7b)
+  - [4.2 Prologos: Traits Over Containers](#orgb7bf04c)
+  - [4.3 You Already Know This Pattern](#org1aded90)
+- [Spiral 5: `functor` &#x2014; Naming Complex Types](#orged3df51)
+  - [5.1 The Problem: Type Signatures Get Long](#orgb35964b)
+  - [5.2 The Solution: Name It](#org7966f53)
+  - [5.3 Progressive Metadata on `functor`](#org47ae058)
+  - [5.4 The Key Insight](#orgb9b216c)
+- [Spiral 6: Channels and Protocols (Session Types)](#org8cdf6d9)
+  - [6.1 The Problem: Communication Goes Wrong](#orgc7e1c0d)
+  - [6.2 Session Types: Protocols as Types](#orgc10dc94)
+  - [6.3 Branching Protocols: Choice and Offer](#org432d56a)
+  - [6.4 Dependent Sessions: Protocols That Depend on Values](#orgca32668)
+- [Spiral 7: Capabilities and the Eventual Send](#org455e98a)
+  - [7.1 A Quick Grounding: What Are Capabilities?](#org62db3ef)
+  - [7.2 Channels as Capabilities](#org723b869)
+  - [7.3 Linear Types Prevent Capability Duplication](#orga9f5586)
+  - [7.4 The Eventual Send](#org628a81a)
+  - [7.5 How This Compares to OCapN](#org8201d62)
+- [Spiral 8: Dependent Types (The Deeper Layer)](#org2e02c71)
+  - [8.1 You've Already Used Them](#org9b5cdcd)
+  - [8.2 The Full Progressive Complexity Ladder](#org03b702c)
+  - [8.3 `??` : The "What Goes Here?" Hole](#org98acc17)
+- [Spiral 9: The Big Picture &#x2014; `spec`, `functor`, `session`](#org311b8de)
+  - [9.1 The Keyword Symmetry](#orge51b168)
+  - [9.2 They All Compose](#orgd726b86)
+- [Where To Go From Here](#orgfc98eab)
+  - [The Progressive Complexity Promise](#orga88ba86)
+- [Further Reading](#orgd864b54)
+  - [Prologos Design Documents](#orgf3b29ef)
+  - [The Codebase](#org64f11fd)
+  - [Capability-Based Security](#orgdbecbee)
 
 > "The language is actually designed to be minimal in ceremony and syntax, and look friendly and inviting to any programmer generally familiar with functional programming; although there are layers of depth to unlock further expressiveness, if they choose to go there."
 
 
-<a id="org4f9d587"></a>
+<a id="org36b431d"></a>
 
 # Who This Is For
 
@@ -62,12 +62,12 @@ This tutorial shows you that Prologos's type system is *not* academic. It's a pr
 **What you won't need:** Category theory, proof assistants, Greek letters, or a PhD.
 
 
-<a id="org8aaf921"></a>
+<a id="orgacb91cd"></a>
 
 # Spiral 1: Just Write Functions
 
 
-<a id="orge84f7aa"></a>
+<a id="org45c4586"></a>
 
 ## 1.1 Your First Prologos Function
 
@@ -81,7 +81,7 @@ That's it. No type annotations. Prologos infers that `name` is a `String` and th
 Key syntax note: `[]` is for function application. `defn greet [name]` defines a function `greet` that takes `name`. `[string-append "Hello, " name]` calls `string-append` with two arguments.
 
 
-<a id="orgce80d72"></a>
+<a id="org7ad70f4"></a>
 
 ## 1.2 Pattern Matching
 
@@ -94,7 +94,7 @@ defn factorial
 The `|` arms define cases directly on the function — no separate `match` expression needed. Brackets `[...]` are for function calls. This reads naturally: "factorial of 0 is 1; factorial of n is n times factorial of (n - 1)."
 
 
-<a id="org8145317"></a>
+<a id="org2132350"></a>
 
 ## 1.3 Collections Work Like You'd Expect
 
@@ -122,12 +122,12 @@ into @[] xs                     ;; => @[1 2 3 4 5]  (List -> PVec)
 `map`, `filter`, `reduce` work generically on Lists, PVecs, Sets &#x2014; any collection type. If you've used Clojure's seq abstraction or Rust's iterators, this is the same idea: one set of function names, all collection types, type-preserving.
 
 
-<a id="org19db2a8"></a>
+<a id="org87bace3"></a>
 
 # Spiral 2: Adding Type Signatures with `spec`
 
 
-<a id="orgb60ba91"></a>
+<a id="orgef25f24"></a>
 
 ## 2.1 Why Bother?
 
@@ -136,7 +136,7 @@ Type inference is great for small functions. But as code grows, explicit type si
 In Prologos, type signatures live in `spec` declarations &#x2014; separate from the function body. Think of `spec` as TypeScript's `interface` for a single function:
 
 
-<a id="org1339439"></a>
+<a id="org11ea974"></a>
 
 ## 2.2 Level 1: Simple Types
 
@@ -154,7 +154,7 @@ function add(x: number, y: number): number { ... }
 ```
 
 
-<a id="orgf25fcc7"></a>
+<a id="orgb1303ac"></a>
 
 ## 2.3 Level 2: Generics (Polymorphism)
 
@@ -172,7 +172,7 @@ function id<A>(x: A): A { return x; }
 ```
 
 
-<a id="org2ebb9a0"></a>
+<a id="org05cd61a"></a>
 
 ## 2.4 Level 3: Constrained Generics
 
@@ -189,12 +189,12 @@ defn sort [xs] ...
 The user writes `sort '[3 1 2]` &#x2014; the compiler sees `A = Int`, finds `Int`'s `Ord` instance, and passes it in automatically. Zero ceremony at the call site.
 
 
-<a id="org69cfc21"></a>
+<a id="org6a020c9"></a>
 
 # Spiral 3: `spec` as Self-Documenting Metadata
 
 
-<a id="org5347484"></a>
+<a id="org78ea03a"></a>
 
 ## 3.1 Beyond Types: Specs as Rich Descriptions
 
@@ -226,7 +226,7 @@ Let's break this down:
 | `:where`      | Trait constraints (interfaces the type must have) | TS `extends` constraint          |
 
 
-<a id="orgb9dac16"></a>
+<a id="orgf29f031"></a>
 
 ## 3.2 Why This Matters
 
@@ -240,7 +240,7 @@ In JavaScript, these live in *four different places*:
 In Prologos, they're *all part of the spec*. The compiler reads them. The tooling reads them. They're always in sync because they live next to the function they describe.
 
 
-<a id="org452378f"></a>
+<a id="orgb461d21"></a>
 
 ## 3.3 The Graduation Path
 
@@ -285,12 +285,12 @@ At no point do you need to understand dependent types, Pi types, or category the
 **The implementation doesn't change.** Only the specification becomes richer.
 
 
-<a id="org18ff835"></a>
+<a id="org0a619f3"></a>
 
 # Spiral 4: Higher-Kinded Types (Without the Jargon)
 
 
-<a id="orgcf2fc10"></a>
+<a id="org9ac3d7b"></a>
 
 ## 4.1 The Problem: Writing Generic Code Over Containers
 
@@ -306,7 +306,7 @@ function fmap<A, B>(f: (a: A) => B, xs: Set<A>): Set<B>;
 ```
 
 
-<a id="orgf4e8192"></a>
+<a id="orgb7bf04c"></a>
 
 ## 4.2 Prologos: Traits Over Containers
 
@@ -324,14 +324,14 @@ Usage &#x2014; zero ceremony:
 
 ```prologos
 fmap inc '[1 2 3]            ;; => '[2 3 4]
-fmap inc @[1 2 3]           ;; => @[2 3 4]
-fmap to-string '[1 2]       ;; => '["1" "2"]
+fmap inc @[1 2 3]            ;; => @[2 3 4]
+fmap to-string '[1 2]        ;; => '["1" "2"]
 ```
 
 The compiler sees `F = List` or `F = PVec`, finds the right `Functor` instance, and dispatches automatically. This is like Rust's trait system or Haskell's type classes, but with less syntax.
 
 
-<a id="org474cafe"></a>
+<a id="org1aded90"></a>
 
 ## 4.3 You Already Know This Pattern
 
@@ -345,12 +345,12 @@ for (const x of anyIterable) { ... }
 Prologos traits are the typed version of protocols: any type that implements `Seqable` (the "can produce a sequence" trait) works with `map`, `filter`, `reduce`, etc. The compiler *proves* the implementation exists, rather than discovering at runtime that it doesn't.
 
 
-<a id="org7d545c6"></a>
+<a id="orged3df51"></a>
 
 # Spiral 5: `functor` &#x2014; Naming Complex Types
 
 
-<a id="orge943fe1"></a>
+<a id="orgb35964b"></a>
 
 ## 5.1 The Problem: Type Signatures Get Long
 
@@ -366,7 +366,7 @@ spec compose-xf : <(S :0 Type) -> [S -> B -> S] -> S -> A -> S>
 Those angle brackets `<...>` contain *dependent types* &#x2014; types that mention runtime values. We'll get to what that means later. For now, the point is: this signature is unreadable.
 
 
-<a id="orgd58742d"></a>
+<a id="org7966f53"></a>
 
 ## 5.2 The Solution: Name It
 
@@ -391,7 +391,7 @@ type Xf<A, B> = <S>(step: (s: S, b: B) => S) => (s: S, a: A) => S;
 ```
 
 
-<a id="org7ed7b50"></a>
+<a id="org47ae058"></a>
 
 ## 5.3 Progressive Metadata on `functor`
 
@@ -409,7 +409,7 @@ functor Xf {A B : Type}
 You don't need `:compose`, `:identity`, or `:laws` to use `functor`. Start with just `:unfolds`. Add algebraic structure when you need it.
 
 
-<a id="org7409596"></a>
+<a id="orgb9b216c"></a>
 
 ## 5.4 The Key Insight
 
@@ -420,12 +420,12 @@ The dependent type (`<...>`) lives in `:unfolds`, consulted only when the compil
 This is Prologos's design philosophy in a nutshell. The deep theory is there when you need it &#x2014; but it's behind a door you never have to open unless you want to.
 
 
-<a id="org0fabf64"></a>
+<a id="org8cdf6d9"></a>
 
 # Spiral 6: Channels and Protocols (Session Types)
 
 
-<a id="orgc95bfc9"></a>
+<a id="orgc7e1c0d"></a>
 
 ## 6.1 The Problem: Communication Goes Wrong
 
@@ -434,7 +434,7 @@ If you've built distributed services, you know the pain: the client sends a JSON
 These are *protocol bugs*. TypeScript can't catch them &#x2014; the type system doesn't model sequences of messages. REST API schemas (OpenAPI) are documentation, not enforcement. gRPC is closer, but still doesn't verify that your client and server agree on the *order* of messages.
 
 
-<a id="org5da2629"></a>
+<a id="orgc10dc94"></a>
 
 ## 6.2 Session Types: Protocols as Types
 
@@ -458,7 +458,7 @@ The compiler checks *both sides*:
 If either side violates the protocol, it's a *compile-time error*.
 
 
-<a id="org2edf51d"></a>
+<a id="org432d56a"></a>
 
 ## 6.3 Branching Protocols: Choice and Offer
 
@@ -479,7 +479,7 @@ session DatabaseService
 The server =offer=s branches; the client =select=s one. This is like a tagged union of possible message sequences. The compiler verifies that the server handles every branch the client might choose.
 
 
-<a id="org6588810"></a>
+<a id="orgca32668"></a>
 
 ## 6.4 Dependent Sessions: Protocols That Depend on Values
 
@@ -497,12 +497,12 @@ The type of the *second* message depends on the *value* of the first. If the cli
 This is a **dependent session type** &#x2014; the protocol shape depends on runtime values. No mainstream language can express this.
 
 
-<a id="org5d10890"></a>
+<a id="org455e98a"></a>
 
 # Spiral 7: Capabilities and the Eventual Send
 
 
-<a id="org936251e"></a>
+<a id="org62db3ef"></a>
 
 ## 7.1 A Quick Grounding: What Are Capabilities?
 
@@ -518,7 +518,7 @@ The core principles:
 If you've built systems with OAuth tokens, API keys, or dependency injection, you've been *approximating* ocap informally. The difference is enforcement: in Prologos, the compiler verifies these properties.
 
 
-<a id="orge2b3ee0"></a>
+<a id="org723b869"></a>
 
 ## 7.2 Channels as Capabilities
 
@@ -541,7 +541,7 @@ If a function receives a channel of type `ReadOnlyDB`, it can *only* query and c
 This maps directly to the ocap principle of attenuation: the `ReadOnlyDB` session type is a *powerless facet* of a full `DatabaseService` &#x2014; same database, smaller authority surface.
 
 
-<a id="orgfe68fd7"></a>
+<a id="orga9f5586"></a>
 
 ## 7.3 Linear Types Prevent Capability Duplication
 
@@ -556,7 +556,7 @@ let chan2 = db-channel   ;; TYPE ERROR: db-channel already consumed
 This means: if I give you my database channel, *I no longer have it*. That's capability transfer &#x2014; enforced by the compiler. No need for runtime wrappers or trust assumptions.
 
 
-<a id="orgeb4a8f0"></a>
+<a id="org628a81a"></a>
 
 ## 7.4 The Eventual Send
 
@@ -592,7 +592,7 @@ The `recv!` operation returns a promise. Multiple queries fly out concurrently. 
 This is analogous to E's *promise pipelining*: rather than waiting for each round trip, you send all your messages and let the promises resolve in whatever order the network delivers. The key difference: Prologos's session type statically proves that the promise chain is well-formed &#x2014; every send has a matching receive, every branch is handled.
 
 
-<a id="orge0eb2af"></a>
+<a id="org8201d62"></a>
 
 ## 7.5 How This Compares to OCapN
 
@@ -613,12 +613,12 @@ The key difference from existing ocap implementations: in Spritely's Goblins, ca
 > "Logos with session types gives you ocap where the capability protocol is enforced by the compiler, not just convention." &#x2014; from project design discussion
 
 
-<a id="org660b047"></a>
+<a id="org2e02c71"></a>
 
 # Spiral 8: Dependent Types (The Deeper Layer)
 
 
-<a id="org5ab3a1f"></a>
+<a id="org9b5cdcd"></a>
 
 ## 8.1 You've Already Used Them
 
@@ -633,7 +633,7 @@ spec replicate : <(n : Nat) -> A -> [Vec A n]>
 The angle brackets `<...>` mark the dependent part. Everything outside angle brackets is regular ML-style typing. This visual separator means you can *see* where dependency happens.
 
 
-<a id="orgbb0c3cc"></a>
+<a id="org03b702c"></a>
 
 ## 8.2 The Full Progressive Complexity Ladder
 
@@ -655,7 +655,7 @@ Levels 0-3 are familiar territory for any TypeScript developer. Level 4 is where
 **You never have to leave the level you're comfortable at.** Code at Level 1 and code at Level 7 coexist in the same codebase, call each other, and are type-checked together.
 
 
-<a id="org301560d"></a>
+<a id="org98acc17"></a>
 
 ## 8.3 `??` : The "What Goes Here?" Hole
 
@@ -684,12 +684,12 @@ Hint: The only value of type Vec B 0 is vnil
 This is *interactive type-driven development*. The types guide you toward the correct implementation. Start with holes, let the compiler fill in the blanks. It's like pair programming with the type checker.
 
 
-<a id="orgbfeed49"></a>
+<a id="org311b8de"></a>
 
 # Spiral 9: The Big Picture &#x2014; `spec`, `functor`, `session`
 
 
-<a id="orgad69224"></a>
+<a id="orge51b168"></a>
 
 ## 9.1 The Keyword Symmetry
 
@@ -705,7 +705,7 @@ Prologos has a deliberate symmetry in its specification language:
 | `session`  | A communication protocol            | gRPC service definition (richer) |
 
 
-<a id="org4c26e21"></a>
+<a id="orgd726b86"></a>
 
 ## 9.2 They All Compose
 
@@ -741,12 +741,12 @@ trait Transducible {C : Type -> Type}
 **The `functor` names the type. The `property` states its laws. The `spec` uses both. The `trait` packages it for generic dispatch. Everything is readable. The dependent types are present exactly once, in `:unfolds`, consulted only when needed.**
 
 
-<a id="orge24cccb"></a>
+<a id="orgfc98eab"></a>
 
 # Where To Go From Here
 
 
-<a id="orgb93c6f1"></a>
+<a id="orga88ba86"></a>
 
 ## The Progressive Complexity Promise
 
@@ -763,12 +763,12 @@ All five levels coexist. Code at any level can call code at any other level. The
 > "Dependent types are the fabric upon which everything is built &#x2014; and can be reached for in pure form if ever needed &#x2014; but otherwise use `functor`, `spec`, etc., with their implicit maps."
 
 
-<a id="org19c8c85"></a>
+<a id="orgd864b54"></a>
 
 # Further Reading
 
 
-<a id="org22acb56"></a>
+<a id="orgf3b29ef"></a>
 
 ## Prologos Design Documents
 
@@ -777,7 +777,7 @@ All five levels coexist. Code at any level can call code at any other level. The
 -   `docs/otto_conversation.org` &#x2014; a conversation exploring session types, OCapN, and capabilities in depth
 
 
-<a id="orgc963199"></a>
+<a id="org64f11fd"></a>
 
 ## The Codebase
 
@@ -787,7 +787,7 @@ All five levels coexist. Code at any level can call code at any other level. The
 -   `docs/spec/grammar.ebnf` &#x2014; the formal grammar of the language
 
 
-<a id="org897a2d1"></a>
+<a id="orgdbecbee"></a>
 
 ## Capability-Based Security
 

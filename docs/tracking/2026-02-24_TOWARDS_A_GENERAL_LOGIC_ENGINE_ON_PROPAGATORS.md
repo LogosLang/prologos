@@ -1,76 +1,76 @@
-- [Executive Summary](#orgea4ebe0)
-- [Part I: Lattice Foundations](#orgb523028)
-  - [1. Why Lattices?](#org5ac2c1c)
-  - [2. Crash Course: The Lattice Zoo](#org47c4f9d)
-    - [2.1 Partial Orders](#orgbfae6e3)
-    - [2.2 Join-Semilattices](#org60a9c1b)
-    - [2.3 Complete Lattices and Top](#org48322c7)
-    - [2.4 Fixed Points: Why Lattices Guarantee Convergence](#org07f205d)
-    - [2.5 Finite Height and Termination](#orgafcae1d)
-  - [3. Key Lattice Structures for Logic Programming](#org5ebabd9)
-    - [3.1 The Substitution Lattice](#org5198fcf)
-    - [3.2 The Herbrand Interpretation Lattice](#orgd041627)
-    - [3.3 The Interval Lattice](#org966b98b)
-    - [3.4 The Protocol State Lattice (Session Types)](#org882e906)
-    - [3.5 The Multiplicity Semiring (QTT)](#orgb8153bd)
-- [Part II: The Architectural Recommendation](#orgcd077c0)
-  - [4. The Three-Layer Architecture](#org5fe482f)
-    - [Layer 1: The Propagator Network (Monotonic Data Plane)](#org79f86b8)
-    - [Layer 2: ATMS / Truth Maintenance (Non-Monotonic Control Plane)](#org4b15d28)
-    - [Layer 3: Stratification (Controlled Non-Monotonicity)](#org735f20b)
-  - [5. Validating the Multiverse Mechanism](#org10d608f)
-    - [Why ATMS over Physical Forking](#orgcefc575)
-    - [The Multiverse in Practice: A Worked Example](#org9e943ac)
-  - [6. Validating the Pocket Universe Mechanism](#org78338d3)
-    - [Applications in the Logic Engine](#org52ae2d2)
-  - [7. Recovering SLD/SLG Semantics](#orgae60f60)
-    - [7.1 SLD Resolution on Propagators](#orgbce1a29)
-    - [7.2 SLG Resolution (Tabling) on Propagators](#org391a7ce)
-    - [7.3 Cut and Pruning](#orgbc489c5)
-  - [8. Tabling: The Completeness Mechanism](#orgd7bb753)
-    - [8.1 Design for Prologos](#org7c5fa21)
-    - [8.2 Lattice Answer Modes](#org259c3a3)
-    - [8.3 Tabling as Pocket Universe](#org792b005)
-  - [9. Connecting to Existing Prologos Infrastructure](#org0222e6e)
-    - [9.1 The Elaborator as a Propagator Network (Today)](#org24bbce6)
-    - [9.2 Session Types as Protocol Propagation](#org56e18b6)
-    - [9.3 QTT Multiplicity Checking as Propagation](#org95da124)
-- [Part III: The Concrete Architecture](#org4ceeeba)
-  - [10. Core Data Types](#org66b9ce8)
-    - [10.1 Lattice Trait](#org1ca4618)
-    - [10.2 Propagator Cell](#orge3428e1)
-    - [10.3 Supported Values (ATMS Integration)](#org9fe8d6a)
-    - [10.4 LVar (Lattice Variable)](#org8c1eecc)
-  - [11. The Propagator Network Runtime](#org354e2fe)
-    - [11.1 Scheduler](#org1b66b50)
-    - [11.2 Contradiction Handler](#orge7a7ecb)
-    - [11.3 The `amb` Operator](#org7d257c2)
-    - [11.4 Answer Collection](#org546b93c)
-  - [12. Phased Implementation Plan](#org0b1a252)
-    - [Phase 0: Lattice Trait + Basic Cells (Foundation)](#orge2aaae0)
-    - [Phase 1: Elaborator Propagators (Compile-Time Use)](#org848259a)
-    - [Phase 2: LVars + Tabling (Runtime Foundation)](#orgdf0f0d3)
-    - [Phase 3: ATMS Layer (Nondeterministic Search)](#org6fb3523)
-    - [Phase 4: Stratified Evaluation (Negation + Aggregation)](#org7c6253e)
-    - [Phase 5: Surface Syntax + Integration (User-Facing Logic Programming)](#orgea19d67)
-    - [Phase 6: Galois Connections + Domain Embeddings (Advanced)](#orgd37f7d1)
-- [Part IV: Critique and Open Questions](#orgeed1905)
-  - [13. What This Architecture Does Well](#org5440340)
-  - [14. What This Architecture Doesn't Solve (Yet)](#orgd199c6f)
-  - [15. Open Research Questions](#orgeaeb0c9)
-- [Summary of Recommendations](#org26517fa)
-- [References](#org9c6f2a3)
-  - [Foundational (Must-Read)](#org6c8847e)
-  - [Tabling and Logic Programming](#org6f3ded2)
-  - [Lattice-Based Languages](#orge736efd)
-  - [Theoretical Foundations](#orgdb0c9a3)
-  - [Constraint Systems](#orge74ee42)
-  - [Type Systems](#orgf767bb0)
-  - [Implementations](#orgc96c0e3)
+- [Executive Summary](#org8eea0a7)
+- [Part I: Lattice Foundations](#org0f04f73)
+  - [1. Why Lattices?](#org97f1ee1)
+  - [2. Crash Course: The Lattice Zoo](#org705afb5)
+    - [2.1 Partial Orders](#org897f7c7)
+    - [2.2 Join-Semilattices](#org61f3e85)
+    - [2.3 Complete Lattices and Top](#org8cb11a7)
+    - [2.4 Fixed Points: Why Lattices Guarantee Convergence](#org33dde35)
+    - [2.5 Finite Height and Termination](#org9878b2b)
+  - [3. Key Lattice Structures for Logic Programming](#orgc832ec1)
+    - [3.1 The Substitution Lattice](#org4f7bcf1)
+    - [3.2 The Herbrand Interpretation Lattice](#orgd6e87b5)
+    - [3.3 The Interval Lattice](#org0494372)
+    - [3.4 The Protocol State Lattice (Session Types)](#org0246103)
+    - [3.5 The Multiplicity Semiring (QTT)](#org0da9f6b)
+- [Part II: The Architectural Recommendation](#org5dfcb32)
+  - [4. The Three-Layer Architecture](#org8965b0b)
+    - [Layer 1: The Propagator Network (Monotonic Data Plane)](#org5806aa7)
+    - [Layer 2: ATMS / Truth Maintenance (Non-Monotonic Control Plane)](#org5769066)
+    - [Layer 3: Stratification (Controlled Non-Monotonicity)](#org23fff47)
+  - [5. Validating the Multiverse Mechanism](#org22089c7)
+    - [Why ATMS over Physical Forking](#orga988462)
+    - [The Multiverse in Practice: A Worked Example](#orgaa1c509)
+  - [6. Validating the Pocket Universe Mechanism](#org434cb02)
+    - [Applications in the Logic Engine](#org9661569)
+  - [7. Recovering SLD/SLG Semantics](#orgef97ee6)
+    - [7.1 SLD Resolution on Propagators](#org387f266)
+    - [7.2 SLG Resolution (Tabling) on Propagators](#org0d568ae)
+    - [7.3 Cut and Pruning](#org916be35)
+  - [8. Tabling: The Completeness Mechanism](#orgb40c5cd)
+    - [8.1 Design for Prologos](#org7bd3b02)
+    - [8.2 Lattice Answer Modes](#org24b4f72)
+    - [8.3 Tabling as Pocket Universe](#org71ed939)
+  - [9. Connecting to Existing Prologos Infrastructure](#org824699a)
+    - [9.1 The Elaborator as a Propagator Network (Today)](#org789304b)
+    - [9.2 Session Types as Protocol Propagation](#org366f7d8)
+    - [9.3 QTT Multiplicity Checking as Propagation](#org0b41b45)
+- [Part III: The Concrete Architecture](#org77efadd)
+  - [10. Core Data Types](#orgeafee7e)
+    - [10.1 Lattice Trait](#org9b90873)
+    - [10.2 Propagator Cell](#org12949ed)
+    - [10.3 Supported Values (ATMS Integration)](#org7eb5212)
+    - [10.4 LVar (Lattice Variable)](#orgaa50d8e)
+  - [11. The Propagator Network Runtime](#org132f257)
+    - [11.1 Scheduler](#orgdd1e5cd)
+    - [11.2 Contradiction Handler](#org802e9f0)
+    - [11.3 The `amb` Operator](#orgbd7b9af)
+    - [11.4 Answer Collection](#org2372cea)
+  - [12. Phased Implementation Plan](#orga1b6913)
+    - [Phase 0: Lattice Trait + Basic Cells (Foundation)](#org49ccb62)
+    - [Phase 1: Elaborator Propagators (Compile-Time Use)](#org68c5865)
+    - [Phase 2: LVars + Tabling (Runtime Foundation)](#orgd91e3e5)
+    - [Phase 3: ATMS Layer (Nondeterministic Search)](#org5319b10)
+    - [Phase 4: Stratified Evaluation (Negation + Aggregation)](#orgfc41056)
+    - [Phase 5: Surface Syntax + Integration (User-Facing Logic Programming)](#org9a975b0)
+    - [Phase 6: Galois Connections + Domain Embeddings (Advanced)](#org0041cfd)
+- [Part IV: Critique and Open Questions](#org56c0921)
+  - [13. What This Architecture Does Well](#orga072997)
+  - [14. What This Architecture Doesn't Solve (Yet)](#org048c27d)
+  - [15. Open Research Questions](#orgbd85895)
+- [Summary of Recommendations](#org213c6f9)
+- [References](#org08b8d17)
+  - [Foundational (Must-Read)](#org46cf3b5)
+  - [Tabling and Logic Programming](#org4123599)
+  - [Lattice-Based Languages](#org26b13fe)
+  - [Theoretical Foundations](#org8339522)
+  - [Constraint Systems](#org1aa74e3)
+  - [Type Systems](#org0e31dee)
+  - [Implementations](#org32f6e53)
 
 
 
-<a id="orgea4ebe0"></a>
+<a id="org8eea0a7"></a>
 
 # Executive Summary
 
@@ -90,12 +90,12 @@ The two user-proposed mechanisms &#x2014; the "Multiverse Mechanism" (choice-poi
 6.  **Phased implementation** starting with compile-time use (elaborator propagators), then extending to runtime logic programming
 
 
-<a id="orgb523028"></a>
+<a id="org0f04f73"></a>
 
 # Part I: Lattice Foundations
 
 
-<a id="org5ac2c1c"></a>
+<a id="org97f1ee1"></a>
 
 ## 1. Why Lattices?
 
@@ -109,12 +109,12 @@ A **lattice** is an algebraic structure that captures the notion of *partial inf
 For a logic engine, lattices provide the mathematical guarantee that computation **converges** &#x2014; that iteratively refining partial answers eventually reaches a stable fixed point.
 
 
-<a id="org47c4f9d"></a>
+<a id="org705afb5"></a>
 
 ## 2. Crash Course: The Lattice Zoo
 
 
-<a id="orgbfae6e3"></a>
+<a id="org897f7c7"></a>
 
 ### 2.1 Partial Orders
 
@@ -129,7 +129,7 @@ The ordering represents "has at least as much information as." In a type inferen
 Not all elements need be comparable &#x2014; this is the "partial" in partial order. Two type constraints might be independent (neither implies the other).
 
 
-<a id="org60a9c1b"></a>
+<a id="org61f3e85"></a>
 
 ### 2.2 Join-Semilattices
 
@@ -147,7 +147,7 @@ The join is:
 Join is the *merge* operation in propagator networks. When two propagators contribute information to the same cell, join combines them. Commutativity means the order doesn't matter; idempotency means duplicate contributions are harmless.
 
 
-<a id="org48322c7"></a>
+<a id="org8cb11a7"></a>
 
 ### 2.3 Complete Lattices and Top
 
@@ -159,7 +159,7 @@ A **complete lattice** also has:
 Top represents incompatible information merged together. When a type checker discovers that a variable must be both `Int` and `String`, the result is $\top$ &#x2014; contradiction. The propagator network must handle this by backtracking or reporting an error.
 
 
-<a id="org07f205d"></a>
+<a id="org33dde35"></a>
 
 ### 2.4 Fixed Points: Why Lattices Guarantee Convergence
 
@@ -174,7 +174,7 @@ $\mathrm{lfp}(f) = \bigsqcup_{n \in \mathbb{N}} f^n(\bot)$
 This is exactly what propagator networks do: start with all cells at $\bot$ (no information), iterate propagators (apply $f$), and converge to the least fixed point (the most general solution).
 
 
-<a id="orgafcae1d"></a>
+<a id="org9878b2b"></a>
 
 ### 2.5 Finite Height and Termination
 
@@ -187,12 +187,12 @@ Widening over-approximates to ensure termination; **narrowing** then recovers pr
 $a \leq a \triangle b \leq a \quad \text{when } b \leq a$
 
 
-<a id="org5ebabd9"></a>
+<a id="orgc832ec1"></a>
 
 ## 3. Key Lattice Structures for Logic Programming
 
 
-<a id="org5198fcf"></a>
+<a id="org4f7bcf1"></a>
 
 ### 3.1 The Substitution Lattice
 
@@ -206,7 +206,7 @@ Unification operates on a lattice of substitutions:
 This is the fundamental lattice for Prolog-style logic programming: every resolution step computes a join on the substitution lattice.
 
 
-<a id="orgd041627"></a>
+<a id="orgd6e87b5"></a>
 
 ### 3.2 The Herbrand Interpretation Lattice
 
@@ -221,7 +221,7 @@ For Datalog/bottom-up evaluation:
 The least fixed point of $T_P$ gives the minimal Herbrand model &#x2014; all provable ground facts.
 
 
-<a id="org966b98b"></a>
+<a id="org0494372"></a>
 
 ### 3.3 The Interval Lattice
 
@@ -233,7 +233,7 @@ For numeric constraint propagation:
 -   $\top$ = $\emptyset$ (contradictory constraints)
 
 
-<a id="org882e906"></a>
+<a id="org0246103"></a>
 
 ### 3.4 The Protocol State Lattice (Session Types)
 
@@ -245,7 +245,7 @@ For Prologos's session type verification:
 -   Duality checking: two endpoints' protocol states must be lattice-dual
 
 
-<a id="orgb8153bd"></a>
+<a id="org0da9f6b"></a>
 
 ### 3.5 The Multiplicity Semiring (QTT)
 
@@ -257,12 +257,12 @@ For Prologos's quantitative type theory:
 -   This forms a *semiring*, not a lattice per se, but the ordering $0 \leq 1 \leq \omega$ creates a lattice structure useful for propagation
 
 
-<a id="orgcd077c0"></a>
+<a id="org5dfcb32"></a>
 
 # Part II: The Architectural Recommendation
 
 
-<a id="org5fe482f"></a>
+<a id="org8965b0b"></a>
 
 ## 4. The Three-Layer Architecture
 
@@ -291,7 +291,7 @@ We recommend a three-layer architecture for Prologos's logic engine:
 ```
 
 
-<a id="org79f86b8"></a>
+<a id="org5806aa7"></a>
 
 ### Layer 1: The Propagator Network (Monotonic Data Plane)
 
@@ -304,7 +304,7 @@ The foundation. Cells hold partial information (lattice elements); propagators c
 This is the layer where type inference, constraint propagation, and dataflow computation live. It is purely monotonic.
 
 
-<a id="org4b15d28"></a>
+<a id="org5769066"></a>
 
 ### Layer 2: ATMS / Truth Maintenance (Non-Monotonic Control Plane)
 
@@ -320,7 +320,7 @@ This layer provides nondeterministic search *without backtracking* in the tradit
 Key insight from the research: **the ATMS's set of nogoods is itself a monotonically growing lattice**. Non-monotonicity in the search space is reified as monotonicity in the meta-lattice of learned constraints.
 
 
-<a id="org735f20b"></a>
+<a id="org23fff47"></a>
 
 ### Layer 3: Stratification (Controlled Non-Monotonicity)
 
@@ -333,7 +333,7 @@ Some operations are genuinely non-monotonic: negation-as-failure, aggregation (`
 This is the established technique from Datalog with negation, Flix, Bloom<sup>L</sup>, and CHR. The CALM theorem confirms: within a stratum, computation is coordination-free; stratum boundaries are the minimal coordination points.
 
 
-<a id="org10d608f"></a>
+<a id="org22089c7"></a>
 
 ## 5. Validating the Multiverse Mechanism
 
@@ -349,7 +349,7 @@ The user's proposed "Multiverse Mechanism" &#x2014; forking lattice state at cho
 | All branches at once  | ATMS maintains all worldviews simultaneously   |
 
 
-<a id="orgcefc575"></a>
+<a id="orga988462"></a>
 
 ### Why ATMS over Physical Forking
 
@@ -371,7 +371,7 @@ The research reveals two approaches to forking:
 -   Memory efficiency: shared structure between worldviews rather than full copies
 
 
-<a id="org9e943ac"></a>
+<a id="orgaa1c509"></a>
 
 ### The Multiverse in Practice: A Worked Example
 
@@ -401,7 +401,7 @@ Under ATMS:
 5.  Collecting answers = iterating over consistent worldviews
 
 
-<a id="org78338d3"></a>
+<a id="org434cb02"></a>
 
 ## 6. Validating the Pocket Universe Mechanism
 
@@ -417,7 +417,7 @@ The "Pocket Universe Mechanism" &#x2014; isolating a sub-computation in a smalle
 | Soundness guarantee     | Galois connection: $\alpha(x) \leq y \iff x \leq \gamma(y)$ |
 
 
-<a id="org52ae2d2"></a>
+<a id="org9661569"></a>
 
 ### Applications in the Logic Engine
 
@@ -430,12 +430,12 @@ The "Pocket Universe Mechanism" &#x2014; isolating a sub-computation in a smalle
 4.  **Abstract interpretation for type checking**: The type checker operates in an abstract domain (types as lattice elements) connected to the concrete domain (values) via a Galois connection. This is already implicit in Prologos's bidirectional type checking; making it explicit with propagators would improve composability and error reporting.
 
 
-<a id="orgae60f60"></a>
+<a id="orgef97ee6"></a>
 
 ## 7. Recovering SLD/SLG Semantics
 
 
-<a id="orgbce1a29"></a>
+<a id="org387f266"></a>
 
 ### 7.1 SLD Resolution on Propagators
 
@@ -453,7 +453,7 @@ SLD resolution (Prolog's execution model) maps onto propagators as follows:
 The key difference: SLD's depth-first, left-to-right search becomes the ATMS's breadth-first, dependency-directed search. This is *more complete* (no infinite loops from left-recursion) and *more efficient* (nogoods prune the search space globally).
 
 
-<a id="org391a7ce"></a>
+<a id="org0d568ae"></a>
 
 ### 7.2 SLG Resolution (Tabling) on Propagators
 
@@ -481,7 +481,7 @@ rule shortest_path A C .{D1 + D2}
 ```
 
 
-<a id="orgbc489c5"></a>
+<a id="org916be35"></a>
 
 ### 7.3 Cut and Pruning
 
@@ -500,14 +500,14 @@ The ATMS approach is superior to Prolog's chronological backtracking because cut
 **Recommendation**: Prologos should support `once` (deterministic commit) and `committed-choice` (guard-based), but NOT raw `!` (Prolog-style cut). Cut is too low-level and error-prone; the ATMS provides better alternatives.
 
 
-<a id="orgd7bb753"></a>
+<a id="orgb40c5cd"></a>
 
 ## 8. Tabling: The Completeness Mechanism
 
 Tabling is *essential* for a practical logic engine. Without it, left-recursive rules cause infinite loops (in SLD) or redundant computation (in naive bottom-up evaluation).
 
 
-<a id="org7c5fa21"></a>
+<a id="org7bd3b02"></a>
 
 ### 8.1 Design for Prologos
 
@@ -531,7 +531,7 @@ Under the hood:
 5.  Consumers receive all answers
 
 
-<a id="org259c3a3"></a>
+<a id="org24b4f72"></a>
 
 ### 8.2 Lattice Answer Modes
 
@@ -542,7 +542,7 @@ Following XSB Prolog's design, each tabled predicate can specify an answer mode:
 -   **`first`**: Store only the first answer (`once` semantics, table frozen after first answer).
 
 
-<a id="org792b005"></a>
+<a id="org71ed939"></a>
 
 ### 8.3 Tabling as Pocket Universe
 
@@ -555,12 +555,12 @@ Each tabled predicate's table is a "pocket universe" in the Galois connection se
 This ensures that tabled sub-computations are modular and can be incrementally updated when the calling context provides new information.
 
 
-<a id="org0222e6e"></a>
+<a id="org824699a"></a>
 
 ## 9. Connecting to Existing Prologos Infrastructure
 
 
-<a id="org24bbce6"></a>
+<a id="org789304b"></a>
 
 ### 9.1 The Elaborator as a Propagator Network (Today)
 
@@ -584,7 +584,7 @@ The gap: these are *ad hoc* rather than *architected*. The metavar store is a mu
 -   Speculative type checking (ATMS worldviews instead of full state copy)
 
 
-<a id="org56e18b6"></a>
+<a id="org366f7d8"></a>
 
 ### 9.2 Session Types as Protocol Propagation
 
@@ -595,7 +595,7 @@ Session type checking already propagates protocol state. Making this explicit wi
 -   Better error messages for protocol violations
 
 
-<a id="org95da124"></a>
+<a id="org0b41b45"></a>
 
 ### 9.3 QTT Multiplicity Checking as Propagation
 
@@ -606,17 +606,17 @@ Multiplicity inference (Sprint 7) already propagates multiplicity constraints. W
 -   The semiring structure ($0, 1, \omega$) is naturally a lattice
 
 
-<a id="org4ceeeba"></a>
+<a id="org77efadd"></a>
 
 # Part III: The Concrete Architecture
 
 
-<a id="org66b9ce8"></a>
+<a id="orgeafee7e"></a>
 
 ## 10. Core Data Types
 
 
-<a id="org1ca4618"></a>
+<a id="org9b90873"></a>
 
 ### 10.1 Lattice Trait
 
@@ -636,7 +636,7 @@ trait Lattice {A : Type}
 ```
 
 
-<a id="orge3428e1"></a>
+<a id="org12949ed"></a>
 
 ### 10.2 Propagator Cell
 
@@ -656,7 +656,7 @@ spec cell-watch : {A : Type} where (Lattice A) [Cell A] -> [A -> Unit] -> Unit
 ```
 
 
-<a id="org9fe8d6a"></a>
+<a id="org7eb5212"></a>
 
 ### 10.3 Supported Values (ATMS Integration)
 
@@ -672,7 +672,7 @@ deftype TMSCell (A : Type)
 ```
 
 
-<a id="org8c1eecc"></a>
+<a id="orgaa50d8e"></a>
 
 ### 10.4 LVar (Lattice Variable)
 
@@ -697,12 +697,12 @@ spec lvar-freeze : {A : Type} where (Lattice A)
 ```
 
 
-<a id="org354e2fe"></a>
+<a id="org132f257"></a>
 
 ## 11. The Propagator Network Runtime
 
 
-<a id="org1b66b50"></a>
+<a id="orgdd1e5cd"></a>
 
 ### 11.1 Scheduler
 
@@ -733,7 +733,7 @@ Properties:
 -   Parallelizable: independent propagators can execute concurrently
 
 
-<a id="orge7a7ecb"></a>
+<a id="org802e9f0"></a>
 
 ### 11.2 Contradiction Handler
 
@@ -747,7 +747,7 @@ When a cell reaches $\top$ (contradiction):
 This is dependency-directed backtracking. It avoids the exponential blowup of chronological backtracking by targeting the actual cause.
 
 
-<a id="org7d257c2"></a>
+<a id="orgbd7b9af"></a>
 
 ### 11.3 The `amb` Operator
 
@@ -763,7 +763,7 @@ spec amb : {A : Type} [List A] -> A
 ```
 
 
-<a id="org546b93c"></a>
+<a id="org2372cea"></a>
 
 ### 11.4 Answer Collection
 
@@ -779,12 +779,12 @@ spec solve-all : {A : Type} [Unit -> A] -> [List A]
 ```
 
 
-<a id="org0b1a252"></a>
+<a id="orga1b6913"></a>
 
 ## 12. Phased Implementation Plan
 
 
-<a id="orge2aaae0"></a>
+<a id="org49ccb62"></a>
 
 ### Phase 0: Lattice Trait + Basic Cells (Foundation)
 
@@ -800,7 +800,7 @@ spec solve-all : {A : Type} [Unit -> A] -> [List A]
 **Dependencies**: None (builds on existing trait system) **Estimated effort**: Medium
 
 
-<a id="org848259a"></a>
+<a id="org68c5865"></a>
 
 ### Phase 1: Elaborator Propagators (Compile-Time Use)
 
@@ -817,7 +817,7 @@ spec solve-all : {A : Type} [Unit -> A] -> [List A]
 **Dependencies**: Phase 0 **Estimated effort**: Large (touches elaborator + typing-core + unify) **Key risk**: This is a significant refactoring of the elaborator core
 
 
-<a id="orgdf0f0d3"></a>
+<a id="orgd91e3e5"></a>
 
 ### Phase 2: LVars + Tabling (Runtime Foundation)
 
@@ -833,7 +833,7 @@ spec solve-all : {A : Type} [Unit -> A] -> [List A]
 **Dependencies**: Phase 0, Phase 2d of Core DS roadmap (transient builders) **Estimated effort**: Large
 
 
-<a id="org6fb3523"></a>
+<a id="org5319b10"></a>
 
 ### Phase 3: ATMS Layer (Nondeterministic Search)
 
@@ -850,7 +850,7 @@ spec solve-all : {A : Type} [Unit -> A] -> [List A]
 **Dependencies**: Phase 0, Phase 2 **Estimated effort**: Large (most complex phase)
 
 
-<a id="org7c6253e"></a>
+<a id="orgfc41056"></a>
 
 ### Phase 4: Stratified Evaluation (Negation + Aggregation)
 
@@ -866,7 +866,7 @@ spec solve-all : {A : Type} [Unit -> A] -> [List A]
 **Dependencies**: Phase 3 **Estimated effort**: Medium
 
 
-<a id="orgea19d67"></a>
+<a id="org9a975b0"></a>
 
 ### Phase 5: Surface Syntax + Integration (User-Facing Logic Programming)
 
@@ -883,7 +883,7 @@ spec solve-all : {A : Type} [Unit -> A] -> [List A]
 **Dependencies**: All previous phases **Estimated effort**: Large
 
 
-<a id="orgd37f7d1"></a>
+<a id="org0041cfd"></a>
 
 ### Phase 6: Galois Connections + Domain Embeddings (Advanced)
 
@@ -897,12 +897,12 @@ spec solve-all : {A : Type} [Unit -> A] -> [List A]
 **Dependencies**: Phase 5 **Estimated effort**: Medium-Large
 
 
-<a id="orgeed1905"></a>
+<a id="org56c0921"></a>
 
 # Part IV: Critique and Open Questions
 
 
-<a id="org5440340"></a>
+<a id="orga072997"></a>
 
 ## 13. What This Architecture Does Well
 
@@ -917,7 +917,7 @@ spec solve-all : {A : Type} [Unit -> A] -> [List A]
 5.  **Better error messages**: Dependency tracking in the ATMS means every derived fact carries its provenance. Type errors can show exactly *which* constraints are in tension and *where* they originated.
 
 
-<a id="orgd199c6f"></a>
+<a id="org048c27d"></a>
 
 ## 14. What This Architecture Doesn't Solve (Yet)
 
@@ -932,7 +932,7 @@ spec solve-all : {A : Type} [Unit -> A] -> [List A]
 5.  **Interaction with QTT**: Logic variables are inherently shared (multiple references). How does this interact with linear types? Preliminary answer: logic variables live at multiplicity $\omega$ (unrestricted), but the *binding environment* can be linear.
 
 
-<a id="orgeaeb0c9"></a>
+<a id="orgbd85895"></a>
 
 ## 15. Open Research Questions
 
@@ -947,7 +947,7 @@ spec solve-all : {A : Type} [Unit -> A] -> [List A]
 5.  **How do pocket universes compose?** Can a tabled predicate call another tabled predicate? (Yes, but completion detection becomes more complex &#x2014; this is the "scheduling dependency" problem in SLG resolution.)
 
 
-<a id="org26517fa"></a>
+<a id="org213c6f9"></a>
 
 # Summary of Recommendations
 
@@ -967,14 +967,14 @@ spec solve-all : {A : Type} [Unit -> A] -> [List A]
 **Overall assessment**: The research strongly supports the proposed architecture. The Multiverse and Pocket Universe mechanisms are not speculative &#x2014; they are well-established techniques (ATMS worldviews and Galois connections respectively) with decades of theoretical grounding and practical implementation experience. The main risk is implementation complexity, mitigated by the phased approach starting with the elaborator refactoring.
 
 
-<a id="org9c6f2a3"></a>
+<a id="org08b8d17"></a>
 
 # References
 
 Organized by relevance to the recommended architecture:
 
 
-<a id="org6c8847e"></a>
+<a id="org46cf3b5"></a>
 
 ## Foundational (Must-Read)
 
@@ -985,7 +985,7 @@ Organized by relevance to the recommended architecture:
 -   Kuper et al., "Freeze After Writing" (POPL, 2014)
 
 
-<a id="org6f3ded2"></a>
+<a id="org4123599"></a>
 
 ## Tabling and Logic Programming
 
@@ -994,7 +994,7 @@ Organized by relevance to the recommended architecture:
 -   Gupta et al., "Parallel Execution of Prolog Programs: A Survey" (*TOPLAS*, 2001)
 
 
-<a id="orge736efd"></a>
+<a id="org26b13fe"></a>
 
 ## Lattice-Based Languages
 
@@ -1003,7 +1003,7 @@ Organized by relevance to the recommended architecture:
 -   Arntzenius & Krishnaswami, "Seminaive Evaluation for a Higher-Order Functional Language" (POPL, 2020)
 
 
-<a id="orgdb0c9a3"></a>
+<a id="org8339522"></a>
 
 ## Theoretical Foundations
 
@@ -1013,7 +1013,7 @@ Organized by relevance to the recommended architecture:
 -   Hellerstein, "Keeping CALM" (*CACM*, 2020)
 
 
-<a id="orge74ee42"></a>
+<a id="org1aa74e3"></a>
 
 ## Constraint Systems
 
@@ -1022,7 +1022,7 @@ Organized by relevance to the recommended architecture:
 -   Conway et al., "Logic and Lattices for Distributed Programming" (SoCC, 2012)
 
 
-<a id="orgf767bb0"></a>
+<a id="org0e31dee"></a>
 
 ## Type Systems
 
@@ -1031,7 +1031,7 @@ Organized by relevance to the recommended architecture:
 -   Kovacs, *Elaboration Zoo* (2022)
 
 
-<a id="orgc96c0e3"></a>
+<a id="org32f6e53"></a>
 
 ## Implementations
 

@@ -280,8 +280,8 @@ Usage --- zero ceremony:
 
 #+begin_src prologos
 fmap inc '[1 2 3]            ;; => '[2 3 4]
-fmap inc @[1 2 3]           ;; => @[2 3 4]
-fmap to-string '[1 2]       ;; => '["1" "2"]
+fmap inc @[1 2 3]            ;; => @[2 3 4]
+fmap to-string '[1 2]        ;; => '["1" "2"]
 #+end_src
 
 The compiler sees =F = List= or =F = PVec=, finds the right =Functor=

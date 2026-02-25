@@ -1,6 +1,6 @@
 #+TITLE: Design Methodology
 #+SUBTITLE: From Research to Realization — How We Design and Build Prologos
-#+AUTHOR: Prologos Project
+#+AUTHOR: The Prologos Project
 #+DATE: 2026-02-24
 
 * Purpose

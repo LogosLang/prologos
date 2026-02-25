@@ -1,4 +1,4 @@
-% Created 2026-02-21 Sat 10:34
+% Created 2026-02-24 Tue 22:57
 % Intended LaTeX compiler: pdflatex
 \documentclass[11pt]{article}
 \usepackage[utf8]{inputenc}
@@ -30,7 +30,7 @@
 \tableofcontents
 
 \section{Introduction}
-\label{sec:org53cf472}
+\label{sec:org9942054}
 
 Prologos is a functional-logic language unifying dependent types, session types,
 linear types (QTT), logic programming, and propagators. This document describes
@@ -55,10 +55,10 @@ representation. All syntactic sugar desugars to s-expressions. Macros operate on
 the post-parse representation, making code-as-data a first-class concept.
 \end{quote}
 \section{Lexical Grammar}
-\label{sec:org3c7e7f7}
+\label{sec:org90a0a46}
 
 \subsection{Comments}
-\label{sec:orgb42c5f6}
+\label{sec:org903ac13}
 
 Line comments begin with \texttt{;} and extend to end of line. There are no block
 comments.
@@ -68,7 +68,7 @@ comments.
 def x : Nat zero  ; inline comment
 \end{verbatim}
 \subsection{Identifiers}
-\label{sec:orge6bed86}
+\label{sec:org425539b}
 
 Identifiers may contain letters, digits, hyphens, question marks, exclamation
 marks, and primes. They must not start with a digit.
@@ -95,25 +95,34 @@ nat::add        ;; qualified reference to nat module's add
 opt::unwrap-or  ;; qualified reference to option module's unwrap-or
 \end{verbatim}
 \subsection{Numeric Literals}
-\label{sec:orge1ec826}
+\label{sec:org9092880}
 
-Prologos has four numeric literal forms:
+Prologos has four numeric literal forms, plus a decimal variant for approximate literals:
 
 \begin{verbatim}
-nat-literal    ::= digit+ 'N'           (* Natural: 0N, 42N, 100N *)
-int-literal    ::= ['-'] digit+         (* Integer: 42, -7, 0     *)
-rat-literal    ::= ['-'] digit+ '/' digit+  (* Rational: 3/7, -1/3 *)
-approx-literal ::= '~' (int | rat)      (* Posit approx: ~42, ~3/7 *)
+nat-literal     ::= digit+ 'N'                (* Natural: 0N, 42N, 100N *)
+int-literal     ::= ['-'] digit+              (* Integer: 42, -7, 0     *)
+rat-literal     ::= ['-'] digit+ '/' digit+   (* Rational: 3/7, -1/3   *)
+decimal-literal ::= ['-'] digit+ '.' digit+   (* Decimal: 3.14, 0.5    *)
+approx-literal  ::= '~' (int | rat | decimal) (* Posit approx: ~42, ~3/7, ~3.14 *)
 \end{verbatim}
 
 \begin{verbatim}
-42N          ;; Nat literal (Church-encoded natural)
+42N          ;; Nat literal (Church-encoded natural — type infrastructure only)
 42           ;; Int literal (arbitrary-precision integer)
 3/7          ;; Rat literal (exact rational)
-~3/7         ;; approximate Posit literal
+3.14         ;; Posit32 literal (approximate — same as ~3.14)
+~3/7         ;; approximate Posit literal (from fraction)
+~3.14        ;; approximate Posit literal (from decimal, stored as exact rational 157/50)
 \end{verbatim}
+
+Bare decimal literals (\texttt{3.14}, \texttt{0.5}) produce Posit32 values, the same as their tilde-prefixed
+equivalents (\texttt{\textasciitilde{}3.14}, \texttt{\textasciitilde{}0.5}). Internally, the decimal is stored as an exact rational (\texttt{157/50})
+and encoded to the nearest Posit32 bit pattern.
+
+Nat is intended for type-level infrastructure (indices, lengths, proofs), not general computation.
 \subsection{String Literals}
-\label{sec:org505ba23}
+\label{sec:orgdef83ec}
 
 Double-quoted with standard escape sequences (\texttt{\textbackslash{}n}, \texttt{\textbackslash{}t}, \texttt{\textbackslash{}\textbackslash{}}, \texttt{\textbackslash{}"}).
 
@@ -122,7 +131,7 @@ Double-quoted with standard escape sequences (\texttt{\textbackslash{}n}, \textt
 "line one\nline two"
 \end{verbatim}
 \subsection{Keyword Literals}
-\label{sec:org473cd3e}
+\label{sec:org38b1556}
 
 Keywords start with \texttt{:} and are used as map keys and enum-like values:
 
@@ -132,14 +141,14 @@ Keywords start with \texttt{:} and are used as map keys and enum-like values:
 :hello
 \end{verbatim}
 \subsection{Boolean Literals}
-\label{sec:org31105d7}
+\label{sec:org723d232}
 
 \begin{verbatim}
 true
 false
 \end{verbatim}
 \subsection{Special Tokens}
-\label{sec:org6aa18fc}
+\label{sec:org9750138}
 
 \begin{center}
 \begin{tabular}{ll}
@@ -147,6 +156,8 @@ Token & Meaning\\
 \hline
 \texttt{\_} & Wildcard / type hole (inferred)\\
 \texttt{\_1} \texttt{\_2} & Numbered placeholders for partial application\\
+\texttt{??} & Typed hole (interactive development)\\
+\texttt{??name} & Named typed hole\\
 \texttt{:0} & Erased multiplicity (use 0 times)\\
 \texttt{:1} & Linear multiplicity (use exactly 1 time)\\
 \texttt{:w} & Unrestricted multiplicity (use any times)\\
@@ -156,7 +167,7 @@ Token & Meaning\\
 \end{tabular}
 \end{center}
 \subsection{Bracket Types}
-\label{sec:orgf06dbf1}
+\label{sec:org80089dc}
 
 Prologos uses four bracket types, each with distinct semantics:
 
@@ -174,7 +185,7 @@ Brackets & Purpose\\
 Inside any bracket pair, newlines are treated as whitespace (indentation is not
 significant).
 \subsection{Collection Literal Prefixes}
-\label{sec:org1c9a28f}
+\label{sec:orgd967663}
 
 \begin{center}
 \begin{tabular}{lll}
@@ -188,12 +199,12 @@ Syntax & Type & Example\\
 \end{tabular}
 \end{center}
 \section{Type Expressions}
-\label{sec:orga19db58}
+\label{sec:orgeb03ab5}
 
 In a dependently-typed language, types and terms share the same expression
 syntax. This section highlights type-specific forms.
 \subsection{Base Types}
-\label{sec:org1642b5e}
+\label{sec:org1a9b3ef}
 
 \begin{verbatim}
 base-type ::= 'Type'     (* universe of types, level inferred *)
@@ -213,7 +224,7 @@ def b : Bool true
 def u : Unit unit
 \end{verbatim}
 \subsection{Parameterized Types}
-\label{sec:orgfeefba8}
+\label{sec:orgcebf12b}
 
 Types are applied to arguments via juxtaposition in brackets:
 
@@ -226,7 +237,7 @@ Set Int             ;; set of ints
 PVec Nat            ;; persistent vector of Nats
 \end{verbatim}
 \subsection{Function Types (Arrows)}
-\label{sec:orgf2c2edd}
+\label{sec:org565b9c6}
 
 Arrows are right-associative infix operators:
 
@@ -244,7 +255,7 @@ Nat -> Nat -> Bool        ;; curried: Nat -> (Nat -> Bool)
 [A -> B] -> [List A] -> List B  ;; higher-order
 \end{verbatim}
 \subsection{Dependent Types (Angle Brackets)}
-\label{sec:org4a602a3}
+\label{sec:orgb1acb83}
 
 Angle brackets delimit dependent Pi (universal) and Sigma (existential) types:
 
@@ -265,7 +276,7 @@ dependent-type ::= '<' '(' ident ':' type ')' '->' type '>'  (* dependent Pi   *
 <n : Nat -> Vec Nat n>
 \end{verbatim}
 \subsection{Sigma Types (Product / Pair Types)}
-\label{sec:org7d4874a}
+\label{sec:orgbdd2aa4}
 
 Non-dependent pair types use infix \texttt{*}:
 
@@ -280,7 +291,7 @@ Nat * Bool
 <(x : Nat) * Vec Nat x>
 \end{verbatim}
 \subsection{Equality Type}
-\label{sec:org354a16e}
+\label{sec:orgc865f24}
 
 \begin{verbatim}
 ;; Eq type : proof that two terms are equal
@@ -288,7 +299,7 @@ Nat * Bool
 (Eq Nat [add x y] [add y x])  ;; commutativity
 \end{verbatim}
 \subsection{Union Types}
-\label{sec:org77bcd63}
+\label{sec:orga8b0290}
 
 Union types use infix \texttt{|}:
 
@@ -297,7 +308,7 @@ Nat | Bool         ;; either a Nat or a Bool
 Int | Rat | Nat    ;; right-associative: Int | (Rat | Nat)
 \end{verbatim}
 \subsection{Universe Levels}
-\label{sec:org3064313}
+\label{sec:org4dbafa4}
 
 \begin{verbatim}
 Type           ;; universe, level inferred
@@ -305,7 +316,7 @@ Type           ;; universe, level inferred
 (Type 1)       ;; explicit level 1 (contains Type 0)
 \end{verbatim}
 \subsection{Type Holes}
-\label{sec:org60a6820}
+\label{sec:orge7bfb98}
 
 The wildcard \texttt{\_} stands for an inferred type:
 
@@ -313,11 +324,38 @@ The wildcard \texttt{\_} stands for an inferred type:
 def x : _ zero    ;; type inferred as Nat
 map _ xs          ;; type argument inferred
 \end{verbatim}
+\subsection{Typed Holes (Interactive Development)}
+\label{sec:orgcc25878}
+
+The \texttt{??} token is a \emph{typed hole} --- distinct from \texttt{\_} (inference hole). Where
+\texttt{\_} means "infer this for me silently," \texttt{??} means "I don't know what goes here
+--- show me what's possible." The type checker produces a diagnostic report with
+the expected type, local context, and suggestions.
+
+\begin{verbatim}
+defn reverse
+  | [nil]        -> nil
+  | [[cons h t]] -> ??
+  ;; Report: Hole ?? : [List A]
+  ;;   h : A, t : [List A], reverse : [List A] -> [List A]
+\end{verbatim}
+
+Named holes label specific incomplete positions:
+
+\begin{verbatim}
+defn zip-with [f xs ys]
+  match [xs ys]
+    | [[cons x xs'] [cons y ys']] -> [cons ??combine ??recurse]
+\end{verbatim}
+
+\texttt{??} is the syntactic foundation for Editor-Assisted Interactive Development
+(Agda/Idris-style hole-driven programming). See the Extended Spec Design
+document for the full vision.
 \section{Expressions}
-\label{sec:org015f17d}
+\label{sec:org241c603}
 
 \subsection{Function Application}
-\label{sec:org2ddac0c}
+\label{sec:orgc4be96d}
 
 Application is juxtaposition, with brackets \texttt{[]} for grouping:
 
@@ -336,7 +374,7 @@ cons [f a] [map f as]       ;; cons(f(a), map(f, as))
 map [add 1N _] '[1N 2N 3N]  ;; map with partial application
 \end{verbatim}
 \subsection{Lambda Expressions}
-\label{sec:org9403515}
+\label{sec:org5317ab4}
 
 \begin{verbatim}
 lambda ::= 'fn' binder+ body
@@ -361,7 +399,7 @@ fn x [suc x]
 (fn (x :0 Nat) zero)       ;; erased lambda (can't use x)
 \end{verbatim}
 \subsection{Pattern Matching}
-\label{sec:org2c96a4b}
+\label{sec:orgb870e5f}
 
 \texttt{match} is the primary pattern matching form, using \texttt{|} for arm separation:
 
@@ -408,7 +446,7 @@ Available patterns:
 \item \textbf{Nested}: \texttt{[cons x nil]} -- grouped pattern in brackets
 \end{itemize}
 \subsection{If (Conditional)}
-\label{sec:orgd954990}
+\label{sec:org7d54272}
 
 \texttt{if} is a macro that desugars to \texttt{match} on Bool:
 
@@ -422,7 +460,7 @@ match [zero? n]
   | false -> step n
 \end{verbatim}
 \subsection{Let (Local Binding)}
-\label{sec:org4151f3e}
+\label{sec:org93a96ed}
 
 \texttt{let} is a macro that desugars to application:
 
@@ -436,7 +474,7 @@ let x : Nat = [add 1N 2N]
   suc x
 \end{verbatim}
 \subsection{Pipe Operator (|>)}
-\label{sec:orgc91349a}
+\label{sec:org9a213fd}
 
 The pipe operator threads a value left-to-right through functions:
 
@@ -455,7 +493,7 @@ zero |> suc |> suc |> suc    ;; = suc(suc(suc(zero))) = 3
 ;; transducer when followed by a terminal (reduce, sum, etc.)
 \end{verbatim}
 \subsection{Compose Operator (>>)}
-\label{sec:org1c7e682}
+\label{sec:org139da18}
 
 Left-to-right function composition:
 
@@ -467,7 +505,7 @@ Left-to-right function composition:
 zero |> [suc >> double]     ;; = double(suc(zero))
 \end{verbatim}
 \subsection{Type Annotations (the)}
-\label{sec:orga2478d1}
+\label{sec:org3f66276}
 
 Explicit type annotation on an expression:
 
@@ -477,7 +515,7 @@ Explicit type annotation on an expression:
 (the [List Nat] nil)
 \end{verbatim}
 \subsection{Pairs}
-\label{sec:orgd43ac9b}
+\label{sec:org0cf7e33}
 
 \begin{verbatim}
 ;; Construct a pair
@@ -492,7 +530,7 @@ fst [pair x y]
 snd [pair x y]
 \end{verbatim}
 \subsection{Quote and Quasiquote}
-\label{sec:orge60734e}
+\label{sec:org5e347c7}
 
 Quote \texttt{'} converts code to \texttt{Datum} (code-as-data):
 
@@ -510,7 +548,7 @@ def val : Datum [datum-nat 10]
 `(add 1 ,val)  ;; template with hole
 \end{verbatim}
 \subsection{Collection Literals}
-\label{sec:org0bd7724}
+\label{sec:org9d91139}
 
 \begin{verbatim}
 ;; List literal (linked list)
@@ -530,9 +568,14 @@ def val : Datum [datum-nat 10]
 
 ;; Map (key-value pairs)
 {:name "Ada" :age 36}
+
+;; Mixed-type map: value type auto-inferred as union
+;; {:name "Alice" :age zero} : Map Keyword (Nat | String)
+;; map-assoc widens: (map-assoc nat-map :k "s") : Map Keyword (Nat | String)
+{:name "Alice" :age zero}
 \end{verbatim}
 \subsection{Partial Application}
-\label{sec:orgc29258c}
+\label{sec:orge3be61e}
 
 Numbered placeholders \texttt{\_1}, \texttt{\_2} enable positional reordering:
 
@@ -544,7 +587,7 @@ Numbered placeholders \texttt{\_1}, \texttt{\_2} enable positional reordering:
 [div _2 _1]          ;; fn x y -> div y x
 \end{verbatim}
 \subsection{Varargs}
-\label{sec:org652d614}
+\label{sec:org1eabae2}
 
 The \texttt{...} marker in specs indicates variadic arguments. In \texttt{defn}, \texttt{...name}
 collects excess arguments into a \texttt{List}:
@@ -565,10 +608,10 @@ defn first-plus-rest [first ...rest]
 first-plus-rest 100 1 2 3  ;; = 106
 \end{verbatim}
 \section{Declarations}
-\label{sec:org4f5d03a}
+\label{sec:org81b4991}
 
 \subsection{Namespace (ns)}
-\label{sec:org910ea90}
+\label{sec:org8c7a2b8}
 
 Must be the first form in a file. Controls module identity and prelude loading:
 
@@ -584,7 +627,7 @@ The prelude automatically provides: \texttt{Nat}, \texttt{Bool}, \texttt{List}, 
 \texttt{Pair} operations, \texttt{Eq=/=Ord=/=Add=/=Sub=/=Mul=/=Neg=/=Abs=/=FromInt=/=Num=/
 =Fractional} traits and instances.
 \subsection{Require}
-\label{sec:org7bba36a}
+\label{sec:org8ce16c0}
 
 Import modules with named or aliased references:
 
@@ -601,7 +644,7 @@ require [prologos.data.list   :refer [List nil cons map]]
         [prologos.data.option :refer [Option none some]]
 \end{verbatim}
 \subsection{Value Definition (def)}
-\label{sec:org1ecb893}
+\label{sec:orge7fbea0}
 
 \begin{verbatim}
 ;; With type annotation
@@ -618,7 +661,7 @@ def nums : [List Nat]
 def- internal-state : Nat zero
 \end{verbatim}
 \subsection{Type Signature (spec)}
-\label{sec:orgf2cdaae}
+\label{sec:orgd8ae23a}
 
 \texttt{spec} declares a type signature separately from the definition:
 
@@ -638,8 +681,64 @@ spec sum-all Nat ... -> Nat
 ;; With multiple implicits and constraints
 spec sort-on {A B : Type} [B -> B -> Bool] [A -> B] [List A] -> List A
 \end{verbatim}
+\subsubsection{Extended Spec with Metadata}
+\label{sec:orgb5eb98f}
+
+\texttt{spec} optionally accepts a trailing metadata map using the implicit map
+syntax. Keyword-headed children after the type signature are collected into a
+metadata hash. Recognized keys include \texttt{:implicits}, \texttt{:where}, \texttt{:doc},
+\texttt{:examples}, \texttt{:properties}, \texttt{:see-also}, \texttt{:pre}, \texttt{:post}, \texttt{:refines}.
+Unrecognized keys are stored but not acted upon (forward-compatible).
+
+The \texttt{:implicits} key lifts implicit binders out of the type signature into
+metadata, freeing the signature to express pure function shape. Inline
+\texttt{\{A : Type\}} and \texttt{:implicits} coexist; both are merged.
+
+\begin{verbatim}
+;; With :implicits — clean signature:
+spec sort [List A] -> [List A]
+  :implicits {A : Type}
+  :where (Ord A)
+  :doc "Sorts a list in ascending order"
+  :examples
+    - [sort '[3N 1N 2N]] => '[1N 2N 3N]
+    - [sort '[]] => '[]
+  :properties (sortable-laws A)
+  :see-also [reverse filter]
+
+;; HKT case — :implicits dramatically improves readability:
+spec gmap [A -> B] -> [C A] -> [C B]
+  :implicits {A B : Type} {C : Type -> Type}
+  :where (Seqable C) (Buildable C)
+
+;; With functor — Pi types hidden entirely:
+spec xf-compose [Xf A B] -> [Xf B C] -> [Xf A C]
+  :implicits {A B C : Type}
+  :properties (transducer-fusion-laws A B C)
+\end{verbatim}
+
+The metadata is entirely optional. A simple \texttt{spec add Nat Nat -> Nat} is
+unchanged. Metadata keys follow the principle of progressive disclosure: add
+\texttt{:doc} and \texttt{:examples} for public APIs, \texttt{:properties} for libraries,
+\texttt{:pre=/}:post= for safety-critical code, \texttt{:refines} for verified code.
+
+Each \texttt{:properties} entry is a map with three keys:
+
+\begin{center}
+\begin{tabular}{ll}
+Key & Meaning\\
+\hline
+\texttt{:name} & Human-readable label for the property\\
+\texttt{:forall} & Universally quantified variables (binders)\\
+\texttt{:holds} & Boolean expression that must be true\\
+\end{tabular}
+\end{center}
+
+See the Extended Spec Design document
+(\texttt{docs/tracking/2026-02-22\_EXTENDED\_SPEC\_DESIGN.org}) for the full research
+survey and design rationale.
 \subsection{Function Definition (defn)}
-\label{sec:orga30a90b}
+\label{sec:orgfdd433b}
 
 \begin{verbatim}
 ;; Basic function
@@ -668,7 +767,7 @@ defn- helper [x]
   suc x
 \end{verbatim}
 \subsection{Algebraic Data Types (data)}
-\label{sec:org5b7a29a}
+\label{sec:orgc04f484}
 
 \begin{verbatim}
 ;; Enumeration (nullary constructors)
@@ -698,7 +797,7 @@ data- InternalTree {A}
   node : A -> InternalTree A -> InternalTree A
 \end{verbatim}
 \subsection{Traits and Implementations}
-\label{sec:org7cfedef}
+\label{sec:orgfcc3bfe}
 
 \begin{verbatim}
 ;; Trait definition
@@ -721,9 +820,126 @@ defn eq-neq [dict x y]
 
 ;; Bundle: named trait combination
 bundle Num := (Add, Sub, Mul, Neg, Abs, FromInt)
+
+;; Trait with :laws reference
+trait Functor {F : Type -> Type}
+  :laws (functor-laws F)
+  fmap : {A B : Type} [A -> B] -> [F A] -> [F B]
 \end{verbatim}
+\subsection{Property Declarations}
+\label{sec:org61c8206}
+
+A \texttt{property} declares a named, composable group of propositions --- analogous
+to \texttt{bundle} for traits. Properties compose via \texttt{:includes} (conjunction) and
+attach to specs via \texttt{:properties} or to traits via \texttt{:laws}.
+
+\begin{verbatim}
+;; Basic property declaration
+property sortable-laws {A : Type}
+  :where (Ord A)
+  - :name "idempotent"
+    :forall {xs : [List A]}
+    :holds [eq? [sort [sort xs]] [sort xs]]
+  - :name "length-preserving"
+    :forall {xs : [List A]}
+    :holds [eq? [length [sort xs]] [length xs]]
+
+;; Composition via :includes (like bundle for traits)
+property monoid-laws {A : Type}
+  :where (Add A) (AdditiveIdentity A)
+  :includes (semigroup-laws A)
+  - :name "left-identity"
+    :forall {x : A}
+    :holds [eq? [add additive-identity x] x]
+  - :name "right-identity"
+    :forall {x : A}
+    :holds [eq? [add x additive-identity] x]
+
+;; Hierarchical: monad includes applicative includes functor
+property monad-laws {M : Type -> Type}
+  :where (Monad M)
+  :includes (applicative-laws M)
+  - :name "left-identity"
+    :forall {a : A} {f : [A -> [M B]]}
+    :holds [eq? [bind [pure a] f] [f a]]
+
+;; Usage in spec
+spec sort [List A] -> [List A]
+  :implicits {A : Type}
+  :where (Ord A)
+  :properties (sortable-laws A)
+
+;; Higher-order: parameterized over functions
+property sorting-properties {A : Type} {f : [List A] -> [List A]}
+  :where (Ord A)
+  - :name "idempotent"
+    :forall {xs : [List A]}
+    :holds [eq? [f [f xs]] [f xs]]
+
+spec sort [List A] -> [List A]
+  :where (Ord A)
+  :properties (sorting-properties A sort)
+\end{verbatim}
+
+Property clause names are scoped to their declaring block. When \texttt{:includes}
+flattens a hierarchy, names are qualified with \texttt{/}:
+\texttt{functor-laws/identity}, \texttt{monad-laws/left-identity}, etc.
+\subsection{Functor Declarations (Named Type Abstractions)}
+\label{sec:org2c36132}
+
+A \texttt{functor} declares a named, parameterized type abstraction with optional
+category-theoretic metadata. Transparent by default --- the type checker unfolds
+to the \texttt{:unfolds} form during elaboration. Metadata keys map CT concepts to
+approachable language.
+
+\begin{verbatim}
+;; Simple type synonym
+functor FilePath
+  :unfolds String
+
+;; Parameterized synonym with documentation
+functor Result {A}
+  :unfolds [Either String A]
+  :doc "A computation that may fail with a string error"
+
+;; Full category-theoretic treatment
+functor Xf {A B : Type}
+  :doc "A transducer: transforms A-reductions into B-reductions"
+  :compose xf-compose
+  :identity id-xf
+  :laws (transducer-fusion-laws A B)
+  :unfolds <(S :0 Type) -> [S -> B -> S] -> S -> A -> S>
+
+;; Optics
+functor Lens {S T A B : Type}
+  :doc "A bidirectional accessor: view and update a part of a structure"
+  :compose lens-compose
+  :identity lens-id
+  :laws (lens-laws S T A B)
+  :see-also [Prism Traversal Iso]
+  :unfolds <{F : Type -> Type} -> (Functor F) -> [A -> [F B]] -> S -> [F T]>
+
+;; Usage in specs — the functor name replaces raw Pi types:
+spec xf-compose [Xf A B] -> [Xf B C] -> [Xf A C]
+  :implicits {A B C : Type}
+spec into-list [Xf A B] -> [List A] -> [List B]
+  :implicits {A B : Type}
+\end{verbatim}
+
+\begin{center}
+\begin{tabular}{lll}
+CT concept & Key & Meaning in plain English\\
+\hline
+Object mapping & \texttt{:unfolds} & "What this expands to under the hood"\\
+Morphism composition & \texttt{:compose} & "How to chain two of these together"\\
+Identity morphism & \texttt{:identity} & "The do-nothing version"\\
+Laws & \texttt{:laws} & "What rules these always follow"\\
+\end{tabular}
+\end{center}
+
+Only \texttt{:unfolds} is required. The rest are progressive.
 \subsection{User-Defined Macros}
-\label{sec:org115b86c}
+\label{sec:orgc1f4c3a}
 
 \begin{verbatim}
 ;; Simple macro: double-it x --> add x x
@@ -744,7 +960,7 @@ when-nonzero zero [double 5]  ;; = 0
 (expand-full (when true [suc zero]))  ;; all steps with labels
 \end{verbatim}
 \section{Multiplicity (QTT)}
-\label{sec:orgb6c15eb}
+\label{sec:org2147f01}
 
 Prologos uses Quantitative Type Theory for resource tracking. Each variable
 binding has a \emph{multiplicity} annotation:
@@ -776,10 +992,10 @@ Nat -w> Nat           ;; unrestricted: explicit
 (fn (x :1 Nat) x)                    ;; must use x exactly once
 \end{verbatim}
 \section{Dependent Types and Eliminators}
-\label{sec:org1e41dbc}
+\label{sec:org3677728}
 
 \subsection{Natural Number Elimination (natrec)}
-\label{sec:org3cd3924}
+\label{sec:org57d8141}
 
 The low-level eliminator for natural numbers:
 
@@ -802,7 +1018,7 @@ defn double [n]
     | suc k -> suc [suc [double k]]
 \end{verbatim}
 \subsection{Equality Elimination (J)}
-\label{sec:org7f8a886}
+\label{sec:org2d7a57c}
 
 \begin{verbatim}
 ;; J motive base left right proof
@@ -811,7 +1027,7 @@ defn double [n]
 J motive base left right refl
 \end{verbatim}
 \subsection{Length-Indexed Vectors}
-\label{sec:org5633044}
+\label{sec:org5a7718c}
 
 \begin{verbatim}
 ;; Vec A n : a vector of exactly n elements of type A
@@ -824,7 +1040,7 @@ vtail Nat 2N v                   ;; safe tail
 vindex Nat 3N [fzero 2N] v      ;; safe index via Fin
 \end{verbatim}
 \section{Full Program Example}
-\label{sec:org6ac7da7}
+\label{sec:orgf02f979}
 
 A complete Prologos program demonstrating multiple features:
 
@@ -872,7 +1088,7 @@ defmacro unless [$cond $body] [if $cond zero $body]
 unless [zero? 5] [factorial 5]
 \end{verbatim}
 \section{Appendix: S-Expression Mode}
-\label{sec:orgf9cdc54}
+\label{sec:org80043a0}
 
 Every WS-mode form has a canonical s-expression representation. In sexp mode,
 all grouping uses parentheses and whitespace is not significant:
@@ -897,7 +1113,7 @@ spec map {A B : Type} [A -> B] [List A] -> List B
 (spec map {A B : Type} (-> (-> A B) (-> (List A) (List B))))
 \end{verbatim}
 \section{Appendix: Whitespace Reader Rules}
-\label{sec:orga422e1c}
+\label{sec:orgb8dc05a}
 
 The WS reader converts indentation to explicit structure:
 
@@ -910,7 +1126,7 @@ The WS reader converts indentation to explicit structure:
 \item \textbf{Column 0}: always starts a new top-level form
 \end{enumerate}
 \section{Appendix: Reader Desugaring Table}
-\label{sec:orge410444}
+\label{sec:orgd158814}
 
 \begin{center}
 \begin{tabular}{lll}
@@ -921,6 +1137,7 @@ Surface syntax & Reader output & Meaning\\
 \texttt{,expr} & \texttt{(\$unquote expr)} & Unquote (splice into QQ)\\
 \texttt{42N} & \texttt{(\$nat-literal 42)} & Natural number literal\\
 \texttt{\textasciitilde{}42} & \texttt{(\$approx-literal 42)} & Approximate (Posit) literal\\
+\texttt{3.14} & \texttt{(\$decimal-literal 157/50)} & Bare decimal → Posit32\\
 \texttt{:name} & \texttt{keyword token} & Keyword literal\\
 \texttt{'[1 2 3]} & \texttt{(\$list-literal 1 2 3)} & List literal\\
 \texttt{@[1 2 3]} & \texttt{(\$vec-literal 1 2 3)} & PVec literal\\
