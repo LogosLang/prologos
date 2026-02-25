@@ -507,6 +507,7 @@
     [(UnionFind) (surf-uf-type loc)]
     [(ATMS) (surf-atms-type loc)]
     [(AssumptionId) (surf-assumption-id-type loc)]
+    [(TableStore) (surf-table-store-type loc)]
     [(zero)   (surf-zero loc)]
     [(true)   (surf-true loc)]
     [(false)  (surf-false loc)]
@@ -2387,6 +2388,80 @@
                 [(prologos-error? a) a]
                 [(prologos-error? aids) aids]
                 [else (surf-atms-worldview a aids loc)])))]
+
+       ;; ---- Tabling operations ----
+       ;; (table-new network)
+       [(table-new)
+        (or (check-arity 'table-new args 1 loc)
+            (let ([net (parse-datum (car args))])
+              (if (prologos-error? net) net
+                  (surf-table-new net loc))))]
+       ;; (table-register store name mode)
+       [(table-register)
+        (or (check-arity 'table-register args 3 loc)
+            (let ([s (parse-datum (car args))]
+                  [n (parse-datum (cadr args))]
+                  [m (parse-datum (caddr args))])
+              (cond
+                [(prologos-error? s) s]
+                [(prologos-error? n) n]
+                [(prologos-error? m) m]
+                [else (surf-table-register s n m loc)])))]
+       ;; (table-add store name answer)
+       [(table-add)
+        (or (check-arity 'table-add args 3 loc)
+            (let ([s (parse-datum (car args))]
+                  [n (parse-datum (cadr args))]
+                  [a (parse-datum (caddr args))])
+              (cond
+                [(prologos-error? s) s]
+                [(prologos-error? n) n]
+                [(prologos-error? a) a]
+                [else (surf-table-add s n a loc)])))]
+       ;; (table-answers store name)
+       [(table-answers)
+        (or (check-arity 'table-answers args 2 loc)
+            (let ([s (parse-datum (car args))]
+                  [n (parse-datum (cadr args))])
+              (cond
+                [(prologos-error? s) s]
+                [(prologos-error? n) n]
+                [else (surf-table-answers s n loc)])))]
+       ;; (table-freeze store name)
+       [(table-freeze)
+        (or (check-arity 'table-freeze args 2 loc)
+            (let ([s (parse-datum (car args))]
+                  [n (parse-datum (cadr args))])
+              (cond
+                [(prologos-error? s) s]
+                [(prologos-error? n) n]
+                [else (surf-table-freeze s n loc)])))]
+       ;; (table-complete? store name)
+       [(table-complete?)
+        (or (check-arity 'table-complete? args 2 loc)
+            (let ([s (parse-datum (car args))]
+                  [n (parse-datum (cadr args))])
+              (cond
+                [(prologos-error? s) s]
+                [(prologos-error? n) n]
+                [else (surf-table-complete s n loc)])))]
+       ;; (table-run store)
+       [(table-run)
+        (or (check-arity 'table-run args 1 loc)
+            (let ([s (parse-datum (car args))])
+              (if (prologos-error? s) s
+                  (surf-table-run s loc))))]
+       ;; (table-lookup store name answer)
+       [(table-lookup)
+        (or (check-arity 'table-lookup args 3 loc)
+            (let ([s (parse-datum (car args))]
+                  [n (parse-datum (cadr args))]
+                  [a (parse-datum (caddr args))])
+              (cond
+                [(prologos-error? s) s]
+                [(prologos-error? n) n]
+                [(prologos-error? a) a]
+                [else (surf-table-lookup s n a loc)])))]
 
        ;; (the-fn type [params...] body)
        [(the-fn)

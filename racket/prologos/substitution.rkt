@@ -336,6 +336,18 @@
     [(expr-atms-consistent a aids) (expr-atms-consistent (shift delta cutoff a) (shift delta cutoff aids))]
     [(expr-atms-worldview a aids) (expr-atms-worldview (shift delta cutoff a) (shift delta cutoff aids))]
 
+    ;; Tabling (all non-binding)
+    [(expr-table-store-type) e]
+    [(expr-table-store-val _) e]
+    [(expr-table-new net) (expr-table-new (shift delta cutoff net))]
+    [(expr-table-register s n m) (expr-table-register (shift delta cutoff s) (shift delta cutoff n) (shift delta cutoff m))]
+    [(expr-table-add s n a) (expr-table-add (shift delta cutoff s) (shift delta cutoff n) (shift delta cutoff a))]
+    [(expr-table-answers s n) (expr-table-answers (shift delta cutoff s) (shift delta cutoff n))]
+    [(expr-table-freeze s n) (expr-table-freeze (shift delta cutoff s) (shift delta cutoff n))]
+    [(expr-table-complete s n) (expr-table-complete (shift delta cutoff s) (shift delta cutoff n))]
+    [(expr-table-run s) (expr-table-run (shift delta cutoff s))]
+    [(expr-table-lookup s n a) (expr-table-lookup (shift delta cutoff s) (shift delta cutoff n) (shift delta cutoff a))]
+
     ;; Int (all non-binding)
     [(expr-Int) e]
     [(expr-int _) e]
@@ -722,6 +734,18 @@
      (expr-atms-write (subst k s a) (subst k s c) (subst k s v) (subst k s sup))]
     [(expr-atms-consistent a aids) (expr-atms-consistent (subst k s a) (subst k s aids))]
     [(expr-atms-worldview a aids) (expr-atms-worldview (subst k s a) (subst k s aids))]
+
+    ;; Tabling (all non-binding)
+    [(expr-table-store-type) e]
+    [(expr-table-store-val _) e]
+    [(expr-table-new net) (expr-table-new (subst k s net))]
+    [(expr-table-register st n m) (expr-table-register (subst k s st) (subst k s n) (subst k s m))]
+    [(expr-table-add st n a) (expr-table-add (subst k s st) (subst k s n) (subst k s a))]
+    [(expr-table-answers st n) (expr-table-answers (subst k s st) (subst k s n))]
+    [(expr-table-freeze st n) (expr-table-freeze (subst k s st) (subst k s n))]
+    [(expr-table-complete st n) (expr-table-complete (subst k s st) (subst k s n))]
+    [(expr-table-run st) (expr-table-run (subst k s st))]
+    [(expr-table-lookup st n a) (expr-table-lookup (subst k s st) (subst k s n) (subst k s a))]
 
     ;; Int (all non-binding)
     [(expr-Int) e]

@@ -245,6 +245,11 @@
  (struct-out surf-atms-nogood) (struct-out surf-atms-amb) (struct-out surf-atms-solve-all)
  (struct-out surf-atms-read) (struct-out surf-atms-write)
  (struct-out surf-atms-consistent) (struct-out surf-atms-worldview)
+ ;; Tabling (SLG-style memoization)
+ (struct-out surf-table-store-type)
+ (struct-out surf-table-new) (struct-out surf-table-register) (struct-out surf-table-add)
+ (struct-out surf-table-answers) (struct-out surf-table-freeze) (struct-out surf-table-complete)
+ (struct-out surf-table-run) (struct-out surf-table-lookup)
  ;; Top-level commands
  (struct-out surf-def)
  (struct-out surf-defn)
@@ -790,6 +795,17 @@
 (struct surf-atms-write         (atms cell val support srcloc) #:transparent) ; (atms-write atms cell val support)
 (struct surf-atms-consistent    (atms aids srcloc) #:transparent)             ; (atms-consistent? atms aids)
 (struct surf-atms-worldview     (atms aids srcloc) #:transparent)             ; (atms-worldview atms aids)
+
+;; ---- Tabling (SLG-style memoization) ----
+(struct surf-table-store-type   (srcloc) #:transparent)                       ; TableStore
+(struct surf-table-new          (network srcloc) #:transparent)               ; (table-new net)
+(struct surf-table-register     (store name mode srcloc) #:transparent)       ; (table-register store name mode)
+(struct surf-table-add          (store name answer srcloc) #:transparent)     ; (table-add store name answer)
+(struct surf-table-answers      (store name srcloc) #:transparent)            ; (table-answers store name)
+(struct surf-table-freeze       (store name srcloc) #:transparent)            ; (table-freeze store name)
+(struct surf-table-complete     (store name srcloc) #:transparent)            ; (table-complete? store name)
+(struct surf-table-run          (store srcloc) #:transparent)                 ; (table-run store)
+(struct surf-table-lookup       (store name answer srcloc) #:transparent)     ; (table-lookup store name answer)
 
 ;; ========================================
 ;; Top-level commands

@@ -180,6 +180,7 @@ base-type ::= 'Type'     (* universe of types, level inferred *)
             | 'UnionFind'    (* persistent disjoint sets       *)
             | 'ATMS'         (* hypothetical reasoning TMS     *)
             | 'AssumptionId' (* ATMS assumption identifier     *)
+            | 'TableStore'   (* SLG-style tabling store        *)
 #+end_src
 
 #+begin_src prologos

@@ -25,7 +25,8 @@
          "rrb.rkt"
          "propagator.rkt"
          "union-find.rkt"
-         "atms.rkt")
+         "atms.rkt"
+         "tabling.rkt")
 
 (provide whnf nf nf-whnf conv conv-nf
          current-nf-cache current-whnf-cache
@@ -1964,6 +1965,104 @@
                 (if (equal? store* store) e (whnf (expr-atms-worldview store* aids)))))]
          [_ (if (equal? store* store) e (whnf (expr-atms-worldview store* aids)))]))]
 
+    ;; ---- Tabling (SLG-style memoization) ----
+
+    ;; Type constructor and runtime wrapper are self-values
+    [(expr-table-store-type) e]
+    [(expr-table-store-val _) e]
+
+    ;; table-new : PropNetwork -> TableStore
+    [(expr-table-new network)
+     (let ([network* (whnf network)])
+       (match network*
+         [(expr-prop-network rnet)
+          (expr-table-store-val (table-store-empty rnet))]
+         [_ (if (equal? network* network) e (whnf (expr-table-new network*)))]))]
+
+    ;; table-register : TableStore -> Keyword -> Keyword -> [TableStore * CellId]
+    [(expr-table-register store name mode)
+     (let ([store* (whnf store)])
+       (match store*
+         [(expr-table-store-val rstore)
+          (let ([name* (whnf name)] [mode* (whnf mode)])
+            (define sym (if (expr-keyword? name*)
+                            (expr-keyword-name name*)
+                            'unknown))
+            (define mode-sym (if (expr-keyword? mode*)
+                                 (expr-keyword-name mode*)
+                                 'all))
+            (define-values (new-ts cid) (table-register rstore sym mode-sym))
+            (expr-pair (expr-table-store-val new-ts) (expr-cell-id cid)))]
+         [_ (if (equal? store* store) e (whnf (expr-table-register store* name mode)))]))]
+
+    ;; table-add : TableStore -> Keyword -> A -> TableStore
+    [(expr-table-add store name answer)
+     (let ([store* (whnf store)])
+       (match store*
+         [(expr-table-store-val rstore)
+          (let ([name* (whnf name)] [answer* (whnf answer)])
+            (define sym (if (expr-keyword? name*)
+                            (expr-keyword-name name*)
+                            'unknown))
+            (expr-table-store-val (table-add rstore sym answer*)))]
+         [_ (if (equal? store* store) e (whnf (expr-table-add store* name answer)))]))]
+
+    ;; table-answers : TableStore -> Keyword -> List _
+    [(expr-table-answers store name)
+     (let ([store* (whnf store)])
+       (match store*
+         [(expr-table-store-val rstore)
+          (let ([name* (whnf name)])
+            (define sym (if (expr-keyword? name*)
+                            (expr-keyword-name name*)
+                            'unknown))
+            (racket-list->prologos-list (table-answers rstore sym)))]
+         [_ (if (equal? store* store) e (whnf (expr-table-answers store* name)))]))]
+
+    ;; table-freeze : TableStore -> Keyword -> TableStore
+    [(expr-table-freeze store name)
+     (let ([store* (whnf store)])
+       (match store*
+         [(expr-table-store-val rstore)
+          (let ([name* (whnf name)])
+            (define sym (if (expr-keyword? name*)
+                            (expr-keyword-name name*)
+                            'unknown))
+            (expr-table-store-val (table-freeze rstore sym)))]
+         [_ (if (equal? store* store) e (whnf (expr-table-freeze store* name)))]))]
+
+    ;; table-complete? : TableStore -> Keyword -> Bool
+    [(expr-table-complete store name)
+     (let ([store* (whnf store)])
+       (match store*
+         [(expr-table-store-val rstore)
+          (let ([name* (whnf name)])
+            (define sym (if (expr-keyword? name*)
+                            (expr-keyword-name name*)
+                            'unknown))
+            (if (table-complete? rstore sym) (expr-true) (expr-false)))]
+         [_ (if (equal? store* store) e (whnf (expr-table-complete store* name)))]))]
+
+    ;; table-run : TableStore -> TableStore
+    [(expr-table-run store)
+     (let ([store* (whnf store)])
+       (match store*
+         [(expr-table-store-val rstore)
+          (expr-table-store-val (table-run rstore))]
+         [_ (if (equal? store* store) e (whnf (expr-table-run store*)))]))]
+
+    ;; table-lookup : TableStore -> Keyword -> A -> Bool
+    [(expr-table-lookup store name answer)
+     (let ([store* (whnf store)])
+       (match store*
+         [(expr-table-store-val rstore)
+          (let ([name* (whnf name)] [answer* (whnf answer)])
+            (define sym (if (expr-keyword? name*)
+                            (expr-keyword-name name*)
+                            'unknown))
+            (if (table-lookup rstore sym answer*) (expr-true) (expr-false)))]
+         [_ (if (equal? store* store) e (whnf (expr-table-lookup store* name answer)))]))]
+
     ;; Union types: pass through (types don't reduce)
     [(expr-union _ _) e]
 
@@ -2364,6 +2463,19 @@
     [(expr-atms-write st cell val sup) (expr-atms-write (nf st) (nf cell) (nf val) (nf sup))]
     [(expr-atms-consistent st aids) (expr-atms-consistent (nf st) (nf aids))]
     [(expr-atms-worldview st aids) (expr-atms-worldview (nf st) (nf aids))]
+
+    ;; Tabling: type constructor + runtime wrapper are self-values
+    [(expr-table-store-type) e]
+    [(expr-table-store-val _) e]
+    ;; Operations: structural recursion into fields
+    [(expr-table-new net) (expr-table-new (nf net))]
+    [(expr-table-register st n m) (expr-table-register (nf st) (nf n) (nf m))]
+    [(expr-table-add st n a) (expr-table-add (nf st) (nf n) (nf a))]
+    [(expr-table-answers st n) (expr-table-answers (nf st) (nf n))]
+    [(expr-table-freeze st n) (expr-table-freeze (nf st) (nf n))]
+    [(expr-table-complete st n) (expr-table-complete (nf st) (nf n))]
+    [(expr-table-run st) (expr-table-run (nf st))]
+    [(expr-table-lookup st n a) (expr-table-lookup (nf st) (nf n) (nf a))]
 
     ;; Foreign function: opaque leaf (already in WHNF)
     [(expr-foreign-fn _ _ _ _ _ _) e]

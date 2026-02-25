@@ -95,6 +95,7 @@
     [(expr-uf-type) "UnionFind"]
     [(expr-atms-type) "ATMS"]
     [(expr-assumption-id-type) "AssumptionId"]
+    [(expr-table-store-type) "TableStore"]
     ;; HKT: unapplied type constructor
     [(expr-tycon name) (symbol->string name)]
     ;; Built-in parameterized types: extract constructor name

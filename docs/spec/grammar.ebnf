@@ -926,7 +926,21 @@ atms-expr       = 'atms-new' , expr                                    (* PropNe
                 ;
 
 (* ------------------------------------------------ *)
-(* 5.26 Datum Constructors and Predicates           *)
+(* 5.26 Tabling (SLG-style memoization)             *)
+(* ------------------------------------------------ *)
+
+tabling-expr    = 'table-new' , expr                                   (* PropNetwork -> TableStore *)
+                | 'table-register' , expr , expr , expr                (* TableStore -> Keyword -> Keyword -> [TableStore * CellId] *)
+                | 'table-add' , expr , expr , expr                     (* TableStore -> Keyword -> A -> TableStore *)
+                | 'table-answers' , expr , expr                        (* TableStore -> Keyword -> List _ *)
+                | 'table-freeze' , expr , expr                         (* TableStore -> Keyword -> TableStore *)
+                | 'table-complete?' , expr , expr                      (* TableStore -> Keyword -> Bool *)
+                | 'table-run' , expr                                   (* TableStore -> TableStore *)
+                | 'table-lookup' , expr , expr , expr                  (* TableStore -> Keyword -> A -> Bool *)
+                ;
+
+(* ------------------------------------------------ *)
+(* 5.27 Datum Constructors and Predicates           *)
 (* ------------------------------------------------ *)
 
 (* Datum is the code-as-data type for homoiconicity *)

@@ -1548,6 +1548,71 @@
            (expr-atms-type)
            (expr-error)))]
 
+    ;; ---- Tabling type constructor ----
+    [(expr-table-store-type) (expr-Type (lzero))]
+
+    ;; ---- Tabling runtime wrapper ----
+    [(expr-table-store-val _) (expr-table-store-type)]
+
+    ;; ---- Tabling operations ----
+
+    ;; table-new : PropNetwork -> TableStore
+    [(expr-table-new network)
+     (if (check ctx network (expr-net-type))
+         (expr-table-store-type)
+         (expr-error))]
+
+    ;; table-register : TableStore -> Keyword -> Keyword -> [TableStore * CellId]
+    [(expr-table-register store name mode)
+     (if (and (check ctx store (expr-table-store-type))
+              (check ctx name (expr-Keyword))
+              (check ctx mode (expr-Keyword)))
+         (expr-Sigma (expr-table-store-type) (expr-cell-id-type))
+         (expr-error))]
+
+    ;; table-add : TableStore -> Keyword -> A -> TableStore
+    [(expr-table-add store name answer)
+     (if (and (check ctx store (expr-table-store-type))
+              (check ctx name (expr-Keyword)))
+         (begin (infer ctx answer)  ;; answer can be any type
+                (expr-table-store-type))
+         (expr-error))]
+
+    ;; table-answers : TableStore -> Keyword -> _ (type-unsafe)
+    [(expr-table-answers store name)
+     (if (and (check ctx store (expr-table-store-type))
+              (check ctx name (expr-Keyword)))
+         (expr-hole)
+         (expr-error))]
+
+    ;; table-freeze : TableStore -> Keyword -> TableStore
+    [(expr-table-freeze store name)
+     (if (and (check ctx store (expr-table-store-type))
+              (check ctx name (expr-Keyword)))
+         (expr-table-store-type)
+         (expr-error))]
+
+    ;; table-complete? : TableStore -> Keyword -> Bool
+    [(expr-table-complete store name)
+     (if (and (check ctx store (expr-table-store-type))
+              (check ctx name (expr-Keyword)))
+         (expr-Bool)
+         (expr-error))]
+
+    ;; table-run : TableStore -> TableStore
+    [(expr-table-run store)
+     (if (check ctx store (expr-table-store-type))
+         (expr-table-store-type)
+         (expr-error))]
+
+    ;; table-lookup : TableStore -> Keyword -> A -> Bool
+    [(expr-table-lookup store name answer)
+     (if (and (check ctx store (expr-table-store-type))
+              (check ctx name (expr-Keyword)))
+         (begin (infer ctx answer)  ;; answer can be any type
+                (expr-Bool))
+         (expr-error))]
+
     ;; ---- Fallback: cannot infer ----
     [_ (expr-error)]))
 
@@ -1789,6 +1854,9 @@
     ;; ---- ATMS runtime wrappers ----
     [((expr-atms-store _) (expr-atms-type)) #t]
     [((expr-assumption-id-val _) (expr-assumption-id-type)) #t]
+
+    ;; ---- Tabling runtime wrapper ----
+    [((expr-table-store-val _) (expr-table-store-type)) #t]
 
     ;; ---- Reduce: ML-style Church elimination ----
     ;; check(G, reduce(scrutinee, arms), T)
@@ -2131,6 +2199,9 @@
     ;; ATMS type constructors — ground types at Type 0
     [(expr-atms-type) (just-level (lzero))]
     [(expr-assumption-id-type) (just-level (lzero))]
+
+    ;; Tabling type constructor — ground type at Type 0
+    [(expr-table-store-type) (just-level (lzero))]
 
     ;; Union formation: A | B : Type(max(level(A), level(B)))
     [(expr-union l r)

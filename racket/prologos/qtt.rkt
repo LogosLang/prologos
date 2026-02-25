@@ -1677,6 +1677,83 @@
           (tu (expr-atms-type) (add-usage u1 u2))]
          [(_ _) (tu-error)]))]
 
+    ;; ---- Tabling type constructor + wrapper ----
+    [(expr-table-store-type) (tu (expr-Type (lzero)) (zero-usage n))]
+    [(expr-table-store-val _) (tu (expr-table-store-type) (zero-usage n))]
+
+    ;; ---- Tabling operations ----
+
+    ;; table-new : PropNetwork -> TableStore
+    [(expr-table-new net)
+     (let ([r1 (inferQ ctx net)])
+       (match r1
+         [(tu _ u) (tu (expr-table-store-type) u)]
+         [_ (tu-error)]))]
+
+    ;; table-register : TableStore -> Keyword -> Keyword -> [TableStore * CellId]
+    [(expr-table-register s n m)
+     (let ([r1 (inferQ ctx s)]
+           [r2 (inferQ ctx n)]
+           [r3 (inferQ ctx m)])
+       (match* (r1 r2 r3)
+         [((tu _ u1) (tu _ u2) (tu _ u3))
+          (tu (infer ctx e) (add-usage u1 (add-usage u2 u3)))]
+         [(_ _ _) (tu-error)]))]
+
+    ;; table-add : TableStore -> Keyword -> A -> TableStore
+    [(expr-table-add s n a)
+     (let ([r1 (inferQ ctx s)]
+           [r2 (inferQ ctx n)]
+           [r3 (inferQ ctx a)])
+       (match* (r1 r2 r3)
+         [((tu _ u1) (tu _ u2) (tu _ u3))
+          (tu (expr-table-store-type) (add-usage u1 (add-usage u2 u3)))]
+         [(_ _ _) (tu-error)]))]
+
+    ;; table-answers : TableStore -> Keyword -> _ (type-unsafe)
+    [(expr-table-answers s n)
+     (let ([r1 (inferQ ctx s)]
+           [r2 (inferQ ctx n)])
+       (match* (r1 r2)
+         [((tu _ u1) (tu _ u2))
+          (tu (infer ctx e) (add-usage u1 u2))]
+         [(_ _) (tu-error)]))]
+
+    ;; table-freeze : TableStore -> Keyword -> TableStore
+    [(expr-table-freeze s n)
+     (let ([r1 (inferQ ctx s)]
+           [r2 (inferQ ctx n)])
+       (match* (r1 r2)
+         [((tu _ u1) (tu _ u2))
+          (tu (expr-table-store-type) (add-usage u1 u2))]
+         [(_ _) (tu-error)]))]
+
+    ;; table-complete? : TableStore -> Keyword -> Bool
+    [(expr-table-complete s n)
+     (let ([r1 (inferQ ctx s)]
+           [r2 (inferQ ctx n)])
+       (match* (r1 r2)
+         [((tu _ u1) (tu _ u2))
+          (tu (expr-Bool) (add-usage u1 u2))]
+         [(_ _) (tu-error)]))]
+
+    ;; table-run : TableStore -> TableStore
+    [(expr-table-run s)
+     (let ([r1 (inferQ ctx s)])
+       (match r1
+         [(tu _ u) (tu (expr-table-store-type) u)]
+         [_ (tu-error)]))]
+
+    ;; table-lookup : TableStore -> Keyword -> A -> Bool
+    [(expr-table-lookup s n a)
+     (let ([r1 (inferQ ctx s)]
+           [r2 (inferQ ctx n)]
+           [r3 (inferQ ctx a)])
+       (match* (r1 r2 r3)
+         [((tu _ u1) (tu _ u2) (tu _ u3))
+          (tu (expr-Bool) (add-usage u1 (add-usage u2 u3)))]
+         [(_ _ _) (tu-error)]))]
+
     ;; ---- J eliminator ----
     ;; Usage from proof, base, motive arguments
     [(expr-J mot base left right proof)
@@ -2004,6 +2081,9 @@
     ;; ---- ATMS runtime wrappers ----
     [((expr-atms-store _) (expr-atms-type)) (bu #t (zero-usage n))]
     [((expr-assumption-id-val _) (expr-assumption-id-type)) (bu #t (zero-usage n))]
+
+    ;; ---- Tabling runtime wrapper ----
+    [((expr-table-store-val _) (expr-table-store-type)) (bu #t (zero-usage n))]
 
     ;; ---- Union type: checkQ(G, e, A | B) ----
     ;; Try left component first, then right. Uses speculative meta state.

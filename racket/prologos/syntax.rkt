@@ -183,6 +183,12 @@
  (struct-out expr-atms-amb) (struct-out expr-atms-solve-all)
  (struct-out expr-atms-read) (struct-out expr-atms-write)
  (struct-out expr-atms-consistent) (struct-out expr-atms-worldview)
+ ;; Tabling (SLG-style memoization)
+ (struct-out expr-table-store-type) (struct-out expr-table-store-val)
+ (struct-out expr-table-new) (struct-out expr-table-register)
+ (struct-out expr-table-add) (struct-out expr-table-answers)
+ (struct-out expr-table-freeze) (struct-out expr-table-complete)
+ (struct-out expr-table-run) (struct-out expr-table-lookup)
  ;; Int (arbitrary-precision integers)
  (struct-out expr-Int)
  (struct-out expr-int)
@@ -689,6 +695,21 @@
 (struct expr-atms-consistent (atms aids) #:transparent)           ; ATMS -> List AssumptionId -> Bool
 (struct expr-atms-worldview (atms aids) #:transparent)            ; ATMS -> List AssumptionId -> ATMS
 
+;; ---- Tabling (SLG-style memoization) ----
+;; Type constructor
+(struct expr-table-store-type () #:transparent)                           ; TableStore
+;; Runtime wrapper
+(struct expr-table-store-val (store-value) #:transparent)                 ; wraps Racket table-store
+;; Operations
+(struct expr-table-new (network) #:transparent)                           ; PropNetwork -> TableStore
+(struct expr-table-register (store name mode) #:transparent)              ; TableStore -> Keyword -> Keyword -> [TableStore * CellId]
+(struct expr-table-add (store name answer) #:transparent)                 ; TableStore -> Keyword -> A -> TableStore
+(struct expr-table-answers (store name) #:transparent)                    ; TableStore -> Keyword -> List _
+(struct expr-table-freeze (store name) #:transparent)                     ; TableStore -> Keyword -> TableStore
+(struct expr-table-complete (store name) #:transparent)                   ; TableStore -> Keyword -> Bool
+(struct expr-table-run (store) #:transparent)                             ; TableStore -> TableStore
+(struct expr-table-lookup (store name answer) #:transparent)              ; TableStore -> Keyword -> A -> Bool
+
 ;; ========================================
 ;; Int (arbitrary-precision integers, backed by Racket exact integers)
 ;; ========================================
@@ -933,6 +954,7 @@
       (expr-uf-type? x) (expr-uf-store? x)
       (expr-atms-type? x) (expr-assumption-id-type? x)
       (expr-atms-store? x) (expr-assumption-id-val? x)
+      (expr-table-store-type? x) (expr-table-store-val? x)
       (expr-hole? x) (expr-typed-hole? x) (expr-meta? x) (expr-reduce? x)
       (expr-union? x) (expr-tycon? x) (expr-error? x)))
 

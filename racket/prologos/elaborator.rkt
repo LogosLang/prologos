@@ -2105,6 +2105,69 @@
              [(prologos-error? el) el]
              [else (expr-atms-worldview ea el)]))]
 
+    ;; ---- Tabling operations ----
+
+    [(surf-table-store-type loc)
+     (expr-table-store-type)]
+
+    [(surf-table-new network loc)
+     (let ([en (elaborate network env depth)])
+       (if (prologos-error? en) en
+           (expr-table-new en)))]
+
+    [(surf-table-register store name mode loc)
+     (let ([es (elaborate store env depth)]
+           [en (elaborate name env depth)]
+           [em (elaborate mode env depth)])
+       (cond [(prologos-error? es) es]
+             [(prologos-error? en) en]
+             [(prologos-error? em) em]
+             [else (expr-table-register es en em)]))]
+
+    [(surf-table-add store name answer loc)
+     (let ([es (elaborate store env depth)]
+           [en (elaborate name env depth)]
+           [ea (elaborate answer env depth)])
+       (cond [(prologos-error? es) es]
+             [(prologos-error? en) en]
+             [(prologos-error? ea) ea]
+             [else (expr-table-add es en ea)]))]
+
+    [(surf-table-answers store name loc)
+     (let ([es (elaborate store env depth)]
+           [en (elaborate name env depth)])
+       (cond [(prologos-error? es) es]
+             [(prologos-error? en) en]
+             [else (expr-table-answers es en)]))]
+
+    [(surf-table-freeze store name loc)
+     (let ([es (elaborate store env depth)]
+           [en (elaborate name env depth)])
+       (cond [(prologos-error? es) es]
+             [(prologos-error? en) en]
+             [else (expr-table-freeze es en)]))]
+
+    [(surf-table-complete store name loc)
+     (let ([es (elaborate store env depth)]
+           [en (elaborate name env depth)])
+       (cond [(prologos-error? es) es]
+             [(prologos-error? en) en]
+             [else (expr-table-complete es en)]))]
+
+    [(surf-table-run store loc)
+     (let ([es (elaborate store env depth)])
+       (if (prologos-error? es) es
+           (expr-table-run es)))]
+
+    [(surf-table-lookup store name answer loc)
+     (let ([es (elaborate store env depth)]
+           [en (elaborate name env depth)]
+           [ea (elaborate answer env depth)])
+       (cond [(prologos-error? es) es]
+             [(prologos-error? en) en]
+             [(prologos-error? ea) ea]
+             [else (expr-table-lookup es en ea)]))]
+
     ;; Reduce: ML-style pattern matching
     ;; Each arm's body must be elaborated with binding names in scope.
     ;; We add dummy binders (the actual types come from the type checker).

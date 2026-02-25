@@ -316,6 +316,18 @@
     [(expr-atms-consistent a aids) (expr-atms-consistent (zonk a) (zonk aids))]
     [(expr-atms-worldview a aids) (expr-atms-worldview (zonk a) (zonk aids))]
 
+    ;; Tabling
+    [(expr-table-store-type) e]
+    [(expr-table-store-val _) e]
+    [(expr-table-new net) (expr-table-new (zonk net))]
+    [(expr-table-register s n m) (expr-table-register (zonk s) (zonk n) (zonk m))]
+    [(expr-table-add s n a) (expr-table-add (zonk s) (zonk n) (zonk a))]
+    [(expr-table-answers s n) (expr-table-answers (zonk s) (zonk n))]
+    [(expr-table-freeze s n) (expr-table-freeze (zonk s) (zonk n))]
+    [(expr-table-complete s n) (expr-table-complete (zonk s) (zonk n))]
+    [(expr-table-run s) (expr-table-run (zonk s))]
+    [(expr-table-lookup s n a) (expr-table-lookup (zonk s) (zonk n) (zonk a))]
+
     ;; Int
     [(expr-Int) e]
     [(expr-int _) e]
@@ -700,6 +712,18 @@
     [(expr-atms-consistent a aids) (expr-atms-consistent (zonk-at-depth depth a) (zonk-at-depth depth aids))]
     [(expr-atms-worldview a aids) (expr-atms-worldview (zonk-at-depth depth a) (zonk-at-depth depth aids))]
 
+    ;; Tabling
+    [(expr-table-store-type) e]
+    [(expr-table-store-val _) e]
+    [(expr-table-new net) (expr-table-new (zonk-at-depth depth net))]
+    [(expr-table-register s n m) (expr-table-register (zonk-at-depth depth s) (zonk-at-depth depth n) (zonk-at-depth depth m))]
+    [(expr-table-add s n a) (expr-table-add (zonk-at-depth depth s) (zonk-at-depth depth n) (zonk-at-depth depth a))]
+    [(expr-table-answers s n) (expr-table-answers (zonk-at-depth depth s) (zonk-at-depth depth n))]
+    [(expr-table-freeze s n) (expr-table-freeze (zonk-at-depth depth s) (zonk-at-depth depth n))]
+    [(expr-table-complete s n) (expr-table-complete (zonk-at-depth depth s) (zonk-at-depth depth n))]
+    [(expr-table-run s) (expr-table-run (zonk-at-depth depth s))]
+    [(expr-table-lookup s n a) (expr-table-lookup (zonk-at-depth depth s) (zonk-at-depth depth n) (zonk-at-depth depth a))]
+
     ;; Int
     [(expr-Int) e]
     [(expr-int _) e]
@@ -1051,6 +1075,18 @@
     [(expr-atms-write a c v s) (expr-atms-write (default-metas a) (default-metas c) (default-metas v) (default-metas s))]
     [(expr-atms-consistent a aids) (expr-atms-consistent (default-metas a) (default-metas aids))]
     [(expr-atms-worldview a aids) (expr-atms-worldview (default-metas a) (default-metas aids))]
+
+    ;; Tabling
+    [(expr-table-store-type) e]
+    [(expr-table-store-val _) e]
+    [(expr-table-new net) (expr-table-new (default-metas net))]
+    [(expr-table-register s n m) (expr-table-register (default-metas s) (default-metas n) (default-metas m))]
+    [(expr-table-add s n a) (expr-table-add (default-metas s) (default-metas n) (default-metas a))]
+    [(expr-table-answers s n) (expr-table-answers (default-metas s) (default-metas n))]
+    [(expr-table-freeze s n) (expr-table-freeze (default-metas s) (default-metas n))]
+    [(expr-table-complete s n) (expr-table-complete (default-metas s) (default-metas n))]
+    [(expr-table-run s) (expr-table-run (default-metas s))]
+    [(expr-table-lookup s n a) (expr-table-lookup (default-metas s) (default-metas n) (default-metas a))]
 
     [(expr-Int) e]
     [(expr-int _) e]

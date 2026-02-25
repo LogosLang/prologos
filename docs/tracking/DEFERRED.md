@@ -299,13 +299,13 @@ The following collection items ARE also deferred (genuine infrastructure deps):
 - 74 tests (26 unit + 37 type-level/eval + 11 integration)
 - Source: `docs/tracking/2026-02-24_LOGIC_ENGINE_DESIGN.org`
 
-### Phase 6: Tabling — SLG-Style Memoization (NOT STARTED)
-- Tables as PropNetwork cells with SetLattice merge
-- Producer/consumer pattern: propagators writing/reading table cells
-- Lattice answer modes (all, lattice, first)
-- `:tabled` and `:answer-mode` spec metadata
-- ~8 AST nodes
-- **Dependencies**: Phase 3, Phase 5
+### Phase 6: Tabling — SLG-Style Memoization (COMPLETE)
+- Tables as PropNetwork cells with list-based set-merge (not SetLattice — lists with `remove-duplicates`)
+- table-store wraps PropNetwork; backed by `hasheq` (consistent with Phases 4-5)
+- Answer modes: `all` (set-union) and `first` (freeze after one); `lattice f` deferred
+- 10 AST nodes (1 type + 1 wrapper + 8 operations)
+- 63 tests (20 unit + 31 type-level/eval + 12 integration)
+- `:tabled` and `:answer-mode` spec metadata — deferred to Phase 7 (`defr`)
 - Source: `docs/tracking/2026-02-24_LOGIC_ENGINE_DESIGN.org`
 
 ### Phase 7: Surface Syntax — defr, rel, solve (NOT STARTED)

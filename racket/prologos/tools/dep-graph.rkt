@@ -735,7 +735,14 @@
    'test-atms-types.rkt
    (test-dep '(atms.rkt propagator.rkt syntax.rkt typing-core.rkt qtt.rkt substitution.rkt pretty-print.rkt reduction.rkt) #f)
    'test-atms-integration.rkt
-   (test-dep '(atms.rkt propagator.rkt syntax.rkt typing-core.rkt reduction.rkt parser.rkt elaborator.rkt surface-syntax.rkt) #t)))
+   (test-dep '(atms.rkt propagator.rkt syntax.rkt typing-core.rkt reduction.rkt parser.rkt elaborator.rkt surface-syntax.rkt) #t)
+   ;; Tabling (SLG-style memoization)
+   'test-tabling.rkt
+   (test-dep '(tabling.rkt propagator.rkt) #f)
+   'test-tabling-types.rkt
+   (test-dep '(tabling.rkt propagator.rkt syntax.rkt typing-core.rkt qtt.rkt substitution.rkt pretty-print.rkt reduction.rkt) #f)
+   'test-tabling-integration.rkt
+   (test-dep '(tabling.rkt propagator.rkt syntax.rkt typing-core.rkt reduction.rkt parser.rkt elaborator.rkt surface-syntax.rkt) #t)))
 
 ;; ============================================================
 ;; Layer 2b: Example file → test file mapping

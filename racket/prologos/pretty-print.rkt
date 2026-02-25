@@ -16,7 +16,8 @@
          "rrb.rkt"
          "propagator.rkt"
          "union-find.rkt"
-         "atms.rkt")
+         "atms.rkt"
+         "tabling.rkt")
 
 (provide pp-expr
          pp-session
@@ -472,6 +473,27 @@
      (format "[atms-consistent? ~a ~a]" (pp-expr a names) (pp-expr aids names))]
     [(expr-atms-worldview a aids)
      (format "[atms-worldview ~a ~a]" (pp-expr a names) (pp-expr aids names))]
+
+    ;; Tabling
+    [(expr-table-store-type) "TableStore"]
+    [(expr-table-store-val v)
+     (format "#<table-store ~a>" (hash-count (table-store-tables v)))]
+    [(expr-table-new net)
+     (format "[table-new ~a]" (pp-expr net names))]
+    [(expr-table-register s n m)
+     (format "[table-register ~a ~a ~a]" (pp-expr s names) (pp-expr n names) (pp-expr m names))]
+    [(expr-table-add s n a)
+     (format "[table-add ~a ~a ~a]" (pp-expr s names) (pp-expr n names) (pp-expr a names))]
+    [(expr-table-answers s n)
+     (format "[table-answers ~a ~a]" (pp-expr s names) (pp-expr n names))]
+    [(expr-table-freeze s n)
+     (format "[table-freeze ~a ~a]" (pp-expr s names) (pp-expr n names))]
+    [(expr-table-complete s n)
+     (format "[table-complete? ~a ~a]" (pp-expr s names) (pp-expr n names))]
+    [(expr-table-run s)
+     (format "[table-run ~a]" (pp-expr s names))]
+    [(expr-table-lookup s n a)
+     (format "[table-lookup ~a ~a ~a]" (pp-expr s names) (pp-expr n names) (pp-expr a names))]
 
     ;; Int
     [(expr-Int) "Int"]
@@ -994,6 +1016,18 @@
     [(expr-atms-write a c v s) (or (uses-bvar0? a) (uses-bvar0? c) (uses-bvar0? v) (uses-bvar0? s))]
     [(expr-atms-consistent a aids) (or (uses-bvar0? a) (uses-bvar0? aids))]
     [(expr-atms-worldview a aids) (or (uses-bvar0? a) (uses-bvar0? aids))]
+
+    ;; Tabling
+    [(expr-table-store-type) #f]
+    [(expr-table-store-val _) #f]
+    [(expr-table-new net) (uses-bvar0? net)]
+    [(expr-table-register s n m) (or (uses-bvar0? s) (uses-bvar0? n) (uses-bvar0? m))]
+    [(expr-table-add s n a) (or (uses-bvar0? s) (uses-bvar0? n) (uses-bvar0? a))]
+    [(expr-table-answers s n) (or (uses-bvar0? s) (uses-bvar0? n))]
+    [(expr-table-freeze s n) (or (uses-bvar0? s) (uses-bvar0? n))]
+    [(expr-table-complete s n) (or (uses-bvar0? s) (uses-bvar0? n))]
+    [(expr-table-run s) (uses-bvar0? s)]
+    [(expr-table-lookup s n a) (or (uses-bvar0? s) (uses-bvar0? n) (uses-bvar0? a))]
 
     [(expr-Int) #f]
     [(expr-int _) #f]
