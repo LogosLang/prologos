@@ -1,0 +1,13 @@
+ns prologos::core::bounded-lattice
+
+require [prologos::core::lattice-trait :refer [Lattice]]
+require [prologos::core::has-top-trait :refer [HasTop]]
+
+;; ========================================
+;; BoundedLattice — Lattice + HasTop
+;; ========================================
+;; A bounded lattice has both a bottom element (from Lattice) and a
+;; top element (from HasTop). This is the standard algebraic structure
+;; for constraint propagation domains that can represent contradiction.
+
+bundle BoundedLattice {A : Type} = Lattice A + HasTop A

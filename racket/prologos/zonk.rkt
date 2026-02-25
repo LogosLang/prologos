@@ -270,6 +270,25 @@
     [(expr-tset-insert! t a) (expr-tset-insert! (zonk t) (zonk a))]
     [(expr-tset-delete! t a) (expr-tset-delete! (zonk t) (zonk a))]
 
+    ;; PropNetwork
+    [(expr-net-type) e]
+    [(expr-cell-id-type) e]
+    [(expr-prop-id-type) e]
+    [(expr-prop-network _) e]
+    [(expr-cell-id _) e]
+    [(expr-prop-id _) e]
+    [(expr-net-new fuel) (expr-net-new (zonk fuel))]
+    [(expr-net-new-cell n init merge)
+     (expr-net-new-cell (zonk n) (zonk init) (zonk merge))]
+    [(expr-net-cell-read n c) (expr-net-cell-read (zonk n) (zonk c))]
+    [(expr-net-cell-write n c v)
+     (expr-net-cell-write (zonk n) (zonk c) (zonk v))]
+    [(expr-net-add-prop n ins outs fn)
+     (expr-net-add-prop (zonk n) (zonk ins) (zonk outs) (zonk fn))]
+    [(expr-net-run n) (expr-net-run (zonk n))]
+    [(expr-net-snapshot n) (expr-net-snapshot (zonk n))]
+    [(expr-net-contradiction n) (expr-net-contradiction (zonk n))]
+
     ;; Int
     [(expr-Int) e]
     [(expr-int _) e]
@@ -605,6 +624,26 @@
     [(expr-tset-insert! t a) (expr-tset-insert! (zonk-at-depth depth t) (zonk-at-depth depth a))]
     [(expr-tset-delete! t a) (expr-tset-delete! (zonk-at-depth depth t) (zonk-at-depth depth a))]
 
+    ;; PropNetwork
+    [(expr-net-type) e]
+    [(expr-cell-id-type) e]
+    [(expr-prop-id-type) e]
+    [(expr-prop-network _) e]
+    [(expr-cell-id _) e]
+    [(expr-prop-id _) e]
+    [(expr-net-new fuel) (expr-net-new (zonk-at-depth depth fuel))]
+    [(expr-net-new-cell n init merge)
+     (expr-net-new-cell (zonk-at-depth depth n) (zonk-at-depth depth init) (zonk-at-depth depth merge))]
+    [(expr-net-cell-read n c) (expr-net-cell-read (zonk-at-depth depth n) (zonk-at-depth depth c))]
+    [(expr-net-cell-write n c v)
+     (expr-net-cell-write (zonk-at-depth depth n) (zonk-at-depth depth c) (zonk-at-depth depth v))]
+    [(expr-net-add-prop n ins outs fn)
+     (expr-net-add-prop (zonk-at-depth depth n) (zonk-at-depth depth ins)
+                        (zonk-at-depth depth outs) (zonk-at-depth depth fn))]
+    [(expr-net-run n) (expr-net-run (zonk-at-depth depth n))]
+    [(expr-net-snapshot n) (expr-net-snapshot (zonk-at-depth depth n))]
+    [(expr-net-contradiction n) (expr-net-contradiction (zonk-at-depth depth n))]
+
     ;; Int
     [(expr-Int) e]
     [(expr-int _) e]
@@ -909,6 +948,26 @@
     [(expr-tmap-dissoc! t k) (expr-tmap-dissoc! (default-metas t) (default-metas k))]
     [(expr-tset-insert! t a) (expr-tset-insert! (default-metas t) (default-metas a))]
     [(expr-tset-delete! t a) (expr-tset-delete! (default-metas t) (default-metas a))]
+
+    ;; PropNetwork
+    [(expr-net-type) e]
+    [(expr-cell-id-type) e]
+    [(expr-prop-id-type) e]
+    [(expr-prop-network _) e]
+    [(expr-cell-id _) e]
+    [(expr-prop-id _) e]
+    [(expr-net-new fuel) (expr-net-new (default-metas fuel))]
+    [(expr-net-new-cell n init merge)
+     (expr-net-new-cell (default-metas n) (default-metas init) (default-metas merge))]
+    [(expr-net-cell-read n c) (expr-net-cell-read (default-metas n) (default-metas c))]
+    [(expr-net-cell-write n c v)
+     (expr-net-cell-write (default-metas n) (default-metas c) (default-metas v))]
+    [(expr-net-add-prop n ins outs fn)
+     (expr-net-add-prop (default-metas n) (default-metas ins)
+                        (default-metas outs) (default-metas fn))]
+    [(expr-net-run n) (expr-net-run (default-metas n))]
+    [(expr-net-snapshot n) (expr-net-snapshot (default-metas n))]
+    [(expr-net-contradiction n) (expr-net-contradiction (default-metas n))]
 
     [(expr-Int) e]
     [(expr-int _) e]

@@ -89,6 +89,9 @@
     [(expr-Keyword) "Keyword"]
     [(expr-Char) "Char"]
     [(expr-String) "String"]
+    [(expr-net-type) "PropNetwork"]
+    [(expr-cell-id-type) "CellId"]
+    [(expr-prop-id-type) "PropId"]
     ;; HKT: unapplied type constructor
     [(expr-tycon name) (symbol->string name)]
     ;; Built-in parameterized types: extract constructor name

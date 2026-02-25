@@ -1347,6 +1347,79 @@
     [(expr-foreign-fn name _ _ _ _ _)
      (or (global-env-lookup-type name) (expr-error))]
 
+    ;; ---- PropNetwork type constructors ----
+    [(expr-net-type) (expr-Type (lzero))]
+    [(expr-cell-id-type) (expr-Type (lzero))]
+    [(expr-prop-id-type) (expr-Type (lzero))]
+
+    ;; ---- PropNetwork runtime wrappers ----
+    [(expr-prop-network _) (expr-net-type)]
+    [(expr-cell-id _) (expr-cell-id-type)]
+    [(expr-prop-id _) (expr-prop-id-type)]
+
+    ;; ---- PropNetwork operations ----
+
+    ;; net-new : Int -> PropNetwork
+    [(expr-net-new fuel)
+     (if (check ctx fuel (expr-Int))
+         (expr-net-type)
+         (expr-error))]
+
+    ;; net-new-cell : PropNetwork -> A -> (A -> A -> A) -> [PropNetwork * CellId]
+    [(expr-net-new-cell net init merge)
+     (if (check ctx net (expr-net-type))
+         (let ([init-ty (infer ctx init)])
+           (if (expr-error? init-ty)
+               (expr-error)
+               (let ([merge-ty (arrow init-ty (arrow init-ty init-ty))])
+                 (if (check ctx merge merge-ty)
+                     (expr-Sigma (expr-net-type) (expr-cell-id-type))
+                     (expr-error)))))
+         (expr-error))]
+
+    ;; net-cell-read : PropNetwork -> CellId -> A (type-unsafe: returns fresh hole)
+    [(expr-net-cell-read net cell)
+     (if (and (check ctx net (expr-net-type))
+              (check ctx cell (expr-cell-id-type)))
+         (expr-hole)   ;; type-unsafe — caller must use (the T ...) or checking context
+         (expr-error))]
+
+    ;; net-cell-write : PropNetwork -> CellId -> A -> PropNetwork
+    [(expr-net-cell-write net cell val)
+     (if (and (check ctx net (expr-net-type))
+              (check ctx cell (expr-cell-id-type)))
+         (let ([_ (infer ctx val)])  ;; val can be any type
+           (expr-net-type))
+         (expr-error))]
+
+    ;; net-add-prop : PropNetwork -> List CellId -> List CellId -> (PropNetwork -> PropNetwork) -> [PropNetwork * PropId]
+    [(expr-net-add-prop net ins outs fn)
+     (let ([list-cid (expr-app (list-type-fvar) (expr-cell-id-type))])
+       (if (and (check ctx net (expr-net-type))
+                (check ctx ins list-cid)
+                (check ctx outs list-cid)
+                (check ctx fn (arrow (expr-net-type) (expr-net-type))))
+           (expr-Sigma (expr-net-type) (expr-prop-id-type))
+           (expr-error)))]
+
+    ;; net-run : PropNetwork -> PropNetwork
+    [(expr-net-run net)
+     (if (check ctx net (expr-net-type))
+         (expr-net-type)
+         (expr-error))]
+
+    ;; net-snapshot : PropNetwork -> PropNetwork (identity — documents backtracking intent)
+    [(expr-net-snapshot net)
+     (if (check ctx net (expr-net-type))
+         (expr-net-type)
+         (expr-error))]
+
+    ;; net-contradict? : PropNetwork -> Bool
+    [(expr-net-contradiction net)
+     (if (check ctx net (expr-net-type))
+         (expr-Bool)
+         (expr-error))]
+
     ;; ---- Fallback: cannot infer ----
     [_ (expr-error)]))
 
@@ -1576,6 +1649,11 @@
     [((expr-tset-delete! t a) (expr-TSet a-ty))
      (and (check ctx t (expr-TSet a-ty))
           (check ctx a a-ty))]
+
+    ;; ---- PropNetwork runtime wrappers ----
+    [((expr-prop-network _) (expr-net-type)) #t]
+    [((expr-cell-id _) (expr-cell-id-type)) #t]
+    [((expr-prop-id _) (expr-prop-id-type)) #t]
 
     ;; ---- Reduce: ML-style Church elimination ----
     ;; check(G, reduce(scrutinee, arms), T)
@@ -1906,6 +1984,11 @@
               [_ (no-level)]))]
          [_ (no-level)]))]
     [(expr-TSet a) (infer-level ctx a)]
+
+    ;; PropNetwork type constructors — all ground types at Type 0
+    [(expr-net-type) (just-level (lzero))]
+    [(expr-cell-id-type) (just-level (lzero))]
+    [(expr-prop-id-type) (just-level (lzero))]
 
     ;; Union formation: A | B : Type(max(level(A), level(B)))
     [(expr-union l r)

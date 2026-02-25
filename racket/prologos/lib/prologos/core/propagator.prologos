@@ -1,0 +1,13 @@
+ns prologos::core::propagator
+
+;; ========================================
+;; Propagator Library Helpers
+;; ========================================
+;; DEFERRED: new-lattice-cell generic wrapper
+;; The generic version `new-lattice-cell {A} where (Lattice A) -> PropNetwork -> Pair`
+;; requires resolving Lattice-bot/Lattice-join implicit type params inside a
+;; generic closure, which hits a meta-resolution limitation. For now, users
+;; call net-new-cell directly with explicit bot/merge values.
+;; See DEFERRED.md for tracking.
+
+;; Placeholder module — future: generic lattice helpers, set-cell, map-cell, etc.

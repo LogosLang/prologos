@@ -9,7 +9,7 @@ blocked on unbuilt infrastructure or uncertain design — not effort avoidance.
 See `docs/tracking/principles/DEVELOPMENT_LESSONS.org` § "Completeness Over
 Deferral".
 
-**Last consolidated sweep**: 2026-02-24 (persistent propagator network revision; logic engine design complete; extended spec hardening complete).
+**Last consolidated sweep**: 2026-02-24 (Logic Engine Phases 1-3 complete; PropNetwork as first-class Prologos type; extended spec hardening complete).
 
 ---
 
@@ -248,32 +248,38 @@ The following collection items ARE also deferred (genuine infrastructure deps):
 
 ## Logic Engine / Propagator Architecture
 
-### Phase 1: Lattice Trait + champ-insert-join (NOT STARTED)
-- `Lattice` trait: bot, join, leq
-- Standard instances: FlatLattice, SetLattice, MapLattice, IntervalLattice, BoolLattice
+### Phase 1: Lattice Trait + champ-insert-join — COMPLETE
+- `Lattice` trait: bot, join, leq — COMPLETE
+- Standard instances: FlatLattice, SetLattice, MapLattice, IntervalLattice, BoolLattice — COMPLETE
 - `champ-insert-join` Racket-level helper: COMPLETE (in `champ.rkt`)
-- `lib/prologos/core/lattice.prologos` + `lattice-instances.prologos`
-- **Dependencies**: None (uses existing trait system)
+- `lib/prologos/core/lattice-trait.prologos` + `lattice-instances.prologos` — COMPLETE
 - Source: `docs/tracking/2026-02-24_LOGIC_ENGINE_DESIGN.org`
 
-### Phase 2: Persistent PropNetwork — Racket-Level (NOT STARTED)
-- **Persistent/immutable** propagator network backed by CHAMP maps
-- All structs `#:transparent` (not `#:mutable`) — pure functional operations
-- `prop-network` struct: cells, propagators, worklist, merge-fns, fuel, contradiction
-- CellId = Nat counter (deterministic, no gensym)
+### Phase 2: Persistent PropNetwork — Racket-Level — COMPLETE
+- Persistent/immutable propagator network backed by CHAMP maps — COMPLETE
+- All structs `#:transparent` (not `#:mutable`) — pure functional operations — COMPLETE
+- CellId/PropId = Nat counters (deterministic, no gensym)
 - `net-cell-write` does join-on-merge — LVars subsumed by cells
-- `run-to-quiescence`: pure tail-recursive loop
+- `run-to-quiescence`: pure tail-recursive loop (BSP scheduler)
 - Backtracking = keep old reference (O(1)). Snapshots = free.
-- No AST nodes (Racket-level only). 3 new files, ~60 tests
-- **Dependencies**: Phase 1
+- 3 files (`propagator.rkt`, tests), ~60 Racket-level tests
 - Source: `docs/tracking/2026-02-24_LOGIC_ENGINE_DESIGN.org`
 
-### Phase 3: PropNetwork as Prologos Type (NOT STARTED)
-- 12 AST nodes exposing PropNetwork to the type system
-- Type rules, reduction, elaboration for network operations
-- LVar-style library functions (set cells, map cells) on top of PropNetwork
-- **Dependencies**: Phase 2
+### Phase 3: PropNetwork as Prologos Type — COMPLETE
+- 14 AST nodes (3 type ctors, 3 runtime wrappers, 8 operations) across 12-file pipeline
+- Type rules (`typing-core.rkt`, `qtt.rkt`), reduction (`reduction.rkt`), surface syntax
+- HasTop trait + BoundedLattice bundle + trait instances
+- Fix: parametric impl dispatch for compound type args without `where` (`macros.rkt`)
+- 56 tests across `test-propagator-types.rkt` (32), `test-propagator-integration.rkt` (16), `test-propagator-lvar.rkt` (8)
 - Source: `docs/tracking/2026-02-24_LOGIC_ENGINE_DESIGN.org`
+
+### Deferred: `new-lattice-cell` Generic Wrapper
+- `new-lattice-cell {A} where (Lattice A) -> PropNetwork -> [PropNetwork * CellId]`
+- Requires resolving `Lattice-bot`/`Lattice-join` implicit type params inside a generic
+  closure body, which hits a meta-resolution limitation in the unifier
+- Workaround: users call `net-new-cell` directly with explicit bot/merge values
+- **Blocked on**: improved implicit resolution for trait accessor calls inside generic closures
+- Source: `lib/prologos/core/propagator.prologos`
 
 ### Phase 4: UnionFind — Persistent Disjoint Sets (NOT STARTED)
 - Persistent union-find (Conchon & Filliâtre)

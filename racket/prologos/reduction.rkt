@@ -22,7 +22,8 @@
          "metavar-store.rkt"
          "foreign.rkt"
          "champ.rkt"
-         "rrb.rkt")
+         "rrb.rkt"
+         "propagator.rkt")
 
 (provide whnf nf nf-whnf conv conv-nf
          current-nf-cache current-whnf-cache
@@ -1613,6 +1614,115 @@
         (racket-list->prologos-list (champ-keys c))]  ;; Set stores keys with #t sentinel
        [_ (expr-set-to-list s*)])]
 
+    ;; ---- PropNetwork iota rules ----
+    ;; Type constructors are self-values
+    [(expr-net-type) e]
+    [(expr-cell-id-type) e]
+    [(expr-prop-id-type) e]
+    ;; Runtime wrappers are self-values
+    [(expr-prop-network _) e]
+    [(expr-cell-id _) e]
+    [(expr-prop-id _) e]
+
+    ;; net-new : Int -> PropNetwork
+    [(expr-net-new fuel)
+     (let ([fuel* (whnf fuel)])
+       (cond
+         [(expr-int? fuel*)
+          (expr-prop-network (make-prop-network (expr-int-val fuel*)))]
+         ;; Nat coercion: try nat-value
+         [(nat-value fuel*)
+          => (lambda (k) (expr-prop-network (make-prop-network k)))]
+         [(equal? fuel* fuel) e]
+         [else (whnf (expr-net-new fuel*))]))]
+
+    ;; net-new-cell : PropNetwork -> A -> (A A -> A) -> [PropNetwork * CellId]
+    [(expr-net-new-cell net init merge)
+     (let ([net* (whnf net)])
+       (match net*
+         [(expr-prop-network rnet)
+          (let* ([init* (whnf init)]
+                 ;; Bridge the Prologos merge function to Racket:
+                 ;; merge-fn(old, new) = whnf(app(app(merge, old), new))
+                 [merge* (whnf merge)]
+                 [racket-merge (lambda (old new)
+                                 (whnf (expr-app (expr-app merge* old) new)))])
+            (let-values ([(net2 cid) (net-new-cell rnet init* racket-merge)])
+              (expr-pair (expr-prop-network net2) (expr-cell-id cid))))]
+         [_ (if (equal? net* net) e (whnf (expr-net-new-cell net* init merge)))]))]
+
+    ;; net-cell-read : PropNetwork -> CellId -> A
+    [(expr-net-cell-read net cell)
+     (let ([net* (whnf net)] [cell* (whnf cell)])
+       (match* (net* cell*)
+         [((expr-prop-network rnet) (expr-cell-id cid))
+          (net-cell-read rnet cid)]
+         [(_ _)
+          (cond
+            [(not (equal? net* net)) (whnf (expr-net-cell-read net* cell))]
+            [(not (equal? cell* cell)) (whnf (expr-net-cell-read net cell*))]
+            [else e])]))]
+
+    ;; net-cell-write : PropNetwork -> CellId -> A -> PropNetwork
+    [(expr-net-cell-write net cell val)
+     (let ([net* (whnf net)] [cell* (whnf cell)])
+       (match* (net* cell*)
+         [((expr-prop-network rnet) (expr-cell-id cid))
+          (let ([val* (whnf val)])
+            (expr-prop-network (net-cell-write rnet cid val*)))]
+         [(_ _)
+          (cond
+            [(not (equal? net* net)) (whnf (expr-net-cell-write net* cell val))]
+            [(not (equal? cell* cell)) (whnf (expr-net-cell-write net cell* val))]
+            [else e])]))]
+
+    ;; net-add-prop : PropNetwork -> List CellId -> List CellId -> (PropNetwork -> PropNetwork) -> [PropNetwork * PropId]
+    [(expr-net-add-prop net ins outs fn)
+     (let ([net* (whnf net)])
+       (match net*
+         [(expr-prop-network rnet)
+          (let* ([ins-list (prologos-list->racket-list (whnf ins))]
+                 [outs-list (prologos-list->racket-list (whnf outs))])
+            (if (and ins-list outs-list)
+                (let* ([fn* (whnf fn)]
+                       ;; Unwrap cell-ids from Prologos AST wrappers
+                       [in-cids (map (lambda (e) (expr-cell-id-cell-id-value (whnf e))) ins-list)]
+                       [out-cids (map (lambda (e) (expr-cell-id-cell-id-value (whnf e))) outs-list)]
+                       ;; Bridge fire function: unwrap -> apply -> re-wrap
+                       [racket-fire (lambda (rnet)
+                                      (let ([result (whnf (expr-app fn* (expr-prop-network rnet)))])
+                                        (match result
+                                          [(expr-prop-network rnet2) rnet2]
+                                          [_ rnet])))])  ;; stuck: return unchanged
+                  (let-values ([(net2 pid) (net-add-propagator rnet in-cids out-cids racket-fire)])
+                    (expr-pair (expr-prop-network net2) (expr-prop-id pid))))
+                ;; Lists not yet reduced — try reducing net
+                (if (equal? net* net) e (whnf (expr-net-add-prop net* ins outs fn)))))]
+         [_ (if (equal? net* net) e (whnf (expr-net-add-prop net* ins outs fn)))]))]
+
+    ;; net-run : PropNetwork -> PropNetwork
+    [(expr-net-run net)
+     (let ([net* (whnf net)])
+       (match net*
+         [(expr-prop-network rnet)
+          (expr-prop-network (run-to-quiescence rnet))]
+         [_ (if (equal? net* net) e (whnf (expr-net-run net*)))]))]
+
+    ;; net-snapshot : PropNetwork -> PropNetwork (identity on persistent data)
+    [(expr-net-snapshot net)
+     (let ([net* (whnf net)])
+       (match net*
+         [(expr-prop-network _) net*]
+         [_ (if (equal? net* net) e (whnf (expr-net-snapshot net*)))]))]
+
+    ;; net-contradiction : PropNetwork -> Bool
+    [(expr-net-contradiction net)
+     (let ([net* (whnf net)])
+       (match net*
+         [(expr-prop-network rnet)
+          (if (net-contradiction? rnet) (expr-true) (expr-false))]
+         [_ (if (equal? net* net) e (whnf (expr-net-contradiction net*)))]))]
+
     ;; Union types: pass through (types don't reduce)
     [(expr-union _ _) e]
 
@@ -1968,6 +2078,24 @@
     [(expr-tmap-dissoc! t k) (expr-tmap-dissoc! (nf t) (nf k))]
     [(expr-tset-insert! t a) (expr-tset-insert! (nf t) (nf a))]
     [(expr-tset-delete! t a) (expr-tset-delete! (nf t) (nf a))]
+
+    ;; PropNetwork normalization
+    ;; Type constructors and runtime wrappers are self-values
+    [(expr-net-type) e]
+    [(expr-cell-id-type) e]
+    [(expr-prop-id-type) e]
+    [(expr-prop-network _) e]
+    [(expr-cell-id _) e]
+    [(expr-prop-id _) e]
+    ;; Operations: structural recursion into fields
+    [(expr-net-new fuel) (expr-net-new (nf fuel))]
+    [(expr-net-new-cell n init merge) (expr-net-new-cell (nf n) (nf init) (nf merge))]
+    [(expr-net-cell-read n cell) (expr-net-cell-read (nf n) (nf cell))]
+    [(expr-net-cell-write n cell val) (expr-net-cell-write (nf n) (nf cell) (nf val))]
+    [(expr-net-add-prop n ins outs fn) (expr-net-add-prop (nf n) (nf ins) (nf outs) (nf fn))]
+    [(expr-net-run n) (expr-net-run (nf n))]
+    [(expr-net-snapshot n) (expr-net-snapshot (nf n))]
+    [(expr-net-contradiction n) (expr-net-contradiction (nf n))]
 
     ;; Foreign function: opaque leaf (already in WHNF)
     [(expr-foreign-fn _ _ _ _ _ _) e]

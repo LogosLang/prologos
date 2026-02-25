@@ -714,7 +714,14 @@
    'test-propagator-persistence.rkt
    (test-dep '(propagator.rkt champ.rkt) #f)
    'test-propagator-bsp.rkt
-   (test-dep '(propagator.rkt champ.rkt) #f)))
+   (test-dep '(propagator.rkt champ.rkt) #f)
+   'test-propagator-types.rkt
+   (test-dep '(propagator.rkt syntax.rkt typing-core.rkt qtt.rkt substitution.rkt pretty-print.rkt) #f)
+   'test-propagator-integration.rkt
+   (test-dep '(propagator.rkt syntax.rkt typing-core.rkt reduction.rkt parser.rkt elaborator.rkt surface-syntax.rkt) #t)
+   'test-propagator-lvar.rkt
+   (test-dep '(propagator.rkt syntax.rkt typing-core.rkt reduction.rkt parser.rkt elaborator.rkt
+               surface-syntax.rkt namespace.rkt macros.rkt) #t)))
 
 ;; ============================================================
 ;; Layer 2b: Example file → test file mapping
@@ -866,6 +873,14 @@
    'prologos::core::lattice-instances  '(prologos::core::lattice-trait
                                          prologos::core::eq-trait
                                          prologos::data::bool)
+
+   ;; HasTop trait + instances + BoundedLattice + propagator helpers
+   'prologos::core::has-top-trait      '()
+   'prologos::core::has-top-instances  '(prologos::core::has-top-trait
+                                         prologos::core::lattice-instances)
+   'prologos::core::bounded-lattice    '(prologos::core::lattice-trait
+                                         prologos::core::has-top-trait)
+   'prologos::core::propagator         '()
 
    ;; Higher-level abstractions
    'prologos::core::numeric-bundles '(prologos::core::add-trait prologos::core::sub-trait
@@ -1111,6 +1126,13 @@
    'test-lattice.rkt             '(prologos::core::lattice-trait
                                    prologos::core::lattice-instances
                                    prologos::core::eq-trait
+                                   prologos::data::bool)
+   'test-propagator-lvar.rkt     '(prologos::core::has-top-trait
+                                   prologos::core::has-top-instances
+                                   prologos::core::bounded-lattice
+                                   prologos::core::propagator
+                                   prologos::core::lattice-trait
+                                   prologos::core::lattice-instances
                                    prologos::data::bool)))
 
 ;; ============================================================

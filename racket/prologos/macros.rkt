@@ -5332,8 +5332,11 @@
   (when (null? type-args)
     (error 'impl "impl ~a: must specify at least one type argument" trait-name))
 
-  ;; Dispatch: parametric impl (has where-constraints) vs monomorphic impl
-  (if (not (null? where-constraints))
+  ;; Dispatch: parametric impl vs monomorphic impl
+  ;; Parametric if has where-constraints OR has compound type args (e.g. (FlatVal A))
+  (define has-compound-type-args?
+    (ormap (lambda (ta) (and (list? ta) (>= (length ta) 2))) type-args))
+  (if (or (not (null? where-constraints)) has-compound-type-args?)
       (process-parametric-impl trait-name tm type-args where-constraints method-defns)
       (process-monomorphic-impl trait-name tm type-args method-defns)))
 

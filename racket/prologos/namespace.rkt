@@ -475,6 +475,12 @@
                                                         Bool--Lattice--dict
                                                         Interval--Lattice--dict]])
 
+    ;; ---- Tier 3g: HasTop trait + instances + BoundedLattice + Propagator helpers ----
+    (require [prologos::core::has-top-trait     :refer [HasTop HasTop-top]])
+    (require [prologos::core::has-top-instances :refer []])
+    (require [prologos::core::bounded-lattice   :refer [BoundedLattice]])
+    (require [prologos::core::propagator        :refer []])
+
     ;; ---- Tier 3e: Generic collection functions (clean names) ----
     ;; These shadow List-specific names (map, filter, reduce, etc.) with
     ;; generic versions that work on any Seqable/Buildable/Foldable collection.

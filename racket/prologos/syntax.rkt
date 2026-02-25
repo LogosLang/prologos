@@ -163,6 +163,13 @@
  (struct-out expr-tvec-push!) (struct-out expr-tvec-update!)
  (struct-out expr-tmap-assoc!) (struct-out expr-tmap-dissoc!)
  (struct-out expr-tset-insert!) (struct-out expr-tset-delete!)
+ ;; PropNetwork (persistent propagator network)
+ (struct-out expr-net-type) (struct-out expr-cell-id-type) (struct-out expr-prop-id-type)
+ (struct-out expr-prop-network) (struct-out expr-cell-id) (struct-out expr-prop-id)
+ (struct-out expr-net-new) (struct-out expr-net-new-cell)
+ (struct-out expr-net-cell-read) (struct-out expr-net-cell-write)
+ (struct-out expr-net-add-prop) (struct-out expr-net-run)
+ (struct-out expr-net-snapshot) (struct-out expr-net-contradiction)
  ;; Int (arbitrary-precision integers)
  (struct-out expr-Int)
  (struct-out expr-int)
@@ -605,6 +612,30 @@
 (struct expr-tset-delete! (t a) #:transparent)                 ; TSet A → A → TSet A
 
 ;; ========================================
+;; PropNetwork (persistent propagator network)
+;; ========================================
+
+;; Type constructors
+(struct expr-net-type () #:transparent)                          ; PropNetwork : Type 0
+(struct expr-cell-id-type () #:transparent)                      ; CellId : Type 0
+(struct expr-prop-id-type () #:transparent)                      ; PropId : Type 0
+
+;; Runtime wrappers (opaque Racket values from propagator.rkt)
+(struct expr-prop-network (net-value) #:transparent)             ; wrapped prop-network
+(struct expr-cell-id (cell-id-value) #:transparent)              ; wrapped cell-id
+(struct expr-prop-id (prop-id-value) #:transparent)              ; wrapped prop-id
+
+;; Operations
+(struct expr-net-new (fuel) #:transparent)                       ; Int -> PropNetwork
+(struct expr-net-new-cell (net init merge) #:transparent)        ; PropNetwork -> A -> (A A -> A) -> [PropNetwork * CellId]
+(struct expr-net-cell-read (net cell) #:transparent)             ; PropNetwork -> CellId -> A
+(struct expr-net-cell-write (net cell val) #:transparent)        ; PropNetwork -> CellId -> A -> PropNetwork
+(struct expr-net-add-prop (net ins outs fn) #:transparent)       ; PropNetwork -> [List CellId] -> [List CellId] -> fn -> [PropNetwork * PropId]
+(struct expr-net-run (net) #:transparent)                        ; PropNetwork -> PropNetwork
+(struct expr-net-snapshot (net) #:transparent)                   ; PropNetwork -> PropNetwork (identity on persistent data)
+(struct expr-net-contradiction (net) #:transparent)              ; PropNetwork -> Bool
+
+;; ========================================
 ;; Int (arbitrary-precision integers, backed by Racket exact integers)
 ;; ========================================
 
@@ -839,6 +870,12 @@
       (expr-tvec-push!? x) (expr-tvec-update!? x)
       (expr-tmap-assoc!? x) (expr-tmap-dissoc!? x)
       (expr-tset-insert!? x) (expr-tset-delete!? x)
+      (expr-net-type? x) (expr-cell-id-type? x) (expr-prop-id-type? x)
+      (expr-prop-network? x) (expr-cell-id? x) (expr-prop-id? x)
+      (expr-net-new? x) (expr-net-new-cell? x)
+      (expr-net-cell-read? x) (expr-net-cell-write? x)
+      (expr-net-add-prop? x) (expr-net-run? x)
+      (expr-net-snapshot? x) (expr-net-contradiction? x)
       (expr-hole? x) (expr-typed-hole? x) (expr-meta? x) (expr-reduce? x)
       (expr-union? x) (expr-tycon? x) (expr-error? x)))
 

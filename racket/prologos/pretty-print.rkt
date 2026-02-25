@@ -13,7 +13,8 @@
          "sessions.rkt"
          "metavar-store.rkt"
          "champ.rkt"
-         "rrb.rkt")
+         "rrb.rkt"
+         "propagator.rkt")
 
 (provide pp-expr
          pp-session
@@ -409,6 +410,26 @@
     [(expr-tmap-dissoc! t k) (format "[tmap-dissoc! ~a ~a]" (pp-expr t names) (pp-expr k names))]
     [(expr-tset-insert! t a) (format "[tset-insert! ~a ~a]" (pp-expr t names) (pp-expr a names))]
     [(expr-tset-delete! t a) (format "[tset-delete! ~a ~a]" (pp-expr t names) (pp-expr a names))]
+
+    ;; PropNetwork
+    [(expr-net-type) "PropNetwork"]
+    [(expr-cell-id-type) "CellId"]
+    [(expr-prop-id-type) "PropId"]
+    [(expr-prop-network v) (format "#<prop-network ~a>" (prop-network-fuel v))]
+    [(expr-cell-id v) (format "#<cell-id ~a>" (cell-id-n v))]
+    [(expr-prop-id v) (format "#<prop-id ~a>" (prop-id-n v))]
+    [(expr-net-new fuel) (format "[net-new ~a]" (pp-expr fuel names))]
+    [(expr-net-new-cell n init merge)
+     (format "[net-new-cell ~a ~a ~a]" (pp-expr n names) (pp-expr init names) (pp-expr merge names))]
+    [(expr-net-cell-read n c) (format "[net-cell-read ~a ~a]" (pp-expr n names) (pp-expr c names))]
+    [(expr-net-cell-write n c v)
+     (format "[net-cell-write ~a ~a ~a]" (pp-expr n names) (pp-expr c names) (pp-expr v names))]
+    [(expr-net-add-prop n ins outs fn)
+     (format "[net-add-prop ~a ~a ~a ~a]"
+             (pp-expr n names) (pp-expr ins names) (pp-expr outs names) (pp-expr fn names))]
+    [(expr-net-run n) (format "[net-run ~a]" (pp-expr n names))]
+    [(expr-net-snapshot n) (format "[net-snapshot ~a]" (pp-expr n names))]
+    [(expr-net-contradiction n) (format "[net-contradict? ~a]" (pp-expr n names))]
 
     ;; Int
     [(expr-Int) "Int"]
@@ -890,6 +911,22 @@
     [(expr-tmap-dissoc! t k) (or (uses-bvar0? t) (uses-bvar0? k))]
     [(expr-tset-insert! t a) (or (uses-bvar0? t) (uses-bvar0? a))]
     [(expr-tset-delete! t a) (or (uses-bvar0? t) (uses-bvar0? a))]
+
+    ;; PropNetwork
+    [(expr-net-type) #f]
+    [(expr-cell-id-type) #f]
+    [(expr-prop-id-type) #f]
+    [(expr-prop-network _) #f]
+    [(expr-cell-id _) #f]
+    [(expr-prop-id _) #f]
+    [(expr-net-new fuel) (uses-bvar0? fuel)]
+    [(expr-net-new-cell n init merge) (or (uses-bvar0? n) (uses-bvar0? init) (uses-bvar0? merge))]
+    [(expr-net-cell-read n c) (or (uses-bvar0? n) (uses-bvar0? c))]
+    [(expr-net-cell-write n c v) (or (uses-bvar0? n) (uses-bvar0? c) (uses-bvar0? v))]
+    [(expr-net-add-prop n ins outs fn) (or (uses-bvar0? n) (uses-bvar0? ins) (uses-bvar0? outs) (uses-bvar0? fn))]
+    [(expr-net-run n) (uses-bvar0? n)]
+    [(expr-net-snapshot n) (uses-bvar0? n)]
+    [(expr-net-contradiction n) (uses-bvar0? n)]
 
     [(expr-Int) #f]
     [(expr-int _) #f]

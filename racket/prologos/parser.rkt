@@ -46,6 +46,7 @@
     set-fold set-filter
     map-fold-entries map-filter-entries map-map-vals
     TVec TMap TSet transient persist! tvec-push! tvec-update! tmap-assoc! tmap-dissoc! tset-insert! tset-delete!
+    PropNetwork CellId PropId net-new net-new-cell net-cell-read net-cell-write net-add-prop net-run net-snapshot net-contradict?
     def defn check eval infer expand expand-1 expand-full parse elaborate match
     ;; Pre-parse macros — should be expanded before reaching parser
     defmacro let do if deftype data spec trait impl where bundle with-transient
@@ -499,6 +500,9 @@
     [(Char) (surf-char-type loc)]
     [(String) (surf-string-type loc)]
     [(Type)   (surf-type #f loc)]     ;; bare Type → infer level (Sprint 6)
+    [(PropNetwork) (surf-net-type loc)]
+    [(CellId) (surf-cell-id-type loc)]
+    [(PropId) (surf-prop-id-type loc)]
     [(zero)   (surf-zero loc)]
     [(true)   (surf-true loc)]
     [(false)  (surf-false loc)]
@@ -2172,6 +2176,72 @@
               (cond [(prologos-error? t) t]
                     [(prologos-error? a) a]
                     [else (surf-tset-delete! t a loc)])))]
+
+       ;; ---- PropNetwork operations ----
+       ;; (net-new fuel)
+       [(net-new)
+        (or (check-arity 'net-new args 1 loc)
+            (let ([fuel (parse-datum (car args))])
+              (if (prologos-error? fuel) fuel
+                  (surf-net-new fuel loc))))]
+       ;; (net-new-cell net init merge)
+       [(net-new-cell)
+        (or (check-arity 'net-new-cell args 3 loc)
+            (let ([n (parse-datum (car args))]
+                  [init (parse-datum (cadr args))]
+                  [merge (parse-datum (caddr args))])
+              (cond [(prologos-error? n) n]
+                    [(prologos-error? init) init]
+                    [(prologos-error? merge) merge]
+                    [else (surf-net-new-cell n init merge loc)])))]
+       ;; (net-cell-read net cell)
+       [(net-cell-read)
+        (or (check-arity 'net-cell-read args 2 loc)
+            (let ([n (parse-datum (car args))]
+                  [c (parse-datum (cadr args))])
+              (cond [(prologos-error? n) n]
+                    [(prologos-error? c) c]
+                    [else (surf-net-cell-read n c loc)])))]
+       ;; (net-cell-write net cell val)
+       [(net-cell-write)
+        (or (check-arity 'net-cell-write args 3 loc)
+            (let ([n (parse-datum (car args))]
+                  [c (parse-datum (cadr args))]
+                  [v (parse-datum (caddr args))])
+              (cond [(prologos-error? n) n]
+                    [(prologos-error? c) c]
+                    [(prologos-error? v) v]
+                    [else (surf-net-cell-write n c v loc)])))]
+       ;; (net-add-prop net ins outs fn)
+       [(net-add-prop)
+        (or (check-arity 'net-add-prop args 4 loc)
+            (let ([n (parse-datum (car args))]
+                  [ins (parse-datum (cadr args))]
+                  [outs (parse-datum (caddr args))]
+                  [f (parse-datum (cadddr args))])
+              (cond [(prologos-error? n) n]
+                    [(prologos-error? ins) ins]
+                    [(prologos-error? outs) outs]
+                    [(prologos-error? f) f]
+                    [else (surf-net-add-prop n ins outs f loc)])))]
+       ;; (net-run net)
+       [(net-run)
+        (or (check-arity 'net-run args 1 loc)
+            (let ([n (parse-datum (car args))])
+              (if (prologos-error? n) n
+                  (surf-net-run n loc))))]
+       ;; (net-snapshot net)
+       [(net-snapshot)
+        (or (check-arity 'net-snapshot args 1 loc)
+            (let ([n (parse-datum (car args))])
+              (if (prologos-error? n) n
+                  (surf-net-snapshot n loc))))]
+       ;; (net-contradict? net)
+       [(|net-contradict?|)
+        (or (check-arity 'net-contradict? args 1 loc)
+            (let ([n (parse-datum (car args))])
+              (if (prologos-error? n) n
+                  (surf-net-contradiction n loc))))]
 
        ;; (the-fn type [params...] body)
        [(the-fn)

@@ -1,0 +1,10 @@
+ns prologos::core::has-top-trait
+
+;; ========================================
+;; HasTop Trait — types with a top element
+;; ========================================
+;; The dual of Lattice-bot. Used for bounded lattices that have both
+;; a minimum (bot) and a maximum (top) element.
+
+trait HasTop {A}
+  top : A

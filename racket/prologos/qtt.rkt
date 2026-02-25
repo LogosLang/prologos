@@ -1449,6 +1449,86 @@
           (tu (tu-type r1) (add-usage u1 u2))]
          [(_ _) (tu-error)]))]
 
+    ;; ---- PropNetwork type constructors ----
+    [(expr-net-type) (tu (expr-Type (lzero)) (zero-usage n))]
+    [(expr-cell-id-type) (tu (expr-Type (lzero)) (zero-usage n))]
+    [(expr-prop-id-type) (tu (expr-Type (lzero)) (zero-usage n))]
+    ;; Runtime wrappers — zero usage (opaque Racket values)
+    [(expr-prop-network _) (tu (expr-net-type) (zero-usage n))]
+    [(expr-cell-id _) (tu (expr-cell-id-type) (zero-usage n))]
+    [(expr-prop-id _) (tu (expr-prop-id-type) (zero-usage n))]
+
+    ;; ---- PropNetwork operations ----
+    ;; net-new : Int -> PropNetwork
+    [(expr-net-new fuel)
+     (let ([r1 (checkQ ctx fuel (expr-Int))])
+       (match r1
+         [(bu #t u) (tu (expr-net-type) u)]
+         [_ (tu-error)]))]
+
+    ;; net-new-cell : PropNetwork -> A -> (A A -> A) -> [PropNetwork * CellId]
+    [(expr-net-new-cell net init merge)
+     (let ([r1 (inferQ ctx net)]
+           [r2 (inferQ ctx init)]
+           [r3 (inferQ ctx merge)])
+       (match* (r1 r2 r3)
+         [((tu _ u1) (tu _ u2) (tu _ u3))
+          (tu (expr-Sigma (expr-net-type) (expr-cell-id-type))
+              (add-usage u1 (add-usage u2 u3)))]
+         [(_ _ _) (tu-error)]))]
+
+    ;; net-cell-read : PropNetwork -> CellId -> A
+    [(expr-net-cell-read net cell)
+     (let ([r1 (inferQ ctx net)]
+           [r2 (inferQ ctx cell)])
+       (match* (r1 r2)
+         [((tu _ u1) (tu _ u2))
+          (tu (infer ctx e) (add-usage u1 u2))]
+         [(_ _) (tu-error)]))]
+
+    ;; net-cell-write : PropNetwork -> CellId -> A -> PropNetwork
+    [(expr-net-cell-write net cell val)
+     (let ([r1 (inferQ ctx net)]
+           [r2 (inferQ ctx cell)]
+           [r3 (inferQ ctx val)])
+       (match* (r1 r2 r3)
+         [((tu _ u1) (tu _ u2) (tu _ u3))
+          (tu (expr-net-type) (add-usage u1 (add-usage u2 u3)))]
+         [(_ _ _) (tu-error)]))]
+
+    ;; net-add-prop : PropNetwork -> [List CellId] -> [List CellId] -> fn -> [PropNetwork * PropId]
+    [(expr-net-add-prop net ins outs fn)
+     (let ([r1 (inferQ ctx net)]
+           [r2 (inferQ ctx ins)]
+           [r3 (inferQ ctx outs)]
+           [r4 (inferQ ctx fn)])
+       (match* (r1 r2 r3 r4)
+         [((tu _ u1) (tu _ u2) (tu _ u3) (tu _ u4))
+          (tu (expr-Sigma (expr-net-type) (expr-prop-id-type))
+              (add-usage u1 (add-usage u2 (add-usage u3 u4))))]
+         [(_ _ _ _) (tu-error)]))]
+
+    ;; net-run : PropNetwork -> PropNetwork
+    [(expr-net-run net)
+     (let ([r1 (inferQ ctx net)])
+       (match r1
+         [(tu _ u) (tu (expr-net-type) u)]
+         [_ (tu-error)]))]
+
+    ;; net-snapshot : PropNetwork -> PropNetwork
+    [(expr-net-snapshot net)
+     (let ([r1 (inferQ ctx net)])
+       (match r1
+         [(tu _ u) (tu (expr-net-type) u)]
+         [_ (tu-error)]))]
+
+    ;; net-contradict? : PropNetwork -> Bool
+    [(expr-net-contradiction net)
+     (let ([r1 (inferQ ctx net)])
+       (match r1
+         [(tu _ u) (tu (expr-Bool) u)]
+         [_ (tu-error)]))]
+
     ;; ---- J eliminator ----
     ;; Usage from proof, base, motive arguments
     [(expr-J mot base left right proof)
@@ -1764,6 +1844,11 @@
          [((bu #t u1) (bu #t u2))
           (bu #t (add-usage u1 u2))]
          [(_ _) (bu #f (zero-usage n))]))]
+
+    ;; ---- PropNetwork runtime wrappers: check against type constructors ----
+    [((expr-prop-network _) (expr-net-type)) (bu #t (zero-usage n))]
+    [((expr-cell-id _) (expr-cell-id-type)) (bu #t (zero-usage n))]
+    [((expr-prop-id _) (expr-prop-id-type)) (bu #t (zero-usage n))]
 
     ;; ---- Union type: checkQ(G, e, A | B) ----
     ;; Try left component first, then right. Uses speculative meta state.

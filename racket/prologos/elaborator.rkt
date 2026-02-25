@@ -1929,6 +1929,67 @@
              [(prologos-error? ea) ea]
              [else (expr-tset-delete! et ea)]))]
 
+    ;; ---- PropNetwork (persistent propagator network) ----
+    [(surf-net-type _loc) (expr-net-type)]
+    [(surf-cell-id-type _loc) (expr-cell-id-type)]
+    [(surf-prop-id-type _loc) (expr-prop-id-type)]
+
+    [(surf-net-new fuel loc)
+     (let ([ef (elaborate fuel env depth)])
+       (if (prologos-error? ef) ef
+           (expr-net-new ef)))]
+
+    [(surf-net-new-cell net init merge loc)
+     (let ([en (elaborate net env depth)]
+           [ei (elaborate init env depth)]
+           [em (elaborate merge env depth)])
+       (cond [(prologos-error? en) en]
+             [(prologos-error? ei) ei]
+             [(prologos-error? em) em]
+             [else (expr-net-new-cell en ei em)]))]
+
+    [(surf-net-cell-read net cell loc)
+     (let ([en (elaborate net env depth)]
+           [ec (elaborate cell env depth)])
+       (cond [(prologos-error? en) en]
+             [(prologos-error? ec) ec]
+             [else (expr-net-cell-read en ec)]))]
+
+    [(surf-net-cell-write net cell val loc)
+     (let ([en (elaborate net env depth)]
+           [ec (elaborate cell env depth)]
+           [ev (elaborate val env depth)])
+       (cond [(prologos-error? en) en]
+             [(prologos-error? ec) ec]
+             [(prologos-error? ev) ev]
+             [else (expr-net-cell-write en ec ev)]))]
+
+    [(surf-net-add-prop net ins outs fn loc)
+     (let ([en (elaborate net env depth)]
+           [ei (elaborate ins env depth)]
+           [eo (elaborate outs env depth)]
+           [ef (elaborate fn env depth)])
+       (cond [(prologos-error? en) en]
+             [(prologos-error? ei) ei]
+             [(prologos-error? eo) eo]
+             [(prologos-error? ef) ef]
+             [else (expr-net-add-prop en ei eo ef)]))]
+
+    [(surf-net-run net loc)
+     (let ([en (elaborate net env depth)])
+       (if (prologos-error? en) en
+           (expr-net-run en)))]
+
+    [(surf-net-snapshot net loc)
+     (let ([en (elaborate net env depth)])
+       (if (prologos-error? en) en
+           (expr-net-snapshot en)))]
+
+    [(surf-net-contradiction net loc)
+     (let ([en (elaborate net env depth)])
+       (if (prologos-error? en) en
+           (expr-net-contradiction en)))]
+
     ;; Reduce: ML-style pattern matching
     ;; Each arm's body must be elaborated with binding names in scope.
     ;; We add dummy binders (the actual types come from the type checker).

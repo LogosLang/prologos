@@ -288,6 +288,25 @@
     [(expr-tset-insert! t a) (expr-tset-insert! (shift delta cutoff t) (shift delta cutoff a))]
     [(expr-tset-delete! t a) (expr-tset-delete! (shift delta cutoff t) (shift delta cutoff a))]
 
+    ;; PropNetwork (all non-binding)
+    [(expr-net-type) e]
+    [(expr-cell-id-type) e]
+    [(expr-prop-id-type) e]
+    [(expr-prop-network _) e]
+    [(expr-cell-id _) e]
+    [(expr-prop-id _) e]
+    [(expr-net-new fuel) (expr-net-new (shift delta cutoff fuel))]
+    [(expr-net-new-cell n init merge)
+     (expr-net-new-cell (shift delta cutoff n) (shift delta cutoff init) (shift delta cutoff merge))]
+    [(expr-net-cell-read n c) (expr-net-cell-read (shift delta cutoff n) (shift delta cutoff c))]
+    [(expr-net-cell-write n c v)
+     (expr-net-cell-write (shift delta cutoff n) (shift delta cutoff c) (shift delta cutoff v))]
+    [(expr-net-add-prop n ins outs fn)
+     (expr-net-add-prop (shift delta cutoff n) (shift delta cutoff ins) (shift delta cutoff outs) (shift delta cutoff fn))]
+    [(expr-net-run n) (expr-net-run (shift delta cutoff n))]
+    [(expr-net-snapshot n) (expr-net-snapshot (shift delta cutoff n))]
+    [(expr-net-contradiction n) (expr-net-contradiction (shift delta cutoff n))]
+
     ;; Int (all non-binding)
     [(expr-Int) e]
     [(expr-int _) e]
@@ -626,6 +645,25 @@
     [(expr-tmap-dissoc! t kt) (expr-tmap-dissoc! (subst k s t) (subst k s kt))]
     [(expr-tset-insert! t a) (expr-tset-insert! (subst k s t) (subst k s a))]
     [(expr-tset-delete! t a) (expr-tset-delete! (subst k s t) (subst k s a))]
+
+    ;; PropNetwork (all non-binding)
+    [(expr-net-type) e]
+    [(expr-cell-id-type) e]
+    [(expr-prop-id-type) e]
+    [(expr-prop-network _) e]
+    [(expr-cell-id _) e]
+    [(expr-prop-id _) e]
+    [(expr-net-new fuel) (expr-net-new (subst k s fuel))]
+    [(expr-net-new-cell n init merge)
+     (expr-net-new-cell (subst k s n) (subst k s init) (subst k s merge))]
+    [(expr-net-cell-read n c) (expr-net-cell-read (subst k s n) (subst k s c))]
+    [(expr-net-cell-write n c v)
+     (expr-net-cell-write (subst k s n) (subst k s c) (subst k s v))]
+    [(expr-net-add-prop n ins outs fn)
+     (expr-net-add-prop (subst k s n) (subst k s ins) (subst k s outs) (subst k s fn))]
+    [(expr-net-run n) (expr-net-run (subst k s n))]
+    [(expr-net-snapshot n) (expr-net-snapshot (subst k s n))]
+    [(expr-net-contradiction n) (expr-net-contradiction (subst k s n))]
 
     ;; Int (all non-binding)
     [(expr-Int) e]
