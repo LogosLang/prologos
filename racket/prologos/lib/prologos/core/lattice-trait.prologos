@@ -20,5 +20,5 @@ ns prologos::core::lattice-trait
 
 trait Lattice {A}
   bot  : A
-  join : A A -> A
-  leq  : A A -> Bool
+  join : A -> A -> A
+  leq  : A -> A -> Bool

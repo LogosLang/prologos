@@ -426,14 +426,15 @@
     (require [prologos::core::neg-instances         :refer []])
     (require [prologos::core::abs-instances         :refer []])
 
-    ;; ---- Tier 3a: Char/String trait instances (side-effect only) ----
-    (require [prologos::core::eq-char-instance        :refer []])
-    (require [prologos::core::ord-char-instance       :refer []])
-    (require [prologos::core::hashable-char-instance  :refer []])
-    (require [prologos::core::eq-string-instance      :refer []])
-    (require [prologos::core::ord-string-instance     :refer []])
-    (require [prologos::core::hashable-string-instance :refer []])
-    (require [prologos::core::add-string-instance     :refer []])
+    ;; ---- Tier 3a: Char/String trait instances ----
+    ;; Dict bindings are referred so they resolve in user code (not just side-effect)
+    (require [prologos::core::eq-char-instance        :refer [Char--Eq--dict]])
+    (require [prologos::core::ord-char-instance       :refer [Char--Ord--dict]])
+    (require [prologos::core::hashable-char-instance  :refer [Char--Hashable--dict]])
+    (require [prologos::core::eq-string-instance      :refer [String--Eq--dict]])
+    (require [prologos::core::ord-string-instance     :refer [String--Ord--dict]])
+    (require [prologos::core::hashable-string-instance :refer [String--Hashable--dict]])
+    (require [prologos::core::add-string-instance     :refer [String--Add--dict]])
 
     ;; ---- Tier 3b: Collection trait instances (side-effect only) ----
     (require [prologos::core::seqable-list    :refer []])
@@ -510,18 +511,19 @@
         (eq? ns-sym 'prologos::core)
         (prelude-dependency? ns-sym)))
   (when (current-module-loader)
-    (with-handlers ([exn:fail? (lambda (e)
-                                 ;; Modules might not exist yet during bootstrap
-                                 (void))])
-      (cond
-        [skip-prelude?
-         ;; Library modules and :no-prelude: just get prologos::core
-         (unless (eq? ns-sym 'prologos::core)
-           (process-require '(require [prologos::core :refer-all])))]
-        [else
-         ;; User modules: get the full prelude
-         (for ([req (in-list prelude-requires)])
-           (process-require req))]))))
+    (cond
+      [skip-prelude?
+       ;; Library modules and :no-prelude: just get prologos::core
+       (unless (eq? ns-sym 'prologos::core)
+         (with-handlers ([exn:fail? (lambda (e) (void))])
+           (process-require '(require [prologos::core :refer-all]))))]
+      [else
+       ;; User modules: get the full prelude
+       ;; Each require is individually wrapped so one failure doesn't
+       ;; prevent loading of subsequent modules.
+       (for ([req (in-list prelude-requires)])
+         (with-handlers ([exn:fail? (lambda (e) (void))])
+           (process-require req)))])))
 
 ;; (provide name ...)
 ;; (provide :all)
