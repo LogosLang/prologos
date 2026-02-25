@@ -297,6 +297,17 @@ The Racket prototype (Phase 0) is a stepping stone. The goal is a
 self-hosted compiler where the type checker, optimizer, and code generator
 are themselves Prologos programs --- enabled by homoiconicity.
 
+** Relational Query Language for Data
+The relational paradigm (~defr~/~rel~/~solve~) is not just a logic programming
+feature --- it is a graph-query database language in its own right. Prolog facts
+are isomorphic to database tables; rules are composable views; subgoals are
+joins. Empirical benchmarks show in-memory logic queries returning in sub-ms
+where equivalent SQLite queries take 30ms. With tabling as materialized views,
+propagators as incremental view maintenance, and ATMS as provenance tracking,
+Prologos has the infrastructure for a serious data query platform. See
+[[file:RELATIONAL_LANGUAGE_VISION.org][Relational Language Vision § Relations as a Graph-Query Database Language]]
+for the full analysis and design implications.
+
 ** Embeddable Logic Engine
 Ship the propagator-based logic engine as an embeddable library (like
 Lua or SQLite) callable from Python, JavaScript, and Rust. Projects don't

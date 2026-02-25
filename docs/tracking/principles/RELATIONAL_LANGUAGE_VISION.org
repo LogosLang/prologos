@@ -334,6 +334,292 @@ in Prologos, the functional expression is a full Prologos expression
 10. *Network mobility*: Propagator networks as first-class, transferable values
 11. *Bidirectional embedding*: Functions in relations via ~is~, relations in
     functions via ~solve~
+12. *Relations as database tables*: Facts are rows, rules are composable views,
+    queries are joins --- the relational language /is/ a graph-query language
+13. *Lightweight fact syntax*: Bodiless clauses (positional and dictionary-style)
+    must be syntactically concise for the database use case to be practical
+14. *Composition over query languages*: Rules compose as naturally as functions;
+    SQL doesn't. This is the Yedalog insight applied to a typed setting.
+
+* Relations as a Graph-Query Database Language
+
+** The Core Isomorphism
+
+A Prolog predicate is structurally isomorphic to a database table. This is not
+metaphor --- it is a precise structural correspondence:
+
+| Prolog Concept     | Database Concept      |
+|--------------------+-----------------------|
+| Predicate name     | Table name            |
+| Fact               | Row                   |
+| Fact argument      | Column value          |
+| Rule               | Derived view          |
+| Query              | SELECT query          |
+| Subgoal in a rule  | JOIN                  |
+| Backtracking       | Nested-loop join      |
+| Tabling            | Materialized view     |
+| Rule composition   | View composition      |
+
+A set of ground facts:
+
+#+begin_src prolog
+employee(alice, engineering, 95000).
+employee(bob, marketing, 72000).
+employee(carol, engineering, 110000).
+#+end_src
+
+is a three-column table named ~employee~. A rule:
+
+#+begin_src prolog
+high_earners_in(Dept, Name) :-
+    employee(Name, Dept, Salary),
+    Salary > 90000.
+#+end_src
+
+is a derived view that joins ~employee~ with a filter. And critically, this
+derived view is itself a table that can be /subqueried in further rules/ ---
+something SQL handles awkwardly with CTEs and subqueries but that logic
+programming handles as naturally as function composition.
+
+** Why Logic Programming Beats SQL for Composition
+
+SQL is a query language. Logic programming is a /definition/ language that
+happens to also query. The difference is profound:
+
+- A SQL CTE is a one-shot inline definition, scoped to a single query.
+- A Prolog rule is a reusable, named, composable unit that participates in
+  recursive definitions, is callable from other rules, and can be individually
+  tested, profiled, and reasoned about.
+
+In Prologos, ~defr~ creates a named relation that is first-class: passable,
+composable, tabled, provenance-tracked. The relational language /is/ the query
+language, but it is also the schema definition language, the view definition
+language, and the integrity constraint language --- all unified.
+
+** Empirical Performance: In-Memory Logic vs. SQLite
+
+Experience with SWI-Prolog demonstrates the performance case. Loading a SQLite
+database (5-6 tables, 6000+ rows each) as Prolog dictionaries --- where the
+predicate name is the table name and dictionary keys are column names ---
+yields sub-millisecond query times vs. ~30ms for equivalent SQLite queries.
+
+The reasons are structural:
+
+- *No parsing overhead*: No SQL parse → plan → execute pipeline. The clause
+  structure /is/ the execution plan.
+- *No serialization*: Terms are native in-memory data. No marshalling between
+  storage format and runtime representation.
+- *First-argument indexing*: Prolog's indexing on the first argument acts as
+  a hash index. Prologos's CHAMP-backed tables go further.
+- *No query planning*: The clause order is the plan. With tabling, the system
+  caches intermediate results automatically.
+
+** Prologos's Unique Advantages for Data Querying
+
+Prologos's architecture gives it capabilities beyond both Prolog and SQL:
+
+*** Tabling = Materialized Views
+
+Phase 6's tabling infrastructure is /exactly/ the mechanism for materialized
+views. A tabled ~defr~ that computes ~high_earners_in~ is a cached derived
+relation. ~table-freeze~ is "this view is now complete." SLG completion
+detection tells you when a recursive view has stabilized.
+
+*** Propagators = Incremental View Maintenance
+
+When a base fact changes, propagators can push updates through dependent tabled
+predicates. This is /incremental view maintenance/ --- the holy grail of
+database systems that most databases only partially implement. The PropNetwork
+infrastructure already has the dependency tracking.
+
+*** ATMS = Provenance and Lineage
+
+Phase 5's ATMS gives every derived fact a support set: the base facts and
+assumptions that justify it. This is /data lineage/ --- knowing not just
+/what/ the query returned, but /why/. In database research, provenance
+semirings (Deutch et al.) formalize this; in Prologos, it falls out naturally
+from the ATMS architecture.
+
+*** Dependent Types = Schema Enforcement
+
+Prologos can type-check relations in ways Prolog never could:
+
+#+begin_src prologos
+;; Schema as type
+defr employee [?name ?dept ?salary]
+  :schema {:name String :dept Department :salary Nat}
+  &> (= ?name "alice") (= ?dept Engineering) (= ?salary 95000N)
+  &> (= ?name "bob")   (= ?dept Marketing)   (= ?salary 72000N)
+
+;; This would be a type error: salary must be Nat
+;; &> (= ?name "eve") (= ?dept Engineering) (= ?salary "high")
+#+end_src
+
+*** Session Types = Query Protocol Safety
+
+For distributed query scenarios (federated databases, agent knowledge exchange),
+session types ensure that query protocols between nodes are well-formed --- you
+can't send a partial join result where a complete one is expected.
+
+** Fact Declaration Syntax
+
+The isomorphism suggests that /bodiless clauses/ (facts) deserve first-class
+syntactic treatment. The current encoding is verbose:
+
+#+begin_src prologos
+;; Verbose: every ground fact requires explicit unification
+defr parent [?x ?y]
+  &> (= ?x "alice") (= ?y "bob")
+  &> (= ?x "bob") (= ?y "carol")
+  &> (= ?x "bob") (= ?y "dave")
+#+end_src
+
+Positional facts:
+
+#+begin_src prologos
+;; Concise positional facts (Prolog-style)
+defr parent [?x ?y]
+  &> "alice" "bob"
+  &> "bob" "carol"
+  &> "bob" "dave"
+#+end_src
+
+Dictionary-style facts (database-style, column names explicit):
+
+#+begin_src prologos
+;; Named-column facts, inspired by SWI-Prolog dict + Datomic
+defr employee [?name ?dept ?salary]
+  &> {:name "alice" :dept Engineering :salary 95000N}
+  &> {:name "bob"   :dept Marketing   :salary 72000N}
+  &> {:name "carol" :dept Engineering :salary 110000N}
+#+end_src
+
+Mixed facts and rules:
+
+#+begin_src prologos
+;; Facts and rules coexist naturally
+defr ancestor [?x ?y]
+  &> (parent ?x ?y)
+  &> (parent ?x ?z) (ancestor ?z ?y)
+
+;; Ground facts are just rules with no subgoals and no logic variables
+defr parent [?x ?y]
+  &> "alice" "bob"
+  &> "bob" "carol"
+#+end_src
+
+The key design decision: a clause body that consists entirely of ground terms
+(no ~?~ variables, no subgoals) is a /fact/. A clause body that contains
+relational goals is a /rule/. This distinction is syntactic sugar --- both
+elaborate to the same propagator infrastructure --- but the sugar matters
+enormously for the database use case, where thousands of facts must be
+declared concisely.
+
+*** Bulk Fact Loading
+
+For the database isomorphism to be practical, we need bulk loading:
+
+#+begin_src prologos
+;; Load facts from an external source
+defr employee [?name ?dept ?salary]
+  :source "employees.csv"
+  :format csv
+  :columns [:name :dept :salary]
+
+;; Or from a Prologos data structure
+def employee-data : [List (Map Keyword Value)]
+  '[{:name "alice" :dept Engineering :salary 95000N}
+    {:name "bob"   :dept Marketing   :salary 72000N}]
+
+defr employee [?name ?dept ?salary]
+  :from employee-data
+#+end_src
+
+Bulk loading is deferred infrastructure, but the /vision/ should inform the
+fact syntax we choose in Phase 7. The syntax must be something that scales
+from 3 facts to 30,000 without becoming unwieldy.
+
+** Scaling Regimes
+
+The database isomorphism operates at different scales:
+
+*** Regime 1: In-Memory, Small-to-Medium (< 1M facts)
+
+Pure Prologos, CHAMP-backed indices, tabling. This is where the sub-ms vs.
+30ms advantage lives. Excellent for:
+- Configuration management
+- Knowledge graphs (ontologies, taxonomies)
+- Policy engines (access control, business rules)
+- Program analysis (points-to, call graphs, type inference)
+- AI agent reasoning (belief bases, world models)
+
+This is the Phase 0 target. The infrastructure (Phases 3-6) is built.
+
+*** Regime 2: Persistent, Medium (1M-100M facts)
+
+Persistent storage backing the fact base, but the query engine is still
+Prologos. CHAMP's persistent data structures provide transactional semantics
+naturally (structural sharing = snapshot isolation). This is the Yedalog /
+Datomic sweet spot.
+
+*** Regime 3: Distributed, Large (> 100M facts)
+
+Distribution, partitioning, parallel semi-naive evaluation. This is where
+Datalog engines like Soufflé, LogicBlox, and Datomic live. Prologos's
+propagator network could potentially distribute (cells on different nodes,
+propagators as message-passing actors), but this is genuine research territory.
+
+** The Yedalog / Logica Connection
+
+Google's Yedalog (2015) and its open-source successor Logica (2020) validated
+the thesis that logic programming as a query language scales at Google's level.
+Key lessons from Yedalog:
+
+1. *Rules compose better than SQL queries*. Engineers could define reusable
+   predicates and compose them freely. CTEs and subqueries in SQL are
+   syntactically and cognitively expensive by comparison.
+
+2. *Aggregation via lattices*. Yedalog extended Datalog with lattice-valued
+   predicates for aggregation (min, max, count, sum). This maps directly to
+   Prologos's lattice answer modes in tabling.
+
+3. *Integration with external data*. Yedalog could query Protocol Buffer
+   datasets and BigTable. Prologos's ~foreign~ and ~:source~ metadata
+   serve the same role.
+
+4. *Bottom-up evaluation is essential*. Top-down Prolog-style evaluation
+   doesn't scale to large fact bases. Datalog-style bottom-up evaluation
+   with tabling does. Prologos's SLG tabling provides this.
+
+Prologos goes further than Yedalog in several ways:
+- *Dependent types* for schema enforcement (Yedalog was untyped)
+- *ATMS provenance* for data lineage (Yedalog had no provenance)
+- *Session types* for distributed query protocol safety
+- *First-class anonymous relations* (~rel~) for ad-hoc query composition
+- *Functional-relational fusion* via ~solve~ / ~is~ (Yedalog was pure Datalog)
+
+** Design Implications for Phase 7
+
+The database isomorphism should inform Phase 7 surface syntax:
+
+1. *Bodiless clauses must be syntactically lightweight*. The primary use case
+   for facts is data entry. Verbose unification syntax (~(= ?x "alice")~)
+   defeats the purpose. Positional and dictionary-style facts are essential.
+
+2. *~defr~ with only ground clauses should be recognizable as a "table"*.
+   The elaborator could optimize pure-fact relations differently (e.g., CHAMP
+   index on first argument, skip tabling overhead for static fact sets).
+
+3. *Bulk loading via ~:source~ / ~:from~ metadata*. The ergonomic path from
+   "I have a CSV" to "I can query it relationally" should be trivially short.
+
+4. *Query results should integrate with the collection system*. ~solve~
+   returns ~Seq (Map Keyword Value)~, which plugs directly into ~map~, ~filter~,
+   ~fold~, ~into-vec~, etc.
+
+5. *Re-usability is the killer feature*. Once ~defr employee~ exists, it can
+   appear as a subgoal in any number of other relations. This is the
+   composability advantage over SQL that the Yedalog engineers identified.
 
 * What This Document Does NOT Cover
 
