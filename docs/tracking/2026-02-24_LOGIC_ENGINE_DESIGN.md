@@ -1,144 +1,177 @@
-- [Executive Summary](#org572f62c)
-  - [Infrastructure Gap Analysis](#orgd797e9a)
-  - [Critical Path](#orgdfd3fbd)
-- [Phase 1: Lattice Trait + Standard Instances](#org379a6c7)
-  - [1.1 Goal](#org854f36f)
-  - [1.2 The `Lattice` Trait](#orgf597ac7)
-  - [1.3 Standard Lattice Instances](#org77040c5)
-    - [1.3.1 `FlatLattice A` — Three-Point Lattice](#orgbe90689)
-    - [1.3.2 `SetLattice A` — Powerset Lattice (Set Union)](#org434e01d)
-    - [1.3.3 `MapLattice K V` — Pointwise Map Lattice](#orgcff0d87)
-    - [1.3.4 `IntervalLattice` — Numeric Intervals](#orgb912fb6)
-    - [1.3.5 `BoolLattice` — Two-Point Lattice](#orgadd6ad9)
-  - [1.4 Racket-Level Implementation](#org06e644c)
-  - [1.5 `champ-insert-join` — Racket-Level Helper](#orge93fe53)
-  - [1.6 New Files](#org9dc97dc)
-  - [1.7 Tests (~25)](#org391e606)
-  - [1.8 Dependencies](#org040c911)
-- [Phase 2: Persistent Propagator Network](#org88d1603)
-  - [2.1 Goal](#orgf66f55e)
-  - [2.2 Architecture](#org7eefea4)
-  - [2.3 Core Data Structures (All Persistent)](#org986d9ec)
-    - [2.3.1 Identity Types](#org9100e4a)
-    - [2.3.2 `prop-cell` — Propagator Cell (Immutable)](#org9aea99b)
-    - [2.3.3 `propagator` — Monotone Function (Immutable)](#org09ab42a)
-    - [2.3.4 `prop-network` — The Network as Value](#orgc5d14fd)
-  - [2.4 Pure Operations](#org845c011)
-  - [2.5 Concrete `fire-fn` Example: Adder Propagator](#org907eaf2)
-  - [2.6 `run-to-quiescence` — Pure Loop](#orgfc75225)
-  - [2.7 Contradiction Handling (Per-Cell `contradicts?` Predicate)](#org384dc1b)
-  - [2.8 LVars Are Subsumed by Cells](#org149e12c)
-  - [2.9 AST Nodes (~12)](#org43e2076)
-  - [2.10 New/Modified Files](#org8a6b2e1)
-  - [2.11 Tests (~60)](#org0cc209f)
-  - [2.12 Dependencies](#orga91ad1e)
-- [Phase 3: PropNetwork as Prologos Type](#org0b1408c)
-  - [3.1 Goal](#org657480c)
-  - [3.2 Why a Separate Phase](#orgadd2a95)
-  - [3.3 Type Signatures](#org79c2c0a)
-  - [3.4 LVar Operations as Library Functions](#org4ef1913)
-  - [3.5 AST Nodes (12)](#orgcccf53c)
-  - [3.6 New/Modified Files](#org2f72f14)
-  - [3.7 Tests (~50)](#orgc7acf01)
-  - [3.8 Dependencies](#org3ee5f44)
-- [Phase 4: UnionFind — Persistent Disjoint Sets](#org08afc3c)
-  - [4.1 Goal](#orgaa73536)
-  - [4.2 Design](#org17431f0)
-  - [4.3 Key Properties](#orgf8c39d0)
-  - [4.4 Integration with Logic Engine: UF vs Cell Division of Labor](#org26afda1)
-  - [4.5 AST Nodes (~6)](#orgf51e8bb)
-  - [4.6 New/Modified Files](#orgc8235e4)
-  - [4.7 Tests (~30)](#orgfa69e50)
-  - [4.8 Dependencies](#orgb2f8646)
-- [Phase 5: Persistent ATMS Layer — Hypothetical Reasoning](#org6773adc)
-  - [5.1 Goal](#orgeae7ff0)
-  - [5.2 Core Data Structures (All Persistent)](#org12e5bfb)
-    - [`assumption` — Hypothetical Premise](#org7eace1e)
-    - [`supported-value` — Value + Justification](#org6ce9a48)
-    - [`tms-cell` — Truth-Maintained Cell (Immutable)](#orgf5aaafa)
-    - [`atms` — The Persistent ATMS](#org8529aec)
-  - [5.3 Pure Operations](#org360f30a)
-  - [5.4 The `amb` Operator (Pure)](#org8144fe8)
-  - [5.5 Two-Tier Mode: Lazy ATMS Activation](#org2dee4cc)
-  - [5.6 Contradiction Handler (Dependency-Directed Backtracking)](#orgfe203de)
-  - [5.7 Answer Collection (Pure)](#org06966cc)
-  - [5.8 AST Nodes (~10)](#org8046601)
-  - [5.9 New/Modified Files](#org603c2f3)
-  - [5.10 Tests (~50)](#orgc891d82)
-  - [5.11 Dependencies](#org83473f6)
-- [Phase 6: Tabling — SLG-Style Memoization](#orgb8af292)
-  - [6.1 Goal](#org616be8f)
-  - [6.2 Design (XSB-Style SLG Resolution)](#org8046eba)
-  - [6.3 Table Lifecycle](#org4559646)
-  - [6.4 Core Data Structures (Persistent)](#org333db18)
-  - [6.5 Lattice Answer Modes](#orgd417073)
-  - [6.6 Spec Metadata Integration](#org441a6ba)
-  - [6.7 AST Nodes (~8)](#orgce4af05)
-  - [6.8 New/Modified Files](#orgb1e5d91)
-  - [6.9 Tests (~40)](#org97e163b)
-  - [6.10 Dependencies](#org351dd5d)
-- [Phase 7: Surface Syntax — `defr`, `rel`, `solve`, `&>`](#org366358b)
-  - [7.1 Goal](#org2637041)
-  - [7.2 Reader Changes](#orge54aae8)
-  - [7.3 Parser Changes](#orgcab9432)
-  - [7.4 Elaboration](#orgdd004aa)
-    - [7.4.1 `defr` Elaboration](#orgcb90b73)
-    - [7.4.2 `solve` Elaboration (Functional-Relational Bridge)](#orgc0bb2f4)
-  - [7.5 Grammar Updates](#org6664ad9)
-  - [7.6 Compile-Time Stratification Check](#orgf4fe44e)
-  - [7.7 AST Nodes (~15)](#orgb2c8db1)
-  - [7.8 New/Modified Files](#orgbafad4e)
-  - [7.9 Tests (~80)](#org71d9176)
-  - [7.10 Dependencies](#orgcddab05)
-- [Phase Summary](#org2bd26d1)
-- [Interaction with Existing Infrastructure](#orgd5bee88)
-  - [Metavar System](#orgf7011e3)
-  - [Trait System](#org58ff73c)
-  - [Spec Metadata](#orgdaa4aef)
-  - [Warnings](#org5d9e6e0)
-  - [QTT / Multiplicities](#org3021e61)
-  - [Collections](#orge4bceb4)
-- [Appendix A: Resolution by Example — `ancestor` as Propagators](#orgc14277e)
-  - [A.1 Source Program](#org115293e)
-  - [A.2 Step 1: Table Creation](#org0d56766)
-  - [A.3 Step 2: Clause 1 → Producer Propagator](#org7a77815)
-  - [A.4 Step 3: Clause 2 → Producer Propagator](#orgccb0287)
-  - [A.5 Step 4: Run to Quiescence](#org1b3ab11)
-  - [A.6 Step 5: Answer Extraction](#org81c8bbb)
-- [Appendix B: End-to-End Query Walkthrough (All Three Layers)](#orga52a81c)
-  - [B.1 Source Program](#org176eb1a)
-  - [B.2 Compile-Time: Stratification Check](#org8fbbdcc)
-  - [B.3 Runtime: Layer 1 — PropNetwork (Stratum 0)](#org3519b2e)
-  - [B.4 Runtime: Layer 3 — Stratum Boundary](#orgbb5180c)
-  - [B.5 Runtime: Layer 2 — ATMS (if needed)](#org8f7765c)
-  - [B.6 Summary: Which Layer Handles What](#org89db1bd)
-- [Performance Expectations](#orgb96157f)
-  - [Cost Model](#org65e6d4f)
-  - [Benchmark Targets (to validate during implementation)](#org7b01b83)
-  - [When Performance Matters Most](#org662ea4e)
-- [What This Design Does NOT Cover](#orgfdc9a70)
-  - [Elaborator Refactoring (Phase 1 of Research Doc)](#org83eda7e)
-  - [Galois Connections / Domain Embeddings (Phase 6 of Research Doc)](#orgd1c2d2a)
-  - [Full Stratified Evaluation Runtime (Phase 4 of Research Doc)](#org0708b34)
-  - [CRDTs / Distributed Logic](#orga0be10a)
-  - [QuickCheck / Property Testing](#orge716ecf)
-- [Architectural Decision: Persistent Networks](#org6e593b1)
-  - [The Problem with Mutable Propagator Networks](#org4952349)
-  - [The Persistent Solution](#org8a70b2a)
-  - [LVar Elimination](#org67ed6c0)
-- [Key Lessons from Prior Work](#org8c7c323)
-- [References](#org1f8f5f1)
-  - [Phase 1 (Lattice)](#org0b9e283)
-  - [Phase 2 (Propagators)](#org9027863)
-  - [Phase 3 (LVars)](#org7c361ea)
-  - [Phase 4 (UnionFind)](#orgf2453e5)
-  - [Phase 5 (ATMS)](#org3ed8c91)
-  - [Phase 6 (Tabling)](#orgd0c0bbb)
-  - [Phase 7 (Surface)](#org7d37679)
+- [Executive Summary](#org53c6fa5)
+  - [Infrastructure Gap Analysis](#orga068faa)
+  - [Critical Path](#orgc42492f)
+- [Phase 1: Lattice Trait + Standard Instances](#orgcb596d9)
+  - [1.1 Goal](#orgafb2ab0)
+  - [1.2 The `Lattice` Trait](#orgefe97f7)
+  - [1.3 Standard Lattice Instances](#orgb2ad4db)
+    - [1.3.1 `FlatLattice A` — Three-Point Lattice](#org636ac15)
+    - [1.3.2 `SetLattice A` — Powerset Lattice (Set Union)](#orgc1bf018)
+    - [1.3.3 `MapLattice K V` — Pointwise Map Lattice](#org553edb1)
+    - [1.3.4 `IntervalLattice` — Numeric Intervals](#orgcebb1da)
+    - [1.3.5 `BoolLattice` — Two-Point Lattice](#org5199f9d)
+  - [1.4 Racket-Level Implementation](#org4d48f4f)
+  - [1.5 `champ-insert-join` — Racket-Level Helper](#org91b3133)
+  - [1.6 New Files](#org2acf744)
+  - [1.7 Tests (~25)](#org26c0ebb)
+  - [1.8 Dependencies](#org62fbc2f)
+- [Phase 2: Persistent Propagator Network](#org70460bb)
+  - [2.1 Goal](#org921ad1d)
+  - [2.2 Architecture](#orgebe733d)
+  - [2.3 Core Data Structures (All Persistent)](#org532d415)
+    - [2.3.1 Identity Types](#org7a2e9fd)
+    - [2.3.2 `prop-cell` — Propagator Cell (Immutable)](#orgcd800be)
+    - [2.3.3 `propagator` — Monotone Function (Immutable)](#orge7cc84d)
+    - [2.3.4 `prop-network` — The Network as Value](#orge08d3ee)
+  - [2.4 Pure Operations](#orgfe1782c)
+  - [2.5 Concrete `fire-fn` Example: Adder Propagator](#org5550c4e)
+  - [2.6 `run-to-quiescence` — Pure Loop](#org0c4e5e7)
+  - [2.7 Contradiction Handling (Per-Cell `contradicts?` Predicate)](#org96d3d6d)
+  - [2.8 LVars Are Subsumed by Cells](#orgc8a6c9b)
+  - [2.9 AST Nodes (~12)](#org656214d)
+  - [2.10 New/Modified Files](#orgf89a263)
+  - [2.11 Tests (~60)](#org56444c1)
+  - [2.12 Dependencies](#orgf75e09c)
+- [Phase 2.5: BSP Parallel Execution ✅](#org272ceb0)
+  - [2.5.1 Goal](#orgb2c21c4)
+  - [2.5.2 BSP Scheduler (Jacobi Iteration)](#org8c9dd16)
+  - [2.5.3 Threshold Propagators](#org27b3752)
+  - [2.5.4 Parallel Executor](#org23fd38f)
+  - [2.5.5 Implications for Later Phases](#org3438a32)
+  - [2.5.6 New Functions](#orgb01da9e)
+  - [2.5.7 Files and Tests](#orgb208411)
+  - [2.5.8 Key Design Decisions](#org62d1abc)
+- [Phase 3: PropNetwork as Prologos Type](#org09f4e35)
+  - [3.1 Goal](#org0b0c95f)
+  - [3.2 Why a Separate Phase](#org756188e)
+  - [3.3 Type Signatures](#org90bb49b)
+  - [3.4 LVar Operations as Library Functions](#org9337ce9)
+  - [3.5 AST Nodes (12)](#org1845aac)
+  - [3.6 New/Modified Files](#orga1e9a03)
+  - [3.7 Tests (~50)](#orga17b15c)
+  - [3.8 Dependencies](#orgf73a081)
+- [Phase 4: UnionFind — Persistent Disjoint Sets](#org19c6898)
+  - [4.1 Goal](#orgfacaf7d)
+  - [4.2 Design](#orgc700459)
+  - [4.3 Key Properties](#org1dd2513)
+  - [4.4 Integration with Logic Engine: UF vs Cell Division of Labor](#org43a92cc)
+  - [4.5 AST Nodes (~6)](#orgf23ed2b)
+  - [4.6 New/Modified Files](#org6bf4876)
+  - [4.7 Tests (~30)](#org94b5b41)
+  - [4.8 Dependencies](#org542fd55)
+- [Phase 5: Persistent ATMS Layer — Hypothetical Reasoning](#org79e8ae7)
+  - [5.1 Goal](#orgce01c25)
+  - [5.2 Core Data Structures (All Persistent)](#org7ed5b42)
+    - [`assumption` — Hypothetical Premise](#org2fcf12c)
+    - [`supported-value` — Value + Justification](#orge0d304e)
+    - [`tms-cell` — Truth-Maintained Cell (Immutable)](#orgdac9b17)
+    - [`atms` — The Persistent ATMS](#orgb06e4eb)
+  - [5.3 Pure Operations](#org50da35b)
+  - [5.4 The `amb` Operator (Pure)](#orga07bf0f)
+  - [5.5 Two-Tier Mode: Lazy ATMS Activation](#orgbf7ba82)
+  - [5.6 Contradiction Handler (Dependency-Directed Backtracking)](#org7ac4146)
+  - [5.7 Answer Collection (Pure)](#org19127fd)
+  - [5.8 BSP Integration: Parallel Worldview Exploration](#orgf5fd667)
+  - [5.9 AST Nodes (~10)](#org9e641c0)
+  - [5.10 New/Modified Files](#orgcd7df09)
+  - [5.11 Tests (~50)](#org0e8f3a1)
+  - [5.12 Dependencies](#org9b027c6)
+- [Phase 6: Tabling — SLG-Style Memoization](#org38eb09d)
+  - [6.1 Goal](#orgaac61cb)
+  - [6.2 Design (XSB-Style SLG Resolution)](#org50d0e71)
+  - [6.3 Table Lifecycle](#orgca3c87b)
+  - [6.4 Core Data Structures (Persistent)](#org05031eb)
+  - [6.5 Lattice Answer Modes](#org4f9a6c9)
+  - [6.6 Spec Metadata Integration](#orgd11b876)
+  - [6.7 BSP Integration: Parallel Table Evaluation](#org6b9d901)
+  - [6.8 AST Nodes (~8)](#org90f5e99)
+  - [6.9 New/Modified Files](#org3ba240f)
+  - [6.10 Tests (~40)](#org9fc6390)
+  - [6.11 Dependencies](#orgbf259e7)
+- [Phase 7: Surface Syntax — `defr`, `rel`, `solve`, `explain`, `solver`, `&>`](#org9a76dad)
+  - [7.1 Goal](#orgcb95cc2)
+  - [7.2 Reader Changes](#org7430f6d)
+  - [7.3 Parser Changes](#orgd3db3ee)
+  - [7.4 Elaboration](#org59986c1)
+    - [7.4.1 `defr` Elaboration](#org81cb252)
+    - [7.4.2 `solve` Elaboration (Functional-Relational Bridge)](#org83334ed)
+    - [7.4.3 `solve-with` Elaboration (Map Merge Override)](#orgf980c59)
+    - [7.4.4 `explain` Elaboration (Provenance-Bearing Bridge)](#orgf33e71a)
+  - [7.5 Grammar Updates](#org9cfd26d)
+  - [7.6 Solver, Solve, and Explain — Unified Design](#orga9da883)
+    - [7.6.1 Design Overview](#org3c707b7)
+    - [7.6.2 The `solver` Top-Level Form](#org02c0222)
+    - [7.6.3 The `Answer` Type](#org0d583a3)
+    - [7.6.4 Dispatch: `solve` / `explain` and `default-solver`](#org447b2ff)
+    - [7.6.5 Map Merge Overrides with `{...}`](#org8051dc5)
+    - [7.6.6 `default-solver` Shadowing](#org90e01c0)
+    - [7.6.7 `solver` Elaboration](#orged75476)
+    - [7.6.8 Default-Parallel Tradeoffs](#orgb2fc3ab)
+  - [7.7 Compile-Time Stratification Check](#orga4fb860)
+  - [7.8 AST Nodes (~21)](#org5fa248a)
+    - [Relational Core (~9)](#orgcff89b3)
+    - [Solve Family (~4)](#org4cf0232)
+    - [Explain Family (~2)](#org7001821)
+    - [Solver Config (~2)](#org7549044)
+    - [Answer + Provenance Types (~2)](#org1b62339)
+    - [Control (~2)](#org7cc8613)
+  - [7.9 New/Modified Files](#orgf376ccc)
+  - [7.10 Tests (~110)](#org1de0a95)
+    - [Relations and Goals (~20)](#org886f3ce)
+    - [Solve Family (~15)](#org631cb38)
+    - [Explain Family (~20)](#org363ad14)
+    - [Solver Config (~15)](#org901ded8)
+    - [Stratification (~5)](#org7ad9aff)
+  - [7.11 Dependencies](#org1df2378)
+- [Phase Summary](#org4f26588)
+- [Interaction with Existing Infrastructure](#org3f111e4)
+  - [Metavar System](#org7b4ca52)
+  - [Trait System](#orgf228fbd)
+  - [Spec Metadata](#org404b88d)
+  - [Warnings](#org8d0e8b7)
+  - [QTT / Multiplicities](#org4c3ce6d)
+  - [Collections](#org3e77afb)
+- [Appendix A: Resolution by Example — `ancestor` as Propagators](#org0ef03b7)
+  - [A.1 Source Program](#org2e20bd8)
+  - [A.2 Step 1: Table Creation](#orgcdfbe27)
+  - [A.3 Step 2: Clause 1 → Producer Propagator](#org9199d4c)
+  - [A.4 Step 3: Clause 2 → Producer Propagator](#org51dfc67)
+  - [A.5 Step 4: Run to Quiescence](#orgacbbc37)
+  - [A.6 Step 5: Answer Extraction](#org9a7168d)
+- [Appendix B: End-to-End Query Walkthrough (All Three Layers)](#org2e89354)
+  - [B.1 Source Program](#org648f912)
+  - [B.2 Compile-Time: Stratification Check](#org1a77fb5)
+  - [B.3 Runtime: Layer 1 — PropNetwork (Stratum 0)](#orge82c3fc)
+  - [B.4 Runtime: Layer 3 — Stratum Boundary](#org075cd31)
+  - [B.5 Runtime: Layer 2 — ATMS (if needed)](#orgb3a8542)
+  - [B.6 Summary: Which Layer Handles What](#orgecc2b41)
+- [Performance Expectations](#org336263f)
+  - [Cost Model](#org59ada23)
+  - [Benchmark Targets (to validate during implementation)](#org50714e3)
+  - [When Performance Matters Most](#org93b7a44)
+- [What This Design Does NOT Cover](#org4695c41)
+  - [Elaborator Refactoring (Phase 1 of Research Doc)](#orgeea8721)
+  - [Galois Connections / Domain Embeddings (Phase 6 of Research Doc)](#org3ce9a3c)
+  - [Full Stratified Evaluation Runtime (Phase 4 of Research Doc)](#org8656864)
+  - [CRDTs / Distributed Logic](#org349960b)
+  - [QuickCheck / Property Testing](#org8d634d0)
+- [Architectural Decision: Persistent Networks](#org00bb04e)
+  - [The Problem with Mutable Propagator Networks](#orgb0cfe76)
+  - [The Persistent Solution](#orgeb7d781)
+  - [LVar Elimination](#org5bf1782)
+- [Key Lessons from Prior Work](#org02c3bd2)
+- [References](#org4fe78d6)
+  - [Phase 1 (Lattice)](#org7c6e651)
+  - [Phase 2 (Propagators)](#org1db6700)
+  - [Phase 3 (LVars)](#org6d3d17d)
+  - [Phase 4 (UnionFind)](#orgf98ab5b)
+  - [Phase 5 (ATMS)](#org9b45f75)
+  - [Phase 6 (Tabling)](#org6432113)
+  - [Phase 7 (Surface)](#org8217c9f)
 
 
 
-<a id="org572f62c"></a>
+<a id="org53c6fa5"></a>
 
 # Executive Summary
 
@@ -153,81 +186,85 @@ And the relational language vision:
 
 -   [Relational Language Vision](principles/RELATIONAL_LANGUAGE_VISION.md) — surface syntax decisions
 
-The engine is built bottom-up in 7 phases:
+The engine is built bottom-up in 8 phases:
 
-1.  **Lattice Trait + champ-insert-join** — the algebraic foundation
-2.  **Persistent PropNetwork** (Racket-level) — the monotonic data plane as value
-2.5.  **BSP Parallel Propagator Execution** — BSP scheduler, threshold propagators, parallel executor
-3.  **PropNetwork as Prologos Type** — expose network ops to the type system
-4.  **UnionFind** — persistent disjoint sets for unification
-5.  **Persistent ATMS** — hypothetical reasoning as value
-6.  **Tabling** — SLG-style memoization for completeness
-7.  **Surface Syntax** — `defr`, `rel`, `solve`, `&>`
+1.  **Lattice Trait + champ-insert-join** — the algebraic foundation ✅
+2.  **Persistent PropNetwork** (Racket-level) — the monotonic data plane as value ✅
+
+2.5. **BSP Parallel Execution** — Jacobi scheduler, threshold propagators, parallel executor ✅
+
+1.  **PropNetwork as Prologos Type** — expose network ops to the type system ✅
+2.  **UnionFind** — persistent disjoint sets for unification
+3.  **Persistent ATMS** — hypothetical reasoning as value
+4.  **Tabling** — SLG-style memoization for completeness
+5.  **Surface Syntax** — `defr`, `rel`, `solve`, `explain`, `solver`, `&>`
 
 Key architectural decision: the entire propagator network and ATMS are **persistent/immutable values** backed by CHAMP maps. Backtracking = keep old reference (O(1)). Snapshots = free. Network mobility = serialize value. LVars are subsumed by PropNetwork cells (join-on-write semantics).
 
 Phases 1-4 are infrastructure with no surface syntax changes. Phase 5-6 add runtime logic capabilities. Phase 7 adds the user-facing language.
 
 
-<a id="orgd797e9a"></a>
+<a id="orga068faa"></a>
 
 ## Infrastructure Gap Analysis
 
-| Component                 | Status           | What Exists                      | What's Needed                         |
-|------------------------- |---------------- |-------------------------------- |------------------------------------- |
-| Persistent collections    | COMPLETE         | PVec, Map, Set, List, LSeq       | —                                     |
-| CHAMP lattice helper      | COMPLETE         | `champ-insert-join` in champ.rkt | —                                     |
-| Transient builders        | COMPLETE         | TVec, TMap, TSet, with-transient | —                                     |
-| Trait system              | COMPLETE         | Registry, resolution, bundles    | Lattice trait + instances             |
-| Property system           | Phase 1 COMPLETE | Storage, flattening, accessors   | QuickCheck for :holds (Phase 2+)      |
-| Spec metadata             | Phase 1 COMPLETE | :examples, :deprecated, :doc     | :tabled, :answer-mode, :strategy      |
-| Metavar system            | COMPLETE         | 4 parallel stores, constraints   | Refactor to propagator cells (later)  |
-| Lattice trait             | NOT STARTED      | —                                | trait + 5-8 standard instances        |
-| Persistent PropNetwork    | NOT STARTED      | —                                | Immutable network, pure ops, CHAMP    |
-| PropNetwork Prologos type | NOT STARTED      | —                                | AST nodes, type rules, reduction      |
-| UnionFind                 | NOT STARTED      | —                                | Persistent disjoint sets              |
-| Persistent ATMS           | NOT STARTED      | —                                | Immutable ATMS, worldview switching   |
-| Tabling                   | NOT STARTED      | —                                | Producer/consumer, table cells        |
-| Stratification            | NOT STARTED      | —                                | SCC decomposition, stratum evaluation |
-| Logic syntax              | NOT STARTED      | —                                | defr, rel, solve, &>, ?var            |
+| Component                 | Status           | What Exists                                    | What's Needed                                   |
+|------------------------- |---------------- |---------------------------------------------- |----------------------------------------------- |
+| Persistent collections    | COMPLETE         | PVec, Map, Set, List, LSeq                     | —                                               |
+| CHAMP lattice helper      | COMPLETE         | `champ-insert-join` in champ.rkt               | —                                               |
+| Transient builders        | COMPLETE         | TVec, TMap, TSet, with-transient               | —                                               |
+| Trait system              | COMPLETE         | Registry, resolution, bundles                  | Lattice trait + instances                       |
+| Property system           | Phase 1 COMPLETE | Storage, flattening, accessors                 | QuickCheck for :holds (Phase 2+)                |
+| Spec metadata             | Phase 1 COMPLETE | :examples, :deprecated, :doc                   | :tabled, :answer-mode, :strategy                |
+| Metavar system            | COMPLETE         | 4 parallel stores, constraints                 | Refactor to propagator cells (later)            |
+| Lattice trait             | COMPLETE         | Lattice + HasTop traits, BoundedLattice bundle | 5 instances (FlatVal, Bool, Interval, Set, Map) |
+| BSP parallel execution    | COMPLETE         | BSP scheduler, threshold props, parallel exec  | ~18 tests, Jacobi iteration                     |
+| Persistent PropNetwork    | COMPLETE         | Immutable network, pure ops, CHAMP             | 55 tests, 9 core operations                     |
+| PropNetwork Prologos type | COMPLETE         | 14 AST nodes, full pipeline                    | 56 tests, library wrappers                      |
+| UnionFind                 | NOT STARTED      | —                                              | Persistent disjoint sets                        |
+| Persistent ATMS           | NOT STARTED      | —                                              | Immutable ATMS, worldview switching             |
+| Tabling                   | NOT STARTED      | —                                              | Producer/consumer, table cells                  |
+| Stratification            | NOT STARTED      | —                                              | SCC decomposition, stratum evaluation           |
+| Logic syntax              | NOT STARTED      | —                                              | defr, rel, solve, &>, ?var                      |
 
 
-<a id="orgdfd3fbd"></a>
+<a id="orgc42492f"></a>
 
 ## Critical Path
 
 ```
-Phase 1 (Lattice + champ-insert-join)
+Phase 1 (Lattice + champ-insert-join)                          ✅
   ↓
-Phase 2 (Persistent PropNetwork, Racket-level) ←── depends on Phase 1
+Phase 2 (Persistent PropNetwork, Racket-level)                 ✅
   ↓
-Phase 2.5 (BSP + Thresholds + Parallel) ←── depends on Phase 2
+Phase 2.5 (BSP Parallel Execution)                             ✅
   ↓
-Phase 3 (PropNetwork as Prologos Type) ←── depends on Phase 2.5
+Phase 3 (PropNetwork as Prologos Type)                         ✅
   ↓                    ↓
-Phase 4 (UnionFind) ←─ can proceed in parallel with Phase 3
+Phase 4 (UnionFind) ←─ can proceed in parallel with Phase 5
   ↓                    ↓
 Phase 5 (Persistent ATMS) ←── depends on Phase 3
-  ↓
+  ↓       uses BSP scheduler for parallel worldview exploration
 Phase 6 (Tabling) ←── depends on Phase 3, Phase 5
-  ↓
+  ↓       table producers/consumers are BSP-compatible propagators
 Phase 7 (Surface Syntax) ←── depends on ALL previous phases
+          solver keyword, default-parallel via BSP
 ```
 
 
-<a id="org379a6c7"></a>
+<a id="orgcb596d9"></a>
 
 # Phase 1: Lattice Trait + Standard Instances
 
 
-<a id="org854f36f"></a>
+<a id="orgafb2ab0"></a>
 
 ## 1.1 Goal
 
 Establish the `Lattice` trait — the algebraic foundation for monotonic computation. Every propagator cell, LVar, and ATMS label set requires a lattice domain. By defining `Lattice` as a standard Prologos trait, we get automatic dictionary resolution at both compile-time and runtime.
 
 
-<a id="orgf597ac7"></a>
+<a id="orgefe97f7"></a>
 
 ## 1.2 The `Lattice` Trait
 
@@ -249,12 +286,12 @@ trait Lattice {A : Type}
 ```
 
 
-<a id="org77040c5"></a>
+<a id="orgb2ad4db"></a>
 
 ## 1.3 Standard Lattice Instances
 
 
-<a id="orgbe90689"></a>
+<a id="org636ac15"></a>
 
 ### 1.3.1 `FlatLattice A` — Three-Point Lattice
 
@@ -285,7 +322,7 @@ defn flat-join [a b]
 ```
 
 
-<a id="org434e01d"></a>
+<a id="orgc1bf018"></a>
 
 ### 1.3.2 `SetLattice A` — Powerset Lattice (Set Union)
 
@@ -303,7 +340,7 @@ instance Lattice [SetLattice A]
 ```
 
 
-<a id="orgcff0d87"></a>
+<a id="org553edb1"></a>
 
 ### 1.3.3 `MapLattice K V` — Pointwise Map Lattice
 
@@ -326,7 +363,7 @@ defn map-lattice-join [m1 m2]
 ```
 
 
-<a id="orgb912fb6"></a>
+<a id="orgcebb1da"></a>
 
 ### 1.3.4 `IntervalLattice` — Numeric Intervals
 
@@ -346,7 +383,7 @@ instance Lattice Interval
 ```
 
 
-<a id="orgadd6ad9"></a>
+<a id="org5199f9d"></a>
 
 ### 1.3.5 `BoolLattice` — Two-Point Lattice
 
@@ -360,7 +397,7 @@ instance Lattice Bool
 ```
 
 
-<a id="org06e644c"></a>
+<a id="org4d48f4f"></a>
 
 ## 1.4 Racket-Level Implementation
 
@@ -376,7 +413,7 @@ At the Racket level, lattice operations are dispatched via the existing trait sy
 No new AST nodes needed for Phase 1. The trait and instance declarations use existing infrastructure.
 
 
-<a id="orge93fe53"></a>
+<a id="org91b3133"></a>
 
 ## 1.5 `champ-insert-join` — Racket-Level Helper
 
@@ -396,7 +433,7 @@ A lattice-aware CHAMP insert that joins on collision, rather than replacing. Thi
 This enables the propagator network to store cell values in a CHAMP map with join-on-write semantics: writing to a cell computes `merge-fn(old-value, new-value)` and inserts the result.
 
 
-<a id="org9dc97dc"></a>
+<a id="org2acf744"></a>
 
 ## 1.6 New Files
 
@@ -407,7 +444,7 @@ This enables the propagator network to store cell values in a CHAMP map with joi
 | `tests/test-lattice.rkt`                       | Trait resolution + law tests |
 
 
-<a id="org391e606"></a>
+<a id="org26c0ebb"></a>
 
 ## 1.7 Tests (~25)
 
@@ -420,7 +457,7 @@ This enables the propagator network to store cell values in a CHAMP map with joi
 -   Laws: commutativity, associativity, idempotency of join (6 tests per instance)
 
 
-<a id="org040c911"></a>
+<a id="org62fbc2f"></a>
 
 ## 1.8 Dependencies
 
@@ -434,12 +471,12 @@ This enables the propagator network to store cell values in a CHAMP map with joi
 &#x2014;
 
 
-<a id="org88d1603"></a>
+<a id="org70460bb"></a>
 
 # Phase 2: Persistent Propagator Network
 
 
-<a id="orgf66f55e"></a>
+<a id="org921ad1d"></a>
 
 ## 2.1 Goal
 
@@ -448,7 +485,7 @@ Implement the monotonic data plane as a **persistent, immutable value**. The ent
 This is a critical design choice: the propagator network is a **first-class value** that can be snapshotted (free), backtracked (O(1) — keep old reference), migrated (serialize and send), and compared (structural equality).
 
 
-<a id="org7eefea4"></a>
+<a id="orgebe733d"></a>
 
 ## 2.2 Architecture
 
@@ -484,12 +521,12 @@ let net2 = (net-cell-write net1 cell-b 99)
 ```
 
 
-<a id="org986d9ec"></a>
+<a id="org532d415"></a>
 
 ## 2.3 Core Data Structures (All Persistent)
 
 
-<a id="org9100e4a"></a>
+<a id="org7a2e9fd"></a>
 
 ### 2.3.1 Identity Types
 
@@ -504,7 +541,7 @@ let net2 = (net-cell-write net1 cell-b 99)
 Cell and propagator identities are monotonic counters *inside* the network. This makes networks deterministic (no gensym side effects) and serializable.
 
 
-<a id="org9aea99b"></a>
+<a id="orgcd800be"></a>
 
 ### 2.3.2 `prop-cell` — Propagator Cell (Immutable)
 
@@ -518,7 +555,7 @@ Cell and propagator identities are monotonic counters *inside* the network. This
 Note: no `id` field in the cell struct itself — the identity is the key in the network's cells map. No `domain` field — the merge function is stored in the network's `merge-fns` map, keyed by cell-id.
 
 
-<a id="org09ab42a"></a>
+<a id="orge7cc84d"></a>
 
 ### 2.3.3 `propagator` — Monotone Function (Immutable)
 
@@ -533,7 +570,7 @@ Note: no `id` field in the cell struct itself — the identity is the key in the
 The `fire-fn` is a **pure function** from network to network. It reads input cells from the network, computes new values, and returns a network with updated output cells. No side effects.
 
 
-<a id="orgc5d14fd"></a>
+<a id="orge08d3ee"></a>
 
 ### 2.3.4 `prop-network` — The Network as Value
 
@@ -560,7 +597,7 @@ Key design choices:
 -   **All CHAMP-backed**: O(log₃₂ n) ≈ O(C) where C ≤ 7 for practical n
 
 
-<a id="org845c011"></a>
+<a id="orgfe1782c"></a>
 
 ## 2.4 Pure Operations
 
@@ -655,7 +692,7 @@ All operations take a network and return a new network. The old network is never
 ```
 
 
-<a id="org907eaf2"></a>
+<a id="org5550c4e"></a>
 
 ## 2.5 Concrete `fire-fn` Example: Adder Propagator
 
@@ -702,7 +739,7 @@ Key observations:
 For the logic engine (Phase 7), a typical `fire-fn` will be a *clause propagator* that attempts unification and writes answer substitutions to a table cell. See Appendix A: Resolution by Example for a worked walkthrough.
 
 
-<a id="orgfc75225"></a>
+<a id="org0c4e5e7"></a>
 
 ## 2.6 `run-to-quiescence` — Pure Loop
 
@@ -742,7 +779,7 @@ Properties:
 -   **Backtrackable**: keep old `net` reference = instant O(1) backtrack
 
 
-<a id="org384dc1b"></a>
+<a id="org96d3d6d"></a>
 
 ## 2.7 Contradiction Handling (Per-Cell `contradicts?` Predicate)
 
@@ -773,7 +810,7 @@ This design avoids requiring `top?` in the `Lattice` trait (which would force ev
 At the pure-network level, contradiction simply records which cell was contradicted. The ATMS layer (Phase 5) interprets this and performs dependency-directed backtracking. Without ATMS, contradiction halts the network.
 
 
-<a id="org149e12c"></a>
+<a id="orgc8a6c9b"></a>
 
 ## 2.8 LVars Are Subsumed by Cells
 
@@ -790,10 +827,10 @@ A key simplification: **LVars are just cells in a persistent network**.
 
 This elimination removes the need for a separate LVar module and ~10 dedicated LVar AST nodes. The propagator network *is* the lattice-compatible collection — its cells natively do join-on-write via the `merge-fn`.
 
-Threshold reads: implemented in Phase 2.5 as **threshold propagators** (`make-threshold-fire-fn`, `make-barrier-fire-fn`). These gate downstream computation until a cell's value crosses a lattice threshold — push-based and reactive, not polling. Works with both Gauss-Seidel and BSP schedulers. True blocking threshold reads (for parallel LVar-style programming with actors/places) are deferred to when actor/place integration is built.
+Threshold reads: for the synchronous logic engine (not parallel), threshold reads are implemented as propagators that check conditions after quiescence. True blocking threshold reads (for parallel LVar-style programming) are deferred to when actor/place integration is built.
 
 
-<a id="org43e2076"></a>
+<a id="org656214d"></a>
 
 ## 2.9 AST Nodes (~12)
 
@@ -815,7 +852,7 @@ New `expr-*` structs in `syntax.rkt`:
 | `expr-cell-id-type`    | —                    | Type constructor CellId      |
 
 
-<a id="org8a6b2e1"></a>
+<a id="orgf89a263"></a>
 
 ## 2.10 New/Modified Files
 
@@ -836,7 +873,7 @@ New `expr-*` structs in `syntax.rkt`:
 | `tests/test-propagator-quiescence.rkt` | NEW                               |
 
 
-<a id="org0cc209f"></a>
+<a id="org56444c1"></a>
 
 ## 2.11 Tests (~60)
 
@@ -860,7 +897,7 @@ New `expr-*` structs in `syntax.rkt`:
 -   Integration: lattice instances work through network cells
 
 
-<a id="orga91ad1e"></a>
+<a id="orgf75e09c"></a>
 
 ## 2.12 Dependencies
 
@@ -872,26 +909,156 @@ New `expr-*` structs in `syntax.rkt`:
 &#x2014;
 
 
-<a id="org0b1408c"></a>
+<a id="org272ceb0"></a>
+
+# Phase 2.5: BSP Parallel Execution ✅
+
+
+<a id="orgb2c21c4"></a>
+
+## 2.5.1 Goal
+
+Add a BSP (Bulk Synchronous Parallel) scheduler to the propagator network, enabling parallel-ready execution before Phase 3 type integration. This phase also adds threshold propagators (gated downstream computation) and a pluggable parallel executor using `racket/future`.
+
+See [BSP Parallel Propagator Tracking Doc](2026-02-24_BSP_PARALLEL_PROPAGATOR.md) for full implementation details.
+
+
+<a id="org8c9dd16"></a>
+
+## 2.5.2 BSP Scheduler (Jacobi Iteration)
+
+The existing `run-to-quiescence` uses **Gauss-Seidel iteration** — fire one propagator at a time, each seeing the latest state. The new `run-to-quiescence-bsp` uses **Jacobi iteration**:
+
+```
+Round k:
+  1. Deduplicate worklist (CHAMP-based set)
+  2. Clear worklist, snapshot the network, decrease fuel by N
+  3. Fire ALL propagators against the SAME snapshot
+  4. Collect writes by diffing output cells
+  5. Bulk-merge all writes into snapshot via net-cell-write
+  6. Repeat until contradiction / fuel / empty worklist
+```
+
+**Same fixpoint** as Gauss-Seidel, guaranteed by the CALM theorem: lattice join is commutative, associative, and idempotent → any scheduling order produces the same result.
+
+| Property               | Gauss-Seidel (existing) | BSP (Jacobi)     |
+|---------------------- |----------------------- |---------------- |
+| Convergence (chain N)  | 1–N passes              | Exactly N rounds |
+| Convergence (fan-out)  | 2–3 passes              | 1–2 rounds       |
+| Parallelizable         | No                      | Yes (per round)  |
+| Fuel usage             | ≤ BSP                   | ≥ Gauss-Seidel   |
+| Deterministic ordering | Worklist order          | Round-based      |
+
+
+<a id="org27b3752"></a>
+
+## 2.5.3 Threshold Propagators
+
+Threshold propagators gate downstream computation until a cell's value crosses a lattice threshold. They are standard propagators whose `fire-fn` checks a predicate before executing the body.
+
+-   **`make-threshold-fire-fn`**: Watches a single cell, fires body when threshold predicate is true
+-   **`make-barrier-fire-fn`**: Multi-cell barrier, fires when ALL predicates are satisfied
+-   **`net-add-threshold` / `net-add-barrier`**: Convenience wrappers
+
+For monotonic lattices, once a threshold is met it stays met → the body fires at most once after crossing. This is push-based and reactive.
+
+
+<a id="org23fd38f"></a>
+
+## 2.5.4 Parallel Executor
+
+`make-parallel-fire-all` creates a pluggable executor for `run-to-quiescence-bsp`:
+
+```racket
+;; Sequential (default)
+(run-to-quiescence-bsp net)
+
+;; Parallel
+(run-to-quiescence-bsp net #:executor (make-parallel-fire-all))
+
+;; Parallel with custom threshold
+(run-to-quiescence-bsp net #:executor (make-parallel-fire-all 8))
+```
+
+-   Below threshold (default: 4 propagators): falls back to sequential
+-   Above threshold: creates one `future` per propagator, `touch` to collect
+-   **Future-safe**: CHAMP operations are pure struct/vector — no mutation
+
+**Contract**: fire-fns MUST be pure for parallel execution.
+
+
+<a id="org3438a32"></a>
+
+## 2.5.5 Implications for Later Phases
+
+The BSP scheduler becomes the **default execution model** for the logic engine:
+
+-   **Phase 5 (ATMS)**: Each worldview exploration can use `run-to-quiescence-bsp`. Independent worldviews are embarrassingly parallel — the BSP executor fires all propagators in a worldview's network simultaneously per round.
+-   **Phase 6 (Tabling)**: Producer and consumer propagators are standard propagators — they participate in BSP rounds naturally. Table cell growth triggers re-firing of consumer propagators in the next BSP round.
+-   **Phase 7 (Surface Syntax)**: The `solver` keyword controls which scheduler is used. The default solver uses BSP with parallel executor for networks above the threshold.
+
+
+<a id="orgb01da9e"></a>
+
+## 2.5.6 New Functions
+
+| Function                  | Purpose                                       |
+|------------------------- |--------------------------------------------- |
+| `dedup-pids`              | CHAMP-based deduplication (internal)          |
+| `fire-and-collect-writes` | Fire against snapshot, diff output cells      |
+| `bulk-merge-writes`       | Fold `net-cell-write` over collected writes   |
+| `sequential-fire-all`     | Map fire-and-collect-writes over all pids     |
+| `run-to-quiescence-bsp`   | BSP loop with pluggable executor              |
+| `make-threshold-fire-fn`  | Gated fire-fn (single cell watch)             |
+| `make-barrier-fire-fn`    | Multi-cell gated fire-fn                      |
+| `net-add-threshold`       | Convenience: threshold + add-propagator       |
+| `net-add-barrier`         | Convenience: barrier + add-propagator         |
+| `make-parallel-fire-all`  | Creates parallel executor via `racket/future` |
+
+
+<a id="orgb208411"></a>
+
+## 2.5.7 Files and Tests
+
+| File                        | Description                                 |
+|--------------------------- |------------------------------------------- |
+| `propagator.rkt` (modified) | +~120 lines, 9 new exports                  |
+| `test-propagator-bsp.rkt`   | 18 tests: 10 BSP + 5 threshold + 3 parallel |
+
+
+<a id="org62d1abc"></a>
+
+## 2.5.8 Key Design Decisions
+
+1.  **BSP coexists with Gauss-Seidel**: Both produce same fixpoint for monotone networks. Users (and the solver) choose the scheduler.
+2.  **Write collection via diffing**: Clean, composable, no changes to existing propagator contract.
+3.  **Executor as parameter**: Default = sequential. Swap in parallel. Scheduler logic independent of execution strategy.
+4.  **Threshold propagators are standard propagators**: No special scheduler support. Works with both Gauss-Seidel and BSP.
+5.  **Future safety**: CHAMP operations are pure → `racket/future` is safe.
+
+&#x2014;
+
+
+<a id="org09f4e35"></a>
 
 # Phase 3: PropNetwork as Prologos Type
 
 
-<a id="org657480c"></a>
+<a id="org0b0c95f"></a>
 
 ## 3.1 Goal
 
 Expose the Racket-level persistent PropNetwork to Prologos's type system. This phase adds the 12 AST nodes defined in Phase 2's design, threading them through the full 12-file pipeline (syntax → typing-core → reduction → elaborator → zonk → pretty-print → qtt → substitution → unify → tests).
 
 
-<a id="orgadd2a95"></a>
+<a id="org756188e"></a>
 
 ## 3.2 Why a Separate Phase
 
 Phase 2 implements the Racket-level data structures and algorithms. Phase 3 wires them into Prologos as first-class values. This separation follows the established pattern: Racket infrastructure first, then Prologos type system integration.
 
 
-<a id="org79c2c0a"></a>
+<a id="org90bb49b"></a>
 
 ## 3.3 Type Signatures
 
@@ -918,7 +1085,7 @@ spec net-contradict? : PropNetwork -> Bool
 ```
 
 
-<a id="org4ef1913"></a>
+<a id="org9337ce9"></a>
 
 ## 3.4 LVar Operations as Library Functions
 
@@ -939,14 +1106,14 @@ defn make-map-cell [net]
 ```
 
 
-<a id="orgcccf53c"></a>
+<a id="org1845aac"></a>
 
 ## 3.5 AST Nodes (12)
 
 Same 12 nodes as Phase 2 design (`expr-prop-network`, `expr-cell-id`, `expr-net-new`, `expr-net-new-cell`, `expr-net-cell-read`, `expr-net-cell-write`, `expr-net-add-prop`, `expr-net-run`, `expr-net-snapshot`, `expr-net-contradict?`, `expr-net-type`, `expr-cell-id-type`).
 
 
-<a id="org2f72f14"></a>
+<a id="orga1e9a03"></a>
 
 ## 3.6 New/Modified Files
 
@@ -967,7 +1134,7 @@ Same 12 nodes as Phase 2 design (`expr-prop-network`, `expr-cell-id`, `expr-net-
 | `tests/test-propagator-lvar.rkt`        | NEW: LVar-style cell tests            |
 
 
-<a id="orgc7acf01"></a>
+<a id="orga17b15c"></a>
 
 ## 3.7 Tests (~50)
 
@@ -988,56 +1155,29 @@ Same 12 nodes as Phase 2 design (`expr-prop-network`, `expr-cell-id`, `expr-net-
 -   Integration: Lattice trait resolution for cell merge functions
 
 
-<a id="org3ee5f44"></a>
+<a id="orgf73a081"></a>
 
 ## 3.8 Dependencies
 
 -   Phase 2 (Racket-level PropNetwork implementation)
--   Phase 2.5 (BSP scheduler, threshold propagators, parallel executor)
 -   Phase 1 (Lattice trait for type-level merge function constraints)
-
-
-## 3.9 Design Note: BoundedLattice Bundle for Contradiction Detection
-
-Phase 2's per-cell `contradiction-fns` (Racket-level lambdas) remain the runtime mechanism for contradiction detection. Phase 3 should add a **`BoundedLattice` bundle** at the Prologos type level that composes with the existing `Lattice` trait:
-
-```prologos
-;; HasTop provides a canonical top element for contradiction detection
-trait HasTop {A : Type}
-  spec top : A
-
-;; BoundedLattice = Lattice + HasTop (via bundle)
-bundle BoundedLattice {A : Type} = Lattice A + HasTop A
-```
-
-When `net-new-cell` is called with a type that has a `BoundedLattice` instance, the `contradicts?` predicate is **derived automatically** from `(equal? v (top))`. This eliminates the need for users to manually supply contradiction predicates for standard lattice types.
-
-The two layers are complementary:
-- **Racket level** (per-cell lambdas): Maximum flexibility — any predicate, supports heterogeneous lattices, no Prologos type system dependency
-- **Prologos level** (BoundedLattice bundle): Ergonomic — derived automatically from trait instances, type-safe, composable via bundle syntax
-
-The Phase 3 implementation should:
-1. Define `HasTop` trait alongside existing `Lattice` trait
-2. Define `BoundedLattice` bundle
-3. Provide standard instances: `HasTop (FlatLattice A)` → `flat-top`, `HasTop BoolLattice` → `#t`
-4. Auto-derive `contradicts?` lambda from `HasTop` instance when available in `net-new-cell` elaboration
 
 &#x2014;
 
 
-<a id="org08afc3c"></a>
+<a id="org19c6898"></a>
 
 # Phase 4: UnionFind — Persistent Disjoint Sets
 
 
-<a id="orgaa73536"></a>
+<a id="orgfacaf7d"></a>
 
 ## 4.1 Goal
 
 Implement a persistent union-find data structure (Conchon & Filliâtre 2007) with backtracking support. This is the core data structure for unification in the logic engine. Unlike the current metavar store (mutable hash table), a persistent union-find supports efficient backtracking for search.
 
 
-<a id="org17431f0"></a>
+<a id="orgc700459"></a>
 
 ## 4.2 Design
 
@@ -1083,7 +1223,7 @@ The union-find uses path splitting (not path compression) to maintain persistenc
 ```
 
 
-<a id="orgf8c39d0"></a>
+<a id="org1dd2513"></a>
 
 ## 4.3 Key Properties
 
@@ -1093,7 +1233,7 @@ The union-find uses path splitting (not path compression) to maintain persistenc
 -   **Value-carrying**: Nodes carry optional payloads (unified terms)
 
 
-<a id="org26afda1"></a>
+<a id="org43a92cc"></a>
 
 ## 4.4 Integration with Logic Engine: UF vs Cell Division of Labor
 
@@ -1122,7 +1262,7 @@ In practice, a logic engine query creates *both*:
 Both are persistent, both support O(1) backtracking. The solver threads both through computation as a pair: `(uf-store, prop-network)`.
 
 
-<a id="orgf51e8bb"></a>
+<a id="orgf23ed2b"></a>
 
 ## 4.5 AST Nodes (~6)
 
@@ -1136,7 +1276,7 @@ Both are persistent, both support O(1) backtracking. The solver threads both thr
 | `expr-uf-type`     | —               | Type constructor UnionFind |
 
 
-<a id="orgc8235e4"></a>
+<a id="org6bf4876"></a>
 
 ## 4.6 New/Modified Files
 
@@ -1148,7 +1288,7 @@ Both are persistent, both support O(1) backtracking. The solver threads both thr
 | `tests/test-union-find.rkt`      | NEW                         |
 
 
-<a id="orgfa69e50"></a>
+<a id="org94b5b41"></a>
 
 ## 4.7 Tests (~30)
 
@@ -1165,7 +1305,7 @@ Both are persistent, both support O(1) backtracking. The solver threads both thr
 -   Integration: as substitution store for simple unification
 
 
-<a id="orgb2f8646"></a>
+<a id="org542fd55"></a>
 
 ## 4.8 Dependencies
 
@@ -1175,12 +1315,12 @@ Both are persistent, both support O(1) backtracking. The solver threads both thr
 &#x2014;
 
 
-<a id="org6773adc"></a>
+<a id="org79e8ae7"></a>
 
 # Phase 5: Persistent ATMS Layer — Hypothetical Reasoning
 
 
-<a id="orgeae7ff0"></a>
+<a id="orgce01c25"></a>
 
 ## 5.1 Goal
 
@@ -1189,12 +1329,12 @@ Implement the Assumption-Based Truth Maintenance System (ATMS) as a **persistent
 This validates the "Multiverse Mechanism" from the propagator research: choice-point forking maps directly onto ATMS worldview management.
 
 
-<a id="org12e5bfb"></a>
+<a id="org7ed5b42"></a>
 
 ## 5.2 Core Data Structures (All Persistent)
 
 
-<a id="org7eace1e"></a>
+<a id="org2fcf12c"></a>
 
 ### `assumption` — Hypothetical Premise
 
@@ -1210,7 +1350,7 @@ This validates the "Multiverse Mechanism" from the propagator research: choice-p
 ```
 
 
-<a id="org6ce9a48"></a>
+<a id="orge0d304e"></a>
 
 ### `supported-value` — Value + Justification
 
@@ -1222,7 +1362,7 @@ This validates the "Multiverse Mechanism" from the propagator research: choice-p
 ```
 
 
-<a id="orgf5aaafa"></a>
+<a id="orgdac9b17"></a>
 
 ### `tms-cell` — Truth-Maintained Cell (Immutable)
 
@@ -1239,7 +1379,7 @@ A TMS cell holds multiple contingent values, each justified by a different assum
 ```
 
 
-<a id="org8529aec"></a>
+<a id="orgb06e4eb"></a>
 
 ### `atms` — The Persistent ATMS
 
@@ -1262,7 +1402,7 @@ Key design choices:
 -   **No mutable state**: all operations return new `atms` values
 
 
-<a id="org360f30a"></a>
+<a id="org50da35b"></a>
 
 ## 5.3 Pure Operations
 
@@ -1296,7 +1436,7 @@ Key design choices:
 ```
 
 
-<a id="org8144fe8"></a>
+<a id="orga07bf0f"></a>
 
 ## 5.4 The `amb` Operator (Pure)
 
@@ -1325,7 +1465,7 @@ Key design choices:
 ```
 
 
-<a id="org2dee4cc"></a>
+<a id="orgbf7ba82"></a>
 
 ## 5.5 Two-Tier Mode: Lazy ATMS Activation
 
@@ -1372,7 +1512,7 @@ The `solve-with` configuration supports:
 This addresses the research doc's §14.1 concern: "For simple deterministic programs, the ATMS layer is pure cost." Lazy activation means deterministic programs never pay ATMS overhead.
 
 
-<a id="orgfe203de"></a>
+<a id="org7ac4146"></a>
 
 ## 5.6 Contradiction Handler (Dependency-Directed Backtracking)
 
@@ -1386,7 +1526,7 @@ When the underlying prop-network detects contradiction (a cell's merged value = 
 This is pure: each step returns a new `atms` value. Dependency-directed backtracking identifies *which* choice was wrong, not just the most recent.
 
 
-<a id="org06966cc"></a>
+<a id="org19127fd"></a>
 
 ## 5.7 Answer Collection (Pure)
 
@@ -1402,9 +1542,39 @@ This is pure: each step returns a new `atms` value. Dependency-directed backtrac
 ```
 
 
-<a id="org8046601"></a>
+<a id="orgf5fd667"></a>
 
-## 5.8 AST Nodes (~10)
+## 5.8 BSP Integration: Parallel Worldview Exploration
+
+The BSP parallel execution model (Phase 2.5) directly benefits ATMS answer collection. Each consistent worldview can be explored in parallel:
+
+1.  **Worldview enumeration**: Generate the set of maximal consistent assumption sets.
+2.  **Parallel propagation**: Each worldview gets its own `run-to-quiescence-bsp` call. Since the PropNetwork is persistent/immutable, each worldview starts from a shared snapshot — no copying, just CHAMP structural sharing.
+3.  **Answer merge**: Collect answers from all worldview runs and deduplicate.
+
+```racket
+;; Parallel worldview exploration using BSP executor
+(define (atms-solve-all-parallel atms goal-cell-id
+                                 #:executor [exec (make-parallel-fire-all)])
+  (define worldviews (enumerate-consistent-worldviews atms))
+  ;; Each worldview can run independently — persistent network means
+  ;; no interference between parallel explorations
+  (define answers
+    (for/fold ([acc (set)])
+              ([wv (in-list worldviews)])
+      (define atms* (atms-with-worldview atms wv))
+      (define net* (run-to-quiescence-bsp (atms-network atms*) #:executor exec))
+      (define val (net-cell-read net* goal-cell-id))
+      (set-union acc (if (eq? val 'bot) (set) (set val)))))
+  answers)
+```
+
+Key insight: the persistent architecture makes parallel worldview exploration trivially safe. Each future operates on its own immutable snapshot. No locks, no coordination beyond the final answer merge. The BSP executor's threshold parameter (default 4) naturally applies — small ATMS problems with few worldviews run sequentially; large search spaces parallelize automatically.
+
+
+<a id="org9e641c0"></a>
+
+## 5.9 AST Nodes (~10)
 
 | Node                  | Fields                   | Semantics                    |
 |--------------------- |------------------------ |---------------------------- |
@@ -1420,9 +1590,9 @@ This is pure: each step returns a new `atms` value. Dependency-directed backtrac
 | `expr-supported-type` | val-type                 | Type of SupportedValue       |
 
 
-<a id="org603c2f3"></a>
+<a id="orgcd7df09"></a>
 
-## 5.9 New/Modified Files
+## 5.10 New/Modified Files
 
 | File                             | Changes                        |
 |-------------------------------- |------------------------------ |
@@ -1435,9 +1605,9 @@ This is pure: each step returns a new `atms` value. Dependency-directed backtrac
 | `tests/test-atms-backtrack.rkt`  | NEW                            |
 
 
-<a id="orgc891d82"></a>
+<a id="org0e8f3a1"></a>
 
-## 5.10 Tests (~50)
+## 5.11 Tests (~50)
 
 -   ATMS creation from network
 -   Assumption creation: returns new atms + id
@@ -1457,9 +1627,9 @@ This is pure: each step returns a new `atms` value. Dependency-directed backtrac
 -   Performance: 100-alternative amb, solve-all
 
 
-<a id="org83473f6"></a>
+<a id="org9b027c6"></a>
 
-## 5.11 Dependencies
+## 5.12 Dependencies
 
 -   Phase 2 (Persistent PropNetwork — ATMS wraps a network)
 -   Phase 3 (PropNetwork as Prologos type — for typed ATMS operations)
@@ -1467,19 +1637,19 @@ This is pure: each step returns a new `atms` value. Dependency-directed backtrac
 &#x2014;
 
 
-<a id="orgb8af292"></a>
+<a id="org38eb09d"></a>
 
 # Phase 6: Tabling — SLG-Style Memoization
 
 
-<a id="org616be8f"></a>
+<a id="orgaac61cb"></a>
 
 ## 6.1 Goal
 
 Implement tabling for completeness. Without tabling, left-recursive rules cause infinite loops. Tabling memoizes intermediate results and detects fixed-point completion.
 
 
-<a id="org8046eba"></a>
+<a id="org50d0e71"></a>
 
 ## 6.2 Design (XSB-Style SLG Resolution)
 
@@ -1492,7 +1662,7 @@ Implement tabling for completeness. Without tabling, left-recursive rules cause 
 | Answer mode | `all` (collect all) or `lattice` (join)            |
 
 
-<a id="org4559646"></a>
+<a id="orgca3c87b"></a>
 
 ## 6.3 Table Lifecycle
 
@@ -1508,7 +1678,7 @@ Implement tabling for completeness. Without tabling, left-recursive rules cause 
 ```
 
 
-<a id="org333db18"></a>
+<a id="org05031eb"></a>
 
 ## 6.4 Core Data Structures (Persistent)
 
@@ -1548,7 +1718,7 @@ The `table-store` is an **index**, not a store. It maps predicate call patterns 
 ```
 
 
-<a id="orgd417073"></a>
+<a id="org4f9a6c9"></a>
 
 ## 6.5 Lattice Answer Modes
 
@@ -1559,7 +1729,7 @@ Following XSB Prolog:
 -   **`first`**: Table frozen after first answer (`once` semantics)
 
 
-<a id="org441a6ba"></a>
+<a id="orgd11b876"></a>
 
 ## 6.6 Spec Metadata Integration
 
@@ -1574,9 +1744,32 @@ spec ancestor : String -> String -> Prop
 This requires adding `:tabled` and `:answer-mode` cases to `parse-spec-metadata` in `macros.rkt` (following the `:examples` pattern).
 
 
-<a id="orgce4af05"></a>
+<a id="org6b9d901"></a>
 
-## 6.7 AST Nodes (~8)
+## 6.7 BSP Integration: Parallel Table Evaluation
+
+Table producers and consumers are standard propagators — they participate naturally in the BSP execution model from Phase 2.5. This means:
+
+1.  **Parallel producer firing**: When multiple producers are runnable in the same BSP round, they fire in parallel against a shared snapshot. Each writes new answers to its table cell; the bulk-merge step unions them.
+
+2.  **Independent tables parallelize automatically**: Tables for different predicates have independent cells. Propagators reading/writing to different table cells have no ordering dependency — the BSP scheduler fires them all in the same round.
+
+3.  **Self-referencing tables (recursive predicates)**: A producer that reads AND writes its own table cell (e.g., `ancestor`'s clause 2) is handled correctly by BSP's Jacobi iteration: the producer sees the snapshot from the *previous* round, not the in-progress writes. New answers appear in the next round. This matches SLG resolution's stratified evaluation.
+
+4.  **Completion detection**: Quiescence in BSP (no dirty cells after a round) is exactly the completion condition for tabling. When no new answers are produced in a round, all tables are complete.
+
+```
+BSP Round 1: producer fires → ancestor cell gets {(a,b), (b,c), (b,d)}
+BSP Round 2: producer re-fires (cell grew) → derives {(a,c), (a,d)}
+BSP Round 3: producer re-fires → no new answers → quiescence = completion
+```
+
+This is the same execution trace as the Appendix A walkthrough, but now each round's propagators fire in parallel when the BSP threshold is met.
+
+
+<a id="org90f5e99"></a>
+
+## 6.8 AST Nodes (~8)
 
 | Node                   | Fields            | Semantics                  |
 |---------------------- |----------------- |-------------------------- |
@@ -1590,9 +1783,9 @@ This requires adding `:tabled` and `:answer-mode` cases to `parse-spec-metadata`
 | `expr-table-type`      | answer-type       | Type of table              |
 
 
-<a id="orgb1e5d91"></a>
+<a id="org3ba240f"></a>
 
-## 6.8 New/Modified Files
+## 6.9 New/Modified Files
 
 | File                             | Changes                        |
 |-------------------------------- |------------------------------ |
@@ -1604,9 +1797,9 @@ This requires adding `:tabled` and `:answer-mode` cases to `parse-spec-metadata`
 | `tests/test-tabling-lattice.rkt` | NEW                            |
 
 
-<a id="org97e163b"></a>
+<a id="org9fc6390"></a>
 
-## 6.9 Tests (~40)
+## 6.10 Tests (~40)
 
 -   Table creation: cell with SetLattice merge in PropNetwork
 -   Table answer insertion: cell write grows answer set
@@ -1623,9 +1816,9 @@ This requires adding `:tabled` and `:answer-mode` cases to `parse-spec-metadata`
 -   Integration: tabling + persistent ATMS for recursive search
 
 
-<a id="org351dd5d"></a>
+<a id="orgbf259e7"></a>
 
-## 6.10 Dependencies
+## 6.11 Dependencies
 
 -   Phase 3 (PropNetwork cells — tables are cells with SetLattice merge)
 -   Phase 5 (ATMS — tabling + nondeterminism interact)
@@ -1633,19 +1826,19 @@ This requires adding `:tabled` and `:answer-mode` cases to `parse-spec-metadata`
 &#x2014;
 
 
-<a id="org366358b"></a>
+<a id="org9a76dad"></a>
 
-# Phase 7: Surface Syntax — `defr`, `rel`, `solve`, `&>`
+# Phase 7: Surface Syntax — `defr`, `rel`, `solve`, `explain`, `solver`, `&>`
 
 
-<a id="org2637041"></a>
+<a id="orgcb95cc2"></a>
 
 ## 7.1 Goal
 
 Implement the user-facing relational language as described in [RELATIONAL<sub>LANGUAGE</sub><sub>VISION.org</sub>](principles/RELATIONAL_LANGUAGE_VISION.md).
 
 
-<a id="orge54aae8"></a>
+<a id="org7430f6d"></a>
 
 ## 7.2 Reader Changes
 
@@ -1660,31 +1853,48 @@ The reader must handle:
 | `(goal ...)` | `(goal ...)` (parenthetical = relational) |
 
 
-<a id="orgcab9432"></a>
+<a id="orgd3db3ee"></a>
 
 ## 7.3 Parser Changes
 
 New surface AST nodes:
 
-| Form                      | Surface AST                                 |
-|------------------------- |------------------------------------------- |
-| `defr name [args] body`   | `(surf-defr name args clauses)`             |
-| `(rel [args] body)`       | `(surf-rel args clauses)`                   |
-| `&> g1 g2 ...`            | `(surf-clause (g1 g2 ...))` within defr/rel |
-| `(solve [goal])`          | `(surf-solve goal)`                         |
-| `(solve-with :opts goal)` | `(surf-solve-with opts goal)`               |
-| `(` ?x ?y)=               | `(surf-unify x y)`                          |
-| `(is ?x [expr])`          | `(surf-is var expr)`                        |
+| Form                                       | Surface AST                                 |
+|------------------------------------------ |------------------------------------------- |
+| `defr name [args] body`                    | `(surf-defr name args clauses)`             |
+| `(rel [args] body)`                        | `(surf-rel args clauses)`                   |
+| `&> g1 g2 ...`                             | `(surf-clause (g1 g2 ...))` within defr/rel |
+| `(solve [goal])`                           | `(surf-solve goal)`                         |
+| `(solve-with solver [goal])`               | `(surf-solve-with solver #f goal)`          |
+| `(solve-with solver {overrides} [goal])`   | `(surf-solve-with solver overrides goal)`   |
+| `(solve-with {overrides} [goal])`          | `(surf-solve-with #f overrides goal)`       |
+| `(explain [goal])`                         | `(surf-explain goal)`                       |
+| `(explain-with solver [goal])`             | `(surf-explain-with solver #f goal)`        |
+| `(explain-with solver {overrides} [goal])` | `(surf-explain-with solver overrides goal)` |
+| `(explain-with {overrides} [goal])`        | `(surf-explain-with #f overrides goal)`     |
+| `solver name opts ...`                     | `(surf-solver name opts)`                   |
+| `(` ?x ?y)=                                | `(surf-unify x y)`                          |
+| `(is ?x [expr])`                           | `(surf-is var expr)`                        |
+
+The `-with` forms have three parse shapes, disambiguated by whether the first argument after the keyword is an identifier (solver name) or a `{...}` map literal (inline overrides):
+
+```
+(solve-with <ident> [goal])          ;; solver only
+(solve-with <ident> {map} [goal])    ;; solver + merge overrides
+(solve-with {map} [goal])            ;; overrides only (merge into default-solver)
+```
+
+The `{...}` braces are unambiguous: they cannot appear as a goal (goals use parentheses) or as a solver name (identifiers). This eliminates multi-arity parsing complexity.
 
 
-<a id="orgdd004aa"></a>
+<a id="org59986c1"></a>
 
 ## 7.4 Elaboration
 
 Relations elaborate to propagator networks. Here is the concrete Racket-level translation for both `defr` and `solve`:
 
 
-<a id="orgcb90b73"></a>
+<a id="org81cb252"></a>
 
 ### 7.4.1 `defr` Elaboration
 
@@ -1703,17 +1913,18 @@ Relations elaborate to propagator networks. Here is the concrete Racket-level tr
 ```
 
 
-<a id="orgc0bb2f4"></a>
+<a id="org83334ed"></a>
 
 ### 7.4.2 `solve` Elaboration (Functional-Relational Bridge)
 
-The `solve` form is the bridge from relational goals back to functional values. Here is how it elaborates at the Racket level:
+The `solve` form is the bridge from relational goals back to functional values. It always returns `Seq (Map Keyword Value)` — bare bindings, no provenance.
 
 ```prologos
 ;; Source: functional code using solve
 defn find-ancestors [person]
   (solve [ancestor person ?who])
-;; Returns: Seq (Map Symbol Value)
+;; Returns: Seq (Map Keyword Value)
+;; => '[{:who "bob"} {:who "carol"} {:who "dave"}]
 ```
 
 Elaborates to:
@@ -1721,37 +1932,140 @@ Elaborates to:
 ```racket
 ;; Racket-level translation of (solve [ancestor person ?who])
 (define (solve-ancestor-query person)
-  (let* (;; 1. Create solver state (network + uf-store)
+  (let* (;; 1. Resolve solver config (default-solver from current namespace)
+         [config (resolve-solver-config 'default-solver)]
+
+         ;; 2. Create solver state (network + uf-store)
          [net0 (make-prop-network)]
          [uf0  (uf-empty)]
 
-         ;; 2. Create logic variable cells
+         ;; 3. Create logic variable cells
          ;;    ?who is the query variable; person is ground (bound)
          [net1+who (net-new-cell net0 'bot flat-join flat-top?)]
          [net1 (car net1+who)]
          [who-id (cdr net1+who)]
 
-         ;; 3. Look up 'ancestor in the relation registry
+         ;; 4. Look up 'ancestor in the relation registry
          ;;    (registered by defr elaboration)
          [ancestor-rel (relation-lookup 'ancestor)]
 
-         ;; 4. Create query propagators:
+         ;; 5. Create query propagators:
          ;;    - Instantiate ancestor's clauses with (person, ?who)
          ;;    - Wire table cell for ancestor
          [net2 (relation-instantiate ancestor-rel net1 uf0
                   (list (ground-val person) who-id))]
 
-         ;; 5. Run to quiescence
-         [net3 (run-to-quiescence net2)]
+         ;; 6. Build executor from solver config
+         [executor (config->executor config)]
 
-         ;; 6. Extract answers from the table cell
+         ;; 7. Run to quiescence (BSP or sequential per config)
+         [net3 (run-to-quiescence* net2 executor)]
+
+         ;; 8. Extract answers from the table cell
          [answers (table-answers net3 'ancestor)]
 
-         ;; 7. Project query variable bindings into Maps
+         ;; 9. Project query variable bindings into Maps
          [results (for/list ([subst (in-set answers)])
-                    (hash 'who (substitution-lookup subst who-id)))])
-    ;; Return as lazy sequence of maps
+                    (hash ':who (substitution-lookup subst who-id)))])
+    ;; Return as lazy sequence of keyword maps
     (list->lseq results)))
+```
+
+
+<a id="orgf980c59"></a>
+
+### 7.4.3 `solve-with` Elaboration (Map Merge Override)
+
+The `-with` forms accept a solver name and/or a `{...}` override map. The elaborator resolves the config via map merge:
+
+```racket
+;; (solve-with default-solver {:timeout 5000} [goal])
+;; elaborates to:
+(let* ([base-config (resolve-solver-config 'default-solver)]
+       [overrides (hash ':timeout 5000)]
+       [config (solver-config-merge base-config overrides)])
+  (solve-impl config goal-thunk))
+
+;; (solve-with {:execution :sequential :timeout 5000} [goal])
+;; elaborates to:
+(let* ([base-config (resolve-solver-config 'default-solver)]  ;; implicit default
+       [overrides (hash ':execution 'sequential ':timeout 5000)]
+       [config (solver-config-merge base-config overrides)])
+  (solve-impl config goal-thunk))
+```
+
+`solver-config-merge` is shallow map merge — overrides win per key:
+
+```racket
+(define (solver-config-merge base overrides)
+  ;; overrides is a Prologos Map (CHAMP-backed)
+  ;; shallow merge: each key in overrides replaces the same key in base
+  (for/fold ([cfg base])
+            ([(k v) (in-champ overrides)])
+    (solver-config-set cfg k v)))
+```
+
+
+<a id="orgf33e71a"></a>
+
+### 7.4.4 `explain` Elaboration (Provenance-Bearing Bridge)
+
+`explain` returns `Seq (Answer Value)` — each answer bundles bindings AND provenance together. Provenance tracking is forced on (defaulting to `:full` if the solver config doesn't specify a level).
+
+```prologos
+;; Source: debugging code using explain
+defn debug-ancestors [person]
+  (explain [ancestor person ?who])
+;; Returns: Seq (Answer Value)
+;; Each Answer has:
+;;   .bindings   : Map Keyword Value    — the what
+;;   .derivation : DerivationTree       — the why
+;;   .depth      : Nat                  — derivation depth
+;;   .support    : Option (Set Keyword) — ATMS support (if :provenance :atms)
+```
+
+The elaboration is identical to `solve` except:
+
+1.  The solver config's `:provenance` key is forced to at least `:full` (if it was `:none`, override to `:full`; otherwise respect the level)
+2.  The executor is wrapped in a provenance-recording decorator
+3.  The result projection builds `Answer` records instead of bare `Map`
+
+```racket
+;; explain elaboration — differs from solve in 3 places
+(define (explain-impl config goal-thunk)
+  ;; 1. Force provenance on
+  (define prov-level
+    (let ([cfg-prov (solver-config-provenance config)])
+      (if (eq? cfg-prov 'none) 'full cfg-prov)))
+
+  ;; 2. Build provenance-recording executor
+  (define executor (config->executor config))
+  (define recording-executor
+    (make-provenance-executor executor prov-level))
+
+  ;; 3. Run to quiescence with provenance tracking
+  (define-values (net-final trace)
+    (run-to-quiescence-traced net recording-executor))
+
+  ;; 4. Project into Answer records (bindings + derivation together)
+  (define results
+    (for/list ([subst (in-set (table-answers net-final table-id))])
+      (make-answer
+       #:bindings   (project-bindings subst query-vars)
+       #:derivation (extract-derivation trace subst)
+       #:depth      (derivation-depth trace subst)
+       #:support    (and (eq? prov-level 'atms)
+                         (extract-support trace subst)))))
+  (list->lseq results))
+```
+
+`explain-with` follows the same map-merge pattern as `solve-with`:
+
+```prologos
+;; All of these work:
+(explain-with debug-solver [ancestor "alice" ?who])
+(explain-with default-solver {:provenance :atms} [ancestor "alice" ?who])
+(explain-with {:provenance :summary :timeout 5000} [ancestor "alice" ?who])
 ```
 
 Key points:
@@ -1759,11 +2073,14 @@ Key points:
 -   `solve` creates a fresh `(network, uf-store)` pair scoped to the query
 -   Ground arguments are injected directly; logic variables become cells
 -   The relation's propagators run to quiescence in the fresh network
--   Results are projected from table cells into `Seq (Map Symbol Value)`
+-   `solve` projects into `Seq (Map Keyword Value)` — bare bindings
+-   `explain` projects into `Seq (Answer Value)` — bindings + provenance
+-   Both forms dispatch to `default-solver` (or a named/merged solver)
+-   Both accept `{...}` map overrides for per-call config
 -   The entire operation is **pure** — no side effects, no global state
 
 
-<a id="org6664ad9"></a>
+<a id="org9cfd26d"></a>
 
 ## 7.5 Grammar Updates
 
@@ -1775,6 +2092,7 @@ Both grammar files must be updated:
 New productions:
 
 ```ebnf
+(* --- Relations --- *)
 relation-def  = "defr" , identifier , param-list , clause+ ;
 anonymous-rel = "(" , "rel" , param-list , clause+ , ")" ;
 clause        = "&>" , goal+ ;
@@ -1783,14 +2101,258 @@ goal-head     = identifier | "=" | "is" | "not" ;
 goal-arg      = logic-var | expression ;
 logic-var     = "?" , identifier ;
 mode-var      = ( "-" | "+" ) , identifier ;
+
+(* --- Solve family (returns Seq Map — bare bindings) --- *)
 solve-expr    = "(" , "solve" , "[" , goal , "]" , ")" ;
-solve-with    = "(" , "solve-with" , metadata* , "[" , goal , "]" , ")" ;
+solve-with    = "(" , "solve-with" , with-args , "[" , goal , "]" , ")" ;
+
+(* --- Explain family (returns Seq Answer — bindings + provenance) --- *)
+explain-expr  = "(" , "explain" , "[" , goal , "]" , ")" ;
+explain-with  = "(" , "explain-with" , with-args , "[" , goal , "]" , ")" ;
+
+(* --- Shared -with argument patterns --- *)
+with-args     = identifier                           (* solver name only *)
+              | identifier , map-literal             (* solver + {overrides} *)
+              | map-literal ;                        (* {overrides} only, merge into default-solver *)
+
+(* --- Solver definition --- *)
+solver-def    = "solver" , identifier , solver-opt+ ;
+solver-opt    = ":" , solver-key , solver-value ;
+solver-key    = "execution" | "threshold" | "strategy"
+              | "tabling" | "timeout" | "provenance" ;
 ```
 
 
-<a id="orgf4fe44e"></a>
+<a id="orga9da883"></a>
 
-## 7.6 Compile-Time Stratification Check
+## 7.6 Solver, Solve, and Explain — Unified Design
+
+This section describes the complete design for how relational queries are configured, dispatched, and how results (with or without provenance) are returned to functional code.
+
+
+<a id="org3c707b7"></a>
+
+### 7.6.1 Design Overview
+
+Two verb families, one config form:
+
+| Form           | Returns                   | Provenance            | Config source     |
+|-------------- |------------------------- |--------------------- |----------------- |
+| `solve`        | `Seq (Map Keyword Value)` | Always off            | `default-solver`  |
+| `solve-with`   | `Seq (Map Keyword Value)` | Always off            | Named + `{merge}` |
+| `explain`      | `Seq (Answer Value)`      | Forced on             | `default-solver`  |
+| `explain-with` | `Seq (Answer Value)`      | On, level from config | Named + `{merge}` |
+
+-   `solve` is the fast path: bare bindings, zero provenance overhead.
+-   `explain` is the observation path: each answer bundles the *what* (bindings) with the *why* (derivation tree, support sets).
+-   Both dispatch to the same solver engine; the difference is purely what gets projected into the result.
+
+
+<a id="org02c0222"></a>
+
+### 7.6.2 The `solver` Top-Level Form
+
+`solver` defines a Prologos-level configuration object — a self-documenting, inspectable value. It carries both execution config and provenance defaults.
+
+```prologos
+;; Built-in solver definitions (in lib/prologos/core/solver.prologos)
+solver default-solver
+  :execution   :parallel     ;; BSP parallel (Phase 2.5)
+  :threshold   4             ;; parallelize when ≥4 runnable propagators
+  :strategy    :auto         ;; Tier 1 (PropNetwork) → Tier 2 (ATMS) on first amb
+  :tabling     :by-default   ;; all defr predicates tabled unless :tabled false
+  :provenance  :none         ;; no provenance overhead by default
+  :timeout     :none
+
+solver sequential-solver
+  :execution   :sequential   ;; Gauss-Seidel single-thread
+  :strategy    :auto
+  :tabling     :by-default
+  :provenance  :none
+  :timeout     :none
+
+solver debug-solver
+  :execution   :sequential   ;; sequential for reproducible traces
+  :strategy    :auto
+  :provenance  :full         ;; derivation trees always
+  :timeout     10000
+
+solver depth-first-solver
+  :execution   :sequential
+  :strategy    :depth-first  ;; no ATMS, chronological backtracking
+  :tabling     :off          ;; user must opt-in with :tabled true
+  :provenance  :none
+  :timeout     :none
+```
+
+Solver config keys:
+
+| Key           | Values                                | Default       | Semantics                              |
+|------------- |------------------------------------- |------------- |-------------------------------------- |
+| `:execution`  | `:parallel`, `:sequential`            | `:parallel`   | BSP (Jacobi) vs Gauss-Seidel           |
+| `:threshold`  | `Nat`                                 | `4`           | Parallel fire threshold                |
+| `:strategy`   | `:auto`, `:depth-first`, `:atms`      | `:auto`       | ATMS tier (auto upgrades on first amb) |
+| `:tabling`    | `:by-default`, `:off`                 | `:by-default` | Tabling for defr predicates            |
+| `:provenance` | `:none`, `:summary`, `:full`, `:atms` | `:none`       | Provenance tracking level              |
+| `:timeout`    | `Nat` (ms) or `:none`                 | `:none`       | Query timeout                          |
+
+Provenance levels:
+
+| Level      | What's recorded                                       | Cost     |
+|---------- |----------------------------------------------------- |-------- |
+| `:none`    | Nothing — bindings only                               | Zero     |
+| `:summary` | Clause-id + depth per answer (no tree)                | Low      |
+| `:full`    | Complete derivation tree per answer                   | Moderate |
+| `:atms`    | Derivation tree + ATMS support sets (assumption sets) | High     |
+
+
+<a id="org0d583a3"></a>
+
+### 7.6.3 The `Answer` Type
+
+When `explain` is used, each result is an `Answer` — a record bundling the bindings (the what) with the provenance (the why). These are never separated: if you want to understand *why* an answer was derived, you always see *which* answer it is.
+
+```prologos
+;; In lib/prologos/core/solver.prologos
+deftype Answer {V : Type}
+  :bindings    (Map Keyword V)           ;; the substitution — the what
+  :derivation  (Option DerivationTree)   ;; present at :full and :atms
+  :clause-id   (Option Keyword)          ;; which clause produced this
+  :depth       Nat                       ;; derivation depth
+  :support     (Option (Set Keyword))    ;; ATMS support set — at :atms only
+
+deftype DerivationTree
+  :goal      Keyword                     ;; relation name
+  :args      (List Value)                ;; instantiated arguments
+  :rule      Keyword                     ;; clause identifier
+  :children  (List DerivationTree)       ;; sub-derivations
+```
+
+At `:summary` level, `.derivation` is `nothing` but `.clause-id` and `.depth` are populated. At `:full`, the derivation tree is present. At `:atms`, both the tree and the support set are present.
+
+The bindings are always present, at every level. Ignoring provenance data you don't need is just ignoring record fields — the data is immutable and the fields carry no ceremony.
+
+
+<a id="org447b2ff"></a>
+
+### 7.6.4 Dispatch: `solve` / `explain` and `default-solver`
+
+`solve` is sugar that expands to `solve-with default-solver`:
+
+```prologos
+;; User code:
+(solve [ancestor "alice" ?who])
+;; Desugars to:
+(solve-with default-solver [ancestor "alice" ?who])
+;; Returns: Seq (Map Keyword Value)
+;; => '[{:who "bob"} {:who "carol"} {:who "dave"}]
+```
+
+`explain` similarly desugars to `explain-with default-solver`:
+
+```prologos
+;; User code:
+(explain [ancestor "alice" ?who])
+;; Desugars to:
+(explain-with default-solver [ancestor "alice" ?who])
+;; Returns: Seq (Answer Value)
+;; Each answer carries .bindings AND .derivation
+```
+
+The semantic difference:
+
+-   `solve` / `solve-with` *always* behaves as if `:provenance :none`, regardless of the solver config. Provenance keys on the solver are ignored. Return type is `Seq (Map Keyword Value)`.
+-   `explain` / `explain-with` reads `:provenance` from the (possibly merged) solver config. If the solver says `:none` or doesn't specify, `explain` defaults to `:full`. Return type is `Seq (Answer Value)`.
+
+This means `solve` and `explain` encode the **caller's intent**, not the solver's config. The solver's `:provenance` key is a *default level for explain*, not a gate on whether provenance happens.
+
+
+<a id="org8051dc5"></a>
+
+### 7.6.5 Map Merge Overrides with `{...}`
+
+Both `-with` forms accept an explicit `{...}` map literal that merges as overrides into the solver config. The `{...}` syntax disambiguates parsing and eliminates multi-arity complexity:
+
+```prologos
+;; --- solve-with ---
+(solve-with debug-solver [goal])                             ;; named solver
+(solve-with default-solver {:timeout 5000} [goal])           ;; solver + overrides
+(solve-with {:execution :sequential :timeout 5000} [goal])   ;; overrides into default-solver
+
+;; --- explain-with ---
+(explain-with debug-solver [goal])                           ;; named solver
+(explain-with default-solver {:provenance :atms} [goal])     ;; upgrade provenance
+(explain-with {:provenance :summary :timeout 5000} [goal])   ;; overrides into default-solver
+```
+
+The merge semantics are shallow map merge — each key in `{overrides}` replaces the same key in the base solver config. This is just our existing map merge semantics applied to solver configs. The merged config is transient to that one call — it is not a named entity and does not persist.
+
+
+<a id="org90e01c0"></a>
+
+### 7.6.6 `default-solver` Shadowing
+
+`default-solver` is a module-level binding. Users shadow it in their namespace with a local `solver` definition:
+
+```prologos
+;; In a performance-sensitive module:
+solver default-solver
+  :execution   :sequential
+  :strategy    :depth-first
+  :timeout     5000
+
+;; All (solve ...) and (explain ...) calls in this module
+;; use the local default-solver
+(solve [expensive-query ?x])
+(explain [expensive-query ?x])  ;; uses :full provenance (explain's default)
+```
+
+No global mutation. Normal name resolution.
+
+
+<a id="orged75476"></a>
+
+### 7.6.7 `solver` Elaboration
+
+A `solver` definition elaborates to a record value backed by a Prologos Map:
+
+```racket
+;; solver default-solver :execution :parallel :threshold 4 ...
+;; elaborates to:
+(define default-solver
+  (make-solver-config
+   (hash ':execution 'parallel
+         ':threshold 4
+         ':strategy 'auto
+         ':tabling 'by-default
+         ':provenance 'none
+         ':timeout #f)))
+```
+
+The solver config is a Map under the hood, which is why `{...}` merge works naturally — it's map-merge-with-last-writer-wins.
+
+
+<a id="orgb2fc3ab"></a>
+
+### 7.6.8 Default-Parallel Tradeoffs
+
+Defaulting to parallel (BSP) execution is justified because:
+
+| Factor              | Parallel (BSP)                                 | Sequential (Gauss-Seidel) |
+|------------------- |---------------------------------------------- |------------------------- |
+| Correctness         | Same fixpoint (CALM theorem)                   | Same fixpoint             |
+| Small problems (<4) | Falls back to sequential (threshold)           | Native                    |
+| Large problems      | Near-linear speedup on propagator-heavy rounds | Single-thread bound       |
+| Memory              | One snapshot per round + futures               | Single mutable pass       |
+| Determinism         | Round-level deterministic (Jacobi)             | Firing-order sensitive    |
+| Debugging           | Reproducible (same round = same result)        | Order-dependent traces    |
+
+The threshold parameter (default 4) is the key: below threshold, BSP delegates to sequential fire — so small queries pay zero parallel overhead. Above threshold, the persistent CHAMP architecture makes parallelism trivially safe (no locks, no shared mutable state). The only cost is per-round snapshot creation, which is O(1) for persistent data.
+
+
+<a id="orga4fb860"></a>
+
+## 7.7 Compile-Time Stratification Check
 
 Any program using `not` (negation-as-failure) must pass a stratification check at compile time. This is the minimum viable safety guarantee for negation:
 
@@ -1830,9 +2392,14 @@ Any program using `not` (negation-as-failure) must pass a stratification check a
 This check runs during elaboration of `defr` forms. Programs without `not` are trivially stratifiable (single stratum) and incur no analysis cost.
 
 
-<a id="orgb2c8db1"></a>
+<a id="org5fa248a"></a>
 
-## 7.7 AST Nodes (~15)
+## 7.8 AST Nodes (~21)
+
+
+<a id="orgcff89b3"></a>
+
+### Relational Core (~9)
 
 | Node                 | Fields                | Semantics                         |
 |-------------------- |--------------------- |--------------------------------- |
@@ -1844,46 +2411,103 @@ This check runs during elaboration of `defr` forms. Programs without `not` are t
 | `expr-unify-goal`    | lhs, rhs              | Unification goal (= ?x ?y)        |
 | `expr-is-goal`       | var, expr             | Functional evaluation in relation |
 | `expr-not-goal`      | goal                  | Negation-as-failure               |
-| `expr-solve`         | goal                  | Solve returning Seq Map           |
-| `expr-solve-with`    | opts, goal            | Parameterized solve               |
-| `expr-solve-one`     | goal                  | Solve returning first answer      |
 | `expr-relation-type` | param-types           | Type of a relation                |
-| `expr-goal-type`     | —                     | Type of a goal                    |
-| `expr-cut`           | —                     | Committed choice (once)           |
-| `expr-guard`         | condition, goal       | Guard evaluation                  |
 
 
-<a id="orgbafad4e"></a>
+<a id="org4cf0232"></a>
 
-## 7.8 New/Modified Files
+### Solve Family (~4)
 
-| File                                   | Changes                           |
-|-------------------------------------- |--------------------------------- |
-| `racket/prologos/reader.rkt`           | ?var, -var, +var, &> handling     |
-| `racket/prologos/surface-syntax.rkt`   | New surface AST structs           |
-| `racket/prologos/parser.rkt`           | Parse defr, rel, solve, &>        |
-| `racket/prologos/macros.rkt`           | process-defr, process-rel         |
-| `racket/prologos/elaborator.rkt`       | Elaborate relations → propagators |
-| `racket/prologos/stratify.rkt`         | NEW: SCC + stratification check   |
-| `racket/prologos/syntax.rkt`           | +15 AST nodes                     |
-| `racket/prologos/typing-core.rkt`      | Type rules for relational forms   |
-| + standard pipeline files              | All 12+ consuming modules         |
-| `docs/spec/grammar.ebnf`               | New productions                   |
-| `docs/spec/grammar.org`                | New sections                      |
-| `lib/prologos/core/relations.prologos` | NEW: Standard relations           |
-| `tests/test-relations-basic.rkt`       | NEW                               |
-| `tests/test-relations-tabling.rkt`     | NEW                               |
-| `tests/test-relations-search.rkt`      | NEW                               |
-| `tests/test-relations-ws.rkt`          | NEW: WS-mode integration          |
-| `tests/test-solve.rkt`                 | NEW                               |
+| Node              | Fields                  | Semantics                                                   |
+|----------------- |----------------------- |----------------------------------------------------------- |
+| `expr-solve`      | goal                    | Solve → `Seq (Map Keyword Value)`                           |
+| `expr-solve-with` | solver, overrides, goal | Parameterized solve (solver may be #f, overrides may be #f) |
+| `expr-solve-one`  | goal                    | Solve returning first answer only                           |
+| `expr-goal-type`  | —                       | Type of a goal                                              |
 
 
-<a id="org71d9176"></a>
+<a id="org7001821"></a>
 
-## 7.9 Tests (~80)
+### Explain Family (~2)
+
+| Node                | Fields                  | Semantics                                              |
+|------------------- |----------------------- |------------------------------------------------------ |
+| `expr-explain`      | goal                    | Explain → `Seq (Answer Value)`                         |
+| `expr-explain-with` | solver, overrides, goal | Parameterized explain (same -with arity as solve-with) |
+
+
+<a id="org7549044"></a>
+
+### Solver Config (~2)
+
+| Node                 | Fields     | Semantics                               |
+|-------------------- |---------- |--------------------------------------- |
+| `expr-solver-config` | config-map | Solver configuration value (Map-backed) |
+| `expr-solver-type`   | —          | Type constructor `Solver`               |
+
+
+<a id="org1b62339"></a>
+
+### Answer + Provenance Types (~2)
+
+| Node                   | Fields   | Semantics                         |
+|---------------------- |-------- |--------------------------------- |
+| `expr-answer-type`     | val-type | Type constructor `Answer V`       |
+| `expr-derivation-type` | —        | Type constructor `DerivationTree` |
+
+
+<a id="org7cc8613"></a>
+
+### Control (~2)
+
+| Node         | Fields          | Semantics               |
+|------------ |--------------- |----------------------- |
+| `expr-cut`   | —               | Committed choice (once) |
+| `expr-guard` | condition, goal | Guard evaluation        |
+
+
+<a id="orgf376ccc"></a>
+
+## 7.9 New/Modified Files
+
+| File                                   | Changes                                     |
+|-------------------------------------- |------------------------------------------- |
+| `racket/prologos/reader.rkt`           | ?var, -var, +var, &> handling               |
+| `racket/prologos/surface-syntax.rkt`   | New surface AST structs                     |
+| `racket/prologos/parser.rkt`           | Parse defr, rel, solve, explain, solver, &> |
+| `racket/prologos/macros.rkt`           | process-defr, process-rel, process-solver   |
+| `racket/prologos/elaborator.rkt`       | Elaborate relations → propagators           |
+| `racket/prologos/stratify.rkt`         | NEW: SCC + stratification check             |
+| `racket/prologos/solver.rkt`           | NEW: Solver config, dispatch, map merge     |
+| `racket/prologos/provenance.rkt`       | NEW: Provenance executor, derivation trees  |
+| `racket/prologos/syntax.rkt`           | +21 AST nodes                               |
+| `racket/prologos/typing-core.rkt`      | Type rules for relational + explain forms   |
+| + standard pipeline files              | All 12+ consuming modules                   |
+| `docs/spec/grammar.ebnf`               | New productions (solve, explain, solver)    |
+| `docs/spec/grammar.org`                | New sections                                |
+| `lib/prologos/core/solver.prologos`    | NEW: Built-in solver definitions            |
+| `lib/prologos/core/answer.prologos`    | NEW: Answer + DerivationTree types          |
+| `lib/prologos/core/relations.prologos` | NEW: Standard relations                     |
+| `tests/test-relations-basic.rkt`       | NEW                                         |
+| `tests/test-relations-tabling.rkt`     | NEW                                         |
+| `tests/test-relations-search.rkt`      | NEW                                         |
+| `tests/test-relations-ws.rkt`          | NEW: WS-mode integration                    |
+| `tests/test-solve.rkt`                 | NEW: solve, solve-with, map merge           |
+| `tests/test-explain.rkt`               | NEW: explain, explain-with, Answer type     |
+| `tests/test-solver-config.rkt`         | NEW: solver def, shadowing, merge           |
+
+
+<a id="org1de0a95"></a>
+
+## 7.10 Tests (~110)
+
+
+<a id="org886f3ce"></a>
+
+### Relations and Goals (~20)
 
 -   Reader: ?var, -var, +var parsed correctly
--   Parser: defr, rel, &>, solve parsed correctly
+-   Parser: defr, rel, &>, solve, explain, solver parsed correctly
 -   WS-mode: defr with indentation-based clauses
 -   Sexp-mode: defr with explicit (defr &#x2026;) form
 -   Basic relation: parent facts, query
@@ -1892,14 +2516,76 @@ This check runs during elaboration of `defr` forms. Programs without `not` are t
 -   Functional evaluation: is ?x [expr]
 -   Multiple clauses: &> separator
 -   Anonymous relation: (rel [?x ?y] &> &#x2026;)
--   Solve: returns Seq of substitution maps
--   Solve: empty result for unsatisfiable goal
--   Solve-with: :strategy option
--   Solve-with: :timeout option
 -   Negation: not (goal)
 -   Mode annotations: -var, +var optimization hints
 -   Integration with functional code: solve in defn body
 -   Integration with traits: relation using trait methods
+
+
+<a id="org631cb38"></a>
+
+### Solve Family (~15)
+
+-   Solve: returns `Seq (Map Keyword Value)`
+-   Solve: empty result for unsatisfiable goal
+-   Solve: ignores `:provenance` key on solver config
+-   Solve-with: named solver dispatch
+-   Solve-with: solver + `{overrides}` map merge
+-   Solve-with: `{overrides}` only (merge into default-solver)
+-   Solve-with: `:strategy` override
+-   Solve-with: `:timeout` override
+-   Solve-with: `:execution :sequential` override
+-   Solve-with: merged config does not persist after call
+-   Solve-one: returns first answer only (`Option (Map Keyword Value)`)
+-   Integration: solve in defn body with map/filter on results
+
+
+<a id="org363ad14"></a>
+
+### Explain Family (~20)
+
+-   Explain: returns `Seq (Answer Value)`
+-   Explain: each Answer has `.bindings` AND `.derivation`
+-   Explain: defaults to `:provenance :full` when solver says `:none`
+-   Explain: respects solver's `:provenance` level when set
+-   Explain-with: named solver dispatch
+-   Explain-with: solver + `{overrides}` map merge
+-   Explain-with: `{overrides}` only (merge into default-solver)
+-   Explain-with: `{:provenance :atms}` includes support sets
+-   Explain-with: `{:provenance :summary}` has clause-id/depth but no tree
+-   Answer.bindings: same data as solve returns (just bundled)
+-   Answer.derivation: tree structure for recursive derivation
+-   Answer.depth: correct depth count
+-   Answer.support: present only at `:atms` level
+-   DerivationTree: .goal, .args, .rule, .children correctly populated
+-   DerivationTree: recursive relation shows chain of rule applications
+-   Explain: ancestor example matches Appendix A derivation trace
+-   Performance: explain overhead proportional to provenance level
+
+
+<a id="org901ded8"></a>
+
+### Solver Config (~15)
+
+-   Solver: definition elaborates to Map-backed config value
+-   Solver: default-solver uses `:parallel` execution
+-   Solver: sequential-solver uses `:sequential` execution
+-   Solver: debug-solver uses `:provenance :full`
+-   Solver: depth-first-solver uses `:depth-first` strategy
+-   Solver: user-defined solver shadows default-solver in namespace
+-   Solver: solve desugars to solve-with default-solver
+-   Solver: explain desugars to explain-with default-solver
+-   Solver: `{...}` merge produces shallow map merge (last writer wins)
+-   Solver: `:threshold` option controls parallel/sequential cutoff
+-   Solver: solver config is inspectable Prologos value
+-   Solver: all keys (:execution, :threshold, :strategy, :tabling, :provenance, :timeout) parsed
+-   Solver: invalid key raises compile-time error
+
+
+<a id="org7ad9aff"></a>
+
+### Stratification (~5)
+
 -   Stratification: non-negated program = single stratum (trivial)
 -   Stratification: negated program with valid stratification compiles
 -   Stratification: cyclic negation detected and rejected at compile time
@@ -1907,31 +2593,32 @@ This check runs during elaboration of `defr` forms. Programs without `not` are t
 -   Performance: 100-fact database, recursive query
 
 
-<a id="orgcddab05"></a>
+<a id="org1df2378"></a>
 
-## 7.10 Dependencies
+## 7.11 Dependencies
 
 -   ALL previous phases (Lattice, Cells, LVars, UF, ATMS, Tabling)
 
 &#x2014;
 
 
-<a id="org2bd26d1"></a>
+<a id="org4f26588"></a>
 
 # Phase Summary
 
-| Phase | Name                        | New AST | New Files | New Tests | Deps      | Size   |
-|----- |--------------------------- |------- |--------- |--------- |--------- |------ |
-| 1     | Lattice + champ-insert-join | 0       | 3         | 25        | None      | Small  |
-| 2     | Persistent PropNetwork      | 0       | 3         | 60        | Ph 1      | Medium |
-| 3     | PropNetwork Prologos Type   | 12      | 3         | 50        | Ph 2      | Medium |
-| 4     | UnionFind                   | 6       | 2         | 30        | None (∥3) | Small  |
-| 5     | Persistent ATMS             | 10      | 3         | 50        | Ph 3      | Large  |
-| 6     | Tabling                     | 8       | 3         | 40        | Ph 3,5    | Medium |
-| 7     | Surface Syntax              | 15      | 11+       | 83        | All       | Large  |
-| TOTAL |                             | 51      | 28+       | 338       |           |        |
+| Phase | Name                        | New AST | New Files | New Tests | Deps      | Size   | Status |
+|----- |--------------------------- |------- |--------- |--------- |--------- |------ |------ |
+| 1     | Lattice + champ-insert-join | 0       | 3         | 25        | None      | Small  | ✅ DONE |
+| 2     | Persistent PropNetwork      | 0       | 3         | 60        | Ph 1      | Medium | ✅ DONE |
+| 2.5   | BSP Parallel Execution      | 0       | 1         | 18        | Ph 2      | Small  | ✅ DONE |
+| 3     | PropNetwork Prologos Type   | 12      | 3         | 50        | Ph 2      | Medium | ✅ DONE |
+| 4     | UnionFind                   | 6       | 2         | 30        | None (∥3) | Small  |        |
+| 5     | Persistent ATMS             | 10      | 3         | 50        | Ph 3      | Large  |        |
+| 6     | Tabling                     | 8       | 3         | 40        | Ph 3,5    | Medium |        |
+| 7     | Surface + Solve/Explain     | 21      | 16+       | 110       | All       | Large  |        |
+| TOTAL |                             | 57      | 34+       | 383       |           |        |        |
 
-Estimated total: ~51 new AST nodes (was 61 — LVar nodes eliminated), ~28+ new files, ~338 new tests.
+Estimated total: ~57 new AST nodes, ~34+ new files, ~383 new tests.
 
 Key changes from the original design:
 
@@ -1943,16 +2630,20 @@ Key changes from the original design:
 -   **Per-cell contradiction detection**: `contradicts?` predicate per cell, not in Lattice trait (no trait hierarchies — see DESIGN<sub>PRINCIPLES.org</sub>)
 -   **ATMS two-tier mode**: Lazy activation on first `amb` — deterministic programs never pay ATMS overhead
 -   **Compile-time stratification**: SCC + negative edge check rejects unstratifiable programs at compile time
+-   **Phase 2.5 (BSP)**: Jacobi-iteration scheduler, threshold propagators, parallel executor. Implications threaded through Phases 5-7.
+-   **Default-parallel solver**: `solve` dispatches to `default-solver` which uses BSP by default. User-shadowable. Threshold (default 4) ensures small problems run sequentially — zero overhead for simple queries.
+-   **Solve/Explain split**: `solve` returns `Seq (Map Keyword Value)` (bare bindings, zero provenance overhead). `explain` returns `Seq (Answer Value)` (bindings + derivation bundled together). Provenance config lives on the solver; `solve` ignores it, `explain` respects it.
+-   **Map merge overrides**: `-with` forms accept `{...}` map literals for per-call config overrides. Shallow map merge into the base solver. Unambiguous parse (`{...}` is always a single syntactic unit).
 
 &#x2014;
 
 
-<a id="orgd5bee88"></a>
+<a id="org3f111e4"></a>
 
 # Interaction with Existing Infrastructure
 
 
-<a id="orgf7011e3"></a>
+<a id="org7b4ca52"></a>
 
 ## Metavar System
 
@@ -1961,28 +2652,28 @@ The current metavar system (`current-meta-store`, `save/restore-meta-state!`) is
 The persistent PropNetwork architecture was directly motivated by the `save/restore-meta-state!` problem: the metavar store requires O(n) deep copies for speculative type checking, and restore requires explicit undo. The persistent approach avoids this entirely — backtracking is O(1) (keep old reference). In the future (post-Phase 7), the elaborator's metavar system could be refactored to use propagator cells internally.
 
 
-<a id="org58ff73c"></a>
+<a id="orgf228fbd"></a>
 
 ## Trait System
 
 The `Lattice` trait (Phase 1) uses the existing trait infrastructure with no modifications. Lattice instances resolve via `resolve-trait-constraints!` like any other trait.
 
 
-<a id="orgdaa4aef"></a>
+<a id="org404b88d"></a>
 
 ## Spec Metadata
 
 Phase 6 adds `:tabled` and `:answer-mode` to `parse-spec-metadata`. This follows the same pattern as `:examples` (Stage C of Extended Spec Hardening): explicit case in the metadata parser using `collect-constraint-values` or direct value capture.
 
 
-<a id="org5d9e6e0"></a>
+<a id="org8d0e8b7"></a>
 
 ## Warnings
 
 The logic engine may emit new warning types (e.g., "tabled predicate exceeded table size limit", "negation in unstratifiable position"). These follow the `warnings.rkt` pattern: new struct + parameter + emit/format.
 
 
-<a id="org3021e61"></a>
+<a id="org4c3ce6d"></a>
 
 ## QTT / Multiplicities
 
@@ -1991,7 +2682,7 @@ Logic variables live at multiplicity `:w` (unrestricted). They are shared across
 Open question: should cells be linear (`:1`)? A cell created and consumed exactly once (write, then read, then discard) could be linear. For now, cells are unrestricted (`:w`).
 
 
-<a id="orge4bceb4"></a>
+<a id="org3e77afb"></a>
 
 ## Collections
 
@@ -2010,14 +2701,14 @@ No separate LVar-Set or LVar-Map types are needed — these are simply cells in 
 &#x2014;
 
 
-<a id="orgc14277e"></a>
+<a id="org0ef03b7"></a>
 
 # Appendix A: Resolution by Example — `ancestor` as Propagators
 
 This appendix shows the complete elaboration of a `defr` definition into propagator network operations. It bridges the gap between the surface syntax (Phase 7) and the propagator substrate (Phases 2-6).
 
 
-<a id="org115293e"></a>
+<a id="org2e20bd8"></a>
 
 ## A.1 Source Program
 
@@ -2035,7 +2726,7 @@ defr ancestor [?x ?y]
 ```
 
 
-<a id="org0d56766"></a>
+<a id="orgcdfbe27"></a>
 
 ## A.2 Step 1: Table Creation
 
@@ -2046,7 +2737,7 @@ defr ancestor [?x ?y]
 3.  The cell's merge function is `set-union` (`SetLattice`) — answers accumulate.
 
 
-<a id="org7a77815"></a>
+<a id="org9199d4c"></a>
 
 ## A.3 Step 2: Clause 1 → Producer Propagator
 
@@ -2073,7 +2764,7 @@ The elaborator creates a propagator that:
 Inputs: `parent`'s table cell. Outputs: `ancestor`'s table cell.
 
 
-<a id="orgccb0287"></a>
+<a id="org51dfc67"></a>
 
 ## A.4 Step 3: Clause 2 → Producer Propagator
 
@@ -2104,7 +2795,7 @@ Inputs: `parent`'s table cell AND `ancestor`'s table cell (self-reference!). Out
 The self-reference is what makes tabling essential: the propagator reads from the cell it writes to. Tabling ensures this reaches a fixed point rather than looping infinitely.
 
 
-<a id="org1b3ab11"></a>
+<a id="orgacbbc37"></a>
 
 ## A.5 Step 4: Run to Quiescence
 
@@ -2128,7 +2819,7 @@ Quiescence reached. ancestor cell = {(alice,bob), (bob,carol), (bob,dave),
 ```
 
 
-<a id="org81c8bbb"></a>
+<a id="org9a7168d"></a>
 
 ## A.6 Step 5: Answer Extraction
 
@@ -2141,14 +2832,14 @@ Results: ?who ∈ {"bob", "carol", "dave"}
 &#x2014;
 
 
-<a id="orga52a81c"></a>
+<a id="org2e89354"></a>
 
 # Appendix B: End-to-End Query Walkthrough (All Three Layers)
 
 This appendix shows a single query that exercises all three layers of the architecture: PropNetwork (Layer 1), ATMS (Layer 2), and Stratification (Layer 3).
 
 
-<a id="org176eb1a"></a>
+<a id="org648f912"></a>
 
 ## B.1 Source Program
 
@@ -2172,7 +2863,7 @@ let result := (solve [unreachable "a" ?target])
 ```
 
 
-<a id="org8fbbdcc"></a>
+<a id="org1a77fb5"></a>
 
 ## B.2 Compile-Time: Stratification Check
 
@@ -2188,7 +2879,7 @@ unreachable  → reachable (−)   → Stratum 1 (negative edge crosses strata)
 The stratification checker (§7.6) verifies: the negative edge `unreachable --not--> reachable` crosses from Stratum 1 to Stratum 0 — safe.
 
 
-<a id="org3519b2e"></a>
+<a id="orge82c3fc"></a>
 
 ## B.3 Runtime: Layer 1 — PropNetwork (Stratum 0)
 
@@ -2210,7 +2901,7 @@ Evaluate `edge`, `reachable`, and `node` to fixed point:
 All purely monotonic. No ATMS overhead. Layer 1 only.
 
 
-<a id="orgbb5180c"></a>
+<a id="org075cd31"></a>
 
 ## B.4 Runtime: Layer 3 — Stratum Boundary
 
@@ -2232,7 +2923,7 @@ For each pair (x, y) in node × node:
 ```
 
 
-<a id="org8f7765c"></a>
+<a id="orgb3a8542"></a>
 
 ## B.5 Runtime: Layer 2 — ATMS (if needed)
 
@@ -2266,7 +2957,7 @@ Final answers: union of all worldviews.
 ```
 
 
-<a id="org89db1bd"></a>
+<a id="orgecc2b41"></a>
 
 ## B.6 Summary: Which Layer Handles What
 
@@ -2282,12 +2973,12 @@ Final answers: union of all worldviews.
 &#x2014;
 
 
-<a id="orgb96157f"></a>
+<a id="org336263f"></a>
 
 # Performance Expectations
 
 
-<a id="org65e6d4f"></a>
+<a id="org59ada23"></a>
 
 ## Cost Model
 
@@ -2310,7 +3001,7 @@ Where:
 -   log₃₂(10,000) ≈ 2.7 — so the "constant" is truly small
 
 
-<a id="org7b01b83"></a>
+<a id="org50714e3"></a>
 
 ## Benchmark Targets (to validate during implementation)
 
@@ -2327,7 +3018,7 @@ Where:
 These targets are order-of-magnitude estimates. Actual benchmarks will be added to `tools/benchmark-tests.rkt` as each phase is implemented. The key comparison is: persistent overhead vs. backtracking savings. For any program with search (>1 choice point), the persistent approach wins because each backtrack is O(1) instead of O(n) deep copy.
 
 
-<a id="org662ea4e"></a>
+<a id="org93b7a44"></a>
 
 ## When Performance Matters Most
 
@@ -2340,40 +3031,40 @@ For the logic engine's intended use cases:
 &#x2014;
 
 
-<a id="orgfdc9a70"></a>
+<a id="org4695c41"></a>
 
 # What This Design Does NOT Cover
 
 
-<a id="org83eda7e"></a>
+<a id="orgeea8721"></a>
 
 ## Elaborator Refactoring (Phase 1 of Research Doc)
 
 Refactoring `current-meta-store` to use a persistent PropNetwork internally is recommended by the research document but deferred. The persistent network architecture makes this refactoring simpler: replace the mutable meta store with a PropNetwork value threaded through elaboration. But it is still a large internal change that can proceed independently after the logic engine exists.
 
 
-<a id="orgd1c2d2a"></a>
+<a id="org3ce9a3c"></a>
 
 ## Galois Connections / Domain Embeddings (Phase 6 of Research Doc)
 
 Modular constraint domains connected via Galois connections are an advanced feature deferred until the basic engine is operational.
 
 
-<a id="org0708b34"></a>
+<a id="org8656864"></a>
 
 ## Full Stratified Evaluation Runtime (Phase 4 of Research Doc)
 
 Phase 7 includes a compile-time stratification *check* (§7.6): SCC decomposition, negative edge classification, and rejection of unstratifiable programs. The runtime evaluation of strata (evaluating lower strata to fixpoint before proceeding to higher strata) is also included as part of the solver's query evaluation loop. Full support for aggregation operators (`count`, `min`, `max`, `sum`) between strata is deferred to a follow-up phase.
 
 
-<a id="orga0be10a"></a>
+<a id="org349960b"></a>
 
 ## CRDTs / Distributed Logic
 
 CRDT-backed collections for distributed actors are long-term goals not addressed here.
 
 
-<a id="orge716ecf"></a>
+<a id="org8d634d0"></a>
 
 ## QuickCheck / Property Testing
 
@@ -2382,12 +3073,12 @@ Executing `:holds` clauses and `:examples` entries requires the logic engine (fo
 &#x2014;
 
 
-<a id="org6e593b1"></a>
+<a id="org00bb04e"></a>
 
 # Architectural Decision: Persistent Networks
 
 
-<a id="org4952349"></a>
+<a id="orgb0cfe76"></a>
 
 ## The Problem with Mutable Propagator Networks
 
@@ -2399,7 +3090,7 @@ The original design proposed mutable Racket structs for PropCell, PropNetwork, T
 -   **Debugging** is harder — state is invisible without explicit inspection
 
 
-<a id="org8a70b2a"></a>
+<a id="orgeb7d781"></a>
 
 ## The Persistent Solution
 
@@ -2414,7 +3105,7 @@ Making the entire network a persistent value backed by CHAMP maps:
 Since log₃₂(n) ≤ 7 for any practical n (up to ~34 billion cells), the cost is bounded by a small constant. For the typical logic engine workload (hundreds to thousands of cells), this is 2-3 levels of CHAMP trie traversal — effectively O(1).
 
 
-<a id="org67ed6c0"></a>
+<a id="org5bf1782"></a>
 
 ## LVar Elimination
 
@@ -2431,7 +3122,7 @@ A further simplification: LVars are subsumed by PropNetwork cells. An LVar is ju
 &#x2014;
 
 
-<a id="org8c7c323"></a>
+<a id="org02c3bd2"></a>
 
 # Key Lessons from Prior Work
 
@@ -2457,14 +3148,14 @@ A further simplification: LVars are subsumed by PropNetwork cells. An LVar is ju
 &#x2014;
 
 
-<a id="org1f8f5f1"></a>
+<a id="org4fe78d6"></a>
 
 # References
 
 Organized by phase relevance:
 
 
-<a id="org0b9e283"></a>
+<a id="org7c6e651"></a>
 
 ## Phase 1 (Lattice)
 
@@ -2472,7 +3163,7 @@ Organized by phase relevance:
 -   Tarski, "A Lattice-Theoretical Fixpoint Theorem" (Pacific J. Math., 1955)
 
 
-<a id="org9027863"></a>
+<a id="org1db6700"></a>
 
 ## Phase 2 (Propagators)
 
@@ -2481,7 +3172,7 @@ Organized by phase relevance:
 -   Hellerstein, "Keeping CALM" (CACM, 2020)
 
 
-<a id="org7c361ea"></a>
+<a id="org6d3d17d"></a>
 
 ## Phase 3 (LVars)
 
@@ -2489,21 +3180,21 @@ Organized by phase relevance:
 -   Kuper et al., "Freeze After Writing" (POPL, 2014)
 
 
-<a id="orgf2453e5"></a>
+<a id="orgf98ab5b"></a>
 
 ## Phase 4 (UnionFind)
 
 -   Conchon & Filliâtre, "A Persistent Union-Find Data Structure" (ML Workshop, 2007)
 
 
-<a id="org3ed8c91"></a>
+<a id="org9b45f75"></a>
 
 ## Phase 5 (ATMS)
 
 -   de Kleer, "An Assumption-Based TMS" (AI Journal, 1986)
 
 
-<a id="orgd0c0bbb"></a>
+<a id="org6432113"></a>
 
 ## Phase 6 (Tabling)
 
@@ -2512,7 +3203,7 @@ Organized by phase relevance:
 -   Madsen et al., "From Datalog to Flix" (PLDI, 2016)
 
 
-<a id="org7d37679"></a>
+<a id="org8217c9f"></a>
 
 ## Phase 7 (Surface)
 

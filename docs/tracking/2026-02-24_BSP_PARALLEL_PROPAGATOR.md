@@ -15,14 +15,14 @@
 
 ## Summary
 
-| Component                           | Status | Details                                              |
-|-------------------------------------|--------|------------------------------------------------------|
-| BSP scheduler (2.5a)                | ✅     | 5 new functions: dedup-pids, fire-and-collect-writes, bulk-merge-writes, sequential-fire-all, run-to-quiescence-bsp |
-| Threshold propagators (2.5b)        | ✅     | 4 new functions: make-threshold-fire-fn, make-barrier-fire-fn, net-add-threshold, net-add-barrier |
-| Parallel executor (2.5c)            | ✅     | 1 new function: make-parallel-fire-all (racket/future) |
-| `propagator.rkt` (updated)          | ✅     | ~265 → ~480 lines (+~120 new lines, 9 new exports)  |
-| `tests/test-propagator-bsp.rkt`     | ✅     | 18 tests: 10 BSP core + 5 threshold + 3 parallel    |
-| `tools/dep-graph.rkt`               | ✅     | 1 new test dep added                                 |
+| Component                       | Status | Details                                                                                                             |
+|---------------------------------|--------|---------------------------------------------------------------------------------------------------------------------|
+| BSP scheduler (2.5a)            | ✅     | 5 new functions: dedup-pids, fire-and-collect-writes, bulk-merge-writes, sequential-fire-all, run-to-quiescence-bsp |
+| Threshold propagators (2.5b)    | ✅     | 4 new functions: make-threshold-fire-fn, make-barrier-fire-fn, net-add-threshold, net-add-barrier                   |
+| Parallel executor (2.5c)        | ✅     | 1 new function: make-parallel-fire-all (racket/future)                                                              |
+| `propagator.rkt` (updated)      | ✅     | ~265 → ~480 lines (+~120 new lines, 9 new exports)                                                                  |
+| `tests/test-propagator-bsp.rkt` | ✅     | 18 tests: 10 BSP core + 5 threshold + 3 parallel                                                                    |
+| `tools/dep-graph.rkt`           | ✅     | 1 new test dep added                                                                                                |
 
 ---
 
@@ -44,13 +44,13 @@ Round k:
 
 **Same fixpoint** as Gauss-Seidel, guaranteed by the CALM theorem: lattice join is commutative, associative, and idempotent → any scheduling order produces the same result.
 
-| Property | Gauss-Seidel (existing) | BSP (Jacobi) |
-|----------|------------------------|---------------|
-| Convergence (chain of N) | 1–N passes | Exactly N rounds |
-| Convergence (fan-out) | 2–3 passes | 1–2 rounds |
-| Parallelizable | No | Yes (per round) |
-| Fuel usage | ≤ BSP | ≥ Gauss-Seidel |
-| Deterministic ordering | Worklist order | Round-based |
+| Property                 | Gauss-Seidel (existing) | BSP (Jacobi)     |
+|--------------------------|-------------------------|------------------|
+| Convergence (chain of N) | 1–N passes              | Exactly N rounds |
+| Convergence (fan-out)    | 2–3 passes              | 1–2 rounds       |
+| Parallelizable           | No                      | Yes (per round)  |
+| Fuel usage               | ≤ BSP                   | ≥ Gauss-Seidel   |
+| Deterministic ordering   | Worklist order          | Round-based      |
 
 ### Threshold Propagators
 

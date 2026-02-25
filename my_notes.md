@@ -1,125 +1,125 @@
-- [Desiderata](#orgb6a719f)
-  - [Syntax](#org2ac21eb)
-    - [Homoiconicity](#orge9814aa)
-    - [Significant whitespace](#org64b6c3a)
-    - [Groupings](#orgb1ae993)
-    - [Fully qualified namespaces with \`/\` seperator](#org9208de9)
-    - [EDN support](#org301c95a)
-    - [predicate functions prefer ending in \`?\`, by convention](#org6be1ee8)
-  - [Propagotors as first class](#org964f7f2)
-  - [Fully qualified namespaces](#orgb3a1caf)
-  - [Strongly typed](#org2d782e1)
-  - [Functional-Logic-based language](#orgfccf2a3)
-  - [Dependent Types as first class](#orga7f5a09)
-  - [Session Types for protocol, Linear Types for memory-guarentees](#org79d1e77)
-  - [Strong support for parallel processing](#org2ec3d72)
-  - [Pattern Matching as first class (like in Erlang or Prolog)](#orgdec144c)
-  - [Constraint Solver Language](#org4dcde34)
-  - [Blazingly fast](#org9ee3c03)
-  - [Excellent, human-readable, compiler errors in the likes of Rust or Gleam **VERY IMPORTANT**](#org78a35e2)
-  - [Arbitrary precision numbers, EFFICIENTLY](#orgbcc59d6)
-  - [Innovations on UNUM types](#org2cf9f01)
-  - [A "don't stop the world" garbage collector, like in Pony](#org43f0001)
-  - [Immutable datastructures with structural sharing, like in Clojure](#orga28b13a)
-- [primitives](#orgc8050c5)
-- [Logic Language](#orgd0ce804)
-  - [Runs on Propagator Infrastructure rather than typical SLD/SLG Resolution](#orgc31ff1b)
-  - [Logical variable names with significant modal prefixes](#org2099a7e)
-  - [First-class anonymous relation primitive](#org0cdc1a0)
-  - [Core primitives:](#org8f2a528)
-  - [Seamless integration into the functional language.](#orgcd896ed)
-    - [example prototype syntax](#orge007cde)
-- [Languages that inspire us](#org587f779)
-  - [Logic Programmming](#org1c038d3)
-  - [Constraint Logic Programming](#org316db62)
-  - [Functional Programming](#orge425994)
-  - [Scripting Languages](#orgbac6826)
-  - [Formal Verification](#org7f37df3)
-  - [Sussman's Propogators](#orge097cd7)
-  - [Interesting Type Systems](#orgc7ab932)
-- [Target](#org2f0faf8)
-  - [LLVM](#org67e03e4)
-  - [Prototype in](#orgac8ae7b)
-- [Personal TODOS](#org4fb615c)
-  - [Editor Support](#orgc40b728)
-  - [Language Features](#org4c912c1)
-  - [optmiizations/audits](#org5206c9f)
-  - [Array Language!](#org42c5b9a)
-  - [todo](#org9bc23a2)
-  - [Namespacing](#org0b1a893)
-  - [Research/Implementation Guidance Documentations](#orgf623b3b)
+- [Desiderata](#org4b1c05f)
+  - [Syntax](#orgaf300a8)
+    - [Homoiconicity](#org254ccd6)
+    - [Significant whitespace](#org8bae28c)
+    - [Groupings](#org4b32098)
+    - [Fully qualified namespaces with \`/\` seperator](#org2870200)
+    - [EDN support](#org9b47f13)
+    - [predicate functions prefer ending in \`?\`, by convention](#org5873596)
+  - [Propagotors as first class](#org7325692)
+  - [Fully qualified namespaces](#org377157f)
+  - [Strongly typed](#org15a1a42)
+  - [Functional-Logic-based language](#orgc626ef2)
+  - [Dependent Types as first class](#org9cd09f2)
+  - [Session Types for protocol, Linear Types for memory-guarentees](#org695ac35)
+  - [Strong support for parallel processing](#org11d03dd)
+  - [Pattern Matching as first class (like in Erlang or Prolog)](#org1cee0ea)
+  - [Constraint Solver Language](#orgf58e91f)
+  - [Blazingly fast](#org287d4de)
+  - [Excellent, human-readable, compiler errors in the likes of Rust or Gleam **VERY IMPORTANT**](#orgf51576c)
+  - [Arbitrary precision numbers, EFFICIENTLY](#org2bc9a22)
+  - [Innovations on UNUM types](#org44a63d6)
+  - [A "don't stop the world" garbage collector, like in Pony](#org80b706b)
+  - [Immutable datastructures with structural sharing, like in Clojure](#org0b0f2b8)
+- [primitives](#org0f1402b)
+- [Logic Language](#orge092597)
+  - [Runs on Propagator Infrastructure rather than typical SLD/SLG Resolution](#orgc08c03d)
+  - [Logical variable names with significant modal prefixes](#orga8fcc18)
+  - [First-class anonymous relation primitive](#org13e7548)
+  - [Core primitives:](#org0553316)
+  - [Seamless integration into the functional language.](#org9acb351)
+    - [example prototype syntax](#org44cba6f)
+- [Languages that inspire us](#orge403da5)
+  - [Logic Programmming](#orgd9bac3c)
+  - [Constraint Logic Programming](#orgd41ea7e)
+  - [Functional Programming](#orgfbdeef1)
+  - [Scripting Languages](#org9d7f18b)
+  - [Formal Verification](#org1f3df1c)
+  - [Sussman's Propogators](#org2aa8e9a)
+  - [Interesting Type Systems](#org51471ac)
+- [Target](#org633d1b9)
+  - [LLVM](#orge3c2f45)
+  - [Prototype in](#orgd18dd1f)
+- [Personal TODOS](#orgf572857)
+  - [Editor Support](#org24d9aab)
+  - [Language Features](#org8d0537b)
+  - [optmiizations/audits](#org7819d14)
+  - [Array Language!](#orgb18ba1d)
+  - [todo](#org840577e)
+  - [Namespacing](#org70dbbd8)
+  - [Research/Implementation Guidance Documentations](#orgf2e8308)
 - [Bundles](#bundles)
-  - [1. Composition, Not Inheritance](#org4bdb196)
-  - [2. Arbitrary Refinement](#orgc0aeb5a)
-  - [3. Open-World Assumption](#org2c3e96c)
-  - [The Lattice Structure](#org50f8a8a)
-- [Syntax Studies](#orgd7d8d0a)
-  - [Multi-arity function bodies](#org86afbd0)
-  - [IDEAs FOR PAREN GROUPINGS](#org29e04d5)
-  - [Mixed syntax](#org75b7dbf)
-  - [call site typing, "Explicit Application"](#orgc770c65)
-  - [Piping](#org4414656)
-  - [\`spec\`](#org1da6f24)
-  - [Schema, Selection, Session](#org6cc65e2)
-    - [schema](#org602d1c4)
-    - [selection: require, include, and provide](#orgf0c3d49)
-    - [session](#org8321f43)
-  - [Point Free&#x2026; APL Style Trains, Trines, and Trouble????](#orga7b8d5a)
-  - [!!!!!!!Narrowing](#org8e373cd)
-  - [Map Syntax](#org4f56a1b)
-    - [Free standing hash-map: The Implicit HashMap Syntax](#org8c2b02b)
-    - [Map Key Accessor Pattern Syntax](#org108663f)
-  - [Head Tail List Syntax](#org76d360e)
-    - [I'm thinking of adding support for prolog style [E1, \_, E3 | Rest] head|tail style syntax in lists. Would this keep homoiconicity? Does this work well on other collection types? Does it make sense? Maps? \`{:name "Alice" :age 42" | \_}\`. Can be used for unification/structural pattern-matching?](#orgf5cdf8a)
-  - [Range Syntax](#org53df30f)
-    - [I'm also thinking of supporting "Range Syntax" for lists and vectors. '[1..5] expands to '[1 2 3 4 5]; also '[1.10 :by 2] expands to '[1 3 5 7 9], '[10..0 :by -2] expands to '[10 8 6 4 2 0], and so on. Should also work on vectors, lazy lists?](#orgec2a2c1)
-    - [Oh! Another idea is to include predicate functions as filter with lazy lists \`~[1.. even?]\`, \`~[1.. [< \_ 100]\`](#orge51cb8c)
-    - [Two issues with the pipe operator to raise: 1. Clarify, does this prevent the nontermination issue? 2. We also have prolog [head | tail] syntax planned out, which uses the same \`|\`&#x2026; but because the range syntax uses .., would the set-builder like \`|\` still work?](#org4de7c41)
-    - [Let's make a short summary of our recommendations for Range Syntax (using keywords on predicates). Be concise, give examples.](#org2f2c8ca)
-    - [Let's summarize our syntax conclusions from above for \`|>\` and \`>>\` with default last position piping, with considerations for \`\_\` magic holes. Let's provide concise but full examples to an implementer, and some considerations for implementing this as O(n) automatically at compiler.](#orgf339292)
-  - [In-line let](#org1321ce3)
-  - [Sigil Design](#org334ceba)
-  - [fn](#orgbe8f9b0)
-  - [HashMap](#orga2aee26)
-    - [Map Literal uses EDN style](#org12cad56)
-    - [Lookup Syntax](#orgf89c9df)
-  - [foreign imports and ffi](#org0d13e98)
-  - [Partial Functions, strict arity, and the Hole-y Trinity: Curry Favor](#orge7f1e8c)
-    - [Use placeholders to invoke partial function](#org8910dd3)
-  - [Type Syntax](#orgc69e6f9)
-  - [Logical Language](#org48cbd2d)
-    - [Keywords](#org4179fb4)
-    - [Logic Variable Syntax and notes](#org06df122)
-    - [Namespaces and Requires](#org44ca309)
-    - [Clause Pipes](#orgf7c8d12)
-    - [Unification](#org214b15d)
-  - [fn/rel fusion&#x2026;](#orgd50145e)
-  - [Unify | = | eq? 🤷‍♀️](#org61dfcd4)
-- [Data Structures](#org9c194f6)
-- [Vision, Principles,](#org07522fa)
-- [Considerations](#org4937e2b)
-  - [Part 2: Persistent Data Structures](#org2cd1783)
-    - [1. HAMT (Hash Array Mapped Trie)](#org55355f3)
-    - [2. Transients for Batch Updates](#org0cdf2d8)
-    - [3. RRB-Trees for Vectors](#org6347eb7)
-    - [4. Structural Sharing + Logic Variables/](#orgb4abf03)
-  - [Part 3: Evaluation Strategy](#org0da7ce4)
-- [Higher Rank Pi Type Syntax](#org3c0b041)
-  - [We have a current limitation with higher-rank Pi types that force us to use the s-expr backend language to write prologos transducers:](#orgccc6215)
-- [pipe](#orgc23a1f3)
+  - [1. Composition, Not Inheritance](#org033062d)
+  - [2. Arbitrary Refinement](#org475104a)
+  - [3. Open-World Assumption](#orgc2b9565)
+  - [The Lattice Structure](#org1d7f341)
+- [Syntax Studies](#org9f164de)
+  - [Multi-arity function bodies](#org66fd2b8)
+  - [IDEAs FOR PAREN GROUPINGS](#org7a67bb1)
+  - [Mixed syntax](#org9da41d1)
+  - [call site typing, "Explicit Application"](#orgfc82b52)
+  - [Piping](#org9f0cb55)
+  - [\`spec\`](#org8db9bcc)
+  - [Schema, Selection, Session](#orgb0aea6e)
+    - [schema](#orgf47aef5)
+    - [selection: require, include, and provide](#orga4c7841)
+    - [session](#org9c420fa)
+  - [Point Free&#x2026; APL Style Trains, Trines, and Trouble????](#org64e0923)
+  - [!!!!!!!Narrowing](#org44eb15d)
+  - [Map Syntax](#org2508617)
+    - [Free standing hash-map: The Implicit HashMap Syntax](#orgf72a532)
+    - [Map Key Accessor Pattern Syntax](#org4828880)
+  - [Head Tail List Syntax](#org3095c5e)
+    - [I'm thinking of adding support for prolog style [E1, \_, E3 | Rest] head|tail style syntax in lists. Would this keep homoiconicity? Does this work well on other collection types? Does it make sense? Maps? \`{:name "Alice" :age 42" | \_}\`. Can be used for unification/structural pattern-matching?](#org48aa4d2)
+  - [Range Syntax](#orgac257de)
+    - [I'm also thinking of supporting "Range Syntax" for lists and vectors. '[1..5] expands to '[1 2 3 4 5]; also '[1.10 :by 2] expands to '[1 3 5 7 9], '[10..0 :by -2] expands to '[10 8 6 4 2 0], and so on. Should also work on vectors, lazy lists?](#org8ed6014)
+    - [Oh! Another idea is to include predicate functions as filter with lazy lists \`~[1.. even?]\`, \`~[1.. [< \_ 100]\`](#org1382afb)
+    - [Two issues with the pipe operator to raise: 1. Clarify, does this prevent the nontermination issue? 2. We also have prolog [head | tail] syntax planned out, which uses the same \`|\`&#x2026; but because the range syntax uses .., would the set-builder like \`|\` still work?](#org56db35b)
+    - [Let's make a short summary of our recommendations for Range Syntax (using keywords on predicates). Be concise, give examples.](#orgfad6532)
+    - [Let's summarize our syntax conclusions from above for \`|>\` and \`>>\` with default last position piping, with considerations for \`\_\` magic holes. Let's provide concise but full examples to an implementer, and some considerations for implementing this as O(n) automatically at compiler.](#org53b1142)
+  - [In-line let](#org9d78f56)
+  - [Sigil Design](#org6d63a0b)
+  - [fn](#org5a88d71)
+  - [HashMap](#org1bb6501)
+    - [Map Literal uses EDN style](#org891c3de)
+    - [Lookup Syntax](#org215222c)
+  - [foreign imports and ffi](#org653b936)
+  - [Partial Functions, strict arity, and the Hole-y Trinity: Curry Favor](#org6e19391)
+    - [Use placeholders to invoke partial function](#org847c1eb)
+  - [Type Syntax](#org1845859)
+  - [Logical Language](#org587e9fc)
+    - [Keywords](#org90f3881)
+    - [Logic Variable Syntax and notes](#org8c6d36f)
+    - [Namespaces and Requires](#org8e43090)
+    - [Clause Pipes](#orga762c7f)
+    - [Unification](#org36b8eff)
+  - [fn/rel fusion&#x2026;](#orge2afbc1)
+  - [Unify | = | eq? 🤷‍♀️](#org2c8453b)
+- [Data Structures](#orgfd551f9)
+- [Vision, Principles,](#org21922c5)
+- [Considerations](#org4fda43f)
+  - [Part 2: Persistent Data Structures](#orgb54d278)
+    - [1. HAMT (Hash Array Mapped Trie)](#org94db902)
+    - [2. Transients for Batch Updates](#org84e35ee)
+    - [3. RRB-Trees for Vectors](#org77eff9f)
+    - [4. Structural Sharing + Logic Variables/](#orgccce636)
+  - [Part 3: Evaluation Strategy](#orgb3bf61d)
+- [Higher Rank Pi Type Syntax](#org77fca78)
+  - [We have a current limitation with higher-rank Pi types that force us to use the s-expr backend language to write prologos transducers:](#org22750d6)
+- [pipe](#org500f8d8)
 
 
-<a id="orgb6a719f"></a>
+<a id="org4b1c05f"></a>
 
 # Desiderata
 
 
-<a id="org2ac21eb"></a>
+<a id="orgaf300a8"></a>
 
 ## Syntax
 
 
-<a id="orge9814aa"></a>
+<a id="org254ccd6"></a>
 
 ### Homoiconicity
 
@@ -130,7 +130,7 @@
 -   Prefix-notation
 
 
-<a id="org64b6c3a"></a>
+<a id="org8bae28c"></a>
 
 ### Significant whitespace
 
@@ -140,7 +140,7 @@
 -   Same line with \`()\` groupings: deeper tree-depth of the AST
 
 
-<a id="orgb1ae993"></a>
+<a id="org4b32098"></a>
 
 ### Groupings
 
@@ -148,41 +148,41 @@
 -   () - Logical Core - Relational Language
 
 
-<a id="org9208de9"></a>
+<a id="org2870200"></a>
 
 ### Fully qualified namespaces with \`/\` seperator
 
 
-<a id="org301c95a"></a>
+<a id="org9b47f13"></a>
 
 ### EDN support
 
 
-<a id="org6be1ee8"></a>
+<a id="org5873596"></a>
 
 ### predicate functions prefer ending in \`?\`, by convention
 
 -   valid? NOT isValid
 
 
-<a id="org964f7f2"></a>
+<a id="org7325692"></a>
 
 ## Propagotors as first class
 
 
-<a id="orgb3a1caf"></a>
+<a id="org377157f"></a>
 
 ## Fully qualified namespaces
 
 -   disambiguate imports' names
 
 
-<a id="org2d782e1"></a>
+<a id="org15a1a42"></a>
 
 ## Strongly typed
 
 
-<a id="orgfccf2a3"></a>
+<a id="orgc626ef2"></a>
 
 ## Functional-Logic-based language
 
@@ -190,19 +190,19 @@
 -   With procedural
 
 
-<a id="orga7f5a09"></a>
+<a id="org9cd09f2"></a>
 
 ## Dependent Types as first class
 
 
-<a id="org79d1e77"></a>
+<a id="org695ac35"></a>
 
 ## Session Types for protocol, Linear Types for memory-guarentees
 
 -   Dependent Session types
 
 
-<a id="org2ec3d72"></a>
+<a id="org11d03dd"></a>
 
 ## Strong support for parallel processing
 
@@ -210,44 +210,44 @@
 -   easy to understand/use primitives for concurrent and parallel processing
 
 
-<a id="orgdec144c"></a>
+<a id="org1cee0ea"></a>
 
 ## Pattern Matching as first class (like in Erlang or Prolog)
 
 
-<a id="org4dcde34"></a>
+<a id="orgf58e91f"></a>
 
 ## Constraint Solver Language
 
 
-<a id="org9ee3c03"></a>
+<a id="org287d4de"></a>
 
 ## Blazingly fast
 
 
-<a id="org78a35e2"></a>
+<a id="orgf51576c"></a>
 
 ## Excellent, human-readable, compiler errors in the likes of Rust or Gleam **VERY IMPORTANT**
 
 
-<a id="orgbcc59d6"></a>
+<a id="org2bc9a22"></a>
 
 ## Arbitrary precision numbers, EFFICIENTLY
 
 -   I don't like "wrapping" Ints, for example; I would rather throw run-time errors than silently wrapping
 
 
-<a id="org2cf9f01"></a>
+<a id="org44a63d6"></a>
 
 ## Innovations on UNUM types
 
 
-<a id="org43f0001"></a>
+<a id="org80b706b"></a>
 
 ## A "don't stop the world" garbage collector, like in Pony
 
 
-<a id="orga28b13a"></a>
+<a id="org0b0f2b8"></a>
 
 ## Immutable datastructures with structural sharing, like in Clojure
 
@@ -255,7 +255,7 @@
 -   ideal vector commitments
 
 
-<a id="orgc8050c5"></a>
+<a id="org0f1402b"></a>
 
 # primitives
 
@@ -263,17 +263,17 @@
 -   
 
 
-<a id="orgd0ce804"></a>
+<a id="orge092597"></a>
 
 # Logic Language
 
 
-<a id="orgc31ff1b"></a>
+<a id="orgc08c03d"></a>
 
 ## Runs on Propagator Infrastructure rather than typical SLD/SLG Resolution
 
 
-<a id="org2099a7e"></a>
+<a id="orga8fcc18"></a>
 
 ## Logical variable names with significant modal prefixes
 
@@ -282,14 +282,14 @@
 -   +logicVar: output
 
 
-<a id="org0cdc1a0"></a>
+<a id="org13e7548"></a>
 
 ## First-class anonymous relation primitive
 
 \`defn\` <=> \`defr\` :: \`fn\` <=> \`rel\`
 
 
-<a id="org8f2a528"></a>
+<a id="org0553316"></a>
 
 ## Core primitives:
 
@@ -299,40 +299,40 @@
     -   defines an anonymous relation
 
 
-<a id="orgcd896ed"></a>
+<a id="org9acb351"></a>
 
 ## Seamless integration into the functional language.
 
 -   use \`rel\` inside \`defn\`s; use \`
 
 
-<a id="orge007cde"></a>
+<a id="org44cba6f"></a>
 
 ### example prototype syntax
 
 A *relation that produces proofs*, defined *locally* inside a *function*, returning *dependent types*.
 
 
-<a id="org587f779"></a>
+<a id="orge403da5"></a>
 
 # Languages that inspire us
 
 
-<a id="org1c038d3"></a>
+<a id="orgd9bac3c"></a>
 
 ## Logic Programmming
 
 -   Prolog (also homoiconic)
 
 
-<a id="org316db62"></a>
+<a id="orgd41ea7e"></a>
 
 ## Constraint Logic Programming
 
 -   ECLiPSe
 
 
-<a id="orge425994"></a>
+<a id="orgfbdeef1"></a>
 
 ## Functional Programming
 
@@ -347,14 +347,14 @@ A *relation that produces proofs*, defined *locally* inside a *function*, return
             -   Safe sharing for concurrency use-cases
 
 
-<a id="orgbac6826"></a>
+<a id="org9d7f18b"></a>
 
 ## Scripting Languages
 
 -   TCL
 
 
-<a id="org7f37df3"></a>
+<a id="org1f3df1c"></a>
 
 ## Formal Verification
 
@@ -362,14 +362,14 @@ A *relation that produces proofs*, defined *locally* inside a *function*, return
     -   Flexibility to define arbitrary formal languages or logics, can be powerful and flexible in proving certain
 
 
-<a id="orge097cd7"></a>
+<a id="org2aa8e9a"></a>
 
 ## Sussman's Propogators
 
 -   Some formalisms using lattices
 
 
-<a id="orgc7ab932"></a>
+<a id="org51471ac"></a>
 
 ## Interesting Type Systems
 
@@ -378,19 +378,19 @@ A *relation that produces proofs*, defined *locally* inside a *function*, return
 -   Rust
 
 
-<a id="org2f0faf8"></a>
+<a id="org633d1b9"></a>
 
 # Target
 
 
-<a id="org67e03e4"></a>
+<a id="orge3c2f45"></a>
 
 ## LLVM
 
 -   Hope to be able to leverage other languages in the ecosystem, with strong ffi support to things like C, C++, Rust, and others
 
 
-<a id="orgac8ae7b"></a>
+<a id="orgd18dd1f"></a>
 
 ## Prototype in
 
@@ -399,12 +399,12 @@ A *relation that produces proofs*, defined *locally* inside a *function*, return
 Write a clean commit message detailing what we accomplished, only output as a markdown block.
 
 
-<a id="org4fb615c"></a>
+<a id="orgf572857"></a>
 
 # Personal TODOS
 
 
-<a id="orgc40b728"></a>
+<a id="org24d9aab"></a>
 
 ## Editor Support
 
@@ -425,7 +425,7 @@ Write a clean commit message detailing what we accomplished, only output as a ma
     -   Hole-Driven Development Features
 
 
-<a id="org4c912c1"></a>
+<a id="org8d0537b"></a>
 
 ## Language Features
 
@@ -503,7 +503,7 @@ Write a clean commit message detailing what we accomplished, only output as a ma
     -   spin up a v8 vm when there's a js import/block, run against that as sibling runtime
 
 
-<a id="org5206c9f"></a>
+<a id="org7819d14"></a>
 
 ## optmiizations/audits
 
@@ -516,9 +516,10 @@ Write a clean commit message detailing what we accomplished, only output as a ma
 -   [X] claude memory architecture
 -   [ ] narrowing research document
 -   [ ] revisit transients for full full pipeline implementation option
+-   [ ] Revist UnionFind §4.3 in Logic Engine Design &#x2013; can we push for a O(log<sub>32</sub> n) variant with find and union? on CHAMP? (currently O(log n))
 
 
-<a id="org42c5b9a"></a>
+<a id="orgb18ba1d"></a>
 
 ## Array Language!
 
@@ -526,7 +527,7 @@ Write a clean commit message detailing what we accomplished, only output as a ma
     -   Intended to work over collections&#x2013;arrays, in particular
 
 
-<a id="org9bc23a2"></a>
+<a id="org840577e"></a>
 
 ## todo
 
@@ -551,7 +552,7 @@ Write a clean commit message detailing what we accomplished, only output as a ma
 ```
 
 
-<a id="org0b1a893"></a>
+<a id="org70dbbd8"></a>
 
 ## Namespacing
 
@@ -563,7 +564,7 @@ Write a clean commit message detailing what we accomplished, only output as a ma
 -   [ ] determine what core libraries get loaded in automatically can be called in by their fully-qualified names without require
 
 
-<a id="orgf623b3b"></a>
+<a id="orgf2e8308"></a>
 
 ## Research/Implementation Guidance Documentations
 
@@ -636,7 +637,7 @@ Supertraits and trait inheritance is inherently IMPLICATION bundles are Conjunct
 -   What Makes Bundles Different
 
 
-<a id="org4bdb196"></a>
+<a id="org033062d"></a>
 
 ## 1. Composition, Not Inheritance
 
@@ -668,7 +669,7 @@ bundle MySpecial = (Add, Hash, Seqable)
 ```
 
 
-<a id="orgc0aeb5a"></a>
+<a id="org475104a"></a>
 
 ## 2. Arbitrary Refinement
 
@@ -689,7 +690,7 @@ bundle SerializableHashable = (Hash, Serialize)
 ```
 
 
-<a id="org2c3e96c"></a>
+<a id="orgc2b9565"></a>
 
 ## 3. Open-World Assumption
 
@@ -708,7 +709,7 @@ bundle Enhanced = (Eq, Ord, MyNewTrait)
 &#x2014;
 
 
-<a id="org50f8a8a"></a>
+<a id="org1d7f341"></a>
 
 ## The Lattice Structure
 
@@ -746,12 +747,12 @@ This is a *join-semilattice*:
 Let's stage all relevant changes; then write a clean commit message output as a markdown block. ONLY STAGE, DO NOT COMMIT.
 
 
-<a id="orgd7d8d0a"></a>
+<a id="org9f164de"></a>
 
 # Syntax Studies
 
 
-<a id="org86afbd0"></a>
+<a id="org66fd2b8"></a>
 
 ## Multi-arity function bodies
 
@@ -777,7 +778,7 @@ defn clamp
 ```
 
 
-<a id="org29e04d5"></a>
+<a id="org7a67bb1"></a>
 
 ## IDEAs FOR PAREN GROUPINGS
 
@@ -812,7 +813,7 @@ def xf
 ```
 
 
-<a id="org75b7dbf"></a>
+<a id="org9da41d1"></a>
 
 ## Mixed syntax
 
@@ -835,7 +836,7 @@ defn find-path [graph, start, end]
 ```
 
 
-<a id="orgc770c65"></a>
+<a id="orgfc82b52"></a>
 
 ## call site typing, "Explicit Application"
 
@@ -849,7 +850,7 @@ let xs = nil @Nat  ;; "nil at type Nat"
 ```
 
 
-<a id="org4414656"></a>
+<a id="org9f0cb55"></a>
 
 ## Piping
 
@@ -864,7 +865,7 @@ let xs = nil @Nat  ;; "nil at type Nat"
 ```
 
 
-<a id="org1da6f24"></a>
+<a id="org8db9bcc"></a>
 
 ## \`spec\`
 
@@ -906,27 +907,27 @@ spec add
 ```
 
 
-<a id="org6cc65e2"></a>
+<a id="orgb0aea6e"></a>
 
 ## Schema, Selection, Session
 
 
-<a id="org602d1c4"></a>
+<a id="orgf47aef5"></a>
 
 ### schema
 
 
-<a id="orgf0c3d49"></a>
+<a id="orga4c7841"></a>
 
 ### selection: require, include, and provide
 
 
-<a id="org8321f43"></a>
+<a id="org9c420fa"></a>
 
 ### session
 
 
-<a id="orga7b8d5a"></a>
+<a id="org64e0923"></a>
 
 ## Point Free&#x2026; APL Style Trains, Trines, and Trouble????
 
@@ -939,17 +940,17 @@ defn compose [f g]
 ```
 
 
-<a id="org8e373cd"></a>
+<a id="org44eb15d"></a>
 
 ## !!!!!!!Narrowing
 
 
-<a id="org4f56a1b"></a>
+<a id="org2508617"></a>
 
 ## Map Syntax
 
 
-<a id="org8c2b02b"></a>
+<a id="orgf72a532"></a>
 
 ### Free standing hash-map: The Implicit HashMap Syntax
 
@@ -1909,7 +1910,7 @@ spec add
     Does this implicit map syntax feel right for Prologos?
 
 
-<a id="org108663f"></a>
+<a id="org4828880"></a>
 
 ### Map Key Accessor Pattern Syntax
 
@@ -2853,12 +2854,12 @@ spec add
     Does this implicit map syntax feel right for Prologos?
 
 
-<a id="org76d360e"></a>
+<a id="org3095c5e"></a>
 
 ## Head Tail List Syntax
 
 
-<a id="orgf5cdf8a"></a>
+<a id="org48aa4d2"></a>
 
 ### I'm thinking of adding support for prolog style [E1, \_, E3 | Rest] head|tail style syntax in lists. Would this keep homoiconicity? Does this work well on other collection types? Does it make sense? Maps? \`{:name "Alice" :age 42" | \_}\`. Can be used for unification/structural pattern-matching?
 
@@ -3332,12 +3333,12 @@ defr member (?x ?xs)
 ```
 
 
-<a id="org53df30f"></a>
+<a id="orgac257de"></a>
 
 ## Range Syntax
 
 
-<a id="orgec2a2c1"></a>
+<a id="org8ed6014"></a>
 
 ### I'm also thinking of supporting "Range Syntax" for lists and vectors. '[1..5] expands to '[1 2 3 4 5]; also '[1.10 :by 2] expands to '[1 3 5 7 9], '[10..0 :by -2] expands to '[10 8 6 4 2 0], and so on. Should also work on vectors, lazy lists?
 
@@ -3695,7 +3696,7 @@ take 10 fibs
 Does this range syntax design feel right for Prologos?
 
 
-<a id="orge51cb8c"></a>
+<a id="org1382afb"></a>
 
 ### Oh! Another idea is to include predicate functions as filter with lazy lists \`~[1.. even?]\`, \`~[1.. [< \_ 100]\`
 
@@ -4112,7 +4113,7 @@ This feels like a natural extension of the range syntax. The `|` separator clear
 Does this feel right?
 
 
-<a id="org4de7c41"></a>
+<a id="org56db35b"></a>
 
 ### Two issues with the pipe operator to raise: 1. Clarify, does this prevent the nontermination issue? 2. We also have prolog [head | tail] syntax planned out, which uses the same \`|\`&#x2026; but because the range syntax uses .., would the set-builder like \`|\` still work?
 
@@ -4477,7 +4478,7 @@ If you want to avoid any `|` overloading concern:
 Does this resolve both concerns?
 
 
-<a id="org2f2c8ca"></a>
+<a id="orgfad6532"></a>
 
 ### Let's make a short summary of our recommendations for Range Syntax (using keywords on predicates). Be concise, give examples.
 
@@ -4551,7 +4552,7 @@ Does this resolve both concerns?
 | `~[1.. :where even? :while [< _ 50]]` | Even numbers under 50 |
 
 
-<a id="orgf339292"></a>
+<a id="org53b1142"></a>
 
 ### Let's summarize our syntax conclusions from above for \`|>\` and \`>>\` with default last position piping, with considerations for \`\_\` magic holes. Let's provide concise but full examples to an implementer, and some considerations for implementing this as O(n) automatically at compiler.
 
@@ -4957,7 +4958,7 @@ let result = into @[] xf users
 | Fusion           | Automatic             | Compiler rewrites pipe |
 
 
-<a id="org1321ce3"></a>
+<a id="org9d78f56"></a>
 
 ## In-line let
 
@@ -5019,7 +5020,7 @@ let [xs (: List Nat) #[10 20]
 ```
 
 
-<a id="org334ceba"></a>
+<a id="org6d63a0b"></a>
 
 ## Sigil Design
 
@@ -5037,7 +5038,7 @@ let [xs (: List Nat) #[10 20]
 ```
 
 
-<a id="orgbe8f9b0"></a>
+<a id="org5a88d71"></a>
 
 ## fn
 
@@ -5048,12 +5049,12 @@ fn [x] add 2 x
 ```
 
 
-<a id="orga2aee26"></a>
+<a id="org1bb6501"></a>
 
 ## HashMap
 
 
-<a id="org12cad56"></a>
+<a id="org891c3de"></a>
 
 ### Map Literal uses EDN style
 
@@ -5062,22 +5063,22 @@ fn [x] add 2 x
 ```
 
 
-<a id="orgf89c9df"></a>
+<a id="org215222c"></a>
 
 ### Lookup Syntax
 
 
-<a id="org0d13e98"></a>
+<a id="org653b936"></a>
 
 ## foreign imports and ffi
 
 
-<a id="orge7f1e8c"></a>
+<a id="org6e19391"></a>
 
 ## Partial Functions, strict arity, and the Hole-y Trinity: Curry Favor
 
 
-<a id="org8910dd3"></a>
+<a id="org847c1eb"></a>
 
 ### Use placeholders to invoke partial function
 
@@ -5100,7 +5101,7 @@ map (clamp 0 100) xs     ;; using 2-arity overload (cleaner!)
 ```
 
 
-<a id="orgc69e6f9"></a>
+<a id="org1845859"></a>
 
 ## Type Syntax
 
@@ -5109,12 +5110,12 @@ map (clamp 0 100) xs     ;; using 2-arity overload (cleaner!)
 -   var::Type
 
 
-<a id="org48cbd2d"></a>
+<a id="org587e9fc"></a>
 
 ## Logical Language
 
 
-<a id="org4179fb4"></a>
+<a id="org90f3881"></a>
 
 ### Keywords
 
@@ -5129,7 +5130,7 @@ clause
 ```
 
 
-<a id="org06df122"></a>
+<a id="org8c6d36f"></a>
 
 ### Logic Variable Syntax and notes
 
@@ -5147,7 +5148,7 @@ clause
     -   We don't want to enforce the naming, but encourage community
 
 
-<a id="org44ca309"></a>
+<a id="org8e43090"></a>
 
 ### Namespaces and Requires
 
@@ -5167,7 +5168,7 @@ defn double-all [xs : List Nat] : List Nat
 ```
 
 
-<a id="orgf7c8d12"></a>
+<a id="orga762c7f"></a>
 
 ### Clause Pipes
 
@@ -5178,7 +5179,7 @@ defn double-all [xs : List Nat] : List Nat
     ```
 
 
-<a id="org214b15d"></a>
+<a id="org36b8eff"></a>
 
 ### Unification
 
@@ -5194,12 +5195,12 @@ defn double-all [xs : List Nat] : List Nat
 ```
 
 
-<a id="orgd50145e"></a>
+<a id="orge2afbc1"></a>
 
 ## fn/rel fusion&#x2026;
 
 
-<a id="org61dfcd4"></a>
+<a id="org2c8453b"></a>
 
 ## Unify | = | eq? 🤷‍♀️
 
@@ -5208,14 +5209,14 @@ defn double-all [xs : List Nat] : List Nat
     -   We're going with the classic \`=\` is unify! 🎉
 
 
-<a id="org9c194f6"></a>
+<a id="orgfd551f9"></a>
 
 # Data Structures
 
 -   Relaxed Radix Balanced Trees (RRB-trees) compared with HAMT-vectors?
 
 
-<a id="org07522fa"></a>
+<a id="org21922c5"></a>
 
 # Vision, Principles,
 
@@ -5238,17 +5239,17 @@ defn double-all [xs : List Nat] : List Nat
     -   Uniform Syntax
 
 
-<a id="org4937e2b"></a>
+<a id="org4fda43f"></a>
 
 # Considerations
 
 
-<a id="org2cd1783"></a>
+<a id="orgb54d278"></a>
 
 ## Part 2: Persistent Data Structures
 
 
-<a id="org55355f3"></a>
+<a id="org94db902"></a>
 
 ### 1. HAMT (Hash Array Mapped Trie)
 
@@ -5265,7 +5266,7 @@ defn double-all [xs : List Nat] : List Nat
 ```
 
 
-<a id="org0cdf2d8"></a>
+<a id="org84e35ee"></a>
 
 ### 2. Transients for Batch Updates
 
@@ -5289,7 +5290,7 @@ If you want efficient `concat`, `slice`, `insert-at`, consider RRB-trees (Relaxe
 ```
 
 
-<a id="org6347eb7"></a>
+<a id="org77eff9f"></a>
 
 ### 3. RRB-Trees for Vectors
 
@@ -5301,7 +5302,7 @@ If you want efficient `concat`, `slice`, `insert-at`, consider RRB-trees (Relaxe
 ```
 
 
-<a id="orgb4abf03"></a>
+<a id="orgccce636"></a>
 
 ### 4. Structural Sharing + Logic Variables/
 
@@ -5322,7 +5323,7 @@ This is unique to Prologos:
 You need to decide how logic variables interact with persistent structures.
 
 
-<a id="org0da7ce4"></a>
+<a id="orgb3bf61d"></a>
 
 ## Part 3: Evaluation Strategy
 
@@ -5352,12 +5353,12 @@ defn lazy-map {A B} [f : A -> B, xs : Seq A] : Seq B
 ```
 
 
-<a id="org3c0b041"></a>
+<a id="org77fca78"></a>
 
 # Higher Rank Pi Type Syntax
 
 
-<a id="orgccc6215"></a>
+<a id="org22750d6"></a>
 
 ## We have a current limitation with higher-rank Pi types that force us to use the s-expr backend language to write prologos transducers:
 
@@ -5814,7 +5815,7 @@ The strategy:
 5.  *Explicit {S}* only when compiler can't infer
 
 
-<a id="orgc23a1f3"></a>
+<a id="org500f8d8"></a>
 
 # pipe
 

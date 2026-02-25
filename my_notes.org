@@ -1,3 +1,10 @@
+:PROPERTIES:
+:GPTEL_MODEL: claude-opus-4-5-20251101
+:GPTEL_BACKEND: Claude Max
+:GPTEL_SYSTEM: You are a large language model living in Emacs and a helpful assistant. If needed, feel free to use Latex. Be concise.
+:GPTEL_TOOLS:
+:END:
+
 * Desiderata
 ** Syntax
 *** Homoiconicity
@@ -135,7 +142,10 @@ A /relation that produces proofs/, defined /locally/ inside a /function/, return
   - Interactivity
     - Hole-Driven Development Features
 ** Language Features
-  - [ ] Clarify `()` as logic clauses and Type Groupings
+  - [ ] Create Benchmarking Design -> intent Testing metavar upgrade
+  - [ ] Upgrade our metavar and type inference infrastructure to our propagator network
+  - [X] Clarify `()` as logic clauses and Type Groupings
+  - [ ] Allow uncurried style in traits
   - [ ] Rewrite any code to prefer A? types as Unions (A | Nil)
     - [ ] Emit warnings/errors for unhandled Nil cases in functions
   - [X] ‼️ Better Type delimiters in WS mode
@@ -213,7 +223,7 @@ A /relation that produces proofs/, defined /locally/ inside a /function/, return
   - [X] claude memory architecture
   - [ ] narrowing research document
   - [ ] revisit transients for full full pipeline implementation option
-
+  - [ ] Revist UnionFind §4.3 in Logic Engine Design -- can we push for a O(log_32 n) variant with find and union? on CHAMP? (currently O(log n))
 
 
 
