@@ -62,6 +62,7 @@
    'multi-dispatch.rkt  '()
    'posit-impl.rkt      '()
    'champ.rkt           '()
+   'propagator.rkt      '(champ.rkt)
    'rrb.rkt             '()
    'foreign.rkt         '(syntax.rkt)
    'sessions.rkt        '(prelude.rkt syntax.rkt substitution.rkt)
@@ -693,7 +694,21 @@
                posit-impl.rkt) #t)
    'test-reduction-perf-02.rkt
    (test-dep '(syntax.rkt prelude.rkt surface-syntax.rkt reader.rkt parser.rkt
-               driver.rkt global-env.rkt reduction.rkt namespace.rkt macros.rkt) #t)))
+               driver.rkt global-env.rkt reduction.rkt namespace.rkt macros.rkt) #t)
+   'test-lattice.rkt
+   (test-dep '(syntax.rkt prelude.rkt substitution.rkt reduction.rkt typing-core.rkt
+               pretty-print.rkt driver.rkt global-env.rkt namespace.rkt
+               macros.rkt qtt.rkt)
+             '(prologos::core::lattice-trait
+               prologos::core::lattice-instances))
+   'test-propagator.rkt
+   (test-dep '(propagator.rkt champ.rkt) #f)
+   'test-propagator-network.rkt
+   (test-dep '(propagator.rkt champ.rkt) #f)
+   'test-propagator-persistence.rkt
+   (test-dep '(propagator.rkt champ.rkt) #f)
+   'test-propagator-bsp.rkt
+   (test-dep '(propagator.rkt champ.rkt) #f)))
 
 ;; ============================================================
 ;; Layer 2b: Example file → test file mapping
@@ -839,6 +854,12 @@
    'prologos::core::pvec-ops       '(prologos::data::list prologos::data::option)
    'prologos::core::seq-functions  '(prologos::core::seq-trait prologos::data::option
                                    prologos::data::list)
+
+   ;; Lattice trait + instances
+   'prologos::core::lattice-trait      '()
+   'prologos::core::lattice-instances  '(prologos::core::lattice-trait
+                                         prologos::core::eq-trait
+                                         prologos::data::bool)
 
    ;; Higher-level abstractions
    'prologos::core::numeric-bundles '(prologos::core::add-trait prologos::core::sub-trait
@@ -1080,7 +1101,11 @@
    'test-string-ops.rkt          '(prologos::data::char prologos::data::string
                                    prologos::core::string-ops
                                    prologos::data::list prologos::data::option
-                                   prologos::data::pair)))
+                                   prologos::data::pair)
+   'test-lattice.rkt             '(prologos::core::lattice-trait
+                                   prologos::core::lattice-instances
+                                   prologos::core::eq-trait
+                                   prologos::data::bool)))
 
 ;; ============================================================
 ;; File scanning functions (used for auto-scan of unknown modules)
