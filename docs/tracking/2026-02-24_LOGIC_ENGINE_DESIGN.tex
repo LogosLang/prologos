@@ -1,0 +1,2355 @@
+% Created 2026-02-24 Tue 15:02
+% Intended LaTeX compiler: pdflatex
+\documentclass[11pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{graphicx}
+\usepackage{longtable}
+\usepackage{wrapfig}
+\usepackage{rotating}
+\usepackage[normalem]{ulem}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{capt-of}
+\usepackage{hyperref}
+\author{Prologos Project}
+\date{2026-02-24}
+\title{Logic Engine Design — Comprehensive Implementation Guide\\\medskip
+\large From Lattice Foundations to Relational Surface Syntax}
+\hypersetup{
+ pdfauthor={Prologos Project},
+ pdftitle={Logic Engine Design — Comprehensive Implementation Guide},
+ pdfkeywords={},
+ pdfsubject={},
+ pdfcreator={Emacs 30.2 (Org mode 9.7.39)}, 
+ pdflang={English}}
+\begin{document}
+
+\maketitle
+\tableofcontents
+
+\section{Executive Summary}
+\label{sec:org753a4d2}
+
+This document is the implementation guide for Prologos's logic engine — the
+substrate on which the relational language (\texttt{defr}, \texttt{rel}, \texttt{solve}) will run.
+It follows the research-design-implementation methodology that produced the
+Extended Spec Design (\url{2026-02-22\_EXTENDED\_SPEC\_DESIGN.org}).
+
+The design is grounded in two research documents:
+\begin{itemize}
+\item \href{2026-02-24\_TOWARDS\_A\_GENERAL\_LOGIC\_ENGINE\_ON\_PROPAGATORS.org}{Towards a General Logic Engine on Propagators} — three-layer architecture
+\item \href{../research/IMPLEMENTATION\_GUIDE\_CORE\_DS\_PROLOGOS.md}{Implementation Guide: Core Data Structures} — Section 8 (lattice integration)
+\end{itemize}
+
+And the relational language vision:
+\begin{itemize}
+\item \href{principles/RELATIONAL\_LANGUAGE\_VISION.org}{Relational Language Vision} — surface syntax decisions
+\end{itemize}
+
+The engine is built bottom-up in 7 phases:
+\begin{enumerate}
+\item \textbf{Lattice Trait + champ-insert-join} — the algebraic foundation
+\item \textbf{Persistent PropNetwork} (Racket-level) — the monotonic data plane as value
+\item \textbf{PropNetwork as Prologos Type} — expose network ops to the type system
+\item \textbf{UnionFind} — persistent disjoint sets for unification
+\item \textbf{Persistent ATMS} — hypothetical reasoning as value
+\item \textbf{Tabling} — SLG-style memoization for completeness
+\item \textbf{Surface Syntax} — \texttt{defr}, \texttt{rel}, \texttt{solve}, \texttt{\&>}
+\end{enumerate}
+
+Key architectural decision: the entire propagator network and ATMS are
+\textbf{persistent/immutable values} backed by CHAMP maps. Backtracking = keep
+old reference (O(1)). Snapshots = free. Network mobility = serialize value.
+LVars are subsumed by PropNetwork cells (join-on-write semantics).
+
+Phases 1-4 are infrastructure with no surface syntax changes. Phase 5-6
+add runtime logic capabilities. Phase 7 adds the user-facing language.
+\subsection{Infrastructure Gap Analysis}
+\label{sec:orgf394129}
+
+\begin{center}
+\begin{tabular}{llll}
+Component & Status & What Exists & What's Needed\\
+\hline
+Persistent collections & COMPLETE & PVec, Map, Set, List, LSeq & —\\
+CHAMP lattice helper & COMPLETE & \texttt{champ-insert-join} in champ.rkt & —\\
+Transient builders & COMPLETE & TVec, TMap, TSet, with-transient & —\\
+Trait system & COMPLETE & Registry, resolution, bundles & Lattice trait + instances\\
+Property system & Phase 1 COMPLETE & Storage, flattening, accessors & QuickCheck for :holds (Phase 2+)\\
+Spec metadata & Phase 1 COMPLETE & :examples, :deprecated, :doc & :tabled, :answer-mode, :strategy\\
+Metavar system & COMPLETE & 4 parallel stores, constraints & Refactor to propagator cells (later)\\
+Lattice trait & NOT STARTED & — & trait + 5-8 standard instances\\
+Persistent PropNetwork & NOT STARTED & — & Immutable network, pure ops, CHAMP\\
+PropNetwork Prologos type & NOT STARTED & — & AST nodes, type rules, reduction\\
+UnionFind & NOT STARTED & — & Persistent disjoint sets\\
+Persistent ATMS & NOT STARTED & — & Immutable ATMS, worldview switching\\
+Tabling & NOT STARTED & — & Producer/consumer, table cells\\
+Stratification & NOT STARTED & — & SCC decomposition, stratum evaluation\\
+Logic syntax & NOT STARTED & — & defr, rel, solve, \&>, ?var\\
+\end{tabular}
+\end{center}
+\subsection{Critical Path}
+\label{sec:orgd51ca02}
+
+\begin{verbatim}
+Phase 1 (Lattice + champ-insert-join)
+  ↓
+Phase 2 (Persistent PropNetwork, Racket-level) ←── depends on Phase 1
+  ↓
+Phase 3 (PropNetwork as Prologos Type) ←── depends on Phase 2
+  ↓                    ↓
+Phase 4 (UnionFind) ←─ can proceed in parallel with Phase 3
+  ↓                    ↓
+Phase 5 (Persistent ATMS) ←── depends on Phase 3
+  ↓
+Phase 6 (Tabling) ←── depends on Phase 3, Phase 5
+  ↓
+Phase 7 (Surface Syntax) ←── depends on ALL previous phases
+\end{verbatim}
+\section{Phase 1: Lattice Trait + Standard Instances}
+\label{sec:org0840b27}
+
+\subsection{1.1 Goal}
+\label{sec:org23cca67}
+
+Establish the \texttt{Lattice} trait — the algebraic foundation for monotonic
+computation. Every propagator cell, LVar, and ATMS label set requires
+a lattice domain. By defining \texttt{Lattice} as a standard Prologos trait,
+we get automatic dictionary resolution at both compile-time and runtime.
+\subsection{1.2 The \texttt{Lattice} Trait}
+\label{sec:org4d3f3a4}
+
+\begin{verbatim}
+;; in lib/prologos/core/lattice.prologos
+(ns prologos::core::lattice :no-prelude)
+
+trait Lattice {A : Type}
+  bot  : A                     ;; bottom element (no information)
+  join : A -> A -> A           ;; least upper bound (merge information)
+  leq  : A -> A -> Bool        ;; lattice ordering
+
+;; Laws (to be checked via property testing in Phase 2+):
+;;   join is commutative:  join a b = join b a
+;;   join is associative:  join (join a b) c = join a (join b c)
+;;   join is idempotent:   join a a = a
+;;   bot is identity:      join bot a = a
+;;   leq is consistent:    leq a b = (join a b == b)
+\end{verbatim}
+\subsection{1.3 Standard Lattice Instances}
+\label{sec:org661cca4}
+
+\subsubsection{1.3.1 \texttt{FlatLattice A} — Three-Point Lattice}
+\label{sec:orgdc988ca}
+
+The simplest useful lattice: bottom → exactly one value → top (contradiction).
+Used for basic unification cells where a variable is either unknown, bound to
+exactly one value, or in conflict.
+
+\begin{verbatim}
+;; in lib/prologos/core/lattice-instances.prologos
+
+;; FlatLattice wraps any Eq type into a flat lattice
+;; ⊥ → value → ⊤
+functor FlatLattice {A : Type}
+  :where (Eq A)
+  :unfolds <(Option [Either A Unit])>
+  ;; none = ⊥, some (left v) = value, some (right unit) = ⊤
+
+instance Lattice [FlatLattice A] where (Eq A)
+  bot  = none
+  join = flat-join
+  leq  = flat-leq
+
+defn flat-join [a b]
+  match [a b]
+    | [none _]                     -> b
+    | [_ none]                     -> a
+    | [[some [left v1]] [some [left v2]]]
+      -> if [eq? v1 v2] a [some [right unit]]
+    | _                            -> [some [right unit]]
+\end{verbatim}
+\subsubsection{1.3.2 \texttt{SetLattice A} — Powerset Lattice (Set Union)}
+\label{sec:orgcaa4fa6}
+
+Growing sets: elements can only be added, never removed. Join = union.
+Used for Herbrand interpretations (sets of ground facts) and LVar-Sets.
+
+\begin{verbatim}
+;; SetLattice: growing sets with union as join
+functor SetLattice {A : Type}
+  :unfolds [Set A]
+
+instance Lattice [SetLattice A]
+  bot  = #{}
+  join = set-union
+  leq  = set-subset?
+\end{verbatim}
+\subsubsection{1.3.3 \texttt{MapLattice K V} — Pointwise Map Lattice}
+\label{sec:org0b7c32e}
+
+Maps where each key has an independent lattice-valued value. Join =
+pointwise join of values. Used for LVar-Maps and substitution stores.
+
+\begin{verbatim}
+;; MapLattice: pointwise lattice on maps
+functor MapLattice {K V : Type}
+  :where (Lattice V)
+  :unfolds [Map K V]
+
+instance Lattice [MapLattice K V] where (Lattice V)
+  bot  = {}
+  join = map-lattice-join
+  leq  = map-lattice-leq
+
+defn map-lattice-join [m1 m2]
+  ;; For keys in both: join values. For keys in one: include.
+  [merge-with join m1 m2]
+\end{verbatim}
+\subsubsection{1.3.4 \texttt{IntervalLattice} — Numeric Intervals}
+\label{sec:org1778e83}
+
+Intervals \texttt{[lo, hi]} with intersection as meet, hull as join. Used for
+numeric constraint propagation (CLP(R/FD)).
+
+\begin{verbatim}
+;; IntervalLattice for numeric constraints
+deftype Interval
+  mk-interval : Rat -> Rat -> Interval    ;; lo, hi (lo <= hi)
+  ;; Special: bot = (-∞, +∞) = unconstrained
+  ;; Special: top = empty = contradicted
+
+instance Lattice Interval
+  bot  = interval-unconstrained
+  join = interval-intersect    ;; narrowing: more constrained = higher
+  leq  = interval-subsumes?   ;; [a,b] ⊑ [c,d] iff [c,d] ⊆ [a,b]
+\end{verbatim}
+\subsubsection{1.3.5 \texttt{BoolLattice} — Two-Point Lattice}
+\label{sec:org35f3d43}
+
+The simplest non-trivial lattice: false < true. Join = OR.
+Used as building block and for boolean constraint propagation.
+
+\begin{verbatim}
+instance Lattice Bool
+  bot  = false
+  join = bool-or
+  leq  = bool-implies?
+\end{verbatim}
+\subsection{1.4 Racket-Level Implementation}
+\label{sec:org326c707}
+
+At the Racket level, lattice operations are dispatched via the existing trait
+system. The \texttt{Lattice} trait follows the standard pattern:
+
+\begin{center}
+\begin{tabular}{ll}
+Component & How\\
+\hline
+Trait struct & \texttt{trait-meta} in \texttt{current-trait-registry}\\
+Instances & \texttt{(impl-entry 'Lattice ...)} in \texttt{current-impl-registry}\\
+Dictionary type & Sigma type: \texttt{(bot . (join . leq))} (3 methods)\\
+Resolution & Standard \texttt{resolve-trait-constraints!} pipeline\\
+\end{tabular}
+\end{center}
+
+No new AST nodes needed for Phase 1. The trait and instance declarations
+use existing infrastructure.
+\subsection{1.5 \texttt{champ-insert-join} — Racket-Level Helper}
+\label{sec:org04ee25c}
+
+A lattice-aware CHAMP insert that joins on collision, rather than replacing.
+This is the foundational Racket-level helper that enables the PropNetwork's
+cells map to do lattice merge natively.
+
+\begin{verbatim}
+;; In racket/prologos/champ.rkt (already implemented)
+
+;; champ-insert-join : champ-root hash key val (val val → val) → champ-root
+(define (champ-insert-join root hash key val join-fn)
+  (let ([existing (champ-lookup root hash key)])
+    (if (eq? existing 'none)
+        (champ-insert root hash key val)
+        (champ-insert root hash key (join-fn existing val)))))
+\end{verbatim}
+
+This enables the propagator network to store cell values in a CHAMP map
+with join-on-write semantics: writing to a cell computes
+\texttt{merge-fn(old-value, new-value)} and inserts the result.
+\subsection{1.6 New Files}
+\label{sec:orgce420e2}
+
+\begin{center}
+\begin{tabular}{ll}
+File & Purpose\\
+\hline
+\texttt{lib/prologos/core/lattice.prologos} & \texttt{Lattice} trait declaration\\
+\texttt{lib/prologos/core/lattice-instances.prologos} & Standard instances\\
+\texttt{tests/test-lattice.rkt} & Trait resolution + law tests\\
+\end{tabular}
+\end{center}
+\subsection{1.7 Tests (\textasciitilde{}25)}
+\label{sec:orgb593ee4}
+
+\begin{itemize}
+\item Lattice trait registered correctly
+\item FlatLattice: bot is identity, join of same values, join of different → top
+\item SetLattice: bot = empty, join = union, leq = subset
+\item MapLattice: pointwise join, partial maps merge correctly
+\item BoolLattice: basic operations
+\item Trait resolution: \texttt{(Lattice [FlatLattice Nat])} resolves correctly
+\item Laws: commutativity, associativity, idempotency of join (6 tests per instance)
+\end{itemize}
+\subsection{1.8 Dependencies}
+\label{sec:org3b75375}
+
+\begin{itemize}
+\item Existing trait system (\texttt{process-trait}, \texttt{process-impl})
+\item Existing collection types (\texttt{Set}, \texttt{Map} for SetLattice, MapLattice)
+\item \texttt{Eq} trait (for \texttt{FlatLattice})
+\item \texttt{champ-insert-join} in \texttt{champ.rkt} (already implemented)
+\item \textbf{No new AST nodes}
+\item \textbf{No changes to typing-core.rkt}
+\end{itemize}
+
+---
+\section{Phase 2: Persistent Propagator Network}
+\label{sec:org0a73577}
+
+\subsection{2.1 Goal}
+\label{sec:orgfdc7f36}
+
+Implement the monotonic data plane as a \textbf{persistent, immutable value}.
+The entire propagator network — cells, propagators, worklist, and
+metadata — is a single Racket struct backed by CHAMP maps. All operations
+are pure functions: they take a network and return a new network.
+
+This is a critical design choice: the propagator network is a \textbf{first-class
+value} that can be snapshotted (free), backtracked (O(1) — keep old
+reference), migrated (serialize and send), and compared (structural equality).
+\subsection{2.2 Architecture}
+\label{sec:org14e2797}
+
+\begin{verbatim}
+┌───────────────────────────────────────┐
+│  prop-network (persistent value)      │
+│                                       │
+│  cells : champ-root (cell-id → cell)  │
+│  propagators : champ-root (prop-id)   │
+│  worklist : list of prop-id           │
+│  merge-fns : champ-root (cell-id → fn)│
+│  fuel : Nat                           │
+│  contradiction : #f | cell-id         │
+│  next-cell-id : Nat                   │
+│  next-prop-id : Nat                   │
+│                                       │
+│  All operations return NEW networks:  │
+│  net-new-cell   : Net → ... → (Net,Id)│
+│  net-cell-write : Net → Id → V → Net  │
+│  run-to-quiescence : Net → Net        │
+└───────────────────────────────────────┘
+\end{verbatim}
+
+Backtracking model:
+\begin{verbatim}
+let net0 = (make-prop-network)
+let net1 = (net-cell-write net0 cell-a 42)
+let net2 = (net-cell-write net1 cell-b 99)
+
+;; Backtrack to net1: simply use the old reference
+;; net0 and net1 are unchanged — structural sharing via CHAMP
+\end{verbatim}
+\subsection{2.3 Core Data Structures (All Persistent)}
+\label{sec:org53fbd62}
+
+\subsubsection{2.3.1 Identity Types}
+\label{sec:org2bd4933}
+
+\begin{verbatim}
+;; In racket/prologos/propagator.rkt
+
+;; Deterministic counters (no gensym — no global state)
+(struct cell-id (n) #:transparent)
+(struct prop-id (n) #:transparent)
+\end{verbatim}
+
+Cell and propagator identities are monotonic counters \emph{inside} the network.
+This makes networks deterministic (no gensym side effects) and serializable.
+\subsubsection{2.3.2 \texttt{prop-cell} — Propagator Cell (Immutable)}
+\label{sec:org4a26b4f}
+
+\begin{verbatim}
+(struct prop-cell
+  (value        ;; Expr — current lattice value (starts at bot)
+   dependents)  ;; champ-root (set of prop-id → #t)
+  #:transparent)
+\end{verbatim}
+
+Note: no \texttt{id} field in the cell struct itself — the identity is the key
+in the network's cells map. No \texttt{domain} field — the merge function is
+stored in the network's \texttt{merge-fns} map, keyed by cell-id.
+\subsubsection{2.3.3 \texttt{propagator} — Monotone Function (Immutable)}
+\label{sec:org45ce325}
+
+\begin{verbatim}
+(struct propagator
+  (inputs      ;; list of cell-id
+   outputs     ;; list of cell-id
+   fire-fn)    ;; (prop-network → prop-network) — pure state transformer
+  #:transparent)
+\end{verbatim}
+
+The \texttt{fire-fn} is a \textbf{pure function} from network to network. It reads input
+cells from the network, computes new values, and returns a network with
+updated output cells. No side effects.
+\subsubsection{2.3.4 \texttt{prop-network} — The Network as Value}
+\label{sec:org8590a92}
+
+\begin{verbatim}
+(struct prop-network
+  (cells            ;; champ-root : cell-id → prop-cell
+   propagators      ;; champ-root : prop-id → propagator
+   worklist         ;; list of prop-id (ephemeral; empty at quiescence)
+   next-cell-id     ;; Nat — monotonic counter for cell ids
+   next-prop-id     ;; Nat — monotonic counter for propagator ids
+   fuel             ;; Nat — step limit to prevent runaway
+   contradiction    ;; #f | cell-id — first contradiction encountered
+   merge-fns        ;; champ-root : cell-id → (Expr Expr → Expr)
+   contradiction-fns) ;; champ-root : cell-id → (Expr → Bool), optional
+  #:transparent)
+\end{verbatim}
+
+Key design choices:
+\begin{itemize}
+\item \textbf{CellId = Nat counter}: deterministic, no gensym, serializable
+\item \textbf{merge-fns} stored per-cell: captures the lattice's \texttt{join} at cell creation
+\item \textbf{contradiction-fns} stored per-cell: optional predicate that detects if a cell
+value represents contradiction (\texttt{top}). This avoids requiring a \texttt{top?} method
+in the \texttt{Lattice} trait or introducing a \texttt{BoundedLattice} sub-trait (Prologos
+has \textbf{no trait hierarchies} — see DESIGN\textsubscript{PRINCIPLES.org}). Instead, contradiction
+detection is a per-cell concern supplied at cell creation time.
+\item \textbf{worklist} is a plain Racket list: ephemeral within \texttt{run-to-quiescence},
+always empty in saved snapshots (quiescent networks have empty worklists)
+\item \textbf{All CHAMP-backed}: O(log₃₂ n) ≈ O(C) where C ≤ 7 for practical n
+\end{itemize}
+\subsection{2.4 Pure Operations}
+\label{sec:orgd2aaf43}
+
+All operations take a network and return a new network. The old network
+is never modified.
+
+\begin{verbatim}
+;; Create empty network
+(define (make-prop-network [fuel 1000000])
+  (prop-network champ-empty    ;; cells
+                champ-empty    ;; propagators
+                '()            ;; worklist
+                0              ;; next-cell-id
+                0              ;; next-prop-id
+                fuel           ;; fuel
+                #f             ;; no contradiction
+                champ-empty    ;; merge-fns
+                champ-empty))  ;; contradiction-fns
+
+;; Add a new cell: returns (values new-network cell-id)
+;; contradicts? is optional (#f = no contradiction detection at this cell)
+(define (net-new-cell net initial-value merge-fn [contradicts? #f])
+  (define id (cell-id (prop-network-next-cell-id net)))
+  (define cell (prop-cell initial-value champ-empty))
+  (define net*
+    (struct-copy prop-network net
+      [cells (champ-insert (prop-network-cells net)
+                            (equal-hash-code id) id cell)]
+      [merge-fns (champ-insert (prop-network-merge-fns net)
+                                (equal-hash-code id) id merge-fn)]
+      [next-cell-id (+ 1 (prop-network-next-cell-id net))]))
+  (values
+   (if contradicts?
+       (struct-copy prop-network net*
+         [contradiction-fns
+          (champ-insert (prop-network-contradiction-fns net*)
+                        (equal-hash-code id) id contradicts?)])
+       net*)
+   id))
+
+;; Read a cell's value
+(define (net-cell-read net cid)
+  (define cell (champ-lookup (prop-network-cells net)
+                              (equal-hash-code cid) cid))
+  (if (eq? cell 'none)
+      (error 'net-cell-read "unknown cell: ~a" cid)
+      (prop-cell-value cell)))
+
+;; Write a cell: computes merge-fn(old, new), enqueues dependents if changed
+(define (net-cell-write net cid new-val)
+  (define cells (prop-network-cells net))
+  (define cell (champ-lookup cells (equal-hash-code cid) cid))
+  (when (eq? cell 'none)
+    (error 'net-cell-write "unknown cell: ~a" cid))
+  (define merge-fn (champ-lookup (prop-network-merge-fns net)
+                                  (equal-hash-code cid) cid))
+  (define old-val (prop-cell-value cell))
+  (define merged (merge-fn old-val new-val))
+  (if (equal? merged old-val)
+      net  ;; No change — return same network
+      (let* ([new-cell (struct-copy prop-cell cell [value merged])]
+             [new-cells (champ-insert cells (equal-hash-code cid) cid new-cell)]
+             ;; Enqueue dependents
+             [deps (champ-keys (prop-cell-dependents cell))]
+             [new-wl (append deps (prop-network-worklist net))])
+        (struct-copy prop-network net
+          [cells new-cells]
+          [worklist new-wl]))))
+
+;; Add a propagator: returns (values new-network prop-id)
+(define (net-add-propagator net input-ids output-ids fire-fn)
+  (define pid (prop-id (prop-network-next-prop-id net)))
+  (define prop (propagator input-ids output-ids fire-fn))
+  ;; Register pid as dependent of each input cell
+  (define new-cells
+    (for/fold ([cells (prop-network-cells net)])
+              ([cid (in-list input-ids)])
+      (define cell (champ-lookup cells (equal-hash-code cid) cid))
+      (if (eq? cell 'none) cells
+          (let ([new-deps (champ-insert (prop-cell-dependents cell)
+                                         (equal-hash-code pid) pid #t)])
+            (champ-insert cells (equal-hash-code cid) cid
+                          (struct-copy prop-cell cell [dependents new-deps]))))))
+  (values
+   (struct-copy prop-network net
+     [cells new-cells]
+     [propagators (champ-insert (prop-network-propagators net)
+                                 (equal-hash-code pid) pid prop)]
+     [next-prop-id (+ 1 (prop-network-next-prop-id net))]
+     ;; Schedule initial firing
+     [worklist (cons pid (prop-network-worklist net))])
+   pid))
+\end{verbatim}
+\subsection{2.5 Concrete \texttt{fire-fn} Example: Adder Propagator}
+\label{sec:org09b37c3}
+
+To ground the abstract \texttt{fire-fn} concept, here is a concrete example: a
+propagator that adds two cells and writes the result to a third.
+
+\begin{verbatim}
+;; adder-fire-fn : cell-id cell-id cell-id → (prop-network → prop-network)
+;; Reads cells A and B, writes A+B to cell C
+(define (make-adder-fire-fn a-id b-id c-id)
+  (lambda (net)
+    (define a-val (net-cell-read net a-id))
+    (define b-val (net-cell-read net b-id))
+    ;; Only propagate if both inputs are known (not bot)
+    (if (and (not (eq? a-val 'bot)) (not (eq? b-val 'bot)))
+        (net-cell-write net c-id (+ a-val b-val))
+        net)))  ;; No change — return same network
+
+;; Usage: wire up an adder network
+(define net0 (make-prop-network))
+(define-values (net1 cell-a) (net-new-cell net0 'bot flat-join))
+(define-values (net2 cell-b) (net-new-cell net1 'bot flat-join))
+(define-values (net3 cell-c) (net-new-cell net2 'bot flat-join))
+(define-values (net4 adder-pid)
+  (net-add-propagator net3
+    (list cell-a cell-b)   ;; inputs
+    (list cell-c)          ;; outputs
+    (make-adder-fire-fn cell-a cell-b cell-c)))
+
+;; Write to inputs, run to quiescence
+(define net5 (net-cell-write net4 cell-a 3))
+(define net6 (net-cell-write net5 cell-b 4))
+(define net7 (run-to-quiescence net6))
+(net-cell-read net7 cell-c) ;; → 7
+\end{verbatim}
+
+Key observations:
+\begin{itemize}
+\item The \texttt{fire-fn} is a \textbf{closure} capturing cell-ids, returning a \textbf{pure function}
+from network to network
+\item It reads inputs via \texttt{net-cell-read} (from the network argument, not side effects)
+\item It writes via \texttt{net-cell-write} (returns new network, not mutation)
+\item If inputs are insufficient (\texttt{bot}), it returns the network unchanged (idempotent)
+\item The same \texttt{fire-fn} works correctly regardless of scheduling order
+\end{itemize}
+
+For the logic engine (Phase 7), a typical \texttt{fire-fn} will be a \emph{clause propagator}
+that attempts unification and writes answer substitutions to a table cell. See
+Appendix A: Resolution by Example for a worked walkthrough.
+\subsection{2.6 \texttt{run-to-quiescence} — Pure Loop}
+\label{sec:orga0d76c5}
+
+The scheduler is not a separate struct — it is the \texttt{worklist} field of the
+network itself. \texttt{run-to-quiescence} is a pure tail-recursive function.
+
+\begin{verbatim}
+(define (run-to-quiescence net)
+  (cond
+    ;; Already contradicted — stop
+    [(prop-network-contradiction net) net]
+    ;; Fuel exhausted — stop
+    [(<= (prop-network-fuel net) 0) net]
+    ;; Worklist empty — quiescent (fixed point reached)
+    [(null? (prop-network-worklist net)) net]
+    ;; Fire next propagator
+    [else
+     (let* ([pid (car (prop-network-worklist net))]
+            [rest (cdr (prop-network-worklist net))]
+            [net* (struct-copy prop-network net
+                    [worklist rest]
+                    [fuel (sub1 (prop-network-fuel net))])]
+            [prop (champ-lookup (prop-network-propagators net*)
+                                (equal-hash-code pid) pid)])
+       (if (eq? prop 'none)
+           ;; Propagator removed or unknown — skip
+           (run-to-quiescence net*)
+           ;; Fire: pure function from network to network
+           (run-to-quiescence ((propagator-fire-fn prop) net*))))]))
+\end{verbatim}
+
+Properties:
+\begin{itemize}
+\item \textbf{Pure}: input is a \texttt{prop-network}, output is a \texttt{prop-network}
+\item \textbf{Deterministic}: same inputs → same fixed point (lattice commutativity)
+\item \textbf{Convergent}: finite-height lattices guarantee termination
+\item \textbf{Fuel-limited}: prevents runaway; configurable via \texttt{fuel} field
+\item \textbf{Backtrackable}: keep old \texttt{net} reference = instant O(1) backtrack
+\end{itemize}
+\subsection{2.7 Contradiction Handling (Per-Cell \texttt{contradicts?} Predicate)}
+\label{sec:orgacdbfff}
+
+Contradiction is detected via a \textbf{per-cell predicate}, not a trait method.
+Each cell may optionally have a \texttt{contradicts?} function (supplied at creation
+time via \texttt{net-new-cell}) that checks if a value represents inconsistency.
+
+This design avoids requiring \texttt{top?} in the \texttt{Lattice} trait (which would force
+every lattice to define it, even those without a sensible top element) and
+avoids introducing a \texttt{BoundedLattice} sub-trait (Prologos has no trait
+hierarchies — see DESIGN\textsubscript{PRINCIPLES.org} § "No Trait Hierarchies").
+
+\begin{verbatim}
+;; In net-cell-write, after computing merged:
+(define (net-cell-write net cid new-val)
+  ;; ... (merge as before) ...
+  ;; After merge, check for contradiction:
+  (define cfn (champ-lookup (prop-network-contradiction-fns net)
+                             (equal-hash-code cid) cid))
+  (define contradicted?
+    (and (not (eq? cfn 'none))   ;; cell has a contradicts? fn
+         (cfn merged)))          ;; the merged value is contradictory
+  (if contradicted?
+      (struct-copy prop-network net* [contradiction cid])
+      net*))
+
+;; Example contradiction predicates for standard lattices:
+;; FlatLattice: (lambda (v) (and (some? v) (right? (unwrap v))))  ;; some(right(unit)) = top
+;; IntervalLattice: (lambda (v) (interval-empty? v))              ;; empty interval = contradicted
+;; SetLattice: #f  ;; no contradiction (sets only grow, never contradict)
+\end{verbatim}
+
+At the pure-network level, contradiction simply records which cell was
+contradicted. The ATMS layer (Phase 5) interprets this and performs
+dependency-directed backtracking. Without ATMS, contradiction halts the
+network.
+\subsection{2.8 LVars Are Subsumed by Cells}
+\label{sec:orgef6b11a}
+
+A key simplification: \textbf{LVars are just cells in a persistent network}.
+
+\begin{center}
+\begin{tabular}{ll}
+LVar operation & Network equivalent\\
+\hline
+\texttt{lvar-new} & \texttt{net-new-cell} with appropriate \texttt{merge-fn}\\
+\texttt{lvar-put} & \texttt{net-cell-write} (already does join-on-write)\\
+\texttt{lvar-get} & \texttt{net-cell-read} (synchronous in single-thread)\\
+\texttt{lvar-freeze} & Read cell value from a quiescent network\\
+\texttt{lvar-set-add} & \texttt{net-cell-write} on cell with \texttt{SetLattice}\\
+\texttt{lvar-map-put} & \texttt{net-cell-write} on cell with \texttt{MapLattice}\\
+\end{tabular}
+\end{center}
+
+This elimination removes the need for a separate LVar module and \textasciitilde{}10
+dedicated LVar AST nodes. The propagator network \emph{is} the lattice-compatible
+collection — its cells natively do join-on-write via the \texttt{merge-fn}.
+
+Threshold reads: for the synchronous logic engine (not parallel), threshold
+reads are implemented as propagators that check conditions after quiescence.
+True blocking threshold reads (for parallel LVar-style programming) are
+deferred to when actor/place integration is built.
+\subsection{2.9 AST Nodes (\textasciitilde{}12)}
+\label{sec:orgaa70a1c}
+
+New \texttt{expr-*} structs in \texttt{syntax.rkt}:
+
+\begin{center}
+\begin{tabular}{lll}
+Node & Fields & Semantics\\
+\hline
+\texttt{expr-prop-network} & net-value & Runtime wrapper for network\\
+\texttt{expr-cell-id} & n & Cell identity (Nat counter)\\
+\texttt{expr-net-new} & fuel-expr & Create empty network\\
+\texttt{expr-net-new-cell} & net, init-val, merge & Add cell, return (net, id)\\
+\texttt{expr-net-cell-read} & net, cell-id & Read cell value\\
+\texttt{expr-net-cell-write} & net, cell-id, val & Write (merge) value\\
+\texttt{expr-net-add-prop} & net, ins, outs, fn & Add propagator\\
+\texttt{expr-net-run} & net & Run to quiescence\\
+\texttt{expr-net-snapshot} & net & Snapshot (identity — free)\\
+\texttt{expr-net-contradict?} & net & Check for contradiction\\
+\texttt{expr-net-type} & — & Type constructor PropNetwork\\
+\texttt{expr-cell-id-type} & — & Type constructor CellId\\
+\end{tabular}
+\end{center}
+\subsection{2.10 New/Modified Files}
+\label{sec:org1b099f5}
+
+\begin{center}
+\begin{tabular}{ll}
+File & Changes\\
+\hline
+\texttt{racket/prologos/propagator.rkt} & NEW: Persistent network, pure ops\\
+\texttt{racket/prologos/syntax.rkt} & +12 AST nodes\\
+\texttt{racket/prologos/typing-core.rkt} & Infer/check rules for network ops\\
+\texttt{racket/prologos/reduction.rkt} & Reduction rules for network ops\\
+\texttt{racket/prologos/elaborator.rkt} & Surface → core for network ops\\
+\texttt{racket/prologos/zonk.rkt} & Zonk cases for new nodes\\
+\texttt{racket/prologos/pretty-print.rkt} & PP cases for new nodes\\
+\texttt{racket/prologos/qtt.rkt} & Multiplicity for network ops\\
+\texttt{racket/prologos/substitution.rkt} & Subst cases for new nodes\\
+\texttt{racket/prologos/unify.rkt} & Unify cases for new nodes\\
+\texttt{tests/test-propagator.rkt} & NEW\\
+\texttt{tests/test-propagator-network.rkt} & NEW\\
+\texttt{tests/test-propagator-quiescence.rkt} & NEW\\
+\end{tabular}
+\end{center}
+\subsection{2.11 Tests (\textasciitilde{}60)}
+\label{sec:org4e896c8}
+
+\begin{itemize}
+\item Network creation: empty, with fuel
+\item Cell creation: returns new network + cell-id
+\item Cell read: returns value
+\item Cell write: merge produces join (FlatLattice, SetLattice)
+\item Cell write: no change when value doesn't increase → same network returned
+\item Cell write: enqueues dependents
+\item Propagator: two cells connected, write propagates
+\item Propagator: diamond network (A → B, A → C, B+C → D)
+\item run-to-quiescence: fires to fixed point
+\item run-to-quiescence: fuel limit prevents runaway
+\item run-to-quiescence: contradiction recorded in network
+\item Persistence: old network unchanged after write
+\item Persistence: old network unchanged after run-to-quiescence
+\item Snapshot: identity operation (\texttt{net} is already persistent)
+\item Backtracking: use old reference after contradiction
+\item LVar-style: cell with SetLattice merge, add elements, freeze via read
+\item LVar-style: cell with MapLattice merge, pointwise join
+\item Integration: lattice instances work through network cells
+\end{itemize}
+\subsection{2.12 Dependencies}
+\label{sec:orga3766dc}
+
+\begin{itemize}
+\item Phase 1 (Lattice trait and instances)
+\item \texttt{champ-insert-join} in \texttt{champ.rkt} (used internally for cell merge)
+\item Existing trait resolution for Lattice dictionary dispatch
+\item 12+ files modified (standard AST node pipeline)
+\end{itemize}
+
+---
+\section{Phase 3: PropNetwork as Prologos Type}
+\label{sec:org24a9791}
+
+\subsection{3.1 Goal}
+\label{sec:org2e69ad7}
+
+Expose the Racket-level persistent PropNetwork to Prologos's type system.
+This phase adds the 12 AST nodes defined in Phase 2's design, threading
+them through the full 12-file pipeline (syntax → typing-core → reduction →
+elaborator → zonk → pretty-print → qtt → substitution → unify → tests).
+\subsection{3.2 Why a Separate Phase}
+\label{sec:org735ddf2}
+
+Phase 2 implements the Racket-level data structures and algorithms. Phase 3
+wires them into Prologos as first-class values. This separation follows
+the established pattern: Racket infrastructure first, then Prologos type
+system integration.
+\subsection{3.3 Type Signatures}
+\label{sec:org3aa1bdb}
+
+\begin{verbatim}
+;; PropNetwork is an opaque type wrapping the persistent network
+deftype PropNetwork
+  mk-prop-network : PropNetwork
+
+;; CellId identifies a cell within a network
+deftype CellId
+  mk-cell-id : Nat -> CellId
+
+;; Operations as typed functions
+spec net-new : Nat -> PropNetwork
+spec net-new-cell : {A : Type} where (Lattice A)
+  PropNetwork -> A -> (A -> A -> A) -> [PropNetwork * CellId]
+spec net-cell-read : {A : Type} PropNetwork -> CellId -> A
+spec net-cell-write : {A : Type} PropNetwork -> CellId -> A -> PropNetwork
+spec net-add-propagator : PropNetwork -> [List CellId] -> [List CellId]
+  -> [PropNetwork -> PropNetwork] -> [PropNetwork * PropId]
+spec net-run : PropNetwork -> PropNetwork
+spec net-snapshot : PropNetwork -> PropNetwork
+spec net-contradict? : PropNetwork -> Bool
+\end{verbatim}
+\subsection{3.4 LVar Operations as Library Functions}
+\label{sec:org6840853}
+
+LVar-style operations are library functions on top of PropNetwork, not
+separate AST nodes:
+
+\begin{verbatim}
+;; A "growing set" = a cell with SetLattice merge
+spec make-set-cell : {A : Type} where (Eq A)
+  PropNetwork -> [PropNetwork * CellId]
+defn make-set-cell [net]
+  [net-new-cell net #{} set-union]
+
+;; A "growing map" = a cell with MapLattice merge
+spec make-map-cell : {K V : Type} where (Eq K) (Lattice V)
+  PropNetwork -> [PropNetwork * CellId]
+defn make-map-cell [net]
+  [net-new-cell net {} [merge-with join]]
+\end{verbatim}
+\subsection{3.5 AST Nodes (12)}
+\label{sec:orgac3d2af}
+
+Same 12 nodes as Phase 2 design (\texttt{expr-prop-network}, \texttt{expr-cell-id},
+\texttt{expr-net-new}, \texttt{expr-net-new-cell}, \texttt{expr-net-cell-read},
+\texttt{expr-net-cell-write}, \texttt{expr-net-add-prop}, \texttt{expr-net-run},
+\texttt{expr-net-snapshot}, \texttt{expr-net-contradict?}, \texttt{expr-net-type},
+\texttt{expr-cell-id-type}).
+\subsection{3.6 New/Modified Files}
+\label{sec:org0469f2d}
+
+\begin{center}
+\begin{tabular}{ll}
+File & Changes\\
+\hline
+\texttt{racket/prologos/syntax.rkt} & +12 AST nodes\\
+\texttt{racket/prologos/typing-core.rkt} & Infer/check rules for network ops\\
+\texttt{racket/prologos/reduction.rkt} & Reduction rules (delegate to .rkt)\\
+\texttt{racket/prologos/elaborator.rkt} & Surface → core translation\\
+\texttt{racket/prologos/zonk.rkt} & Zonk cases\\
+\texttt{racket/prologos/pretty-print.rkt} & PP cases\\
+\texttt{racket/prologos/qtt.rkt} & Multiplicity (:w for networks)\\
+\texttt{racket/prologos/substitution.rkt} & Subst cases\\
+\texttt{racket/prologos/unify.rkt} & Unify cases\\
+\texttt{lib/prologos/core/propagator.prologos} & NEW: Library wrappers (set/map cells)\\
+\texttt{tests/test-propagator-types.rkt} & NEW\\
+\texttt{tests/test-propagator-integration.rkt} & NEW\\
+\texttt{tests/test-propagator-lvar.rkt} & NEW: LVar-style cell tests\\
+\end{tabular}
+\end{center}
+\subsection{3.7 Tests (\textasciitilde{}50)}
+\label{sec:orgefa4fcc}
+
+\begin{itemize}
+\item Type checking: \texttt{net-new} returns \texttt{PropNetwork}
+\item Type checking: \texttt{net-cell-read} returns correct element type
+\item Type checking: \texttt{net-cell-write} returns \texttt{PropNetwork}
+\item Eval: create network, add cells, read values
+\item Eval: write value, verify merge
+\item Eval: propagator fires on cell write
+\item Eval: diamond network (A → B, A → C, B+C → D)
+\item Eval: run-to-quiescence reaches fixed point
+\item Eval: fuel exhaustion
+\item Eval: contradiction detection
+\item Persistence: old network unchanged after operations
+\item LVar-style: set cell grows via union
+\item LVar-style: map cell does pointwise join
+\item LVar-style: freeze = read from quiescent network
+\item Integration: Lattice trait resolution for cell merge functions
+\end{itemize}
+\subsection{3.8 Dependencies}
+\label{sec:org1f75481}
+
+\begin{itemize}
+\item Phase 2 (Racket-level PropNetwork implementation)
+\item Phase 1 (Lattice trait for type-level merge function constraints)
+\end{itemize}
+
+---
+\section{Phase 4: UnionFind — Persistent Disjoint Sets}
+\label{sec:org730cd39}
+
+\subsection{4.1 Goal}
+\label{sec:org2ae433f}
+
+Implement a persistent union-find data structure (Conchon \& Filliâtre 2007)
+with backtracking support. This is the core data structure for unification
+in the logic engine. Unlike the current metavar store (mutable hash table),
+a persistent union-find supports efficient backtracking for search.
+\subsection{4.2 Design}
+\label{sec:orgf0ff216}
+
+The union-find uses path splitting (not path compression) to maintain
+persistence. Each node stores a parent reference and a rank. Find follows
+parent pointers to the root. Union merges by rank.
+
+\begin{verbatim}
+;; In racket/prologos/union-find.rkt
+
+(struct uf-store
+  (nodes)     ;; persistent map: id → uf-node
+  #:transparent)
+
+(struct uf-node
+  (parent     ;; id (self = root)
+   rank       ;; natural number
+   value)     ;; optional payload (for unification: the term)
+  #:transparent)
+
+;; Create empty store
+(define (uf-empty) (uf-store (hasheq)))
+
+;; Make a new set with one element
+(define (uf-make-set store id value)
+  (uf-store
+   (hash-set (uf-store-nodes store) id
+             (uf-node id 0 value))))
+
+;; Find root of id (with path splitting for amortized cost)
+(define (uf-find store id)
+  ;; Returns (values root-id updated-store)
+  ;; Path splitting: point each node to its grandparent
+  ...)
+
+;; Union two sets, merge by rank
+(define (uf-union store id1 id2 merge-fn)
+  ;; Find roots, merge smaller into larger
+  ;; merge-fn combines values if both have payload
+  ;; Returns updated store
+  ...)
+
+;; Snapshot for backtracking
+(define (uf-snapshot store) store)  ;; Already persistent!
+\end{verbatim}
+\subsection{4.3 Key Properties}
+\label{sec:org3ce0a28}
+
+\begin{itemize}
+\item \textbf{Persistent}: Union/find return new stores, old stores unchanged
+\item \textbf{Backtrackable}: Save a reference to the old store = instant backtrack
+\item \textbf{Efficient}: O(log n) find and union (path splitting without compression)
+\item \textbf{Value-carrying}: Nodes carry optional payloads (unified terms)
+\end{itemize}
+\subsection{4.4 Integration with Logic Engine: UF vs Cell Division of Labor}
+\label{sec:org9a70e73}
+
+The union-find and propagator cells serve \textbf{complementary} roles in the logic
+engine. They are not alternatives — both are needed:
+
+\begin{center}
+\begin{tabular}{lll}
+Operation & Uses UF & Uses PropNetwork Cell\\
+\hline
+\texttt{?x = ?y} (var-var) & \texttt{uf-union x y} & —\\
+\texttt{?x = 42} (var-value) & \texttt{uf-find x} → set value & —\\
+\texttt{?x = f(?y, ?z)} (complex) & \texttt{uf-union} + subterm cells & Cell per subterm for propagation\\
+Lattice-valued accumulation & — & \texttt{net-cell-write} with join\\
+Table answer sets & — & Cell with \texttt{SetLattice} merge\\
+Numeric constraints & — & Cell with \texttt{IntervalLattice}\\
+Backtracking & Keep old \texttt{uf-store} & Keep old \texttt{prop-network}\\
+\end{tabular}
+\end{center}
+
+The division of labor:
+\begin{itemize}
+\item \textbf{UnionFind}: structural equality — discovering that two variables must refer
+to the same term. This is the fast path for standard Prolog-style unification.
+O(log n) find-with-path-splitting.
+\item \textbf{PropNetwork cells}: lattice-valued accumulation — aggregating information that
+can only grow (sets of answers, numeric intervals, constraint domains). This is
+the slow-but-general path for constraint propagation.
+\end{itemize}
+
+In practice, a logic engine query creates \emph{both}:
+\begin{enumerate}
+\item A \texttt{uf-store} for the substitution (logic variable bindings)
+\item A \texttt{prop-network} for constraint cells (tables, aggregates, numeric domains)
+\end{enumerate}
+
+Both are persistent, both support O(1) backtracking. The solver threads both
+through computation as a pair: \texttt{(uf-store, prop-network)}.
+\subsection{4.5 AST Nodes (\textasciitilde{}6)}
+\label{sec:org9aaac81}
+
+\begin{center}
+\begin{tabular}{lll}
+Node & Fields & Semantics\\
+\hline
+\texttt{expr-uf-empty} & — & Create empty union-find\\
+\texttt{expr-uf-make-set} & store, id, val & Add new singleton set\\
+\texttt{expr-uf-find} & store, id & Find root of set\\
+\texttt{expr-uf-union} & store, id1, id2 & Union two sets\\
+\texttt{expr-uf-value} & store, id & Get value at id's root\\
+\texttt{expr-uf-type} & — & Type constructor UnionFind\\
+\end{tabular}
+\end{center}
+\subsection{4.6 New/Modified Files}
+\label{sec:org5c53b82}
+
+\begin{center}
+\begin{tabular}{ll}
+File & Changes\\
+\hline
+\texttt{racket/prologos/union-find.rkt} & NEW: Persistent UF\\
+\texttt{racket/prologos/syntax.rkt} & +6 AST nodes\\
++ standard pipeline files & Type rules, reduction, etc.\\
+\texttt{tests/test-union-find.rkt} & NEW\\
+\end{tabular}
+\end{center}
+\subsection{4.7 Tests (\textasciitilde{}30)}
+\label{sec:org415e45b}
+
+\begin{itemize}
+\item Empty store creation
+\item Make-set: adds node
+\item Find: returns self for singleton
+\item Union: merges two sets
+\item Union: rank-based merging
+\item Find after union: both ids → same root
+\item Value: retrieve payload after union
+\item Persistence: old store unchanged after union
+\item Backtracking: restore snapshot works
+\item Performance: 1000 unions, find all roots
+\item Integration: as substitution store for simple unification
+\end{itemize}
+\subsection{4.8 Dependencies}
+\label{sec:orgd18f958}
+
+\begin{itemize}
+\item None (self-contained data structure)
+\item Can proceed in parallel with Phase 3
+\end{itemize}
+
+---
+\section{Phase 5: Persistent ATMS Layer — Hypothetical Reasoning}
+\label{sec:orgdaac427}
+
+\subsection{5.1 Goal}
+\label{sec:orga60e24f}
+
+Implement the Assumption-Based Truth Maintenance System (ATMS) as a
+\textbf{persistent, immutable value}. Like the propagator network, the ATMS is
+backed entirely by CHAMP maps. Backtracking = use old reference.
+Switching worldviews = \texttt{struct-copy} with new \texttt{believed} set.
+
+This validates the "Multiverse Mechanism" from the propagator research:
+choice-point forking maps directly onto ATMS worldview management.
+\subsection{5.2 Core Data Structures (All Persistent)}
+\label{sec:orgbbc7787}
+
+\subsubsection{\texttt{assumption} — Hypothetical Premise}
+\label{sec:org26d617d}
+
+\begin{verbatim}
+;; In racket/prologos/atms.rkt
+
+(struct assumption-id (n) #:transparent)
+
+(struct assumption
+  (name       ;; symbol (for display)
+   datum)     ;; optional: the value this assumption asserts
+  #:transparent)
+\end{verbatim}
+\subsubsection{\texttt{supported-value} — Value + Justification}
+\label{sec:orgb0d506b}
+
+\begin{verbatim}
+(struct supported-value
+  (value      ;; the lattice value
+   support)   ;; champ-root : assumption-id → #t (set of assumptions)
+  #:transparent)
+\end{verbatim}
+\subsubsection{\texttt{tms-cell} — Truth-Maintained Cell (Immutable)}
+\label{sec:org797e868}
+
+A TMS cell holds multiple contingent values, each justified by a different
+assumption set. It generalizes a prop-cell to handle nondeterminism.
+
+\begin{verbatim}
+(struct tms-cell
+  (values        ;; list of supported-value
+   dependents)   ;; champ-root (set of prop-id → #t)
+  #:transparent)
+
+;; Note: immutable. Update returns new tms-cell via struct-copy.
+;; The cell identity (tms-cell-id) is the key in the ATMS's cells map.
+\end{verbatim}
+\subsubsection{\texttt{atms} — The Persistent ATMS}
+\label{sec:org24979a3}
+
+\begin{verbatim}
+(struct atms
+  (network         ;; prop-network (the underlying persistent network)
+   assumptions     ;; champ-root : assumption-id → assumption
+   nogoods         ;; list of champ-root (each a set of assumption-ids → #t)
+   tms-cells       ;; champ-root : cell-id → tms-cell
+   next-assumption ;; Nat — monotonic counter
+   believed)       ;; champ-root : assumption-id → #t (current worldview)
+  #:transparent)
+\end{verbatim}
+
+Key design choices:
+\begin{itemize}
+\item \textbf{All CHAMP-backed}: assumptions, nogoods (as frozen sets), tms-cells, believed
+\item \textbf{Worldview switching}: \texttt{(struct-copy atms a [believed new-set])} — O(1)
+\item \textbf{Backtracking}: keep old \texttt{atms} reference — O(1), structural sharing
+\item \textbf{No mutable state}: all operations return new \texttt{atms} values
+\end{itemize}
+\subsection{5.3 Pure Operations}
+\label{sec:orgee4fe63}
+
+\begin{verbatim}
+;; Create a new assumption: returns (values new-atms assumption-id)
+(define (atms-assume atms name datum)
+  (define aid (assumption-id (atms-next-assumption atms)))
+  (define a (assumption name datum))
+  (values
+   (struct-copy atms atms
+     [assumptions (champ-insert (atms-assumptions atms)
+                                 (equal-hash-code aid) aid a)]
+     [next-assumption (+ 1 (atms-next-assumption atms))]
+     [believed (champ-insert (atms-believed atms)
+                              (equal-hash-code aid) aid #t)])
+   aid))
+
+;; Record a nogood: returns new atms with pruned worldview
+(define (atms-add-nogood atms nogood-set)
+  (struct-copy atms atms
+    [nogoods (cons nogood-set (atms-nogoods atms))]))
+
+;; Check consistency of an assumption set
+(define (atms-consistent? atms assumption-set)
+  (not (for/or ([ng (in-list (atms-nogoods atms))])
+         (champ-subset? ng assumption-set))))
+
+;; Switch worldview: returns new atms with different believed set
+(define (atms-with-worldview atms new-believed)
+  (struct-copy atms atms [believed new-believed]))
+\end{verbatim}
+\subsection{5.4 The \texttt{amb} Operator (Pure)}
+\label{sec:org16a7fd2}
+
+\texttt{amb} creates a choice point with n alternatives. Returns new ATMS.
+
+\begin{verbatim}
+(define (atms-amb atms alternatives)
+  ;; 1. Create fresh hypotheses h1..hn
+  (define-values (atms* hyps)
+    (for/fold ([a atms] [hs '()])
+              ([alt (in-list alternatives)]
+               [i (in-naturals)])
+      (define-values (a* hid) (atms-assume a (format "h~a" i) alt))
+      (values a* (cons hid hs))))
+  ;; 2. Record mutual exclusion: any pair is a nogood
+  (define atms**
+    (for*/fold ([a atms*])
+               ([h1 (in-list hyps)]
+                [h2 (in-list hyps)]
+                #:when (not (equal? h1 h2)))
+      (atms-add-nogood a (champ-insert (champ-insert champ-empty
+                                          (equal-hash-code h1) h1 #t)
+                                        (equal-hash-code h2) h2 #t))))
+  ;; 3. Create TMS cell with supported values
+  (values atms** hyps))
+\end{verbatim}
+\subsection{5.5 Two-Tier Mode: Lazy ATMS Activation}
+\label{sec:orgd875bfa}
+
+The ATMS adds overhead for every cell operation: label management, support
+set tracking, consistency checking. For \textbf{deterministic} queries (no \texttt{amb},
+no choice points), this overhead is pure waste.
+
+Design requirement: the ATMS operates in two tiers:
+
+\textbf{Tier 1 — PropNetwork Only (default)}:
+\begin{itemize}
+\item No ATMS overhead. Just a \texttt{prop-network} with pure propagation.
+\item Cells hold simple values, not supported values.
+\item \texttt{run-to-quiescence} operates directly on the persistent network.
+\item This is sufficient for Datalog evaluation, deterministic constraint
+propagation, and simple tabled predicates.
+\end{itemize}
+
+\textbf{Tier 2 — Full ATMS (activated on first \texttt{amb})}:
+\begin{itemize}
+\item When the solver encounters its first choice point (\texttt{amb}), it upgrades
+to full ATMS mode by wrapping the current network in an \texttt{atms} struct.
+\item From that point on, all cell values become supported values (tagged with
+assumption sets).
+\item Nogoods, worldview switching, and DDB become available.
+\end{itemize}
+
+\begin{verbatim}
+;; The solver state is either a bare network or a full ATMS
+;; (struct solver-state (kind data) #:transparent)
+;; kind is 'network | 'atms
+
+;; On first amb:
+(define (solver-upgrade-to-atms state)
+  (if (eq? (solver-state-kind state) 'atms)
+      state  ;; already upgraded
+      (solver-state 'atms
+        (atms-from-network (solver-state-data state)))))
+
+;; atms-from-network : prop-network → atms
+;; Wraps existing network, converting all cell values to
+;; unconditionally supported values (support = ∅ = always true)
+\end{verbatim}
+
+The \texttt{solve-with} configuration supports:
+\begin{itemize}
+\item \texttt{:strategy :auto} (default) — starts in Tier 1, upgrades on first \texttt{amb}
+\item \texttt{:strategy :depth-first} — pure PropNetwork, no ATMS, chronological choice
+\item \texttt{:strategy :atms} — full ATMS from the start
+\end{itemize}
+
+This addresses the research doc's §14.1 concern: "For simple deterministic
+programs, the ATMS layer is pure cost." Lazy activation means deterministic
+programs never pay ATMS overhead.
+\subsection{5.6 Contradiction Handler (Dependency-Directed Backtracking)}
+\label{sec:org4b9c0a0}
+
+When the underlying prop-network detects contradiction (a cell's merged
+value = top):
+
+\begin{enumerate}
+\item Extract the support set from the contradicted cell's TMS values
+\item Record as a nogood in the ATMS
+\item The nogood automatically prunes that worldview from future exploration
+\item Return new ATMS with nogood recorded
+\end{enumerate}
+
+This is pure: each step returns a new \texttt{atms} value. Dependency-directed
+backtracking identifies \emph{which} choice was wrong, not just the most recent.
+\subsection{5.7 Answer Collection (Pure)}
+\label{sec:org35252ed}
+
+\begin{verbatim}
+;; Enumerate all consistent worldviews and extract answers
+(define (atms-solve-all atms goal-cell-id)
+  ;; 1. Enumerate maximal consistent assumption sets
+  ;; 2. For each worldview, run the network to quiescence
+  ;; 3. Extract goal cell value under that worldview
+  ;; 4. Collect distinct answers
+  ;; Returns: list of answer values
+  ...)
+\end{verbatim}
+\subsection{5.8 AST Nodes (\textasciitilde{}10)}
+\label{sec:org2ff8fcd}
+
+\begin{center}
+\begin{tabular}{lll}
+Node & Fields & Semantics\\
+\hline
+\texttt{expr-atms-new} & network & Create ATMS wrapping network\\
+\texttt{expr-amb} & atms, alternatives & Create choice point\\
+\texttt{expr-assume} & atms, name, datum & Create hypothesis\\
+\texttt{expr-retract} & atms, assumption-id & Retract hypothesis\\
+\texttt{expr-nogood} & atms, assumption-set & Record nogood\\
+\texttt{expr-solve-all} & atms, goal & Collect all solutions\\
+\texttt{expr-tms-read} & atms, cell, worldview & Read under worldview\\
+\texttt{expr-tms-write} & atms, cell, val, support & Write supported value\\
+\texttt{expr-atms-type} & — & Type constructor ATMS\\
+\texttt{expr-supported-type} & val-type & Type of SupportedValue\\
+\end{tabular}
+\end{center}
+\subsection{5.9 New/Modified Files}
+\label{sec:orga106fcc}
+
+\begin{center}
+\begin{tabular}{ll}
+File & Changes\\
+\hline
+\texttt{racket/prologos/atms.rkt} & NEW: Persistent ATMS\\
+\texttt{racket/prologos/syntax.rkt} & +10 AST nodes\\
+\texttt{racket/prologos/propagator.rkt} & Contradiction → record in ATMS\\
++ standard pipeline files & Type rules, reduction, etc.\\
+\texttt{tests/test-atms.rkt} & NEW\\
+\texttt{tests/test-atms-search.rkt} & NEW\\
+\texttt{tests/test-atms-backtrack.rkt} & NEW\\
+\end{tabular}
+\end{center}
+\subsection{5.10 Tests (\textasciitilde{}50)}
+\label{sec:org8ea0ab9}
+
+\begin{itemize}
+\item ATMS creation from network
+\item Assumption creation: returns new atms + id
+\item Supported value: value + support set
+\item TMS cell: multiple contingent values
+\item Consistency check: no nogood subsets
+\item amb: creates mutual exclusion nogoods
+\item amb: different alternatives under different worldviews
+\item Nogood recording: prunes invalid worldviews
+\item Dependency-directed backtracking: contradiction identifies cause
+\item Worldview switching: \texttt{atms-with-worldview} — O(1)
+\item Backtracking: keep old atms reference — O(1)
+\item Persistence: old atms unchanged after assume/nogood
+\item solve-all: enumerates all consistent answers
+\item solve-all: deduplicates answers
+\item Integration: persistent network + persistent ATMS
+\item Performance: 100-alternative amb, solve-all
+\end{itemize}
+\subsection{5.11 Dependencies}
+\label{sec:org7607af3}
+
+\begin{itemize}
+\item Phase 2 (Persistent PropNetwork — ATMS wraps a network)
+\item Phase 3 (PropNetwork as Prologos type — for typed ATMS operations)
+\end{itemize}
+
+---
+\section{Phase 6: Tabling — SLG-Style Memoization}
+\label{sec:org8d0ba1e}
+
+\subsection{6.1 Goal}
+\label{sec:org447f9d8}
+
+Implement tabling for completeness. Without tabling, left-recursive rules
+cause infinite loops. Tabling memoizes intermediate results and detects
+fixed-point completion.
+\subsection{6.2 Design (XSB-Style SLG Resolution)}
+\label{sec:org8aedf98}
+
+\begin{center}
+\begin{tabular}{ll}
+Concept & Implementation\\
+\hline
+Table & PropNetwork cell with SetLattice merge\\
+Producer & Propagator computing new answers for table cell\\
+Consumer & Propagator reading from table cell\\
+Completion & Table cell quiescent when no new answers propagate\\
+Answer mode & \texttt{all} (collect all) or \texttt{lattice} (join)\\
+\end{tabular}
+\end{center}
+\subsection{6.3 Table Lifecycle}
+\label{sec:org781abab}
+
+\begin{verbatim}
+1. First call to tabled predicate → create table cell (SetLattice of answers)
+2. Launch producer propagator → evaluates rules, writes answers to table cell
+3. Recursive call to same predicate → create consumer propagator
+   - Consumer reads from table cell
+   - Re-fires when table cell's value grows (new answers appear)
+4. Network reaches quiescence → no new answers propagate
+5. Table cell value is the complete answer set
+6. Subsequent calls → read from quiescent network (already computed)
+\end{verbatim}
+\subsection{6.4 Core Data Structures (Persistent)}
+\label{sec:org036cec1}
+
+The \texttt{table-store} is an \textbf{index}, not a store. It maps predicate call patterns
+to cell-ids in the PropNetwork. The actual answer data lives in PropNetwork
+cells with \texttt{SetLattice} merge — the table-store merely tells you \emph{which}
+cell to look in.
+
+\begin{verbatim}
+;; In racket/prologos/tabling.rkt
+
+(struct table-entry
+  (predicate-name  ;; symbol
+   call-pattern    ;; the specific instantiation pattern
+   cell-id         ;; cell-id in the prop-network (answers live here)
+   status)         ;; 'active | 'complete
+  #:transparent)   ;; immutable — update via struct-copy
+
+;; NOTE: no `answers` field — answers are stored in the PropNetwork cell
+;; identified by `cell-id`. The cell uses SetLattice merge, so writing
+;; a new answer to it computes set-union with existing answers.
+
+(struct table-store
+  (tables)     ;; champ-root : table-key → table-entry
+  #:transparent)
+
+;; Table key: predicate name + call pattern (up to renaming)
+(define (table-key name args)
+  (cons name (abstract-call-pattern args)))
+
+;; Tables are backed by CHAMP for structural sharing.
+;; Backtracking = keep old table-store reference + old prop-network.
+;;
+;; The lifecycle:
+;; 1. First call → create table-entry + new cell in network
+;; 2. Producer propagator writes answers to the cell
+;; 3. Consumer propagators read from the cell (re-fire when it grows)
+;; 4. Quiescence → mark table-entry status as 'complete
+;; 5. Subsequent calls → read from the cell (already computed)
+\end{verbatim}
+\subsection{6.5 Lattice Answer Modes}
+\label{sec:org4e85898}
+
+Following XSB Prolog:
+
+\begin{itemize}
+\item \textbf{\texttt{all}}: Table stores set of all distinct answer substitutions
+(\texttt{SetLattice} on substitutions)
+\item \textbf{\texttt{lattice f}}: Table stores lattice join of all answers via \texttt{f}
+(single aggregated value, new answers only "new" if they improve)
+\item \textbf{\texttt{first}}: Table frozen after first answer (\texttt{once} semantics)
+\end{itemize}
+\subsection{6.6 Spec Metadata Integration}
+\label{sec:orgcb747ad}
+
+Tabling is declared via spec metadata:
+
+\begin{verbatim}
+spec ancestor : String -> String -> Prop
+  :tabled true
+  :answer-mode all        ;; default
+\end{verbatim}
+
+This requires adding \texttt{:tabled} and \texttt{:answer-mode} cases to
+\texttt{parse-spec-metadata} in \texttt{macros.rkt} (following the \texttt{:examples} pattern).
+\subsection{6.7 AST Nodes (\textasciitilde{}8)}
+\label{sec:org30ba3b0}
+
+\begin{center}
+\begin{tabular}{lll}
+Node & Fields & Semantics\\
+\hline
+\texttt{expr-table-lookup} & name, args & Check if answer in table\\
+\texttt{expr-table-new} & name, answer-mode & Create new table\\
+\texttt{expr-table-add} & table, answer & Add answer to table\\
+\texttt{expr-table-freeze} & table & Freeze table\\
+\texttt{expr-table-answers} & table & Get all answers\\
+\texttt{expr-table-complete?} & table & Check if table is complete\\
+\texttt{expr-tabled} & spec-name & Mark predicate as tabled\\
+\texttt{expr-table-type} & answer-type & Type of table\\
+\end{tabular}
+\end{center}
+\subsection{6.8 New/Modified Files}
+\label{sec:orga0a43f7}
+
+\begin{center}
+\begin{tabular}{ll}
+File & Changes\\
+\hline
+\texttt{racket/prologos/tabling.rkt} & NEW: Table store, lifecycle\\
+\texttt{racket/prologos/macros.rkt} & :tabled, :answer-mode metadata\\
+\texttt{racket/prologos/syntax.rkt} & +8 AST nodes\\
++ standard pipeline files & Type rules, reduction, etc.\\
+\texttt{tests/test-tabling.rkt} & NEW\\
+\texttt{tests/test-tabling-lattice.rkt} & NEW\\
+\end{tabular}
+\end{center}
+\subsection{6.9 Tests (\textasciitilde{}40)}
+\label{sec:org7e43d22}
+
+\begin{itemize}
+\item Table creation: cell with SetLattice merge in PropNetwork
+\item Table answer insertion: cell write grows answer set
+\item Network quiescence: table complete when no new answers propagate
+\item Producer: generates answers from rules, writes to table cell
+\item Consumer: reads from table cell, re-fires on growth
+\item Left-recursion: tabling terminates (the critical test)
+\item Lattice answer mode: min aggregation
+\item Lattice answer mode: set union aggregation
+\item First answer mode: stops after one
+\item Multiple tables: independent cells in same network
+\item Backtracking: persistent network, old table state preserved
+\item Spec metadata: :tabled parsed and stored
+\item Integration: tabling + persistent ATMS for recursive search
+\end{itemize}
+\subsection{6.10 Dependencies}
+\label{sec:orgb74c85f}
+
+\begin{itemize}
+\item Phase 3 (PropNetwork cells — tables are cells with SetLattice merge)
+\item Phase 5 (ATMS — tabling + nondeterminism interact)
+\end{itemize}
+
+---
+\section{Phase 7: Surface Syntax — \texttt{defr}, \texttt{rel}, \texttt{solve}, \texttt{\&>}}
+\label{sec:orgb9aa77e}
+
+\subsection{7.1 Goal}
+\label{sec:org0cdd779}
+
+Implement the user-facing relational language as described in
+\href{principles/RELATIONAL\_LANGUAGE\_VISION.org}{RELATIONAL\textsubscript{LANGUAGE}\textsubscript{VISION.org}}.
+\subsection{7.2 Reader Changes}
+\label{sec:org6c9a896}
+
+The reader must handle:
+
+\begin{center}
+\begin{tabular}{ll}
+Syntax & Reader Output\\
+\hline
+\texttt{?var} & \texttt{(logic-var var)}\\
+\texttt{-var} & \texttt{(mode-var in var)}\\
+\texttt{+var} & \texttt{(mode-var out var)}\\
+\texttt{\&>} & \texttt{(\$clause-sep)}\\
+\texttt{(goal ...)} & \texttt{(goal ...)} (parenthetical = relational)\\
+\end{tabular}
+\end{center}
+\subsection{7.3 Parser Changes}
+\label{sec:org25f5e52}
+
+New surface AST nodes:
+
+\begin{center}
+\begin{tabular}{ll}
+Form & Surface AST\\
+\hline
+\texttt{defr name [args] body} & \texttt{(surf-defr name args clauses)}\\
+\texttt{(rel [args] body)} & \texttt{(surf-rel args clauses)}\\
+\texttt{\&> g1 g2 ...} & \texttt{(surf-clause (g1 g2 ...))} within defr/rel\\
+\texttt{(solve [goal])} & \texttt{(surf-solve goal)}\\
+\texttt{(solve-with :opts goal)} & \texttt{(surf-solve-with opts goal)}\\
+\texttt{(} ?x ?y)= & \texttt{(surf-unify x y)}\\
+\texttt{(is ?x [expr])} & \texttt{(surf-is var expr)}\\
+\end{tabular}
+\end{center}
+\subsection{7.4 Elaboration}
+\label{sec:orgad65326}
+
+Relations elaborate to propagator networks. Here is the concrete Racket-level
+translation for both \texttt{defr} and \texttt{solve}:
+\subsubsection{7.4.1 \texttt{defr} Elaboration}
+\label{sec:orgd60e08e}
+
+\begin{verbatim}
+;; defr ancestor [?x ?y]
+;;   &> (parent ?x ?y)
+;;   &> (parent ?x ?z) (ancestor ?z ?y)
+;;
+;; elaborates to:
+;; 1. Create table for ancestor (tabled by default)
+;; 2. For each clause, create a propagator that:
+;;    a. Unifies arguments with clause head
+;;    b. Resolves subgoals (recursively, via table)
+;;    c. If all succeed, adds answer to table
+;; 3. Register in relation store
+\end{verbatim}
+\subsubsection{7.4.2 \texttt{solve} Elaboration (Functional-Relational Bridge)}
+\label{sec:org27fcf32}
+
+The \texttt{solve} form is the bridge from relational goals back to functional values.
+Here is how it elaborates at the Racket level:
+
+\begin{verbatim}
+;; Source: functional code using solve
+defn find-ancestors [person]
+  (solve [ancestor person ?who])
+;; Returns: Seq (Map Symbol Value)
+\end{verbatim}
+
+Elaborates to:
+
+\begin{verbatim}
+;; Racket-level translation of (solve [ancestor person ?who])
+(define (solve-ancestor-query person)
+  (let* (;; 1. Create solver state (network + uf-store)
+         [net0 (make-prop-network)]
+         [uf0  (uf-empty)]
+
+         ;; 2. Create logic variable cells
+         ;;    ?who is the query variable; person is ground (bound)
+         [net1+who (net-new-cell net0 'bot flat-join flat-top?)]
+         [net1 (car net1+who)]
+         [who-id (cdr net1+who)]
+
+         ;; 3. Look up 'ancestor in the relation registry
+         ;;    (registered by defr elaboration)
+         [ancestor-rel (relation-lookup 'ancestor)]
+
+         ;; 4. Create query propagators:
+         ;;    - Instantiate ancestor's clauses with (person, ?who)
+         ;;    - Wire table cell for ancestor
+         [net2 (relation-instantiate ancestor-rel net1 uf0
+                  (list (ground-val person) who-id))]
+
+         ;; 5. Run to quiescence
+         [net3 (run-to-quiescence net2)]
+
+         ;; 6. Extract answers from the table cell
+         [answers (table-answers net3 'ancestor)]
+
+         ;; 7. Project query variable bindings into Maps
+         [results (for/list ([subst (in-set answers)])
+                    (hash 'who (substitution-lookup subst who-id)))])
+    ;; Return as lazy sequence of maps
+    (list->lseq results)))
+\end{verbatim}
+
+Key points:
+\begin{itemize}
+\item \texttt{solve} creates a fresh \texttt{(network, uf-store)} pair scoped to the query
+\item Ground arguments are injected directly; logic variables become cells
+\item The relation's propagators run to quiescence in the fresh network
+\item Results are projected from table cells into \texttt{Seq (Map Symbol Value)}
+\item The entire operation is \textbf{pure} — no side effects, no global state
+\end{itemize}
+\subsection{7.5 Grammar Updates}
+\label{sec:orgde78289}
+
+Both grammar files must be updated:
+\begin{itemize}
+\item \texttt{docs/spec/grammar.ebnf} — EBNF production rules
+\item \texttt{docs/spec/grammar.org} — Prose companion with examples
+\end{itemize}
+
+New productions:
+
+\begin{verbatim}
+relation-def  = "defr" , identifier , param-list , clause+ ;
+anonymous-rel = "(" , "rel" , param-list , clause+ , ")" ;
+clause        = "&>" , goal+ ;
+goal          = "(" , goal-head , goal-arg* , ")" ;
+goal-head     = identifier | "=" | "is" | "not" ;
+goal-arg      = logic-var | expression ;
+logic-var     = "?" , identifier ;
+mode-var      = ( "-" | "+" ) , identifier ;
+solve-expr    = "(" , "solve" , "[" , goal , "]" , ")" ;
+solve-with    = "(" , "solve-with" , metadata* , "[" , goal , "]" , ")" ;
+\end{verbatim}
+\subsection{7.6 Compile-Time Stratification Check}
+\label{sec:orgdf65859}
+
+Any program using \texttt{not} (negation-as-failure) must pass a stratification check
+at compile time. This is the minimum viable safety guarantee for negation:
+
+\begin{enumerate}
+\item \textbf{Build the predicate dependency graph}: For each \texttt{defr}, record which
+predicates it calls positively and negatively (via \texttt{not}).
+
+\item \textbf{Compute SCCs}: Strongly connected components via Tarjan's algorithm.
+Each SCC is a group of mutually recursive predicates.
+
+\item \textbf{Classify negative edges}: An edge \texttt{A -{}-{}not-{}-{}> B} is:
+\begin{itemize}
+\item \textbf{Safe} if \texttt{B} is in a \emph{lower} SCC than \texttt{A} (B is fully computed before
+A uses its negation)
+\item \textbf{Unsafe} if \texttt{B} is in the \emph{same} SCC as \texttt{A} (cyclic negation — the
+truth of \texttt{not B} depends on \texttt{A} which depends on \texttt{not B})
+\end{itemize}
+
+\item \textbf{Reject unstratifiable programs}: If any negative edge is within an SCC,
+emit a compile-time error: "Cyclic negation detected: \texttt{A} and \texttt{B} are
+mutually recursive through negation. Consider restructuring."
+
+\item \textbf{Assign strata}: Each SCC gets a stratum number (topological order of
+the condensation DAG). Lower strata are evaluated first; their results
+are frozen before higher strata use them via \texttt{not}.
+\end{enumerate}
+
+\begin{verbatim}
+;; In racket/prologos/stratify.rkt (NEW)
+
+;; stratify : (Listof defr-info) → (Listof (Listof defr-info))
+;; Returns a list of strata (each stratum = list of defrs to evaluate together)
+;; Raises compile-time error if program is unstratifiable
+
+(define (stratify defr-infos)
+  (define dep-graph (build-dependency-graph defr-infos))
+  (define sccs (tarjan-scc dep-graph))
+  (define condensation (condense dep-graph sccs))
+  ;; Check: no negative edge within any SCC
+  (for ([scc (in-list sccs)])
+    (for ([pred (in-list scc)])
+      (for ([neg-dep (in-list (negative-dependencies pred))])
+        (when (member neg-dep scc)
+          (raise-stratification-error pred neg-dep scc)))))
+  ;; Return strata in topological order
+  (topological-sort condensation))
+\end{verbatim}
+
+This check runs during elaboration of \texttt{defr} forms. Programs without \texttt{not} are
+trivially stratifiable (single stratum) and incur no analysis cost.
+\subsection{7.7 AST Nodes (\textasciitilde{}15)}
+\label{sec:org6fa8973}
+
+\begin{center}
+\begin{tabular}{lll}
+Node & Fields & Semantics\\
+\hline
+\texttt{expr-defr} & name, params, clauses & Named relation\\
+\texttt{expr-rel} & params, clauses & Anonymous relation\\
+\texttt{expr-clause} & goals & Single clause (disjunct)\\
+\texttt{expr-goal-app} & name, args & Relational goal application\\
+\texttt{expr-logic-var} & name, mode & Logic variable\\
+\texttt{expr-unify-goal} & lhs, rhs & Unification goal (= ?x ?y)\\
+\texttt{expr-is-goal} & var, expr & Functional evaluation in relation\\
+\texttt{expr-not-goal} & goal & Negation-as-failure\\
+\texttt{expr-solve} & goal & Solve returning Seq Map\\
+\texttt{expr-solve-with} & opts, goal & Parameterized solve\\
+\texttt{expr-solve-one} & goal & Solve returning first answer\\
+\texttt{expr-relation-type} & param-types & Type of a relation\\
+\texttt{expr-goal-type} & — & Type of a goal\\
+\texttt{expr-cut} & — & Committed choice (once)\\
+\texttt{expr-guard} & condition, goal & Guard evaluation\\
+\end{tabular}
+\end{center}
+\subsection{7.8 New/Modified Files}
+\label{sec:org3367b84}
+
+\begin{center}
+\begin{tabular}{ll}
+File & Changes\\
+\hline
+\texttt{racket/prologos/reader.rkt} & ?var, -var, +var, \&> handling\\
+\texttt{racket/prologos/surface-syntax.rkt} & New surface AST structs\\
+\texttt{racket/prologos/parser.rkt} & Parse defr, rel, solve, \&>\\
+\texttt{racket/prologos/macros.rkt} & process-defr, process-rel\\
+\texttt{racket/prologos/elaborator.rkt} & Elaborate relations → propagators\\
+\texttt{racket/prologos/stratify.rkt} & NEW: SCC + stratification check\\
+\texttt{racket/prologos/syntax.rkt} & +15 AST nodes\\
+\texttt{racket/prologos/typing-core.rkt} & Type rules for relational forms\\
++ standard pipeline files & All 12+ consuming modules\\
+\texttt{docs/spec/grammar.ebnf} & New productions\\
+\texttt{docs/spec/grammar.org} & New sections\\
+\texttt{lib/prologos/core/relations.prologos} & NEW: Standard relations\\
+\texttt{tests/test-relations-basic.rkt} & NEW\\
+\texttt{tests/test-relations-tabling.rkt} & NEW\\
+\texttt{tests/test-relations-search.rkt} & NEW\\
+\texttt{tests/test-relations-ws.rkt} & NEW: WS-mode integration\\
+\texttt{tests/test-solve.rkt} & NEW\\
+\end{tabular}
+\end{center}
+\subsection{7.9 Tests (\textasciitilde{}80)}
+\label{sec:org8e21ce8}
+
+\begin{itemize}
+\item Reader: ?var, -var, +var parsed correctly
+\item Parser: defr, rel, \&>, solve parsed correctly
+\item WS-mode: defr with indentation-based clauses
+\item Sexp-mode: defr with explicit (defr \ldots{}) form
+\item Basic relation: parent facts, query
+\item Recursive relation: ancestor with tabling
+\item Unification goal: = ?x ?y
+\item Functional evaluation: is ?x [expr]
+\item Multiple clauses: \&> separator
+\item Anonymous relation: (rel [?x ?y] \&> \ldots{})
+\item Solve: returns Seq of substitution maps
+\item Solve: empty result for unsatisfiable goal
+\item Solve-with: :strategy option
+\item Solve-with: :timeout option
+\item Negation: not (goal)
+\item Mode annotations: -var, +var optimization hints
+\item Integration with functional code: solve in defn body
+\item Integration with traits: relation using trait methods
+\item Stratification: non-negated program = single stratum (trivial)
+\item Stratification: negated program with valid stratification compiles
+\item Stratification: cyclic negation detected and rejected at compile time
+\item Error messages: undefined relation, arity mismatch
+\item Performance: 100-fact database, recursive query
+\end{itemize}
+\subsection{7.10 Dependencies}
+\label{sec:org42945fa}
+
+\begin{itemize}
+\item ALL previous phases (Lattice, Cells, LVars, UF, ATMS, Tabling)
+\end{itemize}
+
+---
+\section{Phase Summary}
+\label{sec:org989c9b6}
+
+\begin{center}
+\begin{tabular}{rlrrrll}
+Phase & Name & New AST & New Files & New Tests & Deps & Size\\
+\hline
+1 & Lattice + champ-insert-join & 0 & 3 & 25 & None & Small\\
+2 & Persistent PropNetwork & 0 & 3 & 60 & Ph 1 & Medium\\
+3 & PropNetwork Prologos Type & 12 & 3 & 50 & Ph 2 & Medium\\
+4 & UnionFind & 6 & 2 & 30 & None (∥3) & Small\\
+5 & Persistent ATMS & 10 & 3 & 50 & Ph 3 & Large\\
+6 & Tabling & 8 & 3 & 40 & Ph 3,5 & Medium\\
+7 & Surface Syntax & 15 & 11+ & 83 & All & Large\\
+\hline
+TOTAL &  & 51 & 28+ & 338 &  & \\
+\end{tabular}
+\end{center}
+
+Estimated total: \textasciitilde{}51 new AST nodes (was 61 — LVar nodes eliminated),
+\textasciitilde{}28+ new files, \textasciitilde{}338 new tests.
+
+Key changes from the original design:
+\begin{itemize}
+\item \textbf{Persistent architecture}: All structs are \texttt{\#:transparent} (not \texttt{\#:mutable})
+\item \textbf{LVars subsumed}: 10 LVar AST nodes eliminated (LVars = network cells)
+\item \textbf{Phase 2 split}: Racket-level implementation (Phase 2) separated from
+Prologos type exposure (Phase 3)
+\item \textbf{Free backtracking}: O(1) via structural sharing (CHAMP maps)
+\item \textbf{Free snapshots}: Networks are values — keeping a reference IS a snapshot
+\item \textbf{Per-cell contradiction detection}: \texttt{contradicts?} predicate per cell, not
+in Lattice trait (no trait hierarchies — see DESIGN\textsubscript{PRINCIPLES.org})
+\item \textbf{ATMS two-tier mode}: Lazy activation on first \texttt{amb} — deterministic
+programs never pay ATMS overhead
+\item \textbf{Compile-time stratification}: SCC + negative edge check rejects
+unstratifiable programs at compile time
+\end{itemize}
+
+---
+\section{Interaction with Existing Infrastructure}
+\label{sec:org3574693}
+
+\subsection{Metavar System}
+\label{sec:org083c0b9}
+
+The current metavar system (\texttt{current-meta-store}, \texttt{save/restore-meta-state!})
+is \emph{not} replaced by Phase 2's propagator network. The elaborator continues
+to use its existing metavar system for type inference. The propagator network
+is a \emph{separate, parallel} system used by the logic engine at runtime.
+
+The persistent PropNetwork architecture was directly motivated by the
+\texttt{save/restore-meta-state!} problem: the metavar store requires O(n) deep
+copies for speculative type checking, and restore requires explicit undo.
+The persistent approach avoids this entirely — backtracking is O(1) (keep
+old reference). In the future (post-Phase 7), the elaborator's metavar
+system could be refactored to use propagator cells internally.
+\subsection{Trait System}
+\label{sec:org7b0ab6e}
+
+The \texttt{Lattice} trait (Phase 1) uses the existing trait infrastructure with
+no modifications. Lattice instances resolve via \texttt{resolve-trait-constraints!}
+like any other trait.
+\subsection{Spec Metadata}
+\label{sec:orgf78f927}
+
+Phase 6 adds \texttt{:tabled} and \texttt{:answer-mode} to \texttt{parse-spec-metadata}. This
+follows the same pattern as \texttt{:examples} (Stage C of Extended Spec Hardening):
+explicit case in the metadata parser using \texttt{collect-constraint-values} or
+direct value capture.
+\subsection{Warnings}
+\label{sec:orgbf1a4ce}
+
+The logic engine may emit new warning types (e.g., "tabled predicate exceeded
+table size limit", "negation in unstratifiable position"). These follow the
+\texttt{warnings.rkt} pattern: new struct + parameter + emit/format.
+\subsection{QTT / Multiplicities}
+\label{sec:orge2e8058}
+
+Logic variables live at multiplicity \texttt{:w} (unrestricted). They are shared
+across multiple goals and clauses. The binding environment (the substitution
+store) is functional/persistent and does not consume resources linearly.
+
+Open question: should cells be linear (\texttt{:1})? A cell created and consumed
+exactly once (write, then read, then discard) could be linear. For now,
+cells are unrestricted (\texttt{:w}).
+\subsection{Collections}
+\label{sec:orgd110ba5}
+
+The entire propagator network is backed by CHAMP maps (\texttt{champ.rkt}):
+\begin{itemize}
+\item \texttt{cells} map: \texttt{cell-id → prop-cell}
+\item \texttt{propagators} map: \texttt{prop-id → propagator}
+\item \texttt{merge-fns} map: \texttt{cell-id → merge-fn}
+\item ATMS \texttt{assumptions}, \texttt{tms-cells}, \texttt{believed}: all CHAMP maps
+\item Table stores: CHAMP map of table entries
+\end{itemize}
+
+The \texttt{champ-insert-join} helper (added in Phase 1) enables lattice-aware
+insert-with-merge at the CHAMP level. SetLattice cells use \texttt{set-union}
+as their merge function. MapLattice cells use \texttt{merge-with join}.
+
+No separate LVar-Set or LVar-Map types are needed — these are simply
+cells in a PropNetwork with appropriate merge functions.
+
+---
+\section{Appendix A: Resolution by Example — \texttt{ancestor} as Propagators}
+\label{sec:orga6d8f00}
+
+This appendix shows the complete elaboration of a \texttt{defr} definition into
+propagator network operations. It bridges the gap between the surface syntax
+(Phase 7) and the propagator substrate (Phases 2-6).
+\subsection{A.1 Source Program}
+\label{sec:orgb99a6a7}
+
+\begin{verbatim}
+;; Facts
+defr parent [?x ?y]
+  &> (= ?x "alice") (= ?y "bob")
+  &> (= ?x "bob") (= ?y "carol")
+  &> (= ?x "bob") (= ?y "dave")
+
+;; Recursive relation (tabled by default)
+defr ancestor [?x ?y]
+  &> (parent ?x ?y)                      ;; clause 1: base case
+  &> (parent ?x ?z) (ancestor ?z ?y)    ;; clause 2: recursive
+\end{verbatim}
+\subsection{A.2 Step 1: Table Creation}
+\label{sec:org15c065f}
+
+\texttt{ancestor} is tabled by default. The elaborator:
+
+\begin{enumerate}
+\item Creates a table entry in the \texttt{table-store} index:
+\texttt{(table-entry 'ancestor <call-pattern> cell-42 'active)}
+\item Creates a PropNetwork cell for the table's answer set:
+\texttt{(net-new-cell net 'empty-set set-union)}  → \texttt{cell-42}
+\item The cell's merge function is \texttt{set-union} (\texttt{SetLattice}) — answers accumulate.
+\end{enumerate}
+\subsection{A.3 Step 2: Clause 1 → Producer Propagator}
+\label{sec:org9ec0fa5}
+
+Clause 1: \texttt{\&> (parent ?x ?y)} (base case)
+
+The elaborator creates a propagator that:
+
+\begin{verbatim}
+;; Clause-1 fire-fn for ancestor(?x, ?y):
+;;   For each parent fact matching (?x, ?y), write to ancestor's table cell
+(define (make-ancestor-clause1-fire-fn table-cell-id)
+  (lambda (net)
+    ;; For each fact in parent's table:
+    (define parent-answers
+      (net-cell-read net parent-table-cell-id))
+    ;; Each parent answer is an ancestor answer (base case)
+    ;; Write each to the ancestor table cell
+    (for/fold ([net* net])
+              ([ans (in-set parent-answers)])
+      (net-cell-write net* table-cell-id
+                      (set-add (set) ans)))))
+\end{verbatim}
+
+Inputs: \texttt{parent}'s table cell.
+Outputs: \texttt{ancestor}'s table cell.
+\subsection{A.4 Step 3: Clause 2 → Producer Propagator}
+\label{sec:org03d3521}
+
+Clause 2: \texttt{\&> (parent ?x ?z) (ancestor ?z ?y)} (recursive case)
+
+This creates a propagator that:
+
+\begin{verbatim}
+;; Clause-2 fire-fn for ancestor(?x, ?y):
+;;   Join parent(?x, ?z) with ancestor(?z, ?y) → ancestor(?x, ?y)
+(define (make-ancestor-clause2-fire-fn table-cell-id)
+  (lambda (net)
+    (define parent-facts (net-cell-read net parent-table-cell-id))
+    (define ancestor-facts (net-cell-read net table-cell-id))
+    ;; For each parent(x, z) and ancestor(z, y), derive ancestor(x, y)
+    (define new-answers
+      (for*/set ([p (in-set parent-facts)]
+                 [a (in-set ancestor-facts)]
+                 #:when (equal? (subst-lookup p '?y)    ;; z in parent
+                                (subst-lookup a '?x)))  ;; z in ancestor
+        (make-subst '?x (subst-lookup p '?x)
+                    '?y (subst-lookup a '?y))))
+    (net-cell-write net table-cell-id new-answers)))
+\end{verbatim}
+
+Inputs: \texttt{parent}'s table cell AND \texttt{ancestor}'s table cell (self-reference!).
+Outputs: \texttt{ancestor}'s table cell.
+
+The self-reference is what makes tabling essential: the propagator reads from
+the cell it writes to. Tabling ensures this reaches a fixed point rather
+than looping infinitely.
+\subsection{A.5 Step 4: Run to Quiescence}
+\label{sec:org3b2ecf3}
+
+\begin{verbatim}
+Iteration 1:
+  parent table cell = {(alice,bob), (bob,carol), (bob,dave)}
+  clause-1 fires → ancestor cell ∪= {(alice,bob), (bob,carol), (bob,dave)}
+  clause-2 fires → join parent × ancestor:
+    parent(alice,bob) ∧ ancestor(bob,carol) → ancestor(alice,carol)
+    parent(alice,bob) ∧ ancestor(bob,dave) → ancestor(alice,dave)
+  ancestor cell ∪= {(alice,carol), (alice,dave)}
+
+Iteration 2:
+  clause-2 fires again (ancestor cell grew):
+    parent(alice,bob) ∧ ancestor(bob,carol) → ancestor(alice,carol) — already present
+    parent(alice,bob) ∧ ancestor(bob,dave) → ancestor(alice,dave) — already present
+    No new answers added.
+
+Quiescence reached. ancestor cell = {(alice,bob), (bob,carol), (bob,dave),
+                                      (alice,carol), (alice,dave)}
+\end{verbatim}
+\subsection{A.6 Step 5: Answer Extraction}
+\label{sec:orgd11f32c}
+
+A query \texttt{(solve [ancestor "alice" ?who])} reads the ancestor table cell,
+filters for entries where \texttt{?x = "alice"}, and projects the \texttt{?y} values:
+
+\begin{verbatim}
+Results: ?who ∈ {"bob", "carol", "dave"}
+\end{verbatim}
+
+---
+\section{Appendix B: End-to-End Query Walkthrough (All Three Layers)}
+\label{sec:org13df88b}
+
+This appendix shows a single query that exercises all three layers of the
+architecture: PropNetwork (Layer 1), ATMS (Layer 2), and Stratification
+(Layer 3).
+\subsection{B.1 Source Program}
+\label{sec:orgb618124}
+
+\begin{verbatim}
+defr edge [?from ?to]
+  &> (= ?from "a") (= ?to "b")
+  &> (= ?from "b") (= ?to "c")
+  &> (= ?from "a") (= ?to "c")
+
+defr reachable [?x ?y]
+  &> (edge ?x ?y)
+  &> (edge ?x ?z) (reachable ?z ?y)
+
+;; Negation triggers stratification (Layer 3)
+defr unreachable [?x ?y]
+  &> (node ?x) (node ?y) (not (reachable ?x ?y))
+
+;; Query with nondeterminism (triggers ATMS, Layer 2)
+;; "Find a node that is unreachable from 'a'"
+let result := (solve [unreachable "a" ?target])
+\end{verbatim}
+\subsection{B.2 Compile-Time: Stratification Check}
+\label{sec:org7975a8f}
+
+The predicate dependency graph:
+
+\begin{verbatim}
+edge         (no deps)         → Stratum 0
+reachable    → edge (+)        → Stratum 0 (same SCC, all positive)
+node         (no deps)         → Stratum 0
+unreachable  → reachable (−)   → Stratum 1 (negative edge crosses strata)
+\end{verbatim}
+
+The stratification checker (§7.6) verifies: the negative edge \texttt{unreachable -{}-{}not-{}-{}> reachable} crosses from Stratum 1 to Stratum 0 — safe.
+\subsection{B.3 Runtime: Layer 1 — PropNetwork (Stratum 0)}
+\label{sec:org1d566aa}
+
+Evaluate \texttt{edge}, \texttt{reachable}, and \texttt{node} to fixed point:
+
+\begin{verbatim}
+1. edge table cell:
+   {(a,b), (b,c), (a,c)}
+
+2. reachable table cell (iterate to fixpoint):
+   Iteration 1: {(a,b), (b,c), (a,c)} — from edge base case
+   Iteration 2: {(a,b), (b,c), (a,c), (a,c)} — (a,b)+(b,c)→(a,c), already present
+   Fixpoint: {(a,b), (b,c), (a,c)}
+
+3. node table cell (derived from edge endpoints):
+   {a, b, c}
+\end{verbatim}
+
+All purely monotonic. No ATMS overhead. Layer 1 only.
+\subsection{B.4 Runtime: Layer 3 — Stratum Boundary}
+\label{sec:orgebfd7bc}
+
+Stratum 0 is complete. Now the runtime evaluates Stratum 1.
+
+\texttt{unreachable} uses \texttt{not (reachable ?x ?y)}. This reads the \emph{frozen} reachable
+table from Stratum 0:
+
+\begin{verbatim}
+For each pair (x, y) in node × node:
+  (a, a): reachable(a, a) = not found → unreachable(a, a) ✓
+  (a, b): reachable(a, b) = found → skip
+  (a, c): reachable(a, c) = found → skip
+  (b, a): reachable(b, a) = not found → unreachable(b, a) ✓
+  (b, b): reachable(b, b) = not found → unreachable(b, b) ✓
+  (b, c): reachable(b, c) = found → skip
+  (c, a): reachable(c, a) = not found → unreachable(c, a) ✓
+  (c, b): reachable(c, b) = not found → unreachable(c, b) ✓
+  (c, c): reachable(c, c) = not found → unreachable(c, c) ✓
+\end{verbatim}
+\subsection{B.5 Runtime: Layer 2 — ATMS (if needed)}
+\label{sec:orgc2baad3}
+
+In this example, the query is deterministic (no \texttt{amb}). Under the two-tier
+mode (§5.5), the solver stays in Tier 1 (PropNetwork only) — no ATMS
+overhead.
+
+If we modified the program to include a choice point:
+
+\begin{verbatim}
+;; "Pick a starting node and find what's unreachable from it"
+defr mystery-query [?start ?target]
+  &> (node ?start) (unreachable ?start ?target)
+\end{verbatim}
+
+Now \texttt{node ?start} produces 3 alternatives → \texttt{amb} activates, upgrading
+to Tier 2 (full ATMS):
+
+\begin{verbatim}
+Hypothesis h1: ?start = "a"
+  → unreachable("a", ?target) under h1
+  → Answers: {(a,a)} under h1
+
+Hypothesis h2: ?start = "b"
+  → unreachable("b", ?target) under h2
+  → Answers: {(b,a), (b,b)} under h2
+
+Hypothesis h3: ?start = "c"
+  → unreachable("c", ?target) under h3
+  → Answers: {(c,a), (c,b), (c,c)} under h3
+
+All hypotheses are consistent (no nogoods).
+Final answers: union of all worldviews.
+\end{verbatim}
+\subsection{B.6 Summary: Which Layer Handles What}
+\label{sec:org92ceab6}
+
+\begin{center}
+\begin{tabular}{lll}
+Query Aspect & Layer Used & Phase\\
+\hline
+\texttt{edge}, \texttt{reachable} tables & 1: PropNetwork & Ph 2,6\\
+\texttt{not (reachable ...)} & 3: Stratification & Ph 7\\
+Stratum evaluation order & 3: Stratification & Ph 7\\
+\texttt{node ?start} choice points & 2: ATMS & Ph 5\\
+Backtracking on contradictions & 2: ATMS & Ph 5\\
+Table answer accumulation & 1: PropNetwork & Ph 2,6\\
+\end{tabular}
+\end{center}
+
+---
+\section{Performance Expectations}
+\label{sec:orgd62bbfc}
+
+\subsection{Cost Model}
+\label{sec:org64a2e91}
+
+The persistent architecture adds a constant factor vs. mutable implementations.
+Here are the expected costs for each operation:
+
+\begin{center}
+\begin{tabular}{llll}
+Operation & Cost (Persistent) & Cost (Mutable) & Ratio\\
+\hline
+Cell read & O(log₃₂ n) ≈ O(C), C≤7 & O(1) hash lookup & \textasciitilde{}3x\\
+Cell write (no change) & O(log₃₂ n) comparison & O(1) & \textasciitilde{}3x\\
+Cell write (changed) & O(log₃₂ n) + alloc path & O(1) & \textasciitilde{}5x\\
+Add propagator & O(log₃₂ n) × inputs & O(1) × inputs & \textasciitilde{}3-5x\\
+Backtrack & O(1) — keep old ref & O(n) — deep copy & 100x+ better\\
+Snapshot & O(1) — identity & O(n) — deep copy & 100x+ better\\
+run-to-quiescence & O(k × log₃₂ n) per step & O(k) per step & \textasciitilde{}3-5x\\
+\end{tabular}
+\end{center}
+
+Where:
+\begin{itemize}
+\item n = number of cells in the network (typically 100-10,000)
+\item k = number of propagator firings to quiescence
+\item log₃₂(10,000) ≈ 2.7 — so the "constant" is truly small
+\end{itemize}
+\subsection{Benchmark Targets (to validate during implementation)}
+\label{sec:org9d029a8}
+
+\begin{center}
+\begin{tabular}{lll}
+Benchmark & Target & Validates\\
+\hline
+Create 1000-cell network & < 50ms & CHAMP scaling\\
+Write 1000 values, run to quiescence & < 200ms & Propagation\\
+Backtrack 100 times over 1000-cell net & < 1ms total & Persistence\\
+100-fact ancestor query (tabled) & < 100ms & Tabling\\
+1000-fact Datalog transitive closure & < 500ms & Scalability\\
+\texttt{solve} with 100 alternatives (ATMS) & < 1s & ATMS overhead\\
+Same 100 alternatives, Tier 1 only & < 200ms & Two-tier skip\\
+\end{tabular}
+\end{center}
+
+These targets are order-of-magnitude estimates. Actual benchmarks will be
+added to \texttt{tools/benchmark-tests.rkt} as each phase is implemented. The
+key comparison is: persistent overhead vs. backtracking savings. For any
+program with search (>1 choice point), the persistent approach wins
+because each backtrack is O(1) instead of O(n) deep copy.
+\subsection{When Performance Matters Most}
+\label{sec:orgf6afc5e}
+
+For the logic engine's intended use cases:
+\begin{itemize}
+\item \textbf{Type checking}: The elaborator's current metavar system is fast for
+deterministic type inference. The PropNetwork adds overhead here. The
+elaborator refactoring (post-Phase 7) should only proceed after
+benchmarking confirms acceptable overhead.
+\item \textbf{Logic queries}: Search-heavy programs (Prolog-style) benefit enormously
+from free backtracking. The persistent overhead is amortized over the
+many backtracks avoided.
+\item \textbf{Datalog}: Bottom-up evaluation with tabling is inherently monotonic —
+no backtracking needed. Performance depends on propagation efficiency
+and set operations.
+\end{itemize}
+
+---
+\section{What This Design Does NOT Cover}
+\label{sec:org6db896e}
+
+\subsection{Elaborator Refactoring (Phase 1 of Research Doc)}
+\label{sec:org1c29570}
+
+Refactoring \texttt{current-meta-store} to use a persistent PropNetwork internally
+is recommended by the research document but deferred. The persistent network
+architecture makes this refactoring simpler: replace the mutable meta store
+with a PropNetwork value threaded through elaboration. But it is still a
+large internal change that can proceed independently after the logic engine
+exists.
+\subsection{Galois Connections / Domain Embeddings (Phase 6 of Research Doc)}
+\label{sec:org0d411f5}
+
+Modular constraint domains connected via Galois connections are an advanced
+feature deferred until the basic engine is operational.
+\subsection{Full Stratified Evaluation Runtime (Phase 4 of Research Doc)}
+\label{sec:org52f3402}
+
+Phase 7 includes a compile-time stratification \emph{check} (§7.6): SCC decomposition,
+negative edge classification, and rejection of unstratifiable programs. The
+runtime evaluation of strata (evaluating lower strata to fixpoint before
+proceeding to higher strata) is also included as part of the solver's query
+evaluation loop. Full support for aggregation operators (\texttt{count}, \texttt{min}, \texttt{max},
+\texttt{sum}) between strata is deferred to a follow-up phase.
+\subsection{CRDTs / Distributed Logic}
+\label{sec:org9826016}
+
+CRDT-backed collections for distributed actors are long-term goals not
+addressed here.
+\subsection{QuickCheck / Property Testing}
+\label{sec:org25d5025}
+
+Executing \texttt{:holds} clauses and \texttt{:examples} entries requires the logic engine
+(for proof search). Once the engine exists, this becomes a natural Phase 2
+of the Extended Spec Design.
+
+---
+\section{Architectural Decision: Persistent Networks}
+\label{sec:orgac0e01c}
+
+\subsection{The Problem with Mutable Propagator Networks}
+\label{sec:org44427ae}
+
+The original design proposed mutable Racket structs for PropCell, PropNetwork,
+TMSCell, and ATMS. This creates the same save/restore problem that plagues
+the current metavar store:
+
+\begin{itemize}
+\item \textbf{Snapshotting} requires deep copies — O(n) for n cells
+\item \textbf{Backtracking} requires explicit undo — O(mutations) to restore
+\item \textbf{Network mobility} requires serialization — custom ser/deser code
+\item \textbf{Debugging} is harder — state is invisible without explicit inspection
+\end{itemize}
+\subsection{The Persistent Solution}
+\label{sec:org61863f7}
+
+Making the entire network a persistent value backed by CHAMP maps:
+
+\begin{itemize}
+\item \textbf{Snapshotting} = free (keep a reference — structural sharing)
+\item \textbf{Backtracking} = O(1) (use old reference)
+\item \textbf{Network mobility} = serialize the value (all data is in the struct)
+\item \textbf{Debugging} = the network IS the state (print it, compare it)
+\item \textbf{Cost}: O(log₃₂ n) per cell write instead of O(1)
+\end{itemize}
+
+Since log₃₂(n) ≤ 7 for any practical n (up to \textasciitilde{}34 billion cells),
+the cost is bounded by a small constant. For the typical logic engine
+workload (hundreds to thousands of cells), this is 2-3 levels of
+CHAMP trie traversal — effectively O(1).
+\subsection{LVar Elimination}
+\label{sec:org54b0992}
+
+A further simplification: LVars are subsumed by PropNetwork cells.
+An LVar is just a cell-id in a persistent prop-network, since
+\texttt{net-cell-write} already does join-on-write (inflationary) via the
+per-cell \texttt{merge-fn}. This eliminates \textasciitilde{}10 dedicated LVar AST nodes
+and the separate \texttt{lvar.rkt} module.
+
+\begin{center}
+\begin{tabular}{ll}
+Before & After\\
+\hline
+61 AST & 51 AST\\
+32 files & 27+ files\\
+Separate LVar, LVar-Set, LVar-Map & Cells with SetLattice, MapLattice\\
+Mutable cells + scheduler & Persistent network, pure loop\\
+\texttt{save/restore} for backtracking & Keep old reference\\
+\end{tabular}
+\end{center}
+
+---
+\section{Key Lessons from Prior Work}
+\label{sec:orgdffdbe9}
+
+(Gathered from CLAUDE.md MEMORY and implementation experience)
+
+\begin{enumerate}
+\item \textbf{12+ file pipeline for new AST nodes} — every new \texttt{expr-*} touches
+syntax.rkt, typing-core.rkt, reduction.rkt, elaborator.rkt, zonk.rkt,
+pretty-print.rkt, qtt.rkt, substitution.rkt, unify.rkt, + tests.
+
+\item \textbf{Per-command parameter isolation} — all runtime state (meta stores,
+warning accumulators, table stores) must be parameterized and reset
+per-command in \texttt{driver.rkt}.
+
+\item \textbf{Trait dictionary dispatch} — single-method traits: dict IS the function.
+Multi-method: nested Sigma. Dict names: \texttt{TypeArg-{}-{}TraitName-{}-{}dict}.
+
+\item \textbf{\texttt{collect-constraint-values}} — the right collector for list-valued
+metadata like \texttt{:examples}, \texttt{:laws}, \texttt{:tabled}.
+
+\item \textbf{Generic \texttt{rewrite-implicit-map} branch} — WS-mode keyword blocks need
+to call \texttt{rewrite-implicit-map} at dispatch. The property/functor bugs
+taught this lesson.
+
+\item \textbf{Transient pattern} — generic wrappers (\texttt{expr-transient}, \texttt{expr-persist})
+\begin{itemize}
+\item type-specific variants. Follow this for cell/lvar generics.
+\end{itemize}
+
+\item \textbf{Test file size} — keep under \textasciitilde{}20 cases / \textasciitilde{}30s for parallel execution.
+Split large test files into -01, -02 parts.
+
+\item \textbf{Update dep-graph.rkt} — every new .rkt file needs an entry in
+\texttt{tools/dep-graph.rkt} for incremental testing to work.
+\end{enumerate}
+
+---
+\section{References}
+\label{sec:org7e6d830}
+
+Organized by phase relevance:
+\subsection{Phase 1 (Lattice)}
+\label{sec:org0107c33}
+\begin{itemize}
+\item Cousot \& Cousot, "Abstract Interpretation: A Unified Lattice Model" (POPL, 1977)
+\item Tarski, "A Lattice-Theoretical Fixpoint Theorem" (Pacific J. Math., 1955)
+\end{itemize}
+\subsection{Phase 2 (Propagators)}
+\label{sec:orgbc49498}
+\begin{itemize}
+\item Radul \& Sussman, "The Art of the Propagator" (MIT TR, 2009)
+\item Radul, \emph{Propagation Networks} (PhD thesis, MIT, 2009)
+\item Hellerstein, "Keeping CALM" (CACM, 2020)
+\end{itemize}
+\subsection{Phase 3 (LVars)}
+\label{sec:orgaa280a1}
+\begin{itemize}
+\item Kuper \& Newton, "LVars: Lattice-Based Data Structures for Deterministic Parallelism" (FHPC, 2013)
+\item Kuper et al., "Freeze After Writing" (POPL, 2014)
+\end{itemize}
+\subsection{Phase 4 (UnionFind)}
+\label{sec:org03c2336}
+\begin{itemize}
+\item Conchon \& Filliâtre, "A Persistent Union-Find Data Structure" (ML Workshop, 2007)
+\end{itemize}
+\subsection{Phase 5 (ATMS)}
+\label{sec:org8ac0842}
+\begin{itemize}
+\item de Kleer, "An Assumption-Based TMS" (AI Journal, 1986)
+\end{itemize}
+\subsection{Phase 6 (Tabling)}
+\label{sec:org0eff997}
+\begin{itemize}
+\item Swift \& Warren, "XSB: Extending Prolog with Tabled Logic Programming" (TPLP, 2012)
+\item Chen \& Warren, "Tabled Evaluation with Delaying" (JACM, 1996)
+\item Madsen et al., "From Datalog to Flix" (PLDI, 2016)
+\end{itemize}
+\subsection{Phase 7 (Surface)}
+\label{sec:orgf096bc4}
+\begin{itemize}
+\item Arntzenius \& Krishnaswami, "Datafun: A Functional Datalog" (ICFP, 2016)
+\item Fruhwirth, \emph{Constraint Handling Rules} (CUP, 2009)
+\end{itemize}
+\end{document}

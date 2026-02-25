@@ -1,0 +1,1092 @@
+% Created 2026-02-24 Tue 12:20
+% Intended LaTeX compiler: pdflatex
+\documentclass[11pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{graphicx}
+\usepackage{longtable}
+\usepackage{wrapfig}
+\usepackage{rotating}
+\usepackage[normalem]{ulem}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{capt-of}
+\usepackage{hyperref}
+\author{Prologos Project}
+\date{2026-02-24}
+\title{Towards a General Logic Engine on Propagators\\\medskip
+\large Lattice-Theoretic Foundations and Architectural Recommendations for Prologos}
+\hypersetup{
+ pdfauthor={Prologos Project},
+ pdftitle={Towards a General Logic Engine on Propagators},
+ pdfkeywords={},
+ pdfsubject={},
+ pdfcreator={Emacs 30.2 (Org mode 9.7.39)}, 
+ pdflang={English}}
+\begin{document}
+
+\maketitle
+\tableofcontents
+
+\section{Executive Summary}
+\label{sec:org7243b99}
+
+This document synthesizes two extensive research surveys --- the Lattice-Based
+Propagator Networks survey and the Propagator Networks research report --- into
+a concrete architectural recommendation for Prologos's logic engine. The
+central thesis:
+
+\begin{quote}
+Prologos should build its logic engine as a \textbf{stratified propagator network}
+with an ATMS worldview layer, using lattice-compatible data structures (LVars)
+as the monotonic data plane and assumption-based truth maintenance as the
+non-monotonic control plane. Tabling provides completeness; stratification
+provides negation. The same substrate should serve both compile-time
+(type checking, elaboration) and runtime (logic programming, constraint
+solving) use cases.
+\end{quote}
+
+The two user-proposed mechanisms --- the "Multiverse Mechanism" (choice-point
+forking via ATMS worldviews) and the "Pocket Universe Mechanism" (scoped
+computation via lattice embeddings) --- are both \textbf{validated} by the research
+and directly implementable. The Multiverse Mechanism maps onto ATMS's
+simultaneous worldview maintenance, recovering nondeterminism atop a
+monotonic substrate. The Pocket Universe Mechanism maps onto Galois
+connections between abstract and concrete domains, enabling modular
+constraint domains and scoped sub-computations.
+
+\textbf{Key architectural choices:}
+
+\begin{enumerate}
+\item \textbf{Propagator cells} with user-defined lattice merge (Radul-Sussman model)
+\item \textbf{ATMS layer} for hypothetical reasoning, \texttt{amb}, and dependency-directed backtracking
+\item \textbf{Tabling} for termination and completeness (SLG-style, with lattice answer modes)
+\item \textbf{Stratified evaluation} for negation, aggregation, and non-monotonic operations
+\item \textbf{Galois-connected domain embeddings} for modular constraint solvers
+\item \textbf{Phased implementation} starting with compile-time use (elaborator propagators),
+then extending to runtime logic programming
+\end{enumerate}
+\section{Part I: Lattice Foundations}
+\label{sec:org1d4a47e}
+
+\subsection{1. Why Lattices?}
+\label{sec:org496ff82}
+
+A \textbf{lattice} is an algebraic structure that captures the notion of
+\emph{partial information} and \emph{refinement}. In programming language theory,
+lattices appear everywhere:
+
+\begin{itemize}
+\item \textbf{Type inference}: the substitution lattice (from most general to most specific)
+\item \textbf{Abstract interpretation}: concrete/abstract domain pairs connected by Galois connections
+\item \textbf{Constraint propagation}: cell values that accumulate knowledge monotonically
+\item \textbf{Distributed systems}: CRDTs converging through lattice joins
+\end{itemize}
+
+For a logic engine, lattices provide the mathematical guarantee that
+computation \textbf{converges} --- that iteratively refining partial answers
+eventually reaches a stable fixed point.
+\subsection{2. Crash Course: The Lattice Zoo}
+\label{sec:org7910986}
+
+\subsubsection{2.1 Partial Orders}
+\label{sec:org92c7757}
+
+A \textbf{partial order} \((S, \leq)\) is a set \(S\) with a binary relation \(\leq\) that is:
+
+\begin{itemize}
+\item \textbf{Reflexive}: \(a \leq a\)
+\item \textbf{Antisymmetric}: \(a \leq b\) and \(b \leq a\) implies \(a = b\)
+\item \textbf{Transitive}: \(a \leq b\) and \(b \leq c\) implies \(a \leq c\)
+\end{itemize}
+
+The ordering represents "has at least as much information as." In a type
+inference context: \texttt{Int} \(\leq\) \texttt{?a} means "knowing the type is \texttt{Int}
+is more informative than knowing nothing (metavariable \texttt{?a})."
+
+Not all elements need be comparable --- this is the "partial" in partial
+order. Two type constraints might be independent (neither implies the other).
+\subsubsection{2.2 Join-Semilattices}
+\label{sec:orgd993916}
+
+A \textbf{join-semilattice} \((L, \leq, \bot, \sqcup)\) adds:
+
+\begin{itemize}
+\item A \textbf{bottom} element \(\bot\) (least informative --- "nothing")
+\item A \textbf{join} operation \(\sqcup\) (least upper bound --- "combine information")
+\end{itemize}
+
+The join is:
+\begin{itemize}
+\item \textbf{Commutative}: \(a \sqcup b = b \sqcup a\)
+\item \textbf{Associative}: \((a \sqcup b) \sqcup c = a \sqcup (b \sqcup c)\)
+\item \textbf{Idempotent}: \(a \sqcup a = a\)
+\end{itemize}
+
+Join is the \emph{merge} operation in propagator networks. When two propagators
+contribute information to the same cell, join combines them. Commutativity
+means the order doesn't matter; idempotency means duplicate contributions
+are harmless.
+\subsubsection{2.3 Complete Lattices and Top}
+\label{sec:orgc32f835}
+
+A \textbf{complete lattice} also has:
+\begin{itemize}
+\item A \textbf{top} element \(\top\) (maximally informative --- \emph{contradiction})
+\item \textbf{Meet} operation \(\sqcap\) (greatest lower bound)
+\end{itemize}
+
+Top represents incompatible information merged together. When a type
+checker discovers that a variable must be both \texttt{Int} and \texttt{String}, the
+result is \(\top\) --- contradiction. The propagator network must handle this
+by backtracking or reporting an error.
+\subsubsection{2.4 Fixed Points: Why Lattices Guarantee Convergence}
+\label{sec:org02eac93}
+
+\textbf{Knaster-Tarski theorem}: Every monotone function \(f : L \to L\) on a
+complete lattice has a least fixed point:
+
+\(\mathrm{lfp}(f) = \bigsqcap \{ x \in L \mid f(x) \leq x \}\)
+
+\textbf{Kleene iteration}: On a dcpo with \(\bot\), the least fixed point of a
+Scott-continuous \(f\) is computed by iterating from bottom:
+
+\(\mathrm{lfp}(f) = \bigsqcup_{n \in \mathbb{N}} f^n(\bot)\)
+
+This is exactly what propagator networks do: start with all cells at \(\bot\)
+(no information), iterate propagators (apply \(f\)), and converge to the
+least fixed point (the most general solution).
+\subsubsection{2.5 Finite Height and Termination}
+\label{sec:orgb81fb20}
+
+If the lattice has \textbf{finite height} (longest ascending chain is bounded),
+then Kleene iteration terminates in at most \(h\) steps, where \(h\) is the
+height. For infinite-height lattices (e.g., intervals over reals),
+\textbf{widening} operators accelerate convergence:
+
+\(a \nabla b \geq a \sqcup b\)
+
+Widening over-approximates to ensure termination; \textbf{narrowing} then
+recovers precision:
+
+\(a \leq a \triangle b \leq a \quad \text{when } b \leq a\)
+\subsection{3. Key Lattice Structures for Logic Programming}
+\label{sec:orgf00992d}
+
+\subsubsection{3.1 The Substitution Lattice}
+\label{sec:org77cd5e3}
+
+Unification operates on a lattice of substitutions:
+
+\begin{itemize}
+\item \(\bot\) = identity substitution (no bindings)
+\item \(\sigma \leq \tau\) iff \(\tau\) is a specialization of \(\sigma\) (more bindings)
+\item \(\sigma \sqcup \tau\) = most general unifier (mgu) of \(\sigma\) and \(\tau\)
+\item \(\top\) = failure (no unifier exists)
+\end{itemize}
+
+This is the fundamental lattice for Prolog-style logic programming:
+every resolution step computes a join on the substitution lattice.
+\subsubsection{3.2 The Herbrand Interpretation Lattice}
+\label{sec:org512d620}
+
+For Datalog/bottom-up evaluation:
+
+\begin{itemize}
+\item Elements are sets of ground atoms (Herbrand interpretations)
+\item \(\bot\) = empty set
+\item \(I_1 \leq I_2\) iff \(I_1 \subseteq I_2\)
+\item \(I_1 \sqcup I_2 = I_1 \cup I_2\)
+\item The immediate consequence operator \(T_P\) maps an interpretation to its
+one-step derivation
+\end{itemize}
+
+The least fixed point of \(T_P\) gives the minimal Herbrand model --- all
+provable ground facts.
+\subsubsection{3.3 The Interval Lattice}
+\label{sec:orgb43961f}
+
+For numeric constraint propagation:
+
+\begin{itemize}
+\item Elements are intervals \([a, b]\) over \(\mathbb{R}\)
+\item \(\bot\) = \(\mathbb{R}\) (no constraint)
+\item \([a_1, b_1] \sqcap [a_2, b_2] = [\max(a_1, a_2), \min(b_1, b_2)]\)
+(intersection = more constrained)
+\item \(\top\) = \(\emptyset\) (contradictory constraints)
+\end{itemize}
+\subsubsection{3.4 The Protocol State Lattice (Session Types)}
+\label{sec:org2381593}
+
+For Prologos's session type verification:
+
+\begin{itemize}
+\item \(\bot\) = unconstrained channel
+\item Interior elements = specific protocol states (e.g., "send Int then receive String")
+\item \(\top\) = protocol violation
+\item Duality checking: two endpoints' protocol states must be lattice-dual
+\end{itemize}
+\subsubsection{3.5 The Multiplicity Semiring (QTT)}
+\label{sec:org90250d6}
+
+For Prologos's quantitative type theory:
+
+\begin{itemize}
+\item Elements: \(\{0, 1, \omega\}\) (erased, linear, unrestricted)
+\item Addition: resource usage accumulation
+\item Multiplication: usage in composed contexts
+\item This forms a \emph{semiring}, not a lattice per se, but the ordering \(0 \leq 1 \leq \omega\)
+creates a lattice structure useful for propagation
+\end{itemize}
+\section{Part II: The Architectural Recommendation}
+\label{sec:orgd5aa6b5}
+
+\subsection{4. The Three-Layer Architecture}
+\label{sec:orgbb9fa46}
+
+We recommend a three-layer architecture for Prologos's logic engine:
+
+\begin{verbatim}
+┌─────────────────────────────────────────────────────┐
+│  Layer 3: STRATIFICATION                            │
+│  Negation, aggregation, non-monotone operations     │
+│  Evaluated stratum-by-stratum (lower strata first)  │
+└─────────────┬───────────────────────────┬───────────┘
+              │                           │
+┌─────────────▼───────────────────────────▼───────────┐
+│  Layer 2: ATMS / TRUTH MAINTENANCE                  │
+│  Hypothetical reasoning (amb, worldviews)           │
+│  Nogood recording, dependency-directed backtracking  │
+│  Non-monotonic control over monotonic data           │
+└─────────────┬───────────────────────────┬───────────┘
+              │                           │
+┌─────────────▼───────────────────────────▼───────────┐
+│  Layer 1: PROPAGATOR NETWORK                        │
+│  Cells (lattice values) + Propagators (monotone fns)│
+│  Merge = lattice join                               │
+│  Deterministic, order-independent, parallelizable   │
+└─────────────────────────────────────────────────────┘
+\end{verbatim}
+\subsubsection{Layer 1: The Propagator Network (Monotonic Data Plane)}
+\label{sec:org1455ada}
+
+The foundation. Cells hold partial information (lattice elements);
+propagators compute monotone functions between cells. When a cell's
+value increases (via merge/join), all downstream propagators are
+scheduled for re-execution. This layer guarantees:
+
+\begin{itemize}
+\item \textbf{Determinism}: same inputs \(\to\) same fixed point, regardless of scheduling
+\item \textbf{Convergence}: finite-height lattices terminate; widening handles infinite ones
+\item \textbf{Parallelism}: propagators can execute concurrently (CALM theorem)
+\end{itemize}
+
+This is the layer where type inference, constraint propagation, and
+dataflow computation live. It is purely monotonic.
+\subsubsection{Layer 2: ATMS / Truth Maintenance (Non-Monotonic Control Plane)}
+\label{sec:orge4e0eff}
+
+The innovation. The ATMS maintains \emph{all possible worldviews simultaneously}.
+Each derived fact is labeled with the set of assumptions that justify it.
+
+\begin{itemize}
+\item \textbf{\texttt{amb}} creates fresh hypothetical premises: \(\{h_1, h_2, \ldots\}\)
+\item Each branch's facts are \emph{contingent} on its hypothesis
+\item \textbf{Nogoods}: when a contradiction is detected, the responsible assumption set
+is recorded as a nogood --- permanently invalidating that worldview
+\item \textbf{Dependency-directed backtracking}: nogoods identify \emph{which} choice was
+wrong, skipping irrelevant alternatives
+\end{itemize}
+
+This layer provides nondeterministic search \emph{without backtracking} in the
+traditional sense. All branches exist simultaneously in the ATMS; "exploring
+a branch" = believing a hypothesis; "backtracking" = recording a nogood.
+
+Key insight from the research: \textbf{the ATMS's set of nogoods is itself a
+monotonically growing lattice}. Non-monotonicity in the search space is
+reified as monotonicity in the meta-lattice of learned constraints.
+\subsubsection{Layer 3: Stratification (Controlled Non-Monotonicity)}
+\label{sec:orgcf440ca}
+
+Some operations are genuinely non-monotonic: negation-as-failure,
+aggregation (\texttt{count}, \texttt{min}, \texttt{max}), and finalization. These are handled
+by \textbf{stratification}:
+
+\begin{enumerate}
+\item Decompose the program into strata (strongly connected components of
+the dependency graph, with non-monotonic edges crossing strata)
+\item Evaluate strata bottom-up: within each stratum, run the propagator
+network to its fixed point
+\item Between strata, non-monotonic operations observe the \emph{completed} lower
+stratum
+\end{enumerate}
+
+This is the established technique from Datalog with negation, Flix,
+Bloom\textsuperscript{L}, and CHR. The CALM theorem confirms: within a stratum,
+computation is coordination-free; stratum boundaries are the minimal
+coordination points.
+\subsection{5. Validating the Multiverse Mechanism}
+\label{sec:orga314ea8}
+
+The user's proposed "Multiverse Mechanism" --- forking lattice state at
+choice points, exploring branches independently --- is \emph{directly validated}
+by the research. It maps cleanly onto the ATMS worldview model:
+
+\begin{center}
+\begin{tabular}{ll}
+Multiverse Concept & ATMS Implementation\\
+\hline
+Choice point & \texttt{amb} creating hypothetical premises \(\{h_i\}\)\\
+Fork & Each \(h_i\) labels a worldview\\
+Independent evolution & Facts derived under \(h_i\) are contingent\\
+Branch contradiction & Nogood set \(\{h_i, \ldots\}\) recorded\\
+Branch success & Answer extracted from worldview \(h_i\)\\
+All branches at once & ATMS maintains all worldviews simultaneously\\
+\end{tabular}
+\end{center}
+\subsubsection{Why ATMS over Physical Forking}
+\label{sec:org192bd1f}
+
+The research reveals two approaches to forking:
+
+\begin{enumerate}
+\item \textbf{Physical forking} (MUSE/OR-parallelism): Copy the entire state at each
+choice point. Each copy evolves independently.
+\begin{itemize}
+\item Pro: Simple, naturally parallel
+\item Con: O(state\textsubscript{size}) per fork; no shared learning between branches
+\end{itemize}
+
+\item \textbf{Virtual forking} (ATMS): Tag all facts with their supporting assumptions.
+All worldviews coexist in a single data structure.
+\begin{itemize}
+\item Pro: O(1) context switching; nogoods shared across worldviews;
+dependency-directed backtracking
+\item Con: More complex bookkeeping; label management overhead
+\end{itemize}
+\end{enumerate}
+
+\textbf{Recommendation for Prologos: ATMS (virtual forking).} The reasons:
+
+\begin{itemize}
+\item Prologos already has contingent information in its type checker
+(metavariables with constraints that may be retracted)
+\item Dependency-directed backtracking produces dramatically better error messages
+("this constraint fails because of \emph{these} assumptions") vs chronological
+backtracking ("something went wrong somewhere")
+\item The learning effect: nogoods discovered in one branch prune other branches.
+This is exactly CDCL (Conflict-Driven Clause Learning), which
+revolutionized SAT solving
+\item Memory efficiency: shared structure between worldviews rather than
+full copies
+\end{itemize}
+\subsubsection{The Multiverse in Practice: A Worked Example}
+\label{sec:orgdcb8294}
+
+\begin{verbatim}
+;; A Prologos logic program (hypothetical syntax)
+relation parent : String -> String -> Prop
+parent "alice" "bob"
+parent "bob" "carol"
+parent "bob" "dave"
+
+relation ancestor : String -> String -> Prop
+rule ancestor X Y :- parent X Y
+rule ancestor X Y :- parent X Z, ancestor Z Y
+
+query ancestor "alice" ?who
+;; Expected: ?who = "bob", ?who = "carol", ?who = "dave"
+\end{verbatim}
+
+Under ATMS:
+\begin{enumerate}
+\item Create cell for \texttt{?who}, initially \(\bot\)
+\item First rule: \texttt{parent "alice" ?who} unifies, producing \texttt{?who = "bob"}
+under assumption \(h_1\)
+\item Second rule: \texttt{parent "alice" ?Z}, \texttt{ancestor ?Z ?who}
+\begin{itemize}
+\item \texttt{?Z = "bob"} under \(h_2\); then \texttt{ancestor "bob" ?who}
+\item First rule: \texttt{parent "bob" ?who} → \texttt{?who = "carol"} under \(h_3\)
+or \texttt{?who = "dave"} under \(h_4\) (\texttt{amb} on matching clauses)
+\end{itemize}
+\item All answers coexist: \texttt{\{h\_1: "bob", h\_3: "carol", h\_4: "dave"\}}
+\item Collecting answers = iterating over consistent worldviews
+\end{enumerate}
+\subsection{6. Validating the Pocket Universe Mechanism}
+\label{sec:orgfbb804a}
+
+The "Pocket Universe Mechanism" --- isolating a sub-computation in a
+smaller lattice, then projecting results back --- maps onto \textbf{Galois
+connections} from abstract interpretation:
+
+\begin{center}
+\begin{tabular}{ll}
+Pocket Universe Concept & Formal Mapping\\
+\hline
+Outer lattice (full) & Concrete domain \(C\)\\
+Inner lattice (pocket) & Abstract domain \(A\)\\
+Enter pocket & Abstraction function \(\alpha : C \to A\)\\
+Compute in pocket & Fixed point in \(A\) (cheaper/faster)\\
+Exit pocket & Concretization \(\gamma : A \to C\)\\
+Soundness guarantee & Galois connection: \(\alpha(x) \leq y \iff x \leq \gamma(y)\)\\
+\end{tabular}
+\end{center}
+\subsubsection{Applications in the Logic Engine}
+\label{sec:org921bab0}
+
+\begin{enumerate}
+\item \textbf{Tabling as pocket universes}: When a tabled predicate is called, a
+sub-computation is launched in a "pocket" (the table). Intermediate
+results are accumulated in the table's lattice. When complete, the
+table's answers are projected back into the calling context via the
+consumer mechanism.
+
+\item \textbf{Modular constraint domains}: Each constraint domain (equality,
+ordering, arithmetic, set membership) lives in its own lattice. They
+are embedded into the global propagator network via Galois connections.
+Each domain solver is a "pocket universe" that receives projections of
+the global state and returns refined constraints.
+
+\item \textbf{Scoped hypothetical reasoning}: An \texttt{amb} creates a pocket universe
+for each alternative. Within each pocket, propagation proceeds
+independently. Nogoods discovered in one pocket prune others via
+the ATMS label mechanism.
+
+\item \textbf{Abstract interpretation for type checking}: The type checker operates
+in an abstract domain (types as lattice elements) connected to the
+concrete domain (values) via a Galois connection. This is already
+implicit in Prologos's bidirectional type checking; making it explicit
+with propagators would improve composability and error reporting.
+\end{enumerate}
+\subsection{7. Recovering SLD/SLG Semantics}
+\label{sec:orgece61ff}
+
+\subsubsection{7.1 SLD Resolution on Propagators}
+\label{sec:orgc9dd85a}
+
+SLD resolution (Prolog's execution model) maps onto propagators as follows:
+
+\begin{center}
+\begin{tabular}{ll}
+SLD Concept & Propagator Implementation\\
+\hline
+Goal stack & Worklist of pending propagator firings\\
+Clause selection & \texttt{amb} over matching clauses\\
+Unification & Join on the substitution lattice\\
+New subgoals & New propagators added to the network\\
+Backtracking & Nogood recording + hypothesis retraction\\
+Answer & Fixed point of the substitution cell\\
+\end{tabular}
+\end{center}
+
+The key difference: SLD's depth-first, left-to-right search becomes the
+ATMS's breadth-first, dependency-directed search. This is \emph{more complete}
+(no infinite loops from left-recursion) and \emph{more efficient} (nogoods
+prune the search space globally).
+\subsubsection{7.2 SLG Resolution (Tabling) on Propagators}
+\label{sec:org47d5184}
+
+SLG resolution extends SLD with memoization. The propagator mapping:
+
+\begin{center}
+\begin{tabular}{ll}
+SLG Concept & Propagator Implementation\\
+\hline
+Table (memo store) & LVar with lattice answer mode\\
+Producer & Propagator computing new answers\\
+Consumer & Propagator waiting for table answers (threshold read)\\
+Completion & Table LVar frozen; no more answers\\
+Well-founded semantics & Stratified evaluation of cyclic dependencies\\
+\end{tabular}
+\end{center}
+
+\textbf{Lattice answer modes} (from XSB Prolog): instead of storing all
+individual answers, the table stores the lattice join of all answers.
+This subsumes Datalog evaluation and connects directly to Flix's
+lattice-valued relations.
+
+\begin{verbatim}
+;; SLG-style tabling with lattice answer mode
+;; shortest_path(A, B, D) — D is a MinNat lattice value
+table shortest_path : String -> String -> MinNat -> Prop
+  :answer-mode lattice  ;; join answers via min
+
+rule shortest_path A B 1 :- edge A B
+rule shortest_path A C .{D1 + D2}
+  :- edge A B, shortest_path B C D2, .{D1 = 1}
+\end{verbatim}
+\subsubsection{7.3 Cut and Pruning}
+\label{sec:orgf4679a7}
+
+Cut maps onto ATMS operations:
+
+\begin{center}
+\begin{tabular}{ll}
+Cut Variant & Propagator Implementation\\
+\hline
+\texttt{!} (hard cut) & Retract alternative hypotheses for this \texttt{amb}\\
+\texttt{once/1} & Threshold read + freeze on first answer\\
+\texttt{if-then-else} & Conditional propagator (threshold on condition)\\
+Committed choice & Guard evaluation + monotone commitment\\
+\texttt{\textbackslash{}+} (negation-as-failure) & Stratified: evaluate goal in lower stratum, negate\\
+\end{tabular}
+\end{center}
+
+The ATMS approach is superior to Prolog's chronological backtracking
+because cut's \emph{dependency-directed} counterpart (nogood recording)
+naturally identifies \emph{which} choices to prune, avoiding the well-known
+pitfalls of "red cuts" that silently change program semantics.
+
+\textbf{Recommendation}: Prologos should support \texttt{once} (deterministic commit)
+and \texttt{committed-choice} (guard-based), but NOT raw \texttt{!} (Prolog-style cut).
+Cut is too low-level and error-prone; the ATMS provides better
+alternatives.
+\subsection{8. Tabling: The Completeness Mechanism}
+\label{sec:org437c11f}
+
+Tabling is \emph{essential} for a practical logic engine. Without it, left-recursive
+rules cause infinite loops (in SLD) or redundant computation (in naive
+bottom-up evaluation).
+\subsubsection{8.1 Design for Prologos}
+\label{sec:orgda551bd}
+
+\begin{verbatim}
+;; Tabling declaration via spec metadata
+spec ancestor : String -> String -> Prop
+  :tabled true
+  :answer-mode all  ;; or :answer-mode lattice for aggregate answers
+
+;; Implementation is just regular rules
+rule ancestor X Y :- parent X Y
+rule ancestor X Y :- parent X Z, ancestor Z Y
+\end{verbatim}
+
+Under the hood:
+\begin{enumerate}
+\item First call to \texttt{ancestor} creates a \emph{producer} propagator
+\item The producer evaluates rules, pushing answers into a table (LVar)
+\item Subsequent calls create \emph{consumer} propagators that read from the table
+via threshold reads
+\item When the producer reaches a fixed point (no new answers), the table is frozen
+\item Consumers receive all answers
+\end{enumerate}
+\subsubsection{8.2 Lattice Answer Modes}
+\label{sec:orgd8e6395}
+
+Following XSB Prolog's design, each tabled predicate can specify an answer
+mode:
+
+\begin{itemize}
+\item \textbf{\texttt{all}}: Store all distinct answers (standard tabling). The lattice is
+the powerset of substitutions.
+\item \textbf{\texttt{lattice(f)}}: Aggregate answers via a user-specified lattice join \texttt{f}.
+New answers are only "new" if they improve the current aggregate.
+This subsumes Datalog with lattices (Flix-style).
+\item \textbf{\texttt{first}}: Store only the first answer (\texttt{once} semantics, table frozen
+after first answer).
+\end{itemize}
+\subsubsection{8.3 Tabling as Pocket Universe}
+\label{sec:org9bcefca}
+
+Each tabled predicate's table is a "pocket universe" in the Galois
+connection sense:
+
+\begin{itemize}
+\item \textbf{Abstraction}: project the calling context's substitution onto the
+tabled predicate's argument positions
+\item \textbf{Computation}: evaluate the tabled predicate's rules within the pocket
+\item \textbf{Concretization}: lift the table's answers back into the calling context
+\end{itemize}
+
+This ensures that tabled sub-computations are modular and can be
+incrementally updated when the calling context provides new information.
+\subsection{9. Connecting to Existing Prologos Infrastructure}
+\label{sec:org8a52c01}
+
+\subsubsection{9.1 The Elaborator as a Propagator Network (Today)}
+\label{sec:org982298b}
+
+Prologos's elaborator \emph{already} implements propagator-like behavior:
+
+\begin{center}
+\begin{tabular}{ll}
+Current Elaborator & Propagator Equivalent\\
+\hline
+Metavariables & Cells (lattice of types/terms)\\
+Unification constraints & Propagators (join on subst lattice)\\
+\texttt{resolve-trait-constraints!} & Propagators resolving dict params\\
+\texttt{save/restore-meta-state!} & Speculative execution (worldviews)\\
+\texttt{check-unresolved} & Detecting unsolved cells\\
+Zonking & Reading final fixed-point state\\
+\end{tabular}
+\end{center}
+
+The gap: these are \emph{ad hoc} rather than \emph{architected}. The metavar store
+is a mutable hash table, not a lattice-structured cell. Trait resolution
+uses a worklist, but doesn't record nogoods or do dependency-directed
+backtracking. Speculative execution (\texttt{save/restore-meta-state!}) copies
+the entire state, rather than using ATMS-style contingent values.
+
+\textbf{Phase 1 recommendation}: Refactor the elaborator's metavar system to
+use proper propagator cells with lattice merge semantics. This would
+immediately improve:
+\begin{itemize}
+\item Error messages (dependency tracking shows \emph{why} a constraint failed)
+\item Implicit argument inference (more information from bidirectional flow)
+\item Speculative type checking (ATMS worldviews instead of full state copy)
+\end{itemize}
+\subsubsection{9.2 Session Types as Protocol Propagation}
+\label{sec:orgc0c751a}
+
+Session type checking already propagates protocol state. Making this
+explicit with propagator cells would enable:
+\begin{itemize}
+\item Multi-party session typing (currently only binary)
+\item Dependent session types (protocol depends on values)
+\item Better error messages for protocol violations
+\end{itemize}
+\subsubsection{9.3 QTT Multiplicity Checking as Propagation}
+\label{sec:org8c0a660}
+
+Multiplicity inference (Sprint 7) already propagates multiplicity
+constraints. With proper propagator cells:
+\begin{itemize}
+\item Multiplicity inference becomes a standard fixpoint computation
+\item Multiplicity errors get dependency tracking
+\item The semiring structure (\(0, 1, \omega\)) is naturally a lattice
+\end{itemize}
+\section{Part III: The Concrete Architecture}
+\label{sec:org38611d2}
+
+\subsection{10. Core Data Types}
+\label{sec:org96ba619}
+
+\subsubsection{10.1 Lattice Trait}
+\label{sec:orgcfd006b}
+
+\begin{verbatim}
+;; The fundamental lattice abstraction
+trait Lattice {A : Type}
+  bot   : A
+  join  : A -> A -> A
+  leq   : A -> A -> Bool
+
+;; Laws (checked via property testing):
+;;   join is commutative:  join a b = join b a
+;;   join is associative:  join (join a b) c = join a (join b c)
+;;   join is idempotent:   join a a = a
+;;   bot is identity:      join bot a = a
+;;   leq is consistent:    leq a b = (join a b == b)
+\end{verbatim}
+\subsubsection{10.2 Propagator Cell}
+\label{sec:orgb13f8b1}
+
+\begin{verbatim}
+;; A cell holds a lattice value, tracks dependents
+deftype Cell (A : Type)
+  :where (Lattice A)
+  mk-cell : A -> Cell A
+
+;; Core operations
+spec cell-read  : {A : Type} where (Lattice A) [Cell A] -> A
+spec cell-write : {A : Type} where (Lattice A) [Cell A] -> A -> Unit
+  ;; cell-write c v = merge(current, v); schedule dependents if changed
+
+spec cell-watch : {A : Type} where (Lattice A) [Cell A] -> [A -> Unit] -> Unit
+  ;; Register a callback (propagator) triggered on cell value change
+\end{verbatim}
+\subsubsection{10.3 Supported Values (ATMS Integration)}
+\label{sec:org468f5dd}
+
+\begin{verbatim}
+;; A supported value pairs information with its justification
+deftype Supported (A : Type)
+  mk-supported : A -> [Set Assumption] -> Supported A
+
+;; A TMS cell holds multiple contingent values
+deftype TMSCell (A : Type)
+  :where (Lattice A)
+  mk-tms-cell : [Set [Supported A]] -> TMSCell A
+\end{verbatim}
+\subsubsection{10.4 LVar (Lattice Variable)}
+\label{sec:org398da1e}
+
+\begin{verbatim}
+;; LVar: monotonic lattice variable with threshold reads
+deftype LVar (A : Type)
+  :where (Lattice A)
+  mk-lvar : A -> LVar A
+
+spec lvar-put : {A : Type} where (Lattice A)
+  [LVar A] -> A -> Unit
+  ;; Inflationary: new_state = join(current, value)
+
+spec lvar-get : {A : Type} where (Lattice A)
+  [LVar A] -> [Set A] -> A
+  ;; Threshold read: block until state >= some element of threshold set
+  ;; Threshold elements must be pairwise incompatible
+
+spec lvar-freeze : {A : Type} where (Lattice A)
+  [LVar A] -> A
+  ;; Freeze and return exact state (quasi-deterministic)
+\end{verbatim}
+\subsection{11. The Propagator Network Runtime}
+\label{sec:orgf41ca3b}
+
+\subsubsection{11.1 Scheduler}
+\label{sec:org6aa6b4c}
+
+\begin{verbatim}
+┌──────────────────────────────┐
+│       Scheduler              │
+│  ┌───────────────────────┐   │
+│  │  Worklist (queue)     │   │
+│  │  [prop1, prop3, ...]  │   │
+│  └───────────────────────┘   │
+│                              │
+│  Loop:                       │
+│    1. Dequeue propagator     │
+│    2. Execute (read inputs)  │
+│    3. Write outputs (merge)  │
+│    4. If cell changed:       │
+│       enqueue dependents     │
+│    5. If cell = top:         │
+│       contradiction handler  │
+│    6. Repeat until empty     │
+└──────────────────────────────┘
+\end{verbatim}
+
+Properties:
+\begin{itemize}
+\item Jobs are idempotent (safe to re-execute)
+\item Scheduling order doesn't affect the final result (lattice determinism)
+\item Parallelizable: independent propagators can execute concurrently
+\end{itemize}
+\subsubsection{11.2 Contradiction Handler}
+\label{sec:orgb09b769}
+
+When a cell reaches \(\top\) (contradiction):
+
+\begin{enumerate}
+\item Extract the \emph{support set} (assumptions that led to contradiction)
+\item Record as a \textbf{nogood} in the ATMS
+\item Retract the most recently chosen hypothesis in the nogood set
+\item Re-propagate with the retracted hypothesis disbelieved
+\end{enumerate}
+
+This is dependency-directed backtracking. It avoids the exponential
+blowup of chronological backtracking by targeting the actual cause.
+\subsubsection{11.3 The \texttt{amb} Operator}
+\label{sec:org0251a8e}
+
+\begin{verbatim}
+;; amb creates a choice point with n alternatives
+spec amb : {A : Type} [List A] -> A
+
+;; Under the hood:
+;; 1. Create fresh hypotheses h1, h2, ..., hn
+;; 2. For each hi, create supported value (ai, {hi})
+;; 3. Add mutual exclusion: exactly one hi is believed
+;; 4. Return the cell containing the contingent value
+\end{verbatim}
+\subsubsection{11.4 Answer Collection}
+\label{sec:org9206a95}
+
+\begin{verbatim}
+;; Collect all solutions from a nondeterministic computation
+spec solve-all : {A : Type} [Unit -> A] -> [List A]
+
+;; Under the hood:
+;; 1. Run the computation with ATMS
+;; 2. Iterate over all consistent worldviews at quiescence
+;; 3. For each worldview, extract the answer
+;; 4. Return list of all answers (duplicates removed)
+\end{verbatim}
+\subsection{12. Phased Implementation Plan}
+\label{sec:org42751be}
+
+\subsubsection{Phase 0: Lattice Trait + Basic Cells (Foundation)}
+\label{sec:org485a968}
+
+\textbf{Goal}: Establish the lattice trait and basic propagator cell infrastructure
+at the Racket level.
+
+\begin{itemize}
+\item Define \texttt{Lattice} trait in Prologos
+\item Provide instances: \texttt{FlatLattice} (bottom/value/top), \texttt{SetLattice}
+(powerset with union), \texttt{IntervalLattice}
+\item Implement \texttt{Cell} as a Racket-level struct with mutable value and
+dependent list
+\item Implement basic scheduler (worklist, fire-till-quiescence)
+\item \textbf{\textasciitilde{}15 AST nodes} (cell-new, cell-read, cell-write, cell-watch, \ldots{})
+\item \textbf{\textasciitilde{}40 tests}
+\end{itemize}
+
+\textbf{Dependencies}: None (builds on existing trait system)
+\textbf{Estimated effort}: Medium
+\subsubsection{Phase 1: Elaborator Propagators (Compile-Time Use)}
+\label{sec:orgf29a4dd}
+
+\textbf{Goal}: Refactor the metavar system to use propagator cells internally.
+
+\begin{itemize}
+\item Replace \texttt{current-meta-store} with propagator cells
+\item Unification constraints become propagators between type cells
+\item Trait resolution constraints become propagators
+\item Add dependency tracking to metavar refinements
+\item Improve error messages using dependency information
+\item \textbf{No new surface syntax} --- this is internal refactoring
+\item \textbf{\textasciitilde{}60 tests} (regression + new dependency-tracking tests)
+\end{itemize}
+
+\textbf{Dependencies}: Phase 0
+\textbf{Estimated effort}: Large (touches elaborator + typing-core + unify)
+\textbf{Key risk}: This is a significant refactoring of the elaborator core
+\subsubsection{Phase 2: LVars + Tabling (Runtime Foundation)}
+\label{sec:org7fc556d}
+
+\textbf{Goal}: LVar data structures and tabled evaluation.
+
+\begin{itemize}
+\item Implement \texttt{LVar} with \texttt{put}, threshold \texttt{get}, and \texttt{freeze}
+\item Implement \texttt{LVar-Set}, \texttt{LVar-Map} (grow-only collections)
+\item Implement tabling framework: producer/consumer pattern, table LVars,
+completion detection
+\item Add \texttt{:tabled} spec metadata handling
+\item \textbf{\textasciitilde{}20 AST nodes} (lvar-new, lvar-put, lvar-get, lvar-freeze, table-lookup, \ldots{})
+\item \textbf{\textasciitilde{}50 tests}
+\end{itemize}
+
+\textbf{Dependencies}: Phase 0, Phase 2d of Core DS roadmap (transient builders)
+\textbf{Estimated effort}: Large
+\subsubsection{Phase 3: ATMS Layer (Nondeterministic Search)}
+\label{sec:orgc29260c}
+
+\textbf{Goal}: Assumption-based truth maintenance for hypothetical reasoning.
+
+\begin{itemize}
+\item Implement \texttt{Assumption}, \texttt{Supported}, \texttt{TMSCell} types
+\item Implement nogood recording and management
+\item Implement \texttt{amb} operator with hypothesis creation
+\item Implement contradiction handler with dependency-directed backtracking
+\item Implement \texttt{solve-all} answer collection
+\item \textbf{\textasciitilde{}15 AST nodes} (amb, assume, retract, nogood, \ldots{})
+\item \textbf{\textasciitilde{}60 tests}
+\end{itemize}
+
+\textbf{Dependencies}: Phase 0, Phase 2
+\textbf{Estimated effort}: Large (most complex phase)
+\subsubsection{Phase 4: Stratified Evaluation (Negation + Aggregation)}
+\label{sec:orgb5ed10a}
+
+\textbf{Goal}: Support negation-as-failure and aggregation via stratification.
+
+\begin{itemize}
+\item Implement SCC decomposition of rule dependency graphs
+\item Implement stratum-by-stratum evaluation
+\item Support \texttt{not} (negation-as-failure) between strata
+\item Support lattice aggregation (\texttt{count}, \texttt{min}, \texttt{max}, \texttt{sum}) between strata
+\item \textbf{\textasciitilde{}10 AST nodes}
+\item \textbf{\textasciitilde{}40 tests}
+\end{itemize}
+
+\textbf{Dependencies}: Phase 3
+\textbf{Estimated effort}: Medium
+\subsubsection{Phase 5: Surface Syntax + Integration (User-Facing Logic Programming)}
+\label{sec:org2032bc7}
+
+\textbf{Goal}: Prologos surface syntax for logic programming.
+
+\begin{itemize}
+\item \texttt{relation} declarations
+\item \texttt{rule} and \texttt{query} syntax
+\item Pattern matching integration with unification
+\item \texttt{defn} bodies that can contain logic variables
+\item Integration with the prelude and module system
+\item \textbf{Grammar updates} (grammar.ebnf, grammar.org)
+\item \textbf{\textasciitilde{}80 tests}
+\end{itemize}
+
+\textbf{Dependencies}: All previous phases
+\textbf{Estimated effort}: Large
+\subsubsection{Phase 6: Galois Connections + Domain Embeddings (Advanced)}
+\label{sec:orgcbc91ce}
+
+\textbf{Goal}: Modular constraint domains connected via Galois connections.
+
+\begin{itemize}
+\item \texttt{domain} declarations with abstraction/concretization functions
+\item Cross-domain propagation
+\item Abstract interpretation framework for program analysis
+\item \textbf{\textasciitilde{}30 tests}
+\end{itemize}
+
+\textbf{Dependencies}: Phase 5
+\textbf{Estimated effort}: Medium-Large
+\section{Part IV: Critique and Open Questions}
+\label{sec:org84382c5}
+
+\subsection{13. What This Architecture Does Well}
+\label{sec:org8119818}
+
+\begin{enumerate}
+\item \textbf{Unification of paradigms}: The same propagator substrate serves type
+checking, constraint solving, and logic programming. This is not merely
+aesthetic --- it means improvements to the propagator infrastructure
+benefit all three use cases.
+
+\item \textbf{Sound theoretical basis}: Every component has well-understood
+lattice-theoretic foundations. Convergence, determinism, and soundness
+are not hoped for but \emph{proven} by the mathematical framework.
+
+\item \textbf{Incremental by construction}: Propagator networks naturally support
+incremental computation. When a constraint is added or retracted, only
+affected cells re-propagate. This is essential for interactive
+development (IDE integration, REPL).
+
+\item \textbf{Parallelizable by the CALM theorem}: Within a stratum, all
+propagation is monotonic and therefore coordination-free. This
+provides a natural path to parallel type checking and parallel
+logic evaluation.
+
+\item \textbf{Better error messages}: Dependency tracking in the ATMS means every
+derived fact carries its provenance. Type errors can show exactly
+\emph{which} constraints are in tension and \emph{where} they originated.
+\end{enumerate}
+\subsection{14. What This Architecture Doesn't Solve (Yet)}
+\label{sec:org9fa9c18}
+
+\begin{enumerate}
+\item \textbf{Performance}: ATMS label management has overhead. For simple
+deterministic programs, the ATMS layer is pure cost. We need a
+\emph{bypass} for deterministic code paths that avoids the TMS entirely.
+
+\item \textbf{Infinite domains}: Widening operators are needed for lattices of
+infinite height (intervals, numeric constraints). Choosing the right
+widening strategy is domain-specific and sometimes tricky.
+
+\item \textbf{Efficiency of lattice answer modes}: When the lattice is large or
+the join is expensive, tabling with lattice answer modes can be slow.
+XSB Prolog's experience shows this requires careful implementation.
+
+\item \textbf{Surface syntax design}: How should logic programming syntax look in
+Prologos? The document proposes \texttt{relation} / \texttt{rule} / \texttt{query} but
+this needs design iteration. Should it integrate with \texttt{match}? With
+\texttt{where} constraints? With mixfix \texttt{.\{...\}}?
+
+\item \textbf{Interaction with QTT}: Logic variables are inherently shared
+(multiple references). How does this interact with linear types?
+Preliminary answer: logic variables live at multiplicity \(\omega\)
+(unrestricted), but the \emph{binding environment} can be linear.
+\end{enumerate}
+\subsection{15. Open Research Questions}
+\label{sec:org473d69f}
+
+\begin{enumerate}
+\item \textbf{Can ATMS label management be made zero-cost for deterministic programs?}
+The "speculative ATMS" idea: don't create labels until the first \texttt{amb}.
+Deterministic programs never pay the ATMS overhead.
+
+\item \textbf{How do Prologos's dependent types interact with tabling?}
+Tabling requires comparing calls for "variance" (same query up to
+renaming). With dependent types, this comparison involves type equality,
+which may itself require propagation. Circularity risk.
+
+\item \textbf{Can propagator-based elaboration subsume the current ad-hoc metavar
+system without performance regression?} The current system is fast
+because it's specialized. A general propagator system may be slower
+without careful optimization.
+
+\item \textbf{What is the right granularity for stratification?}
+Per-predicate? Per-SCC? Per-module? Finer granularity allows more
+parallelism but increases analysis cost.
+
+\item \textbf{How do pocket universes compose?} Can a tabled predicate call another
+tabled predicate? (Yes, but completion detection becomes more complex ---
+this is the "scheduling dependency" problem in SLG resolution.)
+\end{enumerate}
+\section{Summary of Recommendations}
+\label{sec:org23d9433}
+
+\begin{center}
+\begin{tabular}{rll}
+\# & Recommendation & Confidence\\
+\hline
+1 & Radul-Sussman propagator model as the substrate & High\\
+2 & ATMS for hypothetical reasoning (validates Multiverse Mech.) & High\\
+3 & Galois connections for domain modularity (validates Pocket U.) & High\\
+4 & SLG-style tabling with lattice answer modes & High\\
+5 & Stratified evaluation for negation and aggregation & High\\
+6 & Start with compile-time use (elaborator), then extend to runtime & High\\
+7 & No raw Prolog-style \texttt{!} cut; use \texttt{once} and committed choice & Medium\\
+8 & "Speculative ATMS" for zero-cost deterministic bypass & Medium\\
+9 & \texttt{Lattice} trait as foundation (user-extensible domains) & High\\
+10 & Surface syntax: \texttt{relation} / \texttt{rule} / \texttt{query} keywords & Low (needs design)\\
+\end{tabular}
+\end{center}
+
+\textbf{Overall assessment}: The research strongly supports the proposed
+architecture. The Multiverse and Pocket Universe mechanisms are not
+speculative --- they are well-established techniques (ATMS worldviews
+and Galois connections respectively) with decades of theoretical
+grounding and practical implementation experience. The main risk is
+implementation complexity, mitigated by the phased approach starting
+with the elaborator refactoring.
+\section{References}
+\label{sec:org7622514}
+
+Organized by relevance to the recommended architecture:
+\subsection{Foundational (Must-Read)}
+\label{sec:org7278eb0}
+\begin{itemize}
+\item Radul \& Sussman, "The Art of the Propagator" (MIT TR, 2009)
+\item Radul, \emph{Propagation Networks} (PhD thesis, MIT, 2009)
+\item de Kleer, "An Assumption-Based TMS" (\emph{AI Journal}, 1986)
+\item Kuper \& Newton, "LVars: Lattice-Based Data Structures for Deterministic Parallelism" (FHPC, 2013)
+\item Kuper et al., "Freeze After Writing" (POPL, 2014)
+\end{itemize}
+\subsection{Tabling and Logic Programming}
+\label{sec:orga7795f7}
+\begin{itemize}
+\item Swift \& Warren, "XSB: Extending Prolog with Tabled Logic Programming" (\emph{TPLP}, 2012)
+\item Chen \& Warren, "Tabled Evaluation with Delaying" (\emph{JACM}, 1996)
+\item Gupta et al., "Parallel Execution of Prolog Programs: A Survey" (\emph{TOPLAS}, 2001)
+\end{itemize}
+\subsection{Lattice-Based Languages}
+\label{sec:org53c296e}
+\begin{itemize}
+\item Madsen et al., "From Datalog to Flix" (PLDI, 2016)
+\item Arntzenius \& Krishnaswami, "Datafun: A Functional Datalog" (ICFP, 2016)
+\item Arntzenius \& Krishnaswami, "Seminaive Evaluation for a Higher-Order Functional Language" (POPL, 2020)
+\end{itemize}
+\subsection{Theoretical Foundations}
+\label{sec:org03cc6b8}
+\begin{itemize}
+\item Tarski, "A Lattice-Theoretical Fixpoint Theorem" (\emph{Pacific J. Math.}, 1955)
+\item Cousot \& Cousot, "Abstract Interpretation: A Unified Lattice Model" (POPL, 1977)
+\item Denecker et al., "Approximation Fixpoint Theory" (2012)
+\item Hellerstein, "Keeping CALM" (\emph{CACM}, 2020)
+\end{itemize}
+\subsection{Constraint Systems}
+\label{sec:org9844d6a}
+\begin{itemize}
+\item Fruhwirth, \emph{Constraint Handling Rules} (CUP, 2009)
+\item Shapiro et al., "Conflict-Free Replicated Data Types" (INRIA, 2011)
+\item Conway et al., "Logic and Lattices for Distributed Programming" (SoCC, 2012)
+\end{itemize}
+\subsection{Type Systems}
+\label{sec:org4f7f2a1}
+\begin{itemize}
+\item Dunfield \& Krishnaswami, "Bidirectional Typechecking for Higher-Rank Polymorphism" (ICFP, 2014)
+\item Pottier \& Remy, "The Essence of ML Type Inference" (2005)
+\item Kovacs, \emph{Elaboration Zoo} (2022)
+\end{itemize}
+\subsection{Implementations}
+\label{sec:org5936c25}
+\begin{itemize}
+\item Holmes (Haskell): \texttt{github.com/i-am-tom/holmes}
+\item Propaganda (Clojure): \texttt{github.com/tgk/propaganda}
+\item Ascent (Rust): \texttt{github.com/s-arash/ascent}
+\item Guanxi (Haskell): \texttt{github.com/ekmett/guanxi}
+\end{itemize}
+\end{document}
