@@ -7,6 +7,9 @@
 Prologos is built on a small set of non-negotiable values that inform every
 design decision. When principles conflict, this ordering reflects priority.
 
+For how these values are applied in practice through our research, design,
+and implementation process, see [[file:DESIGN_METHODOLOGY.org][DESIGN_METHODOLOGY.org]].
+
 ** Correctness Through Types
 The type system is the primary mechanism for ensuring program correctness.
 Dependent types, linear types, and session types are not academic curiosities

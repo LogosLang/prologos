@@ -13,11 +13,13 @@ philosophy, conventions, and accumulated wisdom. These documents are
 | File | Purpose |
 |-------------------------------+--------------------------------------------------|
 | [[file:DESIGN_PRINCIPLES.org]] | Core values, decomplection, layered architecture |
+| [[file:DESIGN_METHODOLOGY.org]] | How we research, design, iterate, and implement |
 | [[file:LANGUAGE_VISION.org]] | What Prologos is, why it exists, where it's going |
 | [[file:LANGUAGE_DESIGN.org]] | Syntax innovations, type system, session types |
 | [[file:PATTERNS_AND_CONVENTIONS.org]] | Naming, coding style, import patterns |
 | [[file:ERGONOMICS.org]] | Progressive disclosure, surface syntax, UX |
 | [[file:DEVELOPMENT_LESSONS.org]] | Accumulated implementation wisdom |
+| [[file:RELATIONAL_LANGUAGE_VISION.org]] | Logic programming surface syntax and semantics |
 | [[file:MISC.org]] | Miscellaneous notes and preferences |
 
 * How These Relate to Other Docs
@@ -43,7 +45,8 @@ philosophy, conventions, and accumulated wisdom. These documents are
 * Maintenance
 
 When making significant design decisions:
-1. Check if the decision aligns with DESIGN_PRINCIPLES
-2. If it introduces a new pattern, add it to PATTERNS_AND_CONVENTIONS
-3. If it teaches a lesson, add it to DEVELOPMENT_LESSONS
-4. If it changes the language's direction, update LANGUAGE_VISION
+1. Follow the five-phase process in DESIGN_METHODOLOGY
+2. Check if the decision aligns with DESIGN_PRINCIPLES
+3. If it introduces a new pattern, add it to PATTERNS_AND_CONVENTIONS
+4. If it teaches a lesson, add it to DEVELOPMENT_LESSONS
+5. If it changes the language's direction, update LANGUAGE_VISION

@@ -20,6 +20,11 @@ lessons systematically, we:
 
 * Workflow Lessons
 
+For the full design-to-implementation lifecycle, see
+[[file:DESIGN_METHODOLOGY.org][DESIGN_METHODOLOGY.org]] --- the five-phase process
+(Research → Refinement → Design Iteration → Implementation → Composition)
+that governs how we approach significant features.
+
 ** Phase-Gated Implementation
 Break large features into lettered sub-phases (a, b, c...) with explicit
 "done" vs. "remaining" tracking. This:
