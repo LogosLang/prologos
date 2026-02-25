@@ -178,6 +178,8 @@ base-type ::= 'Type'     (* universe of types, level inferred *)
             | 'CellId'       (* propagator cell identifier     *)
             | 'PropId'       (* propagator identifier          *)
             | 'UnionFind'    (* persistent disjoint sets       *)
+            | 'ATMS'         (* hypothetical reasoning TMS     *)
+            | 'AssumptionId' (* ATMS assumption identifier     *)
 #+end_src
 
 #+begin_src prologos

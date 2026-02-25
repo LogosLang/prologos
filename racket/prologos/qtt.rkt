@@ -1577,6 +1577,106 @@
           (tu (infer ctx e) (add-usage u1 u2))]
          [(_ _) (tu-error)]))]
 
+    ;; ---- ATMS type constructors ----
+    [(expr-atms-type) (tu (expr-Type (lzero)) (zero-usage n))]
+    [(expr-assumption-id-type) (tu (expr-Type (lzero)) (zero-usage n))]
+    ;; Runtime wrappers
+    [(expr-atms-store _) (tu (expr-atms-type) (zero-usage n))]
+    [(expr-assumption-id-val _) (tu (expr-assumption-id-type) (zero-usage n))]
+
+    ;; ---- ATMS operations ----
+
+    ;; atms-new : PropNetwork -> ATMS
+    [(expr-atms-new net)
+     (let ([r1 (inferQ ctx net)])
+       (match r1
+         [(tu _ u) (tu (expr-atms-type) u)]
+         [_ (tu-error)]))]
+
+    ;; atms-assume : ATMS -> A -> A -> [ATMS * AssumptionId]
+    [(expr-atms-assume a nm d)
+     (let ([r1 (inferQ ctx a)]
+           [r2 (inferQ ctx nm)]
+           [r3 (inferQ ctx d)])
+       (match* (r1 r2 r3)
+         [((tu _ u1) (tu _ u2) (tu _ u3))
+          (tu (infer ctx e) (add-usage u1 (add-usage u2 u3)))]
+         [(_ _ _) (tu-error)]))]
+
+    ;; atms-retract : ATMS -> AssumptionId -> ATMS
+    [(expr-atms-retract a aid)
+     (let ([r1 (inferQ ctx a)]
+           [r2 (inferQ ctx aid)])
+       (match* (r1 r2)
+         [((tu _ u1) (tu _ u2))
+          (tu (expr-atms-type) (add-usage u1 u2))]
+         [(_ _) (tu-error)]))]
+
+    ;; atms-nogood : ATMS -> List AssumptionId -> ATMS
+    [(expr-atms-nogood a aids)
+     (let ([r1 (inferQ ctx a)]
+           [r2 (inferQ ctx aids)])
+       (match* (r1 r2)
+         [((tu _ u1) (tu _ u2))
+          (tu (expr-atms-type) (add-usage u1 u2))]
+         [(_ _) (tu-error)]))]
+
+    ;; atms-amb : ATMS -> List A -> [ATMS * _]
+    [(expr-atms-amb a alts)
+     (let ([r1 (inferQ ctx a)]
+           [r2 (inferQ ctx alts)])
+       (match* (r1 r2)
+         [((tu _ u1) (tu _ u2))
+          (tu (infer ctx e) (add-usage u1 u2))]
+         [(_ _) (tu-error)]))]
+
+    ;; atms-solve-all : ATMS -> CellId -> _
+    [(expr-atms-solve-all a g)
+     (let ([r1 (inferQ ctx a)]
+           [r2 (inferQ ctx g)])
+       (match* (r1 r2)
+         [((tu _ u1) (tu _ u2))
+          (tu (infer ctx e) (add-usage u1 u2))]
+         [(_ _) (tu-error)]))]
+
+    ;; atms-read : ATMS -> CellId -> _
+    [(expr-atms-read a c)
+     (let ([r1 (inferQ ctx a)]
+           [r2 (inferQ ctx c)])
+       (match* (r1 r2)
+         [((tu _ u1) (tu _ u2))
+          (tu (infer ctx e) (add-usage u1 u2))]
+         [(_ _) (tu-error)]))]
+
+    ;; atms-write : ATMS -> CellId -> A -> List AssumptionId -> ATMS
+    [(expr-atms-write a c v s)
+     (let ([r1 (inferQ ctx a)]
+           [r2 (inferQ ctx c)]
+           [r3 (inferQ ctx v)]
+           [r4 (inferQ ctx s)])
+       (match* (r1 r2 r3 r4)
+         [((tu _ u1) (tu _ u2) (tu _ u3) (tu _ u4))
+          (tu (expr-atms-type) (add-usage u1 (add-usage u2 (add-usage u3 u4))))]
+         [(_ _ _ _) (tu-error)]))]
+
+    ;; atms-consistent? : ATMS -> List AssumptionId -> Bool
+    [(expr-atms-consistent a aids)
+     (let ([r1 (inferQ ctx a)]
+           [r2 (inferQ ctx aids)])
+       (match* (r1 r2)
+         [((tu _ u1) (tu _ u2))
+          (tu (expr-Bool) (add-usage u1 u2))]
+         [(_ _) (tu-error)]))]
+
+    ;; atms-worldview : ATMS -> List AssumptionId -> ATMS
+    [(expr-atms-worldview a aids)
+     (let ([r1 (inferQ ctx a)]
+           [r2 (inferQ ctx aids)])
+       (match* (r1 r2)
+         [((tu _ u1) (tu _ u2))
+          (tu (expr-atms-type) (add-usage u1 u2))]
+         [(_ _) (tu-error)]))]
+
     ;; ---- J eliminator ----
     ;; Usage from proof, base, motive arguments
     [(expr-J mot base left right proof)
@@ -1900,6 +2000,10 @@
 
     ;; ---- UnionFind runtime wrapper ----
     [((expr-uf-store _) (expr-uf-type)) (bu #t (zero-usage n))]
+
+    ;; ---- ATMS runtime wrappers ----
+    [((expr-atms-store _) (expr-atms-type)) (bu #t (zero-usage n))]
+    [((expr-assumption-id-val _) (expr-assumption-id-type)) (bu #t (zero-usage n))]
 
     ;; ---- Union type: checkQ(G, e, A | B) ----
     ;; Try left component first, then right. Uses speculative meta state.

@@ -93,6 +93,8 @@
     [(expr-cell-id-type) "CellId"]
     [(expr-prop-id-type) "PropId"]
     [(expr-uf-type) "UnionFind"]
+    [(expr-atms-type) "ATMS"]
+    [(expr-assumption-id-type) "AssumptionId"]
     ;; HKT: unapplied type constructor
     [(expr-tycon name) (symbol->string name)]
     ;; Built-in parameterized types: extract constructor name

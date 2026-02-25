@@ -300,6 +300,22 @@
      (expr-uf-union (zonk st) (zonk id1) (zonk id2))]
     [(expr-uf-value st id) (expr-uf-value (zonk st) (zonk id))]
 
+    ;; ATMS
+    [(expr-atms-type) e]
+    [(expr-assumption-id-type) e]
+    [(expr-atms-store _) e]
+    [(expr-assumption-id-val _) e]
+    [(expr-atms-new net) (expr-atms-new (zonk net))]
+    [(expr-atms-assume a nm d) (expr-atms-assume (zonk a) (zonk nm) (zonk d))]
+    [(expr-atms-retract a aid) (expr-atms-retract (zonk a) (zonk aid))]
+    [(expr-atms-nogood a aids) (expr-atms-nogood (zonk a) (zonk aids))]
+    [(expr-atms-amb a alts) (expr-atms-amb (zonk a) (zonk alts))]
+    [(expr-atms-solve-all a g) (expr-atms-solve-all (zonk a) (zonk g))]
+    [(expr-atms-read a c) (expr-atms-read (zonk a) (zonk c))]
+    [(expr-atms-write a c v s) (expr-atms-write (zonk a) (zonk c) (zonk v) (zonk s))]
+    [(expr-atms-consistent a aids) (expr-atms-consistent (zonk a) (zonk aids))]
+    [(expr-atms-worldview a aids) (expr-atms-worldview (zonk a) (zonk aids))]
+
     ;; Int
     [(expr-Int) e]
     [(expr-int _) e]
@@ -666,6 +682,24 @@
      (expr-uf-union (zonk-at-depth depth st) (zonk-at-depth depth id1) (zonk-at-depth depth id2))]
     [(expr-uf-value st id) (expr-uf-value (zonk-at-depth depth st) (zonk-at-depth depth id))]
 
+    ;; ATMS
+    [(expr-atms-type) e]
+    [(expr-assumption-id-type) e]
+    [(expr-atms-store _) e]
+    [(expr-assumption-id-val _) e]
+    [(expr-atms-new net) (expr-atms-new (zonk-at-depth depth net))]
+    [(expr-atms-assume a nm d)
+     (expr-atms-assume (zonk-at-depth depth a) (zonk-at-depth depth nm) (zonk-at-depth depth d))]
+    [(expr-atms-retract a aid) (expr-atms-retract (zonk-at-depth depth a) (zonk-at-depth depth aid))]
+    [(expr-atms-nogood a aids) (expr-atms-nogood (zonk-at-depth depth a) (zonk-at-depth depth aids))]
+    [(expr-atms-amb a alts) (expr-atms-amb (zonk-at-depth depth a) (zonk-at-depth depth alts))]
+    [(expr-atms-solve-all a g) (expr-atms-solve-all (zonk-at-depth depth a) (zonk-at-depth depth g))]
+    [(expr-atms-read a c) (expr-atms-read (zonk-at-depth depth a) (zonk-at-depth depth c))]
+    [(expr-atms-write a c v s)
+     (expr-atms-write (zonk-at-depth depth a) (zonk-at-depth depth c) (zonk-at-depth depth v) (zonk-at-depth depth s))]
+    [(expr-atms-consistent a aids) (expr-atms-consistent (zonk-at-depth depth a) (zonk-at-depth depth aids))]
+    [(expr-atms-worldview a aids) (expr-atms-worldview (zonk-at-depth depth a) (zonk-at-depth depth aids))]
+
     ;; Int
     [(expr-Int) e]
     [(expr-int _) e]
@@ -1001,6 +1035,22 @@
     [(expr-uf-union st id1 id2)
      (expr-uf-union (default-metas st) (default-metas id1) (default-metas id2))]
     [(expr-uf-value st id) (expr-uf-value (default-metas st) (default-metas id))]
+
+    ;; ATMS
+    [(expr-atms-type) e]
+    [(expr-assumption-id-type) e]
+    [(expr-atms-store _) e]
+    [(expr-assumption-id-val _) e]
+    [(expr-atms-new net) (expr-atms-new (default-metas net))]
+    [(expr-atms-assume a nm d) (expr-atms-assume (default-metas a) (default-metas nm) (default-metas d))]
+    [(expr-atms-retract a aid) (expr-atms-retract (default-metas a) (default-metas aid))]
+    [(expr-atms-nogood a aids) (expr-atms-nogood (default-metas a) (default-metas aids))]
+    [(expr-atms-amb a alts) (expr-atms-amb (default-metas a) (default-metas alts))]
+    [(expr-atms-solve-all a g) (expr-atms-solve-all (default-metas a) (default-metas g))]
+    [(expr-atms-read a c) (expr-atms-read (default-metas a) (default-metas c))]
+    [(expr-atms-write a c v s) (expr-atms-write (default-metas a) (default-metas c) (default-metas v) (default-metas s))]
+    [(expr-atms-consistent a aids) (expr-atms-consistent (default-metas a) (default-metas aids))]
+    [(expr-atms-worldview a aids) (expr-atms-worldview (default-metas a) (default-metas aids))]
 
     [(expr-Int) e]
     [(expr-int _) e]

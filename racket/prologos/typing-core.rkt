@@ -1461,6 +1461,93 @@
          (expr-hole)   ;; type-unsafe — caller must use (the T ...) or checking context
          (expr-error))]
 
+    ;; ---- ATMS type constructors ----
+    [(expr-atms-type) (expr-Type (lzero))]
+    [(expr-assumption-id-type) (expr-Type (lzero))]
+
+    ;; ---- ATMS runtime wrappers ----
+    [(expr-atms-store _) (expr-atms-type)]
+    [(expr-assumption-id-val _) (expr-assumption-id-type)]
+
+    ;; ---- ATMS operations ----
+
+    ;; atms-new : PropNetwork -> ATMS
+    [(expr-atms-new network)
+     (if (check ctx network (expr-net-type))
+         (expr-atms-type)
+         (expr-error))]
+
+    ;; atms-assume : ATMS -> A -> A -> [ATMS * AssumptionId]
+    [(expr-atms-assume a name datum)
+     (if (check ctx a (expr-atms-type))
+         (begin (infer ctx name)    ;; name can be any type
+                (infer ctx datum)   ;; datum can be any type
+                (expr-Sigma (expr-atms-type) (expr-assumption-id-type)))
+         (expr-error))]
+
+    ;; atms-retract : ATMS -> AssumptionId -> ATMS
+    [(expr-atms-retract a aid)
+     (if (and (check ctx a (expr-atms-type))
+              (check ctx aid (expr-assumption-id-type)))
+         (expr-atms-type)
+         (expr-error))]
+
+    ;; atms-nogood : ATMS -> List AssumptionId -> ATMS
+    [(expr-atms-nogood a aids)
+     (let ([list-aid (expr-app (list-type-fvar) (expr-assumption-id-type))])
+       (if (and (check ctx a (expr-atms-type))
+                (check ctx aids list-aid))
+           (expr-atms-type)
+           (expr-error)))]
+
+    ;; atms-amb : ATMS -> List A -> [ATMS * _]
+    [(expr-atms-amb a alternatives)
+     (if (check ctx a (expr-atms-type))
+         (let ([_ (infer ctx alternatives)])  ;; alternatives is a List of anything
+           (expr-Sigma (expr-atms-type) (expr-hole)))
+         (expr-error))]
+
+    ;; atms-solve-all : ATMS -> CellId -> _ (type-unsafe)
+    [(expr-atms-solve-all a goal)
+     (if (and (check ctx a (expr-atms-type))
+              (check ctx goal (expr-cell-id-type)))
+         (expr-hole)
+         (expr-error))]
+
+    ;; atms-read : ATMS -> CellId -> _ (type-unsafe)
+    [(expr-atms-read a cell)
+     (if (and (check ctx a (expr-atms-type))
+              (check ctx cell (expr-cell-id-type)))
+         (expr-hole)
+         (expr-error))]
+
+    ;; atms-write : ATMS -> CellId -> A -> List AssumptionId -> ATMS
+    [(expr-atms-write a cell val support)
+     (let ([list-aid (expr-app (list-type-fvar) (expr-assumption-id-type))])
+       (if (and (check ctx a (expr-atms-type))
+                (check ctx cell (expr-cell-id-type)))
+           (let ([_ (infer ctx val)])  ;; val can be any type
+             (if (check ctx support list-aid)
+                 (expr-atms-type)
+                 (expr-error)))
+           (expr-error)))]
+
+    ;; atms-consistent? : ATMS -> List AssumptionId -> Bool
+    [(expr-atms-consistent a aids)
+     (let ([list-aid (expr-app (list-type-fvar) (expr-assumption-id-type))])
+       (if (and (check ctx a (expr-atms-type))
+                (check ctx aids list-aid))
+           (expr-Bool)
+           (expr-error)))]
+
+    ;; atms-worldview : ATMS -> List AssumptionId -> ATMS
+    [(expr-atms-worldview a aids)
+     (let ([list-aid (expr-app (list-type-fvar) (expr-assumption-id-type))])
+       (if (and (check ctx a (expr-atms-type))
+                (check ctx aids list-aid))
+           (expr-atms-type)
+           (expr-error)))]
+
     ;; ---- Fallback: cannot infer ----
     [_ (expr-error)]))
 
@@ -1698,6 +1785,10 @@
 
     ;; ---- UnionFind runtime wrapper ----
     [((expr-uf-store _) (expr-uf-type)) #t]
+
+    ;; ---- ATMS runtime wrappers ----
+    [((expr-atms-store _) (expr-atms-type)) #t]
+    [((expr-assumption-id-val _) (expr-assumption-id-type)) #t]
 
     ;; ---- Reduce: ML-style Church elimination ----
     ;; check(G, reduce(scrutinee, arms), T)
@@ -2036,6 +2127,10 @@
 
     ;; UnionFind type constructor — ground type at Type 0
     [(expr-uf-type) (just-level (lzero))]
+
+    ;; ATMS type constructors — ground types at Type 0
+    [(expr-atms-type) (just-level (lzero))]
+    [(expr-assumption-id-type) (just-level (lzero))]
 
     ;; Union formation: A | B : Type(max(level(A), level(B)))
     [(expr-union l r)

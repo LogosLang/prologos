@@ -288,14 +288,15 @@ The following collection items ARE also deferred (genuine infrastructure deps):
 - 57 tests (19 unit + 29 type-level + 9 integration)
 - Source: `docs/tracking/2026-02-24_LOGIC_ENGINE_DESIGN.org`
 
-### Phase 5: Persistent ATMS — Hypothetical Reasoning (NOT STARTED)
-- **Persistent/immutable** ATMS backed by CHAMP maps
+### Phase 5: Persistent ATMS — Hypothetical Reasoning (COMPLETE)
+- **Persistent/immutable** ATMS backed by hasheq maps
 - Assumptions, supported values, nogoods — all persistent
 - Worldview switching: `struct-copy atms ... [believed new-set]` — O(1)
 - Backtracking = keep old `atms` reference — O(1)
 - `amb` operator, dependency-directed backtracking, `solve-all`
-- ~10 AST nodes
-- **Dependencies**: Phase 3
+- 14 AST nodes through full 14-file pipeline
+- `atms.rkt` Racket module + surface syntax (`atms-new`, `atms-assume`, `atms-retract`, `atms-nogood`, `atms-amb`, `atms-solve-all`, `atms-read`, `atms-write`, `atms-consistent?`, `atms-worldview`)
+- 74 tests (26 unit + 37 type-level/eval + 11 integration)
 - Source: `docs/tracking/2026-02-24_LOGIC_ENGINE_DESIGN.org`
 
 ### Phase 6: Tabling — SLG-Style Memoization (NOT STARTED)

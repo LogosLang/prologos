@@ -355,6 +355,8 @@
     [(expr-cell-id-type) "0:CellId"]
     [(expr-prop-id-type) "0:PropId"]
     [(expr-uf-type) "0:UnionFind"]
+    [(expr-atms-type) "0:ATMS"]
+    [(expr-assumption-id-type) "0:AssumptionId"]
     [(expr-Type l) (format "0:Type~a" l)]
     [(expr-fvar name) (format "1:~a" name)]
     [(expr-bvar idx) (format "2:~a" idx)]

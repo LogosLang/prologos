@@ -318,6 +318,24 @@
      (expr-uf-union (shift delta cutoff st) (shift delta cutoff id1) (shift delta cutoff id2))]
     [(expr-uf-value st id) (expr-uf-value (shift delta cutoff st) (shift delta cutoff id))]
 
+    ;; ATMS (all non-binding)
+    [(expr-atms-type) e]
+    [(expr-assumption-id-type) e]
+    [(expr-atms-store _) e]
+    [(expr-assumption-id-val _) e]
+    [(expr-atms-new net) (expr-atms-new (shift delta cutoff net))]
+    [(expr-atms-assume a nm d)
+     (expr-atms-assume (shift delta cutoff a) (shift delta cutoff nm) (shift delta cutoff d))]
+    [(expr-atms-retract a aid) (expr-atms-retract (shift delta cutoff a) (shift delta cutoff aid))]
+    [(expr-atms-nogood a aids) (expr-atms-nogood (shift delta cutoff a) (shift delta cutoff aids))]
+    [(expr-atms-amb a alts) (expr-atms-amb (shift delta cutoff a) (shift delta cutoff alts))]
+    [(expr-atms-solve-all a g) (expr-atms-solve-all (shift delta cutoff a) (shift delta cutoff g))]
+    [(expr-atms-read a c) (expr-atms-read (shift delta cutoff a) (shift delta cutoff c))]
+    [(expr-atms-write a c v s)
+     (expr-atms-write (shift delta cutoff a) (shift delta cutoff c) (shift delta cutoff v) (shift delta cutoff s))]
+    [(expr-atms-consistent a aids) (expr-atms-consistent (shift delta cutoff a) (shift delta cutoff aids))]
+    [(expr-atms-worldview a aids) (expr-atms-worldview (shift delta cutoff a) (shift delta cutoff aids))]
+
     ;; Int (all non-binding)
     [(expr-Int) e]
     [(expr-int _) e]
@@ -686,6 +704,24 @@
     [(expr-uf-union st id1 id2)
      (expr-uf-union (subst k s st) (subst k s id1) (subst k s id2))]
     [(expr-uf-value st id) (expr-uf-value (subst k s st) (subst k s id))]
+
+    ;; ATMS (all non-binding)
+    [(expr-atms-type) e]
+    [(expr-assumption-id-type) e]
+    [(expr-atms-store _) e]
+    [(expr-assumption-id-val _) e]
+    [(expr-atms-new net) (expr-atms-new (subst k s net))]
+    [(expr-atms-assume a nm d)
+     (expr-atms-assume (subst k s a) (subst k s nm) (subst k s d))]
+    [(expr-atms-retract a aid) (expr-atms-retract (subst k s a) (subst k s aid))]
+    [(expr-atms-nogood a aids) (expr-atms-nogood (subst k s a) (subst k s aids))]
+    [(expr-atms-amb a alts) (expr-atms-amb (subst k s a) (subst k s alts))]
+    [(expr-atms-solve-all a g) (expr-atms-solve-all (subst k s a) (subst k s g))]
+    [(expr-atms-read a c) (expr-atms-read (subst k s a) (subst k s c))]
+    [(expr-atms-write a c v sup)
+     (expr-atms-write (subst k s a) (subst k s c) (subst k s v) (subst k s sup))]
+    [(expr-atms-consistent a aids) (expr-atms-consistent (subst k s a) (subst k s aids))]
+    [(expr-atms-worldview a aids) (expr-atms-worldview (subst k s a) (subst k s aids))]
 
     ;; Int (all non-binding)
     [(expr-Int) e]

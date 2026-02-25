@@ -15,7 +15,8 @@
          "champ.rkt"
          "rrb.rkt"
          "propagator.rkt"
-         "union-find.rkt")
+         "union-find.rkt"
+         "atms.rkt")
 
 (provide pp-expr
          pp-session
@@ -444,6 +445,33 @@
      (format "[uf-union ~a ~a ~a]" (pp-expr st names) (pp-expr id1 names) (pp-expr id2 names))]
     [(expr-uf-value st id)
      (format "[uf-value ~a ~a]" (pp-expr st names) (pp-expr id names))]
+
+    ;; ATMS
+    [(expr-atms-type) "ATMS"]
+    [(expr-assumption-id-type) "AssumptionId"]
+    [(expr-atms-store v)
+     (format "#<atms ~a>" (hash-count (atms-assumptions v)))]
+    [(expr-assumption-id-val v)
+     (format "#<assumption-id ~a>" (assumption-id-n v))]
+    [(expr-atms-new net) (format "[atms-new ~a]" (pp-expr net names))]
+    [(expr-atms-assume a nm d)
+     (format "[atms-assume ~a ~a ~a]" (pp-expr a names) (pp-expr nm names) (pp-expr d names))]
+    [(expr-atms-retract a aid)
+     (format "[atms-retract ~a ~a]" (pp-expr a names) (pp-expr aid names))]
+    [(expr-atms-nogood a aids)
+     (format "[atms-nogood ~a ~a]" (pp-expr a names) (pp-expr aids names))]
+    [(expr-atms-amb a alts)
+     (format "[atms-amb ~a ~a]" (pp-expr a names) (pp-expr alts names))]
+    [(expr-atms-solve-all a g)
+     (format "[atms-solve-all ~a ~a]" (pp-expr a names) (pp-expr g names))]
+    [(expr-atms-read a c)
+     (format "[atms-read ~a ~a]" (pp-expr a names) (pp-expr c names))]
+    [(expr-atms-write a c v s)
+     (format "[atms-write ~a ~a ~a ~a]" (pp-expr a names) (pp-expr c names) (pp-expr v names) (pp-expr s names))]
+    [(expr-atms-consistent a aids)
+     (format "[atms-consistent? ~a ~a]" (pp-expr a names) (pp-expr aids names))]
+    [(expr-atms-worldview a aids)
+     (format "[atms-worldview ~a ~a]" (pp-expr a names) (pp-expr aids names))]
 
     ;; Int
     [(expr-Int) "Int"]
@@ -950,6 +978,22 @@
     [(expr-uf-find st id) (or (uses-bvar0? st) (uses-bvar0? id))]
     [(expr-uf-union st id1 id2) (or (uses-bvar0? st) (uses-bvar0? id1) (uses-bvar0? id2))]
     [(expr-uf-value st id) (or (uses-bvar0? st) (uses-bvar0? id))]
+
+    ;; ATMS
+    [(expr-atms-type) #f]
+    [(expr-assumption-id-type) #f]
+    [(expr-atms-store _) #f]
+    [(expr-assumption-id-val _) #f]
+    [(expr-atms-new net) (uses-bvar0? net)]
+    [(expr-atms-assume a nm d) (or (uses-bvar0? a) (uses-bvar0? nm) (uses-bvar0? d))]
+    [(expr-atms-retract a aid) (or (uses-bvar0? a) (uses-bvar0? aid))]
+    [(expr-atms-nogood a aids) (or (uses-bvar0? a) (uses-bvar0? aids))]
+    [(expr-atms-amb a alts) (or (uses-bvar0? a) (uses-bvar0? alts))]
+    [(expr-atms-solve-all a g) (or (uses-bvar0? a) (uses-bvar0? g))]
+    [(expr-atms-read a c) (or (uses-bvar0? a) (uses-bvar0? c))]
+    [(expr-atms-write a c v s) (or (uses-bvar0? a) (uses-bvar0? c) (uses-bvar0? v) (uses-bvar0? s))]
+    [(expr-atms-consistent a aids) (or (uses-bvar0? a) (uses-bvar0? aids))]
+    [(expr-atms-worldview a aids) (or (uses-bvar0? a) (uses-bvar0? aids))]
 
     [(expr-Int) #f]
     [(expr-int _) #f]

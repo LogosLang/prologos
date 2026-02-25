@@ -505,6 +505,8 @@
     [(CellId) (surf-cell-id-type loc)]
     [(PropId) (surf-prop-id-type loc)]
     [(UnionFind) (surf-uf-type loc)]
+    [(ATMS) (surf-atms-type loc)]
+    [(AssumptionId) (surf-assumption-id-type loc)]
     [(zero)   (surf-zero loc)]
     [(true)   (surf-true loc)]
     [(false)  (surf-false loc)]
@@ -2290,6 +2292,101 @@
                 [(prologos-error? st) st]
                 [(prologos-error? id) id]
                 [else (surf-uf-value st id loc)])))]
+
+       ;; ---- ATMS operations ----
+       ;; (atms-new network)
+       [(atms-new)
+        (or (check-arity 'atms-new args 1 loc)
+            (let ([net (parse-datum (car args))])
+              (if (prologos-error? net) net
+                  (surf-atms-new net loc))))]
+       ;; (atms-assume atms name datum)
+       [(atms-assume)
+        (or (check-arity 'atms-assume args 3 loc)
+            (let ([a (parse-datum (car args))]
+                  [name (parse-datum (cadr args))]
+                  [datum (parse-datum (caddr args))])
+              (cond
+                [(prologos-error? a) a]
+                [(prologos-error? name) name]
+                [(prologos-error? datum) datum]
+                [else (surf-atms-assume a name datum loc)])))]
+       ;; (atms-retract atms aid)
+       [(atms-retract)
+        (or (check-arity 'atms-retract args 2 loc)
+            (let ([a (parse-datum (car args))]
+                  [aid (parse-datum (cadr args))])
+              (cond
+                [(prologos-error? a) a]
+                [(prologos-error? aid) aid]
+                [else (surf-atms-retract a aid loc)])))]
+       ;; (atms-nogood atms aids)
+       [(atms-nogood)
+        (or (check-arity 'atms-nogood args 2 loc)
+            (let ([a (parse-datum (car args))]
+                  [aids (parse-datum (cadr args))])
+              (cond
+                [(prologos-error? a) a]
+                [(prologos-error? aids) aids]
+                [else (surf-atms-nogood a aids loc)])))]
+       ;; (atms-amb atms alternatives)
+       [(atms-amb)
+        (or (check-arity 'atms-amb args 2 loc)
+            (let ([a (parse-datum (car args))]
+                  [alts (parse-datum (cadr args))])
+              (cond
+                [(prologos-error? a) a]
+                [(prologos-error? alts) alts]
+                [else (surf-atms-amb a alts loc)])))]
+       ;; (atms-solve-all atms goal)
+       [(atms-solve-all)
+        (or (check-arity 'atms-solve-all args 2 loc)
+            (let ([a (parse-datum (car args))]
+                  [goal (parse-datum (cadr args))])
+              (cond
+                [(prologos-error? a) a]
+                [(prologos-error? goal) goal]
+                [else (surf-atms-solve-all a goal loc)])))]
+       ;; (atms-read atms cell)
+       [(atms-read)
+        (or (check-arity 'atms-read args 2 loc)
+            (let ([a (parse-datum (car args))]
+                  [cell (parse-datum (cadr args))])
+              (cond
+                [(prologos-error? a) a]
+                [(prologos-error? cell) cell]
+                [else (surf-atms-read a cell loc)])))]
+       ;; (atms-write atms cell val support)
+       [(atms-write)
+        (or (check-arity 'atms-write args 4 loc)
+            (let ([a (parse-datum (car args))]
+                  [cell (parse-datum (cadr args))]
+                  [val (parse-datum (caddr args))]
+                  [sup (parse-datum (cadddr args))])
+              (cond
+                [(prologos-error? a) a]
+                [(prologos-error? cell) cell]
+                [(prologos-error? val) val]
+                [(prologos-error? sup) sup]
+                [else (surf-atms-write a cell val sup loc)])))]
+       ;; (atms-consistent? atms aids)
+       [(atms-consistent?)
+        (or (check-arity 'atms-consistent? args 2 loc)
+            (let ([a (parse-datum (car args))]
+                  [aids (parse-datum (cadr args))])
+              (cond
+                [(prologos-error? a) a]
+                [(prologos-error? aids) aids]
+                [else (surf-atms-consistent a aids loc)])))]
+       ;; (atms-worldview atms aids)
+       [(atms-worldview)
+        (or (check-arity 'atms-worldview args 2 loc)
+            (let ([a (parse-datum (car args))]
+                  [aids (parse-datum (cadr args))])
+              (cond
+                [(prologos-error? a) a]
+                [(prologos-error? aids) aids]
+                [else (surf-atms-worldview a aids loc)])))]
 
        ;; (the-fn type [params...] body)
        [(the-fn)

@@ -2027,6 +2027,84 @@
              [(prologos-error? ei) ei]
              [else (expr-uf-value es ei)]))]
 
+    ;; ---- ATMS (hypothetical reasoning) ----
+    [(surf-atms-type _loc) (expr-atms-type)]
+    [(surf-assumption-id-type _loc) (expr-assumption-id-type)]
+
+    [(surf-atms-new network loc)
+     (let ([en (elaborate network env depth)])
+       (if (prologos-error? en) en
+           (expr-atms-new en)))]
+
+    [(surf-atms-assume atms name datum loc)
+     (let ([ea (elaborate atms env depth)]
+           [en (elaborate name env depth)]
+           [ed (elaborate datum env depth)])
+       (cond [(prologos-error? ea) ea]
+             [(prologos-error? en) en]
+             [(prologos-error? ed) ed]
+             [else (expr-atms-assume ea en ed)]))]
+
+    [(surf-atms-retract atms aid loc)
+     (let ([ea (elaborate atms env depth)]
+           [ei (elaborate aid env depth)])
+       (cond [(prologos-error? ea) ea]
+             [(prologos-error? ei) ei]
+             [else (expr-atms-retract ea ei)]))]
+
+    [(surf-atms-nogood atms aids loc)
+     (let ([ea (elaborate atms env depth)]
+           [el (elaborate aids env depth)])
+       (cond [(prologos-error? ea) ea]
+             [(prologos-error? el) el]
+             [else (expr-atms-nogood ea el)]))]
+
+    [(surf-atms-amb atms alternatives loc)
+     (let ([ea (elaborate atms env depth)]
+           [el (elaborate alternatives env depth)])
+       (cond [(prologos-error? ea) ea]
+             [(prologos-error? el) el]
+             [else (expr-atms-amb ea el)]))]
+
+    [(surf-atms-solve-all atms goal loc)
+     (let ([ea (elaborate atms env depth)]
+           [eg (elaborate goal env depth)])
+       (cond [(prologos-error? ea) ea]
+             [(prologos-error? eg) eg]
+             [else (expr-atms-solve-all ea eg)]))]
+
+    [(surf-atms-read atms cell loc)
+     (let ([ea (elaborate atms env depth)]
+           [ec (elaborate cell env depth)])
+       (cond [(prologos-error? ea) ea]
+             [(prologos-error? ec) ec]
+             [else (expr-atms-read ea ec)]))]
+
+    [(surf-atms-write atms cell val support loc)
+     (let ([ea (elaborate atms env depth)]
+           [ec (elaborate cell env depth)]
+           [ev (elaborate val env depth)]
+           [es (elaborate support env depth)])
+       (cond [(prologos-error? ea) ea]
+             [(prologos-error? ec) ec]
+             [(prologos-error? ev) ev]
+             [(prologos-error? es) es]
+             [else (expr-atms-write ea ec ev es)]))]
+
+    [(surf-atms-consistent atms aids loc)
+     (let ([ea (elaborate atms env depth)]
+           [el (elaborate aids env depth)])
+       (cond [(prologos-error? ea) ea]
+             [(prologos-error? el) el]
+             [else (expr-atms-consistent ea el)]))]
+
+    [(surf-atms-worldview atms aids loc)
+     (let ([ea (elaborate atms env depth)]
+           [el (elaborate aids env depth)])
+       (cond [(prologos-error? ea) ea]
+             [(prologos-error? el) el]
+             [else (expr-atms-worldview ea el)]))]
+
     ;; Reduce: ML-style pattern matching
     ;; Each arm's body must be elaborated with binding names in scope.
     ;; We add dummy binders (the actual types come from the type checker).

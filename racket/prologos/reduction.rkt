@@ -24,7 +24,8 @@
          "champ.rkt"
          "rrb.rkt"
          "propagator.rkt"
-         "union-find.rkt")
+         "union-find.rkt"
+         "atms.rkt")
 
 (provide whnf nf nf-whnf conv conv-nf
          current-nf-cache current-whnf-cache
@@ -110,6 +111,31 @@
     (if (zero? k)
         (expr-zero)
         (expr-suc (loop (sub1 k))))))
+
+;; ========================================
+;; Helpers for ATMS list ↔ assumption-id set conversion
+;; ========================================
+
+;; Convert a Prologos List of expr-assumption-id-val → hasheq (assumption-id → #t)
+;; Returns #f if the list can't be fully unwrapped (stuck or wrong types).
+(define (prologos-list->assumption-set e)
+  (define elems (prologos-list->racket-list e))
+  (and elems
+       (let loop ([es elems] [acc (hasheq)])
+         (cond
+           [(null? es) acc]
+           [else
+            (let ([e* (whnf (car es))])
+              (if (expr-assumption-id-val? e*)
+                  (loop (cdr es)
+                        (hash-set acc (expr-assumption-id-val-aid-value e*) #t))
+                  #f))]))))
+
+;; Convert a hasheq (assumption-id → #t) → Prologos List of expr-assumption-id-val
+(define (assumption-set->prologos-list aset)
+  (racket-list->prologos-list
+   (for/list ([(aid _) (in-hash aset)])
+     (expr-assumption-id-val aid))))
 
 ;; ========================================
 ;; Helpers for Posit8 reduction
@@ -1808,6 +1834,136 @@
               [(not (equal? id* id)) (whnf (expr-uf-value store id*))]
               [else e])]))]
 
+    ;; ---- ATMS ----
+    ;; Type constructors and runtime wrappers are self-values
+    [(expr-atms-type) e]
+    [(expr-assumption-id-type) e]
+    [(expr-atms-store _) e]
+    [(expr-assumption-id-val _) e]
+
+    ;; atms-new : PropNetwork -> ATMS
+    [(expr-atms-new network)
+     (let ([network* (whnf network)])
+       (match network*
+         [(expr-prop-network rnet)
+          (expr-atms-store (atms-empty rnet))]
+         [_ (if (equal? network* network) e (whnf (expr-atms-new network*)))]))]
+
+    ;; atms-assume : ATMS -> Keyword -> A -> [ATMS * AssumptionId]
+    [(expr-atms-assume store name datum)
+     (let ([store* (whnf store)])
+       (match store*
+         [(expr-atms-store rstore)
+          (let ([name* (whnf name)] [datum* (whnf datum)])
+            (define sym (if (expr-keyword? name*)
+                            (expr-keyword-name name*)
+                            'unknown))
+            (define-values (new-atms aid) (atms-assume rstore sym datum*))
+            (expr-pair (expr-atms-store new-atms) (expr-assumption-id-val aid)))]
+         [_ (if (equal? store* store) e (whnf (expr-atms-assume store* name datum)))]))]
+
+    ;; atms-retract : ATMS -> AssumptionId -> ATMS
+    [(expr-atms-retract store aid)
+     (let ([store* (whnf store)] [aid* (whnf aid)])
+       (match* (store* aid*)
+         [((expr-atms-store rstore) (expr-assumption-id-val raid))
+          (expr-atms-store (atms-retract rstore raid))]
+         [(_ _)
+          (cond
+            [(not (equal? store* store)) (whnf (expr-atms-retract store* aid))]
+            [(not (equal? aid* aid)) (whnf (expr-atms-retract store aid*))]
+            [else e])]))]
+
+    ;; atms-nogood : ATMS -> List AssumptionId -> ATMS
+    [(expr-atms-nogood store aids)
+     (let ([store* (whnf store)])
+       (match store*
+         [(expr-atms-store rstore)
+          (let ([aset (prologos-list->assumption-set (whnf aids))])
+            (if aset
+                (expr-atms-store (atms-add-nogood rstore aset))
+                ;; List not yet reducible
+                (if (equal? store* store) e (whnf (expr-atms-nogood store* aids)))))]
+         [_ (if (equal? store* store) e (whnf (expr-atms-nogood store* aids)))]))]
+
+    ;; atms-amb : ATMS -> List A -> [ATMS * List AssumptionId]
+    [(expr-atms-amb store alternatives)
+     (let ([store* (whnf store)])
+       (match store*
+         [(expr-atms-store rstore)
+          (let ([alt-list (prologos-list->racket-list (whnf alternatives))])
+            (if alt-list
+                (let-values ([(new-atms hyps) (atms-amb rstore alt-list)])
+                  (expr-pair (expr-atms-store new-atms)
+                             (racket-list->prologos-list (map expr-assumption-id-val hyps))))
+                ;; List not yet reducible
+                (if (equal? store* store) e (whnf (expr-atms-amb store* alternatives)))))]
+         [_ (if (equal? store* store) e (whnf (expr-atms-amb store* alternatives)))]))]
+
+    ;; atms-solve-all : ATMS -> CellId -> List _
+    [(expr-atms-solve-all store goal)
+     (let ([store* (whnf store)] [goal* (whnf goal)])
+       (match* (store* goal*)
+         [((expr-atms-store rstore) (expr-cell-id cid))
+          (racket-list->prologos-list (atms-solve-all rstore cid))]
+         [(_ _)
+          (cond
+            [(not (equal? store* store)) (whnf (expr-atms-solve-all store* goal))]
+            [(not (equal? goal* goal)) (whnf (expr-atms-solve-all store goal*))]
+            [else e])]))]
+
+    ;; atms-read : ATMS -> CellId -> _
+    [(expr-atms-read store cell)
+     (let ([store* (whnf store)] [cell* (whnf cell)])
+       (match* (store* cell*)
+         [((expr-atms-store rstore) (expr-cell-id cid))
+          (let ([val (atms-read-cell rstore cid)])
+            (if (eq? val 'bot) (expr-hole) val))]
+         [(_ _)
+          (cond
+            [(not (equal? store* store)) (whnf (expr-atms-read store* cell))]
+            [(not (equal? cell* cell)) (whnf (expr-atms-read store cell*))]
+            [else e])]))]
+
+    ;; atms-write : ATMS -> CellId -> A -> List AssumptionId -> ATMS
+    [(expr-atms-write store cell val support)
+     (let ([store* (whnf store)] [cell* (whnf cell)])
+       (match* (store* cell*)
+         [((expr-atms-store rstore) (expr-cell-id cid))
+          (let ([val* (whnf val)]
+                [sup (prologos-list->assumption-set (whnf support))])
+            (if sup
+                (expr-atms-store (atms-write-cell rstore cid val* sup))
+                ;; Support list not yet reducible
+                (if (equal? store* store) e (whnf (expr-atms-write store* cell val support)))))]
+         [(_ _)
+          (cond
+            [(not (equal? store* store)) (whnf (expr-atms-write store* cell val support))]
+            [(not (equal? cell* cell)) (whnf (expr-atms-write store cell* val support))]
+            [else e])]))]
+
+    ;; atms-consistent : ATMS -> List AssumptionId -> Bool
+    [(expr-atms-consistent store aids)
+     (let ([store* (whnf store)])
+       (match store*
+         [(expr-atms-store rstore)
+          (let ([aset (prologos-list->assumption-set (whnf aids))])
+            (if aset
+                (if (atms-consistent? rstore aset) (expr-true) (expr-false))
+                (if (equal? store* store) e (whnf (expr-atms-consistent store* aids)))))]
+         [_ (if (equal? store* store) e (whnf (expr-atms-consistent store* aids)))]))]
+
+    ;; atms-worldview : ATMS -> List AssumptionId -> ATMS
+    [(expr-atms-worldview store aids)
+     (let ([store* (whnf store)])
+       (match store*
+         [(expr-atms-store rstore)
+          (let ([aset (prologos-list->assumption-set (whnf aids))])
+            (if aset
+                (expr-atms-store (atms-with-worldview rstore aset))
+                (if (equal? store* store) e (whnf (expr-atms-worldview store* aids)))))]
+         [_ (if (equal? store* store) e (whnf (expr-atms-worldview store* aids)))]))]
+
     ;; Union types: pass through (types don't reduce)
     [(expr-union _ _) e]
 
@@ -2191,6 +2347,23 @@
     [(expr-uf-find st id) (expr-uf-find (nf st) (nf id))]
     [(expr-uf-union st id1 id2) (expr-uf-union (nf st) (nf id1) (nf id2))]
     [(expr-uf-value st id) (expr-uf-value (nf st) (nf id))]
+
+    ;; ATMS: type constructors and wrappers are self-values
+    [(expr-atms-type) e]
+    [(expr-assumption-id-type) e]
+    [(expr-atms-store _) e]
+    [(expr-assumption-id-val _) e]
+    ;; Operations: structural recursion into fields
+    [(expr-atms-new net) (expr-atms-new (nf net))]
+    [(expr-atms-assume st name datum) (expr-atms-assume (nf st) (nf name) (nf datum))]
+    [(expr-atms-retract st aid) (expr-atms-retract (nf st) (nf aid))]
+    [(expr-atms-nogood st aids) (expr-atms-nogood (nf st) (nf aids))]
+    [(expr-atms-amb st alts) (expr-atms-amb (nf st) (nf alts))]
+    [(expr-atms-solve-all st goal) (expr-atms-solve-all (nf st) (nf goal))]
+    [(expr-atms-read st cell) (expr-atms-read (nf st) (nf cell))]
+    [(expr-atms-write st cell val sup) (expr-atms-write (nf st) (nf cell) (nf val) (nf sup))]
+    [(expr-atms-consistent st aids) (expr-atms-consistent (nf st) (nf aids))]
+    [(expr-atms-worldview st aids) (expr-atms-worldview (nf st) (nf aids))]
 
     ;; Foreign function: opaque leaf (already in WHNF)
     [(expr-foreign-fn _ _ _ _ _ _) e]

@@ -910,7 +910,23 @@ union-find-expr = 'uf-empty'                                           (* UnionF
                 ;
 
 (* ------------------------------------------------ *)
-(* 5.25 Datum Constructors and Predicates           *)
+(* 5.25 ATMS (hypothetical reasoning)               *)
+(* ------------------------------------------------ *)
+
+atms-expr       = 'atms-new' , expr                                    (* PropNetwork -> ATMS *)
+                | 'atms-assume' , expr , expr , expr                   (* ATMS -> Keyword -> A -> [ATMS * AssumptionId] *)
+                | 'atms-retract' , expr , expr                         (* ATMS -> AssumptionId -> ATMS *)
+                | 'atms-nogood' , expr , expr                          (* ATMS -> List AssumptionId -> ATMS *)
+                | 'atms-amb' , expr , expr                             (* ATMS -> List A -> [ATMS * List AssumptionId] *)
+                | 'atms-solve-all' , expr , expr                       (* ATMS -> CellId -> List _ *)
+                | 'atms-read' , expr , expr                            (* ATMS -> CellId -> _ *)
+                | 'atms-write' , expr , expr , expr , expr             (* ATMS -> CellId -> A -> List AssumptionId -> ATMS *)
+                | 'atms-consistent?' , expr , expr                     (* ATMS -> List AssumptionId -> Bool *)
+                | 'atms-worldview' , expr , expr                       (* ATMS -> List AssumptionId -> ATMS *)
+                ;
+
+(* ------------------------------------------------ *)
+(* 5.26 Datum Constructors and Predicates           *)
 (* ------------------------------------------------ *)
 
 (* Datum is the code-as-data type for homoiconicity *)

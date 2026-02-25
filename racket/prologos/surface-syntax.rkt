@@ -239,6 +239,12 @@
  (struct-out surf-uf-type) (struct-out surf-uf-empty)
  (struct-out surf-uf-make-set) (struct-out surf-uf-find)
  (struct-out surf-uf-union) (struct-out surf-uf-value)
+ ;; ATMS (hypothetical reasoning)
+ (struct-out surf-atms-type) (struct-out surf-assumption-id-type)
+ (struct-out surf-atms-new) (struct-out surf-atms-assume) (struct-out surf-atms-retract)
+ (struct-out surf-atms-nogood) (struct-out surf-atms-amb) (struct-out surf-atms-solve-all)
+ (struct-out surf-atms-read) (struct-out surf-atms-write)
+ (struct-out surf-atms-consistent) (struct-out surf-atms-worldview)
  ;; Top-level commands
  (struct-out surf-def)
  (struct-out surf-defn)
@@ -770,6 +776,20 @@
 (struct surf-uf-find      (store id srcloc) #:transparent)             ; (uf-find store id)
 (struct surf-uf-union     (store id1 id2 srcloc) #:transparent)        ; (uf-union store id1 id2)
 (struct surf-uf-value     (store id srcloc) #:transparent)             ; (uf-value store id)
+
+;; ---- ATMS (hypothetical reasoning) ----
+(struct surf-atms-type          (srcloc) #:transparent)                       ; ATMS
+(struct surf-assumption-id-type (srcloc) #:transparent)                       ; AssumptionId
+(struct surf-atms-new           (network srcloc) #:transparent)               ; (atms-new net)
+(struct surf-atms-assume        (atms name datum srcloc) #:transparent)       ; (atms-assume atms name datum)
+(struct surf-atms-retract       (atms aid srcloc) #:transparent)              ; (atms-retract atms aid)
+(struct surf-atms-nogood        (atms aids srcloc) #:transparent)             ; (atms-nogood atms aids)
+(struct surf-atms-amb           (atms alternatives srcloc) #:transparent)     ; (atms-amb atms alts)
+(struct surf-atms-solve-all     (atms goal srcloc) #:transparent)             ; (atms-solve-all atms goal)
+(struct surf-atms-read          (atms cell srcloc) #:transparent)             ; (atms-read atms cell)
+(struct surf-atms-write         (atms cell val support srcloc) #:transparent) ; (atms-write atms cell val support)
+(struct surf-atms-consistent    (atms aids srcloc) #:transparent)             ; (atms-consistent? atms aids)
+(struct surf-atms-worldview     (atms aids srcloc) #:transparent)             ; (atms-worldview atms aids)
 
 ;; ========================================
 ;; Top-level commands
