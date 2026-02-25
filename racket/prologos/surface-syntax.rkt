@@ -235,6 +235,10 @@
  (struct-out surf-net-cell-read) (struct-out surf-net-cell-write)
  (struct-out surf-net-add-prop) (struct-out surf-net-run)
  (struct-out surf-net-snapshot) (struct-out surf-net-contradiction)
+ ;; UnionFind (persistent disjoint sets)
+ (struct-out surf-uf-type) (struct-out surf-uf-empty)
+ (struct-out surf-uf-make-set) (struct-out surf-uf-find)
+ (struct-out surf-uf-union) (struct-out surf-uf-value)
  ;; Top-level commands
  (struct-out surf-def)
  (struct-out surf-defn)
@@ -758,6 +762,14 @@
 (struct surf-net-run          (net srcloc) #:transparent)              ; (net-run net)
 (struct surf-net-snapshot     (net srcloc) #:transparent)              ; (net-snapshot net)
 (struct surf-net-contradiction (net srcloc) #:transparent)             ; (net-contradict? net)
+
+;; ---- UnionFind (persistent disjoint sets) ----
+(struct surf-uf-type      (srcloc) #:transparent)                      ; UnionFind
+(struct surf-uf-empty     (srcloc) #:transparent)                      ; (uf-empty)
+(struct surf-uf-make-set  (store id val srcloc) #:transparent)         ; (uf-make-set store id val)
+(struct surf-uf-find      (store id srcloc) #:transparent)             ; (uf-find store id)
+(struct surf-uf-union     (store id1 id2 srcloc) #:transparent)        ; (uf-union store id1 id2)
+(struct surf-uf-value     (store id srcloc) #:transparent)             ; (uf-value store id)
 
 ;; ========================================
 ;; Top-level commands

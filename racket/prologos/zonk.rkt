@@ -289,6 +289,17 @@
     [(expr-net-snapshot n) (expr-net-snapshot (zonk n))]
     [(expr-net-contradiction n) (expr-net-contradiction (zonk n))]
 
+    ;; UnionFind
+    [(expr-uf-type) e]
+    [(expr-uf-store _) e]
+    [(expr-uf-empty) e]
+    [(expr-uf-make-set st id val)
+     (expr-uf-make-set (zonk st) (zonk id) (zonk val))]
+    [(expr-uf-find st id) (expr-uf-find (zonk st) (zonk id))]
+    [(expr-uf-union st id1 id2)
+     (expr-uf-union (zonk st) (zonk id1) (zonk id2))]
+    [(expr-uf-value st id) (expr-uf-value (zonk st) (zonk id))]
+
     ;; Int
     [(expr-Int) e]
     [(expr-int _) e]
@@ -644,6 +655,17 @@
     [(expr-net-snapshot n) (expr-net-snapshot (zonk-at-depth depth n))]
     [(expr-net-contradiction n) (expr-net-contradiction (zonk-at-depth depth n))]
 
+    ;; UnionFind
+    [(expr-uf-type) e]
+    [(expr-uf-store _) e]
+    [(expr-uf-empty) e]
+    [(expr-uf-make-set st id val)
+     (expr-uf-make-set (zonk-at-depth depth st) (zonk-at-depth depth id) (zonk-at-depth depth val))]
+    [(expr-uf-find st id) (expr-uf-find (zonk-at-depth depth st) (zonk-at-depth depth id))]
+    [(expr-uf-union st id1 id2)
+     (expr-uf-union (zonk-at-depth depth st) (zonk-at-depth depth id1) (zonk-at-depth depth id2))]
+    [(expr-uf-value st id) (expr-uf-value (zonk-at-depth depth st) (zonk-at-depth depth id))]
+
     ;; Int
     [(expr-Int) e]
     [(expr-int _) e]
@@ -968,6 +990,17 @@
     [(expr-net-run n) (expr-net-run (default-metas n))]
     [(expr-net-snapshot n) (expr-net-snapshot (default-metas n))]
     [(expr-net-contradiction n) (expr-net-contradiction (default-metas n))]
+
+    ;; UnionFind
+    [(expr-uf-type) e]
+    [(expr-uf-store _) e]
+    [(expr-uf-empty) e]
+    [(expr-uf-make-set st id val)
+     (expr-uf-make-set (default-metas st) (default-metas id) (default-metas val))]
+    [(expr-uf-find st id) (expr-uf-find (default-metas st) (default-metas id))]
+    [(expr-uf-union st id1 id2)
+     (expr-uf-union (default-metas st) (default-metas id1) (default-metas id2))]
+    [(expr-uf-value st id) (expr-uf-value (default-metas st) (default-metas id))]
 
     [(expr-Int) e]
     [(expr-int _) e]

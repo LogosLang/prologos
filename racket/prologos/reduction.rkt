@@ -23,7 +23,8 @@
          "foreign.rkt"
          "champ.rkt"
          "rrb.rkt"
-         "propagator.rkt")
+         "propagator.rkt"
+         "union-find.rkt")
 
 (provide whnf nf nf-whnf conv conv-nf
          current-nf-cache current-whnf-cache
@@ -98,6 +99,17 @@
                         (expr-app-arg head-app))])
          (loop (whnf xs) (cons head acc)))]
       [else #f])))
+
+;; ========================================
+;; Helper: Racket integer → Prologos Nat expression
+;; ========================================
+
+;; Convert a non-negative Racket integer to an expr-suc/expr-zero chain.
+(define (racket-nat->expr n)
+  (let loop ([k n])
+    (if (zero? k)
+        (expr-zero)
+        (expr-suc (loop (sub1 k))))))
 
 ;; ========================================
 ;; Helpers for Posit8 reduction
@@ -1723,6 +1735,79 @@
           (if (net-contradiction? rnet) (expr-true) (expr-false))]
          [_ (if (equal? net* net) e (whnf (expr-net-contradiction net*)))]))]
 
+    ;; ---- UnionFind ----
+    ;; Type constructor and runtime wrapper are self-values
+    [(expr-uf-type) e]
+    [(expr-uf-store _) e]
+
+    ;; uf-empty : UnionFind
+    [(expr-uf-empty)
+     (expr-uf-store (uf-empty))]
+
+    ;; uf-make-set : UnionFind -> Nat -> A -> UnionFind
+    [(expr-uf-make-set store id val)
+     (let ([store* (whnf store)])
+       (match store*
+         [(expr-uf-store rstore)
+          (let ([id* (whnf id)])
+            (cond
+              [(nat-value id*)
+               => (lambda (n)
+                    (let ([val* (whnf val)])
+                      (expr-uf-store (uf-make-set rstore n val*))))]
+              [(equal? id* id) (if (equal? store* store) e (whnf (expr-uf-make-set store* id val)))]
+              [else (whnf (expr-uf-make-set store* id* val))]))]
+         [_ (if (equal? store* store) e (whnf (expr-uf-make-set store* id val)))]))]
+
+    ;; uf-find : UnionFind -> Nat -> [Nat * UnionFind]
+    [(expr-uf-find store id)
+     (let ([store* (whnf store)] [id* (whnf id)])
+       (match store*
+         [(expr-uf-store rstore)
+          (cond
+            [(nat-value id*)
+             => (lambda (n)
+                  (let-values ([(root updated) (uf-find rstore n)])
+                    (expr-pair (racket-nat->expr root) (expr-uf-store updated))))]
+            [(not (equal? id* id)) (whnf (expr-uf-find store* id*))]
+            [else e])]
+         [_ (cond
+              [(not (equal? store* store)) (whnf (expr-uf-find store* id))]
+              [(not (equal? id* id)) (whnf (expr-uf-find store id*))]
+              [else e])]))]
+
+    ;; uf-union : UnionFind -> Nat -> Nat -> UnionFind
+    [(expr-uf-union store id1 id2)
+     (let ([store* (whnf store)])
+       (match store*
+         [(expr-uf-store rstore)
+          (let ([id1* (whnf id1)] [id2* (whnf id2)])
+            (cond
+              [(and (nat-value id1*) (nat-value id2*))
+               (let ([n1 (nat-value id1*)] [n2 (nat-value id2*)])
+                 (expr-uf-store (uf-union rstore n1 n2)))]
+              [(not (equal? id1* id1)) (whnf (expr-uf-union store* id1* id2))]
+              [(not (equal? id2* id2)) (whnf (expr-uf-union store* id1 id2*))]
+              [else (if (equal? store* store) e (whnf (expr-uf-union store* id1 id2)))]))]
+         [_ (if (equal? store* store) e (whnf (expr-uf-union store* id1 id2)))]))]
+
+    ;; uf-value : UnionFind -> Nat -> A
+    [(expr-uf-value store id)
+     (let ([store* (whnf store)] [id* (whnf id)])
+       (match store*
+         [(expr-uf-store rstore)
+          (cond
+            [(nat-value id*)
+             => (lambda (n)
+                  (let-values ([(val _updated) (uf-value rstore n)])
+                    val))]
+            [(not (equal? id* id)) (whnf (expr-uf-value store* id*))]
+            [else e])]
+         [_ (cond
+              [(not (equal? store* store)) (whnf (expr-uf-value store* id))]
+              [(not (equal? id* id)) (whnf (expr-uf-value store id*))]
+              [else e])]))]
+
     ;; Union types: pass through (types don't reduce)
     [(expr-union _ _) e]
 
@@ -2096,6 +2181,16 @@
     [(expr-net-run n) (expr-net-run (nf n))]
     [(expr-net-snapshot n) (expr-net-snapshot (nf n))]
     [(expr-net-contradiction n) (expr-net-contradiction (nf n))]
+
+    ;; UnionFind: type constructor, wrapper, and uf-empty are self-values
+    [(expr-uf-type) e]
+    [(expr-uf-store _) e]
+    [(expr-uf-empty) e]  ;; reduces to (expr-uf-store ...) in whnf, but if stuck, it's a value
+    ;; Operations: structural recursion into fields
+    [(expr-uf-make-set st id val) (expr-uf-make-set (nf st) (nf id) (nf val))]
+    [(expr-uf-find st id) (expr-uf-find (nf st) (nf id))]
+    [(expr-uf-union st id1 id2) (expr-uf-union (nf st) (nf id1) (nf id2))]
+    [(expr-uf-value st id) (expr-uf-value (nf st) (nf id))]
 
     ;; Foreign function: opaque leaf (already in WHNF)
     [(expr-foreign-fn _ _ _ _ _ _) e]

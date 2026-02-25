@@ -1420,6 +1420,47 @@
          (expr-Bool)
          (expr-error))]
 
+    ;; ---- UnionFind type constructor ----
+    [(expr-uf-type) (expr-Type (lzero))]
+
+    ;; ---- UnionFind runtime wrapper ----
+    [(expr-uf-store _) (expr-uf-type)]
+
+    ;; ---- UnionFind operations ----
+
+    ;; uf-empty : UnionFind
+    [(expr-uf-empty) (expr-uf-type)]
+
+    ;; uf-make-set : UnionFind -> Nat -> A -> UnionFind
+    [(expr-uf-make-set store id val)
+     (if (and (check ctx store (expr-uf-type))
+              (check ctx id (expr-Nat)))
+         (let ([_ (infer ctx val)])  ;; val can be any type
+           (expr-uf-type))
+         (expr-error))]
+
+    ;; uf-find : UnionFind -> Nat -> [Nat * UnionFind]
+    [(expr-uf-find store id)
+     (if (and (check ctx store (expr-uf-type))
+              (check ctx id (expr-Nat)))
+         (expr-Sigma (expr-Nat) (expr-uf-type))
+         (expr-error))]
+
+    ;; uf-union : UnionFind -> Nat -> Nat -> UnionFind
+    [(expr-uf-union store id1 id2)
+     (if (and (check ctx store (expr-uf-type))
+              (check ctx id1 (expr-Nat))
+              (check ctx id2 (expr-Nat)))
+         (expr-uf-type)
+         (expr-error))]
+
+    ;; uf-value : UnionFind -> Nat -> A (type-unsafe: returns fresh hole)
+    [(expr-uf-value store id)
+     (if (and (check ctx store (expr-uf-type))
+              (check ctx id (expr-Nat)))
+         (expr-hole)   ;; type-unsafe — caller must use (the T ...) or checking context
+         (expr-error))]
+
     ;; ---- Fallback: cannot infer ----
     [_ (expr-error)]))
 
@@ -1654,6 +1695,9 @@
     [((expr-prop-network _) (expr-net-type)) #t]
     [((expr-cell-id _) (expr-cell-id-type)) #t]
     [((expr-prop-id _) (expr-prop-id-type)) #t]
+
+    ;; ---- UnionFind runtime wrapper ----
+    [((expr-uf-store _) (expr-uf-type)) #t]
 
     ;; ---- Reduce: ML-style Church elimination ----
     ;; check(G, reduce(scrutinee, arms), T)
@@ -1989,6 +2033,9 @@
     [(expr-net-type) (just-level (lzero))]
     [(expr-cell-id-type) (just-level (lzero))]
     [(expr-prop-id-type) (just-level (lzero))]
+
+    ;; UnionFind type constructor — ground type at Type 0
+    [(expr-uf-type) (just-level (lzero))]
 
     ;; Union formation: A | B : Type(max(level(A), level(B)))
     [(expr-union l r)

@@ -14,7 +14,8 @@
          "metavar-store.rkt"
          "champ.rkt"
          "rrb.rkt"
-         "propagator.rkt")
+         "propagator.rkt"
+         "union-find.rkt")
 
 (provide pp-expr
          pp-session
@@ -430,6 +431,19 @@
     [(expr-net-run n) (format "[net-run ~a]" (pp-expr n names))]
     [(expr-net-snapshot n) (format "[net-snapshot ~a]" (pp-expr n names))]
     [(expr-net-contradiction n) (format "[net-contradict? ~a]" (pp-expr n names))]
+
+    ;; UnionFind
+    [(expr-uf-type) "UnionFind"]
+    [(expr-uf-store v) (format "#<union-find ~a>" (uf-size v))]
+    [(expr-uf-empty) "[uf-empty]"]
+    [(expr-uf-make-set st id val)
+     (format "[uf-make-set ~a ~a ~a]" (pp-expr st names) (pp-expr id names) (pp-expr val names))]
+    [(expr-uf-find st id)
+     (format "[uf-find ~a ~a]" (pp-expr st names) (pp-expr id names))]
+    [(expr-uf-union st id1 id2)
+     (format "[uf-union ~a ~a ~a]" (pp-expr st names) (pp-expr id1 names) (pp-expr id2 names))]
+    [(expr-uf-value st id)
+     (format "[uf-value ~a ~a]" (pp-expr st names) (pp-expr id names))]
 
     ;; Int
     [(expr-Int) "Int"]
@@ -927,6 +941,15 @@
     [(expr-net-run n) (uses-bvar0? n)]
     [(expr-net-snapshot n) (uses-bvar0? n)]
     [(expr-net-contradiction n) (uses-bvar0? n)]
+
+    ;; UnionFind
+    [(expr-uf-type) #f]
+    [(expr-uf-store _) #f]
+    [(expr-uf-empty) #f]
+    [(expr-uf-make-set st id val) (or (uses-bvar0? st) (uses-bvar0? id) (uses-bvar0? val))]
+    [(expr-uf-find st id) (or (uses-bvar0? st) (uses-bvar0? id))]
+    [(expr-uf-union st id1 id2) (or (uses-bvar0? st) (uses-bvar0? id1) (uses-bvar0? id2))]
+    [(expr-uf-value st id) (or (uses-bvar0? st) (uses-bvar0? id))]
 
     [(expr-Int) #f]
     [(expr-int _) #f]

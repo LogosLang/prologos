@@ -47,6 +47,7 @@
     map-fold-entries map-filter-entries map-map-vals
     TVec TMap TSet transient persist! tvec-push! tvec-update! tmap-assoc! tmap-dissoc! tset-insert! tset-delete!
     PropNetwork CellId PropId net-new net-new-cell net-cell-read net-cell-write net-add-prop net-run net-snapshot net-contradict?
+    UnionFind uf-empty uf-make-set uf-find uf-union uf-value
     def defn check eval infer expand expand-1 expand-full parse elaborate match
     ;; Pre-parse macros — should be expanded before reaching parser
     defmacro let do if deftype data spec trait impl where bundle with-transient
@@ -503,6 +504,7 @@
     [(PropNetwork) (surf-net-type loc)]
     [(CellId) (surf-cell-id-type loc)]
     [(PropId) (surf-prop-id-type loc)]
+    [(UnionFind) (surf-uf-type loc)]
     [(zero)   (surf-zero loc)]
     [(true)   (surf-true loc)]
     [(false)  (surf-false loc)]
@@ -2242,6 +2244,52 @@
             (let ([n (parse-datum (car args))])
               (if (prologos-error? n) n
                   (surf-net-contradiction n loc))))]
+
+       ;; ---- UnionFind operations ----
+       ;; (uf-empty)
+       [(uf-empty)
+        (or (check-arity 'uf-empty args 0 loc)
+            (surf-uf-empty loc))]
+       ;; (uf-make-set store id val)
+       [(uf-make-set)
+        (or (check-arity 'uf-make-set args 3 loc)
+            (let ([st (parse-datum (car args))]
+                  [id (parse-datum (cadr args))]
+                  [val (parse-datum (caddr args))])
+              (cond
+                [(prologos-error? st) st]
+                [(prologos-error? id) id]
+                [(prologos-error? val) val]
+                [else (surf-uf-make-set st id val loc)])))]
+       ;; (uf-find store id)
+       [(uf-find)
+        (or (check-arity 'uf-find args 2 loc)
+            (let ([st (parse-datum (car args))]
+                  [id (parse-datum (cadr args))])
+              (cond
+                [(prologos-error? st) st]
+                [(prologos-error? id) id]
+                [else (surf-uf-find st id loc)])))]
+       ;; (uf-union store id1 id2)
+       [(uf-union)
+        (or (check-arity 'uf-union args 3 loc)
+            (let ([st (parse-datum (car args))]
+                  [id1 (parse-datum (cadr args))]
+                  [id2 (parse-datum (caddr args))])
+              (cond
+                [(prologos-error? st) st]
+                [(prologos-error? id1) id1]
+                [(prologos-error? id2) id2]
+                [else (surf-uf-union st id1 id2 loc)])))]
+       ;; (uf-value store id)
+       [(uf-value)
+        (or (check-arity 'uf-value args 2 loc)
+            (let ([st (parse-datum (car args))]
+                  [id (parse-datum (cadr args))])
+              (cond
+                [(prologos-error? st) st]
+                [(prologos-error? id) id]
+                [else (surf-uf-value st id loc)])))]
 
        ;; (the-fn type [params...] body)
        [(the-fn)

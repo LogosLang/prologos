@@ -885,7 +885,32 @@ transient-expr  = 'transient' , expr               (* create transient from pers
 with-transient-expr = 'with-transient' , identifier , expr , { expr } ;
 
 (* ------------------------------------------------ *)
-(* 5.23 Datum Constructors and Predicates           *)
+(* 5.23 PropNetwork (persistent propagator network) *)
+(* ------------------------------------------------ *)
+
+propagator-expr = 'net-new' , expr                                     (* Int -> PropNetwork *)
+                | 'net-new-cell' , expr , expr , expr                  (* PropNetwork -> A -> (A A -> A) -> [PropNetwork * CellId] *)
+                | 'net-cell-read' , expr , expr                        (* PropNetwork -> CellId -> A *)
+                | 'net-cell-write' , expr , expr , expr                (* PropNetwork -> CellId -> A -> PropNetwork *)
+                | 'net-add-prop' , expr , expr , expr , expr           (* PropNetwork -> [List CellId] -> [List CellId] -> fn -> [PropNetwork * PropId] *)
+                | 'net-run' , expr                                     (* PropNetwork -> PropNetwork *)
+                | 'net-snapshot' , expr                                (* PropNetwork -> PropNetwork *)
+                | 'net-contradict?' , expr                             (* PropNetwork -> Bool *)
+                ;
+
+(* ------------------------------------------------ *)
+(* 5.24 UnionFind (persistent disjoint sets)        *)
+(* ------------------------------------------------ *)
+
+union-find-expr = 'uf-empty'                                           (* UnionFind *)
+                | 'uf-make-set' , expr , expr , expr                   (* UnionFind -> Nat -> A -> UnionFind *)
+                | 'uf-find' , expr , expr                              (* UnionFind -> Nat -> [Nat * UnionFind] *)
+                | 'uf-union' , expr , expr , expr                      (* UnionFind -> Nat -> Nat -> UnionFind *)
+                | 'uf-value' , expr , expr                             (* UnionFind -> Nat -> A *)
+                ;
+
+(* ------------------------------------------------ *)
+(* 5.25 Datum Constructors and Predicates           *)
 (* ------------------------------------------------ *)
 
 (* Datum is the code-as-data type for homoiconicity *)

@@ -307,6 +307,17 @@
     [(expr-net-snapshot n) (expr-net-snapshot (shift delta cutoff n))]
     [(expr-net-contradiction n) (expr-net-contradiction (shift delta cutoff n))]
 
+    ;; UnionFind (all non-binding)
+    [(expr-uf-type) e]
+    [(expr-uf-store _) e]
+    [(expr-uf-empty) e]
+    [(expr-uf-make-set st id val)
+     (expr-uf-make-set (shift delta cutoff st) (shift delta cutoff id) (shift delta cutoff val))]
+    [(expr-uf-find st id) (expr-uf-find (shift delta cutoff st) (shift delta cutoff id))]
+    [(expr-uf-union st id1 id2)
+     (expr-uf-union (shift delta cutoff st) (shift delta cutoff id1) (shift delta cutoff id2))]
+    [(expr-uf-value st id) (expr-uf-value (shift delta cutoff st) (shift delta cutoff id))]
+
     ;; Int (all non-binding)
     [(expr-Int) e]
     [(expr-int _) e]
@@ -664,6 +675,17 @@
     [(expr-net-run n) (expr-net-run (subst k s n))]
     [(expr-net-snapshot n) (expr-net-snapshot (subst k s n))]
     [(expr-net-contradiction n) (expr-net-contradiction (subst k s n))]
+
+    ;; UnionFind (all non-binding)
+    [(expr-uf-type) e]
+    [(expr-uf-store _) e]
+    [(expr-uf-empty) e]
+    [(expr-uf-make-set st id val)
+     (expr-uf-make-set (subst k s st) (subst k s id) (subst k s val))]
+    [(expr-uf-find st id) (expr-uf-find (subst k s st) (subst k s id))]
+    [(expr-uf-union st id1 id2)
+     (expr-uf-union (subst k s st) (subst k s id1) (subst k s id2))]
+    [(expr-uf-value st id) (expr-uf-value (subst k s st) (subst k s id))]
 
     ;; Int (all non-binding)
     [(expr-Int) e]

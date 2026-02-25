@@ -1529,6 +1529,54 @@
          [(tu _ u) (tu (expr-Bool) u)]
          [_ (tu-error)]))]
 
+    ;; ---- UnionFind type constructor ----
+    [(expr-uf-type) (tu (expr-Type (lzero)) (zero-usage n))]
+    ;; Runtime wrapper
+    [(expr-uf-store _) (tu (expr-uf-type) (zero-usage n))]
+
+    ;; ---- UnionFind operations ----
+
+    ;; uf-empty : UnionFind
+    [(expr-uf-empty) (tu (expr-uf-type) (zero-usage n))]
+
+    ;; uf-make-set : UnionFind -> Nat -> A -> UnionFind
+    [(expr-uf-make-set store id val)
+     (let ([r1 (inferQ ctx store)]
+           [r2 (inferQ ctx id)]
+           [r3 (inferQ ctx val)])
+       (match* (r1 r2 r3)
+         [((tu _ u1) (tu _ u2) (tu _ u3))
+          (tu (expr-uf-type) (add-usage u1 (add-usage u2 u3)))]
+         [(_ _ _) (tu-error)]))]
+
+    ;; uf-find : UnionFind -> Nat -> [Nat * UnionFind]
+    [(expr-uf-find store id)
+     (let ([r1 (inferQ ctx store)]
+           [r2 (inferQ ctx id)])
+       (match* (r1 r2)
+         [((tu _ u1) (tu _ u2))
+          (tu (expr-Sigma (expr-Nat) (expr-uf-type)) (add-usage u1 u2))]
+         [(_ _) (tu-error)]))]
+
+    ;; uf-union : UnionFind -> Nat -> Nat -> UnionFind
+    [(expr-uf-union store id1 id2)
+     (let ([r1 (inferQ ctx store)]
+           [r2 (inferQ ctx id1)]
+           [r3 (inferQ ctx id2)])
+       (match* (r1 r2 r3)
+         [((tu _ u1) (tu _ u2) (tu _ u3))
+          (tu (expr-uf-type) (add-usage u1 (add-usage u2 u3)))]
+         [(_ _ _) (tu-error)]))]
+
+    ;; uf-value : UnionFind -> Nat -> A (type-unsafe)
+    [(expr-uf-value store id)
+     (let ([r1 (inferQ ctx store)]
+           [r2 (inferQ ctx id)])
+       (match* (r1 r2)
+         [((tu _ u1) (tu _ u2))
+          (tu (infer ctx e) (add-usage u1 u2))]
+         [(_ _) (tu-error)]))]
+
     ;; ---- J eliminator ----
     ;; Usage from proof, base, motive arguments
     [(expr-J mot base left right proof)
@@ -1849,6 +1897,9 @@
     [((expr-prop-network _) (expr-net-type)) (bu #t (zero-usage n))]
     [((expr-cell-id _) (expr-cell-id-type)) (bu #t (zero-usage n))]
     [((expr-prop-id _) (expr-prop-id-type)) (bu #t (zero-usage n))]
+
+    ;; ---- UnionFind runtime wrapper ----
+    [((expr-uf-store _) (expr-uf-type)) (bu #t (zero-usage n))]
 
     ;; ---- Union type: checkQ(G, e, A | B) ----
     ;; Try left component first, then right. Uses speculative meta state.

@@ -281,12 +281,11 @@ The following collection items ARE also deferred (genuine infrastructure deps):
 - **Blocked on**: improved implicit resolution for trait accessor calls inside generic closures
 - Source: `lib/prologos/core/propagator.prologos`
 
-### Phase 4: UnionFind — Persistent Disjoint Sets (NOT STARTED)
-- Persistent union-find (Conchon & Filliâtre)
-- Path splitting, rank-based union
-- Value-carrying nodes for unification terms
-- ~6 AST nodes
-- **Dependencies**: None (can proceed in parallel with Phase 3)
+### Phase 4: UnionFind — Persistent Disjoint Sets (COMPLETE)
+- Persistent union-find (Conchon & Filliâtre 2007) with path splitting
+- 7 AST nodes through full 14-file pipeline
+- `union-find.rkt` Racket module + surface syntax (`uf-empty`, `uf-make-set`, `uf-find`, `uf-union`, `uf-value`)
+- 57 tests (19 unit + 29 type-level + 9 integration)
 - Source: `docs/tracking/2026-02-24_LOGIC_ENGINE_DESIGN.org`
 
 ### Phase 5: Persistent ATMS — Hypothetical Reasoning (NOT STARTED)

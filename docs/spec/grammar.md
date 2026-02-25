@@ -1,60 +1,64 @@
-- [Introduction](#org353c80f)
-- [Lexical Grammar](#org4392204)
-  - [Comments](#orgb1e123e)
-  - [Identifiers](#orge8c856b)
-  - [Numeric Literals](#org5910a98)
-  - [String Literals](#orgfd66575)
-  - [Keyword Literals](#orgec4938a)
-  - [Boolean Literals](#orga8afb2b)
-  - [Special Tokens](#org30a24cf)
-  - [Bracket Types](#org8792cb9)
-  - [Collection Literal Prefixes](#org367fc3d)
-- [Type Expressions](#org3676e06)
-  - [Base Types](#orgdbff88b)
-  - [Parameterized Types](#org96181da)
-  - [Function Types (Arrows)](#orgfeda93b)
-  - [Dependent Types (Angle Brackets)](#org143540c)
-  - [Sigma Types (Product / Pair Types)](#orge10c275)
-  - [Equality Type](#org0c5b808)
-  - [Union Types](#orga5c51d2)
-  - [Universe Levels](#org7f60464)
-  - [Type Holes](#orgee22f7d)
-- [Expressions](#org0b7d71e)
-  - [Function Application](#orgf5b7243)
-  - [Lambda Expressions](#org80122a5)
-  - [Pattern Matching](#orgc1975c5)
-  - [If (Conditional)](#org21f9fee)
-  - [Let (Local Binding)](#orgb6977b8)
-  - [Pipe Operator (|>)](#org8467ab5)
-  - [Compose Operator (>>)](#orgb2a0189)
-  - [Type Annotations (the)](#orga75b36e)
-  - [Pairs](#orgaec6805)
-  - [Quote and Quasiquote](#org5506af7)
-  - [Collection Literals](#orgf6f15dd)
-  - [Partial Application](#org2ca19ad)
-  - [Varargs](#orga526ae2)
-- [Declarations](#org1a90f35)
-  - [Namespace (ns)](#orgc6841f8)
-  - [Require](#org8de9855)
-  - [Value Definition (def)](#orgcf204e0)
-  - [Type Signature (spec)](#org704420f)
-  - [Function Definition (defn)](#org05b9b9b)
-  - [Algebraic Data Types (data)](#orgb0d13ac)
-  - [Traits and Implementations](#orgfd65fe8)
-  - [User-Defined Macros](#orge38e516)
-- [Multiplicity (QTT)](#org74b35c0)
-- [Dependent Types and Eliminators](#orgf1e9310)
-  - [Natural Number Elimination (natrec)](#org560bad3)
-  - [Equality Elimination (J)](#org057bd4a)
-  - [Length-Indexed Vectors](#orgda652e6)
-- [Full Program Example](#org39bc426)
-- [Appendix: S-Expression Mode](#orgc2dfc33)
-- [Appendix: Whitespace Reader Rules](#org4f4d510)
-- [Appendix: Reader Desugaring Table](#orgb139532)
+- [Introduction](#org1ebb2fb)
+- [Lexical Grammar](#org8e65e2a)
+  - [Comments](#org7d8fa92)
+  - [Identifiers](#orgb447337)
+  - [Numeric Literals](#org15cf07a)
+  - [String Literals](#orgefea47f)
+  - [Keyword Literals](#org6fe1a29)
+  - [Boolean Literals](#org8636907)
+  - [Special Tokens](#orgb40151f)
+  - [Bracket Types](#orgf0bbb14)
+  - [Collection Literal Prefixes](#org68af039)
+- [Type Expressions](#org217a5cf)
+  - [Base Types](#org3fed70d)
+  - [Parameterized Types](#org0b4219c)
+  - [Function Types (Arrows)](#orge3ccc91)
+  - [Dependent Types (Angle Brackets)](#org616cc51)
+  - [Sigma Types (Product / Pair Types)](#orga509320)
+  - [Equality Type](#orgbd83467)
+  - [Union Types](#org0ec2a24)
+  - [Universe Levels](#org7b4147e)
+  - [Type Holes](#org9adaba3)
+  - [Typed Holes (Interactive Development)](#org5c2665a)
+- [Expressions](#orge0eabfd)
+  - [Function Application](#org885aa94)
+  - [Lambda Expressions](#orgf063c4c)
+  - [Pattern Matching](#org96e3a49)
+  - [If (Conditional)](#org157cedb)
+  - [Let (Local Binding)](#orgc5e02c6)
+  - [Pipe Operator (|>)](#org58aaea6)
+  - [Compose Operator (>>)](#org75c201e)
+  - [Type Annotations (the)](#orge9b5afb)
+  - [Pairs](#orge13833f)
+  - [Quote and Quasiquote](#org3dc593c)
+  - [Collection Literals](#orgde57f7f)
+  - [Partial Application](#org54abf34)
+  - [Varargs](#org48046eb)
+- [Declarations](#org39d9e10)
+  - [Namespace (ns)](#orgaefca1b)
+  - [Require](#org5e6a21f)
+  - [Value Definition (def)](#orgbeb52e4)
+  - [Type Signature (spec)](#orgfefe6f8)
+    - [Extended Spec with Metadata](#org2f77602)
+  - [Function Definition (defn)](#org7816c38)
+  - [Algebraic Data Types (data)](#org598e094)
+  - [Traits and Implementations](#org7fcc568)
+  - [Property Declarations](#orgda8fca7)
+  - [Functor Declarations (Named Type Abstractions)](#org2772cff)
+  - [User-Defined Macros](#org4e2e4c9)
+- [Multiplicity (QTT)](#org92f24a4)
+- [Dependent Types and Eliminators](#org434cbc6)
+  - [Natural Number Elimination (natrec)](#org6cc11a3)
+  - [Equality Elimination (J)](#org0daf2b7)
+  - [Length-Indexed Vectors](#org2bfb058)
+- [Full Program Example](#orgd8aa156)
+- [Appendix: S-Expression Mode](#org66ac9f6)
+- [Appendix: Whitespace Reader Rules](#org5694758)
+- [Appendix: Reader Desugaring Table](#org5be1b88)
 
 
 
-<a id="org353c80f"></a>
+<a id="org1ebb2fb"></a>
 
 # Introduction
 
@@ -70,12 +74,12 @@ The grammar is organized bottom-up: lexical elements, then types, then expressio
 > **Design Principle**: Prologos is *homoiconic* &#x2014; code and data share the same representation. All syntactic sugar desugars to s-expressions. Macros operate on the post-parse representation, making code-as-data a first-class concept.
 
 
-<a id="org4392204"></a>
+<a id="org8e65e2a"></a>
 
 # Lexical Grammar
 
 
-<a id="orgb1e123e"></a>
+<a id="org7d8fa92"></a>
 
 ## Comments
 
@@ -87,7 +91,7 @@ def x : Nat zero  ; inline comment
 ```
 
 
-<a id="orge8c856b"></a>
+<a id="orgb447337"></a>
 
 ## Identifiers
 
@@ -115,7 +119,7 @@ opt::unwrap-or  ;; qualified reference to option module's unwrap-or
 ```
 
 
-<a id="org5910a98"></a>
+<a id="org15cf07a"></a>
 
 ## Numeric Literals
 
@@ -143,7 +147,7 @@ Bare decimal literals (`3.14`, `0.5`) produce Posit32 values, the same as their 
 Nat is intended for type-level infrastructure (indices, lengths, proofs), not general computation.
 
 
-<a id="orgfd66575"></a>
+<a id="orgefea47f"></a>
 
 ## String Literals
 
@@ -155,7 +159,7 @@ Double-quoted with standard escape sequences (`\n`, `\t`, `\\`, `\"`).
 ```
 
 
-<a id="orgec4938a"></a>
+<a id="org6fe1a29"></a>
 
 ## Keyword Literals
 
@@ -168,7 +172,7 @@ Keywords start with `:` and are used as map keys and enum-like values:
 ```
 
 
-<a id="orga8afb2b"></a>
+<a id="org8636907"></a>
 
 ## Boolean Literals
 
@@ -178,7 +182,7 @@ false
 ```
 
 
-<a id="org30a24cf"></a>
+<a id="orgb40151f"></a>
 
 ## Special Tokens
 
@@ -186,6 +190,8 @@ false
 |--------- |--------------------------------------------- |
 | `_`       | Wildcard / type hole (inferred)               |
 | `_1` `_2` | Numbered placeholders for partial application |
+| `??`      | Typed hole (interactive development)          |
+| `??name`  | Named typed hole                              |
 | `:0`      | Erased multiplicity (use 0 times)             |
 | `:1`      | Linear multiplicity (use exactly 1 time)      |
 | `:w`      | Unrestricted multiplicity (use any times)     |
@@ -194,7 +200,7 @@ false
 | `refl`    | Equality reflexivity proof                    |
 
 
-<a id="org8792cb9"></a>
+<a id="orgf0bbb14"></a>
 
 ## Bracket Types
 
@@ -210,7 +216,7 @@ Prologos uses four bracket types, each with distinct semantics:
 Inside any bracket pair, newlines are treated as whitespace (indentation is not significant).
 
 
-<a id="org367fc3d"></a>
+<a id="org68af039"></a>
 
 ## Collection Literal Prefixes
 
@@ -223,14 +229,14 @@ Inside any bracket pair, newlines are treated as whitespace (indentation is not 
 | `{k v}`  | `Map`  | `{:name "Ada"}` |
 
 
-<a id="org3676e06"></a>
+<a id="org217a5cf"></a>
 
 # Type Expressions
 
 In a dependently-typed language, types and terms share the same expression syntax. This section highlights type-specific forms.
 
 
-<a id="orgdbff88b"></a>
+<a id="org3fed70d"></a>
 
 ## Base Types
 
@@ -244,6 +250,10 @@ base-type ::= 'Type'     (* universe of types, level inferred *)
             | 'Symbol'   (* symbols for homoiconicity           *)
             | 'Keyword'  (* keyword type for map keys           *)
             | 'Datum'    (* code-as-data algebraic type         *)
+            | 'PropNetwork'  (* persistent propagator network  *)
+            | 'CellId'       (* propagator cell identifier     *)
+            | 'PropId'       (* propagator identifier          *)
+            | 'UnionFind'    (* persistent disjoint sets       *)
 ```
 
 ```prologos
@@ -253,7 +263,7 @@ def u : Unit unit
 ```
 
 
-<a id="org96181da"></a>
+<a id="org0b4219c"></a>
 
 ## Parameterized Types
 
@@ -269,7 +279,7 @@ PVec Nat            ;; persistent vector of Nats
 ```
 
 
-<a id="orgfeda93b"></a>
+<a id="orge3ccc91"></a>
 
 ## Function Types (Arrows)
 
@@ -290,7 +300,7 @@ Nat -> Nat -> Bool        ;; curried: Nat -> (Nat -> Bool)
 ```
 
 
-<a id="org143540c"></a>
+<a id="org616cc51"></a>
 
 ## Dependent Types (Angle Brackets)
 
@@ -314,7 +324,7 @@ dependent-type ::= '<' '(' ident ':' type ')' '->' type '>'  (* dependent Pi   *
 ```
 
 
-<a id="orge10c275"></a>
+<a id="orga509320"></a>
 
 ## Sigma Types (Product / Pair Types)
 
@@ -332,7 +342,7 @@ Nat * Bool
 ```
 
 
-<a id="org0c5b808"></a>
+<a id="orgbd83467"></a>
 
 ## Equality Type
 
@@ -343,7 +353,7 @@ Nat * Bool
 ```
 
 
-<a id="orga5c51d2"></a>
+<a id="org0ec2a24"></a>
 
 ## Union Types
 
@@ -355,7 +365,7 @@ Int | Rat | Nat    ;; right-associative: Int | (Rat | Nat)
 ```
 
 
-<a id="org7f60464"></a>
+<a id="org7b4147e"></a>
 
 ## Universe Levels
 
@@ -366,7 +376,7 @@ Type           ;; universe, level inferred
 ```
 
 
-<a id="orgee22f7d"></a>
+<a id="org9adaba3"></a>
 
 ## Type Holes
 
@@ -378,12 +388,37 @@ map _ xs          ;; type argument inferred
 ```
 
 
-<a id="org0b7d71e"></a>
+<a id="org5c2665a"></a>
+
+## Typed Holes (Interactive Development)
+
+The `??` token is a *typed hole* &#x2014; distinct from `_` (inference hole). Where `_` means "infer this for me silently," `??` means "I don't know what goes here &#x2014; show me what's possible." The type checker produces a diagnostic report with the expected type, local context, and suggestions.
+
+```prologos
+defn reverse
+  | [nil]        -> nil
+  | [[cons h t]] -> ??
+  ;; Report: Hole ?? : [List A]
+  ;;   h : A, t : [List A], reverse : [List A] -> [List A]
+```
+
+Named holes label specific incomplete positions:
+
+```prologos
+defn zip-with [f xs ys]
+  match [xs ys]
+    | [[cons x xs'] [cons y ys']] -> [cons ??combine ??recurse]
+```
+
+`??` is the syntactic foundation for Editor-Assisted Interactive Development (Agda/Idris-style hole-driven programming). See the Extended Spec Design document for the full vision.
+
+
+<a id="orge0eabfd"></a>
 
 # Expressions
 
 
-<a id="orgf5b7243"></a>
+<a id="org885aa94"></a>
 
 ## Function Application
 
@@ -405,7 +440,7 @@ map [add 1N _] '[1N 2N 3N]  ;; map with partial application
 ```
 
 
-<a id="org80122a5"></a>
+<a id="orgf063c4c"></a>
 
 ## Lambda Expressions
 
@@ -433,7 +468,7 @@ fn x [suc x]
 ```
 
 
-<a id="orgc1975c5"></a>
+<a id="org96e3a49"></a>
 
 ## Pattern Matching
 
@@ -481,7 +516,7 @@ Available patterns:
 -   **Nested**: `[cons x nil]` &#x2013; grouped pattern in brackets
 
 
-<a id="org21f9fee"></a>
+<a id="org157cedb"></a>
 
 ## If (Conditional)
 
@@ -498,7 +533,7 @@ match [zero? n]
 ```
 
 
-<a id="orgb6977b8"></a>
+<a id="orgc5e02c6"></a>
 
 ## Let (Local Binding)
 
@@ -515,7 +550,7 @@ let x : Nat = [add 1N 2N]
 ```
 
 
-<a id="org8467ab5"></a>
+<a id="org58aaea6"></a>
 
 ## Pipe Operator (|>)
 
@@ -537,7 +572,7 @@ zero |> suc |> suc |> suc    ;; = suc(suc(suc(zero))) = 3
 ```
 
 
-<a id="orgb2a0189"></a>
+<a id="org75c201e"></a>
 
 ## Compose Operator (>>)
 
@@ -552,7 +587,7 @@ zero |> [suc >> double]     ;; = double(suc(zero))
 ```
 
 
-<a id="orga75b36e"></a>
+<a id="orge9b5afb"></a>
 
 ## Type Annotations (the)
 
@@ -565,7 +600,7 @@ Explicit type annotation on an expression:
 ```
 
 
-<a id="orgaec6805"></a>
+<a id="orge13833f"></a>
 
 ## Pairs
 
@@ -583,7 +618,7 @@ snd [pair x y]
 ```
 
 
-<a id="org5506af7"></a>
+<a id="org3dc593c"></a>
 
 ## Quote and Quasiquote
 
@@ -604,7 +639,7 @@ def val : Datum [datum-nat 10]
 ```
 
 
-<a id="orgf6f15dd"></a>
+<a id="orgde57f7f"></a>
 
 ## Collection Literals
 
@@ -634,7 +669,7 @@ def val : Datum [datum-nat 10]
 ```
 
 
-<a id="org2ca19ad"></a>
+<a id="org54abf34"></a>
 
 ## Partial Application
 
@@ -649,7 +684,7 @@ Numbered placeholders `_1`, `_2` enable positional reordering:
 ```
 
 
-<a id="orga526ae2"></a>
+<a id="org48046eb"></a>
 
 ## Varargs
 
@@ -672,12 +707,12 @@ first-plus-rest 100 1 2 3  ;; = 106
 ```
 
 
-<a id="org1a90f35"></a>
+<a id="org39d9e10"></a>
 
 # Declarations
 
 
-<a id="orgc6841f8"></a>
+<a id="orgaefca1b"></a>
 
 ## Namespace (ns)
 
@@ -694,7 +729,7 @@ ns prologos.data.list :no-prelude
 The prelude automatically provides: `Nat`, `Bool`, `List`, `Option`, `Result`, `Pair` operations, `Eq=/=Ord=/=Add=/=Sub=/=Mul=/=Neg=/=Abs=/=FromInt=/=Num=/ =Fractional` traits and instances.
 
 
-<a id="org8de9855"></a>
+<a id="org5e6a21f"></a>
 
 ## Require
 
@@ -714,7 +749,7 @@ require [prologos.data.list   :refer [List nil cons map]]
 ```
 
 
-<a id="orgcf204e0"></a>
+<a id="orgbeb52e4"></a>
 
 ## Value Definition (def)
 
@@ -734,7 +769,7 @@ def- internal-state : Nat zero
 ```
 
 
-<a id="org704420f"></a>
+<a id="orgfefe6f8"></a>
 
 ## Type Signature (spec)
 
@@ -758,7 +793,51 @@ spec sort-on {A B : Type} [B -> B -> Bool] [A -> B] [List A] -> List A
 ```
 
 
-<a id="org05b9b9b"></a>
+<a id="org2f77602"></a>
+
+### Extended Spec with Metadata
+
+`spec` optionally accepts a trailing metadata map using the implicit map syntax. Keyword-headed children after the type signature are collected into a metadata hash. Recognized keys include `:implicits`, `:where`, `:doc`, `:examples`, `:properties`, `:see-also`, `:pre`, `:post`, `:refines`. Unrecognized keys are stored but not acted upon (forward-compatible).
+
+The `:implicits` key lifts implicit binders out of the type signature into metadata, freeing the signature to express pure function shape. Inline `{A : Type}` and `:implicits` coexist; both are merged.
+
+```prologos
+;; With :implicits — clean signature:
+spec sort [List A] -> [List A]
+  :implicits {A : Type}
+  :where (Ord A)
+  :doc "Sorts a list in ascending order"
+  :examples
+    - [sort '[3N 1N 2N]] => '[1N 2N 3N]
+    - [sort '[]] => '[]
+  :properties (sortable-laws A)
+  :see-also [reverse filter]
+
+;; HKT case — :implicits dramatically improves readability:
+spec gmap [A -> B] -> [C A] -> [C B]
+  :implicits {A B : Type} {C : Type -> Type}
+  :where (Seqable C) (Buildable C)
+
+;; With functor — Pi types hidden entirely:
+spec xf-compose [Xf A B] -> [Xf B C] -> [Xf A C]
+  :implicits {A B C : Type}
+  :properties (transducer-fusion-laws A B C)
+```
+
+The metadata is entirely optional. A simple `spec add Nat Nat -> Nat` is unchanged. Metadata keys follow the principle of progressive disclosure: add `:doc` and `:examples` for public APIs, `:properties` for libraries, `:pre=/`:post= for safety-critical code, `:refines` for verified code.
+
+Each `:properties` entry is a map with three keys:
+
+| Key       | Meaning                                    |
+|--------- |------------------------------------------ |
+| `:name`   | Human-readable label for the property      |
+| `:forall` | Universally quantified variables (binders) |
+| `:holds`  | Boolean expression that must be true       |
+
+See the Extended Spec Design document (`docs/tracking/2026-02-22_EXTENDED_SPEC_DESIGN.org`) for the full research survey and design rationale.
+
+
+<a id="org7816c38"></a>
 
 ## Function Definition (defn)
 
@@ -790,7 +869,7 @@ defn- helper [x]
 ```
 
 
-<a id="orgb0d13ac"></a>
+<a id="org598e094"></a>
 
 ## Algebraic Data Types (data)
 
@@ -823,7 +902,7 @@ data- InternalTree {A}
 ```
 
 
-<a id="orgfd65fe8"></a>
+<a id="org7fcc568"></a>
 
 ## Traits and Implementations
 
@@ -848,10 +927,122 @@ defn eq-neq [dict x y]
 
 ;; Bundle: named trait combination
 bundle Num := (Add, Sub, Mul, Neg, Abs, FromInt)
+
+;; Trait with :laws reference
+trait Functor {F : Type -> Type}
+  :laws (functor-laws F)
+  fmap : {A B : Type} [A -> B] -> [F A] -> [F B]
 ```
 
 
-<a id="orge38e516"></a>
+<a id="orgda8fca7"></a>
+
+## Property Declarations
+
+A `property` declares a named, composable group of propositions &#x2014; analogous to `bundle` for traits. Properties compose via `:includes` (conjunction) and attach to specs via `:properties` or to traits via `:laws`.
+
+```prologos
+;; Basic property declaration
+property sortable-laws {A : Type}
+  :where (Ord A)
+  - :name "idempotent"
+    :forall {xs : [List A]}
+    :holds [eq? [sort [sort xs]] [sort xs]]
+  - :name "length-preserving"
+    :forall {xs : [List A]}
+    :holds [eq? [length [sort xs]] [length xs]]
+
+;; Composition via :includes (like bundle for traits)
+property monoid-laws {A : Type}
+  :where (Add A) (AdditiveIdentity A)
+  :includes (semigroup-laws A)
+  - :name "left-identity"
+    :forall {x : A}
+    :holds [eq? [add additive-identity x] x]
+  - :name "right-identity"
+    :forall {x : A}
+    :holds [eq? [add x additive-identity] x]
+
+;; Hierarchical: monad includes applicative includes functor
+property monad-laws {M : Type -> Type}
+  :where (Monad M)
+  :includes (applicative-laws M)
+  - :name "left-identity"
+    :forall {a : A} {f : [A -> [M B]]}
+    :holds [eq? [bind [pure a] f] [f a]]
+
+;; Usage in spec
+spec sort [List A] -> [List A]
+  :implicits {A : Type}
+  :where (Ord A)
+  :properties (sortable-laws A)
+
+;; Higher-order: parameterized over functions
+property sorting-properties {A : Type} {f : [List A] -> [List A]}
+  :where (Ord A)
+  - :name "idempotent"
+    :forall {xs : [List A]}
+    :holds [eq? [f [f xs]] [f xs]]
+
+spec sort [List A] -> [List A]
+  :where (Ord A)
+  :properties (sorting-properties A sort)
+```
+
+Property clause names are scoped to their declaring block. When `:includes` flattens a hierarchy, names are qualified with `/`: `functor-laws/identity`, `monad-laws/left-identity`, etc.
+
+
+<a id="org2772cff"></a>
+
+## Functor Declarations (Named Type Abstractions)
+
+A `functor` declares a named, parameterized type abstraction with optional category-theoretic metadata. Transparent by default &#x2014; the type checker unfolds to the `:unfolds` form during elaboration. Metadata keys map CT concepts to approachable language.
+
+```prologos
+;; Simple type synonym
+functor FilePath
+  :unfolds String
+
+;; Parameterized synonym with documentation
+functor Result {A}
+  :unfolds [Either String A]
+  :doc "A computation that may fail with a string error"
+
+;; Full category-theoretic treatment
+functor Xf {A B : Type}
+  :doc "A transducer: transforms A-reductions into B-reductions"
+  :compose xf-compose
+  :identity id-xf
+  :laws (transducer-fusion-laws A B)
+  :unfolds <(S :0 Type) -> [S -> B -> S] -> S -> A -> S>
+
+;; Optics
+functor Lens {S T A B : Type}
+  :doc "A bidirectional accessor: view and update a part of a structure"
+  :compose lens-compose
+  :identity lens-id
+  :laws (lens-laws S T A B)
+  :see-also [Prism Traversal Iso]
+  :unfolds <{F : Type -> Type} -> (Functor F) -> [A -> [F B]] -> S -> [F T]>
+
+;; Usage in specs — the functor name replaces raw Pi types:
+spec xf-compose [Xf A B] -> [Xf B C] -> [Xf A C]
+  :implicits {A B C : Type}
+spec into-list [Xf A B] -> [List A] -> [List B]
+  :implicits {A B : Type}
+```
+
+| CT concept           | Key         | Meaning in plain English              |
+|-------------------- |----------- |------------------------------------- |
+| Object mapping       | `:unfolds`  | "What this expands to under the hood" |
+| Morphism composition | `:compose`  | "How to chain two of these together"  |
+| Identity morphism    | `:identity` | "The do-nothing version"              |
+| Laws                 | `:laws`     | "What rules these always follow"      |
+
+Only `:unfolds` is required. The rest are progressive.
+
+
+<a id="org4e2e4c9"></a>
 
 ## User-Defined Macros
 
@@ -875,7 +1066,7 @@ when-nonzero zero [double 5]  ;; = 0
 ```
 
 
-<a id="org74b35c0"></a>
+<a id="org92f24a4"></a>
 
 # Multiplicity (QTT)
 
@@ -905,12 +1096,12 @@ Nat -w> Nat           ;; unrestricted: explicit
 ```
 
 
-<a id="orgf1e9310"></a>
+<a id="org434cbc6"></a>
 
 # Dependent Types and Eliminators
 
 
-<a id="org560bad3"></a>
+<a id="org6cc11a3"></a>
 
 ## Natural Number Elimination (natrec)
 
@@ -936,7 +1127,7 @@ defn double [n]
 ```
 
 
-<a id="org057bd4a"></a>
+<a id="org0daf2b7"></a>
 
 ## Equality Elimination (J)
 
@@ -948,7 +1139,7 @@ J motive base left right refl
 ```
 
 
-<a id="orgda652e6"></a>
+<a id="org2bfb058"></a>
 
 ## Length-Indexed Vectors
 
@@ -964,7 +1155,7 @@ vindex Nat 3N [fzero 2N] v      ;; safe index via Fin
 ```
 
 
-<a id="org39bc426"></a>
+<a id="orgd8aa156"></a>
 
 # Full Program Example
 
@@ -1015,7 +1206,7 @@ unless [zero? 5] [factorial 5]
 ```
 
 
-<a id="orgc2dfc33"></a>
+<a id="org66ac9f6"></a>
 
 # Appendix: S-Expression Mode
 
@@ -1042,7 +1233,7 @@ spec map {A B : Type} [A -> B] [List A] -> List B
 ```
 
 
-<a id="org4f4d510"></a>
+<a id="org5694758"></a>
 
 # Appendix: Whitespace Reader Rules
 
@@ -1056,7 +1247,7 @@ The WS reader converts indentation to explicit structure:
 6.  **Column 0**: always starts a new top-level form
 
 
-<a id="orgb139532"></a>
+<a id="org5be1b88"></a>
 
 # Appendix: Reader Desugaring Table
 

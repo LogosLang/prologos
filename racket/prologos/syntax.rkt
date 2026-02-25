@@ -170,6 +170,11 @@
  (struct-out expr-net-cell-read) (struct-out expr-net-cell-write)
  (struct-out expr-net-add-prop) (struct-out expr-net-run)
  (struct-out expr-net-snapshot) (struct-out expr-net-contradiction)
+ ;; UnionFind (persistent disjoint sets)
+ (struct-out expr-uf-type) (struct-out expr-uf-store)
+ (struct-out expr-uf-empty) (struct-out expr-uf-make-set)
+ (struct-out expr-uf-find) (struct-out expr-uf-union)
+ (struct-out expr-uf-value)
  ;; Int (arbitrary-precision integers)
  (struct-out expr-Int)
  (struct-out expr-int)
@@ -636,6 +641,23 @@
 (struct expr-net-contradiction (net) #:transparent)              ; PropNetwork -> Bool
 
 ;; ========================================
+;; UnionFind (persistent disjoint sets, Conchon & Filliâtre 2007)
+;; ========================================
+
+;; Type constructor
+(struct expr-uf-type () #:transparent)                            ; UnionFind : Type 0
+
+;; Runtime wrapper (opaque Racket uf-store from union-find.rkt)
+(struct expr-uf-store (store-value) #:transparent)                ; wrapped uf-store
+
+;; Operations
+(struct expr-uf-empty () #:transparent)                           ; UnionFind (nullary constructor)
+(struct expr-uf-make-set (store id val) #:transparent)            ; UnionFind -> Nat -> A -> UnionFind
+(struct expr-uf-find (store id) #:transparent)                    ; UnionFind -> Nat -> [Nat * UnionFind]
+(struct expr-uf-union (store id1 id2) #:transparent)              ; UnionFind -> Nat -> Nat -> UnionFind
+(struct expr-uf-value (store id) #:transparent)                   ; UnionFind -> Nat -> A (type-unsafe)
+
+;; ========================================
 ;; Int (arbitrary-precision integers, backed by Racket exact integers)
 ;; ========================================
 
@@ -876,6 +898,7 @@
       (expr-net-cell-read? x) (expr-net-cell-write? x)
       (expr-net-add-prop? x) (expr-net-run? x)
       (expr-net-snapshot? x) (expr-net-contradiction? x)
+      (expr-uf-type? x) (expr-uf-store? x)
       (expr-hole? x) (expr-typed-hole? x) (expr-meta? x) (expr-reduce? x)
       (expr-union? x) (expr-tycon? x) (expr-error? x)))
 

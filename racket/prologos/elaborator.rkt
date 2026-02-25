@@ -1990,6 +1990,43 @@
        (if (prologos-error? en) en
            (expr-net-contradiction en)))]
 
+    ;; ---- UnionFind (persistent disjoint sets) ----
+    [(surf-uf-type _loc) (expr-uf-type)]
+
+    [(surf-uf-empty _loc) (expr-uf-empty)]
+
+    [(surf-uf-make-set store id val loc)
+     (let ([es (elaborate store env depth)]
+           [ei (elaborate id env depth)]
+           [ev (elaborate val env depth)])
+       (cond [(prologos-error? es) es]
+             [(prologos-error? ei) ei]
+             [(prologos-error? ev) ev]
+             [else (expr-uf-make-set es ei ev)]))]
+
+    [(surf-uf-find store id loc)
+     (let ([es (elaborate store env depth)]
+           [ei (elaborate id env depth)])
+       (cond [(prologos-error? es) es]
+             [(prologos-error? ei) ei]
+             [else (expr-uf-find es ei)]))]
+
+    [(surf-uf-union store id1 id2 loc)
+     (let ([es (elaborate store env depth)]
+           [e1 (elaborate id1 env depth)]
+           [e2 (elaborate id2 env depth)])
+       (cond [(prologos-error? es) es]
+             [(prologos-error? e1) e1]
+             [(prologos-error? e2) e2]
+             [else (expr-uf-union es e1 e2)]))]
+
+    [(surf-uf-value store id loc)
+     (let ([es (elaborate store env depth)]
+           [ei (elaborate id env depth)])
+       (cond [(prologos-error? es) es]
+             [(prologos-error? ei) ei]
+             [else (expr-uf-value es ei)]))]
+
     ;; Reduce: ML-style pattern matching
     ;; Each arm's body must be elaborated with binding names in scope.
     ;; We add dummy binders (the actual types come from the type checker).

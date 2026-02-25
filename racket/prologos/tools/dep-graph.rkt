@@ -721,7 +721,14 @@
    (test-dep '(propagator.rkt syntax.rkt typing-core.rkt reduction.rkt parser.rkt elaborator.rkt surface-syntax.rkt) #t)
    'test-propagator-lvar.rkt
    (test-dep '(propagator.rkt syntax.rkt typing-core.rkt reduction.rkt parser.rkt elaborator.rkt
-               surface-syntax.rkt namespace.rkt macros.rkt) #t)))
+               surface-syntax.rkt namespace.rkt macros.rkt) #t)
+   ;; UnionFind (persistent disjoint sets)
+   'test-union-find.rkt
+   (test-dep '(union-find.rkt) #f)
+   'test-union-find-types.rkt
+   (test-dep '(union-find.rkt syntax.rkt typing-core.rkt qtt.rkt substitution.rkt pretty-print.rkt reduction.rkt) #f)
+   'test-union-find-integration.rkt
+   (test-dep '(union-find.rkt syntax.rkt typing-core.rkt reduction.rkt parser.rkt elaborator.rkt surface-syntax.rkt) #t)))
 
 ;; ============================================================
 ;; Layer 2b: Example file → test file mapping

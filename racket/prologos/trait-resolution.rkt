@@ -92,6 +92,7 @@
     [(expr-net-type) "PropNetwork"]
     [(expr-cell-id-type) "CellId"]
     [(expr-prop-id-type) "PropId"]
+    [(expr-uf-type) "UnionFind"]
     ;; HKT: unapplied type constructor
     [(expr-tycon name) (symbol->string name)]
     ;; Built-in parameterized types: extract constructor name
