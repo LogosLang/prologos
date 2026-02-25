@@ -4,4 +4,5 @@
 # Tests listed here are skipped by run-affected-tests.rkt by default.
 # Use --no-skip to override, --skip-only to run only these tests.
 
-# (none currently — test-pipe-compose-e2e.rkt fixed, see 2026-02-19_PIPE_COMPOSE_AUDIT.md)
+test-reduction-perf-01-02.rkt  # fuel exhaustion (1M WHNF steps), ~144s
+test-reduction-perf-02-02.rkt  # fib 20 exponential recursion, ~48s
