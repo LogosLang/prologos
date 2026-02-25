@@ -2577,7 +2577,7 @@
     [(and (>= (length args) 4)
           (let ([second (cadr args)])
             (let ([elems (if (syntax? second) (syntax->list second) #f)])
-              (and elems (not (null? elems))
+              (and elems
                    (andmap (lambda (e) (symbol? (syntax-e e))) elems)
                    (not (ormap (lambda (e)
                                 (let ([d (syntax-e e)])
@@ -2652,17 +2652,21 @@
   ;; Sprint 10: detect bare params (only symbols, no types) vs typed params
   (define explicit-binders
     (let ([elems (if (syntax? params-stx) (syntax->list params-stx) #f)])
-      (if (and elems (not (null? elems))
-               (andmap (lambda (e) (symbol? (syntax-e e))) elems)
-               (not (ormap (lambda (e)
-                             (let ([d (syntax-e e)])
-                               (or (eq? d ':) (mult-annot? d))))
-                           elems)))
-          ;; Bare params: build binders with surf-hole types
-          (for/list ([e (in-list elems)])
-            (binder-info (syntax-e e) #f (surf-hole loc)))
-          ;; Typed params: existing path
-          (parse-defn-binders params-stx loc))))
+      (cond
+        ;; Zero-arg: empty brackets → no binders
+        [(and elems (null? elems)) '()]
+        ;; Bare params: only symbols, no type annotations
+        [(and elems
+              (andmap (lambda (e) (symbol? (syntax-e e))) elems)
+              (not (ormap (lambda (e)
+                            (let ([d (syntax-e e)])
+                              (or (eq? d ':) (mult-annot? d))))
+                          elems)))
+         (for/list ([e (in-list elems)])
+           (binder-info (syntax-e e) #f (surf-hole loc)))]
+        ;; Typed params: existing path
+        [else (parse-defn-binders params-stx loc)])))
+
   (when (prologos-error? explicit-binders)
     (values explicit-binders))
 
@@ -2873,8 +2877,7 @@
   (cond
     [(not parts)
      (parse-error loc "defn: malformed parameter list" #f)]
-    [(null? parts)
-     (parse-error loc "defn: parameter list cannot be empty" #f)]
+    [(null? parts) '()]
     ;; Detect colon-based syntax: check if any element is a bare ': symbol
     ;; (not :0/:1/:w multiplicities, and not inside $angle-type)
     [(ormap (lambda (p)
@@ -3232,16 +3235,12 @@
      ;; Multiple atoms — construct a list datum and run pre-parse expansion
      (define datums (map stx->datum atoms))
      (define expanded (preparse-expand-form datums))
-     ;; If expansion changed the form (macro was applied), parse the expanded result
-     (if (not (equal? expanded datums))
-         ;; Macro expanded — wrap in syntax and parse
-         (parse-datum (datum->syntax #f expanded))
-         ;; No expansion — treat as type application
-         (let ([func (parse-datum (car atoms))]
-               [args (map (lambda (a) (parse-datum a)) (cdr atoms))])
-           (let ([first-err (findf prologos-error? (cons func args))])
-             (if first-err first-err
-                 (surf-app func args loc)))))]))
+     ;; Parse as a full form via parse-datum, which correctly dispatches
+     ;; native type keywords (Set, Map, PVec, List, etc.) as well as
+     ;; user-defined type constructors via application.
+     (parse-datum (datum->syntax #f (if (not (equal? expanded datums))
+                                        expanded
+                                        datums)))]))
 
 ;; ========================================
 ;; Parse the-fn: (the-fn type [params...] body)

@@ -123,15 +123,20 @@ bundle Num := (Numeric, Comparable)
 spec sort : {A : Type} where (Comparable A) [List A] -> [List A]
 #+end_src
 
-** Why Conjunctive, Not Implicative
+** Why Conjunctive, Not Implicative (No Trait Hierarchies)
 Traditional supertraits create hard dependencies:
 - Haskell: ~class Eq a => Ord a~ means Ord /implies/ Eq
 - If the superclass hierarchy changes, all downstream code breaks
+
+Prologos rejects trait hierarchies entirely. No trait implies, requires, or
+inherits from another trait. This is a non-negotiable design principle (see
+DESIGN_PRINCIPLES.org § "No Trait Hierarchies").
 
 Bundles are pure sugar --- expanded at parse time into flat conjunctions:
 - ~(Num A)~ expands to ~(Add A) (Sub A) (Mul A) (Neg A) (Abs A) (FromInt A) (Eq A) (Ord A)~
 - No runtime overhead, no diamond ambiguity, no coupling between traits
 - Users define domain bundles freely without language support
+- ~:include~ means set union of trait constraints, not inheritance
 
 ** Single-Method Trait Optimization
 When a trait has exactly one method, the dictionary /is/ the function:

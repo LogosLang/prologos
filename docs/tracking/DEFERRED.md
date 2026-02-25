@@ -9,7 +9,7 @@ blocked on unbuilt infrastructure or uncertain design — not effort avoidance.
 See `docs/tracking/principles/DEVELOPMENT_LESSONS.org` § "Completeness Over
 Deferral".
 
-**Last consolidated sweep**: 2026-02-23 (all tracking docs audited).
+**Last consolidated sweep**: 2026-02-24 (persistent propagator network revision; logic engine design complete; extended spec hardening complete).
 
 ---
 
@@ -80,9 +80,9 @@ The following collection items ARE also deferred (genuine infrastructure deps):
 - 3a: SortedMap + SortedSet (B+ Tree)
 - 3b: Deque (Finger Tree)
 - 3c: PriorityQueue (Pairing Heap)
-- 3d: LVars + Logical Variables (monotonic lattice variables)
-- 3e: LVar-Map + LVar-Set (lattice-compatible collections)
-- 3f: Propagator Network (constraint propagation cells)
+- 3d-3f: **Subsumed by Logic Engine** — LVars, LVar-Map/Set, PropNetwork
+  are now part of the Logic Engine phases (persistent PropNetwork cells
+  with lattice merge functions replace standalone LVar types)
 - 3g: Length-Indexed Vec (dependent types over collections)
 - Source: `docs/tracking/2026-02-19_CORE_DATA_STRUCTURES_ROADMAP.md`
 
@@ -92,7 +92,8 @@ The following collection items ARE also deferred (genuine infrastructure deps):
 - 4c: Actor/Place Integration (cross-actor persistent collections)
 - 4d: ConcurrentMap (Ctrie — lock-free concurrent hash map)
 - 4e: SymbolTable (ART — Adaptive Radix Tree for string keys)
-- 4f: UnionFind (Persistent union-find)
+- 4f: **Subsumed by Logic Engine Phase 4** — UnionFind is now part of the
+  Logic Engine design (persistent union-find for unification)
 - Source: `docs/tracking/2026-02-19_CORE_DATA_STRUCTURES_ROADMAP.md`
 
 ### Linear Enforcement for Transient Handles
@@ -134,22 +135,48 @@ The following collection items ARE also deferred (genuine infrastructure deps):
 
 ## Spec System / Extended Spec Design
 
-### `??` Typed Holes
-- `??` reader token → `($typed-hole)` sentinel → `expr-typed-hole` AST node
-- Type checker reports diagnostics (expected type + context + suggestions)
-- Distinction: `_` = silent/automatic; `??` = interactive/diagnostic
-- **Blocked on**: 14-file AST pipeline addition + editor protocol design
-- Source: `docs/tracking/2026-02-22_EXTENDED_SPEC_DESIGN.org`
+### `??` Typed Holes — Phase 1 COMPLETE
+- **STATUS**: Full 14-file pipeline implemented (reader → parser → elaborator →
+  typing-core → pretty-print). Enhanced diagnostics: pretty-printed expected type,
+  context bindings with synthetic names and multiplicities. 9 tests.
+- **Remaining (Phase 2+)**: Type-aware suggestions (matching global bindings),
+  editor protocol for structured hole reports (JSON).
+- Source: `docs/tracking/2026-02-24_EXTENDED_SPEC_HARDENING.md`
 
-### `property` Keyword
-- Named, parameterized conjunction of propositions
-- `:includes` for composition (like `bundle` for traits)
-- `:laws` key on `trait` declarations
-- `property-entry` struct and `current-property-store`
-- Source: `docs/tracking/2026-02-22_EXTENDED_SPEC_DESIGN.org`
+### `property` Keyword — Phase 1 COMPLETE
+- **STATUS**: Parsing, storage, `:includes` flattening, `/`-qualified names,
+  `spec-properties` and `trait-laws-flattened` accessors all working.
+  WS-mode integration via `rewrite-implicit-map` property-specific branch.
+  Standard library declarations in `algebraic-laws.prologos`.
+  73 tests (61 sexp + 12 WS).
+- Source: `docs/tracking/2026-02-24_PROPERTY_KEYWORD_HARDENING.md`
+- **Remaining (Phase 2+)**: QuickCheck execution of `:holds` clauses,
+  `Gen` trait, runtime property checking — see Phase 2 below.
+
+### `functor` Keyword — Phase 1 COMPLETE
+- **STATUS**: Parsing, storage, deftype auto-registration all working.
+  WS-mode integration fixed (rewrite-implicit-map applied at dispatch).
+  Standard library declarations in `type-functors.prologos` (Xf, AppResult).
+  11 tests (WS + sexp + stdlib).
+- **Remaining (Phase 2+)**: `:compose`/`:identity` used for category-theoretic
+  composition, opaque functors, error messages showing functor names.
+- Source: `docs/tracking/2026-02-24_EXTENDED_SPEC_HARDENING.md`
+
+### `:examples` Metadata — Phase 1 COMPLETE
+- **STATUS**: Explicit parsing in `parse-spec-metadata`, `spec-examples` accessor.
+  Multiple examples properly collected via `collect-constraint-values`.
+  `spec-doc` accessor also added. 7 tests.
+- **Remaining (Phase 2)**: Type-checking and running `:examples` entries.
+- Source: `docs/tracking/2026-02-24_EXTENDED_SPEC_HARDENING.md`
+
+### `:deprecated` Warnings — Phase 1 COMPLETE
+- **STATUS**: `deprecation-warning` struct in warnings.rkt, emitted during
+  type checking when `expr-fvar` references a spec with `:deprecated` metadata.
+  Displayed after command processing. 6 tests.
+- Source: `docs/tracking/2026-02-24_EXTENDED_SPEC_HARDENING.md`
 
 ### Phase 2: Example and Property Checking (QuickCheck-style)
-- Parse `:examples`, type-check, run as tests
+- Type-check and run `:examples` entries as tests
 - `Gen` trait for type-directed random generation
 - Property checking for `:properties` and `:laws`
 - Contract wrapping: `:pre`/`:post` generate runtime checks with blame
@@ -216,6 +243,96 @@ The following collection items ARE also deferred (genuine infrastructure deps):
 - Postfix operators (`.{n!}`)
 - Full mixfix patterns (`.{if p then a else b}` — Agda-style)
 - Source: `docs/tracking/2026-02-23_MIXFIX_SYNTAX_DESIGN.org`
+
+---
+
+## Logic Engine / Propagator Architecture
+
+### Phase 1: Lattice Trait + champ-insert-join (NOT STARTED)
+- `Lattice` trait: bot, join, leq
+- Standard instances: FlatLattice, SetLattice, MapLattice, IntervalLattice, BoolLattice
+- `champ-insert-join` Racket-level helper: COMPLETE (in `champ.rkt`)
+- `lib/prologos/core/lattice.prologos` + `lattice-instances.prologos`
+- **Dependencies**: None (uses existing trait system)
+- Source: `docs/tracking/2026-02-24_LOGIC_ENGINE_DESIGN.org`
+
+### Phase 2: Persistent PropNetwork — Racket-Level (NOT STARTED)
+- **Persistent/immutable** propagator network backed by CHAMP maps
+- All structs `#:transparent` (not `#:mutable`) — pure functional operations
+- `prop-network` struct: cells, propagators, worklist, merge-fns, fuel, contradiction
+- CellId = Nat counter (deterministic, no gensym)
+- `net-cell-write` does join-on-merge — LVars subsumed by cells
+- `run-to-quiescence`: pure tail-recursive loop
+- Backtracking = keep old reference (O(1)). Snapshots = free.
+- No AST nodes (Racket-level only). 3 new files, ~60 tests
+- **Dependencies**: Phase 1
+- Source: `docs/tracking/2026-02-24_LOGIC_ENGINE_DESIGN.org`
+
+### Phase 3: PropNetwork as Prologos Type (NOT STARTED)
+- 12 AST nodes exposing PropNetwork to the type system
+- Type rules, reduction, elaboration for network operations
+- LVar-style library functions (set cells, map cells) on top of PropNetwork
+- **Dependencies**: Phase 2
+- Source: `docs/tracking/2026-02-24_LOGIC_ENGINE_DESIGN.org`
+
+### Phase 4: UnionFind — Persistent Disjoint Sets (NOT STARTED)
+- Persistent union-find (Conchon & Filliâtre)
+- Path splitting, rank-based union
+- Value-carrying nodes for unification terms
+- ~6 AST nodes
+- **Dependencies**: None (can proceed in parallel with Phase 3)
+- Source: `docs/tracking/2026-02-24_LOGIC_ENGINE_DESIGN.org`
+
+### Phase 5: Persistent ATMS — Hypothetical Reasoning (NOT STARTED)
+- **Persistent/immutable** ATMS backed by CHAMP maps
+- Assumptions, supported values, nogoods — all persistent
+- Worldview switching: `struct-copy atms ... [believed new-set]` — O(1)
+- Backtracking = keep old `atms` reference — O(1)
+- `amb` operator, dependency-directed backtracking, `solve-all`
+- ~10 AST nodes
+- **Dependencies**: Phase 3
+- Source: `docs/tracking/2026-02-24_LOGIC_ENGINE_DESIGN.org`
+
+### Phase 6: Tabling — SLG-Style Memoization (NOT STARTED)
+- Tables as PropNetwork cells with SetLattice merge
+- Producer/consumer pattern: propagators writing/reading table cells
+- Lattice answer modes (all, lattice, first)
+- `:tabled` and `:answer-mode` spec metadata
+- ~8 AST nodes
+- **Dependencies**: Phase 3, Phase 5
+- Source: `docs/tracking/2026-02-24_LOGIC_ENGINE_DESIGN.org`
+
+### Phase 7: Surface Syntax — defr, rel, solve (NOT STARTED)
+- `defr` / `rel` keywords (named and anonymous relations)
+- `&>` clause separator, `?var` logic variables
+- `solve` / `solve-with` bridge to functional world
+- Mode prefixes: `?` (free), `-` (in), `+` (out)
+- Tabling by default for all `defr` relations
+- Grammar updates (EBNF + prose)
+- ~15 AST nodes
+- **Dependencies**: All previous phases
+- Source: `docs/tracking/2026-02-24_LOGIC_ENGINE_DESIGN.org`,
+  `docs/tracking/principles/RELATIONAL_LANGUAGE_VISION.org`
+
+### Post-Phase 7: Stratified Evaluation (NOT STARTED)
+- SCC decomposition of rule dependency graphs
+- Stratum-by-stratum evaluation
+- Full negation-as-failure between strata
+- Lattice aggregation (count, min, max, sum) between strata
+- Source: `docs/tracking/2026-02-24_TOWARDS_A_GENERAL_LOGIC_ENGINE_ON_PROPAGATORS.org`
+
+### Post-Phase 7: Galois Connections + Domain Embeddings (NOT STARTED)
+- Modular constraint domains with abstraction/concretization
+- Cross-domain propagation
+- Abstract interpretation framework
+- Source: `docs/tracking/2026-02-24_TOWARDS_A_GENERAL_LOGIC_ENGINE_ON_PROPAGATORS.org`
+
+### Post-Phase 7: Elaborator Propagator Refactoring (NOT STARTED)
+- Replace `current-meta-store` with propagator cells internally
+- Unification constraints become propagators between type cells
+- Dependency tracking for error messages
+- **Blocked on**: Logic engine Phases 1-2 complete
+- Source: `docs/tracking/2026-02-24_TOWARDS_A_GENERAL_LOGIC_ENGINE_ON_PROPAGATORS.org`
 
 ---
 

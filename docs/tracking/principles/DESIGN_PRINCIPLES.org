@@ -52,6 +52,45 @@ bundles (~bundle Numeric := (Add, Sub, Mul, Neg, Abs, FromInt)~) decomplect
 trait inheritance --- bundles are conjunctive (AND), not implicative (IMPLIES).
 This avoids the diamond problem and superclass brittleness of Haskell/Rust.
 
+** No Trait Hierarchies --- Bundles Only
+Prologos does not support trait hierarchies, supertraits, or trait inheritance.
+This is a non-negotiable design principle, not a missing feature.
+
+The entire rationale for the ~bundle~ concept is to replace hierarchical
+inheritance with flat, conjunctive composition:
+
+- ~bundle Num := (Numeric, Comparable)~ is pure sugar, expanded at parse time
+  into a flat conjunction: ~(Add A) (Sub A) ... (Eq A) (Ord A)~
+- No trait /implies/ another trait. No trait /requires/ another trait as a
+  precondition. Each trait is independent.
+- ~:include~ on a trait refers only to bundled traits as conjunctive refinement
+  with set semantics (de-duplication). It does NOT establish a hierarchy.
+
+Why this matters:
+1. *No diamond problem*: There is no lattice of traits to navigate
+2. *No superclass brittleness*: Adding/removing a trait from a bundle never
+   breaks downstream code --- it only changes the expansion
+3. *Closed under composition*: Bundles compose bundles, all the way down
+4. *Simple mental model*: A bundle IS a set of traits. ~:include~ is set union.
+   There is no inheritance graph to reason about.
+
+Concretely, the following is *illegal* in Prologos:
+#+begin_src prologos
+;; WRONG: This implies BoundedLattice inherits from Lattice
+trait BoundedLattice {A : Type}
+  :includes (Lattice A)     ;; NO --- traits do not include other traits
+  top : A
+
+;; RIGHT: Use a bundle for composition
+bundle BoundedLattice := (Lattice, HasTop)
+
+trait HasTop {A : Type}
+  top : A
+#+end_src
+
+The ~:include~ keyword on ~trait~ is reserved for future bundled-trait
+syntax (conjunctive refinement), never for hierarchical inheritance.
+
 ** Session / Defproc for Protocol Types
 Protocol specification (~session~) is decoupled from process implementation
 (~defproc~). A session describes /what/ communication happens; a defproc

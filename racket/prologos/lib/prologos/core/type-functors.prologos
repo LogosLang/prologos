@@ -1,0 +1,20 @@
+(ns prologos::core::type-functors :no-prelude)
+
+;; ========================================
+;; Type functors — named type abstractions
+;; ========================================
+;; These are metadata-only in Phase 1: they register in the functor store
+;; and as deftypes for transparent expansion. Phase 2+ will use :compose
+;; and :identity for category-theoretic composition.
+
+;; --- Transducer type ---
+
+(functor Xf ($brace-params A : (Type 0) B : (Type 0))
+  :unfolds <(S :0 Type) -> [S -> B -> S] -> S -> A -> S>
+  ($brace-params :doc "A transducer: transforms A-reductions into B-reductions"))
+
+;; --- Application result type ---
+
+(functor AppResult ($brace-params A : (Type 0))
+  :unfolds (Either String A)
+  ($brace-params :doc "A computation that may fail with a string error"))

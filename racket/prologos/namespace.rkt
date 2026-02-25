@@ -371,6 +371,7 @@
     (require [prologos::core::fromint-trait  :refer [FromInt]])
     (require [prologos::core::fromrat-trait  :refer [FromRat]])
     (require [prologos::core::numeric-bundles :refer [Num Fractional]])
+    (require [prologos::core::lattice-trait   :refer [Lattice Lattice-bot Lattice-join Lattice-leq]])
 
     ;; ---- Tier 1b: Additional container types + operations ----
     (require [prologos::data::map-entry :refer [MapEntry mk-entry entry-key entry-val]])
@@ -462,6 +463,16 @@
     (require [prologos::core::collection-bundle :refer [Collection]])
     (require [prologos::core::generic-ops :refer [gmap gfilter gfold glength
                                                  gconcat gany? gall? gto-list]])
+
+    ;; ---- Tier 3f: Lattice trait instances ----
+    (require [prologos::core::lattice-instances :refer [FlatVal flat-bot flat-val flat-top
+                                                        Interval interval-bot mk-interval interval-top
+                                                        set-subset?
+                                                        map-merge-with map-lattice-leq
+                                                        interval-intersect interval-join interval-leq
+                                                        rat-max rat-min
+                                                        Bool--Lattice--dict
+                                                        Interval--Lattice--dict]])
 
     ;; ---- Tier 3e: Generic collection functions (clean names) ----
     ;; These shadow List-specific names (map, filter, reduce, etc.) with

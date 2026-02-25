@@ -431,7 +431,7 @@ This matches universal mathematical convention and the consensus across Haskell,
 
 Operators are registered via the =:mixfix= metadata key on =spec=:
 
-#+begin_example
+#+begin_src prologos
 ;; Library definition of +
 spec add [A A] -> A
   :implicits {A : Type}

@@ -1,50 +1,50 @@
-- [Executive Summary](#orga9bc951)
-- [Current State: What Exists](#org537e79c)
-  - [Numeric Types (4 Families)](#org6ccbcaa)
-  - [Parser Keywords (~85 type-specific operations)](#org8b07731)
-  - [Trait Infrastructure (Complete)](#orgad98b1e)
-  - [Subtype Coercion at Reduction (Within-Family Only)](#orgedf7f22)
-- [Critique: The Ergonomic Gap](#org1352321)
-  - [Problem 1: Parser Keywords Are Not Generic](#orgae7df15)
-  - [Problem 2: No Symbolic Operators for Generic Arithmetic](#orga678e01)
-  - [Problem 3: Parser Keywords Can't Be Passed as Higher-Order Arguments](#org9193ed8)
-  - [Problem 4: No Posit Dominance Rule](#org88c3d25)
-  - [Problem 5: Identity Traits Incomplete for Posit](#orgacbbea4)
-  - [Problem 6: Decimal Literals Require Tilde Ceremony](#orgaef7e2f)
-- [Design Decisions and Tradeoffs](#org1b6dc5f)
-  - [Decision 1: Generic Operators (`+` `-` `*` `/`) as Trait-Dispatched Keywords](#orgcc67809)
-  - [Decision 2: Posit Dominance Rule](#orgd348abd)
-  - [Decision 3: Keep Type-Specific Keywords as Escape Hatch](#org7e9e73b)
-  - [Decision 4: Literal Type Inference — Decimal as Posit32](#org1f16cfc)
-- [Gaps in Infrastructure](#orgffa6022)
-  - [Gap 1: No Generic Operator Keywords](#org3ad7638)
-  - [Gap 2: No Posit Identity Instances](#org5b8d00a)
-  - [Gap 3: No `negate` Generic Operator](#org72510cb)
-  - [Gap 4: No `abs` Generic Operator](#org6f0f16b)
-  - [Gap 5: No `from-int` / `from-rat` Generic Syntax](#org57bc09a)
-  - [Gap 6: No Numeric Type Join Function](#orgd87c350)
-  - [Gap 7: Posit Equality Derived, Not Primitive](#org34a8377)
-  - [Gap 8: Bare Decimal Literals Route to Rat, Not Posit](#org52c8a7e)
-- [Recommendations](#org29ae424)
-  - [Phase 1: Foundation Fixes (Low Risk, High Value)](#org52a2a26)
-    - [1a. Add Posit Identity Instances](#org6b8590b)
-    - [1b. Add Posit Equality Primitives](#orgc9a724c)
-    - [1c. Document Nat vs Int Principle](#org7bc4bca)
-    - [1d. Bare Decimal Literals as Posit32](#org547f591)
-  - [Phase 2: Generic Operators (Medium Risk, Very High Value)](#org8393ca3)
-    - [2a. Add `+` `-` `*` `/` `<` `<=` `=` as Parser Keywords](#orge02d9d2)
-    - [2b. `from-int` and `from-rat` as Context-Resolved Keywords](#orgc5b6ce6)
-  - [Phase 3: Posit Dominance (Higher Risk, High Value)](#orgf54c2b4)
-    - [3a. Numeric Type Join](#org89767ec)
-    - [3b. Coercion in Generic Operators](#org8492b76)
-    - [3c. Implicit Coercion Warnings](#orgd674721)
-  - [Phase 4: Numeric Literal Polymorphism (Future, Research)](#orgb8f9485)
-- [Summary Table](#org923eceb)
-- [What Success Looks Like](#orgcd17ea6)
+- [Executive Summary](#orgc9d4115)
+- [Current State: What Exists](#orgd82c82c)
+  - [Numeric Types (4 Families)](#orgb96bb22)
+  - [Parser Keywords (~85 type-specific operations)](#org1a5905e)
+  - [Trait Infrastructure (Complete)](#org1c38587)
+  - [Subtype Coercion at Reduction (Within-Family Only)](#orgb860de0)
+- [Critique: The Ergonomic Gap](#org478048d)
+  - [Problem 1: Parser Keywords Are Not Generic](#org0229287)
+  - [Problem 2: No Symbolic Operators for Generic Arithmetic](#orgc97ad54)
+  - [Problem 3: Parser Keywords Can't Be Passed as Higher-Order Arguments](#org8b1d1f9)
+  - [Problem 4: No Posit Dominance Rule](#org9037ea7)
+  - [Problem 5: Identity Traits Incomplete for Posit](#orgfd1620d)
+  - [Problem 6: Decimal Literals Require Tilde Ceremony](#org0dd32b9)
+- [Design Decisions and Tradeoffs](#org1a48a14)
+  - [Decision 1: Generic Operators (`+` `-` `*` `/`) as Trait-Dispatched Keywords](#org1f3db81)
+  - [Decision 2: Posit Dominance Rule](#org2d08db2)
+  - [Decision 3: Keep Type-Specific Keywords as Escape Hatch](#org54f4f9a)
+  - [Decision 4: Literal Type Inference — Decimal as Posit32](#org5991261)
+- [Gaps in Infrastructure](#org33a984a)
+  - [Gap 1: No Generic Operator Keywords](#org58de610)
+  - [Gap 2: No Posit Identity Instances](#org7c21227)
+  - [Gap 3: No `negate` Generic Operator](#org2f37057)
+  - [Gap 4: No `abs` Generic Operator](#orgafbdfdf)
+  - [Gap 5: No `from-int` / `from-rat` Generic Syntax](#org91dd371)
+  - [Gap 6: No Numeric Type Join Function](#orgbd1b76b)
+  - [Gap 7: Posit Equality Derived, Not Primitive](#org0daa2d5)
+  - [Gap 8: Bare Decimal Literals Route to Rat, Not Posit](#org39f3fb6)
+- [Recommendations](#org9251a01)
+  - [Phase 1: Foundation Fixes (Low Risk, High Value)](#org43babf8)
+    - [1a. Add Posit Identity Instances](#org92e7ab7)
+    - [1b. Add Posit Equality Primitives](#org43276c3)
+    - [1c. Document Nat vs Int Principle](#org17ad78d)
+    - [1d. Bare Decimal Literals as Posit32](#orgfcd8162)
+  - [Phase 2: Generic Operators (Medium Risk, Very High Value)](#orga7e2455)
+    - [2a. Add `+` `-` `*` `/` `<` `<=` `=` as Parser Keywords](#org04d3380)
+    - [2b. `from-int` and `from-rat` as Context-Resolved Keywords](#orgde97436)
+  - [Phase 3: Posit Dominance (Higher Risk, High Value)](#orgb37377c)
+    - [3a. Numeric Type Join](#org0d725c7)
+    - [3b. Coercion in Generic Operators](#orgfed40c0)
+    - [3c. Implicit Coercion Warnings](#orgf492d7a)
+  - [Phase 4: Numeric Literal Polymorphism (Future, Research)](#orgfdbefd9)
+- [Summary Table](#org052f04b)
+- [What Success Looks Like](#org2fca9da)
 
 
 
-<a id="orga9bc951"></a>
+<a id="orgc9d4115"></a>
 
 # Executive Summary
 
@@ -53,12 +53,12 @@ This audit examines the gap between Prologos's *stated design goal* &#x2014; the
 The recommendation is a phased introduction of generic arithmetic operators (`+`, `-`, `*`, `/`, `<`, `<=`, `=`) that dispatch through the existing trait infrastructure, with a Posit-dominance rule for mixed exact/approximate computation, and compile-time specialization to recover the performance of parser keywords.
 
 
-<a id="org537e79c"></a>
+<a id="orgd82c82c"></a>
 
 # Current State: What Exists
 
 
-<a id="org6ccbcaa"></a>
+<a id="orgb96bb22"></a>
 
 ## Numeric Types (4 Families)
 
@@ -77,7 +77,7 @@ Within-family subtyping is automatic:
 Cross-family: NO implicit coercion (deliberate).
 
 
-<a id="org8b07731"></a>
+<a id="org1a5905e"></a>
 
 ## Parser Keywords (~85 type-specific operations)
 
@@ -99,7 +99,7 @@ This is ~85 keywords across 4 families x 4 widths.
 These are fast (direct AST nodes → Racket primitives) but fundamentally *non-generic*. A function written with `int+` cannot be reused for `Rat`.
 
 
-<a id="orgad98b1e"></a>
+<a id="org1c38587"></a>
 
 ## Trait Infrastructure (Complete)
 
@@ -126,7 +126,7 @@ Bundles:
 -   `Fractional A` := `(Num A) (Div A) (FromRat A)`
 
 
-<a id="orgedf7f22"></a>
+<a id="orgb860de0"></a>
 
 ## Subtype Coercion at Reduction (Within-Family Only)
 
@@ -141,12 +141,12 @@ These fire at reduction time for stuck terms. Example: `[int+ 3N 4]` works becau
 This is the closest thing to implicit widening — but it only works *within a family* and only for parser keywords.
 
 
-<a id="org1352321"></a>
+<a id="org478048d"></a>
 
 # Critique: The Ergonomic Gap
 
 
-<a id="orgae7df15"></a>
+<a id="org0229287"></a>
 
 ## Problem 1: Parser Keywords Are Not Generic
 
@@ -167,7 +167,7 @@ defn double [x] [Add-add x x]   ;; actually needs dict param
 But even this doesn't work cleanly because single-method trait resolution requires the dict to be passed explicitly or resolved at the call site. The user can't write `[+ x x]` and have it just work.
 
 
-<a id="orga678e01"></a>
+<a id="orgc97ad54"></a>
 
 ## Problem 2: No Symbolic Operators for Generic Arithmetic
 
@@ -185,7 +185,7 @@ defn mean [xs]
 ```
 
 
-<a id="org9193ed8"></a>
+<a id="org8b1d1f9"></a>
 
 ## Problem 3: Parser Keywords Can't Be Passed as Higher-Order Arguments
 
@@ -198,7 +198,7 @@ reduce int+ 0 xs   ;; FAILS: int+ is not a value
 Workaround: define a wrapper function. But if `+` dispatched through traits, it *would* be a first-class function (the resolved dict IS the function for single-method traits).
 
 
-<a id="org88c3d25"></a>
+<a id="org9037ea7"></a>
 
 ## Problem 4: No Posit Dominance Rule
 
@@ -215,14 +215,14 @@ Currently, there is no mechanism for this. Mixed exact/approximate operations ar
 ```
 
 
-<a id="orgacbbea4"></a>
+<a id="orgfd1620d"></a>
 
 ## Problem 5: Identity Traits Incomplete for Posit
 
 `AdditiveIdentity` and `MultiplicativeIdentity` have instances for Nat, Int, Rat &#x2014; but NOT for Posit types. This means the generic `sum` and `product` functions from `generic-numeric-ops` cannot be used with Posit lists without adding these instances.
 
 
-<a id="orgaef7e2f"></a>
+<a id="org0dd32b9"></a>
 
 ## Problem 6: Decimal Literals Require Tilde Ceremony
 
@@ -245,12 +245,12 @@ The tilde prefix should remain available (as an explicit "I want approximate") b
 Users who genuinely want the exact rational `157/50` can write the fraction form `157/50` directly &#x2014; that syntax is unambiguous and already exists.
 
 
-<a id="org1b6dc5f"></a>
+<a id="org1a48a14"></a>
 
 # Design Decisions and Tradeoffs
 
 
-<a id="orgcc67809"></a>
+<a id="org1f3db81"></a>
 
 ## Decision 1: Generic Operators (`+` `-` `*` `/`) as Trait-Dispatched Keywords
 
@@ -277,7 +277,7 @@ Users who genuinely want the exact rational `157/50` can write the fraction form
 *Mitigation*: Compile-time specialization. When the elaborator can determine the concrete type (e.g., both args are `Int`), it can emit `expr-int-add` directly instead of going through the trait dict. This gives generic syntax with parser-keyword performance.
 
 
-<a id="orgd348abd"></a>
+<a id="org2d08db2"></a>
 
 ## Decision 2: Posit Dominance Rule
 
@@ -312,7 +312,7 @@ This requires:
 *Mitigation*: Make Posit dominance opt-in via a pragma or module-level declaration. Or: allow it only through the generic operators (`+`) while type-specific keywords (`int+`, `p32+`) remain strict.
 
 
-<a id="org7e9e73b"></a>
+<a id="org54f4f9a"></a>
 
 ## Decision 3: Keep Type-Specific Keywords as Escape Hatch
 
@@ -328,7 +328,7 @@ This is analogous to Clojure's `+` (generic) vs `unchecked-add` (primitive).
 -   Con: Two ways to do the same thing (complexity budget)
 
 
-<a id="org1f16cfc"></a>
+<a id="org5991261"></a>
 
 ## Decision 4: Literal Type Inference — Decimal as Posit32
 
@@ -369,12 +369,12 @@ For users who want exact decimal fractions, the rational syntax `157/50` is alwa
 **Width selection**: Bare decimals default to `Posit32` (the natural default width, matching `~3.14`). Width-specific variants could use a suffix: `3.14p8`, `3.14p16`, `3.14p64` — but this is deferrable to later work.
 
 
-<a id="orgffa6022"></a>
+<a id="org33a984a"></a>
 
 # Gaps in Infrastructure
 
 
-<a id="org3ad7638"></a>
+<a id="org58de610"></a>
 
 ## Gap 1: No Generic Operator Keywords
 
@@ -386,7 +386,7 @@ The parser has no `+`, `-`, `*`, `/` keywords. Adding them requires:
 -   Optional specialization to direct keywords when types are known
 
 
-<a id="org5b8d00a"></a>
+<a id="org7c21227"></a>
 
 ## Gap 2: No Posit Identity Instances
 
@@ -404,21 +404,21 @@ impl MultiplicativeIdentity Posit32
 Without these, generic `sum` and `product` don't work for Posit lists.
 
 
-<a id="org72510cb"></a>
+<a id="org2f37057"></a>
 
 ## Gap 3: No `negate` Generic Operator
 
 There's no `negate` or unary `-` for generic negation. The `Neg` trait exists, but no operator syntax maps to it.
 
 
-<a id="org6f0f16b"></a>
+<a id="orgafbdfdf"></a>
 
 ## Gap 4: No `abs` Generic Operator
 
 Same for `abs`. The trait exists, the instances exist, but no surface syntax maps to it.
 
 
-<a id="org57bc09a"></a>
+<a id="org91dd371"></a>
 
 ## Gap 5: No `from-int` / `from-rat` Generic Syntax
 
@@ -433,21 +433,21 @@ def pi : Posit32 [FromRat-from-rat Posit32--FromRat--dict 355/113]
 ```
 
 
-<a id="orgd87c350"></a>
+<a id="orgbd1b76b"></a>
 
 ## Gap 6: No Numeric Type Join Function
 
 For Posit dominance, the type checker needs a `numeric-join` function: `numeric-join(Int, Posit32) = Posit32`. This doesn't exist. The current `subtype?` is one-directional (is A <: B?), not a join (what's A ∨ B?).
 
 
-<a id="org34a8377"></a>
+<a id="org0daa2d5"></a>
 
 ## Gap 7: Posit Equality Derived, Not Primitive
 
 Posit types lack a primitive equality operation. The Eq instance derives equality from `and [p{N}-le x y] [p{N}-le y x]` — two comparisons per equality check. A native `p{N}-eq` parser keyword would halve this cost.
 
 
-<a id="org52c8a7e"></a>
+<a id="org39f3fb6"></a>
 
 ## Gap 8: Bare Decimal Literals Route to Rat, Not Posit
 
@@ -466,38 +466,38 @@ To route bare decimals to Posit32 instead:
 `Estimated: reader.rkt (5 lines), parser.rkt (5 lines), grammar updates, ~10 tests.`
 
 
-<a id="org29ae424"></a>
+<a id="org9251a01"></a>
 
 # Recommendations
 
 
-<a id="org52a2a26"></a>
+<a id="org43babf8"></a>
 
 ## Phase 1: Foundation Fixes (Low Risk, High Value)
 
 
-<a id="org6b8590b"></a>
+<a id="org92e7ab7"></a>
 
 ### 1a. Add Posit Identity Instances
 
 Add `AdditiveIdentity` and `MultiplicativeIdentity` for Posit8/16/32/64. This unlocks generic `sum` and `product` for Posit lists immediately. `Estimated: 1 file, 8 instances, 8 tests.`
 
 
-<a id="orgc9a724c"></a>
+<a id="org43276c3"></a>
 
 ### 1b. Add Posit Equality Primitives
 
 Add `p{N}-eq` parser keywords (4 new AST nodes). Update Eq instances to use them. Halves equality-check cost. `Estimated: touches 14-file AST pipeline, 4 instance updates, 16 tests.`
 
 
-<a id="org7bc4bca"></a>
+<a id="org17ad78d"></a>
 
 ### 1c. Document Nat vs Int Principle
 
 *Already done* in PATTERNS<sub>AND</sub><sub>CONVENTIONS.org</sub> (this session). Audit further examples in tutorials.
 
 
-<a id="org547f591"></a>
+<a id="orgfcd8162"></a>
 
 ### 1d. Bare Decimal Literals as Posit32
 
@@ -526,12 +526,12 @@ Grammar update: update `decimal-literal` production and prose.
 `Estimated: reader.rkt (~5 lines), parser.rkt (~5 lines), grammar files, ~10 new tests. Low risk.`
 
 
-<a id="org8393ca3"></a>
+<a id="orga7e2455"></a>
 
 ## Phase 2: Generic Operators (Medium Risk, Very High Value)
 
 
-<a id="orge02d9d2"></a>
+<a id="org04d3380"></a>
 
 ### 2a. Add `+` `-` `*` `/` `<` `<=` `=` as Parser Keywords
 
@@ -546,7 +546,7 @@ This is the single highest-value change in this audit. It transforms Prologos fr
 `Estimated: parser.rkt, surface-syntax.rkt, elaborator.rkt, typing-core.rkt changes. ~40 new tests.`
 
 
-<a id="orgc5b6ce6"></a>
+<a id="orgde97436"></a>
 
 ### 2b. `from-int` and `from-rat` as Context-Resolved Keywords
 
@@ -560,12 +560,12 @@ def n  : Rat [from-int 42]            ;; type context resolves Rat instance
 `Estimated: elaborator.rkt changes, ~12 tests.`
 
 
-<a id="orgf54c2b4"></a>
+<a id="orgb37377c"></a>
 
 ## Phase 3: Posit Dominance (Higher Risk, High Value)
 
 
-<a id="org89767ec"></a>
+<a id="org0d725c7"></a>
 
 ### 3a. Numeric Type Join
 
@@ -588,7 +588,7 @@ Posit32  |  Posit16
 Cross-family join: approximate wins. `numeric-join(Rat, Posit32) = Posit32`. Within-family: wider wins. `numeric-join(Int, Rat) = Rat`.
 
 
-<a id="org8492b76"></a>
+<a id="orgfed40c0"></a>
 
 ### 3b. Coercion in Generic Operators
 
@@ -601,7 +601,7 @@ When `[+ a b]` has `a : Int` and `b : Posit32`, the elaborator:
 This only applies to the generic operators. Type-specific keywords (`int+`) remain strict.
 
 
-<a id="orgd674721"></a>
+<a id="orgf492d7a"></a>
 
 ### 3c. Implicit Coercion Warnings
 
@@ -616,7 +616,7 @@ Note: implicit coercion Int → Posit32 at line 42
 `Estimated: typing-core.rkt, reduction.rkt, error infrastructure. ~30 tests.`
 
 
-<a id="orgb8f9485"></a>
+<a id="orgfdbefd9"></a>
 
 ## Phase 4: Numeric Literal Polymorphism (Future, Research)
 
@@ -632,7 +632,7 @@ def z : Int 42            ;; 42 stays as Int (no conversion)
 This is powerful but complex (requires deferred literal typing, defaulting rules). Recommend deferring until Phase 2 operators are stable.
 
 
-<a id="org923eceb"></a>
+<a id="org052f04b"></a>
 
 # Summary Table
 
@@ -649,7 +649,7 @@ This is powerful but complex (requires deferred literal typing, defaulting rules
 | Literal polymorphism        | 4     | High   | High      | V.Large |
 
 
-<a id="orgcd17ea6"></a>
+<a id="org2fca9da"></a>
 
 # What Success Looks Like
 

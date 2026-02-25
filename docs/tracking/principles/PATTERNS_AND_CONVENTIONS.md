@@ -1,43 +1,43 @@
-- [Naming Conventions](#org8a4cc57)
-  - [Functions and Values](#orge5fd694)
-  - [Types and Constructors](#org25d8ad3)
-  - [Modules and Namespaces](#orgbe476b0)
-  - [Library Functions Should Not Repeat the Library Name](#orgddd13f4)
-  - [Trait Methods](#orgc9b68c7)
-- [Nat vs Int: When to Use Each](#orgdeff697)
-- [Function Definition Patterns](#org75330cb)
-  - [Prefer `spec` / `defn` Over `def` With Lambda](#orgc37a1c9)
-  - [Prefer Multi-Arity Over Helper Functions](#org1d25982)
-  - [Uncurried Arguments, Curried Results](#org91c7f6f)
-- [Bracket Usage Rules](#orga14348c)
-- [Collection Conventions](#org41fafb1)
-  - [Seq as Universal Hub](#orgab36ec7)
-  - [Map as Two-Param Type](#org56fa1d7)
-- [Import and Module Patterns](#org3ad96d0)
-  - [Standard Import Forms](#org20b6704)
-  - [Library Modules Skip Prelude](#org3540ac2)
-  - [Prelude Exports](#org2f7764e)
-- [Type Annotation Patterns](#org7bd8ed7)
-  - [Spec for Public Functions](#orgbc472ee)
-  - [Inline Annotation for Local Bindings](#orgf5386c6)
-  - [Implicit vs. Explicit Type Parameters](#org01b4baf)
-- [Error Handling Conventions](#orga25bef1)
-  - [Use `A?` (Nilable) for Simple Absence](#org63bbb7b)
-  - [Use `Result E A` for Recoverable Errors](#org8a369b5)
-  - [Use Dependent Types for Preconditions](#org3360345)
-- [Pipe and Composition](#org0dec943)
-  - [`|>` for Value Threading (Last Argument Position)](#orgcc9eb99)
-  - [`>>` for Function Composition (Left-to-Right)](#orgb244744)
-  - [Block-Form `|>` Enables Loop Fusion](#org09c4f9b)
+- [Naming Conventions](#org24a28e4)
+  - [Functions and Values](#org0338e86)
+  - [Types and Constructors](#org8d5d74f)
+  - [Modules and Namespaces](#org3eb3a45)
+  - [Library Functions Should Not Repeat the Library Name](#org7dadb73)
+  - [Trait Methods](#orgb1a900f)
+- [Nat vs Int: When to Use Each](#orgc686a5f)
+- [Function Definition Patterns](#org0247fef)
+  - [Prefer `spec` / `defn` Over `def` With Lambda](#org8c34dea)
+  - [Prefer Multi-Arity Over Helper Functions](#org0f83de5)
+  - [Uncurried Arguments, Curried Results](#org7f231a8)
+- [Bracket Usage Rules](#orgfb7bccd)
+- [Collection Conventions](#org35523fe)
+  - [Seq as Universal Hub](#org375b992)
+  - [Map as Two-Param Type](#org9e96a66)
+- [Import and Module Patterns](#org76cf81e)
+  - [Standard Import Forms](#org7fa3bce)
+  - [Library Modules Skip Prelude](#org8ebbf7b)
+  - [Prelude Exports](#org79a0b2d)
+- [Type Annotation Patterns](#orgf3f20e9)
+  - [Spec for Public Functions](#orgaecf912)
+  - [Inline Annotation for Local Bindings](#orgca66966)
+  - [Implicit vs. Explicit Type Parameters](#org2e750b5)
+- [Error Handling Conventions](#orge090a18)
+  - [Use `A?` (Nilable) for Simple Absence](#org14e0e7d)
+  - [Use `Result E A` for Recoverable Errors](#org3b40f26)
+  - [Use Dependent Types for Preconditions](#org5e2ca82)
+- [Pipe and Composition](#orgea9c815)
+  - [`|>` for Value Threading (Last Argument Position)](#orgf7b12fa)
+  - [`>>` for Function Composition (Left-to-Right)](#orgf30f198)
+  - [Block-Form `|>` Enables Loop Fusion](#org2356a73)
 
 
 
-<a id="org8a4cc57"></a>
+<a id="org24a28e4"></a>
 
 # Naming Conventions
 
 
-<a id="orge5fd694"></a>
+<a id="org0338e86"></a>
 
 ## Functions and Values
 
@@ -47,7 +47,7 @@
 -   Transducers end in `-xf`: `map-xf`, `filter-xf`, `take-xf`
 
 
-<a id="org25d8ad3"></a>
+<a id="org8d5d74f"></a>
 
 ## Types and Constructors
 
@@ -56,7 +56,7 @@
 -   Constructors: lowercase of their type: `some`, `none`, `cons`, `nil`
 
 
-<a id="orgbe476b0"></a>
+<a id="org3eb3a45"></a>
 
 ## Modules and Namespaces
 
@@ -66,7 +66,7 @@
 -   Side-effect import: `:refer []` (triggers instance registration)
 
 
-<a id="orgddd13f4"></a>
+<a id="org7dadb73"></a>
 
 ## Library Functions Should Not Repeat the Library Name
 
@@ -93,14 +93,14 @@ spec map-vals-list ...   ;; user would write m::map-vals-list (double "map")
 When a library function name collides with a parser keyword or another prelude name, use the module alias for disambiguation rather than lengthening the function name.
 
 
-<a id="orgc9b68c7"></a>
+<a id="orgb1a900f"></a>
 
 ## Trait Methods
 
 Short, action-oriented names: `eq?`, `from`, `add`, `sub`, `compare`. The trait name provides context: `(Eq A)` implies `eq?` compares for equality within type `A`.
 
 
-<a id="orgdeff697"></a>
+<a id="orgc686a5f"></a>
 
 # Nat vs Int: When to Use Each
 
@@ -132,12 +132,12 @@ spec safe-head : {A : Type} (xs : [List A]) {pf : [NonEmpty xs]} -> A
 ```
 
 
-<a id="org75330cb"></a>
+<a id="org0247fef"></a>
 
 # Function Definition Patterns
 
 
-<a id="orgc37a1c9"></a>
+<a id="org8c34dea"></a>
 
 ## Prefer `spec` / `defn` Over `def` With Lambda
 
@@ -154,7 +154,7 @@ def factorial : [Int -> Int]
 ```
 
 
-<a id="org1d25982"></a>
+<a id="org0f83de5"></a>
 
 ## Prefer Multi-Arity Over Helper Functions
 
@@ -177,7 +177,7 @@ defn sum-list
 Multi-arity definitions keep related logic together, are more readable, and let the compiler see the full pattern space for exhaustiveness checking.
 
 
-<a id="org91c7f6f"></a>
+<a id="org7f231a8"></a>
 
 ## Uncurried Arguments, Curried Results
 
@@ -195,7 +195,7 @@ spec fold : {A B : Type} [B -> A -> B] -> B -> [List A] -> B
 The uncurried convention matches the `[f x y z]` call syntax and avoids partial application confusion. When currying is desired, use explicit lambda: `[fn [x] [fold f x]]`.
 
 
-<a id="orga14348c"></a>
+<a id="orgfb7bccd"></a>
 
 # Bracket Usage Rules
 
@@ -215,12 +215,12 @@ The uncurried convention matches the `[f x y z]` call syntax and avoids partial 
 Key rule: **outer trees are implicit** &#x2014; top-level forms don't need wrapping brackets. Write `defn foo [x] body`, not `[defn foo [x] body]`.
 
 
-<a id="org41fafb1"></a>
+<a id="org35523fe"></a>
 
 # Collection Conventions
 
 
-<a id="orgab36ec7"></a>
+<a id="org375b992"></a>
 
 ## Seq as Universal Hub
 
@@ -233,7 +233,7 @@ Any Collection → to-seq → transform (map/filter/fold) → to-seq → Any Col
 Use `Seqable`, `Buildable`, and `Foldable` traits for generic code. Use collection-specific modules (`pvec-ops`, `set-ops`, `map-ops`) for type-specific operations.
 
 
-<a id="org56fa1d7"></a>
+<a id="org9e96a66"></a>
 
 ## Map as Two-Param Type
 
@@ -247,12 +247,12 @@ Use `Seqable`, `Buildable`, and `Foldable` traits for generic code. Use collecti
 ```
 
 
-<a id="org3ad96d0"></a>
+<a id="org76cf81e"></a>
 
 # Import and Module Patterns
 
 
-<a id="org20b6704"></a>
+<a id="org7fa3bce"></a>
 
 ## Standard Import Forms
 
@@ -274,14 +274,14 @@ ns my-module :no-prelude
 ```
 
 
-<a id="org3540ac2"></a>
+<a id="org8ebbf7b"></a>
 
 ## Library Modules Skip Prelude
 
 Library modules under `prologos::data::*` and `prologos::core::*` must use `:no-prelude` (or the equivalent Racket-side mechanism) to avoid circular dependencies. They import only what they need explicitly.
 
 
-<a id="org2f7764e"></a>
+<a id="org79a0b2d"></a>
 
 ## Prelude Exports
 
@@ -296,12 +296,12 @@ The prelude (`ns foo`) provides:
 Own-definition priority: a user's `def map` shadows the prelude's `list::map`.
 
 
-<a id="org7bd8ed7"></a>
+<a id="orgf3f20e9"></a>
 
 # Type Annotation Patterns
 
 
-<a id="orgbc472ee"></a>
+<a id="orgaecf912"></a>
 
 ## Spec for Public Functions
 
@@ -313,7 +313,7 @@ defn sort [xs] ...
 ```
 
 
-<a id="orgf5386c6"></a>
+<a id="orgca66966"></a>
 
 ## Inline Annotation for Local Bindings
 
@@ -325,7 +325,7 @@ def xs : [List Int] '[1 2 3]
 ```
 
 
-<a id="org01b4baf"></a>
+<a id="org2e750b5"></a>
 
 ## Implicit vs. Explicit Type Parameters
 
@@ -334,12 +334,12 @@ def xs : [List Int] '[1 2 3]
 -   Convention: type parameters are implicit unless the caller needs to specify them (e.g., `map-empty K V` where both must be explicit)
 
 
-<a id="orga25bef1"></a>
+<a id="orge090a18"></a>
 
 # Error Handling Conventions
 
 
-<a id="org63bbb7b"></a>
+<a id="org14e0e7d"></a>
 
 ## Use `A?` (Nilable) for Simple Absence
 
@@ -348,7 +348,7 @@ spec find : {A : Type} [A -> Bool] [List A] -> A?
 ```
 
 
-<a id="org8a369b5"></a>
+<a id="org3b40f26"></a>
 
 ## Use `Result E A` for Recoverable Errors
 
@@ -357,7 +357,7 @@ spec parse-int : String -> [Result ParseError Int]
 ```
 
 
-<a id="org3360345"></a>
+<a id="org5e2ca82"></a>
 
 ## Use Dependent Types for Preconditions
 
@@ -366,12 +366,12 @@ spec head : {A : Type} (xs : [List A]) -> {pf : [NonEmpty xs]} -> A
 ```
 
 
-<a id="org0dec943"></a>
+<a id="orgea9c815"></a>
 
 # Pipe and Composition
 
 
-<a id="orgcc9eb99"></a>
+<a id="orgf7b12fa"></a>
 
 ## `|>` for Value Threading (Last Argument Position)
 
@@ -385,7 +385,7 @@ spec head : {A : Type} (xs : [List A]) -> {pf : [NonEmpty xs]} -> A
 Default: value goes to last argument position. Use `_` for explicit placement: `|> x [f _ y]` threads `x` into the `_` position.
 
 
-<a id="orgb244744"></a>
+<a id="orgf30f198"></a>
 
 ## `>>` for Function Composition (Left-to-Right)
 
@@ -394,7 +394,7 @@ def process := >> parse validate transform serialize
 ```
 
 
-<a id="org09c4f9b"></a>
+<a id="org2356a73"></a>
 
 ## Block-Form `|>` Enables Loop Fusion
 

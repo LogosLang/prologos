@@ -1,80 +1,80 @@
-- [Executive Summary](#org425597b)
-  - [Design Principles](#org01f173e)
-- [Part I: Research Survey](#org250ee33)
-  - [1. Agda — Full Mixfix with DAG Precedence](#org78110fd)
-    - [Agda Standard Library Convention (Haskell-like)](#orgd556a3b)
-    - [Key Lessons from Agda](#org547dc46)
-  - [2. Maude — Mixfix with Gather Patterns](#orge2a61f1)
-    - [Maude Standard Precedence Table](#org0318127)
-    - [Key Lessons from Maude](#orgf7d0cb2)
-  - [3. Prolog — User-Defined Operators with Type Specifiers](#org7e3939c)
-    - [ISO Standard Operator Table](#org4b79cd2)
-    - [Key Lessons from Prolog](#orgc496b77)
-  - [4. Haskell — Explicit Numeric Precedence (0-9)](#org4ef43bb)
-    - [Key Lessons from Haskell](#orgfeeca03)
-  - [5. Swift — Named Precedence Groups (Partial Order DAG)](#org7239d71)
-    - [Standard Precedence Groups](#org2277a79)
-    - [Key Lessons from Swift](#org5927203)
-  - [6. Scala & OCaml — First-Character-Based Precedence](#org864588d)
-    - [Key Lessons](#org269b49a)
-  - [7. Tcl `expr` — Infix Sublanguage in a Homoiconic Host](#orgb6f9b44)
-    - [Key Lessons from Tcl](#orgfb8738c)
-  - [8. Racket (Our Host) — SRFI-105, k-infix, Rhombus/Enforest](#org1e27e10)
-    - [SRFI-105 Curly-Infix](#orgc2adf88)
-    - [k-infix (Racket Package)](#org1793dec)
-    - [Rhombus Enforest (Most Relevant)](#org088df25)
-  - [9. Julia — Homoiconic with Native Infix](#org7556bd2)
-    - [Key Lessons from Julia](#org553c078)
-- [Part II: Design Patterns & Gotchas](#org174755f)
-  - [The Classic C Precedence Bug](#orgfc8e67d)
-  - [Few Levels vs Many Levels](#orga4ec3ca)
-  - [The Precedence Interaction Problem](#org6d4aeb0)
-  - [Pratt Parsing / Precedence Climbing](#org11efc7c)
-- [Part III: Prologos Integration Analysis](#org5a2afbd)
-  - [Current Infrastructure](#orgfa4f1df)
-  - [Existing Partial Application Machinery](#org820030a)
-  - [Spec Entry System](#org5be1a85)
-  - [Reader Integration](#org6bc467e)
-- [Part IV: Design Proposal](#org217c2fb)
-  - [1. Surface Syntax: `.{...}`](#orga03f0f3)
-    - [Nesting with `[]` for Prefix Calls Inside Mixfix](#orgd10f70d)
-    - [Equivalence with Prefix](#org340936a)
-  - [2. Named Precedence Groups (Swift/Rhombus Model)](#org0979c0c)
-    - [Built-in Groups](#org89d76f0)
-    - [The Chain: `composition > exponentiation > multiplicative > additive > comparison > logical-and > logical-or > pipe`](#org1c8e67e)
-  - [3. `:mixfix` Key on `spec`](#org4dc88f6)
-    - [`:mixfix` Map Keys](#org114c2ca)
-  - [4. User-Defined Precedence Groups](#org9993783)
-  - [5. Standard Operator Table](#org7313319)
-    - [Arithmetic (via trait-dispatched generic operators)](#org74182da)
-    - [Comparison](#org562c496)
-    - [Logical](#org01f7598)
-    - [Pipeline](#org7b0d44a)
-    - [Cons / Append](#orgebb35e0)
-  - [6. Chained Comparisons (Julia-inspired)](#orgbd0fc7b)
-  - [7. Parsing Algorithm](#orgcf5d310)
-    - [Binding Power Encoding](#org94a48b5)
-  - [8. Sexp Mode Equivalent](#org70583ca)
-- [Part V: Implementation Phases](#org3ad681d)
-  - [Phase 1: Core Reader & Parser (Minimum Viable)](#org8a63ac1)
-  - [Phase 2: `:mixfix` on `spec` + User Groups](#orga4e7c35)
-  - [Phase 3: Chained Comparisons + Diagnostics](#orgb570498)
-  - [Phase 4: Advanced Features (Future)](#org95b39e4)
-- [Part VI: Design Decisions & Tradeoffs](#org40d17f4)
-  - [Decision 1: Named Groups vs Numeric Levels](#org7291c5e)
-  - [Decision 2: `.{...}` Delimiters vs. No Delimiters](#orgf73a9c2)
-  - [Decision 3: Partial Application via `_`](#orgd93d45b)
-  - [Decision 4: Comparison Chaining](#org983e7c2)
-  - [Decision 5: Bitwise Operators](#org9c0cd2c)
-- [Part VII: Open Questions](#org4b57a0c)
-- [References](#org277af47)
-  - [Academic Papers](#orgd210cb3)
-  - [Language Documentation](#org0b3377c)
-  - [Blog Posts & Practical Guides](#org76a4a2c)
+- [Executive Summary](#org35a4282)
+  - [Design Principles](#orga75a109)
+- [Part I: Research Survey](#orgb752a58)
+  - [1. Agda — Full Mixfix with DAG Precedence](#org025ce96)
+    - [Agda Standard Library Convention (Haskell-like)](#org95f1186)
+    - [Key Lessons from Agda](#orge5574f1)
+  - [2. Maude — Mixfix with Gather Patterns](#orgadc4bae)
+    - [Maude Standard Precedence Table](#orgc61a067)
+    - [Key Lessons from Maude](#org70ba5d7)
+  - [3. Prolog — User-Defined Operators with Type Specifiers](#orge737116)
+    - [ISO Standard Operator Table](#org5495a79)
+    - [Key Lessons from Prolog](#orge0df74c)
+  - [4. Haskell — Explicit Numeric Precedence (0-9)](#org5cb0a80)
+    - [Key Lessons from Haskell](#org3b8c37a)
+  - [5. Swift — Named Precedence Groups (Partial Order DAG)](#orgba8335f)
+    - [Standard Precedence Groups](#orgef8b6f2)
+    - [Key Lessons from Swift](#org340475f)
+  - [6. Scala & OCaml — First-Character-Based Precedence](#org4325de6)
+    - [Key Lessons](#orgaf73700)
+  - [7. Tcl `expr` — Infix Sublanguage in a Homoiconic Host](#org2edbf92)
+    - [Key Lessons from Tcl](#org68d7775)
+  - [8. Racket (Our Host) — SRFI-105, k-infix, Rhombus/Enforest](#org23f48e1)
+    - [SRFI-105 Curly-Infix](#org8e46202)
+    - [k-infix (Racket Package)](#org727904f)
+    - [Rhombus Enforest (Most Relevant)](#org8d6233c)
+  - [9. Julia — Homoiconic with Native Infix](#org8ccfbc1)
+    - [Key Lessons from Julia](#org5287fbb)
+- [Part II: Design Patterns & Gotchas](#org883c0ab)
+  - [The Classic C Precedence Bug](#org4b661e0)
+  - [Few Levels vs Many Levels](#org8751ad8)
+  - [The Precedence Interaction Problem](#orgd723730)
+  - [Pratt Parsing / Precedence Climbing](#org77b0d1a)
+- [Part III: Prologos Integration Analysis](#orgc5fa80d)
+  - [Current Infrastructure](#orgfb4d12c)
+  - [Existing Partial Application Machinery](#orgbe2229d)
+  - [Spec Entry System](#orgfd9b70a)
+  - [Reader Integration](#org8266bdf)
+- [Part IV: Design Proposal](#orgf339f35)
+  - [1. Surface Syntax: `.{...}`](#orgb75dc0d)
+    - [Nesting with `[]` for Prefix Calls Inside Mixfix](#orgae6d473)
+    - [Equivalence with Prefix](#orgce500ec)
+  - [2. Named Precedence Groups (Swift/Rhombus Model)](#org906c2fe)
+    - [Built-in Groups](#org8b7df43)
+    - [The Chain: `composition > exponentiation > multiplicative > additive > comparison > logical-and > logical-or > pipe`](#org72dc5cc)
+  - [3. `:mixfix` Key on `spec`](#org091b464)
+    - [`:mixfix` Map Keys](#org1d128d4)
+  - [4. User-Defined Precedence Groups](#orgca851d9)
+  - [5. Standard Operator Table](#orgece5ff9)
+    - [Arithmetic (via trait-dispatched generic operators)](#org474e001)
+    - [Comparison](#orgaa79f91)
+    - [Logical](#org9c96d37)
+    - [Pipeline](#orgd911947)
+    - [Cons / Append](#orga5da53e)
+  - [6. Chained Comparisons (Julia-inspired)](#org13016a6)
+  - [7. Parsing Algorithm](#org8dd6d97)
+    - [Binding Power Encoding](#orgfe4dce5)
+  - [8. Sexp Mode Equivalent](#org9620c9c)
+- [Part V: Implementation Phases](#orgd853200)
+  - [Phase 1: Core Reader & Parser (Minimum Viable)](#orge1b70fe)
+  - [Phase 2: `:mixfix` on `spec` + User Groups](#org3d33245)
+  - [Phase 3: Chained Comparisons + Diagnostics](#org9eb0099)
+  - [Phase 4: Advanced Features (Future)](#orgae914da)
+- [Part VI: Design Decisions & Tradeoffs](#org2048f9f)
+  - [Decision 1: Named Groups vs Numeric Levels](#orgb9ae3d3)
+  - [Decision 2: `.{...}` Delimiters vs. No Delimiters](#orga5e2dfb)
+  - [Decision 3: Partial Application via `_`](#orgeda49aa)
+  - [Decision 4: Comparison Chaining](#orgfc30e11)
+  - [Decision 5: Bitwise Operators](#org95a4b8c)
+- [Part VII: Open Questions](#org4183d55)
+- [References](#org793b85d)
+  - [Academic Papers](#org335232b)
+  - [Language Documentation](#org278925f)
+  - [Blog Posts & Practical Guides](#org4e5b19e)
 
 
 
-<a id="org425597b"></a>
+<a id="org35a4282"></a>
 
 # Executive Summary
 
@@ -83,7 +83,7 @@ Prologos is a homoiconic language with prefix notation as the default: `[f x y]`
 The key insight: `.{...}` is syntactic sugar that desugars to prefix s-expressions at the preparse stage. The canonical data representation is always prefix. This is analogous to how our WS-mode syntax desugars to sexp forms &#x2013; the infix is a **reading convenience**, not a semantic layer.
 
 
-<a id="org01f173e"></a>
+<a id="orga75a109"></a>
 
 ## Design Principles
 
@@ -94,12 +94,12 @@ The key insight: `.{...}` is syntactic sugar that desugars to prefix s-expressio
 5.  **Reject on ambiguity**: if two operators have no declared precedence relationship, `.{...}` containing both is a compile error requiring explicit grouping.
 
 
-<a id="org250ee33"></a>
+<a id="orgb752a58"></a>
 
 # Part I: Research Survey
 
 
-<a id="org78110fd"></a>
+<a id="org025ce96"></a>
 
 ## 1. Agda — Full Mixfix with DAG Precedence
 
@@ -116,7 +116,7 @@ Agda has **no built-in operators**. Every operator is user-defined using undersc
 Precedence is declared via `infixl N`, `infixr N`, `infix N` where N is any number (including fractions and negatives). Default is 20. The precedence relation forms a **DAG** &#x2013; two operators at the same level are **unrelated** unless they share associativity, making their combination ambiguous (parse error).
 
 
-<a id="orgd556a3b"></a>
+<a id="org95f1186"></a>
 
 ### Agda Standard Library Convention (Haskell-like)
 
@@ -132,7 +132,7 @@ Precedence is declared via `infixl N`, `infixr N`, `infix N` where N is any numb
 | 9     | `infixr` | `.` (composition)          |
 
 
-<a id="org547dc46"></a>
+<a id="orge5574f1"></a>
 
 ### Key Lessons from Agda
 
@@ -143,7 +143,7 @@ Precedence is declared via `infixl N`, `infixr N`, `infix N` where N is any numb
 -   **Paper**: Danielsson & Norell, "Parsing Mixfix Operators" (IFL 2008) &#x2013; the foundational algorithm.
 
 
-<a id="orge2a61f1"></a>
+<a id="orgadc4bae"></a>
 
 ## 2. Maude — Mixfix with Gather Patterns
 
@@ -165,7 +165,7 @@ Left-associativity = `gather (E e)`: left arg can be same-precedence, right cann
 Precedence is numeric, lower = tighter (0-127 by convention). **Opposite direction from Prolog/Haskell**.
 
 
-<a id="org0318127"></a>
+<a id="orgc61a067"></a>
 
 ### Maude Standard Precedence Table
 
@@ -183,7 +183,7 @@ Precedence is numeric, lower = tighter (0-127 by convention). **Opposite directi
 | 61   | `implies`            | Implication    |
 
 
-<a id="orgf7d0cb2"></a>
+<a id="org70ba5d7"></a>
 
 ### Key Lessons from Maude
 
@@ -193,7 +193,7 @@ Precedence is numeric, lower = tighter (0-127 by convention). **Opposite directi
 -   **Gotcha**: The juxtaposition operator (`__` for list concatenation) interacts badly with infix operators.
 
 
-<a id="org7e3939c"></a>
+<a id="orge737116"></a>
 
 ## 3. Prolog — User-Defined Operators with Type Specifiers
 
@@ -212,7 +212,7 @@ Prolog operators are purely syntactic sugar declared via `op(Precedence, Type, N
 Precedence range is 1-1200 (higher = looser, opposite of Maude). The `x` vs `y` convention encodes the same idea as Maude's `e` vs `E`: strict-less-than vs less-or-equal.
 
 
-<a id="org4b79cd2"></a>
+<a id="org5495a79"></a>
 
 ### ISO Standard Operator Table
 
@@ -230,7 +230,7 @@ Precedence range is 1-1200 (higher = looser, opposite of Maude). The `x` vs `y` 
 | 200  | `fy`  | `-`, `+`, `\`                                |
 
 
-<a id="orgc496b77"></a>
+<a id="orge0df74c"></a>
 
 ### Key Lessons from Prolog
 
@@ -241,7 +241,7 @@ Precedence range is 1-1200 (higher = looser, opposite of Maude). The `x` vs `y` 
 -   **Gotcha**: `op/3` is purely syntactic &#x2013; it defines notation, not semantics.
 
 
-<a id="org4ef43bb"></a>
+<a id="org5cb0a80"></a>
 
 ## 4. Haskell — Explicit Numeric Precedence (0-9)
 
@@ -258,7 +258,7 @@ infixr 0 $
 Function application (whitespace) is at an implicit level 10, always tightest. Backtick syntax (`` `div` ``) lets any function be used infix.
 
 
-<a id="orgfeeca03"></a>
+<a id="org3b8c37a"></a>
 
 ### Key Lessons from Haskell
 
@@ -269,7 +269,7 @@ Function application (whitespace) is at an implicit level 10, always tightest. B
 -   **Gotcha**: Two operators at the same level with different associativity produce a parse error, not a predictable result.
 
 
-<a id="org7239d71"></a>
+<a id="orgba8335f"></a>
 
 ## 5. Swift — Named Precedence Groups (Partial Order DAG)
 
@@ -284,7 +284,7 @@ infix operator ** : ExponentiationPrecedence
 ```
 
 
-<a id="org2277a79"></a>
+<a id="orgef8b6f2"></a>
 
 ### Standard Precedence Groups
 
@@ -301,7 +301,7 @@ infix operator ** : ExponentiationPrecedence
 | AssignmentPrecedence         | right | `=`, `+`, etc.          | FunctionArrow      |
 
 
-<a id="org5927203"></a>
+<a id="org340475f"></a>
 
 ### Key Lessons from Swift
 
@@ -312,7 +312,7 @@ infix operator ** : ExponentiationPrecedence
 -   **This is the emerging consensus for new language design** (also adopted by Carbon, Fortress, Rhombus).
 
 
-<a id="org864588d"></a>
+<a id="org4325de6"></a>
 
 ## 6. Scala & OCaml — First-Character-Based Precedence
 
@@ -334,7 +334,7 @@ Both determine precedence entirely from the operator's **first character**:
 Scala: last character `:` makes it right-associative. OCaml: `**` prefix makes it right-associative.
 
 
-<a id="org269b49a"></a>
+<a id="orgaf73700"></a>
 
 ### Key Lessons
 
@@ -343,7 +343,7 @@ Scala: last character `:` makes it right-associative. OCaml: `**` prefix makes i
 -   **Not suitable for Prologos**: We want user-definable precedence, and our operators are words (`add`, `mul`) not symbols.
 
 
-<a id="orgb6f9b44"></a>
+<a id="org2edbf92"></a>
 
 ## 7. Tcl `expr` — Infix Sublanguage in a Homoiconic Host
 
@@ -355,7 +355,7 @@ if {$x > 0 && $y < 10} { ... }   ;# expr in condition
 ```
 
 
-<a id="orgfb8738c"></a>
+<a id="org68d7775"></a>
 
 ### Key Lessons from Tcl
 
@@ -365,19 +365,19 @@ if {$x > 0 && $y < 10} { ... }   ;# expr in condition
 -   **Cognitive load**: Users must know two grammars. Minimizing the delta between them helps.
 
 
-<a id="org1e27e10"></a>
+<a id="org23f48e1"></a>
 
 ## 8. Racket (Our Host) — SRFI-105, k-infix, Rhombus/Enforest
 
 
-<a id="orgc2adf88"></a>
+<a id="org8e46202"></a>
 
 ### SRFI-105 Curly-Infix
 
 Deliberately minimal: `{a + b}` -> `(+ a b)`. Same operator folds: `{a + b + c}` -> `(+ a b c)`. Mixed operators: `{a + b * c}` -> `($nfx$ a + b * c)` &#x2013; deliberately **no** precedence at the reader level.
 
 
-<a id="org1793dec"></a>
+<a id="org727904f"></a>
 
 ### k-infix (Racket Package)
 
@@ -389,7 +389,7 @@ Full Pratt-style parser with configurable precedence table:
 ```
 
 
-<a id="org088df25"></a>
+<a id="org8d6233c"></a>
 
 ### Rhombus Enforest (Most Relevant)
 
@@ -410,7 +410,7 @@ Declaration keywords: `~weaker_than`, `~stronger_than`, `~same_as`, `~same_as_on
 This is the closest prior art to what we want for Prologos.
 
 
-<a id="org7556bd2"></a>
+<a id="org8ccfbc1"></a>
 
 ## 9. Julia — Homoiconic with Native Infix
 
@@ -421,7 +421,7 @@ Precedence is determined by Unicode character class (`+`-like at `prec-plus`, `*
 Julia also supports **chained comparisons**: `a < b <` c= desugars to `(a < b) && (b <` c)= with `b` evaluated only once. This is a popular ergonomic feature.
 
 
-<a id="org553c078"></a>
+<a id="org5287fbb"></a>
 
 ### Key Lessons from Julia
 
@@ -430,12 +430,12 @@ Julia also supports **chained comparisons**: `a < b <` c= desugars to `(a < b) &
 -   **Chained comparisons are popular**: Worth considering for Prologos (`.{a < b <` c}=).
 
 
-<a id="org174755f"></a>
+<a id="org883c0ab"></a>
 
 # Part II: Design Patterns & Gotchas
 
 
-<a id="orgfc8e67d"></a>
+<a id="org4b661e0"></a>
 
 ## The Classic C Precedence Bug
 
@@ -448,7 +448,7 @@ This bug propagated to C++, Java, JavaScript, C#, and PHP. Only Swift, Go, Ruby,
 **Lesson for Prologos**: Do NOT define precedence between bitwise and comparison operators. Leave them unrelated; force parentheses.
 
 
-<a id="orga4ec3ca"></a>
+<a id="org8751ad8"></a>
 
 ## Few Levels vs Many Levels
 
@@ -463,7 +463,7 @@ This bug propagated to C++, Java, JavaScript, C#, and PHP. Only Swift, Go, Ruby,
 **Emerging consensus**: Named groups forming a partial order (Swift model) is the sweet spot for new languages.
 
 
-<a id="org6d4aeb0"></a>
+<a id="orgd723730"></a>
 
 ## The Precedence Interaction Problem
 
@@ -474,7 +474,7 @@ When combining libraries with different operator definitions:
 -   Swift/Rhombus: Operators from different libraries have **no** relationship by default. Combining them requires explicit parentheses &#x2013; which is the **correct** behavior.
 
 
-<a id="org11efc7c"></a>
+<a id="org77b0d1a"></a>
 
 ## Pratt Parsing / Precedence Climbing
 
@@ -489,12 +489,12 @@ Pratt parsing (1973) and precedence climbing (1986) are the **same algorithm**. 
 Adapts cleanly to partial orders by adding: if binding powers are **incomparable**, produce an error.
 
 
-<a id="org5a2afbd"></a>
+<a id="orgc5fa80d"></a>
 
 # Part III: Prologos Integration Analysis
 
 
-<a id="orgfa4f1df"></a>
+<a id="orgfb4d12c"></a>
 
 ## Current Infrastructure
 
@@ -509,7 +509,7 @@ The preparse pipeline in `macros.rkt` already handles several syntactic transfor
 The `.{...}` form would be handled at a new **step 0** or integrated into step 3, before macro expansion.
 
 
-<a id="org820030a"></a>
+<a id="orgbe2229d"></a>
 
 ## Existing Partial Application Machinery
 
@@ -522,7 +522,7 @@ Placeholders already work in application context:
 The `.{...}` form should reuse this: `.{_ + 1}` desugars to `[add _ 1]` which then hits the existing placeholder machinery.
 
 
-<a id="org5be1a85"></a>
+<a id="orgfd9b70a"></a>
 
 ## Spec Entry System
 
@@ -536,7 +536,7 @@ spec add [A A] -> A
 ```
 
 
-<a id="org6bc467e"></a>
+<a id="org8266bdf"></a>
 
 ## Reader Integration
 
@@ -548,12 +548,12 @@ The `.{...}` delimiter needs reader-level support. Options:
 Option 1 is cleaner &#x2013; a single read produces the `($mixfix ...)` datum, which then enters the preparse pipeline for precedence resolution.
 
 
-<a id="org217c2fb"></a>
+<a id="orgf339f35"></a>
 
 # Part IV: Design Proposal
 
 
-<a id="orga03f0f3"></a>
+<a id="orgb75dc0d"></a>
 
 ## 1. Surface Syntax: `.{...}`
 
@@ -568,7 +568,7 @@ The `.{...}` delimiter activates mixfix mode. Inside, operators are parsed with 
 ```
 
 
-<a id="orgd10f70d"></a>
+<a id="orgae6d473"></a>
 
 ### Nesting with `[]` for Prefix Calls Inside Mixfix
 
@@ -580,7 +580,7 @@ The `.{...}` delimiter activates mixfix mode. Inside, operators are parsed with 
 This preserves prefix for function application while gaining infix for operators. `[]` inside `.{...}` is an **escape to prefix** &#x2013; the inverse of how `.{...}` is an escape to infix.
 
 
-<a id="org340936a"></a>
+<a id="orgce500ec"></a>
 
 ### Equivalence with Prefix
 
@@ -593,14 +593,14 @@ This preserves prefix for function application while gaining infix for operators
 | `.{a < b && b < c}` | `[and [lt a b] [lt b c]]` |
 
 
-<a id="org0979c0c"></a>
+<a id="org906c2fe"></a>
 
 ## 2. Named Precedence Groups (Swift/Rhombus Model)
 
 We adopt **named precedence groups forming a partial order DAG**, not numeric levels.
 
 
-<a id="org89d76f0"></a>
+<a id="org8b7df43"></a>
 
 ### Built-in Groups
 
@@ -641,51 +641,31 @@ precedence-group pipe
 Note: **bitwise operators have NO relationship to comparison**. This avoids the C precedence bug entirely. Using bitwise and comparison operators together in `.{...}` requires explicit grouping.
 
 
-<a id="org1c8e67e"></a>
+<a id="org72dc5cc"></a>
 
 ### The Chain: `composition > exponentiation > multiplicative > additive > comparison > logical-and > logical-or > pipe`
 
 This matches universal mathematical convention and the consensus across Haskell, Swift, Julia, and Prolog.
 
 
-<a id="org4dc88f6"></a>
+<a id="org091b464"></a>
 
 ## 3. `:mixfix` Key on `spec`
 
 Operators are registered via the `:mixfix` metadata key on `spec`:
 
-```
-;; Library definition of +
-spec add [A A] -> A
-  :implicits {A : Type}
-  :where (Add A)
-  :mixfix {:symbol + :group additive}
+\#+begin<sub>src</sub> prologos ;; Library definition of + spec add [A A] -> A :implicits {A : Type} :where (Add A) :mixfix {:symbol + :group additive}
 
-;; Library definition of *
-spec mul [A A] -> A
-  :implicits {A : Type}
-  :where (Mul A)
-  :mixfix {:symbol * :group multiplicative}
+;; Library definition of \* spec mul [A A] -> A :implicits {A : Type} :where (Mul A) :mixfix {:symbol \* :group multiplicative}
 
-;; Library definition of ==
-spec eq? [A A] -> Bool
-  :implicits {A : Type}
-  :where (Eq A)
-  :mixfix {:symbol == :group comparison}
+;; Library definition of `= spec eq? [A A] -> Bool :implicits {A : Type} :where (Eq A) :mixfix {:symbol =` :group comparison}
 
-;; Unary prefix
-spec neg [A] -> A
-  :implicits {A : Type}
-  :where (Neg A)
-  :mixfix {:symbol - :kind :prefix :group unary}
+;; Unary prefix spec neg [A] -> A :implicits {A : Type} :where (Neg A) :mixfix {:symbol - :kind :prefix :group unary}
 
-;; User-defined operator
-spec cross-product [Vec3 Vec3] -> Vec3
-  :mixfix {:symbol cross :group multiplicative}
-```
+;; User-defined operator spec cross-product [Vec3 Vec3] -> Vec3 :mixfix {:symbol cross :group multiplicative} \#+end<sub>example</sub>
 
 
-<a id="org114c2ca"></a>
+<a id="org1d128d4"></a>
 
 ### `:mixfix` Map Keys
 
@@ -699,7 +679,7 @@ spec cross-product [Vec3 Vec3] -> Vec3
 Associativity is typically inherited from the group. Override is for exceptional cases only.
 
 
-<a id="org9993783"></a>
+<a id="orgca851d9"></a>
 
 ## 4. User-Defined Precedence Groups
 
@@ -724,12 +704,12 @@ Rules:
 -   Groups declared in library modules are imported with the module. The DAG is composed by union of edges across imports.
 
 
-<a id="org7313319"></a>
+<a id="orgece5ff9"></a>
 
 ## 5. Standard Operator Table
 
 
-<a id="org74182da"></a>
+<a id="org474e001"></a>
 
 ### Arithmetic (via trait-dispatched generic operators)
 
@@ -744,7 +724,7 @@ Rules:
 | `-`    | `neg`    | unary          | prefix | `Neg` |
 
 
-<a id="org562c496"></a>
+<a id="orgaa79f91"></a>
 
 ### Comparison
 
@@ -758,7 +738,7 @@ Rules:
 | `>=`   | `ge?`    | comparison | none  | `Ord` |
 
 
-<a id="org01f7598"></a>
+<a id="org9c96d37"></a>
 
 ### Logical
 
@@ -769,7 +749,7 @@ Rules:
 | `!`          | `not`    | unary       | prefix |
 
 
-<a id="org7b0d44a"></a>
+<a id="orgd911947"></a>
 
 ### Pipeline
 
@@ -780,7 +760,7 @@ Rules:
 | `.`      | dot-access | (special)   | left  |
 
 
-<a id="orgebb35e0"></a>
+<a id="orga5da53e"></a>
 
 ### Cons / Append
 
@@ -790,7 +770,7 @@ Rules:
 | `++`   | `append` | additive | left  |
 
 
-<a id="orgbd0fc7b"></a>
+<a id="org13016a6"></a>
 
 ## 6. Chained Comparisons (Julia-inspired)
 
@@ -807,7 +787,7 @@ Inside `.{...}`, consecutive comparison operators are desugared with short-circu
 Comparison operators are **non-associative** in isolation (`.{a < b < c}` is not `.{(a < b) < c}`). Instead, consecutive comparisons trigger the chained desugaring, which is a special preparse rule.
 
 
-<a id="orgcf5d310"></a>
+<a id="org8dd6d97"></a>
 
 ## 7. Parsing Algorithm
 
@@ -821,7 +801,7 @@ The `.{...}` parser uses **Pratt parsing** adapted for partial-order precedence:
 6.  Wildcards (`_`) in the output are handled by the existing placeholder machinery.
 
 
-<a id="org94a48b5"></a>
+<a id="orgfe4dce5"></a>
 
 ### Binding Power Encoding
 
@@ -833,7 +813,7 @@ Each named group gets a pair of binding powers `(left_bp, right_bp)` derived fro
 -   Groups with no relationship have **incomparable** binding powers (not just equal &#x2013; distinct so the parser can detect and error).
 
 
-<a id="org70583ca"></a>
+<a id="org9620c9c"></a>
 
 ## 8. Sexp Mode Equivalent
 
@@ -850,12 +830,12 @@ In sexp mode, `.{...}` has a direct equivalent:
 The `$mixfix` head triggers the same Pratt parser in the preparse stage.
 
 
-<a id="org3ad681d"></a>
+<a id="orgd853200"></a>
 
 # Part V: Implementation Phases
 
 
-<a id="org8a63ac1"></a>
+<a id="orge1b70fe"></a>
 
 ## Phase 1: Core Reader & Parser (Minimum Viable)
 
@@ -866,7 +846,7 @@ The `$mixfix` head triggers the same Pratt parser in the preparse stage.
 -   Tests: arithmetic expressions, comparison, logical, wildcards, nesting with `[]`
 
 
-<a id="orga4e7c35"></a>
+<a id="org3d33245"></a>
 
 ## Phase 2: `:mixfix` on `spec` + User Groups
 
@@ -877,7 +857,7 @@ The `$mixfix` head triggers the same Pratt parser in the preparse stage.
 -   Tests: user-defined operators, custom precedence groups, cross-module
 
 
-<a id="orgb570498"></a>
+<a id="org9eb0099"></a>
 
 ## Phase 3: Chained Comparisons + Diagnostics
 
@@ -887,7 +867,7 @@ The `$mixfix` head triggers the same Pratt parser in the preparse stage.
 -   REPL: show both mixfix and prefix forms
 
 
-<a id="org95b39e4"></a>
+<a id="orgae914da"></a>
 
 ## Phase 4: Advanced Features (Future)
 
@@ -897,12 +877,12 @@ The `$mixfix` head triggers the same Pratt parser in the preparse stage.
 -   Interaction with `functor` keyword: `:compose` and `:identity` could auto-register mixfix
 
 
-<a id="org40d17f4"></a>
+<a id="org2048f9f"></a>
 
 # Part VI: Design Decisions & Tradeoffs
 
 
-<a id="org7291c5e"></a>
+<a id="orgb9ae3d3"></a>
 
 ## Decision 1: Named Groups vs Numeric Levels
 
@@ -920,7 +900,7 @@ The `$mixfix` head triggers the same Pratt parser in the preparse stage.
 Named groups win on every criterion except initial simplicity. The verbose declaration is a one-time cost; the safety benefits accumulate over the lifetime of the language.
 
 
-<a id="orgf73a9c2"></a>
+<a id="orga5e2dfb"></a>
 
 ## Decision 2: `.{...}` Delimiters vs. No Delimiters
 
@@ -940,7 +920,7 @@ The `.` prefix is chosen because:
 -   It's visually lightweight: `.{a + b}` is only 2 characters of overhead.
 
 
-<a id="orgd93d45b"></a>
+<a id="orgeda49aa"></a>
 
 ## Decision 3: Partial Application via `_`
 
@@ -949,7 +929,7 @@ The `.` prefix is chosen because:
 `.{_ + 1}` desugars to `[add _ 1]`, which the existing `expand-expression` in `macros.rkt` already converts to `(fn [$_0] [add $_0 1])`. No new machinery needed. This also means `.{_ * _}` produces a curried two-argument function, consistent with how `map [* _ _] xs` already works.
 
 
-<a id="org983e7c2"></a>
+<a id="orgfc30e11"></a>
 
 ## Decision 4: Comparison Chaining
 
@@ -962,7 +942,7 @@ The `.` prefix is chosen because:
 -   Implemented as a special preparse rule, not a change to the precedence system
 
 
-<a id="org9c0cd2c"></a>
+<a id="org95a4b8c"></a>
 
 ## Decision 5: Bitwise Operators
 
@@ -978,7 +958,7 @@ Bitwise `&`, `|`, `^` are in their own group(s) with **no** edge to `comparison`
 This **prevents the C bug by construction**.
 
 
-<a id="org4b57a0c"></a>
+<a id="org4183d55"></a>
 
 # Part VII: Open Questions
 
@@ -991,12 +971,12 @@ This **prevents the C bug by construction**.
 4.  **Should `functor` `:compose` auto-register a mixfix symbol?** E.g., `functor Xf ... :compose xf-compose` could auto-generate `:mixfix {:symbol >> :group composition}`. Appealing but adds coupling.
 
 
-<a id="org277af47"></a>
+<a id="org793b85d"></a>
 
 # References
 
 
-<a id="orgd210cb3"></a>
+<a id="org335232b"></a>
 
 ## Academic Papers
 
@@ -1007,7 +987,7 @@ This **prevents the C bug by construction**.
 -   Pratt, "Top Down Operator Precedence" (POPL 1973)
 
 
-<a id="org0b3377c"></a>
+<a id="org278925f"></a>
 
 ## Language Documentation
 
@@ -1024,7 +1004,7 @@ This **prevents the C bug by construction**.
 -   [SRFI-105: Curly-infix-expressions](https://srfi.schemers.org/srfi-105/srfi-105.html)
 
 
-<a id="org76a4a2c"></a>
+<a id="org4e5b19e"></a>
 
 ## Blog Posts & Practical Guides
 

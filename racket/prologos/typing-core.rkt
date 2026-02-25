@@ -16,6 +16,7 @@
 ;;;
 
 (require racket/match
+         racket/string
 
          "prelude.rkt"
          "syntax.rkt"
@@ -27,6 +28,7 @@
          "namespace.rkt"
          "metavar-store.rkt"
          "warnings.rkt"
+         "pretty-print.rkt"
 )
 
 (provide infer check is-type infer-level
@@ -226,6 +228,17 @@
     ;; ---- Free variable: lookup in global environment ----
     [(expr-fvar name)
      (let ([ty (global-env-lookup-type name)])
+       (when ty
+         ;; Check for deprecation warning
+         (let ([se (lookup-spec name)])
+           (when se
+             (let ([md (spec-entry-metadata se)])
+               (when md
+                 (let ([dep (hash-ref md ':deprecated #f)])
+                   (when dep
+                     (emit-deprecation-warning!
+                      name
+                      (if (string? dep) dep #f)))))))))
        (if ty ty (expr-error)))]
 
     ;; ---- Universes ----
@@ -1576,10 +1589,34 @@
     ;; An expr-hole is a placeholder that will be filled by type inference.
     [((expr-hole) _) #t]
 
-    ;; ---- Typed hole: reports expected type to stderr, then succeeds ----
+    ;; ---- Typed hole: reports expected type + context to stderr, then succeeds ----
     [((expr-typed-hole name) expected)
      (define hole-label (if name (format "??~a" name) "??"))
-     (fprintf (current-error-port) "Hole ~a : ~a\n" hole-label (format "~a" expected))
+     (define pp-type (pp-expr expected))
+     ;; Build context report with synthetic names
+     (define hole-base-names '("x" "y" "z" "a" "b" "c" "d" "e" "f" "g" "h"))
+     (define ctx-lines
+       (for/list ([i (in-range (ctx-len ctx))])
+         (define ty (lookup-type i ctx))
+         (define m (lookup-mult i ctx))
+         (define var-name
+           (if (< i (length hole-base-names))
+               (list-ref hole-base-names i)
+               (format "v~a" i)))
+         ;; Build name stack for pp-expr: indices 0..i mapped to names
+         (define names-for-pp
+           (for/list ([j (in-range (+ i 1))])
+             (if (< j (length hole-base-names))
+                 (list-ref hole-base-names j)
+                 (format "v~a" j))))
+         (format "  ~a : ~a  (~a)" var-name (pp-expr ty names-for-pp) (pp-mult m))))
+     (fprintf (current-error-port)
+              "Hole ~a : ~a\n~a"
+              hole-label
+              pp-type
+              (if (null? ctx-lines)
+                  ""
+                  (format "Context:\n~a\n" (string-join ctx-lines "\n"))))
      #t]
 
     ;; ---- Meta expression: optimistically succeed ----

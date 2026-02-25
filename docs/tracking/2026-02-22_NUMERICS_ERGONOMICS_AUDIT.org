@@ -23,12 +23,12 @@ parser keywords.
 
 ** Numeric Types (4 Families)
 
-| Family | Types | Literals | Purpose |
-|--------+-------------------+---------------------+-----------------------------|
-| Peano | ~Nat~ | ~42N~, ~zero~, ~suc~ | Type-level only |
-| Exact | ~Int~ | ~42~, ~-7~ | Default computation |
-| Exact | ~Rat~ | ~3/7~, ~1/2~ | Exact fractions |
-| Approx | ~Posit{8,16,32,64}~ | ~~3.14~, ~~3.14p8~ | Tapered-precision approx |
+| Family | Types               | Literals             | Purpose                  |
+|--------+---------------------+----------------------+--------------------------|
+| Peano  | ~Nat~               | ~42N~, ~zero~, ~suc~ | Type-level only          |
+| Exact  | ~Int~               | ~42~, ~-7~           | Default computation      |
+| Exact  | ~Rat~               | ~3/7~, ~1/2~         | Exact fractions          |
+| Approx | ~Posit{8,16,32,64}~ | ~~3.14~, ~~3.14p8~   | Tapered-precision approx |
 
 Within-family subtyping is automatic:
 - Exact: ~Nat <: Int <: Rat~
@@ -40,16 +40,16 @@ Cross-family: NO implicit coercion (deliberate).
 
 Every numeric type has its own set of parser keywords:
 
-| Operation | Int | Rat | Posit32 | Posit8 |
-|-----------+-------+-------+---------+--------|
-| add | ~int+~ | ~rat+~ | ~p32+~ | ~p8+~ |
-| sub | ~int-~ | ~rat-~ | ~p32-~ | ~p8-~ |
-| mul | ~int*~ | ~rat*~ | ~p32*~ | ~p8*~ |
-| div | ~int/~ | ~rat/~ | ~p32/~ | ~p8/~ |
-| neg | ~int-neg~ | ~rat-neg~ | ~p32-neg~ | ~p8-neg~ |
-| abs | ~int-abs~ | ~rat-abs~ | ~p32-abs~ | ~p8-abs~ |
-| lt | ~int-lt~ | ~rat-lt~ | ~p32-lt~ | ~p8-lt~ |
-| eq | ~int-eq~ | ~rat-eq~ | (derived) | (derived) |
+| Operation | Int       | Rat       | Posit32   | Posit8    |
+|-----------+-----------+-----------+-----------+-----------|
+| add       | ~int+~    | ~rat+~    | ~p32+~    | ~p8+~     |
+| sub       | ~int-~    | ~rat-~    | ~p32-~    | ~p8-~     |
+| mul       | ~int*~    | ~rat*~    | ~p32*~    | ~p8*~     |
+| div       | ~int/~    | ~rat/~    | ~p32/~    | ~p8/~     |
+| neg       | ~int-neg~ | ~rat-neg~ | ~p32-neg~ | ~p8-neg~  |
+| abs       | ~int-abs~ | ~rat-abs~ | ~p32-abs~ | ~p8-abs~  |
+| lt        | ~int-lt~  | ~rat-lt~  | ~p32-lt~  | ~p8-lt~   |
+| eq        | ~int-eq~  | ~rat-eq~  | (derived) | (derived) |
 
 This is ~85 keywords across 4 families x 4 widths.
 

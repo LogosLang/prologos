@@ -8,7 +8,19 @@
 
 (provide current-coercion-warnings
          emit-coercion-warning!
-         format-coercion-warning)
+         format-coercion-warning
+         ;; Deprecation warnings
+         current-deprecation-warnings
+         deprecation-warning
+         deprecation-warning?
+         deprecation-warning-name
+         deprecation-warning-message
+         emit-deprecation-warning!
+         format-deprecation-warning)
+
+;; ========================================
+;; Coercion warnings
+;; ========================================
 
 ;; Accumulator for coercion warnings (list of warning structs).
 ;; Reset per-command in driver.rkt.
@@ -29,3 +41,29 @@
   (format "warning: implicit coercion from ~a to ~a (loss of exactness)"
           (coercion-warning-from-type-str w)
           (coercion-warning-to-type-str w)))
+
+;; ========================================
+;; Deprecation warnings
+;; ========================================
+
+;; Accumulator for deprecation warnings (list of warning structs).
+;; Reset per-command in driver.rkt.
+(define current-deprecation-warnings (make-parameter '()))
+
+;; A deprecation warning: name is the deprecated function/spec name (symbol),
+;; message is an optional string (e.g., "use foo-v2 instead") or #f.
+(struct deprecation-warning (name message) #:transparent)
+
+;; Emit a deprecation warning.
+(define (emit-deprecation-warning! name msg)
+  (current-deprecation-warnings
+   (cons (deprecation-warning name msg)
+         (current-deprecation-warnings))))
+
+;; Format a deprecation warning for display.
+(define (format-deprecation-warning w)
+  (format "warning: ~a is deprecated~a"
+          (deprecation-warning-name w)
+          (if (deprecation-warning-message w)
+              (format " — ~a" (deprecation-warning-message w))
+              "")))

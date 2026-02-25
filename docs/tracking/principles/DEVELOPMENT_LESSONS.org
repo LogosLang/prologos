@@ -215,6 +215,22 @@ predictable (it transforms known sentinels).
 
 * Meta-Lessons
 
+** Completeness Over Deferral
+When you have the clarity, the vision, and the full context --- finish
+the work now. Half-built pieces that get deferred are half-built pieces
+that get forgotten. The cost of re-acquiring context later almost always
+exceeds the cost of doing the work while the understanding is fresh.
+
+This doesn't mean never defer --- sometimes layering and phasing is the
+only sensible approach. But the default should be: complete the solution.
+Defer only when there is a genuine dependency on unbuilt infrastructure
+or when the design is genuinely uncertain. "We'll come back to it" is a
+red flag; if the work is clear enough to describe, it's clear enough to
+do.
+
+Corollary: when deferral /is/ necessary, it must be immediately tracked
+in ~DEFERRED.md~. Deferred work that isn't tracked is abandoned work.
+
 ** Let Pain Drive Design
 Don't add features until they're needed. Every deferred item in
 ~DEFERRED.md~ was deferred because the pain wasn't yet sufficient to

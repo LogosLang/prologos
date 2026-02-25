@@ -1,0 +1,823 @@
+% Created 2026-02-24 Tue 07:58
+% Intended LaTeX compiler: pdflatex
+\documentclass[11pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{graphicx}
+\usepackage{longtable}
+\usepackage{wrapfig}
+\usepackage{rotating}
+\usepackage[normalem]{ulem}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{capt-of}
+\usepackage{hyperref}
+\author{Prologos Project}
+\date{2026-02-24}
+\title{A Gentle Introduction to Prologos: Types, Specs, and Sessions\\\medskip
+\large For Programmers Who Ship Code — A Spiral Curriculum}
+\hypersetup{
+ pdfauthor={Prologos Project},
+ pdftitle={A Gentle Introduction to Prologos: Types, Specs, and Sessions},
+ pdfkeywords={},
+ pdfsubject={},
+ pdfcreator={Emacs 30.2 (Org mode 9.7.39)}, 
+ pdflang={English}}
+\begin{document}
+
+\maketitle
+\tableofcontents
+
+\begin{quote}
+"The language is actually designed to be minimal in ceremony and syntax,
+and look friendly and inviting to any programmer generally familiar with
+functional programming; although there are layers of depth to unlock
+further expressiveness, if they choose to go there."
+\end{quote}
+\section{Who This Is For}
+\label{sec:org2d614a5}
+
+You write JavaScript or TypeScript. You've shipped production services.
+You might know about capability-based security from the OCapN community,
+or about distributed systems from building real infrastructure. You've
+heard terms like "dependent types" and "session types" but they sound
+academic.
+
+This tutorial shows you that Prologos's type system is \emph{not} academic.
+It's a pragmatic tool for catching bugs you've been catching with tests,
+conventions, and code review. You can use as little or as much of it as
+you want --- the layers are opt-in.
+
+\textbf{Prerequisites:} Familiarity with a typed language (TypeScript, Java, Rust)
+and comfort with first-class functions (\texttt{map}, \texttt{filter}, \texttt{reduce}).
+
+\textbf{What you won't need:} Category theory, proof assistants, Greek letters,
+or a PhD.
+\section{Spiral 1: Just Write Functions}
+\label{sec:org6a284aa}
+
+\subsection{1.1 Your First Prologos Function}
+\label{sec:orga48c313}
+
+\begin{verbatim}
+defn greet [name]
+  [string-append "Hello, " name]
+\end{verbatim}
+
+That's it. No type annotations. Prologos infers that \texttt{name} is a \texttt{String}
+and the return value is a \texttt{String}. If you've used TypeScript with
+\texttt{noImplicitAny} off, this feels familiar --- write code, let the system
+figure out the types.
+
+Key syntax note: \texttt{[]} is for function application. \texttt{defn greet [name]}
+defines a function \texttt{greet} that takes \texttt{name}. \texttt{[string-append "Hello, " name]}
+calls \texttt{string-append} with two arguments.
+\subsection{1.2 Pattern Matching}
+\label{sec:org8844493}
+
+\begin{verbatim}
+defn factorial
+  | [0] -> 1
+  | [n] -> [* n [factorial [- n 1]]]
+\end{verbatim}
+
+The \texttt{|} arms define cases directly on the function — no separate
+\texttt{match} expression needed. Brackets \texttt{[...]} are for function calls.
+This reads naturally: "factorial of 0 is 1; factorial of n is n times
+factorial of (n - 1)."
+\subsection{1.3 Collections Work Like You'd Expect}
+\label{sec:orgb71ab58}
+
+\begin{verbatim}
+;; List literal
+def xs '[1 2 3 4 5]
+
+;; PVec (persistent vector -- like Clojure's vectors)
+def ys @[10 20 30]
+
+;; Map (persistent hash map)
+def user {:name "Alice" :age 30}
+
+;; Set (persistent hash set)
+def primes #{2 3 5 7}
+
+;; Generic operations work on ALL of them
+map inc xs                      ;; => '[2 3 4 5 6]
+map inc ys                      ;; => @[11 21 31]
+filter (fn [x] [> x 3]) xs     ;; => '[4 5]
+reduce + 0 xs                   ;; => 15
+into @[] xs                     ;; => @[1 2 3 4 5]  (List -> PVec)
+\end{verbatim}
+
+\texttt{map}, \texttt{filter}, \texttt{reduce} work generically on Lists, PVecs, Sets ---
+any collection type. If you've used Clojure's seq abstraction or
+Rust's iterators, this is the same idea: one set of function names,
+all collection types, type-preserving.
+\section{Spiral 2: Adding Type Signatures with \texttt{spec}}
+\label{sec:org35472c1}
+
+\subsection{2.1 Why Bother?}
+\label{sec:orge42f79d}
+
+Type inference is great for small functions. But as code grows, explicit
+type signatures become \emph{documentation that the compiler checks}. TypeScript
+developers know this instinct --- you \emph{could} let TS infer everything, but
+\texttt{: number} on a function parameter prevents a whole class of bugs.
+
+In Prologos, type signatures live in \texttt{spec} declarations --- separate from
+the function body. Think of \texttt{spec} as TypeScript's \texttt{interface} for a
+single function:
+\subsection{2.2 Level 1: Simple Types}
+\label{sec:orgf2e1eac}
+
+\begin{verbatim}
+spec add : Int -> Int -> Int
+defn add [x y] [+ x y]
+\end{verbatim}
+
+Read this as: "\texttt{add} takes an \texttt{Int} and an \texttt{Int} and returns an \texttt{Int}."
+Arrow \texttt{(->)} separates arguments from return type.
+
+This is the equivalent of TypeScript's:
+\begin{verbatim}
+function add(x: number, y: number): number { ... }
+\end{verbatim}
+\subsection{2.3 Level 2: Generics (Polymorphism)}
+\label{sec:org8ce224b}
+
+\begin{verbatim}
+spec id : A -> A
+defn id [x] x
+\end{verbatim}
+
+\texttt{A} is a type variable --- just like TypeScript's \texttt{<T>}. Prologos infers
+that \texttt{A} is a type parameter because it appears free in the signature
+(starts with a capital letter, not a known type). No need to write the
+equivalent of \texttt{<A>}.
+
+TypeScript equivalent:
+\begin{verbatim}
+function id<A>(x: A): A { return x; }
+\end{verbatim}
+\subsection{2.4 Level 3: Constrained Generics}
+\label{sec:org65b026d}
+
+What if your generic function needs the type to support certain operations?
+
+\begin{verbatim}
+spec sort : [List A] -> [List A]
+  :where (Ord A)
+defn sort [xs] ...
+\end{verbatim}
+
+\texttt{:where (Ord A)} means "\texttt{A} must support ordering." This is like
+TypeScript's \texttt{<A extends Comparable<A>{}>{}} but more flexible --- traits
+(Prologos's version of interfaces) are resolved automatically.
+
+The user writes \texttt{sort '[3 1 2]} --- the compiler sees \texttt{A = Int},
+finds \texttt{Int}'s \texttt{Ord} instance, and passes it in automatically. Zero
+ceremony at the call site.
+\section{Spiral 3: \texttt{spec} as Self-Documenting Metadata}
+\label{sec:orge4889e0}
+
+\subsection{3.1 Beyond Types: Specs as Rich Descriptions}
+\label{sec:org93b4305}
+
+Here's where Prologos diverges from TypeScript. A \texttt{spec} isn't \emph{just} a
+type signature --- it's a structured metadata record. You can attach
+documentation, examples, and properties \emph{right next to the type}:
+
+\begin{verbatim}
+spec sort : [List A] -> [List A]
+  :where (Ord A)
+  :doc "Sort a list in ascending order using merge sort"
+  :examples
+    - [sort '[3 1 2]] => '[1 2 3]
+    - [sort '[]] => '[]
+  :properties
+    - :name "preserves-length"
+      :holds [eq? [length [sort xs]] [length xs]]
+    - :name "idempotent"
+      :holds [eq? [sort [sort xs]] [sort xs]]
+\end{verbatim}
+
+Let's break this down:
+
+\begin{center}
+\begin{tabular}{lll}
+Key & What it does & Analogy\\
+\hline
+\texttt{:doc} & Human-readable description & JSDoc \texttt{@description}\\
+\texttt{:examples} & Concrete input/output pairs & Jest \texttt{test("should...")}\\
+\texttt{:properties} & Universal invariants (for all valid inputs) & QuickCheck / fast-check property\\
+\texttt{:where} & Trait constraints (interfaces the type must have) & TS \texttt{extends} constraint\\
+\end{tabular}
+\end{center}
+\subsection{3.2 Why This Matters}
+\label{sec:org1f962fa}
+
+In JavaScript, these live in \emph{four different places}:
+
+\begin{enumerate}
+\item Types: TypeScript \texttt{.d.ts} files or inline annotations
+\item Docs: JSDoc comments (often stale)
+\item Examples: Unit tests in a separate \texttt{*.test.js} file
+\item Properties: Property-based tests in a third file (if you have them at all)
+\end{enumerate}
+
+In Prologos, they're \emph{all part of the spec}. The compiler reads them.
+The tooling reads them. They're always in sync because they live next to
+the function they describe.
+\subsection{3.3 The Graduation Path}
+\label{sec:org472063f}
+
+This is the key design philosophy: \textbf{you opt in to more precision}. Each
+level adds information without changing the previous levels:
+
+\begin{verbatim}
+;; Level 0: No types at all. Inference does the work.
+defn add [x y] [+ x y]
+
+;; Level 1: Add a type signature.
+spec add : Int -> Int -> Int
+defn add [x y] [+ x y]
+
+;; Level 2: Add documentation.
+spec add : Int -> Int -> Int
+  :doc "Integer addition"
+defn add [x y] [+ x y]
+
+;; Level 3: Add examples.
+spec add : Int -> Int -> Int
+  :doc "Integer addition"
+  :examples
+    - [add 2 3] => 5
+defn add [x y] [+ x y]
+
+;; Level 4: Add properties.
+spec add : Int -> Int -> Int
+  :doc "Integer addition"
+  :examples
+    - [add 2 3] => 5
+  :properties
+    - :name "commutative"
+      :holds [eq? [add x y] [add y x]]
+    - :name "identity"
+      :holds [eq? [add x 0] x]
+defn add [x y] [+ x y]
+\end{verbatim}
+
+At no point do you need to understand dependent types, Pi types, or
+category theory. You're just adding metadata that the compiler checks.
+
+\textbf{The implementation doesn't change.} Only the specification becomes richer.
+\section{Spiral 4: Higher-Kinded Types (Without the Jargon)}
+\label{sec:orgbd77094}
+
+\subsection{4.1 The Problem: Writing Generic Code Over Containers}
+\label{sec:org3ee614a}
+
+You know \texttt{map} works on arrays in JavaScript. But what if you want to
+write a function that works on \emph{any container} --- arrays, Sets, Maps,
+async iterables --- without knowing which one?
+
+In TypeScript, this is awkward. You'd need overloads or a complex generic:
+
+\begin{verbatim}
+// TypeScript: you end up with overloads
+function fmap<A, B>(f: (a: A) => B, xs: Array<A>): Array<B>;
+function fmap<A, B>(f: (a: A) => B, xs: Set<A>): Set<B>;
+// ... one per container type
+\end{verbatim}
+\subsection{4.2 Prologos: Traits Over Containers}
+\label{sec:orgda08be5}
+
+In Prologos, the \texttt{Functor} trait captures "any container you can map over":
+
+\begin{verbatim}
+spec fmap : [A -> B] -> [F A] -> [F B]
+  :where (Functor F)
+  :doc "Apply a function inside any container"
+\end{verbatim}
+
+Read \texttt{F} as "some container type." \texttt{F A} means "a container of \texttt{A} values."
+The \texttt{:where (Functor F)} constraint says "\texttt{F} must be a type that supports
+mapping."
+
+Usage --- zero ceremony:
+
+\begin{verbatim}
+fmap inc '[1 2 3]            ;; => '[2 3 4]
+fmap inc @[1 2 3]           ;; => @[2 3 4]
+fmap to-string '[1 2]       ;; => '["1" "2"]
+\end{verbatim}
+
+The compiler sees \texttt{F = List} or \texttt{F = PVec}, finds the right \texttt{Functor}
+instance, and dispatches automatically. This is like Rust's trait system
+or Haskell's type classes, but with less syntax.
+\subsection{4.3 You Already Know This Pattern}
+\label{sec:org11a12f0}
+
+If you've used JavaScript's \texttt{Symbol.iterator} protocol, you know this idea:
+
+\begin{verbatim}
+// JS: any object with [Symbol.iterator] is iterable
+for (const x of anyIterable) { ... }
+\end{verbatim}
+
+Prologos traits are the typed version of protocols: any type that
+implements \texttt{Seqable} (the "can produce a sequence" trait) works with
+\texttt{map}, \texttt{filter}, \texttt{reduce}, etc. The compiler \emph{proves} the implementation
+exists, rather than discovering at runtime that it doesn't.
+\section{Spiral 5: \texttt{functor} --- Naming Complex Types}
+\label{sec:org4a11eb2}
+
+\subsection{5.1 The Problem: Type Signatures Get Long}
+\label{sec:orgdbcedd1}
+
+As your code becomes more generic, type signatures grow:
+
+\begin{verbatim}
+;; This is getting hard to read...
+spec compose-xf : <(S :0 Type) -> [S -> B -> S] -> S -> A -> S>
+                  -> <(S :0 Type) -> [S -> C -> S] -> S -> B -> S>
+                  -> <(S :0 Type) -> [S -> C -> S] -> S -> A -> S>
+\end{verbatim}
+
+Those angle brackets \texttt{<...>} contain \emph{dependent types} --- types that
+mention runtime values. We'll get to what that means later. For now,
+the point is: this signature is unreadable.
+\subsection{5.2 The Solution: Name It}
+\label{sec:org93dfe4e}
+
+\begin{verbatim}
+functor Xf {A B : Type}
+  :doc "A transducer: transforms A-reductions into B-reductions"
+  :unfolds <(S :0 Type) -> [S -> B -> S] -> S -> A -> S>
+\end{verbatim}
+
+Now the signature becomes:
+
+\begin{verbatim}
+spec compose-xf : [Xf A B] -> [Xf B C] -> [Xf A C]
+  :doc "Compose two transducers"
+\end{verbatim}
+
+\texttt{functor} is Prologos's way of saying: "I'm naming a complex type
+pattern so I never have to write out the full thing." It's like
+TypeScript's \texttt{type} alias on steroids:
+
+\begin{verbatim}
+// TypeScript equivalent (roughly)
+type Xf<A, B> = <S>(step: (s: S, b: B) => S) => (s: S, a: A) => S;
+\end{verbatim}
+\subsection{5.3 Progressive Metadata on \texttt{functor}}
+\label{sec:org8c6aef3}
+
+Just like \texttt{spec}, \texttt{functor} supports progressive metadata:
+
+\begin{verbatim}
+functor Xf {A B : Type}
+  :doc "A transducer: transforms A-reductions into B-reductions"
+  :unfolds <(S :0 Type) -> [S -> B -> S] -> S -> A -> S>
+  :compose xf-compose     ;; "this type composes via xf-compose"
+  :identity id-xf         ;; "the identity element is id-xf"
+  :laws (transducer-laws)  ;; "it must satisfy these algebraic laws"
+\end{verbatim}
+
+You don't need \texttt{:compose}, \texttt{:identity}, or \texttt{:laws} to use \texttt{functor}.
+Start with just \texttt{:unfolds}. Add algebraic structure when you need it.
+\subsection{5.4 The Key Insight}
+\label{sec:orgd46a3eb}
+
+The dependent type (\texttt{<...>}) lives in \texttt{:unfolds}, consulted only when
+the compiler needs it. The programmer-facing surface is just \texttt{Xf A B}.
+
+\textbf{Dependent types are the implementation substrate. The surface language
+speaks in domain terms.}
+
+This is Prologos's design philosophy in a nutshell. The deep theory is
+there when you need it --- but it's behind a door you never have to open
+unless you want to.
+\section{Spiral 6: Channels and Protocols (Session Types)}
+\label{sec:orge5253eb}
+
+\subsection{6.1 The Problem: Communication Goes Wrong}
+\label{sec:org8c120c4}
+
+If you've built distributed services, you know the pain: the client
+sends a JSON object, the server expects a different shape, and things
+silently break. Or worse: the client sends two messages when the server
+expects one, and the connection hangs.
+
+These are \emph{protocol bugs}. TypeScript can't catch them --- the type system
+doesn't model sequences of messages. REST API schemas (OpenAPI) are
+documentation, not enforcement. gRPC is closer, but still doesn't verify
+that your client and server agree on the \emph{order} of messages.
+\subsection{6.2 Session Types: Protocols as Types}
+\label{sec:org3c7fbee}
+
+Prologos can express communication protocols \emph{in the type system}:
+
+\begin{verbatim}
+;; A session defines the shape of a conversation
+session Greeter
+  send name : String       ;; client sends a string
+  recv greeting : String   ;; client receives a string
+  end                      ;; conversation is over
+\end{verbatim}
+
+This says: "A \texttt{Greeter} session starts with the client sending a
+\texttt{String} (the name), then the server responds with a \texttt{String}
+(the greeting), then the conversation ends."
+
+The compiler checks \emph{both sides}:
+\begin{itemize}
+\item The client must send a \texttt{String} first, then receive a \texttt{String}
+\item The server must receive a \texttt{String} first, then send a \texttt{String}
+(the \emph{dual} --- send becomes receive, receive becomes send)
+\end{itemize}
+
+If either side violates the protocol, it's a \emph{compile-time error}.
+\subsection{6.3 Branching Protocols: Choice and Offer}
+\label{sec:org277b8af}
+
+Real protocols have branches. Think of an HTTP-like interaction:
+
+\begin{verbatim}
+session DatabaseService
+  rec Loop                  ;; recursive protocol (can repeat)
+    offer                   ;; server offers these choices:
+      | :query              ;; client can select :query
+          recv q : Query    ;;   send a query
+          send r : Result   ;;   get a result back
+          Loop              ;;   and go again
+      | :close              ;; or client can select :close
+          end               ;;   and we're done
+\end{verbatim}
+
+The server =offer=s branches; the client =select=s one. This is like a
+tagged union of possible message sequences. The compiler verifies that
+the server handles every branch the client might choose.
+\subsection{6.4 Dependent Sessions: Protocols That Depend on Values}
+\label{sec:org29bbc5b}
+
+Here's where Prologos goes beyond what gRPC or OpenAPI can express:
+
+\begin{verbatim}
+session VecProtocol (A : Type)
+  recv n : Nat             ;; client sends a number
+  send v : [Vec A n]       ;; server sends a vector of THAT length
+  end
+\end{verbatim}
+
+The type of the \emph{second} message depends on the \emph{value} of the first.
+If the client sends \texttt{3}, the server must send a vector of length 3. Not
+"some vector" --- \emph{exactly} 3 elements. The compiler proves this.
+
+This is a \textbf{dependent session type} --- the protocol shape depends on
+runtime values. No mainstream language can express this.
+\section{Spiral 7: Capabilities and the Eventual Send}
+\label{sec:org19a462a}
+
+\subsection{7.1 A Quick Grounding: What Are Capabilities?}
+\label{sec:org86504a3}
+
+Object-capability security (ocap) is a model where authority comes from
+\emph{possession of a reference}, not from ambient identity checks (like ACLs
+or ambient auth). The idea originates in Mark Miller's E language (2000s)
+and is being standardized for decentralized networks by the \href{https://ocapn.org/}{OCapN
+pre-standardization group}, with implementations in Spritely Goblins
+(Guile Scheme) and the \href{https://github.com/endojs/endo}{Endo} project (JavaScript/Hardened JS).
+
+The core principles:
+\begin{itemize}
+\item \textbf{No ambient authority}: you can't "import" a database handle from thin
+air. Someone must hand you a reference.
+\item \textbf{Attenuation}: you can give someone a \emph{weaker} version of your authority
+(read-only view, rate-limited proxy, etc.)
+\item \textbf{Transfer}: you can pass a capability to someone else — and if it's
+unique, passing it means \emph{you no longer have it}.
+\item \textbf{Composition}: capabilities are just references — they compose like any
+other value.
+\end{itemize}
+
+If you've built systems with OAuth tokens, API keys, or dependency
+injection, you've been \emph{approximating} ocap informally. The difference is
+enforcement: in Prologos, the compiler verifies these properties.
+\subsection{7.2 Channels as Capabilities}
+\label{sec:org2cd069c}
+
+In Prologos, a typed channel \emph{is} a capability. Consider:
+
+\begin{verbatim}
+session ReadOnlyDB
+  rec Loop
+    offer
+      | :query
+          recv q : Query
+          send r : Result
+          Loop
+      | :close
+          end
+\end{verbatim}
+
+If a function receives a channel of type \texttt{ReadOnlyDB}, it can \emph{only}
+query and close. It cannot insert, delete, or modify data ---
+not because of a runtime ACL check, but because those operations
+don't exist in the session type. The \emph{type itself is the attenuation
+boundary}.
+
+This maps directly to the ocap principle of attenuation: the
+\texttt{ReadOnlyDB} session type is a \emph{powerless facet} of a full
+\texttt{DatabaseService} --- same database, smaller authority surface.
+\subsection{7.3 Linear Types Prevent Capability Duplication}
+\label{sec:orgb22a52e}
+
+Prologos's linear types (QTT --- Quantitative Type Theory) add another
+layer. A channel marked with multiplicity \texttt{:1} (linear) cannot be
+duplicated:
+
+\begin{verbatim}
+;; If db-channel is linear (:1), you cannot do this:
+let chan1 = db-channel
+let chan2 = db-channel   ;; TYPE ERROR: db-channel already consumed
+\end{verbatim}
+
+This means: if I give you my database channel, \emph{I no longer have it}.
+That's capability transfer --- enforced by the compiler. No need for
+runtime wrappers or trust assumptions.
+\subsection{7.4 The Eventual Send}
+\label{sec:org834cbb1}
+
+The \emph{eventual send} is a fundamental concept from Mark Miller's E
+language (and now central to OCapN's CapTP --- the Capability Transport
+Protocol). The idea: instead of blocking on a remote call, you fire off
+a message and get back a \emph{promise}. The remote side processes it
+asynchronously. Multiple messages can be in-flight simultaneously.
+
+In JavaScript, this concept is making its way in via the \href{https://github.com/tc39/proposal-eventual-send}{TC39
+proposal-eventual-send}, with syntax like \texttt{E(target).method(args)}.
+
+Prologos provides this natively via \texttt{!!} (non-blocking send) and
+\texttt{recv!} (non-blocking receive):
+
+\begin{verbatim}
+defproc db-client [queries : List Query] : List QueryResult
+  let channel = [connect DatabaseService]
+
+  ;; Fire all queries without waiting (eventual sends)
+  let promises = [map [fn [q]
+    select :query channel
+    send q channel
+    recv! channel           ;; recv! = eventual receive, returns promise
+  ] queries]
+
+  ;; Do other work while queries execute...
+  [log "queries submitted, waiting..."]
+
+  ;; Collect all results when ready
+  let results = [map await promises]
+
+  select :close channel
+  results
+\end{verbatim}
+
+The \texttt{recv!} operation returns a promise. Multiple queries fly out
+concurrently. \texttt{await} collects the results. The session type \emph{still
+guarantees} that every query gets exactly one response --- the protocol
+is preserved even in the asynchronous case.
+
+This is analogous to E's \emph{promise pipelining}: rather than waiting for
+each round trip, you send all your messages and let the promises resolve
+in whatever order the network delivers. The key difference: Prologos's
+session type statically proves that the promise chain is well-formed ---
+every send has a matching receive, every branch is handled.
+\subsection{7.5 How This Compares to OCapN}
+\label{sec:org3f771ae}
+
+\begin{center}
+\begin{tabular}{lll}
+OCapN / E Concept & Prologos Equivalent & Enforcement\\
+\hline
+Object reference & Typed channel endpoint & Compile-time type\\
+Capability attenuation & Session type (can only do what the type says) & Compile-time type\\
+No ambient authority & Linear types prevent copying channels & Compile-time QTT\\
+Eventual send (\texttt{E(x).m()}) & \texttt{!!} / \texttt{send!} (non-blocking send) & Compile-time type\\
+Promise & \texttt{recv!} returns a promise; \texttt{await} resolves & Compile-time type\\
+Promise pipelining & Multiple \texttt{recv!} in-flight; session type tracks & Compile-time type\\
+Vat (isolated object graph) & Process with linear channel context & Compile-time QTT\\
+CapTP (capability transfer) & Channel passing (linear: transfer of authority) & Compile-time QTT\\
+Sealer/Unsealer pairs & Existential types (Sigma) — pack/unpack & Compile-time type\\
+\end{tabular}
+\end{center}
+
+The key difference from existing ocap implementations: in Spritely's
+Goblins, capabilities are enforced at \emph{runtime} by the Guile Scheme VM.
+In Endo/Hardened JS, they're enforced by the SES (Secure ECMAScript)
+sandbox. In Prologos, capabilities are enforced at \emph{compile time} by the
+type checker. If your program type checks, protocol violations are
+\emph{impossible}. The type system \emph{is} the capability system.
+
+\begin{quote}
+"Logos with session types gives you ocap where the capability protocol
+is enforced by the compiler, not just convention."
+--- from project design discussion
+\end{quote}
+\section{Spiral 8: Dependent Types (The Deeper Layer)}
+\label{sec:org82d25e6}
+
+\subsection{8.1 You've Already Used Them}
+\label{sec:org1f40551}
+
+If you read the \texttt{VecProtocol} example above and understood it, you've
+already used dependent types. A dependent type is just a type that
+mentions a runtime value:
+
+\begin{verbatim}
+spec replicate : <(n : Nat) -> A -> [Vec A n]>
+\end{verbatim}
+
+"Given a number \texttt{n}, return a vector of \emph{exactly} \texttt{n} elements." The
+return type depends on the argument value. That's it. That's a
+dependent type.
+
+The angle brackets \texttt{<...>} mark the dependent part. Everything
+outside angle brackets is regular ML-style typing. This visual
+separator means you can \emph{see} where dependency happens.
+\subsection{8.2 The Full Progressive Complexity Ladder}
+\label{sec:org198e29e}
+
+Let's revisit the levels, now that you have the intuition:
+
+\begin{center}
+\begin{tabular}{rlll}
+Level & What You Write & What It Means & TypeScript Analogy\\
+\hline
+0 & \texttt{defn add [x y] [+ x y]} & No types (inference) & TS with \texttt{any}\\
+1 & \texttt{spec add : Int -> Int -> Int} & Concrete types & \texttt{function add(x: number)}\\
+2 & \texttt{spec id : A -> A} & Generics & \texttt{function id<A>(x: A): A}\\
+3 & \texttt{spec sort : ... :where (Ord A)} & Constrained generics & \texttt{<A extends Comparable>}\\
+4 & \texttt{spec fmap : ... :where (Functor F)} & Higher-kinded generics & No TS equivalent\\
+5 & \texttt{functor Xf \{A B\} :unfolds ...} & Named type abstractions & \texttt{type Xf<A,B> = ...}\\
+6 & \texttt{spec replicate : <(n : Nat) -> ...>} & Dependent types (Pi) & No TS equivalent\\
+7 & \texttt{spec filter : ... <result * proof>} & Dependent pairs (Sigma/existential) & No TS equivalent\\
+\end{tabular}
+\end{center}
+
+Levels 0-3 are familiar territory for any TypeScript developer. Level 4
+is where Prologos starts going beyond what mainstream languages offer.
+Levels 5-7 are opt-in power tools.
+
+\textbf{You never have to leave the level you're comfortable at.} Code at
+Level 1 and code at Level 7 coexist in the same codebase, call each
+other, and are type-checked together.
+\subsection{8.3 \texttt{??} : The "What Goes Here?" Hole}
+\label{sec:org7f36f26}
+
+When working with complex types, Prologos provides typed holes --- write
+\texttt{??} where you don't know what to put, and the compiler tells you
+what type it expects:
+
+\begin{verbatim}
+defn zip-with
+  | [f vnil _]             -> vnil
+  | [f _ vnil]             -> ??           ;; What goes here?
+  | [f (vcons x xs) (vcons y ys)]
+      -> [vcons [f x y] [zip-with f xs ys]]
+\end{verbatim}
+
+The compiler responds:
+
+\begin{verbatim}
+Hole ?? at line 3
+Expected type: Vec B 0
+In context:
+  f  : A -> A -> B
+  xs : Vec A (suc n)
+  ys : Vec A 0
+Hint: The only value of type Vec B 0 is vnil
+\end{verbatim}
+
+This is \emph{interactive type-driven development}. The types guide you toward
+the correct implementation. Start with holes, let the compiler fill in
+the blanks. It's like pair programming with the type checker.
+\section{Spiral 9: The Big Picture --- \texttt{spec}, \texttt{functor}, \texttt{session}}
+\label{sec:orgfe0b6f9}
+
+\subsection{9.1 The Keyword Symmetry}
+\label{sec:org1d9070c}
+
+Prologos has a deliberate symmetry in its specification language:
+
+\begin{center}
+\begin{tabular}{lll}
+Keyword & What It Describes & Analogy\\
+\hline
+\texttt{spec} & Function type + metadata & TypeScript function signature\\
+\texttt{trait} & A method that types must implement & TypeScript/Java interface method\\
+\texttt{bundle} & A group of traits (AND conjunction) & \texttt{extends A \& B \& C}\\
+\texttt{property} & A group of testable invariants & QuickCheck property suite\\
+\texttt{functor} & A named, reusable type pattern & TypeScript \texttt{type} alias (richer)\\
+\texttt{session} & A communication protocol & gRPC service definition (richer)\\
+\end{tabular}
+\end{center}
+\subsection{9.2 They All Compose}
+\label{sec:org8cc0494}
+
+The keywords aren't isolated features --- they build on each other:
+
+\begin{verbatim}
+;; A property group
+property transducer-laws {A B C : Type}
+  :holds [eq? [compose-xf id-xf xf] xf]       ;; identity law
+  :holds [eq? [compose-xf [compose-xf f g] h]
+               [compose-xf f [compose-xf g h]]] ;; associativity
+
+;; A type abstraction
+functor Xf {A B : Type}
+  :doc "A transducer"
+  :unfolds <(S :0 Type) -> [S -> B -> S] -> S -> A -> S>
+  :compose xf-compose
+  :identity id-xf
+  :laws (transducer-laws)
+
+;; A function spec using the above
+spec map-xf : [A -> B] -> [Xf A B]
+  :doc "Transducer that applies f to each element"
+  :examples
+    - [into-list [map-xf inc] '[1 2 3]] => '[2 3 4]
+
+;; A trait using all of the above
+trait Transducible {C : Type -> Type}
+  :laws (transducer-fusion C)
+  to-xf : {A B : Type} -> [A -> B] -> [Xf A B]
+\end{verbatim}
+
+\textbf{The \texttt{functor} names the type. The \texttt{property} states its laws. The
+\texttt{spec} uses both. The \texttt{trait} packages it for generic dispatch.
+Everything is readable. The dependent types are present exactly once,
+in \texttt{:unfolds}, consulted only when needed.}
+\section{Where To Go From Here}
+\label{sec:orgc02717d}
+
+\subsection{The Progressive Complexity Promise}
+\label{sec:org7e8ecd6}
+
+Prologos is designed so that:
+
+\begin{enumerate}
+\item A developer who uses Level 0-2 (no types or simple generics) is
+productive immediately
+\item A developer who uses Level 3-4 (traits + higher-kinded types) writes
+highly reusable library code
+\item A developer who uses Level 5-7 (functors + dependent types) writes
+code with compiler-verified correctness guarantees
+\item A developer who uses session types writes distributed systems where
+protocol violations are compile-time errors
+\item A developer who uses linear types writes capability-secure code where
+authority is tracked by the compiler
+\end{enumerate}
+
+All five levels coexist. Code at any level can call code at any other
+level. The type checker handles the complexity; you choose how much
+specification you want to write.
+
+\begin{quote}
+"Dependent types are the fabric upon which everything is built --- and
+can be reached for in pure form if ever needed --- but otherwise use
+\texttt{functor}, \texttt{spec}, etc., with their implicit maps."
+\end{quote}
+\section{Further Reading}
+\label{sec:org8d346bf}
+
+\subsection{Prologos Design Documents}
+\label{sec:org08f4865}
+
+\begin{itemize}
+\item \texttt{docs/tracking/2026-02-22\_EXTENDED\_SPEC\_DESIGN.md} --- the full \texttt{spec=/=functor=/=property} design (the document that inspired this tutorial)
+\item \texttt{docs/tracking/principles/LANGUAGE\_VISION.md} --- the overall vision
+\item \texttt{docs/otto\_conversation.org} --- a conversation exploring session types, OCapN, and capabilities in depth
+\end{itemize}
+\subsection{The Codebase}
+\label{sec:org7457e98}
+
+\begin{itemize}
+\item \texttt{lib/prologos/core/} --- trait definitions and standard library
+\item \texttt{lib/prologos/data/} --- collection types (List, PVec, Map, Set)
+\item \texttt{tests/} --- comprehensive tests showing every feature in action
+\item \texttt{docs/spec/grammar.ebnf} --- the formal grammar of the language
+\end{itemize}
+\subsection{Capability-Based Security}
+\label{sec:org316193d}
+
+\begin{itemize}
+\item \href{https://ocapn.org/}{OCapN Pre-standardization Group} --- the community defining decentralized capability networking
+\item \href{https://github.com/ocapn/ocapn/blob/main/draft-specifications/CapTP\%20Specification.md}{CapTP Draft Specification} --- the wire protocol for capability transfer between machines
+\item \href{https://spritely.institute/files/docs/guile-goblins/0.10/OCapN-The-Object-Capabilities-Network.html}{Spritely Goblins OCapN Docs} --- reference implementation in Guile Scheme
+\item \href{https://github.com/endojs/endo}{Endo / Hardened JavaScript} --- JavaScript-native ocap (SES, eventual send, Agoric)
+\item \href{https://github.com/tc39/proposal-eventual-send}{TC39 Proposal: Eventual Send} --- bringing E-style eventual send to JavaScript
+\item \href{https://github.com/dckc/awesome-ocap}{Awesome Object Capabilities} --- curated reading list on the ocap model
+\item Mark S. Miller, \emph{Robust Composition: Towards a Unified Approach to Access Control and Concurrency Control} (2006) --- the foundational dissertation on E and capabilities
+\end{itemize}
+\end{document}

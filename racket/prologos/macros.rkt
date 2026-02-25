@@ -176,6 +176,12 @@
          property-clause-holds-expr
          register-property!
          lookup-property
+         flatten-property
+         spec-properties
+         spec-examples
+         spec-doc
+         spec-deprecated
+         trait-laws-flattened
          process-property
          ;; Functor registry
          current-functor-store
@@ -978,10 +984,10 @@
                  (process-bundle rewritten)
                  acc]
                 [(eq? base 'property)
-                 (process-property rewritten)
+                 (process-property (rewrite-implicit-map rewritten))
                  acc]
                 [(eq? base 'functor)
-                 (process-functor rewritten)
+                 (process-functor (rewrite-implicit-map rewritten))
                  acc]
                 [(eq? base 'specialize)
                  (define defs (process-specialize rewritten))
@@ -1089,13 +1095,13 @@
          acc]
         ;; ---- Public property — register, consume, AND auto-export name ----
         [(and (pair? datum) (eq? head 'property))
-         (process-property datum)
+         (process-property (rewrite-implicit-map datum))
          (when (and (list? datum) (>= (length datum) 2) (symbol? (cadr datum)))
            (auto-export-name! (cadr datum)))
          acc]
         ;; ---- Public functor — register, consume, AND auto-export name ----
         [(and (pair? datum) (eq? head 'functor))
-         (process-functor datum)
+         (process-functor (rewrite-implicit-map datum))
          (when (and (list? datum) (>= (length datum) 2) (symbol? (cadr datum)))
            (auto-export-name! (cadr datum)))
          acc]
@@ -1427,6 +1433,14 @@
          [(eq? key ':includes)
           (define-values (constraints rest) (collect-constraint-values tail))
           (loop rest (hash-set result key constraints))]
+         ;; :examples → collect parenthesized example forms (datum => datum)
+         [(eq? key ':examples)
+          (define-values (examples rest) (collect-constraint-values tail))
+          (loop rest (hash-set result key examples))]
+         ;; :see-also → collect parenthesized symbol references
+         [(eq? key ':see-also)
+          (define-values (refs rest) (collect-constraint-values tail))
+          (loop rest (hash-set result key refs))]
          ;; :mixfix → next value should be a $brace-params map {:symbol op :group grp}
          [(eq? key ':mixfix)
           (if (and (pair? tail) (pair? (car tail))
@@ -1721,7 +1735,7 @@
 ;; Check if a parameter list contains only bare symbols (no type annotations).
 ;; Also accepts ($rest-param name) and ...name for varargs rest parameters.
 (define (spec-bare-param-list? lst)
-  (and (list? lst) (not (null? lst))
+  (and (list? lst)
        (andmap (lambda (x)
                  (or (and (symbol? x)
                           (not (memq x '(: :0 :1 :w)))
@@ -2743,6 +2757,35 @@
   (cond
     [(not (list? datum)) datum]
     [(null? datum) datum]
+    ;; Property forms: dash-headed children are clauses (not map entries).
+    ;; Separate dash clauses from keyword metadata, flatten dash internals.
+    [(and (pair? datum)
+          (eq? (car datum) 'property)
+          (has-keyword-tail? datum))
+     (define-values (prefix keyword-tail) (split-keyword-tail datum))
+     ;; Partition tail into keyword-headed (metadata) and dash-headed (clauses)
+     (define kw-children (filter keyword-headed? keyword-tail))
+     (define dash-children (filter dash-headed? keyword-tail))
+     ;; Flatten each dash clause's internal keyword-headed children:
+     ;; (- :name "refl" (:holds expr)) → (- :name "refl" :holds expr)
+     (define flat-dash-children
+       (map (lambda (dc)
+              (cons (car dc) ;; -
+                    (apply append
+                      (map (lambda (elem)
+                             (cond
+                               [(and (pair? elem) (keyword-headed? elem))
+                                ;; (:holds expr) → :holds expr
+                                elem]
+                               [else (list elem)]))
+                           (cdr dc)))))
+            dash-children))
+     ;; Build metadata $brace-params from keyword children only
+     (define meta
+       (if (pair? kw-children)
+           (list (implicit-map-children->brace-params kw-children))
+           '()))
+     (append prefix flat-dash-children meta)]
     ;; Scope: only def/defn/spec/trait/property/functor head forms that have a keyword tail
     [(and (pair? datum)
           (memq (car datum) '(def defn spec trait property functor))
@@ -4900,6 +4943,87 @@
   ;; Properties are metadata-only — no code generation in Phase 1
   '())
 
+;; flatten-property : symbol → (listof property-clause)
+;; Resolves :includes recursively, producing a flat list of clauses.
+;; Each clause name is /-qualified: "parent-prop/clause-name".
+;; Detects cycles via visited set.
+(define (flatten-property prop-name)
+  (define entry (lookup-property prop-name))
+  (unless entry
+    (error 'property "unknown property: ~a" prop-name))
+  (flatten-property-entry prop-name entry (seteq)))
+
+(define (flatten-property-entry prop-name entry visited)
+  (when (set-member? visited prop-name)
+    (error 'property "circular :includes detected: ~a" prop-name))
+  (define visited+ (set-add visited prop-name))
+  ;; Flatten includes first
+  (define included-clauses
+    (append-map
+      (lambda (inc-ref)
+        ;; inc-ref is like (semigroup-laws A) — head is property name
+        (define inc-name (if (pair? inc-ref) (car inc-ref) inc-ref))
+        (define inc-entry (lookup-property inc-name))
+        (unless inc-entry
+          (error 'property "property ~a: :includes unknown property ~a"
+                 prop-name inc-name))
+        (flatten-property-entry inc-name inc-entry visited+))
+      (property-entry-includes entry)))
+  ;; Own clauses, /-qualified
+  (define own-clauses
+    (map (lambda (c)
+           (property-clause
+             (string->symbol
+               (format "~a/~a" prop-name (property-clause-name c)))
+             (property-clause-forall-binders c)
+             (property-clause-holds-expr c)))
+         (property-entry-clauses entry)))
+  (append included-clauses own-clauses))
+
+;; spec-properties : symbol → (or/c (listof datum) #f)
+;; Returns the :properties metadata from a spec entry, or #f if none.
+(define (spec-properties name)
+  (define se (lookup-spec name))
+  (and se
+       (let ([md (spec-entry-metadata se)])
+         (and md (hash-ref md ':properties #f)))))
+
+;; spec-examples : symbol → (or/c (listof datum) #f)
+;; Returns the :examples metadata from a spec entry, or #f if none.
+(define (spec-examples name)
+  (define se (lookup-spec name))
+  (and se
+       (let ([md (spec-entry-metadata se)])
+         (and md (hash-ref md ':examples #f)))))
+
+;; spec-doc : symbol → (or/c string #f)
+;; Returns the :doc metadata from a spec entry, or #f if none.
+(define (spec-doc name)
+  (define se (lookup-spec name))
+  (and se
+       (let ([md (spec-entry-metadata se)])
+         (and md (hash-ref md ':doc #f)))))
+
+;; spec-deprecated : symbol → (or/c string #t #f)
+;; Returns the :deprecated metadata from a spec entry, or #f if none.
+(define (spec-deprecated name)
+  (define se (lookup-spec name))
+  (and se
+       (let ([md (spec-entry-metadata se)])
+         (and md (hash-ref md ':deprecated #f)))))
+
+;; trait-laws-flattened : symbol → (listof property-clause)
+;; Returns a flat list of all property clauses from a trait's :laws references.
+(define (trait-laws-flattened trait-name)
+  (define laws (lookup-trait-laws trait-name))
+  (append-map
+    (lambda (law-ref)
+      (define p-name (if (pair? law-ref) (car law-ref) law-ref))
+      (if (lookup-property p-name)
+          (flatten-property p-name)
+          '()))
+    laws))
+
 ;; ========================================
 ;; Functor declarations
 ;; ========================================
@@ -5333,6 +5457,20 @@
   (define pattern-vars
     (remove-duplicates
      (filter (lambda (s) (not (known-name? s))) all-pvar-candidates)))
+  ;; Compute pattern-vars in the order matching implicit quantification.
+  ;; Implicit quantification scans constraint param types first (since
+  ;; they appear first in the param bracket), then method/return types.
+  ;; Without this ordering, dict body helper calls pass type args in the
+  ;; wrong order (e.g. K,V instead of V,K for `impl Lattice (Map K V) where (Lattice V)`).
+  (define constraint-pvar-candidates
+    (apply append
+      (map (lambda (c)
+             (apply append (map collect-pattern-var-candidates (cdr c))))
+           where-constraints)))
+  (define ordered-pattern-vars
+    (remove-duplicates
+     (filter (lambda (s) (not (known-name? s)))
+             (append constraint-pvar-candidates all-pvar-candidates))))
 
   ;; Generate type-arg-str for naming (flattens compound type args)
   (define type-arg-str
@@ -5360,19 +5498,20 @@
   ;; - colon-style: [name : Type, ...] — params have ':' symbol
   ;; - angle-style: [name <Type> ...] — params have ($angle-type ...)
   ;; Generate constraint params in the same style.
+  ;; Scan ALL methods (not just the first) since zero-arg methods like `bot`
+  ;; have empty param brackets that don't indicate style.
   (define uses-colon-style?
-    (let ([first-defn (and (not (null? method-defns)) (car method-defns))])
-      (and first-defn
-           (let ([params-flat (cddr first-defn)]) ;; everything after (defn name ...)
-             ;; Find the parameter bracket
-             (let loop ([items params-flat])
-               (cond
-                 [(null? items) #f]
-                 [(and (list? (car items)) (not (null? (car items)))
-                       (symbol? (caar items)))
-                  ;; This is the bracket — check for ':'
-                  (memq ': (car items))]
-                 [else (loop (cdr items))]))))))
+    (for/or ([defn-d (in-list method-defns)])
+      (let ([params-flat (cddr defn-d)]) ;; everything after (defn name ...)
+        ;; Find the parameter bracket
+        (let loop ([items params-flat])
+          (cond
+            [(null? items) #f]
+            [(and (list? (car items)) (not (null? (car items)))
+                  (symbol? (caar items)))
+             ;; This is the bracket — check for ':'
+             (memq ': (car items))]
+            [else (loop (cdr items))])))))
 
   ;; Generate synthetic constraint dict param names and type annotations
   ;; Each (Eq A) → parameter formatted to match existing style.
@@ -5403,6 +5542,9 @@
         (let loop ([items items] [idx 0])
           (cond
             [(null? items) #f]
+            ;; Empty list = empty param bracket [] → ()
+            [(and (list? (car items)) (null? (car items)))
+             idx]
             [(and (list? (car items))
                   (not (null? (car items)))
                   (symbol? (caar items)))
@@ -5421,28 +5563,122 @@
            (cons constraint-param-items original-params)]))
       `(defn ,helper-name ,@new-params)))
 
+  ;; Extract method-specific params (name . type) from each ORIGINAL method defn
+  ;; (before constraint injection).  These are needed for eta-expansion in the
+  ;; dict body to avoid implicit insertion issues with partial application.
+  (define method-original-params-list
+    (for/list ([defn-d (in-list method-defns)])
+      (define after-name (cddr defn-d))  ;; everything after (defn name ...)
+      ;; Find the bracket (first list in after-name)
+      (define bracket
+        (let loop ([items after-name])
+          (cond
+            [(null? items) '()]
+            [(list? (car items)) (car items)]
+            [else (loop (cdr items))])))
+      ;; Extract name/type pairs from bracket.
+      ;; angle-style: ($angle-type X Y ...) is FLAT — type = X if single, (X Y ...) if compound
+      (define (angle-type-expr at-form)
+        ;; at-form = ($angle-type elem ...) → type = (cdr at-form), unwrap if single
+        (let ([elems (cdr at-form)])
+          (if (and (pair? elems) (null? (cdr elems)))
+              (car elems)     ;; single element: just the symbol
+              elems)))        ;; multiple elements: (TypeCon Arg ...)
+      (let extract ([items bracket] [pairs '()])
+        (cond
+          [(null? items) (reverse pairs)]
+          ;; angle-style: name ($angle-type ...)
+          [(and (>= (length items) 2)
+                (symbol? (car items))
+                (list? (cadr items))
+                (not (null? (cadr items)))
+                (eq? '$angle-type (caadr items)))
+           (extract (cddr items)
+                    (cons (cons (car items) (angle-type-expr (cadr items))) pairs))]
+          ;; colon-style: name : TYPE
+          [(and (>= (length items) 3)
+                (symbol? (car items))
+                (eq? ': (cadr items)))
+           (extract (cdddr items)
+                    (cons (cons (car items) (caddr items)) pairs))]
+          [else (extract (cdr items) pairs)]))))
+
   ;; For single-method traits, dict = method helper (alias via def).
-  ;; For multi-method, dict wraps helpers: (defn dict-name [$Eq-A ...] (pair (h1 $Eq-A) (h2 $Eq-A)))
+  ;; For multi-method, dict wraps helpers in a nested pair with explicit Pi/fn
+  ;; binders.  Methods with extra params (beyond constraint dict) are
+  ;; eta-expanded so the helper call is fully saturated — this avoids the
+  ;; elaborator's implicit-hole insertion (which fires on partial application
+  ;; when n-user-args == n-explicit, inserting metas for leading m0 binders).
   (define dict-def
     (if (= n-expected 1)
         ;; Single-method: dict IS the method helper.
         ;; Just alias: (def dict-name helper-name)
         `(def ,dict-name ,(car method-helper-names))
-        ;; Multi-method: generate a wrapper that takes constraint params and builds the pair.
+        ;; Multi-method: generate (def name : type body) with explicit
+        ;; Pi/fn binders for pattern-vars and constraint params.
         (let* ([constraint-param-names (map car constraint-param-pairs)]
                [helper-calls
-                (for/list ([hn (in-list method-helper-names)])
-                  `(,hn ,@constraint-param-names))]
+                (for/list ([hn (in-list method-helper-names)]
+                           [method-params (in-list method-original-params-list)])
+                  (if (null? method-params)
+                      ;; Zero extra params (e.g. bot) — direct call is fully saturated
+                      `(,hn ,@ordered-pattern-vars ,@constraint-param-names)
+                      ;; Has method-specific params — eta-expand so the call provides
+                      ;; ALL args (pattern-vars + constraints + method params = total),
+                      ;; preventing the elaborator from inserting implicit holes.
+                      ;; Use fresh $eta-N names to avoid shadowing pattern-vars or
+                      ;; constraint params that are in scope.
+                      (let* ([param-types (map cdr method-params)]
+                             [eta-names (for/list ([i (in-range (length method-params))])
+                                          (string->symbol
+                                           (format "$eta-~a" i)))]
+                             [full-call `(,hn ,@ordered-pattern-vars
+                                              ,@constraint-param-names
+                                              ,@eta-names)]
+                             [wrapped
+                              (for/fold ([body full-call])
+                                        ([en (in-list (reverse eta-names))]
+                                         [pt (in-list (reverse param-types))])
+                                `(fn (,en :w ,pt) ,body))])
+                        wrapped)))]
                [dict-body (build-nested-pair helper-calls)]
-               [param-bracket (apply append constraint-param-pairs)])
-          `(defn ,dict-name ,param-bracket ,dict-body))))
+               ;; Return type expression
+               [return-type-expr `(,trait-name ,@type-args)]
+               ;; Constraint types (from where-constraints directly)
+               [constraint-types where-constraints]
+               ;; Build type: Pi pvars:0:Type... -> constraints... -> (Trait TypeArgs)
+               [type-with-constraints
+                (for/fold ([type return-type-expr])
+                          ([ct (in-list (reverse constraint-types))])
+                  `(-> ,ct ,type))]
+               [full-type
+                (for/fold ([type type-with-constraints])
+                          ([pv (in-list (reverse ordered-pattern-vars))])
+                  `(Pi (,pv :0 (Type 0)) ,type))]
+               ;; Build body: fn pvars:0:Type... fn constraints:w... dict-body
+               [body-with-constraints
+                (for/fold ([body dict-body])
+                          ([cn (in-list (reverse constraint-param-names))]
+                           [ct (in-list (reverse constraint-types))])
+                  `(fn (,cn :w ,ct) ,body))]
+               [full-body
+                (for/fold ([body body-with-constraints])
+                          ([pv (in-list (reverse ordered-pattern-vars))])
+                  `(fn (,pv :0 (Type 0)) ,body))])
+          `(def ,dict-name : ,full-type ,full-body))))
 
   ;; Register in parametric impl registry
   (register-param-impl! trait-name
     (param-impl-entry trait-name type-args pattern-vars dict-name where-constraints))
 
-  ;; Return all definitions: method helper defns + dict def
-  (append method-helper-defns (list dict-def)))
+  ;; Return all definitions: method helper defns + dict def(s)
+  ;; dict-def may be a single form or a list of forms (spec + def)
+  (define dict-forms
+    (if (and (list? dict-def) (not (null? dict-def))
+             (list? (car dict-def)) (memq (caar dict-def) '(spec def)))
+        dict-def           ;; list of forms
+        (list dict-def)))  ;; single form → wrap in list
+  (append method-helper-defns dict-forms))
 
 ;; ========================================
 ;; HKT-8: process-specialize — register a specialization

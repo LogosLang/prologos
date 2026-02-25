@@ -24,7 +24,8 @@
          "../driver.rkt"
          "../macros.rkt"
          "../reader.rkt"
-         "../source-location.rkt")
+         "../source-location.rkt"
+         "../warnings.rkt")
 
 ;; ========================================
 ;; Helpers
@@ -339,6 +340,88 @@
   (check-true (string-contains? output "Hole ??")
               (format "Expected diagnostic containing 'Hole ??', got: ~a" output)))
 
+(test-case "typed hole: ?? in defn with bound variable shows Context"
+  ;; defn myid [x] ?? — the body is in a context with x : Nat
+  (define output
+    (parameterize ([current-error-port (open-output-string)])
+      (parameterize ([current-global-env (hasheq)]
+                     [current-spec-store (hasheq)]
+                     [current-property-store (hasheq)]
+                     [current-functor-store (hasheq)]
+                     [current-preparse-registry (current-preparse-registry)]
+                     [current-trait-registry (hasheq)]
+                     [current-trait-laws (hasheq)])
+        (process-string
+          (string-append
+            "(spec myid Nat -> Nat)\n"
+            "(defn myid [x] ($typed-hole))")))
+      (get-output-string (current-error-port))))
+  ;; Should show Context: with at least one binding
+  (check-true (string-contains? output "Context:")
+              (format "Expected 'Context:' in diagnostic, got: ~a" output))
+  ;; Should show the expected type Nat (pretty-printed)
+  (check-true (string-contains? output "Nat")
+              (format "Expected 'Nat' in diagnostic, got: ~a" output)))
+
+(test-case "typed hole: named ??goal shows correct label"
+  (define output
+    (parameterize ([current-error-port (open-output-string)])
+      (parameterize ([current-global-env (hasheq)]
+                     [current-spec-store (hasheq)]
+                     [current-property-store (hasheq)]
+                     [current-functor-store (hasheq)]
+                     [current-preparse-registry (current-preparse-registry)]
+                     [current-trait-registry (hasheq)]
+                     [current-trait-laws (hasheq)])
+        (process-string
+          (string-append
+            "(spec myid Nat -> Nat)\n"
+            "(defn myid [x] ($typed-hole goal))")))
+      (get-output-string (current-error-port))))
+  (check-true (string-contains? output "Hole ??goal")
+              (format "Expected 'Hole ??goal' in diagnostic, got: ~a" output)))
+
+(test-case "typed hole: ?? at top-level (no context bindings) omits Context"
+  (define output
+    (parameterize ([current-error-port (open-output-string)])
+      (parameterize ([current-global-env (hasheq)]
+                     [current-spec-store (hasheq)]
+                     [current-property-store (hasheq)]
+                     [current-functor-store (hasheq)]
+                     [current-preparse-registry (current-preparse-registry)]
+                     [current-trait-registry (hasheq)]
+                     [current-trait-laws (hasheq)])
+        (process-string
+          (string-append
+            "(spec myval Nat)\n"
+            "(def myval ($typed-hole))")))
+      (get-output-string (current-error-port))))
+  ;; Top-level def has no lambda bindings — should not show Context:
+  (check-true (string-contains? output "Hole ??")
+              (format "Expected 'Hole ??' in diagnostic, got: ~a" output))
+  ;; Should show type info
+  (check-true (string-contains? output "Nat")
+              (format "Expected 'Nat' in diagnostic, got: ~a" output)))
+
+(test-case "typed hole: multi-arg function shows multiple context entries"
+  (define output
+    (parameterize ([current-error-port (open-output-string)])
+      (parameterize ([current-global-env (hasheq)]
+                     [current-spec-store (hasheq)]
+                     [current-property-store (hasheq)]
+                     [current-functor-store (hasheq)]
+                     [current-preparse-registry (current-preparse-registry)]
+                     [current-trait-registry (hasheq)]
+                     [current-trait-laws (hasheq)])
+        (process-string
+          (string-append
+            "(spec myfn Nat -> Nat -> Nat)\n"
+            "(defn myfn [a b] ($typed-hole))")))
+      (get-output-string (current-error-port))))
+  ;; Should show Context with at least two bindings
+  (check-true (string-contains? output "Context:")
+              (format "Expected 'Context:' in diagnostic, got: ~a" output)))
+
 ;; ========================================
 ;; 7. :laws on trait declarations
 ;; ========================================
@@ -546,3 +629,442 @@
     ;; B should be auto-detected from the constraint args
     (define b-binder (assq 'B binders))
     (check-true (pair? b-binder))))
+
+;; ========================================
+;; 10. flatten-property: :includes resolution
+;; ========================================
+
+(test-case "flatten-property: simple (no includes)"
+  (parameterize ([current-global-env (hasheq)]
+                 [current-spec-store (hasheq)]
+                 [current-property-store (hasheq)]
+                 [current-functor-store (hasheq)]
+                 [current-preparse-registry (current-preparse-registry)]
+                 [current-trait-registry (hasheq)]
+                 [current-trait-laws (hasheq)])
+    (process-string
+      (string-append
+        "(property eq-laws ($brace-params A : (Type 0))"
+        "  (- :name \"reflexive\" :holds (eq? x x))"
+        "  (- :name \"symmetric\" :holds (impl (eq? x y) (eq? y x)))"
+        "  ($brace-params :where (Eq A)))"))
+    (define clauses (flatten-property 'eq-laws))
+    (check-equal? (length clauses) 2)
+    (check-equal? (property-clause-name (car clauses)) 'eq-laws/reflexive)
+    (check-equal? (property-clause-name (cadr clauses)) 'eq-laws/symmetric)))
+
+(test-case "flatten-property: single include"
+  (parameterize ([current-global-env (hasheq)]
+                 [current-spec-store (hasheq)]
+                 [current-property-store (hasheq)]
+                 [current-functor-store (hasheq)]
+                 [current-preparse-registry (current-preparse-registry)]
+                 [current-trait-registry (hasheq)]
+                 [current-trait-laws (hasheq)])
+    (process-string
+      (string-append
+        "(property semi ($brace-params A : (Type 0))"
+        "  (- :name \"assoc\" :holds (eq? (add (add x y) z) (add x (add y z))))"
+        "  ($brace-params :where (Add A)))"))
+    (process-string
+      (string-append
+        "(property mono ($brace-params A : (Type 0))"
+        "  (- :name \"left-id\" :holds (eq? (add zero x) x))"
+        "  ($brace-params :includes (semi A) :where (Add A)))"))
+    (define clauses (flatten-property 'mono))
+    ;; Should have 2 clauses: semi/assoc + mono/left-id
+    (check-equal? (length clauses) 2)
+    (check-equal? (property-clause-name (car clauses)) 'semi/assoc)
+    (check-equal? (property-clause-name (cadr clauses)) 'mono/left-id)))
+
+(test-case "flatten-property: transitive includes (3 levels)"
+  (parameterize ([current-global-env (hasheq)]
+                 [current-spec-store (hasheq)]
+                 [current-property-store (hasheq)]
+                 [current-functor-store (hasheq)]
+                 [current-preparse-registry (current-preparse-registry)]
+                 [current-trait-registry (hasheq)]
+                 [current-trait-laws (hasheq)])
+    (process-string
+      (string-append
+        "(property base ($brace-params A : (Type 0))"
+        "  (- :name \"b1\" :holds (p1 x)))"))
+    (process-string
+      (string-append
+        "(property mid ($brace-params A : (Type 0))"
+        "  (- :name \"m1\" :holds (p2 x))"
+        "  ($brace-params :includes (base A)))"))
+    (process-string
+      (string-append
+        "(property top ($brace-params A : (Type 0))"
+        "  (- :name \"t1\" :holds (p3 x))"
+        "  ($brace-params :includes (mid A)))"))
+    (define clauses (flatten-property 'top))
+    ;; Should have 3 clauses: base/b1, mid/m1, top/t1
+    (check-equal? (length clauses) 3)
+    (check-equal? (property-clause-name (first clauses)) 'base/b1)
+    (check-equal? (property-clause-name (second clauses)) 'mid/m1)
+    (check-equal? (property-clause-name (third clauses)) 'top/t1)))
+
+(test-case "flatten-property: cycle detection"
+  (parameterize ([current-global-env (hasheq)]
+                 [current-spec-store (hasheq)]
+                 [current-property-store (hasheq)]
+                 [current-functor-store (hasheq)]
+                 [current-preparse-registry (current-preparse-registry)]
+                 [current-trait-registry (hasheq)]
+                 [current-trait-laws (hasheq)])
+    ;; Manually register two properties that include each other
+    (register-property! 'cycA
+      (property-entry 'cycA '() '() '((cycB)) '() (hasheq)))
+    (register-property! 'cycB
+      (property-entry 'cycB '() '() '((cycA)) '() (hasheq)))
+    (check-exn
+      exn:fail?
+      (lambda () (flatten-property 'cycA)))))
+
+(test-case "flatten-property: missing include reference"
+  (parameterize ([current-global-env (hasheq)]
+                 [current-spec-store (hasheq)]
+                 [current-property-store (hasheq)]
+                 [current-functor-store (hasheq)]
+                 [current-preparse-registry (current-preparse-registry)]
+                 [current-trait-registry (hasheq)]
+                 [current-trait-laws (hasheq)])
+    (register-property! 'ref-missing
+      (property-entry 'ref-missing '() '() '((nonexistent A)) '() (hasheq)))
+    (check-exn
+      exn:fail?
+      (lambda () (flatten-property 'ref-missing)))))
+
+(test-case "flatten-property: unknown property name"
+  (parameterize ([current-property-store (hasheq)])
+    (check-exn
+      exn:fail?
+      (lambda () (flatten-property 'does-not-exist)))))
+
+(test-case "flatten-property: holds-expr preserved through flattening"
+  (parameterize ([current-global-env (hasheq)]
+                 [current-spec-store (hasheq)]
+                 [current-property-store (hasheq)]
+                 [current-functor-store (hasheq)]
+                 [current-preparse-registry (current-preparse-registry)]
+                 [current-trait-registry (hasheq)]
+                 [current-trait-laws (hasheq)])
+    (process-string
+      (string-append
+        "(property myp ($brace-params A : (Type 0))"
+        "  (- :name \"law1\" :forall ($brace-params x : A) :holds (pred x)))"))
+    (define clauses (flatten-property 'myp))
+    (check-equal? (length clauses) 1)
+    (define c (car clauses))
+    (check-equal? (property-clause-holds-expr c) '(pred x))
+    (check-true (pair? (property-clause-forall-binders c)))))
+
+(test-case "flatten-property: multiple includes on same level"
+  (parameterize ([current-global-env (hasheq)]
+                 [current-spec-store (hasheq)]
+                 [current-property-store (hasheq)]
+                 [current-functor-store (hasheq)]
+                 [current-preparse-registry (current-preparse-registry)]
+                 [current-trait-registry (hasheq)]
+                 [current-trait-laws (hasheq)])
+    (register-property! 'pA
+      (property-entry 'pA '() '() '()
+        (list (property-clause "c1" #f '(pred1 x))) (hasheq)))
+    (register-property! 'pB
+      (property-entry 'pB '() '() '()
+        (list (property-clause "c2" #f '(pred2 x))) (hasheq)))
+    (register-property! 'pC
+      (property-entry 'pC '() '() '((pA) (pB))
+        (list (property-clause "c3" #f '(pred3 x))) (hasheq)))
+    (define clauses (flatten-property 'pC))
+    (check-equal? (length clauses) 3)
+    (check-equal? (property-clause-name (first clauses)) 'pA/c1)
+    (check-equal? (property-clause-name (second clauses)) 'pB/c2)
+    (check-equal? (property-clause-name (third clauses)) 'pC/c3)))
+
+(test-case "flatten-property: no clauses, only includes"
+  (parameterize ([current-global-env (hasheq)]
+                 [current-spec-store (hasheq)]
+                 [current-property-store (hasheq)]
+                 [current-functor-store (hasheq)]
+                 [current-preparse-registry (current-preparse-registry)]
+                 [current-trait-registry (hasheq)]
+                 [current-trait-laws (hasheq)])
+    (register-property! 'leaf
+      (property-entry 'leaf '() '() '()
+        (list (property-clause "only" #f '(p x))) (hasheq)))
+    (register-property! 'wrapper
+      (property-entry 'wrapper '() '() '((leaf)) '() (hasheq)))
+    (define clauses (flatten-property 'wrapper))
+    (check-equal? (length clauses) 1)
+    (check-equal? (property-clause-name (car clauses)) 'leaf/only)))
+
+;; ========================================
+;; 11. spec-properties accessor
+;; ========================================
+
+(test-case "spec-properties: returns :properties metadata"
+  (parameterize ([current-global-env (hasheq)]
+                 [current-spec-store (hasheq)]
+                 [current-property-store (hasheq)]
+                 [current-functor-store (hasheq)]
+                 [current-preparse-registry (current-preparse-registry)]
+                 [current-trait-registry (hasheq)]
+                 [current-trait-laws (hasheq)])
+    (process-string
+      "(spec myf Nat -> Nat ($brace-params :properties (sortable-laws Nat)))")
+    (define props (spec-properties 'myf))
+    (check-true (pair? props))
+    (check-equal? (length props) 1)
+    (check-equal? (car props) '(sortable-laws Nat))))
+
+(test-case "spec-properties: returns #f when no :properties"
+  (parameterize ([current-global-env (hasheq)]
+                 [current-spec-store (hasheq)]
+                 [current-property-store (hasheq)]
+                 [current-functor-store (hasheq)]
+                 [current-preparse-registry (current-preparse-registry)]
+                 [current-trait-registry (hasheq)]
+                 [current-trait-laws (hasheq)])
+    (process-string "(spec myg Nat -> Nat)")
+    (check-false (spec-properties 'myg))))
+
+(test-case "spec-properties: unknown spec returns #f"
+  (parameterize ([current-spec-store (hasheq)])
+    (check-false (spec-properties 'nonexistent))))
+
+;; ========================================
+;; 12. trait-laws-flattened
+;; ========================================
+
+(test-case "trait-laws-flattened: trait with no :laws"
+  (parameterize ([current-global-env (hasheq)]
+                 [current-spec-store (hasheq)]
+                 [current-property-store (hasheq)]
+                 [current-functor-store (hasheq)]
+                 [current-preparse-registry (current-preparse-registry)]
+                 [current-trait-registry (hasheq)]
+                 [current-trait-laws (hasheq)])
+    (process-string "(trait (Eq (A : (Type 0))) (eq? : A -> A -> Bool))")
+    (define fc (trait-laws-flattened 'Eq))
+    (check-equal? fc '())))
+
+(test-case "trait-laws-flattened: trait with :laws referencing existing property"
+  (parameterize ([current-global-env (hasheq)]
+                 [current-spec-store (hasheq)]
+                 [current-property-store (hasheq)]
+                 [current-functor-store (hasheq)]
+                 [current-preparse-registry (current-preparse-registry)]
+                 [current-trait-registry (hasheq)]
+                 [current-trait-laws (hasheq)])
+    ;; Register a property first
+    (process-string
+      (string-append
+        "(property eq-props ($brace-params A : (Type 0))"
+        "  (- :name \"refl\" :holds (eq? x x))"
+        "  ($brace-params :where (Eq A)))"))
+    ;; Register a trait with :laws
+    (process-string
+      (string-append
+        "(trait (MyEq (A : (Type 0)))"
+        "  (eq? : A -> A -> Bool)"
+        "  ($brace-params :laws (eq-props A)))"))
+    (define fc (trait-laws-flattened 'MyEq))
+    (check-equal? (length fc) 1)
+    (check-equal? (property-clause-name (car fc)) 'eq-props/refl)))
+
+(test-case "trait-laws-flattened: trait :laws ref to missing property yields empty"
+  (parameterize ([current-global-env (hasheq)]
+                 [current-spec-store (hasheq)]
+                 [current-property-store (hasheq)]
+                 [current-functor-store (hasheq)]
+                 [current-preparse-registry (current-preparse-registry)]
+                 [current-trait-registry (hasheq)]
+                 [current-trait-laws (hasheq)])
+    (process-string
+      (string-append
+        "(trait (MyOrd (A : (Type 0)))"
+        "  (lt? : A -> A -> Bool)"
+        "  ($brace-params :laws (nonexistent-prop A)))"))
+    ;; Should gracefully return empty, not error
+    (define fc (trait-laws-flattened 'MyOrd))
+    (check-equal? fc '())))
+
+;; ========================================
+;; 13. :examples parsing + spec-examples accessor
+;; ========================================
+
+(test-case "spec-examples: single example collected"
+  (parameterize ([current-global-env (hasheq)]
+                 [current-spec-store (hasheq)]
+                 [current-property-store (hasheq)]
+                 [current-functor-store (hasheq)]
+                 [current-preparse-registry (current-preparse-registry)]
+                 [current-trait-registry (hasheq)]
+                 [current-trait-laws (hasheq)])
+    (process-string
+      "(spec myf Nat -> Nat ($brace-params :examples ((myf 3N) => 4N)))")
+    (define exs (spec-examples 'myf))
+    (check-true (pair? exs))
+    (check-equal? (length exs) 1)
+    ;; Example form should be ((myf 3N) => 4N)
+    (check-true (list? (car exs)))))
+
+(test-case "spec-examples: multiple examples all collected"
+  (parameterize ([current-global-env (hasheq)]
+                 [current-spec-store (hasheq)]
+                 [current-property-store (hasheq)]
+                 [current-functor-store (hasheq)]
+                 [current-preparse-registry (current-preparse-registry)]
+                 [current-trait-registry (hasheq)]
+                 [current-trait-laws (hasheq)])
+    (process-string
+      "(spec myf Nat -> Nat ($brace-params :examples ((myf 3N) => 4N) ((myf 0N) => 1N)))")
+    (define exs (spec-examples 'myf))
+    (check-true (pair? exs))
+    (check-equal? (length exs) 2)))
+
+(test-case "spec-examples: no examples returns #f"
+  (parameterize ([current-global-env (hasheq)]
+                 [current-spec-store (hasheq)]
+                 [current-property-store (hasheq)]
+                 [current-functor-store (hasheq)]
+                 [current-preparse-registry (current-preparse-registry)]
+                 [current-trait-registry (hasheq)]
+                 [current-trait-laws (hasheq)])
+    (process-string "(spec myg Nat -> Nat)")
+    (check-false (spec-examples 'myg))))
+
+(test-case "spec-examples: example contains => symbol"
+  (parameterize ([current-global-env (hasheq)]
+                 [current-spec-store (hasheq)]
+                 [current-property-store (hasheq)]
+                 [current-functor-store (hasheq)]
+                 [current-preparse-registry (current-preparse-registry)]
+                 [current-trait-registry (hasheq)]
+                 [current-trait-laws (hasheq)])
+    (process-string
+      "(spec myf Nat -> Nat ($brace-params :examples ((myf 3N) => 4N)))")
+    (define exs (spec-examples 'myf))
+    (check-true (pair? exs))
+    ;; Example form should be a list: ((myf 3N) => 4N)
+    (define ex (car exs))
+    (check-equal? (length ex) 3)
+    ;; Second element should be the => symbol
+    (check-equal? (cadr ex) '=>)))
+
+;; ========================================
+;; 14. spec-doc accessor
+;; ========================================
+
+(test-case "spec-doc: returns :doc string"
+  (parameterize ([current-global-env (hasheq)]
+                 [current-spec-store (hasheq)]
+                 [current-property-store (hasheq)]
+                 [current-functor-store (hasheq)]
+                 [current-preparse-registry (current-preparse-registry)]
+                 [current-trait-registry (hasheq)]
+                 [current-trait-laws (hasheq)])
+    (process-string
+      "(spec myf Nat -> Nat ($brace-params :doc \"Adds one to a Nat\"))")
+    (check-equal? (spec-doc 'myf) "Adds one to a Nat")))
+
+(test-case "spec-doc: returns #f when no :doc"
+  (parameterize ([current-global-env (hasheq)]
+                 [current-spec-store (hasheq)]
+                 [current-property-store (hasheq)]
+                 [current-functor-store (hasheq)]
+                 [current-preparse-registry (current-preparse-registry)]
+                 [current-trait-registry (hasheq)]
+                 [current-trait-laws (hasheq)])
+    (process-string "(spec myg Nat -> Nat)")
+    (check-false (spec-doc 'myg))))
+
+(test-case "spec metadata: :examples + :doc + :properties coexist"
+  (parameterize ([current-global-env (hasheq)]
+                 [current-spec-store (hasheq)]
+                 [current-property-store (hasheq)]
+                 [current-functor-store (hasheq)]
+                 [current-preparse-registry (current-preparse-registry)]
+                 [current-trait-registry (hasheq)]
+                 [current-trait-laws (hasheq)])
+    (process-string
+      (string-append
+        "(spec myf Nat -> Nat"
+        " ($brace-params :doc \"doc\" :examples ((myf 1N) => 2N) :properties (p Nat)))"))
+    (check-equal? (spec-doc 'myf) "doc")
+    (check-true (pair? (spec-examples 'myf)))
+    (check-true (pair? (spec-properties 'myf)))))
+
+;; ========================================
+;; 15. :deprecated warnings
+;; ========================================
+
+(test-case "spec-deprecated: returns deprecation message"
+  (parameterize ([current-global-env (hasheq)]
+                 [current-spec-store (hasheq)]
+                 [current-property-store (hasheq)]
+                 [current-functor-store (hasheq)]
+                 [current-preparse-registry (current-preparse-registry)]
+                 [current-trait-registry (hasheq)]
+                 [current-trait-laws (hasheq)])
+    (process-string
+      "(spec old-fn Nat -> Nat ($brace-params :deprecated \"use new-fn instead\"))")
+    (check-equal? (spec-deprecated 'old-fn) "use new-fn instead")))
+
+(test-case "spec-deprecated: boolean flag (no message)"
+  (parameterize ([current-global-env (hasheq)]
+                 [current-spec-store (hasheq)]
+                 [current-property-store (hasheq)]
+                 [current-functor-store (hasheq)]
+                 [current-preparse-registry (current-preparse-registry)]
+                 [current-trait-registry (hasheq)]
+                 [current-trait-laws (hasheq)])
+    (process-string
+      "(spec old-fn Nat -> Nat ($brace-params :deprecated))")
+    (check-equal? (spec-deprecated 'old-fn) #t)))
+
+(test-case "spec-deprecated: returns #f when not deprecated"
+  (parameterize ([current-global-env (hasheq)]
+                 [current-spec-store (hasheq)]
+                 [current-property-store (hasheq)]
+                 [current-functor-store (hasheq)]
+                 [current-preparse-registry (current-preparse-registry)]
+                 [current-trait-registry (hasheq)]
+                 [current-trait-laws (hasheq)])
+    (process-string "(spec new-fn Nat -> Nat)")
+    (check-false (spec-deprecated 'new-fn))))
+
+(test-case "deprecated: warning emitted when deprecated function is referenced"
+  (parameterize ([current-global-env (hasheq)]
+                 [current-spec-store (hasheq)]
+                 [current-property-store (hasheq)]
+                 [current-functor-store (hasheq)]
+                 [current-preparse-registry (current-preparse-registry)]
+                 [current-trait-registry (hasheq)]
+                 [current-trait-laws (hasheq)])
+    ;; Register a deprecated spec + defn, then use it in another defn
+    (define results
+      (process-string
+        (string-append
+          "(spec old-fn Nat -> Nat ($brace-params :deprecated \"use new-fn\"))\n"
+          "(defn old-fn [x] x)\n"
+          "(spec caller Nat -> Nat)\n"
+          "(defn caller [x] (old-fn x))")))
+    ;; The last result (caller defn) should contain the deprecation warning
+    (define last-result (last results))
+    (check-true (and (string? last-result)
+                     (string-contains? last-result "deprecated"))
+                (format "Expected deprecation warning in result, got: ~a" last-result))))
+
+(test-case "format-deprecation-warning: with message"
+  (define w (deprecation-warning 'old-fn "use new-fn"))
+  (check-equal? (format-deprecation-warning w)
+                "warning: old-fn is deprecated — use new-fn"))
+
+(test-case "format-deprecation-warning: without message"
+  (define w (deprecation-warning 'old-fn #f))
+  (check-equal? (format-deprecation-warning w)
+                "warning: old-fn is deprecated"))
