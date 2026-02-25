@@ -86,26 +86,26 @@ Precompute prelude registries once at module load time; tests parameterize with 
 *** 🗣️
 #+ATTR_ORG: :tag prompt
 #+begin_src quote
-  I shared our `/Users/avanti/dev/projects/prologos/docs/tracking/2026-02-22_EXTENDED_SPEC_DESIGN.md` design on extended spec design with a friend very familiar with javascript, but uncomfortable/unfamiliar with deep theoretical notions of type theory.
+  I shared our `../tracking/2026-02-22_EXTENDED_SPEC_DESIGN.md` design on extended spec design with a friend very familiar with javascript, but uncomfortable/unfamiliar with deep theoretical notions of type theory.
 
-  Using the Spiral Curriculum, `/Users/avanti/dev/projects/prologos/docs/Best Practices for Creating Developer Tutorials for Programming Languages and Type Systems.md`, I wonder if we can make him a gentle introduction to Prologos type system, and how the metadata aspects that live on `spec` and `functor` map onto this type system in a self-documenting, layered-disclosure way that make it more approachable to the every-day dev.
+  Using the Spiral Curriculum, `../Best Practices for Creating Developer Tutorials for Programming Languages and Type Systems.md`, I wonder if we can make him a gentle introduction to Prologos type system, and how the metadata aspects that live on `spec` and `functor` map onto this type system in a self-documenting, layered-disclosure way that make it more approachable to the every-day dev.
 
   He's also interested in concepts from OCapN--capability-based systems and asynchronous computing (the eventual send)--and, even though we haven't done much work on `session` and definining session types, there are some use and discussion in some conversations that are captured in our project--if we can draw from some of those as examples as well.
 
 
 #+end_src
-*** [[/Users/avanti/dev/projects/prologos/docs/tutorials/GENTLE_INTRODUCTION_TYPES_SPECS_SESSIONS.org][A Gentle Introduction to Prologos: Types, Specs, and Sessions]]
+*** [[../tutorials/GENTLE_INTRODUCTION_TYPES_SPECS_SESSIONS.org][A Gentle Introduction to Prologos: Types, Specs, and Sessions]]
 
 ** Extended Spec Design
 *** Added `property` keyword
-  - [[/Users/avanti/dev/projects/prologos/docs/tracking/2026-02-24_PROPERTY_KEYWORD_HARDENING.md][Property Keyword - Phase 1 Hardening]]
+  - [[../tracking/2026-02-24_PROPERTY_KEYWORD_HARDENING.md][Property Keyword - Phase 1 Hardening]]
 
 ** Logic Engine - Design and Implementation
-  * [[/Users/avanti/dev/projects/prologos/docs/tracking/2026-02-24_TOWARDS_A_GENERAL_LOGIC_ENGINE_ON_PROPAGATORS.org][Towards a General Logic Engine on Propagators]]
+  * [[../tracking/2026-02-24_TOWARDS_A_GENERAL_LOGIC_ENGINE_ON_PROPAGATORS.org][Towards a General Logic Engine on Propagators]]
 *** 🗣️ Relational Language syntax clarification and Modular Solver architecture Vision
 #+ATTR_ORG: :tag prompt
 #+begin_src quote
-Let's consider `/Users/avanti/dev/projects/prologos/docs/tracking/2026-02-24_TOWARDS_A_GENERAL_LOGIC_ENGINE_ON_PROPAGATORS.org`. 
+Let's consider `../tracking/2026-02-24_TOWARDS_A_GENERAL_LOGIC_ENGINE_ON_PROPAGATORS.org`. 
 
 
   For the syntax of our Logic Programming, "Relational Language", I'm conceiving the paren-delimiters to be used as distinct from our "Command Language", which use `[]`. This provides a clear context to the user at the surface syntax, when both functional and relational elements are used in common bodies.
@@ -320,12 +320,12 @@ This is shaping up to be a genuinely novel synthesis: relational programming wit
 
   But before we can do any meaningful work on the relational language/syntax, we need a substrate to run on...
 
-  Let's follow the research-design-implementation guidance that produced `/Users/avanti/dev/projects/prologos/docs/tracking/2026-02-22_EXTENDED_SPEC_DESIGN.org`. I know we have some more core datastructures to get to before we have the first layer of our logic engine on propagators, for example, (`/Users/avanti/dev/projects/prologos/docs/research/IMPLEMENTATION_GUIDE_CORE_DS_PROLOGOS.md`).
+  Let's follow the research-design-implementation guidance that produced `../tracking/2026-02-22_EXTENDED_SPEC_DESIGN.org`. I know we have some more core datastructures to get to before we have the first layer of our logic engine on propagators, for example, (`../research/IMPLEMENTATION_GUIDE_CORE_DS_PROLOGOS.md`).
 
   Let's identify all gaps in our infrastructure, all datastructures needed, and develop out a design and implementation guide for us to work through on a complete logic engine on which we can run our relational language, similar to our extended spec design.
 
 #+end_src
-*** [[/Users/avanti/dev/projects/prologos/docs/tracking/2026-02-24_LOGIC_ENGINE_DESIGN.org][LOGIC_ENGINE_DESIGN Document]]
+*** [[../tracking/2026-02-24_LOGIC_ENGINE_DESIGN.org][LOGIC_ENGINE_DESIGN Document]]
 *** 🗣️ Design critique
 #+begin_src markdown
   Let's consider this critique:
@@ -662,10 +662,7 @@ With that said, let's refine our design doc one last time with the critiques tha
 
 
 
-** Design Benchmarking suite -> track changes
-** migrate type inference/meta var to propagator infrastructure - compare benchmarks
-
-** Include Design Methodology in `principles` directory
+** ✅ Include Design Methodology in `principles` directory
 #+begin_src quote
   I would like for us to document our general methodolgy for design and implementation, for future consultation and guidance.
 
@@ -693,6 +690,12 @@ With that said, let's refine our design doc one last time with the critiques tha
 
 
 
+
+
+* Carried Over
+** Design Benchmarking suite -> track changes
+** migrate type inference/meta var to propagator infrastructure - compare benchmarks
+
 ** Design - Editor Assisted Interactive Programming
 *** 🗣️
 Before considering this, let's look at the logic engine... it could be what we use for some of this...
@@ -703,7 +706,7 @@ Before considering this, let's look at the logic engine... it could be what we u
   One of the strong design goals for Prologos, is excellent tooling support. One aspect of this is what we're calling "Editor Assisted Interactive Programming", with the `??` directive, similar to Idris or Agda.
   The other aspect is through our `spec` language--being able to property based, and generative testing work on the fly from source code--with editor integrated, tooling-supporting directives.
 
-  Similar to our design work that we iterated through to creat `/Users/avanti/dev/projects/prologos/docs/tracking/2026-02-22_EXTENDED_SPEC_DESIGN.md`, I'd like for us to create a design document that fully considers all aspects for supporting this kind of interactive development, gaps in our implementation, tooling requirements, and comprehensive...
+  Similar to our design work that we iterated through to creat `../tracking/2026-02-22_EXTENDED_SPEC_DESIGN.md`, I'd like for us to create a design document that fully considers all aspects for supporting this kind of interactive development, gaps in our implementation, tooling requirements, and comprehensive...
 
 #+end_src
 

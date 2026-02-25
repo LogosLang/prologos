@@ -72,7 +72,7 @@ Major research and design effort for the =spec= metadata language:
 #+begin_src quote
 Let's do a language audit on the ergonomics of our collections, and seek to uphold our language design goal of supporting most-generic operations efficiently.
 
-  This is similar to our work on the generalization ergonomics of numericals, found here: `/Users/avanti/dev/projects/prologos/docs/tracking/2026-02-22_NUMERICS_ERGONOMICS_AUDIT.org`.
+  This is similar to our work on the generalization ergonomics of numericals, found here: `../tracking/2026-02-22_NUMERICS_ERGONOMICS_AUDIT.org`.
 
   Let's look to rewrite our collections functions using the common super-typ `Seq`, against which all other collections implement, and dispatching to efficient versions.
 
@@ -83,11 +83,11 @@ Let's do a language audit on the ergonomics of our collections, and seek to upho
   This is an audit, and the output is a report document in `tracking`, identifying opportunities to fulfill our vision, design decision/tradeoffs, critiques, gaps in our infrastructure, and recommendations for adoption and phased implementation.
 #+end_src
 
-*** Document: [[/Users/avanti/dev/projects/prologos/docs/tracking/2026-02-23_COLLECTIONS_ERGONOMICS_AUDIT.org][Collections Ergonomics Audit]]
+*** Document: [[../tracking/2026-02-23_COLLECTIONS_ERGONOMICS_AUDIT.org][Collections Ergonomics Audit]]
 
 *** Prompt
 #+begin_src quote
-  Let's turn back and consider `/Users/avanti/dev/projects/prologos/docs/tracking/2026-02-23_COLLECTIONS_ERGONOMICS_AUDIT.org`:
+  Let's turn back and consider `../tracking/2026-02-23_COLLECTIONS_ERGONOMICS_AUDIT.org`:
 
   We recently added extensions to spec—in our design it allows complete specifying complex pi and sigma types completely using the `spec`/`functor` languages—are these sufficiently in place? But regardless, that's orthogonal to the concerns of HKT requiring a C: T-> T... can we extend HKT to allow more parameters... or would it make sense to implement Maps with a MapEntry instead of a K V type (MapEntry is how Clojure does it, I believe)  a `(first {:a 1})` in clojure returns a `clojure.lang.MapEntry` type of paired-value [:a 1].
 
@@ -344,7 +344,7 @@ Shall I update the audit document with these refinements, or do you want to disc
   Your output from this should be "Mixfix Syntax Design.org" in our `tracking` directory.
 
 #+end_src
-*** [[/Users/avanti/dev/projects/prologos/docs/tracking/2026-02-23_MIXFIX_SYNTAX_DESIGN.org][Mixfix Design Doc]]
+*** [[../tracking/2026-02-23_MIXFIX_SYNTAX_DESIGN.org][Mixfix Design Doc]]
 
 *** Critique, Feedback
 #+ATTR_ORG: :tag prompt
@@ -382,11 +382,11 @@ Shall I update the audit document with these refinements, or do you want to disc
 ** ⚙️ Lattic Theory Preliminaries, Applicable to Propagators
 #+ATTR_ORG: :tag prompt
 #+begin_src quote
-  This is an early research and design phase document, similar to our process in `/Users/avanti/dev/projects/prologos/docs/tracking/2026-02-22_EXTENDED_SPEC_DESIGN.org`.
+  This is an early research and design phase document, similar to our process in `../tracking/2026-02-22_EXTENDED_SPEC_DESIGN.org`.
 
   It's one part theoretics applied to the foundations of our work towards implementing our Propagators, and other part filling in the details of implementing our core data structures to get there.
 
-  We have some deep research on Propagators here: `/Users/avanti/dev/projects/prologos/docs/research/RESEARCH_PROPAGATORS.md`, and a roadmap for our core datastructures here: `/Users/avanti/dev/projects/prologos/docs/research/IMPLEMENTATION_GUIDE_CORE_DS_PROLOGOS.md`.
+  We have some deep research on Propagators here: `../research/RESEARCH_PROPAGATORS.md`, and a roadmap for our core datastructures here: `../research/IMPLEMENTATION_GUIDE_CORE_DS_PROLOGOS.md`.
 
 
   I would like for us to synthesis these reports, and augment them with further websearch/comprehensive research. This should be written in a spiral tutorial design, but with a theoretical and implementation/applicability aim. Our goal is to understand the reason and the how, not just the what, and domains of applicability to running a propagator network as a general logic engine.

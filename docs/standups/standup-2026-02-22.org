@@ -83,7 +83,7 @@ Three spiral-curriculum interactive tutorials in =examples/=:
   - [X] README
   - [X] DEVELOPMENT_LESSONS.org
 #+begin_src quote
-I want you to read the various documents in our `./docs` directory, also read `my_notes.org`, and the early conversation I had at `/Users/avanti/dev/projects/prologos/20260206_dependent_types.org` that motivated the start of this project, and the conversation at `/Users/avanti/dev/projects/prologos/docs/otto_conversation.org` where I describe some more of the features and approaches and hopes that I envision for Prologos.
+I want you to read the various documents in our `./docs` directory, also read `my_notes.org`, and the early conversation I had at `../../20260206_dependent_types.org` that motivated the start of this project, and the conversation at `../otto_conversation.org` where I describe some more of the features and approaches and hopes that I envision for Prologos.
 
   Below, the following capitalized titles should be .org documents we create at `./docs/tracking/principles/`. The subpoints below the titles are some short, incomplete notes of ideas of what and what kind of information should be included in the document.
 
@@ -164,7 +164,7 @@ Let's work on supporting an eval on a quoted expr, to return that expr
 #+end_src
 *** Numerics Ergonomics
   - [X] numerics
-    - [[/Users/avanti/dev/projects/prologos/docs/tracking/2026-02-22_NUMERICS_ERGONOMICS_AUDIT.org][Numerics Ergonomics Audit]]
+    - [[../tracking/2026-02-22_NUMERICS_ERGONOMICS_AUDIT.org][Numerics Ergonomics Audit]]
 #+ATTR_ORG: :tag prompt
 #+begin_src quote
   Let's do a language audit on the ergonomics of our numerics, and seek to uphold our language design goal of supporting most-generic operations efficiently.
