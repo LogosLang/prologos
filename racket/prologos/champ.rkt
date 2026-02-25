@@ -21,6 +21,7 @@
          champ-vals
          champ-entries
          champ-equal?
+         champ-insert-join
          ;; Transient builder
          (struct-out tchamp-root)
          champ-transient
@@ -381,6 +382,21 @@
                    #t)))
 
 ;; ========================================
+;; Lattice-aware insert (join on collision)
+;; ========================================
+
+;; champ-insert-join : champ-root hash key val (val val → val) → champ-root
+;; Insert with join-on-collision: if key already exists, apply join-fn
+;; to merge existing and new values. If key is absent, insert directly.
+;; This is the foundation for lattice-compatible persistent maps —
+;; the propagator network's cell map uses this for monotonic merge.
+(define (champ-insert-join root hash key val join-fn)
+  (let ([existing (champ-lookup root hash key)])
+    (if (eq? existing 'none)
+        (champ-insert root hash key val)
+        (champ-insert root hash key (join-fn existing val)))))
+
+;; ========================================
 ;; Vector helpers
 ;; ========================================
 
@@ -651,4 +667,48 @@
         (check-equal? (champ-size m) 100)
         (for ([i (in-range 100)])
           (check-equal? (champ-lookup m (equal-hash-code i) i) (* i i))))))
+
+  ;; ---- champ-insert-join tests ----
+
+  (test-case "champ-insert-join: insert new key (no collision)"
+    (define m (champ-insert-join champ-empty (equal-hash-code 'a) 'a 10 +))
+    (check-equal? (champ-size m) 1)
+    (check-equal? (champ-lookup m (equal-hash-code 'a) 'a) 10))
+
+  (test-case "champ-insert-join: join on existing key"
+    (define m1 (champ-insert champ-empty (equal-hash-code 'a) 'a 10))
+    (define m2 (champ-insert-join m1 (equal-hash-code 'a) 'a 5 +))
+    (check-equal? (champ-size m2) 1)
+    (check-equal? (champ-lookup m2 (equal-hash-code 'a) 'a) 15))
+
+  (test-case "champ-insert-join: join preserves other keys"
+    (define m1 (champ-insert (champ-insert champ-empty
+                                (equal-hash-code 'a) 'a 10)
+                              (equal-hash-code 'b) 'b 20))
+    (define m2 (champ-insert-join m1 (equal-hash-code 'a) 'a 5 +))
+    (check-equal? (champ-size m2) 2)
+    (check-equal? (champ-lookup m2 (equal-hash-code 'a) 'a) 15)
+    (check-equal? (champ-lookup m2 (equal-hash-code 'b) 'b) 20))
+
+  (test-case "champ-insert-join: max as join-fn (lattice-like)"
+    (define m1 (champ-insert champ-empty (equal-hash-code 'x) 'x 3))
+    ;; Join with max: 3 and 7 → 7
+    (define m2 (champ-insert-join m1 (equal-hash-code 'x) 'x 7 max))
+    (check-equal? (champ-lookup m2 (equal-hash-code 'x) 'x) 7)
+    ;; Join with max: 7 and 2 → 7 (no change in value, but new map)
+    (define m3 (champ-insert-join m2 (equal-hash-code 'x) 'x 2 max))
+    (check-equal? (champ-lookup m3 (equal-hash-code 'x) 'x) 7))
+
+  (test-case "champ-insert-join: set-union as join-fn"
+    (define (set-union a b) (append a b))
+    (define m1 (champ-insert champ-empty (equal-hash-code 'k) 'k '(1 2)))
+    (define m2 (champ-insert-join m1 (equal-hash-code 'k) 'k '(3 4) set-union))
+    (check-equal? (champ-lookup m2 (equal-hash-code 'k) 'k) '(1 2 3 4)))
+
+  (test-case "champ-insert-join: persistence (old map unaffected)"
+    (define m1 (champ-insert champ-empty (equal-hash-code 'a) 'a 10))
+    (define m2 (champ-insert-join m1 (equal-hash-code 'a) 'a 5 +))
+    ;; m1 should be unchanged
+    (check-equal? (champ-lookup m1 (equal-hash-code 'a) 'a) 10)
+    (check-equal? (champ-lookup m2 (equal-hash-code 'a) 'a) 15))
 )

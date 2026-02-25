@@ -1,0 +1,24 @@
+ns prologos::core::lattice-trait
+
+;; ========================================
+;; Lattice Trait — algebraic lattice operations
+;; ========================================
+;; A Lattice provides a bottom element, a monotonic join (least upper bound),
+;; and a partial order (leq). These form the foundation for monotonic
+;; computation in propagator networks.
+;;
+;; bot  : A                — bottom element (identity for join)
+;; join : A -> A -> A      — least upper bound (merge)
+;; leq  : A -> A -> Bool   — partial order
+;;
+;; Laws (documented, not enforced at compile time):
+;;   join is commutative: join a b = join b a
+;;   join is associative: join (join a b) c = join a (join b c)
+;;   join is idempotent:  join a a = a
+;;   bot is identity:     join bot a = a
+;;   leq defined by join: leq a b ⟺ join a b = b
+
+trait Lattice {A}
+  bot  : A
+  join : A A -> A
+  leq  : A A -> Bool

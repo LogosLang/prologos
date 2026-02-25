@@ -1,0 +1,163 @@
+ns prologos::core::lattice-instances
+
+require [prologos::core::lattice-trait :refer [Lattice Lattice-bot Lattice-join Lattice-leq]]
+require [prologos::core::eq-trait :refer [Eq]]
+require [prologos::data::bool :refer [not and or implies]]
+
+;; ========================================
+;; Data Types
+;; ========================================
+
+;; FlatVal: Three-point flat lattice (bottom -> value -> top)
+;; Used for propagator cells that hold a single value.
+data FlatVal {A}
+  flat-bot
+  flat-val : A
+  flat-top
+
+;; Interval: Numeric interval lattice (monomorphic over Rat)
+;; Join = intersection (narrowing), bot = unconstrained, top = contradiction.
+data Interval
+  interval-bot
+  mk-interval : Rat -> Rat
+  interval-top
+
+;; ========================================
+;; Helper Functions
+;; ========================================
+
+;; --- Rational helpers ---
+
+spec rat-max Rat Rat -> Rat
+defn rat-max [a b]
+  if [rat-le a b] b a
+
+spec rat-min Rat Rat -> Rat
+defn rat-min [a b]
+  if [rat-le a b] a b
+
+;; --- Set helpers ---
+
+spec set-subset? {A : Type} [Set A] [Set A] -> Bool
+defn set-subset? [a b]
+  set-fold [fn acc x [and acc [set-member? b x]]] true a
+
+;; --- Map helpers ---
+
+spec map-merge-with {K V : Type} [V V -> V] [Map K V] [Map K V] -> [Map K V]
+defn map-merge-with [join-fn m1 m2]
+  map-fold-entries
+    fn [acc <Map K V>] [k <K>] [v <V>]
+      if <Map K V> [map-has-key? acc k]
+        [map-assoc acc k [join-fn [map-get acc k] v]]
+        [map-assoc acc k v]
+    m1
+    m2
+
+spec map-lattice-leq {K V : Type} [V V -> Bool] [Map K V] [Map K V] -> Bool
+defn map-lattice-leq [leq-fn m1 m2]
+  map-fold-entries
+    fn [acc <Bool>] [k <K>] [v <V>]
+      if <Bool> acc
+        if <Bool> [map-has-key? m2 k]
+          [leq-fn v [map-get m2 k]]
+          false
+        false
+    true
+    m1
+
+;; --- Interval helpers ---
+
+spec interval-intersect Rat Rat Rat Rat -> Interval
+defn interval-intersect [lo1 hi1 lo2 hi2]
+  if [rat-le [rat-max lo1 lo2] [rat-min hi1 hi2]]
+    [mk-interval [rat-max lo1 lo2] [rat-min hi1 hi2]]
+    interval-top
+
+spec interval-join Interval Interval -> Interval
+defn interval-join [a b]
+  match a
+    | interval-bot -> b
+    | interval-top -> interval-top
+    | mk-interval lo1 hi1 -> match b
+        | interval-bot -> a
+        | interval-top -> interval-top
+        | mk-interval lo2 hi2 ->
+            interval-intersect lo1 hi1 lo2 hi2
+
+spec interval-leq Interval Interval -> Bool
+defn interval-leq [a b]
+  match a
+    | interval-bot -> true
+    | interval-top -> match b
+        | interval-bot       -> false
+        | mk-interval lo hi -> false
+        | interval-top       -> true
+    | mk-interval lo1 hi1 -> match b
+        | interval-bot -> false
+        | interval-top -> true
+        | mk-interval lo2 hi2 -> and [rat-le lo2 lo1] [rat-le hi1 hi2]
+
+;; ========================================
+;; Lattice Instances
+;; ========================================
+
+;; --- BoolLattice: join=or, bot=false, leq=implies ---
+impl Lattice Bool
+  defn bot [] <Bool>
+    false
+  defn join [a <Bool> b <Bool>] <Bool>
+    or a b
+  defn leq [a <Bool> b <Bool>] <Bool>
+    implies a b
+
+;; --- FlatLattice: parametric, with where (Eq A) ---
+impl Lattice (FlatVal A) where (Eq A)
+  defn bot [] <FlatVal A>
+    flat-bot
+  defn join [a <FlatVal A> b <FlatVal A>] <FlatVal A>
+    match a
+      | flat-bot -> b
+      | flat-top -> flat-top
+      | flat-val v1 -> match b
+          | flat-bot    -> a
+          | flat-top    -> flat-top
+          | flat-val v2 -> if [eq? v1 v2] a flat-top
+  defn leq [a <FlatVal A> b <FlatVal A>] <Bool>
+    match a
+      | flat-bot -> true
+      | flat-top -> match b
+          | flat-bot   -> false
+          | flat-val v -> false
+          | flat-top   -> true
+      | flat-val v1 -> match b
+          | flat-val v2 -> eq? v1 v2
+          | flat-top    -> true
+          | flat-bot    -> false
+
+;; --- SetLattice: join=union, bot=empty, leq=subset ---
+impl Lattice (Set A) where (Eq A)
+  defn bot [] <Set A>
+    #{}
+  defn join [a <Set A> b <Set A>] <Set A>
+    set-union a b
+  defn leq [a <Set A> b <Set A>] <Bool>
+    set-subset? a b
+
+;; --- MapLattice: pointwise join, bot=empty, leq=pointwise ---
+impl Lattice (Map K V) where (Lattice V)
+  defn bot [] <Map K V>
+    {}
+  defn join [a <Map K V> b <Map K V>] <Map K V>
+    map-merge-with K V [fn x y [join x y]] a b
+  defn leq [a <Map K V> b <Map K V>] <Bool>
+    map-lattice-leq K V [fn x y [leq x y]] a b
+
+;; --- IntervalLattice: join=intersection, bot=unconstrained, leq=subsumes ---
+impl Lattice Interval
+  defn bot [] <Interval>
+    interval-bot
+  defn join [a <Interval> b <Interval>] <Interval>
+    interval-join a b
+  defn leq [a <Interval> b <Interval>] <Bool>
+    interval-leq a b
