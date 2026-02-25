@@ -13,6 +13,19 @@ Deferral".
 
 ---
 
+## Trait System
+
+### Uncurried Method Signatures in Trait Definitions
+- Currently trait method type annotations require curried style: `join : A -> A -> A`
+- Uncurried style `join : A A -> A` is preferred but parses `A A` as type application
+- Only `spec`/`defn` support uncurried multi-arg syntax via `extract-implicit-binders`
+- **Fix**: Extend `parse-trait-method` (or the WS-mode type annotation parser) to
+  recognize multi-arg uncurried signatures the same way `spec`/`defn` do
+- **Impact**: Would allow natural trait method declarations matching `defn` style
+- Source: discovered 2026-02-24 when `lattice-trait.prologos` was changed to uncurried style
+
+---
+
 ## Numerics Tower
 
 ### Phase 4: Float32/Float64

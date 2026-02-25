@@ -2,12 +2,11 @@
 
 ;;;
 ;;; Tests for reduction engine performance — heavy computation:
-;;; - fib 20 (exponential tree recursion, ~1M reductions)
 ;;; - fact 20
 ;;; - collatz-len 27 (111 steps)
 ;;;
-;;; These tests exercise the lazy branch normalization fix
-;;; that prevents exponential blowup in nf-whnf boolrec/natrec.
+;;; Split from test-reduction-perf-02.rkt; the slowest test (fib 20)
+;;; is isolated in test-reduction-perf-02-02.rkt.
 ;;;
 
 (require rackunit
@@ -36,20 +35,6 @@
                  [current-type-meta (current-type-meta)])
     (install-module-loader!)
     (process-string s)))
-
-;; ========================================
-;; Lazy branch normalization (boolrec)
-;; ========================================
-
-(test-case "perf: fib 20 completes (boolrec fix)"
-  ;; Previously hung due to exponential branch normalization
-  (define results
-    (run-ns "(ns test.fib :no-prelude)
-(defn fib [n <Int>] <Int>
-  (if (int-le n 1) n (int+ (fib (int- n 1)) (fib (int- n 2)))))
-(eval (fib 20))"))
-  (check-true (ormap (lambda (r) (string-contains? (format "~a" r) "6765 : Int")) results)
-              "fib 20 should equal 6765"))
 
 (test-case "perf: fact 20 completes (boolrec fix)"
   (define results

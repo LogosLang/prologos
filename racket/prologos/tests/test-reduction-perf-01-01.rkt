@@ -3,9 +3,11 @@
 ;;;
 ;;; Tests for reduction engine performance — lightweight checks:
 ;;; - WHNF cache active
-;;; - Reduction fuel/step limit
 ;;; - nat-value memoization
 ;;; - Decimal posit literals
+;;;
+;;; Split from test-reduction-perf-01.rkt (the fuel exhaustion test
+;;; is isolated in test-reduction-perf-01-02.rkt due to ~112s runtime).
 ;;;
 
 (require rackunit
@@ -47,22 +49,6 @@
 (eval 42)"))
   ;; Just verify it runs — the cache is internal
   (check-true (ormap (lambda (r) (string-contains? (format "~a" r) "42 : Int")) results)))
-
-;; ========================================
-;; Fuel exhaustion
-;; ========================================
-
-(test-case "perf: fuel exhaustion on infinite loop"
-  ;; A function that loops forever should hit the fuel limit
-  (check-exn
-   (lambda (e)
-     (and (exn:fail? e)
-          (string-contains? (exn-message e) "fuel exhausted")))
-   (lambda ()
-     (run-ns "(ns test.loop :no-prelude)
-(defn loop [n <Int>] <Int>
-  (loop n))
-(eval (loop 1))"))))
 
 ;; ========================================
 ;; nat-value memoization
