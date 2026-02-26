@@ -1,6 +1,6 @@
 # Benchmarking Framework & Performance Observatory — Design Document
 
-**Date**: 2026-02-25
+**Date**: 2026-02-25 (revised 2026-02-26 after external critique)
 **Status**: DESIGN (pre-implementation)
 **Scope**: Comprehensive benchmarking suite, regression detection, dashboard, and performance observatory for Prologos
 
@@ -106,7 +106,27 @@ zonk.rkt            zonk-steps                Each zonk() recursive call
       (set-perf-counters-field! pc (add1 (perf-counters-field pc))))))
 ```
 
-**Zero-cost when disabled**: When `current-perf-counters` is `#f` (the default), the `when` check is a single pointer comparison — negligible overhead. Benchmarks explicitly opt in via `with-perf-counters`.
+**Zero-cost when disabled**: When `current-perf-counters` is `#f` (the default), the `when` check is a Racket parameter lookup (~5ns, same cost as the existing `current-reduction-fuel` box check in `reduction.rkt`). Benchmarks explicitly opt in via `with-perf-counters`.
+
+**Self-validation**: Phase A must include a self-benchmark measuring counter overhead:
+
+```racket
+;; Validate counter overhead is <5% on tight loops
+(bench "counter-overhead"
+  #:warmup 5 #:samples 20
+  (lambda ()
+    (with-perf-counters
+      (for ([i (in-range 1000000)])
+        (perf-counter-inc! unify-steps)))))
+
+(bench "counter-baseline"
+  #:warmup 5 #:samples 20
+  (lambda ()
+    (for ([i (in-range 1000000)])
+      (void))))
+```
+
+If overhead exceeds 5%, revisit with compile-time elimination. (We expect it won't, given that the analogous `current-reduction-fuel` box-check pattern has been running in every reduction step since day one without measurable impact.)
 
 ### 3.2 Phase-Level Timing Breakdown
 
@@ -122,10 +142,13 @@ zonk.rkt            zonk-steps                Each zonk() recursive call
 (define-values (zonked zonk-ms) (time-phase 'zonk (lambda () (zonk-final ...))))
 ```
 
-**Recording**: Phase timings stored per-command, aggregated per-file in the JSONL record:
+**Recording**: Phase timings stored per-command, aggregated per-file in the JSONL record.
+
+**Schema versioning**: All new records include `"schema_version"` for forward compatibility. Existing records (91 runs) are implicitly v1. Readers must handle both versioned and unversioned records gracefully.
 
 ```json
 {
+  "schema_version": 2,
   "file": "test-quote.rkt",
   "wall_ms": 14200,
   "phases": {
@@ -200,12 +223,14 @@ benchmarks/
 
 ```racket
 (define mem-before (current-memory-use))
-(collect-garbage) (collect-garbage)
+(collect-garbage 'major)  ;; force major GC, not just minor
 ;; ... run test ...
-(collect-garbage) (collect-garbage)
+(collect-garbage 'major)
 (define mem-after (current-memory-use))
 (define mem-delta (- mem-after mem-before))
 ```
+
+**Limitation**: `current-memory-use` measures **retained heap**, not allocation pressure. A program that allocates 1GB but retains only 1MB shows the same as one retaining 1MB throughout. Racket does not expose a direct allocation counter without prohibitive overhead (`errortrace`/`memory-trace` incur 10-100x slowdown). We use `current-gc-milliseconds` delta as a proxy for allocation pressure — high GC time correlates with high allocation rate.
 
 **Additional GC metrics**: Racket provides `current-gc-milliseconds` for total GC time. Record pre/post delta.
 
@@ -214,7 +239,7 @@ benchmarks/
 {
   "file": "test-stdlib.rkt",
   "wall_ms": 132361,
-  "mem_bytes": 48000000,
+  "mem_retained_bytes": 48000000,
   "gc_ms": 2300
 }
 ```
@@ -240,6 +265,20 @@ benchmarks/
 ```
 
 **Effect size gating**: Small absolute changes (<500ms) are never flagged as regressions, even if the percentage is large (e.g., 100ms → 112ms = 12% but not meaningful).
+
+**Variance flagging**: Supplement threshold detection with coefficient of variation (CV) checks to identify unstable benchmarks:
+
+```racket
+(define (flag-high-variance file-name baseline-times)
+  (when (>= (length baseline-times) 5)
+    (define mu (mean baseline-times))
+    (define cv (/ (stddev baseline-times) mu))
+    (when (> cv 0.15)
+      (warn "High variance in ~a: CV=~a% — consider splitting or stabilizing"
+             file-name (* 100 cv)))))
+```
+
+**Design note**: The rolling window is deliberately short (5 runs) to detect *recent* regressions. Long-term drift analysis belongs to the dashboard trend visualization (Phase F), which plots full historical data and makes gradual trends visually obvious.
 
 ---
 
@@ -272,6 +311,28 @@ The Racket `rackcheck` library provides QuickCheck-style property testing with s
 (check-property
   ([prog (gen-surface-program)])
   (check-equal? (parse (pretty-print (parse prog))) (parse prog)))
+```
+
+### 4.2.1 Generator Self-Validation
+
+A buggy `gen-well-typed-program` makes all soundness properties vacuously true. The generators themselves must be validated:
+
+```racket
+;; The generator must actually produce well-typed programs
+(check-property
+  ([prog (gen-well-typed-program 5)])
+  (check-not-exn (lambda () (infer-type prog))))
+
+;; Coverage: generated programs should exercise diverse AST shapes
+(define (validate-generator-coverage n)
+  (define coverage (make-hash))
+  (for ([_ (in-range n)])
+    (define prog (gen-well-typed-program 5))
+    (define shape (classify-ast-shape prog))  ;; top-level AST constructor
+    (hash-update! coverage shape add1 0))
+  ;; Should see reasonable distribution across shapes
+  (for ([(shape count) (in-hash coverage)])
+    (printf "  ~a: ~a (~a%)\n" shape count (round (* 100 (/ count n))))))
 ```
 
 ### 4.3 Performance Properties
@@ -351,12 +412,17 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # full history for baseline access
       - name: Install Racket
         uses: Bogdanp/setup-racket@v1
       - name: Pre-compile
         run: raco make racket/prologos/driver.rkt
+      - name: Fetch baseline from main
+        run: |
+          git show main:data/benchmarks/timings.jsonl > /tmp/baseline-timings.jsonl 2>/dev/null || true
       - name: Run benchmarks
-        run: racket tools/benchmark-tests.rkt --regression-threshold 15
+        run: racket tools/benchmark-tests.rkt --regression-threshold 15 --baseline /tmp/baseline-timings.jsonl
       - name: Generate report
         run: racket tools/benchmark-report.rkt --last 5
       - name: Upload report
@@ -365,6 +431,8 @@ jobs:
           name: benchmark-report
           path: data/benchmarks/report.html
 ```
+
+**Baseline sourcing**: On PR branches, the baseline is fetched from `main`'s `timings.jsonl` rather than relying on the branch having historical data. The `--baseline` flag allows explicit baseline specification.
 
 ---
 
@@ -414,27 +482,38 @@ session-types.prologos   Session type inference
 
 ```racket
 ;; bench-ab.rkt — A/B comparison between type inference backends
-(define (bench-ab program)
-  ;; System A: current implementation
-  (define a-result
-    (with-perf-counters
-      (time-phase 'system-a
-        (lambda () (process-file-system-a program)))))
+;; Each system is run N times for statistical validity.
+(define (bench-ab program #:runs [N 15])
+  ;; Multi-run collection
+  (define a-runs
+    (for/list ([_ (in-range N)])
+      (with-perf-counters
+        (time-phase 'system-a
+          (lambda () (process-file-system-a program))))))
+  (define b-runs
+    (for/list ([_ (in-range N)])
+      (with-perf-counters
+        (time-phase 'system-b
+          (lambda () (process-file-system-b program))))))
 
-  ;; System B: logic-engine implementation
-  (define b-result
-    (with-perf-counters
-      (time-phase 'system-b
-        (lambda () (process-file-system-b program)))))
+  ;; Verify correctness (same results on first run)
+  (check-equal? (result-types (first a-runs)) (result-types (first b-runs)))
 
-  ;; Verify same results
-  (check-equal? (result-types a-result) (result-types b-result))
+  ;; Statistical comparison (non-parametric, no normality assumption)
+  (define a-times (map extract-wall-ms a-runs))
+  (define b-times (map extract-wall-ms b-runs))
+  (define p-value (mann-whitney-u a-times b-times))
+  (define speedup (/ (median b-times) (median a-times)))
 
-  ;; Return comparison data
   (hasheq 'program program
-          'system-a (extract-metrics a-result)
-          'system-b (extract-metrics b-result)))
+          'system-a (summarize-runs a-runs)
+          'system-b (summarize-runs b-runs)
+          'p-value p-value
+          'speedup speedup
+          'significant? (< p-value 0.05)))
 ```
+
+**Statistical rigor**: Single-run comparison between A and B is meaningless due to noise. The harness runs each system N times (default 15) and compares distributions via Mann-Whitney U test (non-parametric, no normality assumption). Only differences with p < 0.05 are reported as significant.
 
 ---
 
@@ -476,7 +555,75 @@ UnionFind     find        with path splitting vs without
 
 ---
 
-## 8. Implementation Plan
+## 8. Operational Practices
+
+### 8.1 Benchmark Selection Criteria
+
+Benchmarks admitted to the suite must satisfy:
+
+1. **Representative**: Covers common use cases, not just pathological edge cases
+2. **Stable**: CV < 10% across 10+ runs (validated via stability check)
+3. **Meaningful**: Takes >100ms for integration benchmarks (micro-benchmarks excepted)
+4. **Diverse**: Exercises different pipeline stages and code paths
+5. **Owned**: Clear purpose documented; updated when semantics change
+
+### 8.2 Benchmark Stability Validation
+
+Before a benchmark is accepted into the suite, validate its stability:
+
+```racket
+(define (validate-benchmark-stability name thunk #:runs [n 10])
+  (define times (for/list ([_ (in-range n)]) (measure thunk)))
+  (define cv (/ (stddev times) (mean times)))
+  (cond
+    [(> cv 0.10) (error "Benchmark ~a is unstable: CV=~a%" name (* 100 cv))]
+    [(> cv 0.05) (warn "Benchmark ~a has moderate variance: CV=~a%" name (* 100 cv))]
+    [else (printf "Benchmark ~a is stable: CV=~a%\n" name (* 100 cv))]))
+```
+
+Unstable benchmarks (CV > 10%) are rejected or investigated for environmental sensitivity. Moderately unstable benchmarks (5-10%) are flagged for review.
+
+### 8.3 Benchmark Deprecation
+
+Benchmarks that become unstable (CV > 15% over 10 runs) or obsolete (testing removed features) are moved to `benchmarks/archived/` with a dated comment explaining why. No formal policy needed at our scale — just keep the suite clean.
+
+### 8.4 Text Summary Output
+
+In addition to JSONL recording and HTML reports, every benchmark run prints a structured text summary to stdout, usable in CI logs and terminal workflows:
+
+```
+════════════════════════════════════════════════════════════════
+BENCHMARK SUMMARY — 2026-02-25 14:32:00 (commit abc1234)
+════════════════════════════════════════════════════════════════
+Overall: 132.4s total (↑ 3.2% from baseline)
+Regressions (2):
+  test-stdlib.rkt      45.2s → 52.1s  (+15.3%)  ← type_check phase
+  test-trait-chain.rkt 12.1s → 14.8s  (+22.3%)  ← trait_resolve phase
+Improvements (1):
+  test-simple.rkt       2.1s →  1.8s  (-14.3%)
+Stable: 42 files within ±5% of baseline
+Heartbeat Totals:
+  unify_steps:  482,000 (↑ 8%)   reduce_steps: 123,000 (stable)
+  meta_created:   1,560 (↑ 12%)  meta_solved:    1,488 (↑ 10%)
+```
+
+### 8.5 Regression Investigation Workflow
+
+When a regression is detected:
+
+1. **Check heartbeat breakdown**: Which counter spiked? (algorithmic change vs. infrastructure change)
+2. **Check phase breakdown**: Which pipeline stage? (narrows from "everything" to "type_check" or "trait_resolve")
+3. **Profile deeply**: `raco profile` or `racket/trace` on the specific test file
+4. **Bisect**: `git bisect run racket tools/bench-single.rkt <test-file>` to find the exact commit
+5. **Compare heartbeats**: If heartbeats changed but wall time didn't, the change is algorithmic but not yet performance-visible (early warning). If wall time changed but heartbeats didn't, it's environmental noise.
+
+### 8.6 Performance Budgets (Future — Phase F+)
+
+Performance budgets will be established after 3 months of data collection. Premature budgets that are either too loose (useless) or too tight (constant false alerts) are worse than no budgets. Once we have sufficient baseline data, we will set per-file heartbeat budgets and wall-time expectations.
+
+---
+
+## 9. Implementation Plan
 
 ### Phase A: Heartbeat Counters (~80 lines)
 
@@ -485,23 +632,26 @@ UnionFind     find        with path splitting vs without
 1. Create `performance-counters.rkt` with counter struct and parameter
 2. Add `perf-counter-inc!` calls to each instrumentation point
 3. Wire into `bench-lib.rkt` for recording alongside wall time
-4. Update JSONL schema with heartbeat fields
+4. Update JSONL schema with `schema_version: 2` and heartbeat fields
+5. Self-benchmark: validate counter overhead is <5% on tight loops (see §3.1)
 
-### Phase B: Phase-Level Timing (~40 lines)
+### Phase B: Phase-Level Timing (~60 lines)
 
 **Files**: `driver.rkt`, `bench-lib.rkt`
 
 1. Add `time-phase` helper to `bench-lib.rkt`
 2. Instrument `driver.rkt` `process-command` with phase wrappers
 3. Aggregate per-file, record in JSONL
+4. Structured text summary output to stdout after each run (see §8.4)
 
 ### Phase C: Micro-Benchmark Harness (~150 lines)
 
 **Files**: New `tools/bench-micro.rkt`, new `benchmarks/micro/*.rkt`
 
-1. Statistical benchmarking library (warmup, sampling, CI computation)
-2. Initial micro-benchmarks for unification, reduction, CHAMP
-3. JSON output format compatible with existing JSONL
+1. Statistical benchmarking library (warmup, sampling, CI computation, CV)
+2. Benchmark stability validation gate (CV < 10% required, see §8.2)
+3. Initial micro-benchmarks for unification, reduction, CHAMP
+4. JSON output format compatible with existing JSONL
 
 ### Phase D: Multi-Run Baseline + Memory (~60 lines)
 
@@ -509,7 +659,8 @@ UnionFind     find        with path splitting vs without
 
 1. Rolling baseline (median of last 5 runs)
 2. Effect size gating (absolute + percentage threshold)
-3. Memory delta recording via `current-memory-use`
+3. Variance flagging (CV > 15% warning, see §3.5)
+4. Memory delta recording via `current-memory-use` with `'major` GC
 
 ### Phase E: Property-Based Testing (~200 lines)
 
@@ -517,8 +668,9 @@ UnionFind     find        with path splitting vs without
 
 1. Install rackcheck dependency
 2. Term/type generators for Prologos AST
-3. Soundness properties (subject reduction, unification, round-trip)
-4. Performance properties (bounded heartbeats)
+3. **Generator self-validation**: verify generators produce well-typed programs, measure AST coverage (see §4.2.1)
+4. Soundness properties (subject reduction, unification, round-trip)
+5. Performance properties (bounded heartbeats)
 
 ### Phase F: Static HTML Report (~300 lines)
 
@@ -539,7 +691,7 @@ UnionFind     find        with path splitting vs without
 
 ---
 
-## 9. Success Criteria
+## 10. Success Criteria
 
 1. **Heartbeat regression detection** catches algorithmic regressions that wall-clock misses
 2. **Phase breakdown** identifies which pipeline stage is responsible for slowdowns
@@ -550,7 +702,7 @@ UnionFind     find        with path splitting vs without
 
 ---
 
-## 10. References
+## 11. References
 
 - Kalibera & Jones, "Rigorous Benchmarking in Reasonable Time" (ICPE 2013)
 - Lean4 heartbeat system: `set_option maxHeartbeats N`

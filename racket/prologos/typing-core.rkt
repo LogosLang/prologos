@@ -23,6 +23,7 @@
          "substitution.rkt"
          "reduction.rkt"
          "unify.rkt"
+         "performance-counters.rkt"
          "global-env.rkt"
          "macros.rkt"
          "namespace.rkt"
@@ -218,6 +219,7 @@
 ;; Type inference (synthesis mode)
 ;; ========================================
 (define (infer ctx e)
+  (perf-inc-infer!)
   (match e
     ;; ---- Bound variable: lookup in context and SHIFT the type ----
     [(expr-bvar k)
@@ -1687,6 +1689,7 @@
 ;; Type checking (checking mode)
 ;; ========================================
 (define (check ctx e t)
+  (perf-inc-infer!)  ;; counts both infer and check calls
   (match* (e (whnf t))
     ;; ---- suc: check against Nat ----
     [((expr-suc e1) (expr-Nat))

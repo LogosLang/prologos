@@ -24,7 +24,8 @@
          "syntax.rkt"
          "prelude.rkt"
          "sessions.rkt"
-         "source-location.rkt")
+         "source-location.rkt"
+         "performance-counters.rkt")
 
 (provide
  ;; Meta-info struct
@@ -200,6 +201,7 @@
 
 ;; Create a postponed constraint, add to global store, register for wakeup.
 (define (add-constraint! lhs rhs ctx source)
+  (perf-inc-constraint!)
   (define c (constraint lhs rhs ctx source 'postponed))
   ;; Add to global store
   (current-constraint-store (cons c (current-constraint-store)))
@@ -218,6 +220,7 @@
 ;; Retry postponed constraints that mention the given meta.
 ;; Uses 'retrying guard to prevent infinite re-entrant loops.
 (define (retry-constraints-for-meta! meta-id)
+  (perf-inc-constraint-retry!)
   (define retry-fn (current-retry-unify))
   (when retry-fn
     (define constraints (get-wakeup-constraints meta-id))
@@ -258,6 +261,7 @@
 
 ;; Create a fresh metavariable, register it in the store, return expr-meta.
 (define (fresh-meta ctx type source)
+  (perf-inc-meta-created!)
   (define id (gensym 'meta))
   (define info (meta-info id ctx type 'unsolved #f '() source))
   (hash-set! (current-meta-store) id info)
@@ -266,6 +270,7 @@
 ;; Assign a solution to a metavariable. Errors if already solved.
 ;; After solving, retries any postponed constraints that mention this meta.
 (define (solve-meta! id solution)
+  (perf-inc-meta-solved!)
   (define info (hash-ref (current-meta-store) id #f))
   (unless info
     (error 'solve-meta! "unknown metavariable: ~a" id))

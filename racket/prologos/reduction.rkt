@@ -18,6 +18,7 @@
          "substitution.rkt"
          "global-env.rkt"
          "posit-impl.rkt"
+         "performance-counters.rkt"
          "macros.rkt"
          "metavar-store.rkt"
          "foreign.rkt"
@@ -660,6 +661,7 @@
      result]))
 
 (define (whnf-impl e)
+  (perf-inc-reduce!)
   ;; Check fuel
   (let ([fuel (current-reduction-fuel)])
     (when fuel

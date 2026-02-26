@@ -759,7 +759,9 @@
    'test-relational-types.rkt
    (test-dep '(syntax.rkt typing-core.rkt qtt.rkt substitution.rkt pretty-print.rkt reduction.rkt elaborator.rkt surface-syntax.rkt solver.rkt) #f)
    'test-relational-e2e.rkt
-   (test-dep '(driver.rkt parser.rkt elaborator.rkt reduction.rkt relations.rkt solver.rkt macros.rkt surface-syntax.rkt syntax.rkt) #f)))
+   (test-dep '(driver.rkt parser.rkt elaborator.rkt reduction.rkt relations.rkt solver.rkt macros.rkt surface-syntax.rkt syntax.rkt) #f)
+   'test-perf-counters.rkt
+   (test-dep '(performance-counters.rkt) #f)))
 
 ;; ============================================================
 ;; Layer 2b: Example file → test file mapping

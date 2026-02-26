@@ -21,7 +21,8 @@
          "union-find.rkt"
          "solver.rkt"
          "provenance.rkt"
-         "syntax.rkt")
+         "syntax.rkt"
+         "performance-counters.rkt")
 
 (provide
  ;; Core structs
@@ -241,6 +242,7 @@
 ;; Unify two terms under a substitution.
 ;; Returns updated substitution or #f on failure.
 (define (unify-terms t1 t2 subst)
+  (perf-inc-solver-unify!)
   (define v1 (walk subst t1))
   (define v2 (walk subst t2))
   (cond
@@ -355,6 +357,7 @@
 
 ;; Solve an app goal: look up relation, try facts then clauses.
 (define (solve-app-goal config store goal-name goal-args subst depth)
+  (perf-inc-solver-backtrack!)
   (define rel (relation-lookup store goal-name))
   (unless rel
     (error 'solve "Unknown relation: ~a" goal-name))

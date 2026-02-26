@@ -16,7 +16,8 @@
 (require racket/match
          "syntax.rkt"
          "metavar-store.rkt"
-         "substitution.rkt")
+         "substitution.rkt"
+         "performance-counters.rkt")
 
 (provide zonk zonk-ctx zonk-final zonk-at-depth)
 
@@ -24,6 +25,7 @@
 ;; Zonk: substitute solved metavariables
 ;; ========================================
 (define (zonk e)
+  (perf-inc-zonk!)
   (match e
     ;; THE KEY CASE: metavariable — follow solution recursively
     [(expr-meta id)

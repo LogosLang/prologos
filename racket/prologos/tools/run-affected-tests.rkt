@@ -392,7 +392,8 @@
   (when (record-timings?)
     (define timings-file (make-timings-path project-root))
     (define record
-      (hasheq 'timestamp (current-iso-timestamp)
+      (hasheq 'schema_version 2
+              'timestamp (current-iso-timestamp)
               'commit (current-commit)
               'branch (current-branch)
               'machine (string-append (symbol->string (system-type 'os))

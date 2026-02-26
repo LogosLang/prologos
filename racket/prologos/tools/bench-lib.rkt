@@ -15,6 +15,7 @@
 
 (provide benchmark-one-test
          extract-test-count
+         extract-perf-counters
          filename-from-path
          status-label
          current-iso-timestamp
@@ -51,15 +52,19 @@
      (close-input-port stderr-port)
      (define ok? (zero? (subprocess-status proc)))
      (define test-count (extract-test-count output))
+     (define heartbeats (extract-perf-counters err-output))
      (define result
        (hasheq 'file (filename-from-path test-path)
                'wall_ms wall-ms
                'status (if ok? "pass" "fail")
                'tests test-count))
+     ;; Attach heartbeats when available
+     (define result+hb
+       (if heartbeats (hash-set result 'heartbeats heartbeats) result))
      ;; Attach error output only on failure (saves space in JSONL)
      (if (and (not ok?) (not (string=? err-output "")))
-         (hash-set result 'error_output err-output)
-         result)]
+         (hash-set result+hb 'error_output err-output)
+         result+hb)]
     [else
      ;; Timeout — kill the process
      (define err-output
@@ -76,6 +81,31 @@
      (if (not (string=? err-output ""))
          (hash-set result 'error_output err-output)
          result)]))
+
+;; Extract PERF-COUNTERS:{json} from stderr output.
+;; Returns a hasheq of counter values, or #f if no heartbeat line found.
+;; Multiple PERF-COUNTERS lines are merged (summed) — handles multi-ns files.
+(define (extract-perf-counters err-output)
+  (define lines (string-split err-output "\n"))
+  (define prefix "PERF-COUNTERS:")
+  (define prefix-len (string-length prefix))
+  (define results
+    (for/list ([line (in-list lines)]
+               #:when (and (>= (string-length line) prefix-len)
+                           (string=? (substring line 0 prefix-len) prefix)))
+      (with-handlers ([exn:fail? (λ (_) #f)])
+        (with-input-from-string (substring line prefix-len) read-json))))
+  (define valid (filter hash? results))
+  (cond
+    [(null? valid) #f]
+    [(= (length valid) 1) (car valid)]
+    [else
+     ;; Sum all counter hashes (multi-ns files emit multiple reports)
+     (for/fold ([acc (car valid)])
+               ([h (in-list (cdr valid))])
+       (for/fold ([a acc])
+                 ([(k v) (in-hash h)])
+         (hash-set a k (+ (hash-ref a k 0) v))))]))
 
 ;; Extract "N tests passed" from raco test output
 (define (extract-test-count output)

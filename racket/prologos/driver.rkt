@@ -36,7 +36,8 @@
          "foreign.rkt"
          "trait-resolution.rkt"
          "warnings.rkt"
-         "relations.rkt")
+         "relations.rkt"
+         "performance-counters.rkt")
 
 (provide process-command
          process-file
@@ -556,10 +557,14 @@
   (define raw-stxs (read-all-syntax port "<string>"))
   (define expanded-stxs (preparse-expand-all raw-stxs))
   (define surfs (map parse-datum expanded-stxs))
-  (for/list ([surf (in-list surfs)])
-    (if (prologos-error? surf)
-        surf
-        (process-command surf))))
+  (define-values (results pc)
+    (with-perf-counters
+      (for/list ([surf (in-list surfs)])
+        (if (prologos-error? surf)
+            surf
+            (process-command surf)))))
+  (when pc (print-perf-report! pc))
+  results)
 
 ;; ========================================
 ;; Process all commands from a file
@@ -575,10 +580,14 @@
   (close-input-port port)
   (define expanded-stxs (preparse-expand-all raw-stxs))
   (define surfs (map parse-datum expanded-stxs))
-  (for/list ([surf (in-list surfs)])
-    (if (prologos-error? surf)
-        surf
-        (process-command surf))))
+  (define-values (results pc)
+    (with-perf-counters
+      (for/list ([surf (in-list surfs)])
+        (if (prologos-error? surf)
+            surf
+            (process-command surf)))))
+  (when pc (print-perf-report! pc))
+  results)
 
 ;; ========================================
 ;; Module Loading

@@ -13,6 +13,7 @@
          "syntax.rkt"
          "prelude.rkt"
          "metavar-store.rkt"
+         "performance-counters.rkt"
          "macros.rkt"
          "zonk.rkt"
          "unify.rkt"
@@ -302,6 +303,7 @@
 (define (resolve-trait-constraints!)
   (for ([(meta-id tc-info) (in-hash (current-trait-constraint-map))])
     (unless (meta-solved? meta-id)
+      (perf-inc-trait-resolve!)
       (define trait-name (trait-constraint-info-trait-name tc-info))
       (define type-args (map (lambda (e) (normalize-for-resolution (zonk e)))
                              (trait-constraint-info-type-arg-exprs tc-info)))

@@ -29,7 +29,8 @@
          "metavar-store.rkt"
          "substitution.rkt"
          "zonk.rkt"
-         "source-location.rkt")
+         "source-location.rkt"
+         "performance-counters.rkt")
 
 (provide unify unify-ok? occurs?
          ;; Sprint 2b exports
@@ -143,6 +144,7 @@
 ;; de Bruijn indices — open-expr automatically decrements higher bvar indices.
 
 (define (unify ctx t1 t2)
+  (perf-inc-unify!)
   ;; Pre-WHNF: try app-vs-app decomposition on the raw (zonked) terms.
   ;; This is critical for correctness with metavariables: when both sides
   ;; are applications (e.g., (app List ?m) vs (app List B)), decomposing

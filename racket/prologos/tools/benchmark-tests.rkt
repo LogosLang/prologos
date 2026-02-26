@@ -118,7 +118,8 @@
 
   ;; Build run record
   (define record
-    (hasheq 'timestamp (current-iso-timestamp)
+    (hasheq 'schema_version 2
+            'timestamp (current-iso-timestamp)
             'commit (current-commit)
             'branch (current-branch)
             'machine (string-append (symbol->string (system-type 'os))

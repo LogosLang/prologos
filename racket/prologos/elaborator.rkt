@@ -18,6 +18,7 @@
          "namespace.rkt"
          "metavar-store.rkt"
          "pretty-print.rkt"
+         "performance-counters.rkt"
          "multi-dispatch.rkt"
          "foreign.rkt"
          "posit-impl.rkt"
@@ -644,6 +645,7 @@
 
 ;; elaborate: surface-expr, env, depth -> (or/c expr? prologos-error?)
 (define (elaborate surf [env '()] [depth 0])
+  (perf-inc-elaborate!)
   (match surf
     ;; Variable: look up name, compute de Bruijn index
     ;; For globals with ALL-implicit type params (e.g., nil : Pi(A :0 Type). List A),
