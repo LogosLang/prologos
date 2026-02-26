@@ -29,6 +29,8 @@
  (struct-out unsolved-implicit-error)
  (struct-out no-instance-error)
  (struct-out ambiguous-method-error)
+ ;; Phase 6: Union type exhaustion
+ (struct-out union-exhaustion-error)
  ;; Predicates
  prologos-error?
  ;; Formatting
@@ -90,6 +92,13 @@
 ;; method-name: symbol — the ambiguous method name (e.g., 'eq?)
 ;; trait-names: (listof symbol) — all traits that define this method
 (struct ambiguous-method-error prologos-error (method-name trait-names) #:transparent)
+
+;; Phase 6: Union type exhaustion — all branches failed (E1006)
+;; branches: (listof string) — pretty-printed branch types
+;; branch-mismatches: (listof string) — per-branch actual type or "<could not infer>"
+;; expr-str: string — pretty-printed expression
+(struct union-exhaustion-error prologos-error
+  (branches branch-mismatches expr-str) #:transparent)
 
 ;; ========================================
 ;; Error Formatting
@@ -221,6 +230,18 @@
                     (string-join (map symbol->string trait-names) ", "))
             (format "  = help: use the qualified accessor name to disambiguate (e.g., ~a-~a)"
                     (car trait-names) method-name))
+      "\n")]
+    ;; Phase 6: E1006 — Union type exhaustion
+    [(union-exhaustion-error _ _ branches branch-mismatches expr-str)
+     (string-join
+      (append
+       (list (format "error[E1006]: expression does not match any branch of union type")
+             (format "  --> ~a" loc-str))
+       (for/list ([br (in-list branches)]
+                  [mm (in-list branch-mismatches)])
+         (format "  tried ~a — type mismatch (got: ~a)" br mm))
+       (list (format "  in expression: ~a" expr-str)
+             (format "  = help: expression must match at least one branch of ~a" msg)))
       "\n")]
     [_ ;; base prologos-error
      (string-join

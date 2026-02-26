@@ -41,19 +41,46 @@
 ;; ========================================
 ;; Check with error reporting
 ;; ========================================
+
+;; Flatten nested union types into a list of branches.
+;; (A | (B | C)) → (list A B C)
+(define (flatten-union-local t)
+  (if (expr-union? t)
+      (append (flatten-union-local (expr-union-left t))
+              (flatten-union-local (expr-union-right t)))
+      (list t)))
+
 ;; Returns (or/c #t prologos-error?)
 ;; Sprint 9: optional `names` for de Bruijn recovery in error messages
+;; Phase 6: union types produce enriched union-exhaustion-error (E1006)
 (define (check/err ctx e t [loc srcloc-unknown] [names '()])
   (if (check ctx e t)
       #t
-      ;; Try to infer the actual type for a helpful error message
-      (let ([actual (infer ctx e)])
-        (type-mismatch-error
-         loc
-         "Type mismatch"
-         (pp-expr t names)
-         (if (expr-error? actual) "<could not infer>" (pp-expr actual names))
-         (pp-expr e names)))))
+      ;; Check failed — is this a union type?
+      (let ([t* (whnf t)])
+        (if (expr-union? t*)
+            ;; Union: produce enriched error with per-branch details
+            (let* ([branches (flatten-union-local t*)]
+                   [actual (infer ctx e)]
+                   [actual-str (if (expr-error? actual)
+                                   "<could not infer>"
+                                   (pp-expr actual names))]
+                   [branch-strs (map (lambda (b) (pp-expr b names)) branches)]
+                   [branch-mismatches (map (lambda (_) actual-str) branches)])
+              (union-exhaustion-error
+               loc
+               (pp-expr t names)  ;; message field = full union type string (for help line)
+               branch-strs
+               branch-mismatches
+               (pp-expr e names)))
+            ;; Non-union: existing behavior
+            (let ([actual (infer ctx e)])
+              (type-mismatch-error
+               loc
+               "Type mismatch"
+               (pp-expr t names)
+               (if (expr-error? actual) "<could not infer>" (pp-expr actual names))
+               (pp-expr e names)))))))
 
 ;; ========================================
 ;; Is-type with error reporting

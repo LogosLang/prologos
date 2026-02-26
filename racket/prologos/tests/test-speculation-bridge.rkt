@@ -11,6 +11,7 @@
 
 (require racket/list
          racket/port
+         racket/string
          rackunit
          rackunit/text-ui
          "test-support.rkt"
@@ -261,6 +262,44 @@
      (check-false (prologos-error? result)))))
 
 ;; ========================================
+;; Suite 7: Error Improvement (Phase 6)
+;; ========================================
+
+(define error-improvement-tests
+  (test-suite
+   "Error improvement"
+
+   (test-case "union exhaustion error — simple (A | B)"
+     (define result (run-simple "(def x <Nat | Bool> \"hello\")"))
+     (check-true (union-exhaustion-error? (last result)))
+     (define err (last result))
+     (check-equal? (length (union-exhaustion-error-branches err)) 2)
+     (define formatted (format-error err))
+     (check-true (string-contains? formatted "E1006"))
+     (check-true (string-contains? formatted "tried")))
+
+   (test-case "union exhaustion error — nested (A | B | C)"
+     (define result (run-ns "(ns test) (def x <<Nat | Bool> | (List Nat)> \"hello\")"))
+     (check-true (union-exhaustion-error? result))
+     ;; 3 branches after flattening
+     (check-equal? (length (union-exhaustion-error-branches result)) 3))
+
+   (test-case "non-union mismatch still produces type-mismatch-error"
+     (define result (run-simple "(def x : Nat true)"))
+     (check-true (type-mismatch-error? (last result))))
+
+   (test-case "union success — no error produced"
+     (define result (run-ns "(ns test) (def x <Nat | Bool> 42N)"))
+     (check-false (prologos-error? result)))
+
+   (test-case "formatted error includes branch details"
+     (define result (run-simple "(def x <Nat | Bool> \"hello\")"))
+     (define formatted (format-error (last result)))
+     (check-true (string-contains? formatted "Nat"))
+     (check-true (string-contains? formatted "Bool"))
+     (check-true (string-contains? formatted "help")))))
+
+;; ========================================
 ;; Run all suites
 ;; ========================================
 
@@ -270,3 +309,4 @@
 (run-tests map-widening-tests)
 (run-tests qtt-tests)
 (run-tests pipeline-tests)
+(run-tests error-improvement-tests)

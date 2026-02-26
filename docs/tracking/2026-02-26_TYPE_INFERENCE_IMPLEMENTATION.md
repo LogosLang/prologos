@@ -189,6 +189,33 @@
 - **Failure tracking via parameter** — `current-speculation-failures` collects labels of failed branches during a command. Future error improvements can read this to explain WHY a union check failed.
 - **No circular dependencies** — bridge depends on `metavar-store.rkt` and `elab-shadow.rkt` (down). `typing-core.rkt` and `qtt.rkt` depend on bridge (up). No cycles.
 
-## Phase 6: Full Switchover + Error Improvement — NOT STARTED
+## Phase 6: Error Enrichment for Union Types — COMPLETE
+
+- [x] 6a: Added `union-exhaustion-error` struct to `errors.rkt` (~25 lines)
+  - Error code E1006 (follows E1001-E1005 progression)
+  - Fields: branches (listof string), branch-mismatches (listof string), expr-str (string)
+  - Format clause produces: `error[E1006]: expression does not match any branch of union type`
+  - Per-branch details: `tried Nat — type mismatch (got: String)`
+  - Help line: `expression must match at least one branch of <Nat | Bool>`
+- [x] 6b: Union-aware `check/err` in `typing-errors.rkt` (~35 lines)
+  - `flatten-union-local` helper: decomposes `(A | (B | C))` → `(A B C)`
+  - `check/err` now calls `whnf` on expected type, detects `expr-union?`
+  - Union failures produce `union-exhaustion-error` with per-branch info
+  - Non-union failures produce existing `type-mismatch-error` (unchanged)
+  - `checkQ-top/err` unchanged (QTT errors are multiplicity violations, not type mismatches)
+- [x] 6c: Added Suite 7 error improvement tests to `test-speculation-bridge.rkt` (5 tests)
+  - Simple union exhaustion (A | B) → E1006 with 2 branches
+  - Nested union (A | B | C) → E1006 with 3 branches (flattened)
+  - Non-union mismatch → still `type-mismatch-error`
+  - Union success → no error
+  - Formatted error includes branch names and help text
+- [x] 6d: Full suite passes (4306 tests, 199 files, 252.2s)
+- [x] 6e: Committed
+
+### Key Decisions (Phase 6)
+- **Reconstruct at error layer** — zero changes to `typing-core.rkt` or `qtt.rkt`. The `check/err` wrapper detects union types after `check` returns `#f`, keeping the type-checking kernel unchanged for Maude cross-validation.
+- **`whnf` on expected type** — handles solved metas that resolve to unions.
+- **Same actual type for all branches** — infer `e`'s type once and report it for every branch. Simpler and nearly as useful as per-branch re-checking.
+- **`message` field stores full union type** — used by format clause for the help line.
 
 ## Phase 7: Performance Optimization — NOT STARTED
