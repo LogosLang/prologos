@@ -1124,6 +1124,39 @@
                                   d))
              (datum->syntax #f (preparse-expand-form injected) stx)))
          (append (reverse new-stxs) acc)]
+        ;; ---- Public defr — auto-export the relation name, pass through ----
+        [(and (pair? datum) (eq? head 'defr))
+         (when (and (list? datum) (>= (length datum) 2) (symbol? (cadr datum)))
+           (auto-export-name! (cadr datum)))
+         (define expanded (preparse-expand-form datum))
+         (if (equal? expanded datum)
+             (cons stx acc)
+             (cons (datum->syntax #f expanded stx) acc))]
+        ;; ---- Public solver — expand to (def name (solver-config ...)), auto-export ----
+        [(and (pair? datum) (eq? head 'solver))
+         ;; (solver name :key val ...) → (def name {:key val ...})
+         (unless (and (list? datum) (>= (length datum) 2) (symbol? (cadr datum)))
+           (error 'solver "solver requires: (solver name :key val ...)"))
+         (define sname (cadr datum))
+         (auto-export-name! sname)
+         (define opts (cddr datum))
+         ;; Wrap as: (def name ($brace-params :key val ...))
+         (define expanded `(def ,sname ($brace-params ,@opts)))
+         (define new-stx (datum->syntax #f (preparse-expand-form expanded) stx))
+         (cons new-stx acc)]
+        ;; ---- Public schema — expand to deftype, auto-export ----
+        [(and (pair? datum) (eq? head 'schema))
+         ;; (schema Name :field1 Type1 :field2 Type2) → (deftype Name ...)
+         (unless (and (list? datum) (>= (length datum) 2) (symbol? (cadr datum)))
+           (error 'schema "schema requires: (schema Name :field1 Type1 ...)"))
+         (define schema-name (cadr datum))
+         (auto-export-name! schema-name)
+         (define field-pairs (cddr datum))
+         ;; Build a deftype with fields as a Map type
+         ;; For now, register as a simple deftype alias
+         (define expanded `(deftype ,schema-name (Map Keyword Value)))
+         (process-deftype expanded)
+         acc]
         ;; ---- Public defn/def — auto-export the name ----
         [(and (pair? datum) (memq head '(defn def)))
          (auto-export-names! (extract-defined-name datum head))
@@ -6222,6 +6255,9 @@
     [(surf-elaborate? surf)
      (surf-elaborate (expand-expression (surf-elaborate-expr surf))
                      (surf-elaborate-srcloc surf))]
+    ;; defr — named relation definition (Phase 7)
+    ;; Pass through to elaboration, which produces (list 'defr name expr)
+    [(surf-defr? surf) surf]
     ;; Bare expression — implicit eval
     [else
      (define loc (cond

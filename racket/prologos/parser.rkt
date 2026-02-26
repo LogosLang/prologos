@@ -17,7 +17,22 @@
 
 (provide parse-datum
          parse-string
-         parse-port)
+         parse-port
+         current-parsing-relational-goal?)
+
+;; ========================================
+;; Relational goal context
+;; ========================================
+;; When #t, list forms with non-keyword heads are parsed as
+;; surf-goal-app instead of surf-app. Set by parse-defr-body for
+;; &> clause content and by solve/explain for their goal arguments.
+(define current-parsing-relational-goal? (make-parameter #f))
+
+;; Parse a datum in relational goal context.
+;; Wraps parse-datum with current-parsing-relational-goal? = #t.
+(define (parse-relational-goal stx)
+  (parameterize ([current-parsing-relational-goal? #t])
+    (parse-datum stx)))
 
 ;; ========================================
 ;; Keywords: forms with special parsing rules
@@ -48,6 +63,10 @@
     TVec TMap TSet transient persist! tvec-push! tvec-update! tmap-assoc! tmap-dissoc! tset-insert! tset-delete!
     PropNetwork CellId PropId net-new net-new-cell net-cell-read net-cell-write net-add-prop net-run net-snapshot net-contradict?
     UnionFind uf-empty uf-make-set uf-find uf-union uf-value
+    ;; Relational language (Phase 7)
+    defr rel solve solve-with solve-one explain explain-with solver schema
+    is not
+    Solver Goal DerivationTree Answer
     def defn check eval infer expand expand-1 expand-full parse elaborate match
     ;; Pre-parse macros — should be expanded before reaching parser
     defmacro let do if deftype data spec trait impl where bundle with-transient
@@ -508,6 +527,10 @@
     [(ATMS) (surf-atms-type loc)]
     [(AssumptionId) (surf-assumption-id-type loc)]
     [(TableStore) (surf-table-store-type loc)]
+    [(Solver) (surf-solver-type loc)]
+    [(Goal) (surf-goal-type loc)]
+    [(DerivationTree) (surf-derivation-type loc)]
+    [(Answer) (surf-answer-type #f loc)]
     [(zero)   (surf-zero loc)]
     [(true)   (surf-true loc)]
     [(false)  (surf-false loc)]
@@ -2463,6 +2486,108 @@
                 [(prologos-error? a) a]
                 [else (surf-table-lookup s n a loc)])))]
 
+       ;; ---- Relational language (Phase 7) ----
+
+       ;; (defr name [params] body...) — relation definition
+       [(defr)
+        (parse-defr args loc)]
+
+       ;; (rel [params] body...) — anonymous relation
+       [(rel)
+        (parse-rel args loc)]
+
+       ;; (solver name :key val ...) — solver definition (should be pre-expanded)
+       [(solver)
+        (parse-error loc "solver should have been expanded before parsing" #f)]
+
+       ;; (schema name :field Type ...) — schema definition (should be pre-expanded)
+       [(schema)
+        (parse-error loc "schema should have been expanded before parsing" #f)]
+
+       ;; (solve (goal)) — goal arg is parsed in relational context
+       [(solve)
+        (or (check-arity 'solve args 1 loc)
+            (let ([g (parse-relational-goal (car args))])
+              (if (prologos-error? g) g
+                  (surf-solve g loc))))]
+
+       ;; (solve-with solver (goal))  or  (solve-with solver {overrides} (goal))
+       ;; or  (solve-with {overrides} (goal))
+       [(solve-with)
+        (parse-solve-with args loc)]
+
+       ;; (solve-one (goal)) — goal arg is parsed in relational context
+       [(solve-one)
+        (or (check-arity 'solve-one args 1 loc)
+            (let ([g (parse-relational-goal (car args))])
+              (if (prologos-error? g) g
+                  (surf-solve g loc))))]  ;; reuse surf-solve (reduction distinguishes)
+
+       ;; (explain (goal)) — goal arg is parsed in relational context
+       [(explain)
+        (or (check-arity 'explain args 1 loc)
+            (let ([g (parse-relational-goal (car args))])
+              (if (prologos-error? g) g
+                  (surf-explain g loc))))]
+
+       ;; (explain-with solver (goal))  or  (explain-with solver {overrides} (goal))
+       ;; or  (explain-with {overrides} (goal))
+       [(explain-with)
+        (parse-explain-with args loc)]
+
+       ;; (= lhs rhs) — unification goal in relational context,
+       ;; generic equality in functional context
+       [(=)
+        (cond
+          [(current-parsing-relational-goal?)
+           (or (check-arity '= args 2 loc)
+               (let ([l (parse-relational-goal (car args))]
+                     [r (parse-relational-goal (cadr args))])
+                 (cond [(prologos-error? l) l]
+                       [(prologos-error? r) r]
+                       [else (surf-unify l r loc)])))]
+          [else
+           ;; Functional context: generic equality operator
+           (parse-application head-stx args loc)])]
+
+       ;; (is var [expr]) — functional eval in relational context
+       [(is)
+        (cond
+          [(current-parsing-relational-goal?)
+           (or (check-arity 'is args 2 loc)
+               (let ([v (parse-relational-goal (car args))]
+                     ;; expr is evaluated functionally, not relationally
+                     [e (parse-datum (cadr args))])
+                 (cond [(prologos-error? v) v]
+                       [(prologos-error? e) e]
+                       [else (surf-is v e loc)])))]
+          [else
+           ;; 'is' is not a functional keyword — treat as application
+           (parse-application head-stx args loc)])]
+
+       ;; (not goal) — negation-as-failure in relational context
+       [(not)
+        (cond
+          [(current-parsing-relational-goal?)
+           (or (check-arity 'not args 1 loc)
+               (let ([g (parse-relational-goal (car args))])
+                 (if (prologos-error? g) g
+                     (surf-not g loc))))]
+          [else
+           ;; 'not' is not a functional keyword — treat as application
+           (parse-application head-stx args loc)])]
+
+       ;; Type constructors — bare atoms
+       [(Solver) (surf-solver-type loc)]
+       [(Goal) (surf-goal-type loc)]
+       [(DerivationTree) (surf-derivation-type loc)]
+       [(Answer)
+        (if (null? args)
+            (surf-answer-type #f loc)
+            (let ([a (parse-datum (car args))])
+              (if (prologos-error? a) a
+                  (surf-answer-type a loc))))]
+
        ;; (the-fn type [params...] body)
        [(the-fn)
         (parse-the-fn args loc)]
@@ -2545,9 +2670,12 @@
             (let ([e (parse-datum (car args))])
               (if (prologos-error? e) e (surf-elaborate e loc))))]
 
-       ;; Not a keyword -> function application
+       ;; Not a keyword -> function application or relational goal
        [else
-        (parse-application head-stx args loc)])]
+        (if (current-parsing-relational-goal?)
+            ;; In relational context: non-keyword head = goal application
+            (parse-goal-application head args loc)
+            (parse-application head-stx args loc))])]
 
     ;; Head is not a symbol -> application of a compound expression
     [else
@@ -2562,6 +2690,21 @@
       (let ([parsed-args (parse-all-args arg-stxs)])
         (if (prologos-error? parsed-args) parsed-args
             (surf-app func parsed-args loc)))))
+
+;; ========================================
+;; Parse relational goal application: (name arg ...) -> surf-goal-app
+;; ========================================
+;; In relational context, a parenthesized form with a non-keyword symbol head
+;; is a goal application. The head is the relation name (symbol), and args
+;; are parsed in relational context (they may contain logic variables).
+(define (parse-goal-application name arg-stxs loc)
+  (define parsed-args
+    (for/list ([a (in-list arg-stxs)])
+      (parse-relational-goal a)))
+  (define err (for/or ([p (in-list parsed-args)])
+                (and (prologos-error? p) p)))
+  (if err err
+      (surf-goal-app name parsed-args loc)))
 
 (define (parse-all-args stxs)
   (if (null? stxs) '()
@@ -3531,6 +3674,338 @@
      (parse-datum (datum->syntax #f (if (not (equal? expanded datums))
                                         expanded
                                         datums)))]))
+
+;; ========================================
+;; Parse solve-with / explain-with (Phase 7)
+;; ========================================
+
+;; (solve-with solver (goal))
+;; (solve-with solver {overrides} (goal))
+;; (solve-with {overrides} (goal))
+(define (parse-solve-with args loc)
+  (cond
+    [(< (length args) 2)
+     (prologos-error loc "solve-with requires at least 2 arguments (solver/overrides and goal)")]
+    ;; 3 args: solver {overrides} (goal)
+    [(and (= (length args) 3)
+          (not (brace-params? (car args)))
+          (brace-params? (cadr args)))
+     (let ([s (parse-datum (car args))]
+           [o (parse-datum (cadr args))]
+           [g (parse-relational-goal (caddr args))])
+       (cond
+         [(prologos-error? s) s]
+         [(prologos-error? o) o]
+         [(prologos-error? g) g]
+         [else (surf-solve-with s o g loc)]))]
+    ;; 2 args: {overrides} (goal) — merge into default-solver
+    [(and (= (length args) 2)
+          (brace-params? (car args)))
+     (let ([o (parse-datum (car args))]
+           [g (parse-relational-goal (cadr args))])
+       (cond
+         [(prologos-error? o) o]
+         [(prologos-error? g) g]
+         [else (surf-solve-with #f o g loc)]))]
+    ;; 2 args: solver (goal) — named solver, no overrides
+    [(= (length args) 2)
+     (let ([s (parse-datum (car args))]
+           [g (parse-relational-goal (cadr args))])
+       (cond
+         [(prologos-error? s) s]
+         [(prologos-error? g) g]
+         [else (surf-solve-with s #f g loc)]))]
+    [else
+     (prologos-error loc "solve-with: expected 2-3 arguments, got ~a" (length args))]))
+
+;; (explain-with ...) — same arity patterns as solve-with
+(define (parse-explain-with args loc)
+  (cond
+    [(< (length args) 2)
+     (prologos-error loc "explain-with requires at least 2 arguments")]
+    ;; 3 args: solver {overrides} (goal)
+    [(and (= (length args) 3)
+          (not (brace-params? (car args)))
+          (brace-params? (cadr args)))
+     (let ([s (parse-datum (car args))]
+           [o (parse-datum (cadr args))]
+           [g (parse-relational-goal (caddr args))])
+       (cond
+         [(prologos-error? s) s]
+         [(prologos-error? o) o]
+         [(prologos-error? g) g]
+         [else (surf-explain-with s o g loc)]))]
+    ;; 2 args: {overrides} (goal)
+    [(and (= (length args) 2)
+          (brace-params? (car args)))
+     (let ([o (parse-datum (car args))]
+           [g (parse-relational-goal (cadr args))])
+       (cond
+         [(prologos-error? o) o]
+         [(prologos-error? g) g]
+         [else (surf-explain-with #f o g loc)]))]
+    ;; 2 args: solver (goal)
+    [(= (length args) 2)
+     (let ([s (parse-datum (car args))]
+           [g (parse-relational-goal (cadr args))])
+       (cond
+         [(prologos-error? s) s]
+         [(prologos-error? g) g]
+         [else (surf-explain-with s #f g loc)]))]
+    [else
+     (prologos-error loc "explain-with: expected 2-3 arguments, got ~a" (length args))]))
+
+;; ========================================
+;; Parse defr: (defr name [params] body...)
+;; ========================================
+
+;; Helper: extract mode annotation from a parameter symbol.
+;; ?name → (name . free), +name → (name . in), -name → (name . out), name → (name . #f)
+(define (extract-mode-annotation sym)
+  (define s (symbol->string sym))
+  (cond
+    [(and (> (string-length s) 1) (char=? (string-ref s 0) #\?))
+     (cons (string->symbol (substring s 1)) 'free)]
+    [(and (> (string-length s) 1) (char=? (string-ref s 0) #\+))
+     (cons (string->symbol (substring s 1)) 'in)]
+    [(and (> (string-length s) 1) (char=? (string-ref s 0) #\-))
+     (cons (string->symbol (substring s 1)) 'out)]
+    [else
+     (cons sym #f)]))
+
+;; Parse relational params: a bracket-delimited list of possibly mode-annotated names.
+;; Returns list of (name . mode) pairs.
+(define (parse-rel-params params-stx loc)
+  (define parts
+    (let ([d (if (syntax? params-stx) (syntax->list params-stx) #f)])
+      (or d
+          (let ([d2 (stx->datum params-stx)])
+            (if (list? d2) d2 #f)))))
+  (cond
+    [(not parts)
+     (prologos-error loc "defr: expected parameter list [?x ?y ...]")]
+    [else
+     (for/list ([p (in-list parts)])
+       (define sym (if (syntax? p) (syntax-e p) p))
+       (cond
+         [(symbol? sym)
+          (extract-mode-annotation sym)]
+         [else
+          (prologos-error loc (format "defr: expected symbol in params, got ~a" sym))]))]))
+
+;; Parse the body portion of a defr variant.
+;; Body is a flat list of tokens that may contain $facts-sep and $clause-sep sentinels.
+;;
+;; Two modes:
+;; - Sexp mode: sentinels are flat tokens in the list:
+;;     body-tokens = [$facts-sep "alice" "bob"]  or  [$clause-sep (parent x y)]
+;; - WS mode: sentinels head sublists (each &>/|| line is its own sublist):
+;;     body-tokens = [($facts-sep "alice" "bob") ($facts-sep "bob" "carol")]
+;;     body-tokens = [($clause-sep (parent x y)) ($clause-sep (parent x z) (ancestor z y))]
+;;
+;; Returns a list of surf-clause or surf-facts nodes (the variant body).
+(define (parse-defr-body body-tokens loc)
+  (cond
+    [(null? body-tokens) '()]
+    [else
+     ;; Helper: detect sentinel kind from a datum.
+     ;; Returns 'facts | 'clause | #f
+     (define (sentinel-kind-of d)
+       (cond
+         [(eq? d '$facts-sep) 'facts]
+         [(eq? d '$clause-sep) 'clause]
+         [else #f]))
+
+     ;; Helper: detect sentinel from a wrapped WS-mode sublist.
+     ;; d is the datum of a body-token; if it's a pair whose car is a sentinel, return the kind.
+     (define (wrapped-sentinel-kind d)
+       (and (pair? d)
+            (sentinel-kind-of
+             (let ([h (car d)]) (if (syntax? h) (syntax-e h) h)))))
+
+     (define first-d (stx->datum (car body-tokens)))
+     (define first-flat-kind (sentinel-kind-of first-d))
+     (define first-wrapped-kind (wrapped-sentinel-kind first-d))
+
+     (cond
+       ;; === WS mode: wrapped sentinels ($sentinel args...) ===
+       ;; Each body-token is a sublist headed by $facts-sep or $clause-sep.
+       [first-wrapped-kind
+        (define results
+          (for/list ([tok (in-list body-tokens)])
+            (define d (stx->datum tok))
+            (define kind (wrapped-sentinel-kind d))
+            (cond
+              [(eq? kind 'facts)
+               ;; Content after sentinel head. In WS mode, continuation rows
+               ;; at deeper indentation become nested sublists within the $facts-sep.
+               ;; Flat terms = first row, nested pairs = subsequent rows.
+               ;; Note: $nat-literal, $decimal-literal, $approx-literal wrapped terms
+               ;; are pairs but are single terms, not nested rows.
+               (define content (cdr d))  ;; list of syntax objects
+               (define (term-sentinel? s)
+                 (define sd (stx->datum s))
+                 (and (pair? sd)
+                      (let ([h (if (syntax? (car sd)) (syntax-e (car sd)) (car sd))])
+                        (memq h '($nat-literal $decimal-literal $approx-literal)))))
+               (define-values (flat-terms nested-rows)
+                 (partition (lambda (s)
+                              (or (not (pair? (stx->datum s)))
+                                  (term-sentinel? s)))
+                            content))
+               (define first-row
+                 (if (null? flat-terms) '()
+                     (list (surf-fact-row (map parse-datum flat-terms) loc))))
+               (define other-rows
+                 (for/list ([nr (in-list nested-rows)])
+                   (define items
+                     (if (syntax? nr) (or (syntax->list nr) (list nr))
+                         (let ([nd (stx->datum nr)])
+                           (if (list? nd) nd (list nr)))))
+                   (surf-fact-row (map parse-datum items) loc)))
+               (surf-facts (append first-row other-rows) loc)]
+              [(eq? kind 'clause)
+               (define content (cdr d))
+               (define parsed-goals (map parse-relational-goal content))
+               (define err (for/or ([p (in-list parsed-goals)])
+                             (and (prologos-error? p) p)))
+               (if err err
+                   (surf-clause parsed-goals loc))]
+              [else
+               ;; Non-sentinel body token — treat as bare goal
+               (define parsed (parse-relational-goal tok))
+               (if (prologos-error? parsed) parsed
+                   (surf-clause (list parsed) loc))])))
+        ;; Check for first error
+        (define err (for/or ([r (in-list results)])
+                      (and (prologos-error? r) r)))
+        (if err (list err) results)]
+
+       ;; === Sexp mode: flat sentinel tokens (original logic) ===
+
+       ;; || fact-block: ground data rows
+       [(eq? first-flat-kind 'facts)
+        (define fact-data (cdr body-tokens))
+        ;; Group facts into rows based on the relation arity.
+        ;; For now, parse all remaining tokens as a flat fact list.
+        ;; The elaborator will group by arity.
+        (define parsed-terms
+          (for/list ([t (in-list fact-data)])
+            (parse-datum t)))
+        (define err (for/or ([p (in-list parsed-terms)])
+                      (and (prologos-error? p) p)))
+        (if err err
+            (list (surf-facts (list (surf-fact-row parsed-terms loc)) loc)))]
+
+       ;; &> clause: rule goals
+       [(eq? first-flat-kind 'clause)
+        (define goal-data (cdr body-tokens))
+        (define parsed-goals
+          (for/list ([g (in-list goal-data)])
+            (parse-relational-goal g)))
+        (define err (for/or ([p (in-list parsed-goals)])
+                      (and (prologos-error? p) p)))
+        (if err err
+            (list (surf-clause parsed-goals loc)))]
+
+       ;; No sentinel — treat as bare goals (implicit &>)
+       [else
+        (define parsed-goals
+          (for/list ([g (in-list body-tokens)])
+            (parse-relational-goal g)))
+        (define err (for/or ([p (in-list parsed-goals)])
+                      (and (prologos-error? p) p)))
+        (if err err
+            (list (surf-clause parsed-goals loc)))])]))
+
+;; (defr name [params] body...)  — single-arity
+;; (defr name | [params1] body1 | [params2] body2 ...)  — multi-arity (via $pipe)
+(define (parse-defr args loc)
+  (cond
+    [(< (length args) 2)
+     (prologos-error loc "defr requires at least: (defr name [params] body...)")]
+    [else
+     (define name (stx->datum (car args)))
+     (unless (symbol? name)
+       (prologos-error loc (format "defr: expected name, got ~a" name)))
+     (define rest (cdr args))
+     ;; Check for multi-arity: rest contains $pipe children
+     (define has-pipes?
+       (ormap (lambda (a)
+                (let ([d (stx->datum a)])
+                  (and (pair? d)
+                       (eq? (let ([h (car d)])
+                              (if (syntax? h) (syntax-e h) h))
+                            '$pipe))))
+              rest))
+     (cond
+       [has-pipes?
+        ;; Multi-arity: each $pipe child is ($pipe params body...)
+        (define variants
+          (for/list ([clause-stx (in-list rest)]
+                     #:when (let ([d (stx->datum clause-stx)])
+                              (and (pair? d)
+                                   (eq? (let ([h (car d)])
+                                          (if (syntax? h) (syntax-e h) h))
+                                        '$pipe))))
+            (define clause-datum
+              (let ([d (stx->datum clause-stx)])
+                (if (pair? d) (cdr d) '())))  ;; strip $pipe head
+            (define clause-elems
+              (if (null? clause-datum) '()
+                  (map (lambda (x) (if (syntax? x) x (datum->syntax #f x)))
+                       clause-datum)))
+            (cond
+              [(null? clause-elems)
+               (prologos-error loc "defr: empty variant")]
+              [else
+               (define params-stx (car clause-elems))
+               (define body-tokens (cdr clause-elems))
+               (define params (parse-rel-params params-stx loc))
+               (cond
+                 [(and (list? params) (ormap prologos-error? params))
+                  (findf prologos-error? params)]
+                 [(prologos-error? params) params]
+                 [else
+                  (define body (parse-defr-body body-tokens loc))
+                  (if (prologos-error? body) body
+                      (surf-defr-variant params body loc))])])))
+        (define err (for/or ([v (in-list variants)])
+                      (and (prologos-error? v) v)))
+        (if err err
+            (surf-defr name #f variants loc))]
+
+       ;; Single-arity: (defr name [params] body...)
+       [else
+        (define params-stx (car rest))
+        (define body-tokens (cdr rest))
+        (define params (parse-rel-params params-stx loc))
+        (cond
+          [(and (list? params) (ormap prologos-error? params))
+           (findf prologos-error? params)]
+          [(prologos-error? params) params]
+          [else
+           (define body (parse-defr-body body-tokens loc))
+           (if (prologos-error? body) body
+               (surf-defr name #f (list (surf-defr-variant params body loc)) loc))])])]))
+
+;; (rel [params] body...) — anonymous relation
+(define (parse-rel args loc)
+  (cond
+    [(< (length args) 1)
+     (prologos-error loc "rel requires at least: (rel [params] body...)")]
+    [else
+     (define params-stx (car args))
+     (define body-tokens (cdr args))
+     (define params (parse-rel-params params-stx loc))
+     (cond
+       [(and (list? params) (ormap prologos-error? params))
+        (findf prologos-error? params)]
+       [(prologos-error? params) params]
+       [else
+        (define body (parse-defr-body body-tokens loc))
+        (if (prologos-error? body) body
+            (surf-rel params body loc))])]))
 
 ;; ========================================
 ;; Parse the-fn: (the-fn type [params...] body)

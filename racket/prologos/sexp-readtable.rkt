@@ -396,6 +396,10 @@
      (read-char port) ; consume >
      (define end-pos (file-position port))
      (datum->syntax #f '$pipe-gt (list src line col pos (- end-pos pos)))]
+    ;; || — facts separator (Phase 7)
+    [(and (char? next) (char=? next #\|))
+     (read-char port) ; consume second |
+     (datum->syntax #f '$facts-sep (list src line col pos 2))]
     ;; | — pipe sentinel (union type separator / match arm)
     [else
      (datum->syntax #f '$pipe (list src line col pos 1))]))
@@ -549,6 +553,24 @@
   (define stx (read-hash-dispatch-syntax ch port "<unknown>" #f #f (file-position port)))
   (if (syntax? stx) (syntax->datum stx) stx))
 
+;; ========================================
+;; Ampersand reader: &> → $clause-sep (Phase 7)
+;; ========================================
+(define (read-ampersand-syntax ch port src line col pos)
+  (define next (peek-char port))
+  (cond
+    ;; &> — clause separator
+    [(and (char? next) (char=? next #\>))
+     (read-char port) ; consume >
+     (datum->syntax #f '$clause-sep (list src line col pos 2))]
+    [else
+     (error 'prologos-reader "~a:~a:~a: Unexpected & — use &> for rule clauses"
+            src (or line 0) (or col 0))]))
+
+(define (read-ampersand-datum ch port)
+  (define stx (read-ampersand-syntax ch port "<unknown>" #f #f (file-position port)))
+  (if (syntax? stx) (syntax->datum stx) stx))
+
 (define prologos-readtable
   (make-readtable (current-readtable)
     #\< 'terminating-macro read-angle-bracket-syntax
@@ -558,6 +580,7 @@
     #\~ 'terminating-macro read-tilde-syntax
     #\@ 'terminating-macro read-at-bracket-syntax
     #\| 'terminating-macro read-pipe-syntax
+    #\& 'terminating-macro read-ampersand-syntax
     #\# 'terminating-macro read-hash-dispatch-syntax
     #\` 'terminating-macro read-backtick-syntax))
 

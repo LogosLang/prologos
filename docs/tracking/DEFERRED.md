@@ -9,7 +9,7 @@ blocked on unbuilt infrastructure or uncertain design — not effort avoidance.
 See `docs/tracking/principles/DEVELOPMENT_LESSONS.org` § "Completeness Over
 Deferral".
 
-**Last consolidated sweep**: 2026-02-24 (Logic Engine Phases 1-3 complete; PropNetwork as first-class Prologos type; extended spec hardening complete).
+**Last consolidated sweep**: 2026-02-25 (Logic Engine Phases 1-7 complete; Relational language surface syntax; full 14-file pipeline).
 
 ---
 
@@ -308,23 +308,24 @@ The following collection items ARE also deferred (genuine infrastructure deps):
 - `:tabled` and `:answer-mode` spec metadata — deferred to Phase 7 (`defr`)
 - Source: `docs/tracking/2026-02-24_LOGIC_ENGINE_DESIGN.org`
 
-### Phase 7: Surface Syntax — defr, rel, solve (NOT STARTED)
+### Phase 7: Surface Syntax — defr, rel, solve (COMPLETE)
 - `defr` / `rel` keywords (named and anonymous relations)
-- `&>` clause separator, `?var` logic variables
-- `solve` / `solve-with` bridge to functional world
-- Mode prefixes: `?` (free), `-` (in), `+` (out)
-- Tabling by default for all `defr` relations
-- Grammar updates (EBNF + prose)
-- ~15 AST nodes
-- **Dependencies**: All previous phases
-- Source: `docs/tracking/2026-02-24_LOGIC_ENGINE_DESIGN.org`,
-  `docs/tracking/principles/RELATIONAL_LANGUAGE_VISION.org`
+- `&>` clause separator, `||` fact sentinel, `?var` logic variables
+- `solve` / `solve-with` / `explain` / `explain-with` bridge to functional world
+- Mode prefixes: `?` (free), `+` (input), `-` (output)
+- 26 AST nodes through full 14-file pipeline
+- Stratification module (Tarjan SCC + stratify)
+- Provenance module (answer records + derivation trees)
+- Grammar updates (EBNF §5.28 + prose)
+- 140+ Phase 7-specific tests
+- **Completed**: 2026-02-25
 
 ### Post-Phase 7: Stratified Evaluation (NOT STARTED)
 - SCC decomposition of rule dependency graphs
 - Stratum-by-stratum evaluation
 - Full negation-as-failure between strata
 - Lattice aggregation (count, min, max, sum) between strata
+- **Note**: `stratify.rkt` infrastructure (Tarjan SCC) built in Phase 7a
 - Source: `docs/tracking/2026-02-24_TOWARDS_A_GENERAL_LOGIC_ENGINE_ON_PROPAGATORS.org`
 
 ### Post-Phase 7: Galois Connections + Domain Embeddings (NOT STARTED)

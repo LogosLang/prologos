@@ -376,7 +376,7 @@
                  "~a:~a:~a: Unexpected @ — use @[...] for PVec literals"
                  (tokenizer-source tok) ln (+ cl 1))])]
 
-      ;; Pipe — reduce arm separator, or |> pipe operator
+      ;; Pipe — reduce arm separator, |> pipe operator, or || fact-block separator
       [(char=? c #\|)
        (tok-read! tok)
        (define next (tok-peek tok))
@@ -384,6 +384,9 @@
          [(and (char? next) (char=? next #\>))
           (tok-read! tok)  ; consume >
           (token 'symbol '$pipe-gt ln cl ps 2)]
+         [(and (char? next) (char=? next #\|))
+          (tok-read! tok)  ; consume second |
+          (token 'symbol '$facts-sep ln cl ps 2)]
          [else
           (token 'symbol '$pipe ln cl ps 1)])]
 
@@ -558,6 +561,19 @@
           (let ([rest (read-ident-rest! tok)])
             (token 'symbol (string->symbol (string-append "?" rest)) ln cl ps
                    (+ 1 (string-length rest))))])]
+
+      ;; Ampersand-greater-than — clause separator &>
+      [(char=? c #\&)
+       (tok-read! tok)
+       (define next (tok-peek tok))
+       (cond
+         [(and (char? next) (char=? next #\>))
+          (tok-read! tok)  ; consume >
+          (token 'symbol '$clause-sep ln cl ps 2)]
+         [else
+          (error 'prologos-reader
+                 "~a:~a:~a: Unexpected & — use &> for rule clauses"
+                 (tokenizer-source tok) ln (+ cl 1))])]
 
       ;; Identifier
       [(ident-start? c)

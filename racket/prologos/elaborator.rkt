@@ -27,6 +27,8 @@
 
 (provide elaborate
          elaborate-top-level
+         ;; Relational scoping (Phase 7)
+         current-relational-env
          ;; Phase D: method name resolution in bodies
          where-method-entry
          where-method-entry?
@@ -49,6 +51,19 @@
          method-reverse-index-entry-method-name
          method-reverse-index-entry-accessor-name
          method-reverse-index-entry-trait-params)
+
+;; ========================================
+;; Relational scoping context
+;; ========================================
+;; When inside a defr variant or solve/explain goal, logic variables from
+;; the param list are in scope. They resolve to expr-logic-var nodes, not
+;; de Bruijn bvars. This parameter holds a hasheq: symbol → expr-logic-var.
+(define current-relational-env (make-parameter #f))
+
+;; When #t, unresolved variables in relational context become free logic
+;; variables (expr-logic-var with mode 'free) instead of "Unbound variable"
+;; errors. Used by solve/explain to allow query variables.
+(define current-relational-fallback? (make-parameter #f))
 
 ;; ========================================
 ;; Elaboration environment
@@ -567,6 +582,10 @@
   (let ([idx (env-lookup env name depth)])
     (cond
       [idx (expr-bvar idx)]
+      ;; Relational context: logic variable from defr params or solve query
+      [(and (current-relational-env)
+            (hash-ref (current-relational-env) name #f))
+       => (lambda (lv) lv)]
       ;; Own-namespace definition takes priority over imports (including prelude).
       ;; This ensures `def map ...` in `ns foo` resolves to `foo::map`, not the
       ;; prelude's `prologos::data::list::map`.
@@ -613,6 +632,9 @@
       [(and (current-infer-constraints-mode?)
             (try-infer-constraint-from-method name loc env depth))
        => (lambda (resolved) resolved)]
+      ;; Relational fallback: unresolved names in solve/explain become free logic vars
+      [(current-relational-fallback?)
+       (expr-logic-var name 'free)]
       [else (unbound-variable-error loc "Unbound variable" name)])))
 
 ;; elaborate: surface-expr, env, depth -> (or/c expr? prologos-error?)
@@ -2168,6 +2190,144 @@
              [(prologos-error? ea) ea]
              [else (expr-table-lookup es en ea)]))]
 
+    ;; ---- Relational language (Phase 7) ----
+
+    ;; Type constructors — no sub-expressions to elaborate
+    [(surf-solver-type loc)
+     (expr-solver-type)]
+
+    [(surf-goal-type loc)
+     (expr-goal-type)]
+
+    [(surf-derivation-type loc)
+     (expr-derivation-type)]
+
+    [(surf-answer-type val-type loc)
+     (if val-type
+         (let ([ev (elaborate val-type env depth)])
+           (if (prologos-error? ev) ev
+               (expr-answer-type ev)))
+         (expr-answer-type #f))]
+
+    ;; defr — named relation definition
+    ;; At expression level, elaborate variants into expr-defr
+    [(surf-defr name schema variants loc)
+     (let ([es (and schema (elaborate schema env depth))])
+       (cond
+         [(and es (prologos-error? es)) es]
+         [else
+          (define elab-variants
+            (for/list ([v (in-list variants)])
+              (elaborate-defr-variant v env depth)))
+          (define first-err (findf prologos-error? elab-variants))
+          (if first-err first-err
+              (expr-defr name (or es #f) elab-variants))]))]
+
+    ;; rel — anonymous relation
+    [(surf-rel params clauses loc)
+     (let ([elab-clauses
+            (for/list ([c (in-list clauses)])
+              (elaborate c env depth))])
+       (define first-err (findf prologos-error? elab-clauses))
+       (if first-err first-err
+           (expr-rel params elab-clauses)))]
+
+    ;; clause — rule clause (&> goals...)
+    [(surf-clause goals loc)
+     (let ([elab-goals
+            (for/list ([g (in-list goals)])
+              (elaborate g env depth))])
+       (define first-err (findf prologos-error? elab-goals))
+       (if first-err first-err
+           (expr-clause elab-goals)))]
+
+    ;; facts — ground fact block (|| rows...)
+    [(surf-facts rows loc)
+     (let ([elab-rows
+            (for/list ([r (in-list rows)])
+              (elaborate r env depth))])
+       (define first-err (findf prologos-error? elab-rows))
+       (if first-err first-err
+           (expr-fact-block elab-rows)))]
+
+    ;; fact-row — single fact row
+    [(surf-fact-row terms loc)
+     (let ([elab-terms
+            (for/list ([t (in-list terms)])
+              (elaborate t env depth))])
+       (define first-err (findf prologos-error? elab-terms))
+       (if first-err first-err
+           (expr-fact-row elab-terms)))]
+
+    ;; goal-app — relational goal application (name args...)
+    [(surf-goal-app name args loc)
+     (let ([elab-args
+            (for/list ([a (in-list args)])
+              (elaborate a env depth))])
+       (define first-err (findf prologos-error? elab-args))
+       (if first-err first-err
+           (expr-goal-app name elab-args)))]
+
+    ;; unify — unification goal (= lhs rhs)
+    [(surf-unify lhs rhs loc)
+     (let ([el (elaborate lhs env depth)]
+           [er (elaborate rhs env depth)])
+       (cond [(prologos-error? el) el]
+             [(prologos-error? er) er]
+             [else (expr-unify-goal el er)]))]
+
+    ;; is — functional eval (is var [expr])
+    [(surf-is var expr loc)
+     (let ([ev (elaborate var env depth)]
+           [ee (elaborate expr env depth)])
+       (cond [(prologos-error? ev) ev]
+             [(prologos-error? ee) ee]
+             [else (expr-is-goal ev ee)]))]
+
+    ;; not — negation-as-failure
+    [(surf-not goal loc)
+     (let ([eg (elaborate goal env depth)])
+       (if (prologos-error? eg) eg
+           (expr-not-goal eg)))]
+
+    ;; solve — bare solve
+    ;; Goal is elaborated in relational-fallback mode: unresolved names become
+    ;; free query variables (expr-logic-var with mode 'free).
+    [(surf-solve goal loc)
+     (let ([eg (parameterize ([current-relational-fallback? #t])
+                 (elaborate goal env depth))])
+       (if (prologos-error? eg) eg
+           (expr-solve eg)))]
+
+    ;; solve-with — parameterized solve
+    [(surf-solve-with solver overrides goal loc)
+     (let ([es (elaborate solver env depth)]
+           [eo (and overrides (elaborate overrides env depth))]
+           [eg (parameterize ([current-relational-fallback? #t])
+                 (elaborate goal env depth))])
+       (cond [(prologos-error? es) es]
+             [(and eo (prologos-error? eo)) eo]
+             [(prologos-error? eg) eg]
+             [else (expr-solve-with es (or eo #f) eg)]))]
+
+    ;; explain — bare explain
+    [(surf-explain goal loc)
+     (let ([eg (parameterize ([current-relational-fallback? #t])
+                 (elaborate goal env depth))])
+       (if (prologos-error? eg) eg
+           (expr-explain eg)))]
+
+    ;; explain-with — parameterized explain
+    [(surf-explain-with solver overrides goal loc)
+     (let ([es (elaborate solver env depth)]
+           [eo (and overrides (elaborate overrides env depth))]
+           [eg (parameterize ([current-relational-fallback? #t])
+                 (elaborate goal env depth))])
+       (cond [(prologos-error? es) es]
+             [(and eo (prologos-error? eo)) eo]
+             [(prologos-error? eg) eg]
+             [else (expr-explain-with es (or eo #f) eg)]))]
+
     ;; Reduce: ML-style pattern matching
     ;; Each arm's body must be elaborated with binding names in scope.
     ;; We add dummy binders (the actual types come from the type checker).
@@ -2375,6 +2535,32 @@
   (if (= n 0) (lzero) (lsuc (nat->level (- n 1)))))
 
 ;; ========================================
+;; Elaborate a defr variant (Phase 7)
+;; ========================================
+;; Each variant has params (list of (name . mode) pairs) and body (list of clauses/facts).
+;; The params are symbolic (not expressions), so we pass them through.
+;; The body elements need elaboration in a relational env where param names
+;; resolve to expr-logic-var nodes (not de Bruijn bvars).
+(define (elaborate-defr-variant v env depth)
+  (match v
+    [(surf-defr-variant params body loc)
+     ;; Build relational env from params: name → expr-logic-var
+     (define rel-env
+       (for/hasheq ([p (in-list params)])
+         (define name (car p))
+         (define mode (or (cdr p) 'free))
+         (values name (expr-logic-var name mode))))
+     (let ([elab-body
+            (parameterize ([current-relational-env rel-env]
+                           [current-relational-fallback? #t])
+              (for/list ([b (in-list body)])
+                (elaborate b env depth)))])
+       (define first-err (findf prologos-error? elab-body))
+       (if first-err first-err
+           (expr-defr-variant params elab-body)))]
+    [_ (prologos-error srcloc-unknown (format "Invalid defr variant: ~a" v))]))
+
+;; ========================================
 ;; Elaborate top-level commands
 ;; Returns the surface command + elaborated expressions,
 ;; or a prologos-error
@@ -2435,6 +2621,13 @@
      (let ([e (elaborate expr-surf)])
        (if (prologos-error? e) e
            (list 'elaborate e)))]
+
+    ;; defr — named relation definition (Phase 7)
+    ;; Elaborate to (list 'defr name expr-defr-node) for driver processing
+    [(surf-defr name schema variants loc)
+     (let ([elab (elaborate surf)])
+       (if (prologos-error? elab) elab
+           (list 'defr name elab)))]
 
     [(surf-defn name _ _ _ loc)
      (prologos-error loc "defn should have been expanded by the macro system before elaboration")]

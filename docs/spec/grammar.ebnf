@@ -964,6 +964,65 @@ datum-preds     = 'sym?' , expr
                 | 'cons?' , expr
                 ;
 
+(* ------------------------------------------------ *)
+(* 5.28 Relational Language (Logic Programming)     *)
+(* ------------------------------------------------ *)
+
+(* Relation definition — named, single or multi-arity *)
+relation-def    = '(' , 'defr' , identifier , rel-variants , ')' ;
+rel-variants    = single-arity | multi-arity ;
+single-arity    = '[' , rel-params , ']' , clause-body ;
+multi-arity     = { '|' , '[' , rel-params , ']' , clause-body } ;
+
+(* Anonymous relation *)
+anon-relation   = '(' , 'rel' , '[' , rel-params , ']' , clause-body , ')' ;
+
+(* Relation parameters with optional mode annotations *)
+rel-params      = { mode-param } ;
+mode-param      = '?' , identifier           (* free logic variable *)
+                | '+' , identifier           (* input mode *)
+                | '-' , identifier           (* output mode *)
+                | identifier                 (* no mode annotation *)
+                ;
+
+(* Clause body: goals separated by sentinels *)
+clause-body     = '&>' , { goal }            (* rule clause: head :- goals *)
+                | '||' , { fact-row }        (* fact block: ground data *)
+                | { goal }                   (* bare goals: implicit clause *)
+                ;
+
+fact-row        = expr , { expr } ;          (* row of ground terms *)
+
+(* Goals *)
+goal            = '(' , identifier , { expr } , ')'   (* relational goal application *)
+                | '(' , '=' , expr , expr , ')'        (* unification goal *)
+                | '(' , 'is' , identifier , expr , ')' (* functional eval in relational context *)
+                | '(' , 'not' , goal , ')'             (* negation-as-failure *)
+                ;
+
+(* Solve / Explain *)
+solve-expr      = '(' , 'solve' , goal , ')'
+                | '(' , 'solve-one' , goal , ')'
+                | '(' , 'solve-with' , solve-args , ')'
+                | '(' , 'explain' , goal , ')'
+                | '(' , 'explain-with' , explain-args , ')'
+                ;
+
+solve-args      = identifier , goal                       (* solver name + goal *)
+                | identifier , '{' , overrides , '}' , goal  (* solver + overrides + goal *)
+                ;
+explain-args    = identifier , goal
+                | identifier , '{' , overrides , '}' , goal
+                ;
+overrides       = { ':' , identifier , expr } ;           (* keyword-value pairs *)
+
+(* Solver / Schema definitions (pre-expanded by macros) *)
+solver-def      = '(' , 'solver' , identifier , { ':' , identifier , expr } , ')' ;
+schema-def      = '(' , 'schema' , identifier , { ':' , identifier , type-expr } , ')' ;
+
+(* Type constructors *)
+rel-type-atom   = 'Solver' | 'Goal' | 'DerivationTree' | 'Answer' ;
+
 
 (* ================================================================== *)
 (* 6. SESSION TYPES (Process Calculus)                                 *)
@@ -1092,7 +1151,9 @@ sexp-let-binding = '(' , identifier , [ ':' , type-expr ] , expr , ')' ;
 
    |>   →  ($pipe-gt ...)     pipe left-to-right
    >>   →  ($compose ...)     compose left-to-right
-   |    →  ($pipe ...)        in match: arm separator
+   |    →  ($pipe ...)        in match/defn/defr: arm separator
+   ||   →  $facts-sep         in defr/rel: fact block sentinel
+   &>   →  $clause-sep        in defr/rel: rule clause sentinel
    :=   →  ($assign ...)      in def: shorthand binding
 
    Block-form |> with indented steps:

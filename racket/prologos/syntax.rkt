@@ -189,6 +189,16 @@
  (struct-out expr-table-add) (struct-out expr-table-answers)
  (struct-out expr-table-freeze) (struct-out expr-table-complete)
  (struct-out expr-table-run) (struct-out expr-table-lookup)
+ ;; Relational language (Phase 7)
+ (struct-out expr-defr) (struct-out expr-defr-variant)
+ (struct-out expr-rel) (struct-out expr-clause) (struct-out expr-fact-block) (struct-out expr-fact-row)
+ (struct-out expr-goal-app) (struct-out expr-logic-var) (struct-out expr-unify-goal) (struct-out expr-is-goal) (struct-out expr-not-goal)
+ (struct-out expr-relation-type) (struct-out expr-schema) (struct-out expr-schema-type)
+ (struct-out expr-solve) (struct-out expr-solve-with) (struct-out expr-solve-one) (struct-out expr-goal-type)
+ (struct-out expr-explain) (struct-out expr-explain-with)
+ (struct-out expr-solver-config) (struct-out expr-solver-type)
+ (struct-out expr-answer-type) (struct-out expr-derivation-type)
+ (struct-out expr-cut) (struct-out expr-guard)
  ;; Int (arbitrary-precision integers)
  (struct-out expr-Int)
  (struct-out expr-int)
@@ -710,6 +720,40 @@
 (struct expr-table-run (store) #:transparent)                             ; TableStore -> TableStore
 (struct expr-table-lookup (store name answer) #:transparent)              ; TableStore -> Keyword -> A -> Bool
 
+;; ---- Relational language (Phase 7) ----
+;; Relational core (14)
+(struct expr-defr (name schema variants) #:transparent)         ; (defr name schema [variants...])
+(struct expr-defr-variant (params body) #:transparent)          ; single arity/pattern variant
+(struct expr-rel (params clauses) #:transparent)                ; anonymous relation
+(struct expr-clause (goals) #:transparent)                      ; single rule clause (&> ...)
+(struct expr-fact-block (rows) #:transparent)                   ; ground fact block (|| ...)
+(struct expr-fact-row (terms) #:transparent)                    ; single fact row
+(struct expr-goal-app (name args) #:transparent)                ; relational goal application
+(struct expr-logic-var (name mode) #:transparent)               ; logic variable (signature)
+(struct expr-unify-goal (lhs rhs) #:transparent)                ; unification goal (= x y)
+(struct expr-is-goal (var expr) #:transparent)                  ; functional eval (is x [expr])
+(struct expr-not-goal (goal) #:transparent)                     ; negation-as-failure
+(struct expr-relation-type (param-types) #:transparent)         ; type of a relation
+(struct expr-schema (name fields) #:transparent)                ; named closed validated map
+(struct expr-schema-type (name) #:transparent)                  ; type constructor for schema
+;; Solve family (4)
+(struct expr-solve (goal) #:transparent)                        ; → Seq (Map Keyword Value)
+(struct expr-solve-with (solver overrides goal) #:transparent)  ; parameterized solve
+(struct expr-solve-one (goal) #:transparent)                    ; → Option (Map Keyword Value)
+(struct expr-goal-type () #:transparent)                        ; type of a goal (Prop)
+;; Explain family (2)
+(struct expr-explain (goal) #:transparent)                      ; → Seq (Answer Value)
+(struct expr-explain-with (solver overrides goal) #:transparent) ; parameterized explain
+;; Solver config (2)
+(struct expr-solver-config (config-map) #:transparent)          ; solver configuration value
+(struct expr-solver-type () #:transparent)                      ; type constructor Solver
+;; Answer + Provenance (2)
+(struct expr-answer-type (val-type) #:transparent)              ; type constructor Answer V
+(struct expr-derivation-type () #:transparent)                  ; type constructor DerivationTree
+;; Control (2)
+(struct expr-cut () #:transparent)                              ; committed choice (once)
+(struct expr-guard (condition goal) #:transparent)              ; guard evaluation
+
 ;; ========================================
 ;; Int (arbitrary-precision integers, backed by Racket exact integers)
 ;; ========================================
@@ -955,6 +999,9 @@
       (expr-atms-type? x) (expr-assumption-id-type? x)
       (expr-atms-store? x) (expr-assumption-id-val? x)
       (expr-table-store-type? x) (expr-table-store-val? x)
+      (expr-solver-type? x) (expr-goal-type? x) (expr-derivation-type? x)
+      (expr-schema-type? x) (expr-answer-type? x) (expr-relation-type? x)
+      (expr-solver-config? x) (expr-cut? x)
       (expr-hole? x) (expr-typed-hole? x) (expr-meta? x) (expr-reduce? x)
       (expr-union? x) (expr-tycon? x) (expr-error? x)))
 

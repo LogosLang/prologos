@@ -35,7 +35,8 @@
          "multi-dispatch.rkt"
          "foreign.rkt"
          "trait-resolution.rkt"
-         "warnings.rkt")
+         "warnings.rkt"
+         "relations.rkt")
 
 (provide process-command
          process-file
@@ -225,6 +226,33 @@
                   ;; (elaborate expr) — show elaborated core AST
                   [(list 'elaborate expr)
                    (pp-expr (zonk-final expr))]
+
+                  ;; (defr name expr) — named relation definition (Phase 7)
+                  ;; Type-infer the relation, register in global env + relation store
+                  [(list 'defr name expr)
+                   (let ([ty (infer/err ctx-empty expr)])
+                     (if (prologos-error? ty) ty
+                         (begin
+                           (resolve-trait-constraints!)
+                           (let ([te (check-unresolved-trait-constraints)])
+                             (if (not (null? te))
+                                 (car te)
+                                 (let ([zonked-body (zonk-final expr)]
+                                       [zonked-type (zonk-final ty)])
+                                   (current-global-env
+                                    (global-env-add (current-global-env) name zonked-type zonked-body))
+                                   (when (current-ns-context)
+                                     (define fqn (qualify-name name
+                                                   (ns-context-current-ns (current-ns-context))))
+                                     (current-global-env
+                                      (global-env-add (current-global-env) fqn zonked-type zonked-body)))
+                                   ;; Convert zonked defr body to runtime relation-info
+                                   ;; and register in the global relation store
+                                   (when (expr-defr? zonked-body)
+                                     (define rel-info (expr-defr->relation-info zonked-body))
+                                     (current-relation-store
+                                      (relation-register (current-relation-store) rel-info)))
+                                   (format "~a : ~a defined." name (pp-expr zonked-type))))))))]
 
                   [_ (prologos-error srcloc-unknown (format "Unknown command: ~a" elab-result))])))]))))
   ;; Append warnings to result string (if any)

@@ -181,6 +181,10 @@ base-type ::= 'Type'     (* universe of types, level inferred *)
             | 'ATMS'         (* hypothetical reasoning TMS     *)
             | 'AssumptionId' (* ATMS assumption identifier     *)
             | 'TableStore'   (* SLG-style tabling store        *)
+            | 'Solver'       (* solver configuration type       *)
+            | 'Goal'         (* relational goal type (Prop)     *)
+            | 'DerivationTree' (* proof/derivation tree         *)
+            | 'Answer'       (* answer with optional provenance *)
 #+end_src
 
 #+begin_src prologos
@@ -912,6 +916,77 @@ when-nonzero zero [double 5]  ;; = 0
 (expand-1 (double-it 5))      ;; one step
 (expand-full (when true [suc zero]))  ;; all steps with labels
 #+end_src
+
+* Relational Language (Logic Programming)
+
+Prologos makes logic programming a first-class paradigm via =defr=, the
+relational analogue of =defn=. Relations use round brackets for goals,
+mode-annotated parameters, and dual sigils for facts (=||=) and rules (=&>=).
+
+** Relation Definition (defr)
+
+#+begin_src prologos
+;; Single-arity: fact block
+defr parent [?x ?y]
+  || "alice" "bob"
+     "bob" "carol"
+
+;; Single-arity: rule clause
+defr ancestor [?x ?y]
+  &> (parent x y)
+
+;; Multi-arity with | dispatch
+defr ancestor
+  | [?x ?y] &> (parent x y)
+  | [?x ?z] &> (parent x y) (ancestor y z)
+
+;; Mode annotations: + = input, - = output, ? = free
+defr lookup [+key -val]
+  &> (table key val)
+#+end_src
+
+** Anonymous Relations (rel)
+
+#+begin_src prologos
+;; Inline relation
+(eval (rel [?x] &> (parent x "bob")))
+#+end_src
+
+** Solve and Explain
+
+#+begin_src prologos
+;; Solve: returns Seq (Map Keyword Value)
+(eval (solve (parent x y)))
+
+;; Solve-one: returns first answer only
+(eval (solve-one (ancestor "alice" y)))
+
+;; Solve-with: named solver
+(eval (solve-with my-solver (ancestor x y)))
+
+;; Explain: returns Seq (Answer Value) with derivation trees
+(eval (explain (ancestor "alice" "carol")))
+
+;; Explain-with: named solver + overrides
+(eval (explain-with debug-solver (ancestor x y)))
+#+end_src
+
+** Solver Configuration
+
+#+begin_src prologos
+;; Solver definitions (pre-expanded by macros)
+(solver my-solver :execution :parallel :timeout 5000)
+(solver debug-solver :provenance :full :strategy :depth-first)
+#+end_src
+
+** Type Constructors
+
+| Type | Kind | Description |
+|------+------+-------------|
+| =Solver= | =Type 0= | Solver configuration |
+| =Goal= | =Type 0= | Relational goal (Prop) |
+| =DerivationTree= | =Type 0= | Proof / derivation tree |
+| =Answer= | =Type 0 -> Type 0= | Answer with optional provenance |
 
 * Multiplicity (QTT)
 

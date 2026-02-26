@@ -742,7 +742,24 @@
    'test-tabling-types.rkt
    (test-dep '(tabling.rkt propagator.rkt syntax.rkt typing-core.rkt qtt.rkt substitution.rkt pretty-print.rkt reduction.rkt) #f)
    'test-tabling-integration.rkt
-   (test-dep '(tabling.rkt propagator.rkt syntax.rkt typing-core.rkt reduction.rkt parser.rkt elaborator.rkt surface-syntax.rkt) #t)))
+   (test-dep '(tabling.rkt propagator.rkt syntax.rkt typing-core.rkt reduction.rkt parser.rkt elaborator.rkt surface-syntax.rkt) #t)
+   ;; Relational language (Phase 7)
+   'test-solver-config.rkt
+   (test-dep '(solver.rkt) #f)
+   'test-relations-runtime.rkt
+   (test-dep '(relations.rkt propagator.rkt tabling.rkt union-find.rkt solver.rkt) #f)
+   'test-stratify.rkt
+   (test-dep '(stratify.rkt) #f)
+   'test-provenance.rkt
+   (test-dep '(provenance.rkt solver.rkt) #f)
+   'test-reader-relational.rkt
+   (test-dep '(reader.rkt sexp-readtable.rkt) #f)
+   'test-parser-relational.rkt
+   (test-dep '(parser.rkt surface-syntax.rkt macros.rkt sexp-readtable.rkt) #f)
+   'test-relational-types.rkt
+   (test-dep '(syntax.rkt typing-core.rkt qtt.rkt substitution.rkt pretty-print.rkt reduction.rkt elaborator.rkt surface-syntax.rkt solver.rkt) #f)
+   'test-relational-e2e.rkt
+   (test-dep '(driver.rkt parser.rkt elaborator.rkt reduction.rkt relations.rkt solver.rkt macros.rkt surface-syntax.rkt syntax.rkt) #f)))
 
 ;; ============================================================
 ;; Layer 2b: Example file → test file mapping

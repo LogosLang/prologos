@@ -1,0 +1,119 @@
+#lang racket/base
+
+;;;
+;;; solver.rkt — Solver Configuration
+;;;
+;;; A solver configuration is a persistent, Map-backed value that controls
+;;; how relational queries are executed. Solver configs are created by the
+;;; `solver` top-level form and consumed by `solve`/`explain` at runtime.
+;;;
+;;; Key concepts:
+;;;   - Config is a hasheq of keyword symbols to values
+;;;   - Shallow map merge for {override} support
+;;;   - Known keys: execution, threshold, strategy, tabling, provenance, timeout
+;;;   - All operations are pure (no mutation)
+;;;
+;;; Design reference: docs/tracking/2026-02-24_LOGIC_ENGINE_DESIGN.org §7.6
+;;;
+
+(provide
+ ;; Core struct
+ (struct-out solver-config)
+ ;; Construction
+ make-solver-config
+ default-solver-config
+ ;; Accessors
+ solver-config-get
+ solver-config-execution
+ solver-config-threshold
+ solver-config-strategy
+ solver-config-tabling
+ solver-config-provenance
+ solver-config-timeout
+ ;; Merge
+ solver-config-merge
+ ;; Validation
+ valid-solver-key?
+ valid-solver-keys)
+
+;; ========================================
+;; Core struct
+;; ========================================
+
+;; Solver configuration — backed by hasheq (symbol → value)
+;; options: hasheq mapping keyword symbols to values
+(struct solver-config (options) #:transparent)
+
+;; ========================================
+;; Known keys and defaults
+;; ========================================
+
+(define valid-solver-keys
+  '(execution threshold strategy tabling provenance timeout))
+
+(define (valid-solver-key? k)
+  (memq k valid-solver-keys))
+
+;; Default values for each key
+(define solver-defaults
+  (hasheq 'execution  'parallel
+          'threshold  4
+          'strategy   'auto
+          'tabling    'by-default
+          'provenance 'none
+          'timeout    #f))
+
+;; ========================================
+;; Construction
+;; ========================================
+
+;; Create a solver-config from a hasheq of options.
+;; Missing keys get defaults from solver-defaults.
+(define (make-solver-config [options (hasheq)])
+  (solver-config
+   (for/fold ([cfg solver-defaults])
+             ([(k v) (in-hash options)])
+     (hash-set cfg k v))))
+
+;; The built-in default solver configuration.
+(define default-solver-config
+  (make-solver-config))
+
+;; ========================================
+;; Accessors
+;; ========================================
+
+;; Get a config value by key, with fallback to default.
+(define (solver-config-get cfg key [default #f])
+  (hash-ref (solver-config-options cfg) key default))
+
+(define (solver-config-execution cfg)
+  (solver-config-get cfg 'execution 'parallel))
+
+(define (solver-config-threshold cfg)
+  (solver-config-get cfg 'threshold 4))
+
+(define (solver-config-strategy cfg)
+  (solver-config-get cfg 'strategy 'auto))
+
+(define (solver-config-tabling cfg)
+  (solver-config-get cfg 'tabling 'by-default))
+
+(define (solver-config-provenance cfg)
+  (solver-config-get cfg 'provenance 'none))
+
+(define (solver-config-timeout cfg)
+  (solver-config-get cfg 'timeout #f))
+
+;; ========================================
+;; Merge
+;; ========================================
+
+;; Shallow merge: each key in overrides replaces the same key in base.
+;; overrides: hasheq (same format as solver-config options)
+;; Returns a new solver-config.
+(define (solver-config-merge base overrides)
+  (solver-config
+   (for/fold ([cfg (solver-config-options base)])
+             ([(k v) (in-hash overrides)])
+     (hash-set cfg k v))))

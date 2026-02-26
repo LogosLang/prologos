@@ -495,6 +495,58 @@
     [(expr-table-lookup s n a)
      (format "[table-lookup ~a ~a ~a]" (pp-expr s names) (pp-expr n names) (pp-expr a names))]
 
+    ;; Relational language (Phase 7)
+    [(expr-solver-type) "Solver"]
+    [(expr-goal-type) "Goal"]
+    [(expr-derivation-type) "DerivationTree"]
+    [(expr-cut) "cut"]
+    [(expr-schema-type n) (format "(Schema ~a)" n)]
+    [(expr-answer-type t)
+     (if t (format "(Answer ~a)" (pp-expr t names)) "Answer")]
+    [(expr-relation-type pts)
+     (format "(Relation ~a)" (string-join (map (lambda (p) (pp-expr p names)) pts) " "))]
+    [(expr-solver-config m)
+     (format "(solver-config ~a)" (pp-expr m names))]
+    [(expr-logic-var name mode)
+     (if mode (format "~a~a" (case mode [(free) "?"] [(in) "+"] [(out) "-"] [else "?"]) name)
+         (symbol->string name))]
+    [(expr-defr nm sc vs)
+     (format "(defr ~a ...~a variants)" nm (length vs))]
+    [(expr-defr-variant ps bd)
+     (format "(variant [~a] ~a)" (length ps) (string-join (map (lambda (b) (pp-expr b names)) bd) " "))]
+    [(expr-rel ps cls)
+     (format "(rel [~a] ...)" (length ps))]
+    [(expr-clause gs)
+     (format "(&> ~a)" (string-join (map (lambda (g) (pp-expr g names)) gs) " "))]
+    [(expr-fact-block rs)
+     (format "(|| ~a rows)" (length rs))]
+    [(expr-fact-row ts)
+     (format "(fact ~a)" (string-join (map (lambda (t) (pp-expr t names)) ts) " "))]
+    [(expr-goal-app nm as)
+     (format "(~a ~a)" (pp-expr nm names) (string-join (map (lambda (a) (pp-expr a names)) as) " "))]
+    [(expr-unify-goal l r)
+     (format "(= ~a ~a)" (pp-expr l names) (pp-expr r names))]
+    [(expr-is-goal v ex)
+     (format "(is ~a ~a)" (pp-expr v names) (pp-expr ex names))]
+    [(expr-not-goal g)
+     (format "(not ~a)" (pp-expr g names))]
+    [(expr-schema nm fs)
+     (format "(schema ~a ~a fields)" nm (length fs))]
+    [(expr-solve g)
+     (format "(solve ~a)" (pp-expr g names))]
+    [(expr-solve-with sv ov g)
+     (format "(solve-with ~a ~a ~a)"
+             (if sv (pp-expr sv names) "#f") (if ov (pp-expr ov names) "#f") (pp-expr g names))]
+    [(expr-solve-one g)
+     (format "(solve-one ~a)" (pp-expr g names))]
+    [(expr-explain g)
+     (format "(explain ~a)" (pp-expr g names))]
+    [(expr-explain-with sv ov g)
+     (format "(explain-with ~a ~a ~a)"
+             (if sv (pp-expr sv names) "#f") (if ov (pp-expr ov names) "#f") (pp-expr g names))]
+    [(expr-guard cond goal)
+     (format "(guard ~a ~a)" (pp-expr cond names) (pp-expr goal names))]
+
     ;; Int
     [(expr-Int) "Int"]
     [(expr-int v) (number->string v)]
@@ -1028,6 +1080,30 @@
     [(expr-table-complete s n) (or (uses-bvar0? s) (uses-bvar0? n))]
     [(expr-table-run s) (uses-bvar0? s)]
     [(expr-table-lookup s n a) (or (uses-bvar0? s) (uses-bvar0? n) (uses-bvar0? a))]
+
+    ;; Relational language (Phase 7)
+    [(expr-solver-type) #f] [(expr-goal-type) #f] [(expr-derivation-type) #f] [(expr-cut) #f]
+    [(expr-schema-type _) #f] [(expr-logic-var _ _) #f]
+    [(expr-answer-type t) (and t (uses-bvar0? t))]
+    [(expr-relation-type pts) (ormap uses-bvar0? pts)]
+    [(expr-solver-config m) (uses-bvar0? m)]
+    [(expr-defr nm sc vs) (or (and sc (uses-bvar0? sc)) (ormap uses-bvar0? vs))]
+    [(expr-defr-variant ps bd) (ormap uses-bvar0? bd)]
+    [(expr-rel ps cls) (ormap uses-bvar0? cls)]
+    [(expr-clause gs) (ormap uses-bvar0? gs)]
+    [(expr-fact-block rs) (ormap uses-bvar0? rs)]
+    [(expr-fact-row ts) (ormap uses-bvar0? ts)]
+    [(expr-goal-app nm as) (or (uses-bvar0? nm) (ormap uses-bvar0? as))]
+    [(expr-unify-goal l r) (or (uses-bvar0? l) (uses-bvar0? r))]
+    [(expr-is-goal v ex) (or (uses-bvar0? v) (uses-bvar0? ex))]
+    [(expr-not-goal g) (uses-bvar0? g)]
+    [(expr-schema nm fs) (ormap uses-bvar0? fs)]
+    [(expr-solve g) (uses-bvar0? g)]
+    [(expr-solve-with sv ov g) (or (and sv (uses-bvar0? sv)) (and ov (uses-bvar0? ov)) (uses-bvar0? g))]
+    [(expr-solve-one g) (uses-bvar0? g)]
+    [(expr-explain g) (uses-bvar0? g)]
+    [(expr-explain-with sv ov g) (or (and sv (uses-bvar0? sv)) (and ov (uses-bvar0? ov)) (uses-bvar0? g))]
+    [(expr-guard cond goal) (or (uses-bvar0? cond) (uses-bvar0? goal))]
 
     [(expr-Int) #f]
     [(expr-int _) #f]

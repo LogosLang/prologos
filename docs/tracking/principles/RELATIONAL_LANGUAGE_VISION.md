@@ -1,47 +1,79 @@
-- [The Core Idea: Relations as First-Class Duals of Functions](#org8674234)
-- [Syntax Decisions](#org64f3260)
-  - [Delimiter Distinction: `(...)` vs `[...]`](#org66d44fb)
-  - [`defr` / `rel` Keywords](#orgef4816b)
-  - [`&>` Conjunction Syntax](#org7661600)
-  - [Logic Variables: `?var` Prefix](#org93eedf2)
-  - [Mode Prefixes: `?`, `-`, `+`](#org6e03491)
-- [The `solve` / `solve-with` Bridge](#orga62065a)
-  - [`solve`: Functional-Relational Bridge](#org0da1363)
-  - [`solve-with`: Solver-as-Metadata-Entity](#org9e97d54)
-  - [Solver Architecture](#org8bedc57)
-- [Tabling by Default](#orgf402cbc)
-  - [Lattice Answer Modes](#org21cd7b8)
-- [Provenance as First-Class](#org9b38d52)
-- [First-Class Propagators and Network Mobility](#orgb6aff6f)
-- [Integration with Functional Language](#org2cbbc76)
-  - [Relations in Functional Code](#orgec692fd)
-  - [Functions in Relational Code](#org295657c)
-- [Design Principles Summary](#org5296c9e)
-- [What This Document Does NOT Cover](#org890eb39)
+- [The Core Idea: Relations as First-Class Duals of Functions](#orge87c734)
+- [Syntax Decisions](#orgd93b20e)
+  - [Delimiter Distinction: `(...)` vs `[...]`](#orga6d32f7)
+  - [`defr` / `rel` Keywords](#orgc0b4459)
+  - [Dual Clause Syntax: `||` for Facts, `&>` for Rules](#org0dd8dad)
+    - [`||` Fact Block Syntax](#org89fbc00)
+    - [`&>` Rule Clause Syntax](#orgf0a3e24)
+    - [Mixed Facts and Rules](#org58d574b)
+    - [S-Expression Representation](#org25b8a94)
+  - [Logic Variables: Context-Determined](#org6737dd0)
+  - [Mode Annotations: Signature-Level Contracts](#org9a4e77e)
+  - [Multi-Arity Relations: `|` Dispatch](#org273f54b)
+- [The `solve` / `solve-with` Bridge](#org7a41b6c)
+  - [`solve`: Functional-Relational Bridge](#org8f65a61)
+  - [`solve-with`: Solver-as-Metadata-Entity](#org3dc45d4)
+  - [Solver Architecture](#org0b5a676)
+- [Tabling by Default](#org4599bbf)
+  - [Lattice Answer Modes](#org89f227b)
+- [Provenance as First-Class](#org16053e0)
+- [First-Class Propagators and Network Mobility](#org7cb5e22)
+- [Integration with Functional Language](#org14e2611)
+  - [Relations in Functional Code](#orgd679728)
+  - [Functions in Relational Code](#orgd2ff7a9)
+- [Schema: The Object Language](#orgc64e586)
+  - [The Specification Triple](#org8d402e3)
+  - [`schema` as Named, Closed, Validated Map](#org7920068)
+  - [Inspiration: Clojure Spec and the "Object Language"](#orga8d19b2)
+  - [`schema` and Session Types](#org9112688)
+  - [`schema` and Relations](#org0cfa5ee)
+- [Design Principles Summary](#org65fc5e0)
+- [Relations as a Graph-Query Database Language](#orge7af578)
+  - [The Core Isomorphism](#orgcfb312d)
+  - [Why Logic Programming Beats SQL for Composition](#org95f6024)
+  - [Empirical Performance: In-Memory Logic vs. SQLite](#orgb9a61c8)
+  - [Prologos's Unique Advantages for Data Querying](#org65d751d)
+    - [Tabling = Materialized Views](#org84431b2)
+    - [Propagators = Incremental View Maintenance](#org87b13b3)
+    - [ATMS = Provenance and Lineage](#org4c417e4)
+    - [`schema` = Typed Relations](#org8dd4929)
+    - [Session Types = Query Protocol Safety](#org0b08e7b)
+  - [Fact Declaration Syntax](#org2f8170b)
+    - [Positional Facts (Schema Provides Ordering)](#org5e7d388)
+    - [Dictionary Facts (Self-Documenting, Order-Independent)](#org88decba)
+    - [The Standalone Fact Question (Unresolved)](#orgb006b95)
+    - [Bulk Fact Loading](#org46cd19a)
+  - [Scaling Regimes](#orgbb823c8)
+    - [Regime 1: In-Memory, Small-to-Medium (< 1M facts)](#org82b6207)
+    - [Regime 2: Persistent, Medium (1M-100M facts)](#org41097ce)
+    - [Regime 3: Distributed, Large (> 100M facts)](#org54eb6a4)
+  - [The Yedalog / Logica Connection](#orgac4bbc8)
+  - [Design Implications for Phase 7](#orgbd10c35)
+- [What This Document Does NOT Cover](#orgc572b0f)
 
 
 
-<a id="org8674234"></a>
+<a id="orge87c734"></a>
 
 # The Core Idea: Relations as First-Class Duals of Functions
 
 The relational paradigm in Prologos is not an add-on or embedded DSL &#x2014; it is a first-class language paradigm, co-equal with functional programming. Just as `fn` creates anonymous functions and `defn` creates named functions, `rel` creates anonymous relations and `defr` creates named relations.
 
-| Paradigm   | Named     | Anonymous | Application | Delimiter |
-|---------- |--------- |--------- |----------- |--------- |
-| Functional | `defn`    | `fn`      | `[f x y]`   | `[...]`   |
-| Relational | `defr`    | `rel`     | `(R ?x ?y)` | `(...)`   |
-| Process    | `defproc` | `proc`    | indentation | indent    |
+| Paradigm   | Spec      | Named     | Anonymous | Application | Delimiter |
+|---------- |--------- |--------- |--------- |----------- |--------- |
+| Functional | `spec`    | `defn`    | `fn`      | `[f x y]`   | `[...]`   |
+| Relational | `schema`  | `defr`    | `rel`     | `(R x y)`   | `(...)`   |
+| Process    | `session` | `defproc` | `proc`    | indentation | indent    |
 
 The parenthetical `(...)` delimiter is the visual sigil for relational forms, just as `[...]` is for functional application. This is not arbitrary &#x2014; it reflects a genuine semantic distinction: functional forms *compute values*, relational forms *constrain search spaces*.
 
 
-<a id="org64f3260"></a>
+<a id="orgd93b20e"></a>
 
 # Syntax Decisions
 
 
-<a id="org66d44fb"></a>
+<a id="orga6d32f7"></a>
 
 ## Delimiter Distinction: `(...)` vs `[...]`
 
@@ -49,12 +81,12 @@ The reader dispatches differently based on the opening delimiter:
 
 -   **`[map inc xs]`:** Functional application. Evaluate `map` with arguments `inc` and `xs`. Returns a value.
 
--   **`(parent ?x ?y)`:** Relational goal. Assert or query the `parent` relation with logic variables `?x` and `?y`. Returns a stream of substitutions.
+-   **`(parent x y)`:** Relational goal. Assert or query the `parent` relation with logic variables `x` and `y`. Returns a stream of substitutions.
 
-This delimiter distinction is visible, mechanical, and unambiguous. A human reader can instantly tell whether a subexpression is functional or relational by looking at the bracket type. The s-expression representation preserves the distinction: `($rel-app parent ?x ?y)` vs `($app map inc xs)`.
+This delimiter distinction is visible, mechanical, and unambiguous. A human reader can instantly tell whether a subexpression is functional or relational by looking at the bracket type. The s-expression representation preserves the distinction: `($rel-app parent x y)` vs `($app map inc xs)`.
 
 
-<a id="orgef4816b"></a>
+<a id="orgc0b4459"></a>
 
 ## `defr` / `rel` Keywords
 
@@ -63,89 +95,213 @@ This delimiter distinction is visible, mechanical, and unambiguous. A human read
 ```prologos
 ;; Named relation with multiple clauses
 defr ancestor [?x ?y]
-  &> (parent ?x ?y)
-  &> (parent ?x ?z) (ancestor ?z ?y)
+  &> (parent x y)
+  &> (parent x z) (ancestor z y)
 
 ;; Anonymous relation (first-class, passable, composable)
 let reachable := (rel [?from ?to ?path]
-  &> (= ?from ?to) (= ?path '[?to | nil])
-  &> (edge ?from ?mid)
-     (reachable ?mid ?to ?rest)
-     (= ?path '[?from | ?rest]))
+  &> (= from to) (= path '[to | nil])
+  &> (edge from mid)
+     (reachable mid to rest)
+     (= path '[from | rest]))
 ```
 
 No existing logical or logical-functional language has a true anonymous relation (`rel`) that can be bound to names and passed between contexts like a lambda. This is Prologos's key innovation for logic-functional fusion.
 
 
-<a id="org7661600"></a>
+<a id="org0dd8dad"></a>
 
-## `&>` Conjunction Syntax
+## Dual Clause Syntax: `||` for Facts, `&>` for Rules
 
-The `&>` operator introduces a clause (disjunctive alternative) within a relation definition. Within a clause, goals are implicitly conjoined (sequential conjunction, left to right).
+A relation body contains two kinds of clauses: *facts* (ground assertions, no logic variables, no subgoals) and *rules* (derived clauses with goals). These have fundamentally different characters &#x2014; facts are *data*, rules are *logic* &#x2014; and Prologos gives them distinct sigils to reflect this.
+
+
+<a id="org89fbc00"></a>
+
+### `||` Fact Block Syntax
+
+The `||` operator introduces a *fact block*: a set of ground tuples that the relation asserts. Each subsequent line at the same indentation level is an additional fact (row) in the block.
+
+```prologos
+schema ParentChild
+  :parent String
+  :child  String
+
+defr parent-child : ParentChild
+  || "Alice" "Bob"
+     "Bob"   "Carol"
+     "Bob"   "Dave"
+```
+
+`||` appears once to introduce the block. The indentation determines which lines belong to the block. This is syntactically lightweight &#x2014; ideal for the database use case where hundreds of facts must be declared concisely.
+
+The double-pipe reads as *OR*: the relation holds for ("Alice", "Bob") OR ("Bob", "Carol") OR ("Bob", "Dave"). Each line is a disjunct. This is the same semantics as separate Prolog facts, but expressed as a visual table.
+
+Why `||` rather than `&>` for facts:
+
+-   **Weight**: `&>` on every line of tabular data is syntactically heavy. The database use case demands concision.
+-   **Semantic clarity**: `&> "Alice" "Bob"` reads as *conjoin "Alice" AND "Bob"* because within a `&>` clause, whitespace juxtaposition means conjunction. But a fact is not a conjunction of its columns &#x2014; it is a single assertion that the tuple inhabits the relation. `||` avoids this misleading reading.
+-   **Visual tabulation**: With `||` as a block introducer, the fact section looks like a data table, which is exactly what it is.
+
+
+<a id="orgf0a3e24"></a>
+
+### `&>` Rule Clause Syntax
+
+The `&>` operator introduces a *rule clause*: a derived assertion with one or more relational goals as its body. Within a clause, goals are implicitly conjoined (sequential conjunction, left to right).
 
 ```prologos
 ;; Two clauses, each with implicit conjunction
 defr ancestor [?x ?y]
-  &> (parent ?x ?y)                          ;; clause 1: base case
-  &> (parent ?x ?z) (ancestor ?z ?y)        ;; clause 2: recursive
-  ;;                 ^--- conjoined goals within clause 2
+  &> (parent x y)                            ;; clause 1: base case
+  &> (parent x z) (ancestor z y)             ;; clause 2: recursive
+  ;;               ^--- conjoined goals within clause 2
 ```
 
 Design rationale:
 
 -   `&>` is visually distinct from functional operators (`|>`, `>>`)
--   It reads as "and also, by this rule&#x2026;" &#x2014; each `&>` is a logical OR
+-   It reads as "and also, by this rule&#x2026;" &#x2014; each `&>` is a logical OR of derivation paths
 -   Within a clause, goals are conjoined by whitespace juxtaposition (AND)
 -   The visual structure mirrors Prolog's clause-based semantics
 
 
-<a id="org93eedf2"></a>
+<a id="org58d574b"></a>
 
-## Logic Variables: `?var` Prefix
+### Mixed Facts and Rules
 
-Logic variables are distinguished by the `?` prefix. This is the default "free" mode &#x2014; the variable may be bound or unbound at entry, and unification determines its value.
-
-```prologos
-(ancestor ?who "carol")    ;; ?who is a logic variable
-[map inc xs]               ;; xs is a functional variable (no ?)
-```
-
-The `?` prefix serves multiple purposes:
-
-1.  Visual distinction from functional variables
-2.  Reader-level dispatch (the reader emits `($logic-var who)`)
-3.  Scope delimitation (logic vars are scoped to their enclosing `rel~/~defr`)
-4.  Mode annotation carrier (see below)
-
-
-<a id="org6e03491"></a>
-
-## Mode Prefixes: `?`, `-`, `+`
-
-Mercury-inspired mode annotations provide optimization hints to the solver:
-
-| Mode | Symbol | Meaning                        |
-|---- |------ |------------------------------ |
-| Free | `?var` | May be bound or unbound        |
-| In   | `-var` | Must be bound on entry         |
-| Out  | `+var` | Unbound, will be bound by goal |
+Facts (`||`) and rules (`&>`) coexist naturally within a single `defr`:
 
 ```prologos
-;; Mode-annotated relation
-defr append [-xs -ys +zs]
-  &> (= -xs nil) (= +zs -ys)
-  &> (= -xs [cons ?h ?t]) (append ?t -ys ?rest) (= +zs [cons ?h ?rest])
+schema ParentChild
+  :parent String
+  :child  String
+
+;; Ground facts as data
+defr parent-child : ParentChild
+  || "Alice" "Bob"
+     "Bob"   "Carol"
+     "Bob"   "Dave"
+
+;; Derived relation composing over the facts
+defr ancestor : ParentChild
+  &> (parent-child x y)
+  &> (parent-child x z) (ancestor z y)
 ```
 
-Modes are *optional* &#x2014; the default `?` works for all cases. When provided, modes enable the solver to choose more efficient strategies (e.g., indexing on bound arguments, generating rather than checking unbound arguments).
+The dual syntax makes the distinction visible at a glance: `||` sections are data you can read as a table; `&>` sections are logic you read as derivation rules. This maps directly to the database isomorphism: `||` is INSERT, `&>` is CREATE VIEW.
 
 
-<a id="orga62065a"></a>
+<a id="org25b8a94"></a>
+
+### S-Expression Representation
+
+In sexp mode, fact blocks desugar to `$facts`, rule clauses to `$clause`:
+
+```
+;; || "Alice" "Bob"   "Bob" "Carol"
+($facts ("Alice" "Bob") ("Bob" "Carol"))
+
+;; &> (parent x z) (ancestor z y)
+($clause ($rel-app parent x z) ($rel-app ancestor z y))
+```
+
+
+<a id="org6737dd0"></a>
+
+## Logic Variables: Context-Determined
+
+Logic variables are distinguished by *context*, not by prefix. Inside relational forms (`defr`, `rel`, `(...)` goals), bare lowercase names are logic variables. Inside functional forms (`defn`, `fn`, `[...]` applications), bare lowercase names are functional variables. The delimiter-based paradigm distinction already carries this information.
+
+```prologos
+(ancestor who "carol")     ;; who is a logic variable (relational context)
+[map inc xs]               ;; xs is a functional variable (functional context)
+```
+
+This is consistent with the functional side: `defn foo [x y]` does not prefix its variables. `defr foo [x y]` follows the same convention.
+
+Disambiguation from constants is structural:
+
+-   `"Alice"` &#x2014; string literal (constant)
+-   `95000N` &#x2014; number literal (constant)
+-   `:name` &#x2014; keyword (constant)
+-   `Engineering` &#x2014; capitalized name = constructor/type (constant)
+-   `nil` &#x2014; known value (constant)
+-   `from`, `mid`, `rest` &#x2014; bare lowercase = logic variable
+-   `_` &#x2014; anonymous/don't-care variable
+
+
+<a id="org9a4e77e"></a>
+
+## Mode Annotations: Signature-Level Contracts
+
+Mercury-inspired mode annotations appear in *relation signatures* to declare the binding contract for each parameter. They are the relational equivalent of type signatures &#x2014; they describe the shape of the relation's interface.
+
+| Mode | Symbol | Meaning                           |
+|---- |------ |--------------------------------- |
+| Free | `?var` | May be bound or unbound (default) |
+| In   | `+var` | Must be bound on entry            |
+| Out  | `-var` | Unbound, will be bound by goal    |
+
+This follows the standard Prolog/Mercury convention: `+` denotes *input* (the caller provides a value) and `-` denotes *output* (the relation produces a value). `?` denotes *free* (either direction).
+
+Mode prefixes appear in the `defr~/~rel` parameter list (the *contract*). In the body, variables are *bare* &#x2014; the modes have already been declared:
+
+```prologos
+;; Signature declares mode contract; body uses bare names
+defr append [+xs +ys -zs]
+  &> (= xs nil) (= zs ys)
+  &> (= xs [cons h t]) (append t ys rest) (= zs [cons h rest])
+
+;; Free mode (?) is the default --- used when either in or out is fine
+defr ancestor [?x ?y]
+  &> (parent-child x y)
+  &> (parent-child x z) (ancestor z y)
+```
+
+Modes are *optional* &#x2014; bare parameters (no prefix) default to free (`?`). When provided, modes enable the solver to choose more efficient strategies (e.g., indexing on bound arguments, generating rather than checking unbound arguments).
+
+If a mode-prefixed variable appears in the body and disagrees with its declared signature mode, the compiler reports an error. By convention, body variables are bare; mode annotations in the body are the exception, not the rule.
+
+
+<a id="org273f54b"></a>
+
+## Multi-Arity Relations: `|` Dispatch
+
+Like functional `defn`, relational `defr` supports multi-arity dispatch via `|`. Each `|` variant has its own parameter list (with optional modes) and body (which may contain `&>` clauses, `||` fact blocks, or bare goals).
+
+```prologos
+defr sum-list
+  | [+list -sum]
+    (sum-list list 0 sum)
+  | [[] +acc -sum]
+    &> (= acc sum)
+  | [[+x|+xs] +acc -sum]
+    &> (new-acc is [+ acc x])
+       (sum-list xs new-acc sum)
+```
+
+This unifies the common Prolog pattern of separate public and worker predicates (`sum_list/2` calling `sum_list/3`) into a single definition. The three `|` variants dispatch on arity and head structure:
+
+1.  `[+list -sum]` &#x2014; the 2-arg public interface, delegates to the 3-arg form
+2.  `[[] +acc -sum]` &#x2014; 3-arg base case: empty list, accumulator is the result
+3.  `[[+x|+xs] +acc -sum]` &#x2014; 3-arg recursive case: process head, recurse on tail
+
+The three-level structure is orthogonal:
+
+-   **`|`** = structural dispatch (arity, head pattern)
+-   **`&>`** = logical disjunction (multiple derivation paths within one case)
+-   **`||`** = ground data (fact tables)
+
+Each level serves a different purpose and they compose freely within `defr`.
+
+
+<a id="org7a41b6c"></a>
 
 # The `solve` / `solve-with` Bridge
 
 
-<a id="org0da1363"></a>
+<a id="org8f65a61"></a>
 
 ## `solve`: Functional-Relational Bridge
 
@@ -153,12 +309,12 @@ Modes are *optional* &#x2014; the default `?` works for all cases. When provided
 
 ```prologos
 ;; Basic solve: returns Seq of substitution maps
-let results := (solve [ancestor "alice" ?who])
+let results := (solve (ancestor "alice" who))
 ;; results : Seq (Map Symbol Value)
-;; => [{?who: "bob"}, {?who: "carol"}, {?who: "dave"}]
+;; => [{who: "bob"}, {who: "carol"}, {who: "dave"}]
 
 ;; With destructuring
-match (solve [ancestor "alice" ?who])
+match (solve (ancestor "alice" who))
   | [some bindings] -> [map-get bindings :who]
   | none -> "nobody"
 ```
@@ -166,7 +322,7 @@ match (solve [ancestor "alice" ?who])
 The return type of `solve` is `Seq (Map Symbol Value)` &#x2014; a lazy sequence of substitution maps. This integrates naturally with the functional collection system: results can be mapped, filtered, folded, taken, etc.
 
 
-<a id="org9e97d54"></a>
+<a id="org3dc45d4"></a>
 
 ## `solve-with`: Solver-as-Metadata-Entity
 
@@ -178,19 +334,19 @@ let results := (solve-with
   :strategy depth-first
   :timeout 5000          ;; milliseconds
   :max-solutions 10
-  [ancestor "alice" ?who])
+  (ancestor "alice" who))
 
 ;; Using a custom constraint domain
 let results := (solve-with
   :domain interval-arithmetic
   :widening standard
-  [constraint ?x ?y])
+  (constraint x y))
 ```
 
 The solver configuration is a map of metadata keys. This follows the established Prologos pattern: structured metadata attached to operations. The solver is not a fixed runtime but a configurable entity.
 
 
-<a id="org8bedc57"></a>
+<a id="org0b5a676"></a>
 
 ## Solver Architecture
 
@@ -205,7 +361,7 @@ The solver is layered, following the three-layer propagator architecture:
 The default solver uses all three layers. `solve-with` allows selecting subsets (e.g., pure Datalog only needs Layer 1, no ATMS).
 
 
-<a id="orgf402cbc"></a>
+<a id="org4599bbf"></a>
 
 # Tabling by Default
 
@@ -220,18 +376,18 @@ The tabling implementation follows XSB Prolog's SLG resolution, extended with la
 ```prologos
 ;; Tabled by default
 defr ancestor [?x ?y]
-  &> (parent ?x ?y)
-  &> (parent ?x ?z) (ancestor ?z ?y)
+  &> (parent x y)
+  &> (parent x z) (ancestor z y)
   ;; Left-recursive call to ancestor is safe --- tabling prevents loops
 
 ;; Opt-out for performance-critical untabled relations
 defr fast-lookup [?x ?y]
   :tabled false
-  &> (fact-table ?x ?y)
+  &> (fact-table x y)
 ```
 
 
-<a id="org21cd7b8"></a>
+<a id="org89f227b"></a>
 
 ## Lattice Answer Modes
 
@@ -239,20 +395,20 @@ Tabled predicates can aggregate answers via lattice operations:
 
 ```prologos
 ;; Standard tabling: collect all answers
-defr reachable [?x ?y]
+defr reachable [x y]
   :answer-mode all
 
 ;; Lattice tabling: aggregate via min
-defr shortest-distance [?x ?y ?d]
+defr shortest-distance [x y d]
   :answer-mode (lattice min)
 
 ;; First-answer tabling: stop after one
-defr any-path [?x ?y ?path]
+defr any-path [x y path]
   :answer-mode first
 ```
 
 
-<a id="org9b38d52"></a>
+<a id="org16053e0"></a>
 
 # Provenance as First-Class
 
@@ -267,7 +423,7 @@ Every derivation in the relational language produces a *provenance trace* &#x201
 ;; Solve with provenance tracking
 let (results, provenances) := (solve-with
   :provenance true
-  [ancestor "alice" ?who])
+  (ancestor "alice" who))
 
 ;; Each provenance is a derivation tree
 ;; ancestor("alice", "carol")
@@ -279,7 +435,7 @@ let (results, provenances) := (solve-with
 Provenance is built on the ATMS's support sets. Each derived fact carries the set of assumptions that justify it. This is not an add-on &#x2014; it is inherent in the propagator architecture.
 
 
-<a id="orgb6aff6f"></a>
+<a id="org7cb5e22"></a>
 
 # First-Class Propagators and Network Mobility
 
@@ -299,7 +455,7 @@ let net := (make-network [ancestor facts])
 (network-add! net [parent "eve" "alice"])
 
 ;; Query the updated network
-let results := (network-solve net [ancestor "eve" ?who])
+let results := (network-solve net (ancestor "eve" who))
 ;; Incremental: only re-propagates from the new fact
 
 ;; Snapshot for later
@@ -310,12 +466,12 @@ let frozen := (network-snapshot net)
 Network mobility is essential for distributed AI agent architectures. An agent can construct a knowledge base, derive conclusions, then ship the entire network to another agent for further reasoning. Session types ensure the transfer protocol is correct.
 
 
-<a id="org2cbbc76"></a>
+<a id="org14e2611"></a>
 
 # Integration with Functional Language
 
 
-<a id="orgec692fd"></a>
+<a id="orgd679728"></a>
 
 ## Relations in Functional Code
 
@@ -325,13 +481,13 @@ Relational goals appear naturally within functional code via `solve`:
 ;; Functional function that uses a relation internally
 spec find-path : Graph Node Node -> [List Node]?
 defn find-path [graph start end]
-  match (solve [path-in graph start end ?p])
+  match (solve (path-in graph start end p))
     | [some bindings] -> [just [map-get bindings :p]]
     | none            -> nothing
 ```
 
 
-<a id="org295657c"></a>
+<a id="orgd2ff7a9"></a>
 
 ## Functions in Relational Code
 
@@ -340,34 +496,489 @@ Functional expressions can appear in relational goals via `is`:
 ```prologos
 ;; Relational rule that calls functional code
 defr factorial [?n ?result]
-  &> (= ?n 0) (= ?result 1)
-  &> (> ?n 0)
-     (is ?n1 [sub ?n 1])
-     (factorial ?n1 ?partial)
-     (is ?result [mul ?n ?partial])
+  &> (= n 0) (= result 1)
+  &> (> n 0)
+     (is n1 [sub n 1])
+     (factorial n1 partial)
+     (is result [mul n partial])
 ```
 
 The `is` keyword evaluates a functional expression and binds the result to a logic variable. This is the standard Prolog/Mercury approach, but in Prologos, the functional expression is a full Prologos expression (type-checked, trait-resolved, etc.).
 
 
-<a id="org5296c9e"></a>
+<a id="orgc64e586"></a>
+
+# Schema: The Object Language
+
+
+<a id="org8d402e3"></a>
+
+## The Specification Triple
+
+Every paradigm in Prologos has a *specification form* that describes the shape of a thing, and a *definitional form* that inhabits that shape:
+
+| Spec Form | Def Form  | What It Specifies                         |
+|--------- |--------- |----------------------------------------- |
+| `spec`    | `defn`    | Function shape: input types → output type |
+| `schema`  | `defr`    | Relation shape: column names, types       |
+| `session` | `defproc` | Protocol shape: message sequence, types   |
+
+The type checker verifies that each definition conforms to its specification. This is the most fundamental pattern in Prologos: *every construct has a specifiable shape and a checkable implementation*.
+
+
+<a id="org7920068"></a>
+
+## `schema` as Named, Closed, Validated Map
+
+Prologos has open maps (`{}`) &#x2014; any keys, any values, unconstrained. A `schema` is the *closed* counterpart: a named map type with fixed keys and typed values.
+
+```prologos
+schema Employee
+  :name   String
+  :dept   Department    ;; a sum type, not just any string
+  :salary Nat
+```
+
+This declaration introduces:
+
+1.  **A type**: `Employee : Type 0`. Values of this type are maps with exactly the declared keys, each holding a value of the declared type.
+
+2.  **A constructor**: Both positional and dictionary-style:
+    
+    ```prologos
+    ;; Dictionary (self-documenting, order-independent)
+    def alice : Employee
+      {:name "Alice" :dept Engineering :salary 95000N}
+    
+    ;; Positional (concise, schema field order determines position)
+    def bob : Employee
+      ("Bob" Marketing 72000N)
+    ```
+
+3.  **A validator**: The type checker rejects ill-formed values:
+    
+    ```prologos
+    ;; TYPE ERROR: :salary expects Nat, got String
+    def bad : Employee
+      {:name "Eve" :dept Engineering :salary "high"}
+    ```
+
+4.  **Field accessors**: Via dot-syntax (already implemented):
+    
+    ```prologos
+    alice.name     ;; => "Alice"
+    alice.salary   ;; => 95000N
+    ```
+
+
+<a id="orga8d19b2"></a>
+
+## Inspiration: Clojure Spec and the "Object Language"
+
+Rich Hickey's work on `clojure.spec` demonstrated that *specifications are data*: schemas describe shapes, shapes compose, and the composition of shapes is itself a shape. The key insight is that a schema is not a class or a struct &#x2014; it is a *predicate over maps* that can be composed, extended, and reasoned about.
+
+Prologos's `schema` follows this philosophy:
+
+-   **Schemas are types, not classes**. No methods, no inheritance, no mutation. A schema describes a shape. Functions that operate on that shape are declared separately via `spec~/~defn`.
+
+-   **Schemas compose**. A schema can include fields from another schema (composition over inheritance):
+    
+    ```prologos
+    schema Person
+      :name String
+      :age  Nat
+    
+    schema Employee
+      :extends Person
+      :dept   Department
+      :salary Nat
+    ```
+
+-   **Schemas validate at boundaries**. The primary use of schemas is at system boundaries: validating data entering the system (from files, networks, user input), validating messages in session-typed protocols, and validating facts in relational definitions.
+
+
+<a id="org9112688"></a>
+
+## `schema` and Session Types
+
+Because `schema` produces a type, schema values can be sent over session-typed channels. This makes schemas the natural language for *validated message shapes*:
+
+```prologos
+schema OrderRequest
+  :item-id  Nat
+  :quantity Nat
+  :customer String
+
+session OrderProtocol
+  recv order : OrderRequest    ;; validated on receipt
+  send confirmation : Bool
+  end
+
+defproc order-server : OrderProtocol
+  recv self order : OrderRequest
+    ;; order.item-id, order.quantity, order.customer all type-safe
+    let ok := [process-order order]
+    send ok self
+      stop
+```
+
+Just as `session` is to `defproc` what `spec` is to `defn`, `schema` provides the validated data shapes that flow *through* those protocols. The specification triple is fully connected:
+
+-   `spec` describes what a function *computes*
+-   `schema` describes what data *looks like*
+-   `session` describes what a conversation *does*
+
+
+<a id="org0cfa5ee"></a>
+
+## `schema` and Relations
+
+`schema` is the natural specification form for relational facts. When a `defr` is annotated with a schema, the schema provides:
+
+1.  **Column names and types**: Each schema field becomes a named, typed column.
+2.  **Positional ordering**: The field declaration order establishes the canonical positional mapping, so positional facts know which argument is which.
+3.  **Validation**: Every fact (whether inline or bulk-loaded) is type-checked against the schema.
+4.  **Query result shape**: `solve` results for schema-annotated relations return typed records, not untyped `Map Keyword Value`.
+
+```prologos
+schema ParentChild
+  :parent String
+  :child  String
+
+defr parent-child : ParentChild
+  ;; ... facts and rules go here (syntax TBD — see § Fact Declaration Syntax)
+```
+
+The `: ParentChild` annotation on `defr` is optional. Unannotated relations are untyped (Prolog-style). Schema-annotated relations are typed and validated (database-style). Users opt into rigor when they want it.
+
+
+<a id="org65fc5e0"></a>
 
 # Design Principles Summary
 
 1.  **Delimiter-based paradigm distinction**: `[...]` functional, `(...)` relational
 2.  **Dual keywords**: `defn~/~fn` for functions, `defr~/~rel` for relations
 3.  **First-class anonymous relations**: `rel` is the relational lambda
-4.  **`&>` clause syntax**: Visually distinct disjunction within relations
-5.  **Mode prefixes**: `?` (free), `-` (in), `+` (out) &#x2014; optional, Mercury-inspired
-6.  **Tabling by default**: Correctness over performance as the default
-7.  **`solve` bridge**: Returns `Seq Map` for functional consumption
-8.  **`solve-with` configuration**: Solver as parameterizable metadata entity
-9.  **Provenance tracking**: Built on ATMS support sets, first-class data
-10. **Network mobility**: Propagator networks as first-class, transferable values
-11. **Bidirectional embedding**: Functions in relations via `is`, relations in functions via `solve`
+4.  **Dual clause sigils**: `||` for facts (data), `&>` for rules (logic)
+5.  **Signature-level mode contracts**: `?` (free), `+` (in), `-` (out) in parameter lists; bare names in bodies &#x2014; context does the rest
+
+5a. **Multi-arity `|` dispatch**: Structural dispatch on arity and head pattern, consistent with functional `defn` multi-arity
+
+1.  **Tabling by default**: Correctness over performance as the default
+2.  **`solve` bridge**: Returns `Seq Map` for functional consumption
+3.  **`solve-with` configuration**: Solver as parameterizable metadata entity
+4.  **Provenance tracking**: Built on ATMS support sets, first-class data
+5.  **Network mobility**: Propagator networks as first-class, transferable values
+6.  **Bidirectional embedding**: Functions in relations via `is`, relations in functions via `solve`
+7.  **The specification triple**: `spec~/~defn`, `schema~/~defr`, `session~/~defproc` &#x2014; every paradigm has a shape and an implementation
+8.  **`schema` as closed validated map**: Named, typed, closed form over maps &#x2014; the object language for data shapes, message validation, and relational facts
+9.  **Relations as database tables**: Facts are rows, rules are composable views, queries are joins &#x2014; the relational language *is* a graph-query language
+10. **`||` fact blocks**: Block-introduced facts with continuation lines &#x2014; concise, tabular, scales from 3 rows to 30,000 without syntactic overhead
+11. **Composition over query languages**: Rules compose as naturally as functions; SQL doesn't. This is the Yedalog insight applied to a typed setting.
 
 
-<a id="org890eb39"></a>
+<a id="orge7af578"></a>
+
+# Relations as a Graph-Query Database Language
+
+
+<a id="orgcfb312d"></a>
+
+## The Core Isomorphism
+
+A Prolog predicate is structurally isomorphic to a database table. This is not metaphor &#x2014; it is a precise structural correspondence:
+
+| Prolog Concept    | Database Concept  |
+|----------------- |----------------- |
+| Predicate name    | Table name        |
+| Fact              | Row               |
+| Fact argument     | Column value      |
+| Rule              | Derived view      |
+| Query             | SELECT query      |
+| Subgoal in a rule | JOIN              |
+| Backtracking      | Nested-loop join  |
+| Tabling           | Materialized view |
+| Rule composition  | View composition  |
+
+A set of ground facts:
+
+```prolog
+employee(alice, engineering, 95000).
+employee(bob, marketing, 72000).
+employee(carol, engineering, 110000).
+```
+
+is a three-column table named `employee`. A rule:
+
+```prolog
+high_earners_in(Dept, Name) :-
+    employee(Name, Dept, Salary),
+    Salary > 90000.
+```
+
+is a derived view that joins `employee` with a filter. And critically, this derived view is itself a table that can be *subqueried in further rules* &#x2014; something SQL handles awkwardly with CTEs and subqueries but that logic programming handles as naturally as function composition.
+
+
+<a id="org95f6024"></a>
+
+## Why Logic Programming Beats SQL for Composition
+
+SQL is a query language. Logic programming is a *definition* language that happens to also query. The difference is profound:
+
+-   A SQL CTE is a one-shot inline definition, scoped to a single query.
+-   A Prolog rule is a reusable, named, composable unit that participates in recursive definitions, is callable from other rules, and can be individually tested, profiled, and reasoned about.
+
+In Prologos, `defr` creates a named relation that is first-class: passable, composable, tabled, provenance-tracked. The relational language *is* the query language, but it is also the schema definition language, the view definition language, and the integrity constraint language &#x2014; all unified.
+
+
+<a id="orgb9a61c8"></a>
+
+## Empirical Performance: In-Memory Logic vs. SQLite
+
+Experience with SWI-Prolog demonstrates the performance case. Loading a SQLite database (5-6 tables, 6000+ rows each) as Prolog dictionaries &#x2014; where the predicate name is the table name and dictionary keys are column names &#x2014; yields sub-millisecond query times vs. ~30ms for equivalent SQLite queries.
+
+The reasons are structural:
+
+-   **No parsing overhead**: No SQL parse → plan → execute pipeline. The clause structure *is* the execution plan.
+-   **No serialization**: Terms are native in-memory data. No marshalling between storage format and runtime representation.
+-   **First-argument indexing**: Prolog's indexing on the first argument acts as a hash index. Prologos's CHAMP-backed tables go further.
+-   **No query planning**: The clause order is the plan. With tabling, the system caches intermediate results automatically.
+
+
+<a id="org65d751d"></a>
+
+## Prologos's Unique Advantages for Data Querying
+
+Prologos's architecture gives it capabilities beyond both Prolog and SQL:
+
+
+<a id="org84431b2"></a>
+
+### Tabling = Materialized Views
+
+Phase 6's tabling infrastructure is *exactly* the mechanism for materialized views. A tabled `defr` that computes `high_earners_in` is a cached derived relation. `table-freeze` is "this view is now complete." SLG completion detection tells you when a recursive view has stabilized.
+
+
+<a id="org87b13b3"></a>
+
+### Propagators = Incremental View Maintenance
+
+When a base fact changes, propagators can push updates through dependent tabled predicates. This is *incremental view maintenance* &#x2014; the holy grail of database systems that most databases only partially implement. The PropNetwork infrastructure already has the dependency tracking.
+
+
+<a id="org4c417e4"></a>
+
+### ATMS = Provenance and Lineage
+
+Phase 5's ATMS gives every derived fact a support set: the base facts and assumptions that justify it. This is *data lineage* &#x2014; knowing not just *what* the query returned, but *why*. In database research, provenance semirings (Deutch et al.) formalize this; in Prologos, it falls out naturally from the ATMS architecture.
+
+
+<a id="org8dd4929"></a>
+
+### `schema` = Typed Relations
+
+Prologos can type-check relations in ways Prolog never could, using the `schema` keyword (see § Schema: The Object Language):
+
+```prologos
+schema Employee
+  :name   String
+  :dept   Department
+  :salary Nat
+
+defr employee : Employee
+  || "alice" Engineering 95000N
+     "bob"   Marketing   72000N
+
+;; This would be a type error: salary must be Nat
+;; || "eve" Engineering "high"
+```
+
+The schema provides column names, types, and positional ordering. The `defr` annotation `: Employee` links the relation to its schema, enabling compile-time validation of every fact.
+
+
+<a id="org0b08e7b"></a>
+
+### Session Types = Query Protocol Safety
+
+For distributed query scenarios (federated databases, agent knowledge exchange), session types ensure that query protocols between nodes are well-formed &#x2014; you can't send a partial join result where a complete one is expected.
+
+
+<a id="org2f8170b"></a>
+
+## Fact Declaration Syntax
+
+The dual-sigil design (`||` for facts, `&>` for rules) resolves the fact syntax question. See § Dual Clause Syntax for the core design. This section covers the specific forms that `||` blocks support.
+
+
+<a id="org5e7d388"></a>
+
+### Positional Facts (Schema Provides Ordering)
+
+With a schema, positional facts are unambiguous &#x2014; the schema field order establishes which position is which column:
+
+```prologos
+schema ParentChild
+  :parent String
+  :child  String
+
+defr parent-child : ParentChild
+  || "Alice" "Bob"           ;; :parent="Alice", :child="Bob"
+     "Bob"   "Carol"
+     "Bob"   "Dave"
+```
+
+The `||` introduces the fact block; subsequent lines at the same indentation are additional rows. No per-line sigil needed.
+
+Without a schema, positional facts still work (Prolog-style), but column names are unavailable to `solve` result maps.
+
+
+<a id="org88decba"></a>
+
+### Dictionary Facts (Self-Documenting, Order-Independent)
+
+For wide relations, dictionary-style facts are self-documenting:
+
+```prologos
+schema Employee
+  :name   String
+  :dept   Department
+  :salary Nat
+
+defr employee : Employee
+  || {:name "Alice" :dept Engineering :salary 95000N}
+     {:name "Bob"   :dept Marketing   :salary 72000N}
+     {:name "Carol" :dept Engineering :salary 110000N}
+```
+
+Positional and dictionary facts are interchangeable within the same `||` block when a schema is present. The schema is the bridge between the two forms.
+
+
+<a id="orgb006b95"></a>
+
+### The Standalone Fact Question (Unresolved)
+
+Should facts be assertable *outside* of a `defr` body? Candidates:
+
+```prologos
+;; Option A: explicit 'fact' keyword
+fact parent-child "Alice" "Bob"
+
+;; Option B: bare assertion looks like function application (ambiguous!)
+parent-child "Alice" "Bob"
+
+;; Option C: relational parens (but parens mean goals/queries)
+(parent-child "Alice" "Bob")
+```
+
+This is an open design question. For Phase 0, facts live inside `defr` bodies. Dynamic assertion (Prolog's `assert/1`) maps to `table-add` in the tabling infrastructure and will be addressed when runtime fact mutation is needed.
+
+
+<a id="org46cd19a"></a>
+
+### Bulk Fact Loading
+
+For the database isomorphism to be practical, we need bulk loading:
+
+```prologos
+;; Load facts from an external source
+defr employee : Employee
+  :source "employees.csv"
+
+;; Or from a Prologos data structure
+def employee-data : [List Employee]
+  '[{:name "Alice" :dept Engineering :salary 95000N}
+    {:name "Bob"   :dept Marketing   :salary 72000N}]
+
+defr employee : Employee
+  :from employee-data
+```
+
+Note how the schema makes `:source` and `:from` cleaner: the column mapping is already declared by `Employee`, so no separate `:columns` or `:format` metadata is needed for well-structured sources.
+
+Bulk loading is deferred infrastructure, but the *vision* should inform the Phase 7 implementation. The `||` block syntax scales naturally from 3 facts to 30,000 without becoming unwieldy.
+
+
+<a id="orgbb823c8"></a>
+
+## Scaling Regimes
+
+The database isomorphism operates at different scales:
+
+
+<a id="org82b6207"></a>
+
+### Regime 1: In-Memory, Small-to-Medium (< 1M facts)
+
+Pure Prologos, CHAMP-backed indices, tabling. This is where the sub-ms vs. 30ms advantage lives. Excellent for:
+
+-   Configuration management
+-   Knowledge graphs (ontologies, taxonomies)
+-   Policy engines (access control, business rules)
+-   Program analysis (points-to, call graphs, type inference)
+-   AI agent reasoning (belief bases, world models)
+
+This is the Phase 0 target. The infrastructure (Phases 3-6) is built.
+
+
+<a id="org41097ce"></a>
+
+### Regime 2: Persistent, Medium (1M-100M facts)
+
+Persistent storage backing the fact base, but the query engine is still Prologos. CHAMP's persistent data structures provide transactional semantics naturally (structural sharing = snapshot isolation). This is the Yedalog / Datomic sweet spot.
+
+
+<a id="org54eb6a4"></a>
+
+### Regime 3: Distributed, Large (> 100M facts)
+
+Distribution, partitioning, parallel semi-naive evaluation. This is where Datalog engines like Soufflé, LogicBlox, and Datomic live. Prologos's propagator network could potentially distribute (cells on different nodes, propagators as message-passing actors), but this is genuine research territory.
+
+
+<a id="orgac4bbc8"></a>
+
+## The Yedalog / Logica Connection
+
+Google's Yedalog (2015) and its open-source successor Logica (2020) validated the thesis that logic programming as a query language scales at Google's level. Key lessons from Yedalog:
+
+1.  **Rules compose better than SQL queries**. Engineers could define reusable predicates and compose them freely. CTEs and subqueries in SQL are syntactically and cognitively expensive by comparison.
+
+2.  **Aggregation via lattices**. Yedalog extended Datalog with lattice-valued predicates for aggregation (min, max, count, sum). This maps directly to Prologos's lattice answer modes in tabling.
+
+3.  **Integration with external data**. Yedalog could query Protocol Buffer datasets and BigTable. Prologos's `foreign` and `:source` metadata serve the same role.
+
+4.  **Bottom-up evaluation is essential**. Top-down Prolog-style evaluation doesn't scale to large fact bases. Datalog-style bottom-up evaluation with tabling does. Prologos's SLG tabling provides this.
+
+Prologos goes further than Yedalog in several ways:
+
+-   **Dependent types** for schema enforcement (Yedalog was untyped)
+-   **ATMS provenance** for data lineage (Yedalog had no provenance)
+-   **Session types** for distributed query protocol safety
+-   **First-class anonymous relations** (`rel`) for ad-hoc query composition
+-   **Functional-relational fusion** via `solve` / `is` (Yedalog was pure Datalog)
+
+
+<a id="orgbd10c35"></a>
+
+## Design Implications for Phase 7
+
+The database isomorphism and `schema` design should inform Phase 7:
+
+1.  **`schema` as a first-class form**. Phase 7 must implement the `schema` keyword as a type-level construct: a named, closed, validated map with field names, types, and canonical ordering.
+
+2.  **Schema-annotated `defr`**. The `: Schema` annotation on `defr` enables positional facts, type-checked columns, and typed `solve` results.
+
+3.  **`||` fact blocks are syntactically lightweight**. The dual-sigil design (`||` for facts, `&>` for rules) ensures that data entry reads as a table, not as logic. Both positional and dictionary-style facts are supported.
+
+4.  **`defr` with only `||` blocks is a "table"**. The elaborator recognizes `defr` bodies containing only `||` (no `&>`) as pure-fact relations and can optimize them differently (CHAMP index on first argument, skip tabling overhead for static fact sets).
+
+5.  **Bulk loading via `:source` / `:from` metadata**. The ergonomic path from "I have a CSV" to "I can query it relationally" should be trivially short. Schemas make this cleaner: the column mapping is declared once.
+
+6.  **Query results integrate with schemas**. For schema-annotated relations, `solve` returns `Seq Schema` (e.g., `Seq Employee`), not untyped maps. Field access via dot-syntax works on results.
+
+7.  **Re-usability is the killer feature**. Once `defr employee` exists, it can appear as a subgoal in any number of other relations. This is the composability advantage over SQL that the Yedalog engineers identified.
+
+
+<a id="orgc572b0f"></a>
 
 # What This Document Does NOT Cover
 

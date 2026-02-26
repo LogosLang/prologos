@@ -1754,6 +1754,106 @@
           (tu (expr-Bool) (add-usage u1 (add-usage u2 u3)))]
          [(_ _ _) (tu-error)]))]
 
+    ;; ---- Relational language (Phase 7) ----
+    ;; Type constructors → zero usage
+    [(expr-solver-type) (tu (expr-Type (lzero)) (zero-usage n))]
+    [(expr-goal-type) (tu (expr-Type (lzero)) (zero-usage n))]
+    [(expr-derivation-type) (tu (expr-Type (lzero)) (zero-usage n))]
+    [(expr-cut) (tu (expr-goal-type) (zero-usage n))]
+    [(expr-schema-type _) (tu (expr-Type (lzero)) (zero-usage n))]
+    [(expr-answer-type t)
+     (if t
+         (let ([r (inferQ ctx t)])
+           (match r
+             [(tu _ u) (tu (expr-Type (lzero)) u)]
+             [_ (tu-error)]))
+         (tu (expr-Type (lzero)) (zero-usage n)))]
+    [(expr-relation-type pts)
+     (let ([rs (map (lambda (p) (inferQ ctx p)) pts)])
+       (define usages (for/list ([r (in-list rs)])
+                        (match r [(tu _ u) u] [_ (zero-usage n)])))
+       (tu (expr-Type (lzero)) (foldl add-usage (zero-usage n) usages)))]
+    [(expr-solver-config _) (tu (expr-solver-type) (zero-usage n))]
+    [(expr-logic-var _ _) (tu (expr-hole) (zero-usage n))]
+    ;; Compound relational nodes — sum sub-expression usages
+    [(expr-defr nm sc vs)
+     (define su (if sc (match (inferQ ctx sc) [(tu _ u) u] [_ (zero-usage n)]) (zero-usage n)))
+     (define vus (for/list ([v (in-list vs)])
+                   (match (inferQ ctx v) [(tu _ u) u] [_ (zero-usage n)])))
+     (tu (expr-hole) (foldl add-usage su vus))]
+    [(expr-defr-variant ps bd)
+     (define us (map (lambda (b) (inferQ ctx b)) bd))
+     (define usages (map (lambda (r) (match r [(tu _ u) u] [_ '()])) us))
+     (tu (expr-hole) (foldl add-usage (zero-usage n) usages))]
+    [(expr-rel ps cls)
+     (define cus (for/list ([c (in-list cls)])
+                   (match (inferQ ctx c) [(tu _ u) u] [_ (zero-usage n)])))
+     (tu (expr-hole) (foldl add-usage (zero-usage n) cus))]
+    [(expr-clause gs)
+     (define gus (for/list ([g (in-list gs)])
+                   (match (inferQ ctx g) [(tu _ u) u] [_ (zero-usage n)])))
+     (tu (expr-goal-type) (foldl add-usage (zero-usage n) gus))]
+    [(expr-fact-block rs)
+     (define rus (for/list ([r (in-list rs)])
+                   (match (inferQ ctx r) [(tu _ u) u] [_ (zero-usage n)])))
+     (tu (expr-goal-type) (foldl add-usage (zero-usage n) rus))]
+    [(expr-fact-row ts)
+     (define tus (for/list ([t (in-list ts)])
+                   (match (inferQ ctx t) [(tu _ u) u] [_ (zero-usage n)])))
+     (tu (expr-hole) (foldl add-usage (zero-usage n) tus))]
+    [(expr-goal-app nm as)
+     (let ([rn (inferQ ctx nm)])
+       (define nus (for/list ([a (in-list as)])
+                     (match (inferQ ctx a) [(tu _ u) u] [_ (zero-usage n)])))
+       (match rn
+         [(tu _ u0) (tu (expr-goal-type) (foldl add-usage u0 nus))]
+         [_ (tu-error)]))]
+    [(expr-unify-goal l r)
+     (let ([r1 (inferQ ctx l)] [r2 (inferQ ctx r)])
+       (match* (r1 r2)
+         [((tu _ u1) (tu _ u2)) (tu (expr-goal-type) (add-usage u1 u2))]
+         [(_ _) (tu-error)]))]
+    [(expr-is-goal v ex)
+     (let ([r1 (inferQ ctx v)] [r2 (inferQ ctx ex)])
+       (match* (r1 r2)
+         [((tu _ u1) (tu _ u2)) (tu (expr-goal-type) (add-usage u1 u2))]
+         [(_ _) (tu-error)]))]
+    [(expr-not-goal g)
+     (let ([r (inferQ ctx g)])
+       (match r [(tu _ u) (tu (expr-goal-type) u)] [_ (tu-error)]))]
+    [(expr-guard cond goal)
+     (let ([r1 (inferQ ctx cond)] [r2 (inferQ ctx goal)])
+       (match* (r1 r2)
+         [((tu _ u1) (tu _ u2)) (tu (expr-goal-type) (add-usage u1 u2))]
+         [(_ _) (tu-error)]))]
+    [(expr-schema nm fs)
+     (define fus (for/list ([f (in-list fs)])
+                   (match (inferQ ctx f) [(tu _ u) u] [_ (zero-usage n)])))
+     (tu (expr-schema-type nm) (foldl add-usage (zero-usage n) fus))]
+    [(expr-solve g)
+     (let ([r (inferQ ctx g)])
+       (match r [(tu _ u) (tu (expr-hole) u)] [_ (tu-error)]))]
+    [(expr-solve-with sv ov g)
+     (define su (if sv (match (inferQ ctx sv) [(tu _ u) u] [_ (zero-usage n)]) (zero-usage n)))
+     (define ou (if ov (match (inferQ ctx ov) [(tu _ u) u] [_ (zero-usage n)]) (zero-usage n)))
+     (let ([rg (inferQ ctx g)])
+       (match rg
+         [(tu _ ug) (tu (expr-hole) (add-usage su (add-usage ou ug)))]
+         [_ (tu-error)]))]
+    [(expr-solve-one g)
+     (let ([r (inferQ ctx g)])
+       (match r [(tu _ u) (tu (expr-hole) u)] [_ (tu-error)]))]
+    [(expr-explain g)
+     (let ([r (inferQ ctx g)])
+       (match r [(tu _ u) (tu (expr-hole) u)] [_ (tu-error)]))]
+    [(expr-explain-with sv ov g)
+     (define su (if sv (match (inferQ ctx sv) [(tu _ u) u] [_ (zero-usage n)]) (zero-usage n)))
+     (define ou (if ov (match (inferQ ctx ov) [(tu _ u) u] [_ (zero-usage n)]) (zero-usage n)))
+     (let ([rg (inferQ ctx g)])
+       (match rg
+         [(tu _ ug) (tu (expr-hole) (add-usage su (add-usage ou ug)))]
+         [_ (tu-error)]))]
+
     ;; ---- J eliminator ----
     ;; Usage from proof, base, motive arguments
     [(expr-J mot base left right proof)
@@ -2084,6 +2184,9 @@
 
     ;; ---- Tabling runtime wrapper ----
     [((expr-table-store-val _) (expr-table-store-type)) (bu #t (zero-usage n))]
+
+    ;; ---- Relational runtime wrapper ----
+    [((expr-solver-config _) (expr-solver-type)) (bu #t (zero-usage n))]
 
     ;; ---- Union type: checkQ(G, e, A | B) ----
     ;; Try left component first, then right. Uses speculative meta state.

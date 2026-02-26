@@ -26,7 +26,10 @@
          "propagator.rkt"
          "union-find.rkt"
          "atms.rkt"
-         "tabling.rkt")
+         "tabling.rkt"
+         "solver.rkt"
+         "relations.rkt"
+         "provenance.rkt")
 
 (provide whnf nf nf-whnf conv conv-nf
          current-nf-cache current-whnf-cache
@@ -137,6 +140,124 @@
   (racket-list->prologos-list
    (for/list ([(aid _) (in-hash aset)])
      (expr-assumption-id-val aid))))
+
+;; ========================================
+;; Helpers for relational solve/explain (Phase 7 Sub-phase E)
+;; ========================================
+
+;; Convert a Prologos AST expression to a ground Racket value for the solver.
+;; Returns a symbol (for logic vars), or the AST expression itself (for ground terms).
+;; The solver unifies using equal? on these values.
+(define (expr->ground-value e)
+  (let ([e* (whnf e)])
+    (cond
+      [(expr-logic-var? e*) (expr-logic-var-name e*)]
+      [else e*])))
+
+;; Convert solver answer maps (list of hasheq) back to a Prologos expression.
+;; Each answer is a hasheq mapping query variable names (symbols) to ground values.
+;; Returns a Prologos List of Maps: '[(map :x val1 :y val2), ...]
+(define (answers->prologos-expr answers query-vars)
+  (racket-list->prologos-list
+   (for/list ([answer (in-list answers)])
+     ;; Build a CHAMP map from the answer bindings
+     (define champ-val
+       (for/fold ([c champ-empty])
+                 ([qv (in-list query-vars)])
+         (define val (hash-ref answer qv #f))
+         (define key (expr-keyword qv))
+         (define pval (if val (ground->prologos-expr val) (expr-fvar 'none)))
+         (champ-insert c (equal-hash-code key) key pval)))
+     (expr-champ champ-val))))
+
+;; Convert a ground solver value back to a Prologos AST expression.
+;; If the value is already an AST expression, return it directly.
+;; If it's a symbol (unresolved logic var), return it as an fvar.
+(define (ground->prologos-expr v)
+  (cond
+    [(symbol? v) (expr-fvar v)]
+    ;; Already an AST expression
+    [(or (expr-zero? v) (expr-suc? v) (expr-true? v) (expr-false? v)
+         (expr-string? v) (expr-int? v) (expr-keyword? v) (expr-fvar? v)
+         (expr-app? v) (expr-champ? v) (expr-lam? v) (expr-pair? v))
+     v]
+    [else (expr-fvar (if (symbol? v) v 'unknown))]))
+
+;; Extract query variable names and ground args from a goal-app's arguments.
+;; Returns (values goal-args query-vars) where:
+;;   goal-args: list of ground values or symbols (for logic vars)
+;;   query-vars: list of symbols for unbound logic variables
+(define (extract-query-info args)
+  (define goal-args '())
+  (define query-vars '())
+  (for ([a (in-list args)])
+    (let ([a* (whnf a)])
+      (cond
+        [(expr-logic-var? a*)
+         (define name (expr-logic-var-name a*))
+         (set! goal-args (cons name goal-args))
+         (set! query-vars (cons name query-vars))]
+        [else
+         (set! goal-args (cons a* goal-args))])))
+  (values (reverse goal-args) (reverse query-vars)))
+
+;; Run solve for a goal expression, returning a Prologos list of answer maps.
+(define (run-solve-goal goal-expr config)
+  (define goal* (whnf goal-expr))
+  (cond
+    [(expr-goal-app? goal*)
+     (define rel-name (expr-goal-app-name goal*))
+     (define rel-args (expr-goal-app-args goal*))
+     (define-values (goal-args query-vars) (extract-query-info rel-args))
+     (define store (current-relation-store))
+     (define answers (solve-goal config store rel-name goal-args query-vars))
+     (answers->prologos-expr answers query-vars)]
+    ;; If the goal is not yet reduced to a goal-app, return the expression unchanged
+    [else (expr-solve goal*)]))
+
+;; Run solve-one for a goal expression, returning Option (first answer or none).
+(define (run-solve-one-goal goal-expr config)
+  (define goal* (whnf goal-expr))
+  (cond
+    [(expr-goal-app? goal*)
+     (define rel-name (expr-goal-app-name goal*))
+     (define rel-args (expr-goal-app-args goal*))
+     (define-values (goal-args query-vars) (extract-query-info rel-args))
+     (define store (current-relation-store))
+     (define answers (solve-goal config store rel-name goal-args query-vars))
+     (if (null? answers)
+         (expr-fvar 'none)
+         ;; Wrap first answer in 'some'
+         (let* ([first-answer (car answers)]
+                [champ-val
+                 (for/fold ([c champ-empty])
+                           ([qv (in-list query-vars)])
+                   (define val (hash-ref first-answer qv #f))
+                   (define key (expr-keyword qv))
+                   (define pval (if val (ground->prologos-expr val) (expr-fvar 'none)))
+                   (champ-insert c (equal-hash-code key) key pval))])
+           (expr-app (expr-fvar 'some) (expr-champ champ-val))))]
+    [else (expr-solve-one goal*)]))
+
+;; Run explain for a goal expression, returning a Prologos list of answer-records.
+(define (run-explain-goal goal-expr config prov-level)
+  (define goal* (whnf goal-expr))
+  (cond
+    [(expr-goal-app? goal*)
+     (define rel-name (expr-goal-app-name goal*))
+     (define rel-args (expr-goal-app-args goal*))
+     (define-values (goal-args query-vars) (extract-query-info rel-args))
+     (define store (current-relation-store))
+     (define answer-records
+       (explain-goal config store rel-name goal-args query-vars prov-level))
+     ;; Convert answer-records to Prologos list of maps
+     ;; Each answer-record has bindings (hasheq), clause-id, depth, derivation, support
+     ;; For now, just return the bindings as maps (same as solve)
+     (define binding-maps
+       (for/list ([ar (in-list answer-records)])
+         (answer-record-bindings ar)))
+     (answers->prologos-expr binding-maps query-vars)]
+    [else (expr-explain goal*)]))
 
 ;; ========================================
 ;; Helpers for Posit8 reduction
@@ -2063,6 +2184,57 @@
             (if (table-lookup rstore sym answer*) (expr-true) (expr-false)))]
          [_ (if (equal? store* store) e (whnf (expr-table-lookup store* name answer)))]))]
 
+    ;; ---- Relational language (Phase 7) ----
+    ;; Type constructors are self-values
+    [(expr-solver-type) e]
+    [(expr-goal-type) e]
+    [(expr-derivation-type) e]
+    [(expr-schema-type _) e]
+    [(expr-answer-type _) e]
+    [(expr-relation-type _) e]
+    [(expr-cut) e]
+    ;; Runtime wrapper is a self-value
+    [(expr-solver-config _) e]
+    ;; Structural values — don't reduce during WHNF
+    [(expr-logic-var _ _) e]
+    [(expr-defr _ _ _) e]
+    [(expr-defr-variant _ _) e]
+    [(expr-rel _ _) e]
+    [(expr-clause _) e]
+    [(expr-fact-block _) e]
+    [(expr-fact-row _) e]
+    [(expr-goal-app _ _) e]
+    [(expr-unify-goal _ _) e]
+    [(expr-is-goal _ _) e]
+    [(expr-not-goal _) e]
+    [(expr-guard _ _) e]
+    [(expr-schema _ _) e]
+    ;; Solve/Explain iota rules: reduce goal then dispatch to runtime solver
+    [(expr-solve goal)
+     (run-solve-goal goal default-solver-config)]
+
+    [(expr-solve-with solver overrides goal)
+     (define cfg
+       (let ([s (whnf solver)])
+         (if (expr-solver-config? s)
+             (expr-solver-config-config-map s)
+             default-solver-config)))
+     (run-solve-goal goal cfg)]
+
+    [(expr-solve-one goal)
+     (run-solve-one-goal goal default-solver-config)]
+
+    [(expr-explain goal)
+     (run-explain-goal goal default-solver-config 'full)]
+
+    [(expr-explain-with solver overrides goal)
+     (define cfg
+       (let ([s (whnf solver)])
+         (if (expr-solver-config? s)
+             (expr-solver-config-config-map s)
+             default-solver-config)))
+     (run-explain-goal goal cfg 'full)]
+
     ;; Union types: pass through (types don't reduce)
     [(expr-union _ _) e]
 
@@ -2476,6 +2648,30 @@
     [(expr-table-complete st n) (expr-table-complete (nf st) (nf n))]
     [(expr-table-run st) (expr-table-run (nf st))]
     [(expr-table-lookup st n a) (expr-table-lookup (nf st) (nf n) (nf a))]
+
+    ;; Relational language (Phase 7)
+    [(expr-solver-type) e] [(expr-goal-type) e] [(expr-derivation-type) e] [(expr-cut) e]
+    [(expr-schema-type _) e] [(expr-logic-var _ _) e]
+    [(expr-answer-type t) (if t (expr-answer-type (nf t)) e)]
+    [(expr-relation-type pts) (expr-relation-type (map nf pts))]
+    [(expr-solver-config m) (expr-solver-config (nf m))]
+    [(expr-defr nm sc vs) (expr-defr nm (and sc (nf sc)) (map nf vs))]
+    [(expr-defr-variant ps bd) (expr-defr-variant ps (map nf bd))]
+    [(expr-rel ps cls) (expr-rel ps (map nf cls))]
+    [(expr-clause gs) (expr-clause (map nf gs))]
+    [(expr-fact-block rs) (expr-fact-block (map nf rs))]
+    [(expr-fact-row ts) (expr-fact-row (map nf ts))]
+    [(expr-goal-app nm as) (expr-goal-app (nf nm) (map nf as))]
+    [(expr-unify-goal l r) (expr-unify-goal (nf l) (nf r))]
+    [(expr-is-goal v ex) (expr-is-goal (nf v) (nf ex))]
+    [(expr-not-goal g) (expr-not-goal (nf g))]
+    [(expr-guard cond goal) (expr-guard (nf cond) (nf goal))]
+    [(expr-schema nm fs) (expr-schema nm (map nf fs))]
+    [(expr-solve g) (expr-solve (nf g))]
+    [(expr-solve-with sv ov g) (expr-solve-with (and sv (nf sv)) (and ov (nf ov)) (nf g))]
+    [(expr-solve-one g) (expr-solve-one (nf g))]
+    [(expr-explain g) (expr-explain (nf g))]
+    [(expr-explain-with sv ov g) (expr-explain-with (and sv (nf sv)) (and ov (nf ov)) (nf g))]
 
     ;; Foreign function: opaque leaf (already in WHNF)
     [(expr-foreign-fn _ _ _ _ _ _) e]

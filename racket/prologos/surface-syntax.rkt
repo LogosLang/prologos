@@ -250,6 +250,16 @@
  (struct-out surf-table-new) (struct-out surf-table-register) (struct-out surf-table-add)
  (struct-out surf-table-answers) (struct-out surf-table-freeze) (struct-out surf-table-complete)
  (struct-out surf-table-run) (struct-out surf-table-lookup)
+ ;; Relational language (Phase 7)
+ (struct-out surf-defr) (struct-out surf-defr-variant) (struct-out surf-rel)
+ (struct-out surf-clause) (struct-out surf-facts) (struct-out surf-fact-row)
+ (struct-out surf-goal-app) (struct-out surf-unify) (struct-out surf-not) (struct-out surf-is)
+ (struct-out surf-solve) (struct-out surf-solve-with)
+ (struct-out surf-explain) (struct-out surf-explain-with)
+ (struct-out surf-schema) (struct-out surf-solver)
+ ;; Relational type constructors
+ (struct-out surf-solver-type) (struct-out surf-goal-type)
+ (struct-out surf-derivation-type) (struct-out surf-answer-type)
  ;; Top-level commands
  (struct-out surf-def)
  (struct-out surf-defn)
@@ -806,6 +816,48 @@
 (struct surf-table-complete     (store name srcloc) #:transparent)            ; (table-complete? store name)
 (struct surf-table-run          (store srcloc) #:transparent)                 ; (table-run store)
 (struct surf-table-lookup       (store name answer srcloc) #:transparent)     ; (table-lookup store name answer)
+
+;; ---- Relational language (Phase 7) ----
+
+;; Named relation: (defr name [params] body) or (defr name | [...] body | [...] body)
+;; name: symbol, schema: surf-expr or #f, variants: (listof surf-defr-variant)
+(struct surf-defr             (name schema variants srcloc) #:transparent)
+;; Single arity/pattern variant: | [params] body
+(struct surf-defr-variant     (params body srcloc) #:transparent)
+;; Anonymous relation: (rel [params] body)
+(struct surf-rel              (params clauses srcloc) #:transparent)
+;; Rule clause: &> goal1 goal2 ...
+(struct surf-clause           (goals srcloc) #:transparent)
+;; Fact block: || term1 term2 \n term3 term4 ...
+(struct surf-facts            (rows srcloc) #:transparent)
+;; Single fact row
+(struct surf-fact-row         (terms srcloc) #:transparent)
+;; Relational goal application: (name arg ...)
+(struct surf-goal-app         (name args srcloc) #:transparent)
+;; Unification goal: (= lhs rhs)
+(struct surf-unify            (lhs rhs srcloc) #:transparent)
+;; Negation-as-failure: (not goal)
+(struct surf-not              (goal srcloc) #:transparent)
+;; Functional eval in relation: (is var [expr])
+(struct surf-is               (var expr srcloc) #:transparent)
+;; Solve: (solve (goal))
+(struct surf-solve            (goal srcloc) #:transparent)
+;; Solve-with: (solve-with solver {overrides} (goal))
+(struct surf-solve-with       (solver overrides goal srcloc) #:transparent)
+;; Explain: (explain (goal))
+(struct surf-explain          (goal srcloc) #:transparent)
+;; Explain-with: (explain-with solver {overrides} (goal))
+(struct surf-explain-with     (solver overrides goal srcloc) #:transparent)
+;; Schema: schema name :field Type ...
+(struct surf-schema           (name fields srcloc) #:transparent)
+;; Solver: solver name :key val ...
+(struct surf-solver           (name options srcloc) #:transparent)
+
+;; ---- Relational type constructors ----
+(struct surf-solver-type      (srcloc) #:transparent)          ; Solver
+(struct surf-goal-type        (srcloc) #:transparent)          ; Goal
+(struct surf-derivation-type  (srcloc) #:transparent)          ; DerivationTree
+(struct surf-answer-type      (val-type srcloc) #:transparent) ; (Answer V) — val-type is surf-expr or #f
 
 ;; ========================================
 ;; Top-level commands

@@ -1613,6 +1613,73 @@
                 (expr-Bool))
          (expr-error))]
 
+    ;; ---- Relational language (Phase 7) ----
+
+    ;; Type constructors → Type 0
+    [(expr-solver-type) (expr-Type (lzero))]
+    [(expr-goal-type) (expr-Type (lzero))]
+    [(expr-derivation-type) (expr-Type (lzero))]
+    [(expr-schema-type _) (expr-Type (lzero))]
+    [(expr-answer-type t)
+     (when t (check ctx t (expr-Type (lzero))))
+     (expr-Type (lzero))]
+    [(expr-relation-type pts)
+     (for-each (lambda (p) (check ctx p (expr-Type (lzero)))) pts)
+     (expr-Type (lzero))]
+
+    ;; Runtime wrappers
+    [(expr-solver-config m) (infer ctx m) (expr-solver-type)]
+    [(expr-cut) (expr-goal-type)]
+    [(expr-logic-var _ _) (expr-hole)]  ;; inferred from context
+
+    ;; defr / rel → relation type (type-unsafe: returns hole)
+    [(expr-defr nm sc vs)
+     (when sc (infer ctx sc))
+     (for-each (lambda (v) (infer ctx v)) vs)
+     (expr-hole)]
+    [(expr-defr-variant ps bd) (for-each (lambda (b) (infer ctx b)) bd) (expr-hole)]
+    [(expr-rel ps cls) (for-each (lambda (c) (infer ctx c)) cls) (expr-hole)]
+
+    ;; Clause/fact bodies → Goal
+    [(expr-clause gs) (for-each (lambda (g) (infer ctx g)) gs) (expr-goal-type)]
+    [(expr-fact-block rs) (for-each (lambda (r) (infer ctx r)) rs) (expr-goal-type)]
+    [(expr-fact-row ts) (for-each (lambda (t) (infer ctx t)) ts) (expr-hole)]
+
+    ;; Goals → Goal
+    [(expr-goal-app nm as)
+     (infer ctx nm)
+     (for-each (lambda (a) (infer ctx a)) as)
+     (expr-goal-type)]
+    [(expr-unify-goal l r)
+     (infer ctx l) (infer ctx r)
+     (expr-goal-type)]
+    [(expr-is-goal v ex)
+     (infer ctx v) (infer ctx ex)
+     (expr-goal-type)]
+    [(expr-not-goal g) (infer ctx g) (expr-goal-type)]
+    [(expr-guard cond goal)
+     (check ctx cond (expr-Bool))
+     (infer ctx goal)
+     (expr-goal-type)]
+
+    ;; Schema → schema-type
+    [(expr-schema nm fs) (for-each (lambda (f) (infer ctx f)) fs) (expr-schema-type nm)]
+
+    ;; Solve/Explain → type-unsafe (hole)
+    [(expr-solve g) (infer ctx g) (expr-hole)]
+    [(expr-solve-with sv ov g)
+     (when sv (infer ctx sv))
+     (when ov (infer ctx ov))
+     (infer ctx g)
+     (expr-hole)]
+    [(expr-solve-one g) (infer ctx g) (expr-hole)]
+    [(expr-explain g) (infer ctx g) (expr-hole)]
+    [(expr-explain-with sv ov g)
+     (when sv (infer ctx sv))
+     (when ov (infer ctx ov))
+     (infer ctx g)
+     (expr-hole)]
+
     ;; ---- Fallback: cannot infer ----
     [_ (expr-error)]))
 
@@ -1857,6 +1924,9 @@
 
     ;; ---- Tabling runtime wrapper ----
     [((expr-table-store-val _) (expr-table-store-type)) #t]
+
+    ;; ---- Relational language runtime wrappers ----
+    [((expr-solver-config _) (expr-solver-type)) #t]
 
     ;; ---- Reduce: ML-style Church elimination ----
     ;; check(G, reduce(scrutinee, arms), T)
@@ -2202,6 +2272,14 @@
 
     ;; Tabling type constructor — ground type at Type 0
     [(expr-table-store-type) (just-level (lzero))]
+
+    ;; Relational type constructors — ground types at Type 0
+    [(expr-solver-type) (just-level (lzero))]
+    [(expr-goal-type) (just-level (lzero))]
+    [(expr-derivation-type) (just-level (lzero))]
+    [(expr-schema-type _) (just-level (lzero))]
+    [(expr-answer-type _) (just-level (lzero))]
+    [(expr-relation-type _) (just-level (lzero))]
 
     ;; Union formation: A | B : Type(max(level(A), level(B)))
     [(expr-union l r)

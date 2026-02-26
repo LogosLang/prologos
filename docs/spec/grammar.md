@@ -1,64 +1,70 @@
-- [Introduction](#org1ebb2fb)
-- [Lexical Grammar](#org8e65e2a)
-  - [Comments](#org7d8fa92)
-  - [Identifiers](#orgb447337)
-  - [Numeric Literals](#org15cf07a)
-  - [String Literals](#orgefea47f)
-  - [Keyword Literals](#org6fe1a29)
-  - [Boolean Literals](#org8636907)
-  - [Special Tokens](#orgb40151f)
-  - [Bracket Types](#orgf0bbb14)
-  - [Collection Literal Prefixes](#org68af039)
-- [Type Expressions](#org217a5cf)
-  - [Base Types](#org3fed70d)
-  - [Parameterized Types](#org0b4219c)
-  - [Function Types (Arrows)](#orge3ccc91)
-  - [Dependent Types (Angle Brackets)](#org616cc51)
-  - [Sigma Types (Product / Pair Types)](#orga509320)
-  - [Equality Type](#orgbd83467)
-  - [Union Types](#org0ec2a24)
-  - [Universe Levels](#org7b4147e)
-  - [Type Holes](#org9adaba3)
-  - [Typed Holes (Interactive Development)](#org5c2665a)
-- [Expressions](#orge0eabfd)
-  - [Function Application](#org885aa94)
-  - [Lambda Expressions](#orgf063c4c)
-  - [Pattern Matching](#org96e3a49)
-  - [If (Conditional)](#org157cedb)
-  - [Let (Local Binding)](#orgc5e02c6)
-  - [Pipe Operator (|>)](#org58aaea6)
-  - [Compose Operator (>>)](#org75c201e)
-  - [Type Annotations (the)](#orge9b5afb)
-  - [Pairs](#orge13833f)
-  - [Quote and Quasiquote](#org3dc593c)
-  - [Collection Literals](#orgde57f7f)
-  - [Partial Application](#org54abf34)
-  - [Varargs](#org48046eb)
-- [Declarations](#org39d9e10)
-  - [Namespace (ns)](#orgaefca1b)
-  - [Require](#org5e6a21f)
-  - [Value Definition (def)](#orgbeb52e4)
-  - [Type Signature (spec)](#orgfefe6f8)
-    - [Extended Spec with Metadata](#org2f77602)
-  - [Function Definition (defn)](#org7816c38)
-  - [Algebraic Data Types (data)](#org598e094)
-  - [Traits and Implementations](#org7fcc568)
-  - [Property Declarations](#orgda8fca7)
-  - [Functor Declarations (Named Type Abstractions)](#org2772cff)
-  - [User-Defined Macros](#org4e2e4c9)
-- [Multiplicity (QTT)](#org92f24a4)
-- [Dependent Types and Eliminators](#org434cbc6)
-  - [Natural Number Elimination (natrec)](#org6cc11a3)
-  - [Equality Elimination (J)](#org0daf2b7)
-  - [Length-Indexed Vectors](#org2bfb058)
-- [Full Program Example](#orgd8aa156)
-- [Appendix: S-Expression Mode](#org66ac9f6)
-- [Appendix: Whitespace Reader Rules](#org5694758)
-- [Appendix: Reader Desugaring Table](#org5be1b88)
+- [Introduction](#org62d9bfe)
+- [Lexical Grammar](#org11fa754)
+  - [Comments](#org0dec869)
+  - [Identifiers](#org0de96cf)
+  - [Numeric Literals](#orgf051678)
+  - [String Literals](#org9635c7c)
+  - [Keyword Literals](#orgf8ad352)
+  - [Boolean Literals](#org810624e)
+  - [Special Tokens](#org14aa470)
+  - [Bracket Types](#org424721b)
+  - [Collection Literal Prefixes](#org4f27d4d)
+- [Type Expressions](#orgcdd3ab5)
+  - [Base Types](#org9fab40f)
+  - [Parameterized Types](#orgb5c5a34)
+  - [Function Types (Arrows)](#org59a94a7)
+  - [Dependent Types (Angle Brackets)](#orga604ea6)
+  - [Sigma Types (Product / Pair Types)](#org0b5d889)
+  - [Equality Type](#orgec998b0)
+  - [Union Types](#org9c0ff50)
+  - [Universe Levels](#org6e42a8a)
+  - [Type Holes](#org168376d)
+  - [Typed Holes (Interactive Development)](#org3d62efe)
+- [Expressions](#orgd63cb30)
+  - [Function Application](#org90da151)
+  - [Lambda Expressions](#org71f4062)
+  - [Pattern Matching](#org9b487f5)
+  - [If (Conditional)](#org82fed27)
+  - [Let (Local Binding)](#orgfa36d2d)
+  - [Pipe Operator (|>)](#org5cc492c)
+  - [Compose Operator (>>)](#org508bd8d)
+  - [Type Annotations (the)](#orgbbd0f49)
+  - [Pairs](#orgdea4c04)
+  - [Quote and Quasiquote](#org6a5ff1d)
+  - [Collection Literals](#org9cafc33)
+  - [Partial Application](#org2e118b4)
+  - [Varargs](#orga2a46c6)
+- [Declarations](#org3493f4d)
+  - [Namespace (ns)](#org45b99b1)
+  - [Require](#org38ebb55)
+  - [Value Definition (def)](#orgdce844d)
+  - [Type Signature (spec)](#org61edc3c)
+    - [Extended Spec with Metadata](#orge1de86a)
+  - [Function Definition (defn)](#org70563a2)
+  - [Algebraic Data Types (data)](#org5048eab)
+  - [Traits and Implementations](#orga0b6d9f)
+  - [Property Declarations](#org1e4096b)
+  - [Functor Declarations (Named Type Abstractions)](#org9d45709)
+  - [User-Defined Macros](#org9c2ef90)
+- [Relational Language (Logic Programming)](#org411c831)
+  - [Relation Definition (defr)](#orgcc757d2)
+  - [Anonymous Relations (rel)](#orgcb63d4d)
+  - [Solve and Explain](#orgce32a41)
+  - [Solver Configuration](#org831a94c)
+  - [Type Constructors](#org2fb68c5)
+- [Multiplicity (QTT)](#org6355d11)
+- [Dependent Types and Eliminators](#orgb50d33b)
+  - [Natural Number Elimination (natrec)](#org08275e8)
+  - [Equality Elimination (J)](#org8122cac)
+  - [Length-Indexed Vectors](#org567189c)
+- [Full Program Example](#org707b577)
+- [Appendix: S-Expression Mode](#org813d7ad)
+- [Appendix: Whitespace Reader Rules](#org2c2e1ba)
+- [Appendix: Reader Desugaring Table](#org5fafa79)
 
 
 
-<a id="org1ebb2fb"></a>
+<a id="org62d9bfe"></a>
 
 # Introduction
 
@@ -74,12 +80,12 @@ The grammar is organized bottom-up: lexical elements, then types, then expressio
 > **Design Principle**: Prologos is *homoiconic* &#x2014; code and data share the same representation. All syntactic sugar desugars to s-expressions. Macros operate on the post-parse representation, making code-as-data a first-class concept.
 
 
-<a id="org8e65e2a"></a>
+<a id="org11fa754"></a>
 
 # Lexical Grammar
 
 
-<a id="org7d8fa92"></a>
+<a id="org0dec869"></a>
 
 ## Comments
 
@@ -91,7 +97,7 @@ def x : Nat zero  ; inline comment
 ```
 
 
-<a id="orgb447337"></a>
+<a id="org0de96cf"></a>
 
 ## Identifiers
 
@@ -119,7 +125,7 @@ opt::unwrap-or  ;; qualified reference to option module's unwrap-or
 ```
 
 
-<a id="org15cf07a"></a>
+<a id="orgf051678"></a>
 
 ## Numeric Literals
 
@@ -147,7 +153,7 @@ Bare decimal literals (`3.14`, `0.5`) produce Posit32 values, the same as their 
 Nat is intended for type-level infrastructure (indices, lengths, proofs), not general computation.
 
 
-<a id="orgefea47f"></a>
+<a id="org9635c7c"></a>
 
 ## String Literals
 
@@ -159,7 +165,7 @@ Double-quoted with standard escape sequences (`\n`, `\t`, `\\`, `\"`).
 ```
 
 
-<a id="org6fe1a29"></a>
+<a id="orgf8ad352"></a>
 
 ## Keyword Literals
 
@@ -172,7 +178,7 @@ Keywords start with `:` and are used as map keys and enum-like values:
 ```
 
 
-<a id="org8636907"></a>
+<a id="org810624e"></a>
 
 ## Boolean Literals
 
@@ -182,7 +188,7 @@ false
 ```
 
 
-<a id="orgb40151f"></a>
+<a id="org14aa470"></a>
 
 ## Special Tokens
 
@@ -200,7 +206,7 @@ false
 | `refl`    | Equality reflexivity proof                    |
 
 
-<a id="orgf0bbb14"></a>
+<a id="org424721b"></a>
 
 ## Bracket Types
 
@@ -216,7 +222,7 @@ Prologos uses four bracket types, each with distinct semantics:
 Inside any bracket pair, newlines are treated as whitespace (indentation is not significant).
 
 
-<a id="org68af039"></a>
+<a id="org4f27d4d"></a>
 
 ## Collection Literal Prefixes
 
@@ -229,14 +235,14 @@ Inside any bracket pair, newlines are treated as whitespace (indentation is not 
 | `{k v}`  | `Map`  | `{:name "Ada"}` |
 
 
-<a id="org217a5cf"></a>
+<a id="orgcdd3ab5"></a>
 
 # Type Expressions
 
 In a dependently-typed language, types and terms share the same expression syntax. This section highlights type-specific forms.
 
 
-<a id="org3fed70d"></a>
+<a id="org9fab40f"></a>
 
 ## Base Types
 
@@ -254,6 +260,13 @@ base-type ::= 'Type'     (* universe of types, level inferred *)
             | 'CellId'       (* propagator cell identifier     *)
             | 'PropId'       (* propagator identifier          *)
             | 'UnionFind'    (* persistent disjoint sets       *)
+            | 'ATMS'         (* hypothetical reasoning TMS     *)
+            | 'AssumptionId' (* ATMS assumption identifier     *)
+            | 'TableStore'   (* SLG-style tabling store        *)
+            | 'Solver'       (* solver configuration type       *)
+            | 'Goal'         (* relational goal type (Prop)     *)
+            | 'DerivationTree' (* proof/derivation tree         *)
+            | 'Answer'       (* answer with optional provenance *)
 ```
 
 ```prologos
@@ -263,7 +276,7 @@ def u : Unit unit
 ```
 
 
-<a id="org0b4219c"></a>
+<a id="orgb5c5a34"></a>
 
 ## Parameterized Types
 
@@ -279,7 +292,7 @@ PVec Nat            ;; persistent vector of Nats
 ```
 
 
-<a id="orge3ccc91"></a>
+<a id="org59a94a7"></a>
 
 ## Function Types (Arrows)
 
@@ -300,7 +313,7 @@ Nat -> Nat -> Bool        ;; curried: Nat -> (Nat -> Bool)
 ```
 
 
-<a id="org616cc51"></a>
+<a id="orga604ea6"></a>
 
 ## Dependent Types (Angle Brackets)
 
@@ -324,7 +337,7 @@ dependent-type ::= '<' '(' ident ':' type ')' '->' type '>'  (* dependent Pi   *
 ```
 
 
-<a id="orga509320"></a>
+<a id="org0b5d889"></a>
 
 ## Sigma Types (Product / Pair Types)
 
@@ -342,7 +355,7 @@ Nat * Bool
 ```
 
 
-<a id="orgbd83467"></a>
+<a id="orgec998b0"></a>
 
 ## Equality Type
 
@@ -353,7 +366,7 @@ Nat * Bool
 ```
 
 
-<a id="org0ec2a24"></a>
+<a id="org9c0ff50"></a>
 
 ## Union Types
 
@@ -365,7 +378,7 @@ Int | Rat | Nat    ;; right-associative: Int | (Rat | Nat)
 ```
 
 
-<a id="org7b4147e"></a>
+<a id="org6e42a8a"></a>
 
 ## Universe Levels
 
@@ -376,7 +389,7 @@ Type           ;; universe, level inferred
 ```
 
 
-<a id="org9adaba3"></a>
+<a id="org168376d"></a>
 
 ## Type Holes
 
@@ -388,7 +401,7 @@ map _ xs          ;; type argument inferred
 ```
 
 
-<a id="org5c2665a"></a>
+<a id="org3d62efe"></a>
 
 ## Typed Holes (Interactive Development)
 
@@ -413,12 +426,12 @@ defn zip-with [f xs ys]
 `??` is the syntactic foundation for Editor-Assisted Interactive Development (Agda/Idris-style hole-driven programming). See the Extended Spec Design document for the full vision.
 
 
-<a id="orge0eabfd"></a>
+<a id="orgd63cb30"></a>
 
 # Expressions
 
 
-<a id="org885aa94"></a>
+<a id="org90da151"></a>
 
 ## Function Application
 
@@ -440,7 +453,7 @@ map [add 1N _] '[1N 2N 3N]  ;; map with partial application
 ```
 
 
-<a id="orgf063c4c"></a>
+<a id="org71f4062"></a>
 
 ## Lambda Expressions
 
@@ -468,7 +481,7 @@ fn x [suc x]
 ```
 
 
-<a id="org96e3a49"></a>
+<a id="org9b487f5"></a>
 
 ## Pattern Matching
 
@@ -516,7 +529,7 @@ Available patterns:
 -   **Nested**: `[cons x nil]` &#x2013; grouped pattern in brackets
 
 
-<a id="org157cedb"></a>
+<a id="org82fed27"></a>
 
 ## If (Conditional)
 
@@ -533,7 +546,7 @@ match [zero? n]
 ```
 
 
-<a id="orgc5e02c6"></a>
+<a id="orgfa36d2d"></a>
 
 ## Let (Local Binding)
 
@@ -550,7 +563,7 @@ let x : Nat = [add 1N 2N]
 ```
 
 
-<a id="org58aaea6"></a>
+<a id="org5cc492c"></a>
 
 ## Pipe Operator (|>)
 
@@ -572,7 +585,7 @@ zero |> suc |> suc |> suc    ;; = suc(suc(suc(zero))) = 3
 ```
 
 
-<a id="org75c201e"></a>
+<a id="org508bd8d"></a>
 
 ## Compose Operator (>>)
 
@@ -587,7 +600,7 @@ zero |> [suc >> double]     ;; = double(suc(zero))
 ```
 
 
-<a id="orge9b5afb"></a>
+<a id="orgbbd0f49"></a>
 
 ## Type Annotations (the)
 
@@ -600,7 +613,7 @@ Explicit type annotation on an expression:
 ```
 
 
-<a id="orge13833f"></a>
+<a id="orgdea4c04"></a>
 
 ## Pairs
 
@@ -618,7 +631,7 @@ snd [pair x y]
 ```
 
 
-<a id="org3dc593c"></a>
+<a id="org6a5ff1d"></a>
 
 ## Quote and Quasiquote
 
@@ -639,7 +652,7 @@ def val : Datum [datum-nat 10]
 ```
 
 
-<a id="orgde57f7f"></a>
+<a id="org9cafc33"></a>
 
 ## Collection Literals
 
@@ -669,7 +682,7 @@ def val : Datum [datum-nat 10]
 ```
 
 
-<a id="org54abf34"></a>
+<a id="org2e118b4"></a>
 
 ## Partial Application
 
@@ -684,7 +697,7 @@ Numbered placeholders `_1`, `_2` enable positional reordering:
 ```
 
 
-<a id="org48046eb"></a>
+<a id="orga2a46c6"></a>
 
 ## Varargs
 
@@ -707,12 +720,12 @@ first-plus-rest 100 1 2 3  ;; = 106
 ```
 
 
-<a id="org39d9e10"></a>
+<a id="org3493f4d"></a>
 
 # Declarations
 
 
-<a id="orgaefca1b"></a>
+<a id="org45b99b1"></a>
 
 ## Namespace (ns)
 
@@ -729,7 +742,7 @@ ns prologos.data.list :no-prelude
 The prelude automatically provides: `Nat`, `Bool`, `List`, `Option`, `Result`, `Pair` operations, `Eq=/=Ord=/=Add=/=Sub=/=Mul=/=Neg=/=Abs=/=FromInt=/=Num=/ =Fractional` traits and instances.
 
 
-<a id="org5e6a21f"></a>
+<a id="org38ebb55"></a>
 
 ## Require
 
@@ -749,7 +762,7 @@ require [prologos.data.list   :refer [List nil cons map]]
 ```
 
 
-<a id="orgbeb52e4"></a>
+<a id="orgdce844d"></a>
 
 ## Value Definition (def)
 
@@ -769,7 +782,7 @@ def- internal-state : Nat zero
 ```
 
 
-<a id="orgfefe6f8"></a>
+<a id="org61edc3c"></a>
 
 ## Type Signature (spec)
 
@@ -793,7 +806,7 @@ spec sort-on {A B : Type} [B -> B -> Bool] [A -> B] [List A] -> List A
 ```
 
 
-<a id="org2f77602"></a>
+<a id="orge1de86a"></a>
 
 ### Extended Spec with Metadata
 
@@ -837,7 +850,7 @@ Each `:properties` entry is a map with three keys:
 See the Extended Spec Design document (`docs/tracking/2026-02-22_EXTENDED_SPEC_DESIGN.org`) for the full research survey and design rationale.
 
 
-<a id="org7816c38"></a>
+<a id="org70563a2"></a>
 
 ## Function Definition (defn)
 
@@ -869,7 +882,7 @@ defn- helper [x]
 ```
 
 
-<a id="org598e094"></a>
+<a id="org5048eab"></a>
 
 ## Algebraic Data Types (data)
 
@@ -902,7 +915,7 @@ data- InternalTree {A}
 ```
 
 
-<a id="org7fcc568"></a>
+<a id="orga0b6d9f"></a>
 
 ## Traits and Implementations
 
@@ -935,7 +948,7 @@ trait Functor {F : Type -> Type}
 ```
 
 
-<a id="orgda8fca7"></a>
+<a id="org1e4096b"></a>
 
 ## Property Declarations
 
@@ -992,7 +1005,7 @@ spec sort [List A] -> [List A]
 Property clause names are scoped to their declaring block. When `:includes` flattens a hierarchy, names are qualified with `/`: `functor-laws/identity`, `monad-laws/left-identity`, etc.
 
 
-<a id="org2772cff"></a>
+<a id="org9d45709"></a>
 
 ## Functor Declarations (Named Type Abstractions)
 
@@ -1042,7 +1055,7 @@ spec into-list [Xf A B] -> [List A] -> [List B]
 Only `:unfolds` is required. The rest are progressive.
 
 
-<a id="org4e2e4c9"></a>
+<a id="org9c2ef90"></a>
 
 ## User-Defined Macros
 
@@ -1066,7 +1079,94 @@ when-nonzero zero [double 5]  ;; = 0
 ```
 
 
-<a id="org92f24a4"></a>
+<a id="org411c831"></a>
+
+# Relational Language (Logic Programming)
+
+Prologos makes logic programming a first-class paradigm via `defr`, the relational analogue of `defn`. Relations use round brackets for goals, mode-annotated parameters, and dual sigils for facts (`||`) and rules (`&>`).
+
+
+<a id="orgcc757d2"></a>
+
+## Relation Definition (defr)
+
+```prologos
+;; Single-arity: fact block
+defr parent [?x ?y]
+  || "alice" "bob"
+     "bob" "carol"
+
+;; Single-arity: rule clause
+defr ancestor [?x ?y]
+  &> (parent x y)
+
+;; Multi-arity with | dispatch
+defr ancestor
+  | [?x ?y] &> (parent x y)
+  | [?x ?z] &> (parent x y) (ancestor y z)
+
+;; Mode annotations: + = input, - = output, ? = free
+defr lookup [+key -val]
+  &> (table key val)
+```
+
+
+<a id="orgcb63d4d"></a>
+
+## Anonymous Relations (rel)
+
+```prologos
+;; Inline relation
+(eval (rel [?x] &> (parent x "bob")))
+```
+
+
+<a id="orgce32a41"></a>
+
+## Solve and Explain
+
+```prologos
+;; Solve: returns Seq (Map Keyword Value)
+(eval (solve (parent x y)))
+
+;; Solve-one: returns first answer only
+(eval (solve-one (ancestor "alice" y)))
+
+;; Solve-with: named solver
+(eval (solve-with my-solver (ancestor x y)))
+
+;; Explain: returns Seq (Answer Value) with derivation trees
+(eval (explain (ancestor "alice" "carol")))
+
+;; Explain-with: named solver + overrides
+(eval (explain-with debug-solver (ancestor x y)))
+```
+
+
+<a id="org831a94c"></a>
+
+## Solver Configuration
+
+```prologos
+;; Solver definitions (pre-expanded by macros)
+(solver my-solver :execution :parallel :timeout 5000)
+(solver debug-solver :provenance :full :strategy :depth-first)
+```
+
+
+<a id="org2fb68c5"></a>
+
+## Type Constructors
+
+| Type             | Kind               | Description                     |
+|---------------- |------------------ |------------------------------- |
+| `Solver`         | `Type 0`           | Solver configuration            |
+| `Goal`           | `Type 0`           | Relational goal (Prop)          |
+| `DerivationTree` | `Type 0`           | Proof / derivation tree         |
+| `Answer`         | `Type 0 -> Type 0` | Answer with optional provenance |
+
+
+<a id="org6355d11"></a>
 
 # Multiplicity (QTT)
 
@@ -1096,12 +1196,12 @@ Nat -w> Nat           ;; unrestricted: explicit
 ```
 
 
-<a id="org434cbc6"></a>
+<a id="orgb50d33b"></a>
 
 # Dependent Types and Eliminators
 
 
-<a id="org6cc11a3"></a>
+<a id="org08275e8"></a>
 
 ## Natural Number Elimination (natrec)
 
@@ -1127,7 +1227,7 @@ defn double [n]
 ```
 
 
-<a id="org0daf2b7"></a>
+<a id="org8122cac"></a>
 
 ## Equality Elimination (J)
 
@@ -1139,7 +1239,7 @@ J motive base left right refl
 ```
 
 
-<a id="org2bfb058"></a>
+<a id="org567189c"></a>
 
 ## Length-Indexed Vectors
 
@@ -1155,7 +1255,7 @@ vindex Nat 3N [fzero 2N] v      ;; safe index via Fin
 ```
 
 
-<a id="orgd8aa156"></a>
+<a id="org707b577"></a>
 
 # Full Program Example
 
@@ -1206,7 +1306,7 @@ unless [zero? 5] [factorial 5]
 ```
 
 
-<a id="org66ac9f6"></a>
+<a id="org813d7ad"></a>
 
 # Appendix: S-Expression Mode
 
@@ -1233,7 +1333,7 @@ spec map {A B : Type} [A -> B] [List A] -> List B
 ```
 
 
-<a id="org5694758"></a>
+<a id="org2c2e1ba"></a>
 
 # Appendix: Whitespace Reader Rules
 
@@ -1247,7 +1347,7 @@ The WS reader converts indentation to explicit structure:
 6.  **Column 0**: always starts a new top-level form
 
 
-<a id="org5be1b88"></a>
+<a id="org5fafa79"></a>
 
 # Appendix: Reader Desugaring Table
 

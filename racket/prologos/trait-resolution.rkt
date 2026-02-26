@@ -96,6 +96,12 @@
     [(expr-atms-type) "ATMS"]
     [(expr-assumption-id-type) "AssumptionId"]
     [(expr-table-store-type) "TableStore"]
+    [(expr-solver-type) "Solver"]
+    [(expr-goal-type) "Goal"]
+    [(expr-derivation-type) "DerivationTree"]
+    [(expr-schema-type name) (format "Schema:~a" name)]
+    [(expr-answer-type _) "Answer"]
+    [(expr-relation-type _) "Relation"]
     ;; HKT: unapplied type constructor
     [(expr-tycon name) (symbol->string name)]
     ;; Built-in parameterized types: extract constructor name

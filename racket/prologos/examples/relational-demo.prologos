@@ -1,0 +1,664 @@
+ns examples.relational-demo
+
+;; ========================================================================
+;;
+;;     ╔═══════════════════════════════════════════════════════╗
+;;     ║   R E L A T I O N A L   P R O G R A M M I N G         ║
+;;     ║           I N   P R O L O G O S                       ║
+;;     ║   An Interactive Spiral Tutorial                      ║
+;;     ╚═══════════════════════════════════════════════════════╝
+;;
+;; ========================================================================
+;;
+;; Welcome! This is a literate tutorial on Prologos's relational
+;; language — the logic programming paradigm that makes Prologos
+;; unique among dependently typed languages.
+;;
+;; STATUS: This file demonstrates the SURFACE SYNTAX of the relational
+;; language (Phase 7). Definitions using `defr` with fact blocks (`||`)
+;; are fully loadable — they parse, elaborate, and type-check. Rule
+;; clauses (`&>`), solve/explain calls, multi-arity dispatch,
+;; schemas, and anonymous relations are shown as COMMENTED SYNTAX
+;; EXAMPLES — they parse correctly in sexp mode but require the
+;; runtime execution engine (goal evaluation, constraint solving)
+;; which is not yet implemented.
+;;
+;; When the runtime is complete, all commented examples will be
+;; uncommented and this file will be fully executable.
+;;
+;; We'll spiral through the topic:
+;;
+;;   🌀 Pass 1  — Your first relation: facts as data
+;;   🌀 Pass 2  — Rules: deriving new knowledge
+;;   🌀 Pass 3  — The solve bridge: logic meets functions
+;;   🌀 Pass 4  — Bidirectional flow: functions inside relations
+;;   🌀 Pass 5  — Anonymous relations with rel
+;;   🌀 Pass 6  — Mode annotations: contracts for binding
+;;   🌀 Pass 7  — Multi-arity dispatch with |
+;;   🌀 Pass 8  — Schemas: typed relations
+;;   🌀 Pass 9  — Explain: provenance and derivation trees
+;;   🌀 Pass 10 — Putting it all together
+;;
+;; Prerequisites: basic Prologos familiarity (defn, fn, List, Option,
+;; pattern matching). The prelude gives you everything via `ns`.
+;;
+;; The Big Idea:
+;;
+;;   Prologos has three paradigms, each with its own delimiter:
+;;
+;;     Functional:  [f x y]    — compute values
+;;     Relational:  (R x y)    — constrain search spaces
+;;     Process:     indentation — sequence communications
+;;
+;;   This tutorial is about the relational paradigm.
+;;
+;;   Key vocabulary:
+;;     defn / fn   → define / anonymous functions
+;;     defr / rel  → define / anonymous relations
+;;     spec        → function type signature
+;;     schema      → relation type signature
+;;     solve       → bridge from relational to functional world
+;;     explain     → solve + provenance (derivation trees)
+;;
+;; Let's go!
+
+
+;; ========================================================================
+;; 🌀 PASS 1 — Your First Relation: Facts as Data
+;; ========================================================================
+;;
+;; A relation is a set of facts and rules. Think of it as a database
+;; table where you can also define derived views.
+;;
+;; The simplest relation is just data — a set of ground facts.
+;; We declare it with `defr` and introduce facts with `||`:
+
+defr parent [?x ?y]
+  || "alice" "bob"
+     "bob"   "carol"
+     "bob"   "dave"
+     "carol" "eve"
+
+;; What just happened?
+;;
+;; 1. `defr parent` declares a relation named `parent`
+;; 2. `[?x ?y]` names the two columns (both free — more on modes later)
+;; 3. `||` introduces a fact block — ground data, like rows in a table
+;; 4. Each line is a row: parent("alice", "bob"), parent("bob", "carol"), etc.
+;;
+;; This is the database isomorphism:
+;;
+;;   Prologos        Database
+;;   ─────────       ────────
+;;   defr            CREATE TABLE
+;;   || row          INSERT INTO
+;;   defr with &>    CREATE VIEW
+;;   (parent x y)    SELECT * FROM parent
+;;   solve           Execute query
+;;
+;; The `||` reads as "OR": the parent relation holds for
+;; ("alice","bob") OR ("bob","carol") OR ("bob","dave") OR ("carol","eve").
+
+;; Let's query it! The `solve` keyword bridges from relational to
+;; functional world:
+;;
+;;   (solve (parent "alice" who))
+;;
+;;   => [{:who "bob"}]
+;;
+;; `solve` returns a Seq of substitution maps. Each map binds the
+;; logic variables that were free in the query. Here `who` was free,
+;; and the solver found one answer: who = "bob".
+;;
+;; Let's try a more open query — who is a parent of whom?
+;;
+;;   (solve (parent x y))
+;;
+;;   => [{:x "alice" :y "bob"}
+;;       {:x "bob"   :y "carol"}
+;;       {:x "bob"   :y "dave"}
+;;       {:x "carol" :y "eve"}]
+;;
+;; All four facts come back. The solver returns ALL solutions.
+
+;; What about queries with no answers?
+;;
+;;   (solve (parent "eve" child))
+;;
+;;   => []
+;;
+;; Empty sequence — Eve has no children in our data.
+
+;; 💡 KEY INSIGHT: In Prologos, `[...]` computes a value (functional).
+;;    `(...)` constrains a search space (relational). The delimiter
+;;    tells you which world you're in.
+;;
+;; 🖊️ YOUR TURN: Add a fact "dave" "frank" to the parent relation
+;;    above, then re-run (solve (parent "dave" child)). What do you get?
+
+
+;; ========================================================================
+;; 🌀 PASS 2 — Rules: Deriving New Knowledge
+;; ========================================================================
+;;
+;; Facts are data you assert. Rules derive new facts from existing ones.
+;; The `&>` sigil introduces rule clauses:
+;;
+;;   defr ancestor [?x ?y]
+;;     &> (parent x y)
+;;     &> (parent x z) (ancestor z y)
+;;
+;; Two clauses:
+;;   Clause 1:  &> (parent x y)
+;;     "x is an ancestor of y if x is a parent of y"
+;;
+;;   Clause 2:  &> (parent x z) (ancestor z y)
+;;     "x is an ancestor of y if x is a parent of some z,
+;;      AND z is an ancestor of y"
+;;
+;; Within a clause, goals are conjoined by whitespace (AND).
+;; Between clauses, &> means logical OR — try each clause.
+;;
+;; The notation mirrors how you'd write it in logic:
+;;   ancestor(x,y) :- parent(x,y).
+;;   ancestor(x,y) :- parent(x,z), ancestor(z,y).
+;;
+;; But Prologos uses `&>` instead of `:-` and parenthetical goals
+;; instead of comma-separated atoms.
+
+;; Let's query:
+;;
+;;   (solve (ancestor "alice" who))
+;;
+;;   => [{:who "bob"} {:who "carol"} {:who "dave"} {:who "eve"}]
+;;
+;; Alice is an ancestor of everyone! The recursive rule followed
+;; the chain: alice→bob→carol→eve and alice→bob→dave.
+;;
+;;   (solve (ancestor who "eve"))
+;;
+;;   => [{:who "carol"} {:who "bob"} {:who "alice"}]
+;;
+;; Three people are ancestors of Eve. Relations work in BOTH
+;; directions — that's the magic of logic programming.
+
+;; 💡 KEY INSIGHT: The `ancestor` relation is recursive, and Prologos
+;;    tables it by default. Tabling prevents infinite loops and
+;;    guarantees all answers are found. You never need to worry about
+;;    left-recursion termination.
+;;
+;; 🖊️ YOUR TURN: Define a `sibling` relation where x and y are
+;;    siblings if they share a parent but are not the same person.
+;;    Hint: use `(parent p x) (parent p y)` and a guard.
+
+
+;; ========================================================================
+;; 🌀 PASS 3 — The Solve Bridge: Logic Meets Functions
+;; ========================================================================
+;;
+;; `solve` returns a lazy Seq of maps. That means you can use all
+;; the functional tools on the results:
+;;
+;; Count how many descendants Alice has:
+;;
+;;   def alice-descendants : Nat
+;;     [length (solve (ancestor "alice" who))]
+;;
+;;   => 4
+;;
+;; Get just the first answer:
+;;
+;;   (solve-one (ancestor "alice" who))
+;;
+;;   => (some {:who "bob"})
+;;
+;; `solve-one` returns Option — the first solution or nothing.
+;;
+;; Use `match` to handle the result functionally:
+;;
+;;   def first-descendant : String
+;;     match (solve-one (ancestor "alice" who))
+;;       | [some bindings] -> [map-get bindings :who]
+;;       | none            -> "nobody"
+;;
+;;   => "bob"
+;;
+;; Filter results functionally:
+;;
+;;   def bobs-children : [List String]
+;;     [map (fn [bindings] [map-get bindings :child])
+;;          (solve (parent "bob" child))]
+;;
+;; The key point: `solve` is a one-way bridge. It takes a relational
+;; goal and returns functional data. From there, you're back in the
+;; functional world with all its tools.
+
+
+;; ========================================================================
+;; 🌀 PASS 4 — Bidirectional Flow: Functions Inside Relations
+;; ========================================================================
+;;
+;; The bridge works both ways. `solve` goes from relational → functional.
+;; `is` goes from functional → relational.
+;;
+;; The `is` keyword evaluates a functional expression inside a
+;; relational goal and binds the result to a logic variable:
+;;
+;;   defr factorial [?n ?result]
+;;     &> (= n 0N) (= result 1N)
+;;     &> (gt n 0N)
+;;        (is n1 [sub n 1N])
+;;        (factorial n1 partial)
+;;        (is result [mult n partial])
+;;
+;; Let's break down clause 2:
+;;   (gt n 0N)              — guard: n must be > 0
+;;   (is n1 [sub n 1N])     — compute n-1, bind to n1
+;;   (factorial n1 partial)  — recursively find partial = (n-1)!
+;;   (is result [mult n partial]) — compute n * partial, bind to result
+;;
+;;   (solve (factorial 5N result))
+;;
+;;   => [{:result 120N}]
+;;
+;; 5! = 120. The relation computed it using functional arithmetic
+;; via `is`.
+
+;; 💡 KEY INSIGHT: `is` is the escape hatch from relations to functions.
+;;    `solve` is the escape hatch from functions to relations.
+;;    Together they fuse the two paradigms:
+;;
+;;        Functional ──solve──→ Relational
+;;        Functional ←──is───── Relational
+
+;; Here's a more interesting example — using unification goals:
+;;
+;;   defr same-sum-pair [?a ?b ?target]
+;;     &> (is s [add a b])
+;;        (= s target)
+;;
+;; This asks: "do a and b add up to target?"
+;; It combines functional evaluation (is) with unification (=).
+
+
+;; ========================================================================
+;; 🌀 PASS 5 — Anonymous Relations with `rel`
+;; ========================================================================
+;;
+;; Just as `fn` creates anonymous functions, `rel` creates anonymous
+;; relations. This is Prologos's unique innovation — no other
+;; logic-functional language has first-class anonymous relations.
+;;
+;; A local relation bound to a name:
+;;
+;;   def is-ancestor-of-bob : Rel
+;;     (rel [?x]
+;;       &> (ancestor x "bob"))
+;;
+;; Use it:
+;;
+;;   (solve (is-ancestor-of-bob who))
+;;
+;;   => [{:who "alice"}]
+;;
+;; Only Alice is an ancestor of Bob.
+;;
+;; Anonymous relations are powerful for ad-hoc queries:
+;;
+;;   def has-two-hop-connection : [List Map]
+;;     (solve (rel [?from ?to]
+;;       &> (parent from mid) (parent mid to))
+;;       from to)
+;;
+;; This creates an anonymous 2-hop relation inline and solves it.
+;; No need to pollute the namespace with a named relation.
+
+;; 💡 KEY INSIGHT: `rel` is the relational lambda.
+;;
+;;    fn  creates values that compute
+;;    rel creates relations that search
+;;
+;;    Both are first-class — you can pass them, return them,
+;;    bind them to names.
+;;
+;; 🖊️ YOUR TURN: Create an anonymous relation that finds all
+;;    grandparent-grandchild pairs (exactly 2 hops via parent).
+
+
+;; ========================================================================
+;; 🌀 PASS 6 — Mode Annotations: Contracts for Binding
+;; ========================================================================
+;;
+;; Mode annotations declare which parameters must be bound (input)
+;; and which will be computed (output). They appear in the parameter
+;; list — the relation's contract:
+;;
+;;   ?var  — free (either direction, the default)
+;;   +var  — input (must be bound by the caller)
+;;   -var  — output (will be bound by the relation)
+;;
+;; Modes are optional. When omitted, ? (free) is the default.
+
+;; This fact relation uses modes to document its columns:
+
+defr append-data [+xs +ys -zs]
+  || "a" "b" "ab"
+     "x" "y" "xy"
+
+;; The modes tell us:
+;;   +xs  — caller must provide the first value
+;;   +ys  — caller must provide the second value
+;;   -zs  — relation will produce the concatenated value
+;;
+;; Here's how the relational version of append WOULD be written:
+;;
+;;   defr append-rel [+xs +ys -zs]
+;;     &> (= xs nil) (= zs ys)
+;;     &> (= xs [cons h t])
+;;        (append-rel t ys rest)
+;;        (= zs [cons h rest])
+;;
+;;   (solve (append-rel '[1N 2N] '[3N 4N] result))
+;;
+;;   => [{:result [1N 2N 3N 4N]}]
+
+;; Why modes matter:
+;;
+;; 1. Documentation — modes tell the reader how to use a relation
+;; 2. Optimization — the solver can choose better strategies
+;;    (e.g., index on +input arguments)
+;; 3. Error detection — calling (append-rel x y result) when x
+;;    is unbound violates the +xs contract
+;;
+;; In the body, variables are BARE — modes live in the signature only.
+;; This keeps the logic clean and readable.
+;;
+;; Compare the visual difference:
+;;
+;;   defr append-rel [+xs +ys -zs]    ← signature: modes declared
+;;     &> (= xs nil) (= zs ys)        ← body: bare names, clean logic
+;;
+;; 🖊️ YOUR TURN: Add mode annotations to the `ancestor` relation.
+;;    Which parameters should be ? (free) and why?
+
+
+;; ========================================================================
+;; 🌀 PASS 7 — Multi-Arity Dispatch with |
+;; ========================================================================
+;;
+;; Like functional `defn`, relational `defr` supports multi-arity
+;; dispatch via `|`. Each variant has its own parameter list and body.
+;; This unifies the common Prolog pattern of public + worker predicates.
+;;
+;;   defr sum-list
+;;     | [+list -sum]
+;;       (sum-list list 0N sum)
+;;     | [[] +acc -sum]
+;;       &> (= acc sum)
+;;     | [[+x | +xs] +acc -sum]
+;;       &> (is new-acc [add acc x])
+;;          (sum-list xs new-acc sum)
+;;
+;; Three variants:
+;;   | [+list -sum]            — 2-arg public interface, delegates to 3-arg
+;;   | [[] +acc -sum]          — 3-arg base case: empty list → acc is sum
+;;   | [[+x|+xs] +acc -sum]   — 3-arg recursive: add head, recurse tail
+;;
+;; The three structural levels compose:
+;;   |   = dispatch on arity/pattern
+;;   &>  = logical disjunction (multiple derivation paths)
+;;   ||  = ground data (fact tables)
+;;
+;;   (solve (sum-list '[1N 2N 3N 4N] result))
+;;
+;;   => [{:result 10N}]
+;;
+;; Multi-arity avoids the Prolog convention of separate predicates:
+;;
+;;   Prolog:    sum_list(Xs, Sum) :- sum_list(Xs, 0, Sum).
+;;              sum_list([], Acc, Acc).
+;;              sum_list([X|Xs], Acc, Sum) :- ...
+;;
+;;   Prologos:  defr sum-list
+;;                | [+list -sum] ...
+;;                | [[] +acc -sum] ...
+;;                | [[+x|+xs] +acc -sum] ...
+;;
+;; Same logic, one definition, pattern-based dispatch.
+
+
+;; ========================================================================
+;; 🌀 PASS 8 — Schemas: Typed Relations
+;; ========================================================================
+;;
+;; So far our relations have been untyped — any values in any columns.
+;; Schemas add types, just as `spec` adds types to `defn`:
+;;
+;;   spec   → defn   (function types)
+;;   schema → defr   (relation types)
+;;
+;;   schema Employee
+;;     :name   String
+;;     :dept   String
+;;     :salary Nat
+;;
+;; A schema declares:
+;;   1. Column names (:name, :dept, :salary)
+;;   2. Column types (String, String, Nat)
+;;   3. Canonical ordering for positional facts
+;;
+;;   defr employee : Employee
+;;     || "Alice" "Engineering" 95000N
+;;        "Bob"   "Marketing"   72000N
+;;        "Carol" "Engineering" 110000N
+;;        "Dave"  "Research"    88000N
+;;
+;; The `: Employee` annotation links the relation to its schema.
+;; Each fact row is type-checked: the third column must be Nat.
+;;
+;; Try uncommenting this — it's a type error!
+;; || "Eve" "Engineering" "high"
+;;    ^^^^^^^^^^^^^^^^^^^^^^^ TYPE ERROR: :salary expects Nat, got String
+;;
+;; Query with schema-aware results:
+;;
+;;   (solve (employee name "Engineering" salary))
+;;
+;;   => [{:name "Alice" :salary 95000N}
+;;       {:name "Carol" :salary 110000N}]
+;;
+;; Schema-annotated solve results use field NAMES, not positions.
+;; The results are typed maps that support dot-access.
+
+;; Derived relation over typed data:
+;;
+;;   defr high-earner [?name ?salary]
+;;     &> (employee name _ salary)
+;;        (gt salary 90000N)
+;;
+;;   (solve (high-earner who salary))
+;;
+;;   => [{:who "Alice" :salary 95000N}
+;;       {:who "Carol" :salary 110000N}]
+
+;; 💡 KEY INSIGHT: Schema is to defr what spec is to defn.
+;;    It's the specification triple:
+;;
+;;      spec    / defn    / fn    — function interfaces
+;;      schema  / defr    / rel   — relation interfaces
+;;      session / defproc / proc  — process interfaces
+;;
+;;    Every paradigm has a shape and an implementation.
+
+
+;; ========================================================================
+;; 🌀 PASS 9 — Explain: Provenance and Derivation Trees
+;; ========================================================================
+;;
+;; `solve` returns bare answers. `explain` returns answers WITH
+;; provenance — a derivation tree showing how each answer was derived.
+;;
+;; This is built on the ATMS (Assumption-based Truth Maintenance System)
+;; infrastructure. Every derived fact carries the set of assumptions
+;; that justify it.
+;;
+;;   (explain (ancestor "alice" "eve"))
+;;
+;;   => [{:bindings {:x "alice" :y "eve"}
+;;        :derivation
+;;          (ancestor "alice" "eve")
+;;            ├── (parent "alice" "bob")        [fact]
+;;            └── (ancestor "bob" "eve")
+;;                ├── (parent "bob" "carol")    [fact]
+;;                └── (ancestor "carol" "eve")
+;;                    └── (parent "carol" "eve") [fact]}]
+;;
+;; The derivation tree shows exactly which rules fired and which
+;; facts were used. This is first-class data you can:
+;;
+;;   • Inspect: "Why does the system believe alice is ancestor of eve?"
+;;   • Log: Audit trails for compliance
+;;   • Serialize: Machine-readable proof certificates
+;;   • Compare: "Are these two derivations isomorphic?"
+
+;; `explain-with` lets you configure provenance detail:
+;;
+;;   (explain-with {:provenance :full} (ancestor "alice" "eve"))
+;;
+;; Full provenance includes rule IDs, unification details, and
+;; depth information at each node.
+
+;; 💡 KEY INSIGHT: Derivation trees are the Curry-Howard bridge.
+;;    A derivation IS a proof. When the logic engine finds that
+;;    ancestor("alice", "eve") holds, the derivation tree is the
+;;    evidence. Prologos makes this evidence inspectable by default.
+;;
+;; 🖊️ YOUR TURN: Use `explain` to see the derivation tree for
+;;    (ancestor "bob" "eve"). How many steps does it take?
+
+
+;; ========================================================================
+;; 🌀 PASS 10 — Putting It All Together
+;; ========================================================================
+;;
+;; Let's build something real: a relational knowledge base for a
+;; course prerequisite system.
+
+;; --- Data layer: course facts ---
+
+defr course-data [?code ?title ?dept]
+  || "CS101" "Intro to CS"         "CS"
+     "CS201" "Data Structures"     "CS"
+     "CS301" "Algorithms"          "CS"
+     "CS401" "Compilers"           "CS"
+     "MA101" "Calculus I"          "Math"
+     "MA201" "Linear Algebra"      "Math"
+     "MA301" "Discrete Math"       "Math"
+
+defr prereq [?course ?requires]
+  || "CS201" "CS101"
+     "CS301" "CS201"
+     "CS301" "MA301"
+     "CS401" "CS301"
+     "MA201" "MA101"
+     "MA301" "MA101"
+
+;; --- Logic layer: derived relations (shown as syntax examples) ---
+;;
+;; Transitive prerequisite: what do you need (directly or indirectly)?
+;;
+;;   defr needs [?course ?requirement]
+;;     &> (prereq course requirement)
+;;     &> (prereq course mid) (needs mid requirement)
+;;
+;; Can a student take a course given completed courses?
+;;
+;;   defr can-take [+student-courses +target]
+;;     &> (needs target req)
+;;        (member req student-courses)
+
+;; --- Functional layer: the user interface ---
+;;
+;; What are ALL prerequisites for Compilers?
+;;
+;;   def compilers-prereqs : [List Map]
+;;     (solve (needs "CS401" req))
+;;
+;;   => [{:req "CS301"} {:req "CS201"} {:req "CS101"}
+;;       {:req "MA301"} {:req "MA101"}]
+;;
+;; Which CS courses can someone take after CS101 + MA101?
+;;
+;;   def next-courses : [List Map]
+;;     (solve (rel [?course]
+;;       &> (course-data code _ "CS")
+;;          (can-take '["CS101" "MA101"] code)))
+;;
+;; Explain WHY CS301 requires MA101:
+;;
+;;   def why-cs301-needs-ma101 : [List Answer]
+;;     (explain (needs "CS301" "MA101"))
+;;
+;; The derivation shows:
+;;   needs("CS301", "MA101")
+;;     └── prereq("CS301", "MA301")    [fact]
+;;         └── needs("MA301", "MA101")
+;;             └── prereq("MA301", "MA101")  [fact]
+
+;; 💡 THIS IS THE POWER OF RELATIONAL PROGRAMMING:
+;;
+;;    1. Data is declared as facts (|| blocks) — like database rows
+;;    2. Logic is derived as rules (&> clauses) — like database views
+;;    3. The same relation works in multiple directions
+;;    4. Tabling guarantees termination and completeness
+;;    5. Provenance explains every answer
+;;    6. Functions and relations interoperate seamlessly via solve/is
+;;    7. Schemas add types when you want correctness guarantees
+
+
+;; ========================================================================
+;; SUMMARY — Relational Programming Cheat Sheet
+;; ========================================================================
+;;
+;;   DEFINING RELATIONS
+;;   ─────────────────────────────────────────────────
+;;   defr name [params]          Named relation
+;;     || "a" "b" "c"            Fact block (ground data)
+;;     &> (goal1) (goal2)        Rule clause (derived logic)
+;;
+;;   rel [params] &> (goals)     Anonymous relation (lambda)
+;;
+;;   QUERYING
+;;   ─────────────────────────────────────────────────
+;;   (solve (goal args))         → Seq of binding maps
+;;   (solve-one (goal args))     → Option of first binding
+;;   (explain (goal args))       → Seq of Answer with provenance
+;;
+;;   INSIDE RULES
+;;   ─────────────────────────────────────────────────
+;;   (= x y)                    Unification goal
+;;   (is x [f a b])             Functional eval → bind to x
+;;   (not (goal))               Negation-as-failure
+;;   (goal-name args)           Subgoal application
+;;
+;;   MODES (in parameter list only)
+;;   ─────────────────────────────────────────────────
+;;   ?x                          Free (default)
+;;   +x                          Input (must be bound)
+;;   -x                          Output (will be bound)
+;;
+;;   MULTI-ARITY
+;;   ─────────────────────────────────────────────────
+;;   defr name
+;;     | [params1] body1         Variant 1
+;;     | [params2] body2         Variant 2
+;;
+;;   THE SPECIFICATION TRIPLE
+;;   ─────────────────────────────────────────────────
+;;   spec    → defn    → fn      Functional paradigm
+;;   schema  → defr    → rel     Relational paradigm
+;;   session → defproc → proc    Process paradigm
+;;
+;; ========================================================================
+;; For more: see RELATIONAL_LANGUAGE_VISION.org in docs/tracking/principles/
+;; ========================================================================
