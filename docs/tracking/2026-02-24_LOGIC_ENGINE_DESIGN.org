@@ -26,7 +26,7 @@ The engine is built bottom-up in 8 phases:
 4. *UnionFind* — persistent disjoint sets for unification
 5. *Persistent ATMS* — hypothetical reasoning as value
 6. *Tabling* — SLG-style memoization for completeness
-7. *Surface Syntax* — ~defr~, ~rel~, ~solve~, ~explain~, ~solver~, ~&>~
+7. *Surface Syntax* — ~schema~, ~defr~, ~rel~, ~solve~, ~explain~, ~solver~, ~&>~, ~||~, ~|~
 
 Key architectural decision: the entire propagator network and ATMS are
 *persistent/immutable values* backed by CHAMP maps. Backtracking = keep
@@ -1518,22 +1518,34 @@ round's propagators fire in parallel when the BSP threshold is met.
 
 ---
 
-* Phase 7: Surface Syntax — ~schema~, ~defr~, ~rel~, ~solve~, ~explain~, ~solver~, ~&>~
+* Phase 7: Surface Syntax — ~schema~, ~defr~, ~rel~, ~solve~, ~explain~, ~solver~, ~&>~, ~||~, ~|~
 
 ** 7.1 Goal
 
 Implement the user-facing relational language as described in
 [[file:principles/RELATIONAL_LANGUAGE_VISION.org][RELATIONAL_LANGUAGE_VISION.org]].
 
-This phase includes the ~schema~ keyword — the relational specification form
-that completes the ~spec~/~defn~, ~schema~/~defr~, ~session~/~defproc~ triple.
-A ~schema~ declares a named, closed, validated map type used for:
-- Typed relational facts (column names + types + positional ordering)
-- Validated message shapes in session-typed protocols
-- Closed record types (Rust struct–like, with dot-access)
+This phase includes:
 
-See [[file:principles/RELATIONAL_LANGUAGE_VISION.org][RELATIONAL_LANGUAGE_VISION.org § Schema: The Object Language]]
-for the full design.
+- *~schema~*: The relational specification form that completes the
+  ~spec~/~defn~, ~schema~/~defr~, ~session~/~defproc~ triple. Declares a
+  named, closed, validated map type for typed facts, session messages, and
+  closed records.
+
+- *Dual clause sigils*: ~||~ for fact blocks (ground data), ~&>~ for rule
+  clauses (logic with goals). See vision doc § Dual Clause Syntax.
+
+- *Multi-arity ~|~ dispatch*: Structural dispatch on arity and head pattern,
+  consistent with functional ~defn~. See vision doc § Multi-Arity Relations.
+
+- *Bare-name logic variables*: Mode annotations (~?~/~+~/~-~) appear only in
+  parameter lists (signature-level contracts). Body variables are bare; the
+  ~(...)~ delimiter establishes relational context.
+
+- *Corrected mode conventions*: ~+~ = input (bound on entry), ~-~ = output
+  (will be bound), ~?~ = free. Standard Prolog/Mercury convention.
+
+See [[file:principles/RELATIONAL_LANGUAGE_VISION.org][RELATIONAL_LANGUAGE_VISION.org]] for the full design.
 
 ** 7.2 Reader Changes
 
@@ -1541,11 +1553,19 @@ The reader must handle:
 
 | Syntax          | Reader Output                            |
 |-----------------+------------------------------------------|
-| ~?var~          | =(logic-var var)=                        |
-| ~-var~          | =(mode-var in var)=                      |
-| ~+var~          | =(mode-var out var)=                     |
+| ~?var~          | =(logic-var var)= (free mode, signature only) |
+| ~+var~          | =(mode-var in var)= (input mode, signature only) |
+| ~-var~          | =(mode-var out var)= (output mode, signature only) |
 | ~&>~            | =($clause-sep)=                          |
+| ~\vert\vert~    | =($facts-sep)=                           |
 | ~(goal ...)~    | =(goal ...)= (parenthetical = relational) |
+
+Note: Mode prefixes (~?~, ~+~, ~-~) are recognized only in parameter lists
+(=defr=/=rel= signatures and ~|~ variant heads). In relational bodies, bare
+lowercase names are logic variables — no prefix needed. The reader does not
+need to special-case body positions; the parser/elaborator handles the
+distinction between signature-level mode annotations and body-level bare
+variable references.
 
 ** 7.3 Parser Changes
 
@@ -1554,28 +1574,67 @@ New surface AST nodes:
 | Form                                          | Surface AST                                   |
 |-----------------------------------------------+-----------------------------------------------|
 | =defr name [args] body=                       | =(surf-defr name args clauses)=               |
+| =defr name \vert [...] body \vert [...] body= | =(surf-defr name #f variants)= (multi-arity)  |
 | =(rel [args] body)=                           | =(surf-rel args clauses)=                     |
 | =&> g1 g2 ...=                                | =(surf-clause (g1 g2 ...))= within defr/rel  |
-| =(solve [goal])=                              | =(surf-solve goal)=                           |
-| =(solve-with solver [goal])=                  | =(surf-solve-with solver #f goal)=            |
-| =(solve-with solver {overrides} [goal])=      | =(surf-solve-with solver overrides goal)=     |
-| =(solve-with {overrides} [goal])=             | =(surf-solve-with #f overrides goal)=         |
-| =(explain [goal])=                            | =(surf-explain goal)=                         |
-| =(explain-with solver [goal])=                | =(surf-explain-with solver #f goal)=          |
-| =(explain-with solver {overrides} [goal])=    | =(surf-explain-with solver overrides goal)=   |
-| =(explain-with {overrides} [goal])=           | =(surf-explain-with #f overrides goal)=       |
+| =\vert\vert term1 term2 ...=                  | =(surf-facts ((t1 t2) ...))= (fact block)    |
+| =(solve (goal))=                              | =(surf-solve goal)=                           |
+| =(solve-with solver (goal))=                  | =(surf-solve-with solver #f goal)=            |
+| =(solve-with solver {overrides} (goal))=      | =(surf-solve-with solver overrides goal)=     |
+| =(solve-with {overrides} (goal))=             | =(surf-solve-with #f overrides goal)=         |
+| =(explain (goal))=                            | =(surf-explain goal)=                         |
+| =(explain-with solver (goal))=                | =(surf-explain-with solver #f goal)=          |
+| =(explain-with solver {overrides} (goal))=    | =(surf-explain-with solver overrides goal)=   |
+| =(explain-with {overrides} (goal))=           | =(surf-explain-with #f overrides goal)=       |
 | =solver name opts ...=                        | =(surf-solver name opts)=                     |
-| =(= ?x ?y)=                                   | =(surf-unify x y)=                            |
-| =(is ?x [expr])=                              | =(surf-is var expr)=                          |
+| =(= x y)=                                     | =(surf-unify x y)=                            |
+| =(is x [expr])=                               | =(surf-is var expr)=                          |
+| =schema name fields ...=                      | =(surf-schema name fields)=                   |
 
-The =-with= forms have three parse shapes, disambiguated by whether the
-first argument after the keyword is an identifier (solver name) or a
-={...}= map literal (inline overrides):
+*** Multi-arity ~|~ dispatch
+
+=defr= supports multi-arity dispatch via ~|~, consistent with functional =defn=:
+
+#+begin_src prologos
+defr sum-list
+  | [+list -sum]
+    (sum-list list 0 sum)
+  | [[] +acc -sum]
+    &> (= acc sum)
+  | [[+x|+xs] +acc -sum]
+    &> (new-acc is [+ acc x])
+       (sum-list xs new-acc sum)
+#+end_src
+
+Each ~|~ introduces a /variant/ with its own parameter list and body. The
+parser collects variants into =(surf-defr-variant params clauses)= structs.
+Dispatch is on arity and head structure (pattern matching).
+
+*** ~||~ fact blocks
+
+=||= introduces a block of ground facts (positional or dictionary):
+
+#+begin_src prologos
+defr parent-child : ParentChild
+  || "Alice" "Bob"
+     "Bob"   "Carol"
+     "Bob"   "Dave"
+#+end_src
+
+The parser collects continuation lines (same indentation) as additional rows
+in the fact block. Each row is a =(surf-fact-row terms)= within the
+=(surf-facts rows)= node.
+
+*** ~solve~/~explain~ use ~(...)~ for goals
+
+Note: =solve= and =explain= take relational goals in ~(...)~ parentheses,
+not ~[...]~ brackets, consistent with the delimiter-based paradigm distinction:
 
 #+begin_src
-(solve-with <ident> [goal])          ;; solver only
-(solve-with <ident> {map} [goal])    ;; solver + merge overrides
-(solve-with {map} [goal])            ;; overrides only (merge into default-solver)
+(solve (ancestor "alice" who))          ;; (goal) in parens
+(solve-with solver (goal))
+(solve-with solver {map} (goal))
+(solve-with {map} (goal))
 #+end_src
 
 The ={...}= braces are unambiguous: they cannot appear as a goal (goals use
@@ -1591,8 +1650,8 @@ translation for both =defr= and =solve=:
 
 #+begin_src racket
 ;; defr ancestor [?x ?y]
-;;   &> (parent ?x ?y)
-;;   &> (parent ?x ?z) (ancestor ?z ?y)
+;;   &> (parent x y)
+;;   &> (parent x z) (ancestor z y)
 ;;
 ;; elaborates to:
 ;; 1. Create table for ancestor (tabled by default)
@@ -1611,7 +1670,7 @@ It always returns =Seq (Map Keyword Value)= — bare bindings, no provenance.
 #+begin_src prologos
 ;; Source: functional code using solve
 defn find-ancestors [person]
-  (solve [ancestor person ?who])
+  (solve (ancestor person who))
 ;; Returns: Seq (Map Keyword Value)
 ;; => '[{:who "bob"} {:who "carol"} {:who "dave"}]
 #+end_src
@@ -1619,7 +1678,7 @@ defn find-ancestors [person]
 Elaborates to:
 
 #+begin_src racket
-;; Racket-level translation of (solve [ancestor person ?who])
+;; Racket-level translation of (solve (ancestor person who))
 (define (solve-ancestor-query person)
   (let* (;; 1. Resolve solver config (default-solver from current namespace)
          [config (resolve-solver-config 'default-solver)]
@@ -1629,7 +1688,7 @@ Elaborates to:
          [uf0  (uf-empty)]
 
          ;; 3. Create logic variable cells
-         ;;    ?who is the query variable; person is ground (bound)
+         ;;    who is the query variable; person is ground (bound)
          [net1+who (net-new-cell net0 'bot flat-join flat-top?)]
          [net1 (car net1+who)]
          [who-id (cdr net1+who)]
@@ -1639,7 +1698,7 @@ Elaborates to:
          [ancestor-rel (relation-lookup 'ancestor)]
 
          ;; 5. Create query propagators:
-         ;;    - Instantiate ancestor's clauses with (person, ?who)
+         ;;    - Instantiate ancestor's clauses with (person, who)
          ;;    - Wire table cell for ancestor
          [net2 (relation-instantiate ancestor-rel net1 uf0
                   (list (ground-val person) who-id))]
@@ -1701,7 +1760,7 @@ if the solver config doesn't specify a level).
 #+begin_src prologos
 ;; Source: debugging code using explain
 defn debug-ancestors [person]
-  (explain [ancestor person ?who])
+  (explain (ancestor person who))
 ;; Returns: Seq (Answer Value)
 ;; Each Answer has:
 ;;   .bindings   : Map Keyword Value    — the what
@@ -1750,9 +1809,9 @@ The elaboration is identical to =solve= except:
 
 #+begin_src prologos
 ;; All of these work:
-(explain-with debug-solver [ancestor "alice" ?who])
-(explain-with default-solver {:provenance :atms} [ancestor "alice" ?who])
-(explain-with {:provenance :summary :timeout 5000} [ancestor "alice" ?who])
+(explain-with debug-solver (ancestor "alice" who))
+(explain-with default-solver {:provenance :atms} (ancestor "alice" who))
+(explain-with {:provenance :summary :timeout 5000} (ancestor "alice" who))
 #+end_src
 
 Key points:
@@ -1775,22 +1834,38 @@ New productions:
 
 #+begin_src ebnf
 (* --- Relations --- *)
-relation-def  = "defr" , identifier , param-list , clause+ ;
-anonymous-rel = "(" , "rel" , param-list , clause+ , ")" ;
-clause        = "&>" , goal+ ;
+relation-def  = "defr" , identifier , [ ":" , type-expr ] ,
+                ( single-arity | multi-arity ) ;
+single-arity  = param-list , clause-body ;
+multi-arity   = variant+ ;
+variant       = "|" , param-list , clause-body ;
+clause-body   = ( fact-block | rule-clause | bare-goal )+ ;
+fact-block    = "||" , fact-row+ ;                    (* ground data block *)
+fact-row      = expression+ ;                         (* positional or dict *)
+rule-clause   = "&>" , goal+ ;                        (* rule with goals *)
+bare-goal     = goal ;                                (* single goal, no &> *)
+anonymous-rel = "(" , "rel" , param-list , clause-body , ")" ;
 goal          = "(" , goal-head , goal-arg* , ")" ;
 goal-head     = identifier | "=" | "is" | "not" ;
-goal-arg      = logic-var | expression ;
-logic-var     = "?" , identifier ;
-mode-var      = ( "-" | "+" ) , identifier ;
+goal-arg      = identifier | expression ;             (* bare names = logic vars *)
+
+(* --- Mode annotations (signature-level only) --- *)
+logic-var     = "?" , identifier ;                    (* free mode *)
+mode-var-in   = "+" , identifier ;                    (* input mode *)
+mode-var-out  = "-" , identifier ;                    (* output mode *)
+param         = logic-var | mode-var-in | mode-var-out | identifier ;
+
+(* --- Schema --- *)
+schema-def    = "schema" , identifier , schema-field+ ;
+schema-field  = keyword , type-expr ;
 
 (* --- Solve family (returns Seq Map — bare bindings) --- *)
-solve-expr    = "(" , "solve" , "[" , goal , "]" , ")" ;
-solve-with    = "(" , "solve-with" , with-args , "[" , goal , "]" , ")" ;
+solve-expr    = "(" , "solve" , goal , ")" ;
+solve-with    = "(" , "solve-with" , with-args , goal , ")" ;
 
 (* --- Explain family (returns Seq Answer — bindings + provenance) --- *)
-explain-expr  = "(" , "explain" , "[" , goal , "]" , ")" ;
-explain-with  = "(" , "explain-with" , with-args , "[" , goal , "]" , ")" ;
+explain-expr  = "(" , "explain" , goal , ")" ;
+explain-with  = "(" , "explain-with" , with-args , goal , ")" ;
 
 (* --- Shared -with argument patterns --- *)
 with-args     = identifier                           (* solver name only *)
@@ -1920,9 +1995,9 @@ the fields carry no ceremony.
 
 #+begin_src prologos
 ;; User code:
-(solve [ancestor "alice" ?who])
+(solve (ancestor "alice" who))
 ;; Desugars to:
-(solve-with default-solver [ancestor "alice" ?who])
+(solve-with default-solver (ancestor "alice" who))
 ;; Returns: Seq (Map Keyword Value)
 ;; => '[{:who "bob"} {:who "carol"} {:who "dave"}]
 #+end_src
@@ -1931,9 +2006,9 @@ the fields carry no ceremony.
 
 #+begin_src prologos
 ;; User code:
-(explain [ancestor "alice" ?who])
+(explain (ancestor "alice" who))
 ;; Desugars to:
-(explain-with default-solver [ancestor "alice" ?who])
+(explain-with default-solver (ancestor "alice" who))
 ;; Returns: Seq (Answer Value)
 ;; Each answer carries .bindings AND .derivation
 #+end_src
@@ -1958,14 +2033,14 @@ and eliminates multi-arity complexity:
 
 #+begin_src prologos
 ;; --- solve-with ---
-(solve-with debug-solver [goal])                             ;; named solver
-(solve-with default-solver {:timeout 5000} [goal])           ;; solver + overrides
-(solve-with {:execution :sequential :timeout 5000} [goal])   ;; overrides into default-solver
+(solve-with debug-solver (goal))                             ;; named solver
+(solve-with default-solver {:timeout 5000} (goal))           ;; solver + overrides
+(solve-with {:execution :sequential :timeout 5000} (goal))   ;; overrides into default-solver
 
 ;; --- explain-with ---
-(explain-with debug-solver [goal])                           ;; named solver
-(explain-with default-solver {:provenance :atms} [goal])     ;; upgrade provenance
-(explain-with {:provenance :summary :timeout 5000} [goal])   ;; overrides into default-solver
+(explain-with debug-solver (goal))                           ;; named solver
+(explain-with default-solver {:provenance :atms} (goal))     ;; upgrade provenance
+(explain-with {:provenance :summary :timeout 5000} (goal))   ;; overrides into default-solver
 #+end_src
 
 The merge semantics are shallow map merge — each key in ={overrides}=
@@ -1987,8 +2062,8 @@ solver default-solver
 
 ;; All (solve ...) and (explain ...) calls in this module
 ;; use the local default-solver
-(solve [expensive-query ?x])
-(explain [expensive-query ?x])  ;; uses :full provenance (explain's default)
+(solve (expensive-query x))
+(explain (expensive-query x))  ;; uses :full provenance (explain's default)
 #+end_src
 
 No global mutation. Normal name resolution.
@@ -2081,21 +2156,26 @@ at compile time. This is the minimum viable safety guarantee for negation:
 This check runs during elaboration of =defr= forms. Programs without =not= are
 trivially stratifiable (single stratum) and incur no analysis cost.
 
-** 7.8 AST Nodes (~21)
+** 7.8 AST Nodes (~26)
 
-*** Relational Core (~9)
+*** Relational Core (~14)
 
 | Node                  | Fields                        | Semantics                  |
 |-----------------------+-------------------------------+----------------------------|
-| =expr-defr=           | name, params, clauses         | Named relation             |
+| =expr-defr=           | name, schema, variants        | Named relation (multi-arity) |
+| =expr-defr-variant=   | params, body                  | Single arity/pattern variant |
 | =expr-rel=            | params, clauses               | Anonymous relation         |
-| =expr-clause=         | goals                         | Single clause (disjunct)   |
+| =expr-clause=         | goals                         | Single rule clause (&> ...) |
+| =expr-fact-block=     | rows                          | Ground fact block (\vert\vert ...) |
+| =expr-fact-row=       | terms                         | Single fact row            |
 | =expr-goal-app=       | name, args                    | Relational goal application |
-| =expr-logic-var=      | name, mode                    | Logic variable             |
-| =expr-unify-goal=     | lhs, rhs                      | Unification goal (= ?x ?y) |
+| =expr-logic-var=      | name, mode                    | Logic variable (signature only) |
+| =expr-unify-goal=     | lhs, rhs                      | Unification goal (= x y)  |
 | =expr-is-goal=        | var, expr                     | Functional evaluation in relation |
 | =expr-not-goal=       | goal                          | Negation-as-failure        |
 | =expr-relation-type=  | param-types                   | Type of a relation         |
+| =expr-schema=         | name, fields                  | Named closed validated map |
+| =expr-schema-type=    | name                          | Type constructor for schema |
 
 *** Solve Family (~4)
 
@@ -2138,7 +2218,7 @@ trivially stratifiable (single stratum) and incur no analysis cost.
 
 | File                                        | Changes                           |
 |---------------------------------------------+-----------------------------------|
-| =racket/prologos/reader.rkt=              | ?var, -var, +var, &> handling     |
+| =racket/prologos/reader.rkt=              | ?var, +var, -var, &>, \vert\vert handling |
 | =racket/prologos/surface-syntax.rkt=      | New surface AST structs           |
 | =racket/prologos/parser.rkt=              | Parse defr, rel, solve, explain, solver, &> |
 | =racket/prologos/macros.rkt=              | process-defr, process-rel, process-solver |
@@ -2166,8 +2246,8 @@ trivially stratifiable (single stratum) and incur no analysis cost.
 
 *** Relations and Goals (~20)
 
-- Reader: ?var, -var, +var parsed correctly
-- Parser: defr, rel, &>, solve, explain, solver parsed correctly
+- Reader: ?var, +var (in), -var (out) parsed correctly
+- Parser: defr, rel, &>, ||, |, solve, explain, solver, schema parsed correctly
 - WS-mode: defr with indentation-based clauses
 - Sexp-mode: defr with explicit (defr ...) form
 - Basic relation: parent facts, query
@@ -2176,6 +2256,9 @@ trivially stratifiable (single stratum) and incur no analysis cost.
 - Functional evaluation: is ?x [expr]
 - Multiple clauses: &> separator
 - Anonymous relation: (rel [?x ?y] &> ...)
+- Multi-arity defr: | dispatch on arity/pattern
+- Fact blocks: || ground data, continuation lines
+- Schema: definition, typed defr annotation
 - Negation: not (goal)
 - Mode annotations: -var, +var optimization hints
 - Integration with functional code: solve in defn body
@@ -2363,16 +2446,20 @@ propagator network operations. It bridges the gap between the surface syntax
 ** A.1 Source Program
 
 #+begin_src prologos
-;; Facts
-defr parent [?x ?y]
-  &> (= ?x "alice") (= ?y "bob")
-  &> (= ?x "bob") (= ?y "carol")
-  &> (= ?x "bob") (= ?y "dave")
+schema ParentChild
+  :parent String
+  :child  String
+
+;; Facts (using || fact block)
+defr parent : ParentChild
+  || "alice" "bob"
+     "bob"   "carol"
+     "bob"   "dave"
 
 ;; Recursive relation (tabled by default)
 defr ancestor [?x ?y]
-  &> (parent ?x ?y)                      ;; clause 1: base case
-  &> (parent ?x ?z) (ancestor ?z ?y)    ;; clause 2: recursive
+  &> (parent x y)                        ;; clause 1: base case
+  &> (parent x z) (ancestor z y)         ;; clause 2: recursive
 #+end_src
 
 ** A.2 Step 1: Table Creation
@@ -2387,13 +2474,13 @@ defr ancestor [?x ?y]
 
 ** A.3 Step 2: Clause 1 → Producer Propagator
 
-Clause 1: =&> (parent ?x ?y)= (base case)
+Clause 1: =&> (parent x y)= (base case)
 
 The elaborator creates a propagator that:
 
 #+begin_src racket
-;; Clause-1 fire-fn for ancestor(?x, ?y):
-;;   For each parent fact matching (?x, ?y), write to ancestor's table cell
+;; Clause-1 fire-fn for ancestor(x, y):
+;;   For each parent fact matching (x, y), write to ancestor's table cell
 (define (make-ancestor-clause1-fire-fn table-cell-id)
   (lambda (net)
     ;; For each fact in parent's table:
@@ -2412,13 +2499,13 @@ Outputs: =ancestor='s table cell.
 
 ** A.4 Step 3: Clause 2 → Producer Propagator
 
-Clause 2: =&> (parent ?x ?z) (ancestor ?z ?y)= (recursive case)
+Clause 2: =&> (parent x z) (ancestor z y)= (recursive case)
 
 This creates a propagator that:
 
 #+begin_src racket
-;; Clause-2 fire-fn for ancestor(?x, ?y):
-;;   Join parent(?x, ?z) with ancestor(?z, ?y) → ancestor(?x, ?y)
+;; Clause-2 fire-fn for ancestor(x, y):
+;;   Join parent(x, z) with ancestor(z, y) → ancestor(x, y)
 (define (make-ancestor-clause2-fire-fn table-cell-id)
   (lambda (net)
     (define parent-facts (net-cell-read net parent-table-cell-id))
@@ -2464,11 +2551,11 @@ Quiescence reached. ancestor cell = {(alice,bob), (bob,carol), (bob,dave),
 
 ** A.6 Step 5: Answer Extraction
 
-A query =(solve [ancestor "alice" ?who])= reads the ancestor table cell,
-filters for entries where =?x = "alice"=, and projects the =?y= values:
+A query =(solve (ancestor "alice" who))= reads the ancestor table cell,
+filters for entries where =x = "alice"=, and projects the =y= values:
 
 #+begin_src
-Results: ?who ∈ {"bob", "carol", "dave"}
+Results: who ∈ {"bob", "carol", "dave"}
 #+end_src
 
 ---
@@ -2483,21 +2570,21 @@ architecture: PropNetwork (Layer 1), ATMS (Layer 2), and Stratification
 
 #+begin_src prologos
 defr edge [?from ?to]
-  &> (= ?from "a") (= ?to "b")
-  &> (= ?from "b") (= ?to "c")
-  &> (= ?from "a") (= ?to "c")
+  || "a" "b"
+     "b" "c"
+     "a" "c"
 
 defr reachable [?x ?y]
-  &> (edge ?x ?y)
-  &> (edge ?x ?z) (reachable ?z ?y)
+  &> (edge x y)
+  &> (edge x z) (reachable z y)
 
 ;; Negation triggers stratification (Layer 3)
 defr unreachable [?x ?y]
-  &> (node ?x) (node ?y) (not (reachable ?x ?y))
+  &> (node x) (node y) (not (reachable x y))
 
 ;; Query with nondeterminism (triggers ATMS, Layer 2)
 ;; "Find a node that is unreachable from 'a'"
-let result := (solve [unreachable "a" ?target])
+let result := (solve (unreachable "a" target))
 #+end_src
 
 ** B.2 Compile-Time: Stratification Check
@@ -2536,7 +2623,7 @@ All purely monotonic. No ATMS overhead. Layer 1 only.
 
 Stratum 0 is complete. Now the runtime evaluates Stratum 1.
 
-=unreachable= uses =not (reachable ?x ?y)=. This reads the /frozen/ reachable
+=unreachable= uses =not (reachable x y)=. This reads the /frozen/ reachable
 table from Stratum 0:
 
 #+begin_src
@@ -2563,23 +2650,23 @@ If we modified the program to include a choice point:
 #+begin_src prologos
 ;; "Pick a starting node and find what's unreachable from it"
 defr mystery-query [?start ?target]
-  &> (node ?start) (unreachable ?start ?target)
+  &> (node start) (unreachable start target)
 #+end_src
 
-Now =node ?start= produces 3 alternatives → =amb= activates, upgrading
+Now =node start= produces 3 alternatives → =amb= activates, upgrading
 to Tier 2 (full ATMS):
 
 #+begin_src
-Hypothesis h1: ?start = "a"
-  → unreachable("a", ?target) under h1
+Hypothesis h1: start = "a"
+  → unreachable("a", target) under h1
   → Answers: {(a,a)} under h1
 
-Hypothesis h2: ?start = "b"
-  → unreachable("b", ?target) under h2
+Hypothesis h2: start = "b"
+  → unreachable("b", target) under h2
   → Answers: {(b,a), (b,b)} under h2
 
-Hypothesis h3: ?start = "c"
-  → unreachable("c", ?target) under h3
+Hypothesis h3: start = "c"
+  → unreachable("c", target) under h3
   → Answers: {(c,a), (c,b), (c,c)} under h3
 
 All hypotheses are consistent (no nogoods).
