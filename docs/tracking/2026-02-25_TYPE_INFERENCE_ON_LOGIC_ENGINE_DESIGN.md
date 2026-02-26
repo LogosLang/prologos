@@ -122,7 +122,7 @@ This is the **"Elaborator Propagator Refactoring"** identified in `DEFERRED.md` 
 
 **Key insight**: The type lattice is essentially the **FlatLattice** from `lattice-instances.prologos` applied to types. Each cell holds either `⊥` (unsolved), a specific type, or `⊤` (contradiction). The join is unification — merging partial information.
 
-However, **applied metas** (e.g., `?m x y` where the meta is applied to arguments) require a richer lattice — the cell may hold a *function from arguments to types*, not just a single type. This maps to the **substitution lattice** described in the research documents.
+**Applied metas** (e.g., `?m x y` where the meta is applied to arguments) do **not** require a richer lattice. Prologos's existing unification uses Miller's pattern unification (`decompose-meta-app` + `pattern-check` + `invert-args` in `unify.rkt`): when the pattern condition holds (all arguments are distinct bound variables), the meta is solved to a concrete lambda term via argument inversion. This lambda is an ordinary type expression — it fits in the same FlatLattice. When the pattern condition fails (e.g., `?m zero`), the constraint is **postponed** — in propagator terms, the propagator fires, reads the cell, finds `⊥`, and returns the network unchanged. When another propagator later solves the meta from a different direction, dependents fire automatically. This "idle until ground" pattern is strictly better than the current system's explicit wakeup chains, and requires no lattice extension.
 
 ### 3.3 Propagator Types for Type Inference
 
@@ -213,6 +213,19 @@ Assumptions:
 
 The ATMS support set for the contradiction cell identifies exactly which assumptions (upstream inference decisions) led to the conflict. This is **dependency-directed** — not just "what failed" but "why it failed."
 
+### 3.6 Multi-Error Collection
+
+The ad-hoc system typically aborts elaboration on the first `unify` failure, reporting one error at a time. The propagator architecture enables **multi-error collection**: a contradiction in one cell (`⊤`) does not prevent independent cells from continuing to propagate, because propagators that read a contradicted cell simply propagate the `⊤` to their outputs while other regions of the network proceed normally.
+
+**Strategy:**
+1. When a cell reaches `⊤`, record the contradiction with its ATMS support set (derivation chain)
+2. Mark the cell — no further *useful* propagation through it, but dependent cells learn of the contradiction
+3. Continue running the network to quiescence; independent constraint regions proceed unaffected
+4. At quiescence, collect *all* contradictions (not just the first)
+5. Report all errors to the user with their respective dependency chains
+
+This transforms the type-checking experience from "fix this one error, re-run, discover the next" to "here are all the type errors in this definition." The `prop-network-contradiction` field currently records only the *first* contradiction cell; this will be extended to a list of contradiction cells in Phase 5.
+
 ---
 
 ## 4. Design: The Propagator-Based Elaborator
@@ -226,11 +239,18 @@ The ATMS support set for the contradiction cell identifies exactly which assumpt
    b. Create propagators for all unification/subtype constraints
    c. Create propagators for trait resolution
    d. Run network to quiescence
-   e. Check for contradictions (cells at ⊤)
-   f. If contradiction: extract ATMS support set for error message
+   e. Collect all contradictions (cells at ⊤) — see §3.6
+   f. If contradictions: extract ATMS support sets for error messages
    g. If quiescent without contradiction: read cell values = solved types
 3. Zonk = read final cell values
 ```
+
+**Scheduling**: Step 2d uses the existing `run-to-quiescence` from `propagator.rkt`. Two schedulers are available: **Gauss-Seidel** (sequential worklist, fires one propagator at a time — good for chain dependencies like `?a → ?b → ?c`) and **Jacobi/BSP** (parallel, fires all worklist propagators per round with snapshot isolation — good for wide, independent constraint regions). Both reach the same fixed point regardless of firing order due to lattice commutativity + associativity + monotonicity (the CALM theorem). Scheduler selection is a Phase 6 optimization concern — Gauss-Seidel is the default.
+
+**Bidirectional modes**: The elaborator's three bidirectional checking modes map naturally to propagator operations:
+- **Checking mode** (expected type known): create cell, write expected type immediately, add unification propagator between expected and actual → constraints flow from known type downward
+- **Inference mode** (type unknown): create cell at `⊥`, elaborate, read cell after quiescence → information flows upward from leaves
+- **Application mode** (function type decomposes): create domain/codomain cells, add Pi decomposition propagator (§3.3) → the function cell's information decomposes into sub-cells
 
 ### 4.2 Meta Creation → Cell Creation
 
@@ -450,6 +470,8 @@ Replace `save/restore-meta-state!` with ATMS worldviews:
 3. **Batched propagation**: Group related constraints and fire in bulk
 4. **Cell reuse**: When a meta is immediately solved, reuse its cell for the solution
 5. **Speculative ATMS bypass**: For programs with no speculation, skip ATMS entirely
+6. **Shared networks for small definitions**: Batch adjacent small definitions (0-2 metas each) into a shared network to amortize creation overhead; single quiescence pass covers the batch
+7. **Scheduler selection**: Profile Gauss-Seidel vs. BSP on real workloads; consider priority-queue scheduling (ground-type propagators first) for improved convergence speed
 
 ---
 
@@ -627,12 +649,13 @@ Then `solve (has-type ?expr Int empty-ctx)` **generates** all expressions of typ
 
 ## 10. Success Criteria
 
-1. **Correctness**: All 4171+ tests pass with propagator-based type inference
+1. **Correctness**: All 4202+ tests pass with propagator-based type inference
 2. **Performance**: No more than 10% regression on the full test suite
 3. **Error quality**: Error messages include dependency chains (at least for unification failures)
 4. **Speculation efficiency**: Speculative type-checking (Church folds, union types) is at least 2x faster on programs with many speculative branches
-5. **Incremental potential**: Demonstrated ability to re-check a single modified definition without full re-elaboration
-6. **Benchmark visibility**: A/B comparison data visible in the static HTML dashboard
+5. **Incremental potential**: The persistent network enables O(1) backtrack to pre-definition state (keep old reference), demonstrating the architectural foundation for future incremental re-checking (transitive dependency tracking across definitions is a separate, future design)
+6. **Multi-error reporting**: A single elaboration pass collects multiple independent type errors (§3.6), rather than aborting on the first
+7. **Benchmark visibility**: A/B comparison data visible in the static HTML dashboard
 
 ---
 
