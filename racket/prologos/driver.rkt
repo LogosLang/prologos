@@ -37,14 +37,16 @@
          "trait-resolution.rkt"
          "warnings.rkt"
          "relations.rkt"
-         "performance-counters.rkt")
+         "performance-counters.rkt"
+         "elab-shadow.rkt")
 
 (provide process-command
          process-file
          process-string
          load-module
          install-module-loader!
-         prologos-lib-dir)
+         prologos-lib-dir
+         current-shadow-mode?)
 
 ;; ========================================
 ;; Standard library path (computed from this module's location)
@@ -138,6 +140,20 @@
 ;; The stored type retains holes which display as `_`.
 
 ;; ========================================
+;; Phase 3: Shadow network mode
+;; ========================================
+;; When #t, mirrors meta operations to a shadow propagator network
+;; for validation. Default off (zero overhead).
+(define current-shadow-mode? (make-parameter #f))
+
+;; Run shadow validation if shadow mode is active.
+(define (maybe-shadow-validate!)
+  (when (current-shadow-mode?)
+    (define report (shadow-validate!))
+    (shadow-log-report! report)
+    (shadow-teardown!)))
+
+;; ========================================
 ;; Process a single top-level command
 ;; ========================================
 ;; Returns a result string, or a prologos-error.
@@ -147,6 +163,7 @@
 ;; bare symbols (for local use) and as fully-qualified names (for export).
 (define (process-command surf)
   (reset-meta-store!)  ;; clear metavariables from previous command
+  (when (current-shadow-mode?) (shadow-init!))
   (parameterize ([current-nf-cache (make-hash)]         ;; per-command nf memoization
                  [current-whnf-cache (make-hash)]       ;; per-command whnf memoization
                  [current-reduction-fuel (box 1000000)]  ;; 1M step limit
@@ -188,9 +205,11 @@
                            (let ([te (check-unresolved-trait-constraints)])
                              (if (not (null? te))
                                  (car te)
-                                 (let ([val (time-phase! reduce (nf (time-phase! zonk (zonk-final expr))))]
-                                       [ty-nf (time-phase! reduce (nf (time-phase! zonk (zonk-final ty))))])
-                                   (format "~a : ~a" (pp-expr val) (pp-expr ty-nf))))))))]
+                                 (begin
+                                   (maybe-shadow-validate!)
+                                   (let ([val (time-phase! reduce (nf (time-phase! zonk (zonk-final expr))))]
+                                         [ty-nf (time-phase! reduce (nf (time-phase! zonk (zonk-final ty))))])
+                                     (format "~a : ~a" (pp-expr val) (pp-expr ty-nf)))))))))]
 
                   ;; (infer expr)
                   [(list 'infer expr)
@@ -201,7 +220,9 @@
                            (let ([te (check-unresolved-trait-constraints)])
                              (if (not (null? te))
                                  (car te)
-                                 (pp-expr (time-phase! zonk (zonk-final ty))))))))]
+                                 (begin
+                                   (maybe-shadow-validate!)
+                                   (pp-expr (time-phase! zonk (zonk-final ty)))))))))]
 
                   ;; (expand datum) — show preparse expansion
                   [(list 'expand datum)
@@ -238,7 +259,9 @@
                            (let ([te (check-unresolved-trait-constraints)])
                              (if (not (null? te))
                                  (car te)
-                                 (let ([zonked-body (time-phase! zonk (zonk-final expr))]
+                                 (begin
+                                   (maybe-shadow-validate!)
+                                   (let ([zonked-body (time-phase! zonk (zonk-final expr))]
                                        [zonked-type (time-phase! zonk (zonk-final ty))])
                                    (current-global-env
                                     (global-env-add (current-global-env) name zonked-type zonked-body))
@@ -253,7 +276,7 @@
                                      (define rel-info (expr-defr->relation-info zonked-body))
                                      (current-relation-store
                                       (relation-register (current-relation-store) rel-info)))
-                                   (format "~a : ~a defined." name (pp-expr zonked-type))))))))]
+                                   (format "~a : ~a defined." name (pp-expr zonked-type)))))))))]
 
                   [_ (prologos-error srcloc-unknown (format "Unknown command: ~a" elab-result))])))]))))
   ;; Append warnings to result string (if any)
@@ -324,6 +347,7 @@
                    lhs-str rhs-str
                    error-loc error-loc)]
                 [else
+                 (maybe-shadow-validate!)
                  ;; zonk-final FIRST, then QTT on zonked terms
                  (define zonked-body (time-phase! zonk (zonk-final body)))
                  (define zonked-type (time-phase! zonk (zonk-final inferred-type)))
@@ -460,6 +484,7 @@
                          lhs-str rhs-str
                          error-loc error-loc)]
                       [else
+                       (maybe-shadow-validate!)
                        ;; 6. zonk-final (resolves mult-metas to concrete values,
                        ;; defaults unsolved level-metas to lzero, mult-metas to mw).
                        (define zonked-body (time-phase! zonk (zonk-final body)))

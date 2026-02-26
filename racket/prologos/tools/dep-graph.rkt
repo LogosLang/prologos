@@ -121,7 +121,8 @@
                            sexp-readtable.rkt)
    'inductive.rkt        '(syntax.rkt typing-core.rkt)
    'type-lattice.rkt     '(syntax.rkt reduction.rkt zonk.rkt substitution.rkt)
-   'elaborator-network.rkt '(propagator.rkt type-lattice.rkt champ.rkt syntax.rkt)))
+   'elaborator-network.rkt '(propagator.rkt type-lattice.rkt champ.rkt syntax.rkt)
+   'elab-shadow.rkt '(elaborator-network.rkt type-lattice.rkt metavar-store.rkt propagator.rkt syntax.rkt)))
 
 ;; ============================================================
 ;; Layer 2: Test → source module dependencies
@@ -773,7 +774,9 @@
    'test-type-lattice.rkt
    (test-dep '(type-lattice.rkt syntax.rkt reduction.rkt zonk.rkt substitution.rkt propagator.rkt champ.rkt) #f)
    'test-elaborator-network.rkt
-   (test-dep '(elaborator-network.rkt propagator.rkt type-lattice.rkt champ.rkt syntax.rkt) #f)))
+   (test-dep '(elaborator-network.rkt propagator.rkt type-lattice.rkt champ.rkt syntax.rkt) #f)
+   'test-elab-shadow.rkt
+   (test-dep '(elab-shadow.rkt elaborator-network.rkt type-lattice.rkt metavar-store.rkt syntax.rkt) #t)))
 
 ;; ============================================================
 ;; Layer 2b: Example file → test file mapping

@@ -81,7 +81,43 @@
 - **Level/mult metas deferred** — trivially flat domains (3-value for mults, small finite for levels), almost always solved immediately or defaulted. Adds scope without validating core approach. Trivial to add later.
 - **Applied metas use "idle until ground" pattern** — propagator fires, reads bot, returns unchanged. When cell gets solved from another direction, propagator re-fires with concrete values. No special propagator type needed.
 
-## Phase 3: Elaborator Dual-Mode — NOT STARTED
+## Phase 3: Shadow Network Validation — COMPLETE
+
+- [x] 3a: Shadow hooks in `metavar-store.rkt` (~15 lines)
+  - Three callback parameters: `current-shadow-fresh-hook`, `current-shadow-solve-hook`, `current-shadow-constraint-hook`
+  - Default `#f` = zero overhead when shadow off (one `#f` check per call ~1ns)
+  - Hook call sites: after `fresh-meta` registration, after `solve-meta!` retry, after `add-constraint!` wakeup registration
+- [x] 3b: Created `elab-shadow.rkt` (~155 lines)
+  - `shadow-report` struct: total-metas, total-solved, shadow-solved, contradictions, mismatches, constraints-added, ok?
+  - Mutable state: `current-shadow-network` (boxed elab-network), `current-shadow-id-map` (hasheq meta-id → cell-id)
+  - `shadow-init!` / `shadow-teardown!` lifecycle
+  - `shadow-on-fresh-meta` — mirrors meta creation to shadow cell
+  - `shadow-on-solve-meta` — writes solution to shadow cell
+  - `shadow-on-constraint` — adds unification propagators between meta cells referenced by lhs/rhs
+  - `extract-shallow-meta-ids` — shallow meta walker (doesn't follow solved metas, unlike `collect-meta-ids`)
+  - `shadow-validate!` — runs network to quiescence, compares with meta-store, reports mismatches
+  - `shadow-log-report!` — stderr output
+- [x] 3c: Wired into `driver.rkt` (~20 lines)
+  - `current-shadow-mode?` parameter (default `#f`)
+  - `maybe-shadow-validate!` helper — validates + logs + tears down
+  - Called after trait resolution succeeds in: eval path, infer path, defr path, type-inferred def path, annotated def path
+  - `shadow-init!` called at start of `process-command` when shadow mode active
+- [x] 3d: Created `tests/test-elab-shadow.rkt` (18 tests)
+  - 3 hook installation tests
+  - 4 meta mirroring tests (fresh, solve, multiple, ground match)
+  - 3 constraint mirroring tests (two metas, unknown meta safety, nested expressions)
+  - 4 validation tests (all-ground ok, contradiction detected, consistent chain, unsolved not errors)
+  - 4 driver integration tests (def, infer, eval in sexp mode + prelude implicit args)
+- [x] 3e: Registered in `dep-graph.rkt` (source-deps + test-deps)
+- [x] 3f: Full suite passes (4266 tests, 197 files)
+- [x] 3g: Committed
+
+### Key Decisions (Phase 3)
+- **Mirror-and-validate, not dual elaboration** — design doc's `elaborate-dual` requires reimplementing ~40 call sites. Shadow hooks achieve validation with ~15 lines of changes to existing code. Validates the same core properties.
+- **Mutable box for shadow network** — hooks are called from imperative meta-store ops, so shadow state must be mutable. Box wraps the immutable elab-network (CHAMP-backed structural sharing preserved).
+- **Constraint hook adds propagators** — when `add-constraint!` fires, we add unification propagators between shadow cells referenced by lhs/rhs metas. This validates the propagator network handles postponed constraints.
+- **Advisory only** — shadow mismatches log to stderr, never affect program behavior. Existing system's result is always returned.
+- **`run-to-quiescence` directly** — `elab-solve` discards network on contradiction (returns `contradiction-info`). Shadow validation needs the post-quiescence network to inspect cell values, so it calls `run-to-quiescence` directly.
 
 ## Phase 4: ATMS Integration for Speculation — NOT STARTED
 

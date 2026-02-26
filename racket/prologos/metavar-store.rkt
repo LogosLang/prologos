@@ -87,7 +87,11 @@
  (struct-out trait-constraint-info)
  current-trait-constraint-map
  register-trait-constraint!
- lookup-trait-constraint)
+ lookup-trait-constraint
+ ;; Phase 3: Shadow network hooks
+ current-shadow-fresh-hook
+ current-shadow-solve-hook
+ current-shadow-constraint-hook)
 
 ;; ========================================
 ;; Meta-info: everything about a single metavariable
@@ -167,6 +171,15 @@
 (define (lookup-trait-constraint meta-id)
   (hash-ref (current-trait-constraint-map) meta-id #f))
 
+;; ========================================
+;; Phase 3: Shadow network hooks
+;; ========================================
+;; When non-#f, called alongside meta operations to mirror to shadow network.
+;; Default #f = zero overhead when shadow is off.
+(define current-shadow-fresh-hook (make-parameter #f))      ;; (id ctx type source) → void
+(define current-shadow-solve-hook (make-parameter #f))      ;; (id solution) → void
+(define current-shadow-constraint-hook (make-parameter #f))  ;; (lhs rhs ctx source) → void
+
 ;; Global constraint store: list of all constraints
 (define current-constraint-store (make-parameter '()))
 
@@ -211,6 +224,8 @@
   (for ([id (in-list meta-ids)])
     (define existing (hash-ref registry id '()))
     (hash-set! registry id (cons c existing)))
+  (define hook (current-shadow-constraint-hook))
+  (when hook (hook lhs rhs ctx source))
   c)
 
 ;; Get constraints associated with a metavariable for wakeup.
@@ -265,6 +280,8 @@
   (define id (gensym 'meta))
   (define info (meta-info id ctx type 'unsolved #f '() source))
   (hash-set! (current-meta-store) id info)
+  (define hook (current-shadow-fresh-hook))
+  (when hook (hook id ctx type source))
   (expr-meta id))
 
 ;; Assign a solution to a metavariable. Errors if already solved.
@@ -279,7 +296,9 @@
   (set-meta-info-status! info 'solved)
   (set-meta-info-solution! info solution)
   ;; Sprint 5: retry postponed constraints that mention this meta
-  (retry-constraints-for-meta! id))
+  (retry-constraints-for-meta! id)
+  (define hook (current-shadow-solve-hook))
+  (when hook (hook id solution)))
 
 ;; Check if a metavariable has been solved.
 (define (meta-solved? id)
