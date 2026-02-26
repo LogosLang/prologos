@@ -763,7 +763,11 @@
    'test-perf-counters.rkt
    (test-dep '(performance-counters.rkt) #f)
    'test-phase-timing.rkt
-   (test-dep '(performance-counters.rkt driver.rkt global-env.rkt) #t)))
+   (test-dep '(performance-counters.rkt driver.rkt global-env.rkt) #t)
+   'test-generators.rkt
+   (test-dep '(syntax.rkt typing-core.rkt metavar-store.rkt reduction.rkt unify.rkt global-env.rkt performance-counters.rkt) #f)
+   'test-properties.rkt
+   (test-dep '(syntax.rkt typing-core.rkt metavar-store.rkt reduction.rkt unify.rkt zonk.rkt global-env.rkt performance-counters.rkt) #f)))
 
 ;; ============================================================
 ;; Layer 2b: Example file → test file mapping
