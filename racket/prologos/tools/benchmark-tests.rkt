@@ -118,7 +118,7 @@
 
   ;; Build run record
   (define record
-    (hasheq 'schema_version 2
+    (hasheq 'schema_version 3
             'timestamp (current-iso-timestamp)
             'commit (current-commit)
             'branch (current-branch)
@@ -146,22 +146,34 @@
           (if all-pass? "all pass" "SOME FAILURES"))
   (printf "Results appended to ~a\n" (path->string timings-file))
 
-  ;; Auto-detect regressions against previous run
+  ;; Auto-detect regressions against multi-run median baseline
   (define has-regressions? #f)
   (define runs (read-all-runs timings-file))
   (when (>= (length runs) 2)
-    (define prev-run (list-ref runs (- (length runs) 2)))
-    (define regressions (detect-regressions record prev-run reg-threshold))
+    (define regressions (detect-regressions-v2 record runs reg-threshold))
     (unless (null? regressions)
       (set! has-regressions? #t)
-      (printf "\nRegressions detected (>~a% vs ~a):\n"
-              reg-threshold (hash-ref prev-run 'commit))
+      (printf "\nRegressions detected (>~a% AND >500ms vs median baseline):\n"
+              reg-threshold)
       (for ([reg (in-list regressions)])
-        (printf "  ~a  ~as -> ~as (+~a%)\n"
+        (printf "  ~a  baseline ~as -> ~as (+~a%, +~ams, n=~a)\n"
                 (pad-str (hash-ref reg 'file) 35)
-                (pad-str (real->decimal-string (/ (hash-ref reg 'prev_ms) 1000.0) 1) 7 'right)
+                (pad-str (real->decimal-string (/ (hash-ref reg 'baseline_ms) 1000.0) 1) 7 'right)
                 (pad-str (real->decimal-string (/ (hash-ref reg 'curr_ms) 1000.0) 1) 7 'right)
-                (real->decimal-string (hash-ref reg 'delta_pct) 0)))))
+                (real->decimal-string (hash-ref reg 'delta_pct) 0)
+                (hash-ref reg 'delta_ms)
+                (hash-ref reg 'baseline_n)))))
+
+  ;; Flag high-variance files across recent runs
+  (when (>= (length runs) 3)
+    (define hv (flag-high-variance runs))
+    (unless (null? hv)
+      (printf "\nHigh-variance files (CV > 15%% across recent runs):\n")
+      (for ([f (in-list (sort hv > #:key (λ (h) (hash-ref h 'cv_pct))))])
+        (printf "  ~a  CV=~a%  (n=~a)\n"
+                (pad-str (hash-ref f 'file) 35)
+                (real->decimal-string (hash-ref f 'cv_pct) 1)
+                (hash-ref f 'sample_count)))))
 
   ;; Structured summary: phase breakdown + heartbeat totals
   (print-structured-summary file-results)
@@ -170,9 +182,65 @@
   (and all-pass? (not has-regressions?)))
 
 ;; ============================================================
-;; Regression detection
+;; Regression detection (v2: multi-run median baseline)
 ;; ============================================================
 
+;; detect-regressions-v2: use median of last N runs as baseline.
+;; Requires BOTH percentage AND absolute threshold to flag a regression.
+;; This prevents flagging 100ms → 120ms (+20%) as a regression when
+;; the absolute delta (20ms) is within normal noise.
+(define (detect-regressions-v2 current-run all-runs threshold-pct
+                               #:baseline-count [baseline-count 5]
+                               #:min-absolute-ms [min-absolute-ms 500])
+  ;; Collect up to baseline-count previous runs (excluding current)
+  (define prev-runs
+    (let ([all-but-last (if (>= (length all-runs) 2)
+                            (take all-runs (sub1 (length all-runs)))
+                            '())])
+      (take-right all-but-last (min baseline-count (length all-but-last)))))
+
+  (when (null? prev-runs) (list))  ;; no baseline available
+
+  ;; Build per-file median baseline from previous runs
+  (define file-baselines (make-hasheq))  ;; file -> (listof ms)
+  (for ([run (in-list prev-runs)])
+    (for ([r (in-list (hash-ref run 'results '()))])
+      (define file (hash-ref r 'file))
+      (define ms (hash-ref r 'wall_ms))
+      (hash-set! file-baselines file
+                 (cons ms (hash-ref file-baselines file '())))))
+
+  (define (list-median xs)
+    (define sorted (sort xs <))
+    (define n (length sorted))
+    (cond
+      [(zero? n) 0]
+      [(odd? n) (list-ref sorted (quotient n 2))]
+      [else (/ (+ (list-ref sorted (sub1 (quotient n 2)))
+                  (list-ref sorted (quotient n 2))) 2)]))
+
+  (filter-map
+   (λ (r)
+     (define file (hash-ref r 'file))
+     (define baseline-samples (hash-ref file-baselines file '()))
+     (and (not (null? baseline-samples))
+          (let* ([cur-ms (hash-ref r 'wall_ms)]
+                 [baseline-ms (list-median baseline-samples)]
+                 [delta-ms (- cur-ms baseline-ms)]
+                 [pct (if (zero? baseline-ms) 0
+                          (* 100.0 (/ delta-ms baseline-ms)))])
+            ;; Both % AND absolute threshold must be exceeded
+            (and (> pct threshold-pct)
+                 (> delta-ms min-absolute-ms)
+                 (hasheq 'file file
+                         'baseline_ms baseline-ms
+                         'baseline_n (length baseline-samples)
+                         'curr_ms cur-ms
+                         'delta_ms (inexact->exact (round delta-ms))
+                         'delta_pct pct)))))
+   (hash-ref current-run 'results)))
+
+;; Legacy single-run regression detection (kept for --compare mode)
 (define (detect-regressions current-run prev-run threshold-pct)
   (define prev-by-file
     (for/hash ([r (in-list (hash-ref prev-run 'results))])
@@ -192,16 +260,51 @@
                          'delta_pct pct)))))
    (hash-ref current-run 'results)))
 
+;; flag-high-variance: identify files with CV > threshold across recent runs.
+;; Returns list of hasheq with file, cv_pct, sample_count.
+(define (flag-high-variance all-runs
+                            #:baseline-count [baseline-count 5]
+                            #:max-cv [max-cv 15.0])
+  (define prev-runs (take-right all-runs (min baseline-count (length all-runs))))
+  (when (< (length prev-runs) 3) (list))  ;; need ≥3 runs for meaningful CV
+
+  ;; Collect per-file timing samples
+  (define file-samples (make-hasheq))
+  (for ([run (in-list prev-runs)])
+    (for ([r (in-list (hash-ref run 'results '()))])
+      (define file (hash-ref r 'file))
+      (define ms (hash-ref r 'wall_ms))
+      (hash-set! file-samples file
+                 (cons ms (hash-ref file-samples file '())))))
+
+  (filter-map
+   (λ (kv)
+     (define file (car kv))
+     (define samples (cdr kv))
+     (and (>= (length samples) 3)
+          (let* ([m (/ (apply + samples) (length samples))]
+                 [sq-diffs (map (λ (x) (expt (- x m) 2)) samples)]
+                 [sd (sqrt (/ (apply + sq-diffs) (sub1 (length samples))))]
+                 [cv-pct (if (zero? m) 0.0 (* 100.0 (/ sd (abs m))))])
+            (and (> cv-pct max-cv)
+                 (hasheq 'file file
+                         'cv_pct (exact->inexact cv-pct)
+                         'sample_count (length samples))))))
+   (hash->list file-samples)))
+
 ;; ============================================================
 ;; Structured summary with phase attribution
 ;; ============================================================
 
 (define (print-structured-summary results)
-  ;; Aggregate heartbeats across all files
+  ;; Aggregate heartbeats, phases, and memory across all files
   (define total-hb (make-hasheq))
   (define total-phases (make-hasheq))
+  (define total-mem-retained 0)
+  (define total-gc-ms 0)
   (define files-with-hb 0)
   (define files-with-phases 0)
+  (define files-with-mem 0)
   (for ([r (in-list results)])
     (define hb (hash-ref r 'heartbeats #f))
     (when hb
@@ -212,7 +315,13 @@
     (when ph
       (set! files-with-phases (add1 files-with-phases))
       (for ([(k v) (in-hash ph)])
-        (hash-set! total-phases k (+ (hash-ref total-phases k 0) v)))))
+        (hash-set! total-phases k (+ (hash-ref total-phases k 0) v))))
+    (define mem (hash-ref r 'memory #f))
+    (when mem
+      (set! files-with-mem (add1 files-with-mem))
+      (set! total-mem-retained (+ total-mem-retained
+                                  (hash-ref mem 'mem_retained_bytes 0)))
+      (set! total-gc-ms (+ total-gc-ms (hash-ref mem 'gc_ms 0)))))
 
   ;; Print heartbeat totals
   (when (> files-with-hb 0)
@@ -237,7 +346,15 @@
       (printf "  ~a  ~as  (~a%)\n"
               (pad-str (symbol->string (car kv)) 18)
               (pad-str (real->decimal-string (/ ms 1000.0) 1) 8 'right)
-              (real->decimal-string pct 0)))))
+              (real->decimal-string pct 0))))
+
+  ;; Print memory summary
+  (when (> files-with-mem 0)
+    (printf "\n--- Memory Summary (~a files) ---\n" files-with-mem)
+    (define mb (/ total-mem-retained 1048576.0))
+    (printf "  Total retained: ~aMB  GC time: ~as\n"
+            (real->decimal-string mb 1)
+            (real->decimal-string (/ total-gc-ms 1000.0) 1))))
 
 ;; ============================================================
 ;; Reporting

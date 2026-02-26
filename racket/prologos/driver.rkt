@@ -558,6 +558,7 @@
   (define expanded-stxs (preparse-expand-all raw-stxs))
   (define surfs (map parse-datum expanded-stxs))
   (define pt (phase-timings 0.0 0.0 0.0 0.0 0.0 0.0 0.0))
+  (define mem-before (measure-memory-before))
   (define-values (results pc)
     (parameterize ([current-phase-timings pt])
       (with-perf-counters
@@ -567,6 +568,7 @@
               (process-command surf))))))
   (when pc (print-perf-report! pc))
   (print-phase-report! pt)
+  (print-memory-report! (measure-memory-after mem-before))
   results)
 
 ;; ========================================
@@ -584,6 +586,7 @@
   (define expanded-stxs (preparse-expand-all raw-stxs))
   (define surfs (map parse-datum expanded-stxs))
   (define pt (phase-timings 0.0 0.0 0.0 0.0 0.0 0.0 0.0))
+  (define mem-before (measure-memory-before))
   (define-values (results pc)
     (parameterize ([current-phase-timings pt])
       (with-perf-counters
@@ -593,6 +596,7 @@
               (process-command surf))))))
   (when pc (print-perf-report! pc))
   (print-phase-report! pt)
+  (print-memory-report! (measure-memory-after mem-before))
   results)
 
 ;; ========================================

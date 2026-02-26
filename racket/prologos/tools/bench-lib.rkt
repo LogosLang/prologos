@@ -17,6 +17,7 @@
          extract-test-count
          extract-perf-counters
          extract-phase-timings
+         extract-memory-stats
          filename-from-path
          status-label
          current-iso-timestamp
@@ -55,20 +56,23 @@
      (define test-count (extract-test-count output))
      (define heartbeats (extract-perf-counters err-output))
      (define phases (extract-phase-timings err-output))
+     (define mem (extract-memory-stats err-output))
      (define result
        (hasheq 'file (filename-from-path test-path)
                'wall_ms wall-ms
                'status (if ok? "pass" "fail")
                'tests test-count))
-     ;; Attach heartbeats and phase timings when available
+     ;; Attach heartbeats, phase timings, and memory stats when available
      (define result+hb
        (if heartbeats (hash-set result 'heartbeats heartbeats) result))
      (define result+ph
        (if phases (hash-set result+hb 'phases phases) result+hb))
+     (define result+mem
+       (if mem (hash-set result+ph 'memory mem) result+ph))
      ;; Attach error output only on failure (saves space in JSONL)
      (if (and (not ok?) (not (string=? err-output "")))
-         (hash-set result+ph 'error_output err-output)
-         result+ph)]
+         (hash-set result+mem 'error_output err-output)
+         result+mem)]
     [else
      ;; Timeout — kill the process
      (define err-output
@@ -134,6 +138,22 @@
        (for/fold ([a acc])
                  ([(k v) (in-hash h)])
          (hash-set a k (+ (hash-ref a k 0) v))))]))
+
+;; Extract MEMORY-STATS:{json} from stderr output.
+;; Returns a hasheq of memory stats, or #f if not found.
+;; For multi-ns files, takes the last (final) report.
+(define (extract-memory-stats err-output)
+  (define lines (string-split err-output "\n"))
+  (define prefix "MEMORY-STATS:")
+  (define prefix-len (string-length prefix))
+  (define results
+    (for/list ([line (in-list lines)]
+               #:when (and (>= (string-length line) prefix-len)
+                           (string=? (substring line 0 prefix-len) prefix)))
+      (with-handlers ([exn:fail? (λ (_) #f)])
+        (with-input-from-string (substring line prefix-len) read-json))))
+  (define valid (filter hash? results))
+  (if (null? valid) #f (last valid)))  ;; take last report (cumulative)
 
 ;; Extract "N tests passed" from raco test output
 (define (extract-test-count output)

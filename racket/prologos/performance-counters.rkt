@@ -44,7 +44,12 @@
  current-phase-timings
  time-phase!
  phase-timings->hasheq
- print-phase-report!)
+ print-phase-report!
+
+ ;; Phase D: Memory + GC reporting
+ measure-memory-before
+ measure-memory-after
+ print-memory-report!)
 
 ;; ============================================================
 ;; Counter struct: 12 mutable fields
@@ -241,3 +246,32 @@
 (define (print-phase-report! pt)
   (define h (phase-timings->hasheq pt))
   (eprintf "PHASE-TIMINGS:~a\n" (jsexpr->string h)))
+
+;; ============================================================
+;; Phase D: Memory + GC reporting
+;;
+;; Records memory usage and GC time before/after processing.
+;; Forces a major GC before measurement for consistency.
+;; ============================================================
+
+;; Snapshot memory state before processing.
+;; Returns an opaque hasheq to be passed to measure-memory-after.
+(define (measure-memory-before)
+  (collect-garbage 'major)
+  (hasheq 'mem_bytes (current-memory-use)
+          'gc_ms (current-gc-milliseconds)))
+
+;; Compute deltas after processing.
+;; Returns a hasheq suitable for JSON serialization.
+(define (measure-memory-after before)
+  (collect-garbage 'major)
+  (define mem-after (current-memory-use))
+  (define gc-after (current-gc-milliseconds))
+  (hasheq 'mem_before_bytes (hash-ref before 'mem_bytes)
+          'mem_after_bytes mem-after
+          'mem_retained_bytes (max 0 (- mem-after (hash-ref before 'mem_bytes)))
+          'gc_ms (- gc-after (hash-ref before 'gc_ms))))
+
+;; Print MEMORY-STATS:{json} to stderr for subprocess extraction.
+(define (print-memory-report! mem-stats)
+  (eprintf "MEMORY-STATS:~a\n" (jsexpr->string mem-stats)))
