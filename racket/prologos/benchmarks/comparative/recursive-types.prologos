@@ -1,0 +1,49 @@
+ns benchmarks::comparative::recursive-types :no-prelude
+
+;; Benchmark: recursive types and inductive families
+;; Stresses: data type elaboration, recursive type-checking, pattern matching
+
+data Tree [A : Type] where
+  | leaf : A -> [Tree A]
+  | node : [Tree A] -> [Tree A] -> [Tree A]
+
+spec tree-size {A : Type} [Tree A] -> Nat
+defn tree-size [t]
+  match t
+    | leaf x     -> 1
+    | node l r   -> suc [add [tree-size l] [tree-size r]]
+
+spec tree-depth {A : Type} [Tree A] -> Nat
+defn tree-depth [t]
+  match t
+    | leaf x     -> zero
+    | node l r   -> suc [max-nat [tree-depth l] [tree-depth r]]
+
+spec tree-map {A B : Type} [A -> B] -> [Tree A] -> [Tree B]
+defn tree-map [f t]
+  match t
+    | leaf x     -> leaf [f x]
+    | node l r   -> node [tree-map f l] [tree-map f r]
+
+;; Helpers
+spec add Nat Nat -> Nat
+defn add [x y]
+  match y
+    | zero  -> x
+    | suc k -> suc [add x k]
+
+spec max-nat Nat Nat -> Nat
+defn max-nat [x y]
+  match x
+    | zero  -> y
+    | suc a ->
+      match y
+        | zero  -> suc a
+        | suc b -> suc [max-nat a b]
+
+;; Build a small tree
+def t1 node [node [leaf 1] [leaf 2]] [leaf 3]
+
+tree-size t1
+tree-depth t1
+tree-map (fn [x : Nat] suc x) t1

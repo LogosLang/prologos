@@ -1,0 +1,29 @@
+ns benchmarks::comparative::higher-order :no-prelude
+
+;; Benchmark: higher-order functions
+;; Stresses: Pi type inference, function application, closures
+
+spec apply {A B : Type} [A -> B] -> A -> B
+defn apply [f x] f x
+
+spec twice {A : Type} [A -> A] -> A -> A
+defn twice [f x] f [f x]
+
+spec thrice {A : Type} [A -> A] -> A -> A
+defn thrice [f x] f [f [f x]]
+
+spec compose {A B C : Type} [B -> C] -> [A -> B] -> A -> C
+defn compose [f g x] f [g x]
+
+spec on {A B C : Type} [B -> B -> C] -> [A -> B] -> A -> A -> C
+defn on [f g x y] f [g x] [g y]
+
+;; Applications
+def inc (fn [x : Nat] suc x)
+
+apply inc 5
+twice inc 3
+thrice inc 0
+compose inc inc 10
+twice [compose inc inc] 0
+thrice [twice inc] 0

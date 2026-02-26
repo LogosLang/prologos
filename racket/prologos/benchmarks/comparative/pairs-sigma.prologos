@@ -1,0 +1,38 @@
+ns benchmarks::comparative::pairs-sigma :no-prelude
+
+;; Benchmark: Sigma types and pairs
+;; Stresses: Sigma elaboration, pair construction/destruction, inference
+
+spec fst {A B : Type} [A * B] -> A
+defn fst [p]
+  match p
+    | pair a b -> a
+
+spec snd {A B : Type} [A * B] -> B
+defn snd [p]
+  match p
+    | pair a b -> b
+
+spec swap {A B : Type} [A * B] -> [B * A]
+defn swap [p]
+  match p
+    | pair a b -> pair b a
+
+spec map-fst {A B C : Type} [A -> C] -> [A * B] -> [C * B]
+defn map-fst [f p]
+  match p
+    | pair a b -> pair [f a] b
+
+spec map-snd {A B C : Type} [B -> C] -> [A * B] -> [A * C]
+defn map-snd [f p]
+  match p
+    | pair a b -> pair a [f b]
+
+def p1 pair 1 true
+def p2 pair [pair 2 3] false
+
+fst p1
+snd p1
+swap p1
+map-fst (fn [x : Nat] suc x) p1
+fst [fst p2]

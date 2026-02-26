@@ -1,0 +1,31 @@
+ns benchmarks::comparative::nat-arithmetic :no-prelude
+
+;; Benchmark: Nat arithmetic reduction
+;; Stresses: reduction (whnf, nf), recursive function evaluation
+
+spec add Nat Nat -> Nat
+defn add [x y]
+  match y
+    | zero  -> x
+    | suc k -> suc [add x k]
+
+spec mult Nat Nat -> Nat
+defn mult [x y]
+  match y
+    | zero  -> zero
+    | suc k -> add x [mult x k]
+
+spec pred Nat -> Nat
+defn pred [n]
+  match n
+    | zero  -> zero
+    | suc k -> k
+
+;; Compute 3 * 4 = 12, then add 5 = 17
+add [mult 3 4] 5
+
+;; Nested: mult (add 2 3) (add 1 2) = 5 * 3 = 15
+mult [add 2 3] [add 1 2]
+
+;; Deep: add 10 10 = 20
+add 10 10

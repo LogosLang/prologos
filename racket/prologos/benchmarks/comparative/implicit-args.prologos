@@ -1,0 +1,24 @@
+ns benchmarks::comparative::implicit-args :no-prelude
+
+;; Benchmark: implicit argument inference
+;; Stresses: meta-variable creation, unification, implicit resolution
+
+spec id {A : Type} A -> A
+defn id [x] x
+
+spec const {A B : Type} A B -> A
+defn const [x y] x
+
+spec flip {A B C : Type} [A -> B -> C] -> B -> A -> C
+defn flip [f b a] f a b
+
+spec compose {A B C : Type} [B -> C] -> [A -> B] -> A -> C
+defn compose [f g x] f [g x]
+
+;; Force implicit resolution on Nat and Bool
+id 42
+id true
+const 1 false
+flip const false 2
+compose id id 7
+compose (fn [x : Nat] suc x) (fn [y : Nat] suc [suc y]) 0

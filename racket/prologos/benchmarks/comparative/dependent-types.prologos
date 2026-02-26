@@ -1,0 +1,28 @@
+ns benchmarks::comparative::dependent-types :no-prelude
+
+;; Benchmark: dependent types
+;; Stresses: dependent unification, type-level computation
+
+;; Length-indexed vectors (simplified)
+data Vec [A : Type] [n : Nat] where
+  | vnil  : [Vec A zero]
+  | vcons : {m : Nat} -> A -> [Vec A m] -> [Vec A [suc m]]
+
+;; Type-safe head
+spec vhead {A : Type} {n : Nat} [Vec A [suc n]] -> A
+defn vhead [v]
+  match v
+    | vcons x xs -> x
+
+;; Type-safe tail
+spec vtail {A : Type} {n : Nat} [Vec A [suc n]] -> [Vec A n]
+defn vtail [v]
+  match v
+    | vcons x xs -> xs
+
+;; Build a small vector
+def v3 : [Vec Nat 3]
+  vcons 1 [vcons 2 [vcons 3 vnil]]
+
+vhead v3
+vtail v3

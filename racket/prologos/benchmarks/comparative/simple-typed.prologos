@@ -1,0 +1,28 @@
+ns benchmarks::comparative::simple-typed :no-prelude
+
+;; Benchmark: simple typed definitions
+;; Stresses: basic type-checking, no inference
+
+spec id Nat -> Nat
+defn id [x] x
+
+spec double Nat -> Nat
+defn double [x] suc [suc x]
+
+spec triple Nat -> Nat
+defn triple [x] suc [suc [suc x]]
+
+spec add Nat Nat -> Nat
+defn add [x y]
+  match y
+    | zero  -> x
+    | suc k -> suc [add x k]
+
+spec mult Nat Nat -> Nat
+defn mult [x y]
+  match y
+    | zero  -> zero
+    | suc k -> add x [mult x k]
+
+add [double 3] [triple 2]
+mult 3 4

@@ -1,0 +1,30 @@
+ns benchmarks::comparative::church-folds :no-prelude
+
+;; Benchmark: Church-encoded naturals and folds
+;; Stresses: higher-order function application, beta reduction, type inference
+
+;; Church naturals as polymorphic functions
+;; Church n = λf. λx. f^n(x)
+spec church-zero {A : Type} [A -> A] -> A -> A
+defn church-zero [f x] x
+
+spec church-suc {A : Type} [[A -> A] -> A -> A] -> [A -> A] -> A -> A
+defn church-suc [n f x] f [n f x]
+
+spec church-add {A : Type} [[A -> A] -> A -> A] -> [[A -> A] -> A -> A] -> [A -> A] -> A -> A
+defn church-add [m n f x] m f [n f x]
+
+;; Convert to Nat
+spec to-nat [[Nat -> Nat] -> Nat -> Nat] -> Nat
+defn to-nat [cn] cn (fn [x : Nat] suc x) zero
+
+;; Build some Church numerals
+def c1 church-suc church-zero
+def c2 church-suc c1
+def c3 church-suc c2
+
+;; Compute: 2 + 3 = 5
+to-nat [church-add c2 c3]
+
+;; Compute: 3 + 3 = 6
+to-nat [church-add c3 c3]

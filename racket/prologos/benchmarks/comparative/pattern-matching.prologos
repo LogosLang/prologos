@@ -1,0 +1,39 @@
+ns benchmarks::comparative::pattern-matching :no-prelude
+
+;; Benchmark: pattern matching and data types
+;; Stresses: data type elaboration, match compilation, inductive elimination
+
+data List [A : Type] where
+  | nil  : [List A]
+  | cons : A -> [List A] -> [List A]
+
+spec length {A : Type} [List A] -> Nat
+defn length [xs]
+  match xs
+    | nil       -> zero
+    | cons x ys -> suc [length ys]
+
+spec map {A B : Type} [A -> B] -> [List A] -> [List B]
+defn map [f xs]
+  match xs
+    | nil       -> nil
+    | cons x ys -> cons [f x] [map f ys]
+
+spec filter {A : Type} [A -> Bool] -> [List A] -> [List A]
+defn filter [p xs]
+  match xs
+    | nil       -> nil
+    | cons x ys -> if [p x] [cons x [filter p ys]] [filter p ys]
+
+spec foldr {A B : Type} [A -> B -> B] -> B -> [List A] -> B
+defn foldr [f z xs]
+  match xs
+    | nil       -> z
+    | cons x ys -> f x [foldr f z ys]
+
+;; Build a small list
+def nums cons 1 [cons 2 [cons 3 [cons 4 [cons 5 nil]]]]
+
+length nums
+map (fn [x : Nat] suc x) nums
+foldr (fn [x : Nat] (fn [acc : Nat] suc acc)) zero nums

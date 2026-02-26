@@ -1,0 +1,46 @@
+ns benchmarks::comparative::bool-logic :no-prelude
+
+;; Benchmark: Bool-heavy logic
+;; Stresses: if-then-else reduction, Bool pattern matching
+
+spec not Bool -> Bool
+defn not [b]
+  match b
+    | true  -> false
+    | false -> true
+
+spec and Bool Bool -> Bool
+defn and [a b]
+  match a
+    | true  -> b
+    | false -> false
+
+spec or Bool Bool -> Bool
+defn or [a b]
+  match a
+    | true  -> true
+    | false -> b
+
+spec xor Bool Bool -> Bool
+defn xor [a b] and [or a b] [not [and a b]]
+
+spec implies Bool Bool -> Bool
+defn implies [a b] or [not a] b
+
+;; Truth table evaluations
+and true true
+and true false
+or false true
+not [and false true]
+xor true false
+xor true true
+implies false true
+implies true false
+
+;; Nested: (T ∧ T) ∨ (¬F ∧ T)
+or [and true true] [and [not false] true]
+
+;; De Morgan: ¬(A ∧ B) = ¬A ∨ ¬B
+def a true
+def b false
+and [not [and a b]] [or [not a] [not b]]
