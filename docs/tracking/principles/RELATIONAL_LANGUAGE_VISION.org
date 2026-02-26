@@ -10,11 +10,11 @@ a first-class language paradigm, co-equal with functional programming. Just as
 ~fn~ creates anonymous functions and ~defn~ creates named functions, ~rel~
 creates anonymous relations and ~defr~ creates named relations.
 
-| Paradigm    | Named    | Anonymous | Application | Delimiter |
-|-------------+----------+-----------+-------------+-----------|
-| Functional  | ~defn~   | ~fn~      | ~[f x y]~   | ~[...]~   |
-| Relational  | ~defr~   | ~rel~     | ~(R ?x ?y)~ | ~(...)~   |
-| Process     | ~defproc~ | ~proc~   | indentation | indent    |
+| Paradigm    | Spec      | Named     | Anonymous | Application | Delimiter |
+|-------------+-----------+-----------+-----------+-------------+-----------|
+| Functional  | ~spec~    | ~defn~    | ~fn~      | ~[f x y]~   | ~[...]~   |
+| Relational  | ~schema~  | ~defr~    | ~rel~     | ~(R ?x ?y)~ | ~(...)~   |
+| Process     | ~session~ | ~defproc~ | ~proc~    | indentation | indent    |
 
 The parenthetical ~(...)~ delimiter is the visual sigil for relational forms,
 just as ~[...]~ is for functional application. This is not arbitrary --- it
@@ -320,6 +320,154 @@ to a logic variable. This is the standard Prolog/Mercury approach, but
 in Prologos, the functional expression is a full Prologos expression
 (type-checked, trait-resolved, etc.).
 
+* Schema: The Object Language
+
+** The Specification Triple
+
+Every paradigm in Prologos has a /specification form/ that describes the shape
+of a thing, and a /definitional form/ that inhabits that shape:
+
+| Spec Form | Def Form  | What It Specifies                          |
+|-----------+-----------+--------------------------------------------|
+| ~spec~    | ~defn~    | Function shape: input types → output type  |
+| ~schema~  | ~defr~    | Relation shape: column names, types        |
+| ~session~ | ~defproc~ | Protocol shape: message sequence, types     |
+
+The type checker verifies that each definition conforms to its specification.
+This is the most fundamental pattern in Prologos: /every construct has a
+specifiable shape and a checkable implementation/.
+
+** ~schema~ as Named, Closed, Validated Map
+
+Prologos has open maps (~{}~) --- any keys, any values, unconstrained. A
+~schema~ is the /closed/ counterpart: a named map type with fixed keys and
+typed values.
+
+#+begin_src prologos
+schema Employee
+  :name   String
+  :dept   Department    ;; a sum type, not just any string
+  :salary Nat
+#+end_src
+
+This declaration introduces:
+
+1. *A type*: ~Employee : Type 0~. Values of this type are maps with exactly
+   the declared keys, each holding a value of the declared type.
+
+2. *A constructor*: Both positional and dictionary-style:
+   #+begin_src prologos
+   ;; Dictionary (self-documenting, order-independent)
+   def alice : Employee
+     {:name "Alice" :dept Engineering :salary 95000N}
+
+   ;; Positional (concise, schema field order determines position)
+   def bob : Employee
+     ("Bob" Marketing 72000N)
+   #+end_src
+
+3. *A validator*: The type checker rejects ill-formed values:
+   #+begin_src prologos
+   ;; TYPE ERROR: :salary expects Nat, got String
+   def bad : Employee
+     {:name "Eve" :dept Engineering :salary "high"}
+   #+end_src
+
+4. *Field accessors*: Via dot-syntax (already implemented):
+   #+begin_src prologos
+   alice.name     ;; => "Alice"
+   alice.salary   ;; => 95000N
+   #+end_src
+
+** Inspiration: Clojure Spec and the "Object Language"
+
+Rich Hickey's work on ~clojure.spec~ demonstrated that /specifications are data/:
+schemas describe shapes, shapes compose, and the composition of shapes is
+itself a shape. The key insight is that a schema is not a class or a struct ---
+it is a /predicate over maps/ that can be composed, extended, and reasoned about.
+
+Prologos's ~schema~ follows this philosophy:
+
+- *Schemas are types, not classes*. No methods, no inheritance, no mutation.
+  A schema describes a shape. Functions that operate on that shape are declared
+  separately via ~spec~/~defn~.
+
+- *Schemas compose*. A schema can include fields from another schema
+  (composition over inheritance):
+  #+begin_src prologos
+  schema Person
+    :name String
+    :age  Nat
+
+  schema Employee
+    :extends Person
+    :dept   Department
+    :salary Nat
+  #+end_src
+
+- *Schemas validate at boundaries*. The primary use of schemas is at system
+  boundaries: validating data entering the system (from files, networks,
+  user input), validating messages in session-typed protocols, and validating
+  facts in relational definitions.
+
+** ~schema~ and Session Types
+
+Because ~schema~ produces a type, schema values can be sent over session-typed
+channels. This makes schemas the natural language for /validated message shapes/:
+
+#+begin_src prologos
+schema OrderRequest
+  :item-id  Nat
+  :quantity Nat
+  :customer String
+
+session OrderProtocol
+  recv order : OrderRequest    ;; validated on receipt
+  send confirmation : Bool
+  end
+
+defproc order-server : OrderProtocol
+  recv self order : OrderRequest
+    ;; order.item-id, order.quantity, order.customer all type-safe
+    let ok := [process-order order]
+    send ok self
+      stop
+#+end_src
+
+Just as ~session~ is to ~defproc~ what ~spec~ is to ~defn~, ~schema~ provides
+the validated data shapes that flow /through/ those protocols. The
+specification triple is fully connected:
+
+- ~spec~ describes what a function /computes/
+- ~schema~ describes what data /looks like/
+- ~session~ describes what a conversation /does/
+
+** ~schema~ and Relations
+
+~schema~ is the natural specification form for relational facts. When a ~defr~
+is annotated with a schema, the schema provides:
+
+1. *Column names and types*: Each schema field becomes a named, typed column.
+2. *Positional ordering*: The field declaration order establishes the canonical
+   positional mapping, so positional facts know which argument is which.
+3. *Validation*: Every fact (whether inline or bulk-loaded) is type-checked
+   against the schema.
+4. *Query result shape*: ~solve~ results for schema-annotated relations return
+   typed records, not untyped ~Map Keyword Value~.
+
+#+begin_src prologos
+schema ParentChild
+  :parent String
+  :child  String
+
+defr parent-child : ParentChild
+  ;; ... facts and rules go here (syntax TBD — see § Fact Declaration Syntax)
+#+end_src
+
+The ~: ParentChild~ annotation on ~defr~ is optional. Unannotated relations
+are untyped (Prolog-style). Schema-annotated relations are typed and validated
+(database-style). Users opt into rigor when they want it.
+
 * Design Principles Summary
 
 1. *Delimiter-based paradigm distinction*: ~[...]~ functional, ~(...)~ relational
@@ -334,11 +482,15 @@ in Prologos, the functional expression is a full Prologos expression
 10. *Network mobility*: Propagator networks as first-class, transferable values
 11. *Bidirectional embedding*: Functions in relations via ~is~, relations in
     functions via ~solve~
-12. *Relations as database tables*: Facts are rows, rules are composable views,
+12. *The specification triple*: ~spec~/~defn~, ~schema~/~defr~, ~session~/~defproc~
+    --- every paradigm has a shape and an implementation
+13. *~schema~ as closed validated map*: Named, typed, closed form over maps ---
+    the object language for data shapes, message validation, and relational facts
+14. *Relations as database tables*: Facts are rows, rules are composable views,
     queries are joins --- the relational language /is/ a graph-query language
-13. *Lightweight fact syntax*: Bodiless clauses (positional and dictionary-style)
+15. *Lightweight fact syntax*: Bodiless clauses (positional and dictionary-style)
     must be syntactically concise for the database use case to be practical
-14. *Composition over query languages*: Rules compose as naturally as functions;
+16. *Composition over query languages*: Rules compose as naturally as functions;
     SQL doesn't. This is the Yedalog insight applied to a typed setting.
 
 * Relations as a Graph-Query Database Language
@@ -440,20 +592,28 @@ assumptions that justify it. This is /data lineage/ --- knowing not just
 semirings (Deutch et al.) formalize this; in Prologos, it falls out naturally
 from the ATMS architecture.
 
-*** Dependent Types = Schema Enforcement
+*** ~schema~ = Typed Relations
 
-Prologos can type-check relations in ways Prolog never could:
+Prologos can type-check relations in ways Prolog never could, using the
+~schema~ keyword (see § Schema: The Object Language):
 
 #+begin_src prologos
-;; Schema as type
-defr employee [?name ?dept ?salary]
-  :schema {:name String :dept Department :salary Nat}
-  &> (= ?name "alice") (= ?dept Engineering) (= ?salary 95000N)
-  &> (= ?name "bob")   (= ?dept Marketing)   (= ?salary 72000N)
+schema Employee
+  :name   String
+  :dept   Department
+  :salary Nat
+
+defr employee : Employee
+  &> "alice" Engineering 95000N
+  &> "bob"   Marketing   72000N
 
 ;; This would be a type error: salary must be Nat
-;; &> (= ?name "eve") (= ?dept Engineering) (= ?salary "high")
+;; &> "eve" Engineering "high"
 #+end_src
+
+The schema provides column names, types, and positional ordering. The ~defr~
+annotation ~: Employee~ links the relation to its schema, enabling compile-time
+validation of every fact.
 
 *** Session Types = Query Protocol Safety
 
@@ -461,7 +621,7 @@ For distributed query scenarios (federated databases, agent knowledge exchange),
 session types ensure that query protocols between nodes are well-formed --- you
 can't send a partial join result where a complete one is expected.
 
-** Fact Declaration Syntax
+** Fact Declaration Syntax (Open Design Question)
 
 The isomorphism suggests that /bodiless clauses/ (facts) deserve first-class
 syntactic treatment. The current encoding is verbose:
@@ -474,38 +634,58 @@ defr parent [?x ?y]
   &> (= ?x "bob") (= ?y "dave")
 #+end_src
 
-Positional facts:
+*** Positional Facts (Schema Provides Ordering)
+
+With a schema, positional facts become unambiguous --- the schema field order
+establishes which position is which column:
 
 #+begin_src prologos
-;; Concise positional facts (Prolog-style)
-defr parent [?x ?y]
-  &> "alice" "bob"
-  &> "bob" "carol"
-  &> "bob" "dave"
+schema ParentChild
+  :parent String
+  :child  String
+
+defr parent-child : ParentChild
+  &> "alice" "bob"           ;; :parent="alice", :child="bob"
+  &> "bob"   "carol"
+  &> "bob"   "dave"
 #+end_src
 
-Dictionary-style facts (database-style, column names explicit):
+Without a schema, positional facts still work (Prolog-style), but column names
+are unavailable to ~solve~ result maps.
+
+*** Dictionary Facts (Self-Documenting, Order-Independent)
+
+For wide relations, dictionary-style facts are self-documenting:
 
 #+begin_src prologos
-;; Named-column facts, inspired by SWI-Prolog dict + Datomic
-defr employee [?name ?dept ?salary]
+schema Employee
+  :name   String
+  :dept   Department
+  :salary Nat
+
+defr employee : Employee
   &> {:name "alice" :dept Engineering :salary 95000N}
   &> {:name "bob"   :dept Marketing   :salary 72000N}
   &> {:name "carol" :dept Engineering :salary 110000N}
 #+end_src
 
-Mixed facts and rules:
+Positional and dictionary facts are interchangeable within the same ~defr~
+when a schema is present. The schema is the bridge between the two forms.
+
+*** Mixed Facts and Rules
+
+Facts and rules coexist naturally in ~defr~:
 
 #+begin_src prologos
-;; Facts and rules coexist naturally
-defr ancestor [?x ?y]
-  &> (parent ?x ?y)
-  &> (parent ?x ?z) (ancestor ?z ?y)
-
-;; Ground facts are just rules with no subgoals and no logic variables
-defr parent [?x ?y]
+;; Ground facts: just data
+defr parent-child : ParentChild
   &> "alice" "bob"
-  &> "bob" "carol"
+  &> "bob"   "carol"
+
+;; Derived relation: rules compose over facts
+defr ancestor : ParentChild
+  &> (parent-child ?x ?y)
+  &> (parent-child ?x ?z) (ancestor ?z ?y)
 #+end_src
 
 The key design decision: a clause body that consists entirely of ground terms
@@ -515,25 +695,46 @@ elaborate to the same propagator infrastructure --- but the sugar matters
 enormously for the database use case, where thousands of facts must be
 declared concisely.
 
+*** The Standalone Fact Question (Unresolved)
+
+Should facts be assertable /outside/ of a ~defr~ body? Candidates:
+
+#+begin_src prologos
+;; Option A: explicit 'fact' keyword
+fact parent-child "Alice" "Bob"
+
+;; Option B: bare assertion looks like function application (ambiguous!)
+parent-child "Alice" "Bob"
+
+;; Option C: relational parens (but parens mean goals/queries)
+(parent-child "Alice" "Bob")
+#+end_src
+
+This is an open design question. For Phase 0, facts live inside ~defr~ bodies.
+Dynamic assertion (Prolog's ~assert/1~) maps to ~table-add~ in the tabling
+infrastructure and will be addressed when runtime fact mutation is needed.
+
 *** Bulk Fact Loading
 
 For the database isomorphism to be practical, we need bulk loading:
 
 #+begin_src prologos
 ;; Load facts from an external source
-defr employee [?name ?dept ?salary]
+defr employee : Employee
   :source "employees.csv"
-  :format csv
-  :columns [:name :dept :salary]
 
 ;; Or from a Prologos data structure
-def employee-data : [List (Map Keyword Value)]
+def employee-data : [List Employee]
   '[{:name "alice" :dept Engineering :salary 95000N}
     {:name "bob"   :dept Marketing   :salary 72000N}]
 
-defr employee [?name ?dept ?salary]
+defr employee : Employee
   :from employee-data
 #+end_src
+
+Note how the schema makes ~:source~ and ~:from~ cleaner: the column mapping
+is already declared by ~Employee~, so no separate ~:columns~ or ~:format~
+metadata is needed for well-structured sources.
 
 Bulk loading is deferred infrastructure, but the /vision/ should inform the
 fact syntax we choose in Phase 7. The syntax must be something that scales
@@ -600,24 +801,32 @@ Prologos goes further than Yedalog in several ways:
 
 ** Design Implications for Phase 7
 
-The database isomorphism should inform Phase 7 surface syntax:
+The database isomorphism and ~schema~ design should inform Phase 7:
 
-1. *Bodiless clauses must be syntactically lightweight*. The primary use case
+1. *~schema~ as a first-class form*. Phase 7 must implement the ~schema~
+   keyword as a type-level construct: a named, closed, validated map with
+   field names, types, and canonical ordering.
+
+2. *Schema-annotated ~defr~*. The ~: Schema~ annotation on ~defr~ enables
+   positional facts, type-checked columns, and typed ~solve~ results.
+
+3. *Bodiless clauses must be syntactically lightweight*. The primary use case
    for facts is data entry. Verbose unification syntax (~(= ?x "alice")~)
    defeats the purpose. Positional and dictionary-style facts are essential.
 
-2. *~defr~ with only ground clauses should be recognizable as a "table"*.
+4. *~defr~ with only ground clauses should be recognizable as a "table"*.
    The elaborator could optimize pure-fact relations differently (e.g., CHAMP
    index on first argument, skip tabling overhead for static fact sets).
 
-3. *Bulk loading via ~:source~ / ~:from~ metadata*. The ergonomic path from
+5. *Bulk loading via ~:source~ / ~:from~ metadata*. The ergonomic path from
    "I have a CSV" to "I can query it relationally" should be trivially short.
+   Schemas make this cleaner: the column mapping is declared once.
 
-4. *Query results should integrate with the collection system*. ~solve~
-   returns ~Seq (Map Keyword Value)~, which plugs directly into ~map~, ~filter~,
-   ~fold~, ~into-vec~, etc.
+6. *Query results integrate with schemas*. For schema-annotated relations,
+   ~solve~ returns ~Seq Schema~ (e.g., ~Seq Employee~), not untyped maps.
+   Field access via dot-syntax works on results.
 
-5. *Re-usability is the killer feature*. Once ~defr employee~ exists, it can
+7. *Re-usability is the killer feature*. Once ~defr employee~ exists, it can
    appear as a subgoal in any number of other relations. This is the
    composability advantage over SQL that the Yedalog engineers identified.
 

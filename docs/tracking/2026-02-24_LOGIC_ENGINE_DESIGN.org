@@ -1518,12 +1518,22 @@ round's propagators fire in parallel when the BSP threshold is met.
 
 ---
 
-* Phase 7: Surface Syntax — ~defr~, ~rel~, ~solve~, ~explain~, ~solver~, ~&>~
+* Phase 7: Surface Syntax — ~schema~, ~defr~, ~rel~, ~solve~, ~explain~, ~solver~, ~&>~
 
 ** 7.1 Goal
 
 Implement the user-facing relational language as described in
 [[file:principles/RELATIONAL_LANGUAGE_VISION.org][RELATIONAL_LANGUAGE_VISION.org]].
+
+This phase includes the ~schema~ keyword — the relational specification form
+that completes the ~spec~/~defn~, ~schema~/~defr~, ~session~/~defproc~ triple.
+A ~schema~ declares a named, closed, validated map type used for:
+- Typed relational facts (column names + types + positional ordering)
+- Validated message shapes in session-typed protocols
+- Closed record types (Rust struct–like, with dot-access)
+
+See [[file:principles/RELATIONAL_LANGUAGE_VISION.org][RELATIONAL_LANGUAGE_VISION.org § Schema: The Object Language]]
+for the full design.
 
 ** 7.2 Reader Changes
 
