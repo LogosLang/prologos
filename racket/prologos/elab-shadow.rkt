@@ -124,12 +124,16 @@
 
 ;; Shallow meta-id extractor: finds expr-meta nodes without following solutions.
 ;; Unlike collect-meta-ids in metavar-store.rkt, does NOT chase solved metas.
+;; Phase 7b: Ground-atom fast path — skip atoms that can never contain metas.
 (define (extract-shallow-meta-ids expr)
   (let walk ([e expr] [acc '()])
     (cond
       [(expr-meta? e)
        (define id (expr-meta-id e))
        (if (memq id acc) acc (cons id acc))]
+      ;; Fast path: ground atoms never contain metas
+      [(or (symbol? e) (number? e) (string? e) (boolean? e) (char? e))
+       acc]
       [(struct? e)
        (define v (struct->vector e))
        (for/fold ([a acc])

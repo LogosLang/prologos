@@ -63,6 +63,7 @@
     [(type-bot? v2) v1]
     [(type-top? v1) type-top]
     [(type-top? v2) type-top]
+    [(eq? v1 v2) v1]            ;; Phase 7b: pointer-equal fast path (interned atoms, sentinels)
     [(equal? v1 v2) v1]
     [else
      (define result (try-unify-pure v1 v2))

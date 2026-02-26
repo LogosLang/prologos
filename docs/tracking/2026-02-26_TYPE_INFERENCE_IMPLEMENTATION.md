@@ -218,4 +218,29 @@
 - **Same actual type for all branches** — infer `e`'s type once and report it for every branch. Simpler and nearly as useful as per-branch re-checking.
 - **`message` field stores full union type** — used by format clause for the help line.
 
-## Phase 7: Performance Optimization — NOT STARTED
+## Phase 7: Performance Optimization + Benchmarking + CI — COMPLETE
+
+- [x] 7a: Per-branch re-checking in `check/err` (~20 lines)
+  - Import `elab-speculation-bridge.rkt` into `typing-errors.rkt`
+  - Each union branch checked speculatively via `with-speculative-rollback`
+  - Per-branch-specific "got: ..." messages in E1006 errors
+  - 2 new tests in Suite 7 (test-speculation-bridge.rkt)
+- [x] 7b: Performance micro-optimizations (~25 lines across 3 files)
+  - `eq?` fast path in `type-lattice-merge` (before expensive `equal?`)
+  - Skip-propagator for ground unification in `elab-add-unify-constraint`
+  - Ground-atom fast path in `extract-shallow-meta-ids`
+- [x] 7c: Fixed benchmarking framework (~10 lines)
+  - Added `module+ main` CLI entry point to `driver.rkt`
+  - Root cause: `bench-ab.rkt` ran `racket driver.rkt file.prologos` but driver had no main — loaded as library and exited without processing
+  - Re-captured baseline: heartbeats now non-zero (11,900 total across 10 programs × 5 runs)
+- [x] 7d: CI integration (~130 lines, 3 new files)
+  - `.github/workflows/test.yml` — runs full test suite on push/PR
+  - `.github/workflows/benchmark.yml` — runs regression check on push to main
+  - `tools/ci-regression-check.rkt` — compares wall times against baseline, exits non-zero on >15% regression
+- [x] 7e: Full suite passes (4308 tests, 199 files, 191.9s)
+
+### Key Decisions (Phase 7)
+- **Per-branch re-checking at error layer** — `with-speculative-rollback` isolates each branch's `check` call; meta-state and shadow network restored on failure. Zero changes to typing-core.rkt.
+- **Eager merge for ground cells** — when both cells have concrete values, `elab-add-unify-constraint` computes `type-lattice-merge` directly, skipping propagator creation entirely.
+- **`module+ main` for driver** — minimal CLI entry point enables `racket driver.rkt file.prologos` for benchmarking while preserving driver.rkt as a library for all existing callers.
+- **15% regression threshold** — conservative default for CI; avoids false positives from system load variance while catching genuine regressions.

@@ -297,7 +297,26 @@
      (define formatted (format-error (last result)))
      (check-true (string-contains? formatted "Nat"))
      (check-true (string-contains? formatted "Bool"))
-     (check-true (string-contains? formatted "help")))))
+     (check-true (string-contains? formatted "help")))
+
+   ;; Phase 7a: per-branch re-checking tests
+
+   (test-case "per-branch re-checking — no 'matched' for fully-failing union"
+     ;; "hello" doesn't match Nat or Bool — both branches should fail, none "matched"
+     (define result (run-simple "(def x <Nat | Bool> \"hello\")"))
+     (check-true (union-exhaustion-error? (last result)))
+     (define mismatches (union-exhaustion-error-branch-mismatches (last result)))
+     (for ([mm (in-list mismatches)])
+       (check-false (string=? mm "matched"))))
+
+   (test-case "per-branch re-checking — each branch reports actual type"
+     ;; "hello" has type String; each branch should report it
+     (define result (run-simple "(def x <Nat | Bool> \"hello\")"))
+     (check-true (union-exhaustion-error? (last result)))
+     (define mismatches (union-exhaustion-error-branch-mismatches (last result)))
+     ;; Both branches should mention String
+     (for ([mm (in-list mismatches)])
+       (check-true (string-contains? mm "String"))))))
 
 ;; ========================================
 ;; Run all suites

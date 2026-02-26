@@ -18,7 +18,8 @@
          "source-location.rkt"
          "errors.rkt"
          "pretty-print.rkt"
-         "global-env.rkt")
+         "global-env.rkt"
+         "elab-speculation-bridge.rkt")
 
 (provide infer/err
          check/err
@@ -53,6 +54,8 @@
 ;; Returns (or/c #t prologos-error?)
 ;; Sprint 9: optional `names` for de Bruijn recovery in error messages
 ;; Phase 6: union types produce enriched union-exhaustion-error (E1006)
+;; Phase 7a: per-branch re-checking — each branch gets its own speculative check
+;;           for branch-specific "got: ..." messages
 (define (check/err ctx e t [loc srcloc-unknown] [names '()])
   (if (check ctx e t)
       #t
@@ -61,12 +64,22 @@
         (if (expr-union? t*)
             ;; Union: produce enriched error with per-branch details
             (let* ([branches (flatten-union-local t*)]
-                   [actual (infer ctx e)]
-                   [actual-str (if (expr-error? actual)
-                                   "<could not infer>"
-                                   (pp-expr actual names))]
                    [branch-strs (map (lambda (b) (pp-expr b names)) branches)]
-                   [branch-mismatches (map (lambda (_) actual-str) branches)])
+                   [branch-mismatches
+                    (for/list ([br (in-list branches)])
+                      ;; Try check against this specific branch (speculatively)
+                      (define ok?
+                        (with-speculative-rollback
+                          (lambda () (check ctx e br))
+                          values  ;; identity: #t = success, #f = failure
+                          (format "union-branch-~a" (pp-expr br names))))
+                      (if ok?
+                          "matched"
+                          ;; Per-branch failure: infer actual type for this branch's message
+                          (let ([actual (infer ctx e)])
+                            (if (expr-error? actual)
+                                "<could not infer>"
+                                (pp-expr actual names)))))])
               (union-exhaustion-error
                loc
                (pp-expr t names)  ;; message field = full union type string (for help line)

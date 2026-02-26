@@ -985,3 +985,17 @@
 
 ;; Auto-install on module load
 (install-module-loader!)
+
+;; ========================================
+;; CLI entry point — process .prologos files
+;; ========================================
+;; Phase 7c: enables `racket driver.rkt file.prologos` for benchmarking.
+;; Emits PERF-COUNTERS, PHASE-TIMINGS, MEMORY-STATS to stderr.
+(module+ main
+  (require racket/cmdline)
+  (define files
+    (command-line
+     #:program "prologos-driver"
+     #:args files files))
+  (for ([f (in-list files)])
+    (process-file f)))

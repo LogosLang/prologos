@@ -156,18 +156,31 @@
 
 ;; Add a unification constraint: cells A and B must unify.
 ;; Returns (values elab-network* prop-id).
+;; Phase 7b: Fast path — if both cells already have concrete values,
+;; eagerly merge and skip propagator creation entirely.
 (define (elab-add-unify-constraint enet cell-a cell-b)
-  (define-values (net* pid)
-    (net-add-propagator
-     (elab-network-prop-net enet)
-     (list cell-a cell-b)    ;; inputs
-     (list cell-a cell-b)    ;; outputs (bidirectional)
-     (make-unify-propagator cell-a cell-b)))
-  (values
-   (elab-network net*
-                 (elab-network-cell-info enet)
-                 (elab-network-next-meta-id enet))
-   pid))
+  (define va (elab-cell-read enet cell-a))
+  (define vb (elab-cell-read enet cell-b))
+  (cond
+    ;; Fast path: both cells already ground — merge eagerly, skip propagator
+    [(and (not (type-bot? va)) (not (type-bot? vb))
+          (not (type-top? va)) (not (type-top? vb)))
+     (define merged (type-lattice-merge va vb))
+     (define enet* (elab-cell-write (elab-cell-write enet cell-a merged) cell-b merged))
+     (values enet* #f)]
+    ;; Standard path: create bidirectional propagator
+    [else
+     (define-values (net* pid)
+       (net-add-propagator
+        (elab-network-prop-net enet)
+        (list cell-a cell-b)    ;; inputs
+        (list cell-a cell-b)    ;; outputs (bidirectional)
+        (make-unify-propagator cell-a cell-b)))
+     (values
+      (elab-network net*
+                    (elab-network-cell-info enet)
+                    (elab-network-next-meta-id enet))
+      pid)]))
 
 ;; ========================================
 ;; Solving
