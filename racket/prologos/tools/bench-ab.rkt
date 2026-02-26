@@ -6,11 +6,13 @@
 ;;   racket tools/bench-ab.rkt benchmarks/comparative/ --runs 15
 ;;   racket tools/bench-ab.rkt benchmarks/comparative/simple-typed.prologos --runs 10
 ;;   racket tools/bench-ab.rkt --ref HEAD~1 benchmarks/comparative/  # compare vs commit
+;;   racket tools/bench-ab.rkt benchmarks/comparative/ --runs 15 --output results.json
 ;;
 ;; Runs each program N times, collects wall-time and heartbeat distributions,
 ;; computes Mann-Whitney U test for statistical significance.
 ;; Default: compare current working tree against itself (stability test).
 ;; With --ref: stash changes, checkout ref, run B samples, restore.
+;; With --output: persist JSON results (timestamp, commit, per-program distributions).
 
 (require racket/cmdline
          racket/list
@@ -19,6 +21,7 @@
          racket/port
          racket/system
          racket/math
+         racket/file
          json
          "bench-lib.rkt"
          "bench-micro.rkt")
@@ -147,12 +150,14 @@
 ;; A/B comparison
 ;; ============================================================
 
+;; Run A/B comparison, printing results and returning a list of per-program
+;; result hashes for serialization.
 (define (run-ab-comparison programs num-runs)
   (printf "\n═══ A/B Benchmark Comparison ═══\n")
   (printf "Runs per program: ~a (+ 1 warmup)\n" num-runs)
   (printf "Programs: ~a\n\n" (length programs))
 
-  (for ([prog (in-list programs)])
+  (for/list ([prog (in-list programs)])
     (define name (path->string (file-name-from-path (string->path prog))))
     (printf "── ~a ──\n" name)
 
@@ -160,12 +165,14 @@
     (printf "  Running A samples...")
     (define a-results (bench-program prog num-runs))
     (define a-times (map (λ (r) (hash-ref r 'wall_ms)) a-results))
+    (define a-hbs (map (λ (r) (hash-ref r 'total_heartbeats)) a-results))
     (printf " done.\n")
 
     ;; Run B samples (same code for now; with --ref would checkout different code)
     (printf "  Running B samples...")
     (define b-results (bench-program prog num-runs))
     (define b-times (map (λ (r) (hash-ref r 'wall_ms)) b-results))
+    (define b-hbs (map (λ (r) (hash-ref r 'total_heartbeats)) b-results))
     (printf " done.\n")
 
     ;; Statistics
@@ -190,13 +197,30 @@
             (exact->inexact (round (min U1 U2)))
             (exact->inexact (/ (round (* z 100)) 100.0))
             (exact->inexact (/ (round (* p 10000)) 10000.0))
-            (if significant? "*** SIGNIFICANT ***" "(not significant)"))))
+            (if significant? "*** SIGNIFICANT ***" "(not significant)"))
+
+    ;; Return structured result for serialization
+    (hasheq 'program name
+            'a_wall_ms (map exact->inexact a-times)
+            'b_wall_ms (map exact->inexact b-times)
+            'a_heartbeats a-hbs
+            'b_heartbeats b-hbs
+            'a_median_ms (exact->inexact a-med)
+            'b_median_ms (exact->inexact b-med)
+            'a_cv (exact->inexact a-cv-val)
+            'b_cv (exact->inexact b-cv-val)
+            'speedup (exact->inexact speedup)
+            'U (exact->inexact (min U1 U2))
+            'z (exact->inexact z)
+            'p (exact->inexact p)
+            'significant significant?)))
 
 ;; ============================================================
 ;; CLI
 ;; ============================================================
 
 (define num-runs (make-parameter 15))
+(define output-file (make-parameter #f))
 
 (define program-paths
   (command-line
@@ -204,6 +228,8 @@
    #:once-each
    ["--runs" n "Number of measured runs per program (default: 15)"
     (num-runs (string->number n))]
+   ["--output" file "Write JSON results to FILE"
+    (output-file file)]
    #:args paths
    (apply append
           (for/list ([p (in-list paths)])
@@ -225,4 +251,17 @@
    (printf "No programs to benchmark.\n")
    (printf "Usage: racket tools/bench-ab.rkt benchmarks/comparative/\n")]
   [else
-   (run-ab-comparison program-paths (num-runs))])
+   (define results (run-ab-comparison program-paths (num-runs)))
+   ;; Persist results if --output was given
+   (when (output-file)
+     (define out-path (output-file))
+     (make-directory* (path-only (string->path out-path)))
+     (define record
+       (hasheq 'timestamp (current-iso-timestamp)
+               'commit (current-commit)
+               'runs_per_program (num-runs)
+               'programs results))
+     (call-with-output-file out-path
+       (λ (port) (write-json record port) (newline port))
+       #:exists 'replace)
+     (printf "Results written to ~a\n" out-path))])
