@@ -3804,7 +3804,7 @@
 ;;     body-tokens = [($clause-sep (parent x y)) ($clause-sep (parent x z) (ancestor z y))]
 ;;
 ;; Returns a list of surf-clause or surf-facts nodes (the variant body).
-(define (parse-defr-body body-tokens loc)
+(define (parse-defr-body body-tokens loc #:arity [arity #f])
   (cond
     [(null? body-tokens) '()]
     [else
@@ -3853,17 +3853,52 @@
                               (or (not (pair? (stx->datum s)))
                                   (term-sentinel? s)))
                             content))
-               (define first-row
-                 (if (null? flat-terms) '()
-                     (list (surf-fact-row (map parse-datum flat-terms) loc))))
+               ;; Split flat-terms into rows based on arity.
+               ;; If arity is known and flat-terms has multiple values,
+               ;; chunk them into groups of `arity` (e.g., || "1" "2" "3" with arity 1
+               ;; becomes 3 rows, not 1 row of 3 values).
+               (define flat-rows
+                 (cond
+                   [(null? flat-terms) '()]
+                   [(and arity (> arity 0) (> (length flat-terms) arity))
+                    ;; Chunk flat-terms into groups of `arity`
+                    (let loop ([remaining flat-terms] [acc '()])
+                      (cond
+                        [(null? remaining) (reverse acc)]
+                        [(< (length remaining) arity)
+                         ;; Remainder doesn't fill a complete row — include as partial
+                         (reverse (cons (surf-fact-row (map parse-datum remaining) loc) acc))]
+                        [else
+                         (define chunk (take remaining arity))
+                         (define rest-stx (drop remaining arity))
+                         (loop rest-stx
+                               (cons (surf-fact-row (map parse-datum chunk) loc) acc))]))]
+                   [else
+                    ;; No arity or flat-terms fits in one row
+                    (list (surf-fact-row (map parse-datum flat-terms) loc))]))
                (define other-rows
-                 (for/list ([nr (in-list nested-rows)])
-                   (define items
-                     (if (syntax? nr) (or (syntax->list nr) (list nr))
-                         (let ([nd (stx->datum nr)])
-                           (if (list? nd) nd (list nr)))))
-                   (surf-fact-row (map parse-datum items) loc)))
-               (surf-facts (append first-row other-rows) loc)]
+                 (apply append
+                   (for/list ([nr (in-list nested-rows)])
+                     (define items
+                       (if (syntax? nr) (or (syntax->list nr) (list nr))
+                           (let ([nd (stx->datum nr)])
+                             (if (list? nd) nd (list nr)))))
+                     ;; Split continuation row by arity, same as flat-terms
+                     (cond
+                       [(and arity (> arity 0) (> (length items) arity))
+                        (let loop ([remaining items] [acc '()])
+                          (cond
+                            [(null? remaining) (reverse acc)]
+                            [(< (length remaining) arity)
+                             (reverse (cons (surf-fact-row (map parse-datum remaining) loc) acc))]
+                            [else
+                             (define chunk (take remaining arity))
+                             (define rest-items (drop remaining arity))
+                             (loop rest-items
+                                   (cons (surf-fact-row (map parse-datum chunk) loc) acc))]))]
+                       [else
+                        (list (surf-fact-row (map parse-datum items) loc))]))))
+               (surf-facts (append flat-rows other-rows) loc)]
               [(eq? kind 'clause)
                (define content (cdr d))
                (define parsed-goals (map parse-relational-goal content))
@@ -3967,7 +4002,8 @@
                   (findf prologos-error? params)]
                  [(prologos-error? params) params]
                  [else
-                  (define body (parse-defr-body body-tokens loc))
+                  (define param-arity (if (list? params) (length params) #f))
+                  (define body (parse-defr-body body-tokens loc #:arity param-arity))
                   (if (prologos-error? body) body
                       (surf-defr-variant params body loc))])])))
         (define err (for/or ([v (in-list variants)])
@@ -3985,7 +4021,8 @@
            (findf prologos-error? params)]
           [(prologos-error? params) params]
           [else
-           (define body (parse-defr-body body-tokens loc))
+           (define param-arity (if (list? params) (length params) #f))
+           (define body (parse-defr-body body-tokens loc #:arity param-arity))
            (if (prologos-error? body) body
                (surf-defr name #f (list (surf-defr-variant params body loc)) loc))])])]))
 
@@ -4003,7 +4040,8 @@
         (findf prologos-error? params)]
        [(prologos-error? params) params]
        [else
-        (define body (parse-defr-body body-tokens loc))
+        (define param-arity (if (list? params) (length params) #f))
+        (define body (parse-defr-body body-tokens loc #:arity param-arity))
         (if (prologos-error? body) body
             (surf-rel params body loc))])]))
 

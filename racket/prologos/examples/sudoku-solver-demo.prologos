@@ -13,16 +13,16 @@ ns examples.sudoku-solver-demo
 ;; satisfaction. We'll solve Sudoku purely by declaring WHAT the
 ;; solution must satisfy — not HOW to find it.
 ;;
-;; STATUS: This file demonstrates the SURFACE SYNTAX of the relational
-;; language (Phase 7). Definitions using `defr` with fact blocks (`||`)
-;; are fully loadable. Rule clauses (`&>`), solve/explain calls,
-;; multi-arity dispatch, and relational goal applications are shown
-;; as COMMENTED SYNTAX EXAMPLES — they parse correctly but require
-;; the runtime execution engine (goal evaluation, constraint solving)
-;; which is not yet implemented.
+;; STATUS: The core relational runtime is WORKING (Phase 7 activation).
+;; Fact-block relations (`digit`, `digit4`) are fully executable with
+;; `solve` queries returning binding maps. Rule clauses, multi-arity
+;; dispatch, list unification, `all-different`, `maplist`, and the full
+;; sudoku/n-queens solvers are shown as COMMENTED SYNTAX EXAMPLES —
+;; they require list unification, higher-order relational application,
+;; and constraint propagation features not yet implemented.
 ;;
-;; When the runtime is complete, all commented examples will be
-;; uncommented and this file will be fully executable.
+;; Each `eval (solve ...)` call below is live — run this file to see
+;; actual solver output for the working domain constraints.
 ;;
 ;; In a conventional language, Sudoku requires:
 ;;   • Explicit backtracking (or a SAT solver library)
@@ -48,12 +48,11 @@ ns examples.sudoku-solver-demo
 defr digit [?d]
   || "1" "2" "3" "4" "5" "6" "7" "8" "9"
 
-;; That's it. Nine facts declaring the valid digits.
-;; Already this is executable:
-;;
-;;   (solve (digit d))
-;;   => [{:d "1"} {:d "2"} ... {:d "9"}]
-;;
+;; That's it. Nine facts declaring the valid digits. Let's query:
+
+eval (solve (digit d))
+;; => [{:d "1"} {:d "2"} {:d "3"} ... {:d "9"}]
+
 ;; NOTE: Using string digits here. When Nat literal expansion inside
 ;; fact blocks is implemented, these become: || 1N 2N 3N 4N 5N 6N 7N 8N 9N
 
@@ -236,6 +235,11 @@ defr digit [?d]
 
 defr digit4 [?d]
   || "1" "2" "3" "4"
+
+;; Query the 4-digit domain:
+
+eval (solve (digit4 d))
+;; => [{:d "1"} {:d "2"} {:d "3"} {:d "4"}]
 
 ;; The 4×4 sudoku relation:
 ;;

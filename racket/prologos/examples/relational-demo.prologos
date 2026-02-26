@@ -14,17 +14,25 @@ ns examples.relational-demo
 ;; language — the logic programming paradigm that makes Prologos
 ;; unique among dependently typed languages.
 ;;
-;; STATUS: This file demonstrates the SURFACE SYNTAX of the relational
-;; language (Phase 7). Definitions using `defr` with fact blocks (`||`)
-;; are fully loadable — they parse, elaborate, and type-check. Rule
-;; clauses (`&>`), solve/explain calls, multi-arity dispatch,
-;; schemas, and anonymous relations are shown as COMMENTED SYNTAX
-;; EXAMPLES — they parse correctly in sexp mode but require the
-;; runtime execution engine (goal evaluation, constraint solving)
-;; which is not yet implemented.
+;; STATUS: The core relational runtime is WORKING (Phase 7 activation).
+;; Fully executable:
+;;   - `defr` with fact blocks (`||`) and rule clauses (`&>`)
+;;   - `solve` queries returning lists of binding maps
+;;   - Recursive relations (DFS with backtracking + variable freshening)
+;;   - Unification goals `(= x y)`
+;;   - Negation-as-failure with ground args `(not (ground-goal))`
+;;   - Mode annotations (`?`, `+`, `-`) for documentation
 ;;
-;; When the runtime is complete, all commented examples will be
-;; uncommented and this file will be fully executable.
+;; Still shown as COMMENTED SYNTAX EXAMPLES (require future runtime work):
+;;   - `is` goals (functional evaluation inside relations)
+;;   - `rel` anonymous relations
+;;   - `solve-one`, `explain`, `explain-with`
+;;   - Multi-arity dispatch with `|`
+;;   - Schemas (typed relations)
+;;   - Variable-carrying negation
+;;
+;; Each `eval (solve ...)` call below is live — run this file to see
+;; actual solver output.
 ;;
 ;; We'll spiral through the topic:
 ;;
@@ -100,34 +108,27 @@ defr parent [?x ?y]
 ;; ("alice","bob") OR ("bob","carol") OR ("bob","dave") OR ("carol","eve").
 
 ;; Let's query it! The `solve` keyword bridges from relational to
-;; functional world:
-;;
-;;   (solve (parent "alice" who))
-;;
-;;   => [{:who "bob"}]
+;; functional world. Who is Alice the parent of?
+
+eval (solve (parent "alice" who))
+;; => [{:who "bob"}]
 ;;
 ;; `solve` returns a Seq of substitution maps. Each map binds the
 ;; logic variables that were free in the query. Here `who` was free,
 ;; and the solver found one answer: who = "bob".
 ;;
 ;; Let's try a more open query — who is a parent of whom?
-;;
-;;   (solve (parent x y))
-;;
-;;   => [{:x "alice" :y "bob"}
-;;       {:x "bob"   :y "carol"}
-;;       {:x "bob"   :y "dave"}
-;;       {:x "carol" :y "eve"}]
+
+eval (solve (parent x y))
+;; => [{:x "alice" :y "bob"} {:x "bob" :y "carol"}
+;;     {:x "bob" :y "dave"} {:x "carol" :y "eve"}]
 ;;
 ;; All four facts come back. The solver returns ALL solutions.
 
 ;; What about queries with no answers?
-;;
-;;   (solve (parent "eve" child))
-;;
-;;   => []
-;;
-;; Empty sequence — Eve has no children in our data.
+
+eval (solve (parent "eve" child))
+;; => nil  (empty — Eve has no children in our data)
 
 ;; 💡 KEY INSIGHT: In Prologos, `[...]` computes a value (functional).
 ;;    `(...)` constrains a search space (relational). The delimiter
@@ -143,11 +144,11 @@ defr parent [?x ?y]
 ;;
 ;; Facts are data you assert. Rules derive new facts from existing ones.
 ;; The `&>` sigil introduces rule clauses:
-;;
-;;   defr ancestor [?x ?y]
-;;     &> (parent x y)
-;;     &> (parent x z) (ancestor z y)
-;;
+
+defr ancestor [?x ?y]
+  &> (parent x y)
+  &> (parent x z) (ancestor z y)
+
 ;; Two clauses:
 ;;   Clause 1:  &> (parent x y)
 ;;     "x is an ancestor of y if x is a parent of y"
@@ -166,18 +167,18 @@ defr parent [?x ?y]
 ;; But Prologos uses `&>` instead of `:-` and parenthetical goals
 ;; instead of comma-separated atoms.
 
-;; Let's query:
-;;
-;;   (solve (ancestor "alice" who))
-;;
-;;   => [{:who "bob"} {:who "carol"} {:who "dave"} {:who "eve"}]
+;; Let's query — who are all of Alice's descendants?
+
+eval (solve (ancestor "alice" who))
+;; => [{:who "bob"} {:who "carol"} {:who "dave"} {:who "eve"}]
 ;;
 ;; Alice is an ancestor of everyone! The recursive rule followed
 ;; the chain: alice→bob→carol→eve and alice→bob→dave.
-;;
-;;   (solve (ancestor who "eve"))
-;;
-;;   => [{:who "carol"} {:who "bob"} {:who "alice"}]
+
+;; And who are Eve's ancestors?
+
+eval (solve (ancestor who "eve"))
+;; => [{:who "carol"} {:who "bob"} {:who "alice"}]
 ;;
 ;; Three people are ancestors of Eve. Relations work in BOTH
 ;; directions — that's the magic of logic programming.
@@ -344,6 +345,11 @@ defr parent [?x ?y]
 defr append-data [+xs +ys -zs]
   || "a" "b" "ab"
      "x" "y" "xy"
+
+;; Query it — what's "a" concatenated with "b"?
+
+eval (solve (append-data "a" "b" result))
+;; => [{:result "ab"}]
 
 ;; The modes tell us:
 ;;   +xs  — caller must provide the first value
@@ -563,38 +569,57 @@ defr prereq [?course ?requires]
      "MA201" "MA101"
      "MA301" "MA101"
 
-;; --- Logic layer: derived relations (shown as syntax examples) ---
+;; --- Logic layer: derived relations ---
 ;;
 ;; Transitive prerequisite: what do you need (directly or indirectly)?
-;;
-;;   defr needs [?course ?requirement]
-;;     &> (prereq course requirement)
-;;     &> (prereq course mid) (needs mid requirement)
-;;
+
+defr needs [?course ?requirement]
+  &> (prereq course requirement)
+  &> (prereq course mid) (needs mid requirement)
+
+;; Query: what are ALL prerequisites for Compilers (CS401)?
+
+eval (solve (needs "CS401" req))
+;; => [{:req "CS301"} {:req "CS201"} {:req "CS101"}
+;;     {:req "MA301"} {:req "MA101"}]
+
+;; What does CS301 directly or indirectly require?
+
+eval (solve (needs "CS301" req))
+;; => [{:req "CS201"} {:req "MA301"} {:req "CS101"} {:req "MA101"}]
+
+;; Query the course database — which courses are in CS?
+
+eval (solve (course-data code title "CS"))
+
+;; Which courses are direct prereqs of CS301?
+
+eval (solve (prereq "CS301" req))
+;; => [{:req "CS201"} {:req "MA301"}]
+
 ;; Can a student take a course given completed courses?
+;; (Requires `member` relation — future work)
 ;;
 ;;   defr can-take [+student-courses +target]
 ;;     &> (needs target req)
 ;;        (member req student-courses)
 
-;; --- Functional layer: the user interface ---
+;; --- Functional layer: using solve results (future syntax examples) ---
 ;;
-;; What are ALL prerequisites for Compilers?
+;; Once `solve-one` and def-level bindings over solve are implemented:
 ;;
 ;;   def compilers-prereqs : [List Map]
 ;;     (solve (needs "CS401" req))
 ;;
-;;   => [{:req "CS301"} {:req "CS201"} {:req "CS101"}
-;;       {:req "MA301"} {:req "MA101"}]
-;;
 ;; Which CS courses can someone take after CS101 + MA101?
+;; (Requires `rel` anonymous relations + `can-take`)
 ;;
 ;;   def next-courses : [List Map]
 ;;     (solve (rel [?course]
 ;;       &> (course-data code _ "CS")
 ;;          (can-take '["CS101" "MA101"] code)))
 ;;
-;; Explain WHY CS301 requires MA101:
+;; Explain WHY CS301 requires MA101 (requires `explain`):
 ;;
 ;;   def why-cs301-needs-ma101 : [List Answer]
 ;;     (explain (needs "CS301" "MA101"))

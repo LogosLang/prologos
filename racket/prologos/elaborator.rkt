@@ -586,6 +586,14 @@
       [(and (current-relational-env)
             (hash-ref (current-relational-env) name #f))
        => (lambda (lv) lv)]
+      ;; Relational fallback: when inside solve/explain/defr goals, bare names
+      ;; become free logic variables — even if they happen to be bound in the
+      ;; global env (e.g., prelude's `code` from char module).
+      ;; This must come BEFORE global env resolution because in relational context
+      ;; `(...)` contains logic variables by default. To reference a global value
+      ;; inside a relational goal, use `[...]` (functional expression) or `is`.
+      [(current-relational-fallback?)
+       (expr-logic-var name 'free)]
       ;; Own-namespace definition takes priority over imports (including prelude).
       ;; This ensures `def map ...` in `ns foo` resolves to `foo::map`, not the
       ;; prelude's `prologos::data::list::map`.
@@ -632,9 +640,6 @@
       [(and (current-infer-constraints-mode?)
             (try-infer-constraint-from-method name loc env depth))
        => (lambda (resolved) resolved)]
-      ;; Relational fallback: unresolved names in solve/explain become free logic vars
-      [(current-relational-fallback?)
-       (expr-logic-var name 'free)]
       [else (unbound-variable-error loc "Unbound variable" name)])))
 
 ;; elaborate: surface-expr, env, depth -> (or/c expr? prologos-error?)

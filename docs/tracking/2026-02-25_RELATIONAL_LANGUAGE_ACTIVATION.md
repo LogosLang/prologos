@@ -66,19 +66,36 @@ solve (ancestor "alice" y)
 4. **Logic var normalization**: clause goals stored `expr-logic-var` structs but solver expected plain symbols
 5. **Mechanical traversal crash**: zonk/substitution recursed into `expr-goal-app` name (a symbol)
 
+## Post-Activation Fixes (Demo File Hardening)
+
+### Parser: Arity-Based Fact Row Splitting
+- **Problem**: `|| "1" "2" "3"` on one line in a 1-arity relation created ONE row of 3 values instead of THREE rows of 1 value. Multi-column relations with multi-value continuation lines had the same issue.
+- **Root cause**: `parse-defr-body` put all flat terms (same-line) and all continuation terms (indented lines) into single rows without considering the relation's arity.
+- **Fix**: Added `#:arity` parameter to `parse-defr-body`. Flat terms and continuation rows are now chunked into groups of `arity` values. All 3 call sites (single-arity, multi-arity, anonymous rel) pass the param count.
+
+### Elaborator: Relational Fallback Priority over Global Env
+- **Problem**: `(solve (course-data code title "CS"))` with the full prelude returned nil because `code` resolved to the prelude's `char->integer` function (from `prologos::data::char`) instead of becoming a free query variable.
+- **Root cause**: In `elaborate-var`, the relational fallback (step 9) ran AFTER global env lookup (step 6). When `current-relational-fallback?` was true, names found in the global env were resolved as functions/constants instead of logic variables.
+- **Fix**: Moved relational fallback check to run immediately after the relational env check — BEFORE global env resolution. In relational context `(...)`, bare symbols are logic variables by default. To reference a global value, use `[...]` (functional expression) or `is`.
+- **Design principle**: This aligns with Prologos's delimiter convention: `[...]` computes values (functional), `(...)` constrains search spaces (relational).
+
+### Demo Files Updated
+- `examples/relational-demo.prologos`: Updated STATUS, uncommented `ancestor` defr (recursive rules), uncommented `needs` defr (transitive prereqs), added 10 executable `eval (solve ...)` calls with live output
+- `examples/sudoku-solver-demo.prologos`: Updated STATUS, added `eval (solve (digit d))` and `eval (solve (digit4 d))` queries
+
 ## Test Results
 
 - 4171 tests across 190 files, all pass
 - 15 new e2e tests + 7 new parser tests + updates to existing tests
-- No whale files (slowest: 17.5s)
+- No whale files (slowest: ~21s)
 
 ## Files Modified
 
 | File | Changes |
 |------|---------|
-| parser.rkt | +60: relational goal context, keyword handlers |
+| parser.rkt | +80: relational goal context, keyword handlers, arity-based fact splitting |
 | macros.rkt | +3: surf-defr passthrough in expand-top-level |
-| elaborator.rkt | +50: relational env, fallback, surf-not handler |
+| elaborator.rkt | +50: relational env, fallback priority, surf-not handler |
 | surface-syntax.rkt | +5: surf-not struct |
 | driver.rkt | +10: relation store wiring |
 | relations.rkt | +190: DFS solver, normalize-term, collect-clause-vars |
@@ -89,3 +106,5 @@ solve (ancestor "alice" y)
 | tests/test-parser-relational.rkt | +30: new tests |
 | tests/test-relational-types.rkt | +5: test updates |
 | tests/test-relational-e2e.rkt | NEW +120: 15 e2e tests |
+| examples/relational-demo.prologos | Updated: live solve queries, uncommented working relations |
+| examples/sudoku-solver-demo.prologos | Updated: live solve queries for digit/digit4 |
