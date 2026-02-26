@@ -120,7 +120,8 @@
                            pretty-print.rkt global-env.rkt reader.rkt macros.rkt
                            sexp-readtable.rkt)
    'inductive.rkt        '(syntax.rkt typing-core.rkt)
-   'type-lattice.rkt     '(syntax.rkt reduction.rkt zonk.rkt substitution.rkt)))
+   'type-lattice.rkt     '(syntax.rkt reduction.rkt zonk.rkt substitution.rkt)
+   'elaborator-network.rkt '(propagator.rkt type-lattice.rkt champ.rkt syntax.rkt)))
 
 ;; ============================================================
 ;; Layer 2: Test → source module dependencies
@@ -770,7 +771,9 @@
    'test-properties.rkt
    (test-dep '(syntax.rkt typing-core.rkt metavar-store.rkt reduction.rkt unify.rkt zonk.rkt global-env.rkt performance-counters.rkt) #f)
    'test-type-lattice.rkt
-   (test-dep '(type-lattice.rkt syntax.rkt reduction.rkt zonk.rkt substitution.rkt propagator.rkt champ.rkt) #f)))
+   (test-dep '(type-lattice.rkt syntax.rkt reduction.rkt zonk.rkt substitution.rkt propagator.rkt champ.rkt) #f)
+   'test-elaborator-network.rkt
+   (test-dep '(elaborator-network.rkt propagator.rkt type-lattice.rkt champ.rkt syntax.rkt) #f)))
 
 ;; ============================================================
 ;; Layer 2b: Example file → test file mapping

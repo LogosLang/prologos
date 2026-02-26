@@ -46,7 +46,40 @@
 - **Multiplicity matching is structural** (`equal?`) — no mult-meta solving in pure mode
 - **`whnf` dependency is acceptable for Phase 1**: `whnf` reads from meta-store but doesn't write; Phase 1 tests only use ground types (no metas). Phase 2+ may need `whnf-pure` that reads from propagator network.
 
-## Phase 2: Parallel Infrastructure — NOT STARTED
+## Phase 2: Parallel Infrastructure — COMPLETE
+
+- [x] 2a: Created `elaborator-network.rkt` (~180 lines)
+  - `elab-network` wrapper struct (prop-net + cell-info CHAMP + next-meta-id counter)
+  - `elab-cell-info` struct (ctx, type, source) — replaces `meta-info` locally
+  - `make-elaboration-network` wraps `make-prop-network`
+  - `elab-fresh-meta` allocates cell at `type-bot` with `type-lattice-merge`/`type-lattice-contradicts?`
+  - `elab-cell-read` / `elab-cell-write` / `elab-cell-info-ref`
+- [x] 2b: Unification propagator
+  - `make-unify-propagator` — bidirectional fire-fn (both cells are inputs AND outputs)
+  - Handles: bot-bot no-op, bot-T propagation, T-T idempotent, T1-T2 contradiction
+  - Termination: guaranteed by `net-cell-write`'s no-change guard
+  - `elab-add-unify-constraint` wraps `net-add-propagator`
+- [x] 2c: Solve + contradiction extraction
+  - `elab-solve` runs to quiescence, returns `(values 'ok enet*)` or `(values 'error contradiction-info)`
+  - `contradiction-info` struct (cell-id, cell-meta, value)
+- [x] 2d: Helper queries
+  - `elab-cell-solved?`, `elab-cell-read-or`, `elab-all-cells`, `elab-unsolved-cells`, `elab-contradicted-cells`
+- [x] 2e: Registered in `dep-graph.rkt` (source-deps + test-deps)
+- [x] 2f: Created `tests/test-elaborator-network.rkt` (22 tests)
+  - 3 network creation tests
+  - 4 cell operation tests
+  - 7 unification propagator tests (including transitive chain A=B=C)
+  - 3 elab-solve tests
+  - 3 helper query tests
+  - 2 structural propagation tests (Pi, app)
+- [x] 2g: Full suite passes
+- [x] 2h: Committed
+
+### Key Decisions (Phase 2)
+- **`elab-network` wrapper struct** — design doc shows bare `prop-network`, but we need per-cell metadata (ctx, type, source). Wrapper keeps metadata co-located as a single pure value without polluting the general-purpose propagator API
+- **No `metavar-store.rkt` dependency** — `elab-cell-info` replaces `meta-info` locally; `source` field accepts any (strings, srclocs, or Phase 3's `meta-source-info`)
+- **Level/mult metas deferred** — trivially flat domains (3-value for mults, small finite for levels), almost always solved immediately or defaulted. Adds scope without validating core approach. Trivial to add later.
+- **Applied metas use "idle until ground" pattern** — propagator fires, reads bot, returns unchanged. When cell gets solved from another direction, propagator re-fires with concrete values. No special propagator type needed.
 
 ## Phase 3: Elaborator Dual-Mode — NOT STARTED
 
