@@ -21,3 +21,9 @@ docs/spec/ott/*.pdf
 
 # Claude Code local memory (personal, not shared)
 CLAUDE.local.md
+
+
+my_notes.*
+
+# Generated benchmark report
+racket/prologos/data/benchmarks/report.html
