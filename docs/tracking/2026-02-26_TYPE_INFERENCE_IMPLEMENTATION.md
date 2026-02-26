@@ -149,6 +149,46 @@
 - **No metavar-store dependency** — purely functional module. Operates on elab-networks without touching imperative meta-store. Phase 5 bridges both.
 - **`run-to-quiescence` directly** — same lesson from Phase 3: `elab-solve` discards network on contradiction. Speculation needs the post-quiescence network for `extract-contradiction-info`.
 
-## Phase 5: Full Switchover + Error Improvement — NOT STARTED
+## Phase 5: Always-On Network + Speculation Bridge — COMPLETE
 
-## Phase 6: Performance Optimization — NOT STARTED
+- [x] 5a: Always-on network in driver (~20 lines)
+  - Renamed `current-shadow-mode?` → `current-network-validation?` (default `#f`)
+  - Shadow always initializes: removed conditional guard around `shadow-init!`
+  - `maybe-shadow-validate!` always runs shadow + teardown; logging controlled by parameter
+  - Added `init-speculation-tracking!` call in `process-command`
+- [x] 5b: Created `elab-speculation-bridge.rkt` (~80 lines)
+  - `with-speculative-rollback` — single abstraction replacing all 4 save/restore patterns
+  - Saves meta-state + forks shadow network, runs thunk, restores on failure
+  - `speculation-failure` struct + `current-speculation-failures` parameter
+  - `init-speculation-tracking!` / `get-speculation-failures` / `record-speculation-failure!`
+  - Dependencies: `metavar-store.rkt`, `elab-shadow.rkt` only (no circular deps)
+- [x] 5c: Wired into `typing-core.rkt` (3 speculation sites, ~20 lines)
+  - Site 1 (map value widening): `with-speculative-rollback` + `values` predicate
+  - Site 2 (union map-get loop): `with-speculative-rollback` + `values` predicate
+  - Site 3 (union type check): `with-speculative-rollback` + `or` fallthrough
+- [x] 5d: Wired into `qtt.rkt` (1 speculation site, ~10 lines)
+  - Site 4 (union checkQ): `with-speculative-rollback` + `bu-ok?` predicate
+- [x] 5e: Updated `test-elab-shadow.rkt` for always-on (~5 lines)
+  - Removed `current-shadow-mode?` guards from integration test helpers
+- [x] 5f: Created `tests/test-speculation-bridge.rkt` (17 tests)
+  - 3 always-on network tests (simple def, type error, implicit args)
+  - 4 speculative rollback tests (success keeps state, failure restores, network fork/restore, multiple failures accumulate)
+  - 4 union type speculation tests (left succeeds, left fails/right succeeds, both fail, nested union)
+  - 2 map widening tests (value fits, widen to union)
+  - 2 QTT union tests (left succeeds, left fails/right succeeds)
+  - 2 full pipeline tests (union types with implicit args, multiple defs)
+- [x] 5g: Registered in `dep-graph.rkt` (source-deps + test-deps)
+- [x] 5h: Full suite passes (4301 tests, 199 files, 186.8s)
+- [x] 5i: Committed
+
+### Key Decisions (Phase 5)
+- **Meta-store remains primary** — not a full switchover. Meta-store handles type-checking. Network mirrors and validates. Bridge adds network fork/restore alongside meta-store save/restore for precision.
+- **Always-on network** — shadow hooks are permanent (not behind a flag). Overhead is ~1 function call + CHAMP op per meta operation (~0.5% wall time from Phase 3 validation).
+- **`with-speculative-rollback` is the single abstraction** — one helper replaces all 4 save/restore patterns. Takes thunk + success predicate + label. Handles meta-state save/restore, network fork/restore, and failure recording.
+- **`values` as identity predicate** — `racket/base` doesn't export `identity`; `values` works as single-value identity.
+- **Failure tracking via parameter** — `current-speculation-failures` collects labels of failed branches during a command. Future error improvements can read this to explain WHY a union check failed.
+- **No circular dependencies** — bridge depends on `metavar-store.rkt` and `elab-shadow.rkt` (down). `typing-core.rkt` and `qtt.rkt` depend on bridge (up). No cycles.
+
+## Phase 6: Full Switchover + Error Improvement — NOT STARTED
+
+## Phase 7: Performance Optimization — NOT STARTED

@@ -24,6 +24,7 @@
          "unify.rkt"
          "typing-core.rkt"
          "metavar-store.rkt"
+         "elab-speculation-bridge.rkt"
          "global-env.rkt")
 
 (provide
@@ -2189,15 +2190,13 @@
     [((expr-solver-config _) (expr-solver-type)) (bu #t (zero-usage n))]
 
     ;; ---- Union type: checkQ(G, e, A | B) ----
-    ;; Try left component first, then right. Uses speculative meta state.
+    ;; Phase 5: speculative rollback with network fork/restore.
     [(_ (expr-union l r))
-     (let ([saved (save-meta-state)])
-       (let ([rl (checkQ ctx e l)])
-         (match rl
-           [(bu #t u) (bu #t u)]
-           [_
-            (restore-meta-state! saved)
-            (checkQ ctx e r)])))]
+     (let ([rl (with-speculative-rollback
+                 (lambda () (checkQ ctx e l))
+                 (lambda (r) (and (bu? r) (bu-ok? r)))
+                 "union-checkQ-left")])
+       (or rl (checkQ ctx e r)))]
 
     ;; ---- Conversion fallback ----
     ;; Phase 3e: added cumulativity + within-family subtyping (consistent with check)

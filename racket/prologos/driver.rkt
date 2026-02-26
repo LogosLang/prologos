@@ -38,7 +38,8 @@
          "warnings.rkt"
          "relations.rkt"
          "performance-counters.rkt"
-         "elab-shadow.rkt")
+         "elab-shadow.rkt"
+         "elab-speculation-bridge.rkt")
 
 (provide process-command
          process-file
@@ -46,7 +47,7 @@
          load-module
          install-module-loader!
          prologos-lib-dir
-         current-shadow-mode?)
+         current-network-validation?)
 
 ;; ========================================
 ;; Standard library path (computed from this module's location)
@@ -140,17 +141,21 @@
 ;; The stored type retains holes which display as `_`.
 
 ;; ========================================
-;; Phase 3: Shadow network mode
+;; Phase 5: Always-on propagator network
 ;; ========================================
-;; When #t, mirrors meta operations to a shadow propagator network
-;; for validation. Default off (zero overhead).
-(define current-shadow-mode? (make-parameter #f))
+;; The shadow network always mirrors meta operations to a propagator network.
+;; When this parameter is #t, validation mismatches are logged to stderr.
+;; The network always runs regardless (for speculation bridge precision).
+(define current-network-validation? (make-parameter #f))
 
-;; Run shadow validation if shadow mode is active.
+;; Run shadow validation and teardown. Always runs; logging controlled by parameter.
+;; Safe to call when shadow isn't initialized (no-op).
 (define (maybe-shadow-validate!)
-  (when (current-shadow-mode?)
+  (define net-box (current-shadow-network))
+  (when net-box
     (define report (shadow-validate!))
-    (shadow-log-report! report)
+    (when (current-network-validation?)
+      (shadow-log-report! report))
     (shadow-teardown!)))
 
 ;; ========================================
@@ -163,7 +168,8 @@
 ;; bare symbols (for local use) and as fully-qualified names (for export).
 (define (process-command surf)
   (reset-meta-store!)  ;; clear metavariables from previous command
-  (when (current-shadow-mode?) (shadow-init!))
+  (shadow-init!)       ;; Phase 5: always-on propagator network
+  (init-speculation-tracking!)
   (parameterize ([current-nf-cache (make-hash)]         ;; per-command nf memoization
                  [current-whnf-cache (make-hash)]       ;; per-command whnf memoization
                  [current-reduction-fuel (box 1000000)]  ;; 1M step limit
@@ -547,9 +553,12 @@
                            (ns-context-current-ns (current-ns-context))))))
     (register-multi-defn! fqn arities fqn-arity-map docstring))
   ;; Process each clause def through process-def (handles type checking, registration)
+  ;; Re-init shadow + speculation tracking per clause (process-def tears down shadow on success)
   (define results
     (for/list ([def (in-list defs)])
       (reset-meta-store!)
+      (shadow-init!)
+      (init-speculation-tracking!)
       (process-def def)))
   ;; Check for errors
   (define first-err (findf prologos-error? results))

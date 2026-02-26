@@ -28,6 +28,7 @@
          "macros.rkt"
          "namespace.rkt"
          "metavar-store.rkt"
+         "elab-speculation-bridge.rkt"
          "warnings.rkt"
          "pretty-print.rkt"
 )
@@ -935,10 +936,11 @@
             ;; Key must check against key type
             [(not (check ctx k kt)) (expr-error)]
             ;; Value fits existing value type — no widening needed
-            [(let ([saved (save-meta-state)])
-               (if (check ctx v vt)
-                   #t
-                   (begin (restore-meta-state! saved) #f)))
+            ;; Phase 5: speculative rollback with network fork/restore
+            [(with-speculative-rollback
+               (lambda () (check ctx v vt))
+               values
+               "map-value-widening")
              (expr-Map kt vt)]
             ;; Value doesn't fit — widen via union
             [else
@@ -963,11 +965,13 @@
                         (reverse acc)
                         (let ([c* (whnf (car cs))])
                           (if (expr-Map? c*)
-                              (let ([saved (save-meta-state)])
-                                (if (check ctx k (expr-Map-k-type c*))
-                                    (loop (cdr cs) (cons (expr-Map-v-type c*) acc))
-                                    (begin (restore-meta-state! saved)
-                                           (loop (cdr cs) acc))))
+                              ;; Phase 5: speculative rollback with network fork/restore
+                              (if (with-speculative-rollback
+                                    (lambda () (check ctx k (expr-Map-k-type c*)))
+                                    values
+                                    "union-map-get-component")
+                                  (loop (cdr cs) (cons (expr-Map-v-type c*) acc))
+                                  (loop (cdr cs) acc))
                               (loop (cdr cs) acc)))))])
             (if (null? map-vts)
                 (expr-error)
@@ -1981,14 +1985,13 @@
 
     ;; ---- Union type: check against A | B ----
     ;; check(G, e, A | B) succeeds if e : A or e : B.
-    ;; Uses speculative meta state to avoid contamination from failed attempts.
+    ;; Phase 5: speculative rollback with network fork/restore.
     [(_ (expr-union l r))
-     (let ([saved (save-meta-state)])
-       (if (check ctx e l)
-           #t
-           (begin
-             (restore-meta-state! saved)
-             (check ctx e r))))]
+     (or (with-speculative-rollback
+           (lambda () (check ctx e l))
+           values
+           "union-check-left")
+         (check ctx e r))]
 
     ;; ---- Checking against hole type: succeed if expression is inferrable ----
     ;; When the expected type is a hole, just verify the expression is well-typed.

@@ -322,17 +322,16 @@
 ;; Suite 5: Driver Integration
 ;; ========================================
 
-;; Helper: run without prelude (simple sexp mode), shadow on
+;; Helper: run without prelude (simple sexp mode).
+;; Phase 5: network is always-on; suppress validation logging in tests.
 (define (run-shadow-simple s)
   (parameterize ([current-global-env (hasheq)]
-                 [current-shadow-mode? #t]
                  [current-error-port (open-output-nowhere)])
     (process-string s)))
 
-;; Helper to run with shadow mode on, using prelude (via test-support)
+;; Helper: run with prelude (via test-support), suppress validation logging.
 (define (run-shadow-ns s)
-  (parameterize ([current-shadow-mode? #t]
-                 [current-error-port (open-output-nowhere)])
+  (parameterize ([current-error-port (open-output-nowhere)])
     (run-ns-last s)))
 
 (define integration-tests
