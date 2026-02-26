@@ -9,7 +9,8 @@
 ;; IMPORTANT: This module must remain a PURE LEAF — requires only racket/base
 ;; and json. 8+ source modules require it; any project dependency creates cycles.
 
-(require json)
+(require json
+         (for-syntax racket/base))
 
 (provide
  ;; Counter struct + parameter
@@ -36,7 +37,14 @@
  perf-counters->hasheq
 
  ;; Subprocess reporting
- print-perf-report!)
+ print-perf-report!
+
+ ;; Phase B: Phase-level timing
+ (struct-out phase-timings)
+ current-phase-timings
+ time-phase!
+ phase-timings->hasheq
+ print-phase-report!)
 
 ;; ============================================================
 ;; Counter struct: 12 mutable fields
@@ -166,3 +174,70 @@
 (define (print-perf-report! pc)
   (define h (perf-counters->hasheq pc))
   (eprintf "PERF-COUNTERS:~a\n" (jsexpr->string h)))
+
+;; ============================================================
+;; Phase B: Phase-level timing
+;;
+;; Accumulates wall-clock milliseconds per pipeline phase.
+;; Uses addition (not assignment) because phases are called
+;; multiple times per file (e.g., zonk-final for body + type).
+;; ============================================================
+
+(struct phase-timings
+  (parse-ms
+   elaborate-ms
+   type-check-ms
+   trait-resolve-ms
+   qtt-ms
+   zonk-ms
+   reduce-ms)
+  #:mutable #:transparent)
+
+;; Parameter: #f = disabled (default), phase-timings struct = enabled
+(define current-phase-timings (make-parameter #f))
+
+;; time-phase! — wrap body in wall-clock timing, accumulate into the named field.
+;; Zero-cost when current-phase-timings is #f.
+;; Usage: (time-phase! elaborate (elaborate surf))
+;;        (time-phase! type-check (infer/err ctx-empty expr))
+;;
+;; Uses syntax-case + datum matching because the phase names (elaborate, etc.)
+;; may be bound identifiers at use sites (e.g., driver.rkt imports elaborate).
+(define-syntax (time-phase! stx)
+  (syntax-case stx ()
+    [(_ phase-name body ...)
+     (case (syntax->datum #'phase-name)
+       [(parse)         #'(time-phase-impl phase-timings-parse-ms set-phase-timings-parse-ms! body ...)]
+       [(elaborate)     #'(time-phase-impl phase-timings-elaborate-ms set-phase-timings-elaborate-ms! body ...)]
+       [(type-check)    #'(time-phase-impl phase-timings-type-check-ms set-phase-timings-type-check-ms! body ...)]
+       [(trait-resolve) #'(time-phase-impl phase-timings-trait-resolve-ms set-phase-timings-trait-resolve-ms! body ...)]
+       [(qtt)           #'(time-phase-impl phase-timings-qtt-ms set-phase-timings-qtt-ms! body ...)]
+       [(zonk)          #'(time-phase-impl phase-timings-zonk-ms set-phase-timings-zonk-ms! body ...)]
+       [(reduce)        #'(time-phase-impl phase-timings-reduce-ms set-phase-timings-reduce-ms! body ...)]
+       [else (raise-syntax-error 'time-phase! "unknown phase name" #'phase-name)])]))
+
+;; Internal helper macro — not exported. Handles the conditional timing + accumulation.
+(define-syntax-rule (time-phase-impl getter setter body ...)
+  (let ([pt (current-phase-timings)])
+    (if pt
+        (let* ([t0 (current-inexact-monotonic-milliseconds)]
+               [result (begin body ...)]
+               [elapsed (- (current-inexact-monotonic-milliseconds) t0)])
+          (setter pt (+ (getter pt) elapsed))
+          result)
+        (begin body ...))))
+
+;; Snapshot to immutable hasheq (for JSON serialization)
+(define (phase-timings->hasheq pt)
+  (hasheq 'parse_ms       (inexact->exact (round (phase-timings-parse-ms pt)))
+          'elaborate_ms   (inexact->exact (round (phase-timings-elaborate-ms pt)))
+          'type_check_ms  (inexact->exact (round (phase-timings-type-check-ms pt)))
+          'trait_resolve_ms (inexact->exact (round (phase-timings-trait-resolve-ms pt)))
+          'qtt_ms         (inexact->exact (round (phase-timings-qtt-ms pt)))
+          'zonk_ms        (inexact->exact (round (phase-timings-zonk-ms pt)))
+          'reduce_ms      (inexact->exact (round (phase-timings-reduce-ms pt)))))
+
+;; Print structured JSON to stderr for subprocess extraction.
+(define (print-phase-report! pt)
+  (define h (phase-timings->hasheq pt))
+  (eprintf "PHASE-TIMINGS:~a\n" (jsexpr->string h)))

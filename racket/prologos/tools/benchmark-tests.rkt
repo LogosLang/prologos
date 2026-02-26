@@ -163,6 +163,9 @@
                 (pad-str (real->decimal-string (/ (hash-ref reg 'curr_ms) 1000.0) 1) 7 'right)
                 (real->decimal-string (hash-ref reg 'delta_pct) 0)))))
 
+  ;; Structured summary: phase breakdown + heartbeat totals
+  (print-structured-summary file-results)
+
   ;; Return success status (pass + no regressions)
   (and all-pass? (not has-regressions?)))
 
@@ -188,6 +191,53 @@
                          'curr_ms cur-ms
                          'delta_pct pct)))))
    (hash-ref current-run 'results)))
+
+;; ============================================================
+;; Structured summary with phase attribution
+;; ============================================================
+
+(define (print-structured-summary results)
+  ;; Aggregate heartbeats across all files
+  (define total-hb (make-hasheq))
+  (define total-phases (make-hasheq))
+  (define files-with-hb 0)
+  (define files-with-phases 0)
+  (for ([r (in-list results)])
+    (define hb (hash-ref r 'heartbeats #f))
+    (when hb
+      (set! files-with-hb (add1 files-with-hb))
+      (for ([(k v) (in-hash hb)])
+        (hash-set! total-hb k (+ (hash-ref total-hb k 0) v))))
+    (define ph (hash-ref r 'phases #f))
+    (when ph
+      (set! files-with-phases (add1 files-with-phases))
+      (for ([(k v) (in-hash ph)])
+        (hash-set! total-phases k (+ (hash-ref total-phases k 0) v)))))
+
+  ;; Print heartbeat totals
+  (when (> files-with-hb 0)
+    (printf "\n--- Heartbeat Totals (~a files) ---\n" files-with-hb)
+    (define sorted-hb (sort (hash->list total-hb) > #:key cdr))
+    (for ([kv (in-list sorted-hb)]
+          #:when (> (cdr kv) 0))
+      (printf "  ~a  ~a\n"
+              (pad-str (symbol->string (car kv)) 22)
+              (pad-str (number->string (cdr kv)) 10 'right))))
+
+  ;; Print phase timing breakdown
+  (when (> files-with-phases 0)
+    (printf "\n--- Phase Timing Totals (~a files) ---\n" files-with-phases)
+    (define sorted-ph (sort (hash->list total-phases) > #:key cdr))
+    (define total-phase-ms
+      (apply + (map cdr (hash->list total-phases))))
+    (for ([kv (in-list sorted-ph)]
+          #:when (> (cdr kv) 0))
+      (define ms (cdr kv))
+      (define pct (if (zero? total-phase-ms) 0 (* 100.0 (/ ms total-phase-ms))))
+      (printf "  ~a  ~as  (~a%)\n"
+              (pad-str (symbol->string (car kv)) 18)
+              (pad-str (real->decimal-string (/ ms 1000.0) 1) 8 'right)
+              (real->decimal-string pct 0)))))
 
 ;; ============================================================
 ;; Reporting

@@ -16,6 +16,7 @@
 (provide benchmark-one-test
          extract-test-count
          extract-perf-counters
+         extract-phase-timings
          filename-from-path
          status-label
          current-iso-timestamp
@@ -53,18 +54,21 @@
      (define ok? (zero? (subprocess-status proc)))
      (define test-count (extract-test-count output))
      (define heartbeats (extract-perf-counters err-output))
+     (define phases (extract-phase-timings err-output))
      (define result
        (hasheq 'file (filename-from-path test-path)
                'wall_ms wall-ms
                'status (if ok? "pass" "fail")
                'tests test-count))
-     ;; Attach heartbeats when available
+     ;; Attach heartbeats and phase timings when available
      (define result+hb
        (if heartbeats (hash-set result 'heartbeats heartbeats) result))
+     (define result+ph
+       (if phases (hash-set result+hb 'phases phases) result+hb))
      ;; Attach error output only on failure (saves space in JSONL)
      (if (and (not ok?) (not (string=? err-output "")))
-         (hash-set result+hb 'error_output err-output)
-         result+hb)]
+         (hash-set result+ph 'error_output err-output)
+         result+ph)]
     [else
      ;; Timeout — kill the process
      (define err-output
@@ -101,6 +105,30 @@
     [(= (length valid) 1) (car valid)]
     [else
      ;; Sum all counter hashes (multi-ns files emit multiple reports)
+     (for/fold ([acc (car valid)])
+               ([h (in-list (cdr valid))])
+       (for/fold ([a acc])
+                 ([(k v) (in-hash h)])
+         (hash-set a k (+ (hash-ref a k 0) v))))]))
+
+;; Extract PHASE-TIMINGS:{json} from stderr output.
+;; Same extraction pattern as perf-counters, with additive merge for multi-ns.
+(define (extract-phase-timings err-output)
+  (define lines (string-split err-output "\n"))
+  (define prefix "PHASE-TIMINGS:")
+  (define prefix-len (string-length prefix))
+  (define results
+    (for/list ([line (in-list lines)]
+               #:when (and (>= (string-length line) prefix-len)
+                           (string=? (substring line 0 prefix-len) prefix)))
+      (with-handlers ([exn:fail? (λ (_) #f)])
+        (with-input-from-string (substring line prefix-len) read-json))))
+  (define valid (filter hash? results))
+  (cond
+    [(null? valid) #f]
+    [(= (length valid) 1) (car valid)]
+    [else
+     ;; Sum all timing hashes (multi-ns files emit multiple reports)
      (for/fold ([acc (car valid)])
                ([h (in-list (cdr valid))])
        (for/fold ([a acc])

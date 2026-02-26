@@ -169,39 +169,39 @@
          (process-def-group expanded)]
         [else
          ;; All other forms: elaborate fully, then process
-          (let ([elab-result (elaborate-top-level expanded)])
+          (let ([elab-result (time-phase! elaborate (elaborate-top-level expanded))])
             (if (prologos-error? elab-result)
                 elab-result
                 (match elab-result
                   ;; (check expr type)
                   [(list 'check expr type)
-                   (let ([chk (check/err ctx-empty expr type)])
+                   (let ([chk (time-phase! type-check (check/err ctx-empty expr type))])
                      (if (prologos-error? chk) chk
                          "OK"))]
 
                   ;; (eval expr)
                   [(list 'eval expr)
-                   (let ([ty (infer/err ctx-empty expr)])
+                   (let ([ty (time-phase! type-check (infer/err ctx-empty expr))])
                      (if (prologos-error? ty) ty
                          (begin
-                           (resolve-trait-constraints!)
+                           (time-phase! trait-resolve (resolve-trait-constraints!))
                            (let ([te (check-unresolved-trait-constraints)])
                              (if (not (null? te))
                                  (car te)
-                                 (let ([val (nf (zonk-final expr))]
-                                       [ty-nf (nf (zonk-final ty))])
+                                 (let ([val (time-phase! reduce (nf (time-phase! zonk (zonk-final expr))))]
+                                       [ty-nf (time-phase! reduce (nf (time-phase! zonk (zonk-final ty))))])
                                    (format "~a : ~a" (pp-expr val) (pp-expr ty-nf))))))))]
 
                   ;; (infer expr)
                   [(list 'infer expr)
-                   (let ([ty (infer/err ctx-empty expr)])
+                   (let ([ty (time-phase! type-check (infer/err ctx-empty expr))])
                      (if (prologos-error? ty) ty
                          (begin
-                           (resolve-trait-constraints!)
+                           (time-phase! trait-resolve (resolve-trait-constraints!))
                            (let ([te (check-unresolved-trait-constraints)])
                              (if (not (null? te))
                                  (car te)
-                                 (pp-expr (zonk-final ty)))))))]
+                                 (pp-expr (time-phase! zonk (zonk-final ty))))))))]
 
                   ;; (expand datum) — show preparse expansion
                   [(list 'expand datum)
@@ -231,15 +231,15 @@
                   ;; (defr name expr) — named relation definition (Phase 7)
                   ;; Type-infer the relation, register in global env + relation store
                   [(list 'defr name expr)
-                   (let ([ty (infer/err ctx-empty expr)])
+                   (let ([ty (time-phase! type-check (infer/err ctx-empty expr))])
                      (if (prologos-error? ty) ty
                          (begin
-                           (resolve-trait-constraints!)
+                           (time-phase! trait-resolve (resolve-trait-constraints!))
                            (let ([te (check-unresolved-trait-constraints)])
                              (if (not (null? te))
                                  (car te)
-                                 (let ([zonked-body (zonk-final expr)]
-                                       [zonked-type (zonk-final ty)])
+                                 (let ([zonked-body (time-phase! zonk (zonk-final expr))]
+                                       [zonked-type (time-phase! zonk (zonk-final ty))])
                                    (current-global-env
                                     (global-env-add (current-global-env) name zonked-type zonked-body))
                                    (when (current-ns-context)
@@ -281,11 +281,11 @@
   (cond
     ;; Sprint 10: Type-inferred def (no type annotation)
     [(not type-surf)
-     (define body (elaborate body-surf))
+     (define body (time-phase! elaborate (elaborate body-surf)))
      (cond
        [(prologos-error? body) body]
        [else
-        (define inferred-type (infer/err ctx-empty body))
+        (define inferred-type (time-phase! type-check (infer/err ctx-empty body)))
         (cond
           [(prologos-error? inferred-type) inferred-type]
           [else
@@ -294,7 +294,7 @@
              [(prologos-error? ty-ok) ty-ok]
              [else
               ;; Phase C: resolve trait-constraint metas to dictionary expressions
-              (resolve-trait-constraints!)
+              (time-phase! trait-resolve (resolve-trait-constraints!))
               ;; Phase C.6: Check for unresolved trait constraints
               (define trait-errors (check-unresolved-trait-constraints))
               (cond
@@ -325,13 +325,13 @@
                    error-loc error-loc)]
                 [else
                  ;; zonk-final FIRST, then QTT on zonked terms
-                 (define zonked-body (zonk-final body))
-                 (define zonked-type (zonk-final inferred-type))
+                 (define zonked-body (time-phase! zonk (zonk-final body)))
+                 (define zonked-type (time-phase! zonk (zonk-final inferred-type)))
                  ;; Skip QTT for expressions with unsupported node types (Vec/Fin)
                  (define qtt-ok
                    (if (contains-unsupported-qtt? zonked-body)
                        #t
-                       (checkQ-top/err ctx-empty zonked-body zonked-type)))
+                       (time-phase! qtt (checkQ-top/err ctx-empty zonked-body zonked-type))))
                  (cond
                    [(prologos-error? qtt-ok) qtt-ok]
                    [else
@@ -346,7 +346,7 @@
     ;; Existing annotated path (type annotation present)
     [else
      ;; 1. Elaborate type
-     (define type (elaborate type-surf))
+     (define type (time-phase! elaborate (elaborate type-surf)))
      (cond
        [(prologos-error? type) type]
        [else
@@ -383,7 +383,7 @@
            ;; body is never used at runtime. The type annotation is all we need.
            (cond
              [data-type-def?
-              (let ([zonked-type (zonk-final type)])
+              (let ([zonked-type (time-phase! zonk (zonk-final type))])
                 (current-global-env
                  (global-env-add-type-only (current-global-env) name zonked-type))
                 (when (current-ns-context)
@@ -394,7 +394,7 @@
                 (format "~a : ~a defined." name (pp-expr zonked-type)))]
              [else
               ;; 4. Elaborate body (self-reference now resolves)
-              (define body (elaborate body-surf))
+              (define body (time-phase! elaborate (elaborate body-surf)))
               (cond
                 [(prologos-error? body)
                  ;; Remove pre-registered entry on elaboration failure
@@ -407,7 +407,7 @@
                 [else
                  ;; 5. Check body against type (use type which has metas instead of holes)
                  ;; Sprint 9: pass recovered name map for de Bruijn recovery in errors
-                 (define chk (check/err ctx-empty body type srcloc-unknown (recover-name-map)))
+                 (define chk (time-phase! type-check (check/err ctx-empty body type srcloc-unknown (recover-name-map))))
                  (cond
                    [(prologos-error? chk)
                     ;; Remove pre-registered entry on type-check failure
@@ -419,7 +419,7 @@
                     chk]
                    [else
                     ;; Phase C: resolve trait-constraint metas to dictionary expressions
-                    (resolve-trait-constraints!)
+                    (time-phase! trait-resolve (resolve-trait-constraints!))
                     ;; Phase C.6: Check for unresolved trait constraints
                     (define trait-errors-ann (check-unresolved-trait-constraints))
                     (cond
@@ -462,15 +462,15 @@
                       [else
                        ;; 6. zonk-final (resolves mult-metas to concrete values,
                        ;; defaults unsolved level-metas to lzero, mult-metas to mw).
-                       (define zonked-body (zonk-final body))
-                       (define zonked-type (zonk-final type))
+                       (define zonked-body (time-phase! zonk (zonk-final body)))
+                       (define zonked-type (time-phase! zonk (zonk-final type)))
                        ;; 6.5. QTT multiplicity check (on zonked terms with concrete mults).
                        ;; Skip for expressions containing unsupported node types (Vec/Fin).
                        (define qtt-ok
                          (if (contains-unsupported-qtt? zonked-body)
                              #t  ;; skip QTT for unsupported expression types
-                             (checkQ-top/err ctx-empty zonked-body zonked-type
-                                             srcloc-unknown (recover-name-map))))
+                             (time-phase! qtt (checkQ-top/err ctx-empty zonked-body zonked-type
+                                             srcloc-unknown (recover-name-map)))))
                        (cond
                          [(prologos-error? qtt-ok)
                           ;; Remove pre-registered entry on QTT failure
@@ -557,13 +557,16 @@
   (define raw-stxs (read-all-syntax port "<string>"))
   (define expanded-stxs (preparse-expand-all raw-stxs))
   (define surfs (map parse-datum expanded-stxs))
+  (define pt (phase-timings 0.0 0.0 0.0 0.0 0.0 0.0 0.0))
   (define-values (results pc)
-    (with-perf-counters
-      (for/list ([surf (in-list surfs)])
-        (if (prologos-error? surf)
-            surf
-            (process-command surf)))))
+    (parameterize ([current-phase-timings pt])
+      (with-perf-counters
+        (for/list ([surf (in-list surfs)])
+          (if (prologos-error? surf)
+              surf
+              (process-command surf))))))
   (when pc (print-perf-report! pc))
+  (print-phase-report! pt)
   results)
 
 ;; ========================================
@@ -580,13 +583,16 @@
   (close-input-port port)
   (define expanded-stxs (preparse-expand-all raw-stxs))
   (define surfs (map parse-datum expanded-stxs))
+  (define pt (phase-timings 0.0 0.0 0.0 0.0 0.0 0.0 0.0))
   (define-values (results pc)
-    (with-perf-counters
-      (for/list ([surf (in-list surfs)])
-        (if (prologos-error? surf)
-            surf
-            (process-command surf)))))
+    (parameterize ([current-phase-timings pt])
+      (with-perf-counters
+        (for/list ([surf (in-list surfs)])
+          (if (prologos-error? surf)
+              surf
+              (process-command surf))))))
   (when pc (print-perf-report! pc))
+  (print-phase-report! pt)
   results)
 
 ;; ========================================

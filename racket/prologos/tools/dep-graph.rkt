@@ -761,7 +761,9 @@
    'test-relational-e2e.rkt
    (test-dep '(driver.rkt parser.rkt elaborator.rkt reduction.rkt relations.rkt solver.rkt macros.rkt surface-syntax.rkt syntax.rkt) #f)
    'test-perf-counters.rkt
-   (test-dep '(performance-counters.rkt) #f)))
+   (test-dep '(performance-counters.rkt) #f)
+   'test-phase-timing.rkt
+   (test-dep '(performance-counters.rkt driver.rkt global-env.rkt) #t)))
 
 ;; ============================================================
 ;; Layer 2b: Example file → test file mapping
