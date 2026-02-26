@@ -148,10 +148,10 @@ spec find-path : Graph Node Node -> [List Node]?
 ;; Relational defines the search space
 defn find-path [graph start end]
   let reachable := (rel [?from ?to ?path]
-    &> (= ?from ?to) (= ?path '[?to | nil])
-    &> (edge ?from ?mid) (reachable ?mid ?to ?rest)
-       (= ?path '[?from | ?rest]))
-  match (solve [reachable start end ?p])
+    &> (= from to) (= path '[to | nil])
+    &> (edge from mid) (reachable mid to rest)
+       (= path '[from | rest]))
+  match (solve (reachable start end p))
     | [some path] -> [just path]
     | none -> nothing
 #+end_src

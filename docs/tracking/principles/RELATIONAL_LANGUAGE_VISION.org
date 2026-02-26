@@ -196,15 +196,19 @@ of type signatures --- they describe the shape of the relation's interface.
 | Mode | Symbol | Meaning                           |
 |------+--------+-----------------------------------|
 | Free | ~?var~ | May be bound or unbound (default) |
-| In   | ~-var~ | Must be bound on entry            |
-| Out  | ~+var~ | Unbound, will be bound by goal    |
+| In   | ~+var~ | Must be bound on entry            |
+| Out  | ~-var~ | Unbound, will be bound by goal    |
+
+This follows the standard Prolog/Mercury convention: ~+~ denotes /input/
+(the caller provides a value) and ~-~ denotes /output/ (the relation
+produces a value). ~?~ denotes /free/ (either direction).
 
 Mode prefixes appear in the ~defr~/~rel~ parameter list (the /contract/).
 In the body, variables are /bare/ --- the modes have already been declared:
 
 #+begin_src prologos
 ;; Signature declares mode contract; body uses bare names
-defr append [-xs -ys +zs]
+defr append [+xs +ys -zs]
   &> (= xs nil) (= zs ys)
   &> (= xs [cons h t]) (append t ys rest) (= zs [cons h rest])
 
@@ -223,6 +227,38 @@ If a mode-prefixed variable appears in the body and disagrees with its
 declared signature mode, the compiler reports an error. By convention,
 body variables are bare; mode annotations in the body are the exception,
 not the rule.
+
+** Multi-Arity Relations: ~|~ Dispatch
+
+Like functional ~defn~, relational ~defr~ supports multi-arity dispatch
+via ~|~. Each ~|~ variant has its own parameter list (with optional modes)
+and body (which may contain ~&>~ clauses, ~||~ fact blocks, or bare goals).
+
+#+begin_src prologos
+defr sum-list
+  | [+list -sum]
+    (sum-list list 0 sum)
+  | [[] +acc -sum]
+    &> (= acc sum)
+  | [[+x|+xs] +acc -sum]
+    &> (new-acc is [+ acc x])
+       (sum-list xs new-acc sum)
+#+end_src
+
+This unifies the common Prolog pattern of separate public and worker
+predicates (~sum_list/2~ calling ~sum_list/3~) into a single definition.
+The three ~|~ variants dispatch on arity and head structure:
+
+1. ~[+list -sum]~ --- the 2-arg public interface, delegates to the 3-arg form
+2. ~[[] +acc -sum]~ --- 3-arg base case: empty list, accumulator is the result
+3. ~[[+x|+xs] +acc -sum]~ --- 3-arg recursive case: process head, recurse on tail
+
+The three-level structure is orthogonal:
+- *~|~* = structural dispatch (arity, head pattern)
+- *~&>~* = logical disjunction (multiple derivation paths within one case)
+- *~||~* = ground data (fact tables)
+
+Each level serves a different purpose and they compose freely within ~defr~.
 
 * The ~solve~ / ~solve-with~ Bridge
 
@@ -580,8 +616,10 @@ are untyped (Prolog-style). Schema-annotated relations are typed and validated
 2. *Dual keywords*: ~defn~/~fn~ for functions, ~defr~/~rel~ for relations
 3. *First-class anonymous relations*: ~rel~ is the relational lambda
 4. *Dual clause sigils*: ~||~ for facts (data), ~&>~ for rules (logic)
-5. *Signature-level mode contracts*: ~?~ (free), ~-~ (in), ~+~ (out) in
+5. *Signature-level mode contracts*: ~?~ (free), ~+~ (in), ~-~ (out) in
    parameter lists; bare names in bodies --- context does the rest
+5a. *Multi-arity ~|~ dispatch*: Structural dispatch on arity and head pattern,
+    consistent with functional ~defn~ multi-arity
 6. *Tabling by default*: Correctness over performance as the default
 7. *~solve~ bridge*: Returns ~Seq Map~ for functional consumption
 8. *~solve-with~ configuration*: Solver as parameterizable metadata entity
