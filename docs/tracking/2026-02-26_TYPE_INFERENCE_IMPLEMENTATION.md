@@ -119,7 +119,35 @@
 - **Advisory only** — shadow mismatches log to stderr, never affect program behavior. Existing system's result is always returned.
 - **`run-to-quiescence` directly** — `elab-solve` discards network on contradiction (returns `contradiction-info`). Shadow validation needs the post-quiescence network to inspect cell values, so it calls `run-to-quiescence` directly.
 
-## Phase 4: ATMS Integration for Speculation — NOT STARTED
+## Phase 4: ATMS-Backed Speculation — COMPLETE
+
+- [x] 4a: Created `elab-speculation.rkt` (~155 lines)
+  - `speculation` struct: ATMS + base elab-network + branches + counter
+  - `branch` struct: hypothesis-id, forked enet, status, contradiction, label
+  - `speculation-result` struct: status, winning enet, winner-index, nogoods, ATMS
+  - `nogood-info` struct: branch-index, label, contradiction, hypothesis-id
+  - `speculation-begin` — create speculation context with ATMS amb (mutual exclusion)
+  - `speculation-try-branch` — fork network, apply try-fn, run to quiescence, detect contradictions
+  - `speculation-commit` — select first OK branch, collect nogoods from failures
+  - `speculate-first-success` — convenience short-circuiting wrapper
+  - Uses `run-to-quiescence` directly (same pattern as shadow-validate!) to preserve post-quiescence network even on contradiction
+- [x] 4b: Created `tests/test-elab-speculation.rkt` (18 tests)
+  - 3 construction tests (2-way, 3-way with mutual exclusion, fork from same base)
+  - 4 binary speculation tests (both succeed, left-fails, both-fail, short-circuit)
+  - 3 map widening pattern tests (fits, doesn't fit, contradiction info preserved)
+  - 2 multi-way tests (3-way 1-succeeds, 3-way all-fail)
+  - 3 nested speculation tests (inner within outer, inner failure doesn't invalidate outer, independent ATMS)
+  - 3 persistence/error reporting tests (base unchanged, nogood labels/indices, contradiction cell details)
+- [x] 4c: Registered in `dep-graph.rkt` (source-deps + test-deps)
+- [x] 4d: Full suite passes (4284 tests, 198 files)
+- [x] 4e: Committed
+
+### Key Decisions (Phase 4)
+- **Separate module, not elaborator-network.rkt extensions** — speculation is a higher-level concept built on top of the base network. Same layering as elab-shadow.rkt.
+- **ATMS for hypothesis tracking, elab-network forking for state** — ATMS tracks nogoods/mutual exclusion. Actual type state lives in forked elab-networks (persistent, O(1) fork). ATMS used only for hypothesis/nogood management.
+- **`try-fn` callback pattern** — `speculation-try-branch` takes `(elab-network → elab-network)`. Keeps module free of typing-core dependencies. Phase 5 calls with real type-checking functions.
+- **No metavar-store dependency** — purely functional module. Operates on elab-networks without touching imperative meta-store. Phase 5 bridges both.
+- **`run-to-quiescence` directly** — same lesson from Phase 3: `elab-solve` discards network on contradiction. Speculation needs the post-quiescence network for `extract-contradiction-info`.
 
 ## Phase 5: Full Switchover + Error Improvement — NOT STARTED
 
