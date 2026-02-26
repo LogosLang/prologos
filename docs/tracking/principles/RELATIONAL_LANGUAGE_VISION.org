@@ -60,11 +60,54 @@ No existing logical or logical-functional language has a true anonymous
 relation (~rel~) that can be bound to names and passed between contexts
 like a lambda. This is Prologos's key innovation for logic-functional fusion.
 
-** ~&>~ Conjunction Syntax
+** Dual Clause Syntax: ~||~ for Facts, ~&>~ for Rules
 
-The ~&>~ operator introduces a clause (disjunctive alternative) within a
-relation definition. Within a clause, goals are implicitly conjoined
-(sequential conjunction, left to right).
+A relation body contains two kinds of clauses: /facts/ (ground assertions,
+no logic variables, no subgoals) and /rules/ (derived clauses with goals).
+These have fundamentally different characters --- facts are /data/, rules are
+/logic/ --- and Prologos gives them distinct sigils to reflect this.
+
+*** ~||~ Fact Block Syntax
+
+The ~||~ operator introduces a /fact block/: a set of ground tuples that
+the relation asserts. Each subsequent line at the same indentation level
+is an additional fact (row) in the block.
+
+#+begin_src prologos
+schema ParentChild
+  :parent String
+  :child  String
+
+defr parent-child : ParentChild
+  || "Alice" "Bob"
+     "Bob"   "Carol"
+     "Bob"   "Dave"
+#+end_src
+
+~||~ appears once to introduce the block. The indentation determines which
+lines belong to the block. This is syntactically lightweight --- ideal for
+the database use case where hundreds of facts must be declared concisely.
+
+The double-pipe reads as /OR/: the relation holds for ("Alice", "Bob") OR
+("Bob", "Carol") OR ("Bob", "Dave"). Each line is a disjunct. This is the
+same semantics as separate Prolog facts, but expressed as a visual table.
+
+Why ~||~ rather than ~&>~ for facts:
+
+- *Weight*: ~&>~ on every line of tabular data is syntactically heavy.
+  The database use case demands concision.
+- *Semantic clarity*: ~&> "Alice" "Bob"~ reads as /conjoin "Alice" AND "Bob"/
+  because within a ~&>~ clause, whitespace juxtaposition means conjunction.
+  But a fact is not a conjunction of its columns --- it is a single assertion
+  that the tuple inhabits the relation. ~||~ avoids this misleading reading.
+- *Visual tabulation*: With ~||~ as a block introducer, the fact section
+  looks like a data table, which is exactly what it is.
+
+*** ~&>~ Rule Clause Syntax
+
+The ~&>~ operator introduces a /rule clause/: a derived assertion with one
+or more relational goals as its body. Within a clause, goals are implicitly
+conjoined (sequential conjunction, left to right).
 
 #+begin_src prologos
 ;; Two clauses, each with implicit conjunction
@@ -77,8 +120,47 @@ defr ancestor [?x ?y]
 Design rationale:
 - ~&>~ is visually distinct from functional operators (~|>~, ~>>~)
 - It reads as "and also, by this rule..." --- each ~&>~ is a logical OR
+  of derivation paths
 - Within a clause, goals are conjoined by whitespace juxtaposition (AND)
 - The visual structure mirrors Prolog's clause-based semantics
+
+*** Mixed Facts and Rules
+
+Facts (~||~) and rules (~&>~) coexist naturally within a single ~defr~:
+
+#+begin_src prologos
+schema ParentChild
+  :parent String
+  :child  String
+
+;; Ground facts as data
+defr parent-child : ParentChild
+  || "Alice" "Bob"
+     "Bob"   "Carol"
+     "Bob"   "Dave"
+
+;; Derived relation composing over the facts
+defr ancestor : ParentChild
+  &> (parent-child ?x ?y)
+  &> (parent-child ?x ?z) (ancestor ?z ?y)
+#+end_src
+
+The dual syntax makes the distinction visible at a glance: ~||~ sections are
+data you can read as a table; ~&>~ sections are logic you read as derivation
+rules. This maps directly to the database isomorphism: ~||~ is INSERT, ~&>~
+is CREATE VIEW.
+
+*** S-Expression Representation
+
+In sexp mode, fact blocks desugar to ~$facts~, rule clauses to ~$clause~:
+
+#+begin_src
+;; || "Alice" "Bob"   "Bob" "Carol"
+($facts ("Alice" "Bob") ("Bob" "Carol"))
+
+;; &> (parent ?x ?z) (ancestor ?z ?y)
+($clause ($rel-app parent ?x ?z) ($rel-app ancestor ?z ?y))
+#+end_src
 
 ** Logic Variables: ~?var~ Prefix
 
@@ -473,7 +555,7 @@ are untyped (Prolog-style). Schema-annotated relations are typed and validated
 1. *Delimiter-based paradigm distinction*: ~[...]~ functional, ~(...)~ relational
 2. *Dual keywords*: ~defn~/~fn~ for functions, ~defr~/~rel~ for relations
 3. *First-class anonymous relations*: ~rel~ is the relational lambda
-4. *~&>~ clause syntax*: Visually distinct disjunction within relations
+4. *Dual clause sigils*: ~||~ for facts (data), ~&>~ for rules (logic)
 5. *Mode prefixes*: ~?~ (free), ~-~ (in), ~+~ (out) --- optional, Mercury-inspired
 6. *Tabling by default*: Correctness over performance as the default
 7. *~solve~ bridge*: Returns ~Seq Map~ for functional consumption
@@ -488,8 +570,8 @@ are untyped (Prolog-style). Schema-annotated relations are typed and validated
     the object language for data shapes, message validation, and relational facts
 14. *Relations as database tables*: Facts are rows, rules are composable views,
     queries are joins --- the relational language /is/ a graph-query language
-15. *Lightweight fact syntax*: Bodiless clauses (positional and dictionary-style)
-    must be syntactically concise for the database use case to be practical
+15. *~||~ fact blocks*: Block-introduced facts with continuation lines ---
+    concise, tabular, scales from 3 rows to 30,000 without syntactic overhead
 16. *Composition over query languages*: Rules compose as naturally as functions;
     SQL doesn't. This is the Yedalog insight applied to a typed setting.
 
@@ -604,11 +686,11 @@ schema Employee
   :salary Nat
 
 defr employee : Employee
-  &> "alice" Engineering 95000N
-  &> "bob"   Marketing   72000N
+  || "alice" Engineering 95000N
+     "bob"   Marketing   72000N
 
 ;; This would be a type error: salary must be Nat
-;; &> "eve" Engineering "high"
+;; || "eve" Engineering "high"
 #+end_src
 
 The schema provides column names, types, and positional ordering. The ~defr~
@@ -621,22 +703,15 @@ For distributed query scenarios (federated databases, agent knowledge exchange),
 session types ensure that query protocols between nodes are well-formed --- you
 can't send a partial join result where a complete one is expected.
 
-** Fact Declaration Syntax (Open Design Question)
+** Fact Declaration Syntax
 
-The isomorphism suggests that /bodiless clauses/ (facts) deserve first-class
-syntactic treatment. The current encoding is verbose:
-
-#+begin_src prologos
-;; Verbose: every ground fact requires explicit unification
-defr parent [?x ?y]
-  &> (= ?x "alice") (= ?y "bob")
-  &> (= ?x "bob") (= ?y "carol")
-  &> (= ?x "bob") (= ?y "dave")
-#+end_src
+The dual-sigil design (~||~ for facts, ~&>~ for rules) resolves the fact
+syntax question. See § Dual Clause Syntax for the core design. This section
+covers the specific forms that ~||~ blocks support.
 
 *** Positional Facts (Schema Provides Ordering)
 
-With a schema, positional facts become unambiguous --- the schema field order
+With a schema, positional facts are unambiguous --- the schema field order
 establishes which position is which column:
 
 #+begin_src prologos
@@ -645,10 +720,13 @@ schema ParentChild
   :child  String
 
 defr parent-child : ParentChild
-  &> "alice" "bob"           ;; :parent="alice", :child="bob"
-  &> "bob"   "carol"
-  &> "bob"   "dave"
+  || "Alice" "Bob"           ;; :parent="Alice", :child="Bob"
+     "Bob"   "Carol"
+     "Bob"   "Dave"
 #+end_src
+
+The ~||~ introduces the fact block; subsequent lines at the same indentation
+are additional rows. No per-line sigil needed.
 
 Without a schema, positional facts still work (Prolog-style), but column names
 are unavailable to ~solve~ result maps.
@@ -664,36 +742,13 @@ schema Employee
   :salary Nat
 
 defr employee : Employee
-  &> {:name "alice" :dept Engineering :salary 95000N}
-  &> {:name "bob"   :dept Marketing   :salary 72000N}
-  &> {:name "carol" :dept Engineering :salary 110000N}
+  || {:name "Alice" :dept Engineering :salary 95000N}
+     {:name "Bob"   :dept Marketing   :salary 72000N}
+     {:name "Carol" :dept Engineering :salary 110000N}
 #+end_src
 
-Positional and dictionary facts are interchangeable within the same ~defr~
+Positional and dictionary facts are interchangeable within the same ~||~ block
 when a schema is present. The schema is the bridge between the two forms.
-
-*** Mixed Facts and Rules
-
-Facts and rules coexist naturally in ~defr~:
-
-#+begin_src prologos
-;; Ground facts: just data
-defr parent-child : ParentChild
-  &> "alice" "bob"
-  &> "bob"   "carol"
-
-;; Derived relation: rules compose over facts
-defr ancestor : ParentChild
-  &> (parent-child ?x ?y)
-  &> (parent-child ?x ?z) (ancestor ?z ?y)
-#+end_src
-
-The key design decision: a clause body that consists entirely of ground terms
-(no ~?~ variables, no subgoals) is a /fact/. A clause body that contains
-relational goals is a /rule/. This distinction is syntactic sugar --- both
-elaborate to the same propagator infrastructure --- but the sugar matters
-enormously for the database use case, where thousands of facts must be
-declared concisely.
 
 *** The Standalone Fact Question (Unresolved)
 
@@ -725,8 +780,8 @@ defr employee : Employee
 
 ;; Or from a Prologos data structure
 def employee-data : [List Employee]
-  '[{:name "alice" :dept Engineering :salary 95000N}
-    {:name "bob"   :dept Marketing   :salary 72000N}]
+  '[{:name "Alice" :dept Engineering :salary 95000N}
+    {:name "Bob"   :dept Marketing   :salary 72000N}]
 
 defr employee : Employee
   :from employee-data
@@ -737,8 +792,8 @@ is already declared by ~Employee~, so no separate ~:columns~ or ~:format~
 metadata is needed for well-structured sources.
 
 Bulk loading is deferred infrastructure, but the /vision/ should inform the
-fact syntax we choose in Phase 7. The syntax must be something that scales
-from 3 facts to 30,000 without becoming unwieldy.
+Phase 7 implementation. The ~||~ block syntax scales naturally from 3 facts
+to 30,000 without becoming unwieldy.
 
 ** Scaling Regimes
 
@@ -810,13 +865,14 @@ The database isomorphism and ~schema~ design should inform Phase 7:
 2. *Schema-annotated ~defr~*. The ~: Schema~ annotation on ~defr~ enables
    positional facts, type-checked columns, and typed ~solve~ results.
 
-3. *Bodiless clauses must be syntactically lightweight*. The primary use case
-   for facts is data entry. Verbose unification syntax (~(= ?x "alice")~)
-   defeats the purpose. Positional and dictionary-style facts are essential.
+3. *~||~ fact blocks are syntactically lightweight*. The dual-sigil design
+   (~||~ for facts, ~&>~ for rules) ensures that data entry reads as a table,
+   not as logic. Both positional and dictionary-style facts are supported.
 
-4. *~defr~ with only ground clauses should be recognizable as a "table"*.
-   The elaborator could optimize pure-fact relations differently (e.g., CHAMP
-   index on first argument, skip tabling overhead for static fact sets).
+4. *~defr~ with only ~||~ blocks is a "table"*. The elaborator recognizes
+   ~defr~ bodies containing only ~||~ (no ~&>~) as pure-fact relations and
+   can optimize them differently (CHAMP index on first argument, skip tabling
+   overhead for static fact sets).
 
 5. *Bulk loading via ~:source~ / ~:from~ metadata*. The ergonomic path from
    "I have a CSV" to "I can query it relationally" should be trivially short.
