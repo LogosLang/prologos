@@ -13,7 +13,7 @@ creates anonymous relations and ~defr~ creates named relations.
 | Paradigm    | Spec      | Named     | Anonymous | Application | Delimiter |
 |-------------+-----------+-----------+-----------+-------------+-----------|
 | Functional  | ~spec~    | ~defn~    | ~fn~      | ~[f x y]~   | ~[...]~   |
-| Relational  | ~schema~  | ~defr~    | ~rel~     | ~(R ?x ?y)~ | ~(...)~   |
+| Relational  | ~schema~  | ~defr~    | ~rel~     | ~(R x y)~   | ~(...)~   |
 | Process     | ~session~ | ~defproc~ | ~proc~    | indentation | indent    |
 
 The parenthetical ~(...)~ delimiter is the visual sigil for relational forms,
@@ -30,13 +30,13 @@ The reader dispatches differently based on the opening delimiter:
 - ~[map inc xs]~ :: Functional application. Evaluate ~map~ with arguments
   ~inc~ and ~xs~. Returns a value.
 
-- ~(parent ?x ?y)~ :: Relational goal. Assert or query the ~parent~ relation
-  with logic variables ~?x~ and ~?y~. Returns a stream of substitutions.
+- ~(parent x y)~ :: Relational goal. Assert or query the ~parent~ relation
+  with logic variables ~x~ and ~y~. Returns a stream of substitutions.
 
 This delimiter distinction is visible, mechanical, and unambiguous. A human
 reader can instantly tell whether a subexpression is functional or relational
 by looking at the bracket type. The s-expression representation preserves
-the distinction: ~($rel-app parent ?x ?y)~ vs ~($app map inc xs)~.
+the distinction: ~($rel-app parent x y)~ vs ~($app map inc xs)~.
 
 ** ~defr~ / ~rel~ Keywords
 
@@ -45,15 +45,15 @@ the distinction: ~($rel-app parent ?x ?y)~ vs ~($app map inc xs)~.
 #+begin_src prologos
 ;; Named relation with multiple clauses
 defr ancestor [?x ?y]
-  &> (parent ?x ?y)
-  &> (parent ?x ?z) (ancestor ?z ?y)
+  &> (parent x y)
+  &> (parent x z) (ancestor z y)
 
 ;; Anonymous relation (first-class, passable, composable)
 let reachable := (rel [?from ?to ?path]
-  &> (= ?from ?to) (= ?path '[?to | nil])
-  &> (edge ?from ?mid)
-     (reachable ?mid ?to ?rest)
-     (= ?path '[?from | ?rest]))
+  &> (= from to) (= path '[to | nil])
+  &> (edge from mid)
+     (reachable mid to rest)
+     (= path '[from | rest]))
 #+end_src
 
 No existing logical or logical-functional language has a true anonymous
@@ -112,9 +112,9 @@ conjoined (sequential conjunction, left to right).
 #+begin_src prologos
 ;; Two clauses, each with implicit conjunction
 defr ancestor [?x ?y]
-  &> (parent ?x ?y)                          ;; clause 1: base case
-  &> (parent ?x ?z) (ancestor ?z ?y)        ;; clause 2: recursive
-  ;;                 ^--- conjoined goals within clause 2
+  &> (parent x y)                            ;; clause 1: base case
+  &> (parent x z) (ancestor z y)             ;; clause 2: recursive
+  ;;               ^--- conjoined goals within clause 2
 #+end_src
 
 Design rationale:
@@ -141,8 +141,8 @@ defr parent-child : ParentChild
 
 ;; Derived relation composing over the facts
 defr ancestor : ParentChild
-  &> (parent-child ?x ?y)
-  &> (parent-child ?x ?z) (ancestor ?z ?y)
+  &> (parent-child x y)
+  &> (parent-child x z) (ancestor z y)
 #+end_src
 
 The dual syntax makes the distinction visible at a glance: ~||~ sections are
@@ -158,47 +158,71 @@ In sexp mode, fact blocks desugar to ~$facts~, rule clauses to ~$clause~:
 ;; || "Alice" "Bob"   "Bob" "Carol"
 ($facts ("Alice" "Bob") ("Bob" "Carol"))
 
-;; &> (parent ?x ?z) (ancestor ?z ?y)
-($clause ($rel-app parent ?x ?z) ($rel-app ancestor ?z ?y))
+;; &> (parent x z) (ancestor z y)
+($clause ($rel-app parent x z) ($rel-app ancestor z y))
 #+end_src
 
-** Logic Variables: ~?var~ Prefix
+** Logic Variables: Context-Determined
 
-Logic variables are distinguished by the ~?~ prefix. This is the default
-"free" mode --- the variable may be bound or unbound at entry, and unification
-determines its value.
+Logic variables are distinguished by /context/, not by prefix. Inside
+relational forms (~defr~, ~rel~, ~(...)~ goals), bare lowercase names are
+logic variables. Inside functional forms (~defn~, ~fn~, ~[...]~ applications),
+bare lowercase names are functional variables. The delimiter-based paradigm
+distinction already carries this information.
 
 #+begin_src prologos
-(ancestor ?who "carol")    ;; ?who is a logic variable
-[map inc xs]               ;; xs is a functional variable (no ?)
+(ancestor who "carol")     ;; who is a logic variable (relational context)
+[map inc xs]               ;; xs is a functional variable (functional context)
 #+end_src
 
-The ~?~ prefix serves multiple purposes:
-1. Visual distinction from functional variables
-2. Reader-level dispatch (the reader emits ~($logic-var who)~)
-3. Scope delimitation (logic vars are scoped to their enclosing ~rel~/~defr~)
-4. Mode annotation carrier (see below)
+This is consistent with the functional side: ~defn foo [x y]~ does not
+prefix its variables. ~defr foo [x y]~ follows the same convention.
 
-** Mode Prefixes: ~?~, ~-~, ~+~
+Disambiguation from constants is structural:
+- ~"Alice"~ --- string literal (constant)
+- ~95000N~ --- number literal (constant)
+- ~:name~ --- keyword (constant)
+- ~Engineering~ --- capitalized name = constructor/type (constant)
+- ~nil~ --- known value (constant)
+- ~from~, ~mid~, ~rest~ --- bare lowercase = logic variable
+- ~_~ --- anonymous/don't-care variable
 
-Mercury-inspired mode annotations provide optimization hints to the solver:
+** Mode Annotations: Signature-Level Contracts
+
+Mercury-inspired mode annotations appear in /relation signatures/ to declare
+the binding contract for each parameter. They are the relational equivalent
+of type signatures --- they describe the shape of the relation's interface.
 
 | Mode | Symbol | Meaning                           |
 |------+--------+-----------------------------------|
-| Free | ~?var~ | May be bound or unbound           |
+| Free | ~?var~ | May be bound or unbound (default) |
 | In   | ~-var~ | Must be bound on entry            |
 | Out  | ~+var~ | Unbound, will be bound by goal    |
 
+Mode prefixes appear in the ~defr~/~rel~ parameter list (the /contract/).
+In the body, variables are /bare/ --- the modes have already been declared:
+
 #+begin_src prologos
-;; Mode-annotated relation
+;; Signature declares mode contract; body uses bare names
 defr append [-xs -ys +zs]
-  &> (= -xs nil) (= +zs -ys)
-  &> (= -xs [cons ?h ?t]) (append ?t -ys ?rest) (= +zs [cons ?h ?rest])
+  &> (= xs nil) (= zs ys)
+  &> (= xs [cons h t]) (append t ys rest) (= zs [cons h rest])
+
+;; Free mode (?) is the default --- used when either in or out is fine
+defr ancestor [?x ?y]
+  &> (parent-child x y)
+  &> (parent-child x z) (ancestor z y)
 #+end_src
 
-Modes are /optional/ --- the default ~?~ works for all cases. When provided,
-modes enable the solver to choose more efficient strategies (e.g., indexing
-on bound arguments, generating rather than checking unbound arguments).
+Modes are /optional/ --- bare parameters (no prefix) default to free (~?~).
+When provided, modes enable the solver to choose more efficient strategies
+(e.g., indexing on bound arguments, generating rather than checking unbound
+arguments).
+
+If a mode-prefixed variable appears in the body and disagrees with its
+declared signature mode, the compiler reports an error. By convention,
+body variables are bare; mode annotations in the body are the exception,
+not the rule.
 
 * The ~solve~ / ~solve-with~ Bridge
 
@@ -209,12 +233,12 @@ It evaluates a relational goal and returns results as a functional value.
 
 #+begin_src prologos
 ;; Basic solve: returns Seq of substitution maps
-let results := (solve [ancestor "alice" ?who])
+let results := (solve (ancestor "alice" who))
 ;; results : Seq (Map Symbol Value)
-;; => [{?who: "bob"}, {?who: "carol"}, {?who: "dave"}]
+;; => [{who: "bob"}, {who: "carol"}, {who: "dave"}]
 
 ;; With destructuring
-match (solve [ancestor "alice" ?who])
+match (solve (ancestor "alice" who))
   | [some bindings] -> [map-get bindings :who]
   | none -> "nobody"
 #+end_src
@@ -234,13 +258,13 @@ let results := (solve-with
   :strategy depth-first
   :timeout 5000          ;; milliseconds
   :max-solutions 10
-  [ancestor "alice" ?who])
+  (ancestor "alice" who))
 
 ;; Using a custom constraint domain
 let results := (solve-with
   :domain interval-arithmetic
   :widening standard
-  [constraint ?x ?y])
+  (constraint x y))
 #+end_src
 
 The solver configuration is a map of metadata keys. This follows the
@@ -280,14 +304,14 @@ with lattice answer modes for Datalog-style aggregate computation.
 #+begin_src prologos
 ;; Tabled by default
 defr ancestor [?x ?y]
-  &> (parent ?x ?y)
-  &> (parent ?x ?z) (ancestor ?z ?y)
+  &> (parent x y)
+  &> (parent x z) (ancestor z y)
   ;; Left-recursive call to ancestor is safe --- tabling prevents loops
 
 ;; Opt-out for performance-critical untabled relations
 defr fast-lookup [?x ?y]
   :tabled false
-  &> (fact-table ?x ?y)
+  &> (fact-table x y)
 #+end_src
 
 ** Lattice Answer Modes
@@ -296,15 +320,15 @@ Tabled predicates can aggregate answers via lattice operations:
 
 #+begin_src prologos
 ;; Standard tabling: collect all answers
-defr reachable [?x ?y]
+defr reachable [x y]
   :answer-mode all
 
 ;; Lattice tabling: aggregate via min
-defr shortest-distance [?x ?y ?d]
+defr shortest-distance [x y d]
   :answer-mode (lattice min)
 
 ;; First-answer tabling: stop after one
-defr any-path [?x ?y ?path]
+defr any-path [x y path]
   :answer-mode first
 #+end_src
 
@@ -323,7 +347,7 @@ assumptions were made. Provenance is first-class data that can be:
 ;; Solve with provenance tracking
 let (results, provenances) := (solve-with
   :provenance true
-  [ancestor "alice" ?who])
+  (ancestor "alice" who))
 
 ;; Each provenance is a derivation tree
 ;; ancestor("alice", "carol")
@@ -355,7 +379,7 @@ let net := (make-network [ancestor facts])
 (network-add! net [parent "eve" "alice"])
 
 ;; Query the updated network
-let results := (network-solve net [ancestor "eve" ?who])
+let results := (network-solve net (ancestor "eve" who))
 ;; Incremental: only re-propagates from the new fact
 
 ;; Snapshot for later
@@ -378,7 +402,7 @@ Relational goals appear naturally within functional code via ~solve~:
 ;; Functional function that uses a relation internally
 spec find-path : Graph Node Node -> [List Node]?
 defn find-path [graph start end]
-  match (solve [path-in graph start end ?p])
+  match (solve (path-in graph start end p))
     | [some bindings] -> [just [map-get bindings :p]]
     | none            -> nothing
 #+end_src
@@ -390,11 +414,11 @@ Functional expressions can appear in relational goals via ~is~:
 #+begin_src prologos
 ;; Relational rule that calls functional code
 defr factorial [?n ?result]
-  &> (= ?n 0) (= ?result 1)
-  &> (> ?n 0)
-     (is ?n1 [sub ?n 1])
-     (factorial ?n1 ?partial)
-     (is ?result [mul ?n ?partial])
+  &> (= n 0) (= result 1)
+  &> (> n 0)
+     (is n1 [sub n 1])
+     (factorial n1 partial)
+     (is result [mul n partial])
 #+end_src
 
 The ~is~ keyword evaluates a functional expression and binds the result
@@ -556,7 +580,8 @@ are untyped (Prolog-style). Schema-annotated relations are typed and validated
 2. *Dual keywords*: ~defn~/~fn~ for functions, ~defr~/~rel~ for relations
 3. *First-class anonymous relations*: ~rel~ is the relational lambda
 4. *Dual clause sigils*: ~||~ for facts (data), ~&>~ for rules (logic)
-5. *Mode prefixes*: ~?~ (free), ~-~ (in), ~+~ (out) --- optional, Mercury-inspired
+5. *Signature-level mode contracts*: ~?~ (free), ~-~ (in), ~+~ (out) in
+   parameter lists; bare names in bodies --- context does the rest
 6. *Tabling by default*: Correctness over performance as the default
 7. *~solve~ bridge*: Returns ~Seq Map~ for functional consumption
 8. *~solve-with~ configuration*: Solver as parameterizable metadata entity
