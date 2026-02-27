@@ -14,7 +14,8 @@
          "../pretty-print.rkt"
          "../driver.rkt"
          "../global-env.rkt"
-         "../champ.rkt")
+         "../champ.rkt"
+         "../metavar-store.rkt")
 
 ;; Helper to run with clean global env
 (define (run s)
@@ -26,76 +27,86 @@
 ;; ========================================
 
 (test-case "Keyword type formation"
-  (check-equal? (tc:infer ctx-empty (expr-Keyword))
-                (expr-Type (lzero))
-                "Keyword : Type 0")
-  (check-equal? (tc:infer-level ctx-empty (expr-Keyword))
-                (tc:just-level (lzero))
-                "Keyword at level 0")
-  (check-true (tc:is-type ctx-empty (expr-Keyword))
-              "Keyword is a type"))
+  (with-fresh-meta-env
+    (check-equal? (tc:infer ctx-empty (expr-Keyword))
+                  (expr-Type (lzero))
+                  "Keyword : Type 0")
+    (check-equal? (tc:infer-level ctx-empty (expr-Keyword))
+                  (tc:just-level (lzero))
+                  "Keyword at level 0")
+    (check-true (tc:is-type ctx-empty (expr-Keyword))
+                "Keyword is a type")))
 
 (test-case "keyword literal typing"
-  (check-equal? (tc:infer ctx-empty (expr-keyword 'name))
-                (expr-Keyword)
-                "keyword(:name) : Keyword")
-  (check-true (tc:check ctx-empty (expr-keyword 'name) (expr-Keyword))
-              "check keyword(:name) : Keyword"))
+  (with-fresh-meta-env
+    (check-equal? (tc:infer ctx-empty (expr-keyword 'name))
+                  (expr-Keyword)
+                  "keyword(:name) : Keyword")
+    (check-true (tc:check ctx-empty (expr-keyword 'name) (expr-Keyword))
+                "check keyword(:name) : Keyword")))
 
 ;; ========================================
 ;; Core AST: Map type formation
 ;; ========================================
 
 (test-case "Map type formation"
-  (check-equal? (tc:infer ctx-empty (expr-Map (expr-Keyword) (expr-Nat)))
-                (expr-Type (lzero))
-                "(Map Keyword Nat) : Type 0")
-  (check-true (tc:is-type ctx-empty (expr-Map (expr-Keyword) (expr-Nat)))
-              "(Map Keyword Nat) is a type"))
+  (with-fresh-meta-env
+    (check-equal? (tc:infer ctx-empty (expr-Map (expr-Keyword) (expr-Nat)))
+                  (expr-Type (lzero))
+                  "(Map Keyword Nat) : Type 0")
+    (check-true (tc:is-type ctx-empty (expr-Map (expr-Keyword) (expr-Nat)))
+                "(Map Keyword Nat) is a type")))
 
 (test-case "Map type level"
-  (check-equal? (tc:infer-level ctx-empty (expr-Map (expr-Keyword) (expr-Nat)))
-                (tc:just-level (lzero))
-                "(Map Keyword Nat) at level 0"))
+  (with-fresh-meta-env
+    (check-equal? (tc:infer-level ctx-empty (expr-Map (expr-Keyword) (expr-Nat)))
+                  (tc:just-level (lzero))
+                  "(Map Keyword Nat) at level 0")))
 
 ;; ========================================
 ;; Core AST: Map empty + assoc typing
 ;; ========================================
 
 (test-case "map-empty typing"
-  (check-equal? (tc:infer ctx-empty (expr-map-empty (expr-Keyword) (expr-Nat)))
-                (expr-Map (expr-Keyword) (expr-Nat))
-                "map-empty(Keyword, Nat) : Map Keyword Nat"))
+  (with-fresh-meta-env
+    (check-equal? (tc:infer ctx-empty (expr-map-empty (expr-Keyword) (expr-Nat)))
+                  (expr-Map (expr-Keyword) (expr-Nat))
+                  "map-empty(Keyword, Nat) : Map Keyword Nat")))
 
 (test-case "map-assoc typing"
-  (let ([m (expr-map-empty (expr-Keyword) (expr-Nat))])
-    (check-equal? (tc:infer ctx-empty (expr-map-assoc m (expr-keyword 'x) (expr-zero)))
-                  (expr-Map (expr-Keyword) (expr-Nat))
-                  "map-assoc infers Map Keyword Nat")))
+  (with-fresh-meta-env
+    (let ([m (expr-map-empty (expr-Keyword) (expr-Nat))])
+      (check-equal? (tc:infer ctx-empty (expr-map-assoc m (expr-keyword 'x) (expr-zero)))
+                    (expr-Map (expr-Keyword) (expr-Nat))
+                    "map-assoc infers Map Keyword Nat"))))
 
 (test-case "map-get typing"
-  (let ([m (expr-map-empty (expr-Keyword) (expr-Nat))])
-    (check-equal? (tc:infer ctx-empty (expr-map-get m (expr-keyword 'x)))
-                  (expr-Nat)
-                  "map-get infers Nat (value type)")))
+  (with-fresh-meta-env
+    (let ([m (expr-map-empty (expr-Keyword) (expr-Nat))])
+      (check-equal? (tc:infer ctx-empty (expr-map-get m (expr-keyword 'x)))
+                    (expr-Nat)
+                    "map-get infers Nat (value type)"))))
 
 (test-case "map-dissoc typing"
-  (let ([m (expr-map-empty (expr-Keyword) (expr-Nat))])
-    (check-equal? (tc:infer ctx-empty (expr-map-dissoc m (expr-keyword 'x)))
-                  (expr-Map (expr-Keyword) (expr-Nat))
-                  "map-dissoc infers Map Keyword Nat")))
+  (with-fresh-meta-env
+    (let ([m (expr-map-empty (expr-Keyword) (expr-Nat))])
+      (check-equal? (tc:infer ctx-empty (expr-map-dissoc m (expr-keyword 'x)))
+                    (expr-Map (expr-Keyword) (expr-Nat))
+                    "map-dissoc infers Map Keyword Nat"))))
 
 (test-case "map-size typing"
-  (let ([m (expr-map-empty (expr-Keyword) (expr-Nat))])
-    (check-equal? (tc:infer ctx-empty (expr-map-size m))
-                  (expr-Nat)
-                  "map-size infers Nat")))
+  (with-fresh-meta-env
+    (let ([m (expr-map-empty (expr-Keyword) (expr-Nat))])
+      (check-equal? (tc:infer ctx-empty (expr-map-size m))
+                    (expr-Nat)
+                    "map-size infers Nat"))))
 
 (test-case "map-has-key typing"
-  (let ([m (expr-map-empty (expr-Keyword) (expr-Nat))])
-    (check-equal? (tc:infer ctx-empty (expr-map-has-key m (expr-keyword 'x)))
-                  (expr-Bool)
-                  "map-has-key infers Bool")))
+  (with-fresh-meta-env
+    (let ([m (expr-map-empty (expr-Keyword) (expr-Nat))])
+      (check-equal? (tc:infer ctx-empty (expr-map-has-key m (expr-keyword 'x)))
+                    (expr-Bool)
+                    "map-has-key infers Bool"))))
 
 ;; ========================================
 ;; Core AST: Map reduction (iota rules)

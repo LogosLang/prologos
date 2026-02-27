@@ -41,6 +41,9 @@
  ;; AST → runtime conversion
  expr-defr->relation-info
  expr->goal-desc
+ ;; Variable renaming helpers (for negation)
+ rename-ast-vars
+ collect-ast-vars
  ;; Execution
  solve-goal
  explain-goal)
@@ -302,10 +305,13 @@
      (define result (unify-terms (walk subst var) (walk subst expr) subst))
      (if result (list result) '())]
     [(not)
-     ;; Negation-as-failure: succeed if inner goal fails
+     ;; Negation-as-failure: succeed if inner goal fails.
+     ;; Apply current substitution to inner goal's variables before evaluating,
+     ;; so negation checks the ground instantiation (not unbound vars).
      (define inner-goal-expr (car args))
      (define inner-goal (expr->goal-desc inner-goal-expr))
-     (define results (solve-single-goal config store inner-goal subst depth))
+     (define resolved-inner-goal (apply-subst-to-goal inner-goal subst))
+     (define results (solve-single-goal config store resolved-inner-goal subst depth))
      (if (null? results)
          (list subst)  ;; inner failed → not succeeds
          '())]         ;; inner succeeded → not fails
@@ -350,10 +356,85 @@
     [(is)
      (when (symbol? (car args)) (hash-set! vars (car args) #t))]
     [(not)
-     ;; inner goal is an AST expr — would need deep walking
-     ;; For now, skip (inner vars won't be freshened)
-     (void)]
+     ;; Deep-walk the inner AST expr to collect variable names
+     (define inner (car args))
+     (collect-ast-vars inner vars)]
     [else (void)]))
+
+;; Apply a substitution to a goal-desc, resolving variables to their bindings.
+;; Used before negation evaluation to ensure ground instantiation.
+(define (apply-subst-to-goal goal subst)
+  (define kind (goal-desc-kind goal))
+  (define args (goal-desc-args goal))
+  (define (resolve-term t)
+    (cond
+      [(symbol? t) (walk subst t)]
+      [(list? t) (map resolve-term t)]
+      [else t]))
+  (case kind
+    [(app)
+     (define goal-name (car args))
+     (define goal-args (cadr args))
+     (goal-desc 'app (list goal-name (map resolve-term goal-args)))]
+    [(unify)
+     (goal-desc 'unify (map resolve-term args))]
+    [(is)
+     (goal-desc 'is (map resolve-term args))]
+    [(not)
+     ;; Recurse into nested not
+     (define inner-goal-expr (car args))
+     (define inner-goal (expr->goal-desc inner-goal-expr))
+     (define resolved (apply-subst-to-goal inner-goal subst))
+     ;; Return as goal-desc directly (already converted)
+     resolved]
+    [else goal]))
+
+;; Deep-walk an AST expression to collect variable names (symbols).
+;; Used for `not` goals where the inner goal is an AST expr, not a goal-desc.
+(define (collect-ast-vars expr vars)
+  (cond
+    [(expr-goal-app? expr)
+     (for ([a (in-list (expr-goal-app-args expr))])
+       (cond
+         [(expr-logic-var? a) (hash-set! vars (expr-logic-var-name a) #t)]
+         [(symbol? a) (hash-set! vars a #t)]))]
+    [(expr-unify-goal? expr)
+     (let ([lhs (expr-unify-goal-lhs expr)]
+           [rhs (expr-unify-goal-rhs expr)])
+       (when (expr-logic-var? lhs) (hash-set! vars (expr-logic-var-name lhs) #t))
+       (when (symbol? lhs) (hash-set! vars lhs #t))
+       (when (expr-logic-var? rhs) (hash-set! vars (expr-logic-var-name rhs) #t))
+       (when (symbol? rhs) (hash-set! vars rhs #t)))]
+    [(expr-not-goal? expr)
+     (collect-ast-vars (expr-not-goal-goal expr) vars)]
+    [else (void)]))
+
+;; Deep-walk an AST expression to rename logic variables using a fresh-map.
+;; Returns a new AST expression with renamed variables.
+(define (rename-ast-vars expr fresh-map)
+  (cond
+    [(expr-goal-app? expr)
+     (expr-goal-app (expr-goal-app-name expr)
+                    (for/list ([a (in-list (expr-goal-app-args expr))])
+                      (cond
+                        [(expr-logic-var? a)
+                         (define fresh-name (hash-ref fresh-map (expr-logic-var-name a)
+                                                      (expr-logic-var-name a)))
+                         (expr-logic-var fresh-name (expr-logic-var-mode a))]
+                        [else a])))]
+    [(expr-unify-goal? expr)
+     (define (rename-unify-term t)
+       (cond
+         [(expr-logic-var? t)
+          (define fresh-name (hash-ref fresh-map (expr-logic-var-name t)
+                                       (expr-logic-var-name t)))
+          (expr-logic-var fresh-name (expr-logic-var-mode t))]
+         [else t]))
+     (expr-unify-goal (rename-unify-term (expr-unify-goal-lhs expr))
+                      (rename-unify-term (expr-unify-goal-rhs expr)))]
+    [(expr-not-goal? expr)
+     (expr-not-goal (rename-ast-vars (expr-not-goal-goal expr) fresh-map))]
+    [else expr]))
 
 ;; Solve an app goal: look up relation, try facts then clauses.
 (define (solve-app-goal config store goal-name goal-args subst depth)
@@ -445,9 +526,9 @@
     [(is)
      (goal-desc 'is (map rename-term args))]
     [(not)
-     ;; not args is a list with one element (the inner goal AST expr)
-     ;; Renaming inside AST exprs would require deep walking — pass through for now
-     goal]
+     ;; Deep-walk the inner AST expression to rename logic variables
+     (define inner-expr (car args))
+     (goal-desc 'not (list (rename-ast-vars inner-expr fresh-map)))]
     [else goal]))
 
 ;; ========================================

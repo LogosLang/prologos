@@ -9,7 +9,7 @@ blocked on unbuilt infrastructure or uncertain design — not effort avoidance.
 See `docs/tracking/principles/DEVELOPMENT_LESSONS.org` § "Completeness Over
 Deferral".
 
-**Last consolidated sweep**: 2026-02-26 (Type inference Phases 8+A-E complete; propagator network primary; CHAMP sole source of truth; meta-aware merge + prop-driven wakeup).
+**Last consolidated sweep**: 2026-02-26 (Staleness audit: numerics ergonomics 8/9 done, auto-implicits Direction 1 done, nested dot-access done. Type inference Phases 8+A-E complete).
 
 ---
 
@@ -23,15 +23,15 @@ Deferral".
 - Open: literal form for IEEE floats vs Posit (currently `~3.14` is Posit32)
 - Source: `docs/tracking/2026-02-19_NUMERICS_TOWER_ROADMAP.md`
 
-### Numerics Ergonomics (from audit)
-- Posit identity instances (AdditiveIdentity/MultiplicativeIdentity for Posit8-64)
-- Posit equality primitives `p{N}-eq` (4 new AST nodes, halves eq cost)
-- Bare decimal `3.14` → Posit32 (reader/parser changes)
-- Generic operators `+` `-` `*` `/` `<` `<=` `=` as parser keywords → trait dispatch
-- Context-resolved `from-int` / `from-rat` keywords
-- Generic `negate` and `abs` surface operators
-- Numeric type join (`numeric-join`) for Posit dominance coercion
-- Implicit coercion warnings (exact → approximate)
+### Numerics Ergonomics (from audit) — MOSTLY COMPLETE
+- ✅ Posit identity instances (AdditiveIdentity/MultiplicativeIdentity for Posit8-64) — `identity-instances.prologos`
+- ✅ Posit equality primitives `p{N}-eq` — `test-posit-eq.rkt`
+- ✅ Bare decimal `3.14` → Posit32 — `test-decimal-literal.rkt`
+- ✅ Generic operators `+` `-` `*` `/` `<` `<=` `=` as parser keywords → trait dispatch — `test-generic-arith-01/02.rkt`
+- ✅ Context-resolved `from-int` / `from-rat` keywords — `test-generic-from.rkt`, `test-cross-family-conversions-*.rkt`
+- ✅ Generic `negate` and `abs` surface operators — `test-generic-arith-02.rkt`
+- ✅ Numeric type join (`numeric-join`) for Posit dominance coercion — `test-numeric-join.rkt`
+- ✅ Implicit coercion warnings (exact → approximate) — `test-coercion-warnings.rkt`
 - Numeric literal polymorphism (`42` polymorphic via `FromInt`) — research/future
 - Source: `docs/tracking/2026-02-22_NUMERICS_ERGONOMICS_AUDIT.org`
 
@@ -200,25 +200,32 @@ The following collection items ARE also deferred (genuine infrastructure deps):
 
 ## Implicit Inference
 
-### Auto-Introduce Unbound Type Variables
-- Capitalized `A` free in type signature → auto-introduce `{A : Type}`
-- Scan after `extract-implicit-binders`, check not in scope as type constructor
-- Only kind `Type`; higher-kinded needs explicit or Direction 2
+### Auto-Introduce Unbound Type Variables — COMPLETE ✅
+- ✅ Direction 1: Capitalized `A` free in type signature → auto-introduce `{A : Type}`
+- Implemented in `macros.rkt` (`collect-free-type-vars-from-datums`, `auto-detected-binders`)
+- Filters known type names, user-defined constructors, traits, bundles, locally-bound Pi names
+- 191+ passing tests in `test-auto-implicits.rkt`, real usage in `test-hkt-errors.rkt`
 - Source: `docs/tracking/2026-02-22_IMPROVED_IMPLICIT_INFERENCE.org`
 
-### Kind Inference from `:where` Clauses
-- `C` in `:where (Seqable C)` → infer `{C : Type -> Type}` from trait decl
-- Extend `propagate-kinds-from-constraints` to cases without explicit binder
+### Kind Inference from `:where` Clauses — Direction 2 (PARTIAL)
+- `propagate-kinds-from-constraints` already refines kinds for explicit `{C}` binders
+- **Remaining**: Auto-detect free variables in `:where` that lack any explicit binder (~50 lines)
+- `C` in `:where (Seqable C)` without `{C}` → infer `{C : Type -> Type}` from trait decl
 - Source: `docs/tracking/2026-02-22_IMPROVED_IMPLICIT_INFERENCE.org`
 
 ---
 
 ## Syntax — Dot-Access
 
-### Phase D: Nil-Coalescing `#:`
-- **Note**: The original DEFERRED.md entry called this "Nested Dot-Access"
-  but the tracking doc labels Phase D as nil-coalescing `#:`.
-  Nested dot-access (`user.address.city`) may also be deferred.
+### Phases A-C COMPLETE ✅ (including nested access)
+- ✅ Single-level: `user.name` → `(map-get user :name)`
+- ✅ Nested: `user.address.city` → `(map-get (map-get user :address) :city)`
+- Reader splits each `.field` into separate `dot-access` tokens; preparse `rewrite-dot-access` left-folds into nested `map-get`
+- E2E tests pass for both sexp and WS mode (see `test-dot-access.rkt`)
+
+### Phase D: Nil-Coalescing `#:` (NOT STARTED)
+- Safe navigation: `user?.address?.city` short-circuits on nil
+- Orthogonal to nested access — does not block anything
 - Source: `docs/tracking/2026-02-21_1800_DOT_ACCESS_SYNTAX.md`
 
 ---
@@ -320,13 +327,16 @@ The following collection items ARE also deferred (genuine infrastructure deps):
 - 140+ Phase 7-specific tests
 - **Completed**: 2026-02-25
 
-### Post-Phase 7: Stratified Evaluation (NOT STARTED)
-- SCC decomposition of rule dependency graphs
-- Stratum-by-stratum evaluation
-- Full negation-as-failure between strata
-- Lattice aggregation (count, min, max, sum) between strata
-- **Note**: `stratify.rkt` infrastructure (Tarjan SCC) built in Phase 7a
-- Source: `docs/tracking/2026-02-24_TOWARDS_A_GENERAL_LOGIC_ENGINE_ON_PROPAGATORS.org`
+### Post-Phase 7: Stratified Evaluation — COMPLETE ✅
+- `stratified-eval.rkt` orchestration module bridging stratify + tabling + relations
+- Dependency extraction (`relation-info->dep-info`), cached stratification (version-based invalidation)
+- Single-stratum fast path (zero overhead for programs without negation)
+- Multi-stratum bottom-up evaluation with stratum ordering for sound negation-as-failure
+- Variable-carrying negation fix (`rename-ast-vars`, `apply-subst-to-goal` in relations.rkt)
+- Wired into reduction.rkt (`solve-goal` → `stratified-solve-goal`)
+- 17 new tests in `test-stratified-eval.rkt`, 199/199 suite pass
+- **Remaining (future)**: Lattice aggregation (count, min, max, sum) between strata
+- Source: `docs/tracking/2026-02-26_STRATIFIED_EVALUATION.md`
 
 ### Post-Phase 7: Galois Connections + Domain Embeddings (NOT STARTED)
 - Modular constraint domains with abstraction/concretization

@@ -30,7 +30,8 @@
          "tabling.rkt"
          "solver.rkt"
          "relations.rkt"
-         "provenance.rkt")
+         "provenance.rkt"
+         "stratified-eval.rkt")
 
 (provide whnf nf nf-whnf conv conv-nf
          current-nf-cache current-whnf-cache
@@ -211,7 +212,7 @@
      (define rel-args (expr-goal-app-args goal*))
      (define-values (goal-args query-vars) (extract-query-info rel-args))
      (define store (current-relation-store))
-     (define answers (solve-goal config store rel-name goal-args query-vars))
+     (define answers (stratified-solve-goal config store rel-name goal-args query-vars))
      (answers->prologos-expr answers query-vars)]
     ;; If the goal is not yet reduced to a goal-app, return the expression unchanged
     [else (expr-solve goal*)]))
@@ -225,7 +226,7 @@
      (define rel-args (expr-goal-app-args goal*))
      (define-values (goal-args query-vars) (extract-query-info rel-args))
      (define store (current-relation-store))
-     (define answers (solve-goal config store rel-name goal-args query-vars))
+     (define answers (stratified-solve-goal config store rel-name goal-args query-vars))
      (if (null? answers)
          (expr-fvar 'none)
          ;; Wrap first answer in 'some'

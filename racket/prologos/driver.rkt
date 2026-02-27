@@ -37,6 +37,7 @@
          "trait-resolution.rkt"
          "warnings.rkt"
          "relations.rkt"
+         "stratified-eval.rkt"
          "performance-counters.rkt"
          "elab-speculation-bridge.rkt"
          "elaborator-network.rkt"
@@ -272,7 +273,8 @@
                                    (when (expr-defr? zonked-body)
                                      (define rel-info (expr-defr->relation-info zonked-body))
                                      (current-relation-store
-                                      (relation-register (current-relation-store) rel-info)))
+                                      (relation-register (current-relation-store) rel-info))
+                                     (bump-relation-store-version!))
                                    (format "~a : ~a defined." name (pp-expr zonked-type)))))))))]
 
                   [_ (prologos-error srcloc-unknown (format "Unknown command: ~a" elab-result))])))]))))
