@@ -1,0 +1,124 @@
+#+TITLE: Standup — 2026-02-27
+#+DATE: 2026-02-27
+
+
+* Yesterday
+
+** Dict-Passing Across Closures: =new-lattice-cell= Generic Wrapper
+
+Implemented =new-lattice-cell=, the first generic propagator helper using
+dict-passing across closures. This was previously deferred as "blocked on
+meta-resolution limitation for trait accessors in closures" — investigation
+proved the blocker was a *false alarm*. Phase D of trait resolution
+(where-context propagation into closures, =elaborator.rkt:729-736=) already
+handles this correctly, as proven by MapLattice's =[fn x y [join x y]]=
+inside =where (Lattice V)=.
+
+The function:
+#+begin_src prologos
+spec new-lattice-cell {A} PropNetwork -> [PropNetwork * CellId] where (Lattice A)
+defn new-lattice-cell [net] where (Lattice A)
+  net-new-cell net bot [fn x y [join x y]]
+#+end_src
+
+*** Four Compiler Edge Cases Fixed
+
+| File             | Bug                                                                       | Fix                                                                              |
+|------------------+---------------------------------------------------------------------------+----------------------------------------------------------------------------------|
+| =macros.rkt=     | =*= operator not recognized in single-sub-list =$angle-type=              | Extended =param-type->angle-type= to flatten =*= sub-lists                      |
+| =macros.rkt=     | =PropNetwork=/=CellId= missing from =known-type-name?=                   | Added propagator types to known-type-name? set                                   |
+| =typing-core.rkt= | De Bruijn shift bug in =net-new-cell= typing rule                        | Explicit =(shift 1 0 init-ty)= / =(shift 2 0 init-ty)= under Pi binders         |
+| =qtt.rkt=        | =inferQ= can't handle standalone lambdas (merge arg)                     | Changed =net-new-cell= QTT rule from =inferQ= to =checkQ= for merge             |
+
+The de Bruijn shift bug: =(arrow init-ty (arrow init-ty init-ty))= produces
+=Pi(mw, bvar(2), Pi(mw, bvar(2), bvar(2)))= — wrong because each Pi binder
+shifts the context. Correct form: =Pi(mw, bvar(2), Pi(mw, bvar(3), bvar(4)))=.
+
+The QTT bug: =inferQ= has no standalone lambda case — lambdas only type-check
+via =checkQ= against a known Pi type. This affected ALL =net-new-cell= usage in
+=def=/=defn= contexts (not just polymorphic); only =eval= was unaffected because
+it skips QTT.
+
+
+** Call-Site Specialization Rewriting (HKT-8 Phase 2)
+
+Implemented the missing half of HKT-8: the compiler now rewrites generic
+function calls to zero-overhead specialized versions when types are statically
+known.
+
+*** =rewrite-specializations= function (=driver.rkt=, ~100 lines)
+
+Post-zonk AST tree walker. Algorithm:
+1. Fast path: empty specialization registry → return unchanged
+2. Decompose application chains into =(head . args)=
+3. If =head= is =(expr-fvar fn-name)= with spec having where-constraints:
+   - Compute =n-to-strip = len(implicit-binders) + len(where-constraints)=
+   - Extract type key from first arg (type arg)
+   - =lookup-specialization fn-name type-key=
+   - If found: strip type+dict args, replace head with specialized name
+4. Recurse into all sub-expressions
+
+Wired into 3 driver pipeline points (after =zonk-final=, before QTT/reduction):
+- =eval= command
+- =def= without annotation
+- =def= with annotation
+
+*** Specializations for =new-lattice-cell=
+
+#+begin_src prologos
+specialize new-lattice-cell for Bool
+  defn new-lattice-cell [net]
+    net-new-cell net false [fn [x : Bool] [y : Bool] [or x y]]
+
+specialize new-lattice-cell for Interval
+  defn new-lattice-cell [net]
+    net-new-cell net interval-bot [fn [x : Interval] [y : Interval] [interval-join x y]]
+#+end_src
+
+These compile as =new-lattice-cell--Bool--specialized= and
+=new-lattice-cell--Interval--specialized= — direct function calls, no dict
+passing, zero overhead.
+
+
+** Tests and Verification
+
+| Test File                            | Tests | Coverage                                                                    |
+|--------------------------------------+-------+-----------------------------------------------------------------------------|
+| =test-new-lattice-cell.rkt=         |    11 | Module loading, type inference, bare method resolution, Bool E2E, prelude, equivalence, dict-passing |
+| =test-call-site-specialization.rkt= |     8 | Registry population, Bool/Interval semantics, fallback, fast path, equivalence |
+
+Final suite: *4337 tests, 201 files, all pass* (215s wall). No whale files (max 22.8s).
+
+
+** Files Changed
+
+| File                                    | Change                                              |
+|-----------------------------------------+------------------------------------------------------|
+| =driver.rkt=                            | =rewrite-specializations= + pipeline wiring (+135 lines) |
+| =typing-core.rkt=                       | De Bruijn shift fix in =net-new-cell= rule           |
+| =qtt.rkt=                               | =checkQ= for =net-new-cell= merge argument           |
+| =macros.rkt=                            | =*= handling, =known-type-name?= propagator types    |
+| =namespace.rkt=                         | Export =new-lattice-cell= from prelude                |
+| =propagator.prologos=                   | Generic + Bool/Interval specializations               |
+| =dep-graph.rkt=                         | 2 new test entries                                    |
+| =DEFERRED.md=                           | =new-lattice-cell= + HKT-8 marked COMPLETE           |
+| =test-new-lattice-cell.rkt= (NEW)      | 11 tests                                             |
+| =test-call-site-specialization.rkt= (NEW) | 8 tests                                           |
+
+
+* Carry-Forward
+
+** Ongoing
+
+- [ ] Galois Connections / Abstract Interpretation on the Logic Engine
+- [ ] =spec= / =functor= configuration language audit
+- [ ] Relational language implementation (Phase 7 scaffolding done)
+- [ ] Collections: Stage I transducer integration (deferred)
+- [ ] Extended spec: Phase 2+ (example checking, property testing, refinement types)
+- [ ] HKT partial application for =Map K= as =Type -> Type= constructor
+- [ ] Homoiconicity Phase IV
+- [ ] =schema= top-level form implementation
+
+
+* Today (Feb 27)
+
