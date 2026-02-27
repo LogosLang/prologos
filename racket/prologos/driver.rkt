@@ -38,16 +38,16 @@
          "warnings.rkt"
          "relations.rkt"
          "performance-counters.rkt"
-         "elab-shadow.rkt"
-         "elab-speculation-bridge.rkt")
+         "elab-speculation-bridge.rkt"
+         "elaborator-network.rkt"
+         "champ.rkt")
 
 (provide process-command
          process-file
          process-string
          load-module
          install-module-loader!
-         prologos-lib-dir
-         current-network-validation?)
+         prologos-lib-dir)
 
 ;; ========================================
 ;; Standard library path (computed from this module's location)
@@ -63,15 +63,29 @@
 ;; ========================================
 ;; Searches the meta store for the first meta with a meta-source-info
 ;; containing a name-map, and returns it. Falls back to '() if none found.
+;; Phase A: reads from CHAMP (primary) or hash (fallback).
 (define (recover-name-map)
-  (for/fold ([result '()])
-            ([(id info) (in-hash (current-meta-store))])
-    (if (null? result)
-        (let ([src (meta-info-source info)])
-          (if (and (meta-source-info? src) (meta-source-info-name-map src))
-              (meta-source-info-name-map src)
-              result))
-        result)))
+  (define mi-box (current-prop-meta-info-box))
+  (if mi-box
+      ;; Production path: fold over CHAMP meta-info store
+      (champ-fold (unbox mi-box)
+                  (lambda (k v acc)
+                    (if (null? acc)
+                        (let ([src (meta-info-source v)])
+                          (if (and (meta-source-info? src) (meta-source-info-name-map src))
+                              (meta-source-info-name-map src)
+                              acc))
+                        acc))
+                  '())
+      ;; Legacy path: iterate hash
+      (for/fold ([result '()])
+                ([(id info) (in-hash (current-meta-store))])
+        (if (null? result)
+            (let ([src (meta-info-source info)])
+              (if (and (meta-source-info? src) (meta-source-info-name-map src))
+                  (meta-source-info-name-map src)
+                  result))
+            result))))
 
 ;; ========================================
 ;; Sprint 10: Check if an elaborated type contains expr-hole
@@ -140,23 +154,6 @@
 ;; just run check(body, type) — the holes act as wildcards, accepting any type.
 ;; The stored type retains holes which display as `_`.
 
-;; ========================================
-;; Phase 5: Always-on propagator network
-;; ========================================
-;; The shadow network always mirrors meta operations to a propagator network.
-;; When this parameter is #t, validation mismatches are logged to stderr.
-;; The network always runs regardless (for speculation bridge precision).
-(define current-network-validation? (make-parameter #f))
-
-;; Run shadow validation and teardown. Always runs; logging controlled by parameter.
-;; Safe to call when shadow isn't initialized (no-op).
-(define (maybe-shadow-validate!)
-  (define net-box (current-shadow-network))
-  (when net-box
-    (define report (shadow-validate!))
-    (when (current-network-validation?)
-      (shadow-log-report! report))
-    (shadow-teardown!)))
 
 ;; ========================================
 ;; Process a single top-level command
@@ -168,7 +165,6 @@
 ;; bare symbols (for local use) and as fully-qualified names (for export).
 (define (process-command surf)
   (reset-meta-store!)  ;; clear metavariables from previous command
-  (shadow-init!)       ;; Phase 5: always-on propagator network
   (init-speculation-tracking!)
   (parameterize ([current-nf-cache (make-hash)]         ;; per-command nf memoization
                  [current-whnf-cache (make-hash)]       ;; per-command whnf memoization
@@ -212,7 +208,6 @@
                              (if (not (null? te))
                                  (car te)
                                  (begin
-                                   (maybe-shadow-validate!)
                                    (let ([val (time-phase! reduce (nf (time-phase! zonk (zonk-final expr))))]
                                          [ty-nf (time-phase! reduce (nf (time-phase! zonk (zonk-final ty))))])
                                      (format "~a : ~a" (pp-expr val) (pp-expr ty-nf)))))))))]
@@ -227,7 +222,6 @@
                              (if (not (null? te))
                                  (car te)
                                  (begin
-                                   (maybe-shadow-validate!)
                                    (pp-expr (time-phase! zonk (zonk-final ty)))))))))]
 
                   ;; (expand datum) — show preparse expansion
@@ -266,7 +260,6 @@
                              (if (not (null? te))
                                  (car te)
                                  (begin
-                                   (maybe-shadow-validate!)
                                    (let ([zonked-body (time-phase! zonk (zonk-final expr))]
                                        [zonked-type (time-phase! zonk (zonk-final ty))])
                                    (current-global-env
@@ -353,7 +346,6 @@
                    lhs-str rhs-str
                    error-loc error-loc)]
                 [else
-                 (maybe-shadow-validate!)
                  ;; zonk-final FIRST, then QTT on zonked terms
                  (define zonked-body (time-phase! zonk (zonk-final body)))
                  (define zonked-type (time-phase! zonk (zonk-final inferred-type)))
@@ -490,7 +482,6 @@
                          lhs-str rhs-str
                          error-loc error-loc)]
                       [else
-                       (maybe-shadow-validate!)
                        ;; 6. zonk-final (resolves mult-metas to concrete values,
                        ;; defaults unsolved level-metas to lzero, mult-metas to mw).
                        (define zonked-body (time-phase! zonk (zonk-final body)))
@@ -553,11 +544,10 @@
                            (ns-context-current-ns (current-ns-context))))))
     (register-multi-defn! fqn arities fqn-arity-map docstring))
   ;; Process each clause def through process-def (handles type checking, registration)
-  ;; Re-init shadow + speculation tracking per clause (process-def tears down shadow on success)
+  ;; Re-init meta store + speculation tracking per clause
   (define results
     (for/list ([def (in-list defs)])
       (reset-meta-store!)
-      (shadow-init!)
       (init-speculation-tracking!)
       (process-def def)))
   ;; Check for errors
@@ -694,7 +684,13 @@
                     [current-multi-defn-registry (current-multi-defn-registry)]
                     [current-spec-store (hasheq)]  ;; fresh — specs are module-local
                     [current-propagated-specs (seteq)]  ;; fresh propagated tracking
-                    [current-loading-set (set-add (current-loading-set) ns-sym)])
+                    [current-loading-set (set-add (current-loading-set) ns-sym)]
+                    ;; Phase 8b: fresh propagator network per module
+                    [current-prop-net-box #f]
+                    [current-prop-id-map-box #f]
+                    ;; Phase A: fresh meta-info CHAMP per module
+                    [current-prop-meta-info-box #f]
+)
        ;; Read and process the file
        ;; Use WS reader for .prologos files, sexp reader otherwise
        (define port (open-input-file file-path))
@@ -985,6 +981,15 @@
 
 ;; Auto-install on module load
 (install-module-loader!)
+
+;; Phase 8b: Install propagator network callbacks into metavar-store.
+;; This breaks the circular dependency: metavar-store → elaborator-network → type-lattice → reduction → metavar-store.
+(install-prop-network-callbacks!
+ make-elaboration-network
+ elab-fresh-meta
+ elab-cell-write
+ elab-cell-read
+ elab-add-unify-constraint)
 
 ;; ========================================
 ;; CLI entry point — process .prologos files

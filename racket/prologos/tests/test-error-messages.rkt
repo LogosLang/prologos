@@ -333,6 +333,7 @@
 (test-case "backward-compat/string-source-still-works"
   ;; Tests that pass strings to fresh-meta continue to work
   (parameterize ([current-meta-store (make-hasheq)])
+    (reset-meta-store!)
     (define m (fresh-meta ctx-empty (expr-Nat) "test-string"))
     (check-true (expr-meta? m))
     (define info (meta-lookup (expr-meta-id m)))
@@ -341,6 +342,7 @@
 
 (test-case "backward-compat/primary-unsolved-metas-filters"
   (parameterize ([current-meta-store (make-hasheq)])
+    (reset-meta-store!)
     ;; Create 3 metas: 1 primary (pi-param), 1 secondary (implicit), 1 internal (bare-Type)
     (fresh-meta ctx-empty (expr-Nat) (meta-source-info srcloc-unknown 'pi-param "a" #f #f))
     (fresh-meta ctx-empty (expr-Nat) (meta-source-info srcloc-unknown 'implicit "b" #f #f))

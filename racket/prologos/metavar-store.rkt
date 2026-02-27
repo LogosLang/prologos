@@ -25,7 +25,13 @@
          "prelude.rkt"
          "sessions.rkt"
          "source-location.rkt"
-         "performance-counters.rkt")
+         "performance-counters.rkt"
+         "champ.rkt")
+         ;; NOTE: elaborator-network.rkt and type-lattice.rkt are NOT required
+         ;; directly to avoid a circular dependency:
+         ;;   metavar-store → elaborator-network → type-lattice → reduction → metavar-store
+         ;; Instead, network operations are injected via callback parameters
+         ;; (same pattern as current-retry-unify for breaking the unify→metavar-store cycle).
 
 (provide
  ;; Meta-info struct
@@ -88,10 +94,18 @@
  current-trait-constraint-map
  register-trait-constraint!
  lookup-trait-constraint
- ;; Phase 3: Shadow network hooks
- current-shadow-fresh-hook
- current-shadow-solve-hook
- current-shadow-constraint-hook)
+ ;; Phase 8b: Propagator-backed internal state
+ current-prop-net-box
+ current-prop-id-map-box
+ current-prop-meta-info-box
+ prop-meta-id-hash
+ ;; Phase 8b: Network operation callbacks (set by driver at startup)
+ current-prop-make-network
+ current-prop-fresh-meta
+ current-prop-cell-write
+ current-prop-cell-read
+ current-prop-add-unify-constraint
+ install-prop-network-callbacks!)
 
 ;; ========================================
 ;; Meta-info: everything about a single metavariable
@@ -171,14 +185,6 @@
 (define (lookup-trait-constraint meta-id)
   (hash-ref (current-trait-constraint-map) meta-id #f))
 
-;; ========================================
-;; Phase 3: Shadow network hooks
-;; ========================================
-;; When non-#f, called alongside meta operations to mirror to shadow network.
-;; Default #f = zero overhead when shadow is off.
-(define current-shadow-fresh-hook (make-parameter #f))      ;; (id ctx type source) → void
-(define current-shadow-solve-hook (make-parameter #f))      ;; (id solution) → void
-(define current-shadow-constraint-hook (make-parameter #f))  ;; (lhs rhs ctx source) → void
 
 ;; Global constraint store: list of all constraints
 (define current-constraint-store (make-parameter '()))
@@ -212,7 +218,31 @@
                  a))))]
       [else acc])))
 
+;; Shallow meta-id extractor for propagator constraints.
+;; Walks the expression tree and collects all meta-ids (without following solutions).
+;; Unlike collect-meta-ids, does NOT chase solved metas transitively —
+;; we just want the structural meta references for creating propagator edges.
+(define (extract-shallow-meta-ids expr)
+  (let walk ([e expr] [acc '()])
+    (cond
+      [(expr-meta? e)
+       (define id (expr-meta-id e))
+       (if (memq id acc) acc (cons id acc))]
+      [(or (symbol? e) (number? e) (string? e) (boolean? e) (char? e))
+       acc]
+      [(struct? e)
+       (define v (struct->vector e))
+       (for/fold ([a acc])
+                 ([i (in-range 1 (vector-length v))])
+         (define field (vector-ref v i))
+         (if (or (struct? field) (expr-meta? field))
+             (walk field a)
+             a))]
+      [else acc])))
+
 ;; Create a postponed constraint, add to global store, register for wakeup.
+;; Phase 8b: Also adds unify propagators on the network between cells
+;; referenced by metas in lhs/rhs.
 (define (add-constraint! lhs rhs ctx source)
   (perf-inc-constraint!)
   (define c (constraint lhs rhs ctx source 'postponed))
@@ -224,8 +254,26 @@
   (for ([id (in-list meta-ids)])
     (define existing (hash-ref registry id '()))
     (hash-set! registry id (cons c existing)))
-  (define hook (current-shadow-constraint-hook))
-  (when hook (hook lhs rhs ctx source))
+  ;; Propagator path: add unify constraints between cells
+  (define net-box (current-prop-net-box))
+  (define add-unify-fn (current-prop-add-unify-constraint))
+  (when (and net-box add-unify-fn)
+    (define enet (unbox net-box))
+    (define id-map (unbox (current-prop-id-map-box)))
+    (define lhs-metas (extract-shallow-meta-ids lhs))
+    (define rhs-metas (extract-shallow-meta-ids rhs))
+    (define enet*
+      (for*/fold ([net enet])
+                 ([lm (in-list lhs-metas)]
+                  [rm (in-list rhs-metas)])
+        (define lcid (champ-lookup id-map (prop-meta-id-hash lm) lm))
+        (define rcid (champ-lookup id-map (prop-meta-id-hash rm) rm))
+        (if (and (not (eq? lcid 'none)) (not (eq? rcid 'none))
+                 (not (equal? lcid rcid)))
+            (let-values ([(net* _pid) (add-unify-fn net lcid rcid)])
+              net*)
+            net)))
+    (set-box! net-box enet*))
   c)
 
 ;; Get constraints associated with a metavariable for wakeup.
@@ -271,48 +319,162 @@
 (define current-meta-store (make-parameter (make-hasheq)))
 
 ;; ========================================
+;; Phase 8b: Propagator-backed internal state
+;; ========================================
+;; When initialized (by reset-meta-store!), expression meta solutions
+;; are stored in an immutable propagator network (CHAMP-backed elab-network).
+;; When #f, the legacy mutable hash path is used (test compatibility).
+
+;; Box of elab-network | #f
+(define current-prop-net-box (make-parameter #f))
+;; Box of CHAMP: meta-id (gensym) → cell-id | #f
+(define current-prop-id-map-box (make-parameter #f))
+;; Box of CHAMP: meta-id (gensym) → meta-info | #f
+;; Phase A: Primary metadata store (replaces hash for production reads).
+(define current-prop-meta-info-box (make-parameter #f))
+
+;; Symbol hash for gensym meta-ids.
+(define (prop-meta-id-hash id) (eq-hash-code id))
+
+;; Callback parameters for network operations.
+;; These are set by install-prop-network-callbacks! (called from driver.rkt)
+;; to break the circular dependency with elaborator-network.rkt.
+(define current-prop-make-network (make-parameter #f))      ;; (→ elab-network)
+(define current-prop-fresh-meta (make-parameter #f))        ;; (enet ctx type source → (values enet* cell-id))
+(define current-prop-cell-write (make-parameter #f))        ;; (enet cell-id value → enet*)
+(define current-prop-cell-read (make-parameter #f))         ;; (enet cell-id → value)
+(define current-prop-add-unify-constraint (make-parameter #f))  ;; (enet cid-a cid-b → (values enet* pid))
+
+;; Inline type-lattice predicates (avoid requiring type-lattice.rkt).
+;; type-bot and type-top are sentinel symbols — see type-lattice.rkt.
+(define (prop-type-bot? v) (eq? v 'type-bot))
+(define (prop-type-top? v) (eq? v 'type-top))
+
+;; Install network operation callbacks. Called once at startup from driver.rkt.
+(define (install-prop-network-callbacks! make-net fresh-m cell-w cell-r add-unify)
+  (current-prop-make-network make-net)
+  (current-prop-fresh-meta fresh-m)
+  (current-prop-cell-write cell-w)
+  (current-prop-cell-read cell-r)
+  (current-prop-add-unify-constraint add-unify))
+
+;; Look up cell-id for a meta-id in the prop id-map. Returns cell-id or #f.
+(define (prop-meta-id->cell-id id)
+  (define box (current-prop-id-map-box))
+  (and box
+       (let ([v (champ-lookup (unbox box) (prop-meta-id-hash id) id)])
+         (if (eq? v 'none) #f v))))
+
+;; ========================================
 ;; API
 ;; ========================================
 
 ;; Create a fresh metavariable, register it in the store, return expr-meta.
+;; Phase A: Writes to CHAMP meta-info store (primary) and propagator network.
+;; Falls back to hash-only when CHAMP not initialized (test compatibility).
 (define (fresh-meta ctx type source)
   (perf-inc-meta-created!)
   (define id (gensym 'meta))
   (define info (meta-info id ctx type 'unsolved #f '() source))
-  (hash-set! (current-meta-store) id info)
-  (define hook (current-shadow-fresh-hook))
-  (when hook (hook id ctx type source))
+  (define mi-box (current-prop-meta-info-box))
+  (cond
+    [mi-box
+     ;; Production path: write to CHAMP meta-info store
+     (set-box! mi-box (champ-insert (unbox mi-box) (prop-meta-id-hash id) id info))
+     ;; Allocate cell on propagator network
+     (define net-box (current-prop-net-box))
+     (define fresh-fn (current-prop-fresh-meta))
+     (when (and net-box fresh-fn)
+       (define enet (unbox net-box))
+       (define-values (enet* cid) (fresh-fn enet ctx type source))
+       (define id-box (current-prop-id-map-box))
+       (set-box! id-box (champ-insert (unbox id-box) (prop-meta-id-hash id) id cid))
+       (set-box! net-box enet*))]
+    [else
+     ;; Legacy path: write to hash (test compatibility)
+     (hash-set! (current-meta-store) id info)])
   (expr-meta id))
 
 ;; Assign a solution to a metavariable. Errors if already solved.
 ;; After solving, retries any postponed constraints that mention this meta.
+;; Phase A: Reads/writes CHAMP meta-info store (primary), propagator cell.
 (define (solve-meta! id solution)
   (perf-inc-meta-solved!)
-  (define info (hash-ref (current-meta-store) id #f))
+  (define mi-box (current-prop-meta-info-box))
+  (define info
+    (if mi-box
+        ;; Production path: read from CHAMP
+        (let ([v (champ-lookup (unbox mi-box) (prop-meta-id-hash id) id)])
+          (if (eq? v 'none) #f v))
+        ;; Legacy path: read from hash
+        (hash-ref (current-meta-store) id #f)))
   (unless info
     (error 'solve-meta! "unknown metavariable: ~a" id))
   (when (eq? (meta-info-status info) 'solved)
     (error 'solve-meta! "metavariable ~a already solved" id))
-  (set-meta-info-status! info 'solved)
-  (set-meta-info-solution! info solution)
+  (cond
+    [mi-box
+     ;; Production path: insert updated meta-info into CHAMP (immutable update)
+     (define updated (meta-info id (meta-info-ctx info) (meta-info-type info)
+                                'solved solution
+                                (meta-info-constraints info) (meta-info-source info)))
+     (set-box! mi-box (champ-insert (unbox mi-box) (prop-meta-id-hash id) id updated))]
+    [else
+     ;; Legacy path: mutate hash entry
+     (set-meta-info-status! info 'solved)
+     (set-meta-info-solution! info solution)])
+  ;; Propagator path: write to cell
+  (define net-box (current-prop-net-box))
+  (define write-fn (current-prop-cell-write))
+  (when (and net-box write-fn)
+    (define cid (prop-meta-id->cell-id id))
+    (when cid
+      (set-box! net-box (write-fn (unbox net-box) cid solution))))
   ;; Sprint 5: retry postponed constraints that mention this meta
-  (retry-constraints-for-meta! id)
-  (define hook (current-shadow-solve-hook))
-  (when hook (hook id solution)))
+  (retry-constraints-for-meta! id))
 
 ;; Check if a metavariable has been solved.
+;; Phase 8b: Reads from propagator network when available (primary).
 (define (meta-solved? id)
-  (define info (hash-ref (current-meta-store) id #f))
-  (and info (eq? (meta-info-status info) 'solved)))
+  (define net-box (current-prop-net-box))
+  (define read-fn (current-prop-cell-read))
+  (cond
+    [(and net-box read-fn)
+     ;; Propagator path: check cell value
+     (define cid (prop-meta-id->cell-id id))
+     (and cid
+          (let ([v (read-fn (unbox net-box) cid)])
+            (and (not (prop-type-bot? v)) (not (prop-type-top? v)))))]
+    [else
+     ;; Legacy path: read from hash
+     (define info (hash-ref (current-meta-store) id #f))
+     (and info (eq? (meta-info-status info) 'solved))]))
 
 ;; Retrieve the solution of a metavariable, or #f if unsolved/unknown.
+;; Phase 8b: Reads from propagator network when available (primary).
 (define (meta-solution id)
-  (define info (hash-ref (current-meta-store) id #f))
-  (and info (meta-info-solution info)))
+  (define net-box (current-prop-net-box))
+  (define read-fn (current-prop-cell-read))
+  (cond
+    [(and net-box read-fn)
+     ;; Propagator path: read cell value
+     (define cid (prop-meta-id->cell-id id))
+     (and cid
+          (let ([v (read-fn (unbox net-box) cid)])
+            (and (not (prop-type-bot? v)) (not (prop-type-top? v)) v)))]
+    [else
+     ;; Legacy path: read from hash
+     (define info (hash-ref (current-meta-store) id #f))
+     (and info (meta-info-solution info))]))
 
 ;; Retrieve the full meta-info struct, or #f if unknown.
+;; Phase A: Reads from CHAMP meta-info store (primary), falls back to hash.
 (define (meta-lookup id)
-  (hash-ref (current-meta-store) id #f))
+  (define mi-box (current-prop-meta-info-box))
+  (if mi-box
+      (let ([v (champ-lookup (unbox mi-box) (prop-meta-id-hash id) id)])
+        (if (eq? v 'none) #f v))
+      (hash-ref (current-meta-store) id #f)))
 
 ;; ========================================
 ;; Sprint 6: Universe level metavariables
@@ -487,13 +649,29 @@
     [else s]))
 
 ;; Clear all metavariables and constraints from the store.
+;; Phase A: Initializes CHAMP meta-info store alongside propagator network.
 (define (reset-meta-store!)
   (hash-clear! (current-meta-store))
   (hash-clear! (current-level-meta-store))
   (hash-clear! (current-mult-meta-store))
   (hash-clear! (current-sess-meta-store))
   (hash-clear! (current-trait-constraint-map))
-  (reset-constraint-store!))
+  (reset-constraint-store!)
+  ;; Initialize propagator network + CHAMP stores
+  (define make-net (current-prop-make-network))
+  (when make-net
+    (define net-box (current-prop-net-box))
+    (cond
+      [net-box
+       ;; Already have boxes — reset contents
+       (set-box! net-box (make-net))
+       (set-box! (current-prop-id-map-box) champ-empty)
+       (set-box! (current-prop-meta-info-box) champ-empty)]
+      [else
+       ;; First call or test context — create boxes
+       (current-prop-net-box (box (make-net)))
+       (current-prop-id-map-box (box champ-empty))
+       (current-prop-meta-info-box (box champ-empty))])))
 
 ;; ========================================
 ;; Meta state save/restore for speculative type-checking
@@ -505,25 +683,57 @@
 ;; Saves the status and solution of all metas in the current store.
 ;; Restore resets each meta back to its saved state.
 
+;; Phase A: save-meta-state is fully O(1) when CHAMP stores are active.
+;; All three CHAMPs (network, id-map, meta-info) are immutable — capturing
+;; the root reference is sufficient. Legacy path (hash) is O(N).
 (define (save-meta-state)
-  ;; Save a snapshot of each meta's (status, solution) pair
-  (for/hasheq ([(id info) (in-hash (current-meta-store))])
-    (values id (cons (meta-info-status info) (meta-info-solution info)))))
+  (define mi-box (current-prop-meta-info-box))
+  (cond
+    [mi-box
+     ;; Production path: all O(1) — capture immutable CHAMP references
+     (list 'prop
+           (unbox (current-prop-net-box))
+           (unbox (current-prop-id-map-box))
+           (unbox mi-box))]
+    [else
+     ;; Legacy path: O(N) hash snapshot
+     (for/hasheq ([(id info) (in-hash (current-meta-store))])
+       (values id (cons (meta-info-status info) (meta-info-solution info))))]))
 
 (define (restore-meta-state! saved)
-  ;; Restore each meta's status and solution from the snapshot.
-  ;; Any metas created AFTER the save are left as-is (they'll be garbage).
-  (for ([(id state) (in-hash saved)])
-    (define info (hash-ref (current-meta-store) id #f))
-    (when info
-      (set-meta-info-status! info (car state))
-      (set-meta-info-solution! info (cdr state)))))
+  (cond
+    [(and (list? saved) (eq? (car saved) 'prop))
+     ;; Production path: all O(1) — swap immutable CHAMP references
+     (define net (cadr saved))
+     (define id-map (caddr saved))
+     (define mi-champ (cadddr saved))
+     (set-box! (current-prop-net-box) net)
+     (set-box! (current-prop-id-map-box) id-map)
+     (set-box! (current-prop-meta-info-box) mi-champ)]
+    [else
+     ;; Legacy path: restore hash only (O(N))
+     (for ([(id state) (in-hash saved)])
+       (define info (hash-ref (current-meta-store) id #f))
+       (when info
+         (set-meta-info-status! info (car state))
+         (set-meta-info-solution! info (cdr state))))]))
 
 ;; List all unsolved metavariable infos.
+;; Phase A: reads from CHAMP (primary) or hash (fallback).
 (define (all-unsolved-metas)
-  (for/list ([(id info) (in-hash (current-meta-store))]
-             #:when (eq? (meta-info-status info) 'unsolved))
-    info))
+  (define mi-box (current-prop-meta-info-box))
+  (if mi-box
+      ;; Production path: fold over CHAMP
+      (champ-fold (unbox mi-box)
+                  (lambda (k v acc)
+                    (if (eq? (meta-info-status v) 'unsolved)
+                        (cons v acc)
+                        acc))
+                  '())
+      ;; Legacy path: iterate hash
+      (for/list ([(id info) (in-hash (current-meta-store))]
+                 #:when (eq? (meta-info-status info) 'unsolved))
+        info)))
 
 ;; ========================================
 ;; Sprint 9: Noise filtering for error display

@@ -4,19 +4,18 @@
 ;;; elab-speculation-bridge.rkt — Bridge between imperative speculation and propagator network
 ;;;
 ;;; Wraps the existing save-meta-state/restore-meta-state! mechanism with
-;;; network fork/restore and ATMS failure tracking. At each speculation site
-;;; in typing-core.rkt and qtt.rkt, `with-speculative-rollback` replaces the
-;;; manual save/restore pattern, adding:
+;;; failure tracking. At each speculation site in typing-core.rkt and qtt.rkt,
+;;; `with-speculative-rollback` replaces the manual save/restore pattern.
 ;;;
-;;;   1. Shadow network fork/restore (precise state — no leaks)
-;;;   2. Speculation failure recording (for future error enrichment)
+;;; Since Phase 8b, save-meta-state captures both the propagator network and
+;;; the hash-based meta-info in O(1) (immutable CHAMP snapshots). Rollback
+;;; restores the network state precisely — no shadow forking needed.
 ;;;
-;;; Phase 5 of the type inference refactoring.
+;;; Phase 5+8b of the type inference refactoring.
 ;;; Design reference: docs/tracking/2026-02-25_TYPE_INFERENCE_ON_LOGIC_ENGINE_DESIGN.md §5.5
 ;;;
 
-(require "metavar-store.rkt"
-         "elab-shadow.rkt")
+(require "metavar-store.rkt")
 
 (provide
  ;; Core speculation helper
@@ -45,43 +44,39 @@
 
 ;; Record a speculation failure.
 (define (record-speculation-failure! label)
-  (define box (current-speculation-failures))
-  (when box
-    (set-box! box (cons (speculation-failure label) (unbox box)))))
+  (define b (current-speculation-failures))
+  (when b
+    (set-box! b (cons (speculation-failure label) (unbox b)))))
 
 ;; Retrieve all recorded failures (newest first).
 (define (get-speculation-failures)
-  (define box (current-speculation-failures))
-  (if box (reverse (unbox box)) '()))
+  (define b (current-speculation-failures))
+  (if b (reverse (unbox b)) '()))
 
 ;; ========================================
 ;; Core speculation helper
 ;; ========================================
 
-;; Speculative rollback with network fork/restore.
+;; Speculative rollback with O(1) immutable snapshot.
 ;;
-;; Saves meta-state + forks shadow network. Runs thunk.
+;; Saves meta-state (O(1) for propagator network, O(N) for hash compat).
+;; Runs thunk.
 ;; If (success? result) → returns result, keeping all mutations.
-;; Otherwise → restores meta-state + network, records failure, returns #f.
+;; Otherwise → restores meta-state, records failure, returns #f.
 ;;
 ;; thunk: (→ any) — the speculative computation
 ;; success?: (any → boolean) — predicate for success (e.g., identity for #t/#f)
 ;; label: string — label for failure recording
 (define (with-speculative-rollback thunk success? label)
-  ;; 1. Save meta-state (imperative snapshot)
+  ;; 1. Save meta-state (immutable CHAMP snapshot — O(1) for network)
   (define saved (save-meta-state))
-  ;; 2. Fork shadow network (O(1) — just read the persistent CHAMP value)
-  (define net-box (current-shadow-network))
-  (define enet-saved (and net-box (unbox net-box)))
-  ;; 3. Run the speculation
+  ;; 2. Run the speculation
   (define result (thunk))
   (cond
     [(success? result) result]
     [else
-     ;; 4. Restore meta-state
+     ;; 3. Restore meta-state (O(1) for network)
      (restore-meta-state! saved)
-     ;; 5. Restore network to fork point
-     (when enet-saved (set-box! net-box enet-saved))
-     ;; 6. Record failure
+     ;; 4. Record failure
      (record-speculation-failure! label)
      #f]))

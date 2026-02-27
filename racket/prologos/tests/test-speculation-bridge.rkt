@@ -3,10 +3,10 @@
 ;;;
 ;;; test-speculation-bridge.rkt — Tests for the speculation bridge
 ;;;
-;;; Tests always-on network, speculative rollback, union type speculation,
+;;; Tests speculative rollback, union type speculation,
 ;;; map widening speculation, QTT union speculation, and full pipeline integration.
 ;;;
-;;; Phase 5 of the type inference refactoring.
+;;; Phase 5+8c of the type inference refactoring.
 ;;;
 
 (require racket/list
@@ -17,10 +17,6 @@
          "test-support.rkt"
          "../prelude.rkt"
          "../syntax.rkt"
-         "../type-lattice.rkt"
-         "../propagator.rkt"
-         "../elaborator-network.rkt"
-         "../elab-shadow.rkt"
          "../elab-speculation-bridge.rkt"
          "../metavar-store.rkt"
          "../driver.rkt"
@@ -50,16 +46,16 @@
   (test-suite
    "Always-on network"
 
-   (test-case "simple def — shadow always runs"
+   (test-case "simple def — propagator network active"
      (define result (run-simple "(def x : Nat 0N)"))
      (check-equal? (last result) "x : Nat defined."))
 
-   (test-case "type error — shadow still runs, teardown happens"
+   (test-case "type error — network still runs, cleanup happens"
      (define result (run-simple "(def x : Nat true)"))
      ;; Should produce a type error
      (check-true (prologos-error? (last result))))
 
-   (test-case "implicit args with prelude — metas mirrored"
+   (test-case "implicit args with prelude — metas on network"
      (define result (run-ns "(ns test) (def x : Nat [add 1N 2N])"))
      (check-false (prologos-error? result)))))
 
@@ -71,15 +67,10 @@
   (test-suite
    "Speculative rollback"
 
-   (test-case "success — keeps meta-state and network"
-     (parameterize ([current-meta-store (make-hash)]
-                    [current-shadow-fresh-hook #f]
-                    [current-shadow-solve-hook #f]
-                    [current-shadow-constraint-hook #f]
-                    [current-shadow-network #f]
-                    [current-shadow-id-map #f]
+   (test-case "success — keeps meta-state"
+     (parameterize ([current-meta-store (make-hasheq)]
                     [current-speculation-failures #f])
-       (shadow-init!)
+       (reset-meta-store!)
        (init-speculation-tracking!)
        ;; Create a meta and solve it inside speculation
        (define m (fresh-meta '() (expr-Nat) "test"))
@@ -96,18 +87,12 @@
        (check-true (meta-solved? id))
        (check-equal? (meta-solution id) (expr-Bool))
        ;; No failures recorded
-       (check-equal? (get-speculation-failures) '())
-       (shadow-teardown!)))
+       (check-equal? (get-speculation-failures) '())))
 
-   (test-case "failure — restores meta-state and network"
-     (parameterize ([current-meta-store (make-hash)]
-                    [current-shadow-fresh-hook #f]
-                    [current-shadow-solve-hook #f]
-                    [current-shadow-constraint-hook #f]
-                    [current-shadow-network #f]
-                    [current-shadow-id-map #f]
+   (test-case "failure — restores meta-state"
+     (parameterize ([current-meta-store (make-hasheq)]
                     [current-speculation-failures #f])
-       (shadow-init!)
+       (reset-meta-store!)
        (init-speculation-tracking!)
        ;; Create a meta
        (define m (fresh-meta '() (expr-Nat) "test"))
@@ -126,23 +111,16 @@
        ;; One failure recorded
        (define failures (get-speculation-failures))
        (check-equal? (length failures) 1)
-       (check-equal? (speculation-failure-label (car failures)) "test-failure")
-       (shadow-teardown!)))
+       (check-equal? (speculation-failure-label (car failures)) "test-failure")))
 
-   (test-case "network fork/restore precision"
-     (parameterize ([current-meta-store (make-hash)]
-                    [current-shadow-fresh-hook #f]
-                    [current-shadow-solve-hook #f]
-                    [current-shadow-constraint-hook #f]
-                    [current-shadow-network #f]
-                    [current-shadow-id-map #f]
+   (test-case "network rollback — cell value restored"
+     (parameterize ([current-meta-store (make-hasheq)]
                     [current-speculation-failures #f])
-       (shadow-init!)
+       (reset-meta-store!)
        (init-speculation-tracking!)
        ;; Create a meta
        (define m (fresh-meta '() (expr-Nat) "test"))
        (define id (expr-meta-id m))
-       (define cid (hash-ref (current-shadow-id-map) id))
        ;; Solve inside failing speculation
        (with-speculative-rollback
          (lambda ()
@@ -150,20 +128,14 @@
            #f)
          values
          "network-test")
-       ;; Shadow network cell should be at bot (restored to fork point)
-       (define enet (unbox (current-shadow-network)))
-       (check-true (type-bot? (elab-cell-read enet cid)))
-       (shadow-teardown!)))
+       ;; Meta should be unsolved (network state restored)
+       (check-false (meta-solved? id))
+       (check-false (meta-solution id))))
 
    (test-case "multiple failures accumulate"
-     (parameterize ([current-meta-store (make-hash)]
-                    [current-shadow-fresh-hook #f]
-                    [current-shadow-solve-hook #f]
-                    [current-shadow-constraint-hook #f]
-                    [current-shadow-network #f]
-                    [current-shadow-id-map #f]
+     (parameterize ([current-meta-store (make-hasheq)]
                     [current-speculation-failures #f])
-       (shadow-init!)
+       (reset-meta-store!)
        (init-speculation-tracking!)
        (with-speculative-rollback (lambda () #f) values "fail-1")
        (with-speculative-rollback (lambda () #f) values "fail-2")
@@ -171,8 +143,7 @@
        (define failures (get-speculation-failures))
        (check-equal? (length failures) 2)
        (check-equal? (speculation-failure-label (car failures)) "fail-1")
-       (check-equal? (speculation-failure-label (cadr failures)) "fail-2")
-       (shadow-teardown!)))))
+       (check-equal? (speculation-failure-label (cadr failures)) "fail-2")))))
 
 ;; ========================================
 ;; Suite 3: Union Type Speculation (Integration)
@@ -242,7 +213,7 @@
   (test-suite
    "Full pipeline integration"
 
-   (test-case "program with union types compiles with always-on network"
+   (test-case "program with union types compiles with propagator network"
      (define result
        (run-ns
         (string-append

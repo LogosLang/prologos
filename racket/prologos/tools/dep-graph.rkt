@@ -122,9 +122,8 @@
    'inductive.rkt        '(syntax.rkt typing-core.rkt)
    'type-lattice.rkt     '(syntax.rkt reduction.rkt zonk.rkt substitution.rkt)
    'elaborator-network.rkt '(propagator.rkt type-lattice.rkt champ.rkt syntax.rkt)
-   'elab-shadow.rkt '(elaborator-network.rkt type-lattice.rkt metavar-store.rkt propagator.rkt syntax.rkt)
    'elab-speculation.rkt '(elaborator-network.rkt atms.rkt type-lattice.rkt propagator.rkt)
-   'elab-speculation-bridge.rkt '(metavar-store.rkt elab-shadow.rkt)))
+   'elab-speculation-bridge.rkt '(metavar-store.rkt)))
 
 ;; ============================================================
 ;; Layer 2: Test → source module dependencies
@@ -777,12 +776,10 @@
    (test-dep '(type-lattice.rkt syntax.rkt reduction.rkt zonk.rkt substitution.rkt propagator.rkt champ.rkt) #f)
    'test-elaborator-network.rkt
    (test-dep '(elaborator-network.rkt propagator.rkt type-lattice.rkt champ.rkt syntax.rkt) #f)
-   'test-elab-shadow.rkt
-   (test-dep '(elab-shadow.rkt elaborator-network.rkt type-lattice.rkt metavar-store.rkt syntax.rkt) #t)
    'test-elab-speculation.rkt
    (test-dep '(elab-speculation.rkt elaborator-network.rkt atms.rkt type-lattice.rkt propagator.rkt) #f)
    'test-speculation-bridge.rkt
-   (test-dep '(elab-speculation-bridge.rkt elab-shadow.rkt metavar-store.rkt typing-core.rkt qtt.rkt) #t)))
+   (test-dep '(elab-speculation-bridge.rkt metavar-store.rkt typing-core.rkt qtt.rkt) #t)))
 
 ;; ============================================================
 ;; Layer 2b: Example file → test file mapping
