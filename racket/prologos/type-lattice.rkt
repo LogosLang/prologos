@@ -26,6 +26,7 @@
 
 (require racket/match
          racket/list
+         "prelude.rkt"         ;; mult-meta?, mult-meta-id (Phase E1)
          "syntax.rkt"
          "reduction.rkt"       ;; whnf (read-only)
          "zonk.rkt"            ;; zonk-at-depth (read-only)
@@ -34,7 +35,11 @@
 (provide type-bot type-top type-bot? type-top?
          type-lattice-merge
          type-lattice-contradicts?
-         try-unify-pure)
+         try-unify-pure
+         ;; Phase E1: Meta-solution callback for propagator-aware merge
+         current-lattice-meta-solution-fn
+         install-lattice-meta-solution-fn!
+         has-unsolved-meta?)
 
 ;; ========================================
 ;; Sentinel values
@@ -45,6 +50,64 @@
 
 (define (type-bot? v) (eq? v 'type-bot))
 (define (type-top? v) (eq? v 'type-top))
+
+;; ========================================
+;; Phase E1: Meta-solution callback
+;; ========================================
+;; Read-only callback for following solved metavariable solutions in pure merge.
+;; Signature: (meta-id → expr | #f) — returns solution or #f if unsolved.
+;; Installed by driver.rkt; default #f (pure structural only).
+;; CRITICAL: This is READ-ONLY. No side effects (no solve-meta!, no cell writes).
+(define current-lattice-meta-solution-fn (make-parameter #f))
+
+(define (install-lattice-meta-solution-fn! fn)
+  (current-lattice-meta-solution-fn fn))
+
+;; Phase E1: Check if an expression contains unsolved metavariables.
+;; Uses the meta-solution callback to distinguish solved from unsolved.
+(define (has-unsolved-meta? e)
+  (define sol-fn (current-lattice-meta-solution-fn))
+  (cond
+    [(not sol-fn) #f]    ;; No callback → can't check, assume no metas
+    [(type-bot? e) #f]
+    [(type-top? e) #f]
+    [(expr-meta? e)
+     (not (sol-fn (expr-meta-id e)))]
+    [(expr-Pi? e)
+     (or (and (mult-meta? (expr-Pi-mult e))
+              (not (sol-fn (mult-meta-id (expr-Pi-mult e)))))
+         (has-unsolved-meta? (expr-Pi-domain e))
+         (has-unsolved-meta? (expr-Pi-codomain e)))]
+    [(expr-app? e)
+     (or (has-unsolved-meta? (expr-app-func e))
+         (has-unsolved-meta? (expr-app-arg e)))]
+    [(expr-Eq? e)
+     (or (has-unsolved-meta? (expr-Eq-type e))
+         (has-unsolved-meta? (expr-Eq-lhs e))
+         (has-unsolved-meta? (expr-Eq-rhs e)))]
+    [(expr-Vec? e)
+     (or (has-unsolved-meta? (expr-Vec-elem-type e))
+         (has-unsolved-meta? (expr-Vec-length e)))]
+    [(expr-Sigma? e)
+     (or (has-unsolved-meta? (expr-Sigma-fst-type e))
+         (has-unsolved-meta? (expr-Sigma-snd-type e)))]
+    [(expr-PVec? e) (has-unsolved-meta? (expr-PVec-elem-type e))]
+    [(expr-Set? e) (has-unsolved-meta? (expr-Set-elem-type e))]
+    [(expr-Map? e)
+     (or (has-unsolved-meta? (expr-Map-k-type e))
+         (has-unsolved-meta? (expr-Map-v-type e)))]
+    [(expr-union? e)
+     (or (has-unsolved-meta? (expr-union-left e))
+         (has-unsolved-meta? (expr-union-right e)))]
+    [(expr-lam? e)
+     (or (has-unsolved-meta? (expr-lam-type e))
+         (has-unsolved-meta? (expr-lam-body e)))]
+    [(expr-pair? e)
+     (or (has-unsolved-meta? (expr-pair-fst e))
+         (has-unsolved-meta? (expr-pair-snd e)))]
+    [(expr-suc? e) (has-unsolved-meta? (expr-suc-pred e))]
+    [(expr-Fin? e) (has-unsolved-meta? (expr-Fin-bound e))]
+    [else #f]))
 
 ;; ========================================
 ;; Lattice merge (join)
@@ -67,7 +130,15 @@
     [(equal? v1 v2) v1]
     [else
      (define result (try-unify-pure v1 v2))
-     (if result result type-top)]))
+     (cond
+       [result result]
+       ;; Phase E1: If either side has unsolved metas, we can't declare
+       ;; contradiction yet — keep the more concrete value. When the meta
+       ;; is solved, solve-meta! writes to its cell, the unify propagator
+       ;; fires again, and merge re-runs with the resolved type.
+       [(or (has-unsolved-meta? v1) (has-unsolved-meta? v2))
+        (if (has-unsolved-meta? v1) v2 v1)]
+       [else type-top])]))
 
 ;; ========================================
 ;; Contradiction predicate
@@ -101,9 +172,15 @@
       ;; Fast path: structurally identical
       [(equal? a b) a]
 
-      ;; Metas: can't solve in pure mode
-      [(expr-meta? a) #f]
-      [(expr-meta? b) #f]
+      ;; Metas: follow solved metas via callback (Phase E1); unsolved → #f
+      [(expr-meta? a)
+       (define sol-fn (current-lattice-meta-solution-fn))
+       (define sol (and sol-fn (sol-fn (expr-meta-id a))))
+       (if sol (try-unify-pure sol b) #f)]
+      [(expr-meta? b)
+       (define sol-fn (current-lattice-meta-solution-fn))
+       (define sol (and sol-fn (sol-fn (expr-meta-id b))))
+       (if sol (try-unify-pure a sol) #f)]
 
       ;; Holes: can't handle in pure mode
       [(expr-hole? a) #f]
@@ -117,8 +194,26 @@
       [(and (expr-Pi? a) (expr-Pi? b))
        (let ([m1 (expr-Pi-mult a)] [m2 (expr-Pi-mult b)])
          (cond
-           ;; Multiplicities must match structurally (no mult-meta solving)
-           [(not (equal? m1 m2)) #f]
+           ;; Multiplicities must match; Phase E1: follow solved mult-metas
+           [(not (equal? m1 m2))
+            (define sol-fn (current-lattice-meta-solution-fn))
+            (define m1* (if (and sol-fn (mult-meta? m1))
+                            (or (sol-fn (mult-meta-id m1)) m1)
+                            m1))
+            (define m2* (if (and sol-fn (mult-meta? m2))
+                            (or (sol-fn (mult-meta-id m2)) m2)
+                            m2))
+            (if (equal? m1* m2*)
+                ;; Resolved mults match — continue with domain/codomain
+                (let ()
+                  (define dom (try-unify-pure (expr-Pi-domain a) (expr-Pi-domain b)))
+                  (and dom
+                       (let ([x (expr-fvar (gensym 'pure-unify))])
+                         (define cod-a (open-expr (zonk-at-depth 1 (expr-Pi-codomain a)) x))
+                         (define cod-b (open-expr (zonk-at-depth 1 (expr-Pi-codomain b)) x))
+                         (define cod (try-unify-pure cod-a cod-b))
+                         (and cod (expr-Pi m1* dom (expr-Pi-codomain a))))))
+                #f)]
            [else
             (define dom (try-unify-pure (expr-Pi-domain a) (expr-Pi-domain b)))
             (and dom

@@ -9,7 +9,7 @@ blocked on unbuilt infrastructure or uncertain design — not effort avoidance.
 See `docs/tracking/principles/DEVELOPMENT_LESSONS.org` § "Completeness Over
 Deferral".
 
-**Last consolidated sweep**: 2026-02-26 (Type inference Phases 8+A-D1 complete; propagator network primary; CHAMP-backed O(1) speculation).
+**Last consolidated sweep**: 2026-02-26 (Type inference Phases 8+A-E complete; propagator network primary; CHAMP sole source of truth; meta-aware merge + prop-driven wakeup).
 
 ---
 
@@ -334,19 +334,21 @@ The following collection items ARE also deferred (genuine infrastructure deps):
 - Abstract interpretation framework
 - Source: `docs/tracking/2026-02-24_TOWARDS_A_GENERAL_LOGIC_ENGINE_ON_PROPAGATORS.org`
 
-### Elaborator Propagator Refactoring — Phases 8+A-D COMPLETE, E+ REMAINING
+### Elaborator Propagator Refactoring — Phases 8+A-E COMPLETE (E3 deferred)
 - ✅ Phase 8: Propagator network as primary type inference engine (56-62% speedup)
 - ✅ Phase A: CHAMP meta-info store, eliminated hash dual-writes in production
 - ✅ Phase B: Level/mult/session metas migrated to CHAMP with O(1) save/restore
 - ✅ Phase C: Incremental trait resolution via wakeup callbacks
 - ✅ Phase D1: ATMS threaded through speculation bridge (foundation)
-- **Remaining**:
-  - Phase D2: Capture support sets on contradiction (enrich `speculation-failure` with `support-set`)
-  - Phase D3: Enrich error structs with `derivation-chain` field (wire ATMS support sets into `union-exhaustion-error`)
-  - Phase D4: Format derivation chains in error display (indented branch reasoning in E1006)
-  - Phase E: Unification as pure propagators (replace imperative `unify!` with propagator constraints)
-  - Hash removal: Remove legacy hash path entirely (requires updating ~25 test files)
-- Source: `docs/tracking/2026-02-25_TYPE_INFERENCE_ON_LOGIC_ENGINE_DESIGN.md`, `docs/tracking/standups/2026-02-26_dailies.md`
+- ✅ Phase D2: Capture support sets on contradiction
+- ✅ Phase D3: Derivation chains in union-exhaustion-error (E1006)
+- ✅ Phase D4: Format derivation chains in error display
+- ✅ Hash removal: CHAMP is sole source of truth; legacy hash paths removed; ~20 test files migrated to `with-fresh-meta-env`
+- ✅ Phase E1: Meta-aware pure unification — `try-unify-pure` follows solved metas via read-only callback; `has-unsolved-meta?` guard prevents spurious `type-top` contradictions
+- ✅ Phase E2: Propagator-driven constraint wakeup — `solve-meta!` runs `run-to-quiescence` after cell writes for transitive propagation; elab-network unwrap/rewrap for scheduler
+- **Deferred**:
+  - Phase E3: Constraint-retry propagators — move full constraint retry into fire functions (side-effectful propagators, re-entrancy risk). Current E2 legacy retry path covers this safely.
+- Source: `docs/tracking/2026-02-25_TYPE_INFERENCE_ON_LOGIC_ENGINE_DESIGN.md`
 
 ---
 

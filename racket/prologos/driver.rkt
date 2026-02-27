@@ -40,6 +40,8 @@
          "performance-counters.rkt"
          "elab-speculation-bridge.rkt"
          "elaborator-network.rkt"
+         "type-lattice.rkt"
+         "propagator.rkt"
          "champ.rkt"
          "unify.rkt"
          "atms.rkt")
@@ -992,6 +994,24 @@
  elab-cell-write
  elab-cell-read
  elab-add-unify-constraint)
+
+;; Phase E2: Install propagator-driven constraint wakeup.
+;; When solve-meta! writes to a cell, the propagator network is run to
+;; quiescence, handling transitive constraint propagation automatically.
+;; The net-box stores elab-network (wrapping prop-network), so we provide
+;; unwrap/rewrap callbacks to extract and re-insert the inner prop-network.
+(current-prop-run-quiescence run-to-quiescence)
+(current-prop-unwrap-net elab-network-prop-net)
+(current-prop-rewrap-net
+ (lambda (enet pnet*)
+   (struct-copy elab-network enet [prop-net pnet*])))
+(current-prop-driven-wakeup? #t)
+
+;; Phase E1: Install meta-solution callback for propagator-aware merge.
+;; This allows type-lattice-merge to follow solved metas (read-only) when
+;; the propagator network merges cell values. Breaks no circular deps because
+;; meta-solution is a pure read from propagator cell or CHAMP store.
+(install-lattice-meta-solution-fn! meta-solution)
 
 ;; Phase C: Install incremental trait resolution callback.
 ;; When a type-arg meta is solved, this callback checks if the associated

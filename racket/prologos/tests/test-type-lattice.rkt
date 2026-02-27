@@ -9,6 +9,7 @@
 
 (require rackunit
          rackunit/text-ui
+         "../prelude.rkt"
          "../syntax.rkt"
          "../type-lattice.rkt"
          "../propagator.rkt"
@@ -186,6 +187,98 @@
      (check-true (net-contradiction? net3)))))
 
 ;; ========================================
+;; Phase E1: Meta-following via callback
+;; ========================================
+
+(define phase-e1-tests
+  (test-suite
+   "Phase E1: Meta-following + unsolved-meta guard"
+
+   (test-case "try-unify-pure follows solved meta (LHS)"
+     ;; Simulate: meta 'a is solved to Nat
+     (parameterize ([current-lattice-meta-solution-fn
+                     (lambda (id) (if (eq? id 'a) (expr-Nat) #f))])
+       ;; (expr-meta 'a) should unify with Nat → Nat
+       (check-equal? (try-unify-pure (expr-meta 'a) (expr-Nat)) (expr-Nat))))
+
+   (test-case "try-unify-pure follows solved meta (RHS)"
+     (parameterize ([current-lattice-meta-solution-fn
+                     (lambda (id) (if (eq? id 'b) (expr-Bool) #f))])
+       (check-equal? (try-unify-pure (expr-Nat) (expr-meta 'b)) #f)  ;; Nat ≠ Bool
+       (check-equal? (try-unify-pure (expr-Bool) (expr-meta 'b)) (expr-Bool))))
+
+   (test-case "try-unify-pure returns #f for unsolved meta"
+     (parameterize ([current-lattice-meta-solution-fn
+                     (lambda (id) #f)])  ;; All unsolved
+       (check-false (try-unify-pure (expr-meta 'x) (expr-Nat)))
+       (check-false (try-unify-pure (expr-Nat) (expr-meta 'y)))))
+
+   (test-case "try-unify-pure follows solved meta inside structure"
+     ;; Meta 'a solved to Nat; try to unify (List ?a) with (List Nat)
+     (parameterize ([current-lattice-meta-solution-fn
+                     (lambda (id) (if (eq? id 'a) (expr-Nat) #f))])
+       (define t1 (expr-app (expr-tycon 'List) (expr-meta 'a)))
+       (define t2 (expr-app (expr-tycon 'List) (expr-Nat)))
+       (define result (try-unify-pure t1 t2))
+       (check-true (expr-app? result))
+       (check-equal? (expr-app-arg result) (expr-Nat))))
+
+   (test-case "merge: unsolved meta avoids false contradiction"
+     ;; If one side has an unsolved meta, merge should return the
+     ;; more concrete side instead of type-top
+     (parameterize ([current-lattice-meta-solution-fn
+                     (lambda (id) #f)])  ;; All unsolved
+       (define result (type-lattice-merge (expr-meta 'x) (expr-Nat)))
+       ;; Should NOT be type-top — should be Nat (the concrete side)
+       (check-equal? result (expr-Nat))))
+
+   (test-case "merge: unsolved meta on RHS avoids false contradiction"
+     (parameterize ([current-lattice-meta-solution-fn
+                     (lambda (id) #f)])
+       (define result (type-lattice-merge (expr-Nat) (expr-meta 'y)))
+       (check-equal? result (expr-Nat))))
+
+   (test-case "merge: solved meta enables proper merge"
+     ;; Meta 'a solved to Nat → merge(Nat, ?a) = Nat
+     (parameterize ([current-lattice-meta-solution-fn
+                     (lambda (id) (if (eq? id 'a) (expr-Nat) #f))])
+       (define result (type-lattice-merge (expr-Nat) (expr-meta 'a)))
+       (check-equal? result (expr-Nat))))
+
+   (test-case "merge: solved meta with mismatch = top"
+     ;; Meta 'a solved to Bool → merge(Nat, ?a) = top
+     (parameterize ([current-lattice-meta-solution-fn
+                     (lambda (id) (if (eq? id 'a) (expr-Bool) #f))])
+       (define result (type-lattice-merge (expr-Nat) (expr-meta 'a)))
+       (check-equal? result type-top)))
+
+   (test-case "try-unify-pure follows solved mult-meta in Pi"
+     ;; Pi with mult-meta that's solved to 'mw
+     (parameterize ([current-lattice-meta-solution-fn
+                     (lambda (id) (if (eq? id 'm1) 'mw #f))])
+       (define pi1 (expr-Pi (mult-meta 'm1) (expr-Nat) (expr-Bool)))
+       (define pi2 (expr-Pi 'mw (expr-Nat) (expr-Bool)))
+       (define result (try-unify-pure pi1 pi2))
+       (check-true (expr-Pi? result))
+       (check-equal? (expr-Pi-mult result) 'mw)))
+
+   (test-case "has-unsolved-meta? detects unsolved"
+     (parameterize ([current-lattice-meta-solution-fn
+                     (lambda (id) #f)])
+       (check-true (has-unsolved-meta? (expr-meta 'x)))
+       (check-true (has-unsolved-meta? (expr-app (expr-tycon 'List) (expr-meta 'x))))
+       (check-false (has-unsolved-meta? (expr-Nat)))
+       (check-false (has-unsolved-meta? (expr-Pi 'mw (expr-Nat) (expr-Bool))))))
+
+   (test-case "has-unsolved-meta? respects solved"
+     (parameterize ([current-lattice-meta-solution-fn
+                     (lambda (id) (if (eq? id 'a) (expr-Nat) #f))])
+       ;; 'a is solved → not unsolved
+       (check-false (has-unsolved-meta? (expr-meta 'a)))
+       ;; 'b is unsolved → has unsolved
+       (check-true (has-unsolved-meta? (expr-meta 'b)))))))
+
+;; ========================================
 ;; Run all tests
 ;; ========================================
 
@@ -193,3 +286,4 @@
 (run-tests structural-tests)
 (run-tests pure-unify-tests)
 (run-tests propnet-integration-tests)
+(run-tests phase-e1-tests)
