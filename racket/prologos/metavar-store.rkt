@@ -89,11 +89,14 @@
  (struct-out constraint-provenance)
  meta-category
  primary-unsolved-metas
- ;; Phase C: Trait constraint tracking
+ ;; Phase C: Trait constraint tracking + incremental resolution
  (struct-out trait-constraint-info)
  current-trait-constraint-map
+ current-trait-wakeup-map
+ current-retry-trait-resolve
  register-trait-constraint!
  lookup-trait-constraint
+ install-trait-resolve-callback!
  ;; Phase 8b: Propagator-backed internal state
  current-prop-net-box
  current-prop-id-map-box
@@ -183,8 +186,30 @@
 ;; require touching every fresh-meta call site).
 (define current-trait-constraint-map (make-parameter (make-hasheq)))
 
+;; Phase C: Reverse index for incremental trait resolution.
+;; Maps type-arg-meta-id → (listof dict-meta-id). When a type-arg meta is
+;; solved, we can immediately check if any trait constraints become resolvable.
+(define current-trait-wakeup-map (make-parameter (make-hasheq)))
+
+;; Phase C: Callback for incremental trait resolution.
+;; Signature: (dict-meta-id trait-constraint-info) → void
+;; Injected from driver.rkt to break circular dependency.
+(define current-retry-trait-resolve (make-parameter #f))
+
+;; Phase C: Install the trait resolve callback.
+(define (install-trait-resolve-callback! resolve-fn)
+  (current-retry-trait-resolve resolve-fn))
+
+;; Register a trait constraint and build wakeup index for incremental resolution.
 (define (register-trait-constraint! meta-id info)
-  (hash-set! (current-trait-constraint-map) meta-id info))
+  (hash-set! (current-trait-constraint-map) meta-id info)
+  ;; Phase C: Build reverse index from type-arg metas → this dict meta
+  (define type-arg-metas (extract-shallow-meta-ids-from-list
+                           (trait-constraint-info-type-arg-exprs info)))
+  (define wakeup (current-trait-wakeup-map))
+  (for ([ta-id (in-list type-arg-metas)])
+    (define existing (hash-ref wakeup ta-id '()))
+    (hash-set! wakeup ta-id (cons meta-id existing))))
 
 (define (lookup-trait-constraint meta-id)
   (hash-ref (current-trait-constraint-map) meta-id #f))
@@ -243,6 +268,28 @@
              (walk field a)
              a))]
       [else acc])))
+
+;; Phase C: Extract meta-ids from a list of expressions (for trait wakeup index).
+(define (extract-shallow-meta-ids-from-list exprs)
+  (let loop ([es exprs] [acc '()])
+    (if (null? es)
+        acc
+        (loop (cdr es) (extract-shallow-meta-ids (car es))))))
+
+;; Phase C: Try to resolve trait constraints that reference a just-solved meta.
+;; Called from solve-meta! when a type-arg meta is solved. Checks the wakeup
+;; map for any trait constraints referencing this meta, and if all their
+;; type-args are now ground, triggers resolution via the callback.
+(define (retry-trait-for-meta! meta-id)
+  (define resolve-fn (current-retry-trait-resolve))
+  (when resolve-fn
+    (define wakeup (current-trait-wakeup-map))
+    (define dict-metas (hash-ref wakeup meta-id '()))
+    (for ([dict-id (in-list dict-metas)])
+      (unless (meta-solved? dict-id)
+        (define tc-info (hash-ref (current-trait-constraint-map) dict-id #f))
+        (when tc-info
+          (resolve-fn dict-id tc-info))))))
 
 ;; Create a postponed constraint, add to global store, register for wakeup.
 ;; Phase 8b: Also adds unify propagators on the network between cells
@@ -443,7 +490,10 @@
     (when cid
       (set-box! net-box (write-fn (unbox net-box) cid solution))))
   ;; Sprint 5: retry postponed constraints that mention this meta
-  (retry-constraints-for-meta! id))
+  (retry-constraints-for-meta! id)
+  ;; Phase C: try incremental trait resolution for trait constraints
+  ;; referencing this meta as a type-arg
+  (retry-trait-for-meta! id))
 
 ;; Check if a metavariable has been solved.
 ;; Phase 8b: Reads from propagator network when available (primary).
@@ -741,6 +791,7 @@
   (hash-clear! (current-mult-meta-store))
   (hash-clear! (current-sess-meta-store))
   (hash-clear! (current-trait-constraint-map))
+  (hash-clear! (current-trait-wakeup-map))
   (reset-constraint-store!)
   ;; Initialize propagator network + CHAMP stores
   (define make-net (current-prop-make-network))

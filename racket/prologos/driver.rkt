@@ -40,7 +40,8 @@
          "performance-counters.rkt"
          "elab-speculation-bridge.rkt"
          "elaborator-network.rkt"
-         "champ.rkt")
+         "champ.rkt"
+         "unify.rkt")
 
 (provide process-command
          process-file
@@ -994,6 +995,23 @@
  elab-cell-write
  elab-cell-read
  elab-add-unify-constraint)
+
+;; Phase C: Install incremental trait resolution callback.
+;; When a type-arg meta is solved, this callback checks if the associated
+;; trait constraint becomes resolvable (all type-args ground) and if so,
+;; resolves it immediately via the existing monomorphic/parametric lookup.
+(install-trait-resolve-callback!
+ (lambda (dict-meta-id tc-info)
+   (define trait-name (trait-constraint-info-trait-name tc-info))
+   (define type-args
+     (map (lambda (e) (normalize-for-resolution (zonk e)))
+          (trait-constraint-info-type-arg-exprs tc-info)))
+   (when (andmap ground-expr? type-args)
+     (define dict-expr
+       (or (try-monomorphic-resolve trait-name type-args)
+           (try-parametric-resolve trait-name type-args)))
+     (when dict-expr
+       (solve-meta! dict-meta-id dict-expr)))))
 
 ;; ========================================
 ;; CLI entry point — process .prologos files
