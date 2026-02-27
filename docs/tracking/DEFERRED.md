@@ -9,7 +9,7 @@ blocked on unbuilt infrastructure or uncertain design — not effort avoidance.
 See `docs/tracking/principles/DEVELOPMENT_LESSONS.org` § "Completeness Over
 Deferral".
 
-**Last consolidated sweep**: 2026-02-25 (Logic Engine Phases 1-7 complete; Relational language surface syntax; full 14-file pipeline).
+**Last consolidated sweep**: 2026-02-26 (Type inference Phases 8+A-D1 complete; propagator network primary; CHAMP-backed O(1) speculation).
 
 ---
 
@@ -334,12 +334,19 @@ The following collection items ARE also deferred (genuine infrastructure deps):
 - Abstract interpretation framework
 - Source: `docs/tracking/2026-02-24_TOWARDS_A_GENERAL_LOGIC_ENGINE_ON_PROPAGATORS.org`
 
-### Post-Phase 7: Elaborator Propagator Refactoring (NOT STARTED)
-- Replace `current-meta-store` with propagator cells internally
-- Unification constraints become propagators between type cells
-- Dependency tracking for error messages
-- **Blocked on**: Logic engine Phases 1-2 complete
-- Source: `docs/tracking/2026-02-24_TOWARDS_A_GENERAL_LOGIC_ENGINE_ON_PROPAGATORS.org`
+### Elaborator Propagator Refactoring — Phases 8+A-D COMPLETE, E+ REMAINING
+- ✅ Phase 8: Propagator network as primary type inference engine (56-62% speedup)
+- ✅ Phase A: CHAMP meta-info store, eliminated hash dual-writes in production
+- ✅ Phase B: Level/mult/session metas migrated to CHAMP with O(1) save/restore
+- ✅ Phase C: Incremental trait resolution via wakeup callbacks
+- ✅ Phase D1: ATMS threaded through speculation bridge (foundation)
+- **Remaining**:
+  - Phase D2: Capture support sets on contradiction (enrich `speculation-failure` with `support-set`)
+  - Phase D3: Enrich error structs with `derivation-chain` field (wire ATMS support sets into `union-exhaustion-error`)
+  - Phase D4: Format derivation chains in error display (indented branch reasoning in E1006)
+  - Phase E: Unification as pure propagators (replace imperative `unify!` with propagator constraints)
+  - Hash removal: Remove legacy hash path entirely (requires updating ~25 test files)
+- Source: `docs/tracking/2026-02-25_TYPE_INFERENCE_ON_LOGIC_ENGINE_DESIGN.md`, `docs/tracking/standups/2026-02-26_dailies.md`
 
 ---
 
