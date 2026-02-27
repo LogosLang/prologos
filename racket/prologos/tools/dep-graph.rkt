@@ -742,6 +742,10 @@
    'test-galois-connection.rkt
    (test-dep '(syntax.rkt typing-core.rkt qtt.rkt reduction.rkt parser.rkt
                elaborator.rkt surface-syntax.rkt namespace.rkt macros.rkt) #t)
+   ;; Sign-Galois connection (Phase 6 deferred, now complete)
+   'test-sign-galois.rkt
+   (test-dep '(syntax.rkt typing-core.rkt qtt.rkt reduction.rkt parser.rkt
+               elaborator.rkt surface-syntax.rkt namespace.rkt macros.rkt) #t)
    ;; Cross-domain propagation (Phase 6c)
    'test-cross-domain-propagator.rkt
    (test-dep '(propagator.rkt champ.rkt) #f)
@@ -998,6 +1002,12 @@
    'prologos::core::galois-trait        '()
    'prologos::core::galois-instances    '(prologos::core::galois-trait
                                           prologos::core::lattice-instances
+                                          prologos::data::bool)
+
+   ;; Sign-Galois connection (Phase 6 deferred, now complete)
+   'prologos::core::sign-galois         '(prologos::core::galois-trait
+                                          prologos::core::lattice-instances
+                                          prologos::data::sign
                                           prologos::data::bool)
 
    ;; Abstract domain library modules (Phase 6d)
@@ -1289,6 +1299,12 @@
    'test-galois-connection.rkt        '(prologos::core::galois-trait
                                         prologos::core::galois-instances
                                         prologos::core::lattice-instances)
+   'test-sign-galois.rkt              '(prologos::core::galois-trait
+                                        prologos::core::galois-instances
+                                        prologos::core::sign-galois
+                                        prologos::core::lattice-instances
+                                        prologos::data::sign
+                                        prologos::data::bool)
    'test-abstract-domains.rkt         '(prologos::data::sign
                                         prologos::core::sign-lattice
                                         prologos::data::parity

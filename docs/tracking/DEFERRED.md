@@ -348,8 +348,8 @@ The following collection items ARE also deferred (genuine infrastructure deps):
 - ✅ Phase 6c: Cross-domain propagation (`net-add-cross-domain-propagator`)
 - ✅ Phase 6d: Sign + Parity abstract domain library modules
 - ✅ Phase 6e: Call-site specialization for `new-widenable-cell`, grammar docs, integration tests
+- ✅ Phase 6f: `sign-galois.prologos` — `impl GaloisConnection Interval Sign` (resolved: negative literals + Rat comparison)
 - **Deferred**:
-  - `sign-galois.prologos` — `impl GaloisConnection Interval Sign` (Rat comparison complexity)
   - `connect-domains` Prologos-level wrapper (needs AST keyword or FFI)
   - Additional abstract domains (Congruence, Pointer, etc.)
 - Source: `docs/tracking/2026-02-27_1026_GALOIS_CONNECTIONS_ABSTRACT_INTERPRETATION.md`
