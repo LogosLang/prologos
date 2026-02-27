@@ -58,7 +58,7 @@
 ;; ========================================
 
 (test-case "normalize-for-resolution: PVec A → (app (tycon PVec) A)"
-  (parameterize ([current-meta-store (make-hasheq)])
+  (with-fresh-meta-env
     (define result (normalize-for-resolution (expr-PVec (expr-Nat))))
     (check-true (expr-app? result))
     (check-true (expr-tycon? (expr-app-func result)))
@@ -66,7 +66,7 @@
     (check-equal? (expr-app-arg result) (expr-Nat))))
 
 (test-case "normalize-for-resolution: Set A → (app (tycon Set) A)"
-  (parameterize ([current-meta-store (make-hasheq)])
+  (with-fresh-meta-env
     (define result (normalize-for-resolution (expr-Set (expr-Int))))
     (check-true (expr-app? result))
     (check-true (expr-tycon? (expr-app-func result)))
@@ -74,7 +74,7 @@
     (check-equal? (expr-app-arg result) (expr-Int))))
 
 (test-case "normalize-for-resolution: Map K V → (app (app (tycon Map) K) V)"
-  (parameterize ([current-meta-store (make-hasheq)])
+  (with-fresh-meta-env
     (define result (normalize-for-resolution (expr-Map (expr-Keyword) (expr-Nat))))
     ;; Should be (app (app (tycon Map) Keyword) Nat)
     (check-true (expr-app? result))
@@ -86,19 +86,19 @@
     (check-equal? (expr-app-arg inner) (expr-Keyword))))
 
 (test-case "normalize-for-resolution: fvar List → tycon List"
-  (parameterize ([current-meta-store (make-hasheq)])
+  (with-fresh-meta-env
     (define result (normalize-for-resolution (expr-fvar 'List)))
     (check-true (expr-tycon? result))
     (check-equal? (expr-tycon-name result) 'List)))
 
 (test-case "normalize-for-resolution: fvar Foo → fvar Foo (not in kind table)"
-  (parameterize ([current-meta-store (make-hasheq)])
+  (with-fresh-meta-env
     (define result (normalize-for-resolution (expr-fvar 'Foo)))
     (check-true (expr-fvar? result))
     (check-equal? (expr-fvar-name result) 'Foo)))
 
 (test-case "normalize-for-resolution: expr-app (fvar List) Nat → (app (tycon List) Nat)"
-  (parameterize ([current-meta-store (make-hasheq)])
+  (with-fresh-meta-env
     (define result (normalize-for-resolution (expr-app (expr-fvar 'List) (expr-Nat))))
     (check-true (expr-app? result))
     (check-true (expr-tycon? (expr-app-func result)))
@@ -106,7 +106,7 @@
     (check-equal? (expr-app-arg result) (expr-Nat))))
 
 (test-case "normalize-for-resolution: plain types pass through"
-  (parameterize ([current-meta-store (make-hasheq)])
+  (with-fresh-meta-env
     (check-equal? (normalize-for-resolution (expr-Nat)) (expr-Nat))
     (check-equal? (normalize-for-resolution (expr-Bool)) (expr-Bool))
     (check-equal? (normalize-for-resolution (expr-Int)) (expr-Int))))
@@ -121,21 +121,21 @@
   (check-equal? (subst 0 (expr-Nat) tc) tc))
 
 (test-case "zonk: expr-tycon passes through all zonk variants"
-  (parameterize ([current-meta-store (make-hasheq)])
+  (with-fresh-meta-env
     (define tc (expr-tycon 'Set))
     (check-equal? (zonk tc) tc)
     (check-equal? (zonk-at-depth 3 tc) tc)
     (check-equal? (zonk-final tc) tc)))
 
 (test-case "reduction: expr-tycon is already in normal form"
-  (parameterize ([current-global-env (hasheq)]
-                 [current-meta-store (make-hasheq)])
-    (define tc (expr-tycon 'Map))
-    (check-equal? (whnf tc) tc)
-    (check-equal? (nf tc) tc)))
+  (with-fresh-meta-env
+    (parameterize ([current-global-env (hasheq)])
+      (define tc (expr-tycon 'Map))
+      (check-equal? (whnf tc) tc)
+      (check-equal? (nf tc) tc))))
 
 (test-case "pretty-print: expr-tycon prints as constructor name"
-  (parameterize ([current-meta-store (make-hasheq)])
+  (with-fresh-meta-env
     (check-equal? (pp-expr (expr-tycon 'PVec)) "PVec")
     (check-equal? (pp-expr (expr-tycon 'Map)) "Map")
     (check-equal? (pp-expr (expr-tycon 'Set)) "Set")))
@@ -145,85 +145,85 @@
 ;; ========================================
 
 (test-case "typing: expr-tycon PVec has kind Type -> Type"
-  (parameterize ([current-global-env (hasheq)]
-                 [current-meta-store (make-hasheq)])
-    (define kind (tc:infer '() (expr-tycon 'PVec)))
-    ;; Should be (Pi m0 (Type lzero) (Type lzero))
-    (check-true (expr-Pi? kind))
-    (check-equal? (expr-Pi-mult kind) 'm0)
-    (check-true (expr-Type? (expr-Pi-domain kind)))
-    (check-true (expr-Type? (expr-Pi-codomain kind)))))
+  (with-fresh-meta-env
+    (parameterize ([current-global-env (hasheq)])
+      (define kind (tc:infer '() (expr-tycon 'PVec)))
+      ;; Should be (Pi m0 (Type lzero) (Type lzero))
+      (check-true (expr-Pi? kind))
+      (check-equal? (expr-Pi-mult kind) 'm0)
+      (check-true (expr-Type? (expr-Pi-domain kind)))
+      (check-true (expr-Type? (expr-Pi-codomain kind))))))
 
 (test-case "typing: expr-tycon Map has kind Type -> Type -> Type"
-  (parameterize ([current-global-env (hasheq)]
-                 [current-meta-store (make-hasheq)])
-    (define kind (tc:infer '() (expr-tycon 'Map)))
-    ;; Should be (Pi m0 (Type lzero) (Pi m0 (Type lzero) (Type lzero)))
-    (check-true (expr-Pi? kind))
-    (check-equal? (expr-Pi-mult kind) 'm0)
-    (define inner (expr-Pi-codomain kind))
-    (check-true (expr-Pi? inner))
-    (check-equal? (expr-Pi-mult inner) 'm0)
-    (check-true (expr-Type? (expr-Pi-codomain inner)))))
+  (with-fresh-meta-env
+    (parameterize ([current-global-env (hasheq)])
+      (define kind (tc:infer '() (expr-tycon 'Map)))
+      ;; Should be (Pi m0 (Type lzero) (Pi m0 (Type lzero) (Type lzero)))
+      (check-true (expr-Pi? kind))
+      (check-equal? (expr-Pi-mult kind) 'm0)
+      (define inner (expr-Pi-codomain kind))
+      (check-true (expr-Pi? inner))
+      (check-equal? (expr-Pi-mult inner) 'm0)
+      (check-true (expr-Type? (expr-Pi-codomain inner))))))
 
 (test-case "typing: expr-tycon with unknown name returns error"
-  (parameterize ([current-global-env (hasheq)]
-                 [current-meta-store (make-hasheq)])
-    (define kind (tc:infer '() (expr-tycon 'Unknown)))
-    (check-true (expr-error? kind))))
+  (with-fresh-meta-env
+    (parameterize ([current-global-env (hasheq)])
+      (define kind (tc:infer '() (expr-tycon 'Unknown)))
+      (check-true (expr-error? kind)))))
 
 ;; ========================================
 ;; 6. Unifier: expr-tycon decomposition
 ;; ========================================
 
 (test-case "unify: tycon vs tycon (same name) succeeds"
-  (parameterize ([current-global-env (hasheq)]
-                 [current-meta-store (make-hasheq)])
-    (check-true (unify ctx-empty (expr-tycon 'PVec) (expr-tycon 'PVec)))))
+  (with-fresh-meta-env
+    (parameterize ([current-global-env (hasheq)])
+      (check-true (unify ctx-empty (expr-tycon 'PVec) (expr-tycon 'PVec))))))
 
 (test-case "unify: tycon vs tycon (different names) fails"
-  (parameterize ([current-global-env (hasheq)]
-                 [current-meta-store (make-hasheq)])
-    (check-false (unify ctx-empty (expr-tycon 'PVec) (expr-tycon 'Set)))))
+  (with-fresh-meta-env
+    (parameterize ([current-global-env (hasheq)])
+      (check-false (unify ctx-empty (expr-tycon 'PVec) (expr-tycon 'Set))))))
 
 (test-case "unify: meta solves to expr-tycon"
-  (parameterize ([current-global-env (hasheq)]
-                 [current-meta-store (make-hasheq)])
-    (define m (fresh-meta ctx-empty (expr-Type (lzero)) "test"))
-    (check-true (unify ctx-empty m (expr-tycon 'PVec)))
-    (check-true (meta-solved? (expr-meta-id m)))
-    (check-equal? (meta-solution (expr-meta-id m)) (expr-tycon 'PVec))))
+  (with-fresh-meta-env
+    (parameterize ([current-global-env (hasheq)])
+      (define m (fresh-meta ctx-empty (expr-Type (lzero)) "test"))
+      (check-true (unify ctx-empty m (expr-tycon 'PVec)))
+      (check-true (meta-solved? (expr-meta-id m)))
+      (check-equal? (meta-solution (expr-meta-id m)) (expr-tycon 'PVec)))))
 
 ;; ========================================
 ;; 7. Unifier: HKT normalization
 ;; ========================================
 
 (test-case "unify: (PVec Nat) vs (app (tycon PVec) Nat) — normalization"
-  (parameterize ([current-global-env (hasheq)]
-                 [current-meta-store (make-hasheq)])
-    (check-true (unify ctx-empty
-                       (expr-PVec (expr-Nat))
-                       (expr-app (expr-tycon 'PVec) (expr-Nat))))))
+  (with-fresh-meta-env
+    (parameterize ([current-global-env (hasheq)])
+      (check-true (unify ctx-empty
+                         (expr-PVec (expr-Nat))
+                         (expr-app (expr-tycon 'PVec) (expr-Nat)))))))
 
 (test-case "unify: (app ?F Nat) vs (PVec Nat) — HKT meta solving"
-  (parameterize ([current-global-env (hasheq)]
-                 [current-meta-store (make-hasheq)])
-    (define m (fresh-meta ctx-empty (expr-Type (lzero)) "F"))
-    (check-true (unify ctx-empty
-                       (expr-app m (expr-Nat))
-                       (expr-PVec (expr-Nat))))
-    (check-true (meta-solved? (expr-meta-id m)))
-    (check-equal? (meta-solution (expr-meta-id m)) (expr-tycon 'PVec))))
+  (with-fresh-meta-env
+    (parameterize ([current-global-env (hasheq)])
+      (define m (fresh-meta ctx-empty (expr-Type (lzero)) "F"))
+      (check-true (unify ctx-empty
+                         (expr-app m (expr-Nat))
+                         (expr-PVec (expr-Nat))))
+      (check-true (meta-solved? (expr-meta-id m)))
+      (check-equal? (meta-solution (expr-meta-id m)) (expr-tycon 'PVec)))))
 
 (test-case "unify: (app ?F Int) vs (Set Int) — HKT meta solving for Set"
-  (parameterize ([current-global-env (hasheq)]
-                 [current-meta-store (make-hasheq)])
-    (define m (fresh-meta ctx-empty (expr-Type (lzero)) "F"))
-    (check-true (unify ctx-empty
-                       (expr-app m (expr-Int))
-                       (expr-Set (expr-Int))))
-    (check-true (meta-solved? (expr-meta-id m)))
-    (check-equal? (meta-solution (expr-meta-id m)) (expr-tycon 'Set))))
+  (with-fresh-meta-env
+    (parameterize ([current-global-env (hasheq)])
+      (define m (fresh-meta ctx-empty (expr-Type (lzero)) "F"))
+      (check-true (unify ctx-empty
+                         (expr-app m (expr-Int))
+                         (expr-Set (expr-Int))))
+      (check-true (meta-solved? (expr-meta-id m)))
+      (check-equal? (meta-solution (expr-meta-id m)) (expr-tycon 'Set)))))
 
 ;; ========================================
 ;; 8. Trait resolution extensions
@@ -240,7 +240,7 @@
   (check-equal? (expr->impl-key-str (expr-Map (expr-Keyword) (expr-Nat))) "Map"))
 
 (test-case "ground-expr?: expr-tycon is ground"
-  (parameterize ([current-meta-store (make-hasheq)])
+  (with-fresh-meta-env
     (check-true (ground-expr? (expr-tycon 'PVec)))
     (check-true (ground-expr? (expr-tycon 'Map)))))
 

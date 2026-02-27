@@ -21,6 +21,7 @@
 
 (require racket/list
          racket/match
+         (for-syntax racket/base)
          "syntax.rkt"
          "prelude.rkt"
          "sessions.rkt"
@@ -112,7 +113,9 @@
  current-prop-cell-write
  current-prop-cell-read
  current-prop-add-unify-constraint
- install-prop-network-callbacks!)
+ install-prop-network-callbacks!
+ ;; Hash removal: test isolation helper
+ with-fresh-meta-env)
 
 ;; ========================================
 ;; Meta-info: everything about a single metavariable
@@ -425,63 +428,76 @@
          (if (eq? v 'none) #f v))))
 
 ;; ========================================
+;; Hash removal: Test isolation macro
+;; ========================================
+;; Provides a fresh, isolated meta environment for unit tests.
+;; Sets up all CHAMP boxes (meta-info, level, mult, sess) plus hash stores
+;; and constraint infrastructure. No propagator network (that's driver's job).
+;;
+;; Usage in tests:
+;;   (with-fresh-meta-env (fresh-meta ...) (solve-meta! ...) ...)
+;; For tests needing extra params:
+;;   (with-fresh-meta-env (parameterize ([current-retry-unify ...]) ...))
+(define-syntax-rule (with-fresh-meta-env body ...)
+  (parameterize ([current-meta-store (make-hasheq)]
+                 [current-level-meta-store (make-hasheq)]
+                 [current-mult-meta-store (make-hasheq)]
+                 [current-sess-meta-store (make-hasheq)]
+                 [current-constraint-store '()]
+                 [current-wakeup-registry (make-hasheq)]
+                 [current-trait-constraint-map (make-hasheq)]
+                 [current-trait-wakeup-map (make-hasheq)]
+                 [current-prop-meta-info-box (box champ-empty)]
+                 [current-prop-net-box #f]
+                 [current-prop-id-map-box #f]
+                 [current-level-meta-champ-box (box champ-empty)]
+                 [current-mult-meta-champ-box (box champ-empty)]
+                 [current-sess-meta-champ-box (box champ-empty)])
+    body ...))
+
+;; ========================================
 ;; API
 ;; ========================================
 
 ;; Create a fresh metavariable, register it in the store, return expr-meta.
-;; Phase A: Writes to CHAMP meta-info store (primary) and propagator network.
-;; Falls back to hash-only when CHAMP not initialized (test compatibility).
+;; Hash removal: Always writes to CHAMP meta-info store. Optionally allocates
+;; propagator cell when network is available (production path via driver.rkt).
 (define (fresh-meta ctx type source)
   (perf-inc-meta-created!)
   (define id (gensym 'meta))
   (define info (meta-info id ctx type 'unsolved #f '() source))
+  ;; Write to CHAMP meta-info store (always available)
   (define mi-box (current-prop-meta-info-box))
-  (cond
-    [mi-box
-     ;; Production path: write to CHAMP meta-info store
-     (set-box! mi-box (champ-insert (unbox mi-box) (prop-meta-id-hash id) id info))
-     ;; Allocate cell on propagator network
-     (define net-box (current-prop-net-box))
-     (define fresh-fn (current-prop-fresh-meta))
-     (when (and net-box fresh-fn)
-       (define enet (unbox net-box))
-       (define-values (enet* cid) (fresh-fn enet ctx type source))
-       (define id-box (current-prop-id-map-box))
-       (set-box! id-box (champ-insert (unbox id-box) (prop-meta-id-hash id) id cid))
-       (set-box! net-box enet*))]
-    [else
-     ;; Legacy path: write to hash (test compatibility)
-     (hash-set! (current-meta-store) id info)])
+  (set-box! mi-box (champ-insert (unbox mi-box) (prop-meta-id-hash id) id info))
+  ;; Optionally allocate cell on propagator network
+  (define net-box (current-prop-net-box))
+  (define fresh-fn (current-prop-fresh-meta))
+  (when (and net-box fresh-fn)
+    (define enet (unbox net-box))
+    (define-values (enet* cid) (fresh-fn enet ctx type source))
+    (define id-box (current-prop-id-map-box))
+    (set-box! id-box (champ-insert (unbox id-box) (prop-meta-id-hash id) id cid))
+    (set-box! net-box enet*))
   (expr-meta id))
 
 ;; Assign a solution to a metavariable. Errors if already solved.
 ;; After solving, retries any postponed constraints that mention this meta.
-;; Phase A: Reads/writes CHAMP meta-info store (primary), propagator cell.
+;; Hash removal: Always reads/writes CHAMP meta-info store.
 (define (solve-meta! id solution)
   (perf-inc-meta-solved!)
   (define mi-box (current-prop-meta-info-box))
   (define info
-    (if mi-box
-        ;; Production path: read from CHAMP
-        (let ([v (champ-lookup (unbox mi-box) (prop-meta-id-hash id) id)])
-          (if (eq? v 'none) #f v))
-        ;; Legacy path: read from hash
-        (hash-ref (current-meta-store) id #f)))
+    (let ([v (champ-lookup (unbox mi-box) (prop-meta-id-hash id) id)])
+      (if (eq? v 'none) #f v)))
   (unless info
     (error 'solve-meta! "unknown metavariable: ~a" id))
   (when (eq? (meta-info-status info) 'solved)
     (error 'solve-meta! "metavariable ~a already solved" id))
-  (cond
-    [mi-box
-     ;; Production path: insert updated meta-info into CHAMP (immutable update)
-     (define updated (meta-info id (meta-info-ctx info) (meta-info-type info)
-                                'solved solution
-                                (meta-info-constraints info) (meta-info-source info)))
-     (set-box! mi-box (champ-insert (unbox mi-box) (prop-meta-id-hash id) id updated))]
-    [else
-     ;; Legacy path: mutate hash entry
-     (set-meta-info-status! info 'solved)
-     (set-meta-info-solution! info solution)])
+  ;; Insert updated meta-info into CHAMP (immutable update)
+  (define updated (meta-info id (meta-info-ctx info) (meta-info-type info)
+                              'solved solution
+                              (meta-info-constraints info) (meta-info-source info)))
+  (set-box! mi-box (champ-insert (unbox mi-box) (prop-meta-id-hash id) id updated))
   ;; Propagator path: write to cell
   (define net-box (current-prop-net-box))
   (define write-fn (current-prop-cell-write))
@@ -496,7 +512,7 @@
   (retry-trait-for-meta! id))
 
 ;; Check if a metavariable has been solved.
-;; Phase 8b: Reads from propagator network when available (primary).
+;; Hash removal: Propagator cell (primary), CHAMP meta-info (fallback).
 (define (meta-solved? id)
   (define net-box (current-prop-net-box))
   (define read-fn (current-prop-cell-read))
@@ -508,12 +524,14 @@
           (let ([v (read-fn (unbox net-box) cid)])
             (and (not (prop-type-bot? v)) (not (prop-type-top? v)))))]
     [else
-     ;; Legacy path: read from hash
-     (define info (hash-ref (current-meta-store) id #f))
-     (and info (eq? (meta-info-status info) 'solved))]))
+     ;; CHAMP path (test context without network)
+     (define mi-box (current-prop-meta-info-box))
+     (if (not mi-box) #f  ;; No meta store initialized — treat as unsolved
+         (let ([v (champ-lookup (unbox mi-box) (prop-meta-id-hash id) id)])
+           (and (not (eq? v 'none)) (eq? (meta-info-status v) 'solved))))]))
 
 ;; Retrieve the solution of a metavariable, or #f if unsolved/unknown.
-;; Phase 8b: Reads from propagator network when available (primary).
+;; Hash removal: Propagator cell (primary), CHAMP meta-info (fallback).
 (define (meta-solution id)
   (define net-box (current-prop-net-box))
   (define read-fn (current-prop-cell-read))
@@ -525,18 +543,19 @@
           (let ([v (read-fn (unbox net-box) cid)])
             (and (not (prop-type-bot? v)) (not (prop-type-top? v)) v)))]
     [else
-     ;; Legacy path: read from hash
-     (define info (hash-ref (current-meta-store) id #f))
-     (and info (meta-info-solution info))]))
+     ;; CHAMP path (test context without network)
+     (define mi-box (current-prop-meta-info-box))
+     (if (not mi-box) #f  ;; No meta store initialized
+         (let ([v (champ-lookup (unbox mi-box) (prop-meta-id-hash id) id)])
+           (and (not (eq? v 'none)) (meta-info-solution v))))]))
 
 ;; Retrieve the full meta-info struct, or #f if unknown.
-;; Phase A: Reads from CHAMP meta-info store (primary), falls back to hash.
+;; Hash removal: Always reads from CHAMP meta-info store.
 (define (meta-lookup id)
   (define mi-box (current-prop-meta-info-box))
-  (if mi-box
+  (if (not mi-box) #f  ;; No meta store initialized
       (let ([v (champ-lookup (unbox mi-box) (prop-meta-id-hash id) id)])
-        (if (eq? v 'none) #f v))
-      (hash-ref (current-meta-store) id #f)))
+        (if (eq? v 'none) #f v))))
 
 ;; ========================================
 ;; Sprint 6: Universe level metavariables
@@ -547,52 +566,42 @@
 (define current-level-meta-store (make-parameter (make-hasheq)))
 
 ;; Create a fresh level metavariable, register in store, return level-meta.
-;; Phase B: CHAMP primary, hash fallback.
+;; Hash removal: Always writes to CHAMP.
 (define (fresh-level-meta source)
   (define id (gensym 'lvl))
   (define box (current-level-meta-champ-box))
-  (if box
-      (set-box! box (champ-insert (unbox box) (prop-meta-id-hash id) id 'unsolved))
-      (hash-set! (current-level-meta-store) id 'unsolved))
+  (set-box! box (champ-insert (unbox box) (prop-meta-id-hash id) id 'unsolved))
   (level-meta id))
 
 ;; Assign a solution to a level metavariable.
-;; Phase B: CHAMP primary, hash fallback.
+;; Hash removal: Always reads/writes CHAMP.
 (define (solve-level-meta! id solution)
   (define box (current-level-meta-champ-box))
   (define status
-    (if box
-        (let ([v (champ-lookup (unbox box) (prop-meta-id-hash id) id)])
-          (if (eq? v 'none) #f v))
-        (hash-ref (current-level-meta-store) id #f)))
+    (let ([v (champ-lookup (unbox box) (prop-meta-id-hash id) id)])
+      (if (eq? v 'none) #f v)))
   (unless status
     (error 'solve-level-meta! "unknown level-meta: ~a" id))
   (when (not (eq? status 'unsolved))
     (error 'solve-level-meta! "level-meta ~a already solved" id))
-  (if box
-      (set-box! box (champ-insert (unbox box) (prop-meta-id-hash id) id solution))
-      (hash-set! (current-level-meta-store) id solution)))
+  (set-box! box (champ-insert (unbox box) (prop-meta-id-hash id) id solution)))
 
 ;; Check if a level metavariable has been solved.
-;; Phase B: CHAMP primary, hash fallback.
+;; Hash removal: Always reads from CHAMP.
 (define (level-meta-solved? id)
   (define box (current-level-meta-champ-box))
   (define v
-    (if box
-        (let ([r (champ-lookup (unbox box) (prop-meta-id-hash id) id)])
-          (if (eq? r 'none) #f r))
-        (hash-ref (current-level-meta-store) id #f)))
+    (let ([r (champ-lookup (unbox box) (prop-meta-id-hash id) id)])
+      (if (eq? r 'none) #f r)))
   (and v (not (eq? v 'unsolved))))
 
 ;; Retrieve the solution of a level metavariable, or #f if unsolved/unknown.
-;; Phase B: CHAMP primary, hash fallback.
+;; Hash removal: Always reads from CHAMP.
 (define (level-meta-solution id)
   (define box (current-level-meta-champ-box))
   (define v
-    (if box
-        (let ([r (champ-lookup (unbox box) (prop-meta-id-hash id) id)])
-          (if (eq? r 'none) #f r))
-        (hash-ref (current-level-meta-store) id #f)))
+    (let ([r (champ-lookup (unbox box) (prop-meta-id-hash id) id)])
+      (if (eq? r 'none) #f r)))
   (and v (not (eq? v 'unsolved)) v))
 
 ;; Zonk a level: follow solved level-metas, leave unsolved in place.
@@ -623,52 +632,42 @@
 (define current-mult-meta-store (make-parameter (make-hasheq)))
 
 ;; Create a fresh mult metavariable, register in store, return mult-meta.
-;; Phase B: CHAMP primary, hash fallback.
+;; Hash removal: Always writes to CHAMP.
 (define (fresh-mult-meta source)
   (define id (gensym 'mmeta))
   (define box (current-mult-meta-champ-box))
-  (if box
-      (set-box! box (champ-insert (unbox box) (prop-meta-id-hash id) id 'unsolved))
-      (hash-set! (current-mult-meta-store) id 'unsolved))
+  (set-box! box (champ-insert (unbox box) (prop-meta-id-hash id) id 'unsolved))
   (mult-meta id))
 
 ;; Assign a solution to a mult metavariable.
-;; Phase B: CHAMP primary, hash fallback.
+;; Hash removal: Always reads/writes CHAMP.
 (define (solve-mult-meta! id solution)
   (define box (current-mult-meta-champ-box))
   (define status
-    (if box
-        (let ([v (champ-lookup (unbox box) (prop-meta-id-hash id) id)])
-          (if (eq? v 'none) #f v))
-        (hash-ref (current-mult-meta-store) id #f)))
+    (let ([v (champ-lookup (unbox box) (prop-meta-id-hash id) id)])
+      (if (eq? v 'none) #f v)))
   (unless status
     (error 'solve-mult-meta! "unknown mult-meta: ~a" id))
   (when (not (eq? status 'unsolved))
     (error 'solve-mult-meta! "mult-meta ~a already solved" id))
-  (if box
-      (set-box! box (champ-insert (unbox box) (prop-meta-id-hash id) id solution))
-      (hash-set! (current-mult-meta-store) id solution)))
+  (set-box! box (champ-insert (unbox box) (prop-meta-id-hash id) id solution)))
 
 ;; Check if a mult metavariable has been solved.
-;; Phase B: CHAMP primary, hash fallback.
+;; Hash removal: Always reads from CHAMP.
 (define (mult-meta-solved? id)
   (define box (current-mult-meta-champ-box))
   (define v
-    (if box
-        (let ([r (champ-lookup (unbox box) (prop-meta-id-hash id) id)])
-          (if (eq? r 'none) #f r))
-        (hash-ref (current-mult-meta-store) id #f)))
+    (let ([r (champ-lookup (unbox box) (prop-meta-id-hash id) id)])
+      (if (eq? r 'none) #f r)))
   (and v (not (eq? v 'unsolved))))
 
 ;; Retrieve the solution of a mult metavariable, or #f if unsolved/unknown.
-;; Phase B: CHAMP primary, hash fallback.
+;; Hash removal: Always reads from CHAMP.
 (define (mult-meta-solution id)
   (define box (current-mult-meta-champ-box))
   (define v
-    (if box
-        (let ([r (champ-lookup (unbox box) (prop-meta-id-hash id) id)])
-          (if (eq? r 'none) #f r))
-        (hash-ref (current-mult-meta-store) id #f)))
+    (let ([r (champ-lookup (unbox box) (prop-meta-id-hash id) id)])
+      (if (eq? r 'none) #f r)))
   (and v (not (eq? v 'unsolved)) v))
 
 ;; Zonk a multiplicity: follow solved mult-metas, leave unsolved in place.
@@ -695,52 +694,42 @@
 (define current-sess-meta-store (make-parameter (make-hasheq)))
 
 ;; Create a fresh sess metavariable, register in store, return sess-meta.
-;; Phase B: CHAMP primary, hash fallback.
+;; Hash removal: Always writes to CHAMP.
 (define (fresh-sess-meta source)
   (define id (gensym 'smeta))
   (define box (current-sess-meta-champ-box))
-  (if box
-      (set-box! box (champ-insert (unbox box) (prop-meta-id-hash id) id 'unsolved))
-      (hash-set! (current-sess-meta-store) id 'unsolved))
+  (set-box! box (champ-insert (unbox box) (prop-meta-id-hash id) id 'unsolved))
   (sess-meta id))
 
 ;; Assign a solution to a sess metavariable.
-;; Phase B: CHAMP primary, hash fallback.
+;; Hash removal: Always reads/writes CHAMP.
 (define (solve-sess-meta! id solution)
   (define box (current-sess-meta-champ-box))
   (define status
-    (if box
-        (let ([v (champ-lookup (unbox box) (prop-meta-id-hash id) id)])
-          (if (eq? v 'none) #f v))
-        (hash-ref (current-sess-meta-store) id #f)))
+    (let ([v (champ-lookup (unbox box) (prop-meta-id-hash id) id)])
+      (if (eq? v 'none) #f v)))
   (unless status
     (error 'solve-sess-meta! "unknown sess-meta: ~a" id))
   (when (not (eq? status 'unsolved))
     (error 'solve-sess-meta! "sess-meta ~a already solved" id))
-  (if box
-      (set-box! box (champ-insert (unbox box) (prop-meta-id-hash id) id solution))
-      (hash-set! (current-sess-meta-store) id solution)))
+  (set-box! box (champ-insert (unbox box) (prop-meta-id-hash id) id solution)))
 
 ;; Check if a sess metavariable has been solved.
-;; Phase B: CHAMP primary, hash fallback.
+;; Hash removal: Always reads from CHAMP.
 (define (sess-meta-solved? id)
   (define box (current-sess-meta-champ-box))
   (define v
-    (if box
-        (let ([r (champ-lookup (unbox box) (prop-meta-id-hash id) id)])
-          (if (eq? r 'none) #f r))
-        (hash-ref (current-sess-meta-store) id #f)))
+    (let ([r (champ-lookup (unbox box) (prop-meta-id-hash id) id)])
+      (if (eq? r 'none) #f r)))
   (and v (not (eq? v 'unsolved))))
 
 ;; Retrieve the solution of a sess metavariable, or #f if unsolved/unknown.
-;; Phase B: CHAMP primary, hash fallback.
+;; Hash removal: Always reads from CHAMP.
 (define (sess-meta-solution id)
   (define box (current-sess-meta-champ-box))
   (define v
-    (if box
-        (let ([r (champ-lookup (unbox box) (prop-meta-id-hash id) id)])
-          (if (eq? r 'none) #f r))
-        (hash-ref (current-sess-meta-store) id #f)))
+    (let ([r (champ-lookup (unbox box) (prop-meta-id-hash id) id)])
+      (if (eq? r 'none) #f r)))
   (and v (not (eq? v 'unsolved)) v))
 
 ;; Zonk a session: follow solved sess-metas, leave unsolved in place.
@@ -783,8 +772,8 @@
     [else s]))
 
 ;; Clear all metavariables and constraints from the store.
-;; Phase A: Initializes CHAMP meta-info store alongside propagator network.
-;; Phase B: Also initializes level/mult/sess CHAMP boxes.
+;; Hash removal: Always resets CHAMP boxes (creates if needed).
+;; Propagator network only reset when callbacks are available.
 (define (reset-meta-store!)
   (hash-clear! (current-meta-store))
   (hash-clear! (current-level-meta-store))
@@ -793,29 +782,31 @@
   (hash-clear! (current-trait-constraint-map))
   (hash-clear! (current-trait-wakeup-map))
   (reset-constraint-store!)
-  ;; Initialize propagator network + CHAMP stores
+  ;; Always reset CHAMP meta-info + auxiliary boxes
+  (define mi-box (current-prop-meta-info-box))
+  (if mi-box
+      (begin
+        (set-box! mi-box champ-empty)
+        (set-box! (current-level-meta-champ-box) champ-empty)
+        (set-box! (current-mult-meta-champ-box) champ-empty)
+        (set-box! (current-sess-meta-champ-box) champ-empty))
+      (begin
+        ;; First call — create CHAMP boxes
+        (current-prop-meta-info-box (box champ-empty))
+        (current-level-meta-champ-box (box champ-empty))
+        (current-mult-meta-champ-box (box champ-empty))
+        (current-sess-meta-champ-box (box champ-empty))))
+  ;; Propagator network: only when callbacks available
   (define make-net (current-prop-make-network))
   (when make-net
     (define net-box (current-prop-net-box))
-    (cond
-      [net-box
-       ;; Already have boxes — reset contents
-       (set-box! net-box (make-net))
-       (set-box! (current-prop-id-map-box) champ-empty)
-       (set-box! (current-prop-meta-info-box) champ-empty)
-       ;; Phase B: reset auxiliary meta CHAMPs
-       (set-box! (current-level-meta-champ-box) champ-empty)
-       (set-box! (current-mult-meta-champ-box) champ-empty)
-       (set-box! (current-sess-meta-champ-box) champ-empty)]
-      [else
-       ;; First call or test context — create boxes
-       (current-prop-net-box (box (make-net)))
-       (current-prop-id-map-box (box champ-empty))
-       (current-prop-meta-info-box (box champ-empty))
-       ;; Phase B: create auxiliary meta CHAMP boxes
-       (current-level-meta-champ-box (box champ-empty))
-       (current-mult-meta-champ-box (box champ-empty))
-       (current-sess-meta-champ-box (box champ-empty))])))
+    (if net-box
+        (begin
+          (set-box! net-box (make-net))
+          (set-box! (current-prop-id-map-box) champ-empty))
+        (begin
+          (current-prop-net-box (box (make-net)))
+          (current-prop-id-map-box (box champ-empty))))))
 
 ;; ========================================
 ;; Meta state save/restore for speculative type-checking
@@ -827,63 +818,41 @@
 ;; Saves the status and solution of all metas in the current store.
 ;; Restore resets each meta back to its saved state.
 
-;; Phase A+B: save-meta-state is fully O(1) when CHAMP stores are active.
-;; All six CHAMPs (network, id-map, meta-info, level, mult, sess) are
-;; immutable — capturing the root reference is sufficient. Legacy path is O(N).
-;; Phase B: Including level/mult/sess fixes the latent speculation bug where
-;; mutations to these stores leaked through with-speculative-rollback.
+;; Hash removal: save-meta-state is always O(1).
+;; Captures all six CHAMP references (network, id-map, meta-info, level, mult, sess).
+;; When no network is available (test context), net/id-map are #f — still captured.
 (define (save-meta-state)
-  (define mi-box (current-prop-meta-info-box))
-  (cond
-    [mi-box
-     ;; Production path: all O(1) — capture immutable CHAMP references
-     (list 'prop
-           (unbox (current-prop-net-box))
-           (unbox (current-prop-id-map-box))
-           (unbox mi-box)
-           (unbox (current-level-meta-champ-box))
-           (unbox (current-mult-meta-champ-box))
-           (unbox (current-sess-meta-champ-box)))]
-    [else
-     ;; Legacy path: O(N) hash snapshot
-     (for/hasheq ([(id info) (in-hash (current-meta-store))])
-       (values id (cons (meta-info-status info) (meta-info-solution info))))]))
+  (define net-box (current-prop-net-box))
+  (define id-box (current-prop-id-map-box))
+  (list 'prop
+        (and net-box (unbox net-box))
+        (and id-box (unbox id-box))
+        (unbox (current-prop-meta-info-box))
+        (unbox (current-level-meta-champ-box))
+        (unbox (current-mult-meta-champ-box))
+        (unbox (current-sess-meta-champ-box))))
 
 (define (restore-meta-state! saved)
-  (cond
-    [(and (list? saved) (eq? (car saved) 'prop))
-     ;; Production path: all O(1) — swap immutable CHAMP references
-     (set-box! (current-prop-net-box) (list-ref saved 1))
-     (set-box! (current-prop-id-map-box) (list-ref saved 2))
-     (set-box! (current-prop-meta-info-box) (list-ref saved 3))
-     ;; Phase B: restore auxiliary meta CHAMPs
-     (set-box! (current-level-meta-champ-box) (list-ref saved 4))
-     (set-box! (current-mult-meta-champ-box) (list-ref saved 5))
-     (set-box! (current-sess-meta-champ-box) (list-ref saved 6))]
-    [else
-     ;; Legacy path: restore hash only (O(N))
-     (for ([(id state) (in-hash saved)])
-       (define info (hash-ref (current-meta-store) id #f))
-       (when info
-         (set-meta-info-status! info (car state))
-         (set-meta-info-solution! info (cdr state))))]))
+  ;; All O(1) — swap immutable CHAMP references
+  (define net-box (current-prop-net-box))
+  (define id-box (current-prop-id-map-box))
+  (when net-box (set-box! net-box (list-ref saved 1)))
+  (when id-box (set-box! id-box (list-ref saved 2)))
+  (set-box! (current-prop-meta-info-box) (list-ref saved 3))
+  (set-box! (current-level-meta-champ-box) (list-ref saved 4))
+  (set-box! (current-mult-meta-champ-box) (list-ref saved 5))
+  (set-box! (current-sess-meta-champ-box) (list-ref saved 6)))
 
 ;; List all unsolved metavariable infos.
-;; Phase A: reads from CHAMP (primary) or hash (fallback).
+;; Hash removal: Always reads from CHAMP.
 (define (all-unsolved-metas)
   (define mi-box (current-prop-meta-info-box))
-  (if mi-box
-      ;; Production path: fold over CHAMP
-      (champ-fold (unbox mi-box)
-                  (lambda (k v acc)
-                    (if (eq? (meta-info-status v) 'unsolved)
-                        (cons v acc)
-                        acc))
-                  '())
-      ;; Legacy path: iterate hash
-      (for/list ([(id info) (in-hash (current-meta-store))]
-                 #:when (eq? (meta-info-status info) 'unsolved))
-        info)))
+  (champ-fold (unbox mi-box)
+              (lambda (k v acc)
+                (if (eq? (meta-info-status v) 'unsolved)
+                    (cons v acc)
+                    acc))
+              '()))
 
 ;; ========================================
 ;; Sprint 9: Noise filtering for error display

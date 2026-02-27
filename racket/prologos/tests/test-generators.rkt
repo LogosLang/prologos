@@ -26,13 +26,10 @@
 ;; ============================================================
 
 (define-syntax-rule (with-fresh-tc-env body ...)
-  (parameterize ([current-meta-store (make-hasheq)]
-                 [current-constraint-store '()]
-                 [current-wakeup-registry (make-hasheq)]
-                 [current-global-env (hasheq)]
-                 [current-reduction-fuel (box 50000)]
-                 [current-level-meta-store (make-hasheq)])
-    body ...))
+  (with-fresh-meta-env
+    (parameterize ([current-global-env (hasheq)]
+                   [current-reduction-fuel (box 50000)])
+      body ...)))
 
 ;; ============================================================
 ;; Type generators

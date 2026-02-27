@@ -25,13 +25,9 @@
 
 ;; Helper: run prologos code in a fresh environment
 (define (run s)
-  (parameterize ([current-global-env (hasheq)]
-                 [current-meta-store (make-hasheq)]
-                 [current-level-meta-store (make-hasheq)]
-                 [current-mult-meta-store (make-hasheq)]
-                 [current-constraint-store '()]
-                 [current-wakeup-registry (make-hasheq)])
-    (process-string s)))
+  (with-fresh-meta-env
+    (parameterize ([current-global-env (hasheq)])
+      (process-string s))))
 
 ;; Helper: run prologos code and return the first result
 (define (run-first s)
@@ -43,14 +39,14 @@
 
 ;; Helper: run code with namespace system active (for module loading)
 (define (run-ns s)
-  (parameterize ([current-global-env (hasheq)]
-                 [current-ns-context #f]
-                 [current-module-registry prelude-module-registry]
-                 [current-lib-paths (list prelude-lib-dir)]
-                 [current-mult-meta-store (make-hasheq)]
-                 [current-preparse-registry prelude-preparse-registry])
-    (install-module-loader!)
-    (process-string s)))
+  (with-fresh-meta-env
+    (parameterize ([current-global-env (hasheq)]
+                   [current-ns-context #f]
+                   [current-module-registry prelude-module-registry]
+                   [current-lib-paths (list prelude-lib-dir)]
+                   [current-preparse-registry prelude-preparse-registry])
+      (install-module-loader!)
+      (process-string s))))
 
 ;; Helper: run code with namespace and return last result
 (define (run-ns-last s)

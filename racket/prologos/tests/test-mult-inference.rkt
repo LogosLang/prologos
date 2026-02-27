@@ -26,13 +26,13 @@
 ;; ========================================
 
 (test-case "mult-meta/fresh-creates-unsolved"
-  (parameterize ([current-mult-meta-store (make-hasheq)])
+  (with-fresh-meta-env
     (define mm (fresh-mult-meta "test"))
     (check-true (mult-meta? mm))
     (check-false (mult-meta-solved? (mult-meta-id mm)))))
 
 (test-case "mult-meta/solve-and-retrieve"
-  (parameterize ([current-mult-meta-store (make-hasheq)])
+  (with-fresh-meta-env
     (define mm (fresh-mult-meta "test"))
     (define id (mult-meta-id mm))
     (solve-mult-meta! id 'mw)
@@ -40,21 +40,21 @@
     (check-equal? (mult-meta-solution id) 'mw)))
 
 (test-case "mult-meta/solve-with-m1"
-  (parameterize ([current-mult-meta-store (make-hasheq)])
+  (with-fresh-meta-env
     (define mm (fresh-mult-meta "test"))
     (define id (mult-meta-id mm))
     (solve-mult-meta! id 'm1)
     (check-equal? (mult-meta-solution id) 'm1)))
 
 (test-case "mult-meta/solve-with-m0"
-  (parameterize ([current-mult-meta-store (make-hasheq)])
+  (with-fresh-meta-env
     (define mm (fresh-mult-meta "test"))
     (define id (mult-meta-id mm))
     (solve-mult-meta! id 'm0)
     (check-equal? (mult-meta-solution id) 'm0)))
 
 (test-case "mult?/accepts-mult-meta"
-  (parameterize ([current-mult-meta-store (make-hasheq)])
+  (with-fresh-meta-env
     (define mm (fresh-mult-meta "test"))
     (check-not-false (mult? mm))))
 
@@ -68,25 +68,25 @@
 ;; ========================================
 
 (test-case "zonk-mult/follows-solved"
-  (parameterize ([current-mult-meta-store (make-hasheq)])
+  (with-fresh-meta-env
     (define mm (fresh-mult-meta "test"))
     (solve-mult-meta! (mult-meta-id mm) 'm1)
     (check-equal? (zonk-mult mm) 'm1)))
 
 (test-case "zonk-mult/preserves-unsolved"
-  (parameterize ([current-mult-meta-store (make-hasheq)])
+  (with-fresh-meta-env
     (define mm (fresh-mult-meta "test"))
     ;; zonk-mult preserves unsolved mult-metas (for intermediate use)
     (check-true (mult-meta? (zonk-mult mm)))))
 
 (test-case "zonk-mult-default/defaults-unsolved-to-mw"
-  (parameterize ([current-mult-meta-store (make-hasheq)])
+  (with-fresh-meta-env
     (define mm (fresh-mult-meta "test"))
     ;; zonk-mult-default defaults unsolved to 'mw (for final output)
     (check-equal? (zonk-mult-default mm) 'mw)))
 
 (test-case "zonk-mult/transitive"
-  (parameterize ([current-mult-meta-store (make-hasheq)])
+  (with-fresh-meta-env
     (define mm1 (fresh-mult-meta "a"))
     (define mm2 (fresh-mult-meta "b"))
     (solve-mult-meta! (mult-meta-id mm1) mm2)
@@ -103,56 +103,40 @@
 ;; ========================================
 
 (test-case "unify-mult/meta-vs-concrete"
-  (parameterize ([current-meta-store (make-hasheq)]
-                 [current-level-meta-store (make-hasheq)]
-                 [current-mult-meta-store (make-hasheq)]
-                 [current-constraint-store '()]
-                 [current-wakeup-registry (make-hasheq)]
-                 [current-global-env (hasheq)])
-    (define mm (fresh-mult-meta "test"))
-    ;; Unify Pi(?m, Nat, Nat) vs Pi(mw, Nat, Nat)
-    (define t1 (expr-Pi mm (expr-Nat) (expr-Nat)))
-    (define t2 (expr-Pi 'mw (expr-Nat) (expr-Nat)))
-    (check-equal? (unify ctx-empty t1 t2) #t)
-    (check-true (mult-meta-solved? (mult-meta-id mm)))
-    (check-equal? (mult-meta-solution (mult-meta-id mm)) 'mw)))
+  (with-fresh-meta-env
+    (parameterize ([current-global-env (hasheq)])
+      (define mm (fresh-mult-meta "test"))
+      ;; Unify Pi(?m, Nat, Nat) vs Pi(mw, Nat, Nat)
+      (define t1 (expr-Pi mm (expr-Nat) (expr-Nat)))
+      (define t2 (expr-Pi 'mw (expr-Nat) (expr-Nat)))
+      (check-equal? (unify ctx-empty t1 t2) #t)
+      (check-true (mult-meta-solved? (mult-meta-id mm)))
+      (check-equal? (mult-meta-solution (mult-meta-id mm)) 'mw))))
 
 (test-case "unify-mult/two-metas"
-  (parameterize ([current-meta-store (make-hasheq)]
-                 [current-level-meta-store (make-hasheq)]
-                 [current-mult-meta-store (make-hasheq)]
-                 [current-constraint-store '()]
-                 [current-wakeup-registry (make-hasheq)]
-                 [current-global-env (hasheq)])
-    (define mm1 (fresh-mult-meta "a"))
-    (define mm2 (fresh-mult-meta "b"))
-    (define t1 (expr-Pi mm1 (expr-Nat) (expr-Nat)))
-    (define t2 (expr-Pi mm2 (expr-Nat) (expr-Nat)))
-    (check-equal? (unify ctx-empty t1 t2) #t)
-    ;; One should be solved to the other
-    (check-true (mult-meta-solved? (mult-meta-id mm1)))))
+  (with-fresh-meta-env
+    (parameterize ([current-global-env (hasheq)])
+      (define mm1 (fresh-mult-meta "a"))
+      (define mm2 (fresh-mult-meta "b"))
+      (define t1 (expr-Pi mm1 (expr-Nat) (expr-Nat)))
+      (define t2 (expr-Pi mm2 (expr-Nat) (expr-Nat)))
+      (check-equal? (unify ctx-empty t1 t2) #t)
+      ;; One should be solved to the other
+      (check-true (mult-meta-solved? (mult-meta-id mm1))))))
 
 (test-case "unify-mult/ground-match"
-  (parameterize ([current-meta-store (make-hasheq)]
-                 [current-level-meta-store (make-hasheq)]
-                 [current-mult-meta-store (make-hasheq)]
-                 [current-constraint-store '()]
-                 [current-wakeup-registry (make-hasheq)]
-                 [current-global-env (hasheq)])
-    (define t1 (expr-Pi 'm1 (expr-Nat) (expr-Nat)))
-    (define t2 (expr-Pi 'm1 (expr-Nat) (expr-Nat)))
-    (check-equal? (unify ctx-empty t1 t2) #t)))
+  (with-fresh-meta-env
+    (parameterize ([current-global-env (hasheq)])
+      (define t1 (expr-Pi 'm1 (expr-Nat) (expr-Nat)))
+      (define t2 (expr-Pi 'm1 (expr-Nat) (expr-Nat)))
+      (check-equal? (unify ctx-empty t1 t2) #t))))
 
 (test-case "unify-mult/ground-mismatch-rejects"
-  (parameterize ([current-meta-store (make-hasheq)]
-                 [current-level-meta-store (make-hasheq)]
-                 [current-mult-meta-store (make-hasheq)]
-                 [current-constraint-store '()]
-                 [current-wakeup-registry (make-hasheq)]
-                 [current-global-env (hasheq)])
-    (define t1 (expr-Pi 'm0 (expr-Nat) (expr-Nat)))
-    (define t2 (expr-Pi 'm1 (expr-Nat) (expr-Nat)))
-    (check-equal? (unify ctx-empty t1 t2) #f)))
+  (with-fresh-meta-env
+    (parameterize ([current-global-env (hasheq)])
+      (define t1 (expr-Pi 'm0 (expr-Nat) (expr-Nat)))
+      (define t2 (expr-Pi 'm1 (expr-Nat) (expr-Nat)))
+      (check-equal? (unify ctx-empty t1 t2) #f))))
 
 ;; ========================================
 ;; Integration tests: multiplicity inference in user code
@@ -160,14 +144,14 @@
 
 ;; Helper: run prologos code with namespace system active
 (define (run-ns s)
-  (parameterize ([current-global-env (hasheq)]
-                 [current-ns-context #f]
-                 [current-module-registry prelude-module-registry]
-                 [current-lib-paths (list prelude-lib-dir)]
-                 [current-mult-meta-store (make-hasheq)]
-                 [current-preparse-registry prelude-preparse-registry])
-    (install-module-loader!)
-    (process-string s)))
+  (with-fresh-meta-env
+    (parameterize ([current-global-env (hasheq)]
+                   [current-ns-context #f]
+                   [current-module-registry prelude-module-registry]
+                   [current-lib-paths (list prelude-lib-dir)]
+                   [current-preparse-registry prelude-preparse-registry])
+      (install-module-loader!)
+      (process-string s))))
 
 ;; Helper: run code and return the last result line
 (define (run-last s)

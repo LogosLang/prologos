@@ -93,26 +93,26 @@
 ;; ========================================
 
 (test-case "infer: map-assoc with matching value type -- no widening"
-  (parameterize ([current-meta-store (make-hasheq)]
-                 [current-global-env (hasheq)])
-    (let* ([m (expr-map-empty (expr-Keyword) (expr-Nat))]
-           [m1 (expr-map-assoc m (expr-keyword 'x) (expr-zero))])
-      (define ty (tc:infer ctx-empty m1))
-      (check-true (expr-Map? ty))
-      (check-equal? (expr-Map-k-type ty) (expr-Keyword))
-      (check-equal? (expr-Map-v-type ty) (expr-Nat)))))
+  (with-fresh-meta-env
+    (parameterize ([current-global-env (hasheq)])
+      (let* ([m (expr-map-empty (expr-Keyword) (expr-Nat))]
+             [m1 (expr-map-assoc m (expr-keyword 'x) (expr-zero))])
+        (define ty (tc:infer ctx-empty m1))
+        (check-true (expr-Map? ty))
+        (check-equal? (expr-Map-k-type ty) (expr-Keyword))
+        (check-equal? (expr-Map-v-type ty) (expr-Nat))))))
 
 (test-case "infer: map-assoc widens when value type differs"
-  (parameterize ([current-meta-store (make-hasheq)]
-                 [current-global-env (hasheq)])
-    (let* ([m (expr-map-empty (expr-Keyword) (expr-Nat))]
-           [m1 (expr-map-assoc m (expr-keyword 'x) (expr-zero))]
-           [m2 (expr-map-assoc m1 (expr-keyword 'y) (expr-string "hello"))])
-      (define ty (tc:infer ctx-empty m2))
-      (check-true (expr-Map? ty) "result should be a Map type")
-      (check-equal? (expr-Map-k-type ty) (expr-Keyword))
-      (check-true (expr-union? (expr-Map-v-type ty))
-                  "value type should be a union (Nat | String)"))))
+  (with-fresh-meta-env
+    (parameterize ([current-global-env (hasheq)])
+      (let* ([m (expr-map-empty (expr-Keyword) (expr-Nat))]
+             [m1 (expr-map-assoc m (expr-keyword 'x) (expr-zero))]
+             [m2 (expr-map-assoc m1 (expr-keyword 'y) (expr-string "hello"))])
+        (define ty (tc:infer ctx-empty m2))
+        (check-true (expr-Map? ty) "result should be a Map type")
+        (check-equal? (expr-Map-k-type ty) (expr-Keyword))
+        (check-true (expr-union? (expr-Map-v-type ty))
+                    "value type should be a union (Nat | String)")))))
 
 ;; ========================================
 ;; C. Surface syntax: sexp mode

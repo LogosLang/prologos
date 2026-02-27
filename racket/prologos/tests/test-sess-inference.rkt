@@ -28,13 +28,13 @@
 ;; ========================================
 
 (test-case "sess-meta/fresh-creates-unsolved"
-  (parameterize ([current-sess-meta-store (make-hasheq)])
+  (with-fresh-meta-env
     (define sm (fresh-sess-meta "test"))
     (check-true (sess-meta? sm))
     (check-false (sess-meta-solved? (sess-meta-id sm)))))
 
 (test-case "sess-meta/solve-and-retrieve"
-  (parameterize ([current-sess-meta-store (make-hasheq)])
+  (with-fresh-meta-env
     (define sm (fresh-sess-meta "test"))
     (define id (sess-meta-id sm))
     (solve-sess-meta! id (sess-end))
@@ -42,7 +42,7 @@
     (check-equal? (sess-meta-solution id) (sess-end))))
 
 (test-case "sess-meta/solve-with-send"
-  (parameterize ([current-sess-meta-store (make-hasheq)])
+  (with-fresh-meta-env
     (define sm (fresh-sess-meta "test"))
     (define id (sess-meta-id sm))
     (define expected (sess-send (expr-Nat) (sess-end)))
@@ -54,23 +54,23 @@
 ;; ========================================
 
 (test-case "zonk-session/follows-solved"
-  (parameterize ([current-sess-meta-store (make-hasheq)])
+  (with-fresh-meta-env
     (define sm (fresh-sess-meta "test"))
     (solve-sess-meta! (sess-meta-id sm) (sess-end))
     (check-equal? (zonk-session sm) (sess-end))))
 
 (test-case "zonk-session/preserves-unsolved"
-  (parameterize ([current-sess-meta-store (make-hasheq)])
+  (with-fresh-meta-env
     (define sm (fresh-sess-meta "test"))
     (check-true (sess-meta? (zonk-session sm)))))
 
 (test-case "zonk-session-default/defaults-unsolved-to-end"
-  (parameterize ([current-sess-meta-store (make-hasheq)])
+  (with-fresh-meta-env
     (define sm (fresh-sess-meta "test"))
     (check-equal? (zonk-session-default sm) (sess-end))))
 
 (test-case "zonk-session/transitive"
-  (parameterize ([current-sess-meta-store (make-hasheq)])
+  (with-fresh-meta-env
     (define sm1 (fresh-sess-meta "a"))
     (define sm2 (fresh-sess-meta "b"))
     (solve-sess-meta! (sess-meta-id sm1) sm2)
@@ -83,7 +83,7 @@
                 (sess-send (expr-Nat) (sess-end))))
 
 (test-case "zonk-session/nested-meta-in-continuation"
-  (parameterize ([current-sess-meta-store (make-hasheq)])
+  (with-fresh-meta-env
     (define sm (fresh-sess-meta "cont"))
     (solve-sess-meta! (sess-meta-id sm) (sess-recv (expr-Bool) (sess-end)))
     (define session (sess-send (expr-Nat) sm))
@@ -95,7 +95,7 @@
 ;; ========================================
 
 (test-case "unify-session/meta-vs-concrete"
-  (parameterize ([current-sess-meta-store (make-hasheq)])
+  (with-fresh-meta-env
     (define sm (fresh-sess-meta "test"))
     (define concrete (sess-send (expr-Nat) (sess-end)))
     (check-equal? (unify-session sm concrete) #t)
@@ -103,7 +103,7 @@
     (check-equal? (sess-meta-solution (sess-meta-id sm)) concrete)))
 
 (test-case "unify-session/two-metas"
-  (parameterize ([current-sess-meta-store (make-hasheq)])
+  (with-fresh-meta-env
     (define sm1 (fresh-sess-meta "a"))
     (define sm2 (fresh-sess-meta "b"))
     (check-equal? (unify-session sm1 sm2) #t)
@@ -111,21 +111,21 @@
     (check-true (sess-meta-solved? (sess-meta-id sm1)))))
 
 (test-case "unify-session/ground-match"
-  (parameterize ([current-sess-meta-store (make-hasheq)])
+  (with-fresh-meta-env
     (check-equal? (unify-session
                    (sess-send (expr-Nat) (sess-end))
                    (sess-send (expr-Nat) (sess-end)))
                   #t)))
 
 (test-case "unify-session/ground-mismatch"
-  (parameterize ([current-sess-meta-store (make-hasheq)])
+  (with-fresh-meta-env
     (check-equal? (unify-session
                    (sess-send (expr-Nat) (sess-end))
                    (sess-recv (expr-Nat) (sess-end)))
                   #f)))
 
 (test-case "unify-session/structural-with-meta-cont"
-  (parameterize ([current-sess-meta-store (make-hasheq)])
+  (with-fresh-meta-env
     (define sm (fresh-sess-meta "cont"))
     (check-equal? (unify-session
                    (sess-send (expr-Nat) sm)
@@ -139,12 +139,12 @@
 ;; ========================================
 
 (test-case "dual/sess-meta-passthrough"
-  (parameterize ([current-sess-meta-store (make-hasheq)])
+  (with-fresh-meta-env
     (define sm (fresh-sess-meta "test"))
     (check-true (sess-meta? (dual sm)))))
 
 (test-case "substS/sess-meta-passthrough"
-  (parameterize ([current-sess-meta-store (make-hasheq)])
+  (with-fresh-meta-env
     (define sm (fresh-sess-meta "test"))
     (check-true (sess-meta? (substS sm 0 (expr-zero))))))
 
@@ -154,12 +154,7 @@
 
 (test-case "sess-infer/send-with-meta-continuation"
   ;; ch :: (sess-send Nat ?S'), send zero, stop → ?S' = sess-end
-  (parameterize ([current-sess-meta-store (make-hasheq)]
-                 [current-meta-store (make-hasheq)]
-                 [current-level-meta-store (make-hasheq)]
-                 [current-mult-meta-store (make-hasheq)]
-                 [current-constraint-store '()]
-                 [current-wakeup-registry (make-hasheq)])
+  (with-fresh-meta-env
     (define cont-meta (fresh-sess-meta "cont"))
     (check-true
      (type-proc ctx-empty
@@ -169,12 +164,7 @@
 
 (test-case "sess-infer/send-then-recv-with-meta-continuation"
   ;; ch :: (sess-send Nat ?S'), send zero, recv Bool, stop → ?S' = (sess-recv Bool sess-end)
-  (parameterize ([current-sess-meta-store (make-hasheq)]
-                 [current-meta-store (make-hasheq)]
-                 [current-level-meta-store (make-hasheq)]
-                 [current-mult-meta-store (make-hasheq)]
-                 [current-constraint-store '()]
-                 [current-wakeup-registry (make-hasheq)])
+  (with-fresh-meta-env
     (define cont-meta (fresh-sess-meta "cont"))
     (check-true
      (type-proc ctx-empty
@@ -186,12 +176,7 @@
 
 (test-case "sess-infer/full-meta-channel-send-stop"
   ;; ch :: ?S, send zero, stop → ?S = (sess-send Nat sess-end)
-  (parameterize ([current-sess-meta-store (make-hasheq)]
-                 [current-meta-store (make-hasheq)]
-                 [current-level-meta-store (make-hasheq)]
-                 [current-mult-meta-store (make-hasheq)]
-                 [current-constraint-store '()]
-                 [current-wakeup-registry (make-hasheq)])
+  (with-fresh-meta-env
     (define ch-meta (fresh-sess-meta "ch"))
     (check-true
      (type-proc ctx-empty
@@ -202,12 +187,7 @@
 
 (test-case "sess-infer/full-meta-send-then-recv"
   ;; ch :: ?S, send zero, recv Bool, stop → ?S = (sess-send Nat (sess-recv Bool sess-end))
-  (parameterize ([current-sess-meta-store (make-hasheq)]
-                 [current-meta-store (make-hasheq)]
-                 [current-level-meta-store (make-hasheq)]
-                 [current-mult-meta-store (make-hasheq)]
-                 [current-constraint-store '()]
-                 [current-wakeup-registry (make-hasheq)])
+  (with-fresh-meta-env
     (define ch-meta (fresh-sess-meta "ch"))
     (check-true
      (type-proc ctx-empty
@@ -219,12 +199,7 @@
 
 (test-case "sess-infer/select-with-meta"
   ;; ch :: ?S, select ping, send zero, stop → ?S solved to choice
-  (parameterize ([current-sess-meta-store (make-hasheq)]
-                 [current-meta-store (make-hasheq)]
-                 [current-level-meta-store (make-hasheq)]
-                 [current-mult-meta-store (make-hasheq)]
-                 [current-constraint-store '()]
-                 [current-wakeup-registry (make-hasheq)])
+  (with-fresh-meta-env
     (define ch-meta (fresh-sess-meta "ch"))
     (check-true
      (type-proc ctx-empty
@@ -243,12 +218,7 @@
 
 (test-case "sess-infer/case-offer-with-meta"
   ;; ch :: ?S, case {ping → recv Nat stop, quit → stop} → ?S solved to offer
-  (parameterize ([current-sess-meta-store (make-hasheq)]
-                 [current-meta-store (make-hasheq)]
-                 [current-level-meta-store (make-hasheq)]
-                 [current-mult-meta-store (make-hasheq)]
-                 [current-constraint-store '()]
-                 [current-wakeup-registry (make-hasheq)])
+  (with-fresh-meta-env
     (define ch-meta (fresh-sess-meta "ch"))
     (check-true
      (type-proc ctx-empty
@@ -262,12 +232,7 @@
 
 (test-case "sess-infer/link-with-meta"
   ;; c1 :: ?S, c2 :: (sess-recv Nat sess-end) → ?S = (sess-send Nat sess-end)
-  (parameterize ([current-sess-meta-store (make-hasheq)]
-                 [current-meta-store (make-hasheq)]
-                 [current-level-meta-store (make-hasheq)]
-                 [current-mult-meta-store (make-hasheq)]
-                 [current-constraint-store '()]
-                 [current-wakeup-registry (make-hasheq)])
+  (with-fresh-meta-env
     (define ch-meta (fresh-sess-meta "ch"))
     (check-true
      (type-proc ctx-empty
@@ -285,12 +250,7 @@
 (test-case "sess-infer/dependent-send-with-meta-continuation"
   ;; ch :: (sess-dsend Nat ?S'), send 2, then send Vec(Nat, 2), stop
   ;; After substS, ?S' should be solved
-  (parameterize ([current-sess-meta-store (make-hasheq)]
-                 [current-meta-store (make-hasheq)]
-                 [current-level-meta-store (make-hasheq)]
-                 [current-mult-meta-store (make-hasheq)]
-                 [current-constraint-store '()]
-                 [current-wakeup-registry (make-hasheq)])
+  (with-fresh-meta-env
     (define cont-meta (fresh-sess-meta "dep-cont"))
     ;; Protocol: !(x:Nat). ?S'
     ;; After sending 2: substS(?S', 0, 2)
@@ -316,12 +276,7 @@
 
 (test-case "NEGATIVE: sess-infer/send-wrong-type-with-meta-cont"
   ;; ch :: (sess-send Nat ?S'), send true → type check fails (true is Bool, not Nat)
-  (parameterize ([current-sess-meta-store (make-hasheq)]
-                 [current-meta-store (make-hasheq)]
-                 [current-level-meta-store (make-hasheq)]
-                 [current-mult-meta-store (make-hasheq)]
-                 [current-constraint-store '()]
-                 [current-wakeup-registry (make-hasheq)])
+  (with-fresh-meta-env
     (define cont-meta (fresh-sess-meta "cont"))
     (check-false
      (type-proc ctx-empty
@@ -330,12 +285,7 @@
 
 (test-case "NEGATIVE: sess-infer/recv-when-session-expects-send"
   ;; ch :: (sess-send Nat sess-end), recv → session shape mismatch
-  (parameterize ([current-sess-meta-store (make-hasheq)]
-                 [current-meta-store (make-hasheq)]
-                 [current-level-meta-store (make-hasheq)]
-                 [current-mult-meta-store (make-hasheq)]
-                 [current-constraint-store '()]
-                 [current-wakeup-registry (make-hasheq)])
+  (with-fresh-meta-env
     (check-false
      (type-proc ctx-empty
                 (make-chan-ctx (cons 'c (sess-send (expr-Nat) (sess-end))))
@@ -346,36 +296,21 @@
 ;; ========================================
 
 (test-case "regression/concrete-send-still-works"
-  (parameterize ([current-sess-meta-store (make-hasheq)]
-                 [current-meta-store (make-hasheq)]
-                 [current-level-meta-store (make-hasheq)]
-                 [current-mult-meta-store (make-hasheq)]
-                 [current-constraint-store '()]
-                 [current-wakeup-registry (make-hasheq)])
+  (with-fresh-meta-env
     (check-true
      (type-proc ctx-empty
                 (make-chan-ctx (cons 'c (sess-send (expr-Nat) (sess-end))))
                 (proc-send (expr-zero) 'c (proc-stop))))))
 
 (test-case "regression/concrete-recv-still-works"
-  (parameterize ([current-sess-meta-store (make-hasheq)]
-                 [current-meta-store (make-hasheq)]
-                 [current-level-meta-store (make-hasheq)]
-                 [current-mult-meta-store (make-hasheq)]
-                 [current-constraint-store '()]
-                 [current-wakeup-registry (make-hasheq)])
+  (with-fresh-meta-env
     (check-true
      (type-proc ctx-empty
                 (make-chan-ctx (cons 'c (sess-recv (expr-Nat) (sess-end))))
                 (proc-recv 'c (expr-Nat) (proc-stop))))))
 
 (test-case "regression/concrete-link-still-works"
-  (parameterize ([current-sess-meta-store (make-hasheq)]
-                 [current-meta-store (make-hasheq)]
-                 [current-level-meta-store (make-hasheq)]
-                 [current-mult-meta-store (make-hasheq)]
-                 [current-constraint-store '()]
-                 [current-wakeup-registry (make-hasheq)])
+  (with-fresh-meta-env
     (check-true
      (type-proc ctx-empty
                 (make-chan-ctx (cons 'c1 (sess-send (expr-Nat) (sess-end)))

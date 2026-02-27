@@ -42,17 +42,17 @@
 (define (run-last s) (last (run s)))
 
 (define (run-ns s)
-  (parameterize ([current-global-env (hasheq)]
-                 [current-ns-context #f]
-                 [current-module-registry prelude-module-registry]
-                 [current-lib-paths (list prelude-lib-dir)]
-                 [current-mult-meta-store (make-hasheq)]
-                 [current-preparse-registry prelude-preparse-registry]
-                 [current-trait-registry prelude-trait-registry]
-                 [current-impl-registry prelude-impl-registry]
-                 [current-param-impl-registry prelude-param-impl-registry])
-    (install-module-loader!)
-    (process-string s)))
+  (with-fresh-meta-env
+    (parameterize ([current-global-env (hasheq)]
+                   [current-ns-context #f]
+                   [current-module-registry prelude-module-registry]
+                   [current-lib-paths (list prelude-lib-dir)]
+                   [current-preparse-registry prelude-preparse-registry]
+                   [current-trait-registry prelude-trait-registry]
+                   [current-impl-registry prelude-impl-registry]
+                   [current-param-impl-registry prelude-param-impl-registry])
+      (install-module-loader!)
+      (process-string s))))
 
 (define (run-ns-last s) (last (run-ns s)))
 
@@ -61,17 +61,17 @@
 ;; Trait definitions (metadata) are kept so `where (Eq A)` parses,
 ;; but concrete instances are cleared so resolution fails as expected.
 (define (run-ns-bare s)
-  (parameterize ([current-global-env (hasheq)]
-                 [current-ns-context #f]
-                 [current-module-registry prelude-module-registry]
-                 [current-lib-paths (list prelude-lib-dir)]
-                 [current-mult-meta-store (make-hasheq)]
-                 [current-preparse-registry prelude-preparse-registry]
-                 [current-trait-registry prelude-trait-registry]
-                 [current-impl-registry (hasheq)]
-                 [current-param-impl-registry (hasheq)])
-    (install-module-loader!)
-    (process-string s)))
+  (with-fresh-meta-env
+    (parameterize ([current-global-env (hasheq)]
+                   [current-ns-context #f]
+                   [current-module-registry prelude-module-registry]
+                   [current-lib-paths (list prelude-lib-dir)]
+                   [current-preparse-registry prelude-preparse-registry]
+                   [current-trait-registry prelude-trait-registry]
+                   [current-impl-registry (hasheq)]
+                   [current-param-impl-registry (hasheq)])
+      (install-module-loader!)
+      (process-string s))))
 
 ;; ========================================
 ;; Phase B.1: Parametric impl registry unit tests
@@ -331,9 +331,7 @@
   (check-true (ground-expr? (expr-fvar 'foo)))
   (check-true (ground-expr? (expr-app (expr-fvar 'List) (expr-Nat))))
   ;; Unsolved meta is not ground
-  (parameterize ([current-meta-store (make-hasheq)]
-                 [current-constraint-store '()]
-                 [current-wakeup-registry (make-hasheq)])
+  (with-fresh-meta-env
     (define m (fresh-meta ctx-empty (expr-hole) "test"))
     (check-false (ground-expr? m))
     ;; Solved meta is ground if solution is ground

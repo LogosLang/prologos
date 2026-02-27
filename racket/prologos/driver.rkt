@@ -65,29 +65,18 @@
 ;; ========================================
 ;; Searches the meta store for the first meta with a meta-source-info
 ;; containing a name-map, and returns it. Falls back to '() if none found.
-;; Phase A: reads from CHAMP (primary) or hash (fallback).
+;; Hash removal: Always reads from CHAMP.
 (define (recover-name-map)
   (define mi-box (current-prop-meta-info-box))
-  (if mi-box
-      ;; Production path: fold over CHAMP meta-info store
-      (champ-fold (unbox mi-box)
-                  (lambda (k v acc)
-                    (if (null? acc)
-                        (let ([src (meta-info-source v)])
-                          (if (and (meta-source-info? src) (meta-source-info-name-map src))
-                              (meta-source-info-name-map src)
-                              acc))
-                        acc))
-                  '())
-      ;; Legacy path: iterate hash
-      (for/fold ([result '()])
-                ([(id info) (in-hash (current-meta-store))])
-        (if (null? result)
-            (let ([src (meta-info-source info)])
-              (if (and (meta-source-info? src) (meta-source-info-name-map src))
-                  (meta-source-info-name-map src)
-                  result))
-            result))))
+  (champ-fold (unbox mi-box)
+              (lambda (k v acc)
+                (if (null? acc)
+                    (let ([src (meta-info-source v)])
+                      (if (and (meta-source-info? src) (meta-source-info-name-map src))
+                          (meta-source-info-name-map src)
+                          acc))
+                    acc))
+              '()))
 
 ;; ========================================
 ;; Sprint 10: Check if an elaborated type contains expr-hole

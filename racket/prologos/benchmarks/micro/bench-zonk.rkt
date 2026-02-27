@@ -44,10 +44,10 @@
 ;; 1. Zonk atom (no metas) — baseline
 (define b-zonk-atom
   (bench "zonk: atom (Nat) x5000"
-    (parameterize ([current-meta-store (make-hasheq)]
-                   [current-reduction-fuel (box 10000)])
-      (for ([_ (in-range 5000)])
-        (zonk (expr-Nat))))))
+    (with-fresh-meta-env
+      (parameterize ([current-reduction-fuel (box 10000)])
+        (for ([_ (in-range 5000)])
+          (zonk (expr-Nat)))))))
 
 ;; 2. Zonk shallow: single solved meta
 (define b-zonk-shallow

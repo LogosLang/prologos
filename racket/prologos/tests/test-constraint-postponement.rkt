@@ -39,9 +39,7 @@
 ;; ========================================
 
 (test-case "constraint-store/add-constraint"
-  (parameterize ([current-meta-store (make-hasheq)]
-                 [current-constraint-store '()]
-                 [current-wakeup-registry (make-hasheq)])
+  (with-fresh-meta-env
     (define m (fresh-meta ctx-empty (expr-hole) "test"))
     (define c (add-constraint! m (expr-Nat) ctx-empty "test"))
     (check-equal? (constraint-status c) 'postponed)
@@ -49,7 +47,7 @@
     (check-equal? (length (all-failed-constraints)) 0)))
 
 (test-case "constraint-store/collect-meta-ids"
-  (parameterize ([current-meta-store (make-hasheq)])
+  (with-fresh-meta-env
     (define m1 (fresh-meta ctx-empty (expr-hole) "a"))
     (define m2 (fresh-meta ctx-empty (expr-hole) "b"))
     ;; Expression with two metas: (app m1 m2)
@@ -58,22 +56,18 @@
     (check-equal? (length ids) 2)))
 
 (test-case "constraint-store/collect-meta-ids-follows-solved"
-  (parameterize ([current-meta-store (make-hasheq)]
-                 [current-constraint-store '()]
-                 [current-wakeup-registry (make-hasheq)]
-                 [current-retry-unify #f])  ;; disable wakeup for this test
-    (define m1 (fresh-meta ctx-empty (expr-hole) "a"))
-    (define m2 (fresh-meta ctx-empty (expr-hole) "b"))
-    ;; Solve m1 to contain m2
-    (solve-meta! (expr-meta-id m1) m2)
-    ;; Now collect-meta-ids on m1 should find m2 (transitively)
-    (define ids (collect-meta-ids m1))
-    (check-not-false (memq (expr-meta-id m2) ids) "should find m2 through solved m1")))
+  (with-fresh-meta-env
+    (parameterize ([current-retry-unify #f])  ;; disable wakeup for this test
+      (define m1 (fresh-meta ctx-empty (expr-hole) "a"))
+      (define m2 (fresh-meta ctx-empty (expr-hole) "b"))
+      ;; Solve m1 to contain m2
+      (solve-meta! (expr-meta-id m1) m2)
+      ;; Now collect-meta-ids on m1 should find m2 (transitively)
+      (define ids (collect-meta-ids m1))
+      (check-not-false (memq (expr-meta-id m2) ids) "should find m2 through solved m1"))))
 
 (test-case "constraint-store/reset"
-  (parameterize ([current-meta-store (make-hasheq)]
-                 [current-constraint-store '()]
-                 [current-wakeup-registry (make-hasheq)])
+  (with-fresh-meta-env
     (define m (fresh-meta ctx-empty (expr-hole) "test"))
     (add-constraint! m (expr-Nat) ctx-empty "test")
     (check-equal? (length (all-postponed-constraints)) 1)
@@ -85,67 +79,59 @@
 ;; ========================================
 
 (test-case "wakeup/solving-meta-retries-constraint"
-  (parameterize ([current-meta-store (make-hasheq)]
-                 [current-constraint-store '()]
-                 [current-wakeup-registry (make-hasheq)]
-                 [current-global-env (hasheq)])
-    ;; Create a meta and a postponed constraint: ?m vs Nat
-    (define m (fresh-meta ctx-empty (expr-Type (lzero)) "test"))
-    (define mid (expr-meta-id m))
-    ;; Create an applied-meta term: (app ?m zero) — non-pattern, will postpone
-    (define flex-term (expr-app m (expr-zero)))
-    (define result (unify ctx-empty flex-term (expr-Nat)))
-    (check-equal? result 'postponed)
-    (check-equal? (length (all-postponed-constraints)) 1)
-    ;; Now solve ?m to (fn [x] Nat) — i.e., a constant function returning Nat
-    ;; This should trigger wakeup and retry the constraint:
-    ;; zonk((app ?m zero)) → (app (fn [x] Nat) zero) → whnf → Nat
-    ;; unify(Nat, Nat) → #t → constraint becomes 'solved
-    (solve-meta! mid (expr-lam 'mw (expr-hole) (expr-Nat)))
-    (check-equal? (length (all-postponed-constraints)) 0)
-    (check-equal? (length (all-failed-constraints)) 0)))
+  (with-fresh-meta-env
+    (parameterize ([current-global-env (hasheq)])
+      ;; Create a meta and a postponed constraint: ?m vs Nat
+      (define m (fresh-meta ctx-empty (expr-Type (lzero)) "test"))
+      (define mid (expr-meta-id m))
+      ;; Create an applied-meta term: (app ?m zero) — non-pattern, will postpone
+      (define flex-term (expr-app m (expr-zero)))
+      (define result (unify ctx-empty flex-term (expr-Nat)))
+      (check-equal? result 'postponed)
+      (check-equal? (length (all-postponed-constraints)) 1)
+      ;; Now solve ?m to (fn [x] Nat) — i.e., a constant function returning Nat
+      ;; This should trigger wakeup and retry the constraint:
+      ;; zonk((app ?m zero)) → (app (fn [x] Nat) zero) → whnf → Nat
+      ;; unify(Nat, Nat) → #t → constraint becomes 'solved
+      (solve-meta! mid (expr-lam 'mw (expr-hole) (expr-Nat)))
+      (check-equal? (length (all-postponed-constraints)) 0)
+      (check-equal? (length (all-failed-constraints)) 0))))
 
 (test-case "wakeup/constraint-fails-on-retry"
-  (parameterize ([current-meta-store (make-hasheq)]
-                 [current-constraint-store '()]
-                 [current-wakeup-registry (make-hasheq)]
-                 [current-global-env (hasheq)])
-    ;; Create a meta and postpone: (app ?m zero) vs Bool
-    (define m (fresh-meta ctx-empty (expr-Type (lzero)) "test"))
-    (define mid (expr-meta-id m))
-    (define flex-term (expr-app m (expr-zero)))
-    (define result (unify ctx-empty flex-term (expr-Bool)))
-    (check-equal? result 'postponed)
-    ;; Solve ?m to (fn [x] Nat) — now (app (fn [x] Nat) zero) → Nat
-    ;; But the constraint expected Bool, so Nat ≠ Bool → failed
-    (solve-meta! mid (expr-lam 'mw (expr-hole) (expr-Nat)))
-    (check-equal? (length (all-postponed-constraints)) 0)
-    (check-equal? (length (all-failed-constraints)) 1)))
+  (with-fresh-meta-env
+    (parameterize ([current-global-env (hasheq)])
+      ;; Create a meta and postpone: (app ?m zero) vs Bool
+      (define m (fresh-meta ctx-empty (expr-Type (lzero)) "test"))
+      (define mid (expr-meta-id m))
+      (define flex-term (expr-app m (expr-zero)))
+      (define result (unify ctx-empty flex-term (expr-Bool)))
+      (check-equal? result 'postponed)
+      ;; Solve ?m to (fn [x] Nat) — now (app (fn [x] Nat) zero) → Nat
+      ;; But the constraint expected Bool, so Nat ≠ Bool → failed
+      (solve-meta! mid (expr-lam 'mw (expr-hole) (expr-Nat)))
+      (check-equal? (length (all-postponed-constraints)) 0)
+      (check-equal? (length (all-failed-constraints)) 1))))
 
 ;; ========================================
 ;; Unit tests: three-valued unify
 ;; ========================================
 
 (test-case "unify/flex-app-non-pattern-postpones"
-  (parameterize ([current-meta-store (make-hasheq)]
-                 [current-constraint-store '()]
-                 [current-wakeup-registry (make-hasheq)]
-                 [current-global-env (hasheq)])
-    (define m (fresh-meta ctx-empty (expr-Type (lzero)) "test"))
-    ;; (app ?m zero) — zero is not a bvar, pattern check fails → postpone
-    (define flex-term (expr-app m (expr-zero)))
-    (check-equal? (unify ctx-empty flex-term (expr-Nat)) 'postponed)))
+  (with-fresh-meta-env
+    (parameterize ([current-global-env (hasheq)])
+      (define m (fresh-meta ctx-empty (expr-Type (lzero)) "test"))
+      ;; (app ?m zero) — zero is not a bvar, pattern check fails → postpone
+      (define flex-term (expr-app m (expr-zero)))
+      (check-equal? (unify ctx-empty flex-term (expr-Nat)) 'postponed))))
 
 (test-case "unify/flex-app-with-bvar-solves"
-  (parameterize ([current-meta-store (make-hasheq)]
-                 [current-constraint-store '()]
-                 [current-wakeup-registry (make-hasheq)]
-                 [current-global-env (hasheq)])
-    (define m (fresh-meta ctx-empty (expr-Type (lzero)) "test"))
-    ;; (app ?m (bvar 0)) — bvar is a pattern arg → should solve
-    (define flex-term (expr-app m (expr-bvar 0)))
-    (check-equal? (unify ctx-empty flex-term (expr-Nat)) #t)
-    (check-true (meta-solved? (expr-meta-id m)))))
+  (with-fresh-meta-env
+    (parameterize ([current-global-env (hasheq)])
+      (define m (fresh-meta ctx-empty (expr-Type (lzero)) "test"))
+      ;; (app ?m (bvar 0)) — bvar is a pattern arg → should solve
+      (define flex-term (expr-app m (expr-bvar 0)))
+      (check-equal? (unify ctx-empty flex-term (expr-Nat)) #t)
+      (check-true (meta-solved? (expr-meta-id m))))))
 
 ;; ========================================
 ;; Integration tests: multi-param implicit inference

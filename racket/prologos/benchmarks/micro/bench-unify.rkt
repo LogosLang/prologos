@@ -25,11 +25,9 @@
 
 ;; Fresh environment for each benchmark iteration
 (define (with-fresh-stores thunk)
-  (parameterize ([current-meta-store (make-hasheq)]
-                 [current-constraint-store '()]
-                 [current-wakeup-registry (make-hasheq)]
-                 [current-reduction-fuel (box 10000)])
-    (thunk)))
+  (with-fresh-meta-env
+    (parameterize ([current-reduction-fuel (box 10000)])
+      (thunk))))
 
 ;; ============================================================
 ;; Benchmarks
@@ -56,9 +54,7 @@
     (with-fresh-stores
       (λ ()
         (for ([_ (in-range 500)])
-          (parameterize ([current-meta-store (make-hasheq)]
-                         [current-constraint-store '()]
-                         [current-wakeup-registry (make-hasheq)])
+          (with-fresh-meta-env
             (define m (fresh-meta '() (expr-Type 0) 'bench))
             (unify '() m (expr-Nat))))))))
 

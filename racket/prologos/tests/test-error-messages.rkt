@@ -42,14 +42,14 @@
   (last (run s)))
 
 (define (run-ns s)
-  (parameterize ([current-global-env (hasheq)]
-                 [current-ns-context #f]
-                 [current-module-registry prelude-module-registry]
-                 [current-lib-paths (list prelude-lib-dir)]
-                 [current-mult-meta-store (make-hasheq)]
-                 [current-preparse-registry prelude-preparse-registry])
-    (install-module-loader!)
-    (process-string s)))
+  (with-fresh-meta-env
+    (parameterize ([current-global-env (hasheq)]
+                   [current-ns-context #f]
+                   [current-module-registry prelude-module-registry]
+                   [current-lib-paths (list prelude-lib-dir)]
+                   [current-preparse-registry prelude-preparse-registry])
+      (install-module-loader!)
+      (process-string s))))
 
 (define (run-ns-last s)
   (last (run-ns s)))
@@ -80,53 +80,53 @@
 ;; ========================================
 
 (test-case "meta-category/primary-for-pi-param"
-  (parameterize ([current-meta-store (make-hasheq)])
+  (with-fresh-meta-env
     (define m (fresh-meta ctx-empty (expr-Nat)
                 (meta-source-info srcloc-unknown 'pi-param "pi mult" #f #f)))
     (define info (meta-lookup (expr-meta-id m)))
     (check-equal? (meta-category info) 'primary)))
 
 (test-case "meta-category/secondary-for-implicit"
-  (parameterize ([current-meta-store (make-hasheq)])
+  (with-fresh-meta-env
     (define m (fresh-meta ctx-empty (expr-Nat)
                 (meta-source-info srcloc-unknown 'implicit "impl arg" #f #f)))
     (define info (meta-lookup (expr-meta-id m)))
     (check-equal? (meta-category info) 'secondary)))
 
 (test-case "meta-category/secondary-for-implicit-app"
-  (parameterize ([current-meta-store (make-hasheq)])
+  (with-fresh-meta-env
     (define m (fresh-meta ctx-empty (expr-Nat)
                 (meta-source-info srcloc-unknown 'implicit-app "impl arg" #f #f)))
     (define info (meta-lookup (expr-meta-id m)))
     (check-equal? (meta-category info) 'secondary)))
 
 (test-case "meta-category/internal-for-bare-Type"
-  (parameterize ([current-meta-store (make-hasheq)])
+  (with-fresh-meta-env
     (define m (fresh-meta ctx-empty (expr-Nat)
                 (meta-source-info srcloc-unknown 'bare-Type "level" #f #f)))
     (define info (meta-lookup (expr-meta-id m)))
     (check-equal? (meta-category info) 'internal)))
 
 (test-case "meta-category/legacy-string-implicit"
-  (parameterize ([current-meta-store (make-hasheq)])
+  (with-fresh-meta-env
     (define m (fresh-meta ctx-empty (expr-Nat) "implicit"))
     (define info (meta-lookup (expr-meta-id m)))
     (check-equal? (meta-category info) 'secondary)))
 
 (test-case "meta-category/legacy-string-bare-Type"
-  (parameterize ([current-meta-store (make-hasheq)])
+  (with-fresh-meta-env
     (define m (fresh-meta ctx-empty (expr-Nat) "bare-Type"))
     (define info (meta-lookup (expr-meta-id m)))
     (check-equal? (meta-category info) 'internal)))
 
 (test-case "meta-category/legacy-string-other"
-  (parameterize ([current-meta-store (make-hasheq)])
+  (with-fresh-meta-env
     (define m (fresh-meta ctx-empty (expr-Nat) "test"))
     (define info (meta-lookup (expr-meta-id m)))
     (check-equal? (meta-category info) 'primary)))
 
 (test-case "meta-category/primary-for-lambda-param"
-  (parameterize ([current-meta-store (make-hasheq)])
+  (with-fresh-meta-env
     (define m (fresh-meta ctx-empty (expr-Nat)
                 (meta-source-info srcloc-unknown 'lambda-param "lam mult" #f #f)))
     (define info (meta-lookup (expr-meta-id m)))
@@ -191,55 +191,47 @@
   ;; When elaborating with a global that has ALL m0 (implicit) params,
   ;; the created meta should have meta-source-info, not a bare string.
   ;; Note: maybe-auto-apply-implicits only fires when ALL params are m0.
-  (parameterize ([current-global-env
-                  (global-env-add (hasheq) 'test-fn
-                    ;; All-implicit: Pi(A :0 Type, B :0 A, Nat)
-                    (expr-Pi 'm0 (expr-Type (lzero)) (expr-Pi 'm0 (expr-bvar 0) (expr-Nat)))
-                    (expr-lam 'm0 (expr-Type (lzero)) (expr-lam 'm0 (expr-bvar 0) (expr-zero))))]
-                 [current-meta-store (make-hasheq)]
-                 [current-level-meta-store (make-hasheq)]
-                 [current-mult-meta-store (make-hasheq)]
-                 [current-constraint-store '()]
-                 [current-wakeup-registry (make-hasheq)])
-    ;; Elaborate a bare reference to test-fn (should auto-apply with meta-source-info)
-    (define result (elaborate (surf-var 'test-fn (srcloc "test.prl" 5 3 7))))
-    (check-false (prologos-error? result))
-    ;; The result should be (app (app (fvar test-fn) (meta ?)) (meta ?))
-    (check-true (expr-app? result))
-    ;; The metas should have meta-source-info
-    (define unsolved (all-unsolved-metas))
-    (check-true (not (null? unsolved)))
-    (define info (car unsolved))
-    (check-true (meta-source-info? (meta-info-source info)))
-    (check-equal? (meta-source-info-kind (meta-info-source info)) 'implicit)))
+  (with-fresh-meta-env
+    (parameterize ([current-global-env
+                    (global-env-add (hasheq) 'test-fn
+                      ;; All-implicit: Pi(A :0 Type, B :0 A, Nat)
+                      (expr-Pi 'm0 (expr-Type (lzero)) (expr-Pi 'm0 (expr-bvar 0) (expr-Nat)))
+                      (expr-lam 'm0 (expr-Type (lzero)) (expr-lam 'm0 (expr-bvar 0) (expr-zero))))])
+      ;; Elaborate a bare reference to test-fn (should auto-apply with meta-source-info)
+      (define result (elaborate (surf-var 'test-fn (srcloc "test.prl" 5 3 7))))
+      (check-false (prologos-error? result))
+      ;; The result should be (app (app (fvar test-fn) (meta ?)) (meta ?))
+      (check-true (expr-app? result))
+      ;; The metas should have meta-source-info
+      (define unsolved (all-unsolved-metas))
+      (check-true (not (null? unsolved)))
+      (define info (car unsolved))
+      (check-true (meta-source-info? (meta-info-source info)))
+      (check-equal? (meta-source-info-kind (meta-info-source info)) 'implicit))))
 
 (test-case "elaborator/env->name-stack-produces-correct-list"
   ;; Elaborate a lambda with a body that references an all-implicit function.
   ;; The meta created should have the name map containing "x" from the lambda binder.
   ;; Note: maybe-auto-apply-implicits only fires when ALL params are m0.
-  (parameterize ([current-global-env
-                  (global-env-add (hasheq) 'impl-fn
-                    ;; All-implicit: Pi(A :0 Type, B :0 A, Nat)
-                    (expr-Pi 'm0 (expr-Type (lzero)) (expr-Pi 'm0 (expr-bvar 0) (expr-Nat)))
-                    (expr-lam 'm0 (expr-Type (lzero)) (expr-lam 'm0 (expr-bvar 0) (expr-zero))))]
-                 [current-meta-store (make-hasheq)]
-                 [current-level-meta-store (make-hasheq)]
-                 [current-mult-meta-store (make-hasheq)]
-                 [current-constraint-store '()]
-                 [current-wakeup-registry (make-hasheq)])
-    ;; Elaborate (fn [x <Nat>] impl-fn) — inside the lambda body, env has "x"
-    (define result (elaborate (surf-lam
-                                (binder-info 'x 'mw (surf-nat-type srcloc-unknown))
-                                (surf-var 'impl-fn (srcloc "test.prl" 5 20 7))
-                                srcloc-unknown)))
-    (check-false (prologos-error? result))
-    ;; The meta from impl-fn auto-apply should have name-map containing "x"
-    (define unsolved (all-unsolved-metas))
-    (check-true (not (null? unsolved)))
-    (define info (car unsolved))
-    (check-true (meta-source-info? (meta-info-source info)))
-    (define nm (meta-source-info-name-map (meta-info-source info)))
-    (check-not-false (and (list? nm) (member "x" nm)))))
+  (with-fresh-meta-env
+    (parameterize ([current-global-env
+                    (global-env-add (hasheq) 'impl-fn
+                      ;; All-implicit: Pi(A :0 Type, B :0 A, Nat)
+                      (expr-Pi 'm0 (expr-Type (lzero)) (expr-Pi 'm0 (expr-bvar 0) (expr-Nat)))
+                      (expr-lam 'm0 (expr-Type (lzero)) (expr-lam 'm0 (expr-bvar 0) (expr-zero))))])
+      ;; Elaborate (fn [x <Nat>] impl-fn) — inside the lambda body, env has "x"
+      (define result (elaborate (surf-lam
+                                  (binder-info 'x 'mw (surf-nat-type srcloc-unknown))
+                                  (surf-var 'impl-fn (srcloc "test.prl" 5 20 7))
+                                  srcloc-unknown)))
+      (check-false (prologos-error? result))
+      ;; The meta from impl-fn auto-apply should have name-map containing "x"
+      (define unsolved (all-unsolved-metas))
+      (check-true (not (null? unsolved)))
+      (define info (car unsolved))
+      (check-true (meta-source-info? (meta-info-source info)))
+      (define nm (meta-source-info-name-map (meta-info-source info)))
+      (check-not-false (and (list? nm) (member "x" nm))))))
 
 ;; ========================================
 ;; Integration: error message quality
@@ -280,22 +272,22 @@
   ;; compose double pred 3 → works, but compose double true 3 → constraint failure
   ;; We need a simpler case that triggers failed constraints
   ;; Let's use a known case: applying a function to wrong implicit type
-  (parameterize ([current-global-env (hasheq)]
-                 [current-ns-context #f]
-                 [current-module-registry prelude-module-registry]
-                 [current-lib-paths (list prelude-lib-dir)]
-                 [current-mult-meta-store (make-hasheq)]
-                 [current-preparse-registry prelude-preparse-registry])
-    (install-module-loader!)
-    (define results (process-string
-      (string-append
-        "(ns errt1)\n"
-        "(require [prologos::core :refer [id]])\n"
-        "(eval (id zero))")))
-    ;; id zero should succeed (it infers the type argument)
-    (define last-result (last results))
-    (check-false (prologos-error? last-result))
-    (check-true (string-contains? last-result "0N"))))
+  (with-fresh-meta-env
+    (parameterize ([current-global-env (hasheq)]
+                   [current-ns-context #f]
+                   [current-module-registry prelude-module-registry]
+                   [current-lib-paths (list prelude-lib-dir)]
+                   [current-preparse-registry prelude-preparse-registry])
+      (install-module-loader!)
+      (define results (process-string
+        (string-append
+          "(ns errt1)\n"
+          "(require [prologos::core :refer [id]])\n"
+          "(eval (id zero))")))
+      ;; id zero should succeed (it infers the type argument)
+      (define last-result (last results))
+      (check-false (prologos-error? last-result))
+      (check-true (string-contains? last-result "0N")))))
 
 ;; ========================================
 ;; Integration: stdlib regression
@@ -332,8 +324,7 @@
 
 (test-case "backward-compat/string-source-still-works"
   ;; Tests that pass strings to fresh-meta continue to work
-  (parameterize ([current-meta-store (make-hasheq)])
-    (reset-meta-store!)
+  (with-fresh-meta-env
     (define m (fresh-meta ctx-empty (expr-Nat) "test-string"))
     (check-true (expr-meta? m))
     (define info (meta-lookup (expr-meta-id m)))
@@ -341,8 +332,7 @@
     (check-equal? (meta-category info) 'primary)))
 
 (test-case "backward-compat/primary-unsolved-metas-filters"
-  (parameterize ([current-meta-store (make-hasheq)])
-    (reset-meta-store!)
+  (with-fresh-meta-env
     ;; Create 3 metas: 1 primary (pi-param), 1 secondary (implicit), 1 internal (bare-Type)
     (fresh-meta ctx-empty (expr-Nat) (meta-source-info srcloc-unknown 'pi-param "a" #f #f))
     (fresh-meta ctx-empty (expr-Nat) (meta-source-info srcloc-unknown 'implicit "b" #f #f))

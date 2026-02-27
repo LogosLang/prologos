@@ -80,41 +80,35 @@
   (check-property
    (make-config #:tests 50)
    (property ([ty gen:prologos-type])
-     (parameterize ([current-meta-store (make-hasheq)]
-                    [current-constraint-store '()]
-                    [current-wakeup-registry (make-hasheq)]
-                    [current-global-env (hasheq)]
-                    [current-reduction-fuel (box 50000)]
-                    [current-level-meta-store (make-hasheq)])
-       (define result (unify '() ty ty))
-       (check-true (not (eq? result #f))
-                   (format "Same type should unify: ~a" ty))
-       ;; After unification, zonk(ty) = zonk(ty) trivially
-       (define z1 (zonk ty))
-       (define z2 (zonk ty))
-       (check-equal? z1 z2)))))
+     (with-fresh-meta-env
+       (parameterize ([current-global-env (hasheq)]
+                      [current-reduction-fuel (box 50000)])
+         (define result (unify '() ty ty))
+         (check-true (not (eq? result #f))
+                     (format "Same type should unify: ~a" ty))
+         ;; After unification, zonk(ty) = zonk(ty) trivially
+         (define z1 (zonk ty))
+         (define z2 (zonk ty))
+         (check-equal? z1 z2))))))
 
 (test-case "property: unification soundness — meta vs concrete"
   (check-property
    (make-config #:tests 30)
    (property ([ty (gen:prologos-type-depth 0)])
-     (parameterize ([current-meta-store (make-hasheq)]
-                    [current-constraint-store '()]
-                    [current-wakeup-registry (make-hasheq)]
-                    [current-global-env (hasheq)]
-                    [current-reduction-fuel (box 50000)]
-                    [current-level-meta-store (make-hasheq)])
-       ;; Create a meta, unify with concrete type
-       (define m (fresh-meta '() (expr-Type 0) 'test))
-       (define result (unify '() m ty))
-       (check-true (not (eq? result #f))
-                   (format "Meta should unify with ~a" ty))
-       ;; zonk(meta) should equal zonk(ty) after successful unification
-       (define zm (zonk m))
-       (define zt (zonk ty))
-       (check-equal? zm zt
-                     (format "After unify(?m, ~a): zonk(?m)=~a but zonk(~a)=~a"
-                             ty zm ty zt))))))
+     (with-fresh-meta-env
+       (parameterize ([current-global-env (hasheq)]
+                      [current-reduction-fuel (box 50000)])
+         ;; Create a meta, unify with concrete type
+         (define m (fresh-meta '() (expr-Type 0) 'test))
+         (define result (unify '() m ty))
+         (check-true (not (eq? result #f))
+                     (format "Meta should unify with ~a" ty))
+         ;; zonk(meta) should equal zonk(ty) after successful unification
+         (define zm (zonk m))
+         (define zt (zonk ty))
+         (check-equal? zm zt
+                       (format "After unify(?m, ~a): zonk(?m)=~a but zonk(~a)=~a"
+                               ty zm ty zt)))))))
 
 ;; ============================================================
 ;; Property 3: Heartbeat bounds
@@ -153,18 +147,15 @@
   (check-property
    (make-config #:tests 30)
    (property ([prog gen:well-typed-program])
-     (parameterize ([current-meta-store (make-hasheq)]
-                    [current-constraint-store '()]
-                    [current-wakeup-registry (make-hasheq)]
-                    [current-global-env (hasheq)]
-                    [current-reduction-fuel (box 50000)]
-                    [current-level-meta-store (make-hasheq)])
-       (define term (car prog))
-       (define z1 (zonk term))
-       (define z2 (zonk z1))
-       (check-equal? z1 z2
-                     (format "zonk not idempotent: zonk(~a)=~a but zonk(zonk)=~a"
-                             term z1 z2))))))
+     (with-fresh-meta-env
+       (parameterize ([current-global-env (hasheq)]
+                      [current-reduction-fuel (box 50000)])
+         (define term (car prog))
+         (define z1 (zonk term))
+         (define z2 (zonk z1))
+         (check-equal? z1 z2
+                       (format "zonk not idempotent: zonk(~a)=~a but zonk(zonk)=~a"
+                               term z1 z2)))))))
 
 ;; ============================================================
 ;; Property 5: NF is a fixed point

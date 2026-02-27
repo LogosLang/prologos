@@ -68,82 +68,78 @@
    "Speculative rollback"
 
    (test-case "success — keeps meta-state"
-     (parameterize ([current-meta-store (make-hasheq)]
-                    [current-speculation-failures #f])
-       (reset-meta-store!)
-       (init-speculation-tracking!)
-       ;; Create a meta and solve it inside speculation
-       (define m (fresh-meta '() (expr-Nat) "test"))
-       (define id (expr-meta-id m))
-       (define result
-         (with-speculative-rollback
-           (lambda ()
-             (solve-meta! id (expr-Bool))
-             #t)
-           values
-           "test-success"))
-       (check-equal? result #t)
-       ;; Meta should be solved (kept)
-       (check-true (meta-solved? id))
-       (check-equal? (meta-solution id) (expr-Bool))
-       ;; No failures recorded
-       (check-equal? (get-speculation-failures) '())))
+     (with-fresh-meta-env
+       (parameterize ([current-speculation-failures #f])
+         (init-speculation-tracking!)
+         ;; Create a meta and solve it inside speculation
+         (define m (fresh-meta '() (expr-Nat) "test"))
+         (define id (expr-meta-id m))
+         (define result
+           (with-speculative-rollback
+             (lambda ()
+               (solve-meta! id (expr-Bool))
+               #t)
+             values
+             "test-success"))
+         (check-equal? result #t)
+         ;; Meta should be solved (kept)
+         (check-true (meta-solved? id))
+         (check-equal? (meta-solution id) (expr-Bool))
+         ;; No failures recorded
+         (check-equal? (get-speculation-failures) '()))))
 
    (test-case "failure — restores meta-state"
-     (parameterize ([current-meta-store (make-hasheq)]
-                    [current-speculation-failures #f])
-       (reset-meta-store!)
-       (init-speculation-tracking!)
-       ;; Create a meta
-       (define m (fresh-meta '() (expr-Nat) "test"))
-       (define id (expr-meta-id m))
-       ;; Solve it inside a failing speculation
-       (define result
+     (with-fresh-meta-env
+       (parameterize ([current-speculation-failures #f])
+         (init-speculation-tracking!)
+         ;; Create a meta
+         (define m (fresh-meta '() (expr-Nat) "test"))
+         (define id (expr-meta-id m))
+         ;; Solve it inside a failing speculation
+         (define result
+           (with-speculative-rollback
+             (lambda ()
+               (solve-meta! id (expr-Bool))
+               #f)  ;; returns #f → failure
+             values
+             "test-failure"))
+         (check-false result)
+         ;; Meta should be UNSOLVED (restored)
+         (check-false (meta-solved? id))
+         ;; One failure recorded
+         (define failures (get-speculation-failures))
+         (check-equal? (length failures) 1)
+         (check-equal? (speculation-failure-label (car failures)) "test-failure"))))
+
+   (test-case "network rollback — cell value restored"
+     (with-fresh-meta-env
+       (parameterize ([current-speculation-failures #f])
+         (init-speculation-tracking!)
+         ;; Create a meta
+         (define m (fresh-meta '() (expr-Nat) "test"))
+         (define id (expr-meta-id m))
+         ;; Solve inside failing speculation
          (with-speculative-rollback
            (lambda ()
              (solve-meta! id (expr-Bool))
-             #f)  ;; returns #f → failure
+             #f)
            values
-           "test-failure"))
-       (check-false result)
-       ;; Meta should be UNSOLVED (restored)
-       (check-false (meta-solved? id))
-       ;; One failure recorded
-       (define failures (get-speculation-failures))
-       (check-equal? (length failures) 1)
-       (check-equal? (speculation-failure-label (car failures)) "test-failure")))
-
-   (test-case "network rollback — cell value restored"
-     (parameterize ([current-meta-store (make-hasheq)]
-                    [current-speculation-failures #f])
-       (reset-meta-store!)
-       (init-speculation-tracking!)
-       ;; Create a meta
-       (define m (fresh-meta '() (expr-Nat) "test"))
-       (define id (expr-meta-id m))
-       ;; Solve inside failing speculation
-       (with-speculative-rollback
-         (lambda ()
-           (solve-meta! id (expr-Bool))
-           #f)
-         values
-         "network-test")
-       ;; Meta should be unsolved (network state restored)
-       (check-false (meta-solved? id))
-       (check-false (meta-solution id))))
+           "network-test")
+         ;; Meta should be unsolved (network state restored)
+         (check-false (meta-solved? id))
+         (check-false (meta-solution id)))))
 
    (test-case "multiple failures accumulate"
-     (parameterize ([current-meta-store (make-hasheq)]
-                    [current-speculation-failures #f])
-       (reset-meta-store!)
-       (init-speculation-tracking!)
-       (with-speculative-rollback (lambda () #f) values "fail-1")
-       (with-speculative-rollback (lambda () #f) values "fail-2")
-       (with-speculative-rollback (lambda () #t) values "success")
-       (define failures (get-speculation-failures))
-       (check-equal? (length failures) 2)
-       (check-equal? (speculation-failure-label (car failures)) "fail-1")
-       (check-equal? (speculation-failure-label (cadr failures)) "fail-2")))))
+     (with-fresh-meta-env
+       (parameterize ([current-speculation-failures #f])
+         (init-speculation-tracking!)
+         (with-speculative-rollback (lambda () #f) values "fail-1")
+         (with-speculative-rollback (lambda () #f) values "fail-2")
+         (with-speculative-rollback (lambda () #t) values "success")
+         (define failures (get-speculation-failures))
+         (check-equal? (length failures) 2)
+         (check-equal? (speculation-failure-label (car failures)) "fail-1")
+         (check-equal? (speculation-failure-label (cadr failures)) "fail-2"))))))
 
 ;; ========================================
 ;; Suite 3: Union Type Speculation (Integration)

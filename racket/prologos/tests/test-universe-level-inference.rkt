@@ -26,13 +26,13 @@
 ;; ========================================
 
 (test-case "level-meta/fresh-creates-unsolved"
-  (parameterize ([current-level-meta-store (make-hasheq)])
+  (with-fresh-meta-env
     (define lm (fresh-level-meta "test"))
     (check-true (level-meta? lm))
     (check-false (level-meta-solved? (level-meta-id lm)))))
 
 (test-case "level-meta/solve-and-retrieve"
-  (parameterize ([current-level-meta-store (make-hasheq)])
+  (with-fresh-meta-env
     (define lm (fresh-level-meta "test"))
     (define id (level-meta-id lm))
     (solve-level-meta! id (lzero))
@@ -40,7 +40,7 @@
     (check-equal? (level-meta-solution id) (lzero))))
 
 (test-case "level-meta/solve-with-lsuc"
-  (parameterize ([current-level-meta-store (make-hasheq)])
+  (with-fresh-meta-env
     (define lm (fresh-level-meta "test"))
     (define id (level-meta-id lm))
     (solve-level-meta! id (lsuc (lzero)))
@@ -51,31 +51,31 @@
 ;; ========================================
 
 (test-case "zonk-level/follows-solved"
-  (parameterize ([current-level-meta-store (make-hasheq)])
+  (with-fresh-meta-env
     (define lm (fresh-level-meta "test"))
     (solve-level-meta! (level-meta-id lm) (lsuc (lzero)))
     (check-equal? (zonk-level lm) (lsuc (lzero)))))
 
 (test-case "zonk-level/preserves-unsolved"
-  (parameterize ([current-level-meta-store (make-hasheq)])
+  (with-fresh-meta-env
     (define lm (fresh-level-meta "test"))
     ;; zonk-level preserves unsolved level-metas (for intermediate use)
     (check-true (level-meta? (zonk-level lm)))))
 
 (test-case "zonk-level-default/defaults-unsolved-to-lzero"
-  (parameterize ([current-level-meta-store (make-hasheq)])
+  (with-fresh-meta-env
     (define lm (fresh-level-meta "test"))
     ;; zonk-level-default defaults unsolved to lzero (for final output)
     (check-equal? (zonk-level-default lm) (lzero))))
 
 (test-case "zonk-level/handles-lsuc-of-level-meta"
-  (parameterize ([current-level-meta-store (make-hasheq)])
+  (with-fresh-meta-env
     (define lm (fresh-level-meta "test"))
     (solve-level-meta! (level-meta-id lm) (lzero))
     (check-equal? (zonk-level (lsuc lm)) (lsuc (lzero)))))
 
 (test-case "zonk-level/transitive"
-  (parameterize ([current-level-meta-store (make-hasheq)])
+  (with-fresh-meta-env
     (define lm1 (fresh-level-meta "a"))
     (define lm2 (fresh-level-meta "b"))
     (solve-level-meta! (level-meta-id lm1) lm2)
@@ -87,59 +87,47 @@
 ;; ========================================
 
 (test-case "unify-level/meta-vs-concrete"
-  (parameterize ([current-meta-store (make-hasheq)]
-                 [current-level-meta-store (make-hasheq)]
-                 [current-constraint-store '()]
-                 [current-wakeup-registry (make-hasheq)]
-                 [current-global-env (hasheq)])
-    (define lm (fresh-level-meta "test"))
-    ;; Unify Type(?l) vs Type(0)
-    (define t1 (expr-Type lm))
-    (define t2 (expr-Type (lzero)))
-    (check-equal? (unify ctx-empty t1 t2) #t)
-    (check-true (level-meta-solved? (level-meta-id lm)))
-    (check-equal? (level-meta-solution (level-meta-id lm)) (lzero))))
+  (with-fresh-meta-env
+    (parameterize ([current-global-env (hasheq)])
+      (define lm (fresh-level-meta "test"))
+      ;; Unify Type(?l) vs Type(0)
+      (define t1 (expr-Type lm))
+      (define t2 (expr-Type (lzero)))
+      (check-equal? (unify ctx-empty t1 t2) #t)
+      (check-true (level-meta-solved? (level-meta-id lm)))
+      (check-equal? (level-meta-solution (level-meta-id lm)) (lzero)))))
 
 (test-case "unify-level/two-metas"
-  (parameterize ([current-meta-store (make-hasheq)]
-                 [current-level-meta-store (make-hasheq)]
-                 [current-constraint-store '()]
-                 [current-wakeup-registry (make-hasheq)]
-                 [current-global-env (hasheq)])
-    (define lm1 (fresh-level-meta "a"))
-    (define lm2 (fresh-level-meta "b"))
-    (define t1 (expr-Type lm1))
-    (define t2 (expr-Type lm2))
-    (check-equal? (unify ctx-empty t1 t2) #t)
-    ;; One should be solved to the other
-    (check-true (level-meta-solved? (level-meta-id lm1)))))
+  (with-fresh-meta-env
+    (parameterize ([current-global-env (hasheq)])
+      (define lm1 (fresh-level-meta "a"))
+      (define lm2 (fresh-level-meta "b"))
+      (define t1 (expr-Type lm1))
+      (define t2 (expr-Type lm2))
+      (check-equal? (unify ctx-empty t1 t2) #t)
+      ;; One should be solved to the other
+      (check-true (level-meta-solved? (level-meta-id lm1))))))
 
 (test-case "unify-level/lsuc-vs-lsuc"
-  (parameterize ([current-meta-store (make-hasheq)]
-                 [current-level-meta-store (make-hasheq)]
-                 [current-constraint-store '()]
-                 [current-wakeup-registry (make-hasheq)]
-                 [current-global-env (hasheq)])
-    (define t1 (expr-Type (lsuc (lzero))))
-    (define t2 (expr-Type (lsuc (lzero))))
-    (check-equal? (unify ctx-empty t1 t2) #t)))
+  (with-fresh-meta-env
+    (parameterize ([current-global-env (hasheq)])
+      (define t1 (expr-Type (lsuc (lzero))))
+      (define t2 (expr-Type (lsuc (lzero))))
+      (check-equal? (unify ctx-empty t1 t2) #t))))
 
 (test-case "unify-level/mismatch-rejects"
-  (parameterize ([current-meta-store (make-hasheq)]
-                 [current-level-meta-store (make-hasheq)]
-                 [current-constraint-store '()]
-                 [current-wakeup-registry (make-hasheq)]
-                 [current-global-env (hasheq)])
-    (define t1 (expr-Type (lzero)))
-    (define t2 (expr-Type (lsuc (lzero))))
-    (check-equal? (unify ctx-empty t1 t2) #f)))
+  (with-fresh-meta-env
+    (parameterize ([current-global-env (hasheq)])
+      (define t1 (expr-Type (lzero)))
+      (define t2 (expr-Type (lsuc (lzero))))
+      (check-equal? (unify ctx-empty t1 t2) #f))))
 
 ;; ========================================
 ;; Unit tests: lmax / level<=? with level-metas
 ;; ========================================
 
 (test-case "lmax/zero-and-level-meta"
-  (parameterize ([current-level-meta-store (make-hasheq)])
+  (with-fresh-meta-env
     (define lm (fresh-level-meta "test"))
     ;; lmax(lzero, ?l) = ?l
     (check-equal? (lmax (lzero) lm) lm)
@@ -147,14 +135,14 @@
     (check-equal? (lmax lm (lzero)) lm)))
 
 (test-case "lmax/concrete-and-level-meta"
-  (parameterize ([current-level-meta-store (make-hasheq)])
+  (with-fresh-meta-env
     (define lm (fresh-level-meta "test"))
     ;; lmax(?l, lsuc(lzero)) = lsuc(lzero)  — concrete wins
     (check-equal? (lmax lm (lsuc (lzero))) (lsuc (lzero)))
     (check-equal? (lmax (lsuc (lzero)) lm) (lsuc (lzero)))))
 
 (test-case "level<=?/meta-is-optimistic"
-  (parameterize ([current-level-meta-store (make-hasheq)])
+  (with-fresh-meta-env
     (define lm (fresh-level-meta "test"))
     (check-true (level<=? lm (lsuc (lzero))))
     (check-true (level<=? lm (lzero)))
@@ -165,7 +153,7 @@
 ;; ========================================
 
 (test-case "level?/accepts-level-meta"
-  (parameterize ([current-level-meta-store (make-hasheq)])
+  (with-fresh-meta-env
     (define lm (fresh-level-meta "test"))
     (check-true (level? lm))))
 

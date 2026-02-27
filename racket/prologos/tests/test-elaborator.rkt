@@ -80,42 +80,46 @@
 (test-case "elab: (fn (x : Nat) x) — identity"
   ;; x is bound at depth 0, used at depth 1, so index = 1 - 0 - 1 = 0
   ;; Sprint 7: omitted mult → mult-meta (not 'mw)
-  (let ([r (elab "(fn (x : Nat) x)")])
-    (check-true (expr-lam? r))
-    (check-true (mult-meta? (expr-lam-mult r)))
-    (check-equal? (expr-lam-type r) (expr-Nat))
-    (check-equal? (expr-lam-body r) (expr-bvar 0))))
+  (with-fresh-meta-env
+    (let ([r (elab "(fn (x : Nat) x)")])
+      (check-true (expr-lam? r))
+      (check-true (mult-meta? (expr-lam-mult r)))
+      (check-equal? (expr-lam-type r) (expr-Nat))
+      (check-equal? (expr-lam-body r) (expr-bvar 0)))))
 
 (test-case "elab: (fn (x : Nat) (suc x))"
   ;; Sprint 7: omitted mult → mult-meta
-  (let ([r (elab "(fn (x : Nat) (suc x))")])
-    (check-true (expr-lam? r))
-    (check-true (mult-meta? (expr-lam-mult r)))
-    (check-equal? (expr-lam-type r) (expr-Nat))
-    (check-equal? (expr-lam-body r) (expr-suc (expr-bvar 0)))))
+  (with-fresh-meta-env
+    (let ([r (elab "(fn (x : Nat) (suc x))")])
+      (check-true (expr-lam? r))
+      (check-true (mult-meta? (expr-lam-mult r)))
+      (check-equal? (expr-lam-type r) (expr-Nat))
+      (check-equal? (expr-lam-body r) (expr-suc (expr-bvar 0))))))
 
 (test-case "elab: (fn (x : Nat) (fn (y : Nat) x)) — outer variable"
   ;; x bound at depth 0, y bound at depth 1
   ;; x used at depth 2: index = 2 - 0 - 1 = 1
   ;; Sprint 7: omitted mult → mult-meta
-  (let ([r (elab "(fn (x : Nat) (fn (y : Nat) x))")])
-    (check-true (expr-lam? r))
-    (check-true (mult-meta? (expr-lam-mult r)))
-    (let ([inner (expr-lam-body r)])
-      (check-true (expr-lam? inner))
-      (check-true (mult-meta? (expr-lam-mult inner)))
-      (check-equal? (expr-lam-body inner) (expr-bvar 1)))))
+  (with-fresh-meta-env
+    (let ([r (elab "(fn (x : Nat) (fn (y : Nat) x))")])
+      (check-true (expr-lam? r))
+      (check-true (mult-meta? (expr-lam-mult r)))
+      (let ([inner (expr-lam-body r)])
+        (check-true (expr-lam? inner))
+        (check-true (mult-meta? (expr-lam-mult inner)))
+        (check-equal? (expr-lam-body inner) (expr-bvar 1))))))
 
 (test-case "elab: (fn (x : Nat) (fn (y : Nat) y)) — inner variable"
   ;; y bound at depth 1, used at depth 2: index = 2 - 1 - 1 = 0
   ;; Sprint 7: omitted mult → mult-meta
-  (let ([r (elab "(fn (x : Nat) (fn (y : Nat) y))")])
-    (check-true (expr-lam? r))
-    (check-true (mult-meta? (expr-lam-mult r)))
-    (let ([inner (expr-lam-body r)])
-      (check-true (expr-lam? inner))
-      (check-true (mult-meta? (expr-lam-mult inner)))
-      (check-equal? (expr-lam-body inner) (expr-bvar 0)))))
+  (with-fresh-meta-env
+    (let ([r (elab "(fn (x : Nat) (fn (y : Nat) y))")])
+      (check-true (expr-lam? r))
+      (check-true (mult-meta? (expr-lam-mult r)))
+      (let ([inner (expr-lam-body r)])
+        (check-true (expr-lam? inner))
+        (check-true (mult-meta? (expr-lam-mult inner)))
+        (check-equal? (expr-lam-body inner) (expr-bvar 0))))))
 
 (test-case "elab: linear lambda"
   (check-equal? (elab "(fn (x :1 Nat) x)")
@@ -131,20 +135,22 @@
 
 (test-case "elab: (Pi (x : Nat) Nat) — dependent Pi"
   ;; Sprint 7: omitted mult → mult-meta
-  (let ([r (elab "(Pi (x : Nat) Nat)")])
-    (check-true (expr-Pi? r))
-    (check-true (mult-meta? (expr-Pi-mult r)))
-    (check-equal? (expr-Pi-domain r) (expr-Nat))
-    (check-equal? (expr-Pi-codomain r) (expr-Nat))))
+  (with-fresh-meta-env
+    (let ([r (elab "(Pi (x : Nat) Nat)")])
+      (check-true (expr-Pi? r))
+      (check-true (mult-meta? (expr-Pi-mult r)))
+      (check-equal? (expr-Pi-domain r) (expr-Nat))
+      (check-equal? (expr-Pi-codomain r) (expr-Nat)))))
 
 (test-case "elab: (Pi (n : Nat) (Vec Nat n)) — dependent with use"
   ;; n bound at depth 0, used at depth 1: index 0
   ;; Sprint 7: omitted mult → mult-meta
-  (let ([r (elab "(Pi (n : Nat) (Vec Nat n))")])
-    (check-true (expr-Pi? r))
-    (check-true (mult-meta? (expr-Pi-mult r)))
-    (check-equal? (expr-Pi-domain r) (expr-Nat))
-    (check-equal? (expr-Pi-codomain r) (expr-Vec (expr-Nat) (expr-bvar 0)))))
+  (with-fresh-meta-env
+    (let ([r (elab "(Pi (n : Nat) (Vec Nat n))")])
+      (check-true (expr-Pi? r))
+      (check-true (mult-meta? (expr-Pi-mult r)))
+      (check-equal? (expr-Pi-domain r) (expr-Nat))
+      (check-equal? (expr-Pi-codomain r) (expr-Vec (expr-Nat) (expr-bvar 0))))))
 
 (test-case "elab: (Pi (A :0 (Type 0)) (-> A A)) — polymorphic identity type"
   (check-equal? (elab "(Pi (A :0 (Type 0)) (-> A A))")
@@ -229,15 +235,16 @@
 (test-case "elab: shadowing — (fn (x : Nat) (fn (x : Bool) x)) refers to inner x"
   ;; Inner x at depth 1, used at depth 2: index = 0
   ;; Sprint 7: omitted mult → mult-meta
-  (let ([r (elab "(fn (x : Nat) (fn (x : Bool) x))")])
-    (check-true (expr-lam? r))
-    (check-true (mult-meta? (expr-lam-mult r)))
-    (check-equal? (expr-lam-type r) (expr-Nat))
-    (let ([inner (expr-lam-body r)])
-      (check-true (expr-lam? inner))
-      (check-true (mult-meta? (expr-lam-mult inner)))
-      (check-equal? (expr-lam-type inner) (expr-Bool))
-      (check-equal? (expr-lam-body inner) (expr-bvar 0)))))
+  (with-fresh-meta-env
+    (let ([r (elab "(fn (x : Nat) (fn (x : Bool) x))")])
+      (check-true (expr-lam? r))
+      (check-true (mult-meta? (expr-lam-mult r)))
+      (check-equal? (expr-lam-type r) (expr-Nat))
+      (let ([inner (expr-lam-body r)])
+        (check-true (expr-lam? inner))
+        (check-true (mult-meta? (expr-lam-mult inner)))
+        (check-equal? (expr-lam-type inner) (expr-Bool))
+        (check-equal? (expr-lam-body inner) (expr-bvar 0))))))
 
 ;; ========================================
 ;; Error cases
@@ -247,26 +254,28 @@
   (check-true (prologos-error? (elab "undefined_var"))))
 
 (test-case "elab: unbound in body"
-  (check-true (prologos-error? (elab "(fn (x : Nat) y)"))))
+  (with-fresh-meta-env
+    (check-true (prologos-error? (elab "(fn (x : Nat) y)")))))
 
 ;; ========================================
 ;; Top-level elaboration
 ;; ========================================
 
 (test-case "elab-top: def"
-  (let ([result (elaborate-top-level
-                 (parse-string "(def myid : (-> Nat Nat) (fn (x : Nat) x))"))])
-    (check-false (prologos-error? result))
-    (check-equal? (car result) 'def)
-    (check-equal? (cadr result) 'myid)
-    ;; Arrow desugars with 'mw (not mult-meta), so Pi mult is concrete
-    (check-equal? (caddr result) (expr-Pi 'mw (expr-Nat) (expr-Nat)))
-    ;; Sprint 7: lambda's omitted mult → mult-meta
-    (let ([body (cadddr result)])
-      (check-true (expr-lam? body))
-      (check-true (mult-meta? (expr-lam-mult body)))
-      (check-equal? (expr-lam-type body) (expr-Nat))
-      (check-equal? (expr-lam-body body) (expr-bvar 0)))))
+  (with-fresh-meta-env
+    (let ([result (elaborate-top-level
+                   (parse-string "(def myid : (-> Nat Nat) (fn (x : Nat) x))"))])
+      (check-false (prologos-error? result))
+      (check-equal? (car result) 'def)
+      (check-equal? (cadr result) 'myid)
+      ;; Arrow desugars with 'mw (not mult-meta), so Pi mult is concrete
+      (check-equal? (caddr result) (expr-Pi 'mw (expr-Nat) (expr-Nat)))
+      ;; Sprint 7: lambda's omitted mult → mult-meta
+      (let ([body (cadddr result)])
+        (check-true (expr-lam? body))
+        (check-true (mult-meta? (expr-lam-mult body)))
+        (check-equal? (expr-lam-type body) (expr-Nat))
+        (check-equal? (expr-lam-body body) (expr-bvar 0))))))
 
 (test-case "elab-top: check"
   (let ([result (elaborate-top-level

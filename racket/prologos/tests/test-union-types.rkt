@@ -56,18 +56,18 @@
 ;; ========================================
 
 (test-case "union: zonk passes through"
-  (parameterize ([current-meta-store (make-hasheq)])
+  (with-fresh-meta-env
     (check-equal?
       (zonk (expr-union (expr-Nat) (expr-Bool)))
       (expr-union (expr-Nat) (expr-Bool)))))
 
 (test-case "union: zonk resolves metas inside"
-  (parameterize ([current-meta-store (make-hasheq)])
-    (define id (gensym 'test))
-    (hash-set! (current-meta-store) id
-               (meta-info id ctx-empty (expr-hole) 'solved (expr-Nat) '() #f))
+  (with-fresh-meta-env
+    (define m (fresh-meta ctx-empty (expr-Type 0) 'test))
+    (define id (expr-meta-id m))
+    (solve-meta! id (expr-Nat))
     (check-equal?
-      (zonk (expr-union (expr-meta id) (expr-Bool)))
+      (zonk (expr-union m (expr-Bool)))
       (expr-union (expr-Nat) (expr-Bool)))))
 
 ;; ========================================
@@ -105,44 +105,44 @@
 ;; ========================================
 
 (test-case "unify: Nat | Bool ≡ Nat | Bool"
-  (parameterize ([current-meta-store (make-hasheq)]
-                 [current-global-env (hasheq)])
-    (check-true
-      (unify-ok? (unify ctx-empty
-                        (expr-union (expr-Nat) (expr-Bool))
-                        (expr-union (expr-Nat) (expr-Bool)))))))
+  (with-fresh-meta-env
+    (parameterize ([current-global-env (hasheq)])
+      (check-true
+        (unify-ok? (unify ctx-empty
+                          (expr-union (expr-Nat) (expr-Bool))
+                          (expr-union (expr-Nat) (expr-Bool))))))))
 
 (test-case "unify: Nat | Bool ≡ Bool | Nat (commutativity)"
-  (parameterize ([current-meta-store (make-hasheq)]
-                 [current-global-env (hasheq)])
-    (check-true
-      (unify-ok? (unify ctx-empty
-                        (expr-union (expr-Nat) (expr-Bool))
-                        (expr-union (expr-Bool) (expr-Nat)))))))
+  (with-fresh-meta-env
+    (parameterize ([current-global-env (hasheq)])
+      (check-true
+        (unify-ok? (unify ctx-empty
+                          (expr-union (expr-Nat) (expr-Bool))
+                          (expr-union (expr-Bool) (expr-Nat))))))))
 
 (test-case "unify: (Nat | Bool) | Unit ≡ Nat | (Bool | Unit) (associativity)"
-  (parameterize ([current-meta-store (make-hasheq)]
-                 [current-global-env (hasheq)])
-    (check-true
-      (unify-ok? (unify ctx-empty
-                        (expr-union (expr-union (expr-Nat) (expr-Bool)) (expr-Unit))
-                        (expr-union (expr-Nat) (expr-union (expr-Bool) (expr-Unit))))))))
+  (with-fresh-meta-env
+    (parameterize ([current-global-env (hasheq)])
+      (check-true
+        (unify-ok? (unify ctx-empty
+                          (expr-union (expr-union (expr-Nat) (expr-Bool)) (expr-Unit))
+                          (expr-union (expr-Nat) (expr-union (expr-Bool) (expr-Unit)))))))))
 
 (test-case "unify: Nat | Bool ≢ Nat | Unit"
-  (parameterize ([current-meta-store (make-hasheq)]
-                 [current-global-env (hasheq)])
-    (check-false
-      (unify ctx-empty
-             (expr-union (expr-Nat) (expr-Bool))
-             (expr-union (expr-Nat) (expr-Unit))))))
+  (with-fresh-meta-env
+    (parameterize ([current-global-env (hasheq)])
+      (check-false
+        (unify ctx-empty
+               (expr-union (expr-Nat) (expr-Bool))
+               (expr-union (expr-Nat) (expr-Unit)))))))
 
 (test-case "unify: Nat | Bool ≢ Nat (different cardinality)"
-  (parameterize ([current-meta-store (make-hasheq)]
-                 [current-global-env (hasheq)])
-    (check-false
-      (unify ctx-empty
-             (expr-union (expr-Nat) (expr-Bool))
-             (expr-Nat)))))
+  (with-fresh-meta-env
+    (parameterize ([current-global-env (hasheq)])
+      (check-false
+        (unify ctx-empty
+               (expr-union (expr-Nat) (expr-Bool))
+               (expr-Nat))))))
 
 ;; ========================================
 ;; Type formation: is-type and infer-level
@@ -167,35 +167,42 @@
 ;; ========================================
 
 (test-case "check: zero : Nat | Bool"
-  (check-true
-    (tc:check ctx-empty (expr-zero) (expr-union (expr-Nat) (expr-Bool)))))
+  (with-fresh-meta-env
+    (check-true
+      (tc:check ctx-empty (expr-zero) (expr-union (expr-Nat) (expr-Bool))))))
 
 (test-case "check: true : Nat | Bool"
-  (check-true
-    (tc:check ctx-empty (expr-true) (expr-union (expr-Nat) (expr-Bool)))))
+  (with-fresh-meta-env
+    (check-true
+      (tc:check ctx-empty (expr-true) (expr-union (expr-Nat) (expr-Bool))))))
 
 (test-case "check: suc(zero) : Nat | Bool"
-  (check-true
-    (tc:check ctx-empty (expr-suc (expr-zero)) (expr-union (expr-Nat) (expr-Bool)))))
+  (with-fresh-meta-env
+    (check-true
+      (tc:check ctx-empty (expr-suc (expr-zero)) (expr-union (expr-Nat) (expr-Bool))))))
 
 (test-case "check: false : Bool | Nat"
-  (check-true
-    (tc:check ctx-empty (expr-false) (expr-union (expr-Bool) (expr-Nat)))))
+  (with-fresh-meta-env
+    (check-true
+      (tc:check ctx-empty (expr-false) (expr-union (expr-Bool) (expr-Nat))))))
 
 (test-case "check: unit : Unit | Nat"
-  (check-true
-    (tc:check ctx-empty (expr-unit) (expr-union (expr-Unit) (expr-Nat)))))
+  (with-fresh-meta-env
+    (check-true
+      (tc:check ctx-empty (expr-unit) (expr-union (expr-Unit) (expr-Nat))))))
 
 (test-case "check: unit does not check against Nat | Bool"
-  (check-false
-    (tc:check ctx-empty (expr-unit) (expr-union (expr-Nat) (expr-Bool)))))
+  (with-fresh-meta-env
+    (check-false
+      (tc:check ctx-empty (expr-unit) (expr-union (expr-Nat) (expr-Bool))))))
 
 (test-case "check: lambda checks against Pi | Nat (union with function type)"
   ;; fn [x : Nat] -> x  should check against (Nat -> Nat) | Bool
-  (check-true
-    (tc:check ctx-empty
-              (expr-lam 'mw (expr-Nat) (expr-bvar 0))
-              (expr-union (expr-Pi 'mw (expr-Nat) (expr-Nat)) (expr-Bool)))))
+  (with-fresh-meta-env
+    (check-true
+      (tc:check ctx-empty
+                (expr-lam 'mw (expr-Nat) (expr-bvar 0))
+                (expr-union (expr-Pi 'mw (expr-Nat) (expr-Nat)) (expr-Bool))))))
 
 ;; ========================================
 ;; Surface syntax: full pipeline tests
