@@ -17,7 +17,11 @@
 ;;; downstream error formatting to show derivation chains ("type mismatch
 ;;; because X at line Y, but Z at line W").
 ;;;
-;;; Phase 5+8b+D of the type inference refactoring.
+;;; Phase D2: Sub-failure capture. When a speculation branch itself triggers
+;;; nested speculations, the inner failures are captured as `sub-failures`
+;;; of the outer failure. This builds a tree of failures for derivation chains.
+;;;
+;;; Phase 5+8b+D+D2 of the type inference refactoring.
 ;;; Design reference: docs/tracking/2026-02-25_TYPE_INFERENCE_ON_LOGIC_ENGINE_DESIGN.md §5.5
 ;;;
 
@@ -32,6 +36,7 @@
  current-speculation-failures
  init-speculation-tracking!
  get-speculation-failures
+ get-latest-speculation-failure
  record-speculation-failure!
  ;; Phase D: ATMS integration
  current-command-atms)
@@ -41,9 +46,13 @@
 ;; ========================================
 
 ;; A recorded speculation failure.
-;; Phase D: Added optional hypothesis-id for ATMS derivation chains.
+;; Phase D: Added hypothesis-id for ATMS derivation chains.
+;; Phase D2: Added support-set (ATMS nogood) and sub-failures (nested failures
+;;   from speculations triggered within this branch).
 ;;   hypothesis-id: assumption-id | #f — the ATMS assumption for this branch
-(struct speculation-failure (label hypothesis-id) #:transparent)
+;;   support-set: hasheq | #f — the ATMS assumptions that made this branch inconsistent
+;;   sub-failures: (listof speculation-failure) — nested failures from within this branch
+(struct speculation-failure (label hypothesis-id support-set sub-failures) #:transparent)
 
 ;; Per-command list of speculation failures (for error enrichment).
 ;; #f when tracking is not active; box of (listof speculation-failure) when active.
@@ -64,16 +73,24 @@
     (set-box! atms-box (atms-empty))))
 
 ;; Record a speculation failure.
-;; Phase D: With optional hypothesis-id for ATMS tracking.
-(define (record-speculation-failure! label [hypothesis-id #f])
+;; Phase D2: With optional hypothesis-id, support-set, and sub-failures.
+(define (record-speculation-failure! label [hypothesis-id #f] [support-set #f] [sub-failures '()])
   (define b (current-speculation-failures))
   (when b
-    (set-box! b (cons (speculation-failure label hypothesis-id) (unbox b)))))
+    (set-box! b (cons (speculation-failure label hypothesis-id support-set sub-failures) (unbox b)))))
 
-;; Retrieve all recorded failures (newest first).
+;; Retrieve all recorded failures (chronological order, oldest first).
 (define (get-speculation-failures)
   (define b (current-speculation-failures))
   (if b (reverse (unbox b)) '()))
+
+;; Phase D2: Get the most recently recorded failure (or #f if none).
+;; Useful for extracting sub-failures immediately after with-speculative-rollback.
+(define (get-latest-speculation-failure)
+  (define b (current-speculation-failures))
+  (if (and b (pair? (unbox b)))
+      (car (unbox b))  ;; newest is at the front (cons'ed on)
+      #f))
 
 ;; ========================================
 ;; Core speculation helper
@@ -103,6 +120,10 @@
             (set-box! ab a*)
             (values ab aid))
           (values #f #f))))
+  ;; Phase D2: Snapshot failure count for sub-failure capture
+  (define failures-before-count
+    (let ([b (current-speculation-failures)])
+      (if b (length (unbox b)) 0)))
   ;; 1. Save meta-state (immutable CHAMP snapshot — O(1) for network)
   (define saved (save-meta-state))
   ;; 2. Run the speculation
@@ -112,11 +133,35 @@
     [else
      ;; 3. Restore meta-state (O(1) for network)
      (restore-meta-state! saved)
-     ;; Phase D: Record nogood in ATMS (this hypothesis alone is inconsistent)
-     (when (and atms-box hyp-id)
-       (set-box! atms-box
-                 (atms-add-nogood (unbox atms-box)
-                                  (hasheq hyp-id #t))))
-     ;; 4. Record failure with hypothesis-id
-     (record-speculation-failure! label hyp-id)
+     ;; Phase D2: Extract sub-failures (failures added during this thunk)
+     ;; The box stores newest-first, so new failures are at the front.
+     (define-values (sub-failures support-set)
+       (let ([b (current-speculation-failures)])
+         (cond
+           [(not b) (values '() #f)]
+           [else
+            (define all-now (unbox b))
+            (define new-count (- (length all-now) failures-before-count))
+            (define subs
+              (if (> new-count 0)
+                  (let ([raw (for/list ([f (in-list all-now)]
+                                        [_ (in-range new-count)])
+                               f)])
+                    (reverse raw))  ;; chronological order
+                  '()))
+            ;; Remove sub-failures from main list (they'll be nested)
+            (when (> new-count 0)
+              (set-box! b (list-tail all-now new-count)))
+            ;; Phase D: Record nogood in ATMS
+            (define ss
+              (if (and atms-box hyp-id)
+                  (begin
+                    (set-box! atms-box
+                              (atms-add-nogood (unbox atms-box)
+                                               (hasheq hyp-id #t)))
+                    (hasheq hyp-id #t))
+                  #f))
+            (values subs ss)])))
+     ;; 4. Record failure with sub-failures and support-set
+     (record-speculation-failure! label hyp-id support-set sub-failures)
      #f]))

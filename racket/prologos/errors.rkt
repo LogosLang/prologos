@@ -6,7 +6,8 @@
 ;;; Each error carries a source location and enough context for readable messages.
 ;;;
 
-(require racket/match
+(require racket/list
+         racket/match
          racket/string
          "source-location.rkt")
 
@@ -97,8 +98,11 @@
 ;; branches: (listof string) — pretty-printed branch types
 ;; branch-mismatches: (listof string) — per-branch actual type or "<could not infer>"
 ;; expr-str: string — pretty-printed expression
+;; Phase D3: derivation-chain: (listof (listof string)) — per-branch list of
+;;   sub-failure labels showing what nested speculation paths were tried.
+;;   Empty list = no chain info (backward compatible).
 (struct union-exhaustion-error prologos-error
-  (branches branch-mismatches expr-str) #:transparent)
+  (branches branch-mismatches expr-str derivation-chain) #:transparent)
 
 ;; ========================================
 ;; Error Formatting
@@ -231,15 +235,23 @@
             (format "  = help: use the qualified accessor name to disambiguate (e.g., ~a-~a)"
                     (car trait-names) method-name))
       "\n")]
-    ;; Phase 6: E1006 — Union type exhaustion
-    [(union-exhaustion-error _ _ branches branch-mismatches expr-str)
+    ;; Phase 6+D4: E1006 — Union type exhaustion with optional derivation chains
+    [(union-exhaustion-error _ _ branches branch-mismatches expr-str derivation-chain)
      (string-join
       (append
        (list (format "error[E1006]: expression does not match any branch of union type")
              (format "  --> ~a" loc-str))
-       (for/list ([br (in-list branches)]
-                  [mm (in-list branch-mismatches)])
-         (format "  tried ~a — type mismatch (got: ~a)" br mm))
+       ;; Per-branch lines with optional derivation chain sub-lines
+       (let ([chains (if (and derivation-chain (pair? derivation-chain))
+                         derivation-chain
+                         (make-list (length branches) '()))])
+         (apply append
+           (for/list ([br (in-list branches)]
+                      [mm (in-list branch-mismatches)]
+                      [chain (in-list chains)])
+             (cons (format "  tried ~a — type mismatch (got: ~a)" br mm)
+                   (for/list ([step (in-list chain)])
+                     (format "    because: ~a" step))))))
        (list (format "  in expression: ~a" expr-str)
              (format "  = help: expression must match at least one branch of ~a" msg)))
       "\n")]
