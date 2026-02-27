@@ -463,6 +463,33 @@
        (tok-read! tok)  ; consume >
        (token 'symbol '-> ln cl ps 2)]
 
+      ;; Negative number literal: -42, -3/7, -3.14
+      ;; Must come AFTER -0>/-1>/-w> and -> checks, BEFORE ident-start?
+      ;; Only fires when - is immediately followed by a digit (no space).
+      [(and (char=? c #\-)
+            (let ([c2 (peek-char (tokenizer-port tok) 1)])
+              (and (char? c2) (char-numeric? c2))))
+       (tok-read! tok)  ; consume -
+       (let ([num-tok (read-number-token! tok (tokenizer-line tok)
+                                               (tokenizer-col tok)
+                                               (tokenizer-pos tok))])
+         (define val (token-value num-tok))
+         (define tt (token-type num-tok))
+         (cond
+           ;; -3N → error: negative Nat is nonsensical
+           [(eq? tt 'nat-literal)
+            (error 'prologos-reader
+                   "~a:~a:~a: Negative natural number literal is not allowed: -~aN"
+                   (tokenizer-source tok) ln (+ cl 1) val)]
+           ;; -3.14 → decimal-literal with negated value
+           [(eq? tt 'decimal-literal)
+            (token 'decimal-literal (- val) ln cl ps
+                   (+ 1 (token-span num-tok)))]
+           ;; -3, -3/7 → number with negated value
+           [else
+            (token (token-type num-tok) (- val) ln cl ps
+                   (+ 1 (token-span num-tok)))]))]
+
       ;; Hash — Set literal #{...}
       [(char=? c #\#)
        (tok-read! tok)
@@ -484,13 +511,25 @@
          [(and (char? next) (char=? next #\[))
           ;; ~[ — LSeq literal opener; [ will be consumed by parse-lseq-literal-form
           (token 'tilde-lbracket #f ln cl ps 1)]
-         [(and (char? next) (char-numeric? next))
-          ;; ~N — read the number, produce ($approx-literal N) as a list
+         [(or (and (char? next) (char-numeric? next))
+              (and (char? next) (char=? next #\-)
+                   (let ([c3 (peek-char (tokenizer-port tok) 1)])
+                     (and (char? c3) (char-numeric? c3)))))
+          ;; ~N or ~-N — read the number (possibly negative), produce approx-literal
+          (define neg? (and (char? next) (char=? next #\-)))
+          (when neg? (tok-read! tok))  ; consume the -
           (let ([num-tok (read-number-token! tok (tokenizer-line tok)
                                                  (tokenizer-col tok)
                                                  (tokenizer-pos tok))])
-            (token 'approx-literal (token-value num-tok) ln cl ps
-                   (+ 1 (token-span num-tok))))]
+            (define raw-val (token-value num-tok))
+            (define val (if neg? (- raw-val) raw-val))
+            ;; Reject ~-3N (negative nat approx)
+            (when (and neg? (eq? (token-type num-tok) 'nat-literal))
+              (error 'prologos-reader
+                     "~a:~a:~a: Negative natural approximate literal is not allowed: ~-~aN"
+                     (tokenizer-source tok) ln (+ cl 1) raw-val))
+            (token 'approx-literal val ln cl ps
+                   (+ 1 (if neg? 1 0) (token-span num-tok))))]
          [else
           (error 'prologos-reader
                  "~a:~a:~a: ~ must be followed by [ (LSeq literal) or a number (approximate literal)"

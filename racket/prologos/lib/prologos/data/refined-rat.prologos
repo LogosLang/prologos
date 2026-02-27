@@ -1,0 +1,72 @@
+ns prologos::data::refined-rat :no-prelude
+
+require [prologos::data::option :refer [Option some none]]
+
+;; ========================================
+;; Refined Rational Types
+;; ========================================
+;; Wrapper types for expressing numeric sign constraints at the type level.
+;; Smart constructors validate at runtime; unsafe constructors trust the caller.
+;;
+;; Subtyping lattice (conceptual, not enforced by the type system):
+;;
+;;           Rat
+;;          /   \
+;;    NegRat     PosRat
+;;
+;; (Zero is shared with refined-int; Rat zero is 0/1 = 0.)
+;; Use to-rat / pos-rat-val / neg-rat-val to convert between layers.
+
+;; Positive rationals (value > 0)
+data PosRat
+  pos-rat Rat
+
+;; Negative rationals (value < 0)
+data NegRat
+  neg-rat Rat
+
+;; ========================================
+;; Smart Constructors (runtime-checked)
+;; ========================================
+
+spec to-pos-rat Rat -> [Option PosRat]
+defn to-pos-rat [r]
+  if [rat-lt 0/1 r]
+    [some [pos-rat r]]
+    none
+
+spec to-neg-rat Rat -> [Option NegRat]
+defn to-neg-rat [r]
+  if [rat-lt r 0/1]
+    [some [neg-rat r]]
+    none
+
+spec is-zero-rat? Rat -> Bool
+defn is-zero-rat? [r]
+  rat-eq r 0/1
+
+;; ========================================
+;; Unsafe Constructors (caller guarantees invariant)
+;; ========================================
+
+spec unsafe-pos-rat Rat -> PosRat
+defn unsafe-pos-rat [r]
+  pos-rat r
+
+spec unsafe-neg-rat Rat -> NegRat
+defn unsafe-neg-rat [r]
+  neg-rat r
+
+;; ========================================
+;; Extractors
+;; ========================================
+
+spec pos-rat-val PosRat -> Rat
+defn pos-rat-val [p]
+  match p
+    | pos-rat r -> r
+
+spec neg-rat-val NegRat -> Rat
+defn neg-rat-val [p]
+  match p
+    | neg-rat r -> r

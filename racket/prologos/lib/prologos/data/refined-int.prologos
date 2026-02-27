@@ -1,0 +1,84 @@
+ns prologos::data::refined-int :no-prelude
+
+require [prologos::data::option :refer [Option some none]]
+
+;; ========================================
+;; Refined Integer Types
+;; ========================================
+;; Wrapper types for expressing numeric sign constraints at the type level.
+;; Smart constructors validate at runtime; unsafe constructors trust the caller.
+;;
+;; Subtyping lattice (conceptual, not enforced by the type system):
+;;
+;;              Int
+;;            /  |  \
+;;      NegInt Zero PosInt
+;;
+;; Use to-int / pos-int-val / neg-int-val to convert between layers.
+
+;; Positive integers (value > 0)
+data PosInt
+  pos-int Int
+
+;; Negative integers (value < 0)
+data NegInt
+  neg-int Int
+
+;; Zero singleton
+data Zero
+  mk-zero
+
+;; ========================================
+;; Smart Constructors (runtime-checked)
+;; ========================================
+
+spec to-pos-int Int -> [Option PosInt]
+defn to-pos-int [n]
+  if [int-lt 0 n]
+    [some [pos-int n]]
+    none
+
+spec to-neg-int Int -> [Option NegInt]
+defn to-neg-int [n]
+  if [int-lt n 0]
+    [some [neg-int n]]
+    none
+
+spec is-zero? Int -> Bool
+defn is-zero? [n]
+  int-eq n 0
+
+;; ========================================
+;; Unsafe Constructors (caller guarantees invariant)
+;; ========================================
+
+spec unsafe-pos-int Int -> PosInt
+defn unsafe-pos-int [n]
+  pos-int n
+
+spec unsafe-neg-int Int -> NegInt
+defn unsafe-neg-int [n]
+  neg-int n
+
+;; ========================================
+;; Extractors
+;; ========================================
+
+spec pos-int-val PosInt -> Int
+defn pos-int-val [p]
+  match p
+    | pos-int n -> n
+
+spec neg-int-val NegInt -> Int
+defn neg-int-val [p]
+  match p
+    | neg-int n -> n
+
+;; ========================================
+;; Conversion: back to Int
+;; ========================================
+
+spec zero-to-int Zero -> Int
+defn zero-to-int [z]
+  match z
+    | mk-zero -> 0

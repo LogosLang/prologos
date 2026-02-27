@@ -1,0 +1,62 @@
+ns prologos::core::refined-int-instances :no-prelude
+
+require [prologos::core::eq-trait   :refer [Eq Eq-eq?]]
+require [prologos::core::ord-trait  :refer [Ord Ord-compare]]
+require [prologos::data::ordering   :refer [Ordering lt-ord eq-ord gt-ord]]
+require [prologos::data::refined-int :refer [PosInt pos-int NegInt neg-int Zero mk-zero]]
+
+;; ========================================
+;; Eq PosInt — delegate to underlying Int
+;; ========================================
+
+impl Eq PosInt
+  defn eq? [x <PosInt> y <PosInt>] <Bool>
+    match x
+      | pos-int a -> match y
+                       | pos-int b -> int-eq a b
+
+;; ========================================
+;; Eq NegInt — delegate to underlying Int
+;; ========================================
+
+impl Eq NegInt
+  defn eq? [x <NegInt> y <NegInt>] <Bool>
+    match x
+      | neg-int a -> match y
+                       | neg-int b -> int-eq a b
+
+;; ========================================
+;; Eq Zero — singleton, always equal
+;; ========================================
+
+impl Eq Zero
+  defn eq? [x <Zero> y <Zero>] <Bool>
+    true
+
+;; ========================================
+;; Ord PosInt — delegate to underlying Int
+;; ========================================
+
+impl Ord PosInt
+  defn compare [x <PosInt> y <PosInt>] <Ordering>
+    match x
+      | pos-int a -> match y
+                       | pos-int b -> if [int-lt a b] lt-ord [if [int-eq a b] eq-ord gt-ord]
+
+;; ========================================
+;; Ord NegInt — delegate to underlying Int
+;; ========================================
+
+impl Ord NegInt
+  defn compare [x <NegInt> y <NegInt>] <Ordering>
+    match x
+      | neg-int a -> match y
+                       | neg-int b -> if [int-lt a b] lt-ord [if [int-eq a b] eq-ord gt-ord]
+
+;; ========================================
+;; Ord Zero — singleton, always eq-ord
+;; ========================================
+
+impl Ord Zero
+  defn compare [x <Zero> y <Zero>] <Ordering>
+    eq-ord

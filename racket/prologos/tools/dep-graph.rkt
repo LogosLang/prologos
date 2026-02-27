@@ -732,6 +732,41 @@
    'test-call-site-specialization.rkt
    (test-dep '(propagator.rkt syntax.rkt typing-core.rkt qtt.rkt reduction.rkt parser.rkt
                elaborator.rkt surface-syntax.rkt namespace.rkt macros.rkt driver.rkt) #t)
+   ;; Widenable trait + widening fixpoint (Phase 6a)
+   'test-widenable-trait.rkt
+   (test-dep '(propagator.rkt syntax.rkt typing-core.rkt qtt.rkt reduction.rkt parser.rkt
+               elaborator.rkt surface-syntax.rkt namespace.rkt macros.rkt) #t)
+   'test-widening-fixpoint.rkt
+   (test-dep '(propagator.rkt champ.rkt) #f)
+   ;; GaloisConnection trait (Phase 6b)
+   'test-galois-connection.rkt
+   (test-dep '(syntax.rkt typing-core.rkt qtt.rkt reduction.rkt parser.rkt
+               elaborator.rkt surface-syntax.rkt namespace.rkt macros.rkt) #t)
+   ;; Cross-domain propagation (Phase 6c)
+   'test-cross-domain-propagator.rkt
+   (test-dep '(propagator.rkt champ.rkt) #f)
+   ;; Abstract domains (Phase 6d)
+   'test-abstract-domains.rkt
+   (test-dep '(syntax.rkt typing-core.rkt qtt.rkt reduction.rkt parser.rkt
+               elaborator.rkt surface-syntax.rkt namespace.rkt macros.rkt) #t)
+   ;; Phase 6e: Integration + specialization
+   'test-widen-specialization.rkt
+   (test-dep '(propagator.rkt syntax.rkt typing-core.rkt qtt.rkt reduction.rkt parser.rkt
+               elaborator.rkt surface-syntax.rkt namespace.rkt macros.rkt driver.rkt) #t)
+   'test-abstract-interpretation-e2e.rkt
+   (test-dep '(propagator.rkt champ.rkt syntax.rkt typing-core.rkt qtt.rkt reduction.rkt parser.rkt
+               elaborator.rkt surface-syntax.rkt namespace.rkt macros.rkt) #t)
+   ;; Negative literal support
+   'test-negative-literals.rkt
+   (test-dep '(reader.rkt parser.rkt syntax.rkt typing-core.rkt qtt.rkt reduction.rkt
+               elaborator.rkt surface-syntax.rkt namespace.rkt macros.rkt) #t)
+   ;; Refined numeric types (PosInt/NegInt/Zero, PosRat/NegRat)
+   'test-refined-int.rkt
+   (test-dep '(syntax.rkt typing-core.rkt qtt.rkt reduction.rkt parser.rkt
+               elaborator.rkt surface-syntax.rkt namespace.rkt macros.rkt) #t)
+   'test-refined-rat.rkt
+   (test-dep '(syntax.rkt typing-core.rkt qtt.rkt reduction.rkt parser.rkt
+               elaborator.rkt surface-syntax.rkt namespace.rkt macros.rkt) #t)
    ;; UnionFind (persistent disjoint sets)
    'test-union-find.rkt
    (test-dep '(union-find.rkt) #f)
@@ -944,7 +979,45 @@
                                          prologos::core::lattice-instances)
    'prologos::core::bounded-lattice    '(prologos::core::lattice-trait
                                          prologos::core::has-top-trait)
-   'prologos::core::propagator         '()
+   'prologos::core::propagator         '(prologos::core::lattice-trait
+                                         prologos::core::lattice-instances
+                                         prologos::core::widenable-trait
+                                         prologos::core::widenable-instances)
+
+   ;; Widenable trait + instances (Phase 6a: widening/narrowing for infinite-height lattices)
+   'prologos::core::widenable-trait     '()
+   'prologos::core::widenable-instances '(prologos::core::widenable-trait
+                                          prologos::core::lattice-instances
+                                          prologos::data::bool)
+
+   ;; GaloisConnection trait + instances (Phase 6b: abstract interpretation)
+   'prologos::core::galois-trait        '()
+   'prologos::core::galois-instances    '(prologos::core::galois-trait
+                                          prologos::core::lattice-instances
+                                          prologos::data::bool)
+
+   ;; Abstract domain library modules (Phase 6d)
+   'prologos::data::sign                '()
+   'prologos::core::sign-lattice        '(prologos::data::sign
+                                          prologos::core::lattice-trait
+                                          prologos::core::has-top-trait
+                                          prologos::data::bool)
+   'prologos::data::parity              '()
+   'prologos::core::parity-lattice      '(prologos::data::parity
+                                          prologos::core::lattice-trait
+                                          prologos::core::has-top-trait)
+
+   ;; Refined numeric types (Phase D: PosInt/NegInt/Zero, PosRat/NegRat)
+   'prologos::data::refined-int          '(prologos::data::option)
+   'prologos::data::refined-rat          '(prologos::data::option)
+   'prologos::core::refined-int-instances '(prologos::core::eq-trait
+                                            prologos::core::ord-trait
+                                            prologos::data::ordering
+                                            prologos::data::refined-int)
+   'prologos::core::refined-rat-instances '(prologos::core::eq-trait
+                                            prologos::core::ord-trait
+                                            prologos::data::ordering
+                                            prologos::data::refined-rat)
 
    ;; Higher-level abstractions
    'prologos::core::numeric-bundles '(prologos::core::add-trait prologos::core::sub-trait
@@ -1203,7 +1276,49 @@
                                    prologos::core::lattice-instances)
    'test-call-site-specialization.rkt '(prologos::core::propagator
                                         prologos::core::lattice-trait
-                                        prologos::core::lattice-instances)))
+                                        prologos::core::lattice-instances)
+   'test-widenable-trait.rkt          '(prologos::core::widenable-trait
+                                        prologos::core::widenable-instances
+                                        prologos::core::propagator
+                                        prologos::core::lattice-trait
+                                        prologos::core::lattice-instances)
+   'test-galois-connection.rkt        '(prologos::core::galois-trait
+                                        prologos::core::galois-instances
+                                        prologos::core::lattice-instances)
+   'test-abstract-domains.rkt         '(prologos::data::sign
+                                        prologos::core::sign-lattice
+                                        prologos::data::parity
+                                        prologos::core::parity-lattice
+                                        prologos::core::lattice-trait
+                                        prologos::core::has-top-trait)
+   'test-widen-specialization.rkt     '(prologos::core::propagator
+                                        prologos::core::widenable-trait
+                                        prologos::core::widenable-instances
+                                        prologos::core::lattice-trait
+                                        prologos::core::lattice-instances)
+   'test-abstract-interpretation-e2e.rkt '(prologos::core::propagator
+                                           prologos::core::widenable-trait
+                                           prologos::core::widenable-instances
+                                           prologos::core::galois-trait
+                                           prologos::core::galois-instances
+                                           prologos::core::lattice-trait
+                                           prologos::core::lattice-instances
+                                           prologos::data::sign
+                                           prologos::core::sign-lattice
+                                           prologos::data::parity
+                                           prologos::core::parity-lattice)
+   'test-refined-int.rkt               '(prologos::data::refined-int
+                                           prologos::core::refined-int-instances
+                                           prologos::data::option
+                                           prologos::core::eq-trait
+                                           prologos::core::ord-trait
+                                           prologos::data::ordering)
+   'test-refined-rat.rkt               '(prologos::data::refined-rat
+                                           prologos::core::refined-rat-instances
+                                           prologos::data::option
+                                           prologos::core::eq-trait
+                                           prologos::core::ord-trait
+                                           prologos::data::ordering)))
 
 ;; ============================================================
 ;; File scanning functions (used for auto-scan of unknown modules)
