@@ -41,7 +41,8 @@
          "elab-speculation-bridge.rkt"
          "elaborator-network.rkt"
          "champ.rkt"
-         "unify.rkt")
+         "unify.rkt"
+         "atms.rkt")
 
 (provide process-command
          process-file
@@ -166,6 +167,11 @@
 ;; bare symbols (for local use) and as fully-qualified names (for export).
 (define (process-command surf)
   (reset-meta-store!)  ;; clear metavariables from previous command
+  ;; Phase D: Initialize ATMS for dependency-directed error tracking.
+  ;; The ATMS box is always available — init-speculation-tracking! creates a
+  ;; fresh ATMS per command. This is cheap (empty ATMS = ~3 hasheq allocations).
+  (when (not (current-command-atms))
+    (current-command-atms (box (atms-empty))))
   (init-speculation-tracking!)
   (parameterize ([current-nf-cache (make-hash)]         ;; per-command nf memoization
                  [current-whnf-cache (make-hash)]       ;; per-command whnf memoization
@@ -695,6 +701,8 @@
                     [current-level-meta-champ-box #f]
                     [current-mult-meta-champ-box #f]
                     [current-sess-meta-champ-box #f]
+                    ;; Phase D: fresh ATMS per module
+                    [current-command-atms #f]
 )
        ;; Read and process the file
        ;; Use WS reader for .prologos files, sexp reader otherwise
