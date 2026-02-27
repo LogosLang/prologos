@@ -298,6 +298,9 @@
     [(expr-net-new fuel) (expr-net-new (shift delta cutoff fuel))]
     [(expr-net-new-cell n init merge)
      (expr-net-new-cell (shift delta cutoff n) (shift delta cutoff init) (shift delta cutoff merge))]
+    [(expr-net-new-cell-widen n init merge wf nf)
+     (expr-net-new-cell-widen (shift delta cutoff n) (shift delta cutoff init) (shift delta cutoff merge)
+                              (shift delta cutoff wf) (shift delta cutoff nf))]
     [(expr-net-cell-read n c) (expr-net-cell-read (shift delta cutoff n) (shift delta cutoff c))]
     [(expr-net-cell-write n c v)
      (expr-net-cell-write (shift delta cutoff n) (shift delta cutoff c) (shift delta cutoff v))]
@@ -725,6 +728,9 @@
     [(expr-net-new fuel) (expr-net-new (subst k s fuel))]
     [(expr-net-new-cell n init merge)
      (expr-net-new-cell (subst k s n) (subst k s init) (subst k s merge))]
+    [(expr-net-new-cell-widen n init merge wf nf)
+     (expr-net-new-cell-widen (subst k s n) (subst k s init) (subst k s merge)
+                              (subst k s wf) (subst k s nf))]
     [(expr-net-cell-read n c) (expr-net-cell-read (subst k s n) (subst k s c))]
     [(expr-net-cell-write n c v)
      (expr-net-cell-write (subst k s n) (subst k s c) (subst k s v))]

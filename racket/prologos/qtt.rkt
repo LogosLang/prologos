@@ -1488,6 +1488,26 @@
               [_ (tu-error)]))]
          [(_ _) (tu-error)]))]
 
+    ;; net-new-cell-widen : PropNetwork -> A -> (A A -> A) -> (A A -> A) -> (A A -> A) -> [PropNetwork * CellId]
+    ;; Use checkQ for all function args (merge, widen, narrow) since inferQ can't handle standalone lambdas.
+    [(expr-net-new-cell-widen net init merge widen-fn narrow-fn)
+     (let ([r1 (inferQ ctx net)]
+           [r2 (inferQ ctx init)])
+       (match* (r1 r2)
+         [((tu _ u1) (tu init-ty u2))
+          (define fn-ty (expr-Pi mw init-ty
+                          (expr-Pi mw (shift 1 0 init-ty)
+                            (shift 2 0 init-ty))))
+          (let ([r3 (checkQ ctx merge fn-ty)]
+                [r4 (checkQ ctx widen-fn fn-ty)]
+                [r5 (checkQ ctx narrow-fn fn-ty)])
+            (match* (r3 r4 r5)
+              [((bu #t u3) (bu #t u4) (bu #t u5))
+               (tu (expr-Sigma (expr-net-type) (expr-cell-id-type))
+                   (add-usage u1 (add-usage u2 (add-usage u3 (add-usage u4 u5)))))]
+              [(_ _ _) (tu-error)]))]
+         [(_ _) (tu-error)]))]
+
     ;; net-cell-read : PropNetwork -> CellId -> A
     [(expr-net-cell-read net cell)
      (let ([r1 (inferQ ctx net)]

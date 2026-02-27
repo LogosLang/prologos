@@ -166,7 +166,7 @@
  ;; PropNetwork (persistent propagator network)
  (struct-out expr-net-type) (struct-out expr-cell-id-type) (struct-out expr-prop-id-type)
  (struct-out expr-prop-network) (struct-out expr-cell-id) (struct-out expr-prop-id)
- (struct-out expr-net-new) (struct-out expr-net-new-cell)
+ (struct-out expr-net-new) (struct-out expr-net-new-cell) (struct-out expr-net-new-cell-widen)
  (struct-out expr-net-cell-read) (struct-out expr-net-cell-write)
  (struct-out expr-net-add-prop) (struct-out expr-net-run)
  (struct-out expr-net-snapshot) (struct-out expr-net-contradiction)
@@ -657,6 +657,7 @@
 ;; Operations
 (struct expr-net-new (fuel) #:transparent)                       ; Int -> PropNetwork
 (struct expr-net-new-cell (net init merge) #:transparent)        ; PropNetwork -> A -> (A A -> A) -> [PropNetwork * CellId]
+(struct expr-net-new-cell-widen (net init merge widen-fn narrow-fn) #:transparent) ; PropNetwork -> A -> (A A -> A) -> (A A -> A) -> (A A -> A) -> [PropNetwork * CellId]
 (struct expr-net-cell-read (net cell) #:transparent)             ; PropNetwork -> CellId -> A
 (struct expr-net-cell-write (net cell val) #:transparent)        ; PropNetwork -> CellId -> A -> PropNetwork
 (struct expr-net-add-prop (net ins outs fn) #:transparent)       ; PropNetwork -> [List CellId] -> [List CellId] -> fn -> [PropNetwork * PropId]
@@ -991,7 +992,7 @@
       (expr-tset-insert!? x) (expr-tset-delete!? x)
       (expr-net-type? x) (expr-cell-id-type? x) (expr-prop-id-type? x)
       (expr-prop-network? x) (expr-cell-id? x) (expr-prop-id? x)
-      (expr-net-new? x) (expr-net-new-cell? x)
+      (expr-net-new? x) (expr-net-new-cell? x) (expr-net-new-cell-widen? x)
       (expr-net-cell-read? x) (expr-net-cell-write? x)
       (expr-net-add-prop? x) (expr-net-run? x)
       (expr-net-snapshot? x) (expr-net-contradiction? x)

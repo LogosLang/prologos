@@ -282,6 +282,8 @@
     [(expr-net-new fuel) (expr-net-new (zonk fuel))]
     [(expr-net-new-cell n init merge)
      (expr-net-new-cell (zonk n) (zonk init) (zonk merge))]
+    [(expr-net-new-cell-widen n init merge wf nf)
+     (expr-net-new-cell-widen (zonk n) (zonk init) (zonk merge) (zonk wf) (zonk nf))]
     [(expr-net-cell-read n c) (expr-net-cell-read (zonk n) (zonk c))]
     [(expr-net-cell-write n c v)
      (expr-net-cell-write (zonk n) (zonk c) (zonk v))]
@@ -699,6 +701,9 @@
     [(expr-net-new fuel) (expr-net-new (zonk-at-depth depth fuel))]
     [(expr-net-new-cell n init merge)
      (expr-net-new-cell (zonk-at-depth depth n) (zonk-at-depth depth init) (zonk-at-depth depth merge))]
+    [(expr-net-new-cell-widen n init merge wf nf)
+     (expr-net-new-cell-widen (zonk-at-depth depth n) (zonk-at-depth depth init) (zonk-at-depth depth merge)
+                              (zonk-at-depth depth wf) (zonk-at-depth depth nf))]
     [(expr-net-cell-read n c) (expr-net-cell-read (zonk-at-depth depth n) (zonk-at-depth depth c))]
     [(expr-net-cell-write n c v)
      (expr-net-cell-write (zonk-at-depth depth n) (zonk-at-depth depth c) (zonk-at-depth depth v))]
@@ -1089,6 +1094,9 @@
     [(expr-net-new fuel) (expr-net-new (default-metas fuel))]
     [(expr-net-new-cell n init merge)
      (expr-net-new-cell (default-metas n) (default-metas init) (default-metas merge))]
+    [(expr-net-new-cell-widen n init merge wf nf)
+     (expr-net-new-cell-widen (default-metas n) (default-metas init) (default-metas merge)
+                              (default-metas wf) (default-metas nf))]
     [(expr-net-cell-read n c) (expr-net-cell-read (default-metas n) (default-metas c))]
     [(expr-net-cell-write n c v)
      (expr-net-cell-write (default-metas n) (default-metas c) (default-metas v))]

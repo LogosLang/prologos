@@ -1814,6 +1814,26 @@
               (expr-pair (expr-prop-network net2) (expr-cell-id cid))))]
          [_ (if (equal? net* net) e (whnf (expr-net-new-cell net* init merge)))]))]
 
+    ;; net-new-cell-widen : PropNetwork -> A -> (A A -> A) -> (A A -> A) -> (A A -> A) -> [PropNetwork * CellId]
+    [(expr-net-new-cell-widen net init merge widen-fn narrow-fn)
+     (let ([net* (whnf net)])
+       (match net*
+         [(expr-prop-network rnet)
+          (let* ([init* (whnf init)]
+                 [merge* (whnf merge)]
+                 [widen* (whnf widen-fn)]
+                 [narrow* (whnf narrow-fn)]
+                 [racket-merge (lambda (old new)
+                                 (whnf (expr-app (expr-app merge* old) new)))]
+                 [racket-widen (lambda (old new)
+                                 (whnf (expr-app (expr-app widen* old) new)))]
+                 [racket-narrow (lambda (old new)
+                                  (whnf (expr-app (expr-app narrow* old) new)))])
+            (let-values ([(net2 cid) (net-new-cell-widen rnet init* racket-merge
+                                                          racket-widen racket-narrow)])
+              (expr-pair (expr-prop-network net2) (expr-cell-id cid))))]
+         [_ (if (equal? net* net) e (whnf (expr-net-new-cell-widen net* init merge widen-fn narrow-fn)))]))]
+
     ;; net-cell-read : PropNetwork -> CellId -> A
     [(expr-net-cell-read net cell)
      (let ([net* (whnf net)] [cell* (whnf cell)])
@@ -2605,6 +2625,7 @@
     ;; Operations: structural recursion into fields
     [(expr-net-new fuel) (expr-net-new (nf fuel))]
     [(expr-net-new-cell n init merge) (expr-net-new-cell (nf n) (nf init) (nf merge))]
+    [(expr-net-new-cell-widen n init merge wf nf*) (expr-net-new-cell-widen (nf n) (nf init) (nf merge) (nf wf) (nf nf*))]
     [(expr-net-cell-read n cell) (expr-net-cell-read (nf n) (nf cell))]
     [(expr-net-cell-write n cell val) (expr-net-cell-write (nf n) (nf cell) (nf val))]
     [(expr-net-add-prop n ins outs fn) (expr-net-add-prop (nf n) (nf ins) (nf outs) (nf fn))]

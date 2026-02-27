@@ -1977,6 +1977,19 @@
              [(prologos-error? em) em]
              [else (expr-net-new-cell en ei em)]))]
 
+    [(surf-net-new-cell-widen net init merge widen-fn narrow-fn loc)
+     (let ([en (elaborate net env depth)]
+           [ei (elaborate init env depth)]
+           [em (elaborate merge env depth)]
+           [ew (elaborate widen-fn env depth)]
+           [enr (elaborate narrow-fn env depth)])
+       (cond [(prologos-error? en) en]
+             [(prologos-error? ei) ei]
+             [(prologos-error? em) em]
+             [(prologos-error? ew) ew]
+             [(prologos-error? enr) enr]
+             [else (expr-net-new-cell-widen en ei em ew enr)]))]
+
     [(surf-net-cell-read net cell loc)
      (let ([en (elaborate net env depth)]
            [ec (elaborate cell env depth)])

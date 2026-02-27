@@ -52,7 +52,15 @@
  ;; Convenience queries
  net-contradiction?
  net-quiescent?
- net-fuel-remaining)
+ net-fuel-remaining
+ ;; Widening support (Phase 6a)
+ net-set-widen-point
+ net-widen-point?
+ net-new-cell-widen
+ net-cell-write-widen
+ run-to-quiescence-widen
+ ;; Cross-domain propagation (Phase 6c)
+ net-add-cross-domain-propagator)
 
 ;; ========================================
 ;; Structs
@@ -84,6 +92,9 @@
 ;; contradiction: #f | cell-id — first contradiction encountered
 ;; merge-fns: champ-root : cell-id → (val val → val)
 ;; contradiction-fns: champ-root : cell-id → (val → Bool)
+;; widen-fns: champ-root : cell-id → (cons widen-fn narrow-fn)
+;;   where widen-fn : (old new → widened), narrow-fn : (old new → narrowed)
+;;   Only cells designated as widening points have entries. (Phase 6a)
 (struct prop-network
   (cells
    propagators
@@ -93,7 +104,8 @@
    fuel
    contradiction
    merge-fns
-   contradiction-fns)
+   contradiction-fns
+   widen-fns)
   #:transparent)
 
 ;; ========================================
@@ -120,7 +132,8 @@
                 fuel           ;; fuel
                 #f             ;; no contradiction
                 champ-empty    ;; merge-fns
-                champ-empty))  ;; contradiction-fns
+                champ-empty    ;; contradiction-fns
+                champ-empty))  ;; widen-fns
 
 ;; ========================================
 ;; Cell Operations
@@ -475,3 +488,275 @@
 ;; How much fuel remains?
 (define (net-fuel-remaining net)
   (prop-network-fuel net))
+
+;; ========================================
+;; Widening Support (Phase 6a)
+;; ========================================
+;;
+;; For lattices with infinite ascending chains, standard fixpoint iteration
+;; may not terminate. Widening over-approximates at designated "widening
+;; point" cells to force convergence; narrowing then recovers precision.
+;;
+;; Strategy: two-phase iteration.
+;;   Phase 1 (widen): run propagation normally, but at widening-point cells,
+;;     replace merge with widen(old, merged) when value changes.
+;;   Phase 2 (narrow): once widen phase is quiescent, switch to narrow phase
+;;     where widening-point cells use narrow(old, merged) instead.
+;;   Repeat until narrow phase produces no changes.
+
+;; Mark a cell as a widening point.
+;; widen-fn: (old-val new-val → widened-val) — over-approximate for convergence
+;; narrow-fn: (old-val new-val → narrowed-val) — recover precision
+;; Returns updated network.
+(define (net-set-widen-point net cid widen-fn narrow-fn)
+  (define h (cell-id-hash cid))
+  (struct-copy prop-network net
+    [widen-fns (champ-insert (prop-network-widen-fns net)
+                              h cid (cons widen-fn narrow-fn))]))
+
+;; Check if a cell is a widening point.
+(define (net-widen-point? net cid)
+  (not (eq? 'none
+             (champ-lookup (prop-network-widen-fns net)
+                           (cell-id-hash cid) cid))))
+
+;; Create a cell AND mark it as a widening point in one step.
+;; Convenience combining net-new-cell + net-set-widen-point.
+;; Returns: (values new-network cell-id)
+(define (net-new-cell-widen net initial-value merge-fn
+                            widen-fn narrow-fn [contradicts? #f])
+  (define-values (net1 cid) (net-new-cell net initial-value merge-fn contradicts?))
+  (values (net-set-widen-point net1 cid widen-fn narrow-fn) cid))
+
+;; Write to a cell with widening: if the cell is a widening point,
+;; applies widen(old, merged) instead of just merge(old, new).
+;; For non-widening cells, behaves identically to net-cell-write.
+(define (net-cell-write-widen net cid new-val)
+  (define cells (prop-network-cells net))
+  (define h (cell-id-hash cid))
+  (define cell (champ-lookup cells h cid))
+  (when (eq? cell 'none)
+    (error 'net-cell-write-widen "unknown cell: ~a" cid))
+  (define merge-fn
+    (champ-lookup (prop-network-merge-fns net) h cid))
+  (define old-val (prop-cell-value cell))
+  (define merged (merge-fn old-val new-val))
+  ;; If cell is a widening point, apply widen to the merged result
+  (define widen-entry (champ-lookup (prop-network-widen-fns net) h cid))
+  (define final-val
+    (if (eq? widen-entry 'none)
+        merged
+        ((car widen-entry) old-val merged)))
+  (if (equal? final-val old-val)
+      net  ;; No change — critical for termination
+      (let* ([new-cell (struct-copy prop-cell cell [value final-val])]
+             [new-cells (champ-insert cells h cid new-cell)]
+             [deps (champ-keys (prop-cell-dependents cell))]
+             [new-wl (append deps (prop-network-worklist net))]
+             [cfn (champ-lookup (prop-network-contradiction-fns net) h cid)]
+             [contradicted?
+              (and (not (eq? cfn 'none))
+                   (cfn final-val))]
+             [net* (struct-copy prop-network net
+                     [cells new-cells]
+                     [worklist new-wl])])
+        (if contradicted?
+            (struct-copy prop-network net* [contradiction cid])
+            net*))))
+
+;; Internal: run one phase of widening fixpoint iteration.
+;; Uses net-cell-write-widen instead of net-cell-write for propagator output.
+;; Returns network at quiescence (or contradiction/fuel exhaustion).
+(define (run-widen-phase net)
+  (cond
+    [(prop-network-contradiction net) net]
+    [(<= (prop-network-fuel net) 0) net]
+    [(null? (prop-network-worklist net)) net]
+    [else
+     (let* ([pid (car (prop-network-worklist net))]
+            [rest (cdr (prop-network-worklist net))]
+            [net* (struct-copy prop-network net
+                    [worklist rest]
+                    [fuel (sub1 (prop-network-fuel net))])]
+            [prop (champ-lookup (prop-network-propagators net*)
+                                (prop-id-hash pid) pid)])
+       (if (eq? prop 'none)
+           (run-widen-phase net*)
+           ;; Fire propagator, but capture writes and apply via net-cell-write-widen
+           (let* ([result-net ((propagator-fire-fn prop) net*)]
+                  ;; Diff output cells to find changes
+                  [writes (for/fold ([ws '()])
+                                    ([cid (in-list (propagator-outputs prop))])
+                            (let ([old (net-cell-read net* cid)]
+                                  [new (net-cell-read result-net cid)])
+                              (if (equal? old new)
+                                  ws
+                                  (cons (cons cid new) ws))))]
+                  ;; Apply writes via widening-aware writer
+                  [net** (for/fold ([n net*])
+                                   ([w (in-list writes)])
+                           (net-cell-write-widen n (car w) (cdr w)))])
+             (run-widen-phase net**))))]))
+
+;; Internal: create a snapshot for narrow-phase firing.
+;; Widening-point cells get a passthrough merge: (lambda (old new) new)
+;; so the propagator's net-cell-write captures the raw transfer function output
+;; rather than the monotone merge (which would hide values below old).
+(define (make-narrow-snapshot net)
+  (define wfns (prop-network-widen-fns net))
+  (define mfns (prop-network-merge-fns net))
+  ;; Replace merge-fn for each widening-point cell with passthrough
+  (define new-mfns
+    (for/fold ([m mfns])
+              ([cid (in-list (champ-keys wfns))])
+      (define h (cell-id-hash cid))
+      (champ-insert m h cid (lambda (old new) new))))
+  (struct-copy prop-network net [merge-fns new-mfns]))
+
+;; Internal: run one phase of narrowing iteration.
+;; Strategy: fire propagators against a snapshot where widening-point cells
+;; have passthrough merge, so we capture the raw transfer function output.
+;; Then apply narrow(old, raw_new) at widening points.
+(define (run-narrow-phase net)
+  (cond
+    [(prop-network-contradiction net) net]
+    [(<= (prop-network-fuel net) 0) net]
+    [(null? (prop-network-worklist net)) net]
+    [else
+     (let* ([pid (car (prop-network-worklist net))]
+            [rest (cdr (prop-network-worklist net))]
+            [net* (struct-copy prop-network net
+                    [worklist rest]
+                    [fuel (sub1 (prop-network-fuel net))])]
+            [prop (champ-lookup (prop-network-propagators net*)
+                                (prop-id-hash pid) pid)])
+       (if (eq? prop 'none)
+           (run-narrow-phase net*)
+           ;; Fire propagator against a snapshot with passthrough merge for widen cells
+           (let* ([snapshot (make-narrow-snapshot net*)]
+                  [result-net ((propagator-fire-fn prop) snapshot)]
+                  ;; Diff output cells — snapshot has passthrough merge, so
+                  ;; we see the raw transfer function output
+                  [writes (for/fold ([ws '()])
+                                    ([cid (in-list (propagator-outputs prop))])
+                            (let ([old (net-cell-read net* cid)]
+                                  [new (net-cell-read result-net cid)])
+                              (if (equal? old new)
+                                  ws
+                                  (cons (cons cid new) ws))))]
+                  ;; Apply writes: at widen-points use narrow-fn, otherwise merge
+                  [net** (for/fold ([n net*])
+                                   ([w (in-list writes)])
+                           (let* ([cid (car w)]
+                                  [new-val (cdr w)]
+                                  [h (cell-id-hash cid)]
+                                  [wentry (champ-lookup
+                                           (prop-network-widen-fns n) h cid)])
+                             (if (eq? wentry 'none)
+                                 ;; Normal cell: use standard write
+                                 (net-cell-write n cid new-val)
+                                 ;; Widening point: apply narrow(old, raw_new)
+                                 (let* ([cell (champ-lookup
+                                               (prop-network-cells n) h cid)]
+                                        [old-val (prop-cell-value cell)]
+                                        [narrowed ((cdr wentry) old-val new-val)])
+                                   (if (equal? narrowed old-val)
+                                       n
+                                       (let* ([new-cell
+                                               (struct-copy prop-cell cell
+                                                 [value narrowed])]
+                                              [new-cells
+                                               (champ-insert
+                                                (prop-network-cells n)
+                                                h cid new-cell)]
+                                              [deps (champ-keys
+                                                     (prop-cell-dependents cell))]
+                                              [new-wl
+                                               (append deps
+                                                       (prop-network-worklist n))]
+                                              [cfn (champ-lookup
+                                                    (prop-network-contradiction-fns n)
+                                                    h cid)]
+                                              [contradicted?
+                                               (and (not (eq? cfn 'none))
+                                                    (cfn narrowed))]
+                                              [n* (struct-copy prop-network n
+                                                    [cells new-cells]
+                                                    [worklist new-wl])])
+                                         (if contradicted?
+                                             (struct-copy prop-network n*
+                                               [contradiction cid])
+                                             n*)))))))])
+             (run-narrow-phase net**))))]))
+
+;; Run the network to quiescence with widening/narrowing.
+;;
+;; Two-phase strategy:
+;;   1. Run widen phase: propagate normally, apply widen at widening points.
+;;      This over-approximates but guarantees convergence.
+;;   2. Run narrow phase: propagate normally, apply narrow at widening points.
+;;      This recovers precision lost to widening.
+;;   3. Repeat narrow phase until no further changes (or max-rounds reached).
+;;
+;; If there are no widening points, behaves identically to run-to-quiescence.
+(define (run-to-quiescence-widen net #:max-rounds [max-rounds 100])
+  ;; Phase 1: widen to quiescence
+  (define widened (run-widen-phase net))
+  (when (or (prop-network-contradiction widened)
+            (<= (prop-network-fuel widened) 0))
+    (void))  ;; early exit conditions handled by return below
+  (if (or (prop-network-contradiction widened)
+          (<= (prop-network-fuel widened) 0))
+      widened
+      ;; Phase 2: narrowing iterations
+      (let loop ([net widened] [rounds 0])
+        (cond
+          [(>= rounds max-rounds) net]
+          [(prop-network-contradiction net) net]
+          [(<= (prop-network-fuel net) 0) net]
+          [else
+           ;; Re-fire all propagators to see if narrowing produces changes
+           ;; Schedule all propagators that have widening-point outputs
+           (define all-prop-ids
+             (champ-keys (prop-network-propagators net)))
+           (define net-with-wl
+             (struct-copy prop-network net
+               [worklist all-prop-ids]))
+           (define narrowed (run-narrow-phase net-with-wl))
+           ;; Check if narrowing changed anything by comparing cell values
+           (if (equal? (prop-network-cells narrowed)
+                       (prop-network-cells net))
+               narrowed  ;; No change — converged
+               (loop narrowed (+ rounds 1)))]))))
+
+;; ========================================
+;; Cross-Domain Propagation (Phase 6c)
+;; ========================================
+
+;; Create TWO unidirectional propagators connecting a concrete-domain cell
+;; and an abstract-domain cell via α/γ functions:
+;;
+;;   1. c-cell changes → write alpha(c-val) to a-cell
+;;   2. a-cell changes → write gamma(a-val) to c-cell
+;;
+;; Returns: (values new-network pid-alpha pid-gamma)
+;;
+;; Termination is guaranteed by net-cell-write's no-change guard:
+;; if alpha(c) = a-cell's current value, no change → no propagation.
+;; Requires alpha and gamma to be monotone.
+(define (net-add-cross-domain-propagator net c-cell a-cell alpha-fn gamma-fn)
+  ;; Propagator 1: C → A (abstraction direction)
+  (define-values (net1 pid-alpha)
+    (net-add-propagator net
+      (list c-cell) (list a-cell)
+      (lambda (net)
+        (define c-val (net-cell-read net c-cell))
+        (net-cell-write net a-cell (alpha-fn c-val)))))
+  ;; Propagator 2: A → C (concretization direction)
+  (define-values (net2 pid-gamma)
+    (net-add-propagator net1
+      (list a-cell) (list c-cell)
+      (lambda (net)
+        (define a-val (net-cell-read net a-cell))
+        (net-cell-write net c-cell (gamma-fn a-val)))))
+  (values net2 pid-alpha pid-gamma))

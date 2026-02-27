@@ -2,6 +2,8 @@ ns prologos::core::propagator
 
 require [prologos::core::lattice-trait :refer-all]
 require [prologos::core::lattice-instances :refer [Interval interval-bot interval-join]]
+require [prologos::core::widenable-trait :refer [Widenable Widenable-widen Widenable-narrow]]
+require [prologos::core::widenable-instances :refer []]
 
 ;; ========================================
 ;; Propagator Library Helpers
@@ -35,3 +37,30 @@ spec new-lattice-cell--Interval--specialized PropNetwork -> [PropNetwork * CellI
 specialize new-lattice-cell for Interval
   defn new-lattice-cell [net]
     net-new-cell net interval-bot [fn [x : Interval] [y : Interval] [interval-join x y]]
+
+;; ========================================
+;; Widenable Cell Helper
+;; ========================================
+;; Creates a cell that is both a lattice cell AND a widening point.
+;; For lattice domains with infinite ascending chains (e.g., Interval),
+;; widen/narrow operators force convergence and recover precision.
+;;
+;; Usage:
+;;   def result [new-widenable-cell [net-new 1000]]
+;;   ;; type A inferred from context; Lattice A + Widenable A resolved automatically
+
+spec new-widenable-cell {A} PropNetwork -> [PropNetwork * CellId] where (Lattice A) (Widenable A)
+defn new-widenable-cell [net] where (Lattice A) (Widenable A)
+  net-new-cell-widen net bot [fn x y [join x y]] [fn x y [widen x y]] [fn x y [narrow x y]]
+
+;; ========================================
+;; Widenable Cell Specialization
+;; ========================================
+;; Zero-overhead version for Interval — the primary widenable lattice.
+;; Bypasses dict resolution for Lattice and inlines interval-specific merge.
+;; Widen/narrow accessed through the Interval Widenable dict directly.
+
+spec new-widenable-cell--Interval--specialized PropNetwork -> [PropNetwork * CellId]
+specialize new-widenable-cell for Interval
+  defn new-widenable-cell [net]
+    net-new-cell-widen net interval-bot [fn [x : Interval] [y : Interval] [interval-join x y]] [fn [x : Interval] [y : Interval] [Widenable-widen Interval--Widenable--dict x y]] [fn [x : Interval] [y : Interval] [Widenable-narrow Interval--Widenable--dict x y]]

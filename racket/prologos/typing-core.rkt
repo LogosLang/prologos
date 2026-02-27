@@ -1388,6 +1388,24 @@
                      (expr-error)))))
          (expr-error))]
 
+    ;; net-new-cell-widen : PropNetwork -> A -> (A A -> A) -> (A A -> A) -> (A A -> A) -> [PropNetwork * CellId]
+    ;; Same as net-new-cell but with two additional function args: widen and narrow.
+    ;; All three function args have the same type: A -> A -> A.
+    [(expr-net-new-cell-widen net init merge widen-fn narrow-fn)
+     (if (check ctx net (expr-net-type))
+         (let ([init-ty (infer ctx init)])
+           (if (expr-error? init-ty)
+               (expr-error)
+               (let ([fn-ty (expr-Pi mw init-ty
+                              (expr-Pi mw (shift 1 0 init-ty)
+                                (shift 2 0 init-ty)))])
+                 (if (and (check ctx merge fn-ty)
+                          (check ctx widen-fn fn-ty)
+                          (check ctx narrow-fn fn-ty))
+                     (expr-Sigma (expr-net-type) (expr-cell-id-type))
+                     (expr-error)))))
+         (expr-error))]
+
     ;; net-cell-read : PropNetwork -> CellId -> A (type-unsafe: returns fresh hole)
     [(expr-net-cell-read net cell)
      (if (and (check ctx net (expr-net-type))

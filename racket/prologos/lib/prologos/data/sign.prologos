@@ -1,0 +1,25 @@
+ns prologos::data::sign
+
+;; ========================================
+;; Sign Domain — Abstract sign analysis
+;; ========================================
+;; Five-element lattice for sign abstraction:
+;;
+;;          sign-top
+;;         /   |   \
+;;   sign-neg sign-zero sign-pos
+;;         \   |   /
+;;          sign-bot
+;;
+;; sign-bot  = no information (unreachable)
+;; sign-neg  = definitely negative
+;; sign-zero = definitely zero
+;; sign-pos  = definitely positive
+;; sign-top  = unknown sign (could be anything)
+
+data Sign
+  sign-bot
+  sign-neg
+  sign-zero
+  sign-pos
+  sign-top

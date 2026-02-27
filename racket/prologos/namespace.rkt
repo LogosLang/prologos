@@ -479,7 +479,15 @@
     (require [prologos::core::has-top-trait     :refer [HasTop HasTop-top]])
     (require [prologos::core::has-top-instances :refer []])
     (require [prologos::core::bounded-lattice   :refer [BoundedLattice]])
-    (require [prologos::core::propagator        :refer [new-lattice-cell]])
+    (require [prologos::core::propagator        :refer [new-lattice-cell new-widenable-cell]])
+
+    ;; ---- Tier 3h: Widenable trait + instances ----
+    (require [prologos::core::widenable-trait     :refer [Widenable Widenable-widen Widenable-narrow]])
+    (require [prologos::core::widenable-instances :refer []])
+
+    ;; ---- Tier 3i: GaloisConnection trait + instances ----
+    (require [prologos::core::galois-trait        :refer [GaloisConnection GaloisConnection-alpha GaloisConnection-gamma]])
+    (require [prologos::core::galois-instances    :refer []])
 
     ;; ---- Tier 3e: Generic collection functions (clean names) ----
     ;; These shadow List-specific names (map, filter, reduce, etc.) with

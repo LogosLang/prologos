@@ -61,7 +61,7 @@
     set-fold set-filter
     map-fold-entries map-filter-entries map-map-vals
     TVec TMap TSet transient persist! tvec-push! tvec-update! tmap-assoc! tmap-dissoc! tset-insert! tset-delete!
-    PropNetwork CellId PropId net-new net-new-cell net-cell-read net-cell-write net-add-prop net-run net-snapshot net-contradict?
+    PropNetwork CellId PropId net-new net-new-cell net-new-cell-widen net-cell-read net-cell-write net-add-prop net-run net-snapshot net-contradict?
     UnionFind uf-empty uf-make-set uf-find uf-union uf-value
     ;; Relational language (Phase 7)
     defr rel solve solve-with solve-one explain explain-with solver schema
@@ -463,9 +463,9 @@
     [(symbol? d)
      (parse-symbol d loc)]
 
-    ;; Bare number → Int (integer literal)
+    ;; Bare number → Int (integer literal), including negatives
     ;; Note: 42N → Nat is handled via $nat-literal sentinel (WS) or symbol pattern (sexp)
-    [(and (exact-nonnegative-integer? d) (integer? d))
+    [(exact-integer? d)
      (surf-int-lit d loc)]
 
     ;; Bare fraction (rational literal, e.g. 3/7)
@@ -2222,6 +2222,20 @@
                     [(prologos-error? init) init]
                     [(prologos-error? merge) merge]
                     [else (surf-net-new-cell n init merge loc)])))]
+       ;; (net-new-cell-widen net init merge widen-fn narrow-fn)
+       [(net-new-cell-widen)
+        (or (check-arity 'net-new-cell-widen args 5 loc)
+            (let ([n (parse-datum (car args))]
+                  [init (parse-datum (cadr args))]
+                  [merge (parse-datum (caddr args))]
+                  [wfn (parse-datum (cadddr args))]
+                  [nfn (parse-datum (list-ref args 4))])
+              (cond [(prologos-error? n) n]
+                    [(prologos-error? init) init]
+                    [(prologos-error? merge) merge]
+                    [(prologos-error? wfn) wfn]
+                    [(prologos-error? nfn) nfn]
+                    [else (surf-net-new-cell-widen n init merge wfn nfn loc)])))]
        ;; (net-cell-read net cell)
        [(net-cell-read)
         (or (check-arity 'net-cell-read args 2 loc)

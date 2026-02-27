@@ -1,0 +1,23 @@
+ns prologos::data::parity
+
+;; ========================================
+;; Parity Domain — Abstract parity analysis
+;; ========================================
+;; Four-element lattice for parity abstraction:
+;;
+;;       parity-top
+;;        /     \
+;;  parity-even  parity-odd
+;;        \     /
+;;       parity-bot
+;;
+;; parity-bot  = no information (unreachable)
+;; parity-even = definitely even
+;; parity-odd  = definitely odd
+;; parity-top  = unknown parity
+
+data Parity
+  parity-bot
+  parity-even
+  parity-odd
+  parity-top

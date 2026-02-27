@@ -342,11 +342,17 @@ The following collection items ARE also deferred (genuine infrastructure deps):
 - **Remaining (future)**: Lattice aggregation (count, min, max, sum) between strata
 - Source: `docs/tracking/2026-02-26_STRATIFIED_EVALUATION.md`
 
-### Post-Phase 7: Galois Connections + Domain Embeddings (NOT STARTED)
-- Modular constraint domains with abstraction/concretization
-- Cross-domain propagation
-- Abstract interpretation framework
-- Source: `docs/tracking/2026-02-24_TOWARDS_A_GENERAL_LOGIC_ENGINE_ON_PROPAGATORS.org`
+### Post-Phase 7: Galois Connections + Domain Embeddings (PHASE 6 COMPLETE)
+- ✅ Phase 6a: `Widenable` trait + widening-aware fixpoint (`run-to-quiescence-widen`)
+- ✅ Phase 6b: `GaloisConnection {C A}` trait + `impl GaloisConnection Interval Bool`
+- ✅ Phase 6c: Cross-domain propagation (`net-add-cross-domain-propagator`)
+- ✅ Phase 6d: Sign + Parity abstract domain library modules
+- ✅ Phase 6e: Call-site specialization for `new-widenable-cell`, grammar docs, integration tests
+- **Deferred**:
+  - `sign-galois.prologos` — `impl GaloisConnection Interval Sign` (Rat comparison complexity)
+  - `connect-domains` Prologos-level wrapper (needs AST keyword or FFI)
+  - Additional abstract domains (Congruence, Pointer, etc.)
+- Source: `docs/tracking/2026-02-27_1026_GALOIS_CONNECTIONS_ABSTRACT_INTERPRETATION.md`
 
 ### Elaborator Propagator Refactoring — Phases 8+A-E COMPLETE (E3 deferred)
 - ✅ Phase 8: Propagator network as primary type inference engine (56-62% speedup)

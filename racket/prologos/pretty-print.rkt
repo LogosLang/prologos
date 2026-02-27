@@ -424,6 +424,10 @@
     [(expr-net-new fuel) (format "[net-new ~a]" (pp-expr fuel names))]
     [(expr-net-new-cell n init merge)
      (format "[net-new-cell ~a ~a ~a]" (pp-expr n names) (pp-expr init names) (pp-expr merge names))]
+    [(expr-net-new-cell-widen n init merge wf nf)
+     (format "[net-new-cell-widen ~a ~a ~a ~a ~a]"
+             (pp-expr n names) (pp-expr init names) (pp-expr merge names)
+             (pp-expr wf names) (pp-expr nf names))]
     [(expr-net-cell-read n c) (format "[net-cell-read ~a ~a]" (pp-expr n names) (pp-expr c names))]
     [(expr-net-cell-write n c v)
      (format "[net-cell-write ~a ~a ~a]" (pp-expr n names) (pp-expr c names) (pp-expr v names))]
@@ -1037,6 +1041,8 @@
     [(expr-prop-id _) #f]
     [(expr-net-new fuel) (uses-bvar0? fuel)]
     [(expr-net-new-cell n init merge) (or (uses-bvar0? n) (uses-bvar0? init) (uses-bvar0? merge))]
+    [(expr-net-new-cell-widen n init merge wf nf)
+     (or (uses-bvar0? n) (uses-bvar0? init) (uses-bvar0? merge) (uses-bvar0? wf) (uses-bvar0? nf))]
     [(expr-net-cell-read n c) (or (uses-bvar0? n) (uses-bvar0? c))]
     [(expr-net-cell-write n c v) (or (uses-bvar0? n) (uses-bvar0? c) (uses-bvar0? v))]
     [(expr-net-add-prop n ins outs fn) (or (uses-bvar0? n) (uses-bvar0? ins) (uses-bvar0? outs) (uses-bvar0? fn))]

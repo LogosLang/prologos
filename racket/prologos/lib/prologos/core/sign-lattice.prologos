@@ -1,0 +1,74 @@
+ns prologos::core::sign-lattice
+
+require [prologos::data::sign :refer [Sign sign-bot sign-neg sign-zero sign-pos sign-top]]
+require [prologos::core::lattice-trait :refer [Lattice]]
+require [prologos::core::has-top-trait :refer [HasTop]]
+require [prologos::data::bool :refer [and or]]
+
+;; ========================================
+;; Lattice Sign
+;; ========================================
+;; join = least upper bound in the 5-element lattice
+;; bot = sign-bot (unreachable / no info)
+;; leq = lattice ordering
+
+impl Lattice Sign
+  defn bot [] <Sign>
+    sign-bot
+  defn join [a <Sign> b <Sign>] <Sign>
+    match a
+      | sign-bot -> b
+      | sign-top -> sign-top
+      | sign-neg -> match b
+          | sign-bot -> sign-neg
+          | sign-neg -> sign-neg
+          | sign-zero -> sign-top
+          | sign-pos -> sign-top
+          | sign-top -> sign-top
+      | sign-zero -> match b
+          | sign-bot -> sign-zero
+          | sign-neg -> sign-top
+          | sign-zero -> sign-zero
+          | sign-pos -> sign-top
+          | sign-top -> sign-top
+      | sign-pos -> match b
+          | sign-bot -> sign-pos
+          | sign-neg -> sign-top
+          | sign-zero -> sign-top
+          | sign-pos -> sign-pos
+          | sign-top -> sign-top
+  defn leq [a <Sign> b <Sign>] <Bool>
+    match a
+      | sign-bot -> true
+      | sign-top -> match b
+          | sign-top -> true
+          | sign-bot -> false
+          | sign-neg -> false
+          | sign-zero -> false
+          | sign-pos -> false
+      | sign-neg -> match b
+          | sign-neg -> true
+          | sign-top -> true
+          | sign-bot -> false
+          | sign-zero -> false
+          | sign-pos -> false
+      | sign-zero -> match b
+          | sign-zero -> true
+          | sign-top -> true
+          | sign-bot -> false
+          | sign-neg -> false
+          | sign-pos -> false
+      | sign-pos -> match b
+          | sign-pos -> true
+          | sign-top -> true
+          | sign-bot -> false
+          | sign-neg -> false
+          | sign-zero -> false
+
+;; ========================================
+;; HasTop Sign
+;; ========================================
+
+impl HasTop Sign
+  defn top [] <Sign>
+    sign-top

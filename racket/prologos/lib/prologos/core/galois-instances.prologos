@@ -1,0 +1,36 @@
+ns prologos::core::galois-instances
+
+require [prologos::core::galois-trait :refer [GaloisConnection]]
+require [prologos::core::lattice-instances :refer [Interval interval-bot interval-top mk-interval]]
+require [prologos::data::bool :refer [not]]
+
+;; ========================================
+;; GaloisConnection Interval Bool
+;; ========================================
+;; "Is constrained?" abstraction.
+;;
+;; In Interval's CONSTRAINT ordering:
+;;   bot = unconstrained (all values)
+;;   top = contradiction (empty set)
+;;   mk-interval lo hi = some constraint
+;;
+;; alpha: Interval -> Bool
+;;   interval-bot  -> false   (unconstrained → "not constrained")
+;;   anything else -> true    (has constraint → "is constrained")
+;;
+;; gamma: Bool -> Interval
+;;   false -> interval-bot    ("not constrained" → unconstrained)
+;;   true  -> interval-top    ("is constrained" → most constrained possible)
+;;
+;; Note: gamma(true) = interval-top is the safe over-approximation:
+;; "is constrained" maps to the tightest possible constraint (contradiction).
+;; This satisfies the adjunction law since alpha(gamma(true)) = alpha(top) = true.
+
+impl GaloisConnection Interval Bool
+  defn alpha [iv <Interval>] <Bool>
+    match iv
+      | interval-bot -> false
+      | interval-top -> true
+      | mk-interval lo hi -> true
+  defn gamma [b <Bool>] <Interval>
+    if b interval-top interval-bot

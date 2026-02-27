@@ -788,6 +788,101 @@ trait Functor {F : Type -> Type}
   fmap : {A B : Type} [A -> B] -> [F A] -> [F B]
 #+end_src
 
+** Abstract Interpretation Traits
+
+Prologos provides trait infrastructure for abstract interpretation --- modular
+abstract domains connected by soundness-preserving Galois connections, with
+widening/narrowing for infinite-height lattices. These traits build on the
+existing =Lattice= and =HasTop= traits.
+
+*** Widenable: Widening and Narrowing
+
+The =Widenable= trait adds widening (∇) and narrowing (Δ) operators to a lattice.
+Widening forces convergence on infinite ascending chains; narrowing recovers
+precision after widening stabilizes. Required for domains like =Interval= that
+have infinite height.
+
+#+begin_src prologos
+;; Trait definition (in prologos::core::widenable-trait)
+trait Widenable {A}
+  widen  : A -> A -> A    ;; ∇ — over-approximate for convergence
+  narrow : A -> A -> A    ;; Δ — recover precision after widening
+
+;; Instance for Interval (Cousot-style widening)
+impl Widenable Interval
+  defn widen [old <Interval> new <Interval>] <Interval>
+    ...  ;; if bounds tighten without stabilizing, jump to bot (unconstrained)
+  defn narrow [old <Interval> new <Interval>] <Interval>
+    ...  ;; intersect old and new to recover precision
+
+;; Creating a widenable cell (generic)
+spec new-widenable-cell {A} PropNetwork -> [PropNetwork * CellId]
+  where (Lattice A) (Widenable A)
+defn new-widenable-cell [net] where (Lattice A) (Widenable A)
+  net-new-cell-widen net bot [fn x y [join x y]] [fn x y [widen x y]] [fn x y [narrow x y]]
+#+end_src
+
+*** GaloisConnection: Abstraction and Concretization
+
+A =GaloisConnection= pairs a concrete domain =C= with an abstract domain =A=
+via an abstraction function (α: C → A) and a concretization function (γ: A → C).
+The adjunction law α(c) ≤ a ⟺ c ≤ γ(a) ensures soundness: anything provable in
+the abstract domain reflects a real property of the concrete domain.
+
+#+begin_src prologos
+;; Trait definition (in prologos::core::galois-trait)
+trait GaloisConnection {C A}
+  alpha : C -> A    ;; abstraction (concrete → abstract)
+  gamma : A -> C    ;; concretization (abstract → concrete)
+
+;; Instance: Interval → Bool ("is constrained?" abstraction)
+impl GaloisConnection Interval Bool
+  defn alpha [iv <Interval>] <Bool>
+    match iv
+      | interval-bot -> false
+      | interval-top -> true
+      | mk-interval lo hi -> true
+  defn gamma [b <Bool>] <Interval>
+    if b interval-top interval-bot
+#+end_src
+
+The multi-type-parameter trait generates dict names following the pattern
+=ConcreteType-AbstractType--GaloisConnection--dict=, e.g.,
+=Interval-Bool--GaloisConnection--dict=. Accessors follow the standard pattern:
+=GaloisConnection-alpha dict val= and =GaloisConnection-gamma dict val=.
+
+*** Cross-Domain Propagation
+
+Cross-domain propagation creates bidirectional links between concrete and abstract
+cells using α/γ functions from a =GaloisConnection=. Changes to either cell
+automatically propagate through the Galois connection:
+
+- Concrete cell changes → α(c-val) written to abstract cell
+- Abstract cell changes → γ(a-val) written to concrete cell
+
+Termination is guaranteed by the no-change guard in =net-cell-write= (assumes
+monotone α/γ over finite-height lattices).
+
+*** Abstract Domain Library Modules
+
+Prologos ships with ready-made abstract domains as library modules (not
+prelude-exported --- use explicit =require=):
+
+- =prologos::data::sign= --- =data Sign = sign-bot | sign-neg | sign-zero | sign-pos | sign-top=
+- =prologos::core::sign-lattice= --- =impl Lattice Sign=, =impl HasTop Sign=
+- =prologos::data::parity= --- =data Parity = parity-bot | parity-even | parity-odd | parity-top=
+- =prologos::core::parity-lattice= --- =impl Lattice Parity=, =impl HasTop Parity=
+
+#+begin_src prologos
+;; Example: using the Sign domain
+require [prologos::data::sign :refer [Sign sign-neg sign-pos sign-top]]
+require [prologos::core::sign-lattice :refer []]
+require [prologos::core::lattice-trait :refer [Lattice Lattice-join]]
+
+eval [Lattice-join Sign--Lattice--dict sign-neg sign-pos]
+;; => sign-top
+#+end_src
+
 ** Property Declarations
 
 A =property= declares a named, composable group of propositions --- analogous

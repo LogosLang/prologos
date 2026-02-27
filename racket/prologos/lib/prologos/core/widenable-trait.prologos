@@ -1,0 +1,18 @@
+ns prologos::core::widenable-trait
+
+;; ========================================
+;; Widenable Trait — lattice domains requiring widening for convergence
+;; ========================================
+;; For lattices with infinite ascending chains (e.g., Interval),
+;; standard fixpoint iteration may not converge. Widening (∇) over-
+;; approximates at designated loop-head cells to guarantee termination;
+;; narrowing (Δ) then recovers precision.
+;;
+;; Laws (not enforced at compile-time):
+;;   widen old new >= new         (over-approximation)
+;;   narrow old new <= old        (precision recovery)
+;;   Finite number of widenings stabilizes  (termination)
+
+trait Widenable {A}
+  widen  : A A -> A
+  narrow : A A -> A

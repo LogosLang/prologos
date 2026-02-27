@@ -231,7 +231,7 @@
  (struct-out surf-tset-insert!) (struct-out surf-tset-delete!)
  ;; PropNetwork (persistent propagator network)
  (struct-out surf-net-type) (struct-out surf-cell-id-type) (struct-out surf-prop-id-type)
- (struct-out surf-net-new) (struct-out surf-net-new-cell)
+ (struct-out surf-net-new) (struct-out surf-net-new-cell) (struct-out surf-net-new-cell-widen)
  (struct-out surf-net-cell-read) (struct-out surf-net-cell-write)
  (struct-out surf-net-add-prop) (struct-out surf-net-run)
  (struct-out surf-net-snapshot) (struct-out surf-net-contradiction)
@@ -777,6 +777,7 @@
 (struct surf-prop-id-type     (srcloc) #:transparent)                  ; PropId
 (struct surf-net-new          (fuel srcloc) #:transparent)             ; (net-new fuel)
 (struct surf-net-new-cell     (net init merge srcloc) #:transparent)   ; (net-new-cell net init merge)
+(struct surf-net-new-cell-widen (net init merge widen-fn narrow-fn srcloc) #:transparent) ; (net-new-cell-widen net init merge widen narrow)
 (struct surf-net-cell-read    (net cell srcloc) #:transparent)         ; (net-cell-read net cell)
 (struct surf-net-cell-write   (net cell val srcloc) #:transparent)     ; (net-cell-write net cell val)
 (struct surf-net-add-prop     (net ins outs fn srcloc) #:transparent)  ; (net-add-prop net ins outs fn)
