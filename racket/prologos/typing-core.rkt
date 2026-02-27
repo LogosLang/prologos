@@ -36,11 +36,12 @@
 (provide infer check is-type infer-level
          (struct-out no-level) (struct-out just-level)
          mark-structural-reduce! structural-reduce? structural-reduce-set
-         subtype?
+         subtype? type-key
          list-type-fvar
          concrete-numeric-type? divisible-numeric-type? negatable-numeric-type?
          from-int-target-type? from-rat-target-type?
-         numeric-join exact-numeric-type? posit-type?)
+         numeric-join exact-numeric-type? posit-type?
+         base-numeric-type)
 
 ;; ========================================
 ;; Structural reduce tracking
@@ -63,13 +64,25 @@
 (struct just-level (level) #:transparent)
 
 ;; ========================================
-;; Within-family subtype predicate (Phase 3e)
+;; Within-family subtype predicate (Phase 3e + Phase E)
 ;; ========================================
 ;; Automatic widening within two type families:
 ;;   Exact:  Nat <: Int <: Rat
 ;;   Posit:  Posit8 <: Posit16 <: Posit32 <: Posit64
-;; All 9 edges enumerated directly (small, fixed relation — no transitive closure needed).
+;; Hardcoded 9 edges for built-in types, then registry fallback for
+;; library-defined subtypes (PosInt <: Int, NegRat <: Rat, etc.).
 ;; Arguments: (subtype? inferred expected) — is inferred a subtype of expected?
+
+;; Extract a canonical symbol key from a type expression.
+;; Built-in types → short name; user-defined types → qualified fvar name.
+(define (type-key t)
+  (match t
+    [(expr-Nat) 'Nat] [(expr-Int) 'Int] [(expr-Rat) 'Rat]
+    [(expr-Posit8) 'Posit8] [(expr-Posit16) 'Posit16]
+    [(expr-Posit32) 'Posit32] [(expr-Posit64) 'Posit64]
+    [(expr-fvar name) name]
+    [_ #f]))
+
 (define (subtype? t1 t2)
   (match* (t1 t2)
     ;; Exact: Nat <: Int <: Rat
@@ -83,7 +96,10 @@
     [((expr-Posit16) (expr-Posit32)) #t]
     [((expr-Posit16) (expr-Posit64)) #t]
     [((expr-Posit32) (expr-Posit64)) #t]
-    [(_ _) #f]))
+    ;; Registry fallback for library-defined subtypes (Phase E)
+    [(_ _)
+     (let ([k1 (type-key t1)] [k2 (type-key t2)])
+       (and k1 k2 (subtype-pair? k1 k2)))]))
 
 ;; ========================================
 ;; Forward declarations for mutual recursion
@@ -165,29 +181,46 @@
   (case r [(0) (expr-Posit8)] [(1) (expr-Posit16)]
           [(2) (expr-Posit32)] [(3) (expr-Posit64)] [else #f]))
 
+;; Phase H: Normalize refined numeric types to their base type.
+;; PosInt/NegInt/Zero → Int; PosRat/NegRat → Rat; others unchanged.
+;; Uses the subtype registry to determine the base type.
+(define (base-numeric-type t)
+  (match t
+    [(expr-fvar name)
+     (cond
+       ;; Check if it's a subtype of Int (direct, not transitive through Int→Rat)
+       [(subtype-pair? name 'Int) (expr-Int)]
+       ;; Check if it's a subtype of Rat (could be direct or via Int)
+       [(subtype-pair? name 'Rat) (expr-Rat)]
+       [else t])]
+    [_ t]))
+
 ;; numeric-join: least upper bound of two numeric types.
 ;; Returns the wider type, or #f if not numeric types.
 ;; Within-family: wider wins (Nat < Int < Rat; P8 < P16 < P32 < P64).
 ;; Cross-family: posit wins (approximate dominates exact).
 ;; The resulting posit width is max(P32, posit operand width) for cross-family.
+;; Phase H: normalizes refined types (PosInt→Int, etc.) before computing the join.
 (define (numeric-join t1 t2)
-  (cond
-    ;; Same numeric type
-    [(and (equal? t1 t2) (concrete-numeric-type? t1)) t1]
-    ;; Both exact
-    [(and (exact-numeric-type? t1) (exact-numeric-type? t2))
-     (exact-type-at-rank (max (exact-rank t1) (exact-rank t2)))]
-    ;; Both posit
-    [(and (posit-type? t1) (posit-type? t2))
-     (posit-type-at-rank (max (posit-rank t1) (posit-rank t2)))]
-    ;; Cross-family: posit wins
-    [(and (exact-numeric-type? t1) (posit-type? t2))
-     ;; Posit dominates; ensure at least P32 for precision
-     (posit-type-at-rank (max 2 (posit-rank t2)))]
-    [(and (posit-type? t1) (exact-numeric-type? t2))
-     (posit-type-at-rank (max 2 (posit-rank t1)))]
-    ;; Not numeric types
-    [else #f]))
+  (let ([t1 (base-numeric-type t1)]
+        [t2 (base-numeric-type t2)])
+    (cond
+      ;; Same numeric type
+      [(and (equal? t1 t2) (concrete-numeric-type? t1)) t1]
+      ;; Both exact
+      [(and (exact-numeric-type? t1) (exact-numeric-type? t2))
+       (exact-type-at-rank (max (exact-rank t1) (exact-rank t2)))]
+      ;; Both posit
+      [(and (posit-type? t1) (posit-type? t2))
+       (posit-type-at-rank (max (posit-rank t1) (posit-rank t2)))]
+      ;; Cross-family: posit wins
+      [(and (exact-numeric-type? t1) (posit-type? t2))
+       ;; Posit dominates; ensure at least P32 for precision
+       (posit-type-at-rank (max 2 (posit-rank t2)))]
+      [(and (posit-type? t1) (exact-numeric-type? t2))
+       (posit-type-at-rank (max 2 (posit-rank t1)))]
+      ;; Not numeric types
+      [else #f])))
 
 ;; Human-readable name for a numeric type expression (for warnings).
 (define (numeric-type-name t)

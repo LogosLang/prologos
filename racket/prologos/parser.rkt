@@ -2684,6 +2684,27 @@
             (let ([e (parse-datum (car args))])
               (if (prologos-error? e) e (surf-elaborate e loc))))]
 
+       ;; (subtype Sub Super) or (subtype Sub Super via coerce-fn)
+       [(subtype)
+        (cond
+          [(< (length args) 2)
+           (parse-error loc "subtype requires at least 2 arguments: (subtype Sub Super)" #f)]
+          [else
+           (define sub-sym (stx->datum (first args)))
+           (define super-sym (stx->datum (second args)))
+           (define rest-args (cddr args))
+           (define via-fn
+             (cond
+               [(null? rest-args) #f]
+               [(and (= (length rest-args) 2)
+                     (eq? (stx->datum (first rest-args)) 'via))
+                (stx->datum (second rest-args))]
+               [else
+                (parse-error loc "subtype: expected (subtype Sub Super) or (subtype Sub Super via fn)" #f)]))
+           (if (prologos-error? via-fn)
+               via-fn
+               (surf-subtype sub-sym super-sym via-fn loc))])]
+
        ;; Not a keyword -> function application or relational goal
        [else
         (if (current-parsing-relational-goal?)

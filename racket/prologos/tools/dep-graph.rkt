@@ -767,6 +767,10 @@
    'test-refined-rat.rkt
    (test-dep '(syntax.rkt typing-core.rkt qtt.rkt reduction.rkt parser.rkt
                elaborator.rkt surface-syntax.rkt namespace.rkt macros.rkt) #t)
+   ;; Refined numeric subtyping (Phase E: PosInt <: Int, NegRat <: Rat, etc.)
+   'test-refined-subtyping.rkt
+   (test-dep '(syntax.rkt typing-core.rkt qtt.rkt reduction.rkt parser.rkt
+               elaborator.rkt surface-syntax.rkt namespace.rkt macros.rkt) #t)
    ;; UnionFind (persistent disjoint sets)
    'test-union-find.rkt
    (test-dep '(union-find.rkt) #f)
@@ -1314,6 +1318,14 @@
                                            prologos::core::ord-trait
                                            prologos::data::ordering)
    'test-refined-rat.rkt               '(prologos::data::refined-rat
+                                           prologos::core::refined-rat-instances
+                                           prologos::data::option
+                                           prologos::core::eq-trait
+                                           prologos::core::ord-trait
+                                           prologos::data::ordering)
+   'test-refined-subtyping.rkt         '(prologos::data::refined-int
+                                           prologos::data::refined-rat
+                                           prologos::core::refined-int-instances
                                            prologos::core::refined-rat-instances
                                            prologos::data::option
                                            prologos::core::eq-trait

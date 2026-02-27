@@ -2581,6 +2581,135 @@
     [_ (prologos-error srcloc-unknown (format "Invalid defr variant: ~a" v))]))
 
 ;; ========================================
+;; Phase E: Process subtype declaration
+;; ========================================
+;; (subtype Sub Super) — auto-infer coercion for single-field wrappers
+;; (subtype Sub Super via fn) — explicit coercion function
+;;
+;; Registers in both the subtype registry (for type-checker subtype?) and
+;; the coercion registry (for reducer try-coerce-via-registry).
+;; Also computes transitive closure with existing subtype relationships.
+(define (process-subtype-declaration sub-sym super-sym via-fn-sym loc)
+  ;; Qualify names with current namespace prefix (if any)
+  (define ns-ctx (current-ns-context))
+  (define (qualify name)
+    (if ns-ctx
+        (qualify-name name (ns-context-current-ns ns-ctx))
+        name))
+  ;; FQN keys for the subtype/coercion registries (used by subtype? via type-key)
+  (define sub-fqn (qualify sub-sym))
+  ;; Built-in types don't need qualification — they use short names in the registry
+  (define super-fqn
+    (case super-sym
+      [(Int) 'Int] [(Rat) 'Rat] [(Nat) 'Nat]
+      [(Posit8) 'Posit8] [(Posit16) 'Posit16]
+      [(Posit32) 'Posit32] [(Posit64) 'Posit64]
+      [else (qualify super-sym)]))
+  ;; Short-name keys (used by try-coerce-via-registry via ctor-meta-type-name)
+  (define sub-short sub-sym)
+  (define super-short super-sym)
+
+  ;; Build coercion function
+  (define coerce-fn
+    (cond
+      ;; Explicit via function: look up and build a coercion that applies it
+      [via-fn-sym
+       (define via-qualified (qualify via-fn-sym))
+       ;; Build a coercion that constructs (via-fn e) as an application expression.
+       ;; The reducer's whnf call in reduce-int-binary/reduce-rat-binary will
+       ;; eventually reduce this application to the coerced value.
+       (lambda (e)
+         (expr-app (expr-fvar via-qualified) e))]
+      [else
+       ;; Auto-infer: look up constructor metadata for the sub-type
+       ;; type-meta is keyed by SHORT name (registered by process-data at preparse time)
+       (define ctors (lookup-type-ctors sub-short))
+       (cond
+         [(and ctors (= (length ctors) 1))
+          (define ctor-name (car ctors))
+          (define meta (lookup-ctor ctor-name))
+          (cond
+            ;; Single-field constructor → unwrap
+            [(and meta (= (length (ctor-meta-field-types meta)) 1))
+             (lambda (e)
+               (match e
+                 [(expr-app (expr-fvar _) inner) inner]
+                 [_ #f]))]
+            ;; Nullary constructor — can't auto-infer
+            [(and meta (= (length (ctor-meta-field-types meta)) 0))
+             (prologos-error loc
+               (format "subtype ~a ~a: nullary constructor ~a requires explicit 'via' coercion"
+                       sub-sym super-sym ctor-name))]
+            [else
+             (prologos-error loc
+               (format "subtype ~a ~a: constructor ~a has ~a fields, auto-inference requires exactly 1"
+                       sub-sym super-sym ctor-name (length (ctor-meta-field-types meta))))])]
+         [else
+          (prologos-error loc
+            (format "subtype ~a ~a: type ~a must have exactly 1 constructor for auto-inference (has ~a)"
+                    sub-sym super-sym sub-sym (if ctors (length ctors) 0)))])]))
+
+  (cond
+    [(prologos-error? coerce-fn) coerce-fn]
+    [else
+     ;; Register the direct subtype pair under BOTH FQN and short-name keys.
+     ;; FQN: for subtype? in typing-core.rkt (type-key extracts FQN from expr-fvar)
+     ;; Short: for try-coerce-via-registry in reduction.rkt (ctor-meta-type-name = short name)
+     (register-subtype-pair! sub-fqn super-fqn)
+     (register-coercion! sub-fqn super-fqn coerce-fn)
+     (unless (eq? sub-fqn sub-short)
+       (register-subtype-pair! sub-short super-short)
+       (register-coercion! sub-short super-short coerce-fn)
+       ;; Also register cross-combinations for mixed lookups
+       (register-subtype-pair! sub-short super-fqn)
+       (register-coercion! sub-short super-fqn coerce-fn))
+
+     ;; Compute transitive closure:
+     ;; For each existing super of super-fqn (or super-short), register sub as sub of that too
+     (define all-supers
+       (remove-duplicates
+        (append (all-supertypes super-fqn)
+                (all-supertypes super-short))))
+     (for ([super-of-super (in-list all-supers)])
+       (unless (subtype-pair? sub-fqn super-of-super)
+         (register-subtype-pair! sub-fqn super-of-super)
+         (unless (eq? sub-fqn sub-short)
+           (register-subtype-pair! sub-short super-of-super))
+         ;; Compose coercions: first coerce sub→super, then super→super-of-super
+         (define super-coerce (or (lookup-coercion super-fqn super-of-super)
+                                  (lookup-coercion super-short super-of-super)))
+         (when super-coerce
+           (define composed
+             (lambda (e)
+               (define intermediate (coerce-fn e))
+               (and intermediate (super-coerce intermediate))))
+           (register-coercion! sub-fqn super-of-super composed)
+           (unless (eq? sub-fqn sub-short)
+             (register-coercion! sub-short super-of-super composed)))))
+
+     ;; For each existing sub of sub-fqn (or sub-short), register them as sub of super too
+     (define all-subs
+       (remove-duplicates
+        (append (all-subtypes sub-fqn)
+                (all-subtypes sub-short))))
+     (for ([sub-of-sub (in-list all-subs)])
+       (unless (subtype-pair? sub-of-sub super-fqn)
+         (register-subtype-pair! sub-of-sub super-fqn)
+         (register-subtype-pair! sub-of-sub super-short)
+         (define sub-coerce (or (lookup-coercion sub-of-sub sub-fqn)
+                                (lookup-coercion sub-of-sub sub-short)))
+         (when sub-coerce
+           (define composed
+             (lambda (e)
+               (define intermediate (sub-coerce e))
+               (and intermediate (coerce-fn intermediate))))
+           (register-coercion! sub-of-sub super-fqn composed)
+           (register-coercion! sub-of-sub super-short composed))))
+
+     ;; Return — declaration only, no elaborated form to process
+     (list 'subtype sub-fqn super-fqn)]))
+
+;; ========================================
 ;; Elaborate top-level commands
 ;; Returns the surface command + elaborated expressions,
 ;; or a prologos-error
@@ -2654,5 +2783,11 @@
 
     [(surf-the-fn _ _ _ loc)
      (prologos-error loc "the-fn should have been expanded by the macro system before elaboration")]
+
+    ;; Phase E: subtype declaration
+    ;; (subtype Sub Super) or (subtype Sub Super via coerce-fn)
+    ;; Registers in subtype + coercion registries; no elaborated AST.
+    [(surf-subtype sub-type super-type via-fn loc)
+     (process-subtype-declaration sub-type super-type via-fn loc)]
 
     [_ (prologos-error srcloc-unknown (format "Unknown top-level form: ~a" surf))]))

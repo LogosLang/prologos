@@ -291,16 +291,48 @@
 ;; to the target type. Returns the coerced value, or #f if not coercible.
 
 ;; Try to coerce a WHNF value to Int. Nat → Int.
+;; Phase E: also handles library-defined subtypes via coercion registry.
 (define (try-coerce-to-int e)
-  (let ([k (nat-value e)])
-    (and k (expr-int k))))
+  (or (let ([k (nat-value e)])
+        (and k (expr-int k)))
+      (try-coerce-via-registry e 'Int)))
 
 ;; Try to coerce a WHNF value to Rat. Nat → Rat, Int → Rat.
+;; Phase E: also handles library-defined subtypes via coercion registry.
 (define (try-coerce-to-rat e)
   (cond
     [(expr-int? e) (expr-rat (expr-int-val e))]
-    [else (let ([k (nat-value e)])
-            (and k (expr-rat k)))]))
+    [else (or (let ([k (nat-value e)])
+                (and k (expr-rat k)))
+              ;; Direct coercion: PosRat→Rat, NegRat→Rat
+              (try-coerce-via-registry e 'Rat)
+              ;; Transitive: PosInt→Int→Rat, NegInt→Int→Rat, Zero→Int→Rat
+              (let ([as-int (try-coerce-via-registry e 'Int)])
+                (and as-int (expr-int? as-int)
+                     (expr-rat (expr-int-val as-int)))))]))
+
+;; Phase E: Generic coercion via registry for library-defined subtypes.
+;; Looks up the constructor's type in ctor-meta, finds a registered coercion
+;; to the target type, and applies it. Handles both single-arg constructors
+;; (e.g., pos-int 5) and nullary constructors (e.g., mk-zero).
+(define (try-coerce-via-registry e target-key)
+  (define (ctor-type-key name)
+    (let ([meta (or (lookup-ctor name) (lookup-ctor (ctor-short-name name)))])
+      (and meta (ctor-meta-type-name meta))))
+  (match e
+    ;; Single-arg constructor application: (pos-int 5), (neg-rat -3/7)
+    [(expr-app (expr-fvar ctor-name) _inner)
+     (let ([tk (ctor-type-key ctor-name)])
+       (and tk
+            (let ([coerce-fn (lookup-coercion tk target-key)])
+              (and coerce-fn (coerce-fn e)))))]
+    ;; Nullary constructor: mk-zero
+    [(expr-fvar ctor-name)
+     (let ([tk (ctor-type-key ctor-name)])
+       (and tk
+            (let ([coerce-fn (lookup-coercion tk target-key)])
+              (and coerce-fn (coerce-fn e)))))]
+    [_ #f]))
 
 ;; Try to coerce a WHNF posit value to a wider width. Returns wider posit or #f.
 (define (try-coerce-to-posit target-width e)

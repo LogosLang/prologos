@@ -292,7 +292,8 @@
  ;; Binder info
  (struct-out binder-info)
  ;; Foreign escape block
- (struct-out surf-foreign-block))
+ (struct-out surf-foreign-block)
+ (struct-out surf-subtype))
 
 ;; ========================================
 ;; Type hole (to be inferred by the type checker)
@@ -944,3 +945,11 @@
 ;; captures: list of (list name type-surf) — Prologos values captured from scope
 ;; return-type: surface type expression for the return value
 (struct surf-foreign-block (lang code-datums captures return-type srcloc) #:transparent)
+
+;; ========================================
+;; Phase E: Subtype declaration
+;; ========================================
+;; (subtype PosInt Int) or (subtype Zero Int via zero-to-int)
+;; sub-type, super-type: symbols (type names)
+;; via-fn: symbol or #f (explicit coercion function, or auto-infer from ctor)
+(struct surf-subtype (sub-type super-type via-fn srcloc) #:transparent)

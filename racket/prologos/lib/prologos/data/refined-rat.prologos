@@ -8,14 +8,13 @@ require [prologos::data::option :refer [Option some none]]
 ;; Wrapper types for expressing numeric sign constraints at the type level.
 ;; Smart constructors validate at runtime; unsafe constructors trust the caller.
 ;;
-;; Subtyping lattice (conceptual, not enforced by the type system):
+;; Subtyping lattice (enforced by the type system via subtype declarations):
 ;;
 ;;           Rat
 ;;          /   \
 ;;    NegRat     PosRat
 ;;
-;; (Zero is shared with refined-int; Rat zero is 0/1 = 0.)
-;; Use to-rat / pos-rat-val / neg-rat-val to convert between layers.
+;; PosRat, NegRat are subtypes of Rat — they can be used anywhere Rat is expected.
 
 ;; Positive rationals (value > 0)
 data PosRat
@@ -70,3 +69,12 @@ spec neg-rat-val NegRat -> Rat
 defn neg-rat-val [p]
   match p
     | neg-rat r -> r
+
+;; ========================================
+;; Subtype declarations
+;; ========================================
+;; PosRat <: Rat (auto-inferred coercion: unwrap single-field constructor)
+;; NegRat <: Rat (auto-inferred coercion: unwrap single-field constructor)
+
+subtype PosRat Rat
+subtype NegRat Rat

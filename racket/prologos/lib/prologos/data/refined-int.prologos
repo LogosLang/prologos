@@ -8,13 +8,13 @@ require [prologos::data::option :refer [Option some none]]
 ;; Wrapper types for expressing numeric sign constraints at the type level.
 ;; Smart constructors validate at runtime; unsafe constructors trust the caller.
 ;;
-;; Subtyping lattice (conceptual, not enforced by the type system):
+;; Subtyping lattice (enforced by the type system via subtype declarations):
 ;;
 ;;              Int
 ;;            /  |  \
 ;;      NegInt Zero PosInt
 ;;
-;; Use to-int / pos-int-val / neg-int-val to convert between layers.
+;; PosInt, NegInt, Zero are subtypes of Int — they can be used anywhere Int is expected.
 
 ;; Positive integers (value > 0)
 data PosInt
@@ -82,3 +82,14 @@ spec zero-to-int Zero -> Int
 defn zero-to-int [z]
   match z
     | mk-zero -> 0
+
+;; ========================================
+;; Subtype declarations
+;; ========================================
+;; PosInt <: Int <: Rat (auto-inferred coercion: unwrap single-field constructor)
+;; NegInt <: Int <: Rat (auto-inferred coercion: unwrap single-field constructor)
+;; Zero <: Int <: Rat (explicit coercion via zero-to-int: nullary constructor)
+
+subtype PosInt Int
+subtype NegInt Int
+subtype Zero Int via zero-to-int

@@ -186,6 +186,7 @@ top-level-form  = require-decl
                 | infer-form
                 | expand-form
                 | foreign-form
+                | subtype-decl
                 | let-form
                 | expr              (* bare expression → implicit eval *)
                 ;
@@ -407,6 +408,16 @@ expand-form     = 'expand' , expr                      (* full macro expansion *
 foreign-form    = 'foreign' , foreign-block ;
 foreign-block   = ? Racket s-expression block ? ;
 
+(* ------------------------------------------------ *)
+(* 3.11 Subtype Declaration                          *)
+(* ------------------------------------------------ *)
+
+(* Declares that sub-type is a subtype of super-type, enabling
+   automatic coercion in type checking and runtime reduction.
+   The optional 'via' clause names an explicit coercion function;
+   without it, the system auto-infers coercion by unwrapping a
+   single-field constructor. *)
+subtype-decl    = 'subtype' , type-name , type-name , [ 'via' , identifier ] ;
 
 (* ================================================================== *)
 (* 4. TYPE EXPRESSIONS                                                 *)

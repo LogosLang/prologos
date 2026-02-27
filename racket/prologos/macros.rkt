@@ -108,6 +108,16 @@
          lookup-bundle
          process-bundle
          expand-bundle-constraints
+         ;; Subtype registry (Phase E)
+         current-subtype-registry
+         register-subtype-pair!
+         subtype-pair?
+         all-supertypes
+         all-subtypes
+         ;; Coercion registry (Phase E)
+         current-coercion-registry
+         register-coercion!
+         lookup-coercion
          ;; HKT-8: Specialization registry
          current-specialization-registry
          specialization-entry
@@ -3647,6 +3657,64 @@
 (current-type-meta (hash-set (current-type-meta) 'Unit '(unit)))
 
 ;; ========================================
+;; Subtype registry (Phase E: refined numeric subtyping)
+;; ========================================
+;; Maps (cons sub-key super-key) → #t for registered subtype relationships.
+;; Keys are symbols: 'Int, 'Rat, 'Nat for built-ins; qualified names for user types.
+;; Used by typing-core.rkt subtype? as a fallback after hardcoded pairs.
+(define current-subtype-registry (make-parameter (hash)))
+
+(define (register-subtype-pair! sub-key super-key)
+  (current-subtype-registry
+   (hash-set (current-subtype-registry) (cons sub-key super-key) #t)))
+
+(define (subtype-pair? sub-key super-key)
+  (hash-ref (current-subtype-registry) (cons sub-key super-key) #f))
+
+;; Return all registered supertypes of a given sub-key.
+(define (all-supertypes sub-key)
+  (for/list ([(k _v) (in-hash (current-subtype-registry))]
+             #:when (equal? (car k) sub-key))
+    (cdr k)))
+
+;; Return all registered subtypes of a given super-key.
+(define (all-subtypes super-key)
+  (for/list ([(k _v) (in-hash (current-subtype-registry))]
+             #:when (equal? (cdr k) super-key))
+    (car k)))
+
+;; ========================================
+;; Coercion registry (Phase E: refined numeric subtyping)
+;; ========================================
+;; Maps (cons sub-key super-key) → (expr → expr) coercion function.
+;; Used by reduction.rkt to coerce refined type values at runtime.
+(define current-coercion-registry (make-parameter (hash)))
+
+(define (register-coercion! sub-key super-key coerce-fn)
+  (current-coercion-registry
+   (hash-set (current-coercion-registry) (cons sub-key super-key) coerce-fn)))
+
+(define (lookup-coercion sub-key super-key)
+  (hash-ref (current-coercion-registry) (cons sub-key super-key) #f))
+
+;; ========================================
+;; Built-in subtype registrations
+;; ========================================
+;; Register existing built-in subtype pairs so transitive closure can find them
+;; when user-defined subtypes chain through (e.g., PosInt <: Int <: Rat).
+;; These duplicate the hardcoded match* in typing-core.rkt subtype?,
+;; but the registry is needed for transitive closure computation.
+(register-subtype-pair! 'Nat 'Int)
+(register-subtype-pair! 'Nat 'Rat)
+(register-subtype-pair! 'Int 'Rat)
+(register-subtype-pair! 'Posit8 'Posit16)
+(register-subtype-pair! 'Posit8 'Posit32)
+(register-subtype-pair! 'Posit8 'Posit64)
+(register-subtype-pair! 'Posit16 'Posit32)
+(register-subtype-pair! 'Posit16 'Posit64)
+(register-subtype-pair! 'Posit32 'Posit64)
+
+;; ========================================
 ;; Trait metadata registry
 ;; ========================================
 ;; Stores metadata about each trait for impl validation and dictionary resolution.
@@ -6276,6 +6344,8 @@
     ;; defr — named relation definition (Phase 7)
     ;; Pass through to elaboration, which produces (list 'defr name expr)
     [(surf-defr? surf) surf]
+    ;; Phase E: subtype declaration — pass through to elaboration
+    [(surf-subtype? surf) surf]
     ;; Bare expression — implicit eval
     [else
      (define loc (cond

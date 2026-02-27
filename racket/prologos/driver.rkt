@@ -401,6 +401,10 @@
                                      (bump-relation-store-version!))
                                    (format "~a : ~a defined." name (pp-expr zonked-type)))))))))]
 
+                  ;; (subtype sub-key super-key) — declaration already processed in elaborator
+                  [(list 'subtype sub-key super-key)
+                   (format "subtype ~a <: ~a registered." sub-key super-key)]
+
                   [_ (prologos-error srcloc-unknown (format "Unknown command: ~a" elab-result))])))]))))
   ;; Append warnings to result string (if any)
   (define coercion-warns (reverse (current-coercion-warnings)))
@@ -796,6 +800,8 @@
      (define mod-type-meta #f)
      (define mod-multi-defn-reg #f)
      (define mod-spec-store #f)
+     (define mod-subtype-reg #f)
+     (define mod-coercion-reg #f)
      (parameterize ([current-global-env (hasheq)]
                     [current-ns-context #f]
                     [current-meta-store (make-hasheq)]
@@ -807,6 +813,8 @@
                     [current-ctor-registry (current-ctor-registry)]
                     [current-type-meta (current-type-meta)]
                     [current-multi-defn-registry (current-multi-defn-registry)]
+                    [current-subtype-registry (current-subtype-registry)]
+                    [current-coercion-registry (current-coercion-registry)]
                     [current-spec-store (hasheq)]  ;; fresh — specs are module-local
                     [current-propagated-specs (seteq)]  ;; fresh propagated tracking
                     [current-loading-set (set-add (current-loading-set) ns-sym)]
@@ -847,7 +855,9 @@
        (set! mod-ctor-reg (current-ctor-registry))
        (set! mod-type-meta (current-type-meta))
        (set! mod-multi-defn-reg (current-multi-defn-registry))
-       (set! mod-spec-store (current-spec-store)))
+       (set! mod-spec-store (current-spec-store))
+       (set! mod-subtype-reg (current-subtype-registry))
+       (set! mod-coercion-reg (current-coercion-registry)))
 
      ;; Propagate preparse registry changes (deftype/defmacro) to the caller.
      ;; This ensures type aliases and macros defined in loaded modules are
@@ -860,6 +870,10 @@
 
      ;; Propagate multi-defn dispatch tables to the caller.
      (current-multi-defn-registry mod-multi-defn-reg)
+
+     ;; Phase E: Propagate subtype and coercion registries.
+     (current-subtype-registry mod-subtype-reg)
+     (current-coercion-registry mod-coercion-reg)
 
      ;; Note: spec store is NOT globally propagated — it's carried in module-info
      ;; for selective propagation via process-require-spec.

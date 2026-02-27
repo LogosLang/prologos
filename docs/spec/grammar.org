@@ -1012,6 +1012,54 @@ when-nonzero zero [double 5]  ;; = 0
 (expand-full (when true [suc zero]))  ;; all steps with labels
 #+end_src
 
+* Subtype Declarations
+
+The =subtype= declaration registers a subtype relationship between two types,
+enabling automatic widening in the type checker and implicit runtime coercion
+in the reducer. This extends the built-in numeric subtype lattice
+(=Nat <: Int <: Rat=, =Posit8 <: Posit16 <: Posit32 <: Posit64=) to
+library-defined refined types.
+
+** Syntax
+
+#+begin_src prologos
+;; Auto-inferred coercion: single-field wrapper types unwrap automatically
+subtype PosInt Int
+subtype NegInt Int
+subtype PosRat Rat
+subtype NegRat Rat
+
+;; Explicit coercion via a named function (required for nullary constructors)
+subtype Zero Int via zero-to-int
+#+end_src
+
+** Semantics
+
+- The type checker's =subtype?= predicate recognizes the declared relationship,
+  so a =PosInt= value can be used wherever =Int= is expected.
+- The reducer's coercion helpers (=try-coerce-to-int=, =try-coerce-to-rat=)
+  unwrap refined values at runtime when they appear as operands to numeric
+  operations (=int+=, =rat*=, etc.).
+- Transitive closure is computed automatically: declaring =PosInt <: Int= when
+  =Int <: Rat= is already known yields =PosInt <: Rat= with composed coercion.
+- Auto-inference works for single-constructor, single-field wrapper types: the
+  coercion simply unwraps the constructor. Nullary constructors (like =mk-zero=)
+  require an explicit =via= clause naming a coercion function.
+
+** Subtype Lattice (Numeric)
+
+#+begin_example
+           Rat
+          / | \
+    NegRat  |  PosRat
+         \  |  /
+          Int
+        / | \
+  NegInt Zero PosInt
+          |
+         Nat
+#+end_example
+
 * Relational Language (Logic Programming)
 
 Prologos makes logic programming a first-class paradigm via =defr=, the
