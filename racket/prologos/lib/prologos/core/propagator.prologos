@@ -1,13 +1,37 @@
 ns prologos::core::propagator
 
+require [prologos::core::lattice-trait :refer-all]
+require [prologos::core::lattice-instances :refer [Interval interval-bot interval-join]]
+
 ;; ========================================
 ;; Propagator Library Helpers
 ;; ========================================
-;; DEFERRED: new-lattice-cell generic wrapper
-;; The generic version `new-lattice-cell {A} where (Lattice A) -> PropNetwork -> Pair`
-;; requires resolving Lattice-bot/Lattice-join implicit type params inside a
-;; generic closure, which hits a meta-resolution limitation. For now, users
-;; call net-new-cell directly with explicit bot/merge values.
-;; See DEFERRED.md for tracking.
 
-;; Placeholder module — future: generic lattice helpers, set-cell, map-cell, etc.
+;; Generic wrapper around net-new-cell.
+;; Extracts bot and join from the Lattice A constraint automatically,
+;; so callers don't need to pass explicit initial value and merge function.
+;;
+;; Usage:
+;;   def result [new-lattice-cell [net-new 1000]]
+;;   ;; type A is inferred from context; Lattice A dict resolved automatically
+
+spec new-lattice-cell {A} PropNetwork -> [PropNetwork * CellId] where (Lattice A)
+defn new-lattice-cell [net] where (Lattice A)
+  net-new-cell net bot [fn x y [join x y]]
+
+;; ========================================
+;; Call-Site Specializations
+;; ========================================
+;; Zero-overhead versions for known lattice types.
+;; The compiler rewrites `(new-lattice-cell Bool dict net)` to
+;; `(new-lattice-cell--Bool--specialized net)` when the type is statically known.
+
+spec new-lattice-cell--Bool--specialized PropNetwork -> [PropNetwork * CellId]
+specialize new-lattice-cell for Bool
+  defn new-lattice-cell [net]
+    net-new-cell net false [fn [x : Bool] [y : Bool] [or x y]]
+
+spec new-lattice-cell--Interval--specialized PropNetwork -> [PropNetwork * CellId]
+specialize new-lattice-cell for Interval
+  defn new-lattice-cell [net]
+    net-new-cell net interval-bot [fn [x : Interval] [y : Interval] [interval-join x y]]

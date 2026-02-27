@@ -1467,16 +1467,26 @@
          [(bu #t u) (tu (expr-net-type) u)]
          [_ (tu-error)]))]
 
-    ;; net-new-cell : PropNetwork -> A -> (A A -> A) -> [PropNetwork * CellId]
+    ;; net-new-cell : PropNetwork -> A -> (A -> A -> A) -> [PropNetwork * CellId]
+    ;; Use checkQ for merge (not inferQ) because inferQ can't handle standalone lambdas.
+    ;; The merge type A -> A -> A is computed from init's inferred type, with proper
+    ;; de Bruijn shifts under Pi binders (init-ty may contain bvars in polymorphic contexts).
     [(expr-net-new-cell net init merge)
      (let ([r1 (inferQ ctx net)]
-           [r2 (inferQ ctx init)]
-           [r3 (inferQ ctx merge)])
-       (match* (r1 r2 r3)
-         [((tu _ u1) (tu _ u2) (tu _ u3))
-          (tu (expr-Sigma (expr-net-type) (expr-cell-id-type))
-              (add-usage u1 (add-usage u2 u3)))]
-         [(_ _ _) (tu-error)]))]
+           [r2 (inferQ ctx init)])
+       (match* (r1 r2)
+         [((tu _ u1) (tu init-ty u2))
+          ;; Build merge type: A -> A -> A with proper shifts under Pi binders
+          (define merge-ty (expr-Pi mw init-ty
+                             (expr-Pi mw (shift 1 0 init-ty)
+                               (shift 2 0 init-ty))))
+          (let ([r3 (checkQ ctx merge merge-ty)])
+            (match r3
+              [(bu #t u3)
+               (tu (expr-Sigma (expr-net-type) (expr-cell-id-type))
+                   (add-usage u1 (add-usage u2 u3)))]
+              [_ (tu-error)]))]
+         [(_ _) (tu-error)]))]
 
     ;; net-cell-read : PropNetwork -> CellId -> A
     [(expr-net-cell-read net cell)

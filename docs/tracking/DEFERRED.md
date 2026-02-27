@@ -280,12 +280,16 @@ The following collection items ARE also deferred (genuine infrastructure deps):
 - 56 tests across `test-propagator-types.rkt` (32), `test-propagator-integration.rkt` (16), `test-propagator-lvar.rkt` (8)
 - Source: `docs/tracking/2026-02-24_LOGIC_ENGINE_DESIGN.org`
 
-### Deferred: `new-lattice-cell` Generic Wrapper
-- `new-lattice-cell {A} where (Lattice A) -> PropNetwork -> [PropNetwork * CellId]`
-- Requires resolving `Lattice-bot`/`Lattice-join` implicit type params inside a generic
-  closure body, which hits a meta-resolution limitation in the unifier
-- Workaround: users call `net-new-cell` directly with explicit bot/merge values
-- **Blocked on**: improved implicit resolution for trait accessor calls inside generic closures
+### ~~Deferred~~ COMPLETE: `new-lattice-cell` Generic Wrapper
+- `new-lattice-cell {A} PropNetwork -> [PropNetwork * CellId] where (Lattice A)`
+- **Resolved 2026-02-27**: The "meta-resolution limitation" was a false alarm.
+  Phase D of trait resolution (where-context propagation into closures) already handles this.
+  The actual blockers were compiler edge cases:
+  1. `*` operator not recognized in single-sub-list `$angle-type` (macros.rkt `param-type->angle-type`)
+  2. `PropNetwork`/`CellId` missing from `known-type-name?` (auto-detected as type vars)
+  3. De Bruijn shift bug in `net-new-cell` typing rule (polymorphic merge type mis-constructed)
+  4. QTT `inferQ` doesn't handle standalone lambdas — fixed by using `checkQ` for merge arg
+- Exported from prelude via `namespace.rkt`
 - Source: `lib/prologos/core/propagator.prologos`
 
 ### Phase 4: UnionFind — Persistent Disjoint Sets (COMPLETE)
@@ -374,10 +378,14 @@ The following collection items ARE also deferred (genuine infrastructure deps):
 
 ## Type System — HKT
 
-### HKT-8: Call-Site Rewriting
-- Specialization framework implemented, but call-site rewriting deferred
-- Users use Tier 2 ops for zero overhead as workaround
-- Source: `docs/tracking/2026-02-20_2100_HKT_GENERIFICATION.md`
+### ~~Deferred~~ COMPLETE: HKT-8: Call-Site Rewriting
+- **Resolved 2026-02-27**: `rewrite-specializations` implemented in `driver.rkt`.
+  Walks post-zonk expression tree, matches application chains headed by functions
+  with where-constraints, strips implicit type + dict args, replaces with registered
+  specialized name. Wired into eval, def (unannotated), and def (annotated) paths.
+- `new-lattice-cell` has Bool and Interval specializations in `propagator.prologos`.
+- Fast path: empty registry → zero overhead.
+- Source: `driver.rkt` (rewrite-specializations), `lib/prologos/core/propagator.prologos`
 
 ### HKT-9: Constraint Inference from Usage
 - Method-triggered constraint generation algorithm designed

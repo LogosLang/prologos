@@ -726,6 +726,12 @@
    'test-propagator-lvar.rkt
    (test-dep '(propagator.rkt syntax.rkt typing-core.rkt reduction.rkt parser.rkt elaborator.rkt
                surface-syntax.rkt namespace.rkt macros.rkt) #t)
+   'test-new-lattice-cell.rkt
+   (test-dep '(propagator.rkt syntax.rkt typing-core.rkt qtt.rkt reduction.rkt parser.rkt
+               elaborator.rkt surface-syntax.rkt namespace.rkt macros.rkt) #t)
+   'test-call-site-specialization.rkt
+   (test-dep '(propagator.rkt syntax.rkt typing-core.rkt qtt.rkt reduction.rkt parser.rkt
+               elaborator.rkt surface-syntax.rkt namespace.rkt macros.rkt driver.rkt) #t)
    ;; UnionFind (persistent disjoint sets)
    'test-union-find.rkt
    (test-dep '(union-find.rkt) #f)
@@ -1191,7 +1197,13 @@
                                    prologos::core::propagator
                                    prologos::core::lattice-trait
                                    prologos::core::lattice-instances
-                                   prologos::data::bool)))
+                                   prologos::data::bool)
+   'test-new-lattice-cell.rkt    '(prologos::core::propagator
+                                   prologos::core::lattice-trait
+                                   prologos::core::lattice-instances)
+   'test-call-site-specialization.rkt '(prologos::core::propagator
+                                        prologos::core::lattice-trait
+                                        prologos::core::lattice-instances)))
 
 ;; ============================================================
 ;; File scanning functions (used for auto-scan of unknown modules)

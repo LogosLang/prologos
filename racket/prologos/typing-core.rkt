@@ -1372,12 +1372,17 @@
          (expr-error))]
 
     ;; net-new-cell : PropNetwork -> A -> (A -> A -> A) -> [PropNetwork * CellId]
+    ;; Build merge type as A -> A -> A.  When A contains bvars (polymorphic context),
+    ;; each Pi binder introduces a new variable, so references to A in the codomain
+    ;; must be shifted.  Pi(mw, A, Pi(mw, shift(1,0,A), shift(2,0,A))).
     [(expr-net-new-cell net init merge)
      (if (check ctx net (expr-net-type))
          (let ([init-ty (infer ctx init)])
            (if (expr-error? init-ty)
                (expr-error)
-               (let ([merge-ty (arrow init-ty (arrow init-ty init-ty))])
+               (let ([merge-ty (expr-Pi mw init-ty
+                                 (expr-Pi mw (shift 1 0 init-ty)
+                                   (shift 2 0 init-ty)))])
                  (if (check ctx merge merge-ty)
                      (expr-Sigma (expr-net-type) (expr-cell-id-type))
                      (expr-error)))))

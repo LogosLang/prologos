@@ -52,7 +52,8 @@
          process-string
          load-module
          install-module-loader!
-         prologos-lib-dir)
+         prologos-lib-dir
+         rewrite-specializations)
 
 ;; ========================================
 ;; Standard library path (computed from this module's location)
@@ -148,6 +149,127 @@
 ;; just run check(body, type) — the holes act as wildcards, accepting any type.
 ;; The stored type retains holes which display as `_`.
 
+;; ========================================
+;; Call-site specialization rewriting (HKT-8)
+;; ========================================
+;; After zonk-final, rewrite calls to generic functions with registered
+;; specializations. E.g., (new-lattice-cell Bool dict net) → (new-lattice-cell--Bool--specialized net)
+;; Strips implicit type args and dict params, replacing with direct specialized call.
+
+;; Extract a type-constructor key from a ground type expression.
+;; Returns a symbol suitable for lookup-specialization, or #f if not ground.
+(define (extract-type-key expr)
+  (match expr
+    [(expr-Bool)         'Bool]
+    [(expr-Nat)          'Nat]
+    [(expr-tycon name)   name]
+    [(expr-fvar name)    name]
+    ;; For applied type constructors like (List Nat), extract the head
+    [(expr-app f _)      (extract-type-key f)]
+    ;; Built-in compound types
+    [(expr-PVec _)       'PVec]
+    [(expr-Set _)        'Set]
+    [(expr-Map _ _)      'Map]
+    [_                   #f]))
+
+;; Build an application chain: (build-app-chain head '(a1 a2 a3)) → (app (app (app head a1) a2) a3)
+(define (build-app-chain head args)
+  (foldl (lambda (arg acc) (expr-app acc arg)) head args))
+
+;; Rewrite call sites of generic functions to use registered specializations.
+;; Walks the expression tree, looking for application chains headed by an fvar
+;; with a spec that has where-constraints + implicit-binders. When the type arg
+;; is ground and a specialization is registered, replaces:
+;;   (generic-fn TypeArg DictArg ... explicit-args)
+;; with:
+;;   (specialized-fn explicit-args)
+(define (rewrite-specializations e)
+  ;; Fast path: if no specializations registered, return unchanged
+  (if (hash-empty? (current-specialization-registry))
+      e
+      (rewrite-spec e)))
+
+(define (rewrite-spec e)
+  (match e
+    ;; Application: check if this chain matches a specializable call
+    [(expr-app _ _)
+     (let-values ([(head args) (decompose-app-for-spec e)])
+       (cond
+         ;; Head is a named function — check for specialization
+         [(and head (expr-fvar? head))
+          (define fn-name (expr-fvar-name head))
+          (define spec (lookup-spec fn-name))
+          (cond
+            [(and spec (spec-entry? spec)
+                  (not (null? (spec-entry-where-constraints spec))))
+             ;; This function has where-constraints → candidate for specialization
+             (define n-implicit (length (spec-entry-implicit-binders spec)))
+             (define n-where (length (spec-entry-where-constraints spec)))
+             (define n-to-strip (+ n-implicit n-where))
+             (cond
+               [(and (>= (length args) n-to-strip)
+                     (> n-implicit 0))
+                ;; First arg should be the type arg
+                (define type-arg (car args))
+                (define type-key (extract-type-key type-arg))
+                (cond
+                  [(and type-key (lookup-specialization fn-name type-key))
+                   => (lambda (entry)
+                        ;; Found specialization! Strip type+dict args, use specialized name
+                        (define explicit-args (drop args n-to-strip))
+                        (define specialized-head (expr-fvar (specialization-entry-specialized-name entry)))
+                        ;; Recurse into the explicit args
+                        (build-app-chain specialized-head
+                                        (map rewrite-spec explicit-args)))]
+                  [else
+                   ;; No specialization found — recurse into all args
+                   (build-app-chain (rewrite-spec head)
+                                    (map rewrite-spec args))])]
+               [else
+                ;; Not enough args for stripping — recurse
+                (build-app-chain (rewrite-spec head)
+                                  (map rewrite-spec args))])]
+            [else
+             ;; No spec or no where-constraints — recurse
+             (build-app-chain (rewrite-spec head)
+                              (map rewrite-spec args))])]
+         [else
+          ;; Non-fvar head (lambda application, etc.) — recurse into subexpressions
+          (expr-app (rewrite-spec (expr-app-func e))
+                    (rewrite-spec (expr-app-arg e)))]))]
+    ;; Structural recursion into all expression types
+    [(expr-lam m ty body)
+     (expr-lam m (rewrite-spec ty) (rewrite-spec body))]
+    [(expr-Pi m a b)
+     (expr-Pi m (rewrite-spec a) (rewrite-spec b))]
+    [(expr-Sigma a b)
+     (expr-Sigma (rewrite-spec a) (rewrite-spec b))]
+    [(expr-pair a b)
+     (expr-pair (rewrite-spec a) (rewrite-spec b))]
+    [(expr-fst x) (expr-fst (rewrite-spec x))]
+    [(expr-snd x) (expr-snd (rewrite-spec x))]
+    [(expr-ann x t) (expr-ann (rewrite-spec x) (rewrite-spec t))]
+    [(expr-suc x) (expr-suc (rewrite-spec x))]
+    [(expr-natrec m b s t)
+     (expr-natrec (rewrite-spec m) (rewrite-spec b) (rewrite-spec s) (rewrite-spec t))]
+    [(expr-boolrec m tc fc t)
+     (expr-boolrec (rewrite-spec m) (rewrite-spec tc) (rewrite-spec fc) (rewrite-spec t))]
+    [(expr-J m b l r p)
+     (expr-J (rewrite-spec m) (rewrite-spec b) (rewrite-spec l) (rewrite-spec r) (rewrite-spec p))]
+    ;; Net/propagator nodes
+    [(expr-net-new-cell net init merge)
+     (expr-net-new-cell (rewrite-spec net) (rewrite-spec init) (rewrite-spec merge))]
+    ;; Leaves — return unchanged
+    [_ e]))
+
+;; Decompose an application chain into (head . args-list).
+;; Returns (values head args) where head is the innermost non-app expression.
+(define (decompose-app-for-spec e)
+  (let loop ([expr e] [args '()])
+    (match expr
+      [(expr-app f a) (loop f (cons a args))]
+      [_ (values expr args)])))
+
 
 ;; ========================================
 ;; Process a single top-level command
@@ -207,7 +329,9 @@
                              (if (not (null? te))
                                  (car te)
                                  (begin
-                                   (let ([val (time-phase! reduce (nf (time-phase! zonk (zonk-final expr))))]
+                                   (let ([val (time-phase! reduce
+                                                (nf (rewrite-specializations
+                                                     (time-phase! zonk (zonk-final expr)))))]
                                          [ty-nf (time-phase! reduce (nf (time-phase! zonk (zonk-final ty))))])
                                      (format "~a : ~a" (pp-expr val) (pp-expr ty-nf)))))))))]
 
@@ -346,8 +470,8 @@
                    lhs-str rhs-str
                    error-loc error-loc)]
                 [else
-                 ;; zonk-final FIRST, then QTT on zonked terms
-                 (define zonked-body (time-phase! zonk (zonk-final body)))
+                 ;; zonk-final FIRST, then specialize, then QTT on zonked terms
+                 (define zonked-body (rewrite-specializations (time-phase! zonk (zonk-final body))))
                  (define zonked-type (time-phase! zonk (zonk-final inferred-type)))
                  ;; Skip QTT for expressions with unsupported node types (Vec/Fin)
                  (define qtt-ok
@@ -484,7 +608,8 @@
                       [else
                        ;; 6. zonk-final (resolves mult-metas to concrete values,
                        ;; defaults unsolved level-metas to lzero, mult-metas to mw).
-                       (define zonked-body (time-phase! zonk (zonk-final body)))
+                       ;; Then rewrite call sites to use registered specializations.
+                       (define zonked-body (rewrite-specializations (time-phase! zonk (zonk-final body))))
                        (define zonked-type (time-phase! zonk (zonk-final type)))
                        ;; 6.5. QTT multiplicity check (on zonked terms with concrete mults).
                        ;; Skip for expressions containing unsupported node types (Vec/Fin).

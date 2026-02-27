@@ -1873,6 +1873,12 @@
     [(and (list? ptype) (pair? ptype) (not (eq? (car ptype) '->))
           (memq '-> ptype))
      `($angle-type ,@ptype)]
+    ;; Grouped type containing infix * : flatten so parse-infix-type handles product
+    ;; e.g. (A * B) → ($angle-type A * B) → parsed as Sigma(_, A, B)
+    ;; Without this, (A * B) as a single sub-list inside $angle-type gets
+    ;; delegated to parse-datum which treats * as a variable name.
+    [(and (list? ptype) (pair? ptype) (memq '* ptype))
+     `($angle-type ,@ptype)]
     ;; All other grouped types: wrap as single element for parse-datum
     ;; Handles: (-> Nat Nat), (List A), (Sigma (_ ...) B), (Option A), etc.
     [(list? ptype)
@@ -1962,8 +1968,16 @@
            (for/list ([pname (in-list param-names)]
                       [ptype (in-list param-types)])
              (list pname (param-type->angle-type ptype)))))
-  ;; Build return type angle form
-  (define ret-angle `($angle-type ,@return-type-tokens))
+  ;; Build return type angle form.
+  ;; When return-type-tokens is a single sub-list (e.g. from [A * B] in the spec),
+  ;; use param-type->angle-type to properly flatten infix operators like * and ->.
+  ;; Without this, ($angle-type (A * B)) gets parsed as a single element by parse-datum
+  ;; which treats * as a variable rather than the Sigma product operator.
+  (define ret-angle
+    (if (and (= (length return-type-tokens) 1)
+             (list? (car return-type-tokens)))
+        (param-type->angle-type (car return-type-tokens))
+        `($angle-type ,@return-type-tokens)))
   ;; Build implicit binder forms if needed
   ;; implicit-binders: alist of ((name . kind) ...) from spec's {A B : Type}
   ;; Group consecutive binders with the same kind into separate $brace-params forms.
@@ -3953,7 +3967,11 @@
                   Quire8 Quire16 Quire32 Quire64
                   List Option Result Either Pair
                   Pi Sigma Eq J
-                  Map Set PVec LSeq Vec Fin Datum Ordering))
+                  Map Set PVec LSeq Vec Fin Datum Ordering
+                  ;; Propagator / ATMS / Relational ground types
+                  PropNetwork CellId PropId UnionFind
+                  ATMS AssumptionId TableStore
+                  Solver Goal Derivation))
       (lookup-ctor sym)       ;; user-defined constructor → known
       (lookup-type-ctors sym) ;; user-defined type → known
       (lookup-trait sym)      ;; trait → known (not a variable)
