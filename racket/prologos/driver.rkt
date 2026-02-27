@@ -690,6 +690,10 @@
                     [current-prop-id-map-box #f]
                     ;; Phase A: fresh meta-info CHAMP per module
                     [current-prop-meta-info-box #f]
+                    ;; Phase B: fresh auxiliary meta CHAMPs per module
+                    [current-level-meta-champ-box #f]
+                    [current-mult-meta-champ-box #f]
+                    [current-sess-meta-champ-box #f]
 )
        ;; Read and process the file
        ;; Use WS reader for .prologos files, sexp reader otherwise

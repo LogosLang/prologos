@@ -99,6 +99,10 @@
  current-prop-id-map-box
  current-prop-meta-info-box
  prop-meta-id-hash
+ ;; Phase B: Auxiliary meta CHAMP boxes
+ current-level-meta-champ-box
+ current-mult-meta-champ-box
+ current-sess-meta-champ-box
  ;; Phase 8b: Network operation callbacks (set by driver at startup)
  current-prop-make-network
  current-prop-fresh-meta
@@ -333,6 +337,14 @@
 ;; Phase A: Primary metadata store (replaces hash for production reads).
 (define current-prop-meta-info-box (make-parameter #f))
 
+;; Phase B: Auxiliary meta CHAMP boxes (level, mult, session).
+;; Each stores id → 'unsolved | solution. Included in save/restore for
+;; correct speculative rollback (fixes latent bug where level/mult/session
+;; meta mutations leaked through with-speculative-rollback).
+(define current-level-meta-champ-box (make-parameter #f))
+(define current-mult-meta-champ-box (make-parameter #f))
+(define current-sess-meta-champ-box (make-parameter #f))
+
 ;; Symbol hash for gensym meta-ids.
 (define (prop-meta-id-hash id) (eq-hash-code id))
 
@@ -485,28 +497,52 @@
 (define current-level-meta-store (make-parameter (make-hasheq)))
 
 ;; Create a fresh level metavariable, register in store, return level-meta.
+;; Phase B: CHAMP primary, hash fallback.
 (define (fresh-level-meta source)
   (define id (gensym 'lvl))
-  (hash-set! (current-level-meta-store) id 'unsolved)
+  (define box (current-level-meta-champ-box))
+  (if box
+      (set-box! box (champ-insert (unbox box) (prop-meta-id-hash id) id 'unsolved))
+      (hash-set! (current-level-meta-store) id 'unsolved))
   (level-meta id))
 
 ;; Assign a solution to a level metavariable.
+;; Phase B: CHAMP primary, hash fallback.
 (define (solve-level-meta! id solution)
-  (define status (hash-ref (current-level-meta-store) id #f))
+  (define box (current-level-meta-champ-box))
+  (define status
+    (if box
+        (let ([v (champ-lookup (unbox box) (prop-meta-id-hash id) id)])
+          (if (eq? v 'none) #f v))
+        (hash-ref (current-level-meta-store) id #f)))
   (unless status
     (error 'solve-level-meta! "unknown level-meta: ~a" id))
   (when (not (eq? status 'unsolved))
     (error 'solve-level-meta! "level-meta ~a already solved" id))
-  (hash-set! (current-level-meta-store) id solution))
+  (if box
+      (set-box! box (champ-insert (unbox box) (prop-meta-id-hash id) id solution))
+      (hash-set! (current-level-meta-store) id solution)))
 
 ;; Check if a level metavariable has been solved.
+;; Phase B: CHAMP primary, hash fallback.
 (define (level-meta-solved? id)
-  (define v (hash-ref (current-level-meta-store) id #f))
+  (define box (current-level-meta-champ-box))
+  (define v
+    (if box
+        (let ([r (champ-lookup (unbox box) (prop-meta-id-hash id) id)])
+          (if (eq? r 'none) #f r))
+        (hash-ref (current-level-meta-store) id #f)))
   (and v (not (eq? v 'unsolved))))
 
 ;; Retrieve the solution of a level metavariable, or #f if unsolved/unknown.
+;; Phase B: CHAMP primary, hash fallback.
 (define (level-meta-solution id)
-  (define v (hash-ref (current-level-meta-store) id #f))
+  (define box (current-level-meta-champ-box))
+  (define v
+    (if box
+        (let ([r (champ-lookup (unbox box) (prop-meta-id-hash id) id)])
+          (if (eq? r 'none) #f r))
+        (hash-ref (current-level-meta-store) id #f)))
   (and v (not (eq? v 'unsolved)) v))
 
 ;; Zonk a level: follow solved level-metas, leave unsolved in place.
@@ -537,28 +573,52 @@
 (define current-mult-meta-store (make-parameter (make-hasheq)))
 
 ;; Create a fresh mult metavariable, register in store, return mult-meta.
+;; Phase B: CHAMP primary, hash fallback.
 (define (fresh-mult-meta source)
   (define id (gensym 'mmeta))
-  (hash-set! (current-mult-meta-store) id 'unsolved)
+  (define box (current-mult-meta-champ-box))
+  (if box
+      (set-box! box (champ-insert (unbox box) (prop-meta-id-hash id) id 'unsolved))
+      (hash-set! (current-mult-meta-store) id 'unsolved))
   (mult-meta id))
 
 ;; Assign a solution to a mult metavariable.
+;; Phase B: CHAMP primary, hash fallback.
 (define (solve-mult-meta! id solution)
-  (define status (hash-ref (current-mult-meta-store) id #f))
+  (define box (current-mult-meta-champ-box))
+  (define status
+    (if box
+        (let ([v (champ-lookup (unbox box) (prop-meta-id-hash id) id)])
+          (if (eq? v 'none) #f v))
+        (hash-ref (current-mult-meta-store) id #f)))
   (unless status
     (error 'solve-mult-meta! "unknown mult-meta: ~a" id))
   (when (not (eq? status 'unsolved))
     (error 'solve-mult-meta! "mult-meta ~a already solved" id))
-  (hash-set! (current-mult-meta-store) id solution))
+  (if box
+      (set-box! box (champ-insert (unbox box) (prop-meta-id-hash id) id solution))
+      (hash-set! (current-mult-meta-store) id solution)))
 
 ;; Check if a mult metavariable has been solved.
+;; Phase B: CHAMP primary, hash fallback.
 (define (mult-meta-solved? id)
-  (define v (hash-ref (current-mult-meta-store) id #f))
+  (define box (current-mult-meta-champ-box))
+  (define v
+    (if box
+        (let ([r (champ-lookup (unbox box) (prop-meta-id-hash id) id)])
+          (if (eq? r 'none) #f r))
+        (hash-ref (current-mult-meta-store) id #f)))
   (and v (not (eq? v 'unsolved))))
 
 ;; Retrieve the solution of a mult metavariable, or #f if unsolved/unknown.
+;; Phase B: CHAMP primary, hash fallback.
 (define (mult-meta-solution id)
-  (define v (hash-ref (current-mult-meta-store) id #f))
+  (define box (current-mult-meta-champ-box))
+  (define v
+    (if box
+        (let ([r (champ-lookup (unbox box) (prop-meta-id-hash id) id)])
+          (if (eq? r 'none) #f r))
+        (hash-ref (current-mult-meta-store) id #f)))
   (and v (not (eq? v 'unsolved)) v))
 
 ;; Zonk a multiplicity: follow solved mult-metas, leave unsolved in place.
@@ -585,28 +645,52 @@
 (define current-sess-meta-store (make-parameter (make-hasheq)))
 
 ;; Create a fresh sess metavariable, register in store, return sess-meta.
+;; Phase B: CHAMP primary, hash fallback.
 (define (fresh-sess-meta source)
   (define id (gensym 'smeta))
-  (hash-set! (current-sess-meta-store) id 'unsolved)
+  (define box (current-sess-meta-champ-box))
+  (if box
+      (set-box! box (champ-insert (unbox box) (prop-meta-id-hash id) id 'unsolved))
+      (hash-set! (current-sess-meta-store) id 'unsolved))
   (sess-meta id))
 
 ;; Assign a solution to a sess metavariable.
+;; Phase B: CHAMP primary, hash fallback.
 (define (solve-sess-meta! id solution)
-  (define status (hash-ref (current-sess-meta-store) id #f))
+  (define box (current-sess-meta-champ-box))
+  (define status
+    (if box
+        (let ([v (champ-lookup (unbox box) (prop-meta-id-hash id) id)])
+          (if (eq? v 'none) #f v))
+        (hash-ref (current-sess-meta-store) id #f)))
   (unless status
     (error 'solve-sess-meta! "unknown sess-meta: ~a" id))
   (when (not (eq? status 'unsolved))
     (error 'solve-sess-meta! "sess-meta ~a already solved" id))
-  (hash-set! (current-sess-meta-store) id solution))
+  (if box
+      (set-box! box (champ-insert (unbox box) (prop-meta-id-hash id) id solution))
+      (hash-set! (current-sess-meta-store) id solution)))
 
 ;; Check if a sess metavariable has been solved.
+;; Phase B: CHAMP primary, hash fallback.
 (define (sess-meta-solved? id)
-  (define v (hash-ref (current-sess-meta-store) id #f))
+  (define box (current-sess-meta-champ-box))
+  (define v
+    (if box
+        (let ([r (champ-lookup (unbox box) (prop-meta-id-hash id) id)])
+          (if (eq? r 'none) #f r))
+        (hash-ref (current-sess-meta-store) id #f)))
   (and v (not (eq? v 'unsolved))))
 
 ;; Retrieve the solution of a sess metavariable, or #f if unsolved/unknown.
+;; Phase B: CHAMP primary, hash fallback.
 (define (sess-meta-solution id)
-  (define v (hash-ref (current-sess-meta-store) id #f))
+  (define box (current-sess-meta-champ-box))
+  (define v
+    (if box
+        (let ([r (champ-lookup (unbox box) (prop-meta-id-hash id) id)])
+          (if (eq? r 'none) #f r))
+        (hash-ref (current-sess-meta-store) id #f)))
   (and v (not (eq? v 'unsolved)) v))
 
 ;; Zonk a session: follow solved sess-metas, leave unsolved in place.
@@ -650,6 +734,7 @@
 
 ;; Clear all metavariables and constraints from the store.
 ;; Phase A: Initializes CHAMP meta-info store alongside propagator network.
+;; Phase B: Also initializes level/mult/sess CHAMP boxes.
 (define (reset-meta-store!)
   (hash-clear! (current-meta-store))
   (hash-clear! (current-level-meta-store))
@@ -666,12 +751,20 @@
        ;; Already have boxes — reset contents
        (set-box! net-box (make-net))
        (set-box! (current-prop-id-map-box) champ-empty)
-       (set-box! (current-prop-meta-info-box) champ-empty)]
+       (set-box! (current-prop-meta-info-box) champ-empty)
+       ;; Phase B: reset auxiliary meta CHAMPs
+       (set-box! (current-level-meta-champ-box) champ-empty)
+       (set-box! (current-mult-meta-champ-box) champ-empty)
+       (set-box! (current-sess-meta-champ-box) champ-empty)]
       [else
        ;; First call or test context — create boxes
        (current-prop-net-box (box (make-net)))
        (current-prop-id-map-box (box champ-empty))
-       (current-prop-meta-info-box (box champ-empty))])))
+       (current-prop-meta-info-box (box champ-empty))
+       ;; Phase B: create auxiliary meta CHAMP boxes
+       (current-level-meta-champ-box (box champ-empty))
+       (current-mult-meta-champ-box (box champ-empty))
+       (current-sess-meta-champ-box (box champ-empty))])))
 
 ;; ========================================
 ;; Meta state save/restore for speculative type-checking
@@ -683,9 +776,11 @@
 ;; Saves the status and solution of all metas in the current store.
 ;; Restore resets each meta back to its saved state.
 
-;; Phase A: save-meta-state is fully O(1) when CHAMP stores are active.
-;; All three CHAMPs (network, id-map, meta-info) are immutable — capturing
-;; the root reference is sufficient. Legacy path (hash) is O(N).
+;; Phase A+B: save-meta-state is fully O(1) when CHAMP stores are active.
+;; All six CHAMPs (network, id-map, meta-info, level, mult, sess) are
+;; immutable — capturing the root reference is sufficient. Legacy path is O(N).
+;; Phase B: Including level/mult/sess fixes the latent speculation bug where
+;; mutations to these stores leaked through with-speculative-rollback.
 (define (save-meta-state)
   (define mi-box (current-prop-meta-info-box))
   (cond
@@ -694,7 +789,10 @@
      (list 'prop
            (unbox (current-prop-net-box))
            (unbox (current-prop-id-map-box))
-           (unbox mi-box))]
+           (unbox mi-box)
+           (unbox (current-level-meta-champ-box))
+           (unbox (current-mult-meta-champ-box))
+           (unbox (current-sess-meta-champ-box)))]
     [else
      ;; Legacy path: O(N) hash snapshot
      (for/hasheq ([(id info) (in-hash (current-meta-store))])
@@ -704,12 +802,13 @@
   (cond
     [(and (list? saved) (eq? (car saved) 'prop))
      ;; Production path: all O(1) — swap immutable CHAMP references
-     (define net (cadr saved))
-     (define id-map (caddr saved))
-     (define mi-champ (cadddr saved))
-     (set-box! (current-prop-net-box) net)
-     (set-box! (current-prop-id-map-box) id-map)
-     (set-box! (current-prop-meta-info-box) mi-champ)]
+     (set-box! (current-prop-net-box) (list-ref saved 1))
+     (set-box! (current-prop-id-map-box) (list-ref saved 2))
+     (set-box! (current-prop-meta-info-box) (list-ref saved 3))
+     ;; Phase B: restore auxiliary meta CHAMPs
+     (set-box! (current-level-meta-champ-box) (list-ref saved 4))
+     (set-box! (current-mult-meta-champ-box) (list-ref saved 5))
+     (set-box! (current-sess-meta-champ-box) (list-ref saved 6))]
     [else
      ;; Legacy path: restore hash only (O(N))
      (for ([(id state) (in-hash saved)])
