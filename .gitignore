@@ -33,3 +33,6 @@ racket/prologos/data/benchmarks/report.html
 
 # Tangled stdlib output (generated from book chapters)
 .tangled/
+
+# Woven stdlib HTML (generated from book chapters)
+docs/stdlib-book/
