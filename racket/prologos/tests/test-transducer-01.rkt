@@ -38,11 +38,40 @@
          "../reader.rkt")
 
 ;; ========================================
-;; Helpers
+;; Shared Fixture (modules loaded once)
 ;; ========================================
 
-;; Run sexp-mode Prologos code
-(define (run s)
+;; Standard preamble: load transducer + list + lseq modules,
+;; plus commonly-used data definitions and helper functions.
+(define shared-preamble
+  "(ns test)
+(require (prologos::data::list :refer (List nil cons))
+         (prologos::data::lseq :refer (LSeq lseq-nil lseq-cell lseq-head lseq-rest lseq-empty?))
+         (prologos::data::lseq-ops :refer (list-to-lseq lseq-to-list lseq-map lseq-filter lseq-fold lseq-length))
+         (prologos::data::transducer :refer (transduce map-xf filter-xf remove-xf xf-compose list-conj into-list-rev)))
+
+;; Helper: make a list of Nat: '(1 2 3)
+(def list123 : (List Nat)
+   (cons Nat (suc zero) (cons Nat (suc (suc zero)) (cons Nat (suc (suc (suc zero))) (nil Nat)))))
+
+;; suc-fn : Nat -> Nat
+(def suc-fn : (-> Nat Nat) (fn (x : Nat) (suc x)))
+
+;; is-positive : Nat -> Bool — returns false for zero, true otherwise
+(def is-positive : (-> Nat Bool)
+  (fn (x : Nat) (match x (zero -> false) (suc _ -> true))))
+
+;; is-zero : Nat -> Bool
+(def is-zero : (-> Nat Bool)
+  (fn (x : Nat) (match x (zero -> true) (suc _ -> false))))
+")
+
+(define-values (shared-global-env
+                shared-ns-context
+                shared-module-reg
+                shared-trait-reg
+                shared-impl-reg
+                shared-param-impl-reg)
   (parameterize ([current-global-env (hasheq)]
                  [current-ns-context #f]
                  [current-module-registry prelude-module-registry]
@@ -54,27 +83,45 @@
                  [current-param-impl-registry prelude-param-impl-registry]
                  [current-bundle-registry (current-bundle-registry)])
     (install-module-loader!)
+    (process-string shared-preamble)
+    (values (current-global-env)
+            (current-ns-context)
+            (current-module-registry)
+            (current-trait-registry)
+            (current-impl-registry)
+            (current-param-impl-registry))))
+
+(define (run s)
+  (parameterize ([current-global-env shared-global-env]
+                 [current-ns-context shared-ns-context]
+                 [current-module-registry shared-module-reg]
+                 [current-lib-paths (list prelude-lib-dir)]
+                 [current-mult-meta-store (make-hasheq)]
+                 [current-preparse-registry (current-preparse-registry)]
+                 [current-trait-registry shared-trait-reg]
+                 [current-impl-registry shared-impl-reg]
+                 [current-param-impl-registry shared-param-impl-reg]
+                 [current-bundle-registry (current-bundle-registry)])
     (process-string s)))
 
 (define (run-last s) (last (run s)))
 
-;; Run WS-mode code via temp .prologos file
+;; Run WS-mode code via temp .prologos file using shared environment
 (define (run-ws s)
   (define tmp (make-temporary-file "prologos-test-~a.prologos"))
   (call-with-output-file tmp #:exists 'replace
     (lambda (out) (display s out)))
   (define result
-    (parameterize ([current-global-env (hasheq)]
-                   [current-ns-context #f]
-                   [current-module-registry prelude-module-registry]
+    (parameterize ([current-global-env shared-global-env]
+                   [current-ns-context shared-ns-context]
+                   [current-module-registry shared-module-reg]
                    [current-lib-paths (list prelude-lib-dir)]
                    [current-mult-meta-store (make-hasheq)]
-                   [current-preparse-registry prelude-preparse-registry]
-                   [current-trait-registry prelude-trait-registry]
-                   [current-impl-registry prelude-impl-registry]
-                   [current-param-impl-registry prelude-param-impl-registry]
+                   [current-preparse-registry (current-preparse-registry)]
+                   [current-trait-registry shared-trait-reg]
+                   [current-impl-registry shared-impl-reg]
+                   [current-param-impl-registry shared-param-impl-reg]
                    [current-bundle-registry (current-bundle-registry)])
-      (install-module-loader!)
       (process-file tmp)))
   (delete-file tmp)
   result)
@@ -86,34 +133,6 @@
   (check-true (string-contains? actual substr)
               (or msg (format "Expected ~s to contain ~s" actual substr))))
 
-;; Standard preamble: load transducer + list + lseq modules
-(define preamble
-  "(ns test)
-(require (prologos::data::list :refer (List nil cons))
-         (prologos::data::lseq :refer (LSeq lseq-nil lseq-cell lseq-head lseq-rest lseq-empty?))
-         (prologos::data::lseq-ops :refer (list-to-lseq lseq-to-list lseq-map lseq-filter lseq-fold lseq-length))
-         (prologos::data::transducer :refer (transduce map-xf filter-xf remove-xf xf-compose list-conj into-list-rev)))
-")
-
-;; Helper: make a list of Nat: '(1 2 3)
-(define list123
-  "(def list123 : (List Nat)
-     (cons Nat (suc zero) (cons Nat (suc (suc zero)) (cons Nat (suc (suc (suc zero))) (nil Nat)))))")
-
-;; Helper: simple predicates and functions
-(define helpers
-  ";; suc-fn : Nat -> Nat
-   (def suc-fn : (-> Nat Nat) (fn (x : Nat) (suc x)))
-
-   ;; is-positive : Nat -> Bool — returns false for zero, true otherwise
-   (def is-positive : (-> Nat Bool)
-     (fn (x : Nat) (match x (zero -> false) (suc _ -> true))))
-
-   ;; is-zero : Nat -> Bool
-   (def is-zero : (-> Nat Bool)
-     (fn (x : Nat) (match x (zero -> true) (suc _ -> false))))
-")
-
 ;; ========================================
 ;; A. map-xf — Map Transducer (4 tests)
 ;; ========================================
@@ -121,28 +140,28 @@
 (test-case "xf/map-xf-type: map-xf type-checks"
   ;; map-xf should produce a well-typed transducer
   (check-contains
-   (run-last (string-append preamble "(infer (map-xf Nat Nat))"))
+   (run-last "(infer (map-xf Nat Nat))")
    "->"))
 
 (test-case "xf/map-xf-suc: map suc over [1,2,3] via transduce"
   ;; transduce (map-xf suc-fn) list-conj nil list123
   ;; = fold (map-xf suc-fn list-conj) nil [1,2,3]
   ;; = [4, 3, 2] (reversed since fold-left with cons)
-  (define result (run-last (string-append preamble list123 helpers
-    "(eval (transduce Nat Nat (List Nat) (map-xf Nat Nat suc-fn) (list-conj Nat) (nil Nat) list123))")))
+  (define result (run-last
+    "(eval (transduce Nat Nat (List Nat) (map-xf Nat Nat suc-fn) (list-conj Nat) (nil Nat) list123))"))
   (check-contains result "'[4N 3N 2N]")
   (check-contains result "List Nat"))
 
 (test-case "xf/map-xf-empty: map over empty list"
-  (define result (run-last (string-append preamble helpers
-    "(eval (transduce Nat Nat (List Nat) (map-xf Nat Nat suc-fn) (list-conj Nat) (nil Nat) (nil Nat)))")))
+  (define result (run-last
+    "(eval (transduce Nat Nat (List Nat) (map-xf Nat Nat suc-fn) (list-conj Nat) (nil Nat) (nil Nat)))"))
   (check-contains result "nil")
   (check-contains result "List Nat"))
 
 (test-case "xf/map-xf-into: map using into-list-rev"
   ;; into-list-rev wraps the xf + list-conj + nil pattern
-  (define result (run-last (string-append preamble list123 helpers
-    "(eval (into-list-rev Nat Nat (map-xf Nat Nat suc-fn) list123))")))
+  (define result (run-last
+    "(eval (into-list-rev Nat Nat (map-xf Nat Nat suc-fn) list123))"))
   (check-contains result "'[4N 3N 2N]")
   (check-contains result "List Nat"))
 
@@ -152,29 +171,29 @@
 
 (test-case "xf/filter-xf-type: filter-xf type-checks"
   (check-contains
-   (run-last (string-append preamble "(infer (filter-xf Nat))"))
+   (run-last "(infer (filter-xf Nat))")
    "->"))
 
 (test-case "xf/filter-xf-positive: filter positives from [0,1,2,3]"
   ;; Build [0, 1, 2, 3] and filter for is-positive → [3, 2, 1] (reversed)
-  (define result (run-last (string-append preamble helpers
+  (define result (run-last
     "(def list0123 : (List Nat)
        (cons Nat zero (cons Nat (suc zero) (cons Nat (suc (suc zero)) (cons Nat (suc (suc (suc zero))) (nil Nat))))))
-     (eval (transduce Nat Nat (List Nat) (filter-xf Nat is-positive) (list-conj Nat) (nil Nat) list0123))")))
+     (eval (transduce Nat Nat (List Nat) (filter-xf Nat is-positive) (list-conj Nat) (nil Nat) list0123))"))
   (check-contains result "'[3N 2N 1N]")
   (check-contains result "List Nat"))
 
 (test-case "xf/filter-xf-none-match: filter yields empty when nothing matches"
   ;; Filter is-zero on [1,2,3] → nothing matches → nil
-  (define result (run-last (string-append preamble list123 helpers
-    "(eval (transduce Nat Nat (List Nat) (filter-xf Nat is-zero) (list-conj Nat) (nil Nat) list123))")))
+  (define result (run-last
+    "(eval (transduce Nat Nat (List Nat) (filter-xf Nat is-zero) (list-conj Nat) (nil Nat) list123))"))
   (check-contains result "nil")
   (check-contains result "List Nat"))
 
 (test-case "xf/filter-xf-all-match: filter keeps all when all match"
   ;; Filter is-positive on [1,2,3] → all pass → [3, 2, 1] (reversed)
-  (define result (run-last (string-append preamble list123 helpers
-    "(eval (transduce Nat Nat (List Nat) (filter-xf Nat is-positive) (list-conj Nat) (nil Nat) list123))")))
+  (define result (run-last
+    "(eval (transduce Nat Nat (List Nat) (filter-xf Nat is-positive) (list-conj Nat) (nil Nat) list123))"))
   (check-contains result "'[3N 2N 1N]")
   (check-contains result "List Nat"))
 
@@ -184,22 +203,22 @@
 
 (test-case "xf/remove-xf-type: remove-xf type-checks"
   (check-contains
-   (run-last (string-append preamble "(infer (remove-xf Nat))"))
+   (run-last "(infer (remove-xf Nat))")
    "->"))
 
 (test-case "xf/remove-xf-zeros: remove zeros from [0,1,0,2,3]"
-  (define result (run-last (string-append preamble helpers
+  (define result (run-last
     "(def list01023 : (List Nat)
        (cons Nat zero (cons Nat (suc zero) (cons Nat zero (cons Nat (suc (suc zero)) (cons Nat (suc (suc (suc zero))) (nil Nat)))))))
-     (eval (transduce Nat Nat (List Nat) (remove-xf Nat is-zero) (list-conj Nat) (nil Nat) list01023))")))
+     (eval (transduce Nat Nat (List Nat) (remove-xf Nat is-zero) (list-conj Nat) (nil Nat) list01023))"))
   (check-contains result "'[3N 2N 1N]")
   (check-contains result "List Nat"))
 
 (test-case "xf/remove-xf-positive: remove positives from [0,1,2] → [0]"
-  (define result (run-last (string-append preamble helpers
+  (define result (run-last
     "(def list012 : (List Nat)
        (cons Nat zero (cons Nat (suc zero) (cons Nat (suc (suc zero)) (nil Nat)))))
-     (eval (transduce Nat Nat (List Nat) (remove-xf Nat is-positive) (list-conj Nat) (nil Nat) list012))")))
+     (eval (transduce Nat Nat (List Nat) (remove-xf Nat is-positive) (list-conj Nat) (nil Nat) list012))"))
   (check-contains result "'[0N]")
   (check-contains result "List Nat"))
 
@@ -211,10 +230,10 @@
   ;; (xf-compose (filter-xf is-positive) (map-xf suc)) on [0,1,2]
   ;; Step 1 (filter positive): 0→skip, 1→pass, 2→pass
   ;; Step 2 (map suc): 1→2, 2→3 → [3, 2] (reversed)
-  (define result (run-last (string-append preamble helpers
+  (define result (run-last
     "(def list012 : (List Nat)
        (cons Nat zero (cons Nat (suc zero) (cons Nat (suc (suc zero)) (nil Nat)))))
-     (eval (transduce Nat Nat (List Nat) (xf-compose Nat Nat Nat (filter-xf Nat is-positive) (map-xf Nat Nat suc-fn)) (list-conj Nat) (nil Nat) list012))")))
+     (eval (transduce Nat Nat (List Nat) (xf-compose Nat Nat Nat (filter-xf Nat is-positive) (map-xf Nat Nat suc-fn)) (list-conj Nat) (nil Nat) list012))"))
   (check-contains result "'[3N 2N]")
   (check-contains result "List Nat"))
 
@@ -222,10 +241,10 @@
   ;; (xf-compose (map-xf suc) (filter-xf is-positive)) on [0,1,2]
   ;; Step 1 (map suc): 0→1, 1→2, 2→3
   ;; Step 2 (filter positive): 1→pass, 2→pass, 3→pass → [3, 2, 1] (reversed)
-  (define result (run-last (string-append preamble helpers
+  (define result (run-last
     "(def list012 : (List Nat)
        (cons Nat zero (cons Nat (suc zero) (cons Nat (suc (suc zero)) (nil Nat)))))
-     (eval (transduce Nat Nat (List Nat) (xf-compose Nat Nat Nat (map-xf Nat Nat suc-fn) (filter-xf Nat is-positive)) (list-conj Nat) (nil Nat) list012))")))
+     (eval (transduce Nat Nat (List Nat) (xf-compose Nat Nat Nat (map-xf Nat Nat suc-fn) (filter-xf Nat is-positive)) (list-conj Nat) (nil Nat) list012))"))
   (check-contains result "'[3N 2N 1N]")
   (check-contains result "List Nat"))
 
@@ -233,37 +252,36 @@
   ;; (xf-compose (filter-xf is-positive) (remove-xf is-zero)) on [0,1,2]
   ;; Step 1 (filter positive): 0→skip, 1→pass, 2→pass
   ;; Step 2 (remove zero): 1→pass, 2→pass → [2, 1] (reversed)
-  (define result (run-last (string-append preamble helpers
+  (define result (run-last
     "(def list012 : (List Nat)
        (cons Nat zero (cons Nat (suc zero) (cons Nat (suc (suc zero)) (nil Nat)))))
-     (eval (transduce Nat Nat (List Nat) (xf-compose Nat Nat Nat (filter-xf Nat is-positive) (remove-xf Nat is-zero)) (list-conj Nat) (nil Nat) list012))")))
+     (eval (transduce Nat Nat (List Nat) (xf-compose Nat Nat Nat (filter-xf Nat is-positive) (remove-xf Nat is-zero)) (list-conj Nat) (nil Nat) list012))"))
   (check-contains result "'[2N 1N]")
   (check-contains result "List Nat"))
 
 (test-case "xf/compose-identity: map id is identity"
   ;; map-xf with identity function should produce same list (reversed)
-  (define result (run-last (string-append preamble list123
+  (define result (run-last
     "(def id-fn : (-> Nat Nat) (fn (x : Nat) x))
-     (eval (transduce Nat Nat (List Nat) (map-xf Nat Nat id-fn) (list-conj Nat) (nil Nat) list123))")))
+     (eval (transduce Nat Nat (List Nat) (map-xf Nat Nat id-fn) (list-conj Nat) (nil Nat) list123))"))
   (check-contains result "'[3N 2N 1N]")
   (check-contains result "List Nat"))
 
 (test-case "xf/compose-on-empty: composed transducer on empty list"
-  (define result (run-last (string-append preamble helpers
-    "(eval (transduce Nat Nat (List Nat) (xf-compose Nat Nat Nat (map-xf Nat Nat suc-fn) (filter-xf Nat is-positive)) (list-conj Nat) (nil Nat) (nil Nat)))")))
+  (define result (run-last
+    "(eval (transduce Nat Nat (List Nat) (xf-compose Nat Nat Nat (map-xf Nat Nat suc-fn) (filter-xf Nat is-positive)) (list-conj Nat) (nil Nat) (nil Nat)))"))
   (check-contains result "nil")
   (check-contains result "List Nat"))
 
 (test-case "xf/compose-into-list-rev: composed xf with into-list-rev"
   ;; into-list-rev with composed xf
-  (define result (run-last (string-append preamble helpers
+  (define result (run-last
     "(def list012 : (List Nat)
        (cons Nat zero (cons Nat (suc zero) (cons Nat (suc (suc zero)) (nil Nat)))))
-     (eval (into-list-rev Nat Nat (xf-compose Nat Nat Nat (filter-xf Nat is-positive) (map-xf Nat Nat suc-fn)) list012))")))
+     (eval (into-list-rev Nat Nat (xf-compose Nat Nat Nat (filter-xf Nat is-positive) (map-xf Nat Nat suc-fn)) list012))"))
   (check-contains result "'[3N 2N]")
   (check-contains result "List Nat"))
 
 ;; ========================================
 ;; E. transduce with custom reducers (4 tests)
 ;; ========================================
-

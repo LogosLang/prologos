@@ -27,24 +27,8 @@
          "../namespace.rkt")
 
 ;; ========================================
-;; Helpers
+;; Shared Fixture (modules loaded once)
 ;; ========================================
-
-(define (run-ns s)
-  (parameterize ([current-global-env (hasheq)]
-                 [current-ns-context #f]
-                 [current-module-registry prelude-module-registry]
-                 [current-lib-paths (list prelude-lib-dir)]
-                 [current-mult-meta-store (make-hasheq)]
-                 [current-preparse-registry prelude-preparse-registry]
-                 [current-trait-registry prelude-trait-registry]
-                 [current-impl-registry prelude-impl-registry]
-                 [current-param-impl-registry prelude-param-impl-registry])
-    (install-module-loader!)
-    (process-string s)))
-
-(define (run-ns-last s)
-  (last (run-ns s)))
 
 ;; Generic ops preamble — defines all generic functions inline.
 ;; NOTE: generic-ops.prologos IS now in the prelude (namespace.rkt Tier 3d).
@@ -69,6 +53,50 @@
     "(spec gto-list {A : Type} {C : Type -> Type} (Seqable C) -> (C A) -> (List A))\n"
     "(defn gto-list [$seq xs] (lseq-to-list ($seq A xs)))\n"))
 
+(define shared-preamble
+  (string-append "(ns test)\n" gen-ops-preamble))
+
+(define-values (shared-global-env
+                shared-ns-context
+                shared-module-reg
+                shared-trait-reg
+                shared-impl-reg
+                shared-param-impl-reg)
+  (parameterize ([current-global-env (hasheq)]
+                 [current-ns-context #f]
+                 [current-module-registry prelude-module-registry]
+                 [current-lib-paths (list prelude-lib-dir)]
+                 [current-mult-meta-store (make-hasheq)]
+                 [current-preparse-registry prelude-preparse-registry]
+                 [current-trait-registry prelude-trait-registry]
+                 [current-impl-registry prelude-impl-registry]
+                 [current-param-impl-registry prelude-param-impl-registry])
+    (install-module-loader!)
+    (let ([results (process-string shared-preamble)])
+      (for ([r (in-list results)])
+        (when (prologos-error? r)
+          (error 'fixture "Gen-ops preamble failed: ~a" (prologos-error-message r)))))
+    (values (current-global-env)
+            (current-ns-context)
+            (current-module-registry)
+            (current-trait-registry)
+            (current-impl-registry)
+            (current-param-impl-registry))))
+
+(define (run s)
+  (parameterize ([current-global-env shared-global-env]
+                 [current-ns-context shared-ns-context]
+                 [current-module-registry shared-module-reg]
+                 [current-lib-paths (list prelude-lib-dir)]
+                 [current-mult-meta-store (make-hasheq)]
+                 [current-preparse-registry (current-preparse-registry)]
+                 [current-trait-registry shared-trait-reg]
+                 [current-impl-registry shared-impl-reg]
+                 [current-param-impl-registry shared-param-impl-reg])
+    (process-string s)))
+
+(define (run-last s) (last (run s)))
+
 
 ;; ========================================
 ;; 6. gfilter on List
@@ -76,21 +104,13 @@
 
 (test-case "generic-ops/gfilter: keep zeros"
   (define result
-    (run-ns-last
-      (string-append
-        "(ns go-gfilt-1)\n"
-        gen-ops-preamble
-        "(eval (gfilter zero? '[0N 1N 0N 2N]))\n")))
+    (run-last "(eval (gfilter zero? '[0N 1N 0N 2N]))\n"))
   (check-true (string-contains? result "'[0N 0N]")))
 
 
 (test-case "generic-ops/gfilter: keep none"
   (define result
-    (run-ns-last
-      (string-append
-        "(ns go-gfilt-2)\n"
-        gen-ops-preamble
-        "(eval (gfilter zero? '[1N 2N]))\n")))
+    (run-last "(eval (gfilter zero? '[1N 2N]))\n"))
   (check-true (string-contains? result "nil")))
 
 
@@ -100,11 +120,7 @@
 
 (test-case "generic-ops/gconcat: List append"
   (define result
-    (run-ns-last
-      (string-append
-        "(ns go-gcat-1)\n"
-        gen-ops-preamble
-        "(eval (gconcat '[1N] '[2N 3N]))\n")))
+    (run-last "(eval (gconcat '[1N] '[2N 3N]))\n"))
   (check-true (string-contains? result "'[1N 2N 3N]")))
 
 
@@ -114,8 +130,5 @@
 
 (test-case "generic-ops/compat: prelude loads"
   (define result
-    (run-ns-last
-      (string-append
-        "(ns go-compat-1)\n"
-        "(eval (suc zero))\n")))
+    (run-last "(eval (suc zero))\n"))
   (check-equal? result "1N : Nat"))
