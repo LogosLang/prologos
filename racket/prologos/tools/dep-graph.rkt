@@ -439,6 +439,10 @@
    (test-dep '(prelude.rkt syntax.rkt surface-syntax.rkt parser.rkt elaborator.rkt
                pretty-print.rkt errors.rkt typing-errors.rkt global-env.rkt
                driver.rkt macros.rkt source-location.rkt) #t)
+   'test-spec-ordering.rkt
+   (test-dep '(prelude.rkt syntax.rkt surface-syntax.rkt parser.rkt elaborator.rkt
+               pretty-print.rkt errors.rkt typing-errors.rkt global-env.rkt
+               driver.rkt macros.rkt source-location.rkt) #t)
    'test-extended-spec.rkt
    (test-dep '(prelude.rkt syntax.rkt surface-syntax.rkt parser.rkt elaborator.rkt
                pretty-print.rkt errors.rkt global-env.rkt

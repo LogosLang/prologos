@@ -949,6 +949,27 @@
     [else '()]))
 
 (define (preparse-expand-all stxs)
+  ;; ---- Pre-scan: register all spec annotations for forward references ----
+  ;; This enables defn-before-spec ordering within a module: a defn can appear
+  ;; before its matching spec, and maybe-inject-spec will still find the type
+  ;; annotation. Safe because process-spec is idempotent (hash-set), and
+  ;; auto-export-name! is guarded by memq.
+  (for ([stx (in-list stxs)])
+    (define datum (syntax->datum stx))
+    (define head (and (pair? datum) (car datum)))
+    (define base (and head (private-form-base head)))
+    (when (or (eq? head 'spec)
+              (eq? base 'spec))
+      (define effective (if (eq? head 'spec) datum (cons 'spec (cdr datum))))
+      (with-handlers ([exn:fail? void])
+        (process-spec effective)
+        (maybe-register-trait-dict-def effective)
+        ;; Auto-export for public specs only (not spec-)
+        (when (and (eq? head 'spec)
+                   (list? effective) (>= (length effective) 2)
+                   (symbol? (cadr effective)))
+          (auto-export-name! (cadr effective))))))
+
   (define result
     (for/fold ([acc '()])
               ([stx (in-list stxs)])
