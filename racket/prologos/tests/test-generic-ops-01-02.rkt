@@ -71,147 +71,62 @@
 
 
 ;; ========================================
-;; 6. gfilter on List
+;; 3. glength on List
 ;; ========================================
 
-(test-case "generic-ops/gfilter: keep zeros"
+(test-case "generic-ops/glength: List empty"
   (define result
     (run-ns-last
       (string-append
-        "(ns go-gfilt-1)\n"
+        "(ns go-glen-1)\n"
         gen-ops-preamble
-        "(eval (gfilter zero? '[0N 1N 0N 2N]))\n")))
-  (check-true (string-contains? result "'[0N 0N]")))
+        "(eval (glength (nil Nat)))\n")))
+  (check-true (string-contains? result "0N")))
 
 
-(test-case "generic-ops/gfilter: keep none"
+(test-case "generic-ops/glength: List non-empty"
   (define result
     (run-ns-last
       (string-append
-        "(ns go-gfilt-2)\n"
+        "(ns go-glen-2)\n"
         gen-ops-preamble
-        "(eval (gfilter zero? '[1N 2N]))\n")))
-  (check-true (string-contains? result "nil")))
-
-
-;; ========================================
-;; 7. gconcat on List
-;; ========================================
-
-(test-case "generic-ops/gconcat: List append"
-  (define result
-    (run-ns-last
-      (string-append
-        "(ns go-gcat-1)\n"
-        gen-ops-preamble
-        "(eval (gconcat '[1N] '[2N 3N]))\n")))
-  (check-true (string-contains? result "'[1N 2N 3N]")))
-
-
-;; ========================================
-;; 8. Backward compatibility
-;; ========================================
-
-(test-case "generic-ops/compat: prelude loads"
-  (define result
-    (run-ns-last
-      (string-append
-        "(ns go-compat-1)\n"
-        "(eval (suc zero))\n")))
-  (check-equal? result "1N : Nat"))
-
-
-(test-case "generic-ops/compat: existing list ops"
-  (define result
-    (run-ns-last
-      (string-append
-        "(ns go-compat-2)\n"
-        "(eval (length '[1N 2N 3N]))\n")))
+        "(eval (glength '[1N 2N 3N]))\n")))
   (check-equal? result "3N : Nat"))
 
 
-(test-case "generic-ops/compat: explicit trait accessor"
+;; ========================================
+;; 4. gto-list on List (identity)
+;; ========================================
+
+(test-case "generic-ops/gto-list: List roundtrip"
   (define result
     (run-ns-last
       (string-append
-        "(ns go-compat-3)\n"
-        "(eval (Eq-eq? Nat Nat--Eq--dict zero zero))\n")))
-  (check-equal? result "true : Bool"))
-
-
-;; ========================================
-;; 9. Prelude integration (HKT-6d)
-;; ========================================
-
-(test-case "generic-ops/prelude: gmap from prelude"
-  (define result
-    (run-ns-last
-      (string-append
-        "(ns go-prelude-1)\n"
-        "(spec inc Nat -> Nat)\n"
-        "(defn inc [x] (suc x))\n"
-        "(eval (gmap inc '[0N 1N]))\n")))
+        "(ns go-gtl-1)\n"
+        gen-ops-preamble
+        "(eval (gto-list '[1N 2N]))\n")))
   (check-true (string-contains? result "'[1N 2N]")))
 
 
-(test-case "generic-ops/prelude: glength from prelude"
+;; ========================================
+;; 5. gfold on List
+;; ========================================
+
+(test-case "generic-ops/gfold: List sum"
   (define result
     (run-ns-last
       (string-append
-        "(ns go-prelude-2)\n"
-        "(eval (glength '[0N 1N 2N]))\n")))
-  (check-equal? result "3N : Nat"))
+        "(ns go-gfold-1)\n"
+        gen-ops-preamble
+        "(eval (gfold add zero '[1N 2N 3N]))\n")))
+  (check-true (string-contains? result "6N")))
 
 
-(test-case "generic-ops/prelude: gfold sum from prelude"
+(test-case "generic-ops/gfold: List empty"
   (define result
     (run-ns-last
       (string-append
-        "(ns go-prelude-3)\n"
-        "(eval (gfold (fn [x] [acc] (add acc x)) zero '[1N 2N 3N]))\n")))
-  (check-equal? result "6N : Nat"))
-
-
-(test-case "generic-ops/prelude: gto-list from prelude"
-  (define result
-    (run-ns-last
-      (string-append
-        "(ns go-prelude-4)\n"
-        "(eval (gto-list '[0N]))\n")))
-  (check-true (string-contains? result "'[0N]")))
-
-
-(test-case "generic-ops/prelude: gfilter from prelude"
-  (define result
-    (run-ns-last
-      (string-append
-        "(ns go-prelude-5)\n"
-        "(eval (gfilter zero? '[0N 1N 0N]))\n")))
-  (check-true (string-contains? result "'[0N 0N]")))
-
-
-(test-case "generic-ops/prelude: gconcat from prelude"
-  (define result
-    (run-ns-last
-      (string-append
-        "(ns go-prelude-6)\n"
-        "(eval (gconcat '[1N] '[2N]))\n")))
-  (check-true (string-contains? result "'[1N 2N]")))
-
-
-(test-case "generic-ops/prelude: gany? from prelude"
-  (define result
-    (run-ns-last
-      (string-append
-        "(ns go-prelude-7)\n"
-        "(eval (gany? zero? '[0N 1N]))\n")))
-  (check-true (string-contains? result "true")))
-
-
-(test-case "generic-ops/prelude: gall? from prelude"
-  (define result
-    (run-ns-last
-      (string-append
-        "(ns go-prelude-8)\n"
-        "(eval (gall? zero? '[0N 1N]))\n")))
-  (check-true (string-contains? result "false")))
+        "(ns go-gfold-2)\n"
+        gen-ops-preamble
+        "(eval (gfold add zero (nil Nat)))\n")))
+  (check-true (string-contains? result "0N")))

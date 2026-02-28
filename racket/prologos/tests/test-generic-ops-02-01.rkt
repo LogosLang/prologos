@@ -71,116 +71,51 @@
 
 
 ;; ========================================
-;; 1. Generic ops define successfully
+;; 6. gfilter on List
 ;; ========================================
 
-(test-case "generic-ops/define: all ops type-check"
-  (define results
-    (run-ns
-      (string-append "(ns go-def-1)\n" gen-ops-preamble)))
-  ;; All definitions should succeed (no error structs)
-  (for ([r (in-list results)])
-    (check-true (string? r)
-                (format "Expected string result, got ~a" r))))
-
-
-;; ========================================
-;; 2. gmap on List
-;; ========================================
-
-(test-case "generic-ops/gmap: List singleton"
+(test-case "generic-ops/gfilter: keep zeros"
   (define result
     (run-ns-last
       (string-append
-        "(ns go-gmap-1)\n"
+        "(ns go-gfilt-1)\n"
         gen-ops-preamble
-        "(spec inc Nat -> Nat)\n"
-        "(defn inc [x] (suc x))\n"
-        "(eval (gmap inc '[0N]))\n")))
-  (check-true (string-contains? result "'[1N]")))
+        "(eval (gfilter zero? '[0N 1N 0N 2N]))\n")))
+  (check-true (string-contains? result "'[0N 0N]")))
 
 
-(test-case "generic-ops/gmap: List multiple"
+(test-case "generic-ops/gfilter: keep none"
   (define result
     (run-ns-last
       (string-append
-        "(ns go-gmap-2)\n"
+        "(ns go-gfilt-2)\n"
         gen-ops-preamble
-        "(spec inc Nat -> Nat)\n"
-        "(defn inc [x] (suc x))\n"
-        "(eval (gmap inc '[0N 1N 2N]))\n")))
-  (check-true (string-contains? result "'[1N 2N 3N]")))
-
-
-(test-case "generic-ops/gmap: List empty"
-  (define result
-    (run-ns-last
-      (string-append
-        "(ns go-gmap-3)\n"
-        gen-ops-preamble
-        "(spec inc Nat -> Nat)\n"
-        "(defn inc [x] (suc x))\n"
-        "(eval (gmap inc (nil Nat)))\n")))
+        "(eval (gfilter zero? '[1N 2N]))\n")))
   (check-true (string-contains? result "nil")))
 
 
 ;; ========================================
-;; 3. glength on List
+;; 7. gconcat on List
 ;; ========================================
 
-(test-case "generic-ops/glength: List empty"
+(test-case "generic-ops/gconcat: List append"
   (define result
     (run-ns-last
       (string-append
-        "(ns go-glen-1)\n"
+        "(ns go-gcat-1)\n"
         gen-ops-preamble
-        "(eval (glength (nil Nat)))\n")))
-  (check-true (string-contains? result "0N")))
-
-
-(test-case "generic-ops/glength: List non-empty"
-  (define result
-    (run-ns-last
-      (string-append
-        "(ns go-glen-2)\n"
-        gen-ops-preamble
-        "(eval (glength '[1N 2N 3N]))\n")))
-  (check-equal? result "3N : Nat"))
+        "(eval (gconcat '[1N] '[2N 3N]))\n")))
+  (check-true (string-contains? result "'[1N 2N 3N]")))
 
 
 ;; ========================================
-;; 4. gto-list on List (identity)
+;; 8. Backward compatibility
 ;; ========================================
 
-(test-case "generic-ops/gto-list: List roundtrip"
+(test-case "generic-ops/compat: prelude loads"
   (define result
     (run-ns-last
       (string-append
-        "(ns go-gtl-1)\n"
-        gen-ops-preamble
-        "(eval (gto-list '[1N 2N]))\n")))
-  (check-true (string-contains? result "'[1N 2N]")))
-
-
-;; ========================================
-;; 5. gfold on List
-;; ========================================
-
-(test-case "generic-ops/gfold: List sum"
-  (define result
-    (run-ns-last
-      (string-append
-        "(ns go-gfold-1)\n"
-        gen-ops-preamble
-        "(eval (gfold add zero '[1N 2N 3N]))\n")))
-  (check-true (string-contains? result "6N")))
-
-
-(test-case "generic-ops/gfold: List empty"
-  (define result
-    (run-ns-last
-      (string-append
-        "(ns go-gfold-2)\n"
-        gen-ops-preamble
-        "(eval (gfold add zero (nil Nat)))\n")))
-  (check-true (string-contains? result "0N")))
+        "(ns go-compat-1)\n"
+        "(eval (suc zero))\n")))
+  (check-equal? result "1N : Nat"))
