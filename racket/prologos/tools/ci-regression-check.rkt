@@ -19,7 +19,8 @@
          racket/string
          racket/list
          racket/format
-         json)
+         json
+         "bench-lib.rkt")
 
 ;; ============================================================
 ;; Configuration
@@ -43,11 +44,10 @@
 ;; ============================================================
 
 (define (bench-program-once program-path)
-  (define raco-path (find-executable-path "racket"))
   (define driver-path (path->string (build-path project-root "driver.rkt")))
   (define t0 (current-inexact-monotonic-milliseconds))
   (define-values (proc stdout-port stdin-port stderr-port)
-    (subprocess #f #f #f raco-path driver-path program-path))
+    (subprocess #f #f #f racket-path driver-path program-path))
   (close-output-port stdin-port)
   (subprocess-wait proc)
   (define t1 (current-inexact-monotonic-milliseconds))

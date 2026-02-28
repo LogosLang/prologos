@@ -30,29 +30,36 @@
          read-all-runs
          append-run-record
          precompile-modules!
-         find-raco-path)
+         find-raco-path
+         find-racket-path
+         racket-path)
 
 ;; ============================================================
 ;; Raco path resolution
 ;; ============================================================
 
-;; Find the `raco` binary. First tries PATH lookup; if that fails,
-;; derives the path from the currently running racket executable
-;; (they're siblings in the same bin/ directory). This handles the
-;; common case where Racket is installed but not on PATH (e.g.,
-;; /Applications/Racket v9.0/bin/).
-(define (find-raco-path)
-  (or (find-executable-path "raco")
+;; Find a Racket installation binary by name ("raco", "racket").
+;; 1. Try PATH lookup via find-executable-path
+;; 2. Fall back to sibling of the currently running racket executable
+;;    (they're co-located in the same bin/ directory in all standard
+;;    Racket installations — macOS, Linux, Windows, Homebrew, etc.)
+;; 3. Error with a clear message if neither works
+(define (find-racket-binary name)
+  (or (find-executable-path name)
       (let* ([exe (find-system-path 'exec-file)]
              [dir (path-only exe)]
-             [raco (and dir (build-path dir "raco"))])
-        (and raco (file-exists? raco) raco))
-      (error 'find-raco-path
-             "Cannot locate raco binary — not on PATH and not sibling of ~a"
-             (find-system-path 'exec-file))))
+             [candidate (and dir (build-path dir name))])
+        (and candidate (file-exists? candidate) candidate))
+      (error 'find-racket-binary
+             "Cannot locate ~a — not on PATH and not sibling of ~a"
+             name (find-system-path 'exec-file))))
 
-;; Cache the raco path (computed once, reused across all subprocesses)
-(define raco-path (find-raco-path))
+(define (find-raco-path)    (find-racket-binary "raco"))
+(define (find-racket-path)  (find-racket-binary "racket"))
+
+;; Cache both paths (computed once at module load, reused across all subprocesses)
+(define raco-path    (find-raco-path))
+(define racket-path  (find-racket-path))
 
 ;; ============================================================
 ;; Benchmark one test file via subprocess
