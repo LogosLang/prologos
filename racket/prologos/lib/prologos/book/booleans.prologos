@@ -1,0 +1,90 @@
+;; ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;; Chapter: Booleans
+;; ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;;
+;; Bool is a built-in type with two constructors: `true` and
+;; `false`. Unlike most data types in Prologos, Bool is not
+;; defined with a `data` declaration — it is primitive, wired
+;; into the type checker and pattern matcher.
+;;
+;; This chapter defines the standard boolean combinators.
+;; The Eq and Ord instances for Bool live in their respective
+;; chapters (Equality and Ordering), following the convention
+;; that trait instances belong with the motivating trait.
+;;
+;; All operations here are pure and total — no bottom, no
+;; exceptions. Each is defined by structural pattern matching
+;; on its first boolean argument.
+
+
+module prologos::data::bool
+
+;; ── Core Operations ─────────────────────────────────
+;;
+;; The four fundamental boolean connectives, plus boolean
+;; equality. These are the building blocks from which all
+;; other boolean functions can be derived.
+;;
+;; Each follows the same pattern: match on the first argument
+;; and return either a constant or the second argument. This
+;; gives us short-circuit semantics for free — `and false x`
+;; never evaluates `x`.
+
+;; Logical NOT: not(true) = false, not(false) = true
+spec not Bool -> Bool
+defn not [b]
+  match b
+    | true  -> false
+    | false -> true
+
+;; Logical AND: and(true, b) = b, and(false, b) = false
+spec and Bool Bool -> Bool
+defn and [a b]
+  match a
+    | true  -> b
+    | false -> false
+
+;; Logical OR: or(true, b) = true, or(false, b) = b
+spec or Bool Bool -> Bool
+defn or [a b]
+  match a
+    | true  -> true
+    | false -> b
+
+;; Logical XOR: xor(true, b) = not(b), xor(false, b) = b
+spec xor Bool Bool -> Bool
+defn xor [a b]
+  match a
+    | true  -> not b
+    | false -> b
+
+;; Boolean equality: bool-eq(true, b) = b, bool-eq(false, b) = not(b)
+spec bool-eq Bool Bool -> Bool
+defn bool-eq [a b]
+  match a
+    | true  -> b
+    | false -> not b
+
+;; ── Derived Operations ──────────────────────────────
+;;
+;; These are defined in terms of the core operations above.
+;; They round out the standard boolean toolkit:
+;;
+;;   • `nand` — Sheffer stroke, functionally complete alone
+;;   • `nor`  — Peirce arrow, also functionally complete alone
+;;   • `implies` — material implication, the backbone of logic
+
+;; NAND: nand(a, b) = not(and(a, b))
+spec nand Bool Bool -> Bool
+defn nand [a b]
+  not [and a b]
+
+;; NOR: nor(a, b) = not(or(a, b))
+spec nor Bool Bool -> Bool
+defn nor [a b]
+  not [or a b]
+
+;; Material implication: implies(a, b) = or(not(a), b)
+spec implies Bool Bool -> Bool
+defn implies [a b]
+  or [not a] b

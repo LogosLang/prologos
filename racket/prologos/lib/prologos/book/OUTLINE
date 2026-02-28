@@ -12,3 +12,6 @@
 ;; Part I — Foundations
 
 equality
+ordering
+booleans
+natural-numbers

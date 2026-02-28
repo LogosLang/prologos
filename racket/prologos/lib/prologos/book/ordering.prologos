@@ -1,0 +1,312 @@
+;; ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;; Chapter: Ordering
+;; ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;;
+;; Where equality asks "are these the same?", ordering asks
+;; "which comes first?" Prologos provides two flavors:
+;;
+;;   1. **Total ordering** — the Ord trait, where every pair of
+;;      values is comparable. `compare 3N 5N` yields `lt-ord`.
+;;
+;;   2. **Partial ordering** — the PartialOrd trait, where some
+;;      pairs may be incomparable. `partial-compare x y` returns
+;;      `Option Ordering` — `none` when the values can't be ranked.
+;;
+;; Both are built on the same three-valued result type: Ordering,
+;; with constructors `lt-ord`, `eq-ord`, and `gt-ord`. This is the
+;; Prologos equivalent of Haskell's `LT | EQ | GT`.
+;;
+;; The chapter begins with the Ordering type itself, then defines
+;; the Ord trait with its derived comparison operators, and finally
+;; covers PartialOrd for lattice-like structures.
+
+
+;; ════════════════════════════════════════════════════
+;; Part I — Total Ordering
+;; ════════════════════════════════════════════════════
+
+
+module prologos::data::ordering
+
+;; ── The Ordering Type ───────────────────────────────
+;;
+;; A three-way comparison result. Every `compare` call returns
+;; one of these three constructors:
+;;
+;;   • `lt-ord` — the first argument is less than the second
+;;   • `eq-ord` — the arguments are equal
+;;   • `gt-ord` — the first argument is greater than the second
+;;
+;; This is a simple enumeration — no fields, no parameters.
+
+data Ordering
+  lt-ord
+  eq-ord
+  gt-ord
+
+
+module prologos::core::ord-trait
+
+;; ── The Ord Trait ───────────────────────────────────
+;;
+;; The Ord trait is the foundation of comparison in Prologos.
+;; Any type with a total ordering implements this single-method
+;; trait. Like Eq, Ord is a single-method trait — the dictionary
+;; IS the `compare` function.
+;;
+;; Laws:
+;;   • Reflexive:     compare x x ≡ eq-ord
+;;   • Transitive:    compare x y = lt-ord ∧ compare y z = lt-ord ⟹ compare x z = lt-ord
+;;   • Antisymmetric: compare x y = lt-ord ⟹ compare y x = gt-ord
+;;   • Total:         ord-le x y ∨ ord-le y x
+;;
+;; From `compare` alone, we derive the full suite of comparison
+;; operators: `ord-lt`, `ord-le`, `ord-gt`, `ord-ge`, `ord-eq`,
+;; `ord-min`, `ord-max`. These are defined generically — once you
+;; implement `compare`, you get all seven for free.
+
+require [prologos::data::ordering :refer [Ordering lt-ord eq-ord gt-ord]]
+require [prologos::data::nat :refer [lt? nat-eq?]]
+require [prologos::data::bool :refer [not]]
+
+trait Ord {A}
+  compare : A A -> Ordering
+  :doc "Total ordering: compares two values and returns lt-ord, eq-ord, or gt-ord"
+  :laws
+    - :name "reflexive"
+      :forall {x : A}
+      :holds [ord-eq [compare x x] eq-ord]
+    - :name "transitive"
+      :forall {x y z : A}
+      :holds [if [and [ord-eq [compare x y] lt-ord] [ord-eq [compare y z] lt-ord]] [ord-eq [compare x z] lt-ord] true]
+    - :name "antisymmetric"
+      :forall {x y : A}
+      :holds [if [and [ord-le x y] [ord-le y x]] [ord-eq [compare x y] eq-ord] true]
+    - :name "total"
+      :forall {x y : A}
+      :holds [or [ord-le x y] [ord-le y x]]
+
+;; ── Ord for Natural Numbers ─────────────────────────
+;;
+;; Natural numbers are totally ordered by magnitude. The
+;; implementation delegates to `lt?` and `nat-eq?` from
+;; `prologos::data::nat`, which are defined by structural
+;; recursion on the Peano representation.
+
+impl Ord Nat
+  defn compare [x y] <Ordering>
+    match [lt? x y]
+      | true  -> lt-ord
+      | false -> match [nat-eq? x y]
+                   | true  -> eq-ord
+                   | false -> gt-ord
+
+;; Backward-compatible alias
+def nat-ord Nat--Ord--dict
+
+;; ── Derived Comparison Operators ────────────────────
+;;
+;; Given any Ord dictionary, we can derive the standard
+;; comparison operators by pattern matching on the Ordering
+;; result. These are generic — they work for any type with
+;; an Ord instance.
+
+;; Less than
+spec ord-lt [Ord A] A A -> Bool
+  :doc "Strict less-than derived from compare"
+defn ord-lt [dict x y]
+  match [dict x y]
+    | lt-ord -> true
+    | eq-ord -> false
+    | gt-ord -> false
+
+;; Less than or equal
+spec ord-le [Ord A] A A -> Bool
+  :doc "Less-than-or-equal derived from compare"
+defn ord-le [dict x y]
+  match [dict x y]
+    | lt-ord -> true
+    | eq-ord -> true
+    | gt-ord -> false
+
+;; Greater than
+spec ord-gt [Ord A] A A -> Bool
+  :doc "Strict greater-than derived from compare"
+defn ord-gt [dict x y]
+  match [dict x y]
+    | lt-ord -> false
+    | eq-ord -> false
+    | gt-ord -> true
+
+;; Greater than or equal
+spec ord-ge [Ord A] A A -> Bool
+  :doc "Greater-than-or-equal derived from compare"
+defn ord-ge [dict x y]
+  match [dict x y]
+    | lt-ord -> false
+    | eq-ord -> true
+    | gt-ord -> true
+
+;; Equal (derived from Ord)
+spec ord-eq [Ord A] A A -> Bool
+  :doc "Equality derived from compare (returns true when compare yields eq-ord)"
+defn ord-eq [dict x y]
+  match [dict x y]
+    | lt-ord -> false
+    | eq-ord -> true
+    | gt-ord -> false
+
+;; Minimum
+spec ord-min [Ord A] A A -> A
+  :doc "Returns the lesser of two values (first on tie)"
+defn ord-min [dict x y]
+  match [dict x y]
+    | lt-ord -> x
+    | eq-ord -> x
+    | gt-ord -> y
+
+;; Maximum
+spec ord-max [Ord A] A A -> A
+  :doc "Returns the greater of two values (first on tie)"
+defn ord-max [dict x y]
+  match [dict x y]
+    | lt-ord -> y
+    | eq-ord -> x
+    | gt-ord -> x
+
+
+module prologos::core::ord-instances
+
+;; ── Ord for Booleans ────────────────────────────────
+;;
+;; Booleans have a natural total order: `false < true`.
+;; This mirrors the convention in most languages and
+;; corresponds to the numeric interpretation false=0, true=1.
+
+require [prologos::core::ord-trait    :refer [Ord Ord-compare]]
+require [prologos::data::ordering     :refer [Ordering lt-ord eq-ord gt-ord]]
+
+impl Ord Bool
+  defn compare [x : Bool y : Bool] <Ordering>
+    if x
+      [if y eq-ord gt-ord]
+      [if y lt-ord eq-ord]
+
+
+module prologos::core::ord-numeric-instances
+
+;; ── Ord for Numeric Types ───────────────────────────
+;;
+;; Each numeric type delegates to foreign primitives for
+;; comparison. The pattern is uniform: check less-than first,
+;; then equality, and default to greater-than.
+;;
+;; For the Posit types (Posit8 through Posit64), there is no
+;; dedicated equality primitive — we derive equality from
+;; `le` by checking `le(x,y) ∧ le(y,x)`.
+
+require [prologos::core::ord-trait  :refer [Ord Ord-compare]]
+require [prologos::data::ordering   :refer [Ordering lt-ord eq-ord gt-ord]]
+require [prologos::data::bool       :refer [and]]
+
+impl Ord Int
+  defn compare [x : Int  y : Int] <Ordering>
+    if [int-lt x y] lt-ord
+      [if [int-eq x y] eq-ord gt-ord]
+
+impl Ord Rat
+  defn compare [x : Rat  y : Rat] <Ordering>
+    if [rat-lt x y] lt-ord
+      [if [rat-eq x y] eq-ord gt-ord]
+
+impl Ord Posit8
+  defn compare [x : Posit8  y : Posit8] <Ordering>
+    if [p8-lt x y] lt-ord
+      [if [and [p8-le x y] [p8-le y x]] eq-ord gt-ord]
+
+impl Ord Posit16
+  defn compare [x : Posit16  y : Posit16] <Ordering>
+    if [p16-lt x y] lt-ord
+      [if [and [p16-le x y] [p16-le y x]] eq-ord gt-ord]
+
+impl Ord Posit32
+  defn compare [x : Posit32  y : Posit32] <Ordering>
+    if [p32-lt x y] lt-ord
+      [if [and [p32-le x y] [p32-le y x]] eq-ord gt-ord]
+
+impl Ord Posit64
+  defn compare [x : Posit64  y : Posit64] <Ordering>
+    if [p64-lt x y] lt-ord
+      [if [and [p64-le x y] [p64-le y x]] eq-ord gt-ord]
+
+
+module prologos::core::ord-char-instance
+
+;; ── Ord for Characters ──────────────────────────────
+;;
+;; Characters are ordered by Unicode code point. The
+;; implementation delegates to `char::lt` and `char::eq`
+;; from `prologos::data::char`.
+
+require [prologos::core::ord-trait :refer [Ord]]
+require [prologos::data::char      :as char :refer []]
+require [prologos::data::ordering  :refer [Ordering lt-ord eq-ord gt-ord]]
+
+impl Ord Char
+  defn compare [x : Char  y : Char] <Ordering>
+    if [char::lt x y]
+      lt-ord
+      [if [char::eq x y]
+        eq-ord
+        gt-ord]
+
+
+module prologos::core::ord-string-instance
+
+;; ── Ord for Strings ─────────────────────────────────
+;;
+;; Strings are ordered lexicographically — character by
+;; character, left to right, with shorter strings comparing
+;; less when one is a prefix of the other.
+
+require [prologos::core::ord-trait :refer [Ord]]
+require [prologos::data::string    :as str :refer []]
+require [prologos::data::ordering  :refer [Ordering lt-ord eq-ord gt-ord]]
+
+impl Ord String
+  defn compare [x : String  y : String] <Ordering>
+    if [str::lt x y]
+      lt-ord
+      [if [str::eq x y]
+        eq-ord
+        gt-ord]
+
+
+;; ════════════════════════════════════════════════════
+;; Part II — Partial Ordering
+;; ════════════════════════════════════════════════════
+
+
+module prologos::core::partialord-trait
+
+;; ── The PartialOrd Trait ────────────────────────────
+;;
+;; Not all types have a total ordering. Floating-point NaN
+;; values, lattice elements in abstract interpretation, and
+;; set-inclusion orderings all have pairs of incomparable
+;; values. For these, Prologos provides PartialOrd.
+;;
+;; Where `compare` returns a bare `Ordering`, `partial-compare`
+;; wraps it in `Option`: `some lt-ord` when comparable, `none`
+;; when not. Every Ord type is trivially PartialOrd (just wrap
+;; in `some`), but PartialOrd captures the weaker guarantee.
+;;
+;; This trait is particularly important for propagator
+;; integration, where lattice types must support partial
+;; comparison to detect convergence.
+
+require [prologos::data::option    :refer [Option some none]]
+require [prologos::data::ordering  :refer [Ordering lt-ord eq-ord gt-ord]]
+
+trait PartialOrd {A}
+  partial-compare : A A -> [Option Ordering]

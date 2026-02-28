@@ -1,0 +1,162 @@
+;; ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;; Chapter: Natural Numbers
+;; ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;;
+;; The natural numbers are the simplest infinite data type:
+;; `zero` and `suc`. Every natural number is either zero or
+;; the successor of another natural number — this is the
+;; Peano representation.
+;;
+;; Nat is a built-in type in Prologos (like Bool), wired into
+;; the type checker and reduction engine. Numeric literals
+;; like `3N` desugar to `suc (suc (suc zero))`.
+;;
+;; This chapter defines the standard arithmetic and comparison
+;; operations on Nat. Every function is total and defined by
+;; structural recursion on the Peano representation — there
+;; are no partial functions, no exceptions. Subtraction is
+;; *saturating*: `sub 2N 5N` yields `zero`, not an error.
+;;
+;; The Eq and Ord instances for Nat live in their respective
+;; chapters. Here we define the primitive `nat-eq?`, `lt?`,
+;; and `le?` functions that those instances delegate to.
+
+
+module prologos::data::nat
+
+;; ── Basic Operations ────────────────────────────────
+;;
+;; The fundamental operations on Peano naturals. Each is
+;; defined by structural recursion — matching on one argument
+;; and recurring on its predecessor.
+
+;; Addition: add x y = x + y (by recursion on y)
+spec add Nat Nat -> Nat
+defn add [x y]
+  match y
+    | zero  -> x
+    | suc k -> suc [add x k]
+
+;; Multiplication: mult x y = x * y (by recursion on y)
+spec mult Nat Nat -> Nat
+defn mult [x y]
+  match y
+    | zero  -> zero
+    | suc k -> add x [mult x k]
+
+;; Double: double n = n + n
+spec double Nat -> Nat
+defn double [n]
+  match n
+    | zero  -> zero
+    | suc k -> suc [suc [double k]]
+
+;; Predecessor: pred(0) = 0, pred(suc(k)) = k
+spec pred Nat -> Nat
+defn pred [n]
+  match n
+    | zero  -> zero
+    | suc k -> k
+
+;; Zero predicate: zero?(0) = true, zero?(suc(k)) = false
+spec zero? Nat -> Bool
+defn zero? [n]
+  match n
+    | zero  -> true
+    | suc _ -> false
+
+;; ── Arithmetic ──────────────────────────────────────
+;;
+;; Subtraction and exponentiation. Note that subtraction on
+;; naturals is *saturating*: `sub x y` returns `max(x - y, 0)`.
+;; This keeps the function total — we never leave Nat.
+
+;; Saturating subtraction: sub(x, y) = max(x - y, 0)
+;; Iterates pred y times starting from x.
+spec sub Nat Nat -> Nat
+defn sub [x y]
+  match y
+    | zero  -> x
+    | suc k -> pred [sub x k]
+
+;; Exponentiation: power(base, exp) = base^exp
+spec pow Nat Nat -> Nat
+defn pow [base exp]
+  match exp
+    | zero  -> suc zero
+    | suc k -> mult base [pow base k]
+
+;; ── Comparison ──────────────────────────────────────
+;;
+;; Comparison operators defined in terms of saturating
+;; subtraction. The key insight: `x ≤ y` iff `sub x y = 0`.
+;; From `le?` we derive `lt?`, `gt?`, `ge?`, and `nat-eq?`.
+;; These primitives are used by the Eq and Ord instances
+;; in the Equality and Ordering chapters.
+
+;; Less-than-or-equal: le?(x, y) iff sub(x, y) == 0
+spec le? Nat Nat -> Bool
+defn le? [x y]
+  zero? [sub x y]
+
+;; Less-than: lt?(x, y) iff not(le?(y, x))
+spec lt? Nat Nat -> Bool
+defn lt? [x y]
+  match [le? y x]
+    | true  -> false
+    | false -> true
+
+;; Greater-than: gt?(x, y) = lt?(y, x)
+spec gt? Nat Nat -> Bool
+defn gt? [x y]
+  lt? y x
+
+;; Greater-than-or-equal: ge?(x, y) = le?(y, x)
+spec ge? Nat Nat -> Bool
+defn ge? [x y]
+  le? y x
+
+;; Nat equality: nat-eq?(x, y) iff le?(x, y) and le?(y, x)
+spec nat-eq? Nat Nat -> Bool
+defn nat-eq? [x y]
+  match [le? x y]
+    | true  -> le? y x
+    | false -> false
+
+;; ── Min, Max, and Clamp ─────────────────────────────
+;;
+;; Selection operators built on `le?`. The `clamp` function
+;; returns a curried function that restricts a value to the
+;; interval `[low, high]` — useful for bounded arithmetic.
+
+;; Minimum of two naturals
+spec min Nat Nat -> Nat
+defn min [x y]
+  match [le? x y]
+    | true  -> x
+    | false -> y
+
+;; Maximum of two naturals
+spec max Nat Nat -> Nat
+defn max [x y]
+  match [le? x y]
+    | true  -> y
+    | false -> x
+
+;; ── Conversion ──────────────────────────────────────
+;;
+;; Converting between Nat and other types. `bool-to-nat`
+;; maps the two-element type into the naturals.
+
+;; Bool to Nat: true -> 1, false -> 0
+spec bool-to-nat Bool -> Nat
+defn bool-to-nat [b]
+  match b
+    | true  -> suc zero
+    | false -> zero
+
+;; Clamp: clamp low high returns a function that clamps x to [low, high]
+spec clamp Nat Nat -> Nat -> Nat
+defn clamp [low high]
+  fn [x]
+    max low [min x high]
