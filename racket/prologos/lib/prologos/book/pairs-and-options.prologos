@@ -1,0 +1,370 @@
+;; ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;; Chapter: Pairs and Options
+;; ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;;
+;; Prologos provides several standard types for representing
+;; optional values, error handling, and binary choices. This
+;; chapter covers four related data types:
+;;
+;;   • **Pair** — non-dependent tuples `(A, B)` via `Sigma`
+;;   • **Option** — a value that may or may not be present
+;;   • **Either** — a tagged union of two types
+;;   • **Result** — success-or-error with domain-specific semantics
+;;   • **Never** — the uninhabited bottom type
+;;
+;; Pairs use the built-in `Sigma` type with a non-dependent first
+;; component: `Sigma (_ : A) B`. The `pair`, `first`, and `second`
+;; constructors/accessors are AST-level keywords. The Pair module
+;; adds derived operations like `swap`, `bimap`, and `uncurry`.
+;;
+;; Option and Result are the workhorses of error handling in
+;; Prologos — Option when there's nothing useful to say about
+;; failure, Result when the error carries information.
+
+
+;; ════════════════════════════════════════════════════
+;; Part I — Pairs
+;; ════════════════════════════════════════════════════
+
+
+module prologos::data::pair
+
+;; ── Pair Utilities ───────────────────────────────
+;;
+;; The built-in `Sigma` type represents dependent pairs. When the
+;; second component doesn't depend on the first, you get an ordinary
+;; tuple. The `pair`, `first`, and `second` keywords are built-in
+;; AST nodes; this module provides derived combinators.
+
+;; Swap: (a, b) -> (b, a)
+spec swap [Sigma [_ <A>] B] -> [Sigma [_ <B>] A]
+defn swap [p]
+  pair [second p] [first p]
+
+;; Map over first component: (A -> C) -> (A, B) -> (C, B)
+spec map-fst [A -> C] [Sigma [_ <A>] B] -> [Sigma [_ <C>] B]
+defn map-fst [f p]
+  pair [f [first p]] [second p]
+
+;; Map over second component: (B -> C) -> (A, B) -> (A, C)
+spec map-snd [B -> C] [Sigma [_ <A>] B] -> [Sigma [_ <A>] C]
+defn map-snd [f p]
+  pair [first p] [f [second p]]
+
+;; Bimap: (A -> C) -> (B -> D) -> (A, B) -> (C, D)
+spec bimap [A -> C] [B -> D] [Sigma [_ <A>] B] -> [Sigma [_ <C>] D]
+defn bimap [f g p]
+  pair [f [first p]] [g [second p]]
+
+;; Duplicate: a -> (a, a)
+spec dup A -> [Sigma [_ <A>] A]
+defn dup [x]
+  pair x x
+
+;; Uncurry: (A -> B -> C) -> (A, B) -> C
+spec uncurry [A -> B -> C] [Sigma [_ <A>] B] -> C
+defn uncurry [f p]
+  f [first p] [second p]
+
+
+;; ════════════════════════════════════════════════════
+;; Part II — Option
+;; ════════════════════════════════════════════════════
+
+
+module prologos::data::option
+
+;; ── The Option Type ──────────────────────────────
+;;
+;; `Option A` represents a value that may or may not be present.
+;; It has two constructors:
+;;   `none` — absence of value
+;;   `some : A` — a present value
+;;
+;; Option is the standard way to handle partial functions in
+;; Prologos. Rather than throwing errors, functions that might
+;; not have a result return `Option`.
+
+data Option {A}
+  none
+  some : A
+
+;; ── Core Combinators ─────────────────────────────
+
+;; Map a function over the contained value.
+spec map [A -> B] [Option A] -> Option B
+  :doc "Apply a function to the value inside Some, pass through None"
+defn map [f opt]
+  match opt
+    | none   -> none
+    | some x -> some [f x]
+
+;; Flat-map (bind): apply f that returns Option B.
+spec flat-map [A -> Option B] [Option A] -> Option B
+  :doc "Monadic bind: chain computations that may fail"
+defn flat-map [f opt]
+  match opt
+    | none   -> none
+    | some x -> f x
+
+;; Unwrap with a default value.
+spec unwrap-or A [Option A] -> A
+  :doc "Extract the value or return a default if None"
+defn unwrap-or [default opt]
+  match opt
+    | none   -> default
+    | some x -> x
+
+;; Return opt if some, else fall back to alt.
+spec or-else [Option A] [Option A] -> Option A
+  :doc "Return the first Option if Some, otherwise the second"
+defn or-else [opt alt]
+  match opt
+    | none   -> alt
+    | some x -> some x
+
+;; ── Filtering and Combining ──────────────────────
+
+;; Keep the value only if the predicate holds, else none.
+spec filter [A -> Bool] [Option A] -> Option A
+  :doc "Keep the value only if it satisfies the predicate"
+defn filter [pred opt]
+  match opt
+    | none   -> none
+    | some x -> match [pred x]
+                  | true  -> some x
+                  | false -> none
+
+;; Combine two Options with a function. None if either is none.
+spec zip-with [A -> B -> C] [Option A] [Option B] -> Option C
+  :doc "Combine two Options with a function; None if either is None"
+defn zip-with [f oa ob]
+  match oa
+    | none   -> none
+    | some a -> match ob
+                  | none   -> none
+                  | some b -> some [f a b]
+
+;; Combine two Options into an Option of pairs. None if either is none.
+spec zip [Option A] [Option B] -> Option [Sigma [_ <A>] B]
+  :doc "Pair two Options; None if either is None"
+defn zip [oa ob]
+  zip-with A B [Sigma [_ <A>] B] [fn a b [pair a b]] oa ob
+
+;; ── Predicates ───────────────────────────────────
+
+;; True if some.
+spec some? [Option A] -> Bool
+  :doc "Returns true if the Option contains a value"
+defn some? [opt]
+  match opt
+    | none   -> false
+    | some _ -> true
+
+;; True if none.
+spec none? [Option A] -> Bool
+  :doc "Returns true if the Option is empty"
+defn none? [opt]
+  match opt
+    | none   -> true
+    | some _ -> false
+
+;; ── Nesting ──────────────────────────────────────
+
+;; Flatten nested Option.
+spec flatten [Option [Option A]] -> Option A
+  :doc "Collapse a nested Option into a single Option"
+defn flatten [opt]
+  match opt
+    | none   -> none
+    | some x -> x
+
+;; Apply a 2-argument function to two Options.
+spec map2 [A -> B -> C] [Option A] [Option B] -> Option C
+  :doc "Apply a binary function to the values of two Options"
+defn map2 [f oa ob]
+  zip-with f oa ob
+
+
+;; ════════════════════════════════════════════════════
+;; Part III — Either and Result
+;; ════════════════════════════════════════════════════
+
+
+module prologos::data::either
+
+;; ── The Either Type ──────────────────────────────
+;;
+;; `Either A B` is a tagged union: `left A` or `right B`.
+;; By convention, `Left` carries the "error" or "alternative" value
+;; and `Right` carries the "success" or "primary" value. Functorial
+;; operations (`map`, `flat-map`) act on the Right branch.
+
+require [prologos::data::option :refer [Option none some]]
+
+data Either {A B}
+  left : A
+  right : B
+
+;; Map a function over the Right value.
+spec map [B -> C] [Either A B] -> Either A C
+defn map [f e]
+  match e
+    | left a  -> left a
+    | right b -> right [f b]
+
+;; Map a function over the Left value.
+spec map-left [A -> C] [Either A B] -> Either C B
+defn map-left [f e]
+  match e
+    | left a  -> left [f a]
+    | right b -> right b
+
+;; Flat-map (bind) over the Right value.
+spec flat-map [B -> Either A C] [Either A B] -> Either A C
+defn flat-map [f e]
+  match e
+    | left a  -> left a
+    | right b -> f b
+
+;; Convert Either to Option, keeping only Right values.
+spec to-option [Either A B] -> Option B
+defn to-option [e]
+  match e
+    | left _  -> none
+    | right b -> some b
+
+;; True if Left.
+spec left? [Either A B] -> Bool
+defn left? [e]
+  match e
+    | left _  -> true
+    | right _ -> false
+
+;; True if Right.
+spec right? [Either A B] -> Bool
+defn right? [e]
+  match e
+    | left _  -> false
+    | right _ -> true
+
+;; Unwrap Right with a default.
+spec unwrap-right B [Either A B] -> B
+defn unwrap-right [default e]
+  match e
+    | left _  -> default
+    | right b -> b
+
+;; Unwrap Left with a default.
+spec unwrap-left A [Either A B] -> A
+defn unwrap-left [default e]
+  match e
+    | left a  -> a
+    | right _ -> default
+
+
+module prologos::data::result
+
+;; ── The Result Type ──────────────────────────────
+;;
+;; `Result A E` is similar to Either but with domain-specific
+;; naming: `ok A` for success, `err E` for error. Result is
+;; the idiomatic error-handling type when the error carries
+;; information (use Option when there's nothing to say about failure).
+
+require [prologos::data::option :refer [Option none some]]
+
+data Result {A E}
+  ok : A
+  err : E
+
+;; Map a function over the ok value.
+spec map [A -> B] [Result A E] -> Result B E
+  :doc "Apply a function to the success value, pass through errors"
+defn map [f r]
+  match r
+    | ok x  -> ok [f x]
+    | err e -> err e
+
+;; Map a function over the error value.
+spec map-err [E -> F] [Result A E] -> Result A F
+  :doc "Apply a function to the error value, pass through successes"
+defn map-err [f r]
+  match r
+    | ok x  -> ok x
+    | err e -> err [f e]
+
+;; Unwrap with a default value.
+spec unwrap-or A [Result A E] -> A
+  :doc "Extract the success value or return a default on error"
+defn unwrap-or [default r]
+  match r
+    | ok x  -> x
+    | err _ -> default
+
+;; Chain a computation on the ok value (monadic bind).
+spec and-then [A -> Result B E] [Result A E] -> Result B E
+  :doc "Monadic bind: chain computations that may fail with errors"
+defn and-then [f r]
+  match r
+    | ok x  -> f x
+    | err e -> err e
+
+;; Chain a computation on the error value (recover from errors).
+spec or-else [E -> Result A F] [Result A E] -> Result A F
+  :doc "Attempt error recovery by transforming the error"
+defn or-else [f r]
+  match r
+    | ok x  -> ok x
+    | err e -> f e
+
+;; True if ok.
+spec ok? [Result A E] -> Bool
+  :doc "Returns true if the Result is a success"
+defn ok? [r]
+  match r
+    | ok _  -> true
+    | err _ -> false
+
+;; True if err.
+spec err? [Result A E] -> Bool
+  :doc "Returns true if the Result is an error"
+defn err? [r]
+  match r
+    | ok _  -> false
+    | err _ -> true
+
+;; Convert Result to Option, discarding error info.
+spec to-option [Result A E] -> Option A
+  :doc "Convert to Option, discarding error information"
+defn to-option [r]
+  match r
+    | ok x  -> some x
+    | err _ -> none
+
+;; Apply a 2-argument function to two Results. Returns first error.
+spec map2 [A -> B -> C] [Result A E] [Result B E] -> Result C E
+  :doc "Apply a binary function to two Results; short-circuits on first error"
+defn map2 [f ra rb]
+  match ra
+    | err e -> err e
+    | ok a  -> match rb
+      | err e -> err e
+      | ok b  -> ok [f a b]
+
+
+;; ════════════════════════════════════════════════════
+;; Part IV — Never
+;; ════════════════════════════════════════════════════
+
+
+module prologos::data::never
+
+;; ── The Never Type ───────────────────────────────
+;;
+;; `Never` has no constructors — it cannot be instantiated.
+;; It serves as the return type of diverging computations
+;; and as the bottom of the subtyping lattice (with union types).
+;; A function returning `Never` promises to never return.
+
+data Never

@@ -1,0 +1,261 @@
+;; ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;; Chapter: Generic Operations
+;; ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;;
+;; This chapter collects several modules that provide generic
+;; operations over collections and numbers:
+;;
+;;   • **generic-ops** — HKT-dispatched collection operations
+;;     (gmap, gfilter, gfold, etc.) — the prototype that led to
+;;     the refined versions in collection-fns
+;;   • **generic-arith** — first-class wrappers around parser
+;;     keyword arithmetic (plus, minus, times, divide, etc.)
+;;   • **generic-numeric-ops** — sum, product, int-range using
+;;     identity traits
+;;   • **seq-functions** — operations using the Seq trait interface
+;;   • **type-functors** — named type abstractions (Xf, AppResult)
+
+
+;; ════════════════════════════════════════════════════
+;; Part I — Generic Collection Operations
+;; ════════════════════════════════════════════════════
+
+
+module prologos::core::generic-ops
+
+;; ── HKT-Dispatched Collection Operations ─────────
+;;
+;; These operate on any collection type implementing Seqable,
+;; Buildable, or Foldable. Named with `g` prefix to avoid
+;; shadowing the collection-fns versions.
+
+require [prologos::core::seqable-trait    :refer [Seqable]]
+require [prologos::core::buildable-trait  :refer [Buildable Buildable-from-seq]]
+require [prologos::core::foldable-trait   :refer [Foldable]]
+require [prologos::data::lseq             :refer [LSeq]]
+require [prologos::data::lseq-ops         :refer [lseq-map lseq-filter lseq-length
+                                                  lseq-append lseq-to-list]]
+require [prologos::data::list             :refer [List]]
+
+;; gmap : (A -> B) -> C A -> C B
+spec gmap {A B : Type} {C : Type -> Type} [Seqable C] -> [Buildable C] -> [A -> B] -> [C A] -> [C B]
+defn gmap [$seq $build f xs]
+  Buildable-from-seq $build B [lseq-map A B f [$seq A xs]]
+
+;; gfilter : (A -> Bool) -> C A -> C A
+spec gfilter {A : Type} {C : Type -> Type} [Seqable C] -> [Buildable C] -> [A -> Bool] -> [C A] -> [C A]
+defn gfilter [$seq $build pred xs]
+  Buildable-from-seq $build A [lseq-filter A pred [$seq A xs]]
+
+;; gfold : (A -> B -> B) -> B -> C A -> B
+spec gfold {A B : Type} {C : Type -> Type} [Foldable C] -> [A -> B -> B] -> B -> [C A] -> B
+defn gfold [$foldable f z xs]
+  $foldable A B f z xs
+
+;; glength : C A -> Nat
+spec glength {A : Type} {C : Type -> Type} [Seqable C] -> [C A] -> Nat
+defn glength [$seq xs]
+  lseq-length [$seq A xs]
+
+;; gconcat : C A -> C A -> C A
+spec gconcat {A : Type} {C : Type -> Type} [Seqable C] -> [Buildable C] -> [C A] -> [C A] -> [C A]
+defn gconcat [$seq $build xs ys]
+  Buildable-from-seq $build A [lseq-append A [$seq A xs] [$seq A ys]]
+
+;; gany? : (A -> Bool) -> C A -> Bool
+spec gany? {A : Type} {C : Type -> Type} [Foldable C] -> [A -> Bool] -> [C A] -> Bool
+defn gany? [$foldable pred xs]
+  $foldable A Bool (fn [a] [acc] (if [pred a] true acc)) false xs
+
+;; gall? : (A -> Bool) -> C A -> Bool
+spec gall? {A : Type} {C : Type -> Type} [Foldable C] -> [A -> Bool] -> [C A] -> Bool
+defn gall? [$foldable pred xs]
+  $foldable A Bool (fn [a] [acc] (if [pred a] acc false)) true xs
+
+;; gto-list : C A -> List A
+spec gto-list {A : Type} {C : Type -> Type} [Seqable C] -> [C A] -> [List A]
+defn gto-list [$seq xs]
+  lseq-to-list [$seq A xs]
+
+
+;; ════════════════════════════════════════════════════
+;; Part II — First-Class Arithmetic
+;; ════════════════════════════════════════════════════
+
+
+module prologos::core::generic-arith
+
+;; ── First-Class Generic Arithmetic ───────────────
+;;
+;; Parser keywords (+, -, *, /, negate, abs) dispatch at the AST
+;; level and can't be passed to higher-order functions like reduce,
+;; map, or fold. These wrappers are proper first-class values.
+
+require [prologos::core::add-trait :refer [Add Add-add]]
+require [prologos::core::sub-trait :refer [Sub Sub-sub]]
+require [prologos::core::mul-trait :refer [Mul Mul-mul]]
+require [prologos::core::div-trait :refer [Div Div-div]]
+require [prologos::core::neg-trait :refer [Neg Neg-neg]]
+require [prologos::core::abs-trait :refer [Abs Abs-abs]]
+
+spec plus [Add A] A -> A -> A
+  :doc "First-class addition — pass to higher-order functions like reduce, map"
+defn plus [dict x y]
+  Add-add dict x y
+
+spec minus [Sub A] A -> A -> A
+  :doc "First-class subtraction"
+defn minus [dict x y]
+  Sub-sub dict x y
+
+spec times [Mul A] A -> A -> A
+  :doc "First-class multiplication"
+defn times [dict x y]
+  Mul-mul dict x y
+
+spec divide [Div A] A -> A -> A
+  :doc "First-class division"
+defn divide [dict x y]
+  Div-div dict x y
+
+spec negate-fn [Neg A] A -> A
+  :doc "First-class negation"
+defn negate-fn [dict x]
+  Neg-neg dict x
+
+spec abs-fn [Abs A] A -> A
+  :doc "First-class absolute value"
+defn abs-fn [dict x]
+  Abs-abs dict x
+
+
+;; ════════════════════════════════════════════════════
+;; Part III — Numeric Fold Operations
+;; ════════════════════════════════════════════════════
+
+
+module prologos::core::generic-numeric-ops
+
+;; ── Sum, Product, and Range ──────────────────────
+;;
+;; Generic folds over lists using identity traits for the
+;; initial value. Also provides `int-range` for generating
+;; integer sequences.
+
+require [prologos::data::list                            :refer [List nil cons reduce]]
+require [prologos::core::add-trait                       :refer [Add Add-add]]
+require [prologos::core::mul-trait                       :refer [Mul Mul-mul]]
+require [prologos::core::additive-identity-trait         :refer [AdditiveIdentity AdditiveIdentity-zero]]
+require [prologos::core::multiplicative-identity-trait   :refer [MultiplicativeIdentity MultiplicativeIdentity-one]]
+
+;; sum : (Add A) (AdditiveIdentity A) -> List A -> A
+spec sum [Add A] -> [AdditiveIdentity A] -> [List A] -> A
+  :doc "Sum a list using generic addition and an additive identity as zero"
+defn sum [add-dict id-dict xs]
+  reduce A A [fn acc x [Add-add add-dict acc x]] [AdditiveIdentity-zero id-dict] xs
+
+;; product : (Mul A) (MultiplicativeIdentity A) -> List A -> A
+spec product [Mul A] -> [MultiplicativeIdentity A] -> [List A] -> A
+  :doc "Multiply a list using generic multiplication and a multiplicative identity as one"
+defn product [mul-dict id-dict xs]
+  reduce A A [fn acc x [Mul-mul mul-dict acc x]] [MultiplicativeIdentity-one id-dict] xs
+
+;; int-range : Int -> Int -> List Int
+spec int-range Int -> Int -> [List Int]
+  :doc "Generate a list of integers from start (inclusive) to end (exclusive)"
+defn int-range [start end]
+  if [int-lt start end]
+    cons Int start [int-range [int+ start 1] end]
+    nil Int
+
+
+;; ════════════════════════════════════════════════════
+;; Part IV — Seq Functions
+;; ════════════════════════════════════════════════════
+
+
+module prologos::core::seq-functions
+
+;; ── Generic Seq Functions ────────────────────────
+;;
+;; Operations using the Seq trait interface (first/rest/empty?).
+;; All take an explicit Seq dictionary. When auto-resolution is
+;; available, the dict param becomes implicit.
+
+require [prologos::core::seq-trait :refer [Seq seq-first seq-rest seq-empty?]]
+require [prologos::data::option :refer [Option some none some? unwrap-or map]]
+require [prologos::data::list :refer [List cons nil]]
+
+;; seq-length : Seq S -> S A -> Nat
+spec seq-length [Seq S] [S A] -> Nat
+defn seq-length [dict xs]
+  if [seq-empty? dict xs]
+    zero
+    suc [seq-length dict [seq-rest dict xs]]
+
+;; seq-drop : Seq S -> Nat -> S A -> S A
+spec seq-drop [Seq S] Nat [S A] -> [S A]
+defn seq-drop [dict n xs]
+  match n
+    | zero   -> xs
+    | suc k  ->
+        if [seq-empty? dict xs]
+          xs
+          seq-drop dict k [seq-rest dict xs]
+
+;; seq-any? : Seq S -> [A -> Bool] -> S A -> Bool
+spec seq-any? [Seq S] [A -> Bool] [S A] -> Bool
+defn seq-any? [dict pred xs]
+  if [seq-empty? dict xs]
+    false
+    if [unwrap-or false [map pred [seq-first dict xs]]]
+      true
+      seq-any? dict pred [seq-rest dict xs]
+
+;; seq-all? : Seq S -> [A -> Bool] -> S A -> Bool
+spec seq-all? [Seq S] [A -> Bool] [S A] -> Bool
+defn seq-all? [dict pred xs]
+  if [seq-empty? dict xs]
+    true
+    if [unwrap-or true [map pred [seq-first dict xs]]]
+      seq-all? dict pred [seq-rest dict xs]
+      false
+
+;; seq-find : Seq S -> [A -> Bool] -> S A -> Option A
+spec seq-find [Seq S] [A -> Bool] [S A] -> [Option A]
+defn seq-find [dict pred xs]
+  if [seq-empty? dict xs]
+    none A
+    if [some? [seq-first dict xs]]
+      if [unwrap-or false [map pred [seq-first dict xs]]]
+        seq-first dict xs
+        seq-find dict pred [seq-rest dict xs]
+      none A
+
+
+;; ════════════════════════════════════════════════════
+;; Part V — Type Functors
+;; ════════════════════════════════════════════════════
+
+
+module prologos::core::type-functors
+
+;; ── Named Type Abstractions ──────────────────────
+;;
+;; Type functors are metadata-only: they register in the functor
+;; store and as deftypes for transparent expansion. The `:compose`
+;; and `:identity` features are reserved for future phases.
+
+(ns prologos::core::type-functors :no-prelude)
+
+;; Xf A B = forall R. (R -> B -> R) -> R -> A -> R
+;; A transducer: transforms A-reductions into B-reductions.
+(functor Xf ($brace-params A : (Type 0) B : (Type 0))
+  :unfolds <(S :0 Type) -> [S -> B -> S] -> S -> A -> S>
+  ($brace-params :doc "A transducer: transforms A-reductions into B-reductions"))
+
+;; AppResult A = Either String A
+;; A computation that may fail with a string error.
+(functor AppResult ($brace-params A : (Type 0))
+  :unfolds (Either String A)
+  ($brace-params :doc "A computation that may fail with a string error"))

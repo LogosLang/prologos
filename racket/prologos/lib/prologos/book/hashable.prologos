@@ -1,0 +1,121 @@
+;; ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;; Chapter: Hashable
+;; ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;;
+;; The `Hashable` trait provides a hash function `hash : A -> Nat`
+;; for use in hash-based data structures (Maps, Sets). Like Eq,
+;; it is a single-method trait: the dictionary IS the hash function.
+;;
+;; Hash values should satisfy the consistency law:
+;;   `eq? x y = true  ⟹  hash x = hash y`
+;;
+;; (The converse need not hold — hash collisions are allowed.)
+;;
+;; This chapter defines the trait, a hash combiner, and instances
+;; for all standard types.
+
+
+;; ════════════════════════════════════════════════════
+;; Part I — The Hashable Trait
+;; ════════════════════════════════════════════════════
+
+
+module prologos::core::hashable-trait
+
+;; ── Hashable Trait and Combiner ──────────────────
+
+require [prologos::data::nat :refer [add mult]]
+
+trait Hashable {A}
+  hash : A -> Nat
+
+;; hash-combine: Boost-style combiner: h1*31 + h2
+;; The constant 31 is a commonly-used prime for hash combining.
+def nat31 : Nat := 31N
+
+spec hash-combine Nat Nat -> Nat
+defn hash-combine [h1 h2]
+  add [mult h1 nat31] h2
+
+
+;; ════════════════════════════════════════════════════
+;; Part II — Instances
+;; ════════════════════════════════════════════════════
+
+
+module prologos::core::hashable-instances
+
+;; ── Hashable Instances for Primitive Types ───────
+
+require [prologos::core::hashable-trait :refer [Hashable Hashable-hash hash-combine]]
+require [prologos::data::nat            :refer [add]]
+require [prologos::data::option          :refer [Option some none]]
+require [prologos::data::list            :refer [List nil cons]]
+require [prologos::data::ordering        :refer [Ordering lt-ord eq-ord gt-ord]]
+
+;; Hashable Nat — identity hash (hash n = n)
+impl Hashable Nat
+  defn hash [n : Nat] <Nat>
+    n
+
+;; Hashable Bool — true=1, false=0
+impl Hashable Bool
+  defn hash [b : Bool] <Nat>
+    if b [suc zero] zero
+
+;; Hashable Ordering — lt=0, eq=1, gt=2
+impl Hashable Ordering
+  defn hash [o : Ordering] <Nat>
+    match o
+      | lt-ord -> zero
+      | eq-ord -> suc zero
+      | gt-ord -> suc [suc zero]
+
+;; ── Parameterized Hash Functions ─────────────────
+;;
+;; These take the Hashable dictionary as an explicit argument.
+;; When auto-resolution is available, the dict param becomes implicit.
+
+;; hash-option: none → 0, some a → hash-combine 1 (hash a)
+spec hash-option [Hashable A] [Option A] -> Nat
+defn hash-option [hash-a opt]
+  match opt
+    | none   -> zero
+    | some a -> hash-combine [suc zero] [hash-a a]
+
+;; hash-list: nil → 0, cons a as → hash-combine (hash a) (hash-list as)
+spec hash-list [Hashable A] [List A] -> Nat
+defn hash-list [hash-a xs]
+  match xs
+    | nil       -> zero
+    | cons a as -> hash-combine [hash-a a] [hash-list hash-a as]
+
+
+module prologos::core::hashable-char-instance
+
+;; ── Hashable Char ────────────────────────────────
+;;
+;; Hash by Unicode code point.
+
+require [prologos::core::hashable-trait :refer [Hashable]]
+
+foreign racket "racket/base" ["char->integer" :as char-hash-nat : Char -> Nat]
+
+impl Hashable Char
+  defn hash [c : Char] <Nat>
+    char-hash-nat c
+
+
+module prologos::core::hashable-string-instance
+
+;; ── Hashable String ──────────────────────────────
+;;
+;; Uses Racket's `equal-hash-code` for efficient string hashing.
+
+require [prologos::core::hashable-trait :refer [Hashable]]
+
+foreign racket "racket/base" [equal-hash-code :as string-hash-nat : String -> Nat]
+
+impl Hashable String
+  defn hash [s : String] <Nat>
+    string-hash-nat s

@@ -1,0 +1,304 @@
+;; ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;; Chapter: Type Conversions
+;; ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;;
+;; Prologos provides a principled system for converting between
+;; numeric types, organized by precision guarantee:
+;;
+;;   • **From A B** — lossless conversion (`A -> B`)
+;;   • **TryFrom A B** — potentially lossy (`A -> Option B`)
+;;   • **Into A B** — convenience reverse of From
+;;   • **FromInt A** — convert from Int (used by the Num bundle)
+;;   • **FromRat A** — convert from Rat (used by the Fractional bundle)
+;;
+;; The conversion hierarchy:
+;;
+;;   `Nat → Int → Rat` (all lossless via From)
+;;   `Posit8 → Posit16 → Posit32 → Posit64` (lossless widening via From)
+;;   `Posit{N} → Rat` (lossless via From — every posit has exact rational form)
+;;   `Rat → Posit{N}` (lossy via TryFrom — precision may be lost)
+;;   `Int → Posit{N}` (lossy via TryFrom — large integers lose precision)
+
+
+;; ════════════════════════════════════════════════════
+;; Part I — Lossless Conversion (From)
+;; ════════════════════════════════════════════════════
+
+
+module prologos::core::from-trait
+
+;; ── The From Trait ───────────────────────────────
+;;
+;; `From A B` means "A can be losslessly converted to B".
+;; Single-method trait: the dictionary IS the conversion function.
+;; Instance key pattern: `SourceType-TargetType--From`
+
+trait From {A B}
+  from : A -> B
+
+
+module prologos::core::from-instances
+
+;; ── From Instances ───────────────────────────────
+;;
+;; Organized by conversion family:
+;;   1. Integer/rational chain: Nat→Int→Rat
+;;   2. Posit widening: Posit8→16→32→64
+;;   3. Cross-family: Posit→Rat (lossless)
+
+require [prologos::core::from-trait :refer [From From-from]]
+
+;; ── Integer/Rational Chain ───────────────────────
+
+;; From Nat Int — natural to integer (lossless)
+impl From Nat Int
+  defn from [n : Nat] <Int>
+    from-nat n
+
+;; From Int Rat — integer to rational (lossless)
+impl From Int Rat
+  defn from [i : Int] <Rat>
+    from-int i
+
+;; From Nat Rat — natural to rational (composed: Nat→Int→Rat)
+impl From Nat Rat
+  defn from [n : Nat] <Rat>
+    from-int [from-nat n]
+
+;; ── Posit Widening (Lossless) ────────────────────
+;; Widening: decode source posit to exact rational, encode to wider target.
+
+;; Posit8 → Posit16
+impl From Posit8 Posit16
+  defn from [x : Posit8] <Posit16>
+    p16-from-rat [p8-to-rat x]
+
+;; Posit8 → Posit32
+impl From Posit8 Posit32
+  defn from [x : Posit8] <Posit32>
+    p32-from-rat [p8-to-rat x]
+
+;; Posit8 → Posit64
+impl From Posit8 Posit64
+  defn from [x : Posit8] <Posit64>
+    p64-from-rat [p8-to-rat x]
+
+;; Posit16 → Posit32
+impl From Posit16 Posit32
+  defn from [x : Posit16] <Posit32>
+    p32-from-rat [p16-to-rat x]
+
+;; Posit16 → Posit64
+impl From Posit16 Posit64
+  defn from [x : Posit16] <Posit64>
+    p64-from-rat [p16-to-rat x]
+
+;; Posit32 → Posit64
+impl From Posit32 Posit64
+  defn from [x : Posit32] <Posit64>
+    p64-from-rat [p32-to-rat x]
+
+;; ── Cross-Family: Posit → Rat (Lossless) ────────
+;; Every finite posit has an exact rational representation.
+
+impl From Posit8 Rat
+  defn from [x : Posit8] <Rat>
+    p8-to-rat x
+
+impl From Posit16 Rat
+  defn from [x : Posit16] <Rat>
+    p16-to-rat x
+
+impl From Posit32 Rat
+  defn from [x : Posit32] <Rat>
+    p32-to-rat x
+
+impl From Posit64 Rat
+  defn from [x : Posit64] <Rat>
+    p64-to-rat x
+
+
+;; ════════════════════════════════════════════════════
+;; Part II — Lossy Conversion (TryFrom)
+;; ════════════════════════════════════════════════════
+
+
+module prologos::core::tryfrom-trait
+
+;; ── The TryFrom Trait ────────────────────────────
+;;
+;; `TryFrom A B` means "A can be converted to B, but precision
+;; may be lost". Returns `Option B` — `some` on success, `none`
+;; on failure. Single-method trait: dict IS the function.
+
+require [prologos::data::option :refer [Option some none]]
+
+trait TryFrom {A B}
+  try-from : A -> Option B
+
+
+module prologos::core::tryfrom-instances
+
+;; ── TryFrom Instances ────────────────────────────
+;;
+;; Note: posit-encode always returns valid posit bits for finite
+;; rationals (clamped to representable range, never NaR), so these
+;; always return `some`. The `TryFrom` interface is chosen because
+;; the conversion is **lossy** (precision may be lost), even though
+;; it never fails at runtime.
+
+require [prologos::core::tryfrom-trait :refer [TryFrom TryFrom-try-from]]
+require [prologos::data::option :refer [Option some none]]
+
+;; ── Rat → Posit (lossy: clamped to representable range) ──
+
+impl TryFrom Rat Posit8
+  defn try-from [r : Rat] <Option Posit8>
+    some Posit8 [p8-from-rat r]
+
+impl TryFrom Rat Posit16
+  defn try-from [r : Rat] <Option Posit16>
+    some Posit16 [p16-from-rat r]
+
+impl TryFrom Rat Posit32
+  defn try-from [r : Rat] <Option Posit32>
+    some Posit32 [p32-from-rat r]
+
+impl TryFrom Rat Posit64
+  defn try-from [r : Rat] <Option Posit64>
+    some Posit64 [p64-from-rat r]
+
+;; ── Int → Posit (lossy: large integers lose precision) ───
+
+impl TryFrom Int Posit8
+  defn try-from [i : Int] <Option Posit8>
+    some Posit8 [p8-from-int i]
+
+impl TryFrom Int Posit16
+  defn try-from [i : Int] <Option Posit16>
+    some Posit16 [p16-from-int i]
+
+impl TryFrom Int Posit32
+  defn try-from [i : Int] <Option Posit32>
+    some Posit32 [p32-from-int i]
+
+impl TryFrom Int Posit64
+  defn try-from [i : Int] <Option Posit64>
+    some Posit64 [p64-from-int i]
+
+
+;; ════════════════════════════════════════════════════
+;; Part III — Convenience Traits (Into, FromInt, FromRat)
+;; ════════════════════════════════════════════════════
+
+
+module prologos::core::into-trait
+
+;; ── The Into Trait ───────────────────────────────
+;;
+;; `Into A B` is the reverse of `From A B` — a convenience trait.
+;; It has a **blanket parametric impl**: whenever `From A B` exists,
+;; `Into A B` is automatically derived.
+
+require [prologos::core::from-trait :refer [From From-from]]
+
+trait Into {A B}
+  into : A -> B
+
+;; Blanket parametric impl: Into A B whenever From A B
+impl Into A B where (From A B)
+  defn into [x : A] <B>
+    from x
+
+
+module prologos::core::fromint-trait
+
+;; ── The FromInt Trait ────────────────────────────
+;;
+;; `FromInt A` converts from Int to A. This is the 1-parameter
+;; version of `From Int A`, used by the Num bundle for generic
+;; numeric literals. Method is `from-integer` (not `from-int`
+;; which is a parser keyword).
+
+trait FromInt {A}
+  from-integer : Int -> A
+  :doc "Convert from Int to type A"
+
+;; Int instance — identity
+impl FromInt Int
+  defn from-integer [x : Int] <Int>
+    x
+
+;; Rat instance — uses the from-int parser keyword (Int→Rat primitive)
+impl FromInt Rat
+  defn from-integer [x : Int] <Rat>
+    from-int x
+
+
+module prologos::core::fromint-posit-instances
+
+;; ── FromInt Posit Instances ──────────────────────
+;;
+;; Bridges the 2-param From to the 1-param FromInt used by the
+;; Num bundle. Enables `Num Posit{N}` bundle resolution.
+
+require [prologos::core::fromint-trait :refer [FromInt FromInt-from-integer]]
+
+impl FromInt Posit8
+  defn from-integer [x : Int] <Posit8>
+    p8-from-int x
+
+impl FromInt Posit16
+  defn from-integer [x : Int] <Posit16>
+    p16-from-int x
+
+impl FromInt Posit32
+  defn from-integer [x : Int] <Posit32>
+    p32-from-int x
+
+impl FromInt Posit64
+  defn from-integer [x : Int] <Posit64>
+    p64-from-int x
+
+
+module prologos::core::fromrat-trait
+
+;; ── The FromRat Trait ────────────────────────────
+;;
+;; `FromRat A` converts from Rat to A. Used by the Fractional
+;; bundle for generic rational literals.
+
+trait FromRat {A}
+  from-rational : Rat -> A
+  :doc "Convert from Rat to type A"
+
+;; Rat instance — identity
+impl FromRat Rat
+  defn from-rational [x : Rat] <Rat>
+    x
+
+
+module prologos::core::fromrat-posit-instances
+
+;; ── FromRat Posit Instances ──────────────────────
+;;
+;; Bridges the 2-param From to the 1-param FromRat used by the
+;; Fractional bundle. Enables `Fractional Posit{N}` bundle resolution.
+
+require [prologos::core::fromrat-trait :refer [FromRat FromRat-from-rational]]
+
+impl FromRat Posit8
+  defn from-rational [x : Rat] <Posit8>
+    p8-from-rat x
+
+impl FromRat Posit16
+  defn from-rational [x : Rat] <Posit16>
+    p16-from-rat x
+
+impl FromRat Posit32
+  defn from-rational [x : Rat] <Posit32>
+    p32-from-rat x
+
+impl FromRat Posit64
+  defn from-rational [x : Rat] <Posit64>
+    p64-from-rat x

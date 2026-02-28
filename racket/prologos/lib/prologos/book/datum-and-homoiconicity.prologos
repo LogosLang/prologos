@@ -1,0 +1,247 @@
+;; ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;; Chapter: Datum and Homoiconicity
+;; ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;;
+;; Prologos is **homoiconic**: code and data share the same
+;; representation. The `Datum` type is the runtime form of quoted
+;; code — what you get when you write `'(f x y)` or `` `(f ,x y) ``.
+;;
+;; A Datum is an algebraic data type with constructors for every
+;; literal form (symbols, keywords, numbers, booleans) plus `nil`
+;; and `cons` for building lists. The quote operator `'` converts
+;; surface syntax to a Datum value; quasiquote `` ` `` allows
+;; splicing computed values into quoted templates.
+;;
+;; This chapter also covers **transducers** — composable stream
+;; transformers that decouple the "what" (map, filter) from the
+;; "how" (reduce into list, fold into sum). Transducers use
+;; higher-rank polymorphism: a transducer is a function polymorphic
+;; in the accumulator type `R`, so it can be applied to any
+;; reduction regardless of the target collection.
+
+
+;; ════════════════════════════════════════════════════
+;; Part I — The Datum Type
+;; ════════════════════════════════════════════════════
+
+
+module prologos::data::datum
+
+;; ── Runtime Representation of Quoted Code ──────────
+;;
+;; Eight constructors cover the full surface syntax:
+;;
+;;   `datum-sym`   — symbols (identifiers, operators)
+;;   `datum-kw`    — keywords (`:name`, `:type`)
+;;   `datum-nat`   — natural number literals
+;;   `datum-int`   — integer literals
+;;   `datum-rat`   — rational literals
+;;   `datum-bool`  — `true` / `false`
+;;   `datum-nil`   — empty list `'()`
+;;   `datum-cons`  — cons cell (head : Datum, tail : Datum)
+;;
+;; Note on predicates: explicit exhaustive patterns are used instead
+;; of wildcard `_` because match with wildcard on user data types
+;; triggers a type-inference limitation that causes module loading
+;; to fail.
+
+data Datum
+  datum-sym  : Symbol
+  datum-kw   : Keyword
+  datum-nat  : Nat
+  datum-int  : Int
+  datum-rat  : Rat
+  datum-bool : Bool
+  datum-nil
+  datum-cons : Datum -> Datum
+
+;; ── Datum Predicates ───────────────────────────────
+
+spec sym? Datum -> Bool
+defn sym? [d]
+  match d
+    | datum-sym _    -> true
+    | datum-kw _     -> false
+    | datum-nat _    -> false
+    | datum-int _    -> false
+    | datum-rat _    -> false
+    | datum-bool _   -> false
+    | datum-nil      -> false
+    | datum-cons _ _ -> false
+
+spec kw? Datum -> Bool
+defn kw? [d]
+  match d
+    | datum-sym _    -> false
+    | datum-kw _     -> true
+    | datum-nat _    -> false
+    | datum-int _    -> false
+    | datum-rat _    -> false
+    | datum-bool _   -> false
+    | datum-nil      -> false
+    | datum-cons _ _ -> false
+
+spec nat? Datum -> Bool
+defn nat? [d]
+  match d
+    | datum-sym _    -> false
+    | datum-kw _     -> false
+    | datum-nat _    -> true
+    | datum-int _    -> false
+    | datum-rat _    -> false
+    | datum-bool _   -> false
+    | datum-nil      -> false
+    | datum-cons _ _ -> false
+
+spec int? Datum -> Bool
+defn int? [d]
+  match d
+    | datum-sym _    -> false
+    | datum-kw _     -> false
+    | datum-nat _    -> false
+    | datum-int _    -> true
+    | datum-rat _    -> false
+    | datum-bool _   -> false
+    | datum-nil      -> false
+    | datum-cons _ _ -> false
+
+spec rat? Datum -> Bool
+defn rat? [d]
+  match d
+    | datum-sym _    -> false
+    | datum-kw _     -> false
+    | datum-nat _    -> false
+    | datum-int _    -> false
+    | datum-rat _    -> true
+    | datum-bool _   -> false
+    | datum-nil      -> false
+    | datum-cons _ _ -> false
+
+spec bool? Datum -> Bool
+defn bool? [d]
+  match d
+    | datum-sym _    -> false
+    | datum-kw _     -> false
+    | datum-nat _    -> false
+    | datum-int _    -> false
+    | datum-rat _    -> false
+    | datum-bool _   -> true
+    | datum-nil      -> false
+    | datum-cons _ _ -> false
+
+spec nil? Datum -> Bool
+defn nil? [d]
+  match d
+    | datum-sym _    -> false
+    | datum-kw _     -> false
+    | datum-nat _    -> false
+    | datum-int _    -> false
+    | datum-rat _    -> false
+    | datum-bool _   -> false
+    | datum-nil      -> true
+    | datum-cons _ _ -> false
+
+spec cons? Datum -> Bool
+defn cons? [d]
+  match d
+    | datum-sym _    -> false
+    | datum-kw _     -> false
+    | datum-nat _    -> false
+    | datum-int _    -> false
+    | datum-rat _    -> false
+    | datum-bool _   -> false
+    | datum-nil      -> false
+    | datum-cons _ _ -> true
+
+
+;; ════════════════════════════════════════════════════
+;; Part II — Transducers
+;; ════════════════════════════════════════════════════
+
+
+module prologos::data::transducer
+
+;; ── Composable Stream Transformers ─────────────────
+;;
+;; A transducer transforms one "reducing function" into another:
+;;
+;;   `Xf A B = forall R. (R -> B -> R) -> (R -> A -> R)`
+;;
+;; This type is **higher-rank**: the transducer is polymorphic in
+;; `R`, so it works with any accumulator type. You can compose
+;; transducers with `xf-compose` and run them with `transduce`.
+;;
+;; Key advantage over chained map/filter: **no intermediate
+;; collections**. A pipeline `(xf-compose (filter-xf p) (map-xf f))`
+;; applies filter and map in a single pass, allocating only the
+;; final result.
+;;
+;; Composition order: `xf-compose xf1 xf2` applies `xf1` first,
+;; then `xf2`. This is reversed from function composition because
+;; transducers transform reducers "from the outside in."
+
+require [prologos::data::lseq     :refer [LSeq lseq-nil lseq-cell lseq-head lseq-rest lseq-empty?]]
+        [prologos::data::lseq-ops :refer [lseq-fold list-to-lseq lseq-to-list]]
+        [prologos::data::list     :refer [List nil cons reverse]]
+
+;; ── Transducer Constructors ────────────────────────
+
+;; map-xf : transform each element through f before passing to reducer.
+spec map-xf {A B : Type} [A -> B] -> <(R :0 Type) -> [R -> B -> R] -> R -> A -> R>
+defn map-xf [f]
+  fn [R :0 <Type>] [rf : <R -> B -> R>] [acc : <R>] [x : <A>]
+    rf acc [f x]
+
+;; filter-xf : only pass elements satisfying pred to the reducer.
+spec filter-xf {A : Type} [A -> Bool] -> <(R :0 Type) -> [R -> A -> R] -> R -> A -> R>
+defn filter-xf [pred]
+  fn [R :0 <Type>] [rf : <R -> A -> R>] [acc : <R>] [x : <A>]
+    if [pred x] [rf acc x] acc
+
+;; remove-xf : opposite of filter — remove elements satisfying pred.
+spec remove-xf {A : Type} [A -> Bool] -> <(R :0 Type) -> [R -> A -> R] -> R -> A -> R>
+defn remove-xf [pred]
+  fn [R :0 <Type>] [rf : <R -> A -> R>] [acc : <R>] [x : <A>]
+    if [pred x] acc [rf acc x]
+
+;; ── Transducer Composition ─────────────────────────
+
+;; xf-compose : compose two transducers (apply xf1 first, then xf2).
+;; (xf-compose xf1 xf2) R rf = xf1 R (xf2 R rf)
+;;
+;; In transducer algebra, composition is reversed from function composition:
+;; xf1 transforms the input first, xf2 transforms the reducer wrapping.
+spec xf-compose {A B C : Type} <(S :0 Type) -> [S -> B -> S] -> S -> A -> S> <(S :0 Type) -> [S -> C -> S] -> S -> B -> S> -> <(S :0 Type) -> [S -> C -> S] -> S -> A -> S>
+defn xf-compose [xf1 xf2]
+  fn [R :0 <Type>] [rf : <R -> C -> R>]
+    xf1 R [xf2 R rf]
+
+;; ── Reducers ───────────────────────────────────────
+
+;; list-conj : a cons-to-front reducer for building lists.
+;; Result is reversed since we fold left.
+spec list-conj {A : Type} [List A] -> A -> [List A]
+defn list-conj [acc x]
+  cons A x acc
+
+;; ── Running Transducers ────────────────────────────
+
+;; transduce : apply a polymorphic transducer xf to list xs,
+;; using reducer rf and initial accumulator init.
+;; The xf is polymorphic in R — transduce specializes it internally.
+spec transduce {A B R : Type} <(S :0 Type) -> [S -> B -> S] -> S -> A -> S> [R -> B -> R] R [List A] -> R
+defn transduce [xf rf init xs]
+  lseq-fold R A [xf R rf] init [list-to-lseq A xs]
+
+;; into-list-rev : transduce into a reversed list (fold-left with cons).
+;; The xf is polymorphic in R — into-list-rev specializes it to (List B).
+spec into-list-rev {A B : Type} <(S :0 Type) -> [S -> B -> S] -> S -> A -> S> [List A] -> [List B]
+defn into-list-rev [xf xs]
+  lseq-fold [List B] A [xf [List B] [list-conj B]] [nil B] [list-to-lseq A xs]
+
+;; into-list : transduce into a correctly-ordered list.
+;; Uses into-list-rev then reverses for correct element order.
+;; One extra O(n) reverse, but fusion saves N-1 intermediate list allocations.
+spec into-list {A B : Type} <(S :0 Type) -> [S -> B -> S] -> S -> A -> S> [List A] -> [List B]
+defn into-list [xf xs]
+  reverse B [into-list-rev xf xs]

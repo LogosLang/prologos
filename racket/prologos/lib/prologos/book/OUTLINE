@@ -29,3 +29,31 @@ lists
 persistent-vectors
 maps
 sets
+
+;; Part IV — Pairs, Options, and Errors
+
+pairs-and-options
+
+;; Part V — Text
+
+characters-and-strings
+
+;; Part VI — Arithmetic and Algebra
+
+arithmetic-traits
+identity-and-algebra
+generic-operations
+
+;; Part VII — Type System Extensions
+
+type-conversions
+hashable
+refined-numerics
+
+;; Part VIII — Homoiconicity
+
+datum-and-homoiconicity
+
+;; Part IX — Lattices and Abstract Interpretation
+
+lattices
