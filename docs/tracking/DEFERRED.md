@@ -207,10 +207,14 @@ The following collection items ARE also deferred (genuine infrastructure deps):
 - 191+ passing tests in `test-auto-implicits.rkt`, real usage in `test-hkt-errors.rkt`
 - Source: `docs/tracking/2026-02-22_IMPROVED_IMPLICIT_INFERENCE.org`
 
-### Kind Inference from `:where` Clauses — Direction 2 (PARTIAL)
-- `propagate-kinds-from-constraints` already refines kinds for explicit `{C}` binders
-- **Remaining**: Auto-detect free variables in `:where` that lack any explicit binder (~50 lines)
-- `C` in `:where (Seqable C)` without `{C}` → infer `{C : Type -> Type}` from trait decl
+### Kind Inference from `:where` Clauses — Direction 2 ✅ COMPLETE
+- `propagate-kinds-from-constraints` refines kinds for explicit `{C}` binders
+- Auto-detect free variables in `:where` via Direction 1 auto-implicits — COMPLETE
+  - `collect-free-type-vars-from-datums` already scans constraint args (macros.rkt:1685)
+  - Auto-detected binders feed into `propagate-kinds-from-constraints` (macros.rkt:1699-1702)
+  - Direction 1 inadvertently closed the Direction 2 gap — no new code needed
+- `C` in `:where (Seqable C)` without `{C}` → infers `{C : Type -> Type}` from trait decl
+- 15 e2e tests in `test-kind-inference-where.rkt`
 - Source: `docs/tracking/2026-02-22_IMPROVED_IMPLICIT_INFERENCE.org`
 
 ---

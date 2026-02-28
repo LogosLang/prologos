@@ -394,6 +394,10 @@
    'test-auto-implicits.rkt
    (test-dep '(errors.rkt global-env.rkt driver.rkt namespace.rkt macros.rkt
                metavar-store.rkt) #t)
+   'test-kind-inference-where.rkt
+   (test-dep '(macros.rkt prelude.rkt syntax.rkt source-location.rkt surface-syntax.rkt
+               errors.rkt metavar-store.rkt parser.rkt elaborator.rkt pretty-print.rkt
+               global-env.rkt driver.rkt namespace.rkt) #t)
    'test-sprint10.rkt
    (test-dep '(errors.rkt global-env.rkt driver.rkt namespace.rkt macros.rkt
                metavar-store.rkt) #t)
@@ -1253,6 +1257,9 @@
                                   prologos::core::mul-instances prologos::core::neg-instances
                                   prologos::core::abs-instances)
    'test-auto-implicits.rkt     '(prologos::data::nat)
+   'test-kind-inference-where.rkt '(prologos::core::seqable-trait prologos::core::buildable-trait
+                                    prologos::core::eq-trait prologos::core::ord-trait
+                                    prologos::data::lseq)
    'test-sprint10.rkt           '(prologos::data::nat prologos::data::bool)
    'test-surface-defmacro-01.rkt '(prologos::data::nat)
    'test-surface-defmacro-02.rkt '(prologos::data::nat)
