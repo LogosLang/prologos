@@ -261,27 +261,55 @@
 ;; ========================================
 
 (define book-css "
-:root {
+/* ── Light theme (default) ── */
+:root, [data-theme='light'] {
   --fg: #2c2c2c; --bg: #fefefe; --accent: #1a6fa8;
   --badge-bg: #e8f4fd; --badge-border: #b8d9f3;
-  --code-bg: #f5f5f0; --border: #ccc; --muted: #666;
+  --code-bg: #f5f5f0; --code-inline-bg: #f0f0ea;
+  --border: #ccc; --muted: #666;
+  --heading: #333; --heading-muted: #444;
+  --nav-border: #eee; --nav-dim: #ccc;
+  --title-rule: #888; --section-border: #aaa;
+}
+/* ── Dark theme ── */
+[data-theme='dark'] {
+  --fg: #d4d4d4; --bg: #1a1a2e; --accent: #6db3f2;
+  --badge-bg: #1e2d3d; --badge-border: #2a4a6b;
+  --code-bg: #16162a; --code-inline-bg: #222240;
+  --border: #3a3a5c; --muted: #8888a8;
+  --heading: #ccc; --heading-muted: #aaa;
+  --nav-border: #2a2a48; --nav-dim: #4a4a6a;
+  --title-rule: #5a5a7a; --section-border: #5a5a7a;
+}
+/* Respect OS preference when no explicit toggle */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --fg: #d4d4d4; --bg: #1a1a2e; --accent: #6db3f2;
+    --badge-bg: #1e2d3d; --badge-border: #2a4a6b;
+    --code-bg: #16162a; --code-inline-bg: #222240;
+    --border: #3a3a5c; --muted: #8888a8;
+    --heading: #ccc; --heading-muted: #aaa;
+    --nav-border: #2a2a48; --nav-dim: #4a4a6a;
+    --title-rule: #5a5a7a; --section-border: #5a5a7a;
+  }
 }
 * { box-sizing: border-box; }
 body {
   font-family: Georgia, 'Times New Roman', serif;
   max-width: 740px; margin: 0 auto; padding: 2rem 1.5rem;
   color: var(--fg); line-height: 1.72; background: var(--bg);
+  transition: background .2s, color .2s;
 }
 h1.chapter-title {
-  font-size: 2rem; border-bottom: 3px double #888;
+  font-size: 2rem; border-bottom: 3px double var(--title-rule);
   padding-bottom: .5rem; margin-bottom: .3rem;
 }
 h2.part-header {
   font-size: 1.35rem; border-top: 1px solid var(--border);
-  margin-top: 2.5rem; padding-top: 1rem; color: #444;
+  margin-top: 2.5rem; padding-top: 1rem; color: var(--heading-muted);
 }
 h3.section-title {
-  font-size: 1.08rem; color: #333; border-left: 3px solid #aaa;
+  font-size: 1.08rem; color: var(--heading); border-left: 3px solid var(--section-border);
   padding-left: .6rem; margin-top: 1.8rem; margin-bottom: .2rem;
 }
 .module-badge {
@@ -296,30 +324,40 @@ pre {
   margin: .5rem 0 1.2rem;
 }
 code { font-family: 'Menlo','Consolas',monospace; font-size: .87rem; }
-pre code { background: none; }
+pre code { background: none; color: var(--fg); }
 p code {
-  background: #f0f0ea; padding: .1em .3em; border-radius: 2px;
+  background: var(--code-inline-bg); padding: .1em .3em; border-radius: 2px;
   font-size: .88em;
 }
 .prose { margin: .5rem 0; }
 .prose p { margin: .6rem 0; }
 nav.chapter-nav {
   font-size: .9rem; color: var(--muted);
-  border-bottom: 1px solid #eee; padding-bottom: .5rem; margin-bottom: 1.5rem;
+  border-bottom: 1px solid var(--nav-border); padding-bottom: .5rem; margin-bottom: 1.5rem;
+  display: flex; align-items: center; gap: .1rem;
 }
 nav.chapter-nav a { color: var(--accent); text-decoration: none; }
 nav.chapter-nav a:hover { text-decoration: underline; }
-nav.chapter-nav .sep { margin: 0 .5rem; color: #ccc; }
+nav.chapter-nav .sep { margin: 0 .5rem; color: var(--nav-dim); }
+nav.chapter-nav .spacer { flex: 1; }
 nav.bottom-nav {
-  margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #eee;
+  margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--nav-border);
   font-size: .9rem; color: var(--muted);
 }
 nav.bottom-nav a { color: var(--accent); text-decoration: none; }
 nav.bottom-nav a:hover { text-decoration: underline; }
 .preamble { margin-bottom: 1.5rem; }
+/* Theme toggle */
+.theme-toggle {
+  background: none; border: 1px solid var(--border); border-radius: 4px;
+  color: var(--muted); cursor: pointer; font-size: 1rem;
+  padding: .15rem .4rem; line-height: 1;
+  transition: border-color .2s, color .2s;
+}
+.theme-toggle:hover { color: var(--accent); border-color: var(--accent); }
 /* TOC page */
 .toc-part-label {
-  font-size: 1.15rem; font-weight: bold; color: #444;
+  font-size: 1.15rem; font-weight: bold; color: var(--heading-muted);
   margin-top: 1.8rem; margin-bottom: .3rem;
 }
 ol.toc-chapters { margin-top: .2rem; padding-left: 1.5rem; }
@@ -328,6 +366,36 @@ ol.toc-chapters a { color: var(--accent); text-decoration: none; }
 ol.toc-chapters a:hover { text-decoration: underline; }
 .toc-modules { font-size: .82rem; color: var(--muted); margin-left: .4rem; }
 .book-subtitle { color: var(--muted); font-size: 1rem; margin-top: -.5rem; margin-bottom: 2rem; }
+")
+
+;; Tiny script: toggle dark/light, persist to localStorage
+(define theme-js "
+<script>
+(function(){
+  var h=document.documentElement, k='prologos-theme';
+  var s=localStorage.getItem(k);
+  if(s) h.setAttribute('data-theme',s);
+  window.toggleTheme=function(){
+    var c=h.getAttribute('data-theme');
+    var n;
+    if(c==='dark') n='light';
+    else if(c==='light') n='dark';
+    else n=(matchMedia('(prefers-color-scheme:dark)').matches?'light':'dark');
+    h.setAttribute('data-theme',n);
+    localStorage.setItem(k,n);
+    document.querySelectorAll('.theme-toggle').forEach(function(b){
+      b.textContent=n==='dark'?'\\u2600':'\\u263E';
+    });
+  };
+  // Set initial icon
+  document.addEventListener('DOMContentLoaded',function(){
+    var isDark=s==='dark'||(!s&&matchMedia('(prefers-color-scheme:dark)').matches);
+    document.querySelectorAll('.theme-toggle').forEach(function(b){
+      b.textContent=isDark?'\\u2600':'\\u263E';
+    });
+  });
+})();
+</script>
 ")
 
 ;; ========================================
@@ -343,6 +411,7 @@ ol.toc-chapters a:hover { text-decoration: underline; }
    "  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n"
    (format "  <title>~a — Prologos Standard Library</title>\n" (html-escape title-text))
    "  <style>" book-css "  </style>\n"
+   theme-js
    "</head>\n"
    "<body>\n"
    body-html
@@ -361,7 +430,7 @@ ol.toc-chapters a:hover { text-decoration: underline; }
         (format "<a href=\"~a.html\">~a →</a>"
                 next-name (string-titlecase (string-replace next-name "-" " ")))
         "<span style=\"color:#ccc\">Next →</span>"))
-  (format "<nav class=\"~a\">~a<span class=\"sep\">|</span><a href=\"index.html\">Table of Contents</a><span class=\"sep\">|</span>~a</nav>\n"
+  (format "<nav class=\"~a\">~a<span class=\"sep\">|</span><a href=\"index.html\">Table of Contents</a><span class=\"sep\">|</span>~a<span class=\"spacer\"></span><button class=\"theme-toggle\" onclick=\"toggleTheme()\" title=\"Toggle dark/light mode\">&#x263E;</button></nav>\n"
           cls prev-link next-link))
 
 ;; ========================================
@@ -452,7 +521,7 @@ ol.toc-chapters a:hover { text-decoration: underline; }
 (define (render-index-page toc-parts)
   (define body
     (string-append
-     "<h1>Prologos Standard Library</h1>\n"
+     "<div style=\"display:flex;align-items:center\"><h1 style=\"flex:1;margin:0\">Prologos Standard Library</h1><button class=\"theme-toggle\" onclick=\"toggleTheme()\" title=\"Toggle dark/light mode\">&#x263E;</button></div>\n"
      "<p class=\"book-subtitle\">A literate tour of the standard library, organized for reading.</p>\n"
      "<nav class=\"toc\">\n"
      (apply string-append
