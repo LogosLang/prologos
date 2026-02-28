@@ -29,7 +29,30 @@
          make-timings-path
          read-all-runs
          append-run-record
-         precompile-modules!)
+         precompile-modules!
+         find-raco-path)
+
+;; ============================================================
+;; Raco path resolution
+;; ============================================================
+
+;; Find the `raco` binary. First tries PATH lookup; if that fails,
+;; derives the path from the currently running racket executable
+;; (they're siblings in the same bin/ directory). This handles the
+;; common case where Racket is installed but not on PATH (e.g.,
+;; /Applications/Racket v9.0/bin/).
+(define (find-raco-path)
+  (or (find-executable-path "raco")
+      (let* ([exe (find-system-path 'exec-file)]
+             [dir (path-only exe)]
+             [raco (and dir (build-path dir "raco"))])
+        (and raco (file-exists? raco) raco))
+      (error 'find-raco-path
+             "Cannot locate raco binary — not on PATH and not sibling of ~a"
+             (find-system-path 'exec-file))))
+
+;; Cache the raco path (computed once, reused across all subprocesses)
+(define raco-path (find-raco-path))
 
 ;; ============================================================
 ;; Benchmark one test file via subprocess
@@ -37,7 +60,6 @@
 
 (define (benchmark-one-test test-path timeout-secs)
   (define t0 (current-inexact-monotonic-milliseconds))
-  (define raco-path (find-executable-path "raco"))
   (define-values (proc stdout-port stdin-port stderr-port)
     (subprocess #f #f #f raco-path "test" test-path))
   (close-output-port stdin-port)
@@ -245,7 +267,6 @@
 ;; Returns #t on success.
 (define (precompile-modules! project-root)
   (define driver-path (path->string (build-path project-root "driver.rkt")))
-  (define raco-path (find-executable-path "raco"))
   (define-values (proc out in err)
     (subprocess #f #f #f raco-path "make" driver-path))
   (close-output-port in)
