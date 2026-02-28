@@ -1,0 +1,14 @@
+;; ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;; Prologos Standard Library — Reading Order
+;; ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;;
+;; This file defines the presentation order of the
+;; standard library book. Chapters are named, not
+;; numbered — ordinals derive from position.
+;;
+;; To add a chapter: insert a line. No file renames.
+;; To reorder: move lines. Module paths are stable.
+
+;; Part I — Foundations
+
+equality
