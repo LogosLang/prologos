@@ -1,0 +1,669 @@
+;; ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;; Chapter: Lists
+;; ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;;
+;; The List is the workhorse data structure of functional programming.
+;; Prologos's List is a singly-linked algebraic data type with two
+;; constructors: `nil` (empty) and `cons` (an element prepended to
+;; a tail). List literals like `'[1N 2N 3N]` desugar to nested cons.
+;;
+;; This chapter is the largest in the standard library. It defines
+;; ~60 functions covering folds, mapping, filtering, slicing, zipping,
+;; sorting, searching, and accumulating transforms. It also defines
+;; all trait instances that make List a first-class citizen of the
+;; collection hierarchy: Foldable, Seqable, Buildable, Functor,
+;; Seq, and Indexed.
+;;
+;; The Eq and Ord instances for List live in their respective
+;; trait chapters.
+
+
+;; ════════════════════════════════════════════════════
+;; Part I — Core Operations
+;; ════════════════════════════════════════════════════
+
+
+module prologos::data::list
+
+;; ── List Type and Folds ─────────────────────────────
+;;
+;; The List type and its two fundamental elimination forms:
+;; right fold (`foldr`) and left fold (`reduce`). Every other
+;; list operation can be expressed in terms of these.
+
+require [prologos::core::eq-trait :refer [nat-eq]]
+        [prologos::data::option   :refer [Option none some]]
+        [prologos::data::nat      :refer [add mult pred zero?]]
+
+data List {A}
+  nil
+  cons : A -> List A
+
+spec foldr [A -> B -> B] B [List A] -> B
+  :doc "Right fold: combine elements right-to-left with an accumulator"
+defn foldr [f z xs]
+  match xs
+    | nil       -> z
+    | cons a as -> f a [foldr f z as]
+
+;; reduce f z [a,b,c] = f (f (f z a) b) c
+spec reduce [B -> A -> B] B [List A] -> B
+  :doc "Left fold: combine elements left-to-right (tail-recursive)"
+defn reduce [f z xs]
+  match xs
+    | nil       -> z
+    | cons a as -> reduce f [f z a] as
+
+;; ── Basic Operations ────────────────────────────────
+
+spec length [List A] -> Nat
+  :doc "Number of elements in the list"
+defn length [xs]
+  match xs
+    | nil      -> zero
+    | cons _ as -> suc [length as]
+
+spec map [A -> B] [List A] -> List B
+  :doc "Apply a function to every element of a list"
+defn map [f xs]
+  match xs
+    | nil       -> nil
+    | cons a as -> cons [f a] [map f as]
+
+spec filter [A -> Bool] [List A] -> List A
+  :doc "Keep only elements satisfying the predicate"
+defn filter [pred xs]
+  match xs
+    | nil       -> nil
+    | cons a as -> match [pred a]
+      | true  -> cons a [filter pred as]
+      | false -> filter pred as
+
+spec append [List A] [List A] -> List A
+  :doc "Concatenate two lists"
+defn append [xs ys]
+  match xs
+    | nil       -> ys
+    | cons a as -> cons a [append as ys]
+
+spec head A [List A] -> A
+  :doc "First element of a list, or the default if empty"
+defn head [default xs]
+  match xs
+    | nil      -> default
+    | cons a _ -> a
+
+spec tail [List A] -> Option [List A]
+  :doc "All elements except the first, or None if empty"
+defn tail [xs]
+  match xs
+    | nil       -> none
+    | cons _ as -> some as
+
+;; Singleton list: a list containing one element.
+spec singleton A -> List A
+defn singleton [x]
+  cons x nil
+
+spec elem [Eq A] A [List A] -> Bool
+  :doc "Check if an element is in the list using equality"
+defn elem [eqf x xs]
+  match xs
+    | nil       -> false
+    | cons a as -> match [eqf x a]
+                     | true  -> true
+                     | false -> elem eqf x as
+
+;; ── Derived from foldl ──────────────────────────────
+
+;; Reverse a list (using helper with accumulator).
+spec reverse-acc [List A] [List A] -> List A
+defn reverse-acc [acc xs]
+  match xs
+    | nil       -> acc
+    | cons a as -> reverse-acc [cons a acc] as
+
+spec reverse [List A] -> List A
+  :doc "Reverse the order of elements"
+defn reverse [xs]
+  reverse-acc nil xs
+
+;; Sum of a list of naturals.
+spec sum [List Nat] -> Nat
+defn sum [xs]
+  reduce add zero xs
+
+;; Product of a list of naturals.
+spec product [List Nat] -> Nat
+defn product [xs]
+  reduce mult [suc zero] xs
+
+;; ── Predicates and Search ───────────────────────────
+
+;; Does any element satisfy the predicate?
+spec any? [A -> Bool] [List A] -> Bool
+defn any? [p xs]
+  match xs
+    | nil       -> false
+    | cons a as -> match [p a]
+      | true  -> true
+      | false -> any? p as
+
+;; Do all elements satisfy the predicate?
+spec all? [A -> Bool] [List A] -> Bool
+defn all? [p xs]
+  match xs
+    | nil       -> true
+    | cons a as -> match [p a]
+      | true  -> all? p as
+      | false -> false
+
+spec find [A -> Bool] [List A] -> Option A
+  :doc "Find the first element satisfying the predicate"
+defn find [p xs]
+  match xs
+    | nil       -> none
+    | cons a as -> match [p a]
+      | true  -> some a
+      | false -> find p as
+
+;; ── Accessors ───────────────────────────────────────
+
+;; 0-indexed element lookup.
+spec nth Nat [List A] -> Option A
+defn nth [n xs]
+  match xs
+    | nil       -> none
+    | cons a as -> match [zero? n]
+      | true  -> some a
+      | false -> nth [pred n] as
+
+;; Last element of a list.
+spec last [List A] -> Option A
+defn last [xs]
+  match xs
+    | nil       -> none
+    | cons a as -> match as
+      | nil     -> some a
+      | cons _ _ -> last as
+
+;; ── Construction ────────────────────────────────────
+
+;; N copies of a value.
+spec replicate Nat A -> List A
+defn replicate [n x]
+  match n
+    | zero  -> nil
+    | suc k -> cons x [replicate k x]
+
+;; Helper for range: builds [0..n-1] via accumulator.
+spec range-helper Nat [List Nat] -> List Nat
+defn range-helper [n acc]
+  match n
+    | zero  -> acc
+    | suc k -> range-helper k [cons k acc]
+
+;; List of naturals [0, 1, ..., n-1].
+spec range Nat -> List Nat
+defn range [n]
+  range-helper n nil
+
+spec concat [List [List A]] -> List A
+  :doc "Flatten a list of lists into a single list"
+defn concat [xss]
+  match xss
+    | nil        -> nil
+    | cons xs rest -> append xs [concat rest]
+
+;; Map then flatten (flatMap/bind).
+spec concat-map [A -> List B] [List A] -> List B
+defn concat-map [f xs]
+  concat [map f xs]
+
+;; ── Slicing ─────────────────────────────────────────
+
+spec take Nat [List A] -> List A
+  :doc "Take the first n elements"
+defn take [n xs]
+  match n
+    | zero  -> nil
+    | suc k -> match xs
+      | nil       -> nil
+      | cons a as -> cons a [take k as]
+
+spec drop Nat [List A] -> List A
+  :doc "Drop the first n elements"
+defn drop [n xs]
+  match n
+    | zero  -> xs
+    | suc k -> match xs
+      | nil       -> nil
+      | cons _ as -> drop k as
+
+;; Split a list at position n. Returns a pair (take n xs, drop n xs).
+spec split-at Nat [List A] -> [Sigma [_ <List A>] [List A]]
+defn split-at [n xs]
+  pair [take n xs] [drop n xs]
+
+;; Take elements while the predicate holds.
+spec take-while [A -> Bool] [List A] -> List A
+defn take-while [p xs]
+  match xs
+    | nil       -> nil
+    | cons a as -> match [p a]
+      | true  -> cons a [take-while p as]
+      | false -> nil
+
+;; Drop elements while the predicate holds.
+spec drop-while [A -> Bool] [List A] -> List A
+defn drop-while [p xs]
+  match xs
+    | nil       -> nil
+    | cons a as -> match [p a]
+      | true  -> drop-while p as
+      | false -> xs
+
+;; ── Partitioning ────────────────────────────────────
+
+;; Split a list by predicate. Returns (satisfy, don't-satisfy).
+spec partition-helper [A -> Bool] [List A] [List A] [List A] -> [Sigma [_ <List A>] [List A]]
+defn partition-helper [p yes no xs]
+  match xs
+    | nil       -> pair [reverse yes] [reverse no]
+    | cons a as -> match [p a]
+      | true  -> partition-helper p [cons a yes] no as
+      | false -> partition-helper p yes [cons a no] as
+
+spec partition [A -> Bool] [List A] -> [Sigma [_ <List A>] [List A]]
+defn partition [p xs]
+  partition-helper p nil nil xs
+
+;; ── Zipping ─────────────────────────────────────────
+
+spec zip-with [A -> B -> C] [List A] [List B] -> List C
+  :doc "Combine two lists element-wise with a function"
+defn zip-with [f xs ys]
+  match xs
+    | nil       -> nil
+    | cons a as -> match ys
+      | nil       -> nil
+      | cons b bs -> cons [f a b] [zip-with f as bs]
+
+spec zip [List A] [List B] -> List [Sigma [_ <A>] B]
+  :doc "Pair corresponding elements of two lists"
+defn zip [xs ys]
+  zip-with A B [Sigma [_ <A>] B] [fn a b [pair a b]] xs ys
+
+;; Unzip pairs into two lists.
+spec unzip-helper [List A] [List B] [List [Sigma [_ <A>] B]] -> [Sigma [_ <List A>] [List B]]
+defn unzip-helper [ls rs ps]
+  match ps
+    | nil       -> pair [reverse ls] [reverse rs]
+    | cons p rest -> unzip-helper [cons [first p] ls] [cons [second p] rs] rest
+
+spec unzip [List [Sigma [_ <A>] B]] -> [Sigma [_ <List A>] [List B]]
+defn unzip [ps]
+  unzip-helper nil nil ps
+
+;; ── Transformations ─────────────────────────────────
+
+;; Insert separator between elements.
+spec intersperse A [List A] -> List A
+defn intersperse [sep xs]
+  match xs
+    | nil       -> nil
+    | cons a as -> match as
+      | nil     -> cons a nil
+      | cons _ _ -> cons a [cons sep [intersperse sep as]]
+
+;; ── Sorting ─────────────────────────────────────────
+;;
+;; Merge sort: split the list in half, sort each half, merge.
+;; `halve` splits by alternating assignment (not by counting),
+;; which avoids an extra traversal to compute the midpoint.
+
+;; Split list into two halves by alternating assignment.
+spec halve-helper [List A] [List A] [List A] -> [Sigma [_ <List A>] [List A]]
+defn halve-helper [left right xs]
+  match xs
+    | nil       -> pair [reverse left] [reverse right]
+    | cons a as -> match as
+      | nil     -> pair [reverse [cons a left]] [reverse right]
+      | cons b rest -> halve-helper [cons a left] [cons b right] rest
+
+spec halve [List A] -> [Sigma [_ <List A>] [List A]]
+defn halve [xs]
+  halve-helper nil nil xs
+
+;; Merge two sorted lists using a comparator.
+spec merge [A -> A -> Bool] [List A] [List A] -> List A
+defn merge [lte xs ys]
+  match xs
+    | nil -> ys
+    | cons x xs2 -> match ys
+      | nil -> xs
+      | cons y ys2 -> match [lte x y]
+        | true  -> cons x [merge lte xs2 ys]
+        | false -> cons y [merge lte xs ys2]
+
+spec sort [A -> A -> Bool] [List A] -> List A
+  :doc "Sort a list using a less-than-or-equal comparator (merge sort)"
+defn sort [lte xs]
+  match xs
+    | nil       -> nil
+    | cons a as -> match as
+      | nil     -> cons a nil
+      | cons _ _ -> merge lte [sort lte [first [halve xs]]] [sort lte [second [halve xs]]]
+
+;; ── Non-empty Folds ─────────────────────────────────
+
+;; Left fold on non-empty list (first element is the initial accumulator).
+spec reduce1 [A -> A -> A] [List A] -> Option A
+defn reduce1 [f xs]
+  match xs
+    | nil       -> none
+    | cons a as -> some [reduce f a as]
+
+;; Right fold on non-empty list (last element is the base).
+spec foldr1-step [A -> A -> A] A [Option A] -> Option A
+defn foldr1-step [f a acc]
+  match acc
+    | none   -> some a
+    | some r -> some [f a r]
+
+spec foldr1 [A -> A -> A] [List A] -> Option A
+defn foldr1 [f xs]
+  foldr A [Option A] [foldr1-step A f] [none A] xs
+
+;; ── Splitting ───────────────────────────────────────
+
+;; All elements except the last. Returns none for empty list.
+spec init-helper [List A] [List A] -> List A
+defn init-helper [acc xs]
+  match xs
+    | nil       -> reverse acc
+    | cons a as -> match as
+      | nil     -> reverse acc
+      | cons _ _ -> init-helper [cons a acc] as
+
+spec init [List A] -> Option [List A]
+defn init [xs]
+  match xs
+    | nil      -> none
+    | cons _ _ -> some [init-helper nil xs]
+
+;; Split where predicate first fails: returns (passing-prefix, rest).
+spec span-helper [A -> Bool] [List A] [List A] -> [Sigma [_ <List A>] [List A]]
+defn span-helper [p acc xs]
+  match xs
+    | nil       -> pair [reverse acc] nil
+    | cons a as -> match [p a]
+      | true  -> span-helper p [cons a acc] as
+      | false -> pair [reverse acc] xs
+
+spec span [A -> Bool] [List A] -> [Sigma [_ <List A>] [List A]]
+defn span [p xs]
+  span-helper p nil xs
+
+;; Split where predicate first succeeds (complement of span).
+spec break-helper [A -> Bool] [List A] [List A] -> [Sigma [_ <List A>] [List A]]
+defn break-helper [p acc xs]
+  match xs
+    | nil       -> pair [reverse acc] nil
+    | cons a as -> match [p a]
+      | true  -> pair [reverse acc] xs
+      | false -> break-helper p [cons a acc] as
+
+spec break [A -> Bool] [List A] -> [Sigma [_ <List A>] [List A]]
+defn break [p xs]
+  break-helper p nil xs
+
+;; ── Equality-Based Operations ───────────────────────
+
+;; Remove consecutive duplicates (like Unix uniq).
+spec dedup-helper [A -> A -> Bool] A [List A] -> List A
+defn dedup-helper [eqf prev xs]
+  match xs
+    | nil       -> nil
+    | cons a as -> match [eqf prev a]
+      | true  -> dedup-helper eqf prev as
+      | false -> cons a [dedup-helper eqf a as]
+
+spec dedup [A -> A -> Bool] [List A] -> List A
+defn dedup [eqf xs]
+  match xs
+    | nil       -> nil
+    | cons a as -> cons a [dedup-helper eqf a as]
+
+;; Check if one list is a prefix of another.
+spec prefix-of? [A -> A -> Bool] [List A] [List A] -> Bool
+defn prefix-of? [eqf prefix xs]
+  match prefix
+    | nil       -> true
+    | cons p ps -> match xs
+      | nil       -> false
+      | cons x rest -> match [eqf p x]
+        | true  -> prefix-of? eqf ps rest
+        | false -> false
+
+;; Check if one list is a suffix of another.
+spec suffix-of? [A -> A -> Bool] [List A] [List A] -> Bool
+defn suffix-of? [eqf suffix xs]
+  prefix-of? eqf [reverse suffix] [reverse xs]
+
+;; Remove first occurrence of an element.
+spec delete [A -> A -> Bool] A [List A] -> List A
+defn delete [eqf x xs]
+  match xs
+    | nil       -> nil
+    | cons a as -> match [eqf x a]
+      | true  -> as
+      | false -> cons a [delete eqf x as]
+
+;; ── Search and Counting ─────────────────────────────
+
+;; Index of first element satisfying predicate.
+spec find-index-helper [A -> Bool] Nat [List A] -> Option Nat
+defn find-index-helper [p n xs]
+  match xs
+    | nil       -> none
+    | cons a as -> match [p a]
+      | true  -> some n
+      | false -> find-index-helper p [suc n] as
+
+spec find-index [A -> Bool] [List A] -> Option Nat
+defn find-index [p xs]
+  find-index-helper p zero xs
+
+;; Count elements satisfying predicate.
+spec count-helper [A -> Bool] Nat [List A] -> Nat
+defn count-helper [p n xs]
+  match xs
+    | nil       -> n
+    | cons a as -> match [p a]
+      | true  -> count-helper p [suc n] as
+      | false -> count-helper p n as
+
+spec count [A -> Bool] [List A] -> Nat
+defn count [p xs]
+  count-helper p zero xs
+
+;; ── Accumulating Transforms ─────────────────────────
+
+;; Left fold with intermediate results.
+;; scanl add 0 [1,2,3] = [0,1,3,6]
+spec scanl [B -> A -> B] B [List A] -> List B
+defn scanl [f z xs]
+  match xs
+    | nil       -> cons z nil
+    | cons a as -> cons z [scanl f [f z a] as]
+
+;; Generate N values by repeated function application.
+;; iterate-n 4 suc 0 = [0,1,2,3]
+spec iterate-n Nat [A -> A] A -> List A
+defn iterate-n [n f x]
+  match n
+    | zero  -> nil
+    | suc k -> cons x [iterate-n k f [f x]]
+
+;; Concat with separator list between each sublist.
+;; intercalate [0] [[1,2],[3,4]] = [1,2,0,3,4]
+spec intercalate [List A] [List [List A]] -> List A
+defn intercalate [sep xss]
+  concat [intersperse sep xss]
+
+;; Sort by derived key using an existing comparator.
+spec sort-on [B -> B -> Bool] [A -> B] [List A] -> List A
+defn sort-on [lte key xs]
+  sort A [fn a b [lte [key a] [key b]]] xs
+
+
+;; ════════════════════════════════════════════════════
+;; Part II — Trait Instances
+;; ════════════════════════════════════════════════════
+
+
+module prologos::core::seqable-list
+
+;; ── Seqable List ────────────────────────────────────
+;;
+;; Convert a List to an LSeq via `list-to-lseq`. Single-method
+;; trait: the dict IS the conversion function.
+
+require [prologos::core::seqable-trait :refer [Seqable Seqable-to-seq]]
+require [prologos::data::lseq          :refer [LSeq]]
+require [prologos::data::lseq-ops      :refer [list-to-lseq]]
+require [prologos::data::list           :refer [List]]
+
+def List--Seqable--dict : [Seqable List] := list-to-lseq
+
+
+module prologos::core::foldable-list
+
+;; ── Foldable List ───────────────────────────────────
+;;
+;; List's fold delegates directly to `foldr` — no conversion
+;; needed. Single-method trait: the dict IS `foldr`.
+
+require [prologos::core::foldable-trait :refer [Foldable]]
+require [prologos::data::list :refer [List foldr]]
+
+spec list-foldable [Foldable List]
+def list-foldable foldr
+
+
+module prologos::core::buildable-list
+
+;; ── Buildable List ──────────────────────────────────
+;;
+;; Build a List from an LSeq via `lseq-to-list`; the empty
+;; collection is `nil`. Buildable is a two-method trait, so
+;; the dict is a Sigma pair.
+
+require [prologos::core::buildable-trait :refer [Buildable Buildable-from-seq Buildable-empty-coll]]
+require [prologos::data::lseq            :refer [LSeq]]
+require [prologos::data::lseq-ops        :refer [lseq-to-list]]
+require [prologos::data::list             :refer [List nil]]
+
+(def List--Buildable--from-seq : [Pi [A :0 <Type>] [-> [LSeq A] [List A]]]
+  lseq-to-list)
+
+(def List--Buildable--empty-coll : [Pi [A :0 <Type>] [List A]]
+  (fn (A :0 (Type 0)) (nil A)))
+
+;; Assemble the dictionary: inline lambdas so pair can type-check
+(spec List--Buildable--dict (Buildable List))
+(def List--Buildable--dict
+  (pair
+    (fn (A :0 (Type 0)) (fn (xs : (LSeq A)) (lseq-to-list A xs)))
+    (fn (A :0 (Type 0)) (nil A))))
+
+
+module prologos::core::seq-list
+
+;; ── Seq List ────────────────────────────────────────
+;;
+;; The Seq trait provides first/rest/empty? for sequential access.
+;; Dict layout: `(pair first-fn (pair rest-fn empty?-fn))`.
+
+require [prologos::core::seq-trait :refer [Seq]]
+require [prologos::data::list :refer [List nil cons]]
+require [prologos::data::option :refer [Option some none]]
+
+spec list-seq-first [List A] -> [Option A]
+defn list-seq-first [xs]
+  match xs
+    | nil       -> none A
+    | cons a _  -> some A a
+
+spec list-seq-rest [List A] -> [List A]
+defn list-seq-rest [xs]
+  match xs
+    | nil       -> nil A
+    | cons _ as -> as
+
+spec list-seq-empty? [List A] -> Bool
+defn list-seq-empty? [xs]
+  match xs
+    | nil      -> true
+    | cons _ _ -> false
+
+;; Assemble the dictionary: (pair first-fn (pair rest-fn empty?-fn))
+spec list-seq [Seq List]
+def list-seq [pair list-seq-first [pair list-seq-rest list-seq-empty?]]
+
+
+module prologos::core::functor-list
+
+;; ── Functor List ────────────────────────────────────
+;;
+;; List's fmap delegates directly to `map`. Single-method
+;; trait: the dict IS `map`.
+
+require [prologos::core::functor-trait :refer [Functor]]
+require [prologos::data::list :refer [List map]]
+
+spec list-functor [Functor List]
+def list-functor map
+
+
+module prologos::core::indexed-list
+
+;; ── Indexed List ────────────────────────────────────
+;;
+;; O(n) positional access for linked lists. Three methods:
+;; nth, length, and update — all by structural recursion.
+
+require [prologos::core::indexed-trait :refer [Indexed Indexed-idx-nth Indexed-idx-length Indexed-idx-update]]
+require [prologos::data::option        :refer [Option some none]]
+require [prologos::data::list           :refer [List nil cons]]
+require [prologos::data::nat            :refer [zero?]]
+
+;; idx-nth : List A -> Nat -> Option A
+(def list-idx-nth : [Pi [A :0 <Type>] [-> [List A] [-> Nat [Option A]]]]
+  (fn (A :0 (Type 0)) (fn (xs : (List A)) (fn (n : Nat)
+    (match xs
+      (nil -> (none A))
+      (cons a as -> (match n
+        (zero -> (some A a))
+        (suc k -> (list-idx-nth A as k)))))))))
+
+;; idx-length : List A -> Nat
+(def list-idx-length : [Pi [A :0 <Type>] [-> [List A] Nat]]
+  (fn (A :0 (Type 0)) (fn (xs : (List A))
+    (match xs
+      (nil -> zero)
+      (cons _ as -> (suc (list-idx-length A as)))))))
+
+;; idx-update : List A -> Nat -> A -> List A
+(def list-idx-update : [Pi [A :0 <Type>] [-> [List A] [-> Nat [-> A [List A]]]]]
+  (fn (A :0 (Type 0)) (fn (xs : (List A)) (fn (n : Nat) (fn (v : A)
+    (match xs
+      (nil -> (nil A))
+      (cons a as -> (match n
+        (zero -> (cons A v as))
+        (suc k -> (cons A a (list-idx-update A as k v)))))))))))
+
+;; Indexed dict: triple (idx-nth, idx-length, idx-update) as nested Sigma
+(def List--Indexed--dict : (Indexed List)
+  (pair list-idx-nth (pair list-idx-length list-idx-update)))

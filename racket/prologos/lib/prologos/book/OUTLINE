@@ -15,3 +15,17 @@ equality
 ordering
 booleans
 natural-numbers
+
+;; Part II — Core Abstractions
+
+lazy-sequences
+foldable
+seqable-buildable
+collection-functions
+
+;; Part III — Data Structures
+
+lists
+persistent-vectors
+maps
+sets

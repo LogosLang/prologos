@@ -1,0 +1,208 @@
+;; ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;; Chapter: Sets
+;; ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;;
+;; Sets (`Set A`) are Prologos's persistent, immutable unordered
+;; collection of unique elements, built on the same **CHAMP trie**
+;; as Maps (with `#t` sentinel values). They provide:
+;;
+;;   • O(1) amortized membership test, insert, and delete
+;;   • Set-algebra operations: union, intersection, difference,
+;;     symmetric difference
+;;   • Structural sharing — updates produce new sets that share
+;;     most of their structure with the original
+;;
+;; Core operations are AST-level keywords:
+;;   `Set`, `set-empty`, `set-insert`, `set-member?`, `set-delete`,
+;;   `set-size`, `set-union`, `set-intersect`, `set-diff`,
+;;   `set-to-list`, `set-fold`, `set-filter`
+;;
+;; Literal syntax: `#{1N 2N 3N}` creates a Set of natural numbers.
+;;
+;; This chapter covers derived set operations, trait instances, and
+;; higher-order functions over sets.
+
+
+;; ════════════════════════════════════════════════════
+;; Part I — Core Set Operations
+;; ════════════════════════════════════════════════════
+
+
+module prologos::data::set
+
+;; ── Constructors and Set Algebra ─────────────────
+;;
+;; The fundamental set operations (`set-empty`, `set-insert`,
+;; `set-member?`, etc.) are built-in AST keywords. This module
+;; provides derived constructors and algebraic operations.
+;;
+;; Note: `set-singleton` and `set-from-list` use sexp-mode `def`
+;; because `set-empty` needs the type argument at runtime for the
+;; CHAMP trie, so `A` must be `:w` (not `:0` erased).
+
+require [prologos::data::list :refer [List nil cons reduce]]
+
+;; Create a singleton set containing one element.
+(def set-singleton : (Pi (A :w (Type 0)) (-> A (Set A)))
+  (fn (A :w (Type 0)) (fn (a : A) (set-insert (set-empty A) a))))
+
+;; Build a set from a list of elements.
+(def set-from-list : (Pi (A :w (Type 0)) (-> (List A) (Set A)))
+  (fn (A :w (Type 0)) (fn (xs : (List A))
+    (the (Set A)
+      (match xs
+        (nil -> (set-empty A))
+        (cons hd tl -> (set-insert (set-from-list A tl) hd)))))))
+
+;; Symmetric difference: elements in exactly one of the two sets.
+;; set-symmetric-diff s1 s2 = union (diff s1 s2) (diff s2 s1)
+spec set-symmetric-diff [Set A] [Set A] -> [Set A]
+defn set-symmetric-diff [s1 s2]
+  set-union [set-diff s1 s2] [set-diff s2 s1]
+
+
+;; ════════════════════════════════════════════════════
+;; Part II — Trait Instances
+;; ════════════════════════════════════════════════════
+
+
+module prologos::core::seqable-set
+
+;; ── Seqable Instance ─────────────────────────────
+;;
+;; Converts a Set to an LSeq by materializing to a List (via native
+;; `set-to-list`), then wrapping with `list-to-lseq`. Element order
+;; is determined by the CHAMP trie's internal hash ordering — it is
+;; *not* insertion-ordered.
+
+require [prologos::core::seqable-trait :refer [Seqable]]
+require [prologos::data::lseq          :refer [LSeq]]
+require [prologos::data::lseq-ops      :refer [list-to-lseq]]
+require [prologos::data::list           :refer [List]]
+
+(def Set--Seqable--dict : [Seqable Set]
+  (fn (A :0 (Type 0)) (fn (s : (Set A))
+    (list-to-lseq A (set-to-list s)))))
+
+
+module prologos::core::foldable-set
+
+;; ── Foldable Instance ────────────────────────────
+;;
+;; Uses native `set-fold` (a left fold via `champ-fold`) for O(n)
+;; traversal without List conversion.
+;;
+;; **Argument flip**: `set-fold` is accumulator-first `(B -> A -> B)`,
+;; but Foldable's fold method is element-first `(A -> B -> B)`. We
+;; flip the arguments, just like the PVec Foldable instance.
+
+require [prologos::core::foldable-trait :refer [Foldable]]
+
+(def set-foldable : [Foldable Set]
+  (fn (A :0 (Type 0)) (fn (B :0 (Type 0)) (fn (f : (-> A (-> B B))) (fn (z : B) (fn (s : (Set A))
+    (set-fold (fn (acc : B) (fn (elem : A) (f elem acc))) z s)))))))
+
+
+module prologos::core::buildable-set
+
+;; ── Buildable Instance ───────────────────────────
+;;
+;; Builds a Set from a lazy sequence by materializing to a List
+;; (via `lseq-to-list`), then folding with `set-insert`.
+;;
+;; **Why not `set-from-list`?** Because `set-from-list` declares
+;; `A :w` (runtime type arg for the CHAMP trie), but the Buildable
+;; trait binding uses `A :0` (erased). Instead we fold manually
+;; using `set-insert` + `set-empty` which have erased type args
+;; at the QTT level.
+
+require [prologos::core::buildable-trait :refer [Buildable]]
+require [prologos::data::lseq            :refer [LSeq]]
+require [prologos::data::lseq-ops        :refer [lseq-to-list]]
+require [prologos::data::list             :refer [List foldr]]
+
+(spec Set--Buildable--dict (Buildable Set))
+(def Set--Buildable--dict
+  (pair
+    (fn (A :0 (Type 0)) (fn (xs : (LSeq A))
+      (foldr A (Set A) (fn (a : A) (fn (acc : (Set A)) (set-insert acc a))) (set-empty A) (lseq-to-list A xs))))
+    (fn (A :0 (Type 0)) (set-empty A))))
+
+
+module prologos::core::setlike-set
+
+;; ── Setlike Instance ─────────────────────────────
+;;
+;; The `Setlike` trait provides the natural set-membership interface:
+;;   `set-member? : Set A -> A -> Bool`
+;;   `set-insert  : Set A -> A -> Set A`
+;;   `set-remove  : Set A -> A -> Set A`
+;;
+;; All three methods delegate directly to AST primitives. Note that
+;; `set-remove` maps to the AST keyword `set-delete` (the trait uses
+;; a more standard name).
+;;
+;; Setlike is a three-method trait, so the dict is a nested Sigma:
+;;   `(pair set-member? (pair set-insert set-remove))`
+
+require [prologos::core::setlike-trait :refer [Setlike]]
+
+(spec Set--Setlike--dict (Setlike Set))
+(def Set--Setlike--dict
+  (pair
+    ;; set-member? : Pi(A :0 Type) Set A -> A -> Bool
+    (fn (A :0 (Type 0)) (fn (s : (Set A)) (fn (a : A)
+      (set-member? s a))))
+    (pair
+      ;; set-insert : Pi(A :0 Type) Set A -> A -> Set A
+      (fn (A :0 (Type 0)) (fn (s : (Set A)) (fn (a : A)
+        (set-insert s a))))
+      ;; set-remove : Pi(A :0 Type) Set A -> A -> Set A
+      (fn (A :0 (Type 0)) (fn (s : (Set A)) (fn (a : A)
+        (set-delete s a)))))))
+
+
+;; ════════════════════════════════════════════════════
+;; Part III — Derived Operations
+;; ════════════════════════════════════════════════════
+
+
+module prologos::core::set-ops
+
+;; ── Higher-Order Set Functions ───────────────────
+;;
+;; `set-fold` and `set-filter` are native AST primitives (parser
+;; keywords) that reduce via `champ-fold` in the reduction engine.
+;; This module provides derived operations and function wrappers
+;; built on those primitives.
+
+require [prologos::data::list    :refer [List foldr]]
+
+;; set-map : (A -> B) -> Set A -> Set B
+;; Applies f to every element, collecting results into a new set.
+;; Uses native set-fold to avoid List conversion.
+spec set-map {A B : Type} [-> A B] -> [Set A] -> [Set B]
+defn set-map [f s]
+  set-fold [fn acc x [set-insert acc [f x]]] [set-empty B] s
+
+;; set-any? : (A -> Bool) -> Set A -> Bool
+spec set-any? {A : Type} [-> A Bool] -> [Set A] -> Bool
+defn set-any? [pred s]
+  set-fold [fn acc x [if [pred x] true acc]] false s
+
+;; set-all? : (A -> Bool) -> Set A -> Bool
+spec set-all? {A : Type} [-> A Bool] -> [Set A] -> Bool
+defn set-all? [pred s]
+  set-fold [fn acc x [if [pred x] acc false]] true s
+
+;; set-to-list-fn : Set A -> List A  (wraps AST set-to-list as a function)
+spec set-to-list-fn {A : Type} [Set A] -> [List A]
+defn set-to-list-fn [s]
+  set-to-list s
+
+;; set-from-list-fn : List A -> Set A  (wraps via fold, erased type arg)
+;; Note: We avoid calling set-from-list directly because it declares A :w,
+;; but spec/defn generates A :0 (erased). Instead we fold with set-insert.
+spec set-from-list-fn {A : Type} [List A] -> [Set A]
+defn set-from-list-fn [xs]
+  foldr A [Set A] [fn a acc [set-insert acc a]] [set-empty A] xs

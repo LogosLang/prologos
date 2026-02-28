@@ -1,0 +1,188 @@
+;; ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;; Chapter: Persistent Vectors
+;; ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;;
+;; Persistent vectors (`PVec`) are Prologos's indexed, immutable
+;; array type, built on a **Relaxed-Radix Balanced tree** (RRB-tree)
+;; with a branching factor of 32. They provide:
+;;
+;;   • O(log32 n) lookup, update, and append
+;;   • O(n) fold and map (via the flat leaf structure)
+;;   • O(1) length
+;;   • Structural sharing — updates produce new vectors that share
+;;     most of their structure with the original
+;;
+;; PVec is a **built-in type**: the core operations (`pvec-empty`,
+;; `pvec-push`, `pvec-nth`, `pvec-update`, `pvec-length`, `pvec-map`,
+;; `pvec-filter`, `pvec-fold`, `pvec-to-list`, `pvec-from-list`) are
+;; AST-level keywords that reduce directly via Racket's `rrb` library.
+;; This chapter defines the **trait instances** and **derived operations**
+;; that integrate PVec into the generic collection framework.
+;;
+;; Literal syntax: `@[1N 2N 3N]` creates a PVec of natural numbers.
+
+
+;; ════════════════════════════════════════════════════
+;; Part I — Trait Instances
+;; ════════════════════════════════════════════════════
+
+
+module prologos::core::seqable-pvec
+
+;; ── Seqable Instance ─────────────────────────────
+;;
+;; Converts a PVec to an LSeq by first materializing to a List
+;; (via native `pvec-to-list`), then wrapping with `list-to-lseq`.
+;; This two-step conversion is necessary because PVec's RRB-tree
+;; structure doesn't naturally produce a lazy sequence.
+;;
+;; Because Seqable is a single-method trait, the dictionary IS the
+;; conversion function itself — no wrapper struct.
+
+require [prologos::core::seqable-trait :refer [Seqable]]
+require [prologos::data::lseq          :refer [LSeq]]
+require [prologos::data::lseq-ops      :refer [list-to-lseq]]
+require [prologos::data::list           :refer [List]]
+
+(def PVec--Seqable--dict : [Seqable PVec]
+  (fn (A :0 (Type 0)) (fn (v : (PVec A))
+    (list-to-lseq A (pvec-to-list v)))))
+
+
+module prologos::core::foldable-pvec
+
+;; ── Foldable Instance ────────────────────────────
+;;
+;; Uses native `pvec-fold` (a left fold via `rrb-fold`) for O(n)
+;; traversal without List conversion. This is more efficient than
+;; going through Seqable.
+;;
+;; **Argument flip**: `pvec-fold` is accumulator-first `(B -> A -> B)`,
+;; but Foldable's fold method is element-first `(A -> B -> B)`. We
+;; flip the arguments. This changes semantics from right-fold to
+;; left-fold, which is acceptable for PVec (indexed, left-to-right
+;; is the natural traversal order).
+
+require [prologos::core::foldable-trait :refer [Foldable]]
+
+(def pvec-foldable : [Foldable PVec]
+  (fn (A :0 (Type 0)) (fn (B :0 (Type 0)) (fn (f : (-> A (-> B B))) (fn (z : B) (fn (v : (PVec A))
+    (pvec-fold (fn (acc : B) (fn (elem : A) (f elem acc))) z v)))))))
+
+
+module prologos::core::buildable-pvec
+
+;; ── Buildable Instance ───────────────────────────
+;;
+;; Builds a PVec from a lazy sequence by materializing to a List
+;; (via `lseq-to-list`), then converting with native `pvec-from-list`.
+;; Also provides an empty PVec via `pvec-empty`.
+;;
+;; Buildable is a two-method trait, so the dict is a Sigma pair:
+;;   `(pair from-seq empty-coll)`
+
+require [prologos::core::buildable-trait :refer [Buildable]]
+require [prologos::data::lseq            :refer [LSeq]]
+require [prologos::data::lseq-ops        :refer [lseq-to-list]]
+require [prologos::data::list             :refer [List]]
+
+(spec PVec--Buildable--dict (Buildable PVec))
+(def PVec--Buildable--dict
+  (pair
+    (fn (A :0 (Type 0)) (fn (xs : (LSeq A))
+      (pvec-from-list (lseq-to-list A xs))))
+    (fn (A :0 (Type 0)) (pvec-empty A))))
+
+
+module prologos::core::functor-pvec
+
+;; ── Functor Instance ─────────────────────────────
+;;
+;; Uses native `pvec-map` for O(n) element-wise mapping without
+;; List conversion. This is the most efficient way to transform
+;; a PVec's contents.
+
+require [prologos::core::functor-trait :refer [Functor]]
+
+(def pvec-functor : [Functor PVec]
+  (fn (A :0 (Type 0)) (fn (B :0 (Type 0)) (fn (f : (-> A B)) (fn (v : (PVec A))
+    (pvec-map f v))))))
+
+
+module prologos::core::indexed-pvec
+
+;; ── Indexed Instance ─────────────────────────────
+;;
+;; O(log32 n) implementations via native PVec primitives. The Indexed
+;; trait provides positional access — nth, length, and update — which
+;; is the natural interface for an array-like structure.
+;;
+;; `idx-nth` is bounds-checked: returns `some` if in bounds, `none`
+;; otherwise. The native `pvec-nth` does not check bounds, so we
+;; guard with `lt?`.
+;;
+;; The Indexed dict is a triple (idx-nth, idx-length, idx-update)
+;; packed as a nested Sigma: `(pair nth (pair length update))`.
+
+require [prologos::core::indexed-trait :refer [Indexed Indexed-idx-nth Indexed-idx-length Indexed-idx-update]]
+require [prologos::data::option        :refer [Option some none]]
+require [prologos::data::nat            :refer [lt?]]
+
+;; idx-nth : PVec A -> Nat -> Option A
+(def pvec-idx-nth : [Pi [A :0 <Type>] [-> [PVec A] [-> Nat [Option A]]]]
+  (fn (A :0 (Type 0)) (fn (v : (PVec A)) (fn (n : Nat)
+    (if [lt? n [pvec-length v]]
+      [some A [pvec-nth v n]]
+      [none A])))))
+
+;; idx-length : PVec A -> Nat
+(def pvec-idx-length : [Pi [A :0 <Type>] [-> [PVec A] Nat]]
+  (fn (A :0 (Type 0)) (fn (v : (PVec A))
+    (pvec-length v))))
+
+;; idx-update : PVec A -> Nat -> A -> PVec A
+(def pvec-idx-update : [Pi [A :0 <Type>] [-> [PVec A] [-> Nat [-> A [PVec A]]]]]
+  (fn (A :0 (Type 0)) (fn (v : (PVec A)) (fn (n : Nat) (fn (x : A)
+    (pvec-update v n x))))))
+
+;; Indexed dict: triple (idx-nth, idx-length, idx-update) as nested Sigma
+(def PVec--Indexed--dict : (Indexed PVec)
+  (pair pvec-idx-nth (pair pvec-idx-length pvec-idx-update)))
+
+
+;; ════════════════════════════════════════════════════
+;; Part II — Derived Operations
+;; ════════════════════════════════════════════════════
+
+
+module prologos::core::pvec-ops
+
+;; ── PVec Operations ──────────────────────────────
+;;
+;; `pvec-map`, `pvec-filter`, and `pvec-fold` are native AST primitives
+;; (parser keywords) that reduce via `rrb-fold` in the reduction engine.
+;; This module provides derived operations and function wrappers around
+;; AST keywords.
+
+require [prologos::data::list    :refer [List nil cons]]
+require [prologos::data::option  :refer [Option some none]]
+
+;; pvec-any? : (A -> Bool) -> PVec A -> Bool
+spec pvec-any? {A : Type} [-> A Bool] -> [PVec A] -> Bool
+defn pvec-any? [pred v]
+  pvec-fold [fn acc x [if [pred x] true acc]] false v
+
+;; pvec-all? : (A -> Bool) -> PVec A -> Bool
+spec pvec-all? {A : Type} [-> A Bool] -> [PVec A] -> Bool
+defn pvec-all? [pred v]
+  pvec-fold [fn acc x [if [pred x] acc false]] true v
+
+;; pvec-from-list-fn : List A -> PVec A  (wraps AST pvec-from-list as a function)
+spec pvec-from-list-fn {A : Type} [List A] -> [PVec A]
+defn pvec-from-list-fn [xs]
+  pvec-from-list xs
+
+;; pvec-to-list-fn : PVec A -> List A  (wraps AST pvec-to-list as a function)
+spec pvec-to-list-fn {A : Type} [PVec A] -> [List A]
+defn pvec-to-list-fn [v]
+  pvec-to-list v

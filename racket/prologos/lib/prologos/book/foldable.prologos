@@ -1,0 +1,59 @@
+;; ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;; Chapter: Foldable and Functor
+;; ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;;
+;; The two fundamental operations on containers are **fold** and
+;; **map**. Fold collapses a container to a single value; map
+;; transforms each element while preserving the container's shape.
+;;
+;; In Prologos, these are captured by two traits:
+;;
+;;   • **Foldable** — right fold: `(A -> B -> B) -> B -> F A -> B`
+;;   • **Functor** — structure-preserving map: `(A -> B) -> F A -> F B`
+;;
+;; Both are single-method traits, meaning the dictionary IS the
+;; function — no wrapper struct. Their instances for specific types
+;; (List, PVec, Set, LSeq) live in the data type chapters.
+
+
+module prologos::core::foldable-trait
+
+;; ── The Foldable Trait ──────────────────────────────
+;;
+;; A foldable container supports right fold. Given a combining
+;; function `f : A -> B -> B`, an initial value `z : B`, and a
+;; container `xs : F A`, fold produces a single `B` by traversing
+;; all elements right-to-left.
+;;
+;; As a single-method trait, the dict IS the fold function.
+
+trait Foldable {F : Type -> Type}
+  fold : [Pi [A :0 <Type>] [Pi [B :0 <Type>] [-> [-> A [-> B B]] [-> B [-> [F A] B]]]]]
+  :doc "Fold a collection to a single value"
+
+
+module prologos::core::functor-trait
+
+;; ── The Functor Trait ───────────────────────────────
+;;
+;; A functor maps a function over a container, transforming
+;; each element while preserving the container's structure.
+;; `fmap f [1, 2, 3]` produces `[f 1, f 2, f 3]` — same
+;; shape, different elements.
+;;
+;; Laws:
+;;   • Identity:    fmap id xs ≡ xs
+;;   • Composition: fmap (f ∘ g) xs ≡ fmap f (fmap g xs)
+;;
+;; As a single-method trait, the dict IS the fmap function.
+
+trait Functor {F : Type -> Type}
+  fmap : [Pi [A :0 <Type>] [Pi [B :0 <Type>] [-> [-> A B] [-> [F A] [F B]]]]]
+  :doc "Functor: map a function over a container while preserving structure"
+  :laws
+    - :name "identity"
+      :forall {xs : [F A]}
+      :holds [eq? [fmap id xs] xs]
+    - :name "composition"
+      :forall {f : [B -> C]} {g : [A -> B]} {xs : [F A]}
+      :holds [eq? [fmap [compose f g] xs] [fmap f [fmap g xs]]]

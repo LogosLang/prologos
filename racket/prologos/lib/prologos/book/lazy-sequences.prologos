@@ -1,0 +1,230 @@
+;; ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;; Chapter: Lazy Sequences
+;; ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;;
+;; The lazy sequence — `LSeq` — is the universal intermediate
+;; representation for collection operations in Prologos. When you
+;; `map` over a PVec or `filter` a Set, the data flows through
+;; LSeq: the source collection converts to LSeq, the transformation
+;; runs lazily, and the result rebuilds into the target type.
+;;
+;; LSeq has two constructors:
+;;   • `lseq-nil` — the empty sequence
+;;   • `lseq-cell` — a head element plus a **thunk** producing the tail
+;;
+;; The thunk (`Unit -> LSeq A`) is the source of laziness: the tail
+;; is computed only when forced. This means `lseq-map` and
+;; `lseq-filter` construct new cells without traversing the input —
+;; work is deferred until someone forces the thunks.
+;;
+;; This chapter defines the LSeq type, its core operations, and
+;; the trait instances that plug it into the collection hierarchy.
+
+
+;; ════════════════════════════════════════════════════
+;; Part I — The LSeq Type
+;; ════════════════════════════════════════════════════
+
+
+module prologos::data::lseq
+
+;; ── LSeq Definition ─────────────────────────────────
+;;
+;; A lazy sequence with two constructors. The thunk field in
+;; `lseq-cell` provides laziness: `Unit -> LSeq A` means the
+;; tail is only computed when forced by applying to `unit`.
+
+require [prologos::data::option :refer [Option none some]]
+
+data LSeq {A}
+  lseq-nil
+  lseq-cell : A -> [Unit -> LSeq A]
+
+;; Get the head element as an Option.
+spec lseq-head [LSeq A] -> Option A
+defn lseq-head [xs]
+  match xs
+    | lseq-nil      -> none
+    | lseq-cell a _t -> some a
+
+;; Get the tail, forcing the thunk. Returns lseq-nil for empty.
+spec lseq-rest [LSeq A] -> LSeq A
+defn lseq-rest [xs]
+  match xs
+    | lseq-nil       -> lseq-nil
+    | lseq-cell _a t -> t unit
+
+;; Check if the lazy sequence is empty.
+spec lseq-empty? [LSeq A] -> Bool
+defn lseq-empty? [xs]
+  match xs
+    | lseq-nil      -> true
+    | lseq-cell _ _ -> false
+
+
+module prologos::data::lseq-ops
+
+;; ── LSeq Operations ─────────────────────────────────
+;;
+;; Conversion, mapping, filtering, slicing, folding, and length.
+;; Functions that construct `lseq-cell` use explicit sexp-mode
+;; `(def ...)` bodies because the thunk field requires explicit
+;; type arguments passed to the constructors.
+
+require [prologos::data::lseq   :refer [LSeq lseq-nil lseq-cell lseq-head lseq-rest lseq-empty?]]
+        [prologos::data::option  :refer [Option none some]]
+        [prologos::data::list    :refer [List nil cons]]
+
+;; Convert a List to an LSeq (preserves order, lazy tail thunks).
+(def list-to-lseq : [Pi [A :0 <Type>] [-> [List A] [LSeq A]]]
+  (fn (A :0 (Type 0)) (fn (xs : (List A))
+    (match xs
+      (nil -> (lseq-nil A))
+      (cons a as -> (lseq-cell A a (fn (_ : Unit) (list-to-lseq A as))))))))
+
+;; Convert an LSeq to a List (strict — forces all thunks).
+(def lseq-to-list : [Pi [A :0 <Type>] [-> [LSeq A] [List A]]]
+  (fn (A :0 (Type 0)) (fn (xs : (LSeq A))
+    (match xs
+      (lseq-nil -> (nil A))
+      (lseq-cell a t -> (cons A a (lseq-to-list A (t unit))))))))
+
+;; Map a function over an LSeq (lazy).
+(def lseq-map : [Pi [A :0 <Type>] [Pi [B :0 <Type>] [-> [-> A B] [-> [LSeq A] [LSeq B]]]]]
+  (fn (A :0 (Type 0)) (fn (B :0 (Type 0)) (fn (f : (-> A B)) (fn (xs : (LSeq A))
+    (match xs
+      (lseq-nil -> (lseq-nil B))
+      (lseq-cell a t -> (lseq-cell B (f a) (fn (_ : Unit) (lseq-map A B f (t unit)))))))))))
+
+;; Filter an LSeq (lazy — skips non-matching elements).
+(def lseq-filter : [Pi [A :0 <Type>] [-> [-> A Bool] [-> [LSeq A] [LSeq A]]]]
+  (fn (A :0 (Type 0)) (fn (pred : (-> A Bool)) (fn (xs : (LSeq A))
+    (match xs
+      (lseq-nil -> (lseq-nil A))
+      (lseq-cell a t -> (match (pred a)
+        (true -> (lseq-cell A a (fn (_ : Unit) (lseq-filter A pred (t unit)))))
+        (false -> (lseq-filter A pred (t unit))))))))))
+
+;; Take the first n elements (lazy).
+(def lseq-take : [Pi [A :0 <Type>] [-> Nat [-> [LSeq A] [LSeq A]]]]
+  (fn (A :0 (Type 0)) (fn (n : Nat) (fn (xs : (LSeq A))
+    (match n
+      (zero -> (lseq-nil A))
+      (suc k -> (match xs
+        (lseq-nil -> (lseq-nil A))
+        (lseq-cell a t -> (lseq-cell A a (fn (_ : Unit) (lseq-take A k (t unit))))))))))))
+
+;; Drop the first n elements (strict on the dropped portion).
+(def lseq-drop : [Pi [A :0 <Type>] [-> Nat [-> [LSeq A] [LSeq A]]]]
+  (fn (A :0 (Type 0)) (fn (n : Nat) (fn (xs : (LSeq A))
+    (match n
+      (zero -> xs)
+      (suc k -> (match xs
+        (lseq-nil -> (lseq-nil A))
+        (lseq-cell _ t -> (lseq-drop A k (t unit))))))))))
+
+;; Append two LSeqs (lazy).
+(def lseq-append : [Pi [A :0 <Type>] [-> [LSeq A] [-> [LSeq A] [LSeq A]]]]
+  (fn (A :0 (Type 0)) (fn (xs : (LSeq A)) (fn (ys : (LSeq A))
+    (match xs
+      (lseq-nil -> ys)
+      (lseq-cell a t -> (lseq-cell A a (fn (_ : Unit) (lseq-append A (t unit) ys)))))))))
+
+;; Left fold (strict — forces all elements).
+(def lseq-fold : [Pi [A :0 <Type>] [Pi [B :0 <Type>] [-> [-> A [-> B A]] [-> A [-> [LSeq B] A]]]]]
+  (fn (A :0 (Type 0)) (fn (B :0 (Type 0)) (fn (f : (-> A (-> B A))) (fn (acc : A) (fn (xs : (LSeq B))
+    (match xs
+      (lseq-nil -> acc)
+      (lseq-cell b t -> (lseq-fold A B f (f acc b) (t unit))))))))))
+
+;; Length (strict — forces all elements).
+(def lseq-length : [Pi [A :0 <Type>] [-> [LSeq A] Nat]]
+  (fn (A :0 (Type 0)) (fn (xs : (LSeq A))
+    (lseq-fold Nat A (fn (n : Nat) (fn (_ : A) (suc n))) zero xs))))
+
+
+;; ════════════════════════════════════════════════════
+;; Part II — Trait Instances
+;; ════════════════════════════════════════════════════
+
+
+module prologos::core::seqable-lseq
+
+;; ── Seqable LSeq (Identity) ────────────────────────
+;;
+;; `to-seq` for LSeq is the identity function — LSeq is already
+;; a lazy sequence, so no conversion is needed.
+
+require [prologos::core::seqable-trait :refer [Seqable]]
+require [prologos::data::lseq          :refer [LSeq]]
+
+(def LSeq--Seqable--dict : [Seqable LSeq]
+  (fn (A :0 (Type 0)) (fn (xs : (LSeq A)) xs)))
+
+
+module prologos::core::foldable-lseq
+
+;; ── Foldable LSeq ──────────────────────────────────
+;;
+;; Strict foldr: forces all elements via `lseq-to-list`, then
+;; delegates to list `foldr`. Adequate since fold always needs
+;; all elements.
+
+require [prologos::core::foldable-trait :refer [Foldable]]
+require [prologos::data::lseq           :refer [LSeq]]
+require [prologos::data::lseq-ops       :refer [lseq-to-list]]
+require [prologos::data::list            :refer [List foldr]]
+
+(def lseq-foldable : [Foldable LSeq]
+  (fn (A :0 (Type 0)) (fn (B :0 (Type 0)) (fn (f : (-> A (-> B B))) (fn (z : B) (fn (xs : (LSeq A))
+    (foldr A B f z (lseq-to-list A xs))))))))
+
+
+module prologos::core::buildable-lseq
+
+;; ── Buildable LSeq (Identity) ──────────────────────
+;;
+;; `from-seq` for LSeq is the identity — the input is already
+;; an LSeq. `empty-coll` returns `lseq-nil`. Buildable is a
+;; two-method trait, so the dict is a Sigma pair.
+
+require [prologos::core::buildable-trait :refer [Buildable]]
+require [prologos::data::lseq            :refer [LSeq lseq-nil]]
+
+(spec LSeq--Buildable--dict (Buildable LSeq))
+(def LSeq--Buildable--dict
+  (pair
+    (fn (A :0 (Type 0)) (fn (xs : (LSeq A)) xs))
+    (fn (A :0 (Type 0)) (lseq-nil A))))
+
+
+module prologos::core::seq-lseq
+
+;; ── Seq LSeq ───────────────────────────────────────
+;;
+;; The Seq trait provides a three-method interface (first, rest,
+;; empty?) for any sequence type. For LSeq, these delegate
+;; directly to `lseq-head`, `lseq-rest`, and `lseq-empty?`.
+;; The dict is a nested Sigma: `(pair first-fn (pair rest-fn empty?-fn))`.
+
+require [prologos::core::seq-trait  :refer [Seq]]
+require [prologos::data::lseq       :refer [LSeq lseq-nil lseq-cell lseq-head lseq-rest lseq-empty?]]
+require [prologos::data::option     :refer [Option some none]]
+
+(spec LSeq--Seq--dict (Seq LSeq))
+(def LSeq--Seq--dict
+  (pair
+    ;; first : Pi(A :0 Type) LSeq A -> Option A
+    (fn (A :0 (Type 0)) (fn (xs : (LSeq A))
+      (match xs
+        (lseq-nil -> (none A))
+        (lseq-cell a _ -> (some A a)))))
+    (pair
+      ;; rest : Pi(A :0 Type) LSeq A -> LSeq A
+      (fn (A :0 (Type 0)) (fn (xs : (LSeq A))
+        (match xs
+          (lseq-nil -> (lseq-nil A))
+          (lseq-cell _ t -> (t unit)))))
+      ;; empty? : Pi(A :0 Type) LSeq A -> Bool
+      (fn (A :0 (Type 0)) (fn (xs : (LSeq A))
+        (lseq-empty? A xs))))))

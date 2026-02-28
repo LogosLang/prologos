@@ -1,0 +1,193 @@
+;; ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;; Chapter: Maps
+;; ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;;
+;; Maps (`Map K V`) are Prologos's persistent, immutable key-value
+;; store, built on a **Compressed Hash-Array Mapped Prefix-tree**
+;; (CHAMP trie). They provide:
+;;
+;;   • O(1) amortized lookup, insert, and delete
+;;   • Structural sharing — updates produce new maps that share
+;;     most of their structure with the original
+;;   • Order-independent equality (two maps with the same entries
+;;     are equal regardless of insertion order)
+;;
+;; Core operations are AST-level keywords:
+;;   `Map`, `map-empty`, `map-assoc`, `map-get`, `map-has-key?`,
+;;   `map-dissoc`, `map-count`, `map-keys`, `map-vals`,
+;;   `map-map-vals`, `map-fold-entries`, `map-filter-entries`
+;;
+;; Literal syntax: `{:name "alice" :age 30N}` creates a Map from
+;; keywords to values.
+;;
+;; **The HKT bridge**: Maps have *two* type parameters (K and V),
+;; but the generic collection traits (Seqable, Buildable, Foldable)
+;; expect type constructors with *one* parameter. The `MapEntry K V`
+;; type bridges this gap — when you iterate over a Map, each element
+;; is a `MapEntry` containing a key-value pair. The `Keyed` trait
+;; provides the native key-value interface without this wrapping.
+
+
+;; ════════════════════════════════════════════════════
+;; Part I — The MapEntry Bridge Type
+;; ════════════════════════════════════════════════════
+
+
+module prologos::data::map-entry
+
+;; ── MapEntry — Key-Value Pair Type ───────────────
+;;
+;; A simple product type representing a key-value pair.
+;; Used as the element type when iterating over Maps
+;; via Seqable/Foldable traits, bridging the 2-type-param
+;; `Map K V` to the 1-type-param trait world:
+;;
+;;   `Map K V  →  Seqable over (MapEntry K V)`
+;;
+;; Constructors:
+;;   `mk-entry : K -> V -> MapEntry K V`
+;;
+;; Accessors:
+;;   `entry-key : MapEntry K V -> K`
+;;   `entry-val : MapEntry K V -> V`
+
+data MapEntry {K V}
+  mk-entry : K -> V
+
+;; Extract the key from a MapEntry.
+spec entry-key {K V : Type} [MapEntry K V] -> K
+defn entry-key [e]
+  match e
+    | mk-entry k _ -> k
+
+;; Extract the value from a MapEntry.
+spec entry-val {K V : Type} [MapEntry K V] -> V
+defn entry-val [e]
+  match e
+    | mk-entry _ v -> v
+
+
+;; ════════════════════════════════════════════════════
+;; Part II — The Keyed Trait Instance
+;; ════════════════════════════════════════════════════
+
+
+module prologos::core::keyed-map
+
+;; ── Keyed Instance for Map ───────────────────────
+;;
+;; The `Keyed` trait provides the natural key-value interface:
+;;   `kv-get    : Map K V -> K -> Option V`
+;;   `kv-assoc  : Map K V -> K -> V -> Map K V`
+;;   `kv-dissoc : Map K V -> K -> Map K V`
+;;
+;; This is how you interact with maps when you know you're working
+;; with a map. The trait-based interface avoids the need to pattern
+;; match on MapEntry — you just use keys directly.
+;;
+;; Keyed is a three-method trait, so the dict is a nested Sigma:
+;;   `(pair kv-get (pair kv-assoc kv-dissoc))`
+
+require [prologos::core::keyed-trait :refer [Keyed]]
+require [prologos::data::option      :refer [Option some none]]
+
+(spec Map--Keyed--dict (Keyed Map))
+(def Map--Keyed--dict
+  (pair
+    ;; kv-get : Pi(K :0 Type) Pi(V :0 Type) Map K V -> K -> Option V
+    (fn (K :0 (Type 0)) (fn (V :0 (Type 0)) (fn (m : (Map K V)) (fn (k : K)
+      (if (map-has-key? m k)
+          (some V (map-get m k))
+          (none V))))))
+    (pair
+      ;; kv-assoc : Pi(K :0 Type) Pi(V :0 Type) Map K V -> K -> V -> Map K V
+      (fn (K :0 (Type 0)) (fn (V :0 (Type 0)) (fn (m : (Map K V)) (fn (k : K) (fn (v : V)
+        (map-assoc m k v))))))
+      ;; kv-dissoc : Pi(K :0 Type) Pi(V :0 Type) Map K V -> K -> Map K V
+      (fn (K :0 (Type 0)) (fn (V :0 (Type 0)) (fn (m : (Map K V)) (fn (k : K)
+        (map-dissoc m k))))))))
+
+
+;; ════════════════════════════════════════════════════
+;; Part III — Map Operations
+;; ════════════════════════════════════════════════════
+
+
+module prologos::core::map-ops
+
+;; ── Derived Operations ───────────────────────────
+;;
+;; `map-map-vals`, `map-fold-entries`, and `map-filter-entries` are
+;; native AST primitives (parser keywords) that reduce via `champ-fold`
+;; in the reduction engine. This module provides derived operations
+;; built on those primitives.
+
+require [prologos::data::list      :refer [List nil cons foldr]]
+require [prologos::data::map-entry :refer [MapEntry mk-entry entry-key entry-val]]
+require [prologos::data::lseq      :refer [LSeq lseq-nil]]
+require [prologos::data::lseq-ops  :refer [list-to-lseq lseq-to-list]]
+
+;; ── Filtering and Projection ─────────────────────
+
+;; map-filter-vals : (V -> Bool) -> Map K V -> Map K V
+;; Keeps only entries whose value satisfies pred.
+;; Uses native map-filter-entries with a key-ignoring predicate.
+spec map-filter-vals {K V : Type} [-> V Bool] -> [Map K V] -> [Map K V]
+defn map-filter-vals [pred m]
+  map-filter-entries [fn k v [pred v]] m
+
+;; map-keys-list : Map K V -> List K  (wraps AST map-keys as a function)
+spec map-keys-list {K V : Type} [Map K V] -> [List K]
+defn map-keys-list [m]
+  map-keys m
+
+;; map-vals-list : Map K V -> List V  (wraps AST map-vals as a function)
+spec map-vals-list {K V : Type} [Map K V] -> [List V]
+defn map-vals-list [m]
+  map-vals m
+
+;; ── Merging ──────────────────────────────────────
+
+;; map-merge : Map K V -> Map K V -> Map K V
+;; Merge two maps. Right map wins on key collision.
+;; Uses native map-fold-entries to fold over m2's entries.
+spec map-merge {K V : Type} [Map K V] -> [Map K V] -> [Map K V]
+defn map-merge [m1 m2]
+  map-fold-entries [fn acc k v [map-assoc acc k v]] m1 m2
+
+;; ── LSeq Bridge Functions ────────────────────────
+;;
+;; Bridge the 2-type-param `Map K V` to the 1-type-param
+;; Seqable/Buildable world via `MapEntry K V` as the element type.
+;; All conversions flow through LSeq as the pivot representation.
+;;
+;; Uses sexp-mode bodies because constructing MapEntry/LSeq/List
+;; values requires explicit type arguments.
+
+;; map-to-entry-list : Map K V -> List (MapEntry K V)
+;; Convert a map to a list of key-value entries.
+;; Uses native map-fold-entries to avoid key-list intermediary.
+(def map-to-entry-list : [Pi [K :0 <Type>] [Pi [V :0 <Type>] [-> [Map K V] [List [MapEntry K V]]]]]
+  (fn (K :0 (Type 0)) (fn (V :0 (Type 0)) (fn (m : (Map K V))
+    (map-fold-entries
+      (fn (acc : (List (MapEntry K V))) (fn (k : K) (fn (v : V)
+        (cons (MapEntry K V) (mk-entry K V k v) acc))))
+      (nil (MapEntry K V))
+      m)))))
+
+;; map-seq : Map K V -> LSeq (MapEntry K V)
+;; Convert a map to a lazy sequence of key-value entries.
+(def map-seq : [Pi [K :0 <Type>] [Pi [V :0 <Type>] [-> [Map K V] [LSeq [MapEntry K V]]]]]
+  (fn (K :0 (Type 0)) (fn (V :0 (Type 0)) (fn (m : (Map K V))
+    (list-to-lseq (MapEntry K V) (map-to-entry-list K V m))))))
+
+;; map-from-seq : LSeq (MapEntry K V) -> Map K V
+;; Build a map from a lazy sequence of key-value entries.
+(def map-from-seq : [Pi [K :0 <Type>] [Pi [V :0 <Type>] [-> [LSeq [MapEntry K V]] [Map K V]]]]
+  (fn (K :0 (Type 0)) (fn (V :0 (Type 0)) (fn (entries : (LSeq (MapEntry K V)))
+    (foldr (MapEntry K V) (Map K V)
+      (fn (e : (MapEntry K V)) (fn (acc : (Map K V))
+        (match e
+          (mk-entry k v -> (map-assoc acc k v)))))
+      (map-empty K V)
+      (lseq-to-list (MapEntry K V) entries))))))

@@ -1,0 +1,160 @@
+;; ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;; Chapter: Seqable, Buildable, and Friends
+;; ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;;
+;; Where Foldable and Functor describe what you can **do** with a
+;; container, the traits in this chapter describe how containers
+;; **convert** between representations and how they **expose** their
+;; elements.
+;;
+;; The key insight: all collection interop flows through `LSeq`.
+;; A Seqable type can become an LSeq; a Buildable type can be
+;; constructed from an LSeq. Together, they enable the pattern:
+;;
+;;     to-seq → transform → from-seq
+;;
+;; This chapter also defines the Seq, Indexed, Keyed, and Setlike
+;; traits — specialized interfaces for sequences, indexed containers,
+;; key-value stores, and set-like collections. The Collection bundle
+;; ties the three core traits (Seqable + Buildable + Foldable) into
+;; a single constraint.
+
+
+module prologos::core::seqable-trait
+
+;; ── The Seqable Trait ───────────────────────────────
+;;
+;; A Seqable collection can be converted to a lazy sequence.
+;; This is the "out" direction: any collection → LSeq.
+;;
+;; Single-method trait: the dict IS the `to-seq` function.
+
+require [prologos::data::lseq :refer [LSeq]]
+
+trait Seqable {C : Type -> Type}
+  to-seq : [Pi [A :0 <Type>] [-> [C A] [LSeq A]]]
+  :doc "Convert a collection to a lazy sequence (LSeq)"
+
+
+module prologos::core::buildable-trait
+
+;; ── The Buildable Trait ─────────────────────────────
+;;
+;; A Buildable collection can be constructed from a lazy sequence
+;; and provides an empty collection. This is the "in" direction:
+;; LSeq → any collection.
+;;
+;; Two-method trait, so the dict is a Sigma pair:
+;;   `(pair from-seq empty-coll)`
+
+require [prologos::data::lseq :refer [LSeq]]
+
+trait Buildable {C : Type -> Type}
+  from-seq   : [Pi [A :0 <Type>] [-> [LSeq A] [C A]]]
+  empty-coll : [Pi [A :0 <Type>] [C A]]
+  :doc "Construct a collection from a lazy sequence"
+
+
+module prologos::core::seq-trait
+
+;; ── The Seq Trait ───────────────────────────────────
+;;
+;; A Seq dict bundles three operations for sequential access:
+;;   • `first`  : S A → Option A
+;;   • `rest`   : S A → S A
+;;   • `empty?` : S A → Bool
+;;
+;; Dict layout: `(Sigma first-fn (Sigma rest-fn empty?-fn))`
+;; This is defined via `deftype` rather than `trait` because the
+;; nested Sigma encoding is specified manually.
+
+require [prologos::data::option :refer [Option some none]]
+
+deftype [Seq $S] [Sigma [_ <[Pi [A :0 <Type>] [-> [$S A] [Option A]]]>] [Sigma [_ <[Pi [A :0 <Type>] [-> [$S A] [$S A]]]>] [Pi [A :0 <Type>] [-> [$S A] Bool]]]]
+
+;; Accessors: project from the dictionary
+
+;; seq-first : (Seq S) -> S A -> Option A
+spec seq-first [Seq S] [S A] -> [Option A]
+defn seq-first [dict xs]
+  [first dict] A xs
+
+;; seq-rest : (Seq S) -> S A -> S A
+spec seq-rest [Seq S] [S A] -> [S A]
+defn seq-rest [dict xs]
+  [first [second dict]] A xs
+
+;; seq-empty? : (Seq S) -> S A -> Bool
+spec seq-empty? [Seq S] [S A] -> Bool
+defn seq-empty? [dict xs]
+  [second [second dict]] A xs
+
+
+module prologos::core::indexed-trait
+
+;; ── The Indexed Trait ───────────────────────────────
+;;
+;; An Indexed collection supports positional access by natural
+;; number index. Three methods:
+;;   • `idx-nth`    : C A → Nat → Option A
+;;   • `idx-length` : C A → Nat
+;;   • `idx-update` : C A → Nat → A → C A
+
+require [prologos::data::option :refer [Option]]
+
+trait Indexed {C : Type -> Type}
+  idx-nth    : [Pi [A :0 <Type>] [-> [C A] [-> Nat [Option A]]]]
+  idx-length : [Pi [A :0 <Type>] [-> [C A] Nat]]
+  idx-update : [Pi [A :0 <Type>] [-> [C A] [-> Nat [-> A [C A]]]]]
+  :doc "Access elements by index"
+
+
+module prologos::core::keyed-trait
+
+;; ── The Keyed Trait ─────────────────────────────────
+;;
+;; A Keyed collection supports key-value operations. Unlike
+;; the other traits, `C` is a **two-parameter** type constructor:
+;; `C K V`. Three methods:
+;;   • `kv-get`    : C K V → K → Option V
+;;   • `kv-assoc`  : C K V → K → V → C K V
+;;   • `kv-dissoc` : C K V → K → C K V
+
+require [prologos::data::option :refer [Option]]
+
+trait Keyed {C : Type -> Type -> Type}
+  kv-get    : [Pi [K :0 <Type>] [Pi [V :0 <Type>] [-> [C K V] [-> K [Option V]]]]]
+  kv-assoc  : [Pi [K :0 <Type>] [Pi [V :0 <Type>] [-> [C K V] [-> K [-> V [C K V]]]]]]
+  kv-dissoc : [Pi [K :0 <Type>] [Pi [V :0 <Type>] [-> [C K V] [-> K [C K V]]]]]
+
+
+module prologos::core::setlike-trait
+
+;; ── The Setlike Trait ───────────────────────────────
+;;
+;; A Setlike collection supports membership test, insertion,
+;; and removal. Three methods:
+;;   • `set-member?` : C A → A → Bool
+;;   • `set-insert`  : C A → A → C A
+;;   • `set-remove`  : C A → A → C A
+
+trait Setlike {C : Type -> Type}
+  set-member? : [Pi [A :0 <Type>] [-> [C A] [-> A Bool]]]
+  set-insert  : [Pi [A :0 <Type>] [-> [C A] [-> A [C A]]]]
+  set-remove  : [Pi [A :0 <Type>] [-> [C A] [-> A [C A]]]]
+
+
+module prologos::core::collection-bundle
+
+;; ── The Collection Bundle ───────────────────────────
+;;
+;; A bundle is syntactic sugar for multiple trait constraints.
+;; `Collection C` expands to `(Seqable C, Buildable C, Foldable C)`
+;; in any `spec` that uses it — a collection is anything that
+;; can be converted to/from LSeq and supports fold.
+
+require [prologos::core::seqable-trait    :refer [Seqable]]
+require [prologos::core::buildable-trait  :refer [Buildable]]
+require [prologos::core::foldable-trait   :refer [Foldable]]
+
+bundle Collection := (Seqable, Buildable, Foldable)
