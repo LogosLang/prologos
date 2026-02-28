@@ -265,16 +265,26 @@
     [(expr-fvar name)
      (let ([ty (global-env-lookup-type name)])
        (when ty
-         ;; Check for deprecation warning
-         (let ([se (lookup-spec name)])
-           (when se
-             (let ([md (spec-entry-metadata se)])
-               (when md
-                 (let ([dep (hash-ref md ':deprecated #f)])
-                   (when dep
-                     (emit-deprecation-warning!
-                      name
-                      (if (string? dep) dep #f)))))))))
+         ;; Check for deprecation warning — spec, then trait, then functor (G7)
+         (let ([spec-dep
+                (let ([se (lookup-spec name)])
+                  (and se
+                       (let ([md (spec-entry-metadata se)])
+                         (and md (hash-ref md ':deprecated #f)))))])
+           (cond
+             [spec-dep
+              (emit-deprecation-warning! name (if (string? spec-dep) spec-dep #f))]
+             [else
+              ;; G7: Check trait deprecation
+              (let ([tdep (trait-deprecated name)])
+                (when tdep
+                  (emit-deprecation-warning! name (if (string? tdep) tdep #f))))
+              ;; G7: Check functor deprecation
+              (let ([fe (lookup-functor name)])
+                (when fe
+                  (let ([fdep (hash-ref (functor-entry-metadata fe) ':deprecated #f)])
+                    (when fdep
+                      (emit-deprecation-warning! name (if (string? fdep) fdep #f))))))])))
        (if ty ty (expr-error)))]
 
     ;; ---- Universes ----

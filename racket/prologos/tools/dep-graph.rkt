@@ -494,6 +494,11 @@
    (test-dep '(macros.rkt prelude.rkt syntax.rkt source-location.rkt surface-syntax.rkt
                errors.rkt metavar-store.rkt parser.rkt elaborator.rkt pretty-print.rkt
                global-env.rkt driver.rkt namespace.rkt trait-resolution.rkt) #t)
+   'test-config-audit.rkt
+   (test-dep '(macros.rkt typing-core.rkt warnings.rkt prelude.rkt syntax.rkt
+               source-location.rkt surface-syntax.rkt parser.rkt elaborator.rkt
+               pretty-print.rkt errors.rkt global-env.rkt driver.rkt reader.rkt
+               namespace.rkt trait-resolution.rkt) #t)
    'test-prelude-numerics.rkt
    (test-dep '(macros.rkt prelude.rkt syntax.rkt source-location.rkt surface-syntax.rkt
                errors.rkt metavar-store.rkt parser.rkt elaborator.rkt pretty-print.rkt

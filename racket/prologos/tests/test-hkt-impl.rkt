@@ -104,7 +104,7 @@
                  [current-impl-registry (hasheq)])
     ;; Register a mock trait
     (register-trait! 'Seqable
-      (trait-meta 'Seqable '((C . (-> (Type 0) (Type 0)))) '()))
+      (trait-meta 'Seqable '((C . (-> (Type 0) (Type 0)))) '() (hasheq)))
     ;; Simulate processing a def with trait type annotation
     (maybe-register-trait-dict-def '(def my-dict : (Seqable List) some-body))
     ;; Should now be registered
@@ -118,7 +118,7 @@
   (parameterize ([current-trait-registry (hasheq)]
                  [current-impl-registry (hasheq)])
     (register-trait! 'Buildable
-      (trait-meta 'Buildable '((C . (-> (Type 0) (Type 0)))) '()))
+      (trait-meta 'Buildable '((C . (-> (Type 0) (Type 0)))) '() (hasheq)))
     (maybe-register-trait-dict-def '(spec PVec--Buildable--dict (Buildable PVec)))
     (define entry (lookup-impl 'PVec--Buildable))
     (check-true (impl-entry? entry))
@@ -136,7 +136,7 @@
   (parameterize ([current-trait-registry (hasheq)]
                  [current-impl-registry (hasheq)])
     (register-trait! 'Eq
-      (trait-meta 'Eq '((A . (Type 0))) '()))
+      (trait-meta 'Eq '((A . (Type 0))) '() (hasheq)))
     ;; No colon/type annotation
     (maybe-register-trait-dict-def '(def foo bar))
     ;; Registry should be empty
@@ -146,7 +146,7 @@
   (parameterize ([current-trait-registry (hasheq)]
                  [current-impl-registry (hasheq)])
     (register-trait! 'Eq
-      (trait-meta 'Eq '((A . (Type 0))) '()))
+      (trait-meta 'Eq '((A . (Type 0))) '() (hasheq)))
     ;; Pre-register an impl
     (register-impl! 'Nat--Eq (impl-entry 'Eq '(Nat) 'Nat--Eq--dict))
     ;; Try to auto-register with same key but different dict name

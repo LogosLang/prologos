@@ -62,8 +62,8 @@
   (parameterize ([current-trait-registry (hasheq)]
                  [current-bundle-registry (hasheq)])
     ;; Register mock traits
-    (register-trait! 'Eq (trait-meta 'Eq '(A) (list (trait-method 'eq? '(A -> A -> Bool)))))
-    (register-trait! 'Ord (trait-meta 'Ord '(A) (list (trait-method 'compare '(A -> A -> Nat)))))
+    (register-trait! 'Eq (trait-meta 'Eq '(A) (list (trait-method 'eq? '(A -> A -> Bool))) (hasheq)))
+    (register-trait! 'Ord (trait-meta 'Ord '(A) (list (trait-method 'compare '(A -> A -> Nat))) (hasheq)))
     ;; Process bundle
     (process-bundle '(bundle Comparable := (Eq Ord)))
     (define b (lookup-bundle 'Comparable))
@@ -77,8 +77,8 @@
   ;; WS reader: `bundle Conv := ([From A B] [Into B A])` → datum with sub-lists
   (parameterize ([current-trait-registry (hasheq)]
                  [current-bundle-registry (hasheq)])
-    (register-trait! 'From (trait-meta 'From '(A B) (list (trait-method 'from '(A -> B)))))
-    (register-trait! 'Into (trait-meta 'Into '(A B) (list (trait-method 'into '(B -> A)))))
+    (register-trait! 'From (trait-meta 'From '(A B) (list (trait-method 'from '(A -> B))) (hasheq)))
+    (register-trait! 'Into (trait-meta 'Into '(A B) (list (trait-method 'into '(B -> A))) (hasheq)))
     (process-bundle '(bundle Conv := ((From A B) (Into B A))))
     (define b (lookup-bundle 'Conv))
     (check-not-false b)
@@ -90,8 +90,8 @@
   ;; (bundle Simple (Eq A) (Ord A))
   (parameterize ([current-trait-registry (hasheq)]
                  [current-bundle-registry (hasheq)])
-    (register-trait! 'Eq (trait-meta 'Eq '(A) (list (trait-method 'eq? '(A -> A -> Bool)))))
-    (register-trait! 'Ord (trait-meta 'Ord '(A) (list (trait-method 'compare '(A -> A -> Nat)))))
+    (register-trait! 'Eq (trait-meta 'Eq '(A) (list (trait-method 'eq? '(A -> A -> Bool))) (hasheq)))
+    (register-trait! 'Ord (trait-meta 'Ord '(A) (list (trait-method 'compare '(A -> A -> Nat))) (hasheq)))
     (process-bundle '(bundle Simple (Eq A) (Ord A)))
     (define b (lookup-bundle 'Simple))
     (check-not-false b)
@@ -111,8 +111,8 @@
   ;; Pure trait constraints pass through unchanged
   (parameterize ([current-trait-registry (hasheq)]
                  [current-bundle-registry (hasheq)])
-    (register-trait! 'Eq (trait-meta 'Eq '(A) (list (trait-method 'eq? '(A -> A -> Bool)))))
-    (register-trait! 'Ord (trait-meta 'Ord '(A) (list (trait-method 'compare '(A -> A -> Nat)))))
+    (register-trait! 'Eq (trait-meta 'Eq '(A) (list (trait-method 'eq? '(A -> A -> Bool))) (hasheq)))
+    (register-trait! 'Ord (trait-meta 'Ord '(A) (list (trait-method 'compare '(A -> A -> Nat))) (hasheq)))
     (check-equal?
       (expand-bundle-constraints '((Eq A) (Ord A)))
       '((Eq A) (Ord A)))))
@@ -121,9 +121,9 @@
   ;; (Comparable Nat) → ((Eq Nat) (Ord Nat))
   (parameterize ([current-trait-registry (hasheq)]
                  [current-bundle-registry (hasheq)])
-    (register-trait! 'Eq (trait-meta 'Eq '(A) (list (trait-method 'eq? '(A -> A -> Bool)))))
-    (register-trait! 'Ord (trait-meta 'Ord '(A) (list (trait-method 'compare '(A -> A -> Nat)))))
-    (register-bundle! 'Comparable (bundle-entry 'Comparable '(A) '((Eq A) (Ord A))))
+    (register-trait! 'Eq (trait-meta 'Eq '(A) (list (trait-method 'eq? '(A -> A -> Bool))) (hasheq)))
+    (register-trait! 'Ord (trait-meta 'Ord '(A) (list (trait-method 'compare '(A -> A -> Nat))) (hasheq)))
+    (register-bundle! 'Comparable (bundle-entry 'Comparable '(A) '((Eq A) (Ord A)) (hasheq)))
     (check-equal?
       (expand-bundle-constraints '((Comparable Nat)))
       '((Eq Nat) (Ord Nat)))))
@@ -133,12 +133,12 @@
   ;; (Numeric A) → ((Add A) (Sub A) (Eq A) (Ord A))
   (parameterize ([current-trait-registry (hasheq)]
                  [current-bundle-registry (hasheq)])
-    (register-trait! 'Add (trait-meta 'Add '(A) (list (trait-method '+ '(A -> A -> A)))))
-    (register-trait! 'Sub (trait-meta 'Sub '(A) (list (trait-method '- '(A -> A -> A)))))
-    (register-trait! 'Eq (trait-meta 'Eq '(A) (list (trait-method 'eq? '(A -> A -> Bool)))))
-    (register-trait! 'Ord (trait-meta 'Ord '(A) (list (trait-method 'compare '(A -> A -> Nat)))))
-    (register-bundle! 'Comparable (bundle-entry 'Comparable '(A) '((Eq A) (Ord A))))
-    (register-bundle! 'Numeric (bundle-entry 'Numeric '(A) '((Add A) (Sub A) (Comparable A))))
+    (register-trait! 'Add (trait-meta 'Add '(A) (list (trait-method '+ '(A -> A -> A))) (hasheq)))
+    (register-trait! 'Sub (trait-meta 'Sub '(A) (list (trait-method '- '(A -> A -> A))) (hasheq)))
+    (register-trait! 'Eq (trait-meta 'Eq '(A) (list (trait-method 'eq? '(A -> A -> Bool))) (hasheq)))
+    (register-trait! 'Ord (trait-meta 'Ord '(A) (list (trait-method 'compare '(A -> A -> Nat))) (hasheq)))
+    (register-bundle! 'Comparable (bundle-entry 'Comparable '(A) '((Eq A) (Ord A)) (hasheq)))
+    (register-bundle! 'Numeric (bundle-entry 'Numeric '(A) '((Add A) (Sub A) (Comparable A)) (hasheq)))
     (check-equal?
       (expand-bundle-constraints '((Numeric A)))
       '((Add A) (Sub A) (Eq A) (Ord A)))))
@@ -147,12 +147,12 @@
   ;; (Numeric A) (Eq A) → no duplicate (Eq A)
   (parameterize ([current-trait-registry (hasheq)]
                  [current-bundle-registry (hasheq)])
-    (register-trait! 'Add (trait-meta 'Add '(A) (list (trait-method '+ '(A -> A -> A)))))
-    (register-trait! 'Sub (trait-meta 'Sub '(A) (list (trait-method '- '(A -> A -> A)))))
-    (register-trait! 'Eq (trait-meta 'Eq '(A) (list (trait-method 'eq? '(A -> A -> Bool)))))
-    (register-trait! 'Ord (trait-meta 'Ord '(A) (list (trait-method 'compare '(A -> A -> Nat)))))
-    (register-bundle! 'Comparable (bundle-entry 'Comparable '(A) '((Eq A) (Ord A))))
-    (register-bundle! 'Numeric (bundle-entry 'Numeric '(A) '((Add A) (Sub A) (Comparable A))))
+    (register-trait! 'Add (trait-meta 'Add '(A) (list (trait-method '+ '(A -> A -> A))) (hasheq)))
+    (register-trait! 'Sub (trait-meta 'Sub '(A) (list (trait-method '- '(A -> A -> A))) (hasheq)))
+    (register-trait! 'Eq (trait-meta 'Eq '(A) (list (trait-method 'eq? '(A -> A -> Bool))) (hasheq)))
+    (register-trait! 'Ord (trait-meta 'Ord '(A) (list (trait-method 'compare '(A -> A -> Nat))) (hasheq)))
+    (register-bundle! 'Comparable (bundle-entry 'Comparable '(A) '((Eq A) (Ord A)) (hasheq)))
+    (register-bundle! 'Numeric (bundle-entry 'Numeric '(A) '((Add A) (Sub A) (Comparable A)) (hasheq)))
     (define result (expand-bundle-constraints '((Numeric A) (Eq A))))
     ;; Should be ((Add A) (Sub A) (Eq A) (Ord A)) — no duplicate (Eq A)
     (check-equal? result '((Add A) (Sub A) (Eq A) (Ord A)))))
@@ -161,9 +161,9 @@
   ;; (Conv Int Rat) → ((From Int Rat) (Into Rat Int))
   (parameterize ([current-trait-registry (hasheq)]
                  [current-bundle-registry (hasheq)])
-    (register-trait! 'From (trait-meta 'From '(A B) (list (trait-method 'from '(A -> B)))))
-    (register-trait! 'Into (trait-meta 'Into '(A B) (list (trait-method 'into '(B -> A)))))
-    (register-bundle! 'Conv (bundle-entry 'Conv '(A B) '((From A B) (Into B A))))
+    (register-trait! 'From (trait-meta 'From '(A B) (list (trait-method 'from '(A -> B))) (hasheq)))
+    (register-trait! 'Into (trait-meta 'Into '(A B) (list (trait-method 'into '(B -> A))) (hasheq)))
+    (register-bundle! 'Conv (bundle-entry 'Conv '(A B) '((From A B) (Into B A)) (hasheq)))
     (check-equal?
       (expand-bundle-constraints '((Conv Int Rat)))
       '((From Int Rat) (Into Rat Int)))))
@@ -172,9 +172,9 @@
   ;; A → B, B → A should error
   (parameterize ([current-trait-registry (hasheq)]
                  [current-bundle-registry (hasheq)])
-    (register-trait! 'Eq (trait-meta 'Eq '(A) (list (trait-method 'eq? '(A -> A -> Bool)))))
-    (register-bundle! 'BundleA (bundle-entry 'BundleA '(A) '((BundleB A))))
-    (register-bundle! 'BundleB (bundle-entry 'BundleB '(A) '((BundleA A))))
+    (register-trait! 'Eq (trait-meta 'Eq '(A) (list (trait-method 'eq? '(A -> A -> Bool))) (hasheq)))
+    (register-bundle! 'BundleA (bundle-entry 'BundleA '(A) '((BundleB A)) (hasheq)))
+    (register-bundle! 'BundleB (bundle-entry 'BundleB '(A) '((BundleA A)) (hasheq)))
     (check-exn exn:fail?
       (lambda () (expand-bundle-constraints '((BundleA X)))))))
 
@@ -190,8 +190,8 @@
   ;; Bundle expects 1 param, given 2 → error
   (parameterize ([current-trait-registry (hasheq)]
                  [current-bundle-registry (hasheq)])
-    (register-trait! 'Eq (trait-meta 'Eq '(A) (list (trait-method 'eq? '(A -> A -> Bool)))))
-    (register-bundle! 'Eqable (bundle-entry 'Eqable '(A) '((Eq A))))
+    (register-trait! 'Eq (trait-meta 'Eq '(A) (list (trait-method 'eq? '(A -> A -> Bool))) (hasheq)))
+    (register-bundle! 'Eqable (bundle-entry 'Eqable '(A) '((Eq A)) (hasheq)))
     (check-exn exn:fail?
       (lambda () (expand-bundle-constraints '((Eqable X Y)))))))
 
@@ -204,9 +204,9 @@
   (parameterize ([current-trait-registry (hasheq)]
                  [current-bundle-registry (hasheq)]
                  [current-spec-store (hasheq)])
-    (register-trait! 'Eq (trait-meta 'Eq '(A) (list (trait-method 'eq? '(A -> A -> Bool)))))
-    (register-trait! 'Ord (trait-meta 'Ord '(A) (list (trait-method 'compare '(A -> A -> Nat)))))
-    (register-bundle! 'Comparable (bundle-entry 'Comparable '(A) '((Eq A) (Ord A))))
+    (register-trait! 'Eq (trait-meta 'Eq '(A) (list (trait-method 'eq? '(A -> A -> Bool))) (hasheq)))
+    (register-trait! 'Ord (trait-meta 'Ord '(A) (list (trait-method 'compare '(A -> A -> Nat))) (hasheq)))
+    (register-bundle! 'Comparable (bundle-entry 'Comparable '(A) '((Eq A) (Ord A)) (hasheq)))
     ;; Process spec with bundle in where clause
     (process-spec '(spec my-sort (List A) -> (List A) where (Comparable A)))
     (define spec (lookup-spec 'my-sort))

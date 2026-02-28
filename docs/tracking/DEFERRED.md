@@ -9,7 +9,7 @@ blocked on unbuilt infrastructure or uncertain design — not effort avoidance.
 See `docs/tracking/principles/DEVELOPMENT_LESSONS.org` § "Completeness Over
 Deferral".
 
-**Last consolidated sweep**: 2026-02-27 (Nil type + safe navigation complete; Dot-Access Phase D + A? nilable sugar complete. Type inference Phases 8+A-E complete).
+**Last consolidated sweep**: 2026-02-27 (Nil type + safe navigation complete; Dot-Access Phase D + A? nilable sugar complete. Type inference Phases 8+A-E complete. Config language hardening Tier 1+2 complete).
 
 ---
 
@@ -169,18 +169,42 @@ The following collection items ARE also deferred (genuine infrastructure deps):
 - **Remaining (Phase 2)**: Type-checking and running `:examples` entries.
 - Source: `docs/tracking/2026-02-24_EXTENDED_SPEC_HARDENING.md`
 
-### `:deprecated` Warnings — Phase 1 COMPLETE
+### `:deprecated` Warnings — Phase 1 COMPLETE, extended for traits/functors
 - **STATUS**: `deprecation-warning` struct in warnings.rkt, emitted during
   type checking when `expr-fvar` references a spec with `:deprecated` metadata.
-  Displayed after command processing. 6 tests.
-- Source: `docs/tracking/2026-02-24_EXTENDED_SPEC_HARDENING.md`
+  Extended to also check traits and functors for deprecation (G7).
+  Displayed after command processing. 6 + 39 tests (test-config-audit.rkt).
+- Source: `docs/tracking/2026-02-24_EXTENDED_SPEC_HARDENING.md`,
+  `docs/tracking/2026-02-27_2300_SPEC_FUNCTOR_AUDIT.md`
+
+### Configuration Language Hardening — Tier 1+2 COMPLETE
+- **STATUS**: Gaps G1-G9 and opportunities O4-O7/O11 from audit implemented.
+  - G1: `:invariant` / `:pre`+`:post` mutual exclusion error
+  - G2: `:implicits` kind conflict detection in `deduplicate-binders`
+  - G3: Property/spec `:where` constraint subset warning
+  - G4: Functor/data name collision detection in `process-functor`
+  - G5: `trait-meta` metadata field + `trait-doc`/`trait-deprecated` accessors
+  - G6: `bundle-entry` metadata field + `bundle-doc` accessor
+  - G7: Deprecation warnings for traits + functors in `typing-core.rkt`
+  - G8: Improved error messages across all gap scenarios
+  - G9: 39 tests in `test-config-audit.rkt`
+  - O4: `:variance` parsed + stored (inert) on functor
+  - O5: `:fold`/`:unfold` parsed + stored (inert) on functor
+  - O6: `:pre`/`:post`/`:invariant` explicitly parsed + stored (inert)
+  - O7: `:exists` clause on property
+  - O11: `:refines :relevant` handled by default clause
+- Source: `docs/tracking/2026-02-27_2300_SPEC_FUNCTOR_AUDIT.md`
 
 ### Phase 2: Example and Property Checking (QuickCheck-style)
 - Type-check and run `:examples` entries as tests
 - `Gen` trait for type-directed random generation
 - Property checking for `:properties` and `:laws`
 - Contract wrapping: `:pre`/`:post` generate runtime checks with blame
-- Source: `docs/tracking/2026-02-22_EXTENDED_SPEC_DESIGN.org`
+- Variance inference from `:unfolds` structure + declared-vs-inferred checking
+- `:compose`/`:identity` active verification on functors
+- `:exists` clause integration with QuickCheck witness search
+- Source: `docs/tracking/2026-02-22_EXTENDED_SPEC_DESIGN.org`,
+  `docs/tracking/2026-02-27_2300_SPEC_FUNCTOR_AUDIT.md` (Tier 3)
 
 ### Phase 3: Refinement Types and Verification
 - `:refines` → Sigma types (dependent pairs with proofs)

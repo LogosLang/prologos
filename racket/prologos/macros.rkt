@@ -70,6 +70,7 @@
          trait-meta-name
          trait-meta-params
          trait-meta-methods
+         trait-meta-metadata
          trait-method
          trait-method?
          trait-method-name
@@ -104,6 +105,7 @@
          bundle-entry-name
          bundle-entry-params
          bundle-entry-constraints
+         bundle-entry-metadata
          register-bundle!
          lookup-bundle
          process-bundle
@@ -191,7 +193,12 @@
          spec-examples
          spec-doc
          spec-deprecated
+         trait-doc
+         trait-deprecated
+         bundle-doc
          trait-laws-flattened
+         deduplicate-binders
+         parse-spec-metadata
          process-property
          ;; Functor registry
          current-functor-store
@@ -1494,6 +1501,36 @@
          [(eq? key ':see-also)
           (define-values (refs rest) (collect-constraint-values tail))
           (loop rest (hash-set result key refs))]
+         ;; :pre → predicate expression on function args (Phase 2: runtime contract)
+         [(eq? key ':pre)
+          (if (null? tail)
+              (error 'spec ":pre requires a predicate expression")
+              (loop (cdr tail) (hash-set result key (car tail))))]
+         ;; :post → predicate expression on args + return (Phase 2: runtime contract)
+         [(eq? key ':post)
+          (if (null? tail)
+              (error 'spec ":post requires a predicate expression")
+              (loop (cdr tail) (hash-set result key (car tail))))]
+         ;; :invariant → relational predicate on args + return (Phase 2: runtime contract)
+         [(eq? key ':invariant)
+          (if (null? tail)
+              (error 'spec ":invariant requires a predicate expression")
+              (loop (cdr tail) (hash-set result key (car tail))))]
+         ;; :variance → functor variance annotation (:covariant, :contravariant, :invariant, :phantom)
+         [(eq? key ':variance)
+          (if (and (pair? tail) (memq (car tail) '(:covariant :contravariant :invariant :phantom)))
+              (loop (cdr tail) (hash-set result key (car tail)))
+              (error 'functor ":variance must be :covariant, :contravariant, :invariant, or :phantom"))]
+         ;; :fold → identifier for catamorphism (recursion scheme)
+         [(eq? key ':fold)
+          (if (and (pair? tail) (symbol? (car tail)))
+              (loop (cdr tail) (hash-set result key (car tail)))
+              (error 'functor ":fold requires an identifier"))]
+         ;; :unfold → identifier for anamorphism (recursion scheme, distinct from :unfolds)
+         [(eq? key ':unfold)
+          (if (and (pair? tail) (symbol? (car tail)))
+              (loop (cdr tail) (hash-set result key (car tail)))
+              (error 'functor ":unfold requires an identifier"))]
          ;; :mixfix → next value should be a $brace-params map {:symbol op :group grp}
          [(eq? key ':mixfix)
           (if (and (pair? tail) (pair? (car tail))
@@ -1538,12 +1575,22 @@
 ;; and warn to stderr about the duplicate.
 (define (deduplicate-binders inline-binders meta-binders)
   (define inline-names (map car inline-binders))
+  (define inline-lookup
+    (for/hasheq ([b (in-list inline-binders)])
+      (values (car b) (cdr b))))
   (define unique-meta
     (filter (lambda (b)
-              (if (memq (car b) inline-names)
-                  (begin
+              (define name (car b))
+              (if (memq name inline-names)
+                  (let ([inline-kind (hash-ref inline-lookup name)]
+                        [meta-kind (cdr b)])
+                    ;; G2: Error on kind disagreement between inline and metadata
+                    (unless (equal? inline-kind meta-kind)
+                      (error 'spec
+                        "implicit binder `~a` declared as `~a` inline but `~a` in :implicits"
+                        name inline-kind meta-kind))
                     (eprintf "warning: duplicate implicit binder ~a in metadata (using inline version)~n"
-                             (car b))
+                             name)
                     #f)
                   #t))
             meta-binders))
@@ -1725,6 +1772,30 @@
   ;; Store all-constraints (explicit where + inline) in spec entry so that
   ;; inject-spec-into-defn knows about inline constraints for dict param generation.
   (define stored-constraints all-constraints)
+  ;; G1: :invariant and :pre/:post have different proof obligation semantics — error if combined
+  (when (and metadata (hash? metadata)
+             (hash-ref metadata ':invariant #f)
+             (or (hash-ref metadata ':pre #f)
+                 (hash-ref metadata ':post #f)))
+    (error 'spec
+      (string-append
+       "spec ~a: `:invariant` and `:pre`/`:post` have different proof obligation semantics "
+       "and cannot be combined. Use `:pre` + `:post` for split obligations, "
+       "or `:invariant` for a single relational assertion.")
+      name))
+  ;; G3: Warn if property :where constraints aren't covered by spec :where
+  (let ([spec-properties (and metadata (hash? metadata) (hash-ref metadata ':properties #f))])
+    (when (and spec-properties (pair? spec-properties))
+      (for ([prop-ref (in-list spec-properties)])
+        (define prop-name (if (pair? prop-ref) (car prop-ref) prop-ref))
+        (define pe (lookup-property prop-name))
+        (when pe
+          (define prop-wheres (property-entry-where-clauses pe))
+          (define spec-trait-names (map car stored-constraints))
+          (for ([pw (in-list prop-wheres)])
+            (unless (memq (car pw) spec-trait-names)
+              (eprintf "warning: property `~a` requires `~a` but spec `~a` only provides ~a~n"
+                       prop-name pw name stored-constraints)))))))
   ;; Check for multi-arity: effective-tokens contain $pipe forms
   (define has-pipes?
     (ormap (lambda (t) (or (eq? t '$pipe)
@@ -3793,8 +3864,9 @@
 ;; trait-method: name (symbol), type-datum (s-expression for the method type)
 (struct trait-method (name type-datum) #:transparent)
 
-;; trait-meta: name (symbol), params ((name . type) ...), methods (list of trait-method)
-(struct trait-meta (name params methods) #:transparent)
+;; trait-meta: name (symbol), params ((name . type) ...), methods (list of trait-method),
+;;            metadata (hasheq of :doc, :deprecated, :see-also, etc.)
+(struct trait-meta (name params methods metadata) #:transparent)
 
 ;; Registry: trait-name (symbol) → trait-meta
 (define current-trait-registry (make-parameter (hasheq)))
@@ -3980,7 +4052,7 @@
 ;; `bundle Comparable := (Eq, Ord)` → `where (Comparable A)` expands to `where (Eq A) (Ord A)`.
 ;; Zero runtime overhead — purely syntactic sugar.
 
-(struct bundle-entry (name params constraints) #:transparent)
+(struct bundle-entry (name params constraints metadata) #:transparent)
 ;; name: symbol — e.g., 'Comparable
 ;; params: (listof symbol) — type var params, e.g., '(A)
 ;; constraints: (listof (listof symbol)) — e.g., '((Eq A) (Ord A))
@@ -4044,7 +4116,7 @@
     (error 'bundle "bundle ~a: missing body" name))
   ;; Parse the bundle body into constraints
   (define-values (params constraints) (parse-bundle-body name body-tokens))
-  (register-bundle! name (bundle-entry name params constraints)))
+  (register-bundle! name (bundle-entry name params constraints (hasheq))))
 
 ;; parse-bundle-body: extract type params and constraint list from bundle body
 ;; Returns (values params constraints) where
@@ -4865,8 +4937,8 @@
   (define methods
     (map (lambda (m) (parse-trait-method m trait-name)) method-specs))
 
-  ;; Register trait metadata
-  (register-trait! trait-name (trait-meta trait-name params methods))
+  ;; Register trait metadata (G5: include metadata hash for :doc, :deprecated, :see-also, etc.)
+  (register-trait! trait-name (trait-meta trait-name params methods trait-metadata))
 
   ;; ---- Generate the dictionary type ----
   ;; Type params as Pi bindings (all :0)
@@ -5033,6 +5105,15 @@
              [(keyword-like-symbol? (car r)) (values (reverse acc) r)]
              [else (bloop (cdr r) (cons (car r) acc))])))
        (loop rest cname binder-forms holds-expr)]
+      [(eq? (car remaining) ':exists)
+       ;; O7: Existential quantification — collect binder groups, tag with :exists
+       (define-values (binder-forms rest)
+         (let bloop ([r (cdr remaining)] [acc '()])
+           (cond
+             [(null? r) (values (reverse acc) '())]
+             [(keyword-like-symbol? (car r)) (values (reverse acc) r)]
+             [else (bloop (cdr r) (cons (car r) acc))])))
+       (loop rest cname (list ':exists binder-forms) holds-expr)]
       [(eq? (car remaining) ':holds)
        ;; Collect expression(s) until next keyword
        (define-values (expr-forms rest)
@@ -5215,6 +5296,24 @@
           '()))
     laws))
 
+;; trait-doc : symbol → (or/c string #f)
+;; Returns the :doc metadata from a trait, or #f if none.
+(define (trait-doc name)
+  (define tm (lookup-trait name))
+  (and tm (hash-ref (trait-meta-metadata tm) ':doc #f)))
+
+;; trait-deprecated : symbol → (or/c string #t #f)
+;; Returns the :deprecated metadata from a trait, or #f if none.
+(define (trait-deprecated name)
+  (define tm (lookup-trait name))
+  (and tm (hash-ref (trait-meta-metadata tm) ':deprecated #f)))
+
+;; bundle-doc : symbol → (or/c string #f)
+;; Returns the :doc metadata from a bundle, or #f if none.
+(define (bundle-doc name)
+  (define be (lookup-bundle name))
+  (and be (hash-ref (bundle-entry-metadata be) ':doc #f)))
+
 ;; ========================================
 ;; Functor declarations
 ;; ========================================
@@ -5299,6 +5398,11 @@
   ;; :unfolds is required for functors
   (unless unfolds-expr
     (error 'functor "functor ~a: requires :unfolds type expression" func-name))
+  ;; G4: Collision detection — functor must not shadow existing data type
+  (when (or (lookup-ctor func-name) (lookup-type-ctors func-name))
+    (error 'functor
+      "functor `~a` conflicts with existing data type `~a` — use a different name"
+      func-name func-name))
   ;; Register functor entry
   (register-functor! func-name
                      (functor-entry func-name params unfolds-expr metadata))

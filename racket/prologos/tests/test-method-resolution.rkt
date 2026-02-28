@@ -60,7 +60,7 @@
   ;; "$Eq-A" → (cons 'Eq '(A)) when Eq is a registered trait
   (parameterize ([current-trait-registry (hasheq)])
     (register-trait! 'Eq (trait-meta 'Eq '((A . (Type 0)))
-                           (list (trait-method 'eq? '(A -> A -> Bool)))))
+                           (list (trait-method 'eq? '(A -> A -> Bool))) (hasheq)))
     (define parsed (parse-dict-param-name '$Eq-A))
     (check-not-false parsed)
     (check-equal? (car parsed) 'Eq)
@@ -70,7 +70,7 @@
   ;; "$Foo-A-B" → (cons 'Foo '(A B)) when Foo is a registered trait
   (parameterize ([current-trait-registry (hasheq)])
     (register-trait! 'Foo (trait-meta 'Foo '((A . (Type 0)) (B . (Type 0)))
-                           (list (trait-method 'bar '(A -> B)))))
+                           (list (trait-method 'bar '(A -> B))) (hasheq)))
     (define parsed (parse-dict-param-name '$Foo-A-B))
     (check-not-false parsed)
     (check-equal? (car parsed) 'Foo)
@@ -85,7 +85,7 @@
   ;; "$Eq" with no type vars → #f (malformed)
   (parameterize ([current-trait-registry (hasheq)])
     (register-trait! 'Eq (trait-meta 'Eq '((A . (Type 0)))
-                           (list (trait-method 'eq? '(A -> A -> Bool)))))
+                           (list (trait-method 'eq? '(A -> A -> Bool))) (hasheq)))
     (check-false (parse-dict-param-name '$Eq))))
 
 ;; ========================================
@@ -96,7 +96,7 @@
   ;; Eq has 1 method → 1 entry with correct accessor name
   (parameterize ([current-trait-registry (hasheq)])
     (register-trait! 'Eq (trait-meta 'Eq '((A . (Type 0)))
-                           (list (trait-method 'eq? '(A -> A -> Bool)))))
+                           (list (trait-method 'eq? '(A -> A -> Bool))) (hasheq)))
     (define entries (dict-param->where-entries '$Eq-A))
     (check-not-false entries)
     (check-equal? (length entries) 1)
@@ -113,7 +113,7 @@
     (register-trait! 'Indexed (trait-meta 'Indexed '((F . (Type 0)))
                                (list (trait-method 'get '(F -> Nat -> A))
                                      (trait-method 'set '(F -> Nat -> A -> F))
-                                     (trait-method 'len '(F -> Nat)))))
+                                     (trait-method 'len '(F -> Nat))) (hasheq)))
     (define entries (dict-param->where-entries '$Indexed-F))
     (check-not-false entries)
     (check-equal? (length entries) 3)
@@ -147,7 +147,7 @@
   ;; eq? → (app (app (fvar 'Eq-eq?) (bvar 1)) (bvar 0))
   (parameterize ([current-trait-registry (hasheq)])
     (register-trait! 'Eq (trait-meta 'Eq '((A . (Type 0)))
-                           (list (trait-method 'eq? '(A -> A -> Bool)))))
+                           (list (trait-method 'eq? '(A -> A -> Bool))) (hasheq)))
     (define ctx (dict-param->where-entries '$Eq-A))
     (parameterize ([current-where-context ctx])
       (define env (list (cons '$Eq-A 1) (cons 'A 0)))
@@ -163,7 +163,7 @@
   ;; foo? is not a method of Eq → #f
   (parameterize ([current-trait-registry (hasheq)])
     (register-trait! 'Eq (trait-meta 'Eq '((A . (Type 0)))
-                           (list (trait-method 'eq? '(A -> A -> Bool)))))
+                           (list (trait-method 'eq? '(A -> A -> Bool))) (hasheq)))
     (define ctx (dict-param->where-entries '$Eq-A))
     (parameterize ([current-where-context ctx])
       (define env (list (cons '$Eq-A 1) (cons 'A 0)))
@@ -179,7 +179,7 @@
   ;; Trait with 2 type params → accessor applied with both type bvars + dict
   (parameterize ([current-trait-registry (hasheq)])
     (register-trait! 'Conv (trait-meta 'Conv '((A . (Type 0)) (B . (Type 0)))
-                             (list (trait-method 'convert '(A -> B)))))
+                             (list (trait-method 'convert '(A -> B))) (hasheq)))
     (define ctx (dict-param->where-entries '$Conv-A-B))
     (parameterize ([current-where-context ctx])
       ;; env: A@0, B@1, $Conv-A-B@2; body at depth 3
@@ -198,9 +198,9 @@
   ;; Two traits with same method name → E1005 error
   (parameterize ([current-trait-registry (hasheq)])
     (register-trait! 'Eq (trait-meta 'Eq '((A . (Type 0)))
-                           (list (trait-method 'check '(A -> Bool)))))
+                           (list (trait-method 'check '(A -> Bool))) (hasheq)))
     (register-trait! 'Validate (trait-meta 'Validate '((A . (Type 0)))
-                                 (list (trait-method 'check '(A -> Bool)))))
+                                 (list (trait-method 'check '(A -> Bool))) (hasheq)))
     (define ctx1 (dict-param->where-entries '$Eq-A))
     (define ctx2 (dict-param->where-entries '$Validate-A))
     (parameterize ([current-where-context (append ctx1 ctx2)])

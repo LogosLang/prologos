@@ -135,7 +135,7 @@
 (test-case "maybe-inject-where/with-Eq-constraint"
   ;; Register Eq as a known trait
   (parameterize ([current-trait-registry (hasheq)])
-    (register-trait! 'Eq (trait-meta 'Eq '((A . (Type 0))) (list (trait-method 'eq? '(A A -> Bool)))))
+    (register-trait! 'Eq (trait-meta 'Eq '((A . (Type 0))) (list (trait-method 'eq? '(A A -> Bool))) (hasheq)))
     (define result
       (maybe-inject-where
        '(defn my-eq [x ($angle-type A) y ($angle-type A)] ($angle-type Bool) where (Eq A) (eq? x y))))
@@ -155,8 +155,8 @@
 
 (test-case "maybe-inject-where/multiple-constraints"
   (parameterize ([current-trait-registry (hasheq)])
-    (register-trait! 'Eq (trait-meta 'Eq '((A . (Type 0))) (list (trait-method 'eq? '(A A -> Bool)))))
-    (register-trait! 'Ord (trait-meta 'Ord '((A . (Type 0))) (list (trait-method 'compare '(A A -> Ordering)))))
+    (register-trait! 'Eq (trait-meta 'Eq '((A . (Type 0))) (list (trait-method 'eq? '(A A -> Bool))) (hasheq)))
+    (register-trait! 'Ord (trait-meta 'Ord '((A . (Type 0))) (list (trait-method 'compare '(A A -> Ordering))) (hasheq)))
     (define result
       (maybe-inject-where
        '(defn my-fn [x ($angle-type A)] ($angle-type A) where (Eq A) (Ord A) body)))
