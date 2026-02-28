@@ -339,6 +339,13 @@
     [(expr-Unit) (expr-Type (lzero))]
     [(expr-unit) (expr-Unit)]
 
+    ;; ---- Nil ----
+    [(expr-Nil) (expr-Type (lzero))]
+    ;; nil value: inferred type is Nil (the nullable type).
+    ;; Note: when List's nil constructor is loaded, the elaborator produces (expr-fvar 'nil)
+    ;; instead — this case only fires for bare Nil usage without List loaded.
+    [(expr-nil) (expr-Nil)]
+
     ;; ---- Annotated terms ----
     ;; ann(e, T) synthesizes T if T is a type and e checks against T
     [(expr-ann e1 t)
@@ -1010,6 +1017,45 @@
                 (expr-error)
                 (build-union-type map-vts)))]
          [_ (expr-error)]))]
+    ;; nil-safe-get: (Map K V | Nil) -> K -> (V | Nil)
+    ;; On Nil input, returns Nil. On Map input, returns V | Nil.
+    ;; On union input, extracts Map components and returns union of V's + Nil.
+    [(expr-nil-safe-get m k)
+     (let ([tm (whnf (infer ctx m))])
+       (match tm
+         ;; Direct Nil → result is Nil
+         [(expr-Nil) (expr-Nil)]
+         ;; Direct Map K V → check key, return V | Nil
+         [(expr-Map kt vt)
+          (if (check ctx k kt)
+              (build-union-type (list (whnf vt) (expr-Nil)))
+              (expr-error))]
+         ;; Union: extract Map and Nil components
+         [(expr-union _ _)
+          (let* ([components (flatten-union tm)]
+                 [map-vts
+                  (let loop ([cs components] [acc '()])
+                    (if (null? cs)
+                        (reverse acc)
+                        (let ([c* (whnf (car cs))])
+                          (cond
+                            [(expr-Map? c*)
+                             (if (with-speculative-rollback
+                                   (lambda () (check ctx k (expr-Map-k-type c*)))
+                                   values
+                                   "union-nil-safe-get-component")
+                                 (loop (cdr cs) (cons (expr-Map-v-type c*) acc))
+                                 (loop (cdr cs) acc))]
+                            [else (loop (cdr cs) acc)]))))])
+            ;; Always include Nil in the result (safe access returns Nil on miss/nil input)
+            (build-union-type (append (map whnf map-vts) (list (expr-Nil)))))]
+         [_ (expr-error)]))]
+    ;; nil?: infer arg type (must succeed), return Bool
+    [(expr-nil-check arg)
+     (let ([ta (infer ctx arg)])
+       (if (expr-error? ta)
+           (expr-error)
+           (expr-Bool)))]
     [(expr-map-dissoc m k)
      (let ([tm (infer ctx m)])
        (match tm
@@ -2038,6 +2084,15 @@
     ;; will be solved by unification constraints from other arguments.
     ;; We can't infer its type yet, so accept it optimistically.
     [((expr-meta _) _) #t]
+
+    ;; ---- nil overloading: check against Nil or List ----
+    ;; nil checks against Nil (the nullable type)
+    [((expr-nil) (expr-Nil)) #t]
+    ;; nil checks against List A (backward compat — nil is the empty list)
+    [((expr-nil) t-check)
+     #:when (let-values ([(tname _targs) (decompose-type-app (whnf t-check))])
+              (and tname (eq? (bare-name tname) 'List)))
+     #t]
 
     ;; ---- Union type: check against A | B ----
     ;; check(G, e, A | B) succeeds if e : A or e : B.

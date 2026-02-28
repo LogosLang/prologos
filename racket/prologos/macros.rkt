@@ -211,6 +211,7 @@
          ;; Implicit map, dot-access, and introspection helpers
          rewrite-implicit-map
          rewrite-dot-access
+         rewrite-nil-dot-access
          rewrite-infix-operators
          maybe-inject-spec
          maybe-inject-spec-def
@@ -831,6 +832,15 @@
          (preparse-expand-form dot-rewritten reg depth)
          dot-rewritten)]
     [else
+  ;; 1b: rewrite nil-dot-access sentinels (#.field, #:kw) → nil-safe-get calls
+  (define nil-dot-rewritten (rewrite-nil-dot-access datum))
+  (cond
+    [(not (equal? nil-dot-rewritten datum))
+     ;; Nil-dot-access rewrite happened — re-expand the result
+     (if (list? nil-dot-rewritten)
+         (preparse-expand-form nil-dot-rewritten reg depth)
+         nil-dot-rewritten)]
+    [else
   ;; Second: rewrite infix operators (|>, >>) before other expansions
   (define infix-rewritten (rewrite-infix-operators datum))
   (when (not (equal? infix-rewritten datum))
@@ -852,7 +862,7 @@
      ;; Return expanded if any transformation changed the datum.
      ;; Compare against original datum (not intermediate) to preserve
      ;; changes from combining passes (foreign blocks, pipe grouping, let merging).
-     (if (equal? expanded datum) datum expanded)])])]))
+     (if (equal? expanded datum) datum expanded)])])])]))
 
 ;; For $pipe forms (WS match arms), group body elements after -> into a single list.
 ;; ($pipe ctor args... -> e1 e2 e3) → ($pipe ctor args... -> (e1 e2 e3))
@@ -2920,6 +2930,67 @@
          (car result)
          result)]))
 
+;; Check if a datum element is a ($nil-dot-access field) sentinel
+(define (nil-dot-access? x)
+  (and (list? x) (= (length x) 2) (eq? (car x) '$nil-dot-access)))
+
+;; Check if a datum element is a ($nil-dot-key :kw) sentinel
+(define (nil-dot-key? x)
+  (and (list? x) (= (length x) 2) (eq? (car x) '$nil-dot-key)))
+
+;; Rewrite nil-dot-access sentinels in a flat datum list.
+;; Pattern 1: (expr ($nil-dot-access f1) ($nil-dot-access f2) ...)
+;;   → (nil-safe-get (nil-safe-get expr :f1) :f2)  (left-to-right chaining)
+;; Pattern 2: (($nil-dot-key :kw) expr) at head position
+;;   → (nil-safe-get expr :kw)
+;; Pattern 3: ($nil-dot-key :kw) standalone (length=1 after splitting)
+;;   → (fn ($x : _) (nil-safe-get $x :kw))  (partial application for piping)
+(define (rewrite-nil-dot-access datum)
+  (cond
+    [(not (list? datum)) datum]
+    [(null? datum) datum]
+    ;; Check for any nil-dot-access or nil-dot-key sentinels in the list
+    [(not (or (ormap nil-dot-access? datum) (ormap nil-dot-key? datum)))
+     datum]
+    ;; Pattern 2: ($nil-dot-key :kw) at head, with at least one more element
+    [(and (nil-dot-key? (car datum)) (>= (length datum) 2))
+     (define kw (cadr (car datum)))
+     (define expr (cadr datum))
+     (define rest-elems (cddr datum))
+     ;; Build (nil-safe-get expr :kw), then handle any remaining elements
+     (define rewritten `(nil-safe-get ,expr ,kw))
+     (if (null? rest-elems)
+         rewritten
+         ;; If there are more elements, recur on the rebuilt list
+         (rewrite-nil-dot-access (cons rewritten rest-elems)))]
+    ;; Pattern 3: standalone ($nil-dot-key :kw) — single element list
+    [(and (= (length datum) 1) (nil-dot-key? (car datum)))
+     (define kw (cadr (car datum)))
+     `(fn ($x : _) (nil-safe-get $x ,kw))]
+    ;; Pattern 1: scan for ($nil-dot-access ...) sentinels, fold left
+    [else
+     (define result
+       (let loop ([elems datum] [acc '()])
+         (cond
+           [(null? elems) (reverse acc)]
+           [(nil-dot-access? (car elems))
+            ;; Must have a preceding element to attach to
+            (if (null? acc)
+                ;; No preceding element — just leave sentinel as-is (error case)
+                (loop (cdr elems) (cons (car elems) acc))
+                ;; Fold: wrap preceding element with nil-safe-get
+                (let* ([field (cadr (car elems))]
+                       [target (car acc)]
+                       [wrapped `(nil-safe-get ,target ,(string->symbol
+                                                          (string-append ":" (symbol->string field))))])
+                  (loop (cdr elems) (cons wrapped (cdr acc)))))]
+           [else
+            (loop (cdr elems) (cons (car elems) acc))])))
+     ;; If result is a single-element list, unwrap it
+     (if (and (pair? result) (null? (cdr result)))
+         (car result)
+         result)]))
+
 ;; Rewrite infix operators ($pipe-gt, $compose) in a datum.
 ;; Called from preparse-expand-subforms before recursing into subexpressions.
 ;; For |>: canonicalizes to block form ($pipe-gt init step1 ...) so the registered
@@ -4030,7 +4101,7 @@
 
 ;; Helper: check if a symbol is a known concrete type name (not a type variable)
 (define (known-type-name? sym)
-  (or (memq sym '(Nat Bool Type Int Rat Unit Symbol Keyword Char String
+  (or (memq sym '(Nat Bool Type Int Rat Unit Nil Symbol Keyword Char String
                   Posit8 Posit16 Posit32 Posit64
                   Quire8 Quire16 Quire32 Quire64
                   List Option Result Either Pair

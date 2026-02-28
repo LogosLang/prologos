@@ -458,6 +458,7 @@ type-atom       = 'Type'                           (* universe, level inferred *
                 | '(' , 'Type' , level-expr , ')'  (* explicit universe level *)
                 | 'Nat' | 'Int' | 'Rat' | 'Bool' | 'Unit'
                 | 'Symbol' | 'Keyword'
+                | 'Nil'                             (* nil type *)
                 | 'Posit8' | 'Posit16' | 'Posit32' | 'Posit64'
                 | 'Quire8' | 'Quire16' | 'Quire32' | 'Quire64'
                 | 'Map' | 'Set' | 'PVec' | 'Vec' | 'Fin'
@@ -470,10 +471,21 @@ type-atom       = 'Type'                           (* universe, level inferred *
                 | '[' , type-expr , { type-expr } , ']'  (* bracketed app *)
                 | dependent-type                   (* angle-bracket Pi/Sigma *)
                 | '_'                              (* type hole / inferred *)
+                | nilable-type                     (* A? sugar for (A | Nil) *)
                 ;
 
 (* ------------------------------------------------ *)
-(* 4.4 Dependent Types (Angle Bracket Syntax)       *)
+(* 4.4 Nilable Type Sugar                           *)
+(* ------------------------------------------------ *)
+
+(* A? sugar: uppercase type name + ? suffix desugars to (A | Nil).
+   Only triggers for known type names (Nat, String, Bool, etc.).
+   Does NOT conflict with lowercase predicates (empty?, nil?). *)
+nilable-type    = ? uppercase letter ? , { ident-char } , '?' ;
+                  (* e.g., String? → (String | Nil), Nat? → (Nat | Nil) *)
+
+(* ------------------------------------------------ *)
+(* 4.5 Dependent Types (Angle Bracket Syntax)       *)
 (* ------------------------------------------------ *)
 
 (* Angle brackets delimit dependent Pi and Sigma types:
@@ -586,6 +598,7 @@ literal         = nat-literal                      (* 42N, 0N *)
                 | keyword-literal                  (* :name, :age *)
                 | bool-literal                     (* true, false *)
                 | 'zero'                           (* Nat zero *)
+                | 'nil'                            (* List nil / Nil value — overloaded *)
                 | 'unit'                           (* Unit value *)
                 | 'refl'                           (* equality proof *)
                 ;
@@ -846,6 +859,7 @@ int-ops         = 'int' , expr                     (* from-nat: Nat -> Int *)
 map-ops         = 'map-empty' , type-expr , type-expr
                 | 'map-assoc' , expr , expr , expr
                 | 'map-get' , expr , expr
+                | 'nil-safe-get' , expr , expr     (* safe access: missing key → nil *)
                 | 'map-dissoc' , expr , expr
                 | 'map-size' , expr
                 | 'map-has-key?' , expr , expr
@@ -1150,6 +1164,8 @@ sexp-let-binding = '(' , identifier , [ ':' , type-expr ] , expr , ')' ;
      ~[...]    → ($lseq-literal ...)
      '[...]    → ($list-literal ...)
      #{...}    → ($set-literal ...)
+     #.field   → nil-dot-access token  (nil-safe field access)
+     #:key     → nil-dot-key token     (nil-safe keyword access)
 *)
 
 
@@ -1166,6 +1182,10 @@ sexp-let-binding = '(' , identifier , [ ':' , type-expr ] , expr , ')' ;
    ||   →  $facts-sep         in defr/rel: fact block sentinel
    &>   →  $clause-sep        in defr/rel: rule clause sentinel
    :=   →  ($assign ...)      in def: shorthand binding
+   .f   →  ($dot-access f)    map field access (→ map-get)
+   .:k  →  ($dot-key :k)      map keyword access (→ map-get)
+   #.f  →  ($nil-dot-access f)  nil-safe field access (→ nil-safe-get)
+   #:k  →  ($nil-dot-key :k)    nil-safe keyword access (→ nil-safe-get)
 
    Block-form |> with indented steps:
      |> initial

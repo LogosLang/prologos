@@ -33,6 +33,9 @@
  (struct-out surf-boolrec)
  (struct-out surf-unit-type)
  (struct-out surf-unit)
+ (struct-out surf-nil-type)
+ (struct-out surf-nil)
+ (struct-out surf-nil-check)
  (struct-out surf-natrec)
  (struct-out surf-J)
  ;; Vec/Fin surface forms
@@ -196,6 +199,7 @@
  (struct-out surf-map-empty)
  (struct-out surf-map-assoc)
  (struct-out surf-map-get)
+ (struct-out surf-nil-safe-get)
  (struct-out surf-map-dissoc)
  (struct-out surf-map-size)
  (struct-out surf-map-has-key)
@@ -379,6 +383,11 @@
 ;; Unit type: Unit
 (struct surf-unit-type (srcloc) #:transparent)
 (struct surf-unit (srcloc) #:transparent)
+
+;; Nil type: Nil (nullable/nothing)
+(struct surf-nil-type (srcloc) #:transparent)
+(struct surf-nil (srcloc) #:transparent)
+(struct surf-nil-check (arg srcloc) #:transparent)  ; (nil? expr)
 
 ;; Bool eliminator: (boolrec motive true-case false-case target)
 (struct surf-boolrec (motive true-case false-case target srcloc) #:transparent)
@@ -716,6 +725,7 @@
 (struct surf-map-empty (k v srcloc) #:transparent)         ; (map-empty K V)
 (struct surf-map-assoc (m k v srcloc) #:transparent)       ; (map-assoc m k v)
 (struct surf-map-get (m k srcloc) #:transparent)           ; (map-get m k)
+(struct surf-nil-safe-get (m k srcloc) #:transparent)      ; (nil-safe-get m k)
 (struct surf-map-dissoc (m k srcloc) #:transparent)        ; (map-dissoc m k)
 (struct surf-map-size (m srcloc) #:transparent)            ; (map-size m)
 (struct surf-map-has-key (m k srcloc) #:transparent)       ; (map-has-key m k)

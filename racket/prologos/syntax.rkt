@@ -36,6 +36,9 @@
  (struct-out expr-boolrec)
  (struct-out expr-Unit)
  (struct-out expr-unit)
+ (struct-out expr-Nil)
+ (struct-out expr-nil)
+ (struct-out expr-nil-check)
  (struct-out expr-Pi)
  (struct-out expr-Sigma)
  (struct-out expr-Eq)
@@ -133,7 +136,7 @@
  ;; Map (persistent hash map)
  (struct-out expr-Map) (struct-out expr-champ)
  (struct-out expr-map-empty) (struct-out expr-map-assoc)
- (struct-out expr-map-get) (struct-out expr-map-dissoc)
+ (struct-out expr-map-get) (struct-out expr-nil-safe-get) (struct-out expr-map-dissoc)
  (struct-out expr-map-size) (struct-out expr-map-has-key)
  (struct-out expr-map-keys) (struct-out expr-map-vals)
  ;; Set (persistent hash set)
@@ -337,6 +340,11 @@
 ;; Unit type
 (struct expr-Unit () #:transparent)
 (struct expr-unit () #:transparent)
+
+;; Nil type (nullable/nothing type — distinct from list's nil)
+(struct expr-Nil () #:transparent)
+(struct expr-nil () #:transparent)
+(struct expr-nil-check (arg) #:transparent)  ; nil? : A -> Bool
 
 ;; Dependent function type
 (struct expr-Pi (mult domain codomain) #:transparent) ; Pi(mult, domain, codomain)
@@ -557,6 +565,7 @@
 ;; Operations
 (struct expr-map-assoc (m k v) #:transparent)                 ; assoc : Map K V → K → V → Map K V
 (struct expr-map-get (m k) #:transparent)                     ; get : Map K V → K → V (error if missing)
+(struct expr-nil-safe-get (m k) #:transparent)                ; nil-safe-get : (Map K V | Nil) → K → (V | Nil)
 (struct expr-map-dissoc (m k) #:transparent)                  ; dissoc : Map K V → K → Map K V
 (struct expr-map-size (m) #:transparent)                      ; size : Map K V → Nat
 (struct expr-map-has-key (m k) #:transparent)                 ; has-key? : Map K V → K → Bool
@@ -921,6 +930,7 @@
       (expr-Type? x) (expr-Nat? x)
       (expr-Bool? x) (expr-true? x) (expr-false? x) (expr-boolrec? x)
       (expr-Unit? x) (expr-unit? x)
+      (expr-Nil? x) (expr-nil? x) (expr-nil-check? x)
       (expr-Pi? x) (expr-Sigma? x) (expr-Eq? x)
       (expr-Vec? x) (expr-vnil? x) (expr-vcons? x)
       (expr-Fin? x) (expr-fzero? x) (expr-fsuc? x)
@@ -965,7 +975,7 @@
       (expr-Char? x) (expr-char? x)
       (expr-String? x) (expr-string? x)
       (expr-Map? x) (expr-champ? x) (expr-map-empty? x)
-      (expr-map-assoc? x) (expr-map-get? x) (expr-map-dissoc? x)
+      (expr-map-assoc? x) (expr-map-get? x) (expr-nil-safe-get? x) (expr-map-dissoc? x)
       (expr-map-size? x) (expr-map-has-key? x)
       (expr-map-keys? x) (expr-map-vals? x)
       (expr-Set? x) (expr-hset? x) (expr-set-empty? x)

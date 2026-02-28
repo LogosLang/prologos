@@ -666,10 +666,17 @@
     [(surf-true _) (expr-true)]
     [(surf-false _) (expr-false)]
     [(surf-unit _) (expr-unit)]
+    ;; nil: overloaded — if the list nil constructor is registered, elaborate as fvar
+    ;; (preserving auto-implicit application: bare nil → (nil _)). Otherwise, use expr-nil.
+    [(surf-nil loc)
+     (if (global-env-lookup-type 'nil)
+         (elaborate-var 'nil loc env depth #t)
+         (expr-nil))]
     [(surf-refl _) (expr-refl)]
     [(surf-nat-type _) (expr-Nat)]
     [(surf-bool-type _) (expr-Bool)]
     [(surf-unit-type _) (expr-Unit)]
+    [(surf-nil-type _) (expr-Nil)]
 
     ;; Type hole (inferred during checking)
     [(surf-hole loc)
@@ -779,10 +786,17 @@
                   (multi-defn-info-arities multi-info))]))]
        [else
         ;; Normal application path
-        (let ([ef (if (surf-var? func)
-                      (elaborate-var (surf-var-name func) (surf-var-srcloc func)
-                                     env depth #f)
-                      (elaborate func env depth))])
+        ;; surf-nil in function position → elaborate as fvar 'nil with auto-apply? = #f
+        ;; (same as surf-var, to avoid double auto-application of implicit params)
+        (let ([ef (cond
+                    [(surf-var? func)
+                     (elaborate-var (surf-var-name func) (surf-var-srcloc func)
+                                    env depth #f)]
+                    [(surf-nil? func)
+                     (if (global-env-lookup-type 'nil)
+                         (elaborate-var 'nil (surf-nil-srcloc func) env depth #f)
+                         (expr-nil))]
+                    [else (elaborate func env depth)])])
           (if (prologos-error? ef) ef
               ;; Check for implicit parameters, arity, and insert fresh metavariables
               (if (expr-fvar? ef)
@@ -1621,6 +1635,18 @@
        (cond [(prologos-error? em) em]
              [(prologos-error? ek) ek]
              [else (expr-map-get em ek)]))]
+
+    [(surf-nil-safe-get m k loc)
+     (let ([em (elaborate m env depth)]
+           [ek (elaborate k env depth)])
+       (cond [(prologos-error? em) em]
+             [(prologos-error? ek) ek]
+             [else (expr-nil-safe-get em ek)]))]
+
+    [(surf-nil-check arg loc)
+     (let ([ea (elaborate arg env depth)])
+       (if (prologos-error? ea) ea
+           (expr-nil-check ea)))]
 
     [(surf-map-dissoc m k loc)
      (let ([em (elaborate m env depth)]

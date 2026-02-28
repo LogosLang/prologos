@@ -138,6 +138,11 @@
     [(expr-false) (tu (expr-Bool) (zero-usage n))]
     [(expr-Unit) (tu (expr-Type (lzero)) (zero-usage n))]
     [(expr-unit) (tu (expr-Unit) (zero-usage n))]
+    [(expr-Nil) (tu (expr-Type (lzero)) (zero-usage n))]
+    ;; nil value: type is Nil (the nullable type).
+    ;; Note: when List's nil constructor is loaded, the elaborator produces (expr-fvar 'nil)
+    ;; instead — this case only fires for bare Nil usage without List loaded.
+    [(expr-nil) (tu (expr-Nil) (zero-usage n))]
     [(expr-Int) (tu (expr-Type (lzero)) (zero-usage n))]
     [(expr-int _) (tu (expr-Int) (zero-usage n))]
     [(expr-Rat) (tu (expr-Type (lzero)) (zero-usage n))]
@@ -1002,6 +1007,20 @@
             [(expr-Map _ vt) (tu vt (add-usage u1 u2))]
             [_ (tu-error)])]
          [(_ _) (tu-error)]))]
+    [(expr-nil-safe-get m k)
+     (let ([r1 (inferQ ctx m)]
+           [r2 (inferQ ctx k)])
+       (match* (r1 r2)
+         [((tu t1 u1) (tu _ u2))
+          ;; nil-safe-get: infer type from typing-core, track usage from both args
+          (let ([result-type (infer ctx e)])
+            (tu result-type (add-usage u1 u2)))]
+         [(_ _) (tu-error)]))]
+    [(expr-nil-check arg)
+     (let ([r (inferQ ctx arg)])
+       (match r
+         [(tu _ u) (tu (expr-Bool) u)]
+         [_ (tu-error)]))]
     [(expr-map-dissoc m k)
      (let ([r1 (inferQ ctx m)]
            [r2 (inferQ ctx k)])

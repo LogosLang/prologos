@@ -49,7 +49,7 @@
 (define (racket-list->prologos-list elems)
   (foldr (lambda (e acc)
            (expr-app (expr-app (expr-fvar 'cons) e) acc))
-         (expr-fvar 'nil)
+         (expr-nil)
          elems))
 
 ;; Convert a Racket list of (cons key val) pairs → Prologos List of (pair k v)
@@ -77,7 +77,10 @@
 (define (prologos-list->racket-list e)
   (let loop ([cur (whnf e)] [acc '()])
     (cond
-      ;; nil — end of list
+      ;; expr-nil — end of list (new overloaded nil node)
+      [(expr-nil? cur)
+       (reverse acc)]
+      ;; nil — end of list (legacy fvar form)
       [(and (expr-fvar? cur) (nil-name? (expr-fvar-name cur)))
        (reverse acc)]
       ;; (nil A) — nil applied to type argument
@@ -649,6 +652,11 @@
      (let ([arm (findf (lambda (a) (eq? (expr-reduce-arm-ctor-name a) 'unit)) arms)])
        (and arm (= (expr-reduce-arm-binding-count arm) 0)
             (expr-reduce-arm-body arm)))]
+    ;; nil: matches 'nil arm in pattern matching (e.g., List pattern match)
+    [(expr-nil? scrut)
+     (let ([arm (findf (lambda (a) (eq? (expr-reduce-arm-ctor-name a) 'nil)) arms)])
+       (and arm (= (expr-reduce-arm-binding-count arm) 0)
+            (expr-reduce-arm-body arm)))]
     [else #f]))
 
 
@@ -669,6 +677,7 @@
            (expr-map-empty? e)      ;; map constructor
            (expr-map-assoc? e)      ;; map operation
            (expr-map-get? e)        ;; nested map-get
+           (expr-nil-safe-get? e)  ;; nested nil-safe-get
            (expr-map-dissoc? e)     ;; map operation
            (expr-error? e))))       ;; error propagation
 
@@ -1400,6 +1409,31 @@
          (if (eq? result 'none)
              (expr-error)
              (whnf result))))]
+    ;; nil?: nil → true, ground non-nil value → false
+    [(expr-nil-check (? expr-nil?)) (expr-true)]
+    [(expr-nil-check a)
+     (let ([a* (whnf a)])
+       (cond
+         [(expr-nil? a*) (expr-true)]
+         ;; Ground values that are definitely not nil → false
+         [(or (expr-true? a*) (expr-false? a*) (expr-unit? a*)
+              (expr-zero? a*) (expr-suc? a*) (expr-int? a*) (expr-rat? a*)
+              (expr-string? a*) (expr-keyword? a*) (expr-char? a*)
+              (expr-champ? a*) (expr-hset? a*) (expr-rrb? a*)
+              (expr-posit8? a*) (expr-posit16? a*) (expr-posit32? a*)
+              (expr-posit64? a*) (expr-pair? a*) (expr-fvar? a*))
+          (expr-false)]
+         [(not (equal? a* a)) (whnf (expr-nil-check a*))]
+         [else e]))]
+
+    ;; nil-safe-get: nil input → nil, champ lookup → value or nil on miss
+    [(expr-nil-safe-get (? expr-nil?) _) (expr-nil)]
+    [(expr-nil-safe-get (expr-champ c) k)
+     (let ([k* (whnf k)])
+       (let ([result (champ-lookup c (equal-hash-code k*) k*)])
+         (if (eq? result 'none)
+             (expr-nil)
+             (whnf result))))]
     [(expr-map-dissoc (expr-champ c) k)
      (let ([k* (whnf k)])
        (expr-champ (champ-delete c (equal-hash-code k*) k*)))]
@@ -1720,6 +1754,14 @@
          ;; If m* is a concrete non-map value, return none (graceful degradation).
          ;; This handles cases like map-get on an Int from a mixed-type union.
          [(definitely-not-map? m*) (expr-fvar 'none)]
+         [else e]))]
+    [(expr-nil-safe-get m k)
+     (let ([m* (whnf m)])
+       (cond
+         [(expr-nil? m*) (expr-nil)]
+         [(not (equal? m* m)) (whnf (expr-nil-safe-get m* k))]
+         ;; If m* is a concrete non-map value, return nil (safe degradation)
+         [(definitely-not-map? m*) (expr-nil)]
          [else e]))]
     [(expr-map-dissoc m k)
      (let ([m* (whnf m)])
@@ -2360,6 +2402,8 @@
     [(expr-false) e]
     [(expr-Unit) e]
     [(expr-unit) e]
+    [(expr-Nil) e]
+    [(expr-nil) e]
     [(expr-Type _) e]
     [(expr-hole) e]
     [(expr-typed-hole _) e]
@@ -2581,6 +2625,8 @@
     [(expr-map-empty k v) (expr-map-empty (nf k) (nf v))]
     [(expr-map-assoc m k v) (expr-map-assoc (nf m) (nf k) (nf v))]
     [(expr-map-get m k) (expr-map-get (nf m) (nf k))]
+    [(expr-nil-safe-get m k) (expr-nil-safe-get (nf m) (nf k))]
+    [(expr-nil-check a) (expr-nil-check (nf a))]
     [(expr-map-dissoc m k) (expr-map-dissoc (nf m) (nf k))]
     [(expr-map-size m) (expr-map-size (nf m))]
     [(expr-map-has-key m k) (expr-map-has-key (nf m) (nf k))]

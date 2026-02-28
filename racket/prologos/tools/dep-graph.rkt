@@ -631,6 +631,12 @@
                errors.rkt metavar-store.rkt parser.rkt elaborator.rkt pretty-print.rkt
                global-env.rkt driver.rkt reduction.rkt typing-core.rkt namespace.rkt
                trait-resolution.rkt reader.rkt) #t)
+   'test-nil-type.rkt
+   (test-dep '(macros.rkt prelude.rkt syntax.rkt source-location.rkt surface-syntax.rkt
+               errors.rkt metavar-store.rkt parser.rkt elaborator.rkt pretty-print.rkt
+               global-env.rkt driver.rkt reduction.rkt typing-core.rkt namespace.rkt
+               trait-resolution.rkt reader.rkt champ.rkt unify.rkt qtt.rkt zonk.rkt
+               substitution.rkt) #t)
    'test-mixfix.rkt
    (test-dep '(macros.rkt prelude.rkt syntax.rkt source-location.rkt surface-syntax.rkt
                errors.rkt metavar-store.rkt parser.rkt elaborator.rkt pretty-print.rkt

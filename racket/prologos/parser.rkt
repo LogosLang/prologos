@@ -55,7 +55,7 @@
     + - * / < <= = negate abs
     Symbol symbol-lit
     Keyword Char String
-    Map map-empty map-assoc map-get map-dissoc map-size map-has-key? map-keys map-vals
+    Map map-empty map-assoc map-get nil-safe-get nil? map-dissoc map-size map-has-key? map-keys map-vals
     Set set-empty set-insert set-member? set-delete set-size set-union set-intersect set-diff set-to-list
     PVec pvec-empty pvec-push pvec-nth pvec-update pvec-length pvec-pop pvec-concat pvec-slice pvec-to-list pvec-from-list pvec-fold pvec-map pvec-filter
     set-fold set-filter
@@ -535,7 +535,9 @@
     [(true)   (surf-true loc)]
     [(false)  (surf-false loc)]
     [(unit)   (surf-unit loc)]
+    [(nil)    (surf-nil loc)]
     [(refl)   (surf-refl loc)]
+    [(Nil)    (surf-nil-type loc)]
     [else
      (define s (symbol->string sym))
      (cond
@@ -558,6 +560,18 @@
           (if (= v 0)
               (surf-zero loc)
               (surf-nat-lit v loc)))]
+       ;; Nilable type sugar: String? → (String | Nil) when uppercase + ends with ?
+       [(and (> (string-length s) 1)
+             (char-upper-case? (string-ref s 0))
+             (char=? (string-ref s (- (string-length s) 1)) #\?))
+        (let* ([base-name (substring s 0 (- (string-length s) 1))]
+               [base-sym (string->symbol base-name)])
+          ;; Check if the base name is a known type keyword
+          (if (known-type-name? base-sym)
+              (let ([base-type (parse-datum (datum->syntax #f base-sym))])
+                (surf-union base-type (surf-nil-type loc) loc))
+              ;; Not a known type — fall back to regular variable
+              (surf-var sym loc)))]
        [else (surf-var sym loc)])]))
 
 ;; ========================================
@@ -1842,6 +1856,22 @@
               (cond [(prologos-error? m) m]
                     [(prologos-error? k) k]
                     [else (surf-map-get m k loc)])))]
+
+       ;; nil-safe-get: (nil-safe-get m k) — safe map access returning V | Nil
+       [(nil-safe-get)
+        (or (check-arity 'nil-safe-get args 2 loc)
+            (let ([m (parse-datum (car args))]
+                  [k (parse-datum (cadr args))])
+              (cond [(prologos-error? m) m]
+                    [(prologos-error? k) k]
+                    [else (surf-nil-safe-get m k loc)])))]
+
+       ;; nil?: (nil? expr) — predicate checking if value is nil
+       [(nil?)
+        (or (check-arity 'nil? args 1 loc)
+            (let ([a (parse-datum (car args))])
+              (if (prologos-error? a) a
+                  (surf-nil-check a loc))))]
 
        ;; map-dissoc: (map-dissoc m k)
        [(map-dissoc)

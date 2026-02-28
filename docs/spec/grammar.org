@@ -130,6 +130,7 @@ false
 | =:1=      | Linear multiplicity (use exactly 1 time)     |
 | =:w=      | Unrestricted multiplicity (use any times)    |
 | =zero=    | Nat zero constructor                         |
+| =nil=     | List empty / Nil value (overloaded)           |
 | =unit=    | Unit value                                   |
 | =refl=    | Equality reflexivity proof                   |
 
@@ -173,6 +174,7 @@ base-type ::= 'Type'     (* universe of types, level inferred *)
             | 'Unit'     (* unit type                           *)
             | 'Symbol'   (* symbols for homoiconicity           *)
             | 'Keyword'  (* keyword type for map keys           *)
+            | 'Nil'      (* nil type (safe navigation)           *)
             | 'Datum'    (* code-as-data algebraic type         *)
             | 'PropNetwork'  (* persistent propagator network  *)
             | 'CellId'       (* propagator cell identifier     *)
@@ -276,6 +278,67 @@ Union types use infix =|=:
 Nat | Bool         ;; either a Nat or a Bool
 Int | Rat | Nat    ;; right-associative: Int | (Rat | Nat)
 #+end_src
+
+** Nil Type and Nilable Types
+
+The =Nil= type represents the absence of a value, used for safe navigation and
+nilable map operations. The =nil= value is overloaded: in list context it is the
+empty list, in =Nil= context it is the nil value.
+
+#+begin_src prologos
+;; Nil as a type
+def nothing : Nil nil
+
+;; Nilable type sugar: A? → (A | Nil)
+def name : String? "hello"     ;; same as (String | Nil)
+def age  : Nat? nil            ;; nil in Nat? context
+
+;; nil? predicate
+nil? nil          ;; true
+nil? 42           ;; false
+nil? "hello"      ;; false
+#+end_src
+
+*** =A?= Sugar
+
+Uppercase type names ending with =?= desugar to a union with =Nil=:
+
+#+begin_src grammar
+nilable-type ::= UpperName '?'    (* String? → (String | Nil) *)
+#+end_src
+
+This only applies to known type names starting with an uppercase letter.
+Lowercase identifiers with =?= suffix (=empty?=, =nil?=) are predicates, not
+types.
+
+*** Safe Navigation (=#.= and =#:=)
+
+The =#.= and =#:= operators provide nil-safe map access. When the target is
+=nil=, the entire chain short-circuits to =nil= instead of raising an error.
+
+#+begin_src prologos
+;; Regular access (throws on nil):
+user.address.city
+
+;; Nil-safe access (returns nil if user or address is nil):
+user#.address#.city
+
+;; Mixed: safe then regular
+user#.address.city    ;; nil-safe for address, regular for city
+
+;; Standalone nil-safe key access
+#:name                ;; fn (x : _) (nil-safe-get x :name)
+#+end_src
+
+In sexp mode, use =nil-safe-get= directly:
+
+#+begin_src prologos
+(nil-safe-get user :address)
+(nil-safe-get (nil-safe-get user :address) :city)
+#+end_src
+
+=nil-safe-get= returns =(V | Nil)= — if the key is missing or the map is =nil=,
+it returns =nil= (NOT an error like =map-get=).
 
 ** Universe Levels
 
@@ -1308,3 +1371,6 @@ The WS reader converts indentation to explicit structure:
 | =...name=       | =($rest-param name)=     | Rest/vararg parameter        |
 | =x \vert> f=    | =($pipe-gt x f)=         | Pipe left-to-right           |
 | =f >> g=        | =($compose f g)=         | Compose left-to-right        |
+| =x.name=        | =($dot-access name)=     | Map field access              |
+| =x#.name=       | =($nil-dot-access name)= | Nil-safe field access         |
+| =x#:name=       | =($nil-dot-key :name)=   | Nil-safe keyword access       |

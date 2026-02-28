@@ -490,7 +490,7 @@
             (token (token-type num-tok) (- val) ln cl ps
                    (+ 1 (token-span num-tok)))]))]
 
-      ;; Hash — Set literal #{...}
+      ;; Hash — Set literal #{...}, nil-safe-get #.field / #.:kw / #:kw
       [(char=? c #\#)
        (tok-read! tok)
        (define next (tok-peek tok))
@@ -498,9 +498,39 @@
          [(and (char? next) (char=? next #\{))
           ;; #{ — Set literal opener; { will be consumed by parse-set-literal-form
           (token 'hash-lbrace #f ln cl ps 1)]
+         [(and (char? next) (char=? next #\.))
+          ;; #. — nil-safe dot access
+          (tok-read! tok) ; consume .
+          (define c3 (tok-peek tok))
+          (cond
+            ;; #.:keyword → nil-dot-key token
+            [(and (char? c3) (char=? c3 #\:)
+                  (let ([c4 (peek-char (tokenizer-port tok) 1)])
+                    (and (char? c4) (ident-start? c4))))
+             (tok-read! tok) ; consume :
+             (define field-name (read-ident-chars! tok))
+             (token 'nil-dot-key (string->symbol (string-append ":" field-name))
+                    ln cl ps (+ 2 1 (string-length field-name)))]
+            ;; #.ident → nil-dot-access token
+            [(and (char? c3) (ident-start? c3))
+             (define field-name (read-ident-chars! tok))
+             (token 'nil-dot-access (string->symbol field-name)
+                    ln cl ps (+ 2 (string-length field-name)))]
+            [else
+             (error 'prologos-reader
+                    "~a:~a:~a: #. must be followed by identifier or :keyword"
+                    (tokenizer-source tok) ln (+ cl 1))])]
+         [(and (char? next) (char=? next #\:)
+               (let ([c3 (peek-char (tokenizer-port tok) 1)])
+                 (and (char? c3) (ident-start? c3))))
+          ;; #:keyword → nil-dot-key token (standalone prefix syntax)
+          (tok-read! tok) ; consume :
+          (define field-name (read-ident-chars! tok))
+          (token 'nil-dot-key (string->symbol (string-append ":" field-name))
+                 ln cl ps (+ 2 (string-length field-name)))]
          [else
           (error 'prologos-reader
-                 "~a:~a:~a: # must be followed by { for Set literal (#{...})"
+                 "~a:~a:~a: # must be followed by { (Set literal), . (nil-safe access), or :keyword"
                  (tokenizer-source tok) ln (+ cl 1))])]
 
       ;; Tilde — LSeq literal ~[ or approximate literal prefix ~42, ~3/7
@@ -1399,6 +1429,26 @@
      (define sp (token-span t))
      (make-stx (list (make-stx '$dot-key src ln cl ps 0)
                      (make-stx (token-value t) src ln (+ cl 1) (+ ps 1) (- sp 1)))
+               src ln cl ps sp)]
+    [(eq? tt 'nil-dot-access)
+     ;; #.field — produce ($nil-dot-access field) sentinel for preparse macro
+     (define t (parser-next! p))
+     (define ln (token-line t))
+     (define cl (token-col t))
+     (define ps (token-pos t))
+     (define sp (token-span t))
+     (make-stx (list (make-stx '$nil-dot-access src ln cl ps 0)
+                     (make-stx (token-value t) src ln (+ cl 2) (+ ps 2) (- sp 2)))
+               src ln cl ps sp)]
+    [(eq? tt 'nil-dot-key)
+     ;; #:keyword or #.:keyword — produce ($nil-dot-key :keyword) sentinel for preparse macro
+     (define t (parser-next! p))
+     (define ln (token-line t))
+     (define cl (token-col t))
+     (define ps (token-pos t))
+     (define sp (token-span t))
+     (make-stx (list (make-stx '$nil-dot-key src ln cl ps 0)
+                     (make-stx (token-value t) src ln (+ cl 2) (+ ps 2) (- sp 2)))
                src ln cl ps sp)]
     [(eq? tt 'typed-hole)
      ;; ?? or ??name — produce ($typed-hole) or ($typed-hole name) sentinel

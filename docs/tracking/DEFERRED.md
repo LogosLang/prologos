@@ -9,7 +9,7 @@ blocked on unbuilt infrastructure or uncertain design — not effort avoidance.
 See `docs/tracking/principles/DEVELOPMENT_LESSONS.org` § "Completeness Over
 Deferral".
 
-**Last consolidated sweep**: 2026-02-26 (Staleness audit: numerics ergonomics 8/9 done, auto-implicits Direction 1 done, nested dot-access done. Type inference Phases 8+A-E complete).
+**Last consolidated sweep**: 2026-02-27 (Nil type + safe navigation complete; Dot-Access Phase D + A? nilable sugar complete. Type inference Phases 8+A-E complete).
 
 ---
 
@@ -227,10 +227,14 @@ The following collection items ARE also deferred (genuine infrastructure deps):
 - Reader splits each `.field` into separate `dot-access` tokens; preparse `rewrite-dot-access` left-folds into nested `map-get`
 - E2E tests pass for both sexp and WS mode (see `test-dot-access.rkt`)
 
-### Phase D: Nil-Coalescing `#:` (NOT STARTED)
-- Safe navigation: `user?.address?.city` short-circuits on nil
-- Orthogonal to nested access — does not block anything
-- Source: `docs/tracking/2026-02-21_1800_DOT_ACCESS_SYNTAX.md`
+### Phase D: Nil-Safe Navigation `#.`/`#:` — COMPLETE ✅
+- `Nil` type + overloaded `nil` value (list-nil and Nil-nil, disambiguated by type inference)
+- `nil-safe-get` keyword: `(Map K V | Nil) → K → (V | Nil)`, returns `nil` on missing key
+- `#.field` / `#:key` WS-mode syntax via reader sentinel + preparse rewrite
+- `nil?` predicate: `A → Bool`
+- Mixed access chains: `user#.address.city`, `user.address#.city`
+- 38 tests in `test-nil-type.rkt`, 4583 tests pass
+- Source: plan `buzzing-launching-pascal.md`
 
 ---
 
@@ -410,9 +414,9 @@ The following collection items ARE also deferred (genuine infrastructure deps):
 - When key is statically known, narrow return type
 - Source: `docs/tracking/2026-02-22_MIXED_TYPE_MAPS.md`
 
-### `A?` Nilable Union Syntax
-- `String?` as sugar for `(String | Nil)`
-- Source: `docs/tracking/2026-02-22_MIXED_TYPE_MAPS.md`
+### `A?` Nilable Union Syntax — COMPLETE ✅
+- `String?` → `(String | Nil)` parser-level sugar for known uppercase type names ending with `?`
+- Implemented in Phase D (above)
 
 ### Pattern Matching for Union Values
 - Convenience forms for matching on union values

@@ -69,6 +69,8 @@
     [(expr-false) "false"]
     [(expr-Unit) "Unit"]
     [(expr-unit) "unit"]
+    [(expr-Nil) "Nil"]
+    [(expr-nil) "nil"]
     [(expr-hole) "_"]
     [(expr-typed-hole name) (if name (format "??~a" name) "??")]
     [(expr-meta id)
@@ -344,6 +346,8 @@
     [(expr-map-empty k v) (format "{} : (Map ~a ~a)" (pp-expr k names) (pp-expr v names))]
     [(expr-map-assoc m k v) (format "[map-assoc ~a ~a ~a]" (pp-expr m names) (pp-expr k names) (pp-expr v names))]
     [(expr-map-get m k) (format "[map-get ~a ~a]" (pp-expr m names) (pp-expr k names))]
+    [(expr-nil-safe-get m k) (format "[nil-safe-get ~a ~a]" (pp-expr m names) (pp-expr k names))]
+    [(expr-nil-check a) (format "[nil? ~a]" (pp-expr a names))]
     [(expr-map-dissoc m k) (format "[map-dissoc ~a ~a]" (pp-expr m names) (pp-expr k names))]
     [(expr-map-size m) (format "[map-size ~a]" (pp-expr m names))]
     [(expr-map-has-key m k) (format "[map-has-key? ~a ~a]" (pp-expr m names) (pp-expr k names))]
@@ -704,7 +708,12 @@
     ;; Limit depth to avoid infinite loops on cyclic structures
     (cond
       [(> depth 1000) #f]
-      ;; nil — end of proper list (bare nil or (nil A) with type arg)
+      ;; expr-nil — end of proper list (new overloaded nil node)
+      [(expr-nil? cur)
+       (if (null? elems)
+           #f   ;; bare nil — don't print as '[], just show "nil"
+           (list (reverse elems) #f))]
+      ;; nil — end of proper list (legacy fvar form: bare nil or (nil A) with type arg)
       [(and (expr-fvar? cur) (nil-name? (expr-fvar-name cur)))
        (if (null? elems)
            #f   ;; bare nil — don't print as '[], just show "nil"
@@ -971,6 +980,8 @@
     [(expr-map-empty k v) (or (uses-bvar0? k) (uses-bvar0? v))]
     [(expr-map-assoc m k v) (or (uses-bvar0? m) (uses-bvar0? k) (uses-bvar0? v))]
     [(expr-map-get m k) (or (uses-bvar0? m) (uses-bvar0? k))]
+    [(expr-nil-safe-get m k) (or (uses-bvar0? m) (uses-bvar0? k))]
+    [(expr-nil-check a) (uses-bvar0? a)]
     [(expr-map-dissoc m k) (or (uses-bvar0? m) (uses-bvar0? k))]
     [(expr-map-size m) (uses-bvar0? m)]
     [(expr-map-has-key m k) (or (uses-bvar0? m) (uses-bvar0? k))]
