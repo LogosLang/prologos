@@ -1,6 +1,6 @@
 ns prologos::core::keyed-map
 
-require [prologos::core::keyed-trait :refer [Keyed]]
+require [prologos::core::collection-traits :refer [Keyed]]
 require [prologos::data::option      :refer [Option some none]]
 
 ;; ========================================

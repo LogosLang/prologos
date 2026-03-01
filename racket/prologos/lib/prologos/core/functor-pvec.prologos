@@ -1,6 +1,6 @@
 ns prologos::core::functor-pvec
 
-require [prologos::core::functor-trait :refer [Functor]]
+require [prologos::core::collection-traits :refer [Functor]]
 
 ;; ========================================
 ;; Functor instance for PVec

@@ -66,7 +66,7 @@
     (run-ns-impls
       (string-append
         "(ns test-hkt-impl-1)\n"
-        "(require [prologos::core::foldable-trait :refer [Foldable]])\n"
+        "(require [prologos::core::collection-traits :refer [Foldable]])\n"
         "(eval zero)\n")))
   ;; Foldable should be in trait registry after loading
   ;; (We can't directly check trait registry here since it's parameterized,
@@ -78,7 +78,7 @@
     (run-ns-last
       (string-append
         "(ns test-hkt-impl-2)\n"
-        "(require [prologos::core::foldable-trait :refer [Foldable Foldable-fold]])\n"
+        "(require [prologos::core::collection-traits :refer [Foldable Foldable-fold]])\n"
         "(eval (suc zero))\n")))
   (check-equal? result "1N : Nat"))
 
@@ -91,7 +91,7 @@
     (run-ns-last
       (string-append
         "(ns test-hkt-impl-3)\n"
-        "(require [prologos::core::functor-trait :refer [Functor Functor-fmap]])\n"
+        "(require [prologos::core::collection-traits :refer [Functor Functor-fmap]])\n"
         "(eval (suc zero))\n")))
   (check-equal? result "1N : Nat"))
 

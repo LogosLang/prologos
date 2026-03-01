@@ -1,6 +1,6 @@
 ns prologos::core::indexed-pvec
 
-require [prologos::core::indexed-trait :refer [Indexed Indexed-idx-nth Indexed-idx-length Indexed-idx-update]]
+require [prologos::core::collection-traits :refer [Indexed Indexed-idx-nth Indexed-idx-length Indexed-idx-update]]
 require [prologos::data::option        :refer [Option some none]]
 require [prologos::data::nat            :refer [lt?]]
 

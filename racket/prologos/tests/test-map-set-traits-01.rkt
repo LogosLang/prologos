@@ -59,11 +59,11 @@
 
 (define preamble
   "(ns test)
-(require (prologos::core::keyed-trait    :refer (Keyed)))
-(require (prologos::core::setlike-trait  :refer (Setlike)))
-(require (prologos::core::seqable-trait  :refer (Seqable)))
-(require (prologos::core::buildable-trait :refer (Buildable Buildable-from-seq Buildable-empty-coll)))
-(require (prologos::core::foldable-trait  :refer (Foldable)))
+(require (prologos::core::collection-traits    :refer (Keyed)))
+(require (prologos::core::collection-traits  :refer (Setlike)))
+(require (prologos::core::collection-traits  :refer (Seqable)))
+(require (prologos::core::collection-traits :refer (Buildable Buildable-from-seq Buildable-empty-coll)))
+(require (prologos::core::collection-traits  :refer (Foldable)))
 (require (prologos::core::keyed-map      :refer (Map--Keyed--dict)))
 (require (prologos::core::setlike-set    :refer (Set--Setlike--dict)))
 (require (prologos::core::seqable-set    :refer (Set--Seqable--dict)))
@@ -88,7 +88,7 @@
     (lambda ()
       (run-ns
         "(ns test)
-         (require (prologos::core::keyed-trait :refer (Keyed)))
+         (require (prologos::core::collection-traits :refer (Keyed)))
          (require (prologos::core::keyed-map   :refer (Map--Keyed--dict)))"))))
 
 
@@ -97,7 +97,7 @@
     (lambda ()
       (run-ns
         "(ns test)
-         (require (prologos::core::setlike-trait :refer (Setlike)))
+         (require (prologos::core::collection-traits :refer (Setlike)))
          (require (prologos::core::setlike-set   :refer (Set--Setlike--dict)))"))))
 
 
@@ -106,7 +106,7 @@
     (lambda ()
       (run-ns
         "(ns test)
-         (require (prologos::core::seqable-trait :refer (Seqable)))
+         (require (prologos::core::collection-traits :refer (Seqable)))
          (require (prologos::core::seqable-set   :refer (Set--Seqable--dict)))"))))
 
 
@@ -115,7 +115,7 @@
     (lambda ()
       (run-ns
         "(ns test)
-         (require (prologos::core::buildable-trait :refer (Buildable)))
+         (require (prologos::core::collection-traits :refer (Buildable)))
          (require (prologos::core::buildable-set   :refer (Set--Buildable--dict)))"))))
 
 
@@ -124,7 +124,7 @@
     (lambda ()
       (run-ns
         "(ns test)
-         (require (prologos::core::foldable-trait :refer (Foldable)))
+         (require (prologos::core::collection-traits :refer (Foldable)))
          (require (prologos::core::foldable-set   :refer (set-foldable)))"))))
 
 

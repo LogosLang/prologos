@@ -33,9 +33,9 @@
   (string-append
    "(ns test)\n"
    "(require [prologos::core::functor-list :refer [list-functor]])\n"
-   "(require [prologos::core::functor-trait :refer [Functor]])\n"
+   "(require [prologos::core::collection-traits :refer [Functor]])\n"
    "(require [prologos::core::foldable-list :refer [list-foldable]])\n"
-   "(require [prologos::core::seq-trait :refer [Seq seq-first seq-rest seq-empty?]])\n"
+   "(require [prologos::core::collection-traits :refer [Seq seq-first seq-rest seq-empty?]])\n"
    "(require [prologos::core::seq-list :refer [list-seq]])\n"
    "(require [prologos::data::list :refer [List nil cons]])\n"
    "(require [prologos::data::nat :refer [double zero? add]])\n"

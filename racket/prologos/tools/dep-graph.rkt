@@ -950,15 +950,7 @@
    'prologos::core::into-trait       '(prologos::core::from-trait)
    'prologos::core::tryfrom-trait    '(prologos::data::option)
    'prologos::core::hashable-trait   '(prologos::data::nat)
-   'prologos::core::seq-trait        '(prologos::data::option)
-   'prologos::core::seqable-trait    '(prologos::data::lseq)
-   'prologos::core::buildable-trait  '(prologos::data::lseq)
-   'prologos::core::foldable-trait   '()
-   'prologos::core::reducible-trait  '()
-   'prologos::core::functor-trait    '()
-   'prologos::core::indexed-trait    '(prologos::data::option)
-   'prologos::core::keyed-trait      '(prologos::data::option)
-   'prologos::core::setlike-trait    '()
+   'prologos::core::collection-traits '(prologos::data::lseq prologos::data::option)
    'prologos::core::partialord-trait '(prologos::data::option prologos::data::ordering)
 
    ;; Trait instances
@@ -1005,47 +997,47 @@
                                     prologos::data::pair)
 
    ;; Collection trait instances
-   'prologos::core::seq-list       '(prologos::core::seq-trait prologos::data::list
+   'prologos::core::seq-list       '(prologos::core::collection-traits prologos::data::list
                                    prologos::data::option)
-   'prologos::core::seqable-list   '(prologos::core::seqable-trait prologos::data::lseq
+   'prologos::core::seqable-list   '(prologos::core::collection-traits prologos::data::lseq
                                    prologos::data::lseq-ops prologos::data::list)
-   'prologos::core::buildable-list '(prologos::core::buildable-trait prologos::data::lseq
+   'prologos::core::buildable-list '(prologos::core::collection-traits prologos::data::lseq
                                    prologos::data::lseq-ops prologos::data::list)
-   'prologos::core::indexed-list   '(prologos::core::indexed-trait prologos::data::option
+   'prologos::core::indexed-list   '(prologos::core::collection-traits prologos::data::option
                                    prologos::data::list prologos::data::nat)
-   'prologos::core::foldable-list  '(prologos::core::foldable-trait prologos::data::list)
-   'prologos::core::reducible-list '(prologos::core::reducible-trait prologos::data::list)
-   'prologos::core::functor-list   '(prologos::core::functor-trait prologos::data::list)
+   'prologos::core::foldable-list  '(prologos::core::collection-traits prologos::data::list)
+   'prologos::core::reducible-list '(prologos::core::collection-traits prologos::data::list)
+   'prologos::core::functor-list   '(prologos::core::collection-traits prologos::data::list)
    ;; PVec trait instances
-   'prologos::core::seqable-pvec   '(prologos::core::seqable-trait prologos::data::lseq
+   'prologos::core::seqable-pvec   '(prologos::core::collection-traits prologos::data::lseq
                                     prologos::data::lseq-ops prologos::data::list)
-   'prologos::core::buildable-pvec '(prologos::core::buildable-trait prologos::data::lseq
+   'prologos::core::buildable-pvec '(prologos::core::collection-traits prologos::data::lseq
                                     prologos::data::lseq-ops prologos::data::list)
-   'prologos::core::indexed-pvec   '(prologos::core::indexed-trait prologos::data::option
+   'prologos::core::indexed-pvec   '(prologos::core::collection-traits prologos::data::option
                                     prologos::data::nat)
-   'prologos::core::foldable-pvec  '(prologos::core::foldable-trait prologos::data::list)
-   'prologos::core::reducible-pvec '(prologos::core::reducible-trait)
-   'prologos::core::functor-pvec   '(prologos::core::functor-trait prologos::data::list)
+   'prologos::core::foldable-pvec  '(prologos::core::collection-traits prologos::data::list)
+   'prologos::core::reducible-pvec '(prologos::core::collection-traits)
+   'prologos::core::functor-pvec   '(prologos::core::collection-traits prologos::data::list)
    'prologos::core::pvec-ops       '(prologos::data::list prologos::data::option)
    ;; Set trait instances
-   'prologos::core::seqable-set    '(prologos::core::seqable-trait prologos::data::lseq
+   'prologos::core::seqable-set    '(prologos::core::collection-traits prologos::data::lseq
                                      prologos::data::lseq-ops prologos::data::list)
-   'prologos::core::buildable-set  '(prologos::core::buildable-trait prologos::data::lseq
+   'prologos::core::buildable-set  '(prologos::core::collection-traits prologos::data::lseq
                                      prologos::data::lseq-ops prologos::data::list)
-   'prologos::core::foldable-set   '(prologos::core::foldable-trait)
-   'prologos::core::reducible-set  '(prologos::core::reducible-trait)
+   'prologos::core::foldable-set   '(prologos::core::collection-traits)
+   'prologos::core::reducible-set  '(prologos::core::collection-traits)
    'prologos::core::setlike-set    '()
    'prologos::core::set-ops        '(prologos::data::list prologos::data::option)
    ;; LSeq trait instances
-   'prologos::core::seqable-lseq   '(prologos::core::seqable-trait prologos::data::lseq)
-   'prologos::core::buildable-lseq '(prologos::core::buildable-trait prologos::data::lseq)
-   'prologos::core::foldable-lseq  '(prologos::core::foldable-trait prologos::data::lseq
+   'prologos::core::seqable-lseq   '(prologos::core::collection-traits prologos::data::lseq)
+   'prologos::core::buildable-lseq '(prologos::core::collection-traits prologos::data::lseq)
+   'prologos::core::foldable-lseq  '(prologos::core::collection-traits prologos::data::lseq
                                      prologos::data::lseq-ops prologos::data::list)
-   'prologos::core::reducible-lseq '(prologos::core::reducible-trait prologos::data::lseq
+   'prologos::core::reducible-lseq '(prologos::core::collection-traits prologos::data::lseq
                                      prologos::data::lseq-ops)
-   'prologos::core::seq-lseq       '(prologos::core::seq-trait prologos::data::lseq
+   'prologos::core::seq-lseq       '(prologos::core::collection-traits prologos::data::lseq
                                      prologos::data::option)
-   'prologos::core::seq-functions  '(prologos::core::seq-trait prologos::data::option
+   'prologos::core::seq-functions  '(prologos::core::collection-traits prologos::data::option
                                    prologos::data::list)
 
    ;; Lattice trait + instances
@@ -1189,23 +1181,23 @@
                                   prologos::core::eq-trait)
    'test-trait-impl-01.rkt       '(prologos::data::nat prologos::data::bool prologos::data::option
                                   prologos::data::either prologos::data::list
-                                  prologos::core::eq-trait prologos::core::seq-trait
+                                  prologos::core::eq-trait prologos::core::collection-traits
                                   prologos::core::seq-list prologos::core::seq-functions)
    'test-trait-impl-02.rkt       '(prologos::data::nat prologos::data::bool prologos::data::option
                                   prologos::data::either prologos::data::list
-                                  prologos::core::eq-trait prologos::core::seq-trait
+                                  prologos::core::eq-trait prologos::core::collection-traits
                                   prologos::core::seq-list prologos::core::seq-functions)
    'test-trait-impl-03.rkt       '(prologos::data::nat prologos::data::bool prologos::data::option
                                   prologos::data::either prologos::data::list
-                                  prologos::core::eq-trait prologos::core::seq-trait
+                                  prologos::core::eq-trait prologos::core::collection-traits
                                   prologos::core::seq-list prologos::core::seq-functions)
    'test-trait-impl-04-01.rkt     '(prologos::data::nat prologos::data::bool prologos::data::option
                                   prologos::data::either prologos::data::list
-                                  prologos::core::eq-trait prologos::core::seq-trait
+                                  prologos::core::eq-trait prologos::core::collection-traits
                                   prologos::core::seq-list prologos::core::seq-functions)
    'test-trait-impl-04-02.rkt     '(prologos::data::nat prologos::data::bool prologos::data::option
                                   prologos::data::either prologos::data::list
-                                  prologos::core::eq-trait prologos::core::seq-trait
+                                  prologos::core::eq-trait prologos::core::collection-traits
                                   prologos::core::seq-list prologos::core::seq-functions)
    'test-trait-resolution.rkt   '(prologos::data::nat prologos::data::bool prologos::core::eq-trait)
    'test-method-resolution.rkt  '(prologos::data::nat prologos::data::bool prologos::core::eq-trait
@@ -1263,7 +1255,7 @@
                                   prologos::core::functor-list prologos::core::seq-list
                                   prologos::core::seqable-list prologos::core::buildable-list
                                   prologos::core::collection-ops)
-   'test-reducible.rkt            '(prologos::core::reducible-trait prologos::core::buildable-trait
+   'test-reducible.rkt            '(prologos::core::collection-traits prologos::core::collection-traits
                                   prologos::core::reducible-list prologos::core::reducible-pvec
                                   prologos::core::reducible-set prologos::core::reducible-lseq
                                   prologos::core::buildable-list prologos::core::buildable-pvec
@@ -1271,16 +1263,16 @@
                                   prologos::data::list prologos::data::nat prologos::data::option
                                   prologos::data::lseq prologos::data::lseq-ops)
    'test-generic-ops-01-01.rkt    '(prologos::data::list prologos::data::nat prologos::data::option
-                                  prologos::core::seq-trait prologos::core::seq-functions
+                                  prologos::core::collection-traits prologos::core::seq-functions
                                   prologos::core::collection-ops)
    'test-generic-ops-01-02.rkt    '(prologos::data::list prologos::data::nat prologos::data::option
-                                  prologos::core::seq-trait prologos::core::seq-functions
+                                  prologos::core::collection-traits prologos::core::seq-functions
                                   prologos::core::collection-ops)
    'test-generic-ops-02-01.rkt    '(prologos::data::list prologos::data::nat prologos::data::option
-                                  prologos::core::seq-trait prologos::core::seq-functions
+                                  prologos::core::collection-traits prologos::core::seq-functions
                                   prologos::core::collection-ops)
    'test-generic-ops-02-02.rkt    '(prologos::data::list prologos::data::nat prologos::data::option
-                                  prologos::core::seq-trait prologos::core::seq-functions
+                                  prologos::core::collection-traits prologos::core::seq-functions
                                   prologos::core::collection-ops)
    'test-hkt-errors.rkt         '()  ; Uses ns/prelude — no extra lib deps
    'test-specialization.rkt     '()  ; Uses ns/prelude — no extra lib deps
@@ -1309,10 +1301,10 @@
    'test-sexp-reader-parity.rkt '(prologos::data::nat prologos::data::list)
    'test-introspection.rkt      '(prologos::data::datum)
    'test-quote.rkt              '(prologos::data::datum)
-   'test-kind-inference.rkt     '(prologos::core::seqable-trait prologos::core::buildable-trait
+   'test-kind-inference.rkt     '(prologos::core::collection-traits prologos::core::collection-traits
                                   prologos::data::lseq prologos::data::nat)
-   'test-hkt-impl.rkt           '(prologos::core::foldable-trait prologos::core::functor-trait
-                                  prologos::core::seqable-trait prologos::core::buildable-trait
+   'test-hkt-impl.rkt           '(prologos::core::collection-traits prologos::core::collection-traits
+                                  prologos::core::collection-traits prologos::core::collection-traits
                                   prologos::core::seqable-list prologos::core::seqable-pvec
                                   prologos::core::seqable-lseq prologos::core::seqable-set
                                   prologos::core::buildable-list prologos::core::buildable-pvec
@@ -1353,7 +1345,7 @@
                                   prologos::core::mul-instances prologos::core::neg-instances
                                   prologos::core::abs-instances)
    'test-auto-implicits.rkt     '(prologos::data::nat)
-   'test-kind-inference-where.rkt '(prologos::core::seqable-trait prologos::core::buildable-trait
+   'test-kind-inference-where.rkt '(prologos::core::collection-traits prologos::core::collection-traits
                                     prologos::core::eq-trait prologos::core::ord-trait
                                     prologos::data::lseq)
    'test-sprint10.rkt           '(prologos::data::nat prologos::data::bool)

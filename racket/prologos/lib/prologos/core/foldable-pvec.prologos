@@ -1,6 +1,6 @@
 ns prologos::core::foldable-pvec
 
-require [prologos::core::foldable-trait :refer [Foldable]]
+require [prologos::core::collection-traits :refer [Foldable]]
 
 ;; ========================================
 ;; Foldable instance for PVec

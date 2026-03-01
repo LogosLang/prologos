@@ -1,6 +1,6 @@
 ns prologos::core::setlike-set
 
-require [prologos::core::setlike-trait :refer [Setlike]]
+require [prologos::core::collection-traits :refer [Setlike]]
 
 ;; ========================================
 ;; Setlike instance for Set

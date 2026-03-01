@@ -30,8 +30,8 @@
 
 (define shared-preamble
   "(ns test)
-(require (prologos::core::reducible-trait  :refer (Reducible)))
-(require (prologos::core::buildable-trait  :refer (Buildable Buildable-from-seq Buildable-empty-coll Buildable-conj)))
+(require (prologos::core::collection-traits  :refer (Reducible)))
+(require (prologos::core::collection-traits  :refer (Buildable Buildable-from-seq Buildable-empty-coll Buildable-conj)))
 (require (prologos::core::reducible-list   :refer (list-reducible)))
 (require (prologos::core::reducible-pvec   :refer (pvec-reducible)))
 (require (prologos::core::reducible-set    :refer (set-reducible)))

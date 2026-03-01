@@ -58,7 +58,7 @@
     (run-ns-with-spec-store
       (string-append
         "(ns test-d2-1 :no-prelude)\n"
-        "(require [prologos::core::seqable-trait :refer [Seqable]])\n"
+        "(require [prologos::core::collection-traits :refer [Seqable]])\n"
         "(require [prologos::data::lseq :refer [LSeq]])\n"
         "(spec my-to-seq (C A) -> (LSeq A) where (Seqable C))\n")))
   (define se (hash-ref spec-store 'my-to-seq #f))
@@ -80,7 +80,7 @@
     (run-ns-with-spec-store
       (string-append
         "(ns test-d2-2 :no-prelude)\n"
-        "(require [prologos::core::buildable-trait :refer [Buildable]])\n"
+        "(require [prologos::core::collection-traits :refer [Buildable]])\n"
         "(require [prologos::data::lseq :refer [LSeq]])\n"
         "(spec my-build (LSeq A) -> (C A) where (Buildable C))\n")))
   (define se (hash-ref spec-store 'my-build #f))
@@ -95,8 +95,8 @@
     (run-ns-with-spec-store
       (string-append
         "(ns test-d2-3 :no-prelude)\n"
-        "(require [prologos::core::seqable-trait :refer [Seqable]])\n"
-        "(require [prologos::core::buildable-trait :refer [Buildable]])\n"
+        "(require [prologos::core::collection-traits :refer [Seqable]])\n"
+        "(require [prologos::core::collection-traits :refer [Buildable]])\n"
         "(require [prologos::data::lseq :refer [LSeq]])\n"
         "(spec gmap (-> A B) -> (C A) -> (C B) where (Seqable C) (Buildable C))\n")))
   (define se (hash-ref spec-store 'gmap #f))
@@ -113,7 +113,7 @@
     (run-ns-with-spec-store
       (string-append
         "(ns test-d2-4 :no-prelude)\n"
-        "(require [prologos::core::seqable-trait :refer [Seqable]])\n"
+        "(require [prologos::core::collection-traits :refer [Seqable]])\n"
         "(require [prologos::core::eq-trait :refer [Eq]])\n"
         "(spec gfilter (-> A Bool) -> (C A) -> (C A) where (Seqable C) (Eq A))\n")))
   (define se (hash-ref spec-store 'gfilter #f))
@@ -129,7 +129,7 @@
     (run-ns-with-spec-store
       (string-append
         "(ns test-d2-5 :no-prelude)\n"
-        "(require [prologos::core::seqable-trait :refer [Seqable]])\n"
+        "(require [prologos::core::collection-traits :refer [Seqable]])\n"
         ;; C only appears in where, not in type signature
         "(spec my-phantom Nat where (Seqable C))\n")))
   (define se (hash-ref spec-store 'my-phantom #f))
@@ -216,7 +216,7 @@
     (run-ns-with-spec-store
       (string-append
         "(ns test-d2-compat1 :no-prelude)\n"
-        "(require [prologos::core::seqable-trait :refer [Seqable]])\n"
+        "(require [prologos::core::collection-traits :refer [Seqable]])\n"
         "(require [prologos::data::lseq :refer [LSeq]])\n"
         ;; Explicit {C} binder — existing pattern should still work
         "(spec my-explicit ($brace-params C) ($brace-params A)"
@@ -233,7 +233,7 @@
     (run-ns-with-spec-store
       (string-append
         "(ns test-d2-compat2 :no-prelude)\n"
-        "(require [prologos::core::seqable-trait :refer [Seqable]])\n"
+        "(require [prologos::core::collection-traits :refer [Seqable]])\n"
         "(require [prologos::data::lseq :refer [LSeq]])\n"
         ;; Explicit kind annotation matching trait kind — should agree
         ;; parse-brace-param-list expects: ($brace-params C : Type -> Type)
@@ -252,7 +252,7 @@
       (run-ns-with-spec-store
         (string-append
           "(ns test-d2-conflict :no-prelude)\n"
-          "(require [prologos::core::seqable-trait :refer [Seqable]])\n"
+          "(require [prologos::core::collection-traits :refer [Seqable]])\n"
           "(require [prologos::data::lseq :refer [LSeq]])\n"
           "(spec my-conflict ($brace-params C : Type -> Type -> Type)"
           "  ($brace-params A)"
@@ -267,7 +267,7 @@
     (run-ns-with-spec-store
       (string-append
         "(ns test-d2-meta :no-prelude)\n"
-        "(require [prologos::core::seqable-trait :refer [Seqable]])\n"
+        "(require [prologos::core::collection-traits :refer [Seqable]])\n"
         "(require [prologos::data::lseq :refer [LSeq]])\n"
         ;; Use metadata :where instead of inline where
         "(spec my-meta-fn (C A) -> (LSeq A) {:where (Seqable C)})\n")))

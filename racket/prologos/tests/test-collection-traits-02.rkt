@@ -59,11 +59,11 @@
 
 (define preamble
   "(ns test)
-(require (prologos::core::seqable-trait   :refer (Seqable Seqable-to-seq)))
-(require (prologos::core::buildable-trait :refer (Buildable Buildable-from-seq Buildable-empty-coll)))
-(require (prologos::core::indexed-trait   :refer (Indexed Indexed-idx-nth Indexed-idx-length Indexed-idx-update)))
-(require (prologos::core::keyed-trait     :refer (Keyed Keyed-kv-get Keyed-kv-assoc Keyed-kv-dissoc)))
-(require (prologos::core::setlike-trait   :refer (Setlike Setlike-set-member? Setlike-set-insert Setlike-set-remove)))
+(require (prologos::core::collection-traits   :refer (Seqable Seqable-to-seq)))
+(require (prologos::core::collection-traits :refer (Buildable Buildable-from-seq Buildable-empty-coll)))
+(require (prologos::core::collection-traits   :refer (Indexed Indexed-idx-nth Indexed-idx-length Indexed-idx-update)))
+(require (prologos::core::collection-traits     :refer (Keyed Keyed-kv-get Keyed-kv-assoc Keyed-kv-dissoc)))
+(require (prologos::core::collection-traits   :refer (Setlike Setlike-set-member? Setlike-set-insert Setlike-set-remove)))
 (require (prologos::core::seqable-list    :refer (List--Seqable--dict)))
 (require (prologos::core::buildable-list  :refer (List--Buildable--dict List--Buildable--from-seq List--Buildable--empty-coll)))
 (require (prologos::core::indexed-list    :refer (List--Indexed--dict list-idx-nth list-idx-length list-idx-update)))

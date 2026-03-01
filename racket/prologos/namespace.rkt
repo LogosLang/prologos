@@ -372,7 +372,7 @@
     (require [prologos::core::fromrat-trait  :refer [FromRat]])
     (require [prologos::core::numeric-bundles :refer [Num Fractional]])
     (require [prologos::core::lattice-trait   :refer [Lattice Lattice-bot Lattice-join Lattice-leq]])
-    (require [prologos::core::reducible-trait :refer [Reducible]])
+    (require [prologos::core::collection-traits :refer [Reducible Collection]])
 
     ;; ---- Additional container types + operations ----
     (require [prologos::data::map-entry :refer [MapEntry mk-entry entry-key entry-val]])
@@ -466,7 +466,6 @@
     (require [prologos::core::identity-instances :refer []])
 
     ;; ---- Generic collection operations (HKT-dispatched) ----
-    (require [prologos::core::collection-bundle :refer [Collection]])
     (require [prologos::core::generic-ops :refer [gmap gfilter gfold glength
                                                   gconcat gany? gall? gto-list]])
 
