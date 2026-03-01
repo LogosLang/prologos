@@ -220,7 +220,11 @@
 (define (render-inline text)
   (define escaped (html-escape text))
   (define step1 (regexp-replace* #rx"\\*\\*([^*]+)\\*\\*" escaped "<strong>\\1</strong>"))
-  (regexp-replace* #rx"`([^`]+)`" step1 "<code>\\1</code>"))
+  ;; Handle double-backtick inline code first: `` `content` ``
+  ;; Content may include single backticks, so use .*? (non-greedy)
+  (define step2 (regexp-replace* #rx"``[ ](.+?)[ ]``" step1 "<code>\\1</code>"))
+  ;; Then single-backtick: `content`
+  (regexp-replace* #rx"`([^`]+)`" step2 "<code>\\1</code>"))
 
 ;; Split a list of prose strings into paragraphs (separated by "" blank lines).
 (define (split-on-blanks lines)
@@ -246,6 +250,100 @@
      (format "<p>~a</p>" (string-join (map render-inline para) "\n")))
    "\n"))
 
+;; ========================================
+;; Syntax Highlighting
+;; ========================================
+;;
+;; Regex-based highlighter. Works on HTML-escaped text using a sentinel-based
+;; approach: first pass replaces tokens with sentinels (\x00class\x00text\x01),
+;; then a second pass converts sentinels to <span> tags. This avoids double-
+;; wrapping since regexes only match un-sentineled text.
+
+;; Keyword regex: word-boundary matched list of all Prologos keywords.
+;; The regex is compiled once at module load time.
+(define hl-keyword-rx
+  (regexp
+   (string-append
+    "(?<=^|[ \\[\\]{}(),])"  ;; lookbehind: start of line or delimiter
+    "("
+    (string-join
+     '("defn" "def" "data" "spec-?" "trait-?" "impl-?"
+       "match" "fn" "let" "do" "if" "the" "forall" "exists"
+       "check" "eval" "infer" "defmacro" "bundle" "property" "functor"
+       "relation" "clause" "query" "foreign" "require" "provide"
+       "ns" "module" "deftype" "subtype" "transient" "persist!"
+       "with-transient" "defr")
+     "|")
+    ")"
+    "(?=$|[ \\[\\]{}(),:])")))  ;; lookahead: end of line or delimiter
+
+;; Highlight an already-HTML-escaped code line using regex replacements.
+;; Order matters: strings and comments first (highest priority), then other tokens.
+;; Uses #px (Perl-compatible) regexes for lookbehind/lookahead support.
+;; Highlight uses a placeholder approach: strings and comments are extracted
+;; first (replaced with unique tokens), then keyword/type/etc highlighting
+;; runs on the placeholder-ified text, then placeholders are restored.
+;; This prevents keywords inside strings from being highlighted.
+(define (highlight-code-line line)
+  ;; Phase A: Extract comments and strings into placeholders
+  (define stash '())  ;; list of (placeholder . replacement) pairs
+  (define counter 0)
+  (define (make-placeholder! cls content)
+    (set! counter (add1 counter))
+    (define tok (format "\x00~a\x00" counter))
+    (set! stash (cons (cons tok (format "<span class=\"~a\">~a</span>" cls content))
+                      stash))
+    tok)
+
+  ;; Step 1: Comments (;; to end of line)
+  ;; Use #px lookbehind to avoid matching ; in HTML entities like &lt; &gt; &amp;
+  (define s1
+    (regexp-replace #px"(?<![a-z]);.*$" line
+                    (lambda (m) (make-placeholder! "hl-cmt" m))))
+
+  ;; Step 2: Strings ("...") — replace with placeholders
+  (define s2
+    (regexp-replace* #rx"\"[^\"]*\""
+                     s1
+                     (lambda (m) (make-placeholder! "hl-str" m))))
+
+  ;; Phase B: Highlight remaining tokens (safe — no strings/comments to interfere)
+
+  ;; Step 3: Keyword literals (:name, :refer, etc.)
+  (define s3
+    (regexp-replace* #px"(?<![a-zA-Z0-9_:]):[a-zA-Z][a-zA-Z0-9_?!*+-]*"
+                     s2
+                     (lambda (m) (string-append "<span class=\"hl-kwlit\">" m "</span>"))))
+
+  ;; Step 4: Number literals (42N, 3/4, ~3.14)
+  (define s4
+    (regexp-replace* #px"(?<=[[ (]|^)[~]?[0-9]+(?:/[0-9]+|\\.[0-9]+|N)?"
+                     s3
+                     (lambda (m) (string-append "<span class=\"hl-num\">" m "</span>"))))
+
+  ;; Step 5: Operators (-&gt; is HTML-escaped ->)
+  (define s5
+    (regexp-replace* #rx"-&gt;|&gt;&gt;|:="
+                     s4
+                     (lambda (m) (string-append "<span class=\"hl-op\">" m "</span>"))))
+
+  ;; Step 6: Keywords (word-boundary matched)
+  (define s6
+    (regexp-replace* #px"(?<=^|[ \\[\\]{}(),\n])(?:defn|def|data|spec-?|trait-?|impl-?|match|fn|let|do|if|the|forall|exists|check|eval|infer|defmacro|bundle|property|functor|relation|clause|query|foreign|require|provide|ns|module|deftype|subtype|transient|persist!|with-transient|defr)(?=$|[ \\[\\]{}(),:])"
+                     s5
+                     (lambda (m) (string-append "<span class=\"hl-kw\">" m "</span>"))))
+
+  ;; Step 7: Type identifiers (start with uppercase, not already in a span tag)
+  (define s7
+    (regexp-replace* #px"(?<![a-z\">])[A-Z][a-zA-Z0-9_*+!?'-]*"
+                     s6
+                     (lambda (m) (string-append "<span class=\"hl-ty\">" m "</span>"))))
+
+  ;; Phase C: Restore placeholders
+  (for/fold ([result s7])
+            ([pair (in-list stash)])
+    (string-replace result (car pair) (cdr pair))))
+
 (define (render-code-block code-lines)
   (define trimmed
     (let* ([fwd (dropf code-lines (lambda (l) (string=? (string-trim l) "")))]
@@ -254,7 +352,9 @@
   (if (null? trimmed)
       ""
       (format "<pre><code class=\"prologos\">~a</code></pre>"
-              (string-join (map html-escape trimmed) "\n"))))
+              (string-join (map (lambda (l) (highlight-code-line (html-escape l)))
+                                trimmed)
+                           "\n"))))
 
 ;; ========================================
 ;; CSS
@@ -296,7 +396,7 @@
 * { box-sizing: border-box; }
 body {
   font-family: Georgia, 'Times New Roman', serif;
-  max-width: 740px; margin: 0 auto; padding: 2rem 1.5rem;
+  max-width: 880px; margin: 0 auto; padding: 2rem 1.5rem;
   color: var(--fg); line-height: 1.72; background: var(--bg);
   transition: background .2s, color .2s;
 }
@@ -312,16 +412,21 @@ h3.section-title {
   font-size: 1.08rem; color: var(--heading); border-left: 3px solid var(--section-border);
   padding-left: .6rem; margin-top: 1.8rem; margin-bottom: .2rem;
 }
+.module-container {
+  border: 1px solid var(--border); border-radius: 6px;
+  padding: .8rem 1.2rem; margin: 1.5rem 0;
+}
 .module-badge {
   display: inline-block; font-family: 'Menlo','Consolas',monospace;
   font-size: .78rem; background: var(--badge-bg); color: var(--accent);
   border: 1px solid var(--badge-border); border-radius: 3px;
-  padding: .1rem .45rem; margin: .6rem 0 .25rem;
+  padding: .1rem .45rem; margin: 0 0 .5rem;
 }
 pre {
   background: var(--code-bg); border-left: 3px solid var(--border);
   padding: .9rem 1rem; overflow-x: auto; border-radius: 0 4px 4px 0;
-  margin: .5rem 0 1.2rem;
+  margin: .5rem -1.5rem 1.2rem;
+  font-size: .8rem;
 }
 code { font-family: 'Menlo','Consolas',monospace; font-size: .87rem; }
 pre code { background: none; color: var(--fg); }
@@ -366,6 +471,32 @@ ol.toc-chapters a { color: var(--accent); text-decoration: none; }
 ol.toc-chapters a:hover { text-decoration: underline; }
 .toc-modules { font-size: .82rem; color: var(--muted); margin-left: .4rem; }
 .book-subtitle { color: var(--muted); font-size: 1rem; margin-top: -.5rem; margin-bottom: 2rem; }
+/* ── Syntax highlighting (light) ── */
+.hl-kw  { color: #7c4dff; font-weight: 600; }
+.hl-ty  { color: #0d7377; }
+.hl-str { color: #2e7d32; }
+.hl-num { color: #c75000; }
+.hl-cmt { color: var(--muted); font-style: italic; }
+.hl-kwlit { color: #6f42c1; }
+.hl-op  { color: #d63384; }
+.hl-br  { color: var(--muted); }
+/* ── Syntax highlighting (dark) ── */
+[data-theme='dark'] .hl-kw  { color: #c792ea; }
+[data-theme='dark'] .hl-ty  { color: #80cbc4; }
+[data-theme='dark'] .hl-str { color: #c3e88d; }
+[data-theme='dark'] .hl-num { color: #f78c6c; }
+[data-theme='dark'] .hl-kwlit { color: #b39ddb; }
+[data-theme='dark'] .hl-op  { color: #ff80ab; }
+[data-theme='dark'] .hl-br  { color: #888; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .hl-kw  { color: #c792ea; }
+  :root:not([data-theme='light']) .hl-ty  { color: #80cbc4; }
+  :root:not([data-theme='light']) .hl-str { color: #c3e88d; }
+  :root:not([data-theme='light']) .hl-num { color: #f78c6c; }
+  :root:not([data-theme='light']) .hl-kwlit { color: #b39ddb; }
+  :root:not([data-theme='light']) .hl-op  { color: #ff80ab; }
+  :root:not([data-theme='light']) .hl-br  { color: #888; }
+}
 ")
 
 ;; Tiny script: toggle dark/light, persist to localStorage
@@ -440,8 +571,21 @@ ol.toc-chapters a:hover { text-decoration: underline; }
 (define (render-chapter-page elements chapter-name prev-name next-name)
   (define out '())
   (define last-module "")
+  (define module-open? #f)
 
   (define (emit! s) (set! out (cons s out)))
+
+  (define (close-module!)
+    (when module-open?
+      (emit! "</section>\n")
+      (set! module-open? #f)))
+
+  (define (open-module! name)
+    (close-module!)
+    (emit! (format "<section class=\"module-container\">\n<div class=\"module-badge\">~a</div>\n"
+                   (html-escape name)))
+    (set! module-open? #t)
+    (set! last-module name))
 
   ;; Top nav
   (emit! (nav-bar prev-name next-name))
@@ -453,6 +597,7 @@ ol.toc-chapters a:hover { text-decoration: underline; }
        (emit! (format "<h1 class=\"chapter-title\">~a</h1>\n" (html-escape text)))]
 
       [(elem:part-header text)
+       (close-module!)
        (emit! (format "<h2 class=\"part-header\">~a</h2>\n" (html-escape text)))]
 
       [(elem:section text)
@@ -460,8 +605,7 @@ ol.toc-chapters a:hover { text-decoration: underline; }
 
       [(elem:module name flags)
        (unless (string=? name last-module)
-         (emit! (format "<div class=\"module-badge\">~a</div>\n" (html-escape name)))
-         (set! last-module name))]
+         (open-module! name))]
 
       [(elem:prose lines)
        (define rendered (render-prose-lines lines))
@@ -470,14 +614,14 @@ ol.toc-chapters a:hover { text-decoration: underline; }
 
       [(elem:code lines mod)
        (define rendered (render-code-block lines))
-       ;; Emit module badge if module changed
+       ;; Open module container if module changed
        (when (and (not (string=? mod "")) (not (string=? mod last-module)))
-         (emit! (format "<div class=\"module-badge\">~a</div>\n" (html-escape mod)))
-         (set! last-module mod))
+         (open-module! mod))
        (unless (string=? rendered "")
          (emit! rendered)
          (emit! "\n"))]))
 
+  (close-module!)
   (emit! "</article>\n")
   ;; Bottom nav
   (emit! (nav-bar prev-name next-name #:class "bottom-nav"))

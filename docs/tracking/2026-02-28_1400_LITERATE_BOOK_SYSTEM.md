@@ -24,7 +24,8 @@ The book lives in `lib/prologos/book/`. The OUTLINE manifest controls chapter or
 | Phase 5b | Declaration-first output ordering | Complete | `53223ca` |
 | Phase 5c | Form-level dependency analysis | Complete | `b17555c` |
 | Phase 6 | Prelude generation from book | Complete | — |
-| Phase 7 | Extended weaver (syntax highlighting, search) | Not started | — |
+| Phase 7a | Module container cards | Complete | — |
+| Phase 7b | Regex-based syntax highlighting | Complete | — |
 | Phase 8 | CI integration (tangle, weave, diff-check) | Not started | — |
 
 ## Phase Details
@@ -51,7 +52,7 @@ chapters as human-readable HTML with book-like typography.
 - Inline formatting (bold, code spans)
 - Module badges (pills showing which compilation unit)
 - Prev/TOC/Next navigation
-- Book-like CSS: Georgia serif, 740px max-width, left-border code blocks
+- Book-like CSS: Georgia serif, left-border code blocks, light/dark themes
 
 ### Phase 3: Foundation Chapters (Complete)
 
@@ -160,13 +161,60 @@ Full suite: 4638 tests, zero regressions.
 before launching batch workers. This runs `gen-prelude.rkt --validate` as a subprocess
 (~0.2s). Silent when in sync; prints a warning with remediation command on drift.
 
-### Phase 7: Extended Weaver (Not Started)
+### Phase 7a: Module Container Cards (Complete)
 
-Enhance the weaver with:
-- Syntax highlighting for Prologos code blocks
+Each module's content (prose, code blocks, section headers) is now wrapped in a
+`<section class="module-container">` with a card-style border. The module badge
+serves as the card header.
+
+**Renderer changes:** `render-chapter-page` tracks `module-open?` state. On new
+module, closes the previous `</section>` and opens a new one. Part headers and
+chapter end close the current container.
+
+**CSS:** 1px border, 6px border-radius, 0.8rem/1.2rem padding, 1.5rem margin.
+
+### Phase 7b: Syntax Highlighting (Complete)
+
+Regex-based syntax highlighting for code blocks, using a placeholder approach
+to prevent false positives (e.g., keywords inside strings).
+
+**Token categories (8):**
+| Category | CSS class | Examples |
+|---|---|---|
+| Keyword | `hl-kw` | `defn`, `spec`, `trait`, `impl`, `match`, `fn`, ... |
+| Type | `hl-ty` | `Nat`, `Bool`, `List` (uppercase identifiers) |
+| String | `hl-str` | `"hello"` |
+| Number | `hl-num` | `42N`, `3/4`, `~3.14` |
+| Comment | `hl-cmt` | `; ...` |
+| Keyword literal | `hl-kwlit` | `:name`, `:refer`, `:doc` |
+| Operator | `hl-op` | `->`, `>>`, `:=` |
+
+**Approach:** Three-phase pipeline per code line:
+1. **Phase A** — Extract comments and strings into null-byte placeholders
+2. **Phase B** — Apply keyword/type/number/operator regex highlighting
+3. **Phase C** — Restore placeholders (comments/strings get their spans back)
+
+This prevents keywords like `the`, `if`, `do` inside string literals from being
+highlighted. Uses `#px` (Perl-compatible) regexes for lookahead/lookbehind.
+
+**Bug fixes applied:**
+- `::` module separator: `:` in `prologos::core::eq-trait` no longer matches as keyword literal
+- HTML entity `;`: `&lt;` / `&gt;` semicolons no longer trigger comment highlighting
+- Double-backtick inline code: `` `` `(f ,x y) `` `` in prose now renders correctly
+
+**Additional CSS changes:**
+- Body max-width: 880px (wider layout for less horizontal scrolling)
+- `pre` blocks: negative margins (-1.5rem) to extend beyond container
+- Code font-size: 0.8rem (slightly smaller for more content per line)
+- Light/dark theme variants for all 7 highlight classes
+
+**Performance:** All 22 chapters generate in <30s. Earlier character-level scanner
+approach hung (O(n*m) per line); regex approach uses Racket's C-implemented engine.
+
+### Phase 7 — Remaining Ideas (Not Started)
+
 - Cross-reference links between chapters
 - Full-text search in the generated HTML
-- Dark mode toggle
 - PDF generation (via Pandoc or custom LaTeX backend)
 
 ### Phase 8: CI Integration (Not Started)
@@ -221,6 +269,6 @@ docs/stdlib-book/            — weaver output (gitignored)
 | Tool | Purpose | LOC |
 |---|---|---|
 | `tools/tangle-stdlib.rkt` | Extract compilation units from chapters (+ `--analyze`) | ~200 |
-| `tools/weave-stdlib.rkt` | Render HTML documentation | ~425 |
+| `tools/weave-stdlib.rkt` | Render HTML documentation (containers, syntax highlighting) | ~790 |
 | `tools/form-deps.rkt` | Form-level dependency analysis across book chapters | ~300 |
 | `tools/gen-prelude.rkt` | Generate/validate prelude from PRELUDE manifest | ~200 |
