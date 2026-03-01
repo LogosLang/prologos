@@ -2,19 +2,23 @@
 ;; Chapter: Collection Functions
 ;; ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ;;
-;; With Seqable, Buildable, and Foldable in hand, we can now write
-;; **generic** collection operations that work on any collection type.
-;; `map`, `filter`, `reduce`, `take`, `drop`, `into` — all defined
-;; once, usable everywhere.
+;; With Seqable, Buildable, Foldable, and Reducible in hand, we can
+;; now write **generic** collection operations that work on any
+;; collection type. `map`, `filter`, `reduce`, `take`, `drop`,
+;; `into` — all defined once, usable everywhere.
 ;;
-;; The pattern is always the same:
+;; Two patterns:
 ;;
-;;     to-seq → lseq-op → from-seq
+;;   (1) **Reducing ops** use `Reducible` (native left fold) — folds
+;;       directly over the source's internal structure. No LSeq
+;;       intermediary. Includes: `reduce`, `length`, `any?`, `all?`, `find`.
 ;;
-;; The compiler auto-resolves the Seqable/Buildable/Foldable
-;; dictionaries at each call site from the concrete type. When you
-;; write `map f my-pvec`, the compiler passes the PVec Seqable and
-;; Buildable dicts automatically.
+;;   (2) **Transforming ops** use `Seqable + Buildable` — converts
+;;       to LSeq, transforms, converts back. Includes: `map`, `filter`,
+;;       `take`, `drop`, `concat`, `into`.
+;;
+;; The compiler auto-resolves the trait dictionaries at each call site
+;; from the concrete type.
 ;;
 ;; This chapter also includes List-specialized versions (for when
 ;; HKT inference isn't available) and named conversion functions
@@ -30,22 +34,26 @@ module prologos::core::collection-fns :no-prelude
 
 ;; ── Generic Collection Functions ────────────────────
 ;;
-;; These operate on any collection implementing Seqable, Buildable,
-;; or Foldable. Names intentionally match (and shadow) List-specific
-;; versions in the prelude.
+;; These operate on any collection implementing the collection traits.
+;; Names intentionally match (and shadow) List-specific versions.
 ;;
-;; Single-method trait dicts (`$seq`, `$foldable`) are the function
-;; itself; multi-method trait accessors (`Buildable-from-seq`) are
-;; global fvars. Type args are passed explicitly to lseq functions.
+;; Reducing ops use `Reducible` (native left fold — no LSeq intermediary).
+;; Transforming ops use `Seqable + Buildable` (to-seq → op → from-seq).
+;;
+;; Single-method trait dicts (`$seq`, `$red`) are the function itself;
+;; multi-method trait accessors (`Buildable-from-seq`) are global fvars.
 
 (require (prologos::core::seqable-trait    :refer (Seqable))
          (prologos::core::buildable-trait  :refer (Buildable Buildable-from-seq))
          (prologos::core::foldable-trait   :refer (Foldable))
+         (prologos::core::reducible-trait  :refer (Reducible))
          (prologos::data::lseq            :refer (LSeq lseq-nil lseq-cell lseq-head lseq-rest lseq-empty?))
          (prologos::data::lseq-ops        :refer (lseq-map lseq-filter lseq-take lseq-drop
                                                   lseq-append lseq-fold lseq-length lseq-to-list))
          (prologos::data::list            :refer (List))
          (prologos::data::option          :refer (Option none some)))
+
+;; ── Transforming ops (Seqable + Buildable) ──────────
 
 ;; map : (A -> B) -> C A -> C B
 (spec map {A B : Type} {C : Type -> Type} (Seqable C) -> (Buildable C) -> (-> A B) -> (C A) -> (C B))
@@ -57,56 +65,64 @@ module prologos::core::collection-fns :no-prelude
 (defn filter [$seq $build pred xs]
   (Buildable-from-seq $build A (lseq-filter A pred ($seq A xs))))
 
+;; concat : C A -> C A -> C A
+(spec concat {A : Type} {C : Type -> Type} (Seqable C) -> (Buildable C) -> (C A) -> (C A) -> (C A))
+(defn concat [$seq $build xs ys]
+  (Buildable-from-seq $build A (lseq-append A ($seq A xs) ($seq A ys))))
+
+;; ── Reducing ops (Reducible — native left fold) ─────
+
 ;; reduce : (B -> A -> B) -> B -> C A -> B   [left fold, accumulator first]
-;; Matches List::reduce semantics: f takes (acc, elem).
-(spec reduce {A B : Type} {C : Type -> Type} (Seqable C) -> (-> B (-> A B)) -> B -> (C A) -> B)
-(defn reduce [$seq f z xs]
-  (lseq-fold B A f z ($seq A xs)))
+;; Folds natively over the collection via Reducible — no LSeq intermediary.
+(spec reduce {A B : Type} {C : Type -> Type} (Reducible C) -> (-> B (-> A B)) -> B -> (C A) -> B)
+(defn reduce [$red f z xs]
+  ($red A B f z xs))
+
+;; length : C A -> Nat
+;; Counts elements via native left fold.
+(spec length {A : Type} {C : Type -> Type} (Reducible C) -> (C A) -> Nat)
+(defn length [$red xs]
+  ($red A Nat (fn (n : Nat) (fn (_ : A) (suc n))) zero xs))
+
+;; any? : (A -> Bool) -> C A -> Bool
+;; Note: does NOT short-circuit (processes all elements via fold).
+(spec any? {A : Type} {C : Type -> Type} (Reducible C) -> (-> A Bool) -> (C A) -> Bool)
+(defn any? [$red pred xs]
+  ($red A Bool (fn (acc : Bool) (fn (a : A) (if (pred a) true acc))) false xs))
+
+;; all? : (A -> Bool) -> C A -> Bool
+;; Note: does NOT short-circuit (processes all elements via fold).
+(spec all? {A : Type} {C : Type -> Type} (Reducible C) -> (-> A Bool) -> (C A) -> Bool)
+(defn all? [$red pred xs]
+  ($red A Bool (fn (acc : Bool) (fn (a : A) (if (pred a) acc false))) true xs))
+
+;; find : (A -> Bool) -> C A -> Option A
+;; Note: does NOT short-circuit (processes all elements via fold).
+(spec find {A : Type} {C : Type -> Type} (Reducible C) -> (-> A Bool) -> (C A) -> (Option A))
+(defn find [$red pred xs]
+  ($red A (Option A)
+    (fn (acc : (Option A)) (fn (a : A)
+      (match acc
+        (some _ -> acc)
+        (none -> (if (pred a) (some A a) (none A))))))
+    (none A) xs))
+
+;; ── Seqable-based ops (head access, reduce1) ────────
 
 ;; reduce1 : (A -> A -> A) -> C A -> Option A   [first element as initial]
 ;; Like Clojure's (reduce f coll): uses first element as accumulator.
 ;; Returns none for empty collections, some result for non-empty.
+;; Stays on Seqable because it needs head access to extract the first element.
 (spec reduce1 {A : Type} {C : Type -> Type} (Seqable C) -> (-> A (-> A A)) -> (C A) -> (Option A))
 (defn reduce1 [$seq f xs]
   (match ($seq A xs)
     (lseq-nil -> (none A))
     (lseq-cell a t -> (some A (lseq-fold A A f a (t unit))))))
 
-;; length : C A -> Nat
-(spec length {A : Type} {C : Type -> Type} (Seqable C) -> (C A) -> Nat)
-(defn length [$seq xs]
-  (lseq-length ($seq A xs)))
-
-;; concat : C A -> C A -> C A
-(spec concat {A : Type} {C : Type -> Type} (Seqable C) -> (Buildable C) -> (C A) -> (C A) -> (C A))
-(defn concat [$seq $build xs ys]
-  (Buildable-from-seq $build A (lseq-append A ($seq A xs) ($seq A ys))))
-
-;; any? : (A -> Bool) -> C A -> Bool
-(spec any? {A : Type} {C : Type -> Type} (Foldable C) -> (-> A Bool) -> (C A) -> Bool)
-(defn any? [$foldable pred xs]
-  ($foldable A Bool (fn (a : A) (fn (acc : Bool) (if (pred a) true acc))) false xs))
-
-;; all? : (A -> Bool) -> C A -> Bool
-(spec all? {A : Type} {C : Type -> Type} (Foldable C) -> (-> A Bool) -> (C A) -> Bool)
-(defn all? [$foldable pred xs]
-  ($foldable A Bool (fn (a : A) (fn (acc : Bool) (if (pred a) acc false))) true xs))
-
 ;; to-list : C A -> List A
 (spec to-list {A : Type} {C : Type -> Type} (Seqable C) -> (C A) -> (List A))
 (defn to-list [$seq xs]
   (lseq-to-list ($seq A xs)))
-
-;; find : (A -> Bool) -> C A -> Option A
-;; Note: does NOT short-circuit (processes all elements via fold).
-(spec find {A : Type} {C : Type -> Type} (Foldable C) -> (-> A Bool) -> (C A) -> (Option A))
-(defn find [$foldable pred xs]
-  ($foldable A (Option A)
-    (fn (a : A) (fn (acc : (Option A))
-      (match acc
-        (some _ -> acc)
-        (none -> (if (pred a) (some A a) (none A))))))
-    (none A) xs))
 
 ;; take : Nat -> C A -> C A
 (spec take {A : Type} {C : Type -> Type} (Seqable C) -> (Buildable C) -> Nat -> (C A) -> (C A))

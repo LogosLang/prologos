@@ -16,8 +16,8 @@
 ;; This chapter also defines the Seq, Indexed, Keyed, and Setlike
 ;; traits — specialized interfaces for sequences, indexed containers,
 ;; key-value stores, and set-like collections. The Collection bundle
-;; ties the three core traits (Seqable + Buildable + Foldable) into
-;; a single constraint.
+;; ties the four core traits (Seqable + Buildable + Foldable + Reducible)
+;; into a single constraint.
 
 
 module prologos::core::seqable-trait
@@ -156,12 +156,14 @@ module prologos::core::collection-bundle
 ;; ── The Collection Bundle ───────────────────────────
 ;;
 ;; A bundle is syntactic sugar for multiple trait constraints.
-;; `Collection C` expands to `(Seqable C, Buildable C, Foldable C)`
+;; `Collection C` expands to `(Seqable C, Buildable C, Foldable C, Reducible C)`
 ;; in any `spec` that uses it — a collection is anything that
-;; can be converted to/from LSeq and supports fold.
+;; can be converted to/from LSeq and supports both right fold
+;; (Foldable) and left fold (Reducible).
 
 require [prologos::core::seqable-trait    :refer [Seqable]]
 require [prologos::core::buildable-trait  :refer [Buildable]]
 require [prologos::core::foldable-trait   :refer [Foldable]]
+require [prologos::core::reducible-trait  :refer [Reducible]]
 
-bundle Collection := (Seqable, Buildable, Foldable)
+bundle Collection := (Seqable, Buildable, Foldable, Reducible)

@@ -3,14 +3,16 @@ ns prologos::core::collection-bundle
 require [prologos::core::seqable-trait    :refer [Seqable]]
 require [prologos::core::buildable-trait  :refer [Buildable]]
 require [prologos::core::foldable-trait   :refer [Foldable]]
+require [prologos::core::reducible-trait  :refer [Reducible]]
 
 ;; ========================================
 ;; Collection Bundle
 ;; ========================================
-;; Expands to (Seqable C, Buildable C, Foldable C) when used in a spec.
-;; A Collection is any type constructor that can be converted to/from
-;; lazy sequences and supports fold.
+;; Expands to (Seqable C, Buildable C, Foldable C, Reducible C)
+;; when used in a spec. A Collection is any type constructor that
+;; can be converted to/from lazy sequences, supports right fold
+;; (Foldable), left fold (Reducible), and incremental building.
 ;;
 ;; Note: bundles do not yet support :doc/:laws metadata.
 
-bundle Collection := (Seqable, Buildable, Foldable)
+bundle Collection := (Seqable, Buildable, Foldable, Reducible)
