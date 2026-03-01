@@ -52,12 +52,7 @@
 (require [prologos::core::ord :refer [Ord PartialOrd PartialOrd-partial-compare
                                       nat-ord ord-lt ord-le ord-gt ord-ge ord-eq
                                       ord-min ord-max Char--Ord--dict String--Ord--dict]])
-(require [prologos::core::add-trait      :refer [Add]])
-(require [prologos::core::sub-trait      :refer [Sub]])
-(require [prologos::core::mul-trait      :refer [Mul]])
-(require [prologos::core::div-trait      :refer [Div]])
-(require [prologos::core::neg-trait      :refer [Neg]])
-(require [prologos::core::abs-trait      :refer [Abs]])
+(require [prologos::core::arithmetic :refer [Add Sub Mul Div Neg Abs String--Add--dict]])
 (require [prologos::core::fromint-trait  :refer [FromInt]])
 (require [prologos::core::fromrat-trait  :refer [FromRat]])
 (require [prologos::core::numeric-bundles :refer [Num Fractional]])
@@ -106,24 +101,19 @@
 ;; ---- Instance registration (side-effect only, :refer []) ----
 ;; eq-instances + eq-numeric-instances merged into prologos::core::eq
 ;; ord-instances + ord-numeric-instances merged into prologos::core::ord
-(require [prologos::core::add-instances         :refer []])
-(require [prologos::core::sub-instances         :refer []])
-(require [prologos::core::mul-instances         :refer []])
-(require [prologos::core::div-instances           :refer []])
+;; add/sub/mul/div/neg/abs traits + instances + add-string-instance merged into prologos::core::arithmetic
 (require [prologos::core::fromint-posit-instances  :refer []])
 (require [prologos::core::fromrat-posit-instances  :refer []])
-(require [prologos::core::neg-instances         :refer []])
-(require [prologos::core::abs-instances         :refer []])
 
 ;; ---- Char/String trait instances ----
 ;; Dict bindings are referred so they resolve in user code (not just side-effect)
 ;; eq-char-instance merged into prologos::core::eq
 ;; ord-char-instance merged into prologos::core::ord
-(require [prologos::core::hashable-char-instance  :refer [Char--Hashable--dict]])
+;; hashable-trait + hashable-instances + hashable-char-instance + hashable-string-instance merged into prologos::core::hashable
+(require [prologos::core::hashable :refer [Char--Hashable--dict String--Hashable--dict]])
 ;; eq-string-instance merged into prologos::core::eq
 ;; ord-string-instance merged into prologos::core::ord
-(require [prologos::core::hashable-string-instance :refer [String--Hashable--dict]])
-(require [prologos::core::add-string-instance     :refer [String--Add--dict]])
+;; add-string-instance merged into prologos::core::arithmetic
 
 ;; ---- Collection trait instances (side-effect only) ----
 (require [prologos::core::seqable-list    :refer []])

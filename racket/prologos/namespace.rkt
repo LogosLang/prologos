@@ -429,10 +429,10 @@
     ;; Dict bindings are referred so they resolve in user code (not just side-effect)
     ;; eq-char-instance merged into prologos::core::eq
     ;; ord-char-instance merged into prologos::core::ord
-    (require [prologos::core::hashable-char-instance  :refer [Char--Hashable--dict]])
+    ;; hashable-trait + hashable-instances + hashable-char-instance + hashable-string-instance merged into prologos::core::hashable
+    (require [prologos::core::hashable :refer [Char--Hashable--dict String--Hashable--dict]])
     ;; eq-string-instance merged into prologos::core::eq
     ;; ord-string-instance merged into prologos::core::ord
-    (require [prologos::core::hashable-string-instance :refer [String--Hashable--dict]])
     (require [prologos::core::add-string-instance     :refer [String--Add--dict]])
 
     ;; ---- Collection trait instances (side-effect only) ----

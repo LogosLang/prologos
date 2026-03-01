@@ -2,8 +2,7 @@
 
 ;;;
 ;;; Tests for Phase 2: Hashable Trait and Hash Utilities
-;;; Tests hashable-trait.prologos (trait + hash-combine) and
-;;; hashable-instances.prologos (Nat/Bool/Ordering impls + hash-option/hash-list)
+;;; Tests hashable.prologos (trait + hash-combine + Nat/Bool/Ordering impls + hash-option/hash-list)
 ;;;
 
 (require rackunit
@@ -32,8 +31,7 @@
 
 (define shared-preamble
   "(ns test)
-(require (prologos::core::hashable-trait :refer (Hashable Hashable-hash hash-combine nat31)))
-(require (prologos::core::hashable-instances :refer (hash-option hash-list)))
+(require (prologos::core::hashable :refer (Hashable Hashable-hash hash-combine nat31 hash-option hash-list)))
 (require (prologos::data::option :refer (Option some none)))
 (require (prologos::data::list :refer (List nil cons)))
 (require (prologos::data::ordering :refer (Ordering lt-ord eq-ord gt-ord)))

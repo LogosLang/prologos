@@ -954,7 +954,9 @@
    'prologos::core::from-trait       '()
    'prologos::core::into-trait       '(prologos::core::from-trait)
    'prologos::core::tryfrom-trait    '(prologos::data::option)
-   'prologos::core::hashable-trait   '(prologos::data::nat)
+   ;; hashable-trait + hashable-instances + hashable-char-instance + hashable-string-instance merged into prologos::core::hashable
+   'prologos::core::hashable         '(prologos::data::nat prologos::data::option
+                                       prologos::data::list prologos::data::ordering)
    'prologos::core::collection-traits '(prologos::data::lseq prologos::data::option)
    ;; partialord-trait merged into prologos::core::ord
 
@@ -971,9 +973,7 @@
    'prologos::core::tryfrom-instances     '(prologos::core::tryfrom-trait prologos::data::option)
    'prologos::core::fromint-posit-instances '(prologos::core::fromint-trait)
    'prologos::core::fromrat-posit-instances '(prologos::core::fromrat-trait)
-   'prologos::core::hashable-instances    '(prologos::core::hashable-trait prologos::data::nat
-                                          prologos::data::option prologos::data::list
-                                          prologos::data::ordering)
+   ;; hashable-instances merged into prologos::core::hashable
 
    ;; Char/String data modules
    'prologos::data::char         '()
@@ -982,10 +982,10 @@
    ;; Char/String trait instances
    ;; eq-char-instance merged into prologos::core::eq
    ;; ord-char-instance merged into prologos::core::ord
-   'prologos::core::hashable-char-instance  '(prologos::core::hashable-trait)
+   ;; hashable-char-instance merged into prologos::core::hashable
    ;; eq-string-instance merged into prologos::core::eq
    ;; ord-string-instance merged into prologos::core::ord
-   'prologos::core::hashable-string-instance '(prologos::core::hashable-trait)
+   ;; hashable-string-instance merged into prologos::core::hashable
    'prologos::core::add-string-instance     '(prologos::core::add-trait prologos::data::string)
 
    ;; String operations
@@ -1236,10 +1236,10 @@
                                   prologos::data::option prologos::data::list
                                   prologos::core::eq prologos::core::ord
                                   prologos::core::eq)
-   'test-hashable-01.rkt         '(prologos::core::hashable-trait prologos::core::hashable-instances
+   'test-hashable-01.rkt         '(prologos::core::hashable
                                   prologos::data::nat prologos::data::bool prologos::data::ordering
                                   prologos::data::option prologos::data::list)
-   'test-hashable-02.rkt         '(prologos::core::hashable-trait prologos::core::hashable-instances
+   'test-hashable-02.rkt         '(prologos::core::hashable
                                   prologos::data::nat prologos::data::bool prologos::data::ordering
                                   prologos::data::option prologos::data::list)
    'test-collection-traits-01.rkt '(prologos::data::list prologos::data::nat prologos::data::option
@@ -1358,9 +1358,7 @@
    'test-implicit-inference.rkt  '(prologos::data::nat)
    'test-char-string.rkt         '(prologos::data::char prologos::data::string
                                    prologos::core::eq prologos::core::ord
-                                   prologos::core::hashable-char-instance
-                                   prologos::core::eq prologos::core::ord
-                                   prologos::core::hashable-string-instance
+                                   prologos::core::hashable
                                    prologos::core::add-string-instance)
    'test-string-ops.rkt          '(prologos::data::char prologos::data::string
                                    prologos::core::string-ops

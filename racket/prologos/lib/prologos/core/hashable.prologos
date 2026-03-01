@@ -1,0 +1,103 @@
+ns prologos::core::hashable
+
+require [prologos::data::nat      :refer [add mult]]
+require [prologos::data::option   :refer [Option some none]]
+require [prologos::data::list     :refer [List nil cons]]
+require [prologos::data::ordering :refer [Ordering lt-ord eq-ord gt-ord]]
+
+;; ========================================
+;; Hashable Trait
+;; ========================================
+;; Hashable A = A -> Nat (single-method: dict IS the function)
+;; Generated: deftype Hashable, accessor Hashable-hash
+;; Instance naming: Nat--Hashable--dict, Bool--Hashable--dict, etc.
+
+trait Hashable {A}
+  hash : A -> Nat
+
+;; ========================================
+;; Hash Combiners
+;; ========================================
+
+;; hash-combine: Boost-style combiner: h1*31 + h2
+;; The constant 31 is a commonly-used prime for hash combining.
+;; (For Church-encoded Nat this is slow, but correct for prototype.)
+def nat31 : Nat := 31N
+
+spec hash-combine Nat Nat -> Nat
+defn hash-combine [h1 h2]
+  add [mult h1 nat31] h2
+
+;; ========================================
+;; Hashable Nat — identity hash
+;; ========================================
+;; hash n = n (the natural number itself)
+
+impl Hashable Nat
+  defn hash [n : Nat] <Nat>
+    n
+
+;; ========================================
+;; Hashable Bool — true=1, false=0
+;; ========================================
+;; Note: Use 'if' instead of 'match' — match on Bool inside impl
+;; body hits a mult-meta store issue with bare params.
+
+impl Hashable Bool
+  defn hash [b : Bool] <Nat>
+    if b [suc zero] zero
+
+;; ========================================
+;; Hashable Ordering — lt=0, eq=1, gt=2
+;; ========================================
+
+impl Hashable Ordering
+  defn hash [o : Ordering] <Nat>
+    match o
+      | lt-ord -> zero
+      | eq-ord -> suc zero
+      | gt-ord -> suc [suc zero]
+
+;; ========================================
+;; Parameterized hash functions (explicit dict)
+;; ========================================
+;; These take the Hashable dictionary as an explicit argument,
+;; matching the existing pattern used by `elem` in list.prologos.
+
+;; hash-option: hash an Option A using a Hashable A dict.
+;; none -> 0, some a -> hash-combine 1 (hash a)
+spec hash-option [Hashable A] [Option A] -> Nat
+defn hash-option [hash-a opt]
+  match opt
+    | none   -> zero
+    | some a -> hash-combine [suc zero] [hash-a a]
+
+;; hash-list: hash a List A using a Hashable A dict.
+;; nil -> 0, cons a as -> hash-combine (hash a) (hash-list as)
+spec hash-list [Hashable A] [List A] -> Nat
+defn hash-list [hash-a xs]
+  match xs
+    | nil       -> zero
+    | cons a as -> hash-combine [hash-a a] [hash-list hash-a as]
+
+;; ========================================
+;; Hashable Char — hash by code point
+;; ========================================
+;; Use char->integer marshalled as Nat for the hash value.
+
+foreign racket "racket/base" ["char->integer" :as char-hash-nat : Char -> Nat]
+
+impl Hashable Char
+  defn hash [c : Char] <Nat>
+    char-hash-nat c
+
+;; ========================================
+;; Hashable String — use Racket's equal-hash-code
+;; ========================================
+;; equal-hash-code returns a fixnum; marshal as Nat for the hash trait.
+
+foreign racket "racket/base" [equal-hash-code :as string-hash-nat : String -> Nat]
+
+impl Hashable String
+  defn hash [s : String] <Nat>
+    string-hash-nat s
