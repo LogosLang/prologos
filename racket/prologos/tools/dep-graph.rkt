@@ -292,7 +292,7 @@
                macros.rkt qtt.rkt)
              '(prologos::core::additive-identity-trait prologos::core::multiplicative-identity-trait
                prologos::core::identity-instances prologos::core::generic-numeric-ops
-               prologos::core::add-instances prologos::core::mul-instances))
+               prologos::core::arithmetic prologos::core::arithmetic))
    'test-posit-eq.rkt
    (test-dep '(syntax.rkt prelude.rkt substitution.rkt reduction.rkt typing-core.rkt
                pretty-print.rkt driver.rkt global-env.rkt namespace.rkt
@@ -943,12 +943,8 @@
                                           prologos::data::bool)
    'prologos::core::ord              '(prologos::data::ordering prologos::data::nat prologos::data::bool
                                           prologos::data::option prologos::data::char prologos::data::string)
-   'prologos::core::add-trait        '(prologos::data::nat)
-   'prologos::core::sub-trait        '(prologos::data::nat)
-   'prologos::core::mul-trait        '(prologos::data::nat)
-   'prologos::core::div-trait        '()
-   'prologos::core::neg-trait        '()
-   'prologos::core::abs-trait        '()
+   ;; add/sub/mul/div/neg/abs traits + instances + add-string-instance merged into prologos::core::arithmetic
+   'prologos::core::arithmetic      '(prologos::data::nat prologos::data::string)
    'prologos::core::fromint-trait    '()
    'prologos::core::fromrat-trait    '()
    'prologos::core::from-trait       '()
@@ -963,12 +959,7 @@
    ;; Trait instances
    ;; eq-instances, eq-derived, eq-numeric-instances merged into prologos::core::eq
    ;; ord-instances, ord-numeric-instances merged into prologos::core::ord
-   'prologos::core::add-instances         '(prologos::core::add-trait)
-   'prologos::core::sub-instances         '(prologos::core::sub-trait)
-   'prologos::core::mul-instances         '(prologos::core::mul-trait)
-   'prologos::core::div-instances         '(prologos::core::div-trait)
-   'prologos::core::neg-instances         '(prologos::core::neg-trait)
-   'prologos::core::abs-instances         '(prologos::core::abs-trait)
+   ;; add-instances/sub-instances/mul-instances/div-instances/neg-instances/abs-instances merged into prologos::core::arithmetic
    'prologos::core::from-instances        '(prologos::core::from-trait)
    'prologos::core::tryfrom-instances     '(prologos::core::tryfrom-trait prologos::data::option)
    'prologos::core::fromint-posit-instances '(prologos::core::fromint-trait)
@@ -986,7 +977,7 @@
    ;; eq-string-instance merged into prologos::core::eq
    ;; ord-string-instance merged into prologos::core::ord
    ;; hashable-string-instance merged into prologos::core::hashable
-   'prologos::core::add-string-instance     '(prologos::core::add-trait prologos::data::string)
+   ;; add-string-instance merged into prologos::core::arithmetic
 
    ;; String operations
    'prologos::core::string-ops    '(prologos::data::string prologos::data::char
@@ -1096,9 +1087,7 @@
                                             prologos::data::refined-rat)
 
    ;; Higher-level abstractions
-   'prologos::core::numeric-bundles '(prologos::core::add-trait prologos::core::sub-trait
-                                    prologos::core::mul-trait prologos::core::div-trait
-                                    prologos::core::neg-trait prologos::core::abs-trait
+   'prologos::core::numeric-bundles '(prologos::core::arithmetic
                                     prologos::core::eq prologos::core::ord
                                     prologos::core::fromint-trait prologos::core::fromrat-trait)
    'prologos::core::collection-ops '(prologos::core::seqable-list prologos::core::buildable-list
@@ -1198,25 +1187,25 @@
                                   prologos::core::seq-list prologos::core::seq-functions)
    'test-trait-resolution.rkt   '(prologos::data::nat prologos::data::bool prologos::core::eq)
    'test-method-resolution.rkt  '(prologos::data::nat prologos::data::bool prologos::core::eq
-                                  prologos::core::add-trait)
+                                  prologos::core::arithmetic)
    'test-bundles.rkt            '(prologos::data::nat prologos::data::bool prologos::core::eq
-                                  prologos::core::add-trait prologos::core::numeric-bundles)
-   'test-prelude-numerics.rkt   '(prologos::core::div-trait prologos::core::div-instances
+                                  prologos::core::arithmetic prologos::core::numeric-bundles)
+   'test-prelude-numerics.rkt   '(prologos::core::arithmetic prologos::core::arithmetic
                                   prologos::core::fromint-trait prologos::core::fromint-posit-instances
                                   prologos::core::fromrat-trait prologos::core::fromrat-posit-instances
                                   prologos::core::numeric-bundles)
    'test-generic-arith-02.rkt   '(prologos::core::generic-arith
-                                  prologos::core::add-trait prologos::core::sub-trait
-                                  prologos::core::mul-trait prologos::core::div-trait
-                                  prologos::core::neg-trait prologos::core::abs-trait
-                                  prologos::core::add-instances prologos::core::sub-instances
-                                  prologos::core::mul-instances prologos::core::div-instances
-                                  prologos::core::neg-instances prologos::core::abs-instances)
-   'test-numeric-traits-01.rkt   '(prologos::data::nat prologos::core::add-trait
-                                  prologos::core::sub-trait prologos::core::mul-trait
+                                  prologos::core::arithmetic prologos::core::arithmetic
+                                  prologos::core::arithmetic prologos::core::arithmetic
+                                  prologos::core::arithmetic prologos::core::arithmetic
+                                  prologos::core::arithmetic prologos::core::arithmetic
+                                  prologos::core::arithmetic prologos::core::arithmetic
+                                  prologos::core::arithmetic prologos::core::arithmetic)
+   'test-numeric-traits-01.rkt   '(prologos::data::nat prologos::core::arithmetic
+                                  prologos::core::arithmetic prologos::core::arithmetic
                                   prologos::core::eq prologos::core::ord)
-   'test-numeric-traits-02.rkt   '(prologos::data::nat prologos::core::add-trait
-                                  prologos::core::sub-trait prologos::core::mul-trait
+   'test-numeric-traits-02.rkt   '(prologos::data::nat prologos::core::arithmetic
+                                  prologos::core::arithmetic prologos::core::arithmetic
                                   prologos::core::eq prologos::core::ord)
    'test-cross-family-conversions-01.rkt '(prologos::core::from-trait prologos::core::tryfrom-trait
                                         prologos::core::fromint-trait prologos::core::fromrat-trait
@@ -1310,7 +1299,7 @@
                                   prologos::data::nat prologos::data::list prologos::data::lseq)
    'test-coherence.rkt          '(prologos::core::eq prologos::data::nat)
    'test-bare-methods.rkt       '(prologos::core::eq prologos::core::ord
-                                  prologos::core::add-trait prologos::data::nat)
+                                  prologos::core::arithmetic prologos::data::nat)
    'test-hkt-kind.rkt           '(prologos::data::nat prologos::data::option prologos::data::list)
    'test-match-builtins.rkt     '(prologos::data::nat)
    'test-list-literals.rkt      '(prologos::data::nat prologos::data::list)
@@ -1319,28 +1308,28 @@
                                   prologos::data::pair prologos::data::ordering prologos::data::eq
                                   prologos::data::list prologos::data::option prologos::data::result
                                   prologos::core::eq prologos::core::ord
-                                  prologos::core::add-trait prologos::core::sub-trait
-                                  prologos::core::mul-trait prologos::core::neg-trait
-                                  prologos::core::abs-trait prologos::core::fromint-trait
+                                  prologos::core::arithmetic prologos::core::arithmetic
+                                  prologos::core::arithmetic prologos::core::arithmetic
+                                  prologos::core::arithmetic prologos::core::fromint-trait
                                   prologos::core::numeric-bundles
                                   prologos::core::eq prologos::core::eq
                                   prologos::core::ord prologos::core::ord
-                                  prologos::core::add-instances prologos::core::sub-instances
-                                  prologos::core::mul-instances prologos::core::neg-instances
-                                  prologos::core::abs-instances)
+                                  prologos::core::arithmetic prologos::core::arithmetic
+                                  prologos::core::arithmetic prologos::core::arithmetic
+                                  prologos::core::arithmetic)
    'test-prelude-system-02.rkt   '(prologos::core prologos::data::nat prologos::data::bool
                                   prologos::data::pair prologos::data::ordering prologos::data::eq
                                   prologos::data::list prologos::data::option prologos::data::result
                                   prologos::core::eq prologos::core::ord
-                                  prologos::core::add-trait prologos::core::sub-trait
-                                  prologos::core::mul-trait prologos::core::neg-trait
-                                  prologos::core::abs-trait prologos::core::fromint-trait
+                                  prologos::core::arithmetic prologos::core::arithmetic
+                                  prologos::core::arithmetic prologos::core::arithmetic
+                                  prologos::core::arithmetic prologos::core::fromint-trait
                                   prologos::core::numeric-bundles
                                   prologos::core::eq prologos::core::eq
                                   prologos::core::ord prologos::core::ord
-                                  prologos::core::add-instances prologos::core::sub-instances
-                                  prologos::core::mul-instances prologos::core::neg-instances
-                                  prologos::core::abs-instances)
+                                  prologos::core::arithmetic prologos::core::arithmetic
+                                  prologos::core::arithmetic prologos::core::arithmetic
+                                  prologos::core::arithmetic)
    'test-auto-implicits.rkt     '(prologos::data::nat)
    'test-kind-inference-where.rkt '(prologos::core::collection-traits prologos::core::collection-traits
                                     prologos::core::eq prologos::core::ord
@@ -1359,7 +1348,7 @@
    'test-char-string.rkt         '(prologos::data::char prologos::data::string
                                    prologos::core::eq prologos::core::ord
                                    prologos::core::hashable
-                                   prologos::core::add-string-instance)
+                                   prologos::core::arithmetic)
    'test-string-ops.rkt          '(prologos::data::char prologos::data::string
                                    prologos::core::string-ops
                                    prologos::data::list prologos::data::option

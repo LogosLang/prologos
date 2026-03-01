@@ -1,8 +1,7 @@
 ns prologos::core::generic-numeric-ops
 
 require [prologos::data::list                            :refer [List nil cons reduce]]
-require [prologos::core::add-trait                       :refer [Add Add-add]]
-require [prologos::core::mul-trait                       :refer [Mul Mul-mul]]
+require [prologos::core::arithmetic                      :refer [Add Add-add Mul Mul-mul]]
 require [prologos::core::additive-identity-trait         :refer [AdditiveIdentity AdditiveIdentity-zero]]
 require [prologos::core::multiplicative-identity-trait   :refer [MultiplicativeIdentity MultiplicativeIdentity-one]]
 

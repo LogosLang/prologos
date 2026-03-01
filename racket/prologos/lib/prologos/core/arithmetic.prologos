@@ -1,0 +1,289 @@
+ns prologos::core::arithmetic
+
+require [prologos::data::nat    :refer [add sub mult]]
+require [prologos::data::string :as str :refer []]
+
+;; ════════════════════════════════════════════════════════════════
+;; Add Trait — binary addition
+;; ════════════════════════════════════════════════════════════════
+;; Add A = A A -> A (single-method: dict IS the function)
+;; Generated: deftype Add, accessor Add-add
+;; Instance: Nat--Add--dict, Nat--Add--add
+
+trait Add {A}
+  add : A A -> A
+  :doc "Binary addition over type A"
+  :laws
+    - :name "commutative"
+      :forall {x y : A}
+      :holds [eq? [add x y] [add y x]]
+    - :name "associative"
+      :forall {x y z : A}
+      :holds [eq? [add [add x y] z] [add x [add y z]]]
+
+;; Nat instance — delegates to prologos::data::nat/add
+impl Add Nat
+  defn add [x y] <Nat>
+    add x y
+
+;; Int instance
+impl Add Int
+  defn add [x : Int  y : Int] <Int>
+    int+ x y
+
+;; Rat instance
+impl Add Rat
+  defn add [x : Rat  y : Rat] <Rat>
+    rat+ x y
+
+;; Posit8 instance
+impl Add Posit8
+  defn add [x : Posit8  y : Posit8] <Posit8>
+    p8+ x y
+
+;; Posit16 instance
+impl Add Posit16
+  defn add [x : Posit16  y : Posit16] <Posit16>
+    p16+ x y
+
+;; Posit32 instance
+impl Add Posit32
+  defn add [x : Posit32  y : Posit32] <Posit32>
+    p32+ x y
+
+;; Posit64 instance
+impl Add Posit64
+  defn add [x : Posit64  y : Posit64] <Posit64>
+    p64+ x y
+
+;; String instance — concatenation
+impl Add String
+  defn add [x : String  y : String] <String>
+    str::append x y
+
+;; ════════════════════════════════════════════════════════════════
+;; Sub Trait — binary subtraction
+;; ════════════════════════════════════════════════════════════════
+;; Sub A = A A -> A (single-method: dict IS the function)
+;; Nat sub is saturating: sub(x, y) = max(x - y, 0)
+
+trait Sub {A}
+  sub : A A -> A
+  :doc "Binary subtraction over type A"
+
+;; Nat instance — saturating subtraction
+impl Sub Nat
+  defn sub [x y] <Nat>
+    sub x y
+
+;; Int instance
+impl Sub Int
+  defn sub [x : Int  y : Int] <Int>
+    int- x y
+
+;; Rat instance
+impl Sub Rat
+  defn sub [x : Rat  y : Rat] <Rat>
+    rat- x y
+
+;; Posit8 instance
+impl Sub Posit8
+  defn sub [x : Posit8  y : Posit8] <Posit8>
+    p8- x y
+
+;; Posit16 instance
+impl Sub Posit16
+  defn sub [x : Posit16  y : Posit16] <Posit16>
+    p16- x y
+
+;; Posit32 instance
+impl Sub Posit32
+  defn sub [x : Posit32  y : Posit32] <Posit32>
+    p32- x y
+
+;; Posit64 instance
+impl Sub Posit64
+  defn sub [x : Posit64  y : Posit64] <Posit64>
+    p64- x y
+
+;; ════════════════════════════════════════════════════════════════
+;; Mul Trait — binary multiplication
+;; ════════════════════════════════════════════════════════════════
+;; Mul A = A A -> A (single-method: dict IS the function)
+
+trait Mul {A}
+  mul : A A -> A
+  :doc "Binary multiplication over type A"
+  :laws
+    - :name "commutative"
+      :forall {x y : A}
+      :holds [eq? [mul x y] [mul y x]]
+    - :name "associative"
+      :forall {x y z : A}
+      :holds [eq? [mul [mul x y] z] [mul x [mul y z]]]
+
+;; Nat instance — delegates to prologos::data::nat/mult
+impl Mul Nat
+  defn mul [x y] <Nat>
+    mult x y
+
+;; Int instance
+impl Mul Int
+  defn mul [x : Int  y : Int] <Int>
+    int* x y
+
+;; Rat instance
+impl Mul Rat
+  defn mul [x : Rat  y : Rat] <Rat>
+    rat* x y
+
+;; Posit8 instance
+impl Mul Posit8
+  defn mul [x : Posit8  y : Posit8] <Posit8>
+    p8* x y
+
+;; Posit16 instance
+impl Mul Posit16
+  defn mul [x : Posit16  y : Posit16] <Posit16>
+    p16* x y
+
+;; Posit32 instance
+impl Mul Posit32
+  defn mul [x : Posit32  y : Posit32] <Posit32>
+    p32* x y
+
+;; Posit64 instance
+impl Mul Posit64
+  defn mul [x : Posit64  y : Posit64] <Posit64>
+    p64* x y
+
+;; ════════════════════════════════════════════════════════════════
+;; Div Trait — binary division
+;; ════════════════════════════════════════════════════════════════
+;; Div A = A A -> A (single-method: dict IS the function)
+;; No Nat instance (no integer division primitive).
+
+trait Div {A}
+  div : A A -> A
+  :doc "Binary division over type A"
+
+;; Int instance — integer division
+impl Div Int
+  defn div [x : Int  y : Int] <Int>
+    int/ x y
+
+;; Rat instance
+impl Div Rat
+  defn div [x : Rat  y : Rat] <Rat>
+    rat/ x y
+
+;; Posit8 instance
+impl Div Posit8
+  defn div [x : Posit8  y : Posit8] <Posit8>
+    p8/ x y
+
+;; Posit16 instance
+impl Div Posit16
+  defn div [x : Posit16  y : Posit16] <Posit16>
+    p16/ x y
+
+;; Posit32 instance
+impl Div Posit32
+  defn div [x : Posit32  y : Posit32] <Posit32>
+    p32/ x y
+
+;; Posit64 instance
+impl Div Posit64
+  defn div [x : Posit64  y : Posit64] <Posit64>
+    p64/ x y
+
+;; ════════════════════════════════════════════════════════════════
+;; Neg Trait — unary negation
+;; ════════════════════════════════════════════════════════════════
+;; Neg A = A -> A (single-method: dict IS the function)
+;; No Nat instance (negation leaves Nat domain).
+
+trait Neg {A}
+  neg : A -> A
+  :doc "Unary negation over type A"
+  :laws
+    - :name "involution"
+      :forall {x : A}
+      :holds [eq? [neg [neg x]] x]
+
+;; Int instance
+impl Neg Int
+  defn neg [x : Int] <Int>
+    int-neg x
+
+;; Rat instance
+impl Neg Rat
+  defn neg [x : Rat] <Rat>
+    rat-neg x
+
+;; Posit8 instance
+impl Neg Posit8
+  defn neg [x : Posit8] <Posit8>
+    p8-neg x
+
+;; Posit16 instance
+impl Neg Posit16
+  defn neg [x : Posit16] <Posit16>
+    p16-neg x
+
+;; Posit32 instance
+impl Neg Posit32
+  defn neg [x : Posit32] <Posit32>
+    p32-neg x
+
+;; Posit64 instance
+impl Neg Posit64
+  defn neg [x : Posit64] <Posit64>
+    p64-neg x
+
+;; ════════════════════════════════════════════════════════════════
+;; Abs Trait — absolute value
+;; ════════════════════════════════════════════════════════════════
+;; Abs A = A -> A (single-method: dict IS the function)
+;; No Nat instance (Nat is always non-negative).
+
+trait Abs {A}
+  abs : A -> A
+  :doc "Absolute value over type A"
+  :laws
+    - :name "non-negative"
+      :forall {x : A}
+      :holds [gte? [abs x] 0]
+    - :name "idempotent"
+      :forall {x : A}
+      :holds [eq? [abs [abs x]] [abs x]]
+
+;; Int instance
+impl Abs Int
+  defn abs [x : Int] <Int>
+    int-abs x
+
+;; Rat instance
+impl Abs Rat
+  defn abs [x : Rat] <Rat>
+    rat-abs x
+
+;; Posit8 instance
+impl Abs Posit8
+  defn abs [x : Posit8] <Posit8>
+    p8-abs x
+
+;; Posit16 instance
+impl Abs Posit16
+  defn abs [x : Posit16] <Posit16>
+    p16-abs x
+
+;; Posit32 instance
+impl Abs Posit32
+  defn abs [x : Posit32] <Posit32>
+    p32-abs x
+
+;; Posit64 instance
+impl Abs Posit64
+  defn abs [x : Posit64] <Posit64>
+    p64-abs x

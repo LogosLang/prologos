@@ -1,11 +1,6 @@
 ns prologos::core::numeric-bundles
 
-require [prologos::core::add-trait     :refer [Add]]
-require [prologos::core::sub-trait     :refer [Sub]]
-require [prologos::core::mul-trait     :refer [Mul]]
-require [prologos::core::div-trait     :refer [Div]]
-require [prologos::core::neg-trait     :refer [Neg]]
-require [prologos::core::abs-trait     :refer [Abs]]
+require [prologos::core::arithmetic :refer [Add Sub Mul Div Neg Abs]]
 require [prologos::core::eq      :refer [Eq]]
 require [prologos::core::ord     :refer [Ord]]
 require [prologos::core::fromint-trait :refer [FromInt]]

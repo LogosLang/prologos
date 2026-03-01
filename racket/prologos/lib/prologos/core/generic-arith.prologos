@@ -1,11 +1,7 @@
 ns prologos::core::generic-arith
 
-require [prologos::core::add-trait :refer [Add Add-add]]
-require [prologos::core::sub-trait :refer [Sub Sub-sub]]
-require [prologos::core::mul-trait :refer [Mul Mul-mul]]
-require [prologos::core::div-trait :refer [Div Div-div]]
-require [prologos::core::neg-trait :refer [Neg Neg-neg]]
-require [prologos::core::abs-trait :refer [Abs Abs-abs]]
+require [prologos::core::arithmetic :refer [Add Add-add Sub Sub-sub Mul Mul-mul
+                                            Div Div-div Neg Neg-neg Abs Abs-abs]]
 
 ;; ========================================
 ;; First-Class Generic Arithmetic
