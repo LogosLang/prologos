@@ -19,8 +19,7 @@ natural-numbers
 ;; Part II — Core Abstractions
 
 lazy-sequences
-foldable
-seqable-buildable
+collection-traits
 collection-functions
 
 ;; Part III — Data Structures

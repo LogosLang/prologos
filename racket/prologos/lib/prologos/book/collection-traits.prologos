@@ -1,0 +1,211 @@
+;; ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;; Chapter: Collection Traits
+;; ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;;
+;; The trait vocabulary for generic collection programming.
+;;
+;; **What you can do** with a container — collapse or transform it:
+;;   Foldable (right fold), Reducible (left fold), Functor (map).
+;;   All three are single-method traits (dictionary IS the function).
+;;
+;; **How containers convert** between representations:
+;;   Seqable (to LSeq) and Buildable (from LSeq) enable the pattern
+;;   `to-seq -> transform -> from-seq` for universal collection interop.
+;;
+;; **Specialized access patterns**:
+;;   Seq (first/rest/empty?), Indexed (positional by Nat),
+;;   Keyed (key-value get/assoc/dissoc), Setlike (member/insert/remove).
+;;
+;; The **Collection** bundle ties Seqable + Buildable + Foldable +
+;; Reducible into one constraint. **Type functors** (Xf, AppResult)
+;; provide named type-level abstractions.
+;;
+;; Instances for List, PVec, Set, LSeq, and Map live in their
+;; respective data type chapters.
+
+
+module prologos::core::collection-traits
+
+require [prologos::data::lseq   :refer [LSeq]]
+require [prologos::data::option :refer [Option some none]]
+
+;; ========================================
+;; Seqable Trait — Convert to LSeq
+;; ========================================
+;; A Seqable collection can be converted to a lazy sequence.
+;; to-seq : C A -> LSeq A
+;;
+;; The method type uses explicit Pi for the free type variable A,
+;; because the trait macro doesn't auto-quantify free vars.
+
+trait Seqable {C : Type -> Type}
+  to-seq : [Pi [A :0 <Type>] [-> [C A] [LSeq A]]]
+  :doc "Convert a collection to a lazy sequence (LSeq)"
+
+;; ========================================
+;; Buildable Trait — Construct from LSeq
+;; ========================================
+;; A Buildable collection can be constructed from a lazy sequence,
+;; provides an empty collection, and supports single-element append.
+;;
+;; from-seq   : LSeq A -> C A
+;; empty-coll : C A
+;; conj       : C A -> A -> C A
+;;
+;; Three-method trait, dict is a nested Sigma pair:
+;;   (pair from-seq (pair empty-coll conj))
+
+trait Buildable {C : Type -> Type}
+  from-seq   : [Pi [A :0 <Type>] [-> [LSeq A] [C A]]]
+  empty-coll : [Pi [A :0 <Type>] [C A]]
+  conj       : [Pi [A :0 <Type>] [-> [C A] [-> A [C A]]]]
+  :doc "Construct a collection from a lazy sequence"
+
+;; ========================================
+;; Foldable Trait
+;; ========================================
+;; A foldable container supports right fold.
+;; fold : (A -> B -> B) -> B -> F A -> B
+;;
+;; Single-method trait: dict IS the function
+
+trait Foldable {F : Type -> Type}
+  fold : [Pi [A :0 <Type>] [Pi [B :0 <Type>] [-> [-> A [-> B B]] [-> B [-> [F A] B]]]]]
+  :doc "Fold a collection to a single value"
+
+;; ========================================
+;; Reducible Trait
+;; ========================================
+;; A reducible container supports left fold.
+;; reduce : (B -> A -> B) -> B -> F A -> B
+;;
+;; Single-method trait: dict IS the function.
+;; Companion to Foldable (right fold).
+
+trait Reducible {F : Type -> Type}
+  reduce : [Pi [A :0 <Type>] [Pi [B :0 <Type>] [-> [-> B [-> A B]] [-> B [-> [F A] B]]]]]
+  :doc "Left-fold a collection to a single value (accumulator-first)"
+
+;; ========================================
+;; Functor Trait
+;; ========================================
+;; A functor maps a function over a container.
+;; fmap : (A -> B) -> F A -> F B
+;;
+;; Single-method trait: dict IS the function
+
+trait Functor {F : Type -> Type}
+  fmap : [Pi [A :0 <Type>] [Pi [B :0 <Type>] [-> [-> A B] [-> [F A] [F B]]]]]
+  :doc "Functor: map a function over a container while preserving structure"
+  :laws
+    - :name "identity"
+      :forall {xs : [F A]}
+      :holds [eq? [fmap id xs] xs]
+    - :name "composition"
+      :forall {f : [B -> C]} {g : [A -> B]} {xs : [F A]}
+      :holds [eq? [fmap [compose f g] xs] [fmap f [fmap g xs]]]
+
+;; ========================================
+;; Seq Trait — Universal Sequence Interface
+;; ========================================
+;; A Seq dict bundles three operations as a nested Sigma:
+;;   first  : S A -> Option A
+;;   rest   : S A -> S A
+;;   empty? : S A -> Bool
+;;
+;; Dict layout: (Sigma first-fn (Sigma rest-fn empty?-fn))
+
+deftype [Seq $S] [Sigma [_ <[Pi [A :0 <Type>] [-> [$S A] [Option A]]]>] [Sigma [_ <[Pi [A :0 <Type>] [-> [$S A] [$S A]]]>] [Pi [A :0 <Type>] [-> [$S A] Bool]]]]
+
+;; Accessors: project from the dictionary
+;; Each takes the dict + the collection, with S and A implicit
+
+;; seq-first : (Seq S) -> S A -> Option A
+spec seq-first [Seq S] [S A] -> [Option A]
+defn seq-first [dict xs]
+  [first dict] A xs
+
+;; seq-rest : (Seq S) -> S A -> S A
+spec seq-rest [Seq S] [S A] -> [S A]
+defn seq-rest [dict xs]
+  [first [second dict]] A xs
+
+;; seq-empty? : (Seq S) -> S A -> Bool
+spec seq-empty? [Seq S] [S A] -> Bool
+defn seq-empty? [dict xs]
+  [second [second dict]] A xs
+
+;; ========================================
+;; Indexed Trait — Positional Access
+;; ========================================
+;; An Indexed collection supports access by natural number index.
+;;
+;; idx-nth    : C A -> Nat -> Option A
+;; idx-length : C A -> Nat
+;; idx-update : C A -> Nat -> A -> C A
+
+trait Indexed {C : Type -> Type}
+  idx-nth    : [Pi [A :0 <Type>] [-> [C A] [-> Nat [Option A]]]]
+  idx-length : [Pi [A :0 <Type>] [-> [C A] Nat]]
+  idx-update : [Pi [A :0 <Type>] [-> [C A] [-> Nat [-> A [C A]]]]]
+  :doc "Access elements by index"
+
+;; ========================================
+;; Keyed Trait — Key-Value Access
+;; ========================================
+;; A Keyed collection supports key-value operations.
+;; C is a two-parameter type constructor: C K V
+;;
+;; kv-get    : C K V -> K -> Option V
+;; kv-assoc  : C K V -> K -> V -> C K V
+;; kv-dissoc : C K V -> K -> C K V
+
+trait Keyed {C : Type -> Type -> Type}
+  kv-get    : [Pi [K :0 <Type>] [Pi [V :0 <Type>] [-> [C K V] [-> K [Option V]]]]]
+  kv-assoc  : [Pi [K :0 <Type>] [Pi [V :0 <Type>] [-> [C K V] [-> K [-> V [C K V]]]]]]
+  kv-dissoc : [Pi [K :0 <Type>] [Pi [V :0 <Type>] [-> [C K V] [-> K [C K V]]]]]
+
+;; ========================================
+;; Setlike Trait — Set Operations
+;; ========================================
+;; A Setlike collection supports membership, insertion, and removal.
+;;
+;; set-member? : C A -> A -> Bool
+;; set-insert  : C A -> A -> C A
+;; set-remove  : C A -> A -> C A
+
+trait Setlike {C : Type -> Type}
+  set-member? : [Pi [A :0 <Type>] [-> [C A] [-> A Bool]]]
+  set-insert  : [Pi [A :0 <Type>] [-> [C A] [-> A [C A]]]]
+  set-remove  : [Pi [A :0 <Type>] [-> [C A] [-> A [C A]]]]
+
+;; ========================================
+;; Collection Bundle
+;; ========================================
+;; Expands to (Seqable C, Buildable C, Foldable C, Reducible C)
+;; when used in a spec. A Collection is any type constructor that
+;; can be converted to/from lazy sequences, supports right fold
+;; (Foldable), left fold (Reducible), and incremental building.
+;;
+;; Note: bundles do not yet support :doc/:laws metadata.
+
+bundle Collection := (Seqable, Buildable, Foldable, Reducible)
+
+;; ========================================
+;; Type functors — named type abstractions
+;; ========================================
+;; These are metadata-only in Phase 1: they register in the functor store
+;; and as deftypes for transparent expansion. Phase 2+ will use :compose
+;; and :identity for category-theoretic composition.
+
+;; --- Transducer type ---
+
+(functor Xf ($brace-params A : (Type 0) B : (Type 0))
+  :unfolds <(S :0 Type) -> [S -> B -> S] -> S -> A -> S>
+  ($brace-params :doc "A transducer: transforms A-reductions into B-reductions"))
+
+;; --- Application result type ---
+
+(functor AppResult ($brace-params A : (Type 0))
+  :unfolds (Either String A)
+  ($brace-params :doc "A computation that may fail with a string error"))
