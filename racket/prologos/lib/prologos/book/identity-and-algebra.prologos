@@ -5,123 +5,196 @@
 ;; This chapter covers the algebraic infrastructure that ties
 ;; arithmetic traits together:
 ;;
-;;   • **AdditiveIdentity** — the zero element for each type
-;;   • **MultiplicativeIdentity** — the one element for each type
-;;   • **Num** and **Fractional** bundles — grouped constraints
-;;   • **Algebraic laws** — property declarations for testing
+;;   * **AdditiveIdentity** --- the zero element for each type
+;;   * **MultiplicativeIdentity** --- the one element for each type
+;;   * **Num** and **Fractional** bundles --- grouped constraints
+;;   * **Generic arithmetic** --- first-class wrappers (plus, minus,
+;;     times, divide, negate-fn, abs-fn) formerly in generic-operations
+;;   * **Sum/product/int-range** --- generic folds using identity traits,
+;;     formerly in generic-operations
+;;   * **Algebraic laws** --- property declarations for testing
 ;;
 ;; The identity traits are single-method traits where the method
-;; is a *value*, not a function — the dictionary IS the zero/one
+;; is a *value*, not a function --- the dictionary IS the zero/one
 ;; element itself. This enables `sum` and `product` to work
 ;; generically over any numeric type.
 
 
-;; ════════════════════════════════════════════════════
-;; Part I — Identity Traits
-;; ════════════════════════════════════════════════════
+module prologos::core::algebra
 
+require [prologos::core::arithmetic :refer [Add Add-add Sub Sub-sub Mul Mul-mul
+                                            Div Div-div Neg Neg-neg Abs Abs-abs]]
+require [prologos::core::eq         :refer [Eq]]
+require [prologos::core::ord        :refer [Ord]]
+require [prologos::core::conversions   :refer [FromInt FromRat]]
+require [prologos::data::list       :refer [List nil cons reduce]]
 
-module prologos::core::additive-identity-trait
+;; ========================================
+;; Num Bundle
+;; ========================================
+;; (Num A) expands to:
+;;   (Add A) (Sub A) (Mul A) (Neg A) (Eq A) (Ord A) (Abs A) (FromInt A)
+;;
+;; Applicable types:
+;;   Int — all 8 traits have Int impls
+;;   Rat — all 8 traits have Rat impls (after loading instances)
+;;   Nat — FAILS (lacks Neg, Abs, FromInt → no-instance-error)
+;;   Posit — FAILS until Phase 3f adds FromInt Posit impls
 
-;; ── AdditiveIdentity — The Zero Element ──────────
+bundle Num := (Add Sub Mul Neg Eq Ord Abs FromInt)
+
+;; ========================================
+;; Fractional Bundle
+;; ========================================
+;; (Fractional A) expands to Num's 8 + (Div A) (FromRat A) = 10 constraints
+;;
+;; Applicable types:
+;;   Rat — all 10 traits have Rat impls
+
+bundle Fractional := (Num Div FromRat)
+
+;; ========================================
+;; AdditiveIdentity Trait — additive zero
+;; ========================================
+;; AdditiveIdentity A = A (single-method: dict IS the zero element)
+;; Generated: deftype AdditiveIdentity, accessor AdditiveIdentity-zero
 
 trait AdditiveIdentity {A}
   zero : A
 
-
-module prologos::core::multiplicative-identity-trait
-
-;; ── MultiplicativeIdentity — The One Element ─────
+;; ========================================
+;; MultiplicativeIdentity Trait — multiplicative one
+;; ========================================
+;; MultiplicativeIdentity A = A (single-method: dict IS the one element)
+;; Generated: deftype MultiplicativeIdentity, accessor MultiplicativeIdentity-one
 
 trait MultiplicativeIdentity {A}
   one : A
 
-
-module prologos::core::identity-instances
-
-;; ── Identity Instances ───────────────────────────
-;;
-;; The dictionary IS the identity element (single-method trait
-;; where the method is a value, not a function).
-
-require [prologos::core::additive-identity-trait       :refer [AdditiveIdentity]]
-require [prologos::core::multiplicative-identity-trait  :refer [MultiplicativeIdentity]]
-
-;; ── Additive Identity (zero) ─────────────────────
+;; ========================================
+;; AdditiveIdentity Instances (zero)
+;; ========================================
+;; The dict IS the zero element (single-method trait where method = value).
 
 (def Int--AdditiveIdentity--dict : [AdditiveIdentity Int] 0)
 (def Rat--AdditiveIdentity--dict : [AdditiveIdentity Rat] 0/1)
 (def Nat--AdditiveIdentity--dict : [AdditiveIdentity Nat] 0N)
 
-;; ── Multiplicative Identity (one) ────────────────
+;; ========================================
+;; MultiplicativeIdentity Instances (one)
+;; ========================================
+;; The dict IS the one element.
 
 (def Int--MultiplicativeIdentity--dict : [MultiplicativeIdentity Int] 1)
 (def Rat--MultiplicativeIdentity--dict : [MultiplicativeIdentity Rat] 1/1)
 (def Nat--MultiplicativeIdentity--dict : [MultiplicativeIdentity Nat] 1N)
 
-;; ── Posit Identity Instances ─────────────────────
+;; ========================================
+;; Posit8 Identity Instances
+;; ========================================
 
 (def Posit8--AdditiveIdentity--dict : [AdditiveIdentity Posit8] [posit8 0])
 (def Posit8--MultiplicativeIdentity--dict : [MultiplicativeIdentity Posit8] [posit8 64])
 
+;; ========================================
+;; Posit16 Identity Instances
+;; ========================================
+
 (def Posit16--AdditiveIdentity--dict : [AdditiveIdentity Posit16] [posit16 0])
 (def Posit16--MultiplicativeIdentity--dict : [MultiplicativeIdentity Posit16] [posit16 16384])
+
+;; ========================================
+;; Posit32 Identity Instances
+;; ========================================
 
 (def Posit32--AdditiveIdentity--dict : [AdditiveIdentity Posit32] [posit32 0])
 (def Posit32--MultiplicativeIdentity--dict : [MultiplicativeIdentity Posit32] [posit32 1073741824])
 
+;; ========================================
+;; Posit64 Identity Instances
+;; ========================================
+
 (def Posit64--AdditiveIdentity--dict : [AdditiveIdentity Posit64] [posit64 0])
 (def Posit64--MultiplicativeIdentity--dict : [MultiplicativeIdentity Posit64] [posit64 4611686018427387904])
 
+;; ========================================
+;; sum — generic additive fold over a list
+;; ========================================
+;; sum [Add A] [AdditiveIdentity A] (List A) -> A
+;; Uses the AdditiveIdentity dict as the zero element and Add-add for accumulation.
+;; Left fold (reduce) for efficiency.
 
-;; ════════════════════════════════════════════════════
-;; Part II — Numeric Bundles
-;; ════════════════════════════════════════════════════
+spec sum [Add A] -> [AdditiveIdentity A] -> [List A] -> A
+  :doc "Sum a list using generic addition and an additive identity as zero"
+defn sum [add-dict id-dict xs]
+  reduce A A [fn acc x [Add-add add-dict acc x]] [AdditiveIdentity-zero id-dict] xs
 
+;; ========================================
+;; product — generic multiplicative fold over a list
+;; ========================================
+;; product [Mul A] [MultiplicativeIdentity A] (List A) -> A
+;; Uses MultiplicativeIdentity dict as one, Mul-mul for accumulation.
 
-module prologos::core::numeric-bundles
+spec product [Mul A] -> [MultiplicativeIdentity A] -> [List A] -> A
+  :doc "Multiply a list using generic multiplication and a multiplicative identity as one"
+defn product [mul-dict id-dict xs]
+  reduce A A [fn acc x [Mul-mul mul-dict acc x]] [MultiplicativeIdentity-one id-dict] xs
 
-;; ── Num and Fractional Bundles ───────────────────
-;;
-;; Bundles are syntactic sugar for multiple trait constraints.
-;; `(Num A)` expands to 8 constraints; `(Fractional A)` adds 2 more.
-;;
-;; **Num A** works for: Int, Rat, Posit8–64
-;; **Fractional A** works for: Rat, Posit8–64
-;; Nat fails Num (lacks Neg, Abs, FromInt).
+;; ========================================
+;; int-range — generate a list of integers [start .. end-1]
+;; ========================================
+;; int-range : Int -> Int -> List Int
 
-require [prologos::core::add-trait     :refer [Add]]
-require [prologos::core::sub-trait     :refer [Sub]]
-require [prologos::core::mul-trait     :refer [Mul]]
-require [prologos::core::div-trait     :refer [Div]]
-require [prologos::core::neg-trait     :refer [Neg]]
-require [prologos::core::abs-trait     :refer [Abs]]
-require [prologos::core::eq-trait      :refer [Eq]]
-require [prologos::core::ord-trait     :refer [Ord]]
-require [prologos::core::fromint-trait :refer [FromInt]]
-require [prologos::core::fromrat-trait :refer [FromRat]]
+spec int-range Int -> Int -> [List Int]
+  :doc "Generate a list of integers from start (inclusive) to end (exclusive)"
+defn int-range [start end]
+  if [int-lt start end]
+    cons Int start [int-range [int+ start 1] end]
+    nil Int
 
-;; (Num A) = (Add Sub Mul Neg Eq Ord Abs FromInt) A
-bundle Num := (Add Sub Mul Neg Eq Ord Abs FromInt)
+;; ========================================
+;; First-Class Generic Arithmetic
+;; ========================================
+;; Parser keywords (+, -, *, /, negate, abs) dispatch at the AST level
+;; and can't be passed to higher-order functions like reduce, map, fold.
+;; These wrappers are proper first-class values.
 
-;; (Fractional A) = Num A + (Div FromRat) A = 10 constraints
-bundle Fractional := (Num Div FromRat)
+spec plus [Add A] A -> A -> A
+  :doc "First-class addition — pass to higher-order functions like reduce, map"
+defn plus [dict x y]
+  Add-add dict x y
 
+spec minus [Sub A] A -> A -> A
+  :doc "First-class subtraction"
+defn minus [dict x y]
+  Sub-sub dict x y
 
-;; ════════════════════════════════════════════════════
-;; Part III — Algebraic Laws
-;; ════════════════════════════════════════════════════
+spec times [Mul A] A -> A -> A
+  :doc "First-class multiplication"
+defn times [dict x y]
+  Mul-mul dict x y
 
+spec divide [Div A] A -> A -> A
+  :doc "First-class division"
+defn divide [dict x y]
+  Div-div dict x y
 
-module prologos::core::algebraic-laws
+spec negate-fn [Neg A] A -> A
+  :doc "First-class negation"
+defn negate-fn [dict x]
+  Neg-neg dict x
 
-;; ── Property Declarations ────────────────────────
-;;
-;; These are metadata-only in Phase 1: they register in the property
-;; store but do not generate code. Phase 2 (QuickCheck) will execute
-;; `:holds` clauses as randomized tests.
+spec abs-fn [Abs A] A -> A
+  :doc "First-class absolute value"
+defn abs-fn [dict x]
+  Abs-abs dict x
 
-(ns prologos::core::algebraic-laws :no-prelude)
+;; ========================================
+;; Algebraic laws — standard property declarations
+;; ========================================
+;; These are metadata-only in Phase 1: they register in the property store
+;; but do not generate code. Phase 2 (QuickCheck) will execute :holds
+;; clauses as randomized tests.
 
 ;; --- Semigroup / Monoid / Group ---
 
