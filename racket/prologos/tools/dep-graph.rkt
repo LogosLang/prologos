@@ -583,6 +583,9 @@
    (test-dep '(macros.rkt prelude.rkt syntax.rkt source-location.rkt surface-syntax.rkt
                errors.rkt metavar-store.rkt parser.rkt elaborator.rkt pretty-print.rkt
                global-env.rkt driver.rkt namespace.rkt multi-dispatch.rkt) #t)
+   'test-reducible.rkt
+   (test-dep '(macros.rkt syntax.rkt errors.rkt metavar-store.rkt
+               global-env.rkt driver.rkt namespace.rkt) #t)
    'test-generic-ops-01-01.rkt
    (test-dep '(macros.rkt prelude.rkt syntax.rkt source-location.rkt surface-syntax.rkt
                errors.rkt metavar-store.rkt parser.rkt elaborator.rkt pretty-print.rkt
@@ -1260,6 +1263,13 @@
                                   prologos::core::functor-list prologos::core::seq-list
                                   prologos::core::seqable-list prologos::core::buildable-list
                                   prologos::core::collection-ops)
+   'test-reducible.rkt            '(prologos::core::reducible-trait prologos::core::buildable-trait
+                                  prologos::core::reducible-list prologos::core::reducible-pvec
+                                  prologos::core::reducible-set prologos::core::reducible-lseq
+                                  prologos::core::buildable-list prologos::core::buildable-pvec
+                                  prologos::core::buildable-set prologos::core::collection-fns
+                                  prologos::data::list prologos::data::nat prologos::data::option
+                                  prologos::data::lseq prologos::data::lseq-ops)
    'test-generic-ops-01-01.rkt    '(prologos::data::list prologos::data::nat prologos::data::option
                                   prologos::core::seq-trait prologos::core::seq-functions
                                   prologos::core::collection-ops)

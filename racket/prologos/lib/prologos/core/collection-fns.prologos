@@ -79,6 +79,12 @@
         (none -> (if (pred a) (some A a) (none A))))))
     (none A) xs))
 
+;; to-list : C A -> List A
+;; Materialize any Seqable collection into a List.
+(spec to-list {A : Type} {C : Type -> Type} (Seqable C) -> (C A) -> (List A))
+(defn to-list [$seq xs]
+  (lseq-to-list ($seq A xs)))
+
 ;; ── Seqable-based ops (head access, reduce1) ────────
 
 ;; reduce1 : (A -> A -> A) -> C A -> Option A   [first element as initial]
