@@ -315,13 +315,22 @@
              (run-tests test-paths project-root))])])]))
 
 ;; ============================================================
-;; Per-file test execution with timing
+;; Batch test execution with shared prelude
 ;; ============================================================
+;;
+;; Instead of spawning one `raco test` subprocess per file (each loading
+;; the prelude from scratch, ~11s), we group files into N batch workers.
+;; Each worker loads the prelude ONCE, then runs ~N/jobs files in sequence
+;; via dynamic-require. Results stream back as JSONL, one line per file.
+;;
+;; For 225 files with 10 jobs:
+;;   Old: 225 × ~13s prelude loads = ~400-500s total
+;;   New: 10 × ~11s prelude loads + 225 × ~2s per file = ~60-80s total
 
 (define (run-tests test-paths project-root)
   (define file-count (length test-paths))
 
-  ;; Pre-compile modules to bytecode (reduces per-subprocess overhead from ~22s to ~1s)
+  ;; Pre-compile modules to bytecode (reduces per-subprocess overhead)
   (when (do-precompile?)
     (printf "Pre-compiling modules...\n")
     (define precomp-t0 (current-inexact-monotonic-milliseconds))
@@ -330,50 +339,84 @@
     (printf "Pre-compiled in ~as\n"
             (real->decimal-string (/ precomp-ms 1000.0) 1)))
 
-  (printf "\n--- Running ~a files (~a parallel, timeout: ~as) ---\n"
-          file-count (num-jobs) (timeout-secs))
+  ;; Distribute files across batches (round-robin for load balance)
+  (define jobs (min (num-jobs) file-count))
+  (define batches (make-vector jobs '()))
+  (for ([path (in-list test-paths)]
+        [i (in-naturals)])
+    (define slot (modulo i jobs))
+    (vector-set! batches slot (cons path (vector-ref batches slot))))
+  ;; Reverse each batch to restore original order
+  (for ([i (in-range jobs)])
+    (vector-set! batches i (reverse (vector-ref batches i))))
 
-  (define work-ch (make-async-channel))
+  ;; Resolve batch worker path
+  (define batch-worker-path
+    (path->string (build-path project-root "tools" "batch-worker.rkt")))
+
+  (printf "\n--- Running ~a files (~a batch workers, timeout: ~as) ---\n"
+          file-count jobs (timeout-secs))
+
+  ;; Spawn all batch workers and reader threads
   (define result-ch (make-async-channel))
-
-  ;; Spawn worker threads
-  (define workers
-    (for/list ([_ (in-range (num-jobs))])
-      (thread
-       (λ ()
-         (let loop ()
-           (define path (async-channel-get work-ch))
-           (unless (eq? path 'done)
-             (define result (benchmark-one-test path (timeout-secs)))
-             (async-channel-put result-ch result)
-             (loop)))))))
-
-  ;; Enqueue all test paths
   (define t0 (current-inexact-monotonic-milliseconds))
-  (for ([p (in-list test-paths)])
-    (async-channel-put work-ch p))
+  (define all-procs '())
 
-  ;; Signal workers to stop
-  (for ([_ (in-range (num-jobs))])
-    (async-channel-put work-ch 'done))
+  (for ([i (in-range jobs)]
+        #:when (pair? (vector-ref batches i)))
+    (define batch (vector-ref batches i))
+    (define-values (proc stdout stdin stderr)
+      (apply subprocess #f #f #f racket-path batch-worker-path batch))
+    (close-output-port stdin)
+    (set! all-procs (cons proc all-procs))
+    ;; Reader thread: parse JSONL from worker stdout → result channel
+    (thread
+     (λ ()
+       (let loop ()
+         (define line (read-line stdout 'any))
+         (cond
+           [(eof-object? line)
+            (close-input-port stdout)
+            (close-input-port stderr)]
+           [else
+            (define trimmed (string-trim line))
+            (unless (string=? trimmed "")
+              (with-handlers ([exn:fail? void])
+                (define r (with-input-from-string trimmed read-json))
+                (when (hash? r)
+                  (async-channel-put result-ch r))))
+            (loop)])))))
 
   ;; Collect results with progress output
-  (define file-results
-    (for/list ([i (in-range file-count)])
-      (define r (async-channel-get result-ch))
-      (define ms (hash-ref r 'wall_ms))
-      (define status (hash-ref r 'status))
-      (printf "[~a/~a] ~a ~a (~as)\n"
-              (add1 i) file-count
-              (hash-ref r 'file)
-              (status-label status)
-              (real->decimal-string (/ ms 1000.0) 1))
-      (flush-output)
-      r))
+  (define collected '())
+  (let loop ([remaining file-count] [count 0])
+    (when (> remaining 0)
+      (define r (sync/timeout (* (timeout-secs) 1.0) result-ch))
+      (cond
+        [r
+         (define ms (hash-ref r 'wall_ms))
+         (printf "[~a/~a] ~a ~a (~as)\n"
+                 (add1 count) file-count
+                 (hash-ref r 'file)
+                 (status-label (hash-ref r 'status))
+                 (real->decimal-string (/ ms 1000.0) 1))
+         (flush-output)
+         (set! collected (cons r collected))
+         (loop (sub1 remaining) (add1 count))]
+        [else
+         ;; Timeout — kill all workers, report remaining as timeout
+         (eprintf "\nTIMEOUT: No result received for ~as. Killing ~a remaining.\n"
+                  (timeout-secs) remaining)
+         (for ([p (in-list all-procs)])
+           (with-handlers ([exn:fail? void])
+             (subprocess-kill p #t)))])))
 
-  ;; Wait for all workers
-  (for ([w (in-list workers)])
-    (thread-wait w))
+  (define file-results (reverse collected))
+
+  ;; Wait for all worker processes to finish
+  (for ([p (in-list all-procs)])
+    (with-handlers ([exn:fail? void])
+      (subprocess-wait p)))
 
   (define t1 (current-inexact-monotonic-milliseconds))
   (define total-wall-ms (inexact->exact (round (- t1 t0))))
@@ -381,12 +424,27 @@
   (define all-pass? (andmap (λ (r) (string=? (hash-ref r 'status) "pass")) file-results))
 
   ;; Print summary
-  (printf "\n~a tests in ~as (~a files, ~a jobs, ~a)\n"
+  (define failed-files
+    (filter (λ (r) (not (string=? (hash-ref r 'status) "pass"))) file-results))
+  (printf "\n~a tests in ~as (~a files, ~a batch workers, ~a)\n"
           total-tests
           (real->decimal-string (/ total-wall-ms 1000.0) 1)
           file-count
-          (num-jobs)
-          (if all-pass? "all pass" "SOME FAILURES"))
+          jobs
+          (if all-pass? "all pass"
+              (format "~a FAILURES" (length failed-files))))
+  (unless all-pass?
+    (printf "\nFailed files:\n")
+    (for ([r (in-list failed-files)])
+      (printf "  ~a" (hash-ref r 'file))
+      (when (hash-has-key? r 'error_output)
+        (define msg (hash-ref r 'error_output))
+        (define short (if (> (string-length msg) 60)
+                         (string-append (substring msg 0 60) "...")
+                         msg))
+        (printf "  (~a)" (string-replace short "\n" " ")))
+      (newline))
+    (printf "\nFailure logs: data/benchmarks/failures/*.log\n"))
 
   ;; Record to JSONL (unless --no-record)
   (when (record-timings?)
@@ -399,7 +457,7 @@
               'machine (string-append (symbol->string (system-type 'os))
                                       "-"
                                       (symbol->string (system-type 'arch)))
-              'jobs (num-jobs)
+              'jobs jobs
               'total_wall_ms total-wall-ms
               'total_tests total-tests
               'file_count file-count
