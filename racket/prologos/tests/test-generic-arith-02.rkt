@@ -57,7 +57,7 @@
   "(ns test)
 (require (prologos::core::arithmetic :refer (Add Add-add Sub Sub-sub Mul Mul-mul
                                              Div Div-div Neg Neg-neg Abs Abs-abs)))
-(require (prologos::core::generic-arith  :refer (plus minus times divide negate-fn abs-fn)))
+(require (prologos::core::algebra  :refer (plus minus times divide negate-fn abs-fn)))
 ")
 
 ;; ========================================

@@ -59,11 +59,10 @@
 
 (define preamble
   "(ns test)
-(require (prologos::core::additive-identity-trait       :refer (AdditiveIdentity AdditiveIdentity-zero)))
-(require (prologos::core::multiplicative-identity-trait  :refer (MultiplicativeIdentity MultiplicativeIdentity-one)))
-(require (prologos::core::identity-instances             :refer ()))
+(require (prologos::core::algebra :refer (AdditiveIdentity AdditiveIdentity-zero
+                                          MultiplicativeIdentity MultiplicativeIdentity-one
+                                          sum product)))
 (require (prologos::core::arithmetic                     :refer (Add Add-add Mul Mul-mul)))
-(require (prologos::core::generic-numeric-ops            :refer (sum product)))
 (require (prologos::data::list                           :refer (List nil cons)))
 ")
 
