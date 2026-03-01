@@ -62,6 +62,15 @@ The following collection items ARE also deferred (genuine infrastructure deps):
 - Requires careful refactoring of deftype/trait boundary
 - **Blocked on**: design uncertainty about deftype vs trait dispatch
 
+### Clause-Style Constraint Matching (Layer 2 Specialization)
+- Enable prioritized dispatch over disjoint trait constraints via `|` clause syntax
+- E.g., `spec map | (Mappable C) -> ... | (Reducible C) -> (Buildable C) -> ...`
+- Resolver tries clauses top-to-bottom; first satisfiable match wins
+- Requires fallible trait resolution (try/fail instead of hard error)
+- Foundation exists: `save-meta-state`/`restore-meta-state!` for speculative type-checking
+- **Not blocked**, but separate from Layer 1 (fold+build doesn't need this)
+- Source: `docs/tracking/2026-02-28_2200_CLAUSE_STYLE_CONSTRAINT_MATCHING.md`
+
 ### Sorted Collections (SortedMap, SortedSet)
 - B+ tree or red-black tree backends
 - New `Sorted` trait guaranteeing iteration order
