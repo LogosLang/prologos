@@ -1,14 +1,16 @@
-(ns prologos::core::collection-fns :no-prelude)
+(ns prologos::core::collections :no-prelude)
 
 (require (prologos::core::collection-traits :refer (Seqable))
          (prologos::core::collection-traits :refer (Buildable Buildable-from-seq))
          (prologos::core::collection-traits :refer (Foldable))
          (prologos::core::collection-traits :refer (Reducible))
-         (prologos::data::lseq            :refer (LSeq lseq-nil lseq-cell lseq-head lseq-rest lseq-empty?))
-         (prologos::data::lseq-ops        :refer (lseq-map lseq-filter lseq-take lseq-drop
-                                                  lseq-append lseq-fold lseq-length lseq-to-list))
-         (prologos::data::list            :refer (List))
-         (prologos::data::option          :refer (Option none some)))
+         (prologos::core::list              :refer (List--Seqable--dict List--Buildable--dict List--Buildable--from-seq))
+         (prologos::data::lseq             :refer (LSeq lseq-nil lseq-cell lseq-head lseq-rest lseq-empty?))
+         (prologos::data::lseq-ops         :refer (lseq-map lseq-filter lseq-take lseq-drop
+                                                   lseq-append lseq-fold lseq-length lseq-to-list
+                                                   list-to-lseq))
+         (prologos::data::list             :refer (List nil cons foldr))
+         (prologos::data::option           :refer (Option none some)))
 
 ;; ========================================
 ;; Generic Collection Functions
@@ -139,3 +141,77 @@
 (spec rest-seq {A : Type} {C : Type -> Type} (Seqable C) -> (C A) -> (LSeq A))
 (defn rest-seq [$seq xs]
   (lseq-rest A ($seq A xs)))
+
+;; ========================================
+;; Collection Operations (List-specialized)
+;; ========================================
+;; Demonstrates Seq-centric architecture with explicit List specialization.
+
+;; coll-map : (A -> B) -> List A -> List B
+spec coll-map {A B : Type} [A -> B] -> [List A] -> [List B]
+defn coll-map [f xs]
+  List--Buildable--from-seq B [lseq-map A B f [List--Seqable--dict A xs]]
+
+;; coll-filter : (A -> Bool) -> List A -> List A
+spec coll-filter {A : Type} [A -> Bool] -> [List A] -> [List A]
+defn coll-filter [pred xs]
+  List--Buildable--from-seq A [lseq-filter A pred [List--Seqable--dict A xs]]
+
+;; coll-length : List A -> Nat
+spec coll-length {A : Type} [List A] -> Nat
+defn coll-length [xs]
+  lseq-length A [List--Seqable--dict A xs]
+
+;; coll-to-list : List A -> List A
+spec coll-to-list {A : Type} [List A] -> [List A]
+defn coll-to-list [xs]
+  lseq-to-list A [List--Seqable--dict A xs]
+
+;; ========================================
+;; Collection Conversion Functions
+;; ========================================
+;; Named conversion utilities between List, PVec, LSeq, and Set.
+;; No HKT dispatch — explicit named functions for each direction.
+
+;; ── List → PVec ──────────
+
+;; vec : List A -> PVec A
+spec vec {A : Type} [List A] -> [PVec A]
+defn vec [xs]
+  pvec-from-list xs
+
+;; ── Any → LSeq (lazy sequence) ──────────
+
+;; list-to-seq : List A -> LSeq A
+spec list-to-seq {A : Type} [List A] -> [LSeq A]
+defn list-to-seq [xs]
+  list-to-lseq A xs
+
+;; pvec-to-seq : PVec A -> LSeq A
+spec pvec-to-seq {A : Type} [PVec A] -> [LSeq A]
+defn pvec-to-seq [v]
+  list-to-lseq A [pvec-to-list v]
+
+;; set-to-seq : Set A -> LSeq A
+spec set-to-seq {A : Type} [Set A] -> [LSeq A]
+defn set-to-seq [s]
+  list-to-lseq A [set-to-list s]
+
+;; ── LSeq → specific collections (into-*) ──────────
+
+;; into-list : LSeq A -> List A
+spec into-list {A : Type} [LSeq A] -> [List A]
+defn into-list [xs]
+  lseq-to-list A xs
+
+;; into-vec : LSeq A -> PVec A
+spec into-vec {A : Type} [LSeq A] -> [PVec A]
+defn into-vec [xs]
+  pvec-from-list [lseq-to-list A xs]
+
+;; into-set : LSeq A -> Set A
+;; Folds the lazy sequence into a Set via set-insert.
+;; (Can't call set-from-list due to :w/:0 multiplicity mismatch.)
+spec into-set {A : Type} [LSeq A] -> [Set A]
+defn into-set [xs]
+  foldr A [Set A] [fn a acc [set-insert acc a]] [set-empty A] [lseq-to-list A xs]

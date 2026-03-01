@@ -399,10 +399,7 @@
     (require [prologos::core::set  :refer [set-map set-any? set-all?
                                            set-to-list-fn set-from-list-fn]])
 
-    ;; ---- Collection conversions ----
-    (require [prologos::core::collection-conversions :refer [vec list-to-seq pvec-to-seq
-                                                             set-to-seq into-vec
-                                                             into-list into-set]])
+    ;; ---- Collection conversions (now in prologos::core::collections) ----
 
     ;; ---- Generic numeric operations + first-class arithmetic ----
     ;; sum, product, int-range, plus, minus, times, divide, negate-fn, abs-fn
@@ -452,16 +449,20 @@
     ;; ---- Abstract domain instances (Sign/Parity lattices, Galois connections, refined numerics) ----
     (require [prologos::core::abstract-domains :refer-all])
 
-    ;; ---- Generic collection functions (clean names) ----
+    ;; ---- Generic collection functions + conversions (clean names) ----
     ;; These shadow List-specific names (map, filter, reduce, etc.) with
     ;; generic versions that work on any Seqable/Buildable/Foldable collection.
-    ;; Users can still access List-specific versions via fully qualified names.
+    ;; Also includes collection-to-collection conversions (vec, list-to-seq, etc.)
+    ;; and List-specialized coll-map/coll-filter/coll-length/coll-to-list.
     ;; MUST BE LAST — shadowing depends on ordering.
-    (require [prologos::core::collection-fns :refer [map filter reduce reduce1
-                                                      length concat any? all?
-                                                      to-list find take drop
-                                                      into head empty?
-                                                      rest-seq]])))
+    (require [prologos::core::collections :refer [map filter reduce reduce1
+                                                  length concat any? all?
+                                                  to-list find take drop
+                                                  into head empty? rest-seq
+                                                  coll-map coll-filter coll-length coll-to-list
+                                                  vec list-to-seq pvec-to-seq
+                                                  set-to-seq into-vec
+                                                  into-list into-set]])))
 ;;; ---- END GENERATED PRELUDE ----
 
 ;; ========================================

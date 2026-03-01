@@ -291,7 +291,7 @@
    (test-dep '(syntax.rkt prelude.rkt substitution.rkt reduction.rkt typing-core.rkt
                pretty-print.rkt driver.rkt global-env.rkt namespace.rkt
                macros.rkt qtt.rkt)
-             '(prologos::core::collection-conversions))
+             '(prologos::core::collections))
    'test-prelude-collections.rkt
    (test-dep '(syntax.rkt prelude.rkt substitution.rkt reduction.rkt typing-core.rkt
                pretty-print.rkt driver.rkt global-env.rkt namespace.rkt
@@ -986,8 +986,8 @@
    'prologos::core::map            '(prologos::core::collection-traits prologos::data::option
                                      prologos::data::list prologos::data::map-entry
                                      prologos::data::lseq prologos::data::lseq-ops)
-   'prologos::core::seq-functions  '(prologos::core::collection-traits prologos::data::option
-                                   prologos::data::list)
+   'prologos::core::generic-ops  '(prologos::core::collection-traits prologos::data::option
+                                   prologos::data::list prologos::data::lseq prologos::data::lseq-ops)
 
    ;; Consolidated lattice hierarchy (lattice-trait + lattice-instances + has-top-trait +
    ;; has-top-instances + bounded-lattice + widenable-trait + widenable-instances +
@@ -1017,9 +1017,10 @@
                               prologos::core::eq prologos::core::ord
                               prologos::core::conversions
                               prologos::data::list)
-   'prologos::core::collection-ops '(prologos::core::list
+   'prologos::core::collections '(prologos::core::collection-traits
+                                   prologos::core::list
                                    prologos::data::lseq prologos::data::lseq-ops
-                                   prologos::data::list)))
+                                   prologos::data::list prologos::data::option)))
 
 ;; ============================================================
 ;; Layer 3b: Test → .prologos runtime dependencies
@@ -1095,23 +1096,23 @@
    'test-trait-impl-01.rkt       '(prologos::data::nat prologos::data::bool prologos::data::option
                                   prologos::data::either prologos::data::list
                                   prologos::core::eq prologos::core::collection-traits
-                                  prologos::core::list prologos::core::seq-functions)
+                                  prologos::core::list prologos::core::generic-ops)
    'test-trait-impl-02.rkt       '(prologos::data::nat prologos::data::bool prologos::data::option
                                   prologos::data::either prologos::data::list
                                   prologos::core::eq prologos::core::collection-traits
-                                  prologos::core::list prologos::core::seq-functions)
+                                  prologos::core::list prologos::core::generic-ops)
    'test-trait-impl-03.rkt       '(prologos::data::nat prologos::data::bool prologos::data::option
                                   prologos::data::either prologos::data::list
                                   prologos::core::eq prologos::core::collection-traits
-                                  prologos::core::list prologos::core::seq-functions)
+                                  prologos::core::list prologos::core::generic-ops)
    'test-trait-impl-04-01.rkt     '(prologos::data::nat prologos::data::bool prologos::data::option
                                   prologos::data::either prologos::data::list
                                   prologos::core::eq prologos::core::collection-traits
-                                  prologos::core::list prologos::core::seq-functions)
+                                  prologos::core::list prologos::core::generic-ops)
    'test-trait-impl-04-02.rkt     '(prologos::data::nat prologos::data::bool prologos::data::option
                                   prologos::data::either prologos::data::list
                                   prologos::core::eq prologos::core::collection-traits
-                                  prologos::core::list prologos::core::seq-functions)
+                                  prologos::core::list prologos::core::generic-ops)
    'test-trait-resolution.rkt   '(prologos::data::nat prologos::data::bool prologos::core::eq)
    'test-method-resolution.rkt  '(prologos::data::nat prologos::data::bool prologos::core::eq
                                   prologos::core::arithmetic)
@@ -1157,28 +1158,28 @@
                                   prologos::data::option prologos::data::list)
    'test-collection-traits-01.rkt '(prologos::data::list prologos::data::nat prologos::data::option
                                   prologos::core::list
-                                  prologos::core::collection-ops)
+                                  prologos::core::collections)
    'test-collection-traits-02.rkt '(prologos::data::list prologos::data::nat prologos::data::option
                                   prologos::core::list
-                                  prologos::core::collection-ops)
+                                  prologos::core::collections)
    'test-reducible.rkt            '(prologos::core::collection-traits prologos::core::collection-traits
                                   prologos::core::list prologos::core::pvec
                                   prologos::core::set prologos::core::lseq
-                                  prologos::core::collection-fns
+                                  prologos::core::collections
                                   prologos::data::list prologos::data::nat prologos::data::option
                                   prologos::data::lseq prologos::data::lseq-ops)
    'test-generic-ops-01-01.rkt    '(prologos::data::list prologos::data::nat prologos::data::option
-                                  prologos::core::collection-traits prologos::core::seq-functions
-                                  prologos::core::collection-ops)
+                                  prologos::core::collection-traits prologos::core::generic-ops
+                                  prologos::core::collections)
    'test-generic-ops-01-02.rkt    '(prologos::data::list prologos::data::nat prologos::data::option
-                                  prologos::core::collection-traits prologos::core::seq-functions
-                                  prologos::core::collection-ops)
+                                  prologos::core::collection-traits prologos::core::generic-ops
+                                  prologos::core::collections)
    'test-generic-ops-02-01.rkt    '(prologos::data::list prologos::data::nat prologos::data::option
-                                  prologos::core::collection-traits prologos::core::seq-functions
-                                  prologos::core::collection-ops)
+                                  prologos::core::collection-traits prologos::core::generic-ops
+                                  prologos::core::collections)
    'test-generic-ops-02-02.rkt    '(prologos::data::list prologos::data::nat prologos::data::option
-                                  prologos::core::collection-traits prologos::core::seq-functions
-                                  prologos::core::collection-ops)
+                                  prologos::core::collection-traits prologos::core::generic-ops
+                                  prologos::core::collections)
    'test-hkt-errors.rkt         '()  ; Uses ns/prelude — no extra lib deps
    'test-specialization.rkt     '()  ; Uses ns/prelude — no extra lib deps
    'test-constraint-inference.rkt '() ; Uses ns/prelude — no extra lib deps

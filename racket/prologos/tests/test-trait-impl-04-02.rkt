@@ -32,8 +32,8 @@
 (define shared-preamble
   (string-append
    "(ns test)\n"
-   "(require [prologos::core::seq-functions :refer [seq-length seq-drop seq-any? seq-all? seq-find]])\n"
-   "(require [prologos::core::seq-list :refer [list-seq]])\n"
+   "(require [prologos::core::generic-ops :refer [seq-length seq-drop seq-any? seq-all? seq-find]])\n"
+   "(require [prologos::core::list :refer [list-seq]])\n"
    "(require [prologos::data::list :refer [cons nil]])\n"
    "(require [prologos::data::nat :refer [zero?]])\n"
    ))
