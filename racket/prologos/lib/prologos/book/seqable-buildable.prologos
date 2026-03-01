@@ -40,18 +40,25 @@ module prologos::core::buildable-trait
 
 ;; ── The Buildable Trait ─────────────────────────────
 ;;
-;; A Buildable collection can be constructed from a lazy sequence
-;; and provides an empty collection. This is the "in" direction:
-;; LSeq → any collection.
+;; A Buildable collection can be constructed from a lazy sequence,
+;; provides an empty collection, and supports single-element append.
+;; This is the "in" direction: LSeq → any collection, plus
+;; incremental building via `conj`.
 ;;
-;; Two-method trait, so the dict is a Sigma pair:
-;;   `(pair from-seq empty-coll)`
+;; Three-method trait, so the dict is a nested Sigma pair:
+;;   `(pair from-seq (pair empty-coll conj))`
+;;
+;; Accessors:
+;;   `Buildable-from-seq`   = `(first dict)`
+;;   `Buildable-empty-coll` = `(first (second dict))`
+;;   `Buildable-conj`       = `(second (second dict))`
 
 require [prologos::data::lseq :refer [LSeq]]
 
 trait Buildable {C : Type -> Type}
   from-seq   : [Pi [A :0 <Type>] [-> [LSeq A] [C A]]]
   empty-coll : [Pi [A :0 <Type>] [C A]]
+  conj       : [Pi [A :0 <Type>] [-> [C A] [-> A [C A]]]]
   :doc "Construct a collection from a lazy sequence"
 
 

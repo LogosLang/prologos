@@ -1,17 +1,19 @@
 ;; ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-;; Chapter: Foldable and Functor
+;; Chapter: Foldable, Reducible, and Functor
 ;; ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ;;
-;; The two fundamental operations on containers are **fold** and
-;; **map**. Fold collapses a container to a single value; map
-;; transforms each element while preserving the container's shape.
+;; The three fundamental operations on containers are **fold** (right),
+;; **reduce** (left), and **map**. Fold and reduce collapse a container
+;; to a single value; map transforms each element while preserving the
+;; container's shape.
 ;;
-;; In Prologos, these are captured by two traits:
+;; In Prologos, these are captured by three traits:
 ;;
-;;   • **Foldable** — right fold: `(A -> B -> B) -> B -> F A -> B`
-;;   • **Functor** — structure-preserving map: `(A -> B) -> F A -> F B`
+;;   • **Foldable**  — right fold: `(A -> B -> B) -> B -> F A -> B`
+;;   • **Reducible** — left fold:  `(B -> A -> B) -> B -> F A -> B`
+;;   • **Functor**   — structure-preserving map: `(A -> B) -> F A -> F B`
 ;;
-;; Both are single-method traits, meaning the dictionary IS the
+;; All three are single-method traits, meaning the dictionary IS the
 ;; function — no wrapper struct. Their instances for specific types
 ;; (List, PVec, Set, LSeq) live in the data type chapters.
 
@@ -30,6 +32,27 @@ module prologos::core::foldable-trait
 trait Foldable {F : Type -> Type}
   fold : [Pi [A :0 <Type>] [Pi [B :0 <Type>] [-> [-> A [-> B B]] [-> B [-> [F A] B]]]]]
   :doc "Fold a collection to a single value"
+
+
+module prologos::core::reducible-trait
+
+;; ── The Reducible Trait ──────────────────────────────
+;;
+;; A reducible container supports left fold. Given a combining
+;; function `f : B -> A -> B`, an initial accumulator `z : B`, and a
+;; container `xs : F A`, reduce produces a single `B` by traversing
+;; all elements left-to-right.
+;;
+;; Left fold is the natural choice for accumulator-style building:
+;; tail-recursive, accumulator-first, processes elements in order.
+;; Companion to Foldable (right fold, element-first, structural
+;; recursion).
+;;
+;; As a single-method trait, the dict IS the reduce function.
+
+trait Reducible {F : Type -> Type}
+  reduce : [Pi [A :0 <Type>] [Pi [B :0 <Type>] [-> [-> B [-> A B]] [-> B [-> [F A] B]]]]]
+  :doc "Left-fold a collection to a single value (accumulator-first)"
 
 
 module prologos::core::functor-trait

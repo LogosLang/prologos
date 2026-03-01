@@ -5,13 +5,18 @@ require [prologos::data::lseq :refer [LSeq]]
 ;; ========================================
 ;; Buildable Trait — Construct from LSeq
 ;; ========================================
-;; A Buildable collection can be constructed from a lazy sequence
-;; and provides an empty collection.
+;; A Buildable collection can be constructed from a lazy sequence,
+;; provides an empty collection, and supports single-element append.
 ;;
 ;; from-seq   : LSeq A -> C A
 ;; empty-coll : C A
+;; conj       : C A -> A -> C A
+;;
+;; Three-method trait, dict is a nested Sigma pair:
+;;   (pair from-seq (pair empty-coll conj))
 
 trait Buildable {C : Type -> Type}
   from-seq   : [Pi [A :0 <Type>] [-> [LSeq A] [C A]]]
   empty-coll : [Pi [A :0 <Type>] [C A]]
+  conj       : [Pi [A :0 <Type>] [-> [C A] [-> A [C A]]]]
   :doc "Construct a collection from a lazy sequence"
