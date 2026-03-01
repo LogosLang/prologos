@@ -25,33 +25,34 @@
 ;; between the standard collection types.
 
 
-;; ════════════════════════════════════════════════════
-;; Part I — Generic Operations
-;; ════════════════════════════════════════════════════
+module prologos::core::collections :no-prelude
 
+(require (prologos::core::collection-traits :refer (Seqable))
+         (prologos::core::collection-traits :refer (Buildable Buildable-from-seq))
+         (prologos::core::collection-traits :refer (Foldable))
+         (prologos::core::collection-traits :refer (Reducible))
+         (prologos::core::list              :refer (List--Seqable--dict List--Buildable--dict List--Buildable--from-seq))
+         (prologos::data::lseq             :refer (LSeq lseq-nil lseq-cell lseq-head lseq-rest lseq-empty?))
+         (prologos::data::lseq-ops         :refer (lseq-map lseq-filter lseq-take lseq-drop
+                                                   lseq-append lseq-fold lseq-length lseq-to-list
+                                                   list-to-lseq))
+         (prologos::data::list             :refer (List nil cons foldr))
+         (prologos::data::option           :refer (Option none some)))
 
-module prologos::core::collection-fns :no-prelude
-
-;; ── Generic Collection Functions ────────────────────
+;; ========================================
+;; Generic Collection Functions
+;; ========================================
+;; These operate on any collection implementing Seqable/Buildable/Foldable/Reducible.
+;; Names intentionally match (and shadow) List-specific versions in the prelude.
+;; The compiler auto-resolves trait dicts at call sites from the concrete type.
 ;;
-;; These operate on any collection implementing the collection traits.
-;; Names intentionally match (and shadow) List-specific versions.
+;; Two patterns:
+;;   (1) Reducing ops: use Reducible (left fold) — folds natively over source
+;;   (2) Transforming ops: use Seqable+Buildable — to-seq → lseq-op → from-seq
 ;;
-;; Reducing ops use `Reducible` (native left fold — no LSeq intermediary).
-;; Transforming ops use `Seqable + Buildable` (to-seq → op → from-seq).
-;;
-;; Single-method trait dicts (`$seq`, `$red`) are the function itself;
-;; multi-method trait accessors (`Buildable-from-seq`) are global fvars.
-
-(require (prologos::core::seqable-trait    :refer (Seqable))
-         (prologos::core::buildable-trait  :refer (Buildable Buildable-from-seq))
-         (prologos::core::foldable-trait   :refer (Foldable))
-         (prologos::core::reducible-trait  :refer (Reducible))
-         (prologos::data::lseq            :refer (LSeq lseq-nil lseq-cell lseq-head lseq-rest lseq-empty?))
-         (prologos::data::lseq-ops        :refer (lseq-map lseq-filter lseq-take lseq-drop
-                                                  lseq-append lseq-fold lseq-length lseq-to-list))
-         (prologos::data::list            :refer (List))
-         (prologos::data::option          :refer (Option none some)))
+;; NOTE: Single-method trait dicts ($seq, $red) are the function itself;
+;; multi-method trait accessors (Buildable-from-seq) are global fvars.
+;; Type args are passed explicitly to lseq functions that need them.
 
 ;; ── Transforming ops (Seqable + Buildable) ──────────
 
@@ -107,6 +108,12 @@ module prologos::core::collection-fns :no-prelude
         (none -> (if (pred a) (some A a) (none A))))))
     (none A) xs))
 
+;; to-list : C A -> List A
+;; Materialize any Seqable collection into a List.
+(spec to-list {A : Type} {C : Type -> Type} (Seqable C) -> (C A) -> (List A))
+(defn to-list [$seq xs]
+  (lseq-to-list ($seq A xs)))
+
 ;; ── Seqable-based ops (head access, reduce1) ────────
 
 ;; reduce1 : (A -> A -> A) -> C A -> Option A   [first element as initial]
@@ -118,11 +125,6 @@ module prologos::core::collection-fns :no-prelude
   (match ($seq A xs)
     (lseq-nil -> (none A))
     (lseq-cell a t -> (some A (lseq-fold A A f a (t unit))))))
-
-;; to-list : C A -> List A
-(spec to-list {A : Type} {C : Type -> Type} (Seqable C) -> (C A) -> (List A))
-(defn to-list [$seq xs]
-  (lseq-to-list ($seq A xs)))
 
 ;; take : Nat -> C A -> C A
 (spec take {A : Type} {C : Type -> Type} (Seqable C) -> (Buildable C) -> Nat -> (C A) -> (C A))
@@ -139,47 +141,38 @@ module prologos::core::collection-fns :no-prelude
 ;; The target arg determines the output type (its value is discarded).
 ;; Usage: (into @[] '[1 2 3]) → @[1 2 3]
 ;;        (into #{} @[1 2 3]) → #{1 2 3}
+;;        |> '[1 2 3] (into @[])   ;; in pipe context
 (spec into {A : Type} {S : Type -> Type} {T : Type -> Type} (Seqable S) -> (Buildable T) -> (T A) -> (S A) -> (T A))
 (defn into [$seq $build _target source]
   (Buildable-from-seq $build A ($seq A source)))
 
 ;; head : C A -> Option A
 ;; Get the first element of any collection, or none if empty.
-;; Note: named `head` not `first` because `first` is a parser keyword.
+;; Converts to LSeq via Seqable, then extracts the head.
+;; Note: named `head` not `first` because `first` is a parser keyword
+;; (Sigma pair projection).
 (spec head {A : Type} {C : Type -> Type} (Seqable C) -> (C A) -> (Option A))
 (defn head [$seq xs]
   (lseq-head A ($seq A xs)))
 
 ;; empty? : C A -> Bool
+;; Check if a collection is empty.
 (spec empty? {A : Type} {C : Type -> Type} (Seqable C) -> (C A) -> Bool)
 (defn empty? [$seq xs]
   (lseq-empty? A ($seq A xs)))
 
 ;; rest-seq : C A -> LSeq A
 ;; Get the remaining elements as a lazy sequence.
+;; The return type is always LSeq (not the original collection type)
+;; since this streams the tail without materializing a new collection.
 (spec rest-seq {A : Type} {C : Type -> Type} (Seqable C) -> (C A) -> (LSeq A))
 (defn rest-seq [$seq xs]
   (lseq-rest A ($seq A xs)))
 
-
-;; ════════════════════════════════════════════════════
-;; Part II — List-Specialized Operations
-;; ════════════════════════════════════════════════════
-
-
-module prologos::core::collection-ops
-
-;; ── List-Specialized Collection Operations ──────────
-;;
-;; These demonstrate the Seq-centric architecture with concrete
-;; List types, useful when HKT type parameters can't be passed
-;; at call sites. The pattern is: to-seq → lseq-op → from-seq.
-
-require [prologos::core::seqable-list    :refer [List--Seqable--dict]]
-require [prologos::core::buildable-list  :refer [List--Buildable--dict List--Buildable--from-seq]]
-require [prologos::data::lseq            :refer [LSeq]]
-require [prologos::data::lseq-ops        :refer [lseq-map lseq-filter lseq-to-list lseq-length]]
-require [prologos::data::list             :refer [List]]
+;; ========================================
+;; Collection Operations (List-specialized)
+;; ========================================
+;; Demonstrates Seq-centric architecture with explicit List specialization.
 
 ;; coll-map : (A -> B) -> List A -> List B
 spec coll-map {A B : Type} [A -> B] -> [List A] -> [List B]
@@ -201,28 +194,20 @@ spec coll-to-list {A : Type} [List A] -> [List A]
 defn coll-to-list [xs]
   lseq-to-list A [List--Seqable--dict A xs]
 
+;; ========================================
+;; Collection Conversion Functions
+;; ========================================
+;; Named conversion utilities between List, PVec, LSeq, and Set.
+;; No HKT dispatch — explicit named functions for each direction.
 
-;; ════════════════════════════════════════════════════
-;; Part III — Collection Conversions
-;; ════════════════════════════════════════════════════
-
-
-module prologos::core::collection-conversions
-
-;; ── Named Conversion Functions ──────────────────────
-;;
-;; Explicit conversions between List, PVec, LSeq, and Set.
-;; No HKT dispatch — named functions for each direction.
-;; All conversions flow through LSeq as the pivot representation.
-
-require [prologos::data::list     :refer [List nil cons foldr]]
-require [prologos::data::lseq     :refer [LSeq lseq-nil]]
-require [prologos::data::lseq-ops :refer [list-to-lseq lseq-to-list]]
+;; ── List → PVec ──────────
 
 ;; vec : List A -> PVec A
 spec vec {A : Type} [List A] -> [PVec A]
 defn vec [xs]
   pvec-from-list xs
+
+;; ── Any → LSeq (lazy sequence) ──────────
 
 ;; list-to-seq : List A -> LSeq A
 spec list-to-seq {A : Type} [List A] -> [LSeq A]
@@ -238,6 +223,8 @@ defn pvec-to-seq [v]
 spec set-to-seq {A : Type} [Set A] -> [LSeq A]
 defn set-to-seq [s]
   list-to-lseq A [set-to-list s]
+
+;; ── LSeq → specific collections (into-*) ──────────
 
 ;; into-list : LSeq A -> List A
 spec into-list {A : Type} [LSeq A] -> [List A]
