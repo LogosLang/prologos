@@ -951,6 +951,7 @@
    'prologos::core::seqable-trait    '(prologos::data::lseq)
    'prologos::core::buildable-trait  '(prologos::data::lseq)
    'prologos::core::foldable-trait   '()
+   'prologos::core::reducible-trait  '()
    'prologos::core::functor-trait    '()
    'prologos::core::indexed-trait    '(prologos::data::option)
    'prologos::core::keyed-trait      '(prologos::data::option)
@@ -1010,6 +1011,7 @@
    'prologos::core::indexed-list   '(prologos::core::indexed-trait prologos::data::option
                                    prologos::data::list prologos::data::nat)
    'prologos::core::foldable-list  '(prologos::core::foldable-trait prologos::data::list)
+   'prologos::core::reducible-list '(prologos::core::reducible-trait prologos::data::list)
    'prologos::core::functor-list   '(prologos::core::functor-trait prologos::data::list)
    ;; PVec trait instances
    'prologos::core::seqable-pvec   '(prologos::core::seqable-trait prologos::data::lseq
@@ -1019,8 +1021,27 @@
    'prologos::core::indexed-pvec   '(prologos::core::indexed-trait prologos::data::option
                                     prologos::data::nat)
    'prologos::core::foldable-pvec  '(prologos::core::foldable-trait prologos::data::list)
+   'prologos::core::reducible-pvec '(prologos::core::reducible-trait)
    'prologos::core::functor-pvec   '(prologos::core::functor-trait prologos::data::list)
    'prologos::core::pvec-ops       '(prologos::data::list prologos::data::option)
+   ;; Set trait instances
+   'prologos::core::seqable-set    '(prologos::core::seqable-trait prologos::data::lseq
+                                     prologos::data::lseq-ops prologos::data::list)
+   'prologos::core::buildable-set  '(prologos::core::buildable-trait prologos::data::lseq
+                                     prologos::data::lseq-ops prologos::data::list)
+   'prologos::core::foldable-set   '(prologos::core::foldable-trait)
+   'prologos::core::reducible-set  '(prologos::core::reducible-trait)
+   'prologos::core::setlike-set    '()
+   'prologos::core::set-ops        '(prologos::data::list prologos::data::option)
+   ;; LSeq trait instances
+   'prologos::core::seqable-lseq   '(prologos::core::seqable-trait prologos::data::lseq)
+   'prologos::core::buildable-lseq '(prologos::core::buildable-trait prologos::data::lseq)
+   'prologos::core::foldable-lseq  '(prologos::core::foldable-trait prologos::data::lseq
+                                     prologos::data::lseq-ops prologos::data::list)
+   'prologos::core::reducible-lseq '(prologos::core::reducible-trait prologos::data::lseq
+                                     prologos::data::lseq-ops)
+   'prologos::core::seq-lseq       '(prologos::core::seq-trait prologos::data::lseq
+                                     prologos::data::option)
    'prologos::core::seq-functions  '(prologos::core::seq-trait prologos::data::option
                                    prologos::data::list)
 
