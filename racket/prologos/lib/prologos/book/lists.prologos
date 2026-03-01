@@ -25,19 +25,22 @@
 
 module prologos::data::list
 
-;; ── List Type and Folds ─────────────────────────────
-;;
-;; The List type and its two fundamental elimination forms:
-;; right fold (`foldr`) and left fold (`reduce`). Every other
-;; list operation can be expressed in terms of these.
-
-require [prologos::core::eq-trait :refer [nat-eq]]
+require [prologos::core::eq :refer [nat-eq]]
         [prologos::data::option   :refer [Option none some]]
         [prologos::data::nat      :refer [add mult pred zero?]]
+
+;; ========================================
+;; Prologos List Type
+;; List A = Pi(R : Type 0). R -> (A -> R -> R) -> R
+;; ========================================
 
 data List {A}
   nil
   cons : A -> List A
+
+;; ========================================
+;; Folds
+;; ========================================
 
 spec foldr [A -> B -> B] B [List A] -> B
   :doc "Right fold: combine elements right-to-left with an accumulator"
@@ -54,7 +57,9 @@ defn reduce [f z xs]
     | nil       -> z
     | cons a as -> reduce f [f z a] as
 
-;; ── Basic Operations ────────────────────────────────
+;; ========================================
+;; Basic Operations
+;; ========================================
 
 spec length [List A] -> Nat
   :doc "Number of elements in the list"
@@ -114,7 +119,9 @@ defn elem [eqf x xs]
                      | true  -> true
                      | false -> elem eqf x as
 
-;; ── Derived from foldl ──────────────────────────────
+;; ========================================
+;; Derived from foldl
+;; ========================================
 
 ;; Reverse a list (using helper with accumulator).
 spec reverse-acc [List A] [List A] -> List A
@@ -138,7 +145,9 @@ spec product [List Nat] -> Nat
 defn product [xs]
   reduce mult [suc zero] xs
 
-;; ── Predicates and Search ───────────────────────────
+;; ========================================
+;; Predicates and Search
+;; ========================================
 
 ;; Does any element satisfy the predicate?
 spec any? [A -> Bool] [List A] -> Bool
@@ -167,7 +176,9 @@ defn find [p xs]
       | true  -> some a
       | false -> find p as
 
-;; ── Accessors ───────────────────────────────────────
+;; ========================================
+;; Accessors
+;; ========================================
 
 ;; 0-indexed element lookup.
 spec nth Nat [List A] -> Option A
@@ -187,7 +198,9 @@ defn last [xs]
       | nil     -> some a
       | cons _ _ -> last as
 
-;; ── Construction ────────────────────────────────────
+;; ========================================
+;; Construction
+;; ========================================
 
 ;; N copies of a value.
 spec replicate Nat A -> List A
@@ -220,7 +233,9 @@ spec concat-map [A -> List B] [List A] -> List B
 defn concat-map [f xs]
   concat [map f xs]
 
-;; ── Slicing ─────────────────────────────────────────
+;; ========================================
+;; Slicing
+;; ========================================
 
 spec take Nat [List A] -> List A
   :doc "Take the first n elements"
@@ -263,7 +278,9 @@ defn drop-while [p xs]
       | true  -> drop-while p as
       | false -> xs
 
-;; ── Partitioning ────────────────────────────────────
+;; ========================================
+;; Partitioning
+;; ========================================
 
 ;; Split a list by predicate. Returns (satisfy, don't-satisfy).
 spec partition-helper [A -> Bool] [List A] [List A] [List A] -> [Sigma [_ <List A>] [List A]]
@@ -278,7 +295,9 @@ spec partition [A -> Bool] [List A] -> [Sigma [_ <List A>] [List A]]
 defn partition [p xs]
   partition-helper p nil nil xs
 
-;; ── Zipping ─────────────────────────────────────────
+;; ========================================
+;; Zipping
+;; ========================================
 
 spec zip-with [A -> B -> C] [List A] [List B] -> List C
   :doc "Combine two lists element-wise with a function"
@@ -305,7 +324,9 @@ spec unzip [List [Sigma [_ <A>] B]] -> [Sigma [_ <List A>] [List B]]
 defn unzip [ps]
   unzip-helper nil nil ps
 
-;; ── Transformations ─────────────────────────────────
+;; ========================================
+;; Transformations
+;; ========================================
 
 ;; Insert separator between elements.
 spec intersperse A [List A] -> List A
@@ -316,13 +337,12 @@ defn intersperse [sep xs]
       | nil     -> cons a nil
       | cons _ _ -> cons a [cons sep [intersperse sep as]]
 
-;; ── Sorting ─────────────────────────────────────────
-;;
-;; Merge sort: split the list in half, sort each half, merge.
-;; `halve` splits by alternating assignment (not by counting),
-;; which avoids an extra traversal to compute the midpoint.
+;; ========================================
+;; Sorting
+;; ========================================
 
 ;; Split list into two halves by alternating assignment.
+;; halve-helper alternates: odd-indexed -> left, even-indexed -> right, reversed at end.
 spec halve-helper [List A] [List A] [List A] -> [Sigma [_ <List A>] [List A]]
 defn halve-helper [left right xs]
   match xs
@@ -355,9 +375,12 @@ defn sort [lte xs]
       | nil     -> cons a nil
       | cons _ _ -> merge lte [sort lte [first [halve xs]]] [sort lte [second [halve xs]]]
 
-;; ── Non-empty Folds ─────────────────────────────────
+;; ========================================
+;; Non-empty Folds
+;; ========================================
 
 ;; Left fold on non-empty list (first element is the initial accumulator).
+;; reduce1 f [a,b,c] = f (f a b) c
 spec reduce1 [A -> A -> A] [List A] -> Option A
 defn reduce1 [f xs]
   match xs
@@ -365,6 +388,8 @@ defn reduce1 [f xs]
     | cons a as -> some [reduce f a as]
 
 ;; Right fold on non-empty list (last element is the base).
+;; foldr1 f [a,b,c] = f a (f b c)
+;; Wraps each element in some, then folds with a combiner.
 spec foldr1-step [A -> A -> A] A [Option A] -> Option A
 defn foldr1-step [f a acc]
   match acc
@@ -375,7 +400,9 @@ spec foldr1 [A -> A -> A] [List A] -> Option A
 defn foldr1 [f xs]
   foldr A [Option A] [foldr1-step A f] [none A] xs
 
-;; ── Splitting ───────────────────────────────────────
+;; ========================================
+;; Splitting
+;; ========================================
 
 ;; All elements except the last. Returns none for empty list.
 spec init-helper [List A] [List A] -> List A
@@ -393,6 +420,7 @@ defn init [xs]
     | cons _ _ -> some [init-helper nil xs]
 
 ;; Split where predicate first fails: returns (passing-prefix, rest).
+;; span zero? [0,0,1,2] = pair [0,0] [1,2]
 spec span-helper [A -> Bool] [List A] [List A] -> [Sigma [_ <List A>] [List A]]
 defn span-helper [p acc xs]
   match xs
@@ -406,6 +434,7 @@ defn span [p xs]
   span-helper p nil xs
 
 ;; Split where predicate first succeeds (complement of span).
+;; break zero? [1,2,0,3] = pair [1,2] [0,3]
 spec break-helper [A -> Bool] [List A] [List A] -> [Sigma [_ <List A>] [List A]]
 defn break-helper [p acc xs]
   match xs
@@ -418,9 +447,12 @@ spec break [A -> Bool] [List A] -> [Sigma [_ <List A>] [List A]]
 defn break [p xs]
   break-helper p nil xs
 
-;; ── Equality-Based Operations ───────────────────────
+;; ========================================
+;; Equality-Based Operations
+;; ========================================
 
 ;; Remove consecutive duplicates (like Unix uniq).
+;; dedup nat-eq [1,1,2,2,3] = [1,2,3]
 spec dedup-helper [A -> A -> Bool] A [List A] -> List A
 defn dedup-helper [eqf prev xs]
   match xs
@@ -436,6 +468,7 @@ defn dedup [eqf xs]
     | cons a as -> cons a [dedup-helper eqf a as]
 
 ;; Check if one list is a prefix of another.
+;; prefix-of? nat-eq [1,2] [1,2,3] = true
 spec prefix-of? [A -> A -> Bool] [List A] [List A] -> Bool
 defn prefix-of? [eqf prefix xs]
   match prefix
@@ -447,11 +480,13 @@ defn prefix-of? [eqf prefix xs]
         | false -> false
 
 ;; Check if one list is a suffix of another.
+;; suffix-of? nat-eq [2,3] [1,2,3] = true
 spec suffix-of? [A -> A -> Bool] [List A] [List A] -> Bool
 defn suffix-of? [eqf suffix xs]
   prefix-of? eqf [reverse suffix] [reverse xs]
 
 ;; Remove first occurrence of an element.
+;; delete nat-eq 2 [1,2,3,2] = [1,3,2]
 spec delete [A -> A -> Bool] A [List A] -> List A
 defn delete [eqf x xs]
   match xs
@@ -460,9 +495,12 @@ defn delete [eqf x xs]
       | true  -> as
       | false -> cons a [delete eqf x as]
 
-;; ── Search and Counting ─────────────────────────────
+;; ========================================
+;; Search and Counting
+;; ========================================
 
 ;; Index of first element satisfying predicate.
+;; find-index zero? [3,2,0,1] = some 2
 spec find-index-helper [A -> Bool] Nat [List A] -> Option Nat
 defn find-index-helper [p n xs]
   match xs
@@ -476,6 +514,7 @@ defn find-index [p xs]
   find-index-helper p zero xs
 
 ;; Count elements satisfying predicate.
+;; count zero? [0,1,0,2,0] = 3
 spec count-helper [A -> Bool] Nat [List A] -> Nat
 defn count-helper [p n xs]
   match xs
@@ -488,7 +527,9 @@ spec count [A -> Bool] [List A] -> Nat
 defn count [p xs]
   count-helper p zero xs
 
-;; ── Accumulating Transforms ─────────────────────────
+;; ========================================
+;; Accumulating Transforms
+;; ========================================
 
 ;; Left fold with intermediate results.
 ;; scanl add 0 [1,2,3] = [0,1,3,6]
@@ -513,6 +554,9 @@ defn intercalate [sep xss]
   concat [intersperse sep xss]
 
 ;; Sort by derived key using an existing comparator.
+;; sort-on nat-lte key xs — sorts xs by (key x) using nat-lte
+;; Sort by derived key using an existing comparator.
+;; sort-on nat-lte key xs — sorts xs by (key x) using nat-lte
 spec sort-on [B -> B -> Bool] [A -> B] [List A] -> List A
 defn sort-on [lte key xs]
   sort A [fn a b [lte [key a] [key b]]] xs
@@ -523,65 +567,38 @@ defn sort-on [lte key xs]
 ;; ════════════════════════════════════════════════════
 
 
-module prologos::core::seqable-list
+module prologos::core::list
 
-;; ── Seqable List ────────────────────────────────────
-;;
-;; Convert a List to an LSeq via `list-to-lseq`. Single-method
-;; trait: the dict IS the conversion function.
-
-require [prologos::core::seqable-trait :refer [Seqable Seqable-to-seq]]
+require [prologos::core::collection-traits :refer [Seqable Seqable-to-seq
+                                                    Buildable Buildable-from-seq Buildable-empty-coll Buildable-conj
+                                                    Foldable
+                                                    Reducible
+                                                    Indexed Indexed-idx-nth Indexed-idx-length Indexed-idx-update
+                                                    Functor
+                                                    Seq]]
 require [prologos::data::lseq          :refer [LSeq]]
-require [prologos::data::lseq-ops      :refer [list-to-lseq]]
-require [prologos::data::list           :refer [List]]
+require [prologos::data::lseq-ops      :refer [list-to-lseq lseq-to-list]]
+require [prologos::data::list           :refer [List nil cons foldr reduce map]]
+require [prologos::data::option        :refer [Option some none]]
+require [prologos::data::nat            :refer [zero?]]
+
+;; ========================================
+;; Seqable List Instance
+;; ========================================
+;; Convert a List to an LSeq via list-to-lseq.
+;; The Seqable dict IS the function (single-method trait).
 
 def List--Seqable--dict : [Seqable List] := list-to-lseq
 
-
-module prologos::core::foldable-list
-
-;; ── Foldable List ───────────────────────────────────
+;; ========================================
+;; Buildable List Instance
+;; ========================================
+;; from-seq   : LSeq A -> List A  (via lseq-to-list)
+;; empty-coll : List A             (via nil A)
+;; conj       : List A -> A -> List A  (via cons — prepend, O(1))
 ;;
-;; List's fold delegates directly to `foldr` — no conversion
-;; needed. Single-method trait: the dict IS `foldr`.
-
-require [prologos::core::foldable-trait :refer [Foldable]]
-require [prologos::data::list :refer [List foldr]]
-
-spec list-foldable [Foldable List]
-def list-foldable foldr
-
-
-module prologos::core::reducible-list
-
-;; ── Reducible List ──────────────────────────────────
-;;
-;; List's reduce wraps the native `reduce` (left fold,
-;; tail-recursive). The type parameter order is swapped:
-;; List's reduce has (B, A) but Reducible expects (A, B)
-;; where A=element, B=accumulator.
-
-require [prologos::core::reducible-trait :refer [Reducible]]
-require [prologos::data::list :refer [List reduce]]
-
-(def list-reducible : [Reducible List]
-  (fn (A :0 (Type 0)) (fn (B :0 (Type 0)) (fn (f : (-> B (-> A B))) (fn (z : B) (fn (xs : (List A))
-    (reduce B A f z xs)))))))
-
-
-module prologos::core::buildable-list
-
-;; ── Buildable List ──────────────────────────────────
-;;
-;; Build a List from an LSeq via `lseq-to-list`; the empty
-;; collection is `nil`; conj prepends via `cons` (O(1)).
-;; Buildable is a three-method trait, so the dict is a nested
-;; Sigma pair: `(pair from-seq (pair empty-coll conj))`.
-
-require [prologos::core::buildable-trait :refer [Buildable Buildable-from-seq Buildable-empty-coll Buildable-conj]]
-require [prologos::data::lseq            :refer [LSeq]]
-require [prologos::data::lseq-ops        :refer [lseq-to-list]]
-require [prologos::data::list             :refer [List nil cons]]
+;; Buildable is a three-method trait, so the dict is a nested Sigma pair:
+;;   (pair from-seq (pair empty-coll conj))
 
 (def List--Buildable--from-seq : [Pi [A :0 <Type>] [-> [LSeq A] [List A]]]
   lseq-to-list)
@@ -598,68 +615,36 @@ require [prologos::data::list             :refer [List nil cons]]
       (fn (A :0 (Type 0)) (nil A))
       (fn (A :0 (Type 0)) (fn (xs : (List A)) (fn (x : A) (cons A x xs)))))))
 
+;; ========================================
+;; Foldable instance for List
+;; ========================================
+;; list-foldable : Foldable List
+;; = Pi(A :0 Type) Pi(B :0 Type) (A -> B -> B) -> B -> List A -> B
 
-module prologos::core::seq-list
+spec list-foldable [Foldable List]
+def list-foldable foldr
 
-;; ── Seq List ────────────────────────────────────────
+;; ========================================
+;; Reducible instance for List
+;; ========================================
+;; Uses List's native reduce (left fold, tail-recursive).
+;; reduce : (B -> A -> B) -> B -> List A -> B
 ;;
-;; The Seq trait provides first/rest/empty? for sequential access.
-;; Dict layout: `(pair first-fn (pair rest-fn empty?-fn))`.
+;; List's reduce has implicit params in order (B, A) but
+;; Reducible expects (A, B) where A=element, B=accumulator.
+;; We wrap with explicit Pi binders to reorder.
 
-require [prologos::core::seq-trait :refer [Seq]]
-require [prologos::data::list :refer [List nil cons]]
-require [prologos::data::option :refer [Option some none]]
+(def list-reducible : [Reducible List]
+  (fn (A :0 (Type 0)) (fn (B :0 (Type 0)) (fn (f : (-> B (-> A B))) (fn (z : B) (fn (xs : (List A))
+    (reduce B A f z xs)))))))
 
-spec list-seq-first [List A] -> [Option A]
-defn list-seq-first [xs]
-  match xs
-    | nil       -> none A
-    | cons a _  -> some A a
-
-spec list-seq-rest [List A] -> [List A]
-defn list-seq-rest [xs]
-  match xs
-    | nil       -> nil A
-    | cons _ as -> as
-
-spec list-seq-empty? [List A] -> Bool
-defn list-seq-empty? [xs]
-  match xs
-    | nil      -> true
-    | cons _ _ -> false
-
-;; Assemble the dictionary: (pair first-fn (pair rest-fn empty?-fn))
-spec list-seq [Seq List]
-def list-seq [pair list-seq-first [pair list-seq-rest list-seq-empty?]]
-
-
-module prologos::core::functor-list
-
-;; ── Functor List ────────────────────────────────────
-;;
-;; List's fmap delegates directly to `map`. Single-method
-;; trait: the dict IS `map`.
-
-require [prologos::core::functor-trait :refer [Functor]]
-require [prologos::data::list :refer [List map]]
-
-spec list-functor [Functor List]
-def list-functor map
-
-
-module prologos::core::indexed-list
-
-;; ── Indexed List ────────────────────────────────────
-;;
-;; O(n) positional access for linked lists. Three methods:
-;; nth, length, and update — all by structural recursion.
-
-require [prologos::core::indexed-trait :refer [Indexed Indexed-idx-nth Indexed-idx-length Indexed-idx-update]]
-require [prologos::data::option        :refer [Option some none]]
-require [prologos::data::list           :refer [List nil cons]]
-require [prologos::data::nat            :refer [zero?]]
+;; ========================================
+;; Indexed List Instance
+;; ========================================
+;; O(n) implementations for linked list.
 
 ;; idx-nth : List A -> Nat -> Option A
+;; Returns (some elem) at index n, or none if out of bounds.
 (def list-idx-nth : [Pi [A :0 <Type>] [-> [List A] [-> Nat [Option A]]]]
   (fn (A :0 (Type 0)) (fn (xs : (List A)) (fn (n : Nat)
     (match xs
@@ -676,6 +661,7 @@ require [prologos::data::nat            :refer [zero?]]
       (cons _ as -> (suc (list-idx-length A as)))))))
 
 ;; idx-update : List A -> Nat -> A -> List A
+;; Replace element at index n. If out of bounds, return unchanged.
 (def list-idx-update : [Pi [A :0 <Type>] [-> [List A] [-> Nat [-> A [List A]]]]]
   (fn (A :0 (Type 0)) (fn (xs : (List A)) (fn (n : Nat) (fn (v : A)
     (match xs
@@ -687,3 +673,41 @@ require [prologos::data::nat            :refer [zero?]]
 ;; Indexed dict: triple (idx-nth, idx-length, idx-update) as nested Sigma
 (def List--Indexed--dict : (Indexed List)
   (pair list-idx-nth (pair list-idx-length list-idx-update)))
+
+;; ========================================
+;; Functor instance for List
+;; ========================================
+;; list-functor : Functor List
+;; = Pi(A :0 Type) Pi(B :0 Type) (A -> B) -> List A -> List B
+
+spec list-functor [Functor List]
+def list-functor map
+
+;; ========================================
+;; Seq instance for List
+;; ========================================
+
+;; first : List A -> Option A
+spec list-seq-first [List A] -> [Option A]
+defn list-seq-first [xs]
+  match xs
+    | nil       -> none A
+    | cons a _  -> some A a
+
+;; rest : List A -> List A
+spec list-seq-rest [List A] -> [List A]
+defn list-seq-rest [xs]
+  match xs
+    | nil       -> nil A
+    | cons _ as -> as
+
+;; empty? : List A -> Bool
+spec list-seq-empty? [List A] -> Bool
+defn list-seq-empty? [xs]
+  match xs
+    | nil      -> true
+    | cons _ _ -> false
+
+;; Assemble the dictionary: (pair first-fn (pair rest-fn empty?-fn))
+spec list-seq [Seq List]
+def list-seq [pair list-seq-first [pair list-seq-rest list-seq-empty?]]
