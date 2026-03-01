@@ -103,12 +103,28 @@ require [prologos::core::foldable-trait :refer [Foldable]]
     (set-fold (fn (acc : B) (fn (elem : A) (f elem acc))) z s)))))))
 
 
+module prologos::core::reducible-set
+
+;; ── Reducible Instance ──────────────────────────
+;;
+;; Uses native `set-fold` directly — no argument flipping needed
+;; since both `set-fold` and Reducible use accumulator-first
+;; `(B -> A -> B)` convention.
+
+require [prologos::core::reducible-trait :refer [Reducible]]
+
+(def set-reducible : [Reducible Set]
+  (fn (A :0 (Type 0)) (fn (B :0 (Type 0)) (fn (f : (-> B (-> A B))) (fn (z : B) (fn (s : (Set A))
+    (set-fold f z s)))))))
+
+
 module prologos::core::buildable-set
 
 ;; ── Buildable Instance ───────────────────────────
 ;;
 ;; Builds a Set from a lazy sequence by materializing to a List
 ;; (via `lseq-to-list`), then folding with `set-insert`.
+;; Conj delegates to `set-insert` directly (O(log n)).
 ;;
 ;; **Why not `set-from-list`?** Because `set-from-list` declares
 ;; `A :w` (runtime type arg for the CHAMP trie), but the Buildable
@@ -126,7 +142,9 @@ require [prologos::data::list             :refer [List foldr]]
   (pair
     (fn (A :0 (Type 0)) (fn (xs : (LSeq A))
       (foldr A (Set A) (fn (a : A) (fn (acc : (Set A)) (set-insert acc a))) (set-empty A) (lseq-to-list A xs))))
-    (fn (A :0 (Type 0)) (set-empty A))))
+    (pair
+      (fn (A :0 (Type 0)) (set-empty A))
+      (fn (A :0 (Type 0)) (fn (s : (Set A)) (fn (x : A) (set-insert s x)))))))
 
 
 module prologos::core::setlike-set

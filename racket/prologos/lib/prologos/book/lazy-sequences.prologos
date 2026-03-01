@@ -180,22 +180,43 @@ require [prologos::data::list            :refer [List foldr]]
     (foldr A B f z (lseq-to-list A xs))))))))
 
 
+module prologos::core::reducible-lseq
+
+;; ── Reducible LSeq ──────────────────────────────────
+;;
+;; Uses `lseq-fold` (strict left fold). Note the type parameter
+;; swap: `lseq-fold` has `Pi [A :0 Type] Pi [B :0 Type]` where
+;; A=accumulator, B=element. Reducible wants A=element, B=acc.
+;; So we pass `lseq-fold B A` to get the right instantiation.
+
+require [prologos::core::reducible-trait :refer [Reducible]]
+require [prologos::data::lseq           :refer [LSeq]]
+require [prologos::data::lseq-ops       :refer [lseq-fold]]
+
+(def lseq-reducible : [Reducible LSeq]
+  (fn (A :0 (Type 0)) (fn (B :0 (Type 0)) (fn (f : (-> B (-> A B))) (fn (z : B) (fn (xs : (LSeq A))
+    (lseq-fold B A f z xs)))))))
+
+
 module prologos::core::buildable-lseq
 
 ;; ── Buildable LSeq (Identity) ──────────────────────
 ;;
 ;; `from-seq` for LSeq is the identity — the input is already
-;; an LSeq. `empty-coll` returns `lseq-nil`. Buildable is a
-;; two-method trait, so the dict is a Sigma pair.
+;; an LSeq. `empty-coll` returns `lseq-nil`. `conj` prepends
+;; via `lseq-cell` (lazy cons, O(1)). Buildable is a
+;; three-method trait, so the dict is a nested Sigma pair.
 
 require [prologos::core::buildable-trait :refer [Buildable]]
-require [prologos::data::lseq            :refer [LSeq lseq-nil]]
+require [prologos::data::lseq            :refer [LSeq lseq-nil lseq-cell]]
 
 (spec LSeq--Buildable--dict (Buildable LSeq))
 (def LSeq--Buildable--dict
   (pair
     (fn (A :0 (Type 0)) (fn (xs : (LSeq A)) xs))
-    (fn (A :0 (Type 0)) (lseq-nil A))))
+    (pair
+      (fn (A :0 (Type 0)) (lseq-nil A))
+      (fn (A :0 (Type 0)) (fn (xs : (LSeq A)) (fn (x : A) (lseq-cell A x (fn (_ : Unit) xs))))))))
 
 
 module prologos::core::seq-lseq

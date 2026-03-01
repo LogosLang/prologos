@@ -1,19 +1,19 @@
 ns prologos::core::buildable-list
 
-require [prologos::core::buildable-trait :refer [Buildable Buildable-from-seq Buildable-empty-coll]]
+require [prologos::core::buildable-trait :refer [Buildable Buildable-from-seq Buildable-empty-coll Buildable-conj]]
 require [prologos::data::lseq            :refer [LSeq]]
 require [prologos::data::lseq-ops        :refer [lseq-to-list]]
-require [prologos::data::list             :refer [List nil]]
+require [prologos::data::list             :refer [List nil cons]]
 
 ;; ========================================
 ;; Buildable List Instance
 ;; ========================================
-;; from-seq : LSeq A -> List A  (via lseq-to-list)
-;; empty-coll : List A           (via nil A)
+;; from-seq   : LSeq A -> List A  (via lseq-to-list)
+;; empty-coll : List A             (via nil A)
+;; conj       : List A -> A -> List A  (via cons — prepend, O(1))
 ;;
-;; Buildable is a two-method trait, so the dict is a Sigma pair.
-;; pair with named refs can't infer the dependent Sigma type, so we
-;; use inline lambdas in the pair constructor (same as sexp inline approach).
+;; Buildable is a three-method trait, so the dict is a nested Sigma pair:
+;;   (pair from-seq (pair empty-coll conj))
 
 (def List--Buildable--from-seq : [Pi [A :0 <Type>] [-> [LSeq A] [List A]]]
   lseq-to-list)
@@ -26,4 +26,6 @@ require [prologos::data::list             :refer [List nil]]
 (def List--Buildable--dict
   (pair
     (fn (A :0 (Type 0)) (fn (xs : (LSeq A)) (lseq-to-list A xs)))
-    (fn (A :0 (Type 0)) (nil A))))
+    (pair
+      (fn (A :0 (Type 0)) (nil A))
+      (fn (A :0 (Type 0)) (fn (xs : (List A)) (fn (x : A) (cons A x xs)))))))

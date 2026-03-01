@@ -10,8 +10,9 @@ require [prologos::data::list             :refer [List foldr]]
 ;; ========================================
 ;; from-seq   : LSeq A -> Set A  (via lseq-to-list -> foldr with set-insert)
 ;; empty-coll : Set A             (via set-empty)
+;; conj       : Set A -> A -> Set A  (via set-insert, O(log n))
 ;;
-;; Buildable is a two-method trait, so the dict is a Sigma pair.
+;; Buildable is a three-method trait, so the dict is a nested Sigma pair.
 ;; Note: Can't call set-from-list directly because it declares A :w,
 ;; but the trait binding uses A :0 (erased). Instead we fold manually
 ;; using set-insert + set-empty which have erased type args at QTT level.
@@ -21,4 +22,6 @@ require [prologos::data::list             :refer [List foldr]]
   (pair
     (fn (A :0 (Type 0)) (fn (xs : (LSeq A))
       (foldr A (Set A) (fn (a : A) (fn (acc : (Set A)) (set-insert acc a))) (set-empty A) (lseq-to-list A xs))))
-    (fn (A :0 (Type 0)) (set-empty A))))
+    (pair
+      (fn (A :0 (Type 0)) (set-empty A))
+      (fn (A :0 (Type 0)) (fn (s : (Set A)) (fn (x : A) (set-insert s x)))))))

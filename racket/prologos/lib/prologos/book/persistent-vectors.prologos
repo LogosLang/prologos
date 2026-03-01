@@ -70,16 +70,32 @@ require [prologos::core::foldable-trait :refer [Foldable]]
     (pvec-fold (fn (acc : B) (fn (elem : A) (f elem acc))) z v)))))))
 
 
+module prologos::core::reducible-pvec
+
+;; ── Reducible Instance ──────────────────────────
+;;
+;; Uses native `pvec-fold` directly — no argument flipping needed
+;; since both `pvec-fold` and Reducible use accumulator-first
+;; `(B -> A -> B)` convention.
+
+require [prologos::core::reducible-trait :refer [Reducible]]
+
+(def pvec-reducible : [Reducible PVec]
+  (fn (A :0 (Type 0)) (fn (B :0 (Type 0)) (fn (f : (-> B (-> A B))) (fn (z : B) (fn (v : (PVec A))
+    (pvec-fold f z v)))))))
+
+
 module prologos::core::buildable-pvec
 
 ;; ── Buildable Instance ───────────────────────────
 ;;
 ;; Builds a PVec from a lazy sequence by materializing to a List
 ;; (via `lseq-to-list`), then converting with native `pvec-from-list`.
-;; Also provides an empty PVec via `pvec-empty`.
+;; Also provides an empty PVec via `pvec-empty`, and conj via
+;; `pvec-push` (append to end, O(log₃₂ n)).
 ;;
-;; Buildable is a two-method trait, so the dict is a Sigma pair:
-;;   `(pair from-seq empty-coll)`
+;; Buildable is a three-method trait, so the dict is a nested Sigma pair:
+;;   `(pair from-seq (pair empty-coll conj))`
 
 require [prologos::core::buildable-trait :refer [Buildable]]
 require [prologos::data::lseq            :refer [LSeq]]
@@ -91,7 +107,9 @@ require [prologos::data::list             :refer [List]]
   (pair
     (fn (A :0 (Type 0)) (fn (xs : (LSeq A))
       (pvec-from-list (lseq-to-list A xs))))
-    (fn (A :0 (Type 0)) (pvec-empty A))))
+    (pair
+      (fn (A :0 (Type 0)) (pvec-empty A))
+      (fn (A :0 (Type 0)) (fn (v : (PVec A)) (fn (x : A) (pvec-push v x)))))))
 
 
 module prologos::core::functor-pvec

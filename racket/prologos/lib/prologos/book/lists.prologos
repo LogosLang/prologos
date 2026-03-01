@@ -552,18 +552,36 @@ spec list-foldable [Foldable List]
 def list-foldable foldr
 
 
+module prologos::core::reducible-list
+
+;; ── Reducible List ──────────────────────────────────
+;;
+;; List's reduce wraps the native `reduce` (left fold,
+;; tail-recursive). The type parameter order is swapped:
+;; List's reduce has (B, A) but Reducible expects (A, B)
+;; where A=element, B=accumulator.
+
+require [prologos::core::reducible-trait :refer [Reducible]]
+require [prologos::data::list :refer [List reduce]]
+
+(def list-reducible : [Reducible List]
+  (fn (A :0 (Type 0)) (fn (B :0 (Type 0)) (fn (f : (-> B (-> A B))) (fn (z : B) (fn (xs : (List A))
+    (reduce B A f z xs)))))))
+
+
 module prologos::core::buildable-list
 
 ;; ── Buildable List ──────────────────────────────────
 ;;
 ;; Build a List from an LSeq via `lseq-to-list`; the empty
-;; collection is `nil`. Buildable is a two-method trait, so
-;; the dict is a Sigma pair.
+;; collection is `nil`; conj prepends via `cons` (O(1)).
+;; Buildable is a three-method trait, so the dict is a nested
+;; Sigma pair: `(pair from-seq (pair empty-coll conj))`.
 
-require [prologos::core::buildable-trait :refer [Buildable Buildable-from-seq Buildable-empty-coll]]
+require [prologos::core::buildable-trait :refer [Buildable Buildable-from-seq Buildable-empty-coll Buildable-conj]]
 require [prologos::data::lseq            :refer [LSeq]]
 require [prologos::data::lseq-ops        :refer [lseq-to-list]]
-require [prologos::data::list             :refer [List nil]]
+require [prologos::data::list             :refer [List nil cons]]
 
 (def List--Buildable--from-seq : [Pi [A :0 <Type>] [-> [LSeq A] [List A]]]
   lseq-to-list)
@@ -576,7 +594,9 @@ require [prologos::data::list             :refer [List nil]]
 (def List--Buildable--dict
   (pair
     (fn (A :0 (Type 0)) (fn (xs : (LSeq A)) (lseq-to-list A xs)))
-    (fn (A :0 (Type 0)) (nil A))))
+    (pair
+      (fn (A :0 (Type 0)) (nil A))
+      (fn (A :0 (Type 0)) (fn (xs : (List A)) (fn (x : A) (cons A x xs)))))))
 
 
 module prologos::core::seq-list

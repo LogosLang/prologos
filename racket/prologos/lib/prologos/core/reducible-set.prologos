@@ -1,0 +1,18 @@
+ns prologos::core::reducible-set
+
+require [prologos::core::reducible-trait :refer [Reducible]]
+
+;; ========================================
+;; Reducible instance for Set
+;; ========================================
+;; Uses native set-fold (left fold via CHAMP trie traversal) for
+;; O(n) traversal without List conversion.
+;;
+;; set-fold : (B -> A -> B) -> B -> Set A -> B
+;; Reducible : Pi [A :0 Type] Pi [B :0 Type] (B -> A -> B) -> B -> Set A -> B
+;;
+;; The function signature matches directly: accumulator-first.
+
+(def set-reducible : [Reducible Set]
+  (fn (A :0 (Type 0)) (fn (B :0 (Type 0)) (fn (f : (-> B (-> A B))) (fn (z : B) (fn (s : (Set A))
+    (set-fold f z s)))))))
