@@ -23,9 +23,7 @@
 (define galois-preamble
   (string-append
     "(ns test :no-prelude)\n"
-    "(require [prologos::core::galois-trait :refer [GaloisConnection GaloisConnection-alpha GaloisConnection-gamma]])\n"
-    "(require [prologos::core::galois-instances :refer []])\n"
-    "(require [prologos::core::lattice-instances :refer [Interval interval-bot interval-top mk-interval]])\n"))
+    "(require [prologos::core::lattice :refer [GaloisConnection GaloisConnection-alpha GaloisConnection-gamma Interval interval-bot interval-top mk-interval]])\n"))
 
 ;; ========================================
 ;; 1. Trait Registration

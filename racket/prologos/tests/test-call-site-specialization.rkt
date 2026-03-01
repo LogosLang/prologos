@@ -84,7 +84,7 @@
     (string-append
      "(ns cs-interval1)\n"
      "(require [prologos::core::propagator :refer [new-lattice-cell]])\n"
-     "(require [prologos::core::lattice-instances :refer [Interval interval-bot Interval--Lattice--dict]])\n"
+     "(require [prologos::core::lattice :refer [Interval interval-bot Interval--Lattice--dict]])\n"
      "(def p : (Sigma (_ : PropNetwork) CellId) (new-lattice-cell Interval Interval--Lattice--dict (net-new 100)))\n"
      "(def n : PropNetwork (first p))\n"
      "(def c : CellId (second p))\n"
@@ -102,8 +102,7 @@
      (run-ns-last
       (string-append
        "(ns cs-fallback1)\n"
-       "(require [prologos::core::lattice-trait :refer-all])\n"
-       "(require [prologos::core::lattice-instances :refer []])\n"
+       "(require [prologos::core::lattice :refer-all])\n"
        "(spec nlc {A} PropNetwork -> (PropNetwork * CellId) where (Lattice A))\n"
        "(defn nlc [net] where (Lattice A) (net-new-cell net bot (fn (x : _) (y : _) (join x y))))\n"
        "(def p : (Sigma (_ : PropNetwork) CellId) (nlc Bool Bool--Lattice--dict (net-new 100)))\n"
@@ -139,8 +138,7 @@
     (run-ns-last
      (string-append
       "(ns cs-equiv2)\n"
-      "(require [prologos::core::lattice-trait :refer-all])\n"
-      "(require [prologos::core::lattice-instances :refer []])\n"
+      "(require [prologos::core::lattice :refer-all])\n"
       "(spec nlc {A} PropNetwork -> (PropNetwork * CellId) where (Lattice A))\n"
       "(defn nlc [net] where (Lattice A) (net-new-cell net bot (fn (x : _) (y : _) (join x y))))\n"
       "(def p : (Sigma (_ : PropNetwork) CellId) (nlc Bool Bool--Lattice--dict (net-new 100)))\n"

@@ -45,8 +45,7 @@
     (string-append
      "(ns ws-init1)\n"
      "(require [prologos::core::propagator :refer [new-widenable-cell]])\n"
-     "(require [prologos::core::lattice-instances :refer [Interval interval-bot Interval--Lattice--dict]])\n"
-     "(require [prologos::core::widenable-instances :refer [Interval--Widenable--dict]])\n"
+     "(require [prologos::core::lattice :refer [Interval interval-bot Interval--Lattice--dict Interval--Widenable--dict]])\n"
      "(def p : (Sigma (_ : PropNetwork) CellId) (new-widenable-cell Interval Interval--Lattice--dict Interval--Widenable--dict (net-new 100)))\n"
      "(def n : PropNetwork (first p))\n"
      "(def c : CellId (second p))\n"
@@ -59,8 +58,7 @@
     (string-append
      "(ns ws-wr1)\n"
      "(require [prologos::core::propagator :refer [new-widenable-cell]])\n"
-     "(require [prologos::core::lattice-instances :refer [Interval mk-interval Interval--Lattice--dict]])\n"
-     "(require [prologos::core::widenable-instances :refer [Interval--Widenable--dict]])\n"
+     "(require [prologos::core::lattice :refer [Interval mk-interval Interval--Lattice--dict Interval--Widenable--dict]])\n"
      "(def p : (Sigma (_ : PropNetwork) CellId) (new-widenable-cell Interval Interval--Lattice--dict Interval--Widenable--dict (net-new 100)))\n"
      "(def n1 : PropNetwork (first p))\n"
      "(def c : CellId (second p))\n"
@@ -78,8 +76,7 @@
      (string-append
       "(ns ws-eq1)\n"
       "(require [prologos::core::propagator :refer [new-widenable-cell]])\n"
-      "(require [prologos::core::lattice-instances :refer [Interval interval-bot Interval--Lattice--dict]])\n"
-      "(require [prologos::core::widenable-instances :refer [Interval--Widenable--dict]])\n"
+      "(require [prologos::core::lattice :refer [Interval interval-bot Interval--Lattice--dict Interval--Widenable--dict]])\n"
       "(def p : (Sigma (_ : PropNetwork) CellId) (new-widenable-cell Interval Interval--Lattice--dict Interval--Widenable--dict (net-new 100)))\n"
       "(def n : PropNetwork (first p))\n"
       "(def c : CellId (second p))\n"
@@ -101,7 +98,6 @@
       (string-append
        "(ns ws-widen1)\n"
        "(require [prologos::core::propagator :refer [new-widenable-cell]])\n"
-       "(require [prologos::core::lattice-instances :refer [Interval mk-interval Interval--Lattice--dict]])\n"
-       "(require [prologos::core::widenable-instances :refer [Interval--Widenable--dict]])\n"
+       "(require [prologos::core::lattice :refer [Interval mk-interval Interval--Lattice--dict Interval--Widenable--dict]])\n"
        "(def p : (Sigma (_ : PropNetwork) CellId) (new-widenable-cell Interval Interval--Lattice--dict Interval--Widenable--dict (net-new 100)))\n"
        "(eval 0N)\n")))))

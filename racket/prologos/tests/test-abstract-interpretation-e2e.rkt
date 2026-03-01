@@ -158,8 +158,8 @@
     (string-append
      "(ns e2e-sign1 :no-prelude)\n"
      "(require [prologos::data::sign :refer [Sign sign-bot sign-neg sign-pos sign-top]])\n"
-     "(require [prologos::core::sign-lattice :refer []])\n"
-     "(require [prologos::core::lattice-trait :refer [Lattice Lattice-join]])\n"
+     "(require [prologos::core::abstract-domains :refer []])\n"
+     "(require [prologos::core::lattice :refer [Lattice Lattice-join]])\n"
      "(eval (Lattice-join Sign--Lattice--dict sign-neg sign-pos))\n"))
    "sign-top"))
 
@@ -169,8 +169,8 @@
     (string-append
      "(ns e2e-parity1 :no-prelude)\n"
      "(require [prologos::data::parity :refer [Parity parity-bot parity-even parity-odd parity-top]])\n"
-     "(require [prologos::core::parity-lattice :refer []])\n"
-     "(require [prologos::core::lattice-trait :refer [Lattice Lattice-join]])\n"
+     "(require [prologos::core::abstract-domains :refer []])\n"
+     "(require [prologos::core::lattice :refer [Lattice Lattice-join]])\n"
      "(eval (Lattice-join Parity--Lattice--dict parity-even parity-odd))\n"))
    "parity-top"))
 
@@ -184,9 +184,7 @@
    (run-ns-last
     (string-append
      "(ns e2e-gc1)\n"
-     "(require [prologos::core::galois-trait :refer [GaloisConnection GaloisConnection-alpha]])\n"
-     "(require [prologos::core::galois-instances :refer []])\n"
-     "(require [prologos::core::lattice-instances :refer [Interval mk-interval]])\n"
+     "(require [prologos::core::lattice :refer [GaloisConnection GaloisConnection-alpha Interval mk-interval]])\n"
      "(eval (GaloisConnection-alpha Interval-Bool--GaloisConnection--dict (mk-interval 1 10)))\n"))
    "true"))
 
@@ -195,9 +193,7 @@
    (run-ns-last
     (string-append
      "(ns e2e-gc2)\n"
-     "(require [prologos::core::galois-trait :refer [GaloisConnection GaloisConnection-gamma]])\n"
-     "(require [prologos::core::galois-instances :refer []])\n"
-     "(require [prologos::core::lattice-instances :refer [Interval interval-bot interval-top]])\n"
+     "(require [prologos::core::lattice :refer [GaloisConnection GaloisConnection-gamma Interval interval-bot interval-top]])\n"
      "(eval (GaloisConnection-gamma Interval-Bool--GaloisConnection--dict true))\n"))
    "interval-top"))
 
@@ -210,9 +206,7 @@
    (run-ns-last
     (string-append
      "(ns e2e-widen1)\n"
-     "(require [prologos::core::widenable-trait :refer [Widenable Widenable-widen]])\n"
-     "(require [prologos::core::widenable-instances :refer []])\n"
-     "(require [prologos::core::lattice-instances :refer [Interval interval-bot mk-interval]])\n"
+     "(require [prologos::core::lattice :refer [Widenable Widenable-widen Interval interval-bot mk-interval]])\n"
      ";; widen(bot, mk-interval 1 10) = mk-interval 1 10 (old=bot means new passes through)\n"
      "(eval (Widenable-widen Interval--Widenable--dict interval-bot (mk-interval 1 10)))\n"))
    "mk-interval"))
@@ -222,9 +216,7 @@
    (run-ns-last
     (string-append
      "(ns e2e-narrow1)\n"
-     "(require [prologos::core::widenable-trait :refer [Widenable Widenable-narrow]])\n"
-     "(require [prologos::core::widenable-instances :refer []])\n"
-     "(require [prologos::core::lattice-instances :refer [Interval interval-bot mk-interval]])\n"
+     "(require [prologos::core::lattice :refer [Widenable Widenable-narrow Interval interval-bot mk-interval]])\n"
      ";; narrow(mk-interval 1 10, bot) = mk-interval 1 10 (new=bot means old preserved)\n"
      "(eval (Widenable-narrow Interval--Widenable--dict (mk-interval 1 10) interval-bot))\n"))
    "mk-interval"))

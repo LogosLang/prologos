@@ -23,17 +23,15 @@
   (string-append
     "(ns test :no-prelude)\n"
     "(require [prologos::data::sign :refer [Sign sign-bot sign-neg sign-zero sign-pos sign-top]])\n"
-    "(require [prologos::core::sign-lattice :refer []])\n"
-    "(require [prologos::core::lattice-trait :refer [Lattice Lattice-bot Lattice-join Lattice-leq]])\n"
-    "(require [prologos::core::has-top-trait :refer [HasTop HasTop-top]])\n"))
+    "(require [prologos::core::abstract-domains :refer []])\n"
+    "(require [prologos::core::lattice :refer [Lattice Lattice-bot Lattice-join Lattice-leq HasTop HasTop-top]])\n"))
 
 (define parity-preamble
   (string-append
     "(ns test :no-prelude)\n"
     "(require [prologos::data::parity :refer [Parity parity-bot parity-even parity-odd parity-top]])\n"
-    "(require [prologos::core::parity-lattice :refer []])\n"
-    "(require [prologos::core::lattice-trait :refer [Lattice Lattice-bot Lattice-join Lattice-leq]])\n"
-    "(require [prologos::core::has-top-trait :refer [HasTop HasTop-top]])\n"))
+    "(require [prologos::core::abstract-domains :refer []])\n"
+    "(require [prologos::core::lattice :refer [Lattice Lattice-bot Lattice-join Lattice-leq HasTop HasTop-top]])\n"))
 
 ;; ========================================
 ;; 1. Sign Data Type
