@@ -18,31 +18,21 @@
 ;; derived from the J eliminator.
 
 
-;; ════════════════════════════════════════════════════
-;; Part I — The Eq Trait
-;; ════════════════════════════════════════════════════
+module prologos::core::eq
 
+require [prologos::data::nat      :refer [nat-eq?]]
+require [prologos::data::bool     :refer [not bool-eq and]]
+require [prologos::data::ordering :refer [Ordering lt-ord eq-ord gt-ord]]
+require [prologos::data::option   :refer [Option some none]]
+;; NOTE: prologos::data::list NOT imported here to avoid circular dependency
+;; (list.prologos requires prologos::core::eq for nat-eq).
+;; list-eq lives in Phase 3a consolidated list module instead.
+require [prologos::data::char     :as char :refer []]
+require [prologos::data::string   :as str  :refer []]
 
-module prologos::core::eq-trait
-
-;; ── The Eq Trait ──────────────────────────────────
-;;
-;; The Eq trait is the foundation of comparison in Prologos.
-;; Any type that supports decidable equality implements this
-;; single-method trait.
-;;
-;; Laws:
-;;   • Reflexive:  eq? x x ≡ true
-;;   • Symmetric:  eq? x y ≡ eq? y x
-;;   • Transitive: eq? x y ∧ eq? y z ⟹ eq? x z
-;;
-;; Because Eq is a single-method trait, the dictionary IS the
-;; function — there is no wrapper struct. When you write
-;; `[eq? 3N 3N]` and Eq Nat is in scope, the compiler passes
-;; `nat-eq?` directly.
-
-require [prologos::data::nat :refer [nat-eq?]]
-require [prologos::data::bool :refer [not]]
+;; ========================================
+;; Eq Trait — structural equality
+;; ========================================
 
 trait Eq {A}
   eq? : A A -> Bool
@@ -58,12 +48,7 @@ trait Eq {A}
       :forall {x y z : A}
       :holds [if [and [eq? x y] [eq? y z]] [eq? x z] true]
 
-;; ── Eq for Natural Numbers ────────────────────────
-;;
-;; Natural numbers have decidable equality via structural
-;; recursion: Z = Z, S n = S m iff n = m. The primitive
-;; `nat-eq?` is defined in prologos::data::nat.
-
+;; Nat instance
 impl Eq Nat
   defn eq? [x y] <Bool>
     nat-eq? x y
@@ -71,36 +56,25 @@ impl Eq Nat
 ;; Backward-compatible alias
 def nat-eq Nat--Eq--dict
 
-;; ── Negation of Equality ──────────────────────────
-;;
-;; A generic not-equal function, defined once for all Eq types.
-
+;; Generic neq: negate equality
 spec eq-neq [Eq A] A A -> Bool
   :doc "Not-equal: negation of eq?"
 defn eq-neq [dict x y]
   not [dict x y]
 
-
-module prologos::core::eq-instances
-
-;; ── Eq for Booleans ───────────────────────────────
-;;
-;; Boolean equality is trivial: true = true, false = false.
-;; We reuse `bool-eq` from prologos::data::bool.
-
-require [prologos::core::eq-trait   :refer [Eq Eq-eq?]]
-require [prologos::data::bool       :refer [bool-eq not]]
-require [prologos::data::ordering   :refer [Ordering lt-ord eq-ord gt-ord]]
+;; ========================================
+;; Eq Bool
+;; ========================================
+;; Reuses bool-eq from prologos::data::bool.
 
 impl Eq Bool
   defn eq? [x : Bool y : Bool] <Bool>
     bool-eq x y
 
-;; ── Eq for Ordering ──────────────────────────────
-;;
-;; The Ordering type has three constructors: lt-ord, eq-ord,
-;; gt-ord. Equality is a 9-case match: equal only when the
-;; same constructor.
+;; ========================================
+;; Eq Ordering
+;; ========================================
+;; 9-case match: equal only when same constructor.
 
 impl Eq Ordering
   defn eq? [x : Ordering y : Ordering] <Bool>
@@ -118,89 +92,74 @@ impl Eq Ordering
                     | eq-ord -> false
                     | gt-ord -> true
 
-
-module prologos::core::eq-numeric-instances
-
-;; ── Eq for Numeric Types ──────────────────────────
-;;
-;; Each numeric type delegates to a foreign primitive:
-;;   Int  → int-eq    (Racket =)
-;;   Rat  → rat-eq    (exact rational =)
-;;   Posit8..64 → p8-eq..p64-eq (IEEE-like comparison)
-
-require [prologos::core::eq-trait :refer [Eq Eq-eq?]]
+;; ========================================
+;; Eq Int
+;; ========================================
 
 impl Eq Int
   defn eq? [x : Int  y : Int] <Bool>
     int-eq x y
 
+;; ========================================
+;; Eq Rat
+;; ========================================
+
 impl Eq Rat
   defn eq? [x : Rat  y : Rat] <Bool>
     rat-eq x y
+
+;; ========================================
+;; Eq Posit8
+;; ========================================
 
 impl Eq Posit8
   defn eq? [x : Posit8  y : Posit8] <Bool>
     p8-eq x y
 
+;; ========================================
+;; Eq Posit16
+;; ========================================
+
 impl Eq Posit16
   defn eq? [x : Posit16  y : Posit16] <Bool>
     p16-eq x y
+
+;; ========================================
+;; Eq Posit32
+;; ========================================
 
 impl Eq Posit32
   defn eq? [x : Posit32  y : Posit32] <Bool>
     p32-eq x y
 
+;; ========================================
+;; Eq Posit64
+;; ========================================
+
 impl Eq Posit64
   defn eq? [x : Posit64  y : Posit64] <Bool>
     p64-eq x y
 
-
-module prologos::core::eq-char-instance
-
-;; ── Eq for Characters ─────────────────────────────
-;;
-;; Character equality delegates to the char module's `eq`
-;; function, which wraps Racket's `char=?`.
-
-require [prologos::core::eq-trait :refer [Eq]]
-require [prologos::data::char     :as char :refer []]
+;; ========================================
+;; Eq Char
+;; ========================================
 
 impl Eq Char
   defn eq? [x : Char  y : Char] <Bool>
     char::eq x y
 
-
-module prologos::core::eq-string-instance
-
-;; ── Eq for Strings ────────────────────────────────
-;;
-;; String equality delegates to the string module's `eq`
-;; function, which wraps Racket's `string=?`.
-
-require [prologos::core::eq-trait :refer [Eq]]
-require [prologos::data::string   :as str :refer []]
+;; ========================================
+;; Eq String
+;; ========================================
 
 impl Eq String
   defn eq? [x : String  y : String] <Bool>
     str::eq x y
 
-
-module prologos::core::eq-derived
-
-;; ── Derived Equality for Parameterized Types ──────
-;;
-;; For parameterized types like Option A and List A, we can't
-;; write `impl Eq (Option A)` directly — that would require
-;; higher-kinded trait instances. Instead, we provide functions
-;; that take an Eq dictionary for the element type as an
-;; explicit argument.
-;;
-;; These mirror the pattern used by `elem` in list.prologos.
-
-require [prologos::core::eq-trait  :refer [Eq Eq-eq?]]
-require [prologos::data::option    :refer [Option some none]]
-require [prologos::data::list      :refer [List nil cons]]
-require [prologos::data::bool      :refer [and]]
+;; ========================================
+;; Derived Eq for parameterized types
+;; ========================================
+;; These take an Eq dictionary as explicit argument.
 
 ;; option-eq: compare two Option A values using an Eq A dict.
 ;; none == none, some a == some b iff eq? a b, else false.
@@ -213,6 +172,22 @@ defn option-eq [eq-a x y]
     | some a -> match y
                   | none   -> false
                   | some b -> eq-a a b
+
+;; list-eq: deferred to prologos::core::list (Phase 3a) to avoid
+;; circular dependency with prologos::data::list.
+
+
+module prologos::core::eq-derived
+
+require [prologos::core::eq   :refer [Eq Eq-eq?]]
+require [prologos::data::list :refer [List nil cons]]
+require [prologos::data::bool :refer [and]]
+
+;; ========================================
+;; Derived Eq for List
+;; ========================================
+;; Kept separate from prologos::core::eq to avoid circular dependency:
+;; prologos::data::list requires prologos::core::eq for nat-eq.
 
 ;; list-eq: compare two List A values using an Eq A dict.
 ;; nil == nil, cons a as == cons b bs iff eq? a b && list-eq as bs, else false.
@@ -234,22 +209,10 @@ defn list-eq [eq-a xs ys]
 
 module prologos::data::eq
 
-;; ── Propositional Equality Lemmas ─────────────────
-;;
-;; While the Eq trait gives us *decidable* equality (a Bool),
-;; propositional equality lives in the type theory. The built-in
-;; type `Eq A a b` is inhabited by `refl` when `a` and `b` are
-;; definitionally equal.
-;;
-;; The J eliminator (Martin-Löf's elimination principle for
-;; identity types) lets us derive the standard lemmas:
-;;
-;;   sym   : Eq A a b → Eq A b a
-;;   cong  : (f : A → B) → Eq A a b → Eq B (f a) (f b)
-;;   trans : Eq A a b → Eq A b c → Eq A a c
-;;
-;; These are the building blocks for equational reasoning in
-;; dependent type theory.
+;; ========================================
+;; Prologos Propositional Equality Library
+;; Lemmas derived from the J eliminator.
+;; ========================================
 
 ;; Symmetry: Eq(A, a, b) -> Eq(A, b, a)
 defn sym {A} [a :0 : A, b :0 : A, prf : [Eq A a b]] : [Eq A b a]
