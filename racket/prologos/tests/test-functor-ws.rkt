@@ -21,7 +21,9 @@
          "../global-env.rkt"
          "../driver.rkt"
          "../reader.rkt"
-         "../source-location.rkt")
+         "../source-location.rkt"
+         "../namespace.rkt"
+         "test-support.rkt")
 
 ;; ========================================
 ;; Helpers
@@ -181,9 +183,12 @@
                  [current-type-meta (hasheq)]
                  [current-preparse-registry (current-preparse-registry)]
                  [current-trait-registry (hasheq)]
-                 [current-trait-laws (hasheq)])
+                 [current-trait-laws (hasheq)]
+                 [current-module-registry prelude-module-registry]
+                 [current-lib-paths (list prelude-lib-dir)])
+    (install-module-loader!)
     (define here (path->string (path-only (syntax-source #'here))))
-    (define file-path (simplify-path (build-path here ".." "lib" "prologos" "core" "type-functors.prologos")))
+    (define file-path (simplify-path (build-path here ".." "lib" "prologos" "core" "collection-traits.prologos")))
     (process-file file-path)
     ;; Both functors should be registered
     (check-true (functor-entry? (lookup-functor 'Xf)))
@@ -197,9 +202,12 @@
                  [current-type-meta (hasheq)]
                  [current-preparse-registry (current-preparse-registry)]
                  [current-trait-registry (hasheq)]
-                 [current-trait-laws (hasheq)])
+                 [current-trait-laws (hasheq)]
+                 [current-module-registry prelude-module-registry]
+                 [current-lib-paths (list prelude-lib-dir)])
+    (install-module-loader!)
     (define here (path->string (path-only (syntax-source #'here))))
-    (define file-path (simplify-path (build-path here ".." "lib" "prologos" "core" "type-functors.prologos")))
+    (define file-path (simplify-path (build-path here ".." "lib" "prologos" "core" "collection-traits.prologos")))
     (process-file file-path)
     (define fe (lookup-functor 'Xf))
     (check-true (functor-entry? fe))
@@ -216,9 +224,12 @@
                  [current-type-meta (hasheq)]
                  [current-preparse-registry (current-preparse-registry)]
                  [current-trait-registry (hasheq)]
-                 [current-trait-laws (hasheq)])
+                 [current-trait-laws (hasheq)]
+                 [current-module-registry prelude-module-registry]
+                 [current-lib-paths (list prelude-lib-dir)])
+    (install-module-loader!)
     (define here (path->string (path-only (syntax-source #'here))))
-    (define file-path (simplify-path (build-path here ".." "lib" "prologos" "core" "type-functors.prologos")))
+    (define file-path (simplify-path (build-path here ".." "lib" "prologos" "core" "collection-traits.prologos")))
     (process-file file-path)
     (define fe (lookup-functor 'AppResult))
     (check-true (functor-entry? fe))
