@@ -28,56 +28,100 @@
 
 
 ;; ════════════════════════════════════════════════════
-;; Part I — The Lattice Trait
+;; Part I — Core Lattice Infrastructure
 ;; ════════════════════════════════════════════════════
 
 
-module prologos::core::lattice-trait
+module prologos::core::lattice
 
-;; ── Lattice: Bot, Join, Leq ────────────────────────
+require [prologos::core::eq :refer [Eq]]
+require [prologos::data::bool :refer [not and or implies]]
+
+;; ========================================
+;; Lattice Trait -- algebraic lattice operations
+;; ========================================
+;; A Lattice provides a bottom element, a monotonic join (least upper bound),
+;; and a partial order (leq). These form the foundation for monotonic
+;; computation in propagator networks.
 ;;
-;; A Lattice provides three operations:
-;;
-;;   `bot`  : A               — bottom element (identity for join)
-;;   `join` : A -> A -> A     — least upper bound (merge)
-;;   `leq`  : A -> A -> Bool  — partial order
+;; bot  : A                -- bottom element (identity for join)
+;; join : A A -> A      -- least upper bound (merge)
+;; leq  : A A -> Bool   -- partial order
 ;;
 ;; Laws (documented, not enforced at compile time):
-;;   join is commutative: `join a b = join b a`
-;;   join is associative: `join (join a b) c = join a (join b c)`
-;;   join is idempotent:  `join a a = a`
-;;   bot is identity:     `join bot a = a`
-;;   leq defined by join: `leq a b  ⟺  join a b = b`
+;;   join is commutative: join a b = join b a
+;;   join is associative: join (join a b) c = join a (join b c)
+;;   join is idempotent:  join a a = a
+;;   bot is identity:     join bot a = a
+;;   leq defined by join: leq a b <=> join a b = b
 
 trait Lattice {A}
   bot  : A
   join : A A -> A
   leq  : A A -> Bool
 
+;; ========================================
+;; HasTop Trait -- types with a top element
+;; ========================================
+;; The dual of Lattice-bot. Used for bounded lattices that have both
+;; a minimum (bot) and a maximum (top) element.
 
-;; ════════════════════════════════════════════════════
-;; Part II — Lattice Instances and Data Types
-;; ════════════════════════════════════════════════════
+trait HasTop {A}
+  top : A
 
+;; ========================================
+;; BoundedLattice -- Lattice + HasTop
+;; ========================================
+;; A bounded lattice has both a bottom element (from Lattice) and a
+;; top element (from HasTop). This is the standard algebraic structure
+;; for constraint propagation domains that can represent contradiction.
 
-module prologos::core::lattice-instances
+bundle BoundedLattice := (Lattice, HasTop)
 
-;; ── Supporting Data Types ──────────────────────────
+;; ========================================
+;; Widenable Trait -- lattice domains requiring widening for convergence
+;; ========================================
+;; For lattices with infinite ascending chains (e.g., Interval),
+;; standard fixpoint iteration may not converge. Widening (nabla) over-
+;; approximates at designated loop-head cells to guarantee termination;
+;; narrowing (delta) then recovers precision.
 ;;
-;; Two data types are defined here because they are tightly coupled
-;; to their lattice instances:
-;;
-;; **FlatVal A**: A three-point flat lattice for propagator cells
-;; that hold a single value. Joining two different values produces
-;; `flat-top` (contradiction).
-;;
-;; **Interval**: A numeric interval lattice over `Rat`. Join is
-;; intersection (narrowing constraints), `interval-bot` is
-;; unconstrained, `interval-top` is contradiction (empty).
+;; Laws (not enforced at compile-time):
+;;   widen old new >= new         (over-approximation)
+;;   narrow old new <= old        (precision recovery)
+;;   Finite number of widenings stabilizes  (termination)
 
-require [prologos::core::lattice-trait :refer [Lattice Lattice-bot Lattice-join Lattice-leq]]
-require [prologos::core::eq-trait :refer [Eq]]
-require [prologos::data::bool :refer [not and or implies]]
+trait Widenable {A}
+  widen  : A A -> A
+  narrow : A A -> A
+
+;; ========================================
+;; GaloisConnection Trait -- adjoint pair between domains
+;; ========================================
+;; A Galois connection (alpha, gamma) between a concrete domain C and an
+;; abstract domain A satisfies the adjunction law:
+;;
+;;   alpha(c) <=_A a  <=>  c <=_C gamma(a)
+;;
+;; This ensures that abstraction (alpha) and concretization (gamma) are
+;; soundly related: anything provable in the abstract domain
+;; corresponds to a property in the concrete domain.
+;;
+;; Laws (not enforced at compile-time):
+;;   alpha . gamma . alpha = alpha          (reductive)
+;;   gamma . alpha . gamma = gamma          (extensive)
+;;   alpha(c) <= a <=> c <= gamma(a)   (adjunction)
+;;
+;; Instance key pattern: ConcreteType-AbstractType--GaloisConnection--dict
+;; Example: Interval-Bool--GaloisConnection--dict
+
+trait GaloisConnection {C A}
+  alpha : C -> A
+  gamma : A -> C
+
+;; ========================================
+;; Data Types
+;; ========================================
 
 ;; FlatVal: Three-point flat lattice (bottom -> value -> top)
 ;; Used for propagator cells that hold a single value.
@@ -93,7 +137,9 @@ data Interval
   mk-interval : Rat -> Rat
   interval-top
 
-;; ── Helper Functions ───────────────────────────────
+;; ========================================
+;; Helper Functions
+;; ========================================
 
 ;; --- Rational helpers ---
 
@@ -167,7 +213,9 @@ defn interval-leq [a b]
         | interval-top -> true
         | mk-interval lo2 hi2 -> and [rat-le lo2 lo1] [rat-le hi1 hi2]
 
-;; ── Lattice Instances ──────────────────────────────
+;; ========================================
+;; Lattice Instances
+;; ========================================
 
 ;; --- BoolLattice: join=or, bot=false, leq=implies ---
 impl Lattice Bool
@@ -229,33 +277,11 @@ impl Lattice Interval
   defn leq [a <Interval> b <Interval>] <Bool>
     interval-leq a b
 
+;; ========================================
+;; HasTop Instances
+;; ========================================
 
-;; ════════════════════════════════════════════════════
-;; Part III — HasTop Trait and Instances
-;; ════════════════════════════════════════════════════
-
-
-module prologos::core::has-top-trait
-
-;; ── HasTop: The Dual of Bot ────────────────────────
-;;
-;; Not all lattices have a top element (e.g., the natural numbers
-;; under ≤). `HasTop` is a separate trait so that operations requiring
-;; both bot and top (like bounded lattice algorithms) can express
-;; that requirement precisely.
-
-trait HasTop {A}
-  top : A
-
-
-module prologos::core::has-top-instances
-
-;; ── HasTop Instances ───────────────────────────────
-
-require [prologos::core::has-top-trait :refer [HasTop]]
-require [prologos::core::lattice-instances :refer [FlatVal flat-top Interval interval-top]]
-
-;; Bool: top is true (true ∨ x = true)
+;; Bool: top is true (true or x = true)
 impl HasTop Bool
   defn top [] <Bool>
     true
@@ -270,69 +296,27 @@ impl HasTop Interval
   defn top [] <Interval>
     interval-top
 
-
-;; ════════════════════════════════════════════════════
-;; Part IV — BoundedLattice Bundle
-;; ════════════════════════════════════════════════════
-
-
-module prologos::core::bounded-lattice
-
-;; ── BoundedLattice = Lattice + HasTop ──────────────
+;; ========================================
+;; Widenable Interval -- Classic Cousot-style interval widening
+;; ========================================
 ;;
-;; A bounded lattice has both a bottom element (from Lattice) and a
-;; top element (from HasTop). This is the standard algebraic structure
-;; for constraint propagation domains that can represent contradiction.
-
-require [prologos::core::lattice-trait :refer [Lattice]]
-require [prologos::core::has-top-trait :refer [HasTop]]
-
-bundle BoundedLattice {A : Type} = Lattice A + HasTop A
-
-
-;; ════════════════════════════════════════════════════
-;; Part V — Widening and Narrowing
-;; ════════════════════════════════════════════════════
-
-
-module prologos::core::widenable-trait
-
-;; ── Widenable Trait ────────────────────────────────
+;; Key: Interval uses CONSTRAINT ordering:
+;;   bot = unconstrained (all values), top = contradiction (empty).
+;;   join = intersection (tighter constraints).
+;;   Lattice order: more-constrained is HIGHER.
 ;;
-;; For lattices with infinite ascending chains (e.g., `Interval`),
-;; standard fixpoint iteration may not converge. **Widening** (`∇`)
-;; over-approximates at loop-head cells to guarantee termination;
-;; **narrowing** (`Δ`) then recovers precision.
+;; Widening for convergence: when constraints keep tightening without
+;; stabilizing, RELAX them (jump toward bot/unconstrained) to force
+;; termination. This is "downward" in the constraint lattice.
 ;;
-;; Laws (not enforced at compile-time):
-;;   `widen old new >= new`          (over-approximation)
-;;   `narrow old new <= old`         (precision recovery)
-;;   Finite number of widenings stabilizes  (termination)
-
-trait Widenable {A}
-  widen  : A A -> A
-  narrow : A A -> A
-
-
-module prologos::core::widenable-instances
-
-;; ── Widenable Interval ─────────────────────────────
+;; widen(old, new):
+;;   If new is TIGHTER than old on either bound -> relax to unconstrained.
+;;   Concretely: if lo increased or hi decreased, jump to bot.
+;;   Otherwise return new (already stable or loosening).
 ;;
-;; Classic Cousot-style interval widening. Interval uses CONSTRAINT
-;; ordering: `bot` = unconstrained (all values), `top` = contradiction
-;; (empty). Lattice order: more-constrained is HIGHER.
-;;
-;; **Widening** for convergence: when constraints keep tightening
-;; without stabilizing, RELAX them (jump toward `bot`/unconstrained)
-;; to force termination. Concretely: if lo increased or hi decreased,
-;; jump to `interval-bot`.
-;;
-;; **Narrowing**: after widening stabilizes, recover precision by
-;; taking the tighter of old and new on each bound.
-
-require [prologos::core::widenable-trait :refer [Widenable]]
-require [prologos::core::lattice-instances :refer [Interval interval-bot mk-interval interval-top rat-max rat-min]]
-require [prologos::data::bool :refer [and or]]
+;; narrow(old, new):
+;;   After widening stabilizes, recover precision by intersecting.
+;;   Keep the tighter of old and new on each bound.
 
 impl Widenable Interval
   defn widen [old <Interval> new <Interval>] <Interval>
@@ -345,6 +329,7 @@ impl Widenable Interval
           | mk-interval lo2 hi2 ->
               ;; If lo increased (tighter low bound) or hi decreased
               ;; (tighter high bound), jump to unconstrained
+              ;; rat-gt lo2 lo1  = rat-lt lo1 lo2
               if [or [rat-lt lo1 lo2] [rat-lt hi2 hi1]]
                 interval-bot
                 new
@@ -359,57 +344,27 @@ impl Widenable Interval
               ;; Tighten: take the more constrained bound from each side
               mk-interval [rat-max lo1 lo2] [rat-min hi1 hi2]
 
-
-;; ════════════════════════════════════════════════════
-;; Part VI — Galois Connections
-;; ════════════════════════════════════════════════════
-
-
-module prologos::core::galois-trait
-
-;; ── GaloisConnection Trait ─────────────────────────
+;; ========================================
+;; GaloisConnection Interval Bool
+;; ========================================
+;; "Is constrained?" abstraction.
 ;;
-;; A Galois connection `(α, γ)` between a concrete domain `C` and
-;; an abstract domain `A` satisfies the adjunction law:
+;; In Interval's CONSTRAINT ordering:
+;;   bot = unconstrained (all values)
+;;   top = contradiction (empty set)
+;;   mk-interval lo hi = some constraint
 ;;
-;;   `α(c) ≤_A a  ⟺  c ≤_C γ(a)`
+;; alpha: Interval -> Bool
+;;   interval-bot  -> false   (unconstrained -> "not constrained")
+;;   anything else -> true    (has constraint -> "is constrained")
 ;;
-;; This ensures that abstraction (`α`) and concretization (`γ`) are
-;; soundly related: anything provable in the abstract domain
-;; corresponds to a property in the concrete domain.
+;; gamma: Bool -> Interval
+;;   false -> interval-bot    ("not constrained" -> unconstrained)
+;;   true  -> interval-top    ("is constrained" -> most constrained possible)
 ;;
-;; Laws (not enforced at compile-time):
-;;   `α ∘ γ ∘ α = α`           (reductive)
-;;   `γ ∘ α ∘ γ = γ`           (extensive)
-;;   `α(c) ≤ a  ⟺  c ≤ γ(a)`  (adjunction)
-
-trait GaloisConnection {C A}
-  alpha : C -> A
-  gamma : A -> C
-
-
-module prologos::core::galois-instances
-
-;; ── GaloisConnection Interval Bool ─────────────────
-;;
-;; "Is constrained?" abstraction. In Interval's CONSTRAINT ordering:
-;;
-;;   `interval-bot`     = unconstrained (all values)
-;;   `interval-top`     = contradiction (empty set)
-;;   `mk-interval lo hi` = some constraint
-;;
-;; `alpha`: `interval-bot` → `false` (not constrained),
-;;          anything else  → `true`  (is constrained)
-;;
-;; `gamma`: `false` → `interval-bot` (not constrained → unconstrained),
-;;          `true`  → `interval-top` (is constrained → most constrained)
-;;
-;; Note: `gamma(true) = interval-top` is the safe over-approximation.
-;; This satisfies the adjunction since `alpha(gamma(true)) = alpha(top) = true`.
-
-require [prologos::core::galois-trait :refer [GaloisConnection]]
-require [prologos::core::lattice-instances :refer [Interval interval-bot interval-top mk-interval]]
-require [prologos::data::bool :refer [not]]
+;; Note: gamma(true) = interval-top is the safe over-approximation:
+;; "is constrained" maps to the tightest possible constraint (contradiction).
+;; This satisfies the adjunction law since alpha(gamma(true)) = alpha(top) = true.
 
 impl GaloisConnection Interval Bool
   defn alpha [iv <Interval>] <Bool>
@@ -421,123 +376,29 @@ impl GaloisConnection Interval Bool
     if b interval-top interval-bot
 
 
-module prologos::core::sign-galois
+;; ════════════════════════════════════════════════════
+;; Part II — Abstract Domain Instances
+;; ════════════════════════════════════════════════════
 
-;; ── GaloisConnection Interval Sign ─────────────────
-;;
-;; Sign abstraction of numeric intervals. Maps intervals to
-;; sign information and vice versa.
-;;
-;; `alpha` (abstraction): Interval → Sign
-;;   `interval-bot`      → `sign-bot`   (unreachable → no info)
-;;   `interval-top`      → `sign-top`   (contradiction → any sign)
-;;   `mk-interval lo hi`:
-;;     lo > 0            → `sign-pos`   (entirely positive)
-;;     hi < 0            → `sign-neg`   (entirely negative)
-;;     lo = 0 and hi = 0 → `sign-zero`  (exactly zero)
-;;     otherwise         → `sign-top`   (spans zero → unknown)
-;;
-;; `gamma` (concretization): Sign → Interval
-;;   Uses sentinel values `±999999/1` for "effectively unbounded"
-;;   intervals, representing `±∞` in a sound abstract interpretation.
 
-require [prologos::core::galois-trait :refer [GaloisConnection]]
-require [prologos::core::lattice-instances :refer [Interval interval-bot interval-top mk-interval]]
+module prologos::core::abstract-domains
+
 require [prologos::data::sign :refer [Sign sign-bot sign-neg sign-zero sign-pos sign-top]]
-require [prologos::data::bool :refer [and]]
-
-;; Sentinel values for "effectively unbounded" intervals.
-;; In a sound abstract interpretation, these represent ±∞.
-def pos-inf : Rat 999999/1
-def neg-inf : Rat -999999/1
-
-impl GaloisConnection Interval Sign
-  defn alpha [iv <Interval>] <Sign>
-    match iv
-      | interval-bot -> sign-bot
-      | interval-top -> sign-top
-      | mk-interval lo hi ->
-          if [rat-lt 0/1 lo] sign-pos
-            [if [rat-lt hi 0/1] sign-neg
-              [if [and [rat-eq lo 0/1] [rat-eq hi 0/1]] sign-zero
-                sign-top]]
-  defn gamma [s <Sign>] <Interval>
-    match s
-      | sign-bot  -> interval-bot
-      | sign-neg  -> mk-interval neg-inf -1/1
-      | sign-zero -> mk-interval 0/1 0/1
-      | sign-pos  -> mk-interval 1/1 pos-inf
-      | sign-top  -> mk-interval neg-inf pos-inf
-
-
-;; ════════════════════════════════════════════════════
-;; Part VII — Abstract Domain Lattice Instances
-;; ════════════════════════════════════════════════════
-
-
-module prologos::core::parity-lattice
-
-;; ── Lattice and HasTop for Parity ──────────────────
-;;
-;; The four-element Parity lattice. Join is the least upper bound;
-;; joining `even` with `odd` yields `top` (unknown).
-
 require [prologos::data::parity :refer [Parity parity-bot parity-even parity-odd parity-top]]
-require [prologos::core::lattice-trait :refer [Lattice]]
-require [prologos::core::has-top-trait :refer [HasTop]]
-
-impl Lattice Parity
-  defn bot [] <Parity>
-    parity-bot
-  defn join [a <Parity> b <Parity>] <Parity>
-    match a
-      | parity-bot -> b
-      | parity-top -> parity-top
-      | parity-even -> match b
-          | parity-bot -> parity-even
-          | parity-even -> parity-even
-          | parity-odd -> parity-top
-          | parity-top -> parity-top
-      | parity-odd -> match b
-          | parity-bot -> parity-odd
-          | parity-even -> parity-top
-          | parity-odd -> parity-odd
-          | parity-top -> parity-top
-  defn leq [a <Parity> b <Parity>] <Bool>
-    match a
-      | parity-bot -> true
-      | parity-top -> match b
-          | parity-top -> true
-          | parity-bot -> false
-          | parity-even -> false
-          | parity-odd -> false
-      | parity-even -> match b
-          | parity-even -> true
-          | parity-top -> true
-          | parity-bot -> false
-          | parity-odd -> false
-      | parity-odd -> match b
-          | parity-odd -> true
-          | parity-top -> true
-          | parity-bot -> false
-          | parity-even -> false
-
-impl HasTop Parity
-  defn top [] <Parity>
-    parity-top
-
-
-module prologos::core::sign-lattice
-
-;; ── Lattice and HasTop for Sign ────────────────────
-;;
-;; The five-element Sign lattice. Any two distinct non-bot,
-;; non-top values join to `sign-top` (unknown).
-
-require [prologos::data::sign :refer [Sign sign-bot sign-neg sign-zero sign-pos sign-top]]
-require [prologos::core::lattice-trait :refer [Lattice]]
-require [prologos::core::has-top-trait :refer [HasTop]]
+require [prologos::core::lattice :refer [Lattice HasTop GaloisConnection Interval interval-bot interval-top mk-interval]]
+require [prologos::core::eq :refer [Eq Eq-eq?]]
+require [prologos::core::ord :refer [Ord Ord-compare]]
+require [prologos::data::ordering :refer [Ordering lt-ord eq-ord gt-ord]]
+require [prologos::data::refined-int :refer [PosInt pos-int NegInt neg-int Zero mk-zero]]
+require [prologos::data::refined-rat :refer [PosRat pos-rat NegRat neg-rat]]
 require [prologos::data::bool :refer [and or]]
+
+;; ========================================
+;; Lattice Sign
+;; ========================================
+;; join = least upper bound in the 5-element lattice
+;; bot = sign-bot (unreachable / no info)
+;; leq = lattice ordering
 
 impl Lattice Sign
   defn bot [] <Sign>
@@ -592,43 +453,234 @@ impl Lattice Sign
           | sign-neg -> false
           | sign-zero -> false
 
+;; ========================================
+;; HasTop Sign
+;; ========================================
+
 impl HasTop Sign
   defn top [] <Sign>
     sign-top
 
+;; ========================================
+;; Lattice Parity
+;; ========================================
+
+impl Lattice Parity
+  defn bot [] <Parity>
+    parity-bot
+  defn join [a <Parity> b <Parity>] <Parity>
+    match a
+      | parity-bot -> b
+      | parity-top -> parity-top
+      | parity-even -> match b
+          | parity-bot -> parity-even
+          | parity-even -> parity-even
+          | parity-odd -> parity-top
+          | parity-top -> parity-top
+      | parity-odd -> match b
+          | parity-bot -> parity-odd
+          | parity-even -> parity-top
+          | parity-odd -> parity-odd
+          | parity-top -> parity-top
+  defn leq [a <Parity> b <Parity>] <Bool>
+    match a
+      | parity-bot -> true
+      | parity-top -> match b
+          | parity-top -> true
+          | parity-bot -> false
+          | parity-even -> false
+          | parity-odd -> false
+      | parity-even -> match b
+          | parity-even -> true
+          | parity-top -> true
+          | parity-bot -> false
+          | parity-odd -> false
+      | parity-odd -> match b
+          | parity-odd -> true
+          | parity-top -> true
+          | parity-bot -> false
+          | parity-even -> false
+
+;; ========================================
+;; HasTop Parity
+;; ========================================
+
+impl HasTop Parity
+  defn top [] <Parity>
+    parity-top
+
+;; ========================================
+;; GaloisConnection Interval Sign
+;; ========================================
+;; Sign abstraction of numeric intervals.
+;;
+;; alpha (abstraction): Interval -> Sign
+;;   interval-bot          -> sign-bot   (unreachable -> no info)
+;;   interval-top          -> sign-top   (contradiction -> any sign)
+;;   mk-interval lo hi:
+;;     lo > 0              -> sign-pos   (entirely positive)
+;;     hi < 0              -> sign-neg   (entirely negative)
+;;     lo = 0 and hi = 0   -> sign-zero  (exactly zero)
+;;     otherwise           -> sign-top   (spans zero -> unknown)
+;;
+;; gamma (concretization): Sign -> Interval
+;;   sign-bot  -> interval-bot                  (unreachable -> unconstrained)
+;;   sign-neg  -> mk-interval neg-inf -1/1      (some negative value)
+;;   sign-zero -> mk-interval 0/1 0/1           (exactly zero)
+;;   sign-pos  -> mk-interval 1/1 pos-inf       (some positive value)
+;;   sign-top  -> mk-interval neg-inf pos-inf   (any value)
+
+;; Sentinel values for "effectively unbounded" intervals.
+;; In a sound abstract interpretation, these represent +/- infinity.
+def pos-inf : Rat 999999/1
+def neg-inf : Rat -999999/1
+
+impl GaloisConnection Interval Sign
+  defn alpha [iv <Interval>] <Sign>
+    match iv
+      | interval-bot -> sign-bot
+      | interval-top -> sign-top
+      | mk-interval lo hi ->
+          if [rat-lt 0/1 lo] sign-pos
+            [if [rat-lt hi 0/1] sign-neg
+              [if [and [rat-eq lo 0/1] [rat-eq hi 0/1]] sign-zero
+                sign-top]]
+  defn gamma [s <Sign>] <Interval>
+    match s
+      | sign-bot  -> interval-bot
+      | sign-neg  -> mk-interval neg-inf -1/1
+      | sign-zero -> mk-interval 0/1 0/1
+      | sign-pos  -> mk-interval 1/1 pos-inf
+      | sign-top  -> mk-interval neg-inf pos-inf
+
+;; ========================================
+;; Eq PosInt -- delegate to underlying Int
+;; ========================================
+
+impl Eq PosInt
+  defn eq? [x <PosInt> y <PosInt>] <Bool>
+    match x
+      | pos-int a -> match y
+                       | pos-int b -> int-eq a b
+
+;; ========================================
+;; Eq NegInt -- delegate to underlying Int
+;; ========================================
+
+impl Eq NegInt
+  defn eq? [x <NegInt> y <NegInt>] <Bool>
+    match x
+      | neg-int a -> match y
+                       | neg-int b -> int-eq a b
+
+;; ========================================
+;; Eq Zero -- singleton, always equal
+;; ========================================
+
+impl Eq Zero
+  defn eq? [x <Zero> y <Zero>] <Bool>
+    true
+
+;; ========================================
+;; Ord PosInt -- delegate to underlying Int
+;; ========================================
+
+impl Ord PosInt
+  defn compare [x <PosInt> y <PosInt>] <Ordering>
+    match x
+      | pos-int a -> match y
+                       | pos-int b -> if [int-lt a b] lt-ord [if [int-eq a b] eq-ord gt-ord]
+
+;; ========================================
+;; Ord NegInt -- delegate to underlying Int
+;; ========================================
+
+impl Ord NegInt
+  defn compare [x <NegInt> y <NegInt>] <Ordering>
+    match x
+      | neg-int a -> match y
+                       | neg-int b -> if [int-lt a b] lt-ord [if [int-eq a b] eq-ord gt-ord]
+
+;; ========================================
+;; Ord Zero -- singleton, always eq-ord
+;; ========================================
+
+impl Ord Zero
+  defn compare [x <Zero> y <Zero>] <Ordering>
+    eq-ord
+
+;; ========================================
+;; Eq PosRat -- delegate to underlying Rat
+;; ========================================
+
+impl Eq PosRat
+  defn eq? [x <PosRat> y <PosRat>] <Bool>
+    match x
+      | pos-rat a -> match y
+                       | pos-rat b -> rat-eq a b
+
+;; ========================================
+;; Eq NegRat -- delegate to underlying Rat
+;; ========================================
+
+impl Eq NegRat
+  defn eq? [x <NegRat> y <NegRat>] <Bool>
+    match x
+      | neg-rat a -> match y
+                       | neg-rat b -> rat-eq a b
+
+;; ========================================
+;; Ord PosRat -- delegate to underlying Rat
+;; ========================================
+
+impl Ord PosRat
+  defn compare [x <PosRat> y <PosRat>] <Ordering>
+    match x
+      | pos-rat a -> match y
+                       | pos-rat b -> if [rat-lt a b] lt-ord [if [rat-eq a b] eq-ord gt-ord]
+
+;; ========================================
+;; Ord NegRat -- delegate to underlying Rat
+;; ========================================
+
+impl Ord NegRat
+  defn compare [x <NegRat> y <NegRat>] <Ordering>
+    match x
+      | neg-rat a -> match y
+                       | neg-rat b -> if [rat-lt a b] lt-ord [if [rat-eq a b] eq-ord gt-ord]
+
 
 ;; ════════════════════════════════════════════════════
-;; Part VIII — Propagator Helpers
+;; Part III — Propagator Helpers
 ;; ════════════════════════════════════════════════════
 
 
 module prologos::core::propagator
 
-;; ── Lattice Cell Creation ──────────────────────────
-;;
-;; Generic wrappers around `net-new-cell` that extract `bot` and
-;; `join` from the `Lattice` constraint automatically, so callers
-;; don't need to pass explicit initial value and merge function.
+require [prologos::core::lattice :refer-all]
+
+;; ========================================
+;; Propagator Library Helpers
+;; ========================================
+
+;; Generic wrapper around net-new-cell.
+;; Extracts bot and join from the Lattice A constraint automatically,
+;; so callers don't need to pass explicit initial value and merge function.
 ;;
 ;; Usage:
-;;   `def result [new-lattice-cell [net-new 1000]]`
-;;   Type `A` inferred from context; `Lattice A` dict resolved automatically.
-
-require [prologos::core::lattice-trait :refer-all]
-require [prologos::core::lattice-instances :refer [Interval interval-bot interval-join]]
-require [prologos::core::widenable-trait :refer [Widenable Widenable-widen Widenable-narrow]]
-require [prologos::core::widenable-instances :refer []]
+;;   def result [new-lattice-cell [net-new 1000]]
+;;   ;; type A is inferred from context; Lattice A dict resolved automatically
 
 spec new-lattice-cell {A} PropNetwork -> [PropNetwork * CellId] where (Lattice A)
 defn new-lattice-cell [net] where (Lattice A)
   net-new-cell net bot [fn x y [join x y]]
 
-;; ── Call-Site Specializations ──────────────────────
-;;
-;; Zero-overhead versions for known lattice types. The compiler
-;; rewrites `(new-lattice-cell Bool dict net)` to
-;; `(new-lattice-cell--Bool--specialized net)` when the type is
-;; statically known.
+;; ========================================
+;; Call-Site Specializations
+;; ========================================
+;; Zero-overhead versions for known lattice types.
+;; The compiler rewrites `(new-lattice-cell Bool dict net)` to
+;; `(new-lattice-cell--Bool--specialized net)` when the type is statically known.
 
 spec new-lattice-cell--Bool--specialized PropNetwork -> [PropNetwork * CellId]
 specialize new-lattice-cell for Bool
@@ -640,20 +692,27 @@ specialize new-lattice-cell for Interval
   defn new-lattice-cell [net]
     net-new-cell net interval-bot [fn [x : Interval] [y : Interval] [interval-join x y]]
 
-;; ── Widenable Cell Helper ──────────────────────────
-;;
+;; ========================================
+;; Widenable Cell Helper
+;; ========================================
 ;; Creates a cell that is both a lattice cell AND a widening point.
 ;; For lattice domains with infinite ascending chains (e.g., Interval),
 ;; widen/narrow operators force convergence and recover precision.
+;;
+;; Usage:
+;;   def result [new-widenable-cell [net-new 1000]]
+;;   ;; type A inferred from context; Lattice A + Widenable A resolved automatically
 
 spec new-widenable-cell {A} PropNetwork -> [PropNetwork * CellId] where (Lattice A) (Widenable A)
 defn new-widenable-cell [net] where (Lattice A) (Widenable A)
   net-new-cell-widen net bot [fn x y [join x y]] [fn x y [widen x y]] [fn x y [narrow x y]]
 
-;; ── Widenable Cell Specialization ──────────────────
-;;
+;; ========================================
+;; Widenable Cell Specialization
+;; ========================================
 ;; Zero-overhead version for Interval — the primary widenable lattice.
-;; Bypasses dict resolution and inlines interval-specific merge.
+;; Bypasses dict resolution for Lattice and inlines interval-specific merge.
+;; Widen/narrow accessed through the Interval Widenable dict directly.
 
 spec new-widenable-cell--Interval--specialized PropNetwork -> [PropNetwork * CellId]
 specialize new-widenable-cell for Interval

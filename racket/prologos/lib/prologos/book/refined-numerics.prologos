@@ -20,7 +20,8 @@
 ;; `Sign` — which are data types used by the lattice framework for
 ;; static analysis. They appear here because they are pure data types
 ;; with no dependencies on the lattice machinery; their lattice
-;; instances live in the Lattices chapter.
+;; instances and trait instances (Eq, Ord, GaloisConnection) live in
+;; the Lattices chapter under `prologos::core::abstract-domains`.
 
 
 ;; ════════════════════════════════════════════════════
@@ -30,21 +31,21 @@
 
 module prologos::data::refined-int
 
-;; ── Refined Integer Types ──────────────────────────
-;;
+require [prologos::data::option :refer [Option some none]]
+
+;; ========================================
+;; Refined Integer Types
+;; ========================================
 ;; Wrapper types for expressing numeric sign constraints at the type level.
 ;; Smart constructors validate at runtime; unsafe constructors trust the caller.
 ;;
-;; Subtyping lattice (enforced by the type system via `subtype` declarations):
+;; Subtyping lattice (enforced by the type system via subtype declarations):
 ;;
 ;;              Int
 ;;            /  |  \
 ;;      NegInt Zero PosInt
 ;;
-;; `PosInt`, `NegInt`, `Zero` are subtypes of `Int` — they can be used
-;; anywhere `Int` is expected.
-
-require [prologos::data::option :refer [Option some none]]
+;; PosInt, NegInt, Zero are subtypes of Int — they can be used anywhere Int is expected.
 
 ;; Positive integers (value > 0)
 data PosInt
@@ -58,10 +59,9 @@ data NegInt
 data Zero
   mk-zero
 
-;; ── Smart Constructors ─────────────────────────────
-;;
-;; Runtime-checked constructors that return `Option`. Use these when
-;; the sign of a value is not statically known.
+;; ========================================
+;; Smart Constructors (runtime-checked)
+;; ========================================
 
 spec to-pos-int Int -> [Option PosInt]
 defn to-pos-int [n]
@@ -79,10 +79,9 @@ spec is-zero? Int -> Bool
 defn is-zero? [n]
   int-eq n 0
 
-;; ── Unsafe Constructors ────────────────────────────
-;;
-;; These bypass runtime checks — the caller guarantees the invariant.
-;; Use only when the sign is known from context (e.g., after a guard).
+;; ========================================
+;; Unsafe Constructors (caller guarantees invariant)
+;; ========================================
 
 spec unsafe-pos-int Int -> PosInt
 defn unsafe-pos-int [n]
@@ -92,7 +91,9 @@ spec unsafe-neg-int Int -> NegInt
 defn unsafe-neg-int [n]
   neg-int n
 
-;; ── Extractors ─────────────────────────────────────
+;; ========================================
+;; Extractors
+;; ========================================
 
 spec pos-int-val PosInt -> Int
 defn pos-int-val [p]
@@ -104,16 +105,21 @@ defn neg-int-val [p]
   match p
     | neg-int n -> n
 
+;; ========================================
+;; Conversion: back to Int
+;; ========================================
+
 spec zero-to-int Zero -> Int
 defn zero-to-int [z]
   match z
     | mk-zero -> 0
 
-;; ── Subtype Declarations ───────────────────────────
-;;
-;; `PosInt <: Int` and `NegInt <: Int` are auto-inferred: single-field
-;; wrapper constructors automatically unwrap. `Zero <: Int` needs an
-;; explicit coercion since `mk-zero` is nullary.
+;; ========================================
+;; Subtype declarations
+;; ========================================
+;; PosInt <: Int <: Rat (auto-inferred coercion: unwrap single-field constructor)
+;; NegInt <: Int <: Rat (auto-inferred coercion: unwrap single-field constructor)
+;; Zero <: Int <: Rat (explicit coercion via zero-to-int: nullary constructor)
 
 subtype PosInt Int
 subtype NegInt Int
@@ -127,17 +133,21 @@ subtype Zero Int via zero-to-int
 
 module prologos::data::refined-rat
 
-;; ── Refined Rational Types ─────────────────────────
+require [prologos::data::option :refer [Option some none]]
+
+;; ========================================
+;; Refined Rational Types
+;; ========================================
+;; Wrapper types for expressing numeric sign constraints at the type level.
+;; Smart constructors validate at runtime; unsafe constructors trust the caller.
 ;;
-;; The same pattern as refined integers, applied to `Rat`:
+;; Subtyping lattice (enforced by the type system via subtype declarations):
 ;;
 ;;           Rat
 ;;          /   \
 ;;    NegRat     PosRat
 ;;
-;; No `ZeroRat` — zero is already representable as `0/1 : Rat`.
-
-require [prologos::data::option :refer [Option some none]]
+;; PosRat, NegRat are subtypes of Rat — they can be used anywhere Rat is expected.
 
 ;; Positive rationals (value > 0)
 data PosRat
@@ -147,7 +157,9 @@ data PosRat
 data NegRat
   neg-rat Rat
 
-;; ── Smart Constructors ─────────────────────────────
+;; ========================================
+;; Smart Constructors (runtime-checked)
+;; ========================================
 
 spec to-pos-rat Rat -> [Option PosRat]
 defn to-pos-rat [r]
@@ -165,7 +177,9 @@ spec is-zero-rat? Rat -> Bool
 defn is-zero-rat? [r]
   rat-eq r 0/1
 
-;; ── Unsafe Constructors ────────────────────────────
+;; ========================================
+;; Unsafe Constructors (caller guarantees invariant)
+;; ========================================
 
 spec unsafe-pos-rat Rat -> PosRat
 defn unsafe-pos-rat [r]
@@ -175,7 +189,9 @@ spec unsafe-neg-rat Rat -> NegRat
 defn unsafe-neg-rat [r]
   neg-rat r
 
-;; ── Extractors ─────────────────────────────────────
+;; ========================================
+;; Extractors
+;; ========================================
 
 spec pos-rat-val PosRat -> Rat
 defn pos-rat-val [p]
@@ -187,134 +203,38 @@ defn neg-rat-val [p]
   match p
     | neg-rat r -> r
 
-;; ── Subtype Declarations ───────────────────────────
-;;
-;; Auto-inferred coercions: unwrap single-field constructors.
+;; ========================================
+;; Subtype declarations
+;; ========================================
+;; PosRat <: Rat (auto-inferred coercion: unwrap single-field constructor)
+;; NegRat <: Rat (auto-inferred coercion: unwrap single-field constructor)
 
 subtype PosRat Rat
 subtype NegRat Rat
 
 
 ;; ════════════════════════════════════════════════════
-;; Part III — Refined Integer Instances
-;; ════════════════════════════════════════════════════
-
-
-module prologos::core::refined-int-instances
-
-;; ── Eq and Ord for Refined Integers ────────────────
-;;
-;; Each instance delegates to the underlying `Int` comparison.
-;; `Zero` is a singleton — all values are equal, all comparisons
-;; return `eq-ord`.
-
-require [prologos::core::eq-trait   :refer [Eq Eq-eq?]]
-require [prologos::core::ord-trait  :refer [Ord Ord-compare]]
-require [prologos::data::ordering   :refer [Ordering lt-ord eq-ord gt-ord]]
-require [prologos::data::refined-int :refer [PosInt pos-int NegInt neg-int Zero mk-zero]]
-
-;; Eq PosInt — delegate to underlying Int
-impl Eq PosInt
-  defn eq? [x <PosInt> y <PosInt>] <Bool>
-    match x
-      | pos-int a -> match y
-                       | pos-int b -> int-eq a b
-
-;; Eq NegInt — delegate to underlying Int
-impl Eq NegInt
-  defn eq? [x <NegInt> y <NegInt>] <Bool>
-    match x
-      | neg-int a -> match y
-                       | neg-int b -> int-eq a b
-
-;; Eq Zero — singleton, always equal
-impl Eq Zero
-  defn eq? [x <Zero> y <Zero>] <Bool>
-    true
-
-;; Ord PosInt — delegate to underlying Int
-impl Ord PosInt
-  defn compare [x <PosInt> y <PosInt>] <Ordering>
-    match x
-      | pos-int a -> match y
-                       | pos-int b -> if [int-lt a b] lt-ord [if [int-eq a b] eq-ord gt-ord]
-
-;; Ord NegInt — delegate to underlying Int
-impl Ord NegInt
-  defn compare [x <NegInt> y <NegInt>] <Ordering>
-    match x
-      | neg-int a -> match y
-                       | neg-int b -> if [int-lt a b] lt-ord [if [int-eq a b] eq-ord gt-ord]
-
-;; Ord Zero — singleton, always eq-ord
-impl Ord Zero
-  defn compare [x <Zero> y <Zero>] <Ordering>
-    eq-ord
-
-
-;; ════════════════════════════════════════════════════
-;; Part IV — Refined Rational Instances
-;; ════════════════════════════════════════════════════
-
-
-module prologos::core::refined-rat-instances
-
-;; ── Eq and Ord for Refined Rationals ───────────────
-;;
-;; Same delegation pattern as refined integers.
-
-require [prologos::core::eq-trait   :refer [Eq Eq-eq?]]
-require [prologos::core::ord-trait  :refer [Ord Ord-compare]]
-require [prologos::data::ordering   :refer [Ordering lt-ord eq-ord gt-ord]]
-require [prologos::data::refined-rat :refer [PosRat pos-rat NegRat neg-rat]]
-
-;; Eq PosRat — delegate to underlying Rat
-impl Eq PosRat
-  defn eq? [x <PosRat> y <PosRat>] <Bool>
-    match x
-      | pos-rat a -> match y
-                       | pos-rat b -> rat-eq a b
-
-;; Eq NegRat — delegate to underlying Rat
-impl Eq NegRat
-  defn eq? [x <NegRat> y <NegRat>] <Bool>
-    match x
-      | neg-rat a -> match y
-                       | neg-rat b -> rat-eq a b
-
-;; Ord PosRat — delegate to underlying Rat
-impl Ord PosRat
-  defn compare [x <PosRat> y <PosRat>] <Ordering>
-    match x
-      | pos-rat a -> match y
-                       | pos-rat b -> if [rat-lt a b] lt-ord [if [rat-eq a b] eq-ord gt-ord]
-
-;; Ord NegRat — delegate to underlying Rat
-impl Ord NegRat
-  defn compare [x <NegRat> y <NegRat>] <Ordering>
-    match x
-      | neg-rat a -> match y
-                       | neg-rat b -> if [rat-lt a b] lt-ord [if [rat-eq a b] eq-ord gt-ord]
-
-
-;; ════════════════════════════════════════════════════
-;; Part V — Abstract Domains
+;; Part III — Abstract Domains (Data Types)
 ;; ════════════════════════════════════════════════════
 
 
 module prologos::data::parity
 
-;; ── The Parity Domain ──────────────────────────────
+;; ========================================
+;; Parity Domain — Abstract parity analysis
+;; ========================================
+;; Four-element lattice for parity abstraction:
 ;;
-;; A four-element lattice for abstract parity analysis.
-;; Used by the lattice framework to track whether a numeric
-;; value is provably even, provably odd, or unknown.
-;;
-;;       parity-top        (unknown parity)
+;;       parity-top
 ;;        /     \
 ;;  parity-even  parity-odd
 ;;        \     /
-;;       parity-bot        (unreachable / no information)
+;;       parity-bot
+;;
+;; parity-bot  = no information (unreachable)
+;; parity-even = definitely even
+;; parity-odd  = definitely odd
+;; parity-top  = unknown parity
 
 data Parity
   parity-bot
@@ -325,17 +245,22 @@ data Parity
 
 module prologos::data::sign
 
-;; ── The Sign Domain ────────────────────────────────
+;; ========================================
+;; Sign Domain — Abstract sign analysis
+;; ========================================
+;; Five-element lattice for sign abstraction:
 ;;
-;; A five-element lattice for abstract sign analysis.
-;; Used by Galois connections to abstract numeric intervals
-;; into sign information.
-;;
-;;          sign-top           (unknown sign)
+;;          sign-top
 ;;         /   |   \
 ;;   sign-neg sign-zero sign-pos
 ;;         \   |   /
-;;          sign-bot           (unreachable / no information)
+;;          sign-bot
+;;
+;; sign-bot  = no information (unreachable)
+;; sign-neg  = definitely negative
+;; sign-zero = definitely zero
+;; sign-pos  = definitely positive
+;; sign-top  = unknown sign (could be anything)
 
 data Sign
   sign-bot
