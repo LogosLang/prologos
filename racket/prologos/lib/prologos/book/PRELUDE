@@ -1,0 +1,191 @@
+;; ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;; Prologos Prelude Manifest
+;; ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;;
+;; Single source of truth for the prelude auto-imports.
+;; Each (require ...) entry is emitted verbatim into namespace.rkt.
+;;
+;; Run:  racket tools/gen-prelude.rkt --validate   (check against namespace.rkt)
+;;       racket tools/gen-prelude.rkt --write      (regenerate namespace.rkt)
+;;
+;; ORDERING MATTERS: later :refer entries shadow earlier ones
+;; for the same name. The generic collection-fns require MUST be
+;; last so its names (map, filter, etc.) shadow List-specific versions.
+
+;; ---- Core combinators (not a book chapter) ----
+(require [prologos::core :refer-all])
+
+;; ---- Foundation data types ----
+(require [prologos::data::ordering :refer [Ordering lt-ord eq-ord gt-ord]])
+(require [prologos::data::bool     :refer [not and or xor bool-eq implies nand nor]])
+(require [prologos::data::nat      :refer [add mult double pred zero? sub pow
+                                           le? lt? gt? ge? nat-eq? min max
+                                           bool-to-nat clamp]])
+(require [prologos::data::pair     :refer [swap map-fst map-snd bimap dup uncurry]])
+(require [prologos::data::eq       :refer [sym cong trans]])
+
+;; ---- Char & String data operations ----
+;; Most operations accessed via module alias: char::code, str::length, etc.
+(require [prologos::data::char   :as char :refer []])
+(require [prologos::data::string :as str  :refer []])
+
+;; ---- Container data types ----
+;; Option: types + predicates unqualified; ops via opt:: alias
+(require [prologos::data::option :as opt :refer [Option none some some? none? flatten]])
+;; Result: types + predicates unqualified; ops via result:: alias
+(require [prologos::data::result :as result :refer [Result ok err ok? err?]])
+;; List: full API unqualified (wins all name-conflict tiebreaks)
+(require [prologos::data::list :refer [List nil cons foldr reduce length
+                                       map filter append head tail singleton
+                                       reverse sum product any? all? find
+                                       nth last replicate range concat
+                                       concat-map take drop split-at
+                                       take-while drop-while partition
+                                       zip-with zip unzip intersperse sort
+                                       elem dedup count scanl iterate-n
+                                       intercalate sort-on reduce1 foldr1
+                                       init span break prefix-of? suffix-of?
+                                       delete find-index]])
+
+;; ---- Core traits (type class definitions) ----
+(require [prologos::core::eq-trait  :refer [Eq eq-neq nat-eq]])
+(require [prologos::core::ord-trait :refer [Ord nat-ord ord-lt ord-le
+                                           ord-gt ord-ge ord-eq
+                                           ord-min ord-max]])
+(require [prologos::core::add-trait      :refer [Add]])
+(require [prologos::core::sub-trait      :refer [Sub]])
+(require [prologos::core::mul-trait      :refer [Mul]])
+(require [prologos::core::div-trait      :refer [Div]])
+(require [prologos::core::neg-trait      :refer [Neg]])
+(require [prologos::core::abs-trait      :refer [Abs]])
+(require [prologos::core::fromint-trait  :refer [FromInt]])
+(require [prologos::core::fromrat-trait  :refer [FromRat]])
+(require [prologos::core::numeric-bundles :refer [Num Fractional]])
+(require [prologos::core::lattice-trait   :refer [Lattice Lattice-bot Lattice-join Lattice-leq]])
+
+;; ---- Additional container types + operations ----
+(require [prologos::data::map-entry :refer [MapEntry mk-entry entry-key entry-val]])
+(require [prologos::data::lseq     :as lseq :refer [LSeq lseq-nil lseq-cell]])
+(require [prologos::data::lseq-ops :refer [list-to-lseq lseq-to-list lseq-map
+                                           lseq-filter lseq-take lseq-drop
+                                           lseq-append lseq-fold lseq-length]])
+(require [prologos::data::set      :refer [set-singleton set-from-list set-symmetric-diff]])
+
+;; ---- Additional trait definitions ----
+(require [prologos::core::additive-identity-trait       :refer-all])
+(require [prologos::core::multiplicative-identity-trait  :refer-all])
+
+;; ---- String operation module ----
+;; Most ops via str-ops:: alias to avoid conflicts with List names.
+(require [prologos::core::string-ops :as str-ops :refer []])
+
+;; ---- Collection operation modules ----
+;; Note: pvec-map, pvec-filter, pvec-fold, set-fold, set-filter,
+;; map-fold-entries, map-filter-entries, map-map-vals are now native
+;; parser keywords — no need to import from ops modules.
+(require [prologos::core::pvec-ops :refer [pvec-any? pvec-all?
+                                           pvec-from-list-fn pvec-to-list-fn]])
+(require [prologos::core::map-ops  :refer [map-filter-vals map-keys-list
+                                           map-vals-list map-merge
+                                           map-to-entry-list map-seq map-from-seq]])
+(require [prologos::core::set-ops  :refer [set-map set-any? set-all?
+                                           set-to-list-fn set-from-list-fn]])
+
+;; ---- Collection conversions ----
+(require [prologos::core::collection-conversions :refer [vec list-to-seq pvec-to-seq
+                                                         set-to-seq into-vec
+                                                         into-list into-set]])
+
+;; ---- Generic numeric operations ----
+(require [prologos::core::generic-numeric-ops :refer [sum product int-range]])
+
+;; ---- First-class generic arithmetic ----
+(require [prologos::core::generic-arith :refer [plus minus times divide negate-fn abs-fn]])
+
+;; ---- Instance registration (side-effect only, :refer []) ----
+(require [prologos::core::eq-instances         :refer []])
+(require [prologos::core::eq-numeric-instances  :refer []])
+(require [prologos::core::ord-instances         :refer []])
+(require [prologos::core::ord-numeric-instances :refer []])
+(require [prologos::core::add-instances         :refer []])
+(require [prologos::core::sub-instances         :refer []])
+(require [prologos::core::mul-instances         :refer []])
+(require [prologos::core::div-instances           :refer []])
+(require [prologos::core::fromint-posit-instances  :refer []])
+(require [prologos::core::fromrat-posit-instances  :refer []])
+(require [prologos::core::neg-instances         :refer []])
+(require [prologos::core::abs-instances         :refer []])
+
+;; ---- Char/String trait instances ----
+;; Dict bindings are referred so they resolve in user code (not just side-effect)
+(require [prologos::core::eq-char-instance        :refer [Char--Eq--dict]])
+(require [prologos::core::ord-char-instance       :refer [Char--Ord--dict]])
+(require [prologos::core::hashable-char-instance  :refer [Char--Hashable--dict]])
+(require [prologos::core::eq-string-instance      :refer [String--Eq--dict]])
+(require [prologos::core::ord-string-instance     :refer [String--Ord--dict]])
+(require [prologos::core::hashable-string-instance :refer [String--Hashable--dict]])
+(require [prologos::core::add-string-instance     :refer [String--Add--dict]])
+
+;; ---- Collection trait instances (side-effect only) ----
+(require [prologos::core::seqable-list    :refer []])
+(require [prologos::core::buildable-list  :refer []])
+(require [prologos::core::foldable-list   :refer []])
+(require [prologos::core::indexed-list    :refer []])
+(require [prologos::core::functor-list    :refer []])
+(require [prologos::core::seqable-pvec    :refer []])
+(require [prologos::core::buildable-pvec  :refer []])
+(require [prologos::core::indexed-pvec    :refer []])
+(require [prologos::core::foldable-pvec   :refer []])
+(require [prologos::core::functor-pvec    :refer []])
+(require [prologos::core::keyed-map       :refer []])
+(require [prologos::core::setlike-set     :refer []])
+(require [prologos::core::seqable-set     :refer []])
+(require [prologos::core::buildable-set   :refer []])
+(require [prologos::core::foldable-set    :refer []])
+(require [prologos::core::seq-lseq        :refer []])
+(require [prologos::core::foldable-lseq   :refer []])
+(require [prologos::core::seqable-lseq    :refer []])
+(require [prologos::core::buildable-lseq  :refer []])
+
+;; ---- Identity trait instances (side-effect only) ----
+(require [prologos::core::identity-instances :refer []])
+
+;; ---- Generic collection operations (HKT-dispatched) ----
+(require [prologos::core::collection-bundle :refer [Collection]])
+(require [prologos::core::generic-ops :refer [gmap gfilter gfold glength
+                                              gconcat gany? gall? gto-list]])
+
+;; ---- Lattice trait instances ----
+(require [prologos::core::lattice-instances :refer [FlatVal flat-bot flat-val flat-top
+                                                     Interval interval-bot mk-interval interval-top
+                                                     set-subset?
+                                                     map-merge-with map-lattice-leq
+                                                     interval-intersect interval-join interval-leq
+                                                     rat-max rat-min
+                                                     Bool--Lattice--dict
+                                                     Interval--Lattice--dict]])
+
+;; ---- HasTop trait + instances + BoundedLattice + Propagator helpers ----
+(require [prologos::core::has-top-trait     :refer [HasTop HasTop-top]])
+(require [prologos::core::has-top-instances :refer []])
+(require [prologos::core::bounded-lattice   :refer [BoundedLattice]])
+(require [prologos::core::propagator        :refer [new-lattice-cell new-widenable-cell]])
+
+;; ---- Widenable trait + instances ----
+(require [prologos::core::widenable-trait     :refer [Widenable Widenable-widen Widenable-narrow]])
+(require [prologos::core::widenable-instances :refer []])
+
+;; ---- GaloisConnection trait + instances ----
+(require [prologos::core::galois-trait        :refer [GaloisConnection GaloisConnection-alpha GaloisConnection-gamma]])
+(require [prologos::core::galois-instances    :refer []])
+
+;; ---- Generic collection functions (clean names) ----
+;; These shadow List-specific names (map, filter, reduce, etc.) with
+;; generic versions that work on any Seqable/Buildable/Foldable collection.
+;; Users can still access List-specific versions via fully qualified names.
+;; MUST BE LAST — shadowing depends on ordering.
+(require [prologos::core::collection-fns :refer [map filter reduce reduce1
+                                                  length concat any? all?
+                                                  to-list find take drop
+                                                  into head empty?
+                                                  rest-seq]])

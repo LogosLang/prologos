@@ -318,50 +318,50 @@
   (or (string-prefix? s "prologos::data::")
       (string-prefix? s "prologos::core::")))
 
+;;; ---- BEGIN GENERATED PRELUDE ----
 ;; The prelude: a curated list of require specs emitted into user namespaces.
-;; Organized in tiers by dependency order.
+;; Generated from lib/prologos/book/PRELUDE by tools/gen-prelude.rkt.
 (define prelude-requires
-  '(;; ---- Tier 0: prologos::core (combinators + macros) ----
+  '(;; ---- Core combinators (not a book chapter) ----
     (require [prologos::core :refer-all])
 
-    ;; ---- Tier 0: Foundation data types ----
+    ;; ---- Foundation data types ----
     (require [prologos::data::ordering :refer [Ordering lt-ord eq-ord gt-ord]])
     (require [prologos::data::bool     :refer [not and or xor bool-eq implies nand nor]])
     (require [prologos::data::nat      :refer [add mult double pred zero? sub pow
-                                              le? lt? gt? ge? nat-eq? min max
-                                              bool-to-nat clamp]])
+                                               le? lt? gt? ge? nat-eq? min max
+                                               bool-to-nat clamp]])
     (require [prologos::data::pair     :refer [swap map-fst map-snd bimap dup uncurry]])
     (require [prologos::data::eq       :refer [sym cong trans]])
 
-    ;; ---- Tier 0b: Char & String data operations ----
+    ;; ---- Char & String data operations ----
     ;; Most operations accessed via module alias: char::code, str::length, etc.
-    ;; Only non-conflicting names imported unqualified.
     (require [prologos::data::char   :as char :refer []])
     (require [prologos::data::string :as str  :refer []])
 
-    ;; ---- Tier 1: Container data types ----
+    ;; ---- Container data types ----
     ;; Option: types + predicates unqualified; ops via opt:: alias
     (require [prologos::data::option :as opt :refer [Option none some some? none? flatten]])
     ;; Result: types + predicates unqualified; ops via result:: alias
     (require [prologos::data::result :as result :refer [Result ok err ok? err?]])
     ;; List: full API unqualified (wins all name-conflict tiebreaks)
     (require [prologos::data::list :refer [List nil cons foldr reduce length
-                                          map filter append head tail singleton
-                                          reverse sum product any? all? find
-                                          nth last replicate range concat
-                                          concat-map take drop split-at
-                                          take-while drop-while partition
-                                          zip-with zip unzip intersperse sort
-                                          elem dedup count scanl iterate-n
-                                          intercalate sort-on reduce1 foldr1
-                                          init span break prefix-of? suffix-of?
-                                          delete find-index]])
+                                           map filter append head tail singleton
+                                           reverse sum product any? all? find
+                                           nth last replicate range concat
+                                           concat-map take drop split-at
+                                           take-while drop-while partition
+                                           zip-with zip unzip intersperse sort
+                                           elem dedup count scanl iterate-n
+                                           intercalate sort-on reduce1 foldr1
+                                           init span break prefix-of? suffix-of?
+                                           delete find-index]])
 
-    ;; ---- Tier 2: Core traits (type class definitions) ----
+    ;; ---- Core traits (type class definitions) ----
     (require [prologos::core::eq-trait  :refer [Eq eq-neq nat-eq]])
     (require [prologos::core::ord-trait :refer [Ord nat-ord ord-lt ord-le
-                                              ord-gt ord-ge ord-eq
-                                              ord-min ord-max]])
+                                               ord-gt ord-ge ord-eq
+                                               ord-min ord-max]])
     (require [prologos::core::add-trait      :refer [Add]])
     (require [prologos::core::sub-trait      :refer [Sub]])
     (require [prologos::core::mul-trait      :refer [Mul]])
@@ -373,46 +373,46 @@
     (require [prologos::core::numeric-bundles :refer [Num Fractional]])
     (require [prologos::core::lattice-trait   :refer [Lattice Lattice-bot Lattice-join Lattice-leq]])
 
-    ;; ---- Tier 1b: Additional container types + operations ----
+    ;; ---- Additional container types + operations ----
     (require [prologos::data::map-entry :refer [MapEntry mk-entry entry-key entry-val]])
     (require [prologos::data::lseq     :as lseq :refer [LSeq lseq-nil lseq-cell]])
     (require [prologos::data::lseq-ops :refer [list-to-lseq lseq-to-list lseq-map
-                                              lseq-filter lseq-take lseq-drop
-                                              lseq-append lseq-fold lseq-length]])
+                                               lseq-filter lseq-take lseq-drop
+                                               lseq-append lseq-fold lseq-length]])
     (require [prologos::data::set      :refer [set-singleton set-from-list set-symmetric-diff]])
 
-    ;; ---- Tier 2b: Trait definitions (additional) ----
+    ;; ---- Additional trait definitions ----
     (require [prologos::core::additive-identity-trait       :refer-all])
     (require [prologos::core::multiplicative-identity-trait  :refer-all])
 
-    ;; ---- Tier 2c-str: String operation module ----
+    ;; ---- String operation module ----
     ;; Most ops via str-ops:: alias to avoid conflicts with List names.
     (require [prologos::core::string-ops :as str-ops :refer []])
 
-    ;; ---- Tier 2c: Collection operation modules ----
+    ;; ---- Collection operation modules ----
     ;; Note: pvec-map, pvec-filter, pvec-fold, set-fold, set-filter,
     ;; map-fold-entries, map-filter-entries, map-map-vals are now native
     ;; parser keywords — no need to import from ops modules.
     (require [prologos::core::pvec-ops :refer [pvec-any? pvec-all?
-                                              pvec-from-list-fn pvec-to-list-fn]])
+                                               pvec-from-list-fn pvec-to-list-fn]])
     (require [prologos::core::map-ops  :refer [map-filter-vals map-keys-list
-                                              map-vals-list map-merge
-                                              map-to-entry-list map-seq map-from-seq]])
+                                               map-vals-list map-merge
+                                               map-to-entry-list map-seq map-from-seq]])
     (require [prologos::core::set-ops  :refer [set-map set-any? set-all?
-                                              set-to-list-fn set-from-list-fn]])
+                                               set-to-list-fn set-from-list-fn]])
 
-    ;; ---- Tier 2d: Collection conversions ----
+    ;; ---- Collection conversions ----
     (require [prologos::core::collection-conversions :refer [vec list-to-seq pvec-to-seq
-                                                            set-to-seq into-vec
-                                                            into-list into-set]])
+                                                             set-to-seq into-vec
+                                                             into-list into-set]])
 
-    ;; ---- Tier 2e: Generic numeric operations ----
+    ;; ---- Generic numeric operations ----
     (require [prologos::core::generic-numeric-ops :refer [sum product int-range]])
 
-    ;; ---- Tier 2f: First-class generic arithmetic ----
+    ;; ---- First-class generic arithmetic ----
     (require [prologos::core::generic-arith :refer [plus minus times divide negate-fn abs-fn]])
 
-    ;; ---- Tier 3: Instance registration (side-effect only, :refer []) ----
+    ;; ---- Instance registration (side-effect only, :refer []) ----
     (require [prologos::core::eq-instances         :refer []])
     (require [prologos::core::eq-numeric-instances  :refer []])
     (require [prologos::core::ord-instances         :refer []])
@@ -426,7 +426,7 @@
     (require [prologos::core::neg-instances         :refer []])
     (require [prologos::core::abs-instances         :refer []])
 
-    ;; ---- Tier 3a: Char/String trait instances ----
+    ;; ---- Char/String trait instances ----
     ;; Dict bindings are referred so they resolve in user code (not just side-effect)
     (require [prologos::core::eq-char-instance        :refer [Char--Eq--dict]])
     (require [prologos::core::ord-char-instance       :refer [Char--Ord--dict]])
@@ -436,7 +436,7 @@
     (require [prologos::core::hashable-string-instance :refer [String--Hashable--dict]])
     (require [prologos::core::add-string-instance     :refer [String--Add--dict]])
 
-    ;; ---- Tier 3b: Collection trait instances (side-effect only) ----
+    ;; ---- Collection trait instances (side-effect only) ----
     (require [prologos::core::seqable-list    :refer []])
     (require [prologos::core::buildable-list  :refer []])
     (require [prologos::core::foldable-list   :refer []])
@@ -457,47 +457,49 @@
     (require [prologos::core::seqable-lseq    :refer []])
     (require [prologos::core::buildable-lseq  :refer []])
 
-    ;; ---- Tier 3c: Identity trait instances (side-effect only) ----
+    ;; ---- Identity trait instances (side-effect only) ----
     (require [prologos::core::identity-instances :refer []])
 
-    ;; ---- Tier 3d: Generic collection operations (HKT-dispatched) ----
+    ;; ---- Generic collection operations (HKT-dispatched) ----
     (require [prologos::core::collection-bundle :refer [Collection]])
     (require [prologos::core::generic-ops :refer [gmap gfilter gfold glength
-                                                 gconcat gany? gall? gto-list]])
+                                                  gconcat gany? gall? gto-list]])
 
-    ;; ---- Tier 3f: Lattice trait instances ----
+    ;; ---- Lattice trait instances ----
     (require [prologos::core::lattice-instances :refer [FlatVal flat-bot flat-val flat-top
-                                                        Interval interval-bot mk-interval interval-top
-                                                        set-subset?
-                                                        map-merge-with map-lattice-leq
-                                                        interval-intersect interval-join interval-leq
-                                                        rat-max rat-min
-                                                        Bool--Lattice--dict
-                                                        Interval--Lattice--dict]])
+                                                         Interval interval-bot mk-interval interval-top
+                                                         set-subset?
+                                                         map-merge-with map-lattice-leq
+                                                         interval-intersect interval-join interval-leq
+                                                         rat-max rat-min
+                                                         Bool--Lattice--dict
+                                                         Interval--Lattice--dict]])
 
-    ;; ---- Tier 3g: HasTop trait + instances + BoundedLattice + Propagator helpers ----
+    ;; ---- HasTop trait + instances + BoundedLattice + Propagator helpers ----
     (require [prologos::core::has-top-trait     :refer [HasTop HasTop-top]])
     (require [prologos::core::has-top-instances :refer []])
     (require [prologos::core::bounded-lattice   :refer [BoundedLattice]])
     (require [prologos::core::propagator        :refer [new-lattice-cell new-widenable-cell]])
 
-    ;; ---- Tier 3h: Widenable trait + instances ----
+    ;; ---- Widenable trait + instances ----
     (require [prologos::core::widenable-trait     :refer [Widenable Widenable-widen Widenable-narrow]])
     (require [prologos::core::widenable-instances :refer []])
 
-    ;; ---- Tier 3i: GaloisConnection trait + instances ----
+    ;; ---- GaloisConnection trait + instances ----
     (require [prologos::core::galois-trait        :refer [GaloisConnection GaloisConnection-alpha GaloisConnection-gamma]])
     (require [prologos::core::galois-instances    :refer []])
 
-    ;; ---- Tier 3e: Generic collection functions (clean names) ----
+    ;; ---- Generic collection functions (clean names) ----
     ;; These shadow List-specific names (map, filter, reduce, etc.) with
     ;; generic versions that work on any Seqable/Buildable/Foldable collection.
     ;; Users can still access List-specific versions via fully qualified names.
+    ;; MUST BE LAST — shadowing depends on ordering.
     (require [prologos::core::collection-fns :refer [map filter reduce reduce1
-                                                     length concat any? all?
-                                                     to-list find take drop
-                                                     into head empty?
-                                                     rest-seq]])))
+                                                      length concat any? all?
+                                                      to-list find take drop
+                                                      into head empty?
+                                                      rest-seq]])))
+;;; ---- END GENERATED PRELUDE ----
 
 ;; ========================================
 ;; Pre-parse Directive Processing

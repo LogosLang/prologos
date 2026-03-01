@@ -20,7 +20,10 @@ The book lives in `lib/prologos/book/`. The OUTLINE manifest controls chapter or
 | Phase 3 | Foundation chapters (12 chapters, 56 modules) | Complete | `396bfe5`, `c208357` |
 | Phase 4 | Complete stdlib (22 chapters, 121 modules) | Complete | `0051176` |
 | Phase 5 | Spec pre-scan for free ordering | Complete | `49be0b8` |
-| Phase 6 | Prelude generation from book | Not started | — |
+| Phase 5a | Three-pass pre-registration | Complete | `53223ca` |
+| Phase 5b | Declaration-first output ordering | Complete | `53223ca` |
+| Phase 5c | Form-level dependency analysis | Complete | `b17555c` |
+| Phase 6 | Prelude generation from book | Complete | — |
 | Phase 7 | Extended weaver (syntax highlighting, search) | Not started | — |
 | Phase 8 | CI integration (tangle, weave, diff-check) | Not started | — |
 
@@ -87,16 +90,75 @@ ordering within a module — essential for natural prose flow in literate chapte
 Safe because `process-spec` is idempotent (hash-set) and `auto-export-name!`
 has a memq guard.
 
-**What this does NOT address:**
-- Data forward references (defn referencing constructor from later `data`)
-- Trait forward references (similar issue with `process-trait`)
-- Cross-module forward references (handled by `require` ordering)
+### Phase 5 Extension: Free Ordering of Declarations (Complete)
 
-### Phase 6: Prelude Generation from Book (Not Started)
+Extended Phase 5 into a full free-ordering system so that only genuinely cyclic
+dependencies produce compiler errors. Detailed tracking in
+`docs/tracking/2026-02-28_1800_FREE_ORDERING.md`.
 
-Generate the prelude requires list directly from the book's module definitions,
-replacing the hand-maintained list in `namespace.rkt`. This ensures the prelude
-stays in sync with the standard library as modules are added or renamed.
+**Phase 5a: Three-Pass Pre-Registration** (commit `53223ca`)
+
+Replaced the single spec pre-scan with a three-pass architecture:
+- **Pass 0**: No-dependency declarations (data, trait, deftype, defmacro, bundle,
+  property, functor) — 7 forms that only write to registries.
+- **Pass 1**: Declarations depending on Pass 0 outputs — spec (reads bundle +
+  trait registries) and impl (reads trait registry).
+- **Pass 2**: Main processing loop (unchanged).
+
+Added idempotency guard to `register-param-impl!` to prevent double-registration
+when `process-impl` runs in both Pass 1 and Pass 2.
+
+**Phase 5b: Declaration-First Output Ordering** (commit `53223ca`)
+
+After the main processing loop, a stable partition hoists data/trait-generated
+defs before user forms. This ensures constructor types and trait accessor types
+enter `global-env` before any user `defn`/`def` is type-checked.
+
+Key design choice: impl-generated defs are NOT hoisted — impl method helpers
+can reference user-defined functions from the same module.
+
+**Phase 5c: Form-Level Dependency Analysis** (commit `b17555c`)
+
+Built `tools/form-deps.rkt` (~300 LOC) — reads all 22 book chapters via the WS
+reader, splits at module boundaries, and extracts defines/references per form.
+Computes module-level SCCs via `tarjan-scc` from `stratify.rkt`.
+
+Result: 121 modules, 907 forms, zero module-level cycles. The stdlib book's
+module DAG is clean. Added `--analyze` flag to `tangle-stdlib.rkt`.
+
+**What the Phase 5 Extension enables:**
+- `defn` using constructors from a `data` declared later in the module
+- `spec` referencing `bundle` or `trait` declared later
+- `impl` referencing `trait` declared later
+- Pattern matching against constructors from later `data` declarations
+- Verification that the stdlib has no spurious cross-module cycles
+
+10 test cases in `test-free-ordering.rkt`. Full suite: 4638 tests, zero regressions.
+
+### Phase 6: Prelude Generation from Book (Complete)
+
+The `PRELUDE` manifest (`lib/prologos/book/PRELUDE`) is now the single source of
+truth for the prelude auto-imports. The `tools/gen-prelude.rkt` tool generates the
+`prelude-requires` definition in `namespace.rkt` from this manifest.
+
+**PRELUDE manifest**: 87 require entries extracted from `namespace.rkt`, organized
+with section comments matching the book structure. Ordering matters — generic
+`collection-fns` names must come last to shadow List-specific versions.
+
+**gen-prelude.rkt** (~200 LOC) supports four modes:
+- Default: print generated `prelude-requires` to stdout
+- `--validate`: compare generated entries against current `namespace.rkt` (87/87 match)
+- `--write`: update `namespace.rkt` in place between `BEGIN/END GENERATED PRELUDE` markers
+- `--check-exports`: verify all 87 referenced modules exist as `.prologos` files
+
+**namespace.rkt**: `prelude-requires` block is now delimited by marker comments.
+The tool replaces content between markers, preserving the rest of the file.
+
+Full suite: 4638 tests, zero regressions.
+
+**Automated drift check**: `run-affected-tests.rkt` now calls `check-prelude-drift!`
+before launching batch workers. This runs `gen-prelude.rkt --validate` as a subprocess
+(~0.2s). Silent when in sync; prints a warning with remediation command on drift.
 
 ### Phase 7: Extended Weaver (Not Started)
 
@@ -144,6 +206,7 @@ defn bar [x] (suc x)
 ```
 lib/prologos/book/
   OUTLINE                    — manifest (chapter ordering + part groupings)
+  PRELUDE                    — prelude specification (require entries)
   equality.prologos          — Chapter 1
   ordering.prologos          — Chapter 2
   ...
@@ -157,5 +220,7 @@ docs/stdlib-book/            — weaver output (gitignored)
 
 | Tool | Purpose | LOC |
 |---|---|---|
-| `tools/tangle-stdlib.rkt` | Extract compilation units from chapters | ~200 |
+| `tools/tangle-stdlib.rkt` | Extract compilation units from chapters (+ `--analyze`) | ~200 |
 | `tools/weave-stdlib.rkt` | Render HTML documentation | ~425 |
+| `tools/form-deps.rkt` | Form-level dependency analysis across book chapters | ~300 |
+| `tools/gen-prelude.rkt` | Generate/validate prelude from PRELUDE manifest | ~200 |
