@@ -21,7 +21,8 @@
          racket/path
          racket/list
          racket/match
-         racket/format)
+         racket/format
+         racket/system)
 
 ;; ========================================
 ;; OUTLINE reader
@@ -279,6 +280,7 @@
     (make-parameter
      (build-path project-root "racket" "prologos" "lib")))
   (define verify? (make-parameter #f))
+  (define analyze? (make-parameter #f))
 
   (command-line
    #:program "tangle-stdlib"
@@ -291,8 +293,24 @@
     (lib-dir (string->path dir))]
    [("--verify") "Compare tangled output against originals"
     (verify? #t)]
+   [("--analyze") "Run form-level dependency analysis"
+    (analyze? #t)]
    #:args ()
    (cond
+     [(analyze?)
+      ;; Delegate to form-deps.rkt
+      (define form-deps-path
+        (build-path (path-only (syntax-source #'here)) "form-deps.rkt"))
+      ;; Resolve racket binary (same strategy as bench-lib.rkt)
+      (define racket-exe
+        (or (find-executable-path "racket")
+            (let* ([exe (find-system-path 'exec-file)]
+                   [dir (path-only exe)]
+                   [candidate (and dir (build-path dir "racket"))])
+              (and candidate (file-exists? candidate) candidate))
+            (error 'tangle-stdlib "Cannot locate racket binary")))
+      (define result (system* racket-exe (path->string form-deps-path)))
+      (unless result (exit 1))]
      [(verify?)
       (printf "Verifying tangled output against originals...~n")
       (define ok? (verify-tangled (output-dir) (lib-dir)))
