@@ -1,0 +1,255 @@
+ns prologos::core::conversions
+
+require [prologos::data::option :refer [Option some none]]
+
+;; ========================================
+;; From Trait — lossless conversion from A to B
+;; ========================================
+;; From A B = A -> B (single-method: dict IS the function)
+;; Generated: deftype From, accessor From-from
+;; Instance key pattern: SourceType-TargetType--From
+;; Example: Nat-Int--From--dict
+
+trait From {A B}
+  from : A -> B
+
+;; ========================================
+;; From Instances — lossless cross-family conversions
+;; ========================================
+;; Each From A B instance provides `from : A -> B` (dict IS the function).
+;; Instance key: SourceType-TargetType--From
+
+;; ========================================
+;; Within-family: exact integer/rational chain
+;; ========================================
+
+;; From Nat Int — natural to integer (lossless)
+impl From Nat Int
+  defn from [n : Nat] <Int>
+    from-nat n
+
+;; From Int Rat — integer to rational (lossless)
+impl From Int Rat
+  defn from [i : Int] <Rat>
+    from-int i
+
+;; From Nat Rat — natural to rational (composed: Nat->Int->Rat)
+impl From Nat Rat
+  defn from [n : Nat] <Rat>
+    from-int [from-nat n]
+
+;; ========================================
+;; Within-family: posit widening (lossless)
+;; ========================================
+;; Widening: decode source posit to exact rational, encode to wider target.
+
+;; Posit8 -> Posit16
+impl From Posit8 Posit16
+  defn from [x : Posit8] <Posit16>
+    p16-from-rat [p8-to-rat x]
+
+;; Posit8 -> Posit32
+impl From Posit8 Posit32
+  defn from [x : Posit8] <Posit32>
+    p32-from-rat [p8-to-rat x]
+
+;; Posit8 -> Posit64
+impl From Posit8 Posit64
+  defn from [x : Posit8] <Posit64>
+    p64-from-rat [p8-to-rat x]
+
+;; Posit16 -> Posit32
+impl From Posit16 Posit32
+  defn from [x : Posit16] <Posit32>
+    p32-from-rat [p16-to-rat x]
+
+;; Posit16 -> Posit64
+impl From Posit16 Posit64
+  defn from [x : Posit16] <Posit64>
+    p64-from-rat [p16-to-rat x]
+
+;; Posit32 -> Posit64
+impl From Posit32 Posit64
+  defn from [x : Posit32] <Posit64>
+    p64-from-rat [p32-to-rat x]
+
+;; ========================================
+;; Cross-family: Posit -> Rat (lossless)
+;; ========================================
+;; Every finite posit has an exact rational representation.
+
+;; Posit8 -> Rat
+impl From Posit8 Rat
+  defn from [x : Posit8] <Rat>
+    p8-to-rat x
+
+;; Posit16 -> Rat
+impl From Posit16 Rat
+  defn from [x : Posit16] <Rat>
+    p16-to-rat x
+
+;; Posit32 -> Rat
+impl From Posit32 Rat
+  defn from [x : Posit32] <Rat>
+    p32-to-rat x
+
+;; Posit64 -> Rat
+impl From Posit64 Rat
+  defn from [x : Posit64] <Rat>
+    p64-to-rat x
+
+;; ========================================
+;; TryFrom Trait — fallible conversion from A to B
+;; ========================================
+;; TryFrom A B = A -> Option B (single-method: dict IS the function)
+;; Generated: deftype TryFrom, accessor TryFrom-try-from
+;; For conversions that may lose precision or fail.
+;; Returns (some result) on success, none on failure.
+
+trait TryFrom {A B}
+  try-from : A -> Option B
+
+;; ========================================
+;; TryFrom Instances — potentially lossy cross-family conversions
+;; ========================================
+;; Each TryFrom A B instance provides `try-from : A -> Option B`.
+;; Instance key: SourceType-TargetType--TryFrom
+;;
+;; Note: posit-encode always returns valid posit bits for finite rationals
+;; (clamped to representable range, never NaR), so these always return `some`.
+;; The `TryFrom` interface is chosen because the conversion is lossy
+;; (precision may be lost), even though it never fails at runtime.
+
+;; ========================================
+;; Rat -> Posit (lossy: clamped to representable range)
+;; ========================================
+
+impl TryFrom Rat Posit8
+  defn try-from [r : Rat] <Option Posit8>
+    some Posit8 [p8-from-rat r]
+
+impl TryFrom Rat Posit16
+  defn try-from [r : Rat] <Option Posit16>
+    some Posit16 [p16-from-rat r]
+
+impl TryFrom Rat Posit32
+  defn try-from [r : Rat] <Option Posit32>
+    some Posit32 [p32-from-rat r]
+
+impl TryFrom Rat Posit64
+  defn try-from [r : Rat] <Option Posit64>
+    some Posit64 [p64-from-rat r]
+
+;; ========================================
+;; Int -> Posit (lossy: large integers lose precision)
+;; ========================================
+
+impl TryFrom Int Posit8
+  defn try-from [i : Int] <Option Posit8>
+    some Posit8 [p8-from-int i]
+
+impl TryFrom Int Posit16
+  defn try-from [i : Int] <Option Posit16>
+    some Posit16 [p16-from-int i]
+
+impl TryFrom Int Posit32
+  defn try-from [i : Int] <Option Posit32>
+    some Posit32 [p32-from-int i]
+
+impl TryFrom Int Posit64
+  defn try-from [i : Int] <Option Posit64>
+    some Posit64 [p64-from-int i]
+
+;; ========================================
+;; Into Trait — reversed From (convenience)
+;; ========================================
+;; Into A B = A -> B (single-method: dict IS the function)
+;; Generated: deftype Into, accessor Into-into
+;; Derived automatically from From: if From A B exists, Into A B exists.
+
+trait Into {A B}
+  into : A -> B
+
+;; Blanket parametric impl: Into A B whenever From A B
+;; Phase D method resolution resolves bare `from` to (From-from A B dict x)
+impl Into A B where (From A B)
+  defn into [x : A] <B>
+    from x
+
+;; ========================================
+;; FromInt Trait — convert Int to A
+;; ========================================
+;; FromInt A = Int -> A (single-method: dict IS the function)
+;; Method is "from-integer" (not "from-int" — that's a parser keyword).
+
+trait FromInt {A}
+  from-integer : Int -> A
+  :doc "Convert from Int to type A"
+
+;; Int instance — identity
+impl FromInt Int
+  defn from-integer [x : Int] <Int>
+    x
+
+;; Rat instance — uses the from-int parser keyword (Int->Rat primitive)
+impl FromInt Rat
+  defn from-integer [x : Int] <Rat>
+    from-int x
+
+;; ========================================
+;; FromInt Posit instances — Int -> Posit{N}
+;; ========================================
+;; Bridges the 2-param From to the 1-param FromInt used by Num bundle.
+;; Enables `Num Posit{N}` bundle resolution.
+
+impl FromInt Posit8
+  defn from-integer [x : Int] <Posit8>
+    p8-from-int x
+
+impl FromInt Posit16
+  defn from-integer [x : Int] <Posit16>
+    p16-from-int x
+
+impl FromInt Posit32
+  defn from-integer [x : Int] <Posit32>
+    p32-from-int x
+
+impl FromInt Posit64
+  defn from-integer [x : Int] <Posit64>
+    p64-from-int x
+
+;; ========================================
+;; FromRat Trait — convert Rat to A
+;; ========================================
+;; FromRat A = Rat -> A (single-method: dict IS the function)
+
+trait FromRat {A}
+  from-rational : Rat -> A
+  :doc "Convert from Rat to type A"
+
+;; Rat instance — identity
+impl FromRat Rat
+  defn from-rational [x : Rat] <Rat>
+    x
+
+;; ========================================
+;; FromRat Posit instances — Rat -> Posit{N}
+;; ========================================
+;; Bridges the 2-param From to the 1-param FromRat used by Fractional bundle.
+;; Enables `Fractional Posit{N}` bundle resolution.
+
+impl FromRat Posit8
+  defn from-rational [x : Rat] <Posit8>
+    p8-from-rat x
+
+impl FromRat Posit16
+  defn from-rational [x : Rat] <Posit16>
+    p16-from-rat x
+
+impl FromRat Posit32
+  defn from-rational [x : Rat] <Posit32>
+    p32-from-rat x
+
+impl FromRat Posit64
+  defn from-rational [x : Rat] <Posit64>
+    p64-from-rat x

@@ -70,24 +70,24 @@
 ;; Within-family exact
 (test-case "from/nat-to-int"
   (define r (run-ns-strings (string-append
-    "(ns t)(require [prologos::core::from-trait :refer [From From-from]])"
-    "(require [prologos::core::from-instances :refer []])"
+    "(ns t)(require [prologos::core::conversions :refer [From From-from]])"
+    "(require [prologos::core::conversions :refer []])"
     "(eval (From-from Nat Int Nat-Int--From--dict zero))")))
   (check-true (string-contains? (last r) "0 : Int")))
 
 
 (test-case "from/int-to-rat"
   (define r (run-ns-strings (string-append
-    "(ns t)(require [prologos::core::from-trait :refer [From From-from]])"
-    "(require [prologos::core::from-instances :refer []])"
+    "(ns t)(require [prologos::core::conversions :refer [From From-from]])"
+    "(require [prologos::core::conversions :refer []])"
     "(eval (From-from Int Rat Int-Rat--From--dict (int 42)))")))
   (check-true (string-contains? (last r) "42 : Rat")))
 
 
 (test-case "from/nat-to-rat"
   (define r (run-ns-strings (string-append
-    "(ns t)(require [prologos::core::from-trait :refer [From From-from]])"
-    "(require [prologos::core::from-instances :refer []])"
+    "(ns t)(require [prologos::core::conversions :refer [From From-from]])"
+    "(require [prologos::core::conversions :refer []])"
     "(eval (From-from Nat Rat Nat-Rat--From--dict zero))")))
   (check-true (string-contains? (last r) "0 : Rat")))
 
@@ -95,48 +95,48 @@
 ;; Posit widening (6 tests)
 (test-case "from/posit8-to-posit16"
   (define r (run-ns-strings (string-append
-    "(ns t)(require [prologos::core::from-trait :refer [From From-from]])"
-    "(require [prologos::core::from-instances :refer []])"
+    "(ns t)(require [prologos::core::conversions :refer [From From-from]])"
+    "(require [prologos::core::conversions :refer []])"
     "(eval (From-from Posit8 Posit16 Posit8-Posit16--From--dict (posit8 64)))")))
   (check-true (string-contains? (last r) "Posit16")))
 
 
 (test-case "from/posit8-to-posit32"
   (define r (run-ns-strings (string-append
-    "(ns t)(require [prologos::core::from-trait :refer [From From-from]])"
-    "(require [prologos::core::from-instances :refer []])"
+    "(ns t)(require [prologos::core::conversions :refer [From From-from]])"
+    "(require [prologos::core::conversions :refer []])"
     "(eval (From-from Posit8 Posit32 Posit8-Posit32--From--dict (posit8 64)))")))
   (check-true (string-contains? (last r) "Posit32")))
 
 
 (test-case "from/posit8-to-posit64"
   (define r (run-ns-strings (string-append
-    "(ns t)(require [prologos::core::from-trait :refer [From From-from]])"
-    "(require [prologos::core::from-instances :refer []])"
+    "(ns t)(require [prologos::core::conversions :refer [From From-from]])"
+    "(require [prologos::core::conversions :refer []])"
     "(eval (From-from Posit8 Posit64 Posit8-Posit64--From--dict (posit8 64)))")))
   (check-true (string-contains? (last r) "Posit64")))
 
 
 (test-case "from/posit16-to-posit32"
   (define r (run-ns-strings (string-append
-    "(ns t)(require [prologos::core::from-trait :refer [From From-from]])"
-    "(require [prologos::core::from-instances :refer []])"
+    "(ns t)(require [prologos::core::conversions :refer [From From-from]])"
+    "(require [prologos::core::conversions :refer []])"
     "(eval (From-from Posit16 Posit32 Posit16-Posit32--From--dict (posit16 16384)))")))
   (check-true (string-contains? (last r) "Posit32")))
 
 
 (test-case "from/posit16-to-posit64"
   (define r (run-ns-strings (string-append
-    "(ns t)(require [prologos::core::from-trait :refer [From From-from]])"
-    "(require [prologos::core::from-instances :refer []])"
+    "(ns t)(require [prologos::core::conversions :refer [From From-from]])"
+    "(require [prologos::core::conversions :refer []])"
     "(eval (From-from Posit16 Posit64 Posit16-Posit64--From--dict (posit16 16384)))")))
   (check-true (string-contains? (last r) "Posit64")))
 
 
 (test-case "from/posit32-to-posit64"
   (define r (run-ns-strings (string-append
-    "(ns t)(require [prologos::core::from-trait :refer [From From-from]])"
-    "(require [prologos::core::from-instances :refer []])"
+    "(ns t)(require [prologos::core::conversions :refer [From From-from]])"
+    "(require [prologos::core::conversions :refer []])"
     "(eval (From-from Posit32 Posit64 Posit32-Posit64--From--dict (posit32 1073741824)))")))
   (check-true (string-contains? (last r) "Posit64")))
 
@@ -144,31 +144,31 @@
 ;; Cross-family posit->rat (4 tests)
 (test-case "from/posit8-to-rat"
   (define r (run-ns-strings (string-append
-    "(ns t)(require [prologos::core::from-trait :refer [From From-from]])"
-    "(require [prologos::core::from-instances :refer []])"
+    "(ns t)(require [prologos::core::conversions :refer [From From-from]])"
+    "(require [prologos::core::conversions :refer []])"
     "(eval (From-from Posit8 Rat Posit8-Rat--From--dict (posit8 64)))")))
   (check-true (string-contains? (last r) "1 : Rat")))
 
 
 (test-case "from/posit16-to-rat"
   (define r (run-ns-strings (string-append
-    "(ns t)(require [prologos::core::from-trait :refer [From From-from]])"
-    "(require [prologos::core::from-instances :refer []])"
+    "(ns t)(require [prologos::core::conversions :refer [From From-from]])"
+    "(require [prologos::core::conversions :refer []])"
     "(eval (From-from Posit16 Rat Posit16-Rat--From--dict (posit16 16384)))")))
   (check-true (string-contains? (last r) "1 : Rat")))
 
 
 (test-case "from/posit32-to-rat"
   (define r (run-ns-strings (string-append
-    "(ns t)(require [prologos::core::from-trait :refer [From From-from]])"
-    "(require [prologos::core::from-instances :refer []])"
+    "(ns t)(require [prologos::core::conversions :refer [From From-from]])"
+    "(require [prologos::core::conversions :refer []])"
     "(eval (From-from Posit32 Rat Posit32-Rat--From--dict (posit32 1073741824)))")))
   (check-true (string-contains? (last r) "1 : Rat")))
 
 
 (test-case "from/posit64-to-rat"
   (define r (run-ns-strings (string-append
-    "(ns t)(require [prologos::core::from-trait :refer [From From-from]])"
-    "(require [prologos::core::from-instances :refer []])"
+    "(ns t)(require [prologos::core::conversions :refer [From From-from]])"
+    "(require [prologos::core::conversions :refer []])"
     "(eval (From-from Posit64 Rat Posit64-Rat--From--dict (posit64 4611686018427387904)))")))
   (check-true (string-contains? (last r) "1 : Rat")))

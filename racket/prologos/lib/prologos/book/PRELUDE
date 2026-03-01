@@ -53,9 +53,8 @@
                                       nat-ord ord-lt ord-le ord-gt ord-ge ord-eq
                                       ord-min ord-max Char--Ord--dict String--Ord--dict]])
 (require [prologos::core::arithmetic :refer [Add Sub Mul Div Neg Abs String--Add--dict]])
-(require [prologos::core::fromint-trait  :refer [FromInt]])
-(require [prologos::core::fromrat-trait  :refer [FromRat]])
-(require [prologos::core::numeric-bundles :refer [Num Fractional]])
+(require [prologos::core::conversions :refer [From Into TryFrom FromInt FromRat]])
+(require [prologos::core::algebra :refer-all])
 (require [prologos::core::lattice-trait   :refer [Lattice Lattice-bot Lattice-join Lattice-leq]])
 (require [prologos::core::collection-traits :refer [Reducible Collection]])
 
@@ -67,9 +66,8 @@
                                            lseq-append lseq-fold lseq-length]])
 (require [prologos::data::set      :refer [set-singleton set-from-list set-symmetric-diff]])
 
-;; ---- Additional trait definitions ----
-(require [prologos::core::additive-identity-trait       :refer-all])
-(require [prologos::core::multiplicative-identity-trait  :refer-all])
+;; ---- Identity traits (in algebra module) ----
+;; AdditiveIdentity, MultiplicativeIdentity, and all instances are in prologos::core::algebra
 
 ;; ---- String operation module ----
 ;; Most ops via str-ops:: alias to avoid conflicts with List names.
@@ -92,18 +90,15 @@
                                                          set-to-seq into-vec
                                                          into-list into-set]])
 
-;; ---- Generic numeric operations ----
-(require [prologos::core::generic-numeric-ops :refer [sum product int-range]])
-
-;; ---- First-class generic arithmetic ----
-(require [prologos::core::generic-arith :refer [plus minus times divide negate-fn abs-fn]])
+;; ---- Generic numeric operations + first-class arithmetic ----
+;; sum, product, int-range, plus, minus, times, divide, negate-fn, abs-fn
+;; are now in prologos::core::algebra (loaded via :refer-all above)
 
 ;; ---- Instance registration (side-effect only, :refer []) ----
 ;; eq-instances + eq-numeric-instances merged into prologos::core::eq
 ;; ord-instances + ord-numeric-instances merged into prologos::core::ord
 ;; add/sub/mul/div/neg/abs traits + instances + add-string-instance merged into prologos::core::arithmetic
-(require [prologos::core::fromint-posit-instances  :refer []])
-(require [prologos::core::fromrat-posit-instances  :refer []])
+;; from/tryfrom/into/fromint/fromrat traits + instances merged into prologos::core::conversions
 
 ;; ---- Char/String trait instances ----
 ;; Dict bindings are referred so they resolve in user code (not just side-effect)
@@ -140,8 +135,8 @@
 (require [prologos::core::seqable-lseq    :refer []])
 (require [prologos::core::buildable-lseq  :refer []])
 
-;; ---- Identity trait instances (side-effect only) ----
-(require [prologos::core::identity-instances :refer []])
+;; ---- Identity trait instances ----
+;; Instances are now in prologos::core::algebra (loaded via :refer-all above)
 
 ;; ---- Generic collection operations (HKT-dispatched) ----
 (require [prologos::core::generic-ops :refer [gmap gfilter gfold glength

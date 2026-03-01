@@ -147,7 +147,7 @@
 (test-case "fromint/int-identity"
   (define r (run-ns-last (string-append
     "(ns t)\n"
-    "(require [prologos::core::fromint-trait :refer [FromInt FromInt-from-integer]])\n"
+    "(require [prologos::core::conversions :refer [FromInt FromInt-from-integer]])\n"
     "(eval (FromInt-from-integer Int Int--FromInt--dict (int 42)))\n")))
   (check-true (string-contains? (format "~a" r) "42 : Int")))
 
@@ -155,7 +155,7 @@
 (test-case "fromint/rat-conversion"
   (define r (run-ns-last (string-append
     "(ns t)\n"
-    "(require [prologos::core::fromint-trait :refer [FromInt FromInt-from-integer]])\n"
+    "(require [prologos::core::conversions :refer [FromInt FromInt-from-integer]])\n"
     "(eval (FromInt-from-integer Rat Rat--FromInt--dict (int 42)))\n")))
   (check-true (string-contains? (format "~a" r) "42 : Rat")))
 
@@ -163,7 +163,7 @@
 (test-case "fromrat/rat-identity"
   (define r (run-ns-last (string-append
     "(ns t)\n"
-    "(require [prologos::core::fromrat-trait :refer [FromRat FromRat-from-rational]])\n"
+    "(require [prologos::core::conversions :refer [FromRat FromRat-from-rational]])\n"
     "(eval (FromRat-from-rational Rat Rat--FromRat--dict (rat 3/7)))\n")))
   (check-true (string-contains? (format "~a" r) "3/7 : Rat")))
 
@@ -176,7 +176,7 @@
   ;; Use Num bundle with Int — all 8 constraints should resolve
   (define results (run-ns-strings (string-append
     "(ns t)\n"
-    "(require [prologos::core::numeric-bundles :refer [Num]])\n"
+    "(require [prologos::core::algebra :refer [Num]])\n"
     "(require [prologos::core::arithmetic :refer []])\n"
     "(require [prologos::core::arithmetic :refer []])\n"
     "(require [prologos::core::arithmetic :refer []])\n"
@@ -196,7 +196,7 @@
   ;; Use Num bundle with Rat
   (define results (run-ns-strings (string-append
     "(ns t)\n"
-    "(require [prologos::core::numeric-bundles :refer [Num]])\n"
+    "(require [prologos::core::algebra :refer [Num]])\n"
     "(require [prologos::core::arithmetic :refer []])\n"
     "(require [prologos::core::arithmetic :refer []])\n"
     "(require [prologos::core::arithmetic :refer []])\n"
@@ -216,7 +216,7 @@
   ;; Nat should fail Num bundle (lacks Neg, Abs, FromInt)
   (define results (run-ns (string-append
     "(ns t)\n"
-    "(require [prologos::core::numeric-bundles :refer [Num]])\n"
+    "(require [prologos::core::algebra :refer [Num]])\n"
     "(require [prologos::core::arithmetic :refer [Add-add]])\n"
     "(spec num-add A A -> A where (Num A))\n"
     "(defn num-add [x y] where (Num A)\n"
@@ -231,7 +231,7 @@
   ;; Fractional with Rat — all 10 constraints resolve
   (define results (run-ns-strings (string-append
     "(ns t)\n"
-    "(require [prologos::core::numeric-bundles :refer [Fractional]])\n"
+    "(require [prologos::core::algebra :refer [Fractional]])\n"
     "(require [prologos::core::arithmetic :refer []])\n"
     "(require [prologos::core::arithmetic :refer []])\n"
     "(require [prologos::core::arithmetic :refer []])\n"

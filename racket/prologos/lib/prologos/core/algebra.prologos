@@ -1,0 +1,211 @@
+ns prologos::core::algebra
+
+require [prologos::core::arithmetic :refer [Add Add-add Sub Sub-sub Mul Mul-mul
+                                            Div Div-div Neg Neg-neg Abs Abs-abs]]
+require [prologos::core::eq         :refer [Eq]]
+require [prologos::core::ord        :refer [Ord]]
+require [prologos::core::conversions   :refer [FromInt FromRat]]
+require [prologos::data::list       :refer [List nil cons reduce]]
+
+;; ========================================
+;; Num Bundle
+;; ========================================
+;; (Num A) expands to:
+;;   (Add A) (Sub A) (Mul A) (Neg A) (Eq A) (Ord A) (Abs A) (FromInt A)
+;;
+;; Applicable types:
+;;   Int — all 8 traits have Int impls
+;;   Rat — all 8 traits have Rat impls (after loading instances)
+;;   Nat — FAILS (lacks Neg, Abs, FromInt → no-instance-error)
+;;   Posit — FAILS until Phase 3f adds FromInt Posit impls
+
+bundle Num := (Add Sub Mul Neg Eq Ord Abs FromInt)
+
+;; ========================================
+;; Fractional Bundle
+;; ========================================
+;; (Fractional A) expands to Num's 8 + (Div A) (FromRat A) = 10 constraints
+;;
+;; Applicable types:
+;;   Rat — all 10 traits have Rat impls
+
+bundle Fractional := (Num Div FromRat)
+
+;; ========================================
+;; AdditiveIdentity Trait — additive zero
+;; ========================================
+;; AdditiveIdentity A = A (single-method: dict IS the zero element)
+;; Generated: deftype AdditiveIdentity, accessor AdditiveIdentity-zero
+
+trait AdditiveIdentity {A}
+  zero : A
+
+;; ========================================
+;; MultiplicativeIdentity Trait — multiplicative one
+;; ========================================
+;; MultiplicativeIdentity A = A (single-method: dict IS the one element)
+;; Generated: deftype MultiplicativeIdentity, accessor MultiplicativeIdentity-one
+
+trait MultiplicativeIdentity {A}
+  one : A
+
+;; ========================================
+;; AdditiveIdentity Instances (zero)
+;; ========================================
+;; The dict IS the zero element (single-method trait where method = value).
+
+(def Int--AdditiveIdentity--dict : [AdditiveIdentity Int] 0)
+(def Rat--AdditiveIdentity--dict : [AdditiveIdentity Rat] 0/1)
+(def Nat--AdditiveIdentity--dict : [AdditiveIdentity Nat] 0N)
+
+;; ========================================
+;; MultiplicativeIdentity Instances (one)
+;; ========================================
+;; The dict IS the one element.
+
+(def Int--MultiplicativeIdentity--dict : [MultiplicativeIdentity Int] 1)
+(def Rat--MultiplicativeIdentity--dict : [MultiplicativeIdentity Rat] 1/1)
+(def Nat--MultiplicativeIdentity--dict : [MultiplicativeIdentity Nat] 1N)
+
+;; ========================================
+;; Posit8 Identity Instances
+;; ========================================
+
+(def Posit8--AdditiveIdentity--dict : [AdditiveIdentity Posit8] [posit8 0])
+(def Posit8--MultiplicativeIdentity--dict : [MultiplicativeIdentity Posit8] [posit8 64])
+
+;; ========================================
+;; Posit16 Identity Instances
+;; ========================================
+
+(def Posit16--AdditiveIdentity--dict : [AdditiveIdentity Posit16] [posit16 0])
+(def Posit16--MultiplicativeIdentity--dict : [MultiplicativeIdentity Posit16] [posit16 16384])
+
+;; ========================================
+;; Posit32 Identity Instances
+;; ========================================
+
+(def Posit32--AdditiveIdentity--dict : [AdditiveIdentity Posit32] [posit32 0])
+(def Posit32--MultiplicativeIdentity--dict : [MultiplicativeIdentity Posit32] [posit32 1073741824])
+
+;; ========================================
+;; Posit64 Identity Instances
+;; ========================================
+
+(def Posit64--AdditiveIdentity--dict : [AdditiveIdentity Posit64] [posit64 0])
+(def Posit64--MultiplicativeIdentity--dict : [MultiplicativeIdentity Posit64] [posit64 4611686018427387904])
+
+;; ========================================
+;; sum — generic additive fold over a list
+;; ========================================
+;; sum [Add A] [AdditiveIdentity A] (List A) -> A
+;; Uses the AdditiveIdentity dict as the zero element and Add-add for accumulation.
+;; Left fold (reduce) for efficiency.
+
+spec sum [Add A] -> [AdditiveIdentity A] -> [List A] -> A
+  :doc "Sum a list using generic addition and an additive identity as zero"
+defn sum [add-dict id-dict xs]
+  reduce A A [fn acc x [Add-add add-dict acc x]] [AdditiveIdentity-zero id-dict] xs
+
+;; ========================================
+;; product — generic multiplicative fold over a list
+;; ========================================
+;; product [Mul A] [MultiplicativeIdentity A] (List A) -> A
+;; Uses MultiplicativeIdentity dict as one, Mul-mul for accumulation.
+
+spec product [Mul A] -> [MultiplicativeIdentity A] -> [List A] -> A
+  :doc "Multiply a list using generic multiplication and a multiplicative identity as one"
+defn product [mul-dict id-dict xs]
+  reduce A A [fn acc x [Mul-mul mul-dict acc x]] [MultiplicativeIdentity-one id-dict] xs
+
+;; ========================================
+;; int-range — generate a list of integers [start .. end-1]
+;; ========================================
+;; int-range : Int -> Int -> List Int
+
+spec int-range Int -> Int -> [List Int]
+  :doc "Generate a list of integers from start (inclusive) to end (exclusive)"
+defn int-range [start end]
+  if [int-lt start end]
+    cons Int start [int-range [int+ start 1] end]
+    nil Int
+
+;; ========================================
+;; First-Class Generic Arithmetic
+;; ========================================
+;; Parser keywords (+, -, *, /, negate, abs) dispatch at the AST level
+;; and can't be passed to higher-order functions like reduce, map, fold.
+;; These wrappers are proper first-class values.
+
+spec plus [Add A] A -> A -> A
+  :doc "First-class addition — pass to higher-order functions like reduce, map"
+defn plus [dict x y]
+  Add-add dict x y
+
+spec minus [Sub A] A -> A -> A
+  :doc "First-class subtraction"
+defn minus [dict x y]
+  Sub-sub dict x y
+
+spec times [Mul A] A -> A -> A
+  :doc "First-class multiplication"
+defn times [dict x y]
+  Mul-mul dict x y
+
+spec divide [Div A] A -> A -> A
+  :doc "First-class division"
+defn divide [dict x y]
+  Div-div dict x y
+
+spec negate-fn [Neg A] A -> A
+  :doc "First-class negation"
+defn negate-fn [dict x]
+  Neg-neg dict x
+
+spec abs-fn [Abs A] A -> A
+  :doc "First-class absolute value"
+defn abs-fn [dict x]
+  Abs-abs dict x
+
+;; ========================================
+;; Algebraic laws — standard property declarations
+;; ========================================
+;; These are metadata-only in Phase 1: they register in the property store
+;; but do not generate code. Phase 2 (QuickCheck) will execute :holds
+;; clauses as randomized tests.
+
+;; --- Semigroup / Monoid / Group ---
+
+(property semigroup-laws ($brace-params A : (Type 0))
+  (- :name "associativity"
+     :forall ($brace-params x : A) ($brace-params y : A) ($brace-params z : A)
+     :holds (eq? (add (add x y) z) (add x (add y z))))
+  ($brace-params :where (Add A) (Eq A)))
+
+(property monoid-laws ($brace-params A : (Type 0))
+  (- :name "left-identity"
+     :forall ($brace-params x : A)
+     :holds (eq? (add additive-identity x) x))
+  (- :name "right-identity"
+     :forall ($brace-params x : A)
+     :holds (eq? (add x additive-identity) x))
+  ($brace-params :includes (semigroup-laws A) :where (Add A) (AdditiveIdentity A) (Eq A)))
+
+;; --- Functor ---
+
+(property functor-laws ($brace-params F : (-> (Type 0) (Type 0)))
+  (- :name "identity"
+     :forall ($brace-params xs : (F A))
+     :holds (eq? (fmap id xs) xs))
+  (- :name "composition"
+     :forall ($brace-params f : (-> A B)) ($brace-params g : (-> B C)) ($brace-params xs : (F A))
+     :holds (eq? (fmap (>> f g) xs) (fmap g (fmap f xs))))
+  ($brace-params :where (Functor F)))
+
+;; --- Commutativity ---
+
+(property commutative-add-laws ($brace-params A : (Type 0))
+  (- :name "commutativity"
+     :forall ($brace-params x : A) ($brace-params y : A)
+     :holds (eq? (add x y) (add y x)))
+  ($brace-params :where (Add A) (Eq A)))
