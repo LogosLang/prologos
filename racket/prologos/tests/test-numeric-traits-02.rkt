@@ -107,8 +107,8 @@
 (test-case "ord/int-lt"
   (define r (run-ns-last (string-append
     "(ns t)\n"
-    "(require [prologos::core::ord-trait :refer [Ord Ord-compare]])\n"
-    "(require [prologos::core::ord-numeric-instances :refer []])\n"
+    "(require [prologos::core::ord :refer [Ord Ord-compare]])\n"
+    "(require [prologos::core::ord :refer []])\n"
     "(eval (Ord-compare Int Int--Ord--dict (int 3) (int 5)))\n")))
   (check-true (string-contains? (format "~a" r) "lt-ord")))
 
@@ -116,8 +116,8 @@
 (test-case "ord/int-eq"
   (define r (run-ns-last (string-append
     "(ns t)\n"
-    "(require [prologos::core::ord-trait :refer [Ord Ord-compare]])\n"
-    "(require [prologos::core::ord-numeric-instances :refer []])\n"
+    "(require [prologos::core::ord :refer [Ord Ord-compare]])\n"
+    "(require [prologos::core::ord :refer []])\n"
     "(eval (Ord-compare Int Int--Ord--dict (int 5) (int 5)))\n")))
   (check-true (string-contains? (format "~a" r) "eq-ord")))
 
@@ -125,8 +125,8 @@
 (test-case "ord/int-gt"
   (define r (run-ns-last (string-append
     "(ns t)\n"
-    "(require [prologos::core::ord-trait :refer [Ord Ord-compare]])\n"
-    "(require [prologos::core::ord-numeric-instances :refer []])\n"
+    "(require [prologos::core::ord :refer [Ord Ord-compare]])\n"
+    "(require [prologos::core::ord :refer []])\n"
     "(eval (Ord-compare Int Int--Ord--dict (int 7) (int 5)))\n")))
   (check-true (string-contains? (format "~a" r) "gt-ord")))
 
@@ -134,8 +134,8 @@
 (test-case "ord/rat-lt"
   (define r (run-ns-last (string-append
     "(ns t)\n"
-    "(require [prologos::core::ord-trait :refer [Ord Ord-compare]])\n"
-    "(require [prologos::core::ord-numeric-instances :refer []])\n"
+    "(require [prologos::core::ord :refer [Ord Ord-compare]])\n"
+    "(require [prologos::core::ord :refer []])\n"
     "(eval (Ord-compare Rat Rat--Ord--dict (rat 1/3) (rat 2/3)))\n")))
   (check-true (string-contains? (format "~a" r) "lt-ord")))
 
@@ -183,7 +183,7 @@
     "(require [prologos::core::neg-instances :refer []])\n"
     "(require [prologos::core::abs-instances :refer []])\n"
     "(require [prologos::core::eq :refer []])\n"
-    "(require [prologos::core::ord-numeric-instances :refer []])\n"
+    "(require [prologos::core::ord :refer []])\n"
     "(require [prologos::core::add-trait :refer [Add-add]])\n"
     "(spec num-add A A -> A where (Num A))\n"
     "(defn num-add [x y] where (Num A)\n"
@@ -203,7 +203,7 @@
     "(require [prologos::core::neg-instances :refer []])\n"
     "(require [prologos::core::abs-instances :refer []])\n"
     "(require [prologos::core::eq :refer []])\n"
-    "(require [prologos::core::ord-numeric-instances :refer []])\n"
+    "(require [prologos::core::ord :refer []])\n"
     "(require [prologos::core::add-trait :refer [Add-add]])\n"
     "(spec num-add A A -> A where (Num A))\n"
     "(defn num-add [x y] where (Num A)\n"
@@ -239,7 +239,7 @@
     "(require [prologos::core::neg-instances :refer []])\n"
     "(require [prologos::core::abs-instances :refer []])\n"
     "(require [prologos::core::eq :refer []])\n"
-    "(require [prologos::core::ord-numeric-instances :refer []])\n"
+    "(require [prologos::core::ord :refer []])\n"
     "(require [prologos::core::div-trait :refer [Div-div]])\n"
     "(spec frac-div A A -> A where (Fractional A))\n"
     "(defn frac-div [x y] where (Fractional A)\n"

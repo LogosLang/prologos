@@ -236,7 +236,7 @@
     (run-ns-last
      (string-append
       "(ns hkt-compat2)\n"
-      "(require [prologos::core::ord-trait :refer [nat-ord ord-lt]])\n"
+      "(require [prologos::core::ord :refer [nat-ord ord-lt]])\n"
       "(eval (ord-lt Nat nat-ord zero (suc zero)))")))
   (check-equal? result "true : Bool"))
 

@@ -941,7 +941,8 @@
                                           prologos::data::char prologos::data::string)
    'prologos::core::eq-derived      '(prologos::core::eq prologos::data::list
                                           prologos::data::bool)
-   'prologos::core::ord-trait        '(prologos::data::ordering prologos::data::nat prologos::data::bool)
+   'prologos::core::ord              '(prologos::data::ordering prologos::data::nat prologos::data::bool
+                                          prologos::data::option prologos::data::char prologos::data::string)
    'prologos::core::add-trait        '(prologos::data::nat)
    'prologos::core::sub-trait        '(prologos::data::nat)
    'prologos::core::mul-trait        '(prologos::data::nat)
@@ -955,13 +956,11 @@
    'prologos::core::tryfrom-trait    '(prologos::data::option)
    'prologos::core::hashable-trait   '(prologos::data::nat)
    'prologos::core::collection-traits '(prologos::data::lseq prologos::data::option)
-   'prologos::core::partialord-trait '(prologos::data::option prologos::data::ordering)
+   ;; partialord-trait merged into prologos::core::ord
 
    ;; Trait instances
    ;; eq-instances, eq-derived, eq-numeric-instances merged into prologos::core::eq
-   'prologos::core::ord-instances         '(prologos::core::ord-trait prologos::data::ordering)
-   'prologos::core::ord-numeric-instances '(prologos::core::ord-trait prologos::data::ordering
-                                          prologos::data::bool)
+   ;; ord-instances, ord-numeric-instances merged into prologos::core::ord
    'prologos::core::add-instances         '(prologos::core::add-trait)
    'prologos::core::sub-instances         '(prologos::core::sub-trait)
    'prologos::core::mul-instances         '(prologos::core::mul-trait)
@@ -982,12 +981,10 @@
 
    ;; Char/String trait instances
    ;; eq-char-instance merged into prologos::core::eq
-   'prologos::core::ord-char-instance       '(prologos::core::ord-trait prologos::data::char
-                                             prologos::data::ordering)
+   ;; ord-char-instance merged into prologos::core::ord
    'prologos::core::hashable-char-instance  '(prologos::core::hashable-trait)
    ;; eq-string-instance merged into prologos::core::eq
-   'prologos::core::ord-string-instance     '(prologos::core::ord-trait prologos::data::string
-                                             prologos::data::ordering)
+   ;; ord-string-instance merged into prologos::core::ord
    'prologos::core::hashable-string-instance '(prologos::core::hashable-trait)
    'prologos::core::add-string-instance     '(prologos::core::add-trait prologos::data::string)
 
@@ -1090,11 +1087,11 @@
    'prologos::data::refined-int          '(prologos::data::option)
    'prologos::data::refined-rat          '(prologos::data::option)
    'prologos::core::refined-int-instances '(prologos::core::eq
-                                            prologos::core::ord-trait
+                                            prologos::core::ord
                                             prologos::data::ordering
                                             prologos::data::refined-int)
    'prologos::core::refined-rat-instances '(prologos::core::eq
-                                            prologos::core::ord-trait
+                                            prologos::core::ord
                                             prologos::data::ordering
                                             prologos::data::refined-rat)
 
@@ -1102,7 +1099,7 @@
    'prologos::core::numeric-bundles '(prologos::core::add-trait prologos::core::sub-trait
                                     prologos::core::mul-trait prologos::core::div-trait
                                     prologos::core::neg-trait prologos::core::abs-trait
-                                    prologos::core::eq prologos::core::ord-trait
+                                    prologos::core::eq prologos::core::ord
                                     prologos::core::fromint-trait prologos::core::fromrat-trait)
    'prologos::core::collection-ops '(prologos::core::seqable-list prologos::core::buildable-list
                                    prologos::data::lseq prologos::data::lseq-ops
@@ -1133,31 +1130,31 @@
                                   prologos::data::ordering prologos::data::pair prologos::data::eq)
    'test-stdlib-02-traits-01.rkt '(prologos::data::nat prologos::data::bool prologos::data::list
                                   prologos::data::option prologos::data::result
-                                  prologos::core::eq prologos::core::ord-trait
+                                  prologos::core::eq prologos::core::ord
                                   prologos::data::ordering)
    'test-stdlib-02-traits-02.rkt '(prologos::data::nat prologos::data::bool prologos::data::list
                                   prologos::data::option prologos::data::result
-                                  prologos::core::eq prologos::core::ord-trait
+                                  prologos::core::eq prologos::core::ord
                                   prologos::data::ordering)
    'test-stdlib-02-traits-03.rkt '(prologos::data::nat prologos::data::bool prologos::data::list
                                   prologos::data::option prologos::data::result
-                                  prologos::core::eq prologos::core::ord-trait
+                                  prologos::core::eq prologos::core::ord
                                   prologos::data::ordering)
    'test-stdlib-02-traits-04.rkt '(prologos::data::nat prologos::data::bool prologos::data::list
                                   prologos::data::option prologos::data::result
-                                  prologos::core::eq prologos::core::ord-trait
+                                  prologos::core::eq prologos::core::ord
                                   prologos::data::ordering)
    'test-stdlib-02-traits-05.rkt '(prologos::data::nat prologos::data::bool prologos::data::list
                                   prologos::data::option prologos::data::result
-                                  prologos::core::eq prologos::core::ord-trait
+                                  prologos::core::eq prologos::core::ord
                                   prologos::data::ordering)
    'test-stdlib-02-traits-06.rkt '(prologos::data::nat prologos::data::bool prologos::data::list
                                   prologos::data::option prologos::data::result
-                                  prologos::core::eq prologos::core::ord-trait
+                                  prologos::core::eq prologos::core::ord
                                   prologos::data::ordering)
    'test-stdlib-02-traits-07.rkt '(prologos::data::nat prologos::data::bool prologos::data::list
                                   prologos::data::option prologos::data::result
-                                  prologos::core::eq prologos::core::ord-trait
+                                  prologos::core::eq prologos::core::ord
                                   prologos::data::ordering)
    'test-stdlib-03-list-01.rkt   '(prologos::data::nat prologos::data::bool prologos::data::list
                                   prologos::data::option prologos::core::eq)
@@ -1217,10 +1214,10 @@
                                   prologos::core::neg-instances prologos::core::abs-instances)
    'test-numeric-traits-01.rkt   '(prologos::data::nat prologos::core::add-trait
                                   prologos::core::sub-trait prologos::core::mul-trait
-                                  prologos::core::eq prologos::core::ord-trait)
+                                  prologos::core::eq prologos::core::ord)
    'test-numeric-traits-02.rkt   '(prologos::data::nat prologos::core::add-trait
                                   prologos::core::sub-trait prologos::core::mul-trait
-                                  prologos::core::eq prologos::core::ord-trait)
+                                  prologos::core::eq prologos::core::ord)
    'test-cross-family-conversions-01.rkt '(prologos::core::from-trait prologos::core::tryfrom-trait
                                         prologos::core::fromint-trait prologos::core::fromrat-trait
                                         prologos::data::nat prologos::data::option)
@@ -1233,11 +1230,11 @@
    'test-subtyping.rkt          '(prologos::data::nat)
    'test-eq-ord-extended-01.rkt  '(prologos::data::nat prologos::data::bool prologos::data::ordering
                                   prologos::data::option prologos::data::list
-                                  prologos::core::eq prologos::core::ord-trait
+                                  prologos::core::eq prologos::core::ord
                                   prologos::core::eq)
    'test-eq-ord-extended-02.rkt  '(prologos::data::nat prologos::data::bool prologos::data::ordering
                                   prologos::data::option prologos::data::list
-                                  prologos::core::eq prologos::core::ord-trait
+                                  prologos::core::eq prologos::core::ord
                                   prologos::core::eq)
    'test-hashable-01.rkt         '(prologos::core::hashable-trait prologos::core::hashable-instances
                                   prologos::data::nat prologos::data::bool prologos::data::ordering
@@ -1312,7 +1309,7 @@
                                   prologos::core::functor-list prologos::core::functor-pvec
                                   prologos::data::nat prologos::data::list prologos::data::lseq)
    'test-coherence.rkt          '(prologos::core::eq prologos::data::nat)
-   'test-bare-methods.rkt       '(prologos::core::eq prologos::core::ord-trait
+   'test-bare-methods.rkt       '(prologos::core::eq prologos::core::ord
                                   prologos::core::add-trait prologos::data::nat)
    'test-hkt-kind.rkt           '(prologos::data::nat prologos::data::option prologos::data::list)
    'test-match-builtins.rkt     '(prologos::data::nat)
@@ -1321,32 +1318,32 @@
    'test-prelude-system-01.rkt   '(prologos::core prologos::data::nat prologos::data::bool
                                   prologos::data::pair prologos::data::ordering prologos::data::eq
                                   prologos::data::list prologos::data::option prologos::data::result
-                                  prologos::core::eq prologos::core::ord-trait
+                                  prologos::core::eq prologos::core::ord
                                   prologos::core::add-trait prologos::core::sub-trait
                                   prologos::core::mul-trait prologos::core::neg-trait
                                   prologos::core::abs-trait prologos::core::fromint-trait
                                   prologos::core::numeric-bundles
                                   prologos::core::eq prologos::core::eq
-                                  prologos::core::ord-instances prologos::core::ord-numeric-instances
+                                  prologos::core::ord prologos::core::ord
                                   prologos::core::add-instances prologos::core::sub-instances
                                   prologos::core::mul-instances prologos::core::neg-instances
                                   prologos::core::abs-instances)
    'test-prelude-system-02.rkt   '(prologos::core prologos::data::nat prologos::data::bool
                                   prologos::data::pair prologos::data::ordering prologos::data::eq
                                   prologos::data::list prologos::data::option prologos::data::result
-                                  prologos::core::eq prologos::core::ord-trait
+                                  prologos::core::eq prologos::core::ord
                                   prologos::core::add-trait prologos::core::sub-trait
                                   prologos::core::mul-trait prologos::core::neg-trait
                                   prologos::core::abs-trait prologos::core::fromint-trait
                                   prologos::core::numeric-bundles
                                   prologos::core::eq prologos::core::eq
-                                  prologos::core::ord-instances prologos::core::ord-numeric-instances
+                                  prologos::core::ord prologos::core::ord
                                   prologos::core::add-instances prologos::core::sub-instances
                                   prologos::core::mul-instances prologos::core::neg-instances
                                   prologos::core::abs-instances)
    'test-auto-implicits.rkt     '(prologos::data::nat)
    'test-kind-inference-where.rkt '(prologos::core::collection-traits prologos::core::collection-traits
-                                    prologos::core::eq prologos::core::ord-trait
+                                    prologos::core::eq prologos::core::ord
                                     prologos::data::lseq)
    'test-sprint10.rkt           '(prologos::data::nat prologos::data::bool)
    'test-surface-defmacro-01.rkt '(prologos::data::nat)
@@ -1360,9 +1357,9 @@
    'test-qtt-pipeline.rkt       '(prologos::data::nat)
    'test-implicit-inference.rkt  '(prologos::data::nat)
    'test-char-string.rkt         '(prologos::data::char prologos::data::string
-                                   prologos::core::eq prologos::core::ord-char-instance
+                                   prologos::core::eq prologos::core::ord
                                    prologos::core::hashable-char-instance
-                                   prologos::core::eq prologos::core::ord-string-instance
+                                   prologos::core::eq prologos::core::ord
                                    prologos::core::hashable-string-instance
                                    prologos::core::add-string-instance)
    'test-string-ops.rkt          '(prologos::data::char prologos::data::string
@@ -1426,13 +1423,13 @@
                                            prologos::core::refined-int-instances
                                            prologos::data::option
                                            prologos::core::eq
-                                           prologos::core::ord-trait
+                                           prologos::core::ord
                                            prologos::data::ordering)
    'test-refined-rat.rkt               '(prologos::data::refined-rat
                                            prologos::core::refined-rat-instances
                                            prologos::data::option
                                            prologos::core::eq
-                                           prologos::core::ord-trait
+                                           prologos::core::ord
                                            prologos::data::ordering)
    'test-refined-subtyping.rkt         '(prologos::data::refined-int
                                            prologos::data::refined-rat
@@ -1440,7 +1437,7 @@
                                            prologos::core::refined-rat-instances
                                            prologos::data::option
                                            prologos::core::eq
-                                           prologos::core::ord-trait
+                                           prologos::core::ord
                                            prologos::data::ordering)))
 
 ;; ============================================================

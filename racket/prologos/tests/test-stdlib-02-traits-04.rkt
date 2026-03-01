@@ -149,34 +149,34 @@
 
 
 ;; ========================================
-;; prologos::core::ord-trait — Ord dictionary-passing
+;; prologos::core::ord — Ord dictionary-passing
 ;; ========================================
 
 (test-case "ord/nat-ord-lt"
   ;; nat-ord 2 5 → lt-ord → match to extract
   (check-equal?
-   (last (run-ns "(ns ord1)\n(require [prologos::core::ord-trait :refer [nat-ord]])\n(require [prologos::data::ordering :refer [Ordering lt-ord eq-ord gt-ord]])\n(eval (the Nat (match (nat-ord (suc (suc zero)) (suc (suc (suc (suc (suc zero)))))) (lt-ord -> zero) (eq-ord -> (suc zero)) (gt-ord -> (suc (suc zero))))))"))
+   (last (run-ns "(ns ord1)\n(require [prologos::core::ord :refer [nat-ord]])\n(require [prologos::data::ordering :refer [Ordering lt-ord eq-ord gt-ord]])\n(eval (the Nat (match (nat-ord (suc (suc zero)) (suc (suc (suc (suc (suc zero)))))) (lt-ord -> zero) (eq-ord -> (suc zero)) (gt-ord -> (suc (suc zero))))))"))
    "0N : Nat"))
 
 
 (test-case "ord/nat-ord-eq"
   ;; nat-ord 3 3 → eq-ord → match to extract
   (check-equal?
-   (last (run-ns "(ns ord2)\n(require [prologos::core::ord-trait :refer [nat-ord]])\n(require [prologos::data::ordering :refer [Ordering lt-ord eq-ord gt-ord]])\n(eval (the Nat (match (nat-ord (suc (suc (suc zero))) (suc (suc (suc zero)))) (lt-ord -> zero) (eq-ord -> (suc zero)) (gt-ord -> (suc (suc zero))))))"))
+   (last (run-ns "(ns ord2)\n(require [prologos::core::ord :refer [nat-ord]])\n(require [prologos::data::ordering :refer [Ordering lt-ord eq-ord gt-ord]])\n(eval (the Nat (match (nat-ord (suc (suc (suc zero))) (suc (suc (suc zero)))) (lt-ord -> zero) (eq-ord -> (suc zero)) (gt-ord -> (suc (suc zero))))))"))
    "1N : Nat"))
 
 
 (test-case "ord/nat-ord-gt"
   ;; nat-ord 5 2 → gt-ord → match to extract
   (check-equal?
-   (last (run-ns "(ns ord3)\n(require [prologos::core::ord-trait :refer [nat-ord]])\n(require [prologos::data::ordering :refer [Ordering lt-ord eq-ord gt-ord]])\n(eval (the Nat (match (nat-ord (suc (suc (suc (suc (suc zero))))) (suc (suc zero))) (lt-ord -> zero) (eq-ord -> (suc zero)) (gt-ord -> (suc (suc zero))))))"))
+   (last (run-ns "(ns ord3)\n(require [prologos::core::ord :refer [nat-ord]])\n(require [prologos::data::ordering :refer [Ordering lt-ord eq-ord gt-ord]])\n(eval (the Nat (match (nat-ord (suc (suc (suc (suc (suc zero))))) (suc (suc zero))) (lt-ord -> zero) (eq-ord -> (suc zero)) (gt-ord -> (suc (suc zero))))))"))
    "2N : Nat"))
 
 
 (test-case "ord/nat-ord-type-check"
   ;; nat-ord : Nat -> Nat -> Ordering (which is Ord Nat after deftype expansion)
   (check-equal?
-   (last (run-ns "(ns ord4)\n(require [prologos::core::ord-trait :refer [nat-ord]])\n(require [prologos::data::ordering :refer [Ordering]])\n(check nat-ord : (-> Nat (-> Nat Ordering)))"))
+   (last (run-ns "(ns ord4)\n(require [prologos::core::ord :refer [nat-ord]])\n(require [prologos::data::ordering :refer [Ordering]])\n(check nat-ord : (-> Nat (-> Nat Ordering)))"))
    "OK"))
 
 
@@ -185,19 +185,19 @@
 (test-case "ord/ord-lt-true"
   ;; ord-lt nat-ord 2 5 = true
   (check-equal?
-   (last (run-ns "(ns ol1)\n(require [prologos::core::ord-trait :refer [nat-ord ord-lt]])\n(eval (ord-lt Nat nat-ord (suc (suc zero)) (suc (suc (suc (suc (suc zero)))))))"))
+   (last (run-ns "(ns ol1)\n(require [prologos::core::ord :refer [nat-ord ord-lt]])\n(eval (ord-lt Nat nat-ord (suc (suc zero)) (suc (suc (suc (suc (suc zero)))))))"))
    "true : Bool"))
 
 
 (test-case "ord/ord-lt-false"
   ;; ord-lt nat-ord 5 2 = false
   (check-equal?
-   (last (run-ns "(ns ol2)\n(require [prologos::core::ord-trait :refer [nat-ord ord-lt]])\n(eval (ord-lt Nat nat-ord (suc (suc (suc (suc (suc zero))))) (suc (suc zero))))"))
+   (last (run-ns "(ns ol2)\n(require [prologos::core::ord :refer [nat-ord ord-lt]])\n(eval (ord-lt Nat nat-ord (suc (suc (suc (suc (suc zero))))) (suc (suc zero))))"))
    "false : Bool"))
 
 
 (test-case "ord/ord-le-eq"
   ;; ord-le nat-ord 3 3 = true
   (check-equal?
-   (last (run-ns "(ns ol3)\n(require [prologos::core::ord-trait :refer [nat-ord ord-le]])\n(eval (ord-le Nat nat-ord (suc (suc (suc zero))) (suc (suc (suc zero)))))"))
+   (last (run-ns "(ns ol3)\n(require [prologos::core::ord :refer [nat-ord ord-le]])\n(eval (ord-le Nat nat-ord (suc (suc (suc zero))) (suc (suc (suc zero)))))"))
    "true : Bool"))

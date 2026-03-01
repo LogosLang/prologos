@@ -1,0 +1,210 @@
+ns prologos::core::ord
+
+require [prologos::data::ordering :refer [Ordering lt-ord eq-ord gt-ord]]
+require [prologos::data::nat      :refer [lt? nat-eq?]]
+require [prologos::data::bool     :refer [not and]]
+require [prologos::data::option   :refer [Option some none]]
+require [prologos::data::char     :as char :refer []]
+require [prologos::data::string   :as str  :refer []]
+
+;; ========================================
+;; Ord Trait — total ordering
+;; ========================================
+
+trait Ord {A}
+  compare : A A -> Ordering
+  :doc "Total ordering: compares two values and returns lt-ord, eq-ord, or gt-ord"
+  :laws
+    - :name "reflexive"
+      :forall {x : A}
+      :holds [ord-eq [compare x x] eq-ord]
+    - :name "transitive"
+      :forall {x y z : A}
+      :holds [if [and [ord-eq [compare x y] lt-ord] [ord-eq [compare y z] lt-ord]] [ord-eq [compare x z] lt-ord] true]
+    - :name "antisymmetric"
+      :forall {x y : A}
+      :holds [if [and [ord-le x y] [ord-le y x]] [ord-eq [compare x y] eq-ord] true]
+    - :name "total"
+      :forall {x y : A}
+      :holds [or [ord-le x y] [ord-le y x]]
+
+;; ========================================
+;; PartialOrd Trait
+;; ========================================
+;; A partial order supports comparison that may be incomparable.
+;; partial-compare : A A -> Option Ordering
+;; Returns (some ordering) for comparable elements, (none) for incomparable.
+;; Needed for lattice types in propagator integration.
+
+trait PartialOrd {A}
+  partial-compare : A A -> [Option Ordering]
+
+;; ========================================
+;; Ord Nat
+;; ========================================
+
+impl Ord Nat
+  defn compare [x y] <Ordering>
+    match [lt? x y]
+      | true  -> lt-ord
+      | false -> match [nat-eq? x y]
+                   | true  -> eq-ord
+                   | false -> gt-ord
+
+;; Backward-compatible alias
+def nat-ord Nat--Ord--dict
+
+;; Derived operations from an Ord dictionary
+
+;; Less than
+spec ord-lt [Ord A] A A -> Bool
+  :doc "Strict less-than derived from compare"
+defn ord-lt [dict x y]
+  match [dict x y]
+    | lt-ord -> true
+    | eq-ord -> false
+    | gt-ord -> false
+
+;; Less than or equal
+spec ord-le [Ord A] A A -> Bool
+  :doc "Less-than-or-equal derived from compare"
+defn ord-le [dict x y]
+  match [dict x y]
+    | lt-ord -> true
+    | eq-ord -> true
+    | gt-ord -> false
+
+;; Greater than
+spec ord-gt [Ord A] A A -> Bool
+  :doc "Strict greater-than derived from compare"
+defn ord-gt [dict x y]
+  match [dict x y]
+    | lt-ord -> false
+    | eq-ord -> false
+    | gt-ord -> true
+
+;; Greater than or equal
+spec ord-ge [Ord A] A A -> Bool
+  :doc "Greater-than-or-equal derived from compare"
+defn ord-ge [dict x y]
+  match [dict x y]
+    | lt-ord -> false
+    | eq-ord -> true
+    | gt-ord -> true
+
+;; Equal (derived from Ord)
+spec ord-eq [Ord A] A A -> Bool
+  :doc "Equality derived from compare (returns true when compare yields eq-ord)"
+defn ord-eq [dict x y]
+  match [dict x y]
+    | lt-ord -> false
+    | eq-ord -> true
+    | gt-ord -> false
+
+;; Minimum
+spec ord-min [Ord A] A A -> A
+  :doc "Returns the lesser of two values (first on tie)"
+defn ord-min [dict x y]
+  match [dict x y]
+    | lt-ord -> x
+    | eq-ord -> x
+    | gt-ord -> y
+
+;; Maximum
+spec ord-max [Ord A] A A -> A
+  :doc "Returns the greater of two values (first on tie)"
+defn ord-max [dict x y]
+  match [dict x y]
+    | lt-ord -> y
+    | eq-ord -> x
+    | gt-ord -> x
+
+;; ========================================
+;; Ord Bool — false < true
+;; ========================================
+
+impl Ord Bool
+  defn compare [x : Bool y : Bool] <Ordering>
+    if x
+      [if y eq-ord gt-ord]
+      [if y lt-ord eq-ord]
+
+;; ========================================
+;; Ord Int
+;; ========================================
+
+impl Ord Int
+  defn compare [x : Int  y : Int] <Ordering>
+    if [int-lt x y] lt-ord
+      [if [int-eq x y] eq-ord gt-ord]
+
+;; ========================================
+;; Ord Rat
+;; ========================================
+
+impl Ord Rat
+  defn compare [x : Rat  y : Rat] <Ordering>
+    if [rat-lt x y] lt-ord
+      [if [rat-eq x y] eq-ord gt-ord]
+
+;; ========================================
+;; Ord Posit8
+;; ========================================
+;; No p8-eq primitive; derive eq from p8-le:
+;; eq?(x,y) = and(le(x,y), le(y,x))
+
+impl Ord Posit8
+  defn compare [x : Posit8  y : Posit8] <Ordering>
+    if [p8-lt x y] lt-ord
+      [if [and [p8-le x y] [p8-le y x]] eq-ord gt-ord]
+
+;; ========================================
+;; Ord Posit16
+;; ========================================
+
+impl Ord Posit16
+  defn compare [x : Posit16  y : Posit16] <Ordering>
+    if [p16-lt x y] lt-ord
+      [if [and [p16-le x y] [p16-le y x]] eq-ord gt-ord]
+
+;; ========================================
+;; Ord Posit32
+;; ========================================
+
+impl Ord Posit32
+  defn compare [x : Posit32  y : Posit32] <Ordering>
+    if [p32-lt x y] lt-ord
+      [if [and [p32-le x y] [p32-le y x]] eq-ord gt-ord]
+
+;; ========================================
+;; Ord Posit64
+;; ========================================
+
+impl Ord Posit64
+  defn compare [x : Posit64  y : Posit64] <Ordering>
+    if [p64-lt x y] lt-ord
+      [if [and [p64-le x y] [p64-le y x]] eq-ord gt-ord]
+
+;; ========================================
+;; Ord Char — by Unicode code point
+;; ========================================
+
+impl Ord Char
+  defn compare [x : Char  y : Char] <Ordering>
+    if [char::lt x y]
+      lt-ord
+      [if [char::eq x y]
+        eq-ord
+        gt-ord]
+
+;; ========================================
+;; Ord String — lexicographic ordering
+;; ========================================
+
+impl Ord String
+  defn compare [x : String  y : String] <Ordering>
+    if [str::lt x y]
+      lt-ord
+      [if [str::eq x y]
+        eq-ord
+        gt-ord]

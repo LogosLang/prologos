@@ -359,9 +359,9 @@
 
     ;; ---- Core traits (type class definitions) ----
     (require [prologos::core::eq :refer [Eq eq-neq nat-eq Char--Eq--dict String--Eq--dict]])
-    (require [prologos::core::ord-trait :refer [Ord nat-ord ord-lt ord-le
-                                               ord-gt ord-ge ord-eq
-                                               ord-min ord-max]])
+    (require [prologos::core::ord :refer [Ord PartialOrd PartialOrd-partial-compare
+                                          nat-ord ord-lt ord-le ord-gt ord-ge ord-eq
+                                          ord-min ord-max Char--Ord--dict String--Ord--dict]])
     (require [prologos::core::add-trait      :refer [Add]])
     (require [prologos::core::sub-trait      :refer [Sub]])
     (require [prologos::core::mul-trait      :refer [Mul]])
@@ -415,8 +415,7 @@
 
     ;; ---- Instance registration (side-effect only, :refer []) ----
     ;; eq-instances + eq-numeric-instances merged into prologos::core::eq
-    (require [prologos::core::ord-instances         :refer []])
-    (require [prologos::core::ord-numeric-instances :refer []])
+    ;; ord-instances + ord-numeric-instances merged into prologos::core::ord
     (require [prologos::core::add-instances         :refer []])
     (require [prologos::core::sub-instances         :refer []])
     (require [prologos::core::mul-instances         :refer []])
@@ -429,10 +428,10 @@
     ;; ---- Char/String trait instances ----
     ;; Dict bindings are referred so they resolve in user code (not just side-effect)
     ;; eq-char-instance merged into prologos::core::eq
-    (require [prologos::core::ord-char-instance       :refer [Char--Ord--dict]])
+    ;; ord-char-instance merged into prologos::core::ord
     (require [prologos::core::hashable-char-instance  :refer [Char--Hashable--dict]])
     ;; eq-string-instance merged into prologos::core::eq
-    (require [prologos::core::ord-string-instance     :refer [String--Ord--dict]])
+    ;; ord-string-instance merged into prologos::core::ord
     (require [prologos::core::hashable-string-instance :refer [String--Hashable--dict]])
     (require [prologos::core::add-string-instance     :refer [String--Add--dict]])
 
