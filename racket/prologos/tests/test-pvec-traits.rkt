@@ -59,12 +59,10 @@
 
 (define preamble
   "(ns test)
-(require (prologos::core::seqable-pvec    :refer (PVec--Seqable--dict)))
-(require (prologos::core::buildable-pvec  :refer (PVec--Buildable--dict)))
-(require (prologos::core::foldable-pvec   :refer (pvec-foldable)))
-(require (prologos::core::functor-pvec    :refer (pvec-functor)))
-(require (prologos::core::indexed-pvec    :refer (PVec--Indexed--dict pvec-idx-nth pvec-idx-length pvec-idx-update)))
-(require (prologos::core::pvec-ops        :refer (pvec-any? pvec-all? pvec-from-list-fn pvec-to-list-fn)))
+(require (prologos::core::pvec :refer (PVec--Seqable--dict PVec--Buildable--dict
+                                       pvec-foldable pvec-functor
+                                       PVec--Indexed--dict pvec-idx-nth pvec-idx-length pvec-idx-update
+                                       pvec-any? pvec-all? pvec-from-list-fn pvec-to-list-fn)))
 (require (prologos::data::lseq            :refer (LSeq lseq-nil lseq-cell)))
 (require (prologos::data::lseq-ops        :refer (lseq-to-list list-to-lseq)))
 (require (prologos::data::option          :refer (Option some none)))

@@ -1,9 +1,6 @@
 ns prologos::core::propagator
 
-require [prologos::core::lattice-trait :refer-all]
-require [prologos::core::lattice-instances :refer [Interval interval-bot interval-join]]
-require [prologos::core::widenable-trait :refer [Widenable Widenable-widen Widenable-narrow]]
-require [prologos::core::widenable-instances :refer []]
+require [prologos::core::lattice :refer-all]
 
 ;; ========================================
 ;; Propagator Library Helpers

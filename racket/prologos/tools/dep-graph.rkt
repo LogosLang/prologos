@@ -220,30 +220,22 @@
    (test-dep '(syntax.rkt prelude.rkt substitution.rkt reduction.rkt typing-core.rkt
                pretty-print.rkt driver.rkt global-env.rkt rrb.rkt namespace.rkt
                macros.rkt qtt.rkt)
-             '(prologos::core::seqable-pvec prologos::core::buildable-pvec
-               prologos::core::foldable-pvec prologos::core::functor-pvec
-               prologos::core::indexed-pvec prologos::core::pvec-ops))
+             '(prologos::core::pvec))
    'test-map-set-traits-01.rkt
    (test-dep '(syntax.rkt prelude.rkt substitution.rkt reduction.rkt typing-core.rkt
                pretty-print.rkt driver.rkt global-env.rkt namespace.rkt
                macros.rkt qtt.rkt champ.rkt)
-             '(prologos::core::keyed-map prologos::core::setlike-set
-               prologos::core::seqable-set prologos::core::buildable-set
-               prologos::core::foldable-set prologos::core::set-ops
-               prologos::core::map-ops))
+             '(prologos::core::set prologos::core::map))
    'test-map-set-traits-02.rkt
    (test-dep '(syntax.rkt prelude.rkt substitution.rkt reduction.rkt typing-core.rkt
                pretty-print.rkt driver.rkt global-env.rkt namespace.rkt
                macros.rkt qtt.rkt champ.rkt)
-             '(prologos::core::keyed-map prologos::core::setlike-set
-               prologos::core::seqable-set prologos::core::buildable-set
-               prologos::core::foldable-set prologos::core::set-ops
-               prologos::core::map-ops))
+             '(prologos::core::set prologos::core::map))
    'test-pvec-ops-eval.rkt
    (test-dep '(syntax.rkt prelude.rkt substitution.rkt reduction.rkt typing-core.rkt
                pretty-print.rkt driver.rkt global-env.rkt rrb.rkt namespace.rkt
                macros.rkt qtt.rkt)
-             '(prologos::core::pvec-ops))
+             '(prologos::core::pvec))
    'test-pvec-fold.rkt
    (test-dep '(syntax.rkt prelude.rkt substitution.rkt reduction.rkt typing-core.rkt
                pretty-print.rkt driver.rkt global-env.rkt rrb.rkt namespace.rkt
@@ -258,12 +250,12 @@
    (test-dep '(syntax.rkt prelude.rkt substitution.rkt reduction.rkt typing-core.rkt
                pretty-print.rkt driver.rkt global-env.rkt namespace.rkt
                macros.rkt qtt.rkt champ.rkt)
-             '(prologos::core::set-ops))
+             '(prologos::core::set))
    'test-map-ops-eval.rkt
    (test-dep '(syntax.rkt prelude.rkt substitution.rkt reduction.rkt typing-core.rkt
                pretty-print.rkt driver.rkt global-env.rkt namespace.rkt
                macros.rkt qtt.rkt champ.rkt)
-             '(prologos::core::map-ops))
+             '(prologos::core::map))
    'test-map-entry.rkt
    (test-dep '(syntax.rkt prelude.rkt substitution.rkt reduction.rkt typing-core.rkt
                pretty-print.rkt driver.rkt global-env.rkt namespace.rkt
@@ -273,13 +265,12 @@
    (test-dep '(syntax.rkt prelude.rkt substitution.rkt reduction.rkt typing-core.rkt
                pretty-print.rkt driver.rkt global-env.rkt namespace.rkt
                macros.rkt qtt.rkt champ.rkt)
-             '(prologos::data::map-entry prologos::core::map-ops))
+             '(prologos::data::map-entry prologos::core::map))
    'test-lseq-traits.rkt
    (test-dep '(syntax.rkt prelude.rkt substitution.rkt reduction.rkt typing-core.rkt
                pretty-print.rkt driver.rkt global-env.rkt namespace.rkt
                macros.rkt qtt.rkt)
-             '(prologos::core::seq-lseq prologos::core::foldable-lseq
-               prologos::core::seqable-lseq prologos::core::buildable-lseq))
+             '(prologos::core::lseq))
    'test-identity-generic-ops.rkt
    (test-dep '(syntax.rkt prelude.rkt substitution.rkt reduction.rkt typing-core.rkt
                pretty-print.rkt driver.rkt global-env.rkt namespace.rkt
@@ -759,8 +750,7 @@
    (test-dep '(syntax.rkt prelude.rkt substitution.rkt reduction.rkt typing-core.rkt
                pretty-print.rkt driver.rkt global-env.rkt namespace.rkt
                macros.rkt qtt.rkt)
-             '(prologos::core::lattice-trait
-               prologos::core::lattice-instances))
+             '(prologos::core::lattice))
    'test-propagator.rkt
    (test-dep '(propagator.rkt champ.rkt) #f)
    'test-propagator-network.rkt
@@ -976,114 +966,58 @@
                                     prologos::data::list prologos::data::option
                                     prologos::data::pair)
 
-   ;; Collection trait instances
-   'prologos::core::seq-list       '(prologos::core::collection-traits prologos::data::list
-                                   prologos::data::option)
-   'prologos::core::seqable-list   '(prologos::core::collection-traits prologos::data::lseq
-                                   prologos::data::lseq-ops prologos::data::list)
-   'prologos::core::buildable-list '(prologos::core::collection-traits prologos::data::lseq
-                                   prologos::data::lseq-ops prologos::data::list)
-   'prologos::core::indexed-list   '(prologos::core::collection-traits prologos::data::option
-                                   prologos::data::list prologos::data::nat)
-   'prologos::core::foldable-list  '(prologos::core::collection-traits prologos::data::list)
-   'prologos::core::reducible-list '(prologos::core::collection-traits prologos::data::list)
-   'prologos::core::functor-list   '(prologos::core::collection-traits prologos::data::list)
-   ;; PVec trait instances
-   'prologos::core::seqable-pvec   '(prologos::core::collection-traits prologos::data::lseq
-                                    prologos::data::lseq-ops prologos::data::list)
-   'prologos::core::buildable-pvec '(prologos::core::collection-traits prologos::data::lseq
-                                    prologos::data::lseq-ops prologos::data::list)
-   'prologos::core::indexed-pvec   '(prologos::core::collection-traits prologos::data::option
-                                    prologos::data::nat)
-   'prologos::core::foldable-pvec  '(prologos::core::collection-traits prologos::data::list)
-   'prologos::core::reducible-pvec '(prologos::core::collection-traits)
-   'prologos::core::functor-pvec   '(prologos::core::collection-traits prologos::data::list)
-   'prologos::core::pvec-ops       '(prologos::data::list prologos::data::option)
-   ;; Set trait instances
-   'prologos::core::seqable-set    '(prologos::core::collection-traits prologos::data::lseq
-                                     prologos::data::lseq-ops prologos::data::list)
-   'prologos::core::buildable-set  '(prologos::core::collection-traits prologos::data::lseq
-                                     prologos::data::lseq-ops prologos::data::list)
-   'prologos::core::foldable-set   '(prologos::core::collection-traits)
-   'prologos::core::reducible-set  '(prologos::core::collection-traits)
-   'prologos::core::setlike-set    '()
-   'prologos::core::set-ops        '(prologos::data::list prologos::data::option)
-   ;; LSeq trait instances
-   'prologos::core::seqable-lseq   '(prologos::core::collection-traits prologos::data::lseq)
-   'prologos::core::buildable-lseq '(prologos::core::collection-traits prologos::data::lseq)
-   'prologos::core::foldable-lseq  '(prologos::core::collection-traits prologos::data::lseq
-                                     prologos::data::lseq-ops prologos::data::list)
-   'prologos::core::reducible-lseq '(prologos::core::collection-traits prologos::data::lseq
-                                     prologos::data::lseq-ops)
-   'prologos::core::seq-lseq       '(prologos::core::collection-traits prologos::data::lseq
+   ;; Collection trait instances (consolidated by type)
+   ;; list: Seqable, Buildable, Foldable, Reducible, Indexed, Functor, Seq
+   'prologos::core::list           '(prologos::core::collection-traits prologos::data::list
+                                     prologos::data::lseq prologos::data::lseq-ops
+                                     prologos::data::option prologos::data::nat)
+   ;; pvec: Seqable, Buildable, Foldable, Reducible, Indexed, Functor + ops
+   'prologos::core::pvec           '(prologos::core::collection-traits prologos::data::list
+                                     prologos::data::lseq prologos::data::lseq-ops
+                                     prologos::data::option prologos::data::nat)
+   ;; set: Seqable, Buildable, Foldable, Reducible, Setlike + ops
+   'prologos::core::set            '(prologos::core::collection-traits prologos::data::list
+                                     prologos::data::lseq prologos::data::lseq-ops)
+   ;; lseq: Seqable, Buildable, Foldable, Reducible, Seq
+   'prologos::core::lseq           '(prologos::core::collection-traits prologos::data::lseq
+                                     prologos::data::lseq-ops prologos::data::list
                                      prologos::data::option)
+   ;; map: Keyed + ops
+   'prologos::core::map            '(prologos::core::collection-traits prologos::data::option
+                                     prologos::data::list prologos::data::map-entry
+                                     prologos::data::lseq prologos::data::lseq-ops)
    'prologos::core::seq-functions  '(prologos::core::collection-traits prologos::data::option
                                    prologos::data::list)
 
-   ;; Lattice trait + instances
-   'prologos::core::lattice-trait      '()
-   'prologos::core::lattice-instances  '(prologos::core::lattice-trait
-                                         prologos::core::eq
-                                         prologos::data::bool)
-
-   ;; HasTop trait + instances + BoundedLattice + propagator helpers
-   'prologos::core::has-top-trait      '()
-   'prologos::core::has-top-instances  '(prologos::core::has-top-trait
-                                         prologos::core::lattice-instances)
-   'prologos::core::bounded-lattice    '(prologos::core::lattice-trait
-                                         prologos::core::has-top-trait)
-   'prologos::core::propagator         '(prologos::core::lattice-trait
-                                         prologos::core::lattice-instances
-                                         prologos::core::widenable-trait
-                                         prologos::core::widenable-instances)
-
-   ;; Widenable trait + instances (Phase 6a: widening/narrowing for infinite-height lattices)
-   'prologos::core::widenable-trait     '()
-   'prologos::core::widenable-instances '(prologos::core::widenable-trait
-                                          prologos::core::lattice-instances
+   ;; Consolidated lattice hierarchy (lattice-trait + lattice-instances + has-top-trait +
+   ;; has-top-instances + bounded-lattice + widenable-trait + widenable-instances +
+   ;; galois-trait + galois-instances)
+   'prologos::core::lattice             '(prologos::core::eq
                                           prologos::data::bool)
+   'prologos::core::propagator          '(prologos::core::lattice)
 
-   ;; GaloisConnection trait + instances (Phase 6b: abstract interpretation)
-   'prologos::core::galois-trait        '()
-   'prologos::core::galois-instances    '(prologos::core::galois-trait
-                                          prologos::core::lattice-instances
-                                          prologos::data::bool)
-
-   ;; Sign-Galois connection (Phase 6 deferred, now complete)
-   'prologos::core::sign-galois         '(prologos::core::galois-trait
-                                          prologos::core::lattice-instances
-                                          prologos::data::sign
-                                          prologos::data::bool)
-
-   ;; Abstract domain library modules (Phase 6d)
+   ;; Consolidated abstract domains (sign-lattice + sign-galois + parity-lattice +
+   ;; refined-int-instances + refined-rat-instances)
    'prologos::data::sign                '()
-   'prologos::core::sign-lattice        '(prologos::data::sign
-                                          prologos::core::lattice-trait
-                                          prologos::core::has-top-trait
-                                          prologos::data::bool)
    'prologos::data::parity              '()
-   'prologos::core::parity-lattice      '(prologos::data::parity
-                                          prologos::core::lattice-trait
-                                          prologos::core::has-top-trait)
-
-   ;; Refined numeric types (Phase D: PosInt/NegInt/Zero, PosRat/NegRat)
-   'prologos::data::refined-int          '(prologos::data::option)
-   'prologos::data::refined-rat          '(prologos::data::option)
-   'prologos::core::refined-int-instances '(prologos::core::eq
-                                            prologos::core::ord
-                                            prologos::data::ordering
-                                            prologos::data::refined-int)
-   'prologos::core::refined-rat-instances '(prologos::core::eq
-                                            prologos::core::ord
-                                            prologos::data::ordering
-                                            prologos::data::refined-rat)
+   'prologos::data::refined-int         '(prologos::data::option)
+   'prologos::data::refined-rat         '(prologos::data::option)
+   'prologos::core::abstract-domains    '(prologos::data::sign
+                                          prologos::data::parity
+                                          prologos::core::lattice
+                                          prologos::core::eq
+                                          prologos::core::ord
+                                          prologos::data::ordering
+                                          prologos::data::refined-int
+                                          prologos::data::refined-rat
+                                          prologos::data::bool)
 
    ;; Higher-level abstractions
    'prologos::core::algebra '(prologos::core::arithmetic
                               prologos::core::eq prologos::core::ord
                               prologos::core::conversions
                               prologos::data::list)
-   'prologos::core::collection-ops '(prologos::core::seqable-list prologos::core::buildable-list
+   'prologos::core::collection-ops '(prologos::core::list
                                    prologos::data::lseq prologos::data::lseq-ops
                                    prologos::data::list)))
 
@@ -1161,23 +1095,23 @@
    'test-trait-impl-01.rkt       '(prologos::data::nat prologos::data::bool prologos::data::option
                                   prologos::data::either prologos::data::list
                                   prologos::core::eq prologos::core::collection-traits
-                                  prologos::core::seq-list prologos::core::seq-functions)
+                                  prologos::core::list prologos::core::seq-functions)
    'test-trait-impl-02.rkt       '(prologos::data::nat prologos::data::bool prologos::data::option
                                   prologos::data::either prologos::data::list
                                   prologos::core::eq prologos::core::collection-traits
-                                  prologos::core::seq-list prologos::core::seq-functions)
+                                  prologos::core::list prologos::core::seq-functions)
    'test-trait-impl-03.rkt       '(prologos::data::nat prologos::data::bool prologos::data::option
                                   prologos::data::either prologos::data::list
                                   prologos::core::eq prologos::core::collection-traits
-                                  prologos::core::seq-list prologos::core::seq-functions)
+                                  prologos::core::list prologos::core::seq-functions)
    'test-trait-impl-04-01.rkt     '(prologos::data::nat prologos::data::bool prologos::data::option
                                   prologos::data::either prologos::data::list
                                   prologos::core::eq prologos::core::collection-traits
-                                  prologos::core::seq-list prologos::core::seq-functions)
+                                  prologos::core::list prologos::core::seq-functions)
    'test-trait-impl-04-02.rkt     '(prologos::data::nat prologos::data::bool prologos::data::option
                                   prologos::data::either prologos::data::list
                                   prologos::core::eq prologos::core::collection-traits
-                                  prologos::core::seq-list prologos::core::seq-functions)
+                                  prologos::core::list prologos::core::seq-functions)
    'test-trait-resolution.rkt   '(prologos::data::nat prologos::data::bool prologos::core::eq)
    'test-method-resolution.rkt  '(prologos::data::nat prologos::data::bool prologos::core::eq
                                   prologos::core::arithmetic)
@@ -1222,20 +1156,15 @@
                                   prologos::data::nat prologos::data::bool prologos::data::ordering
                                   prologos::data::option prologos::data::list)
    'test-collection-traits-01.rkt '(prologos::data::list prologos::data::nat prologos::data::option
-                                  prologos::core::indexed-list prologos::core::foldable-list
-                                  prologos::core::functor-list prologos::core::seq-list
-                                  prologos::core::seqable-list prologos::core::buildable-list
+                                  prologos::core::list
                                   prologos::core::collection-ops)
    'test-collection-traits-02.rkt '(prologos::data::list prologos::data::nat prologos::data::option
-                                  prologos::core::indexed-list prologos::core::foldable-list
-                                  prologos::core::functor-list prologos::core::seq-list
-                                  prologos::core::seqable-list prologos::core::buildable-list
+                                  prologos::core::list
                                   prologos::core::collection-ops)
    'test-reducible.rkt            '(prologos::core::collection-traits prologos::core::collection-traits
-                                  prologos::core::reducible-list prologos::core::reducible-pvec
-                                  prologos::core::reducible-set prologos::core::reducible-lseq
-                                  prologos::core::buildable-list prologos::core::buildable-pvec
-                                  prologos::core::buildable-set prologos::core::collection-fns
+                                  prologos::core::list prologos::core::pvec
+                                  prologos::core::set prologos::core::lseq
+                                  prologos::core::collection-fns
                                   prologos::data::list prologos::data::nat prologos::data::option
                                   prologos::data::lseq prologos::data::lseq-ops)
    'test-generic-ops-01-01.rkt    '(prologos::data::list prologos::data::nat prologos::data::option
@@ -1281,11 +1210,8 @@
                                   prologos::data::lseq prologos::data::nat)
    'test-hkt-impl.rkt           '(prologos::core::collection-traits prologos::core::collection-traits
                                   prologos::core::collection-traits prologos::core::collection-traits
-                                  prologos::core::seqable-list prologos::core::seqable-pvec
-                                  prologos::core::seqable-lseq prologos::core::seqable-set
-                                  prologos::core::buildable-list prologos::core::buildable-pvec
-                                  prologos::core::foldable-list prologos::core::foldable-pvec
-                                  prologos::core::functor-list prologos::core::functor-pvec
+                                  prologos::core::list prologos::core::pvec
+                                  prologos::core::lseq prologos::core::set
                                   prologos::data::nat prologos::data::list prologos::data::lseq)
    'test-coherence.rkt          '(prologos::core::eq prologos::data::nat)
    'test-bare-methods.rkt       '(prologos::core::eq prologos::core::ord
@@ -1343,75 +1269,49 @@
                                    prologos::core::string-ops
                                    prologos::data::list prologos::data::option
                                    prologos::data::pair)
-   'test-lattice.rkt             '(prologos::core::lattice-trait
-                                   prologos::core::lattice-instances
+   'test-lattice.rkt             '(prologos::core::lattice
                                    prologos::core::eq
                                    prologos::data::bool)
-   'test-propagator-lvar.rkt     '(prologos::core::has-top-trait
-                                   prologos::core::has-top-instances
-                                   prologos::core::bounded-lattice
+   'test-propagator-lvar.rkt     '(prologos::core::lattice
                                    prologos::core::propagator
-                                   prologos::core::lattice-trait
-                                   prologos::core::lattice-instances
                                    prologos::data::bool)
    'test-new-lattice-cell.rkt    '(prologos::core::propagator
-                                   prologos::core::lattice-trait
-                                   prologos::core::lattice-instances)
+                                   prologos::core::lattice)
    'test-call-site-specialization.rkt '(prologos::core::propagator
-                                        prologos::core::lattice-trait
-                                        prologos::core::lattice-instances)
-   'test-widenable-trait.rkt          '(prologos::core::widenable-trait
-                                        prologos::core::widenable-instances
-                                        prologos::core::propagator
-                                        prologos::core::lattice-trait
-                                        prologos::core::lattice-instances)
-   'test-galois-connection.rkt        '(prologos::core::galois-trait
-                                        prologos::core::galois-instances
-                                        prologos::core::lattice-instances)
-   'test-sign-galois.rkt              '(prologos::core::galois-trait
-                                        prologos::core::galois-instances
-                                        prologos::core::sign-galois
-                                        prologos::core::lattice-instances
+                                        prologos::core::lattice)
+   'test-widenable-trait.rkt          '(prologos::core::lattice
+                                        prologos::core::propagator)
+   'test-galois-connection.rkt        '(prologos::core::lattice)
+   'test-sign-galois.rkt              '(prologos::core::lattice
+                                        prologos::core::abstract-domains
                                         prologos::data::sign
                                         prologos::data::bool)
    'test-abstract-domains.rkt         '(prologos::data::sign
-                                        prologos::core::sign-lattice
                                         prologos::data::parity
-                                        prologos::core::parity-lattice
-                                        prologos::core::lattice-trait
-                                        prologos::core::has-top-trait)
+                                        prologos::core::lattice
+                                        prologos::core::abstract-domains)
    'test-widen-specialization.rkt     '(prologos::core::propagator
-                                        prologos::core::widenable-trait
-                                        prologos::core::widenable-instances
-                                        prologos::core::lattice-trait
-                                        prologos::core::lattice-instances)
+                                        prologos::core::lattice)
    'test-abstract-interpretation-e2e.rkt '(prologos::core::propagator
-                                           prologos::core::widenable-trait
-                                           prologos::core::widenable-instances
-                                           prologos::core::galois-trait
-                                           prologos::core::galois-instances
-                                           prologos::core::lattice-trait
-                                           prologos::core::lattice-instances
+                                           prologos::core::lattice
+                                           prologos::core::abstract-domains
                                            prologos::data::sign
-                                           prologos::core::sign-lattice
-                                           prologos::data::parity
-                                           prologos::core::parity-lattice)
+                                           prologos::data::parity)
    'test-refined-int.rkt               '(prologos::data::refined-int
-                                           prologos::core::refined-int-instances
+                                           prologos::core::abstract-domains
                                            prologos::data::option
                                            prologos::core::eq
                                            prologos::core::ord
                                            prologos::data::ordering)
    'test-refined-rat.rkt               '(prologos::data::refined-rat
-                                           prologos::core::refined-rat-instances
+                                           prologos::core::abstract-domains
                                            prologos::data::option
                                            prologos::core::eq
                                            prologos::core::ord
                                            prologos::data::ordering)
    'test-refined-subtyping.rkt         '(prologos::data::refined-int
                                            prologos::data::refined-rat
-                                           prologos::core::refined-int-instances
-                                           prologos::core::refined-rat-instances
+                                           prologos::core::abstract-domains
                                            prologos::data::option
                                            prologos::core::eq
                                            prologos::core::ord

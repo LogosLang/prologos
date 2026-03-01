@@ -1,0 +1,96 @@
+ns prologos::core::lseq
+
+require [prologos::core::collection-traits :refer [Seqable
+                                                    Buildable
+                                                    Foldable
+                                                    Reducible
+                                                    Seq]]
+require [prologos::data::lseq           :refer [LSeq lseq-nil lseq-cell lseq-head lseq-rest lseq-empty?]]
+require [prologos::data::lseq-ops       :refer [lseq-to-list lseq-fold]]
+require [prologos::data::list            :refer [List foldr]]
+require [prologos::data::option         :refer [Option some none]]
+
+;; ========================================
+;; Seqable instance for LSeq (identity)
+;; ========================================
+;; to-seq for LSeq is the identity function — LSeq is already a
+;; lazy sequence, so no conversion needed.
+
+(def LSeq--Seqable--dict : [Seqable LSeq]
+  (fn (A :0 (Type 0)) (fn (xs : (LSeq A)) xs)))
+
+;; ========================================
+;; Buildable instance for LSeq (identity)
+;; ========================================
+;; from-seq for LSeq is the identity function — input is already LSeq.
+;; empty-coll returns lseq-nil.
+;; conj prepends via lseq-cell (lazy cons, O(1)).
+;;
+;; Buildable is a three-method trait, so the dict is a nested Sigma pair.
+
+(spec LSeq--Buildable--dict (Buildable LSeq))
+(def LSeq--Buildable--dict
+  (pair
+    (fn (A :0 (Type 0)) (fn (xs : (LSeq A)) xs))
+    (pair
+      (fn (A :0 (Type 0)) (lseq-nil A))
+      (fn (A :0 (Type 0)) (fn (xs : (LSeq A)) (fn (x : A) (lseq-cell A x (fn (_ : Unit) xs))))))))
+
+;; ========================================
+;; Foldable instance for LSeq
+;; ========================================
+;; Strict foldr: forces all elements via lseq-to-list, then delegates
+;; to list foldr. Adequate since fold always needs all elements.
+;; lseq-foldable : Foldable LSeq
+;; = Pi(A :0 Type) Pi(B :0 Type) (A -> B -> B) -> B -> LSeq A -> B
+
+(def lseq-foldable : [Foldable LSeq]
+  (fn (A :0 (Type 0)) (fn (B :0 (Type 0)) (fn (f : (-> A (-> B B))) (fn (z : B) (fn (xs : (LSeq A))
+    (foldr A B f z (lseq-to-list A xs))))))))
+
+;; ========================================
+;; Reducible instance for LSeq
+;; ========================================
+;; Uses lseq-fold (strict left fold, forces all elements).
+;;
+;; lseq-fold : Pi [A :0 Type] Pi [B :0 Type] (A -> B -> A) -> A -> LSeq B -> A
+;; where A = accumulator type, B = element type (swapped!)
+;;
+;; Reducible expects:
+;;   Pi [A :0 Type] Pi [B :0 Type] (B -> A -> B) -> B -> LSeq A -> B
+;; where A = element type, B = accumulator type
+;;
+;; So we pass type args as: lseq-fold B A (where B=acc, A=elem)
+;; to get: (B -> A -> B) -> B -> LSeq A -> B
+
+(def lseq-reducible : [Reducible LSeq]
+  (fn (A :0 (Type 0)) (fn (B :0 (Type 0)) (fn (f : (-> B (-> A B))) (fn (z : B) (fn (xs : (LSeq A))
+    (lseq-fold B A f z xs)))))))
+
+;; ========================================
+;; Seq instance for LSeq
+;; ========================================
+;; first  : LSeq A -> Option A  (delegates to lseq-head wrapped in Option)
+;; rest   : LSeq A -> LSeq A    (delegates to lseq-rest)
+;; empty? : LSeq A -> Bool      (delegates to lseq-empty?)
+;;
+;; Seq is a three-method trait via deftype (nested Sigma):
+;; (pair first-fn (pair rest-fn empty?-fn))
+
+(spec LSeq--Seq--dict (Seq LSeq))
+(def LSeq--Seq--dict
+  (pair
+    ;; first : Pi(A :0 Type) LSeq A -> Option A
+    (fn (A :0 (Type 0)) (fn (xs : (LSeq A))
+      (match xs
+        (lseq-nil -> (none A))
+        (lseq-cell a _ -> (some A a)))))
+    (pair
+      ;; rest : Pi(A :0 Type) LSeq A -> LSeq A
+      (fn (A :0 (Type 0)) (fn (xs : (LSeq A))
+        (match xs
+          (lseq-nil -> (lseq-nil A))
+          (lseq-cell _ t -> (t unit)))))
+      ;; empty? : Pi(A :0 Type) LSeq A -> Bool
+      (fn (A :0 (Type 0)) (fn (xs : (LSeq A))
+        (lseq-empty? A xs))))))

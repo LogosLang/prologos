@@ -1,0 +1,144 @@
+ns prologos::core::list
+
+require [prologos::core::collection-traits :refer [Seqable Seqable-to-seq
+                                                    Buildable Buildable-from-seq Buildable-empty-coll Buildable-conj
+                                                    Foldable
+                                                    Reducible
+                                                    Indexed Indexed-idx-nth Indexed-idx-length Indexed-idx-update
+                                                    Functor
+                                                    Seq]]
+require [prologos::data::lseq          :refer [LSeq]]
+require [prologos::data::lseq-ops      :refer [list-to-lseq lseq-to-list]]
+require [prologos::data::list           :refer [List nil cons foldr reduce map]]
+require [prologos::data::option        :refer [Option some none]]
+require [prologos::data::nat            :refer [zero?]]
+
+;; ========================================
+;; Seqable List Instance
+;; ========================================
+;; Convert a List to an LSeq via list-to-lseq.
+;; The Seqable dict IS the function (single-method trait).
+
+def List--Seqable--dict : [Seqable List] := list-to-lseq
+
+;; ========================================
+;; Buildable List Instance
+;; ========================================
+;; from-seq   : LSeq A -> List A  (via lseq-to-list)
+;; empty-coll : List A             (via nil A)
+;; conj       : List A -> A -> List A  (via cons — prepend, O(1))
+;;
+;; Buildable is a three-method trait, so the dict is a nested Sigma pair:
+;;   (pair from-seq (pair empty-coll conj))
+
+(def List--Buildable--from-seq : [Pi [A :0 <Type>] [-> [LSeq A] [List A]]]
+  lseq-to-list)
+
+(def List--Buildable--empty-coll : [Pi [A :0 <Type>] [List A]]
+  (fn (A :0 (Type 0)) (nil A)))
+
+;; Assemble the dictionary: inline lambdas so pair can type-check
+(spec List--Buildable--dict (Buildable List))
+(def List--Buildable--dict
+  (pair
+    (fn (A :0 (Type 0)) (fn (xs : (LSeq A)) (lseq-to-list A xs)))
+    (pair
+      (fn (A :0 (Type 0)) (nil A))
+      (fn (A :0 (Type 0)) (fn (xs : (List A)) (fn (x : A) (cons A x xs)))))))
+
+;; ========================================
+;; Foldable instance for List
+;; ========================================
+;; list-foldable : Foldable List
+;; = Pi(A :0 Type) Pi(B :0 Type) (A -> B -> B) -> B -> List A -> B
+
+spec list-foldable [Foldable List]
+def list-foldable foldr
+
+;; ========================================
+;; Reducible instance for List
+;; ========================================
+;; Uses List's native reduce (left fold, tail-recursive).
+;; reduce : (B -> A -> B) -> B -> List A -> B
+;;
+;; List's reduce has implicit params in order (B, A) but
+;; Reducible expects (A, B) where A=element, B=accumulator.
+;; We wrap with explicit Pi binders to reorder.
+
+(def list-reducible : [Reducible List]
+  (fn (A :0 (Type 0)) (fn (B :0 (Type 0)) (fn (f : (-> B (-> A B))) (fn (z : B) (fn (xs : (List A))
+    (reduce B A f z xs)))))))
+
+;; ========================================
+;; Indexed List Instance
+;; ========================================
+;; O(n) implementations for linked list.
+
+;; idx-nth : List A -> Nat -> Option A
+;; Returns (some elem) at index n, or none if out of bounds.
+(def list-idx-nth : [Pi [A :0 <Type>] [-> [List A] [-> Nat [Option A]]]]
+  (fn (A :0 (Type 0)) (fn (xs : (List A)) (fn (n : Nat)
+    (match xs
+      (nil -> (none A))
+      (cons a as -> (match n
+        (zero -> (some A a))
+        (suc k -> (list-idx-nth A as k)))))))))
+
+;; idx-length : List A -> Nat
+(def list-idx-length : [Pi [A :0 <Type>] [-> [List A] Nat]]
+  (fn (A :0 (Type 0)) (fn (xs : (List A))
+    (match xs
+      (nil -> zero)
+      (cons _ as -> (suc (list-idx-length A as)))))))
+
+;; idx-update : List A -> Nat -> A -> List A
+;; Replace element at index n. If out of bounds, return unchanged.
+(def list-idx-update : [Pi [A :0 <Type>] [-> [List A] [-> Nat [-> A [List A]]]]]
+  (fn (A :0 (Type 0)) (fn (xs : (List A)) (fn (n : Nat) (fn (v : A)
+    (match xs
+      (nil -> (nil A))
+      (cons a as -> (match n
+        (zero -> (cons A v as))
+        (suc k -> (cons A a (list-idx-update A as k v)))))))))))
+
+;; Indexed dict: triple (idx-nth, idx-length, idx-update) as nested Sigma
+(def List--Indexed--dict : (Indexed List)
+  (pair list-idx-nth (pair list-idx-length list-idx-update)))
+
+;; ========================================
+;; Functor instance for List
+;; ========================================
+;; list-functor : Functor List
+;; = Pi(A :0 Type) Pi(B :0 Type) (A -> B) -> List A -> List B
+
+spec list-functor [Functor List]
+def list-functor map
+
+;; ========================================
+;; Seq instance for List
+;; ========================================
+
+;; first : List A -> Option A
+spec list-seq-first [List A] -> [Option A]
+defn list-seq-first [xs]
+  match xs
+    | nil       -> none A
+    | cons a _  -> some A a
+
+;; rest : List A -> List A
+spec list-seq-rest [List A] -> [List A]
+defn list-seq-rest [xs]
+  match xs
+    | nil       -> nil A
+    | cons _ as -> as
+
+;; empty? : List A -> Bool
+spec list-seq-empty? [List A] -> Bool
+defn list-seq-empty? [xs]
+  match xs
+    | nil      -> true
+    | cons _ _ -> false
+
+;; Assemble the dictionary: (pair first-fn (pair rest-fn empty?-fn))
+spec list-seq [Seq List]
+def list-seq [pair list-seq-first [pair list-seq-rest list-seq-empty?]]

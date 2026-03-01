@@ -1,7 +1,6 @@
 ns prologos::core::collection-ops
 
-require [prologos::core::seqable-list    :refer [List--Seqable--dict]]
-require [prologos::core::buildable-list  :refer [List--Buildable--dict List--Buildable--from-seq]]
+require [prologos::core::list    :refer [List--Seqable--dict List--Buildable--dict List--Buildable--from-seq]]
 require [prologos::data::lseq            :refer [LSeq]]
 require [prologos::data::lseq-ops        :refer [lseq-map lseq-filter lseq-to-list lseq-length]]
 require [prologos::data::list             :refer [List]]

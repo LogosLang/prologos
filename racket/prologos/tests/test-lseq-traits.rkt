@@ -62,10 +62,8 @@
 (require (prologos::core::collection-traits  :refer (Seqable)))
 (require (prologos::core::collection-traits :refer (Buildable)))
 (require (prologos::core::collection-traits  :refer (Foldable)))
-(require (prologos::core::seq-lseq       :refer (LSeq--Seq--dict)))
-(require (prologos::core::foldable-lseq  :refer (lseq-foldable)))
-(require (prologos::core::seqable-lseq   :refer (LSeq--Seqable--dict)))
-(require (prologos::core::buildable-lseq :refer (LSeq--Buildable--dict)))
+(require (prologos::core::lseq :refer (LSeq--Seq--dict lseq-foldable
+                                       LSeq--Seqable--dict LSeq--Buildable--dict)))
 (require (prologos::data::lseq           :refer (LSeq lseq-nil lseq-cell)))
 (require (prologos::data::lseq-ops       :refer (lseq-to-list list-to-lseq)))
 (require (prologos::data::option         :refer (Option some none)))
@@ -82,7 +80,7 @@
       (run-ns
         "(ns test)
          (require (prologos::core::collection-traits :refer (Seq)))
-         (require (prologos::core::seq-lseq  :refer (LSeq--Seq--dict)))"))))
+         (require (prologos::core::lseq  :refer (LSeq--Seq--dict)))"))))
 
 (test-case "lseq-traits/foldable-lseq-loads"
   (check-not-exn
@@ -90,7 +88,7 @@
       (run-ns
         "(ns test)
          (require (prologos::core::collection-traits :refer (Foldable)))
-         (require (prologos::core::foldable-lseq  :refer (lseq-foldable)))"))))
+         (require (prologos::core::lseq  :refer (lseq-foldable)))"))))
 
 (test-case "lseq-traits/seqable-lseq-loads"
   (check-not-exn
@@ -98,7 +96,7 @@
       (run-ns
         "(ns test)
          (require (prologos::core::collection-traits :refer (Seqable)))
-         (require (prologos::core::seqable-lseq  :refer (LSeq--Seqable--dict)))"))))
+         (require (prologos::core::lseq  :refer (LSeq--Seqable--dict)))"))))
 
 (test-case "lseq-traits/buildable-lseq-loads"
   (check-not-exn
@@ -106,7 +104,7 @@
       (run-ns
         "(ns test)
          (require (prologos::core::collection-traits :refer (Buildable)))
-         (require (prologos::core::buildable-lseq  :refer (LSeq--Buildable--dict)))"))))
+         (require (prologos::core::lseq  :refer (LSeq--Buildable--dict)))"))))
 
 ;; ========================================
 ;; Seq LSeq — type inference

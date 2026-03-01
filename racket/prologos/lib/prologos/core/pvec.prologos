@@ -1,0 +1,136 @@
+ns prologos::core::pvec
+
+require [prologos::core::collection-traits :refer [Seqable
+                                                    Buildable
+                                                    Foldable
+                                                    Reducible
+                                                    Indexed Indexed-idx-nth Indexed-idx-length Indexed-idx-update
+                                                    Functor]]
+require [prologos::data::lseq          :refer [LSeq]]
+require [prologos::data::lseq-ops      :refer [list-to-lseq lseq-to-list]]
+require [prologos::data::list           :refer [List nil cons]]
+require [prologos::data::option        :refer [Option some none]]
+require [prologos::data::nat            :refer [lt?]]
+
+;; ========================================
+;; Seqable PVec Instance
+;; ========================================
+;; Convert a PVec to an LSeq via pvec-to-list -> list-to-lseq.
+;; The Seqable dict IS the function (single-method trait).
+
+(def PVec--Seqable--dict : [Seqable PVec]
+  (fn (A :0 (Type 0)) (fn (v : (PVec A))
+    (list-to-lseq A (pvec-to-list v)))))
+
+;; ========================================
+;; Buildable PVec Instance
+;; ========================================
+;; from-seq   : LSeq A -> PVec A  (via lseq-to-list -> pvec-from-list)
+;; empty-coll : PVec A             (via pvec-empty)
+;; conj       : PVec A -> A -> PVec A  (via pvec-push — append to end, O(log32 n))
+;;
+;; Buildable is a three-method trait, so the dict is a nested Sigma pair.
+
+(spec PVec--Buildable--dict (Buildable PVec))
+(def PVec--Buildable--dict
+  (pair
+    (fn (A :0 (Type 0)) (fn (xs : (LSeq A))
+      (pvec-from-list (lseq-to-list A xs))))
+    (pair
+      (fn (A :0 (Type 0)) (pvec-empty A))
+      (fn (A :0 (Type 0)) (fn (v : (PVec A)) (fn (x : A) (pvec-push v x)))))))
+
+;; ========================================
+;; Foldable instance for PVec
+;; ========================================
+;; Uses native pvec-fold (left fold via rrb-fold) for O(n) traversal
+;; without List conversion.
+;;
+;; Note: pvec-fold is accumulator-first (B -> A -> B), but Foldable's
+;; fold method is element-first (A -> B -> B). We flip the arguments.
+;; This changes semantics from right-fold to left-fold, which is
+;; acceptable for PVec (indexed, left-to-right is natural).
+
+(def pvec-foldable : [Foldable PVec]
+  (fn (A :0 (Type 0)) (fn (B :0 (Type 0)) (fn (f : (-> A (-> B B))) (fn (z : B) (fn (v : (PVec A))
+    (pvec-fold (fn (acc : B) (fn (elem : A) (f elem acc))) z v)))))))
+
+;; ========================================
+;; Reducible instance for PVec
+;; ========================================
+;; Uses native pvec-fold (left fold via RRB tree traversal) for
+;; O(n) traversal without List conversion.
+;;
+;; pvec-fold : (B -> A -> B) -> B -> PVec A -> B
+;; Reducible : Pi [A :0 Type] Pi [B :0 Type] (B -> A -> B) -> B -> PVec A -> B
+;;
+;; The function signature matches directly: accumulator-first.
+
+(def pvec-reducible : [Reducible PVec]
+  (fn (A :0 (Type 0)) (fn (B :0 (Type 0)) (fn (f : (-> B (-> A B))) (fn (z : B) (fn (v : (PVec A))
+    (pvec-fold f z v)))))))
+
+;; ========================================
+;; Indexed PVec Instance
+;; ========================================
+;; O(log32 n) implementations via native PVec primitives.
+
+;; idx-nth : PVec A -> Nat -> Option A
+;; Bounds-checked: returns (some elem) if in bounds, (none) otherwise.
+(def pvec-idx-nth : [Pi [A :0 <Type>] [-> [PVec A] [-> Nat [Option A]]]]
+  (fn (A :0 (Type 0)) (fn (v : (PVec A)) (fn (n : Nat)
+    (if [lt? n [pvec-length v]]
+      [some A [pvec-nth v n]]
+      [none A])))))
+
+;; idx-length : PVec A -> Nat
+(def pvec-idx-length : [Pi [A :0 <Type>] [-> [PVec A] Nat]]
+  (fn (A :0 (Type 0)) (fn (v : (PVec A))
+    (pvec-length v))))
+
+;; idx-update : PVec A -> Nat -> A -> PVec A
+(def pvec-idx-update : [Pi [A :0 <Type>] [-> [PVec A] [-> Nat [-> A [PVec A]]]]]
+  (fn (A :0 (Type 0)) (fn (v : (PVec A)) (fn (n : Nat) (fn (x : A)
+    (pvec-update v n x))))))
+
+;; Indexed dict: triple (idx-nth, idx-length, idx-update) as nested Sigma
+(def PVec--Indexed--dict : (Indexed PVec)
+  (pair pvec-idx-nth (pair pvec-idx-length pvec-idx-update)))
+
+;; ========================================
+;; Functor instance for PVec
+;; ========================================
+;; Uses native pvec-map for O(n) mapping without List conversion.
+;; pvec-functor : Functor PVec
+;; = Pi(A :0 Type) Pi(B :0 Type) (A -> B) -> PVec A -> PVec B
+
+(def pvec-functor : [Functor PVec]
+  (fn (A :0 (Type 0)) (fn (B :0 (Type 0)) (fn (f : (-> A B)) (fn (v : (PVec A))
+    (pvec-map f v))))))
+
+;; ========================================
+;; PVec Operations
+;; ========================================
+;; pvec-map, pvec-filter, pvec-fold are now native AST primitives
+;; (parser keywords). They reduce via rrb-fold in the reduction engine.
+;; pvec-any? and pvec-all? use native pvec-fold.
+
+;; pvec-any? : (A -> Bool) -> PVec A -> Bool
+spec pvec-any? {A : Type} [-> A Bool] -> [PVec A] -> Bool
+defn pvec-any? [pred v]
+  pvec-fold [fn acc x [if [pred x] true acc]] false v
+
+;; pvec-all? : (A -> Bool) -> PVec A -> Bool
+spec pvec-all? {A : Type} [-> A Bool] -> [PVec A] -> Bool
+defn pvec-all? [pred v]
+  pvec-fold [fn acc x [if [pred x] acc false]] true v
+
+;; pvec-from-list-fn : List A -> PVec A  (wraps AST pvec-from-list as a function)
+spec pvec-from-list-fn {A : Type} [List A] -> [PVec A]
+defn pvec-from-list-fn [xs]
+  pvec-from-list xs
+
+;; pvec-to-list-fn : PVec A -> List A  (wraps AST pvec-to-list as a function)
+spec pvec-to-list-fn {A : Type} [PVec A] -> [List A]
+defn pvec-to-list-fn [v]
+  pvec-to-list v

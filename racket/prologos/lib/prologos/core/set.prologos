@@ -1,0 +1,129 @@
+ns prologos::core::set
+
+require [prologos::core::collection-traits :refer [Seqable
+                                                    Buildable
+                                                    Foldable
+                                                    Reducible
+                                                    Setlike]]
+require [prologos::data::lseq            :refer [LSeq]]
+require [prologos::data::lseq-ops        :refer [list-to-lseq lseq-to-list]]
+require [prologos::data::list             :refer [List nil cons foldr]]
+
+;; ========================================
+;; Seqable instance for Set
+;; ========================================
+;; to-seq : Set A -> LSeq A
+;; Converts via set-to-list -> list-to-lseq.
+
+(def Set--Seqable--dict : [Seqable Set]
+  (fn (A :0 (Type 0)) (fn (s : (Set A))
+    (list-to-lseq A (set-to-list s)))))
+
+;; ========================================
+;; Buildable Set Instance
+;; ========================================
+;; from-seq   : LSeq A -> Set A  (via lseq-to-list -> foldr with set-insert)
+;; empty-coll : Set A             (via set-empty)
+;; conj       : Set A -> A -> Set A  (via set-insert, O(log n))
+;;
+;; Buildable is a three-method trait, so the dict is a nested Sigma pair.
+;; Note: Can't call set-from-list directly because it declares A :w,
+;; but the trait binding uses A :0 (erased). Instead we fold manually
+;; using set-insert + set-empty which have erased type args at QTT level.
+
+(spec Set--Buildable--dict (Buildable Set))
+(def Set--Buildable--dict
+  (pair
+    (fn (A :0 (Type 0)) (fn (xs : (LSeq A))
+      (foldr A (Set A) (fn (a : A) (fn (acc : (Set A)) (set-insert acc a))) (set-empty A) (lseq-to-list A xs))))
+    (pair
+      (fn (A :0 (Type 0)) (set-empty A))
+      (fn (A :0 (Type 0)) (fn (s : (Set A)) (fn (x : A) (set-insert s x)))))))
+
+;; ========================================
+;; Foldable instance for Set
+;; ========================================
+;; Uses native set-fold (left fold via champ-fold) for O(n) traversal
+;; without List conversion.
+;;
+;; Note: set-fold is accumulator-first (B -> A -> B), but Foldable's
+;; fold method is element-first (A -> B -> B). We flip the arguments.
+
+(def set-foldable : [Foldable Set]
+  (fn (A :0 (Type 0)) (fn (B :0 (Type 0)) (fn (f : (-> A (-> B B))) (fn (z : B) (fn (s : (Set A))
+    (set-fold (fn (acc : B) (fn (elem : A) (f elem acc))) z s)))))))
+
+;; ========================================
+;; Reducible instance for Set
+;; ========================================
+;; Uses native set-fold (left fold via CHAMP trie traversal) for
+;; O(n) traversal without List conversion.
+;;
+;; set-fold : (B -> A -> B) -> B -> Set A -> B
+;; Reducible : Pi [A :0 Type] Pi [B :0 Type] (B -> A -> B) -> B -> Set A -> B
+;;
+;; The function signature matches directly: accumulator-first.
+
+(def set-reducible : [Reducible Set]
+  (fn (A :0 (Type 0)) (fn (B :0 (Type 0)) (fn (f : (-> B (-> A B))) (fn (z : B) (fn (s : (Set A))
+    (set-fold f z s)))))))
+
+;; ========================================
+;; Setlike instance for Set
+;; ========================================
+;; set-member? : Set A -> A -> Bool   (delegates to AST set-member?)
+;; set-insert  : Set A -> A -> Set A  (delegates to AST set-insert)
+;; set-remove  : Set A -> A -> Set A  (delegates to AST set-delete)
+;;
+;; Setlike is a three-method trait, so the dict is a nested Sigma:
+;; (pair set-member? (pair set-insert set-remove))
+
+(spec Set--Setlike--dict (Setlike Set))
+(def Set--Setlike--dict
+  (pair
+    ;; set-member? : Pi(A :0 Type) Set A -> A -> Bool
+    (fn (A :0 (Type 0)) (fn (s : (Set A)) (fn (a : A)
+      (set-member? s a))))
+    (pair
+      ;; set-insert : Pi(A :0 Type) Set A -> A -> Set A
+      (fn (A :0 (Type 0)) (fn (s : (Set A)) (fn (a : A)
+        (set-insert s a))))
+      ;; set-remove : Pi(A :0 Type) Set A -> A -> Set A
+      (fn (A :0 (Type 0)) (fn (s : (Set A)) (fn (a : A)
+        (set-delete s a)))))))
+
+;; ========================================
+;; Set Operations
+;; ========================================
+;; set-fold, set-filter are now native AST primitives
+;; (parser keywords). They reduce via champ-fold in the reduction engine.
+;; set-map, set-any?, and set-all? use native set-fold.
+
+;; set-map : (A -> B) -> Set A -> Set B
+;; Applies f to every element, collecting results into a new set.
+;; Uses native set-fold to avoid List conversion.
+spec set-map {A B : Type} [-> A B] -> [Set A] -> [Set B]
+defn set-map [f s]
+  set-fold [fn acc x [set-insert acc [f x]]] [set-empty B] s
+
+;; set-any? : (A -> Bool) -> Set A -> Bool
+spec set-any? {A : Type} [-> A Bool] -> [Set A] -> Bool
+defn set-any? [pred s]
+  set-fold [fn acc x [if [pred x] true acc]] false s
+
+;; set-all? : (A -> Bool) -> Set A -> Bool
+spec set-all? {A : Type} [-> A Bool] -> [Set A] -> Bool
+defn set-all? [pred s]
+  set-fold [fn acc x [if [pred x] acc false]] true s
+
+;; set-to-list-fn : Set A -> List A  (wraps AST set-to-list as a function)
+spec set-to-list-fn {A : Type} [Set A] -> [List A]
+defn set-to-list-fn [s]
+  set-to-list s
+
+;; set-from-list-fn : List A -> Set A  (wraps via fold, erased type arg)
+;; Note: We avoid calling set-from-list directly because it declares A :w,
+;; but spec/defn generates A :0 (erased). Instead we fold with set-insert.
+spec set-from-list-fn {A : Type} [List A] -> [Set A]
+defn set-from-list-fn [xs]
+  foldr A [Set A] [fn a acc [set-insert acc a]] [set-empty A] xs

@@ -1,0 +1,267 @@
+ns prologos::core::abstract-domains
+
+require [prologos::data::sign :refer [Sign sign-bot sign-neg sign-zero sign-pos sign-top]]
+require [prologos::data::parity :refer [Parity parity-bot parity-even parity-odd parity-top]]
+require [prologos::core::lattice :refer [Lattice HasTop GaloisConnection Interval interval-bot interval-top mk-interval]]
+require [prologos::core::eq :refer [Eq Eq-eq?]]
+require [prologos::core::ord :refer [Ord Ord-compare]]
+require [prologos::data::ordering :refer [Ordering lt-ord eq-ord gt-ord]]
+require [prologos::data::refined-int :refer [PosInt pos-int NegInt neg-int Zero mk-zero]]
+require [prologos::data::refined-rat :refer [PosRat pos-rat NegRat neg-rat]]
+require [prologos::data::bool :refer [and or]]
+
+;; ========================================
+;; Lattice Sign
+;; ========================================
+;; join = least upper bound in the 5-element lattice
+;; bot = sign-bot (unreachable / no info)
+;; leq = lattice ordering
+
+impl Lattice Sign
+  defn bot [] <Sign>
+    sign-bot
+  defn join [a <Sign> b <Sign>] <Sign>
+    match a
+      | sign-bot -> b
+      | sign-top -> sign-top
+      | sign-neg -> match b
+          | sign-bot -> sign-neg
+          | sign-neg -> sign-neg
+          | sign-zero -> sign-top
+          | sign-pos -> sign-top
+          | sign-top -> sign-top
+      | sign-zero -> match b
+          | sign-bot -> sign-zero
+          | sign-neg -> sign-top
+          | sign-zero -> sign-zero
+          | sign-pos -> sign-top
+          | sign-top -> sign-top
+      | sign-pos -> match b
+          | sign-bot -> sign-pos
+          | sign-neg -> sign-top
+          | sign-zero -> sign-top
+          | sign-pos -> sign-pos
+          | sign-top -> sign-top
+  defn leq [a <Sign> b <Sign>] <Bool>
+    match a
+      | sign-bot -> true
+      | sign-top -> match b
+          | sign-top -> true
+          | sign-bot -> false
+          | sign-neg -> false
+          | sign-zero -> false
+          | sign-pos -> false
+      | sign-neg -> match b
+          | sign-neg -> true
+          | sign-top -> true
+          | sign-bot -> false
+          | sign-zero -> false
+          | sign-pos -> false
+      | sign-zero -> match b
+          | sign-zero -> true
+          | sign-top -> true
+          | sign-bot -> false
+          | sign-neg -> false
+          | sign-pos -> false
+      | sign-pos -> match b
+          | sign-pos -> true
+          | sign-top -> true
+          | sign-bot -> false
+          | sign-neg -> false
+          | sign-zero -> false
+
+;; ========================================
+;; HasTop Sign
+;; ========================================
+
+impl HasTop Sign
+  defn top [] <Sign>
+    sign-top
+
+;; ========================================
+;; Lattice Parity
+;; ========================================
+
+impl Lattice Parity
+  defn bot [] <Parity>
+    parity-bot
+  defn join [a <Parity> b <Parity>] <Parity>
+    match a
+      | parity-bot -> b
+      | parity-top -> parity-top
+      | parity-even -> match b
+          | parity-bot -> parity-even
+          | parity-even -> parity-even
+          | parity-odd -> parity-top
+          | parity-top -> parity-top
+      | parity-odd -> match b
+          | parity-bot -> parity-odd
+          | parity-even -> parity-top
+          | parity-odd -> parity-odd
+          | parity-top -> parity-top
+  defn leq [a <Parity> b <Parity>] <Bool>
+    match a
+      | parity-bot -> true
+      | parity-top -> match b
+          | parity-top -> true
+          | parity-bot -> false
+          | parity-even -> false
+          | parity-odd -> false
+      | parity-even -> match b
+          | parity-even -> true
+          | parity-top -> true
+          | parity-bot -> false
+          | parity-odd -> false
+      | parity-odd -> match b
+          | parity-odd -> true
+          | parity-top -> true
+          | parity-bot -> false
+          | parity-even -> false
+
+;; ========================================
+;; HasTop Parity
+;; ========================================
+
+impl HasTop Parity
+  defn top [] <Parity>
+    parity-top
+
+;; ========================================
+;; GaloisConnection Interval Sign
+;; ========================================
+;; Sign abstraction of numeric intervals.
+;;
+;; alpha (abstraction): Interval -> Sign
+;;   interval-bot          -> sign-bot   (unreachable -> no info)
+;;   interval-top          -> sign-top   (contradiction -> any sign)
+;;   mk-interval lo hi:
+;;     lo > 0              -> sign-pos   (entirely positive)
+;;     hi < 0              -> sign-neg   (entirely negative)
+;;     lo = 0 and hi = 0   -> sign-zero  (exactly zero)
+;;     otherwise           -> sign-top   (spans zero -> unknown)
+;;
+;; gamma (concretization): Sign -> Interval
+;;   sign-bot  -> interval-bot                  (unreachable -> unconstrained)
+;;   sign-neg  -> mk-interval neg-inf -1/1      (some negative value)
+;;   sign-zero -> mk-interval 0/1 0/1           (exactly zero)
+;;   sign-pos  -> mk-interval 1/1 pos-inf       (some positive value)
+;;   sign-top  -> mk-interval neg-inf pos-inf   (any value)
+
+;; Sentinel values for "effectively unbounded" intervals.
+;; In a sound abstract interpretation, these represent +/- infinity.
+def pos-inf : Rat 999999/1
+def neg-inf : Rat -999999/1
+
+impl GaloisConnection Interval Sign
+  defn alpha [iv <Interval>] <Sign>
+    match iv
+      | interval-bot -> sign-bot
+      | interval-top -> sign-top
+      | mk-interval lo hi ->
+          if [rat-lt 0/1 lo] sign-pos
+            [if [rat-lt hi 0/1] sign-neg
+              [if [and [rat-eq lo 0/1] [rat-eq hi 0/1]] sign-zero
+                sign-top]]
+  defn gamma [s <Sign>] <Interval>
+    match s
+      | sign-bot  -> interval-bot
+      | sign-neg  -> mk-interval neg-inf -1/1
+      | sign-zero -> mk-interval 0/1 0/1
+      | sign-pos  -> mk-interval 1/1 pos-inf
+      | sign-top  -> mk-interval neg-inf pos-inf
+
+;; ========================================
+;; Eq PosInt -- delegate to underlying Int
+;; ========================================
+
+impl Eq PosInt
+  defn eq? [x <PosInt> y <PosInt>] <Bool>
+    match x
+      | pos-int a -> match y
+                       | pos-int b -> int-eq a b
+
+;; ========================================
+;; Eq NegInt -- delegate to underlying Int
+;; ========================================
+
+impl Eq NegInt
+  defn eq? [x <NegInt> y <NegInt>] <Bool>
+    match x
+      | neg-int a -> match y
+                       | neg-int b -> int-eq a b
+
+;; ========================================
+;; Eq Zero -- singleton, always equal
+;; ========================================
+
+impl Eq Zero
+  defn eq? [x <Zero> y <Zero>] <Bool>
+    true
+
+;; ========================================
+;; Ord PosInt -- delegate to underlying Int
+;; ========================================
+
+impl Ord PosInt
+  defn compare [x <PosInt> y <PosInt>] <Ordering>
+    match x
+      | pos-int a -> match y
+                       | pos-int b -> if [int-lt a b] lt-ord [if [int-eq a b] eq-ord gt-ord]
+
+;; ========================================
+;; Ord NegInt -- delegate to underlying Int
+;; ========================================
+
+impl Ord NegInt
+  defn compare [x <NegInt> y <NegInt>] <Ordering>
+    match x
+      | neg-int a -> match y
+                       | neg-int b -> if [int-lt a b] lt-ord [if [int-eq a b] eq-ord gt-ord]
+
+;; ========================================
+;; Ord Zero -- singleton, always eq-ord
+;; ========================================
+
+impl Ord Zero
+  defn compare [x <Zero> y <Zero>] <Ordering>
+    eq-ord
+
+;; ========================================
+;; Eq PosRat -- delegate to underlying Rat
+;; ========================================
+
+impl Eq PosRat
+  defn eq? [x <PosRat> y <PosRat>] <Bool>
+    match x
+      | pos-rat a -> match y
+                       | pos-rat b -> rat-eq a b
+
+;; ========================================
+;; Eq NegRat -- delegate to underlying Rat
+;; ========================================
+
+impl Eq NegRat
+  defn eq? [x <NegRat> y <NegRat>] <Bool>
+    match x
+      | neg-rat a -> match y
+                       | neg-rat b -> rat-eq a b
+
+;; ========================================
+;; Ord PosRat -- delegate to underlying Rat
+;; ========================================
+
+impl Ord PosRat
+  defn compare [x <PosRat> y <PosRat>] <Ordering>
+    match x
+      | pos-rat a -> match y
+                       | pos-rat b -> if [rat-lt a b] lt-ord [if [rat-eq a b] eq-ord gt-ord]
+
+;; ========================================
+;; Ord NegRat -- delegate to underlying Rat
+;; ========================================
+
+impl Ord NegRat
+  defn compare [x <NegRat> y <NegRat>] <Ordering>
+    match x
+      | neg-rat a -> match y
+                       | neg-rat b -> if [rat-lt a b] lt-ord [if [rat-eq a b] eq-ord gt-ord]

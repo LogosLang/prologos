@@ -182,7 +182,7 @@
                  [current-trait-registry (hasheq)]
                  [current-trait-laws (hasheq)])
     (define here (path->string (path-only (syntax-source #'here))))
-    (define file-path (simplify-path (build-path here ".." "lib" "prologos" "core" "algebraic-laws.prologos")))
+    (define file-path (simplify-path (build-path here ".." "lib" "prologos" "core" "algebra.prologos")))
     (process-file file-path)
     ;; All 4 properties should be registered
     (check-true (property-entry? (lookup-property 'semigroup-laws)))
@@ -199,7 +199,7 @@
                  [current-trait-registry (hasheq)]
                  [current-trait-laws (hasheq)])
     (define here (path->string (path-only (syntax-source #'here))))
-    (define file-path (simplify-path (build-path here ".." "lib" "prologos" "core" "algebraic-laws.prologos")))
+    (define file-path (simplify-path (build-path here ".." "lib" "prologos" "core" "algebra.prologos")))
     (process-file file-path)
     (define pe (lookup-property 'semigroup-laws))
     (check-equal? (length (property-entry-clauses pe)) 1)
@@ -214,7 +214,7 @@
                  [current-trait-registry (hasheq)]
                  [current-trait-laws (hasheq)])
     (define here (path->string (path-only (syntax-source #'here))))
-    (define file-path (simplify-path (build-path here ".." "lib" "prologos" "core" "algebraic-laws.prologos")))
+    (define file-path (simplify-path (build-path here ".." "lib" "prologos" "core" "algebra.prologos")))
     (process-file file-path)
     (define pe (lookup-property 'monoid-laws))
     ;; Should have 1 include (semigroup-laws A)
@@ -229,7 +229,7 @@
                  [current-trait-registry (hasheq)]
                  [current-trait-laws (hasheq)])
     (define here (path->string (path-only (syntax-source #'here))))
-    (define file-path (simplify-path (build-path here ".." "lib" "prologos" "core" "algebraic-laws.prologos")))
+    (define file-path (simplify-path (build-path here ".." "lib" "prologos" "core" "algebra.prologos")))
     (process-file file-path)
     (define clauses (flatten-property 'monoid-laws))
     ;; semigroup-laws/associativity + monoid-laws/left-identity + monoid-laws/right-identity
@@ -247,7 +247,7 @@
                  [current-trait-registry (hasheq)]
                  [current-trait-laws (hasheq)])
     (define here (path->string (path-only (syntax-source #'here))))
-    (define file-path (simplify-path (build-path here ".." "lib" "prologos" "core" "algebraic-laws.prologos")))
+    (define file-path (simplify-path (build-path here ".." "lib" "prologos" "core" "algebra.prologos")))
     (process-file file-path)
     (define pe (lookup-property 'functor-laws))
     (check-equal? (length (property-entry-clauses pe)) 2)
@@ -263,7 +263,7 @@
                  [current-trait-registry (hasheq)]
                  [current-trait-laws (hasheq)])
     (define here (path->string (path-only (syntax-source #'here))))
-    (define file-path (simplify-path (build-path here ".." "lib" "prologos" "core" "algebraic-laws.prologos")))
+    (define file-path (simplify-path (build-path here ".." "lib" "prologos" "core" "algebra.prologos")))
     (process-file file-path)
     (define pe (lookup-property 'commutative-add-laws))
     (check-equal? (length (property-entry-clauses pe)) 1)

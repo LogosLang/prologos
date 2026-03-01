@@ -365,7 +365,7 @@
     (require [prologos::core::arithmetic :refer [Add Sub Mul Div Neg Abs String--Add--dict]])
     (require [prologos::core::conversions :refer [From Into TryFrom FromInt FromRat]])
     (require [prologos::core::algebra :refer-all])
-    (require [prologos::core::lattice-trait   :refer [Lattice Lattice-bot Lattice-join Lattice-leq]])
+    (require [prologos::core::lattice :refer-all])
     (require [prologos::core::collection-traits :refer [Reducible Collection]])
 
     ;; ---- Additional container types + operations ----
@@ -383,17 +383,21 @@
     ;; Most ops via str-ops:: alias to avoid conflicts with List names.
     (require [prologos::core::string-ops :as str-ops :refer []])
 
-    ;; ---- Collection operation modules ----
+    ;; ---- Collection operation modules (consolidated) ----
     ;; Note: pvec-map, pvec-filter, pvec-fold, set-fold, set-filter,
     ;; map-fold-entries, map-filter-entries, map-map-vals are now native
     ;; parser keywords — no need to import from ops modules.
-    (require [prologos::core::pvec-ops :refer [pvec-any? pvec-all?
-                                               pvec-from-list-fn pvec-to-list-fn]])
-    (require [prologos::core::map-ops  :refer [map-filter-vals map-keys-list
-                                               map-vals-list map-merge
-                                               map-to-entry-list map-seq map-from-seq]])
-    (require [prologos::core::set-ops  :refer [set-map set-any? set-all?
-                                               set-to-list-fn set-from-list-fn]])
+    ;; pvec: pvec-any?, pvec-all?, pvec-from-list-fn, pvec-to-list-fn
+    (require [prologos::core::pvec :refer [pvec-any? pvec-all?
+                                           pvec-from-list-fn pvec-to-list-fn]])
+    ;; map: map-filter-vals, map-keys-list, map-vals-list, map-merge,
+    ;;      map-to-entry-list, map-seq, map-from-seq
+    (require [prologos::core::map  :refer [map-filter-vals map-keys-list
+                                           map-vals-list map-merge
+                                           map-to-entry-list map-seq map-from-seq]])
+    ;; set: set-map, set-any?, set-all?, set-to-list-fn, set-from-list-fn
+    (require [prologos::core::set  :refer [set-map set-any? set-all?
+                                           set-to-list-fn set-from-list-fn]])
 
     ;; ---- Collection conversions ----
     (require [prologos::core::collection-conversions :refer [vec list-to-seq pvec-to-seq
@@ -420,30 +424,17 @@
     ;; ord-string-instance merged into prologos::core::ord
     ;; add-string-instance merged into prologos::core::arithmetic
 
-    ;; ---- Collection trait instances (side-effect only) ----
-    (require [prologos::core::seqable-list    :refer []])
-    (require [prologos::core::buildable-list  :refer []])
-    (require [prologos::core::foldable-list   :refer []])
-    (require [prologos::core::reducible-list  :refer []])
-    (require [prologos::core::indexed-list    :refer []])
-    (require [prologos::core::functor-list    :refer []])
-    (require [prologos::core::seqable-pvec    :refer []])
-    (require [prologos::core::buildable-pvec  :refer []])
-    (require [prologos::core::indexed-pvec    :refer []])
-    (require [prologos::core::foldable-pvec   :refer []])
-    (require [prologos::core::reducible-pvec  :refer []])
-    (require [prologos::core::functor-pvec    :refer []])
-    (require [prologos::core::keyed-map       :refer []])
-    (require [prologos::core::setlike-set     :refer []])
-    (require [prologos::core::seqable-set     :refer []])
-    (require [prologos::core::buildable-set   :refer []])
-    (require [prologos::core::foldable-set    :refer []])
-    (require [prologos::core::reducible-set   :refer []])
-    (require [prologos::core::seq-lseq        :refer []])
-    (require [prologos::core::foldable-lseq   :refer []])
-    (require [prologos::core::reducible-lseq  :refer []])
-    (require [prologos::core::seqable-lseq    :refer []])
-    (require [prologos::core::buildable-lseq  :refer []])
+    ;; ---- Collection trait instances (consolidated by type) ----
+    ;; list: Seqable, Buildable, Foldable, Reducible, Indexed, Functor, Seq instances
+    (require [prologos::core::list :refer-all])
+    ;; pvec: Seqable, Buildable, Foldable, Reducible, Indexed, Functor instances + ops
+    (require [prologos::core::pvec :refer-all])
+    ;; set: Seqable, Buildable, Foldable, Reducible, Setlike instances + ops
+    (require [prologos::core::set  :refer-all])
+    ;; lseq: Seqable, Buildable, Foldable, Reducible, Seq instances
+    (require [prologos::core::lseq :refer-all])
+    ;; map: Keyed instance + ops (map-filter-vals, map-merge, map-seq, etc.)
+    (require [prologos::core::map  :refer-all])
 
     ;; ---- Identity trait instances ----
     ;; Instances are now in prologos::core::algebra (loaded via :refer-all above)
@@ -452,29 +443,14 @@
     (require [prologos::core::generic-ops :refer [gmap gfilter gfold glength
                                                   gconcat gany? gall? gto-list]])
 
-    ;; ---- Lattice trait instances ----
-    (require [prologos::core::lattice-instances :refer [FlatVal flat-bot flat-val flat-top
-                                                         Interval interval-bot mk-interval interval-top
-                                                         set-subset?
-                                                         map-merge-with map-lattice-leq
-                                                         interval-intersect interval-join interval-leq
-                                                         rat-max rat-min
-                                                         Bool--Lattice--dict
-                                                         Interval--Lattice--dict]])
+    ;; ---- Lattice + HasTop + BoundedLattice + Widenable + GaloisConnection ----
+    ;; All lattice hierarchy consolidated into prologos::core::lattice (loaded via :refer-all above)
 
-    ;; ---- HasTop trait + instances + BoundedLattice + Propagator helpers ----
-    (require [prologos::core::has-top-trait     :refer [HasTop HasTop-top]])
-    (require [prologos::core::has-top-instances :refer []])
-    (require [prologos::core::bounded-lattice   :refer [BoundedLattice]])
-    (require [prologos::core::propagator        :refer [new-lattice-cell new-widenable-cell]])
+    ;; ---- Propagator helpers ----
+    (require [prologos::core::propagator :refer [new-lattice-cell new-widenable-cell]])
 
-    ;; ---- Widenable trait + instances ----
-    (require [prologos::core::widenable-trait     :refer [Widenable Widenable-widen Widenable-narrow]])
-    (require [prologos::core::widenable-instances :refer []])
-
-    ;; ---- GaloisConnection trait + instances ----
-    (require [prologos::core::galois-trait        :refer [GaloisConnection GaloisConnection-alpha GaloisConnection-gamma]])
-    (require [prologos::core::galois-instances    :refer []])
+    ;; ---- Abstract domain instances (Sign/Parity lattices, Galois connections, refined numerics) ----
+    (require [prologos::core::abstract-domains :refer-all])
 
     ;; ---- Generic collection functions (clean names) ----
     ;; These shadow List-specific names (map, filter, reduce, etc.) with
