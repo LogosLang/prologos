@@ -1,6 +1,6 @@
 ns prologos::core::refined-int-instances :no-prelude
 
-require [prologos::core::eq-trait   :refer [Eq Eq-eq?]]
+require [prologos::core::eq   :refer [Eq Eq-eq?]]
 require [prologos::core::ord-trait  :refer [Ord Ord-compare]]
 require [prologos::data::ordering   :refer [Ordering lt-ord eq-ord gt-ord]]
 require [prologos::data::refined-int :refer [PosInt pos-int NegInt neg-int Zero mk-zero]]

@@ -1,0 +1,157 @@
+ns prologos::core::eq
+
+require [prologos::data::nat      :refer [nat-eq?]]
+require [prologos::data::bool     :refer [not bool-eq and]]
+require [prologos::data::ordering :refer [Ordering lt-ord eq-ord gt-ord]]
+require [prologos::data::option   :refer [Option some none]]
+;; NOTE: prologos::data::list NOT imported here to avoid circular dependency
+;; (list.prologos requires prologos::core::eq for nat-eq).
+;; list-eq lives in Phase 3a consolidated list module instead.
+require [prologos::data::char     :as char :refer []]
+require [prologos::data::string   :as str  :refer []]
+
+;; ========================================
+;; Eq Trait — structural equality
+;; ========================================
+
+trait Eq {A}
+  eq? : A A -> Bool
+  :doc "Structural equality: returns true when two values of the same type are equal"
+  :laws
+    - :name "reflexive"
+      :forall {x : A}
+      :holds [eq? x x]
+    - :name "symmetric"
+      :forall {x y : A}
+      :holds [eq? [eq? x y] [eq? y x]]
+    - :name "transitive"
+      :forall {x y z : A}
+      :holds [if [and [eq? x y] [eq? y z]] [eq? x z] true]
+
+;; Nat instance
+impl Eq Nat
+  defn eq? [x y] <Bool>
+    nat-eq? x y
+
+;; Backward-compatible alias
+def nat-eq Nat--Eq--dict
+
+;; Generic neq: negate equality
+spec eq-neq [Eq A] A A -> Bool
+  :doc "Not-equal: negation of eq?"
+defn eq-neq [dict x y]
+  not [dict x y]
+
+;; ========================================
+;; Eq Bool
+;; ========================================
+;; Reuses bool-eq from prologos::data::bool.
+
+impl Eq Bool
+  defn eq? [x : Bool y : Bool] <Bool>
+    bool-eq x y
+
+;; ========================================
+;; Eq Ordering
+;; ========================================
+;; 9-case match: equal only when same constructor.
+
+impl Eq Ordering
+  defn eq? [x : Ordering y : Ordering] <Bool>
+    match x
+      | lt-ord -> match y
+                    | lt-ord -> true
+                    | eq-ord -> false
+                    | gt-ord -> false
+      | eq-ord -> match y
+                    | lt-ord -> false
+                    | eq-ord -> true
+                    | gt-ord -> false
+      | gt-ord -> match y
+                    | lt-ord -> false
+                    | eq-ord -> false
+                    | gt-ord -> true
+
+;; ========================================
+;; Eq Int
+;; ========================================
+
+impl Eq Int
+  defn eq? [x : Int  y : Int] <Bool>
+    int-eq x y
+
+;; ========================================
+;; Eq Rat
+;; ========================================
+
+impl Eq Rat
+  defn eq? [x : Rat  y : Rat] <Bool>
+    rat-eq x y
+
+;; ========================================
+;; Eq Posit8
+;; ========================================
+
+impl Eq Posit8
+  defn eq? [x : Posit8  y : Posit8] <Bool>
+    p8-eq x y
+
+;; ========================================
+;; Eq Posit16
+;; ========================================
+
+impl Eq Posit16
+  defn eq? [x : Posit16  y : Posit16] <Bool>
+    p16-eq x y
+
+;; ========================================
+;; Eq Posit32
+;; ========================================
+
+impl Eq Posit32
+  defn eq? [x : Posit32  y : Posit32] <Bool>
+    p32-eq x y
+
+;; ========================================
+;; Eq Posit64
+;; ========================================
+
+impl Eq Posit64
+  defn eq? [x : Posit64  y : Posit64] <Bool>
+    p64-eq x y
+
+;; ========================================
+;; Eq Char
+;; ========================================
+
+impl Eq Char
+  defn eq? [x : Char  y : Char] <Bool>
+    char::eq x y
+
+;; ========================================
+;; Eq String
+;; ========================================
+
+impl Eq String
+  defn eq? [x : String  y : String] <Bool>
+    str::eq x y
+
+;; ========================================
+;; Derived Eq for parameterized types
+;; ========================================
+;; These take an Eq dictionary as explicit argument.
+
+;; option-eq: compare two Option A values using an Eq A dict.
+;; none == none, some a == some b iff eq? a b, else false.
+spec option-eq [Eq A] [Option A] [Option A] -> Bool
+defn option-eq [eq-a x y]
+  match x
+    | none   -> match y
+                  | none   -> true
+                  | some _ -> false
+    | some a -> match y
+                  | none   -> false
+                  | some b -> eq-a a b
+
+;; list-eq: deferred to prologos::core::list (Phase 3a) to avoid
+;; circular dependency with prologos::data::list.

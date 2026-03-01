@@ -48,7 +48,7 @@
                                        delete find-index]])
 
 ;; ---- Core traits (type class definitions) ----
-(require [prologos::core::eq-trait  :refer [Eq eq-neq nat-eq]])
+(require [prologos::core::eq :refer [Eq eq-neq nat-eq Char--Eq--dict String--Eq--dict]])
 (require [prologos::core::ord-trait :refer [Ord nat-ord ord-lt ord-le
                                            ord-gt ord-ge ord-eq
                                            ord-min ord-max]])
@@ -104,8 +104,7 @@
 (require [prologos::core::generic-arith :refer [plus minus times divide negate-fn abs-fn]])
 
 ;; ---- Instance registration (side-effect only, :refer []) ----
-(require [prologos::core::eq-instances         :refer []])
-(require [prologos::core::eq-numeric-instances  :refer []])
+;; eq-instances + eq-numeric-instances merged into prologos::core::eq
 (require [prologos::core::ord-instances         :refer []])
 (require [prologos::core::ord-numeric-instances :refer []])
 (require [prologos::core::add-instances         :refer []])
@@ -119,10 +118,10 @@
 
 ;; ---- Char/String trait instances ----
 ;; Dict bindings are referred so they resolve in user code (not just side-effect)
-(require [prologos::core::eq-char-instance        :refer [Char--Eq--dict]])
+;; eq-char-instance merged into prologos::core::eq
 (require [prologos::core::ord-char-instance       :refer [Char--Ord--dict]])
 (require [prologos::core::hashable-char-instance  :refer [Char--Hashable--dict]])
-(require [prologos::core::eq-string-instance      :refer [String--Eq--dict]])
+;; eq-string-instance merged into prologos::core::eq
 (require [prologos::core::ord-string-instance     :refer [String--Ord--dict]])
 (require [prologos::core::hashable-string-instance :refer [String--Hashable--dict]])
 (require [prologos::core::add-string-instance     :refer [String--Add--dict]])

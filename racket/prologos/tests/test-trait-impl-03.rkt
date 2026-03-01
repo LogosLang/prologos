@@ -241,7 +241,7 @@
     (run-ns-last
      (string-append
       "(ns d2t1)\n"
-      "(require [prologos::core::eq-trait :refer [nat-eq]])\n"
+      "(require [prologos::core::eq :refer [nat-eq]])\n"
       "(eval (nat-eq zero zero))")))
   (check-equal? result "true : Bool"))
 
@@ -251,7 +251,7 @@
     (run-ns-last
      (string-append
       "(ns d2t2)\n"
-      "(require [prologos::core::eq-trait :refer [nat-eq eq-neq]])\n"
+      "(require [prologos::core::eq :refer [nat-eq eq-neq]])\n"
       "(eval (eq-neq Nat nat-eq (suc zero) (suc (suc zero))))")))
   (check-equal? result "true : Bool"))
 
@@ -283,7 +283,7 @@
     (run-ns-last
      (string-append
       "(ns d2t5)\n"
-      "(require [prologos::core::eq-trait :refer [Nat--Eq--dict]])\n"
+      "(require [prologos::core::eq :refer [Nat--Eq--dict]])\n"
       "(eval (Nat--Eq--dict (suc (suc zero)) (suc (suc zero))))")))
   (check-equal? result "true : Bool"))
 

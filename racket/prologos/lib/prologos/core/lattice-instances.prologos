@@ -1,7 +1,7 @@
 ns prologos::core::lattice-instances
 
 require [prologos::core::lattice-trait :refer [Lattice Lattice-bot Lattice-join Lattice-leq]]
-require [prologos::core::eq-trait :refer [Eq]]
+require [prologos::core::eq :refer [Eq]]
 require [prologos::data::bool :refer [not and or implies]]
 
 ;; ========================================

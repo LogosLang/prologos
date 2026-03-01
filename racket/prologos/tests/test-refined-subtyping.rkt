@@ -186,7 +186,7 @@
    (run-ns-last
     (string-append (rs-ns 'rs-e2)
      "(require [prologos::core::refined-int-instances :refer [PosInt--Eq--dict]])\n"
-     "(require [prologos::core::eq-trait :refer [Eq Eq-eq?]])\n"
+     "(require [prologos::core::eq :refer [Eq Eq-eq?]])\n"
      "(eval (Eq-eq? PosInt PosInt--Eq--dict (pos-int 5) (pos-int 5)))\n"))
    "true"))
 

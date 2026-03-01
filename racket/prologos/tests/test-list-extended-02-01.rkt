@@ -47,7 +47,7 @@
    "   scanl iterate-n sort-on]])\n"
    "(require [prologos::data::option :refer [Option none some unwrap-or]])\n"
    "(require [prologos::data::nat :refer [add mult pred zero?]])\n"
-   "(require [prologos::core::eq-trait :refer [nat-eq]])\n"))
+   "(require [prologos::core::eq :refer [nat-eq]])\n"))
 
 
 ;; ========================================

@@ -162,33 +162,33 @@
 (test-case "elem/found"
   ;; 2 is in [1, 2, 3]
   (check-equal?
-   (last (run-ns "(ns le1)\n(require [prologos::data::list :refer [List nil cons elem]])\n(require [prologos::core::eq-trait :refer [nat-eq]])\n(eval (elem Nat nat-eq (suc (suc zero)) (cons Nat (suc zero) (cons Nat (suc (suc zero)) (cons Nat (suc (suc (suc zero))) (nil Nat))))))"))
+   (last (run-ns "(ns le1)\n(require [prologos::data::list :refer [List nil cons elem]])\n(require [prologos::core::eq :refer [nat-eq]])\n(eval (elem Nat nat-eq (suc (suc zero)) (cons Nat (suc zero) (cons Nat (suc (suc zero)) (cons Nat (suc (suc (suc zero))) (nil Nat))))))"))
    "true : Bool"))
 
 
 (test-case "elem/not-found"
   ;; 5 is not in [1, 2, 3]
   (check-equal?
-   (last (run-ns "(ns le2)\n(require [prologos::data::list :refer [List nil cons elem]])\n(require [prologos::core::eq-trait :refer [nat-eq]])\n(eval (elem Nat nat-eq (suc (suc (suc (suc (suc zero))))) (cons Nat (suc zero) (cons Nat (suc (suc zero)) (cons Nat (suc (suc (suc zero))) (nil Nat))))))"))
+   (last (run-ns "(ns le2)\n(require [prologos::data::list :refer [List nil cons elem]])\n(require [prologos::core::eq :refer [nat-eq]])\n(eval (elem Nat nat-eq (suc (suc (suc (suc (suc zero))))) (cons Nat (suc zero) (cons Nat (suc (suc zero)) (cons Nat (suc (suc (suc zero))) (nil Nat))))))"))
    "false : Bool"))
 
 
 (test-case "elem/empty-list"
   ;; Any element not in []
   (check-equal?
-   (last (run-ns "(ns le3)\n(require [prologos::data::list :refer [List nil elem]])\n(require [prologos::core::eq-trait :refer [nat-eq]])\n(eval (elem Nat nat-eq zero (nil Nat)))"))
+   (last (run-ns "(ns le3)\n(require [prologos::data::list :refer [List nil elem]])\n(require [prologos::core::eq :refer [nat-eq]])\n(eval (elem Nat nat-eq zero (nil Nat)))"))
    "false : Bool"))
 
 
 (test-case "elem/first-element"
   ;; 0 is first in [0, 1, 2]
   (check-equal?
-   (last (run-ns "(ns le4)\n(require [prologos::data::list :refer [List nil cons elem]])\n(require [prologos::core::eq-trait :refer [nat-eq]])\n(eval (elem Nat nat-eq zero (cons Nat zero (cons Nat (suc zero) (cons Nat (suc (suc zero)) (nil Nat))))))"))
+   (last (run-ns "(ns le4)\n(require [prologos::data::list :refer [List nil cons elem]])\n(require [prologos::core::eq :refer [nat-eq]])\n(eval (elem Nat nat-eq zero (cons Nat zero (cons Nat (suc zero) (cons Nat (suc (suc zero)) (nil Nat))))))"))
    "true : Bool"))
 
 
 (test-case "elem/last-element"
   ;; 3 is last in [1, 2, 3]
   (check-equal?
-   (last (run-ns "(ns le5)\n(require [prologos::data::list :refer [List nil cons elem]])\n(require [prologos::core::eq-trait :refer [nat-eq]])\n(eval (elem Nat nat-eq (suc (suc (suc zero))) (cons Nat (suc zero) (cons Nat (suc (suc zero)) (cons Nat (suc (suc (suc zero))) (nil Nat))))))"))
+   (last (run-ns "(ns le5)\n(require [prologos::data::list :refer [List nil cons elem]])\n(require [prologos::core::eq :refer [nat-eq]])\n(eval (elem Nat nat-eq (suc (suc (suc zero))) (cons Nat (suc zero) (cons Nat (suc (suc zero)) (cons Nat (suc (suc (suc zero))) (nil Nat))))))"))
    "true : Bool"))

@@ -1,27 +1,14 @@
 ns prologos::core::eq-derived
 
-require [prologos::core::eq-trait  :refer [Eq Eq-eq?]]
-require [prologos::data::option    :refer [Option some none]]
-require [prologos::data::list      :refer [List nil cons]]
-require [prologos::data::bool      :refer [and]]
+require [prologos::core::eq   :refer [Eq Eq-eq?]]
+require [prologos::data::list :refer [List nil cons]]
+require [prologos::data::bool :refer [and]]
 
 ;; ========================================
-;; Derived Eq for parameterized types
+;; Derived Eq for List
 ;; ========================================
-;; These take an Eq dictionary as explicit argument.
-;; Pattern matches the 'elem' function in list.prologos.
-
-;; option-eq: compare two Option A values using an Eq A dict.
-;; none == none, some a == some b iff eq? a b, else false.
-spec option-eq [Eq A] [Option A] [Option A] -> Bool
-defn option-eq [eq-a x y]
-  match x
-    | none   -> match y
-                  | none   -> true
-                  | some _ -> false
-    | some a -> match y
-                  | none   -> false
-                  | some b -> eq-a a b
+;; Kept separate from prologos::core::eq to avoid circular dependency:
+;; prologos::data::list requires prologos::core::eq for nat-eq.
 
 ;; list-eq: compare two List A values using an Eq A dict.
 ;; nil == nil, cons a as == cons b bs iff eq? a b && list-eq as bs, else false.

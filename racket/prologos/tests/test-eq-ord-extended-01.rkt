@@ -50,11 +50,12 @@
 
 (define preamble
   "(ns test)
-(require (prologos::core::eq-trait :refer (Eq Eq-eq? eq-neq)))
+(require (prologos::core::eq :refer (Eq Eq-eq? eq-neq)))
 (require (prologos::core::ord-trait :refer (Ord Ord-compare ord-lt ord-le ord-gt ord-ge ord-eq ord-min ord-max)))
-(require (prologos::core::eq-instances :refer ()))
+(require (prologos::core::eq :refer ()))
 (require (prologos::core::ord-instances :refer ()))
-(require (prologos::core::eq-derived :refer (option-eq list-eq)))
+(require (prologos::core::eq :refer (option-eq)))
+(require (prologos::core::eq-derived :refer (list-eq)))
 (require (prologos::core::partialord-trait :refer (PartialOrd PartialOrd-partial-compare)))
 (require (prologos::data::option :refer (Option some none)))
 (require (prologos::data::list :refer (List nil cons)))

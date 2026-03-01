@@ -226,7 +226,7 @@
     (run-ns-last
      (string-append
       "(ns hkt-compat1)\n"
-      "(require [prologos::core::eq-trait :refer [Nat--Eq--dict]])\n"
+      "(require [prologos::core::eq :refer [Nat--Eq--dict]])\n"
       "(eval (Nat--Eq--dict (suc (suc zero)) (suc (suc zero))))")))
   (check-equal? result "true : Bool"))
 

@@ -114,7 +114,7 @@
       (string-append
         "(ns test-d2-4 :no-prelude)\n"
         "(require [prologos::core::collection-traits :refer [Seqable]])\n"
-        "(require [prologos::core::eq-trait :refer [Eq]])\n"
+        "(require [prologos::core::eq :refer [Eq]])\n"
         "(spec gfilter (-> A Bool) -> (C A) -> (C A) where (Seqable C) (Eq A))\n")))
   (define se (hash-ref spec-store 'gfilter #f))
   (check-true (spec-entry? se))
@@ -283,7 +283,7 @@
     (run-ns-with-spec-store
       (string-append
         "(ns test-d2-meta2 :no-prelude)\n"
-        "(require [prologos::core::eq-trait :refer [Eq]])\n"
+        "(require [prologos::core::eq :refer [Eq]])\n"
         ;; Metadata :where with Type-kinded constraint
         "(spec my-meta-eq A A -> Bool {:where (Eq A)})\n")))
   (define se (hash-ref spec-store 'my-meta-eq #f))

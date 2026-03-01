@@ -137,8 +137,8 @@
 
 (define preamble
   "(ns test)
-(require (prologos::core::eq-trait :refer (Eq Eq-eq?)))
-(require (prologos::core::eq-numeric-instances :refer ()))
+(require (prologos::core::eq :refer (Eq Eq-eq?)))
+(require (prologos::core::eq :refer ()))
 ")
 
 (test-case "posit-eq/trait-eq-posit32"

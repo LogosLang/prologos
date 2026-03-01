@@ -210,7 +210,7 @@
   (define results
     (run-ns (string-append
              "(ns test-where1)\n"
-             "(require [prologos::core::eq-trait :refer [Eq Eq-eq? nat-eq eq-neq]])\n"
+             "(require [prologos::core::eq :refer [Eq Eq-eq? nat-eq eq-neq]])\n"
              ;; Define a function using where clause (sexp mode)
              "(spec my-neq A A -> Bool where (Eq A))\n"
              ;; defn with bare params — spec injection adds types including the leading (Eq A) dict
@@ -231,7 +231,7 @@
   (define results
     (run-ns (string-append
              "(ns test-where-ws)\n"
-             "(require [prologos::core::eq-trait :refer [Eq Eq-eq? nat-eq eq-neq]])\n"
+             "(require [prologos::core::eq :refer [Eq Eq-eq? nat-eq eq-neq]])\n"
              ;; Tricky: in sexp mode, where is just a bare symbol in the token list
              ;; We test that process-spec handles it correctly
              "(spec ws-neq A A -> Bool where (Eq A))\n"
