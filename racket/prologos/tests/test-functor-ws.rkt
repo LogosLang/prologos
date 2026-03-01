@@ -45,6 +45,7 @@
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
                  [current-functor-store (hasheq)]
+                 [current-type-meta (hasheq)]
                  [current-preparse-registry (current-preparse-registry)]
                  [current-trait-registry (hasheq)]
                  [current-trait-laws (hasheq)])
@@ -119,6 +120,7 @@
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
                  [current-functor-store (hasheq)]
+                 [current-type-meta (hasheq)]
                  [current-preparse-registry (current-preparse-registry)]
                  [current-trait-registry (hasheq)]
                  [current-trait-laws (hasheq)])
@@ -141,6 +143,7 @@
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
                  [current-functor-store (hasheq)]
+                 [current-type-meta (hasheq)]
                  [current-preparse-registry (current-preparse-registry)]
                  [current-trait-registry (hasheq)]
                  [current-trait-laws (hasheq)])
@@ -156,6 +159,7 @@
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
                  [current-functor-store (hasheq)]
+                 [current-type-meta (hasheq)]
                  [current-preparse-registry (current-preparse-registry)]
                  [current-trait-registry (hasheq)]
                  [current-trait-laws (hasheq)])
@@ -174,6 +178,7 @@
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
                  [current-functor-store (hasheq)]
+                 [current-type-meta (hasheq)]
                  [current-preparse-registry (current-preparse-registry)]
                  [current-trait-registry (hasheq)]
                  [current-trait-laws (hasheq)])
@@ -189,6 +194,7 @@
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
                  [current-functor-store (hasheq)]
+                 [current-type-meta (hasheq)]
                  [current-preparse-registry (current-preparse-registry)]
                  [current-trait-registry (hasheq)]
                  [current-trait-laws (hasheq)])
@@ -207,6 +213,7 @@
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
                  [current-functor-store (hasheq)]
+                 [current-type-meta (hasheq)]
                  [current-preparse-registry (current-preparse-registry)]
                  [current-trait-registry (hasheq)]
                  [current-trait-laws (hasheq)])

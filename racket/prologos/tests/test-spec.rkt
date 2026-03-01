@@ -7,6 +7,7 @@
 (require rackunit
          racket/string
          racket/list
+         racket/set
          "../prelude.rkt"
          "../syntax.rkt"
          "../surface-syntax.rkt"
@@ -26,6 +27,7 @@
 (define (run s)
   (parameterize ([current-global-env (hasheq)]
                  [current-spec-store (hasheq)]
+                 [current-propagated-specs (seteq)]
                  [current-preparse-registry (current-preparse-registry)])
     (process-string s)))
 
