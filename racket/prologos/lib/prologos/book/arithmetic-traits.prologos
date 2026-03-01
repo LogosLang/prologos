@@ -23,18 +23,17 @@
 ;;   • **String**: Add (concatenation) — no others
 
 
-;; ════════════════════════════════════════════════════
-;; Part I — Addition
-;; ════════════════════════════════════════════════════
+module prologos::core::arithmetic
 
+require [prologos::data::nat    :refer [add sub mult]]
+require [prologos::data::string :as str :refer []]
 
-module prologos::core::add-trait
-
-;; ── The Add Trait ────────────────────────────────
-;;
-;; Binary addition. Laws: commutative and associative.
-
-require [prologos::data::nat :refer [add]]
+;; ════════════════════════════════════════════════════════════════
+;; Add Trait — binary addition
+;; ════════════════════════════════════════════════════════════════
+;; Add A = A A -> A (single-method: dict IS the function)
+;; Generated: deftype Add, accessor Add-add
+;; Instance: Nat--Add--dict, Nat--Add--add
 
 trait Add {A}
   add : A A -> A
@@ -52,63 +51,46 @@ impl Add Nat
   defn add [x y] <Nat>
     add x y
 
-
-module prologos::core::add-instances
-
-;; ── Add Instances for Numeric Types ──────────────
-
-require [prologos::core::add-trait :refer [Add Add-add]]
-
+;; Int instance
 impl Add Int
   defn add [x : Int  y : Int] <Int>
     int+ x y
 
+;; Rat instance
 impl Add Rat
   defn add [x : Rat  y : Rat] <Rat>
     rat+ x y
 
+;; Posit8 instance
 impl Add Posit8
   defn add [x : Posit8  y : Posit8] <Posit8>
     p8+ x y
 
+;; Posit16 instance
 impl Add Posit16
   defn add [x : Posit16  y : Posit16] <Posit16>
     p16+ x y
 
+;; Posit32 instance
 impl Add Posit32
   defn add [x : Posit32  y : Posit32] <Posit32>
     p32+ x y
 
+;; Posit64 instance
 impl Add Posit64
   defn add [x : Posit64  y : Posit64] <Posit64>
     p64+ x y
 
-
-module prologos::core::add-string-instance
-
-;; ── Add String — Concatenation ───────────────────
-
-require [prologos::core::add-trait :refer [Add]]
-require [prologos::data::string    :as str :refer []]
-
+;; String instance — concatenation
 impl Add String
   defn add [x : String  y : String] <String>
     str::append x y
 
-
-;; ════════════════════════════════════════════════════
-;; Part II — Subtraction
-;; ════════════════════════════════════════════════════
-
-
-module prologos::core::sub-trait
-
-;; ── The Sub Trait ────────────────────────────────
-;;
-;; Binary subtraction. Nat subtraction is saturating:
-;; `sub(x, y) = max(x - y, 0)`.
-
-require [prologos::data::nat :refer [sub]]
+;; ════════════════════════════════════════════════════════════════
+;; Sub Trait — binary subtraction
+;; ════════════════════════════════════════════════════════════════
+;; Sub A = A A -> A (single-method: dict IS the function)
+;; Nat sub is saturating: sub(x, y) = max(x - y, 0)
 
 trait Sub {A}
   sub : A A -> A
@@ -119,50 +101,40 @@ impl Sub Nat
   defn sub [x y] <Nat>
     sub x y
 
-
-module prologos::core::sub-instances
-
-;; ── Sub Instances for Numeric Types ──────────────
-
-require [prologos::core::sub-trait :refer [Sub Sub-sub]]
-
+;; Int instance
 impl Sub Int
   defn sub [x : Int  y : Int] <Int>
     int- x y
 
+;; Rat instance
 impl Sub Rat
   defn sub [x : Rat  y : Rat] <Rat>
     rat- x y
 
+;; Posit8 instance
 impl Sub Posit8
   defn sub [x : Posit8  y : Posit8] <Posit8>
     p8- x y
 
+;; Posit16 instance
 impl Sub Posit16
   defn sub [x : Posit16  y : Posit16] <Posit16>
     p16- x y
 
+;; Posit32 instance
 impl Sub Posit32
   defn sub [x : Posit32  y : Posit32] <Posit32>
     p32- x y
 
+;; Posit64 instance
 impl Sub Posit64
   defn sub [x : Posit64  y : Posit64] <Posit64>
     p64- x y
 
-
-;; ════════════════════════════════════════════════════
-;; Part III — Multiplication
-;; ════════════════════════════════════════════════════
-
-
-module prologos::core::mul-trait
-
-;; ── The Mul Trait ────────────────────────────────
-;;
-;; Binary multiplication. Laws: commutative and associative.
-
-require [prologos::data::nat :refer [mult]]
+;; ════════════════════════════════════════════════════════════════
+;; Mul Trait — binary multiplication
+;; ════════════════════════════════════════════════════════════════
+;; Mul A = A A -> A (single-method: dict IS the function)
 
 trait Mul {A}
   mul : A A -> A
@@ -180,49 +152,41 @@ impl Mul Nat
   defn mul [x y] <Nat>
     mult x y
 
-
-module prologos::core::mul-instances
-
-;; ── Mul Instances for Numeric Types ──────────────
-
-require [prologos::core::mul-trait :refer [Mul Mul-mul]]
-
+;; Int instance
 impl Mul Int
   defn mul [x : Int  y : Int] <Int>
     int* x y
 
+;; Rat instance
 impl Mul Rat
   defn mul [x : Rat  y : Rat] <Rat>
     rat* x y
 
+;; Posit8 instance
 impl Mul Posit8
   defn mul [x : Posit8  y : Posit8] <Posit8>
     p8* x y
 
+;; Posit16 instance
 impl Mul Posit16
   defn mul [x : Posit16  y : Posit16] <Posit16>
     p16* x y
 
+;; Posit32 instance
 impl Mul Posit32
   defn mul [x : Posit32  y : Posit32] <Posit32>
     p32* x y
 
+;; Posit64 instance
 impl Mul Posit64
   defn mul [x : Posit64  y : Posit64] <Posit64>
     p64* x y
 
-
-;; ════════════════════════════════════════════════════
-;; Part IV — Division
-;; ════════════════════════════════════════════════════
-
-
-module prologos::core::div-trait
-
-;; ── The Div Trait ────────────────────────────────
-;;
-;; Binary division. No Nat instance (no integer division primitive).
-;; Int division is truncating (toward zero).
+;; ════════════════════════════════════════════════════════════════
+;; Div Trait — binary division
+;; ════════════════════════════════════════════════════════════════
+;; Div A = A A -> A (single-method: dict IS the function)
+;; No Nat instance (no integer division primitive).
 
 trait Div {A}
   div : A A -> A
@@ -233,45 +197,36 @@ impl Div Int
   defn div [x : Int  y : Int] <Int>
     int/ x y
 
-
-module prologos::core::div-instances
-
-;; ── Div Instances for Numeric Types ──────────────
-
-require [prologos::core::div-trait :refer [Div Div-div]]
-
+;; Rat instance
 impl Div Rat
   defn div [x : Rat  y : Rat] <Rat>
     rat/ x y
 
+;; Posit8 instance
 impl Div Posit8
   defn div [x : Posit8  y : Posit8] <Posit8>
     p8/ x y
 
+;; Posit16 instance
 impl Div Posit16
   defn div [x : Posit16  y : Posit16] <Posit16>
     p16/ x y
 
+;; Posit32 instance
 impl Div Posit32
   defn div [x : Posit32  y : Posit32] <Posit32>
     p32/ x y
 
+;; Posit64 instance
 impl Div Posit64
   defn div [x : Posit64  y : Posit64] <Posit64>
     p64/ x y
 
-
-;; ════════════════════════════════════════════════════
-;; Part V — Negation and Absolute Value
-;; ════════════════════════════════════════════════════
-
-
-module prologos::core::neg-trait
-
-;; ── The Neg Trait ────────────────────────────────
-;;
-;; Unary negation. No Nat instance (negation leaves the Nat domain).
-;; Law: involution (`neg (neg x) = x`).
+;; ════════════════════════════════════════════════════════════════
+;; Neg Trait — unary negation
+;; ════════════════════════════════════════════════════════════════
+;; Neg A = A -> A (single-method: dict IS the function)
+;; No Nat instance (negation leaves Nat domain).
 
 trait Neg {A}
   neg : A -> A
@@ -286,40 +241,36 @@ impl Neg Int
   defn neg [x : Int] <Int>
     int-neg x
 
-
-module prologos::core::neg-instances
-
-;; ── Neg Instances for Numeric Types ──────────────
-
-require [prologos::core::neg-trait :refer [Neg Neg-neg]]
-
+;; Rat instance
 impl Neg Rat
   defn neg [x : Rat] <Rat>
     rat-neg x
 
+;; Posit8 instance
 impl Neg Posit8
   defn neg [x : Posit8] <Posit8>
     p8-neg x
 
+;; Posit16 instance
 impl Neg Posit16
   defn neg [x : Posit16] <Posit16>
     p16-neg x
 
+;; Posit32 instance
 impl Neg Posit32
   defn neg [x : Posit32] <Posit32>
     p32-neg x
 
+;; Posit64 instance
 impl Neg Posit64
   defn neg [x : Posit64] <Posit64>
     p64-neg x
 
-
-module prologos::core::abs-trait
-
-;; ── The Abs Trait ────────────────────────────────
-;;
-;; Absolute value. No Nat instance (Nat is always non-negative).
-;; Laws: non-negative and idempotent.
+;; ════════════════════════════════════════════════════════════════
+;; Abs Trait — absolute value
+;; ════════════════════════════════════════════════════════════════
+;; Abs A = A -> A (single-method: dict IS the function)
+;; No Nat instance (Nat is always non-negative).
 
 trait Abs {A}
   abs : A -> A
@@ -337,29 +288,27 @@ impl Abs Int
   defn abs [x : Int] <Int>
     int-abs x
 
-
-module prologos::core::abs-instances
-
-;; ── Abs Instances for Numeric Types ──────────────
-
-require [prologos::core::abs-trait :refer [Abs Abs-abs]]
-
+;; Rat instance
 impl Abs Rat
   defn abs [x : Rat] <Rat>
     rat-abs x
 
+;; Posit8 instance
 impl Abs Posit8
   defn abs [x : Posit8] <Posit8>
     p8-abs x
 
+;; Posit16 instance
 impl Abs Posit16
   defn abs [x : Posit16] <Posit16>
     p16-abs x
 
+;; Posit32 instance
 impl Abs Posit32
   defn abs [x : Posit32] <Posit32>
     p32-abs x
 
+;; Posit64 instance
 impl Abs Posit64
   defn abs [x : Posit64] <Posit64>
     p64-abs x
