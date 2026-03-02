@@ -880,6 +880,9 @@
    (test-dep '(macros.rkt typing-core.rkt capability-resolution.rkt) #t)
    'test-capability-05.rkt
    (test-dep '(capability-inference.rkt propagator.rkt champ.rkt macros.rkt driver.rkt) #t)
+   ;; ATMS provenance for capability audit trails (Phase 5 deferred)
+   'test-capability-05b.rkt
+   (test-dep '(capability-inference.rkt atms.rkt propagator.rkt champ.rkt macros.rkt driver.rkt) #t)
    ;; Foreign function capability gating (Phase 6)
    'test-capability-06.rkt
    (test-dep '(driver.rkt capability-inference.rkt propagator.rkt champ.rkt macros.rkt foreign.rkt) #t)))
