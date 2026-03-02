@@ -20,6 +20,7 @@
          racket/list
          racket/string
          racket/set
+         "syntax.rkt"           ;; Phase 7: expr-fvar?, expr-app? for capability-type-expr?
          "surface-syntax.rkt"
          "source-location.rkt"
          "errors.rkt"

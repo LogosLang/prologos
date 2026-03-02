@@ -403,7 +403,7 @@
     (define display-name
       (if (and cap-type (expr-fvar? cap-type))
           cap-name  ;; simple cap — just the name
-          (or (and cap-type (pretty-print-expr cap-type)) cap-name)))
+          (or (and cap-type (pp-expr cap-type)) cap-name)))
     (define message
       (format "E2001: Required capability ~a not available in scope. Add it as a function parameter: {cap :0 ~a}"
               display-name display-name))

@@ -885,7 +885,13 @@
    (test-dep '(capability-inference.rkt atms.rkt propagator.rkt champ.rkt macros.rkt driver.rkt) #t)
    ;; Foreign function capability gating (Phase 6)
    'test-capability-06.rkt
-   (test-dep '(driver.rkt capability-inference.rkt propagator.rkt champ.rkt macros.rkt foreign.rkt) #t)))
+   (test-dep '(driver.rkt capability-inference.rkt propagator.rkt champ.rkt macros.rkt foreign.rkt) #t)
+   ;; Dependent (parameterized) capabilities (Phase 7)
+   'test-capability-07.rkt
+   (test-dep '(macros.rkt parser.rkt elaborator.rkt driver.rkt capability-inference.rkt type-lattice.rkt) #t)
+   ;; Cross-domain bridge: type lattice ↔ capability lattice (Phase 8)
+   'test-capability-08.rkt
+   (test-dep '(cap-type-bridge.rkt propagator.rkt type-lattice.rkt capability-inference.rkt macros.rkt driver.rkt) #t)))
 
 ;; ============================================================
 ;; Layer 2b: Example file → test file mapping
