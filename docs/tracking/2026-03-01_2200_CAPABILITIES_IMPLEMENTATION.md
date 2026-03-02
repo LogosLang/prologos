@@ -78,3 +78,16 @@ closure. All 21 existing tests pass without modification.
 | 6b | Type extension: prepend `:0` Pi binders for capabilities | done | `533928d` |
 | 6c | Integration with inference (automatic via existing Pi chain walking) | done | `533928d` |
 | 6d | Tests: test-capability-06.rkt (15 tests, all pass) | done | `533928d` |
+
+## Phase 8: Cross-Network Interfacing
+
+Bridges type inference and capability inference networks via Galois connections.
+Uses `net-add-cross-domain-propagator` (Phase 6c infrastructure) with α/γ functions
+between the type lattice and CapabilitySet lattice. Phase 8d deferred.
+
+| Sub-phase | Description | Status | Commit |
+|---|---|---|---|
+| 8a | α/γ abstraction functions (type-to-cap-set, cap-set-to-type) in cap-type-bridge.rkt | | |
+| 8b | Cross-domain network construction + overdeclared analysis + cap-bridge REPL cmd | | |
+| 8c | Tests: test-capability-08.rkt (~20 tests) | | |
+| 8d | Multi-agent cross-network reasoning | deferred | — |

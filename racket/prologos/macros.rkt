@@ -6680,6 +6680,7 @@
     [(surf-cap-closure? surf) surf]
     [(surf-cap-audit? surf) surf]
     [(surf-cap-verify? surf) surf]
+    [(surf-cap-bridge? surf) surf]
     ;; Bare expression — implicit eval
     [else
      (define loc (cond

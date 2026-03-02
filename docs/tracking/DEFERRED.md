@@ -395,6 +395,13 @@ The following collection items ARE also deferred (genuine infrastructure deps):
   - Additional abstract domains (Congruence, Pointer, etc.)
 - Source: `docs/tracking/2026-02-27_1026_GALOIS_CONNECTIONS_ABSTRACT_INTERPRETATION.md`
 
+### Capabilities — Phase 8d: Multi-Agent Cross-Network Reasoning
+- Separate agents on separate propagator networks cross-referencing via
+  cross-network propagators, with dependent-typed proof objects as provenance
+- Machine-checkable justification chains across network boundaries
+- **Blocked on**: session type design (Phase 9), dependent capabilities (Phase 7)
+- Source: `docs/tracking/2026-03-01_1500_CAPABILITIES_AS_TYPES_DESIGN.md` §Phase 8d
+
 ### Elaborator Propagator Refactoring — Phases 8+A-E COMPLETE (E3 deferred)
 - ✅ Phase 8: Propagator network as primary type inference engine (56-62% speedup)
 - ✅ Phase A: CHAMP meta-info store, eliminated hash dual-writes in production

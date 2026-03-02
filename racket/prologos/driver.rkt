@@ -46,7 +46,8 @@
          "champ.rkt"
          "unify.rkt"
          "atms.rkt"
-         "capability-inference.rkt")
+         "capability-inference.rkt"
+         "cap-type-bridge.rkt")
 
 (provide process-command
          process-file
@@ -484,6 +485,43 @@
                               name
                               missing-str
                               (string-join trace-lines "\n"))])]
+
+                  ;; (cap-bridge name) — cross-domain bridge analysis
+                  [(list 'cap-bridge name)
+                   (define bridge-result (build-cross-domain-network))
+                   (define type-closures (cap-type-bridge-result-type-closures bridge-result))
+                   (define cap-closures (cap-type-bridge-result-cap-closures bridge-result))
+                   (define overdeclared-set (cap-audit-overdeclared bridge-result name))
+                   ;; Type from the env (original)
+                   (define entry (hash-ref (current-global-env) name #f))
+                   (define type-str
+                     (if (and entry (pair? entry))
+                         (format "~a" (car entry))
+                         "<unknown>"))
+                   ;; Capabilities from type decomposition (α direction)
+                   (define type-caps (hash-ref cap-closures name (seteq)))
+                   (define type-caps-str
+                     (if (set-empty? type-caps)
+                         "∅ (pure)"
+                         (string-join (sort (map symbol->string (set->list type-caps)) string<?) ", ")))
+                   ;; Capabilities from call-graph inference
+                   (define inferred-caps (hash-ref cap-closures name (seteq)))
+                   (define inferred-str
+                     (if (set-empty? inferred-caps)
+                         "∅ (pure)"
+                         (string-join (sort (map symbol->string (set->list inferred-caps)) string<?) ", ")))
+                   ;; Overdeclared
+                   (define overdeclared-str
+                     (if (set-empty? overdeclared-set)
+                         "none"
+                         (string-join (sort (map symbol->string (set->list overdeclared-set)) string<?) ", ")))
+                   (string-join
+                    (list (format "cap-bridge ~a:" name)
+                          (format "  Type: ~a" type-str)
+                          (format "  Capabilities (from type): {~a}" type-caps-str)
+                          (format "  Capabilities (inferred):  {~a}" inferred-str)
+                          (format "  Overdeclared:             {~a}" overdeclared-str))
+                    "\n")]
 
                   [_ (prologos-error srcloc-unknown (format "Unknown command: ~a" elab-result))])))]))))
   ;; Append warnings to result string (if any)

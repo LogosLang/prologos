@@ -2784,6 +2784,14 @@
           [else
            (surf-cap-verify (stx->datum (first args)) loc)])]
 
+       ;; (cap-bridge name) — cross-domain bridge analysis (type ↔ capability)
+       [(cap-bridge)
+        (cond
+          [(null? args)
+           (parse-error loc "cap-bridge requires a function name" #f)]
+          [else
+           (surf-cap-bridge (stx->datum (first args)) loc)])]
+
        ;; Not a keyword -> function application or relational goal
        [else
         (if (current-parsing-relational-goal?)

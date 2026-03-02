@@ -303,7 +303,8 @@
  ;; Capability inference REPL commands
  (struct-out surf-cap-closure)
  (struct-out surf-cap-audit)
- (struct-out surf-cap-verify))
+ (struct-out surf-cap-verify)
+ (struct-out surf-cap-bridge))
 
 ;; ========================================
 ;; Type hole (to be inferred by the type checker)
@@ -988,3 +989,5 @@
 (struct surf-cap-audit (name cap-name srcloc) #:transparent)
 ;; (cap-verify name) — verify authority root: declared caps subsume inferred closure
 (struct surf-cap-verify (name srcloc) #:transparent)
+;; (cap-bridge name) — cross-domain bridge analysis: type ↔ capability with overdeclared detection
+(struct surf-cap-bridge (name srcloc) #:transparent)

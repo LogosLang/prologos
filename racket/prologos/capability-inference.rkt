@@ -40,6 +40,8 @@
          ;; Expression analysis
          extract-fvar-names
          extract-capability-requirements
+         ;; Call graph (reused by cap-type-bridge.rkt)
+         build-call-graph
          ;; Inference
          run-capability-inference
          ;; Query API
