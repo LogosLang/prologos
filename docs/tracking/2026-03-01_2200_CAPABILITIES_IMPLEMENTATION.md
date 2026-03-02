@@ -79,6 +79,23 @@ closure. All 21 existing tests pass without modification.
 | 6c | Integration with inference (automatic via existing Pi chain walking) | done | `533928d` |
 | 6d | Tests: test-capability-06.rkt (15 tests, all pass) | done | `533928d` |
 
+## Phase 7: Dependent (Parameterized) Capabilities
+
+Adds parameterized capability types indexed by values: `(capability FileCap (p : Path))`
+declares a type family where `FileCap "/data"` is path-specific file access. Key insight:
+the elaborator resolves capabilities optimistically by functor name; the type checker
+verifies indices via existing `expr-app` unification. Phases 7e-7g deferred.
+
+| Sub-phase | Description | Status | Commit |
+|---|---|---|---|
+| 7a | Parser: replace error stub with parse-binder calls | done | `a6453f1` |
+| 7b | Elaboration: Pi chain construction + driver 4-element result | done | `08e4319` |
+| 7c | Resolution: capability-type-expr? helper, scope tracking, implicit resolution | done | `e8fc439` |
+| 7d | Tests: test-capability-07.rkt (20 tests, all pass) + dep-graph registration | done | `0a75942` |
+| 7e | CapabilitySet extension for expr-app caps in propagator network | deferred | — |
+| 7f | cap-type-bridge for dependent caps (α/γ with expr-app) | deferred | — |
+| 7g | Dependent caps in `foreign` blocks (`:requires [FileCap p]`) | deferred | — |
+
 ## Phase 8: Cross-Network Interfacing
 
 Bridges type inference and capability inference networks via Galois connections.

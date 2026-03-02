@@ -187,6 +187,7 @@ top-level-form  = require-decl
                 | expand-form
                 | foreign-form
                 | subtype-decl
+                | capability-decl
                 | let-form
                 | expr              (* bare expression → implicit eval *)
                 ;
@@ -418,6 +419,12 @@ foreign-block   = ? Racket s-expression block ? ;
    without it, the system auto-infers coercion by unwrapping a
    single-field constructor. *)
 subtype-decl    = 'subtype' , type-name , type-name , [ 'via' , identifier ] ;
+
+(* Declares a capability type. Nullary capabilities are simple opaque types.
+   Parameterized capabilities are type families indexed by values, e.g.,
+   (capability FileCap (p : Path)) declares FileCap : Path → Type 0.
+   The parameters use binder syntax and are elaborated to a Pi chain. *)
+capability-decl = 'capability' , type-name , { '(' , identifier , ':' , type-expr , ')' } ;
 
 (* ================================================================== *)
 (* 4. TYPE EXPRESSIONS                                                 *)

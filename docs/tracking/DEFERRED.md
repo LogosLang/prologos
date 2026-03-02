@@ -395,11 +395,23 @@ The following collection items ARE also deferred (genuine infrastructure deps):
   - Additional abstract domains (Congruence, Pointer, etc.)
 - Source: `docs/tracking/2026-02-27_1026_GALOIS_CONNECTIONS_ABSTRACT_INTERPRETATION.md`
 
+### Capabilities — Phase 7e-7g: Dependent Capability Extensions
+- **7e**: Extend `cap-set` to hold type expressions (not just symbols) for propagator network
+  - Symbolic constraint variables for dependent indices
+  - `extract-capability-requirements` for `expr-app` forms
+- **7f**: Update cap-type-bridge α/γ functions for `expr-app` capability types
+- **7g**: Dependent caps in `foreign` blocks (`:requires [FileCap p]` syntax)
+- **Context**: Phases 7a-7d complete (commit `0a75942`) — parsing, type formation,
+  scope tracking, functor-based resolution all working. Current cap-closure/cap-inference
+  treats applied caps (like `[FileCap "/data"]`) as opaque (appears pure). These phases
+  add full dependent-cap awareness to the inference/bridge infrastructure.
+- Source: `docs/tracking/2026-03-01_1500_CAPABILITIES_AS_TYPES_DESIGN.md` §Phase 7
+
 ### Capabilities — Phase 8d: Multi-Agent Cross-Network Reasoning
 - Separate agents on separate propagator networks cross-referencing via
   cross-network propagators, with dependent-typed proof objects as provenance
 - Machine-checkable justification chains across network boundaries
-- **Blocked on**: session type design (Phase 9), dependent capabilities (Phase 7)
+- **Blocked on**: session type design (Phase 9), dependent capabilities (Phase 7e-7g)
 - **Context**: Phases 8a-8c complete (commit `cd8b1e1`) — α/γ Galois connections,
   cross-domain network, overdeclared analysis, cap-bridge REPL command
 - Source: `docs/tracking/2026-03-01_1500_CAPABILITIES_AS_TYPES_DESIGN.md` §Phase 8d
