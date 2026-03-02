@@ -67,8 +67,8 @@ closure. All 21 existing tests pass without modification.
 | 5e | REPL commands (cap-closure, cap-audit) in parser/elaborator/driver | done | `7d651cb` |
 | 5f | Tests: test-capability-05.rkt (21 tests, all pass) | done | `7d651cb` |
 | 5g | CHAMP trie fix: store hash in data entries | done | `a2dbea4` |
-| — | ATMS provenance deferred (no longer blocked, just not yet implemented) | deferred | |
-| — | Authority root verification deferred (depends on ATMS) | deferred | |
+| 5h | ATMS provenance for capability audit trails (15 tests in test-capability-05b.rkt) | done | `44015d2` |
+| 5i | Authority root verification + cap-verify REPL command (10 new tests, 24 total in 05b) | done | `1372178` |
 
 ## Phase 6: Foreign Function Capability Gating
 
