@@ -159,6 +159,24 @@ Type inference, constraint solving, and runtime coordination all use the same un
 -   Runtime concurrency (LVar cells, process propagators)
 -   Logic programming (substitution cells, unification propagators)
 
+### The Logic Engine as General Infrastructure
+
+The Logic Engine &#x2014; the propagator network + UnionFind + ATMS + tabling + stratification &#x2014; is not only the foundation for the relational language. It is the **general infrastructure for all monotonic fixed-point computations** in the compiler and runtime. Any problem that can be framed as "cells holding partial information, refined to a fixed point" is a candidate for the Logic Engine.
+
+Identified use cases beyond relational logic and type inference:
+
+-   **Hole-driven development (`??`)**: Holes are metavariables &#x2014; cells in the propagator network. Type inference already narrows hole types via constraint propagation. Extending to value-level proof search means searching the space of constructors and functions that produce the right type. The ATMS enables hypothetical reasoning ("what if this hole is filled with X?"); tabling prevents redundant search. The difference between type inference and hole-filling is the domain of the lattice cells &#x2014; the infrastructure is the same.
+
+-   **Property derivation and structural inference**: Properties (from the Extended Spec `property` form) are propositions attached to types. Deriving which properties hold for a composite type &#x2014; e.g., which properties of `Num` hold for `Int` &#x2014; is a constraint propagation problem. Property-membership cells and composition propagators would flow property truths through trait and bundle composition.
+
+-   **Generative / property-based testing**: Generating test inputs that satisfy complex constraints is constraint solving. The propagator network with domain-specific cells (integer intervals, enumerated sets) computes satisfying assignments. The ATMS explores multiple assignments via `amb`. This is the SmartGen approach &#x2014; test generation guided by constraint solving rather than random sampling.
+
+-   **Abstract interpretation and enhanced static analysis**: Abstract domains form lattices (Lattice trait). Abstract interpretation computes fixed points over lattices (propagator network). Galois connections bridge concrete and abstract domains (GaloisConnection trait). Sign, parity, and interval analysis are already implemented as abstract domains. Extending to whole-program analysis &#x2014; including capability inference &#x2014; requires building call-graph-level propagator networks where each function is a cell. The ATMS provides provenance: "why does the analyzer conclude this function requires ReadCap?" is answered by tracing the derivation tree.
+
+-   **CLP(FD) / CLP(R) constraint solving**: The propagator network is domain-agnostic &#x2014; each cell has a domain-specific merge function. For CLP(FD), cells hold integer interval domains; propagators are arithmetic constraints. For CLP(R), symbolic intervals or polynomial domains. This is the Radul-Sussman design: propagator networks as the universal substrate for multi-domain constraint solving. This extends the relational language with constraint domains, bringing Prologos's logic programming closer to the power of SICStus or ECLiPSe.
+
+The unifying principle: **any monotonic fixed-point computation in the compiler or runtime should use the Logic Engine**, not a hand-rolled fixed-point loop. This gives uniform infrastructure (cells, propagators, quiescence, backtracking), uniform provenance (ATMS-based derivation trees), and uniform performance characteristics (CHAMP-backed persistence, BSP scheduling).
+
 
 <a id="org7b82287"></a>
 

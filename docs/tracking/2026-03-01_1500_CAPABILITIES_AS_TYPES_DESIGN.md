@@ -290,8 +290,8 @@ seL4 proves authority confinement in Isabelle/HOL. Pony proves data-race freedom
 | Infrastructure | Status | Relevance to Capabilities |
 |----------------|--------|--------------------------|
 | **QTT (`:0` / `:1` / `:w`)** | Complete | The enforcement mechanism — `:0` for authority proofs, `:1` for authority transfer |
-| **Union types (`expr-union`)** | Complete | Composite capabilities as `type FsCap = ReadCap \| WriteCap` |
-| **Subtype declarations** | Complete | Attenuation — `subtype ReadCap FsCap` with transitive closure |
+| **Union types (`expr-union`)** | Complete | Composite capabilities as `type FsCap := ReadCap \| WriteCap` |
+| **Subtype declarations** | Complete | Attenuation — `ReadCap <: FsCap` with transitive closure |
 | **Implicit arguments (`{A : Type}`)** | Complete | Capability parameters in specs — `{fs :0 ReadCap}` |
 | **Trait system** | Complete | Capability declaration as zero-method traits |
 | **Dependent types** | Complete | Resource-indexed capabilities — `FileCap : Path -> Type` |
@@ -432,9 +432,9 @@ As established in the principles document, composite capabilities are **union ty
 
 ```prologos
 ;; Composite capabilities as union types
-type FsCap    = ReadCap | WriteCap
-type NetCap   = HttpCap | WsCap
-type SysCap   = FsCap | NetCap | DbCap | SpawnCap | ClockCap
+type FsCap    := ReadCap | WriteCap
+type NetCap   := HttpCap | WsCap
+type SysCap   := FsCap | NetCap | DbCap | SpawnCap | ClockCap
 ```
 
 Having `FsCap` means having authority that *includes* both reading and writing. The union expands the set of permitted operations.
@@ -462,20 +462,20 @@ Bundles confuse these two levels — a bundle would make `FsCap` a conjunction (
 Union type membership gives natural subtyping:
 
 ```prologos
-;; ReadCap is a member of FsCap (= ReadCap | WriteCap)
+;; ReadCap is a member of FsCap (:= ReadCap | WriteCap)
 ;; Therefore ReadCap <: FsCap — read authority is a subset of full fs authority
-subtype ReadCap FsCap
-subtype WriteCap FsCap
+ReadCap  <: FsCap
+WriteCap <: FsCap
 
 ;; FsCap is a member of SysCap
-subtype FsCap SysCap
-subtype NetCap SysCap
-subtype DbCap SysCap
-subtype SpawnCap SysCap
-subtype ClockCap SysCap
+FsCap    <: SysCap
+NetCap   <: SysCap
+DbCap    <: SysCap
+SpawnCap <: SysCap
+ClockCap <: SysCap
 
 ;; Transitive closure (computed automatically by existing subtype infrastructure):
-;; ReadCap <: FsCap <: SysCap
+;; ReadCap <: FsCap <: SysCap  (chained form)
 ;; Therefore ReadCap <: SysCap
 ```
 
@@ -524,7 +524,7 @@ When the compiler encounters a capability constraint `{cap : CapType}`:
 ```prologos
 capability ReadCap
 capability WriteCap
-type FsCap = ReadCap | WriteCap
+type FsCap := ReadCap | WriteCap
 
 ;; main receives SysCap from the runtime (authority root)
 defn main {sys :0 SysCap}
@@ -532,8 +532,8 @@ defn main {sys :0 SysCap}
 
 ;; process-data doesn't declare capability params — they're inferred
 defn process-data [in-path out-path]
-  let data = [read-file in-path]      ;; read-file requires {ReadCap}
-  let result = [transform data]        ;; pure — no capabilities
+  let data := [read-file in-path]      ;; read-file requires {ReadCap}
+  let result := [transform data]        ;; pure — no capabilities
   [write-file out-path result]         ;; write-file requires {WriteCap}
 
 ;; The compiler infers:
@@ -656,7 +656,7 @@ spec read-file-dep : {p : Path} -> FileCap p :1 -> Result String IOError
 
 ;; Only works with a capability for THAT EXACT file
 defn main {sys :0 SysCap}
-  let cap = [mint-file-cap sys [path "/data/input.csv"]]
+  let cap := [mint-file-cap sys [path "/data/input.csv"]]
   [read-file-dep cap]   ;; ✓ — cap authorizes /data/input.csv
   ;; [read-file-dep cap2] where cap2 : FileCap (path "/etc/passwd")
   ;; would be a TYPE ERROR — wrong path
@@ -757,8 +757,8 @@ Linear types provide a natural revocation mechanism:
 ```prologos
 ;; Parent grants a capability to a child scope
 defn with-limited-fs [action]
-  let cap :1 = [mint-read-cap sys [path "/data"]]
-  let result = [action cap]   ;; cap is consumed — child can't keep it
+  let cap :1 := [mint-read-cap sys [path "/data"]]
+  let result := [action cap]   ;; cap is consumed — child can't keep it
   result                       ;; after this line, cap no longer exists
 
 ;; The child function receives cap :1 — it MUST consume it
@@ -788,14 +788,14 @@ defn main {sys :0 SysCap}
 
 ;; In tests: grant only the capabilities the test needs
 defn test-read-file
-  let mock-fs :0 = [mock-read-cap]       ;; a test-only mock capability
-  let result = [read-file mock-fs [path "/test/data.csv"]]
+  let mock-fs :0 := [mock-read-cap]       ;; a test-only mock capability
+  let result := [read-file mock-fs [path "/test/data.csv"]]
   [assert-ok result]
 
 ;; In tests: verify that pure code requires NO capabilities
 defn test-transform
   ;; No capability parameters — transform is pure
-  let result = [transform test-data]
+  let result := [transform test-data]
   [assert-eq result expected]
 ```
 
@@ -833,21 +833,22 @@ capability SpawnCap
 capability ClockCap
 
 ;; Composite capabilities (union types)
-type FsCap  = ReadCap | WriteCap
-type NetCap = HttpCap | WsCap
+type FsCap  := ReadCap | WriteCap
+type NetCap := HttpCap | WsCap
 type SysCap = FsCap | NetCap | DbCap | SpawnCap | ClockCap
 
 ;; Subtype registrations (for attenuation resolution)
-subtype ReadCap FsCap
-subtype WriteCap FsCap
-subtype HttpCap NetCap
-subtype WsCap NetCap
-subtype FsCap SysCap
-subtype NetCap SysCap
-subtype DbCap SysCap
-subtype SpawnCap SysCap
-subtype ClockCap SysCap
-;; Transitive: ReadCap <: FsCap <: SysCap, etc.
+;; Infix `<:` is syntactic sugar for `subtype`: `A <: B` desugars to `($subtype A B)`
+ReadCap  <: FsCap
+WriteCap <: FsCap
+HttpCap  <: NetCap
+WsCap    <: NetCap
+FsCap    <: SysCap
+NetCap   <: SysCap
+DbCap    <: SysCap
+SpawnCap <: SysCap
+ClockCap <: SysCap
+;; Transitive (chained): ReadCap <: FsCap <: SysCap
 ```
 
 This hierarchy is **open for extension** — users can define their own capability types:
@@ -858,7 +859,7 @@ capability EmailCap           ;; authority to send emails
 capability PaymentCap         ;; authority to process payments
 capability AuditCap           ;; authority to write audit logs
 
-type BusinessCap = EmailCap | PaymentCap | AuditCap
+type BusinessCap := EmailCap | PaymentCap | AuditCap
 ```
 
 <a id="52-fs-example"></a>
@@ -880,8 +881,8 @@ spec read-file  : Path -> Result String IOError
 ;; Compiler infers: {fs :0 ReadCap} from calling open-read + read-all
 defn read-file [p]
   match [open-read p]
-    | [ok h]  -> let (h content) = [read-all h]
-                 let _ = [close! h]
+    | [ok h]  -> let (h content) := [read-all h]
+                 let _ := [close! h]
                  [ok content]
     | [err e] -> [err e]
 
@@ -889,8 +890,8 @@ spec write-file : Path -> String -> Result Unit IOError
 ;; Compiler infers: {fs :0 WriteCap} from calling open-write + write-str
 defn write-file [p content]
   match [open-write p]
-    | [ok h]  -> let (h _) = [write-str h content]
-                 let _ = [close! h]
+    | [ok h]  -> let (h _) := [write-str h content]
+                 let _ := [close! h]
                  [ok unit]
     | [err e] -> [err e]
 ```
@@ -935,7 +936,7 @@ spec read-file-dep : {p : Path} -> FileCap p :1 -> Result String IOError
 
 ;; Usage:
 defn process-data {fs :0 FsCap} [p : Path]
-  let cap = [mint-file-cap p]         ;; FileCap p, minted from FsCap
+  let cap := [mint-file-cap p]         ;; FileCap p, minted from FsCap
   match [read-file-dep cap]           ;; cap consumed (linear)
     | [ok data]  -> [transform data]
     | [err e]    -> [handle-error e]
@@ -981,7 +982,7 @@ The I/O Library Design's other decisions remain valid:
 
 **Goal**: The compiler can distinguish capability types from regular traits.
 
-- **1a**: `capability` keyword in surface syntax, desugaring to `trait ... :capability`
+- **1a**: `capability` keyword as first-class top-level form (own AST struct, not desugaring to `trait`)
 - **1b**: Capability registry in compiler state (`current-capability-types`)
 - **1c**: Registration of `capability` declarations in the registry during elaboration
 - **1d**: Tests — capability types are registered; regular traits are not
@@ -1000,18 +1001,19 @@ The I/O Library Design's other decisions remain valid:
 **Depends on**: Phase 1 (capability registry).
 **Estimated scope**: ~50 lines in `elaborator.rkt`, ~30 lines in `qtt.rkt`, ~15 tests.
 
-### Phase 3: Standard Capability Hierarchy
+### Phase 3: Infix `<:` Subtyping Syntax + Standard Capability Hierarchy
 
-**Goal**: Define the standard capability types and their subtype relationships.
+**Goal**: Infix `<:` for readable subtype declarations. Define the standard capability types and their subtype relationships.
 
-- **3a**: Leaf capability declarations (`ReadCap`, `WriteCap`, `HttpCap`, etc.)
-- **3b**: Composite capabilities as union types (`FsCap = ReadCap | WriteCap`, etc.)
-- **3c**: Subtype registrations (`subtype ReadCap FsCap`, etc.)
-- **3d**: Library file: `lib/prologos/core/capabilities.prologos`
-- **3e**: Tests — subtype resolution, union subsumption, transitive closure
+- **3a**: `<:` infix operator in WS reader, desugaring to `($subtype A B)`. Chained form `A <: B <: C` desugars to `($subtype A B) ($subtype B C)`.
+- **3b**: Leaf capability declarations (`ReadCap`, `WriteCap`, `HttpCap`, etc.)
+- **3c**: Composite capabilities as union types (`FsCap := ReadCap | WriteCap`, etc.)
+- **3d**: Subtype registrations using `<:` syntax (`ReadCap <: FsCap`, etc.)
+- **3e**: Library file: `lib/prologos/core/capabilities.prologos`
+- **3f**: Tests — `<:` parsing, subtype resolution, union subsumption, transitive closure
 
 **Depends on**: Phase 1. Phase 2 (for correct multiplicity defaulting).
-**Estimated scope**: ~1 new `.prologos` file, ~20 tests.
+**Estimated scope**: ~30 lines reader change for `<:`, ~1 new `.prologos` file, ~25 tests.
 
 ### Phase 4: Lexical Capability Resolution
 

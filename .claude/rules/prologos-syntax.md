@@ -9,6 +9,8 @@
 - Uncurried: `defn foo [x y z] body`
 - Don't wrap outer tree -- top-level forms are implicit
 - Eval is implicit -- write `[f x]` not `eval [f x]`
+- `:=` for binding/assignment -- `def x : T := val`, `let y := expr`, `type Foo := A | B`, `bundle Num := (Add Sub Mul)`
+- `=` is RESERVED for the `unify` operation -- never use `=` for binding or type definitions
 
 ## Naming
 - Predicates: `?` suffix (`zero?`, `empty?`)
