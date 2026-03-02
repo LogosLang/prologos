@@ -54,7 +54,10 @@
          load-module
          install-module-loader!
          prologos-lib-dir
-         rewrite-specializations)
+         rewrite-specializations
+         ;; Phase 6: Foreign capability gating helpers (for testing)
+         extract-foreign-caps
+         extract-caps-from-brace-params)
 
 ;; ========================================
 ;; Standard library path (computed from this module's location)
@@ -1039,31 +1042,86 @@
   (unless (and (list? datum) (>= (length datum) 4)
                (eq? (cadr datum) 'racket)
                (string? (caddr datum)))
-    (error 'foreign "Expected: (foreign racket \"module\" [:as alias] (name [:as alias] : type) ...)"))
+    (error 'foreign "Expected: (foreign racket \"module\" [:as alias] [:requires (Cap ...)] (name [:as alias] : type) ...)"))
   (define module-path-str (caddr datum))
   (define rest (cdddr datum))
 
   ;; Check for optional module-level :as alias
   ;; WS reader produces 'as (keyword stripped), sexp reader produces ':as
-  (define-values (module-alias decls)
+  (define-values (module-alias rest1)
     (if (and (>= (length rest) 2)
              (memq (car rest) '(:as as))
              (symbol? (cadr rest)))
         (values (cadr rest) (cddr rest))
         (values #f rest)))
 
+  ;; Check for optional capability annotations.
+  ;; Two formats:
+  ;;   :requires (Cap1 Cap2 ...) — explicit keyword (works in both sexp and WS mode)
+  ;;   ($brace-params name :0 Cap ...) — WS reader's brace-params
+  (define-values (foreign-caps decls)
+    (extract-foreign-caps rest1))
+
   (when (null? decls)
     (error 'foreign "No declarations after module alias ~a" (or module-alias "")))
 
   (for ([decl (in-list decls)])
-    (handle-foreign-decl module-path-str decl module-alias)))
+    (handle-foreign-decl module-path-str decl module-alias foreign-caps)))
+
+;; Extract capability annotations from remaining foreign tokens.
+;; Returns: (values cap-names remaining-decls)
+;; cap-names: list of capability type symbols
+;; remaining-decls: list with capability annotations removed
+(define (extract-foreign-caps tokens)
+  (let loop ([toks tokens] [caps '()] [decls '()])
+    (cond
+      [(null? toks) (values caps (reverse decls))]
+      ;; :requires (Cap1 Cap2 ...) — keyword form
+      [(and (>= (length toks) 2)
+            (memq (car toks) '(:requires requires))
+            (list? (cadr toks)))
+       (define cap-names
+         (for/list ([c (in-list (cadr toks))]
+                    #:when (and (symbol? c) (capability-type? c)))
+           c))
+       (loop (cddr toks) (append caps cap-names) decls)]
+      ;; ($brace-params ...) — WS reader brace-params, extract capability types
+      [(and (list? (car toks))
+            (pair? (car toks))
+            (eq? (caar toks) '$brace-params))
+       (define bp-body (cdar toks))
+       ;; Parse brace-params: (name :mult Type name2 :mult Type2 ...)
+       ;; Extract type names that are capability types
+       (define cap-names (extract-caps-from-brace-params bp-body))
+       (loop (cdr toks) (append caps cap-names) decls)]
+      [else
+       (loop (cdr toks) caps (cons (car toks) decls))])))
+
+;; Extract capability type names from brace-params body.
+;; Format: (name :mult Type name2 :mult Type2 ...) or (name Type ...) (default mult)
+;; Returns list of symbols that are capability types.
+(define (extract-caps-from-brace-params bp-body)
+  (let loop ([elems bp-body] [caps '()])
+    (cond
+      [(null? elems) caps]
+      ;; Skip multiplicity annotations (:0, :1, :w)
+      [(and (symbol? (car elems))
+            (memq (car elems) '(:0 :1 :w m0 m1 mw)))
+       (loop (cdr elems) caps)]
+      ;; Capability type name?
+      [(and (symbol? (car elems))
+            (capability-type? (car elems)))
+       (loop (cdr elems) (cons (car elems) caps))]
+      ;; Skip other elements (parameter names, non-capability types)
+      [else (loop (cdr elems) caps)])))
 
 ;; Process a single foreign declaration: (name [:as alias] : type-tokens...)
 ;; e.g., (add1 : Nat -> Nat)            — no alias
 ;;       (add1 :as increment : Nat -> Nat) — symbol alias
 ;;
 ;; module-alias: optional symbol prefix (e.g., 'rkt → registers as rkt/name)
-(define (handle-foreign-decl module-path-str decl [module-alias #f])
+;; foreign-caps: list of capability type symbols required by this foreign block
+(define (handle-foreign-decl module-path-str decl [module-alias #f] [foreign-caps '()])
   (unless (and (list? decl) (>= (length decl) 3)
                (or (symbol? (car decl)) (string? (car decl))))
     (error 'foreign "Expected: (name [:as alias] : type), got: ~a" decl))
@@ -1114,6 +1172,19 @@
   ;; Zonk the type to resolve any metas
   (define zonked-type (zonk-final type-expr))
 
+  ;; If foreign capabilities declared, prepend :0 Pi binders.
+  ;; (Pi (c :0 ReadCap) (Pi (x :w String) String)) — capability proof precedes real args.
+  ;; This makes capability requirements visible to:
+  ;;   - Phase 4 lexical resolution (insert-implicits resolves :0 cap binders)
+  ;;   - Phase 5 inference (extract-capability-requirements walks Pi chain)
+  (define full-type
+    (if (null? foreign-caps)
+        zonked-type
+        (foldr (lambda (cap-name rest-type)
+                 (expr-Pi 'm0 (expr-fvar cap-name) rest-type))
+               zonked-type
+               foreign-caps)))
+
   ;; dynamic-require the Racket function using its ORIGINAL Racket name
   (define rkt-mod-path (string->symbol module-path-str))
   (define rkt-proc
@@ -1122,7 +1193,8 @@
                                         racket-name module-path-str (exn-message e)))])
       (dynamic-require rkt-mod-path racket-name)))
 
-  ;; Parse type to get marshalling info
+  ;; Parse type to get marshalling info — use the original type (without capability Pi binders)
+  ;; because marshalling only applies to the runtime argument types, not erased capabilities
   (define parsed-type (parse-foreign-type zonked-type))
   (define-values (marshal-in marshal-out) (make-marshaller-pair parsed-type))
   (define arity (length (car parsed-type)))
@@ -1130,15 +1202,15 @@
   ;; Build the foreign-fn value with the Prologos name
   (define val (expr-foreign-fn prologos-name rkt-proc arity '() marshal-in marshal-out))
 
-  ;; Register in global env under the Prologos name
+  ;; Register in global env with full type (including capability Pi binders)
   (current-global-env
-   (global-env-add (current-global-env) prologos-name zonked-type val))
+   (global-env-add (current-global-env) prologos-name full-type val))
 
   ;; Also register FQN if in a namespace
   (when (current-ns-context)
     (define fqn (qualify-name prologos-name (ns-context-current-ns (current-ns-context))))
     (current-global-env
-     (global-env-add (current-global-env) fqn zonked-type val))
+     (global-env-add (current-global-env) fqn full-type val))
     ;; Auto-export the foreign binding
     (ns-context-add-auto-export (current-ns-context) prologos-name)))
 
