@@ -167,3 +167,4 @@ New types, traits, instances, and bundles can always be added (open world). But 
 -   QTT linearity (resources cannot be duplicated or discarded silently)
 -   Session type duality (both endpoints of a protocol must agree)
 -   Monotonic constraint propagation (type inference only accumulates information)
+-   Capability security (authority cannot be forged, only delegated; see [Capability Security](CAPABILITY_SECURITY.md))

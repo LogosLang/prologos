@@ -1,48 +1,48 @@
-- [Purpose](#org9dcba23)
-- [The Five Phases](#org6f8e721)
-  - [Phase 1: Deep Research](#org7ad1d9e)
-    - [What this looks like](#org79b7fc0)
-    - [Key practices](#org852d8a8)
-    - [Artifacts](#orgf1f3f5e)
-    - [Example](#org9f098e1)
-  - [Phase 2: Research Refinement and Gap Analysis](#org553659b)
-    - [What this looks like](#org96dd5b1)
-    - [Key practices](#org0399a64)
-    - [Artifacts](#orgc75aeb1)
-  - [Phase 3: Design Iteration](#org406e5e5)
-    - [What this looks like](#org4ea5348)
-    - [Key practices](#org82ec763)
-    - [The critique cycle in practice](#orgb7e69bb)
-    - [Artifacts](#org9c6f098)
-  - [Phase 4: Implementation](#orgd497f8a)
-    - [What this looks like](#org388d853)
-    - [Key practices](#orgde299e3)
-    - [Implementation flow](#org83afeff)
-    - [Artifacts](#orgd725af8)
-  - [Phase 5: Composition and Extension](#orgdebcf4a)
-    - [What this looks like](#orgb4db2c5)
-    - [Key practices](#orga9753a1)
-- [Cross-Cutting Principles](#org3b23b77)
-  - [Theoretical Grounding, Practical Surface](#org61a408f)
-  - [Design Documents Are Living](#orgd88b616)
-  - [Critique Is a Gift](#orgc5cb716)
-  - [Standups as Design Memory](#org16c7b9c)
-  - [The 14-File Pipeline as Discipline](#orgcc8cbf4)
-- [Anti-Patterns](#orgaa20e44)
-  - ["We'll come back to it"](#org4439538)
-  - [Quick fixes that meet criteria partially](#orgd305d9f)
-  - [Research without documentation](#orgb3a12b4)
-  - [Design without critique](#org26d36bd)
-  - [Implementation without tests](#org2509f7e)
-- [Relationship to Other Principles Documents](#orgfb9660b)
-- [Exemplar Projects](#orgf0b63f7)
-  - [Extended Spec Language Design](#orgc42847e)
-  - [Logic Engine on Propagators](#org4a16360)
-  - [Collections Ergonomics](#orgd0f4754)
+- [Purpose](#org163f357)
+- [The Five Phases](#orga8ce28d)
+  - [Phase 1: Deep Research](#orgf2f8859)
+    - [What this looks like](#org8b9a42c)
+    - [Key practices](#org75c540b)
+    - [Artifacts](#org72fc998)
+    - [Example](#orge8e1356)
+  - [Phase 2: Research Refinement and Gap Analysis](#org32c9e08)
+    - [What this looks like](#org30595ad)
+    - [Key practices](#org353b6d2)
+    - [Artifacts](#orga482507)
+  - [Phase 3: Design Iteration](#orged5cb32)
+    - [What this looks like](#orga3ab094)
+    - [Key practices](#org8bc5967)
+    - [The critique cycle in practice](#orgad88a5a)
+    - [Artifacts](#org7019f64)
+  - [Phase 4: Implementation](#orgee28009)
+    - [What this looks like](#org1254d38)
+    - [Key practices](#org9dc4874)
+    - [Implementation flow](#org909ef4c)
+    - [Artifacts](#org9f1e6be)
+  - [Phase 5: Composition and Extension](#org6400175)
+    - [What this looks like](#org2577fc6)
+    - [Key practices](#org1233e32)
+- [Cross-Cutting Principles](#org1c1e9e5)
+  - [Theoretical Grounding, Practical Surface](#orgef4a37c)
+  - [Design Documents Are Living](#orgec7b043)
+  - [Critique Is a Gift](#orged369f8)
+  - [Standups as Design Memory](#org183fe4b)
+  - [The 14-File Pipeline as Discipline](#org845a580)
+- [Anti-Patterns](#org8385c81)
+  - ["We'll come back to it"](#orgf04f6ee)
+  - [Quick fixes that meet criteria partially](#org6196233)
+  - [Research without documentation](#orgcde9701)
+  - [Design without critique](#orgbd3334d)
+  - [Implementation without tests](#orgd01cf30)
+- [Relationship to Other Principles Documents](#org86d9910)
+- [Exemplar Projects](#orgb9d7ef1)
+  - [Extended Spec Language Design](#org0aa99e0)
+  - [Logic Engine on Propagators](#orgdf9aaf5)
+  - [Collections Ergonomics](#org9e5acf1)
 
 
 
-<a id="org9dcba23"></a>
+<a id="org163f357"></a>
 
 # Purpose
 
@@ -51,19 +51,19 @@ This document describes the methodology we follow when designing and implementin
 The methodology emerged organically from our practice on major efforts including the Extended Spec Language Design, the Logic Engine on Propagators, Collections Ergonomics, the Numerics Tower, and the Homoiconicity phases. It is descriptive (capturing what actually works) as much as prescriptive (defining what we should do).
 
 
-<a id="org6f8e721"></a>
+<a id="orga8ce28d"></a>
 
 # The Five Phases
 
 
-<a id="org7ad1d9e"></a>
+<a id="orgf2f8859"></a>
 
 ## Phase 1: Deep Research
 
 *Goal*: Ground ourselves in the best techniques &#x2014; cutting-edge and well-proven &#x2014; with a comprehensive survey of the landscape.
 
 
-<a id="org79b7fc0"></a>
+<a id="org8b9a42c"></a>
 
 ### What this looks like
 
@@ -73,7 +73,7 @@ The methodology emerged organically from our practice on major efforts including
 -   Produce a research document (`docs/research/` or `docs/tracking/`) that synthesizes findings
 
 
-<a id="org852d8a8"></a>
+<a id="org75c540b"></a>
 
 ### Key practices
 
@@ -86,7 +86,7 @@ The methodology emerged organically from our practice on major efforts including
 -   **Document as you go**: Research that isn't written down evaporates when context windows reset. The research document becomes the institutional memory.
 
 
-<a id="orgf1f3f5e"></a>
+<a id="org72fc998"></a>
 
 ### Artifacts
 
@@ -95,21 +95,21 @@ The methodology emerged organically from our practice on major efforts including
 -   A vocabulary of concepts that the team will use in subsequent phases
 
 
-<a id="org9f098e1"></a>
+<a id="orge8e1356"></a>
 
 ### Example
 
 The Logic Engine began with `2026-02-23_LATTICE_PROPAGATOR_RESEARCH.md`, covering lattice foundations, LVars/LVish deterministic parallelism, the "Multiverse Mechanism" and "Pocket Universe" theories, Radul-Sussman propagator networks, and TMS/ATMS truth maintenance. This document established the conceptual vocabulary (cells, propagators, quiescence, monotonic merge) that all subsequent design work referenced.
 
 
-<a id="org553659b"></a>
+<a id="org32c9e08"></a>
 
 ## Phase 2: Research Refinement and Gap Analysis
 
 *Goal*: Refine our understanding, identify gaps in current infrastructure, consider tradeoffs, identify opportunities aligned with core principles, and make qualified recommendations.
 
 
-<a id="org96dd5b1"></a>
+<a id="org30595ad"></a>
 
 ### What this looks like
 
@@ -120,7 +120,7 @@ The Logic Engine began with `2026-02-23_LATTICE_PROPAGATOR_RESEARCH.md`, coverin
 -   Make recommendations, with rationale, for which approach to pursue
 
 
-<a id="org0399a64"></a>
+<a id="org353b6d2"></a>
 
 ### Key practices
 
@@ -141,7 +141,7 @@ The Logic Engine began with `2026-02-23_LATTICE_PROPAGATOR_RESEARCH.md`, coverin
 -   **Opportunities over features**: Don't just fill gaps &#x2014; identify opportunities where our unique combination of features enables something no other system offers. The fusion of propagators with session types for distributed constraint solving is an opportunity that arises from having both systems in the same language.
 
 
-<a id="orgc75aeb1"></a>
+<a id="orga482507"></a>
 
 ### Artifacts
 
@@ -150,14 +150,14 @@ The Logic Engine began with `2026-02-23_LATTICE_PROPAGATOR_RESEARCH.md`, coverin
 -   Recommendation with rationale tied to principles
 
 
-<a id="org406e5e5"></a>
+<a id="orged5cb32"></a>
 
 ## Phase 3: Design Iteration
 
 *Goal*: Produce a concrete design with a detailed, phased roadmap for implementation, refined through critique and feedback until there is full clarity.
 
 
-<a id="org4ea5348"></a>
+<a id="orga3ab094"></a>
 
 ### What this looks like
 
@@ -169,7 +169,7 @@ This is an iterative cycle:
 4.  **Repeat**: Continue until all parties have clarity and confidence
 
 
-<a id="org82ec763"></a>
+<a id="org8bc5967"></a>
 
 ### Key practices
 
@@ -186,7 +186,7 @@ This is an iterative cycle:
 -   **Concrete over abstract**: Show elaboration examples, not just type signatures. Show how `defr ancestor` becomes propagator cells and fire functions, not just "relations elaborate to propagator networks." Every level of abstraction should have at least one concrete example that a reader can trace through.
 
 
-<a id="orgb7e69bb"></a>
+<a id="orgad88a5a"></a>
 
 ### The critique cycle in practice
 
@@ -207,7 +207,7 @@ The Logic Engine Design went through a similar cycle:
 6.  **Final roadmap** → phased implementation plan with clear phase dependencies and test strategies per phase
 
 
-<a id="org9c6f098"></a>
+<a id="org7019f64"></a>
 
 ### Artifacts
 
@@ -217,14 +217,14 @@ The Logic Engine Design went through a similar cycle:
 -   Record of critique and responses (preserved in standups)
 
 
-<a id="orgd497f8a"></a>
+<a id="orgee28009"></a>
 
 ## Phase 4: Implementation
 
 *Goal*: Execute the phased roadmap, shipping complete and sound solutions at each phase, raising design issues as they surface.
 
 
-<a id="org388d853"></a>
+<a id="org1254d38"></a>
 
 ### What this looks like
 
@@ -234,7 +234,7 @@ The Logic Engine Design went through a similar cycle:
 -   When implementation reveals design gaps, stop and address them
 
 
-<a id="orgde299e3"></a>
+<a id="org9dc4874"></a>
 
 ### Key practices
 
@@ -267,7 +267,7 @@ The Logic Engine Design went through a similar cycle:
 -   **Track deferred work immediately**: When something must be deferred (the `new-lattice-cell` generic wrapper, for instance), add it to `DEFERRED.md` in the same commit. Deferred work not tracked is abandoned work.
 
 
-<a id="org83afeff"></a>
+<a id="org909ef4c"></a>
 
 ### Implementation flow
 
@@ -308,7 +308,7 @@ The Logic Engine Design went through a similar cycle:
 ```
 
 
-<a id="orgd725af8"></a>
+<a id="org9f1e6be"></a>
 
 ### Artifacts
 
@@ -318,14 +318,14 @@ The Logic Engine Design went through a similar cycle:
 -   Test suite growth (measurable)
 
 
-<a id="orgdebcf4a"></a>
+<a id="org6400175"></a>
 
 ## Phase 5: Composition and Extension
 
 *Goal*: Enjoy the well-thought-out design and how it composes with our multi-level, modular, extensible language. Verify that the new feature integrates cleanly and enables future extension.
 
 
-<a id="orgb4db2c5"></a>
+<a id="org2577fc6"></a>
 
 ### What this looks like
 
@@ -335,7 +335,7 @@ The Logic Engine Design went through a similar cycle:
 -   Identify the new possibilities that the feature enables
 
 
-<a id="orga9753a1"></a>
+<a id="org1233e32"></a>
 
 ### Key practices
 
@@ -352,28 +352,28 @@ The Logic Engine Design went through a similar cycle:
 -   **Teach through usage**: Write examples that show the feature in context. The Logic Engine's test files serve double duty as documentation: they show how to create networks, add cells, wire propagators, run to quiescence, and read results. Future users (including future context windows) learn from these examples.
 
 
-<a id="org3b23b77"></a>
+<a id="org1c1e9e5"></a>
 
 # Cross-Cutting Principles
 
 These principles apply across all five phases.
 
 
-<a id="org61a408f"></a>
+<a id="orgef4a37c"></a>
 
 ## Theoretical Grounding, Practical Surface
 
 Every design decision should be traceable to a theoretical foundation, but the surface presentation should be practical and approachable. "Lattice-theoretic monotonic constraint propagation" is the theory; `net-cell-write` with a merge function is the practice. Both must exist: the theory ensures correctness, the practice ensures usability.
 
 
-<a id="orgd88b616"></a>
+<a id="orgec7b043"></a>
 
 ## Design Documents Are Living
 
 Design documents are not write-once artifacts. They are updated as implementation reveals new information. The Logic Engine design document was refined after every critique round and after Phase 3 implementation revealed the `HasTop` trait need and the implicit-resolution limitation. Stale design documents are worse than no design documents.
 
 
-<a id="orgc5cb716"></a>
+<a id="orged369f8"></a>
 
 ## Critique Is a Gift
 
@@ -382,61 +382,61 @@ Adversarial critique &#x2014; even harsh critique &#x2014; improves designs. The
 Not all critiques are valid. The key judgment is: does this critique identify a real gap in the design, or does it misunderstand the system's context? When the latter, push back clearly and use the pushback to sharpen your articulation of *why* the design is the way it is.
 
 
-<a id="org16c7b9c"></a>
+<a id="org183fe4b"></a>
 
 ## Standups as Design Memory
 
 Our standup documents (`docs/standups/standup-YYYY-MM-DD.org`) serve as a chronological record of design discussions, including the back-and-forth of critique and refinement. The 🗣️ (human) and 🤖 (machine) annotations preserve the conversational flow. This record is invaluable for reconstructing design rationale months later.
 
 
-<a id="orgcc8cbf4"></a>
+<a id="org845a580"></a>
 
 ## The 14-File Pipeline as Discipline
 
 Prologos's 14-file AST pipeline (syntax → surface-syntax → parser → elaborator → typing-core → qtt → reduction → substitution → zonk → pretty-print → unify → macros → foreign) is both a cost and a benefit. The cost is that every new AST node requires touching many files. The benefit is that every subsystem handles every node consistently. This enforced consistency is a design methodology in itself: if a feature can't be expressed through the pipeline, it's a signal that the feature's abstraction is wrong.
 
 
-<a id="orgaa20e44"></a>
+<a id="org8385c81"></a>
 
 # Anti-Patterns
 
 
-<a id="org4439538"></a>
+<a id="orgf04f6ee"></a>
 
 ## "We'll come back to it"
 
 Defer only when genuinely blocked. Track all deferrals immediately. See `DEVELOPMENT_LESSONS.org` § "Completeness Over Deferral."
 
 
-<a id="orgd305d9f"></a>
+<a id="org6196233"></a>
 
 ## Quick fixes that meet criteria partially
 
 A partial solution that passes tests but doesn't address the underlying design concern creates technical debt with interest. Better to identify the design gap, address it, and ship the complete solution.
 
 
-<a id="orgb3a12b4"></a>
+<a id="orgcde9701"></a>
 
 ## Research without documentation
 
 Research that exists only in a developer's head is lost when context resets. Write it down. Even rough notes are better than nothing.
 
 
-<a id="org26d36bd"></a>
+<a id="orgbd3334d"></a>
 
 ## Design without critique
 
 A design that hasn't been subjected to adversarial critique has unknown weaknesses. Actively seek feedback, especially on the parts you're most confident about &#x2014; confidence is where blind spots hide.
 
 
-<a id="org2509f7e"></a>
+<a id="orgd01cf30"></a>
 
 ## Implementation without tests
 
 An untested implementation is an unverified hypothesis. Tests are the proof that the implementation matches the design. New features aren't done until they have tests.
 
 
-<a id="orgfb9660b"></a>
+<a id="org86d9910"></a>
 
 # Relationship to Other Principles Documents
 
@@ -448,16 +448,17 @@ An untested implementation is an unverified hypothesis. Tests are the proof that
 | `PATTERNS_AND_CONVENTIONS.org`   | Captures patterns that Phase 5 discovers                   |
 | `ERGONOMICS.org`                 | Informs Phase 2 tradeoff analysis for user-facing features |
 | `RELATIONAL_LANGUAGE_VISION.org` | Example of Phase 1-2 output for a specific domain          |
+| `CAPABILITY_SECURITY.md`         | Principles for authority control; constrains I/O, FFI, and process designs |
 
 
-<a id="orgf0b63f7"></a>
+<a id="orgb9d7ef1"></a>
 
 # Exemplar Projects
 
 These completed efforts illustrate the methodology in practice:
 
 
-<a id="orgc42847e"></a>
+<a id="org0aa99e0"></a>
 
 ## Extended Spec Language Design
 
@@ -468,7 +469,7 @@ These completed efforts illustrate the methodology in practice:
 -   **Composition**: `property` composes with `trait` via `:laws`, `bundle` composes `property` groups, `functor` composes with `spec` metadata.
 
 
-<a id="org4a16360"></a>
+<a id="orgdf9aaf5"></a>
 
 ## Logic Engine on Propagators
 
@@ -479,7 +480,7 @@ These completed efforts illustrate the methodology in practice:
 -   **Composition**: PropNetwork composes with trait system (Lattice, HasTop, BoundedLattice), type system (first-class type), prelude (available from any `ns` module).
 
 
-<a id="orgd0f4754"></a>
+<a id="org9e5acf1"></a>
 
 ## Collections Ergonomics
 

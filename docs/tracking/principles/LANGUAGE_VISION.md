@@ -1,39 +1,40 @@
-- [The Elevator Pitch](#orge91cbcb)
-- [What Problem Does Prologos Solve?](#orgda86e1a)
-- [Formal Methods for Everyone](#org02d4ebb)
-  - [Executable Specifications](#org13e6ee9)
-  - [Proof Search, Not Proof Writing](#orgd602dbf)
-  - [Derivation Trees as Data](#orgf691d72)
-- [Cutting-Edge Research, Accessible Surface](#org29185dd)
-  - [Pi Calculus (`defproc`) and Session Types (`session`)](#orge715f81)
-  - [Quantitative Type Theory (QTT)](#orgaa3ddbc)
-  - [Posit Arithmetic (2022 Standard)](#orgb20486a)
-  - [Propagator Networks](#orgdab5828)
-- [The Three Languages in One](#org69d1f60)
-- [Excellent Error Reporting](#orgd03002c)
-- [Excellent FFI Through `foreign`](#org15ce8de)
-- [Where Prologos Sits](#org50515fa)
-- [Editor-Assisted Interactive Development](#org8d6713e)
-  - [The Workflow](#org0b9c029)
-  - [Inspiration](#org07d65c0)
-  - [The Logic Engine Works for You, Invisibly](#org4e8aa7f)
-  - [Surface Language as Domain Vocabulary](#org65bc8f5)
-- [Long-Term Aspirations](#org9945624)
-  - [Self-Hosting](#orgcf2cd1b)
-  - [Embeddable Logic Engine](#org196a769)
-  - [AI Agent Infrastructure](#org893d6d6)
-  - [A Language to Live In and Grow With](#org6e8b5bf)
+- [The Elevator Pitch](#orgfd17594)
+- [What Problem Does Prologos Solve?](#orga5a3d0a)
+- [Formal Methods for Everyone](#orge5f8580)
+  - [Executable Specifications](#org4622dcc)
+  - [Proof Search, Not Proof Writing](#org9481843)
+  - [Derivation Trees as Data](#orgd32a38c)
+- [Cutting-Edge Research, Accessible Surface](#org80d6684)
+  - [Pi Calculus (`defproc`) and Session Types (`session`)](#orge71e07c)
+  - [Quantitative Type Theory (QTT)](#org8dbe6fd)
+  - [Posit Arithmetic (2022 Standard)](#org08fb9b1)
+  - [Propagator Networks](#org6ba735c)
+- [The Three Languages in One](#org7b82287)
+- [Excellent Error Reporting](#orgc8ec9cd)
+- [Excellent FFI Through `foreign`](#org69f7aaa)
+- [Where Prologos Sits](#org4f67838)
+- [Editor-Assisted Interactive Development](#org7708970)
+  - [The Workflow](#org179ce44)
+  - [Inspiration](#orgd39a26f)
+  - [The Logic Engine Works for You, Invisibly](#org108102d)
+  - [Surface Language as Domain Vocabulary](#orgb3b8dc0)
+- [Long-Term Aspirations](#org65acaad)
+  - [Self-Hosting](#orgff8ea2f)
+  - [Relational Query Language for Data](#org937b3a4)
+  - [Embeddable Logic Engine](#orgea68f79)
+  - [AI Agent Infrastructure](#org3e30881)
+  - [A Language to Live In and Grow With](#orgc745d87)
 
 
 
-<a id="orge91cbcb"></a>
+<a id="orgfd17594"></a>
 
 # The Elevator Pitch
 
 Prologos (*Πρόλογος*) is a functional-logic language that unifies dependent types, session types, linear types (QTT), logic programming, and propagators into a single homoiconic framework. Deep theory hides behind an approachable, pragmatic surface &#x2014; a CS curriculum in a REPL.
 
 
-<a id="orgda86e1a"></a>
+<a id="orga5a3d0a"></a>
 
 # What Problem Does Prologos Solve?
 
@@ -47,24 +48,26 @@ Modern software has four interlocking correctness problems that existing languag
 
 4.  **Logical correctness**: Conclusions follow from premises; decisions are justified by evidence. Logic programming with proof terms solves this.
 
-No existing language unifies all four. Prologos does, and it does so in a way that users can adopt incrementally &#x2014; start with plain functions, add types when you need guarantees, add sessions when you need protocols.
+5.  **Authority correctness**: Code can only perform effects it was explicitly granted permission for &#x2014; no ambient authority, no confused deputies, no privilege escalation. Capability security (QTT + dependent types + session types) solves this. See [Capability Security](CAPABILITY_SECURITY.md).
+
+No existing language unifies all five. Prologos does, and it does so in a way that users can adopt incrementally &#x2014; start with plain functions, add types when you need guarantees, add sessions when you need protocols, add capabilities when you need authority control.
 
 
-<a id="org02d4ebb"></a>
+<a id="orge5f8580"></a>
 
 # Formal Methods for Everyone
 
 Prologos brings formal methods out of the ivory tower.
 
 
-<a id="org13e6ee9"></a>
+<a id="org4622dcc"></a>
 
 ## Executable Specifications
 
 The language is formally specified in Maude (10 modules, 33+ integration tests) before implementation in Racket. The operational semantics are captured in PLT Redex. This means the language design itself has been verified for consistency before a line of prototype code was written.
 
 
-<a id="orgd602dbf"></a>
+<a id="org9481843"></a>
 
 ## Proof Search, Not Proof Writing
 
@@ -78,19 +81,19 @@ def six-factorial : <(r : Nat) * [Factorial 6N r]>
 ```
 
 
-<a id="orgf691d72"></a>
+<a id="orgd32a38c"></a>
 
 ## Derivation Trees as Data
 
 Every proof search produces a derivation tree. These trees are first-class data that can be inspected, logged, serialized, and audited. This is the foundation for explainable AI: every decision comes with a machine-checkable justification.
 
 
-<a id="org29185dd"></a>
+<a id="org80d6684"></a>
 
 # Cutting-Edge Research, Accessible Surface
 
 
-<a id="orge715f81"></a>
+<a id="orge71e07c"></a>
 
 ## Pi Calculus (`defproc`) and Session Types (`session`)
 
@@ -112,7 +115,7 @@ defproc vec-server (A : Type) : [VecProtocol A]
 Dependent session types allow protocols to depend on runtime values: the server above sends a vector whose length was determined by the client's request. This is not possible in standard session type systems.
 
 
-<a id="orgaa3ddbc"></a>
+<a id="org8dbe6fd"></a>
 
 ## Quantitative Type Theory (QTT)
 
@@ -138,14 +141,14 @@ defn double-spend [coin alice bob]
 ```
 
 
-<a id="orgb20486a"></a>
+<a id="org08fb9b1"></a>
 
 ## Posit Arithmetic (2022 Standard)
 
 Prologos uses exact arithmetic by default (`Int`, `Rat`) and Posit numbers for approximate computation. Posits provide tapered precision &#x2014; more bits near 1.0, fewer at extremes &#x2014; and a single `NaR` (Not a Real) instead of IEEE 754's zoo of NaN/Inf values. IEEE floats are available for FFI interop but are not the default.
 
 
-<a id="orgdab5828"></a>
+<a id="org6ba735c"></a>
 
 ## Propagator Networks
 
@@ -157,7 +160,7 @@ Type inference, constraint solving, and runtime coordination all use the same un
 -   Logic programming (substitution cells, unification propagators)
 
 
-<a id="org69d1f60"></a>
+<a id="org7b82287"></a>
 
 # The Three Languages in One
 
@@ -178,16 +181,16 @@ spec find-path : Graph Node Node -> [List Node]?
 ;; Relational defines the search space
 defn find-path [graph start end]
   let reachable := (rel [?from ?to ?path]
-    &> (= ?from ?to) (= ?path '[?to | nil])
-    &> (edge ?from ?mid) (reachable ?mid ?to ?rest)
-       (= ?path '[?from | ?rest]))
-  match (solve [reachable start end ?p])
+    &> (= from to) (= path '[to | nil])
+    &> (edge from mid) (reachable mid to rest)
+       (= path '[from | rest]))
+  match (solve (reachable start end p))
     | [some path] -> [just path]
     | none -> nothing
 ```
 
 
-<a id="orgd03002c"></a>
+<a id="orgc8ec9cd"></a>
 
 # Excellent Error Reporting
 
@@ -215,7 +218,7 @@ E1003: Linear variable consumed more than once
 ```
 
 
-<a id="org15ce8de"></a>
+<a id="org69f7aaa"></a>
 
 # Excellent FFI Through `foreign`
 
@@ -228,7 +231,7 @@ Interop with host languages should feel seamless, not foreign:
 -   Goal: calling a Racket/Rust/JS function should feel as natural as calling a Prologos function
 
 
-<a id="org50515fa"></a>
+<a id="org4f67838"></a>
 
 # Where Prologos Sits
 
@@ -242,18 +245,19 @@ Interop with host languages should feel seamless, not foreign:
 | Homoiconicity      | Strong   | No      | No      | No   | Weak   | No     |
 | Proof automation   | Native   | No      | Partial | No   | Impl.  | No     |
 | Protocol safety    | Static   | No      | Static  | No   | No     | RT     |
+| Capability security| Static   | No      | No      | No   | No     | No     |
 
-(Own = ownership/borrowing; RT = runtime only; Lib = library, not native)
+(Own = ownership/borrowing; RT = runtime only; Lib = library, not native; see [Capability Security](CAPABILITY_SECURITY.md))
 
 
-<a id="org8d6713e"></a>
+<a id="org7708970"></a>
 
 # Editor-Assisted Interactive Development
 
 Prologos aspires to a development experience where the type system is not a gatekeeper but a *collaborator*. We call this vision **Editor-Assisted Interactive Development** (EAID).
 
 
-<a id="org0b9c029"></a>
+<a id="org179ce44"></a>
 
 ## The Workflow
 
@@ -268,7 +272,7 @@ Prologos aspires to a development experience where the type system is not a gate
 5.  **Validate** &#x2014; the spec's properties and examples are checked automatically. The implementation is verified against the spec without writing separate tests.
 
 
-<a id="org07d65c0"></a>
+<a id="orgd39a26f"></a>
 
 ## Inspiration
 
@@ -283,7 +287,7 @@ This model draws from:
 -   **PropEr (Erlang)**: Type-driven generator synthesis. Types as generators.
 
 
-<a id="org4e8aa7f"></a>
+<a id="org108102d"></a>
 
 ## The Logic Engine Works for You, Invisibly
 
@@ -307,7 +311,7 @@ defn reverse
 ```
 
 
-<a id="org65bc8f5"></a>
+<a id="orgb3b8dc0"></a>
 
 ## Surface Language as Domain Vocabulary
 
@@ -321,33 +325,40 @@ The ultimate goal: programmers never need to see Pi or Sigma types unless they c
 Each keyword carries structured metadata. The formal type theory (Pi, Sigma, universe levels, multiplicities) exists in `:unfolds` blocks, in the elaborator, and in error messages (on demand). The programmer's daily interface is domain vocabulary expressed through keywords and maps.
 
 
-<a id="org9945624"></a>
+<a id="org65acaad"></a>
 
 # Long-Term Aspirations
 
 
-<a id="orgcf2cd1b"></a>
+<a id="orgff8ea2f"></a>
 
 ## Self-Hosting
 
 The Racket prototype (Phase 0) is a stepping stone. The goal is a self-hosted compiler where the type checker, optimizer, and code generator are themselves Prologos programs &#x2014; enabled by homoiconicity.
 
 
-<a id="org196a769"></a>
+<a id="org937b3a4"></a>
+
+## Relational Query Language for Data
+
+The relational paradigm (`defr~/~rel~/~solve`) is not just a logic programming feature &#x2014; it is a graph-query database language in its own right. Prolog facts are isomorphic to database tables; rules are composable views; subgoals are joins. Empirical benchmarks show in-memory logic queries returning in sub-ms where equivalent SQLite queries take 30ms. With tabling as materialized views, propagators as incremental view maintenance, and ATMS as provenance tracking, Prologos has the infrastructure for a serious data query platform. See [Relational Language Vision § Relations as a Graph-Query Database Language](RELATIONAL_LANGUAGE_VISION.md) for the full analysis and design implications.
+
+
+<a id="orgea68f79"></a>
 
 ## Embeddable Logic Engine
 
 Ship the propagator-based logic engine as an embeddable library (like Lua or SQLite) callable from Python, JavaScript, and Rust. Projects don't need to adopt the full language to benefit from its constraint solving.
 
 
-<a id="org893d6d6"></a>
+<a id="org3e30881"></a>
 
 ## AI Agent Infrastructure
 
 The killer application: multi-agent orchestration where agents communicate via session-typed protocols, reason via proof search, and explain their decisions via derivation trees. Prologos as the *language for certified concurrent reasoning*.
 
 
-<a id="org6e8b5bf"></a>
+<a id="orgc745d87"></a>
 
 ## A Language to Live In and Grow With
 
