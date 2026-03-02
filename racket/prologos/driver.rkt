@@ -292,7 +292,8 @@
                  [current-reduction-fuel (box 1000000)]  ;; 1M step limit
                  [current-nat-value-cache (make-hash)]  ;; per-command nat-value memoization
                  [current-coercion-warnings '()]         ;; per-command coercion warnings
-                 [current-deprecation-warnings '()])     ;; per-command deprecation warnings
+                 [current-deprecation-warnings '()]      ;; per-command deprecation warnings
+                 [current-capability-warnings '()])      ;; per-command capability warnings
   (define result
   (let ()
   (define expanded (expand-top-level surf))
@@ -421,9 +422,11 @@
   ;; Append warnings to result string (if any)
   (define coercion-warns (reverse (current-coercion-warnings)))
   (define deprecation-warns (reverse (current-deprecation-warnings)))
+  (define capability-warns (reverse (current-capability-warnings)))
   (define all-warning-strs
     (append (map format-coercion-warning coercion-warns)
-            (map format-deprecation-warning deprecation-warns)))
+            (map format-deprecation-warning deprecation-warns)
+            (map format-capability-warning capability-warns)))
   (if (or (null? all-warning-strs) (prologos-error? result))
       result
       (string-join

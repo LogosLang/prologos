@@ -16,7 +16,15 @@
          deprecation-warning-name
          deprecation-warning-message
          emit-deprecation-warning!
-         format-deprecation-warning)
+         format-deprecation-warning
+         ;; Capability warnings (W2001)
+         current-capability-warnings
+         capability-warning
+         capability-warning?
+         capability-warning-name
+         capability-warning-multiplicity
+         emit-capability-warning!
+         format-capability-warning)
 
 ;; ========================================
 ;; Coercion warnings
@@ -67,3 +75,27 @@
           (if (deprecation-warning-message w)
               (format " — ~a" (deprecation-warning-message w))
               "")))
+
+;; ========================================
+;; Capability warnings (W2001)
+;; ========================================
+
+;; Accumulator for capability warnings (list of warning structs).
+;; Reset per-command in driver.rkt.
+(define current-capability-warnings (make-parameter '()))
+
+;; A capability warning: name is the capability type name (symbol),
+;; multiplicity is the declared multiplicity ('mw typically).
+;; W2001: Unrestricted (:w) on a capability — consider :0 (authority proof) or :1 (authority transfer).
+(struct capability-warning (name multiplicity) #:transparent)
+
+;; Emit a capability warning.
+(define (emit-capability-warning! name mult)
+  (current-capability-warnings
+   (cons (capability-warning name mult)
+         (current-capability-warnings))))
+
+;; Format a capability warning for display.
+(define (format-capability-warning w)
+  (format "W2001: Unrestricted :w on capability ~a — consider :0 (authority proof) or :1 (authority transfer)."
+          (capability-warning-name w)))

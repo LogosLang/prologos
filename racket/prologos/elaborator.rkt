@@ -24,7 +24,8 @@
          "posit-impl.rkt"
          "champ.rkt"
          "macros.rkt"             ;; Phase C: for lookup-trait (trait constraint detection)
-         "substitution.rkt")     ;; Phase C: for subst (Pi codomain substitution)
+         "substitution.rkt"      ;; Phase C: for subst (Pi codomain substitution)
+         "warnings.rkt")         ;; Phase 2: for capability warnings (W2001)
 
 (provide elaborate
          elaborate-top-level
@@ -715,11 +716,18 @@
             [ty-surf (binder-info-type binder)]
             [ty (elaborate ty-surf env depth)])
        (if (prologos-error? ty) ty
-           (let* ([new-env (env-extend env name depth)]
-                  [new-depth (+ depth 1)]
-                  [bod (elaborate body new-env new-depth)])
-             (if (prologos-error? bod) bod
-                 (expr-Pi mult ty bod)))))]
+           (begin
+             ;; W2001: warn if capability type used with unrestricted (:w) multiplicity.
+             ;; Capabilities are authority proofs — :0 (erased) or :1 (linear transfer) are preferred.
+             (when (and (eq? mult 'mw)
+                        (expr-fvar? ty)
+                        (capability-type? (expr-fvar-name ty)))
+               (emit-capability-warning! (expr-fvar-name ty) 'mw))
+             (let* ([new-env (env-extend env name depth)]
+                    [new-depth (+ depth 1)]
+                    [bod (elaborate body new-env new-depth)])
+               (if (prologos-error? bod) bod
+                   (expr-Pi mult ty bod))))))]
 
     ;; Lambda: (lam (x :m A) body) -> lam(m, elab-A, elab-body) with x bound
     ;; Sprint 7: #f mult → fresh-mult-meta
