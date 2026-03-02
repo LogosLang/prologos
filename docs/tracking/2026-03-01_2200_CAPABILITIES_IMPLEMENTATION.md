@@ -74,7 +74,7 @@ closure. All 21 existing tests pass without modification.
 
 | Sub-phase | Description | Status | Commit |
 |---|---|---|---|
-| 6a | Foreign capability annotation syntax | pending | |
-| 6b | Elaboration of foreign capabilities | pending | |
-| 6c | Integration with inference network | pending | |
-| 6d | Tests: test-capability-06.rkt | pending | |
+| 6a | `:requires` + `$brace-params` parsing in handle-foreign | done | `533928d` |
+| 6b | Type extension: prepend `:0` Pi binders for capabilities | done | `533928d` |
+| 6c | Integration with inference (automatic via existing Pi chain walking) | done | `533928d` |
+| 6d | Tests: test-capability-06.rkt (15 tests, all pass) | done | `533928d` |

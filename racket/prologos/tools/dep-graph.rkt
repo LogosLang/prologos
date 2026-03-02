@@ -879,7 +879,10 @@
    'test-capability-04.rkt
    (test-dep '(macros.rkt typing-core.rkt capability-resolution.rkt) #t)
    'test-capability-05.rkt
-   (test-dep '(capability-inference.rkt propagator.rkt champ.rkt macros.rkt driver.rkt) #t)))
+   (test-dep '(capability-inference.rkt propagator.rkt champ.rkt macros.rkt driver.rkt) #t)
+   ;; Foreign function capability gating (Phase 6)
+   'test-capability-06.rkt
+   (test-dep '(driver.rkt capability-inference.rkt propagator.rkt champ.rkt macros.rkt foreign.rkt) #t)))
 
 ;; ============================================================
 ;; Layer 2b: Example file → test file mapping
