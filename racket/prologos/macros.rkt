@@ -126,6 +126,7 @@
          register-capability!
          lookup-capability
          capability-type?
+         capability-type-expr?
          ;; Capability scope for lexical resolution (Phase 4)
          current-capability-scope
          find-capability-in-scope
@@ -3980,29 +3981,47 @@
 (define (capability-type? name)
   (and (hash-ref (current-capability-registry) name #f) #t))
 
+;; Extract capability functor name from a type expression.
+;; Handles both simple fvar (ReadCap) and applied forms (FileCap "/data").
+;; Returns the functor name (symbol) if the type is a capability, or #f otherwise.
+(define (capability-type-expr? ty)
+  (define (expr-head e)
+    (cond [(expr-fvar? e) e]
+          [(expr-app? e)  (expr-head (expr-app-func e))]
+          [else #f]))
+  (define head (expr-head ty))
+  (and head (expr-fvar? head)
+       (capability-type? (expr-fvar-name head))
+       (expr-fvar-name head)))
+
 ;; ========================================
 ;; Capability scope for lexical resolution (Phase 4)
 ;; ========================================
 ;; Tracks capability-typed bindings currently in scope during elaboration.
-;; Each entry is (cons intro-depth cap-type-name), where intro-depth is the
-;; de Bruijn depth at which the capability binding was introduced.
+;; Each entry is (cons intro-depth type-expr), where intro-depth is the
+;; de Bruijn depth at which the capability binding was introduced,
+;; and type-expr is the full elaborated type (fvar for simple caps,
+;; expr-app chain for dependent caps like (FileCap "/data")).
 ;; Most-recent bindings are at the front (cons prepends).
 (define current-capability-scope (make-parameter '()))
 
 ;; Search the capability scope for a binding that satisfies the required capability.
+;; Phase 7: scope entries are now (cons depth type-expr), not (cons depth symbol).
 ;; A binding satisfies the requirement if:
-;;   - Its type equals the required type, OR
-;;   - The required type is a subtype of the binding's type (attenuation)
+;;   - Its functor name equals the required functor name, OR
+;;   - The required functor is a subtype of the binding's functor (attenuation)
 ;;     e.g., need ReadCap, have FsCap: ReadCap <: FsCap → FsCap subsumes ReadCap
 ;; Returns the intro-depth of the matching binding, or #f if none found.
-(define (find-capability-in-scope required-cap-name scope)
+(define (find-capability-in-scope required-cap-expr scope)
+  (define req-name (capability-type-expr? required-cap-expr))
   (for/or ([entry (in-list scope)])
     (define entry-depth (car entry))
-    (define entry-cap-name (cdr entry))
-    (if (or (eq? required-cap-name entry-cap-name)
-            (subtype-pair? required-cap-name entry-cap-name))
-        entry-depth
-        #f)))
+    (define entry-ty (cdr entry))
+    (define entry-name (capability-type-expr? entry-ty))
+    (cond
+      [(and req-name entry-name (eq? req-name entry-name)) entry-depth]
+      [(and req-name entry-name (subtype-pair? req-name entry-name)) entry-depth]
+      [else #f])))
 
 ;; ========================================
 ;; Trait metadata registry

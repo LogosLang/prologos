@@ -18,7 +18,8 @@
          "zonk.rkt"
          "unify.rkt"
          "errors.rkt"
-         "source-location.rkt")
+         "source-location.rkt"
+         "pretty-print.rkt")
 
 (provide resolve-trait-constraints!
          check-unresolved-trait-constraints
@@ -388,6 +389,7 @@
   (for/list ([(meta-id cc-info) (in-hash (current-capability-constraint-map))]
              #:when (not (meta-solved? meta-id)))
     (define cap-name (capability-constraint-info-cap-name cc-info))
+    (define cap-type (capability-constraint-info-cap-type-expr cc-info))
     ;; Recover source location from the meta's source info
     (define minfo (meta-lookup meta-id))
     (define src (and minfo (meta-info-source minfo)))
@@ -395,9 +397,16 @@
       (if (and src (meta-source-info? src))
           (meta-source-info-loc src)
           srcloc-unknown))
+    ;; Use the full type expression for dependent caps in the error message.
+    ;; For simple caps, cap-type is just (expr-fvar 'ReadCap), so cap-name suffices.
+    ;; For dependent caps like (FileCap "/data"), show the full type.
+    (define display-name
+      (if (and cap-type (expr-fvar? cap-type))
+          cap-name  ;; simple cap — just the name
+          (or (and cap-type (pretty-print-expr cap-type)) cap-name)))
     (define message
       (format "E2001: Required capability ~a not available in scope. Add it as a function parameter: {cap :0 ~a}"
-              cap-name cap-name))
+              display-name display-name))
     (no-instance-error loc message cap-name (symbol->string cap-name))))
 
 ;; Collect all registered instances for a trait, returning short display strings.

@@ -236,7 +236,8 @@
 ;; so the error-reporting engine can produce E2001/E2002 messages.
 
 (struct capability-constraint-info
-  (cap-name)   ;; symbol — e.g., 'ReadCap
+  (cap-name       ;; symbol — e.g., 'ReadCap (functor name)
+   cap-type-expr) ;; type expression — e.g., (expr-fvar 'ReadCap) or (expr-app (expr-fvar 'FileCap) ...)
   #:transparent)
 
 ;; Auxiliary map: meta-id → capability-constraint-info

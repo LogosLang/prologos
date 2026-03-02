@@ -444,37 +444,36 @@
             (register-trait-constraint!
               (expr-meta-id meta-expr)
               (trait-constraint-info trait-name type-arg-metas))]))
-       ;; Phase 4: Capability constraint resolution (lexical scope)
+       ;; Phase 4/7: Capability constraint resolution (lexical scope)
        ;; If the domain is a capability type (not a trait), try to resolve from scope.
-       (when (and (not trait?)
-                  (expr-fvar? dom)
-                  (capability-type? (expr-fvar-name dom)))
-         (define cap-name (expr-fvar-name dom))
-         (define scope (current-capability-scope))
-         ;; Search scope: prefer exact type match, then subtype match.
-         ;; Exact match → solve meta to bvar (types agree).
-         ;; Subtype match → leave meta unsolved (type checker & QTT accept expr-meta
-         ;;   optimistically; the :0 multiplicity means it's erased at runtime).
-         ;; No match → tag for E2001 error.
-         (define exact-depth
-           (for/or ([entry (in-list scope)])
-             (and (eq? cap-name (cdr entry)) (car entry))))
-         (cond
-           [exact-depth
-            ;; Exact type match — solve meta to the capability binding.
-            ;; De Bruijn index: current-depth - intro-depth - 1
-            (define bvar-idx (- current-depth exact-depth 1))
-            (solve-meta! (expr-meta-id meta-expr) (expr-bvar bvar-idx))]
-           [(find-capability-in-scope cap-name scope)
-            ;; Subtype match — capability IS available via a supertype in scope.
-            ;; Leave meta unsolved: type checker accepts (expr-meta) optimistically,
-            ;; QTT assigns zero usage (:0 erased), zonk-final leaves as-is.
-            (void)]
-           [else
-            ;; No capability in scope — tag for E2001 error reporting.
-            (register-capability-constraint!
-              (expr-meta-id meta-expr)
-              (capability-constraint-info cap-name))]))
+       ;; Phase 7: handles both simple caps (ReadCap) and dependent caps (FileCap "/data").
+       ;; Resolution is by functor name — the type checker verifies indices.
+       (let ([cap-name (capability-type-expr? dom)])
+         (when (and (not trait?) cap-name)
+           (define scope (current-capability-scope))
+           ;; Search scope: prefer exact functor match, then subtype match.
+           ;; Scope entries are (cons depth type-expr) where type-expr may be
+           ;; an fvar (simple cap) or expr-app chain (dependent cap).
+           (define exact-depth
+             (for/or ([entry (in-list scope)])
+               (define entry-name (capability-type-expr? (cdr entry)))
+               (and entry-name (eq? cap-name entry-name) (car entry))))
+           (cond
+             [exact-depth
+              ;; Functor match — solve meta to the capability binding.
+              ;; De Bruijn index: current-depth - intro-depth - 1
+              (define bvar-idx (- current-depth exact-depth 1))
+              (solve-meta! (expr-meta-id meta-expr) (expr-bvar bvar-idx))]
+             [(find-capability-in-scope dom scope)
+              ;; Subtype match — capability IS available via a supertype in scope.
+              ;; Leave meta unsolved: type checker accepts (expr-meta) optimistically,
+              ;; QTT assigns zero usage (:0 erased), zonk-final leaves as-is.
+              (void)]
+             [else
+              ;; No capability in scope — tag for E2001 error reporting.
+              (register-capability-constraint!
+                (expr-meta-id meta-expr)
+                (capability-constraint-info cap-name dom))])))
        ;; Substitute meta into codomain for next iteration
        ;; (shift and replace de Bruijn index 0 with the new meta)
        (define next-ty (subst 0 meta-expr cod))
@@ -758,15 +757,15 @@
              ;; W2001: warn if capability type used with unrestricted (:w) multiplicity.
              ;; Capabilities are authority proofs — :0 (erased) or :1 (linear transfer) are preferred.
              (when (and (eq? mult 'mw)
-                        (expr-fvar? ty)
-                        (capability-type? (expr-fvar-name ty)))
-               (emit-capability-warning! (expr-fvar-name ty) 'mw))
+                        (capability-type-expr? ty))
+               (emit-capability-warning! (capability-type-expr? ty) 'mw))
              ;; Phase 4: track capability-typed bindings in scope
+             ;; Phase 7: store full type expr (not just functor name) to support
+             ;; dependent capabilities like (FileCap "/data").
              (let* ([new-env (env-extend env name depth)]
                     [new-depth (+ depth 1)]
-                    [cap-scope (if (and (expr-fvar? ty)
-                                        (capability-type? (expr-fvar-name ty)))
-                                   (cons (cons depth (expr-fvar-name ty))
+                    [cap-scope (if (capability-type-expr? ty)
+                                   (cons (cons depth ty)
                                          (current-capability-scope))
                                    (current-capability-scope))]
                     [bod (parameterize ([current-capability-scope cap-scope])
@@ -794,9 +793,9 @@
                                       (current-where-context)))
                                 (current-where-context))]
                   ;; Phase 4: track capability-typed bindings in scope
-                  [cap-scope (if (and (expr-fvar? ty)
-                                      (capability-type? (expr-fvar-name ty)))
-                                 (cons (cons depth (expr-fvar-name ty))
+                  ;; Phase 7: store full type expr for dependent cap support
+                  [cap-scope (if (capability-type-expr? ty)
+                                 (cons (cons depth ty)
                                        (current-capability-scope))
                                  (current-capability-scope))]
                   [bod (parameterize ([current-where-context body-ctx]
