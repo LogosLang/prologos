@@ -7,6 +7,7 @@
   - [The Prologos Insight: Linear Values as Capabilities](#prologos-insight)
 - [QTT as Capability Discipline](#qtt-capabilities)
   - [The Three Multiplicity Modes](#three-modes)
+  - [The `:w` Tension: Capabilities vs. Traits](#w-tension)
   - [Authority Checking vs. Authority Transfer](#checking-vs-transfer)
   - [Capability Attenuation](#attenuation)
 - [Capabilities as Implicit Parameters](#implicit-capabilities)
@@ -16,7 +17,7 @@
   - [The Capability Closure](#capability-closure)
 - [Capability Composition](#composition)
   - [Fine-Grained Capabilities](#fine-grained)
-  - [Bundles as Composite Capabilities](#bundles)
+  - [Union Types as Composite Capabilities](#composite-union)
   - [Attenuation as Subtyping](#attenuation-subtyping)
 - [The Entry Point as Authority Root](#authority-root)
 - [Dependent Capabilities](#dependent-capabilities)
@@ -101,7 +102,22 @@ QTT's three multiplicities map precisely to three modes of capability usage:
 |-----|--------|-----------------|---------|
 | Erased | `:0` | **Authority proof** | Compile-time evidence that you *could* use this capability. No runtime cost. The type checker verifies it exists; the compiled code never touches it. |
 | Linear | `:1` | **Transferable authority** | A runtime token representing authority. Can be used, delegated, or attenuated — but exactly once. This is capability transfer in the seL4 sense. |
-| Unrestricted | `:w` | **Ambient authority** | Authority available without restriction. Appropriate for capabilities that are genuinely universal (pure computation, logging). Use sparingly — `:w` capabilities are ambient authority. |
+| Unrestricted | `:w` | **Ambient authority** | Authority available without restriction. **The compiler should warn when `:w` is used on a capability type.** Capability-bearing values should default to `:0` (erased proof) or `:1` (linear transfer). A `:w` capability is ambient authority — the very thing capability security exists to prevent. The warning is specific to capability types; `:w` on trait constraints (e.g., `{Eq A}`) is normal and triggers no warning. |
+
+### The `:w` Tension: Capabilities vs. Traits
+
+There is a deliberate asymmetry between capabilities and traits regarding `:w`:
+
+- **Trait constraints at `:w` are normal.** `{Eq A}` is unrestricted — the fact that integers are equal is mathematical truth, not a scarce resource. Traits are ambient knowledge.
+- **Capability constraints at `:w` should warn.** `{fs :w FsCap}` means "unrestricted filesystem authority" — this is ambient authority, which is precisely what POLA forbids.
+
+The compiler distinguishes these by recognizing capability types as a distinct kind. When a type is declared as a capability (via `trait` with a capability marker, or by convention/annotation — an open design question), the compiler enforces:
+
+- `:0` (erased proof) — **default for capability constraints in specs**. Zero runtime cost.
+- `:1` (linear transfer) — when explicit delegation/consumption is needed.
+- `:w` — triggers a **compiler warning**: "Unrestricted capability `:w` on `FsCap` — consider `:0` (authority proof) or `:1` (authority transfer)."
+
+This preserves the ergonomics of the trait system (`:w` is normal for `Eq`, `Ord`, `Add`) while enforcing discipline on capability types. The mechanism for marking a trait as a capability type is a design question for the Capabilities as Types design doc.
 
 <a id="checking-vs-transfer"></a>
 
@@ -267,30 +283,46 @@ trait ClockCap      ;; can read the system clock
 
 Each trait is zero-method — it's a *proof of authority*, not an interface. (Though capabilities *could* carry methods if the design calls for it — e.g., `ReadCap` could carry the `read-bytes` function itself, making the capability and the operation inseparable.)
 
-<a id="bundles"></a>
+<a id="composite-union"></a>
 
-## Bundles as Composite Capabilities
+## Union Types as Composite Capabilities
 
-Composite capabilities use the existing bundle mechanism:
+Composite capabilities are expressed through **union types**, not bundles. This is a fundamental distinction rooted in the logical character of each mechanism:
+
+- **Bundles are contraction** — they narrow the possibility space. `bundle Numeric = Add + Sub + Mul + Neg + Abs + FromInt` means a type must satisfy *all* of these constraints simultaneously. Bundles are conjunctive (AND).
+
+- **Composite capabilities are weakening** — they relax constraints. A capability that grants filesystem access is *more* permissive than one that grants only read access. Composite capabilities widen the authority space; they are a set union of individual authorities.
+
+Union types are the correct expression:
 
 ```prologos
-bundle FsCap    = ReadCap + WriteCap
-bundle NetCap   = HttpCap
-bundle SysCap   = FsCap + NetCap + DbCap + SpawnCap + ClockCap
+;; A composite capability is a union of individual capabilities
+;; FsCap grants either ReadCap or WriteCap authority
+type FsCap    = ReadCap | WriteCap
+type NetCap   = HttpCap | WsCap
+type SysCap   = FsCap | NetCap | DbCap | SpawnCap | ClockCap
 ```
 
-This composes naturally with existing Prologos infrastructure. Bundles are conjunctive (AND) — having `FsCap` means having both `ReadCap` and `WriteCap`.
+Having `FsCap` means having authority that *includes* both reading and writing — the union expands the set of permitted operations. This is the opposite direction from a bundle constraint, which narrows what a type must provide.
+
+**Why bundles are wrong for capabilities**: A `bundle FsCap = ReadCap + WriteCap` would mean "require a type that satisfies both `ReadCap` AND `WriteCap`" — this is a demand (contraction), not a grant (weakening). A capability is something you *have*, not something you *must prove*. Union types correctly model "authority that encompasses any of these individual authorities."
 
 <a id="attenuation-subtyping"></a>
 
 ## Attenuation as Subtyping
 
-Bundle subsumption gives natural attenuation:
+Union type subsumption gives natural attenuation:
 
-- `FsCap` subsumes `ReadCap` (bundle contains member)
-- `SysCap` subsumes `FsCap` (bundle contains bundle)
+- `ReadCap` is a subtype of `FsCap` — read authority is a subset of full filesystem authority
+- `FsCap` is a subtype of `SysCap` — filesystem authority is a subset of full system authority
 
-When a function requires `{ReadCap}` and the caller has `{FsCap}`, the compiler resolves it through bundle subsumption — no explicit attenuation needed. This is the zero-cost common case.
+```prologos
+subtype ReadCap FsCap      ;; ReadCap <: FsCap (read ⊂ read|write)
+subtype WriteCap FsCap     ;; WriteCap <: FsCap (write ⊂ read|write)
+subtype FsCap SysCap       ;; FsCap <: SysCap (fs ⊂ sys)
+```
+
+When a function requires `{ReadCap}` and the caller has `{fs : FsCap}`, the compiler resolves it through subtype subsumption — `ReadCap <: FsCap`, so the `FsCap` satisfies the `ReadCap` requirement. No explicit attenuation needed. This is the zero-cost common case.
 
 Explicit attenuation (the `:1` transfer operations in §QTT) is only needed when you want to *permanently narrow* your own authority or *delegate* a restricted capability to another process.
 
@@ -373,7 +405,7 @@ The detailed design of session type syntax and semantics is a separate effort (s
 
 2. **Low Friction, High Assurance.** The ergonomic cost of capability security should be comparable to QTT's cost — a few annotations that the compiler can mostly infer. Capabilities must not feel like a bureaucratic burden. If the security model makes simple programs painful, the design is wrong.
 
-3. **Capabilities Are Types, Not Annotations.** Capabilities participate in the type system — they can be dependent, they can be linear, they compose through bundles, they attenuate through subtyping. They are not a separate annotation language bolted onto the type system.
+3. **Capabilities Are Types, Not Annotations.** Capabilities participate in the type system — they can be dependent, they can be linear, they compose through union types, they attenuate through subtyping. They are not a separate annotation language bolted onto the type system. Capabilities on types are constraints — like trait constraints, but with different scoping rules and multiplicity defaults.
 
 4. **The Compiler Is the Auditor.** Capability closures are computed automatically. Security review is type-checking. The compiler can answer "what authority does this function/module/program require?" without whole-program analysis beyond what type inference already does.
 
@@ -381,7 +413,7 @@ The detailed design of session type syntax and semantics is a separate effort (s
 
 6. **Progressive Disclosure.** A beginner writing `defn hello [] "hello world"` encounters no capabilities. A user performing file I/O sees `{ReadCap}` in the inferred type if they ask. A security-conscious developer writes explicit capability parameters and uses dependent capabilities for path-level scoping. Each tier is opt-in.
 
-7. **Composition Through Existing Mechanisms.** Capabilities use traits (for declaration), bundles (for composition), subtyping (for attenuation), and implicit parameters (for ergonomic passing). No new language mechanisms are required — only new applications of existing ones.
+7. **Composition Through Existing Mechanisms.** Capabilities use traits (for declaration), union types (for composite authority), subtyping (for attenuation), and implicit parameters (for ergonomic passing). No new language mechanisms are required — only new applications of existing ones.
 
 ---
 
