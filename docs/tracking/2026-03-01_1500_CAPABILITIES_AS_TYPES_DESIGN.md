@@ -301,8 +301,13 @@ seL4 proves authority confinement in Isabelle/HOL. Pony proves data-race freedom
 | **Type checker (`typing-core.rkt`)** | Complete | Site for capability verification |
 | **QTT checker (`qtt.rkt`)** | Complete | Site for `:w` warning on capability types |
 | **Foreign function interface** | Complete | Wrapping host I/O; needs capability gating |
+| **Propagator network (`propagator.rkt`)** | Complete | Lattice-based cells, BSP scheduler, `run-to-quiescence` — capability inference IS a monotonic fixed-point problem |
+| **ATMS (`atms.rkt`)** | Complete | Provenance for capability requirements — "why does f require ReadCap?" answered by ATMS dependency trees |
+| **Galois connections / cross-domain propagators** | Complete | Cross-network communication between type inference and capability inference networks |
+| **SetLattice** | Complete | CapabilitySet as `PowerSet(CapabilityType)` — join is set union, bot is `{}` |
+| **Abstract domains (Sign, Parity, Interval)** | Complete | Precedent for domain-specific lattices over the propagator network |
 
-The core message: **Prologos already has the type-system primitives** needed for capability security. What's missing is the *glue* — the mechanisms that connect these primitives into a coherent capability system.
+The core message: **Prologos already has the type-system primitives AND the constraint-solving infrastructure** needed for capability security. The propagator network, ATMS, and Galois connections — built for the Logic Engine — are directly applicable to capability inference. What's missing is the *glue* — the mechanisms that connect these primitives into a coherent capability system.
 
 <a id="32-gaps"></a>
 
@@ -325,9 +330,9 @@ The core message: **Prologos already has the type-system primitives** needed for
 
 #### Gap 3: Capability Inference Through Call Graphs
 
-**Problem**: Currently, the elaborator and type checker work function-by-function. Capability inference requires propagating capability requirements *backwards* through the call graph: if `f` calls `g`, and `g` requires `{ReadCap}`, then `f` must also require `{ReadCap}` (unless `f` explicitly provides it).
+**Problem**: Currently, the elaborator and type checker work function-by-function. Capability inference requires propagating capability requirements through the call graph: if `f` calls `g`, and `g` requires `{ReadCap}`, then `f` must also require `{ReadCap}` (unless `f` explicitly provides it). This is a monotonic fixed-point computation over a PowerSet lattice — exactly the class of problem the Logic Engine's propagator network was built to solve.
 
-**Required**: A capability inference pass that computes the transitive capability closure for each function. See [§4.6](#46-inference).
+**Required**: A propagator network where each function is a cell holding its CapabilitySet, call edges are propagators that union callee requirements into callers, and `run-to-quiescence` computes the transitive capability closure. The ATMS threads provenance through the network, enabling "why does f require ReadCap?" queries. See [§4.6](#46-inference).
 
 #### Gap 4: Multiplicity Defaulting for Capability Constraints
 
@@ -546,45 +551,62 @@ defn process-data [in-path out-path]
 
 <a id="46-inference"></a>
 
-### 4.6 Capability Inference Through the Call Graph
+### 4.6 Capability Inference via Propagator Network
 
-Capability inference is a **backward propagation** through the call graph:
+Capability inference is a **monotonic fixed-point computation** over a PowerSet lattice — exactly the class of problem the Logic Engine's propagator network was built to solve. Rather than implementing a hand-rolled fixed-point pass, we reuse the existing propagator infrastructure (`propagator.rkt`), gaining uniform quiescence detection, ATMS provenance, and CHAMP-backed persistence for free.
+
+#### The Propagator Network Architecture
 
 ```
-                    main {SysCap}
-                       │
-                       ▼
-              process-data {FsCap} ← inferred from body
-                    │         │
-                    ▼         ▼
-           read-file      write-file
-          {ReadCap}      {WriteCap}
-                ↑              ↑
-          declared in     declared in
-          spec            spec
+   Capability Inference Network (separate from type inference)
+   ┌────────────────────────────────────────────────────────┐
+   │                                                        │
+   │  ┌──────────┐  call-edge   ┌──────────────┐           │
+   │  │ read-file│─────────────▶│ process-data  │           │
+   │  │ {ReadCap}│  propagator  │ {ReadCap, ... }│          │
+   │  └──────────┘              └───────┬───────┘           │
+   │                                    │ call-edge         │
+   │  ┌───────────┐  call-edge  ┌──────▼───────┐           │
+   │  │write-file │─────────────▶│    main      │           │
+   │  │{WriteCap} │  propagator  │ {Read,Write} │           │
+   │  └───────────┘              └──────────────┘           │
+   │                                                        │
+   │  ┌──────────┐                                          │
+   │  │transform │  (no call-edge propagators)              │
+   │  │   {}     │  → stays at ⊥ = pure                    │
+   │  └──────────┘                                          │
+   │                                                        │
+   │  Lattice: PowerSet(CapabilityType)                     │
+   │  Join: set-union    Bot: {}    Top: AllCaps            │
+   │  Quiescence: run-to-quiescence → fixed point           │
+   └────────────────────────────────────────────────────────┘
 ```
 
-The inference algorithm:
+#### Network Construction
 
-1. **Leaf functions** (functions that directly require capabilities) have capabilities declared in their specs: `spec read-file {fs :0 ReadCap} : Path -> Result String IOError`
+The network is built as a **post-type-checking pass** (after all functions in a module are type-checked):
 
-2. **Interior functions** have capabilities inferred from their bodies. The compiler collects all capability requirements from all callees and unions them.
+1. **Cell creation**: For each function `f` in the module, create a cell `cap-cell(f)` with domain `PowerSet(CapabilityType)`, initialized to `{}` (empty = pure).
 
-3. **The authority root** (`main`) must have explicit capability parameters that cover all transitively-required capabilities.
+2. **Seed leaf cells**: For functions with explicit capability declarations in their specs (`{fs :0 ReadCap}`), merge the declared capabilities into their cell. These are the "axioms" of the network.
 
-4. **Pure functions** (functions that call no capability-requiring functions) have empty capability sets. This is visible in the type: no `{...Cap}` in the inferred spec.
+3. **Wire call-edge propagators**: For each call `f → g` in the call graph, add a propagator: `when cap-cell(g) changes, union its value into cap-cell(f)`. This is `net-add-propagator!` with a `set-union` merge.
+
+4. **Run to quiescence**: `run-to-quiescence` computes the fixed point. All cells now hold their **capability closure** — the transitive set of capabilities required.
+
+5. **Verify authority roots**: Check that `main`'s explicit capability set subsumes its inferred closure. Emit errors for uncovered capabilities.
 
 #### The Capability Closure
 
-The **capability closure** of a function is the full set of capabilities transitively required by its body. This is analogous to the "effect set" in effect type systems, but using capabilities instead of effects.
+The **capability closure** of a function is the fixed-point value of its cell — the full set of capabilities transitively required by its body. This is analogous to the "effect set" in effect type systems, but using capabilities instead of effects.
 
 ```prologos
-;; Compiler computes capability closures:
-;;   main:         {SysCap}               (explicit)
-;;   process-data: {ReadCap, WriteCap}    (inferred, = {FsCap})
-;;   read-file:    {ReadCap}              (declared)
-;;   write-file:   {WriteCap}             (declared)
-;;   transform:    {}                     (pure)
+;; After run-to-quiescence, cells hold:
+;;   cap-cell(main):         {ReadCap, WriteCap}  (inferred)
+;;   cap-cell(process-data): {ReadCap, WriteCap}  (inferred from callees)
+;;   cap-cell(read-file):    {ReadCap}             (seeded from spec)
+;;   cap-cell(write-file):   {WriteCap}            (seeded from spec)
+;;   cap-cell(transform):    {}                    (pure — no propagators fired)
 ```
 
 The capability closure is:
@@ -592,18 +614,32 @@ The capability closure is:
 - **Visible** — an IDE command or REPL query can display it
 - **Auditable** — security review reduces to inspecting capability closures
 - **Monotonic** — adding a callee can only expand the closure, never shrink it
+- **Provenance-tracked** — with ATMS threading (see below), each capability in the closure has a derivation chain
 
-#### Implementation Strategy
+#### ATMS Provenance: "Why Does f Require ReadCap?"
 
-Capability inference can be implemented as a **post-type-checking pass**:
+By threading the ATMS through the capability inference network, every capability in every cell's closure carries a **derivation tree** explaining how it was inferred:
 
-1. After all functions are type-checked, collect capability constraints
-2. Build a call graph from the module's functions
-3. For each function, compute the transitive union of all callee capability requirements
-4. Check that each function's explicit or inferred capability set is satisfied by its caller
-5. Check that `main`'s explicit capability set covers the entire program's requirements
+```
+cap-cell(process-data) contains ReadCap because:
+  └─ call-edge propagator from cap-cell(read-file)
+     └─ read-file spec declares {fs :0 ReadCap}
+        └─ foreign import racket::open-input-file requires ReadCap
+```
 
-This is a fixed-point computation (mutual recursion requires iteration), but in practice most programs have acyclic call graphs, and the fixed point converges in one or two passes.
+This is the **capability audit trail** — answering "why does this function need filesystem access?" by tracing the derivation tree. The ATMS provides this for free when the network is constructed with ATMS-backed cells. This directly realizes the "compiler as capability auditor" vision from §2.3.
+
+#### Separate Networks, Cross-Domain Communication
+
+The capability inference network is **separate** from the type inference network:
+
+- **Different lattice domains**: Type inference cells hold metavariable solutions (types); capability cells hold `PowerSet(CapabilityType)`.
+- **Different lifecycles**: Type inference runs during elaboration (per-function); capability inference runs post-elaboration (whole-module).
+- **Different monotonicity guarantees**: Type inference can backtrack (speculative checking); capability inference is purely monotonic (no backtracking needed).
+
+When the two networks need to communicate — e.g., capability inference needs type information to resolve which branch of a union type is relevant, or type inference needs capability information to resolve ambiguous overloads — **cross-domain propagators** via Galois connections (Phase 6c infrastructure: `net-add-cross-domain-propagator`) provide the bridge. Information discovered in one domain flows into the other through well-defined abstraction/concretization functions.
+
+This architecture scales to additional analysis domains (abstract interpretation, property inference) as separate networks that interoperate through the same Galois connection mechanism.
 
 <a id="47-authority-root"></a>
 
@@ -835,7 +871,7 @@ capability ClockCap
 ;; Composite capabilities (union types)
 type FsCap  := ReadCap | WriteCap
 type NetCap := HttpCap | WsCap
-type SysCap = FsCap | NetCap | DbCap | SpawnCap | ClockCap
+type SysCap := FsCap | NetCap | DbCap | SpawnCap | ClockCap
 
 ;; Subtype registrations (for attenuation resolution)
 ;; Infix `<:` is syntactic sugar for `subtype`: `A <: B` desugars to `($subtype A B)`
@@ -1028,18 +1064,22 @@ The I/O Library Design's other decisions remain valid:
 **Depends on**: Phase 1, Phase 3 (for subtype relationships).
 **Estimated scope**: ~150 lines in `typing-core.rkt`, ~30 tests. This is the most significant implementation phase.
 
-### Phase 5: Capability Inference
+### Phase 5: Capability Inference via Propagator Network
 
-**Goal**: The compiler infers capability requirements from function bodies.
+**Goal**: The compiler infers capability requirements from function bodies using the Logic Engine's propagator network, with ATMS provenance for capability auditing.
 
-- **5a**: Collect capability requirements from callees during type checking
-- **5b**: Propagate requirements upward through the call graph
-- **5c**: Compute capability closures for all functions in a module
-- **5d**: Display capability closures on request (REPL command)
-- **5e**: Tests — inferred capabilities match expected, pure functions have empty closures
+- **5a**: Create `CapabilitySet` lattice type — `PowerSet(CapabilityType)` with join = set-union, bot = `{}`. Implement `Lattice` trait for it (or leverage existing `SetLattice` infrastructure).
+- **5b**: Build capability inference network post-type-checking: one cell per function in the module, initialized to `{}`. Seed leaf cells from declared spec capabilities.
+- **5c**: Wire call-edge propagators: for each call `f → g`, add propagator that unions `cap-cell(g)` into `cap-cell(f)`.
+- **5d**: `run-to-quiescence` computes capability closures for all functions simultaneously.
+- **5e**: Thread ATMS through the network — each capability in each cell's closure carries a derivation tree. Implement `:capability-audit` REPL command that traces "why does f require ReadCap?" via ATMS dependency traversal.
+- **5f**: Verify authority roots: check that `main`'s explicit capability set subsumes its inferred closure. Emit capability-specific error messages (E-codes) for uncovered requirements, with ATMS-derived "because" chains.
+- **5g**: Display capability closures on request (REPL command `:cap-closure f`).
+- **5h**: Tests — inferred capabilities match expected, pure functions have empty closures, ATMS provenance traces correct, mutual recursion converges, `:w` warned capabilities propagate correctly.
 
-**Depends on**: Phase 4 (lexical resolution must work before inference can propagate).
-**Estimated scope**: ~200 lines (new pass or extension to elaborator), ~25 tests.
+**Depends on**: Phase 4 (lexical resolution must work before inference can propagate). Propagator network infrastructure (complete). ATMS infrastructure (complete).
+**Estimated scope**: ~300 lines (network construction + CapabilitySet lattice + REPL commands), ~35 tests.
+**Design principle**: Completeness Now — build ATMS provenance from the start rather than adding it later. The "why does f require ReadCap?" query is a core part of the capability auditing story and must be available from Phase 5 onward.
 
 ### Phase 6: Foreign Function Capability Gating
 
@@ -1065,13 +1105,25 @@ The I/O Library Design's other decisions remain valid:
 **Depends on**: Phase 4-6 stable. May require extensions to the dependent type infrastructure.
 **Estimated scope**: ~200 lines, ~20 tests. Research needed on interaction with elaborator.
 
-### Phase 8: Session Types for Capability Protocols (Future)
+### Phase 8: Cross-Network Interfacing (Future)
+
+**Goal**: Enable the capability inference network to communicate with the type inference network (and future analysis networks) via Galois connections.
+
+- **8a**: Define the abstraction/concretization functions between the type inference lattice domain and the `CapabilitySet` lattice domain — e.g., abstracting a union type `ReadCap | WriteCap` into `{ReadCap, WriteCap}` in the capability domain.
+- **8b**: Wire cross-domain propagators via `net-add-cross-domain-propagator` (Phase 6c infrastructure) so that type-level discoveries (e.g., narrowing a union branch) inform capability inference, and capability requirements inform type resolution when ambiguous.
+- **8c**: Tests — cross-network information flow, bidirectional propagation, fixed-point convergence across networks.
+- **8d**: Investigate multi-agent scenario: separate agents operating on separate propagator networks (each carrying dependent-typed proof objects as provenance) cross-referencing via cross-network propagators. This would enable collaborative reasoning with machine-checkable justification chains across network boundaries.
+
+**Depends on**: Phase 5 (capability inference network operational). Galois connection infrastructure (Phase 6c, complete).
+**Estimated scope**: Research-heavy. ~150 lines for cross-domain propagator wiring, ~20 tests. Multi-agent scenario (8d) is exploratory.
+
+### Phase 9: Session Types for Capability Protocols (Future)
 
 **Goal**: Compile-time verification of capability delegation protocols.
 
-- **8a**: Session types that carry capability types as payloads
-- **8b**: Linear capability transfer within session communication
-- **8c**: Revocation as a session protocol state
+- **9a**: Session types that carry capability types as payloads
+- **9b**: Linear capability transfer within session communication
+- **9c**: Revocation as a session protocol state
 
 **Depends on**: Session types design (separate document). Phase 4-5.
 
@@ -1081,17 +1133,13 @@ The I/O Library Design's other decisions remain valid:
 
 ## 8. Open Questions for Design Discussion
 
-### Q1: Should `capability` be a keyword or a trait annotation?
+### Q1: Should `capability` be a keyword or a trait annotation? — **RESOLVED**
 
-**Option A**: `capability ReadCap` as a top-level keyword (like `trait`, `schema`, `session`)
-- Pro: Clear intent, first-class syntactic status
-- Con: New keyword, grammar expansion
-
-**Option B**: `trait ReadCap :capability` with metadata
-- Pro: No new keyword, reuses existing trait infrastructure
-- Con: Capability nature is less visible in code
-
-**Recommendation**: Option A. Capabilities are a fundamental language concept that warrants first-class syntax. The `capability` keyword is as important as `trait`, `schema`, or `session`.
+**Decision**: `capability` is a **first-class top-level form** with its own AST struct (Option A). It does NOT desugar to `trait`. Rationale:
+- Different resolution semantics (lexical, not global registry)
+- Different QTT defaults (`:0` by default, not `:w`)
+- Different extension paths (dependent capabilities, not trait instances)
+- Clear syntactic signal of intent — as fundamental as `trait`, `schema`, or `session`
 
 ### Q2: Module-level capability declarations?
 
