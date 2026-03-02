@@ -817,6 +817,7 @@
      (define mod-spec-store #f)
      (define mod-subtype-reg #f)
      (define mod-coercion-reg #f)
+     (define mod-capability-reg #f)
      (parameterize ([current-global-env (hasheq)]
                     [current-ns-context #f]
                     [current-meta-store (make-hasheq)]
@@ -830,6 +831,7 @@
                     [current-multi-defn-registry (current-multi-defn-registry)]
                     [current-subtype-registry (current-subtype-registry)]
                     [current-coercion-registry (current-coercion-registry)]
+                    [current-capability-registry (current-capability-registry)]
                     [current-spec-store (hasheq)]  ;; fresh — specs are module-local
                     [current-propagated-specs (seteq)]  ;; fresh propagated tracking
                     [current-loading-set (set-add (current-loading-set) ns-sym)]
@@ -872,7 +874,8 @@
        (set! mod-multi-defn-reg (current-multi-defn-registry))
        (set! mod-spec-store (current-spec-store))
        (set! mod-subtype-reg (current-subtype-registry))
-       (set! mod-coercion-reg (current-coercion-registry)))
+       (set! mod-coercion-reg (current-coercion-registry))
+       (set! mod-capability-reg (current-capability-registry)))
 
      ;; Propagate preparse registry changes (deftype/defmacro) to the caller.
      ;; This ensures type aliases and macros defined in loaded modules are
@@ -889,6 +892,9 @@
      ;; Phase E: Propagate subtype and coercion registries.
      (current-subtype-registry mod-subtype-reg)
      (current-coercion-registry mod-coercion-reg)
+
+     ;; Capability registry: propagate capability declarations from loaded modules.
+     (current-capability-registry mod-capability-reg)
 
      ;; Note: spec store is NOT globally propagated — it's carried in module-info
      ;; for selective propagation via process-require-spec.

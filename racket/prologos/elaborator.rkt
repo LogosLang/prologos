@@ -2646,6 +2646,14 @@
   ;; Build coercion function
   (define coerce-fn
     (cond
+      ;; Capability types: no runtime coercion needed — capabilities are
+      ;; erased authority proofs (:0 multiplicity). Only the subtype-pair?
+      ;; relationship matters for type-level checking.
+      [(and (capability-type? sub-sym) (capability-type? super-sym))
+       #f]  ;; no coercion for capability subtypes
+      ;; Also check FQN forms in case short names don't match
+      [(and (capability-type? sub-fqn) (capability-type? super-fqn))
+       #f]
       ;; Explicit via function: look up and build a coercion that applies it
       [via-fn-sym
        (define via-qualified (qualify via-fn-sym))
@@ -2690,13 +2698,16 @@
      ;; FQN: for subtype? in typing-core.rkt (type-key extracts FQN from expr-fvar)
      ;; Short: for try-coerce-via-registry in reduction.rkt (ctor-meta-type-name = short name)
      (register-subtype-pair! sub-fqn super-fqn)
-     (register-coercion! sub-fqn super-fqn coerce-fn)
+     (when coerce-fn
+       (register-coercion! sub-fqn super-fqn coerce-fn))
      (unless (eq? sub-fqn sub-short)
        (register-subtype-pair! sub-short super-short)
-       (register-coercion! sub-short super-short coerce-fn)
+       (when coerce-fn
+         (register-coercion! sub-short super-short coerce-fn))
        ;; Also register cross-combinations for mixed lookups
        (register-subtype-pair! sub-short super-fqn)
-       (register-coercion! sub-short super-fqn coerce-fn))
+       (when coerce-fn
+         (register-coercion! sub-short super-fqn coerce-fn)))
 
      ;; Compute transitive closure:
      ;; For each existing super of super-fqn (or super-short), register sub as sub of that too
@@ -2710,16 +2721,18 @@
          (unless (eq? sub-fqn sub-short)
            (register-subtype-pair! sub-short super-of-super))
          ;; Compose coercions: first coerce sub→super, then super→super-of-super
-         (define super-coerce (or (lookup-coercion super-fqn super-of-super)
-                                  (lookup-coercion super-short super-of-super)))
-         (when super-coerce
-           (define composed
-             (lambda (e)
-               (define intermediate (coerce-fn e))
-               (and intermediate (super-coerce intermediate))))
-           (register-coercion! sub-fqn super-of-super composed)
-           (unless (eq? sub-fqn sub-short)
-             (register-coercion! sub-short super-of-super composed)))))
+         ;; Skip coercion composition when coerce-fn is #f (capability subtypes)
+         (when coerce-fn
+           (define super-coerce (or (lookup-coercion super-fqn super-of-super)
+                                    (lookup-coercion super-short super-of-super)))
+           (when super-coerce
+             (define composed
+               (lambda (e)
+                 (define intermediate (coerce-fn e))
+                 (and intermediate (super-coerce intermediate))))
+             (register-coercion! sub-fqn super-of-super composed)
+             (unless (eq? sub-fqn sub-short)
+               (register-coercion! sub-short super-of-super composed))))))
 
      ;; For each existing sub of sub-fqn (or sub-short), register them as sub of super too
      (define all-subs
@@ -2730,15 +2743,17 @@
        (unless (subtype-pair? sub-of-sub super-fqn)
          (register-subtype-pair! sub-of-sub super-fqn)
          (register-subtype-pair! sub-of-sub super-short)
-         (define sub-coerce (or (lookup-coercion sub-of-sub sub-fqn)
-                                (lookup-coercion sub-of-sub sub-short)))
-         (when sub-coerce
-           (define composed
-             (lambda (e)
-               (define intermediate (sub-coerce e))
-               (and intermediate (coerce-fn intermediate))))
-           (register-coercion! sub-of-sub super-fqn composed)
-           (register-coercion! sub-of-sub super-short composed))))
+         ;; Skip coercion composition when coerce-fn is #f (capability subtypes)
+         (when coerce-fn
+           (define sub-coerce (or (lookup-coercion sub-of-sub sub-fqn)
+                                  (lookup-coercion sub-of-sub sub-short)))
+           (when sub-coerce
+             (define composed
+               (lambda (e)
+                 (define intermediate (sub-coerce e))
+                 (and intermediate (coerce-fn intermediate))))
+             (register-coercion! sub-of-sub super-fqn composed)
+             (register-coercion! sub-of-sub super-short composed)))))
 
      ;; Return — declaration only, no elaborated form to process
      (list 'subtype sub-fqn super-fqn)]))

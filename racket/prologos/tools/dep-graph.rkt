@@ -996,6 +996,9 @@
                                           prologos::data::bool)
    'prologos::core::propagator          '(prologos::core::lattice)
 
+   ;; Standard capability types + subtype hierarchy
+   'prologos::core::capabilities       '()
+
    ;; Consolidated abstract domains (sign-lattice + sign-galois + parity-lattice +
    ;; refined-int-instances + refined-rat-instances)
    'prologos::data::sign                '()

@@ -133,6 +133,11 @@
 ;; ---- Lattice + HasTop + BoundedLattice + Widenable + GaloisConnection ----
 ;; All lattice hierarchy consolidated into prologos::core::lattice (loaded via :refer-all above)
 
+;; ---- Standard capability types (side-effect registration) ----
+;; ReadCap, WriteCap, HttpCap, StdioCap, FsCap, NetCap, SysCap
+;; + subtype hierarchy (ReadCap <: FsCap <: SysCap, etc.)
+(require [prologos::core::capabilities :refer []])
+
 ;; ---- Propagator helpers ----
 (require [prologos::core::propagator :refer [new-lattice-cell new-widenable-cell]])
 

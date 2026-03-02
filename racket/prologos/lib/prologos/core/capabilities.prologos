@@ -1,0 +1,37 @@
+ns prologos::core::capabilities :no-prelude
+
+;; ========================================
+;; Standard Capability Types
+;; ========================================
+;; Authority tokens for the capability security system.
+;; Capabilities are erased at :0 multiplicity (authority proofs)
+;; or linear at :1 (authority transfer). :w is warned (W2001).
+;;
+;; Hierarchy (attenuation):
+;;
+;;                SysCap
+;;              /   |   \
+;;          FsCap NetCap StdioCap
+;;          / \     |
+;;   ReadCap WriteCap HttpCap
+;;
+
+;; --- Leaf capabilities (atomic authority) ---
+capability ReadCap
+capability WriteCap
+capability HttpCap
+capability StdioCap
+
+;; --- Composite capabilities (grouped authority) ---
+capability FsCap
+capability NetCap
+capability SysCap
+
+;; --- Subtype hierarchy (attenuation) ---
+;; A function requiring ReadCap can be satisfied by FsCap or SysCap.
+subtype ReadCap FsCap
+subtype WriteCap FsCap
+subtype HttpCap NetCap
+subtype FsCap SysCap
+subtype NetCap SysCap
+subtype StdioCap SysCap
