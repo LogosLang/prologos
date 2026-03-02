@@ -55,12 +55,12 @@ correct, and avoids the CHAMP issue. Produces identical results for unidirection
 
 | Sub-phase | Description | Status | Commit |
 |---|---|---|---|
-| 5a | CapabilitySet lattice (cap-set, join, subsumes?) | done | |
-| 5b | Expression analysis (extract-fvar-names, extract-capability-requirements) | done | |
-| 5c | Iterative fixed-point inference (build-call-graph, run-capability-inference) | done | |
-| 5d | Query API (capability-closure, capability-audit-trail) | done | |
-| 5e | REPL commands (cap-closure, cap-audit) in parser/elaborator/driver | done | |
-| 5f | Tests: test-capability-05.rkt (21 tests, all pass) | done | |
+| 5a | CapabilitySet lattice (cap-set, join, subsumes?) | done | `7d651cb` |
+| 5b | Expression analysis (extract-fvar-names, extract-capability-requirements) | done | `7d651cb` |
+| 5c | Iterative fixed-point inference (build-call-graph, run-capability-inference) | done | `7d651cb` |
+| 5d | Query API (capability-closure, capability-audit-trail) | done | `7d651cb` |
+| 5e | REPL commands (cap-closure, cap-audit) in parser/elaborator/driver | done | `7d651cb` |
+| 5f | Tests: test-capability-05.rkt (21 tests, all pass) | done | `7d651cb` |
 | — | ATMS provenance deferred (requires CHAMP fix for propagator network) | deferred | |
 | — | Authority root verification deferred (requires ATMS) | deferred | |
 
