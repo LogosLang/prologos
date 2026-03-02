@@ -868,7 +868,18 @@
    'test-elab-speculation.rkt
    (test-dep '(elab-speculation.rkt elaborator-network.rkt atms.rkt type-lattice.rkt propagator.rkt) #f)
    'test-speculation-bridge.rkt
-   (test-dep '(elab-speculation-bridge.rkt metavar-store.rkt typing-core.rkt qtt.rkt) #t)))
+   (test-dep '(elab-speculation-bridge.rkt metavar-store.rkt typing-core.rkt qtt.rkt) #t)
+   ;; Capability inference (Phase 5)
+   'test-capability-01.rkt
+   (test-dep '(macros.rkt parser.rkt surface-syntax.rkt elaborator.rkt driver.rkt) #t)
+   'test-capability-02.rkt
+   (test-dep '(macros.rkt qtt.rkt) #t)
+   'test-capability-03.rkt
+   (test-dep '(macros.rkt parser.rkt surface-syntax.rkt elaborator.rkt driver.rkt) #t)
+   'test-capability-04.rkt
+   (test-dep '(macros.rkt typing-core.rkt capability-resolution.rkt) #t)
+   'test-capability-05.rkt
+   (test-dep '(capability-inference.rkt propagator.rkt champ.rkt macros.rkt driver.rkt) #t)))
 
 ;; ============================================================
 ;; Layer 2b: Example file → test file mapping

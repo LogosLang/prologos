@@ -1,27 +1,27 @@
 #lang racket/base
 
 ;;;
-;;; capability-inference.rkt — Capability Inference
+;;; capability-inference.rkt — Capability Inference via Propagator Network
 ;;;
 ;;; Computes transitive capability closures for all functions in a module
-;;; using iterative fixed-point computation. Each function's closure is the
-;;; union of its declared capabilities and the closures of all its callees.
-;;; The iteration converges in O(depth × edges) rounds.
+;;; using the persistent propagator network (propagator.rkt / champ.rkt).
+;;; Each function gets a cell in the network, seeded with its declared
+;;; capabilities. Call edges become propagators: when callee g's cell
+;;; changes, g's cap-set is written to caller f's cell (joined via
+;;; set-union). run-to-quiescence computes the fixed point.
+;;;
+;;; Domain: PowerSet(CapabilityName) — finite lattice, monotone join.
+;;; Termination: guaranteed by monotone cap-set-join + finite cap names.
 ;;;
 ;;; Design reference: docs/tracking/2026-03-01_1500_CAPABILITIES_AS_TYPES_DESIGN.md §4.6
-;;;
-;;; Implementation note: The design calls for propagator network integration,
-;;; but the CHAMP trie backing the network has a scaling issue with 1000+ cells.
-;;; Since capability inference is a unidirectional flow (callee→caller),
-;;; a simple iterative algorithm suffices and produces identical results.
-;;; Upgrade to propagator network when CHAMP scaling is addressed.
 ;;;
 
 (require racket/match
          racket/set
          "macros.rkt"         ;; capability-type?, subtype-pair?
          "syntax.rkt"         ;; expr structs
-         "global-env.rkt")    ;; current-global-env
+         "global-env.rkt"     ;; current-global-env
+         "propagator.rkt")    ;; prop-network, cells, propagators, run-to-quiescence
 
 (provide ;; CapabilitySet lattice
          cap-set
@@ -130,16 +130,20 @@
     (values name (extract-fvar-names body))))
 
 ;; ========================================
-;; Iterative Fixed-Point Inference
+;; Propagator Network-Based Inference
 ;; ========================================
 ;;
 ;; Algorithm:
-;; 1. Initialize each function's closure with its declared capabilities.
-;; 2. For each function, union in all callees' closures.
-;; 3. Repeat step 2 until no closures change (fixed point).
+;; 1. Build call graph from global env.
+;; 2. Create a propagator network cell per function, seeded with declared caps.
+;; 3. For each call edge (caller → callee), add a propagator:
+;;    when callee's cell changes, write callee's cap-set to caller's cell.
+;;    The cell's merge function (cap-set-join) handles set-union.
+;; 4. run-to-quiescence computes the transitive closure.
+;; 5. Read final cell values → capability closures.
 ;;
-;; Converges because: set-union is monotone, capability sets are finite.
-;; Complexity: O(D × E × K) where D=call depth, E=edges, K=max cap set size.
+;; Converges because: cap-set-join is monotone, capability name set is finite,
+;; and net-cell-write's no-change guard stops propagation when join is idempotent.
 
 (struct cap-inference-result
   (closures       ;; hasheq: function-name → (seteq of capability names)
@@ -150,31 +154,51 @@
   ;; Step 1: Build call graph
   (define call-graph (build-call-graph env))
 
-  ;; Step 2: Initialize closures with declared capabilities
-  (define closures (make-hasheq))
-  (for ([(name _) (in-hash call-graph)])
-    (define entry (hash-ref env name #f))
-    (define caps
-      (if (and entry (pair? entry))
-          (extract-capability-requirements (car entry))
-          (seteq)))
-    (hash-set! closures name caps))
+  ;; Step 2: Create propagator network with a cell per function.
+  ;; Each cell's initial value is the function's declared capabilities.
+  ;; Merge function is cap-set-join (set-union — monotone, commutative).
+  (define-values (net0 name->cid)
+    (for/fold ([net (make-prop-network)]
+               [mapping (hasheq)])
+              ([(name _) (in-hash call-graph)])
+      (define entry (hash-ref env name #f))
+      (define initial-caps
+        (if (and entry (pair? entry))
+            (cap-set (extract-capability-requirements (car entry)))
+            cap-set-bot))
+      (define-values (net* cid) (net-new-cell net initial-caps cap-set-join))
+      (values net* (hash-set mapping name cid))))
 
-  ;; Step 3: Iterate until fixed point
-  (let loop ([changed? #t])
-    (when changed?
-      (define any-changed? #f)
-      (for ([(caller callees) (in-hash call-graph)])
-        (define current (hash-ref closures caller (seteq)))
-        (define new-caps
-          (for/fold ([caps current])
+  ;; Step 3: Add propagators for each call edge.
+  ;; For caller → callee: propagator watches callee-cell, writes to caller-cell.
+  ;; When callee's caps change, caller's cell gets callee's caps joined in.
+  (define net1
+    (for/fold ([net net0])
+              ([(caller callees) (in-hash call-graph)])
+      (define caller-cid (hash-ref name->cid caller #f))
+      (if (not caller-cid)
+          net  ;; defensive: caller not in network (shouldn't happen)
+          (for/fold ([net net])
                     ([callee (in-set callees)]
-                     #:when (hash-ref closures callee #f))
-            (set-union caps (hash-ref closures callee (seteq)))))
-        (unless (equal? new-caps current)
-          (hash-set! closures caller new-caps)
-          (set! any-changed? #t)))
-      (loop any-changed?)))
+                     #:when (hash-ref name->cid callee #f))
+            (define callee-cid (hash-ref name->cid callee))
+            (define-values (net* _pid)
+              (net-add-propagator net
+                (list callee-cid)    ;; inputs: watch callee's cell
+                (list caller-cid)    ;; outputs: may write to caller's cell
+                (lambda (n)
+                  (define callee-caps (net-cell-read n callee-cid))
+                  (net-cell-write n caller-cid callee-caps))))
+            net*))))
+
+  ;; Step 4: Run to quiescence (fixed point)
+  (define net-final (run-to-quiescence net1))
+
+  ;; Step 5: Extract closures from final cell values
+  (define closures
+    (for/hasheq ([(name cid) (in-hash name->cid)])
+      (define caps (net-cell-read net-final cid))
+      (values name (cap-set-members caps))))
 
   (cap-inference-result closures call-graph))
 
