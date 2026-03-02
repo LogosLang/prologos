@@ -2736,6 +2736,35 @@
      (list 'subtype sub-fqn super-fqn)]))
 
 ;; ========================================
+;; Capability declaration (Capabilities as Types)
+;; ========================================
+;; (capability ReadCap) — registers as a capability type.
+;; Capabilities are type-level markers used in QTT binders to express
+;; authority requirements. At :0 they are erased; at :1 they are linear.
+;;
+;; Registers in the capability registry (for kind-marker checking) and
+;; returns a 'capability result so the driver can install the name as a type.
+(define (process-capability-declaration name params loc)
+  ;; Qualify name with current namespace prefix
+  (define ns-ctx (current-ns-context))
+  (define (qualify sym)
+    (if ns-ctx
+        (qualify-name sym (ns-context-current-ns ns-ctx))
+        sym))
+  (define name-fqn (qualify name))
+  (define name-short name)
+
+  ;; Register in the capability registry under both FQN and short name.
+  ;; This enables capability-type? to check either form.
+  (define meta (capability-meta name-fqn params (hasheq)))
+  (register-capability! name-fqn meta)
+  (unless (eq? name-fqn name-short)
+    (register-capability! name-short meta))
+
+  ;; Return: driver installs the name as a type in the global env
+  (list 'capability name-fqn name-short))
+
+;; ========================================
 ;; Elaborate top-level commands
 ;; Returns the surface command + elaborated expressions,
 ;; or a prologos-error
@@ -2815,5 +2844,10 @@
     ;; Registers in subtype + coercion registries; no elaborated AST.
     [(surf-subtype sub-type super-type via-fn loc)
      (process-subtype-declaration sub-type super-type via-fn loc)]
+
+    ;; Capability declaration
+    ;; (capability Name) — registers in capability registry + as a zero-field type.
+    [(surf-capability name params loc)
+     (process-capability-declaration name params loc)]
 
     [_ (prologos-error srcloc-unknown (format "Unknown top-level form: ~a" surf))]))

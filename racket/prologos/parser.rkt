@@ -2735,6 +2735,29 @@
                via-fn
                (surf-subtype sub-sym super-sym via-fn loc))])]
 
+       ;; (capability Name) — capability type declaration
+       ;; (capability Name (p : Type)) — dependent capability (Phase 7, reserved)
+       [(capability)
+        (cond
+          [(null? args)
+           (parse-error loc "capability requires a name: (capability Name)" #f)]
+          [else
+           (define name-sym (stx->datum (first args)))
+           (define rest-args (cdr args))
+           ;; For now, params are reserved for Phase 7 (dependent capabilities)
+           ;; Parse remaining args as param declarations if present
+           (define params
+             (cond
+               [(null? rest-args) '()]
+               [else
+                ;; Future: parse (p : Type) parameter declarations
+                (parse-error loc
+                  "capability: dependent capability parameters not yet supported (Phase 7)"
+                  #f)]))
+           (if (prologos-error? params)
+               params
+               (surf-capability name-sym params loc))])]
+
        ;; Not a keyword -> function application or relational goal
        [else
         (if (current-parsing-relational-goal?)

@@ -120,6 +120,12 @@
          current-coercion-registry
          register-coercion!
          lookup-coercion
+         ;; Capability registry (Capabilities as Types)
+         current-capability-registry
+         (struct-out capability-meta)
+         register-capability!
+         lookup-capability
+         capability-type?
          ;; HKT-8: Specialization registry
          current-specialization-registry
          specialization-entry
@@ -3947,6 +3953,31 @@
 (register-subtype-pair! 'Posit32 'Posit64)
 
 ;; ========================================
+;; Capability registry (Capabilities as Types)
+;; ========================================
+;; Stores metadata about each capability type for kind-marker checking,
+;; multiplicity defaulting, and capability resolution.
+
+;; capability-meta: name (symbol, FQN), params (list, reserved for dependent caps),
+;;                  metadata (hasheq of :doc, etc.)
+(struct capability-meta (name params metadata) #:transparent)
+
+;; Registry: capability-name (symbol) → capability-meta
+(define current-capability-registry (make-parameter (hasheq)))
+
+(define (register-capability! name meta)
+  (current-capability-registry
+   (hash-set (current-capability-registry) name meta)))
+
+(define (lookup-capability name)
+  (hash-ref (current-capability-registry) name #f))
+
+;; Kind marker check: is this name a registered capability type?
+;; Checks both the exact name and short name (for namespace-qualified lookups).
+(define (capability-type? name)
+  (and (hash-ref (current-capability-registry) name #f) #t))
+
+;; ========================================
 ;; Trait metadata registry
 ;; ========================================
 ;; Stores metadata about each trait for impl validation and dictionary resolution.
@@ -6616,6 +6647,8 @@
     [(surf-defr? surf) surf]
     ;; Phase E: subtype declaration — pass through to elaboration
     [(surf-subtype? surf) surf]
+    ;; Capability declaration — pass through to elaboration
+    [(surf-capability? surf) surf]
     ;; Bare expression — implicit eval
     [else
      (define loc (cond

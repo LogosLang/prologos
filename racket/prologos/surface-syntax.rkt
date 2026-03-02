@@ -297,7 +297,9 @@
  (struct-out binder-info)
  ;; Foreign escape block
  (struct-out surf-foreign-block)
- (struct-out surf-subtype))
+ (struct-out surf-subtype)
+ ;; Capability declaration
+ (struct-out surf-capability))
 
 ;; ========================================
 ;; Type hole (to be inferred by the type checker)
@@ -963,3 +965,12 @@
 ;; sub-type, super-type: symbols (type names)
 ;; via-fn: symbol or #f (explicit coercion function, or auto-infer from ctor)
 (struct surf-subtype (sub-type super-type via-fn srcloc) #:transparent)
+
+;; ========================================
+;; Capability declaration
+;; ========================================
+;; (capability ReadCap) — zero-argument capability type declaration
+;; (capability FileCap (p : Path)) — dependent capability (Phase 7, reserved)
+;; name: symbol (capability type name)
+;; params: list of (list name type-datum) or '() for nullary capabilities
+(struct surf-capability (name params srcloc) #:transparent)

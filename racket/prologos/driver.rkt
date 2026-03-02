@@ -405,6 +405,18 @@
                   [(list 'subtype sub-key super-key)
                    (format "subtype ~a <: ~a registered." sub-key super-key)]
 
+                  ;; (capability name-fqn name-short) — capability declaration
+                  ;; Install the capability name as a type in the global env.
+                  ;; Capability types are zero-arity, opaque types at Type 0.
+                  [(list 'capability name-fqn name-short)
+                   ;; Install under both FQN and short name
+                   (current-global-env
+                    (global-env-add-type-only (current-global-env) name-fqn (expr-Type 0)))
+                   (unless (eq? name-fqn name-short)
+                     (current-global-env
+                      (global-env-add-type-only (current-global-env) name-short (expr-Type 0))))
+                   (format "capability ~a registered." name-short)]
+
                   [_ (prologos-error srcloc-unknown (format "Unknown command: ~a" elab-result))])))]))))
   ;; Append warnings to result string (if any)
   (define coercion-warns (reverse (current-coercion-warnings)))
