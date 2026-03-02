@@ -561,19 +561,19 @@ Capability inference is a **monotonic fixed-point computation** over a PowerSet 
    Capability Inference Network (separate from type inference)
    ┌────────────────────────────────────────────────────────┐
    │                                                        │
-   │  ┌──────────┐  call-edge   ┌──────────────┐           │
-   │  │ read-file│─────────────▶│ process-data  │           │
+   │  ┌──────────┐  call-edge   ┌────────────────┐          │
+   │  │ read-file│─────────────▶│ process-data   │          │
    │  │ {ReadCap}│  propagator  │ {ReadCap, ... }│          │
-   │  └──────────┘              └───────┬───────┘           │
+   │  └──────────┘              └───────┬────────┘          │
    │                                    │ call-edge         │
-   │  ┌───────────┐  call-edge  ┌──────▼───────┐           │
+   │  ┌───────────┐  call-edge  ┌──────▼────────┐           │
    │  │write-file │─────────────▶│    main      │           │
    │  │{WriteCap} │  propagator  │ {Read,Write} │           │
    │  └───────────┘              └──────────────┘           │
    │                                                        │
    │  ┌──────────┐                                          │
    │  │transform │  (no call-edge propagators)              │
-   │  │   {}     │  → stays at ⊥ = pure                    │
+   │  │   {}     │  → stays at ⊥ = pure                     │
    │  └──────────┘                                          │
    │                                                        │
    │  Lattice: PowerSet(CapabilityType)                     │
@@ -581,6 +581,16 @@ Capability inference is a **monotonic fixed-point computation** over a PowerSet 
    │  Quiescence: run-to-quiescence → fixed point           │
    └────────────────────────────────────────────────────────┘
 ```
+
+#### Lattice Design
+
+```
+CapabilitySet : PowerSet(CapabilityType)
+Join:  set-union
+Bot:   {} (empty set — pure function)
+```
+
+There is no symbolic `Top`. The lattice is finite because the set of declared capability types in a compilation unit is finite. In practice, `SysCap` is the broadest standard capability, but user-defined capabilities extend beyond the standard hierarchy. Convergence is guaranteed by finiteness of the PowerSet over declared capability types — each cell can change at most `|CapabilityTypes|` times, and there are `|Functions|` cells.
 
 #### Network Construction
 
@@ -590,7 +600,7 @@ The network is built as a **post-type-checking pass** (after all functions in a 
 
 2. **Seed leaf cells**: For functions with explicit capability declarations in their specs (`{fs :0 ReadCap}`), merge the declared capabilities into their cell. These are the "axioms" of the network.
 
-3. **Wire call-edge propagators**: For each call `f → g` in the call graph, add a propagator: `when cap-cell(g) changes, union its value into cap-cell(f)`. This is `net-add-propagator!` with a `set-union` merge.
+3. **Wire call-edge propagators**: For each call `f → g` in the call graph, add a propagator: `when cap-cell(g) changes, union its value into cap-cell(f)`. This is `net-add-propagator!` with a `set-union` merge. The call graph is extracted from the elaborated AST — each `expr-app` where the callee is a known function creates an edge.
 
 4. **Run to quiescence**: `run-to-quiescence` computes the fixed point. All cells now hold their **capability closure** — the transitive set of capabilities required.
 
@@ -616,6 +626,90 @@ The capability closure is:
 - **Monotonic** — adding a callee can only expand the closure, never shrink it
 - **Provenance-tracked** — with ATMS threading (see below), each capability in the closure has a derivation chain
 
+#### Worked Example: Inference Through a Call Graph
+
+```prologos
+;; Leaf: declared capability in spec
+spec read-file {fs :0 ReadCap} : Path -> Result String IOError
+
+;; Middle: no capability declared — inferred from body
+defn load-config [path]
+  [parse-json [read-file path]]
+
+;; Top: no capability declared — inferred from transitive calls
+defn initialize []
+  [load-config [path "/etc/config.json"]]
+
+;; Authority root: explicit capability covers entire program
+defn main {sys :0 SysCap}
+  [initialize]
+```
+
+Step-by-step network propagation:
+
+```
+Step 0: Cell creation + seeding
+
+  Cell              Initial Value    Source
+  ─────────────────────────────────────────────────────
+  cap-cell(read-file)   {ReadCap}    seeded from spec
+  cap-cell(parse-json)  {}           no capabilities in spec
+  cap-cell(load-config) {}           no capabilities in spec
+  cap-cell(initialize)  {}           no capabilities in spec
+  cap-cell(main)        {SysCap}     seeded from spec
+
+Step 1: Wire call-edge propagators
+
+  Propagator: load-config calls read-file
+    → on cap-cell(read-file) change, union into cap-cell(load-config)
+  Propagator: load-config calls parse-json
+    → on cap-cell(parse-json) change, union into cap-cell(load-config)
+  Propagator: initialize calls load-config
+    → on cap-cell(load-config) change, union into cap-cell(initialize)
+  Propagator: main calls initialize
+    → on cap-cell(initialize) change, union into cap-cell(main)
+
+Step 2: run-to-quiescence
+
+  Round 1:
+    cap-cell(read-file) = {ReadCap} → fires propagator →
+      cap-cell(load-config) merges {ReadCap} → now {ReadCap} (changed!)
+    cap-cell(parse-json) = {} → no propagator fires
+
+  Round 2:
+    cap-cell(load-config) = {ReadCap} → fires propagator →
+      cap-cell(initialize) merges {ReadCap} → now {ReadCap} (changed!)
+
+  Round 3:
+    cap-cell(initialize) = {ReadCap} → fires propagator →
+      cap-cell(main) merges {ReadCap} → still {SysCap} (ReadCap <: SysCap, subsumed)
+
+  Quiescence — no more changes.
+
+Step 3: Verify authority roots
+
+  main's inferred closure: {ReadCap} (from initialize → load-config → read-file)
+  main's declared capability: {SysCap}
+  ReadCap <: FsCap <: SysCap ✓ — subsumption check passes.
+```
+
+#### Monotonicity Is Deliberate, Not Conservative
+
+The capability closure of a function is the **union of all capabilities required by all code paths** in its body. For branching code:
+
+```prologos
+defn process [data]
+  if [admin? data.user]
+    [admin-action data]      ;; requires AdminCap
+    [user-action data]       ;; requires UserCap
+```
+
+The inferred closure of `process` is `{AdminCap, UserCap}` — both branches. This is the *correct* answer, not a conservative approximation. The function *could* take either branch, so the calling context *must* have both capabilities available. A context with only `{UserCap}` cannot safely call `process` — it would fail if the admin branch is taken.
+
+This is analogous to how Haskell types `if c then readFile f else print s` as `IO ()` (not conditional on `c`). The type captures what the function *may* do, not what it *will* do in a particular execution.
+
+Path-sensitive refinement — "you only need AdminCap if the first argument is an admin" — requires dependent capabilities (Phase 7: `capability AdminAction (p : Proof [admin? user])`). The monotonic answer is the sound foundation; dependent capabilities are the optimization for cases where the calling context can provide proof of which branch is taken.
+
 #### ATMS Provenance: "Why Does f Require ReadCap?"
 
 By threading the ATMS through the capability inference network, every capability in every cell's closure carries a **derivation tree** explaining how it was inferred:
@@ -640,6 +734,66 @@ The capability inference network is **separate** from the type inference network
 When the two networks need to communicate — e.g., capability inference needs type information to resolve which branch of a union type is relevant, or type inference needs capability information to resolve ambiguous overloads — **cross-domain propagators** via Galois connections (Phase 6c infrastructure: `net-add-cross-domain-propagator`) provide the bridge. Information discovered in one domain flows into the other through well-defined abstraction/concretization functions.
 
 This architecture scales to additional analysis domains (abstract interpretation, property inference) as separate networks that interoperate through the same Galois connection mechanism.
+
+#### Module Boundaries
+
+Capability inference is **module-scoped**: the propagator network is built for all functions within a single module. Cross-module calls use the callee's **explicit spec** as an axiom — the same way type inference already works across module boundaries.
+
+This gives a natural three-tier model:
+
+| Function kind | Capability source | Mechanism |
+|---------------|------------------|-----------|
+| **Exported** (in another module's `:refer`) | Explicit spec | Spec is the module interface; capability requirements visible to importers |
+| **Internal** (module-private) | Inferred | Network propagation within the module |
+| **Cross-module callee** | Callee's spec | Treated as a leaf cell (seeded from imported spec, no intra-module propagation) |
+
+When module A calls `B::bar`, the inference network in module A treats `bar` as a leaf with whatever capabilities `B`'s spec declares. This means:
+
+- **Exported functions should have explicit capability specs.** This is good practice anyway — the spec is the contract.
+- **If an exported function omits capability specs**, callers in other modules see it as pure (no capabilities required). If the function actually requires capabilities, the error surfaces in module B (where the inference runs), not in module A.
+- **Module-level capability declarations** (`ns my-module :capabilities [ReadCap WriteCap]`) are a potential future convenience for declaring the module's aggregate requirements, but not needed for Phase 1-6.
+
+#### Higher-Order Functions and Capability Propagation
+
+When a function takes a function argument, what capabilities does the call require?
+
+```prologos
+defn apply-action [f, x]
+  [f x]           ;; f might require capabilities — which ones?
+```
+
+The inference network sees `f` as a parameter, not a concrete function. The call edge `apply-action → f` has an *unknown* target. There are two cases:
+
+**Case 1: Concrete call site (common).** At the call site `[apply-action read-line path]`, the compiler knows `read-line` requires `{ReadCap}`. Normal capability propagation handles this — the call site's inference network sees `read-line` as the concrete callee and wires the propagator. `apply-action` itself doesn't need to declare capabilities; the *call site* does.
+
+**Case 2: Generic higher-order function (needs explicit spec).** If `apply-action` is exported and called from other modules, its spec must declare what capabilities `f` may require. Without capability parametricity, this means explicit constraints:
+
+```prologos
+;; Option A: concrete capability constraint
+spec map-with-read {fs :0 ReadCap} : (Path -> String) -> [List Path] -> [List String]
+defn map-with-read [f, xs]
+  ...
+
+;; Option B (future): capability parametricity — generic over capabilities
+spec map-with-cap {C : Capability} : (A -> {C} B) -> [List A] -> {C} [List B]
+```
+
+This is analogous to Haskell's `mapM :: Monad m => (a -> m b) -> [a] -> m [b]` — the `Monad m` constraint must be explicit in the type. Capability parametricity (Q3, deferred) makes this more ergonomic, but explicit constraints are sufficient for Phase 1-6.
+
+**Key insight**: for *module-internal* higher-order code, inference handles everything. The issue only arises for *exported* generic higher-order functions that abstract over capabilities — and those are relatively rare.
+
+#### Performance Considerations
+
+For a module with `N` functions, `M` call edges, and `K` distinct capability types:
+
+- **Cells**: `N` (one per function)
+- **Propagators**: `M` (one per call edge)
+- **Worst-case rounds to quiescence**: `N × K` (each cell can change at most `K` times)
+- **Total propagator firings**: `O(M × K)` (each propagator fires at most once per new capability added to its source)
+
+For practical module sizes (N ≈ 50-200 functions, M ≈ 100-500 edges, K ≈ 5-20 capability types), this is negligible compared to type inference. The ATMS adds per-firing overhead (recording justifications), but this is constant-factor overhead on an already-cheap computation.
+
+The CHAMP-backed persistent network means the inference result can be cached and incrementally updated when a single function changes — though this optimization is deferred to post-Phase 6.
 
 <a id="47-authority-root"></a>
 
@@ -746,6 +900,29 @@ The warning is emitted in `qtt.rkt` during multiplicity checking:
 
 The check is simple because it keys off the capability registry ([§4.2](#42-kind-marker)).
 
+#### Why `:0` Handles the Common Case
+
+A natural concern: "if capabilities default to `:0`, won't using a capability in multiple branches violate linearity?" No — `:0` means *erased* (compile-time proof only), not "used once." The compiler checks that you *have* the authority, but the capability is erased at runtime. You can "use" a `:0` proof as many times as you want — that's what erased means.
+
+```prologos
+;; Both branches use fs at :0 — no conflict
+spec process {fs :0 ReadCap} : Data -> Result String IOError
+defn process [data]
+  if [condition data]
+    [read-file path-a]      ;; fs resolves here (:0 — erased, no runtime cost)
+    [read-file path-b]      ;; and here (:0 — same proof, still erased)
+```
+
+The three multiplicities for capabilities:
+
+| Multiplicity | Meaning | Multiple uses? | Runtime presence? | Typical use |
+|-------------|---------|----------------|-------------------|------------|
+| `:0` | Erased authority proof | Unlimited | No (erased) | Default — "this function is authorized" |
+| `:1` | Linear authority transfer | Exactly once | Yes | Delegation — "give away this authority" |
+| `:w` | Unrestricted runtime value | Unlimited | Yes | **Warned** — "ambient authority, no revocation guarantees" |
+
+`:w` on a capability is genuinely suspicious because it means the capability value exists at runtime, can be stored in data structures, passed to arbitrary functions, and — critically — **cannot be revoked** once shared. The `:w` warning is not about multi-branch usage (that's `:0`), but about capabilities escaping their intended scope.
+
 <a id="410-sessions"></a>
 
 ### 4.10 Session Types as Capability Protocols
@@ -804,7 +981,13 @@ defn with-limited-fs [action]
 
 When a `:1` capability exits its scope, it's consumed. No CDT or membrane needed — the type system ensures the capability doesn't outlive its intended scope.
 
-For more complex revocation (revoking a capability that was shared via `:w`, or revoking a capability held by a remote process via session types), the design needs further work. This is deferred to the session types design phase.
+For more complex revocation, the design defers to the session types phase. However, the trade-offs are explicit and by-design:
+
+- **`:0` capabilities** (the default) have no revocation concern — they are erased at runtime. There is nothing to revoke.
+- **`:1` capabilities** have scope-based revocation — consumption guarantees the capability doesn't outlive its scope.
+- **`:w` capabilities** (warned) **explicitly forfeit revocation guarantees.** A `:w` capability can be copied and stored, making revocation impossible without a runtime indirection layer (CDT or membrane). This is the trade-off the `:w` warning makes explicit: if you need revocation, use `:1`.
+
+Protocol-based revocation (session type `?Revoke`) and hierarchical revocation (CDT-style, all descendants) are deferred to the session types design phase.
 
 **Revocation hierarchy**:
 - **Scope-based revocation** (`:1` consumption) — available now via QTT
@@ -838,6 +1021,76 @@ defn test-transform
 The key property: **testing pure code requires no capability mocking.** The type system guarantees that `transform` performs no I/O — it has no capability parameters. Only functions with capability requirements need capability injection in tests.
 
 This is a major ergonomic advantage over effect systems, where even testing pure code may require effect handlers.
+
+<a id="413-errors"></a>
+
+### 4.13 Error Messages for Capability Violations
+
+Capability errors should be clear, actionable, and leverage ATMS provenance to explain *why* the capability is required.
+
+#### Missing Capability
+
+```
+Error E2001: Required capability `ReadCap` not available in scope
+
+  ┌─ src/my_module.prologos:42:3
+  │
+  │ defn process [data]
+  │   [read-file data.path]
+  │    ^^^^^^^^^^^^^^^^^
+  │
+  │ The function `read-file` requires `{fs :0 ReadCap}`, but
+  │ `process` does not have `ReadCap` in scope.
+  │
+  │ Suggestions:
+  │   1. Add `{fs :0 ReadCap}` to `process`'s spec
+  │   2. Call `process` from a function that has `ReadCap` in scope
+  │   3. Add `ReadCap` as a parameter: `defn process {fs :0 ReadCap} [data]`
+```
+
+#### Authority Root Subsumption Failure
+
+```
+Error E2002: Authority root `main` does not cover required capabilities
+
+  ┌─ src/main.prologos:5:1
+  │
+  │ defn main {fs :0 FsCap}
+  │           ^^^^^^^^^^^^
+  │
+  │ The program requires capabilities not covered by `main`'s declaration:
+  │   Missing: {HttpCap}
+  │
+  │ Capability trace (via ATMS):
+  │   main → initialize → sync-data → http-get
+  │   `http-get` declares `{net :0 HttpCap}` in its spec
+  │
+  │ Suggestions:
+  │   1. Expand main's capabilities: `{sys :0 SysCap}` (covers all)
+  │   2. Add specific: `{fs :0 FsCap} {net :0 HttpCap}`
+```
+
+#### `:w` Warning
+
+```
+Warning W2001: Unrestricted capability `:w` on `FsCap`
+
+  ┌─ src/server.prologos:12:6
+  │
+  │ spec handler {fs :w FsCap} : Request -> Response
+  │                ^^
+  │
+  │ Capability `FsCap` at `:w` (unrestricted) means:
+  │   - The capability value exists at runtime (not erased)
+  │   - It can be stored, copied, and shared without restriction
+  │   - Revocation guarantees are forfeited
+  │
+  │ Consider:
+  │   `:0` (default) — compile-time authority proof, zero runtime cost
+  │   `:1` — linear authority transfer, scope-based revocation
+```
+
+These error codes (`E2001`, `E2002`, `W2001`) follow the existing error infrastructure (E1001/E1002/E1003 from Sprint 9).
 
 ---
 
@@ -886,6 +1139,14 @@ SpawnCap <: SysCap
 ClockCap <: SysCap
 ;; Transitive (chained): ReadCap <: FsCap <: SysCap
 ```
+
+#### A Note on Union-Type Semantics for Capabilities
+
+The `|` in `type FsCap := ReadCap | WriteCap` is a **type union**, not a boolean "or." A value of type `FsCap` is a value that IS a `ReadCap` OR IS a `WriteCap`. Having an `FsCap` means having authority that *encompasses* both reading and writing — the union *expands* the set of operations, not restricts it.
+
+The subtyping direction makes this intuitive: `ReadCap <: FsCap` reads as "read authority is a subset of full filesystem authority." A function requiring `{ReadCap}` can be called by anyone with `{FsCap}` (more authority), but not vice versa — filesystem authority subsumes read-only authority.
+
+This is consistent with how union types work throughout the language, and with the capability-theoretic principle that attenuation (narrowing authority) is subtyping.
 
 This hierarchy is **open for extension** — users can define their own capability types:
 
