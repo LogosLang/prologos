@@ -126,6 +126,9 @@
          register-capability!
          lookup-capability
          capability-type?
+         ;; Capability scope for lexical resolution (Phase 4)
+         current-capability-scope
+         find-capability-in-scope
          ;; HKT-8: Specialization registry
          current-specialization-registry
          specialization-entry
@@ -3976,6 +3979,30 @@
 ;; Checks both the exact name and short name (for namespace-qualified lookups).
 (define (capability-type? name)
   (and (hash-ref (current-capability-registry) name #f) #t))
+
+;; ========================================
+;; Capability scope for lexical resolution (Phase 4)
+;; ========================================
+;; Tracks capability-typed bindings currently in scope during elaboration.
+;; Each entry is (cons intro-depth cap-type-name), where intro-depth is the
+;; de Bruijn depth at which the capability binding was introduced.
+;; Most-recent bindings are at the front (cons prepends).
+(define current-capability-scope (make-parameter '()))
+
+;; Search the capability scope for a binding that satisfies the required capability.
+;; A binding satisfies the requirement if:
+;;   - Its type equals the required type, OR
+;;   - The required type is a subtype of the binding's type (attenuation)
+;;     e.g., need ReadCap, have FsCap: ReadCap <: FsCap → FsCap subsumes ReadCap
+;; Returns the intro-depth of the matching binding, or #f if none found.
+(define (find-capability-in-scope required-cap-name scope)
+  (for/or ([entry (in-list scope)])
+    (define entry-depth (car entry))
+    (define entry-cap-name (cdr entry))
+    (if (or (eq? required-cap-name entry-cap-name)
+            (subtype-pair? required-cap-name entry-cap-name))
+        entry-depth
+        #f)))
 
 ;; ========================================
 ;; Trait metadata registry

@@ -22,6 +22,7 @@
 
 (provide resolve-trait-constraints!
          check-unresolved-trait-constraints
+         check-unresolved-capability-constraints
          ;; Exposed for testing
          try-monomorphic-resolve
          try-parametric-resolve
@@ -375,6 +376,29 @@
                  trait-name type-args-str avail-str hint)]))
 
     (no-instance-error loc message trait-name type-args-str)))
+
+;; ========================================
+;; Unresolved capability constraint checking (Phase 4)
+;; ========================================
+
+;; Return a list of no-instance-error structs for capability constraints that
+;; remain unsolved (i.e., no matching capability found in lexical scope).
+;; E2001: "Required capability ~a not available in scope."
+(define (check-unresolved-capability-constraints)
+  (for/list ([(meta-id cc-info) (in-hash (current-capability-constraint-map))]
+             #:when (not (meta-solved? meta-id)))
+    (define cap-name (capability-constraint-info-cap-name cc-info))
+    ;; Recover source location from the meta's source info
+    (define minfo (meta-lookup meta-id))
+    (define src (and minfo (meta-info-source minfo)))
+    (define loc
+      (if (and src (meta-source-info? src))
+          (meta-source-info-loc src)
+          srcloc-unknown))
+    (define message
+      (format "E2001: Required capability ~a not available in scope. Add it as a function parameter: {cap :0 ~a}"
+              cap-name cap-name))
+    (no-instance-error loc message cap-name (symbol->string cap-name))))
 
 ;; Collect all registered instances for a trait, returning short display strings.
 ;; Checks both monomorphic registry (e.g., "Nat--Eq" → "Nat") and

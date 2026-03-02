@@ -98,6 +98,11 @@
  register-trait-constraint!
  lookup-trait-constraint
  install-trait-resolve-callback!
+ ;; Phase 4: Capability constraint tracking
+ (struct-out capability-constraint-info)
+ current-capability-constraint-map
+ register-capability-constraint!
+ lookup-capability-constraint
  ;; Phase 8b: Propagator-backed internal state
  current-prop-net-box
  current-prop-id-map-box
@@ -221,6 +226,27 @@
 
 (define (lookup-trait-constraint meta-id)
   (hash-ref (current-trait-constraint-map) meta-id #f))
+
+;; ========================================
+;; Phase 4: Capability constraint tracking
+;; ========================================
+;; When the elaborator inserts implicit metas for capability-constraint
+;; parameters (e.g., {cap :0 ReadCap}), and no matching capability is
+;; found in lexical scope, the meta is tagged with capability-constraint-info
+;; so the error-reporting engine can produce E2001/E2002 messages.
+
+(struct capability-constraint-info
+  (cap-name)   ;; symbol — e.g., 'ReadCap
+  #:transparent)
+
+;; Auxiliary map: meta-id → capability-constraint-info
+(define current-capability-constraint-map (make-parameter (make-hasheq)))
+
+(define (register-capability-constraint! meta-id info)
+  (hash-set! (current-capability-constraint-map) meta-id info))
+
+(define (lookup-capability-constraint meta-id)
+  (hash-ref (current-capability-constraint-map) meta-id #f))
 
 
 ;; Global constraint store: list of all constraints

@@ -343,7 +343,13 @@
 ;; 2. If that fails, check if the function has a spec with where-constraints.
 ;;    For a function with N m0 binders and C where-constraints, the last C
 ;;    m0 binders are trait constraint params (the first N-C are type variable binders).
+;;
+;; Phase 4: Capability constraint resolution:
+;; 3. If the domain is a capability type (neither trait nor type variable),
+;;    search current-capability-scope for a matching binding and resolve eagerly.
+;;    If no match, tag as capability-constraint-info for E2001 error reporting.
 (define (insert-implicits-with-tagging base-expr func-type n-holes fname loc env
+                                       #:depth [current-depth 0]
                                        #:default-kind [default-kind 'implicit-app])
   ;; Look up spec where-constraints for position-based trait detection.
   ;; The function name may be namespace-qualified (e.g., 'ns::my-neq),
@@ -438,6 +444,37 @@
             (register-trait-constraint!
               (expr-meta-id meta-expr)
               (trait-constraint-info trait-name type-arg-metas))]))
+       ;; Phase 4: Capability constraint resolution (lexical scope)
+       ;; If the domain is a capability type (not a trait), try to resolve from scope.
+       (when (and (not trait?)
+                  (expr-fvar? dom)
+                  (capability-type? (expr-fvar-name dom)))
+         (define cap-name (expr-fvar-name dom))
+         (define scope (current-capability-scope))
+         ;; Search scope: prefer exact type match, then subtype match.
+         ;; Exact match → solve meta to bvar (types agree).
+         ;; Subtype match → leave meta unsolved (type checker & QTT accept expr-meta
+         ;;   optimistically; the :0 multiplicity means it's erased at runtime).
+         ;; No match → tag for E2001 error.
+         (define exact-depth
+           (for/or ([entry (in-list scope)])
+             (and (eq? cap-name (cdr entry)) (car entry))))
+         (cond
+           [exact-depth
+            ;; Exact type match — solve meta to the capability binding.
+            ;; De Bruijn index: current-depth - intro-depth - 1
+            (define bvar-idx (- current-depth exact-depth 1))
+            (solve-meta! (expr-meta-id meta-expr) (expr-bvar bvar-idx))]
+           [(find-capability-in-scope cap-name scope)
+            ;; Subtype match — capability IS available via a supertype in scope.
+            ;; Leave meta unsolved: type checker accepts (expr-meta) optimistically,
+            ;; QTT assigns zero usage (:0 erased), zonk-final leaves as-is.
+            (void)]
+           [else
+            ;; No capability in scope — tag for E2001 error reporting.
+            (register-capability-constraint!
+              (expr-meta-id meta-expr)
+              (capability-constraint-info cap-name))]))
        ;; Substitute meta into codomain for next iteration
        ;; (shift and replace de Bruijn index 0 with the new meta)
        (define next-ty (subst 0 meta-expr cod))
@@ -455,7 +492,7 @@
 ;; Only applies when ALL Pi binders are m0 (fully implicit).
 ;; For mixed types (like cons : Pi(A :0 Type 0, A -> List A -> List A)),
 ;; we don't auto-apply — the user must use application syntax.
-(define (maybe-auto-apply-implicits fvar-expr resolved-name loc env)
+(define (maybe-auto-apply-implicits fvar-expr resolved-name loc env depth)
   (define ftype (global-env-lookup-type resolved-name))
   (if ftype
       (let ([mults (collect-pi-mults ftype)])
@@ -464,6 +501,7 @@
             ;; All params are implicit → auto-apply with Pi-chain-walking tagging
             (insert-implicits-with-tagging fvar-expr ftype (length mults)
                                            resolved-name loc env
+                                           #:depth depth
                                            #:default-kind 'implicit)
             fvar-expr))
       fvar-expr))
@@ -605,7 +643,7 @@
               (and (global-env-lookup-type own-fqn) own-fqn)))
        => (lambda (own-fqn)
             (if auto-apply?
-                (maybe-auto-apply-implicits (expr-fvar own-fqn) own-fqn loc env)
+                (maybe-auto-apply-implicits (expr-fvar own-fqn) own-fqn loc env depth)
                 (expr-fvar own-fqn)))]
       ;; Phase D: resolve bare trait method names from where-context.
       ;; This MUST come before namespace/global resolution so that `add` inside
@@ -622,12 +660,12 @@
                    resolved)))
        => (lambda (resolved)
             (if auto-apply?
-                (maybe-auto-apply-implicits (expr-fvar resolved) resolved loc env)
+                (maybe-auto-apply-implicits (expr-fvar resolved) resolved loc env depth)
                 (expr-fvar resolved)))]
       ;; Fall back to bare name
       [(global-env-lookup-type name)
        (if auto-apply?
-           (maybe-auto-apply-implicits (expr-fvar name) name loc env)
+           (maybe-auto-apply-implicits (expr-fvar name) name loc env depth)
            (expr-fvar name))]
       ;; Multi-body function: base name exists in dispatch registry but not in global env.
       ;; Must be applied (bare reference is ambiguous — which arity?).
@@ -723,9 +761,16 @@
                         (expr-fvar? ty)
                         (capability-type? (expr-fvar-name ty)))
                (emit-capability-warning! (expr-fvar-name ty) 'mw))
+             ;; Phase 4: track capability-typed bindings in scope
              (let* ([new-env (env-extend env name depth)]
                     [new-depth (+ depth 1)]
-                    [bod (elaborate body new-env new-depth)])
+                    [cap-scope (if (and (expr-fvar? ty)
+                                        (capability-type? (expr-fvar-name ty)))
+                                   (cons (cons depth (expr-fvar-name ty))
+                                         (current-capability-scope))
+                                   (current-capability-scope))]
+                    [bod (parameterize ([current-capability-scope cap-scope])
+                           (elaborate body new-env new-depth))])
                (if (prologos-error? bod) bod
                    (expr-Pi mult ty bod))))))]
 
@@ -748,7 +793,14 @@
                                       (append (current-where-context) entries)
                                       (current-where-context)))
                                 (current-where-context))]
-                  [bod (parameterize ([current-where-context body-ctx])
+                  ;; Phase 4: track capability-typed bindings in scope
+                  [cap-scope (if (and (expr-fvar? ty)
+                                      (capability-type? (expr-fvar-name ty)))
+                                 (cons (cons depth (expr-fvar-name ty))
+                                       (current-capability-scope))
+                                 (current-capability-scope))]
+                  [bod (parameterize ([current-where-context body-ctx]
+                                     [current-capability-scope cap-scope])
                          (elaborate body new-env new-depth))])
              (if (prologos-error? bod) bod
                  (expr-lam mult ty bod)))))]
@@ -854,7 +906,8 @@
                             [(> n-holes 0)
                              (let ([with-metas
                                     (insert-implicits-with-tagging ef ftype n-holes
-                                                                    fname loc env)])
+                                                                    fname loc env
+                                                                    #:depth depth)])
                                (elaborate-args with-metas effective-args env depth loc))]
                             ;; Normal case: no insertion needed, proceed
                             [else

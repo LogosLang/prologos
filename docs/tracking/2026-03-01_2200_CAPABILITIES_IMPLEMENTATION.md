@@ -8,40 +8,44 @@
 
 | Sub-phase | Description | Status | Commit |
 |---|---|---|---|
-| 1a | `surf-capability` struct in surface-syntax.rkt | pending | |
-| 1b | `capability` keyword in parser.rkt | pending | |
-| 1c | Capability registry in macros.rkt | pending | |
-| 1d | `expand-top-level` pass-through | pending | |
-| 1e | `process-capability-declaration` in elaborator.rkt | pending | |
-| 1f | Driver dispatch for `capability` | pending | |
-| 1g | Tests: test-capability-01.rkt | pending | |
+| 1a | `surf-capability` struct in surface-syntax.rkt | done | `0fd0470` |
+| 1b | `capability` keyword in parser.rkt | done | `0fd0470` |
+| 1c | Capability registry in macros.rkt | done | `0fd0470` |
+| 1d | `expand-top-level` pass-through | done | `0fd0470` |
+| 1e | `process-capability-declaration` in elaborator.rkt | done | `0fd0470` |
+| 1f | Driver dispatch for `capability` | done | `0fd0470` |
+| 1g | Tests: test-capability-01.rkt (11 tests, all pass) | done | `0fd0470` |
 
 ## Phase 2: Multiplicity Defaulting + `:w` Warning
 
 | Sub-phase | Description | Status | Commit |
 |---|---|---|---|
-| 2a | QTT defaulting for capability constraints | pending | |
-| 2b | `:w` warning emission (W2001) | pending | |
-| 2c | Tests: test-capability-02.rkt | pending | |
+| 2a | QTT defaulting for capability constraints | done | `f2bf6ad` |
+| 2b | `:w` warning emission (W2001) | done | `f2bf6ad` |
+| 2c | Tests: test-capability-02.rkt (13 tests, all pass) | done | `f2bf6ad` |
 
 ## Phase 3: Infix `<:` Syntax + Standard Hierarchy
 
 | Sub-phase | Description | Status | Commit |
 |---|---|---|---|
-| 3a | `<:` infix operator in reader + preparse | pending | |
-| 3b | Standard capability declarations (.prologos) | pending | |
-| 3c | PRELUDE and dep-graph updates | pending | |
-| 3d | Tests: test-capability-03.rkt | pending | |
+| 3a | Capability-aware subtype (skip coercion) + module loading | done | `641f015` |
+| 3b | Standard capability library (capabilities.prologos) | done | `641f015` |
+| 3c | PRELUDE, dep-graph, namespace.rkt updates | done | `641f015` |
+| 3d | Tests: test-capability-03.rkt (11 tests, all pass) | done | `641f015` |
+| — | `<:` infix syntax deferred (sugar, not blocking) | deferred | |
 
 ## Phase 4: Lexical Capability Resolution
 
 | Sub-phase | Description | Status | Commit |
 |---|---|---|---|
-| 4a | Separate resolution path | pending | |
-| 4b | Integration into type checking | pending | |
-| 4c | Subtype-aware resolution | pending | |
-| 4d | Error messages (E2001, E2002) | pending | |
-| 4e | Tests: test-capability-04.rkt | pending | |
+| 4a | capability-constraint-info struct + registry (metavar-store.rkt) | done | |
+| 4b | current-capability-scope + find-capability-in-scope (macros.rkt) | done | |
+| 4c | Lambda scope tracking + insert-implicits resolution (elaborator.rkt) | done | |
+| 4d | Subtype-aware resolution (exact→solve, subtype→leave unsolved) | done | |
+| 4e | check-unresolved-capability-constraints (trait-resolution.rkt) | done | |
+| 4f | E2001 error in driver.rkt process-def paths | done | |
+| 4g | prelude-capability-registry in test-support.rkt | done | |
+| 4h | Tests: test-capability-04.rkt (12 tests, all pass) | done | |
 
 ## Phase 5: Capability Inference via Propagator Network
 

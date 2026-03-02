@@ -293,7 +293,8 @@
                  [current-nat-value-cache (make-hash)]  ;; per-command nat-value memoization
                  [current-coercion-warnings '()]         ;; per-command coercion warnings
                  [current-deprecation-warnings '()]      ;; per-command deprecation warnings
-                 [current-capability-warnings '()])      ;; per-command capability warnings
+                 [current-capability-warnings '()]       ;; per-command capability warnings
+                 [current-capability-constraint-map (make-hasheq)])  ;; per-command capability constraints
   (define result
   (let ()
   (define expanded (expand-top-level surf))
@@ -462,9 +463,13 @@
               (time-phase! trait-resolve (resolve-trait-constraints!))
               ;; Phase C.6: Check for unresolved trait constraints
               (define trait-errors (check-unresolved-trait-constraints))
+              ;; Phase 4: Check for unresolved capability constraints
+              (define cap-errors (check-unresolved-capability-constraints))
               (cond
                 [(not (null? trait-errors))
                  (car trait-errors)]  ;; Return the first unresolved trait error
+                [(not (null? cap-errors))
+                 (car cap-errors)]    ;; Return the first unresolved capability error
                 [else
               ;; Check for failed constraints (Sprint 5)
               (define failed (all-failed-constraints))
@@ -587,6 +592,8 @@
                     (time-phase! trait-resolve (resolve-trait-constraints!))
                     ;; Phase C.6: Check for unresolved trait constraints
                     (define trait-errors-ann (check-unresolved-trait-constraints))
+                    ;; Phase 4: Check for unresolved capability constraints
+                    (define cap-errors-ann (check-unresolved-capability-constraints))
                     (cond
                       [(not (null? trait-errors-ann))
                        (current-global-env (hash-remove (current-global-env) name))
@@ -595,6 +602,13 @@
                           (hash-remove (current-global-env)
                            (qualify-name name (ns-context-current-ns (current-ns-context))))))
                        (car trait-errors-ann)]
+                      [(not (null? cap-errors-ann))
+                       (current-global-env (hash-remove (current-global-env) name))
+                       (when (current-ns-context)
+                         (current-global-env
+                          (hash-remove (current-global-env)
+                           (qualify-name name (ns-context-current-ns (current-ns-context))))))
+                       (car cap-errors-ann)]
                       [else
                     ;; 5.5. Check for failed constraints (Sprint 5)
                     (define failed (all-failed-constraints))

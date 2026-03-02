@@ -35,6 +35,7 @@
          prelude-impl-registry
          prelude-param-impl-registry
          prelude-preparse-registry
+         prelude-capability-registry
          prelude-lib-dir
          ;; Convenience helpers
          run-ns-last
@@ -57,7 +58,8 @@
                 prelude-trait-registry
                 prelude-impl-registry
                 prelude-param-impl-registry
-                prelude-preparse-registry)
+                prelude-preparse-registry
+                prelude-capability-registry)
   (parameterize ([current-global-env (hasheq)]
                  [current-ns-context #f]
                  [current-module-registry (hasheq)]
@@ -66,14 +68,16 @@
                  [current-preparse-registry (current-preparse-registry)]
                  [current-trait-registry (current-trait-registry)]
                  [current-impl-registry (current-impl-registry)]
-                 [current-param-impl-registry (current-param-impl-registry)])
+                 [current-param-impl-registry (current-param-impl-registry)]
+                 [current-capability-registry (current-capability-registry)])
     (install-module-loader!)
     (process-string "(ns prelude-cache)\n")
     (values (current-module-registry)
             (current-trait-registry)
             (current-impl-registry)
             (current-param-impl-registry)
-            (current-preparse-registry))))
+            (current-preparse-registry)
+            (current-capability-registry))))
 
 ;; ========================================
 ;; Fast test helpers using cached prelude

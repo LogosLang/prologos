@@ -54,7 +54,7 @@
                  [current-param-impl-registry prelude-param-impl-registry]
                  [current-multi-defn-registry (current-multi-defn-registry)]
                  [current-spec-store (hasheq)]
-                 [current-capability-registry (hasheq)])
+                 [current-capability-registry prelude-capability-registry])
     (install-module-loader!)
     (process-string shared-preamble)
     (values (current-global-env)
@@ -138,21 +138,22 @@
 
 (test-case "prelude/standard-capabilities-registered"
   ;; The shared fixture loads the prelude, which should include capabilities.
-  ;; Check that standard capability names are in the capability registry.
-  (check-true (capability-type? 'ReadCap)
-              "ReadCap should be registered from prelude")
-  (check-true (capability-type? 'WriteCap)
-              "WriteCap should be registered from prelude")
-  (check-true (capability-type? 'HttpCap)
-              "HttpCap should be registered from prelude")
-  (check-true (capability-type? 'StdioCap)
-              "StdioCap should be registered from prelude")
-  (check-true (capability-type? 'FsCap)
-              "FsCap should be registered from prelude")
-  (check-true (capability-type? 'NetCap)
-              "NetCap should be registered from prelude")
-  (check-true (capability-type? 'SysCap)
-              "SysCap should be registered from prelude"))
+  ;; Check that standard capability names are in the shared capability registry.
+  (parameterize ([current-capability-registry shared-capability-reg])
+    (check-true (capability-type? 'ReadCap)
+                "ReadCap should be registered from prelude")
+    (check-true (capability-type? 'WriteCap)
+                "WriteCap should be registered from prelude")
+    (check-true (capability-type? 'HttpCap)
+                "HttpCap should be registered from prelude")
+    (check-true (capability-type? 'StdioCap)
+                "StdioCap should be registered from prelude")
+    (check-true (capability-type? 'FsCap)
+                "FsCap should be registered from prelude")
+    (check-true (capability-type? 'NetCap)
+                "NetCap should be registered from prelude")
+    (check-true (capability-type? 'SysCap)
+                "SysCap should be registered from prelude")))
 
 (test-case "prelude/standard-capabilities-in-global-env"
   ;; Capability names should be in the global env as types
