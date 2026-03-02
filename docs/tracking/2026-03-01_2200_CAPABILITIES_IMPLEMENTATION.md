@@ -87,7 +87,7 @@ between the type lattice and CapabilitySet lattice. Phase 8d deferred.
 
 | Sub-phase | Description | Status | Commit |
 |---|---|---|---|
-| 8a | α/γ abstraction functions (type-to-cap-set, cap-set-to-type) in cap-type-bridge.rkt | | |
-| 8b | Cross-domain network construction + overdeclared analysis + cap-bridge REPL cmd | | |
-| 8c | Tests: test-capability-08.rkt (~20 tests) | | |
+| 8a | α/γ abstraction functions (type-to-cap-set, cap-set-to-type) in cap-type-bridge.rkt | done | `cd8b1e1` |
+| 8b | Cross-domain network construction + overdeclared analysis + cap-bridge REPL cmd | done | `cd8b1e1` |
+| 8c | Tests: test-capability-08.rkt (20 tests, all pass) | done | `cd8b1e1` |
 | 8d | Multi-agent cross-network reasoning | deferred | — |

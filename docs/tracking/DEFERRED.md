@@ -400,6 +400,8 @@ The following collection items ARE also deferred (genuine infrastructure deps):
   cross-network propagators, with dependent-typed proof objects as provenance
 - Machine-checkable justification chains across network boundaries
 - **Blocked on**: session type design (Phase 9), dependent capabilities (Phase 7)
+- **Context**: Phases 8a-8c complete (commit `cd8b1e1`) — α/γ Galois connections,
+  cross-domain network, overdeclared analysis, cap-bridge REPL command
 - Source: `docs/tracking/2026-03-01_1500_CAPABILITIES_AS_TYPES_DESIGN.md` §Phase 8d
 
 ### Elaborator Propagator Refactoring — Phases 8+A-E COMPLETE (E3 deferred)
