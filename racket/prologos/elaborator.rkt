@@ -2933,4 +2933,7 @@
     [(surf-cap-audit name cap-name _loc)
      (list 'cap-audit name cap-name)]
 
+    [(surf-cap-verify name _loc)
+     (list 'cap-verify name)]
+
     [_ (prologos-error srcloc-unknown (format "Unknown top-level form: ~a" surf))]))

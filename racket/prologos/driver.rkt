@@ -454,6 +454,37 @@
                                         trail)
                                    "\n")))])]
 
+                  ;; (cap-verify name) — authority root subsumption check
+                  [(list 'cap-verify name)
+                   (define vresult (verify-authority-root name))
+                   (cond
+                     [(authority-root-ok? vresult)
+                      (format "~a: authority root verification passed." name)]
+                     [(authority-root-failure? vresult)
+                      (define missing (authority-root-failure-missing vresult))
+                      (define traces (authority-root-failure-traces vresult))
+                      (define missing-str
+                        (string-join
+                         (sort (map symbol->string (set->list missing)) string<?)
+                         ", "))
+                      (define trace-lines
+                        (for/list ([trace (in-list traces)])
+                          (define cap-name (first trace))
+                          (define trail (second trace))
+                          (if (null? trail)
+                              (format "  ~a: directly declared" cap-name)
+                              (format "  ~a: ~a"
+                                      cap-name
+                                      (string-join
+                                       (map (lambda (edge)
+                                              (format "~a → ~a" (first edge) (second edge)))
+                                            trail)
+                                       " → ")))))
+                      (format "error[E2002]: authority root `~a` does not cover required capabilities\n  Missing: {~a}\n  Capability traces:\n~a"
+                              name
+                              missing-str
+                              (string-join trace-lines "\n"))])]
+
                   [_ (prologos-error srcloc-unknown (format "Unknown command: ~a" elab-result))])))]))))
   ;; Append warnings to result string (if any)
   (define coercion-warns (reverse (current-coercion-warnings)))

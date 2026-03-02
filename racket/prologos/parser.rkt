@@ -2776,6 +2776,14 @@
                            (stx->datum (second args))
                            loc)])]
 
+       ;; (cap-verify name) — verify authority root subsumption
+       [(cap-verify)
+        (cond
+          [(null? args)
+           (parse-error loc "cap-verify requires a function name" #f)]
+          [else
+           (surf-cap-verify (stx->datum (first args)) loc)])]
+
        ;; Not a keyword -> function application or relational goal
        [else
         (if (current-parsing-relational-goal?)

@@ -6679,6 +6679,7 @@
     ;; Capability inference REPL commands — pass through
     [(surf-cap-closure? surf) surf]
     [(surf-cap-audit? surf) surf]
+    [(surf-cap-verify? surf) surf]
     ;; Bare expression — implicit eval
     [else
      (define loc (cond

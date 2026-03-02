@@ -302,7 +302,8 @@
  (struct-out surf-capability)
  ;; Capability inference REPL commands
  (struct-out surf-cap-closure)
- (struct-out surf-cap-audit))
+ (struct-out surf-cap-audit)
+ (struct-out surf-cap-verify))
 
 ;; ========================================
 ;; Type hole (to be inferred by the type checker)
@@ -985,3 +986,5 @@
 (struct surf-cap-closure (name srcloc) #:transparent)
 ;; (cap-audit name cap-name) — show provenance trail for why a function requires a capability
 (struct surf-cap-audit (name cap-name srcloc) #:transparent)
+;; (cap-verify name) — verify authority root: declared caps subsume inferred closure
+(struct surf-cap-verify (name srcloc) #:transparent)

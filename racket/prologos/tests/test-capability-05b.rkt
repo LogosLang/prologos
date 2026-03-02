@@ -324,3 +324,201 @@
           "(cap-audit mc-fn2 HttpCap)")))
   (check-true (string-contains? (last result-read) "directly declares"))
   (check-true (string-contains? (last result-http) "directly declares")))
+
+;; ========================================
+;; Unit Tests: Authority Root Verification
+;; ========================================
+
+;; Helper: run code, capture env, then verify authority root
+(define (run-and-verify root-name s)
+  (parameterize ([current-global-env shared-global-env]
+                 [current-ns-context shared-ns-context]
+                 [current-module-registry shared-module-reg]
+                 [current-lib-paths (list prelude-lib-dir)]
+                 [current-mult-meta-store (make-hasheq)]
+                 [current-preparse-registry (current-preparse-registry)]
+                 [current-trait-registry shared-trait-reg]
+                 [current-impl-registry shared-impl-reg]
+                 [current-param-impl-registry shared-param-impl-reg]
+                 [current-capability-registry shared-capability-reg]
+                 [current-subtype-registry shared-subtype-reg])
+    (process-string s)
+    (verify-authority-root root-name)))
+
+(test-case "authority-root/passes-when-declared-covers-closure"
+  ;; main declares ReadCap, only calls functions needing ReadCap
+  (define vresult
+    (run-and-verify 'ar-main
+     (string-append
+      "(def ar-helper : (Pi (c :0 ReadCap) (Pi (x :w Nat) Nat))"
+      " := (fn (c :0 ReadCap) (fn (x :w Nat) x)))\n"
+      "(def ar-main : (Pi (c :0 ReadCap) (Pi (x :w Nat) Nat))"
+      " := (fn (c :0 ReadCap) (fn (x :w Nat) (ar-helper x))))")))
+  (check-true (authority-root-ok? vresult)
+              "Subsumption should pass when declared = closure"))
+
+(test-case "authority-root/passes-for-pure-function"
+  ;; Pure function has empty closure → trivially passes
+  (define vresult
+    (run-and-verify 'ar-pure
+     "(def ar-pure : (Pi (x :w Nat) Nat) := (fn (x :w Nat) x))"))
+  (check-true (authority-root-ok? vresult)
+              "Pure function always passes authority root check"))
+
+(test-case "authority-root/passes-when-supertype-covers"
+  ;; main declares FsCap, closure needs ReadCap, ReadCap <: FsCap → covered
+  (define vresult
+    (run-and-verify 'ar-super
+     (string-append
+      "(def ar-reader : (Pi (c :0 ReadCap) (Pi (x :w Nat) Nat))"
+      " := (fn (c :0 ReadCap) (fn (x :w Nat) x)))\n"
+      "(def ar-super : (Pi (c :0 FsCap) (Pi (x :w Nat) Nat))"
+      " := (fn (c :0 FsCap) (fn (x :w Nat) (ar-reader x))))")))
+  (check-true (authority-root-ok? vresult)
+              "FsCap should cover ReadCap via subtyping"))
+
+(test-case "authority-root/fails-when-cap-not-declared"
+  ;; Construct env directly: f declares ReadCap, g declares HttpCap, f calls g.
+  ;; f's closure should be {ReadCap, HttpCap}, declared = {ReadCap}, missing = {HttpCap}.
+  ;; (Bypasses elaborator because lexical resolution prevents this from type-checking.)
+  (parameterize ([current-capability-registry shared-capability-reg]
+                 [current-subtype-registry shared-subtype-reg])
+    (define g-type (expr-Pi 'm0 (expr-fvar 'HttpCap)
+                     (expr-Pi 'mw (expr-fvar 'Nat) (expr-fvar 'Nat))))
+    (define g-body (expr-lam 'mw #f (expr-lam 'mw #f (expr-fvar 'x))))
+    (define f-type (expr-Pi 'm0 (expr-fvar 'ReadCap)
+                     (expr-Pi 'mw (expr-fvar 'Nat) (expr-fvar 'Nat))))
+    (define f-body (expr-lam 'mw #f
+                     (expr-lam 'mw #f (expr-app (expr-fvar 'g) (expr-fvar 'x)))))
+    (define env (hasheq 'f (cons f-type f-body)
+                        'g (cons g-type g-body)))
+    (define vresult (verify-authority-root 'f env))
+    (check-true (authority-root-failure? vresult)
+                "Should fail when closure contains uncovered capability")
+    (check-true (set-member? (authority-root-failure-missing vresult) 'HttpCap)
+                "HttpCap should be in missing set")))
+
+(test-case "authority-root/failure-has-traces"
+  ;; Chain: f → g → h, h declares HttpCap, f only declares ReadCap.
+  ;; Failure should include traces with the call chain.
+  (parameterize ([current-capability-registry shared-capability-reg]
+                 [current-subtype-registry shared-subtype-reg])
+    (define h-type (expr-Pi 'm0 (expr-fvar 'HttpCap)
+                     (expr-Pi 'mw (expr-fvar 'Nat) (expr-fvar 'Nat))))
+    (define h-body (expr-lam 'mw #f (expr-lam 'mw #f (expr-fvar 'x))))
+    (define g-type (expr-Pi 'mw (expr-fvar 'Nat) (expr-fvar 'Nat)))
+    (define g-body (expr-lam 'mw #f (expr-app (expr-fvar 'h) (expr-fvar 'x))))
+    (define f-type (expr-Pi 'm0 (expr-fvar 'ReadCap)
+                     (expr-Pi 'mw (expr-fvar 'Nat) (expr-fvar 'Nat))))
+    (define f-body (expr-lam 'mw #f
+                     (expr-lam 'mw #f (expr-app (expr-fvar 'g) (expr-fvar 'x)))))
+    (define env (hasheq 'f (cons f-type f-body)
+                        'g (cons g-type g-body)
+                        'h (cons h-type h-body)))
+    (define vresult (verify-authority-root 'f env))
+    (check-true (authority-root-failure? vresult))
+    (define traces (authority-root-failure-traces vresult))
+    (check-true (pair? traces)
+                "Failure should include traces for missing caps")
+    ;; Each trace is (list cap-name trail)
+    (define first-trace (first traces))
+    (check-equal? (first first-trace) 'HttpCap
+                  "Trace should identify HttpCap as missing")))
+
+(test-case "authority-root/failure-declares-field-correct"
+  ;; Verify the declared set in failure struct matches what's in the type
+  (parameterize ([current-capability-registry shared-capability-reg]
+                 [current-subtype-registry shared-subtype-reg])
+    (define g-type (expr-Pi 'm0 (expr-fvar 'HttpCap)
+                     (expr-Pi 'mw (expr-fvar 'Nat) (expr-fvar 'Nat))))
+    (define g-body (expr-lam 'mw #f (expr-lam 'mw #f (expr-fvar 'x))))
+    (define f-type (expr-Pi 'm0 (expr-fvar 'ReadCap)
+                     (expr-Pi 'mw (expr-fvar 'Nat) (expr-fvar 'Nat))))
+    (define f-body (expr-lam 'mw #f
+                     (expr-lam 'mw #f (expr-app (expr-fvar 'g) (expr-fvar 'x)))))
+    (define env (hasheq 'f (cons f-type f-body)
+                        'g (cons g-type g-body)))
+    (define vresult (verify-authority-root 'f env))
+    (check-true (authority-root-failure? vresult))
+    (check-true (set-member? (authority-root-failure-declared vresult) 'ReadCap)
+                "Declared set should contain ReadCap")
+    (check-false (set-member? (authority-root-failure-declared vresult) 'HttpCap)
+                 "HttpCap should NOT be in declared set")))
+
+(test-case "authority-root/multiple-missing-caps"
+  ;; f declares nothing, calls g (ReadCap) and h (HttpCap)
+  ;; Both should appear in missing set.
+  (parameterize ([current-capability-registry shared-capability-reg]
+                 [current-subtype-registry shared-subtype-reg])
+    (define g-type (expr-Pi 'm0 (expr-fvar 'ReadCap)
+                     (expr-Pi 'mw (expr-fvar 'Nat) (expr-fvar 'Nat))))
+    (define g-body (expr-lam 'mw #f (expr-lam 'mw #f (expr-fvar 'x))))
+    (define h-type (expr-Pi 'm0 (expr-fvar 'HttpCap)
+                     (expr-Pi 'mw (expr-fvar 'Nat) (expr-fvar 'Nat))))
+    (define h-body (expr-lam 'mw #f (expr-lam 'mw #f (expr-fvar 'x))))
+    (define f-type (expr-Pi 'mw (expr-fvar 'Nat) (expr-fvar 'Nat)))
+    (define f-body (expr-lam 'mw #f
+                     (expr-app (expr-fvar 'g)
+                       (expr-app (expr-fvar 'h) (expr-fvar 'x)))))
+    (define env (hasheq 'f (cons f-type f-body)
+                        'g (cons g-type g-body)
+                        'h (cons h-type h-body)))
+    (define vresult (verify-authority-root 'f env))
+    (check-true (authority-root-failure? vresult))
+    (define missing (authority-root-failure-missing vresult))
+    (check-true (set-member? missing 'ReadCap) "ReadCap should be missing")
+    (check-true (set-member? missing 'HttpCap) "HttpCap should be missing")))
+
+;; ========================================
+;; Integration Tests: cap-verify REPL Command
+;; ========================================
+
+(test-case "cap-verify/repl-passes"
+  (define result
+    (run (string-append
+          "(def cv-helper : (Pi (c :0 ReadCap) (Pi (x :w Nat) Nat))"
+          " := (fn (c :0 ReadCap) (fn (x :w Nat) x)))\n"
+          "(def cv-main : (Pi (c :0 ReadCap) (Pi (x :w Nat) Nat))"
+          " := (fn (c :0 ReadCap) (fn (x :w Nat) (cv-helper x))))\n"
+          "(cap-verify cv-main)")))
+  (check-true (string-contains? (last result) "verification passed")
+              "cap-verify should report passed"))
+
+(test-case "cap-verify/repl-fails-with-E2002"
+  ;; Construct env directly with mismatched caps, then run cap-verify via REPL.
+  ;; cv-fail declares ReadCap but calls cv-http (HttpCap).
+  (define g-type (expr-Pi 'm0 (expr-fvar 'HttpCap)
+                   (expr-Pi 'mw (expr-fvar 'Nat) (expr-fvar 'Nat))))
+  (define g-body (expr-lam 'mw #f (expr-lam 'mw #f (expr-fvar 'x))))
+  (define f-type (expr-Pi 'm0 (expr-fvar 'ReadCap)
+                   (expr-Pi 'mw (expr-fvar 'Nat) (expr-fvar 'Nat))))
+  (define f-body (expr-lam 'mw #f
+                   (expr-lam 'mw #f (expr-app (expr-fvar 'cv-http) (expr-fvar 'x)))))
+  ;; Inject into env, then run cap-verify REPL command
+  (define env-with-fns
+    (hash-set (hash-set shared-global-env 'cv-http (cons g-type g-body))
+              'cv-fail (cons f-type f-body)))
+  (parameterize ([current-global-env env-with-fns]
+                 [current-ns-context shared-ns-context]
+                 [current-module-registry shared-module-reg]
+                 [current-lib-paths (list prelude-lib-dir)]
+                 [current-mult-meta-store (make-hasheq)]
+                 [current-preparse-registry (current-preparse-registry)]
+                 [current-trait-registry shared-trait-reg]
+                 [current-impl-registry shared-impl-reg]
+                 [current-param-impl-registry shared-param-impl-reg]
+                 [current-capability-registry shared-capability-reg]
+                 [current-subtype-registry shared-subtype-reg])
+    (define result (process-string "(cap-verify cv-fail)"))
+    (check-true (string-contains? (last result) "E2002")
+                "Should report E2002 error code")
+    (check-true (string-contains? (last result) "HttpCap")
+                "Should identify HttpCap as missing")))
+
+(test-case "cap-verify/repl-pure-function-passes"
+  (define result
+    (run (string-append
+          "(def cv-pure : (Pi (x :w Nat) Nat) := (fn (x :w Nat) x))\n"
+          "(cap-verify cv-pure)")))
+  (check-true (string-contains? (last result) "verification passed")
+              "Pure function should pass"))

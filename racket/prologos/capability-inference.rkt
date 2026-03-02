@@ -46,6 +46,16 @@
          capability-closure
          capability-audit-trail
          capability-audit-roots
+         ;; Authority root verification
+         verify-authority-root
+         authority-root-ok
+         authority-root-ok?
+         authority-root-failure
+         authority-root-failure?
+         authority-root-failure-root-name
+         authority-root-failure-declared
+         authority-root-failure-missing
+         authority-root-failure-traces
          ;; Result struct
          cap-inference-result
          cap-inference-result?
@@ -470,3 +480,64 @@
                     (hash-set! parent callee current)
                     (append acc (list callee))))
                 (bfs new-q)])]))])]))
+
+;; ========================================
+;; Authority Root Verification
+;; ========================================
+;;
+;; Verifies that a function's declared capability set subsumes its
+;; inferred closure. The "authority root" is the function (typically
+;; `main`) where capabilities are granted by the runtime — the only
+;; place where capabilities are "minted from nothing."
+;;
+;; If the inferred closure contains capabilities not covered by the
+;; declared set, the function returns an authority-root-failure with
+;; ATMS-derived traces explaining where the uncovered capabilities
+;; come from.
+;;
+;; Design reference: §4.7 (Authority Root), §4.13 (E2002 error)
+
+(struct authority-root-ok () #:transparent)
+
+;; root-name: symbol — the function being verified
+;; declared: (seteq) — capability names declared in the function's type spec
+;; missing: (seteq) — capability names in closure but not subsumed by declared
+;; traces: (listof (list cap-name trail)) — ATMS-derived audit trail per missing cap
+;;   where trail is (listof (list caller callee)) from capability-audit-trail
+(struct authority-root-failure (root-name declared missing traces) #:transparent)
+
+;; Verify that root-name's declared capabilities subsume its inferred closure.
+;; If env is provided, runs inference on it; otherwise uses current-global-env.
+;; Returns authority-root-ok or authority-root-failure.
+(define (verify-authority-root root-name [env (current-global-env)])
+  ;; Run inference to get the full picture
+  (define result (run-capability-inference env))
+  (define closure (capability-closure result root-name))
+
+  ;; Extract declared capabilities from the function's type in the env
+  (define entry (hash-ref env root-name #f))
+  (define declared
+    (if (and entry (pair? entry))
+        (extract-capability-requirements (car entry))
+        (seteq)))
+
+  ;; Find capabilities in the closure that are NOT subsumed by any declared cap.
+  ;; A capability `c` is covered if there exists a declared cap `d` such that
+  ;; c == d or c <: d (c is a subtype of d, i.e., d covers c).
+  (define missing
+    (for/seteq ([cap (in-set closure)]
+                #:unless (for/or ([dcap (in-set declared)])
+                           (or (eq? cap dcap)
+                               (subtype-pair? cap dcap))))
+      cap))
+
+  (cond
+    [(set-empty? missing)
+     (authority-root-ok)]
+    [else
+     ;; Build ATMS-derived traces for each missing capability
+     (define traces
+       (for/list ([cap (in-set missing)])
+         (define trail (capability-audit-trail result root-name cap))
+         (list cap trail)))
+     (authority-root-failure root-name declared missing traces)]))
