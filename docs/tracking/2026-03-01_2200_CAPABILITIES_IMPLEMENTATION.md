@@ -49,20 +49,26 @@
 
 ## Phase 5: Capability Inference
 
-Note: Design called for propagator network, but CHAMP trie scaling issue with 1000+ cells
-caused 320/1356 cells to be lost. Rewrote as iterative fixed-point algorithm — simpler,
-correct, and avoids the CHAMP issue. Produces identical results for unidirectional flow.
+Initially used iterative fixed-point due to CHAMP trie scaling bug. CHAMP bug identified and
+fixed (`a2dbea4`): `node-insert` used `equal-hash-code` during data-to-node promotion instead
+of stored caller-provided hash — causing ~30% data loss with custom hash functions (like
+`cell-id-hash`). Fix: store hash in data entries as 3-vectors `#(hash key val)`.
+
+Migrated to propagator network (`6b9eb57`): each function → cell seeded with declared caps,
+each call edge → propagator, `cap-set-join` as merge, `run-to-quiescence` computes transitive
+closure. All 21 existing tests pass without modification.
 
 | Sub-phase | Description | Status | Commit |
 |---|---|---|---|
 | 5a | CapabilitySet lattice (cap-set, join, subsumes?) | done | `7d651cb` |
 | 5b | Expression analysis (extract-fvar-names, extract-capability-requirements) | done | `7d651cb` |
-| 5c | Iterative fixed-point inference (build-call-graph, run-capability-inference) | done | `7d651cb` |
+| 5c | Inference via propagator network (was iterative, migrated) | done | `6b9eb57` |
 | 5d | Query API (capability-closure, capability-audit-trail) | done | `7d651cb` |
 | 5e | REPL commands (cap-closure, cap-audit) in parser/elaborator/driver | done | `7d651cb` |
 | 5f | Tests: test-capability-05.rkt (21 tests, all pass) | done | `7d651cb` |
-| — | ATMS provenance deferred (requires CHAMP fix for propagator network) | deferred | |
-| — | Authority root verification deferred (requires ATMS) | deferred | |
+| 5g | CHAMP trie fix: store hash in data entries | done | `a2dbea4` |
+| — | ATMS provenance deferred (no longer blocked, just not yet implemented) | deferred | |
+| — | Authority root verification deferred (depends on ATMS) | deferred | |
 
 ## Phase 6: Foreign Function Capability Gating
 
