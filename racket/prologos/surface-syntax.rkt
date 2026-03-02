@@ -299,7 +299,10 @@
  (struct-out surf-foreign-block)
  (struct-out surf-subtype)
  ;; Capability declaration
- (struct-out surf-capability))
+ (struct-out surf-capability)
+ ;; Capability inference REPL commands
+ (struct-out surf-cap-closure)
+ (struct-out surf-cap-audit))
 
 ;; ========================================
 ;; Type hole (to be inferred by the type checker)
@@ -974,3 +977,11 @@
 ;; name: symbol (capability type name)
 ;; params: list of (list name type-datum) or '() for nullary capabilities
 (struct surf-capability (name params srcloc) #:transparent)
+
+;; ========================================
+;; Capability inference REPL commands (Phase 5)
+;; ========================================
+;; (cap-closure name) — show transitive capability closure for a function
+(struct surf-cap-closure (name srcloc) #:transparent)
+;; (cap-audit name cap-name) — show provenance trail for why a function requires a capability
+(struct surf-cap-audit (name cap-name srcloc) #:transparent)

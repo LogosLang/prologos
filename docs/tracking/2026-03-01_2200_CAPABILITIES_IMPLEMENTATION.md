@@ -38,27 +38,31 @@
 
 | Sub-phase | Description | Status | Commit |
 |---|---|---|---|
-| 4a | capability-constraint-info struct + registry (metavar-store.rkt) | done | |
-| 4b | current-capability-scope + find-capability-in-scope (macros.rkt) | done | |
-| 4c | Lambda scope tracking + insert-implicits resolution (elaborator.rkt) | done | |
-| 4d | Subtype-aware resolution (exact→solve, subtype→leave unsolved) | done | |
-| 4e | check-unresolved-capability-constraints (trait-resolution.rkt) | done | |
-| 4f | E2001 error in driver.rkt process-def paths | done | |
-| 4g | prelude-capability-registry in test-support.rkt | done | |
-| 4h | Tests: test-capability-04.rkt (12 tests, all pass) | done | |
+| 4a | capability-constraint-info struct + registry (metavar-store.rkt) | done | `756aaa4` |
+| 4b | current-capability-scope + find-capability-in-scope (macros.rkt) | done | `756aaa4` |
+| 4c | Lambda scope tracking + insert-implicits resolution (elaborator.rkt) | done | `756aaa4` |
+| 4d | Subtype-aware resolution (exact→solve, subtype→leave unsolved) | done | `756aaa4` |
+| 4e | check-unresolved-capability-constraints (trait-resolution.rkt) | done | `756aaa4` |
+| 4f | E2001 error in driver.rkt process-def paths | done | `756aaa4` |
+| 4g | prelude-capability-registry in test-support.rkt | done | `756aaa4` |
+| 4h | Tests: test-capability-04.rkt (12 tests, all pass) | done | `756aaa4` |
 
-## Phase 5: Capability Inference via Propagator Network
+## Phase 5: Capability Inference
+
+Note: Design called for propagator network, but CHAMP trie scaling issue with 1000+ cells
+caused 320/1356 cells to be lost. Rewrote as iterative fixed-point algorithm — simpler,
+correct, and avoids the CHAMP issue. Produces identical results for unidirectional flow.
 
 | Sub-phase | Description | Status | Commit |
 |---|---|---|---|
-| 5a | CapabilitySet lattice | pending | |
-| 5b | Network construction | pending | |
-| 5c | Call-edge propagators | pending | |
-| 5d | Run to quiescence | pending | |
-| 5e | ATMS provenance | pending | |
-| 5f | Authority root verification | pending | |
-| 5g | REPL commands | pending | |
-| 5h | Tests: test-capability-05.rkt | pending | |
+| 5a | CapabilitySet lattice (cap-set, join, subsumes?) | done | |
+| 5b | Expression analysis (extract-fvar-names, extract-capability-requirements) | done | |
+| 5c | Iterative fixed-point inference (build-call-graph, run-capability-inference) | done | |
+| 5d | Query API (capability-closure, capability-audit-trail) | done | |
+| 5e | REPL commands (cap-closure, cap-audit) in parser/elaborator/driver | done | |
+| 5f | Tests: test-capability-05.rkt (21 tests, all pass) | done | |
+| — | ATMS provenance deferred (requires CHAMP fix for propagator network) | deferred | |
+| — | Authority root verification deferred (requires ATMS) | deferred | |
 
 ## Phase 6: Foreign Function Capability Gating
 

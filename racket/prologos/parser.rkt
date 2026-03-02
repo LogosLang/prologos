@@ -2758,6 +2758,24 @@
                params
                (surf-capability name-sym params loc))])]
 
+       ;; (cap-closure name) — show transitive capability closure
+       [(cap-closure)
+        (cond
+          [(null? args)
+           (parse-error loc "cap-closure requires a function name" #f)]
+          [else
+           (surf-cap-closure (stx->datum (first args)) loc)])]
+
+       ;; (cap-audit name cap-name) — show provenance trail
+       [(cap-audit)
+        (cond
+          [(or (null? args) (null? (cdr args)))
+           (parse-error loc "cap-audit requires function name and capability name" #f)]
+          [else
+           (surf-cap-audit (stx->datum (first args))
+                           (stx->datum (second args))
+                           loc)])]
+
        ;; Not a keyword -> function application or relational goal
        [else
         (if (current-parsing-relational-goal?)

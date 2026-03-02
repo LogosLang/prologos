@@ -2926,4 +2926,11 @@
     [(surf-capability name params loc)
      (process-capability-declaration name params loc)]
 
+    ;; Capability inference REPL commands (Phase 5)
+    [(surf-cap-closure name _loc)
+     (list 'cap-closure name)]
+
+    [(surf-cap-audit name cap-name _loc)
+     (list 'cap-audit name cap-name)]
+
     [_ (prologos-error srcloc-unknown (format "Unknown top-level form: ~a" surf))]))

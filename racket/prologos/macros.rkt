@@ -6676,6 +6676,9 @@
     [(surf-subtype? surf) surf]
     ;; Capability declaration — pass through to elaboration
     [(surf-capability? surf) surf]
+    ;; Capability inference REPL commands — pass through
+    [(surf-cap-closure? surf) surf]
+    [(surf-cap-audit? surf) surf]
     ;; Bare expression — implicit eval
     [else
      (define loc (cond

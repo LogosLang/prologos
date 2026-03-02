@@ -45,7 +45,8 @@
          "propagator.rkt"
          "champ.rkt"
          "unify.rkt"
-         "atms.rkt")
+         "atms.rkt"
+         "capability-inference.rkt")
 
 (provide process-command
          process-file
@@ -418,6 +419,37 @@
                      (current-global-env
                       (global-env-add-type-only (current-global-env) name-short (expr-Type 0))))
                    (format "capability ~a registered." name-short)]
+
+                  ;; (cap-closure name) — transitive capability closure query
+                  [(list 'cap-closure name)
+                   (define result (run-capability-inference))
+                   (define closure (capability-closure result name))
+                   (if (set-empty? closure)
+                       (format "~a: pure (no capabilities required)" name)
+                       (format "~a requires: ~a"
+                               name
+                               (string-join
+                                (sort (map symbol->string (set->list closure)) string<?)
+                                ", ")))]
+
+                  ;; (cap-audit name cap-name) — provenance trail query
+                  [(list 'cap-audit name cap-name)
+                   (define result (run-capability-inference))
+                   (define closure (capability-closure result name))
+                   (cond
+                     [(not (set-member? closure cap-name))
+                      (format "~a does not require ~a" name cap-name)]
+                     [else
+                      (define trail (capability-audit-trail result name cap-name))
+                      (if (null? trail)
+                          (format "~a directly declares ~a" name cap-name)
+                          (format "~a requires ~a because:\n~a"
+                                  name cap-name
+                                  (string-join
+                                   (map (lambda (edge)
+                                          (format "  ~a calls ~a" (first edge) (second edge)))
+                                        trail)
+                                   "\n")))])]
 
                   [_ (prologos-error srcloc-unknown (format "Unknown command: ~a" elab-result))])))]))))
   ;; Append warnings to result string (if any)
