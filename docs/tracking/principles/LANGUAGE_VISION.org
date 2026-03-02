@@ -28,9 +28,15 @@ languages address piecemeal:
 4. *Logical correctness*: Conclusions follow from premises; decisions are
    justified by evidence. Logic programming with proof terms solves this.
 
-No existing language unifies all four. Prologos does, and it does so in a
+5. *Authority correctness*: Code can only perform effects it was explicitly
+   granted permission for --- no ambient authority, no confused deputies, no
+   privilege escalation. Capability security (QTT + dependent types + session
+   types) solves this. See [[file:CAPABILITY_SECURITY.md][Capability Security]].
+
+No existing language unifies all five. Prologos does, and it does so in a
 way that users can adopt incrementally --- start with plain functions, add
-types when you need guarantees, add sessions when you need protocols.
+types when you need guarantees, add sessions when you need protocols, add
+capabilities when you need authority control.
 
 * Formal Methods for Everyone
 
@@ -127,6 +133,82 @@ point. This unifies:
 - Runtime concurrency (LVar cells, process propagators)
 - Logic programming (substitution cells, unification propagators)
 
+*** The Logic Engine as General Infrastructure
+
+The Logic Engine --- the propagator network + UnionFind + ATMS + tabling +
+stratification --- is not only the foundation for the relational language.
+It is the *general infrastructure for all monotonic fixed-point
+computations* in the compiler and runtime. Any problem that can be framed
+as "cells holding partial information, refined to a fixed point" is a
+candidate for the Logic Engine.
+
+Identified use cases beyond relational logic and type inference:
+
+- *Hole-driven development (~??~)*: Holes are metavariables --- cells in
+  the propagator network. Type inference already narrows hole types via
+  constraint propagation. Extending to value-level proof search means
+  searching the space of constructors and functions that produce the right
+  type. The ATMS enables hypothetical reasoning ("what if this hole is
+  filled with X?"); tabling prevents redundant search. The difference
+  between type inference and hole-filling is the domain of the lattice
+  cells --- the infrastructure is the same.
+
+- *Property derivation and structural inference*: Properties (from the
+  Extended Spec ~property~ form) are propositions attached to types.
+  Deriving which properties hold for a composite type --- e.g., which
+  properties of ~Num~ hold for ~Int~ --- is a constraint propagation
+  problem. Property-membership cells and composition propagators would flow
+  property truths through trait and bundle composition.
+
+- *Generative / property-based testing*: Generating test inputs that
+  satisfy complex constraints is constraint solving. The propagator network
+  with domain-specific cells (integer intervals, enumerated sets) computes
+  satisfying assignments. The ATMS explores multiple assignments via ~amb~.
+  This is the SmartGen approach --- test generation guided by constraint
+  solving rather than random sampling.
+
+- *Abstract interpretation and enhanced static analysis*: Abstract domains
+  form lattices (~Lattice~ trait). Abstract interpretation computes fixed
+  points over lattices (propagator network). Galois connections bridge
+  concrete and abstract domains (~GaloisConnection~ trait). Sign, parity,
+  and interval analysis are already implemented as abstract domains.
+  Extending to whole-program analysis --- including capability inference ---
+  requires building call-graph-level propagator networks where each function
+  is a cell. The ATMS provides provenance: "why does the analyzer conclude
+  this function requires ReadCap?" is answered by tracing the derivation
+  tree.
+
+- *CLP(FD) / CLP(R) constraint solving*: The propagator network is
+  domain-agnostic --- each cell has a domain-specific merge function. For
+  CLP(FD), cells hold integer interval domains; propagators are arithmetic
+  constraints. For CLP(R), symbolic intervals or polynomial domains. This
+  is the Radul-Sussman design: propagator networks as the universal
+  substrate for multi-domain constraint solving. This extends the relational
+  language with constraint domains, bringing Prologos's logic programming
+  closer to the power of SICStus or ECLiPSe.
+
+- *Cross-network interfacing*: Different compiler subsystems operate on
+  different propagator networks with different lattice domains --- type
+  inference (metavariable cells), capability inference (capability-set
+  cells), abstract interpretation (abstract-domain cells). The Galois
+  connection infrastructure (Phase 6c: ~net-add-cross-domain-propagator~)
+  enables these networks to communicate: information discovered in one
+  domain can flow into another. For example, capability inference may need
+  type information to resolve which branch of a union type is relevant;
+  type inference may need capability information to resolve ambiguous
+  overloads. At the runtime level, agents operating on separate propagator
+  networks --- each carrying dependent-typed proof objects as provenance ---
+  could cross-reference findings via cross-network propagators, enabling
+  multi-agent collaborative reasoning with machine-checkable justification
+  chains across network boundaries.
+
+The unifying principle: *any monotonic fixed-point computation in the
+compiler or runtime should use the Logic Engine*, not a hand-rolled
+fixed-point loop. This gives uniform infrastructure (cells, propagators,
+quiescence, backtracking), uniform provenance (ATMS-based derivation
+trees), and uniform performance characteristics (CHAMP-backed persistence,
+BSP scheduling).
+
 * The Three Languages in One
 
 Prologos fuses three paradigms, each with its own visual sigil:
@@ -204,6 +286,7 @@ Interop with host languages should feel seamless, not foreign:
 | Homoiconicity       | Strong   | No      | No      | No   | Weak   | No     |
 | Proof automation    | Native   | No      | Partial | No   | Impl.  | No     |
 | Protocol safety     | Static   | No      | Static  | No   | No     | RT     |
+| Capability security | Static   | No      | No      | No   | No     | No     |
 
 (Own = ownership/borrowing; RT = runtime only; Lib = library, not native)
 

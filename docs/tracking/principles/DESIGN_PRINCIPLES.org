@@ -260,3 +260,4 @@ cannot break existing guarantees. This is achieved through:
 - QTT linearity (resources cannot be duplicated or discarded silently)
 - Session type duality (both endpoints of a protocol must agree)
 - Monotonic constraint propagation (type inference only accumulates information)
+- Capability security (authority cannot be forged, only delegated; see [[file:CAPABILITY_SECURITY.md][Capability Security]])
