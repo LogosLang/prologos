@@ -2735,8 +2735,8 @@
                via-fn
                (surf-subtype sub-sym super-sym via-fn loc))])]
 
-       ;; (capability Name) — capability type declaration
-       ;; (capability Name (p : Type)) — dependent capability (Phase 7, reserved)
+       ;; (capability Name) — nullary capability type declaration
+       ;; (capability Name (p : Type)) — dependent (parameterized) capability
        [(capability)
         (cond
           [(null? args)
@@ -2744,16 +2744,17 @@
           [else
            (define name-sym (stx->datum (first args)))
            (define rest-args (cdr args))
-           ;; For now, params are reserved for Phase 7 (dependent capabilities)
            ;; Parse remaining args as param declarations if present
+           ;; Each param is a binder: (p : Type) or (p :m Type)
            (define params
              (cond
                [(null? rest-args) '()]
                [else
-                ;; Future: parse (p : Type) parameter declarations
-                (parse-error loc
-                  "capability: dependent capability parameters not yet supported (Phase 7)"
-                  #f)]))
+                (define parsed
+                  (for/list ([arg (in-list rest-args)])
+                    (parse-binder arg loc)))
+                (define err (findf prologos-error? parsed))
+                (if err err parsed)]))
            (if (prologos-error? params)
                params
                (surf-capability name-sym params loc))])]
