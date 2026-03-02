@@ -412,16 +412,17 @@
                   [(list 'subtype sub-key super-key)
                    (format "subtype ~a <: ~a registered." sub-key super-key)]
 
-                  ;; (capability name-fqn name-short) — capability declaration
+                  ;; (capability name-fqn name-short cap-type) — capability declaration
                   ;; Install the capability name as a type in the global env.
-                  ;; Capability types are zero-arity, opaque types at Type 0.
-                  [(list 'capability name-fqn name-short)
+                  ;; Nullary caps: cap-type = (expr-Type 0).
+                  ;; Dependent caps: cap-type = Pi(p :0 T, ... (expr-Type 0)).
+                  [(list 'capability name-fqn name-short cap-type)
                    ;; Install under both FQN and short name
                    (current-global-env
-                    (global-env-add-type-only (current-global-env) name-fqn (expr-Type 0)))
+                    (global-env-add-type-only (current-global-env) name-fqn cap-type))
                    (unless (eq? name-fqn name-short)
                      (current-global-env
-                      (global-env-add-type-only (current-global-env) name-short (expr-Type 0))))
+                      (global-env-add-type-only (current-global-env) name-short cap-type)))
                    (format "capability ~a registered." name-short)]
 
                   ;; (cap-closure name) — transitive capability closure query

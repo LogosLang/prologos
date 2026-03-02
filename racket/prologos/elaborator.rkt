@@ -2830,15 +2830,42 @@
   (define name-fqn (qualify name))
   (define name-short name)
 
-  ;; Register in the capability registry under both FQN and short name.
-  ;; This enables capability-type? to check either form.
-  (define meta (capability-meta name-fqn params (hasheq)))
-  (register-capability! name-fqn meta)
-  (unless (eq? name-fqn name-short)
-    (register-capability! name-short meta))
+  ;; Build the capability's kind type.
+  ;; Nullary: (expr-Type 0)
+  ;; Dependent: Pi(p :0 T1, Pi(q :0 T2, ... (expr-Type 0)))
+  ;; Indices use :0 multiplicity — they are computationally irrelevant.
+  (define cap-type
+    (if (null? params)
+        (expr-Type 0)
+        ;; Elaborate each param's type and build a Pi chain.
+        ;; Thread env/depth so later params can reference earlier ones.
+        (let loop ([ps params] [env (hasheq)] [depth 0])
+          (cond
+            [(null? ps) (expr-Type 0)]
+            [else
+             (define bi (car ps))
+             (define param-name (binder-info-name bi))
+             (define ty-surf (binder-info-type bi))
+             (define ty (elaborate ty-surf env depth))
+             (if (prologos-error? ty)
+                 ty  ;; propagate error
+                 (let* ([rest (loop (cdr ps)
+                                    (env-extend env param-name depth)
+                                    (+ depth 1))])
+                   (if (prologos-error? rest)
+                       rest
+                       (expr-Pi 'm0 ty rest))))]))))
 
-  ;; Return: driver installs the name as a type in the global env
-  (list 'capability name-fqn name-short))
+  (if (prologos-error? cap-type)
+      cap-type
+      (let ([meta (capability-meta name-fqn params (hasheq))])
+        ;; Register in the capability registry under both FQN and short name.
+        ;; This enables capability-type? to check either form.
+        (register-capability! name-fqn meta)
+        (unless (eq? name-fqn name-short)
+          (register-capability! name-short meta))
+        ;; Return: driver installs the name as a type in the global env
+        (list 'capability name-fqn name-short cap-type))))
 
 ;; ========================================
 ;; Elaborate top-level commands
