@@ -17,6 +17,7 @@
          champ-size
          champ-has-key?
          champ-fold
+         champ-fold/hash
          champ-keys
          champ-vals
          champ-entries
@@ -38,9 +39,16 @@
 ;; ========================================
 
 ;; A CHAMP node: datamap and nodemap are 32-bit bitmasks.
-;; content is a vector: data entries (key . value) at front,
-;; child champ-nodes at back.
+;; content is a vector: data entries at front, child champ-nodes at back.
+;; Data entries are 3-vectors: #(hash key value), storing the caller-provided
+;; hash so sub-node promotion doesn't need to re-derive it.
 (struct champ-node (datamap nodemap content) #:transparent)
+
+;; Data entry accessors
+(define (de-hash entry) (vector-ref entry 0))
+(define (de-key entry) (vector-ref entry 1))
+(define (de-val entry) (vector-ref entry 2))
+(define (make-de hash key val) (vector hash key val))
 
 ;; Collision node: stores all (key . value) pairs with identical hash.
 (struct champ-collision (hash entries) #:transparent)
@@ -117,8 +125,8 @@
        [(not (zero? (bitwise-and dm bit)))
         (define idx (data-index dm bit))
         (define entry (vector-ref arr idx))
-        (if (equal? (car entry) key)
-            (cdr entry)
+        (if (equal? (de-key entry) key)
+            (de-val entry)
             'none)]
        ;; Child node at this position
        [(not (zero? (bitwise-and nm bit)))
@@ -160,17 +168,17 @@
        [(not (zero? (bitwise-and dm bit)))
         (define idx (data-index dm bit))
         (define entry (vector-ref arr idx))
-        (define existing-key (car entry))
+        (define existing-key (de-key entry))
         (cond
           ;; Same key: update value
           [(equal? existing-key key)
            (define new-arr (vector-copy arr))
-           (vector-set! new-arr idx (cons key val))
+           (vector-set! new-arr idx (make-de hash key val))
            (values (champ-node dm nm new-arr) #f)]
           ;; Different key: create sub-node or collision
           [else
-           (define existing-hash (equal-hash-code existing-key))
-           (define sub-node (merge-two existing-hash existing-key (cdr entry)
+           (define existing-hash (de-hash entry))  ;; USE STORED HASH (was: equal-hash-code)
+           (define sub-node (merge-two existing-hash existing-key (de-val entry)
                                        hash key val (+ level 1)))
            ;; Remove data entry, add node entry
            (define new-dm (bitwise-and dm (bitwise-not bit)))
@@ -193,7 +201,7 @@
        [else
         (define new-dm (bitwise-ior dm bit))
         (define idx (data-index new-dm bit))
-        (define new-arr (vec-insert arr idx (cons key val)))
+        (define new-arr (vec-insert arr idx (make-de hash key val)))
         (values (champ-node new-dm nm new-arr) #t)])]))
 
 ;; Merge two key-value pairs into a sub-node (or collision node)
@@ -216,9 +224,9 @@
         ;; Different segments: two data entries
         (if (< seg1 seg2)
             (champ-node (bitwise-ior bit1 bit2) 0
-                        (vector (cons key1 val1) (cons key2 val2)))
+                        (vector (make-de hash1 key1 val1) (make-de hash2 key2 val2)))
             (champ-node (bitwise-ior bit1 bit2) 0
-                        (vector (cons key2 val2) (cons key1 val1))))])]))
+                        (vector (make-de hash2 key2 val2) (make-de hash1 key1 val1))))])]))
 
 (define (collision-insert coll hash key val)
   (define entries (champ-collision-entries coll))
@@ -260,7 +268,7 @@
         (define idx (data-index dm bit))
         (define entry (vector-ref arr idx))
         (cond
-          [(equal? (car entry) key)
+          [(equal? (de-key entry) key)
            ;; Found: remove data entry
            (define new-dm (bitwise-and dm (bitwise-not bit)))
            (define new-arr (vec-remove arr idx))
@@ -333,6 +341,12 @@
 (define (champ-fold root f init)
   (node-fold (champ-root-node root) f init))
 
+;; champ-fold/hash : root (hash key val acc → acc) init → acc
+;; Like champ-fold but exposes the stored hash for each entry.
+;; Enables correct cross-map operations when custom hash functions are used.
+(define (champ-fold/hash root f init)
+  (node-fold/hash (champ-root-node root) f init))
+
 (define (node-fold node f acc)
   (cond
     [(champ-collision? node)
@@ -350,13 +364,40 @@
          (if (>= i data-count)
              a
              (let ([entry (vector-ref arr i)])
-               (loop (+ i 1) (f (car entry) (cdr entry) a))))))
+               (loop (+ i 1) (f (de-key entry) (de-val entry) a))))))
      ;; Fold over child nodes
      (let loop ([i 0] [a acc2])
        (if (>= i node-count)
            a
            (let ([child (vector-ref arr (+ data-count i))])
              (loop (+ i 1) (node-fold child f a)))))]))
+
+(define (node-fold/hash node f acc)
+  (cond
+    [(champ-collision? node)
+     ;; Collision nodes store the shared hash once
+     (define h (champ-collision-hash node))
+     (foldl (lambda (entry a) (f h (car entry) (cdr entry) a))
+            acc (champ-collision-entries node))]
+    [else
+     (define dm (champ-node-datamap node))
+     (define nm (champ-node-nodemap node))
+     (define arr (champ-node-content node))
+     (define data-count (popcount dm))
+     (define node-count (popcount nm))
+     ;; Fold over data entries (hash stored in each entry)
+     (define acc2
+       (let loop ([i 0] [a acc])
+         (if (>= i data-count)
+             a
+             (let ([entry (vector-ref arr i)])
+               (loop (+ i 1) (f (de-hash entry) (de-key entry) (de-val entry) a))))))
+     ;; Fold over child nodes
+     (let loop ([i 0] [a acc2])
+       (if (>= i node-count)
+           a
+           (let ([child (vector-ref arr (+ data-count i))])
+             (loop (+ i 1) (node-fold/hash child f a)))))]))
 
 (define (champ-keys root)
   (champ-fold root (lambda (k v acc) (cons k acc)) '()))
@@ -371,15 +412,18 @@
 ;; Equality
 ;; ========================================
 
+;; Uses champ-fold/hash to look up keys in map b using the STORED hash,
+;; not equal-hash-code. This is correct even when maps were created with
+;; custom hash functions (e.g., the propagator network's cell-id-hash).
 (define (champ-equal? a b)
   (and (= (champ-root-size a) (champ-root-size b))
-       (champ-fold a
-                   (lambda (k v ok?)
-                     (and ok?
-                          (let ([v2 (champ-lookup b (equal-hash-code k) k)])
-                            (and (not (eq? v2 'none))
-                                 (equal? v v2)))))
-                   #t)))
+       (champ-fold/hash a
+                        (lambda (h k v ok?)
+                          (and ok?
+                               (let ([v2 (champ-lookup b h k)])
+                                 (and (not (eq? v2 'none))
+                                      (equal? v v2)))))
+                        #t)))
 
 ;; ========================================
 ;; Lattice-aware insert (join on collision)
@@ -456,16 +500,21 @@
 ;; insert/delete. Freezing rebuilds the persistent CHAMP from hash entries.
 ;; This is simpler than Clojure's owner-id approach but achieves O(n) total
 ;; for batch construction. The owner-id optimization can be added later.
+;;
+;; The hash table stores key → (cons stored-hash val), preserving the
+;; caller-provided hash so tchamp-freeze can reconstruct the CHAMP with
+;; the correct hash function (not just equal-hash-code).
 
 (struct tchamp-root (entries size) #:mutable #:transparent)
-;; entries: mutable Racket hash table (equal?-keyed)
+;; entries: mutable Racket hash table, key → (cons hash val)
 ;; size:    element count (tracked separately for O(1) access)
 
 ;; champ-transient : champ-root -> tchamp-root
 ;; Create a transient from a persistent map.
+;; Uses champ-fold/hash to preserve the stored hash per entry.
 (define (champ-transient root)
   (define ht (make-hash))
-  (champ-fold root (lambda (k v _) (hash-set! ht k v)) (void))
+  (champ-fold/hash root (lambda (h k v _) (hash-set! ht k (cons h v))) (void))
   (tchamp-root ht (champ-root-size root)))
 
 ;; tchamp-insert! : tchamp-root hash key val -> tchamp-root
@@ -474,7 +523,7 @@
   (define ht (tchamp-root-entries troot))
   (unless (hash-has-key? ht key)
     (set-tchamp-root-size! troot (+ (tchamp-root-size troot) 1)))
-  (hash-set! ht key val)
+  (hash-set! ht key (cons hash val))
   troot)
 
 ;; tchamp-delete! : tchamp-root hash key -> tchamp-root
@@ -488,11 +537,12 @@
 
 ;; tchamp-freeze : tchamp-root -> champ-root
 ;; Freeze the transient into a persistent map.
+;; Uses the stored hash per entry, not equal-hash-code.
 (define (tchamp-freeze troot)
   (define ht (tchamp-root-entries troot))
   (for/fold ([m champ-empty])
-            ([(k v) (in-hash ht)])
-    (champ-insert m (equal-hash-code k) k v)))
+            ([(k hv) (in-hash ht)])
+    (champ-insert m (car hv) k (cdr hv))))
 
 ;; tchamp-size* : tchamp-root -> exact-nonneg-integer
 (define (tchamp-size* troot)
@@ -500,7 +550,8 @@
 
 ;; tchamp-lookup : tchamp-root hash key -> val or 'none
 (define (tchamp-lookup troot hash key)
-  (hash-ref (tchamp-root-entries troot) key 'none))
+  (define entry (hash-ref (tchamp-root-entries troot) key #f))
+  (if entry (cdr entry) 'none))
 
 ;; ========================================
 ;; Module tests
@@ -584,6 +635,36 @@
     (check-equal? (champ-size m) 100)
     (for ([i (in-range 100)])
       (check-equal? (champ-lookup m (equal-hash-code i) i) (* i i))))
+
+  (test-case "champ: 1500 keys (scaling stress test)"
+    ;; Regression: custom hash functions (not equal-hash-code) used to lose
+    ;; entries during data-to-node promotion because merge-two re-derived the
+    ;; hash via equal-hash-code instead of using the caller-provided hash.
+    (define m
+      (for/fold ([m champ-empty])
+                ([i (in-range 1500)])
+        (champ-insert m i i (* i i))))  ;; hash = i (custom, not equal-hash-code)
+    (check-equal? (champ-size m) 1500)
+    (for ([i (in-range 1500)])
+      (check-not-equal? (champ-lookup m i i) 'none
+                         (format "lookup failed for key ~a" i))
+      (check-equal? (champ-lookup m i i) (* i i))))
+
+  (test-case "champ: struct keys with custom hash (propagator pattern)"
+    ;; Simulates how propagator.rkt uses CHAMP: cell-id structs with
+    ;; cell-id-hash (= integer n) rather than equal-hash-code.
+    (struct test-id (n) #:transparent)
+    (define (test-id-hash tid) (test-id-n tid))
+    (define m
+      (for/fold ([m champ-empty])
+                ([i (in-range 1500)])
+        (define tid (test-id i))
+        (champ-insert m (test-id-hash tid) tid (* i i))))
+    (check-equal? (champ-size m) 1500)
+    (for ([i (in-range 1500)])
+      (define tid (test-id i))
+      (check-not-equal? (champ-lookup m (test-id-hash tid) tid) 'none
+                         (format "lookup failed for test-id ~a" i))))
 
   (test-case "champ: equality"
     (define m1 (champ-insert (champ-insert champ-empty
@@ -711,4 +792,49 @@
     ;; m1 should be unchanged
     (check-equal? (champ-lookup m1 (equal-hash-code 'a) 'a) 10)
     (check-equal? (champ-lookup m2 (equal-hash-code 'a) 'a) 15))
+
+  ;; ---- Custom hash function correctness tests ----
+
+  (test-case "champ-equal?: custom hash maps"
+    ;; Two maps built with custom hashes (integer directly), different insertion order
+    (define m1 (champ-insert (champ-insert champ-empty 10 'a 1) 20 'b 2))
+    (define m2 (champ-insert (champ-insert champ-empty 20 'b 2) 10 'a 1))
+    (check-true (champ-equal? m1 m2)))
+
+  (test-case "champ-fold/hash: exposes stored hash"
+    (define m (champ-insert (champ-insert champ-empty 42 'x 1) 99 'y 2))
+    (define entries
+      (champ-fold/hash m (lambda (h k v acc) (cons (list h k v) acc)) '()))
+    (check-equal? (length entries) 2)
+    ;; Both stored hashes should be the originals (42, 99)
+    (define hashes (sort (map car entries) <))
+    (check-equal? hashes '(42 99)))
+
+  (test-case "tchamp: custom hash roundtrip"
+    ;; Build a map with custom integer hashes, roundtrip through transient,
+    ;; verify lookups still work with the original hashes.
+    (define m0
+      (for/fold ([m champ-empty])
+                ([i (in-range 200)])
+        (champ-insert m (* i 7) i (* i i))))  ;; hash = i*7 (custom)
+    (check-equal? (champ-size m0) 200)
+    ;; Roundtrip
+    (define t (champ-transient m0))
+    (check-equal? (tchamp-size* t) 200)
+    (define m1 (tchamp-freeze t))
+    (check-equal? (champ-size m1) 200)
+    ;; All entries findable with original hashes
+    (for ([i (in-range 200)])
+      (check-equal? (champ-lookup m1 (* i 7) i) (* i i)
+                    (format "roundtrip lookup failed for key ~a" i))))
+
+  (test-case "tchamp: custom hash insert in transient"
+    ;; Start with custom-hash map, insert via transient, freeze and check
+    (define m0 (champ-insert champ-empty 42 'a 1))
+    (define t (champ-transient m0))
+    (tchamp-insert! t 99 'b 2)  ;; custom hash 99
+    (define m1 (tchamp-freeze t))
+    (check-equal? (champ-size m1) 2)
+    (check-equal? (champ-lookup m1 42 'a) 1)
+    (check-equal? (champ-lookup m1 99 'b) 2))
 )
