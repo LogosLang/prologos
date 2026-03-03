@@ -173,6 +173,18 @@
          register-schema!
          lookup-schema
          parse-schema-fields
+         ;; Selection registry
+         current-selection-registry
+         selection-entry
+         selection-entry?
+         selection-entry-name
+         selection-entry-schema-name
+         selection-entry-requires-paths
+         selection-entry-provides-paths
+         selection-entry-includes-names
+         selection-entry-srcloc
+         register-selection!
+         lookup-selection
          ;; Spec store
          current-spec-store
          current-propagated-specs
@@ -381,6 +393,26 @@
            (string->symbol (substring s 1))))
        (loop (cddr pairs)
              (cons (schema-field kw-name type-datum) fields))])))
+
+;; ========================================
+;; Selection registry
+;; ========================================
+;; name: symbol (the selection name, e.g., 'MovieTimesReq)
+;; schema-name: symbol (the parent schema, e.g., 'User)
+;; requires-paths: list of Racket keywords (#:id, #:name, etc.)
+;; provides-paths: list of Racket keywords
+;; includes-names: list of symbols (other selection names)
+;; srcloc: source location of the selection form
+(struct selection-entry (name schema-name requires-paths provides-paths includes-names srcloc) #:transparent)
+
+;; Selection store: symbol → selection-entry
+(define current-selection-registry (make-parameter (hasheq)))
+
+(define (register-selection! name entry)
+  (current-selection-registry (hash-set (current-selection-registry) name entry)))
+
+(define (lookup-selection name)
+  (hash-ref (current-selection-registry) name #f))
 
 ;; ========================================
 ;; Pattern variables: symbols starting with $

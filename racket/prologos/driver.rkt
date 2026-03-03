@@ -412,6 +412,17 @@
                   [(list 'subtype sub-key super-key)
                    (format "subtype ~a <: ~a registered." sub-key super-key)]
 
+                  ;; (selection name-fqn name-short schema-name) — selection declaration
+                  ;; Install the selection name as a type in the global env.
+                  [(list 'selection name-fqn name-short schema-name)
+                   ;; Install under both FQN and short name
+                   (current-global-env
+                    (global-env-add-type-only (current-global-env) name-fqn (expr-Type 0)))
+                   (unless (eq? name-fqn name-short)
+                     (current-global-env
+                      (global-env-add-type-only (current-global-env) name-short (expr-Type 0))))
+                   (format "selection ~a from ~a registered." name-short schema-name)]
+
                   ;; (capability name-fqn name-short cap-type) — capability declaration
                   ;; Install the capability name as a type in the global env.
                   ;; Nullary caps: cap-type = (expr-Type 0).

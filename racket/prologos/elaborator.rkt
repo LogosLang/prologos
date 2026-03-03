@@ -2819,6 +2819,57 @@
 ;;
 ;; Registers in the capability registry (for kind-marker checking) and
 ;; returns a 'capability result so the driver can install the name as a type.
+;; ========================================
+;; Process selection declaration
+;; ========================================
+;; Validates:
+;;   1. Parent schema exists in schema registry
+;;   2. Required/provided field paths are valid fields in the schema
+;; Then registers the selection and returns a 'selection result for the driver.
+(define (process-selection-declaration name schema-name req prov incl loc)
+  (define ns-ctx (current-ns-context))
+  (define (qualify sym)
+    (if ns-ctx
+        (qualify-name sym (ns-context-current-ns ns-ctx))
+        sym))
+  (define name-fqn (qualify name))
+  (define name-short name)
+  ;; Look up the parent schema (try both qualified and bare names)
+  (define schema-fqn (qualify schema-name))
+  (define schema (or (lookup-schema schema-fqn)
+                     (lookup-schema schema-name)))
+  (cond
+    [(not schema)
+     (prologos-error loc
+                     (format "selection ~a: schema ~a not found" name schema-name))]
+    [else
+     ;; Validate field paths against schema fields
+     (define schema-fields (schema-entry-fields schema))
+     (define schema-field-kws
+       (for/list ([f (in-list schema-fields)])
+         (string->keyword (symbol->string (schema-field-keyword f)))))
+     ;; Check that each required/provided path exists in the schema
+     (define field-err
+       (for/or ([kw (in-list (append req prov))])
+         (if (member kw schema-field-kws)
+             #f  ;; field found — no error
+             (prologos-error loc
+                             (format "selection ~a: field :~a not found in schema ~a"
+                                     name (keyword->string kw) schema-name)))))
+     (cond
+       [(prologos-error? field-err) field-err]
+       [else
+        ;; Validate includes (just check they're symbols — actual resolution in Phase 4)
+        ;; For now, skip deep validation of included selections
+        ;; Register the selection
+        (register-selection! name-fqn
+                             (selection-entry name-fqn schema-fqn req prov incl loc))
+        (unless (eq? name-fqn name-short)
+          (register-selection! name-short
+                               (selection-entry name-short schema-fqn req prov incl loc)))
+        ;; Return result for driver to install as type in global-env
+        (list 'selection name-fqn name-short schema-name)])]))
+
 (define (process-capability-declaration name params loc)
   ;; Qualify name with current namespace prefix
   (define ns-ctx (current-ns-context))
@@ -2946,6 +2997,12 @@
     ;; Registers in subtype + coercion registries; no elaborated AST.
     [(surf-subtype sub-type super-type via-fn loc)
      (process-subtype-declaration sub-type super-type via-fn loc)]
+
+    ;; Selection declaration
+    ;; (selection Name from Schema :requires [...] :provides [...] :includes [...])
+    ;; Validates schema exists, validates field paths, registers selection, creates type.
+    [(surf-selection name schema-name req prov incl loc)
+     (process-selection-declaration name schema-name req prov incl loc)]
 
     ;; Capability declaration
     ;; (capability Name) — registers in capability registry + as a zero-field type.
