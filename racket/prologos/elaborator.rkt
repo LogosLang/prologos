@@ -1737,6 +1737,75 @@
        (if (prologos-error? em) em
            (expr-map-vals em)))]
 
+    ;; get-in: desugar to chained map-get calls
+    ;; Single path:   (get-in m :a.b.c) → (map-get (map-get (map-get m :a) :b) :c)
+    ;; Multiple paths: (get-in m :a.{b c}) → {kw-b (map-get (map-get m :a) :b)
+    ;;                                         kw-c (map-get (map-get m :a) :c)}
+    [(surf-get-in target paths loc)
+     (let ([et (elaborate target env depth)])
+       (if (prologos-error? et) et
+           (let ()
+             ;; Path segments are Racket keywords (#:zip); expr-keyword takes symbols
+             (define (seg->kw seg)
+               (expr-keyword (string->symbol (keyword->string seg))))
+             ;; Build a chained map-get for a single path
+             (define (path->chain base segs)
+               (foldl (lambda (seg acc)
+                        (expr-map-get acc (seg->kw seg)))
+                      base segs))
+             (cond
+               ;; Single path → return the leaf value
+               [(= (length paths) 1)
+                (path->chain et (car paths))]
+               ;; Multiple paths → build a map literal {leaf-key value ...}
+               [else
+                ;; Create fresh metas for the map literal's key/value types
+                (define km (fresh-meta ctx-empty (expr-hole)
+                             (meta-source-info loc 'map-key-type "key type of get-in projection" #f (env->name-stack env))))
+                (define vm (fresh-meta ctx-empty (expr-hole)
+                             (meta-source-info loc 'map-val-type "value type of get-in projection" #f (env->name-stack env))))
+                (let build-map ([remaining paths]
+                                [result (expr-map-empty km vm)])
+                  (cond
+                    [(null? remaining) result]
+                    [else
+                     (define path (car remaining))
+                     (define leaf-key (last path))  ;; last segment is the map key
+                     (define chain (path->chain et path))
+                     (build-map (cdr remaining)
+                                (expr-map-assoc result (seg->kw leaf-key) chain))]))]))))]
+
+    ;; update-in: desugar to nested map-get + map-assoc
+    ;; (update-in m :a.b.c f) →
+    ;;   (map-assoc m :a
+    ;;     (map-assoc (map-get m :a) :b
+    ;;       (map-assoc (map-get (map-get m :a) :b) :c
+    ;;         (f (map-get (map-get (map-get m :a) :b) :c)))))
+    [(surf-update-in target paths fn-expr loc)
+     (let ([et (elaborate target env depth)]
+           [ef (elaborate fn-expr env depth)])
+       (cond
+         [(prologos-error? et) et]
+         [(prologos-error? ef) ef]
+         ;; update-in only makes sense for a single path
+         [(not (= (length paths) 1))
+          (parse-error loc "update-in requires exactly one path (no branching)" #f)]
+         [else
+          (let ([segs (car paths)])
+            ;; Path segments are Racket keywords (#:zip); expr-keyword takes symbols
+            (define (seg->kw seg)
+              (expr-keyword (string->symbol (keyword->string seg))))
+            ;; Build the nested update structure
+            (define (build-update base segs)
+              (cond
+                [(null? segs) (expr-app ef base)]  ;; leaf: apply fn
+                [else
+                 (define key (car segs))
+                 (define sub-val (expr-map-get base (seg->kw key)))
+                 (define updated (build-update sub-val (cdr segs)))
+                 (expr-map-assoc base (seg->kw key) updated)]))
+            (build-update et segs))]))]
+
     ;; ---- Set type and operations ----
     [(surf-set-type a loc)
      (let ([ea (elaborate a env depth)])
