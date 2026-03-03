@@ -417,6 +417,8 @@
     [(expr-tmap-dissoc! t k) (format "[tmap-dissoc! ~a ~a]" (pp-expr t names) (pp-expr k names))]
     [(expr-tset-insert! t a) (format "[tset-insert! ~a ~a]" (pp-expr t names) (pp-expr a names))]
     [(expr-tset-delete! t a) (format "[tset-delete! ~a ~a]" (pp-expr t names) (pp-expr a names))]
+    ;; Panic
+    [(expr-panic msg) (format "(panic ~a)" (pp-expr msg names))]
 
     ;; PropNetwork
     [(expr-net-type) "PropNetwork"]
@@ -1042,6 +1044,8 @@
     [(expr-tmap-dissoc! t k) (or (uses-bvar0? t) (uses-bvar0? k))]
     [(expr-tset-insert! t a) (or (uses-bvar0? t) (uses-bvar0? a))]
     [(expr-tset-delete! t a) (or (uses-bvar0? t) (uses-bvar0? a))]
+    ;; Panic
+    [(expr-panic msg) (uses-bvar0? msg)]
 
     ;; PropNetwork
     [(expr-net-type) #f]

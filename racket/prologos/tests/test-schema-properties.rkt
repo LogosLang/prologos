@@ -269,3 +269,38 @@
   (define fields (schema-entry-fields entry))
   (define host-field (findf (lambda (f) (eq? (schema-field-keyword f) 'host)) fields))
   (check-equal? (schema-field-default-val host-field) "localhost"))
+
+;; ========================================
+;; Section 4: panic — runtime abort construct
+;; ========================================
+
+;; 17. panic type-checks in checking context (inhabits any type)
+(test-case "schema-prop/panic-checks-any-type"
+  (define results
+    (run (string-append
+          "(spec always-panic Nat -> Nat)\n"
+          "(defn always-panic [x] (panic \"not implemented\"))\n")))
+  (check-no-errors results))
+
+;; 18. panic at runtime produces a prologos-error (via eval, not def)
+(test-case "schema-prop/panic-runtime-error"
+  (define result
+    (run-last "(the Nat (panic \"kaboom\"))"))
+  (check-true (prologos-error? result)
+              (format "Expected prologos-error from panic, got ~v" result)))
+
+;; 19. panic in if-else: true branch taken, panic not triggered
+(test-case "schema-prop/panic-if-else-not-triggered"
+  (define result
+    (run-last "(if true 42N (panic \"unreachable\"))"))
+  (check-false (prologos-error? result)
+               (format "Expected success when panic branch not taken, got ~v" result))
+  (check-true (string? result))
+  (check-true (string-contains? result "42")))
+
+;; 20. panic in if-else: false branch triggers panic
+(test-case "schema-prop/panic-if-else-triggered"
+  (define result
+    (run-last "(if false 42N (panic \"hit the panic\"))"))
+  (check-true (prologos-error? result)
+              (format "Expected prologos-error from false-branch panic, got ~v" result)))

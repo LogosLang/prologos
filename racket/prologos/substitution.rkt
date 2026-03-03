@@ -291,6 +291,8 @@
     [(expr-tmap-dissoc! t k) (expr-tmap-dissoc! (shift delta cutoff t) (shift delta cutoff k))]
     [(expr-tset-insert! t a) (expr-tset-insert! (shift delta cutoff t) (shift delta cutoff a))]
     [(expr-tset-delete! t a) (expr-tset-delete! (shift delta cutoff t) (shift delta cutoff a))]
+    ;; Panic
+    [(expr-panic msg) (expr-panic (shift delta cutoff msg))]
 
     ;; PropNetwork (all non-binding)
     [(expr-net-type) e]
@@ -725,6 +727,8 @@
     [(expr-tmap-dissoc! t kt) (expr-tmap-dissoc! (subst k s t) (subst k s kt))]
     [(expr-tset-insert! t a) (expr-tset-insert! (subst k s t) (subst k s a))]
     [(expr-tset-delete! t a) (expr-tset-delete! (subst k s t) (subst k s a))]
+    ;; Panic
+    [(expr-panic msg) (expr-panic (subst k s msg))]
 
     ;; PropNetwork (all non-binding)
     [(expr-net-type) e]

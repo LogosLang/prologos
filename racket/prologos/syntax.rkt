@@ -250,6 +250,8 @@
  (struct-out expr-hole)
  ;; Typed hole (?? or ??name — reports expected type)
  (struct-out expr-typed-hole)
+ ;; Panic (runtime abort — inhabits any type)
+ (struct-out expr-panic)
  ;; Metavariable (to be solved during elaboration/unification)
  (struct-out expr-meta)
  ;; Reduce (ML-style pattern matching — desugared in type checker)
@@ -913,6 +915,11 @@
 
 
 ;; ========================================
+;; Panic (runtime abort, inhabits any type)
+;; ========================================
+(struct expr-panic (msg) #:transparent)                      ; (panic msg) — msg : String
+
+;; ========================================
 ;; Error marker (for failed inference)
 ;; ========================================
 (struct expr-error () #:transparent)
@@ -1013,6 +1020,7 @@
       (expr-solver-type? x) (expr-goal-type? x) (expr-derivation-type? x)
       (expr-schema-type? x) (expr-answer-type? x) (expr-relation-type? x)
       (expr-solver-config? x) (expr-cut? x)
+      (expr-panic? x)
       (expr-hole? x) (expr-typed-hole? x) (expr-meta? x) (expr-reduce? x)
       (expr-union? x) (expr-tycon? x) (expr-error? x)))
 

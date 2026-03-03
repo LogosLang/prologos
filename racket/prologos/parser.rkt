@@ -2182,6 +2182,15 @@
             (let ([c (parse-datum (car args))])
               (if (prologos-error? c) c
                   (surf-persist c loc))))]
+
+       ;; ---- Panic ----
+       ;; (panic msg)
+       [(panic)
+        (or (check-arity 'panic args 1 loc)
+            (let ([m (parse-datum (car args))])
+              (if (prologos-error? m) m
+                  (surf-panic m loc))))]
+
        ;; (tvec-push! t x)
        [(|tvec-push!|)
         (or (check-arity '|tvec-push!| args 2 loc)

@@ -230,6 +230,8 @@
  ;; Transient Builders
  (struct-out surf-transient-type)
  (struct-out surf-transient) (struct-out surf-persist)
+ ;; Panic
+ (struct-out surf-panic)
  (struct-out surf-tvec-push!) (struct-out surf-tvec-update!)
  (struct-out surf-tmap-assoc!) (struct-out surf-tmap-dissoc!)
  (struct-out surf-tset-insert!) (struct-out surf-tset-delete!)
@@ -790,6 +792,9 @@
 (struct surf-tmap-dissoc! (t k srcloc) #:transparent)        ; (tmap-dissoc! t k)
 (struct surf-tset-insert! (t a srcloc) #:transparent)        ; (tset-insert! t a)
 (struct surf-tset-delete! (t a srcloc) #:transparent)        ; (tset-delete! t a)
+
+;; ---- Panic ----
+(struct surf-panic (msg srcloc) #:transparent)               ; (panic msg)
 
 ;; ---- PropNetwork (persistent propagator network) ----
 (struct surf-net-type         (srcloc) #:transparent)                  ; PropNetwork

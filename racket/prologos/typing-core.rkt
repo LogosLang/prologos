@@ -1566,6 +1566,8 @@
          [(expr-TMap k v) (expr-Map k v)]
          [(expr-TSet a) (expr-Set a)]
          [_ (expr-error)]))]
+    ;; Panic: requires checking context (can't synthesize type for panic)
+    [(expr-panic _) (expr-error)]
     [(expr-TVec a)
      (if (is-type ctx a) (expr-Type (lzero)) (expr-error))]
     [(expr-TMap k v)
@@ -2014,6 +2016,11 @@
     ;; ---- suc: check against Nat ----
     [((expr-suc e1) (expr-Nat))
      (check ctx e1 (expr-Nat))]
+
+    ;; ---- Panic: inhabits any type ----
+    ;; (panic msg) checks against any T when msg : String
+    [((expr-panic msg) _)
+     (check ctx msg (expr-String))]
 
     ;; ---- Lambda: check against Pi ----
     ;; check(G, lam(m, A, body), Pi(m, A', B))

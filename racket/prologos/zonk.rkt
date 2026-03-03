@@ -275,6 +275,8 @@
     [(expr-tmap-dissoc! t k) (expr-tmap-dissoc! (zonk t) (zonk k))]
     [(expr-tset-insert! t a) (expr-tset-insert! (zonk t) (zonk a))]
     [(expr-tset-delete! t a) (expr-tset-delete! (zonk t) (zonk a))]
+    ;; Panic
+    [(expr-panic msg) (expr-panic (zonk msg))]
 
     ;; PropNetwork
     [(expr-net-type) e]
@@ -698,6 +700,8 @@
     [(expr-tmap-dissoc! t k) (expr-tmap-dissoc! (zonk-at-depth depth t) (zonk-at-depth depth k))]
     [(expr-tset-insert! t a) (expr-tset-insert! (zonk-at-depth depth t) (zonk-at-depth depth a))]
     [(expr-tset-delete! t a) (expr-tset-delete! (zonk-at-depth depth t) (zonk-at-depth depth a))]
+    ;; Panic
+    [(expr-panic msg) (expr-panic (zonk-at-depth depth msg))]
 
     ;; PropNetwork
     [(expr-net-type) e]
@@ -1095,6 +1099,8 @@
     [(expr-tmap-dissoc! t k) (expr-tmap-dissoc! (default-metas t) (default-metas k))]
     [(expr-tset-insert! t a) (expr-tset-insert! (default-metas t) (default-metas a))]
     [(expr-tset-delete! t a) (expr-tset-delete! (default-metas t) (default-metas a))]
+    ;; Panic
+    [(expr-panic msg) (expr-panic (default-metas msg))]
 
     ;; PropNetwork
     [(expr-net-type) e]

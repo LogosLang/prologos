@@ -340,7 +340,14 @@
                                                 (nf (rewrite-specializations
                                                      (time-phase! zonk (zonk-final expr)))))]
                                          [ty-nf (time-phase! reduce (nf (time-phase! zonk (zonk-final ty))))])
-                                     (format "~a : ~a" (pp-expr val) (pp-expr ty-nf)))))))))]
+                                     ;; Check for panic at runtime
+                                     (if (expr-panic? val)
+                                         (prologos-error #f
+                                           (format "panic: ~a"
+                                             (if (expr-string? (expr-panic-msg val))
+                                                 (expr-string-val (expr-panic-msg val))
+                                                 (pp-expr (expr-panic-msg val)))))
+                                         (format "~a : ~a" (pp-expr val) (pp-expr ty-nf))))))))))]
 
                   ;; (infer expr)
                   [(list 'infer expr)

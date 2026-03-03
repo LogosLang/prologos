@@ -2409,6 +2409,7 @@
     [(expr-typed-hole _) e]
     [(expr-meta _) e]
     [(expr-error) e]
+    [(expr-panic msg) (expr-panic (nf msg))]  ;; reduce msg, stay stuck
     [(expr-tycon _) e]  ;; Unapplied type constructor (HKT) — already normal
 
     ;; Structured terms: normalize subterms

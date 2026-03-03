@@ -1367,6 +1367,12 @@
                       [(expr-TSet a) (tu (expr-Set a) u)]
                       [_ (tu-error)])]
          [_ (tu-error)]))]
+    ;; Panic: msg is runtime-relevant (mw), type is error (needs checking context)
+    [(expr-panic msg)
+     (let ([r (inferQ ctx msg)])
+       (match r
+         [(tu _ u) (tu (expr-error) u)]
+         [_ (tu-error)]))]
     [(expr-TVec a)
      (let ([r (inferQ ctx a)])
        (match r
@@ -1947,6 +1953,13 @@
     ;; ---- suc: check against Nat ----
     [((expr-suc e1) (expr-Nat))
      (let ([r (checkQ ctx e1 (expr-Nat))])
+       (match r
+         [(bu #t u) (bu #t u)]
+         [_ (bu #f (zero-usage n))]))]
+
+    ;; ---- Panic: inhabits any type, count msg usage ----
+    [((expr-panic msg) _)
+     (let ([r (checkQ ctx msg (expr-String))])
        (match r
          [(bu #t u) (bu #t u)]
          [_ (bu #f (zero-usage n))]))]

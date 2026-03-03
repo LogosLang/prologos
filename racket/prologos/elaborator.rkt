@@ -1998,6 +1998,12 @@
        (cond [(prologos-error? ec) ec]
              [else (expr-persist ec)]))]
 
+    ;; `panic` — runtime abort, inhabits any type
+    [(surf-panic msg loc)
+     (let ([em (elaborate msg env depth)])
+       (cond [(prologos-error? em) em]
+             [else (expr-panic em)]))]
+
     [(surf-tvec-push! t x loc)
      (let ([et (elaborate t env depth)]
            [ex (elaborate x env depth)])
