@@ -266,3 +266,70 @@
   (check-true (surf-selection? result))
   (check-equal? (surf-selection-requires-paths result)
                 '((#:name) (#:address #:zip) (#:age) (#:address #:city))))
+
+;; ========================================
+;; Section 3: Phase 3b — Deep path validation against nested schemas
+;; ========================================
+
+;; 22. Deep path :address.zip validated — zip exists in Address
+(test-case "sel-path/deep-valid-address-zip"
+  (define result
+    (run-last "(selection ValidDeep from User :requires [:address.zip])"))
+  (check-true (string? result) (format "Expected string, got ~v" result))
+  (check-true (string-contains? result "selection")))
+
+;; 23. Deep path :address.city validated — city exists in Address
+(test-case "sel-path/deep-valid-address-city"
+  (define result
+    (run-last "(selection ValidDeep2 from User :requires [:address.city])"))
+  (check-true (string? result) (format "Expected string, got ~v" result))
+  (check-true (string-contains? result "selection")))
+
+;; 24. Error: deep path :address.bogus — bogus does NOT exist in Address
+(test-case "sel-path/deep-invalid-nested-field"
+  (define result
+    (run-last "(selection BadNested from User :requires [:address.bogus])"))
+  (check-true (prologos-error? result)
+              (format "Expected error for :address.bogus (bogus not in Address), got ~v" result)))
+
+;; 25. Error: deep path on non-schema field — :name.foo (name is String, not schema)
+(test-case "sel-path/deep-non-schema-field"
+  (define result
+    (run-last "(selection BadDeep from User :requires [:name.foo])"))
+  (check-true (prologos-error? result)
+              (format "Expected error for :name.foo (String not a schema), got ~v" result)))
+
+;; 26. Error: deep path on non-schema field — :age.bar (age is Nat)
+(test-case "sel-path/deep-non-schema-nat"
+  (define result
+    (run-last "(selection BadDeep2 from User :requires [:age.bar])"))
+  (check-true (prologos-error? result)
+              (format "Expected error for :age.bar (Nat not a schema), got ~v" result)))
+
+;; 27. Mixed flat+deep paths — all valid
+(test-case "sel-path/deep-mixed-valid"
+  (define results
+    (run (string-append
+          "(selection MixedDeep from User :requires [:name :address.zip :address.state])")))
+  (check-no-errors results))
+
+;; 28. Error in provides deep path — bad nested field
+(test-case "sel-path/deep-provides-invalid"
+  (define result
+    (run-last "(selection BadProv from User :provides [:address.bogus])"))
+  (check-true (prologos-error? result)
+              (format "Expected error for provides :address.bogus, got ~v" result)))
+
+;; 29. Brace expansion with deep validation — :address.{zip city} valid
+(test-case "sel-path/deep-brace-valid"
+  (define result
+    (run-last "(selection BraceDeep from User :requires [:address.{zip city}])"))
+  (check-true (string? result) (format "Expected string, got ~v" result))
+  (check-true (string-contains? result "selection")))
+
+;; 30. Brace expansion with deep validation — :address.{zip bogus} errors
+(test-case "sel-path/deep-brace-invalid"
+  (define result
+    (run-last "(selection BadBrace from User :requires [:address.{zip bogus}])"))
+  (check-true (prologos-error? result)
+              (format "Expected error for :address.{zip bogus}, got ~v" result)))

@@ -2843,42 +2843,83 @@
      (prologos-error loc
                      (format "selection ~a: schema ~a not found" name schema-name))]
     [else
-     ;; Validate field paths against schema fields.
+     ;; Validate field paths against schema fields (deep validation).
      ;; Paths are structured lists: (#:name) or (#:address #:zip) or (#:address *).
-     ;; For now (Phase 3a), validate only the first segment (top-level field).
-     ;; Phase 3b adds deep validation of nested segments.
-     (define schema-fields (schema-entry-fields schema))
-     (define schema-field-kws
-       (for/list ([f (in-list schema-fields)])
-         (string->keyword (symbol->string (schema-field-keyword f)))))
-     ;; Check that each required/provided path's first segment exists in the schema
+     ;; For multi-segment paths, each segment is validated against the schema at that level.
+     ;; e.g., :address.zip → validate :address in User, then validate :zip in Address.
+     ;;
+     ;; validate-path: validate a single structured path against a schema.
+     ;; Returns #f if valid, or a prologos-error.
+     (define (validate-path path current-schema current-schema-name)
+       (cond
+         [(null? path) #f]  ;; fully consumed path — valid
+         [else
+          (define seg (car path))
+          (define rest (cdr path))
+          (define fields (schema-entry-fields current-schema))
+          (define field-kws
+            (for/list ([f (in-list fields)])
+              (string->keyword (symbol->string (schema-field-keyword f)))))
+          (cond
+            ;; Wildcard: valid if schema has any fields (no deeper validation)
+            [(or (eq? seg '*) (eq? seg '**))
+             (if (null? fields)
+                 (prologos-error loc
+                                 (format "selection ~a: wildcard on schema ~a with no fields"
+                                         name current-schema-name))
+                 #f)]
+            ;; Keyword segment
+            [(keyword? seg)
+             (if (not (member seg field-kws))
+                 (prologos-error loc
+                                 (format "selection ~a: field :~a not found in schema ~a"
+                                         name (keyword->string seg) current-schema-name))
+                 ;; Field exists — if more segments remain, validate deeper
+                 (if (null? rest)
+                     #f  ;; leaf field, valid
+                     ;; Find the field's type and check if it's a schema for deeper validation
+                     (let* ([kw-sym (string->symbol (keyword->string seg))]
+                            [field (for/first ([f (in-list fields)]
+                                              #:when (eq? (schema-field-keyword f) kw-sym))
+                                     f)]
+                            [type-datum (schema-field-type-datum field)])
+                       ;; Type datum might be a symbol (schema name) or compound type
+                       (cond
+                         [(symbol? type-datum)
+                          (define nested-schema
+                            (or (lookup-schema type-datum)
+                                ;; Try without namespace prefix (short name lookup)
+                                (let-values ([(_prefix short) (split-qualified-name type-datum)])
+                                  (and short (lookup-schema short)))))
+                          (if nested-schema
+                              (validate-path rest nested-schema type-datum)
+                              ;; Type is not a schema — can't traverse deeper
+                              (prologos-error loc
+                                              (format "selection ~a: field :~a in ~a has type ~a which is not a schema (cannot traverse deeper with :~a)"
+                                                      name (keyword->string seg) current-schema-name
+                                                      type-datum
+                                                      (string-join (map (lambda (s)
+                                                                          (if (keyword? s)
+                                                                              (keyword->string s)
+                                                                              (format "~a" s)))
+                                                                        rest) "."))))]
+                         [else
+                          ;; Compound type — can't traverse into non-schema types
+                          (prologos-error loc
+                                          (format "selection ~a: field :~a in ~a has compound type ~v which is not a schema"
+                                                  name (keyword->string seg) current-schema-name type-datum))]))))]
+            [else
+             (prologos-error loc
+                             (format "selection ~a: unexpected path segment ~v"
+                                     name seg))])]))
+     ;; Validate all paths
      (define field-err
        (for/or ([path (in-list (append req prov))])
          (cond
            [(not (pair? path))
             (prologos-error loc
                             (format "selection ~a: malformed path ~v" name path))]
-           [else
-            (define first-seg (car path))
-            (cond
-              ;; Wildcard at top level: all fields → valid if schema has any fields
-              [(or (eq? first-seg '*) (eq? first-seg '**))
-               (if (null? schema-fields)
-                   (prologos-error loc
-                                   (format "selection ~a: wildcard on schema ~a with no fields"
-                                           name schema-name))
-                   #f)]
-              ;; Keyword segment: check against schema fields
-              [(keyword? first-seg)
-               (if (member first-seg schema-field-kws)
-                   #f  ;; field found — no error
-                   (prologos-error loc
-                                   (format "selection ~a: field :~a not found in schema ~a"
-                                           name (keyword->string first-seg) schema-name)))]
-              [else
-               (prologos-error loc
-                               (format "selection ~a: unexpected path segment ~v"
-                                       name first-seg))])])))
+           [else (validate-path path schema schema-name)])))
      (cond
        [(prologos-error? field-err) field-err]
        [else
