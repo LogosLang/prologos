@@ -158,6 +158,21 @@
          ;; HKT-4: Overlap detection helpers (for testing)
          parametric-impls-could-overlap?
          format-param-impl-entry
+         ;; Schema registry
+         current-schema-registry
+         schema-field
+         schema-field?
+         schema-field-keyword
+         schema-field-type-datum
+         schema-entry
+         schema-entry?
+         schema-entry-name
+         schema-entry-fields
+         schema-entry-closed?
+         schema-entry-srcloc
+         register-schema!
+         lookup-schema
+         parse-schema-fields
          ;; Spec store
          current-spec-store
          current-propagated-specs
@@ -317,6 +332,55 @@
 
 (define (spec-propagated? name)
   (set-member? (current-propagated-specs) name))
+
+;; ========================================
+;; Schema registry: field information for schema types
+;; ========================================
+
+;; A schema field: stores a keyword name and its declared type datum.
+;; keyword: symbol — the keyword name (e.g., 'name, 'age)
+;; type-datum: symbol or list — the type datum (e.g., 'String, 'Nat, '(List Nat))
+(struct schema-field (keyword type-datum) #:transparent)
+
+;; A schema entry: stores the full schema definition.
+;; name: symbol — the schema name (e.g., 'User)
+;; fields: (listof schema-field) — the declared fields in order
+;; closed?: boolean — #t if :closed was specified (default #f, Phase 5)
+;; srcloc: source location of the schema form
+(struct schema-entry (name fields closed? srcloc) #:transparent)
+
+;; Schema store: symbol → schema-entry
+(define current-schema-registry (make-parameter (hasheq)))
+
+(define (register-schema! name entry)
+  (current-schema-registry (hash-set (current-schema-registry) name entry)))
+
+(define (lookup-schema name)
+  (hash-ref (current-schema-registry) name #f))
+
+;; Parse schema field pairs from a datum list.
+;; Input: (:name String :age Nat) → list of schema-field
+;; Handles both simple types (Nat, String) and compound types ((List Nat)).
+(define (parse-schema-fields field-pairs srcloc)
+  (let loop ([pairs field-pairs] [fields '()])
+    (cond
+      [(null? pairs) (reverse fields)]
+      [(null? (cdr pairs))
+       (error 'schema
+              (format "schema field ~a is missing a type" (car pairs)))]
+      [else
+       (define kw-datum (car pairs))
+       (define type-datum (cadr pairs))
+       ;; Validate keyword: must be a keyword-like symbol (starts with ':')
+       (unless (keyword-like-symbol? kw-datum)
+         (error 'schema
+                (format "expected a keyword field name (e.g., :name), got ~a" kw-datum)))
+       ;; Strip the leading ':' for storage
+       (define kw-name
+         (let ([s (symbol->string kw-datum)])
+           (string->symbol (substring s 1))))
+       (loop (cddr pairs)
+             (cons (schema-field kw-name type-datum) fields))])))
 
 ;; ========================================
 ;; Pattern variables: symbols starting with $
@@ -1250,16 +1314,19 @@
          (define expanded `(def ,sname ($brace-params ,@opts)))
          (define new-stx (datum->syntax #f (preparse-expand-form expanded) stx))
          (cons new-stx acc)]
-        ;; ---- Public schema — expand to deftype, auto-export ----
+        ;; ---- Public schema — parse fields, register, expand to deftype, auto-export ----
         [(and (pair? datum) (eq? head 'schema))
-         ;; (schema Name :field1 Type1 :field2 Type2) → (deftype Name ...)
+         ;; (schema Name :field1 Type1 :field2 Type2 ...) → register + deftype
          (unless (and (list? datum) (>= (length datum) 2) (symbol? (cadr datum)))
            (error 'schema "schema requires: (schema Name :field1 Type1 ...)"))
          (define schema-name (cadr datum))
          (auto-export-name! schema-name)
          (define field-pairs (cddr datum))
-         ;; Build a deftype with fields as a Map type
-         ;; For now, register as a simple deftype alias
+         ;; Parse and register schema fields
+         (define fields (parse-schema-fields field-pairs (syntax->datum stx)))
+         (register-schema! schema-name
+                           (schema-entry schema-name fields #f (syntax->datum stx)))
+         ;; Still expand to deftype for backward compatibility (Phase 1b will change this)
          (define expanded `(deftype ,schema-name (Map Keyword Value)))
          (process-deftype expanded)
          acc]
