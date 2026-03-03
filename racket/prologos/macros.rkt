@@ -1348,6 +1348,9 @@
          ;; Actual field checking is done in typing-core.rkt via schema registry lookups.
          (define type-def `(def ,schema-name : (Type 0) (Type 0)))
          (cons (datum->syntax #f type-def stx) acc)]
+        ;; ---- Selection declaration — pass through to parser/elaborator (Phase 2b) ----
+        [(and (pair? datum) (eq? head 'selection))
+         (cons stx acc)]
         ;; ---- Public defn/def — auto-export the name ----
         [(and (pair? datum) (memq head '(defn def)))
          (auto-export-names! (extract-defined-name datum head))
@@ -6779,6 +6782,8 @@
     [(surf-defr? surf) surf]
     ;; Phase E: subtype declaration — pass through to elaboration
     [(surf-subtype? surf) surf]
+    ;; Selection declaration — pass through to elaboration
+    [(surf-selection? surf) surf]
     ;; Capability declaration — pass through to elaboration
     [(surf-capability? surf) surf]
     ;; Capability inference REPL commands — pass through

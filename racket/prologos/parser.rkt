@@ -64,7 +64,7 @@
     PropNetwork CellId PropId net-new net-new-cell net-new-cell-widen net-cell-read net-cell-write net-add-prop net-run net-snapshot net-contradict?
     UnionFind uf-empty uf-make-set uf-find uf-union uf-value
     ;; Relational language (Phase 7)
-    defr rel solve solve-with solve-one explain explain-with solver schema
+    defr rel solve solve-with solve-one explain explain-with solver schema selection
     is not
     Solver Goal DerivationTree Answer
     def defn check eval infer expand expand-1 expand-full parse elaborate match
@@ -2735,6 +2735,10 @@
                via-fn
                (surf-subtype sub-sym super-sym via-fn loc))])]
 
+       ;; (selection Name from Schema :requires [...] :provides [...] :includes [...])
+       [(selection)
+        (parse-selection args loc)]
+
        ;; (capability Name) — nullary capability type declaration
        ;; (capability Name (p : Type)) — dependent (parameterized) capability
        [(capability)
@@ -2803,6 +2807,141 @@
     ;; Head is not a symbol -> application of a compound expression
     [else
      (parse-application head-stx args loc)]))
+
+;; ========================================
+;; Parse selection declaration
+;; ========================================
+;; (selection Name from Schema :requires [:field1 :field2 ...]
+;;                             :provides [:field3 ...]
+;;                             :includes [Sel1 Sel2 ...])
+;; All three clauses are optional. At least one of :requires/:provides/:includes
+;; must be present.
+(define (parse-selection args loc)
+  (cond
+    [(< (length args) 3)
+     (parse-error loc "selection requires at least: (selection Name from Schema)" #f)]
+    [else
+     (define name-sym (stx->datum (first args)))
+     (define from-kw  (stx->datum (second args)))
+     (define schema-sym (stx->datum (third args)))
+     ;; Validate 'from' keyword
+     (cond
+       [(not (symbol? name-sym))
+        (parse-error loc (format "selection: expected name symbol, got ~v" name-sym) #f)]
+       [(not (eq? from-kw 'from))
+        (parse-error loc (format "selection: expected 'from' after name, got ~v" from-kw) #f)]
+       [(not (symbol? schema-sym))
+        (parse-error loc (format "selection: expected schema name after 'from', got ~v" schema-sym) #f)]
+       [else
+        ;; Parse keyword clauses from remaining args
+        ;; Use syntax->datum (deep) since clause values are nested lists
+        (define rest-args (map (lambda (s) (if (syntax? s) (syntax->datum s) s))
+                               (cdddr args)))
+        (define-values (req prov incl err)
+          (parse-selection-clauses rest-args loc))
+        (cond
+          [err err]  ;; propagate parse error
+          [(and (null? req) (null? prov) (null? incl))
+           (parse-error loc "selection: requires at least one of :requires, :provides, or :includes" #f)]
+          [else
+           (surf-selection name-sym schema-sym req prov incl loc)])])]))
+
+;; Helper: check if a datum is a Prologos keyword symbol (:foo style)
+;; In sexp mode, :foo comes through as a symbol ':foo (not a Racket keyword).
+(define (selection-clause-sym? d)
+  (and (symbol? d)
+       (let ([s (symbol->string d)])
+         (and (> (string-length s) 1)
+              (char=? (string-ref s 0) #\:)))))
+
+;; Extract the name part from a :keyword-style symbol: ':requires -> "requires"
+(define (clause-sym->string d)
+  (substring (symbol->string d) 1))
+
+;; Parse the keyword clauses: :requires [...], :provides [...], :includes [...]
+;; In sexp mode, :requires arrives as the symbol ':requires, and [:x :y] as '(:x :y).
+;; Returns (values requires-list provides-list includes-list error-or-#f)
+(define (parse-selection-clauses args loc)
+  (let loop ([remaining args]
+             [req '()] [prov '()] [incl '()])
+    (cond
+      [(null? remaining)
+       (values req prov incl #f)]
+      [(not (selection-clause-sym? (car remaining)))
+       (values '() '() '()
+               (parse-error loc
+                            (format "selection: unexpected token ~v, expected :requires, :provides, or :includes"
+                                    (car remaining))
+                            #f))]
+      [else
+       (define kw-str (clause-sym->string (car remaining)))
+       (cond
+         [(null? (cdr remaining))
+          (values '() '() '()
+                  (parse-error loc (format "selection: :~a requires a vector argument" kw-str) #f))]
+         [else
+          (define val (cadr remaining))
+          ;; val should be a list (from [...] read as (...))
+          (define items
+            (cond
+              [(list? val) val]
+              [else #f]))
+          (cond
+            [(not items)
+             (values '() '() '()
+                     (parse-error loc (format "selection: :~a value must be a vector, got ~v" kw-str val) #f))]
+            [(string=? kw-str "requires")
+             ;; Validate that all items are keyword-style symbols (field paths)
+             (define validated (validate-selection-paths items kw-str loc))
+             (if (prologos-error? validated)
+                 (values '() '() '() validated)
+                 (loop (cddr remaining) (append req validated) prov incl))]
+            [(string=? kw-str "provides")
+             (define validated (validate-selection-paths items kw-str loc))
+             (if (prologos-error? validated)
+                 (values '() '() '() validated)
+                 (loop (cddr remaining) req (append prov validated) incl))]
+            [(string=? kw-str "includes")
+             ;; Items should be symbols (selection names)
+             (define validated (validate-selection-includes items loc))
+             (if (prologos-error? validated)
+                 (values '() '() '() validated)
+                 (loop (cddr remaining) req prov (append incl validated)))]
+            [else
+             (values '() '() '()
+                     (parse-error loc (format "selection: unknown clause :~a, expected :requires, :provides, or :includes"
+                                              kw-str)
+                                  #f))])])])))
+
+;; Validate that selection paths are keyword-style symbols (Phase 2a: flat paths only)
+;; In sexp mode, field paths like :x come through as symbols ':x.
+;; Stores them as Racket keywords (#:x) for uniform downstream processing.
+;; Deep paths (dot-separated) are Phase 3.
+;; Returns list of Racket keywords in original order, or a prologos-error.
+(define (validate-selection-paths items clause-name loc)
+  (define result
+    (for/list ([item (in-list items)])
+      (cond
+        [(selection-clause-sym? item)
+         ;; :x → Racket keyword #:x
+         (string->keyword (clause-sym->string item))]
+        [else
+         (parse-error loc (format "selection :~a: expected keyword field path, got ~v" clause-name item) #f)])))
+  ;; Check for any errors in the list
+  (define err (for/or ([r (in-list result)]) (and (prologos-error? r) r)))
+  (or err result))
+
+;; Validate that includes items are symbols (selection names)
+;; Returns list of symbols in original order, or a prologos-error.
+(define (validate-selection-includes items loc)
+  (define result
+    (for/list ([item (in-list items)])
+      (cond
+        [(symbol? item) item]
+        [else
+         (parse-error loc (format "selection :includes: expected selection name, got ~v" item) #f)])))
+  (define err (for/or ([r (in-list result)]) (and (prologos-error? r) r)))
+  (or err result))
 
 ;; ========================================
 ;; Parse function application: (f a b c) -> surf-app

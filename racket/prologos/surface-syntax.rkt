@@ -298,6 +298,8 @@
  ;; Foreign escape block
  (struct-out surf-foreign-block)
  (struct-out surf-subtype)
+ ;; Selection declaration
+ (struct-out surf-selection)
  ;; Capability declaration
  (struct-out surf-capability)
  ;; Capability inference REPL commands
@@ -970,6 +972,17 @@
 ;; sub-type, super-type: symbols (type names)
 ;; via-fn: symbol or #f (explicit coercion function, or auto-infer from ctor)
 (struct surf-subtype (sub-type super-type via-fn srcloc) #:transparent)
+
+;; ========================================
+;; Selection declaration
+;; ========================================
+;; (selection Name from Schema :requires [...] :provides [...] :includes [...])
+;; name: symbol (selection type name)
+;; schema-name: symbol (the schema this selects from)
+;; requires-paths: list of keywords or path-exprs (fields caller must provide)
+;; provides-paths: list of keywords or path-exprs (fields function guarantees)
+;; includes-names: list of symbols (other selections to include via set union)
+(struct surf-selection (name schema-name requires-paths provides-paths includes-names srcloc) #:transparent)
 
 ;; ========================================
 ;; Capability declaration
