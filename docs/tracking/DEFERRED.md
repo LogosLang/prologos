@@ -271,6 +271,37 @@ The following collection items ARE also deferred (genuine infrastructure deps):
 
 ---
 
+## Schema + Selection
+
+### Phases 1-3b COMPLETE ✅
+- Schema: field registry, named type, typed construction, typed field access
+- Selection: parsing, registry, elaboration, field-gating, structured paths
+- Deep paths: `:address.zip` parsing, wildcards (`*`/`**`), brace expansion
+- Deep validation: nested schema field validation in elaborator
+- Source: `docs/tracking/2026-03-02_2200_SCHEMA_SELECTION_DESIGN.md`, plan `buzzing-launching-pascal.md`
+
+### Phase 3c: Nested Field-Gating for Deep Paths (DEFERRED)
+- When a selection has deep path `:address.zip`, accessing `.address` currently returns
+  the full `Address` schema type (all fields accessible). It should return a sub-selection
+  of Address that only exposes `:zip`.
+- Requires synthetic sub-selection generation at type-check time or selection context
+  propagation through chained dot-access
+- **Blocked on**: Design for type-level sub-selection representation
+- Commit: `a409ce9` (Phase 3b)
+
+### Phase 4: Selection Composition (NOT STARTED)
+- `:includes [A B]` set-union resolution (most demanding wins per §11.3)
+- `User * MovieTimesReq` Sigma operator in type positions
+- Source: plan `buzzing-launching-pascal.md`
+
+### Phase 5: Schema Properties (NOT STARTED)
+- `:closed` rejects extra keys in construction
+- `:default val` fills missing fields at construction time
+- `:check [pred]` runtime assertion on field values
+- Source: plan `buzzing-launching-pascal.md`
+
+---
+
 ## Syntax — Mixfix
 
 ### Statement-Like Forms in `.{...}`
