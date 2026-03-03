@@ -308,6 +308,22 @@ The following collection items ARE also deferred (genuine infrastructure deps):
 - Phase 5c: `:check` runtime wrapping — emits `if/panic` assertions on field values at construction (commit `a4d993f`)
 - 14 new tests (17-30) in `test-schema-properties.rkt`; 4963 tests pass across 246 files
 
+### Phase 3d: Selection Path Extension (COMPLETE)
+- Brace items as sub-paths: `:a.{b.c d.e}` branches navigate independently (commit `1d342a9`)
+- Nested braces: `:a.{b.{c d} e}` recursive expansion (commit `b288922`)
+- Post-brace continuation: `:a.{b c}.**` suffix appends to all branches (commit `91528fe`)
+- Cons-dot normalization: `.{...}` at tail position in brackets (commit `5b4d4dc`)
+- E2E pipeline tests with real schemas (commit `994d9fb`)
+- 17 new tests (40-57) in `test-selection-paths.rkt`
+
+### Phase 3e: General-Purpose Path Expressions (COMPLETE)
+- `get-in`/`update-in` expressions use path algebra for data navigation/transformation
+- AST + parsing: `surf-get-in`, `surf-update-in` parsed with `validate-selection-paths` (commit `32993ad`)
+- Elaboration: pure desugaring to `map-get`/`map-assoc` chains — no downstream changes (commit `f5749c8`)
+- Type checking: free from desugaring — existing `map-get`/`map-assoc` type rules apply
+- 20 new tests in `test-path-expressions.rkt` (commit `93af4bc`)
+- WS mode disambiguation: deferred (see "WS Mode Path Expression Disambiguation" below)
+
 ---
 
 ## Syntax — Mixfix
@@ -516,6 +532,27 @@ The following collection items ARE also deferred (genuine infrastructure deps):
 - Source: `docs/tracking/2026-02-22_MIXED_TYPE_MAPS.md`
 
 ---
+
+## Numerics — Peano Nat Efficiency
+
+### Replace Peano Nat with Native Representation
+- **Problem**: Peano encoding (`Z | S (S (S Z))`) is O(n) for every numeric operation. `8080N` causes O(8080) recursion in `nat-value` during `lt` comparison. Tests must use `3N` to avoid timeouts.
+- **Options**:
+  1. `type Nat := PosInt | Zero` — lightweight union, immediate fix, reuses refined numeric subtyping
+  2. Keep `PeanoNat` for structural induction proofs, `Nat` becomes native — dual types
+  3. Compiler erasure (Idris 2 approach) — surface Peano, native at runtime
+- **Recommendation**: Option 1 for Phase 0. Keep `PeanoNat` as separate type for proofs.
+- **Dependencies**: Refined numeric subtyping (COMPLETE), union types (COMPLETE)
+- **Source**: Path expression testing revealed the issue (2026-03-03); also noted in 2026-03-03 dailies
+
+### WS Mode Path Expression Disambiguation
+- **Problem**: In WS mode, `.{` is tokenized as `dot-lbrace` (mixfix expressions). Path branching syntax `:address.{zip city}` conflicts with mixfix.
+- **Options**:
+  1. Context-sensitive: parser knows `get-in`/`update-in` path arg is a "path parsing context" where `.{` means branching
+  2. Different syntax for WS path branching: `.:{zip city}` or `[path :address.{zip city}]`
+  3. Sexp fallback for complex paths (always available)
+- **Status**: Sexp mode works correctly now. WS disambiguation deferred until WS-mode `get-in`/`update-in` is needed.
+- **Source**: Phase 3e-e plan (2026-03-03)
 
 ## Infrastructure / Performance
 
