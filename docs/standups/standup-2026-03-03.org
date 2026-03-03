@@ -1,0 +1,58 @@
+#+TITLE: Standup — 2026-03-03
+#+DATE: 2026-03-03
+
+
+* Yesterday (since Mar 2 standup)
+
+** Schema Design — Research + Design Document
+
+Two research documents and a comprehensive design document:
+
+- Schema Type Design Research (commit =34cb8e5=): 15+ ecosystem survey (clojure.spec, Malli,
+  Ecto, Zod, Pydantic, Protocol Buffers, etc.) — approaches to validation, open vs closed,
+  layered metadata
+- Schema as Protocol Research (commit =d5d81e4=): GraphQL selection/fragment comparison,
+  =selection= keyword design, =requires/provides= directional semantics
+- Design Document (commits =de09c6e=, =fa0708a=): Consolidated design with Hickey's three
+  orthogonal concerns, path algebra, integration points for functional/relational/process
+
+** Module Keyword Rename: =require= -> =imports=, =provide= -> =exports=
+
+5-phase rename across entire codebase (commits =6d8b6a0= through =42bd8f5=):
+- Phase A: Core parser/elaborator/driver
+- Phase B: Prelude manifest + regenerated prelude block
+- Phase C: Library files + Emacs editor support
+- Phase D: Test file string replacements
+- Phase E: Grammar, docs, and examples
+
+** Schema + Selection Implementation (Phases 1–5 Runtime)
+
+Full implementation from parsing through runtime enforcement:
+
+- *Phases 1a-1c* (commits =c227bcd=, =f9170a0=, =d631a45=): Schema field registry, named types,
+  typed construction + field access, QTT support, 11 E2E tests
+- *Phases 2a-2c* (commits =fad8d07=, =e7f93a4=, =b5ba86d=): Selection parsing, registry,
+  elaboration, field-gating, QTT support
+- *Phase 3a-3b* (commits =5d21089=, =a409ce9=): Structured path parsing (=:address.zip=,
+  =:address.*=, =:address.{zip city}=), deep path validation against nested schemas
+- *Phase 3c* (commit =9435568=): Nested field-gating via lazy sub-selection synthesis —
+  =AddrZip/address= cached sub-selections, recursive nesting
+- *Phase 4* (commit =fa288eb=): Selection composition via =:includes= set-union with =path-union=
+  join semantics (wildcards subsume specifics)
+- *Phase 5* (commit =e27a3f8=): Schema properties parsing — =:closed=, =:default val=, =:check pred=
+- *Phase 5a* (commit =ea4ea9f=): =expr-panic= AST node — general-purpose abort across 14-file pipeline
+- *Phase 5b* (commit =8dfd645=): =:default= preparse injection — auto-fills missing fields at construction
+- *Phase 5c* (commit =a4d993f=): =:check= runtime wrapping — =if/panic= assertions on field values
+
+** Metrics
+
+| Metric         | Mar 2 standup |  Current |
+|----------------+---------------+----------|
+| Tests          |          4810 |     4963 |
+| Test files     |           236 |      246 |
+| Schema phases  |         (none) | 1-5 Runtime complete |
+| Selection phases |       (none) | 2a-3c + Phase 4 complete |
+
+* Today
+
+
