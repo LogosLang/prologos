@@ -394,6 +394,24 @@
        (loop (cddr pairs)
              (cons (schema-field kw-name type-datum) fields))])))
 
+;; Qualify a type-datum symbol using namespace context.
+;; Built-in types (Nat, String, etc.) are left as-is.
+;; User-defined types (Address, Point, etc.) are qualified with the current namespace.
+;; Compound type datums like (List Nat) are recursively qualified.
+(define builtin-type-names
+  '(Nat Int Rat Bool String Char Keyword Unit Nil Symbol Type
+    Posit8 Posit16 Posit32 Posit64 Quire8 Quire16 Quire32 Quire64
+    List PVec Map Set Option Result Pair LSeq Value))
+(define (qualify-type-datum datum ns-ctx)
+  (cond
+    [(symbol? datum)
+     (if (memq datum builtin-type-names)
+         datum
+         (qualify-name datum (ns-context-current-ns ns-ctx)))]
+    [(list? datum)
+     (map (lambda (d) (qualify-type-datum d ns-ctx)) datum)]
+    [else datum]))
+
 ;; ========================================
 ;; Selection registry
 ;; ========================================
@@ -1381,8 +1399,16 @@
          (define schema-name (cadr datum))
          (auto-export-name! schema-name)
          (define field-pairs (cddr datum))
-         ;; Parse and register schema fields
-         (define fields (parse-schema-fields field-pairs (syntax->datum stx)))
+         ;; Parse and register schema fields — qualify user-defined type names
+         (define fields-raw (parse-schema-fields field-pairs (syntax->datum stx)))
+         (define ns-ctx (current-ns-context))
+         (define fields
+           (if ns-ctx
+               (map (lambda (f)
+                      (schema-field (schema-field-keyword f)
+                                    (qualify-type-datum (schema-field-type-datum f) ns-ctx)))
+                    fields-raw)
+               fields-raw))
          (register-schema! schema-name
                            (schema-entry schema-name fields #f (syntax->datum stx)))
          ;; Emit schema name as an opaque type in global-env (same pattern as data types).

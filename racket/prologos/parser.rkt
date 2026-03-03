@@ -2913,23 +2913,105 @@
                                               kw-str)
                                   #f))])])])))
 
-;; Validate that selection paths are keyword-style symbols (Phase 2a: flat paths only)
-;; In sexp mode, field paths like :x come through as symbols ':x.
-;; Stores them as Racket keywords (#:x) for uniform downstream processing.
-;; Deep paths (dot-separated) are Phase 3.
-;; Returns list of Racket keywords in original order, or a prologos-error.
+;; Parse selection field paths into structured path representations.
+;; A path is a list of segments: keywords (#:name) or wildcards ('* / '**).
+;;
+;; Flat:     :name         → ((#:name))
+;; Deep:     :address.zip  → ((#:address #:zip))
+;; Wildcard: :address.*    → ((#:address *))
+;; Globstar: :address.**   → ((#:address **))
+;; Brace:    :address.{zip city}  → ((#:address #:zip) (#:address #:city))
+;;
+;; In sexp mode, :address.{zip city} becomes two tokens:
+;;   ':address.  ($brace-params zip city)
+;; The parser detects trailing-dot + brace-params and expands.
+;;
+;; Returns list of structured paths in original order, or a prologos-error.
 (define (validate-selection-paths items clause-name loc)
-  (define result
-    (for/list ([item (in-list items)])
+  (define (parse-path-string s)
+    ;; s is the string after stripping leading ':', e.g. "address.zip", "address.*"
+    (define segments (string-split s "."))
+    (for/list ([seg (in-list segments)])
       (cond
-        [(selection-clause-sym? item)
-         ;; :x → Racket keyword #:x
-         (string->keyword (clause-sym->string item))]
-        [else
-         (parse-error loc (format "selection :~a: expected keyword field path, got ~v" clause-name item) #f)])))
-  ;; Check for any errors in the list
-  (define err (for/or ([r (in-list result)]) (and (prologos-error? r) r)))
-  (or err result))
+        [(string=? seg "*")  '*]
+        [(string=? seg "**") '**]
+        [(string=? seg "")
+         ;; Empty segment from trailing dot — shouldn't happen in final paths
+         (parse-error loc (format "selection :~a: empty path segment in ~a" clause-name s) #f)]
+        [else (string->keyword seg)])))
+  (define (brace-params? x)
+    (and (pair? x) (or (eq? (car x) '$brace-params)
+                        (and (syntax? (car x))
+                             (eq? (syntax-e (car x)) '$brace-params)))))
+  ;; Expand brace branching: prefix "address" + branches (zip city)
+  ;; → (("address" "zip") ("address" "city"))
+  (define (expand-brace-branches prefix-str brace-items)
+    (apply append
+           (for/list ([branch (in-list brace-items)])
+             (cond
+               [(symbol? branch)
+                ;; Simple branch: zip → "address.zip"
+                (define branch-str (symbol->string branch))
+                (list (parse-path-string (string-append prefix-str "." branch-str)))]
+               ;; Nested brace: branch is another ($brace-params ...) — rare, defer
+               [else
+                (list (parse-error loc
+                        (format "selection :~a: nested brace branching not yet supported: ~v"
+                                clause-name branch) #f))]))))
+  ;; Process items, handling trailing-dot + brace-params pairs
+  (let loop ([remaining items] [acc '()])
+    (cond
+      [(null? remaining) (reverse acc)]
+      [else
+       (define item (car remaining))
+       (cond
+         ;; Trailing-dot symbol followed by brace-params: :address.{zip city}
+         [(and (symbol? item)
+               (let ([s (symbol->string item)])
+                 (and (> (string-length s) 1)
+                      (char=? (string-ref s 0) #\:)
+                      (char=? (string-ref s (sub1 (string-length s))) #\.)))
+               (pair? (cdr remaining))
+               (brace-params? (if (syntax? (cadr remaining))
+                                  (syntax-e (cadr remaining))
+                                  (cadr remaining))))
+          (define s (symbol->string item))
+          (define prefix (substring s 1 (sub1 (string-length s))))  ;; strip : and trailing .
+          (define brace-raw (if (syntax? (cadr remaining))
+                                (syntax-e (cadr remaining))
+                                (cadr remaining)))
+          (define brace-items (cdr brace-raw))  ;; strip '$brace-params head
+          (define expanded (expand-brace-branches prefix brace-items))
+          ;; Check for errors in expanded paths
+          (define err (for/or ([p (in-list expanded)])
+                        (and (prologos-error? p) p)))
+          (if err
+              err
+              (loop (cddr remaining) (append (reverse expanded) acc)))]
+         ;; Standard keyword-style path symbol
+         [(selection-clause-sym? item)
+          (define s (clause-sym->string item))
+          (define path (parse-path-string s))
+          ;; Check for errors in parsed path segments
+          (define err (for/or ([seg (in-list path)]) (and (prologos-error? seg) seg)))
+          (if err
+              err
+              (loop (cdr remaining) (cons path acc)))]
+         [else
+          (parse-error loc
+                       (format "selection :~a: expected keyword field path, got ~v"
+                               clause-name item)
+                       #f)])])))
+
+(define (string-split s delim)
+  ;; Split string s on single-char delimiter
+  (define dchar (string-ref delim 0))
+  (let loop ([chars (string->list s)] [current '()] [result '()])
+    (cond
+      [(null? chars) (reverse (cons (list->string (reverse current)) result))]
+      [(char=? (car chars) dchar)
+       (loop (cdr chars) '() (cons (list->string (reverse current)) result))]
+      [else (loop (cdr chars) (cons (car chars) current) result)])))
 
 ;; Validate that includes items are symbols (selection names)
 ;; Returns list of symbols in original order, or a prologos-error.

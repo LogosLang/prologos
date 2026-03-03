@@ -2843,19 +2843,42 @@
      (prologos-error loc
                      (format "selection ~a: schema ~a not found" name schema-name))]
     [else
-     ;; Validate field paths against schema fields
+     ;; Validate field paths against schema fields.
+     ;; Paths are structured lists: (#:name) or (#:address #:zip) or (#:address *).
+     ;; For now (Phase 3a), validate only the first segment (top-level field).
+     ;; Phase 3b adds deep validation of nested segments.
      (define schema-fields (schema-entry-fields schema))
      (define schema-field-kws
        (for/list ([f (in-list schema-fields)])
          (string->keyword (symbol->string (schema-field-keyword f)))))
-     ;; Check that each required/provided path exists in the schema
+     ;; Check that each required/provided path's first segment exists in the schema
      (define field-err
-       (for/or ([kw (in-list (append req prov))])
-         (if (member kw schema-field-kws)
-             #f  ;; field found — no error
-             (prologos-error loc
-                             (format "selection ~a: field :~a not found in schema ~a"
-                                     name (keyword->string kw) schema-name)))))
+       (for/or ([path (in-list (append req prov))])
+         (cond
+           [(not (pair? path))
+            (prologos-error loc
+                            (format "selection ~a: malformed path ~v" name path))]
+           [else
+            (define first-seg (car path))
+            (cond
+              ;; Wildcard at top level: all fields → valid if schema has any fields
+              [(or (eq? first-seg '*) (eq? first-seg '**))
+               (if (null? schema-fields)
+                   (prologos-error loc
+                                   (format "selection ~a: wildcard on schema ~a with no fields"
+                                           name schema-name))
+                   #f)]
+              ;; Keyword segment: check against schema fields
+              [(keyword? first-seg)
+               (if (member first-seg schema-field-kws)
+                   #f  ;; field found — no error
+                   (prologos-error loc
+                                   (format "selection ~a: field :~a not found in schema ~a"
+                                           name (keyword->string first-seg) schema-name)))]
+              [else
+               (prologos-error loc
+                               (format "selection ~a: unexpected path segment ~v"
+                                       name first-seg))])])))
      (cond
        [(prologos-error? field-err) field-err]
        [else

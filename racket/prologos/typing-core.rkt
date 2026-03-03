@@ -320,11 +320,17 @@
         (and short (lookup-selection short)))))
 
 ;; Check if a keyword is in a selection's allowed fields (requires + provides).
-;; kw is a symbol (e.g., 'name), selection-entry has Racket keywords (#:name).
+;; kw-sym is a symbol (e.g., 'name). Paths are structured lists: ((#:name) (#:address #:zip) ...).
+;; A top-level field :foo is allowed if ANY path's first segment is #:foo.
+;; This includes flat paths like (#:name) and the first hop of deep paths like (#:address #:zip).
 (define (selection-allows-field? sel kw-sym)
   (define kw-rkt (string->keyword (symbol->string kw-sym)))
-  (or (member kw-rkt (selection-entry-requires-paths sel))
-      (member kw-rkt (selection-entry-provides-paths sel))))
+  (define (path-starts-with? path kw)
+    (and (pair? path) (equal? (car path) kw)))
+  (or (ormap (lambda (p) (path-starts-with? p kw-rkt))
+             (selection-entry-requires-paths sel))
+      (ormap (lambda (p) (path-starts-with? p kw-rkt))
+             (selection-entry-provides-paths sel))))
 
 ;; ========================================
 ;; Type inference (synthesis mode)

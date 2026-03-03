@@ -31,7 +31,7 @@
               (format "Expected surf-selection, got ~v" result))
   (check-equal? (surf-selection-name result) 'MovieTimesReq)
   (check-equal? (surf-selection-schema-name result) 'User)
-  (check-equal? (surf-selection-requires-paths result) '(#:id #:zip))
+  (check-equal? (surf-selection-requires-paths result) '((#:id) (#:zip)))
   (check-equal? (surf-selection-provides-paths result) '())
   (check-equal? (surf-selection-includes-names result) '()))
 
@@ -45,7 +45,7 @@
   (check-equal? (surf-selection-name result) 'UserOut)
   (check-equal? (surf-selection-schema-name result) 'User)
   (check-equal? (surf-selection-requires-paths result) '())
-  (check-equal? (surf-selection-provides-paths result) '(#:name #:email))
+  (check-equal? (surf-selection-provides-paths result) '((#:name) (#:email)))
   (check-equal? (surf-selection-includes-names result) '()))
 
 ;; ========================================
@@ -68,7 +68,7 @@
 (test-case "selection-parse/requires-and-includes"
   (define result (test-parse "(selection Full from User :requires [:address] :includes [BasicId])"))
   (check-true (surf-selection? result))
-  (check-equal? (surf-selection-requires-paths result) '(#:address))
+  (check-equal? (surf-selection-requires-paths result) '((#:address)))
   (check-equal? (surf-selection-includes-names result) '(BasicId)))
 
 ;; ========================================
@@ -78,8 +78,8 @@
 (test-case "selection-parse/all-three-clauses"
   (define result (test-parse "(selection Stage from Req :requires [:id] :provides [:result] :includes [Base])"))
   (check-true (surf-selection? result))
-  (check-equal? (surf-selection-requires-paths result) '(#:id))
-  (check-equal? (surf-selection-provides-paths result) '(#:result))
+  (check-equal? (surf-selection-requires-paths result) '((#:id)))
+  (check-equal? (surf-selection-provides-paths result) '((#:result)))
   (check-equal? (surf-selection-includes-names result) '(Base)))
 
 ;; ========================================
@@ -89,7 +89,7 @@
 (test-case "selection-parse/multi-field-requires"
   (define result (test-parse "(selection Big from S :requires [:a :b :c :d :e])"))
   (check-true (surf-selection? result))
-  (check-equal? (surf-selection-requires-paths result) '(#:a #:b #:c #:d #:e)))
+  (check-equal? (surf-selection-requires-paths result) '((#:a) (#:b) (#:c) (#:d) (#:e))))
 
 ;; ========================================
 ;; 7. Field order preserved
@@ -98,7 +98,7 @@
 (test-case "selection-parse/field-order-preserved"
   (define result (test-parse "(selection Ordered from S :requires [:z :a :m :b])"))
   (check-true (surf-selection? result))
-  (check-equal? (surf-selection-requires-paths result) '(#:z #:a #:m #:b)))
+  (check-equal? (surf-selection-requires-paths result) '((#:z) (#:a) (#:m) (#:b))))
 
 ;; ========================================
 ;; Error cases
