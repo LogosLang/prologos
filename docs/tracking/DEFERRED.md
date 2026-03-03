@@ -9,7 +9,7 @@ blocked on unbuilt infrastructure or uncertain design — not effort avoidance.
 See `docs/tracking/principles/DEVELOPMENT_LESSONS.org` § "Completeness Over
 Deferral".
 
-**Last consolidated sweep**: 2026-02-27 (Nil type + safe navigation complete; Dot-Access Phase D + A? nilable sugar complete. Type inference Phases 8+A-E complete. Config language hardening Tier 1+2 complete).
+**Last consolidated sweep**: 2026-03-03 (Schema Phase 5 Runtime complete: expr-panic, :default fill, :check assertion. 4963 tests, 246 files).
 
 ---
 
@@ -296,17 +296,17 @@ The following collection items ARE also deferred (genuine infrastructure deps):
 - `User * MovieTimesReq` Sigma operator in type positions — DEFERRED (requires parser changes)
 - Commit: `fa288eb`
 
-### Phase 5: Schema Properties (COMPLETE)
+### Phase 5: Schema Properties — Parsing + Storage (COMPLETE)
 - `:closed` rejects extra keys at construction time
-- `:default val` stored in `schema-field-default-val` (runtime fill deferred)
-- `:check [pred]` stored in `schema-field-check-pred` (runtime assertion deferred per §9.7)
+- `:default val` stored in `schema-field-default-val`
+- `:check [pred]` stored in `schema-field-check-pred`
 - Commit: `e27a3f8`
 
-### Phase 5 Runtime: Default Fill + Check Assertion (DEFERRED)
-- `:default` should auto-fill missing fields at construction time (needs constructor rewriting)
-- `:check` should emit runtime assertions on field values (needs reduction-time hook)
-- Currently properties are parsed and stored but not enforced at runtime
-- **Blocked on**: Constructor rewriting infrastructure for default fill; reduction hooks for check
+### Phase 5 Runtime: Default Fill + Check Assertion (COMPLETE)
+- Phase 5a: `expr-panic` AST node — general-purpose abort, types as `∀A. String → A` (commit `ea4ea9f`)
+- Phase 5b: `:default` preparse injection — auto-fills missing fields at schema construction (commit `8dfd645`)
+- Phase 5c: `:check` runtime wrapping — emits `if/panic` assertions on field values at construction (commit `a4d993f`)
+- 14 new tests (17-30) in `test-schema-properties.rkt`; 4963 tests pass across 246 files
 
 ---
 
