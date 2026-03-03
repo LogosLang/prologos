@@ -155,7 +155,7 @@
     (run-ns-last
       (string-append
         "(ns test-coherence-compat2)\n"
-        "(require [prologos::core::eq :refer [Nat--Eq--dict]])\n"
+        "(imports [prologos::core::eq :refer [Nat--Eq--dict]])\n"
         "(eval (Nat--Eq--dict (suc zero) (suc zero)))\n")))
   (check-equal? result "true : Bool"))
 

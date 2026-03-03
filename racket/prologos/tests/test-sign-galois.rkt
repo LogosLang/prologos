@@ -23,9 +23,9 @@
 (define sign-galois-preamble
   (string-append
     "(ns test :no-prelude)\n"
-    "(require [prologos::core::lattice :refer [GaloisConnection GaloisConnection-alpha GaloisConnection-gamma Interval interval-bot interval-top mk-interval]])\n"
-    "(require [prologos::core::abstract-domains :refer []])\n"
-    "(require [prologos::data::sign :refer [Sign sign-bot sign-neg sign-zero sign-pos sign-top]])\n"))
+    "(imports [prologos::core::lattice :refer [GaloisConnection GaloisConnection-alpha GaloisConnection-gamma Interval interval-bot interval-top mk-interval]])\n"
+    "(imports [prologos::core::abstract-domains :refer []])\n"
+    "(imports [prologos::data::sign :refer [Sign sign-bot sign-neg sign-zero sign-pos sign-top]])\n"))
 
 (define dict "Interval-Sign--GaloisConnection--dict")
 

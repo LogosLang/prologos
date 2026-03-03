@@ -132,12 +132,12 @@
 
 (test-case "explicit require prologos::core with :as alias"
   (check-equal?
-   (run-ns "(ns test.alias)\n(require [prologos::core :as core])\n(eval (core::id Nat zero))")
+   (run-ns "(ns test.alias)\n(imports [prologos::core :as core])\n(eval (core::id Nat zero))")
    '("0N : Nat")))
 
 (test-case "explicit require prologos::core with :refer"
   (check-equal?
-   (run-ns "(ns test.refer)\n(require [prologos::core :refer [compose]])\n(def suc-fn <(-> Nat Nat)> (fn [n <Nat>] (suc n)))\n(eval (compose Nat Nat Nat suc-fn suc-fn zero))")
+   (run-ns "(ns test.refer)\n(imports [prologos::core :refer [compose]])\n(def suc-fn <(-> Nat Nat)> (fn [n <Nat>] (suc n)))\n(eval (compose Nat Nat Nat suc-fn suc-fn zero))")
    '("suc-fn : Nat -> Nat defined." "2N : Nat")))
 
 ;; ========================================

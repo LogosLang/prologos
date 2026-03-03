@@ -83,7 +83,7 @@
   ;; Pattern variable used multiple times in template
   (check-equal?
    (run-last (string-append "(ns dm18)\n"
-                            "(require (prologos::data::nat :refer (add)))\n"
+                            "(imports (prologos::data::nat :refer (add)))\n"
                             "(defmacro double-add ($x) (add $x $x))\n"
                             "(eval (double-add (the Nat (suc zero))))"))
    "2N : Nat"))
@@ -104,7 +104,7 @@
   ;; (defmacro call-with ($f $args ...) ($f $args ...))
   (check-equal?
    (run-last (string-append "(ns dm20)\n"
-                            "(require (prologos::data::nat :refer (add)))\n"
+                            "(imports (prologos::data::nat :refer (add)))\n"
                             "(defmacro call-with ($f $args ...) ($f $args ...))\n"
                             "(eval (call-with add (the Nat (suc zero)) (the Nat (suc zero))))"))
    "2N : Nat"))

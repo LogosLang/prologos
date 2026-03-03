@@ -224,7 +224,7 @@
   (define results (run-ns
     (string-append
       "(ns bundle-test-1)\n"
-      "(require [prologos::core::eq :refer [Eq Eq-eq? eq-neq]])\n"
+      "(imports [prologos::core::eq :refer [Eq Eq-eq? eq-neq]])\n"
       "(bundle Eqable := (Eq))\n"
       "(spec my-eq A A -> Bool where (Eqable A))\n"
       "(defn my-eq [x y] where (Eqable A)\n"
@@ -241,7 +241,7 @@
   (define results (run-ns
     (string-append
       "(ns bundle-test-2)\n"
-      "(require [prologos::core::eq :refer [Eq Eq-eq? eq-neq]])\n"
+      "(imports [prologos::core::eq :refer [Eq Eq-eq? eq-neq]])\n"
       "(spec flat-eq A A -> Bool where (Eq A))\n"
       "(defn flat-eq [x y] where (Eq A)\n"
       "  (eq? x y))\n"
@@ -259,7 +259,7 @@
   (define results (run-ns
     (string-append
       "(ns bundle-test-3)\n"
-      "(require [prologos::core::eq :refer [Eq Eq-eq? eq-neq]])\n"
+      "(imports [prologos::core::eq :refer [Eq Eq-eq? eq-neq]])\n"
       "(bundle- PrivEq := (Eq))\n"
       "(spec priv-eq A A -> Bool where (PrivEq A))\n"
       "(defn priv-eq [x y] where (PrivEq A)\n"
@@ -277,7 +277,7 @@
   (define results (run-ns
     (string-append
       "(ns bundle-test-4)\n"
-      "(require [prologos::core::eq :refer [Eq Eq-eq? eq-neq]])\n"
+      "(imports [prologos::core::eq :refer [Eq Eq-eq? eq-neq]])\n"
       "(bundle Eqable := (Eq))\n"
       "(spec dedup-eq A A -> Bool where (Eqable A) (Eq A))\n"
       "(defn dedup-eq [x y] where (Eqable A) (Eq A)\n"

@@ -218,7 +218,7 @@
   (define results (run-ns
     (string-append
       "(ns method-test-1)\n"
-      "(require [prologos::core::eq :refer [Eq Eq-eq? eq-neq]])\n"
+      "(imports [prologos::core::eq :refer [Eq Eq-eq? eq-neq]])\n"
       "(spec my-eq A A -> Bool where (Eq A))\n"
       "(defn my-eq [x y] where (Eq A)\n"
       "  (eq? x y))\n"
@@ -234,7 +234,7 @@
   (define results (run-ns
     (string-append
       "(ns method-test-2)\n"
-      "(require [prologos::core::eq :refer [Eq Eq-eq? eq-neq]])\n"
+      "(imports [prologos::core::eq :refer [Eq Eq-eq? eq-neq]])\n"
       "(spec my-eq A A -> Bool where (Eq A))\n"
       "(defn my-eq [x y] where (Eq A)\n"
       "  (eq? x y))\n"
@@ -250,7 +250,7 @@
   (define results (run-ns
     (string-append
       "(ns method-test-3)\n"
-      "(require [prologos::core::eq :refer [Eq Eq-eq?]])\n"
+      "(imports [prologos::core::eq :refer [Eq Eq-eq?]])\n"
       "(spec check-eq A A -> Bool where (Eq A))\n"
       "(defn check-eq [x y] where (Eq A)\n"
       "  (eq? x y))\n"
@@ -266,7 +266,7 @@
   (define results (run-ns
     (string-append
       "(ns method-test-4)\n"
-      "(require [prologos::core::eq :refer [Eq Eq-eq?]])\n"
+      "(imports [prologos::core::eq :refer [Eq Eq-eq?]])\n"
       "(spec check-eq-v2 A A -> Bool where (Eq A))\n"
       "(defn check-eq-v2 [x y] where (Eq A)\n"
       "  (Eq-eq? A $Eq-A x y))\n"
@@ -281,7 +281,7 @@
   (define results (run-ns
     (string-append
       "(ns method-test-5)\n"
-      "(require [prologos::core::eq :refer [Eq Eq-eq? eq-neq]])\n"
+      "(imports [prologos::core::eq :refer [Eq Eq-eq? eq-neq]])\n"
       "(eval (eq-neq Nat Nat--Eq--dict zero zero))\n")))
   (define result-strings (filter string? results))
   (check-true (not (null? result-strings)))
@@ -293,7 +293,7 @@
   (define results (run-ns
     (string-append
       "(ns method-test-6)\n"
-      "(require [prologos::core::eq :refer [Eq Eq-eq?]])\n"
+      "(imports [prologos::core::eq :refer [Eq Eq-eq?]])\n"
       "(spec same? A A -> Bool where (Eq A))\n"
       "(defn same? [x y] where (Eq A)\n"
       "  (eq? x y))\n"
@@ -308,8 +308,8 @@
   (define results (run-ns
     (string-append
       "(ns method-test-7)\n"
-      "(require [prologos::core::eq :refer [Eq Eq-eq?]])\n"
-      "(require [prologos::data::bool :refer [not]])\n"
+      "(imports [prologos::core::eq :refer [Eq Eq-eq?]])\n"
+      "(imports [prologos::data::bool :refer [not]])\n"
       "(spec neq? A A -> Bool where (Eq A))\n"
       "(defn neq? [x y] where (Eq A)\n"
       "  (not (eq? x y)))\n"
@@ -324,7 +324,7 @@
   (define results (run-ns
     (string-append
       "(ns method-test-8)\n"
-      "(require [prologos::core::eq :refer [Eq Eq-eq?]])\n"
+      "(imports [prologos::core::eq :refer [Eq Eq-eq?]])\n"
       ;; No where clause — eq? is not in scope
       "(spec bad-fn Nat -> Bool)\n"
       "(defn bad-fn [x]\n"

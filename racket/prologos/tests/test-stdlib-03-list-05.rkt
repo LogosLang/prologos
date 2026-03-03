@@ -67,28 +67,28 @@
 (test-case "list/intersperse-sum"
   ;; intersperse 10 [1,2,3] = [1,10,2,10,3], sum = 26
   (check-equal?
-   (last (run-ns "(ns lst172)\n(require [prologos::data::list :refer [List nil cons intersperse sum]])\n(eval (sum (intersperse Nat (suc (suc (suc (suc (suc (suc (suc (suc (suc (suc zero)))))))))) (cons Nat (suc zero) (cons Nat (suc (suc zero)) (cons Nat (suc (suc (suc zero))) (nil Nat)))))))"))
+   (last (run-ns "(ns lst172)\n(imports [prologos::data::list :refer [List nil cons intersperse sum]])\n(eval (sum (intersperse Nat (suc (suc (suc (suc (suc (suc (suc (suc (suc (suc zero)))))))))) (cons Nat (suc zero) (cons Nat (suc (suc zero)) (cons Nat (suc (suc (suc zero))) (nil Nat)))))))"))
    "26N : Nat"))
 
 
 (test-case "list/replicate-length"
   ;; replicate 4 0 = [0,0,0,0], length = 4
   (check-equal?
-   (last (run-ns "(ns lst173)\n(require [prologos::data::list :refer [List replicate length]])\n(eval (length Nat (replicate Nat (suc (suc (suc (suc zero)))) zero)))"))
+   (last (run-ns "(ns lst173)\n(imports [prologos::data::list :refer [List replicate length]])\n(eval (length Nat (replicate Nat (suc (suc (suc (suc zero)))) zero)))"))
    "4N : Nat"))
 
 
 (test-case "list/range-length"
   ;; range 5 has length 5
   (check-equal?
-   (last (run-ns "(ns lst174)\n(require [prologos::data::list :refer [List range length]])\n(eval (length Nat (range (suc (suc (suc (suc (suc zero))))))))"))
+   (last (run-ns "(ns lst174)\n(imports [prologos::data::list :refer [List range length]])\n(eval (length Nat (range (suc (suc (suc (suc (suc zero))))))))"))
    "5N : Nat"))
 
 
 (test-case "list/range-head"
   ;; range 3 = [0,1,2], head = 0
   (check-equal?
-   (last (run-ns "(ns lst175)\n(require [prologos::data::list :refer [List range head]])\n(eval (head Nat (suc (suc (suc zero))) (range (suc (suc (suc zero))))))"))
+   (last (run-ns "(ns lst175)\n(imports [prologos::data::list :refer [List range head]])\n(eval (head Nat (suc (suc (suc zero))) (range (suc (suc (suc zero))))))"))
    "0N : Nat"))
 
 
@@ -101,7 +101,7 @@
   (check-equal?
    (last (run-ns-pair
      "(ns test.auto-export.mod-a)\n(defn add-one : (-> Nat Nat) [n] (suc n))"
-     "(ns test.auto-export.mod-b)\n(require [test.auto-export.mod-a :refer [add-one]])\n(eval (add-one (suc zero)))"))
+     "(ns test.auto-export.mod-b)\n(imports [test.auto-export.mod-a :refer [add-one]])\n(eval (add-one (suc zero)))"))
    "2N : Nat"))
 
 
@@ -109,7 +109,7 @@
   (check-equal?
    (last (run-ns-pair
      "(ns test.auto-export.def-a)\n(def my-two : Nat (suc (suc zero)))"
-     "(ns test.auto-export.def-b)\n(require [test.auto-export.def-a :refer [my-two]])\n(eval my-two)"))
+     "(ns test.auto-export.def-b)\n(imports [test.auto-export.def-a :refer [my-two]])\n(eval my-two)"))
    "2N : Nat"))
 
 
@@ -119,7 +119,7 @@
    (lambda ()
      (run-ns-pair
        "(ns test.priv.defn-a)\n(defn- helper : (-> Nat Nat) [n] (suc n))"
-       "(ns test.priv.defn-b)\n(require [test.priv.defn-a :refer [helper]])\n(eval (helper zero))"))))
+       "(ns test.priv.defn-b)\n(imports [test.priv.defn-a :refer [helper]])\n(eval (helper zero))"))))
 
 
 (test-case "auto-export: def- is private (not exported)"
@@ -128,7 +128,7 @@
    (lambda ()
      (run-ns-pair
        "(ns test.priv.def-a)\n(def- secret : Nat (suc zero))"
-       "(ns test.priv.def-b)\n(require [test.priv.def-a :refer [secret]])\n(eval secret)"))))
+       "(ns test.priv.def-b)\n(imports [test.priv.def-a :refer [secret]])\n(eval secret)"))))
 
 
 (test-case "auto-export: data auto-exports type and constructors"
@@ -137,7 +137,7 @@
    (lambda ()
      (run-ns-pair
        "(ns test.auto-export.data-a)\n(data Color red green blue)"
-       "(ns test.auto-export.data-b)\n(require [test.auto-export.data-a :refer [Color red green blue]])\n(check red : Color)"))))
+       "(ns test.auto-export.data-b)\n(imports [test.auto-export.data-a :refer [Color red green blue]])\n(check red : Color)"))))
 
 
 (test-case "auto-export: data- is private (type and constructors not exported)"
@@ -146,7 +146,7 @@
    (lambda ()
      (run-ns-pair
        "(ns test.priv.data-a)\n(data- InternalType foo bar)"
-       "(ns test.priv.data-b)\n(require [test.priv.data-a :refer [InternalType]])\n(eval foo)"))))
+       "(ns test.priv.data-b)\n(imports [test.priv.data-a :refer [InternalType]])\n(eval foo)"))))
 
 
 (test-case "auto-export: explicit provide overrides auto-exports"
@@ -155,8 +155,8 @@
    #rx"does not export"
    (lambda ()
      (run-ns-pair
-       "(ns test.override.mod-a)\n(provide pub-fn)\n(defn pub-fn : (-> Nat Nat) [n] (suc n))\n(defn hidden-fn : (-> Nat Nat) [n] (suc (suc n)))"
-       "(ns test.override.mod-b)\n(require [test.override.mod-a :refer [hidden-fn]])\n(eval (hidden-fn zero))"))))
+       "(ns test.override.mod-a)\n(exports pub-fn)\n(defn pub-fn : (-> Nat Nat) [n] (suc n))\n(defn hidden-fn : (-> Nat Nat) [n] (suc (suc n)))"
+       "(ns test.override.mod-b)\n(imports [test.override.mod-a :refer [hidden-fn]])\n(eval (hidden-fn zero))"))))
 
 
 (test-case "auto-export: defn- usable locally within the same module"

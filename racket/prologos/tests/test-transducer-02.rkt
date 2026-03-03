@@ -45,7 +45,7 @@
 ;; plus commonly-used data definitions and helper functions.
 (define shared-preamble
   "(ns test)
-(require (prologos::data::list :refer (List nil cons))
+(imports (prologos::data::list :refer (List nil cons))
          (prologos::data::lseq :refer (LSeq lseq-nil lseq-cell lseq-head lseq-rest lseq-empty?))
          (prologos::data::lseq-ops :refer (list-to-lseq lseq-to-list lseq-map lseq-filter lseq-fold lseq-length))
          (prologos::data::transducer :refer (transduce map-xf filter-xf remove-xf xf-compose list-conj into-list-rev)))
@@ -146,7 +146,7 @@
 (test-case "xf/transduce-sum: sum with map"
   ;; Sum of suc-mapped [1,2,3] = sum of [2,3,4] = 9
   (define result (run-last
-    "(require (prologos::data::nat :refer (add)))
+    "(imports (prologos::data::nat :refer (add)))
      (def sum-rf : (-> Nat (-> Nat Nat))
        (fn (acc : Nat) (fn (x : Nat) (add acc x))))
      (eval (transduce Nat Nat Nat (map-xf Nat Nat suc-fn) sum-rf zero list123))"))
@@ -155,7 +155,7 @@
 (test-case "xf/transduce-sum-filtered: sum positives only"
   ;; Sum of positives in [0,1,2,3] = 1+2+3 = 6
   (define result (run-last
-    "(require (prologos::data::nat :refer (add)))
+    "(imports (prologos::data::nat :refer (add)))
      (def list0123 : (List Nat)
        (cons Nat zero (cons Nat (suc zero) (cons Nat (suc (suc zero)) (cons Nat (suc (suc (suc zero))) (nil Nat))))))
      (def sum-rf : (-> Nat (-> Nat Nat))
@@ -166,7 +166,7 @@
 (test-case "xf/transduce-composed-sum: sum of suc-mapped positives"
   ;; On [0,1,2,3]: filter positive → [1,2,3], map suc → [2,3,4], sum → 9
   (define result (run-last
-    "(require (prologos::data::nat :refer (add)))
+    "(imports (prologos::data::nat :refer (add)))
      (def list0123 : (List Nat)
        (cons Nat zero (cons Nat (suc zero) (cons Nat (suc (suc zero)) (cons Nat (suc (suc (suc zero))) (nil Nat))))))
      (def sum-rf : (-> Nat (-> Nat Nat))
@@ -204,7 +204,7 @@
 (test-case "ws/transducer-module-loads: transducer module loads via WS"
   ;; Just verify the module can be loaded and a def type-checks
   (define results (run-ws
-    "ns test\nrequire [prologos::data::transducer :refer [map-xf filter-xf transduce list-conj]]\ninfer [map-xf Nat Nat]"))
+    "ns test\nimports [prologos::data::transducer :refer [map-xf filter-xf transduce list-conj]]\ninfer [map-xf Nat Nat]"))
   (check-contains (last results) "->"))
 
 (test-case "ws/transducer-map: transduce with map-xf in WS mode"

@@ -59,11 +59,11 @@
 
 (define preamble
   "(ns test)
-(require (prologos::core::algebra :refer (AdditiveIdentity AdditiveIdentity-zero
+(imports (prologos::core::algebra :refer (AdditiveIdentity AdditiveIdentity-zero
                                           MultiplicativeIdentity MultiplicativeIdentity-one
                                           sum product int-range)))
-(require (prologos::core::arithmetic                     :refer (Add Add-add Mul Mul-mul)))
-(require (prologos::data::list                           :refer (List nil cons)))
+(imports (prologos::core::arithmetic                     :refer (Add Add-add Mul Mul-mul)))
+(imports (prologos::data::list                           :refer (List nil cons)))
 ")
 
 ;; ========================================
@@ -75,21 +75,21 @@
     (lambda ()
       (run-ns
         "(ns test)
-         (require (prologos::core::algebra :refer (AdditiveIdentity)))"))))
+         (imports (prologos::core::algebra :refer (AdditiveIdentity)))"))))
 
 (test-case "identity/multiplicative-identity-trait-loads"
   (check-not-exn
     (lambda ()
       (run-ns
         "(ns test)
-         (require (prologos::core::algebra :refer (MultiplicativeIdentity)))"))))
+         (imports (prologos::core::algebra :refer (MultiplicativeIdentity)))"))))
 
 (test-case "identity/identity-instances-load"
   (check-not-exn
     (lambda ()
       (run-ns
         "(ns test)
-         (require (prologos::core::algebra :refer (AdditiveIdentity MultiplicativeIdentity)))"))))
+         (imports (prologos::core::algebra :refer (AdditiveIdentity MultiplicativeIdentity)))"))))
 
 (test-case "identity/generic-numeric-ops-loads"
   (check-not-exn

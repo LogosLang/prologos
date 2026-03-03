@@ -154,43 +154,43 @@
 (test-case "implicit/compose-three-args"
   ;; compose double pred 3 → pred 3 = 2, double 2 = 4
   (check-equal?
-   (run-last "(ns cp1)\n(require [prologos::core :refer [compose]])\n(require [prologos::data::nat :refer [double pred]])\n(eval (compose double pred 3N))")
+   (run-last "(ns cp1)\n(imports [prologos::core :refer [compose]])\n(imports [prologos::data::nat :refer [double pred]])\n(eval (compose double pred 3N))")
    "4N : Nat"))
 
 (test-case "implicit/apply-two-args"
   ;; apply double 3 → double 3 = 6
   (check-equal?
-   (run-last "(ns cp2)\n(require [prologos::core :refer [apply]])\n(require [prologos::data::nat :refer [double]])\n(eval (apply double 3N))")
+   (run-last "(ns cp2)\n(imports [prologos::core :refer [apply]])\n(imports [prologos::data::nat :refer [double]])\n(eval (apply double 3N))")
    "6N : Nat"))
 
 (test-case "implicit/flip-three-args"
   ;; flip sub 2 5 → sub 5 2 = 3
   (check-equal?
-   (run-last "(ns cp3)\n(require [prologos::core :refer [flip]])\n(require [prologos::data::nat :refer [sub]])\n(eval (flip sub 2N 5N))")
+   (run-last "(ns cp3)\n(imports [prologos::core :refer [flip]])\n(imports [prologos::data::nat :refer [sub]])\n(eval (flip sub 2N 5N))")
    "3N : Nat"))
 
 (test-case "implicit/const-regression"
   ;; const zero true → zero (regression test)
   (check-equal?
-   (run-last "(ns cp4)\n(require [prologos::core :refer [const]])\n(eval (const zero true))")
+   (run-last "(ns cp4)\n(imports [prologos::core :refer [const]])\n(eval (const zero true))")
    "0N : Nat"))
 
 (test-case "implicit/id-regression"
   ;; id zero → zero (regression test)
   (check-equal?
-   (run-last "(ns cp5)\n(require [prologos::core :refer [id]])\n(eval (id zero))")
+   (run-last "(ns cp5)\n(imports [prologos::core :refer [id]])\n(eval (id zero))")
    "0N : Nat"))
 
 (test-case "implicit/compose-bool-result"
   ;; compose not not true → not (not true) = not false = true
   (check-equal?
-   (run-last "(ns cp6)\n(require [prologos::core :refer [compose]])\n(require [prologos::data::bool :refer [not]])\n(eval (compose not not true))")
+   (run-last "(ns cp6)\n(imports [prologos::core :refer [compose]])\n(imports [prologos::data::bool :refer [not]])\n(eval (compose not not true))")
    "true : Bool"))
 
 (test-case "implicit/on-combinator"
   ;; on nat-eq? double 2N 3N → nat-eq? (double 2N) (double 3N) → nat-eq? 4 6 → false
   (check-equal?
-   (run-last "(ns cp7)\n(require [prologos::core :refer [on]])\n(require [prologos::data::nat :refer [double nat-eq?]])\n(eval (on nat-eq? double 2N 3N))")
+   (run-last "(ns cp7)\n(imports [prologos::core :refer [on]])\n(imports [prologos::data::nat :refer [double nat-eq?]])\n(eval (on nat-eq? double 2N 3N))")
    "false : Bool"))
 
 ;; ========================================
@@ -200,17 +200,17 @@
 (test-case "implicit/explicit-type-args-still-work"
   ;; map Nat Nat suc [1, 2] — explicit type args
   (check-equal?
-   (run-last "(ns cp8)\n(require [prologos::data::list :refer [List nil cons map length]])\n(eval (length Nat (map Nat Nat (fn (x : Nat) (suc x)) (cons Nat zero (cons Nat (suc zero) (nil Nat))))))")
+   (run-last "(ns cp8)\n(imports [prologos::data::list :refer [List nil cons map length]])\n(eval (length Nat (map Nat Nat (fn (x : Nat) (suc x)) (cons Nat zero (cons Nat (suc zero) (nil Nat))))))")
    "2N : Nat"))
 
 (test-case "implicit/stdlib-nat-still-works"
   ;; add 2 3 = 5
   (check-equal?
-   (run-last "(ns cp9)\n(require [prologos::data::nat :refer [add]])\n(eval (add 2N 3N))")
+   (run-last "(ns cp9)\n(imports [prologos::data::nat :refer [add]])\n(eval (add 2N 3N))")
    "5N : Nat"))
 
 (test-case "implicit/stdlib-bool-still-works"
   ;; not true = false
   (check-equal?
-   (run-last "(ns cp10)\n(require [prologos::data::bool :refer [not]])\n(eval (not true))")
+   (run-last "(ns cp10)\n(imports [prologos::data::bool :refer [not]])\n(eval (not true))")
    "false : Bool"))

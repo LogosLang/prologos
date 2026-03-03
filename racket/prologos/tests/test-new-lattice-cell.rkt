@@ -31,7 +31,7 @@
      (run-ns-last
       (string-append
        "(ns nlc-load)\n"
-       "(require [prologos::core::propagator :refer [new-lattice-cell]])\n"
+       "(imports [prologos::core::propagator :refer [new-lattice-cell]])\n"
        "(eval 0N)\n")))))
 
 ;; ========================================
@@ -45,7 +45,7 @@
      (run-ns-last
       (string-append
        "(ns nlc-type)\n"
-       "(require [prologos::core::lattice :refer-all])\n"
+       "(imports [prologos::core::lattice :refer-all])\n"
        "(spec nlc {A} PropNetwork -> (PropNetwork * CellId) where (Lattice A))\n"
        "(defn nlc [net] where (Lattice A) (net-new-cell net bot (fn (x : _) (y : _) (join x y))))\n"
        "(eval 0N)\n")))))
@@ -60,7 +60,7 @@
    (run-ns-last
     (string-append
      "(ns nlc-bot)\n"
-     "(require [prologos::core::lattice :refer-all])\n"
+     "(imports [prologos::core::lattice :refer-all])\n"
      "(spec get-bot {A} A -> A where (Lattice A))\n"
      "(defn get-bot [x] where (Lattice A) bot)\n"
      "(eval (get-bot Bool Bool--Lattice--dict true))\n"))
@@ -71,7 +71,7 @@
    (run-ns-last
     (string-append
      "(ns nlc-join)\n"
-     "(require [prologos::core::lattice :refer-all])\n"
+     "(imports [prologos::core::lattice :refer-all])\n"
      "(spec my-join {A} A A -> A where (Lattice A))\n"
      "(defn my-join [x y] where (Lattice A) (join x y))\n"
      "(eval (my-join Bool Bool--Lattice--dict false true))\n"))
@@ -86,7 +86,7 @@
    (run-ns-last
     (string-append
      "(ns nlc-bool1)\n"
-     "(require [prologos::core::lattice :refer-all])\n"
+     "(imports [prologos::core::lattice :refer-all])\n"
      "(spec nlc {A} PropNetwork -> (PropNetwork * CellId) where (Lattice A))\n"
      "(defn nlc [net] where (Lattice A) (net-new-cell net bot (fn (x : _) (y : _) (join x y))))\n"
      "(def pair1 : (Sigma (_ : PropNetwork) CellId) (nlc Bool Bool--Lattice--dict (net-new 1000)))\n"
@@ -100,7 +100,7 @@
    (run-ns-last
     (string-append
      "(ns nlc-bool2)\n"
-     "(require [prologos::core::lattice :refer-all])\n"
+     "(imports [prologos::core::lattice :refer-all])\n"
      "(spec nlc {A} PropNetwork -> (PropNetwork * CellId) where (Lattice A))\n"
      "(defn nlc [net] where (Lattice A) (net-new-cell net bot (fn (x : _) (y : _) (join x y))))\n"
      "(def pair1 : (Sigma (_ : PropNetwork) CellId) (nlc Bool Bool--Lattice--dict (net-new 1000)))\n"
@@ -115,7 +115,7 @@
    (run-ns-last
     (string-append
      "(ns nlc-bool3)\n"
-     "(require [prologos::core::lattice :refer-all])\n"
+     "(imports [prologos::core::lattice :refer-all])\n"
      "(spec nlc {A} PropNetwork -> (PropNetwork * CellId) where (Lattice A))\n"
      "(defn nlc [net] where (Lattice A) (net-new-cell net bot (fn (x : _) (y : _) (join x y))))\n"
      "(def p : (Sigma (_ : PropNetwork) CellId) (nlc Bool Bool--Lattice--dict (net-new 1000)))\n"
@@ -136,7 +136,7 @@
    (run-ns-last
     (string-append
      "(ns nlc-prelude1)\n"
-     "(require [prologos::core::propagator :refer [new-lattice-cell]])\n"
+     "(imports [prologos::core::propagator :refer [new-lattice-cell]])\n"
      "(def p : (Sigma (_ : PropNetwork) CellId) (new-lattice-cell Bool Bool--Lattice--dict (net-new 1000)))\n"
      "(def n1 : PropNetwork (first p))\n"
      "(def c : CellId (second p))\n"
@@ -154,7 +154,7 @@
     (run-ns-last
      (string-append
       "(ns nlc-equiv1)\n"
-      "(require [prologos::core::lattice :refer-all])\n"
+      "(imports [prologos::core::lattice :refer-all])\n"
       "(spec nlc {A} PropNetwork -> (PropNetwork * CellId) where (Lattice A))\n"
       "(defn nlc [net] where (Lattice A) (net-new-cell net bot (fn (x : _) (y : _) (join x y))))\n"
       "(def p : (Sigma (_ : PropNetwork) CellId) (nlc Bool Bool--Lattice--dict (net-new 1000)))\n"
@@ -187,7 +187,7 @@
    (run-ns-last
     (string-append
      "(ns nlc-dictpass)\n"
-     "(require [prologos::core::lattice :refer-all])\n"
+     "(imports [prologos::core::lattice :refer-all])\n"
      "(spec generic-join {A} A A -> A where (Lattice A))\n"
      "(defn generic-join [x y] where (Lattice A) (join x y))\n"
      "(eval (generic-join Bool Bool--Lattice--dict false true))\n"))

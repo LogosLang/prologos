@@ -55,9 +55,9 @@
 ;; Preamble: load trait defs + instances + generic-arith
 (define preamble
   "(ns test)
-(require (prologos::core::arithmetic :refer (Add Add-add Sub Sub-sub Mul Mul-mul
+(imports (prologos::core::arithmetic :refer (Add Add-add Sub Sub-sub Mul Mul-mul
                                              Div Div-div Neg Neg-neg Abs Abs-abs)))
-(require (prologos::core::algebra  :refer (plus minus times divide negate-fn abs-fn)))
+(imports (prologos::core::algebra  :refer (plus minus times divide negate-fn abs-fn)))
 ")
 
 ;; ========================================

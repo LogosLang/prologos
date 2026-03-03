@@ -25,9 +25,9 @@
 (define refined-preamble
   (string-append
    "(ns rs :no-prelude)\n"
-   "(require [prologos::data::option :refer [Option some none]])\n"
-   "(require [prologos::data::refined-int :refer [PosInt pos-int NegInt neg-int Zero mk-zero to-pos-int to-neg-int is-zero? unsafe-pos-int unsafe-neg-int pos-int-val neg-int-val zero-to-int]])\n"
-   "(require [prologos::data::refined-rat :refer [PosRat pos-rat NegRat neg-rat to-pos-rat to-neg-rat pos-rat-val neg-rat-val unsafe-pos-rat unsafe-neg-rat]])\n"))
+   "(imports [prologos::data::option :refer [Option some none]])\n"
+   "(imports [prologos::data::refined-int :refer [PosInt pos-int NegInt neg-int Zero mk-zero to-pos-int to-neg-int is-zero? unsafe-pos-int unsafe-neg-int pos-int-val neg-int-val zero-to-int]])\n"
+   "(imports [prologos::data::refined-rat :refer [PosRat pos-rat NegRat neg-rat to-pos-rat to-neg-rat pos-rat-val neg-rat-val unsafe-pos-rat unsafe-neg-rat]])\n"))
 
 (define (rs-ns name)
   (string-replace refined-preamble "(ns rs :no-prelude)"
@@ -185,8 +185,8 @@
   (check-contains
    (run-ns-last
     (string-append (rs-ns 'rs-e2)
-     "(require [prologos::core::abstract-domains :refer [PosInt--Eq--dict]])\n"
-     "(require [prologos::core::eq :refer [Eq Eq-eq?]])\n"
+     "(imports [prologos::core::abstract-domains :refer [PosInt--Eq--dict]])\n"
+     "(imports [prologos::core::eq :refer [Eq Eq-eq?]])\n"
      "(eval (Eq-eq? PosInt PosInt--Eq--dict (pos-int 5) (pos-int 5)))\n"))
    "true"))
 

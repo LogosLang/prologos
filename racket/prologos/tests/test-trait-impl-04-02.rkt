@@ -32,10 +32,10 @@
 (define shared-preamble
   (string-append
    "(ns test)\n"
-   "(require [prologos::core::generic-ops :refer [seq-length seq-drop seq-any? seq-all? seq-find]])\n"
-   "(require [prologos::core::list :refer [list-seq]])\n"
-   "(require [prologos::data::list :refer [cons nil]])\n"
-   "(require [prologos::data::nat :refer [zero?]])\n"
+   "(imports [prologos::core::generic-ops :refer [seq-length seq-drop seq-any? seq-all? seq-find]])\n"
+   "(imports [prologos::core::list :refer [list-seq]])\n"
+   "(imports [prologos::data::list :refer [cons nil]])\n"
+   "(imports [prologos::data::nat :refer [zero?]])\n"
    ))
 
 (define-values (shared-global-env

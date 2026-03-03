@@ -53,8 +53,8 @@
 (test-case "where/neg-rat-auto-resolution"
   (define results (run-ns-strings (string-append
     "(ns t)\n"
-    "(require [prologos::core::arithmetic :refer [Neg Neg-neg]])\n"
-    "(require [prologos::core::arithmetic :refer []])\n"
+    "(imports [prologos::core::arithmetic :refer [Neg Neg-neg]])\n"
+    "(imports [prologos::core::arithmetic :refer []])\n"
     "(spec generic-neg A -> A where (Neg A))\n"
     "(defn generic-neg [x] where (Neg A)\n"
     "  (Neg-neg A $Neg-A x))\n"
@@ -71,8 +71,8 @@
 (test-case "eq/int-equal"
   (define r (run-ns-last (string-append
     "(ns t)\n"
-    "(require [prologos::core::eq :refer [Eq Eq-eq?]])\n"
-    "(require [prologos::core::eq :refer []])\n"
+    "(imports [prologos::core::eq :refer [Eq Eq-eq?]])\n"
+    "(imports [prologos::core::eq :refer []])\n"
     "(eval (Eq-eq? Int Int--Eq--dict (int 3) (int 3)))\n")))
   (check-true (string-contains? (format "~a" r) "true")))
 
@@ -80,8 +80,8 @@
 (test-case "eq/int-unequal"
   (define r (run-ns-last (string-append
     "(ns t)\n"
-    "(require [prologos::core::eq :refer [Eq Eq-eq?]])\n"
-    "(require [prologos::core::eq :refer []])\n"
+    "(imports [prologos::core::eq :refer [Eq Eq-eq?]])\n"
+    "(imports [prologos::core::eq :refer []])\n"
     "(eval (Eq-eq? Int Int--Eq--dict (int 3) (int 4)))\n")))
   (check-true (string-contains? (format "~a" r) "false")))
 
@@ -89,8 +89,8 @@
 (test-case "eq/rat-equal"
   (define r (run-ns-last (string-append
     "(ns t)\n"
-    "(require [prologos::core::eq :refer [Eq Eq-eq?]])\n"
-    "(require [prologos::core::eq :refer []])\n"
+    "(imports [prologos::core::eq :refer [Eq Eq-eq?]])\n"
+    "(imports [prologos::core::eq :refer []])\n"
     "(eval (Eq-eq? Rat Rat--Eq--dict (rat 1/2) (rat 1/2)))\n")))
   (check-true (string-contains? (format "~a" r) "true")))
 
@@ -98,8 +98,8 @@
 (test-case "eq/rat-unequal"
   (define r (run-ns-last (string-append
     "(ns t)\n"
-    "(require [prologos::core::eq :refer [Eq Eq-eq?]])\n"
-    "(require [prologos::core::eq :refer []])\n"
+    "(imports [prologos::core::eq :refer [Eq Eq-eq?]])\n"
+    "(imports [prologos::core::eq :refer []])\n"
     "(eval (Eq-eq? Rat Rat--Eq--dict (rat 1/2) (rat 1/3)))\n")))
   (check-true (string-contains? (format "~a" r) "false")))
 
@@ -107,8 +107,8 @@
 (test-case "ord/int-lt"
   (define r (run-ns-last (string-append
     "(ns t)\n"
-    "(require [prologos::core::ord :refer [Ord Ord-compare]])\n"
-    "(require [prologos::core::ord :refer []])\n"
+    "(imports [prologos::core::ord :refer [Ord Ord-compare]])\n"
+    "(imports [prologos::core::ord :refer []])\n"
     "(eval (Ord-compare Int Int--Ord--dict (int 3) (int 5)))\n")))
   (check-true (string-contains? (format "~a" r) "lt-ord")))
 
@@ -116,8 +116,8 @@
 (test-case "ord/int-eq"
   (define r (run-ns-last (string-append
     "(ns t)\n"
-    "(require [prologos::core::ord :refer [Ord Ord-compare]])\n"
-    "(require [prologos::core::ord :refer []])\n"
+    "(imports [prologos::core::ord :refer [Ord Ord-compare]])\n"
+    "(imports [prologos::core::ord :refer []])\n"
     "(eval (Ord-compare Int Int--Ord--dict (int 5) (int 5)))\n")))
   (check-true (string-contains? (format "~a" r) "eq-ord")))
 
@@ -125,8 +125,8 @@
 (test-case "ord/int-gt"
   (define r (run-ns-last (string-append
     "(ns t)\n"
-    "(require [prologos::core::ord :refer [Ord Ord-compare]])\n"
-    "(require [prologos::core::ord :refer []])\n"
+    "(imports [prologos::core::ord :refer [Ord Ord-compare]])\n"
+    "(imports [prologos::core::ord :refer []])\n"
     "(eval (Ord-compare Int Int--Ord--dict (int 7) (int 5)))\n")))
   (check-true (string-contains? (format "~a" r) "gt-ord")))
 
@@ -134,8 +134,8 @@
 (test-case "ord/rat-lt"
   (define r (run-ns-last (string-append
     "(ns t)\n"
-    "(require [prologos::core::ord :refer [Ord Ord-compare]])\n"
-    "(require [prologos::core::ord :refer []])\n"
+    "(imports [prologos::core::ord :refer [Ord Ord-compare]])\n"
+    "(imports [prologos::core::ord :refer []])\n"
     "(eval (Ord-compare Rat Rat--Ord--dict (rat 1/3) (rat 2/3)))\n")))
   (check-true (string-contains? (format "~a" r) "lt-ord")))
 
@@ -147,7 +147,7 @@
 (test-case "fromint/int-identity"
   (define r (run-ns-last (string-append
     "(ns t)\n"
-    "(require [prologos::core::conversions :refer [FromInt FromInt-from-integer]])\n"
+    "(imports [prologos::core::conversions :refer [FromInt FromInt-from-integer]])\n"
     "(eval (FromInt-from-integer Int Int--FromInt--dict (int 42)))\n")))
   (check-true (string-contains? (format "~a" r) "42 : Int")))
 
@@ -155,7 +155,7 @@
 (test-case "fromint/rat-conversion"
   (define r (run-ns-last (string-append
     "(ns t)\n"
-    "(require [prologos::core::conversions :refer [FromInt FromInt-from-integer]])\n"
+    "(imports [prologos::core::conversions :refer [FromInt FromInt-from-integer]])\n"
     "(eval (FromInt-from-integer Rat Rat--FromInt--dict (int 42)))\n")))
   (check-true (string-contains? (format "~a" r) "42 : Rat")))
 
@@ -163,7 +163,7 @@
 (test-case "fromrat/rat-identity"
   (define r (run-ns-last (string-append
     "(ns t)\n"
-    "(require [prologos::core::conversions :refer [FromRat FromRat-from-rational]])\n"
+    "(imports [prologos::core::conversions :refer [FromRat FromRat-from-rational]])\n"
     "(eval (FromRat-from-rational Rat Rat--FromRat--dict (rat 3/7)))\n")))
   (check-true (string-contains? (format "~a" r) "3/7 : Rat")))
 
@@ -176,15 +176,15 @@
   ;; Use Num bundle with Int — all 8 constraints should resolve
   (define results (run-ns-strings (string-append
     "(ns t)\n"
-    "(require [prologos::core::algebra :refer [Num]])\n"
-    "(require [prologos::core::arithmetic :refer []])\n"
-    "(require [prologos::core::arithmetic :refer []])\n"
-    "(require [prologos::core::arithmetic :refer []])\n"
-    "(require [prologos::core::arithmetic :refer []])\n"
-    "(require [prologos::core::arithmetic :refer []])\n"
-    "(require [prologos::core::eq :refer []])\n"
-    "(require [prologos::core::ord :refer []])\n"
-    "(require [prologos::core::arithmetic :refer [Add-add]])\n"
+    "(imports [prologos::core::algebra :refer [Num]])\n"
+    "(imports [prologos::core::arithmetic :refer []])\n"
+    "(imports [prologos::core::arithmetic :refer []])\n"
+    "(imports [prologos::core::arithmetic :refer []])\n"
+    "(imports [prologos::core::arithmetic :refer []])\n"
+    "(imports [prologos::core::arithmetic :refer []])\n"
+    "(imports [prologos::core::eq :refer []])\n"
+    "(imports [prologos::core::ord :refer []])\n"
+    "(imports [prologos::core::arithmetic :refer [Add-add]])\n"
     "(spec num-add A A -> A where (Num A))\n"
     "(defn num-add [x y] where (Num A)\n"
     "  (Add-add A $Add-A x y))\n"
@@ -196,15 +196,15 @@
   ;; Use Num bundle with Rat
   (define results (run-ns-strings (string-append
     "(ns t)\n"
-    "(require [prologos::core::algebra :refer [Num]])\n"
-    "(require [prologos::core::arithmetic :refer []])\n"
-    "(require [prologos::core::arithmetic :refer []])\n"
-    "(require [prologos::core::arithmetic :refer []])\n"
-    "(require [prologos::core::arithmetic :refer []])\n"
-    "(require [prologos::core::arithmetic :refer []])\n"
-    "(require [prologos::core::eq :refer []])\n"
-    "(require [prologos::core::ord :refer []])\n"
-    "(require [prologos::core::arithmetic :refer [Add-add]])\n"
+    "(imports [prologos::core::algebra :refer [Num]])\n"
+    "(imports [prologos::core::arithmetic :refer []])\n"
+    "(imports [prologos::core::arithmetic :refer []])\n"
+    "(imports [prologos::core::arithmetic :refer []])\n"
+    "(imports [prologos::core::arithmetic :refer []])\n"
+    "(imports [prologos::core::arithmetic :refer []])\n"
+    "(imports [prologos::core::eq :refer []])\n"
+    "(imports [prologos::core::ord :refer []])\n"
+    "(imports [prologos::core::arithmetic :refer [Add-add]])\n"
     "(spec num-add A A -> A where (Num A))\n"
     "(defn num-add [x y] where (Num A)\n"
     "  (Add-add A $Add-A x y))\n"
@@ -216,8 +216,8 @@
   ;; Nat should fail Num bundle (lacks Neg, Abs, FromInt)
   (define results (run-ns (string-append
     "(ns t)\n"
-    "(require [prologos::core::algebra :refer [Num]])\n"
-    "(require [prologos::core::arithmetic :refer [Add-add]])\n"
+    "(imports [prologos::core::algebra :refer [Num]])\n"
+    "(imports [prologos::core::arithmetic :refer [Add-add]])\n"
     "(spec num-add A A -> A where (Num A))\n"
     "(defn num-add [x y] where (Num A)\n"
     "  (Add-add A $Add-A x y))\n"
@@ -231,16 +231,16 @@
   ;; Fractional with Rat — all 10 constraints resolve
   (define results (run-ns-strings (string-append
     "(ns t)\n"
-    "(require [prologos::core::algebra :refer [Fractional]])\n"
-    "(require [prologos::core::arithmetic :refer []])\n"
-    "(require [prologos::core::arithmetic :refer []])\n"
-    "(require [prologos::core::arithmetic :refer []])\n"
-    "(require [prologos::core::arithmetic :refer []])\n"
-    "(require [prologos::core::arithmetic :refer []])\n"
-    "(require [prologos::core::arithmetic :refer []])\n"
-    "(require [prologos::core::eq :refer []])\n"
-    "(require [prologos::core::ord :refer []])\n"
-    "(require [prologos::core::arithmetic :refer [Div-div]])\n"
+    "(imports [prologos::core::algebra :refer [Fractional]])\n"
+    "(imports [prologos::core::arithmetic :refer []])\n"
+    "(imports [prologos::core::arithmetic :refer []])\n"
+    "(imports [prologos::core::arithmetic :refer []])\n"
+    "(imports [prologos::core::arithmetic :refer []])\n"
+    "(imports [prologos::core::arithmetic :refer []])\n"
+    "(imports [prologos::core::arithmetic :refer []])\n"
+    "(imports [prologos::core::eq :refer []])\n"
+    "(imports [prologos::core::ord :refer []])\n"
+    "(imports [prologos::core::arithmetic :refer [Div-div]])\n"
     "(spec frac-div A A -> A where (Fractional A))\n"
     "(defn frac-div [x y] where (Fractional A)\n"
     "  (Div-div A $Div-A x y))\n"
@@ -256,7 +256,7 @@
   ;; The global add from prologos::data::nat should still work
   (define r (run-ns-last (string-append
     "(ns t)\n"
-    "(require [prologos::data::nat :refer [add]])\n"
+    "(imports [prologos::data::nat :refer [add]])\n"
     "(eval (add zero (suc zero)))\n")))
   (check-true (string-contains? (format "~a" r) "1")))
 
@@ -265,6 +265,6 @@
   ;; The global sub from prologos::data::nat should still work
   (define r (run-ns-last (string-append
     "(ns t)\n"
-    "(require [prologos::data::nat :refer [sub]])\n"
+    "(imports [prologos::data::nat :refer [sub]])\n"
     "(eval (sub (suc (suc (suc zero))) (suc zero)))\n")))
   (check-true (string-contains? (format "~a" r) "2")))

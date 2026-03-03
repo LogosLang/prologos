@@ -90,15 +90,15 @@
 (test-case "nat::add basic"
   ;; 0 + 0 = 0
   (check-equal?
-   (run-ns "(ns t1)\n(require [prologos::data::nat :refer [add]])\n(eval (add zero zero))")
+   (run-ns "(ns t1)\n(imports [prologos::data::nat :refer [add]])\n(eval (add zero zero))")
    '("0N : Nat"))
   ;; 0 + 3 = 3
   (check-equal?
-   (run-ns "(ns t2)\n(require [prologos::data::nat :refer [add]])\n(eval (add zero (suc (suc (suc zero)))))")
+   (run-ns "(ns t2)\n(imports [prologos::data::nat :refer [add]])\n(eval (add zero (suc (suc (suc zero)))))")
    '("3N : Nat"))
   ;; 2 + 3 = 5
   (check-equal?
-   (run-ns "(ns t3)\n(require [prologos::data::nat :refer [add]])\n(eval (add (suc (suc zero)) (suc (suc (suc zero)))))")
+   (run-ns "(ns t3)\n(imports [prologos::data::nat :refer [add]])\n(eval (add (suc (suc zero)) (suc (suc (suc zero)))))")
    '("5N : Nat")))
 
 
@@ -109,15 +109,15 @@
 (test-case "nat/mult basic"
   ;; 0 * 3 = 0
   (check-equal?
-   (run-ns "(ns t4)\n(require [prologos::data::nat :refer [mult]])\n(eval (mult zero (suc (suc (suc zero)))))")
+   (run-ns "(ns t4)\n(imports [prologos::data::nat :refer [mult]])\n(eval (mult zero (suc (suc (suc zero)))))")
    '("0N : Nat"))
   ;; 2 * 3 = 6
   (check-equal?
-   (run-ns "(ns t5)\n(require [prologos::data::nat :refer [mult]])\n(eval (mult (suc (suc zero)) (suc (suc (suc zero)))))")
+   (run-ns "(ns t5)\n(imports [prologos::data::nat :refer [mult]])\n(eval (mult (suc (suc zero)) (suc (suc (suc zero)))))")
    '("6N : Nat"))
   ;; 3 * 1 = 3
   (check-equal?
-   (run-ns "(ns t6)\n(require [prologos::data::nat :refer [mult]])\n(eval (mult (suc (suc (suc zero))) (suc zero)))")
+   (run-ns "(ns t6)\n(imports [prologos::data::nat :refer [mult]])\n(eval (mult (suc (suc (suc zero))) (suc zero)))")
    '("3N : Nat")))
 
 
@@ -128,11 +128,11 @@
 (test-case "nat::double"
   ;; double 0 = 0
   (check-equal?
-   (run-ns "(ns t7)\n(require [prologos::data::nat :refer [double]])\n(eval (double zero))")
+   (run-ns "(ns t7)\n(imports [prologos::data::nat :refer [double]])\n(eval (double zero))")
    '("0N : Nat"))
   ;; double 3 = 6
   (check-equal?
-   (run-ns "(ns t8)\n(require [prologos::data::nat :refer [double]])\n(eval (double (suc (suc (suc zero)))))")
+   (run-ns "(ns t8)\n(imports [prologos::data::nat :refer [double]])\n(eval (double (suc (suc (suc zero)))))")
    '("6N : Nat")))
 
 
@@ -143,15 +143,15 @@
 (test-case "nat/pred"
   ;; pred 0 = 0
   (check-equal?
-   (run-ns "(ns t9)\n(require [prologos::data::nat :refer [pred]])\n(eval (pred zero))")
+   (run-ns "(ns t9)\n(imports [prologos::data::nat :refer [pred]])\n(eval (pred zero))")
    '("0N : Nat"))
   ;; pred 3 = 2
   (check-equal?
-   (run-ns "(ns t10)\n(require [prologos::data::nat :refer [pred]])\n(eval (pred (suc (suc (suc zero)))))")
+   (run-ns "(ns t10)\n(imports [prologos::data::nat :refer [pred]])\n(eval (pred (suc (suc (suc zero)))))")
    '("2N : Nat"))
   ;; pred 1 = 0
   (check-equal?
-   (run-ns "(ns t11)\n(require [prologos::data::nat :refer [pred]])\n(eval (pred (suc zero)))")
+   (run-ns "(ns t11)\n(imports [prologos::data::nat :refer [pred]])\n(eval (pred (suc zero)))")
    '("0N : Nat")))
 
 
@@ -162,11 +162,11 @@
 (test-case "nat/zero?"
   ;; zero? 0 = true
   (check-equal?
-   (run-ns "(ns t12)\n(require [prologos::data::nat :refer [zero?]])\n(eval (zero? zero))")
+   (run-ns "(ns t12)\n(imports [prologos::data::nat :refer [zero?]])\n(eval (zero? zero))")
    '("true : Bool"))
   ;; zero? 1 = false
   (check-equal?
-   (run-ns "(ns t13)\n(require [prologos::data::nat :refer [zero?]])\n(eval (zero? (suc zero)))")
+   (run-ns "(ns t13)\n(imports [prologos::data::nat :refer [zero?]])\n(eval (zero? (suc zero)))")
    '("false : Bool")))
 
 
@@ -176,7 +176,7 @@
 
 (test-case "nat module with :as alias"
   (check-equal?
-   (run-ns "(ns t14)\n(require [prologos::data::nat :as nat])\n(eval (nat::add (suc zero) (suc (suc zero))))")
+   (run-ns "(ns t14)\n(imports [prologos::data::nat :as nat])\n(eval (nat::add (suc zero) (suc (suc zero))))")
    '("3N : Nat")))
 
 
@@ -186,10 +186,10 @@
 
 (test-case "nat operations type correctly"
   (check-equal?
-   (run-ns "(ns t15)\n(require [prologos::data::nat :refer [add]])\n(check (add zero) <(-> Nat Nat)>)")
+   (run-ns "(ns t15)\n(imports [prologos::data::nat :refer [add]])\n(check (add zero) <(-> Nat Nat)>)")
    '("OK"))
   (check-equal?
-   (run-ns "(ns t16)\n(require [prologos::data::nat :refer [zero?]])\n(check zero? <(-> Nat Bool)>)")
+   (run-ns "(ns t16)\n(imports [prologos::data::nat :refer [zero?]])\n(check zero? <(-> Nat Bool)>)")
    '("OK")))
 
 
@@ -219,10 +219,10 @@
 
 (test-case "bool::not"
   (check-equal?
-   (run-ns "(ns t17)\n(require [prologos::data::bool :refer [not]])\n(eval (not true))")
+   (run-ns "(ns t17)\n(imports [prologos::data::bool :refer [not]])\n(eval (not true))")
    '("false : Bool"))
   (check-equal?
-   (run-ns "(ns t18)\n(require [prologos::data::bool :refer [not]])\n(eval (not false))")
+   (run-ns "(ns t18)\n(imports [prologos::data::bool :refer [not]])\n(eval (not false))")
    '("true : Bool")))
 
 
@@ -232,16 +232,16 @@
 
 (test-case "bool::and"
   (check-equal?
-   (run-ns "(ns t19)\n(require [prologos::data::bool :refer [and]])\n(eval (and true true))")
+   (run-ns "(ns t19)\n(imports [prologos::data::bool :refer [and]])\n(eval (and true true))")
    '("true : Bool"))
   (check-equal?
-   (run-ns "(ns t20)\n(require [prologos::data::bool :refer [and]])\n(eval (and true false))")
+   (run-ns "(ns t20)\n(imports [prologos::data::bool :refer [and]])\n(eval (and true false))")
    '("false : Bool"))
   (check-equal?
-   (run-ns "(ns t21)\n(require [prologos::data::bool :refer [and]])\n(eval (and false true))")
+   (run-ns "(ns t21)\n(imports [prologos::data::bool :refer [and]])\n(eval (and false true))")
    '("false : Bool"))
   (check-equal?
-   (run-ns "(ns t22)\n(require [prologos::data::bool :refer [and]])\n(eval (and false false))")
+   (run-ns "(ns t22)\n(imports [prologos::data::bool :refer [and]])\n(eval (and false false))")
    '("false : Bool")))
 
 
@@ -251,16 +251,16 @@
 
 (test-case "bool/or"
   (check-equal?
-   (run-ns "(ns t23)\n(require [prologos::data::bool :refer [or]])\n(eval (or true true))")
+   (run-ns "(ns t23)\n(imports [prologos::data::bool :refer [or]])\n(eval (or true true))")
    '("true : Bool"))
   (check-equal?
-   (run-ns "(ns t24)\n(require [prologos::data::bool :refer [or]])\n(eval (or true false))")
+   (run-ns "(ns t24)\n(imports [prologos::data::bool :refer [or]])\n(eval (or true false))")
    '("true : Bool"))
   (check-equal?
-   (run-ns "(ns t25)\n(require [prologos::data::bool :refer [or]])\n(eval (or false true))")
+   (run-ns "(ns t25)\n(imports [prologos::data::bool :refer [or]])\n(eval (or false true))")
    '("true : Bool"))
   (check-equal?
-   (run-ns "(ns t26)\n(require [prologos::data::bool :refer [or]])\n(eval (or false false))")
+   (run-ns "(ns t26)\n(imports [prologos::data::bool :refer [or]])\n(eval (or false false))")
    '("false : Bool")))
 
 
@@ -270,16 +270,16 @@
 
 (test-case "bool/xor"
   (check-equal?
-   (run-ns "(ns t27)\n(require [prologos::data::bool :refer [xor]])\n(eval (xor true true))")
+   (run-ns "(ns t27)\n(imports [prologos::data::bool :refer [xor]])\n(eval (xor true true))")
    '("false : Bool"))
   (check-equal?
-   (run-ns "(ns t28)\n(require [prologos::data::bool :refer [xor]])\n(eval (xor true false))")
+   (run-ns "(ns t28)\n(imports [prologos::data::bool :refer [xor]])\n(eval (xor true false))")
    '("true : Bool"))
   (check-equal?
-   (run-ns "(ns t29)\n(require [prologos::data::bool :refer [xor]])\n(eval (xor false true))")
+   (run-ns "(ns t29)\n(imports [prologos::data::bool :refer [xor]])\n(eval (xor false true))")
    '("true : Bool"))
   (check-equal?
-   (run-ns "(ns t30)\n(require [prologos::data::bool :refer [xor]])\n(eval (xor false false))")
+   (run-ns "(ns t30)\n(imports [prologos::data::bool :refer [xor]])\n(eval (xor false false))")
    '("false : Bool")))
 
 
@@ -289,11 +289,11 @@
 
 (test-case "bool/bool-eq"
   (check-equal?
-   (run-ns "(ns t31)\n(require [prologos::data::bool :refer [bool-eq]])\n(eval (bool-eq true true))")
+   (run-ns "(ns t31)\n(imports [prologos::data::bool :refer [bool-eq]])\n(eval (bool-eq true true))")
    '("true : Bool"))
   (check-equal?
-   (run-ns "(ns t32)\n(require [prologos::data::bool :refer [bool-eq]])\n(eval (bool-eq true false))")
+   (run-ns "(ns t32)\n(imports [prologos::data::bool :refer [bool-eq]])\n(eval (bool-eq true false))")
    '("false : Bool"))
   (check-equal?
-   (run-ns "(ns t33)\n(require [prologos::data::bool :refer [bool-eq]])\n(eval (bool-eq false false))")
+   (run-ns "(ns t33)\n(imports [prologos::data::bool :refer [bool-eq]])\n(eval (bool-eq false false))")
    '("true : Bool")))

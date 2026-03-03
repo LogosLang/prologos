@@ -58,10 +58,10 @@
 
 (define preamble
   "(ns test)
-(require (prologos::core::collections :refer (vec list-to-seq pvec-to-seq set-to-seq into-list into-vec into-set)))
-(require (prologos::data::list    :refer (List nil cons)))
-(require (prologos::data::lseq    :refer (LSeq lseq-nil lseq-cell)))
-(require (prologos::data::lseq-ops :refer (list-to-lseq lseq-to-list)))
+(imports (prologos::core::collections :refer (vec list-to-seq pvec-to-seq set-to-seq into-list into-vec into-set)))
+(imports (prologos::data::list    :refer (List nil cons)))
+(imports (prologos::data::lseq    :refer (LSeq lseq-nil lseq-cell)))
+(imports (prologos::data::lseq-ops :refer (list-to-lseq lseq-to-list)))
 ")
 
 ;; ========================================
@@ -73,7 +73,7 @@
     (lambda ()
       (run-ns
         "(ns test)
-         (require (prologos::core::collections :refer (vec list-to-seq pvec-to-seq set-to-seq into-list into-vec into-set)))"))))
+         (imports (prologos::core::collections :refer (vec list-to-seq pvec-to-seq set-to-seq into-list into-vec into-set)))"))))
 
 ;; ========================================
 ;; vec — List → PVec

@@ -214,13 +214,13 @@
 (test-case "regression/stdlib-add"
   ;; Existing stdlib definitions should still work
   (check-equal?
-   (run-last "(ns reg1)\n(require [prologos::data::nat :refer [add]])\n(eval (add (suc zero) (suc (suc zero))))")
+   (run-last "(ns reg1)\n(imports [prologos::data::nat :refer [add]])\n(eval (add (suc zero) (suc (suc zero))))")
    "3N : Nat"))
 
 (test-case "regression/stdlib-zero?"
   ;; Existing match-based stdlib functions work
   (check-equal?
-   (run-last "(ns reg2)\n(require [prologos::data::nat :refer [zero?]])\n(eval (zero? zero))")
+   (run-last "(ns reg2)\n(imports [prologos::data::nat :refer [zero?]])\n(eval (zero? zero))")
    "true : Bool"))
 
 ;; ========================================
@@ -262,7 +262,7 @@
   ;; defn with function-returning return type + inner fn with return type
   ;; This is the clamp pattern: defn f [a, b] <Nat -> Nat> fn [x] <Nat> body
   (check-equal?
-   (run-last "(ns frt6)\n(require [prologos::data::nat :refer [min max]])\n(defn clamp [low <Nat> high <Nat>] <(-> Nat Nat)> (fn [x <Nat>] <Nat> (max low (min x high))))\n(eval (clamp (suc (suc zero)) (suc (suc (suc (suc zero)))) (suc (suc (suc (suc (suc (suc zero))))))))")
+   (run-last "(ns frt6)\n(imports [prologos::data::nat :refer [min max]])\n(defn clamp [low <Nat> high <Nat>] <(-> Nat Nat)> (fn [x <Nat>] <Nat> (max low (min x high))))\n(eval (clamp (suc (suc zero)) (suc (suc (suc (suc zero)))) (suc (suc (suc (suc (suc (suc zero))))))))")
    "4N : Nat"))
 
 (test-case "fn-rettype/defn-returns-function-simple"

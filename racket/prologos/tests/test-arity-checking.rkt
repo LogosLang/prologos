@@ -104,19 +104,19 @@
   ;; cons has type Pi(A :0 Type, A -> List A -> List A)
   ;; User provides 2 explicit args (A inferred): cons zero (nil Nat)
   (define result
-    (run-ns-last "(ns ar1)\n(require [prologos::data::list :refer [List nil cons]])\n(check (cons zero (nil Nat)) : (List Nat))"))
+    (run-ns-last "(ns ar1)\n(imports [prologos::data::list :refer [List nil cons]])\n(check (cons zero (nil Nat)) : (List Nat))"))
   (check-equal? result "OK"))
 
 (test-case "arity/implicits-explicit-backward-compat"
   ;; User provides ALL args including implicit: cons Nat zero (nil Nat)
   (define result
-    (run-ns-last "(ns ar2)\n(require [prologos::data::list :refer [List nil cons]])\n(check (cons Nat zero (nil Nat)) : (List Nat))"))
+    (run-ns-last "(ns ar2)\n(imports [prologos::data::list :refer [List nil cons]])\n(check (cons Nat zero (nil Nat)) : (List Nat))"))
   (check-equal? result "OK"))
 
 (test-case "arity/implicits-too-many"
   ;; cons has 1 implicit + 2 explicit = 3 total. Giving 4 should error.
   (define result
-    (run-ns-last "(ns ar3)\n(require [prologos::data::list :refer [List nil cons]])\n(eval (cons Nat zero (nil Nat) zero))"))
+    (run-ns-last "(ns ar3)\n(imports [prologos::data::list :refer [List nil cons]])\n(eval (cons Nat zero (nil Nat) zero))"))
   (check-true (prologos-error? result))
   (check-true (arity-error? result)))
 
@@ -160,12 +160,12 @@
 
 (test-case "arity/stdlib-add-correct"
   (define result
-    (run-ns-last "(ns ar4)\n(require [prologos::data::nat :refer [add]])\n(eval (add (suc zero) (suc (suc zero))))"))
+    (run-ns-last "(ns ar4)\n(imports [prologos::data::nat :refer [add]])\n(eval (add (suc zero) (suc (suc zero))))"))
   (check-equal? result "3N : Nat"))
 
 (test-case "arity/stdlib-map-correct"
   (define result
-    (run-ns-last "(ns ar5)\n(require [prologos::data::list :refer [List nil cons map]])\n(eval (map Nat Nat (fn [x <Nat>] (suc x)) (cons Nat zero (nil Nat))))"))
+    (run-ns-last "(ns ar5)\n(imports [prologos::data::list :refer [List nil cons map]])\n(eval (map Nat Nat (fn [x <Nat>] (suc x)) (cons Nat zero (nil Nat))))"))
   (check-false (prologos-error? result)))
 
 ;; ========================================

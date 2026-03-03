@@ -45,7 +45,7 @@
 ;; plus commonly-used data definitions and helper functions.
 (define shared-preamble
   "(ns test)
-(require (prologos::data::list :refer (List nil cons))
+(imports (prologos::data::list :refer (List nil cons))
          (prologos::data::lseq :refer (LSeq lseq-nil lseq-cell lseq-head lseq-rest lseq-empty?))
          (prologos::data::lseq-ops :refer (list-to-lseq lseq-to-list lseq-map lseq-filter lseq-fold lseq-length))
          (prologos::data::transducer :refer (transduce map-xf filter-xf remove-xf xf-compose list-conj into-list-rev)))

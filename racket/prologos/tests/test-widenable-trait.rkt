@@ -31,7 +31,7 @@
   (check-contains
     (run-ns-last (string-append
       "(ns test :no-prelude)\n"
-      "(require [prologos::core::lattice :refer [Widenable Widenable-widen Widenable-narrow Interval interval-bot]])\n"
+      "(imports [prologos::core::lattice :refer [Widenable Widenable-widen Widenable-narrow Interval interval-bot]])\n"
       "(eval (Widenable-widen Interval--Widenable--dict interval-bot interval-bot))"))
     "interval-bot"))
 
@@ -39,7 +39,7 @@
   (check-contains
     (run-ns-last (string-append
       "(ns test :no-prelude)\n"
-      "(require [prologos::core::lattice :refer [Widenable Widenable-widen Widenable-narrow Interval interval-bot]])\n"
+      "(imports [prologos::core::lattice :refer [Widenable Widenable-widen Widenable-narrow Interval interval-bot]])\n"
       "(def x : Interval interval-bot)"))
     "defined"))
 
@@ -51,7 +51,7 @@
   (check-contains
     (run-ns-last (string-append
       "(ns test :no-prelude)\n"
-      "(require [prologos::core::lattice :refer [Widenable Widenable-widen Widenable-narrow Interval interval-bot mk-interval]])\n"
+      "(imports [prologos::core::lattice :refer [Widenable Widenable-widen Widenable-narrow Interval interval-bot mk-interval]])\n"
       "(eval (Widenable-widen Interval--Widenable--dict interval-bot interval-bot))"))
     "interval-bot"))
 
@@ -59,7 +59,7 @@
   (check-contains
     (run-ns-last (string-append
       "(ns test :no-prelude)\n"
-      "(require [prologos::core::lattice :refer [Widenable Widenable-widen Widenable-narrow Interval interval-bot mk-interval]])\n"
+      "(imports [prologos::core::lattice :refer [Widenable Widenable-widen Widenable-narrow Interval interval-bot mk-interval]])\n"
       "(eval (Widenable-narrow Interval--Widenable--dict interval-bot interval-bot))"))
     "interval-bot"))
 
@@ -72,7 +72,7 @@
   (check-contains
     (run-ns-last (string-append
       "(ns test :no-prelude)\n"
-      "(require [prologos::core::lattice :refer [Widenable Widenable-widen Widenable-narrow Interval interval-bot mk-interval]])\n"
+      "(imports [prologos::core::lattice :refer [Widenable Widenable-widen Widenable-narrow Interval interval-bot mk-interval]])\n"
       "(eval (Widenable-widen Interval--Widenable--dict (mk-interval 0 100) (mk-interval 0 100)))"))
     "mk-interval"))
 
@@ -81,7 +81,7 @@
   (check-contains
     (run-ns-last (string-append
       "(ns test :no-prelude)\n"
-      "(require [prologos::core::lattice :refer [Widenable Widenable-widen Widenable-narrow Interval interval-bot mk-interval]])\n"
+      "(imports [prologos::core::lattice :refer [Widenable Widenable-widen Widenable-narrow Interval interval-bot mk-interval]])\n"
       "(eval (Widenable-widen Interval--Widenable--dict (mk-interval 0 100) (mk-interval 10 100)))"))
     "interval-bot"))
 
@@ -90,7 +90,7 @@
   (check-contains
     (run-ns-last (string-append
       "(ns test :no-prelude)\n"
-      "(require [prologos::core::lattice :refer [Widenable Widenable-widen Widenable-narrow Interval interval-bot mk-interval]])\n"
+      "(imports [prologos::core::lattice :refer [Widenable Widenable-widen Widenable-narrow Interval interval-bot mk-interval]])\n"
       "(eval (Widenable-widen Interval--Widenable--dict (mk-interval 0 100) (mk-interval 0 50)))"))
     "interval-bot"))
 
@@ -103,7 +103,7 @@
   (check-contains
     (run-ns-last (string-append
       "(ns test :no-prelude)\n"
-      "(require [prologos::core::lattice :refer [Widenable Widenable-widen Widenable-narrow Interval interval-bot mk-interval]])\n"
+      "(imports [prologos::core::lattice :refer [Widenable Widenable-widen Widenable-narrow Interval interval-bot mk-interval]])\n"
       "(eval (Widenable-narrow Interval--Widenable--dict (mk-interval 0 100) (mk-interval 10 50)))"))
     "mk-interval"))
 

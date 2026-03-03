@@ -282,7 +282,7 @@
       (define results (process-string
         (string-append
           "(ns errt1)\n"
-          "(require [prologos::core :refer [id]])\n"
+          "(imports [prologos::core :refer [id]])\n"
           "(eval (id zero))")))
       ;; id zero should succeed (it infers the type argument)
       (define last-result (last results))
@@ -295,12 +295,12 @@
 
 (test-case "error-message/stdlib-id-still-works"
   (check-equal?
-   (run-ns-last "(ns emt1)\n(require [prologos::core :refer [id]])\n(eval (id zero))")
+   (run-ns-last "(ns emt1)\n(imports [prologos::core :refer [id]])\n(eval (id zero))")
    "0N : Nat"))
 
 (test-case "error-message/stdlib-add-still-works"
   (check-equal?
-   (run-ns-last "(ns emt2)\n(require [prologos::data::nat :refer [add]])\n(eval (add 2N 3N))")
+   (run-ns-last "(ns emt2)\n(imports [prologos::data::nat :refer [add]])\n(eval (add 2N 3N))")
    "5N : Nat"))
 
 ;; ========================================

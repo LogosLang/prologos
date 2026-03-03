@@ -73,21 +73,21 @@
 (test-case "list/reduce-empty"
   ;; reduce add 0 [] = 0
   (check-equal?
-   (last (run-ns "(ns lst100)\n(require [prologos::data::list :refer [List nil reduce]])\n(require [prologos::data::nat :refer [add]])\n(eval (reduce Nat Nat add zero (nil Nat)))"))
+   (last (run-ns "(ns lst100)\n(imports [prologos::data::list :refer [List nil reduce]])\n(imports [prologos::data::nat :refer [add]])\n(eval (reduce Nat Nat add zero (nil Nat)))"))
    "0N : Nat"))
 
 
 (test-case "list/reduce-single"
   ;; reduce add 0 [5] = 5
   (check-equal?
-   (last (run-ns "(ns lst101)\n(require [prologos::data::list :refer [List nil cons reduce]])\n(require [prologos::data::nat :refer [add]])\n(eval (reduce Nat Nat add zero (cons Nat (suc (suc (suc (suc (suc zero))))) (nil Nat))))"))
+   (last (run-ns "(ns lst101)\n(imports [prologos::data::list :refer [List nil cons reduce]])\n(imports [prologos::data::nat :refer [add]])\n(eval (reduce Nat Nat add zero (cons Nat (suc (suc (suc (suc (suc zero))))) (nil Nat))))"))
    "5N : Nat"))
 
 
 (test-case "list/reduce-multi"
   ;; reduce add 0 [1,2,3] = 6
   (check-equal?
-   (last (run-ns "(ns lst102)\n(require [prologos::data::list :refer [List nil cons reduce]])\n(require [prologos::data::nat :refer [add]])\n(eval (reduce Nat Nat add zero (cons Nat (suc zero) (cons Nat (suc (suc zero)) (cons Nat (suc (suc (suc zero))) (nil Nat))))))"))
+   (last (run-ns "(ns lst102)\n(imports [prologos::data::list :refer [List nil cons reduce]])\n(imports [prologos::data::nat :refer [add]])\n(eval (reduce Nat Nat add zero (cons Nat (suc zero) (cons Nat (suc (suc zero)) (cons Nat (suc (suc (suc zero))) (nil Nat))))))"))
    "6N : Nat"))
 
 
@@ -97,13 +97,13 @@
 
 (test-case "list/tail-empty"
   (check-equal?
-   (last (run-ns "(ns lst103)\n(require [prologos::data::list :refer [List nil tail length]])\n(require [prologos::data::option :refer [unwrap-or]])\n(eval (length Nat (unwrap-or (List Nat) (nil Nat) (tail Nat (nil Nat)))))"))
+   (last (run-ns "(ns lst103)\n(imports [prologos::data::list :refer [List nil tail length]])\n(imports [prologos::data::option :refer [unwrap-or]])\n(eval (length Nat (unwrap-or (List Nat) (nil Nat) (tail Nat (nil Nat)))))"))
    "0N : Nat"))
 
 
 (test-case "list/tail-nonempty"
   (check-equal?
-   (last (run-ns "(ns lst104)\n(require [prologos::data::list :refer [List nil cons tail length]])\n(require [prologos::data::option :refer [unwrap-or]])\n(eval (length Nat (unwrap-or (List Nat) (nil Nat) (tail Nat (cons Nat (suc zero) (cons Nat (suc (suc zero)) (cons Nat (suc (suc (suc zero))) (nil Nat))))))))"))
+   (last (run-ns "(ns lst104)\n(imports [prologos::data::list :refer [List nil cons tail length]])\n(imports [prologos::data::option :refer [unwrap-or]])\n(eval (length Nat (unwrap-or (List Nat) (nil Nat) (tail Nat (cons Nat (suc zero) (cons Nat (suc (suc zero)) (cons Nat (suc (suc (suc zero))) (nil Nat))))))))"))
    "2N : Nat"))
 
 
@@ -112,21 +112,21 @@
 (test-case "list/reverse-empty"
   ;; reverse [] = [], length 0
   (check-equal?
-   (last (run-ns "(ns lst105)\n(require [prologos::data::list :refer [List nil reverse length]])\n(eval (length Nat (reverse Nat (nil Nat))))"))
+   (last (run-ns "(ns lst105)\n(imports [prologos::data::list :refer [List nil reverse length]])\n(eval (length Nat (reverse Nat (nil Nat))))"))
    "0N : Nat"))
 
 
 (test-case "list/reverse-single"
   ;; reverse [5] = [5], head = 5
   (check-equal?
-   (last (run-ns "(ns lst106)\n(require [prologos::data::list :refer [List nil cons reverse head]])\n(eval (head Nat zero (reverse Nat (cons Nat (suc (suc (suc (suc (suc zero))))) (nil Nat)))))"))
+   (last (run-ns "(ns lst106)\n(imports [prologos::data::list :refer [List nil cons reverse head]])\n(eval (head Nat zero (reverse Nat (cons Nat (suc (suc (suc (suc (suc zero))))) (nil Nat)))))"))
    "5N : Nat"))
 
 
 (test-case "list/reverse-multi"
   ;; reverse [1,2,3], head = 3
   (check-equal?
-   (last (run-ns "(ns lst107)\n(require [prologos::data::list :refer [List nil cons reverse head]])\n(eval (head Nat zero (reverse Nat (cons Nat (suc zero) (cons Nat (suc (suc zero)) (cons Nat (suc (suc (suc zero))) (nil Nat)))))))"))
+   (last (run-ns "(ns lst107)\n(imports [prologos::data::list :refer [List nil cons reverse head]])\n(eval (head Nat zero (reverse Nat (cons Nat (suc zero) (cons Nat (suc (suc zero)) (cons Nat (suc (suc (suc zero))) (nil Nat)))))))"))
    "3N : Nat"))
 
 
@@ -135,14 +135,14 @@
 (test-case "list/sum-empty"
   ;; sum [] = 0
   (check-equal?
-   (last (run-ns "(ns lst108)\n(require [prologos::data::list :refer [List nil sum]])\n(eval (sum (nil Nat)))"))
+   (last (run-ns "(ns lst108)\n(imports [prologos::data::list :refer [List nil sum]])\n(eval (sum (nil Nat)))"))
    "0N : Nat"))
 
 
 (test-case "list/sum-multi"
   ;; sum [1,2,3] = 6
   (check-equal?
-   (last (run-ns "(ns lst109)\n(require [prologos::data::list :refer [List nil cons sum]])\n(eval (sum (cons Nat (suc zero) (cons Nat (suc (suc zero)) (cons Nat (suc (suc (suc zero))) (nil Nat))))))"))
+   (last (run-ns "(ns lst109)\n(imports [prologos::data::list :refer [List nil cons sum]])\n(eval (sum (cons Nat (suc zero) (cons Nat (suc (suc zero)) (cons Nat (suc (suc (suc zero))) (nil Nat))))))"))
    "6N : Nat"))
 
 
@@ -151,14 +151,14 @@
 (test-case "list/product-empty"
   ;; product [] = 1
   (check-equal?
-   (last (run-ns "(ns lst110)\n(require [prologos::data::list :refer [List nil product]])\n(eval (product (nil Nat)))"))
+   (last (run-ns "(ns lst110)\n(imports [prologos::data::list :refer [List nil product]])\n(eval (product (nil Nat)))"))
    "1N : Nat"))
 
 
 (test-case "list/product-multi"
   ;; product [2,3] = 6
   (check-equal?
-   (last (run-ns "(ns lst111)\n(require [prologos::data::list :refer [List nil cons product]])\n(eval (product (cons Nat (suc (suc zero)) (cons Nat (suc (suc (suc zero))) (nil Nat)))))"))
+   (last (run-ns "(ns lst111)\n(imports [prologos::data::list :refer [List nil cons product]])\n(eval (product (cons Nat (suc (suc zero)) (cons Nat (suc (suc (suc zero))) (nil Nat)))))"))
    "6N : Nat"))
 
 
@@ -167,21 +167,21 @@
 (test-case "list/any?-empty"
   ;; any? zero? [] = false
   (check-equal?
-   (last (run-ns "(ns lst112)\n(require [prologos::data::list :refer [List nil any?]])\n(require [prologos::data::nat :refer [zero?]])\n(eval (any? Nat zero? (nil Nat)))"))
+   (last (run-ns "(ns lst112)\n(imports [prologos::data::list :refer [List nil any?]])\n(imports [prologos::data::nat :refer [zero?]])\n(eval (any? Nat zero? (nil Nat)))"))
    "false : Bool"))
 
 
 (test-case "list/any?-found"
   ;; any? zero? [1, 0, 2] = true
   (check-equal?
-   (last (run-ns "(ns lst113)\n(require [prologos::data::list :refer [List nil cons any?]])\n(require [prologos::data::nat :refer [zero?]])\n(eval (any? Nat zero? (cons Nat (suc zero) (cons Nat zero (cons Nat (suc (suc zero)) (nil Nat))))))"))
+   (last (run-ns "(ns lst113)\n(imports [prologos::data::list :refer [List nil cons any?]])\n(imports [prologos::data::nat :refer [zero?]])\n(eval (any? Nat zero? (cons Nat (suc zero) (cons Nat zero (cons Nat (suc (suc zero)) (nil Nat))))))"))
    "true : Bool"))
 
 
 (test-case "list/any?-not-found"
   ;; any? zero? [1, 2] = false
   (check-equal?
-   (last (run-ns "(ns lst114)\n(require [prologos::data::list :refer [List nil cons any?]])\n(require [prologos::data::nat :refer [zero?]])\n(eval (any? Nat zero? (cons Nat (suc zero) (cons Nat (suc (suc zero)) (nil Nat)))))"))
+   (last (run-ns "(ns lst114)\n(imports [prologos::data::list :refer [List nil cons any?]])\n(imports [prologos::data::nat :refer [zero?]])\n(eval (any? Nat zero? (cons Nat (suc zero) (cons Nat (suc (suc zero)) (nil Nat)))))"))
    "false : Bool"))
 
 
@@ -190,19 +190,19 @@
 (test-case "list/all?-empty"
   ;; all? zero? [] = true (vacuously)
   (check-equal?
-   (last (run-ns "(ns lst115)\n(require [prologos::data::list :refer [List nil all?]])\n(require [prologos::data::nat :refer [zero?]])\n(eval (all? Nat zero? (nil Nat)))"))
+   (last (run-ns "(ns lst115)\n(imports [prologos::data::list :refer [List nil all?]])\n(imports [prologos::data::nat :refer [zero?]])\n(eval (all? Nat zero? (nil Nat)))"))
    "true : Bool"))
 
 
 (test-case "list/all?-all-pass"
   ;; all? zero? [0, 0] = true
   (check-equal?
-   (last (run-ns "(ns lst116)\n(require [prologos::data::list :refer [List nil cons all?]])\n(require [prologos::data::nat :refer [zero?]])\n(eval (all? Nat zero? (cons Nat zero (cons Nat zero (nil Nat)))))"))
+   (last (run-ns "(ns lst116)\n(imports [prologos::data::list :refer [List nil cons all?]])\n(imports [prologos::data::nat :refer [zero?]])\n(eval (all? Nat zero? (cons Nat zero (cons Nat zero (nil Nat)))))"))
    "true : Bool"))
 
 
 (test-case "list/all?-some-fail"
   ;; all? zero? [0, 1] = false
   (check-equal?
-   (last (run-ns "(ns lst117)\n(require [prologos::data::list :refer [List nil cons all?]])\n(require [prologos::data::nat :refer [zero?]])\n(eval (all? Nat zero? (cons Nat zero (cons Nat (suc zero) (nil Nat)))))"))
+   (last (run-ns "(ns lst117)\n(imports [prologos::data::list :refer [List nil cons all?]])\n(imports [prologos::data::nat :refer [zero?]])\n(eval (all? Nat zero? (cons Nat zero (cons Nat (suc zero) (nil Nat)))))"))
    "false : Bool"))

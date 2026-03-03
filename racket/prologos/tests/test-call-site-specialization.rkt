@@ -31,7 +31,7 @@
   (run-ns-last
    (string-append
     "(ns cs-reg1)\n"
-    "(require [prologos::core::propagator :refer [new-lattice-cell]])\n"
+    "(imports [prologos::core::propagator :refer [new-lattice-cell]])\n"
     "(eval 0N)\n"))
   (check-not-false (lookup-specialization 'new-lattice-cell 'Bool)))
 
@@ -39,7 +39,7 @@
   (run-ns-last
    (string-append
     "(ns cs-reg2)\n"
-    "(require [prologos::core::propagator :refer [new-lattice-cell]])\n"
+    "(imports [prologos::core::propagator :refer [new-lattice-cell]])\n"
     "(eval 0N)\n"))
   (check-not-false (lookup-specialization 'new-lattice-cell 'Interval)))
 
@@ -52,7 +52,7 @@
    (run-ns-last
     (string-append
      "(ns cs-bool1)\n"
-     "(require [prologos::core::propagator :refer [new-lattice-cell]])\n"
+     "(imports [prologos::core::propagator :refer [new-lattice-cell]])\n"
      "(def p : (Sigma (_ : PropNetwork) CellId) (new-lattice-cell Bool Bool--Lattice--dict (net-new 100)))\n"
      "(def n : PropNetwork (first p))\n"
      "(def c : CellId (second p))\n"
@@ -65,7 +65,7 @@
    (run-ns-last
     (string-append
      "(ns cs-bool2)\n"
-     "(require [prologos::core::propagator :refer [new-lattice-cell]])\n"
+     "(imports [prologos::core::propagator :refer [new-lattice-cell]])\n"
      "(def p : (Sigma (_ : PropNetwork) CellId) (new-lattice-cell Bool Bool--Lattice--dict (net-new 100)))\n"
      "(def n1 : PropNetwork (first p))\n"
      "(def c : CellId (second p))\n"
@@ -83,8 +83,8 @@
    (run-ns-last
     (string-append
      "(ns cs-interval1)\n"
-     "(require [prologos::core::propagator :refer [new-lattice-cell]])\n"
-     "(require [prologos::core::lattice :refer [Interval interval-bot Interval--Lattice--dict]])\n"
+     "(imports [prologos::core::propagator :refer [new-lattice-cell]])\n"
+     "(imports [prologos::core::lattice :refer [Interval interval-bot Interval--Lattice--dict]])\n"
      "(def p : (Sigma (_ : PropNetwork) CellId) (new-lattice-cell Interval Interval--Lattice--dict (net-new 100)))\n"
      "(def n : PropNetwork (first p))\n"
      "(def c : CellId (second p))\n"
@@ -102,7 +102,7 @@
      (run-ns-last
       (string-append
        "(ns cs-fallback1)\n"
-       "(require [prologos::core::lattice :refer-all])\n"
+       "(imports [prologos::core::lattice :refer-all])\n"
        "(spec nlc {A} PropNetwork -> (PropNetwork * CellId) where (Lattice A))\n"
        "(defn nlc [net] where (Lattice A) (net-new-cell net bot (fn (x : _) (y : _) (join x y))))\n"
        "(def p : (Sigma (_ : PropNetwork) CellId) (nlc Bool Bool--Lattice--dict (net-new 100)))\n"
@@ -128,7 +128,7 @@
     (run-ns-last
      (string-append
       "(ns cs-equiv1)\n"
-      "(require [prologos::core::propagator :refer [new-lattice-cell]])\n"
+      "(imports [prologos::core::propagator :refer [new-lattice-cell]])\n"
       "(def p : (Sigma (_ : PropNetwork) CellId) (new-lattice-cell Bool Bool--Lattice--dict (net-new 100)))\n"
       "(def n : PropNetwork (first p))\n"
       "(def c : CellId (second p))\n"
@@ -138,7 +138,7 @@
     (run-ns-last
      (string-append
       "(ns cs-equiv2)\n"
-      "(require [prologos::core::lattice :refer-all])\n"
+      "(imports [prologos::core::lattice :refer-all])\n"
       "(spec nlc {A} PropNetwork -> (PropNetwork * CellId) where (Lattice A))\n"
       "(defn nlc [net] where (Lattice A) (net-new-cell net bot (fn (x : _) (y : _) (join x y))))\n"
       "(def p : (Sigma (_ : PropNetwork) CellId) (nlc Bool Bool--Lattice--dict (net-new 100)))\n"

@@ -31,10 +31,10 @@
 
 (define shared-preamble
   "(ns test)
-(require (prologos::core::hashable :refer (Hashable Hashable-hash hash-combine nat31 hash-option hash-list)))
-(require (prologos::data::option :refer (Option some none)))
-(require (prologos::data::list :refer (List nil cons)))
-(require (prologos::data::ordering :refer (Ordering lt-ord eq-ord gt-ord)))
+(imports (prologos::core::hashable :refer (Hashable Hashable-hash hash-combine nat31 hash-option hash-list)))
+(imports (prologos::data::option :refer (Option some none)))
+(imports (prologos::data::list :refer (List nil cons)))
+(imports (prologos::data::ordering :refer (Ordering lt-ord eq-ord gt-ord)))
 ")
 
 (define-values (shared-global-env

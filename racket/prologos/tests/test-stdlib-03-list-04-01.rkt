@@ -24,7 +24,7 @@
 
 (define shared-preamble
   "(ns test)
-(require [prologos::data::list :refer [List nil cons zip length head unzip sum intersperse halve]])
+(imports [prologos::data::list :refer [List nil cons zip length head unzip sum intersperse halve]])
 ")
 
 (define-values (shared-global-env

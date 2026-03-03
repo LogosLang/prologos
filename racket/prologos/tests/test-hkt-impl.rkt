@@ -66,7 +66,7 @@
     (run-ns-impls
       (string-append
         "(ns test-hkt-impl-1)\n"
-        "(require [prologos::core::collection-traits :refer [Foldable]])\n"
+        "(imports [prologos::core::collection-traits :refer [Foldable]])\n"
         "(eval zero)\n")))
   ;; Foldable should be in trait registry after loading
   ;; (We can't directly check trait registry here since it's parameterized,
@@ -78,7 +78,7 @@
     (run-ns-last
       (string-append
         "(ns test-hkt-impl-2)\n"
-        "(require [prologos::core::collection-traits :refer [Foldable Foldable-fold]])\n"
+        "(imports [prologos::core::collection-traits :refer [Foldable Foldable-fold]])\n"
         "(eval (suc zero))\n")))
   (check-equal? result "1N : Nat"))
 
@@ -91,7 +91,7 @@
     (run-ns-last
       (string-append
         "(ns test-hkt-impl-3)\n"
-        "(require [prologos::core::collection-traits :refer [Functor Functor-fmap]])\n"
+        "(imports [prologos::core::collection-traits :refer [Functor Functor-fmap]])\n"
         "(eval (suc zero))\n")))
   (check-equal? result "1N : Nat"))
 
@@ -163,7 +163,7 @@
     (run-ns-impls
       (string-append
         "(ns test-hkt-impl-seq1)\n"
-        "(require [prologos::core::list :refer [List--Seqable--dict]])\n"
+        "(imports [prologos::core::list :refer [List--Seqable--dict]])\n"
         "(eval zero)\n")))
   (define entry (hash-ref impls 'List--Seqable #f))
   (check-true (impl-entry? entry))
@@ -176,7 +176,7 @@
     (run-ns-impls
       (string-append
         "(ns test-hkt-impl-seq2)\n"
-        "(require [prologos::core::pvec :refer [PVec--Seqable--dict]])\n"
+        "(imports [prologos::core::pvec :refer [PVec--Seqable--dict]])\n"
         "(eval zero)\n")))
   (define entry (hash-ref impls 'PVec--Seqable #f))
   (check-true (impl-entry? entry))
@@ -187,7 +187,7 @@
     (run-ns-impls
       (string-append
         "(ns test-hkt-impl-seq3)\n"
-        "(require [prologos::core::lseq :refer [LSeq--Seqable--dict]])\n"
+        "(imports [prologos::core::lseq :refer [LSeq--Seqable--dict]])\n"
         "(eval zero)\n")))
   (define entry (hash-ref impls 'LSeq--Seqable #f))
   (check-true (impl-entry? entry)))
@@ -197,7 +197,7 @@
     (run-ns-impls
       (string-append
         "(ns test-hkt-impl-seq4)\n"
-        "(require [prologos::core::set :refer [Set--Seqable--dict]])\n"
+        "(imports [prologos::core::set :refer [Set--Seqable--dict]])\n"
         "(eval zero)\n")))
   (define entry (hash-ref impls 'Set--Seqable #f))
   (check-true (impl-entry? entry)))
@@ -211,7 +211,7 @@
     (run-ns-impls
       (string-append
         "(ns test-hkt-impl-build1)\n"
-        "(require [prologos::core::list :refer [List--Buildable--dict]])\n"
+        "(imports [prologos::core::list :refer [List--Buildable--dict]])\n"
         "(eval zero)\n")))
   (define entry (hash-ref impls 'List--Buildable #f))
   (check-true (impl-entry? entry))
@@ -223,7 +223,7 @@
     (run-ns-impls
       (string-append
         "(ns test-hkt-impl-build2)\n"
-        "(require [prologos::core::pvec :refer [PVec--Buildable--dict]])\n"
+        "(imports [prologos::core::pvec :refer [PVec--Buildable--dict]])\n"
         "(eval zero)\n")))
   (define entry (hash-ref impls 'PVec--Buildable #f))
   (check-true (impl-entry? entry)))
@@ -237,7 +237,7 @@
     (run-ns-impls
       (string-append
         "(ns test-hkt-impl-fold1)\n"
-        "(require [prologos::core::list :refer [list-foldable]])\n"
+        "(imports [prologos::core::list :refer [list-foldable]])\n"
         "(eval zero)\n")))
   (define entry (hash-ref impls 'List--Foldable #f))
   (check-true (impl-entry? entry))
@@ -248,7 +248,7 @@
     (run-ns-impls
       (string-append
         "(ns test-hkt-impl-fold2)\n"
-        "(require [prologos::core::pvec :refer [pvec-foldable]])\n"
+        "(imports [prologos::core::pvec :refer [pvec-foldable]])\n"
         "(eval zero)\n")))
   (define entry (hash-ref impls 'PVec--Foldable #f))
   (check-true (impl-entry? entry)))
@@ -262,7 +262,7 @@
     (run-ns-impls
       (string-append
         "(ns test-hkt-impl-func1)\n"
-        "(require [prologos::core::list :refer [list-functor]])\n"
+        "(imports [prologos::core::list :refer [list-functor]])\n"
         "(eval zero)\n")))
   (define entry (hash-ref impls 'List--Functor #f))
   (check-true (impl-entry? entry))
@@ -273,7 +273,7 @@
     (run-ns-impls
       (string-append
         "(ns test-hkt-impl-func2)\n"
-        "(require [prologos::core::pvec :refer [pvec-functor]])\n"
+        "(imports [prologos::core::pvec :refer [pvec-functor]])\n"
         "(eval zero)\n")))
   (define entry (hash-ref impls 'PVec--Functor #f))
   (check-true (impl-entry? entry)))
@@ -287,8 +287,8 @@
     (run-ns-last
       (string-append
         "(ns test-hkt-impl-compat1)\n"
-        "(require [prologos::core::list :refer [list-foldable]])\n"
-        "(require [prologos::data::list :refer [List cons nil]])\n"
+        "(imports [prologos::core::list :refer [list-foldable]])\n"
+        "(imports [prologos::data::list :refer [List cons nil]])\n"
         "(eval (list-foldable Nat Nat (fn (a : Nat) (fn (b : Nat) (add a b))) zero"
         "  (cons Nat (suc (suc zero)) (cons Nat (suc zero) (nil Nat)))))\n")))
   (check-equal? result "3N : Nat"))
@@ -298,8 +298,8 @@
     (run-ns-last
       (string-append
         "(ns test-hkt-impl-compat2)\n"
-        "(require [prologos::core::list :refer [list-functor]])\n"
-        "(require [prologos::data::list :refer [List cons nil length]])\n"
+        "(imports [prologos::core::list :refer [list-functor]])\n"
+        "(imports [prologos::data::list :refer [List cons nil length]])\n"
         "(eval (length (list-functor Nat Nat (fn (n : Nat) (suc n))"
         "  (cons Nat (suc zero) (cons Nat zero (nil Nat))))))\n")))
   (check-equal? result "2N : Nat"))

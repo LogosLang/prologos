@@ -226,7 +226,7 @@
     (run-ns-last
      (string-append
       "(ns hkt-compat1)\n"
-      "(require [prologos::core::eq :refer [Nat--Eq--dict]])\n"
+      "(imports [prologos::core::eq :refer [Nat--Eq--dict]])\n"
       "(eval (Nat--Eq--dict (suc (suc zero)) (suc (suc zero))))")))
   (check-equal? result "true : Bool"))
 
@@ -236,7 +236,7 @@
     (run-ns-last
      (string-append
       "(ns hkt-compat2)\n"
-      "(require [prologos::core::ord :refer [nat-ord ord-lt]])\n"
+      "(imports [prologos::core::ord :refer [nat-ord ord-lt]])\n"
       "(eval (ord-lt Nat nat-ord zero (suc zero)))")))
   (check-equal? result "true : Bool"))
 
@@ -246,7 +246,7 @@
     (run-ns-last
      (string-append
       "(ns hkt-compat3)\n"
-      "(require [prologos::data::option :refer [some none some?]])\n"
+      "(imports [prologos::data::option :refer [some none some?]])\n"
       "(eval (some? (some Nat (suc zero))))")))
   (check-equal? result "true : Bool"))
 
@@ -256,6 +256,6 @@
     (run-ns-last
      (string-append
       "(ns hkt-compat4)\n"
-      "(require [prologos::data::list :refer [cons nil length]])\n"
+      "(imports [prologos::data::list :refer [cons nil length]])\n"
       "(eval (length (cons Nat (suc zero) (cons Nat zero (nil Nat)))))")))
   (check-equal? result "2N : Nat"))

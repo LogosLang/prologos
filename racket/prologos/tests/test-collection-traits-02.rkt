@@ -59,16 +59,16 @@
 
 (define preamble
   "(ns test)
-(require (prologos::core::collection-traits   :refer (Seqable Seqable-to-seq)))
-(require (prologos::core::collection-traits :refer (Buildable Buildable-from-seq Buildable-empty-coll)))
-(require (prologos::core::collection-traits   :refer (Indexed Indexed-idx-nth Indexed-idx-length Indexed-idx-update)))
-(require (prologos::core::collection-traits     :refer (Keyed Keyed-kv-get Keyed-kv-assoc Keyed-kv-dissoc)))
-(require (prologos::core::collection-traits   :refer (Setlike Setlike-set-member? Setlike-set-insert Setlike-set-remove)))
-(require (prologos::core::list    :refer (List--Seqable--dict List--Buildable--dict List--Buildable--from-seq List--Buildable--empty-coll List--Indexed--dict list-idx-nth list-idx-length list-idx-update)))
-(require (prologos::data::lseq            :refer (LSeq lseq-nil lseq-cell)))
-(require (prologos::data::lseq-ops        :refer (lseq-to-list list-to-lseq)))
-(require (prologos::data::option          :refer (Option some none)))
-(require (prologos::data::list            :refer (List nil cons)))
+(imports (prologos::core::collection-traits   :refer (Seqable Seqable-to-seq)))
+(imports (prologos::core::collection-traits :refer (Buildable Buildable-from-seq Buildable-empty-coll)))
+(imports (prologos::core::collection-traits   :refer (Indexed Indexed-idx-nth Indexed-idx-length Indexed-idx-update)))
+(imports (prologos::core::collection-traits     :refer (Keyed Keyed-kv-get Keyed-kv-assoc Keyed-kv-dissoc)))
+(imports (prologos::core::collection-traits   :refer (Setlike Setlike-set-member? Setlike-set-insert Setlike-set-remove)))
+(imports (prologos::core::list    :refer (List--Seqable--dict List--Buildable--dict List--Buildable--from-seq List--Buildable--empty-coll List--Indexed--dict list-idx-nth list-idx-length list-idx-update)))
+(imports (prologos::data::lseq            :refer (LSeq lseq-nil lseq-cell)))
+(imports (prologos::data::lseq-ops        :refer (lseq-to-list list-to-lseq)))
+(imports (prologos::data::option          :refer (Option some none)))
+(imports (prologos::data::list            :refer (List nil cons)))
 ")
 
 

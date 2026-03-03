@@ -39,19 +39,19 @@
 (test-case "implicit/id-nat"
   ;; (id zero) infers A = Nat
   (check-equal?
-   (run-last "(ns imp1)\n(require [prologos::core :refer [id]])\n(eval (id zero))")
+   (run-last "(ns imp1)\n(imports [prologos::core :refer [id]])\n(eval (id zero))")
    "0N : Nat"))
 
 (test-case "implicit/id-bool"
   ;; (id true) infers A = Bool
   (check-equal?
-   (run-last "(ns imp2)\n(require [prologos::core :refer [id]])\n(eval (id true))")
+   (run-last "(ns imp2)\n(imports [prologos::core :refer [id]])\n(eval (id true))")
    "true : Bool"))
 
 (test-case "implicit/id-suc"
   ;; (id (suc zero)) infers A = Nat
   (check-equal?
-   (run-last "(ns imp3)\n(require [prologos::core :refer [id]])\n(eval (id (suc zero)))")
+   (run-last "(ns imp3)\n(imports [prologos::core :refer [id]])\n(eval (id (suc zero)))")
    "1N : Nat"))
 
 ;; ========================================
@@ -61,7 +61,7 @@
 (test-case "implicit/const-nat-bool"
   ;; (const zero true) infers A = Nat, B = Bool
   (check-equal?
-   (run-last "(ns imp4)\n(require [prologos::core :refer [const]])\n(eval (const zero true))")
+   (run-last "(ns imp4)\n(imports [prologos::core :refer [const]])\n(eval (const zero true))")
    "0N : Nat"))
 
 ;; ========================================
@@ -71,25 +71,25 @@
 (test-case "implicit/singleton"
   ;; (singleton zero) infers A = Nat, produces a 1-element list
   (check-equal?
-   (run-last "(ns imp5)\n(require [prologos::data::list :refer [singleton length]])\n(eval (length Nat (singleton Nat zero)))")
+   (run-last "(ns imp5)\n(imports [prologos::data::list :refer [singleton length]])\n(eval (length Nat (singleton Nat zero)))")
    "1N : Nat"))
 
 (test-case "implicit/map-suc"
   ;; map suc [0, 1] then foldr add → 3
   (check-equal?
-   (run-last "(ns imp6)\n(require [prologos::data::list :refer [List nil cons map foldr]])\n(require [prologos::data::nat :refer [add]])\n(eval (foldr Nat Nat add zero (map Nat Nat (fn (x : Nat) (suc x)) (cons Nat zero (cons Nat (suc zero) (nil Nat))))))")
+   (run-last "(ns imp6)\n(imports [prologos::data::list :refer [List nil cons map foldr]])\n(imports [prologos::data::nat :refer [add]])\n(eval (foldr Nat Nat add zero (map Nat Nat (fn (x : Nat) (suc x)) (cons Nat zero (cons Nat (suc zero) (nil Nat))))))")
    "3N : Nat"))
 
 (test-case "implicit/append"
   ;; append [1] [2] then length → 2
   (check-equal?
-   (run-last "(ns imp7)\n(require [prologos::data::list :refer [List nil cons append length]])\n(eval (length Nat (append Nat (cons Nat (suc zero) (nil Nat)) (cons Nat (suc (suc zero)) (nil Nat)))))")
+   (run-last "(ns imp7)\n(imports [prologos::data::list :refer [List nil cons append length]])\n(eval (length Nat (append Nat (cons Nat (suc zero) (nil Nat)) (cons Nat (suc (suc zero)) (nil Nat)))))")
    "2N : Nat"))
 
 (test-case "implicit/head"
   ;; head with default
   (check-equal?
-   (run-last "(ns imp8)\n(require [prologos::data::list :refer [List nil cons head]])\n(eval (head Nat zero (cons Nat (suc (suc zero)) (nil Nat))))")
+   (run-last "(ns imp8)\n(imports [prologos::data::list :refer [List nil cons head]])\n(eval (head Nat zero (cons Nat (suc (suc zero)) (nil Nat))))")
    "2N : Nat"))
 
 ;; ========================================
@@ -98,7 +98,7 @@
 
 (test-case "implicit/option-some"
   (check-equal?
-   (run-last "(ns imp9)\n(require [prologos::data::option :refer [some unwrap-or]])\n(eval (unwrap-or Nat zero (some Nat (suc zero))))")
+   (run-last "(ns imp9)\n(imports [prologos::data::option :refer [some unwrap-or]])\n(eval (unwrap-or Nat zero (some Nat (suc zero))))")
    "1N : Nat"))
 
 ;; ========================================
@@ -118,7 +118,7 @@
 
 (test-case "implicit/no-unsolved-metas-in-output"
   ;; The output should never contain ?meta
-  (let ([output (run-ns "(ns imp11)\n(require [prologos::core :refer [id]])\n(eval (id zero))\n(infer (id zero))")])
+  (let ([output (run-ns "(ns imp11)\n(imports [prologos::core :refer [id]])\n(eval (id zero))\n(infer (id zero))")])
     (for ([line output])
       (check-false (string-contains? line "?meta")
                    (format "Unexpected meta in output: ~a" line)))))

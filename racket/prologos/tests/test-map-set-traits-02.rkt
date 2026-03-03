@@ -59,19 +59,19 @@
 
 (define preamble
   "(ns test)
-(require (prologos::core::collection-traits    :refer (Keyed)))
-(require (prologos::core::collection-traits  :refer (Setlike)))
-(require (prologos::core::collection-traits  :refer (Seqable)))
-(require (prologos::core::collection-traits :refer (Buildable Buildable-from-seq Buildable-empty-coll)))
-(require (prologos::core::collection-traits  :refer (Foldable)))
-(require (prologos::core::map :refer (Map--Keyed--dict map-filter-vals map-keys-list map-vals-list map-merge)))
-(require (prologos::core::set :refer (Set--Setlike--dict Set--Seqable--dict Set--Buildable--dict
+(imports (prologos::core::collection-traits    :refer (Keyed)))
+(imports (prologos::core::collection-traits  :refer (Setlike)))
+(imports (prologos::core::collection-traits  :refer (Seqable)))
+(imports (prologos::core::collection-traits :refer (Buildable Buildable-from-seq Buildable-empty-coll)))
+(imports (prologos::core::collection-traits  :refer (Foldable)))
+(imports (prologos::core::map :refer (Map--Keyed--dict map-filter-vals map-keys-list map-vals-list map-merge)))
+(imports (prologos::core::set :refer (Set--Setlike--dict Set--Seqable--dict Set--Buildable--dict
                                       set-foldable set-map set-any? set-all? set-to-list-fn set-from-list-fn)))
-(require (prologos::data::lseq           :refer (LSeq lseq-nil lseq-cell)))
-(require (prologos::data::lseq-ops       :refer (lseq-to-list list-to-lseq)))
-(require (prologos::data::option         :refer (Option some none)))
-(require (prologos::data::list           :refer (List nil cons)))
-(require (prologos::data::set            :refer (set-singleton set-from-list)))
+(imports (prologos::data::lseq           :refer (LSeq lseq-nil lseq-cell)))
+(imports (prologos::data::lseq-ops       :refer (lseq-to-list list-to-lseq)))
+(imports (prologos::data::option         :refer (Option some none)))
+(imports (prologos::data::list           :refer (List nil cons)))
+(imports (prologos::data::set            :refer (set-singleton set-from-list)))
 ")
 
 
@@ -146,7 +146,7 @@
 
 (test-case "map-set-traits/set-fold-type"
   (define result (run-ns-last (string-append preamble
-    "(require (prologos::data::nat :refer (add)))
+    "(imports (prologos::data::nat :refer (add)))
      (def s <(Set Nat)> (set-insert (set-empty Nat) zero))
      (infer (set-fold add zero s))")))
   (check-contains result "Nat"))

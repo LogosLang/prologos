@@ -49,7 +49,7 @@
 (define preamble
   (string-append
     "(ns map-entry-test)\n"
-    "(require (prologos::data::map-entry :refer (MapEntry mk-entry entry-key entry-val)))\n"))
+    "(imports (prologos::data::map-entry :refer (MapEntry mk-entry entry-key entry-val)))\n"))
 
 
 ;; ========================================

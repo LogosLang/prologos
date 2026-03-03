@@ -165,13 +165,13 @@
 (test-case "qtt-pipeline/stdlib-nat-loads"
   ;; The nat stdlib loads and add works
   (check-equal?
-   (run-ns-last "(ns qtt-r1)\n(require [prologos::data::nat :refer [add]])\n(eval (add (suc (suc zero)) (suc (suc (suc zero)))))")
+   (run-ns-last "(ns qtt-r1)\n(imports [prologos::data::nat :refer [add]])\n(eval (add (suc (suc zero)) (suc (suc (suc zero)))))")
    "5N : Nat"))
 
 (test-case "qtt-pipeline/stdlib-bool-loads"
   ;; The bool stdlib loads
   (check-equal?
-   (run-ns-last "(ns qtt-r2)\n(require [prologos::data::bool :refer [not]])\n(eval (not true))")
+   (run-ns-last "(ns qtt-r2)\n(imports [prologos::data::bool :refer [not]])\n(eval (not true))")
    "false : Bool"))
 
 (test-case "qtt-pipeline/mult-inference-still-works"

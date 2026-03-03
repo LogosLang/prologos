@@ -32,11 +32,11 @@
 (define shared-preamble
   (string-append
    "(ns test)\n"
-   "(require [prologos::core::list :refer [list-functor list-foldable list-seq]])\n"
-   "(require [prologos::core::collection-traits :refer [Functor]])\n"
-   "(require [prologos::core::collection-traits :refer [Seq seq-first seq-rest seq-empty?]])\n"
-   "(require [prologos::data::list :refer [List nil cons]])\n"
-   "(require [prologos::data::nat :refer [double zero? add]])\n"
+   "(imports [prologos::core::list :refer [list-functor list-foldable list-seq]])\n"
+   "(imports [prologos::core::collection-traits :refer [Functor]])\n"
+   "(imports [prologos::core::collection-traits :refer [Seq seq-first seq-rest seq-empty?]])\n"
+   "(imports [prologos::data::list :refer [List nil cons]])\n"
+   "(imports [prologos::data::nat :refer [double zero? add]])\n"
    ))
 
 (define-values (shared-global-env

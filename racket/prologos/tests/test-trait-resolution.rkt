@@ -203,7 +203,7 @@
   (define results (run-ns
     (string-append
       "(ns compat-test)\n"
-      "(require [prologos::core::eq :refer [Eq Eq-eq? eq-neq]])\n"
+      "(imports [prologos::core::eq :refer [Eq Eq-eq? eq-neq]])\n"
       "(eval (eq-neq Nat Nat--Eq--dict zero zero))\n")))
   ;; Filter for actual result strings (not error structs or empty)
   (define result-strings (filter string? results))
@@ -222,8 +222,8 @@
   (define results (run-ns
     (string-append
       "(ns param-impl-test)\n"
-      "(require [prologos::core::eq :refer [Eq Eq-eq? nat-eq]])\n"
-      "(require [prologos::data::bool :refer [not]])\n"
+      "(imports [prologos::core::eq :refer [Eq Eq-eq? nat-eq]])\n"
+      "(imports [prologos::data::bool :refer [not]])\n"
       "(impl Eq (List A) where (Eq A)\n"
       "  (defn eq? [xs : (List A), ys : (List A)] : Bool\n"
       "    true))\n")))
@@ -248,8 +248,8 @@
   (define results (run-ns
     (string-append
       "(ns monomorphic-resolve-test)\n"
-      "(require [prologos::core::eq :refer [Eq Eq-eq?]])\n"
-      "(require [prologos::data::bool :refer [not]])\n"
+      "(imports [prologos::core::eq :refer [Eq Eq-eq?]])\n"
+      "(imports [prologos::data::bool :refer [not]])\n"
       ;; Define my-neq with where clause — dict is implicit m0 parameter
       "(spec my-neq A A -> Bool where (Eq A))\n"
       "(defn my-neq [x y]\n"
@@ -268,8 +268,8 @@
   (define results (run-ns
     (string-append
       "(ns bool-resolve-test)\n"
-      "(require [prologos::core::eq :refer [Eq Eq-eq?]])\n"
-      "(require [prologos::data::bool :refer [not]])\n"
+      "(imports [prologos::core::eq :refer [Eq Eq-eq?]])\n"
+      "(imports [prologos::data::bool :refer [not]])\n"
       ;; Define Eq Bool impl inline (library only has Eq Nat)
       "(impl Eq Bool\n"
       "  (defn eq? [x : Bool, y : Bool] : Bool\n"
@@ -290,7 +290,7 @@
   (define results (run-ns
     (string-append
       "(ns backward-compat-test)\n"
-      "(require [prologos::core::eq :refer [Eq Eq-eq? eq-neq]])\n"
+      "(imports [prologos::core::eq :refer [Eq Eq-eq? eq-neq]])\n"
       "(eval (eq-neq Nat Nat--Eq--dict zero zero))\n")))
   (define result-strings (filter string? results))
   (check-true (not (null? result-strings))
@@ -303,8 +303,8 @@
   (define results (run-ns
     (string-append
       "(ns eq-neq-diff-test)\n"
-      "(require [prologos::core::eq :refer [Eq Eq-eq?]])\n"
-      "(require [prologos::data::bool :refer [not]])\n"
+      "(imports [prologos::core::eq :refer [Eq Eq-eq?]])\n"
+      "(imports [prologos::data::bool :refer [not]])\n"
       "(spec my-neq A A -> Bool where (Eq A))\n"
       "(defn my-neq [x y]\n"
       "  (not (Eq-eq? A $Eq-A x y)))\n"
@@ -414,8 +414,8 @@
   (define results (run-ns
     (string-append
       "(ns parametric-resolve-test)\n"
-      "(require [prologos::core::eq :refer [Eq Eq-eq?]])\n"
-      "(require [prologos::data::list :refer [List nil cons]])\n"
+      "(imports [prologos::core::eq :refer [Eq Eq-eq?]])\n"
+      "(imports [prologos::data::list :refer [List nil cons]])\n"
       ;; Define parametric impl: Eq (List A) where (Eq A)
       "(impl Eq (List A) where (Eq A)\n"
       "  (defn eq? [xs : (List A), ys : (List A)] : Bool\n"
@@ -462,8 +462,8 @@
   (define results (run-ns-bare
     (string-append
       "(ns missing-instance-test :no-prelude)\n"
-      "(require [prologos::core::eq :refer [Eq Eq-eq?]])\n"
-      "(require [prologos::data::bool :refer [not]])\n"
+      "(imports [prologos::core::eq :refer [Eq Eq-eq?]])\n"
+      "(imports [prologos::data::bool :refer [not]])\n"
       "(spec my-neq A A -> Bool where (Eq A))\n"
       "(defn my-neq [x y]\n"
       "  (not (Eq-eq? A $Eq-A x y)))\n"
@@ -479,8 +479,8 @@
   (define results (run-ns-bare
     (string-append
       "(ns error-format-test :no-prelude)\n"
-      "(require [prologos::core::eq :refer [Eq Eq-eq?]])\n"
-      "(require [prologos::data::bool :refer [not]])\n"
+      "(imports [prologos::core::eq :refer [Eq Eq-eq?]])\n"
+      "(imports [prologos::data::bool :refer [not]])\n"
       "(spec my-neq A A -> Bool where (Eq A))\n"
       "(defn my-neq [x y]\n"
       "  (not (Eq-eq? A $Eq-A x y)))\n"

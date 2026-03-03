@@ -59,14 +59,14 @@
 
 (define preamble
   "(ns test)
-(require (prologos::core::pvec :refer (PVec--Seqable--dict PVec--Buildable--dict
+(imports (prologos::core::pvec :refer (PVec--Seqable--dict PVec--Buildable--dict
                                        pvec-foldable pvec-functor
                                        PVec--Indexed--dict pvec-idx-nth pvec-idx-length pvec-idx-update
                                        pvec-any? pvec-all? pvec-from-list-fn pvec-to-list-fn)))
-(require (prologos::data::lseq            :refer (LSeq lseq-nil lseq-cell)))
-(require (prologos::data::lseq-ops        :refer (lseq-to-list list-to-lseq)))
-(require (prologos::data::option          :refer (Option some none)))
-(require (prologos::data::list            :refer (List nil cons)))
+(imports (prologos::data::lseq            :refer (LSeq lseq-nil lseq-cell)))
+(imports (prologos::data::lseq-ops        :refer (lseq-to-list list-to-lseq)))
+(imports (prologos::data::option          :refer (Option some none)))
+(imports (prologos::data::list            :refer (List nil cons)))
 ")
 
 ;; ========================================
@@ -108,7 +108,7 @@
 (test-case "pvec-traits/foldable-eval"
   ;; foldr on PVec returns correct type
   (define result (run-ns-last (string-append preamble
-    "(require (prologos::data::nat :refer (add)))
+    "(imports (prologos::data::nat :refer (add)))
      (def v <(PVec Nat)> (pvec-push (pvec-push (pvec-push (pvec-empty Nat) (suc zero)) (suc (suc zero))) (suc (suc (suc zero)))))
      (infer (pvec-foldable Nat Nat (fn (a : Nat) (fn (b : Nat) (add b a))) zero v))")))
   (check-contains result "Nat"))
@@ -174,7 +174,7 @@
 
 (test-case "pvec-traits/pvec-fold-type"
   (define result (run-ns-last (string-append preamble
-    "(require (prologos::data::nat :refer (add)))
+    "(imports (prologos::data::nat :refer (add)))
      (def v <(PVec Nat)> (pvec-push (pvec-empty Nat) zero))
      (infer (pvec-fold add zero v))")))
   (check-contains result "Nat"))

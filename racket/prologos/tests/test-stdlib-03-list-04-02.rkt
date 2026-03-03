@@ -24,8 +24,8 @@
 
 (define shared-preamble
   "(ns test)
-(require [prologos::data::list :refer [List nil cons merge length sum sort head reverse]])
-(require [prologos::data::nat :refer [le?]])
+(imports [prologos::data::list :refer [List nil cons merge length sum sort head reverse]])
+(imports [prologos::data::nat :refer [le?]])
 ")
 
 (define-values (shared-global-env

@@ -59,11 +59,11 @@
 
 (define preamble
   "(ns test)
-(require (prologos::core::algebra :refer (AdditiveIdentity AdditiveIdentity-zero
+(imports (prologos::core::algebra :refer (AdditiveIdentity AdditiveIdentity-zero
                                           MultiplicativeIdentity MultiplicativeIdentity-one
                                           sum product)))
-(require (prologos::core::arithmetic                     :refer (Add Add-add Mul Mul-mul)))
-(require (prologos::data::list                           :refer (List nil cons)))
+(imports (prologos::core::arithmetic                     :refer (Add Add-add Mul Mul-mul)))
+(imports (prologos::data::list                           :refer (List nil cons)))
 ")
 
 ;; ========================================

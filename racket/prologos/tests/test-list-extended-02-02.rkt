@@ -36,7 +36,7 @@
 ;; Common preamble for tests
 (define preamble
   (string-append
-   "(require [prologos::data::list :refer [List nil cons reduce foldr length map filter append\n"
+   "(imports [prologos::data::list :refer [List nil cons reduce foldr length map filter append\n"
    "   head tail singleton elem reverse sum product any? all? find nth last\n"
    "   replicate range concat concat-map take drop split-at take-while drop-while\n"
    "   partition zip-with zip unzip intersperse halve merge sort\n"
@@ -45,9 +45,9 @@
    "   dedup dedup-helper prefix-of? suffix-of? delete\n"
    "   find-index find-index-helper count count-helper\n"
    "   scanl iterate-n sort-on]])\n"
-   "(require [prologos::data::option :refer [Option none some unwrap-or]])\n"
-   "(require [prologos::data::nat :refer [add mult pred zero?]])\n"
-   "(require [prologos::core::eq :refer [nat-eq]])\n"))
+   "(imports [prologos::data::option :refer [Option none some unwrap-or]])\n"
+   "(imports [prologos::data::nat :refer [add mult pred zero?]])\n"
+   "(imports [prologos::core::eq :refer [nat-eq]])\n"))
 
 
 ;; ========================================
@@ -160,7 +160,7 @@
 (test-case "sort-on/empty"
   (check-equal?
    (last (run-ns (string-append "(ns tle48)\n" preamble
-     "(require [prologos::data::nat :refer [le?]])\n"
+     "(imports [prologos::data::nat :refer [le?]])\n"
      "(eval (length (sort-on le? (fn (x : Nat) x) '[])))")))
    "0N : Nat"))
 
@@ -169,6 +169,6 @@
   ;; sort-on le? id [3 1 2] = [1 2 3], head = 1
   (check-equal?
    (last (run-ns (string-append "(ns tle49)\n" preamble
-     "(require [prologos::data::nat :refer [le?]])\n"
+     "(imports [prologos::data::nat :refer [le?]])\n"
      "(eval (head zero (sort-on le? (fn (x : Nat) x) '[3N 1N 2N])))")))
    "1N : Nat"))

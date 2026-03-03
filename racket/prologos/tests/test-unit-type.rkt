@@ -84,7 +84,7 @@
 (test-case "unit-type/in-list"
   ;; List Unit containing one element
   (check-equal?
-   (run-last "(ns ut7)\n(require (prologos::data::list :refer (List nil cons)))\n(eval (the (List Unit) (cons unit nil)))")
+   (run-last "(ns ut7)\n(imports (prologos::data::list :refer (List nil cons)))\n(eval (the (List Unit) (cons unit nil)))")
    "'[unit] : [prologos::data::list::List Unit]"))
 
 ;; ========================================

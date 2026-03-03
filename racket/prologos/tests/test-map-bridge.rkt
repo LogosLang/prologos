@@ -54,7 +54,7 @@
 (define preamble
   (string-append
     "(ns map-bridge-test)\n"
-    "(require (prologos::data::map-entry :refer (MapEntry mk-entry entry-key entry-val))\n"
+    "(imports (prologos::data::map-entry :refer (MapEntry mk-entry entry-key entry-val))\n"
     "         (prologos::data::lseq :refer (LSeq lseq-nil lseq-cell))\n"
     "         (prologos::data::lseq-ops :refer (list-to-lseq lseq-to-list))\n"
     "         (prologos::core::map :refer (map-to-entry-list map-seq map-from-seq\n"

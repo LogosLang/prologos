@@ -72,21 +72,21 @@
 (test-case "match/option-some"
   ;; Match on some: extract the value
   (check-equal?
-   (run-ns "(ns mo1)\n(require [prologos::data::option :refer [Option none some]])\n(eval (the Nat (match (some Nat zero) (none -> (suc zero)) (some x -> x))))")
+   (run-ns "(ns mo1)\n(imports [prologos::data::option :refer [Option none some]])\n(eval (the Nat (match (some Nat zero) (none -> (suc zero)) (some x -> x))))")
    '("0N : Nat")))
 
 
 (test-case "match/option-none"
   ;; Match on none: use default
   (check-equal?
-   (run-ns "(ns mo2)\n(require [prologos::data::option :refer [Option none some]])\n(eval (the Nat (match (none Nat) (none -> (suc zero)) (some x -> x))))")
+   (run-ns "(ns mo2)\n(imports [prologos::data::option :refer [Option none some]])\n(eval (the Nat (match (none Nat) (none -> (suc zero)) (some x -> x))))")
    '("1N : Nat")))
 
 
 (test-case "match/option-some-transform"
   ;; Match on some: transform the value
   (check-equal?
-   (run-ns "(ns mo3)\n(require [prologos::data::option :refer [Option none some]])\n(eval (the Nat (match (some Nat (suc (suc zero))) (none -> zero) (some x -> (suc x)))))")
+   (run-ns "(ns mo3)\n(imports [prologos::data::option :refer [Option none some]])\n(eval (the Nat (match (some Nat (suc (suc zero))) (none -> zero) (some x -> (suc x)))))")
    '("3N : Nat")))
 
 
@@ -95,14 +95,14 @@
 (test-case "match/result-ok"
   ;; Match on ok: extract value
   (check-equal?
-   (run-ns "(ns mr1)\n(require [prologos::data::result :refer [Result ok err]])\n(eval (the Nat (match (ok Nat Bool zero) (ok x -> x) (err _ -> (suc zero)))))")
+   (run-ns "(ns mr1)\n(imports [prologos::data::result :refer [Result ok err]])\n(eval (the Nat (match (ok Nat Bool zero) (ok x -> x) (err _ -> (suc zero)))))")
    '("0N : Nat")))
 
 
 (test-case "match/result-err"
   ;; Match on err: use error branch
   (check-equal?
-   (run-ns "(ns mr2)\n(require [prologos::data::result :refer [Result ok err]])\n(eval (the Nat (match (err Nat Bool true) (ok x -> (suc zero)) (err _ -> (suc zero)))))")
+   (run-ns "(ns mr2)\n(imports [prologos::data::result :refer [Result ok err]])\n(eval (the Nat (match (err Nat Bool true) (ok x -> (suc zero)) (err _ -> (suc zero)))))")
    '("1N : Nat")))
 
 
@@ -110,7 +110,7 @@
   ;; Match on err: use the error value
   ;; Convert Bool to Nat using boolrec
   (check-equal?
-   (run-ns "(ns mr3)\n(require [prologos::data::result :refer [Result ok err]])\n(eval (the Nat (match (err Nat Bool true) (ok x -> x) (err e -> (boolrec Nat (suc (suc zero)) zero e)))))")
+   (run-ns "(ns mr3)\n(imports [prologos::data::result :refer [Result ok err]])\n(eval (the Nat (match (err Nat Bool true) (ok x -> x) (err e -> (boolrec Nat (suc (suc zero)) zero e)))))")
    '("2N : Nat")))
 
 
@@ -118,19 +118,19 @@
 
 (test-case "match/ordering-lt"
   (check-equal?
-   (run-ns "(ns mord1)\n(require [prologos::data::ordering :refer [Ordering lt-ord eq-ord gt-ord]])\n(eval (the Nat (match (lt-ord) (lt-ord -> zero) (eq-ord -> (suc zero)) (gt-ord -> (suc (suc zero))))))")
+   (run-ns "(ns mord1)\n(imports [prologos::data::ordering :refer [Ordering lt-ord eq-ord gt-ord]])\n(eval (the Nat (match (lt-ord) (lt-ord -> zero) (eq-ord -> (suc zero)) (gt-ord -> (suc (suc zero))))))")
    '("0N : Nat")))
 
 
 (test-case "match/ordering-eq"
   (check-equal?
-   (run-ns "(ns mord2)\n(require [prologos::data::ordering :refer [Ordering lt-ord eq-ord gt-ord]])\n(eval (the Nat (match (eq-ord) (lt-ord -> zero) (eq-ord -> (suc zero)) (gt-ord -> (suc (suc zero))))))")
+   (run-ns "(ns mord2)\n(imports [prologos::data::ordering :refer [Ordering lt-ord eq-ord gt-ord]])\n(eval (the Nat (match (eq-ord) (lt-ord -> zero) (eq-ord -> (suc zero)) (gt-ord -> (suc (suc zero))))))")
    '("1N : Nat")))
 
 
 (test-case "match/ordering-gt"
   (check-equal?
-   (run-ns "(ns mord3)\n(require [prologos::data::ordering :refer [Ordering lt-ord eq-ord gt-ord]])\n(eval (the Nat (match (gt-ord) (lt-ord -> zero) (eq-ord -> (suc zero)) (gt-ord -> (suc (suc zero))))))")
+   (run-ns "(ns mord3)\n(imports [prologos::data::ordering :refer [Ordering lt-ord eq-ord gt-ord]])\n(eval (the Nat (match (gt-ord) (lt-ord -> zero) (eq-ord -> (suc zero)) (gt-ord -> (suc (suc zero))))))")
    '("2N : Nat")))
 
 
@@ -161,10 +161,10 @@
 (test-case "match/inside-def"
   ;; Use match inside a function definition
   (check-equal?
-   (last (run-ns "(ns md1)\n(require [prologos::data::option :refer [Option none some]])\n(def unwrap : (Pi (A :0 (Type 0)) (-> A (-> (Option A) A)))\n  (fn (A :0 (Type 0)) (fn (default : A) (fn (opt : (Option A))\n    (the A (match opt (none -> default) (some x -> x)))))))\n(eval (unwrap Nat (suc (suc zero)) (some Nat zero)))"))
+   (last (run-ns "(ns md1)\n(imports [prologos::data::option :refer [Option none some]])\n(def unwrap : (Pi (A :0 (Type 0)) (-> A (-> (Option A) A)))\n  (fn (A :0 (Type 0)) (fn (default : A) (fn (opt : (Option A))\n    (the A (match opt (none -> default) (some x -> x)))))))\n(eval (unwrap Nat (suc (suc zero)) (some Nat zero)))"))
    "0N : Nat")
   (check-equal?
-   (last (run-ns "(ns md2)\n(require [prologos::data::option :refer [Option none some]])\n(def unwrap : (Pi (A :0 (Type 0)) (-> A (-> (Option A) A)))\n  (fn (A :0 (Type 0)) (fn (default : A) (fn (opt : (Option A))\n    (the A (match opt (none -> default) (some x -> x)))))))\n(eval (unwrap Nat (suc (suc zero)) (none Nat)))"))
+   (last (run-ns "(ns md2)\n(imports [prologos::data::option :refer [Option none some]])\n(def unwrap : (Pi (A :0 (Type 0)) (-> A (-> (Option A) A)))\n  (fn (A :0 (Type 0)) (fn (default : A) (fn (opt : (Option A))\n    (the A (match opt (none -> default) (some x -> x)))))))\n(eval (unwrap Nat (suc (suc zero)) (none Nat)))"))
    "2N : Nat"))
 
 
@@ -173,20 +173,20 @@
 (test-case "match/library-unwrap-or"
   ;; unwrap-or is now implemented with match
   (check-equal?
-   (run-ns "(ns mlu1)\n(require [prologos::data::option :refer [Option none some unwrap-or]])\n(eval (unwrap-or Nat (suc (suc zero)) (some Nat zero)))")
+   (run-ns "(ns mlu1)\n(imports [prologos::data::option :refer [Option none some unwrap-or]])\n(eval (unwrap-or Nat (suc (suc zero)) (some Nat zero)))")
    '("0N : Nat"))
   (check-equal?
-   (run-ns "(ns mlu2)\n(require [prologos::data::option :refer [Option none some unwrap-or]])\n(eval (unwrap-or Nat (suc (suc zero)) (none Nat)))")
+   (run-ns "(ns mlu2)\n(imports [prologos::data::option :refer [Option none some unwrap-or]])\n(eval (unwrap-or Nat (suc (suc zero)) (none Nat)))")
    '("2N : Nat")))
 
 
 (test-case "match/library-unwrap-or"
   ;; unwrap-or is now implemented with match
   (check-equal?
-   (run-ns "(ns mlu3)\n(require [prologos::data::result :refer [Result ok err unwrap-or]])\n(eval (unwrap-or Nat Bool (suc (suc zero)) (ok Nat Bool zero)))")
+   (run-ns "(ns mlu3)\n(imports [prologos::data::result :refer [Result ok err unwrap-or]])\n(eval (unwrap-or Nat Bool (suc (suc zero)) (ok Nat Bool zero)))")
    '("0N : Nat"))
   (check-equal?
-   (run-ns "(ns mlu4)\n(require [prologos::data::result :refer [Result ok err unwrap-or]])\n(eval (unwrap-or Nat Bool (suc (suc zero)) (err Nat Bool true)))")
+   (run-ns "(ns mlu4)\n(imports [prologos::data::result :refer [Result ok err unwrap-or]])\n(eval (unwrap-or Nat Bool (suc (suc zero)) (err Nat Bool true)))")
    '("2N : Nat")))
 
 
@@ -211,26 +211,26 @@
 (test-case "or-else/some-some"
   ;; some takes priority over alt — use unwrap-or to extract value
   (check-equal?
-   (last (run-ns "(ns ooe1)\n(require [prologos::data::option :refer [Option none some or-else unwrap-or]])\n(eval (unwrap-or Nat (suc (suc zero)) (or-else Nat (some Nat zero) (some Nat (suc zero)))))"))
+   (last (run-ns "(ns ooe1)\n(imports [prologos::data::option :refer [Option none some or-else unwrap-or]])\n(eval (unwrap-or Nat (suc (suc zero)) (or-else Nat (some Nat zero) (some Nat (suc zero)))))"))
    "0N : Nat"))
 
 
 (test-case "or-else/some-none"
   ;; some takes priority, alt is none
   (check-equal?
-   (last (run-ns "(ns ooe2)\n(require [prologos::data::option :refer [Option none some or-else unwrap-or]])\n(eval (unwrap-or Nat (suc (suc zero)) (or-else Nat (some Nat (suc zero)) (none Nat))))"))
+   (last (run-ns "(ns ooe2)\n(imports [prologos::data::option :refer [Option none some or-else unwrap-or]])\n(eval (unwrap-or Nat (suc (suc zero)) (or-else Nat (some Nat (suc zero)) (none Nat))))"))
    "1N : Nat"))
 
 
 (test-case "or-else/none-some"
   ;; opt is none, falls back to alt
   (check-equal?
-   (last (run-ns "(ns ooe3)\n(require [prologos::data::option :refer [Option none some or-else unwrap-or]])\n(eval (unwrap-or Nat zero (or-else Nat (none Nat) (some Nat (suc (suc zero))))))"))
+   (last (run-ns "(ns ooe3)\n(imports [prologos::data::option :refer [Option none some or-else unwrap-or]])\n(eval (unwrap-or Nat zero (or-else Nat (none Nat) (some Nat (suc (suc zero))))))"))
    "2N : Nat"))
 
 
 (test-case "or-else/none-none"
   ;; both none — returns default from unwrap-or
   (check-equal?
-   (last (run-ns "(ns ooe4)\n(require [prologos::data::option :refer [Option none some or-else unwrap-or]])\n(eval (unwrap-or Nat (suc (suc (suc zero))) (or-else Nat (none Nat) (none Nat))))"))
+   (last (run-ns "(ns ooe4)\n(imports [prologos::data::option :refer [Option none some or-else unwrap-or]])\n(eval (unwrap-or Nat (suc (suc (suc zero))) (or-else Nat (none Nat) (none Nat))))"))
    "3N : Nat"))

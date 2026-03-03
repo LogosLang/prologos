@@ -24,7 +24,7 @@
 
 (define shared-preamble
   "(ns test)
-(require (prologos::core::collections :refer (map filter reduce reduce1 length concat any? all? to-list find take drop into head empty?)))
+(imports (prologos::core::collections :refer (map filter reduce reduce1 length concat any? all? to-list find take drop into head empty?)))
 ")
 
 (define-values (shared-global-env
