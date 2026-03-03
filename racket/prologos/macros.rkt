@@ -577,6 +577,43 @@
            (datum-subst-list (cdr elems) bindings))]))
 
 ;; ========================================
+;; ========================================
+;; Schema default injection helpers
+;; ========================================
+
+;; Extract provided keyword symbols from a $brace-params datum.
+;; ($brace-params :x 1 :y 2) → '(x y)
+(define (brace-params-provided-keywords brace-datum)
+  (let loop ([items (cdr brace-datum)] [keys '()])
+    (cond
+      [(null? items) (reverse keys)]
+      [(and (symbol? (car items)) (keyword-like-symbol? (car items)))
+       (loop (if (null? (cdr items)) items (cddr items))
+             (cons (let ([s (symbol->string (car items))])
+                     (string->symbol (substring s 1)))
+                   keys))]
+      [else (loop (if (null? (cdr items)) items (cddr items)) keys)])))
+
+;; Inject default values for missing fields into a $brace-params datum.
+;; Returns augmented $brace-params or original if nothing to inject.
+(define (inject-schema-defaults schema-entry brace-datum)
+  (define provided (brace-params-provided-keywords brace-datum))
+  (define fields (schema-entry-fields schema-entry))
+  (define missing-defaults
+    (filter-map (lambda (f)
+                  (and (schema-field-default-val f)
+                       (not (memq (schema-field-keyword f) provided))
+                       (cons (schema-field-keyword f) (schema-field-default-val f))))
+                fields))
+  (if (null? missing-defaults)
+      brace-datum
+      ;; Append :field val pairs to the brace-params
+      (append brace-datum
+              (append-map (lambda (pair)
+                            (list (string->symbol (format ":~a" (car pair)))
+                                  (cdr pair)))
+                          missing-defaults))))
+
 ;; preparse-expand-form: expand a single datum
 ;; ========================================
 ;; Tries to match the head symbol against registered macros.
@@ -629,7 +666,10 @@
                  (let ([arg (cadr datum)])
                    (and (pair? arg) (eq? (car arg) '$brace-params)))
                  (null? (cddr datum)))  ;; exactly one arg: the brace-params
-            (preparse-expand-form `(the ,(car datum) ,(cadr datum)) reg (+ depth 1))
+            ;; Phase 5b: inject default values for missing fields
+            (let* ([augmented (inject-schema-defaults maybe-schema (cadr datum))]
+                   [the-form `(the ,(car datum) ,augmented)])
+              (preparse-expand-form the-form reg (+ depth 1)))
             ;; Not a schema construction — recurse into subexpressions
             (preparse-expand-subforms datum reg depth))])]
     ;; Non-symbol list — recurse into subexpressions

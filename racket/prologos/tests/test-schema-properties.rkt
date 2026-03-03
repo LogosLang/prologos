@@ -304,3 +304,56 @@
     (run-last "(if false 42N (panic \"hit the panic\"))"))
   (check-true (prologos-error? result)
               (format "Expected prologos-error from false-branch panic, got ~v" result)))
+
+;; ========================================
+;; Section 5: :default — runtime enforcement
+;; ========================================
+
+;; 21. :default fills missing field at construction time
+(test-case "schema-prop/default-fills-missing"
+  (define results
+    (run (string-append
+          "(schema DefPoint :x Nat :y Nat :default 0N)\n"
+          "(def dp : DefPoint (DefPoint ($brace-params :x 5N)))\n"
+          "(map-get dp :y)\n")))
+  (check-no-errors results)
+  ;; Last result should be 0 (the default), not an error
+  (define last-result (last results))
+  (check-true (string? last-result) (format "Expected string, got ~v" last-result))
+  (check-true (string-contains? last-result "0")))
+
+;; 22. :default doesn't override explicitly provided value
+(test-case "schema-prop/default-no-override"
+  (define results
+    (run (string-append
+          "(schema DefPoint2 :x Nat :y Nat :default 0N)\n"
+          "(def dp2 : DefPoint2 (DefPoint2 ($brace-params :x 5N :y 99N)))\n"
+          "(map-get dp2 :y)\n")))
+  (check-no-errors results)
+  (define last-result (last results))
+  (check-true (string? last-result))
+  (check-true (string-contains? last-result "99")))
+
+;; 23. Multiple defaults: both missing fields filled
+(test-case "schema-prop/multiple-defaults"
+  (define results
+    (run (string-append
+          "(schema MultiDef :a Nat :default 1N :b String :default \"hello\")\n"
+          "(def md : MultiDef (MultiDef ($brace-params)))\n"
+          "(map-get md :a)\n")))
+  (check-no-errors results)
+  (define last-result (last results))
+  (check-true (string? last-result))
+  (check-true (string-contains? last-result "1")))
+
+;; 24. No defaults needed (all fields provided)
+(test-case "schema-prop/default-all-provided"
+  (define results
+    (run (string-append
+          "(schema DefPoint3 :x Nat :y Nat :default 0N)\n"
+          "(def dp3 : DefPoint3 (DefPoint3 ($brace-params :x 10N :y 20N)))\n"
+          "(map-get dp3 :x)\n")))
+  (check-no-errors results)
+  (define last-result (last results))
+  (check-true (string? last-result))
+  (check-true (string-contains? last-result "10")))
