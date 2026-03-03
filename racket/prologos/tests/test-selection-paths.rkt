@@ -434,3 +434,39 @@
                "(defn get-state2 [u] (map-get (map-get u :address) :state))\n")))
   (check-true (prologos-error? result)
               (format "Expected error for :state via brace sub-selection, got ~v" result)))
+
+;; ========================================
+;; Section 4: Phase 3d — Extended brace branching (sub-paths in branches)
+;; ========================================
+
+;; 40. Sub-paths in brace items: :a.{b.c d.e} → two paths with dotted branches
+(test-case "sel-path/brace-subpath-dotted"
+  (define result (test-parse "(selection Req from S :requires [:a.{b.c d.e}])"))
+  (check-true (surf-selection? result)
+              (format "Expected surf-selection, got ~v" result))
+  (check-equal? (surf-selection-requires-paths result)
+                '((#:a #:b #:c) (#:a #:d #:e))))
+
+;; 41. Mixed depths in brace items: :a.{b c.d.e f}
+(test-case "sel-path/brace-subpath-mixed-depth"
+  (define result (test-parse "(selection Req from S :requires [:a.{b c.d.e f}])"))
+  (check-true (surf-selection? result)
+              (format "Expected surf-selection, got ~v" result))
+  (check-equal? (surf-selection-requires-paths result)
+                '((#:a #:b) (#:a #:c #:d #:e) (#:a #:f))))
+
+;; 42. Wildcard globstar in brace item: :a.{b.** c.d}
+(test-case "sel-path/brace-subpath-globstar"
+  (define result (test-parse "(selection Req from S :requires [:a.{b.** c.d}])"))
+  (check-true (surf-selection? result)
+              (format "Expected surf-selection, got ~v" result))
+  (check-equal? (surf-selection-requires-paths result)
+                '((#:a #:b **) (#:a #:c #:d))))
+
+;; 43. Single wildcard in brace item: :a.{b.* c}
+(test-case "sel-path/brace-subpath-single-wildcard"
+  (define result (test-parse "(selection Req from S :requires [:a.{b.* c}])"))
+  (check-true (surf-selection? result)
+              (format "Expected surf-selection, got ~v" result))
+  (check-equal? (surf-selection-requires-paths result)
+                '((#:a #:b *) (#:a #:c))))
