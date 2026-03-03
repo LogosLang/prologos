@@ -1,6 +1,6 @@
 # Schema + Selection: Design Document
 
-**Status**: Design Draft (Phase 2 of Design Methodology)
+**Status**: Design Draft (Phase 2 of Design Methodology) — Open questions resolved, critique incorporated
 **Date**: 2026-03-02
 **Tracking**: `docs/tracking/2026-03-02_2200_SCHEMA_SELECTION_DESIGN.md`
 **Research**: `docs/research/2026-03-02_SCHEMA_TYPE_DESIGN_RESEARCH.md`, `docs/research/2026-03-02_SCHEMA_AS_PROTOCOL_RESEARCH.md`
@@ -33,6 +33,8 @@
   - [4.8 `:includes` Composition](#48-includes-composition)
   - [4.9 Bare Selection Names in Type Positions](#49-bare-selection-names)
   - [4.10 Sigma Composition with `*`](#410-sigma-composition)
+  - [4.11 Inline Selection Syntax](#411-inline-selection)
+  - [4.12 Schema-Level Properties](#412-schema-properties)
 - [5. Comprehensive Examples](#5-comprehensive-examples)
   - [5.1 The Movie Times Example (Hickey)](#51-movie-times)
   - [5.2 Request Pipeline (Information Building)](#52-request-pipeline)
@@ -56,9 +58,28 @@
   - [8.3 Relational: `schema`/`defr`](#83-relational)
   - [8.4 Process: `session`/`defproc`](#84-process)
   - [8.5 Schema Evolution at Session Boundaries](#85-evolution)
-- [9. Open Questions for Design Discussion](#9-open-questions)
-- [10. Phased Implementation Sketch](#10-implementation-sketch)
-- [11. References](#11-references)
+- [9. Resolved Questions](#9-resolved-questions)
+  - [9.1 Schema-Level Properties: Confirmed](#91-schema-properties)
+  - [9.2 Inline Selection Syntax: Confirmed](#92-inline-syntax)
+  - [9.3 Dual `:requires` + `:provides`: Confirmed](#93-dual-direction)
+  - [9.4 Linear Schema Fields: Confirmed](#94-linear-fields)
+  - [9.5 `*` Operator Disambiguation: Resolved](#95-star-disambiguation)
+  - [9.6 Multi-Schema Selections: Deferred](#96-multi-schema)
+  - [9.7 Runtime vs Compile-Time Checking: Runtime First](#97-runtime-first)
+- [10. Construction and Consumption Semantics](#10-construction-consumption)
+  - [10.1 Constructing Values That Satisfy Selections](#101-construction)
+  - [10.2 Consuming Selection-Typed Values](#102-consumption)
+  - [10.3 Error Messages](#103-error-messages)
+- [11. Design Notes from Critique](#11-critique-notes)
+  - [11.1 `:requires` Is Syntactic, Not a Keyword Argument](#111-syntactic-keyword)
+  - [11.2 Bare `:address` Equivalence — Rationale](#112-bare-address)
+  - [11.3 `:includes` Join Precision](#113-includes-join)
+  - [11.4 Schema Openness at Construction vs Consumption](#114-openness-sites)
+  - [11.5 Relations Have Complete Rows](#115-complete-rows)
+  - [11.6 Selections Are Structural, Not Dependent (Phase 0)](#116-structural-not-dependent)
+  - [11.7 Deep Nesting as Design Smell](#117-deep-nesting-smell)
+- [12. Phased Implementation Sketch](#12-implementation-sketch)
+- [13. References](#13-references)
 
 ---
 
@@ -89,10 +110,13 @@ This document consolidates all research findings and design conversations into a
 
 ### What This Document Does NOT Cover
 
-- Runtime validation infrastructure (`:check` predicates, `:default` values) — deferred to implementation
 - Schema extension (`:extends`) — deferred to implementation
 - Schema evolution / deprecation — future design
 - Computed fields / resolvers — future design
+
+### Scope Note: `:closed`, `:default`, `:check`
+
+Schema-level properties (`:closed`, `:default`, `:check`) are **confirmed as part of the design** (see §9 Resolved Questions). Their full syntax and semantics are specified here; detailed implementation mechanics are covered during implementation phases.
 
 ---
 
@@ -110,7 +134,7 @@ Every schema system in the landscape (spec, Malli, JSON Schema, Protobuf, Ecto, 
 |---|---------|----------|---------|
 | 1 | **Shape** | What keys CAN exist? What type does each have? | `schema` |
 | 2 | **Presence** | Which keys MUST be present in this context? | `selection` |
-| 3 | **Openness** | Can the map contain extra keys? | `:closed` (future) |
+| 3 | **Openness** | Can the map contain extra keys? | `:closed` on schema |
 
 Systems that conflate these concerns create accidental complexity:
 - **Schema proliferation** ("UserForRegistration", "UserForUpdate") — from conflating shape with requirements
@@ -464,6 +488,56 @@ session OrderService
 
 `*` is left-associative: `A * B * C` = `(A * B) * C`. All selections must be from the same schema (or compatible schemas via `:extends`).
 
+### 4.11 Inline Selection Syntax
+
+<a id="411-inline-selection"></a>
+
+For one-off selections that don't warrant a name, inline syntax is available in type positions:
+
+```prologos
+;; Named selection (primary, for reuse)
+selection MovieTimesReq from User
+  :requires [:id :address.zip]
+
+spec get-times : MovieTimesReq -> List MovieTime
+
+;; Inline selection (sugar, for one-off use)
+spec get-times : User{:id :address.zip} -> List MovieTime
+```
+
+Inline syntax is `Schema{paths...}` — the schema name followed by a brace-enclosed path list. This desugars to an anonymous selection. Named selections remain the primary form for anything used more than once.
+
+### 4.12 Schema-Level Properties
+
+<a id="412-schema-properties"></a>
+
+Schemas support metadata properties on the schema itself and on individual fields:
+
+```prologos
+;; Schema-level: :closed
+schema Config :closed
+  host  : String
+  port  : Int
+  debug : Bool
+
+;; Field-level: :default, :check
+schema Employee
+  name    : String
+  email   : String        :default ""
+  salary  : Int           :check [> _ 0]
+  badge   : Int           :check [> _ 0]  :default 0
+```
+
+**Grammar**: Schema-level properties follow the schema name. Field-level properties follow the field type. This is positional and unambiguous — `key Type [property*]`.
+
+| Property | Level | Meaning |
+|----------|-------|---------|
+| `:closed` | Schema | No extra keys beyond declared fields |
+| `:default val` | Field | Constructor uses `val` when key absent |
+| `:check [pred]` | Field | Runtime validation predicate on field value |
+
+`:default` applies at construction time — the constructor fills in the default, so the value always has the key. `:check` is a runtime assertion in Phase 0, upgradable to compile-time proof obligation later.
+
 ---
 
 <a id="5-comprehensive-examples"></a>
@@ -763,7 +837,7 @@ Open and closed schemas are distinguished by the presence of a row variable:
 ;; Open schema (default) — has row variable
 User : { :id UserId, :name String, ... | r }
 
-;; Closed schema — no row variable (future: :closed keyword)
+;; Closed schema — no row variable (`:closed` keyword)
 Config : { :host String, :port Int }
 ```
 
@@ -995,46 +1069,57 @@ This follows Proto3's lesson and GraphQL's evolution strategy: additive changes 
 
 ---
 
-<a id="9-open-questions"></a>
+<a id="9-resolved-questions"></a>
 
-## 9. Open Questions for Design Discussion
+## 9. Resolved Questions
 
-### 9.1 Schema-Level Properties
+All open questions from the initial draft have been resolved through design discussion.
 
-Should schemas support metadata properties like `:closed`, `:default`, `:check`?
+<a id="91-schema-properties"></a>
+
+### 9.1 Schema-Level Properties: CONFIRMED
+
+Schemas support metadata properties: `:closed`, `:default`, `:check`.
 
 ```prologos
-;; Closed schema
+;; Closed schema — no extra keys allowed
 schema Config :closed
   host : String
   port : Int
 
-;; Default values
+;; Default values and value constraints
 schema Employee
   name    : String
   email   : String  :default ""
   salary  : Int     :check [> _ 0]
 ```
 
-**Current stance**: Deferred to implementation. The core schema/selection design works without them. Add as progressive disclosure layers.
+These are progressive disclosure layers: bare `schema` for simple cases, add `:closed`/`:default`/`:check` when needed.
 
-### 9.2 Inline Selection Syntax
+<a id="92-inline-syntax"></a>
 
-Should selections be expressible inline in type positions?
+### 9.2 Inline Selection Syntax: CONFIRMED
+
+Both named and inline selection syntax are supported:
 
 ```prologos
-;; Named (confirmed)
+;; Named (primary form)
+selection MovieTimesReq from User
+  :requires [:id :address.zip]
+
 spec get-times : MovieTimesReq -> List MovieTime
 
-;; Inline (question)
+;; Inline (sugar for one-off uses)
 spec get-times : User{:id :address.zip} -> List MovieTime
 ```
 
-**Current stance**: Named selections are the primary form. Inline may be added as sugar if demand warrants.
+Named selections are the primary form for reuse. Inline syntax is sugar for cases where a selection is used exactly once and naming it would add ceremony without value.
 
-### 9.3 `:requires` + `:provides` on Same Selection
+<a id="93-dual-direction"></a>
 
-Can a single selection have both? This would describe a "transformer" — needs certain fields in, guarantees certain fields out.
+### 9.3 Dual `:requires` + `:provides`: CONFIRMED
+
+A single selection can have both `:requires` and `:provides`, describing a transformer stage:
 
 ```prologos
 selection EnrichmentStage from Request
@@ -1042,11 +1127,13 @@ selection EnrichmentStage from Request
   :provides [:id :auth-token :user]
 ```
 
-**Current stance**: Yes, this is valid and useful for pipeline stages. The `:requires` is the precondition, `:provides` is the postcondition. Together they form a dependent function type.
+The `:requires` is the precondition (what must be present in the input). The `:provides` is the postcondition (what is guaranteed in the output). Together they form a dependent function type — the pipeline stage transforms a request with certain fields into a request with (potentially more) fields.
 
-### 9.4 Schema and QTT Multiplicities
+<a id="94-linear-fields"></a>
 
-What multiplicity should schema fields have? Should linear fields (`:1`) be expressible?
+### 9.4 Linear Schema Fields: CONFIRMED
+
+Schema fields can carry QTT multiplicity annotations:
 
 ```prologos
 schema Connection
@@ -1054,41 +1141,268 @@ schema Connection
   config : Config          ;; unrestricted (default :w)
 ```
 
-**Current stance**: Default is `:w` (unrestricted). Linear schema fields are a future extension for resource-typed schemas.
+Default multiplicity is `:w` (unrestricted). Linear fields (`:1`) are expressible for resource-typed schemas (e.g., database connections, file handles). This integrates with Prologos's existing QTT infrastructure.
 
-### 9.5 `*` Operator Ambiguity
+<a id="95-star-disambiguation"></a>
 
-In `User * MovieTimesReq`, `*` is Sigma composition. In `:address.*`, `*` is the wildcard. Are these ambiguous?
+### 9.5 `*` Operator Disambiguation: RESOLVED
 
-**Resolution**: No ambiguity — the `*` in type positions is always Sigma (binary operator between type expressions). The `*` in path positions (inside `:requires` vectors after a `.`) is always the wildcard. The two live in different syntactic contexts and are never confused.
-
-### 9.6 Selection From Multiple Schemas
-
-Can a selection draw from multiple schemas?
+No ambiguity. `*` in type positions is always Sigma composition (binary operator between types). `*` in path positions (after `.` inside `:requires` vectors) is always the wildcard. Different syntactic contexts, never confused.
 
 ```prologos
-;; Single schema (confirmed)
-selection Req from User
-  :requires [:id :name]
+;; Type position: Sigma composition
+spec get-times : User * MovieTimesReq -> List MovieTime
 
-;; Multiple schemas (question)
-selection JoinedReq from User, Order
-  :requires [:user.id :order.total]
+;; Path position: wildcard
+:requires [:address.*]
 ```
 
-**Current stance**: Deferred. Single-schema selections are the initial design. Multi-schema selections may be added when relational joins need them.
+The overloading is well-precedented — `*` means different things in regex vs arithmetic, in glob patterns vs multiplication. Context makes it unambiguous.
 
-### 9.7 Runtime Validation vs Compile-Time Checking
+<a id="96-multi-schema"></a>
 
-Should `:check` predicates be compile-time (proof obligations) or runtime (assertions)?
+### 9.6 Multi-Schema Selections: DEFERRED
 
-**Current stance**: Start as runtime, following the "Properties are Types in Waiting" principle. The infrastructure for compile-time proof checking (via the propagator network) can upgrade them later.
+Deferred. Needs design thought, particularly around key collision when fields from different schemas share names. Single-schema selections are the initial design. Multi-schema selections may be added when relational joins create the need.
+
+<a id="97-runtime-first"></a>
+
+### 9.7 Runtime vs Compile-Time Checking: RUNTIME FIRST
+
+`:check` predicates start as runtime assertions. The proof-checking infrastructure (propagator network, static analysis) is not yet built. Following the "Properties are Types in Waiting" principle, runtime checks can be upgraded to compile-time proof obligations as the infrastructure matures.
 
 ---
 
-<a id="10-implementation-sketch"></a>
+<a id="10-construction-consumption"></a>
 
-## 10. Phased Implementation Sketch
+## 10. Construction and Consumption Semantics
+
+This section addresses how values satisfying selections are *created* and *used* — a gap identified in critique review.
+
+<a id="101-construction"></a>
+
+### 10.1 Constructing Values That Satisfy Selections
+
+Values are constructed as normal schema values. The type checker verifies that the selection's requirements are met. No special construction syntax is needed.
+
+```prologos
+selection MovieTimesReq from User
+  :requires [:id :address.zip]
+
+spec make-req : UserId -> ZipCode -> MovieTimesReq
+defn make-req [uid zip]
+  ;; Construct a User value (schema constructor)
+  ;; Type checker verifies :id and :address.zip are present
+  User
+    :id uid
+    :address (Address :zip zip)
+```
+
+The key insight: **selection refinement is checked at the point where a schema value is used as a selection type**, not at construction. A `User` value is always a `User` — it becomes a `MovieTimesReq` when it flows into a position that expects `MovieTimesReq`, and the type checker verifies the required keys are present.
+
+This is the same pattern as other refinement types in Prologos — the value is the underlying type, the refinement is checked at usage sites.
+
+```prologos
+;; Explicit coercion (optional, for clarity)
+let user := User {:id 42, :address {:zip "90210"}}
+let req : MovieTimesReq := user   ;; type checker verifies refinement here
+```
+
+<a id="102-consumption"></a>
+
+### 10.2 Consuming Selection-Typed Values
+
+When a function receives a selection-typed parameter, only the selected fields are accessible:
+
+```prologos
+spec get-times : MovieTimesReq -> List MovieTime
+defn get-times [user]
+  user.id           ;; OK — :id is in selection
+  user.address.zip  ;; OK — :address.zip is in selection
+  user.first-name   ;; TYPE ERROR — :first-name not in selection
+```
+
+The type checker uses the selection's field set to gate dot-access. This is the refinement working in reverse — the type narrows what's available.
+
+<a id="103-error-messages"></a>
+
+### 10.3 Error Messages
+
+When a selection violation occurs, the error message should be precise:
+
+```
+Error E2001: Field 'first-name' is not available in selection 'MovieTimesReq'
+
+  defn get-times [user]
+    user.first-name
+         ^^^^^^^^^^
+
+  MovieTimesReq (from User) requires:
+    :id
+    :address.zip
+
+  'first-name' exists in schema User but is not selected.
+  To access it, add :first-name to the selection's :requires,
+  or use a different selection.
+```
+
+When a value doesn't satisfy a selection:
+
+```
+Error E2002: Value does not satisfy selection 'MovieTimesReq'
+
+  let req : MovieTimesReq := user
+                              ^^^^
+
+  MovieTimesReq requires:
+    :id          — present ✓
+    :address.zip — MISSING ✗
+
+  The User value is missing the :address field (or :address.zip within it).
+```
+
+---
+
+<a id="11-critique-notes"></a>
+
+## 11. Design Notes from Critique
+
+These notes address specific concerns raised during independent design review.
+
+<a id="111-syntactic-keyword"></a>
+
+### 11.1 `:requires` Is Syntactic, Not a Keyword Argument
+
+**Concern**: Does `:requires [...]` depend on a general keyword-argument infrastructure that doesn't exist yet?
+
+**Resolution**: No. `:requires`, `:provides`, and `:includes` are **syntactic keywords of the `selection` form**, parsed by the `selection` parser rule. They are not general keyword arguments in the Clojure sense. This follows the existing pattern:
+
+- `ns foo :no-prelude` — `:no-prelude` is a syntactic keyword of `ns`, not a general keyword
+- `spec f : A -> B` — the `:` is syntactic, not a general operator
+- `schema Employee :closed` — `:closed` is a syntactic property of `schema`
+
+The parser knows: `selection Name from Schema [:requires [paths]] [:provides [paths]] [:includes [sels]]`. These are positional/named sub-forms, not data-layer keywords.
+
+<a id="112-bare-address"></a>
+
+### 11.2 Bare `:address` Equivalence — Rationale
+
+**Concern**: `:address` meaning `:address.*` (all fields) loses the ability to express "address exists but contents unspecified."
+
+**Resolution**: This was an explicit design decision. The reasoning:
+
+1. **Common case wins**: When you say "I need the address," you mean the whole address 95% of the time. Requiring `.*` for the common case penalizes the majority.
+
+2. **"Exists but contents unspecified" is rare in typed systems**: In a dependently-typed language, saying "I need address but don't care what's in it" is unusual. If you have the address, you have its fields (they're part of the type). The unspecified-contents case is more relevant in dynamic systems.
+
+3. **If needed later**: A `:address?` or `:address.?` syntax could express "presence without content requirements." This is a future extension, not a Phase 0 need.
+
+The equivalence `:address` ≡ `:address.*` stands as designed.
+
+<a id="113-includes-join"></a>
+
+### 11.3 `:includes` Join Precision
+
+**Concern**: What happens when included selections have overlapping paths at different depths?
+
+**Resolution**: `:includes` takes the **join (union)** of field sets, meaning **the most demanding requirement wins** at each path:
+
+```prologos
+selection A from User
+  :requires [:address.zip]       ;; needs just zip
+
+selection B from User
+  :requires [:address.*]         ;; needs all address fields
+
+selection C from User
+  :includes [A B]
+;; Result: :requires [:address.*]
+;; Because address.* ⊇ address.zip, the join is address.*
+```
+
+The rule: for any path prefix, if one selection requires `prefix.*` and another requires `prefix.field`, the join is `prefix.*` (the more demanding requirement). This is set union on the expanded field sets — it can never produce a *weaker* requirement than either input.
+
+<a id="114-openness-sites"></a>
+
+### 11.4 Schema Openness at Construction vs Consumption
+
+**Concern**: Open-by-default means `User {:id 1, :naem "Alice"}` (typo) is silently accepted.
+
+**Observation**: The GraphQL model (creation-site closed, consumption-site open) is worth noting. In practice:
+
+- **Schema constructor** validates field names against the declared fields (typos caught)
+- **Functions receiving schema values** are open to extra fields (allows schema evolution)
+
+This is a reasonable refinement that can be decided during implementation. The core design (schemas open by default via row variable) is correct; whether the *constructor* is strict is an implementation-level decision that doesn't affect the type-level encoding.
+
+**Current stance**: Note as an implementation consideration. The constructor should likely validate field names against the schema (catching typos) while the type system remains open to extra fields at consumption sites.
+
+<a id="115-complete-rows"></a>
+
+### 11.5 Relations Have Complete Rows
+
+**Concern**: How do selections interact with relations?
+
+**Clarification**: Relations (`defr`) always contain **complete rows** — every field of the schema is present in every tuple. This is fundamental to the relational model (a tuple is a function from attributes to values; every attribute must have a value).
+
+```prologos
+schema Employee
+  id     : EmployeeId
+  name   : String
+  dept   : Department
+  salary : Int
+
+defr employee : Employee
+  || 1 "Alice" Engineering 95000   ;; complete row: all 4 fields
+     2 "Bob"   Marketing   72000   ;; complete row: all 4 fields
+```
+
+Selections are for **function parameters and session messages** — contexts where you want to say "I only need a subset." Relations are the *source of truth* with all fields; functions and protocols are the *consumers* that may only need a projection.
+
+Selection-as-query-projection (e.g., "give me only the name column") is a **future extension** for the relational query language, not part of the core schema/selection design.
+
+<a id="116-structural-not-dependent"></a>
+
+### 11.6 Selections Are Structural, Not Dependent (Phase 0)
+
+**Concern**: Can selections depend on values (e.g., "a Vec with exactly n elements")?
+
+**Clarification**: In Phase 0, selections are **purely structural** — they express field presence requirements only. A selection says "these keys must exist" and the type checker verifies this structurally.
+
+Dependent selections (where the *values* of fields are constrained, not just their presence) are a future extension. The `:check` predicate on schema fields provides runtime value validation, but it does not create a type-level dependency between fields.
+
+```prologos
+;; Phase 0: structural (field presence only)
+selection MovieTimesReq from User
+  :requires [:id :address.zip]
+
+;; Future: dependent (field values constrained)
+;; selection SizedVec (n : Nat) from Vec
+;;   :requires [:length]
+;;   :check [= length n]
+```
+
+The Sigma encoding (`Σ (u : User) (HasKeys u #{...})`) supports upgrading to dependent selections later — `HasKeys` can be replaced with a richer predicate. But Phase 0 keeps it simple.
+
+<a id="117-deep-nesting-smell"></a>
+
+### 11.7 Deep Nesting as Design Smell
+
+**Note from critique**: Extremely deep selection paths like `:foo.{bar baz.{zaz quaz.yaz.{* taz.waz}}}` may indicate a need to refactor into smaller schemas or intermediate selections.
+
+This is sound advice. The path algebra *supports* arbitrary depth, but deeply nested selections suggest:
+
+1. **Schema refactoring opportunity**: Extract nested sub-schemas into named schemas
+2. **Intermediate selection opportunity**: Compose from smaller, named selections via `:includes`
+3. **Possible API design issue**: If consumers need to reach 5 levels deep, the data model may need flattening
+
+The syntax handles depth; good design practice limits it. The indentation alternative (§4.6) helps readability when depth is genuinely needed.
+
+---
+
+<a id="12-implementation-sketch"></a>
+
+## 12. Phased Implementation Sketch
 
 ### Phase 1: Schema Foundation
 
@@ -1144,9 +1458,9 @@ Should `:check` predicates be compile-time (proof obligations) or runtime (asser
 
 ---
 
-<a id="11-references"></a>
+<a id="13-references"></a>
 
-## 11. References
+## 13. References
 
 ### Research Documents
 
