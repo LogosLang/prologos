@@ -357,3 +357,70 @@
   (define last-result (last results))
   (check-true (string? last-result))
   (check-true (string-contains? last-result "10")))
+
+;; ========================================
+;; Section 6: :check — runtime enforcement
+;; ========================================
+
+;; 25. :check passes when predicate satisfied
+(test-case "schema-prop/check-passes"
+  (define results
+    (run (string-append
+          "(schema Validated :age Nat :check (> _ 0N))\n"
+          "(def v1 : Validated (Validated ($brace-params :age 5N)))\n"
+          "(map-get v1 :age)\n")))
+  (check-no-errors results)
+  (define last-result (last results))
+  (check-true (string? last-result))
+  (check-true (string-contains? last-result "5")))
+
+;; 26. :check fails when predicate violated → prologos-error (panic)
+(test-case "schema-prop/check-fails"
+  (define result
+    (run-last
+     (string-append
+      "(schema Val2 :age Nat :check (> _ 0N))\n"
+      "(Val2 ($brace-params :age 0N))\n")))
+  (check-true (prologos-error? result)
+              (format "Expected prologos-error for check failure, got ~v" result)))
+
+;; 27. Multiple :check fields — both must pass
+(test-case "schema-prop/check-multiple-pass"
+  (define results
+    (run (string-append
+          "(schema Bounds :lo Nat :check (> _ 0N) :hi Nat :check (> _ 0N))\n"
+          "(def b1 : Bounds (Bounds ($brace-params :lo 1N :hi 10N)))\n"
+          "(map-get b1 :hi)\n")))
+  (check-no-errors results))
+
+;; 28. Multiple :check fields — one fails
+(test-case "schema-prop/check-multiple-one-fails"
+  (define result
+    (run-last
+     (string-append
+      "(schema Bounds2 :lo Nat :check (> _ 0N) :hi Nat :check (> _ 0N))\n"
+      "(Bounds2 ($brace-params :lo 0N :hi 10N))\n")))
+  (check-true (prologos-error? result)
+              (format "Expected prologos-error for :lo check failure, got ~v" result)))
+
+;; 29. :check + :default — default value also validated
+(test-case "schema-prop/check-with-default-valid"
+  (define results
+    (run (string-append
+          "(schema Safe :x Nat :check (> _ 0N) :default 1N)\n"
+          "(def s1 : Safe (Safe ($brace-params)))\n"
+          "(map-get s1 :x)\n")))
+  (check-no-errors results)
+  (define last-result (last results))
+  (check-true (string? last-result))
+  (check-true (string-contains? last-result "1")))
+
+;; 30. :check + :closed — all three properties work together
+(test-case "schema-prop/check-closed-combined"
+  (define results
+    (run (string-append
+          "(schema Strict :closed :port Nat :check (> _ 0N) :host String)\n"
+          ;; Use small Nat value — Peano Nat comparison is O(n), so large values like 8080N hang
+          "(def s2 : Strict (Strict ($brace-params :port 3N :host \"localhost\")))\n"
+          "(map-get s2 :port)\n")))
+  (check-no-errors results))

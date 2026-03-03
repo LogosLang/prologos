@@ -614,6 +614,59 @@
                                   (cdr pair)))
                           missing-defaults))))
 
+;; ========================================
+;; Schema check-pred wrapping helpers
+;; ========================================
+
+;; Substitute all occurrences of the symbol _ in a datum tree.
+(define (subst-underscore datum replacement)
+  (cond
+    [(eq? datum '_) replacement]
+    [(pair? datum) (map (lambda (d) (subst-underscore d replacement)) datum)]
+    [else datum]))
+
+;; Normalize operator symbols in a check-pred datum to parser keywords.
+;; > → lt (swapped), >= → le (swapped), < → lt, <= → le, == → eq, /= → neq.
+;; Passes through $mixfix datums (WS reader already wrapped them).
+;; Passes through function applications (valid? _) unchanged.
+(define (normalize-check-pred datum)
+  (cond
+    [(not (pair? datum)) datum]
+    [(eq? (car datum) '$mixfix) datum]  ;; WS reader already handled
+    [(memq (car datum) '(> >=))
+     (define norm-args (map normalize-check-pred (cdr datum)))
+     `(,(if (eq? (car datum) '>) 'lt 'le) ,@(reverse norm-args))]
+    [(memq (car datum) '(< <=))
+     (define norm-args (map normalize-check-pred (cdr datum)))
+     `(,(if (eq? (car datum) '<) 'lt 'le) ,@norm-args)]
+    [(memq (car datum) '(== /=))
+     (define norm-args (map normalize-check-pred (cdr datum)))
+     `(,(if (eq? (car datum) '==) 'eq 'neq) ,@norm-args)]
+    [else (map normalize-check-pred datum)]))
+
+;; Wrap a base-form datum with nested if/panic checks for all checked fields.
+;; Returns the wrapped datum, or base-form if no checks needed.
+(define (wrap-schema-checks schema-entry base-form)
+  (define fields (schema-entry-fields schema-entry))
+  (define checked-fields
+    (filter (lambda (f) (schema-field-check-pred f)) fields))
+  (if (null? checked-fields)
+      base-form
+      (let ([tmp '__schema-check-tmp])
+        (define body
+          (foldr (lambda (f inner)
+                   (define kw-sym (schema-field-keyword f))
+                   (define access `(map-get ,tmp ,(string->symbol (format ":~a" kw-sym))))
+                   (define pred-raw (schema-field-check-pred f))
+                   (define pred-subst (subst-underscore pred-raw access))
+                   (define pred-norm (normalize-check-pred pred-subst))
+                   (define schema-name (schema-entry-name schema-entry))
+                   (define msg (format "~a: field :~a failed check ~a" schema-name kw-sym pred-raw))
+                   `(if ,pred-norm ,inner (panic ,msg)))
+                 tmp
+                 checked-fields))
+        `(let ,tmp ,base-form ,body))))
+
 ;; preparse-expand-form: expand a single datum
 ;; ========================================
 ;; Tries to match the head symbol against registered macros.
@@ -667,9 +720,11 @@
                    (and (pair? arg) (eq? (car arg) '$brace-params)))
                  (null? (cddr datum)))  ;; exactly one arg: the brace-params
             ;; Phase 5b: inject default values for missing fields
+            ;; Phase 5c: wrap with :check assertions
             (let* ([augmented (inject-schema-defaults maybe-schema (cadr datum))]
-                   [the-form `(the ,(car datum) ,augmented)])
-              (preparse-expand-form the-form reg (+ depth 1)))
+                   [the-form `(the ,(car datum) ,augmented)]
+                   [wrapped (wrap-schema-checks maybe-schema the-form)])
+              (preparse-expand-form wrapped reg (+ depth 1)))
             ;; Not a schema construction — recurse into subexpressions
             (preparse-expand-subforms datum reg depth))])]
     ;; Non-symbol list — recurse into subexpressions
