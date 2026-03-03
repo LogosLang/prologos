@@ -289,16 +289,23 @@ The following collection items ARE also deferred (genuine infrastructure deps):
 - **Blocked on**: Design for type-level sub-selection representation
 - Commit: `a409ce9` (Phase 3b)
 
-### Phase 4: Selection Composition (NOT STARTED)
-- `:includes [A B]` set-union resolution (most demanding wins per §11.3)
-- `User * MovieTimesReq` Sigma operator in type positions
-- Source: plan `buzzing-launching-pascal.md`
+### Phase 4: Selection Composition (COMPLETE)
+- `:includes [A B]` set-union with `path-union` join semantics (wildcards subsume specifics)
+- Cross-schema includes and unknown selection references produce clear errors
+- `User * MovieTimesReq` Sigma operator in type positions — DEFERRED (requires parser changes)
+- Commit: `fa288eb`
 
-### Phase 5: Schema Properties (NOT STARTED)
-- `:closed` rejects extra keys in construction
-- `:default val` fills missing fields at construction time
-- `:check [pred]` runtime assertion on field values
-- Source: plan `buzzing-launching-pascal.md`
+### Phase 5: Schema Properties (COMPLETE)
+- `:closed` rejects extra keys at construction time
+- `:default val` stored in `schema-field-default-val` (runtime fill deferred)
+- `:check [pred]` stored in `schema-field-check-pred` (runtime assertion deferred per §9.7)
+- Commit: `e27a3f8`
+
+### Phase 5 Runtime: Default Fill + Check Assertion (DEFERRED)
+- `:default` should auto-fill missing fields at construction time (needs constructor rewriting)
+- `:check` should emit runtime assertions on field values (needs reduction-time hook)
+- Currently properties are parsed and stored but not enforced at runtime
+- **Blocked on**: Constructor rewriting infrastructure for default fill; reduction hooks for check
 
 ---
 
