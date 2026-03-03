@@ -2822,10 +2822,94 @@
 ;; ========================================
 ;; Process selection declaration
 ;; ========================================
+;; :includes resolution helpers
+;; ========================================
+
+;; Resolve :includes — look up each included selection, validate parent schema match,
+;; collect their requires/provides paths.
+;; Returns (values incl-req incl-prov error-or-#f)
+(define (resolve-includes incl-names expected-schema-fqn sel-name loc)
+  (let loop ([remaining incl-names] [req-acc '()] [prov-acc '()])
+    (cond
+      [(null? remaining)
+       (values req-acc prov-acc #f)]
+      [else
+       (define incl-sym (car remaining))
+       ;; Look up the included selection (try qualified and bare names)
+       (define ns-ctx (current-ns-context))
+       (define incl-fqn (if ns-ctx
+                             (qualify-name incl-sym (ns-context-current-ns ns-ctx))
+                             incl-sym))
+       (define incl-sel (or (lookup-selection incl-fqn)
+                            (lookup-selection incl-sym)))
+       (cond
+         [(not incl-sel)
+          (values '() '()
+                  (prologos-error loc
+                                  (format "selection ~a: :includes references unknown selection ~a"
+                                          sel-name incl-sym)))]
+         ;; Verify included selection is from the same schema
+         [(not (or (eq? (selection-entry-schema-name incl-sel) expected-schema-fqn)
+                   ;; Also compare short names in case of qualification mismatch
+                   (let-values ([(_p1 s1) (split-qualified-name (selection-entry-schema-name incl-sel))]
+                                [(_p2 s2) (split-qualified-name expected-schema-fqn)])
+                     (and s1 s2 (eq? s1 s2)))))
+          (values '() '()
+                  (prologos-error loc
+                                  (format "selection ~a: :includes ~a is from schema ~a, expected ~a"
+                                          sel-name incl-sym
+                                          (selection-entry-schema-name incl-sel)
+                                          expected-schema-fqn)))]
+         [else
+          (loop (cdr remaining)
+                (append req-acc (selection-entry-requires-paths incl-sel))
+                (append prov-acc (selection-entry-provides-paths incl-sel)))])])))
+
+;; Path union: deduplicate paths, applying join semantics (§11.3).
+;; - If both (#:address #:zip) and (#:address *) exist, keep only (#:address *)
+;;   because * ⊇ any specific field.
+;; - If (#:address #:zip) and (#:address #:city), keep both.
+;; - Identical paths are deduplicated.
+(define (path-union paths)
+  (define (path-subsumes? broader narrower)
+    ;; Does broader subsume narrower?
+    ;; (#:address *) subsumes (#:address #:zip) — wildcard covers all fields
+    ;; (#:address **) subsumes (#:address #:foo #:bar) — globstar covers all depths
+    (cond
+      [(null? broader) #t]  ;; empty prefix subsumes nothing... actually if both empty, equal
+      [(null? narrower) #f]  ;; broader still has segments but narrower exhausted
+      [else
+       (define b-seg (car broader))
+       (define n-seg (car narrower))
+       (cond
+         ;; Wildcard at this level: subsumes everything at this depth
+         [(eq? b-seg '*)
+          (null? (cdr broader))]  ;; * must be terminal
+         ;; Globstar: subsumes everything from here down
+         [(eq? b-seg '**)
+          #t]
+         ;; Same segment: continue deeper
+         [(equal? b-seg n-seg)
+          (path-subsumes? (cdr broader) (cdr narrower))]
+         ;; Different segments: no subsumption
+         [else #f])]))
+  ;; Remove paths that are subsumed by a broader path in the set
+  (define unique (remove-duplicates paths equal?))
+  (filter (lambda (path)
+            ;; Keep this path unless some OTHER path in unique subsumes it
+            (not (for/or ([other (in-list unique)])
+                   (and (not (equal? other path))
+                        (path-subsumes? other path)))))
+          unique))
+
+;; ========================================
+;; Process selection declaration
+;; ========================================
 ;; Validates:
 ;;   1. Parent schema exists in schema registry
 ;;   2. Required/provided field paths are valid fields in the schema
-;; Then registers the selection and returns a 'selection result for the driver.
+;;   3. :includes references resolve to existing selections from same schema
+;; Then registers the selection with resolved paths and returns a 'selection result.
 (define (process-selection-declaration name schema-name req prov incl loc)
   (define ns-ctx (current-ns-context))
   (define (qualify sym)
@@ -2923,16 +3007,23 @@
      (cond
        [(prologos-error? field-err) field-err]
        [else
-        ;; Validate includes (just check they're symbols — actual resolution in Phase 4)
-        ;; For now, skip deep validation of included selections
-        ;; Register the selection
-        (register-selection! name-fqn
-                             (selection-entry name-fqn schema-fqn req prov incl loc))
-        (unless (eq? name-fqn name-short)
-          (register-selection! name-short
-                               (selection-entry name-short schema-fqn req prov incl loc)))
-        ;; Return result for driver to install as type in global-env
-        (list 'selection name-fqn name-short schema-name)])]))
+        ;; Resolve :includes — look up each included selection, collect their paths
+        (define-values (incl-req incl-prov incl-err)
+          (resolve-includes incl schema-fqn name loc))
+        (cond
+          [(prologos-error? incl-err) incl-err]
+          [else
+           ;; Compute effective paths: union of own + included
+           (define eff-req (path-union (append req incl-req)))
+           (define eff-prov (path-union (append prov incl-prov)))
+           ;; Register the selection with effective (resolved) paths
+           (register-selection! name-fqn
+                                (selection-entry name-fqn schema-fqn eff-req eff-prov incl loc))
+           (unless (eq? name-fqn name-short)
+             (register-selection! name-short
+                                  (selection-entry name-short schema-fqn eff-req eff-prov incl loc)))
+           ;; Return result for driver to install as type in global-env
+           (list 'selection name-fqn name-short schema-name)])])]))
 
 (define (process-capability-declaration name params loc)
   ;; Qualify name with current namespace prefix
