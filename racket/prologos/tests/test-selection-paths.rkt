@@ -470,3 +470,33 @@
               (format "Expected surf-selection, got ~v" result))
   (check-equal? (surf-selection-requires-paths result)
                 '((#:a #:b *) (#:a #:c))))
+
+;; --- Phase 3d-b: Nested braces inside branch items ---
+
+;; 44. Nested brace: :a.{b.{c d} e} → 3 paths
+(test-case "sel-path/nested-brace-simple"
+  (define result (test-parse "(selection Req from S :requires [:a.{b.{c d} e}])"))
+  (check-true (surf-selection? result)
+              (format "Expected surf-selection, got ~v" result))
+  (check-equal? (surf-selection-requires-paths result)
+                '((#:a #:b #:c) (#:a #:b #:d) (#:a #:e))))
+
+;; 45. Deep nesting: :user.{name address.{zip city.{name abbrev}} age} → 5 paths
+(test-case "sel-path/nested-brace-deep"
+  (define result (test-parse "(selection Req from S :requires [:user.{name address.{zip city.{name abbrev}} age}])"))
+  (check-true (surf-selection? result)
+              (format "Expected surf-selection, got ~v" result))
+  (check-equal? (surf-selection-requires-paths result)
+                '((#:user #:name)
+                  (#:user #:address #:zip)
+                  (#:user #:address #:city #:name)
+                  (#:user #:address #:city #:abbrev)
+                  (#:user #:age))))
+
+;; 46. Two nested brace pairs: :a.{b.{c d} e.{f g}} → 4 paths
+(test-case "sel-path/nested-brace-two-pairs"
+  (define result (test-parse "(selection Req from S :requires [:a.{b.{c d} e.{f g}}])"))
+  (check-true (surf-selection? result)
+              (format "Expected surf-selection, got ~v" result))
+  (check-equal? (surf-selection-requires-paths result)
+                '((#:a #:b #:c) (#:a #:b #:d) (#:a #:e #:f) (#:a #:e #:g))))

@@ -2954,19 +2954,48 @@
                              (eq? (syntax-e (car x)) '$brace-params)))))
   ;; Expand brace branching: prefix "address" + branches (zip city)
   ;; → (("address" "zip") ("address" "city"))
-  (define (expand-brace-branches prefix-str brace-items)
-    (apply append
-           (for/list ([branch (in-list brace-items)])
-             (cond
-               [(symbol? branch)
-                ;; Simple branch: zip → "address.zip"
-                (define branch-str (symbol->string branch))
-                (list (parse-path-string (string-append prefix-str "." branch-str)))]
-               ;; Nested brace: branch is another ($brace-params ...) — rare, defer
-               [else
-                (list (parse-error loc
-                        (format "selection :~a: nested brace branching not yet supported: ~v"
-                                clause-name branch) #f))]))))
+  ;; Branch items may be:
+  ;;   - bare symbol:        zip → "address.zip"
+  ;;   - dotted symbol:      zip.code → "address.zip.code"
+  ;;   - trailing-dot + sub-brace: b. ($brace-params c d) → recursive expand
+  ;; suffix-segments: optional segments appended to every expanded branch
+  (define (expand-brace-branches prefix-str brace-items [suffix-segments '()])
+    (define (trailing-dot-sym? s)
+      (and (symbol? s)
+           (let ([str (symbol->string s)])
+             (and (> (string-length str) 1)
+                  (char=? (string-ref str (sub1 (string-length str))) #\.)))))
+    (define (strip-trailing-dot s)
+      ;; "b." → "b"
+      (define str (symbol->string s))
+      (substring str 0 (sub1 (string-length str))))
+    (let branch-loop ([remaining brace-items] [acc '()])
+      (cond
+        [(null? remaining) (apply append (reverse acc))]
+        ;; Trailing-dot symbol + sub-brace: b.{c d} → recursive expand
+        [(and (trailing-dot-sym? (car remaining))
+              (pair? (cdr remaining))
+              (brace-params? (let ([x (cadr remaining)])
+                               (if (syntax? x) (syntax-e x) x))))
+         (define sub-prefix
+           (string-append prefix-str "." (strip-trailing-dot (car remaining))))
+         (define sub-brace-raw
+           (let ([x (cadr remaining)])
+             (if (syntax? x) (syntax-e x) x)))
+         (define sub-brace-items (cdr sub-brace-raw))  ;; strip '$brace-params head
+         (define sub-expanded
+           (expand-brace-branches sub-prefix sub-brace-items suffix-segments))
+         (branch-loop (cddr remaining) (cons sub-expanded acc))]
+        ;; Simple symbol branch (possibly dotted): zip, zip.code, b.**, b.*
+        [(symbol? (car remaining))
+         (define branch-str (symbol->string (car remaining)))
+         (define base (parse-path-string (string-append prefix-str "." branch-str)))
+         (branch-loop (cdr remaining)
+                      (cons (list (append base suffix-segments)) acc))]
+        [else
+         (list (parse-error loc
+                 (format "selection :~a: unexpected item in brace expansion: ~v"
+                         clause-name (car remaining)) #f))])))
   ;; Process items, handling trailing-dot + brace-params pairs
   (let loop ([remaining items] [acc '()])
     (cond
