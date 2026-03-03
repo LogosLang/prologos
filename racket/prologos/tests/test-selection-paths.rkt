@@ -534,3 +534,20 @@
               (format "Expected surf-selection, got ~v" result))
   (check-equal? (surf-selection-requires-paths result)
                 '((#:a #:b #:x **) (#:a #:c #:y **))))
+
+;; --- Phase 3d-d: Cons-dot normalization + cartesian product ---
+
+;; 51. Chained braces (cartesian product): :a.{b c}.{d e} → 4 paths
+;;     In sexp mode, .{d e} triggers cons-dot at tail position.
+;;     Normalization reconstructs ($brace-params d e) from bare symbols.
+(test-case "sel-path/cons-dot-cartesian"
+  (define result (test-parse "(selection Req from S :requires [:a.{b c}.{d e}])"))
+  (check-true (surf-selection? result)
+              (format "Expected surf-selection, got ~v" result))
+  (check-equal? (surf-selection-requires-paths result)
+                '((#:a #:b #:d) (#:a #:b #:e) (#:a #:c #:d) (#:a #:c #:e))))
+
+;; 52. Cons-dot limitation: .{...} only works at tail of bracket.
+;;     :a.{b c}.{d e}.f would be a reader error — users should write
+;;     :a.{b.{d.f e.f} c.{d.f e.f}} or :a.{b.{d e}.f c.{d e}.f} instead.
+;;     (No test — reader error prevents reaching parser.)

@@ -2952,6 +2952,23 @@
     (and (pair? x) (or (eq? (car x) '$brace-params)
                         (and (syntax? (car x))
                              (eq? (syntax-e (car x)) '$brace-params)))))
+  (define (path-segments->prefix-string segs)
+    ;; Convert path segments (#:a #:b) back to prefix string "a.b"
+    ;; Note: can't use (keyword? seg) here — shadowed by parser's own keyword?
+    ;; which checks Prologos keywords. Path segments from string->keyword are
+    ;; Racket keywords; wildcard segments are symbols '* / '**.
+    (define parts
+      (for/list ([seg segs])
+        (cond
+          [(eq? seg '*)   "*"]
+          [(eq? seg '**)  "**"]
+          [else (keyword->string seg)])))
+    ;; Join with "." separator (no racket/string dependency)
+    (if (null? parts) ""
+        (apply string-append
+               (car parts)
+               (for/list ([p (in-list (cdr parts))])
+                 (string-append "." p)))))
   ;; Expand brace branching: prefix "address" + branches (zip city)
   ;; → (("address" "zip") ("address" "city"))
   ;; Branch items may be:
@@ -2998,6 +3015,9 @@
                          clause-name (car remaining)) #f))])))
   ;; Consume a post-brace continuation like .** or .d or .d.e
   ;; Returns (values suffix-segments rest-remaining)
+  ;; suffix-segments can be:
+  ;;   '()               — no continuation
+  ;;   (list of keywords/wildcards)  — flat continuation appended to each branch
   ;; A continuation is a symbol starting with '.' that immediately follows a brace group.
   (define (consume-post-brace-continuation remaining)
     (cond
@@ -3013,8 +3033,28 @@
        (values suffix-segs (cdr remaining))]
       [else
        (values '() remaining)]))
+  ;; Normalize cons-dot-garbled brace continuations.
+  ;; When Racket reads :a.{b c}.{d e} inside [...], the `.{d e}` triggers cons-dot:
+  ;;   (:a. ($brace-params b c) $brace-params d e)
+  ;; where $brace-params appears as a bare symbol. Detect and re-wrap:
+  ;;   (:a. ($brace-params b c) ($brace-params d e))
+  ;; Limitation: this only works when .{...} is at the END of the bracket.
+  ;; If items follow (e.g., :a.{b c}.{d e} :x), Racket errors at read time.
+  (define (normalize-cons-dot-braces items)
+    (let norm-loop ([remaining items] [acc '()])
+      (cond
+        [(null? remaining) (reverse acc)]
+        ;; Bare $brace-params symbol (from cons-dot splicing)
+        [(and (symbol? (car remaining))
+              (eq? (car remaining) '$brace-params))
+         ;; Everything from here to end is the brace contents
+         ;; (cons-dot only works at tail position)
+         (define brace-contents (cdr remaining))
+         (reverse (cons (cons '$brace-params brace-contents) acc))]
+        [else
+         (norm-loop (cdr remaining) (cons (car remaining) acc))])))
   ;; Process items, handling trailing-dot + brace-params pairs
-  (let loop ([remaining items] [acc '()])
+  (let loop ([remaining (normalize-cons-dot-braces items)] [acc '()])
     (cond
       [(null? remaining) (reverse acc)]
       [else
@@ -3040,13 +3080,34 @@
           (define after-brace (cddr remaining))
           (define-values (suffix-segs rest-after)
             (consume-post-brace-continuation after-brace))
-          (define expanded (expand-brace-branches prefix brace-items suffix-segs))
+          (define expanded0 (expand-brace-branches prefix brace-items suffix-segs))
+          ;; Check for continuation brace (cartesian product from cons-dot normalization)
+          ;; :a.{b c}.{d e} → after normalization and first expansion, rest-after may
+          ;; start with ($brace-params d e)
+          (define-values (expanded rest-final)
+            (cond
+              [(and (pair? rest-after)
+                    (brace-params? (let ([x (car rest-after)])
+                                     (if (syntax? x) (syntax-e x) x))))
+               ;; Cartesian product: for each path from first brace, re-expand
+               ;; with continuation brace items
+               (define cont-raw (let ([x (car rest-after)])
+                                  (if (syntax? x) (syntax-e x) x)))
+               (define cont-items (cdr cont-raw))
+               (define cart
+                 (apply append
+                   (for/list ([path (in-list expanded0)])
+                     (define pfx (path-segments->prefix-string path))
+                     (expand-brace-branches pfx cont-items))))
+               (values cart (cdr rest-after))]
+              [else
+               (values expanded0 rest-after)]))
           ;; Check for errors in expanded paths
           (define err (for/or ([p (in-list expanded)])
                         (and (prologos-error? p) p)))
           (if err
               err
-              (loop rest-after (append (reverse expanded) acc)))]
+              (loop rest-final (append (reverse expanded) acc)))]
          ;; Standard keyword-style path symbol
          [(selection-clause-sym? item)
           (define s (clause-sym->string item))
