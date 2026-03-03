@@ -43,7 +43,7 @@ ns examples.numerics-tutorial-demo
 ;; Prerequisites: basic Prologos (Bool, List, Option, pattern matching).
 ;; The prelude gives you everything via `(ns foo)`.
 
-require [prologos::data::list   :refer [List nil cons length head map
+imports [prologos::data::list   :refer [List nil cons length head map
                                         foldr reduce filter reverse append]]
         [prologos::data::nat    :refer [add mult pred sub pow double
                                         zero? le? lt? gt? ge? nat-eq?
@@ -1220,11 +1220,9 @@ as-posit
 ;; • prologos::core::*-trait   — Eq, Ord, Add, Sub, Mul, Neg, Abs, Div
 ;; • prologos::core::from-trait / tryfrom-trait — Cross-family conversions
 ;; • prologos::core::fromint-trait / fromrat-trait — FromInt, FromRat
-;; • prologos::core::numeric-bundles — Num, Fractional bundles
-;; • prologos::core::additive-identity-trait — zero for a type
-;; • prologos::core::multiplicative-identity-trait — one for a type
-;; • prologos::core::generic-numeric-ops — sum, product, int-range
-;; • prologos::core::identity-instances — zero/one for Nat, Int, Rat
+;; • prologos::core::algebra — Num/Fractional bundles, AdditiveIdentity,
+;;     MultiplicativeIdentity, identity instances, sum, product, int-range,
+;;     plus/minus/times/divide/negate-fn/abs-fn, algebraic law declarations
 ;;
 ;; The From/TryFrom traits (not in prelude, require explicitly):
 ;;   From Nat Int, From Int Rat, From Nat Rat  — lossless

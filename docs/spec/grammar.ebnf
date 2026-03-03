@@ -139,26 +139,26 @@ ns-options      = ':no-prelude'    (* opt out of automatic prelude import *)
                 ;
 
 (* ------------------------------------------------ *)
-(* 2.2 Require (Module Import)                      *)
+(* 2.2 Imports (Module Import)                      *)
 (* ------------------------------------------------ *)
 
-require-decl    = 'require' , require-spec , { require-spec } ;
-require-spec    = '[' , module-path , require-clauses , ']' ;
-require-clauses = { require-clause } ;
-require-clause  = ':as' , identifier                    (* alias prefix *)
+imports-decl    = 'imports' , imports-spec , { imports-spec } ;
+imports-spec    = '[' , module-path , imports-clauses , ']' ;
+imports-clauses = { imports-clause } ;
+imports-clause  = ':as' , identifier                    (* alias prefix *)
                 | ':refer' , '[' , { identifier } , ']' (* named imports *)
                 | ':refer-all'                          (* import everything *)
                 ;
 
 (* ------------------------------------------------ *)
-(* 2.3 Provide (Module Export)                      *)
+(* 2.3 Exports (Module Export)                      *)
 (* ------------------------------------------------ *)
 
-provide-decl    = 'provide' , '[' , { identifier } , ']' ;
+exports-decl    = 'exports' , '[' , { identifier } , ']' ;
 
 (* Note: By default, all top-level def/defn/data/spec/trait/impl
    forms are auto-exported. Use defn-/def-/data- for private forms.
-   Explicit provide overrides auto-export. *)
+   Explicit exports overrides auto-export. *)
 
 
 (* ================================================================== *)
@@ -169,8 +169,8 @@ provide-decl    = 'provide' , '[' , { identifier } , ']' ;
    newlines at column 0 (or by NEWLINE tokens in the WS reader). *)
 program         = [ ns-decl ] , { top-level-form } ;
 
-top-level-form  = require-decl
-                | provide-decl
+top-level-form  = imports-decl
+                | exports-decl
                 | def-form
                 | defn-form
                 | spec-form

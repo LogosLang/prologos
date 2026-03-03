@@ -35,7 +35,7 @@ ns examples.strings-tutorial-demo
 ;; Prerequisites: basic Prologos (Nat, Bool, List, Option, pattern matching).
 ;; The prelude gives you everything via `(ns foo)`.
 
-require [prologos::data::list   :refer [List nil cons map filter
+imports [prologos::data::list   :refer [List nil cons map filter
                                         length sum reverse append head]]
         [prologos::data::nat    :refer [add zero? le?]]
         [prologos::data::option :refer [Option some none unwrap-or]]

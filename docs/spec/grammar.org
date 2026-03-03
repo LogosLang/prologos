@@ -655,19 +655,19 @@ The prelude automatically provides: =Nat=, =Bool=, =List=, =Option=, =Result=,
 =Pair= operations, =Eq=/=Ord=/=Add=/=Sub=/=Mul=/=Neg=/=Abs=/=FromInt=/=Num=/
 =Fractional= traits and instances.
 
-** Require
+** Imports
 
 Import modules with named or aliased references:
 
 #+begin_src prologos
 ;; Named imports
-require [prologos.data.list :refer [List nil cons map length]]
+imports [prologos.data.list :refer [List nil cons map length]]
 
 ;; Aliased module
-require [prologos.data.nat :as nat :refer [add mult]]
+imports [prologos.data.nat :as nat :refer [add mult]]
 
-;; Multiple requires
-require [prologos.data.list   :refer [List nil cons map]]
+;; Multiple imports
+imports [prologos.data.list   :refer [List nil cons map]]
         [prologos.data.nat    :refer [add mult]]
         [prologos.data.option :refer [Option none some]]
 #+end_src
@@ -929,7 +929,7 @@ monotone α/γ over finite-height lattices).
 *** Abstract Domain Library Modules
 
 Prologos ships with ready-made abstract domains as library modules (not
-prelude-exported --- use explicit =require=):
+prelude-exported --- use explicit =imports=):
 
 - =prologos::data::sign= --- =data Sign = sign-bot | sign-neg | sign-zero | sign-pos | sign-top=
 - =prologos::core::sign-lattice= --- =impl Lattice Sign=, =impl HasTop Sign=
@@ -938,9 +938,9 @@ prelude-exported --- use explicit =require=):
 
 #+begin_src prologos
 ;; Example: using the Sign domain
-require [prologos::data::sign :refer [Sign sign-neg sign-pos sign-top]]
-require [prologos::core::sign-lattice :refer []]
-require [prologos::core::lattice-trait :refer [Lattice Lattice-join]]
+imports [prologos::data::sign :refer [Sign sign-neg sign-pos sign-top]]
+imports [prologos::core::sign-lattice :refer []]
+imports [prologos::core::lattice-trait :refer [Lattice Lattice-join]]
 
 eval [Lattice-join Sign--Lattice--dict sign-neg sign-pos]
 ;; => sign-top
@@ -1276,7 +1276,7 @@ A complete Prologos program demonstrating multiple features:
 #+begin_src prologos
 ns examples.demo
 
-require [prologos.data.list   :refer [List nil cons map reduce sum length]]
+imports [prologos.data.list   :refer [List nil cons map reduce sum length]]
         [prologos.data.nat    :refer [add mult]]
         [prologos.data.option :refer [Option none some]]
 

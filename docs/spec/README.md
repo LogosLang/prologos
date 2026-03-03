@@ -21,7 +21,7 @@ docs/spec/
 
 W3C-style EBNF (ISO 14977 variant) covering the complete surface syntax:
 - Lexical grammar (tokens, literals, comments, whitespace rules)
-- Module system (ns, require, provide)
+- Module system (ns, imports, exports)
 - Declarations (def, defn, spec, data, trait, impl, bundle, defmacro)
 - Type expressions (Pi, Sigma, arrows, unions, universes, dependent types)
 - Expressions (application, lambda, match, pipes, quotes, collections)
@@ -38,7 +38,7 @@ Org-mode document with prose explanations and example code for each grammar sect
 2. Lexical Grammar (comments, identifiers, literals, brackets)
 3. Type Expressions (base, parameterized, arrows, dependent, unions)
 4. Expressions (application, lambda, match, pipes, quotes, collections)
-5. Declarations (ns, require, def, defn, spec, data, trait, impl, macros)
+5. Declarations (ns, imports, def, defn, spec, data, trait, impl, macros)
 6. QTT multiplicities
 7. Dependent types and eliminators
 8. Full program example

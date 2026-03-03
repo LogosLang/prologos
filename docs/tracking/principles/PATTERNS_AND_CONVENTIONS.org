@@ -17,7 +17,7 @@
 
 ** Modules and Namespaces
 - Separated by ~::~: ~prologos::data::list~, ~prologos::core::map-ops~
-- Module aliases with ~:as~: ~require [prologos::core::map-ops :as m]~
+- Module aliases with ~:as~: ~imports [prologos::core::map-ops :as m]~
 - Selective import: ~:refer [merge fold-entries keys vals]~
 - Side-effect import: ~:refer []~ (triggers instance registration)
 
@@ -33,7 +33,7 @@ spec vals : {K V : Type} [Map K V] -> [List V]
 spec merge : {K V : Type} [Map K V] [Map K V] -> [Map K V]
 
 ;; Usage: qualified access prevents collision
-require [prologos::core::map-ops :as m :refer [merge]]
+imports [prologos::core::map-ops :as m :refer [merge]]
 m::keys my-map
 m::vals my-map
 merge m1 m2
@@ -190,13 +190,13 @@ use standalone functions from ~map-ops~:
 
 #+begin_src prologos
 ;; Import with alias (preferred for libraries)
-require [prologos::core::map-ops :as m :refer [merge]]
+imports [prologos::core::map-ops :as m :refer [merge]]
 
 ;; Import specific names
-require [prologos::data::list :refer [List nil cons map filter]]
+imports [prologos::data::list :refer [List nil cons map filter]]
 
 ;; Side-effect only (registers trait instances)
-require [prologos::core::eq-nat :refer []]
+imports [prologos::core::eq-nat :refer []]
 
 ;; Full prelude
 ns my-module

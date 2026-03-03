@@ -123,7 +123,7 @@ struct, no field access. ~(Add Nat)~ resolves directly to the Nat addition
 function. This gives zero-overhead dispatch for the common case.
 
 ** Instance Registration Is a Side Effect
-~(require [prologos::core::eq-nat :refer []])~ loads the module for its
+~(imports [prologos::core::eq-nat :refer []])~ loads the module for its
 side effect (registering the Eq instance for Nat). The empty ~:refer []~
 signals "I don't need any names, just register the instances."
 
@@ -217,6 +217,60 @@ The reader emits sentinel nodes (~$dot-access~, ~$dot-key~, ~$pipe-gt~)
 that are rewritten by preparse into standard AST forms. This keeps the
 reader simple (it doesn't need to understand semantics) and the preparse
 predictable (it transforms known sentinels).
+
+* Optimization Lessons
+
+** Prefer ~where~ Constraints for Specialization
+When a function needs a trait constraint, use ~where~ syntax rather than
+explicit positional dict parameters:
+
+#+begin_src prologos
+;; Good — eligible for call-site specialization:
+spec my-fn {A} SomeArg -> Result where (Trait A)
+defn my-fn [arg] where (Trait A)
+  ...method-name arg...
+
+;; Unavoidable but less optimal — invisible to rewriter:
+spec my-fn [Trait A] A -> A
+defn my-fn [dict x]
+  Trait-method dict x
+#+end_src
+
+The ~where~ style threads the trait dictionary automatically via
+~maybe-inject-where~ in ~macros.rkt~, and the ~rewrite-specializations~
+pass in ~driver.rkt~ can replace calls with zero-overhead specialized
+versions when the type argument is statically known. The explicit
+positional dict style works, but the rewriter can't detect it.
+
+** Call-Site Specialization: When to Add ~specialize~ Blocks
+Rule of thumb:
+- 3+ concrete types regularly used → add specializations for each
+- Hot loop (propagator merge, inner folds) → specialize even for 1 type
+- One-off generic usage → dict-passing overhead is negligible, don't bother
+
+Each specialization is small (~4 lines: spec + specialize + defn + body)
+and eliminates all dict-passing overhead for that type, collapsing to a
+direct function call. The generic dict-passing version remains as the
+correct fallback for types without a specialization.
+
+** Two Dict-Passing Styles Coexist
+The codebase has two styles for polymorphic functions that need trait
+constraints:
+
+| Style               | Example           | Rewriter sees it? | Ergonomics     |
+|---------------------+-------------------+-------------------+----------------|
+| ~where (Trait A)~   | ~new-lattice-cell~ | Yes               | Auto-injected  |
+| ~[Trait A]~ positional | ~plus~, ~sum~   | No                | Manual at call |
+
+Migration path for the positional style:
+1. Change spec to use ~where~ clause
+2. Change defn to use bare method names
+3. Add ~specialize~ blocks for common types
+4. Existing call sites continue to work (the desugared form is identical)
+
+This migration is optional --- the positional style works correctly, it
+just doesn't benefit from automatic specialization. Prioritize migration
+for functions called in performance-sensitive paths.
 
 * Meta-Lessons
 

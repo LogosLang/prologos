@@ -31,7 +31,7 @@ ns examples.map-tutorial-demo
 ;;
 ;; Let's go!
 
-require [prologos::data::list   :refer [List nil cons map filter foldr
+imports [prologos::data::list   :refer [List nil cons map filter foldr
                                         length sum reverse append head]]
         [prologos::data::nat    :refer [add mult double sub zero? le?]]
         [prologos::data::option :refer [Option some none unwrap-or]]
