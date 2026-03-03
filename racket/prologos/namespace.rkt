@@ -326,29 +326,29 @@
 ;; Generated from lib/prologos/book/PRELUDE by tools/gen-prelude.rkt.
 (define prelude-imports
   '(;; ---- Core combinators (not a book chapter) ----
-    (require [prologos::core :refer-all])
+    (imports [prologos::core :refer-all])
 
     ;; ---- Foundation data types ----
-    (require [prologos::data::ordering :refer [Ordering lt-ord eq-ord gt-ord]])
-    (require [prologos::data::bool     :refer [not and or xor bool-eq implies nand nor]])
-    (require [prologos::data::nat      :refer [add mult double pred zero? sub pow
+    (imports [prologos::data::ordering :refer [Ordering lt-ord eq-ord gt-ord]])
+    (imports [prologos::data::bool     :refer [not and or xor bool-eq implies nand nor]])
+    (imports [prologos::data::nat      :refer [add mult double pred zero? sub pow
                                                le? lt? gt? ge? nat-eq? min max
                                                bool-to-nat clamp]])
-    (require [prologos::data::pair     :refer [swap map-fst map-snd bimap dup uncurry]])
-    (require [prologos::data::eq       :refer [sym cong trans]])
+    (imports [prologos::data::pair     :refer [swap map-fst map-snd bimap dup uncurry]])
+    (imports [prologos::data::eq       :refer [sym cong trans]])
 
     ;; ---- Char & String data operations ----
     ;; Most operations accessed via module alias: char::code, str::length, etc.
-    (require [prologos::data::char   :as char :refer []])
-    (require [prologos::data::string :as str  :refer []])
+    (imports [prologos::data::char   :as char :refer []])
+    (imports [prologos::data::string :as str  :refer []])
 
     ;; ---- Container data types ----
     ;; Option: types + predicates unqualified; ops via opt:: alias
-    (require [prologos::data::option :as opt :refer [Option none some some? none? flatten]])
+    (imports [prologos::data::option :as opt :refer [Option none some some? none? flatten]])
     ;; Result: types + predicates unqualified; ops via result:: alias
-    (require [prologos::data::result :as result :refer [Result ok err ok? err?]])
+    (imports [prologos::data::result :as result :refer [Result ok err ok? err?]])
     ;; List: full API unqualified (wins all name-conflict tiebreaks)
-    (require [prologos::data::list :refer [List nil cons foldr reduce length
+    (imports [prologos::data::list :refer [List nil cons foldr reduce length
                                            map filter append head tail singleton
                                            reverse sum product any? all? find
                                            nth last replicate range concat
@@ -361,45 +361,45 @@
                                            delete find-index]])
 
     ;; ---- Core traits (type class definitions) ----
-    (require [prologos::core::eq :refer [Eq eq-neq nat-eq Char--Eq--dict String--Eq--dict]])
-    (require [prologos::core::ord :refer [Ord PartialOrd PartialOrd-partial-compare
+    (imports [prologos::core::eq :refer [Eq eq-neq nat-eq Char--Eq--dict String--Eq--dict]])
+    (imports [prologos::core::ord :refer [Ord PartialOrd PartialOrd-partial-compare
                                           nat-ord ord-lt ord-le ord-gt ord-ge ord-eq
                                           ord-min ord-max Char--Ord--dict String--Ord--dict]])
-    (require [prologos::core::arithmetic :refer [Add Sub Mul Div Neg Abs String--Add--dict]])
-    (require [prologos::core::conversions :refer [From Into TryFrom FromInt FromRat]])
-    (require [prologos::core::algebra :refer-all])
-    (require [prologos::core::lattice :refer-all])
-    (require [prologos::core::collection-traits :refer [Reducible Collection]])
+    (imports [prologos::core::arithmetic :refer [Add Sub Mul Div Neg Abs String--Add--dict]])
+    (imports [prologos::core::conversions :refer [From Into TryFrom FromInt FromRat]])
+    (imports [prologos::core::algebra :refer-all])
+    (imports [prologos::core::lattice :refer-all])
+    (imports [prologos::core::collection-traits :refer [Reducible Collection]])
 
     ;; ---- Additional container types + operations ----
-    (require [prologos::data::map-entry :refer [MapEntry mk-entry entry-key entry-val]])
-    (require [prologos::data::lseq     :as lseq :refer [LSeq lseq-nil lseq-cell]])
-    (require [prologos::data::lseq-ops :refer [list-to-lseq lseq-to-list lseq-map
+    (imports [prologos::data::map-entry :refer [MapEntry mk-entry entry-key entry-val]])
+    (imports [prologos::data::lseq     :as lseq :refer [LSeq lseq-nil lseq-cell]])
+    (imports [prologos::data::lseq-ops :refer [list-to-lseq lseq-to-list lseq-map
                                                lseq-filter lseq-take lseq-drop
                                                lseq-append lseq-fold lseq-length]])
-    (require [prologos::data::set      :refer [set-singleton set-from-list set-symmetric-diff]])
+    (imports [prologos::data::set      :refer [set-singleton set-from-list set-symmetric-diff]])
 
     ;; ---- Identity traits (in algebra module) ----
     ;; AdditiveIdentity, MultiplicativeIdentity, and all instances are in prologos::core::algebra
 
     ;; ---- String operation module ----
     ;; Most ops via str-ops:: alias to avoid conflicts with List names.
-    (require [prologos::core::string-ops :as str-ops :refer []])
+    (imports [prologos::core::string-ops :as str-ops :refer []])
 
     ;; ---- Collection operation modules (consolidated) ----
     ;; Note: pvec-map, pvec-filter, pvec-fold, set-fold, set-filter,
     ;; map-fold-entries, map-filter-entries, map-map-vals are now native
     ;; parser keywords — no need to import from ops modules.
     ;; pvec: pvec-any?, pvec-all?, pvec-from-list-fn, pvec-to-list-fn
-    (require [prologos::core::pvec :refer [pvec-any? pvec-all?
+    (imports [prologos::core::pvec :refer [pvec-any? pvec-all?
                                            pvec-from-list-fn pvec-to-list-fn]])
     ;; map: map-filter-vals, map-keys-list, map-vals-list, map-merge,
     ;;      map-to-entry-list, map-seq, map-from-seq
-    (require [prologos::core::map  :refer [map-filter-vals map-keys-list
+    (imports [prologos::core::map  :refer [map-filter-vals map-keys-list
                                            map-vals-list map-merge
                                            map-to-entry-list map-seq map-from-seq]])
     ;; set: set-map, set-any?, set-all?, set-to-list-fn, set-from-list-fn
-    (require [prologos::core::set  :refer [set-map set-any? set-all?
+    (imports [prologos::core::set  :refer [set-map set-any? set-all?
                                            set-to-list-fn set-from-list-fn]])
 
     ;; ---- Collection conversions (now in prologos::core::collections) ----
@@ -419,28 +419,28 @@
     ;; eq-char-instance merged into prologos::core::eq
     ;; ord-char-instance merged into prologos::core::ord
     ;; hashable-trait + hashable-instances + hashable-char-instance + hashable-string-instance merged into prologos::core::hashable
-    (require [prologos::core::hashable :refer [Char--Hashable--dict String--Hashable--dict]])
+    (imports [prologos::core::hashable :refer [Char--Hashable--dict String--Hashable--dict]])
     ;; eq-string-instance merged into prologos::core::eq
     ;; ord-string-instance merged into prologos::core::ord
     ;; add-string-instance merged into prologos::core::arithmetic
 
     ;; ---- Collection trait instances (consolidated by type) ----
     ;; list: Seqable, Buildable, Foldable, Reducible, Indexed, Functor, Seq instances
-    (require [prologos::core::list :refer-all])
+    (imports [prologos::core::list :refer-all])
     ;; pvec: Seqable, Buildable, Foldable, Reducible, Indexed, Functor instances + ops
-    (require [prologos::core::pvec :refer-all])
+    (imports [prologos::core::pvec :refer-all])
     ;; set: Seqable, Buildable, Foldable, Reducible, Setlike instances + ops
-    (require [prologos::core::set  :refer-all])
+    (imports [prologos::core::set  :refer-all])
     ;; lseq: Seqable, Buildable, Foldable, Reducible, Seq instances
-    (require [prologos::core::lseq :refer-all])
+    (imports [prologos::core::lseq :refer-all])
     ;; map: Keyed instance + ops (map-filter-vals, map-merge, map-seq, etc.)
-    (require [prologos::core::map  :refer-all])
+    (imports [prologos::core::map  :refer-all])
 
     ;; ---- Identity trait instances ----
     ;; Instances are now in prologos::core::algebra (loaded via :refer-all above)
 
     ;; ---- Generic collection operations (HKT-dispatched) ----
-    (require [prologos::core::generic-ops :refer [gmap gfilter gfold glength
+    (imports [prologos::core::generic-ops :refer [gmap gfilter gfold glength
                                                   gconcat gany? gall? gto-list]])
 
     ;; ---- Lattice + HasTop + BoundedLattice + Widenable + GaloisConnection ----
@@ -449,13 +449,13 @@
     ;; ---- Standard capability types (side-effect registration) ----
     ;; ReadCap, WriteCap, HttpCap, StdioCap, FsCap, NetCap, SysCap
     ;; + subtype hierarchy (ReadCap <: FsCap <: SysCap, etc.)
-    (require [prologos::core::capabilities :refer []])
+    (imports [prologos::core::capabilities :refer []])
 
     ;; ---- Propagator helpers ----
-    (require [prologos::core::propagator :refer [new-lattice-cell new-widenable-cell]])
+    (imports [prologos::core::propagator :refer [new-lattice-cell new-widenable-cell]])
 
     ;; ---- Abstract domain instances (Sign/Parity lattices, Galois connections, refined numerics) ----
-    (require [prologos::core::abstract-domains :refer-all])
+    (imports [prologos::core::abstract-domains :refer-all])
 
     ;; ---- Generic collection functions + conversions (clean names) ----
     ;; These shadow List-specific names (map, filter, reduce, etc.) with
@@ -463,7 +463,7 @@
     ;; Also includes collection-to-collection conversions (vec, list-to-seq, etc.)
     ;; and List-specialized coll-map/coll-filter/coll-length/coll-to-list.
     ;; MUST BE LAST — shadowing depends on ordering.
-    (require [prologos::core::collections :refer [map filter reduce reduce1
+    (imports [prologos::core::collections :refer [map filter reduce reduce1
                                                   length concat any? all?
                                                   to-list find take drop
                                                   into head empty? rest-seq
