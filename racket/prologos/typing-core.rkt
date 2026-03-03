@@ -48,7 +48,12 @@
          lookup-schema-by-name
          ;; Selection type helpers
          lookup-selection-by-name
-         selection-allows-field?)
+         selection-allows-field?
+         ;; Sub-selection synthesis (Phase 3c)
+         selection-sub-name
+         extract-path-suffixes
+         selection-field-unrestricted?
+         selection-field-type)
 
 ;; ========================================
 ;; Structural reduce tracking
@@ -331,6 +336,90 @@
              (selection-entry-requires-paths sel))
       (ormap (lambda (p) (path-starts-with? p kw-rkt))
              (selection-entry-provides-paths sel))))
+
+;; ========================================
+;; Sub-selection synthesis for nested field-gating (Phase 3c)
+;; ========================================
+
+;; Compute deterministic synthetic name for a sub-selection.
+;; E.g., (selection-sub-name 'AddrZip 'address) → 'AddrZip/address
+(define (selection-sub-name parent-name field-sym)
+  (string->symbol (format "~a/~a" parent-name field-sym)))
+
+;; Extract path suffixes for a given keyword from a path list.
+;; ((#:address #:zip) (#:address #:city) (#:name)) with kw=#:address
+;; → ((#:zip) (#:city))
+(define (extract-path-suffixes paths kw)
+  (let loop ([ps paths] [acc '()])
+    (if (null? ps)
+        (reverse acc)
+        (let ([p (car ps)])
+          (if (and (pair? p) (equal? (car p) kw))
+              (let ([tail (cdr p)])
+                (if (pair? tail)
+                    (loop (cdr ps) (cons tail acc))
+                    (loop (cdr ps) acc)))
+              (loop (cdr ps) acc))))))
+
+;; Check if a field should return the full schema type (unrestricted).
+;; True when any matching path is: bare (#:field), wildcard (#:field *),
+;; or globstar (#:field **).
+(define (selection-field-unrestricted? paths kw)
+  (ormap (lambda (p)
+           (and (pair? p) (equal? (car p) kw)
+                (or (null? (cdr p))              ;; bare: (#:address)
+                    (equal? (cdr p) '(*))         ;; wildcard: (#:address *)
+                    (equal? (cdr p) '(**)))))     ;; globstar: (#:address **)
+         paths))
+
+;; Compute the type for a selection field access.
+;; If the field's schema type needs sub-selection gating, synthesize
+;; or retrieve a cached sub-selection. Returns an expr (type).
+(define (selection-field-type sel kw-sym schema)
+  (define field (schema-lookup-field schema kw-sym))
+  (if (not field)
+      (expr-error)
+      (let ([field-type-expr (schema-field-type->expr (schema-field-type-datum field))])
+        ;; Only apply sub-selection gating if the field type is a schema
+        (match field-type-expr
+          [(expr-fvar nested-schema-name)
+           #:when (lookup-schema-by-name nested-schema-name)
+           (let* ([kw-rkt (string->keyword (symbol->string kw-sym))]
+                  [all-paths (append (selection-entry-requires-paths sel)
+                                    (selection-entry-provides-paths sel))])
+             (cond
+               ;; Unrestricted access — return full schema type
+               [(selection-field-unrestricted? all-paths kw-rkt)
+                field-type-expr]
+               ;; Compute sub-selection
+               [else
+                (let* ([suffixes (extract-path-suffixes all-paths kw-rkt)]
+                       [sub-name (selection-sub-name (selection-entry-name sel) kw-sym)])
+                  (cond
+                    ;; No deep paths through this field — shouldn't happen since
+                    ;; selection-allows-field? passed, but guard anyway
+                    [(null? suffixes) field-type-expr]
+                    ;; Already cached
+                    [(lookup-selection sub-name) (expr-fvar sub-name)]
+                    ;; Create + register sub-selection
+                    [else
+                     (let ([nested-schema (lookup-schema-by-name nested-schema-name)])
+                       (register-selection!
+                        sub-name
+                        (selection-entry sub-name
+                                        (schema-entry-name nested-schema)
+                                        suffixes  ;; requires-paths = path suffixes
+                                        '()       ;; provides-paths = empty
+                                        '()       ;; includes-names = empty
+                                        #f))      ;; srcloc = synthetic
+                       ;; Install as type in global-env
+                       (current-global-env
+                        (global-env-add-type-only (current-global-env)
+                                                  sub-name
+                                                  (expr-Type (lzero))))
+                       (expr-fvar sub-name))]))]))]
+          ;; Not a schema type — return as-is (e.g., String, Nat)
+          [_ field-type-expr]))))
 
 ;; ========================================
 ;; Type inference (synthesis mode)
@@ -1103,12 +1192,9 @@
                      ;; Field NOT in selection's allowed fields → error
                      [(not (selection-allows-field? sel kw-sym))
                       (expr-error)]
-                     ;; Field in selection → look up type in parent schema
+                     ;; Field in selection → compute type with sub-selection gating
                      [else
-                      (let ([field (schema-lookup-field schema kw-sym)])
-                        (if field
-                            (schema-field-type->expr (schema-field-type-datum field))
-                            (expr-error)))])]
+                      (selection-field-type sel kw-sym schema)])]
                   [_ (expr-error)])))]
          ;; Schema type: look up field by keyword name
          [(expr-fvar name)

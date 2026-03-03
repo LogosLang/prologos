@@ -230,14 +230,18 @@
   (check-no-errors results))
 
 ;; ========================================
-;; 12. Deep path from includes accessible
+;; 12. Deep path from includes accessible (returns sub-selection, not full Address)
 ;; ========================================
 
 (test-case "sel-compose/deep-path-included"
-  ;; AddrZip has :address.zip — include it and verify :address access
-  (define results
-    (run (string-append
-          "(selection WithAddrZip from User :includes [AddrZip] :requires [:name])\n"
-          "(spec compose-addr WithAddrZip -> Address)\n"
-          "(defn compose-addr [u] (map-get u :address))\n")))
-  (check-no-errors results))
+  ;; AddrZip has :address.zip — include it, :address is accessible but returns sub-selection
+  ;; Phase 3c: can't use `-> Address` because it returns a sub-selection type
+  (define result
+    (run-last (string-append
+               "(selection WithAddrZip from User :includes [AddrZip] :requires [:name])\n"
+               "(def u2 : WithAddrZip (the WithAddrZip ($brace-params :name \"alice\" :address (the Address ($brace-params :zip 10001N :city \"NYC\" :state \"NY\")))))\n"
+               "(infer (map-get u2 :address))")))
+  (check-true (string? result) (format "Expected string, got ~v" result))
+  ;; Result should be a sub-selection type, not full Address
+  (check-false (string-contains? result "Address")
+               (format "Expected sub-selection type from composed deep path, got ~v" result)))

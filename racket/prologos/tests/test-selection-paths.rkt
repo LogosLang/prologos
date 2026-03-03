@@ -112,13 +112,18 @@
 (define shared-preamble
   (string-append
    "(ns test)\n"
-   ;; Define schemas — Address nested in User
+   ;; Define schemas — Address nested in User, Geo nested in Address2
+   "(schema Geo :lat Nat :lon Nat)\n"
    "(schema Address :zip Nat :city String :state String)\n"
+   "(schema Address2 :zip Nat :city String :geo Geo)\n"
    "(schema User :name String :age Nat :address Address)\n"
+   "(schema User2 :name String :address2 Address2)\n"
    ;; Flat selection (top-level fields only)
    "(selection NameAddr from User :requires [:name :address])\n"
    ;; Deep path selection — first segment :address must be valid in User
-   "(selection AddrZip from User :requires [:address.zip])\n"))
+   "(selection AddrZip from User :requires [:address.zip])\n"
+   ;; Wildcard selection — all of :address
+   "(selection AllAddr from User :requires [:address.*])\n"))
 
 (define-values (shared-global-env
                 shared-ns-context
@@ -210,14 +215,19 @@
   (check-true (prologos-error? result)
               (format "Expected error for :age via NameAddr, got ~v" result)))
 
-;; 15. AddrZip (deep path :address.zip) — spec+defn: :address access allowed
-;;     Uses spec+defn pattern to avoid nested value construction complexity
-(test-case "sel-path/addzip-address-gated"
-  (define results
-    (run (string-append
-          "(spec addzip-get-addr AddrZip -> Address)\n"
-          "(defn addzip-get-addr [u] (map-get u :address))\n")))
-  (check-no-errors results))
+;; 15. AddrZip (deep path :address.zip) — :address access returns sub-selection (not full Address)
+;;     Phase 3c: accessing :address on AddrZip returns a sub-selection gating only :zip
+(test-case "sel-path/addzip-address-sub-selection"
+  ;; Can't use `-> Address` because the return type is now a synthetic sub-selection
+  ;; Instead, verify that :address access doesn't error (it's an allowed field)
+  (define result
+    (run-last (string-append
+               "(def u : AddrZip (the AddrZip ($brace-params :name \"alice\" :age 30N :address (the Address ($brace-params :zip 10001N :city \"NYC\" :state \"NY\")))))\n"
+               "(infer (map-get u :address))")))
+  (check-true (string? result) (format "Expected string, got ~v" result))
+  ;; The result should NOT be "Address" — it should be the sub-selection type name
+  (check-false (string-contains? result "Address")
+               (format "Expected sub-selection type, not full Address, got ~v" result)))
 
 ;; 16. AddrZip (deep path) — :name is blocked (not in selection)
 (test-case "sel-path/addzip-blocks-name"
@@ -333,3 +343,94 @@
     (run-last "(selection BadBrace from User :requires [:address.{zip bogus}])"))
   (check-true (prologos-error? result)
               (format "Expected error for :address.{zip bogus}, got ~v" result)))
+
+;; ========================================
+;; Section 4: Phase 3c — Nested field-gating via sub-selection synthesis
+;; ========================================
+
+;; 31. AddrZip: chained access — :zip reachable through sub-selection
+(test-case "sel-path/sub-sel-zip-accessible"
+  (define results
+    (run (string-append
+          "(spec get-zip AddrZip -> Nat)\n"
+          "(defn get-zip [u] (map-get (map-get u :address) :zip))\n")))
+  (check-no-errors results))
+
+;; 32. AddrZip: :city BLOCKED through sub-selection
+(test-case "sel-path/sub-sel-city-blocked"
+  (define result
+    (run-last (string-append
+               "(spec get-city-bad AddrZip -> String)\n"
+               "(defn get-city-bad [u] (map-get (map-get u :address) :city))\n")))
+  (check-true (prologos-error? result)
+              (format "Expected error for :city via AddrZip sub-selection, got ~v" result)))
+
+;; 33. AddrZip: :state BLOCKED through sub-selection
+(test-case "sel-path/sub-sel-state-blocked"
+  (define result
+    (run-last (string-append
+               "(spec get-state-bad AddrZip -> String)\n"
+               "(defn get-state-bad [u] (map-get (map-get u :address) :state))\n")))
+  (check-true (prologos-error? result)
+              (format "Expected error for :state via AddrZip sub-selection, got ~v" result)))
+
+;; 34. NameAddr (flat :address path) — :address returns FULL Address (unrestricted)
+;;     NameAddr has :requires [:name :address] — :address is a bare path, so full access
+(test-case "sel-path/nameaddr-full-address"
+  (define results
+    (run (string-append
+          "(spec nameaddr-get-city NameAddr -> String)\n"
+          "(defn nameaddr-get-city [u] (map-get (map-get u :address) :city))\n")))
+  (check-no-errors results))
+
+;; 35. AllAddr (:address.*) — :address returns FULL Address (wildcard = unrestricted)
+(test-case "sel-path/alladdr-wildcard-full"
+  (define results
+    (run (string-append
+          "(spec alladdr-get-state AllAddr -> String)\n"
+          "(defn alladdr-get-state [u] (map-get (map-get u :address) :state))\n")))
+  (check-no-errors results))
+
+;; 36. Three-level deep path: User2 -> Address2 -> Geo
+;;     Selection requires :address2.geo.lat → sub-selection on Address2 (only :geo),
+;;     then sub-sub-selection on Geo (only :lat)
+(test-case "sel-path/three-level-sub-selection"
+  (define results
+    (run (string-append
+          "(selection Deep3 from User2 :requires [:address2.geo.lat])\n"
+          ;; Chain: u -> address2 (sub-sel) -> geo (sub-sub-sel) -> lat (Nat)
+          "(spec get-lat Deep3 -> Nat)\n"
+          "(defn get-lat [u] (map-get (map-get (map-get u :address2) :geo) :lat))\n")))
+  (check-no-errors results))
+
+;; 37. Three-level deep path: :lon should be BLOCKED
+(test-case "sel-path/three-level-lon-blocked"
+  (define result
+    (run-last (string-append
+               "(selection Deep3b from User2 :requires [:address2.geo.lat])\n"
+               "(spec get-lon Deep3b -> Nat)\n"
+               "(defn get-lon [u] (map-get (map-get (map-get u :address2) :geo) :lon))\n")))
+  (check-true (prologos-error? result)
+              (format "Expected error for :lon via 3-level sub-selection, got ~v" result)))
+
+;; 38. Multiple deep paths: :address.{zip city} → sub-selection with both zip and city
+(test-case "sel-path/brace-sub-selection"
+  (define results
+    (run (string-append
+          "(selection AddrZipCity from User :requires [:address.{zip city}])\n"
+          ;; Both :zip and :city should be accessible through sub-selection
+          "(spec get-zip2 AddrZipCity -> Nat)\n"
+          "(defn get-zip2 [u] (map-get (map-get u :address) :zip))\n"
+          "(spec get-city2 AddrZipCity -> String)\n"
+          "(defn get-city2 [u] (map-get (map-get u :address) :city))\n")))
+  (check-no-errors results))
+
+;; 39. Brace sub-selection: :state still blocked (not in {zip city})
+(test-case "sel-path/brace-sub-selection-blocks-other"
+  (define result
+    (run-last (string-append
+               "(selection AddrZipCity2 from User :requires [:address.{zip city}])\n"
+               "(spec get-state2 AddrZipCity2 -> String)\n"
+               "(defn get-state2 [u] (map-get (map-get u :address) :state))\n")))
+  (check-true (prologos-error? result)
+              (format "Expected error for :state via brace sub-selection, got ~v" result)))
