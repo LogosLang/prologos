@@ -280,14 +280,15 @@ The following collection items ARE also deferred (genuine infrastructure deps):
 - Deep validation: nested schema field validation in elaborator
 - Source: `docs/tracking/2026-03-02_2200_SCHEMA_SELECTION_DESIGN.md`, plan `buzzing-launching-pascal.md`
 
-### Phase 3c: Nested Field-Gating for Deep Paths (DEFERRED)
-- When a selection has deep path `:address.zip`, accessing `.address` currently returns
-  the full `Address` schema type (all fields accessible). It should return a sub-selection
-  of Address that only exposes `:zip`.
-- Requires synthetic sub-selection generation at type-check time or selection context
-  propagation through chained dot-access
-- **Blocked on**: Design for type-level sub-selection representation
-- Commit: `a409ce9` (Phase 3b)
+### Phase 3c: Nested Field-Gating for Deep Paths (COMPLETE)
+- Lazy sub-selection synthesis: accessing `:address` on `AddrZip` (requires `:address.zip`)
+  returns synthetic sub-selection type restricting access to only `:zip`
+- Sub-selections are normal `selection-entry` structs cached under deterministic names
+  (e.g., `AddrZip/address`) in the existing selection registry
+- Recursive nesting for 3+ levels, bare paths and wildcards return full schema (unrestricted)
+- 4 helpers: `selection-sub-name`, `extract-path-suffixes`, `selection-field-unrestricted?`, `selection-field-type`
+- 9 new tests (31-39), 2 existing tests updated
+- Commit: `9435568`
 
 ### Phase 4: Selection Composition (COMPLETE)
 - `:includes [A B]` set-union with `path-union` join semantics (wildcards subsume specifics)
