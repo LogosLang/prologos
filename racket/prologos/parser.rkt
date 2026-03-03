@@ -56,6 +56,7 @@
     Symbol symbol-lit
     Keyword Char String
     Map map-empty map-assoc map-get nil-safe-get nil? map-dissoc map-size map-has-key? map-keys map-vals
+    get-in update-in
     Set set-empty set-insert set-member? set-delete set-size set-union set-intersect set-diff set-to-list
     PVec pvec-empty pvec-push pvec-nth pvec-update pvec-length pvec-pop pvec-concat pvec-slice pvec-to-list pvec-from-list pvec-fold pvec-map pvec-filter
     set-fold set-filter
@@ -1911,6 +1912,48 @@
             (let ([m (parse-datum (car args))])
               (if (prologos-error? m) m
                   (surf-map-vals m loc))))]
+
+       ;; ---- Path algebra operations ----
+       ;; get-in: (get-in target path-spec)
+       ;; path-spec is parsed as selection paths, e.g., :address.zip or :address.{zip city}
+       [(get-in)
+        (cond
+          [(< (length args) 2)
+           (parse-error loc "get-in requires at least 2 arguments: (get-in target path-spec)" #f)]
+          [else
+           (define target (parse-datum (car args)))
+           (if (prologos-error? target) target
+               ;; Parse remaining args as path items — use syntax->datum (deep)
+               ;; to match how selection parsing works (see parse-selection line 2886)
+               (let ([paths (validate-selection-paths
+                              (map (lambda (a) (if (syntax? a) (syntax->datum a) a))
+                                   (cdr args))
+                              "get-in" loc)])
+                 (if (prologos-error? paths) paths
+                     (surf-get-in target paths loc))))])]
+
+       ;; update-in: (update-in target path-spec fn-expr)
+       ;; path-spec is parsed as selection paths, fn-expr is the update function
+       [(update-in)
+        (cond
+          [(< (length args) 3)
+           (parse-error loc "update-in requires at least 3 arguments: (update-in target path-spec fn)" #f)]
+          [else
+           (define target (parse-datum (car args)))
+           (if (prologos-error? target) target
+               ;; Split: last arg is fn, everything in between is path-spec
+               ;; path-items are from (cdr args) excluding the last element
+               (let* ([rest (cdr args)]
+                      [fn-arg (last rest)]
+                      [path-args (reverse (cdr (reverse rest)))]  ;; drop last from rest
+                      [fn-expr (parse-datum fn-arg)])
+                 (if (prologos-error? fn-expr) fn-expr
+                     (let ([paths (validate-selection-paths
+                                    (map (lambda (a) (if (syntax? a) (syntax->datum a) a))
+                                         path-args)
+                                    "update-in" loc)])
+                       (if (prologos-error? paths) paths
+                           (surf-update-in target paths fn-expr loc))))))])]
 
        ;; ---- Set type and operations ----
        ;; (Set A)

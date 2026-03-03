@@ -205,6 +205,8 @@
  (struct-out surf-map-has-key)
  (struct-out surf-map-keys)
  (struct-out surf-map-vals)
+ (struct-out surf-get-in)
+ (struct-out surf-update-in)
  ;; Set surface forms
  (struct-out surf-set-type)
  (struct-out surf-set-literal)
@@ -742,6 +744,8 @@
 (struct surf-map-has-key (m k srcloc) #:transparent)       ; (map-has-key m k)
 (struct surf-map-keys (m srcloc) #:transparent)            ; (map-keys m)
 (struct surf-map-vals (m srcloc) #:transparent)            ; (map-vals m)
+(struct surf-get-in (target paths srcloc) #:transparent)   ; (get-in target path-spec) — paths is list of parsed paths
+(struct surf-update-in (target paths fn-expr srcloc) #:transparent) ; (update-in target path-spec fn)
 
 ;; ========================================
 ;; Set (CHAMP-backed persistent hash set)

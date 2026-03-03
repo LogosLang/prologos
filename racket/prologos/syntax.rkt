@@ -139,6 +139,7 @@
  (struct-out expr-map-get) (struct-out expr-nil-safe-get) (struct-out expr-map-dissoc)
  (struct-out expr-map-size) (struct-out expr-map-has-key)
  (struct-out expr-map-keys) (struct-out expr-map-vals)
+ (struct-out expr-get-in) (struct-out expr-update-in)
  ;; Set (persistent hash set)
  (struct-out expr-Set) (struct-out expr-hset)
  (struct-out expr-set-empty) (struct-out expr-set-insert)
@@ -573,6 +574,10 @@
 (struct expr-map-has-key (m k) #:transparent)                 ; has-key? : Map K V → K → Bool
 (struct expr-map-keys (m) #:transparent)                      ; keys : Map K V → List K
 (struct expr-map-vals (m) #:transparent)                      ; vals : Map K V → List V
+
+;; Path algebra operations
+(struct expr-get-in (target paths) #:transparent)             ; get-in : M → paths → V
+(struct expr-update-in (target paths fn) #:transparent)       ; update-in : M → paths → (V → V) → M
 
 ;; ========================================
 ;; Set (persistent hash set, backed by CHAMP with #t sentinel)
