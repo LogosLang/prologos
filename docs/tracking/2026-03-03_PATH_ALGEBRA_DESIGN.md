@@ -65,25 +65,25 @@ Schemas declare named map types with typed fields and optional properties.
 **Sexp mode:**
 ```scheme
 (schema Geo
-  :lat Nat
-  :lon Nat)
+  :lat Int
+  :lon Int)
 
 (schema Address
   :street String
   :city   String
   :state  String
-  :zip    Nat)
+  :zip    Int)
 
 (schema User
   :name    String
-  :age     Nat
+  :age     Int
   :email   String
   :address Address)
 
 ;; Schema with properties
 (schema Config
   :host  String :default "localhost"
-  :port  Nat    :default 8080N :check [pos?]
+  :port  Int    :default 8080 :check [pos?]
   :debug Bool   :default false
   :closed)
 ```
@@ -91,25 +91,25 @@ Schemas declare named map types with typed fields and optional properties.
 **WS (indentation) mode:**
 ```prologos
 schema Geo
-  :lat Nat
-  :lon Nat
+  :lat Int
+  :lon Int
 
 schema Address
   :street String
   :city   String
   :state  String
-  :zip    Nat
+  :zip    Int
 
 schema User
   :name    String
-  :age     Nat
+  :age     Int
   :email   String
   :address Address
 
 ;; Schema with properties
 schema Config
   :host  String :default "localhost"
-  :port  Nat    :default 8080N :check [pos?]
+  :port  Int    :default 8080 :check [pos?]
   :debug Bool   :default false
   :closed
 ```
@@ -121,11 +121,11 @@ def home-address
   :street "742 Evergreen Terrace"
   :city   "Springfield"
   :state  "OR"
-  :zip    97403N
+  :zip    97403
 
 def alice
   :name    "Alice"
-  :age     3N
+  :age     30
   :email   "alice@example.com"
   :address home-address
 ```
@@ -133,9 +133,9 @@ def alice
 **Sexp equivalent:**
 ```scheme
 (def home-address := {:street "742 Evergreen Terrace" :city "Springfield"
-                      :state "OR" :zip 97403N})
+                      :state "OR" :zip 97403})
 
-(def alice := {:name "Alice" :age 3N :email "alice@example.com"
+(def alice := {:name "Alice" :age 30 :email "alice@example.com"
                :address home-address})
 ```
 
@@ -207,11 +207,11 @@ spec get-name PublicProfile -> String
 defn get-name [u]
   u.name                           ;; OK — :name is in PublicProfile
 
-spec get-age PublicProfile -> Nat
+spec get-age PublicProfile -> Int
 defn get-age [u]
   u.age                            ;; ERROR — :age is NOT in PublicProfile
 
-spec get-zip ShippingZip -> Nat
+spec get-zip ShippingZip -> Int
 defn get-zip [u]
   u.address.zip                    ;; OK — :address.zip is declared
 
@@ -230,7 +230,7 @@ defn get-city [u]
 (get-in alice :name)               ;; → "Alice"
 
 ;; Two-level deep
-(get-in alice :address.zip)        ;; → 97403N
+(get-in alice :address.zip)        ;; → 97403
 
 ;; Three-level (with nested schemas)
 (get-in response :data.user.name)  ;; → "Alice"
@@ -257,11 +257,11 @@ When `get-in` receives a branched path, it projects a subset of fields into a ne
 ```scheme
 ;; Project two fields from address
 (get-in alice :address.{zip city})
-;; → {:zip 97403N :city "Springfield"}
+;; → {:zip 97403 :city "Springfield"}
 
 ;; Mixed depth: some branches are deep, some shallow
 (get-in alice :address.{zip city.** state})
-;; → {:zip 97403N :city (...all of city...) :state "OR"}
+;; → {:zip 97403 :city (...all of city...) :state "OR"}
 
 ;; Per-branch sub-paths
 (get-in alice :{name address.zip})
@@ -275,7 +275,7 @@ When `get-in` receives a branched path, it projects a subset of fields into a ne
 def label-info := [get-in alice :address.{zip city}]
 
 ;; Use projected map
-label-info.zip                     ;; → 97403N
+label-info.zip                     ;; → 97403
 label-info.city                    ;; → "Springfield"
 ```
 
@@ -283,74 +283,74 @@ label-info.city                    ;; → "Springfield"
 
 **Sexp mode — modeling an API response:**
 ```scheme
-(schema Geo      :lat Nat :lon Nat)
+(schema Geo      :lat Int :lon Int)
 (schema Location :name String :geo Geo)
-(schema Venue    :id Nat :location Location :capacity Nat)
-(schema Event    :title String :venue Venue :attendees Nat)
+(schema Venue    :id Int :location Location :capacity Int)
+(schema Event    :title String :venue Venue :attendees Int)
 
 (def concert := {:title "Symphony No. 9"
-                 :venue {:id 1N
+                 :venue {:id 42
                          :location {:name "Concert Hall"
-                                    :geo {:lat 45N :lon 122N}}
-                         :capacity 2000N}
-                 :attendees 1500N})
+                                    :geo {:lat 45 :lon -122}}
+                         :capacity 2000}
+                 :attendees 1500})
 
 ;; Deep navigation — four levels
-(get-in concert :venue.location.geo.lat)   ;; → 45N
+(get-in concert :venue.location.geo.lat)   ;; → 45
 
 ;; Branch at the deepest level
 (get-in concert :venue.location.geo.{lat lon})
-;; → {:lat 45N :lon 122N}
+;; → {:lat 45 :lon -122}
 
 ;; Branch at intermediate level — mixed depths
 (get-in concert :venue.{id location.name capacity})
 ;; Expands to three paths:
-;;   :venue.id              → 1N
+;;   :venue.id              → 42
 ;;   :venue.location.name   → "Concert Hall"
-;;   :venue.capacity        → 2000N
-;; Result: {:id 1N :name "Concert Hall" :capacity 2000N}
+;;   :venue.capacity        → 2000
+;; Result: {:id 42 :name "Concert Hall" :capacity 2000}
 
 ;; Nested braces — select within select
 (get-in concert :venue.{id location.{name geo.{lat lon}}})
 ;; Expands to four paths:
-;;   :venue.id                   → 1N
+;;   :venue.id                   → 42
 ;;   :venue.location.name        → "Concert Hall"
-;;   :venue.location.geo.lat     → 45N
-;;   :venue.location.geo.lon     → 122N
-;; Result: {:id 1N :name "Concert Hall" :lat 45N :lon 122N}
+;;   :venue.location.geo.lat     → 45
+;;   :venue.location.geo.lon     → -122
+;; Result: {:id 42 :name "Concert Hall" :lat 45 :lon -122}
 ```
 
 **WS mode equivalent:**
 ```prologos
 schema Geo
-  :lat Nat
-  :lon Nat
+  :lat Int
+  :lon Int
 
 schema Location
   :name String
   :geo  Geo
 
 schema Venue
-  :id       Nat
+  :id       Int
   :location Location
-  :capacity Nat
+  :capacity Int
 
 schema Event
   :title     String
   :venue     Venue
-  :attendees Nat
+  :attendees Int
 
 def concert
   :title "Symphony No. 9"
   :venue
-    :id 1N
+    :id 42
     :location
       :name "Concert Hall"
       :geo
-        :lat 45N
-        :lon 122N
-    :capacity 2000N
-  :attendees 1500N
+        :lat 45
+        :lon -122
+    :capacity 2000
+  :attendees 1500
 
 ;; Deep navigation
 def lat := [get-in concert :venue.location.geo.lat]
@@ -374,25 +374,25 @@ def flat-view := [get-in concert :venue.{id location.{name geo.{lat lon}}}]
 **Sexp mode:**
 ```scheme
 ;; Increment a nested field
-(update-in concert :attendees (fn [n] [add n 1N]))
+(update-in concert :attendees (fn [n] [add n 1]))
 
 ;; Replace a deep value
 (update-in concert :venue.location.name (fn [_] "New Venue"))
 
 ;; Transform deeply nested field
-(update-in concert :venue.capacity (fn [c] [mul c 2N]))
+(update-in concert :venue.capacity (fn [c] [mul c 2]))
 ```
 
 **WS mode:**
 ```prologos
 ;; Increment attendees
-def sold-one-more := [update-in concert :attendees (fn [n] [add n 1N])]
+def sold-one-more := [update-in concert :attendees (fn [n] [add n 1])]
 
 ;; Rename venue
 def renamed := [update-in concert :venue.location.name (fn [_] "New Venue")]
 
 ;; Double capacity
-def expanded := [update-in concert :venue.capacity (fn [c] [mul c 2N])]
+def expanded := [update-in concert :venue.capacity (fn [c] [mul c 2])]
 ```
 
 #### Multi-level rebuild
@@ -400,14 +400,14 @@ def expanded := [update-in concert :venue.capacity (fn [c] [mul c 2N])]
 The desugaring shows how `update-in` reconstructs each level:
 
 ```scheme
-;; (update-in concert :venue.location.geo.lat (fn [x] 0N))
+;; (update-in concert :venue.location.geo.lat (fn [x] 0))
 ;;
 ;; Desugars to:
 ;; (map-assoc concert :venue
 ;;   (map-assoc (map-get concert :venue) :location
 ;;     (map-assoc (map-get (map-get concert :venue) :location) :geo
 ;;       (map-assoc (map-get (map-get (map-get concert :venue) :location) :geo) :lat
-;;         ((fn [x] 0N) (map-get (map-get (map-get (map-get concert :venue) :location) :geo) :lat))))))
+;;         ((fn [x] 0) (map-get (map-get (map-get (map-get concert :venue) :location) :geo) :lat))))))
 ;;
 ;; Each level: get the current sub-value, recurse, wrap in map-assoc to rebuild.
 ;; At the leaf: apply the function to the current value.
@@ -418,17 +418,17 @@ The desugaring shows how `update-in` reconstructs each level:
 ```scheme
 ;; Verify the update took effect
 (get-in
-  (update-in concert :venue.location.geo.lat (fn [_] 0N))
+  (update-in concert :venue.location.geo.lat (fn [_] 0))
   :venue.location.geo.lat)
-;; → 0N
+;; → 0
 
 ;; Chain multiple updates
 (get-in
   (update-in
-    (update-in concert :venue.capacity (fn [c] [mul c 2N]))
-    :attendees (fn [a] [add a 100N]))
+    (update-in concert :venue.capacity (fn [c] [mul c 2]))
+    :attendees (fn [a] [add a 100]))
   :venue.capacity)
-;; → 4000N
+;; → 4000
 ```
 
 **WS mode:**
@@ -436,18 +436,18 @@ The desugaring shows how `update-in` reconstructs each level:
 ;; Verify update
 def zeroed-lat
   [get-in
-    [update-in concert :venue.location.geo.lat (fn [_] 0N)]
+    [update-in concert :venue.location.geo.lat (fn [_] 0)]
     :venue.location.geo.lat]
-;; → 0N
+;; → 0
 
 ;; Chain updates and extract
 def new-capacity
   [get-in
     [update-in
-      [update-in concert :venue.capacity (fn [c] [mul c 2N])]
-      :attendees (fn [a] [add a 100N])]
+      [update-in concert :venue.capacity (fn [c] [mul c 2])]
+      :attendees (fn [a] [add a 100])]
     :venue.capacity]
-;; → 4000N
+;; → 4000
 ```
 
 #### Error: branched `update-in` is rejected
@@ -467,10 +467,10 @@ Selections use the full path algebra to declare fine-grained access policies.
 
 **Sexp mode:**
 ```scheme
-(schema GeoPoint :lat Nat :lon Nat)
-(schema Address  :street String :city String :state String :zip Nat :geo GeoPoint)
+(schema GeoPoint :lat Int :lon Int)
+(schema Address  :street String :city String :state String :zip Int :geo GeoPoint)
 (schema Profile  :bio String :avatar String :website String)
-(schema Account  :id Nat :name String :email String :address Address :profile Profile)
+(schema Account  :id Int :name String :email String :address Address :profile Profile)
 
 ;; Public API: only name and profile.{bio avatar}
 (selection PublicAPI from Account
@@ -504,14 +504,14 @@ Selections use the full path algebra to declare fine-grained access policies.
 **WS mode:**
 ```prologos
 schema GeoPoint
-  :lat Nat
-  :lon Nat
+  :lat Int
+  :lon Int
 
 schema Address
   :street String
   :city   String
   :state  String
-  :zip    Nat
+  :zip    Int
   :geo    GeoPoint
 
 schema Profile
@@ -520,7 +520,7 @@ schema Profile
   :website String
 
 schema Account
-  :id      Nat
+  :id      Int
   :name    String
   :email   String
   :address Address
@@ -566,7 +566,7 @@ defn format-label [account]
     account.name "\n"
     account.address.street "\n"
     account.address.city ", " account.address.state " "
-    [nat-to-string account.address.zip]]
+    [int-to-string account.address.zip]]
 ```
 
 ### 6. Path Algebra Interaction with Dot-Access
@@ -588,12 +588,12 @@ They compose naturally:
 
 ;; get-in to project, then dot-access on the projection
 def coords := [get-in concert :venue.location.geo.{lat lon}]
-coords.lat                                   ;; → 45N
-coords.lon                                   ;; → 122N
+coords.lat                                   ;; → 45
+coords.lon                                   ;; → -122
 
 ;; update-in then dot-access
-[update-in concert :venue.capacity (fn [c] [mul c 2N])].venue.capacity
-;; → 4000N
+[update-in concert :venue.capacity (fn [c] [mul c 2])].venue.capacity
+;; → 4000
 ```
 
 ### 7. Wildcard and Globstar Semantics
