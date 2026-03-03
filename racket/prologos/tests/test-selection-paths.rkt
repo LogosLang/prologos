@@ -551,3 +551,59 @@
 ;;     :a.{b c}.{d e}.f would be a reader error — users should write
 ;;     :a.{b.{d.f e.f} c.{d.f e.f}} or :a.{b.{d e}.f c.{d e}.f} instead.
 ;;     (No test — reader error prevents reaching parser.)
+
+;; ========================================
+;; Section 5: Phase 3d-e — E2E pipeline tests for extended paths
+;; ========================================
+
+;; 53. Deep sub-path in branch validates through pipeline
+;;     User2 -> Address2 -> Geo, selection requires :address2.{geo.lat}
+(test-case "sel-path/e2e-subpath-in-branch"
+  (define results
+    (run (string-append
+          "(selection DeepBranch from User2 :requires [:address2.{geo.lat}])\n"
+          ;; Access lat through the chain: u -> address2 -> geo -> lat
+          "(spec get-lat DeepBranch -> Nat)\n"
+          "(defn get-lat [u] (map-get (map-get (map-get u :address2) :geo) :lat))\n")))
+  (check-no-errors results))
+
+;; 54. Nested braces through pipeline: :address2.{geo.{lat lon}}
+(test-case "sel-path/e2e-nested-braces"
+  (define results
+    (run (string-append
+          "(selection NestedBrace from User2 :requires [:address2.{geo.{lat lon}}])\n"
+          ;; Both lat and lon should be accessible
+          "(spec nb-lat NestedBrace -> Nat)\n"
+          "(defn nb-lat [u] (map-get (map-get (map-get u :address2) :geo) :lat))\n"
+          "(spec nb-lon NestedBrace -> Nat)\n"
+          "(defn nb-lon [u] (map-get (map-get (map-get u :address2) :geo) :lon))\n")))
+  (check-no-errors results))
+
+;; 55. Field gating: {geo.lat} blocks :lon
+(test-case "sel-path/e2e-subpath-branch-blocks"
+  (define result
+    (run-last (string-append
+               "(selection GeoLat from User2 :requires [:address2.{geo.lat}])\n"
+               "(spec gl-bad GeoLat -> Nat)\n"
+               "(defn gl-bad [u] (map-get (map-get (map-get u :address2) :geo) :lon))\n")))
+  (check-true (prologos-error? result)
+              (format "Expected error for :lon via {geo.lat} sub-selection, got ~v" result)))
+
+;; 56. Path union with subsumption: :address2.{geo.**} subsumes :address2.{geo.lat}
+(test-case "sel-path/e2e-globstar-subsumption"
+  (define results
+    (run (string-append
+          "(selection GlobSub from User2 :requires [:address2.{geo.**} :address2.{geo.lat}])\n"
+          ;; Both lat and lon should be accessible (** subsumes everything)
+          "(spec gs-lat GlobSub -> Nat)\n"
+          "(defn gs-lat [u] (map-get (map-get (map-get u :address2) :geo) :lat))\n"
+          "(spec gs-lon GlobSub -> Nat)\n"
+          "(defn gs-lon [u] (map-get (map-get (map-get u :address2) :geo) :lon))\n")))
+  (check-no-errors results))
+
+;; 57. Error: :address2.{geo.bogus} — invalid nested field
+(test-case "sel-path/e2e-invalid-nested-field"
+  (define result
+    (run-last "(selection BadNested from User2 :requires [:address2.{geo.bogus}])"))
+  (check-true (prologos-error? result)
+              (format "Expected error for bogus nested field, got ~v" result)))
