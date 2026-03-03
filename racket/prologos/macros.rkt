@@ -1097,6 +1097,16 @@
            (define fpairs (cddr eff-datum))
            (define flds (parse-schema-fields fpairs #f))
            (register-schema! sname (schema-entry sname flds #f #f)))]
+        [(selection)
+         ;; Pre-register selection name so known-type-name? recognizes it during spec processing
+         (when (and (list? eff-datum) (>= (length eff-datum) 4)
+                    (symbol? (cadr eff-datum))     ;; selection name
+                    (eq? (caddr eff-datum) 'from)  ;; 'from' keyword
+                    (symbol? (cadddr eff-datum)))  ;; schema name
+           (define sel-name (cadr eff-datum))
+           (define schema-name (cadddr eff-datum))
+           ;; Minimal pre-registration — full validation happens during elaboration
+           (register-selection! sel-name (selection-entry sel-name schema-name '() '() '() #f)))]
         [else (void)])))
 
   ;; ============================================================
@@ -4479,7 +4489,9 @@
       (lookup-ctor sym)       ;; user-defined constructor → known
       (lookup-type-ctors sym) ;; user-defined type → known
       (lookup-trait sym)      ;; trait → known (not a variable)
-      (lookup-bundle sym)))   ;; bundle → known (not a variable)
+      (lookup-bundle sym)     ;; bundle → known (not a variable)
+      (lookup-schema sym)     ;; schema → known type (not a variable)
+      (lookup-selection sym)))  ;; selection → known type (not a variable)
 
 ;; Phase 1b: Check if a symbol starts with an uppercase letter (type variable candidate)
 (define (capitalized-symbol? sym)

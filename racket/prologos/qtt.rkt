@@ -1005,6 +1005,11 @@
           ;; map-get returns the value type V from Map K V
           (match t1
             [(expr-Map _ vt) (tu vt (add-usage u1 u2))]
+            ;; Schema/selection type: infer result type from typing-core, track usage
+            [(expr-fvar name)
+             #:when (or (lookup-schema-by-name name) (lookup-selection-by-name name))
+             (let ([result-type (infer ctx e)])
+               (tu result-type (add-usage u1 u2)))]
             [_ (tu-error)])]
          [(_ _) (tu-error)]))]
     [(expr-nil-safe-get m k)
@@ -2034,6 +2039,24 @@
     [((expr-map-assoc m k v) (expr-fvar name))
      #:when (lookup-schema-by-name name)
      ;; Check submap against same schema type; infer key/value usage
+     (let ([rm (checkQ ctx m (expr-fvar name))]
+           [rk (inferQ ctx k)]
+           [rv (inferQ ctx v)])
+       (match* (rm rk rv)
+         [((bu #t u1) (tu _ u2) (tu _ u3))
+          (bu #t (add-usage u1 (add-usage u2 u3)))]
+         [(_ _ _) (bu #f (zero-usage n))]))]
+    ;; ---- Map constructors: check against Selection type (fvar) ----
+    ;; Selection types delegate to parent schema at value level.
+    [((expr-champ _) (expr-fvar name))
+     #:when (lookup-selection-by-name name)
+     (bu #t (zero-usage n))]
+    [((expr-map-empty _ _) (expr-fvar name))
+     #:when (lookup-selection-by-name name)
+     (bu #t (zero-usage n))]
+    [((expr-map-assoc m k v) (expr-fvar name))
+     #:when (lookup-selection-by-name name)
+     ;; Selection types delegate to parent schema at value level for QTT.
      (let ([rm (checkQ ctx m (expr-fvar name))]
            [rk (inferQ ctx k)]
            [rv (inferQ ctx v)])

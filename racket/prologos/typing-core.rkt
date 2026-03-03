@@ -45,7 +45,10 @@
          ;; Schema type helpers
          schema-field-type->expr
          schema-lookup-field
-         lookup-schema-by-name)
+         lookup-schema-by-name
+         ;; Selection type helpers
+         lookup-selection-by-name
+         selection-allows-field?)
 
 ;; ========================================
 ;; Structural reduce tracking
@@ -308,6 +311,20 @@
       (let ([short (let-values ([(_prefix s) (split-qualified-name name)])
                      s)])
         (and short (lookup-schema short)))))
+
+;; Look up a selection by name, trying both the full name and bare (short) name.
+(define (lookup-selection-by-name name)
+  (or (lookup-selection name)
+      (let ([short (let-values ([(_prefix s) (split-qualified-name name)])
+                     s)])
+        (and short (lookup-selection short)))))
+
+;; Check if a keyword is in a selection's allowed fields (requires + provides).
+;; kw is a symbol (e.g., 'name), selection-entry has Racket keywords (#:name).
+(define (selection-allows-field? sel kw-sym)
+  (define kw-rkt (string->keyword (symbol->string kw-sym)))
+  (or (member kw-rkt (selection-entry-requires-paths sel))
+      (member kw-rkt (selection-entry-provides-paths sel))))
 
 ;; ========================================
 ;; Type inference (synthesis mode)
@@ -1066,6 +1083,27 @@
        (match tm
          [(expr-Map kt vt)
           (if (check ctx k kt) vt (expr-error))]
+         ;; Selection type: gate field access to selected fields only
+         [(expr-fvar name)
+          #:when (lookup-selection-by-name name)
+          (let* ([sel (lookup-selection-by-name name)]
+                 [schema-name (selection-entry-schema-name sel)]
+                 [schema (lookup-schema-by-name schema-name)])
+            (if (not schema)
+                (expr-error)  ;; parent schema not found — shouldn't happen if elaborator validated
+                (match k
+                  [(expr-keyword kw-sym)
+                   (cond
+                     ;; Field NOT in selection's allowed fields → error
+                     [(not (selection-allows-field? sel kw-sym))
+                      (expr-error)]
+                     ;; Field in selection → look up type in parent schema
+                     [else
+                      (let ([field (schema-lookup-field schema kw-sym)])
+                        (if field
+                            (schema-field-type->expr (schema-field-type-datum field))
+                            (expr-error)))])]
+                  [_ (expr-error)])))]
          ;; Schema type: look up field by keyword name
          [(expr-fvar name)
           #:when (lookup-schema-by-name name)
@@ -2011,6 +2049,21 @@
                      (not (expr-error? (infer ctx v)))))]
               [_ (and (check ctx k (expr-Keyword))
                       (not (expr-error? (infer ctx v))))])))]
+    ;; map-assoc checked against Selection type — delegate to parent schema check
+    [((expr-map-assoc m k v) (expr-fvar sel-name))
+     #:when (lookup-selection-by-name sel-name)
+     (let* ([sel (lookup-selection-by-name sel-name)]
+            [schema-name (selection-entry-schema-name sel)])
+       ;; A selection at value level IS the parent schema — delegate to schema check
+       (check ctx (expr-map-assoc m k v) (expr-fvar schema-name)))]
+    ;; map-empty checked against Selection type — delegate to parent schema
+    [((expr-map-empty k1 v1) (expr-fvar sel-name))
+     #:when (lookup-selection-by-name sel-name)
+     #t]
+    ;; champ checked against Selection type — delegate to parent schema
+    [((expr-champ v) (expr-fvar sel-name))
+     #:when (lookup-selection-by-name sel-name)
+     #t]
     ;; map-empty checked against Schema type — always ok (empty map is a valid partial schema)
     [((expr-map-empty _ _) (expr-fvar schema-name))
      #:when (lookup-schema-by-name schema-name)
