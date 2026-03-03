@@ -50,33 +50,581 @@ branch        = identifier , { '.' , path-segment } ;   (* sub-path *)
 - Recursive nesting: `{name address.{zip city.{name abbrev}}}` — braces within braces
 - Wildcards in branches: `{name address.** settings}` — glob within a branch
 
-## Expression Forms
+---
 
-### `get-in` — Navigate and Extract
+## Examples by Feature
 
-```prologos
-;; Single path: returns the value at the leaf
-(get-in user :address.zip)
-;; Desugars to: (map-get (map-get user :address) :zip)
+All examples are shown in both sexp mode and WS (indentation) mode. In WS mode,
+path expressions live inside `[...]` brackets, where indentation is ignored and the
+`.` / `{...}` path syntax works inline.
 
-;; Branched path: returns a map with projected fields
-(get-in user :address.{zip city})
-;; Desugars to: (map-assoc (map-assoc (map-empty K V) :zip (map-get (map-get user :address) :zip))
-;;                         :city (map-get (map-get user :address) :city))
+### 1. Schema Definitions
+
+Schemas declare named map types with typed fields and optional properties.
+
+**Sexp mode:**
+```scheme
+(schema Geo
+  :lat Nat
+  :lon Nat)
+
+(schema Address
+  :street String
+  :city   String
+  :state  String
+  :zip    Nat)
+
+(schema User
+  :name    String
+  :age     Nat
+  :email   String
+  :address Address)
+
+;; Schema with properties
+(schema Config
+  :host  String :default "localhost"
+  :port  Nat    :default 8080N :check [pos?]
+  :debug Bool   :default false
+  :closed)
 ```
 
-### `update-in` — Navigate and Transform
+**WS (indentation) mode:**
+```prologos
+schema Geo
+  :lat Nat
+  :lon Nat
+
+schema Address
+  :street String
+  :city   String
+  :state  String
+  :zip    Nat
+
+schema User
+  :name    String
+  :age     Nat
+  :email   String
+  :address Address
+
+;; Schema with properties
+schema Config
+  :host  String :default "localhost"
+  :port  Nat    :default 8080N :check [pos?]
+  :debug Bool   :default false
+  :closed
+```
+
+**Constructing schema-typed values** (implicit map syntax in WS mode):
+```prologos
+;; WS mode — indentation-based keyword block desugars to map literal
+def home-address
+  :street "742 Evergreen Terrace"
+  :city   "Springfield"
+  :state  "OR"
+  :zip    97403N
+
+def alice
+  :name    "Alice"
+  :age     3N
+  :email   "alice@example.com"
+  :address home-address
+```
+
+**Sexp equivalent:**
+```scheme
+(def home-address := {:street "742 Evergreen Terrace" :city "Springfield"
+                      :state "OR" :zip 97403N})
+
+(def alice := {:name "Alice" :age 3N :email "alice@example.com"
+               :address home-address})
+```
+
+### 2. Selection Definitions
+
+Selections declare which fields are accessible through a given view of a schema.
+
+**Sexp mode:**
+```scheme
+;; Only name and email visible
+(selection PublicProfile from User
+  :requires [:name :email])
+
+;; Deep path: only address.zip (not street/city/state)
+(selection ShippingZip from User
+  :requires [:address.zip])
+
+;; Branched deep path: address.{zip city} — two fields
+(selection ShippingLabel from User
+  :requires [:name :address.{zip city state}])
+
+;; Wildcard: all of address
+(selection FullAddress from User
+  :requires [:name :address.*])
+
+;; Globstar: all descendants of address (same as wildcard for flat schemas,
+;; but recurses into nested schemas)
+(selection DeepAddress from User
+  :requires [:address.**])
+
+;; Composition via :includes
+(selection ExtendedProfile from User
+  :includes [PublicProfile]
+  :requires [:age])
+```
+
+**WS (indentation) mode:**
+```prologos
+;; Only name and email visible
+selection PublicProfile from User
+  :requires [:name :email]
+
+;; Deep path: only address.zip
+selection ShippingZip from User
+  :requires [:address.zip]
+
+;; Branched: address.{zip city state}
+selection ShippingLabel from User
+  :requires [:name :address.{zip city state}]
+
+;; Wildcard: all of address
+selection FullAddress from User
+  :requires [:name :address.*]
+
+;; Globstar: all descendants
+selection DeepAddress from User
+  :requires [:address.**]
+
+;; Composition
+selection ExtendedProfile from User
+  :includes [PublicProfile]
+  :requires [:age]
+```
+
+**Using selections to restrict access:**
+```prologos
+;; A function typed with a selection can only access declared fields
+spec get-name PublicProfile -> String
+defn get-name [u]
+  u.name                           ;; OK — :name is in PublicProfile
+
+spec get-age PublicProfile -> Nat
+defn get-age [u]
+  u.age                            ;; ERROR — :age is NOT in PublicProfile
+
+spec get-zip ShippingZip -> Nat
+defn get-zip [u]
+  u.address.zip                    ;; OK — :address.zip is declared
+
+spec get-city ShippingZip -> String
+defn get-city [u]
+  u.address.city                   ;; ERROR — only :address.zip, not :city
+```
+
+### 3. `get-in` — Navigate and Extract
+
+#### Simple paths
+
+**Sexp mode:**
+```scheme
+;; Single field
+(get-in alice :name)               ;; → "Alice"
+
+;; Two-level deep
+(get-in alice :address.zip)        ;; → 97403N
+
+;; Three-level (with nested schemas)
+(get-in response :data.user.name)  ;; → "Alice"
+```
+
+**WS mode:**
+```prologos
+;; Inline in bracket expressions
+def name := [get-in alice :name]
+
+def zip := [get-in alice :address.zip]
+
+def deep-name := [get-in response :data.user.name]
+
+;; In a pipe
+alice |> [get-in _ :address.zip]
+```
+
+#### Branched paths (field projection)
+
+When `get-in` receives a branched path, it projects a subset of fields into a new map.
+
+**Sexp mode:**
+```scheme
+;; Project two fields from address
+(get-in alice :address.{zip city})
+;; → {:zip 97403N :city "Springfield"}
+
+;; Mixed depth: some branches are deep, some shallow
+(get-in alice :address.{zip city.** state})
+;; → {:zip 97403N :city (...all of city...) :state "OR"}
+
+;; Per-branch sub-paths
+(get-in alice :{name address.zip})
+;; NOTE: :{...} at root level is not valid syntax.
+;; For root-level branching, use multiple get-in calls or a selection.
+```
+
+**WS mode:**
+```prologos
+;; Project zip and city from address
+def label-info := [get-in alice :address.{zip city}]
+
+;; Use projected map
+label-info.zip                     ;; → 97403N
+label-info.city                    ;; → "Springfield"
+```
+
+#### Complex nested paths
+
+**Sexp mode — modeling an API response:**
+```scheme
+(schema Geo      :lat Nat :lon Nat)
+(schema Location :name String :geo Geo)
+(schema Venue    :id Nat :location Location :capacity Nat)
+(schema Event    :title String :venue Venue :attendees Nat)
+
+(def concert := {:title "Symphony No. 9"
+                 :venue {:id 1N
+                         :location {:name "Concert Hall"
+                                    :geo {:lat 45N :lon 122N}}
+                         :capacity 2000N}
+                 :attendees 1500N})
+
+;; Deep navigation — four levels
+(get-in concert :venue.location.geo.lat)   ;; → 45N
+
+;; Branch at the deepest level
+(get-in concert :venue.location.geo.{lat lon})
+;; → {:lat 45N :lon 122N}
+
+;; Branch at intermediate level — mixed depths
+(get-in concert :venue.{id location.name capacity})
+;; Expands to three paths:
+;;   :venue.id              → 1N
+;;   :venue.location.name   → "Concert Hall"
+;;   :venue.capacity        → 2000N
+;; Result: {:id 1N :name "Concert Hall" :capacity 2000N}
+
+;; Nested braces — select within select
+(get-in concert :venue.{id location.{name geo.{lat lon}}})
+;; Expands to four paths:
+;;   :venue.id                   → 1N
+;;   :venue.location.name        → "Concert Hall"
+;;   :venue.location.geo.lat     → 45N
+;;   :venue.location.geo.lon     → 122N
+;; Result: {:id 1N :name "Concert Hall" :lat 45N :lon 122N}
+```
+
+**WS mode equivalent:**
+```prologos
+schema Geo
+  :lat Nat
+  :lon Nat
+
+schema Location
+  :name String
+  :geo  Geo
+
+schema Venue
+  :id       Nat
+  :location Location
+  :capacity Nat
+
+schema Event
+  :title     String
+  :venue     Venue
+  :attendees Nat
+
+def concert
+  :title "Symphony No. 9"
+  :venue
+    :id 1N
+    :location
+      :name "Concert Hall"
+      :geo
+        :lat 45N
+        :lon 122N
+    :capacity 2000N
+  :attendees 1500N
+
+;; Deep navigation
+def lat := [get-in concert :venue.location.geo.lat]
+
+;; Branched projection at depth
+def coords := [get-in concert :venue.location.geo.{lat lon}]
+
+;; Mixed-depth branching
+def venue-summary := [get-in concert :venue.{id location.name capacity}]
+
+;; Nested braces — select within select
+def flat-view := [get-in concert :venue.{id location.{name geo.{lat lon}}}]
+```
+
+### 4. `update-in` — Navigate and Transform
+
+`update-in` applies a function at a path leaf and rebuilds the structure above it.
+
+#### Simple updates
+
+**Sexp mode:**
+```scheme
+;; Increment a nested field
+(update-in concert :attendees (fn [n] [add n 1N]))
+
+;; Replace a deep value
+(update-in concert :venue.location.name (fn [_] "New Venue"))
+
+;; Transform deeply nested field
+(update-in concert :venue.capacity (fn [c] [mul c 2N]))
+```
+
+**WS mode:**
+```prologos
+;; Increment attendees
+def sold-one-more := [update-in concert :attendees (fn [n] [add n 1N])]
+
+;; Rename venue
+def renamed := [update-in concert :venue.location.name (fn [_] "New Venue")]
+
+;; Double capacity
+def expanded := [update-in concert :venue.capacity (fn [c] [mul c 2N])]
+```
+
+#### Multi-level rebuild
+
+The desugaring shows how `update-in` reconstructs each level:
+
+```scheme
+;; (update-in concert :venue.location.geo.lat (fn [x] 0N))
+;;
+;; Desugars to:
+;; (map-assoc concert :venue
+;;   (map-assoc (map-get concert :venue) :location
+;;     (map-assoc (map-get (map-get concert :venue) :location) :geo
+;;       (map-assoc (map-get (map-get (map-get concert :venue) :location) :geo) :lat
+;;         ((fn [x] 0N) (map-get (map-get (map-get (map-get concert :venue) :location) :geo) :lat))))))
+;;
+;; Each level: get the current sub-value, recurse, wrap in map-assoc to rebuild.
+;; At the leaf: apply the function to the current value.
+```
+
+#### Composition: `get-in` after `update-in`
+
+```scheme
+;; Verify the update took effect
+(get-in
+  (update-in concert :venue.location.geo.lat (fn [_] 0N))
+  :venue.location.geo.lat)
+;; → 0N
+
+;; Chain multiple updates
+(get-in
+  (update-in
+    (update-in concert :venue.capacity (fn [c] [mul c 2N]))
+    :attendees (fn [a] [add a 100N]))
+  :venue.capacity)
+;; → 4000N
+```
+
+**WS mode:**
+```prologos
+;; Verify update
+def zeroed-lat
+  [get-in
+    [update-in concert :venue.location.geo.lat (fn [_] 0N)]
+    :venue.location.geo.lat]
+;; → 0N
+
+;; Chain updates and extract
+def new-capacity
+  [get-in
+    [update-in
+      [update-in concert :venue.capacity (fn [c] [mul c 2N])]
+      :attendees (fn [a] [add a 100N])]
+    :venue.capacity]
+;; → 4000N
+```
+
+#### Error: branched `update-in` is rejected
+
+```scheme
+;; Branched paths in update-in are a static error.
+;; Which branch should the function apply to? Ambiguous.
+(update-in concert :venue.{capacity attendees} inc)
+;; ERROR: "update-in requires exactly one path (no branching)"
+```
+
+### 5. Selections with Path Algebra
+
+Selections use the full path algebra to declare fine-grained access policies.
+
+#### Real-world API scenario
+
+**Sexp mode:**
+```scheme
+(schema GeoPoint :lat Nat :lon Nat)
+(schema Address  :street String :city String :state String :zip Nat :geo GeoPoint)
+(schema Profile  :bio String :avatar String :website String)
+(schema Account  :id Nat :name String :email String :address Address :profile Profile)
+
+;; Public API: only name and profile.{bio avatar}
+(selection PublicAPI from Account
+  :requires [:name :profile.{bio avatar}])
+;; Accessible: name, profile.bio, profile.avatar
+;; Blocked:    id, email, address.*, profile.website
+
+;; Shipping: name + address minus geo
+(selection ShippingInfo from Account
+  :requires [:name :address.{street city state zip}])
+;; Accessible: name, address.street, address.city, address.state, address.zip
+;; Blocked:    id, email, profile.*, address.geo
+
+;; Admin: everything
+(selection AdminView from Account
+  :requires [:*])
+;; Or equivalently: :requires [:**]
+
+;; Geo-only: just the coordinates
+(selection GeoOnly from Account
+  :requires [:address.geo.{lat lon}])
+;; Accessible: address.geo.lat, address.geo.lon
+;; Blocked:    everything else
+
+;; Composed: shipping + public
+(selection CustomerFacing from Account
+  :includes [ShippingInfo PublicAPI])
+;; Union of both — name, address.{street city state zip}, profile.{bio avatar}
+```
+
+**WS mode:**
+```prologos
+schema GeoPoint
+  :lat Nat
+  :lon Nat
+
+schema Address
+  :street String
+  :city   String
+  :state  String
+  :zip    Nat
+  :geo    GeoPoint
+
+schema Profile
+  :bio     String
+  :avatar  String
+  :website String
+
+schema Account
+  :id      Nat
+  :name    String
+  :email   String
+  :address Address
+  :profile Profile
+
+;; Public API
+selection PublicAPI from Account
+  :requires [:name :profile.{bio avatar}]
+
+;; Shipping
+selection ShippingInfo from Account
+  :requires [:name :address.{street city state zip}]
+
+;; Admin
+selection AdminView from Account
+  :requires [:*]
+
+;; Geo-only
+selection GeoOnly from Account
+  :requires [:address.geo.{lat lon}]
+
+;; Composed
+selection CustomerFacing from Account
+  :includes [ShippingInfo PublicAPI]
+```
+
+**Functions constrained by selections:**
+```prologos
+;; A handler that can only see public data
+spec render-profile PublicAPI -> String
+defn render-profile [account]
+  ;; account.name           OK
+  ;; account.profile.bio    OK
+  ;; account.profile.avatar OK
+  ;; account.email          BLOCKED — not in PublicAPI
+  ;; account.address.zip    BLOCKED — not in PublicAPI
+  [string-append account.name ": " account.profile.bio]
+
+;; A handler that can only see shipping data
+spec format-label ShippingInfo -> String
+defn format-label [account]
+  [string-append
+    account.name "\n"
+    account.address.street "\n"
+    account.address.city ", " account.address.state " "
+    [nat-to-string account.address.zip]]
+```
+
+### 6. Path Algebra Interaction with Dot-Access
+
+Prologos has two complementary systems for field access:
+
+| System | Syntax | Use case |
+|--------|--------|----------|
+| Dot-access | `user.name`, `user.address.zip` | Point access at use site |
+| Path algebra | `:address.{zip city}` | Declarative paths in selections, bulk navigation |
+| `get-in` | `(get-in user :address.zip)` | Programmatic path-based access |
+| `update-in` | `(update-in user :address.zip f)` | Programmatic path-based update |
+
+They compose naturally:
 
 ```prologos
-;; Apply function at leaf, rebuild structure
-(update-in user :address.zip (fn [n] 0N))
-;; Desugars to: (map-assoc user :address
-;;                (map-assoc (map-get user :address) :zip
-;;                  ((fn [n] 0N) (map-get (map-get user :address) :zip))))
+;; Dot-access on get-in result
+[get-in concert :venue.location].name        ;; → "Concert Hall"
 
-;; Only single paths allowed (no branching)
-(update-in user :address.{zip city} f)  ;; ERROR: branched update-in
+;; get-in to project, then dot-access on the projection
+def coords := [get-in concert :venue.location.geo.{lat lon}]
+coords.lat                                   ;; → 45N
+coords.lon                                   ;; → 122N
+
+;; update-in then dot-access
+[update-in concert :venue.capacity (fn [c] [mul c 2N])].venue.capacity
+;; → 4000N
 ```
+
+### 7. Wildcard and Globstar Semantics
+
+```scheme
+;; * (wildcard): all immediate fields — equivalent to listing every field
+(selection AllAddress from User
+  :requires [:address.*])
+;; Same as: :requires [:address.{street city state zip geo}]
+;; But doesn't require knowing the field names — forward-compatible.
+
+;; ** (globstar): all fields at all depths — recursive
+(selection EverythingUnder from User
+  :requires [:address.**])
+;; Includes: address.street, address.city, ..., address.geo.lat, address.geo.lon
+;; Recurses into nested schemas.
+
+;; Globstar in branches
+(selection Mixed from User
+  :requires [:name :address.{geo.** zip}])
+;; Includes: name, address.geo.lat, address.geo.lon, address.zip
+;; Blocks:   address.street, address.city, address.state
+
+;; Post-brace globstar
+(selection EverythingDeep from Account
+  :requires [:address.{street city}.**])
+;; Appends ** to each branch: address.street.**, address.city.**
+;; (For leaf fields like String, ** is a no-op. For nested schemas, it recurses.)
+```
+
+---
 
 ## Architecture
 
@@ -106,18 +654,32 @@ No new type checking code needed. Since `get-in`/`update-in` desugar to existing
 ### WS Mode (Deferred)
 
 In sexp mode, `:address.{zip city}` tokenizes as `:address.` + `($brace-params zip city)`.
-In WS mode, `.{` is the `dot-lbrace` token for mixfix expressions. Disambiguation is deferred;
-sexp mode is the canonical surface for complex paths. See DEFERRED.md.
+In WS mode, `.{` is the `dot-lbrace` token for mixfix expressions (e.g. `.{a + b * c}`).
+The disambiguation is deferred; sexp mode is the canonical surface for complex paths, and
+WS mode uses `[...]` brackets around path expressions where the sexp tokenizer applies.
+See DEFERRED.md.
+
+---
 
 ## Prior Art
 
-- **Clojure**: `get-in`, `update-in`, `assoc-in` — same concept, no brace expansion
-- **Specter**: Navigators for nested transformations — more powerful but complex API
-- **Lenses** (Haskell): Get/set/modify with composable optics — theoretically elegant,
-  operationally similar to what path algebra provides
-- **GraphQL**: Field selection with nested projections — `selection` declarations are
-  directly inspired by this
-- **jq**: Path expressions for JSON — wildcards and recursive descent similar to `*`/`**`
+| System | Comparison |
+|--------|------------|
+| **Clojure** `get-in`/`update-in`/`assoc-in` | Same concept, vector-of-keys instead of path syntax, no brace expansion |
+| **Specter** (Clojure) | Composable navigators for nested transforms — more powerful but heavier API |
+| **Lenses** (Haskell) | Get/set/modify with composable optics — theoretically elegant, operationally similar |
+| **GraphQL** | Field selection with nested projections — `selection` declarations directly inspired by this |
+| **jq** | Path expressions for JSON — wildcards (`.[]`) and recursive descent (`..`) similar to `*`/`**` |
+| **XPath** | XML navigation — `/foo/bar`, `//bar` (recursive), `foo/*` (wildcard) — similar concepts |
+| **CSS Selectors** | `.class > .child`, `.parent .descendant` — structural navigation in a tree |
+| **JSONPath** | `$.store.book[*].author`, `$..author` — direct analogy to `:store.book.*.author` |
+
+Prologos's path algebra is unique in combining:
+1. Brace expansion with per-branch sub-paths (no prior art for this)
+2. Integration with a type system (selections enforce path-based access control)
+3. Desugaring to first-class language operations (not a separate query language)
+
+---
 
 ## Sexp Tokenization Details
 
@@ -133,6 +695,8 @@ Understanding how Racket's sexp reader tokenizes path syntax is critical:
 The cons-dot issue occurs because `.{...}` at the tail of a bracket list triggers Racket's
 cons-dot reader. The `normalize-cons-dot-braces` pass detects the bare `$brace-params` symbol
 and re-wraps it.
+
+---
 
 ## Test Coverage
 
@@ -151,3 +715,4 @@ and re-wraps it.
 | 3e-a | AST nodes and parsing | `32993ad` |
 | 3e-b/c | Elaboration (get-in + update-in) | `f5749c8` |
 | 3e-f | Path expression tests | `93af4bc` |
+| 3f | Design doc + grammar | `3c2f730` |
