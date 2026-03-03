@@ -5,8 +5,8 @@
 
 ;; ===== Namespace and imports =====
 (ns sample)
-(require [prologos.data.nat :refer [add mul]])
-(provide double is-zero)
+(imports [prologos.data.nat :refer [add mul]])
+(exports double is-zero)
 
 ;; ===== Definitions =====
 (def one (inc zero))

@@ -40,7 +40,7 @@
 (defconst prologos-font-lock-keywords-1
   `(;; Top-level definition forms
     (,(regexp-opt '("def" "defn" "defmacro" "deftype" "data" "spec"
-                    "ns" "require" "provide" "foreign" "trait" "impl")
+                    "ns" "imports" "exports" "require" "provide" "foreign" "trait" "impl")
                   'symbols)
      . font-lock-keyword-face)
     ;; Top-level commands

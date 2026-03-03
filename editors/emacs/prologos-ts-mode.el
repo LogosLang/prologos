@@ -57,7 +57,7 @@
    :language 'prologos
    :feature 'keyword
    '(["defn" "def" "data" "deftype" "match" "fn"
-      "ns" "provide" "require" ":refer"] @font-lock-keyword-face)
+      "ns" "imports" "exports" "provide" "require" ":refer"] @font-lock-keyword-face)
 
    :language 'prologos
    :feature 'keyword

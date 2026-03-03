@@ -167,6 +167,16 @@ They are promoted to generic-string syntax only inside racket{...} blocks."
   (let ((face (prologos-test--face-at-first "require" "(require [prologos.data.nat])")))
     (should (eq face 'font-lock-keyword-face))))
 
+(ert-deftest prologos-test/font-lock-imports ()
+  "The `imports' keyword should be highlighted."
+  (let ((face (prologos-test--face-at-first "imports" "(imports [prologos.data.nat])")))
+    (should (eq face 'font-lock-keyword-face))))
+
+(ert-deftest prologos-test/font-lock-exports ()
+  "The `exports' keyword should be highlighted."
+  (let ((face (prologos-test--face-at-first "exports" "(exports double is-zero)")))
+    (should (eq face 'font-lock-keyword-face))))
+
 ;; ============================================================
 ;; Test: Font-lock — commands
 ;; ============================================================

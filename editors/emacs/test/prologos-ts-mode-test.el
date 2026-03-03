@@ -110,6 +110,22 @@
                "require [prologos.core.eq-trait :refer [nat-eq]]\n")))
     (should (eq face 'font-lock-keyword-face))))
 
+(ert-deftest prologos-ts-test/font-lock-imports-keyword ()
+  "The `imports' keyword should get keyword face."
+  (skip-unless prologos-ts-test--treesit-available)
+  (let ((face (prologos-ts-test--face-at-first
+               "imports"
+               "imports [prologos.core.eq-trait :refer [nat-eq]]\n")))
+    (should (eq face 'font-lock-keyword-face))))
+
+(ert-deftest prologos-ts-test/font-lock-exports-keyword ()
+  "The `exports' keyword should get keyword face."
+  (skip-unless prologos-ts-test--treesit-available)
+  (let ((face (prologos-ts-test--face-at-first
+               "exports"
+               "exports double is-zero\n")))
+    (should (eq face 'font-lock-keyword-face))))
+
 ;; ============================================================
 ;; Test: Font-lock definition names
 ;; ============================================================
