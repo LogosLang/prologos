@@ -500,3 +500,37 @@
               (format "Expected surf-selection, got ~v" result))
   (check-equal? (surf-selection-requires-paths result)
                 '((#:a #:b #:c) (#:a #:b #:d) (#:a #:e #:f) (#:a #:e #:g))))
+
+;; --- Phase 3d-c: Post-brace continuation ---
+
+;; 47. Globstar after brace: :a.{b c}.** → append ** to every branch
+(test-case "sel-path/post-brace-globstar"
+  (define result (test-parse "(selection Req from S :requires [:a.{b c}.**])"))
+  (check-true (surf-selection? result)
+              (format "Expected surf-selection, got ~v" result))
+  (check-equal? (surf-selection-requires-paths result)
+                '((#:a #:b **) (#:a #:c **))))
+
+;; 48. Single field after brace: :a.{b c}.d
+(test-case "sel-path/post-brace-field"
+  (define result (test-parse "(selection Req from S :requires [:a.{b c}.d])"))
+  (check-true (surf-selection? result)
+              (format "Expected surf-selection, got ~v" result))
+  (check-equal? (surf-selection-requires-paths result)
+                '((#:a #:b #:d) (#:a #:c #:d))))
+
+;; 49. Multi-segment continuation: :a.{b c}.d.e
+(test-case "sel-path/post-brace-multi-segment"
+  (define result (test-parse "(selection Req from S :requires [:a.{b c}.d.e])"))
+  (check-true (surf-selection? result)
+              (format "Expected surf-selection, got ~v" result))
+  (check-equal? (surf-selection-requires-paths result)
+                '((#:a #:b #:d #:e) (#:a #:c #:d #:e))))
+
+;; 50. Sub-path branches + globstar continuation: :a.{b.x c.y}.**
+(test-case "sel-path/post-brace-subpath-globstar"
+  (define result (test-parse "(selection Req from S :requires [:a.{b.x c.y}.**])"))
+  (check-true (surf-selection? result)
+              (format "Expected surf-selection, got ~v" result))
+  (check-equal? (surf-selection-requires-paths result)
+                '((#:a #:b #:x **) (#:a #:c #:y **))))

@@ -2996,6 +2996,23 @@
          (list (parse-error loc
                  (format "selection :~a: unexpected item in brace expansion: ~v"
                          clause-name (car remaining)) #f))])))
+  ;; Consume a post-brace continuation like .** or .d or .d.e
+  ;; Returns (values suffix-segments rest-remaining)
+  ;; A continuation is a symbol starting with '.' that immediately follows a brace group.
+  (define (consume-post-brace-continuation remaining)
+    (cond
+      [(and (pair? remaining)
+            (symbol? (car remaining))
+            (let ([s (symbol->string (car remaining))])
+              (and (> (string-length s) 1)
+                   (char=? (string-ref s 0) #\.))))
+       ;; e.g., .** → "**", .d → "d", .d.e → "d.e"
+       (define s (symbol->string (car remaining)))
+       (define cont-str (substring s 1 (string-length s)))
+       (define suffix-segs (parse-path-string cont-str))
+       (values suffix-segs (cdr remaining))]
+      [else
+       (values '() remaining)]))
   ;; Process items, handling trailing-dot + brace-params pairs
   (let loop ([remaining items] [acc '()])
     (cond
@@ -3019,13 +3036,17 @@
                                 (syntax-e (cadr remaining))
                                 (cadr remaining)))
           (define brace-items (cdr brace-raw))  ;; strip '$brace-params head
-          (define expanded (expand-brace-branches prefix brace-items))
+          ;; Check for post-brace continuation: .** or .d or .d.e
+          (define after-brace (cddr remaining))
+          (define-values (suffix-segs rest-after)
+            (consume-post-brace-continuation after-brace))
+          (define expanded (expand-brace-branches prefix brace-items suffix-segs))
           ;; Check for errors in expanded paths
           (define err (for/or ([p (in-list expanded)])
                         (and (prologos-error? p) p)))
           (if err
               err
-              (loop (cddr remaining) (append (reverse expanded) acc)))]
+              (loop rest-after (append (reverse expanded) acc)))]
          ;; Standard keyword-style path symbol
          [(selection-clause-sym? item)
           (define s (clause-sym->string item))
