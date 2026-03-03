@@ -1123,6 +1123,91 @@ subtype Zero Int via zero-to-int
          Nat
 #+end_example
 
+* Schema, Selection, and Path Algebra
+
+Prologos provides /schemas/ for declaring structured data shapes, /selections/ for
+declaring field-level access policies, and a /path algebra/ for navigating and
+transforming nested data.
+
+** Schema Definitions
+
+Schemas declare named map types with typed fields and optional properties:
+
+#+begin_src prologos
+;; Basic schema
+(schema User :name String :age Nat :address Address)
+
+;; Schema with properties
+(schema Config
+  :host String :default "localhost"
+  :port Nat    :default 8080N :check [pos?]
+  :debug Bool  :default false)
+
+;; Closed schema (rejects extra keys)
+(schema Point :x Nat :y Nat :closed)
+#+end_src
+
+Field properties: =:default val= (auto-fill on construction), =:check [pred]= (runtime
+assertion), =:closed= (reject unknown fields). Schema-typed values are constructed as
+map literals: ~(def u : User := {:name "Alice" :age 3N :address {...}})~.
+
+** Selection Definitions
+
+Selections declare which fields are accessible through a given view of a schema:
+
+#+begin_src prologos
+;; Allow access to name and address only
+(selection NameAddr from User :requires [:name :address])
+
+;; Deep paths: only address.zip
+(selection AddrZip from User :requires [:address.zip])
+
+;; Composition via :includes
+(selection Extended from User :includes [NameAddr] :requires [:age])
+#+end_src
+
+A function typed with a selection type can only access the declared fields:
+~(spec get-name NameAddr -> String)~ can access ~:name~ but not ~:age~.
+
+** Path Algebra
+
+The path algebra provides a rich syntax for navigating nested data:
+
+| Syntax                    | Meaning                                  |
+|---------------------------+------------------------------------------|
+| =:address.zip=            | Navigate two levels deep                 |
+| =:address.*=              | All fields of address (wildcard)         |
+| =:address.**=             | All descendants (globstar)               |
+| =:address.{zip city}=     | Branch: expand to two paths              |
+| =:a.{b.c d.e}=           | Per-branch sub-paths                     |
+| =:a.{b.{c d} e}=         | Nested braces (recursive)                |
+| =:a.{b c}.**=             | Post-brace suffix applied to all         |
+
+Brace items are full sub-paths, enabling mixed-depth branching:
+~:user.{name address.{zip city} age}~ expands to five independent paths.
+
+** Path Expressions: =get-in= and =update-in=
+
+Two expression forms apply the path algebra to values:
+
+#+begin_src prologos
+;; Navigate: get value at path
+(get-in user :address.zip)           ;; → Nat value
+
+;; Navigate + branch: project subset
+(get-in user :address.{zip city})    ;; → {:zip 10001N :city "NYC"}
+
+;; Navigate + transform: apply fn at leaf, rebuild structure
+(update-in user :address.zip (fn [n] 0N))  ;; → user with zip set to 0N
+#+end_src
+
+*Semantics*:
+- =get-in= with single path desugars to chained =map-get=: ~(map-get (map-get user :address) :zip)~
+- =get-in= with branched paths builds a map literal with projected fields
+- =update-in= desugars to nested =map-get= / =map-assoc= with function application at leaf
+
+Both forms reuse the existing =map-get= and =map-assoc= type checking infrastructure.
+
 * Relational Language (Logic Programming)
 
 Prologos makes logic programming a first-class paradigm via =defr=, the

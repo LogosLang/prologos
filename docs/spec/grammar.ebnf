@@ -1048,9 +1048,38 @@ explain-args    = identifier , goal
                 ;
 overrides       = { ':' , identifier , expr } ;           (* keyword-value pairs *)
 
-(* Solver / Schema definitions (pre-expanded by macros) *)
+(* Solver / Schema / Selection definitions *)
 solver-def      = '(' , 'solver' , identifier , { ':' , identifier , expr } , ')' ;
-schema-def      = '(' , 'schema' , identifier , { ':' , identifier , type-expr } , ')' ;
+schema-def      = '(' , 'schema' , identifier , { schema-field } , ')' ;
+schema-field    = ':' , identifier , type-expr , { schema-prop } ;
+schema-prop     = ':closed'
+                | ':default' , expr
+                | ':check' , '[' , expr , ']'
+                ;
+
+selection-def   = '(' , 'selection' , identifier , 'from' , identifier ,
+                  { selection-clause } , ')' ;
+selection-clause = ':requires' , '[' , { field-path } , ']'
+                 | ':provides' , '[' , { field-path } , ']'
+                 | ':includes' , '[' , { identifier } , ']'
+                 ;
+
+(* ------------------------------------------------ *)
+(* 5.25 Path Algebra                                *)
+(* ------------------------------------------------ *)
+
+(* Field paths — used in selection declarations, get-in, and update-in *)
+field-path      = ':' , identifier , { '.' , path-segment } ;
+path-segment    = identifier
+                | '*'                                      (* wildcard: all fields *)
+                | '**'                                     (* globstar: all descendants *)
+                | '{' , branch , { ' ' , branch } , '}'   (* brace expansion *)
+                ;
+branch          = identifier , { '.' , path-segment } ;   (* sub-path in a branch *)
+
+(* Path expressions — general-purpose data navigation *)
+get-in-expr     = '(' , 'get-in' , expr , field-path , ')' ;
+update-in-expr  = '(' , 'update-in' , expr , field-path , expr , ')' ;
 
 (* Type constructors *)
 rel-type-atom   = 'Solver' | 'Goal' | 'DerivationTree' | 'Answer' ;
