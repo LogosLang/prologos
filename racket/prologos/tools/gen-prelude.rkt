@@ -1,7 +1,7 @@
 #lang racket/base
 
 ;; ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-;; gen-prelude — generate prelude-requires from PRELUDE manifest
+;; gen-prelude — generate prelude-imports from PRELUDE manifest
 ;; ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ;;
 ;; The PRELUDE manifest (lib/prologos/book/PRELUDE) is the single source
@@ -41,7 +41,7 @@
 ;; ========================================
 
 ;; Read the PRELUDE manifest → list of content lines (after header).
-;; Header = everything before the first "(require" or ";; ----" line.
+;; Header = everything before the first "(imports" / "(require" or ";; ----" line.
 (define (read-prelude-manifest manifest-path)
   (unless (file-exists? manifest-path)
     (error 'gen-prelude "PRELUDE manifest not found: ~a" manifest-path))
@@ -52,7 +52,8 @@
       [in-header?
        (define stripped (string-trim (car lines)))
        (cond
-         [(or (string-prefix? stripped "(require")
+         [(or (string-prefix? stripped "(imports")
+              (string-prefix? stripped "(require")
               (string-prefix? stripped ";; ----"))
           (cons (car lines) (loop (cdr lines) #f))]
          [else (loop (cdr lines) #t)])]
@@ -63,8 +64,8 @@
 ;; Racket prelude generator
 ;; ========================================
 
-;; Generate the (define prelude-requires '(...)) block from content lines.
-;; Preserves internal indentation of multi-line require forms.
+;; Generate the (define prelude-imports '(...)) block from content lines.
+;; Preserves internal indentation of multi-line imports forms.
 ;; Returns a string.
 (define (generate-prelude-string content-lines)
   ;; Strip trailing blank lines
@@ -76,15 +77,15 @@
   (cond
     [(null? clean-lines)
      (string-append
-      ";; The prelude: a curated list of require specs emitted into user namespaces.\n"
+      ";; The prelude: a curated list of imports specs emitted into user namespaces.\n"
       ";; Generated from lib/prologos/book/PRELUDE by tools/gen-prelude.rkt.\n"
-      "(define prelude-requires '())\n")]
+      "(define prelude-imports '())\n")]
     [else
      (define out (open-output-string))
 
-     (fprintf out ";; The prelude: a curated list of require specs emitted into user namespaces.\n")
+     (fprintf out ";; The prelude: a curated list of imports specs emitted into user namespaces.\n")
      (fprintf out ";; Generated from lib/prologos/book/PRELUDE by tools/gen-prelude.rkt.\n")
-     (fprintf out "(define prelude-requires\n")
+     (fprintf out "(define prelude-imports\n")
 
      ;; First content line opens the quoted list
      (fprintf out "  '(~a\n" (car clean-lines))
@@ -136,25 +137,26 @@
              (drop lines (add1 end-idx)))]
     [else (values #f #f #f)]))
 
-;; Extract current prelude-requires block from namespace.rkt (no markers needed).
-;; Tracks paren depth to find the complete (define prelude-requires ...) form.
+;; Extract current prelude-imports block from namespace.rkt (no markers needed).
+;; Tracks paren depth to find the complete (define prelude-imports ...) form.
 ;; Returns the block as a string.
 (define (extract-current-prelude ns-path)
   (define lines (file->lines ns-path))
   (define start-idx
     (for/first ([i (in-naturals)]
                 [line (in-list lines)]
-                #:when (string-contains? line "(define prelude-requires"))
+                #:when (or (string-contains? line "(define prelude-imports")
+                           (string-contains? line "(define prelude-requires")))
       i))
   (unless start-idx
-    (error 'gen-prelude "Cannot find (define prelude-requires ...) in ~a" ns-path))
+    (error 'gen-prelude "Cannot find (define prelude-imports ...) in ~a" ns-path))
 
   ;; Find end by tracking paren depth
   (define end-idx
     (let loop ([i start-idx] [depth 0] [started? #f])
       (cond
         [(>= i (length lines))
-         (error 'gen-prelude "Unterminated prelude-requires in ~a" ns-path)]
+         (error 'gen-prelude "Unterminated prelude-imports in ~a" ns-path)]
         [else
          (define line (list-ref lines i))
          (define new-depth
@@ -198,10 +200,11 @@
 ;; Validation
 ;; ========================================
 
-;; Extract require entries from a prelude text block.
-;; Returns a list of normalized require s-expressions (as strings).
-;; Multi-line requires are joined into single lines.
-(define (extract-require-entries text)
+;; Extract import entries from a prelude text block.
+;; Returns a list of normalized imports s-expressions (as strings).
+;; Multi-line imports are joined into single lines.
+;; Also recognizes legacy (require ...) forms for backward compat.
+(define (extract-import-entries text)
   (define lines (string-split text "\n"))
   (define result '())
   (define current-req #f)
@@ -210,8 +213,9 @@
   (for ([line (in-list lines)])
     (define stripped (string-trim line))
     (cond
-      ;; Start of a new require
-      [(and (not current-req) (string-prefix? stripped "(require"))
+      ;; Start of a new imports/require entry
+      [(and (not current-req) (or (string-prefix? stripped "(imports")
+                                  (string-prefix? stripped "(require")))
        (set! current-req stripped)
        (set! paren-depth
              (for/fold ([d 0]) ([c (in-string stripped)])
@@ -241,11 +245,11 @@
   (define generated (generate-prelude-string content-lines))
   (define current (extract-current-prelude ns-path))
 
-  (define gen-reqs (extract-require-entries generated))
-  (define cur-reqs (extract-require-entries current))
+  (define gen-reqs (extract-import-entries generated))
+  (define cur-reqs (extract-import-entries current))
 
-  (printf "Generated: ~a require entries from PRELUDE manifest\n" (length gen-reqs))
-  (printf "Current:   ~a require entries in namespace.rkt\n" (length cur-reqs))
+  (printf "Generated: ~a import entries from PRELUDE manifest\n" (length gen-reqs))
+  (printf "Current:   ~a import entries in namespace.rkt\n" (length cur-reqs))
 
   (define max-len (max (length gen-reqs) (length cur-reqs)))
   (define diffs 0)
@@ -259,7 +263,7 @@
 
   (cond
     [(= diffs 0)
-     (printf "\nValidation PASSED: all ~a require entries match\n" (length gen-reqs))
+     (printf "\nValidation PASSED: all ~a import entries match\n" (length gen-reqs))
      #t]
     [else
      (when (> diffs 10)
@@ -272,10 +276,10 @@
 ;; ========================================
 
 ;; Extract module namespace symbols from PRELUDE manifest content lines.
-;; Handles multi-line require forms by joining lines until parens balance.
+;; Handles multi-line imports forms by joining lines until parens balance.
 (define (extract-prelude-modules content-lines)
   (define full-text (string-join content-lines "\n"))
-  (define reqs (extract-require-entries full-text))
+  (define reqs (extract-import-entries full-text))
   (filter-map
    (lambda (req-str)
      (define spec

@@ -49,8 +49,11 @@
  current-module-loader
  ;; Pre-parse directive processing
  process-ns-declaration
- process-require
- process-provide
+ process-imports
+ process-exports
+ ;; Backward-compat aliases
+ (rename-out [process-imports process-require]
+             [process-exports process-provide])
  ;; Foreign import handler (callback set by driver.rkt)
  current-foreign-handler
  process-foreign
@@ -319,9 +322,9 @@
       (string-prefix? s "prologos::core::")))
 
 ;;; ---- BEGIN GENERATED PRELUDE ----
-;; The prelude: a curated list of require specs emitted into user namespaces.
+;; The prelude: a curated list of imports specs emitted into user namespaces.
 ;; Generated from lib/prologos/book/PRELUDE by tools/gen-prelude.rkt.
-(define prelude-requires
+(define prelude-imports
   '(;; ---- Core combinators (not a book chapter) ----
     (require [prologos::core :refer-all])
 
@@ -474,7 +477,7 @@
 ;; Pre-parse Directive Processing
 ;; ========================================
 ;; These functions are called from macros.rkt during preparse-expand-all.
-;; They consume ns/require/provide forms and have side effects on
+;; They consume ns/imports/exports forms and have side effects on
 ;; current-ns-context, current-global-env, and current-module-registry.
 
 ;; (ns namespace-sym)
@@ -501,52 +504,54 @@
        ;; Library modules and :no-prelude: just get prologos::core
        (unless (eq? ns-sym 'prologos::core)
          (with-handlers ([exn:fail? (lambda (e) (void))])
-           (process-require '(require [prologos::core :refer-all]))))]
+           (process-imports '(imports [prologos::core :refer-all]))))]
       [else
        ;; User modules: get the full prelude
-       ;; Each require is individually wrapped so one failure doesn't
+       ;; Each imports is individually wrapped so one failure doesn't
        ;; prevent loading of subsequent modules.
-       (for ([req (in-list prelude-requires)])
+       (for ([req (in-list prelude-imports)])
          (with-handlers ([exn:fail? (lambda (e) (void))])
-           (process-require req)))])))
+           (process-imports req)))])))
 
-;; (provide name ...)
-;; (provide :all)
+;; (exports name ...)
+;; (exports :all)
 ;; Records the export list in the current namespace context.
-(define (process-provide datum)
+;; Also accepts legacy (provide ...) form for backward compatibility.
+(define (process-exports datum)
   (unless (and (list? datum) (>= (length datum) 2))
-    (error 'provide "provide requires: (provide name ...) or (provide :all)"))
+    (error 'exports "exports requires: (exports name ...) or (exports :all)"))
   (define names (cdr datum))
   (define ctx (current-ns-context))
   (unless ctx
-    (error 'provide "provide used without ns declaration"))
+    (error 'exports "exports used without ns declaration"))
   (cond
     [(and (= (length names) 1) (eq? (car names) ':all))
      ;; :all — will be resolved at module finalization time
      (ns-context-set-exports ctx '(:all))]
     [else
      (unless (andmap symbol? names)
-       (error 'provide "provide: all names must be symbols"))
+       (error 'exports "exports: all names must be symbols"))
      (current-ns-context (ns-context-set-exports ctx names))]))
 
-;; (require spec ...)
+;; (imports spec ...)
 ;; Where each spec is one of:
 ;;   [ns-sym :as alias]
 ;;   [ns-sym :refer [name ...]]
 ;;   [ns-sym :refer-all]
 ;;   ns-sym  (shorthand for [ns-sym :refer-all])
-(define (process-require datum)
+;; Also accepts legacy (require ...) form for backward compatibility.
+(define (process-imports datum)
   (unless (and (list? datum) (>= (length datum) 2))
-    (error 'require "require requires at least one spec"))
+    (error 'imports "imports requires at least one spec"))
   (for ([spec (in-list (cdr datum))])
-    (process-require-spec spec)))
+    (process-imports-spec spec)))
 
-;; Process a single require spec
-(define (process-require-spec spec)
+;; Process a single imports spec
+(define (process-imports-spec spec)
   (cond
-    ;; Bare symbol: (require prologos::data::nat) → shorthand for :refer-all
+    ;; Bare symbol: (imports prologos::data::nat) → shorthand for :refer-all
     [(symbol? spec)
-     (process-require-spec (list spec ':refer-all))]
+     (process-imports-spec (list spec ':refer-all))]
 
     ;; List form: [ns-sym :as alias] or [ns-sym :refer [...]] or [ns-sym :refer-all]
     [(and (list? spec) (>= (length spec) 2) (symbol? (car spec)))
@@ -577,7 +582,7 @@
             (for ([name (in-list names)])
               (unless (or (member name exports)
                           (and (pair? exports) (eq? (car exports) ':all)))
-                (error 'require
+                (error 'imports
                        "~a does not export ~a (exports: ~a)"
                        ns-sym name exports))))
           (current-ns-context
@@ -604,10 +609,10 @@
           (loop (cdr dirs))]
 
          [else
-          (error 'require "Unknown require directive: ~a" (car dirs))]))]
+          (error 'imports "Unknown imports directive: ~a" (car dirs))]))]
 
     [else
-     (error 'require "Invalid require spec: ~a" spec)]))
+     (error 'imports "Invalid imports spec: ~a" spec)]))
 
 ;; Ensure a module is loaded, returning its module-info (or #f if loader unavailable).
 ;; Always calls load-module (even if cached) so that load-module can import

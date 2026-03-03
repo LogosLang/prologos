@@ -917,13 +917,13 @@
     [else
      ;; 2. Check for circular dependencies
      (when (set-member? (current-loading-set) ns-sym)
-       (error 'require "Circular dependency detected: ~a" ns-sym))
+       (error 'imports "Circular dependency detected: ~a" ns-sym))
 
      ;; 3. Resolve to file path
      (define file-path
        (resolve-ns-path ns-sym base-dir))
      (unless file-path
-       (error 'require "Cannot find module: ~a (searched lib paths: ~a)"
+       (error 'imports "Cannot find module: ~a (searched lib paths: ~a)"
               ns-sym (current-lib-paths)))
 
      ;; 4. Process the file in a fresh environment
@@ -981,7 +981,7 @@
          (unless (prologos-error? surf)
            (define result (process-command surf))
            (when (prologos-error? result)
-             (error 'require "Error loading module ~a: ~a"
+             (error 'imports "Error loading module ~a: ~a"
                     ns-sym (prologos-error-message result)))))
 
        ;; Capture the resulting environment, namespace context, and registries
@@ -1016,7 +1016,7 @@
      (current-capability-registry mod-capability-reg)
 
      ;; Note: spec store is NOT globally propagated — it's carried in module-info
-     ;; for selective propagation via process-require-spec.
+     ;; for selective propagation via process-imports-spec.
 
      ;; 5. Build module-info
      ;; Export determination priority:

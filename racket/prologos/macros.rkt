@@ -1034,13 +1034,13 @@
         [(and (pair? datum) (eq? head 'ns))
          (process-ns-declaration datum)
          acc]
-        ;; require — import module and consume
-        [(and (pair? datum) (eq? head 'require))
-         (process-require datum)
+        ;; imports (formerly require) — import module and consume
+        [(and (pair? datum) (or (eq? head 'imports) (eq? head 'require)))
+         (process-imports datum)
          acc]
-        ;; provide — record exports and consume
-        [(and (pair? datum) (eq? head 'provide))
-         (process-provide datum)
+        ;; exports (formerly provide) — record exports and consume
+        [(and (pair? datum) (or (eq? head 'exports) (eq? head 'provide)))
+         (process-exports datum)
          acc]
         ;; foreign — import foreign function binding and consume
         [(and (pair? datum) (eq? head 'foreign))
