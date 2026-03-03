@@ -2051,8 +2051,10 @@
                (let ([field (schema-lookup-field schema kw-sym)])
                  (if field
                      (check ctx v (schema-field-type->expr (schema-field-type-datum field)))
-                     ;; Open by default: unknown fields accepted (Phase 5 adds :closed)
-                     (not (expr-error? (infer ctx v)))))]
+                     ;; :closed schemas reject unknown fields; open schemas accept them
+                     (if (schema-entry-closed? schema)
+                         #f
+                         (not (expr-error? (infer ctx v))))))]
               [_ (and (check ctx k (expr-Keyword))
                       (not (expr-error? (infer ctx v))))])))]
     ;; map-assoc checked against Selection type — delegate to parent schema check

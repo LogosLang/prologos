@@ -70,8 +70,8 @@
 
 (test-case "schema-registry/register-and-lookup"
   (parameterize ([current-schema-registry (hasheq)])
-    (define fields (list (schema-field 'name 'String)
-                         (schema-field 'age 'Nat)))
+    (define fields (list (schema-field 'name 'String #f #f)
+                         (schema-field 'age 'Nat #f #f)))
     (define entry (schema-entry 'User fields #f #f))
     (register-schema! 'User entry)
     (define looked-up (lookup-schema 'User))
@@ -86,8 +86,8 @@
 
 (test-case "schema-registry/register-multiple"
   (parameterize ([current-schema-registry (hasheq)])
-    (register-schema! 'A (schema-entry 'A (list (schema-field 'x 'Nat)) #f #f))
-    (register-schema! 'B (schema-entry 'B (list (schema-field 'y 'Bool)) #f #f))
+    (register-schema! 'A (schema-entry 'A (list (schema-field 'x 'Nat #f #f)) #f #f))
+    (register-schema! 'B (schema-entry 'B (list (schema-field 'y 'Bool #f #f)) #f #f))
     (check-true (schema-entry? (lookup-schema 'A)))
     (check-true (schema-entry? (lookup-schema 'B)))
     (check-equal? (schema-entry-name (lookup-schema 'A)) 'A)

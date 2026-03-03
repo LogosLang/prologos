@@ -164,6 +164,8 @@
          schema-field?
          schema-field-keyword
          schema-field-type-datum
+         schema-field-default-val
+         schema-field-check-pred
          schema-entry
          schema-entry?
          schema-entry-name
@@ -352,7 +354,10 @@
 ;; A schema field: stores a keyword name and its declared type datum.
 ;; keyword: symbol — the keyword name (e.g., 'name, 'age)
 ;; type-datum: symbol or list — the type datum (e.g., 'String, 'Nat, '(List Nat))
-(struct schema-field (keyword type-datum) #:transparent)
+;; A schema field: keyword name, declared type, optional default value, optional check predicate.
+;; default-val: #f if no :default, otherwise the datum value
+;; check-pred: #f if no :check, otherwise the predicate datum (e.g., (> _ 0))
+(struct schema-field (keyword type-datum default-val check-pred) #:transparent)
 
 ;; A schema entry: stores the full schema definition.
 ;; name: symbol — the schema name (e.g., 'User)
@@ -391,8 +396,31 @@
        (define kw-name
          (let ([s (symbol->string kw-datum)])
            (string->symbol (substring s 1))))
-       (loop (cddr pairs)
-             (cons (schema-field kw-name type-datum) fields))])))
+       ;; Consume optional :default val and :check pred after the type
+       (define-values (default-val check-pred rest)
+         (parse-field-properties (cddr pairs)))
+       (loop rest
+             (cons (schema-field kw-name type-datum default-val check-pred) fields))])))
+
+;; Parse optional field-level properties after a field's type datum.
+;; Returns (values default-val check-pred remaining-pairs).
+;; Handles: :default val, :check (pred), in any order, at most once each.
+(define (parse-field-properties pairs)
+  (let loop ([remaining pairs] [default-val #f] [check-pred #f])
+    (cond
+      [(null? remaining) (values default-val check-pred remaining)]
+      ;; :default val — consume two items
+      [(eq? (car remaining) ':default)
+       (when (null? (cdr remaining))
+         (error 'schema ":default requires a value"))
+       (loop (cddr remaining) (cadr remaining) check-pred)]
+      ;; :check pred — consume two items (pred is a form like (> _ 0))
+      [(eq? (car remaining) ':check)
+       (when (null? (cdr remaining))
+         (error 'schema ":check requires a predicate"))
+       (loop (cddr remaining) default-val (cadr remaining))]
+      ;; Not a field property — stop
+      [else (values default-val check-pred remaining)])))
 
 ;; Qualify a type-datum symbol using namespace context.
 ;; Built-in types (Nat, String, etc.) are left as-is.
@@ -1112,9 +1140,14 @@
          ;; Pre-register schema fields so forward references work
          (when (and (list? eff-datum) (>= (length eff-datum) 2) (symbol? (cadr eff-datum)))
            (define sname (cadr eff-datum))
-           (define fpairs (cddr eff-datum))
+           (define after-name (cddr eff-datum))
+           ;; Detect :closed property after schema name
+           (define-values (closed? fpairs)
+             (if (and (pair? after-name) (eq? (car after-name) ':closed))
+                 (values #t (cdr after-name))
+                 (values #f after-name)))
            (define flds (parse-schema-fields fpairs #f))
-           (register-schema! sname (schema-entry sname flds #f #f)))]
+           (register-schema! sname (schema-entry sname flds closed? #f)))]
         [(selection)
          ;; Pre-register selection name so known-type-name? recognizes it during spec processing
          (when (and (list? eff-datum) (>= (length eff-datum) 4)
@@ -1393,12 +1426,17 @@
          (cons new-stx acc)]
         ;; ---- Public schema — parse fields, register, emit as named type, auto-export ----
         [(and (pair? datum) (eq? head 'schema))
-         ;; (schema Name :field1 Type1 :field2 Type2 ...) → register + (def Name : (Type 0) (Type 0))
+         ;; (schema Name [:closed] :field1 Type1 :field2 Type2 ...) → register + (def Name : (Type 0) (Type 0))
          (unless (and (list? datum) (>= (length datum) 2) (symbol? (cadr datum)))
            (error 'schema "schema requires: (schema Name :field1 Type1 ...)"))
          (define schema-name (cadr datum))
          (auto-export-name! schema-name)
-         (define field-pairs (cddr datum))
+         (define after-name (cddr datum))
+         ;; Detect :closed property after schema name
+         (define-values (closed? field-pairs)
+           (if (and (pair? after-name) (eq? (car after-name) ':closed))
+               (values #t (cdr after-name))
+               (values #f after-name)))
          ;; Parse and register schema fields — qualify user-defined type names
          (define fields-raw (parse-schema-fields field-pairs (syntax->datum stx)))
          (define ns-ctx (current-ns-context))
@@ -1406,11 +1444,13 @@
            (if ns-ctx
                (map (lambda (f)
                       (schema-field (schema-field-keyword f)
-                                    (qualify-type-datum (schema-field-type-datum f) ns-ctx)))
+                                    (qualify-type-datum (schema-field-type-datum f) ns-ctx)
+                                    (schema-field-default-val f)
+                                    (schema-field-check-pred f)))
                     fields-raw)
                fields-raw))
          (register-schema! schema-name
-                           (schema-entry schema-name fields #f (syntax->datum stx)))
+                           (schema-entry schema-name fields closed? (syntax->datum stx)))
          ;; Emit schema name as an opaque type in global-env (same pattern as data types).
          ;; The def form (def Name : (Type 0) (Type 0)) creates an fvar with Type 0 type.
          ;; Actual field checking is done in typing-core.rkt via schema registry lookups.
