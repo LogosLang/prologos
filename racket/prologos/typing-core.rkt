@@ -41,7 +41,11 @@
          concrete-numeric-type? divisible-numeric-type? negatable-numeric-type?
          from-int-target-type? from-rat-target-type?
          numeric-join exact-numeric-type? posit-type?
-         base-numeric-type)
+         base-numeric-type
+         ;; Schema type helpers
+         schema-field-type->expr
+         schema-lookup-field
+         lookup-schema-by-name)
 
 ;; ========================================
 ;; Structural reduce tracking
@@ -248,6 +252,62 @@
         (emit-coercion-warning! (numeric-type-name exact-t)
                                 (numeric-type-name j)))))
   j)
+
+;; ========================================
+;; Schema field type conversion
+;; ========================================
+;; Convert a schema field type-datum (symbol or list) into an AST type expression.
+;; Built-in types map to their constructors; user-defined types map to expr-fvar.
+;; Compound types like (List Nat) are handled as nested applications.
+(define (schema-field-type->expr datum)
+  (cond
+    [(symbol? datum)
+     (case datum
+       [(Nat)     (expr-Nat)]
+       [(Int)     (expr-Int)]
+       [(Rat)     (expr-Rat)]
+       [(Bool)    (expr-Bool)]
+       [(String)  (expr-String)]
+       [(Char)    (expr-Char)]
+       [(Keyword) (expr-Keyword)]
+       [(Unit)    (expr-Unit)]
+       [(Nil)     (expr-Nil)]
+       [(Symbol)  (expr-Symbol)]
+       [(Posit8)  (expr-Posit8)]
+       [(Posit16) (expr-Posit16)]
+       [(Posit32) (expr-Posit32)]
+       [(Posit64) (expr-Posit64)]
+       [else      (expr-fvar datum)])]
+    [(and (list? datum) (>= (length datum) 2))
+     ;; Compound type: (List Nat) → (app (fvar List) (Nat))
+     ;; (Map Keyword String) → (app (app (fvar Map) (Keyword)) (String))
+     (let loop ([parts datum])
+       (cond
+         [(null? parts) (error 'schema-field-type->expr "empty type datum")]
+         [(null? (cdr parts)) (schema-field-type->expr (car parts))]
+         [else
+          (let loop2 ([args (cdr parts)]
+                      [result (schema-field-type->expr (car parts))])
+            (if (null? args)
+                result
+                (loop2 (cdr args)
+                       (expr-app result (schema-field-type->expr (car args))))))]))]
+    [else (error 'schema-field-type->expr (format "unsupported type datum: ~a" datum))]))
+
+;; Look up a field keyword in a schema's field list.
+;; Returns the schema-field or #f.
+(define (schema-lookup-field schema-entry keyword-sym)
+  (for/first ([f (in-list (schema-entry-fields schema-entry))]
+              #:when (eq? (schema-field-keyword f) keyword-sym))
+    f))
+
+;; Look up a schema by name, trying both the full name and bare (short) name.
+;; Handles qualified names like 'test::Point → looks up 'Point.
+(define (lookup-schema-by-name name)
+  (or (lookup-schema name)
+      (let ([short (let-values ([(_prefix s) (split-qualified-name name)])
+                     s)])
+        (and short (lookup-schema short)))))
 
 ;; ========================================
 ;; Type inference (synthesis mode)
@@ -1006,6 +1066,20 @@
        (match tm
          [(expr-Map kt vt)
           (if (check ctx k kt) vt (expr-error))]
+         ;; Schema type: look up field by keyword name
+         [(expr-fvar name)
+          #:when (lookup-schema-by-name name)
+          (let ([schema (lookup-schema-by-name name)])
+            (match k
+              ;; Keyword literal access: user.name → (map-get user :name)
+              [(expr-keyword kw-sym)
+               (let ([field (schema-lookup-field schema kw-sym)])
+                 (if field
+                     (schema-field-type->expr (schema-field-type-datum field))
+                     (expr-error)))]
+              ;; Non-keyword key on schema: fall back to error
+              ;; (schemas only support keyword field access)
+              [_ (expr-error)]))]
          [(expr-union _ _)
           ;; Union type: extract Map components, check key, collect value types
           (let* ([components (flatten-union tm)]
@@ -1922,6 +1996,29 @@
      (and (check ctx m (expr-Map kt vt))
           (check ctx k kt)
           (check ctx v vt))]
+    ;; map-assoc checked against Schema type — validate field types
+    [((expr-map-assoc m k v) (expr-fvar schema-name))
+     #:when (lookup-schema-by-name schema-name)
+     (let ([schema (lookup-schema-by-name schema-name)])
+       ;; Check that the key is a keyword and the value matches the field type
+       (and (check ctx m (expr-fvar schema-name))
+            (match k
+              [(expr-keyword kw-sym)
+               (let ([field (schema-lookup-field schema kw-sym)])
+                 (if field
+                     (check ctx v (schema-field-type->expr (schema-field-type-datum field)))
+                     ;; Open by default: unknown fields accepted (Phase 5 adds :closed)
+                     (not (expr-error? (infer ctx v)))))]
+              [_ (and (check ctx k (expr-Keyword))
+                      (not (expr-error? (infer ctx v))))])))]
+    ;; map-empty checked against Schema type — always ok (empty map is a valid partial schema)
+    [((expr-map-empty _ _) (expr-fvar schema-name))
+     #:when (lookup-schema-by-name schema-name)
+     #t]
+    ;; champ checked against Schema type — accept raw champ values
+    [((expr-champ _) (expr-fvar schema-name))
+     #:when (lookup-schema-by-name schema-name)
+     #t]
 
     ;; ---- Set checks ----
     ;; hset checked against Set A

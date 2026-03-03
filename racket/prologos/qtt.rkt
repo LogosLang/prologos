@@ -2022,6 +2022,26 @@
           (bu #t (add-usage u1 (add-usage u2 u3)))]
          [(_ _ _) (bu #f (zero-usage n))]))]
 
+    ;; ---- Map constructors: check against Schema type (fvar) ----
+    ;; Schema types are opaque fvar types backed by maps; QTT tracks usage normally.
+    [((expr-champ _) (expr-fvar name))
+     #:when (lookup-schema-by-name name)
+     (bu #t (zero-usage n))]
+    [((expr-map-empty _ _) (expr-fvar name))
+     #:when (lookup-schema-by-name name)
+     ;; Type args of map-empty are erased (m0) — zero usage, same as (expr-champ)
+     (bu #t (zero-usage n))]
+    [((expr-map-assoc m k v) (expr-fvar name))
+     #:when (lookup-schema-by-name name)
+     ;; Check submap against same schema type; infer key/value usage
+     (let ([rm (checkQ ctx m (expr-fvar name))]
+           [rk (inferQ ctx k)]
+           [rv (inferQ ctx v)])
+       (match* (rm rk rv)
+         [((bu #t u1) (tu _ u2) (tu _ u3))
+          (bu #t (add-usage u1 (add-usage u2 u3)))]
+         [(_ _ _) (bu #f (zero-usage n))]))]
+
     ;; ---- Set constructors: check against Set type ----
     [((expr-hset _) (expr-Set _)) (bu #t (zero-usage n))]
     [((expr-set-empty a) (expr-Set _))

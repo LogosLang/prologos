@@ -542,8 +542,18 @@
             datum  ; no change, avoid infinite loop
             (preparse-expand-form result reg (+ depth 1)))]
        [else
-        ;; Not a macro — recurse into subexpressions
-        (preparse-expand-subforms datum reg depth)])]
+        ;; Schema construction rewrite: (SchemaName ($brace-params ...)) → (the SchemaName ($brace-params ...))
+        ;; When the head is a known schema name and the rest is a brace-params map literal,
+        ;; wrap in a `the` annotation so the map is type-checked against the schema.
+        (define maybe-schema (lookup-schema (car datum)))
+        (if (and maybe-schema
+                 (pair? (cdr datum))
+                 (let ([arg (cadr datum)])
+                   (and (pair? arg) (eq? (car arg) '$brace-params)))
+                 (null? (cddr datum)))  ;; exactly one arg: the brace-params
+            (preparse-expand-form `(the ,(car datum) ,(cadr datum)) reg (+ depth 1))
+            ;; Not a schema construction — recurse into subexpressions
+            (preparse-expand-subforms datum reg depth))])]
     ;; Non-symbol list — recurse into subexpressions
     [(pair? datum)
      (preparse-expand-subforms datum reg depth)]
@@ -1048,6 +1058,13 @@
         [(bundle)   (process-bundle (rewrite-implicit-map eff-datum))]
         [(property) (process-property (rewrite-implicit-map eff-datum))]
         [(functor)  (process-functor (rewrite-implicit-map eff-datum))]
+        [(schema)
+         ;; Pre-register schema fields so forward references work
+         (when (and (list? eff-datum) (>= (length eff-datum) 2) (symbol? (cadr eff-datum)))
+           (define sname (cadr eff-datum))
+           (define fpairs (cddr eff-datum))
+           (define flds (parse-schema-fields fpairs #f))
+           (register-schema! sname (schema-entry sname flds #f #f)))]
         [else (void)])))
 
   ;; ============================================================
@@ -1314,9 +1331,9 @@
          (define expanded `(def ,sname ($brace-params ,@opts)))
          (define new-stx (datum->syntax #f (preparse-expand-form expanded) stx))
          (cons new-stx acc)]
-        ;; ---- Public schema — parse fields, register, expand to deftype, auto-export ----
+        ;; ---- Public schema — parse fields, register, emit as named type, auto-export ----
         [(and (pair? datum) (eq? head 'schema))
-         ;; (schema Name :field1 Type1 :field2 Type2 ...) → register + deftype
+         ;; (schema Name :field1 Type1 :field2 Type2 ...) → register + (def Name : (Type 0) (Type 0))
          (unless (and (list? datum) (>= (length datum) 2) (symbol? (cadr datum)))
            (error 'schema "schema requires: (schema Name :field1 Type1 ...)"))
          (define schema-name (cadr datum))
@@ -1326,10 +1343,11 @@
          (define fields (parse-schema-fields field-pairs (syntax->datum stx)))
          (register-schema! schema-name
                            (schema-entry schema-name fields #f (syntax->datum stx)))
-         ;; Still expand to deftype for backward compatibility (Phase 1b will change this)
-         (define expanded `(deftype ,schema-name (Map Keyword Value)))
-         (process-deftype expanded)
-         acc]
+         ;; Emit schema name as an opaque type in global-env (same pattern as data types).
+         ;; The def form (def Name : (Type 0) (Type 0)) creates an fvar with Type 0 type.
+         ;; Actual field checking is done in typing-core.rkt via schema registry lookups.
+         (define type-def `(def ,schema-name : (Type 0) (Type 0)))
+         (cons (datum->syntax #f type-def stx) acc)]
         ;; ---- Public defn/def — auto-export the name ----
         [(and (pair? datum) (memq head '(defn def)))
          (auto-export-names! (extract-defined-name datum head))

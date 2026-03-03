@@ -652,7 +652,10 @@
              (or (lookup-type-ctors name)
                  (and short-name-for-check (lookup-type-ctors short-name-for-check))
                  (lookup-ctor name)
-                 (and short-name-for-check (lookup-ctor short-name-for-check))))
+                 (and short-name-for-check (lookup-ctor short-name-for-check))
+                 ;; Schema types: opaque like data types, body not checked
+                 (lookup-schema name)
+                 (and short-name-for-check (lookup-schema short-name-for-check))))
            ;; For data type definitions, skip body elaboration/checking entirely.
            ;; The type is opaque (stored with value = #f), so the Church-encoded
            ;; body is never used at runtime. The type annotation is all we need.
