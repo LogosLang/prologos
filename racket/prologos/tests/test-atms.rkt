@@ -361,3 +361,109 @@
       (atms-write-cell a 'goal alt (hasheq h #t))))
   (define answers (atms-solve-all a1 'goal))
   (check-equal? (length answers) 10))
+
+;; ========================================
+;; GDE-2: Minimal diagnoses (hitting-set)
+;; ========================================
+
+(test-case "atms-minimal-diagnoses: empty for no conflicts"
+  (define-values (a0 h0) (atms-assume (atms-empty) 'h0 'a))
+  (define-values (a1 h1) (atms-assume a0 'h1 'b))
+  ;; No nogoods → no diagnoses
+  (check-equal? (atms-minimal-diagnoses a1) '()))
+
+(test-case "atms-minimal-diagnoses: single nogood → single diagnosis"
+  (define-values (a0 h0) (atms-assume (atms-empty) 'h0 'a))
+  (define-values (a1 h1) (atms-assume a0 'h1 'b))
+  (define a2 (atms-add-nogood a1 (hasheq h0 #t h1 #t)))
+  (define diags (atms-minimal-diagnoses a2))
+  ;; One diagnosis, containing one assumption (greedy picks the most common)
+  (check-equal? (length diags) 1)
+  (check-equal? (hash-count (car diags)) 1))
+
+(test-case "atms-minimal-diagnoses: shared assumption across nogoods"
+  ;; h0 appears in two nogoods → greedy picks h0 alone as the diagnosis
+  (define-values (a0 h0) (atms-assume (atms-empty) 'h0 'a))
+  (define-values (a1 h1) (atms-assume a0 'h1 'b))
+  (define-values (a2 h2) (atms-assume a1 'h2 'c))
+  (define a3 (atms-add-nogood a2 (hasheq h0 #t h1 #t)))
+  (define a4 (atms-add-nogood a3 (hasheq h0 #t h2 #t)))
+  (define diags (atms-minimal-diagnoses a4))
+  (check-equal? (length diags) 1)
+  ;; h0 is the most common → greedy picks it
+  (define diag (car diags))
+  (check-true (hash-has-key? diag h0))
+  (check-equal? (hash-count diag) 1))
+
+(test-case "atms-minimal-diagnoses: disjoint nogoods need multiple retractions"
+  ;; {h0,h1} and {h2,h3} — disjoint, so need to retract from each
+  (define-values (a0 h0) (atms-assume (atms-empty) 'h0 'a))
+  (define-values (a1 h1) (atms-assume a0 'h1 'b))
+  (define-values (a2 h2) (atms-assume a1 'h2 'c))
+  (define-values (a3 h3) (atms-assume a2 'h3 'd))
+  (define a4 (atms-add-nogood a3 (hasheq h0 #t h1 #t)))
+  (define a5 (atms-add-nogood a4 (hasheq h2 #t h3 #t)))
+  (define diags (atms-minimal-diagnoses a5))
+  (check-equal? (length diags) 1)
+  ;; Need 2 retractions (one per disjoint nogood)
+  (check-equal? (hash-count (car diags)) 2))
+
+(test-case "atms-minimal-diagnoses: retracted assumption avoids conflict"
+  ;; h0,h1 is nogood, but h1 is retracted → no violated nogoods
+  (define-values (a0 h0) (atms-assume (atms-empty) 'h0 'a))
+  (define-values (a1 h1) (atms-assume a0 'h1 'b))
+  (define a2 (atms-add-nogood a1 (hasheq h0 #t h1 #t)))
+  (define a3 (atms-retract a2 h1))
+  (check-equal? (atms-minimal-diagnoses a3) '()))
+
+(test-case "atms-minimal-diagnoses: single-assumption nogood"
+  ;; Singleton nogood {h0} → h0 alone is the diagnosis
+  (define-values (a0 h0) (atms-assume (atms-empty) 'h0 'a))
+  (define a1 (atms-add-nogood a0 (hasheq h0 #t)))
+  (define diags (atms-minimal-diagnoses a1))
+  (check-equal? (length diags) 1)
+  (check-true (hash-has-key? (car diags) h0))
+  (check-equal? (hash-count (car diags)) 1))
+
+;; ========================================
+;; GDE-2: Conflict graph
+;; ========================================
+
+(test-case "atms-conflict-graph: empty for no conflicts"
+  (define-values (a0 h0) (atms-assume (atms-empty) 'h0 'a))
+  (define graph (atms-conflict-graph a0))
+  (check-equal? (hash-count graph) 0))
+
+(test-case "atms-conflict-graph: shows assumptions in violated nogoods"
+  (define-values (a0 h0) (atms-assume (atms-empty) 'h0 'a))
+  (define-values (a1 h1) (atms-assume a0 'h1 'b))
+  (define-values (a2 h2) (atms-assume a1 'h2 'c))
+  (define a3 (atms-add-nogood a2 (hasheq h0 #t h1 #t)))
+  (define graph (atms-conflict-graph a3))
+  ;; h0 and h1 are in the graph (they're in the violated nogood)
+  (check-true (hash-has-key? graph h0))
+  (check-true (hash-has-key? graph h1))
+  ;; h2 is NOT in any nogood
+  (check-false (hash-has-key? graph h2)))
+
+(test-case "atms-conflict-graph: multiple nogoods per assumption"
+  (define-values (a0 h0) (atms-assume (atms-empty) 'h0 'a))
+  (define-values (a1 h1) (atms-assume a0 'h1 'b))
+  (define-values (a2 h2) (atms-assume a1 'h2 'c))
+  (define a3 (atms-add-nogood a2 (hasheq h0 #t h1 #t)))
+  (define a4 (atms-add-nogood a3 (hasheq h0 #t h2 #t)))
+  (define graph (atms-conflict-graph a4))
+  ;; h0 appears in 2 nogoods
+  (check-equal? (length (hash-ref graph h0)) 2)
+  ;; h1 and h2 each appear in 1
+  (check-equal? (length (hash-ref graph h1)) 1)
+  (check-equal? (length (hash-ref graph h2)) 1))
+
+(test-case "atms-conflict-graph: retracted assumptions not in violated nogoods"
+  (define-values (a0 h0) (atms-assume (atms-empty) 'h0 'a))
+  (define-values (a1 h1) (atms-assume a0 'h1 'b))
+  (define a2 (atms-add-nogood a1 (hasheq h0 #t h1 #t)))
+  ;; Retract h1 → nogood not violated → graph empty
+  (define a3 (atms-retract a2 h1))
+  (define graph (atms-conflict-graph a3))
+  (check-equal? (hash-count graph) 0))

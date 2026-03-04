@@ -51,6 +51,9 @@
  (struct-out nogood-explanation)
  atms-explain-hypothesis
  atms-explain
+ ;; GDE-2: Minimal diagnoses
+ atms-minimal-diagnoses
+ atms-conflict-graph
  ;; Helpers
  assumption-id-hash
  hash-subset?)
@@ -316,3 +319,79 @@
       (for/list ([(aid _) (in-hash ng)])
         (cons aid (hash-ref (atms-assumptions a) aid #f))))
     (nogood-explanation ng members)))
+
+;; ========================================
+;; GDE-2: Minimal diagnoses (hitting-set)
+;; ========================================
+
+;; A diagnosis is a set of assumptions whose retraction resolves all conflicts.
+;; A MINIMAL diagnosis is one where no proper subset also resolves all conflicts.
+;;
+;; Algorithm: greedy hitting-set (de Kleer & Williams 1987, simplified).
+;; For each violated nogood, we must retract at least one assumption from it.
+;; This is the classic minimum hitting-set problem (NP-hard in general, but
+;; our nogoods are small — typically 2-3 assumptions — so greedy works well).
+;;
+;; Phase 0: Greedy approach — iteratively pick the assumption that appears
+;; in the most unhit nogoods. This gives a good (often minimal) diagnosis.
+;;
+;; Returns: (listof hasheq) — each hasheq is assumption-id → #t (a diagnosis).
+;; Currently returns a single greedy diagnosis. Future: enumerate all minimal.
+(define (atms-minimal-diagnoses a)
+  (define violated
+    (for/list ([ng (in-list (atms-nogoods a))]
+               #:when (hash-subset? ng (atms-believed a)))
+      ng))
+  (cond
+    [(null? violated) '()]  ;; No conflicts → no diagnosis needed
+    [else
+     ;; Greedy hitting set: pick assumption in most nogoods
+     (define diagnosis (greedy-hitting-set violated))
+     (if (hash-empty? diagnosis) '() (list diagnosis))]))
+
+;; Greedy hitting-set: repeatedly pick the assumption appearing in the most
+;; unhit nogoods until all nogoods are hit.
+;; Returns: hasheq assumption-id → #t (the hitting set)
+(define (greedy-hitting-set nogoods)
+  (let loop ([remaining nogoods] [diagnosis (hasheq)])
+    (cond
+      [(null? remaining) diagnosis]
+      [else
+       ;; Count occurrences of each assumption across remaining nogoods
+       (define counts (make-hasheq))
+       (for ([ng (in-list remaining)])
+         (for ([(aid _) (in-hash ng)])
+           (hash-set! counts aid (+ 1 (hash-ref counts aid 0)))))
+       ;; Pick the assumption with the highest count
+       (define-values (best-aid _best-count)
+         (for/fold ([best #f] [best-count 0])
+                   ([(aid count) (in-hash counts)])
+           (if (> count best-count)
+               (values aid count)
+               (values best best-count))))
+       (cond
+         [(not best-aid) diagnosis]  ;; shouldn't happen if remaining is non-empty
+         [else
+          ;; Remove all nogoods containing best-aid
+          (define new-remaining
+            (for/list ([ng (in-list remaining)]
+                       #:when (not (hash-has-key? ng best-aid)))
+              ng))
+          (loop new-remaining (hash-set diagnosis best-aid #t))])])))
+
+;; Return the conflict graph: assumptions participating in violated nogoods.
+;; Returns: hasheq assumption-id → (listof hasheq)
+;;   Each key is an assumption-id that appears in at least one violated nogood.
+;;   Each value is the list of violated nogoods containing that assumption.
+(define (atms-conflict-graph a)
+  (define violated
+    (for/list ([ng (in-list (atms-nogoods a))]
+               #:when (hash-subset? ng (atms-believed a)))
+      ng))
+  (define graph (make-hasheq))
+  (for ([ng (in-list violated)])
+    (for ([(aid _) (in-hash ng)])
+      (hash-set! graph aid (cons ng (hash-ref graph aid '())))))
+  ;; Convert to immutable
+  (for/hasheq ([(aid ngs) (in-hash graph)])
+    (values aid (reverse ngs))))
