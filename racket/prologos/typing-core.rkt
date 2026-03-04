@@ -601,7 +601,7 @@
      (let ([mot-ty (whnf (infer ctx mot))])
        (match mot-ty
          [(expr-Pi _ dom _)
-          (if (and (unify-ok? (unify ctx dom (expr-Bool)))
+          (if (and (unify*-ok? (unify* ctx dom (expr-Bool)))
                    (check ctx tc (expr-app mot (expr-true)))
                    (check ctx fc (expr-app mot (expr-false)))
                    (check ctx target (expr-Bool)))
@@ -645,8 +645,8 @@
      (let ([pt (whnf (infer ctx proof))])
        (match pt
          [(expr-Eq t t1 t2)
-          (if (and (unify-ok? (unify ctx t1 left))
-                   (unify-ok? (unify ctx t2 right))
+          (if (and (unify*-ok? (unify* ctx t1 left))
+                   (unify*-ok? (unify* ctx t2 right))
                    ;; Verify base has correct type: Π(a:A). motive(a, a, refl)
                    (check ctx base
                      (expr-Pi 'mw t
@@ -1433,7 +1433,7 @@
                 (match f
                   [(expr-lam m dom body)
                    (let* ([actual-dom (if (expr-hole? dom) a (whnf dom))])
-                     (if (or (expr-hole? dom) (unify-ok? (unify ctx actual-dom a)))
+                     (if (or (expr-hole? dom) (unify*-ok? (unify* ctx actual-dom a)))
                          (let ([b (infer (cons (cons actual-dom 'mw) ctx) body)])
                            (if (equal? b (expr-error))
                                (expr-error)
@@ -1444,7 +1444,7 @@
                 ;; Normal path: f inferred to Pi — un-shift codomain via subst
                 (match (whnf tf)
                   [(expr-Pi _ dom cod)
-                   (if (unify-ok? (unify ctx dom a))
+                   (if (unify*-ok? (unify* ctx dom a))
                        (expr-PVec (whnf (subst 0 (expr-zero) cod)))
                        (expr-error))]
                   [_ (expr-error)])))]
@@ -1518,7 +1518,7 @@
                 (match f
                   [(expr-lam m dom body)
                    (let* ([actual-dom (if (expr-hole? dom) v (whnf dom))])
-                     (if (or (expr-hole? dom) (unify-ok? (unify ctx actual-dom v)))
+                     (if (or (expr-hole? dom) (unify*-ok? (unify* ctx actual-dom v)))
                          (let ([w (infer (cons (cons actual-dom 'mw) ctx) body)])
                            (if (equal? w (expr-error))
                                (expr-error)
@@ -1529,7 +1529,7 @@
                 ;; Normal path — un-shift codomain via subst
                 (match (whnf tf)
                   [(expr-Pi _ dom cod)
-                   (if (unify-ok? (unify ctx dom v))
+                   (if (unify*-ok? (unify* ctx dom v))
                        (expr-Map k (whnf (subst 0 (expr-zero) cod)))
                        (expr-error))]
                   [_ (expr-error)])))]
@@ -2040,16 +2040,16 @@
           (solve-mult-meta! (mult-meta-id m) resolved)
           (when (mult-meta? m2)
             (solve-mult-meta! (mult-meta-id m2) resolved))
-          (and (unify-ok? (unify ctx a t-dom))
+          (and (unify*-ok? (unify* ctx a t-dom))
                (check (ctx-extend ctx a resolved) body b)))]
        ;; Sprint 7: Pi mult is mult-meta → accept lambda's mult
        [(mult-meta? m2)
         (solve-mult-meta! (mult-meta-id m2) m)
-        (and (unify-ok? (unify ctx a t-dom))
+        (and (unify*-ok? (unify* ctx a t-dom))
              (check (ctx-extend ctx a m) body b))]
        ;; Concrete mults: must match
        [(not (eq? m m2)) #f]
-       [(not (unify-ok? (unify ctx a t-dom))) #f]
+       [(not (unify*-ok? (unify* ctx a t-dom))) #f]
        [else (check (ctx-extend ctx a m) body b)])]
 
     ;; ---- Pair: check against Sigma ----
@@ -2061,31 +2061,31 @@
     ;; ---- refl: check against Eq ----
     ;; refl : Eq(A, e1, e2) iff conv(e1, e2)
     [((expr-refl) (expr-Eq _ e1 e2))
-     (unify-ok? (unify ctx e1 e2))]
+     (unify*-ok? (unify* ctx e1 e2))]
 
     ;; ---- Vec constructors ----
     ;; vnil(A) : Vec(A, zero)
     [((expr-vnil a1) (expr-Vec a2 n))
      (and (is-type ctx a1)
-          (unify-ok? (unify ctx a1 a2))
-          (unify-ok? (unify ctx n (expr-zero))))]
+          (unify*-ok? (unify* ctx a1 a2))
+          (unify*-ok? (unify* ctx n (expr-zero))))]
 
     ;; vcons(A, n, head, tail) : Vec(A, suc(n))
     [((expr-vcons a1 n1 hd tl) (expr-Vec a2 len))
-     (and (unify-ok? (unify ctx a1 a2))
-          (unify-ok? (unify ctx len (expr-suc n1)))
+     (and (unify*-ok? (unify* ctx a1 a2))
+          (unify*-ok? (unify* ctx len (expr-suc n1)))
           (check ctx hd a1)
           (check ctx tl (expr-Vec a1 n1)))]
 
     ;; ---- Fin constructors ----
     ;; fzero(n) : Fin(suc(n))
     [((expr-fzero n1) (expr-Fin bound))
-     (and (unify-ok? (unify ctx bound (expr-suc n1)))
+     (and (unify*-ok? (unify* ctx bound (expr-suc n1)))
           (check ctx n1 (expr-Nat)))]
 
     ;; fsuc(n, i) : Fin(suc(n))  when i : Fin(n)
     [((expr-fsuc n1 i) (expr-Fin bound))
-     (and (unify-ok? (unify ctx bound (expr-suc n1)))
+     (and (unify*-ok? (unify* ctx bound (expr-suc n1)))
           (check ctx i (expr-Fin n1)))]
 
     ;; ---- Int literal check ----
@@ -2129,8 +2129,8 @@
     [((expr-champ _) (expr-Map _ _)) #t]
     ;; map-empty checked against Map K V
     [((expr-map-empty k1 v1) (expr-Map k2 v2))
-     (and (unify-ok? (unify ctx k1 k2))
-          (unify-ok? (unify ctx v1 v2)))]
+     (and (unify*-ok? (unify* ctx k1 k2))
+          (unify*-ok? (unify* ctx v1 v2)))]
     ;; map-assoc checked against Map K V — propagate expected type
     [((expr-map-assoc m k v) (expr-Map kt vt))
      (and (check ctx m (expr-Map kt vt))
@@ -2182,7 +2182,7 @@
     [((expr-hset _) (expr-Set _)) #t]
     ;; set-empty checked against Set A
     [((expr-set-empty a1) (expr-Set a2))
-     (unify-ok? (unify ctx a1 a2))]
+     (unify*-ok? (unify* ctx a1 a2))]
     ;; set-insert checked against Set A — propagate expected type
     [((expr-set-insert s a) (expr-Set a-ty))
      (and (check ctx s (expr-Set a-ty))
@@ -2191,7 +2191,7 @@
     ;; ---- PVec checks ----
     [((expr-rrb _) (expr-PVec _)) #t]
     [((expr-pvec-empty a1) (expr-PVec a2))
-     (unify-ok? (unify ctx a1 a2))]
+     (unify*-ok? (unify* ctx a1 a2))]
     [((expr-pvec-push v x) (expr-PVec a))
      (and (check ctx v (expr-PVec a))
           (check ctx x a))]
@@ -2248,7 +2248,7 @@
      (let ([tm (infer ctx map)])
        (match tm
          [(expr-Map k2 v)
-          (and (unify-ok? (unify ctx k k2))
+          (and (unify*-ok? (unify* ctx k k2))
                (check ctx f (expr-Pi 'mw v (shift 1 0 w))))]
          [_ #f]))]
 
@@ -2380,7 +2380,7 @@
     [(_ t-whnf)
      (let ([t1 (infer ctx e)])
        (and (not (expr-error? t1))
-            (or (unify-ok? (unify ctx t t1))
+            (or (unify*-ok? (unify* ctx t t1))
                 (match* ((whnf t) (whnf t1))
                   ;; Cumulativity: Type(m) ≤ Type(n) when m ≤ n
                   [((expr-Type l1) (expr-Type l2))

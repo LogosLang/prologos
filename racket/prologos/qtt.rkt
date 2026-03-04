@@ -1924,8 +1924,8 @@
          [(tu t5 u5)
           (match (whnf t5)
             [(expr-Eq t t1 t2)
-             (if (and (unify-ok? (unify ctx t1 left))
-                      (unify-ok? (unify ctx t2 right))
+             (if (and (unify*-ok? (unify* ctx t1 left))
+                      (unify*-ok? (unify* ctx t2 right))
                       ;; Verify base type: Π(a:A). motive(a, a, refl)
                       (check ctx base
                         (expr-Pi 'mw t
@@ -1977,7 +1977,7 @@
             [mults-ok (or (mult-meta? m) (mult-meta? m2) (eq? m m2))])
        (cond
          [(not mults-ok) (bu #f (zero-usage n))]
-         [(not (unify-ok? (unify ctx a t-dom))) (bu #f (zero-usage n))]
+         [(not (unify*-ok? (unify* ctx a t-dom))) (bu #f (zero-usage n))]
          [else
           (let ([r (checkQ (ctx-extend ctx a effective-m) body b)])
             (match r
@@ -2006,7 +2006,7 @@
 
     ;; ---- refl: check against Eq ----
     [((expr-refl) (expr-Eq _ e1 e2))
-     (bu (unify-ok? (unify ctx e1 e2)) (zero-usage n))]
+     (bu (unify*-ok? (unify* ctx e1 e2)) (zero-usage n))]
 
     ;; ---- Meta expression: optimistically succeed with zero usage ----
     ;; A metavariable (from implicit arg insertion) doesn't consume resources.
@@ -2230,7 +2230,7 @@
              (let ([rf (inferQ-or-checkQ ctx f (expr-Pi 'mw v (shift 1 0 w)))])
                (match rf
                  [(tu _ uf)
-                  (bu (and (unify-ok? (unify ctx k k2))
+                  (bu (and (unify*-ok? (unify* ctx k k2))
                            (check ctx (expr-map-map-vals f map) expected-type))
                       (add-usage uf um))]
                  [_ (bu #f (zero-usage n))]))]
@@ -2313,7 +2313,7 @@
        (match r
          [(tu t1 u)
           (if (and (not (expr-error? t1))
-                   (or (unify-ok? (unify ctx t t1))
+                   (or (unify*-ok? (unify* ctx t t1))
                        (match* ((whnf t) (whnf t1))
                          [((expr-Type l1) (expr-Type l2))
                           (level<=? l2 l1)]
