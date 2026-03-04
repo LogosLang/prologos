@@ -277,6 +277,27 @@
 
 
 ;; ========================================
+;; P3b: Shadow validation wrapper for trait resolution post-pass.
+;; Counts unsolved trait metas before/after the post-pass.
+;; If the post-pass solves metas that the propagator path missed,
+;; log a divergence to stderr. Zero divergences = safe to switch over.
+;; ========================================
+(define (resolve-trait-constraints!/shadow)
+  (define tcm (current-trait-constraint-map))
+  (define before-unsolved
+    (for/sum ([(dict-id _info) (in-hash tcm)])
+      (if (meta-solved? dict-id) 0 1)))
+  (resolve-trait-constraints!)
+  (define after-unsolved
+    (for/sum ([(dict-id _info) (in-hash tcm)])
+      (if (meta-solved? dict-id) 0 1)))
+  (define newly-solved (- before-unsolved after-unsolved))
+  (when (> newly-solved 0)
+    (eprintf "TRAIT-SHADOW-MISMATCH: post-pass solved ~a trait metas missed by cell-path\n"
+             newly-solved)
+    (perf-inc-constraint-shadow-mismatch!)))
+
+;; ========================================
 ;; Process a single top-level command
 ;; ========================================
 ;; Returns a result string, or a prologos-error.
@@ -331,7 +352,7 @@
                    (let ([ty (time-phase! type-check (infer/err ctx-empty expr))])
                      (if (prologos-error? ty) ty
                          (begin
-                           (time-phase! trait-resolve (resolve-trait-constraints!))
+                           (time-phase! trait-resolve (resolve-trait-constraints!/shadow))
                            (let ([te (check-unresolved-trait-constraints)])
                              (if (not (null? te))
                                  (car te)
@@ -354,7 +375,7 @@
                    (let ([ty (time-phase! type-check (infer/err ctx-empty expr))])
                      (if (prologos-error? ty) ty
                          (begin
-                           (time-phase! trait-resolve (resolve-trait-constraints!))
+                           (time-phase! trait-resolve (resolve-trait-constraints!/shadow))
                            (let ([te (check-unresolved-trait-constraints)])
                              (if (not (null? te))
                                  (car te)
@@ -392,7 +413,7 @@
                    (let ([ty (time-phase! type-check (infer/err ctx-empty expr))])
                      (if (prologos-error? ty) ty
                          (begin
-                           (time-phase! trait-resolve (resolve-trait-constraints!))
+                           (time-phase! trait-resolve (resolve-trait-constraints!/shadow))
                            (let ([te (check-unresolved-trait-constraints)])
                              (if (not (null? te))
                                  (car te)
@@ -583,7 +604,7 @@
              [(prologos-error? ty-ok) ty-ok]
              [else
               ;; Phase C: resolve trait-constraint metas to dictionary expressions
-              (time-phase! trait-resolve (resolve-trait-constraints!))
+              (time-phase! trait-resolve (resolve-trait-constraints!/shadow))
               ;; Phase C.6: Check for unresolved trait constraints
               (define trait-errors (check-unresolved-trait-constraints))
               ;; Phase 4: Check for unresolved capability constraints
@@ -715,7 +736,7 @@
                     chk]
                    [else
                     ;; Phase C: resolve trait-constraint metas to dictionary expressions
-                    (time-phase! trait-resolve (resolve-trait-constraints!))
+                    (time-phase! trait-resolve (resolve-trait-constraints!/shadow))
                     ;; Phase C.6: Check for unresolved trait constraints
                     (define trait-errors-ann (check-unresolved-trait-constraints))
                     ;; Phase 4: Check for unresolved capability constraints
