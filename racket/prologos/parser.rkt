@@ -2584,6 +2584,12 @@
                 [(prologos-error? a) a]
                 [else (surf-table-lookup s n a loc)])))]
 
+       ;; ---- Session types (Phase S1/S2) ----
+
+       ;; (session Name Body) — session type declaration
+       [(session)
+        (parse-session args loc)]
+
        ;; ---- Relational language (Phase 7) ----
 
        ;; (defr name [params] body...) — relation definition
@@ -4553,6 +4559,233 @@
         (define body (parse-defr-body body-tokens loc #:arity param-arity))
         (if (prologos-error? body) body
             (surf-rel params body loc))])]))
+
+;; ========================================
+;; Parse session: (session Name Body)
+;; ========================================
+;; Body is a nested sexp structure representing the session protocol.
+;; Forms: (Send Type Cont), (Recv Type Cont), (DSend (n : T) Cont),
+;;        (DRecv (n : T) Cont), (Choice ((:l1 S1) ...)), (Offer ((:l1 S1) ...)),
+;;        (Mu Cont), (Mu Label Cont), End, (SVar Name), (Shared Body)
+
+(define (parse-session args loc)
+  (cond
+    [(< (length args) 2)
+     (parse-error loc "session requires a name and body: (session Name Body)" #f)]
+    [else
+     (define name (stx->datum (car args)))
+     (unless (symbol? name)
+       (parse-error loc (format "session: expected name, got ~a" name) #f))
+     (define rest (cdr args))
+     ;; Check for metadata keywords before body
+     (define-values (metadata body-args) (extract-session-metadata rest loc))
+     (cond
+       [(prologos-error? metadata) metadata]
+       [(null? body-args)
+        (parse-error loc "session: missing body after name" #f)]
+       [else
+        (define body (parse-session-body (car body-args) loc))
+        (if (prologos-error? body) body
+            (surf-session name metadata body loc))])]))
+
+;; Extract metadata keywords (:doc, :deprecated, etc.) from before the body.
+;; Returns (values metadata-alist remaining-args).
+(define (extract-session-metadata args loc)
+  (let loop ([remaining args] [meta '()])
+    (cond
+      [(null? remaining) (values (reverse meta) '())]
+      [else
+       (define head-datum (stx->datum (car remaining)))
+       (cond
+         ;; Keyword followed by value = metadata pair
+         [(and (symbol? head-datum)
+               (let ([s (symbol->string head-datum)])
+                 (and (> (string-length s) 1)
+                      (char=? (string-ref s 0) #\:)))
+               (pair? (cdr remaining)))
+          (define key head-datum)
+          (define val-stx (cadr remaining))
+          (define val (parse-datum val-stx))
+          (if (prologos-error? val) (values val '())
+              (loop (cddr remaining) (cons (cons key val) meta)))]
+         ;; Not a keyword — rest is body
+         [else (values (reverse meta) remaining)])])))
+
+;; Parse a session body form.
+(define (parse-session-body stx loc)
+  (define d (stx->datum stx))
+  (define stx-loc (datum-srcloc stx))
+  (define use-loc (if (equal? stx-loc srcloc-unknown) loc stx-loc))
+  (cond
+    ;; Bare symbol: End or SVar reference or session name ref
+    [(symbol? d)
+     (case d
+       [(End end) (surf-sess-end use-loc)]
+       [else (surf-sess-ref d use-loc)])]
+    ;; List form
+    [(pair? d)
+     (define head-stx (car d))
+     (define head (if (syntax? head-stx) (syntax-e head-stx) head-stx))
+     (define args* (cdr d))
+     ;; Ensure args are accessible as syntax or datum
+     (define body-args
+       (map (lambda (x) (if (syntax? x) x (datum->syntax #f x stx)))
+            args*))
+     (case head
+       ;; (Send Type Cont)
+       [(Send)
+        (cond
+          [(not (= (length body-args) 2))
+           (parse-error use-loc "Send requires type and continuation: (Send Type Cont)" #f)]
+          [else
+           (define ty (parse-datum (car body-args)))
+           (if (prologos-error? ty) ty
+               (let ([cont (parse-session-body (cadr body-args) use-loc)])
+                 (if (prologos-error? cont) cont
+                     (surf-sess-send ty cont use-loc))))])]
+       ;; (Recv Type Cont)
+       [(Recv)
+        (cond
+          [(not (= (length body-args) 2))
+           (parse-error use-loc "Recv requires type and continuation: (Recv Type Cont)" #f)]
+          [else
+           (define ty (parse-datum (car body-args)))
+           (if (prologos-error? ty) ty
+               (let ([cont (parse-session-body (cadr body-args) use-loc)])
+                 (if (prologos-error? cont) cont
+                     (surf-sess-recv ty cont use-loc))))])]
+       ;; (DSend (n : T) Cont) — dependent send
+       [(DSend)
+        (cond
+          [(not (= (length body-args) 2))
+           (parse-error use-loc "DSend requires binder and continuation: (DSend (n : T) Cont)" #f)]
+          [else
+           (define binder-stx (car body-args))
+           (define binder-d (stx->datum binder-stx))
+           (cond
+             [(and (pair? binder-d) (>= (length binder-d) 3))
+              (define bind-name (let ([x (car binder-d)])
+                                 (if (syntax? x) (syntax-e x) x)))
+              ;; Skip the colon
+              (define bind-type-stx (last binder-d))
+              (define bind-type (parse-datum (if (syntax? bind-type-stx) bind-type-stx
+                                                (datum->syntax #f bind-type-stx stx))))
+              (if (prologos-error? bind-type) bind-type
+                  (let ([cont (parse-session-body (cadr body-args) use-loc)])
+                    (if (prologos-error? cont) cont
+                        (surf-sess-dsend bind-name bind-type cont use-loc))))]
+             [else
+              (parse-error use-loc "DSend: binder must be (name : Type)" #f)])])]
+       ;; (DRecv (n : T) Cont) — dependent receive
+       [(DRecv)
+        (cond
+          [(not (= (length body-args) 2))
+           (parse-error use-loc "DRecv requires binder and continuation: (DRecv (n : T) Cont)" #f)]
+          [else
+           (define binder-stx (car body-args))
+           (define binder-d (stx->datum binder-stx))
+           (cond
+             [(and (pair? binder-d) (>= (length binder-d) 3))
+              (define bind-name (let ([x (car binder-d)])
+                                 (if (syntax? x) (syntax-e x) x)))
+              (define bind-type-stx (last binder-d))
+              (define bind-type (parse-datum (if (syntax? bind-type-stx) bind-type-stx
+                                                (datum->syntax #f bind-type-stx stx))))
+              (if (prologos-error? bind-type) bind-type
+                  (let ([cont (parse-session-body (cadr body-args) use-loc)])
+                    (if (prologos-error? cont) cont
+                        (surf-sess-drecv bind-name bind-type cont use-loc))))]
+             [else
+              (parse-error use-loc "DRecv: binder must be (name : Type)" #f)])])]
+       ;; (Choice ((:l1 S1) (:l2 S2) ...))
+       [(Choice)
+        (cond
+          [(not (= (length body-args) 1))
+           (parse-error use-loc "Choice requires one argument: list of branches" #f)]
+          [else
+           (define branches-stx (car body-args))
+           (define branches (parse-session-branches branches-stx use-loc))
+           (if (prologos-error? branches) branches
+               (surf-sess-choice branches use-loc))])]
+       ;; (Offer ((:l1 S1) (:l2 S2) ...))
+       [(Offer)
+        (cond
+          [(not (= (length body-args) 1))
+           (parse-error use-loc "Offer requires one argument: list of branches" #f)]
+          [else
+           (define branches-stx (car body-args))
+           (define branches (parse-session-branches branches-stx use-loc))
+           (if (prologos-error? branches) branches
+               (surf-sess-offer branches use-loc))])]
+       ;; (Mu Cont) — anonymous recursion
+       ;; (Mu Label Cont) — named recursion
+       [(Mu)
+        (cond
+          [(= (length body-args) 1)
+           ;; Anonymous: (Mu Cont)
+           (define body (parse-session-body (car body-args) use-loc))
+           (if (prologos-error? body) body
+               (surf-sess-rec #f body use-loc))]
+          [(= (length body-args) 2)
+           ;; Named: (Mu Label Cont)
+           (define label (stx->datum (car body-args)))
+           (define body (parse-session-body (cadr body-args) use-loc))
+           (if (prologos-error? body) body
+               (surf-sess-rec label body use-loc))]
+          [else
+           (parse-error use-loc "Mu requires 1 or 2 arguments: (Mu Cont) or (Mu Label Cont)" #f)])]
+       ;; (SVar Name) — session variable reference
+       [(SVar)
+        (cond
+          [(not (= (length body-args) 1))
+           (parse-error use-loc "SVar requires one argument: (SVar Name)" #f)]
+          [else
+           (define name (stx->datum (car body-args)))
+           (surf-sess-var name use-loc)])]
+       ;; (Shared Body) — shared session
+       [(Shared)
+        (cond
+          [(not (= (length body-args) 1))
+           (parse-error use-loc "Shared requires one argument: (Shared Body)" #f)]
+          [else
+           (define body (parse-session-body (car body-args) use-loc))
+           (if (prologos-error? body) body
+               (surf-sess-shared body use-loc))])]
+       [else
+        (parse-error use-loc (format "Unknown session body form: ~a" head) #f)])]
+    [else
+     (parse-error use-loc (format "Invalid session body: ~a" d) #f)]))
+
+;; Parse session branch list: ((:l1 S1) (:l2 S2) ...)
+(define (parse-session-branches stx loc)
+  (define d (stx->datum stx))
+  (cond
+    [(not (pair? d))
+     (parse-error loc "Expected list of branches" #f)]
+    [else
+     (define branches
+       (for/list ([branch-stx (in-list (if (list? d) d (list d)))])
+         (define bd (if (syntax? branch-stx) (stx->datum branch-stx) branch-stx))
+         (cond
+           [(and (pair? bd) (>= (length bd) 2))
+            (define label-raw (let ([x (car bd)])
+                                (if (syntax? x) (syntax-e x) x)))
+            (define label
+              (cond
+                [(keyword? label-raw) (string->symbol (keyword->string label-raw))]
+                [(symbol? label-raw) label-raw]
+                [else (parse-error loc (format "Branch label must be a keyword or symbol, got ~a" label-raw) #f)]))
+            (if (prologos-error? label) label
+                (let ([cont (parse-session-body
+                             (let ([x (cadr bd)])
+                               (if (syntax? x) x (datum->syntax #f x stx)))
+                             loc)])
+                  (if (prologos-error? cont) cont
+                      (surf-sess-branch label cont loc))))]
+           [else
+            (parse-error loc (format "Branch must be (label body), got ~a" bd) #f)])))
+     (define err (findf prologos-error? branches))
+     (if err err branches)]))
 
 ;; ========================================
 ;; Parse the-fn: (the-fn type [params...] body)
