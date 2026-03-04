@@ -395,11 +395,11 @@ _Living section — updated as work progresses._
 | P1-E3a | DONE | d2ef419 | cell-ids on constraints, retry-constraints-via-cells!, 16 tests |
 | P1-E3b | DONE | 29cdf0f | Shadow validation: zero mismatches across 5092 tests |
 | P1-E3c | DONE | b5ba62b | Switchover: cell-state-driven retry is sole production path |
-| P1-E3d | DONE | (pending) | Remove current-prop-driven-wakeup?, cleanup |
-| P3a | PENDING | | |
-| P3b | PENDING | | |
-| P3c | PENDING | | |
-| P3d | PENDING | | |
+| P1-E3d | DONE | 2de330f | Remove current-prop-driven-wakeup?, cleanup |
+| P3a | DONE | ccdd042 | cell-ids on trait constraints, retry-traits-via-cells!, 11 tests |
+| P3b | DONE | 73fe021 | Shadow validation: zero mismatches across 5103 tests |
+| P3c | DONE | 10b8022 | Switchover: removed resolve-trait-constraints! from 5 driver sites |
+| P3d | DONE | (this) | Cleanup: removed shadow wrapper, cleaned comments |
 | P5a | PENDING | | |
 | P5b | PENDING | | |
 | P5c | PENDING | | |
