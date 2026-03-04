@@ -58,6 +58,7 @@
  perf-inc-atms-hypothesis!
  perf-inc-atms-nogood!
  perf-inc-provenance-chain!
+ perf-inc-constraint-shadow-mismatch!
  provenance-counters->hasheq
  print-provenance-report!)
 
@@ -297,7 +298,8 @@
   (speculation-count
    atms-hypothesis-count
    atms-nogood-count
-   provenance-chain-count)
+   provenance-chain-count
+   constraint-shadow-mismatches)  ;; P1-E3b: cell-path vs legacy divergences
   #:mutable #:transparent)
 
 (define current-provenance-counters (make-parameter #f))
@@ -322,11 +324,17 @@
     (when pv (set-provenance-counters-provenance-chain-count!
               pv (add1 (provenance-counters-provenance-chain-count pv))))))
 
+(define-syntax-rule (perf-inc-constraint-shadow-mismatch!)
+  (let ([pv (current-provenance-counters)])
+    (when pv (set-provenance-counters-constraint-shadow-mismatches!
+              pv (add1 (provenance-counters-constraint-shadow-mismatches pv))))))
+
 (define (provenance-counters->hasheq pv)
   (hasheq 'speculation_count       (provenance-counters-speculation-count pv)
           'atms_hypothesis_count   (provenance-counters-atms-hypothesis-count pv)
           'atms_nogood_count       (provenance-counters-atms-nogood-count pv)
-          'provenance_chain_count  (provenance-counters-provenance-chain-count pv)))
+          'provenance_chain_count  (provenance-counters-provenance-chain-count pv)
+          'constraint_shadow_mismatches (provenance-counters-constraint-shadow-mismatches pv)))
 
 (define (print-provenance-report! pv)
   (define h (provenance-counters->hasheq pv))

@@ -606,8 +606,21 @@
      ;; Scans all postponed constraints whose meta cells may have changed
      ;; during quiescence — captures transitive propagation.
      (retry-constraints-via-cells!)
+     ;; P1-E3b: Shadow validation — snapshot which constraints are still
+     ;; postponed after cell-path, then run legacy and check for divergences.
+     (define still-postponed-after-cells
+       (for/list ([c (in-list (current-constraint-store))]
+                  #:when (eq? (constraint-status c) 'postponed))
+         c))
      ;; Legacy retry as secondary path (catches constraints without cell-ids)
-     (retry-constraints-for-meta! id)]
+     (retry-constraints-for-meta! id)
+     ;; Shadow comparison: any constraint that was still postponed after
+     ;; cell-path but is now solved/failed was caught only by legacy.
+     (for ([c (in-list still-postponed-after-cells)])
+       (when (not (eq? (constraint-status c) 'postponed))
+         (perf-inc-constraint-shadow-mismatch!)
+         (eprintf "CONSTRAINT-SHADOW-MISMATCH: legacy solved constraint missed by cell-path (meta ~a)\n"
+                  id)))]
     [else
      ;; Legacy: manual wakeup registry
      (retry-constraints-for-meta! id)])
