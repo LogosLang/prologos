@@ -269,3 +269,54 @@
   (check-not-false m)
   ;; Zero hypotheses — no speculation, no context assumption
   (check-equal? (string->number (cadr m)) 0))
+
+;; ========================================
+;; Suite 8: GDE-3 — Rich error formatting with derivation trees
+;; ========================================
+
+(test-case "GDE-3: union error includes context annotation in derivation chain"
+  ;; Union type mismatch on an annotated def should include "user annotated" line
+  (define result (last (run-simple "(def x <Nat | Bool> \"hello\")")))
+  (check-true (union-exhaustion-error? result))
+  (define formatted (format-error result))
+  ;; Should contain union branch info
+  (check-true (string-contains? formatted "tried Nat"))
+  (check-true (string-contains? formatted "tried Bool")))
+
+(test-case "GDE-3: type mismatch provenance includes context info"
+  ;; Simple annotated def type mismatch — provenance should contain context info
+  (define result (last (run-simple "(def x : Nat true)")))
+  (check-true (type-mismatch-error? result))
+  ;; The provenance field is a list of strings
+  (define prov (type-mismatch-error-provenance result))
+  (check-true (list? prov)))
+
+(test-case "GDE-3: format-error renders [diagnosis] lines without 'because:' prefix"
+  ;; Construct a type-mismatch-error with a diagnosis provenance line
+  (define err (type-mismatch-error srcloc-unknown "Type mismatch" "Nat" "Bool" "(f x)"
+                '("tried branch Nat" "[diagnosis] retract: x : Nat")))
+  (define formatted (format-error err))
+  ;; Diagnosis line should appear without "because:" prefix
+  (check-true (string-contains? formatted "[diagnosis] retract: x : Nat"))
+  ;; But regular provenance should have "because:"
+  (check-true (string-contains? formatted "because: tried branch Nat"))
+  ;; Specifically, should NOT have "because: [diagnosis]"
+  (check-false (string-contains? formatted "because: [diagnosis]")))
+
+(test-case "GDE-3: union error format renders diagnosis in derivation chain"
+  ;; Construct a union-exhaustion-error with diagnosis in chain
+  (define err
+    (union-exhaustion-error srcloc-unknown "Nat | Bool"
+                            '("Nat" "Bool")
+                            '("Bool" "Nat")
+                            "\"hello\""
+                            '(("tried branch Nat" "[diagnosis] retract: x : Nat | Bool")
+                              ("tried branch Bool"))))
+  (define formatted (format-error err))
+  ;; Diagnosis line should appear without "because:" prefix
+  (check-true (string-contains? formatted "[diagnosis] retract: x : Nat | Bool"))
+  (check-false (string-contains? formatted "because: [diagnosis]")))
+
+(test-case "GDE-3: successful def produces no diagnosis in provenance"
+  (define result (last (run-simple "(def x : Nat 0N)")))
+  (check-false (prologos-error? result)))

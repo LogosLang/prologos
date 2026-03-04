@@ -120,28 +120,36 @@
 ;; Phase D3+E3b: Build a human-readable derivation chain from nested speculation failures.
 ;; Returns a list of strings, one per sub-failure, showing the speculation path.
 ;; When atms-box is provided (box of atms), appends ATMS conflict info to each step.
+;; GDE-3: Also appends minimal diagnosis lines showing which user annotations
+;; participate in the conflict, enabling messages like:
+;;   "because: user annotated x : Nat"
+;;   "minimal fix: retract def-type-annotation"
 (define (build-derivation-chain sub-failures [atms-box #f])
   (when (pair? sub-failures)
     (perf-inc-provenance-chain!))
-  (for/list ([sf (in-list sub-failures)])
-    (define label (speculation-failure-label sf))
-    (define nested (speculation-failure-sub-failures sf))
-    (define base (format-speculation-label label))
-    (define with-nested
-      (if (pair? nested)
-          (format "~a (also tried: ~a)"
-                  base
-                  (string-join (map (lambda (n)
-                                      (format-speculation-label
-                                       (speculation-failure-label n)))
-                                    nested)
-                               ", "))
-          base))
-    ;; E3b: Append ATMS conflict info when available
-    (define atms-info (format-atms-conflict atms-box (speculation-failure-hypothesis-id sf)))
-    (if (string=? atms-info "")
-        with-nested
-        (format "~a — ~a" with-nested atms-info))))
+  (define chain
+    (for/list ([sf (in-list sub-failures)])
+      (define label (speculation-failure-label sf))
+      (define nested (speculation-failure-sub-failures sf))
+      (define base (format-speculation-label label))
+      (define with-nested
+        (if (pair? nested)
+            (format "~a (also tried: ~a)"
+                    base
+                    (string-join (map (lambda (n)
+                                        (format-speculation-label
+                                         (speculation-failure-label n)))
+                                      nested)
+                                 ", "))
+            base))
+      ;; E3b: Append ATMS conflict info when available
+      (define atms-info (format-atms-conflict atms-box (speculation-failure-hypothesis-id sf)))
+      (if (string=? atms-info "")
+          with-nested
+          (format "~a — ~a" with-nested atms-info))))
+  ;; GDE-3: Append context assumption info from nogoods
+  (define context-lines (format-context-diagnosis sub-failures atms-box))
+  (append chain context-lines))
 
 ;; E3b: Format ATMS conflict info for a hypothesis.
 ;; Returns "" if no ATMS, no hypothesis, or no nogoods for this hypothesis.
@@ -168,6 +176,61 @@
                ""
                (format "conflicts with: ~a"
                        (string-join unique-names ", ")))))]))
+
+;; GDE-3: Extract context assumption info from nogoods for diagnosis display.
+;; Returns additional provenance lines showing:
+;; 1. Context assumptions (user annotations) that participate in the conflict
+;; 2. Minimal diagnosis from ATMS (which assumptions to retract)
+;;
+;; These lines are included in the provenance/derivation-chain list and rendered
+;; by format-error with "because:" prefix for context lines, or as-is for diagnosis.
+(define (format-context-diagnosis sub-failures atms-box)
+  (cond
+    [(not atms-box) '()]
+    [(null? sub-failures) '()]
+    [else
+     (define a (unbox atms-box))
+     ;; Collect all support-sets from sub-failures
+     (define all-support-sets
+       (for/list ([sf (in-list sub-failures)]
+                  #:when (speculation-failure-support-set sf))
+         (speculation-failure-support-set sf)))
+     (cond
+       [(null? all-support-sets) '()]
+       [else
+        ;; Extract context assumptions (non-speculation) from support sets
+        (define context-aids
+          (remove-duplicates
+           (for*/list ([ss (in-list all-support-sets)]
+                       [(aid _) (in-hash ss)]
+                       #:when (let ([asn (hash-ref (atms-assumptions a) aid #f)])
+                                (and asn
+                                     (memq (assumption-name asn)
+                                           '(def-type-annotation check-type-annotation)))))
+             aid)))
+        (define context-lines
+          (for/list ([aid (in-list context-aids)])
+            (define asn (hash-ref (atms-assumptions a) aid #f))
+            (if asn
+                (format "user annotated ~a" (assumption-datum asn))
+                "")))
+        ;; Minimal diagnosis: which assumptions to retract
+        (define diags (atms-minimal-diagnoses a))
+        (define diag-lines
+          (cond
+            [(null? diags) '()]
+            [else
+             (define diag (car diags))
+             (define diag-datums
+               (for/list ([(aid _) (in-hash diag)])
+                 (define asn (hash-ref (atms-assumptions a) aid #f))
+                 (if asn (format "~a" (assumption-datum asn))
+                     (format "assumption-~a" (assumption-id-n aid)))))
+             (if (null? diag-datums) '()
+                 (list (string-append
+                        "[diagnosis] retract: "
+                        (string-join diag-datums " or "))))]))
+        (append context-lines diag-lines)])]))
 
 ;; Phase D3: Convert internal speculation labels to human-readable strings.
 (define (format-speculation-label label)

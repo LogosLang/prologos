@@ -122,7 +122,9 @@
              (format "  Got:      ~a" (format-val actual))
              (if expr (format "  In expression: ~a" (format-val expr)) ""))
        (for/list ([step (in-list (or provenance '()))])
-         (format "    because: ~a" step)))
+         (if (string-prefix? step "[diagnosis]")
+             (format "    ~a" step)
+             (format "    because: ~a" step))))
       "\n")]
     [(unbound-variable-error _ _ name)
      (string-join
@@ -255,7 +257,9 @@
                       [chain (in-list chains)])
              (cons (format "  tried ~a — type mismatch (got: ~a)" br mm)
                    (for/list ([step (in-list chain)])
-                     (format "    because: ~a" step))))))
+                     (if (string-prefix? step "[diagnosis]")
+                         (format "    ~a" step)
+                         (format "    because: ~a" step)))))))
        (list (format "  in expression: ~a" expr-str)
              (format "  = help: expression must match at least one branch of ~a" msg)))
       "\n")]
