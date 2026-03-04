@@ -35,8 +35,6 @@
 (provide unify unify-ok? occurs?
          ;; P1-G2: Propagator-aware unification wrapper
          unify* unify*-ok?
-         ;; P1-G4: Shadow validation counter
-         unify*-shadow-mismatch-count
          ;; Sprint 2b exports
          decompose-meta-app pattern-check invert-args
          ;; Union type helpers
@@ -615,39 +613,30 @@
 ;; Phase G2: structural consistency check (contradiction detection)
 ;; Phase G3: meta-bearing upgrade ('postponed → #t when cell solved)
 
-;; P1-G4: Shadow mismatch counter — tracks how many times unify* diverges from unify.
-(define unify*-shadow-mismatches 0)
-(define (unify*-shadow-mismatch-count) unify*-shadow-mismatches)
-
 (define (unify* ctx t1 t2)
-  ;; P1-G3: Snapshot constraint store to detect solved-via-quiescence.
+  ;; Snapshot constraint store to detect solved-via-quiescence.
   (define pre-store (current-constraint-store))
   (define result (unify ctx t1 t2))
   ;; Post-unification consistency check with propagator network.
   ;; Quiescence already ran inside solve-meta! (if any metas were solved).
   (define check-fn (current-prop-has-contradiction?))
-  (define final-result
-    (cond
-      [(not check-fn) result]  ;; No network (test context) → pass through
-      ;; If unify said #t or 'postponed but network has contradiction → downgrade to #f
-      [(and (not (eq? result #f)) (check-fn)) #f]
-      ;; P1-G3: If unify returned 'postponed, check if quiescence resolved
-      ;; the constraint via transitive propagation. If the most recent constraint
-      ;; added during this call was solved by retry-via-cells, upgrade to #t.
-      [(eq? result 'postponed)
-       (define post-store (current-constraint-store))
-       (cond
-         ;; A new constraint was added (post-store is longer than pre-store)
-         [(and (pair? post-store)
-               (not (eq? post-store pre-store))
-               (eq? (constraint-status (car post-store)) 'solved))
-          #t]  ;; Upgrade: constraint was resolved by quiescence
-         [else 'postponed])]
-      [else result]))
-  ;; P1-G4: Shadow logging — report divergence from base unify result.
-  (when (not (eq? result final-result))
-    (set! unify*-shadow-mismatches (+ 1 unify*-shadow-mismatches)))
-  final-result)
+  (cond
+    [(not check-fn) result]  ;; No network (test context) → pass through
+    ;; If unify said #t or 'postponed but network has contradiction → downgrade to #f
+    [(and (not (eq? result #f)) (check-fn)) #f]
+    ;; If unify returned 'postponed, check if quiescence resolved
+    ;; the constraint via transitive propagation. If the most recent constraint
+    ;; added during this call was solved by retry-via-cells, upgrade to #t.
+    [(eq? result 'postponed)
+     (define post-store (current-constraint-store))
+     (cond
+       ;; A new constraint was added (post-store is longer than pre-store)
+       [(and (pair? post-store)
+             (not (eq? post-store pre-store))
+             (eq? (constraint-status (car post-store)) 'solved))
+        #t]  ;; Upgrade: constraint was resolved by quiescence
+       [else 'postponed])]
+    [else result]))
 
 (define (unify*-ok? result) (not (eq? result #f)))
 
