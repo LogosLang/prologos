@@ -454,15 +454,15 @@ _Living section — updated as work progresses._
 | P5a | DONE | 9317e1e | mult-lattice.rkt: 5-element flat lattice, 9 tests |
 | P5b | DONE | 2ad5c18 | Mult cells in elab network, callbacks in metavar-store, 6 tests |
 | P5c | DONE | 6b69901 | type↔mult cross-domain bridge, 8 bridge unit tests |
-| P5d | DONE | (this) | PIR: no regressions, slight improvements across board |
-| P1-G1 | PENDING | | |
-| P1-G2 | PENDING | | |
-| P1-G3 | PENDING | | |
-| P1-G4 | PENDING | | |
-| P1-G5 | PENDING | | |
-| P1-G6 | PENDING | | |
-| P1-G7 | PENDING | | |
-| P1-G8 | PENDING | | |
+| P5d | DONE | f443906 | PIR: no regressions, slight improvements across board |
+| P1-G1 | DONE | 466eabf | Design doc: thin wrapper over existing unify |
+| P1-G2 | DONE | daa52d3 | unify* wrapper, contradiction check callback, 9 tests |
+| P1-G3 | DONE | 079ff7f | Meta-bearing upgrade: 'postponed→#t on quiescence, 14 tests |
+| P1-G4 | DONE | bb654b6 | Shadow validation: all 29 call sites replaced, 0 mismatches |
+| P1-G5 | DONE | 09a9dbf | Benchmark baseline: 10 programs × 15 runs, all within noise |
+| P1-G6 | DONE | b949e46 | Switchover: removed shadow counter, unify* sole path |
+| P1-G7 | DONE | b264bda | unify→unify-core rename, unify=propagator-aware entry point |
+| P1-G8 | DONE | (this) | PIR: no regressions, 5140 tests, all benchmarks within noise |
 | GDE-1 | PENDING | | |
 | GDE-2 | PENDING | | |
 | GDE-3 | PENDING | | |

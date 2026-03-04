@@ -564,6 +564,25 @@ The following collection items ARE also deferred (genuine infrastructure deps):
 
 ---
 
+## Propagator-Driven Unification (P-Unify)
+
+### Full Lattice-Propagator Unification — NOT STARTED
+- **Problem**: Current `unify*` is a post-hoc observer — calls imperative `unify-core`,
+  then checks propagator network for contradictions. The lattice cells react to meta-solving
+  side effects but don't *drive* unification.
+- **Goal**: Replace `unify-core` internals with cell-driven solving where the propagator
+  network is the *authority*, not the observer.
+- **Key capabilities**:
+  1. Propagator-driven solving — cell narrowing triggers unification of dependent terms
+  2. Bidirectional cross-domain inference — multiplicity evidence constrains type choices
+  3. Incremental re-solving — partial state propagation instead of full re-unification
+- **Depends on**: GDE (General Diagnostic Engine) — need diagnostic infrastructure to
+  debug propagator-driven solving when it goes wrong
+- **Prerequisite complete**: P1-G migration (all call sites flow through `unify*` choke point)
+- **Source**: P1-G design discussion (2026-03-04 session)
+
+---
+
 ## Infrastructure / Performance
 
 ### Compiled Module Cache
