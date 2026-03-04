@@ -13,11 +13,13 @@
 ;;   racket tools/run-affected-tests.rkt --no-record # skip JSONL timing recording
 ;;   racket tools/run-affected-tests.rkt --timeout 300  # per-test timeout (default: 600)
 ;;   racket tools/run-affected-tests.rkt --no-precompile  # skip bytecode pre-compilation
+;;   racket tools/run-affected-tests.rkt --failures      # show failure logs from last run
 ;;
 ;; Automatically records per-file timing data to data/benchmarks/timings.jsonl.
 ;; Use benchmark-tests.rkt for reporting (--report, --trend, --compare, --slowest).
 
 (require racket/cmdline
+         racket/file
          racket/list
          racket/path
          racket/port
@@ -168,6 +170,7 @@
 (define record-timings? (make-parameter #t))
 (define timeout-secs (make-parameter 600))
 (define do-precompile? (make-parameter #t))
+(define show-failures? (make-parameter #f))
 
 (define (main)
   (command-line
@@ -191,6 +194,8 @@
     (timeout-secs (string->number secs))]
    ["--no-precompile" "Skip bytecode pre-compilation step"
     (do-precompile? #f)]
+   ["--failures" "Show failure logs from last run (no tests executed)"
+    (show-failures? #t)]
    #:multi
    ["--skip" file "Skip an additional test file (additive with .skip-tests)"
     (extra-skips (cons (string->symbol file) (extra-skips)))])
@@ -206,6 +211,27 @@
 
   (define tests-dir
     (build-path project-root "tests"))
+
+  ;; --failures: show failure logs from last run, then exit
+  (when (show-failures?)
+    (define fail-dir (build-path project-root "data" "benchmarks" "failures"))
+    (cond
+      [(not (directory-exists? fail-dir))
+       (printf "No failure logs found (directory does not exist: ~a)\n" fail-dir)]
+      [else
+       (define logs (sort (map path->string (directory-list fail-dir #:build? #t))
+                          string<?))
+       (define log-files (filter (lambda (p) (string-suffix? p ".log")) logs))
+       (cond
+         [(null? log-files)
+          (printf "No failure logs found — all tests passed last run.\n")]
+         [else
+          (printf "~a failure log(s) from last run:\n\n" (length log-files))
+          (for ([log-path (in-list log-files)])
+            (printf "~a\n" (make-string 60 #\─))
+            (display (file->string log-path))
+            (newline))])])
+    (exit 0))
 
   (cond
     ;; --all: run everything (subject to skip filter)
@@ -468,19 +494,17 @@
           (if all-pass? "all pass"
               (format "~a FAILURES" (length failed-files))))
   (unless all-pass?
-    (printf "\nFailed files:\n")
     (for ([r (in-list failed-files)])
-      (printf "  ~a" (hash-ref r 'file))
+      (printf "\n~a\n" (make-string 60 #\─))
+      (printf "FAILED: ~a\n" (hash-ref r 'file))
       (when (hash-has-key? r 'error_output)
         (define msg (hash-ref r 'error_output))
-        ;; Show first line of error diagnostic (or first 80 chars of exception)
-        (define first-line (car (string-split msg "\n")))
-        (define short (if (> (string-length first-line) 80)
-                         (string-append (substring first-line 0 80) "...")
-                         first-line))
-        (printf "\n    ~a" short))
+        ;; Print full diagnostic content inline — no need to open log files
+        (for ([line (in-list (string-split msg "\n"))])
+          (printf "    ~a\n" line)))
       (newline))
-    (printf "\nSee failure logs: data/benchmarks/failures/*.log\n"))
+    (printf "~a\n" (make-string 60 #\─))
+    (printf "Failure logs: data/benchmarks/failures/*.log\n"))
 
   ;; Record to JSONL (unless --no-record)
   (when (record-timings?)

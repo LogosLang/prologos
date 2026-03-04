@@ -285,12 +285,11 @@
                    (not (string-prefix? l "PROVENANCE-STATS"))))
             remaining-stderr-lines))
 
-  ;; Attach error output on failure — prefer first diagnostic over raw exception
-  (define first-diagnostic
-    (and (pair? error-diagnostics) (car error-diagnostics)))
+  ;; Attach error output on failure — ALL diagnostics, not just the first
   (define error-output
     (cond
-      [first-diagnostic first-diagnostic]
+      [(pair? error-diagnostics)
+       (string-join error-diagnostics "\n\n")]
       [(not (string=? error-msg "")) error-msg]
       [else #f]))
   (define result-final
