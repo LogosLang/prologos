@@ -24,12 +24,12 @@
 | S3 | S3b: Process elaboration | ✅ | `79ced0d` | elaborate-proc-body + proc branches |
 | S3 | S3c: `throws` desugaring | ⏳ | | Deferred: needs capability integration (S5) |
 | S3 | S3d: Driver + pretty-printing | ✅ | `a15cb7f` `7a2d6e5` | 19 tests, pp-process, unannotated recv fix |
-| S4 | S4a: Session lattice | ☐ | | |
-| S4 | S4b: Session inference propagators | ☐ | | |
-| S4 | S4c: Duality bidirectional prop | ☐ | | |
-| S4 | S4d: ATMS integration | ☐ | | |
-| S4 | S4e: Cross-domain bridges | ☐ | | |
-| S4 | S4f: Deadlock detection | ☐ | | |
+| S4 | S4a: Session lattice | ✅ | `c01182b` | sess-bot/top, session-lattice-merge, 26 tests |
+| S4 | S4b: Session inference propagators | ✅ | `54c7c90` | send/recv/select/offer/stop propagators, 20 tests |
+| S4 | S4c: Duality bidirectional prop | ✅ | `54c7c90` | add-duality-prop, proc-new compilation |
+| S4 | S4d: ATMS integration | ✅ | `6383f1b` | session-op trace, session-protocol-error, 10 tests |
+| S4 | S4e: Cross-domain bridges | ⏳ | | Deferred: needs deeper type↔session cell integration |
+| S4 | S4f: Deadlock detection | ✅ | `2e244b1` | check-session-completeness, 9 tests |
 | S5 | S5a: Capability binders | ☐ | | |
 | S5 | S5b: Boundary operations | ☐ | | |
 | S5 | S5c: Delegation + warnings | ☐ | | |

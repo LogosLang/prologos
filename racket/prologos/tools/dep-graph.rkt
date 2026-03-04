@@ -86,6 +86,8 @@
    'repl-support.rkt              '(driver.rkt errors.rkt global-env.rkt macros.rkt parser.rkt)
    'repl.rkt                      '(driver.rkt errors.rkt global-env.rkt macros.rkt parser.rkt pretty-print.rkt reader.rkt sexp-readtable.rkt source-location.rkt)
    'rrb.rkt                       '()
+   'session-lattice.rkt           '(sessions.rkt type-lattice.rkt)
+   'session-propagators.rkt       '(errors.rkt pretty-print.rkt processes.rkt propagator.rkt session-lattice.rkt sessions.rkt source-location.rkt)
    'sessions.rkt                  '(prelude.rkt substitution.rkt syntax.rkt)
    'sexp-readtable.rkt            '()
    'sexp.rkt                      '(main.rkt)
@@ -487,12 +489,20 @@
    (test-dep '(driver.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt multi-dispatch.rkt namespace.rkt prelude.rkt syntax.rkt) #t)
    'test-sess-inference.rkt
    (test-dep '(metavar-store.rkt prelude.rkt processes.rkt sessions.rkt substitution.rkt syntax.rkt typing-core.rkt typing-sessions.rkt) #f)
+   'test-session-deadlock-01.rkt
+   (test-dep '(errors.rkt processes.rkt propagator.rkt session-lattice.rkt session-propagators.rkt sessions.rkt syntax.rkt) #f)
    'test-session-elaborate-01.rkt
    (test-dep '(driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parser.rkt pretty-print.rkt processes.rkt sessions.rkt surface-syntax.rkt) #f)
+   'test-session-errors-01.rkt
+   (test-dep '(errors.rkt pretty-print.rkt processes.rkt session-lattice.rkt session-propagators.rkt sessions.rkt syntax.rkt) #f)
+   'test-session-lattice-01.rkt
+   (test-dep '(session-lattice.rkt sessions.rkt syntax.rkt) #f)
    'test-session-parse-01.rkt
    (test-dep '(errors.rkt parser.rkt surface-syntax.rkt) #f)
    'test-session-parse-02.rkt
    (test-dep '(errors.rkt macros.rkt parser.rkt surface-syntax.rkt) #f)
+   'test-session-propagators-01.rkt
+   (test-dep '(errors.rkt processes.rkt propagator.rkt session-lattice.rkt session-propagators.rkt sessions.rkt syntax.rkt) #f)
    'test-sessions.rkt
    (test-dep '(prelude.rkt sessions.rkt substitution.rkt syntax.rkt) #f)
    'test-set-ops-eval.rkt
