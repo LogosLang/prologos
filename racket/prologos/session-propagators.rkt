@@ -51,6 +51,8 @@
  trace-add
  ;; Compilation
  compile-proc-to-network
+ ;; S4f: Deadlock/completeness detection
+ check-session-completeness
  ;; Top-level checker
  check-session-via-propagators)
 
@@ -406,13 +408,84 @@
    derivation))
 
 ;; ========================================
+;; S4f: Deadlock / completeness detection
+;; ========================================
+
+;; After quiescence with no contradiction, check for incomplete protocol.
+;;
+;; The check looks for cells with 'stop operations that did NOT reach sess-end.
+;; In the propagator model:
+;;   - Root/intermediate cells retain their full session value (monotonic lattice)
+;;   - Only "terminal" cells (constrained by proc-stop) must be at sess-end
+;;   - A terminal cell NOT at sess-end with no contradiction means the stop
+;;     propagator couldn't resolve — potential deadlock or unused channel
+;;
+;; Additionally checks for sess-bot cells with 'init or 'new operations,
+;; meaning a channel was allocated but never constrained by any process operation.
+;;
+;; Returns:
+;;   'ok — all terminal cells at end, no unused channels
+;;   session-protocol-error — incomplete protocol or unused channel
+(define (check-session-completeness net trace)
+  ;; 1. Find cells with 'stop ops that aren't at sess-end
+  ;; 2. Find cells with only 'init/'new ops (never used by process)
+  (define problems
+    (for/fold ([acc '()])
+              ([(cid ops) (in-hash trace)])
+      (define val
+        (with-handlers ([exn:fail? (lambda (e) sess-bot)])
+          (net-cell-read net cid)))
+      (define has-stop? (for/or ([op (in-list ops)]) (eq? 'stop (session-op-kind op))))
+      (define has-init-only?
+        (and (for/and ([op (in-list ops)])
+               (memq (session-op-kind op) '(init new dual)))
+             (not (null? ops))))
+      (cond
+        ;; Terminal cell not at end = process stopped but protocol remains
+        [(and has-stop?
+              (not (sess-end? val))
+              (not (sess-bot? val))
+              (not (sess-top? val)))
+         (cons (list cid val ops 'incomplete) acc)]
+        ;; Allocated channel never used by any process operation
+        [(and has-init-only? (sess-bot? val))
+         (cons (list cid val ops 'unused) acc)]
+        [else acc])))
+  (cond
+    [(null? problems) 'ok]
+    [else
+     ;; Report the first problem
+     (define entry (car problems))
+     (define cid (first entry))
+     (define val (second entry))
+     (define ops (third entry))
+     (define kind (fourth entry))
+     (define channel
+       (if (null? ops) '?
+           (session-op-channel (last ops))))
+     (define derivation
+       (for/list ([op (in-list (reverse ops))])
+         (session-op-description op)))
+     (define msg
+       (case kind
+         [(incomplete) "Incomplete protocol: session not fully consumed (potential deadlock)"]
+         [(unused) "Unused channel: allocated but never used by any process operation"]
+         [else "Session completeness check failed"]))
+     (define detail
+       (case kind
+         [(incomplete) (format "Remaining session: ~a" (pp-session val))]
+         [(unused) "Channel cell is at bottom (no information)"]
+         [else ""]))
+     (session-protocol-error srcloc-unknown msg channel detail derivation)]))
+
+;; ========================================
 ;; Top-level session checker
 ;; ========================================
 
 ;; Check a process against a session type using propagator inference.
 ;; Returns:
 ;;   'ok — process correctly implements the protocol
-;;   session-protocol-error — protocol violation with derivation chain
+;;   session-protocol-error — protocol violation or incomplete protocol
 (define (check-session-via-propagators proc session-type)
   ;; 1. Create empty network
   (define net0 (make-prop-network))
@@ -433,4 +506,6 @@
   (cond
     [contradiction-cell
      (build-session-error net3 trace contradiction-cell session-type)]
-    [else 'ok]))
+    ;; 7. S4f: Check for incomplete protocol (deadlock detection)
+    [else
+     (check-session-completeness net3 trace)]))
