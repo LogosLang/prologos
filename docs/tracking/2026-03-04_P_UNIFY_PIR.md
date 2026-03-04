@@ -1,9 +1,9 @@
 # P-Unify: Propagator-Driven Unification — Post-Implementation Review
 
 **Date**: 2026-03-04
-**Commits**: `b34e716` through `f944d2c` (7 commits)
-**Test Count**: 5234 (258 files) — up from 5186 (256 files)
-**New Tests**: 48 (35 in test-unify-structural.rkt, 13 in test-unify-cell-driven.rkt)
+**Commits**: `b34e716` through `2785e09` (10 commits)
+**Test Count**: 5277 (259 files) -- up from 5186 (256 files)
+**New Tests**: 91 (35 in test-unify-structural.rkt, 13 in test-unify-cell-driven.rkt, 43 in test-structural-decomp.rkt)
 
 ## Summary
 
@@ -54,10 +54,19 @@ cell-driven architecture where:
 - Cell-read is already primary; CHAMP fallback needed for test contexts without network
 - Defer until `with-fresh-meta-env` is upgraded to always create a network
 
-### Phase 4c: Structural Decomposition Propagators
-- Lazy child cell creation during quiescence for Pi/Sigma sub-components
-- High risk: novel pattern with unclear interaction with speculation/rollback
-- Defer: current improvements already provide most of the benefit
+### Phase 4c: Structural Decomposition Propagators (commits `8624a33`-`2785e09`) -- COMPLETE
+- **4c-a** (`8624a33`): Infrastructure -- `cell-decomps` and `pair-decomps` CHAMP registries,
+  `current-structural-meta-lookup` callback, installed from `driver.rkt`
+- **4c-b** (`3094aa1`): Core decomposition -- `make-structural-unify-propagator` replaces
+  `make-unify-propagator`; `decompose-pi`, `decompose-app` with sub-cells, sub-propagators,
+  and reconstructors; fast path refined to check `has-unsolved-meta?`; 24 tests
+- **4c-c** (`2785e09`): Extended constructors -- Sigma, Eq, Vec, PVec, Set, Map, pair,
+  suc, lam decomposers; generic `decompose-1` for 1-component types; fix pre-existing
+  `try-unify-pure` lam arity bug; 19 new tests
+- **Key mechanism**: bare metas reuse existing propagator cells, connecting structural
+  positions directly to meta cells for network-driven solving
+- **Benchmark**: 142.6s total, no regressions vs baseline (~139.9s = +2%)
+- **Test count**: 5277 (259 files), all pass
 
 ### Phase 5a: Remove Dual Storage
 - CHAMP meta-info still stores status/solution alongside cells
@@ -68,12 +77,13 @@ cell-driven architecture where:
 
 **Overall**: ~3-5% overhead vs pre-P-Unify baseline, well within 15% budget.
 
-| Metric | Before | After | Delta |
-|--------|--------|-------|-------|
-| Total wall time | ~133s | ~132-140s | +0-5% |
-| Test count | 5186 | 5234 | +48 |
-| File count | 256 | 258 | +2 |
-| Cell-write mismatches | N/A | 0 | — |
+| Metric | Pre-P-Unify | P-Unify 1a-4b | P-Unify 4c | Delta (overall) |
+|--------|-------------|---------------|------------|-----------------|
+| Total wall time | ~133s | ~132-140s | ~142.6s | +5-7% |
+| Test count | 5186 | 5234 | 5277 | +91 |
+| File count | 256 | 258 | 259 | +3 |
+| Cell-write mismatches | N/A | 0 | 0 | -- |
+| Structural decomp constructors | 0 | 0 | 11 | -- |
 
 The overhead comes primarily from `maybe-flush-network!` calls, which are
 no-ops in the common case (worklist empty after solve-meta!'s quiescence).
@@ -116,3 +126,25 @@ unify(ctx, t1, t2)                       [top-level, propagator-aware]
 4. **Meta-aware lattice merge is a clean extension**: Changing `try-unify-pure`
    to return the concrete side for unsolved metas is monotone and idempotent,
    preserving the lattice invariants.
+
+5. **Structural decomposition is fundamentally a Radul/Sussman pattern**: The
+   constructor/accessor decomposition pattern (Phase 4c) is clean and composable.
+   Each constructor has the same structure: extract components, create sub-cells,
+   wire sub-propagators and reconstructors. The generic `decompose-1` eliminates
+   boilerplate for 1-component types.
+
+6. **`current-lattice-meta-solution-fn` gates structural decomposition**: Without it,
+   `has-unsolved-meta?` returns `#f` for all expressions, causing the fast path to
+   bypass structural decomposition. This is correct in production (callback is installed
+   from driver.rkt) but must be explicitly set in tests.
+
+7. **Parent cells retain meta references after sub-cell solving**: `try-unify-pure`
+   preserves the first side's structure. Reconstructors can't always update parents
+   to fully concrete values. This is correct -- zonking resolves meta references later.
+   The key invariant is that meta CELLS are solved to concrete values.
+
+8. **Latent bugs surface when new paths exercise old code**: Phase 4c-c revealed a
+   pre-existing arity bug in `try-unify-pure`'s lam case (`expr-lam` called with 2
+   args instead of 3). The code was unreachable in practice because lam values are
+   usually beta-reduced before unification. Structural decomposition tests exercised
+   the path for the first time.
