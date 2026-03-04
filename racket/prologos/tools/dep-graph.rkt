@@ -849,6 +849,10 @@
    (test-dep '(reader.rkt sexp-readtable.rkt) #f)
    'test-parser-relational.rkt
    (test-dep '(parser.rkt surface-syntax.rkt macros.rkt sexp-readtable.rkt) #f)
+   'test-session-parse-01.rkt
+   (test-dep '(parser.rkt surface-syntax.rkt errors.rkt) #f)
+   'test-process-parse-01.rkt
+   (test-dep '(parser.rkt surface-syntax.rkt errors.rkt) #f)
    'test-relational-types.rkt
    (test-dep '(syntax.rkt typing-core.rkt qtt.rkt substitution.rkt pretty-print.rkt reduction.rkt elaborator.rkt surface-syntax.rkt solver.rkt) #f)
    'test-relational-e2e.rkt

@@ -6996,6 +6996,11 @@
     [(surf-cap-audit? surf) surf]
     [(surf-cap-verify? surf) surf]
     [(surf-cap-bridge? surf) surf]
+    ;; Session/process declarations — pass through to elaboration (Phase S1/S2)
+    [(surf-session? surf) surf]
+    [(surf-defproc? surf) surf]
+    [(surf-proc? surf) surf]
+    [(surf-dual? surf) surf]
     ;; Bare expression — implicit eval
     [else
      (define loc (cond
