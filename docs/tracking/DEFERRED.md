@@ -533,17 +533,13 @@ The following collection items ARE also deferred (genuine infrastructure deps):
 
 ---
 
-## Numerics — Peano Nat Efficiency
+## ~~Numerics — Peano Nat Efficiency~~ COMPLETE
 
-### Replace Peano Nat with Native Representation
-- **Problem**: Peano encoding (`Z | S (S (S Z))`) is O(n) for every numeric operation. `8080N` causes O(8080) recursion in `nat-value` during `lt` comparison. Tests must use `3N` to avoid timeouts.
-- **Options**:
-  1. `type Nat := PosInt | Zero` — lightweight union, immediate fix, reuses refined numeric subtyping
-  2. Keep `PeanoNat` for structural induction proofs, `Nat` becomes native — dual types
-  3. Compiler erasure (Idris 2 approach) — surface Peano, native at runtime
-- **Recommendation**: Option 1 for Phase 0. Keep `PeanoNat` as separate type for proofs.
-- **Dependencies**: Refined numeric subtyping (COMPLETE), union types (COMPLETE)
-- **Source**: Path expression testing revealed the issue (2026-03-03); also noted in 2026-03-03 dailies
+### ~~Replace Peano Nat with Native Representation~~ DONE (commits `f17c522`, `c2ad2b5`, `5ef9fed`)
+- **Implemented**: Option 3 (Idris 2 approach) — Peano surface syntax preserved, native `expr-nat-val` at runtime
+- `nat->expr`, `nat-value`, elaboration, whnf, nf, pattern matching, unification all use O(1) `expr-nat-val`
+- 14 pipeline files updated, 17 test files updated, 5005 tests pass
+- ~~**Problem**: Peano encoding (`Z | S (S (S Z))`) is O(n) for every numeric operation.~~
 
 ### WS Mode Path Expression Disambiguation
 - **Problem**: In WS mode, `.{` is tokenized as `dot-lbrace` (mixfix expressions). Path branching syntax `:address.{zip city}` conflicts with mixfix.
