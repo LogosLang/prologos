@@ -196,6 +196,8 @@
    (test-dep '(atms.rkt elab-speculation.rkt elaborator-network.rkt prelude.rkt propagator.rkt syntax.rkt type-lattice.rkt) #f)
    'test-elaborator-network.rkt
    (test-dep '(elaborator-network.rkt propagator.rkt syntax.rkt type-lattice.rkt) #f)
+   'test-structural-decomp.rkt
+   (test-dep '(elaborator-network.rkt propagator.rkt syntax.rkt type-lattice.rkt) #f)
    'test-elaborator.rkt
    (test-dep '(elaborator.rkt errors.rkt global-env.rkt metavar-store.rkt parser.rkt prelude.rkt source-location.rkt surface-syntax.rkt syntax.rkt) #f)
    'test-eliminator-typing.rkt
