@@ -585,16 +585,12 @@
     (define cid (prop-meta-id->cell-id id))
     (when cid
       (set-box! net-box (write-fn (unbox net-box) cid solution))))
-  ;; Phase E2: Propagator-driven wakeup vs legacy manual wakeup
+  ;; P1-E3c: Constraint retry — propagator path when network available,
+  ;; legacy wakeup registry only for test contexts without a network.
   (cond
-    [(and (current-prop-driven-wakeup?) net-box (current-prop-run-quiescence)
+    [(and net-box (current-prop-run-quiescence)
           (current-prop-unwrap-net) (current-prop-rewrap-net))
-     ;; Propagator-driven: run network to quiescence. Cell writes from
-     ;; above enqueue dependent propagators (bidirectional unify propagators
-     ;; from add-constraint!). These fire, merge values, and may write to
-     ;; connected cells — handling transitive constraint propagation automatically.
-     ;; The net-box stores an elab-network (wrapping prop-network), so we
-     ;; unwrap → run quiescence → rewrap.
+     ;; Production path: run network to quiescence, then cell-state retry.
      (define run-fn (current-prop-run-quiescence))
      (define unwrap (current-prop-unwrap-net))
      (define rewrap (current-prop-rewrap-net))
@@ -602,27 +598,9 @@
      (define pnet (unwrap enet))
      (define pnet* (run-fn pnet))
      (set-box! net-box (rewrap enet pnet*))
-     ;; P1-E3a: Cell-state-driven constraint retry (propagator path).
-     ;; Scans all postponed constraints whose meta cells may have changed
-     ;; during quiescence — captures transitive propagation.
-     (retry-constraints-via-cells!)
-     ;; P1-E3b: Shadow validation — snapshot which constraints are still
-     ;; postponed after cell-path, then run legacy and check for divergences.
-     (define still-postponed-after-cells
-       (for/list ([c (in-list (current-constraint-store))]
-                  #:when (eq? (constraint-status c) 'postponed))
-         c))
-     ;; Legacy retry as secondary path (catches constraints without cell-ids)
-     (retry-constraints-for-meta! id)
-     ;; Shadow comparison: any constraint that was still postponed after
-     ;; cell-path but is now solved/failed was caught only by legacy.
-     (for ([c (in-list still-postponed-after-cells)])
-       (when (not (eq? (constraint-status c) 'postponed))
-         (perf-inc-constraint-shadow-mismatch!)
-         (eprintf "CONSTRAINT-SHADOW-MISMATCH: legacy solved constraint missed by cell-path (meta ~a)\n"
-                  id)))]
+     (retry-constraints-via-cells!)]
     [else
-     ;; Legacy: manual wakeup registry
+     ;; Fallback for test contexts without propagator network
      (retry-constraints-for-meta! id)])
   ;; Phase C: try incremental trait resolution for trait constraints
   ;; referencing this meta as a type-arg (always runs — not yet propagator-driven)
