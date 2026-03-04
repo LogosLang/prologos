@@ -819,17 +819,19 @@ From the Type Inference PIR and Benchmarking Framework Design:
 - P4 is fully independent — can proceed at any time
 - P3 and P5 can proceed in parallel after P1
 
-### Recommended Execution Order (Revised 2026-03-03)
+### Recommended Execution Order (Revised 2026-03-04)
 
-Interleaves session type parsing (no propagator dependency) with infrastructure work:
+Pivoted to prioritize E3-provenance (ATMS derivation chains for error messages) based on
+LE Audit §6.2 Layer 1 identification. Infrastructure was ~90% built; E3 wired the last mile.
 
-1. **S1-S2** (session/process parsing) — pure surface syntax, no propagator dependency
-2. **P4** (test dependencies) — multiplicative benefit, independent, low risk
-3. **S3** (session elaboration) — connects parsing to semantic AST, still no propagator needed
-4. **P3** (trait resolution as propagators) — enriches propagator network before S4
-5. **S4** (session propagator network) — lands on battle-tested, enriched infra
-6. **P5 + S5-S8** (QTT multiplicities, capabilities, runtime, async) — later
-7. **P1-E3, P1-G** (constraint-retry, pure unification) — long-term
+1. **S1-S2** (session/process parsing) — COMPLETE (commits `8cba95e`–`c17d3dc`)
+2. **P4** (test dependency auto-sync) — COMPLETE (commit `ec10d77`)
+3. **E3-provenance** (ATMS derivation chains in type errors) — COMPLETE (commits `4e1edee`–`0588c19`)
+4. **S3** (session elaboration) — next
+5. **P3** (trait resolution as propagators) — enriches network before S4
+6. **S4** (session propagator network) — lands on enriched infra
+7. **P5 + S5-S8** (QTT multiplicities, capabilities, runtime, async) — later
+8. **P1-E3, P1-G** (constraint-retry, pure unification) — long-term
 
 **Rationale**: S1-S3 cost the same regardless of when they're done. P4 and P3 between
 S3 and S4 means the most complex session type work (S4) benefits from both multiplicative

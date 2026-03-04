@@ -55,7 +55,7 @@
    'capability-inference.rkt      '(atms.rkt global-env.rkt macros.rkt propagator.rkt syntax.rkt)
    'champ.rkt                     '()
    'driver.rkt                    '(atms.rkt cap-type-bridge.rkt capability-inference.rkt champ.rkt elab-speculation-bridge.rkt elaborator-network.rkt elaborator.rkt errors.rkt foreign.rkt global-env.rkt macros.rkt metavar-store.rkt multi-dispatch.rkt namespace.rkt parser.rkt performance-counters.rkt prelude.rkt pretty-print.rkt propagator.rkt qtt.rkt reader.rkt reduction.rkt relations.rkt sexp-readtable.rkt source-location.rkt stratified-eval.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt type-lattice.rkt typing-core.rkt typing-errors.rkt unify.rkt warnings.rkt zonk.rkt)
-   'elab-speculation-bridge.rkt   '(atms.rkt metavar-store.rkt)
+   'elab-speculation-bridge.rkt   '(atms.rkt metavar-store.rkt performance-counters.rkt)
    'elab-speculation.rkt          '(atms.rkt elaborator-network.rkt propagator.rkt type-lattice.rkt)
    'elaborator-network.rkt        '(champ.rkt propagator.rkt syntax.rkt type-lattice.rkt)
    'elaborator.rkt                '(champ.rkt errors.rkt foreign.rkt global-env.rkt macros.rkt metavar-store.rkt multi-dispatch.rkt namespace.rkt performance-counters.rkt posit-impl.rkt prelude.rkt pretty-print.rkt source-location.rkt substitution.rkt surface-syntax.rkt syntax.rkt warnings.rkt)
@@ -99,7 +99,7 @@
    'trait-resolution.rkt          '(errors.rkt macros.rkt metavar-store.rkt performance-counters.rkt prelude.rkt pretty-print.rkt source-location.rkt syntax.rkt unify.rkt zonk.rkt)
    'type-lattice.rkt              '(prelude.rkt reduction.rkt substitution.rkt syntax.rkt zonk.rkt)
    'typing-core.rkt               '(elab-speculation-bridge.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt performance-counters.rkt prelude.rkt pretty-print.rkt reduction.rkt substitution.rkt syntax.rkt unify.rkt warnings.rkt)
-   'typing-errors.rkt             '(elab-speculation-bridge.rkt errors.rkt global-env.rkt prelude.rkt pretty-print.rkt qtt.rkt reduction.rkt source-location.rkt syntax.rkt typing-core.rkt)
+   'typing-errors.rkt             '(atms.rkt elab-speculation-bridge.rkt errors.rkt global-env.rkt performance-counters.rkt prelude.rkt pretty-print.rkt qtt.rkt reduction.rkt source-location.rkt syntax.rkt typing-core.rkt)
    'typing-sessions.rkt           '(metavar-store.rkt prelude.rkt processes.rkt reduction.rkt sessions.rkt substitution.rkt syntax.rkt typing-core.rkt)
    'unify.rkt                     '(metavar-store.rkt performance-counters.rkt prelude.rkt reduction.rkt source-location.rkt substitution.rkt syntax.rkt zonk.rkt)
    'union-find.rkt                '()
@@ -408,6 +408,8 @@
    (test-dep '(global-env.rkt metavar-store.rkt performance-counters.rkt prelude.rkt reduction.rkt syntax.rkt typing-core.rkt unify.rkt zonk.rkt) #f)
    'test-property-ws.rkt
    (test-dep '(driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt parser.rkt pretty-print.rkt reader.rkt source-location.rkt surface-syntax.rkt syntax.rkt) #f)
+   'test-provenance-errors.rkt
+   (test-dep '(driver.rkt elab-speculation-bridge.rkt errors.rkt global-env.rkt metavar-store.rkt performance-counters.rkt prelude.rkt source-location.rkt syntax.rkt) #t)
    'test-provenance.rkt
    (test-dep '(provenance.rkt) #f)
    'test-pvec-fold.rkt
