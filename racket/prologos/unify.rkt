@@ -37,8 +37,10 @@
          unify* unify*-ok?
          ;; Internal core (for tests that need raw unification without propagator checks)
          unify-core
-         ;; P-U1a: Pure unification classifier (no side effects)
+         ;; P-U1a/1b: Pure unification classifiers (no side effects)
          classify-whnf-problem
+         classify-level-problem
+         classify-mult-problem
          dispatch-unify-whnf
          ;; Sprint 2b exports
          decompose-meta-app pattern-check invert-args
@@ -591,53 +593,70 @@
 ;; ========================================
 ;; Sprint 6: Universe Level Unification
 ;; ========================================
-;; Unify two universe levels, solving level-metas as side effects.
-;; Returns #t if levels are equal (possibly after solving), #f otherwise.
 
-(define (unify-level l1 l2)
+;; P-U1b: Pure level classifier — follows solved metas (pure reads),
+;; returns a tagged classification:
+;;   '(ok)                          — structurally equal
+;;   (list 'solve-level id rhs)     — unsolved level-meta, needs solving
+;;   (list 'sub-level l1* l2*)      — lsuc vs lsuc: recurse on predecessors
+;;   '(fail)                        — concrete mismatch
+(define (classify-level-problem l1 l2)
   (cond
-    [(equal? l1 l2) #t]
-    ;; level-meta on left: follow or solve
+    [(equal? l1 l2) '(ok)]
     [(level-meta? l1)
      (let ([sol (level-meta-solution (level-meta-id l1))])
        (if sol
-           (unify-level sol l2)
-           (begin (solve-level-meta! (level-meta-id l1) l2) #t)))]
-    ;; level-meta on right: follow or solve
+           (classify-level-problem sol l2)
+           (list 'solve-level (level-meta-id l1) l2)))]
     [(level-meta? l2)
      (let ([sol (level-meta-solution (level-meta-id l2))])
        (if sol
-           (unify-level l1 sol)
-           (begin (solve-level-meta! (level-meta-id l2) l1) #t)))]
-    ;; lsuc vs lsuc: recurse
+           (classify-level-problem l1 sol)
+           (list 'solve-level (level-meta-id l2) l1)))]
     [(and (lsuc? l1) (lsuc? l2))
-     (unify-level (lsuc-pred l1) (lsuc-pred l2))]
-    ;; Mismatch (e.g., lzero vs lsuc)
-    [else #f]))
+     (list 'sub-level (lsuc-pred l1) (lsuc-pred l2))]
+    [else '(fail)]))
+
+;; Dispatcher: performs side-effecting solve or recurse.
+(define (unify-level l1 l2)
+  (define cl (classify-level-problem l1 l2))
+  (match cl
+    ['(ok) #t]
+    ['(fail) #f]
+    [(list 'solve-level id rhs) (solve-level-meta! id rhs) #t]
+    [(list 'sub-level l1* l2*) (unify-level l1* l2*)]))
 
 ;; ========================================
 ;; Sprint 7: Multiplicity Unification
 ;; ========================================
-;; Unify two multiplicities, solving mult-metas as side effects.
-;; Returns #t if multiplicities are equal (possibly after solving), #f otherwise.
 
-(define (unify-mult m1 m2)
+;; P-U1b: Pure mult classifier — follows solved metas (pure reads),
+;; returns a tagged classification:
+;;   '(ok)                         — structurally equal
+;;   (list 'solve-mult id rhs)     — unsolved mult-meta, needs solving
+;;   '(fail)                       — concrete mismatch
+(define (classify-mult-problem m1 m2)
   (cond
-    [(equal? m1 m2) #t]
-    ;; mult-meta on left: follow or solve
+    [(equal? m1 m2) '(ok)]
     [(mult-meta? m1)
      (let ([sol (mult-meta-solution (mult-meta-id m1))])
        (if sol
-           (unify-mult sol m2)
-           (begin (solve-mult-meta! (mult-meta-id m1) m2) #t)))]
-    ;; mult-meta on right: follow or solve
+           (classify-mult-problem sol m2)
+           (list 'solve-mult (mult-meta-id m1) m2)))]
     [(mult-meta? m2)
      (let ([sol (mult-meta-solution (mult-meta-id m2))])
        (if sol
-           (unify-mult m1 sol)
-           (begin (solve-mult-meta! (mult-meta-id m2) m1) #t)))]
-    ;; Concrete mismatch
-    [else #f]))
+           (classify-mult-problem m1 sol)
+           (list 'solve-mult (mult-meta-id m2) m1)))]
+    [else '(fail)]))
+
+;; Dispatcher: performs side-effecting solve.
+(define (unify-mult m1 m2)
+  (define cl (classify-mult-problem m1 m2))
+  (match cl
+    ['(ok) #t]
+    ['(fail) #f]
+    [(list 'solve-mult id rhs) (solve-mult-meta! id rhs) #t]))
 
 ;; ========================================
 ;; P1-G7: Propagator-Aware Unification (primary entry point)

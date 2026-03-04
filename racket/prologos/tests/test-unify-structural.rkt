@@ -11,6 +11,7 @@
 (require rackunit
          "../prelude.rkt"
          "../syntax.rkt"
+         "../metavar-store.rkt"
          "../unify.rkt")
 
 ;; ========================================
@@ -180,3 +181,56 @@
     (classify-whnf-problem (expr-ann (expr-zero) (expr-Nat)) (expr-zero)))
   (check-equal? (car result) 'retry)
   (check-true (expr-zero? (cadr result))))
+
+;; ========================================
+;; Suite 6: Level classifier (P-U1b)
+;; ========================================
+
+(test-case "classify-level: equal levels → ok"
+  (check-equal? (classify-level-problem (lzero) (lzero)) '(ok)))
+
+(test-case "classify-level: lsuc vs lsuc → sub-level"
+  (define result (classify-level-problem (lsuc (lzero)) (lsuc (lzero))))
+  ;; Both preds are lzero so it collapses to ok via recursion
+  (check-equal? result '(ok)))
+
+(test-case "classify-level: lsuc(lzero) vs lsuc(lsuc(lzero)) → sub-level"
+  ;; Classifier strips one layer of lsuc, returns sub-level for dispatcher to recurse
+  (define result (classify-level-problem (lsuc (lzero)) (lsuc (lsuc (lzero)))))
+  (check-equal? (car result) 'sub-level)
+  (check-true (lzero? (cadr result)))
+  (check-true (lsuc? (caddr result))))
+
+(test-case "classify-level: unsolved level-meta → solve-level"
+  (with-fresh-meta-env
+    (define lm (fresh-level-meta 'test))
+    (define result (classify-level-problem lm (lsuc (lzero))))
+    (check-equal? (car result) 'solve-level)))
+
+(test-case "classify-level: solved level-meta follows solution"
+  (with-fresh-meta-env
+    (define lm (fresh-level-meta 'test))
+    (solve-level-meta! (level-meta-id lm) (lzero))
+    (check-equal? (classify-level-problem lm (lzero)) '(ok))))
+
+;; ========================================
+;; Suite 7: Multiplicity classifier (P-U1b)
+;; ========================================
+
+(test-case "classify-mult: equal → ok"
+  (check-equal? (classify-mult-problem mw mw) '(ok)))
+
+(test-case "classify-mult: mismatch → fail"
+  (check-equal? (classify-mult-problem m0 m1) '(fail)))
+
+(test-case "classify-mult: unsolved mult-meta → solve-mult"
+  (with-fresh-meta-env
+    (define mm (fresh-mult-meta 'test))
+    (define result (classify-mult-problem mm mw))
+    (check-equal? (car result) 'solve-mult)))
+
+(test-case "classify-mult: solved mult-meta follows solution"
+  (with-fresh-meta-env
+    (define mm (fresh-mult-meta 'test))
+    (solve-mult-meta! (mult-meta-id mm) m1)
+    (check-equal? (classify-mult-problem mm m1) '(ok))))
