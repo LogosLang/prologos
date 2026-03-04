@@ -187,6 +187,8 @@
          selection-entry-srcloc
          register-selection!
          lookup-selection
+         ;; Session WS desugaring (exported for testing)
+         desugar-session-ws
          ;; Spec store
          current-spec-store
          current-propagated-specs
@@ -666,6 +668,161 @@
                  tmp
                  checked-fields))
         `(let ,tmp ,base-form ,body))))
+
+;; ========================================
+;; Session type WS-mode desugaring (Phase S1d)
+;; ========================================
+;; Converts WS-mode session body items from flat list to nested sexp form.
+;; Input: (session Name items...) where items are flat body elements
+;;   (! Type) → Send, (? Type) → Recv, (!: (n : T)) → DSend, (?: (n : T)) → DRecv,
+;;   (+> ($pipe :l1 items...) ...) → Choice, (&> ($pipe :l1 items...) ...) → Offer,
+;;   rec → anonymous Mu, (rec Label) → named Mu, end → End,
+;;   (shared items...) → Shared
+;; Output: (session Name NestedBody) where NestedBody is right-nested sexp
+
+(define (desugar-session-ws datum)
+  (define parts (cdr datum))  ;; skip 'session
+  (cond
+    [(< (length parts) 2)
+     datum]  ;; malformed — let parser report error
+    [else
+     (define name (car parts))
+     (define rest (cdr parts))
+     ;; Separate metadata from body items
+     (define-values (meta body-items) (split-session-metadata rest))
+     (define nested-body (session-items->nested body-items))
+     `(session ,name ,@meta ,nested-body)]))
+
+;; Split leading metadata keywords from body items.
+;; Returns (values metadata-items body-items).
+(define (split-session-metadata items)
+  (let loop ([remaining items] [meta '()])
+    (cond
+      [(null? remaining) (values (reverse meta) '())]
+      [else
+       (define item (car remaining))
+       (cond
+         ;; Keyword symbol followed by value = metadata
+         [(and (symbol? item)
+               (let ([s (symbol->string item)])
+                 (and (> (string-length s) 1)
+                      (char=? (string-ref s 0) #\:)))
+               (pair? (cdr remaining)))
+          (loop (cddr remaining) (cons (cadr remaining) (cons item meta)))]
+         ;; Not a keyword — rest is body
+         [else (values (reverse meta) remaining)])])))
+
+;; Right-fold a flat list of WS session items into nested sexp form.
+;; (! String) (? Nat) end  →  (Send String (Recv Nat End))
+(define (session-items->nested items)
+  (cond
+    [(null? items) 'End]  ;; implicit End
+    [(= (length items) 1)
+     (session-item->sexp (car items) 'End)]
+    [else
+     (session-item->sexp (car items) (session-items->nested (cdr items)))]))
+
+;; Convert a single WS session item to sexp, with given continuation.
+(define (session-item->sexp item cont)
+  (cond
+    ;; Bare symbol
+    [(symbol? item)
+     (case item
+       [(end End) 'End]
+       [(rec) `(Mu ,cont)]
+       [else
+        ;; Session variable reference — use as-is, cont is ignored
+        ;; (the item IS the body, not a step that chains)
+        item])]
+    ;; List form
+    [(pair? item)
+     (define head (car item))
+     (case head
+       ;; (! Type) → (Send Type Cont)
+       [(!)
+        (if (>= (length item) 2)
+            `(Send ,(cadr item) ,cont)
+            item)]  ;; malformed
+       ;; (? Type) → (Recv Type Cont)
+       [(??)
+        (if (>= (length item) 2)
+            `(Recv ,(cadr item) ,cont)
+            item)]
+       [(?)
+        (if (>= (length item) 2)
+            `(Recv ,(cadr item) ,cont)
+            item)]
+       ;; (!: (n : T)) → (DSend (n : T) Cont)
+       [(!:)
+        (if (>= (length item) 2)
+            `(DSend ,(cadr item) ,cont)
+            item)]
+       ;; (?: (n : T)) → (DRecv (n : T) Cont)
+       [(?:)
+        (if (>= (length item) 2)
+            `(DRecv ,(cadr item) ,cont)
+            item)]
+       ;; (+> ($pipe :l1 items...) ...) → (Choice ((:l1 nested1) (:l2 nested2) ...))
+       [(+>)
+        (define branches (desugar-session-branches (cdr item)))
+        `(Choice ,branches)]
+       ;; (&> ($pipe :l1 items...) ...) → (Offer ...)
+       [(&>)
+        (define branches (desugar-session-branches (cdr item)))
+        `(Offer ,branches)]
+       ;; (rec Label) → (Mu Label Cont)
+       [(rec)
+        (if (>= (length item) 2)
+            `(Mu ,(cadr item) ,cont)
+            `(Mu ,cont))]
+       ;; (shared items...) → (Shared nested)
+       [(shared)
+        `(Shared ,(session-items->nested (cdr item)))]
+       ;; (SVar Name) → pass through
+       [(SVar) item]
+       ;; Otherwise — pass through unchanged (could be a type reference)
+       [else item])]
+    [else item]))
+
+;; Desugar WS-mode branch list from $pipe children.
+;; ($pipe :label items...) → (:label nested)
+(define (desugar-session-branches pipe-children)
+  (for/list ([child (in-list pipe-children)])
+    (cond
+      [(and (pair? child) (eq? (car child) '$pipe) (>= (length child) 2))
+       (define label (cadr child))
+       (define branch-items (cddr child))
+       ;; Handle -> chains in branch items
+       (define clean-items (flatten-arrow-chain branch-items))
+       (define nested (session-items->nested clean-items))
+       `(,label ,nested)]
+      ;; Non-pipe child — pass through (shouldn't happen in well-formed input)
+      [else child])))
+
+;; Flatten arrow chains: (-> X (-> Y)) → (X Y)
+;; The WS reader may produce inline arrow chains for branch bodies.
+(define (flatten-arrow-chain items)
+  (cond
+    [(null? items) '()]
+    [(and (= (length items) 1) (pair? (car items)) (eq? (caar items) '->))
+     ;; Single -> wrapper: unwrap
+     (flatten-arrow-chain (cdar items))]
+    [else
+     (cons (car items) (flatten-arrow-chain (cdr items)))]))
+
+;; ========================================
+;; Process WS-mode desugaring (Phase S2c)
+;; ========================================
+;; For now, process WS desugaring is a pass-through — the WS reader
+;; produces forms that the sexp-mode parser can handle directly for
+;; basic cases. Full WS desugaring (chan ! expr, var := chan ?, etc.)
+;; will be implemented when we add WS-mode operator disambiguation.
+
+(define (desugar-defproc-ws datum)
+  ;; Pass through to sexp-mode parser for now.
+  ;; WS-mode process desugaring requires operator disambiguation
+  ;; (! and ? as session ops vs expression ops) which is Phase S2c.
+  datum)
 
 ;; preparse-expand-form: expand a single datum
 ;; ========================================
@@ -1554,6 +1711,18 @@
         ;; ---- Selection declaration — pass through to parser/elaborator (Phase 2b) ----
         [(and (pair? datum) (eq? head 'selection))
          (cons stx acc)]
+        ;; ---- Session type declaration — desugar WS-mode body to sexp form (Phase S1d) ----
+        [(and (pair? datum) (eq? head 'session))
+         (when (and (list? datum) (>= (length datum) 2) (symbol? (cadr datum)))
+           (auto-export-name! (cadr datum)))
+         (define desugared (desugar-session-ws datum))
+         (cons (datum->syntax #f desugared stx) acc)]
+        ;; ---- Process declaration — desugar WS-mode body to sexp form (Phase S2c) ----
+        [(and (pair? datum) (eq? head 'defproc))
+         (when (and (list? datum) (>= (length datum) 2) (symbol? (cadr datum)))
+           (auto-export-name! (cadr datum)))
+         (define desugared (desugar-defproc-ws datum))
+         (cons (datum->syntax #f desugared stx) acc)]
         ;; ---- Public defn/def — auto-export the name ----
         [(and (pair? datum) (memq head '(defn def)))
          (auto-export-names! (extract-defined-name datum head))
