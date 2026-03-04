@@ -13,6 +13,7 @@
          racket/match
          racket/string
          "prelude.rkt"
+         "performance-counters.rkt"
          "syntax.rkt"
          "reduction.rkt"
          "typing-core.rkt"
@@ -120,6 +121,8 @@
 ;; Returns a list of strings, one per sub-failure, showing the speculation path.
 ;; When atms-box is provided (box of atms), appends ATMS conflict info to each step.
 (define (build-derivation-chain sub-failures [atms-box #f])
+  (when (pair? sub-failures)
+    (perf-inc-provenance-chain!))
   (for/list ([sf (in-list sub-failures)])
     (define label (speculation-failure-label sf))
     (define nested (speculation-failure-sub-failures sf))

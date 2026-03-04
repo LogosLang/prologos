@@ -866,9 +866,11 @@
   (define expanded-stxs (preparse-expand-all raw-stxs))
   (define surfs (map parse-datum expanded-stxs))
   (define pt (phase-timings 0.0 0.0 0.0 0.0 0.0 0.0 0.0))
+  (define pv (provenance-counters 0 0 0 0))
   (define mem-before (measure-memory-before))
   (define-values (results pc)
-    (parameterize ([current-phase-timings pt])
+    (parameterize ([current-phase-timings pt]
+                   [current-provenance-counters pv])
       (with-perf-counters
         (for/list ([surf (in-list surfs)])
           (if (prologos-error? surf)
@@ -876,6 +878,7 @@
               (process-command surf))))))
   (when pc (print-perf-report! pc))
   (print-phase-report! pt)
+  (print-provenance-report! pv)
   (print-memory-report! (measure-memory-after mem-before))
   results)
 
@@ -894,9 +897,11 @@
   (define expanded-stxs (preparse-expand-all raw-stxs))
   (define surfs (map parse-datum expanded-stxs))
   (define pt (phase-timings 0.0 0.0 0.0 0.0 0.0 0.0 0.0))
+  (define pv (provenance-counters 0 0 0 0))
   (define mem-before (measure-memory-before))
   (define-values (results pc)
-    (parameterize ([current-phase-timings pt])
+    (parameterize ([current-phase-timings pt]
+                   [current-provenance-counters pv])
       (with-perf-counters
         (for/list ([surf (in-list surfs)])
           (if (prologos-error? surf)
@@ -904,6 +909,7 @@
               (process-command surf))))))
   (when pc (print-perf-report! pc))
   (print-phase-report! pt)
+  (print-provenance-report! pv)
   (print-memory-report! (measure-memory-after mem-before))
   results)
 

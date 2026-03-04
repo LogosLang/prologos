@@ -49,7 +49,17 @@
  ;; Phase D: Memory + GC reporting
  measure-memory-before
  measure-memory-after
- print-memory-report!)
+ print-memory-report!
+
+ ;; E3d: Provenance stats
+ (struct-out provenance-counters)
+ current-provenance-counters
+ perf-inc-speculation!
+ perf-inc-atms-hypothesis!
+ perf-inc-atms-nogood!
+ perf-inc-provenance-chain!
+ provenance-counters->hasheq
+ print-provenance-report!)
 
 ;; ============================================================
 ;; Counter struct: 12 mutable fields
@@ -275,3 +285,49 @@
 ;; Print MEMORY-STATS:{json} to stderr for subprocess extraction.
 (define (print-memory-report! mem-stats)
   (eprintf "MEMORY-STATS:~a\n" (jsexpr->string mem-stats)))
+
+;; ============================================================
+;; E3d: Provenance stats
+;;
+;; Counts speculation branches, ATMS hypotheses/nogoods created,
+;; and provenance chains emitted. Zero-cost when disabled.
+;; ============================================================
+
+(struct provenance-counters
+  (speculation-count
+   atms-hypothesis-count
+   atms-nogood-count
+   provenance-chain-count)
+  #:mutable #:transparent)
+
+(define current-provenance-counters (make-parameter #f))
+
+(define-syntax-rule (perf-inc-speculation!)
+  (let ([pv (current-provenance-counters)])
+    (when pv (set-provenance-counters-speculation-count!
+              pv (add1 (provenance-counters-speculation-count pv))))))
+
+(define-syntax-rule (perf-inc-atms-hypothesis!)
+  (let ([pv (current-provenance-counters)])
+    (when pv (set-provenance-counters-atms-hypothesis-count!
+              pv (add1 (provenance-counters-atms-hypothesis-count pv))))))
+
+(define-syntax-rule (perf-inc-atms-nogood!)
+  (let ([pv (current-provenance-counters)])
+    (when pv (set-provenance-counters-atms-nogood-count!
+              pv (add1 (provenance-counters-atms-nogood-count pv))))))
+
+(define-syntax-rule (perf-inc-provenance-chain!)
+  (let ([pv (current-provenance-counters)])
+    (when pv (set-provenance-counters-provenance-chain-count!
+              pv (add1 (provenance-counters-provenance-chain-count pv))))))
+
+(define (provenance-counters->hasheq pv)
+  (hasheq 'speculation_count       (provenance-counters-speculation-count pv)
+          'atms_hypothesis_count   (provenance-counters-atms-hypothesis-count pv)
+          'atms_nogood_count       (provenance-counters-atms-nogood-count pv)
+          'provenance_chain_count  (provenance-counters-provenance-chain-count pv)))
+
+(define (print-provenance-report! pv)
+  (define h (provenance-counters->hasheq pv))
+  (eprintf "PROVENANCE-STATS:~a\n" (jsexpr->string h)))

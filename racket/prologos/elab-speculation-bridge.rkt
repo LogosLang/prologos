@@ -26,7 +26,8 @@
 ;;;
 
 (require "metavar-store.rkt"
-         "atms.rkt")
+         "atms.rkt"
+         "performance-counters.rkt")
 
 (provide
  ;; Core speculation helper
@@ -112,12 +113,15 @@
 ;; success?: (any → boolean) — predicate for success (e.g., identity for #t/#f)
 ;; label: string — label for failure recording
 (define (with-speculative-rollback thunk success? label)
+  ;; E3d: count speculation entries
+  (perf-inc-speculation!)
   ;; Phase D: Create ATMS hypothesis if tracking is active
   (define-values (atms-box hyp-id)
     (let ([ab (current-command-atms)])
       (if ab
           (let-values ([(a* aid) (atms-assume (unbox ab) (string->symbol label) label)])
             (set-box! ab a*)
+            (perf-inc-atms-hypothesis!)
             (values ab aid))
           (values #f #f))))
   ;; Phase D2: Snapshot failure count for sub-failure capture
@@ -159,6 +163,7 @@
                     (set-box! atms-box
                               (atms-add-nogood (unbox atms-box)
                                                (hasheq hyp-id #t)))
+                    (perf-inc-atms-nogood!)
                     (hasheq hyp-id #t))
                   #f))
             (values subs ss)])))
