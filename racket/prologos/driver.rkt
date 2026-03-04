@@ -352,7 +352,8 @@
                    (let ([ty (time-phase! type-check (infer/err ctx-empty expr))])
                      (if (prologos-error? ty) ty
                          (begin
-                           (time-phase! trait-resolve (resolve-trait-constraints!/shadow))
+                           ;; P3c: trait resolution now handled by propagator cell-path in solve-meta!
+                           ;; (resolve-trait-constraints! removed — zero shadow mismatches in P3b)
                            (let ([te (check-unresolved-trait-constraints)])
                              (if (not (null? te))
                                  (car te)
@@ -375,7 +376,8 @@
                    (let ([ty (time-phase! type-check (infer/err ctx-empty expr))])
                      (if (prologos-error? ty) ty
                          (begin
-                           (time-phase! trait-resolve (resolve-trait-constraints!/shadow))
+                           ;; P3c: trait resolution now handled by propagator cell-path in solve-meta!
+                           ;; (resolve-trait-constraints! removed — zero shadow mismatches in P3b)
                            (let ([te (check-unresolved-trait-constraints)])
                              (if (not (null? te))
                                  (car te)
@@ -413,7 +415,8 @@
                    (let ([ty (time-phase! type-check (infer/err ctx-empty expr))])
                      (if (prologos-error? ty) ty
                          (begin
-                           (time-phase! trait-resolve (resolve-trait-constraints!/shadow))
+                           ;; P3c: trait resolution now handled by propagator cell-path in solve-meta!
+                           ;; (resolve-trait-constraints! removed — zero shadow mismatches in P3b)
                            (let ([te (check-unresolved-trait-constraints)])
                              (if (not (null? te))
                                  (car te)
@@ -604,7 +607,8 @@
              [(prologos-error? ty-ok) ty-ok]
              [else
               ;; Phase C: resolve trait-constraint metas to dictionary expressions
-              (time-phase! trait-resolve (resolve-trait-constraints!/shadow))
+              ;; P3c: trait resolution now handled by propagator cell-path in solve-meta!
+                           ;; (resolve-trait-constraints! removed — zero shadow mismatches in P3b)
               ;; Phase C.6: Check for unresolved trait constraints
               (define trait-errors (check-unresolved-trait-constraints))
               ;; Phase 4: Check for unresolved capability constraints
@@ -736,7 +740,8 @@
                     chk]
                    [else
                     ;; Phase C: resolve trait-constraint metas to dictionary expressions
-                    (time-phase! trait-resolve (resolve-trait-constraints!/shadow))
+                    ;; P3c: trait resolution now handled by propagator cell-path in solve-meta!
+                           ;; (resolve-trait-constraints! removed — zero shadow mismatches in P3b)
                     ;; Phase C.6: Check for unresolved trait constraints
                     (define trait-errors-ann (check-unresolved-trait-constraints))
                     ;; Phase 4: Check for unresolved capability constraints
