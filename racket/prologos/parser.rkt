@@ -74,7 +74,9 @@
     ;; Private-suffix forms — consumed in preparse, rewritten to base form
     defn- def- data- deftype- defmacro- spec- trait- impl- bundle-
     ;; Pre-parse namespace directives — consumed before reaching parser
-    ns imports exports require provide foreign))
+    ns imports exports require provide foreign
+    ;; Session types and processes (Phase S1/S2)
+    session defproc proc stop new par link select offer end rec shared dual strategy spawn))
 
 (define (keyword? sym)
   (and (symbol? sym) (memq sym keywords)))
