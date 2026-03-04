@@ -399,11 +399,11 @@ _Living section — updated as work progresses._
 | P3a | DONE | ccdd042 | cell-ids on trait constraints, retry-traits-via-cells!, 11 tests |
 | P3b | DONE | 73fe021 | Shadow validation: zero mismatches across 5103 tests |
 | P3c | DONE | 10b8022 | Switchover: removed resolve-trait-constraints! from 5 driver sites |
-| P3d | DONE | (this) | Cleanup: removed shadow wrapper, cleaned comments |
-| P5a | PENDING | | |
-| P5b | PENDING | | |
-| P5c | PENDING | | |
-| P5d | PENDING | | |
+| P3d | DONE | 478a82b | Cleanup: removed shadow wrapper, cleaned comments |
+| P5a | DONE | 9317e1e | mult-lattice.rkt: 5-element flat lattice, 9 tests |
+| P5b | DONE | 2ad5c18 | Mult cells in elab network, callbacks in metavar-store, 6 tests |
+| P5c | DONE | 6b69901 | type↔mult cross-domain bridge, 8 bridge unit tests |
+| P5d | DONE | (this) | PIR: no regressions, slight improvements across board |
 | P1-G1 | PENDING | | |
 | P1-G2 | PENDING | | |
 | P1-G3 | PENDING | | |
