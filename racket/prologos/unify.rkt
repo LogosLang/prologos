@@ -37,6 +37,9 @@
          unify* unify*-ok?
          ;; Internal core (for tests that need raw unification without propagator checks)
          unify-core
+         ;; P-U1a: Pure unification classifier (no side effects)
+         classify-whnf-problem
+         dispatch-unify-whnf
          ;; Sprint 2b exports
          decompose-meta-app pattern-check invert-args
          ;; Union type helpers
@@ -182,163 +185,199 @@
           (unify-core ctx (expr-app-arg a) (expr-app-arg b)))]
     [else (unify-core ctx a b)]))
 
+;; ========================================
+;; P-U1a: Pure Unification Classifier
+;; ========================================
+;;
+;; Given two WHNF-reduced terms, classify the unification problem without
+;; performing any side effects. Returns a tagged list:
+;;
+;; '(ok)                                     — structurally equal or wildcard match
+;; '(conv)                                   — structural mismatch (conv-nf fallback)
+;; (list 'flex-rigid meta-id rhs)            — bare unsolved meta vs concrete
+;; (list 'flex-app flex-term rhs)            — applied meta (spine-headed by unsolved meta)
+;; (list 'sub goals)                         — goals: (listof (cons lhs rhs))
+;; (list 'pi m1 m2 dom-a dom-b cod-a cod-b) — Pi: mult + domain + codomain
+;; (list 'binder fst-a fst-b snd-a snd-b)   — Sigma/lam: first + binder-opened second
+;; (list 'level l1 l2)                       — universe level unification
+;; (list 'union cs-a cs-b)                   — union component lists
+;; (list 'retry a* b*)                       — normalized terms, re-classify
+;;
+;; Binder cases ('pi, 'binder) return raw codomain/snd-type; the dispatcher
+;; handles zonk-at-depth, open-expr, and fresh fvar generation.
+;;
+;; Does NOT perform: solve-meta!, add-constraint!, perf counters.
+;; DOES perform: struct field reads (pure), flatten-union (pure).
+
+(define (classify-whnf-problem a b)
+  (cond
+    ;; Fast path: structurally identical
+    [(equal? a b) '(ok)]
+
+    ;; Holes: wildcards
+    [(expr-hole? a) '(ok)]
+    [(expr-hole? b) '(ok)]
+    [(expr-typed-hole? a) '(ok)]
+    [(expr-typed-hole? b) '(ok)]
+
+    ;; Same unsolved meta
+    [(and (expr-meta? a) (expr-meta? b)
+          (eq? (expr-meta-id a) (expr-meta-id b)))
+     '(ok)]
+
+    ;; Meta on left/right
+    [(expr-meta? a) (list 'flex-rigid (expr-meta-id a) b)]
+    [(expr-meta? b) (list 'flex-rigid (expr-meta-id b) a)]
+
+    ;; --- Structural decomposition ---
+
+    ;; Pi vs Pi
+    [(and (expr-Pi? a) (expr-Pi? b))
+     (list 'pi
+           (expr-Pi-mult a) (expr-Pi-mult b)
+           (expr-Pi-domain a) (expr-Pi-domain b)
+           (expr-Pi-codomain a) (expr-Pi-codomain b))]
+
+    ;; Sigma vs Sigma
+    [(and (expr-Sigma? a) (expr-Sigma? b))
+     (list 'binder
+           (expr-Sigma-fst-type a) (expr-Sigma-fst-type b)
+           (expr-Sigma-snd-type a) (expr-Sigma-snd-type b))]
+
+    ;; suc vs suc
+    [(and (expr-suc? a) (expr-suc? b))
+     (list 'sub (list (cons (expr-suc-pred a) (expr-suc-pred b))))]
+
+    ;; nat-val vs nat-val
+    [(and (expr-nat-val? a) (expr-nat-val? b))
+     (if (= (expr-nat-val-n a) (expr-nat-val-n b)) '(ok) '(conv))]
+
+    ;; Cross-repr: nat-val(0) vs zero
+    [(and (expr-nat-val? a) (expr-zero? b))
+     (if (= (expr-nat-val-n a) 0) '(ok) '(conv))]
+    [(and (expr-zero? a) (expr-nat-val? b))
+     (if (= (expr-nat-val-n b) 0) '(ok) '(conv))]
+
+    ;; Cross-repr: nat-val(n>0) vs suc(X)
+    [(and (expr-nat-val? a) (> (expr-nat-val-n a) 0) (expr-suc? b))
+     (list 'sub (list (cons (expr-nat-val (- (expr-nat-val-n a) 1)) (expr-suc-pred b))))]
+    [(and (expr-suc? a) (expr-nat-val? b) (> (expr-nat-val-n b) 0))
+     (list 'sub (list (cons (expr-suc-pred a) (expr-nat-val (- (expr-nat-val-n b) 1)))))]
+
+    ;; Cross-repr: nat-val(0) vs suc(_) — fail
+    [(and (expr-nat-val? a) (= (expr-nat-val-n a) 0) (expr-suc? b)) '(conv)]
+    [(and (expr-suc? a) (expr-nat-val? b) (= (expr-nat-val-n b) 0)) '(conv)]
+
+    ;; tycon vs tycon (HKT): same name = equal
+    [(and (expr-tycon? a) (expr-tycon? b))
+     (if (eq? (expr-tycon-name a) (expr-tycon-name b)) '(ok) '(conv))]
+
+    ;; --- HKT normalization: retry after normalizing built-in types ---
+    [(and (normalizable-builtin? a) (expr-app? b))
+     (list 'retry (normalize-for-resolution a) b)]
+    [(and (expr-app? a) (normalizable-builtin? b))
+     (list 'retry a (normalize-for-resolution b))]
+    [(and (normalizable-builtin? a) (normalizable-builtin? b))
+     (list 'retry (normalize-for-resolution a) (normalize-for-resolution b))]
+    [(and (normalizable-builtin? a) (flex-app? b))
+     (list 'retry (normalize-for-resolution a) b)]
+    [(and (flex-app? a) (normalizable-builtin? b))
+     (list 'retry a (normalize-for-resolution b))]
+
+    ;; app vs app (rigid-rigid)
+    [(and (expr-app? a) (expr-app? b))
+     (list 'sub (list (cons (expr-app-func a) (expr-app-func b))
+                       (cons (expr-app-arg a) (expr-app-arg b))))]
+
+    ;; Applied meta (flex-app) — one side is app headed by unsolved meta
+    [(flex-app? a) (list 'flex-app a b)]
+    [(flex-app? b) (list 'flex-app b a)]
+
+    ;; Eq vs Eq
+    [(and (expr-Eq? a) (expr-Eq? b))
+     (list 'sub (list (cons (expr-Eq-type a) (expr-Eq-type b))
+                       (cons (expr-Eq-lhs a) (expr-Eq-lhs b))
+                       (cons (expr-Eq-rhs a) (expr-Eq-rhs b))))]
+
+    ;; Vec vs Vec
+    [(and (expr-Vec? a) (expr-Vec? b))
+     (list 'sub (list (cons (expr-Vec-elem-type a) (expr-Vec-elem-type b))
+                       (cons (expr-Vec-length a) (expr-Vec-length b))))]
+
+    ;; Fin vs Fin
+    [(and (expr-Fin? a) (expr-Fin? b))
+     (list 'sub (list (cons (expr-Fin-bound a) (expr-Fin-bound b))))]
+
+    ;; lam vs lam
+    [(and (expr-lam? a) (expr-lam? b))
+     (list 'binder
+           (expr-lam-type a) (expr-lam-type b)
+           (expr-lam-body a) (expr-lam-body b))]
+
+    ;; pair vs pair
+    [(and (expr-pair? a) (expr-pair? b))
+     (list 'sub (list (cons (expr-pair-fst a) (expr-pair-fst b))
+                       (cons (expr-pair-snd a) (expr-pair-snd b))))]
+
+    ;; Type vs Type (universe levels)
+    [(and (expr-Type? a) (expr-Type? b))
+     (list 'level (expr-Type-level a) (expr-Type-level b))]
+
+    ;; Union vs Union
+    [(and (expr-union? a) (expr-union? b))
+     (list 'union (flatten-union a) (flatten-union b))]
+
+    ;; ann: strip annotation and retry
+    [(expr-ann? a) (list 'retry (expr-ann-term a) b)]
+    [(expr-ann? b) (list 'retry a (expr-ann-term b))]
+
+    ;; Fallback: conv-nf for atoms/neutrals
+    [else '(conv)]))
+
+;; ========================================
+;; P-U1a: Unification Dispatcher
+;; ========================================
+;; Given two WHNF terms and a classification from classify-whnf-problem,
+;; dispatches to the appropriate solver. This function performs side effects
+;; (solve-meta!, add-constraint!, etc.) based on the classification.
+
+(define (dispatch-unify-whnf ctx a b classification)
+  (match classification
+    ['(ok) #t]
+    ['(conv) (conv-nf a b)]
+    [(list 'flex-rigid id rhs)
+     (solve-flex-rigid id rhs ctx)]
+    [(list 'flex-app flex-term rhs)
+     (solve-flex-app flex-term rhs ctx)]
+    [(list 'sub goals)
+     (for/and ([g (in-list goals)])
+       (unify-core ctx (car g) (cdr g)))]
+    ;; Pi: mult unification (special) + domain + binder-opened codomain
+    ;; Codomain uses zonk-at-depth(1, ...) + open-expr for correct de Bruijn indices.
+    [(list 'pi m1 m2 dom-a dom-b cod-a cod-b)
+     (and (unify-mult m1 m2)
+          (unify-core ctx dom-a dom-b)
+          (let ([x (expr-fvar (gensym 'unify))])
+            (unify-core ctx
+                   (open-expr (zonk-at-depth 1 cod-a) x)
+                   (open-expr (zonk-at-depth 1 cod-b) x))))]
+    ;; Sigma/lam: first component + binder-opened second
+    [(list 'binder fst-a fst-b snd-a snd-b)
+     (and (unify-core ctx fst-a fst-b)
+          (let ([x (expr-fvar (gensym 'unify))])
+            (unify-core ctx
+                   (open-expr (zonk-at-depth 1 snd-a) x)
+                   (open-expr (zonk-at-depth 1 snd-b) x))))]
+    [(list 'level l1 l2) (unify-level l1 l2)]
+    [(list 'union cs-a cs-b) (unify-union-components ctx cs-a cs-b)]
+    [(list 'retry a* b*) (unify-whnf ctx a* b*)]))
+
 ;; Core unification after WHNF reduction
+;; Classifies the problem, then dispatches to the appropriate solver.
 (define (unify-whnf ctx t1 t2)
   (let ([a (whnf t1)]
         [b (whnf t2)])
-    (cond
-      ;; Fast path: structurally identical after WHNF
-      [(equal? a b) #t]
-
-      ;; expr-hole wildcard (preserves existing conv behavior)
-      [(expr-hole? a) #t]
-      [(expr-hole? b) #t]
-      [(expr-typed-hole? a) #t]
-      [(expr-typed-hole? b) #t]
-
-      ;; Both are the same unsolved metavariable
-      [(and (expr-meta? a) (expr-meta? b)
-            (eq? (expr-meta-id a) (expr-meta-id b)))
-       #t]
-
-      ;; Meta on left side: solve
-      [(expr-meta? a)
-       (solve-flex-rigid (expr-meta-id a) b ctx)]
-
-      ;; Meta on right side: solve
-      [(expr-meta? b)
-       (solve-flex-rigid (expr-meta-id b) a ctx)]
-
-      ;; --- Structural decomposition ---
-
-      ;; Pi vs Pi: multiplicities must unify, then unify domains and codomains.
-      ;; Codomains are opened with a fresh fvar to avoid de Bruijn depth issues.
-      ;; Sprint 7: uses unify-mult instead of eq? for mult-meta support.
-      ;; Sprint 11: Use zonk-at-depth(1, cod) before opening codomains.
-      ;; When a meta is solved to bvar(N) during domain unification, that bvar
-      ;; is at depth 0 (the domain level). Inside the codomain (depth 1), the
-      ;; same context variable is at bvar(N+1). zonk-at-depth shifts meta
-      ;; solutions by the accumulated binder depth, so bvar(N) becomes bvar(N+1)
-      ;; in the codomain, yielding correct de Bruijn indices after open-expr.
-      [(and (expr-Pi? a) (expr-Pi? b))
-       (let ([m1 (expr-Pi-mult a)] [m2 (expr-Pi-mult b)])
-         (and (unify-mult m1 m2)
-              (unify-core ctx (expr-Pi-domain a) (expr-Pi-domain b))
-              (let ([x (expr-fvar (gensym 'unify))])
-                (unify-core ctx
-                       (open-expr (zonk-at-depth 1 (expr-Pi-codomain a)) x)
-                       (open-expr (zonk-at-depth 1 (expr-Pi-codomain b)) x)))))]
-
-      ;; Sigma vs Sigma: opened with fresh fvar for second type
-      ;; Same depth-aware zonking as Pi codomains.
-      [(and (expr-Sigma? a) (expr-Sigma? b))
-       (and (unify-core ctx (expr-Sigma-fst-type a) (expr-Sigma-fst-type b))
-            (let ([x (expr-fvar (gensym 'unify))])
-              (unify-core ctx
-                     (open-expr (zonk-at-depth 1 (expr-Sigma-snd-type a)) x)
-                     (open-expr (zonk-at-depth 1 (expr-Sigma-snd-type b)) x))))]
-
-      ;; suc vs suc
-      [(and (expr-suc? a) (expr-suc? b))
-       (unify-core ctx (expr-suc-pred a) (expr-suc-pred b))]
-
-      ;; nat-val vs nat-val
-      [(and (expr-nat-val? a) (expr-nat-val? b))
-       (= (expr-nat-val-n a) (expr-nat-val-n b))]
-      ;; Cross-repr: nat-val(0) vs zero
-      [(and (expr-nat-val? a) (expr-zero? b)) (= (expr-nat-val-n a) 0)]
-      [(and (expr-zero? a) (expr-nat-val? b)) (= (expr-nat-val-n b) 0)]
-      ;; Cross-repr: nat-val(n>0) vs suc(X) — structural decomposition
-      [(and (expr-nat-val? a) (> (expr-nat-val-n a) 0) (expr-suc? b))
-       (unify-core ctx (expr-nat-val (- (expr-nat-val-n a) 1)) (expr-suc-pred b))]
-      [(and (expr-suc? a) (expr-nat-val? b) (> (expr-nat-val-n b) 0))
-       (unify-core ctx (expr-suc-pred a) (expr-nat-val (- (expr-nat-val-n b) 1)))]
-      ;; Cross-repr: nat-val(0) vs suc(_) — fail
-      [(and (expr-nat-val? a) (= (expr-nat-val-n a) 0) (expr-suc? b)) #f]
-      [(and (expr-suc? a) (expr-nat-val? b) (= (expr-nat-val-n b) 0)) #f]
-
-      ;; tycon vs tycon (HKT): same name = equal
-      [(and (expr-tycon? a) (expr-tycon? b))
-       (eq? (expr-tycon-name a) (expr-tycon-name b))]
-
-      ;; --- HKT normalization: built-in type vs app ---
-      ;; When one side is a built-in type application (e.g., (expr-PVec A)) and the
-      ;; other is an expr-app (e.g., (expr-app ?F A)), normalize the built-in to
-      ;; expr-app/expr-tycon form so structural decomposition can solve ?F = (expr-tycon 'PVec).
-      [(and (normalizable-builtin? a) (expr-app? b))
-       (unify-whnf ctx (normalize-for-resolution a) b)]
-      [(and (expr-app? a) (normalizable-builtin? b))
-       (unify-whnf ctx a (normalize-for-resolution b))]
-      ;; Both sides are normalizable built-in types: normalize both
-      [(and (normalizable-builtin? a) (normalizable-builtin? b))
-       (unify-whnf ctx (normalize-for-resolution a) (normalize-for-resolution b))]
-      ;; Built-in type vs flex-app (meta-headed app): normalize built-in first
-      [(and (normalizable-builtin? a) (flex-app? b))
-       (unify-whnf ctx (normalize-for-resolution a) b)]
-      [(and (flex-app? a) (normalizable-builtin? b))
-       (unify-whnf ctx a (normalize-for-resolution b))]
-
-      ;; app vs app (rigid-rigid): try structural decomposition first
-      [(and (expr-app? a) (expr-app? b))
-       (and (unify-core ctx (expr-app-func a) (expr-app-func b))
-            (unify-core ctx (expr-app-arg a) (expr-app-arg b)))]
-
-      ;; --- Sprint 2b: Applied meta (flex-app) handling ---
-      ;; Fires when one side is (app ... (app (expr-meta ?m) x1) ... xn)
-      ;; and the other is NOT an app (already handled above).
-      [(flex-app? a)
-       (solve-flex-app a b ctx)]
-      [(flex-app? b)
-       (solve-flex-app b a ctx)]
-
-      ;; Eq vs Eq
-      [(and (expr-Eq? a) (expr-Eq? b))
-       (and (unify-core ctx (expr-Eq-type a) (expr-Eq-type b))
-            (unify-core ctx (expr-Eq-lhs a) (expr-Eq-lhs b))
-            (unify-core ctx (expr-Eq-rhs a) (expr-Eq-rhs b)))]
-
-      ;; Vec vs Vec
-      [(and (expr-Vec? a) (expr-Vec? b))
-       (and (unify-core ctx (expr-Vec-elem-type a) (expr-Vec-elem-type b))
-            (unify-core ctx (expr-Vec-length a) (expr-Vec-length b)))]
-
-      ;; Fin vs Fin
-      [(and (expr-Fin? a) (expr-Fin? b))
-       (unify-core ctx (expr-Fin-bound a) (expr-Fin-bound b))]
-
-      ;; lam vs lam: opened with fresh fvar for body
-      ;; Same depth-aware zonking as Pi/Sigma.
-      [(and (expr-lam? a) (expr-lam? b))
-       (and (unify-core ctx (expr-lam-type a) (expr-lam-type b))
-            (let ([x (expr-fvar (gensym 'unify))])
-              (unify-core ctx
-                     (open-expr (zonk-at-depth 1 (expr-lam-body a)) x)
-                     (open-expr (zonk-at-depth 1 (expr-lam-body b)) x))))]
-
-      ;; pair vs pair
-      [(and (expr-pair? a) (expr-pair? b))
-       (and (unify-core ctx (expr-pair-fst a) (expr-pair-fst b))
-            (unify-core ctx (expr-pair-snd a) (expr-pair-snd b)))]
-
-      ;; Type vs Type (universe levels) — Sprint 6: level-meta aware
-      [(and (expr-Type? a) (expr-Type? b))
-       (unify-level (expr-Type-level a) (expr-Type-level b))]
-
-      ;; Union vs Union: flatten both, sort, and unify component-wise.
-      ;; Handles ACI (associativity, commutativity, idempotence).
-      [(and (expr-union? a) (expr-union? b))
-       (let ([cs-a (flatten-union a)]
-             [cs-b (flatten-union b)])
-         (unify-union-components ctx cs-a cs-b))]
-
-      ;; ann: should not survive WHNF, but handle defensively
-      [(expr-ann? a) (unify-core ctx (expr-ann-term a) b)]
-      [(expr-ann? b) (unify-core ctx a (expr-ann-term b))]
-
-      ;; --- Fallback: conv-nf for atoms/neutrals ---
-      ;; This handles bvar, fvar, zero, true, false, refl, Nat, Bool,
-      ;; natrec, J, boolrec, and any remaining cases
-      [else (conv-nf a b)])))
+    (dispatch-unify-whnf ctx a b (classify-whnf-problem a b))))
 
 ;; ========================================
 ;; Union type unification helpers

@@ -596,6 +596,8 @@
    (test-dep '(prelude.rkt reduction.rkt substitution.rkt syntax.rkt typing-core.rkt) #f)
    'test-unify.rkt
    (test-dep '(global-env.rkt metavar-store.rkt prelude.rkt reduction.rkt syntax.rkt unify.rkt) #f)
+   'test-unify-structural.rkt
+   (test-dep '(prelude.rkt syntax.rkt unify.rkt) #f)
    'test-union-find-integration.rkt
    (test-dep '(driver.rkt errors.rkt global-env.rkt prelude.rkt pretty-print.rkt reduction.rkt substitution.rkt syntax.rkt typing-core.rkt) #t)
    'test-union-find-types.rkt
