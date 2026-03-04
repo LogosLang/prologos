@@ -131,6 +131,8 @@
  current-prop-run-quiescence
  current-prop-unwrap-net
  current-prop-rewrap-net
+ ;; P-U3c: Flush network quiescence (no-op if no network or worklist empty)
+ maybe-flush-network!
  ;; Hash removal: test isolation helper
  with-fresh-meta-env)
 
@@ -671,6 +673,22 @@
   (retry-traits-via-cells!)
   ;; Legacy wakeup map path (still runs as secondary for P3a shadow phase)
   (retry-trait-for-meta! id))
+
+;; P-U3c: Lightweight quiescence flush.
+;; Runs the propagator network to quiescence if available.
+;; No-op when: no network, no quiescence function, or worklist already empty.
+;; This is cheaper than solve-meta!'s full flush because it skips constraint
+;; retry and trait resolution — those are only needed after meta state changes.
+(define (maybe-flush-network!)
+  (define net-box (current-prop-net-box))
+  (define run-fn (current-prop-run-quiescence))
+  (define unwrap (current-prop-unwrap-net))
+  (define rewrap (current-prop-rewrap-net))
+  (when (and net-box run-fn unwrap rewrap)
+    (define enet (unbox net-box))
+    (define pnet (unwrap enet))
+    (define pnet* (run-fn pnet))
+    (set-box! net-box (rewrap enet pnet*))))
 
 ;; Check if a metavariable has been solved.
 ;; Hash removal: Propagator cell (primary), CHAMP meta-info (fallback).

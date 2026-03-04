@@ -361,24 +361,31 @@
     [(list 'flex-app flex-term rhs)
      (solve-flex-app flex-term rhs ctx)]
     [(list 'sub goals)
+     ;; P-U3c: For multi-goal decomposition, flush network between goals
+     ;; to propagate transitive constraints from earlier goals to later ones.
      (for/and ([g (in-list goals)])
-       (unify-core ctx (car g) (cdr g)))]
+       (begin0 (unify-core ctx (car g) (cdr g))
+               (maybe-flush-network!)))]
     ;; Pi: mult unification (special) + domain + binder-opened codomain
     ;; Codomain uses zonk-at-depth(1, ...) + open-expr for correct de Bruijn indices.
+    ;; P-U3c: flush network between domain and codomain for transitive propagation.
     [(list 'pi m1 m2 dom-a dom-b cod-a cod-b)
      (and (unify-mult m1 m2)
           (unify-core ctx dom-a dom-b)
-          (let ([x (expr-fvar (gensym 'unify))])
-            (unify-core ctx
-                   (open-expr (zonk-at-depth 1 cod-a) x)
-                   (open-expr (zonk-at-depth 1 cod-b) x))))]
+          (begin (maybe-flush-network!)
+            (let ([x (expr-fvar (gensym 'unify))])
+              (unify-core ctx
+                     (open-expr (zonk-at-depth 1 cod-a) x)
+                     (open-expr (zonk-at-depth 1 cod-b) x)))))]
     ;; Sigma/lam: first component + binder-opened second
+    ;; P-U3c: flush network between first and second for transitive propagation.
     [(list 'binder fst-a fst-b snd-a snd-b)
      (and (unify-core ctx fst-a fst-b)
-          (let ([x (expr-fvar (gensym 'unify))])
-            (unify-core ctx
-                   (open-expr (zonk-at-depth 1 snd-a) x)
-                   (open-expr (zonk-at-depth 1 snd-b) x))))]
+          (begin (maybe-flush-network!)
+            (let ([x (expr-fvar (gensym 'unify))])
+              (unify-core ctx
+                     (open-expr (zonk-at-depth 1 snd-a) x)
+                     (open-expr (zonk-at-depth 1 snd-b) x)))))]
     [(list 'level l1 l2) (unify-level l1 l2)]
     [(list 'union cs-a cs-b) (unify-union-components ctx cs-a cs-b)]
     [(list 'retry a* b*) (unify-whnf ctx a* b*)]))
