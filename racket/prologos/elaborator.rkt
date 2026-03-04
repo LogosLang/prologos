@@ -692,15 +692,18 @@
     [(surf-var name loc)
      (elaborate-var name loc env depth #t)]
 
-    ;; Nat literal: desugar to suc chain
+    ;; Nat literal: native O(1) representation
     [(surf-nat-lit n loc)
-     (nat->expr n)]
+     (expr-nat-val n)]
 
     ;; Constants
-    [(surf-zero _) (expr-zero)]
+    [(surf-zero _) (expr-nat-val 0)]
     [(surf-suc pred loc)
      (let ([e (elaborate pred env depth)])
-       (if (prologos-error? e) e (expr-suc e)))]
+       (cond
+         [(prologos-error? e) e]
+         [(expr-nat-val? e) (expr-nat-val (+ (expr-nat-val-n e) 1))]
+         [else (expr-suc e)]))]  ;; symbolic: suc of bound variable
     [(surf-true _) (expr-true)]
     [(surf-false _) (expr-false)]
     [(surf-unit _) (expr-unit)]

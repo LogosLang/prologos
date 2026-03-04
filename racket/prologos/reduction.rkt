@@ -114,12 +114,9 @@
 ;; Helper: Racket integer → Prologos Nat expression
 ;; ========================================
 
-;; Convert a non-negative Racket integer to an expr-suc/expr-zero chain.
+;; Convert a non-negative Racket integer to a native Nat value.
 (define (racket-nat->expr n)
-  (let loop ([k n])
-    (if (zero? k)
-        (expr-zero)
-        (expr-suc (loop (sub1 k))))))
+  (expr-nat-val n))
 
 ;; ========================================
 ;; Helpers for ATMS list ↔ assumption-id set conversion
@@ -275,6 +272,8 @@
 (define (nat-value e)
   (define cache (current-nat-value-cache))
   (cond
+    ;; O(1) fast path for native Nat values
+    [(expr-nat-val? e) (expr-nat-val-n e)]
     [(and cache (hash-ref cache e #f)) => values]
     [else
      (define result
@@ -627,12 +626,23 @@
 ;; can't handle them. Returns substituted body expression, or #f.
 (define (try-builtin-reduce scrut arms)
   (cond
-    ;; Nat: zero (nullary)
+    ;; Nat: nat-val(0) matches 'zero arm (native representation)
+    [(and (expr-nat-val? scrut) (= (expr-nat-val-n scrut) 0))
+     (let ([arm (findf (lambda (a) (eq? (expr-reduce-arm-ctor-name a) 'zero)) arms)])
+       (and arm (= (expr-reduce-arm-binding-count arm) 0)
+            (expr-reduce-arm-body arm)))]
+    ;; Nat: nat-val(n>0) matches 'suc arm, binds predecessor as nat-val(n-1)
+    [(and (expr-nat-val? scrut) (> (expr-nat-val-n scrut) 0))
+     (let ([arm (findf (lambda (a) (eq? (expr-reduce-arm-ctor-name a) 'suc)) arms)])
+       (and arm (= (expr-reduce-arm-binding-count arm) 1)
+            (subst 0 (expr-nat-val (- (expr-nat-val-n scrut) 1))
+                   (expr-reduce-arm-body arm))))]
+    ;; Nat: zero (nullary) — legacy Peano
     [(expr-zero? scrut)
      (let ([arm (findf (lambda (a) (eq? (expr-reduce-arm-ctor-name a) 'zero)) arms)])
        (and arm (= (expr-reduce-arm-binding-count arm) 0)
             (expr-reduce-arm-body arm)))]
-    ;; Nat: suc/suc (one field: the predecessor)
+    ;; Nat: suc/suc (one field: the predecessor) — legacy Peano
     [(expr-suc? scrut)
      (let ([arm (findf (lambda (a) (eq? (expr-reduce-arm-ctor-name a) 'suc)) arms)])
        (and arm (= (expr-reduce-arm-binding-count arm) 1)
@@ -719,12 +729,19 @@
     [(expr-fst (expr-pair e1 _)) (whnf e1)]
     [(expr-snd (expr-pair _ e2)) (whnf e2)]
 
-    ;; Iota reduction for natrec
-    ;; natrec(motive, base, step, zero) -> base
+    ;; Iota reduction for natrec — native nat-val (Idris 2 model)
+    [(expr-natrec _ base _ (expr-nat-val n)) #:when (= n 0) (whnf base)]
+    [(expr-natrec mot base step (expr-nat-val n)) #:when (> n 0)
+     (whnf (expr-app (expr-app step (expr-nat-val (- n 1)))
+                     (expr-natrec mot base step (expr-nat-val (- n 1)))))]
+    ;; Iota reduction for natrec — legacy Peano representation
     [(expr-natrec _ base _ (expr-zero)) (whnf base)]
-    ;; natrec(motive, base, step, suc(n)) -> app(app(step, n), natrec(motive, base, step, n))
     [(expr-natrec mot base step (expr-suc n))
      (whnf (expr-app (expr-app step n) (expr-natrec mot base step n)))]
+
+    ;; Suc collapse: concrete inner → native nat-val
+    [(expr-suc (expr-nat-val k)) (expr-nat-val (+ k 1))]
+    [(expr-suc (expr-zero))      (expr-nat-val 1)]
 
     ;; J reduction: J(motive, base, a, _, refl) -> app(base, a)
     [(expr-J _ base left _ (expr-refl)) (whnf (expr-app base left))]
@@ -2394,7 +2411,7 @@
     ;; Atoms / leaves — already normal
     [(expr-bvar _) e]
     [(expr-fvar _) e]
-    [(expr-zero) e]
+    [(expr-zero) (expr-nat-val 0)]  ;; normalize legacy zero to native
     [(expr-nat-val _) e]
     [(expr-refl) e]
     [(expr-Nat) e]
@@ -2414,7 +2431,12 @@
     [(expr-tycon _) e]  ;; Unapplied type constructor (HKT) — already normal
 
     ;; Structured terms: normalize subterms
-    [(expr-suc e1) (expr-suc (nf e1))]
+    [(expr-suc e1)
+     (let ([inner (nf e1)])
+       (cond
+         [(expr-nat-val? inner) (expr-nat-val (+ (expr-nat-val-n inner) 1))]
+         [(expr-zero? inner)    (expr-nat-val 1)]
+         [else                  (expr-suc inner)]))]
     [(expr-lam m t body) (expr-lam m (nf t) (nf body))]
     [(expr-Pi m dom cod) (expr-Pi m (nf dom) (nf cod))]
     [(expr-Sigma t1 t2) (expr-Sigma (nf t1) (nf t2))]
@@ -2437,6 +2459,10 @@
     [(expr-natrec mot base step target)
      (let ([target* (nf target)])
        (match target*
+         [(expr-nat-val n) #:when (= n 0) (nf base)]
+         [(expr-nat-val n) #:when (> n 0)
+          (nf (expr-app (expr-app step (expr-nat-val (- n 1)))
+                        (expr-natrec mot base step (expr-nat-val (- n 1)))))]
          [(expr-zero) (nf base)]
          [(expr-suc n) (nf (expr-app (expr-app step n) (expr-natrec mot base step n)))]
          [_ (expr-natrec (nf mot) base step target*)]))]

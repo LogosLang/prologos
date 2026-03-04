@@ -1034,12 +1034,9 @@
 ;; ========================================
 ;; Convenience: convert Racket natural to Prologos numerals
 ;; ========================================
-;; nat(0) = zero
-;; nat(n+1) = suc(nat(n))
+;; nat(n) = native Nat value (Idris 2 model: Peano surface, native runtime)
 (define (nat->expr n)
-  (if (zero? n)
-      (expr-zero)
-      (expr-suc (nat->expr (sub1 n)))))
+  (expr-nat-val n))
 
 ;; Non-dependent function type sugar: A --> B = Pi(mw, A, B)
 (define (arrow a b)
