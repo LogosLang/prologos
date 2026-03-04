@@ -181,15 +181,66 @@ propagators: "these two cells must agree" rather than "solve this meta now."
 
 ### P1-G1: Design — Propagator Unification API
 
-Design the new API preserving three-valued returns (`#t`/`'postponed`/`#f`):
-- `unify-via-network(enet, cell-a, cell-b)` → `(values enet* result)`
-  - If both cells concrete: merge immediately, return `#t` or `#f`
-  - If one/both are `type-bot`: add bidirectional unify propagator, return `'postponed`
-  - The propagator fires when the bot cell gets a value
-- Imperative wrapper: `unify*(ctx, t1, t2)` — same signature as current `unify`,
-  but internally reads/writes the propagator network box
+**Status: DONE** — design below.
 
-No code changes — just design document in tracking/.
+#### Current Architecture (What Exists)
+
+The system already has dual-path unification:
+1. **Imperative path** (`unify` in `unify.rkt`): 3-valued return (`#t`/`'postponed`/`#f`),
+   calls `solve-meta!` (side effect), `add-constraint!` for postponement.
+2. **Propagator mirror** (`make-unify-propagator` in `elaborator-network.rkt`):
+   Pure lattice merge via `type-lattice-merge` → `try-unify-pure`. Used for
+   constraint retry after quiescence.
+
+Key functions in imperative `unify`:
+- `solve-flex-rigid(id, rhs, ctx)` — bare meta vs concrete → `solve-meta!`
+- `solve-flex-app(flex-term, rhs, ctx)` — applied meta → Miller's pattern check → solve/postpone
+- `invert-args(args, rhs)` — construct λ-abstraction for pattern unification
+- `unify-mult(m1, m2)` / `unify-level(l1, l2)` — subsidiary unification
+
+Call sites: ~23 in `typing-core.rkt`, ~6 in `qtt.rkt`, all via `(unify-ok? (unify ctx t1 t2))`.
+
+#### Design Decision: Thin Wrapper Over Existing Infrastructure
+
+The propagator version of `unify` does NOT rewrite the unification algorithm. Instead,
+it wraps the existing `unify` to:
+1. Ensure meta solutions are written to propagator cells (already done by P5b's `solve-meta!` writes)
+2. Ensure constraint postponement registers propagator-level constraints (already done by `add-constraint!`)
+3. After each `unify` call, run the propagator network to quiescence
+
+The new API:
+```
+unify*(ctx, t1, t2) → #t | 'postponed | #f
+```
+Same signature as `unify`. Internally:
+1. Call `(unify ctx t1 t2)` — side effects write to cells
+2. Run propagator network to quiescence (transitive propagation)
+3. Scan for contradictions → if contradiction, return `#f`
+4. Return original `unify` result (with possible upgrade from `'postponed` to `#t`
+   if quiescence solved the constraint)
+
+**Why this works:** The propagator network is already wired (P1-E3, P3, P5b).
+`solve-meta!` writes to cells. `retry-constraints-via-cells!` replays postponed
+constraints when cells change. The missing piece is running quiescence explicitly
+after each `unify` call in `typing-core.rkt` to enable transitive propagation.
+
+#### Phase G2-G3 Strategy
+
+- **G2 (structural)**: Add `unify*` wrapper that runs quiescence after `unify`.
+  Test with structural-only cases (no metas). Verify that the propagator network
+  correctly records type unifications.
+
+- **G3 (meta-bearing)**: Extend `unify*` to check whether quiescence resolved
+  previously-postponed constraints. If a meta was solved by quiescence (cell went
+  from `type-bot` to concrete), return `#t` instead of `'postponed`.
+
+#### Risk Analysis
+
+The main risk is **double-solving**: `unify` calls `solve-meta!` which writes to
+the cell, then quiescence fires propagators which might re-unify. Guard: propagator
+fire functions use `type-lattice-merge` which is idempotent (x ⊔ x = x).
+
+No code changes — design only.
 
 ### P1-G2: Structural Unification Propagator (no metas)
 
