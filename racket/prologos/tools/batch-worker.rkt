@@ -54,7 +54,8 @@
 (require "../macros.rkt"
          "../namespace.rkt"
          "../global-env.rkt"
-         "../metavar-store.rkt")
+         "../metavar-store.rkt"
+         "../errors.rkt")
 
 ;; Load prelude via test-support.rkt (warms Racket module cache).
 ;; Must use dynamic-require (not require) to control execution order.
@@ -113,6 +114,30 @@
    #:program "batch-worker"
    #:args files
    files))
+
+;; Extract ERROR-DIAGNOSTIC:BEGIN...END blocks from captured stderr.
+;; Returns (values diagnostics remaining-lines)
+;;   diagnostics: list of strings (content between BEGIN and END markers)
+;;   remaining-lines: list of strings (all other non-metric lines)
+(define (extract-error-diagnostics stderr-str)
+  (define lines (string-split stderr-str "\n"))
+  (define diagnostics '())
+  (define remaining '())
+  (define in-diag? #f)
+  (define current-diag '())
+  (for ([line (in-list lines)])
+    (cond
+      [(string=? line "ERROR-DIAGNOSTIC:BEGIN")
+       (set! in-diag? #t)
+       (set! current-diag '())]
+      [(string=? line "ERROR-DIAGNOSTIC:END")
+       (set! in-diag? #f)
+       (set! diagnostics (cons (string-join (reverse current-diag) "\n") diagnostics))]
+      [in-diag?
+       (set! current-diag (cons line current-diag))]
+      [else
+       (set! remaining (cons line remaining))]))
+  (values (reverse diagnostics) (reverse remaining)))
 
 ;; Save the real stdout for JSON output
 (define real-stdout (current-output-port))
@@ -176,6 +201,8 @@
          [current-global-env              ready-global-env]
          ;; metavar-store.rkt — fresh mutable hash per file
          [current-mult-meta-store         (make-hasheq)]
+         ;; errors.rkt — emit formatted errors to stderr for failure logs
+         [current-emit-error-diagnostics  #t]
          ;; Set load-relative-directory so dynamic-require with relative
          ;; paths inside test files resolves correctly (e.g., test-quote.rkt's
          ;; (dynamic-require "../sexp-readtable.rkt" ...) needs to resolve
@@ -242,10 +269,33 @@
   (define result+ph  (if phases (hash-set result+hb 'phases phases) result+hb))
   (define result+mem (if memory (hash-set result+ph 'memory memory) result+ph))
 
-  ;; Attach error output on failure
+  ;; Extract error diagnostics from captured stderr
+  (define-values (error-diagnostics remaining-stderr-lines)
+    (extract-error-diagnostics captured-err))
+
+  ;; Extract PROVENANCE-STATS lines for dedicated section
+  (define provenance-stats-lines
+    (filter (lambda (l) (string-prefix? l "PROVENANCE-STATS:")) remaining-stderr-lines))
+  ;; Remaining stderr without metrics or diagnostics
+  (define clean-stderr-lines
+    (filter (lambda (l)
+              (and (not (string-prefix? l "PERF-COUNTERS"))
+                   (not (string-prefix? l "PHASE-TIMINGS"))
+                   (not (string-prefix? l "MEMORY-STATS"))
+                   (not (string-prefix? l "PROVENANCE-STATS"))))
+            remaining-stderr-lines))
+
+  ;; Attach error output on failure — prefer first diagnostic over raw exception
+  (define first-diagnostic
+    (and (pair? error-diagnostics) (car error-diagnostics)))
+  (define error-output
+    (cond
+      [first-diagnostic first-diagnostic]
+      [(not (string=? error-msg "")) error-msg]
+      [else #f]))
   (define result-final
-    (if (and (not ok?) (not (string=? error-msg "")))
-        (hash-set result+mem 'error_output error-msg)
+    (if (and (not ok?) error-output)
+        (hash-set result+mem 'error_output error-output)
         result+mem))
 
   ;; Write failure log if test failed
@@ -260,16 +310,28 @@
          (fprintf out "=== ~a FAILED ===\n" file-name)
          (fprintf out "wall_ms: ~a\n" wall-ms)
          (fprintf out "tests: ~a (~a failures)\n\n" file-tests file-failures)
+         ;; Error Diagnostics — formatted prologos errors with provenance chains
+         (when (pair? error-diagnostics)
+           (fprintf out "--- Error Diagnostics ---\n")
+           (for ([diag (in-list error-diagnostics)])
+             (fprintf out "~a\n\n" diag)))
+         ;; Exception — rackunit or Racket-level exception
          (when (not (string=? error-msg ""))
            (fprintf out "--- Exception ---\n~a\n\n" error-msg))
-         (when (not (string=? captured-err ""))
-           ;; Filter out PERF-COUNTERS/PHASE-TIMINGS/MEMORY-STATS noise
-           (fprintf out "--- Captured stderr ---\n")
-           (for ([line (in-list (string-split captured-err "\n"))]
-                 #:when (not (string-prefix? line "PERF-COUNTERS"))
-                 #:when (not (string-prefix? line "PHASE-TIMINGS"))
-                 #:when (not (string-prefix? line "MEMORY-STATS")))
-             (fprintf out "~a\n" line)))))]
+         ;; RackUnit stderr — test failure details (minus metrics/diagnostics)
+         (define non-empty-stderr
+           (filter (lambda (l) (not (string=? l ""))) clean-stderr-lines))
+         (when (pair? non-empty-stderr)
+           (fprintf out "--- RackUnit stderr ---\n")
+           (for ([line (in-list non-empty-stderr)])
+             (fprintf out "~a\n" line))
+           (fprintf out "\n"))
+         ;; Provenance Stats — ATMS and speculation counters
+         (when (pair? provenance-stats-lines)
+           (fprintf out "--- Provenance Stats ---\n")
+           (for ([line (in-list provenance-stats-lines)])
+             (fprintf out "~a\n" line))
+           (fprintf out "\n"))))]
     ;; Clean up old failure log on pass (from previous failing run)
     [(file-exists? log-path)
      (delete-file log-path)])
