@@ -35,7 +35,10 @@
  ;; Predicates
  prologos-error?
  ;; Formatting
- format-error)
+ format-error
+ ;; Diagnostic emission (for test runner integration)
+ current-emit-error-diagnostics
+ emit-error-diagnostic)
 
 ;; ========================================
 ;; Error Hierarchy
@@ -275,3 +278,19 @@
   (cond
     [(string? v) v]
     [else (format "~a" v)]))
+
+;; ========================================
+;; Diagnostic Emission
+;; ========================================
+
+;; When #t, process-string/process-file emit formatted errors to current-error-port.
+;; Default #f — no behavior change for direct `raco test` or REPL usage.
+;; The batch worker sets this to #t so formatted errors appear in failure logs.
+(define current-emit-error-diagnostics (make-parameter #f))
+
+;; Emit a formatted error diagnostic to current-error-port as a delimited block.
+;; The batch worker parses these blocks from captured stderr.
+(define (emit-error-diagnostic err)
+  (eprintf "ERROR-DIAGNOSTIC:BEGIN\n")
+  (eprintf "~a\n" (format-error err))
+  (eprintf "ERROR-DIAGNOSTIC:END\n"))

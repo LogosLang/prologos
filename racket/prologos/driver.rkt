@@ -884,6 +884,11 @@
           (if (prologos-error? surf)
               surf
               (process-command surf))))))
+  ;; Emit formatted error diagnostics to stderr when enabled (test runner integration)
+  (when (current-emit-error-diagnostics)
+    (for ([r (in-list results)])
+      (when (prologos-error? r)
+        (emit-error-diagnostic r))))
   (when pc (print-perf-report! pc))
   (print-phase-report! pt)
   (print-provenance-report! pv)
@@ -915,6 +920,11 @@
           (if (prologos-error? surf)
               surf
               (process-command surf))))))
+  ;; Emit formatted error diagnostics to stderr when enabled (test runner integration)
+  (when (current-emit-error-diagnostics)
+    (for ([r (in-list results)])
+      (when (prologos-error? r)
+        (emit-error-diagnostic r))))
   (when pc (print-perf-report! pc))
   (print-phase-report! pt)
   (print-provenance-report! pv)
