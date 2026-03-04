@@ -33,8 +33,10 @@
          "performance-counters.rkt")
 
 (provide unify unify-ok? occurs?
-         ;; P1-G2: Propagator-aware unification wrapper
+         ;; Backward-compat alias (unify* = unify after P1-G7)
          unify* unify*-ok?
+         ;; Internal core (for tests that need raw unification without propagator checks)
+         unify-core
          ;; Sprint 2b exports
          decompose-meta-app pattern-check invert-args
          ;; Union type helpers
@@ -120,7 +122,7 @@
   (cond
     ;; Already solved? Check consistency by unifying solution with rhs
     [(meta-solved? id)
-     (unify ctx (meta-solution id) rhs)]
+     (unify-core ctx (meta-solution id) rhs)]
     ;; Occur check: prevent infinite types
     [(occurs? id rhs) #f]
     ;; Solve!
@@ -145,7 +147,7 @@
 ;; with a fresh fvar via open-expr. This ensures meta solutions have correct
 ;; de Bruijn indices — open-expr automatically decrements higher bvar indices.
 
-(define (unify ctx t1 t2)
+(define (unify-core ctx t1 t2)
   (perf-inc-unify!)
   ;; Pre-WHNF: try app-vs-app decomposition on the raw (zonked) terms.
   ;; This is critical for correctness with metavariables: when both sides
@@ -177,8 +179,8 @@
   (cond
     [(and (expr-app? a) (expr-app? b))
      (and (unify-spine ctx (expr-app-func a) (expr-app-func b))
-          (unify ctx (expr-app-arg a) (expr-app-arg b)))]
-    [else (unify ctx a b)]))
+          (unify-core ctx (expr-app-arg a) (expr-app-arg b)))]
+    [else (unify-core ctx a b)]))
 
 ;; Core unification after WHNF reduction
 (define (unify-whnf ctx t1 t2)
@@ -221,24 +223,24 @@
       [(and (expr-Pi? a) (expr-Pi? b))
        (let ([m1 (expr-Pi-mult a)] [m2 (expr-Pi-mult b)])
          (and (unify-mult m1 m2)
-              (unify ctx (expr-Pi-domain a) (expr-Pi-domain b))
+              (unify-core ctx (expr-Pi-domain a) (expr-Pi-domain b))
               (let ([x (expr-fvar (gensym 'unify))])
-                (unify ctx
+                (unify-core ctx
                        (open-expr (zonk-at-depth 1 (expr-Pi-codomain a)) x)
                        (open-expr (zonk-at-depth 1 (expr-Pi-codomain b)) x)))))]
 
       ;; Sigma vs Sigma: opened with fresh fvar for second type
       ;; Same depth-aware zonking as Pi codomains.
       [(and (expr-Sigma? a) (expr-Sigma? b))
-       (and (unify ctx (expr-Sigma-fst-type a) (expr-Sigma-fst-type b))
+       (and (unify-core ctx (expr-Sigma-fst-type a) (expr-Sigma-fst-type b))
             (let ([x (expr-fvar (gensym 'unify))])
-              (unify ctx
+              (unify-core ctx
                      (open-expr (zonk-at-depth 1 (expr-Sigma-snd-type a)) x)
                      (open-expr (zonk-at-depth 1 (expr-Sigma-snd-type b)) x))))]
 
       ;; suc vs suc
       [(and (expr-suc? a) (expr-suc? b))
-       (unify ctx (expr-suc-pred a) (expr-suc-pred b))]
+       (unify-core ctx (expr-suc-pred a) (expr-suc-pred b))]
 
       ;; nat-val vs nat-val
       [(and (expr-nat-val? a) (expr-nat-val? b))
@@ -248,9 +250,9 @@
       [(and (expr-zero? a) (expr-nat-val? b)) (= (expr-nat-val-n b) 0)]
       ;; Cross-repr: nat-val(n>0) vs suc(X) — structural decomposition
       [(and (expr-nat-val? a) (> (expr-nat-val-n a) 0) (expr-suc? b))
-       (unify ctx (expr-nat-val (- (expr-nat-val-n a) 1)) (expr-suc-pred b))]
+       (unify-core ctx (expr-nat-val (- (expr-nat-val-n a) 1)) (expr-suc-pred b))]
       [(and (expr-suc? a) (expr-nat-val? b) (> (expr-nat-val-n b) 0))
-       (unify ctx (expr-suc-pred a) (expr-nat-val (- (expr-nat-val-n b) 1)))]
+       (unify-core ctx (expr-suc-pred a) (expr-nat-val (- (expr-nat-val-n b) 1)))]
       ;; Cross-repr: nat-val(0) vs suc(_) — fail
       [(and (expr-nat-val? a) (= (expr-nat-val-n a) 0) (expr-suc? b)) #f]
       [(and (expr-suc? a) (expr-nat-val? b) (= (expr-nat-val-n b) 0)) #f]
@@ -278,8 +280,8 @@
 
       ;; app vs app (rigid-rigid): try structural decomposition first
       [(and (expr-app? a) (expr-app? b))
-       (and (unify ctx (expr-app-func a) (expr-app-func b))
-            (unify ctx (expr-app-arg a) (expr-app-arg b)))]
+       (and (unify-core ctx (expr-app-func a) (expr-app-func b))
+            (unify-core ctx (expr-app-arg a) (expr-app-arg b)))]
 
       ;; --- Sprint 2b: Applied meta (flex-app) handling ---
       ;; Fires when one side is (app ... (app (expr-meta ?m) x1) ... xn)
@@ -291,32 +293,32 @@
 
       ;; Eq vs Eq
       [(and (expr-Eq? a) (expr-Eq? b))
-       (and (unify ctx (expr-Eq-type a) (expr-Eq-type b))
-            (unify ctx (expr-Eq-lhs a) (expr-Eq-lhs b))
-            (unify ctx (expr-Eq-rhs a) (expr-Eq-rhs b)))]
+       (and (unify-core ctx (expr-Eq-type a) (expr-Eq-type b))
+            (unify-core ctx (expr-Eq-lhs a) (expr-Eq-lhs b))
+            (unify-core ctx (expr-Eq-rhs a) (expr-Eq-rhs b)))]
 
       ;; Vec vs Vec
       [(and (expr-Vec? a) (expr-Vec? b))
-       (and (unify ctx (expr-Vec-elem-type a) (expr-Vec-elem-type b))
-            (unify ctx (expr-Vec-length a) (expr-Vec-length b)))]
+       (and (unify-core ctx (expr-Vec-elem-type a) (expr-Vec-elem-type b))
+            (unify-core ctx (expr-Vec-length a) (expr-Vec-length b)))]
 
       ;; Fin vs Fin
       [(and (expr-Fin? a) (expr-Fin? b))
-       (unify ctx (expr-Fin-bound a) (expr-Fin-bound b))]
+       (unify-core ctx (expr-Fin-bound a) (expr-Fin-bound b))]
 
       ;; lam vs lam: opened with fresh fvar for body
       ;; Same depth-aware zonking as Pi/Sigma.
       [(and (expr-lam? a) (expr-lam? b))
-       (and (unify ctx (expr-lam-type a) (expr-lam-type b))
+       (and (unify-core ctx (expr-lam-type a) (expr-lam-type b))
             (let ([x (expr-fvar (gensym 'unify))])
-              (unify ctx
+              (unify-core ctx
                      (open-expr (zonk-at-depth 1 (expr-lam-body a)) x)
                      (open-expr (zonk-at-depth 1 (expr-lam-body b)) x))))]
 
       ;; pair vs pair
       [(and (expr-pair? a) (expr-pair? b))
-       (and (unify ctx (expr-pair-fst a) (expr-pair-fst b))
-            (unify ctx (expr-pair-snd a) (expr-pair-snd b)))]
+       (and (unify-core ctx (expr-pair-fst a) (expr-pair-fst b))
+            (unify-core ctx (expr-pair-snd a) (expr-pair-snd b)))]
 
       ;; Type vs Type (universe levels) — Sprint 6: level-meta aware
       [(and (expr-Type? a) (expr-Type? b))
@@ -330,8 +332,8 @@
          (unify-union-components ctx cs-a cs-b))]
 
       ;; ann: should not survive WHNF, but handle defensively
-      [(expr-ann? a) (unify ctx (expr-ann-term a) b)]
-      [(expr-ann? b) (unify ctx a (expr-ann-term b))]
+      [(expr-ann? a) (unify-core ctx (expr-ann-term a) b)]
+      [(expr-ann? b) (unify-core ctx a (expr-ann-term b))]
 
       ;; --- Fallback: conv-nf for atoms/neutrals ---
       ;; This handles bvar, fvar, zero, true, false, refl, Nat, Bool,
@@ -442,7 +444,7 @@
       [else
        (for/and ([a (in-list sorted-a)]
                  [b (in-list sorted-b)])
-         (unify ctx a b))])))
+         (unify-core ctx a b))])))
 
 ;; ========================================
 ;; Sprint 2b: Applied Meta (Flex-App) Support
@@ -599,32 +601,31 @@
     [else #f]))
 
 ;; ========================================
-;; P1-G2: Propagator-Aware Unification Wrapper
+;; P1-G7: Propagator-Aware Unification (primary entry point)
 ;; ========================================
 ;;
-;; unify*(ctx, t1, t2) → #t | 'postponed | #f
+;; unify(ctx, t1, t2) → #t | 'postponed | #f
 ;;
-;; Same semantics as `unify`, but with post-call propagator network
-;; consistency checking. After `unify` runs (which may call solve-meta!
-;; which runs quiescence), check the propagator network for:
+;; Calls unify-core (the raw unification engine), then checks the
+;; propagator network for consistency:
 ;; 1. Contradictions not caught by the imperative path → downgrade to #f
 ;; 2. Solved constraints via transitive propagation → upgrade 'postponed → #t
 ;;
-;; Phase G2: structural consistency check (contradiction detection)
-;; Phase G3: meta-bearing upgrade ('postponed → #t when cell solved)
+;; This is the ONLY entry point for unification in the main pipeline.
+;; unify-core is internal (for recursive calls and constraint retry).
 
-(define (unify* ctx t1 t2)
+(define (unify ctx t1 t2)
   ;; Snapshot constraint store to detect solved-via-quiescence.
   (define pre-store (current-constraint-store))
-  (define result (unify ctx t1 t2))
+  (define result (unify-core ctx t1 t2))
   ;; Post-unification consistency check with propagator network.
   ;; Quiescence already ran inside solve-meta! (if any metas were solved).
   (define check-fn (current-prop-has-contradiction?))
   (cond
     [(not check-fn) result]  ;; No network (test context) → pass through
-    ;; If unify said #t or 'postponed but network has contradiction → downgrade to #f
+    ;; If unify-core said #t or 'postponed but network has contradiction → downgrade to #f
     [(and (not (eq? result #f)) (check-fn)) #f]
-    ;; If unify returned 'postponed, check if quiescence resolved
+    ;; If unify-core returned 'postponed, check if quiescence resolved
     ;; the constraint via transitive propagation. If the most recent constraint
     ;; added during this call was solved by retry-via-cells, upgrade to #t.
     [(eq? result 'postponed)
@@ -638,18 +639,22 @@
        [else 'postponed])]
     [else result]))
 
-(define (unify*-ok? result) (not (eq? result #f)))
+;; Backward-compat aliases
+(define unify* unify)
+(define unify*-ok? unify-ok?)
 
 ;; ========================================
 ;; Sprint 5: Install constraint retry callback
 ;; ========================================
 ;; When solve-meta! solves a metavariable, retry-constraints-for-meta!
 ;; calls this callback on each postponed constraint that mentions the meta.
+;; Retry callback uses unify-core (not unify) to avoid double propagator
+;; checking — the retry itself is triggered by propagator quiescence.
 (current-retry-unify
  (lambda (c)
    (let ([lhs (zonk-at-depth 0 (constraint-lhs c))]
          [rhs (zonk-at-depth 0 (constraint-rhs c))])
-     (define result (unify (constraint-ctx c) lhs rhs))
+     (define result (unify-core (constraint-ctx c) lhs rhs))
      (cond
        [(eq? result #t)   (set-constraint-status! c 'solved)]
        [(eq? result #f)   (set-constraint-status! c 'failed)]
