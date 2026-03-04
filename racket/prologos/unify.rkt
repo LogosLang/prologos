@@ -122,6 +122,9 @@
 ;; ========================================
 ;; Solve a bare (unapplied) metavariable
 ;; ========================================
+;; P-U2a: After solve-meta!, check propagator network for contradictions.
+;; This catches transitive inconsistencies from cell writes + quiescence
+;; that the imperative path wouldn't detect until the top-level `unify` wrapper.
 
 (define (solve-flex-rigid id rhs ctx)
   (cond
@@ -133,7 +136,13 @@
     ;; Solve!
     [else
      (solve-meta! id rhs)
-     #t]))
+     ;; P-U2a: Post-solve contradiction check via propagator network.
+     ;; solve-meta! writes to cell + runs quiescence, which may trigger
+     ;; transitive propagation that reveals inconsistencies.
+     (define check-fn (current-prop-has-contradiction?))
+     (if (and check-fn (check-fn))
+         #f   ;; Propagator network detected contradiction
+         #t)]))
 
 ;; ========================================
 ;; Core Unification
@@ -528,6 +537,7 @@
     [(not (pattern-check args))
      ;; Failed pattern condition — postpone for later retry (Sprint 5)
      ;; Sprint 9: attach structured provenance from the head meta
+     (define pre-store (current-constraint-store))
      (add-constraint! flex-term rhs ctx
        (constraint-provenance
          srcloc-unknown
@@ -535,12 +545,25 @@
          (let-values ([(head-id _args) (decompose-meta-app flex-term)])
            (and head-id (let ([info (meta-lookup head-id)])
                           (and info (meta-info-source info)))))))
-     'postponed]
+     ;; P-U2a: Check if quiescence already resolved the constraint.
+     ;; add-constraint! creates propagator cells, so transitive propagation
+     ;; may have solved the constraint immediately.
+     (define post-store (current-constraint-store))
+     (cond
+       [(and (pair? post-store)
+             (not (eq? post-store pre-store))
+             (eq? (constraint-status (car post-store)) 'solved))
+        #t]  ;; Upgrade: constraint was resolved by quiescence
+       [else 'postponed])]
     [(occurs? id rhs) #f]  ; occur check
     [else
      ;; Solve by inversion: construct lambda abstraction
      (solve-meta! id (invert-args args rhs))
-     #t]))
+     ;; P-U2a: Post-solve contradiction check (same as solve-flex-rigid)
+     (define check-fn (current-prop-has-contradiction?))
+     (if (and check-fn (check-fn))
+         #f
+         #t)]))
 
 ;; Construct a lambda abstraction that, when applied to the original arguments,
 ;; produces the RHS.
