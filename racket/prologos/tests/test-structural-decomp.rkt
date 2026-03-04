@@ -549,12 +549,270 @@
        (check-not-false pid)))))
 
 ;; ========================================
+;; Phase 4c-c: Extended Constructor Tags
+;; ========================================
+
+(define extended-tag-tests
+  (test-suite
+   "Extended type-constructor-tag"
+
+   (test-case "Sigma → 'Sigma"
+     (check-eq? (type-constructor-tag (expr-Sigma (expr-Nat) (expr-Bool))) 'Sigma))
+   (test-case "Eq → 'Eq"
+     (check-eq? (type-constructor-tag (expr-Eq (expr-Nat) (expr-zero) (expr-zero))) 'Eq))
+   (test-case "Vec → 'Vec"
+     (check-eq? (type-constructor-tag (expr-Vec (expr-Nat) (expr-zero))) 'Vec))
+   (test-case "PVec → 'PVec"
+     (check-eq? (type-constructor-tag (expr-PVec (expr-Nat))) 'PVec))
+   (test-case "Set → 'Set"
+     (check-eq? (type-constructor-tag (expr-Set (expr-Nat))) 'Set))
+   (test-case "Map → 'Map"
+     (check-eq? (type-constructor-tag (expr-Map (expr-Nat) (expr-Bool))) 'Map))
+   (test-case "pair → 'pair"
+     (check-eq? (type-constructor-tag (expr-pair (expr-zero) (expr-true))) 'pair))
+   (test-case "suc → 'suc"
+     (check-eq? (type-constructor-tag (expr-suc (expr-zero))) 'suc))
+   (test-case "lam → 'lam"
+     (check-eq? (type-constructor-tag (expr-lam 'm1 (expr-Nat) (expr-bvar 0))) 'lam))))
+
+;; ========================================
+;; Phase 4c-c: Sigma Decomposition
+;; ========================================
+
+(define sigma-tests
+  (test-suite
+   "Sigma decomposition"
+
+   (test-case "Sigma(Nat, ?M) = Sigma(Nat, Bool) → ?M solved"
+     (define enet0 (make-elaboration-network))
+     (define-values (enet1 meta-M) (elab-fresh-meta enet0 '() #f "M"))
+     (define M-id (cell-id-n meta-M))
+     (define-values (enet2 cell-a) (elab-fresh-meta enet1 '() #f "cell-a"))
+     (define-values (enet3 cell-b) (elab-fresh-meta enet2 '() #f "cell-b"))
+     (define enet4 (elab-cell-write enet3 cell-a
+                     (expr-Sigma (expr-Nat) (expr-meta M-id))))
+     (define enet5 (elab-cell-write enet4 cell-b
+                     (expr-Sigma (expr-Nat) (expr-Bool))))
+     (parameterize ([current-structural-meta-lookup
+                     (make-test-meta-lookup (hash M-id meta-M))]
+                    [current-lattice-meta-solution-fn unsolved-meta-solution-fn])
+       (define-values (enet6 _pid) (elab-add-unify-constraint enet5 cell-a cell-b))
+       (define enet7 (solve-ok enet6))
+       (check-equal? (elab-cell-read enet7 meta-M) (expr-Bool))))
+
+   (test-case "Sigma(?A, ?B) = Sigma(Nat, Bool) → both metas solved"
+     (define enet0 (make-elaboration-network))
+     (define-values (enet1 meta-A) (elab-fresh-meta enet0 '() #f "A"))
+     (define-values (enet2 meta-B) (elab-fresh-meta enet1 '() #f "B"))
+     (define A-id (cell-id-n meta-A))
+     (define B-id (cell-id-n meta-B))
+     (define-values (enet3 cell-a) (elab-fresh-meta enet2 '() #f "cell-a"))
+     (define-values (enet4 cell-b) (elab-fresh-meta enet3 '() #f "cell-b"))
+     (define enet5 (elab-cell-write enet4 cell-a
+                     (expr-Sigma (expr-meta A-id) (expr-meta B-id))))
+     (define enet6 (elab-cell-write enet5 cell-b
+                     (expr-Sigma (expr-Nat) (expr-Bool))))
+     (parameterize ([current-structural-meta-lookup
+                     (make-test-meta-lookup (hash A-id meta-A B-id meta-B))]
+                    [current-lattice-meta-solution-fn unsolved-meta-solution-fn])
+       (define-values (enet7 _pid) (elab-add-unify-constraint enet6 cell-a cell-b))
+       (define enet8 (solve-ok enet7))
+       (check-equal? (elab-cell-read enet8 meta-A) (expr-Nat))
+       (check-equal? (elab-cell-read enet8 meta-B) (expr-Bool))))))
+
+;; ========================================
+;; Phase 4c-c: Eq Decomposition
+;; ========================================
+
+(define eq-tests
+  (test-suite
+   "Eq decomposition"
+
+   (test-case "Eq(?T, zero, ?R) = Eq(Nat, zero, suc(zero)) → metas solved"
+     (define enet0 (make-elaboration-network))
+     (define-values (enet1 meta-T) (elab-fresh-meta enet0 '() #f "T"))
+     (define-values (enet2 meta-R) (elab-fresh-meta enet1 '() #f "R"))
+     (define T-id (cell-id-n meta-T))
+     (define R-id (cell-id-n meta-R))
+     (define-values (enet3 cell-a) (elab-fresh-meta enet2 '() #f "cell-a"))
+     (define-values (enet4 cell-b) (elab-fresh-meta enet3 '() #f "cell-b"))
+     (define suc-zero (expr-suc (expr-zero)))
+     (define enet5 (elab-cell-write enet4 cell-a
+                     (expr-Eq (expr-meta T-id) (expr-zero) (expr-meta R-id))))
+     (define enet6 (elab-cell-write enet5 cell-b
+                     (expr-Eq (expr-Nat) (expr-zero) suc-zero)))
+     (parameterize ([current-structural-meta-lookup
+                     (make-test-meta-lookup (hash T-id meta-T R-id meta-R))]
+                    [current-lattice-meta-solution-fn unsolved-meta-solution-fn])
+       (define-values (enet7 _pid) (elab-add-unify-constraint enet6 cell-a cell-b))
+       (define enet8 (solve-ok enet7))
+       (check-equal? (elab-cell-read enet8 meta-T) (expr-Nat))
+       (check-equal? (elab-cell-read enet8 meta-R) suc-zero)))))
+
+;; ========================================
+;; Phase 4c-c: Vec Decomposition
+;; ========================================
+
+(define vec-tests
+  (test-suite
+   "Vec decomposition"
+
+   (test-case "Vec(?E, suc(zero)) = Vec(Nat, suc(zero)) → ?E solved"
+     (define enet0 (make-elaboration-network))
+     (define-values (enet1 meta-E) (elab-fresh-meta enet0 '() #f "E"))
+     (define E-id (cell-id-n meta-E))
+     (define-values (enet2 cell-a) (elab-fresh-meta enet1 '() #f "cell-a"))
+     (define-values (enet3 cell-b) (elab-fresh-meta enet2 '() #f "cell-b"))
+     (define suc-zero (expr-suc (expr-zero)))
+     (define enet4 (elab-cell-write enet3 cell-a
+                     (expr-Vec (expr-meta E-id) suc-zero)))
+     (define enet5 (elab-cell-write enet4 cell-b
+                     (expr-Vec (expr-Nat) suc-zero)))
+     (parameterize ([current-structural-meta-lookup
+                     (make-test-meta-lookup (hash E-id meta-E))]
+                    [current-lattice-meta-solution-fn unsolved-meta-solution-fn])
+       (define-values (enet6 _pid) (elab-add-unify-constraint enet5 cell-a cell-b))
+       (define enet7 (solve-ok enet6))
+       (check-equal? (elab-cell-read enet7 meta-E) (expr-Nat))))))
+
+;; ========================================
+;; Phase 4c-c: 1-Component Types (PVec, Set, suc)
+;; ========================================
+
+(define one-component-tests
+  (test-suite
+   "1-component type decomposition"
+
+   (test-case "PVec(?E) = PVec(Nat) → ?E solved"
+     (define enet0 (make-elaboration-network))
+     (define-values (enet1 meta-E) (elab-fresh-meta enet0 '() #f "E"))
+     (define E-id (cell-id-n meta-E))
+     (define-values (enet2 cell-a) (elab-fresh-meta enet1 '() #f "cell-a"))
+     (define-values (enet3 cell-b) (elab-fresh-meta enet2 '() #f "cell-b"))
+     (define enet4 (elab-cell-write enet3 cell-a (expr-PVec (expr-meta E-id))))
+     (define enet5 (elab-cell-write enet4 cell-b (expr-PVec (expr-Nat))))
+     (parameterize ([current-structural-meta-lookup
+                     (make-test-meta-lookup (hash E-id meta-E))]
+                    [current-lattice-meta-solution-fn unsolved-meta-solution-fn])
+       (define-values (enet6 _pid) (elab-add-unify-constraint enet5 cell-a cell-b))
+       (define enet7 (solve-ok enet6))
+       (check-equal? (elab-cell-read enet7 meta-E) (expr-Nat))))
+
+   (test-case "Set(?E) = Set(Bool) → ?E solved"
+     (define enet0 (make-elaboration-network))
+     (define-values (enet1 meta-E) (elab-fresh-meta enet0 '() #f "E"))
+     (define E-id (cell-id-n meta-E))
+     (define-values (enet2 cell-a) (elab-fresh-meta enet1 '() #f "cell-a"))
+     (define-values (enet3 cell-b) (elab-fresh-meta enet2 '() #f "cell-b"))
+     (define enet4 (elab-cell-write enet3 cell-a (expr-Set (expr-meta E-id))))
+     (define enet5 (elab-cell-write enet4 cell-b (expr-Set (expr-Bool))))
+     (parameterize ([current-structural-meta-lookup
+                     (make-test-meta-lookup (hash E-id meta-E))]
+                    [current-lattice-meta-solution-fn unsolved-meta-solution-fn])
+       (define-values (enet6 _pid) (elab-add-unify-constraint enet5 cell-a cell-b))
+       (define enet7 (solve-ok enet6))
+       (check-equal? (elab-cell-read enet7 meta-E) (expr-Bool))))
+
+   (test-case "suc(?P) = suc(zero) → ?P solved"
+     (define enet0 (make-elaboration-network))
+     (define-values (enet1 meta-P) (elab-fresh-meta enet0 '() #f "P"))
+     (define P-id (cell-id-n meta-P))
+     (define-values (enet2 cell-a) (elab-fresh-meta enet1 '() #f "cell-a"))
+     (define-values (enet3 cell-b) (elab-fresh-meta enet2 '() #f "cell-b"))
+     (define enet4 (elab-cell-write enet3 cell-a (expr-suc (expr-meta P-id))))
+     (define enet5 (elab-cell-write enet4 cell-b (expr-suc (expr-zero))))
+     (parameterize ([current-structural-meta-lookup
+                     (make-test-meta-lookup (hash P-id meta-P))]
+                    [current-lattice-meta-solution-fn unsolved-meta-solution-fn])
+       (define-values (enet6 _pid) (elab-add-unify-constraint enet5 cell-a cell-b))
+       (define enet7 (solve-ok enet6))
+       (check-equal? (elab-cell-read enet7 meta-P) (expr-zero))))))
+
+;; ========================================
+;; Phase 4c-c: Map Decomposition
+;; ========================================
+
+(define map-tests
+  (test-suite
+   "Map decomposition"
+
+   (test-case "Map(?K, ?V) = Map(Nat, Bool) → both metas solved"
+     (define enet0 (make-elaboration-network))
+     (define-values (enet1 meta-K) (elab-fresh-meta enet0 '() #f "K"))
+     (define-values (enet2 meta-V) (elab-fresh-meta enet1 '() #f "V"))
+     (define K-id (cell-id-n meta-K))
+     (define V-id (cell-id-n meta-V))
+     (define-values (enet3 cell-a) (elab-fresh-meta enet2 '() #f "cell-a"))
+     (define-values (enet4 cell-b) (elab-fresh-meta enet3 '() #f "cell-b"))
+     (define enet5 (elab-cell-write enet4 cell-a
+                     (expr-Map (expr-meta K-id) (expr-meta V-id))))
+     (define enet6 (elab-cell-write enet5 cell-b
+                     (expr-Map (expr-Nat) (expr-Bool))))
+     (parameterize ([current-structural-meta-lookup
+                     (make-test-meta-lookup (hash K-id meta-K V-id meta-V))]
+                    [current-lattice-meta-solution-fn unsolved-meta-solution-fn])
+       (define-values (enet7 _pid) (elab-add-unify-constraint enet6 cell-a cell-b))
+       (define enet8 (solve-ok enet7))
+       (check-equal? (elab-cell-read enet8 meta-K) (expr-Nat))
+       (check-equal? (elab-cell-read enet8 meta-V) (expr-Bool))))))
+
+;; ========================================
+;; Phase 4c-c: pair Decomposition
+;; ========================================
+
+(define pair-tests
+  (test-suite
+   "pair decomposition"
+
+   (test-case "pair(?F, true) = pair(zero, true) → ?F solved"
+     (define enet0 (make-elaboration-network))
+     (define-values (enet1 meta-F) (elab-fresh-meta enet0 '() #f "F"))
+     (define F-id (cell-id-n meta-F))
+     (define-values (enet2 cell-a) (elab-fresh-meta enet1 '() #f "cell-a"))
+     (define-values (enet3 cell-b) (elab-fresh-meta enet2 '() #f "cell-b"))
+     (define enet4 (elab-cell-write enet3 cell-a
+                     (expr-pair (expr-meta F-id) (expr-true))))
+     (define enet5 (elab-cell-write enet4 cell-b
+                     (expr-pair (expr-zero) (expr-true))))
+     (parameterize ([current-structural-meta-lookup
+                     (make-test-meta-lookup (hash F-id meta-F))]
+                    [current-lattice-meta-solution-fn unsolved-meta-solution-fn])
+       (define-values (enet6 _pid) (elab-add-unify-constraint enet5 cell-a cell-b))
+       (define enet7 (solve-ok enet6))
+       (check-equal? (elab-cell-read enet7 meta-F) (expr-zero))))))
+
+;; ========================================
+;; Phase 4c-c: lam Decomposition
+;; ========================================
+
+(define lam-tests
+  (test-suite
+   "lam decomposition"
+
+   (test-case "lam(m1, ?T, bvar(0)) = lam(m1, Nat, bvar(0)) → ?T solved"
+     (define enet0 (make-elaboration-network))
+     (define-values (enet1 meta-T) (elab-fresh-meta enet0 '() #f "T"))
+     (define T-id (cell-id-n meta-T))
+     (define-values (enet2 cell-a) (elab-fresh-meta enet1 '() #f "cell-a"))
+     (define-values (enet3 cell-b) (elab-fresh-meta enet2 '() #f "cell-b"))
+     (define enet4 (elab-cell-write enet3 cell-a
+                     (expr-lam 'm1 (expr-meta T-id) (expr-bvar 0))))
+     (define enet5 (elab-cell-write enet4 cell-b
+                     (expr-lam 'm1 (expr-Nat) (expr-bvar 0))))
+     (parameterize ([current-structural-meta-lookup
+                     (make-test-meta-lookup (hash T-id meta-T))]
+                    [current-lattice-meta-solution-fn unsolved-meta-solution-fn])
+       (define-values (enet6 _pid) (elab-add-unify-constraint enet5 cell-a cell-b))
+       (define enet7 (solve-ok enet6))
+       (check-equal? (elab-cell-read enet7 meta-T) (expr-Nat))))))
+
+;; ========================================
 ;; Run All
 ;; ========================================
 
 (run-tests
  (test-suite
-  "Phase 4c-b: Structural Decomposition"
+  "Phase 4c: Structural Decomposition"
   tag-tests
   pi-ground-tests
   pi-meta-tests
@@ -565,5 +823,14 @@
   dependent-tests
   contradiction-tests
   reconstructor-tests
-  fast-path-tests)
+  fast-path-tests
+  ;; Phase 4c-c: Extended constructors
+  extended-tag-tests
+  sigma-tests
+  eq-tests
+  vec-tests
+  one-component-tests
+  map-tests
+  pair-tests
+  lam-tests)
  'verbose)

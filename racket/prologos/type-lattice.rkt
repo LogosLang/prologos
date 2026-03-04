@@ -292,7 +292,7 @@
               (define body-a (open-expr (zonk-at-depth 1 (expr-lam-body a)) x))
               (define body-b (open-expr (zonk-at-depth 1 (expr-lam-body b)) x))
               (define body (try-unify-pure body-a body-b))
-              (and body (expr-lam ty (expr-lam-body a)))))]
+              (and body (expr-lam (expr-lam-mult a) ty (expr-lam-body a)))))]
 
       ;; pair vs pair
       [(and (expr-pair? a) (expr-pair? b))

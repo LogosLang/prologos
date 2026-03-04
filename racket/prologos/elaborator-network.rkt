@@ -295,9 +295,17 @@
   (cond
     [(type-bot? e) #f]
     [(type-top? e) #f]
-    [(expr-Pi? e) 'Pi]
-    [(expr-app? e) 'app]
-    ;; Phase 4c-c will add: Sigma, Eq, Vec, PVec, Set, Map, pair, suc, lam
+    [(expr-Pi? e)    'Pi]
+    [(expr-app? e)   'app]
+    [(expr-Sigma? e) 'Sigma]
+    [(expr-Eq? e)    'Eq]
+    [(expr-Vec? e)   'Vec]
+    [(expr-PVec? e)  'PVec]
+    [(expr-Set? e)   'Set]
+    [(expr-Map? e)   'Map]
+    [(expr-pair? e)  'pair]
+    [(expr-suc? e)   'suc]
+    [(expr-lam? e)   'lam]
     [else #f]))
 
 ;; Create or reuse a sub-cell for a decomposed component expression.
@@ -460,6 +468,297 @@
       (make-app-reconstructor cell-b func-b arg-b)))
   (net-pair-decomp-insert net6 pair-key))
 
+;; ========================================
+;; Phase 4c-c: Extended Constructor Decomposers
+;; ========================================
+;;
+;; Same pattern as Pi/app: extract components, create sub-cells,
+;; wire sub-propagators and reconstructors, register pair.
+;; Multiplicities for Pi and lam are handled by the imperative unify-mult
+;; path (already works). Sub-cells for mult are deferred.
+
+;; --- Sigma(fst-type, snd-type) — 2 sub-cells ---
+
+(define (make-sigma-reconstructor parent-cell fst-cell snd-cell)
+  (lambda (net)
+    (define fst-val (net-cell-read net fst-cell))
+    (define snd-val (net-cell-read net snd-cell))
+    (cond
+      [(or (type-bot? fst-val) (type-bot? snd-val)) net]
+      [(or (type-top? fst-val) (type-top? snd-val))
+       (net-cell-write net parent-cell type-top)]
+      [else
+       (net-cell-write net parent-cell (expr-Sigma fst-val snd-val))])))
+
+(define (decompose-sigma net cell-a cell-b va vb unified pair-key)
+  (define src-a (if (expr-Sigma? va) va unified))
+  (define src-b (if (expr-Sigma? vb) vb unified))
+  (define-values (net1 subs-a)
+    (get-or-create-sub-cells net cell-a 'Sigma
+      (list (expr-Sigma-fst-type src-a) (expr-Sigma-snd-type src-a))))
+  (define-values (net2 subs-b)
+    (get-or-create-sub-cells net1 cell-b 'Sigma
+      (list (expr-Sigma-fst-type src-b) (expr-Sigma-snd-type src-b))))
+  (define fst-a (car subs-a)) (define snd-a (cadr subs-a))
+  (define fst-b (car subs-b)) (define snd-b (cadr subs-b))
+  ;; Sub-propagators
+  (define-values (net3 _p1)
+    (if (equal? fst-a fst-b) (values net2 #f)
+        (net-add-propagator net2 (list fst-a fst-b) (list fst-a fst-b)
+          (make-structural-unify-propagator fst-a fst-b))))
+  (define-values (net4 _p2)
+    (if (equal? snd-a snd-b) (values net3 #f)
+        (net-add-propagator net3 (list snd-a snd-b) (list snd-a snd-b)
+          (make-structural-unify-propagator snd-a snd-b))))
+  ;; Reconstructors
+  (define-values (net5 _p3)
+    (net-add-propagator net4 (list fst-a snd-a) (list cell-a)
+      (make-sigma-reconstructor cell-a fst-a snd-a)))
+  (define-values (net6 _p4)
+    (net-add-propagator net5 (list fst-b snd-b) (list cell-b)
+      (make-sigma-reconstructor cell-b fst-b snd-b)))
+  (net-pair-decomp-insert net6 pair-key))
+
+;; --- Eq(type, lhs, rhs) — 3 sub-cells ---
+
+(define (make-eq-reconstructor parent-cell type-cell lhs-cell rhs-cell)
+  (lambda (net)
+    (define tv (net-cell-read net type-cell))
+    (define lv (net-cell-read net lhs-cell))
+    (define rv (net-cell-read net rhs-cell))
+    (cond
+      [(or (type-bot? tv) (type-bot? lv) (type-bot? rv)) net]
+      [(or (type-top? tv) (type-top? lv) (type-top? rv))
+       (net-cell-write net parent-cell type-top)]
+      [else
+       (net-cell-write net parent-cell (expr-Eq tv lv rv))])))
+
+(define (decompose-eq net cell-a cell-b va vb unified pair-key)
+  (define src-a (if (expr-Eq? va) va unified))
+  (define src-b (if (expr-Eq? vb) vb unified))
+  (define-values (net1 subs-a)
+    (get-or-create-sub-cells net cell-a 'Eq
+      (list (expr-Eq-type src-a) (expr-Eq-lhs src-a) (expr-Eq-rhs src-a))))
+  (define-values (net2 subs-b)
+    (get-or-create-sub-cells net1 cell-b 'Eq
+      (list (expr-Eq-type src-b) (expr-Eq-lhs src-b) (expr-Eq-rhs src-b))))
+  (define type-a (car subs-a)) (define lhs-a (cadr subs-a)) (define rhs-a (caddr subs-a))
+  (define type-b (car subs-b)) (define lhs-b (cadr subs-b)) (define rhs-b (caddr subs-b))
+  ;; 3 sub-propagators
+  (define-values (net3 _p1)
+    (if (equal? type-a type-b) (values net2 #f)
+        (net-add-propagator net2 (list type-a type-b) (list type-a type-b)
+          (make-structural-unify-propagator type-a type-b))))
+  (define-values (net4 _p2)
+    (if (equal? lhs-a lhs-b) (values net3 #f)
+        (net-add-propagator net3 (list lhs-a lhs-b) (list lhs-a lhs-b)
+          (make-structural-unify-propagator lhs-a lhs-b))))
+  (define-values (net5 _p3)
+    (if (equal? rhs-a rhs-b) (values net4 #f)
+        (net-add-propagator net4 (list rhs-a rhs-b) (list rhs-a rhs-b)
+          (make-structural-unify-propagator rhs-a rhs-b))))
+  ;; Reconstructors
+  (define-values (net6 _p4)
+    (net-add-propagator net5 (list type-a lhs-a rhs-a) (list cell-a)
+      (make-eq-reconstructor cell-a type-a lhs-a rhs-a)))
+  (define-values (net7 _p5)
+    (net-add-propagator net6 (list type-b lhs-b rhs-b) (list cell-b)
+      (make-eq-reconstructor cell-b type-b lhs-b rhs-b)))
+  (net-pair-decomp-insert net7 pair-key))
+
+;; --- Vec(elem-type, length) — 2 sub-cells ---
+
+(define (make-vec-reconstructor parent-cell elem-cell len-cell)
+  (lambda (net)
+    (define ev (net-cell-read net elem-cell))
+    (define lv (net-cell-read net len-cell))
+    (cond
+      [(or (type-bot? ev) (type-bot? lv)) net]
+      [(or (type-top? ev) (type-top? lv))
+       (net-cell-write net parent-cell type-top)]
+      [else
+       (net-cell-write net parent-cell (expr-Vec ev lv))])))
+
+(define (decompose-vec net cell-a cell-b va vb unified pair-key)
+  (define src-a (if (expr-Vec? va) va unified))
+  (define src-b (if (expr-Vec? vb) vb unified))
+  (define-values (net1 subs-a)
+    (get-or-create-sub-cells net cell-a 'Vec
+      (list (expr-Vec-elem-type src-a) (expr-Vec-length src-a))))
+  (define-values (net2 subs-b)
+    (get-or-create-sub-cells net1 cell-b 'Vec
+      (list (expr-Vec-elem-type src-b) (expr-Vec-length src-b))))
+  (define elem-a (car subs-a)) (define len-a (cadr subs-a))
+  (define elem-b (car subs-b)) (define len-b (cadr subs-b))
+  (define-values (net3 _p1)
+    (if (equal? elem-a elem-b) (values net2 #f)
+        (net-add-propagator net2 (list elem-a elem-b) (list elem-a elem-b)
+          (make-structural-unify-propagator elem-a elem-b))))
+  (define-values (net4 _p2)
+    (if (equal? len-a len-b) (values net3 #f)
+        (net-add-propagator net3 (list len-a len-b) (list len-a len-b)
+          (make-structural-unify-propagator len-a len-b))))
+  (define-values (net5 _p3)
+    (net-add-propagator net4 (list elem-a len-a) (list cell-a)
+      (make-vec-reconstructor cell-a elem-a len-a)))
+  (define-values (net6 _p4)
+    (net-add-propagator net5 (list elem-b len-b) (list cell-b)
+      (make-vec-reconstructor cell-b elem-b len-b)))
+  (net-pair-decomp-insert net6 pair-key))
+
+;; --- PVec(elem-type) — 1 sub-cell ---
+
+(define (make-1-reconstructor parent-cell sub-cell ctor)
+  (lambda (net)
+    (define sv (net-cell-read net sub-cell))
+    (cond
+      [(type-bot? sv) net]
+      [(type-top? sv) (net-cell-write net parent-cell type-top)]
+      [else (net-cell-write net parent-cell (ctor sv))])))
+
+(define (decompose-1 net cell-a cell-b va vb unified pair-key tag pred? accessor ctor)
+  (define src-a (if (pred? va) va unified))
+  (define src-b (if (pred? vb) vb unified))
+  (define-values (net1 subs-a)
+    (get-or-create-sub-cells net cell-a tag (list (accessor src-a))))
+  (define-values (net2 subs-b)
+    (get-or-create-sub-cells net1 cell-b tag (list (accessor src-b))))
+  (define sub-a (car subs-a))
+  (define sub-b (car subs-b))
+  (define-values (net3 _p1)
+    (if (equal? sub-a sub-b) (values net2 #f)
+        (net-add-propagator net2 (list sub-a sub-b) (list sub-a sub-b)
+          (make-structural-unify-propagator sub-a sub-b))))
+  (define-values (net4 _p2)
+    (net-add-propagator net3 (list sub-a) (list cell-a)
+      (make-1-reconstructor cell-a sub-a ctor)))
+  (define-values (net5 _p3)
+    (net-add-propagator net4 (list sub-b) (list cell-b)
+      (make-1-reconstructor cell-b sub-b ctor)))
+  (net-pair-decomp-insert net5 pair-key))
+
+;; --- Map(k-type, v-type) — 2 sub-cells ---
+
+(define (make-map-reconstructor parent-cell k-cell v-cell)
+  (lambda (net)
+    (define kv (net-cell-read net k-cell))
+    (define vv (net-cell-read net v-cell))
+    (cond
+      [(or (type-bot? kv) (type-bot? vv)) net]
+      [(or (type-top? kv) (type-top? vv))
+       (net-cell-write net parent-cell type-top)]
+      [else
+       (net-cell-write net parent-cell (expr-Map kv vv))])))
+
+(define (decompose-map net cell-a cell-b va vb unified pair-key)
+  (define src-a (if (expr-Map? va) va unified))
+  (define src-b (if (expr-Map? vb) vb unified))
+  (define-values (net1 subs-a)
+    (get-or-create-sub-cells net cell-a 'Map
+      (list (expr-Map-k-type src-a) (expr-Map-v-type src-a))))
+  (define-values (net2 subs-b)
+    (get-or-create-sub-cells net1 cell-b 'Map
+      (list (expr-Map-k-type src-b) (expr-Map-v-type src-b))))
+  (define k-a (car subs-a)) (define v-a (cadr subs-a))
+  (define k-b (car subs-b)) (define v-b (cadr subs-b))
+  (define-values (net3 _p1)
+    (if (equal? k-a k-b) (values net2 #f)
+        (net-add-propagator net2 (list k-a k-b) (list k-a k-b)
+          (make-structural-unify-propagator k-a k-b))))
+  (define-values (net4 _p2)
+    (if (equal? v-a v-b) (values net3 #f)
+        (net-add-propagator net3 (list v-a v-b) (list v-a v-b)
+          (make-structural-unify-propagator v-a v-b))))
+  (define-values (net5 _p3)
+    (net-add-propagator net4 (list k-a v-a) (list cell-a)
+      (make-map-reconstructor cell-a k-a v-a)))
+  (define-values (net6 _p4)
+    (net-add-propagator net5 (list k-b v-b) (list cell-b)
+      (make-map-reconstructor cell-b k-b v-b)))
+  (net-pair-decomp-insert net6 pair-key))
+
+;; --- pair(fst, snd) — 2 sub-cells ---
+
+(define (make-pair-reconstructor parent-cell fst-cell snd-cell)
+  (lambda (net)
+    (define fv (net-cell-read net fst-cell))
+    (define sv (net-cell-read net snd-cell))
+    (cond
+      [(or (type-bot? fv) (type-bot? sv)) net]
+      [(or (type-top? fv) (type-top? sv))
+       (net-cell-write net parent-cell type-top)]
+      [else
+       (net-cell-write net parent-cell (expr-pair fv sv))])))
+
+(define (decompose-pair net cell-a cell-b va vb unified pair-key)
+  (define src-a (if (expr-pair? va) va unified))
+  (define src-b (if (expr-pair? vb) vb unified))
+  (define-values (net1 subs-a)
+    (get-or-create-sub-cells net cell-a 'pair
+      (list (expr-pair-fst src-a) (expr-pair-snd src-a))))
+  (define-values (net2 subs-b)
+    (get-or-create-sub-cells net1 cell-b 'pair
+      (list (expr-pair-fst src-b) (expr-pair-snd src-b))))
+  (define fst-a (car subs-a)) (define snd-a (cadr subs-a))
+  (define fst-b (car subs-b)) (define snd-b (cadr subs-b))
+  (define-values (net3 _p1)
+    (if (equal? fst-a fst-b) (values net2 #f)
+        (net-add-propagator net2 (list fst-a fst-b) (list fst-a fst-b)
+          (make-structural-unify-propagator fst-a fst-b))))
+  (define-values (net4 _p2)
+    (if (equal? snd-a snd-b) (values net3 #f)
+        (net-add-propagator net3 (list snd-a snd-b) (list snd-a snd-b)
+          (make-structural-unify-propagator snd-a snd-b))))
+  (define-values (net5 _p3)
+    (net-add-propagator net4 (list fst-a snd-a) (list cell-a)
+      (make-pair-reconstructor cell-a fst-a snd-a)))
+  (define-values (net6 _p4)
+    (net-add-propagator net5 (list fst-b snd-b) (list cell-b)
+      (make-pair-reconstructor cell-b fst-b snd-b)))
+  (net-pair-decomp-insert net6 pair-key))
+
+;; --- lam(mult, type, body) — 2 sub-cells (type + body; mult via imperative path) ---
+
+(define (make-lam-reconstructor parent-cell mult type-cell body-cell)
+  (lambda (net)
+    (define tv (net-cell-read net type-cell))
+    (define bv (net-cell-read net body-cell))
+    (cond
+      [(or (type-bot? tv) (type-bot? bv)) net]
+      [(or (type-top? tv) (type-top? bv))
+       (net-cell-write net parent-cell type-top)]
+      [else
+       (net-cell-write net parent-cell (expr-lam mult tv bv))])))
+
+(define (decompose-lam net cell-a cell-b va vb unified pair-key)
+  (define src-a (if (expr-lam? va) va unified))
+  (define src-b (if (expr-lam? vb) vb unified))
+  (define mult-a (expr-lam-mult src-a))
+  (define mult-b (expr-lam-mult src-b))
+  (define-values (net1 subs-a)
+    (get-or-create-sub-cells net cell-a 'lam
+      (list (expr-lam-type src-a) (expr-lam-body src-a))))
+  (define-values (net2 subs-b)
+    (get-or-create-sub-cells net1 cell-b 'lam
+      (list (expr-lam-type src-b) (expr-lam-body src-b))))
+  (define type-a (car subs-a)) (define body-a (cadr subs-a))
+  (define type-b (car subs-b)) (define body-b (cadr subs-b))
+  (define-values (net3 _p1)
+    (if (equal? type-a type-b) (values net2 #f)
+        (net-add-propagator net2 (list type-a type-b) (list type-a type-b)
+          (make-structural-unify-propagator type-a type-b))))
+  (define-values (net4 _p2)
+    (if (equal? body-a body-b) (values net3 #f)
+        (net-add-propagator net3 (list body-a body-b) (list body-a body-b)
+          (make-structural-unify-propagator body-a body-b))))
+  (define-values (net5 _p3)
+    (net-add-propagator net4 (list type-a body-a) (list cell-a)
+      (make-lam-reconstructor cell-a mult-a type-a body-a)))
+  (define-values (net6 _p4)
+    (net-add-propagator net5 (list type-b body-b) (list cell-b)
+      (make-lam-reconstructor cell-b mult-b type-b body-b)))
+  (net-pair-decomp-insert net6 pair-key))
+
 ;; Dispatch to constructor-specific decomposer if unified value is compound.
 ;; Checks pair-decomps registry to avoid duplicate decomposition.
 (define (maybe-decompose net cell-a cell-b va vb unified)
@@ -472,9 +771,20 @@
        [(net-pair-decomp? net pair-key) net]  ;; Already decomposed for this pair
        [else
         (case tag
-          [(Pi)  (decompose-pi  net cell-a cell-b va vb unified pair-key)]
-          [(app) (decompose-app net cell-a cell-b va vb unified pair-key)]
-          ;; Phase 4c-c: Sigma, Eq, Vec, PVec, Set, Map, pair, suc, lam
+          [(Pi)    (decompose-pi    net cell-a cell-b va vb unified pair-key)]
+          [(app)   (decompose-app   net cell-a cell-b va vb unified pair-key)]
+          [(Sigma) (decompose-sigma net cell-a cell-b va vb unified pair-key)]
+          [(Eq)    (decompose-eq    net cell-a cell-b va vb unified pair-key)]
+          [(Vec)   (decompose-vec   net cell-a cell-b va vb unified pair-key)]
+          [(PVec)  (decompose-1     net cell-a cell-b va vb unified pair-key
+                     'PVec expr-PVec? expr-PVec-elem-type expr-PVec)]
+          [(Set)   (decompose-1     net cell-a cell-b va vb unified pair-key
+                     'Set expr-Set? expr-Set-elem-type expr-Set)]
+          [(Map)   (decompose-map   net cell-a cell-b va vb unified pair-key)]
+          [(pair)  (decompose-pair  net cell-a cell-b va vb unified pair-key)]
+          [(suc)   (decompose-1     net cell-a cell-b va vb unified pair-key
+                     'suc expr-suc? expr-suc-pred expr-suc)]
+          [(lam)   (decompose-lam   net cell-a cell-b va vb unified pair-key)]
           [else net])])]))
 
 ;; Structural unify propagator: replacement for make-unify-propagator.
