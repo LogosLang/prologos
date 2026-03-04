@@ -125,6 +125,8 @@
  ;; P5b: Multiplicity cell callbacks
  current-prop-fresh-mult-cell
  current-prop-mult-cell-write
+ ;; P1-G2: Network contradiction check
+ current-prop-has-contradiction?
  ;; Propagator quiescence + rewrap (used by solve-meta!)
  current-prop-run-quiescence
  current-prop-unwrap-net
@@ -521,6 +523,10 @@
 ;; P5b: Multiplicity cell callbacks
 (define current-prop-fresh-mult-cell (make-parameter #f))   ;; (enet source → (values enet* cell-id))
 (define current-prop-mult-cell-write (make-parameter #f))   ;; (enet cell-id value → enet*)
+
+;; P1-G2: Network contradiction check (set by driver.rkt).
+;; Returns #t if the current propagator network has a contradiction, #f otherwise.
+(define current-prop-has-contradiction? (make-parameter #f))  ;; (→ boolean)
 
 ;; Propagator quiescence callbacks (set by driver.rkt).
 ;; current-prop-run-quiescence: (prop-network → prop-network) — runs scheduler.

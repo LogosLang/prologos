@@ -1375,6 +1375,14 @@
 (current-prop-fresh-mult-cell elab-fresh-mult-cell)
 (current-prop-mult-cell-write elab-mult-cell-write)
 
+;; P1-G2: Install contradiction check callback
+(current-prop-has-contradiction?
+ (lambda ()
+   (define net-box (current-prop-net-box))
+   (and net-box
+        (let ([enet (unbox net-box)])
+          (net-contradiction? (elab-network-prop-net enet))))))
+
 ;; Phase E2: Install propagator-driven constraint wakeup.
 ;; When solve-meta! writes to a cell, the propagator network is run to
 ;; quiescence, handling transitive constraint propagation automatically.

@@ -33,6 +33,8 @@
          "performance-counters.rkt")
 
 (provide unify unify-ok? occurs?
+         ;; P1-G2: Propagator-aware unification wrapper
+         unify* unify*-ok?
          ;; Sprint 2b exports
          decompose-meta-app pattern-check invert-args
          ;; Union type helpers
@@ -595,6 +597,36 @@
            (begin (solve-mult-meta! (mult-meta-id m2) m1) #t)))]
     ;; Concrete mismatch
     [else #f]))
+
+;; ========================================
+;; P1-G2: Propagator-Aware Unification Wrapper
+;; ========================================
+;;
+;; unify*(ctx, t1, t2) → #t | 'postponed | #f
+;;
+;; Same semantics as `unify`, but with post-call propagator network
+;; consistency checking. After `unify` runs (which may call solve-meta!
+;; which runs quiescence), check the propagator network for:
+;; 1. Contradictions not caught by the imperative path → downgrade to #f
+;; 2. Solved constraints via transitive propagation → upgrade 'postponed → #t
+;;
+;; Phase G2: structural consistency check (contradiction detection)
+;; Phase G3: meta-bearing upgrade ('postponed → #t when cell solved)
+
+(define (unify* ctx t1 t2)
+  (define result (unify ctx t1 t2))
+  ;; Post-unification consistency check with propagator network.
+  ;; Quiescence already ran inside solve-meta! (if any metas were solved).
+  ;; We just check if a network contradiction was detected.
+  (define check-fn (current-prop-has-contradiction?))
+  (cond
+    [(not check-fn) result]  ;; No network (test context) → pass through
+    ;; If unify said #t or 'postponed but network has contradiction → downgrade to #f
+    [(and (not (eq? result #f)) (check-fn)) #f]
+    ;; Otherwise return unify's result (G3 will add upgrade logic for 'postponed → #t)
+    [else result]))
+
+(define (unify*-ok? result) (not (eq? result #f)))
 
 ;; ========================================
 ;; Sprint 5: Install constraint retry callback
