@@ -634,7 +634,21 @@
   (when (and net-box write-fn)
     (define cid (prop-meta-id->cell-id id))
     (when cid
-      (set-box! net-box (write-fn (unbox net-box) cid solution))))
+      (set-box! net-box (write-fn (unbox net-box) cid solution))
+      ;; P-U2b: Post-write consistency validation.
+      ;; After writing solution to cell, read it back and verify it matches.
+      ;; A mismatch would indicate a lattice merge conflict (cell had a prior
+      ;; value that doesn't unify with solution). Log as advisory — the
+      ;; propagator contradiction check will catch actual errors.
+      (define read-fn (current-prop-cell-read))
+      (when read-fn
+        (define cell-val (read-fn (unbox net-box) cid))
+        (when (and cell-val
+                   (not (equal? cell-val solution))
+                   ;; Don't flag bot/top — those are expected lattice states
+                   (not (prop-type-bot? cell-val))
+                   (not (prop-type-top? cell-val)))
+          (perf-inc-cell-write-mismatch!)))))
   ;; P1-E3c: Constraint retry — propagator path when network available,
   ;; legacy wakeup registry only for test contexts without a network.
   (cond

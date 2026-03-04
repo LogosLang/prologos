@@ -61,6 +61,8 @@
  perf-inc-constraint-shadow-mismatch!
  ;; GDE-4: Diagnosis counter
  perf-inc-gde-diagnosis!
+ ;; P-U2b: Cell-write consistency counter
+ perf-inc-cell-write-mismatch!
  provenance-counters->hasheq
  print-provenance-report!)
 
@@ -302,7 +304,8 @@
    atms-nogood-count
    provenance-chain-count
    constraint-shadow-mismatches   ;; P1-E3b: cell-path vs legacy divergences
-   gde-diagnosis-count)           ;; GDE-4: diagnoses computed
+   gde-diagnosis-count            ;; GDE-4: diagnoses computed
+   cell-write-mismatches)         ;; P-U2b: cell value ≠ solution after write
   #:mutable #:transparent)
 
 (define current-provenance-counters (make-parameter #f))
@@ -337,13 +340,19 @@
     (when pv (set-provenance-counters-gde-diagnosis-count!
               pv (add1 (provenance-counters-gde-diagnosis-count pv))))))
 
+(define-syntax-rule (perf-inc-cell-write-mismatch!)
+  (let ([pv (current-provenance-counters)])
+    (when pv (set-provenance-counters-cell-write-mismatches!
+              pv (add1 (provenance-counters-cell-write-mismatches pv))))))
+
 (define (provenance-counters->hasheq pv)
   (hasheq 'speculation_count       (provenance-counters-speculation-count pv)
           'atms_hypothesis_count   (provenance-counters-atms-hypothesis-count pv)
           'atms_nogood_count       (provenance-counters-atms-nogood-count pv)
           'provenance_chain_count  (provenance-counters-provenance-chain-count pv)
           'constraint_shadow_mismatches (provenance-counters-constraint-shadow-mismatches pv)
-          'gde_diagnosis_count     (provenance-counters-gde-diagnosis-count pv)))
+          'gde_diagnosis_count     (provenance-counters-gde-diagnosis-count pv)
+          'cell_write_mismatches   (provenance-counters-cell-write-mismatches pv)))
 
 (define (print-provenance-report! pv)
   (define h (provenance-counters->hasheq pv))
