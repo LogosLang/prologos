@@ -2590,6 +2590,18 @@
        [(session)
         (parse-session args loc)]
 
+       ;; (defproc Name : SessionType Body) — named process definition
+       [(defproc)
+        (parse-defproc args loc)]
+
+       ;; (proc : SessionType Body) — anonymous process
+       [(proc)
+        (parse-proc args loc)]
+
+       ;; (dual SessionRef) — dual session type
+       [(dual)
+        (parse-dual args loc)]
+
        ;; ---- Relational language (Phase 7) ----
 
        ;; (defr name [params] body...) — relation definition
@@ -4784,6 +4796,255 @@
                       (surf-sess-branch label cont loc))))]
            [else
             (parse-error loc (format "Branch must be (label body), got ~a" bd) #f)])))
+     (define err (findf prologos-error? branches))
+     (if err err branches)]))
+
+;; ========================================
+;; Parse defproc: (defproc Name : SessionType Body)
+;; Also: (defproc Name [ch1 : S1, ch2 : S2] Body)
+;; ========================================
+
+(define (parse-defproc args loc)
+  (cond
+    [(< (length args) 2)
+     (parse-error loc "defproc requires at least a name and body" #f)]
+    [else
+     (define name (stx->datum (car args)))
+     (unless (symbol? name)
+       (parse-error loc (format "defproc: expected name, got ~a" name) #f))
+     (define rest (cdr args))
+     ;; Check for session type annotation: (defproc Name : SessionType Body)
+     ;; or multi-channel: (defproc Name [ch : S, ...] Body)
+     (define-values (session-type channels remaining)
+       (parse-defproc-header rest loc))
+     (cond
+       [(prologos-error? session-type) session-type]
+       [(null? remaining)
+        (parse-error loc "defproc: missing process body" #f)]
+       [else
+        (define body (parse-proc-body (car remaining) loc))
+        (if (prologos-error? body) body
+            (surf-defproc name session-type channels '() body loc))])]))
+
+;; Parse the defproc header after the name.
+;; Returns (values session-type channels remaining-args).
+;; session-type: parsed session type expression, or #f
+;; channels: list of (cons name session-type), or '()
+;; remaining-args: the rest after header
+(define (parse-defproc-header args loc)
+  (cond
+    [(null? args) (values #f '() '())]
+    [else
+     (define first-d (stx->datum (car args)))
+     (cond
+       ;; Colon means session type annotation: : SessionType Body
+       [(eq? first-d ':)
+        (cond
+          [(< (length args) 3)
+           (values (parse-error loc "defproc: expected session type after ':'" #f) '() '())]
+          [else
+           (define sess-type (parse-datum (cadr args)))
+           (values sess-type '() (cddr args))])]
+       ;; No colon — treat remaining as body
+       [else
+        (values #f '() args)])]))
+
+;; (proc : SessionType Body) — anonymous process
+(define (parse-proc args loc)
+  (cond
+    [(null? args)
+     (parse-error loc "proc requires a body" #f)]
+    [else
+     (define first-d (stx->datum (car args)))
+     (cond
+       ;; (proc : SessionType Body)
+       [(eq? first-d ':)
+        (cond
+          [(< (length args) 3)
+           (parse-error loc "proc: expected session type and body after ':'" #f)]
+          [else
+           (define sess-type (parse-datum (cadr args)))
+           (if (prologos-error? sess-type) sess-type
+               (let ([body (parse-proc-body (caddr args) loc)])
+                 (if (prologos-error? body) body
+                     (surf-proc sess-type '() '() body loc))))])]
+       ;; (proc Body) — no session type annotation
+       [else
+        (define body (parse-proc-body (car args) loc))
+        (if (prologos-error? body) body
+            (surf-proc #f '() '() body loc))])]))
+
+;; (dual SessionRef) — dual of a session type
+(define (parse-dual args loc)
+  (cond
+    [(not (= (length args) 1))
+     (parse-error loc "dual requires exactly one argument: (dual SessionRef)" #f)]
+    [else
+     (define ref (parse-datum (car args)))
+     (if (prologos-error? ref) ref
+         (surf-dual ref loc))]))
+
+;; ========================================
+;; Parse process body (recursive descent)
+;; ========================================
+;; Process body forms (sexp mode):
+;;   (proc-send Chan Expr Cont)
+;;   (proc-recv Chan Var Cont)
+;;   (proc-sel Chan :Label Cont)
+;;   (proc-case Chan ((:l1 P1) (:l2 P2) ...))
+;;   (proc-stop)
+;;   (proc-new Session (proc-par P1 P2))
+;;   (proc-par P1 P2)
+;;   (proc-link C1 C2)
+;;   (proc-rec Label)
+
+(define (parse-proc-body stx loc)
+  (define d (stx->datum stx))
+  (define stx-loc (datum-srcloc stx))
+  (define use-loc (if (equal? stx-loc srcloc-unknown) loc stx-loc))
+  (cond
+    ;; Bare symbol: proc-stop or proc-rec
+    [(symbol? d)
+     (case d
+       [(proc-stop stop) (surf-proc-stop use-loc)]
+       [else (parse-error use-loc (format "Unknown process body atom: ~a" d) #f)])]
+    ;; List form
+    [(pair? d)
+     (define head-stx (car d))
+     (define head (if (syntax? head-stx) (syntax-e head-stx) head-stx))
+     (define args* (cdr d))
+     (define body-args
+       (map (lambda (x) (if (syntax? x) x (datum->syntax #f x stx)))
+            args*))
+     (case head
+       ;; (proc-send Chan Expr Cont)
+       [(proc-send)
+        (cond
+          [(not (= (length body-args) 3))
+           (parse-error use-loc "proc-send requires 3 arguments: (proc-send Chan Expr Cont)" #f)]
+          [else
+           (define chan (stx->datum (car body-args)))
+           (define expr (parse-datum (cadr body-args)))
+           (if (prologos-error? expr) expr
+               (let ([cont (parse-proc-body (caddr body-args) use-loc)])
+                 (if (prologos-error? cont) cont
+                     (surf-proc-send chan expr cont use-loc))))])]
+       ;; (proc-recv Chan Var Cont)
+       [(proc-recv)
+        (cond
+          [(not (= (length body-args) 3))
+           (parse-error use-loc "proc-recv requires 3 arguments: (proc-recv Chan Var Cont)" #f)]
+          [else
+           (define chan (stx->datum (car body-args)))
+           (define var (stx->datum (cadr body-args)))
+           (define cont (parse-proc-body (caddr body-args) use-loc))
+           (if (prologos-error? cont) cont
+               (surf-proc-recv var chan cont use-loc))])]
+       ;; (proc-sel Chan :Label Cont)
+       [(proc-sel)
+        (cond
+          [(not (= (length body-args) 3))
+           (parse-error use-loc "proc-sel requires 3 arguments: (proc-sel Chan :Label Cont)" #f)]
+          [else
+           (define chan (stx->datum (car body-args)))
+           (define label-raw (stx->datum (cadr body-args)))
+           (define label
+             (cond
+               [(keyword? label-raw) (string->symbol (keyword->string label-raw))]
+               [(symbol? label-raw) label-raw]
+               [else (parse-error use-loc (format "proc-sel: label must be keyword or symbol, got ~a" label-raw) #f)]))
+           (if (prologos-error? label) label
+               (let ([cont (parse-proc-body (caddr body-args) use-loc)])
+                 (if (prologos-error? cont) cont
+                     (surf-proc-select chan label cont use-loc))))])]
+       ;; (proc-case Chan ((:l1 P1) (:l2 P2) ...))
+       [(proc-case)
+        (cond
+          [(not (= (length body-args) 2))
+           (parse-error use-loc "proc-case requires 2 arguments: (proc-case Chan Branches)" #f)]
+          [else
+           (define chan (stx->datum (car body-args)))
+           (define branches (parse-proc-branches (cadr body-args) use-loc))
+           (if (prologos-error? branches) branches
+               (surf-proc-offer chan branches use-loc))])]
+       ;; (proc-stop)
+       [(proc-stop)
+        (cond
+          [(not (null? body-args))
+           (parse-error use-loc "proc-stop takes no arguments" #f)]
+          [else (surf-proc-stop use-loc)])]
+       ;; (proc-new Session Body)
+       [(proc-new)
+        (cond
+          [(not (= (length body-args) 2))
+           (parse-error use-loc "proc-new requires 2 arguments: (proc-new Session Body)" #f)]
+          [else
+           (define sess (parse-datum (car body-args)))
+           (if (prologos-error? sess) sess
+               (let ([body (parse-proc-body (cadr body-args) use-loc)])
+                 (if (prologos-error? body) body
+                     (surf-proc-new '() sess body use-loc))))])]
+       ;; (proc-par P1 P2)
+       [(proc-par)
+        (cond
+          [(not (= (length body-args) 2))
+           (parse-error use-loc "proc-par requires 2 arguments: (proc-par P1 P2)" #f)]
+          [else
+           (define left (parse-proc-body (car body-args) use-loc))
+           (if (prologos-error? left) left
+               (let ([right (parse-proc-body (cadr body-args) use-loc)])
+                 (if (prologos-error? right) right
+                     (surf-proc-par left right use-loc))))])]
+       ;; (proc-link C1 C2)
+       [(proc-link)
+        (cond
+          [(not (= (length body-args) 2))
+           (parse-error use-loc "proc-link requires 2 arguments: (proc-link C1 C2)" #f)]
+          [else
+           (define c1 (stx->datum (car body-args)))
+           (define c2 (stx->datum (cadr body-args)))
+           (surf-proc-link c1 c2 use-loc)])]
+       ;; (proc-rec Label)
+       [(proc-rec)
+        (cond
+          [(not (= (length body-args) 1))
+           (parse-error use-loc "proc-rec requires 1 argument: (proc-rec Label)" #f)]
+          [else
+           (define label (stx->datum (car body-args)))
+           (surf-proc-rec label use-loc)])]
+       [else
+        (parse-error use-loc (format "Unknown process body form: ~a" head) #f)])]
+    [else
+     (parse-error use-loc (format "Invalid process body: ~a" d) #f)]))
+
+;; Parse process branch list: ((:l1 P1) (:l2 P2) ...)
+(define (parse-proc-branches stx loc)
+  (define d (stx->datum stx))
+  (cond
+    [(not (pair? d))
+     (parse-error loc "Expected list of process branches" #f)]
+    [else
+     (define branches
+       (for/list ([branch-stx (in-list (if (list? d) d (list d)))])
+         (define bd (if (syntax? branch-stx) (stx->datum branch-stx) branch-stx))
+         (cond
+           [(and (pair? bd) (>= (length bd) 2))
+            (define label-raw (let ([x (car bd)])
+                                (if (syntax? x) (syntax-e x) x)))
+            (define label
+              (cond
+                [(keyword? label-raw) (string->symbol (keyword->string label-raw))]
+                [(symbol? label-raw) label-raw]
+                [else (parse-error loc (format "Process branch label must be keyword or symbol, got ~a" label-raw) #f)]))
+            (if (prologos-error? label) label
+                (let ([body (parse-proc-body
+                             (let ([x (cadr bd)])
+                               (if (syntax? x) x (datum->syntax #f x stx)))
+                             loc)])
+                  (if (prologos-error? body) body
+                      (surf-proc-offer-branch label body loc))))]
+           [else
+            (parse-error loc (format "Process branch must be (label body), got ~a" bd) #f)])))
      (define err (findf prologos-error? branches))
      (if err err branches)]))
 
