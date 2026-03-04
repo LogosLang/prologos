@@ -99,6 +99,8 @@
  register-trait-constraint!
  lookup-trait-constraint
  install-trait-resolve-callback!
+ retry-traits-via-cells!
+ current-trait-cell-map
  ;; Phase 4: Capability constraint tracking
  (struct-out capability-constraint-info)
  current-capability-constraint-map
@@ -214,6 +216,10 @@
 (define (install-trait-resolve-callback! resolve-fn)
   (current-retry-trait-resolve resolve-fn))
 
+;; P3a: Trait constraint → cell-ids mapping for cell-state-driven resolution.
+;; Maps dict-meta-id → (listof cell-id) for type-arg metas.
+(define current-trait-cell-map (make-parameter (make-hasheq)))
+
 ;; Register a trait constraint and build wakeup index for incremental resolution.
 (define (register-trait-constraint! meta-id info)
   (hash-set! (current-trait-constraint-map) meta-id info)
@@ -223,7 +229,19 @@
   (define wakeup (current-trait-wakeup-map))
   (for ([ta-id (in-list type-arg-metas)])
     (define existing (hash-ref wakeup ta-id '()))
-    (hash-set! wakeup ta-id (cons meta-id existing))))
+    (hash-set! wakeup ta-id (cons meta-id existing)))
+  ;; P3a: Record cell-ids for type-arg metas for cell-state-driven resolution.
+  (define id-map-box (current-prop-id-map-box))
+  (when id-map-box
+    (define id-map (unbox id-map-box))
+    (define cell-ids
+      (for*/list ([ta-id (in-list type-arg-metas)]
+                  [cid (in-value (champ-lookup id-map (prop-meta-id-hash ta-id) ta-id))]
+                  #:when (not (eq? cid 'none)))
+        cid))
+    (when (not (null? cell-ids))
+      (hash-set! (current-trait-cell-map) meta-id
+                 (remove-duplicates cell-ids eq?)))))
 
 (define (lookup-trait-constraint meta-id)
   (hash-ref (current-trait-constraint-map) meta-id #f))
@@ -326,6 +344,29 @@
         (define tc-info (hash-ref (current-trait-constraint-map) dict-id #f))
         (when tc-info
           (resolve-fn dict-id tc-info))))))
+
+;; P3a: Retry trait resolution using propagator cell state.
+;; After run-to-quiescence, scans ALL trait constraints whose type-arg cells
+;; have become non-bot. This captures transitive propagation that the wakeup
+;; map might miss (e.g., if a type-arg meta was solved indirectly via network).
+(define (retry-traits-via-cells!)
+  (define resolve-fn (current-retry-trait-resolve))
+  (define net-box (current-prop-net-box))
+  (define read-fn (current-prop-cell-read))
+  (when (and resolve-fn net-box read-fn)
+    (define enet (unbox net-box))
+    (define tcm (current-trait-cell-map))
+    (for ([(dict-id cell-ids) (in-hash tcm)])
+      (unless (meta-solved? dict-id)
+        (define tc-info (hash-ref (current-trait-constraint-map) dict-id #f))
+        (when tc-info
+          ;; Check if any type-arg cell has become non-bot
+          (define any-solved?
+            (for/or ([cid (in-list cell-ids)])
+              (let ([v (read-fn enet cid)])
+                (and (not (prop-type-bot? v)) (not (prop-type-top? v))))))
+          (when any-solved?
+            (resolve-fn dict-id tc-info)))))))
 
 ;; Create a postponed constraint, add to global store, register for wakeup.
 ;; Phase 8b: Also adds unify propagators on the network between cells
@@ -522,6 +563,7 @@
                  [current-wakeup-registry (make-hasheq)]
                  [current-trait-constraint-map (make-hasheq)]
                  [current-trait-wakeup-map (make-hasheq)]
+                 [current-trait-cell-map (make-hasheq)]
                  [current-prop-meta-info-box (box champ-empty)]
                  [current-prop-net-box #f]
                  [current-prop-id-map-box #f]
@@ -597,8 +639,10 @@
     [else
      ;; Fallback for test contexts without propagator network
      (retry-constraints-for-meta! id)])
-  ;; Phase C: try incremental trait resolution for trait constraints
-  ;; referencing this meta as a type-arg (always runs — not yet propagator-driven)
+  ;; Trait resolution: cell-state-driven path (propagator) + legacy wakeup.
+  ;; P3a: Cell-state path captures transitive propagation via the network.
+  (retry-traits-via-cells!)
+  ;; Legacy wakeup map path (still runs as secondary for P3a shadow phase)
   (retry-trait-for-meta! id))
 
 ;; Check if a metavariable has been solved.
@@ -871,6 +915,7 @@
   (hash-clear! (current-sess-meta-store))
   (hash-clear! (current-trait-constraint-map))
   (hash-clear! (current-trait-wakeup-map))
+  (hash-clear! (current-trait-cell-map))
   (reset-constraint-store!)
   ;; Always reset CHAMP meta-info + auxiliary boxes
   (define mi-box (current-prop-meta-info-box))
