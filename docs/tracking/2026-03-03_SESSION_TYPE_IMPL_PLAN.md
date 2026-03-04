@@ -20,10 +20,10 @@
 | S2 | S2b: Sexp-mode process parser | ✅ | `8c750b2` | 17 tests |
 | S2 | S2c: WS-mode process preparse | ⏳ | `bc6a961` | Stub pass-through; full disambiguation deferred |
 | S2 | S2d: Process macro pass-through | ✅ | `56fe397` | Combined with S1e |
-| S3 | S3a: Session elaboration | ☐ | | |
-| S3 | S3b: Process elaboration | ☐ | | |
-| S3 | S3c: `throws` desugaring | ☐ | | |
-| S3 | S3d: Driver + pretty-printing | ☐ | | |
+| S3 | S3a: Session elaboration | ✅ | `79ced0d` | Session registry + elaborate-session-body |
+| S3 | S3b: Process elaboration | ✅ | `79ced0d` | elaborate-proc-body + proc branches |
+| S3 | S3c: `throws` desugaring | ⏳ | | Deferred: needs capability integration (S5) |
+| S3 | S3d: Driver + pretty-printing | ✅ | `a15cb7f` `7a2d6e5` | 19 tests, pp-process, unannotated recv fix |
 | S4 | S4a: Session lattice | ☐ | | |
 | S4 | S4b: Session inference propagators | ☐ | | |
 | S4 | S4c: Duality bidirectional prop | ☐ | | |
