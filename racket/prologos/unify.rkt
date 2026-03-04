@@ -614,16 +614,28 @@
 ;; Phase G3: meta-bearing upgrade ('postponed → #t when cell solved)
 
 (define (unify* ctx t1 t2)
+  ;; P1-G3: Snapshot constraint store to detect solved-via-quiescence.
+  (define pre-store (current-constraint-store))
   (define result (unify ctx t1 t2))
   ;; Post-unification consistency check with propagator network.
   ;; Quiescence already ran inside solve-meta! (if any metas were solved).
-  ;; We just check if a network contradiction was detected.
   (define check-fn (current-prop-has-contradiction?))
   (cond
     [(not check-fn) result]  ;; No network (test context) → pass through
     ;; If unify said #t or 'postponed but network has contradiction → downgrade to #f
     [(and (not (eq? result #f)) (check-fn)) #f]
-    ;; Otherwise return unify's result (G3 will add upgrade logic for 'postponed → #t)
+    ;; P1-G3: If unify returned 'postponed, check if quiescence resolved
+    ;; the constraint via transitive propagation. If the most recent constraint
+    ;; added during this call was solved by retry-via-cells, upgrade to #t.
+    [(eq? result 'postponed)
+     (define post-store (current-constraint-store))
+     (cond
+       ;; A new constraint was added (post-store is longer than pre-store)
+       [(and (pair? post-store)
+             (not (eq? post-store pre-store))
+             (eq? (constraint-status (car post-store)) 'solved))
+        #t]  ;; Upgrade: constraint was resolved by quiescence
+       [else 'postponed])]
     [else result]))
 
 (define (unify*-ok? result) (not (eq? result #f)))

@@ -181,3 +181,78 @@
   (check-true (unify*-ok? #t))
   (check-true (unify*-ok? 'postponed))
   (check-false (unify*-ok? #f)))
+
+;; ========================================
+;; P1-G3: Meta-bearing upgrade tests
+;; ========================================
+;; Verify that unify* correctly handles metavariable-bearing terms
+;; and that the propagator network participates in resolution.
+
+(test-case "g3/meta-vs-concrete-succeeds"
+  ;; Bare meta unified with concrete type → #t (meta gets solved)
+  (define result
+    (parameterize ([current-global-env shared-global-env]
+                   [current-ns-context shared-ns-context]
+                   [current-module-registry shared-module-reg]
+                   [current-trait-registry shared-trait-reg]
+                   [current-impl-registry shared-impl-reg]
+                   [current-param-impl-registry shared-param-impl-reg]
+                   [current-preparse-registry shared-preparse-reg]
+                   [current-capability-registry shared-cap-reg]
+                   [current-mult-meta-store (make-hasheq)]
+                   [current-lib-paths (list prelude-lib-dir)])
+      (install-module-loader!)
+      ;; fresh-meta returns (expr-meta id) — use directly
+      (define meta-expr (fresh-meta '() #f "test-g3-meta"))
+      (unify* '() meta-expr (expr-fvar 'Nat))))
+  (check-equal? result #t))
+
+(test-case "g3/meta-vs-meta-succeeds"
+  ;; Two bare unsolved metas → flex-flex: one solved to other → #t
+  (define result
+    (parameterize ([current-global-env shared-global-env]
+                   [current-ns-context shared-ns-context]
+                   [current-module-registry shared-module-reg]
+                   [current-trait-registry shared-trait-reg]
+                   [current-impl-registry shared-impl-reg]
+                   [current-param-impl-registry shared-param-impl-reg]
+                   [current-preparse-registry shared-preparse-reg]
+                   [current-capability-registry shared-cap-reg]
+                   [current-mult-meta-store (make-hasheq)]
+                   [current-lib-paths (list prelude-lib-dir)])
+      (install-module-loader!)
+      (define me1 (fresh-meta '() #f "test-g3-m1"))
+      (define me2 (fresh-meta '() #f "test-g3-m2"))
+      (unify* '() me1 me2)))
+  ;; flex-flex with bare metas: one gets solved to the other → #t
+  (check-equal? result #t))
+
+(test-case "g3/meta-in-pi-domain-succeeds"
+  ;; Pi with meta domain vs Pi with concrete domain → #t (meta solved)
+  (define result
+    (parameterize ([current-global-env shared-global-env]
+                   [current-ns-context shared-ns-context]
+                   [current-module-registry shared-module-reg]
+                   [current-trait-registry shared-trait-reg]
+                   [current-impl-registry shared-impl-reg]
+                   [current-param-impl-registry shared-param-impl-reg]
+                   [current-preparse-registry shared-preparse-reg]
+                   [current-capability-registry shared-cap-reg]
+                   [current-mult-meta-store (make-hasheq)]
+                   [current-lib-paths (list prelude-lib-dir)])
+      (install-module-loader!)
+      (define me (fresh-meta '() #f "test-g3-dom"))
+      (define pi-a (expr-Pi 'mw me (expr-fvar 'Bool)))
+      (define pi-b (expr-Pi 'mw (expr-fvar 'Nat) (expr-fvar 'Bool)))
+      (unify* '() pi-a pi-b)))
+  (check-equal? result #t))
+
+(test-case "g3/integration-polymorphic-app"
+  ;; Full integration: polymorphic function application exercises meta solving
+  (define result (run-last "eval [add 1N 2N]\n"))
+  (check-false (and result (prologos-error? result))))
+
+(test-case "g3/integration-type-annotation"
+  ;; Type annotation forces unification of declared vs inferred types
+  (define result (run-last "(the Nat (the Nat zero))\n"))
+  (check-false (and result (prologos-error? result))))
