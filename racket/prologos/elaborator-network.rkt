@@ -53,7 +53,9 @@
  elab-mult-cell-read
  elab-mult-cell-write
  ;; P5c: Cross-domain bridge (type ↔ multiplicity)
- elab-add-type-mult-bridge)
+ elab-add-type-mult-bridge
+ ;; Phase 4c: Structural decomposition support
+ current-structural-meta-lookup)
 
 ;; ========================================
 ;; Structs
@@ -246,6 +248,17 @@
 (define (elab-contradicted-cells enet)
   (define cid (prop-network-contradiction (elab-network-prop-net enet)))
   (if cid (list cid) '()))
+
+;; ========================================
+;; Phase 4c: Structural Decomposition Support
+;; ========================================
+;;
+;; Callback for identifying meta cells during structural decomposition.
+;; When a compound type (e.g., Pi(Nat, ?M)) is decomposed, the sub-cell for
+;; ?M should reuse the meta's existing propagator cell. This callback maps
+;; (expr-meta id) → cell-id (or #f for non-metas / unmapped metas).
+;; Set by driver.rkt to break circular dependency with metavar-store.rkt.
+(define current-structural-meta-lookup (make-parameter #f))
 
 ;; ========================================
 ;; P5b: Multiplicity Cells

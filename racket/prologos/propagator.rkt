@@ -60,7 +60,14 @@
  net-cell-write-widen
  run-to-quiescence-widen
  ;; Cross-domain propagation (Phase 6c)
- net-add-cross-domain-propagator)
+ net-add-cross-domain-propagator
+ ;; Structural decomposition registries (Phase 4c)
+ net-cell-decomp-lookup
+ net-cell-decomp-insert
+ net-pair-decomp?
+ net-pair-decomp-insert
+ decomp-key
+ decomp-key-hash)
 
 ;; ========================================
 ;; Structs
@@ -95,6 +102,10 @@
 ;; widen-fns: champ-root : cell-id → (cons widen-fn narrow-fn)
 ;;   where widen-fn : (old new → widened), narrow-fn : (old new → narrowed)
 ;;   Only cells designated as widening points have entries. (Phase 6a)
+;; cell-decomps: champ-root : cell-id → (cons constructor-tag (listof cell-id))
+;;   Per-cell sub-cell assignments for structural decomposition. (Phase 4c)
+;; pair-decomps: champ-root : (cons cell-id cell-id) → #t
+;;   Per-pair dedup: prevents duplicate sub-propagators between the same pair. (Phase 4c)
 (struct prop-network
   (cells
    propagators
@@ -105,7 +116,9 @@
    contradiction
    merge-fns
    contradiction-fns
-   widen-fns)
+   widen-fns
+   cell-decomps
+   pair-decomps)
   #:transparent)
 
 ;; ========================================
@@ -133,7 +146,9 @@
                 #f             ;; no contradiction
                 champ-empty    ;; merge-fns
                 champ-empty    ;; contradiction-fns
-                champ-empty))  ;; widen-fns
+                champ-empty    ;; widen-fns
+                champ-empty    ;; cell-decomps (Phase 4c)
+                champ-empty))  ;; pair-decomps (Phase 4c)
 
 ;; ========================================
 ;; Cell Operations
@@ -728,6 +743,56 @@
                        (prop-network-cells net))
                narrowed  ;; No change — converged
                (loop narrowed (+ rounds 1)))]))))
+
+;; ========================================
+;; Structural Decomposition Registries (Phase 4c)
+;; ========================================
+;;
+;; Support for structural decomposition propagators. When a unify propagator
+;; detects both cells have compound values with the same head constructor
+;; (e.g., Pi vs Pi), it decomposes into sub-cells + sub-propagators.
+;;
+;; Two registries prevent duplicate work:
+;;   cell-decomps: per-cell sub-cell assignments (reused across constraints)
+;;   pair-decomps: per-pair dedup (prevents duplicate sub-propagators)
+
+;; Canonical key for a cell pair: (cons smaller-id larger-id) by cell-id-n.
+(define (decomp-key cid-a cid-b)
+  (if (<= (cell-id-n cid-a) (cell-id-n cid-b))
+      (cons cid-a cid-b)
+      (cons cid-b cid-a)))
+
+;; Hash for decomp keys: combine the two cell-id hashes.
+(define (decomp-key-hash key)
+  (bitwise-xor (cell-id-hash (car key))
+               (* 31 (+ 1 (cell-id-hash (cdr key))))))
+
+;; Look up per-cell sub-cell assignments.
+;; Returns (cons constructor-tag (listof cell-id)) or 'none.
+(define (net-cell-decomp-lookup net cid)
+  (champ-lookup (prop-network-cell-decomps net) (cell-id-hash cid) cid))
+
+;; Register per-cell sub-cell assignments.
+;; tag: symbol (e.g., 'Pi, 'app, 'Sigma)
+;; sub-cells: (listof cell-id)
+(define (net-cell-decomp-insert net cid tag sub-cells)
+  (struct-copy prop-network net
+    [cell-decomps
+     (champ-insert (prop-network-cell-decomps net)
+                   (cell-id-hash cid) cid
+                   (cons tag sub-cells))]))
+
+;; Check if a cell pair has already been decomposed.
+(define (net-pair-decomp? net key)
+  (not (eq? 'none (champ-lookup (prop-network-pair-decomps net)
+                                 (decomp-key-hash key) key))))
+
+;; Register a cell pair as decomposed.
+(define (net-pair-decomp-insert net key)
+  (struct-copy prop-network net
+    [pair-decomps
+     (champ-insert (prop-network-pair-decomps net)
+                   (decomp-key-hash key) key #t)]))
 
 ;; ========================================
 ;; Cross-Domain Propagation (Phase 6c)

@@ -1409,6 +1409,15 @@
 ;; meta-solution is a pure read from propagator cell or CHAMP store.
 (install-lattice-meta-solution-fn! meta-solution)
 
+;; Phase 4c: Install structural decomposition meta-lookup callback.
+;; When a compound type is decomposed into sub-cells, bare metas (expr-meta id)
+;; should reuse the meta's existing propagator cell. This callback maps
+;; (expr-meta id) → cell-id, enabling sub-cell propagation to solve metas.
+(current-structural-meta-lookup
+ (lambda (e)
+   (and (expr-meta? e)
+        (prop-meta-id->cell-id (expr-meta-id e)))))
+
 ;; Phase C: Install incremental trait resolution callback.
 ;; When a type-arg meta is solved, this callback checks if the associated
 ;; trait constraint becomes resolvable (all type-args ground) and if so,

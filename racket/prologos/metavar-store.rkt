@@ -133,6 +133,8 @@
  current-prop-rewrap-net
  ;; P-U3c: Flush network quiescence (no-op if no network or worklist empty)
  maybe-flush-network!
+ ;; Phase 4c: Meta cell lookup (for structural decomposition propagators)
+ prop-meta-id->cell-id
  ;; Hash removal: test isolation helper
  with-fresh-meta-env)
 
