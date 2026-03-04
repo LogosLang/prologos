@@ -3281,9 +3281,9 @@
      ;; (the typing judgment handles binding semantics)
      (let ([cont (elaborate-proc-body cont-surf)])
        (if (prologos-error? cont) cont
-           ;; proc-recv takes (chan type cont) — type is filled at type-checking time
-           ;; We use a fresh session meta as placeholder type
-           (proc-recv chan (expr-Type 0) cont)))]
+           ;; proc-recv takes (chan type cont) — type annotation is #f when unspecified.
+           ;; The typing judgment infers the receive type from the session context.
+           (proc-recv chan #f cont)))]
 
     [(surf-proc-select chan label cont-surf _loc)
      (let ([cont (elaborate-proc-body cont-surf)])

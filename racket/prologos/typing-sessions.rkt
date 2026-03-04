@@ -148,22 +148,25 @@
          [_ #f]))]
 
     ;; ---- Receive: recv from c into x:A, continue as P ----
+    ;; a-annot is the type annotation from the process; #f means "infer from session".
     [(proc-recv c a-annot p)
      (let ([s (zonk-session (chan-ctx-lookup delta c))])
        (match s
          ;; Simple recv: c :: recv(A, S)
          [(sess-recv a s-cont)
-          (and (or (equal? a a-annot) (conv a a-annot))
+          (and (or (not a-annot) (equal? a a-annot) (conv a a-annot))
                (is-type gamma a)
                (type-proc (ctx-extend gamma a 'mw) (chan-ctx-update delta c s-cont) p))]
          ;; Dependent recv: c :: drecv(A, S)
          [(sess-drecv a s-cont)
-          (and (or (equal? a a-annot) (conv a a-annot))
+          (and (or (not a-annot) (equal? a a-annot) (conv a a-annot))
                (is-type gamma a)
                (type-proc (ctx-extend gamma a 'mw) (chan-ctx-update delta c s-cont) p))]
          ;; Sprint 8: sess-meta → infer session from operation
+         ;; Requires explicit annotation to solve the meta (can't infer from nothing).
          [(sess-meta id)
-          (and (is-type gamma a-annot)
+          (and a-annot  ; can't solve meta without annotation
+               (is-type gamma a-annot)
                (let ([cont-meta (fresh-sess-meta (format "recv-cont-~a" c))])
                  (solve-sess-meta! id (sess-recv a-annot cont-meta))
                  (type-proc (ctx-extend gamma a-annot 'mw)
