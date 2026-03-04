@@ -47,7 +47,10 @@
          "unify.rkt"
          "atms.rkt"
          "capability-inference.rkt"
-         "cap-type-bridge.rkt")
+         "cap-type-bridge.rkt"
+         "sessions.rkt"           ;; Phase S3: session types (for driver integration)
+         "processes.rkt"          ;; Phase S3: process types (for driver integration)
+         "typing-sessions.rkt")   ;; Phase S3: type-proc judgment
 
 (provide process-command
          process-file
@@ -545,6 +548,73 @@
                           (format "  Capabilities (inferred):  {~a}" inferred-str)
                           (format "  Overdeclared:             {~a}" overdeclared-str))
                     "\n")]
+
+                  ;; Phase S3: Session type declaration
+                  ;; Register the session name as a type in the global env
+                  [(list 'session name sess-body)
+                   ;; Install as a type-level binding (like capability/selection)
+                   (current-global-env
+                    (global-env-add-type-only (current-global-env) name (expr-Type 0)))
+                   (when (current-ns-context)
+                     (define fqn (qualify-name name
+                                   (ns-context-current-ns (current-ns-context))))
+                     (current-global-env
+                      (global-env-add-type-only (current-global-env) fqn (expr-Type 0))))
+                   (format "session ~a defined." name)]
+
+                  ;; Phase S3: Process definition
+                  ;; Type-check the process against its session type
+                  [(list 'defproc name sess-ty channels caps proc-body)
+                   (cond
+                     ;; If session type annotation present, look up or use directly
+                     [sess-ty
+                      ;; Look up session type from registry if it's a variable reference
+                      (define sess-entry
+                        (cond
+                          [(expr-fvar? sess-ty)
+                           (define entry (lookup-session (expr-fvar-name sess-ty)))
+                           (and entry (session-entry-session-type entry))]
+                          [else #f]))
+                      (define resolved-sess (or sess-entry #f))
+                      (cond
+                        [resolved-sess
+                         ;; Build channel context: self -> session type
+                         (define delta (chan-ctx-add chan-ctx-empty 'self resolved-sess))
+                         (define type-ok?
+                           (time-phase! type-check (type-proc ctx-empty delta proc-body)))
+                         (cond
+                           [type-ok?
+                            ;; Register in global env
+                            (current-global-env
+                             (global-env-add-type-only (current-global-env) name (expr-Type 0)))
+                            (when (current-ns-context)
+                              (define fqn (qualify-name name
+                                            (ns-context-current-ns (current-ns-context))))
+                              (current-global-env
+                               (global-env-add-type-only (current-global-env) fqn (expr-Type 0))))
+                            (format "defproc ~a : ~a type-checked." name (pp-session resolved-sess))]
+                           [else
+                            (prologos-error #f
+                              (format "Process ~a does not implement session protocol ~a"
+                                      name (pp-session resolved-sess)))])]
+                        [else
+                         ;; No resolved session — register without type-checking for now
+                         (current-global-env
+                          (global-env-add-type-only (current-global-env) name (expr-Type 0)))
+                         (format "defproc ~a defined (session type not resolved for checking)." name)])]
+                     [else
+                      ;; No session type annotation — just register
+                      (current-global-env
+                       (global-env-add-type-only (current-global-env) name (expr-Type 0)))
+                      (format "defproc ~a defined." name)])]
+
+                  ;; Phase S3: Anonymous process — just type-check, don't register
+                  [(list 'proc sess-ty channels caps proc-body)
+                   (format "anonymous process elaborated.")]
+
+                  ;; Phase S3: dual — session duality result
+                  [(list 'dual name dual-sess)
+                   (format "dual ~a = ~a" name (pp-session dual-sess))]
 
                   [_ (prologos-error srcloc-unknown (format "Unknown command: ~a" elab-result))])))]))))
   ;; Append warnings to result string (if any)

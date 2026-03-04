@@ -189,6 +189,15 @@
          lookup-selection
          ;; Session WS desugaring (exported for testing)
          desugar-session-ws
+         ;; Session registry
+         current-session-registry
+         session-entry
+         session-entry?
+         session-entry-name
+         session-entry-session-type
+         session-entry-srcloc
+         register-session!
+         lookup-session
          ;; Spec store
          current-spec-store
          current-propagated-specs
@@ -461,6 +470,24 @@
 
 (define (lookup-selection name)
   (hash-ref (current-selection-registry) name #f))
+
+;; ========================================
+;; Session registry
+;; ========================================
+;; Stores session type declarations for lookup during elaboration.
+;; name: symbol — the session name (e.g., 'Greeting)
+;; session-type: sess-* tree — the elaborated session type (filled after elaboration)
+;; srcloc: source location of the session declaration
+(struct session-entry (name session-type srcloc) #:transparent)
+
+;; Session store: symbol → session-entry
+(define current-session-registry (make-parameter (hasheq)))
+
+(define (register-session! name entry)
+  (current-session-registry (hash-set (current-session-registry) name entry)))
+
+(define (lookup-session name)
+  (hash-ref (current-session-registry) name #f))
 
 ;; ========================================
 ;; Pattern variables: symbols starting with $

@@ -25,7 +25,9 @@
          "champ.rkt"
          "macros.rkt"             ;; Phase C: for lookup-trait (trait constraint detection)
          "substitution.rkt"      ;; Phase C: for subst (Pi codomain substitution)
-         "warnings.rkt")         ;; Phase 2: for capability warnings (W2001)
+         "warnings.rkt"          ;; Phase 2: for capability warnings (W2001)
+         "sessions.rkt"          ;; Phase S3: session type constructors (elaboration target)
+         "processes.rkt")        ;; Phase S3: process constructors (elaboration target)
 
 (provide elaborate
          elaborate-top-level
@@ -3151,6 +3153,192 @@
         (list 'capability name-fqn name-short cap-type))))
 
 ;; ========================================
+;; Phase S3: Session type elaboration
+;; Converts surf-sess-* tree → sess-* tree (de Bruijn indices for recursion)
+;; ========================================
+
+;; Elaborate a session body.
+;; rec-stack: list of (label . depth) for named recursion variables.
+;; depth: current recursion nesting depth (for de Bruijn indexing of session vars).
+(define (elaborate-session-body surf rec-stack depth [session-name #f])
+  (match surf
+    [(surf-sess-send type-surf cont-surf _loc)
+     (let ([ty (elaborate type-surf)])
+       (if (prologos-error? ty) ty
+           (let ([cont (elaborate-session-body cont-surf rec-stack depth session-name)])
+             (if (prologos-error? cont) cont
+                 (sess-send ty cont)))))]
+
+    [(surf-sess-recv type-surf cont-surf _loc)
+     (let ([ty (elaborate type-surf)])
+       (if (prologos-error? ty) ty
+           (let ([cont (elaborate-session-body cont-surf rec-stack depth session-name)])
+             (if (prologos-error? cont) cont
+                 (sess-recv ty cont)))))]
+
+    [(surf-sess-dsend name type-surf cont-surf _loc)
+     (let ([ty (elaborate type-surf)])
+       (if (prologos-error? ty) ty
+           ;; Dependent send: the name binds in the continuation type (expression-level).
+           ;; This does NOT affect session-level de Bruijn; name is for substS.
+           (let ([cont (elaborate-session-body cont-surf rec-stack depth session-name)])
+             (if (prologos-error? cont) cont
+                 (sess-dsend ty cont)))))]
+
+    [(surf-sess-drecv name type-surf cont-surf _loc)
+     (let ([ty (elaborate type-surf)])
+       (if (prologos-error? ty) ty
+           (let ([cont (elaborate-session-body cont-surf rec-stack depth session-name)])
+             (if (prologos-error? cont) cont
+                 (sess-drecv ty cont)))))]
+
+    [(surf-sess-choice branches-surf _loc)
+     (let ([branches (elaborate-session-branches branches-surf rec-stack depth session-name)])
+       (if (prologos-error? branches) branches
+           (sess-choice branches)))]
+
+    [(surf-sess-offer branches-surf _loc)
+     (let ([branches (elaborate-session-branches branches-surf rec-stack depth session-name)])
+       (if (prologos-error? branches) branches
+           (sess-offer branches)))]
+
+    [(surf-sess-rec label body-surf _loc)
+     ;; Push the recursion label onto the rec-stack at current depth.
+     ;; For anonymous Mu (label=#f), use the session name if available;
+     ;; this supports (session Loop (Mu (Send Nat (SVar Loop)))) pattern.
+     (let* ([effective-label (or label session-name (gensym 'μ))]
+            [new-stack (cons (cons effective-label depth) rec-stack)]
+            [body (elaborate-session-body body-surf new-stack (add1 depth) session-name)])
+       (if (prologos-error? body) body
+           (sess-mu body)))]
+
+    [(surf-sess-var name _loc)
+     ;; Look up the named recursion variable in the stack and compute de Bruijn index
+     (let loop ([stack rec-stack])
+       (cond
+         [(null? stack)
+          (prologos-error _loc (format "Unbound session recursion variable: ~a" name))]
+         [(eq? (caar stack) name)
+          (sess-svar (- (sub1 depth) (cdar stack)))]
+         [else (loop (cdr stack))]))]
+
+    [(surf-sess-end _loc)
+     (sess-end)]
+
+    [(surf-sess-shared body-surf _loc)
+     ;; shared is an annotation; for now, elaborate the body and mark as :w
+     ;; Multiplicity annotation is deferred to S4 (propagator integration)
+     (elaborate-session-body body-surf rec-stack depth session-name)]
+
+    [(surf-sess-ref name _loc)
+     ;; Named session reference: look up in session registry
+     (let ([entry (lookup-session name)])
+       (if entry
+           (session-entry-session-type entry)
+           ;; Also check if it could be a recursion variable for implicit rec
+           (let loop ([stack rec-stack])
+             (cond
+               [(null? stack)
+                (prologos-error _loc (format "Unknown session type: ~a" name))]
+               [(eq? (caar stack) name)
+                (sess-svar (- (sub1 depth) (cdar stack)))]
+               [else (loop (cdr stack))]))))]
+
+    [_ (prologos-error #f (format "Unknown session body form: ~a" surf))]))
+
+;; Elaborate a list of session branches (for choice/offer).
+;; Each branch is a surf-sess-branch.
+;; Returns: assoc list of (cons label sess-tree), or prologos-error.
+(define (elaborate-session-branches branches-surf rec-stack depth session-name)
+  (let loop ([remaining branches-surf] [acc '()])
+    (cond
+      [(null? remaining) (reverse acc)]
+      [else
+       (define branch (car remaining))
+       (define label (surf-sess-branch-label branch))
+       (define cont (elaborate-session-body (surf-sess-branch-cont branch) rec-stack depth session-name))
+       (if (prologos-error? cont) cont
+           (loop (cdr remaining) (cons (cons label cont) acc)))])))
+
+;; ========================================
+;; Phase S3: Process elaboration
+;; Converts surf-proc-* tree → proc-* tree
+;; ========================================
+
+;; Elaborate a process body.
+;; Returns: proc-* tree, or prologos-error.
+(define (elaborate-proc-body surf)
+  (match surf
+    [(surf-proc-send chan expr-surf cont-surf _loc)
+     (let ([expr (elaborate expr-surf)])
+       (if (prologos-error? expr) expr
+           (let ([cont (elaborate-proc-body cont-surf)])
+             (if (prologos-error? cont) cont
+                 (proc-send expr chan cont)))))]
+
+    [(surf-proc-recv var chan cont-surf _loc)
+     ;; recv binds a variable; for now pass through as symbol
+     ;; (the typing judgment handles binding semantics)
+     (let ([cont (elaborate-proc-body cont-surf)])
+       (if (prologos-error? cont) cont
+           ;; proc-recv takes (chan type cont) — type is filled at type-checking time
+           ;; We use a fresh session meta as placeholder type
+           (proc-recv chan (expr-Type 0) cont)))]
+
+    [(surf-proc-select chan label cont-surf _loc)
+     (let ([cont (elaborate-proc-body cont-surf)])
+       (if (prologos-error? cont) cont
+           (proc-sel chan label cont)))]
+
+    [(surf-proc-offer chan branches-surf _loc)
+     (let ([branches (elaborate-proc-branches branches-surf)])
+       (if (prologos-error? branches) branches
+           (proc-case chan branches)))]
+
+    [(surf-proc-stop _loc)
+     (proc-stop)]
+
+    [(surf-proc-new channels session-type-surf body-surf _loc)
+     (let ([sess-ty (if session-type-surf (elaborate session-type-surf) #f)])
+       (if (and sess-ty (prologos-error? sess-ty)) sess-ty
+           (let ([body (elaborate-proc-body body-surf)])
+             (if (prologos-error? body) body
+                 ;; For now, session type is the elaborated type expression
+                 ;; proc-new takes (session cont) — we'll use the type expr as session placeholder
+                 (proc-new (or sess-ty (expr-Type 0)) body)))))]
+
+    [(surf-proc-par left-surf right-surf _loc)
+     (let ([left (elaborate-proc-body left-surf)])
+       (if (prologos-error? left) left
+           (let ([right (elaborate-proc-body right-surf)])
+             (if (prologos-error? right) right
+                 (proc-par left right)))))]
+
+    [(surf-proc-link chan1 chan2 _loc)
+     (proc-link chan1 chan2)]
+
+    [(surf-proc-rec _label _loc)
+     ;; Tail recursion marker — at process level, this is a jump back
+     ;; In the core AST, we don't have a direct rec process form;
+     ;; for now emit as a sentinel that typing-sessions can handle
+     (proc-stop)]  ;; TODO: S4 will add proper process recursion propagator
+
+    [_ (prologos-error #f (format "Unknown process body form: ~a" surf))]))
+
+;; Elaborate process offer branches.
+;; Returns: assoc list of (cons label proc-tree), or prologos-error.
+(define (elaborate-proc-branches branches-surf)
+  (let loop ([remaining branches-surf] [acc '()])
+    (cond
+      [(null? remaining) (reverse acc)]
+      [else
+       (define branch (car remaining))
+       (define label (surf-proc-offer-branch-label branch))
+       (define body (elaborate-proc-body (surf-proc-offer-branch-body branch)))
+       (if (prologos-error? body) body
+           (loop (cdr remaining) (cons (cons label body) acc)))])))
+
+;; ========================================
 ;; Elaborate top-level commands
 ;; Returns the surface command + elaborated expressions,
 ;; or a prologos-error
@@ -3254,5 +3442,48 @@
 
     [(surf-cap-bridge name _loc)
      (list 'cap-bridge name)]
+
+    ;; Phase S3: Session type declaration
+    ;; Elaborate body to sess-* tree, register in session registry.
+    [(surf-session name metadata body-surf loc)
+     (let ([sess-body (elaborate-session-body body-surf '() 0 name)])
+       (if (prologos-error? sess-body) sess-body
+           (begin
+             ;; Register in session registry (both bare and FQN)
+             (register-session! name (session-entry name sess-body loc))
+             (when (current-ns-context)
+               (define fqn (qualify-name name
+                             (ns-context-current-ns (current-ns-context))))
+               (register-session! fqn (session-entry fqn sess-body loc)))
+             (list 'session name sess-body))))]
+
+    ;; Phase S3: Process definition
+    ;; Elaborate session type annotation (if any), elaborate process body.
+    [(surf-defproc name session-type-surf channels caps body-surf loc)
+     (let ([sess-ty (if session-type-surf (elaborate session-type-surf) #f)])
+       (if (and sess-ty (prologos-error? sess-ty)) sess-ty
+           (let ([proc-body (elaborate-proc-body body-surf)])
+             (if (prologos-error? proc-body) proc-body
+                 (list 'defproc name sess-ty channels caps proc-body)))))]
+
+    ;; Phase S3: Anonymous process
+    [(surf-proc session-type-surf channels caps body-surf loc)
+     (let ([sess-ty (if session-type-surf (elaborate session-type-surf) #f)])
+       (if (and sess-ty (prologos-error? sess-ty)) sess-ty
+           (let ([proc-body (elaborate-proc-body body-surf)])
+             (if (prologos-error? proc-body) proc-body
+                 (list 'proc sess-ty channels caps proc-body)))))]
+
+    ;; Phase S3: dual — compute dual of a named session type
+    [(surf-dual session-ref-surf loc)
+     (let ([sess-ref (elaborate session-ref-surf)])
+       (if (prologos-error? sess-ref) sess-ref
+           ;; Look up the session name and apply dual
+           (let* ([name (if (expr-fvar? sess-ref) (expr-fvar-name sess-ref)
+                            (if (symbol? session-ref-surf) session-ref-surf #f))]
+                  [entry (and name (lookup-session name))])
+             (if entry
+                 (list 'dual name (dual (session-entry-session-type entry)))
+                 (prologos-error loc (format "Unknown session type for dual: ~a" sess-ref))))))]
 
     [_ (prologos-error srcloc-unknown (format "Unknown top-level form: ~a" surf))]))
