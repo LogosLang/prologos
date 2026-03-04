@@ -17,6 +17,7 @@
          racket/path
          racket/port
          racket/string
+         rackunit
          "../macros.rkt"
          "../prelude.rkt"
          "../syntax.rkt"
@@ -46,7 +47,10 @@
          check-error-has-provenance
          check-error-diagnosis-count
          extract-provenance-json
-         run-simple-capture-stderr)
+         run-simple-capture-stderr
+         ;; Rich failure diagnostics: custom check with provenance
+         check-prologos
+         error-provenance-summary)
 
 ;; ========================================
 ;; Compute lib-dir from this file's location
@@ -174,3 +178,52 @@
        (regexp-match* #rx"\"([^\"]+)\":([0-9]+)" json-body #:match-select cdr))
      (for/hash ([pair (in-list pair-matches)])
        (values (car pair) (string->number (cadr pair))))]))
+
+;; ========================================
+;; Rich failure diagnostics: custom check
+;; ========================================
+
+;; Summarize provenance information from a prologos-error.
+;; Returns a human-readable string with derivation chain details.
+(define (error-provenance-summary err)
+  (cond
+    [(type-mismatch-error? err)
+     (define prov (type-mismatch-error-provenance err))
+     (if (and (list? prov) (pair? prov))
+         (string-join prov "\n")
+         "(no provenance)")]
+    [(union-exhaustion-error? err)
+     (define chain (union-exhaustion-error-derivation-chain err))
+     (if (and (list? chain) (ormap pair? chain))
+         (string-join
+          (for/list ([branch-chain (in-list chain)]
+                     [i (in-naturals 1)])
+            (if (pair? branch-chain)
+                (format "branch ~a:\n  ~a" i (string-join branch-chain "\n  "))
+                (format "branch ~a: (no chain)" i)))
+          "\n")
+         "(no derivation chain)")]
+    [else "(no provenance for this error type)"]))
+
+;; Custom check: drop-in replacement for check-equal? that enriches
+;; failure output with formatted prologos errors and provenance chains.
+;;
+;; When actual is a prologos-error and expected is a string (common pattern),
+;; the failure message shows the formatted error with "because:" chains
+;; instead of just the opaque struct representation.
+;;
+;; Usage: (check-prologos (run-last "(def x : Nat 0N)") "x : Nat defined.")
+(define-check (check-prologos actual expected)
+  (unless (equal? actual expected)
+    (with-check-info*
+      (append
+        (list (make-check-info 'expected expected)
+              (make-check-info 'actual actual))
+        (if (prologos-error? actual)
+            (list (make-check-info 'formatted-error (format-error actual))
+                  (make-check-info 'provenance (error-provenance-summary actual)))
+            '())
+        (if (prologos-error? expected)
+            (list (make-check-info 'expected-formatted (format-error expected)))
+            '()))
+      (lambda () (fail-check "prologos result mismatch")))))
