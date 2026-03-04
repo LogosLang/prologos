@@ -173,15 +173,19 @@
       ;; Fast path: structurally identical
       [(equal? a b) a]
 
-      ;; Metas: follow solved metas via callback (Phase E1); unsolved → #f
+      ;; Metas: follow solved metas via callback (Phase E1).
+      ;; P-U4b: When meta is unsolved, return the concrete other side.
+      ;; This enables the propagator lattice to resolve meta-bearing
+      ;; unifications transitively: merge(unsolved, Nat) = Nat.
+      ;; Monotonicity: bot ⊔ v = v for any v.
       [(expr-meta? a)
        (define sol-fn (current-lattice-meta-solution-fn))
        (define sol (and sol-fn (sol-fn (expr-meta-id a))))
-       (if sol (try-unify-pure sol b) #f)]
+       (if sol (try-unify-pure sol b) b)]  ;; unsolved → return concrete side
       [(expr-meta? b)
        (define sol-fn (current-lattice-meta-solution-fn))
        (define sol (and sol-fn (sol-fn (expr-meta-id b))))
-       (if sol (try-unify-pure a sol) #f)]
+       (if sol (try-unify-pure a sol) a)]  ;; unsolved → return concrete side
 
       ;; Holes: can't handle in pure mode
       [(expr-hole? a) #f]

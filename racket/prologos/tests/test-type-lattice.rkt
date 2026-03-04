@@ -120,9 +120,10 @@
    (test-case "Ground types fail: Nat ≠ Bool"
      (check-false (try-unify-pure (expr-Nat) (expr-Bool))))
 
-   (test-case "Meta encountered → #f"
-     (check-false (try-unify-pure (expr-meta 'x) (expr-Nat)))
-     (check-false (try-unify-pure (expr-Nat) (expr-meta 'y))))
+   (test-case "Meta encountered → returns concrete side (P-U4b)"
+     ;; P-U4b: unsolved meta ⊔ concrete = concrete (monotone lattice merge)
+     (check-equal? (try-unify-pure (expr-meta 'x) (expr-Nat)) (expr-Nat))
+     (check-equal? (try-unify-pure (expr-Nat) (expr-meta 'y)) (expr-Nat)))
 
    (test-case "Nested structure: Pi(Pi(Nat,Bool), Int)"
      (define inner (expr-Pi 'mw (expr-Nat) (expr-Bool)))
@@ -207,11 +208,12 @@
        (check-equal? (try-unify-pure (expr-Nat) (expr-meta 'b)) #f)  ;; Nat ≠ Bool
        (check-equal? (try-unify-pure (expr-Bool) (expr-meta 'b)) (expr-Bool))))
 
-   (test-case "try-unify-pure returns #f for unsolved meta"
+   (test-case "try-unify-pure returns concrete side for unsolved meta (P-U4b)"
      (parameterize ([current-lattice-meta-solution-fn
                      (lambda (id) #f)])  ;; All unsolved
-       (check-false (try-unify-pure (expr-meta 'x) (expr-Nat)))
-       (check-false (try-unify-pure (expr-Nat) (expr-meta 'y)))))
+       ;; P-U4b: unsolved meta → return the other (concrete) side
+       (check-equal? (try-unify-pure (expr-meta 'x) (expr-Nat)) (expr-Nat))
+       (check-equal? (try-unify-pure (expr-Nat) (expr-meta 'y)) (expr-Nat))))
 
    (test-case "try-unify-pure follows solved meta inside structure"
      ;; Meta 'a solved to Nat; try to unify (List ?a) with (List Nat)
