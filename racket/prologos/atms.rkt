@@ -47,6 +47,10 @@
  atms-write-cell
  ;; Solving
  atms-solve-all
+ ;; Explanation / derivation chains
+ (struct-out nogood-explanation)
+ atms-explain-hypothesis
+ atms-explain
  ;; Helpers
  assumption-id-hash
  hash-subset?)
@@ -277,3 +281,38 @@
                    (cons val acc)))
              acc)))
      (reverse answers)]))
+
+;; ========================================
+;; Explanation / derivation chains
+;; ========================================
+
+;; A nogood explanation: the nogood set and metadata for the conflicting assumptions.
+;; nogood-set: hasheq assumption-id → #t
+;; conflicting-assumptions: (listof (cons assumption-id assumption))
+;;   — the OTHER assumptions in the nogood (excluding the queried hypothesis)
+(struct nogood-explanation (nogood-set conflicting-assumptions) #:transparent)
+
+;; Given an ATMS and a hypothesis-id, return all nogoods containing that hypothesis.
+;; For each matching nogood, resolves the conflicting assumptions (all assumptions
+;; in the nogood other than the queried one) with their metadata.
+;; Returns: (listof nogood-explanation)
+(define (atms-explain-hypothesis a hypothesis-id)
+  (for/list ([ng (in-list (atms-nogoods a))]
+             #:when (hash-has-key? ng hypothesis-id))
+    (define others
+      (for/list ([(aid _) (in-hash ng)]
+                 #:when (not (equal? aid hypothesis-id)))
+        (cons aid (hash-ref (atms-assumptions a) aid #f))))
+    (nogood-explanation ng others)))
+
+;; Return all nogoods that are violated under the current believed set.
+;; Each violated nogood is returned as a nogood-explanation with full
+;; assumption metadata for all members.
+;; Returns: (listof nogood-explanation)
+(define (atms-explain a)
+  (for/list ([ng (in-list (atms-nogoods a))]
+             #:when (hash-subset? ng (atms-believed a)))
+    (define members
+      (for/list ([(aid _) (in-hash ng)])
+        (cons aid (hash-ref (atms-assumptions a) aid #f))))
+    (nogood-explanation ng members)))

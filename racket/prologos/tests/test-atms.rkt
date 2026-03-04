@@ -278,6 +278,75 @@
   (check-equal? (assumption-id-hash (assumption-id 42)) 42))
 
 ;; ========================================
+;; Explanation / derivation chains (E3a)
+;; ========================================
+
+(test-case "atms-explain-hypothesis: returns nogoods containing hypothesis"
+  (define-values (a0 h0) (atms-assume (atms-empty) 'h0 'a))
+  (define-values (a1 h1) (atms-assume a0 'h1 'b))
+  (define-values (a2 h2) (atms-assume a1 'h2 'c))
+  ;; Record {h0, h1} and {h0, h2} as nogoods
+  (define a3 (atms-add-nogood a2 (hasheq h0 #t h1 #t)))
+  (define a4 (atms-add-nogood a3 (hasheq h0 #t h2 #t)))
+  ;; h0 appears in both nogoods
+  (define exps (atms-explain-hypothesis a4 h0))
+  (check-equal? (length exps) 2)
+  ;; h1 appears in only one
+  (check-equal? (length (atms-explain-hypothesis a4 h1)) 1)
+  ;; h2 appears in only one
+  (check-equal? (length (atms-explain-hypothesis a4 h2)) 1))
+
+(test-case "atms-explain-hypothesis: conflicting-assumptions excludes queried hypothesis"
+  (define-values (a0 h0) (atms-assume (atms-empty) 'h0 'a))
+  (define-values (a1 h1) (atms-assume a0 'h1 'b))
+  (define a2 (atms-add-nogood a1 (hasheq h0 #t h1 #t)))
+  (define exps (atms-explain-hypothesis a2 h0))
+  (check-equal? (length exps) 1)
+  (define exp (car exps))
+  ;; conflicting-assumptions should have only h1, not h0
+  (define others (nogood-explanation-conflicting-assumptions exp))
+  (check-equal? (length others) 1)
+  (check-equal? (car (car others)) h1)
+  (check-equal? (assumption-name (cdr (car others))) 'h1))
+
+(test-case "atms-explain-hypothesis: empty for hypothesis not in any nogood"
+  (define-values (a0 h0) (atms-assume (atms-empty) 'h0 'a))
+  (define-values (a1 h1) (atms-assume a0 'h1 'b))
+  ;; No nogoods
+  (check-equal? (atms-explain-hypothesis a1 h0) '())
+  ;; Nogood involving only h0
+  (define a2 (atms-add-nogood a1 (hasheq h0 #t)))
+  (check-equal? (atms-explain-hypothesis a2 h1) '()))
+
+(test-case "atms-explain: returns violated nogoods under believed set"
+  (define-values (a0 h0) (atms-assume (atms-empty) 'h0 'a))
+  (define-values (a1 h1) (atms-assume a0 'h1 'b))
+  (define-values (a2 h2) (atms-assume a1 'h2 'c))
+  ;; Both h0,h1 believed; record {h0,h1} as nogood
+  (define a3 (atms-add-nogood a2 (hasheq h0 #t h1 #t)))
+  ;; Under full believed set {h0,h1,h2}: one violation
+  (define violations (atms-explain a3))
+  (check-equal? (length violations) 1)
+  ;; After retracting h1: no violations
+  (define a4 (atms-retract a3 h1))
+  (check-equal? (length (atms-explain a4)) 0))
+
+(test-case "atms-explain: empty when no nogoods violated"
+  (define-values (a0 h0) (atms-assume (atms-empty) 'h0 'a))
+  (define-values (a1 h1) (atms-assume a0 'h1 'b))
+  (check-equal? (atms-explain a1) '()))
+
+(test-case "atms-explain: members include all assumptions in nogood"
+  (define-values (a0 h0) (atms-assume (atms-empty) 'h0 'a))
+  (define-values (a1 h1) (atms-assume a0 'h1 'b))
+  (define a2 (atms-add-nogood a1 (hasheq h0 #t h1 #t)))
+  (define violations (atms-explain a2))
+  (check-equal? (length violations) 1)
+  (define members (nogood-explanation-conflicting-assumptions (car violations)))
+  ;; atms-explain returns ALL members (not just "others" like explain-hypothesis)
+  (check-equal? (length members) 2))
+
+;; ========================================
 ;; Performance
 ;; ========================================
 
