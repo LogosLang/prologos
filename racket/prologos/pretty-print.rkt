@@ -11,6 +11,7 @@
          "prelude.rkt"
          "syntax.rkt"
          "sessions.rkt"
+         "processes.rkt"
          "metavar-store.rkt"
          "champ.rkt"
          "rrb.rkt"
@@ -21,6 +22,7 @@
 
 (provide pp-expr
          pp-session
+         pp-process
          pp-mult
          pp-function-signature
          pp-datum)
@@ -1262,6 +1264,40 @@
 (define (pp-branches bl names)
   (string-join
    (map (lambda (b) (format "~a: ~a" (car b) (pp-session (cdr b) names)))
+        bl)
+   ", "))
+
+;; ========================================
+;; Pretty-print processes
+;; ========================================
+
+;; pp-process: convert proc-* tree → readable string
+(define (pp-process p)
+  (match p
+    [(proc-stop) "stop"]
+    [(proc-send e c cont)
+     (format "send(~a, ~a, ~a)" c (pp-expr e) (pp-process cont))]
+    [(proc-recv c ty cont)
+     (if ty
+         (format "recv(~a : ~a, ~a)" c (pp-expr ty) (pp-process cont))
+         (format "recv(~a, ~a)" c (pp-process cont)))]
+    [(proc-sel c label cont)
+     (format "sel(~a.~a, ~a)" c label (pp-process cont))]
+    [(proc-case c branches)
+     (format "case(~a, { ~a })" c (pp-proc-branches branches))]
+    [(proc-new s cont)
+     (format "new(~a, ~a)" (pp-expr s) (pp-process cont))]
+    [(proc-par p1 p2)
+     (format "(~a | ~a)" (pp-process p1) (pp-process p2))]
+    [(proc-link c1 c2)
+     (format "link(~a, ~a)" c1 c2)]
+    [(proc-solve ty cont)
+     (format "solve(~a, ~a)" (pp-expr ty) (pp-process cont))]
+    [_ (format "~a" p)]))
+
+(define (pp-proc-branches bl)
+  (string-join
+   (map (lambda (b) (format "~a: ~a" (car b) (pp-process (cdr b))))
         bl)
    ", "))
 
