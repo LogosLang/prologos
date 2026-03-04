@@ -506,6 +506,7 @@
     ;; ---- Natural numbers ----
     [(expr-Nat) (expr-Type (lzero))]
     [(expr-zero) (expr-Nat)]
+    [(expr-nat-val _) (expr-Nat)]
     ;; suc in synthesis: if argument infers to Nat
     [(expr-suc e1)
      (if (equal? (infer ctx e1) (expr-Nat))
@@ -2016,6 +2017,8 @@
     ;; ---- suc: check against Nat ----
     [((expr-suc e1) (expr-Nat))
      (check ctx e1 (expr-Nat))]
+    ;; ---- nat-val: always Nat ----
+    [((expr-nat-val _) (expr-Nat)) #t]
 
     ;; ---- Panic: inhabits any type ----
     ;; (panic msg) checks against any T when msg : String

@@ -238,6 +238,21 @@
       [(and (expr-suc? a) (expr-suc? b))
        (unify ctx (expr-suc-pred a) (expr-suc-pred b))]
 
+      ;; nat-val vs nat-val
+      [(and (expr-nat-val? a) (expr-nat-val? b))
+       (= (expr-nat-val-n a) (expr-nat-val-n b))]
+      ;; Cross-repr: nat-val(0) vs zero
+      [(and (expr-nat-val? a) (expr-zero? b)) (= (expr-nat-val-n a) 0)]
+      [(and (expr-zero? a) (expr-nat-val? b)) (= (expr-nat-val-n b) 0)]
+      ;; Cross-repr: nat-val(n>0) vs suc(X) — structural decomposition
+      [(and (expr-nat-val? a) (> (expr-nat-val-n a) 0) (expr-suc? b))
+       (unify ctx (expr-nat-val (- (expr-nat-val-n a) 1)) (expr-suc-pred b))]
+      [(and (expr-suc? a) (expr-nat-val? b) (> (expr-nat-val-n b) 0))
+       (unify ctx (expr-suc-pred a) (expr-nat-val (- (expr-nat-val-n b) 1)))]
+      ;; Cross-repr: nat-val(0) vs suc(_) — fail
+      [(and (expr-nat-val? a) (= (expr-nat-val-n a) 0) (expr-suc? b)) #f]
+      [(and (expr-suc? a) (expr-nat-val? b) (= (expr-nat-val-n b) 0)) #f]
+
       ;; tycon vs tycon (HKT): same name = equal
       [(and (expr-tycon? a) (expr-tycon? b))
        (eq? (expr-tycon-name a) (expr-tycon-name b))]
@@ -338,6 +353,7 @@
 (define (union-sort-key e)
   (match e
     [(expr-Nat) "0:Nat"]
+    [(expr-nat-val _) "0:NatVal"]
     [(expr-Bool) "0:Bool"]
     [(expr-Unit) "0:Unit"]
     [(expr-Nil) "0:Nil"]

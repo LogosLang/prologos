@@ -182,7 +182,7 @@
   (cond
     [(symbol? v) (expr-fvar v)]
     ;; Already an AST expression
-    [(or (expr-zero? v) (expr-suc? v) (expr-true? v) (expr-false? v)
+    [(or (expr-zero? v) (expr-suc? v) (expr-nat-val? v) (expr-true? v) (expr-false? v)
          (expr-string? v) (expr-int? v) (expr-keyword? v) (expr-fvar? v)
          (expr-app? v) (expr-champ? v) (expr-lam? v) (expr-pair? v))
      v]
@@ -1417,7 +1417,7 @@
          [(expr-nil? a*) (expr-true)]
          ;; Ground values that are definitely not nil → false
          [(or (expr-true? a*) (expr-false? a*) (expr-unit? a*)
-              (expr-zero? a*) (expr-suc? a*) (expr-int? a*) (expr-rat? a*)
+              (expr-zero? a*) (expr-suc? a*) (expr-nat-val? a*) (expr-int? a*) (expr-rat? a*)
               (expr-string? a*) (expr-keyword? a*) (expr-char? a*)
               (expr-champ? a*) (expr-hset? a*) (expr-rrb? a*)
               (expr-posit8? a*) (expr-posit16? a*) (expr-posit32? a*)
@@ -2395,6 +2395,7 @@
     [(expr-bvar _) e]
     [(expr-fvar _) e]
     [(expr-zero) e]
+    [(expr-nat-val _) e]
     [(expr-refl) e]
     [(expr-Nat) e]
     [(expr-Bool) e]

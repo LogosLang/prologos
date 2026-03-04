@@ -62,6 +62,7 @@
 
     ;; Atoms
     [(expr-zero) "0N"]
+    [(expr-nat-val n) (format "~aN" n)]
     [(expr-refl) "refl"]
     [(expr-Nat) "Nat"]
     [(expr-Bool) "Bool"]
@@ -674,6 +675,7 @@
 ;; Try to interpret an expr as a Racket natural number (suc chain ending in zero)
 (define (try-as-nat e)
   (match e
+    [(expr-nat-val n) n]
     [(expr-zero) 0]
     [(expr-suc inner)
      (let ([n (try-as-nat inner)])

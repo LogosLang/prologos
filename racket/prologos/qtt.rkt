@@ -134,6 +134,7 @@
     [(expr-Nat) (tu (expr-Type (lzero)) (zero-usage n))]
     [(expr-Bool) (tu (expr-Type (lzero)) (zero-usage n))]
     [(expr-zero) (tu (expr-Nat) (zero-usage n))]
+    [(expr-nat-val _) (tu (expr-Nat) (zero-usage n))]
     [(expr-true) (tu (expr-Bool) (zero-usage n))]
     [(expr-false) (tu (expr-Bool) (zero-usage n))]
     [(expr-Unit) (tu (expr-Type (lzero)) (zero-usage n))]
@@ -1956,6 +1957,8 @@
        (match r
          [(bu #t u) (bu #t u)]
          [_ (bu #f (zero-usage n))]))]
+    ;; ---- nat-val: always Nat, zero usage ----
+    [((expr-nat-val _) (expr-Nat)) (bu #t (zero-usage n))]
 
     ;; ---- Panic: inhabits any type, count msg usage ----
     [((expr-panic msg) _)

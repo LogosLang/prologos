@@ -18,6 +18,7 @@
  (struct-out expr-fvar)
  (struct-out expr-zero)
  (struct-out expr-suc)
+ (struct-out expr-nat-val)
  (struct-out expr-lam)
  (struct-out expr-app)
  (struct-out expr-pair)
@@ -284,6 +285,7 @@
 ;; Natural numbers
 (struct expr-zero () #:transparent)
 (struct expr-suc (pred) #:transparent)
+(struct expr-nat-val (n) #:transparent)   ; O(1) native natural number (Idris 2 model)
 
 ;; Lambda and application
 (struct expr-lam (mult type body) #:transparent)  ; lam(mult, type, body)
@@ -934,7 +936,7 @@
 ;; ========================================
 (define (expr? x)
   (or (expr-bvar? x) (expr-fvar? x)
-      (expr-zero? x) (expr-suc? x)
+      (expr-zero? x) (expr-suc? x) (expr-nat-val? x)
       (expr-lam? x) (expr-app? x)
       (expr-pair? x) (expr-fst? x) (expr-snd? x)
       (expr-refl? x) (expr-ann? x)

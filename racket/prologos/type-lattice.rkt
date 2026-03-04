@@ -106,6 +106,7 @@
      (or (has-unsolved-meta? (expr-pair-fst e))
          (has-unsolved-meta? (expr-pair-snd e)))]
     [(expr-suc? e) (has-unsolved-meta? (expr-suc-pred e))]
+    [(expr-nat-val? e) #f]
     [(expr-Fin? e) (has-unsolved-meta? (expr-Fin-bound e))]
     [else #f]))
 
@@ -240,6 +241,12 @@
       [(and (expr-suc? a) (expr-suc? b))
        (define pred (try-unify-pure (expr-suc-pred a) (expr-suc-pred b)))
        (and pred (expr-suc pred))]
+      ;; nat-val vs nat-val
+      [(and (expr-nat-val? a) (expr-nat-val? b))
+       (and (= (expr-nat-val-n a) (expr-nat-val-n b)) a)]
+      ;; Cross-repr: nat-val(0) vs zero
+      [(and (expr-nat-val? a) (expr-zero? b)) (and (= (expr-nat-val-n a) 0) a)]
+      [(and (expr-zero? a) (expr-nat-val? b)) (and (= (expr-nat-val-n b) 0) b)]
 
       ;; tycon vs tycon: same name
       [(and (expr-tycon? a) (expr-tycon? b))
@@ -342,6 +349,7 @@
 (define (union-sort-key-pure e)
   (match e
     [(expr-Nat) "0:Nat"]
+    [(expr-nat-val _) "0:NatVal"]
     [(expr-Bool) "0:Bool"]
     [(expr-Unit) "0:Unit"]
     [(expr-Int) "0:Int"]

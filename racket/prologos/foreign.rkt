@@ -32,6 +32,7 @@
 (define (nat->integer e)
   (let loop ([e e] [acc 0])
     (match e
+      [(expr-nat-val n) (+ acc n)]
       [(expr-zero) acc]
       [(expr-suc n) (loop n (add1 acc))]
       [_ (error 'foreign "Cannot marshal to integer — not a Nat numeral: ~a" e)])))
@@ -87,8 +88,7 @@
 (define (integer->nat n)
   (unless (and (exact-integer? n) (>= n 0))
     (error 'foreign "Cannot marshal from Racket: expected non-negative integer, got ~a" n))
-  (let loop ([n n])
-    (if (zero? n) (expr-zero) (expr-suc (loop (sub1 n))))))
+  (expr-nat-val n))
 
 ;; Dispatch marshal-in by base type symbol
 ;; Convert a Racket exact integer to a Prologos Int

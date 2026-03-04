@@ -31,6 +31,7 @@
 
     ;; Constants (no bound variables inside)
     [(expr-zero) e]
+    [(expr-nat-val _) e]
     [(expr-suc e1) (expr-suc (shift delta cutoff e1))]
     [(expr-refl) e]
     [(expr-Nat) e]
@@ -467,6 +468,7 @@
 
     ;; Constants
     [(expr-zero) e]
+    [(expr-nat-val _) e]
     [(expr-suc e1) (expr-suc (subst k s e1))]
     [(expr-refl) e]
     [(expr-Nat) e]
