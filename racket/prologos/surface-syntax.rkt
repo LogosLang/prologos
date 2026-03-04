@@ -310,7 +310,35 @@
  (struct-out surf-cap-closure)
  (struct-out surf-cap-audit)
  (struct-out surf-cap-verify)
- (struct-out surf-cap-bridge))
+ (struct-out surf-cap-bridge)
+ ;; Session declaration and body nodes (S1)
+ (struct-out surf-session)
+ (struct-out surf-sess-send)
+ (struct-out surf-sess-recv)
+ (struct-out surf-sess-dsend)
+ (struct-out surf-sess-drecv)
+ (struct-out surf-sess-choice)
+ (struct-out surf-sess-offer)
+ (struct-out surf-sess-branch)
+ (struct-out surf-sess-rec)
+ (struct-out surf-sess-var)
+ (struct-out surf-sess-end)
+ (struct-out surf-sess-shared)
+ (struct-out surf-sess-ref)
+ ;; Process declarations and body nodes (S2)
+ (struct-out surf-defproc)
+ (struct-out surf-proc)
+ (struct-out surf-dual)
+ (struct-out surf-proc-send)
+ (struct-out surf-proc-recv)
+ (struct-out surf-proc-select)
+ (struct-out surf-proc-offer)
+ (struct-out surf-proc-offer-branch)
+ (struct-out surf-proc-stop)
+ (struct-out surf-proc-new)
+ (struct-out surf-proc-par)
+ (struct-out surf-proc-link)
+ (struct-out surf-proc-rec))
 
 ;; ========================================
 ;; Type hole (to be inferred by the type checker)
@@ -1013,3 +1041,46 @@
 (struct surf-cap-verify (name srcloc) #:transparent)
 ;; (cap-bridge name) — cross-domain bridge analysis: type ↔ capability with overdeclared detection
 (struct surf-cap-bridge (name srcloc) #:transparent)
+
+;; ========================================
+;; Session type declaration (Phase S1)
+;; ========================================
+;; (session Name metadata body) — top-level session type declaration
+;; name: symbol, metadata: assoc list of keyword options (:doc, :deprecated, :throws), body: surf-sess-* tree
+(struct surf-session (name metadata body srcloc) #:transparent)
+;; Session body nodes — right-nested continuation-passing structure
+(struct surf-sess-send   (type cont srcloc) #:transparent)       ; ! Type . cont
+(struct surf-sess-recv   (type cont srcloc) #:transparent)       ; ? Type . cont
+(struct surf-sess-dsend  (name type cont srcloc) #:transparent)  ; !: name Type . cont
+(struct surf-sess-drecv  (name type cont srcloc) #:transparent)  ; ?: name Type . cont
+(struct surf-sess-choice (branches srcloc) #:transparent)        ; +> with branch list
+(struct surf-sess-offer  (branches srcloc) #:transparent)        ; &> with branch list
+(struct surf-sess-branch (label cont srcloc) #:transparent)      ; | :label -> cont
+(struct surf-sess-rec    (label body srcloc) #:transparent)      ; rec (label=#f for anonymous)
+(struct surf-sess-var    (name srcloc) #:transparent)            ; recursion variable reference
+(struct surf-sess-end    (srcloc) #:transparent)                 ; end
+(struct surf-sess-shared (body srcloc) #:transparent)            ; shared session
+(struct surf-sess-ref    (name srcloc) #:transparent)            ; named session reference
+
+;; ========================================
+;; Process declarations (Phase S2)
+;; ========================================
+;; (defproc Name : SessionType body) — named process definition
+;; channels: list of (name . session-type) for multi-channel form, or '() for single-channel
+;; caps: list of capability binders, or '()
+(struct surf-defproc (name session-type channels caps body srcloc) #:transparent)
+;; (proc : SessionType body) — anonymous process
+(struct surf-proc    (session-type channels caps body srcloc) #:transparent)
+;; (dual SessionRef) — dual of a named session type
+(struct surf-dual    (session-ref srcloc) #:transparent)
+;; Process body nodes — right-nested continuation-passing structure
+(struct surf-proc-send    (chan expr cont srcloc) #:transparent)   ; chan ! expr
+(struct surf-proc-recv    (var chan cont srcloc) #:transparent)    ; var := chan ?
+(struct surf-proc-select  (chan label cont srcloc) #:transparent)  ; select chan :label
+(struct surf-proc-offer   (chan branches srcloc) #:transparent)    ; offer chan | ...
+(struct surf-proc-offer-branch (label body srcloc) #:transparent) ; | :label -> body
+(struct surf-proc-stop    (srcloc) #:transparent)                 ; stop
+(struct surf-proc-new     (channels session-type body srcloc) #:transparent) ; new [c1 c2] : S
+(struct surf-proc-par     (left right srcloc) #:transparent)      ; par P1 P2
+(struct surf-proc-link    (chan1 chan2 srcloc) #:transparent)      ; link c1 c2
+(struct surf-proc-rec     (label srcloc) #:transparent)           ; rec (tail recursion)
