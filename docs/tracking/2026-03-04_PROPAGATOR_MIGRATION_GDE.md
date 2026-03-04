@@ -462,8 +462,8 @@ _Living section — updated as work progresses._
 | P1-G5 | DONE | 09a9dbf | Benchmark baseline: 10 programs × 15 runs, all within noise |
 | P1-G6 | DONE | b949e46 | Switchover: removed shadow counter, unify* sole path |
 | P1-G7 | DONE | b264bda | unify→unify-core rename, unify=propagator-aware entry point |
-| P1-G8 | DONE | (this) | PIR: no regressions, 5140 tests, all benchmarks within noise |
-| GDE-1 | PENDING | | |
-| GDE-2 | PENDING | | |
-| GDE-3 | PENDING | | |
-| GDE-4 | PENDING | | |
+| P1-G8 | DONE | 09186bd | PIR: no regressions, 5140 tests, all benchmarks within noise |
+| GDE-1 | DONE | 163f7c6 | Context assumptions for def/check annotations, multi-hypothesis nogoods, 7 tests |
+| GDE-2 | DONE | 9c45b64 | Greedy hitting-set minimal diagnosis + conflict graph in ATMS, 10 tests |
+| GDE-3 | DONE | fdf0d49 | Derivation trees with context assumptions + diagnosis lines, 5 tests |
+| GDE-4 | DONE | f7cbe22 | test-support helpers + test-gde-errors.rkt (24 tests), gde_diagnosis_count |

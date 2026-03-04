@@ -576,9 +576,9 @@ The following collection items ARE also deferred (genuine infrastructure deps):
   1. Propagator-driven solving — cell narrowing triggers unification of dependent terms
   2. Bidirectional cross-domain inference — multiplicity evidence constrains type choices
   3. Incremental re-solving — partial state propagation instead of full re-unification
-- **Depends on**: GDE (General Diagnostic Engine) — need diagnostic infrastructure to
-  debug propagator-driven solving when it goes wrong
+- **Depends on**: GDE (General Diagnostic Engine) — COMPLETE (commits 163f7c6..f7cbe22)
 - **Prerequisite complete**: P1-G migration (all call sites flow through `unify*` choke point)
+- **Prerequisite complete**: GDE (context assumptions, minimal diagnoses, derivation trees)
 - **Source**: P1-G design discussion (2026-03-04 session)
 
 ---
