@@ -162,16 +162,16 @@
   (let* ([empty (expr-hset champ-empty)]
          [s1 (whnf (expr-set-insert empty (expr-zero)))]
          [s2 (whnf (expr-set-insert s1 (expr-suc (expr-zero))))])
-    (check-equal? (whnf (expr-set-size empty)) (expr-zero)
+    (check-equal? (whnf (expr-set-size empty)) (expr-nat-val 0)
                   "empty set has size 0")
-    (check-equal? (whnf (expr-set-size s2)) (expr-suc (expr-suc (expr-zero)))
+    (check-equal? (whnf (expr-set-size s2)) (expr-nat-val 2)
                   "two-element set has size 2")))
 
 (test-case "set-insert duplicate does not increase size"
   (let* ([empty (expr-hset champ-empty)]
          [s1 (whnf (expr-set-insert empty (expr-zero)))]
          [s2 (whnf (expr-set-insert s1 (expr-zero)))])
-    (check-equal? (whnf (expr-set-size s2)) (expr-suc (expr-zero))
+    (check-equal? (whnf (expr-set-size s2)) (expr-nat-val 1)
                   "duplicate insert → size still 1")))
 
 (test-case "set-union reduction"
@@ -186,7 +186,7 @@
     (check-equal? (whnf (expr-set-member u (expr-suc (expr-zero))))
                   (expr-true)
                   "union contains 1")
-    (check-equal? (whnf (expr-set-size u)) (expr-suc (expr-suc (expr-zero)))
+    (check-equal? (whnf (expr-set-size u)) (expr-nat-val 2)
                   "union size = 2")))
 
 (test-case "set-intersect reduction"

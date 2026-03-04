@@ -180,9 +180,9 @@
     (check-pred expr-rrb? result)
     (let ([r (expr-rrb-racket-rrb result)])
       (check-equal? (rrb-size r) 3)
-      (check-equal? (whnf (rrb-get r 0)) (expr-zero))
-      (check-equal? (whnf (rrb-get r 1)) (expr-suc (expr-zero)))
-      (check-equal? (whnf (rrb-get r 2)) (expr-suc (expr-suc (expr-zero)))))))
+      (check-equal? (whnf (rrb-get r 0)) (expr-nat-val 0))
+      (check-equal? (whnf (rrb-get r 1)) (expr-nat-val 1))
+      (check-equal? (whnf (rrb-get r 2)) (expr-nat-val 2)))))
 
 (test-case "PVec transient update"
   ;; Build 3 elements, update index 1, persist

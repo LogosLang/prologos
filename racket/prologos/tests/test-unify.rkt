@@ -131,7 +131,7 @@
     (check-true (unify ctx-empty
                        (expr-suc m)
                        (expr-suc (expr-zero))))
-    (check-equal? (meta-solution (expr-meta-id m)) (expr-zero)))))
+    (check-equal? (meta-solution (expr-meta-id m)) (expr-nat-val 0)))))
 
 (test-case "unify: nested suc(?m) ≡ suc(suc(suc(zero)))"
   (with-fresh-meta-env
@@ -140,7 +140,7 @@
     (check-true (unify ctx-empty
                        (expr-suc (expr-suc m))
                        (expr-suc (expr-suc (expr-suc (expr-zero))))))
-    (check-equal? (meta-solution (expr-meta-id m)) (expr-suc (expr-zero))))))
+    (check-equal? (meta-solution (expr-meta-id m)) (expr-nat-val 1)))))
 
 (test-case "unify: Vec(?m1, ?m2) ≡ Vec(Nat, suc(zero)) solves both"
   (with-fresh-meta-env
@@ -151,7 +151,7 @@
                        (expr-Vec m1 m2)
                        (expr-Vec (expr-Nat) (expr-suc (expr-zero)))))
     (check-equal? (meta-solution (expr-meta-id m1)) (expr-Nat))
-    (check-equal? (meta-solution (expr-meta-id m2)) (expr-suc (expr-zero))))))
+    (check-equal? (meta-solution (expr-meta-id m2)) (expr-nat-val 1)))))
 
 (test-case "unify: Fin(?m) ≡ Fin(suc(zero)) solves"
   (with-fresh-meta-env
@@ -160,7 +160,7 @@
     (check-true (unify ctx-empty
                        (expr-Fin m)
                        (expr-Fin (expr-suc (expr-zero)))))
-    (check-equal? (meta-solution (expr-meta-id m)) (expr-suc (expr-zero))))))
+    (check-equal? (meta-solution (expr-meta-id m)) (expr-nat-val 1)))))
 
 (test-case "unify: Eq(?m1, ?m2, ?m3) ≡ Eq(Nat, zero, suc(zero)) solves all"
   (with-fresh-meta-env
@@ -173,7 +173,7 @@
                        (expr-Eq (expr-Nat) (expr-zero) (expr-suc (expr-zero)))))
     (check-equal? (meta-solution (expr-meta-id m1)) (expr-Nat))
     (check-equal? (meta-solution (expr-meta-id m2)) (expr-zero))
-    (check-equal? (meta-solution (expr-meta-id m3)) (expr-suc (expr-zero))))))
+    (check-equal? (meta-solution (expr-meta-id m3)) (expr-nat-val 1)))))
 
 (test-case "unify: app(?m1, ?m2) ≡ app(fvar(f), fvar(x)) solves both"
   (with-fresh-meta-env

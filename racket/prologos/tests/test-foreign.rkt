@@ -64,9 +64,9 @@
   (check-equal? (nat->integer (expr-suc (expr-suc (expr-suc (expr-zero))))) 3))
 
 (test-case "foreign/marshal-integer->nat"
-  (check-equal? (integer->nat 0) (expr-zero))
-  (check-equal? (integer->nat 1) (expr-suc (expr-zero)))
-  (check-equal? (integer->nat 3) (expr-suc (expr-suc (expr-suc (expr-zero))))))
+  (check-equal? (integer->nat 0) (expr-nat-val 0))
+  (check-equal? (integer->nat 1) (expr-nat-val 1))
+  (check-equal? (integer->nat 3) (expr-nat-val 3)))
 
 (test-case "foreign/marshal-roundtrip-nat"
   ;; integer->nat->integer roundtrip

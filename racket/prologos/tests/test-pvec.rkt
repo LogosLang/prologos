@@ -156,7 +156,7 @@
                         (expr-pvec-push
                           (expr-pvec-push (expr-pvec-empty (expr-Nat)) (expr-zero))
                           (expr-suc (expr-zero)))))])
-    (check-equal? result (expr-suc (expr-suc (expr-zero))))))
+    (check-equal? result (expr-nat-val 2))))
 
 (test-case "pvec-update reduction"
   ;; push zero, update index 0 to 1, nth at 0 → 1
@@ -166,7 +166,7 @@
                           (expr-zero)
                           (expr-suc (expr-zero)))
                         (expr-zero)))])
-    (check-equal? result (expr-suc (expr-zero)))))
+    (check-equal? result (expr-nat-val 1))))
 
 (test-case "pvec-pop reduction"
   ;; push two elements, pop, length = 1
@@ -175,7 +175,7 @@
                           (expr-pvec-push
                             (expr-pvec-push (expr-pvec-empty (expr-Nat)) (expr-zero))
                             (expr-suc (expr-zero))))))])
-    (check-equal? result (expr-suc (expr-zero)))))
+    (check-equal? result (expr-nat-val 1))))
 
 ;; ========================================
 ;; Core AST: Substitution

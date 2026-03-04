@@ -310,7 +310,7 @@
          [val (whnf (expr-net-cell-read net2 cid))])
     (check-true (expr-prop-network? net2) "write returns PropNetwork")
     ;; With "take second" merge, writing suc(zero) should give suc(zero)
-    (check-equal? val (expr-suc (expr-zero))
+    (check-equal? val (expr-nat-val 1)
                   "cell value is suc(zero) after write")))
 
 (test-case "eval: net-run on fresh network (no propagators)"

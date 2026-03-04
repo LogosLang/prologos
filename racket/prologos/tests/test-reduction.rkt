@@ -18,9 +18,9 @@
   (check-equal? (whnf (expr-app (expr-lam 'mw (expr-Nat) (expr-bvar 0)) (expr-zero)))
                 (expr-zero)))
 
-(test-case "whnf: beta (lam x:Nat. suc x) zero -> suc(zero)"
+(test-case "whnf: beta (lam x:Nat. suc x) zero -> nat-val(1)"
   (check-equal? (whnf (expr-app (expr-lam 'mw (expr-Nat) (expr-suc (expr-bvar 0))) (expr-zero)))
-                (expr-suc (expr-zero))))
+                (expr-nat-val 1)))
 
 (test-case "whnf: nested beta (lam x. lam y. x) zero -> lam(mw, Nat, zero)"
   (check-equal? (whnf (expr-app (expr-lam 'mw (expr-Nat) (expr-lam 'mw (expr-Nat) (expr-bvar 1))) (expr-zero)))
@@ -30,9 +30,9 @@
   (check-equal? (whnf (expr-fst (expr-pair (expr-zero) (expr-suc (expr-zero)))))
                 (expr-zero)))
 
-(test-case "whnf: snd(pair(zero, suc(zero))) -> suc(zero)"
+(test-case "whnf: snd(pair(zero, suc(zero))) -> nat-val(1)"
   (check-equal? (whnf (expr-snd (expr-pair (expr-zero) (expr-suc (expr-zero)))))
-                (expr-suc (expr-zero))))
+                (expr-nat-val 1)))
 
 (test-case "whnf: annotation erasure ann(zero, Nat) -> zero"
   (check-equal? (whnf (expr-ann (expr-zero) (expr-Nat)))
@@ -65,14 +65,14 @@
   (check-equal? (whnf (expr-natrec test-motive (expr-zero) test-step (expr-suc (expr-zero))))
                 (expr-suc (expr-natrec test-motive (expr-zero) test-step (expr-zero)))))
 
-(test-case "nf: natrec with suc(zero) -> suc(zero)"
+(test-case "nf: natrec with suc(zero) -> nat-val(1)"
   ;; Full normalization reduces the inner natrec too
   (check-equal? (nf (expr-natrec test-motive (expr-zero) test-step (expr-suc (expr-zero))))
-                (expr-suc (expr-zero))))
+                (expr-nat-val 1)))
 
-(test-case "nf: natrec with suc(suc(zero)) -> suc(suc(zero))"
+(test-case "nf: natrec with suc(suc(zero)) -> nat-val(2)"
   (check-equal? (nf (expr-natrec test-motive (expr-zero) test-step (expr-suc (expr-suc (expr-zero)))))
-                (expr-suc (expr-suc (expr-zero)))))
+                (expr-nat-val 2)))
 
 ;; ========================================
 ;; J eliminator test
@@ -129,10 +129,10 @@
 ;; ========================================
 
 (test-case "whnf: vhead of vcons"
-  ;; vhead(Nat, zero, vcons(Nat, zero, suc(zero), vnil(Nat))) -> suc(zero)
+  ;; vhead(Nat, zero, vcons(Nat, zero, suc(zero), vnil(Nat))) -> nat-val(1)
   (check-equal? (whnf (expr-vhead (expr-Nat) (expr-zero)
                         (expr-vcons (expr-Nat) (expr-zero) (expr-suc (expr-zero)) (expr-vnil (expr-Nat)))))
-                (expr-suc (expr-zero))))
+                (expr-nat-val 1)))
 
 (test-case "whnf: vtail of vcons"
   ;; vtail(Nat, zero, vcons(Nat, zero, suc(zero), vnil(Nat))) -> vnil(Nat)
@@ -152,7 +152,7 @@
 
 (test-case "whnf: boolrec false -> false-case"
   (check-equal? (whnf (expr-boolrec boolrec-motive (expr-zero) (expr-suc (expr-zero)) (expr-false)))
-                (expr-suc (expr-zero))))
+                (expr-nat-val 1)))
 
 (test-case "whnf: boolrec stuck on bvar"
   ;; When target is not a value, boolrec should not reduce
@@ -161,7 +161,7 @@
 
 (test-case "nf: boolrec true normalizes all subexpressions"
   (check-equal? (nf (expr-boolrec boolrec-motive (expr-zero) (expr-suc (expr-zero)) (expr-true)))
-                (expr-zero)))
+                (expr-nat-val 0)))
 
 (test-case "conv: boolrec true === true-case"
   (check-true (conv (expr-boolrec boolrec-motive (expr-zero) (expr-suc (expr-zero)) (expr-true))

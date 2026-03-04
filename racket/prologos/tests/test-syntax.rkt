@@ -13,12 +13,12 @@
 ;; nat->expr convenience
 ;; ========================================
 
-(test-case "nat->expr: 0 = zero"
-  (check-equal? (nat->expr 0) (expr-zero)))
-(test-case "nat->expr: 3 = suc(suc(suc(zero)))"
-  (check-equal? (nat->expr 3) (expr-suc (expr-suc (expr-suc (expr-zero))))))
-(test-case "nat->expr: 1 = suc(zero)"
-  (check-equal? (nat->expr 1) (expr-suc (expr-zero))))
+(test-case "nat->expr: 0 = nat-val(0)"
+  (check-equal? (nat->expr 0) (expr-nat-val 0)))
+(test-case "nat->expr: 3 = nat-val(3)"
+  (check-equal? (nat->expr 3) (expr-nat-val 3)))
+(test-case "nat->expr: 1 = nat-val(1)"
+  (check-equal? (nat->expr 1) (expr-nat-val 1)))
 
 ;; ========================================
 ;; Context operations

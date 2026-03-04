@@ -148,7 +148,7 @@
       (define m2 (fresh-meta ctx-empty (expr-Nat) "second"))
       (solve-meta! (expr-meta-id m1) m2)
       (solve-meta! (expr-meta-id m2) (expr-suc (expr-zero)))
-      (check-equal? (whnf m1) (expr-suc (expr-zero))))))
+      (check-equal? (whnf m1) (expr-nat-val 1)))))
 
 ;; ========================================
 ;; nf handles metas
@@ -168,7 +168,7 @@
       (solve-meta! (expr-meta-id m)
                    (expr-app (expr-lam 'mw (expr-Nat) (expr-suc (expr-bvar 0)))
                              (expr-zero)))
-      (check-equal? (nf m) (expr-suc (expr-zero))))))
+      (check-equal? (nf m) (expr-nat-val 1)))))
 
 ;; ========================================
 ;; conv handles metas

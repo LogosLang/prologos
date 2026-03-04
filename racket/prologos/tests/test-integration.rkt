@@ -49,9 +49,9 @@
   (check-equal? (tc:infer ctx-empty (expr-app (expr-app poly-id-ann (expr-Nat)) (expr-zero)))
                 (expr-Nat)))
 
-(test-case "1d. Normalize polyId Nat zero = zero"
+(test-case "1d. Normalize polyId Nat zero = nat-val(0)"
   (check-equal? (nf (expr-app (expr-app poly-id-ann (expr-Nat)) (expr-zero)))
-                (expr-zero)))
+                (expr-nat-val 0)))
 
 ;; ================================================================
 ;; 2. NESTED DEPENDENT TYPES: Vector types
@@ -250,7 +250,7 @@
                                   (expr-suc (expr-zero))  ; base = 1
                                   plus-step
                                   (expr-suc (expr-suc (expr-zero)))))  ; target = 2
-                (expr-suc (expr-suc (expr-suc (expr-zero))))))
+                (expr-nat-val 3)))
 
 (test-case "9b. Conversion: 1 + 1 == 2"
   (check-true (conv (expr-natrec plus-motive

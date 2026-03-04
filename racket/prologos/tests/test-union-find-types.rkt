@@ -178,7 +178,7 @@
          [result (whnf (expr-uf-find store (expr-zero)))])
     (check-true (expr-pair? result) "uf-find returns a pair")
     ;; First element should be 0 (the root of a singleton set)
-    (check-equal? (whnf (expr-fst result)) (expr-zero) "root of singleton is 0")
+    (check-equal? (whnf (expr-fst result)) (expr-nat-val 0) "root of singleton is 0")
     ;; Second element should be a uf-store
     (check-true (expr-uf-store? (whnf (expr-snd result))) "updated store is uf-store")))
 

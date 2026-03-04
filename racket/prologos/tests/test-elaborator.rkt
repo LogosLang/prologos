@@ -27,7 +27,7 @@
 ;; ========================================
 
 (test-case "elab: zero"
-  (check-equal? (elab "zero") (expr-zero)))
+  (check-equal? (elab "zero") (expr-nat-val 0)))
 
 (test-case "elab: Nat"
   (check-equal? (elab "Nat") (expr-Nat)))
@@ -61,7 +61,7 @@
   (check-equal? (elab "3") (expr-int 3)))
 
 (test-case "elab: (suc zero)"
-  (check-equal? (elab "(suc zero)") (expr-suc (expr-zero))))
+  (check-equal? (elab "(suc zero)") (expr-nat-val 1)))
 
 ;; ========================================
 ;; Arrow (non-dependent)
@@ -127,7 +127,7 @@
 
 (test-case "elab: erased lambda"
   (check-equal? (elab "(fn (x :0 Nat) zero)")
-                (expr-lam 'm0 (expr-Nat) (expr-zero))))
+                (expr-lam 'm0 (expr-Nat) (expr-nat-val 0))))
 
 ;; ========================================
 ;; Pi — de Bruijn indices
@@ -163,7 +163,7 @@
 
 (test-case "elab: (Sigma (x : Nat) (Eq Nat x zero))"
   (check-equal? (elab "(Sigma (x : Nat) (Eq Nat x zero))")
-                (expr-Sigma (expr-Nat) (expr-Eq (expr-Nat) (expr-bvar 0) (expr-zero)))))
+                (expr-Sigma (expr-Nat) (expr-Eq (expr-Nat) (expr-bvar 0) (expr-nat-val 0)))))
 
 ;; ========================================
 ;; Application
@@ -193,40 +193,40 @@
 ;; ========================================
 
 (test-case "elab: (pair zero refl)"
-  (check-equal? (elab "(pair zero refl)") (expr-pair (expr-zero) (expr-refl))))
+  (check-equal? (elab "(pair zero refl)") (expr-pair (expr-nat-val 0) (expr-refl))))
 
 (test-case "elab: (first (pair zero refl))"
-  (check-equal? (elab "(first (pair zero refl))") (expr-fst (expr-pair (expr-zero) (expr-refl)))))
+  (check-equal? (elab "(first (pair zero refl))") (expr-fst (expr-pair (expr-nat-val 0) (expr-refl)))))
 
 (test-case "elab: (second (pair zero refl))"
-  (check-equal? (elab "(second (pair zero refl))") (expr-snd (expr-pair (expr-zero) (expr-refl)))))
+  (check-equal? (elab "(second (pair zero refl))") (expr-snd (expr-pair (expr-nat-val 0) (expr-refl)))))
 
 ;; ========================================
 ;; Annotation
 ;; ========================================
 
 (test-case "elab: (the Nat zero)"
-  (check-equal? (elab "(the Nat zero)") (expr-ann (expr-zero) (expr-Nat))))
+  (check-equal? (elab "(the Nat zero)") (expr-ann (expr-nat-val 0) (expr-Nat))))
 
 ;; ========================================
 ;; Eq
 ;; ========================================
 
 (test-case "elab: (Eq Nat zero zero)"
-  (check-equal? (elab "(Eq Nat zero zero)") (expr-Eq (expr-Nat) (expr-zero) (expr-zero))))
+  (check-equal? (elab "(Eq Nat zero zero)") (expr-Eq (expr-Nat) (expr-nat-val 0) (expr-nat-val 0))))
 
 ;; ========================================
 ;; Vec/Fin
 ;; ========================================
 
 (test-case "elab: (Vec Nat (suc zero))"
-  (check-equal? (elab "(Vec Nat (suc zero))") (expr-Vec (expr-Nat) (expr-suc (expr-zero)))))
+  (check-equal? (elab "(Vec Nat (suc zero))") (expr-Vec (expr-Nat) (expr-nat-val 1))))
 
 (test-case "elab: (vnil Nat)"
   (check-equal? (elab "(vnil Nat)") (expr-vnil (expr-Nat))))
 
 (test-case "elab: (Fin (suc zero))"
-  (check-equal? (elab "(Fin (suc zero))") (expr-Fin (expr-suc (expr-zero)))))
+  (check-equal? (elab "(Fin (suc zero))") (expr-Fin (expr-nat-val 1))))
 
 ;; ========================================
 ;; Shadowing
@@ -282,7 +282,7 @@
                  (parse-string "(check zero : Nat)"))])
     (check-false (prologos-error? result))
     (check-equal? (car result) 'check)
-    (check-equal? (cadr result) (expr-zero))
+    (check-equal? (cadr result) (expr-nat-val 0))
     (check-equal? (caddr result) (expr-Nat))))
 
 (test-case "elab-top: eval"
@@ -290,11 +290,11 @@
                  (parse-string "(eval (suc zero))"))])
     (check-false (prologos-error? result))
     (check-equal? (car result) 'eval)
-    (check-equal? (cadr result) (expr-suc (expr-zero)))))
+    (check-equal? (cadr result) (expr-nat-val 1))))
 
 (test-case "elab-top: infer"
   (let ([result (elaborate-top-level
                  (parse-string "(infer zero)"))])
     (check-false (prologos-error? result))
     (check-equal? (car result) 'infer)
-    (check-equal? (cadr result) (expr-zero))))
+    (check-equal? (cadr result) (expr-nat-val 0))))

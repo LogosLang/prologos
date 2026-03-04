@@ -147,7 +147,7 @@
                 (expr-zero)
                 "if-nar on NaR -> nar-case")
   (check-equal? (whnf (expr-p32-if-nar (expr-Nat) (expr-zero) (expr-suc (expr-zero)) (expr-posit32 1073741824)))
-                (expr-suc (expr-zero))
+                (expr-nat-val 1)
                 "if-nar on non-NaR -> normal-case"))
 
 ;; ========================================

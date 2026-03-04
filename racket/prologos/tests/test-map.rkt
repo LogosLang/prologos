@@ -119,7 +119,7 @@
          [reduced-m1 (whnf m1)]
          [get-result (whnf (expr-map-get reduced-m1 (expr-keyword 'name)))])
     (check-true (expr-champ? reduced-m1) "assoc produces champ")
-    (check-equal? get-result (expr-suc (expr-zero))
+    (check-equal? get-result (expr-nat-val 1)
                   "map-get retrieves value")))
 
 (test-case "map-get missing key → error"
@@ -132,7 +132,7 @@
          [m1 (whnf (expr-map-assoc empty (expr-keyword 'x) (expr-zero)))]
          [m2 (whnf (expr-map-assoc m1 (expr-keyword 'x) (expr-suc (expr-zero))))]
          [result (whnf (expr-map-get m2 (expr-keyword 'x)))])
-    (check-equal? result (expr-suc (expr-zero))
+    (check-equal? result (expr-nat-val 1)
                   "assoc updates existing key")))
 
 (test-case "map-dissoc reduction"
@@ -147,9 +147,9 @@
   (let* ([empty (expr-champ champ-empty)]
          [m1 (whnf (expr-map-assoc empty (expr-keyword 'a) (expr-zero)))]
          [m2 (whnf (expr-map-assoc m1 (expr-keyword 'b) (expr-suc (expr-zero))))])
-    (check-equal? (whnf (expr-map-size empty)) (expr-zero)
+    (check-equal? (whnf (expr-map-size empty)) (expr-nat-val 0)
                   "empty map has size 0")
-    (check-equal? (whnf (expr-map-size m2)) (expr-suc (expr-suc (expr-zero)))
+    (check-equal? (whnf (expr-map-size m2)) (expr-nat-val 2)
                   "two-entry map has size 2")))
 
 (test-case "map-has-key reduction"

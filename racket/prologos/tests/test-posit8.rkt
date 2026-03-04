@@ -152,7 +152,7 @@
                 "if-nar on NaR → nar-case")
   ;; Normal branch: p8-if-nar(Nat, zero, (suc zero), posit8(64)) → (suc zero)
   (check-equal? (whnf (expr-p8-if-nar (expr-Nat) (expr-zero) (expr-suc (expr-zero)) (expr-posit8 64)))
-                (expr-suc (expr-zero))
+                (expr-nat-val 1)
                 "if-nar on non-NaR → normal-case"))
 
 ;; ========================================
