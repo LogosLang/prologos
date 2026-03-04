@@ -9,7 +9,8 @@
 ;;; Sprint 9: Added optional `names` parameter for de Bruijn → user name recovery.
 ;;;
 
-(require racket/match
+(require racket/list
+         racket/match
          racket/string
          "prelude.rkt"
          "syntax.rkt"
@@ -20,7 +21,8 @@
          "errors.rkt"
          "pretty-print.rkt"
          "global-env.rkt"
-         "elab-speculation-bridge.rkt")
+         "elab-speculation-bridge.rkt"
+         "atms.rkt")
 
 (provide infer/err
          check/err
@@ -84,7 +86,7 @@
                                   (if latest
                                       (speculation-failure-sub-failures latest)
                                       '())]
-                                 [chain (build-derivation-chain sub-failures)]
+                                 [chain (build-derivation-chain sub-failures (current-command-atms))]
                                  [actual (infer ctx e)])
                             (list (if (expr-error? actual)
                                       "<could not infer>"
@@ -108,22 +110,55 @@
                (if (expr-error? actual) "<could not infer>" (pp-expr actual names))
                (pp-expr e names)))))))
 
-;; Phase D3: Build a human-readable derivation chain from nested speculation failures.
+;; Phase D3+E3b: Build a human-readable derivation chain from nested speculation failures.
 ;; Returns a list of strings, one per sub-failure, showing the speculation path.
-(define (build-derivation-chain sub-failures)
+;; When atms-box is provided (box of atms), appends ATMS conflict info to each step.
+(define (build-derivation-chain sub-failures [atms-box #f])
   (for/list ([sf (in-list sub-failures)])
     (define label (speculation-failure-label sf))
     (define nested (speculation-failure-sub-failures sf))
     (define base (format-speculation-label label))
-    (if (pair? nested)
-        (format "~a (also tried: ~a)"
-                base
-                (string-join (map (lambda (n)
-                                    (format-speculation-label
-                                     (speculation-failure-label n)))
-                                  nested)
-                             ", "))
-        base)))
+    (define with-nested
+      (if (pair? nested)
+          (format "~a (also tried: ~a)"
+                  base
+                  (string-join (map (lambda (n)
+                                      (format-speculation-label
+                                       (speculation-failure-label n)))
+                                    nested)
+                               ", "))
+          base))
+    ;; E3b: Append ATMS conflict info when available
+    (define atms-info (format-atms-conflict atms-box (speculation-failure-hypothesis-id sf)))
+    (if (string=? atms-info "")
+        with-nested
+        (format "~a — ~a" with-nested atms-info))))
+
+;; E3b: Format ATMS conflict info for a hypothesis.
+;; Returns "" if no ATMS, no hypothesis, or no nogoods for this hypothesis.
+;; Otherwise returns "conflicts with: <name1>, <name2>" from the nogood set.
+(define (format-atms-conflict atms-box hyp-id)
+  (cond
+    [(not atms-box) ""]
+    [(not hyp-id) ""]
+    [else
+     (define a (unbox atms-box))
+     (define explanations (atms-explain-hypothesis a hyp-id))
+     (if (null? explanations)
+         ""
+         ;; Collect all conflicting assumption names across all nogoods
+         (let* ([all-others
+                 (apply append
+                        (map nogood-explanation-conflicting-assumptions explanations))]
+                [names
+                 (for/list ([pair (in-list all-others)]
+                            #:when (cdr pair))
+                   (symbol->string (assumption-name (cdr pair))))]
+                [unique-names (remove-duplicates names)])
+           (if (null? unique-names)
+               ""
+               (format "conflicts with: ~a"
+                       (string-join unique-names ", ")))))]))
 
 ;; Phase D3: Convert internal speculation labels to human-readable strings.
 (define (format-speculation-label label)
