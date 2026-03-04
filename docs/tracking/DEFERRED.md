@@ -550,6 +550,21 @@ The following collection items ARE also deferred (genuine infrastructure deps):
 - **Status**: Sexp mode works correctly now. WS disambiguation deferred until WS-mode `get-in`/`update-in` is needed.
 - **Source**: Phase 3e-e plan (2026-03-03)
 
+## Coding Standards — Nat-in-Computations Audit
+
+### Replace Nat with PosInt/Int in Computation Examples and APIs
+- **Problem**: `Nat` (Peano natural numbers) is used in many examples, docs, and APIs
+  where `PosInt` or `Int` would be more correct and performant. `Nat` is a proof-level
+  type (induction, length-indexed vectors); using it for runtime computations (fuel
+  limits, counts, sizes) is an anti-pattern that sets bad examples.
+- **Scope**: Audit all docs, examples, `:fuel` parameters, library APIs, and design
+  documents for `Nat` used in computational (not proof) contexts.
+- **Replace with**: `PosInt` for strictly-positive counts (fuel, sizes, ports),
+  `Int` for general integers, `Nat` only for inductive/proof contexts.
+- **Source**: Session type design review (2026-03-03)
+
+---
+
 ## Infrastructure / Performance
 
 ### Compiled Module Cache

@@ -64,7 +64,7 @@ are deferred; the orchestrator pattern covers multi-party needs.
 | 2 | Process self-channel (explicit vs implicit) | Implicit `self` for single-channel; explicit naming for multi-channel (§9) |
 | 3 | Recursion syntax | `rec` with optional named label: `rec Loop` (§7) |
 | 4 | Blocking model | Design for async from day one (`!!`/`??` in grammar); implement sync first (§3) |
-| 5 | Deadlock freedom | Single-session guaranteed by construction; multi-session via propagator cycle detection (future) |
+| 5 | Deadlock freedom | Single-session guaranteed by construction; multi-session via propagator quiescence analysis (Phase S4) |
 | 6 | Multiparty | Binary + orchestrator pattern; global types deferred (§17) |
 | 7 | Schema integration (`*` Sigma) | `*` for primary data constraint; attenuations compose at type level (§13) |
 | 8 | Capability integration | Three-tier model: channel-as-cap, boundary gating, in-protocol delegation (§12) |
@@ -117,6 +117,7 @@ Four axes — direction (send/recv) × blocking (sync/async) × dependency (simp
 | `end` | `session` | Protocol termination |
 | `rec` | `session` | Recursion point |
 | `.` | `session` | Explicit continuation separator |
+| `shared` | `session` | Shared service marker (`:w` multiplicity channel) |
 
 ### 3.3 Process Body Operators
 
@@ -342,8 +343,15 @@ From linear logic:
 Branches use `| :label -> ...`, consistent with `match`, `defn` multi-clause,
 and `type` variants. `:keyword` labels match schema field syntax.
 
+**Both branch forms are supported:**
+
+1. **Indentation-based** (multi-line): branches as indented blocks under `+>` / `&>`
+2. **Inline arrow** (single-line): `| :label -> continuation -> ...`
+
+The two forms desugar to the same s-expression and can be mixed freely:
+
 ```prologos
-;; Protocol declaration
+;; Indentation-based (multi-line)
 session OrderProtocol
   ? OrderRequest
   ! Quote
@@ -354,6 +362,10 @@ session OrderProtocol
         end
     | :reject
         end
+
+;; Inline arrow (single-line)
+session OrderProtocol
+  ? OrderRequest . ! Quote . +> | :accept -> ? PaymentInfo -> ! Confirmation -> end | :reject -> end
 ```
 
 ### 6.3 Process Implementation
@@ -504,6 +516,52 @@ defproc orchestrator [buyer : BuyerProtocol, seller : SellerProtocol]
 - **Multi-channel forces explicitness**: When multiple channels are in play, implicit
   naming would be confusing
 
+### 9.5 Duality and Channel Pairs
+
+Every session type `S` has a dual `dual(S)` that describes the complementary endpoint.
+When `new [c1 c2] : S` creates a channel pair:
+
+- `c1` gets type `S`
+- `c2` gets type `dual(S)`
+
+Duality is structural and recursive:
+
+| Type | Dual |
+|------|------|
+| `! T . S` | `? T . dual(S)` |
+| `? T . S` | `! T . dual(S)` |
+| `!: x T . S` | `?: x T . dual(S)` |
+| `?: x T . S` | `!: x T . dual(S)` |
+| `+> { l1: S1, ..., ln: Sn }` | `&> { l1: dual(S1), ..., ln: dual(Sn) }` |
+| `&> { l1: S1, ..., ln: Sn }` | `+> { l1: dual(S1), ..., ln: dual(Sn) }` |
+| `end` | `end` |
+| `rec . S` | `rec . dual(S)` |
+
+**Process-level implication**: The `dual` keyword in process declarations refers to
+the dual of a named session type. If `session Greeting` defines the initiator's view,
+then `dual Greeting` is the responder's view:
+
+```prologos
+session Greeting
+  ! String . ? String . end
+
+;; Initiator sends first, receives second
+defproc greeter : Greeting
+  self ! "hello"
+  name := self ?
+  stop
+
+;; Responder receives first, sends second (dual)
+defproc responder : dual Greeting
+  msg := self ?
+  self ! "hi back"
+  stop
+```
+
+Duality is enforced by the bidirectional propagator (§15.4): the two endpoints of a
+channel pair are always constrained to be duals. A protocol violation on either side
+produces an ATMS-traced error.
+
 ---
 
 <a id="10-execution"></a>
@@ -596,11 +654,59 @@ over propagators rather than over threads. The goal: anything "embarrassingly pa
 in Prologos should be ergonomically deployable as such, where overhead doesn't eat the
 benefit.
 
+### 10.6 Choice as Cell-Write
+
+A critical clarification of how `+>` (internal choice) and `&>` (external choice) map
+to the propagator substrate: **choice is external input resolution via monotonic cell writes,
+not non-determinism.**
+
+In propagator terms:
+
+- `select chan :label` writes `:label` to a **choice cell** associated with that channel
+  endpoint. This is a regular monotonic cell write — the choice cell goes from `⊥` (no
+  choice yet) to `:label`. Once written, it cannot be changed (monotonicity).
+
+- `offer chan | :l1 -> P1 | :l2 -> P2` is a **guarded propagator**: it watches the choice
+  cell and fires when the cell is resolved. The guard selects which continuation `P_i` to
+  activate based on the cell's value.
+
+```
+Channel pair: new [c1 c2] : S where S contains +> { :read, :write }
+
+  c1 side (internal choice):
+    Cell: c1.choice          ;; starts at ⊥
+    Propagator: select-prop
+      fires when: process reaches choice point
+      effect: writes :read or :write to c1.choice
+
+  c2 side (external choice):
+    Propagator: offer-prop
+      watches: c1.choice     ;; NOTE: watches the OTHER endpoint's choice cell
+      fires when: c1.choice ≠ ⊥
+      effect: activates continuation for the chosen label
+```
+
+**Why this matters**: There is no branching or backtracking. There is no scheduler making
+a non-deterministic choice. The `select` side writes to a cell; the `offer` side reads
+from that cell. This is the same mechanism as any other propagator cell write — the only
+difference is that the lattice is a flat set of labels rather than a numeric or type lattice.
+
+This means the propagator-as-scheduler model handles choice with zero special machinery.
+Choice cells participate in the same `run-to-quiescence` cycle as message cells and session
+state cells. Deadlock occurs when the choice cell is never written to (no propagator fires
+to resolve it), which is detectable as part of the standard quiescence check.
+
 ---
 
 <a id="11-strategy"></a>
 
 ## 11. Execution Strategy: `strategy`
+
+> **Note**: The `strategy` keyword and its property vocabulary (`:fairness`, `:fuel`,
+> `:io`, `:parallelism`) are **provisional**. The exact property names and value sets
+> will be refined during implementation (Phase S6) as we gain experience with real
+> scheduling scenarios on the propagator substrate. The structural decision — a named,
+> decomplected top-level declaration — is firm; the vocabulary within it is not.
 
 ### 11.1 Rationale
 
@@ -646,7 +752,7 @@ strategy default
 | Property | Values | Default | Meaning |
 |----------|--------|---------|---------|
 | `:fairness` | `:round-robin`, `:priority`, `:none` | `:round-robin` | Cell scheduling order |
-| `:fuel` | Nat | 50000 | Per-step propagator firing limit |
+| `:fuel` | PosInt | 50000 | Per-step propagator firing limit |
 | `:io` | `:nonblocking`, `:blocking-ok` | `:nonblocking` | I/O bridge behavior |
 | `:parallelism` | `:single-thread`, `:work-stealing` | `:single-thread` | Multi-core strategy (future) |
 
@@ -1023,7 +1129,68 @@ Protocol violation at line 42:
 | Session ↔ QTT | Linear resource checking |
 | Session ↔ Capability | Authority delegation verification |
 | Session ↔ Schema | Selection constraint propagation |
-| Session ↔ Progress | Deadlock freedom checking (future) |
+| Session ↔ Progress | Deadlock freedom checking (Phase S4) |
+
+### 15.7 Dependent Session ↔ Type Lattice Interaction
+
+Dependent sessions (`!:`/`?:`) create bidirectional constraints between the session
+lattice and the type lattice. Here is the propagator flow for a dependent protocol:
+
+```
+session VecTransfer
+  ?: n Nat              ;; (1) dependent receive: n binds in continuation
+  ? Vec String n        ;; (2) non-dependent receive using n
+  ! Bool . end
+
+Propagator network for VecTransfer checking:
+
+  ┌─────────────────────────────────────────────────────┐
+  │ SESSION LATTICE                                     │
+  │                                                     │
+  │  cell(self.session) ─────────────────────────────── │
+  │    = DepRecv(Nat, n. Recv(Vec String n, Send Bool End)) │
+  │                                                     │
+  │  Propagator P1: session-step                        │
+  │    watches: cell(self.session)                      │
+  │    effect: advance session, emit type constraint    │
+  │           ───────────────────────┐                  │
+  └─────────────────────────────────┼──────────────────┘
+                                    │
+                         bridge propagator
+                                    │
+  ┌─────────────────────────────────┼──────────────────┐
+  │ TYPE LATTICE                    ▼                   │
+  │                                                     │
+  │  cell(n) : Nat ──── type constraint ────────────── │
+  │    │                                                │
+  │    └──► cell(vec-type) = Vec String n               │
+  │           ▲                                         │
+  │           │  Propagator P2: dep-instantiate         │
+  │           │    watches: cell(n)                     │
+  │           │    effect: when n is known, refine      │
+  │           │            Vec String n to Vec String 5 │
+  │           │            (if n=5)                     │
+  │                                                     │
+  └─────────────────────────────────────────────────────┘
+```
+
+**Key interaction points:**
+
+1. **DepRecv creates a type-level binding**: When the session step fires for `?: n Nat`,
+   it creates a fresh cell `cell(n)` in the type lattice with initial constraint `: Nat`
+
+2. **Type refinement feeds back into session**: When `cell(n)` is resolved (e.g., to `5`),
+   the dependent continuation `Recv(Vec String n, ...)` can be fully instantiated to
+   `Recv(Vec String 5, ...)`, enabling the next session step to type-check
+
+3. **Bidirectional flow**: The session lattice generates type constraints; the type lattice
+   resolves them; the resolutions feed back into session continuation instantiation. This
+   is the same bidirectional propagation pattern used for universe level inference and
+   multiplicity inference in the existing type checker
+
+This interaction is unique to Prologos — other session type systems handle dependent
+sessions via explicit substitution. The propagator model makes the dependency resolution
+emergent from the constraint network rather than requiring a separate substitution pass.
 
 ---
 
@@ -1049,9 +1216,9 @@ session RobustFileAccess
         end
 ```
 
-### 16.2 Future: `throws` Clause
+### 16.2 `throws` Clause (Phase S3)
 
-A `throws` clause that desugars to implicit `&>` at every step:
+A `throws` clause desugars to implicit `&>` at every step during elaboration:
 
 ```prologos
 session FileAccess throws IOError
@@ -1062,7 +1229,9 @@ session FileAccess throws IOError
     | :close -> end
 ```
 
-Deferred to a later implementation phase. Start with explicit branch modeling.
+This is syntactic sugar — the elaborator inserts `&> | :error -> ! IOError . end` at each
+protocol step. Implemented in Phase S3 (Elaboration) as a desugaring pass. Start with
+explicit branch modeling; `throws` provides ergonomic shorthand once the core works.
 
 ---
 
@@ -1135,9 +1304,10 @@ defproc async-client : AsyncGreeting
   stop
 ```
 
-### 18.2 Deep Deref
+### 18.2 Deep Deref and Pipeline Resolution
 
-`@@p` for recursive deref (promise resolves to another promise).
+- `@@p` for recursive deref (promise resolves to another promise)
+- `@>` for promise pipeline resolution — resolve a chain of dependent promises
 
 ### 18.3 Availability
 
@@ -1202,7 +1372,7 @@ defproc greeter : Greeting
 |---------|--------|------|
 | `!!`/`??` async operators | Design complete; implement after sync core is stable | Phase 2 of session implementation |
 | `@promise` resolution | Depends on `!!`/`??` | Phase 2 |
-| `throws` clause | Syntactic sugar over explicit branches | After core error handling works |
+| `throws` clause | Syntactic sugar over explicit branches | Phase S3 (elaboration-level desugaring) |
 | Global types (MPST) | Orchestrator pattern sufficient for now | If binary+orchestrator proves insufficient |
 | Capability revocation | Distributed computing concern | Distributed channels phase |
 | Work-stealing parallelism | Single-threaded is correct for Phase 0 | Performance optimization phase |
@@ -1240,6 +1410,7 @@ defproc greeter : Greeting
 - Elaborate `defproc`/`proc` to process terms (using existing `proc-*` constructors)
 - Handle `self` as implicit channel
 - Handle dependent send/receive (`!:`/`?:`) with proper binding
+- `throws` clause desugaring (syntactic sugar → implicit `&> | :error -> ...` at each step)
 
 ### Phase S4: Session Type Checking on Propagator Network
 
@@ -1248,6 +1419,7 @@ defproc greeter : Greeting
 - Duality bidirectional propagator
 - ATMS integration for protocol violation derivations
 - Cross-domain bridges (session ↔ type, session ↔ QTT)
+- Deadlock detection via propagator quiescence analysis (unresolved choice cells = deadlock)
 
 ### Phase S5: Capability Integration
 
