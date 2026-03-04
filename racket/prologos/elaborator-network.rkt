@@ -20,6 +20,7 @@
          "propagator.rkt"
          "type-lattice.rkt"
          "mult-lattice.rkt"
+         "prelude.rkt"       ;; P5c: mult-meta? for Pi mult extraction
          "champ.rkt"
          "syntax.rkt")
 
@@ -50,7 +51,9 @@
  ;; P5b: Multiplicity cells
  elab-fresh-mult-cell
  elab-mult-cell-read
- elab-mult-cell-write)
+ elab-mult-cell-write
+ ;; P5c: Cross-domain bridge (type ↔ multiplicity)
+ elab-add-type-mult-bridge)
 
 ;; ========================================
 ;; Structs
@@ -276,3 +279,58 @@
    (net-cell-write (elab-network-prop-net enet) cid val)
    (elab-network-cell-info enet)
    (elab-network-next-meta-id enet)))
+
+;; ========================================
+;; P5c: Cross-Domain Bridge (Type ↔ Multiplicity)
+;; ========================================
+;;
+;; Connects a type cell to a mult cell via a cross-domain propagator pair.
+;; When the type cell receives a Pi type, the alpha propagator extracts the
+;; binder multiplicity and writes it to the mult cell. The gamma direction
+;; is a no-op (deferred — future work may embed mult info back into types).
+;;
+;; This enables information to flow from type inference into multiplicity
+;; inference: if unification reveals a type is (Pi :m1 A B), the mult cell
+;; immediately learns m1 without waiting for QTT checking.
+
+;; Alpha: extract multiplicity from a type cell value.
+;; - type-bot → mult-bot (no info yet)
+;; - type-top → mult-top (contradiction propagates)
+;; - (expr-Pi m _ _) where m ∈ {m0, m1, mw} → m
+;; - (expr-Pi (mult-meta _) _ _) → mult-bot (unsolved)
+;; - other type → mult-bot (not a Pi, no mult to extract)
+(define (type->mult-alpha type-val)
+  (cond
+    [(type-bot? type-val) mult-bot]
+    [(type-top? type-val) mult-top]
+    [(expr-Pi? type-val)
+     (define m (expr-Pi-mult type-val))
+     (cond
+       [(memq m '(m0 m1 mw)) m]
+       [(mult-meta? m) mult-bot]
+       [else mult-bot])]
+    [else mult-bot]))
+
+;; Gamma: no-op — returns the current type cell value unchanged.
+;; Future work (P5c-gamma) may reconstruct Pi types with solved mults.
+(define (mult->type-gamma _mult-val)
+  ;; Identity on the type cell: gamma returns type-bot to avoid
+  ;; writing to the type cell (bot ⊔ x = x, no change).
+  type-bot)
+
+;; Add a cross-domain propagator pair bridging a type cell and a mult cell.
+;; Returns (values elab-network* pid-alpha pid-gamma).
+(define (elab-add-type-mult-bridge enet type-cell-id mult-cell-id)
+  (define net (elab-network-prop-net enet))
+  (define-values (net* pid-alpha pid-gamma)
+    (net-add-cross-domain-propagator net
+      type-cell-id mult-cell-id
+      type->mult-alpha
+      mult->type-gamma))
+  (values
+   (elab-network
+    net*
+    (elab-network-cell-info enet)
+    (elab-network-next-meta-id enet))
+   pid-alpha
+   pid-gamma))
