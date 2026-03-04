@@ -58,6 +58,7 @@
  add-constraint!
  collect-meta-ids
  get-wakeup-constraints
+ retry-constraints-via-cells!
  reset-constraint-store!
  all-postponed-constraints
  all-failed-constraints
@@ -153,7 +154,8 @@
    rhs       ;; Expr — right side of unification
    ctx       ;; Context — typing context at creation
    source    ;; any — debug info (string or constraint-provenance)
-   status)   ;; 'postponed | 'retrying | 'solved | 'failed
+   status    ;; 'postponed | 'retrying | 'solved | 'failed
+   cell-ids) ;; (listof cell-id) — propagator cells for metas in lhs/rhs (P1-E3a)
   #:transparent
   #:mutable)
 
@@ -331,7 +333,7 @@
 ;; referenced by metas in lhs/rhs.
 (define (add-constraint! lhs rhs ctx source)
   (perf-inc-constraint!)
-  (define c (constraint lhs rhs ctx source 'postponed))
+  (define c (constraint lhs rhs ctx source 'postponed '()))
   ;; Add to global store
   (current-constraint-store (cons c (current-constraint-store)))
   ;; Register for wakeup on all mentioned metas
@@ -359,7 +361,15 @@
             (let-values ([(net* _pid) (add-unify-fn net lcid rcid)])
               net*)
             net)))
-    (set-box! net-box enet*))
+    (set-box! net-box enet*)
+    ;; P1-E3a: Record cell-ids for all metas in constraint for cell-state retry.
+    ;; Uses full collect-meta-ids (not just shallow) to capture nested metas.
+    (define all-cell-ids
+      (for*/list ([mid (in-list meta-ids)]
+                  [cid (in-value (champ-lookup id-map (prop-meta-id-hash mid) mid))]
+                  #:when (not (eq? cid 'none)))
+        cid))
+    (set-constraint-cell-ids! c (remove-duplicates all-cell-ids eq?)))
   c)
 
 ;; Get constraints associated with a metavariable for wakeup.
@@ -381,6 +391,32 @@
         ;; If still 'retrying after the call, set back to 'postponed
         (when (eq? (constraint-status c) 'retrying)
           (set-constraint-status! c 'postponed))))))
+
+;; P1-E3a: Retry postponed constraints using propagator cell state.
+;; After run-to-quiescence, checks ALL postponed constraints that have cell-ids.
+;; A constraint is retried if any of its meta cells has become non-bot
+;; (i.e., some meta was solved, possibly via transitive propagation).
+;; This captures transitive wakeups that the legacy wakeup registry misses.
+(define (retry-constraints-via-cells!)
+  (define retry-fn (current-retry-unify))
+  (define net-box (current-prop-net-box))
+  (define read-fn (current-prop-cell-read))
+  (when (and retry-fn net-box read-fn)
+    (define enet (unbox net-box))
+    (for ([c (in-list (current-constraint-store))])
+      (when (and (eq? (constraint-status c) 'postponed)
+                 (not (null? (constraint-cell-ids c))))
+        ;; Check if any meta cell has become non-bot (meta solved)
+        (define any-solved?
+          (for/or ([cid (in-list (constraint-cell-ids c))])
+            (let ([v (read-fn enet cid)])
+              (and (not (prop-type-bot? v)) (not (prop-type-top? v))))))
+        (when any-solved?
+          ;; Guard against re-entrant retry (same as legacy path)
+          (set-constraint-status! c 'retrying)
+          (retry-fn c)
+          (when (eq? (constraint-status c) 'retrying)
+            (set-constraint-status! c 'postponed)))))))
 
 ;; Reset the constraint store (called by reset-meta-store!).
 (define (reset-constraint-store!)
@@ -566,7 +602,11 @@
      (define pnet (unwrap enet))
      (define pnet* (run-fn pnet))
      (set-box! net-box (rewrap enet pnet*))
-     ;; Legacy retry as secondary path (catches constraints without propagators)
+     ;; P1-E3a: Cell-state-driven constraint retry (propagator path).
+     ;; Scans all postponed constraints whose meta cells may have changed
+     ;; during quiescence — captures transitive propagation.
+     (retry-constraints-via-cells!)
+     ;; Legacy retry as secondary path (catches constraints without cell-ids)
      (retry-constraints-for-meta! id)]
     [else
      ;; Legacy: manual wakeup registry
