@@ -40,7 +40,11 @@
  get-latest-speculation-failure
  record-speculation-failure!
  ;; Phase D: ATMS integration
- current-command-atms)
+ current-command-atms
+ ;; GDE-1: Context assumptions (user annotations)
+ current-context-assumptions
+ add-context-assumption!
+ get-context-assumption-ids)
 
 ;; ========================================
 ;; Speculation failure tracking
@@ -71,7 +75,9 @@
   ;; Phase D: create a fresh ATMS per command if ATMS box exists
   (define atms-box (current-command-atms))
   (when atms-box
-    (set-box! atms-box (atms-empty))))
+    (set-box! atms-box (atms-empty)))
+  ;; GDE-1: initialize context assumptions tracking
+  (current-context-assumptions (box '())))
 
 ;; Record a speculation failure.
 ;; Phase D2: With optional hypothesis-id, support-set, and sub-failures.
@@ -92,6 +98,38 @@
   (if (and b (pair? (unbox b)))
       (car (unbox b))  ;; newest is at the front (cons'ed on)
       #f))
+
+;; ========================================
+;; GDE-1: Context assumptions (user annotations)
+;; ========================================
+;; Non-speculation ATMS assumptions created for user-provided type annotations.
+;; These are included in nogoods when speculation fails, enabling error messages
+;; like "because: user annotated x : Nat at foo.prologos:3".
+;;
+;; current-context-assumptions: #f | box of (listof assumption-id)
+;; Tracks assumption-ids created for user annotations in the current command.
+(define current-context-assumptions (make-parameter #f))
+
+;; Create an ATMS assumption for a user annotation.
+;; name: symbol — e.g., 'def-type-annotation
+;; datum: any — descriptive data (e.g., "x : Nat at line 3")
+;; Returns: assumption-id | #f (if ATMS not active)
+(define (add-context-assumption! name datum)
+  (define atms-box (current-command-atms))
+  (define ctx-box (current-context-assumptions))
+  (cond
+    [(and atms-box ctx-box)
+     (define-values (a* aid) (atms-assume (unbox atms-box) name datum))
+     (set-box! atms-box a*)
+     (set-box! ctx-box (cons aid (unbox ctx-box)))
+     (perf-inc-atms-hypothesis!)
+     aid]
+    [else #f]))
+
+;; Get all context assumption ids for the current command.
+(define (get-context-assumption-ids)
+  (define ctx-box (current-context-assumptions))
+  (if ctx-box (reverse (unbox ctx-box)) '()))
 
 ;; ========================================
 ;; Core speculation helper
@@ -156,15 +194,21 @@
             ;; Remove sub-failures from main list (they'll be nested)
             (when (> new-count 0)
               (set-box! b (list-tail all-now new-count)))
-            ;; Phase D: Record nogood in ATMS
+            ;; GDE-1: Build multi-hypothesis nogood including context assumptions.
+            ;; The nogood set contains the speculation hypothesis AND any context
+            ;; assumptions (user annotations), enabling diagnoses like
+            ;; "because: user annotated x : Nat".
             (define ss
               (if (and atms-box hyp-id)
-                  (begin
+                  (let* ([ctx-aids (get-context-assumption-ids)]
+                         [nogood-set
+                          (for/fold ([s (hasheq hyp-id #t)])
+                                    ([aid (in-list ctx-aids)])
+                            (hash-set s aid #t))])
                     (set-box! atms-box
-                              (atms-add-nogood (unbox atms-box)
-                                               (hasheq hyp-id #t)))
+                              (atms-add-nogood (unbox atms-box) nogood-set))
                     (perf-inc-atms-nogood!)
-                    (hasheq hyp-id #t))
+                    nogood-set)
                   #f))
             (values subs ss)])))
      ;; 4. Record failure with sub-failures and support-set

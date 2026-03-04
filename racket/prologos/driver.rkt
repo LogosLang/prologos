@@ -322,6 +322,10 @@
                 (match elab-result
                   ;; (check expr type)
                   [(list 'check expr type)
+                   ;; GDE-1: Record check annotation as ATMS context assumption.
+                   (add-context-assumption!
+                    'check-type-annotation
+                    (format "check : ~a" (pp-expr type)))
                    (let ([chk (time-phase! type-check (check/err ctx-empty expr type))])
                      (if (prologos-error? chk) chk
                          "OK"))]
@@ -653,6 +657,11 @@
         (cond
           [(prologos-error? ty-ok) ty-ok]
           [else
+           ;; GDE-1: Record user type annotation as ATMS context assumption.
+           ;; This enables error messages like "because: user annotated x : Nat".
+           (add-context-assumption!
+            'def-type-annotation
+            (format "~a : ~a" name (pp-expr type)))
            ;; 3. Pre-register for recursive references
            (current-global-env
             (global-env-add-type-only (current-global-env) name type))

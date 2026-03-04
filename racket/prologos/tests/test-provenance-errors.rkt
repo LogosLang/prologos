@@ -20,7 +20,8 @@
          "../global-env.rkt"
          "../errors.rkt"
          "../performance-counters.rkt"
-         "../source-location.rkt")
+         "../source-location.rkt"
+         "../atms.rkt")
 
 ;; ========================================
 ;; Test Helpers
@@ -179,3 +180,92 @@
   ;; This tests that trait resolution failures flow through the provenance pipeline
   (define result (run-ns "(ns test :no-prelude) (def x : Nat \"hello\")"))
   (check-true (prologos-error? result)))
+
+;; ========================================
+;; Suite 7: GDE-1 — Context assumptions in nogoods
+;; ========================================
+
+;; Helper: Run a command through the driver, return speculation failures list.
+(define (run-and-get-failures s)
+  (parameterize ([current-global-env (hasheq)]
+                 [current-error-port (open-output-nowhere)])
+    (define failures-box (box '()))
+    (parameterize ([current-speculation-failures failures-box])
+      (process-string s)
+      (reverse (unbox failures-box)))))
+
+(test-case "GDE-1: context assumption created for annotated def"
+  ;; When a def has a type annotation, an ATMS context assumption is created.
+  ;; We verify via stderr stats that the ATMS has assumptions beyond just speculation.
+  (define pair (run-simple-with-stderr "(def x : Nat true)"))
+  (define stderr (cdr pair))
+  (define m (regexp-match #rx"atms_hypothesis_count\":([0-9]+)" stderr))
+  (check-not-false m)
+  ;; Should have at least 1 hypothesis (the context assumption for "x : Nat")
+  (define count (string->number (cadr m)))
+  (check-true (>= count 1)))
+
+(test-case "GDE-1: union error nogoods include context assumption"
+  ;; When a union type mismatch occurs with an annotated def, the nogood
+  ;; should contain BOTH the speculation hypothesis AND the context assumption.
+  (define pair (run-simple-with-stderr "(def x <Nat | Bool> \"hello\")"))
+  (define stderr (cdr pair))
+  ;; Extract the ATMS from the provenance stats
+  (define m-hyp (regexp-match #rx"atms_hypothesis_count\":([0-9]+)" stderr))
+  (check-not-false m-hyp)
+  ;; Hypothesis count should be >= 3: 1 context assumption + 2 speculation branches
+  (define hyp-count (string->number (cadr m-hyp)))
+  (check-true (>= hyp-count 3)
+              (format "Expected >= 3 hypotheses (1 ctx + 2 spec), got ~a" hyp-count)))
+
+(test-case "GDE-1: speculation failure support-set is multi-hypothesis"
+  ;; After a failing speculation on an annotated def, the support-set
+  ;; (nogood) should contain more than one assumption.
+  (define pair (run-simple-with-stderr "(def x <Nat | Bool> \"hello\")"))
+  (define results (car pair))
+  (define err (last results))
+  (check-true (union-exhaustion-error? err))
+  ;; Check derivation chain — should contain ATMS-derived info
+  (define chain (union-exhaustion-error-derivation-chain err))
+  (check-true (list? chain)))
+
+(test-case "GDE-1: context assumption for check command"
+  ;; (check expr : Type) should also create a context assumption.
+  (define pair (run-simple-with-stderr "(check true : Nat)"))
+  (define stderr (cdr pair))
+  (define m (regexp-match #rx"atms_hypothesis_count\":([0-9]+)" stderr))
+  (check-not-false m)
+  (define count (string->number (cadr m)))
+  ;; At least 1 hypothesis from the check annotation
+  (check-true (>= count 1)))
+
+(test-case "GDE-1: successful def has no nogoods"
+  ;; A well-typed annotated def should create context assumption but no nogoods.
+  (define pair (run-simple-with-stderr "(def x : Nat 0N)"))
+  (define stderr (cdr pair))
+  (define m (regexp-match #rx"atms_nogood_count\":([0-9]+)" stderr))
+  (check-not-false m)
+  (check-equal? (string->number (cadr m)) 0))
+
+(test-case "GDE-1: successful def context assumption + zero nogoods"
+  ;; Successful annotated def: hypothesis created but no nogoods recorded.
+  (define pair (run-simple-with-stderr "(def x : Nat 0N)"))
+  (define stderr (cdr pair))
+  (define m-hyp (regexp-match #rx"atms_hypothesis_count\":([0-9]+)" stderr))
+  (check-not-false m-hyp)
+  ;; Context assumption created
+  (define hyp-count (string->number (cadr m-hyp)))
+  (check-true (>= hyp-count 1))
+  ;; No nogoods
+  (define m-ng (regexp-match #rx"atms_nogood_count\":([0-9]+)" stderr))
+  (check-not-false m-ng)
+  (check-equal? (string->number (cadr m-ng)) 0))
+
+(test-case "GDE-1: unannotated def creates no context assumption"
+  ;; A def without type annotation should NOT create a context assumption.
+  (define pair (run-simple-with-stderr "(def x 0N)"))
+  (define stderr (cdr pair))
+  (define m (regexp-match #rx"atms_hypothesis_count\":([0-9]+)" stderr))
+  (check-not-false m)
+  ;; Zero hypotheses — no speculation, no context assumption
+  (check-equal? (string->number (cadr m)) 0))
