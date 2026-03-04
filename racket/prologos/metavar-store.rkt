@@ -120,9 +120,8 @@
  current-prop-cell-read
  current-prop-add-unify-constraint
  install-prop-network-callbacks!
- ;; Phase E2: Propagator-driven constraint wakeup
+ ;; Propagator quiescence + rewrap (used by solve-meta!)
  current-prop-run-quiescence
- current-prop-driven-wakeup?
  current-prop-unwrap-net
  current-prop-rewrap-net
  ;; Hash removal: test isolation helper
@@ -475,15 +474,11 @@
 (define current-prop-cell-read (make-parameter #f))         ;; (enet cell-id → value)
 (define current-prop-add-unify-constraint (make-parameter #f))  ;; (enet cid-a cid-b → (values enet* pid))
 
-;; Phase E2: Propagator-driven constraint wakeup parameters.
-;; When current-prop-driven-wakeup? is #t, solve-meta! runs propagator
-;; network to quiescence instead of manually iterating the wakeup registry.
+;; Propagator quiescence callbacks (set by driver.rkt).
 ;; current-prop-run-quiescence: (prop-network → prop-network) — runs scheduler.
 ;; current-prop-unwrap-net: (elab-network → prop-network) — extract inner net.
 ;; current-prop-rewrap-net: (elab-network prop-network → elab-network) — rewrap.
-;; All default to #f for backward compatibility.
 (define current-prop-run-quiescence (make-parameter #f))
-(define current-prop-driven-wakeup? (make-parameter #f))
 (define current-prop-unwrap-net (make-parameter #f))
 (define current-prop-rewrap-net (make-parameter #f))
 

@@ -483,8 +483,7 @@ The following collection items ARE also deferred (genuine infrastructure deps):
 - ✅ Hash removal: CHAMP is sole source of truth; legacy hash paths removed; ~20 test files migrated to `with-fresh-meta-env`
 - ✅ Phase E1: Meta-aware pure unification — `try-unify-pure` follows solved metas via read-only callback; `has-unsolved-meta?` guard prevents spurious `type-top` contradictions
 - ✅ Phase E2: Propagator-driven constraint wakeup — `solve-meta!` runs `run-to-quiescence` after cell writes for transitive propagation; elab-network unwrap/rewrap for scheduler
-- **Deferred**:
-  - Phase E3: Constraint-retry propagators — move full constraint retry into fire functions (side-effectful propagators, re-entrancy risk). Current E2 legacy retry path covers this safely.
+- ✅ Phase E3: Constraint-retry propagators — cell-state-driven retry after quiescence replaces legacy wakeup registry in production path (commits d2ef419, 29cdf0f, b5ba62b). Legacy fallback retained for test contexts without network.
 - Source: `docs/tracking/2026-02-25_TYPE_INFERENCE_ON_LOGIC_ENGINE_DESIGN.md`
 
 ---

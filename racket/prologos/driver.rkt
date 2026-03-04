@@ -1382,7 +1382,6 @@
 (current-prop-rewrap-net
  (lambda (enet pnet*)
    (struct-copy elab-network enet [prop-net pnet*])))
-(current-prop-driven-wakeup? #t)
 
 ;; Phase E1: Install meta-solution callback for propagator-aware merge.
 ;; This allows type-lattice-merge to follow solved metas (read-only) when
