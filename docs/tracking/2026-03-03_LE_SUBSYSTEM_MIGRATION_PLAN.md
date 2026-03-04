@@ -714,16 +714,16 @@ lattice is trivial. Migration is straightforward once type inference migration i
 
 | Gap | Priority | Blocked By |
 |-----|----------|------------|
-| Heartbeat counters (`performance-counters.rkt`) | P0 | Nothing — ready to implement |
-| Phase-level timing in driver | P0 | Nothing |
+| ~~Heartbeat counters (`performance-counters.rkt`)~~ | ~~P0~~ | **COMPLETE** — 12 counters wired into production |
+| ~~Phase-level timing in driver~~ | ~~P0~~ | **COMPLETE** — 7 phases in driver.rkt |
 | Micro-benchmark harness | P1 | Nothing |
 | Multi-run statistical baseline (rolling median) | P1 | Nothing |
 | Memory profiling (peak RSS, GC) | P1 | Nothing |
 | Property-based testing (rackcheck) | P2 | Generator design |
 
-**Recommendation**: Implement heartbeat counters (Phase A from Benchmarking Design) and
-phase-level timing (Phase B) BEFORE starting any new migration. These provide the
-instrumentation needed for meaningful baseline capture.
+**Note**: Heartbeat counters and phase-level timing were discovered to be already complete
+in `performance-counters.rkt` (12 counters across 7 modules, all wired into production code).
+This was listed as NOT STARTED but is in fact COMPLETE.
 
 ### 9.3 Per-Migration Benchmark Artifacts
 
@@ -809,15 +809,21 @@ From the Type Inference PIR and Benchmarking Framework Design:
 - P4 is fully independent — can proceed at any time
 - P3 and P5 can proceed in parallel after P1
 
-### Recommended Execution Order
+### Recommended Execution Order (Revised 2026-03-03)
 
-1. **Benchmarking infrastructure** (heartbeats, phase timing) — enables all baselines
-2. **P4** (test dependencies) — independent, low risk, immediate quality-of-life benefit
-3. **P1-E3** (constraint-retry propagators) — complete the type inference migration
-4. **P3** (trait resolution) — natural follow-on from type inference
-5. **P2** (session types) — builds on all prior work, new lattice from scratch
-6. **P5** (QTT multiplicities) — lowest priority, shares infra with P2 cross-domain
-7. **P1-G** (pure propagator unification) — long-term, highest risk
+Interleaves session type parsing (no propagator dependency) with infrastructure work:
+
+1. **S1-S2** (session/process parsing) — pure surface syntax, no propagator dependency
+2. **P4** (test dependencies) — multiplicative benefit, independent, low risk
+3. **S3** (session elaboration) — connects parsing to semantic AST, still no propagator needed
+4. **P3** (trait resolution as propagators) — enriches propagator network before S4
+5. **S4** (session propagator network) — lands on battle-tested, enriched infra
+6. **P5 + S5-S8** (QTT multiplicities, capabilities, runtime, async) — later
+7. **P1-E3, P1-G** (constraint-retry, pure unification) — long-term
+
+**Rationale**: S1-S3 cost the same regardless of when they're done. P4 and P3 between
+S3 and S4 means the most complex session type work (S4) benefits from both multiplicative
+testing improvement AND a more mature propagator ecosystem.
 
 ---
 
@@ -843,8 +849,8 @@ From the Type Inference PIR and Benchmarking Framework Design:
 | JSONL recording | COMPLETE |
 | A/B comparison (`bench-ab.rkt`) | COMPLETE |
 | CI regression gate | COMPLETE |
-| Heartbeat counters (`performance-counters.rkt`) | NOT STARTED |
-| Phase-level timing in driver | NOT STARTED |
+| Heartbeat counters (`performance-counters.rkt`) | **COMPLETE** (12 counters, all wired) |
+| Phase-level timing in driver | **COMPLETE** (7 phases in driver.rkt) |
 | Micro-benchmark harness | NOT STARTED |
 | Multi-run statistical baseline | NOT STARTED |
 

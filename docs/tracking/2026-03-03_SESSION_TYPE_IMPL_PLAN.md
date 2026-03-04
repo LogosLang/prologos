@@ -11,15 +11,15 @@
 
 | Phase | Sub-phase | Status | Commit | Notes |
 |-------|-----------|--------|--------|-------|
-| S1 | S1a: Surface syntax structs | ☐ | | |
-| S1 | S1b: Reserved words | ☐ | | |
-| S1 | S1c: Sexp-mode parser | ☐ | | |
-| S1 | S1d: WS-mode preparse | ☐ | | |
-| S1 | S1e: Macro pass-through + grammar | ☐ | | |
-| S2 | S2a: Process surface structs | ☐ | | |
-| S2 | S2b: Sexp-mode process parser | ☐ | | |
-| S2 | S2c: WS-mode process preparse | ☐ | | |
-| S2 | S2d: Process macro pass-through | ☐ | | |
+| S1 | S1a: Surface syntax structs | ✅ | `4a42b38` | Combined with S2a |
+| S1 | S1b: Reserved words | ✅ | `4f3c789` | 15 keywords |
+| S1 | S1c: Sexp-mode parser | ✅ | `8cba95e` | 18 tests |
+| S1 | S1d: WS-mode preparse | ✅ | `bc6a961` | 16 tests |
+| S1 | S1e: Macro pass-through + grammar | ✅ | `56fe397` | Pass-through + dep-graph |
+| S2 | S2a: Process surface structs | ✅ | `4a42b38` | Combined with S1a |
+| S2 | S2b: Sexp-mode process parser | ✅ | `8c750b2` | 17 tests |
+| S2 | S2c: WS-mode process preparse | ⏳ | `bc6a961` | Stub pass-through; full disambiguation deferred |
+| S2 | S2d: Process macro pass-through | ✅ | `56fe397` | Combined with S1e |
 | S3 | S3a: Session elaboration | ☐ | | |
 | S3 | S3b: Process elaboration | ☐ | | |
 | S3 | S3c: `throws` desugaring | ☐ | | |
