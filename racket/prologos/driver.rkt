@@ -1371,6 +1371,10 @@
  elab-cell-read
  elab-add-unify-constraint)
 
+;; P5b: Install multiplicity cell callbacks
+(current-prop-fresh-mult-cell elab-fresh-mult-cell)
+(current-prop-mult-cell-write elab-mult-cell-write)
+
 ;; Phase E2: Install propagator-driven constraint wakeup.
 ;; When solve-meta! writes to a cell, the propagator network is run to
 ;; quiescence, handling transitive constraint propagation automatically.

@@ -122,6 +122,9 @@
  current-prop-cell-read
  current-prop-add-unify-constraint
  install-prop-network-callbacks!
+ ;; P5b: Multiplicity cell callbacks
+ current-prop-fresh-mult-cell
+ current-prop-mult-cell-write
  ;; Propagator quiescence + rewrap (used by solve-meta!)
  current-prop-run-quiescence
  current-prop-unwrap-net
@@ -515,6 +518,10 @@
 (define current-prop-cell-read (make-parameter #f))         ;; (enet cell-id → value)
 (define current-prop-add-unify-constraint (make-parameter #f))  ;; (enet cid-a cid-b → (values enet* pid))
 
+;; P5b: Multiplicity cell callbacks
+(define current-prop-fresh-mult-cell (make-parameter #f))   ;; (enet source → (values enet* cell-id))
+(define current-prop-mult-cell-write (make-parameter #f))   ;; (enet cell-id value → enet*)
+
 ;; Propagator quiescence callbacks (set by driver.rkt).
 ;; current-prop-run-quiescence: (prop-network → prop-network) — runs scheduler.
 ;; current-prop-unwrap-net: (elab-network → prop-network) — extract inner net.
@@ -767,14 +774,28 @@
 
 ;; Create a fresh mult metavariable, register in store, return mult-meta.
 ;; Hash removal: Always writes to CHAMP.
+;; P5b: Optionally allocates a mult cell on the propagator network.
 (define (fresh-mult-meta source)
   (define id (gensym 'mmeta))
   (define box (current-mult-meta-champ-box))
   (set-box! box (champ-insert (unbox box) (prop-meta-id-hash id) id 'unsolved))
+  ;; P5b: Allocate mult cell on propagator network if available
+  (define net-box (current-prop-net-box))
+  (define fresh-fn (current-prop-fresh-mult-cell))
+  (when (and net-box fresh-fn)
+    (define enet (unbox net-box))
+    (define-values (enet* cid) (fresh-fn enet source))
+    (set-box! net-box enet*)
+    ;; Record mapping: mult-meta-id → cell-id in the prop id-map
+    (define id-map-box (current-prop-id-map-box))
+    (when id-map-box
+      (set-box! id-map-box
+        (champ-insert (unbox id-map-box) (prop-meta-id-hash id) id cid))))
   (mult-meta id))
 
 ;; Assign a solution to a mult metavariable.
 ;; Hash removal: Always reads/writes CHAMP.
+;; P5b: Also writes to propagator mult cell if available.
 (define (solve-mult-meta! id solution)
   (define box (current-mult-meta-champ-box))
   (define status
@@ -784,7 +805,17 @@
     (error 'solve-mult-meta! "unknown mult-meta: ~a" id))
   (when (not (eq? status 'unsolved))
     (error 'solve-mult-meta! "mult-meta ~a already solved" id))
-  (set-box! box (champ-insert (unbox box) (prop-meta-id-hash id) id solution)))
+  (set-box! box (champ-insert (unbox box) (prop-meta-id-hash id) id solution))
+  ;; P5b: Write to propagator mult cell
+  (define net-box (current-prop-net-box))
+  (define write-fn (current-prop-mult-cell-write))
+  (when (and net-box write-fn)
+    (define id-map-box (current-prop-id-map-box))
+    (define cid (and id-map-box
+                     (champ-lookup (unbox id-map-box) (prop-meta-id-hash id) id)))
+    (when (and (not (eq? cid 'none)) cid)
+      (define enet (unbox net-box))
+      (set-box! net-box (write-fn enet cid solution)))))
 
 ;; Check if a mult metavariable has been solved.
 ;; Hash removal: Always reads from CHAMP.

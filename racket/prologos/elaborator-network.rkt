@@ -19,6 +19,7 @@
 (require racket/list
          "propagator.rkt"
          "type-lattice.rkt"
+         "mult-lattice.rkt"
          "champ.rkt"
          "syntax.rkt")
 
@@ -45,7 +46,11 @@
  elab-cell-read-or
  elab-all-cells
  elab-unsolved-cells
- elab-contradicted-cells)
+ elab-contradicted-cells
+ ;; P5b: Multiplicity cells
+ elab-fresh-mult-cell
+ elab-mult-cell-read
+ elab-mult-cell-write)
 
 ;; ========================================
 ;; Structs
@@ -238,3 +243,36 @@
 (define (elab-contradicted-cells enet)
   (define cid (prop-network-contradiction (elab-network-prop-net enet)))
   (if cid (list cid) '()))
+
+;; ========================================
+;; P5b: Multiplicity Cells
+;; ========================================
+;;
+;; Multiplicity cells use the mult-lattice (mult-bot/m0/m1/mw/mult-top).
+;; These are separate from type cells but live on the same prop-network.
+;; Cross-domain propagators (P5c) will bridge type cells and mult cells.
+
+;; Allocate a mult cell on the network. Returns (values elab-network* cell-id).
+(define (elab-fresh-mult-cell enet source)
+  (define net (elab-network-prop-net enet))
+  (define-values (net* cid)
+    (net-new-cell net mult-bot mult-lattice-merge mult-lattice-contradicts?))
+  (define info (elab-cell-info '() #f source))
+  (define h (cell-id-hash cid))
+  (values
+   (elab-network
+    net*
+    (champ-insert (elab-network-cell-info enet) h cid info)
+    (+ 1 (elab-network-next-meta-id enet)))
+   cid))
+
+;; Read a mult cell's current value.
+(define (elab-mult-cell-read enet cid)
+  (net-cell-read (elab-network-prop-net enet) cid))
+
+;; Write a multiplicity value to a cell (lattice join via mult-lattice-merge).
+(define (elab-mult-cell-write enet cid val)
+  (elab-network
+   (net-cell-write (elab-network-prop-net enet) cid val)
+   (elab-network-cell-info enet)
+   (elab-network-next-meta-id enet)))
