@@ -9,6 +9,7 @@
          "../syntax.rkt"
          "../sessions.rkt"
          "../processes.rkt"
+         "../errors.rkt"
          "../session-lattice.rkt"
          "../session-propagators.rkt"
          "../propagator.rkt")
@@ -19,7 +20,7 @@
 
 (define (check-ok? result) (eq? result 'ok))
 (define (check-contradiction? result)
-  (and (list? result) (eq? (car result) 'contradiction)))
+  (session-protocol-error? result))
 
 ;; ========================================
 ;; Basic: send/stop type-checks

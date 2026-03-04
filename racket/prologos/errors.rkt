@@ -21,6 +21,7 @@
  (struct-out not-a-function-error)
  (struct-out parse-error)
  (struct-out session-error)
+ (struct-out session-protocol-error)
  (struct-out inference-failed-error)
  (struct-out arity-error)
  (struct-out multi-arity-error)
@@ -68,6 +69,12 @@
 
 ;; Session type error
 (struct session-error prologos-error (channel detail) #:transparent)
+
+;; Session protocol violation with derivation chain (S4d)
+;; Extends session-error with per-operation tracing for conflict diagnosis.
+;; derivation: (listof string) — chain of "because:" explanations
+;;   showing what process operations contributed to the session type conflict.
+(struct session-protocol-error session-error (derivation) #:transparent)
 
 ;; Type inference failed (could not synthesize a type)
 (struct inference-failed-error prologos-error (expr) #:transparent)
@@ -160,6 +167,18 @@
       (list (format "Error at ~a" loc-str)
             (format "  ~a" msg)
             (if datum (format "  Near: ~a" datum) ""))
+      "\n")]
+    ;; S4d: Session protocol error with derivation chain (must precede session-error)
+    [(session-protocol-error _ _ channel detail derivation)
+     (string-join
+      (append
+       (filter (lambda (s) (not (string=? s "")))
+        (list (format "Error at ~a" loc-str)
+              (format "  ~a" msg)
+              (format "  Channel: ~a" channel)
+              (if detail (format "  ~a" detail) "")))
+       (for/list ([step (in-list (or derivation '()))])
+         (format "    because: ~a" step)))
       "\n")]
     [(session-error _ _ channel detail)
      (string-join

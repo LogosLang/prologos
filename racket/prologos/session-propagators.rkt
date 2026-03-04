@@ -14,6 +14,11 @@
 ;;; - The cell's value refines monotonically: sess-bot → concrete → sess-top
 ;;; - Contradictions arise from polarity mismatches or type incompatibilities
 ;;;
+;;; S4d: Operation tracing (ATMS-style derivation chains)
+;;; - Each process operation records a session-op in a trace map
+;;; - On contradiction: the trace explains which operations conflicted
+;;; - Errors are structured session-protocol-error values with derivation chains
+;;;
 ;;; Integration:
 ;;; - Uses propagator.rkt's persistent network (cells, propagators, scheduling)
 ;;; - Uses session-lattice.rkt for merge and contradiction detection
@@ -22,10 +27,13 @@
 
 (require racket/match
          racket/list
+         racket/string
          "propagator.rkt"
          "sessions.rkt"
          "processes.rkt"
          "session-lattice.rkt"
+         "errors.rkt"
+         "source-location.rkt"
          "pretty-print.rkt")
 
 (provide
@@ -38,6 +46,9 @@
  add-stop-prop
  ;; Duality (S4c)
  add-duality-prop
+ ;; S4d: Operation tracing
+ (struct-out session-op)
+ trace-add
  ;; Compilation
  compile-proc-to-network
  ;; Top-level checker
@@ -51,6 +62,24 @@
 ;; Returns (values net cell-id).
 (define (make-session-cell net [initial-value sess-bot])
   (net-new-cell net initial-value session-lattice-merge session-lattice-contradicts?))
+
+;; ========================================
+;; S4d: Operation tracing
+;; ========================================
+
+;; A session-op records what process operation constrains a cell.
+;; kind: symbol — 'init, 'send, 'recv, 'stop, 'select, 'offer, 'dual, 'new
+;; channel: symbol — the channel name this operation acts on
+;; description: string — human-readable explanation
+(struct session-op (kind channel description) #:transparent)
+
+;; A session trace is a hasheq from cell-id → (listof session-op).
+;; Records all operations that constrained each cell.
+
+;; Add an operation record for a cell in the trace.
+(define (trace-add trace cell-id op)
+  (hash-set trace cell-id
+    (cons op (hash-ref trace cell-id '()))))
 
 ;; ========================================
 ;; Process operation propagators
@@ -203,63 +232,102 @@
   net2)
 
 ;; ========================================
-;; Process tree compilation
+;; Process tree compilation (with trace)
 ;; ========================================
 
 ;; compile-proc-to-network: walk a proc-* tree and add propagators.
 ;; channel-cells: hash of (channel-name → cell-id)
-;; Returns the augmented network.
-(define (compile-proc-to-network net proc channel-cells)
+;; trace: hasheq cell-id → (listof session-op) — accumulated operation trace
+;; Returns (values augmented-network augmented-trace).
+(define (compile-proc-to-network net proc channel-cells [trace (hasheq)])
   (match proc
     ;; ---- Stop: all channels must be at End ----
     [(proc-stop)
-     (for/fold ([n net]) ([(_chan cid) (in-hash channel-cells)])
-       (add-stop-prop n cid))]
+     (define net*
+       (for/fold ([n net]) ([(_chan cid) (in-hash channel-cells)])
+         (add-stop-prop n cid)))
+     (define trace*
+       (for/fold ([t trace]) ([(chan cid) (in-hash channel-cells)])
+         (trace-add t cid (session-op 'stop chan
+                            (format "process stops (expects ~a at end)" chan)))))
+     (values net* trace*)]
 
     ;; ---- Send: constrain channel to Send, continue ----
     [(proc-send _expr chan cont)
      (define chan-cid (hash-ref channel-cells chan #f))
      (if (not chan-cid)
-         net  ;; unknown channel, skip
+         (values net trace)  ;; unknown channel, skip
          (let-values ([(net* cont-cid) (add-send-prop net chan-cid)])
+           (define trace*
+             (trace-add
+              (trace-add trace chan-cid
+                (session-op 'send chan (format "process sends on ~a" chan)))
+              cont-cid
+              (session-op 'send chan (format "continuation after send on ~a" chan))))
            (compile-proc-to-network net* cont
-             (hash-set channel-cells chan cont-cid))))]
+             (hash-set channel-cells chan cont-cid) trace*)))]
 
     ;; ---- Recv: constrain channel to Recv, continue ----
     [(proc-recv chan _type cont)
      (define chan-cid (hash-ref channel-cells chan #f))
      (if (not chan-cid)
-         net
+         (values net trace)
          (let-values ([(net* cont-cid) (add-recv-prop net chan-cid)])
+           (define trace*
+             (trace-add
+              (trace-add trace chan-cid
+                (session-op 'recv chan (format "process receives from ~a" chan)))
+              cont-cid
+              (session-op 'recv chan (format "continuation after recv on ~a" chan))))
            (compile-proc-to-network net* cont
-             (hash-set channel-cells chan cont-cid))))]
+             (hash-set channel-cells chan cont-cid) trace*)))]
 
     ;; ---- Select: constrain to Choice, select label, continue ----
     [(proc-sel chan label cont)
      (define chan-cid (hash-ref channel-cells chan #f))
      (if (not chan-cid)
-         net
+         (values net trace)
          (let-values ([(net* cont-cid) (add-select-prop net chan-cid label)])
+           (define trace*
+             (trace-add
+              (trace-add trace chan-cid
+                (session-op 'select chan
+                  (format "process selects label '~a on ~a" label chan)))
+              cont-cid
+              (session-op 'select chan
+                (format "continuation after select '~a on ~a" label chan))))
            (compile-proc-to-network net* cont
-             (hash-set channel-cells chan cont-cid))))]
+             (hash-set channel-cells chan cont-cid) trace*)))]
 
     ;; ---- Case/Offer: constrain to Offer, compile each branch ----
     [(proc-case chan proc-branches)
      (define chan-cid (hash-ref channel-cells chan #f))
      (if (not chan-cid)
-         net
+         (values net trace)
          (let* ([labels (map car proc-branches)]
                 [net* (void)] [branch-cells (void)])
            (define-values (n bc) (add-offer-prop net chan-cid labels))
+           (define trace*
+             (trace-add trace chan-cid
+               (session-op 'offer chan
+                 (format "process offers branches ~a on ~a"
+                   (string-join (map (lambda (l) (format "'~a" l)) labels) ", ")
+                   chan))))
+           ;; Record branch context on each continuation cell
+           (define trace-with-branches
+             (for/fold ([t trace*]) ([b (in-list bc)])
+               (trace-add t (cdr b)
+                 (session-op 'offer chan
+                   (format "branch '~a of offer on ~a" (car b) chan)))))
            ;; Compile each process branch against its continuation cell
-           (for/fold ([net-acc n])
+           (for/fold ([net-acc n] [trace-acc trace-with-branches])
                      ([pb (in-list proc-branches)])
              (define lbl (car pb))
              (define p (cdr pb))
              (define cont-cid (cdr (assq lbl bc)))
              ;; Each branch sees the same channel set except chan is now the branch cont
              (compile-proc-to-network net-acc p
-               (hash-set channel-cells chan cont-cid)))))]
+               (hash-set channel-cells chan cont-cid) trace-acc))))]
 
     ;; ---- New: create paired channel cells with duality ----
     [(proc-new session-ty (proc-par p1 p2))
@@ -268,28 +336,74 @@
      (define-values (net2 cell-b) (make-session-cell net1))
      ;; Add duality constraint: a and b are dual sessions
      (define net3 (add-duality-prop net2 cell-a cell-b))
+     ;; Record duality in trace
+     (define trace*
+       (trace-add
+        (trace-add trace cell-a
+          (session-op 'new 'ch "channel endpoint A (proc-new)"))
+        cell-b
+        (session-op 'dual 'ch "channel endpoint B (dual of A)")))
      ;; Compile both sides of the parallel composition
      ;; p1 gets 'ch → cell-a, p2 gets 'ch → cell-b
-     (define net4 (compile-proc-to-network net3 p1
-                    (hash-set channel-cells 'ch cell-a)))
+     (define-values (net4 trace**)
+       (compile-proc-to-network net3 p1
+         (hash-set channel-cells 'ch cell-a) trace*))
      (compile-proc-to-network net4 p2
-       (hash-set channel-cells 'ch cell-b))]
+       (hash-set channel-cells 'ch cell-b) trace**)]
 
     ;; ---- Par: split channels (both sides share channel cells) ----
     [(proc-par p1 p2)
-     (define net* (compile-proc-to-network net p1 channel-cells))
-     (compile-proc-to-network net* p2 channel-cells)]
+     (define-values (net* trace*)
+       (compile-proc-to-network net p1 channel-cells trace))
+     (compile-proc-to-network net* p2 channel-cells trace*)]
 
     ;; ---- Link: add duality constraint between two channels ----
     [(proc-link c1 c2)
      (define c1-cid (hash-ref channel-cells c1 #f))
      (define c2-cid (hash-ref channel-cells c2 #f))
      (if (and c1-cid c2-cid)
-         (add-duality-prop net c1-cid c2-cid)
-         net)]
+         (let ([net* (add-duality-prop net c1-cid c2-cid)])
+           (define trace*
+             (trace-add
+              (trace-add trace c1-cid
+                (session-op 'dual c1 (format "linked ~a ↔ ~a (duality)" c1 c2)))
+              c2-cid
+              (session-op 'dual c2 (format "linked ~a ↔ ~a (duality)" c2 c1))))
+           (values net* trace*))
+         (values net trace))]
 
     ;; ---- Fallback ----
-    [_ net]))
+    [_ (values net trace)]))
+
+;; ========================================
+;; Error construction (S4d)
+;; ========================================
+
+;; Build a session-protocol-error from contradiction info and trace.
+;; Finds the channel associated with the contradicting cell and builds
+;; a derivation chain from all operations that constrained that cell.
+(define (build-session-error net trace contradiction-cell session-type)
+  ;; Look up all operations on the contradicting cell
+  (define ops (hash-ref trace contradiction-cell '()))
+  ;; The cell's current value (should be sess-top = contradiction)
+  (define cell-val
+    (with-handlers ([exn:fail? (lambda (e) 'unknown)])
+      (net-cell-read net contradiction-cell)))
+  ;; Determine the primary channel from ops
+  (define channel
+    (if (null? ops) '?
+        (session-op-channel (last ops))))
+  ;; Build derivation chain (oldest → newest)
+  (define derivation
+    (for/list ([op (in-list (reverse ops))])
+      (session-op-description op)))
+  ;; Construct the error
+  (session-protocol-error
+   srcloc-unknown  ;; srcloc (core proc-* AST lacks locations; surface forms carry them)
+   "Protocol violation: process does not match declared session type"
+   channel
+   (format "Declared session type: ~a" (pp-session session-type))
+   derivation))
 
 ;; ========================================
 ;; Top-level session checker
@@ -297,22 +411,26 @@
 
 ;; Check a process against a session type using propagator inference.
 ;; Returns:
-;;   'ok - process correctly implements the protocol
-;;   (list 'contradiction cell-id) - protocol violation detected
-;;   (list 'error msg) - compilation error
+;;   'ok — process correctly implements the protocol
+;;   session-protocol-error — protocol violation with derivation chain
 (define (check-session-via-propagators proc session-type)
   ;; 1. Create empty network
   (define net0 (make-prop-network))
   ;; 2. Create root session cell for 'self, initialized with declared type
   (define-values (net1 self-cell) (make-session-cell net0 session-type))
-  ;; 3. Compile process tree against channel cells
+  ;; 3. Initialize trace with session declaration
+  (define init-trace
+    (hasheq self-cell
+      (list (session-op 'init 'self
+              (format "session type declared as ~a" (pp-session session-type))))))
+  ;; 4. Compile process tree against channel cells
   (define channel-cells (hasheq 'self self-cell))
-  (define net2 (compile-proc-to-network net1 proc channel-cells))
-  ;; 4. Run to quiescence
+  (define-values (net2 trace) (compile-proc-to-network net1 proc channel-cells init-trace))
+  ;; 5. Run to quiescence
   (define net3 (run-to-quiescence net2))
-  ;; 5. Check for contradictions
+  ;; 6. Check for contradictions
   (define contradiction-cell (prop-network-contradiction net3))
   (cond
     [contradiction-cell
-     (list 'contradiction contradiction-cell)]
+     (build-session-error net3 trace contradiction-cell session-type)]
     [else 'ok]))
