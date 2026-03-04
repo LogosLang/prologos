@@ -5,7 +5,7 @@
 ;; Usage:
 ;;   racket tools/update-deps.rkt           # print discovered deps to stdout
 ;;   racket tools/update-deps.rkt --check   # verify current data matches actual requires
-;;   racket tools/update-deps.rkt --write   # overwrite dep-graph.rkt data section (TODO)
+;;   racket tools/update-deps.rkt --write   # regenerate dep-graph.rkt data sections
 
 (require racket/cmdline
          racket/file
@@ -214,6 +214,123 @@
     (exit 1)))
 
 ;; ============================================================
+;; Write mode — regenerate dep-graph.rkt data sections
+;; ============================================================
+
+;; Find a balanced-paren form starting at marker string.
+;; Returns (cons start-pos end-pos) or #f.
+(define (find-balanced-form text marker)
+  (define start (regexp-match-positions (regexp-quote marker) text))
+  (cond
+    [(not start) #f]
+    [else
+     (define pos (caar start))
+     (define len (string-length text))
+     (let loop ([i pos] [depth 0] [started? #f])
+       (cond
+         [(>= i len) #f]
+         [(char=? (string-ref text i) #\()
+          (loop (add1 i) (add1 depth) #t)]
+         [(char=? (string-ref text i) #\))
+          (define new-depth (sub1 depth))
+          (if (and started? (zero? new-depth))
+              (cons pos (add1 i))
+              (loop (add1 i) new-depth #t))]
+         [else (loop (add1 i) depth started?)]))]))
+
+;; Format a simple symbol → symbol-list hash as (define name (hasheq ...))
+(define (format-simple-hash name data)
+  (define entries (sort (hash->list data) (λ (a b) (symbol<? (car a) (car b)))))
+  (define lines
+    (for/list ([entry (in-list entries)])
+      (define k (car entry))
+      (define v (cdr entry))
+      (define vals (sort v symbol<?))
+      (if (null? vals)
+          (format "   '~a~a'()" k (pad-to k 30))
+          (format "   '~a~a'(~a)" k (pad-to k 30)
+                  (string-join (map (λ (s) (format "~a" s)) vals) " ")))))
+  (string-append
+   (format "(define ~a\n  (hasheq\n" name)
+   (string-join lines "\n")
+   "))"))
+
+;; Format test-deps hash as (define test-deps (hasheq ...))
+(define (format-test-deps-hash data)
+  (define entries (sort (hash->list data) (λ (a b) (symbol<? (car a) (car b)))))
+  (define lines
+    (for/list ([entry (in-list entries)])
+      (define k (car entry))
+      (define td (cdr entry))
+      (define mods (sort (test-dep-source-modules td) symbol<?))
+      (define driver? (test-dep-uses-driver? td))
+      (if (null? mods)
+          (format "   '~a\n   (test-dep '() ~a)" k driver?)
+          (format "   '~a\n   (test-dep '(~a) ~a)"
+                  k
+                  (string-join (map (λ (s) (format "~a" s)) mods) " ")
+                  driver?))))
+  (string-append
+   "(define test-deps\n  (hasheq\n"
+   (string-join lines "\n")
+   "))"))
+
+;; Padding helper for alignment
+(define (pad-to sym width)
+  (define s (symbol->string sym))
+  (define need (max 1 (- width (string-length s))))
+  (make-string need #\space))
+
+;; Replace a balanced-paren form in text with new-text
+(define (replace-form text marker new-text)
+  (define range (find-balanced-form text marker))
+  (cond
+    [(not range)
+     (eprintf "WARNING: Could not find '~a' in dep-graph.rkt\n" marker)
+     text]
+    [else
+     (string-append
+      (substring text 0 (car range))
+      new-text
+      (substring text (cdr range)))]))
+
+(define (run-write)
+  (printf "Scanning project for actual dependencies...\n")
+
+  (define disc-source (discover-source-deps))
+  (printf "  Found ~a source modules\n" (hash-count disc-source))
+
+  (define disc-test (discover-test-deps))
+  (printf "  Found ~a test files\n" (hash-count disc-test))
+
+  (define disc-prologos (discover-prologos-lib-deps))
+  (printf "  Found ~a .prologos modules\n" (hash-count disc-prologos))
+
+  (define disc-test-pl (discover-test-prologos-deps))
+  (printf "  Found ~a test→prologos mappings\n" (hash-count disc-test-pl))
+
+  (define dep-graph-path (build-path tools-dir "dep-graph.rkt"))
+  (define text (file->string dep-graph-path))
+
+  ;; Replace each data section
+  (define text1 (replace-form text "(define source-deps"
+                              (format-simple-hash "source-deps" disc-source)))
+  (define text2 (replace-form text1 "(define test-deps"
+                              (format-test-deps-hash disc-test)))
+  (define text3 (replace-form text2 "(define prologos-lib-deps"
+                              (format-simple-hash "prologos-lib-deps" disc-prologos)))
+  (define text4 (replace-form text3 "(define test-prologos-deps"
+                              (format-simple-hash "test-prologos-deps" disc-test-pl)))
+
+  ;; Write back
+  (call-with-output-file dep-graph-path
+    (λ (out) (display text4 out))
+    #:exists 'replace)
+
+  (printf "\nWrote updated dep-graph.rkt\n")
+  (printf "Run 'racket tools/update-deps.rkt --check' to verify.\n"))
+
+;; ============================================================
 ;; Print mode (default)
 ;; ============================================================
 
@@ -253,14 +370,12 @@
    #:once-each
    ["--check" "Verify current dep-graph.rkt data matches actual requires"
     (check-mode? #t)]
-   ["--write" "Overwrite dep-graph.rkt data section (not yet implemented)"
+   ["--write" "Regenerate dep-graph.rkt data sections from actual requires"
     (write-mode? #t)])
 
   (cond
     [(check-mode?) (run-check)]
-    [(write-mode?)
-     (printf "--write mode not yet implemented.\n")
-     (printf "Use --check to see mismatches, then manually update dep-graph.rkt.\n")]
+    [(write-mode?) (run-write)]
     [else (run-print)]))
 
 (main)
