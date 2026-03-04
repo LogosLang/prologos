@@ -45,7 +45,8 @@
 (struct prologos-error (srcloc message) #:transparent)
 
 ;; Type mismatch: expected one type, got another
-(struct type-mismatch-error prologos-error (expected actual expr) #:transparent)
+;; E3c: provenance — list of strings tracing the derivation chain (empty = no provenance)
+(struct type-mismatch-error prologos-error (expected actual expr provenance) #:transparent)
 
 ;; Unbound variable reference
 (struct unbound-variable-error prologos-error (name) #:transparent)
@@ -112,13 +113,16 @@
   (define loc-str (format-srcloc (prologos-error-srcloc err)))
   (define msg (prologos-error-message err))
   (match err
-    [(type-mismatch-error _ _ expected actual expr)
+    [(type-mismatch-error _ _ expected actual expr provenance)
      (string-join
-      (list (format "Error at ~a" loc-str)
-            (format "  ~a" msg)
-            (format "  Expected: ~a" (format-val expected))
-            (format "  Got:      ~a" (format-val actual))
-            (if expr (format "  In expression: ~a" (format-val expr)) ""))
+      (append
+       (list (format "Error at ~a" loc-str)
+             (format "  ~a" msg)
+             (format "  Expected: ~a" (format-val expected))
+             (format "  Got:      ~a" (format-val actual))
+             (if expr (format "  In expression: ~a" (format-val expr)) ""))
+       (for/list ([step (in-list (or provenance '()))])
+         (format "    because: ~a" step)))
       "\n")]
     [(unbound-variable-error _ _ name)
      (string-join

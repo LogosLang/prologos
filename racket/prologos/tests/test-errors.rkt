@@ -28,7 +28,7 @@
 (test-case "type-mismatch-error: is prologos-error"
   (check-true
    (prologos-error?
-    (type-mismatch-error srcloc-unknown "Type mismatch" "Nat" "Bool" #f))))
+    (type-mismatch-error srcloc-unknown "Type mismatch" "Nat" "Bool" #f '()))))
 
 (test-case "unbound-variable-error: is prologos-error"
   (check-true
@@ -52,7 +52,7 @@
 (test-case "format-error: type mismatch"
   (let ([err (type-mismatch-error (srcloc "test.prl" 5 2 10)
                                    "Type mismatch in application"
-                                   "Nat" "Bool" "(f x)")])
+                                   "Nat" "Bool" "(f x)" '())])
     (check-true (string-contains? (format-error err) "test.prl:5:2"))
     (check-true (string-contains? (format-error err) "Expected: Nat"))
     (check-true (string-contains? (format-error err) "Got:      Bool"))

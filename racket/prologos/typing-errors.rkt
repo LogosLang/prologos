@@ -101,14 +101,20 @@
                branch-mismatches
                (pp-expr e names)
                derivation-chain))
-            ;; Non-union: existing behavior
-            (let ([actual (infer ctx e)])
+            ;; Non-union: collect provenance from speculation failures
+            (let* ([actual (infer ctx e)]
+                   [latest (get-latest-speculation-failure)]
+                   [sub-failures (if latest
+                                     (speculation-failure-sub-failures latest)
+                                     '())]
+                   [provenance (build-derivation-chain sub-failures (current-command-atms))])
               (type-mismatch-error
                loc
                "Type mismatch"
                (pp-expr t names)
                (if (expr-error? actual) "<could not infer>" (pp-expr actual names))
-               (pp-expr e names)))))))
+               (pp-expr e names)
+               provenance))))))
 
 ;; Phase D3+E3b: Build a human-readable derivation chain from nested speculation failures.
 ;; Returns a list of strings, one per sub-failure, showing the speculation path.
