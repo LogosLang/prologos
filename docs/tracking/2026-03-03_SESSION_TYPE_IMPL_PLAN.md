@@ -30,9 +30,9 @@
 | S4 | S4d: ATMS integration | ✅ | `6383f1b` | session-op trace, session-protocol-error, 10 tests |
 | S4 | S4e: Cross-domain bridges | ⏳ | | Deferred: needs deeper type↔session cell integration |
 | S4 | S4f: Deadlock detection | ✅ | `2e244b1` | check-session-completeness, 9 tests |
-| S5 | S5a: Capability binders | ☐ | | |
-| S5 | S5b: Boundary operations | ☐ | | |
-| S5 | S5c: Delegation + warnings | ☐ | | |
+| S5 | S5a: Capability binders | ✅ | `497bb73` | 12 tests, cap parsing + gamma threading |
+| S5 | S5b: Boundary operations | ✅ | `ff63591` | 13 tests, open/connect/listen parse+elab+type |
+| S5 | S5c: Delegation + warnings | ✅ | `50b6616` | 6 tests, W2002 dead auth + W2003 ambient auth |
 | S6 | S6a: Strategy parsing + registration | ☐ | | |
 | S7 | S7a: Channel cells | ☐ | | |
 | S7 | S7b: Process-to-propagator compilation | ☐ | | |

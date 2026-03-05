@@ -489,6 +489,12 @@
    (test-dep '(driver.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt multi-dispatch.rkt namespace.rkt prelude.rkt syntax.rkt) #t)
    'test-sess-inference.rkt
    (test-dep '(metavar-store.rkt prelude.rkt processes.rkt sessions.rkt substitution.rkt syntax.rkt typing-core.rkt typing-sessions.rkt) #f)
+   'test-session-boundary-01.rkt
+   (test-dep '(driver.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parser.rkt pretty-print.rkt processes.rkt sessions.rkt source-location.rkt surface-syntax.rkt syntax.rkt warnings.rkt) #f)
+   'test-session-caps-01.rkt
+   (test-dep '(driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parser.rkt processes.rkt sessions.rkt source-location.rkt surface-syntax.rkt syntax.rkt warnings.rkt) #f)
+   'test-session-caps-02.rkt
+   (test-dep '(driver.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parser.rkt processes.rkt sessions.rkt surface-syntax.rkt syntax.rkt warnings.rkt) #f)
    'test-session-deadlock-01.rkt
    (test-dep '(errors.rkt processes.rkt propagator.rkt session-lattice.rkt session-propagators.rkt sessions.rkt syntax.rkt) #f)
    'test-session-elaborate-01.rkt
