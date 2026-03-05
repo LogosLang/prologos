@@ -374,6 +374,94 @@ integrates cleanly and enables future extension.
   propagators, run to quiescence, and read results. Future users
   (including future context windows) learn from these examples.
 
+*** Post Implementation Review (PIR)
+
+After a significant feature is complete --- all sub-phases shipped, tests
+passing, tracking documents updated --- conduct a Post Implementation
+Review. The PIR is the reflective counterpart to the research phase: where
+Phase 1 asks "what do we know going in?", the PIR asks "what do we know
+coming out?"
+
+A PIR is /not/ a retrospective about process (though process insights
+belong). It is primarily a /technical/ review: did the design hold up?
+What did the implementation reveal about our architecture? What does
+this feature enable that we didn't anticipate?
+
+**** What to cover
+
+- *Objectives vs. actuals*: What did we set out to build? What did we
+  actually build? Quantify scope adherence (e.g., "36/38 sub-phases,
+  95%"). Note what was correctly deferred vs. what was scope creep or
+  missed.
+
+- *What went well*: Identify decisions, patterns, and practices that
+  paid off. These are candidates for codification in principles
+  documents. The Session Type PIR identified the 3-phase design process
+  (research → design → plan) and propagator-as-universal-substrate as
+  key successes worth replicating.
+
+- *Challenges and how they were resolved*: Document the hard problems
+  and their solutions. Be specific --- "the ~??~ / ~$typed-hole~ reader
+  conflict required context-sensitive disambiguation at three points in
+  the desugaring pipeline" is more useful than "WS parsing was tricky."
+  Future implementations facing similar challenges will benefit from
+  the concrete resolution.
+
+- *Architectural validation*: Did the feature integrate cleanly with
+  existing systems? Were the extension points (AST pipeline, trait
+  system, propagator network) sufficient, or did they need modification?
+  A clean integration validates the architecture; friction points
+  identify areas for improvement.
+
+- *Quantitative summary*: Lines of code, test count growth, number of
+  commits, implementation duration. These establish baselines for
+  estimating future work of similar scope.
+
+- *Forward enablement*: What does this feature make possible that wasn't
+  possible before? What are the natural next steps? This section bridges
+  from the completed work to the future roadmap.
+
+- *Lessons learned*: Distill the key insights --- both technical and
+  methodological --- into actionable guidance. The best lessons are
+  specific enough to apply ("single-method trait dicts should be the
+  function itself, not a wrapper struct") rather than generic ("test
+  early and often").
+
+**** When to do a PIR
+
+Not every change warrants a PIR. Use one when:
+- The feature spanned multiple phases or sub-phases
+- The implementation took more than a single session
+- The work involved architectural decisions (new AST nodes, new
+  infrastructure files, new cross-cutting concerns)
+- You learned something that future work should benefit from
+
+Skip for routine bug fixes, single-file changes, or features that
+followed established patterns without surprises.
+
+**** Artifacts
+
+- PIR document: ~docs/tracking/YYYY-MM-DD_TOPIC_PIR.md~
+- Updates to ~DEVELOPMENT_LESSONS.org~ for broadly applicable lessons
+- Updates to ~PATTERNS_AND_CONVENTIONS.org~ for new patterns discovered
+- Updates to ~MEMORY.md~ for project-level status
+
+**** Example
+
+The Session Types PIR (~2026-03-04_SESSION_TYPE_PIR.md~) covered 36/38
+sub-phases across ~24 hours. Key findings:
+- The 3-phase design methodology (deep research → adversarial critique →
+  phased implementation) produced zero architectural rework
+- Propagator networks proved to be a universal substrate: session types
+  were the third domain (after types and multiplicities) to use the
+  same infrastructure without modification
+- The ~??~ / ~$typed-hole~ WS reader conflict revealed that
+  context-sensitive token disambiguation requires handling at every
+  stage of the desugaring pipeline, not just one
+- Phase 0 scoping (defer concurrent runtime) was validated as correct:
+  complete type-level infrastructure enables future runtime work without
+  redesign
+
 * Cross-Cutting Principles
 
 These principles apply across all five phases.
@@ -508,3 +596,29 @@ These completed efforts illustrate the methodology in practice:
   on transient type exposure).
 - *Composition*: Generic ~map~/~filter~/~reduce~ work across all
   collection types. ~into~ converts between any two collections.
+
+** Session Types (S1--S8)
+- *Research*: ~2026-03-03_SESSION_TYPE_RESEARCH.md~ surveying the
+  pi-calculus, Gay-Vasconcelos session types, Toninho-Caires-Pfenning
+  propositions-as-sessions, Wadler's Classical Processes, Scalas-Yoshida
+  multiparty session types, and Jespersen-Munksgaard-Sestoft Rust
+  embedding
+- *Design*: ~2026-03-03_SESSION_TYPE_DESIGN.md~ with 8-phase roadmap,
+  ~26 surface syntax structs, propagator-based type checking,
+  Galois connection bridges
+- *Iteration*: Adversarial critique refined duality computation,
+  deadlock detection strategy, capability integration, and the
+  functional-relational boundary between session and process layers
+- *Implementation*: 36/38 sub-phases complete (~24 hours). 4 new
+  infrastructure files, 1,880 new lines, 392 test cases (+21% suite
+  growth). S8b correctly deferred (promises meaningless without
+  concurrent runtime).
+- *Composition*: Session types are the third domain on the propagator
+  network (after types and multiplicities), using the same
+  infrastructure without modification. Galois connection bridges
+  compose session and type domains. ~defproc~ composes with trait
+  system, QTT, and capability binders.
+- *PIR*: ~2026-03-04_SESSION_TYPE_PIR.md~ --- first exemplar of the
+  PIR practice. Validated the 3-phase design methodology, identified
+  the ~??~/~$typed-hole~ desugaring lesson, and established forward
+  roadmap for concurrent runtime and multi-party sessions.
