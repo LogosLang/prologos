@@ -18,7 +18,7 @@
 | S1 | S1e: Macro pass-through + grammar | ✅ | `56fe397` | Pass-through + dep-graph |
 | S2 | S2a: Process surface structs | ✅ | `4a42b38` | Combined with S1a |
 | S2 | S2b: Sexp-mode process parser | ✅ | `8c750b2` | 17 tests |
-| S2 | S2c: WS-mode process preparse | ⏳ | `bc6a961` | Stub pass-through; full disambiguation deferred |
+| S2 | S2c: WS-mode process preparse | ✅ | `9f7692b` | 24 tests, reader ! handler, full preparse desugaring |
 | S2 | S2d: Process macro pass-through | ✅ | `56fe397` | Combined with S1e |
 | S3 | S3a: Session elaboration | ✅ | `79ced0d` | Session registry + elaborate-session-body |
 | S3 | S3b: Process elaboration | ✅ | `79ced0d` | elaborate-proc-body + proc branches |

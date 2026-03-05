@@ -401,6 +401,8 @@
    (test-dep '(prelude.rkt pretty-print.rkt sessions.rkt syntax.rkt) #f)
    'test-process-parse-01.rkt
    (test-dep '(errors.rkt parser.rkt surface-syntax.rkt) #f)
+   'test-process-ws-01.rkt
+   (test-dep '(driver.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parser.rkt processes.rkt reader.rkt sessions.rkt surface-syntax.rkt warnings.rkt) #f)
    'test-propagator-bsp.rkt
    (test-dep '(champ.rkt propagator.rkt) #f)
    'test-propagator-integration.rkt
