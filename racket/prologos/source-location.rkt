@@ -18,9 +18,10 @@
 
 ;; Format a source location for display
 (define (format-srcloc loc)
-  (if (equal? loc srcloc-unknown)
-      "<unknown>"
-      (format "~a:~a:~a"
-              (srcloc-file loc)
-              (srcloc-line loc)
-              (srcloc-col loc))))
+  (cond
+    [(not loc) "<unknown>"]
+    [(equal? loc srcloc-unknown) "<unknown>"]
+    [else (format "~a:~a:~a"
+                  (srcloc-file loc)
+                  (srcloc-line loc)
+                  (srcloc-col loc))]))

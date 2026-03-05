@@ -44,13 +44,14 @@
 
 ;; Convert our prologos srcloc to the raw list format.
 (define (prologos-loc->where loc)
-  (if (equal? loc prologos:srcloc-unknown)
-      #f
-      (list (prologos:srcloc-file loc)
-            (prologos:srcloc-line loc)
-            (prologos:srcloc-col loc)
-            #f    ;; position (we don't track byte offset)
-            (prologos:srcloc-span loc))))
+  (cond
+    [(not loc) #f]
+    [(equal? loc prologos:srcloc-unknown) #f]
+    [else (list (prologos:srcloc-file loc)
+                (prologos:srcloc-line loc)
+                (prologos:srcloc-col loc)
+                #f    ;; position (we don't track byte offset)
+                (prologos:srcloc-span loc))]))
 
 ;; Raise a prologos-error as a Racket exception.
 ;; Used inside the #%module-begin macro when type checking fails.
