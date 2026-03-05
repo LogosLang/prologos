@@ -610,6 +610,63 @@ The following collection items ARE also deferred (genuine infrastructure deps):
 
 ---
 
+## IO Library
+
+### Dependent Send/Receive (`!:`/`?:`) (NOT STARTED)
+- **Problem**: Dependent session operators bind values in the continuation scope.
+  Reader doesn't handle `!:`/`?:` tokens. Session type elaboration needs binding logic.
+- **Needed for**: Schema-typed IO, value-dependent protocols (e.g., `?: n Nat . ? [Vec String n]`)
+- **Blocked on**: Reader/parser token support for `!:`/`?:` in WS mode
+- **Source**: `docs/tracking/2026-03-05_IO_LIBRARY_DESIGN_V2.md` §10, `docs/tracking/2026-03-03_SESSION_TYPE_DESIGN.md` §8
+
+### IO Bridge Propagators (NOT STARTED)
+- **Problem**: The double-boundary IO model (compile-time cap-check → IO bridge cell → IO
+  propagator → external world) is designed but not implemented. Need `io-bridge-cell` type,
+  side-effecting IO propagator, and wiring into `run-to-quiescence`.
+- **Needed for**: Any actual IO operations (file, network, database)
+- **Blocked on**: Nothing (builds on existing propagator + session infrastructure)
+- **Source**: `docs/tracking/2026-03-05_IO_LIBRARY_DESIGN_V2.md` §2, `docs/tracking/2026-03-03_SESSION_TYPE_DESIGN.md` §12.5
+
+### Boundary Operations: `open`/`connect`/`listen` (NOT STARTED)
+- **Problem**: Capability-gated channel creation for external resources is designed
+  (Session Type Design §12.4) but not implemented. These operations create channel
+  endpoints to external resources (files, network, databases).
+- **Needed for**: Any external IO beyond stdin/stdout
+- **Blocked on**: IO bridge propagators (above)
+- **Source**: `docs/tracking/2026-03-05_IO_LIBRARY_DESIGN_V2.md` §6, `docs/tracking/2026-03-03_SESSION_TYPE_DESIGN.md` §12.4
+
+### Opaque Type Marshalling (NOT STARTED)
+- **Problem**: `foreign.rkt` handles Nat/Int/Bool/String/Char but not opaque Racket values
+  (file ports, database connections). Need `:opaque` foreign annotation or pass-through
+  marshalling strategy.
+- **Needed for**: File handles, database connections, network sockets via FFI
+- **Blocked on**: Nothing (foreign.rkt extension)
+- **Source**: `docs/tracking/2026-03-05_IO_LIBRARY_DESIGN_V2.md` §10, `docs/tracking/2026-03-01_1200_IO_LIBRARY_DESIGN.md` §6.1
+
+### `Path` Type (NOT STARTED)
+- **Problem**: No cross-platform file path abstraction. Could be String wrapper initially
+  or opaque Racket `path?` value.
+- **Pure operations**: join, parent, file-name, extension, with-extension, absolute?, relative?
+- **Blocked on**: Nothing (straightforward String wrapper or opaque type)
+- **Source**: `docs/tracking/2026-03-05_IO_LIBRARY_DESIGN_V2.md` §9
+
+### `Bytes` Type (NOT STARTED)
+- **Problem**: No binary data type. Not needed for text IO (Phase 1) but needed for binary
+  IO, SQLite FFI, and network protocols.
+- **Blocked on**: Nothing, but lower priority than text IO
+- **Source**: `docs/tracking/2026-03-05_IO_LIBRARY_DESIGN_V2.md` §12.3
+
+### Transitive Capability Inference (NOT STARTED)
+- **Problem**: Full lexical capability resolution (CAPABILITY_SECURITY.md §Lexical Resolution)
+  needs capability inference to propagate through call chains — if `f` calls `g` which
+  requires `{ReadCap}`, then `f` should infer `{ReadCap}` requirement. Current cap-inference
+  is per-function, not transitive.
+- **Needed for**: Ergonomic IO (Tier 1 progressive disclosure — no manual cap annotations)
+- **Blocked on**: Design cycle for transitive cap-inference mechanism
+- **Source**: `docs/tracking/2026-03-05_IO_LIBRARY_DESIGN_V2.md` §10, `docs/tracking/principles/CAPABILITY_SECURITY.md` §Lexical Resolution
+
+---
+
 ## Infrastructure / Performance
 
 ### Compiled Module Cache
