@@ -3184,6 +3184,20 @@
              (if (prologos-error? cont) cont
                  (maybe-wrap-throws (sess-recv ty cont) throws-type)))))]
 
+    [(surf-sess-async-send type-surf cont-surf _loc)
+     (let ([ty (elaborate type-surf)])
+       (if (prologos-error? ty) ty
+           (let ([cont (elaborate-session-body cont-surf rec-stack depth session-name throws-type)])
+             (if (prologos-error? cont) cont
+                 (maybe-wrap-throws (sess-async-send ty cont) throws-type)))))]
+
+    [(surf-sess-async-recv type-surf cont-surf _loc)
+     (let ([ty (elaborate type-surf)])
+       (if (prologos-error? ty) ty
+           (let ([cont (elaborate-session-body cont-surf rec-stack depth session-name throws-type)])
+             (if (prologos-error? cont) cont
+                 (maybe-wrap-throws (sess-async-recv ty cont) throws-type)))))]
+
     [(surf-sess-dsend name type-surf cont-surf _loc)
      (let ([ty (elaborate type-surf)])
        (if (prologos-error? ty) ty

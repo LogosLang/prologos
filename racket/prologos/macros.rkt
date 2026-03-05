@@ -524,8 +524,9 @@
 ;; properties: hasheq of keyword → value
 ;;   :fairness   → :round-robin | :priority | :none
 ;;   :fuel       → positive integer (propagator firing limit per step)
-;;   :io         → :nonblocking | :blocking-ok
-;;   :parallelism → :single-thread | :work-stealing
+;;   :scheduler-io → :nonblocking | :blocking-ok (renamed from :io to avoid
+;;                   confusion with protocol-level async !! / ??)
+;;   :parallelism   → :single-thread | :work-stealing
 ;; srcloc: source location of the strategy declaration
 (struct strategy-entry (name properties srcloc) #:transparent)
 
@@ -533,14 +534,14 @@
 (define strategy-defaults
   (hasheq ':fairness ':round-robin
           ':fuel 50000
-          ':io ':nonblocking
+          ':scheduler-io ':nonblocking
           ':parallelism ':single-thread))
 
 ;; Valid property keys and their valid values
 (define valid-strategy-keys
   (hasheq ':fairness '(:round-robin :priority :none)
           ':fuel 'positive-integer
-          ':io '(:nonblocking :blocking-ok)
+          ':scheduler-io '(:nonblocking :blocking-ok)
           ':parallelism '(:single-thread :work-stealing)))
 
 ;; Strategy store: symbol → strategy-entry
@@ -903,20 +904,41 @@
     ;; List form
     [(pair? item)
      (define head (car item))
-     (case head
+     ;; Handle reader's ($typed-hole) form for ?? in session context.
+     ;; The WS reader tokenizes ?? as ($typed-hole), which appears as the head
+     ;; of the line-grouped item. The inner element may be a syntax object.
+     (define (typed-hole-head? h)
+       (and (pair? h)
+            (let ([inner (car h)])
+              (and (or (and (symbol? inner) (eq? inner '$typed-hole))
+                       (and (syntax? inner) (eq? (syntax-e inner) '$typed-hole)))
+                   (null? (cdr h))))))
+     (cond
+      [(typed-hole-head? head)
+       (if (>= (length item) 2)
+           `(AsyncRecv ,(cadr item) ,cont)
+           item)]
+      [else
+       (case head
        ;; (! Type) → (Send Type Cont)
        [(!)
         (if (>= (length item) 2)
             `(Send ,(cadr item) ,cont)
             item)]  ;; malformed
-       ;; (? Type) → (Recv Type Cont)
+       ;; (?? Type) → (AsyncRecv Type Cont) — non-blocking recv
        [(??)
         (if (>= (length item) 2)
-            `(Recv ,(cadr item) ,cont)
+            `(AsyncRecv ,(cadr item) ,cont)
             item)]
+       ;; (? Type) → (Recv Type Cont)
        [(?)
         (if (>= (length item) 2)
             `(Recv ,(cadr item) ,cont)
+            item)]
+       ;; (!! Type) → (AsyncSend Type Cont) — non-blocking send
+       [(!!)
+        (if (>= (length item) 2)
+            `(AsyncSend ,(cadr item) ,cont)
             item)]
        ;; (!: n T) → (DSend (n : T) Cont)
        ;; WS reader produces (!: n Nat) as a 3-element list
@@ -978,7 +1000,7 @@
        ;; (SVar Name) → pass through
        [(SVar) item]
        ;; Otherwise — pass through unchanged (could be a type reference)
-       [else item])]
+       [else item])])]
     [else item]))
 
 ;; Desugar WS-mode branch list from $pipe children.
@@ -1024,9 +1046,21 @@
 (define (regroup-session-tokens items)
   (cond
     [(null? items) '()]
-    ;; ! or ? or ?? followed by something → group as (Op Type)
+    ;; ($typed-hole) followed by something → async recv (?? Type)
+    ;; The reader tokenizes ?? as ($typed-hole), not a symbol.
+    ;; In session body context, bare ($typed-hole) means async recv.
+    ;; The inner element may be a symbol or a syntax object.
+    [(and (pair? (car items))
+          (let ([inner (caar items)])
+            (and (or (and (symbol? inner) (eq? inner '$typed-hole))
+                     (and (syntax? inner) (eq? (syntax-e inner) '$typed-hole)))
+                 (null? (cdar items))))
+          (pair? (cdr items)))
+     (cons (list '?? (cadr items))
+           (regroup-session-tokens (cddr items)))]
+    ;; ! or ? or !! followed by something → group as (Op Type)
     [(and (symbol? (car items))
-          (memq (car items) '(! ? ??))
+          (memq (car items) '(! ? !!))
           (pair? (cdr items)))
      (cons (list (car items) (cadr items))
            (regroup-session-tokens (cddr items)))]
@@ -1116,11 +1150,17 @@
     [(pair? item)
      (define len (length item))
      (cond
-       ;; (Chan ! Expr) or (Chan !: Expr) — send
-       [(and (= len 3) (memq (cadr item) '(! !:)))
+       ;; (Chan ! Expr) or (Chan !: Expr) or (Chan !! Expr) — send
+       [(and (= len 3) (memq (cadr item) '(! !: !!)))
         `(proc-send ,(car item) ,(caddr item) ,cont)]
-       ;; (Var := Chan ?) or (Var := Chan ?:) — receive
-       [(and (= len 4) (eq? (cadr item) ':=) (memq (cadddr item) '(? ?:)))
+       ;; (Var := Chan ?) or (Var := Chan ?:) or (Var := Chan ??) — receive
+       ;; Note: ?? from the reader arrives as ($typed-hole), not a symbol.
+       [(and (= len 4) (eq? (cadr item) ':=)
+             (or (memq (cadddr item) '(? ?:))
+                 (and (pair? (cadddr item))
+                      (let ([inner (car (cadddr item))])
+                        (or (eq? inner '$typed-hole)
+                            (and (syntax? inner) (eq? (syntax-e inner) '$typed-hole)))))))
         `(proc-recv ,(caddr item) ,(car item) ,cont)]
        ;; (select Chan :Label) — select
        [(and (>= len 3) (eq? (car item) 'select))

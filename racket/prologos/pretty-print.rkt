@@ -1249,6 +1249,10 @@
     [(sess-drecv t cont)
      (let ([name (fresh-name (length names) names)])
        (format "[?[~a <~a>] . ~a]" name (pp-expr t names) (pp-session cont (cons name names))))]
+    [(sess-async-send t cont)
+     (format "[!!~a . ~a]" (pp-expr t names) (pp-session cont names))]
+    [(sess-async-recv t cont)
+     (format "[??~a . ~a]" (pp-expr t names) (pp-session cont names))]
     [(sess-choice branches)
      (format "[+{ ~a }]" (pp-branches branches names))]
     [(sess-offer branches)

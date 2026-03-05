@@ -76,15 +76,17 @@
     [(sess-top? sess-val) type-top]
     [(sess-send? sess-val)  (sess-send-type sess-val)]
     [(sess-dsend? sess-val) (sess-dsend-type sess-val)]
+    [(sess-async-send? sess-val) (sess-async-send-type sess-val)]
     [else type-bot]))
 
-;; α for Recv: extracts message type from sess-recv / sess-drecv
+;; α for Recv: extracts message type from sess-recv / sess-drecv / sess-async-recv
 (define (recv-type-alpha sess-val)
   (cond
     [(sess-bot? sess-val) type-bot]
     [(sess-top? sess-val) type-top]
     [(sess-recv? sess-val)  (sess-recv-type sess-val)]
     [(sess-drecv? sess-val) (sess-drecv-type sess-val)]
+    [(sess-async-recv? sess-val) (sess-async-recv-type sess-val)]
     [else type-bot]))
 
 ;; ========================================

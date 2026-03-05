@@ -57,6 +57,19 @@
  resolve-expr)
 
 ;; ========================================
+;; Async-aware predicates: accept both sync and async session variants
+;; In Phase 0, proc-send/proc-recv compile identically for both.
+;; ========================================
+
+(define (sess-send-like? v) (or (sess-send? v) (sess-async-send? v)))
+(define (sess-send-like-cont v)
+  (if (sess-send? v) (sess-send-cont v) (sess-async-send-cont v)))
+
+(define (sess-recv-like? v) (or (sess-recv? v) (sess-async-recv? v)))
+(define (sess-recv-like-cont v)
+  (if (sess-recv? v) (sess-recv-cont v) (sess-async-recv-cont v)))
+
+;; ========================================
 ;; Message Lattice (flat: bot → value → top)
 ;; ========================================
 ;;
@@ -428,7 +441,7 @@
         (define-values (rnet3 _pid)
           (rt-add-session-advance-in-rnet rnet2
             (channel-endpoint-session-cell ep) next-sess-cell
-            sess-send? sess-send-cont))
+            sess-send-like? sess-send-like-cont))
         ;; Update endpoint with new session cell
         (define ep* (endpoint-advance-session ep next-sess-cell))
         (define trace*
@@ -451,7 +464,7 @@
         (define-values (rnet2 _pid)
           (rt-add-session-advance-in-rnet rnet1
             (channel-endpoint-session-cell ep) next-sess-cell
-            sess-recv? sess-recv-cont))
+            sess-recv-like? sess-recv-like-cont))
         ;; Add propagator to capture received value into bindings
         ;; (For Phase 0, we just read the msg-in cell value)
         (define msg-in-cell (channel-endpoint-msg-in-cell ep))

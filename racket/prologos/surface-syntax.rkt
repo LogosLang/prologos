@@ -317,6 +317,8 @@
  (struct-out surf-sess-recv)
  (struct-out surf-sess-dsend)
  (struct-out surf-sess-drecv)
+ (struct-out surf-sess-async-send)
+ (struct-out surf-sess-async-recv)
  (struct-out surf-sess-choice)
  (struct-out surf-sess-offer)
  (struct-out surf-sess-branch)
@@ -1063,6 +1065,8 @@
 (struct surf-sess-recv   (type cont srcloc) #:transparent)       ; ? Type . cont
 (struct surf-sess-dsend  (name type cont srcloc) #:transparent)  ; !: name Type . cont
 (struct surf-sess-drecv  (name type cont srcloc) #:transparent)  ; ?: name Type . cont
+(struct surf-sess-async-send (type cont srcloc) #:transparent)   ; !! Type . cont (non-blocking send)
+(struct surf-sess-async-recv (type cont srcloc) #:transparent)   ; ?? Type . cont (non-blocking recv)
 (struct surf-sess-choice (branches srcloc) #:transparent)        ; +> with branch list
 (struct surf-sess-offer  (branches srcloc) #:transparent)        ; &> with branch list
 (struct surf-sess-branch (label cont srcloc) #:transparent)      ; | :label -> cont

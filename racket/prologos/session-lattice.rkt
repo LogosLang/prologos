@@ -66,6 +66,10 @@
      (or (has-unsolved-session-meta? cont))]
     [(sess-drecv ty cont)
      (or (has-unsolved-session-meta? cont))]
+    [(sess-async-send ty cont)
+     (or (has-unsolved-session-meta? cont))]
+    [(sess-async-recv ty cont)
+     (or (has-unsolved-session-meta? cont))]
     [(sess-choice branches)
      (ormap (lambda (b) (has-unsolved-session-meta? (cdr b))) branches)]
     [(sess-offer branches)
@@ -156,6 +160,19 @@
            [merged-cont (try-unify-session-pure cont1 cont2)])
        (and merged-ty merged-cont
             (sess-drecv merged-ty merged-cont)))]
+
+    ;; ---- Async send/recv ----
+    [((sess-async-send a1 cont1) (sess-async-send a2 cont2))
+     (let ([merged-ty (try-unify-pure a1 a2)]
+           [merged-cont (try-unify-session-pure cont1 cont2)])
+       (and merged-ty merged-cont
+            (sess-async-send merged-ty merged-cont)))]
+
+    [((sess-async-recv a1 cont1) (sess-async-recv a2 cont2))
+     (let ([merged-ty (try-unify-pure a1 a2)]
+           [merged-cont (try-unify-session-pure cont1 cont2)])
+       (and merged-ty merged-cont
+            (sess-async-recv merged-ty merged-cont)))]
 
     ;; ---- Choice: intersect labels (both sides must offer same label) ----
     [((sess-choice branches1) (sess-choice branches2))

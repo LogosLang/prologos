@@ -41,6 +41,8 @@
  make-session-cell
  add-send-prop
  add-recv-prop
+ add-async-send-prop
+ add-async-recv-prop
  add-select-prop
  add-offer-prop
  add-stop-prop
@@ -97,8 +99,9 @@
 ;; The propagator watches the channel's session cell and decomposes
 ;; the session into the current operation + continuation.
 
-;; add-send-prop: constrains sess-cell to be sess-send(A, S')
+;; add-send-prop: constrains sess-cell to be sess-send(A, S') or sess-async-send(A, S')
 ;; Returns (values net cont-cell-id) where cont-cell holds S'.
+;; In Phase 0, proc-send matches both sync and async send in the session type.
 (define (add-send-prop net sess-cell)
   ;; Create continuation cell
   (define-values (net1 cont-cell) (make-session-cell net))
@@ -110,8 +113,9 @@
       (cond
         [(sess-bot? sess-val) n]  ;; No info yet, wait
         [(sess-send? sess-val)
-         ;; Forward: extract continuation → write to cont-cell
          (net-cell-write n cont-cell (sess-send-cont sess-val))]
+        [(sess-async-send? sess-val)
+         (net-cell-write n cont-cell (sess-async-send-cont sess-val))]
         [(sess-meta? sess-val) n]  ;; Unknown, defer
         ;; Incompatible shape → write contradiction
         [else (net-cell-write n sess-cell sess-top)])))
@@ -119,7 +123,7 @@
     (net-add-propagator net1 (list sess-cell) (list cont-cell) fire-fn))
   (values net2 cont-cell))
 
-;; add-recv-prop: constrains sess-cell to be sess-recv(A, S')
+;; add-recv-prop: constrains sess-cell to be sess-recv(A, S') or sess-async-recv(A, S')
 (define (add-recv-prop net sess-cell)
   (define-values (net1 cont-cell) (make-session-cell net))
   (define fire-fn
@@ -129,6 +133,41 @@
         [(sess-bot? sess-val) n]
         [(sess-recv? sess-val)
          (net-cell-write n cont-cell (sess-recv-cont sess-val))]
+        [(sess-async-recv? sess-val)
+         (net-cell-write n cont-cell (sess-async-recv-cont sess-val))]
+        [(sess-meta? sess-val) n]
+        [else (net-cell-write n sess-cell sess-top)])))
+  (define-values (net2 _pid)
+    (net-add-propagator net1 (list sess-cell) (list cont-cell) fire-fn))
+  (values net2 cont-cell))
+
+;; add-async-send-prop: constrains sess-cell to be sess-async-send(A, S')
+;; Identical to add-send-prop but matches sess-async-send.
+(define (add-async-send-prop net sess-cell)
+  (define-values (net1 cont-cell) (make-session-cell net))
+  (define fire-fn
+    (lambda (n)
+      (define sess-val (net-cell-read n sess-cell))
+      (cond
+        [(sess-bot? sess-val) n]
+        [(sess-async-send? sess-val)
+         (net-cell-write n cont-cell (sess-async-send-cont sess-val))]
+        [(sess-meta? sess-val) n]
+        [else (net-cell-write n sess-cell sess-top)])))
+  (define-values (net2 _pid)
+    (net-add-propagator net1 (list sess-cell) (list cont-cell) fire-fn))
+  (values net2 cont-cell))
+
+;; add-async-recv-prop: constrains sess-cell to be sess-async-recv(A, S')
+(define (add-async-recv-prop net sess-cell)
+  (define-values (net1 cont-cell) (make-session-cell net))
+  (define fire-fn
+    (lambda (n)
+      (define sess-val (net-cell-read n sess-cell))
+      (cond
+        [(sess-bot? sess-val) n]
+        [(sess-async-recv? sess-val)
+         (net-cell-write n cont-cell (sess-async-recv-cont sess-val))]
         [(sess-meta? sess-val) n]
         [else (net-cell-write n sess-cell sess-top)])))
   (define-values (net2 _pid)

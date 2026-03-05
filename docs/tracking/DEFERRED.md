@@ -583,6 +583,33 @@ The following collection items ARE also deferred (genuine infrastructure deps):
 
 ---
 
+## Session Types — Concurrent Runtime
+
+### Full Concurrent Session Execution (NOT STARTED)
+- **Problem**: Phase 0 compiles processes to a single propagator network that runs to
+  quiescence atomically. `!!` and `!` produce identical runtime behavior — there is no
+  real concurrency, no buffered channels, no async message delivery.
+- **Goal**: True concurrent session execution with:
+  1. Buffered channels with async message passing (bounded/unbounded)
+  2. `!!`/`??` runtime distinction from `!`/`?` (non-blocking send returns immediately,
+     non-blocking recv returns a promise cell with real lifecycle)
+  3. Multiple propagator networks running concurrently (one per process or process group)
+  4. Distributed propagator scheduling — cross-network message delivery
+  5. Promise cell lifecycle: pending → resolved → consumed (with timeout/cancellation)
+  6. Fairness guarantees via strategy `:fairness` parameter
+- **Current Phase 0 semantics**: `!!`/`??` are parsed and type-checked as session type
+  variants (`sess-async-send`/`sess-async-recv`) but compile to the same runtime
+  operations as `!`/`?`. `@` is parsed as a deref operator but is identity at runtime.
+  This is by design — Phase 0 validates the type-level protocol without concurrent runtime.
+- **Blocked on**: Multi-network runtime infrastructure, Racket-level concurrency primitives
+  (places/threads), distributed scheduling design
+- **Value**: Propagators naturally model distributed computation — each cell is a "location"
+  that can live on any network. Cross-network propagators are the foundation for distributed
+  session execution. This is where the propagator architecture really shines.
+- **Source**: S8 design discussion (2026-03-04 session), `docs/tracking/2026-03-03_SESSION_TYPE_IMPL_PLAN.md`
+
+---
+
 ## Infrastructure / Performance
 
 ### Compiled Module Cache

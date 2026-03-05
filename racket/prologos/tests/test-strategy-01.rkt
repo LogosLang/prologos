@@ -49,7 +49,7 @@
   (check-false err)
   (check-equal? (hash-ref props ':fairness) ':round-robin)
   (check-equal? (hash-ref props ':fuel) 50000)
-  (check-equal? (hash-ref props ':io) ':nonblocking)
+  (check-equal? (hash-ref props ':scheduler-io) ':nonblocking)
   (check-equal? (hash-ref props ':parallelism) ':single-thread))
 
 (test-case "parse-strategy-properties: override fairness"
@@ -66,11 +66,11 @@
 
 (test-case "parse-strategy-properties: multiple overrides"
   (define-values (props err)
-    (parse-strategy-properties '(:fairness :priority :fuel 10000 :io :blocking-ok)))
+    (parse-strategy-properties '(:fairness :priority :fuel 10000 :scheduler-io :blocking-ok)))
   (check-false err)
   (check-equal? (hash-ref props ':fairness) ':priority)
   (check-equal? (hash-ref props ':fuel) 10000)
-  (check-equal? (hash-ref props ':io) ':blocking-ok))
+  (check-equal? (hash-ref props ':scheduler-io) ':blocking-ok))
 
 (test-case "parse-strategy-properties: invalid key"
   (define-values (props err)
@@ -109,7 +109,7 @@
                 "strategy realtime defined."))
 
 (test-case "e2e: strategy with all properties"
-  (check-equal? (run "(strategy batch :fairness :round-robin :fuel 1000000 :io :blocking-ok :parallelism :work-stealing)")
+  (check-equal? (run "(strategy batch :fairness :round-robin :fuel 1000000 :scheduler-io :blocking-ok :parallelism :work-stealing)")
                 "strategy batch defined."))
 
 (test-case "e2e: strategy registers in registry"

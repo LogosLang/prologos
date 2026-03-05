@@ -147,6 +147,10 @@
          [(sess-dsend a s-cont)
           (and (check gamma e a)
                (type-proc gamma (chan-ctx-update delta c (substS s-cont 0 e)) p))]
+         ;; Async send: c :: async-send(A, S)
+         [(sess-async-send a s-cont)
+          (and (check gamma e a)
+               (type-proc gamma (chan-ctx-update delta c s-cont) p))]
          ;; Sprint 8: sess-meta → infer session from operation
          [(sess-meta id)
           (let ([ty (infer gamma e)])
@@ -168,6 +172,11 @@
                (type-proc (ctx-extend gamma a 'mw) (chan-ctx-update delta c s-cont) p))]
          ;; Dependent recv: c :: drecv(A, S)
          [(sess-drecv a s-cont)
+          (and (or (not a-annot) (equal? a a-annot) (conv a a-annot))
+               (is-type gamma a)
+               (type-proc (ctx-extend gamma a 'mw) (chan-ctx-update delta c s-cont) p))]
+         ;; Async recv: c :: async-recv(A, S)
+         [(sess-async-recv a s-cont)
           (and (or (not a-annot) (equal? a a-annot) (conv a a-annot))
                (is-type gamma a)
                (type-proc (ctx-extend gamma a 'mw) (chan-ctx-update delta c s-cont) p))]

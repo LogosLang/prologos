@@ -53,7 +53,7 @@
 
 (test-case "ws-strategy: all properties"
   (check-equal? (run-ws
-    "strategy batch\n  :fairness :round-robin\n  :fuel 1000000\n  :io :blocking-ok\n  :parallelism :work-stealing\n")
+    "strategy batch\n  :fairness :round-robin\n  :fuel 1000000\n  :scheduler-io :blocking-ok\n  :parallelism :work-stealing\n")
     "strategy batch defined."))
 
 ;; ========================================
@@ -67,7 +67,7 @@
   (define props (strategy-entry-properties entry))
   (check-equal? (hash-ref props ':fairness) ':round-robin)
   (check-equal? (hash-ref props ':fuel) 50000)
-  (check-equal? (hash-ref props ':io) ':nonblocking)
+  (check-equal? (hash-ref props ':scheduler-io) ':nonblocking)
   (check-equal? (hash-ref props ':parallelism) ':single-thread))
 
 (test-case "ws-strategy: overrides preserved in registry"
@@ -79,7 +79,7 @@
   (check-equal? (hash-ref props ':fairness) ':priority)
   (check-equal? (hash-ref props ':fuel) 5000)
   ;; Defaults for unset properties
-  (check-equal? (hash-ref props ':io) ':nonblocking))
+  (check-equal? (hash-ref props ':scheduler-io) ':nonblocking))
 
 ;; ========================================
 ;; WS-4c: Error cases

@@ -4721,6 +4721,28 @@
                         (surf-sess-drecv bind-name bind-type cont use-loc))))]
              [else
               (parse-error use-loc "DRecv: binder must be (name : Type)" #f)])])]
+       ;; (AsyncSend Type Cont) — non-blocking send
+       [(AsyncSend)
+        (cond
+          [(not (= (length body-args) 2))
+           (parse-error use-loc "AsyncSend requires type and continuation: (AsyncSend Type Cont)" #f)]
+          [else
+           (define ty (parse-datum (car body-args)))
+           (if (prologos-error? ty) ty
+               (let ([cont (parse-session-body (cadr body-args) use-loc)])
+                 (if (prologos-error? cont) cont
+                     (surf-sess-async-send ty cont use-loc))))])]
+       ;; (AsyncRecv Type Cont) — non-blocking receive
+       [(AsyncRecv)
+        (cond
+          [(not (= (length body-args) 2))
+           (parse-error use-loc "AsyncRecv requires type and continuation: (AsyncRecv Type Cont)" #f)]
+          [else
+           (define ty (parse-datum (car body-args)))
+           (if (prologos-error? ty) ty
+               (let ([cont (parse-session-body (cadr body-args) use-loc)])
+                 (if (prologos-error? cont) cont
+                     (surf-sess-async-recv ty cont use-loc))))])]
        ;; (Choice ((:l1 S1) (:l2 S2) ...))
        [(Choice)
         (cond
