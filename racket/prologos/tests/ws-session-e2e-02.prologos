@@ -1,0 +1,22 @@
+;; E2E test: Session with offer + strategy
+;; Tests branching session types and strategy declarations.
+
+session Server
+  &>
+    | :get -> ! String -> end
+    | :put -> ? String -> end
+
+defproc handler : Server
+  offer self
+    | :get ->
+        self ! "hello"
+        stop
+    | :put ->
+        data := self ?
+        stop
+
+strategy default
+
+strategy realtime
+  :fairness :priority
+  :fuel 10000

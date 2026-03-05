@@ -1,0 +1,20 @@
+;; E2E test: Complete session + process program in .prologos syntax
+;; Tests basic send/recv/end session with a type-checked defproc.
+
+session Greeting
+  ! String
+  end
+
+defproc greeter : Greeting
+  self ! "hello"
+  stop
+
+session Echo
+  ! String
+  ? String
+  end
+
+defproc echo-client : Echo
+  self ! "hello"
+  reply := self ?
+  stop
