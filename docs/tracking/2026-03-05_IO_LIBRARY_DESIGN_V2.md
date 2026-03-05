@@ -206,7 +206,7 @@ ns my-app
 
 ;; Just works — compiler infers {fs :0 ReadCap} on main
 defn main []
-  let data = [read-file "data.csv"]
+  let data := [read-file "data.csv"]
   [print data]
 ```
 
@@ -391,7 +391,7 @@ For complex IO patterns, use `defproc` directly:
 ```prologos
 ;; A process that reads line-by-line and processes
 defproc line-processor : dual FileRead {fs :0 ReadCap}
-  let file-ch = open [path "data.csv"] :read {fs}
+  let file-ch := open [path "data.csv"] :read {fs}
   rec
     select file-ch :read-line
     match [file-ch ?]
@@ -409,21 +409,26 @@ defproc line-processor : dual FileRead {fs :0 ReadCap}
 ;; Explicit capability in header
 defproc web-scraper : ScraperProtocol {net :0 HttpCap, fs :0 WriteCap}
   url := self ?
-  let resp = [http-get url]
-  let data = [extract-data resp]
+  let resp := [http-get url]
+  let data := [extract-data resp]
   [write-file [path "output.json"] [to-json data]]
   self ! :done
   stop
 
-;; Main as powerbox — delegates attenuated capabilities
+;; Main as powerbox — subtype subsumption handles attenuation
 defproc main [args : List String] {sys : IOCap}
-  let read-only = [attenuate sys ReadCap]
-  let write-only = [attenuate sys WriteCap]
-
-  spawn (data-loader {read-only})
-  spawn (report-writer {write-only})
+  spawn data-loader ReadCap       ;; compiler resolves ReadCap <: IOCap
+  spawn report-writer WriteCap    ;; compiler resolves WriteCap <: IOCap
   ...
 ```
+
+**Implicit attenuation via subtype subsumption**: Because `ReadCap <: FsCap <: IOCap`,
+the compiler can automatically resolve a child's `{ReadCap}` requirement from the
+parent's `{sys : IOCap}`. No explicit `attenuate` call needed for the common case.
+The spawned process gets proof of the narrower authority; the parent retains its full
+authority (`:0` is erased — it's a proof, not a value being consumed). Explicit
+`attenuate` is only needed for `:1` (linear) authority *transfer*, where the parent
+permanently gives up its own access.
 
 ---
 
@@ -455,21 +460,23 @@ From CAPABILITY_SECURITY.md §Authority Root and Session Type Design §12.3:
 ;; This is the ONLY place capabilities are minted from nothing
 defn main {sys : IOCap}
   ;; Beginner: just use convenience functions
-  let data = [read-file [path "input.csv"]]
+  let data := [read-file [path "input.csv"]]
   [println [format "Read {} bytes" [string-length data]]]
 
 ;; Or as a process for complex IO
 defproc main [args : List String] {sys : IOCap}
-  let (fs-cap, remaining) = [split-cap sys FsCap]
-  let (net-cap, remaining) = [split-cap remaining NetCap]
-
-  spawn (file-watcher {fs-cap})     ;; gets only filesystem authority
-  spawn (api-server {net-cap})      ;; gets only network authority
+  ;; Subtype subsumption: compiler resolves FsCap <: IOCap, NetCap <: IOCap
+  spawn file-watcher FsCap       ;; gets only filesystem authority
+  spawn api-server NetCap        ;; gets only network authority
   ...
 ```
 
 No external manifest file. The capability chain is in the code, visible in
 types, auditable by the compiler. **The type signatures ARE the security manifest.**
+
+Explicit `split-cap` / `attenuate` is available for `:1` linear authority transfer
+(where the parent genuinely gives up its own access), but the common `:0` case
+uses implicit subtype resolution — zero ceremony.
 
 ---
 
@@ -558,14 +565,17 @@ for beginner access.
 
 ### 10.3 Priority Order
 
-1. **IO bridge propagators** — the foundational mechanism
-2. **Boundary operations** (`open`, `connect`, `listen`) — create channels to external resources
-3. **Opaque type marshalling** — FFI can pass through Racket ports
-4. **Dependent send/receive** — value-dependent protocols for typed IO
-5. **Path type** — basic filesystem abstraction
-6. **Convenience functions** — `read-file`, `write-file`, etc. built on top of 1-5
-7. **Dependent capabilities** — path-scoped authority (can start with non-dependent)
-8. **Transitive capability inference** — full call-chain cap resolution
+1. **Dependent capabilities (Phase 7e-7g)** — path-scoped authority so IO has a concept of "what path am I allowed to touch" from day one
+2. **IO bridge propagators** — the foundational IO mechanism
+3. **Boundary operations** (`open`, `connect`, `listen`) — create channels to external resources
+4. **Opaque type marshalling** — FFI can pass through Racket ports
+5. **Dependent send/receive (`!:`/`?:`)** — value-dependent protocols for typed IO
+6. **`Path` type** — basic filesystem abstraction
+7. **`Bytes` type** — binary IO (needed for SQLite FFI capstone)
+8. **Convenience functions** — `read-file`, `write-file`, etc. built on top of 1-7
+9. **Transitive capability inference** — full call-chain cap resolution (design round at this phase)
+
+**Deferred to separate design iteration**: Streaming/lazy IO (needs design for LSeq + open handle lifetime management).
 
 ---
 
@@ -594,37 +604,231 @@ for beginner access.
 
 ---
 
-## 12. Open Questions for Design Discussion
+## 12. Design Decisions and Discussion
 
-1. **Prelude inclusion**: Should `read-file` / `write-file` / `println` be in the prelude?
-   Pro: beginner accessibility. Con: pure functions shouldn't see IO by default.
-   *Recommendation*: Include `println` in prelude (debugging aid). Require `use prologos.core.io`
-   for file IO (explicit opt-in to side effects).
+### 12.1 Prelude Inclusion — RESOLVED
 
-2. **Handle vs. Channel**: Should Tier 1 convenience functions hide the session protocol
-   entirely (returning plain `Result String IOError`), or should they return a channel the
-   user can choose to interact with?
-   *Recommendation*: Tier 1 hides everything. `read-file` returns `Result String IOError`.
-   Session channels appear only at Tier 2+.
+`print`, `println`, and friends go in the prelude (debugging aids, always available).
+File, network, and database IO require explicit import: `use prologos.core.io`.
 
-3. **Binary IO**: How urgently is a `Bytes` type needed? Text IO (String) covers CSV, JSON,
-   config files, logs. Binary IO needs Bytes. SQLite FFI may need it.
-   *Recommendation*: Defer Bytes to Phase 2. Text IO first.
+This follows the progressive disclosure principle: console output is so fundamental
+that hiding it behind an import would annoy beginners. But filesystem access is a
+capability — making the user write `use prologos.core.io` signals "you are opting
+into side effects" and makes the boundary visible.
 
-4. **Error recovery in sessions**: If a file read fails mid-protocol, does the session type
-   force a `:close` branch, or can the error short-circuit?
-   *Recommendation*: Errors are values in `Result`. The protocol continues normally
-   (the user handles the `err` case). Session `end` handles cleanup.
+### 12.2 Handle vs. Channel — Design Tradeoff Analysis
 
-5. **IO mocking for tests**: How do tests inject mock IO?
-   *Recommendation*: Test contexts provide mock IO bridge propagators. The session
-   protocol is the same; only the IO propagator on the server side changes. This is
-   natural in the propagator model — swap the IO propagator, keep the protocol.
+The question: at Tier 2 (bracketed resource access), should the user interact with
+a **linear handle** (traditional functional IO) or a **session channel** (process-based)?
 
-6. **`defn main` vs `defproc main`**: Should `main` be a function (simpler) or a process
-   (more powerful)?
-   *Recommendation*: Support both. `defn main` for simple scripts (capabilities inferred).
-   `defproc main` for concurrent programs (explicit channel management).
+**Approach A: Linear Handle (simpler mental model)**
+
+```prologos
+;; Handle is an opaque linear value — functions take and return it
+spec with-open : Path -> Mode -> <(h : Handle :1) -> <Handle :1 * A>> -> Result A IOError
+
+defn process-file [p]
+  with-open p :read fn [h :1]
+    let (h line1) := [read-line h]
+    let (h line2) := [read-line h]
+    let (h _) := [read-line h]     ;; must thread handle through every call
+    (h [line1 line2])               ;; return handle + result
+
+;; Convenience on top
+defn read-all-lines [h :1]
+  match [read-line h]
+    | (h some line) -> let (h rest) := [read-all-lines h]
+                       (h [cons line rest])
+    | (h none) -> (h nil)
+```
+
+**Pros**: Familiar to Idris 2/Mercury/Clean users. Simple mental model — a handle is
+a value, functions are pure transformations. No process/channel/session concepts needed.
+
+**Cons**: Handle threading is verbose (`let (h x) := ...` everywhere). Every read
+operation returns a new handle. The user must remember to return the handle from the
+body. Accidental double-use is a type error, but the ergonomics are clunky.
+
+**Approach B: Session Channel (protocol-verified)**
+
+```prologos
+;; Channel endpoint with session type — select operations, receive results
+spec with-open : Path -> Mode -> <(ch : FileRW) -> A> -> Result A IOError
+
+defn process-file [p]
+  with-open p :read fn [ch]
+    select ch :read-line
+    let line1 := ch ?
+    select ch :read-line
+    let line2 := ch ?
+    select ch :close               ;; explicit close in protocol
+    [line1 line2]                   ;; just return the data
+```
+
+**Pros**: No handle threading — the channel manages sequencing via the session protocol.
+The user selects operations and receives results. Close is part of the protocol, verified
+by the type checker. Composes naturally with Tier 3 (full `defproc`). More expressive —
+the session type can encode complex interactions (branching, recursion, dependent values).
+
+**Cons**: Introduces session type concepts at Tier 2. `select` / `ch ?` is unfamiliar
+syntax for pure functional programmers. The mental model is "I'm talking to an IO
+service" rather than "I'm transforming a handle."
+
+**Approach C: Hybrid (both available, progressive disclosure)**
+
+```prologos
+;; Tier 2a: Handle-style — for users who want simple linear threading
+defn process-file [p]
+  with-open p :read fn [h :1]
+    let (h content) := [read-all h]
+    (h content)
+
+;; Tier 2b: Channel-style — for users who want protocol control
+defn process-file-v2 [p]
+  with-session p :read fn [ch]
+    select ch :read-line
+    let line := ch ?
+    select ch :close
+    line
+```
+
+Handle-style uses linear threading (simpler, familiar). Channel-style uses session
+protocols (more powerful, verified). Both are available. Progressive disclosure:
+start with handles, graduate to channels when you need protocol control.
+
+**The handle is internally backed by a channel** — `with-open` creates a channel to the
+IO service but presents a handle API. `with-session` exposes the channel directly.
+Same underlying mechanism, two interfaces at different abstraction levels.
+
+**Decision needed**: Should we support both (Approach C), or commit to one?
+
+### 12.3 Binary IO and SQLite Capstone — On Roadmap
+
+`Bytes` type is now on the roadmap (Phase B4). SQLite integration (Phase G) serves as
+a capstone demo that exercises the full stack: capability-gated `db-open`, session-typed
+`DbSession`, `Bytes` for binary data, schema-typed query results, and dependent
+capabilities for database-scoped authority.
+
+### 12.4 Error Handling in Sessions — Current State and IO Impact
+
+**Current session error handling (as implemented in S1-S8)**:
+
+Today, session types have no built-in error mechanism. A `defproc` that encounters
+an error has limited options:
+
+1. **Send an error value**: The protocol must include the error in its type.
+   `? [Result String IOError]` — the receiver gets a `Result` and must handle both cases.
+   This works but makes every session type carry error information explicitly.
+
+2. **Stop the process**: `stop` terminates the process. The other endpoint sees a
+   stuck channel (the session didn't reach `end`). This is currently undetected at
+   runtime — no timeout or deadline mechanism.
+
+3. **No `throws` in session types yet**: The session type design (§8.2) shows
+   `throws IOError` syntax, but this is not yet implemented. A `throws` clause would
+   allow the session to signal an error that short-circuits the protocol.
+
+**Impact on IO design**:
+
+For IO, errors are common (file not found, permission denied, connection refused).
+Every IO session protocol must account for errors. Two approaches:
+
+**Approach A: Errors as values (current — no new mechanism needed)**
+
+```prologos
+session FileRead
+  +>
+    | :read-all  -> ? [Result String IOError] . end
+    | :read-line -> ? [Result String? IOError] . FileRead
+    | :close     -> end
+```
+
+Every receive returns `Result`. The client handles `ok`/`err` at each step. Verbose
+but explicit — no hidden control flow. The protocol always reaches `end` cleanly
+because errors are just data, not exceptions.
+
+**Approach B: Session-level `throws` (requires new mechanism)**
+
+```prologos
+session FileRead throws IOError
+  +>
+    | :read-all  -> ? String . end       ;; clean types — no Result wrapper
+    | :read-line -> ? String? . FileRead
+    | :close     -> end
+
+;; On error, the IO service sends an IOError on a separate error channel,
+;; and the session short-circuits to end. The client sees:
+;; ok: normal data flow
+;; err: IOError value + protocol terminated
+```
+
+Cleaner types (no `Result` wrapper), but requires implementing `throws` in the
+session type system — a new propagator for error channel, a new session operator
+for "abort with error," and integration with the double-boundary model.
+
+**Recommendation**: Start with Approach A (errors as values) for Phase D. This works
+today with existing infrastructure. Add `throws` support as a separate design iteration
+if the verbosity of `Result` wrappers in every protocol becomes painful.
+
+### 12.5 IO Mocking for Tests — RESOLVED
+
+Test contexts provide mock IO bridge propagators. The session protocol is the same;
+only the IO propagator on the server side changes. This is natural in the propagator
+model — swap the IO propagator, keep the protocol. The session type guarantees that
+the mock and real implementations conform to the same protocol.
+
+### 12.6 `defn main` vs `defproc main` — Both, With Different Profiles
+
+Both forms are supported. The choice depends on what the program does:
+
+**`defn main` — Simple scripts, sequential IO**
+
+```prologos
+ns word-count
+
+;; defn main: capabilities inferred, no process machinery
+;; Compiler infers {fs :0 ReadCap, stdio :0 StdioCap} from body
+defn main []
+  match [read-file [path "input.txt"]]
+    | ok content ->
+        let words := [split content " "]
+        [println [format "Word count: {}" [length words]]]
+    | err e ->
+        [println [format "Error: {}" [show e]]]
+```
+
+`defn main` is a function. IO operations are called as regular functions with
+inferred capabilities. No channels, no processes, no `spawn`. The compiler
+infers all capability requirements from the body and resolves them from the
+runtime-provided `IOCap`. This is the Tier 1 experience.
+
+**`defproc main` — Concurrent programs, explicit channel management**
+
+```prologos
+ns web-server
+
+;; defproc main: explicit capabilities, process spawning, channel management
+defproc main [args : List String] {sys : IOCap}
+  let port := [parse-int [head args]]
+  let server-ch := listen port HttpProtocol NetCap
+
+  rec
+    let client-ch := server-ch ?     ;; accept connection
+    spawn request-handler client-ch ReadCap WriteCap
+    rec                              ;; loop: accept next connection
+```
+
+`defproc main` is a process. It has a `self` channel, can `spawn` child processes,
+and explicitly manages channels and capabilities. This is the Tier 3 experience.
+
+**Key difference**: `defn main` hides ALL process machinery. The user writes
+sequential code with regular function calls. `defproc main` exposes process
+machinery for programs that need concurrency, channel management, or explicit
+capability delegation.
+
+**Implementation**: `defn main` desugars internally to a process with a single
+"run body to completion" session, but the user never sees this. The compiler
+handles the translation.
 
 ---
 
@@ -648,7 +852,7 @@ ns word-count
 defn main []
   match [read-file [path "input.txt"]]
     | ok content ->
-        let words = [split content " "]
+        let words := [split content " "]
         [println [format "Word count: {}" [length words]]]
     | err e ->
         [println [format "Error: {}" [show e]]]
@@ -662,7 +866,7 @@ ns csv-process
 defn main []
   match [read-csv-maps [path "employees.csv"]]
     | ok rows ->
-        let names = |> rows
+        let names := |> rows
           filter [fn [r] [eq? [map-get r :dept] "Engineering"]]
           map [fn [r] [map-get r :name]]
         [println [format "Engineers: {}" names]]
@@ -676,8 +880,8 @@ defn main []
 ns merge-files
 
 defn merge [input-paths output-path]
-  let contents = [map read-file input-paths]
-  let merged = [string-join [filter-map ok? contents] "\n"]
+  let contents := [map read-file input-paths]
+  let merged := [string-join [filter-map ok? contents] "\n"]
   [write-file output-path merged]
 ```
 
@@ -697,10 +901,10 @@ defproc file-loader : dual WorkProtocol {fs :0 ReadCap}
   stop
 
 defproc main [args : List String] {sys : IOCap}
-  let paths = [map path args]
-  let results = [map (fn [p]
+  let paths := [map path args]
+  let results := [map (fn [p]
     new [my-ch worker-ch] : WorkProtocol
-    spawn (file-loader {[attenuate sys ReadCap]}) worker-ch
+    spawn file-loader worker-ch ReadCap   ;; compiler resolves ReadCap <: IOCap
     my-ch ! p
     my-ch ?) paths]
   [println [format "Loaded {} files" [length results]]]
@@ -711,56 +915,77 @@ defproc main [args : List String] {sys : IOCap}
 
 ## 14. Phased Implementation Roadmap
 
-### Phase A: IO Bridge Infrastructure
-- IO bridge cell type in propagator network
-- IO propagator that performs side effects during `run-to-quiescence`
-- `open` boundary operation (capability-gated channel creation)
-- Opaque type marshalling in `foreign.rkt` (`:opaque` annotation)
-- **Depends on**: nothing (builds on existing propagator + session infrastructure)
+### Phase A: Dependent Capabilities + IO Foundations
+- **A1**: Dependent capabilities (Phase 7e-7g from DEFERRED.md) — path-indexed caps
+  like `FileCap "/data"`. Extend `cap-set` to hold type expressions, update
+  cap-type-bridge alpha/gamma functions. This gives IO a concept of "what path am I
+  allowed to touch" from the start.
+- **A2**: IO bridge cell type in propagator network
+- **A3**: IO propagator that performs side effects during `run-to-quiescence`
+- **A4**: Opaque type marshalling in `foreign.rkt` (`:opaque` annotation)
+- **Depends on**: nothing (builds on existing propagator + session + cap infrastructure)
 
-### Phase B: Core File IO
-- `Path` type (String wrapper or opaque Racket path)
-- `IOError` data type
-- FFI bridge to Racket file operations
-- `read-file`, `write-file`, `read-lines`, `append-file` convenience functions
-- `with-open` macro (bracket pattern, session channel internally)
-- `println` / `print` / `read-ln` for console IO
-- Tests: 30+ covering read/write/error/linear safety
+### Phase B: Boundary Operations + Path + Bytes
+- **B1**: `open` boundary operation (capability-gated channel creation for files)
+- **B2**: `connect` / `listen` boundary operations (network, database)
+- **B3**: `Path` type (String wrapper or opaque Racket path) + pure operations
+- **B4**: `Bytes` type for binary IO (needed for SQLite FFI)
+- **B5**: `IOError` data type
 - **Depends on**: Phase A
 
-### Phase C: File Session Protocols
-- `FileRead` / `FileWrite` / `FileAppend` / `FileRW` session types
-- IO service processes (dual of each session type)
-- Line-by-line reading via session protocol
-- Tests: 20+ session protocol tests
-- **Depends on**: Phase B
+### Phase C: Dependent Send/Receive
+- **C1**: Reader/parser support for `!:` / `?:` tokens in WS mode
+- **C2**: Session type elaboration with value binding in continuation scope
+- **C3**: Integration tests with schema-typed IO protocols
+- **Depends on**: Phase B (needed for schema-typed IO, but IO bridge can start without)
 
-### Phase D: CSV + Structured Data
-- CSV parser (split, quoting, headers)
-- `read-csv`, `read-csv-maps`, `write-csv`
-- Integration with schema system for typed CSV reading
-- **Depends on**: Phase B + dependent send/receive for schema typing
+### Phase D: Core File IO
+- **D1**: FFI bridge to Racket file operations (via `:opaque` from A4)
+- **D2**: `read-file`, `write-file`, `read-lines`, `append-file` convenience functions
+- **D3**: `with-open` macro (bracket pattern, handle or session channel internally)
+- **D4**: `println` / `print` / `read-ln` for console IO
+- **D5**: Tests: 30+ covering read/write/error/capability safety
+- **Depends on**: Phases A + B
 
-### Phase E: Network IO
-- `connect` boundary operation
-- `listen` boundary operation
-- `HttpRequest` / `TcpStream` session types
-- HTTP client (basic: GET/POST/PUT/DELETE)
-- **Depends on**: Phase A + network capability traits
+### Phase E: File Session Protocols
+- **E1**: `FileRead` / `FileWrite` / `FileAppend` / `FileRW` session types
+- **E2**: IO service processes (dual of each session type)
+- **E3**: Line-by-line reading via session protocol
+- **E4**: Tests: 20+ session protocol tests
+- **Depends on**: Phase D
 
-### Phase F: Database IO
-- `db-open` boundary operation
-- `DbSession` session type
-- SQLite via Racket `db` library
-- Parameterized queries, result rows
-- **Depends on**: Phase A + opaque marshalling for db connections
+### Phase F: CSV + Structured Data
+- **F1**: CSV parser (split, quoting, headers)
+- **F2**: `read-csv`, `read-csv-maps`, `write-csv`
+- **F3**: Integration with schema system for typed CSV reading (uses `!:`/`?:` from Phase C)
+- **Depends on**: Phase D + Phase C for schema typing
 
-### Phase G: Relational Language Integration
-- `:source csv "file.csv"` metadata on `defr`
-- `:source sqlite "db.db" "table"` metadata on `defr`
-- Bulk loading as relation facts
-- Cross-source queries
-- **Depends on**: Phases D + F + relational language maturity
+### Phase G: Database IO (SQLite Capstone)
+- **G1**: `db-open` boundary operation
+- **G2**: `DbSession` session type
+- **G3**: SQLite via Racket `db` library + `Bytes` from B4
+- **G4**: Parameterized queries, result rows
+- **G5**: Demo: load SQLite database, query, return typed results
+- **Depends on**: Phases A + B (especially B4 Bytes)
+
+### Phase H: Transitive Capability Inference
+- **H1**: Design round for lexical capability resolution mechanism
+- **H2**: Cap-inference propagation through call chains
+- **H3**: Integration tests: Tier 1 programs with zero manual cap annotations
+- **Depends on**: Phase D (needs real IO functions to test against)
+
+### Phase I: Network IO
+- **I1**: `HttpRequest` / `TcpStream` session types
+- **I2**: HTTP client (basic: GET/POST/PUT/DELETE)
+- **I3**: WebSocket connections
+- **Depends on**: Phases A + B
+
+### Phase J: Relational Language Integration
+- **J1**: `:source csv "file.csv"` metadata on `defr`
+- **J2**: `:source sqlite "db.db" "table"` metadata on `defr`
+- **J3**: Bulk loading as relation facts
+- **J4**: Cross-source queries
+- **Depends on**: Phases F + G + relational language maturity
 
 ---
 
