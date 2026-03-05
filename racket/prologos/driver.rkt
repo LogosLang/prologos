@@ -55,6 +55,7 @@
 (provide process-command
          process-file
          process-string
+         process-string-ws
          load-module
          install-module-loader!
          prologos-lib-dir
@@ -1030,6 +1031,39 @@
   (define port (open-input-string s))
   ;; Read raw syntax, apply pre-parse expansion, then parse
   (define raw-stxs (read-all-syntax port "<string>"))
+  (define expanded-stxs (preparse-expand-all raw-stxs))
+  (define surfs (map parse-datum expanded-stxs))
+  (define pt (phase-timings 0.0 0.0 0.0 0.0 0.0 0.0 0.0))
+  (define pv (provenance-counters 0 0 0 0 0 0 0))
+  (define mem-before (measure-memory-before))
+  (define-values (results pc)
+    (parameterize ([current-phase-timings pt]
+                   [current-provenance-counters pv])
+      (with-perf-counters
+        (for/list ([surf (in-list surfs)])
+          (if (prologos-error? surf)
+              surf
+              (process-command surf))))))
+  ;; Emit formatted error diagnostics to stderr when enabled (test runner integration)
+  (when (current-emit-error-diagnostics)
+    (for ([r (in-list results)])
+      (when (prologos-error? r)
+        (emit-error-diagnostic r))))
+  (when pc (print-perf-report! pc))
+  (print-phase-report! pt)
+  (print-provenance-report! pv)
+  (print-memory-report! (measure-memory-after mem-before))
+  results)
+
+;; ========================================
+;; Process all commands from a WS-mode string
+;; ========================================
+;; Like process-string, but uses the WS reader (indentation-sensitive).
+;; This is the path that .prologos files use — the primary design target.
+(define (process-string-ws s)
+  (define port (open-input-string s))
+  ;; Use WS reader (indentation -> nested lists)
+  (define raw-stxs (read-all-syntax-ws port "<ws-string>"))
   (define expanded-stxs (preparse-expand-all raw-stxs))
   (define surfs (map parse-datum expanded-stxs))
   (define pt (phase-timings 0.0 0.0 0.0 0.0 0.0 0.0 0.0))

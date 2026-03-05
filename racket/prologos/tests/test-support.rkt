@@ -43,6 +43,9 @@
          ;; Convenience helpers
          run-ns-last
          run-ns-all
+         ;; WS-mode helpers (primary design target)
+         run-ns-ws-last
+         run-ns-ws-all
          ;; GDE-4: Structured error testing helpers
          check-error-has-provenance
          check-error-diagnosis-count
@@ -123,6 +126,38 @@
                  [current-param-impl-registry prelude-param-impl-registry])
     (install-module-loader!)
     (process-string s)))
+
+;; ========================================
+;; WS-mode helpers (primary design target)
+;; ========================================
+;; Like run-ns-last/run-ns-all but using the WS reader (indentation-sensitive).
+;; This is the path that .prologos files use.
+
+(define (run-ns-ws-last s)
+  (parameterize ([current-global-env (hasheq)]
+                 [current-ns-context #f]
+                 [current-module-registry prelude-module-registry]
+                 [current-lib-paths (list prelude-lib-dir)]
+                 [current-mult-meta-store (make-hasheq)]
+                 [current-preparse-registry prelude-preparse-registry]
+                 [current-trait-registry prelude-trait-registry]
+                 [current-impl-registry prelude-impl-registry]
+                 [current-param-impl-registry prelude-param-impl-registry])
+    (install-module-loader!)
+    (last (process-string-ws s))))
+
+(define (run-ns-ws-all s)
+  (parameterize ([current-global-env (hasheq)]
+                 [current-ns-context #f]
+                 [current-module-registry prelude-module-registry]
+                 [current-lib-paths (list prelude-lib-dir)]
+                 [current-mult-meta-store (make-hasheq)]
+                 [current-preparse-registry prelude-preparse-registry]
+                 [current-trait-registry prelude-trait-registry]
+                 [current-impl-registry prelude-impl-registry]
+                 [current-param-impl-registry prelude-param-impl-registry])
+    (install-module-loader!)
+    (process-string-ws s)))
 
 ;; ========================================
 ;; GDE-4: Structured error testing helpers
