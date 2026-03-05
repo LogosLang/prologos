@@ -342,7 +342,9 @@
  ;; S5b: Boundary operations
  (struct-out surf-proc-open)
  (struct-out surf-proc-connect)
- (struct-out surf-proc-listen))
+ (struct-out surf-proc-listen)
+ ;; S6: Strategy declaration
+ (struct-out surf-strategy))
 
 ;; ========================================
 ;; Type hole (to be inferred by the type checker)
@@ -1092,3 +1094,6 @@
 (struct surf-proc-open    (path session-type cap cont srcloc) #:transparent)    ; open path : S {cap}
 (struct surf-proc-connect (addr session-type cap cont srcloc) #:transparent)    ; connect addr : S {cap}
 (struct surf-proc-listen  (port session-type cap cont srcloc) #:transparent)    ; listen port : S {cap}
+;; Phase S6: Strategy declaration
+;; name: symbol, properties: assoc list of (cons keyword datum), srcloc: source location
+(struct surf-strategy (name properties srcloc) #:transparent)

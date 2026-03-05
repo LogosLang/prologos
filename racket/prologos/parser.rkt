@@ -2602,6 +2602,10 @@
        [(dual)
         (parse-dual args loc)]
 
+       ;; (strategy Name :key val ...) — strategy declaration (Phase S6)
+       [(strategy)
+        (parse-strategy args loc)]
+
        ;; ---- Relational language (Phase 7) ----
 
        ;; (defr name [params] body...) — relation definition
@@ -4919,6 +4923,32 @@
      (define ref (parse-datum (car args)))
      (if (prologos-error? ref) ref
          (surf-dual ref loc))]))
+
+;; (strategy Name :key val ...) — strategy declaration (Phase S6)
+;; Properties are keyword-value pairs. Validation is done during elaboration.
+(define (parse-strategy args loc)
+  (cond
+    [(< (length args) 1)
+     (parse-error loc "strategy requires a name: (strategy Name :key val ...)" #f)]
+    [else
+     (define name (stx->datum (car args)))
+     (unless (symbol? name)
+       (parse-error loc (format "strategy: expected name, got ~a" name) #f))
+     ;; Collect remaining items as raw datum property pairs
+     (define props
+       (let loop ([remaining (cdr args)] [acc '()])
+         (cond
+           [(null? remaining) (reverse acc)]
+           [else
+            (define key (stx->datum (car remaining)))
+            (cond
+              [(null? (cdr remaining))
+               ;; Bare keyword at end — let elaborator report error
+               (reverse (cons (cons key #f) acc))]
+              [else
+               (define val (stx->datum (cadr remaining)))
+               (loop (cddr remaining) (cons (cons key val) acc))])])))
+     (surf-strategy name props loc)]))
 
 ;; ========================================
 ;; Parse process body (recursive descent)

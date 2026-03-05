@@ -3586,4 +3586,21 @@
                  (list 'dual name (dual (session-entry-session-type entry)))
                  (prologos-error loc (format "Unknown session type for dual: ~a" sess-ref))))))]
 
+    ;; Phase S6: Strategy declaration
+    ;; Validate properties, register in strategy registry.
+    [(surf-strategy name raw-props loc)
+     ;; Convert raw property pairs (cons key val) to flat keyword list
+     (define flat-props
+       (apply append (map (lambda (p) (list (car p) (cdr p))) raw-props)))
+     (define-values (props err) (parse-strategy-properties flat-props))
+     (if err
+         (prologos-error loc err)
+         (begin
+           (register-strategy! name (strategy-entry name props loc))
+           (when (current-ns-context)
+             (define fqn (qualify-name name
+                           (ns-context-current-ns (current-ns-context))))
+             (register-strategy! fqn (strategy-entry fqn props loc)))
+           (list 'strategy name props)))]
+
     [_ (prologos-error srcloc-unknown (format "Unknown top-level form: ~a" surf))]))

@@ -201,6 +201,17 @@
          session-entry-srcloc
          register-session!
          lookup-session
+         ;; Strategy registry (Phase S6)
+         current-strategy-registry
+         strategy-entry
+         strategy-entry?
+         strategy-entry-name
+         strategy-entry-properties
+         strategy-entry-srcloc
+         register-strategy!
+         lookup-strategy
+         strategy-defaults
+         parse-strategy-properties
          ;; Spec store
          current-spec-store
          current-propagated-specs
@@ -491,6 +502,84 @@
 
 (define (lookup-session name)
   (hash-ref (current-session-registry) name #f))
+
+;; ========================================
+;; Strategy registry (Phase S6): scheduling/execution configuration
+;; ========================================
+
+;; A strategy entry: stores scheduling/execution configuration properties.
+;; name: symbol — the strategy name (e.g., 'realtime, 'batch)
+;; properties: hasheq of keyword → value
+;;   :fairness   → :round-robin | :priority | :none
+;;   :fuel       → positive integer (propagator firing limit per step)
+;;   :io         → :nonblocking | :blocking-ok
+;;   :parallelism → :single-thread | :work-stealing
+;; srcloc: source location of the strategy declaration
+(struct strategy-entry (name properties srcloc) #:transparent)
+
+;; Default strategy properties
+(define strategy-defaults
+  (hasheq ':fairness ':round-robin
+          ':fuel 50000
+          ':io ':nonblocking
+          ':parallelism ':single-thread))
+
+;; Valid property keys and their valid values
+(define valid-strategy-keys
+  (hasheq ':fairness '(:round-robin :priority :none)
+          ':fuel 'positive-integer
+          ':io '(:nonblocking :blocking-ok)
+          ':parallelism '(:single-thread :work-stealing)))
+
+;; Strategy store: symbol → strategy-entry
+(define current-strategy-registry (make-parameter (hasheq)))
+
+(define (register-strategy! name entry)
+  (current-strategy-registry (hash-set (current-strategy-registry) name entry)))
+
+(define (lookup-strategy name)
+  (hash-ref (current-strategy-registry) name #f))
+
+;; Parse strategy properties from a flat keyword-value list.
+;; Input: (:fairness :priority :fuel 10000) → hasheq
+;; Validates keys and values against valid-strategy-keys.
+;; Returns: (values hasheq-of-props error-or-#f)
+(define (parse-strategy-properties prop-list)
+  (let loop ([remaining prop-list] [props strategy-defaults])
+    (cond
+      [(null? remaining) (values props #f)]
+      [else
+       (define key (car remaining))
+       (cond
+         ;; Must be a keyword symbol
+         [(not (and (symbol? key)
+                    (let ([s (symbol->string key)])
+                      (and (> (string-length s) 1)
+                           (char=? (string-ref s 0) #\:)))))
+          (values props (format "strategy: expected keyword property, got ~a" key))]
+         ;; Must be a valid strategy key
+         [(not (hash-has-key? valid-strategy-keys key))
+          (values props (format "strategy: unknown property ~a (valid: ~a)"
+                                key (hash-keys valid-strategy-keys)))]
+         ;; Must have a value after the key
+         [(null? (cdr remaining))
+          (values props (format "strategy: property ~a requires a value" key))]
+         [else
+          (define val (cadr remaining))
+          (define valid-vals (hash-ref valid-strategy-keys key))
+          ;; Validate value
+          (define val-error
+            (cond
+              [(eq? valid-vals 'positive-integer)
+               (if (and (integer? val) (positive? val)) #f
+                   (format "strategy: ~a requires a positive integer, got ~a" key val))]
+              [(list? valid-vals)
+               (if (memq val valid-vals) #f
+                   (format "strategy: ~a must be one of ~a, got ~a" key valid-vals val))]
+              [else #f]))
+          (if val-error
+              (values props val-error)
+              (loop (cddr remaining) (hash-set props key val)))])])))
 
 ;; ========================================
 ;; Pattern variables: symbols starting with $
@@ -1902,6 +1991,11 @@
         [(and (pair? datum) (eq? head 'proc))
          (define desugared (desugar-proc-ws datum))
          (cons (datum->syntax #f desugared stx) acc)]
+        ;; ---- Strategy declaration — pass through to parser (Phase S6) ----
+        [(and (pair? datum) (eq? head 'strategy))
+         (when (and (list? datum) (>= (length datum) 2) (symbol? (cadr datum)))
+           (auto-export-name! (cadr datum)))
+         (cons stx acc)]
         ;; ---- Public defn/def — auto-export the name ----
         [(and (pair? datum) (memq head '(defn def)))
          (auto-export-names! (extract-defined-name datum head))
@@ -7349,6 +7443,8 @@
     [(surf-defproc? surf) surf]
     [(surf-proc? surf) surf]
     [(surf-dual? surf) surf]
+    ;; Strategy declaration — pass through to elaboration (Phase S6)
+    [(surf-strategy? surf) surf]
     ;; Bare expression — implicit eval
     [else
      (define loc (cond

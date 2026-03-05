@@ -697,6 +697,10 @@
                   [(list 'dual name dual-sess)
                    (format "dual ~a = ~a" name (pp-session dual-sess))]
 
+                  ;; Phase S6: Strategy declaration
+                  [(list 'strategy name props)
+                   (format "strategy ~a defined." name)]
+
                   [_ (prologos-error srcloc-unknown (format "Unknown command: ~a" elab-result))])))]))))
   ;; Append warnings to result string (if any)
   (define coercion-warns (reverse (current-coercion-warnings)))
