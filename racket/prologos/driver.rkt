@@ -755,6 +755,44 @@
                         (format "Cannot spawn ~a: no session type"
                                 (or proc-name "anonymous process")))])]
 
+                  ;; Phase S7d: Spawn-with — execute a process with strategy
+                  [(list 'spawn-with proc-name sess-ty proc-body caps props)
+                   (cond
+                     [sess-ty
+                      (define resolved-sess
+                        (cond
+                          [(expr-fvar? sess-ty)
+                           (define entry (lookup-session (expr-fvar-name sess-ty)))
+                           (and entry (session-entry-session-type entry))]
+                          [else sess-ty]))
+                      (cond
+                        [resolved-sess
+                         (define fuel (hash-ref props ':fuel 50000))
+                         (define result (rt-execute-process proc-body resolved-sess fuel))
+                         (define status (rt-exec-result-status result))
+                         (case status
+                           [(ok)
+                            (format "~aprocess~a executed. Protocol completed."
+                                    (if proc-name (format "~a: " proc-name) "")
+                                    (format " : ~a" (pp-session resolved-sess)))]
+                           [(contradiction)
+                            (prologos-error #f
+                              (format "~aprocess execution failed: protocol violation (~a)"
+                                      (if proc-name (format "~a " proc-name) "")
+                                      (pp-session resolved-sess)))]
+                           [else
+                            (format "~aprocess execution: ~a"
+                                    (if proc-name (format "~a: " proc-name) "")
+                                    status)])]
+                        [else
+                         (prologos-error #f
+                           (format "Cannot spawn ~a: session type not resolved"
+                                   (or proc-name "anonymous process")))])]
+                     [else
+                      (prologos-error #f
+                        (format "Cannot spawn ~a: no session type"
+                                (or proc-name "anonymous process")))])]
+
                   [_ (prologos-error srcloc-unknown (format "Unknown command: ~a" elab-result))])))]))))
   ;; Append warnings to result string (if any)
   (define coercion-warns (reverse (current-coercion-warnings)))

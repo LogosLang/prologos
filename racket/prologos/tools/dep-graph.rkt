@@ -523,6 +523,8 @@
    (test-dep '(processes.rkt propagator.rkt session-lattice.rkt session-runtime.rkt sessions.rkt syntax.rkt) #f)
    'test-session-runtime-03.rkt
    (test-dep '(driver.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt sessions.rkt) #t)
+   'test-session-runtime-04.rkt
+   (test-dep '(driver.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt sessions.rkt) #t)
    'test-session-throws-01.rkt
    (test-dep '(driver.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt sessions.rkt) #f)
    'test-session-type-bridge-01.rkt

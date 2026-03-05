@@ -3641,4 +3641,64 @@
        [else
         (prologos-error loc "spawn requires a process name or inline process")])]
 
+    ;; Phase S7d: Spawn-with command — execute a process with strategy
+    [(surf-spawn-with strategy-ref raw-overrides target loc)
+     ;; 1. Resolve base strategy properties
+     (define base-props
+       (cond
+         [(not strategy-ref) strategy-defaults]
+         [else
+          (define entry (lookup-strategy strategy-ref))
+          (define fqn-entry
+            (and (not entry) (current-ns-context)
+                 (lookup-strategy
+                  (qualify-name strategy-ref
+                    (ns-context-current-ns (current-ns-context))))))
+          (define resolved (or entry fqn-entry))
+          (if resolved
+              (strategy-entry-properties resolved)
+              (prologos-error loc
+                (format "Unknown strategy: ~a" strategy-ref)))]))
+     (if (prologos-error? base-props) base-props
+         (let ()
+           ;; 2. Merge overrides into base properties (last one wins)
+           (define final-props
+             (if raw-overrides
+                 (for/fold ([props base-props])
+                           ([pair (in-list raw-overrides)])
+                   (hash-set props (car pair) (cdr pair)))
+                 base-props))
+           ;; 3. Resolve process target (same as surf-spawn)
+           (define proc-result
+             (cond
+               [(surf-var? target)
+                (define name (surf-var-name target))
+                (define entry (lookup-process name))
+                (define fqn-entry
+                  (and (not entry) (current-ns-context)
+                       (lookup-process
+                        (qualify-name name
+                          (ns-context-current-ns (current-ns-context))))))
+                (define resolved (or entry fqn-entry))
+                (if resolved
+                    (list name
+                          (process-entry-session-type resolved)
+                          (process-entry-proc-body resolved)
+                          (process-entry-caps resolved))
+                    (prologos-error loc
+                      (format "Unknown process: ~a" name)))]
+               [(surf-proc? target)
+                (define elab (elaborate-top-level target))
+                (if (prologos-error? elab) elab
+                    (match elab
+                      [(list 'proc sess-ty _channels caps proc-body)
+                       (list #f sess-ty proc-body caps)]
+                      [_ (prologos-error loc "spawn-with target must be a process")]))]
+               [else
+                (prologos-error loc "spawn-with requires a process name or inline process")]))
+           (if (prologos-error? proc-result) proc-result
+               (match proc-result
+                 [(list proc-name sess-ty proc-body caps)
+                  (list 'spawn-with proc-name sess-ty proc-body caps final-props)]))))]
+
     [_ (prologos-error srcloc-unknown (format "Unknown top-level form: ~a" surf))]))

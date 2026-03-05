@@ -631,9 +631,9 @@
 ;; compiles the process, and runs to quiescence.
 ;;
 ;; Returns: rt-exec-result
-(define (rt-execute-process proc session-type)
+(define (rt-execute-process proc session-type [fuel 1000000])
   ;; 1. Create runtime network
-  (define rnet0 (make-runtime-network))
+  (define rnet0 (make-runtime-network fuel))
   ;; 2. Create channel pair for self
   (define-values (rnet1 pair) (rt-new-channel-pair rnet0 session-type))
   (define ep-a (channel-pair-ep-a pair))

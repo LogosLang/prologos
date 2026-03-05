@@ -346,7 +346,9 @@
  ;; S6: Strategy declaration
  (struct-out surf-strategy)
  ;; S7c: Spawn command
- (struct-out surf-spawn))
+ (struct-out surf-spawn)
+ ;; S7d: Spawn-with command
+ (struct-out surf-spawn-with))
 
 ;; ========================================
 ;; Type hole (to be inferred by the type checker)
@@ -1103,3 +1105,8 @@
 ;; target: symbol (named process ref) or surf-proc (anonymous process)
 ;; strategy: symbol or #f (S7d: strategy application)
 (struct surf-spawn (target strategy srcloc) #:transparent)
+;; Phase S7d: Spawn-with command — execute a process with strategy
+;; strategy: symbol — named strategy reference, or #f (use defaults)
+;; overrides: list of (key val ...) or #f — inline property overrides
+;; target: surf-var (named process ref) or surf-proc (anonymous process)
+(struct surf-spawn-with (strategy overrides target srcloc) #:transparent)

@@ -76,7 +76,7 @@
     ;; Pre-parse namespace directives — consumed before reaching parser
     ns imports exports require provide foreign
     ;; Session types and processes (Phase S1/S2)
-    session defproc proc stop new par link select offer end rec shared dual strategy spawn))
+    session defproc proc stop new par link select offer end rec shared dual strategy spawn spawn-with))
 
 (define (keyword? sym)
   (and (symbol? sym) (memq sym keywords)))
@@ -2610,6 +2610,10 @@
        [(spawn)
         (parse-spawn args loc)]
 
+       ;; (spawn-with strat {overrides} target) — parameterized spawn (Phase S7d)
+       [(spawn-with)
+        (parse-spawn-with args loc)]
+
        ;; ---- Relational language (Phase 7) ----
 
        ;; (defr name [params] body...) — relation definition
@@ -4973,6 +4977,66 @@
            (parse-list target-datum loc target-stx)    ;; parse as anonymous proc
            (parse-symbol target-datum loc)))    ;; parse as name reference
      (surf-spawn parsed-target #f loc)]))
+
+;; ========================================
+;; Parse spawn-with command (Phase S7d)
+;; ========================================
+;; (spawn-with strat-name target)           — named strategy, no overrides
+;; (spawn-with strat-name {overrides} target) — named strategy + overrides
+;; (spawn-with {overrides} target)           — default strategy + overrides
+(define (parse-spawn-with args loc)
+  ;; Parse a spawn target: symbol → name ref, pair → anonymous proc
+  (define (parse-spawn-target stx)
+    (define d (stx->datum stx))
+    (if (pair? d)
+        (parse-list d loc stx)
+        (parse-symbol d loc)))
+  ;; Extract raw keyword-value pairs from $brace-params as alist
+  ;; ($brace-params :fuel 100 :fairness :none) → ((:fuel . 100) (:fairness . :none))
+  (define (extract-override-alist stx)
+    (define d (stx->datum stx))
+    (define items (cdr d))  ;; strip $brace-params head
+    (let loop ([remaining items] [acc '()])
+      (cond
+        [(null? remaining) (reverse acc)]
+        [(null? (cdr remaining))
+         (reverse (cons (cons (car remaining) #f) acc))]
+        [else
+         (loop (cddr remaining) (cons (cons (car remaining) (cadr remaining)) acc))])))
+  (cond
+    [(< (length args) 2)
+     (parse-error loc "spawn-with requires at least 2 arguments (strategy/overrides and process)" #f)]
+    ;; 3 args: strat-name {overrides} target
+    [(and (= (length args) 3)
+          (not (brace-params-stx? (car args)))
+          (brace-params-stx? (cadr args)))
+     (let ([s (stx->datum (car args))]
+           [o (extract-override-alist (cadr args))]
+           [t (parse-spawn-target (caddr args))])
+       (cond
+         [(not (symbol? s))
+          (parse-error loc (format "spawn-with: expected strategy name, got ~a" s) #f)]
+         [(prologos-error? t) t]
+         [else (surf-spawn-with s o t loc)]))]
+    ;; 2 args: {overrides} target — use default strategy
+    [(and (= (length args) 2)
+          (brace-params-stx? (car args)))
+     (let ([o (extract-override-alist (car args))]
+           [t (parse-spawn-target (cadr args))])
+       (cond
+         [(prologos-error? t) t]
+         [else (surf-spawn-with #f o t loc)]))]
+    ;; 2 args: strat-name target — no overrides
+    [(= (length args) 2)
+     (let ([s (stx->datum (car args))]
+           [t (parse-spawn-target (cadr args))])
+       (cond
+         [(not (symbol? s))
+          (parse-error loc (format "spawn-with: expected strategy name, got ~a" s) #f)]
+         [(prologos-error? t) t]
+         [else (surf-spawn-with s #f t loc)]))]
+    [else
+     (parse-error loc "spawn-with: expected 2-3 arguments, got ~a" (length args))]))
 
 ;; ========================================
 ;; Parse process body (recursive descent)

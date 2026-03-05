@@ -211,6 +211,7 @@
          register-strategy!
          lookup-strategy
          strategy-defaults
+         valid-strategy-keys
          parse-strategy-properties
          ;; Process registry (Phase S7c)
          current-process-registry
@@ -2128,6 +2129,10 @@
         ;; ---- Spawn command — pass through (Phase S7c) ----
         ;; (spawn name) or (spawn (proc ...)) — no WS desugaring needed
         [(and (pair? datum) (eq? head 'spawn))
+         (cons stx acc)]
+        ;; ---- Spawn-with command — pass through (Phase S7d) ----
+        ;; (spawn-with strat {overrides} target) — no WS desugaring needed
+        [(and (pair? datum) (eq? head 'spawn-with))
          (cons stx acc)]
         ;; ---- Strategy declaration — desugar WS-mode props, pass to parser (Phase S6) ----
         [(and (pair? datum) (eq? head 'strategy))
@@ -7586,6 +7591,8 @@
     [(surf-strategy? surf) surf]
     ;; Spawn command — pass through to elaboration (Phase S7c)
     [(surf-spawn? surf) surf]
+    ;; Spawn-with command — pass through to elaboration (Phase S7d)
+    [(surf-spawn-with? surf) surf]
     ;; Bare expression — implicit eval
     [else
      (define loc (cond
