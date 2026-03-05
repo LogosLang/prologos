@@ -2606,6 +2606,10 @@
        [(strategy)
         (parse-strategy args loc)]
 
+       ;; (spawn Name) or (spawn (proc ...)) — execute a process (Phase S7c)
+       [(spawn)
+        (parse-spawn args loc)]
+
        ;; ---- Relational language (Phase 7) ----
 
        ;; (defr name [params] body...) — relation definition
@@ -4949,6 +4953,26 @@
                (define val (stx->datum (cadr remaining)))
                (loop (cddr remaining) (cons (cons key val) acc))])])))
      (surf-strategy name props loc)]))
+
+;; ========================================
+;; Parse spawn command (Phase S7c)
+;; ========================================
+;; (spawn Name) — named process reference
+;; (spawn (proc ...)) — anonymous inline process
+(define (parse-spawn args loc)
+  (cond
+    [(null? args)
+     (parse-error loc "spawn requires a process target" #f)]
+    [else
+     (define target-stx (car args))
+     (define target-datum (stx->datum target-stx))
+     ;; If target is a list → parse as anonymous proc or other form
+     ;; If target is a symbol → parse as name reference (expr)
+     (define parsed-target
+       (if (pair? target-datum)
+           (parse-list target-datum loc target-stx)    ;; parse as anonymous proc
+           (parse-symbol target-datum loc)))    ;; parse as name reference
+     (surf-spawn parsed-target #f loc)]))
 
 ;; ========================================
 ;; Parse process body (recursive descent)

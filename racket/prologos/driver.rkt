@@ -50,7 +50,8 @@
          "cap-type-bridge.rkt"
          "sessions.rkt"           ;; Phase S3: session types (for driver integration)
          "processes.rkt"          ;; Phase S3: process types (for driver integration)
-         "typing-sessions.rkt")   ;; Phase S3: type-proc judgment
+         "typing-sessions.rkt"    ;; Phase S3: type-proc judgment
+         "session-runtime.rkt")   ;; Phase S7c: rt-execute-process (spawn execution)
 
 (provide process-command
          process-file
@@ -647,6 +648,14 @@
                                             (ns-context-current-ns (current-ns-context))))
                               (current-global-env
                                (global-env-add-type-only (current-global-env) fqn (expr-Type 0))))
+                            ;; S7c: Register in process registry for spawn
+                            (register-process! name
+                              (process-entry name resolved-sess proc-body caps srcloc-unknown))
+                            (when (current-ns-context)
+                              (define fqn (qualify-name name
+                                            (ns-context-current-ns (current-ns-context))))
+                              (register-process! fqn
+                                (process-entry fqn resolved-sess proc-body caps srcloc-unknown)))
                             (format "defproc ~a : ~a type-checked." name (pp-session resolved-sess))]
                            [else
                             (prologos-error #f
@@ -656,6 +665,9 @@
                          ;; No resolved session — register without type-checking for now
                          (current-global-env
                           (global-env-add-type-only (current-global-env) name (expr-Type 0)))
+                         ;; S7c: Register in process registry (no resolved session for execution)
+                         (register-process! name
+                           (process-entry name #f proc-body caps srcloc-unknown))
                          (format "defproc ~a defined (session type not resolved for checking)." name)])]
                      [else
                       ;; No session type annotation — just register
@@ -664,6 +676,9 @@
                         (check-process-cap-warnings name caps proc-body))
                       (current-global-env
                        (global-env-add-type-only (current-global-env) name (expr-Type 0)))
+                      ;; S7c: Register in process registry (no session type for execution)
+                      (register-process! name
+                        (process-entry name #f proc-body caps srcloc-unknown))
                       (format "defproc ~a defined." name)])]
 
                   ;; Phase S3+S5a: Anonymous process — type-check if session type present
@@ -701,6 +716,44 @@
                   ;; Phase S6: Strategy declaration
                   [(list 'strategy name props)
                    (format "strategy ~a defined." name)]
+
+                  ;; Phase S7c: Spawn — execute a process
+                  [(list 'spawn proc-name sess-ty proc-body caps)
+                   (cond
+                     [sess-ty
+                      ;; Look up session type if it's a reference
+                      (define resolved-sess
+                        (cond
+                          [(expr-fvar? sess-ty)
+                           (define entry (lookup-session (expr-fvar-name sess-ty)))
+                           (and entry (session-entry-session-type entry))]
+                          [else sess-ty]))
+                      (cond
+                        [resolved-sess
+                         (define result (rt-execute-process proc-body resolved-sess))
+                         (define status (rt-exec-result-status result))
+                         (case status
+                           [(ok)
+                            (format "~aprocess~a executed. Protocol completed."
+                                    (if proc-name (format "~a: " proc-name) "")
+                                    (format " : ~a" (pp-session resolved-sess)))]
+                           [(contradiction)
+                            (prologos-error #f
+                              (format "~aprocess execution failed: protocol violation (~a)"
+                                      (if proc-name (format "~a " proc-name) "")
+                                      (pp-session resolved-sess)))]
+                           [else
+                            (format "~aprocess execution: ~a"
+                                    (if proc-name (format "~a: " proc-name) "")
+                                    status)])]
+                        [else
+                         (prologos-error #f
+                           (format "Cannot spawn ~a: session type not resolved"
+                                   (or proc-name "anonymous process")))])]
+                     [else
+                      (prologos-error #f
+                        (format "Cannot spawn ~a: no session type"
+                                (or proc-name "anonymous process")))])]
 
                   [_ (prologos-error srcloc-unknown (format "Unknown command: ~a" elab-result))])))]))))
   ;; Append warnings to result string (if any)

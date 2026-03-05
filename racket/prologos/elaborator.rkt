@@ -3609,4 +3609,36 @@
              (register-strategy! fqn (strategy-entry fqn props loc)))
            (list 'strategy name props)))]
 
+    ;; Phase S7c: Spawn command — execute a registered or inline process
+    [(surf-spawn target _strategy loc)
+     (cond
+       ;; Named process: look up from process registry
+       [(surf-var? target)
+        (define name (surf-var-name target))
+        (define entry (lookup-process name))
+        ;; Also try FQN
+        (define fqn-entry
+          (and (not entry) (current-ns-context)
+               (lookup-process
+                (qualify-name name
+                  (ns-context-current-ns (current-ns-context))))))
+        (define resolved (or entry fqn-entry))
+        (if resolved
+            (list 'spawn name
+                  (process-entry-session-type resolved)
+                  (process-entry-proc-body resolved)
+                  (process-entry-caps resolved))
+            (prologos-error loc
+              (format "Unknown process: ~a" name)))]
+       ;; Anonymous process (surf-proc): elaborate inline
+       [(surf-proc? target)
+        (define elab (elaborate-top-level target))
+        (if (prologos-error? elab) elab
+            (match elab
+              [(list 'proc sess-ty _channels caps proc-body)
+               (list 'spawn #f sess-ty proc-body caps)]
+              [_ (prologos-error loc "spawn target must be a process")]))]
+       [else
+        (prologos-error loc "spawn requires a process name or inline process")])]
+
     [_ (prologos-error srcloc-unknown (format "Unknown top-level form: ~a" surf))]))

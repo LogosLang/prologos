@@ -54,7 +54,7 @@
    'cap-type-bridge.rkt           '(capability-inference.rkt global-env.rkt macros.rkt propagator.rkt syntax.rkt type-lattice.rkt)
    'capability-inference.rkt      '(atms.rkt global-env.rkt macros.rkt propagator.rkt syntax.rkt)
    'champ.rkt                     '()
-   'driver.rkt                    '(atms.rkt cap-type-bridge.rkt capability-inference.rkt champ.rkt elab-speculation-bridge.rkt elaborator-network.rkt elaborator.rkt errors.rkt foreign.rkt global-env.rkt macros.rkt metavar-store.rkt multi-dispatch.rkt namespace.rkt parser.rkt performance-counters.rkt prelude.rkt pretty-print.rkt processes.rkt propagator.rkt qtt.rkt reader.rkt reduction.rkt relations.rkt sessions.rkt sexp-readtable.rkt source-location.rkt stratified-eval.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt type-lattice.rkt typing-core.rkt typing-errors.rkt typing-sessions.rkt unify.rkt warnings.rkt zonk.rkt)
+   'driver.rkt                    '(atms.rkt cap-type-bridge.rkt capability-inference.rkt champ.rkt elab-speculation-bridge.rkt elaborator-network.rkt elaborator.rkt errors.rkt foreign.rkt global-env.rkt macros.rkt metavar-store.rkt multi-dispatch.rkt namespace.rkt parser.rkt performance-counters.rkt prelude.rkt pretty-print.rkt processes.rkt propagator.rkt qtt.rkt reader.rkt reduction.rkt relations.rkt session-runtime.rkt sessions.rkt sexp-readtable.rkt source-location.rkt stratified-eval.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt type-lattice.rkt typing-core.rkt typing-errors.rkt typing-sessions.rkt unify.rkt warnings.rkt zonk.rkt)
    'elab-speculation-bridge.rkt   '(atms.rkt metavar-store.rkt performance-counters.rkt)
    'elab-speculation.rkt          '(atms.rkt elaborator-network.rkt propagator.rkt type-lattice.rkt)
    'elaborator-network.rkt        '(champ.rkt mult-lattice.rkt prelude.rkt propagator.rkt syntax.rkt type-lattice.rkt)
@@ -521,6 +521,8 @@
    (test-dep '(propagator.rkt session-lattice.rkt session-runtime.rkt sessions.rkt syntax.rkt) #f)
    'test-session-runtime-02.rkt
    (test-dep '(processes.rkt propagator.rkt session-lattice.rkt session-runtime.rkt sessions.rkt syntax.rkt) #f)
+   'test-session-runtime-03.rkt
+   (test-dep '(driver.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt sessions.rkt) #t)
    'test-session-throws-01.rkt
    (test-dep '(driver.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt sessions.rkt) #f)
    'test-session-type-bridge-01.rkt

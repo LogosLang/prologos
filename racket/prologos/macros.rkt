@@ -212,6 +212,17 @@
          lookup-strategy
          strategy-defaults
          parse-strategy-properties
+         ;; Process registry (Phase S7c)
+         current-process-registry
+         process-entry
+         process-entry?
+         process-entry-name
+         process-entry-session-type
+         process-entry-proc-body
+         process-entry-caps
+         process-entry-srcloc
+         register-process!
+         lookup-process
          ;; Spec store
          current-spec-store
          current-propagated-specs
@@ -539,6 +550,27 @@
 
 (define (lookup-strategy name)
   (hash-ref (current-strategy-registry) name #f))
+
+;; ========================================
+;; Process registry (Phase S7c): stores defproc definitions for spawn
+;; ========================================
+
+;; A process entry: stores a defined process for later execution.
+;; name: symbol — the process name
+;; session-type: sess-* tree — the session type
+;; proc-body: proc-* tree — the process body
+;; caps: list of (list name mult type-expr) — capability binders
+;; srcloc: source location
+(struct process-entry (name session-type proc-body caps srcloc) #:transparent)
+
+;; Process store: symbol → process-entry
+(define current-process-registry (make-parameter (hasheq)))
+
+(define (register-process! name entry)
+  (current-process-registry (hash-set (current-process-registry) name entry)))
+
+(define (lookup-process name)
+  (hash-ref (current-process-registry) name #f))
 
 ;; Parse strategy properties from a flat keyword-value list.
 ;; Input: (:fairness :priority :fuel 10000) → hasheq
@@ -2093,6 +2125,10 @@
         [(and (pair? datum) (eq? head 'proc))
          (define desugared (desugar-proc-ws datum))
          (cons (datum->syntax #f desugared stx) acc)]
+        ;; ---- Spawn command — pass through (Phase S7c) ----
+        ;; (spawn name) or (spawn (proc ...)) — no WS desugaring needed
+        [(and (pair? datum) (eq? head 'spawn))
+         (cons stx acc)]
         ;; ---- Strategy declaration — desugar WS-mode props, pass to parser (Phase S6) ----
         [(and (pair? datum) (eq? head 'strategy))
          (when (and (list? datum) (>= (length datum) 2) (symbol? (cadr datum)))
@@ -7548,6 +7584,8 @@
     [(surf-dual? surf) surf]
     ;; Strategy declaration — pass through to elaboration (Phase S6)
     [(surf-strategy? surf) surf]
+    ;; Spawn command — pass through to elaboration (Phase S7c)
+    [(surf-spawn? surf) surf]
     ;; Bare expression — implicit eval
     [else
      (define loc (cond

@@ -344,7 +344,9 @@
  (struct-out surf-proc-connect)
  (struct-out surf-proc-listen)
  ;; S6: Strategy declaration
- (struct-out surf-strategy))
+ (struct-out surf-strategy)
+ ;; S7c: Spawn command
+ (struct-out surf-spawn))
 
 ;; ========================================
 ;; Type hole (to be inferred by the type checker)
@@ -1097,3 +1099,7 @@
 ;; Phase S6: Strategy declaration
 ;; name: symbol, properties: assoc list of (cons keyword datum), srcloc: source location
 (struct surf-strategy (name properties srcloc) #:transparent)
+;; Phase S7c: Spawn command — execute a process
+;; target: symbol (named process ref) or surf-proc (anonymous process)
+;; strategy: symbol or #f (S7d: strategy application)
+(struct surf-spawn (target strategy srcloc) #:transparent)

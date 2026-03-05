@@ -216,6 +216,7 @@
                 "")))
         ;; Minimal diagnosis: which assumptions to retract
         (define diags (atms-minimal-diagnoses a))
+        (when (pair? diags) (perf-inc-gde-diagnosis!))
         (define diag-lines
           (cond
             [(null? diags) '()]
