@@ -13,6 +13,7 @@
 |-------|-----------|--------|--------|-------|
 | IO-A | A1: Opaque type marshalling | | | `expr-opaque` + `foreign.rkt` |
 | IO-A | A2: Path + IOError types | | | String wrapper, 6 error ctors |
+| IO-A | A3: IO capability extensions | | | Extend `capabilities.prologos` for IO |
 | IO-B | B1: IO state lattice | | | `io-bridge.rkt` |
 | IO-B | B2: IO bridge propagator | | | Side-effecting fire-fn |
 | IO-B | B3: FFI bridge to Racket | | | `io-ffi.rkt` |
@@ -21,8 +22,11 @@
 | IO-D | D1: File IO functions | | | `read-file`, `write-file`, etc. |
 | IO-D | D2: Console IO functions | | | `print`, `println`, `read-ln` |
 | IO-D | D3: `with-open` macro | | | Bracket pattern |
+| IO-D | D4: Filesystem query functions | | | `exists?`, `is-file?`, `is-dir?`, `list-dir` |
+| IO-D | D5: `main` powerbox mechanism | | | Runtime caps provisioning + `defn main` desugaring |
 | IO-E | E1: Protocol definitions | | | `FileRead`/`FileWrite`/`FileRW` |
 | IO-E | E2: Session-based file IO | | | IO service processes |
+| IO-E | E3: Protocol composition tests | | | IO protocols compose with user protocols |
 | IO-F | F1: Linear handle type | | | `Handle :1`, fio functions |
 | IO-F | F2: fio bracket pattern | | | `fio-with-open` |
 | IO-G | G1: CSV parser | | | RFC 4180 parsing |
@@ -43,23 +47,28 @@
 1. [Document Purpose](#1-document-purpose)
 2. [Design Decisions Summary](#2-design-decisions-summary)
 3. [Prerequisites: What's Already Built](#3-prerequisites)
-4. [Opaque Type Marshalling](#4-opaque-type-marshalling)
-5. [IO Bridge Architecture](#5-io-bridge-architecture)
-6. [Boundary Operations Runtime](#6-boundary-operations-runtime)
-7. [Dependent Send/Receive](#7-dependent-sendreceive)
-8. [Path and IOError Types](#8-path-and-ioerror-types)
-9. [FFI Bridge Layer](#9-ffi-bridge-layer)
-10. [Convenience Functions and `with-open`](#10-convenience-functions-and-with-open)
-11. [IO Session Protocols](#11-io-session-protocols)
-12. [Functional IO (`fio`) Module](#12-functional-io-fio-module)
-13. [Console IO](#13-console-io)
-14. [CSV and Structured Data](#14-csv-and-structured-data)
-15. [Capability Inference Pipeline Integration](#15-capability-inference-pipeline-integration)
-16. [Dependent Capabilities](#16-dependent-capabilities)
-17. [Module Structure and Prelude](#17-module-structure-and-prelude)
-18. [Phased Implementation Roadmap](#18-phased-implementation-roadmap)
-19. [Deferred Features](#19-deferred-features)
-20. [References](#20-references)
+4. [IO Capability Types](#4-io-capability-types)
+5. [Opaque Type Marshalling](#5-opaque-type-marshalling)
+6. [IO Bridge Architecture](#6-io-bridge-architecture)
+7. [Boundary Operations Runtime](#7-boundary-operations-runtime)
+8. [Dependent Send/Receive](#8-dependent-sendreceive)
+9. [Path and IOError Types](#9-path-and-ioerror-types)
+10. [FFI Bridge Layer](#10-ffi-bridge-layer)
+11. [Convenience Functions and `with-open`](#11-convenience-functions-and-with-open)
+12. [Filesystem Query Functions](#12-filesystem-query-functions)
+13. [`main` as Powerbox](#13-main-as-powerbox)
+14. [IO Session Protocols](#14-io-session-protocols)
+15. [Functional IO (`fio`) Module](#15-functional-io-fio-module)
+16. [Console IO](#16-console-io)
+17. [CSV and Structured Data](#17-csv-and-structured-data)
+18. [Capability Inference Pipeline Integration](#18-capability-inference-pipeline-integration)
+19. [Dependent Capabilities](#19-dependent-capabilities)
+20. [IO Test Infrastructure](#20-io-test-infrastructure)
+21. [Target Example Programs](#21-target-example-programs)
+22. [Module Structure and Prelude](#22-module-structure-and-prelude)
+23. [Phased Implementation Roadmap](#23-phased-implementation-roadmap)
+24. [Deferred Features](#24-deferred-features)
+25. [References](#25-references)
 
 ---
 
@@ -94,7 +103,7 @@ surface, design rationale, and example programs. This document assumes familiari
 - Dependent capabilities (`FileCap "/data"`) — path-indexed authority proofs
 - Dependent send/receive (`!:`/`?:`) — value-dependent session protocols
 
-**Out of scope** (see §19 Deferred):
+**Out of scope** (see §24 Deferred):
 - Network IO (`connect`/`listen`) — Phase 2+
 - Database IO (`db-open`, SQLite) — Phase 2+
 - Relational integration (`:source csv` on `defr`) — Phase 3+
@@ -124,6 +133,12 @@ Decisions resolved in Phase I (IO Library Design V2 §12) plus new implementatio
 | D13 | `with-open` pattern | Follows `with-transient` macro pattern; session channel internally | V2 §5.2 |
 | D14 | Console IO | Direct FFI to Racket `display`/`read-line`; no session for Tier 1 | New |
 | D15 | fio handle threading | Bracket pattern (`fio-with-open`); linear `Handle :1` type | V2 §12.2 |
+| D16 | fio internal architecture | `fio` backed by session channels internally (thin wrapper over `io`); not direct FFI | V2 §12.2 ("fio is a thin ergonomic layer over io") |
+| D17 | Composite capability model | Standalone `capability` declarations with `subtype` hierarchy (not union type decomposition) — matches existing `capabilities.prologos` | New; see §4 |
+| D18 | Console IO capability | `println` in prelude is cap-free (no `StdioCap` required); `StdoutSession`/`StdinSession` in Tier 3 require explicit `StdioCap` | New; see §16 |
+| D19 | Bracket naming | `with-open` for both `io` and `fio` modules; `with-session` reserved for explicit session channel acquisition | New |
+| D20 | `main` as powerbox | Runtime provisions inferred capabilities to `main`; `defn main` desugars to a process internally | V2 §7, §12.6 |
+| D21 | IO error codes | `E4xxx` range for IO and capability errors | New; see §24 |
 
 ---
 
@@ -150,6 +165,8 @@ Decisions resolved in Phase I (IO Library Design V2 §12) plus new implementatio
 | Union types | `typing-core.rkt` | — | Complete | Composite capabilities via union |
 | Subtype system | `typing-core.rkt` | — | Complete | Transitive subtype closure, coercion registry |
 | Schema system | multiple | — | Complete | Field registry, typed construction |
+| Capability types | `lib/prologos/core/capabilities.prologos` | 38 | Complete (partial) | 7 caps: ReadCap, WriteCap, HttpCap, StdioCap, FsCap, NetCap, SysCap + 6 subtype decls |
+| Capability parser | `parser.rkt` L2826-2848 | 22 | Complete | `(capability Name)` and `(capability Name (p : Type))` — parameterized form already supported |
 
 ### What Exists But Is NOT Implemented at Runtime
 
@@ -163,18 +180,116 @@ Decisions resolved in Phase I (IO Library Design V2 §12) plus new implementatio
 
 ---
 
-<a id="4-opaque-type-marshalling"></a>
+<a id="4-io-capability-types"></a>
 
-## 4. Opaque Type Marshalling
+## 4. IO Capability Types
 
-### 4.1 Problem
+### 4.1 Existing Infrastructure
+
+The file `lib/prologos/core/capabilities.prologos` already defines 7 capability types
+and 6 subtype relationships:
+
+```prologos
+;; Already exists — 7 capabilities:
+capability ReadCap       ;; read from filesystem
+capability WriteCap      ;; write to filesystem
+capability HttpCap       ;; make HTTP requests
+capability StdioCap      ;; use stdin/stdout/stderr
+capability FsCap         ;; composite: filesystem
+capability NetCap        ;; composite: network
+capability SysCap        ;; top-level: all system authority
+
+;; Already exists — 6 subtype relationships:
+subtype ReadCap FsCap
+subtype WriteCap FsCap
+subtype HttpCap NetCap
+subtype FsCap SysCap
+subtype NetCap SysCap
+subtype StdioCap SysCap
+```
+
+The parser (`parser.rkt` L2826-2848) already supports both `(capability Name)` and
+the parameterized form `(capability Name (p : Type))` — this means dependent capability
+declarations like `capability FileCap (p : Path)` can be parsed today.
+
+### 4.2 Capabilities Needed for IO Phase 1 (File IO)
+
+Doc1 (V2 §3.1) specifies 14 leaf capabilities. For file IO (Phases IO-A through IO-G),
+we need to add:
+
+```prologos
+;; New leaf capabilities for file IO:
+capability AppendCap     ;; append to files
+capability StatCap       ;; query file metadata (exists?, is-file?, etc.)
+
+;; New subtype relationships:
+subtype AppendCap FsCap
+subtype StatCap FsCap
+```
+
+The remaining 7 capabilities from Doc1 (MkdirCap, DeleteCap, WsCap, ListenCap,
+DbReadCap, DbWriteCap, SpawnCap, ClockCap, EnvCap) are deferred to Phase 2+ alongside
+their corresponding IO modules (network, database, process spawning).
+
+### 4.3 Composite Capability Model (Decision D17)
+
+Doc1 (V2 §3.2) and CAPABILITY_SECURITY.md §Composite Union describe composite
+capabilities as **union types**: `type FsCap = ReadCap | WriteCap`. The existing
+codebase uses a **standalone capability with subtype declarations**: `capability FsCap`
++ `subtype ReadCap FsCap`.
+
+These are semantically different:
+- **Union type approach**: `FsCap` IS `ReadCap | WriteCap` (structural decomposition)
+- **Subtype approach**: `FsCap` is opaque; `ReadCap` happens to be a subtype (nominal)
+
+**Decision D17**: We use the **subtype approach** (matching the existing implementation).
+The nominal model is cleaner — no structural decomposition needed, and it composes
+naturally with the capability inference propagator which works with atomic names. The
+subtype registry provides the same subsumption semantics: a function requiring
+`{ReadCap}` is satisfied by a caller with `{FsCap}` through transitive subtype closure.
+
+### 4.4 IOCap — Top of IO Hierarchy
+
+Doc1 defines `IOCap` as the top-level IO authority encompassing all IO capabilities.
+The existing `SysCap` serves this role. For consistency with Doc1 naming:
+
+```prologos
+;; Option A: Add IOCap as alias for SysCap
+;; capability IOCap   ;; already is SysCap
+
+;; Option B: Keep SysCap as the top (simpler)
+;; Doc1's `{sys : IOCap}` on main becomes `{sys : SysCap}`
+```
+
+For Phase 1, we use `SysCap` as the top-level authority (it already exists and subsumes
+all capabilities). `IOCap` can be added as a separate declaration if the distinction
+between "system capabilities" and "IO capabilities" becomes meaningful in Phase 2+.
+
+### 4.5 AST Pipeline Impact
+
+None — `capability` and `subtype` are existing top-level forms. No AST changes needed.
+
+### 4.6 Tests (~5, part of IO-A3)
+
+- New capabilities (`AppendCap`, `StatCap`) exist after module load
+- Subtype relationships hold: `AppendCap <: FsCap <: SysCap`
+- Subtype subsumption: function requiring `AppendCap` satisfied by `FsCap` caller
+- Regression: existing 7 capabilities and 6 subtypes unchanged
+
+---
+
+<a id="5-opaque-type-marshalling"></a>
+
+## 5. Opaque Type Marshalling
+
+### 5.1 Problem
 
 `foreign.rkt` marshals between Prologos values and Racket values for a fixed set of base
 types (Nat, Int, Rat, Bool, Unit, Char, String). IO operations need to pass Racket-native
 opaque values (file ports, database connections, network sockets) through the Prologos
 runtime without interpretation.
 
-### 4.2 Design
+### 5.2 Design
 
 **New struct in `syntax.rkt`:**
 
@@ -215,14 +330,14 @@ runtime without interpretation.
      (error 'foreign "Unsupported marshal-out type: ~a" base-type))]
 ```
 
-### 4.3 Alternative Considered: Simple Pass-Through
+### 5.3 Alternative Considered: Simple Pass-Through
 
 A simpler approach: add a single `'Opaque` symbol to `base-type-name` without tag
 differentiation. This loses type safety (all opaque values are the same type). The tagged
 approach costs ~5 more lines but preserves the invariant that different opaque types
 (file port vs. db connection) are distinct at the type level.
 
-### 4.4 AST Pipeline Impact
+### 5.4 AST Pipeline Impact
 
 | File | Change |
 |------|--------|
@@ -233,7 +348,7 @@ approach costs ~5 more lines but preserves the invariant that different opaque t
 | `zonk.rkt` | Pass-through for `expr-opaque` |
 | `substitution.rkt` | Pass-through for `expr-opaque` (no free variables) |
 
-### 4.5 Tests (~8)
+### 5.5 Tests (~8)
 
 - Marshal Racket port → `expr-opaque` → Racket port round-trip
 - Tagged opaque types are distinct (`'file-port` vs `'db-conn`)
@@ -243,18 +358,18 @@ approach costs ~5 more lines but preserves the invariant that different opaque t
 
 ---
 
-<a id="5-io-bridge-architecture"></a>
+<a id="6-io-bridge-architecture"></a>
 
-## 5. IO Bridge Architecture
+## 6. IO Bridge Architecture
 
-### 5.1 Overview
+### 6.1 Overview
 
 The IO bridge is the mechanism by which session protocol operations (`!`/`?`/`select`/
 `offer`) on IO channels translate into actual side effects (reading/writing files, network
 operations). It sits between the session runtime and external resources, implementing the
 "double-boundary" model from Session Type Design §12.5.
 
-### 5.2 IO State Lattice
+### 6.2 IO State Lattice
 
 ```
 IOState lattice (flat with distinguished elements):
@@ -301,7 +416,7 @@ IOState lattice (flat with distinguished elements):
 (define (io-state-contradicts? v) (io-top? v))
 ```
 
-### 5.3 IO Bridge Propagator
+### 6.3 IO Bridge Propagator
 
 The IO bridge propagator is a **side-effecting** propagator. Unlike normal propagators
 (which are pure lattice joins), this one performs actual IO when fired. This is by design —
@@ -347,7 +462,7 @@ the propagator network is the IO scheduler.
       [else net])))
 ```
 
-### 5.4 Integration with `run-to-quiescence`
+### 6.4 Integration with `run-to-quiescence`
 
 IO bridge propagators participate in the same `run-to-quiescence` loop as session
 propagators. The scheduling is:
@@ -361,7 +476,7 @@ propagators. The scheduling is:
 No special scheduling priority is needed — the data dependency graph naturally orders
 session advancement before IO operations before result delivery.
 
-### 5.5 Error Handling in the IO Bridge
+### 6.5 Error Handling in the IO Bridge
 
 IO errors (file not found, permission denied, etc.) are caught by the IO bridge propagator
 and converted to Prologos `Result` values:
@@ -382,7 +497,7 @@ Racket exceptions are caught at the IO bridge boundary and converted to `Result`
 The session protocol sees only values, never exceptions. This maintains the guarantee that
 errors are handled in the type system.
 
-### 5.6 File: `racket/prologos/io-bridge.rkt`
+### 6.6 File: `racket/prologos/io-bridge.rkt`
 
 **Estimated size**: ~200 lines
 
@@ -397,17 +512,17 @@ errors are handled in the type system.
 
 ---
 
-<a id="6-boundary-operations-runtime"></a>
+<a id="7-boundary-operations-runtime"></a>
 
-## 6. Boundary Operations Runtime
+## 7. Boundary Operations Runtime
 
-### 6.1 Problem
+### 7.1 Problem
 
 `proc-open`, `proc-connect`, and `proc-listen` are parsed, elaborated, and type-checked,
 but `compile-live-process` in `session-runtime.rkt` (L636) falls through silently for
 these forms. They need match arms that create IO channels.
 
-### 6.2 `proc-open` — File Open
+### 7.2 `proc-open` — File Open
 
 Unlike `proc-new` (which creates a channel pair with two endpoints), `proc-open` creates
 a **single-endpoint channel** where the other side is an IO bridge propagator:
@@ -449,7 +564,7 @@ a **single-endpoint channel** where the other side is an IO bridge propagator:
    (hash-set channel-eps 'ch ep) bindings trace*)]
 ```
 
-### 6.3 `rt-new-io-channel` — Single-Endpoint Channel Creation
+### 7.3 `rt-new-io-channel` — Single-Endpoint Channel Creation
 
 ```racket
 ;; Create a single channel endpoint backed by an IO bridge cell.
@@ -470,14 +585,14 @@ a **single-endpoint channel** where the other side is an IO bridge propagator:
     io-id))
 ```
 
-### 6.4 `proc-connect` and `proc-listen` — Deferred
+### 7.4 `proc-connect` and `proc-listen` — Deferred
 
 `proc-connect` (network) and `proc-listen` (server socket) follow the same pattern as
 `proc-open` but with different FFI calls. They are deferred to Phase 2+ (network IO).
 The infrastructure built for `proc-open` (single-endpoint channels, IO bridge propagators)
 directly generalizes to these cases.
 
-### 6.5 Tests (~12)
+### 7.5 Tests (~12)
 
 - `proc-open` creates a single-endpoint channel (not a pair)
 - IO bridge cell starts at `io-bot`, transitions through `io-opening` → `io-open`
@@ -491,11 +606,11 @@ directly generalizes to these cases.
 
 ---
 
-<a id="7-dependent-sendreceive"></a>
+<a id="8-dependent-sendreceive"></a>
 
-## 7. Dependent Send/Receive
+## 8. Dependent Send/Receive
 
-### 7.1 Current State — Much Further Along Than Previously Documented
+### 8.1 Current State — Much Further Along Than Previously Documented
 
 The pipeline for `!:`/`?:` is **almost entirely complete**. The prior claim that this
 was "blocked on reader/parser token work" was stale and incorrect. Here is the actual
@@ -515,7 +630,7 @@ layer-by-layer status:
 | Grammar docs | **STALE** | `grammar.ebnf` L1099-1100 | WS operator syntax not documented |
 | Tests (existing) | **PARTIAL** | `test-session-parse-02.rkt`, `test-session-ws-01.rkt` | Parse + WS desugar pass; no E2E dependent-type tests |
 
-### 7.2 The Two Real Gaps
+### 8.2 The Two Real Gaps
 
 **Gap 1: Elaborator binder scope** (`elaborator.rkt` L3201-3208)
 
@@ -578,7 +693,7 @@ continuation must have `substS` applied with the actual value:
       raw-cont))
 ```
 
-### 7.3 What Dependent Sessions Enable
+### 8.3 What Dependent Sessions Enable
 
 Beyond schema-typed IO, dependent send/receive is essential for:
 
@@ -587,7 +702,7 @@ Beyond schema-typed IO, dependent send/receive is essential for:
 - **Negotiated protocols**: `!: format Keyword . ? [FormatData format] . end` — response type depends on request
 - **Capability transfer**: `!: cap CapType . ? [Attested cap] . end` — prove authority was received
 
-### 7.4 No Dependency on IO Infrastructure
+### 8.4 No Dependency on IO Infrastructure
 
 Dependent send/receive is a session type feature, not an IO feature. It has **zero
 dependency** on Phases IO-A through IO-D. It can be implemented immediately, in parallel
@@ -596,11 +711,11 @@ supporting infrastructure (IR, typing, parsing, reader) is complete.
 
 ---
 
-<a id="8-path-and-ioerror-types"></a>
+<a id="9-path-and-ioerror-types"></a>
 
-## 8. Path and IOError Types
+## 9. Path and IOError Types
 
-### 8.1 Path Type
+### 9.1 Path Type
 
 **Decision D9**: String wrapper initially, not opaque Racket path.
 
@@ -640,7 +755,7 @@ defn path-file-name [p]
 
 Pure operations only — no IO in this module.
 
-### 8.2 IOError Type
+### 9.2 IOError Type
 
 ```prologos
 ;; lib/prologos/data/io-error.prologos
@@ -655,7 +770,7 @@ type IOError
    | IOFailed String
 ```
 
-### 8.3 Racket-Side Error Mapping
+### 9.3 Racket-Side Error Mapping
 
 ```racket
 ;; In io-bridge.rkt or io-ffi.rkt
@@ -674,7 +789,7 @@ type IOError
      (expr-ctor 'IOFailed (list (expr-string msg)))]))
 ```
 
-### 8.4 Tests (~10)
+### 9.4 Tests (~10)
 
 - `Path` constructor and accessors round-trip
 - `path-join` concatenates with separator
@@ -684,11 +799,11 @@ type IOError
 
 ---
 
-<a id="9-ffi-bridge-layer"></a>
+<a id="10-ffi-bridge-layer"></a>
 
-## 9. FFI Bridge Layer
+## 10. FFI Bridge Layer
 
-### 9.1 File: `racket/prologos/io-ffi.rkt`
+### 10.1 File: `racket/prologos/io-ffi.rkt`
 
 This module wraps Racket's file IO primitives as foreign functions callable from Prologos.
 It uses opaque type marshalling (§4) for file ports.
@@ -743,13 +858,13 @@ It uses opaque type marshalling (§4) for file ports.
 (define (read-line-wrapper) (read-line))
 ```
 
-### 9.2 Registration in Namespace
+### 10.2 Registration in Namespace
 
 These FFI functions are registered in the namespace during module loading, similar to how
 `register-foreign!` works in `driver.rkt`. The `io-ffi-registry` is imported by the
 IO library modules and registered as foreign bindings.
 
-### 9.3 Two Paths for IO
+### 10.3 Two Paths for IO
 
 There are two ways IO operations reach the external world:
 
@@ -764,11 +879,11 @@ invoked and how linearity/capability checking works.
 
 ---
 
-<a id="10-convenience-functions-and-with-open"></a>
+<a id="11-convenience-functions-and-with-open"></a>
 
-## 10. Convenience Functions and `with-open`
+## 11. Convenience Functions and `with-open`
 
-### 10.1 Core IO Module: `lib/prologos/core/io.prologos`
+### 11.1 Core IO Module: `lib/prologos/core/io.prologos`
 
 ```prologos
 ;; lib/prologos/core/io.prologos
@@ -807,7 +922,7 @@ defn with-open [p mode body]
   ...
 ```
 
-### 10.2 Implementation Strategy for Convenience Functions
+### 11.2 Implementation Strategy for Convenience Functions
 
 Each convenience function internally:
 
@@ -842,7 +957,7 @@ defn read-file [p]
   result
 ```
 
-### 10.3 `with-open` Macro
+### 11.3 `with-open` Macro (Decision D19)
 
 Following the `with-transient` pattern in `macros.rkt`:
 
@@ -867,7 +982,7 @@ Following the `with-transient` pattern in `macros.rkt`:
 (register-preparse-macro! 'with-open expand-with-open)
 ```
 
-### 10.4 Tests (~30)
+### 11.4 Tests (~30)
 
 - `read-file` reads file content correctly
 - `read-file` on nonexistent file → `err (FileNotFound ...)`
@@ -883,11 +998,182 @@ Following the `with-transient` pattern in `macros.rkt`:
 
 ---
 
-<a id="11-io-session-protocols"></a>
+<a id="12-filesystem-query-functions"></a>
 
-## 11. IO Session Protocols
+## 12. Filesystem Query Functions
 
-### 11.1 File: `lib/prologos/core/io-protocols.prologos`
+### 12.1 Functions (from V2 §5.1)
+
+Doc1 specifies four filesystem query convenience functions. These are Tier 1 (no
+handles, no session concepts visible) and use direct FFI calls with capability inference.
+
+```prologos
+;; In lib/prologos/io/fs.prologos
+ns prologos.io.fs :no-prelude
+use prologos.data.path :refer [Path path-str]
+
+;; All require {StatCap} — inferred, never visible to Tier 1 users
+
+spec exists? : Path -> Bool
+defn exists? [p]
+  foreign io-file-exists? [path-str p]
+
+spec is-file? : Path -> Bool
+defn is-file? [p]
+  ;; foreign io-file-exists? + not directory
+  foreign io-is-file? [path-str p]
+
+spec is-dir? : Path -> Bool
+defn is-dir? [p]
+  foreign io-directory? [path-str p]
+
+spec list-dir : Path -> Result [List Path] IOError
+defn list-dir [p]
+  ;; foreign io-directory-list wraps Racket directory-list
+  foreign io-directory-list [path-str p]
+```
+
+### 12.2 FFI Extensions
+
+`io-ffi.rkt` needs additional entries:
+
+```racket
+;; Add to io-ffi-registry:
+'io-is-file?       (cons file-exists?-not-dir  '((String) . Bool))
+'io-directory-list  (cons directory-list-wrapper '((String) . (List String)))
+```
+
+### 12.3 Tests (~8, part of IO-D4)
+
+- `exists?` returns `#t` for existing file
+- `exists?` returns `#f` for nonexistent path
+- `is-file?` returns `#t` for file, `#f` for directory
+- `is-dir?` returns `#t` for directory, `#f` for file
+- `list-dir` returns list of paths for existing directory
+- `list-dir` returns error for nonexistent directory
+- Capability inference: `exists?` infers `{StatCap}`
+- Capability inference: `list-dir` infers `{StatCap}`
+
+---
+
+<a id="13-main-as-powerbox"></a>
+
+## 13. `main` as Powerbox
+
+### 13.1 Design (from V2 §7, CAPABILITY_SECURITY.md §Authority Root)
+
+`main` is the authority root — the only place capabilities are minted from nothing. The
+runtime grants the full `SysCap` to `main`, which can then delegate narrower capabilities
+to called functions and spawned processes via subtype subsumption.
+
+This is the critical mechanism for Tier 1 progressive disclosure: users write `defn main`
+with no capability annotations; the compiler infers what's needed; the runtime provides it.
+
+### 13.2 Two Forms of `main` (Decision D8, D20)
+
+**`defn main` — Simple scripts, sequential IO**
+
+```prologos
+;; Compiler infers capabilities from body
+;; Runtime provisions SysCap; inferred caps resolve via subsumption
+defn main []
+  let data := [read-file [path "input.txt"]]
+  [println data]
+```
+
+`defn main` desugars internally to a process with a single "run body to completion"
+session. The user never sees this. The desugaring:
+
+```
+defn main [] body
+→ defproc __main_proc : __RunToCompletion {sys : SysCap}
+    let __result := body
+    self ! __result
+    stop
+```
+
+Where `__RunToCompletion` is an internal session type: `! A . end`.
+
+**`defproc main` — Concurrent programs, explicit channel management**
+
+```prologos
+;; Explicit capabilities in header
+defproc main [args : List String] {sys : SysCap}
+  spawn file-watcher FsCap       ;; ReadCap <: FsCap <: SysCap
+  spawn api-server NetCap
+  ...
+```
+
+### 13.3 Implementation
+
+#### 13.3.1 Compile-Time: Cap Inference on `main`
+
+After capability inference (Phase IO-H), `driver.rkt` stores the inferred cap closure
+for `main`:
+
+```racket
+;; In driver.rkt, after run-capability-inference:
+(when (hash-has-key? cap-closures 'main)
+  (current-main-capabilities (hash-ref cap-closures 'main)))
+```
+
+#### 13.3.2 Runtime: Cap Provisioning
+
+The runtime provisions capabilities to `main` before execution. For Phase 0 (no
+concurrent runtime), this is a compile-time check only — the capabilities are `:0`
+(erased), so no runtime values need to be constructed:
+
+```racket
+;; In driver.rkt, when running main:
+;; 1. Check that the program's cap closure is satisfiable
+;;    (all caps are subtypes of SysCap — trivially true for IO caps)
+;; 2. No runtime action needed — :0 caps are erased
+;; 3. Proceed to execute main
+```
+
+For a future concurrent runtime, capability provisioning would create actual
+capability tokens that are passed through the process network.
+
+#### 13.3.3 `defn main` Desugaring
+
+In `macros.rkt` or `elaborator.rkt`, when a `defn main` is encountered:
+
+```racket
+;; Detect defn main (no defproc main exists)
+;; Desugar:
+;;   (defn main [] body)
+;; → (defproc __main_wrapper : __MainSession {sys : SysCap}
+;;     (let __result body)
+;;     (send self __result)
+;;     stop)
+;; Where __MainSession = (sess-send (type-of-body) (sess-end))
+```
+
+This is the same pattern as how `defn` with IO calls needs to be wrapped — the
+desugaring creates a process context where capabilities can be resolved.
+
+**Note**: For Phase 0 (no concurrent runtime), the desugaring may be simpler: just
+execute the body directly with capability checking at type-check time. The full process
+desugaring is needed when the concurrent runtime exists. The key is that the type
+checker sees the capability requirements on `main` and verifies them.
+
+### 13.4 Tests (~8, part of IO-D5)
+
+- `defn main [] [println "hello"]` — caps inferred, program runs
+- `defn main` with `read-file` — `ReadCap` inferred and satisfied
+- `defn main` with `read-file` + `write-file` — both caps inferred
+- `defproc main` with explicit `{sys : SysCap}` — accepted
+- Cap subsumption: child requiring `ReadCap` satisfied by parent's `SysCap`
+- Error: function requiring `ReadCap` called from non-main context without cap — type error
+- Cap closure of `main` matches expected set
+
+---
+
+<a id="14-io-session-protocols"></a>
+
+## 14. IO Session Protocols
+
+### 14.1 File: `lib/prologos/core/io-protocols.prologos`
 
 ```prologos
 ;; lib/prologos/core/io-protocols.prologos
@@ -930,7 +1216,7 @@ session FileRW
     | :close     -> end
 ```
 
-### 11.2 IO Service Processes
+### 14.2 IO Service Processes
 
 Each session type has a corresponding IO service process that implements the server
 (dual) side. These processes run as IO bridge propagators — they watch the session
@@ -954,7 +1240,7 @@ defproc file-read-service : dual FileRead
         stop
 ```
 
-### 11.3 Composition: Protocols as Types
+### 14.3 Composition: Protocols as Types
 
 Following PROTOCOLS_AS_TYPES.org, IO protocols compose naturally:
 
@@ -973,7 +1259,36 @@ session CopyProtocol
   end
 ```
 
-### 11.4 Tests (~20)
+### 14.4 Protocol Composition Tests (IO-E3)
+
+Following PROTOCOLS_AS_TYPES.org, IO protocols must compose with each other and with
+user-defined protocols. This is the "composition is the test" principle — if IO protocols
+don't compose, the architecture has a problem.
+
+```prologos
+;; A user protocol that composes with FileRead
+session ReadAndProcess
+  ? Path                               ;; receive a file path
+  ? [Result String IOError]            ;; read result (from FileRead phase)
+  ! [Result ProcessedData ProcessError] ;; processing result
+  end
+
+;; Protocol that transitions to FileWrite after reading
+session CopyProtocol
+  ? Path . ? Path                       ;; source and dest
+  ? [Result String IOError]             ;; read phase
+  ! [Result Unit IOError]               ;; write phase
+  end
+```
+
+**Tests** (~5):
+- IO protocol composes with user-defined continuation
+- Duality preserved through composed IO protocol
+- Capability requirements union across composed protocol phases
+- Mixed IO protocol (FileRead phase → user processing → FileWrite phase)
+- Type error when composition violates protocol structure
+
+### 14.5 Tests (~20 for IO-E1/E2, ~5 for IO-E3)
 
 - `FileRead` session type duality check
 - `FileWrite` session type duality check
@@ -988,11 +1303,11 @@ session CopyProtocol
 
 ---
 
-<a id="12-functional-io-fio-module"></a>
+<a id="15-functional-io-fio-module"></a>
 
-## 12. Functional IO (`fio`) Module
+## 15. Functional IO (`fio`) Module
 
-### 12.1 Design Rationale
+### 15.1 Design Rationale
 
 The `fio` module provides an alternative to session-based IO for users who prefer
 functional handle threading (familiar to Rust, Haskell, C programmers). It uses
@@ -1001,7 +1316,23 @@ linear types (`:1` multiplicity) to ensure handles are used exactly once.
 This is the "Tier 1/2 alternative" from Design V2 §12.2 — simpler than session types
 but still safe via linearity.
 
-### 12.2 Handle Type
+### 15.2 Internal Architecture (Decision D16)
+
+Per Doc1 V2 §12.2: "Internally, `fio` handles are backed by session channels —
+`with-open` creates a channel to the IO service but presents a handle API. This means
+no code duplication in the runtime. `fio` is a thin ergonomic layer over `io`."
+
+`fio` functions do NOT use direct FFI calls. They create session channels to the IO
+bridge internally and present a linear handle API externally. This ensures:
+
+- **Single IO path**: All IO goes through the same IO bridge propagators
+- **Uniform mocking**: Swapping the IO propagator works for both `io` and `fio`
+- **No code duplication**: `fio-read-all` uses the same IO bridge as `io`'s `read-file`
+- **Consistent error handling**: Same `Result`/`IOError` from the same bridge
+
+The `Handle` type wraps a session channel endpoint, not a raw Racket port:
+
+### 15.3 Handle Type
 
 ```prologos
 ;; lib/prologos/core/fio.prologos
@@ -1009,41 +1340,49 @@ ns prologos.core.fio :no-prelude
 use prologos.data.path :refer [Path path-str]
 use prologos.data.io-error :refer [IOError]
 
-;; Handle wraps an opaque file port with linear ownership.
+;; Handle wraps a session channel endpoint with linear ownership.
+;; Internally backed by a FileRW session channel to the IO bridge.
 ;; The :1 multiplicity ensures exactly-once use.
-type Handle := MkHandle OpaqueFilePort
+type Handle := MkHandle ChannelEndpoint
 
 ;; Open a file, returning a linear handle
+;; Internally: creates a session channel via proc-open, wraps in Handle
 spec fio-open : Path -> Keyword -> Result Handle IOError
 defn fio-open [p mode]
-  foreign io-ffi-open [path-str p] mode
+  ;; open p mode creates a session channel to IO bridge
+  ;; wrap the endpoint in Handle for linear tracking
+  ...
 
 ;; Read all content (consumes handle, returns new handle + data)
+;; Internally: select :read-all on the wrapped channel, receive result
 spec fio-read-all : Handle :1 -> <Handle :1 * Result String IOError>
 defn fio-read-all [h]
   match h
-    | MkHandle port ->
-        let data := foreign io-read-string port
-        [MkHandle port, ok data]
+    | MkHandle ch ->
+        ;; Session protocol: select :read-all, receive Result
+        select ch :read-all
+        let result := ch ?
+        [MkHandle ch, result]
 
 ;; Write content (consumes handle, returns new handle)
 spec fio-write : Handle :1 -> String -> <Handle :1 * Result Unit IOError>
 defn fio-write [h content]
   match h
-    | MkHandle port ->
-        foreign io-write-string port content
-        [MkHandle port, ok unit]
+    | MkHandle ch ->
+        select ch :write
+        ch ! content
+        [MkHandle ch, ok unit]
 
 ;; Close handle (consumes handle, does not return it)
 spec fio-close : Handle :1 -> Result Unit IOError
 defn fio-close [h]
   match h
-    | MkHandle port ->
-        foreign io-close port
+    | MkHandle ch ->
+        select ch :close
         ok unit
 ```
 
-### 12.3 Bracket Pattern: `fio-with-open`
+### 15.4 Bracket Pattern: `fio-with-open`
 
 ```prologos
 ;; Bracket pattern for fio: opens, runs body with linear handle, closes.
@@ -1058,7 +1397,7 @@ defn fio-with-open [p mode body]
     | err e -> err e
 ```
 
-### 12.4 Usage Example
+### 15.5 Usage Example
 
 ```prologos
 ns my-app
@@ -1072,7 +1411,7 @@ defn main []
       | err e -> [h2, [handle-error e]]
 ```
 
-### 12.5 QTT Enforcement
+### 15.6 QTT Enforcement
 
 The `:1` multiplicity on `Handle` is enforced by the QTT checker. If a handle is:
 - Used zero times → QTT error: "linear value unused (resource leak)"
@@ -1080,7 +1419,7 @@ The `:1` multiplicity on `Handle` is enforced by the QTT checker. If a handle is
 
 This is the same mechanism already used for session channel endpoints.
 
-### 12.6 Tests (~15)
+### 15.7 Tests (~15)
 
 - `fio-open` returns a linear handle
 - `fio-read-all` consumes and returns handle
@@ -1095,17 +1434,17 @@ This is the same mechanism already used for session channel endpoints.
 
 ---
 
-<a id="13-console-io"></a>
+<a id="16-console-io"></a>
 
-## 13. Console IO
+## 16. Console IO
 
-### 13.1 Design
+### 16.1 Design
 
 Console IO (`print`, `println`, `read-ln`) is the simplest IO operation and the most
 commonly used (debugging, REPL interaction). It does NOT use session types — it's
 direct FFI calls with capability inference.
 
-### 13.2 Implementation
+### 16.2 Implementation
 
 ```prologos
 ;; In lib/prologos/core/io.prologos (alongside file IO)
@@ -1123,19 +1462,23 @@ defn read-ln []
   foreign io-read-ln
 ```
 
-### 13.3 Prelude Inclusion
+### 16.3 Prelude Inclusion (Decision D18)
 
-Per Decision D4, `println` is included in the prelude for beginner accessibility.
-`print` and `read-ln` require `use prologos.core.io`.
+Per Decision D4 and D18, `println` is included in the prelude for beginner accessibility
+and is **cap-free** — it does not require `StdioCap`. This supports Tier 1 progressive
+disclosure where beginners never see capability annotations.
+
+`print` and `read-ln` also require no capability in their convenience forms. Explicit
+`StdioCap` is only required for session-based console IO (Tier 3, §16.4).
 
 ```racket
-;; In namespace.rkt, add to prelude-requires:
-'(prologos.core.io (println))
+;; In namespace.rkt, add to prelude-imports:
+(imports [prologos::core::io :refer [println]])
 ```
 
-### 13.4 Session-Based Console (Optional, Tier 3)
+### 16.4 Session-Based Console (Optional, Tier 3)
 
-For programs that want structured console IO:
+For programs that want structured console IO with explicit capability control:
 
 ```prologos
 session StdoutSession
@@ -1152,22 +1495,25 @@ session StdinSession
       | :done      -> end
 ```
 
-These are provided in `io-protocols.prologos` but not used by the convenience functions.
+These are provided in `io-protocols.prologos` and require `{stdio :0 StdioCap}` in
+the process's capability set. The convenience functions in §16.2 do NOT use these
+protocols — they use direct FFI calls and are cap-free per Decision D18.
 
-### 13.5 Tests (~5, included in IO-D2)
+### 16.5 Tests (~5, included in IO-D2)
 
 - `println` outputs string with newline
 - `print` outputs string without newline
 - `read-ln` reads from stdin (test with mock)
-- `println` infers `{StdioCap}` (or no cap for console — design decision)
+- `println` does NOT infer `StdioCap` (cap-free, Decision D18)
+- `StdoutSession`/`StdinSession` require explicit `StdioCap` in defproc
 
 ---
 
-<a id="14-csv-and-structured-data"></a>
+<a id="17-csv-and-structured-data"></a>
 
-## 14. CSV and Structured Data
+## 17. CSV and Structured Data
 
-### 14.1 CSV Parser
+### 17.1 CSV Parser
 
 ```prologos
 ;; lib/prologos/core/csv.prologos
@@ -1194,7 +1540,7 @@ defn parse-csv-maps [s]
     | nil -> '[]
 ```
 
-### 14.2 Convenience Functions
+### 17.2 Convenience Functions
 
 ```prologos
 spec read-csv : Path -> Result [List [List String]] IOError
@@ -1215,9 +1561,9 @@ defn write-csv [p rows]
   [write-file p content]
 ```
 
-### 14.3 Schema-Typed CSV (Dependent Send/Receive — Deferred)
+### 17.3 Schema-Typed CSV (Dependent Send/Receive — Deferred)
 
-When `!:`/`?:` are implemented (Phase IO-I), CSV reading can be typed by schema:
+When `!:`/`?:` are implemented (Phase IO-J), CSV reading can be typed by schema:
 
 ```prologos
 ;; Future: schema-typed CSV reading
@@ -1229,7 +1575,7 @@ session TypedCsvRead {S : Schema}
 
 This is deferred because it depends on dependent send/receive infrastructure.
 
-### 14.4 Tests (~20)
+### 17.4 Tests (~20)
 
 - `parse-csv` splits simple CSV
 - `parse-csv` handles quoted fields with commas
@@ -1243,18 +1589,18 @@ This is deferred because it depends on dependent send/receive infrastructure.
 
 ---
 
-<a id="15-capability-inference-pipeline-integration"></a>
+<a id="18-capability-inference-pipeline-integration"></a>
 
-## 15. Capability Inference Pipeline Integration
+## 18. Capability Inference Pipeline Integration
 
-### 15.1 Current State
+### 18.1 Current State
 
 `capability-inference.rkt` implements a complete propagator-based transitive closure
 algorithm for capability requirements. However, it's only accessible via REPL commands
 (`(cap-closure name)` and `(cap-audit name cap)` in `driver.rkt` L502-515). It is NOT
 wired into the normal compilation pipeline.
 
-### 15.2 What Needs to Change
+### 18.2 What Needs to Change
 
 For Tier 1 progressive disclosure (users never write capability annotations), capability
 inference must run automatically:
@@ -1266,7 +1612,7 @@ inference must run automatically:
 3. **Warning on explicit caps that disagree with inference**: If a user writes
    `{fs :0 ReadCap}` but the function also needs `WriteCap`, warn
 
-### 15.3 Implementation
+### 18.3 Implementation
 
 ```racket
 ;; In driver.rkt, after process-top-level-defs:
@@ -1285,14 +1631,14 @@ inference must run automatically:
     (current-main-capabilities main-caps)))
 ```
 
-### 15.4 Limitation: Flat Cap Names Only
+### 18.4 Limitation: Flat Cap Names Only
 
 `extract-capability-requirements` in `capability-inference.rkt` (L130-141) only handles
 `(expr-fvar name)` domains — plain capability names like `ReadCap`. Applied/dependent
 caps like `(FileCap "/data")` are silently ignored. This is acceptable for Phase IO-A–H
 (all caps are flat names). Dependent caps are Phase 7e-7g work.
 
-### 15.5 Tests (~10)
+### 18.5 Tests (~10)
 
 - `defn f [] [read-file ...]` → cap closure includes `ReadCap`
 - Transitive: `defn g [] [f]` → cap closure includes `ReadCap`
@@ -1303,11 +1649,11 @@ caps like `(FileCap "/data")` are silently ignored. This is acceptable for Phase
 
 ---
 
-<a id="16-dependent-capabilities"></a>
+<a id="19-dependent-capabilities"></a>
 
-## 16. Dependent Capabilities
+## 19. Dependent Capabilities
 
-### 16.1 Motivation
+### 19.1 Motivation
 
 Being able to specify *which file* a function has access to is fundamental to the
 capability security model. Without dependent capabilities, all file IO functions require
@@ -1327,7 +1673,7 @@ spec read-config {cap :0 FileCap "/etc/app.conf"} : Result Config IOError
 This is the difference between "has filesystem access" and "has access to this specific
 file" — the core value proposition of capability security.
 
-### 16.2 Current State (Phases 7a-7d Complete)
+### 19.2 Current State (Phases 7a-7d Complete)
 
 Capability types as zero-method traits with `:0` erased binders are fully working:
 - Parsing: `{cap :0 ReadCap}` in spec headers
@@ -1342,9 +1688,9 @@ Capability types as zero-method traits with `:0` erased binders are fully workin
 - Cap-type bridge α/γ functions don't handle applied capability types
 - No surface syntax for dependent cap requirements in foreign blocks
 
-### 16.3 Design
+### 19.3 Design
 
-#### 16.3.1 Cap-Set with Type Expressions
+#### 19.3.1 Cap-Set with Type Expressions
 
 Currently `cap-set` is a `seteq` of symbols. It needs to hold arbitrary type expressions
 for applied capabilities:
@@ -1366,7 +1712,7 @@ for applied capabilities:
 The cap-set becomes a `set` using `equal?` comparison (not `eq?`), since `cap-entry`
 structs with expression indices need structural equality.
 
-#### 16.3.2 `extract-capability-requirements` Extension
+#### 19.3.2 `extract-capability-requirements` Extension
 
 ```racket
 (define (extract-capability-requirements type)
@@ -1393,7 +1739,7 @@ structs with expression indices need structural equality.
       [_ caps])))
 ```
 
-#### 16.3.3 Cap-Type Bridge Updates
+#### 19.3.3 Cap-Type Bridge Updates
 
 The α (abstraction) and γ (concretization) Galois connection functions in
 `cap-type-bridge.rkt` need to handle applied cap types:
@@ -1410,7 +1756,7 @@ The α (abstraction) and γ (concretization) Galois connection functions in
 ;;            → (expr-app (expr-fvar 'FileCap) (expr-string "/data"))
 ```
 
-#### 16.3.4 Capability Subsumption
+#### 19.3.4 Capability Subsumption
 
 A function requiring `{FileCap "/data"}` is satisfied by a caller with `{FsCap}` —
 the blanket cap subsumes the specific one. This uses the existing subtype registry:
@@ -1422,7 +1768,7 @@ FileCap "/data" <: ReadCap <: FsReadCap <: FsCap <: IOCap
 The subsumption check becomes: for each required `cap-entry`, check if the provided
 cap-set contains a subsuming entry. Flat caps always subsume their applied refinements.
 
-#### 16.3.5 Dependent Cap in Convenience Functions
+#### 19.3.5 Dependent Cap in Convenience Functions
 
 With dependent caps, the Tier 3 API becomes:
 
@@ -1441,7 +1787,7 @@ defn read-specific [p]
 Tier 1 and Tier 2 continue to use flat caps — `read-file` infers `{ReadCap}` (blanket).
 Dependent caps are Tier 3 for security-conscious code.
 
-### 16.4 Tests (~15)
+### 19.4 Tests (~15)
 
 - `cap-entry` with flat cap equals existing behavior
 - `cap-entry` with applied cap (`FileCap "/data"`) round-trips
@@ -1459,11 +1805,193 @@ Dependent caps are Tier 3 for security-conscious code.
 
 ---
 
-<a id="17-module-structure-and-prelude"></a>
+<a id="20-io-test-infrastructure"></a>
 
-## 17. Module Structure and Prelude
+## 20. IO Test Infrastructure
 
-### 16.1 Module Layout
+### 20.1 Challenge
+
+IO operations interact with the filesystem, console, and (eventually) network. Testing
+IO requires either real side effects (slow, non-deterministic, cleanup-prone) or mocking
+(requires infrastructure).
+
+### 20.2 Temp Directory Pattern (Phase IO-D onwards)
+
+For file IO tests, use Racket's `make-temporary-directory` to create isolated test
+directories:
+
+```racket
+;; In test-io-file-01.rkt
+(define test-dir (make-temporary-directory))
+(define test-file (build-path test-dir "test.txt"))
+
+(define (cleanup!)
+  (when (directory-exists? test-dir)
+    (delete-directory/files test-dir)))
+
+;; Each test writes to test-dir, reads back, checks result
+;; cleanup! called in a dynamic-wind or test teardown
+```
+
+All IO integration tests create their own temp directory, write test files there, and
+clean up after themselves. This avoids polluting the project tree and allows parallel
+test execution.
+
+### 20.3 IO Propagator Mocking (Phase 2+)
+
+Per Decision D7, IO mocking works by swapping the IO propagator (server side) while
+keeping the session protocol unchanged (client side). This is deferred to Phase 2+ but
+the architecture supports it:
+
+```racket
+;; Future: mock IO propagator for testing
+;; Instead of make-io-bridge-propagator (real IO):
+;; Use make-mock-io-propagator that returns canned responses
+;; Session client code is unchanged — it sees the same protocol
+```
+
+### 20.4 Console IO Mocking
+
+For `println`/`read-ln` tests, use Racket's `with-output-to-string` and
+`with-input-from-string` at the FFI bridge layer:
+
+```racket
+;; Capture println output
+(define output
+  (with-output-to-string
+    (lambda () (run-prologos-expr '(println "hello")))))
+(check-equal? output "hello\n")
+
+;; Simulate read-ln input
+(define result
+  (with-input-from-string "user input\n"
+    (lambda () (run-prologos-expr '(read-ln)))))
+(check-equal? result (make-ok "user input"))
+```
+
+### 20.5 Mini-Capstone: File IO Integration Validation
+
+After completing Phase IO-D (core file IO), run a mini-capstone integration test that
+exercises the full path from Prologos source through the IO bridge to real filesystem
+operations and back:
+
+```racket
+;; test-io-capstone-01.rkt — Integration capstone
+;; 1. Parse + elaborate + type-check a Prologos program that reads/writes files
+;; 2. Execute via session runtime with real IO bridge
+;; 3. Verify file was created with correct contents
+;; 4. Verify read-back matches
+;; 5. Clean up temp directory
+```
+
+This validates that the entire pipeline (WS reader → parser → elaborator → type checker →
+runtime → IO bridge → FFI → filesystem) works end-to-end.
+
+---
+
+<a id="21-target-example-programs"></a>
+
+## 21. Target Example Programs
+
+These examples from V2 §13 serve as concrete validation targets. Each maps to a phase
+completion milestone — when the phase is done, the corresponding example should compile
+and run correctly.
+
+### 21.1 Hello World (Tier 1) — after IO-D2
+
+```prologos
+ns hello
+
+[println "Hello, world!"]
+```
+
+No capabilities. No session types. No handles. Just works.
+**Validates**: Console FFI, `println` in prelude, cap-free console (D18).
+
+### 21.2 Read and Process a File (Tier 1) — after IO-D1 + IO-D5
+
+```prologos
+ns word-count
+
+defn main []
+  match [read-file [path "input.txt"]]
+    | ok content ->
+        let words := [split content " "]
+        [println [format "Word count: {}" [length words]]]
+    | err e ->
+        [println [format "Error: {}" [show e]]]
+```
+
+**Validates**: `read-file`, `Path`, `IOError`, `defn main` as powerbox (D20),
+capability inference (IO-H).
+
+### 21.3 CSV Processing (Tier 1) — after IO-G2
+
+```prologos
+ns csv-process
+
+defn main []
+  match [read-csv-maps [path "employees.csv"]]
+    | ok rows ->
+        let names := |> rows
+          filter [fn [r] [eq? [map-get r :dept] "Engineering"]]
+          map [fn [r] [map-get r :name]]
+        [println [format "Engineers: {}" names]]
+    | err e ->
+        [println [format "Error: {}" [show e]]]
+```
+
+**Validates**: CSV library, pipe operator, `defn main` powerbox.
+
+### 21.4 Multi-File Processing (Tier 2) — after IO-D3
+
+```prologos
+ns merge-files
+
+defn merge [input-paths output-path]
+  let contents := [map read-file input-paths]
+  let merged := [string-join [filter-map ok? contents] "\n"]
+  [write-file output-path merged]
+```
+
+**Validates**: `read-file`/`write-file` composition, `with-open` bracket pattern.
+
+### 21.5 Concurrent IO (Tier 3) — after IO-E2 + IO-D5
+
+```prologos
+ns concurrent-io
+
+session WorkProtocol
+  ? Path
+  ! [Result String IOError]
+  end
+
+defproc file-loader : dual WorkProtocol {fs :0 ReadCap}
+  path := self ?
+  self ! [read-file path]
+  stop
+
+defproc main [args : List String] {sys :0 SysCap}
+  let paths := [map path args]
+  let results := [map (fn [p]
+    new [my-ch worker-ch] : WorkProtocol
+    spawn file-loader worker-ch ReadCap
+    my-ch ! p
+    my-ch ?) paths]
+  [println [format "Loaded {} files" [length results]]]
+  stop
+```
+
+**Validates**: Session protocols, `proc-open`, concurrent IO, capability subsumption
+(ReadCap <: SysCap), `defproc main`.
+
+---
+
+<a id="22-module-structure-and-prelude"></a>
+
+## 22. Module Structure and Prelude
+
+### 22.1 Module Layout
 
 ```
 lib/prologos/
@@ -1483,21 +2011,25 @@ lib/prologos/
 
 All modules use `:no-prelude` (standard for library code, avoids circularity).
 
-### 16.2 Prelude Additions
+### 22.2 Prelude Additions
 
 ```racket
-;; In namespace.rkt, add to prelude-requires:
+;; In namespace.rkt, add to prelude-imports list:
 ;; Minimal IO in prelude — just println for debugging
-'(prologos.core.io (println))
-'(prologos.data.path (Path path))
-'(prologos.data.io-error (IOError))
+(imports [prologos::core::io :refer [println]])
+(imports [prologos::data::path :refer [Path path]])
+(imports [prologos::data::io-error :refer [IOError]])
 ```
 
 File IO (`read-file`, `write-file`, etc.) requires explicit `use prologos.core.io`.
 This follows Decision D4 — pure functions shouldn't see IO by default, but `println`
 is a debugging aid that belongs in the prelude.
 
-### 16.3 Dependency Graph for `dep-graph.rkt`
+**Note**: The `prelude-imports` list in `namespace.rkt` uses `(imports [module::path :refer [...]])`
+syntax with `::` separators (Racket-side), not dot-separated module paths. The `.prologos` files
+use `use prologos.core.io :refer [...]` with dot separators (surface syntax).
+
+### 22.3 Dependency Graph for `dep-graph.rkt`
 
 New test files need entries in `tools/dep-graph.rkt`:
 
@@ -1513,18 +2045,23 @@ New test files need entries in `tools/dep-graph.rkt`:
 
 ---
 
-<a id="18-phased-implementation-roadmap"></a>
+<a id="23-phased-implementation-roadmap"></a>
 
-## 18. Phased Implementation Roadmap
+## 23. Phased Implementation Roadmap
 
 ### Dependency Graph
 
 ```
 IO-A1 (Opaque FFI) ──┐
-                      ├── IO-B (IO Bridge) ── IO-C (Boundary Ops) ── IO-D (Core File IO) ──┬── IO-E (Session Protocols)
-IO-A2 (Path/IOError) ┘                                                                     ├── IO-F (Functional IO)
-                                                                                            ├── IO-G (CSV)
-                                                                                            └── IO-H (Cap Inference) ── IO-I (Dependent Caps)
+IO-A2 (Path/IOError)  ├── IO-B (IO Bridge) ── IO-C (Boundary Ops) ──┐
+IO-A3 (IO Caps) ─────┘                                              │
+                                                                     ├── IO-D (Core File IO + Console + with-open + FS Queries + main) ──┐
+                                                                     │                                                                    │
+                                                                     │   ┌── IO-E (Session Protocols + Composition Tests)                 │
+                                                                     │   ├── IO-F (Functional IO)                                         │
+                                                                     │   ├── IO-G (CSV)                                                   │
+                                                                     └───┤                                                                │
+                                                                         └── IO-H (Cap Inference) ── IO-I (Dependent Caps)               │
 
 IO-J (Dep Send/Recv) ── no dependencies on IO-A through IO-I; can be done immediately
 ```
@@ -1535,6 +2072,10 @@ IO-H for pipeline integration). They can be implemented in any order after IO-D.
 **IO-J has no IO dependencies** — it fixes two small gaps in the existing session type
 infrastructure. It can and should be implemented first, as dependent protocols are
 essential for the IO library's typed session patterns.
+
+**IO-A3** (IO capability extensions) has no code dependencies — it only adds new
+`capability` and `subtype` declarations to `capabilities.prologos`. It should be done
+early to establish the capability hierarchy before IO functions reference it.
 
 ---
 
@@ -1574,6 +2115,36 @@ essential for the IO library's typed session patterns.
 
 **Tests**: `tests/test-io-path-01.rkt` (~10 tests)
 **Depends on**: Nothing (pure data types)
+
+#### IO-A3: IO Capability Extensions
+
+**Goal**: Extend `capabilities.prologos` with IO-specific capabilities. See §4 for full design.
+
+**Files modified**:
+| File | Change |
+|------|--------|
+| `lib/prologos/core/capabilities.prologos` | Add `AppendCap`, `StatCap`, `IOCap`; add subtype declarations |
+
+**New declarations**:
+```prologos
+;; New leaf capabilities
+capability AppendCap     ;; append to files (distinct from write)
+capability StatCap       ;; query filesystem metadata (exists?, is-file?, is-dir?)
+
+;; New composite
+capability IOCap         ;; top of IO hierarchy (subsumes FsCap, NetCap, StdioCap)
+
+;; New subtype relationships
+subtype AppendCap FsCap
+subtype StatCap FsCap
+subtype IOCap SysCap       ;; IOCap is below SysCap (IOCap for IO, SysCap for everything)
+subtype FsCap IOCap
+subtype NetCap IOCap
+subtype StdioCap IOCap
+```
+
+**Tests**: `tests/test-io-cap-types-01.rkt` (~5 tests: parse, subtype checking, attenuation)
+**Depends on**: Nothing (pure declarations)
 
 ---
 
@@ -1688,7 +2259,36 @@ essential for the IO library's typed session patterns.
 **Tests**: Part of `tests/test-io-file-02.rkt` (~10 tests)
 **Depends on**: IO-D1
 
-**Total Phase IO-D tests**: ~30 across `test-io-file-01.rkt` and `test-io-file-02.rkt`
+#### IO-D4: Filesystem Query Functions
+
+**Goal**: `exists?`, `is-file?`, `is-dir?`, `list-dir` available. See §12 for full design.
+
+**Files modified**:
+| File | Change |
+|------|--------|
+| `lib/prologos/io/fs.prologos` | Query functions (NEW) |
+| `racket/prologos/io-ffi.rkt` | Add `io-ffi-file-exists?`, `io-ffi-directory-exists?`, `io-ffi-directory-list` |
+
+**Tests**: `tests/test-io-fs-01.rkt` (~8 tests)
+**Depends on**: IO-D1 (needs FFI infrastructure)
+
+#### IO-D5: `main` as Powerbox
+
+**Goal**: Runtime provisions inferred capabilities to `main`; `defn main` desugars to
+a process internally. See §13 for full design.
+
+**Files modified**:
+| File | Change |
+|------|--------|
+| `racket/prologos/driver.rkt` | Detect `main`, run cap inference, provision caps to runtime |
+| `racket/prologos/macros.rkt` | `defn main` desugaring to `defproc __main_proc` |
+| `racket/prologos/session-runtime.rkt` | Accept provisioned caps, create `SysCap` (or inferred subset) |
+
+**Tests**: Part of `tests/test-io-main-01.rkt` (~8 tests)
+**Depends on**: IO-D1, IO-H (cap inference must be wired in)
+
+**Total Phase IO-D tests**: ~46 across `test-io-file-01.rkt`, `test-io-file-02.rkt`,
+`test-io-fs-01.rkt`, and `test-io-main-01.rkt`
 
 ---
 
@@ -1719,7 +2319,20 @@ essential for the IO library's typed session patterns.
 **Tests**: `tests/test-io-session-02.rkt` (~10 tests)
 **Depends on**: IO-E1
 
-**Total Phase IO-E tests**: ~20
+#### IO-E3: Protocol Composition Tests
+
+**Goal**: Validate that IO protocols compose correctly with user-defined protocols.
+See §14.4 for full design.
+
+**Tests**: `tests/test-io-session-03.rkt` (~5 tests)
+- IO protocol embedded in a user-defined application protocol
+- Sequential composition of `FileRead` then `FileWrite`
+- Named continuation composition
+- IO protocol passed through a forwarder process
+
+**Depends on**: IO-E1, IO-E2
+
+**Total Phase IO-E tests**: ~25 across `test-io-session-01.rkt` through `test-io-session-03.rkt`
 
 ---
 
@@ -1852,7 +2465,7 @@ essential for the IO library's typed session patterns.
 ### Phase IO-J: Dependent Send/Receive
 
 **Priority**: HIGH — no IO dependencies, can be implemented immediately.
-Only two small gaps remain (see §7 for full analysis).
+Only two small gaps remain (see §8 for full analysis).
 
 #### IO-J1: Elaborator Binder Scope
 
@@ -1913,6 +2526,7 @@ type-check → runtime for dependent session types.
 |-------|-----------|-------------|-------|------------|
 | IO-A | A1 | Opaque type marshalling | ~8 | — |
 | IO-A | A2 | Path + IOError types | ~10 | — |
+| IO-A | A3 | IO capability extensions | ~5 | — |
 | IO-B | B1 | IO state lattice | ~5 | A1 |
 | IO-B | B2 | IO bridge propagator | ~5 | B1 |
 | IO-B | B3 | FFI bridge to Racket | ~5 | A1 |
@@ -1921,8 +2535,11 @@ type-check → runtime for dependent session types.
 | IO-D | D1 | File IO functions | ~15 | C |
 | IO-D | D2 | Console IO functions | ~5 | D1 |
 | IO-D | D3 | `with-open` macro | ~10 | D1 |
+| IO-D | D4 | Filesystem query functions | ~8 | D1 |
+| IO-D | D5 | `main` as powerbox | ~8 | D1, H |
 | IO-E | E1 | Protocol definitions | ~10 | D |
 | IO-E | E2 | Session-based file IO | ~10 | E1 |
+| IO-E | E3 | Protocol composition tests | ~5 | E1, E2 |
 | IO-F | F1 | Linear handle type | ~10 | D |
 | IO-F | F2 | fio bracket pattern | ~5 | F1 |
 | IO-G | G1 | CSV parser | ~12 | — (pure) |
@@ -1935,13 +2552,13 @@ type-check → runtime for dependent session types.
 | IO-J | J1 | Elaborator binder scope | ~5 | — (independent) |
 | IO-J | J2 | Runtime dep send/recv | ~5 | J1 |
 | IO-J | J3 | Grammar + E2E tests | ~8 | J2 |
-| **Total** | | | **~173** | |
+| **Total** | | | **~199** | |
 
 ---
 
-<a id="19-deferred-features"></a>
+<a id="24-deferred-features"></a>
 
-## 19. Deferred Features
+## 24. Deferred Features
 
 | Feature | Reason | Phase | Blocked On |
 |---------|--------|-------|------------|
@@ -1954,14 +2571,28 @@ type-check → runtime for dependent session types.
 | IO mocking framework | Swap IO propagators in test context | Phase 2+ | IO-B infrastructure |
 | `proc-connect` runtime | Same pattern as `proc-open`, different FFI | IO-K | IO-C pattern |
 | `proc-listen` runtime | Same pattern as `proc-open`, different FFI | IO-K | IO-C pattern |
+| Session `throws` / error escalation | Session error handling via `throws` clause | Phase 2+ | Session runtime error model |
+| SQLite capstone integration | End-to-end DB IO with opaque handles + session protocols | IO-L+ | IO-L + IO-E patterns |
+
+### IO Error Code Range (Decision D21)
+
+IO and capability errors use the `E4xxx` range:
+
+| Range | Category | Examples |
+|-------|----------|----------|
+| E4001-E4099 | File IO errors | File not found, permission denied, path invalid |
+| E4100-E4199 | Console IO errors | Stdin closed, encoding error |
+| E4200-E4299 | Network IO errors | Connection refused, timeout (Phase 2+) |
+| E4300-E4399 | Capability errors | Missing capability, cap subsumption failure |
+| E4400-E4499 | Session IO errors | IO bridge failure, protocol violation in IO context |
 
 All deferred items are tracked in `docs/tracking/DEFERRED.md`.
 
 ---
 
-<a id="20-references"></a>
+<a id="25-references"></a>
 
-## 20. References
+## 25. References
 
 ### Predecessor Documents
 - `docs/tracking/2026-03-05_IO_LIBRARY_DESIGN_V2.md` — Phase I API design + gap analysis
