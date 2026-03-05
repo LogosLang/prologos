@@ -3157,48 +3157,56 @@
 ;; Converts surf-sess-* tree → sess-* tree (de Bruijn indices for recursion)
 ;; ========================================
 
+;; S3c: Wrap a session step in an error-offer when :throws is active.
+;; Protocol step S becomes (sess-offer ((:ok S) (:error (sess-send ErrorType (sess-end)))))
+(define (maybe-wrap-throws step throws-type)
+  (if throws-type
+      (sess-offer (list (cons ':ok step) (cons ':error (sess-send throws-type (sess-end)))))
+      step))
+
 ;; Elaborate a session body.
 ;; rec-stack: list of (label . depth) for named recursion variables.
 ;; depth: current recursion nesting depth (for de Bruijn indexing of session vars).
-(define (elaborate-session-body surf rec-stack depth [session-name #f])
+;; throws-type: #f or elaborated error type for :throws desugaring (S3c).
+(define (elaborate-session-body surf rec-stack depth [session-name #f] [throws-type #f])
   (match surf
     [(surf-sess-send type-surf cont-surf _loc)
      (let ([ty (elaborate type-surf)])
        (if (prologos-error? ty) ty
-           (let ([cont (elaborate-session-body cont-surf rec-stack depth session-name)])
+           (let ([cont (elaborate-session-body cont-surf rec-stack depth session-name throws-type)])
              (if (prologos-error? cont) cont
-                 (sess-send ty cont)))))]
+                 (maybe-wrap-throws (sess-send ty cont) throws-type)))))]
 
     [(surf-sess-recv type-surf cont-surf _loc)
      (let ([ty (elaborate type-surf)])
        (if (prologos-error? ty) ty
-           (let ([cont (elaborate-session-body cont-surf rec-stack depth session-name)])
+           (let ([cont (elaborate-session-body cont-surf rec-stack depth session-name throws-type)])
              (if (prologos-error? cont) cont
-                 (sess-recv ty cont)))))]
+                 (maybe-wrap-throws (sess-recv ty cont) throws-type)))))]
 
     [(surf-sess-dsend name type-surf cont-surf _loc)
      (let ([ty (elaborate type-surf)])
        (if (prologos-error? ty) ty
            ;; Dependent send: the name binds in the continuation type (expression-level).
            ;; This does NOT affect session-level de Bruijn; name is for substS.
-           (let ([cont (elaborate-session-body cont-surf rec-stack depth session-name)])
+           (let ([cont (elaborate-session-body cont-surf rec-stack depth session-name throws-type)])
              (if (prologos-error? cont) cont
-                 (sess-dsend ty cont)))))]
+                 (maybe-wrap-throws (sess-dsend ty cont) throws-type)))))]
 
     [(surf-sess-drecv name type-surf cont-surf _loc)
      (let ([ty (elaborate type-surf)])
        (if (prologos-error? ty) ty
-           (let ([cont (elaborate-session-body cont-surf rec-stack depth session-name)])
+           (let ([cont (elaborate-session-body cont-surf rec-stack depth session-name throws-type)])
              (if (prologos-error? cont) cont
-                 (sess-drecv ty cont)))))]
+                 (maybe-wrap-throws (sess-drecv ty cont) throws-type)))))]
 
     [(surf-sess-choice branches-surf _loc)
-     (let ([branches (elaborate-session-branches branches-surf rec-stack depth session-name)])
+     (let ([branches (elaborate-session-branches branches-surf rec-stack depth session-name throws-type)])
        (if (prologos-error? branches) branches
            (sess-choice branches)))]
 
     [(surf-sess-offer branches-surf _loc)
-     (let ([branches (elaborate-session-branches branches-surf rec-stack depth session-name)])
+     (let ([branches (elaborate-session-branches branches-surf rec-stack depth session-name throws-type)])
        (if (prologos-error? branches) branches
            (sess-offer branches)))]
 
@@ -3208,7 +3216,7 @@
      ;; this supports (session Loop (Mu (Send Nat (SVar Loop)))) pattern.
      (let* ([effective-label (or label session-name (gensym 'μ))]
             [new-stack (cons (cons effective-label depth) rec-stack)]
-            [body (elaborate-session-body body-surf new-stack (add1 depth) session-name)])
+            [body (elaborate-session-body body-surf new-stack (add1 depth) session-name throws-type)])
        (if (prologos-error? body) body
            (sess-mu body)))]
 
@@ -3228,7 +3236,7 @@
     [(surf-sess-shared body-surf _loc)
      ;; shared is an annotation; for now, elaborate the body and mark as :w
      ;; Multiplicity annotation is deferred to S4 (propagator integration)
-     (elaborate-session-body body-surf rec-stack depth session-name)]
+     (elaborate-session-body body-surf rec-stack depth session-name throws-type)]
 
     [(surf-sess-ref name _loc)
      ;; Named session reference: look up in session registry
@@ -3249,14 +3257,14 @@
 ;; Elaborate a list of session branches (for choice/offer).
 ;; Each branch is a surf-sess-branch.
 ;; Returns: assoc list of (cons label sess-tree), or prologos-error.
-(define (elaborate-session-branches branches-surf rec-stack depth session-name)
+(define (elaborate-session-branches branches-surf rec-stack depth session-name [throws-type #f])
   (let loop ([remaining branches-surf] [acc '()])
     (cond
       [(null? remaining) (reverse acc)]
       [else
        (define branch (car remaining))
        (define label (surf-sess-branch-label branch))
-       (define cont (elaborate-session-body (surf-sess-branch-cont branch) rec-stack depth session-name))
+       (define cont (elaborate-session-body (surf-sess-branch-cont branch) rec-stack depth session-name throws-type))
        (if (prologos-error? cont) cont
            (loop (cdr remaining) (cons (cons label cont) acc)))])))
 
@@ -3515,17 +3523,26 @@
 
     ;; Phase S3: Session type declaration
     ;; Elaborate body to sess-* tree, register in session registry.
+    ;; S3c: Extract :throws metadata for error-offer desugaring.
     [(surf-session name metadata body-surf loc)
-     (let ([sess-body (elaborate-session-body body-surf '() 0 name)])
-       (if (prologos-error? sess-body) sess-body
-           (begin
-             ;; Register in session registry (both bare and FQN)
-             (register-session! name (session-entry name sess-body loc))
-             (when (current-ns-context)
-               (define fqn (qualify-name name
-                             (ns-context-current-ns (current-ns-context))))
-               (register-session! fqn (session-entry fqn sess-body loc)))
-             (list 'session name sess-body))))]
+     ;; S3c: Check for :throws in metadata and elaborate the error type
+     (let* ([throws-pair (assq ':throws metadata)]
+            [throws-type
+             (if throws-pair
+                 (let ([ty (elaborate (cdr throws-pair))])
+                   (if (prologos-error? ty) ty ty))
+                 #f)])
+       (if (and throws-type (prologos-error? throws-type)) throws-type
+           (let ([sess-body (elaborate-session-body body-surf '() 0 name throws-type)])
+             (if (prologos-error? sess-body) sess-body
+                 (begin
+                   ;; Register in session registry (both bare and FQN)
+                   (register-session! name (session-entry name sess-body loc))
+                   (when (current-ns-context)
+                     (define fqn (qualify-name name
+                                   (ns-context-current-ns (current-ns-context))))
+                     (register-session! fqn (session-entry fqn sess-body loc)))
+                   (list 'session name sess-body))))))]
 
     ;; Phase S3+S5a: Process definition
     ;; Elaborate session type annotation (if any), elaborate capability binders,
