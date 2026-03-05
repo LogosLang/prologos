@@ -625,10 +625,33 @@
                        (+ 2 (string-length name-str))))
               ;; bare ?? — unnamed typed hole
               (token 'typed-hole #f ln cl ps 2))]
+         [(and (char? c2) (char=? c2 #\:))
+          ;; ?: — dependent receive operator (session types)
+          (tok-read! tok)
+          (token 'symbol '?: ln cl ps 2)]
          [else
           ;; Lone ? — treat as identifier character, read rest
           (let ([rest (read-ident-rest! tok)])
             (token 'symbol (string->symbol (string-append "?" rest)) ln cl ps
+                   (+ 1 (string-length rest))))])]
+
+      ;; Exclamation mark — session send operator (S2c)
+      [(char=? c #\!)
+       (tok-read! tok) ; consume !
+       (define c2 (tok-peek tok))
+       (cond
+         [(and (char? c2) (char=? c2 #\!))
+          ;; !! — async send (reserved for S8)
+          (tok-read! tok)
+          (token 'symbol '!! ln cl ps 2)]
+         [(and (char? c2) (char=? c2 #\:))
+          ;; !: — dependent send operator (session types)
+          (tok-read! tok)
+          (token 'symbol '!: ln cl ps 2)]
+         [else
+          ;; Lone ! — session send, or part of identifier
+          (let ([rest (read-ident-rest! tok)])
+            (token 'symbol (string->symbol (string-append "!" rest)) ln cl ps
                    (+ 1 (string-length rest))))])]
 
       ;; Ampersand-greater-than — clause separator &>

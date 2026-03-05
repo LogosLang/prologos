@@ -189,6 +189,9 @@
          lookup-selection
          ;; Session WS desugaring (exported for testing)
          desugar-session-ws
+         ;; Process WS desugaring (S2c, exported for testing)
+         desugar-defproc-ws
+         desugar-proc-ws
          ;; Session registry
          current-session-registry
          session-entry
@@ -840,16 +843,161 @@
 ;; ========================================
 ;; Process WS-mode desugaring (Phase S2c)
 ;; ========================================
-;; For now, process WS desugaring is a pass-through — the WS reader
-;; produces forms that the sexp-mode parser can handle directly for
-;; basic cases. Full WS desugaring (chan ! expr, var := chan ?, etc.)
-;; will be implemented when we add WS-mode operator disambiguation.
+;; Converts WS-mode process body items from flat list to nested sexp form.
+;; Input (from WS reader):
+;;   (defproc Name : SessionType (self ! "hello") (name := self ?) stop)
+;; Output (for sexp-mode parser):
+;;   (defproc Name : SessionType (proc-send self "hello" (proc-recv self name (proc-stop))))
+;;
+;; Parallels desugar-session-ws for session type declarations.
+
+;; Check if a datum is a ($brace-params ...) form (capability binders).
+(define (brace-params-datum? x)
+  (and (pair? x) (eq? (car x) '$brace-params)))
+
+;; Split defproc header from body items.
+;; Header forms: `: SessionType`, `($brace-params ...)`
+;; Returns (values header-prefix body-items).
+(define (split-defproc-header items)
+  (cond
+    [(null? items) (values '() '())]
+    [(eq? (car items) ':)
+     ;; : SessionType [Caps] Body...
+     (cond
+       [(< (length items) 2) (values items '())]  ;; malformed
+       [else
+        (define sess-type (cadr items))
+        (define after (cddr items))
+        (cond
+          [(and (pair? after) (brace-params-datum? (car after)))
+           (values (list ': sess-type (car after)) (cdr after))]
+          [else
+           (values (list ': sess-type) after)])])]
+    [(brace-params-datum? (car items))
+     ;; {Caps} Body...
+     (values (list (car items)) (cdr items))]
+    [else
+     ;; No header — everything is body
+     (values '() items)]))
+
+;; Right-fold a flat list of WS process body items into nested sexp form.
+;; (self ! "x") (name := self ?) stop  →  (proc-send self "x" (proc-recv self name (proc-stop)))
+(define (proc-items->nested items)
+  (cond
+    [(null? items) '(proc-stop)]  ;; implicit stop
+    [(= (length items) 1)
+     (proc-item->sexp (car items) '(proc-stop))]
+    [else
+     (proc-item->sexp (car items) (proc-items->nested (cdr items)))]))
+
+;; Desugar WS-mode branch list from $pipe children for offer/case.
+;; ($pipe :label items...) → (:label nested-body)
+(define (desugar-proc-branches pipe-children)
+  (for/list ([child (in-list pipe-children)])
+    (cond
+      [(and (pair? child) (eq? (car child) '$pipe) (>= (length child) 2))
+       (define label (cadr child))
+       (define branch-items (cddr child))
+       (define clean-items (flatten-arrow-chain branch-items))
+       (define nested (proc-items->nested clean-items))
+       `(,label ,nested)]
+      [else child])))
+
+;; Convert a single WS process body item to sexp, with given continuation.
+(define (proc-item->sexp item cont)
+  (cond
+    ;; Bare symbol
+    [(symbol? item)
+     (case item
+       [(stop proc-stop) '(proc-stop)]
+       [(rec) '(proc-rec)]
+       [else item])]  ;; unknown — pass through for parser error
+    ;; List form
+    [(pair? item)
+     (define len (length item))
+     (cond
+       ;; (Chan ! Expr) or (Chan !: Expr) — send
+       [(and (= len 3) (memq (cadr item) '(! !:)))
+        `(proc-send ,(car item) ,(caddr item) ,cont)]
+       ;; (Var := Chan ?) or (Var := Chan ?:) — receive
+       [(and (= len 4) (eq? (cadr item) ':=) (memq (cadddr item) '(? ?:)))
+        `(proc-recv ,(caddr item) ,(car item) ,cont)]
+       ;; (select Chan :Label) — select
+       [(and (>= len 3) (eq? (car item) 'select))
+        `(proc-sel ,(cadr item) ,(caddr item) ,cont)]
+       ;; (offer Chan $pipe...) — case/offer
+       [(and (>= len 2) (eq? (car item) 'offer))
+        (define chan (cadr item))
+        (define branches (desugar-proc-branches (cddr item)))
+        `(proc-case ,chan ,branches)]
+       ;; (new (c1 c2) : Session Body1 Body2) — new channel pair
+       [(and (>= len 5) (eq? (car item) 'new) (eq? (caddr item) ':))
+        (define session-type (cadddr item))
+        (define par-bodies (cddddr item))
+        (cond
+          [(= (length par-bodies) 2)
+           `(proc-new ,session-type
+              (proc-par ,(proc-items->nested (list (car par-bodies)))
+                        ,(proc-items->nested (list (cadr par-bodies)))))]
+          [else
+           `(proc-new ,session-type ,(proc-items->nested par-bodies))])]
+       ;; (par P1 P2) — parallel
+       [(and (= len 3) (eq? (car item) 'par))
+        `(proc-par ,(proc-items->nested (list (cadr item)))
+                   ,(proc-items->nested (list (caddr item))))]
+       ;; (link c1 c2) — channel forwarding
+       [(and (= len 3) (eq? (car item) 'link))
+        `(proc-link ,(cadr item) ,(caddr item))]
+       ;; (open/connect/listen path : Session [Cap] body...) — boundary ops
+       [(and (>= len 4) (memq (car item) '(open connect listen)))
+        (define proc-op (case (car item)
+                          [(open) 'proc-open]
+                          [(connect) 'proc-connect]
+                          [(listen) 'proc-listen]))
+        `(,proc-op ,@(cdr item))]
+       ;; Other list forms (match, function calls, etc.) — pass through
+       [else item])]
+    [else item]))
 
 (define (desugar-defproc-ws datum)
-  ;; Pass through to sexp-mode parser for now.
-  ;; WS-mode process desugaring requires operator disambiguation
-  ;; (! and ? as session ops vs expression ops) which is Phase S2c.
-  datum)
+  (define parts (cdr datum))  ;; skip 'defproc
+  (cond
+    [(< (length parts) 2) datum]  ;; malformed — let parser report error
+    [else
+     (define name (car parts))
+     (define rest (cdr parts))
+     (define-values (header-items body-items) (split-defproc-header rest))
+     (cond
+       [(null? body-items) datum]  ;; no body to desugar
+       ;; If body is already a single sexp proc form, pass through
+       [(and (= (length body-items) 1) (pair? (car body-items))
+             (let ([h (caar body-items)])
+               (memq h '(proc-send proc-recv proc-sel proc-case proc-stop
+                         proc-new proc-par proc-link proc-rec
+                         proc-open proc-connect proc-listen))))
+        datum]
+       [else
+        (define nested-body (proc-items->nested body-items))
+        `(defproc ,name ,@header-items ,nested-body)])]))
+
+(define (desugar-proc-ws datum)
+  (define parts (cdr datum))  ;; skip 'proc
+  (cond
+    [(null? parts) datum]
+    [else
+     (define-values (header-items body-items) (split-defproc-header parts))
+     (cond
+       [(null? body-items) datum]
+       ;; If body is already a single sexp proc form, pass through
+       [(and (= (length body-items) 1) (pair? (car body-items))
+             (let ([h (caar body-items)])
+               (memq h '(proc-send proc-recv proc-sel proc-case proc-stop
+                         proc-new proc-par proc-link proc-rec
+                         proc-open proc-connect proc-listen))))
+        datum]
+       [else
+        (define nested-body (proc-items->nested body-items))
+        `(proc ,@header-items ,nested-body)])]))
 
 ;; preparse-expand-form: expand a single datum
 ;; ========================================
@@ -1749,6 +1897,10 @@
          (when (and (list? datum) (>= (length datum) 2) (symbol? (cadr datum)))
            (auto-export-name! (cadr datum)))
          (define desugared (desugar-defproc-ws datum))
+         (cons (datum->syntax #f desugared stx) acc)]
+        ;; ---- Anonymous process — desugar WS-mode body (Phase S2c) ----
+        [(and (pair? datum) (eq? head 'proc))
+         (define desugared (desugar-proc-ws datum))
          (cons (datum->syntax #f desugared stx) acc)]
         ;; ---- Public defn/def — auto-export the name ----
         [(and (pair? datum) (memq head '(defn def)))
