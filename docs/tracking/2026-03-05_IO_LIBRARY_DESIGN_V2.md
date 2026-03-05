@@ -995,6 +995,7 @@ defproc main [args : List String] {sys : IOCap}
 - Capability security: `docs/tracking/principles/CAPABILITY_SECURITY.md`
 - Session type design: `docs/tracking/2026-03-03_SESSION_TYPE_DESIGN.md` (§9-14)
 - Capabilities as types: `docs/tracking/2026-03-01_1500_CAPABILITIES_AS_TYPES_DESIGN.md`
+- **Protocols as types**: `docs/tracking/principles/PROTOCOLS_AS_TYPES.org` — composable session types, protocol composition through named continuations, capability composition
 - Design principles: `docs/tracking/principles/DESIGN_PRINCIPLES.org`
 - Ergonomics: `docs/tracking/principles/ERGONOMICS.org`
 - Language vision: `docs/tracking/principles/LANGUAGE_VISION.org`

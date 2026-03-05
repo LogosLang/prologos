@@ -16,6 +16,7 @@ philosophy, conventions, and accumulated wisdom. These documents are
 | [[file:DESIGN_METHODOLOGY.org]] | How we research, design, iterate, and implement |
 | [[file:LANGUAGE_VISION.org]] | What Prologos is, why it exists, where it's going |
 | [[file:LANGUAGE_DESIGN.org]] | Syntax innovations, type system, session types |
+| [[file:PROTOCOLS_AS_TYPES.org]] | Composable protocols through session types |
 | [[file:PATTERNS_AND_CONVENTIONS.org]] | Naming, coding style, import patterns |
 | [[file:ERGONOMICS.org]] | Progressive disclosure, surface syntax, UX |
 | [[file:DEVELOPMENT_LESSONS.org]] | Accumulated implementation wisdom |

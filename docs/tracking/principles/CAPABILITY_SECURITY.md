@@ -393,7 +393,9 @@ This verifies at compile time that:
 
 The fusion of session types and capability types is where Prologos offers something no other language does: **compile-time verification of distributed authority delegation protocols.**
 
-The detailed design of session type syntax and semantics is a separate effort (see note in [I/O Library Design](../2026-03-01_1200_IO_LIBRARY_DESIGN.md)). This principles document establishes that session types are the protocol layer for capability delegation.
+When protocols compose through named session types in continuation positions, capabilities compose alongside them — the composed protocol's authority requirements are the union of its constituent phases' requirements. The compiler tracks authority through every phase transition at zero runtime cost (`:0` authority proofs are erased). See [Protocols as Types](PROTOCOLS_AS_TYPES.org) for the full design.
+
+The detailed design of session type syntax and semantics is a separate effort (see [Session Type Design](../2026-03-03_SESSION_TYPE_DESIGN.md) and [IO Library Design V2](../2026-03-05_IO_LIBRARY_DESIGN_V2.md)). This principles document establishes that session types are the protocol layer for capability delegation.
 
 ---
 
@@ -427,6 +429,7 @@ The detailed design of session type syntax and semantics is a separate effort (s
 | `DESIGN_PRINCIPLES.md` | "Correctness Through Types" subsumes capability verification. "Progressive Disclosure" governs the ergonomic layering. "Decomplection" motivates separating authority from identity. |
 | `RELATIONAL_LANGUAGE_VISION.md` | External data sources (`defr :source`) require filesystem capabilities. Capability security governs which modules can access which external data. |
 | `ERGONOMICS.md` | The "Low Friction, High Assurance" principle is an ergonomics constraint. Capability notation must pass the same usability bar as QTT multiplicities. |
+| `PROTOCOLS_AS_TYPES.org` | Protocol composition carries capability composition — when protocols sequence through named continuations, their capability requirements union automatically. |
 | I/O Library Design | The I/O library is an *application* of the capability system, not a design in its own right. I/O functions require capability parameters; the library design follows from the capability model. |
 
 ---

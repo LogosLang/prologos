@@ -91,6 +91,36 @@ Dependent session types allow protocols to depend on runtime values: the
 server above sends a vector whose length was determined by the client's
 request. This is not possible in standard session type systems.
 
+*** Protocols Compose Through Types
+
+Because session types are first-class types, named session types can appear
+in continuation positions of other session types. This gives composable
+protocols with no additional mechanism --- complex protocols are assembled
+from simpler building blocks:
+
+#+begin_src prologos
+session Handshake
+  ! Version . ? Version . Authenticated     ;; transitions to Auth phase
+
+session Authenticated
+  ! Credentials . ? [Result Token AuthError] .
+  +>
+    | :ok   -> Ready                         ;; success: operational phase
+    | :fail -> end                            ;; failure: done
+
+session Ready
+  +>
+    | :query -> ! String . ? Rows . Ready
+    | :close -> end
+#+end_src
+
+Each named session type is a reusable protocol phase. Transitions between
+phases are type-checked. The protocol graph forms a verified state machine.
+When protocols compose, their capability requirements compose via union ---
+the compiler tracks authority through every phase transition at zero runtime
+cost. See [[file:PROTOCOLS_AS_TYPES.org][Protocols as Types]] for the full
+design and theoretical foundations.
+
 ** Quantitative Type Theory (QTT)
 Three multiplicities capture resource usage:
 

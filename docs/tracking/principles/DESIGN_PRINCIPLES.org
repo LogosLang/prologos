@@ -100,6 +100,13 @@ Protocol specification (~session~) is decoupled from process implementation
 describes /how/ one endpoint behaves. This mirrors the spec/defn duality:
 session is to defproc what spec is to defn.
 
+Because session types are first-class types, named session types compose
+naturally: a continuation position can reference any named session type,
+enabling complex protocols to be assembled from simpler building blocks. The
+process (~defproc~) sees a single session type regardless of whether the
+protocol was composed from multiple named types or defined monolithically.
+See [[file:PROTOCOLS_AS_TYPES.org][Protocols as Types]].
+
 ** Data vs. Control
 Types and expressions (tree-structured data) use brackets: ~[f x y]~.
 Processes (linear control flow) use indentation. This syntactic distinction
@@ -128,6 +135,12 @@ Each layer adds capability without invalidating the layers below. A program
 using only layers 1-3 is a standard typed functional program. Adding layer 4
 gives data modeling. Layer 5-6 adds concurrent protocol verification. Layer 7
 composes trait constraints. Users choose their depth.
+
+Note that Layer 5 (Protocols) supports *composition through the type system*:
+named session types can appear in continuation positions, enabling complex
+protocols to be assembled from simpler phases. This is not a separate
+mechanism --- it falls out of session types being first-class types. See
+[[file:PROTOCOLS_AS_TYPES.org][Protocols as Types]].
 
 * The Most Generalizable Interface
 
@@ -258,6 +271,6 @@ cannot break existing guarantees. This is achieved through:
 
 - Parametric polymorphism (theorems for free)
 - QTT linearity (resources cannot be duplicated or discarded silently)
-- Session type duality (both endpoints of a protocol must agree)
+- Session type duality (both endpoints of a protocol must agree, preserved through composition)
 - Monotonic constraint propagation (type inference only accumulates information)
 - Capability security (authority cannot be forged, only delegated; see [[file:CAPABILITY_SECURITY.md][Capability Security]])

@@ -224,6 +224,9 @@ Key features:
 - *Choice*: ~offer~ (server) / ~select~ (client) for branching protocols
 - *Linearity*: channels are linear (~:1~) --- cannot be duplicated or dropped
 - *Deadlock freedom*: guaranteed for binary sessions by construction
+- *Composition*: named session types in continuation positions enable
+  building complex protocols from simpler phases (see
+  [[file:PROTOCOLS_AS_TYPES.org][Protocols as Types]])
 
 ** Async Primitives
 | Primitive | Meaning |
