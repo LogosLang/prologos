@@ -22,7 +22,7 @@
 | S2 | S2d: Process macro pass-through | ✅ | `56fe397` | Combined with S1e |
 | S3 | S3a: Session elaboration | ✅ | `79ced0d` | Session registry + elaborate-session-body |
 | S3 | S3b: Process elaboration | ✅ | `79ced0d` | elaborate-proc-body + proc branches |
-| S3 | S3c: `throws` desugaring | ⏳ | | Deferred: needs capability integration (S5) |
+| S3 | S3c: `throws` desugaring | ✅ | `78e6638` | maybe-wrap-throws, 10 tests |
 | S3 | S3d: Driver + pretty-printing | ✅ | `a15cb7f` `7a2d6e5` | 19 tests, pp-process, unannotated recv fix |
 | S4 | S4a: Session lattice | ✅ | `c01182b` | sess-bot/top, session-lattice-merge, 26 tests |
 | S4 | S4b: Session inference propagators | ✅ | `54c7c90` | send/recv/select/offer/stop propagators, 20 tests |
@@ -33,7 +33,7 @@
 | S5 | S5a: Capability binders | ✅ | `497bb73` | 12 tests, cap parsing + gamma threading |
 | S5 | S5b: Boundary operations | ✅ | `ff63591` | 13 tests, open/connect/listen parse+elab+type |
 | S5 | S5c: Delegation + warnings | ✅ | `50b6616` | 6 tests, W2002 dead auth + W2003 ambient auth |
-| S6 | S6a: Strategy parsing + registration | ☐ | | |
+| S6 | S6a: Strategy parsing + registration | ✅ | `4ddc546` | 14 tests, full pipeline + validation |
 | S7 | S7a: Channel cells | ☐ | | |
 | S7 | S7b: Process-to-propagator compilation | ☐ | | |
 | S7 | S7c: End-to-end execution | ☐ | | |

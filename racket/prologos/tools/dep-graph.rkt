@@ -511,6 +511,8 @@
    (test-dep '(errors.rkt macros.rkt parser.rkt surface-syntax.rkt) #f)
    'test-session-propagators-01.rkt
    (test-dep '(errors.rkt processes.rkt propagator.rkt session-lattice.rkt session-propagators.rkt sessions.rkt syntax.rkt) #f)
+   'test-session-throws-01.rkt
+   (test-dep '(driver.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt sessions.rkt) #f)
    'test-sessions.rkt
    (test-dep '(prelude.rkt sessions.rkt substitution.rkt syntax.rkt) #f)
    'test-set-ops-eval.rkt
@@ -567,6 +569,8 @@
    (test-dep '(driver.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt) #t)
    'test-stdlib-03-list-05.rkt
    (test-dep '(driver.rkt global-env.rkt macros.rkt namespace.rkt) #t)
+   'test-strategy-01.rkt
+   (test-dep '(driver.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt) #f)
    'test-stratified-eval.rkt
    (test-dep '(driver.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt reader.rkt relations.rkt solver.rkt stratified-eval.rkt stratify.rkt syntax.rkt trait-resolution.rkt) #f)
    'test-stratify.rkt
