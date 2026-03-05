@@ -612,57 +612,66 @@ The following collection items ARE also deferred (genuine infrastructure deps):
 
 ## IO Library
 
-### Dependent Send/Receive (`!:`/`?:`) (NOT STARTED)
+### Dependent Send/Receive (`!:`/`?:`) (NOT STARTED — Phase IO-I)
 - **Problem**: Dependent session operators bind values in the continuation scope.
   Reader doesn't handle `!:`/`?:` tokens. Session type elaboration needs binding logic.
 - **Needed for**: Schema-typed IO, value-dependent protocols (e.g., `?: n Nat . ? [Vec String n]`)
 - **Blocked on**: Reader/parser token support for `!:`/`?:` in WS mode
+- **Implementation design**: `docs/tracking/2026-03-05_IO_IMPLEMENTATION_DESIGN.md` §7
 - **Source**: `docs/tracking/2026-03-05_IO_LIBRARY_DESIGN_V2.md` §10, `docs/tracking/2026-03-03_SESSION_TYPE_DESIGN.md` §8
 
-### IO Bridge Propagators (NOT STARTED)
+### IO Bridge Propagators (NOT STARTED — Phase IO-B)
 - **Problem**: The double-boundary IO model (compile-time cap-check → IO bridge cell → IO
   propagator → external world) is designed but not implemented. Need `io-bridge-cell` type,
   side-effecting IO propagator, and wiring into `run-to-quiescence`.
 - **Needed for**: Any actual IO operations (file, network, database)
 - **Blocked on**: Nothing (builds on existing propagator + session infrastructure)
+- **Implementation design**: `docs/tracking/2026-03-05_IO_IMPLEMENTATION_DESIGN.md` §5
 - **Source**: `docs/tracking/2026-03-05_IO_LIBRARY_DESIGN_V2.md` §2, `docs/tracking/2026-03-03_SESSION_TYPE_DESIGN.md` §12.5
 
-### Boundary Operations: `open`/`connect`/`listen` (NOT STARTED)
+### Boundary Operations: `open`/`connect`/`listen` (NOT STARTED — Phase IO-C / IO-J)
 - **Problem**: Capability-gated channel creation for external resources is designed
   (Session Type Design §12.4) but not implemented. These operations create channel
   endpoints to external resources (files, network, databases).
 - **Needed for**: Any external IO beyond stdin/stdout
 - **Blocked on**: IO bridge propagators (above)
+- **Note**: `proc-open` (file) is Phase IO-C; `proc-connect`/`proc-listen` (network) deferred to IO-J
+- **Implementation design**: `docs/tracking/2026-03-05_IO_IMPLEMENTATION_DESIGN.md` §6
 - **Source**: `docs/tracking/2026-03-05_IO_LIBRARY_DESIGN_V2.md` §6, `docs/tracking/2026-03-03_SESSION_TYPE_DESIGN.md` §12.4
 
-### Opaque Type Marshalling (NOT STARTED)
+### Opaque Type Marshalling (NOT STARTED — Phase IO-A1)
 - **Problem**: `foreign.rkt` handles Nat/Int/Bool/String/Char but not opaque Racket values
-  (file ports, database connections). Need `:opaque` foreign annotation or pass-through
-  marshalling strategy.
+  (file ports, database connections). Need `expr-opaque` wrapper struct + tagged pass-through
+  marshalling.
 - **Needed for**: File handles, database connections, network sockets via FFI
 - **Blocked on**: Nothing (foreign.rkt extension)
+- **Implementation design**: `docs/tracking/2026-03-05_IO_IMPLEMENTATION_DESIGN.md` §4
 - **Source**: `docs/tracking/2026-03-05_IO_LIBRARY_DESIGN_V2.md` §10, `docs/tracking/2026-03-01_1200_IO_LIBRARY_DESIGN.md` §6.1
 
-### `Path` Type (NOT STARTED)
-- **Problem**: No cross-platform file path abstraction. Could be String wrapper initially
-  or opaque Racket `path?` value.
+### `Path` Type (NOT STARTED — Phase IO-A2)
+- **Problem**: No cross-platform file path abstraction. Decision: String wrapper initially.
 - **Pure operations**: join, parent, file-name, extension, with-extension, absolute?, relative?
-- **Blocked on**: Nothing (straightforward String wrapper or opaque type)
+- **Blocked on**: Nothing (straightforward String wrapper)
+- **Implementation design**: `docs/tracking/2026-03-05_IO_IMPLEMENTATION_DESIGN.md` §8
 - **Source**: `docs/tracking/2026-03-05_IO_LIBRARY_DESIGN_V2.md` §9
 
-### `Bytes` Type (NOT STARTED)
+### `Bytes` Type (NOT STARTED — Deferred to Phase 2)
 - **Problem**: No binary data type. Not needed for text IO (Phase 1) but needed for binary
   IO, SQLite FFI, and network protocols.
 - **Blocked on**: Nothing, but lower priority than text IO
 - **Source**: `docs/tracking/2026-03-05_IO_LIBRARY_DESIGN_V2.md` §12.3
 
-### Transitive Capability Inference (NOT STARTED)
-- **Problem**: Full lexical capability resolution (CAPABILITY_SECURITY.md §Lexical Resolution)
-  needs capability inference to propagate through call chains — if `f` calls `g` which
-  requires `{ReadCap}`, then `f` should infer `{ReadCap}` requirement. Current cap-inference
-  is per-function, not transitive.
+### Capability Inference Pipeline Integration (NOT STARTED — Phase IO-H)
+- **Problem**: `run-capability-inference` in `capability-inference.rkt` correctly computes
+  transitive closure via propagator fixed-point, but is only wired into REPL commands
+  (`(cap-closure)`, `(cap-audit)`), NOT into the normal compilation pipeline. Tier 1
+  progressive disclosure requires automatic inference during compilation.
+- **Note**: Transitive inference IS implemented (propagator network handles it). The gap
+  is wiring it into `driver.rkt` after `process-top-level-defs`. Flat cap names only —
+  applied/dependent caps (`FileCap "/data"`) require Phases 7e-7g.
 - **Needed for**: Ergonomic IO (Tier 1 progressive disclosure — no manual cap annotations)
-- **Blocked on**: Design cycle for transitive cap-inference mechanism
+- **Blocked on**: IO functions to exist (need something to infer caps on)
+- **Implementation design**: `docs/tracking/2026-03-05_IO_IMPLEMENTATION_DESIGN.md` §15
 - **Source**: `docs/tracking/2026-03-05_IO_LIBRARY_DESIGN_V2.md` §10, `docs/tracking/principles/CAPABILITY_SECURITY.md` §Lexical Resolution
 
 ---
