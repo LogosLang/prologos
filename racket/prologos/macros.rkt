@@ -833,11 +833,25 @@
 
 ;; Right-fold a flat list of WS session items into nested sexp form.
 ;; (! String) (? Nat) end  →  (Send String (Recv Nat End))
+;;
+;; Special handling for `rec` in continuation position:
+;; - As the FIRST item (head): creates a Mu (recursion binder)
+;; - As a TAIL item (continuation after send/recv): recursion variable reference
+;;   In WS mode: `rec` at tail means "go back to the enclosing Mu"
+;;   The parser treats bare symbols in session position as session variables.
 (define (session-items->nested items)
   (cond
     [(null? items) 'End]  ;; implicit End
     [(= (length items) 1)
-     (session-item->sexp (car items) 'End)]
+     (define item (car items))
+     ;; Bare `rec` as the only/last item = recursion variable reference
+     ;; Parser's parse-session-body handles bare symbols as surf-sess-var
+     (cond
+       [(and (symbol? item) (eq? item 'rec))
+        ;; Recursion back to enclosing Mu — pass as bare symbol.
+        ;; The elaborator resolves unnamed recursion variables.
+        'rec]
+       [else (session-item->sexp item 'End)])]
     [else
      (session-item->sexp (car items) (session-items->nested (cdr items)))]))
 
@@ -871,29 +885,60 @@
         (if (>= (length item) 2)
             `(Recv ,(cadr item) ,cont)
             item)]
-       ;; (!: (n : T)) → (DSend (n : T) Cont)
+       ;; (!: n T) → (DSend (n : T) Cont)
+       ;; WS reader produces (!: n Nat) as a 3-element list
        [(!:)
-        (if (>= (length item) 2)
-            `(DSend ,(cadr item) ,cont)
-            item)]
-       ;; (?: (n : T)) → (DRecv (n : T) Cont)
+        (cond
+          [(= (length item) 3)
+           ;; (!: name Type) → (DSend (name : Type) Cont)
+           `(DSend (,(cadr item) : ,(caddr item)) ,cont)]
+          [(= (length item) 2)
+           ;; (!: (n : T)) from sexp form — pass through
+           `(DSend ,(cadr item) ,cont)]
+          [else item])]
+       ;; (?: x T) → (DRecv (x : T) Cont)
+       ;; WS reader produces (?: x Bool) as a 3-element list
        [(?:)
-        (if (>= (length item) 2)
-            `(DRecv ,(cadr item) ,cont)
-            item)]
+        (cond
+          [(= (length item) 3)
+           ;; (?: name Type) → (DRecv (name : Type) Cont)
+           `(DRecv (,(cadr item) : ,(caddr item)) ,cont)]
+          [(= (length item) 2)
+           ;; (?: (x : T)) from sexp form — pass through
+           `(DRecv ,(cadr item) ,cont)]
+          [else item])]
        ;; (+> ($pipe :l1 items...) ...) → (Choice ((:l1 nested1) (:l2 nested2) ...))
        [(+>)
         (define branches (desugar-session-branches (cdr item)))
         `(Choice ,branches)]
        ;; (&> ($pipe :l1 items...) ...) → (Offer ...)
-       [(&>)
+       ;; Note: &> tokenizes as $clause-sep in the reader, so match both.
+       [(&> $clause-sep)
         (define branches (desugar-session-branches (cdr item)))
         `(Offer ,branches)]
-       ;; (rec Label) → (Mu Label Cont)
+       ;; rec forms:
+       ;; (rec) alone → (Mu cont)
+       ;; (rec Label Body...) where Label is a symbol → (Mu Label desugared-body)
+       ;; (rec Body...) where Body is a list → (Mu desugared-body)
        [(rec)
-        (if (>= (length item) 2)
-            `(Mu ,(cadr item) ,cont)
-            `(Mu ,cont))]
+        (cond
+          [(= (length item) 1)
+           ;; Bare (rec) — unnamed recursion, body is the continuation
+           `(Mu ,cont)]
+          [(and (>= (length item) 2) (symbol? (cadr item)))
+           ;; Named recursion: (rec Label Body...)
+           (define label (cadr item))
+           (define body-items (cddr item))
+           (cond
+             [(null? body-items)
+              ;; Just a label, body is the continuation
+              `(Mu ,label ,cont)]
+             [else
+              ;; Named with body items — desugar recursively
+              `(Mu ,label ,(session-items->nested body-items))])]
+          [else
+           ;; Unnamed recursion with body items: (rec Body...)
+           `(Mu ,(session-items->nested (cdr item)))])]
        ;; (shared items...) → (Shared nested)
        [(shared)
         `(Shared ,(session-items->nested (cdr item)))]
@@ -911,23 +956,56 @@
       [(and (pair? child) (eq? (car child) '$pipe) (>= (length child) 2))
        (define label (cadr child))
        (define branch-items (cddr child))
-       ;; Handle -> chains in branch items
-       (define clean-items (flatten-arrow-chain branch-items))
+       ;; Handle -> chains in branch items:
+       ;; 1. Strip bare -> symbols
+       ;; 2. Re-group flat tokens into operator+arg lists
+       (define flat-items (flatten-arrow-chain branch-items))
+       (define clean-items (regroup-session-tokens flat-items))
        (define nested (session-items->nested clean-items))
        `(,label ,nested)]
       ;; Non-pipe child — pass through (shouldn't happen in well-formed input)
       [else child])))
 
-;; Flatten arrow chains: (-> X (-> Y)) → (X Y)
-;; The WS reader may produce inline arrow chains for branch bodies.
+;; Flatten arrow chains: strip bare -> symbols from item lists.
+;; The WS reader produces inline arrow chains for branch bodies:
+;;   (-> ! Nat -> rec) → (! Nat rec)     [strip bare -> symbols]
+;;   ((-> X Y)) → (X Y)                  [unwrap single -> wrapper list]
 (define (flatten-arrow-chain items)
   (cond
     [(null? items) '()]
+    ;; Single -> wrapper list: (-> X Y) as a nested list
     [(and (= (length items) 1) (pair? (car items)) (eq? (caar items) '->))
-     ;; Single -> wrapper: unwrap
      (flatten-arrow-chain (cdar items))]
+    ;; Bare -> symbol — skip it (WS reader separator)
+    [(and (symbol? (car items)) (eq? (car items) '->))
+     (flatten-arrow-chain (cdr items))]
     [else
      (cons (car items) (flatten-arrow-chain (cdr items)))]))
+
+;; Re-group flat session tokens into operator+argument lists.
+;; After arrow-stripping, branch bodies may be flat token sequences:
+;;   (! Nat rec end) → ((! Nat) rec end)
+;;   (? String end) → ((? String) end)
+;;   (!: n Nat end) → ((!: n Nat) end)
+;; Bare symbols (end, rec, SVar names) remain ungrouped.
+(define (regroup-session-tokens items)
+  (cond
+    [(null? items) '()]
+    ;; ! or ? or ?? followed by something → group as (Op Type)
+    [(and (symbol? (car items))
+          (memq (car items) '(! ? ??))
+          (pair? (cdr items)))
+     (cons (list (car items) (cadr items))
+           (regroup-session-tokens (cddr items)))]
+    ;; !: or ?: followed by two things → group as (Op Name Type)
+    [(and (symbol? (car items))
+          (memq (car items) '(!: ?:))
+          (>= (length (cdr items)) 2))
+     (cons (list (car items) (cadr items) (caddr items))
+           (regroup-session-tokens (cdddr items)))]
+    [else
+     (cons (car items)
+           (regroup-session-tokens (cdr items)))]))
 
 ;; ========================================
 ;; Process WS-mode desugaring (Phase S2c)
@@ -1087,6 +1165,30 @@
        [else
         (define nested-body (proc-items->nested body-items))
         `(proc ,@header-items ,nested-body)])]))
+
+;; ========================================
+;; Strategy WS-mode desugaring (Phase WS-4)
+;; ========================================
+;; The WS reader groups each indented property line as a sub-list:
+;;   (strategy realtime (:fairness :priority) (:fuel 10000))
+;; The parser expects a flat form:
+;;   (strategy realtime :fairness :priority :fuel 10000)
+;; This function flattens nested property pairs.
+(define (desugar-strategy-ws datum)
+  (define parts (cdr datum))  ;; skip 'strategy
+  (cond
+    [(< (length parts) 1) datum]  ;; malformed
+    [else
+     (define name (car parts))
+     (define rest (cdr parts))
+     ;; Flatten: each element that is a list of keywords/values gets spliced
+     (define flat-props
+       (apply append
+              (for/list ([item (in-list rest)])
+                (cond
+                  [(pair? item) item]    ;; (:key value) → splice
+                  [else (list item)]))))  ;; bare symbol → keep
+     `(strategy ,name ,@flat-props)]))
 
 ;; preparse-expand-form: expand a single datum
 ;; ========================================
@@ -1991,11 +2093,12 @@
         [(and (pair? datum) (eq? head 'proc))
          (define desugared (desugar-proc-ws datum))
          (cons (datum->syntax #f desugared stx) acc)]
-        ;; ---- Strategy declaration — pass through to parser (Phase S6) ----
+        ;; ---- Strategy declaration — desugar WS-mode props, pass to parser (Phase S6) ----
         [(and (pair? datum) (eq? head 'strategy))
          (when (and (list? datum) (>= (length datum) 2) (symbol? (cadr datum)))
            (auto-export-name! (cadr datum)))
-         (cons stx acc)]
+         (define desugared (desugar-strategy-ws datum))
+         (cons (datum->syntax #f desugared stx) acc)]
         ;; ---- Public defn/def — auto-export the name ----
         [(and (pair? datum) (memq head '(defn def)))
          (auto-export-names! (extract-defined-name datum head))

@@ -463,6 +463,14 @@
        (tok-read! tok)  ; consume >
        (token 'symbol '-> ln cl ps 2)]
 
+      ;; +> — session choice operator (must come before ident-start? since + is ident-start)
+      [(and (char=? c #\+)
+            (let ([c2 (peek-char (tokenizer-port tok) 1)])
+              (and (char? c2) (char=? c2 #\>))))
+       (tok-read! tok)  ; consume +
+       (tok-read! tok)  ; consume >
+       (token 'symbol '+> ln cl ps 2)]
+
       ;; Negative number literal: -42, -3/7, -3.14
       ;; Must come AFTER -0>/-1>/-w> and -> checks, BEFORE ident-start?
       ;; Only fires when - is immediately followed by a digit (no space).

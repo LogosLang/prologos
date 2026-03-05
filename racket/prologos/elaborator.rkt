@@ -3214,8 +3214,14 @@
      ;; Push the recursion label onto the rec-stack at current depth.
      ;; For anonymous Mu (label=#f), use the session name if available;
      ;; this supports (session Loop (Mu (Send Nat (SVar Loop)))) pattern.
+     ;; Also register 'rec as an alias for unnamed Mus so WS-mode bare
+     ;; `rec` as recursion variable works (e.g., `| :inc -> ! Nat -> rec`).
      (let* ([effective-label (or label session-name (gensym 'μ))]
-            [new-stack (cons (cons effective-label depth) rec-stack)]
+            [base-stack (cons (cons effective-label depth) rec-stack)]
+            [new-stack (if (not label)
+                          ;; Unnamed Mu: also register 'rec so WS `rec` resolves
+                          (cons (cons 'rec depth) base-stack)
+                          base-stack)]
             [body (elaborate-session-body body-surf new-stack (add1 depth) session-name throws-type)])
        (if (prologos-error? body) body
            (sess-mu body)))]
