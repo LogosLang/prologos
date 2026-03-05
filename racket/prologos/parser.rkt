@@ -4641,7 +4641,7 @@
      (define args* (cdr d))
      ;; Ensure args are accessible as syntax or datum
      (define body-args
-       (map (lambda (x) (if (syntax? x) x (datum->syntax #f x stx)))
+       (map (lambda (x) (if (syntax? x) x (datum->syntax #f x (if (syntax? stx) stx #f))))
             args*))
      (case head
        ;; (Send Type Cont)
@@ -4790,7 +4790,7 @@
             (if (prologos-error? label) label
                 (let ([cont (parse-session-body
                              (let ([x (cadr bd)])
-                               (if (syntax? x) x (datum->syntax #f x stx)))
+                               (if (syntax? x) x (datum->syntax #f x (if (syntax? stx) stx #f))))
                              loc)])
                   (if (prologos-error? cont) cont
                       (surf-sess-branch label cont loc))))]
@@ -4950,7 +4950,7 @@
      (define head (if (syntax? head-stx) (syntax-e head-stx) head-stx))
      (define args* (cdr d))
      (define body-args
-       (map (lambda (x) (if (syntax? x) x (datum->syntax #f x stx)))
+       (map (lambda (x) (if (syntax? x) x (datum->syntax #f x (if (syntax? stx) stx #f))))
             args*))
      (case head
        ;; (proc-send Chan Expr Cont)
@@ -5048,6 +5048,19 @@
           [else
            (define label (stx->datum (car body-args)))
            (surf-proc-rec label use-loc)])]
+       ;; S5b: Boundary operations
+       ;; (proc-open Path : Session {Cap} Cont)
+       [(proc-open)
+        (parse-boundary-op 'proc-open body-args use-loc
+          (lambda (arg sess cap cont loc) (surf-proc-open arg sess cap cont loc)))]
+       ;; (proc-connect Addr : Session {Cap} Cont)
+       [(proc-connect)
+        (parse-boundary-op 'proc-connect body-args use-loc
+          (lambda (arg sess cap cont loc) (surf-proc-connect arg sess cap cont loc)))]
+       ;; (proc-listen Port : Session {Cap} Cont)
+       [(proc-listen)
+        (parse-boundary-op 'proc-listen body-args use-loc
+          (lambda (arg sess cap cont loc) (surf-proc-listen arg sess cap cont loc)))]
        [else
         (parse-error use-loc (format "Unknown process body form: ~a" head) #f)])]
     [else
@@ -5075,7 +5088,7 @@
             (if (prologos-error? label) label
                 (let ([body (parse-proc-body
                              (let ([x (cadr bd)])
-                               (if (syntax? x) x (datum->syntax #f x stx)))
+                               (if (syntax? x) x (datum->syntax #f x (if (syntax? stx) stx #f))))
                              loc)])
                   (if (prologos-error? body) body
                       (surf-proc-offer-branch label body loc))))]
@@ -5083,6 +5096,47 @@
             (parse-error loc (format "Process branch must be (label body), got ~a" bd) #f)])))
      (define err (findf prologos-error? branches))
      (if err err branches)]))
+
+;; S5b: Parse boundary operation — shared logic for proc-open/proc-connect/proc-listen
+;; Syntax: (proc-open Arg : Session Cap Cont) — cap is a symbol or brace-params
+;; Minimal: (proc-open Arg : Session Cap Cont) — 5 args with : separator
+;; Without cap: (proc-open Arg : Session Cont) — 4 args, cap = #f
+(define (parse-boundary-op op-name body-args loc make-surf)
+  (cond
+    [(< (length body-args) 4)
+     (parse-error loc
+       (format "~a requires at least 4 arguments: (~a Arg : Session Cont)" op-name op-name) #f)]
+    [else
+     (define arg-expr (parse-datum (car body-args)))
+     (when (prologos-error? arg-expr) (void))
+     (if (prologos-error? arg-expr) arg-expr
+         (let ()
+           (define second-d (stx->datum (cadr body-args)))
+           (cond
+             [(not (eq? second-d ':))
+              (parse-error loc (format "~a: expected ':' after argument" op-name) #f)]
+             [else
+              (define sess-type (parse-datum (caddr body-args)))
+              (if (prologos-error? sess-type) sess-type
+                  (let ([rest (cdddr body-args)])
+                    (cond
+                      ;; Two remaining: check if first is cap
+                      [(= (length rest) 2)
+                       (define cap-raw (stx->datum (car rest)))
+                       (define cap-sym (if (symbol? cap-raw) cap-raw #f))
+                       (define cont (parse-proc-body (cadr rest) loc))
+                       (if (prologos-error? cont) cont
+                           (make-surf arg-expr sess-type cap-sym cont loc))]
+                      ;; One remaining: no cap
+                      [(= (length rest) 1)
+                       (define cont (parse-proc-body (car rest) loc))
+                       (if (prologos-error? cont) cont
+                           (make-surf arg-expr sess-type #f cont loc))]
+                      [else
+                       (parse-error loc
+                         (format "~a: expected (Arg : Session [Cap] Cont), got ~a args after session type"
+                                 op-name (length rest))
+                         #f)])))])))]))
 
 ;; ========================================
 ;; Parse the-fn: (the-fn type [params...] body)

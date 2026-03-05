@@ -3297,6 +3297,32 @@
         scope)))
 
 ;; ========================================
+;; Phase S5b: Boundary operation elaboration helper
+;; ========================================
+
+;; Elaborate a boundary operation (open/connect/listen).
+;; Elaborates the argument expression and session type, resolves the cap
+;; in the current capability scope, then builds the core proc struct.
+(define (elaborate-boundary-op kind arg-surf sess-type-surf cap-sym cont-surf)
+  (define arg (elaborate arg-surf))
+  (if (prologos-error? arg) arg
+      (let ([sess-ty (elaborate sess-type-surf)])
+        (if (prologos-error? sess-ty) sess-ty
+            (let ([cont (elaborate-proc-body cont-surf)])
+              (if (prologos-error? cont) cont
+                  ;; Resolve capability: look up cap-sym in the capability scope
+                  (let* ([cap-type (if cap-sym
+                                       (let ([scope (current-capability-scope)])
+                                         ;; Look for a binding with this name in caps from
+                                         ;; the enclosing process header
+                                         (expr-fvar cap-sym))
+                                       #f)])
+                    (case kind
+                      [(open)    (proc-open    arg sess-ty cap-type cont)]
+                      [(connect) (proc-connect arg sess-ty cap-type cont)]
+                      [(listen)  (proc-listen  arg sess-ty cap-type cont)]))))))))
+
+;; ========================================
 ;; Phase S3: Process elaboration
 ;; Converts surf-proc-* tree → proc-* tree
 ;; ========================================
@@ -3358,6 +3384,14 @@
      ;; In the core AST, we don't have a direct rec process form;
      ;; for now emit as a sentinel that typing-sessions can handle
      (proc-stop)]  ;; TODO: S4 will add proper process recursion propagator
+
+    ;; S5b: Boundary operations
+    [(surf-proc-open path-surf sess-type-surf cap-sym cont-surf _loc)
+     (elaborate-boundary-op 'open path-surf sess-type-surf cap-sym cont-surf)]
+    [(surf-proc-connect addr-surf sess-type-surf cap-sym cont-surf _loc)
+     (elaborate-boundary-op 'connect addr-surf sess-type-surf cap-sym cont-surf)]
+    [(surf-proc-listen port-surf sess-type-surf cap-sym cont-surf _loc)
+     (elaborate-boundary-op 'listen port-surf sess-type-surf cap-sym cont-surf)]
 
     [_ (prologos-error #f (format "Unknown process body form: ~a" surf))]))
 

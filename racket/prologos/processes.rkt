@@ -24,6 +24,10 @@
  (struct-out proc-link)
  (struct-out proc-solve)
  (struct-out proc-no-proc)
+ ;; Boundary operations (S5b)
+ (struct-out proc-open)
+ (struct-out proc-connect)
+ (struct-out proc-listen)
  ;; Channel context operations
  chan-ctx-empty chan-ctx-add chan-ctx-lookup chan-ctx-remove
  chan-ctx-update chan-ctx-all-ended? chan-ctx-keys chan-ctx-size
@@ -43,6 +47,12 @@
 (struct proc-link (chan1 chan2) #:transparent)         ; link/forward
 (struct proc-solve (type cont) #:transparent)         ; proof search (axiomatic)
 (struct proc-no-proc () #:transparent)                ; sentinel for failed lookup
+
+;; S5b: Boundary operations — open/connect/listen create single-endpoint channels
+;; gated by capability requirements.
+(struct proc-open    (path session-type cap-type cont) #:transparent)    ; open path : S {cap}, cont
+(struct proc-connect (addr session-type cap-type cont) #:transparent)    ; connect addr : S {cap}, cont
+(struct proc-listen  (port session-type cap-type cont) #:transparent)    ; listen port : S {cap}, cont
 
 ;; BranchProcList: assoc list of (cons label proc)
 

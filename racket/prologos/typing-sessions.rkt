@@ -36,6 +36,15 @@
 (provide type-proc unify-session)
 
 ;; ========================================
+;; S5b: Capability type check in unrestricted context
+;; ========================================
+;; Check if an unrestricted context (gamma) contains a binding for a given type.
+;; Gamma is a list of (cons type mult) pairs. Returns #t if any entry's type
+;; matches the given type expression (by equal?).
+(define (ctx-has-type? gamma ty)
+  (ormap (lambda (entry) (equal? (car entry) ty)) gamma))
+
+;; ========================================
 ;; Context splits: generate all 2^n partitions
 ;; of a hash into two disjoint subsets
 ;; ========================================
@@ -239,6 +248,21 @@
     [(proc-solve a p)
      (and (is-type gamma a)
           (type-proc (ctx-extend gamma a 'mw) delta p))]
+
+    ;; ---- S5b: Boundary operations ----
+    ;; open/connect/listen create a single channel endpoint with the declared session type.
+    ;; The capability type must be present in gamma (at any multiplicity).
+    [(proc-open _path session-type cap-type cont)
+     (and (or (not cap-type) (ctx-has-type? gamma cap-type))
+          (type-proc gamma (chan-ctx-add delta 'ch session-type) cont))]
+
+    [(proc-connect _addr session-type cap-type cont)
+     (and (or (not cap-type) (ctx-has-type? gamma cap-type))
+          (type-proc gamma (chan-ctx-add delta 'ch session-type) cont))]
+
+    [(proc-listen _port session-type cap-type cont)
+     (and (or (not cap-type) (ctx-has-type? gamma cap-type))
+          (type-proc gamma (chan-ctx-add delta 'ch session-type) cont))]
 
     ;; ---- Fallback ----
     [_ #f]))

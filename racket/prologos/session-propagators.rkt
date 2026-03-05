@@ -374,6 +374,34 @@
            (values net* trace*))
          (values net trace))]
 
+    ;; ---- S5b: Boundary operations: create single-endpoint channel ----
+    ;; open/connect/listen create a new channel cell with the declared session type
+    ;; and add it to channel-cells under a generated name. The continuation runs
+    ;; with the new channel available.
+    [(proc-open path session-type _cap-type cont)
+     (define-values (net1 cell) (make-session-cell net))
+     (define trace*
+       (trace-add trace cell
+         (session-op 'open 'ch (format "opened channel with session type (open)"))))
+     (compile-proc-to-network net1 cont
+       (hash-set channel-cells 'ch cell) trace*)]
+
+    [(proc-connect addr session-type _cap-type cont)
+     (define-values (net1 cell) (make-session-cell net))
+     (define trace*
+       (trace-add trace cell
+         (session-op 'connect 'ch (format "connected channel with session type (connect)"))))
+     (compile-proc-to-network net1 cont
+       (hash-set channel-cells 'ch cell) trace*)]
+
+    [(proc-listen port session-type _cap-type cont)
+     (define-values (net1 cell) (make-session-cell net))
+     (define trace*
+       (trace-add trace cell
+         (session-op 'listen 'ch (format "listening channel with session type (listen)"))))
+     (compile-proc-to-network net1 cont
+       (hash-set channel-cells 'ch cell) trace*)]
+
     ;; ---- Fallback ----
     [_ (values net trace)]))
 

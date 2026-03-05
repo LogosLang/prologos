@@ -1293,6 +1293,19 @@
      (format "link(~a, ~a)" c1 c2)]
     [(proc-solve ty cont)
      (format "solve(~a, ~a)" (pp-expr ty) (pp-process cont))]
+    ;; S5b: Boundary operations
+    [(proc-open path sess cap cont)
+     (if cap
+         (format "open(~a : ~a {~a}, ~a)" (pp-expr path) (pp-expr sess) (pp-expr cap) (pp-process cont))
+         (format "open(~a : ~a, ~a)" (pp-expr path) (pp-expr sess) (pp-process cont)))]
+    [(proc-connect addr sess cap cont)
+     (if cap
+         (format "connect(~a : ~a {~a}, ~a)" (pp-expr addr) (pp-expr sess) (pp-expr cap) (pp-process cont))
+         (format "connect(~a : ~a, ~a)" (pp-expr addr) (pp-expr sess) (pp-process cont)))]
+    [(proc-listen port sess cap cont)
+     (if cap
+         (format "listen(~a : ~a {~a}, ~a)" (pp-expr port) (pp-expr sess) (pp-expr cap) (pp-process cont))
+         (format "listen(~a : ~a, ~a)" (pp-expr port) (pp-expr sess) (pp-process cont)))]
     [_ (format "~a" p)]))
 
 (define (pp-proc-branches bl)

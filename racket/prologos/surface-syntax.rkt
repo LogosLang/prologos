@@ -338,7 +338,11 @@
  (struct-out surf-proc-new)
  (struct-out surf-proc-par)
  (struct-out surf-proc-link)
- (struct-out surf-proc-rec))
+ (struct-out surf-proc-rec)
+ ;; S5b: Boundary operations
+ (struct-out surf-proc-open)
+ (struct-out surf-proc-connect)
+ (struct-out surf-proc-listen))
 
 ;; ========================================
 ;; Type hole (to be inferred by the type checker)
@@ -1084,3 +1088,7 @@
 (struct surf-proc-par     (left right srcloc) #:transparent)      ; par P1 P2
 (struct surf-proc-link    (chan1 chan2 srcloc) #:transparent)      ; link c1 c2
 (struct surf-proc-rec     (label srcloc) #:transparent)           ; rec (tail recursion)
+;; Phase S5b: Boundary operations — capability-gated channel creation
+(struct surf-proc-open    (path session-type cap cont srcloc) #:transparent)    ; open path : S {cap}
+(struct surf-proc-connect (addr session-type cap cont srcloc) #:transparent)    ; connect addr : S {cap}
+(struct surf-proc-listen  (port session-type cap cont srcloc) #:transparent)    ; listen port : S {cap}
