@@ -403,6 +403,8 @@
    (test-dep '(errors.rkt parser.rkt surface-syntax.rkt) #f)
    'test-process-ws-01.rkt
    (test-dep '(driver.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parser.rkt processes.rkt reader.rkt sessions.rkt surface-syntax.rkt warnings.rkt) #f)
+   'test-process-ws-02.rkt
+   (test-dep '(driver.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt sessions.rkt) #f)
    'test-propagator-bsp.rkt
    (test-dep '(champ.rkt propagator.rkt) #f)
    'test-propagator-integration.rkt
@@ -499,6 +501,8 @@
    (test-dep '(driver.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parser.rkt processes.rkt sessions.rkt surface-syntax.rkt syntax.rkt warnings.rkt) #f)
    'test-session-deadlock-01.rkt
    (test-dep '(errors.rkt processes.rkt propagator.rkt session-lattice.rkt session-propagators.rkt sessions.rkt syntax.rkt) #f)
+   'test-session-e2e-ws.rkt
+   (test-dep '(driver.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt sessions.rkt) #f)
    'test-session-elaborate-01.rkt
    (test-dep '(driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parser.rkt pretty-print.rkt processes.rkt sessions.rkt surface-syntax.rkt) #f)
    'test-session-errors-01.rkt
@@ -513,6 +517,8 @@
    (test-dep '(errors.rkt processes.rkt propagator.rkt session-lattice.rkt session-propagators.rkt sessions.rkt syntax.rkt) #f)
    'test-session-throws-01.rkt
    (test-dep '(driver.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt sessions.rkt) #f)
+   'test-session-ws-01.rkt
+   (test-dep '(driver.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt sessions.rkt) #t)
    'test-sessions.rkt
    (test-dep '(prelude.rkt sessions.rkt substitution.rkt syntax.rkt) #f)
    'test-set-ops-eval.rkt
@@ -571,6 +577,8 @@
    (test-dep '(driver.rkt global-env.rkt macros.rkt namespace.rkt) #t)
    'test-strategy-01.rkt
    (test-dep '(driver.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt) #f)
+   'test-strategy-ws-01.rkt
+   (test-dep '(driver.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt) #t)
    'test-stratified-eval.rkt
    (test-dep '(driver.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt reader.rkt relations.rkt solver.rkt stratified-eval.rkt stratify.rkt syntax.rkt trait-resolution.rkt) #f)
    'test-stratify.rkt

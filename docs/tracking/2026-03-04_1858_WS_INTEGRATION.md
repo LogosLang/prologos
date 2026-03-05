@@ -1,7 +1,7 @@
 # WS-Mode Integration: Full .prologos File Support
 
 **Date**: 2026-03-04
-**Status**: In progress
+**Status**: Complete (WS-1 through WS-5)
 **Priority**: PRIMARY DESIGN TARGET
 
 ---
@@ -66,11 +66,11 @@ Key architectural facts:
 
 | Phase | Status | Commit | Notes |
 |-------|--------|--------|-------|
-| WS-1: `process-string-ws` in driver | ☐ | | Public export for WS-mode string processing |
-| WS-2: Session declaration WS tests | ☐ | | Send/Recv/End, Choice/Offer, Mu, dependent, throws |
-| WS-3: Process definition WS tests | ☐ | | send/recv/stop, select, offer, caps, boundary ops |
-| WS-4: Strategy WS tests | ☐ | | keyword-value property blocks |
-| WS-5: E2E `.prologos` file tests | ☐ | | Full session program in `.prologos` via `process-file` |
+| WS-1: `process-string-ws` in driver | ✅ | `3879128` | Public export + `run-ns-ws-last`/`run-ns-ws-all` helpers |
+| WS-2: Session declaration WS tests | ✅ | `8eeb81a` | 13 tests: Send/Recv/End, Choice/Offer, Mu, dependent, throws. Fixed `+>` tokenizer, `&>` preparse, DSend/DRecv binders, rec handler, branch regrouping |
+| WS-3: Process definition WS tests | ✅ | `c91f5a1` | 7 tests: send+stop, send+recv+stop, select, offer branches, no annotation, both-WS session+defproc |
+| WS-4: Strategy WS tests | ✅ | `c91f5a1` | 7 tests: bare default, with properties, all properties, registry verification, error cases |
+| WS-5: E2E `.prologos` file tests | ✅ | `c91f5a1` | 4 tests: file loading, session registry, offer+strategy from `.prologos` files |
 
 ---
 
@@ -301,3 +301,45 @@ Test harness loads via `process-file` in an `.rkt` test file.
 5. **Session body operators vs expression operators**: `!` and `?` are now tokenized
    correctly (S2c, commit `9f7692b`), but the WS reader's interaction with indentation
    grouping needs validation.
+
+---
+
+## Completion Summary
+
+**Total new WS tests**: 31 (13 + 7 + 7 + 4)
+**Full suite verification**: 5471 tests, 274 files, 0 regressions (2 pre-existing failures unrelated to WS)
+**Test count**: 5440 → 5471
+
+### Bugs Found and Fixed During WS-2
+
+| Bug | Root Cause | Fix |
+|-----|-----------|-----|
+| `+>` not tokenized | `+` enters `ident-start?` but `>` not in `ident-continue?` | Added special-case handler in reader.rkt before `ident-start?` |
+| `&>` produces `$clause-sep` | `&>` already tokenized for logic rules as `$clause-sep` | Updated `session-item->sexp` to match both `&>` and `$clause-sep` |
+| DSend/DRecv lose type info | WS reader's `(!: n Nat)` 3-elem list vs expected `(n : Nat)` binder | Reconstructed binder form for 3-element case in `session-item->sexp` |
+| `rec` handler too simplistic | Single handler couldn't distinguish named/unnamed/head/continuation contexts | Rewrote with contextual branching for all `rec` positions |
+| Branch body tokens ungrouped | `flatten-arrow-chain` left operators as bare tokens: `! Nat rec` | Added `regroup-session-tokens` to reconstruct operator groups |
+| `->` symbols not stripped | `flatten-arrow-chain` only handled nested `(-> ...)`, not bare `->` | Added bare symbol filtering clause |
+| `rec` at continuation = new Mu | Bare `rec` in single-item position treated as Mu, not recursion variable | Special-cased single bare `rec` as pass-through symbol |
+| Unnamed Mu + `rec` variable | `'rec` not in rec-stack for unnamed Mu (only `session-name` was) | Added `'rec` alias to rec-stack in elaborator |
+
+### New Files
+
+| File | Type | Tests |
+|------|------|-------|
+| `tests/test-session-ws-01.rkt` | Test | 13 |
+| `tests/test-process-ws-02.rkt` | Test | 7 |
+| `tests/test-strategy-ws-01.rkt` | Test | 7 |
+| `tests/test-session-e2e-ws.rkt` | Test | 4 |
+| `tests/ws-session-e2e-01.prologos` | E2E fixture | — |
+| `tests/ws-session-e2e-02.prologos` | E2E fixture | — |
+
+### Modified Files
+
+| File | Changes |
+|------|---------|
+| `driver.rkt` | Added `process-string-ws` export |
+| `reader.rkt` | Added `+>` tokenizer handler |
+| `macros.rkt` | Fixed session desugaring (6 issues), added `desugar-strategy-ws`, `regroup-session-tokens` |
+| `elaborator.rkt` | Added `'rec` alias in rec-stack for unnamed Mu |
+| `test-support.rkt` | Added `run-ns-ws-last`, `run-ns-ws-all` helpers |
