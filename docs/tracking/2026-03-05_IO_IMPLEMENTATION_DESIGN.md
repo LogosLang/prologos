@@ -7,6 +7,34 @@
 
 ---
 
+## Progress Tracker
+
+| Phase | Sub-phase | Status | Commit | Notes |
+|-------|-----------|--------|--------|-------|
+| IO-A | A1: Opaque type marshalling | | | `expr-opaque` + `foreign.rkt` |
+| IO-A | A2: Path + IOError types | | | String wrapper, 6 error ctors |
+| IO-B | B1: IO state lattice | | | `io-bridge.rkt` |
+| IO-B | B2: IO bridge propagator | | | Side-effecting fire-fn |
+| IO-B | B3: FFI bridge to Racket | | | `io-ffi.rkt` |
+| IO-C | C1: `proc-open` runtime | | | `compile-live-process` match arm |
+| IO-C | C2: Integration tests | | | Open + session + IO bridge E2E |
+| IO-D | D1: File IO functions | | | `read-file`, `write-file`, etc. |
+| IO-D | D2: Console IO functions | | | `print`, `println`, `read-ln` |
+| IO-D | D3: `with-open` macro | | | Bracket pattern |
+| IO-E | E1: Protocol definitions | | | `FileRead`/`FileWrite`/`FileRW` |
+| IO-E | E2: Session-based file IO | | | IO service processes |
+| IO-F | F1: Linear handle type | | | `Handle :1`, fio functions |
+| IO-F | F2: fio bracket pattern | | | `fio-with-open` |
+| IO-G | G1: CSV parser | | | RFC 4180 parsing |
+| IO-G | G2: CSV file functions | | | `read-csv`, `write-csv` |
+| IO-H | H1: Cap inference pipeline | | | Wire into `driver.rkt` |
+| IO-I | I1: `cap-set` with type exprs | | | Extend cap-set for applied caps |
+| IO-I | I2: `extract-capability-requirements` for `expr-app` | | | `FileCap "/data"` extraction |
+| IO-I | I3: Cap-type bridge for applied caps | | | α/γ for `expr-app` cap types |
+| IO-I | I4: Path-indexed cap tests | | | End-to-end dependent caps |
+
+---
+
 ## Table of Contents
 
 1. [Document Purpose](#1-document-purpose)
@@ -24,10 +52,11 @@
 13. [Console IO](#13-console-io)
 14. [CSV and Structured Data](#14-csv-and-structured-data)
 15. [Capability Inference Pipeline Integration](#15-capability-inference-pipeline-integration)
-16. [Module Structure and Prelude](#16-module-structure-and-prelude)
-17. [Phased Implementation Roadmap](#17-phased-implementation-roadmap)
-18. [Deferred Features](#18-deferred-features)
-19. [References](#19-references)
+16. [Dependent Capabilities](#16-dependent-capabilities)
+17. [Module Structure and Prelude](#17-module-structure-and-prelude)
+18. [Phased Implementation Roadmap](#18-phased-implementation-roadmap)
+19. [Deferred Features](#19-deferred-features)
+20. [References](#20-references)
 
 ---
 
@@ -49,7 +78,7 @@ surface, design rationale, and example programs. This document assumes familiari
 
 ### Scope
 
-**In scope** (Phases IO-A through IO-H):
+**In scope** (Phases IO-A through IO-I):
 - Opaque FFI marshalling, Path type, IOError type
 - IO bridge propagator infrastructure
 - Boundary operation runtime (`proc-open`)
@@ -59,13 +88,13 @@ surface, design rationale, and example programs. This document assumes familiari
 - Console IO (`print`, `println`, `read-ln`)
 - CSV reading/writing
 - Capability inference wired into compilation pipeline
+- Dependent capabilities (`FileCap "/data"`) — path-indexed authority proofs
 
-**Out of scope** (see §18 Deferred):
+**Out of scope** (see §19 Deferred):
 - Dependent send/receive (`!:`/`?:`) — blocked on reader/parser token work
 - Network IO (`connect`/`listen`) — Phase 2+
 - Database IO (`db-open`, SQLite) — Phase 2+
 - Relational integration (`:source csv` on `defr`) — Phase 3+
-- Dependent capabilities (`FileCap "/data"`) — Phases 7e-7g
 
 ---
 
@@ -1214,9 +1243,165 @@ caps like `(FileCap "/data")` are silently ignored. This is acceptable for Phase
 
 ---
 
-<a id="16-module-structure-and-prelude"></a>
+<a id="16-dependent-capabilities"></a>
 
-## 16. Module Structure and Prelude
+## 16. Dependent Capabilities
+
+### 16.1 Motivation
+
+Being able to specify *which file* a function has access to is fundamental to the
+capability security model. Without dependent capabilities, all file IO functions require
+a blanket `{ReadCap}` — granting access to the entire filesystem. With dependent
+capabilities, authority can be scoped to specific paths:
+
+```prologos
+;; Without dependent caps: blanket filesystem access
+spec read-config : Path -> Result Config IOError
+;; Inferred: {fs :0 ReadCap}  — can read ANY file
+
+;; With dependent caps: scoped to one path
+spec read-config {cap :0 FileCap "/etc/app.conf"} : Result Config IOError
+;; Can ONLY read /etc/app.conf — principle of least authority
+```
+
+This is the difference between "has filesystem access" and "has access to this specific
+file" — the core value proposition of capability security.
+
+### 16.2 Current State (Phases 7a-7d Complete)
+
+Capability types as zero-method traits with `:0` erased binders are fully working:
+- Parsing: `{cap :0 ReadCap}` in spec headers
+- Type formation: capability traits participate in type checking
+- Scope tracking: lexical capability resolution
+- Functor-based resolution: trait instance lookup
+
+**What's missing** (Phases 7e-7g, previously deferred):
+- `cap-set` holds only symbols — cannot represent `[FileCap "/data"]`
+- `extract-capability-requirements` (L130-141 of `capability-inference.rkt`) only
+  matches `(expr-fvar name)` — silently ignores `(expr-app (expr-fvar 'FileCap) ...)`
+- Cap-type bridge α/γ functions don't handle applied capability types
+- No surface syntax for dependent cap requirements in foreign blocks
+
+### 16.3 Design
+
+#### 16.3.1 Cap-Set with Type Expressions
+
+Currently `cap-set` is a `seteq` of symbols. It needs to hold arbitrary type expressions
+for applied capabilities:
+
+```racket
+;; Current: (seteq 'ReadCap 'WriteCap)
+;; New:     (set (cap-entry 'ReadCap #f)
+;;               (cap-entry 'FileCap (expr-string "/data"))
+;;               (cap-entry 'WriteCap #f))
+
+(struct cap-entry (name index) #:transparent)
+;; name: symbol — the capability trait name
+;; index: #f for flat caps, or an expr for dependent caps
+
+;; Subsumption: (cap-entry 'ReadCap #f) subsumes (cap-entry 'FileCap "/data")
+;; iff ReadCap <: FileCap in the subtype registry
+```
+
+The cap-set becomes a `set` using `equal?` comparison (not `eq?`), since `cap-entry`
+structs with expression indices need structural equality.
+
+#### 16.3.2 `extract-capability-requirements` Extension
+
+```racket
+(define (extract-capability-requirements type)
+  (let loop ([ty type] [caps (set)])  ;; set, not seteq
+    (match ty
+      [(expr-Pi mult dom cod)
+       (define new-caps
+         (cond
+           ;; Flat cap: {fs :0 ReadCap}
+           [(and (eq? mult 'm0)
+                 (expr-fvar? dom)
+                 (capability-type? (expr-fvar-name dom)))
+            (set-add caps (cap-entry (expr-fvar-name dom) #f))]
+           ;; Applied cap: {cap :0 [FileCap "/data"]}
+           [(and (eq? mult 'm0)
+                 (expr-app? dom)
+                 (expr-fvar? (expr-app-fn dom))
+                 (capability-type? (expr-fvar-name (expr-app-fn dom))))
+            (set-add caps (cap-entry
+                           (expr-fvar-name (expr-app-fn dom))
+                           (expr-app-arg dom)))]
+           [else caps]))
+       (loop cod new-caps)]
+      [_ caps])))
+```
+
+#### 16.3.3 Cap-Type Bridge Updates
+
+The α (abstraction) and γ (concretization) Galois connection functions in
+`cap-type-bridge.rkt` need to handle applied cap types:
+
+```racket
+;; α: type domain → cap domain
+;; Currently: (expr-fvar 'ReadCap) → 'ReadCap
+;; Extended:  (expr-app (expr-fvar 'FileCap) (expr-string "/data"))
+;;            → (cap-entry 'FileCap (expr-string "/data"))
+
+;; γ: cap domain → type domain
+;; Currently: 'ReadCap → (expr-fvar 'ReadCap)
+;; Extended:  (cap-entry 'FileCap (expr-string "/data"))
+;;            → (expr-app (expr-fvar 'FileCap) (expr-string "/data"))
+```
+
+#### 16.3.4 Capability Subsumption
+
+A function requiring `{FileCap "/data"}` is satisfied by a caller with `{FsCap}` —
+the blanket cap subsumes the specific one. This uses the existing subtype registry:
+
+```
+FileCap "/data" <: ReadCap <: FsReadCap <: FsCap <: IOCap
+```
+
+The subsumption check becomes: for each required `cap-entry`, check if the provided
+cap-set contains a subsuming entry. Flat caps always subsume their applied refinements.
+
+#### 16.3.5 Dependent Cap in Convenience Functions
+
+With dependent caps, the Tier 3 API becomes:
+
+```prologos
+;; Path-indexed read: can only read this specific file
+spec read-config {cap :0 FileCap "/etc/app.conf"} : Result Config IOError
+defn read-config []
+  [read-file [path "/etc/app.conf"]]
+
+;; Path-parameterized: cap depends on the path argument
+spec read-specific {A : Type} {p : Path} {cap :0 FileCap p} : Result A IOError
+defn read-specific [p]
+  [read-file p]
+```
+
+Tier 1 and Tier 2 continue to use flat caps — `read-file` infers `{ReadCap}` (blanket).
+Dependent caps are Tier 3 for security-conscious code.
+
+### 16.4 Tests (~15)
+
+- `cap-entry` with flat cap equals existing behavior
+- `cap-entry` with applied cap (`FileCap "/data"`) round-trips
+- `extract-capability-requirements` extracts flat caps (regression)
+- `extract-capability-requirements` extracts applied caps
+- Cap-set subsumption: `ReadCap` subsumes `FileCap "/data"`
+- Cap-set subsumption: `FileCap "/data"` does NOT subsume `ReadCap`
+- Cap-type bridge α: applied cap type → cap-entry
+- Cap-type bridge γ: cap-entry → applied cap type
+- Transitive inference with dependent caps through call chain
+- End-to-end: `spec` with `{FileCap "/data"}` type-checks correctly
+- End-to-end: mismatched path rejected
+- `cap-closure` REPL command shows dependent caps
+- `cap-audit` REPL command with path-indexed cap
+
+---
+
+<a id="17-module-structure-and-prelude"></a>
+
+## 17. Module Structure and Prelude
 
 ### 16.1 Module Layout
 
@@ -1268,9 +1453,9 @@ New test files need entries in `tools/dep-graph.rkt`:
 
 ---
 
-<a id="17-phased-implementation-roadmap"></a>
+<a id="18-phased-implementation-roadmap"></a>
 
-## 17. Phased Implementation Roadmap
+## 18. Phased Implementation Roadmap
 
 ### Dependency Graph
 
@@ -1279,11 +1464,12 @@ IO-A1 (Opaque FFI) ──┐
                       ├── IO-B (IO Bridge) ── IO-C (Boundary Ops) ── IO-D (Core File IO) ──┬── IO-E (Session Protocols)
 IO-A2 (Path/IOError) ┘                                                                     ├── IO-F (Functional IO)
                                                                                             ├── IO-G (CSV)
-                                                                                            └── IO-H (Cap Inference)
+                                                                                            ├── IO-H (Cap Inference) ── IO-I (Dependent Caps)
+                                                                                            └── IO-I can start after IO-H
 ```
 
-IO-E, IO-F, IO-G, and IO-H are independent of each other and can be implemented in any
-order after IO-D.
+IO-E, IO-F, IO-G, IO-H, and IO-I are independent of each other (except IO-I depends on
+IO-H for pipeline integration). They can be implemented in any order after IO-D.
 
 ---
 
@@ -1549,6 +1735,55 @@ order after IO-D.
 
 ---
 
+### Phase IO-I: Dependent Capabilities
+
+#### IO-I1: Cap-Set with Type Expressions
+
+**Goal**: `cap-set` holds `cap-entry` structs (name + optional index) instead of bare symbols.
+
+**Files modified**:
+| File | Change |
+|------|--------|
+| `racket/prologos/capability-inference.rkt` | `cap-entry` struct; update `cap-set` from `seteq` to `set`; update all cap-set operations |
+
+**Tests**: Part of `tests/test-io-dep-cap-01.rkt` (~4 tests)
+**Depends on**: IO-H (cap inference pipeline must be wired in)
+
+#### IO-I2: `extract-capability-requirements` for Applied Caps
+
+**Goal**: `extract-capability-requirements` recognizes `(expr-app (expr-fvar 'FileCap) ...)`.
+
+**Files modified**:
+| File | Change |
+|------|--------|
+| `racket/prologos/capability-inference.rkt` | Extend `extract-capability-requirements` match for `expr-app` |
+
+**Tests**: Part of `tests/test-io-dep-cap-01.rkt` (~3 tests)
+**Depends on**: IO-I1
+
+#### IO-I3: Cap-Type Bridge for Applied Caps
+
+**Goal**: α/γ Galois connection handles `expr-app` capability types.
+
+**Files modified**:
+| File | Change |
+|------|--------|
+| `racket/prologos/cap-type-bridge.rkt` | Extend α (type→cap) and γ (cap→type) for applied caps |
+
+**Tests**: Part of `tests/test-io-dep-cap-01.rkt` (~4 tests)
+**Depends on**: IO-I1
+
+#### IO-I4: Path-Indexed Capability End-to-End
+
+**Goal**: Full dependent capability flow — spec with `{FileCap "/data"}`, type-check, inference, subsumption.
+
+**Tests**: `tests/test-io-dep-cap-02.rkt` (~4 end-to-end tests)
+**Depends on**: IO-I2, IO-I3
+
+**Total Phase IO-I tests**: ~15 across `test-io-dep-cap-01.rkt` and `test-io-dep-cap-02.rkt`
+
+---
+
 ### Summary Table
 
 | Phase | Sub-phase | Description | Tests | Depends On |
@@ -1570,34 +1805,38 @@ order after IO-D.
 | IO-G | G1 | CSV parser | ~12 | — (pure) |
 | IO-G | G2 | CSV file functions | ~8 | D, G1 |
 | IO-H | H1 | Cap inference pipeline | ~10 | D |
-| **Total** | | | **~140** | |
+| IO-I | I1 | Cap-set with type expressions | ~4 | H |
+| IO-I | I2 | `extract-capability-requirements` for `expr-app` | ~3 | I1 |
+| IO-I | I3 | Cap-type bridge for applied caps | ~4 | I1 |
+| IO-I | I4 | Path-indexed cap E2E | ~4 | I2, I3 |
+| **Total** | | | **~155** | |
 
 ---
 
-<a id="18-deferred-features"></a>
+<a id="19-deferred-features"></a>
 
-## 18. Deferred Features
+## 19. Deferred Features
 
 | Feature | Reason | Phase | Blocked On |
 |---------|--------|-------|------------|
-| Dependent send/receive (`!:`/`?:`) | Reader/parser token work needed | IO-I | WS reader tokens |
-| Network IO (`connect`/`listen`) | Different FFI layer (sockets) | IO-J | IO-B infrastructure |
-| Database IO (`db-open`, SQLite) | Opaque db connections + SQL | IO-K | IO-A1 (opaque) + Racket `db` lib |
-| Relational integration (`:source csv`) | Depends on relational language maturity | IO-L | CSV + relational subsystem |
-| Dependent capabilities (`FileCap "/data"`) | `extract-capability-requirements` only handles flat fvars | IO-M | Phases 7e-7g |
+| Dependent send/receive (`!:`/`?:`) | Reader/parser token work needed | IO-J | WS reader tokens |
+| Network IO (`connect`/`listen`) | Different FFI layer (sockets) | IO-K | IO-B infrastructure |
+| Database IO (`db-open`, SQLite) | Opaque db connections + SQL | IO-L | IO-A1 (opaque) + Racket `db` lib |
+| Relational integration (`:source csv`) | Depends on relational language maturity | IO-M | CSV + relational subsystem |
+| Dependent caps in foreign blocks | `:requires [FileCap p]` syntax | IO-N | IO-I (dependent caps) |
 | `Bytes` type | Not needed for text IO | Phase 2 | Nothing |
 | Streaming/lazy IO | LSeq + handle lifetime management | Phase 2+ | `Bytes` + lazy evaluation |
 | IO mocking framework | Swap IO propagators in test context | Phase 2+ | IO-B infrastructure |
-| `proc-connect` runtime | Same pattern as `proc-open`, different FFI | IO-J | IO-C pattern |
-| `proc-listen` runtime | Same pattern as `proc-open`, different FFI | IO-J | IO-C pattern |
+| `proc-connect` runtime | Same pattern as `proc-open`, different FFI | IO-K | IO-C pattern |
+| `proc-listen` runtime | Same pattern as `proc-open`, different FFI | IO-K | IO-C pattern |
 
 All deferred items are tracked in `docs/tracking/DEFERRED.md`.
 
 ---
 
-<a id="19-references"></a>
+<a id="20-references"></a>
 
-## 19. References
+## 20. References
 
 ### Predecessor Documents
 - `docs/tracking/2026-03-05_IO_LIBRARY_DESIGN_V2.md` — Phase I API design + gap analysis
@@ -1625,4 +1864,4 @@ All deferred items are tracked in `docs/tracking/DEFERRED.md`.
 - `racket/prologos/driver.rkt` — Compilation driver
 
 ### Deferred Work
-- `docs/tracking/DEFERRED.md` — IO Library section (L613-666)
+- `docs/tracking/DEFERRED.md` — IO Library section + Capabilities Phase 7e-7g

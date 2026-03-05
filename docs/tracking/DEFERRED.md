@@ -460,6 +460,9 @@ The following collection items ARE also deferred (genuine infrastructure deps):
   scope tracking, functor-based resolution all working. Current cap-closure/cap-inference
   treats applied caps (like `[FileCap "/data"]`) as opaque (appears pure). These phases
   add full dependent-cap awareness to the inference/bridge infrastructure.
+- **Note**: 7e and 7f are now covered by IO Implementation Design Phase IO-I (IO-I1 through
+  IO-I3). 7g (foreign block syntax) remains deferred as IO-N.
+- **Implementation design**: `docs/tracking/2026-03-05_IO_IMPLEMENTATION_DESIGN.md` §16
 - Source: `docs/tracking/2026-03-01_1500_CAPABILITIES_AS_TYPES_DESIGN.md` §Phase 7
 
 ### Capabilities — Phase 8d: Multi-Agent Cross-Network Reasoning
