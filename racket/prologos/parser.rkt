@@ -4815,7 +4815,8 @@
      (define rest (cdr args))
      ;; Check for session type annotation: (defproc Name : SessionType Body)
      ;; or multi-channel: (defproc Name [ch : S, ...] Body)
-     (define-values (session-type channels remaining)
+     ;; S5a: also parse capability binders: {cap :0 CapType}
+     (define-values (session-type channels caps remaining)
        (parse-defproc-header rest loc))
      (cond
        [(prologos-error? session-type) session-type]
@@ -4824,32 +4825,45 @@
        [else
         (define body (parse-proc-body (car remaining) loc))
         (if (prologos-error? body) body
-            (surf-defproc name session-type channels '() body loc))])]))
+            (surf-defproc name session-type channels caps body loc))])]))
 
 ;; Parse the defproc header after the name.
-;; Returns (values session-type channels remaining-args).
+;; Returns (values session-type channels caps remaining-args).
 ;; session-type: parsed session type expression, or #f
 ;; channels: list of (cons name session-type), or '()
+;; caps: list of binder-info structs for capability binders, or '()
 ;; remaining-args: the rest after header
 (define (parse-defproc-header args loc)
   (cond
-    [(null? args) (values #f '() '())]
+    [(null? args) (values #f '() '() '())]
     [else
      (define first-d (stx->datum (car args)))
      (cond
-       ;; Colon means session type annotation: : SessionType Body
+       ;; Colon means session type annotation: : SessionType [Caps] Body
        [(eq? first-d ':)
         (cond
           [(< (length args) 3)
-           (values (parse-error loc "defproc: expected session type after ':'" #f) '() '())]
+           (values (parse-error loc "defproc: expected session type after ':'" #f) '() '() '())]
           [else
            (define sess-type (parse-datum (cadr args)))
-           (values sess-type '() (cddr args))])]
-       ;; No colon — treat remaining as body
+           ;; Check for capability binders after session type: {cap :0 CapType}
+           (define after-sess (cddr args))
+           (cond
+             [(and (pair? after-sess) (brace-params-stx? (car after-sess)))
+              (define cap-binders (unwrap-brace-params (car after-sess) loc))
+              (values sess-type '() cap-binders (cdr after-sess))]
+             [else
+              (values sess-type '() '() after-sess)])])]
+       ;; $brace-params without session type: capability binders only
+       [(brace-params? (if (syntax? (car args)) (syntax-e (car args)) first-d))
+        (define cap-binders (unwrap-brace-params (car args) loc))
+        (values #f '() cap-binders (cdr args))]
+       ;; No colon, no braces — treat remaining as body
        [else
-        (values #f '() args)])]))
+        (values #f '() '() args)])]))
 
-;; (proc : SessionType Body) — anonymous process
+;; (proc : SessionType [Caps] Body) — anonymous process
+;; S5a: optionally parse {cap :0 CapType} after session type
 (define (parse-proc args loc)
   (cond
     [(null? args)
@@ -4857,7 +4871,7 @@
     [else
      (define first-d (stx->datum (car args)))
      (cond
-       ;; (proc : SessionType Body)
+       ;; (proc : SessionType [Caps] Body)
        [(eq? first-d ':)
         (cond
           [(< (length args) 3)
@@ -4865,10 +4879,32 @@
           [else
            (define sess-type (parse-datum (cadr args)))
            (if (prologos-error? sess-type) sess-type
-               (let ([body (parse-proc-body (caddr args) loc)])
-                 (if (prologos-error? body) body
-                     (surf-proc sess-type '() '() body loc))))])]
-       ;; (proc Body) — no session type annotation
+               ;; Check for capability binders after session type
+               (let* ([after-sess (cddr args)]
+                      [has-caps? (and (pair? after-sess)
+                                      (brace-params-stx? (car after-sess)))]
+                      [caps (if has-caps?
+                                (unwrap-brace-params (car after-sess) loc)
+                                '())]
+                      [body-args (if has-caps? (cdr after-sess) after-sess)])
+                 (cond
+                   [(null? body-args)
+                    (parse-error loc "proc: missing process body" #f)]
+                   [else
+                    (define body (parse-proc-body (car body-args) loc))
+                    (if (prologos-error? body) body
+                        (surf-proc sess-type '() caps body loc))])))])]
+       ;; (proc {Caps} Body) — caps without session type
+       [(brace-params? (if (syntax? (car args)) (syntax-e (car args)) first-d))
+        (define caps (unwrap-brace-params (car args) loc))
+        (cond
+          [(null? (cdr args))
+           (parse-error loc "proc: missing process body after capability binders" #f)]
+          [else
+           (define body (parse-proc-body (cadr args) loc))
+           (if (prologos-error? body) body
+               (surf-proc #f '() caps body loc))])]
+       ;; (proc Body) — no session type, no caps
        [else
         (define body (parse-proc-body (car args) loc))
         (if (prologos-error? body) body

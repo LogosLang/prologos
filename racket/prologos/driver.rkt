@@ -562,8 +562,9 @@
                       (global-env-add-type-only (current-global-env) fqn (expr-Type 0))))
                    (format "session ~a defined." name)]
 
-                  ;; Phase S3: Process definition
-                  ;; Type-check the process against its session type
+                  ;; Phase S3+S5a: Process definition
+                  ;; Type-check the process against its session type.
+                  ;; S5a: Build gamma from capability bindings.
                   [(list 'defproc name sess-ty channels caps proc-body)
                    (cond
                      ;; If session type annotation present, look up or use directly
@@ -580,8 +581,13 @@
                         [resolved-sess
                          ;; Build channel context: self -> session type
                          (define delta (chan-ctx-add chan-ctx-empty 'self resolved-sess))
+                         ;; S5a: Build gamma from capability bindings
+                         ;; Each cap is (list name mult type-expr)
+                         (define gamma-with-caps
+                           (for/fold ([g ctx-empty]) ([cap (in-list caps)])
+                             (ctx-extend g (third cap) (second cap))))
                          (define type-ok?
-                           (time-phase! type-check (type-proc ctx-empty delta proc-body)))
+                           (time-phase! type-check (type-proc gamma-with-caps delta proc-body)))
                          (cond
                            [type-ok?
                             ;; Register in global env
@@ -608,9 +614,33 @@
                        (global-env-add-type-only (current-global-env) name (expr-Type 0)))
                       (format "defproc ~a defined." name)])]
 
-                  ;; Phase S3: Anonymous process — just type-check, don't register
+                  ;; Phase S3+S5a: Anonymous process — type-check if session type present
                   [(list 'proc sess-ty channels caps proc-body)
-                   (format "anonymous process elaborated.")]
+                   (cond
+                     [sess-ty
+                      ;; Look up session type
+                      (define sess-entry
+                        (cond
+                          [(expr-fvar? sess-ty)
+                           (define entry (lookup-session (expr-fvar-name sess-ty)))
+                           (and entry (session-entry-session-type entry))]
+                          [else #f]))
+                      (define resolved-sess (or sess-entry #f))
+                      (cond
+                        [resolved-sess
+                         (define delta (chan-ctx-add chan-ctx-empty 'self resolved-sess))
+                         (define gamma-with-caps
+                           (for/fold ([g ctx-empty]) ([cap (in-list caps)])
+                             (ctx-extend g (third cap) (second cap))))
+                         (define type-ok?
+                           (time-phase! type-check (type-proc gamma-with-caps delta proc-body)))
+                         (if type-ok?
+                             (format "anonymous process : ~a type-checked." (pp-session resolved-sess))
+                             (prologos-error #f
+                               (format "Anonymous process does not implement session protocol ~a"
+                                       (pp-session resolved-sess))))]
+                        [else (format "anonymous process elaborated.")])]
+                     [else (format "anonymous process elaborated.")])]
 
                   ;; Phase S3: dual — session duality result
                   [(list 'dual name dual-sess)

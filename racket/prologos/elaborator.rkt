@@ -3261,6 +3261,42 @@
            (loop (cdr remaining) (cons (cons label cont) acc)))])))
 
 ;; ========================================
+;; Phase S5a: Capability binder elaboration for processes
+;; ========================================
+
+;; Elaborate a list of binder-info structs (capability binders from process headers).
+;; Each binder-info has: name, mult, type (surf form).
+;; Returns: list of (cons name elaborated-type), or prologos-error on first failure.
+;; Also emits W2001 warning for :w multiplicity on capability types.
+(define (elaborate-cap-binders cap-binders loc)
+  (if (null? cap-binders) '()
+      (let loop ([remaining cap-binders] [acc '()])
+        (if (null? remaining) (reverse acc)
+            (let* ([bi (car remaining)]
+                   [name (binder-info-name bi)]
+                   [mult (or (binder-info-mult bi) 'm0)] ;; default to :0 for caps
+                   [ty-surf (binder-info-type bi)]
+                   [ty (elaborate ty-surf)])
+              (if (prologos-error? ty) ty
+                  (begin
+                    ;; W2001: warn if capability with :w multiplicity
+                    (when (and (eq? mult 'mw) (capability-type-expr? ty))
+                      (emit-capability-warning! (capability-type-expr? ty) 'mw))
+                    (loop (cdr remaining)
+                          (cons (list name mult ty) acc)))))))))
+
+;; Build capability scope entries from elaborated cap binders.
+;; Each cap binder (name mult type) where type is a capability → push into scope.
+;; Scope entries are (cons depth type-expr); for process caps, depth is 0
+;; (they're at the top-level of the process, not inside any Pi/lambda).
+(define (build-cap-scope elab-caps existing-scope)
+  (for/fold ([scope existing-scope]) ([cap (in-list elab-caps)])
+    (define ty (third cap))
+    (if (capability-type-expr? ty)
+        (cons (cons 0 ty) scope)
+        scope)))
+
+;; ========================================
 ;; Phase S3: Process elaboration
 ;; Converts surf-proc-* tree → proc-* tree
 ;; ========================================
@@ -3457,22 +3493,35 @@
                (register-session! fqn (session-entry fqn sess-body loc)))
              (list 'session name sess-body))))]
 
-    ;; Phase S3: Process definition
-    ;; Elaborate session type annotation (if any), elaborate process body.
+    ;; Phase S3+S5a: Process definition
+    ;; Elaborate session type annotation (if any), elaborate capability binders,
+    ;; elaborate process body with capabilities in scope.
     [(surf-defproc name session-type-surf channels caps body-surf loc)
      (let ([sess-ty (if session-type-surf (elaborate session-type-surf) #f)])
        (if (and sess-ty (prologos-error? sess-ty)) sess-ty
-           (let ([proc-body (elaborate-proc-body body-surf)])
-             (if (prologos-error? proc-body) proc-body
-                 (list 'defproc name sess-ty channels caps proc-body)))))]
+           ;; S5a: Elaborate capability binders and push into scope
+           (let ([elab-caps (elaborate-cap-binders caps loc)])
+             (if (prologos-error? elab-caps) elab-caps
+                 (let ([cap-scope (build-cap-scope elab-caps (current-capability-scope))])
+                   (define proc-body
+                     (parameterize ([current-capability-scope cap-scope])
+                       (elaborate-proc-body body-surf)))
+                   (if (prologos-error? proc-body) proc-body
+                       (list 'defproc name sess-ty channels elab-caps proc-body)))))))]
 
-    ;; Phase S3: Anonymous process
+    ;; Phase S3+S5a: Anonymous process
     [(surf-proc session-type-surf channels caps body-surf loc)
      (let ([sess-ty (if session-type-surf (elaborate session-type-surf) #f)])
        (if (and sess-ty (prologos-error? sess-ty)) sess-ty
-           (let ([proc-body (elaborate-proc-body body-surf)])
-             (if (prologos-error? proc-body) proc-body
-                 (list 'proc sess-ty channels caps proc-body)))))]
+           ;; S5a: Elaborate capability binders and push into scope
+           (let ([elab-caps (elaborate-cap-binders caps loc)])
+             (if (prologos-error? elab-caps) elab-caps
+                 (let ([cap-scope (build-cap-scope elab-caps (current-capability-scope))])
+                   (define proc-body
+                     (parameterize ([current-capability-scope cap-scope])
+                       (elaborate-proc-body body-surf)))
+                   (if (prologos-error? proc-body) proc-body
+                       (list 'proc sess-ty channels elab-caps proc-body)))))))]
 
     ;; Phase S3: dual — compute dual of a named session type
     [(surf-dual session-ref-surf loc)
