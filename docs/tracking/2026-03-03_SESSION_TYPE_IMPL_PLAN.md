@@ -28,14 +28,14 @@
 | S4 | S4b: Session inference propagators | ✅ | `54c7c90` | send/recv/select/offer/stop propagators, 20 tests |
 | S4 | S4c: Duality bidirectional prop | ✅ | `54c7c90` | add-duality-prop, proc-new compilation |
 | S4 | S4d: ATMS integration | ✅ | `6383f1b` | session-op trace, session-protocol-error, 10 tests |
-| S4 | S4e: Cross-domain bridges | ⏳ | | Deferred: needs deeper type↔session cell integration |
+| S4 | S4e: Cross-domain bridges | ✅ | `03ea8ed` | Session↔Type Galois connection, 25 tests |
 | S4 | S4f: Deadlock detection | ✅ | `2e244b1` | check-session-completeness, 9 tests |
 | S5 | S5a: Capability binders | ✅ | `497bb73` | 12 tests, cap parsing + gamma threading |
 | S5 | S5b: Boundary operations | ✅ | `ff63591` | 13 tests, open/connect/listen parse+elab+type |
 | S5 | S5c: Delegation + warnings | ✅ | `50b6616` | 6 tests, W2002 dead auth + W2003 ambient auth |
 | S6 | S6a: Strategy parsing + registration | ✅ | `4ddc546` | 14 tests, full pipeline + validation |
-| S7 | S7a: Channel cells | ☐ | | |
-| S7 | S7b: Process-to-propagator compilation | ☐ | | |
+| S7 | S7a: Channel cells | ✅ | `6442f7d` | session-runtime.rkt, 20 tests |
+| S7 | S7b: Process-to-propagator compilation | ✅ | `60f4e33` | compile-live-process, 19 tests |
 | S7 | S7c: End-to-end execution | ☐ | | |
 | S7 | S7d: Strategy application | ☐ | | |
 | S8 | S8a: `!!`/`??` operators | ☐ | | |
@@ -489,20 +489,26 @@ Port existing tests from `test-typing-sessions.rkt` to verify equivalence.
 **Tests**: `tests/test-session-errors-01.rkt` (~10 tests).
 **Commit**: After ATMS-traced session errors.
 
-### S4e: Cross-Domain Bridges
+### S4e: Cross-Domain Bridges ✅
 
-**File**: `racket/prologos/session-propagators.rkt`
+**File**: `racket/prologos/session-type-bridge.rkt` (NEW — ~280 lines)
+**Commit**: `03ea8ed`
 
-1. **Session ↔ Type**: Message types create type-lattice cells, bridged to session cells.
-   When sess-cell refines to Send(T, S), T propagates to the expression type cell
-2. **Session ↔ QTT**: Channel multiplicity (:1 default, :w shared) constrains QTT.
-   Linear channels used once per step → QTT verifies at compile time
-3. **Dependent session bridge** (design doc §15.7): `!:`/`?:` create bidirectional
-   type↔session constraints. When `?: n Nat` fires, creates type cell `cell(n) : Nat`;
-   continuation `? Vec String n` uses cell(n) for instantiation
+Galois connection between session lattice cells and type lattice cells,
+following the P5c (type↔multiplicity) and cap-type-bridge patterns.
 
-**Tests**: `tests/test-session-bridges-01.rkt` (~15 tests).
-**Commit**: After cross-domain bridges.
+1. **Session ↔ Type** (implemented): α functions extract message types from
+   sess-send/sess-recv; γ is a no-op (returns sess-bot). Effectively unidirectional.
+   - `send-type-alpha`/`recv-type-alpha`: monotone extraction
+   - `add-send-type-bridge`/`add-recv-type-bridge`: create bridged type-lattice cells
+   - `compile-proc-with-type-bridges`: extended compilation collecting msg-type-constraints
+   - `check-session-with-types`: type-aware checker (query + check modes)
+   - Also handles `sess-dsend`/`sess-drecv` type extraction
+2. **Session ↔ QTT** (deferred): Channel multiplicity (:1 default, :w shared) constrains QTT.
+3. **Dependent session γ** (deferred): Bidirectional type↔session constraints for `!:`/`?:`.
+   Architecture supports it — γ direction returns sess-bot for now.
+
+**Tests**: `tests/test-session-type-bridge-01.rkt` (25 tests).
 
 ### S4f: Deadlock Detection
 
@@ -754,6 +760,7 @@ session Counter
 | `racket/prologos/typing-sessions.rkt` | Existing type-proc judgment | S3d (call), S4b (upgrade) |
 | `racket/prologos/session-lattice.rkt` | **NEW**: Session type lattice | S4a |
 | `racket/prologos/session-propagators.rkt` | **NEW**: Session inference propagators | S4b-f |
+| `racket/prologos/session-type-bridge.rkt` | **NEW**: Session↔Type cross-domain bridge | S4e |
 | `racket/prologos/session-runtime.rkt` | **NEW**: Runtime execution propagators | S7a-d |
 | `racket/prologos/propagator.rkt` | Existing propagator network | read in S4, S7 |
 | `racket/prologos/type-lattice.rkt` | Existing type lattice | read in S4e |
