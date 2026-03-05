@@ -282,6 +282,51 @@
 ;; ========================================
 ;; Process a single top-level command
 ;; ========================================
+;; ========================================
+;; S5c: Process capability usage analysis
+;; ========================================
+
+;; Check if a core process body structurally uses any boundary operation
+;; (proc-open, proc-connect, proc-listen) that references a capability.
+;; Returns a set of cap-type expressions used in boundary ops.
+(define (proc-body-used-caps proc-body)
+  (match proc-body
+    [(proc-open _path _sess cap-type cont)
+     (set-union (if cap-type (set cap-type) (set)) (proc-body-used-caps cont))]
+    [(proc-connect _addr _sess cap-type cont)
+     (set-union (if cap-type (set cap-type) (set)) (proc-body-used-caps cont))]
+    [(proc-listen _port _sess cap-type cont)
+     (set-union (if cap-type (set cap-type) (set)) (proc-body-used-caps cont))]
+    [(proc-send _e _c cont) (proc-body-used-caps cont)]
+    [(proc-recv _c _t cont) (proc-body-used-caps cont)]
+    [(proc-sel _c _l cont) (proc-body-used-caps cont)]
+    [(proc-case _c branches)
+     (for/fold ([s (set)]) ([b (in-list branches)])
+       (set-union s (proc-body-used-caps (cdr b))))]
+    [(proc-new _s cont) (proc-body-used-caps cont)]
+    [(proc-par left right)
+     (set-union (proc-body-used-caps left) (proc-body-used-caps right))]
+    [(proc-solve _t cont) (proc-body-used-caps cont)]
+    [_ (set)]))
+
+;; Emit W2002 warnings for capability binders that are never used in boundary ops.
+;; Also emit W2003 for :w caps in process headers.
+(define (check-process-cap-warnings name caps proc-body)
+  (define used-caps (proc-body-used-caps proc-body))
+  (for ([cap (in-list caps)])
+    (define cap-name (first cap))
+    (define cap-mult (second cap))
+    (define cap-type (third cap))
+    ;; W2003: ambient authority — :w cap in process header
+    (when (eq? cap-mult 'mw)
+      (emit-process-cap-warning! 'W2003 cap-name
+        (format "ambient authority :w on ~a in process ~a — consider :0 or :1" cap-name name)))
+    ;; W2002: dead authority — cap declared but not used in any boundary op
+    (when (and (not (set-member? used-caps cap-type))
+              (not (eq? cap-mult 'mw)))  ;; Don't double-warn if W2003 already fired
+      (emit-process-cap-warning! 'W2002 cap-name
+        (format "capability ~a declared but unused in process ~a" cap-name name)))))
+
 ;; Returns a result string, or a prologos-error.
 ;; Side effect: may update current-global-env for 'def'.
 ;;
@@ -590,6 +635,9 @@
                            (time-phase! type-check (type-proc gamma-with-caps delta proc-body)))
                          (cond
                            [type-ok?
+                            ;; S5c: Check for dead/ambient authority warnings
+                            (when (pair? caps)
+                              (check-process-cap-warnings name caps proc-body))
                             ;; Register in global env
                             (current-global-env
                              (global-env-add-type-only (current-global-env) name (expr-Type 0)))
@@ -610,6 +658,9 @@
                          (format "defproc ~a defined (session type not resolved for checking)." name)])]
                      [else
                       ;; No session type annotation — just register
+                      ;; S5c: Check for dead/ambient authority warnings
+                      (when (pair? caps)
+                        (check-process-cap-warnings name caps proc-body))
                       (current-global-env
                        (global-env-add-type-only (current-global-env) name (expr-Type 0)))
                       (format "defproc ~a defined." name)])]
@@ -654,7 +705,11 @@
   (define all-warning-strs
     (append (map format-coercion-warning coercion-warns)
             (map format-deprecation-warning deprecation-warns)
-            (map format-capability-warning capability-warns)))
+            (map (lambda (w)
+                   (cond
+                     [(process-cap-warning? w) (format-process-cap-warning w)]
+                     [else (format-capability-warning w)]))
+                 capability-warns)))
   (if (or (null? all-warning-strs) (prologos-error? result))
       result
       (string-join

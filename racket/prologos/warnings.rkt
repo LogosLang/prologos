@@ -24,7 +24,15 @@
          capability-warning-name
          capability-warning-multiplicity
          emit-capability-warning!
-         format-capability-warning)
+         format-capability-warning
+         ;; Process capability warnings (W2002, W2003)
+         process-cap-warning
+         process-cap-warning?
+         process-cap-warning-code
+         process-cap-warning-name
+         process-cap-warning-message
+         emit-process-cap-warning!
+         format-process-cap-warning)
 
 ;; ========================================
 ;; Coercion warnings
@@ -99,3 +107,25 @@
 (define (format-capability-warning w)
   (format "W2001: Unrestricted :w on capability ~a — consider :0 (authority proof) or :1 (authority transfer)."
           (capability-warning-name w)))
+
+;; ========================================
+;; Process capability warnings (W2002, W2003)
+;; ========================================
+
+;; W2002: Dead authority — process declares a capability binder but never uses it.
+;; W2003: Ambient authority — process header uses :w multiplicity on a cap.
+;; These are accumulated in the same current-capability-warnings list (shared accumulator).
+(struct process-cap-warning (code name message) #:transparent)
+
+;; Emit a process capability warning.
+(define (emit-process-cap-warning! code name msg)
+  (current-capability-warnings
+   (cons (process-cap-warning code name msg)
+         (current-capability-warnings))))
+
+;; Format a process capability warning for display.
+(define (format-process-cap-warning w)
+  (format "~a: ~a — ~a"
+          (process-cap-warning-code w)
+          (process-cap-warning-name w)
+          (process-cap-warning-message w)))
