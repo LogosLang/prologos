@@ -51,6 +51,8 @@
  trace-add
  ;; Compilation
  compile-proc-to-network
+ ;; S4d: Error construction
+ build-session-error
  ;; S4f: Deadlock/completeness detection
  check-session-completeness
  ;; Top-level checker

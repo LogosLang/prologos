@@ -89,6 +89,7 @@
    'session-lattice.rkt           '(sessions.rkt type-lattice.rkt)
    'session-propagators.rkt       '(errors.rkt pretty-print.rkt processes.rkt propagator.rkt session-lattice.rkt sessions.rkt source-location.rkt)
    'session-runtime.rkt           '(propagator.rkt session-lattice.rkt sessions.rkt)
+   'session-type-bridge.rkt       '(errors.rkt pretty-print.rkt processes.rkt propagator.rkt session-lattice.rkt session-propagators.rkt sessions.rkt source-location.rkt type-lattice.rkt)
    'sessions.rkt                  '(prelude.rkt substitution.rkt syntax.rkt)
    'sexp-readtable.rkt            '()
    'sexp.rkt                      '(main.rkt)
@@ -520,6 +521,8 @@
    (test-dep '(propagator.rkt session-lattice.rkt session-runtime.rkt sessions.rkt syntax.rkt) #f)
    'test-session-throws-01.rkt
    (test-dep '(driver.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt sessions.rkt) #f)
+   'test-session-type-bridge-01.rkt
+   (test-dep '(errors.rkt processes.rkt propagator.rkt session-lattice.rkt session-propagators.rkt session-type-bridge.rkt sessions.rkt syntax.rkt type-lattice.rkt) #f)
    'test-session-ws-01.rkt
    (test-dep '(driver.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt sessions.rkt) #t)
    'test-sessions.rkt
