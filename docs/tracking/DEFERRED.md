@@ -615,12 +615,18 @@ The following collection items ARE also deferred (genuine infrastructure deps):
 
 ## IO Library
 
-### Dependent Send/Receive (`!:`/`?:`) (NOT STARTED — Phase IO-I)
-- **Problem**: Dependent session operators bind values in the continuation scope.
-  Reader doesn't handle `!:`/`?:` tokens. Session type elaboration needs binding logic.
-- **Needed for**: Schema-typed IO, value-dependent protocols (e.g., `?: n Nat . ? [Vec String n]`)
-- **Blocked on**: Reader/parser token support for `!:`/`?:` in WS mode
-- **Implementation design**: `docs/tracking/2026-03-05_IO_IMPLEMENTATION_DESIGN.md` §7
+### Dependent Send/Receive (`!:`/`?:`) (NOT STARTED — Phase IO-J)
+- **Problem**: Two small gaps remain in an otherwise complete pipeline: (1) elaborator
+  discards binder name (L3201-3215), preventing dependent continuation types from
+  referencing the bound variable; (2) runtime predicates `sess-send-like?`/`sess-recv-like?`
+  exclude `sess-dsend`/`sess-drecv`.
+- **Note**: Reader, preparse, surface syntax, parser, IR, type-checker, and pretty-printer
+  are ALL complete. The prior "blocked on reader" claim was stale. See §7 of the
+  implementation design for full layer-by-layer analysis.
+- **Needed for**: Schema-typed IO, value-dependent protocols, length-indexed protocols,
+  negotiated protocols, capability transfer
+- **Blocked on**: Nothing — can be implemented immediately (no IO infrastructure dependency)
+- **Implementation design**: `docs/tracking/2026-03-05_IO_IMPLEMENTATION_DESIGN.md` §7, Phase IO-J
 - **Source**: `docs/tracking/2026-03-05_IO_LIBRARY_DESIGN_V2.md` §10, `docs/tracking/2026-03-03_SESSION_TYPE_DESIGN.md` §8
 
 ### IO Bridge Propagators (NOT STARTED — Phase IO-B)

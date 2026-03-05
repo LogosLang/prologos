@@ -32,6 +32,9 @@
 | IO-I | I2: `extract-capability-requirements` for `expr-app` | | | `FileCap "/data"` extraction |
 | IO-I | I3: Cap-type bridge for applied caps | | | α/γ for `expr-app` cap types |
 | IO-I | I4: Path-indexed cap tests | | | End-to-end dependent caps |
+| IO-J | J1: Elaborator binder scope | | | Extend gamma for dep session continuation |
+| IO-J | J2: Runtime dep send/recv | | | `sess-dsend`/`sess-drecv` predicates + `substS` |
+| IO-J | J3: Grammar + E2E tests | | | Update grammar.ebnf; dep session E2E tests |
 
 ---
 
@@ -78,7 +81,7 @@ surface, design rationale, and example programs. This document assumes familiari
 
 ### Scope
 
-**In scope** (Phases IO-A through IO-I):
+**In scope** (Phases IO-A through IO-J):
 - Opaque FFI marshalling, Path type, IOError type
 - IO bridge propagator infrastructure
 - Boundary operation runtime (`proc-open`)
@@ -89,9 +92,9 @@ surface, design rationale, and example programs. This document assumes familiari
 - CSV reading/writing
 - Capability inference wired into compilation pipeline
 - Dependent capabilities (`FileCap "/data"`) — path-indexed authority proofs
+- Dependent send/receive (`!:`/`?:`) — value-dependent session protocols
 
 **Out of scope** (see §19 Deferred):
-- Dependent send/receive (`!:`/`?:`) — blocked on reader/parser token work
 - Network IO (`connect`/`listen`) — Phase 2+
 - Database IO (`db-open`, SQLite) — Phase 2+
 - Relational integration (`:source csv` on `defr`) — Phase 3+
@@ -155,7 +158,7 @@ Decisions resolved in Phase I (IO Library Design V2 §12) plus new implementatio
 | `proc-open` | Struct, parser, elaborator, type-checker | `compile-live-process` match arm — currently falls through silently at L636 |
 | `proc-connect` | Struct, parser, elaborator, type-checker | Same — no runtime match arm |
 | `proc-listen` | Struct, parser, elaborator, type-checker | Same — no runtime match arm |
-| `sess-dsend`/`sess-drecv` | Struct, `dual`/`substS`/`unfoldS` | No WS reader tokens (`!:`/`?:`); no runtime match arm |
+| `sess-dsend`/`sess-drecv` | Struct, `dual`/`substS`/`unfoldS`, reader, preparse, parser, type-checker, pretty-printer | Elaborator discards binder name (§7.2 Gap 1); runtime predicates exclude dsend/drecv (§7.2 Gap 2) |
 | Cap inference in compile path | `run-capability-inference` function | Wired into REPL `(cap-closure)` only, not normal compilation |
 
 ---
@@ -492,47 +495,104 @@ directly generalizes to these cases.
 
 ## 7. Dependent Send/Receive
 
-### 7.1 Current State
+### 7.1 Current State — Much Further Along Than Previously Documented
 
-`sess-dsend` and `sess-drecv` structs exist in `sessions.rkt` (L33-34). `dual`, `substS`,
-and `unfoldS` all handle them correctly. But:
+The pipeline for `!:`/`?:` is **almost entirely complete**. The prior claim that this
+was "blocked on reader/parser token work" was stale and incorrect. Here is the actual
+layer-by-layer status:
 
-- **No WS reader tokens**: `!:` and `?:` are not tokenized
-- **No elaboration binding**: The value sent/received is not bound in the continuation scope
-- **No runtime match**: `compile-live-process` has no case for dependent sessions
+| Layer | Status | File | Notes |
+|-------|--------|------|-------|
+| WS reader (`!:`/`?:` tokens) | **DONE** | `reader.rkt` L636-658 | Tokenize as `'!:` / `'?:` symbols |
+| Session preparse | **DONE** | `macros.rkt` L826-1075 | `desugar-session-ws`, `regroup-session-tokens` handle `!:` / `?:` |
+| Surface syntax structs | **DONE** | `surface-syntax.rkt` L1066-1067 | `surf-sess-dsend`, `surf-sess-drecv` |
+| Sexp parser | **DONE** | `parser.rkt` L4681-4723 | `(DSend (n : T) Cont)` / `(DRecv (x : T) Cont)` |
+| Elaborator | **GAP** | `elaborator.rkt` L3201-3215 | Binder name **discarded** — continuation cannot reference bound variable |
+| Sessions IR | **DONE** | `sessions.rkt` L33-34 | `dual`, `substS`, `unfoldS` all correct |
+| Type-checker | **DONE** | `typing-sessions.rkt` L146-177 | `substS` on send; `ctx-extend` on recv |
+| Runtime propagator | **GAP** | `session-runtime.rkt` L64-70 | `sess-send-like?`/`sess-recv-like?` exclude `sess-dsend`/`sess-drecv` |
+| Pretty-printer | **DONE** | `pretty-print.rkt` L1246-1251 | Fresh name generation |
+| Grammar docs | **STALE** | `grammar.ebnf` L1099-1100 | WS operator syntax not documented |
+| Tests (existing) | **PARTIAL** | `test-session-parse-02.rkt`, `test-session-ws-01.rkt` | Parse + WS desugar pass; no E2E dependent-type tests |
 
-### 7.2 Why This Is Deferred
+### 7.2 The Two Real Gaps
 
-Dependent send/receive is needed for schema-typed IO (e.g., "send a number `n`, then
-receive exactly `n` strings"). This is a powerful feature but not required for basic
-file IO, where the protocol is static. The core IO library (Phases IO-A through IO-H)
-uses only non-dependent session types.
+**Gap 1: Elaborator binder scope** (`elaborator.rkt` L3201-3208)
 
-### 7.3 What Phases IO-A–H Build Without It
+The `name` from `surf-sess-dsend`/`surf-sess-drecv` is discarded during elaboration.
+For `?: n Nat . ? [Vec String n] . end` to work, the elaborator must extend gamma with
+`n : Nat` when elaborating the continuation session body (exactly as `expr-Pi` binding
+works for function types).
 
-All IO session protocols in this design use non-dependent `sess-send`/`sess-recv`:
+```racket
+;; Current (L3201-3208): name is discarded
+[(surf-sess-dsend name type-surf cont-surf _loc)
+ (let ([ty (elaborate type-surf)])
+   (let ([cont (elaborate-session-body cont-surf ...)])
+     (maybe-wrap-throws (sess-dsend ty cont) throws-type)))]
 
-```prologos
-session FileRead
-  +>
-    | :read-all  -> ? [Result String IOError] . end
-    | :read-line -> ? [Result [Option String] IOError] . FileRead
-    | :close     -> end
+;; Fix: extend gamma before elaborating continuation
+[(surf-sess-dsend name type-surf cont-surf _loc)
+ (let ([ty (elaborate type-surf)])
+   (let ([cont (parameterize ([current-gamma (ctx-extend (current-gamma) ty 'mw)])
+                 (elaborate-session-body cont-surf ...))])
+     (maybe-wrap-throws (sess-dsend ty cont) throws-type)))]
 ```
 
-No value binds in the continuation. The type of the next operation does not depend on
-the value sent or received. This covers all of: file read, file write, CSV, console IO.
+The same pattern applies to `surf-sess-drecv`. This is ~10 lines of change.
 
-### 7.4 Implementation Sketch (for Phase IO-I)
+**Gap 2: Runtime predicates** (`session-runtime.rkt` L64-70)
 
-When dependent send/receive is eventually implemented:
+`sess-send-like?` and `sess-recv-like?` do not include the dependent variants:
 
-1. **WS reader**: Tokenize `!:` as `$sess-dep-send`, `?:` as `$sess-dep-recv`
-2. **Parser**: `parse-session-op` handles `$sess-dep-send`/`$sess-dep-recv` with a
-   binder name and type: `?: n Nat . ? [Vec String n] . end`
-3. **Elaboration**: Bind the variable in the continuation scope (like Pi binding)
-4. **Runtime**: `sess-dsend-like?`/`sess-drecv-like?` predicates; `compile-live-process`
-   captures the actual value and substitutes it into the continuation session type
+```racket
+;; Current:
+(define (sess-send-like? v) (or (sess-send? v) (sess-async-send? v)))
+
+;; Fix (add sess-dsend):
+(define (sess-send-like? v) (or (sess-send? v) (sess-async-send? v) (sess-dsend? v)))
+(define (sess-send-like-cont v)
+  (cond [(sess-send? v) (sess-send-cont v)]
+        [(sess-async-send? v) (sess-async-send-cont v)]
+        [(sess-dsend? v) (sess-dsend-cont v)]))
+
+;; Same for recv:
+(define (sess-recv-like? v) (or (sess-recv? v) (sess-async-recv? v) (sess-drecv? v)))
+(define (sess-recv-like-cont v)
+  (cond [(sess-recv? v) (sess-recv-cont v)]
+        [(sess-async-recv? v) (sess-async-recv-cont v)]
+        [(sess-drecv? v) (sess-drecv-cont v)]))
+```
+
+Additionally, the runtime needs to substitute the actual sent value into the continuation
+session type (using `substS`). Currently `compile-live-process` advances the session cell
+via `sess-send-like-cont` which just extracts the continuation. For dependent send, the
+continuation must have `substS` applied with the actual value:
+
+```racket
+;; In the Send match arm, after writing the value:
+(define raw-cont (sess-send-like-cont sess))
+(define actual-cont
+  (if (sess-dsend? sess)
+      (substS raw-cont 0 val)  ;; substitute sent value into continuation
+      raw-cont))
+```
+
+### 7.3 What Dependent Sessions Enable
+
+Beyond schema-typed IO, dependent send/receive is essential for:
+
+- **Length-indexed protocols**: `!: n Nat . ! [Vec String n] . end` — send exactly `n` items
+- **Schema-typed file reading**: `?: header [List String] . ? [List [Record header]] . end`
+- **Negotiated protocols**: `!: format Keyword . ? [FormatData format] . end` — response type depends on request
+- **Capability transfer**: `!: cap CapType . ? [Attested cap] . end` — prove authority was received
+
+### 7.4 No Dependency on IO Infrastructure
+
+Dependent send/receive is a session type feature, not an IO feature. It has **zero
+dependency** on Phases IO-A through IO-D. It can be implemented immediately, in parallel
+with the IO infrastructure phases. The two gaps are small (~20 lines total) and all
+supporting infrastructure (IR, typing, parsing, reader) is complete.
 
 ---
 
@@ -1464,12 +1524,17 @@ IO-A1 (Opaque FFI) ──┐
                       ├── IO-B (IO Bridge) ── IO-C (Boundary Ops) ── IO-D (Core File IO) ──┬── IO-E (Session Protocols)
 IO-A2 (Path/IOError) ┘                                                                     ├── IO-F (Functional IO)
                                                                                             ├── IO-G (CSV)
-                                                                                            ├── IO-H (Cap Inference) ── IO-I (Dependent Caps)
-                                                                                            └── IO-I can start after IO-H
+                                                                                            └── IO-H (Cap Inference) ── IO-I (Dependent Caps)
+
+IO-J (Dep Send/Recv) ── no dependencies on IO-A through IO-I; can be done immediately
 ```
 
 IO-E, IO-F, IO-G, IO-H, and IO-I are independent of each other (except IO-I depends on
 IO-H for pipeline integration). They can be implemented in any order after IO-D.
+
+**IO-J has no IO dependencies** — it fixes two small gaps in the existing session type
+infrastructure. It can and should be implemented first, as dependent protocols are
+essential for the IO library's typed session patterns.
 
 ---
 
@@ -1784,6 +1849,64 @@ IO-H for pipeline integration). They can be implemented in any order after IO-D.
 
 ---
 
+### Phase IO-J: Dependent Send/Receive
+
+**Priority**: HIGH — no IO dependencies, can be implemented immediately.
+Only two small gaps remain (see §7 for full analysis).
+
+#### IO-J1: Elaborator Binder Scope
+
+**Goal**: `surf-sess-dsend`/`surf-sess-drecv` extend gamma with the bound variable
+when elaborating the continuation, so `?: n Nat . ? [Vec String n] . end` resolves `n`.
+
+**Files modified**:
+| File | Change |
+|------|--------|
+| `racket/prologos/elaborator.rkt` | L3201-3215: extend gamma with binder in `surf-sess-dsend`/`surf-sess-drecv` cases (~10 lines) |
+
+**Tests**: Part of `tests/test-io-dep-session-01.rkt` (~5 tests)
+**Depends on**: Nothing — all other layers are complete
+
+#### IO-J2: Runtime Dependent Send/Recv
+
+**Goal**: `sess-send-like?`/`sess-recv-like?` include `sess-dsend`/`sess-drecv`;
+`compile-live-process` applies `substS` to substitute actual values into dependent
+continuation session types.
+
+**Files modified**:
+| File | Change |
+|------|--------|
+| `racket/prologos/session-runtime.rkt` | L64-70: extend predicates + cont accessors for dsend/drecv (~8 lines) |
+| `racket/prologos/session-runtime.rkt` | L428-485: add `substS` application in send path for `sess-dsend` (~5 lines) |
+
+**Tests**: Part of `tests/test-io-dep-session-01.rkt` (~5 tests)
+**Depends on**: IO-J1
+
+#### IO-J3: Grammar Update + E2E Tests
+
+**Goal**: Update `grammar.ebnf` with WS-mode `!:` / `?:` syntax (currently only documents
+sexp forms). Full end-to-end tests through WS reader → preparse → parse → elaborate →
+type-check → runtime for dependent session types.
+
+**Files modified**:
+| File | Change |
+|------|--------|
+| `docs/spec/grammar.ebnf` | Add WS-mode `!: name Type` / `?: name Type` operator syntax |
+| `docs/spec/grammar.org` | Update prose companion with examples |
+
+**Tests**: `tests/test-io-dep-session-02.rkt` (~8 E2E tests)
+- `?: n Nat . ? [Vec String n] . end` — length-indexed recv
+- `!: format Keyword . ? [FormatData format] . end` — negotiated protocol
+- Duality of dependent session types
+- Process runtime with dependent send/recv: values substituted correctly
+- Type error on mismatched dependent type
+
+**Depends on**: IO-J2
+
+**Total Phase IO-J tests**: ~18 across `test-io-dep-session-01.rkt` and `test-io-dep-session-02.rkt`
+
+---
+
 ### Summary Table
 
 | Phase | Sub-phase | Description | Tests | Depends On |
@@ -1809,7 +1932,10 @@ IO-H for pipeline integration). They can be implemented in any order after IO-D.
 | IO-I | I2 | `extract-capability-requirements` for `expr-app` | ~3 | I1 |
 | IO-I | I3 | Cap-type bridge for applied caps | ~4 | I1 |
 | IO-I | I4 | Path-indexed cap E2E | ~4 | I2, I3 |
-| **Total** | | | **~155** | |
+| IO-J | J1 | Elaborator binder scope | ~5 | — (independent) |
+| IO-J | J2 | Runtime dep send/recv | ~5 | J1 |
+| IO-J | J3 | Grammar + E2E tests | ~8 | J2 |
+| **Total** | | | **~173** | |
 
 ---
 
@@ -1819,7 +1945,6 @@ IO-H for pipeline integration). They can be implemented in any order after IO-D.
 
 | Feature | Reason | Phase | Blocked On |
 |---------|--------|-------|------------|
-| Dependent send/receive (`!:`/`?:`) | Reader/parser token work needed | IO-J | WS reader tokens |
 | Network IO (`connect`/`listen`) | Different FFI layer (sockets) | IO-K | IO-B infrastructure |
 | Database IO (`db-open`, SQLite) | Opaque db connections + SQL | IO-L | IO-A1 (opaque) + Racket `db` lib |
 | Relational integration (`:source csv`) | Depends on relational language maturity | IO-M | CSV + relational subsystem |
