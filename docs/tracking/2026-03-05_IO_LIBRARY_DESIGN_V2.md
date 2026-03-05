@@ -513,10 +513,12 @@ The type system ensures every IO error path is handled.
 lib/prologos/
   data/
     path.prologos            ;; Path type + pure operations (no IO)
+    bytes.prologos           ;; Bytes type (binary data)
     io-error.prologos        ;; IOError data type
   core/
-    io.prologos              ;; Convenience functions (read-file, write-file, etc.)
-    io-bridge.prologos       ;; FFI layer (foreign imports from Racket)
+    io.prologos              ;; Session-based IO — the "Prologos way" (recommended)
+    fio.prologos             ;; Functional IO — linear handle threading (alternative)
+    io-bridge.prologos       ;; FFI layer (foreign imports from Racket, shared)
     io-protocols.prologos    ;; Session types for IO (FileRead, FileWrite, etc.)
     csv.prologos             ;; CSV reading/writing
   io/
@@ -525,6 +527,10 @@ lib/prologos/
     db.prologos              ;; Database operations (query, execute, etc.)
     console.prologos         ;; Stdin/stdout/stderr
 ```
+
+The two IO modules (`io` and `fio`) share the same bridge layer and capability
+model. `io` exposes session channels; `fio` exposes linear handles backed by
+channels internally. Both are available; `io` is the default/recommended path.
 
 All modules use `:no-prelude` (standard for library code). The convenience
 functions (`read-file`, `write-file`, `println`) are exported to the prelude
@@ -616,91 +622,77 @@ that hiding it behind an import would annoy beginners. But filesystem access is 
 capability — making the user write `use prologos.core.io` signals "you are opting
 into side effects" and makes the boundary visible.
 
-### 12.2 Handle vs. Channel — Design Tradeoff Analysis
+### 12.2 Handle vs. Channel — RESOLVED: Hybrid (Option C)
 
-The question: at Tier 2 (bracketed resource access), should the user interact with
-a **linear handle** (traditional functional IO) or a **session channel** (process-based)?
+**Decision**: Support both linear handles and session channels, in separate modules
+with clear separation. Session-based IO is the recommended path; handle-based IO is
+the functional escape hatch.
 
-**Approach A: Linear Handle (simpler mental model)**
+**Module separation**:
 
-```prologos
-;; Handle is an opaque linear value — functions take and return it
-spec with-open : Path -> Mode -> <(h : Handle :1) -> <Handle :1 * A>> -> Result A IOError
+- **`prologos.core.io`** — Session-based IO. `with-session`, `select`, channel
+  operations. The "Prologos way." This is what `use prologos.core.io` gives you.
+  Steers toward sessions as the natural approach.
+- **`prologos.core.fio`** — Functional IO. Linear handle threading, `with-open`,
+  pure functions that take and return handles. Familiar to Rust/Idris/Clean devs.
+  The `f` prefix signals "functional" — no session concepts needed.
 
-defn process-file [p]
-  with-open p :read fn [h :1]
-    let (h line1) := [read-line h]
-    let (h line2) := [read-line h]
-    let (h _) := [read-line h]     ;; must thread handle through every call
-    (h [line1 line2])               ;; return handle + result
+Both modules share the same underlying IO bridge propagators and capability model.
+Same error types (`IOError`), same capability requirements (`ReadCap`, `WriteCap`).
+The difference is the user-facing API, not the implementation.
 
-;; Convenience on top
-defn read-all-lines [h :1]
-  match [read-line h]
-    | (h some line) -> let (h rest) := [read-all-lines h]
-                       (h [cons line rest])
-    | (h none) -> (h nil)
-```
+**Internally, `fio` handles are backed by session channels** — `with-open` creates
+a channel to the IO service but presents a handle API. This means no code
+duplication in the runtime. `fio` is a thin ergonomic layer over `io`.
 
-**Pros**: Familiar to Idris 2/Mercury/Clean users. Simple mental model — a handle is
-a value, functions are pure transformations. No process/channel/session concepts needed.
+**Interop**: A program can use both modules. A `defn main` (Tier 1) using `fio`-style
+`read-file` can coexist with a `defproc` (Tier 3) using session-typed channels. Both
+are backed by the same IO bridge, so there are no coherence issues.
 
-**Cons**: Handle threading is verbose (`let (h x) := ...` everywhere). Every read
-operation returns a new handle. The user must remember to return the handle from the
-body. Accidental double-use is a type error, but the ergonomics are clunky.
-
-**Approach B: Session Channel (protocol-verified)**
+**Session-based IO (`prologos.core.io`)**:
 
 ```prologos
-;; Channel endpoint with session type — select operations, receive results
-spec with-open : Path -> Mode -> <(ch : FileRW) -> A> -> Result A IOError
-
 defn process-file [p]
-  with-open p :read fn [ch]
+  with-session p :read fn [ch]
     select ch :read-line
     let line1 := ch ?
     select ch :read-line
     let line2 := ch ?
-    select ch :close               ;; explicit close in protocol
-    [line1 line2]                   ;; just return the data
+    select ch :close
+    [line1 line2]
 ```
 
-**Pros**: No handle threading — the channel manages sequencing via the session protocol.
-The user selects operations and receives results. Close is part of the protocol, verified
-by the type checker. Composes naturally with Tier 3 (full `defproc`). More expressive —
-the session type can encode complex interactions (branching, recursion, dependent values).
+No handle threading. The channel manages sequencing via the session protocol.
+Close is part of the protocol, verified by the type checker. Composes naturally
+with Tier 3 (`defproc`). The session type can encode complex interactions
+(branching, recursion, dependent values).
 
-**Cons**: Introduces session type concepts at Tier 2. `select` / `ch ?` is unfamiliar
-syntax for pure functional programmers. The mental model is "I'm talking to an IO
-service" rather than "I'm transforming a handle."
-
-**Approach C: Hybrid (both available, progressive disclosure)**
+**Functional IO (`prologos.core.fio`)**:
 
 ```prologos
-;; Tier 2a: Handle-style — for users who want simple linear threading
 defn process-file [p]
   with-open p :read fn [h :1]
-    let (h content) := [read-all h]
-    (h content)
-
-;; Tier 2b: Channel-style — for users who want protocol control
-defn process-file-v2 [p]
-  with-session p :read fn [ch]
-    select ch :read-line
-    let line := ch ?
-    select ch :close
-    line
+    let (h line1) := [read-line h]
+    let (h line2) := [read-line h]
+    let (h _) := [read-line h]
+    (h [line1 line2])
 ```
 
-Handle-style uses linear threading (simpler, familiar). Channel-style uses session
-protocols (more powerful, verified). Both are available. Progressive disclosure:
-start with handles, graduate to channels when you need protocol control.
+Familiar to Idris 2/Mercury/Clean users. Simple mental model — a handle is a
+linear value, functions are pure transformations. No session concepts needed.
+Verbose (handle threading), but correct and predictable.
 
-**The handle is internally backed by a channel** — `with-open` creates a channel to the
-IO service but presents a handle API. `with-session` exposes the channel directly.
-Same underlying mechanism, two interfaces at different abstraction levels.
+**Ergonomic roadmap for `fio`**: The linear threading verbosity is acknowledged.
+Phase D ships with explicit threading. A later ergonomic iteration may add
+`!`-rebind sugar (e.g., `let line := [read-line! h]` where `!` signals "consume
+and rebind `h`"). This defers syntax design until real usage patterns emerge.
 
-**Decision needed**: Should we support both (Approach C), or commit to one?
+**Steering toward sessions**: `prologos.core.io` is the default import.
+Documentation leads with session examples. `prologos.core.fio` is documented
+as "for users who prefer functional-style linear handle threading." The
+progressive disclosure path is: Tier 1 (convenience functions, no IO concepts
+visible) → Tier 2 (`fio` handles or `io` sessions) → Tier 3 (`defproc` with
+full channel management).
 
 ### 12.3 Binary IO and SQLite Capstone — On Roadmap
 
