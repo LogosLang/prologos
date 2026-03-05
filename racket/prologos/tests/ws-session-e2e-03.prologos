@@ -1,0 +1,32 @@
+;; E2E test: Async session types (!!/??), mixed async/sync,
+;; duality, and :scheduler-io strategy property.
+
+session AsyncPing
+  !! String
+  ?? String
+  end
+
+defproc pinger : AsyncPing
+  self !! "ping"
+  reply := self ??
+  stop
+
+session MixedProto
+  !! Nat
+  ? String
+  ! Nat
+  ?? Nat
+  end
+
+defproc mixed-client : MixedProto
+  self !! 42N
+  msg := self ?
+  self ! 7N
+  n := self ??
+  stop
+
+dual AsyncPing
+
+strategy async-plan
+  :scheduler-io :blocking-ok
+  :fuel 100000

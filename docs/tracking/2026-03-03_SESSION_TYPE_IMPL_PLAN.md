@@ -36,11 +36,11 @@
 | S6 | S6a: Strategy parsing + registration | ✅ | `4ddc546` | 14 tests, full pipeline + validation |
 | S7 | S7a: Channel cells | ✅ | `6442f7d` | session-runtime.rkt, 20 tests |
 | S7 | S7b: Process-to-propagator compilation | ✅ | `60f4e33` | compile-live-process, 19 tests |
-| S7 | S7c: End-to-end execution | ☐ | | |
-| S7 | S7d: Strategy application | ☐ | | |
-| S8 | S8a: `!!`/`??` operators | ☐ | | |
-| S8 | S8b: Promise cells + `@` | ☐ | | |
-| S8 | S8c: Integration tests | ☐ | | |
+| S7 | S7c: End-to-end execution | ✅ | `7b4fedb` | Process registry, spawn command, 17 E2E tests |
+| S7 | S7d: Strategy application | ✅ | `89f4933` | spawn-with command, fuel threading, 11 tests |
+| S8 | S8a: `!!`/`??` operators + `:scheduler-io` | ✅ | `3ffc9a8` | Type-level async, 30 tests (21 sexp + 9 WS) |
+| S8 | S8b: Promise cells + `@` | DEFERRED | | Requires concurrent runtime (see DEFERRED.md) |
+| S8 | S8c: Integration tests | ✅ | | 8 E2E tests via .prologos file |
 
 ---
 
@@ -574,7 +574,7 @@ following the P5c (type↔multiplicity) and cap-type-bridge patterns.
 **Files**: surface-syntax.rkt, parser.rkt, macros.rkt, elaborator.rkt, driver.rkt
 
 1. `(struct surf-strategy (name properties srcloc) #:transparent)`
-2. Parse: `(strategy name :fairness :round-robin :fuel 50000 :io :nonblocking)`
+2. Parse: `(strategy name :fairness :round-robin :fuel 50000 :scheduler-io :nonblocking)`
 3. WS preparse: keyword-block desugaring (reuses implicit map syntax pattern)
 4. Registry (modeled on solver registry, macros.rkt line 1511):
    ```racket
@@ -643,7 +643,7 @@ Execute via `run-to-quiescence`.
 
 1. Apply `:fuel` to `run-to-quiescence` fuel parameter
 2. Apply `:fairness` to propagator scheduling order
-3. Apply `:io` to IO-bridge propagator behavior
+3. Apply `:scheduler-io` to IO-bridge propagator behavior
 4. `spawn proc :strategy name` at use site
 
 **Tests**: ~8 tests added to runtime tests.

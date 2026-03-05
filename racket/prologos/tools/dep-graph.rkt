@@ -529,6 +529,8 @@
    (test-dep '(driver.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt pretty-print.rkt session-lattice.rkt sessions.rkt syntax.rkt) #f)
    'test-session-async-ws-01.rkt
    (test-dep '(driver.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt sessions.rkt) #t)
+   'test-session-async-e2e.rkt
+   (test-dep '(driver.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt sessions.rkt) #f)
    'test-session-throws-01.rkt
    (test-dep '(driver.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt sessions.rkt) #f)
    'test-session-type-bridge-01.rkt
