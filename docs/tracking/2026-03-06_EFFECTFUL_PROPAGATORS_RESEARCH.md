@@ -710,45 +710,213 @@ sufficient for Phase 0.
 
 **No changes needed.**
 
-### Phase 1 (Near-term): Formalize the Architecture
+### Phase 1 (Near-term): Formalize the Architecture — COMPLETE
 
-Document the current approach as "Stratified Effect Barriers" in the
-architectural principles. Make the implicit strata explicit:
+**Status**: Formalized below. See also `docs/tracking/principles/EFFECTFUL_COMPUTATION_ON_PROPAGATORS.org`
+for the general Layered Recovery Principle that subsumes this.
 
-1. Pre-execution stratum: type checking, capability verification, protocol enforcement
-2. Execution stratum: sequential effect execution via AST walk
-3. Post-execution stratum: resource leak detection, protocol completion checking
+#### The Three Strata
 
-This costs nothing to implement — it's documentation of what we already do.
+The current `compile-live-process` + `rt-execute-process` pipeline implements
+three strata. They are not separated into distinct phases — they are *interleaved*
+within the sequential AST walk — but the logical separation is clear:
 
-### Phase 2 (Medium-term): Timestamped Effect Cells
+**Stratum 1: Pre-Execution Verification (Monotone)**
 
-When the concurrent runtime is built (deferred from S8b), Architecture B
-becomes relevant. Concurrent processes produce effects on independent
-timelines; timestamps (vector clocks for concurrent processes) provide
-the causal ordering needed to sequence their execution.
+Before any IO effect executes, the type system has already verified:
+- Session type checking (`session-propagators.rkt`, S4 layer) — the process
+  conforms to its declared protocol
+- Capability verification (`macros.rkt`, cap inference) — the process has
+  authority for the IO operations it performs
+- QTT multiplicity checking — linear resources are used exactly once
+- Type checking of send/recv payloads — values match declared types
+
+These checks happen during elaboration (before `compile-live-process` is called).
+They use propagator networks and constraint solving — entirely monotone.
+
+**Stratum 2: Effect Execution (Non-Monotone, Sequential)**
+
+`compile-live-process` walks the process AST recursively. At each node:
+
+1. `proc-open`: Opens a file/resource port immediately (side effect)
+   ```
+   (io-bridge-open-file ... io-cell)  ;; line ~859
+   ```
+2. `proc-send`: Writes to the port immediately if IO channel
+   ```
+   (write-string str-val port)        ;; line ~609
+   (flush-output port)                ;; line ~610
+   ```
+3. `proc-recv`: Reads from the port immediately if IO channel
+   ```
+   (define data (read-string 1048576 port))  ;; line ~654
+   ```
+4. `proc-stop`: Closes all IO ports immediately
+   ```
+   (close-input-port port) / (close-output-port port)  ;; line ~565-566
+   ```
+
+The walk order is the effect order. The session type's continuation structure
+dictates the walk order (each node recurses into `cont`). Therefore:
+
+```
+Session type order = AST structure = walk order = effect execution order
+```
+
+This chain of equalities is the informal "soundness proof" for Architecture A.
+It works because the AST is a tree (not a DAG), the walk is recursive
+(left-to-right, depth-first), and the session type's continuation structure
+mirrors the tree exactly.
+
+Alongside effect execution, the walk also installs propagator network
+infrastructure:
+- Session advancement propagators (monotone — advance session cell on each step)
+- Message cell writes (lattice values for session verification)
+- Passive guard propagators at `proc-stop` (verify all channels at `end`)
+
+This infrastructure participates in Stratum 3.
+
+**Stratum 3: Post-Execution Verification (Monotone)**
+
+After `compile-live-process` returns, `rt-execute-process` runs the propagator
+network to quiescence:
+
+```racket
+;; rt-execute-process, line ~904
+(define rnet5 (rt-run-to-quiescence rnet4))
+```
+
+During quiescence, session advancement propagators fire. If any session cell
+reaches `sess-top` (contradiction), the process has violated its protocol.
+The passive guard at `proc-stop` checks that all channels are at `sess-end`.
+
+This is a monotone fixed-point computation. It verifies post-conditions:
+- All channels completed their protocols (reached `end`)
+- No protocol violations occurred (no `sess-top`)
+- Message types matched expectations (no lattice contradictions)
+
+If contradictions are found:
+```racket
+;; rt-execute-process, line ~906-908
+[(rt-contradiction? rnet5)
+ (rt-exec-result 'contradiction bindings rnet5 trace)]
+```
+
+#### The Barrier Pattern
+
+```
+┌───────────────────────────────────────────────────┐
+│ Stratum 1: PRE-EXECUTION (monotone)               │
+│   Type checking, capability inference,             │
+│   session type verification, QTT checking          │
+│   [elaboration + constraint solving]               │
+├───────────────── BARRIER ─────────────────────────┤
+│ Stratum 2: EFFECT EXECUTION (non-monotone)         │
+│   Sequential AST walk with inline IO execution     │
+│   open → write/read → close in walk order          │
+│   [compile-live-process]                           │
+├───────────────── BARRIER ─────────────────────────┤
+│ Stratum 3: POST-EXECUTION (monotone)               │
+│   Propagator network runs to quiescence            │
+│   Session advancement, protocol completion,        │
+│   contradiction detection                          │
+│   [rt-run-to-quiescence]                           │
+└───────────────────────────────────────────────────┘
+```
+
+The barriers are implicit — they're the function call boundaries between
+`elaborate`/`type-check` (Stratum 1), `compile-live-process` (Stratum 2),
+and `rt-run-to-quiescence` (Stratum 3).
+
+#### Interleaving Within Stratum 2
+
+A subtle point: within `compile-live-process`, effect execution and propagator
+installation are interleaved. At each AST node, the function both:
+- Executes the IO effect (non-monotone: writes to file)
+- Installs session advancement propagators (monotone: builds network)
+
+This interleaving is safe because:
+1. The propagators installed during the walk don't fire until
+   `rt-run-to-quiescence` (they're added to the network but the worklist
+   isn't processed)
+2. The IO effects are order-independent of the propagator installation
+   (writing to a file doesn't affect the propagator network's cells)
+3. The walk order ensures that both effects and propagators are installed
+   in session-type order
+
+In a future Architecture D implementation, this interleaving would be
+separated: propagators would be installed during the walk (monotone),
+and effects would be collected and executed after quiescence (at the
+Layer 5 barrier). The current approach conflates these because single-channel
+sequential execution makes the separation unnecessary.
+
+#### Correctness Argument
+
+Architecture A is correct for single-channel, single-process IO because:
+
+1. **Session fidelity** (Stratum 1): The type checker verifies the process
+   conforms to the session type. If type checking succeeds, the process
+   performs the correct operations in the correct order.
+
+2. **Walk order = session order** (Stratum 2): The recursive walk follows
+   the continuation structure, which mirrors the session type. Effects
+   execute in the order the session type prescribes.
+
+3. **Post-verification** (Stratum 3): After execution, the propagator network
+   confirms that the session advancement reached `end` on all channels. If
+   it didn't, a protocol violation is reported.
+
+The argument breaks down for multi-channel concurrent processes because:
+- The walk visits channels sequentially, but some effects should be concurrent
+- `proc-par` processes two sub-processes sequentially (left then right), but
+  their effects may need interleaving
+- Cross-channel data dependencies may require non-walk ordering
+
+This is exactly where Architecture D (session-derived ordering via the Galois
+connection) becomes necessary. See `2026-03-06_SESSION_TYPES_AS_EFFECT_ORDERING.org`.
+
+### Phase 2 (Medium-term): Session-Derived Effect Ordering (Architecture D)
+
+**Updated**: The Mar 6 research session concluded that Architecture D
+(session-derived ordering) is preferable to Architecture B (timestamped
+effect cells) for the concurrent runtime. See
+`2026-03-06_SESSION_TYPES_AS_EFFECT_ORDERING.org` §10-11 for the full
+analysis and architecture decision (A + D, B subsumed).
+
+When the concurrent runtime is built (deferred from S8b), Architecture D
+provides the ordering discipline:
+
+- Session advancement as Lamport clocks (per-channel total order)
+- Vector clocks for multi-channel partial order
+- Cross-channel data dependencies via transitive closure (monotone fixed point)
+- ATMS for branching effect orders (`proc-case`)
+- Effect handler at the control boundary (Layer 5)
 
 Key design questions for Phase 2:
-- Are timestamps syntactic positions (simple, static) or logical clocks
-  (dynamic, more expressive)?
-- How do `proc-par` effects interleave? (Vector timestamps suggest
-  partial order — concurrent effects from independent branches can
-  execute in either order if they don't conflict)
-- Does the effect cell merge function need to handle conflicts?
-  (Concurrent writes to the same file from parallel processes)
+- How does `proc-par` interact with effect positions? (Each sub-process
+  gets independent session clocks; shared channels create synchronization
+  points via vector clock comparison)
+- When should effects be collected vs. executed eagerly? (Collect in
+  the general case; eager execution for single-channel degenerate case
+  preserves current behavior)
+- Can the data-flow analysis be done incrementally by propagators?
+  (Yes — transitive closure is monotone; each new data-flow edge
+  triggers propagation to compute new transitive edges)
 
 ### Phase 3 (Long-term): Full Reactive Effect Integration
 
 Architecture C — topological scheduling of effect propagators with
-freeze semantics — is the end goal if we want effects to be fully
-integrated into the propagator substrate. This would enable:
+freeze semantics — remains a research direction for effects that are
+neither session-typed nor sequentially walked. This would enable:
 - Effect-aware propagation: a propagator that produces an effect *and*
   consumes the effect's result in a single network
 - Compile-time effect ordering analysis (the IO-DAG is a static artifact)
 - Formal quasi-determinism guarantees via freeze
 
-This is a research problem, not an engineering task. It should be
-explored in a prototype before being integrated into the main system.
+With Architecture D available, Phase 3 is less urgent — D handles the
+common case (session-typed IO) and A handles the fallback case
+(unsessioned IO). Phase 3 would address the remaining gap: declarative
+effect specifications outside of session contexts.
 
 ---
 
