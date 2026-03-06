@@ -67,16 +67,28 @@
     ;; Bare capability reference: fvar whose name is in capability registry
     [(expr-fvar name)
      (if (capability-type? name)
-         (cap-set (seteq name))
+         (cap-set (set (bare-cap name)))
+         cap-set-bot)]
+    ;; Applied capability: (expr-app (expr-fvar cap-name) index-expr)
+    [(expr-app (? expr-fvar? f) idx)
+     (define name (expr-fvar-name f))
+     (if (capability-type? name)
+         (cap-set (set (cap-entry name idx)))
          cap-set-bot)]
     ;; Union type: join both branches
     [(expr-union left right)
      (cap-set-join (type-to-cap-set left) (type-to-cap-set right))]
-    ;; Pi with :0 capability domain: include cap, recurse on codomain
+    ;; Pi with :0 bare capability domain: include cap, recurse on codomain
     [(expr-Pi 'm0 (? expr-fvar? dom) cod)
      (define name (expr-fvar-name dom))
      (if (capability-type? name)
-         (cap-set-join (cap-set (seteq name)) (type-to-cap-set cod))
+         (cap-set-join (cap-set (set (bare-cap name))) (type-to-cap-set cod))
+         (type-to-cap-set cod))]
+    ;; Pi with :0 applied capability domain: (Pi m0 (FileCap "/data") cod)
+    [(expr-Pi 'm0 (expr-app (? expr-fvar? f) idx) cod)
+     (define name (expr-fvar-name f))
+     (if (capability-type? name)
+         (cap-set-join (cap-set (set (cap-entry name idx))) (type-to-cap-set cod))
          (type-to-cap-set cod))]
     ;; Pi with non-:0 or non-fvar domain: recurse on codomain only
     [(expr-Pi _ _ cod) (type-to-cap-set cod)]
@@ -101,19 +113,29 @@
 ;; to ensure deterministic output (important for test stability and for
 ;; type-lattice-merge which compares structurally).
 
+;; Convert a cap-entry to its type expression representation.
+;; Bare cap → (expr-fvar name), applied cap → (expr-app (expr-fvar name) idx)
+(define (cap-entry->type-expr entry)
+  (if (cap-entry-index-expr entry)
+      (expr-app (expr-fvar (cap-entry-name entry)) (cap-entry-index-expr entry))
+      (expr-fvar (cap-entry-name entry))))
+
 (define (cap-set-to-type caps)
+  ;; Sort by name for determinism
   (define members (sort (set->list (cap-set-members caps))
-                        symbol<?))
+                        (lambda (a b)
+                          (string<? (symbol->string (cap-entry-name a))
+                                    (symbol->string (cap-entry-name b))))))
   (cond
     [(null? members) type-bot]
     [(= 1 (length members))
-     (expr-fvar (car members))]
+     (cap-entry->type-expr (car members))]
     [else
      ;; Build right-associative union: C1 | (C2 | C3)
-     (foldr (lambda (name acc)
+     (foldr (lambda (entry acc)
               (if (type-bot? acc)
-                  (expr-fvar name)
-                  (expr-union (expr-fvar name) acc)))
+                  (cap-entry->type-expr entry)
+                  (expr-union (cap-entry->type-expr entry) acc)))
             type-bot
             members)]))
 
@@ -143,8 +165,8 @@
 
 (struct cap-type-bridge-result
   (type-closures       ;; hasheq: name → type-expr (from type cells)
-   cap-closures        ;; hasheq: name → (seteq cap-names) (from cap cells)
-   overdeclared        ;; hasheq: name → (seteq unused-cap-names)
+   cap-closures        ;; hasheq: name → (set of cap-entry) (from cap cells)
+   overdeclared        ;; hasheq: name → (set of cap-entry) (unused caps)
    call-graph)         ;; hasheq: name → (seteq callee-names)
   #:transparent)
 
@@ -240,15 +262,15 @@
       (define declared
         (if (and entry (pair? entry))
             (extract-capability-requirements (car entry))
-            (seteq)))
+            (set)))
       (define callees (hash-ref call-graph name (seteq)))
       ;; Exercised = union of all callees' cap-cell values (only callees
       ;; that are actual functions in the env, not type references like Nat)
       (define exercised
-        (for/fold ([caps (seteq)])
+        (for/fold ([caps (set)])
                   ([callee (in-set callees)]
                    #:when (hash-ref cap-closures callee #f))
-          (set-union caps (hash-ref cap-closures callee (seteq)))))
+          (set-union caps (hash-ref cap-closures callee (set)))))
       ;; Leaf functions (no function callees — only type refs from
       ;; extract-fvar-names) exercise their own declared caps directly.
       ;; They are terminal consumers (e.g., foreign IO bindings).
@@ -257,12 +279,11 @@
           (hash-ref cap-closures callee #f)))
       (define effective-exercised
         (if has-function-callees? exercised declared))
-      ;; Overdeclared = declared - exercised (subtype-aware)
+      ;; Overdeclared = declared - exercised (cap-entry-aware)
       (define unused
-        (for/seteq ([dcap (in-set declared)]
-                     #:unless (for/or ([ecap (in-set effective-exercised)])
-                                (or (eq? dcap ecap)
-                                    (subtype-pair? ecap dcap))))
+        (for/set ([dcap (in-set declared)]
+                  #:unless (for/or ([ecap (in-set effective-exercised)])
+                             (cap-entry-covers? ecap dcap)))
           dcap))
       (values name unused)))
 
@@ -273,5 +294,6 @@
 ;; ========================================
 
 ;; Get the set of overdeclared (unused) capabilities for a function.
+;; Returns a set of cap-entry structs.
 (define (cap-audit-overdeclared result func-name)
-  (hash-ref (cap-type-bridge-result-overdeclared result) func-name (seteq)))
+  (hash-ref (cap-type-bridge-result-overdeclared result) func-name (set)))

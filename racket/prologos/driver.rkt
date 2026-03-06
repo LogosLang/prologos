@@ -508,7 +508,7 @@
                        (format "~a requires: ~a"
                                name
                                (string-join
-                                (sort (map symbol->string (set->list closure)) string<?)
+                                (sort (map cap-entry->string (set->list closure)) string<?)
                                 ", ")))]
 
                   ;; (cap-audit name cap-name) — provenance trail query
@@ -516,7 +516,7 @@
                    (define result (run-capability-inference))
                    (define closure (capability-closure result name))
                    (cond
-                     [(not (set-member? closure cap-name))
+                     [(not (closure-has-cap-name? closure cap-name))
                       (format "~a does not require ~a" name cap-name)]
                      [else
                       (define trail (capability-audit-trail result name cap-name))
@@ -541,7 +541,7 @@
                       (define traces (authority-root-failure-traces vresult))
                       (define missing-str
                         (string-join
-                         (sort (map symbol->string (set->list missing)) string<?)
+                         (sort (map cap-entry->string (set->list missing)) string<?)
                          ", "))
                       (define trace-lines
                         (for/list ([trace (in-list traces)])
@@ -574,22 +574,22 @@
                          (format "~a" (car entry))
                          "<unknown>"))
                    ;; Capabilities from type decomposition (α direction)
-                   (define type-caps (hash-ref cap-closures name (seteq)))
+                   (define type-caps (hash-ref cap-closures name (set)))
                    (define type-caps-str
                      (if (set-empty? type-caps)
                          "∅ (pure)"
-                         (string-join (sort (map symbol->string (set->list type-caps)) string<?) ", ")))
+                         (string-join (sort (map cap-entry->string (set->list type-caps)) string<?) ", ")))
                    ;; Capabilities from call-graph inference
-                   (define inferred-caps (hash-ref cap-closures name (seteq)))
+                   (define inferred-caps (hash-ref cap-closures name (set)))
                    (define inferred-str
                      (if (set-empty? inferred-caps)
                          "∅ (pure)"
-                         (string-join (sort (map symbol->string (set->list inferred-caps)) string<?) ", ")))
+                         (string-join (sort (map cap-entry->string (set->list inferred-caps)) string<?) ", ")))
                    ;; Overdeclared
                    (define overdeclared-str
                      (if (set-empty? overdeclared-set)
                          "none"
-                         (string-join (sort (map symbol->string (set->list overdeclared-set)) string<?) ", ")))
+                         (string-join (sort (map cap-entry->string (set->list overdeclared-set)) string<?) ", ")))
                    (string-join
                     (list (format "cap-bridge ~a:" name)
                           (format "  Type: ~a" type-str)
@@ -1147,13 +1147,13 @@
         (define declared-caps (extract-capability-requirements (car entry)))
         (when (not (set-empty? declared-caps))
           ;; This is an authority root — verify that declared caps subsume closure
-          (define closure (hash-ref closures name (seteq)))
+          ;; Both declared-caps and closure are sets of cap-entry
+          (define closure (hash-ref closures name (set)))
           ;; Find capabilities in closure NOT covered by any declared cap
           (define missing
-            (for/seteq ([cap (in-set closure)]
-                        #:unless (for/or ([dcap (in-set declared-caps)])
-                                   (or (eq? cap dcap)
-                                       (subtype-pair? cap dcap))))
+            (for/set ([cap (in-set closure)]
+                      #:unless (for/or ([dcap (in-set declared-caps)])
+                                 (cap-entry-covers? dcap cap)))
               cap))
           (unless (set-empty? missing)
             (set! violations
@@ -1169,7 +1169,7 @@
           (format "  `~a` requires undeclared: {~a}"
                   name
                   (string-join
-                   (sort (map symbol->string (set->list missing)) string<?)
+                   (sort (map cap-entry->string (set->list missing)) string<?)
                    ", "))))
       (error 'capability-check
              "E2004: capability security violation — authority roots with undeclared transitive capabilities:\n~a"

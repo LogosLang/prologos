@@ -395,7 +395,7 @@
     (define vresult (verify-authority-root 'f env))
     (check-true (authority-root-failure? vresult)
                 "Should fail when closure contains uncovered capability")
-    (check-true (set-member? (authority-root-failure-missing vresult) 'HttpCap)
+    (check-true (closure-has-cap-name? (authority-root-failure-missing vresult) 'HttpCap)
                 "HttpCap should be in missing set")))
 
 (test-case "authority-root/failure-has-traces"
@@ -440,9 +440,9 @@
                         'g (cons g-type g-body)))
     (define vresult (verify-authority-root 'f env))
     (check-true (authority-root-failure? vresult))
-    (check-true (set-member? (authority-root-failure-declared vresult) 'ReadCap)
+    (check-true (closure-has-cap-name? (authority-root-failure-declared vresult) 'ReadCap)
                 "Declared set should contain ReadCap")
-    (check-false (set-member? (authority-root-failure-declared vresult) 'HttpCap)
+    (check-false (closure-has-cap-name? (authority-root-failure-declared vresult) 'HttpCap)
                  "HttpCap should NOT be in declared set")))
 
 (test-case "authority-root/multiple-missing-caps"
@@ -466,8 +466,8 @@
     (define vresult (verify-authority-root 'f env))
     (check-true (authority-root-failure? vresult))
     (define missing (authority-root-failure-missing vresult))
-    (check-true (set-member? missing 'ReadCap) "ReadCap should be missing")
-    (check-true (set-member? missing 'HttpCap) "HttpCap should be missing")))
+    (check-true (closure-has-cap-name? missing 'ReadCap) "ReadCap should be missing")
+    (check-true (closure-has-cap-name? missing 'HttpCap) "HttpCap should be missing")))
 
 ;; ========================================
 ;; Integration Tests: cap-verify REPL Command

@@ -92,35 +92,35 @@
   (check-true (set-empty? (cap-set-members cap-set-bot))))
 
 (test-case "lattice/join-union"
-  (define a (cap-set (seteq 'ReadCap)))
-  (define b (cap-set (seteq 'WriteCap)))
+  (define a (cap-set (set (bare-cap 'ReadCap))))
+  (define b (cap-set (set (bare-cap 'WriteCap))))
   (define j (cap-set-join a b))
   (check-equal? (set-count (cap-set-members j)) 2)
-  (check-true (set-member? (cap-set-members j) 'ReadCap))
-  (check-true (set-member? (cap-set-members j) 'WriteCap)))
+  (check-true (closure-has-cap-name? (cap-set-members j) 'ReadCap))
+  (check-true (closure-has-cap-name? (cap-set-members j) 'WriteCap)))
 
 (test-case "lattice/join-idempotent"
-  (define a (cap-set (seteq 'ReadCap 'WriteCap)))
+  (define a (cap-set (set (bare-cap 'ReadCap) (bare-cap 'WriteCap))))
   (define j (cap-set-join a a))
   (check-equal? (cap-set-members j) (cap-set-members a)))
 
 (test-case "lattice/subsumes-exact"
-  (define avail (cap-set (seteq 'ReadCap 'WriteCap)))
-  (define req (cap-set (seteq 'ReadCap)))
+  (define avail (cap-set (set (bare-cap 'ReadCap) (bare-cap 'WriteCap))))
+  (define req (cap-set (set (bare-cap 'ReadCap))))
   (check-true (cap-set-subsumes? avail req)))
 
 (test-case "lattice/subsumes-subtype"
   ;; ReadCap <: FsCap, so FsCap available should subsume ReadCap required
   (parameterize ([current-subtype-registry shared-subtype-reg])
-    (define avail (cap-set (seteq 'FsCap)))
-    (define req (cap-set (seteq 'ReadCap)))
+    (define avail (cap-set (set (bare-cap 'FsCap))))
+    (define req (cap-set (set (bare-cap 'ReadCap))))
     (check-true (cap-set-subsumes? avail req))))
 
 (test-case "lattice/not-subsumes"
   ;; FsCap is NOT a subtype of ReadCap
   (parameterize ([current-subtype-registry shared-subtype-reg])
-    (define avail (cap-set (seteq 'ReadCap)))
-    (define req (cap-set (seteq 'FsCap)))
+    (define avail (cap-set (set (bare-cap 'ReadCap))))
+    (define req (cap-set (set (bare-cap 'FsCap))))
     (check-false (cap-set-subsumes? avail req))))
 
 ;; ========================================
@@ -146,7 +146,7 @@
                  (expr-Pi 'mw (expr-fvar 'Nat)
                    (expr-fvar 'Nat))))
     (define caps (extract-capability-requirements ty))
-    (check-true (set-member? caps 'ReadCap))
+    (check-true (closure-has-cap-name? caps 'ReadCap))
     (check-equal? (set-count caps) 1)))
 
 (test-case "extract-caps/non-capability-m0"
@@ -166,8 +166,8 @@
                      (expr-fvar 'Nat)))))
     (define caps (extract-capability-requirements ty))
     (check-equal? (set-count caps) 2)
-    (check-true (set-member? caps 'ReadCap))
-    (check-true (set-member? caps 'HttpCap))))
+    (check-true (closure-has-cap-name? caps 'ReadCap))
+    (check-true (closure-has-cap-name? caps 'HttpCap))))
 
 ;; ========================================
 ;; Integration Tests: Inference Network
@@ -238,16 +238,16 @@
   ;; Function declares FsCap, closure needs ReadCap — FsCap subsumes ReadCap
   (parameterize ([current-subtype-registry shared-subtype-reg]
                  [current-capability-registry shared-capability-reg])
-    (define avail (cap-set (seteq 'FsCap)))
-    (define req (cap-set (seteq 'ReadCap)))
+    (define avail (cap-set (set (bare-cap 'FsCap))))
+    (define req (cap-set (set (bare-cap 'ReadCap))))
     (check-true (cap-set-subsumes? avail req))))
 
 (test-case "subsumption/insufficient"
   ;; Function declares ReadCap, needs FsCap — insufficient
   (parameterize ([current-subtype-registry shared-subtype-reg]
                  [current-capability-registry shared-capability-reg])
-    (define avail (cap-set (seteq 'ReadCap)))
-    (define req (cap-set (seteq 'FsCap)))
+    (define avail (cap-set (set (bare-cap 'ReadCap))))
+    (define req (cap-set (set (bare-cap 'FsCap))))
     (check-false (cap-set-subsumes? avail req))))
 
 ;; ========================================

@@ -111,7 +111,7 @@
   ;; type-to-cap-set on a bare capability fvar → singleton cap-set
   (parameterize ([current-capability-registry shared-capability-reg])
     (define result (type-to-cap-set (expr-fvar 'ReadCap)))
-    (check-true (set-member? (cap-set-members result) 'ReadCap))
+    (check-true (closure-has-cap-name? (cap-set-members result) 'ReadCap))
     (check-equal? (set-count (cap-set-members result)) 1)))
 
 (test-case "alpha/non-capability-fvar"
@@ -125,8 +125,8 @@
   (parameterize ([current-capability-registry shared-capability-reg])
     (define result
       (type-to-cap-set (expr-union (expr-fvar 'ReadCap) (expr-fvar 'WriteCap))))
-    (check-true (set-member? (cap-set-members result) 'ReadCap))
-    (check-true (set-member? (cap-set-members result) 'WriteCap))
+    (check-true (closure-has-cap-name? (cap-set-members result) 'ReadCap))
+    (check-true (closure-has-cap-name? (cap-set-members result) 'WriteCap))
     (check-equal? (set-count (cap-set-members result)) 2)))
 
 (test-case "alpha/pi-with-capability-domain"
@@ -134,7 +134,7 @@
   (parameterize ([current-capability-registry shared-capability-reg])
     (define result
       (type-to-cap-set (expr-Pi 'm0 (expr-fvar 'ReadCap) (expr-fvar 'String))))
-    (check-true (set-member? (cap-set-members result) 'ReadCap))
+    (check-true (closure-has-cap-name? (cap-set-members result) 'ReadCap))
     (check-equal? (set-count (cap-set-members result)) 1)))
 
 (test-case "alpha/type-bot-gives-empty"
@@ -150,13 +150,13 @@
 
 (test-case "gamma/singleton-gives-fvar"
   ;; cap-set-to-type on {ReadCap} → (expr-fvar 'ReadCap)
-  (define result (cap-set-to-type (cap-set (seteq 'ReadCap))))
+  (define result (cap-set-to-type (cap-set (set (bare-cap 'ReadCap)))))
   (check-true (expr-fvar? result))
   (check-equal? (expr-fvar-name result) 'ReadCap))
 
 (test-case "gamma/multi-gives-union"
   ;; cap-set-to-type on {ReadCap, WriteCap} → union
-  (define result (cap-set-to-type (cap-set (seteq 'ReadCap 'WriteCap))))
+  (define result (cap-set-to-type (cap-set (set (bare-cap 'ReadCap) (bare-cap 'WriteCap)))))
   (check-true (expr-union? result)))
 
 (test-case "roundtrip/alpha-gamma-alpha"
@@ -171,7 +171,7 @@
 (test-case "roundtrip/gamma-alpha-gamma"
   ;; γ(α(γ(S))) = γ(S) for cap-set — structural equality on types
   (parameterize ([current-capability-registry shared-capability-reg])
-    (define s (cap-set (seteq 'ReadCap 'WriteCap)))
+    (define s (cap-set (set (bare-cap 'ReadCap) (bare-cap 'WriteCap))))
     (define gamma-s (cap-set-to-type s))
     (define alpha-gamma-s (type-to-cap-set gamma-s))
     (define gamma-alpha-gamma-s (cap-set-to-type alpha-gamma-s))
@@ -201,7 +201,7 @@
       " := (fn (c :0 ReadCap) (fn (x :w Nat) (g8 x))))")))
   (define cap-closures (cap-type-bridge-result-cap-closures result))
   (define f-key (find-key-by-suffix cap-closures "f8"))
-  (check-true (and f-key (set-member? (hash-ref cap-closures f-key (seteq)) 'ReadCap))
+  (check-true (and f-key (closure-has-cap-name? (hash-ref cap-closures f-key (set)) 'ReadCap))
               "f8 should have ReadCap in its closure"))
 
 (test-case "bridge/overdeclared-detection"
@@ -231,7 +231,7 @@
     (define bridge-result (build-cross-domain-network env))
     (define overdeclared (cap-audit-overdeclared bridge-result 'f-od))
     ;; HttpCap is declared by f but never used in call graph
-    (check-true (set-member? overdeclared 'HttpCap)
+    (check-true (closure-has-cap-name? overdeclared 'HttpCap)
                 "HttpCap should be overdeclared")))
 
 (test-case "bridge/pure-function"
@@ -241,7 +241,7 @@
      "(def pure8 : (Pi (x :w Nat) Nat) := (fn (x :w Nat) x))"))
   (define cap-closures (cap-type-bridge-result-cap-closures result))
   (define k (find-key-by-suffix cap-closures "pure8"))
-  (check-true (and k (set-empty? (hash-ref cap-closures k (seteq))))
+  (check-true (and k (set-empty? (hash-ref cap-closures k (set))))
               "pure function should have empty cap closure"))
 
 (test-case "bridge/diamond-topology"
@@ -258,9 +258,9 @@
       " := (fn (c1 :0 ReadCap) (fn (c2 :0 HttpCap) (fn (x :w Nat) (g-dia (h-dia x))))))")))
   (define cap-closures (cap-type-bridge-result-cap-closures result))
   (define f-key (find-key-by-suffix cap-closures "f-dia"))
-  (define f-caps (and f-key (hash-ref cap-closures f-key (seteq))))
-  (check-true (and f-caps (set-member? f-caps 'ReadCap)) "f-dia should require ReadCap")
-  (check-true (and f-caps (set-member? f-caps 'HttpCap)) "f-dia should require HttpCap"))
+  (define f-caps (and f-key (hash-ref cap-closures f-key (set))))
+  (check-true (and f-caps (closure-has-cap-name? f-caps 'ReadCap)) "f-dia should require ReadCap")
+  (check-true (and f-caps (closure-has-cap-name? f-caps 'HttpCap)) "f-dia should require HttpCap"))
 
 (test-case "bridge/convergence-mutual-recursion"
   ;; Mutual recursion: f calls g, g calls f. Both declare ReadCap.
@@ -290,9 +290,9 @@
     (define result (build-cross-domain-network env))
     (define cap-closures (cap-type-bridge-result-cap-closures result))
     ;; Both should have ReadCap in their closures
-    (check-true (set-member? (hash-ref cap-closures 'f-mr (seteq)) 'ReadCap)
+    (check-true (closure-has-cap-name? (hash-ref cap-closures 'f-mr (set)) 'ReadCap)
                 "f-mr should have ReadCap")
-    (check-true (set-member? (hash-ref cap-closures 'g-mr (seteq)) 'ReadCap)
+    (check-true (closure-has-cap-name? (hash-ref cap-closures 'g-mr (set)) 'ReadCap)
                 "g-mr should have ReadCap")))
 
 ;; ========================================

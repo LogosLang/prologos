@@ -127,8 +127,8 @@
   (define closures (cap-inference-result-closures cap-result))
   ;; The function should have ReadCap in its closure
   (define read-fn-closure
-    (hash-ref closures 'test-cap-pipeline::read-fn (seteq)))
-  (check-true (set-member? read-fn-closure 'ReadCap)
+    (hash-ref closures 'test-cap-pipeline::read-fn (set)))
+  (check-true (closure-has-cap-name? read-fn-closure 'ReadCap)
               "read-fn closure should include ReadCap"))
 
 (test-case "cap-pipeline/transitive-inference"
@@ -143,8 +143,8 @@
   (check-true (cap-inference-result? cap-result))
   (define closures (cap-inference-result-closures cap-result))
   (define f-closure
-    (hash-ref closures 'test-cap-pipeline::f-calls-g (seteq)))
-  (check-true (set-member? f-closure 'ReadCap)
+    (hash-ref closures 'test-cap-pipeline::f-calls-g (set)))
+  (check-true (closure-has-cap-name? f-closure 'ReadCap)
               "f-calls-g closure should include ReadCap transitively"))
 
 (test-case "cap-pipeline/pure-function-empty-closure"
@@ -155,7 +155,7 @@
   (check-true (cap-inference-result? cap-result))
   (define closures (cap-inference-result-closures cap-result))
   (define pure-closure
-    (hash-ref closures 'test-cap-pipeline::pure-ident (seteq)))
+    (hash-ref closures 'test-cap-pipeline::pure-ident (set)))
   (check-true (set-empty? pure-closure)
               "pure function should have empty closure"))
 
@@ -169,10 +169,10 @@
   (check-true (cap-inference-result? cap-result))
   (define closures (cap-inference-result-closures cap-result))
   (define rw-closure
-    (hash-ref closures 'test-cap-pipeline::rw-fn (seteq)))
-  (check-true (set-member? rw-closure 'ReadCap)
+    (hash-ref closures 'test-cap-pipeline::rw-fn (set)))
+  (check-true (closure-has-cap-name? rw-closure 'ReadCap)
               "rw-fn closure should include ReadCap")
-  (check-true (set-member? rw-closure 'WriteCap)
+  (check-true (closure-has-cap-name? rw-closure 'WriteCap)
               "rw-fn closure should include WriteCap"))
 
 ;; ========================================

@@ -28,15 +28,26 @@
          "syntax.rkt"         ;; expr structs
          "global-env.rkt"     ;; current-global-env
          "propagator.rkt"     ;; prop-network, cells, propagators, run-to-quiescence
-         "atms.rkt")          ;; ATMS for provenance tracking
+         "atms.rkt"           ;; ATMS for provenance tracking
+         "pretty-print.rkt")  ;; pp-expr for cap-entry->string
 
-(provide ;; CapabilitySet lattice
+(provide ;; Capability entries (IO-I)
+         cap-entry
+         cap-entry?
+         cap-entry-name
+         cap-entry-index-expr
+         bare-cap
+         cap-entry->string
+         cap-entry-covers?
+         closure-has-cap-name?
+         ;; CapabilitySet lattice
          cap-set
          cap-set?
          cap-set-members
          cap-set-bot
          cap-set-join
          cap-set-subsumes?
+         cap-set-names          ;; backward compat: seteq of just names
          ;; Expression analysis
          extract-fvar-names
          extract-capability-requirements
@@ -78,30 +89,73 @@
 (define current-module-cap-result (make-parameter #f))
 
 ;; ========================================
+;; Capability Entry (IO-I)
+;; ========================================
+;;
+;; A capability entry: either bare (no index) or applied (with index expression).
+;; Bare: (cap-entry 'ReadCap #f) — a simple capability like ReadCap
+;; Applied: (cap-entry 'FileCap (expr-string "/data")) — a parametric cap like FileCap "/data"
+;;
+;; Uses #:transparent for structural equality (important for set membership).
+
+(struct cap-entry (name index-expr) #:transparent)
+
+;; Convenience: bare capability (no index parameter)
+(define (bare-cap name) (cap-entry name #f))
+
+;; Display helper for cap-entry
+(define (cap-entry->string e)
+  (if (cap-entry-index-expr e)
+      (format "(~a ~a)" (cap-entry-name e) (pp-expr (cap-entry-index-expr e) '()))
+      (symbol->string (cap-entry-name e))))
+
+;; ========================================
 ;; CapabilitySet Lattice
 ;; ========================================
 ;;
-;; Domain: PowerSet(CapabilityName) where CapabilityName is a symbol.
+;; Domain: PowerSet(cap-entry) — finite lattice, monotone join.
 ;; Bot: empty set (pure function — no capabilities required).
 ;; Join: set-union (monotone — capabilities only accumulate).
 ;; Subsumption: every required cap is subtype of some available cap.
+;;
+;; Uses equal?-based set (not seteq) because cap-entry structs need
+;; structural comparison: two (cap-entry 'FileCap (expr-string "/data"))
+;; must be considered equal.
 
 (struct cap-set (members) #:transparent)
-;; members: (seteq of symbols)
+;; members: (set of cap-entry), equal?-based
 
-(define cap-set-bot (cap-set (seteq)))
+(define cap-set-bot (cap-set (set)))
 
 (define (cap-set-join a b)
   (cap-set (set-union (cap-set-members a) (cap-set-members b))))
 
 ;; Does `available` subsume `required`?
-;; Every capability in `required` must be either equal to or a subtype of
-;; some capability in `available`.
+;; Every capability in `required` must be covered by some available cap.
+;; Coverage: cap names match and (for bare caps) subtype holds, OR
+;; for applied caps, names match and index expressions are equal.
 (define (cap-set-subsumes? available required)
   (for/and ([req (in-set (cap-set-members required))])
     (for/or ([avail (in-set (cap-set-members available))])
-      (or (eq? req avail)
-          (subtype-pair? req avail)))))
+      (cap-entry-covers? avail req))))
+
+;; Does `avail` cover `req`?
+;; - Same name, same index → exact match
+;; - Same name, avail has no index, req has no index → exact bare match
+;; - avail name is supertype of req name (subtype-pair?) → covers
+;; - avail has no index (bare cap), req has index → bare cap covers applied
+;;   (FsCap covers FileCap "/data" if FileCap <: FsCap)
+(define (cap-entry-covers? avail req)
+  (define a-name (cap-entry-name avail))
+  (define r-name (cap-entry-name req))
+  (or (equal? avail req)                    ;; structural equality
+      (subtype-pair? r-name a-name)))       ;; subtype: r-name <: a-name
+
+;; Backward-compat helper: extract just the names from a cap-set (seteq of symbols).
+;; Used by legacy code that only needs names, not full cap-entries.
+(define (cap-set-names cs)
+  (for/seteq ([e (in-set (cap-set-members cs))])
+    (cap-entry-name e)))
 
 ;; ========================================
 ;; Expression Analysis: Extract Free Variable Names
@@ -135,19 +189,29 @@
 ;; ========================================
 ;;
 ;; Walk a function's type (Pi chain) to find :0 binders whose domain
-;; is a capability type. Returns the set of capability names.
+;; is a capability type. Returns a set of cap-entry (equal?-based).
+;;
+;; Handles both bare capabilities (expr-fvar 'ReadCap) and applied
+;; capabilities (expr-app (expr-fvar 'FileCap) (expr-string "/data")).
 
 (define (extract-capability-requirements type)
-  (let loop ([ty type] [caps (seteq)])
+  (let loop ([ty type] [caps (set)])
     (match ty
-      [(expr-Pi mult dom cod)
-       (define new-caps
-         (if (and (eq? mult 'm0)
-                  (expr-fvar? dom)
-                  (capability-type? (expr-fvar-name dom)))
-             (set-add caps (expr-fvar-name dom))
-             caps))
-       (loop cod new-caps)]
+      ;; :0 bare capability: (Pi m0 ReadCap ...)
+      [(expr-Pi (? (lambda (m) (eq? m 'm0))) (? expr-fvar? dom) cod)
+       (define name (expr-fvar-name dom))
+       (if (capability-type? name)
+           (loop cod (set-add caps (bare-cap name)))
+           (loop cod caps))]
+      ;; :0 applied capability: (Pi m0 (FileCap "/data") ...)
+      [(expr-Pi (? (lambda (m) (eq? m 'm0))) (expr-app (? expr-fvar? f) idx) cod)
+       (define name (expr-fvar-name f))
+       (if (capability-type? name)
+           (loop cod (set-add caps (cap-entry name idx)))
+           (loop cod caps))]
+      ;; Other Pi: recurse on codomain
+      [(expr-Pi _ _ cod)
+       (loop cod caps)]
       [_ caps])))
 
 ;; ========================================
@@ -180,10 +244,10 @@
 ;; and net-cell-write's no-change guard stops propagation when join is idempotent.
 
 (struct cap-inference-result
-  (closures              ;; hasheq: function-name → (seteq of capability names)
+  (closures              ;; hasheq: function-name → (set of cap-entry)
    call-graph            ;; hasheq: function-name → (seteq callee-names)
    provenance-atms       ;; atms: ATMS with provenance assumptions and supported values
-   provenance-roots)     ;; hasheq: (cons func cap) → (seteq declaring-func-names)
+   provenance-roots)     ;; hash: (cons func cap-name) → (seteq declaring-func-names)
   #:transparent)
 
 (define (run-capability-inference [env (current-global-env)])
@@ -284,18 +348,30 @@
 (define (atms-cell-key func-name cap-name)
   (string->symbol (format "~a:~a" func-name cap-name)))
 
+;; Helper: does a closure (set of cap-entry) contain a cap with the given name?
+;; Matches both exact name and unqualified suffix (e.g., 'ReadCap matches
+;; both 'ReadCap and 'my-ns::ReadCap).
+(define (closure-has-cap-name? closure cap-name)
+  (for/or ([e (in-set closure)])
+    (or (eq? (cap-entry-name e) cap-name)
+        (eq? (unqualify-name (cap-entry-name e)) cap-name))))
+
 (define (build-capability-provenance closures call-graph env)
   ;; Step 1: Find all direct declarations: (func-name . cap-name) pairs
   ;; NOTE: Uses equal?-based hash because keys are cons pairs (not eq?-comparable).
-  (define direct-decls  ;; hash: (cons func cap) → #t
+  ;; Closures contain cap-entry structs; provenance keys use cap-entry-name (symbol)
+  ;; for compatibility with ATMS cell keys and downstream queries.
+  (define direct-decls  ;; hash: (cons func cap-name-symbol) → #t
     (for*/hash ([(name caps) (in-hash closures)]
-                [c (in-set caps)]
+                [c-entry (in-set caps)]
+                [c (in-value (cap-entry-name c-entry))]
                 [entry (in-value (hash-ref env name #f))]
                 [declared (in-value
                            (if (and entry (pair? entry))
                                (extract-capability-requirements (car entry))
-                               (seteq)))]
-                #:when (set-member? declared c))
+                               (set)))]
+                #:when (for/or ([d (in-set declared)])
+                         (eq? (cap-entry-name d) c)))
       (values (cons name c) #t)))
 
   ;; Step 2: Build reverse call graph (callee → set of callers)
@@ -358,9 +434,10 @@
           [else
            (set-add! visited current)
            ;; Only add root if this function actually has c in its closure
-           (define func-closure (hash-ref closures current (seteq)))
+           ;; c is a cap-name symbol; closures contain cap-entries
+           (define func-closure (hash-ref closures current (set)))
            (cond
-             [(set-member? func-closure c)
+             [(closure-has-cap-name? func-closure c)
               (add-root! current c h)
               ;; Continue BFS to callers of current
               (define callers (hash-ref rev-graph current (seteq)))
@@ -417,8 +494,9 @@
 ;; ========================================
 
 ;; Get the capability closure for a function.
+;; Returns a set of cap-entry structs.
 (define (capability-closure result func-name)
-  (hash-ref (cap-inference-result-closures result) func-name (seteq)))
+  (hash-ref (cap-inference-result-closures result) func-name (set)))
 
 ;; Get the set of functions that directly declared a capability,
 ;; causing it to appear in func-name's closure.
@@ -440,10 +518,10 @@
   (define closures (cap-inference-result-closures result))
   (define call-graph (cap-inference-result-call-graph result))
 
-  ;; Check if func even requires this cap
+  ;; Check if func even requires this cap (cap-name is a symbol)
   (define closure (capability-closure result func-name))
   (cond
-    [(not (set-member? closure cap-name)) '()]
+    [(not (closure-has-cap-name? closure cap-name)) '()]
     [else
      ;; Use provenance roots to identify direct declarers
      (define roots (capability-audit-roots result func-name cap-name))
@@ -485,8 +563,8 @@
                   (for/fold ([acc rest-q])
                             ([callee (in-set callees)]
                              #:when (not (set-member? visited callee))
-                             #:when (set-member?
-                                      (hash-ref closures callee (seteq))
+                             #:when (closure-has-cap-name?
+                                      (hash-ref closures callee (set))
                                       cap-name))
                     (set-add! visited callee)
                     (hash-set! parent callee current)
@@ -527,20 +605,19 @@
   (define closure (capability-closure result root-name))
 
   ;; Extract declared capabilities from the function's type in the env
+  ;; Returns a set of cap-entry structs
   (define entry (hash-ref env root-name #f))
   (define declared
     (if (and entry (pair? entry))
         (extract-capability-requirements (car entry))
-        (seteq)))
+        (set)))
 
-  ;; Find capabilities in the closure that are NOT subsumed by any declared cap.
-  ;; A capability `c` is covered if there exists a declared cap `d` such that
-  ;; c == d or c <: d (c is a subtype of d, i.e., d covers c).
+  ;; Find capabilities in the closure that are NOT covered by any declared cap.
+  ;; Both closure and declared are sets of cap-entry.
   (define missing
-    (for/seteq ([cap (in-set closure)]
-                #:unless (for/or ([dcap (in-set declared)])
-                           (or (eq? cap dcap)
-                               (subtype-pair? cap dcap))))
+    (for/set ([cap (in-set closure)]
+              #:unless (for/or ([dcap (in-set declared)])
+                         (cap-entry-covers? dcap cap)))
       cap))
 
   (cond
@@ -548,8 +625,9 @@
      (authority-root-ok)]
     [else
      ;; Build ATMS-derived traces for each missing capability
+     ;; Audit trail uses cap-name (symbol), not full cap-entry
      (define traces
-       (for/list ([cap (in-set missing)])
-         (define trail (capability-audit-trail result root-name cap))
-         (list cap trail)))
+       (for/list ([cap-e (in-set missing)])
+         (define trail (capability-audit-trail result root-name (cap-entry-name cap-e)))
+         (list (cap-entry-name cap-e) trail)))
      (authority-root-failure root-name declared missing traces)]))
