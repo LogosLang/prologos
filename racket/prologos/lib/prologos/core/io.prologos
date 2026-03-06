@@ -4,3 +4,8 @@ ns prologos::core::io :no-prelude
 foreign racket "io-ffi.rkt" [io-ffi-read-all :as read-file : String -> String]
 foreign racket "io-ffi.rkt" [io-ffi-write-file :as write-file : String String -> Unit]
 foreign racket "io-ffi.rkt" [io-ffi-append-file :as append-file : String String -> Unit]
+
+;; Console IO — direct FFI, no capability annotations yet (IO-G/IO-H)
+foreign racket "io-ffi.rkt" [display-wrapper :as print : String -> Unit]
+foreign racket "io-ffi.rkt" [displayln-wrapper :as println : String -> Unit]
+foreign racket "io-ffi.rkt" [io-ffi-read-ln-unit :as read-ln : Unit -> String]

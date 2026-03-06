@@ -38,7 +38,7 @@
 
 (define shared-preamble
   "(ns test-io)
-(imports (prologos::core::io :refer (read-file write-file append-file)))")
+(imports (prologos::core::io :refer (read-file write-file append-file print println read-ln)))")
 
 (define-values (shared-global-env
                 shared-ns-context
@@ -159,3 +159,51 @@
   (run-last (format "(append-file ~s \"created by append\")" (path->string tmp)))
   (check-equal? (file->string (path->string tmp)) "created by append")
   (delete-file tmp))
+
+;; ========================================
+;; Group 4: Console IO (print, println, read-ln)
+;; ========================================
+
+(test-case "print: outputs string to stdout"
+  (define output
+    (with-output-to-string
+      (lambda ()
+        (run-last "(print \"hello console\")"))))
+  (check-true (string-contains? output "hello console")))
+
+(test-case "println: outputs with newline"
+  (define output
+    (with-output-to-string
+      (lambda ()
+        (run-last "(println \"hello line\")"))))
+  (check-true (string-contains? output "hello line\n")))
+
+(test-case "read-ln: reads input line"
+  (define result
+    (with-input-from-string "test input\n"
+      (lambda ()
+        (run-last "(read-ln unit)"))))
+  (check-true (string-contains? result "\"test input\""))
+  (check-true (string-contains? result ": String")))
+
+(test-case "print: available in prelude"
+  ;; Use a fresh ns with prelude (not our shared fixture) to test prelude availability
+  (define output
+    (with-output-to-string
+      (lambda ()
+        (parameterize ([current-global-env (hasheq)]
+                       [current-ns-context #f]
+                       [current-module-registry prelude-module-registry]
+                       [current-lib-paths (list prelude-lib-dir)]
+                       [current-mult-meta-store (make-hasheq)]
+                       [current-preparse-registry prelude-preparse-registry]
+                       [current-ctor-registry (current-ctor-registry)]
+                       [current-type-meta (current-type-meta)]
+                       [current-trait-registry prelude-trait-registry]
+                       [current-impl-registry prelude-impl-registry]
+                       [current-param-impl-registry prelude-param-impl-registry]
+                       [current-multi-defn-registry (current-multi-defn-registry)]
+                       [current-spec-store (hasheq)])
+          (install-module-loader!)
+          (process-string "(ns test-prelude-io)\n(print \"from prelude\")")))))
+  (check-true (string-contains? output "from prelude")))

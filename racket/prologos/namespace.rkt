@@ -451,6 +451,10 @@
     ;; + subtype hierarchy (ReadCap <: FsCap <: SysCap, etc.)
     (imports [prologos::core::capabilities :refer []])
 
+    ;; ---- IO convenience functions (IO-D2) ----
+    ;; Only print/println in prelude; read-ln/read-file/write-file need explicit import
+    (imports [prologos::core::io :refer [print println]])
+
     ;; ---- Propagator helpers ----
     (imports [prologos::core::propagator :refer [new-lattice-cell new-widenable-cell]])
 

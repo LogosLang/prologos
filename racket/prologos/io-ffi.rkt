@@ -26,7 +26,9 @@
  ;; High-level convenience wrappers (IO-D1)
  io-ffi-read-all
  io-ffi-write-file
- io-ffi-append-file)
+ io-ffi-append-file
+ ;; Console IO with Unit arg (IO-D2)
+ io-ffi-read-ln-unit)
 
 ;; ========================================
 ;; Wrapper Functions
@@ -77,6 +79,12 @@
     (lambda (out) (write-string content out))
     #:exists 'append)
   (void))
+
+;; Console IO with Unit arg (IO-D2)
+;; Takes Unit so it's a function (arity 1), not a thunk evaluated at def time.
+(define (io-ffi-read-ln-unit _unit)
+  (define v (read-line))
+  (if (eof-object? v) "" v))
 
 ;; ========================================
 ;; FFI Registry
