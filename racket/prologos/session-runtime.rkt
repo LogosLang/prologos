@@ -19,7 +19,9 @@
          "sessions.rkt"
          "session-lattice.rkt"
          "processes.rkt"
-         "pretty-print.rkt")
+         "pretty-print.rkt"
+         "syntax.rkt"
+         "io-bridge.rkt")
 
 (provide
  ;; Structs
@@ -54,7 +56,9 @@
  rt-execute-process
  rt-cross-wire-choice
  endpoint-advance-session
- resolve-expr)
+ resolve-expr
+ ;; IO channel
+ rt-new-io-channel)
 
 ;; ========================================
 ;; Async-aware predicates: accept both sync and async session variants
@@ -259,6 +263,38 @@
                     (runtime-network-channel-info rnet)
                     (runtime-network-next-chan-id rnet))
    pair))
+
+;; ========================================
+;; IO Channel (single endpoint)
+;; ========================================
+
+;; Create a single channel endpoint backed by an IO bridge cell.
+;; Unlike rt-new-channel-pair (8 cells, 2 endpoints, cross-wiring),
+;; this creates 5 cells (4 standard + 1 IO state) with one endpoint.
+;; The "other side" is the IO bridge propagator (installed separately).
+;;
+;; Returns (values runtime-network* channel-endpoint io-cell-id)
+(define (rt-new-io-channel rnet session-type)
+  (define net (runtime-network-prop-net rnet))
+  ;; 4 standard endpoint cells
+  (define-values (net1 msg-out-id)
+    (net-new-cell net msg-bot msg-lattice-merge msg-lattice-contradicts?))
+  (define-values (net2 msg-in-id)
+    (net-new-cell net1 msg-bot msg-lattice-merge msg-lattice-contradicts?))
+  (define-values (net3 sess-id)
+    (net-new-cell net2 session-type session-lattice-merge session-lattice-contradicts?))
+  (define-values (net4 choice-id)
+    (net-new-cell net3 choice-bot choice-lattice-merge choice-lattice-contradicts?))
+  ;; 1 IO state cell (from io-bridge.rkt)
+  (define-values (net5 io-id)
+    (net-new-cell net4 io-bot io-state-merge io-state-contradicts?))
+  (define ep (channel-endpoint msg-out-id msg-in-id sess-id choice-id))
+  (values
+    (runtime-network net5
+                     (runtime-network-channel-info rnet)
+                     (runtime-network-next-chan-id rnet))
+    ep
+    io-id))
 
 ;; ========================================
 ;; Session Advancement
@@ -631,6 +667,47 @@
            (channel-endpoint-session-cell ep2)
            (format "linked ~a ↔ ~a (forwarding)" c2 c1)))
         (values rnet3 bindings trace*)])]
+
+    ;; ---- Open: create IO channel, install bridge propagator ----
+    [(proc-open path-expr session-type cap-type cont)
+     ;; 1. Create a single channel endpoint (not a pair)
+     (define-values (rnet1 ep io-cell)
+       (rt-new-io-channel rnet session-type))
+     ;; 2. Resolve the path expression
+     (define path-val (resolve-expr path-expr bindings))
+     ;; 3. Determine IO mode from session type
+     (define mode (if (sess-recv-like? session-type) 'read 'write))
+     ;; 4. Write io-opening to io-cell
+     (define rnet2
+       (rt-cell-write rnet1 io-cell
+         (io-opening (expr-string-val path-val) mode)))
+     ;; 5. Install IO bridge propagator
+     (define-values (rnet3 _pid)
+       (rt-add-propagator rnet2
+         (list io-cell
+               (channel-endpoint-session-cell ep)
+               (channel-endpoint-msg-out-cell ep))
+         (list (channel-endpoint-msg-in-cell ep)
+               io-cell)
+         (make-io-bridge-propagator
+           io-cell
+           (channel-endpoint-session-cell ep)
+           (channel-endpoint-msg-in-cell ep)
+           (channel-endpoint-msg-out-cell ep))))
+     ;; 6. Actually open the file (side effect)
+     ;; io-bridge-open-file works on prop-network, so unwrap/rewrap
+     (define rnet4
+       (runtime-network
+        (io-bridge-open-file (runtime-network-prop-net rnet3) io-cell)
+        (runtime-network-channel-info rnet3)
+        (runtime-network-next-chan-id rnet3)))
+     ;; 7. Trace
+     (define trace*
+       (rt-trace-add trace (channel-endpoint-session-cell ep)
+         (format "proc-open: file ~a" (expr-string-val path-val))))
+     ;; 8. Recurse into continuation with endpoint bound to 'ch
+     (compile-live-process rnet4 cont
+       (hash-set channel-eps 'ch ep) bindings trace*)]
 
     ;; ---- Fallback ----
     [_ (values rnet bindings trace)]))

@@ -12,7 +12,6 @@
 
 (require "propagator.rkt"
          "sessions.rkt"
-         "session-runtime.rkt"
          "syntax.rkt")
 
 (provide
@@ -101,10 +100,14 @@
 ;; Only used with the sequential Gauss-Seidel scheduler (never BSP/parallel).
 ;;
 
-;; --- Local session predicates ---
+;; --- Local predicates ---
+;; Avoid circular dependency: session-runtime.rkt requires io-bridge.rkt,
+;; so io-bridge.rkt cannot require session-runtime.rkt.
+;; msg-bot is the symbol 'msg-bot (sentinel defined in session-runtime.rkt).
+(define (io-msg-bot? v) (eq? v 'msg-bot))
+
 ;; sess-send-like? / sess-recv-like? are internal to session-runtime.rkt.
 ;; Define local equivalents using struct predicates from sessions.rkt.
-
 (define (io-sess-send? v) (or (sess-send? v) (sess-async-send? v)))
 (define (io-sess-recv? v) (or (sess-recv? v) (sess-async-recv? v)))
 
@@ -180,7 +183,7 @@
       ;; → Client is sending data; bridge writes to file
       [(and (io-open? io-state)
             (io-sess-send? sess)
-            (not (msg-bot? msg-out)))
+            (not (io-msg-bot? msg-out)))
        (with-handlers ([exn:fail?
                         (lambda (e)
                           (net-cell-write net msg-in-cell
