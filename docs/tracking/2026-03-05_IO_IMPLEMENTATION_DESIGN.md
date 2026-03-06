@@ -14,9 +14,9 @@
 | IO-A | A1: Opaque type marshalling | ✅ | `8a2f5d0` | 13 tests; `expr-opaque` AST node + marshalling in `foreign.rkt`; pass-throughs in substitution/zonk/reduction/pretty-print |
 | IO-A | A2: Path + IOError types | ✅ | `1a6d926` | 14 tests; `path.prologos` (3 fns via qualified `str::append`), `io-error.prologos` (6 ctors); deferred `path-parent`/`path-extension`/`path-file-name` (need `substring`/`index-of`) |
 | IO-A | A3: IO capability extensions | ✅ | `da67f31` | 18 tests; +`AppendCap`, +`StatCap`, +`IOCap`; hierarchy `FsCap/NetCap/StdioCap → IOCap → SysCap`; used `capability`+`subtype` declarations (pragmatic, not D17 union types — see note below) |
-| IO-B | B1: IO state lattice | | | `io-bridge.rkt` |
-| IO-B | B2: IO bridge propagator | | | Side-effecting fire-fn |
-| IO-B | B3: FFI bridge to Racket | | | `io-ffi.rkt` |
+| IO-B | B1: IO state lattice | ✅ | `2f1ebbf` | 5 tests; `io-bot/io-top/io-opening/io-open/io-closed` + merge function in `io-bridge.rkt` |
+| IO-B | B2: IO bridge propagator | ✅ | `1b9b91a` | 5 tests; side-effecting fire-fn, `io-bridge-open-file`, `make-io-bridge-cell`; local session predicates (avoids modifying session-runtime.rkt) |
+| IO-B | B3: FFI bridge to Racket | ✅ | `d4934d4` | 5 tests; `io-ffi.rkt` with 12-entry registry + wrapper fns; `io-close-port` generic close (Racket has no `close-port`) |
 | IO-C | C1: `proc-open` runtime | | | `compile-live-process` match arm |
 | IO-C | C2: Integration tests | | | Open + session + IO bridge E2E |
 | IO-D | D1: File IO functions | | | `read-file`, `write-file`, etc. |
