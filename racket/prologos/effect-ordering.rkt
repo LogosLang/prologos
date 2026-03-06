@@ -227,25 +227,43 @@
 ;; AD-D3: Effect Descriptor Linearization
 ;; ========================================
 
+;; Sort effects sharing the same position by kind priority:
+;; open (0) → write/read (1) → close (2)
+;; This ensures open always precedes IO operations, which precede close.
+(define (effect-kind-priority eff)
+  (cond [(eff-open? eff) 0]
+        [(eff-close? eff) 2]
+        [else 1]))  ;; write and read have equal priority
+
+(define (sort-effects-at-position effs)
+  (sort effs < #:key effect-kind-priority))
+
 ;; Linearize effect descriptors according to an ordering.
 ;;
 ;; Takes a complete ordering and a list of effect descriptors, produces
 ;; a total order consistent with the partial order. Uses Kahn's algorithm
 ;; with deterministic tiebreak (channel name, then depth).
 ;;
+;; Multiple effects may share the same position (e.g., eff-open and eff-write
+;; at the same session depth). Within a position, effects are ordered by kind:
+;; open → write/read → close.
+;;
 ;; ordering : eff-ordering (should be transitively closed)
 ;; effects  : list of effect-desc (from effect collection)
 ;; Returns: list of effect-desc in execution order, or #f if cycle detected.
 (define (linearize-effects ordering effects)
-  (define positions (map effect-desc-position effects))
-  ;; Build position → effect-desc mapping
-  (define pos->effect (make-hash))   ;; equal?-based keys (eff-pos structs)
+  ;; Deduplicate positions for the topological sort
+  (define positions (remove-duplicates (map effect-desc-position effects)))
+  ;; Build position → (list-of effect-desc) mapping
+  (define pos->effects (make-hash))   ;; equal?-based keys (eff-pos structs)
   (for ([eff (in-list effects)])
-    (hash-set! pos->effect (effect-desc-position eff) eff))
+    (hash-update! pos->effects (effect-desc-position eff)
+                  (lambda (lst) (cons eff lst)) '()))
   ;; Use the existing position linearization
   (define linearized-positions (eff-ordering-linearize positions ordering))
   (cond
     [(not linearized-positions) #f]  ;; cycle detected
     [else
-     (for/list ([pos (in-list linearized-positions)])
-       (hash-ref pos->effect pos))]))
+     (apply append
+       (for/list ([pos (in-list linearized-positions)])
+         (sort-effects-at-position (hash-ref pos->effects pos '()))))]))

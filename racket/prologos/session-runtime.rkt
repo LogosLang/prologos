@@ -672,10 +672,15 @@
        [(not ep) (values rnet bindings0 trace)]  ;; unknown channel
        [else
         (define val (resolve-expr expr bindings0))
-        ;; Write value to msg-out cell
-        (define rnet1 (rt-cell-write rnet (channel-endpoint-msg-out-cell ep) val))
-        ;; AD-C1: collect eff-write descriptor or perform inline IO
+        ;; AD-E fix: In collection mode, skip msg-out write for IO channels.
+        ;; Multiple sends on the same channel write different values to the
+        ;; same msg-out cell, causing a spurious msg-lattice contradiction.
+        ;; The msg-out write is only needed for cross-wired channels (non-IO).
         (define io-cell (get-io-cell chan bindings0))
+        (define rnet1
+          (if (and collecting? io-cell)
+              rnet  ;; skip — effects collected separately
+              (rt-cell-write rnet (channel-endpoint-msg-out-cell ep) val)))
         (define bindings-send
           (cond
             ;; AD-C1: collect effect descriptor
