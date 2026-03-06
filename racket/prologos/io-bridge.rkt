@@ -139,9 +139,14 @@
                         (net-cell-write net io-cell io-top))])
        (define port
          (case mode
-           [(read)   (open-input-file path)]
-           [(write)  (open-output-file path #:exists 'truncate/replace)]
-           [(append) (open-output-file path #:exists 'append)]
+           [(read)       (open-input-file path)]
+           [(write)      (open-output-file path #:exists 'truncate/replace)]
+           [(append)     (open-output-file path #:exists 'append)]
+           [(read+write)
+            ;; open-input-output-file returns 2 values; we use the input port
+            ;; (which is also an output port for i/o files)
+            (define-values (in out) (open-input-output-file path #:exists 'update))
+            in]  ;; input-port that is also an output-port
            [else (error 'io-bridge-open-file "unknown mode: ~a" mode)]))
        (net-cell-write net io-cell (io-open port mode)))]
     [else net]))
@@ -218,9 +223,11 @@
        (with-handlers ([exn:fail?
                         (lambda (e) net)])
          (define port (io-open-port io-state))
-         (if (input-port? port)
-             (close-input-port port)
-             (close-output-port port))
+         ;; Input-output ports (read+write mode) are both input and output.
+         ;; close-input-port on an i/o port closes both directions.
+         (cond
+           [(input-port? port)  (close-input-port port)]
+           [(output-port? port) (close-output-port port)])
          (net-cell-write net io-cell io-closed))]
 
       [else net])))

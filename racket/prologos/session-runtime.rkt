@@ -58,7 +58,9 @@
  endpoint-advance-session
  resolve-expr
  ;; IO channel
- rt-new-io-channel)
+ rt-new-io-channel
+ ;; IO mode inference (IO-E2)
+ io-infer-mode)
 
 ;; ========================================
 ;; Async-aware predicates: accept both sync and async session variants
@@ -72,6 +74,45 @@
 (define (sess-recv-like? v) (or (sess-recv? v) (sess-async-recv? v)))
 (define (sess-recv-like-cont v)
   (if (sess-recv? v) (sess-recv-cont v) (sess-async-recv-cont v)))
+
+;; ========================================
+;; IO mode inference for proc-open (IO-E2)
+;; ========================================
+;;
+;; Determines the file mode from the session type structure.
+;; For flat protocols (send/recv), mode is clear. For choice-based
+;; protocols (FileRead, FileWrite, etc.), we analyze the branches.
+
+(define (io-infer-mode session-type)
+  (define sess (if (sess-mu? session-type) (unfold-session session-type) session-type))
+  (cond
+    [(sess-recv-like? sess) 'read]
+    [(sess-send-like? sess) 'write]
+    [(sess-choice? sess)
+     ;; Inspect choice branches: check if any branch starts with send or recv.
+     ;; Ignore end/svar branches — they don't determine IO mode.
+     ;; Also check labels to distinguish write vs append mode:
+     ;;   :append label → 'append mode (open-output-file with #:exists 'append)
+     ;;   :write label  → 'write mode (open-output-file with #:exists 'truncate/replace)
+     (define branches (sess-choice-branches sess))
+     (define labels (map car branches))
+     (define has-send?
+       (for/or ([b (in-list branches)])
+         (sess-send-like? (cdr b))))
+     (define has-recv?
+       (for/or ([b (in-list branches)])
+         (sess-recv-like? (cdr b))))
+     (define has-append-label? (memq ':append labels))
+     (define has-write-label?  (or (memq ':write labels) (memq ':write-ln labels)))
+     (cond
+       [(and has-send? has-recv?) 'read+write]
+       [has-recv? 'read]
+       [(and has-send? has-append-label? (not has-write-label?)) 'append]
+       [has-send? 'write]
+       [else 'read])]  ;; all branches are end/svar → read (safe default)
+    [(sess-offer? sess) 'read+write]
+    [(sess-end? sess) 'read]  ;; no-op
+    [else 'read]))
 
 ;; ========================================
 ;; Message Lattice (flat: bot → value → top)
@@ -305,6 +346,11 @@
 (define (rt-fresh-session-cell net initial-session)
   (net-new-cell net initial-session session-lattice-merge session-lattice-contradicts?))
 
+;; Create a fresh choice cell (for recursive protocols with multiple selections).
+;; Returns (values prop-network cell-id).
+(define (rt-fresh-choice-cell net)
+  (net-new-cell net choice-bot choice-lattice-merge choice-lattice-contradicts?))
+
 ;; Create a propagator that advances session state from current to next cell.
 ;;
 ;; Watches current-cell. When it has a concrete session type:
@@ -403,6 +449,16 @@
                            (runtime-network-next-chan-id rnet))
           cid))
 
+;; Create a fresh choice cell in the runtime network context.
+;; Returns (values rnet* cell-id).
+(define (rt-fresh-choice-cell-in-rnet rnet)
+  (define-values (net* cid)
+    (rt-fresh-choice-cell (runtime-network-prop-net rnet)))
+  (values (runtime-network net*
+                           (runtime-network-channel-info rnet)
+                           (runtime-network-next-chan-id rnet))
+          cid))
+
 ;; Add a session advance propagator in the runtime network context.
 ;; Returns (values rnet* prop-id).
 (define (rt-add-session-advance-in-rnet rnet current-cell next-cell expected? extract)
@@ -425,6 +481,47 @@
           pid))
 
 ;; ----------------------------------------
+;; IO Bridge Re-installation (IO-E2)
+;; ----------------------------------------
+
+;; IO channel info is stored in bindings under synthetic keys:
+;;   '__io_cell_<chan> → io-cell-id
+;; When a new session cell is created for an IO channel, we re-install
+;; the bridge propagator on the new session cell so it can react to
+;; session type transitions (recv → read file, send → write file, etc.)
+
+(define (io-channel-key chan)
+  (string->symbol (format "__io_cell_~a" chan)))
+
+(define (get-io-cell chan bindings)
+  (hash-ref bindings (io-channel-key chan) #f))
+
+;; Install IO bridge propagator on endpoint's current session cell.
+;; Returns updated rnet.
+(define (install-io-bridge rnet ep io-cell)
+  (define-values (rnet* _pid)
+    (rt-add-propagator rnet
+      (list io-cell
+            (channel-endpoint-session-cell ep)
+            (channel-endpoint-msg-out-cell ep))
+      (list (channel-endpoint-msg-in-cell ep)
+            io-cell)
+      (make-io-bridge-propagator
+        io-cell
+        (channel-endpoint-session-cell ep)
+        (channel-endpoint-msg-in-cell ep)
+        (channel-endpoint-msg-out-cell ep))))
+  rnet*)
+
+;; If chan is an IO channel, install bridge on the new endpoint's session cell.
+;; Returns updated rnet.
+(define (maybe-install-io-bridge rnet chan ep bindings)
+  (define io-cell (get-io-cell chan bindings))
+  (if io-cell
+      (install-io-bridge rnet ep io-cell)
+      rnet))
+
+;; ----------------------------------------
 ;; Main Compiler: compile-live-process
 ;; ----------------------------------------
 
@@ -441,21 +538,41 @@
                               [bindings (hasheq)] [trace (hasheq)])
   (match proc
     ;; ---- Stop: all channels must be at End ----
+    ;; Direct IO: close any IO ports immediately during compilation
+    ;; (IO side effects must happen in compilation order to avoid
+    ;;  propagator firing-order issues).
+    ;; Session guard: passive — waits for advancement chain, doesn't write End.
     [(proc-stop)
+     ;; 1. Close IO ports directly
+     (define rnet-io
+       (for/fold ([r rnet])
+                 ([(chan _ep) (in-hash channel-eps)])
+         (define io-cell (get-io-cell chan bindings))
+         (if io-cell
+             (let ([io-state (rt-cell-read r io-cell)])
+               (if (io-open? io-state)
+                   (begin
+                     (with-handlers ([exn:fail? void])
+                       (define port (io-open-port io-state))
+                       (cond
+                         [(input-port? port)  (close-input-port port)]
+                         [(output-port? port) (close-output-port port)]))
+                     (rt-cell-write r io-cell io-closed))
+                   r))
+             r)))
+     ;; 2. Install passive session guard propagators
      (define-values (rnet* trace*)
-       (for/fold ([r rnet] [t trace])
+       (for/fold ([r rnet-io] [t trace])
                  ([(chan ep) (in-hash channel-eps)])
          (define sess-cell (channel-endpoint-session-cell ep))
-         ;; Add propagator that asserts End on the session cell
          (define-values (r* _pid)
            (rt-add-propagator r (list sess-cell) (list sess-cell)
              (lambda (n)
                (define sess-val (net-cell-read n sess-cell))
                (define sess (if (sess-mu? sess-val) (unfold-session sess-val) sess-val))
                (cond
-                 [(sess-bot? sess)
-                  (net-cell-write n sess-cell (sess-end))]
-                 [(sess-end? sess) n]
+                 [(sess-bot? sess) n]  ;; Wait for advancement chain
+                 [(sess-end? sess) n]  ;; Confirmed — protocol completed
                  [else (net-cell-write n sess-cell sess-top)]))))
          (values r* (rt-trace-add t sess-cell
                       (format "process stops (expects ~a at End)" chan)))))
@@ -470,6 +587,20 @@
         (define val (resolve-expr expr bindings))
         ;; Write value to msg-out cell
         (define rnet1 (rt-cell-write rnet (channel-endpoint-msg-out-cell ep) val))
+        ;; Direct IO: if this is an IO channel, write to file immediately
+        ;; (IO operations must execute during compilation, not during quiescence,
+        ;;  because propagator firing order cannot guarantee write-before-close)
+        (define io-cell (get-io-cell chan bindings))
+        (when io-cell
+          (define io-state (rt-cell-read rnet1 io-cell))
+          (when (io-open? io-state)
+            (with-handlers ([exn:fail? void])
+              (define port (io-open-port io-state))
+              (define str-val (if (expr-string? val)
+                                  (expr-string-val val)
+                                  (format "~a" val)))
+              (write-string str-val port)
+              (flush-output port))))
         ;; Create fresh session cell for continuation
         (define-values (rnet2 next-sess-cell)
           (rt-fresh-session-cell-in-rnet rnet1 sess-bot))
@@ -493,25 +624,41 @@
      (cond
        [(not ep) (values rnet bindings trace)]
        [else
+        ;; Direct IO: if this is an IO channel, read from file immediately
+        ;; (IO operations must execute during compilation, not during quiescence)
+        (define io-cell (get-io-cell chan bindings))
+        (define msg-in-cell (channel-endpoint-msg-in-cell ep))
+        (define rnet0
+          (if io-cell
+              (let ([io-state (rt-cell-read rnet io-cell)])
+                (if (io-open? io-state)
+                    (with-handlers ([exn:fail?
+                                    (lambda (e)
+                                      (rt-cell-write rnet msg-in-cell
+                                        (expr-string (format "IO error: ~a" (exn-message e)))))])
+                      (define port (io-open-port io-state))
+                      (define data (read-string 1048576 port))  ;; 1MB max
+                      (define result
+                        (if (eof-object? data)
+                            (expr-string "")
+                            (expr-string data)))
+                      (rt-cell-write rnet msg-in-cell result))
+                    rnet))
+              rnet))
         ;; Create fresh session cell for continuation
         (define-values (rnet1 next-sess-cell)
-          (rt-fresh-session-cell-in-rnet rnet sess-bot))
+          (rt-fresh-session-cell-in-rnet rnet0 sess-bot))
         ;; Add session advance: Recv → continuation
         (define-values (rnet2 _pid)
           (rt-add-session-advance-in-rnet rnet1
             (channel-endpoint-session-cell ep) next-sess-cell
             sess-recv-like? sess-recv-like-cont))
-        ;; Add propagator to capture received value into bindings
-        ;; (For Phase 0, we just read the msg-in cell value)
-        (define msg-in-cell (channel-endpoint-msg-in-cell ep))
         ;; Update endpoint with new session cell
         (define ep* (endpoint-advance-session ep next-sess-cell))
         (define trace*
           (rt-trace-add trace (channel-endpoint-session-cell ep)
             (format "process receives from ~a" chan)))
-        ;; Record binding: use a generated variable name based on channel
-        ;; proc-recv stores the channel name and type, not a variable name
-        ;; We use the channel name as the binding key for now
+        ;; Record binding
         (define bindings* (hash-set bindings chan 'pending-recv))
         ;; Recurse into continuation
         (compile-live-process rnet2 cont
@@ -528,9 +675,14 @@
         ;; Create fresh session cell for continuation
         (define-values (rnet2 next-sess-cell)
           (rt-fresh-session-cell-in-rnet rnet1 sess-bot))
+        ;; Create fresh choice cell for continuation (recursive protocols
+        ;; need a new choice cell per selection; reusing the same cell would
+        ;; cause a contradiction on the second select)
+        (define-values (rnet2c next-choice-cell)
+          (rt-fresh-choice-cell-in-rnet rnet2))
         ;; Add session advance: Choice → selected branch
         (define-values (rnet3 _pid)
-          (rt-add-propagator rnet2
+          (rt-add-propagator rnet2c
             (list (channel-endpoint-session-cell ep))
             (list next-sess-cell)
             (lambda (n)
@@ -545,8 +697,12 @@
                      (net-cell-write n (channel-endpoint-session-cell ep) sess-top)
                      (net-cell-write n next-sess-cell branch))]
                 [else (net-cell-write n (channel-endpoint-session-cell ep) sess-top)]))))
-        ;; Update endpoint
-        (define ep* (endpoint-advance-session ep next-sess-cell))
+        ;; Update endpoint with new session cell AND new choice cell
+        (define ep* (channel-endpoint
+                     (channel-endpoint-msg-out-cell ep)
+                     (channel-endpoint-msg-in-cell ep)
+                     next-sess-cell
+                     next-choice-cell))
         (define trace*
           (rt-trace-add trace (channel-endpoint-session-cell ep)
             (format "process selects '~a on ~a" label chan)))
@@ -668,7 +824,9 @@
            (format "linked ~a ↔ ~a (forwarding)" c2 c1)))
         (values rnet3 bindings trace*)])]
 
-    ;; ---- Open: create IO channel, install bridge propagator ----
+    ;; ---- Open: create IO channel, open file directly ----
+    ;; IO operations are executed directly during compilation (not via
+    ;; bridge propagators) to ensure correct ordering: open → write/read → close.
     [(proc-open path-expr session-type cap-type cont)
      ;; 1. Create a single channel endpoint (not a pair)
      (define-values (rnet1 ep io-cell)
@@ -676,38 +834,27 @@
      ;; 2. Resolve the path expression
      (define path-val (resolve-expr path-expr bindings))
      ;; 3. Determine IO mode from session type
-     (define mode (if (sess-recv-like? session-type) 'read 'write))
+     (define mode (io-infer-mode session-type))
      ;; 4. Write io-opening to io-cell
      (define rnet2
        (rt-cell-write rnet1 io-cell
          (io-opening (expr-string-val path-val) mode)))
-     ;; 5. Install IO bridge propagator
-     (define-values (rnet3 _pid)
-       (rt-add-propagator rnet2
-         (list io-cell
-               (channel-endpoint-session-cell ep)
-               (channel-endpoint-msg-out-cell ep))
-         (list (channel-endpoint-msg-in-cell ep)
-               io-cell)
-         (make-io-bridge-propagator
-           io-cell
-           (channel-endpoint-session-cell ep)
-           (channel-endpoint-msg-in-cell ep)
-           (channel-endpoint-msg-out-cell ep))))
-     ;; 6. Actually open the file (side effect)
-     ;; io-bridge-open-file works on prop-network, so unwrap/rewrap
-     (define rnet4
+     ;; 5. Open the file directly (side effect during compilation)
+     (define rnet3
        (runtime-network
-        (io-bridge-open-file (runtime-network-prop-net rnet3) io-cell)
-        (runtime-network-channel-info rnet3)
-        (runtime-network-next-chan-id rnet3)))
-     ;; 7. Trace
+        (io-bridge-open-file (runtime-network-prop-net rnet2) io-cell)
+        (runtime-network-channel-info rnet2)
+        (runtime-network-next-chan-id rnet2)))
+     ;; 6. Trace
      (define trace*
        (rt-trace-add trace (channel-endpoint-session-cell ep)
          (format "proc-open: file ~a" (expr-string-val path-val))))
+     ;; 7. Store io-cell in bindings for direct IO in send/recv/stop
+     (define bindings*
+       (hash-set bindings (io-channel-key 'ch) io-cell))
      ;; 8. Recurse into continuation with endpoint bound to 'ch
-     (compile-live-process rnet4 cont
-       (hash-set channel-eps 'ch ep) bindings trace*)]
+     (compile-live-process rnet3 cont
+       (hash-set channel-eps 'ch ep) bindings* trace*)]
 
     ;; ---- Fallback ----
     [_ (values rnet bindings trace)]))
