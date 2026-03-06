@@ -134,7 +134,7 @@ Decisions resolved in Phase I (IO Library Design V2 §12) plus new implementatio
 | D14 | Console IO | Direct FFI to Racket `display`/`read-line`; no session for Tier 1 | New |
 | D15 | fio handle threading | Bracket pattern (`fio-with-open`); linear `Handle :1` type | V2 §12.2 |
 | D16 | fio internal architecture | `fio` backed by session channels internally (thin wrapper over `io`); not direct FFI | V2 §12.2 ("fio is a thin ergonomic layer over io") |
-| D17 | Composite capability model | Standalone `capability` declarations with `subtype` hierarchy (not union type decomposition) — matches existing `capabilities.prologos` | New; see §4 |
+| D17 | Composite capability model | **Union types** for composite caps (`type FsCap = ReadCap \| WriteCap`); attenuation via natural subtyping (`ReadCap <: FsCap`). Existing `capabilities.prologos` standalone declarations need revision. | CAPABILITY_SECURITY.md §Composite Union; see §4 |
 | D18 | Console IO capability | `println` in prelude is cap-free (no `StdioCap` required); `StdoutSession`/`StdinSession` in Tier 3 require explicit `StdioCap` | New; see §16 |
 | D19 | Bracket naming | `with-open` for both `io` and `fio` modules; `with-session` reserved for explicit session channel acquisition | New |
 | D20 | `main` as powerbox | Runtime provisions inferred capabilities to `main`; `defn main` desugars to a process internally | V2 §7, §12.6 |
@@ -165,7 +165,7 @@ Decisions resolved in Phase I (IO Library Design V2 §12) plus new implementatio
 | Union types | `typing-core.rkt` | — | Complete | Composite capabilities via union |
 | Subtype system | `typing-core.rkt` | — | Complete | Transitive subtype closure, coercion registry |
 | Schema system | multiple | — | Complete | Field registry, typed construction |
-| Capability types | `lib/prologos/core/capabilities.prologos` | 38 | Complete (partial) | 7 caps: ReadCap, WriteCap, HttpCap, StdioCap, FsCap, NetCap, SysCap + 6 subtype decls |
+| Capability types | `lib/prologos/core/capabilities.prologos` | 38 | **Needs revision** (IO-A3) | 4 leaf caps (ReadCap, WriteCap, HttpCap, StdioCap) + 3 standalone composite caps (FsCap, NetCap, SysCap) — composites must become union types per D17 |
 | Capability parser | `parser.rkt` L2826-2848 | 22 | Complete | `(capability Name)` and `(capability Name (p : Type))` — parameterized form already supported |
 
 ### What Exists But Is NOT Implemented at Runtime
@@ -186,95 +186,149 @@ Decisions resolved in Phase I (IO Library Design V2 §12) plus new implementatio
 
 ### 4.1 Existing Infrastructure
 
-The file `lib/prologos/core/capabilities.prologos` already defines 7 capability types
-and 6 subtype relationships:
+The file `lib/prologos/core/capabilities.prologos` currently defines 7 capability types
+and 6 subtype relationships using standalone declarations:
 
 ```prologos
-;; Already exists — 7 capabilities:
-capability ReadCap       ;; read from filesystem
-capability WriteCap      ;; write to filesystem
-capability HttpCap       ;; make HTTP requests
-capability StdioCap      ;; use stdin/stdout/stderr
-capability FsCap         ;; composite: filesystem
-capability NetCap        ;; composite: network
-capability SysCap        ;; top-level: all system authority
+;; Currently exists — but NEEDS REVISION (see §4.3):
+capability ReadCap       ;; leaf: read from filesystem          ← KEEP as capability
+capability WriteCap      ;; leaf: write to filesystem           ← KEEP as capability
+capability HttpCap       ;; leaf: make HTTP requests            ← KEEP as capability
+capability StdioCap      ;; leaf: use stdin/stdout/stderr       ← KEEP as capability
+capability FsCap         ;; WRONG: should be union type, not standalone capability
+capability NetCap        ;; WRONG: should be union type, not standalone capability
+capability SysCap        ;; WRONG: should be union type, not standalone capability
 
-;; Already exists — 6 subtype relationships:
-subtype ReadCap FsCap
-subtype WriteCap FsCap
-subtype HttpCap NetCap
-subtype FsCap SysCap
-subtype NetCap SysCap
-subtype StdioCap SysCap
+;; Currently exists — REDUNDANT after union type revision:
+subtype ReadCap FsCap    ;; DERIVED from union membership
+subtype WriteCap FsCap   ;; DERIVED from union membership
+subtype HttpCap NetCap   ;; DERIVED from union membership
+subtype FsCap SysCap     ;; DERIVED from union membership
+subtype NetCap SysCap    ;; DERIVED from union membership
+subtype StdioCap SysCap  ;; DERIVED from union membership
 ```
+
+Per CAPABILITY_SECURITY.md §Composite Union, composite caps must be **union types**
+(authority that encompasses any variant), not standalone declarations with subtype
+hierarchies. Phase IO-A3 revises this file — see §4.3 for the rationale and §4.2
+for the target state.
 
 The parser (`parser.rkt` L2826-2848) already supports both `(capability Name)` and
 the parameterized form `(capability Name (p : Type))` — this means dependent capability
 declarations like `capability FileCap (p : Path)` can be parsed today.
 
-### 4.2 Capabilities Needed for IO Phase 1 (File IO)
+### 4.2 Target Capability Hierarchy (after IO-A3)
 
 Doc1 (V2 §3.1) specifies 14 leaf capabilities. For file IO (Phases IO-A through IO-G),
-we need to add:
+we add two new leaf capabilities and revise composites to union types:
 
 ```prologos
-;; New leaf capabilities for file IO:
-capability AppendCap     ;; append to files
-capability StatCap       ;; query file metadata (exists?, is-file?, etc.)
+;; Leaf capabilities (zero-method traits):
+capability ReadCap       ;; read from filesystem
+capability WriteCap      ;; write to filesystem
+capability AppendCap     ;; append to files (NEW)
+capability StatCap       ;; query file metadata (NEW)
+capability HttpCap       ;; make HTTP requests
+capability StdioCap      ;; use stdin/stdout/stderr
 
-;; New subtype relationships:
-subtype AppendCap FsCap
-subtype StatCap FsCap
+;; Composite capabilities (union types — per CAPABILITY_SECURITY.md):
+type FsCap  = ReadCap | WriteCap | AppendCap | StatCap
+type NetCap = HttpCap
+type IOCap  = FsCap | NetCap | StdioCap
+type SysCap = IOCap
 ```
 
-The remaining 7 capabilities from Doc1 (MkdirCap, DeleteCap, WsCap, ListenCap,
+Attenuation is natural subtyping: `ReadCap <: FsCap <: IOCap <: SysCap`.
+
+The remaining leaf capabilities from Doc1 (MkdirCap, DeleteCap, WsCap, ListenCap,
 DbReadCap, DbWriteCap, SpawnCap, ClockCap, EnvCap) are deferred to Phase 2+ alongside
-their corresponding IO modules (network, database, process spawning).
+their corresponding IO modules (network, database, process spawning). When added,
+they expand their respective union types (e.g., `type NetCap = HttpCap | WsCap`).
 
 ### 4.3 Composite Capability Model (Decision D17)
 
-Doc1 (V2 §3.2) and CAPABILITY_SECURITY.md §Composite Union describe composite
-capabilities as **union types**: `type FsCap = ReadCap | WriteCap`. The existing
-codebase uses a **standalone capability with subtype declarations**: `capability FsCap`
-+ `subtype ReadCap FsCap`.
+CAPABILITY_SECURITY.md §Composite Union is unambiguous: composite capabilities are
+**union types**, not standalone declarations with subtype hierarchies.
 
-These are semantically different:
-- **Union type approach**: `FsCap` IS `ReadCap | WriteCap` (structural decomposition)
-- **Subtype approach**: `FsCap` is opaque; `ReadCap` happens to be a subtype (nominal)
+The logical distinction is fundamental:
+- **Bundles are conjunctive (AND)** — contraction, narrowing, "must satisfy all"
+- **Composite caps are disjunctive (OR)** — weakening, widening, "grants any of these"
 
-**Decision D17**: We use the **subtype approach** (matching the existing implementation).
-The nominal model is cleaner — no structural decomposition needed, and it composes
-naturally with the capability inference propagator which works with atomic names. The
-subtype registry provides the same subsumption semantics: a function requiring
-`{ReadCap}` is satisfied by a caller with `{FsCap}` through transitive subtype closure.
+Union types are the correct expression because a capability is something you *have*
+(authority), not something you *must prove* (constraint). `FsCap` grants authority that
+*encompasses* both reading and writing — this is union, not intersection.
+
+**Decision D17**: Composite capabilities are **union types**. Attenuation follows
+naturally as subtyping (`ReadCap <: FsCap` because a variant is a subtype of its union).
+
+```prologos
+;; Leaf capabilities — zero-method traits as authority proofs
+capability ReadCap
+capability WriteCap
+capability AppendCap
+capability StatCap
+capability HttpCap
+capability StdioCap
+
+;; Composite capabilities — union types (authority encompasses any variant)
+type FsCap    = ReadCap | WriteCap | AppendCap | StatCap
+type NetCap   = HttpCap
+type IOCap    = FsCap | NetCap | StdioCap
+type SysCap   = IOCap   ;; SysCap encompasses all IO authority (+ future: SpawnCap, ClockCap)
+```
+
+Attenuation falls out of union type subsumption:
+- `ReadCap <: FsCap` — read authority is a subset of filesystem authority
+- `FsCap <: IOCap` — filesystem authority is a subset of all IO authority
+- `IOCap <: SysCap` — IO authority is a subset of system authority
+
+When a function requires `{ReadCap}` and the caller has `{fs : FsCap}`, the compiler
+resolves it through subtype subsumption — `ReadCap <: FsCap`, so `FsCap` satisfies
+the `ReadCap` requirement. No explicit attenuation needed. This is the zero-cost
+common case (CAPABILITY_SECURITY.md §Attenuation as Subtyping).
+
+**Migration note**: The existing `capabilities.prologos` uses standalone `capability`
+declarations for composites (`capability FsCap`) with explicit `subtype` declarations.
+Phase IO-A3 must revise these to union type definitions. The `subtype` declarations
+for leaf-to-composite relationships become redundant (derived from union membership)
+but may be retained as explicit documentation or for the subsumption checker if it
+doesn't yet derive subtypes from union structure automatically.
 
 ### 4.4 IOCap — Top of IO Hierarchy
 
-Doc1 defines `IOCap` as the top-level IO authority encompassing all IO capabilities.
-The existing `SysCap` serves this role. For consistency with Doc1 naming:
+Doc1 §3 defines `IOCap` as the top-level IO authority. Per the union model:
 
 ```prologos
-;; Option A: Add IOCap as alias for SysCap
-;; capability IOCap   ;; already is SysCap
-
-;; Option B: Keep SysCap as the top (simpler)
-;; Doc1's `{sys : IOCap}` on main becomes `{sys : SysCap}`
+type IOCap = FsCap | NetCap | StdioCap
+type SysCap = IOCap   ;; SysCap = IOCap for now; expands with SpawnCap, ClockCap later
 ```
 
-For Phase 1, we use `SysCap` as the top-level authority (it already exists and subsumes
-all capabilities). `IOCap` can be added as a separate declaration if the distinction
-between "system capabilities" and "IO capabilities" becomes meaningful in Phase 2+.
+`IOCap` and `SysCap` are distinct — `IOCap` encompasses IO authority, while `SysCap`
+encompasses all system authority (IO + process spawning + clock access + future
+capabilities). For Phase 1, `SysCap = IOCap` (they're equivalent), but the names are
+kept separate for forward compatibility. `main` receives `SysCap`.
 
 ### 4.5 AST Pipeline Impact
 
-None — `capability` and `subtype` are existing top-level forms. No AST changes needed.
+If the existing `capability` keyword creates standalone zero-method traits and the
+union type `type` keyword already creates union types, no new AST is needed — we just
+use `type` instead of `capability` for composites. The `capability` keyword remains
+for leaf capabilities (zero-method traits).
+
+**Open question**: Does the capability inference propagator handle union-typed caps?
+It currently works with atomic symbol names in `cap-set`. If `FsCap` is now a union
+type rather than an atomic cap name, `extract-capability-requirements` may need to
+resolve through union membership. This should be verified in Phase IO-A3 and addressed
+in Phase IO-H (capability inference pipeline integration).
 
 ### 4.6 Tests (~5, part of IO-A3)
 
-- New capabilities (`AppendCap`, `StatCap`) exist after module load
-- Subtype relationships hold: `AppendCap <: FsCap <: SysCap`
-- Subtype subsumption: function requiring `AppendCap` satisfied by `FsCap` caller
-- Regression: existing 7 capabilities and 6 subtypes unchanged
+- Composite cap `FsCap` is a union type (`ReadCap | WriteCap | AppendCap | StatCap`)
+- Attenuation: `ReadCap <: FsCap` via union subsumption
+- Transitive: `ReadCap <: FsCap <: IOCap <: SysCap`
+- Function requiring `{ReadCap}` satisfied by caller with `{FsCap}` (subsumption)
+- `IOCap` and `SysCap` exist as top-level union types
+- Regression: leaf capabilities (`ReadCap`, `WriteCap`, etc.) unchanged
 
 ---
 
@@ -1759,14 +1813,17 @@ The α (abstraction) and γ (concretization) Galois connection functions in
 #### 19.3.4 Capability Subsumption
 
 A function requiring `{FileCap "/data"}` is satisfied by a caller with `{FsCap}` —
-the blanket cap subsumes the specific one. This uses the existing subtype registry:
+the blanket cap subsumes the specific one. With union-typed composites (D17), the
+subsumption chain is:
 
 ```
-FileCap "/data" <: ReadCap <: FsReadCap <: FsCap <: IOCap
+FileCap "/data" <: ReadCap <: FsCap (= ReadCap | WriteCap | ...) <: IOCap <: SysCap
 ```
 
 The subsumption check becomes: for each required `cap-entry`, check if the provided
 cap-set contains a subsuming entry. Flat caps always subsume their applied refinements.
+Union type membership provides the subtype relationships — `ReadCap <: FsCap` because
+`ReadCap` is a variant of the `FsCap` union.
 
 #### 19.3.5 Dependent Cap in Convenience Functions
 
@@ -2118,33 +2175,40 @@ early to establish the capability hierarchy before IO functions reference it.
 
 #### IO-A3: IO Capability Extensions
 
-**Goal**: Extend `capabilities.prologos` with IO-specific capabilities. See §4 for full design.
+**Goal**: Revise `capabilities.prologos` to use **union types** for composite capabilities
+(per CAPABILITY_SECURITY.md §Composite Union, Decision D17). Add new leaf capabilities.
+See §4 for full design.
 
 **Files modified**:
 | File | Change |
 |------|--------|
-| `lib/prologos/core/capabilities.prologos` | Add `AppendCap`, `StatCap`, `IOCap`; add subtype declarations |
+| `lib/prologos/core/capabilities.prologos` | Add `AppendCap`, `StatCap` leaves; revise `FsCap`, `NetCap` to union types; add `IOCap`, `SysCap` as union types |
 
-**New declarations**:
+**Revised `capabilities.prologos`**:
 ```prologos
-;; New leaf capabilities
-capability AppendCap     ;; append to files (distinct from write)
-capability StatCap       ;; query filesystem metadata (exists?, is-file?, is-dir?)
+;; Leaf capabilities — zero-method traits (authority proofs)
+capability ReadCap       ;; read from filesystem
+capability WriteCap      ;; write to filesystem
+capability AppendCap     ;; append to files (distinct from overwrite)
+capability StatCap       ;; query filesystem metadata
+capability HttpCap       ;; make HTTP requests
+capability StdioCap      ;; use stdin/stdout/stderr
 
-;; New composite
-capability IOCap         ;; top of IO hierarchy (subsumes FsCap, NetCap, StdioCap)
-
-;; New subtype relationships
-subtype AppendCap FsCap
-subtype StatCap FsCap
-subtype IOCap SysCap       ;; IOCap is below SysCap (IOCap for IO, SysCap for everything)
-subtype FsCap IOCap
-subtype NetCap IOCap
-subtype StdioCap IOCap
+;; Composite capabilities — union types (authority encompasses any variant)
+type FsCap  = ReadCap | WriteCap | AppendCap | StatCap
+type NetCap = HttpCap
+type IOCap  = FsCap | NetCap | StdioCap
+type SysCap = IOCap    ;; expands later: IOCap | SpawnCap | ClockCap
 ```
 
-**Tests**: `tests/test-io-cap-types-01.rkt` (~5 tests: parse, subtype checking, attenuation)
-**Depends on**: Nothing (pure declarations)
+**Migration**: Removes standalone `capability FsCap`, `capability NetCap`, `capability SysCap`
+declarations and their `subtype` declarations. Union membership provides the subtype
+relationships automatically (`ReadCap <: FsCap` because `ReadCap` is a variant of `FsCap`).
+
+**Tests**: `tests/test-io-cap-types-01.rkt` (~5 tests: parse, union type formation, subtype
+subsumption via union membership, transitive attenuation)
+**Depends on**: Nothing (pure declarations); but verify union-based subsumption works with
+existing `subtype` registry (may need `auto-register-union-subtypes` in typing-core.rkt)
 
 ---
 
