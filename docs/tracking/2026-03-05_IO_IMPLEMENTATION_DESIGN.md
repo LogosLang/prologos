@@ -1,6 +1,6 @@
 # IO Library Implementation Design
 
-**Status**: Implementation Phase — IO-A/B/C/D/E/F/J complete, IO-G next
+**Status**: Implementation Phase — IO-A/B/C/D/E/F/G/H/I/J complete
 **Predecessor**: `docs/tracking/2026-03-05_IO_LIBRARY_DESIGN_V2.md` (Phase I — API research + gap analysis)
 **Template**: Follows the format of `docs/tracking/2026-03-03_SESSION_TYPE_DESIGN.md`
 **Date**: 2026-03-05
@@ -23,19 +23,20 @@
 | IO-D | D2: Console IO functions | ✅ | `8f5235a` | 4 tests; `print`, `println`, `read-ln` in io.prologos; print/println added to prelude |
 | IO-D | D3: `with-open` macro | ✅ | `cbfa039` | 8 tests; preparse macro in `proc-item->sexp` expands to proc-open + body + proc-sel ch :close; auto-close on block exit |
 | IO-D | D4: Filesystem query functions | ✅ | `832cd5e` | 7 tests; `exists?`, `file?`, `dir?` in `prologos::io::fs`; `io-ffi-path-exists` wrapper (Racket `file-exists?` excludes dirs); `list-dir` deferred (needs List marshalling) |
-| IO-D | D5: `main` powerbox mechanism | ⏳ | | DEFERRED → IO-H (needs cap inference) |
+| IO-D | D5: `main` powerbox mechanism | ✅ | `f2dd088` | 11 tests; `:requires` on foreign blocks, `-0>` cap params on csv read/write, SysCap provisioned for `main` and top-level evals, batch-worker cap-registry fix |
 | IO-E | E1: Protocol definitions | ✅ | `54071c5` | 11 tests; `FileRead`/`FileWrite`/`FileAppend`/`FileRW` in `io-protocols.prologos`; duality, structure, branch validation |
 | IO-E | E2: Session-based file IO | ✅ | `fe6ea88` | 10 tests; direct IO execution in compile-live-process (not bridge propagators); `io-infer-mode` for choice protocols; fresh choice cells for recursive sessions; `read+write`/`append` modes |
 | IO-E | E3: Protocol composition tests | ✅ | `a2b5c7c` | 6 tests; fixed `proc-item->sexp` missing continuation for open/connect/listen boundary ops; WS pipeline defproc with open + select + recv |
 | IO-F | F1: Linear handle type | ✅ | `d249098` | `Handle` ADT + `fio-open`/`fio-read-all`/`fio-write`/`fio-close` with `:1` Pi types; integer port table in `io-ffi.rkt`; data-flow FFI tricks for lazy eval; type checker fix for let+match (beta-redex check propagation) |
 | IO-F | F2: fio bracket pattern | ✅ | `d249098` | `fio-with-file` bracket: open, run body, close; match-on-unit forces close; read-and-cache pattern for lazy eval safety; 15 tests |
-| IO-G | G1: CSV parser | | | RFC 4180 parsing |
-| IO-G | G2: CSV file functions | | | `read-csv`, `write-csv` |
-| IO-H | H1: Cap inference pipeline | | | Wire into `driver.rkt` |
-| IO-I | I1: `cap-set` with type exprs | | | Extend cap-set for applied caps |
-| IO-I | I2: `extract-capability-requirements` for `expr-app` | | | `FileCap "/data"` extraction |
-| IO-I | I3: Cap-type bridge for applied caps | | | α/γ for `expr-app` cap types |
-| IO-I | I4: Path-indexed cap tests | | | End-to-end dependent caps |
+| IO-G | G1: CSV parser | ✅ | `7d621e8` | 20 tests; RFC 4180 state machine in `io-ffi.rkt`; RS/US (ASCII 30/31) serialization for structured data through String-only FFI boundary; `csv-parse-serialized`, `csv-serialize-rows`, `csv-quote-field`, `csv-read-file`, `csv-write-file` |
+| IO-G | G2: CSV module + file functions | ✅ | `7d621e8` | 8 E2E tests; `csv.prologos` with `parse-csv`, `csv-to-string`, `read-csv`, `write-csv`; implicit type params in `map` (no explicit type args); RS/US separators via `str::from-char [char::from-code N]` |
+| IO-H | H1: Cap inference pipeline | ✅ | `3a72975` | 10 tests; `run-post-compilation-inference!` in `driver.rkt`; `current-module-cap-result` parameter; hooked into `process-string`/`process-string-ws`/`load-module` |
+| IO-H | H2: Underdeclared caps → error | ✅ | `84a8d83` | Upgraded W2004 warning to E2004 hard error (security violation per user feedback: "underdeclared caps must panic") |
+| IO-I | I1: `cap-entry` struct + `cap-set` migration | ✅ | `5c9eb93` | `cap-entry` (name + optional index-expr); `cap-set` from `seteq` to `set` of `cap-entry`; `cap-set-names` backward-compat helper; ~10 existing test files migrated |
+| IO-I | I2: `extract-capability-requirements` for `expr-app` | ✅ | `5c9eb93` | Match arm for `(expr-Pi mult (expr-app f idx) cod)` where `f` is capability-typed `expr-fvar` |
+| IO-I | I3: Cap-type bridge for applied caps | ✅ | `5c9eb93` | α direction: `type-to-cap-set` handles `expr-app` and Pi with applied cap domain; γ direction: `cap-set-to-type` reconstructs `expr-app` for indexed caps; `cap-entry->type-expr` helper |
+| IO-I | I4: REPL + E2E dependent cap tests | ✅ | `5c9eb93` | 15 tests across `test-io-dep-cap-01.rkt` (11) and `test-io-dep-cap-02.rkt` (4); REPL commands (`cap-closure`, `cap-audit`, `cap-verify`, `cap-bridge`) display applied cap syntax via `cap-entry->string` |
 | IO-J | J1: Elaborator binder scope | ✅ | `059a934` | Racket params `current-sess-expr-env`/`current-sess-expr-depth` thread expression-level scope through session body elaboration; `env-extend` + `parameterize` for dsend/drecv continuations |
 | IO-J | J2: Runtime dep send/recv | ✅ | `059a934` | `sess-dsend`/`sess-drecv` added to `sess-send-like?`/`sess-recv-like?` predicates + cont extractors; `substS` applied in send advance; io-bridge local predicates updated; 14 tests |
 | IO-J | J3: Grammar + E2E tests | ✅ | `594d780` | WS-mode `ws-session-step` production added to grammar.ebnf; Session Types section added to grammar.org; 8 E2E tests validating dependent sessions through full WS pipeline |
