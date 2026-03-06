@@ -9,29 +9,43 @@ ns prologos::core::capabilities :no-prelude
 ;;
 ;; Hierarchy (attenuation):
 ;;
-;;                SysCap
-;;              /   |   \
-;;          FsCap NetCap StdioCap
-;;          / \     |
-;;   ReadCap WriteCap HttpCap
+;;                     SysCap
+;;                       |
+;;                     IOCap
+;;                   /   |   \
+;;              FsCap  NetCap  StdioCap
+;;           / | \  \    |
+;;     ReadCap WriteCap AppendCap StatCap  HttpCap
 ;;
+;; Composite capabilities are conceptually union types (D17):
+;;   FsCap  = ReadCap | WriteCap | AppendCap | StatCap
+;;   NetCap = HttpCap
+;;   IOCap  = FsCap | NetCap | StdioCap
+;;   SysCap = IOCap
 
 ;; --- Leaf capabilities (atomic authority) ---
 capability ReadCap
 capability WriteCap
+capability AppendCap
+capability StatCap
 capability HttpCap
 capability StdioCap
 
 ;; --- Composite capabilities (grouped authority) ---
 capability FsCap
 capability NetCap
+capability IOCap
 capability SysCap
 
 ;; --- Subtype hierarchy (attenuation) ---
-;; A function requiring ReadCap can be satisfied by FsCap or SysCap.
+;; A function requiring ReadCap can be satisfied by FsCap, IOCap, or SysCap.
+;; Transitive closure is computed at registration time.
 subtype ReadCap FsCap
 subtype WriteCap FsCap
+subtype AppendCap FsCap
+subtype StatCap FsCap
 subtype HttpCap NetCap
-subtype FsCap SysCap
-subtype NetCap SysCap
-subtype StdioCap SysCap
+subtype FsCap IOCap
+subtype NetCap IOCap
+subtype StdioCap IOCap
+subtype IOCap SysCap
