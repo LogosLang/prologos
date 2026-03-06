@@ -21,7 +21,9 @@
          "processes.rkt"
          "pretty-print.rkt"
          "syntax.rkt"
-         "io-bridge.rkt")
+         "io-bridge.rkt"
+         "effect-position.rkt"
+         "effect-bridge.rkt")
 
 (provide
  ;; Structs
@@ -63,7 +65,12 @@
  io-infer-mode
  ;; Async-aware predicates (IO-J2)
  sess-send-like? sess-send-like-cont
- sess-recv-like? sess-recv-like-cont)
+ sess-recv-like? sess-recv-like-cont
+ ;; AD-C: Effect collection mode
+ collecting-effects?
+ get-effect-acc
+ get-chan-depth
+ get-eff-pos-cells)
 
 ;; ========================================
 ;; Async-aware predicates: accept both sync and async session variants
@@ -529,6 +536,59 @@
       rnet))
 
 ;; ----------------------------------------
+;; AD-C: Effect Collection Helpers
+;; ----------------------------------------
+
+;; When #:collect-effects? is #t, effect collection state is stored in
+;; the bindings hash under special keys (threaded through recursive calls
+;; automatically — no signature changes needed for internal recursion).
+
+(define eff-collect-key    '__collect_effects?)
+(define eff-acc-key        '__effect_acc)
+(define eff-chan-depth-key  '__chan_depth)
+(define eff-pos-cells-key  '__eff_pos_cells)
+
+;; Is this walk in effect collection mode?
+(define (collecting-effects? bindings)
+  (hash-ref bindings eff-collect-key #f))
+
+;; Get the accumulated effect-set from bindings.
+(define (get-effect-acc bindings)
+  (hash-ref bindings eff-acc-key effect-set-empty))
+
+;; Get the current depth for a channel.
+(define (get-chan-depth bindings chan)
+  (hash-ref (hash-ref bindings eff-chan-depth-key (hasheq)) chan 0))
+
+;; Increment the depth for a channel.
+(define (inc-chan-depth bindings chan)
+  (define depths (hash-ref bindings eff-chan-depth-key (hasheq)))
+  (hash-set bindings eff-chan-depth-key
+    (hash-set depths chan (add1 (hash-ref depths chan 0)))))
+
+;; Add an effect descriptor to the accumulator in bindings.
+(define (add-effect-to-bindings bindings desc)
+  (hash-set bindings eff-acc-key
+    (effect-set-add (get-effect-acc bindings) desc)))
+
+;; Get the effect position cells hash from bindings.
+(define (get-eff-pos-cells bindings)
+  (hash-ref bindings eff-pos-cells-key (hasheq)))
+
+;; Store an effect position cell for a channel.
+(define (set-eff-pos-cell bindings chan cell-id)
+  (define cells (hash-ref bindings eff-pos-cells-key (hasheq)))
+  (hash-set bindings eff-pos-cells-key
+    (hash-set cells chan cell-id)))
+
+;; Initialize effect collection state in bindings (first call only).
+(define (init-effect-collection bindings)
+  (hash-set (hash-set (hash-set bindings
+    eff-collect-key #t)
+    eff-acc-key effect-set-empty)
+    eff-chan-depth-key (hasheq)))
+
+;; ----------------------------------------
 ;; Main Compiler: compile-live-process
 ;; ----------------------------------------
 
@@ -540,9 +600,22 @@
 ;; bindings:     hasheq : symbol → value (accumulated recv bindings)
 ;; trace:        hasheq : cell-id → (listof string)
 ;;
+;; #:collect-effects? — when #t, accumulates effect descriptors in bindings
+;;   instead of performing inline IO. Used by Architecture D pipeline.
+;;   Default #f preserves Architecture A behavior unchanged.
+;;
 ;; Returns: (values rnet* bindings* trace*)
 (define (compile-live-process rnet proc channel-eps
-                              [bindings (hasheq)] [trace (hasheq)])
+                              [bindings (hasheq)] [trace (hasheq)]
+                              #:collect-effects? [collect? #f])
+  ;; Initialize effect collection state on first call (AD-C1).
+  ;; On recursive calls, collect? defaults to #f but the state is
+  ;; already in bindings from the first call.
+  (define bindings0
+    (if (and collect? (not (collecting-effects? bindings)))
+        (init-effect-collection bindings)
+        bindings))
+  (define collecting? (collecting-effects? bindings0))
   (match proc
     ;; ---- Stop: all channels must be at End ----
     ;; Direct IO: close any IO ports immediately during compilation
@@ -550,23 +623,30 @@
     ;;  propagator firing-order issues).
     ;; Session guard: passive — waits for advancement chain, doesn't write End.
     [(proc-stop)
-     ;; 1. Close IO ports directly
-     (define rnet-io
-       (for/fold ([r rnet])
+     ;; 1. Close IO ports directly (or collect eff-close descriptors in D mode)
+     (define-values (rnet-io bindings-stop)
+       (for/fold ([r rnet] [b bindings0])
                  ([(chan _ep) (in-hash channel-eps)])
-         (define io-cell (get-io-cell chan bindings))
-         (if io-cell
-             (let ([io-state (rt-cell-read r io-cell)])
-               (if (io-open? io-state)
-                   (begin
-                     (with-handlers ([exn:fail? void])
-                       (define port (io-open-port io-state))
-                       (cond
-                         [(input-port? port)  (close-input-port port)]
-                         [(output-port? port) (close-output-port port)]))
-                     (rt-cell-write r io-cell io-closed))
-                   r))
-             r)))
+         (define io-cell (get-io-cell chan b))
+         (cond
+           ;; AD-C1: collect eff-close instead of closing ports
+           [(and collecting? io-cell)
+            (define depth (get-chan-depth b chan))
+            (values r (add-effect-to-bindings b
+                        (eff-close chan (eff-pos chan depth))))]
+           ;; Architecture A: close ports directly
+           [io-cell
+            (let ([io-state (rt-cell-read r io-cell)])
+              (if (io-open? io-state)
+                  (begin
+                    (with-handlers ([exn:fail? void])
+                      (define port (io-open-port io-state))
+                      (cond
+                        [(input-port? port)  (close-input-port port)]
+                        [(output-port? port) (close-output-port port)]))
+                    (values (rt-cell-write r io-cell io-closed) b))
+                  (values r b)))]
+           [else (values r b)])))
      ;; 2. Install passive session guard propagators
      (define-values (rnet* trace*)
        (for/fold ([r rnet-io] [t trace])
@@ -583,31 +663,42 @@
                  [else (net-cell-write n sess-cell sess-top)]))))
          (values r* (rt-trace-add t sess-cell
                       (format "process stops (expects ~a at End)" chan)))))
-     (values rnet* bindings trace*)]
+     (values rnet* bindings-stop trace*)]
 
     ;; ---- Send: write value to channel-out, advance session ----
     [(proc-send expr chan cont)
      (define ep (hash-ref channel-eps chan #f))
      (cond
-       [(not ep) (values rnet bindings trace)]  ;; unknown channel
+       [(not ep) (values rnet bindings0 trace)]  ;; unknown channel
        [else
-        (define val (resolve-expr expr bindings))
+        (define val (resolve-expr expr bindings0))
         ;; Write value to msg-out cell
         (define rnet1 (rt-cell-write rnet (channel-endpoint-msg-out-cell ep) val))
-        ;; Direct IO: if this is an IO channel, write to file immediately
-        ;; (IO operations must execute during compilation, not during quiescence,
-        ;;  because propagator firing order cannot guarantee write-before-close)
-        (define io-cell (get-io-cell chan bindings))
-        (when io-cell
-          (define io-state (rt-cell-read rnet1 io-cell))
-          (when (io-open? io-state)
-            (with-handlers ([exn:fail? void])
-              (define port (io-open-port io-state))
-              (define str-val (if (expr-string? val)
-                                  (expr-string-val val)
-                                  (format "~a" val)))
-              (write-string str-val port)
-              (flush-output port))))
+        ;; AD-C1: collect eff-write descriptor or perform inline IO
+        (define io-cell (get-io-cell chan bindings0))
+        (define bindings-send
+          (cond
+            ;; AD-C1: collect effect descriptor
+            [(and collecting? io-cell)
+             (define depth (get-chan-depth bindings0 chan))
+             (add-effect-to-bindings bindings0
+               (eff-write chan (eff-pos chan depth) val))]
+            ;; Architecture A: direct IO (write to file immediately)
+            [else
+             (when io-cell
+               (define io-state (rt-cell-read rnet1 io-cell))
+               (when (io-open? io-state)
+                 (with-handlers ([exn:fail? void])
+                   (define port (io-open-port io-state))
+                   (define str-val (if (expr-string? val)
+                                       (expr-string-val val)
+                                       (format "~a" val)))
+                   (write-string str-val port)
+                   (flush-output port))))
+             bindings0]))
+        ;; Increment channel depth (AD-C1: for position tracking)
+        (define bindings-depth
+          (if collecting? (inc-chan-depth bindings-send chan) bindings-send))
         ;; Create fresh session cell for continuation
         (define-values (rnet2 next-sess-cell)
           (rt-fresh-session-cell-in-rnet rnet1 sess-bot))
@@ -630,35 +721,48 @@
             (format "process sends on ~a" chan)))
         ;; Recurse into continuation
         (compile-live-process rnet3 cont
-          (hash-set channel-eps chan ep*) bindings trace*)])]
+          (hash-set channel-eps chan ep*) bindings-depth trace*)])]
 
     ;; ---- Recv: read from channel-in, bind value, advance session ----
     [(proc-recv chan _binding _type cont)
      (define ep (hash-ref channel-eps chan #f))
      (cond
-       [(not ep) (values rnet bindings trace)]
+       [(not ep) (values rnet bindings0 trace)]
        [else
-        ;; Direct IO: if this is an IO channel, read from file immediately
-        ;; (IO operations must execute during compilation, not during quiescence)
-        (define io-cell (get-io-cell chan bindings))
+        ;; AD-C1: collect eff-read descriptor or perform inline IO
+        (define io-cell (get-io-cell chan bindings0))
         (define msg-in-cell (channel-endpoint-msg-in-cell ep))
-        (define rnet0
-          (if io-cell
-              (let ([io-state (rt-cell-read rnet io-cell)])
-                (if (io-open? io-state)
-                    (with-handlers ([exn:fail?
-                                    (lambda (e)
-                                      (rt-cell-write rnet msg-in-cell
-                                        (expr-string (format "IO error: ~a" (exn-message e)))))])
-                      (define port (io-open-port io-state))
-                      (define data (read-string 1048576 port))  ;; 1MB max
-                      (define result
-                        (if (eof-object? data)
-                            (expr-string "")
-                            (expr-string data)))
-                      (rt-cell-write rnet msg-in-cell result))
-                    rnet))
-              rnet))
+        (define-values (rnet0 bindings-recv)
+          (cond
+            ;; AD-C1: collect effect descriptor
+            [(and collecting? io-cell)
+             (define depth (get-chan-depth bindings0 chan))
+             (values rnet
+                     (add-effect-to-bindings bindings0
+                       (eff-read chan (eff-pos chan depth))))]
+            ;; Architecture A: direct IO (read from file immediately)
+            [else
+             (values
+              (if io-cell
+                  (let ([io-state (rt-cell-read rnet io-cell)])
+                    (if (io-open? io-state)
+                        (with-handlers ([exn:fail?
+                                        (lambda (e)
+                                          (rt-cell-write rnet msg-in-cell
+                                            (expr-string (format "IO error: ~a" (exn-message e)))))])
+                          (define port (io-open-port io-state))
+                          (define data (read-string 1048576 port))  ;; 1MB max
+                          (define result
+                            (if (eof-object? data)
+                                (expr-string "")
+                                (expr-string data)))
+                          (rt-cell-write rnet msg-in-cell result))
+                        rnet))
+                  rnet)
+              bindings0)]))
+        ;; Increment channel depth (AD-C1: for position tracking)
+        (define bindings-depth
+          (if collecting? (inc-chan-depth bindings-recv chan) bindings-recv))
         ;; Create fresh session cell for continuation
         (define-values (rnet1 next-sess-cell)
           (rt-fresh-session-cell-in-rnet rnet0 sess-bot))
@@ -673,7 +777,7 @@
           (rt-trace-add trace (channel-endpoint-session-cell ep)
             (format "process receives from ~a" chan)))
         ;; Record binding
-        (define bindings* (hash-set bindings chan 'pending-recv))
+        (define bindings* (hash-set bindings-depth chan 'pending-recv))
         ;; Recurse into continuation
         (compile-live-process rnet2 cont
           (hash-set channel-eps chan ep*) bindings* trace*)])]
@@ -682,7 +786,7 @@
     [(proc-sel chan label cont)
      (define ep (hash-ref channel-eps chan #f))
      (cond
-       [(not ep) (values rnet bindings trace)]
+       [(not ep) (values rnet bindings0 trace)]
        [else
         ;; Write label to choice cell
         (define rnet1 (rt-cell-write rnet (channel-endpoint-choice-cell ep) label))
@@ -720,15 +824,18 @@
         (define trace*
           (rt-trace-add trace (channel-endpoint-session-cell ep)
             (format "process selects '~a on ~a" label chan)))
+        ;; Increment channel depth (AD-C1: select is one step)
+        (define bindings-sel
+          (if collecting? (inc-chan-depth bindings0 chan) bindings0))
         ;; Recurse
         (compile-live-process rnet3 cont
-          (hash-set channel-eps chan ep*) bindings trace*)])]
+          (hash-set channel-eps chan ep*) bindings-sel trace*)])]
 
     ;; ---- Case/Offer: watch choice cell, compile each branch (guarded) ----
     [(proc-case chan proc-branches)
      (define ep (hash-ref channel-eps chan #f))
      (cond
-       [(not ep) (values rnet bindings trace)]
+       [(not ep) (values rnet bindings0 trace)]
        [else
         (define choice-cell (channel-endpoint-choice-cell ep))
         (define sess-cell (channel-endpoint-session-cell ep))
@@ -768,7 +875,10 @@
         ;; Compile each branch guarded on the choice cell value
         ;; All branches are compiled, but only the one matching the choice
         ;; will see non-bot values on its message cells.
-        (for/fold ([r rnet2] [b bindings] [t trace*])
+        ;; Increment channel depth (AD-C1: case/offer is one step)
+        (define bindings-case
+          (if collecting? (inc-chan-depth bindings0 chan) bindings0))
+        (for/fold ([r rnet2] [b bindings-case] [t trace*])
                   ([pb (in-list proc-branches)])
           (define lbl (car pb))
           (define p (cdr pb))
@@ -792,7 +902,7 @@
      ;; Compile p1 with ch → ep-a
      (define-values (rnet3 bindings1 trace1)
        (compile-live-process rnet2 p1
-         (hash-set channel-eps 'ch ep-a) bindings trace*))
+         (hash-set channel-eps 'ch ep-a) bindings0 trace*))
      ;; Compile p2 with ch → ep-b
      (compile-live-process rnet3 p2
        (hash-set channel-eps 'ch ep-b) bindings1 trace1)]
@@ -800,7 +910,7 @@
     ;; ---- Par: compile both sides with shared channels ----
     [(proc-par p1 p2)
      (define-values (rnet1 bindings1 trace1)
-       (compile-live-process rnet p1 channel-eps bindings trace))
+       (compile-live-process rnet p1 channel-eps bindings0 trace))
      (compile-live-process rnet1 p2 channel-eps bindings1 trace1)]
 
     ;; ---- Link: forward between two channels ----
@@ -808,7 +918,7 @@
      (define ep1 (hash-ref channel-eps c1 #f))
      (define ep2 (hash-ref channel-eps c2 #f))
      (cond
-       [(not (and ep1 ep2)) (values rnet bindings trace)]
+       [(not (and ep1 ep2)) (values rnet bindings0 trace)]
        [else
         ;; Forward msg: c1.out → c2.in, c2.out → c1.in
         (define-values (rnet1 _p1)
@@ -836,7 +946,7 @@
              (format "linked ~a ↔ ~a (forwarding)" c1 c2))
            (channel-endpoint-session-cell ep2)
            (format "linked ~a ↔ ~a (forwarding)" c2 c1)))
-        (values rnet3 bindings trace*)])]
+        (values rnet3 bindings0 trace*)])]
 
     ;; ---- Open: create IO channel, open file directly ----
     ;; IO operations are executed directly during compilation (not via
@@ -846,32 +956,64 @@
      (define-values (rnet1 ep io-cell)
        (rt-new-io-channel rnet session-type))
      ;; 2. Resolve the path expression
-     (define path-val (resolve-expr path-expr bindings))
+     (define path-val (resolve-expr path-expr bindings0))
      ;; 3. Determine IO mode from session type
      (define mode (io-infer-mode session-type))
-     ;; 4. Write io-opening to io-cell
-     (define rnet2
-       (rt-cell-write rnet1 io-cell
-         (io-opening (expr-string-val path-val) mode)))
-     ;; 5. Open the file directly (side effect during compilation)
-     (define rnet3
-       (runtime-network
-        (io-bridge-open-file (runtime-network-prop-net rnet2) io-cell)
-        (runtime-network-channel-info rnet2)
-        (runtime-network-next-chan-id rnet2)))
-     ;; 6. Trace
-     (define trace*
-       (rt-trace-add trace (channel-endpoint-session-cell ep)
-         (format "proc-open: file ~a" (expr-string-val path-val))))
-     ;; 7. Store io-cell in bindings for direct IO in send/recv/stop
-     (define bindings*
-       (hash-set bindings (io-channel-key 'ch) io-cell))
-     ;; 8. Recurse into continuation with endpoint bound to 'ch
-     (compile-live-process rnet3 cont
-       (hash-set channel-eps 'ch ep) bindings* trace*)]
+     (cond
+       [collecting?
+        ;; AD-C1: Collect eff-open descriptor instead of opening file.
+        ;; IO cell stays at io-bot (no file opened).
+        (define bindings-eff
+          (add-effect-to-bindings bindings0
+            (eff-open 'ch (eff-pos 'ch 0) (expr-string-val path-val) mode)))
+        ;; AD-C2: Install session-effect bridge for position tracking.
+        (define sess-cell (channel-endpoint-session-cell ep))
+        (define pnet (runtime-network-prop-net rnet1))
+        (define-values (pnet2 eff-cell)
+          (net-new-cell pnet eff-bot eff-pos-merge))
+        (define-values (pnet3 _pid)
+          (add-session-effect-bridge pnet2 sess-cell eff-cell 'ch session-type))
+        (define rnet2
+          (runtime-network pnet3
+                           (runtime-network-channel-info rnet1)
+                           (runtime-network-next-chan-id rnet1)))
+        ;; Store io-cell (for IO channel detection) and position cell in bindings
+        (define bindings*
+          (set-eff-pos-cell
+            (hash-set bindings-eff (io-channel-key 'ch) io-cell)
+            'ch eff-cell))
+        ;; Trace
+        (define trace*
+          (rt-trace-add trace (channel-endpoint-session-cell ep)
+            (format "proc-open: file ~a (effect collection)" (expr-string-val path-val))))
+        ;; Recurse
+        (compile-live-process rnet2 cont
+          (hash-set channel-eps 'ch ep) bindings* trace*)]
+       [else
+        ;; Architecture A: open file directly
+        ;; 4. Write io-opening to io-cell
+        (define rnet2
+          (rt-cell-write rnet1 io-cell
+            (io-opening (expr-string-val path-val) mode)))
+        ;; 5. Open the file directly (side effect during compilation)
+        (define rnet3
+          (runtime-network
+           (io-bridge-open-file (runtime-network-prop-net rnet2) io-cell)
+           (runtime-network-channel-info rnet2)
+           (runtime-network-next-chan-id rnet2)))
+        ;; 6. Trace
+        (define trace*
+          (rt-trace-add trace (channel-endpoint-session-cell ep)
+            (format "proc-open: file ~a" (expr-string-val path-val))))
+        ;; 7. Store io-cell in bindings for direct IO in send/recv/stop
+        (define bindings*
+          (hash-set bindings0 (io-channel-key 'ch) io-cell))
+        ;; 8. Recurse into continuation with endpoint bound to 'ch
+        (compile-live-process rnet3 cont
+          (hash-set channel-eps 'ch ep) bindings* trace*)])]
 
     ;; ---- Fallback ----
-    [_ (values rnet bindings trace)]))
+    [_ (values rnet bindings0 trace)]))
 
 ;; ----------------------------------------
 ;; Entry Point: compile and execute a process

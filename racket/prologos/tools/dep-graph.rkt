@@ -92,7 +92,7 @@
    'rrb.rkt                       '()
    'session-lattice.rkt           '(sessions.rkt type-lattice.rkt)
    'session-propagators.rkt       '(errors.rkt pretty-print.rkt processes.rkt propagator.rkt session-lattice.rkt sessions.rkt source-location.rkt)
-   'session-runtime.rkt           '(io-bridge.rkt pretty-print.rkt processes.rkt propagator.rkt session-lattice.rkt sessions.rkt syntax.rkt)
+   'session-runtime.rkt           '(effect-bridge.rkt effect-position.rkt io-bridge.rkt pretty-print.rkt processes.rkt propagator.rkt session-lattice.rkt sessions.rkt syntax.rkt)
    'session-type-bridge.rkt       '(errors.rkt pretty-print.rkt processes.rkt propagator.rkt session-lattice.rkt session-propagators.rkt sessions.rkt source-location.rkt type-lattice.rkt)
    'sessions.rkt                  '(prelude.rkt substitution.rkt syntax.rkt)
    'sexp-readtable.rkt            '()
@@ -205,6 +205,8 @@
    (test-dep '(driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parser.rkt prelude.rkt pretty-print.rkt reader.rkt reduction.rkt source-location.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt typing-core.rkt) #t)
    'test-effect-bridge-01.rkt
    (test-dep '(effect-bridge.rkt effect-position.rkt propagator.rkt sessions.rkt session-lattice.rkt syntax.rkt) #f)
+   'test-effect-collection-01.rkt
+   (test-dep '(effect-bridge.rkt effect-position.rkt io-bridge.rkt processes.rkt propagator.rkt session-lattice.rkt session-runtime.rkt sessions.rkt syntax.rkt) #f)
    'test-effect-position-01.rkt
    (test-dep '(effect-position.rkt sessions.rkt syntax.rkt) #f)
    'test-elab-speculation.rkt
