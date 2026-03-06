@@ -151,7 +151,7 @@ Decisions resolved in Phase I (IO Library Design V2 §12) plus new implementatio
 | D15 | fio handle threading | Bracket pattern (`fio-with-open`); linear `Handle :1` type | V2 §12.2 |
 | D16 | fio internal architecture | `fio` backed by session channels internally (thin wrapper over `io`); not direct FFI | V2 §12.2 ("fio is a thin ergonomic layer over io") |
 | D17 | Composite capability model | **Union types** for composite caps (`type FsCap = ReadCap \| WriteCap`); attenuation via natural subtyping (`ReadCap <: FsCap`). Existing `capabilities.prologos` standalone declarations need revision. | CAPABILITY_SECURITY.md §Composite Union; see §4 |
-| D18 | Console IO capability | `println` in prelude is cap-free (no `StdioCap` required); `StdoutSession`/`StdinSession` in Tier 3 require explicit `StdioCap` | New; see §16 |
+| D18 | Console IO capability | Console IO (`print`, `println`, `read-ln`) **infers `StdioCap`** via standard cap inference; `:0` erased, invisible at Tier 1 but compiler-tracked. `StdoutSession`/`StdinSession` (Tier 3) require explicit `{stdio :0 StdioCap}` | Revised per critique; see §16 |
 | D19 | Bracket naming | `with-open` for both `io` and `fio` modules; `with-session` reserved for explicit session channel acquisition | New |
 | D20 | `main` as powerbox | Runtime provisions inferred capabilities to `main`; `defn main` desugars to a process internally | V2 §7, §12.6 |
 | D21 | IO error codes | `E4xxx` range for IO and capability errors | New; see §24 |
@@ -936,18 +936,22 @@ These FFI functions are registered in the namespace during module loading, simil
 `register-foreign!` works in `driver.rkt`. The `io-ffi-registry` is imported by the
 IO library modules and registered as foreign bindings.
 
-### 10.3 Two Paths for IO
+### 10.3 Two Tiers of the IO API Surface
 
-There are two ways IO operations reach the external world:
+There are two tiers of the IO API surface, both backed by the same FFI bridge:
 
-1. **IO bridge propagator path** (session-based IO, `prologos.core.io`):
+1. **Session-based IO** (`prologos.core.io`, Tier 2-3):
    Process → session channel → IO bridge propagator → Racket IO → results back through channel
 
-2. **Direct FFI path** (functional IO, `prologos.core.fio`):
+2. **Functional linear IO** (`prologos.core.fio`, Tier 2 alternative):
    Prologos function → `(foreign ...)` call → `io-ffi.rkt` → Racket IO → marshalled result
 
-Both paths go through the same Racket IO functions. The difference is how they're
-invoked and how linearity/capability checking works.
+These are **two tiers of the same IO architecture**, not two competing implementations.
+Both go through the same Racket IO functions in `io-ffi.rkt`, and both enforce capability
+checking at compile time. The difference is the user-facing abstraction: session protocols
+vs. linear handle threading. Console IO convenience functions (§16) also use direct FFI
+but are part of Tier 1 progressive disclosure, not an escape hatch — they carry the same
+`StdioCap` requirement, just invisibly via `:0` erased parameters.
 
 ---
 
@@ -1152,6 +1156,11 @@ defn main []
   [println data]
 ```
 
+`defn main` is **strictly sequential** — `spawn` is illegal in `defn main` context (it
+is only legal in `defproc` context, where channel management is explicit). This is enforced
+by the type system: `spawn` requires a process context, and `defn main` desugars to a
+single-shot process with no exposed channels.
+
 `defn main` desugars internally to a process with a single "run body to completion"
 session. The user never sees this. The desugaring:
 
@@ -1313,7 +1322,11 @@ defproc file-read-service : dual FileRead
 
 ### 14.3 Composition: Protocols as Types
 
-Following PROTOCOLS_AS_TYPES.org, IO protocols compose naturally:
+Following `PROTOCOLS_AS_TYPES.org`, IO protocols compose naturally through the mechanisms
+described in that document: named continuations enable protocol sequencing, channel passing
+enables protocol delegation, and capability requirements union across composed phases. The
+examples below show the IO-specific surface; see `PROTOCOLS_AS_TYPES.org` for the full
+composition model (§Protocol Composition, §Named Continuations, §Channel Passing).
 
 ```prologos
 ;; A logging protocol that composes FileWrite with a header phase
@@ -1359,7 +1372,34 @@ session CopyProtocol
 - Mixed IO protocol (FileRead phase → user processing → FileWrite phase)
 - Type error when composition violates protocol structure
 
-### 14.5 Tests (~20 for IO-E1/E2, ~5 for IO-E3)
+### 14.5 Error Handling: Phase 1 vs Phase 2
+
+**Phase 1 approach** (this document): Each IO operation returns `Result A IOError`.
+Error handling is explicit at each call site — the user pattern-matches on `ok`/`err`.
+This is simple and works immediately.
+
+**Phase 2 target**: Session `throws` (desugaring already exists at the elaboration level,
+commit `78e6638`). Once the `throws` runtime is implemented, IO protocols can declare
+error escalation:
+
+```prologos
+session FileRead throws IOError
+  +>
+    | :read-all  -> ? String . end        ;; no Result wrapper — throws on error
+    | :read-line -> ? [Option String] . FileRead
+    | :close     -> end
+```
+
+The `throws` desugaring wraps each operation with automatic error checking and escalation
+to the session's error handler. This eliminates the `Result` wrapper at each step and is
+the natural fit for session-based IO.
+
+**Priority**: `throws` runtime is a **near-term priority** after Phase 1 IO lands. The
+elaboration-level desugaring is already complete; only the runtime `catch`/`escalate`
+match arms need implementation (~50-100 lines in `session-runtime.rkt`). This is tracked
+in §24 Deferred Features.
+
+### 14.6 Tests (~20 for IO-E1/E2, ~5 for IO-E3)
 
 - `FileRead` session type duality check
 - `FileWrite` session type duality check
@@ -1400,6 +1440,14 @@ bridge internally and present a linear handle API externally. This ensures:
 - **Uniform mocking**: Swapping the IO propagator works for both `io` and `fio`
 - **No code duplication**: `fio-read-all` uses the same IO bridge as `io`'s `read-file`
 - **Consistent error handling**: Same `Result`/`IOError` from the same bridge
+
+**Performance open question**: A one-shot `fio-read-all` creates a session channel,
+installs one IO bridge cell, and runs the session protocol — all for a single read.
+In practice this is one lattice cell transition (`io-bot → io-open → io-closed`),
+not a heavyweight protocol, but it IS more overhead than a direct FFI call. If
+profiling after Phase IO-F shows measurable overhead for one-shot operations, a
+fast path (direct FFI for `fio-read-all`/`fio-write`) can be added without changing
+the API. Until then, uniform architecture takes priority over speculative optimization.
 
 The `Handle` type wraps a session channel endpoint, not a raw Racket port:
 
@@ -1515,20 +1563,26 @@ Console IO (`print`, `println`, `read-ln`) is the simplest IO operation and the 
 commonly used (debugging, REPL interaction). It does NOT use session types — it's
 direct FFI calls with capability inference.
 
+Per Decision D18, console IO **infers `StdioCap`** via the standard capability
+inference mechanism. The capability is `:0` erased (zero runtime cost) and invisible
+to Tier 1 users — `main` has `SysCap` which subsumes `StdioCap`, so it "just works."
+But the compiler tracks the authority chain: `cap-closure` shows console IO usage,
+and security auditing can identify all I/O-performing functions.
+
 ### 16.2 Implementation
 
 ```prologos
 ;; In lib/prologos/core/io.prologos (alongside file IO)
 
-spec print : String -> Unit
+spec print {_ :0 StdioCap} : String -> Unit
 defn print [s]
   foreign io-display s
 
-spec println : String -> Unit
+spec println {_ :0 StdioCap} : String -> Unit
 defn println [s]
   foreign io-displayln s
 
-spec read-ln : Result String IOError
+spec read-ln {_ :0 StdioCap} : Result String IOError
 defn read-ln []
   foreign io-read-ln
 ```
@@ -1537,10 +1591,17 @@ defn read-ln []
 
 Per Decisions D4 and D18, **all standard console IO functions** are included in the
 prelude: `print`, `println`, `read-ln`. These are debugging and interaction
-essentials that belong in every program's default vocabulary, just as they do in
-every practical language.
+essentials that belong in every program's default vocabulary.
 
-Explicit `StdioCap` is only required for session-based console IO (Tier 3, §16.4).
+All three infer `{_ :0 StdioCap}` via standard capability inference. For Tier 1 users
+this is invisible — `main` provisions `SysCap` (which subsumes `StdioCap`), so
+`println "hello"` works without the user ever seeing a capability annotation. But the
+compiler knows: if a helper function calls `println`, its inferred cap set includes
+`StdioCap`. This maintains the invariant that **a function's authority is exactly the
+set of capabilities it receives as parameters** (CAPABILITY_SECURITY.md).
+
+Session-based console IO (Tier 3, §16.4) additionally requires explicit `StdioCap`
+in the `defproc` header.
 
 ```racket
 ;; In namespace.rkt, add to prelude-imports:
@@ -1575,8 +1636,9 @@ protocols — they use direct FFI calls and are cap-free per Decision D18.
 - `println` outputs string with newline
 - `print` outputs string without newline
 - `read-ln` reads from stdin (test with mock)
-- `println` does NOT infer `StdioCap` (cap-free, Decision D18)
-- `StdoutSession`/`StdinSession` require explicit `StdioCap` in defproc
+- `println` infers `{StdioCap}` via cap inference (D18)
+- `cap-closure` on a function calling `println` shows `StdioCap` in cap set
+- `StdoutSession`/`StdinSession` require explicit `{stdio :0 StdioCap}` in defproc
 
 ---
 
@@ -2668,8 +2730,9 @@ type-check → runtime for dependent session types.
 | IO mocking framework | Swap IO propagators in test context | Phase 2+ | IO-B infrastructure |
 | `proc-connect` runtime | Same pattern as `proc-open`, different FFI | IO-K | IO-C pattern |
 | `proc-listen` runtime | Same pattern as `proc-open`, different FFI | IO-K | IO-C pattern |
-| Session `throws` / error escalation | Session error handling via `throws` clause | Phase 2+ | Session runtime error model |
+| Session `throws` / error escalation | Session error handling via `throws` clause. Desugaring exists (commit `78e6638`); runtime `catch`/`escalate` match arms needed (~50-100 lines). **Near-term priority** after Phase 1 IO lands — see §14.5. | Post IO-E | Session runtime error model (elaboration done) |
 | SQLite capstone integration | End-to-end DB IO with opaque handles + session protocols | IO-L+ | IO-L + IO-E patterns |
+| IO + relational integration | Narrowing, tabling, and mode constraints for IO in logic programming context. How do `defr` relations interact with IO effects? Requires clarifying the semantics of IO in a relational/backtracking context — side effects must be controlled or prohibited during search. | Phase 3+ | Relational subsystem maturity + IO-E |
 
 ### IO Error Code Range (Decision D21)
 
