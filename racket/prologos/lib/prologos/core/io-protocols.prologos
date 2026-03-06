@@ -1,0 +1,48 @@
+ns prologos::core::io-protocols :no-prelude
+
+;; IO Session Protocols — Phase IO-E1
+;;
+;; These define the session types for file IO operations.
+;; Clients select an operation via internal choice (+>), and the
+;; IO bridge (server-side) performs the corresponding IO action.
+;;
+;; Phase 0 uses plain String payloads; errors propagate as Racket exceptions.
+;; Future: Result String IOError payloads via compound type marshalling.
+
+;; === File Read Protocol ===
+;; Client selects: :read-all (bulk read), :read-line (line read), or :close.
+session FileRead
+  rec
+    +>
+      | :read-all  -> ? String -> end
+      | :read-line -> ? String -> rec
+      | :close     -> end
+
+;; === File Write Protocol ===
+;; Client selects: :write, :write-ln, :flush, or :close.
+session FileWrite
+  rec
+    +>
+      | :write    -> ! String -> rec
+      | :write-ln -> ! String -> rec
+      | :flush    -> rec
+      | :close    -> end
+
+;; === File Append Protocol ===
+;; Client selects: :append or :close.
+session FileAppend
+  rec
+    +>
+      | :append -> ! String -> rec
+      | :close  -> end
+
+;; === Bidirectional File IO Protocol ===
+;; Client selects: read or write operations, or :close.
+session FileRW
+  rec
+    +>
+      | :read-all  -> ? String -> rec
+      | :read-line -> ? String -> rec
+      | :write     -> ! String -> rec
+      | :write-ln  -> ! String -> rec
+      | :close     -> end
