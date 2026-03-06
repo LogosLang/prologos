@@ -267,6 +267,12 @@
    (test-dep '(driver.rkt io-ffi.rkt foreign.rkt) #t)
    'test-spec-mult-01.rkt
    (test-dep '(driver.rkt macros.rkt) #t)
+   'test-io-main-01.rkt
+   (test-dep '(capability-inference.rkt driver.rkt elaborator.rkt errors.rkt
+              global-env.rkt io-ffi.rkt macros.rkt metavar-store.rkt
+              multi-dispatch.rkt namespace.rkt parser.rkt prelude.rkt
+              pretty-print.rkt source-location.rkt surface-syntax.rkt
+              syntax.rkt) #t)
    'test-io-file-01.rkt
    (test-dep '(driver.rkt io-ffi.rkt foreign.rkt) #t)
    'test-io-file-02.rkt
@@ -889,6 +895,7 @@
    'test-hkt-kind.rkt             '(prologos::core::eq prologos::core::ord prologos::data::list prologos::data::option)
    'test-identity-generic-ops.rkt '(prologos::core::algebra prologos::core::arithmetic prologos::data::list)
    'test-implicit-inference.rkt   '(prologos::core prologos::data::list prologos::data::nat prologos::data::option)
+   'test-io-main-01.rkt           '(prologos::core::capabilities prologos::core::csv prologos::core::io)
    'test-io-path-01.rkt           '(prologos::data::io-error prologos::data::path)
    'test-kind-inference-where.rkt '(prologos::core::collection-traits prologos::core::eq prologos::data::lseq)
    'test-kind-inference.rkt       '(prologos::core::collection-traits prologos::data::lseq)

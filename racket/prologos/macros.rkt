@@ -2232,6 +2232,11 @@
                  (cons stx acc)
                  (cons (datum->syntax #f maybe-where-injected stx) acc))
              (cons (datum->syntax #f expanded stx) acc))]
+        ;; ---- Public capability — auto-export the capability type name (IO-D5) ----
+        [(and (pair? datum) (eq? head 'capability))
+         (when (and (list? datum) (>= (length datum) 2) (symbol? (cadr datum)))
+           (auto-export-name! (cadr datum)))
+         (cons stx acc)]
         ;; Regular form — expand
         [else
          (define expanded (preparse-expand-form datum))

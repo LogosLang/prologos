@@ -368,7 +368,13 @@
          (process-def-group expanded)]
         [else
          ;; All other forms: elaborate fully, then process
-          (let ([elab-result (time-phase! elaborate (elaborate-top-level expanded))])
+         ;; IO-D5: Provision SysCap into scope for top-level expressions.
+         ;; Top-level (REPL/interactive) acts as a powerbox — the user IS the authority.
+          (let ([elab-result (time-phase! elaborate
+                  (parameterize ([current-capability-scope
+                                  (cons (cons 0 (expr-fvar 'SysCap))
+                                        (current-capability-scope))])
+                    (elaborate-top-level expanded)))])
             (if (prologos-error? elab-result)
                 elab-result
                 (match elab-result
@@ -827,7 +833,15 @@
   (cond
     ;; Sprint 10: Type-inferred def (no type annotation)
     [(not type-surf)
-     (define body (time-phase! elaborate (elaborate body-surf)))
+     ;; IO-D5: If this is `main`, provision SysCap into capability scope.
+     ;; main is the powerbox — it holds all authority implicitly.
+     (define body (time-phase! elaborate
+       (parameterize ([current-capability-scope
+                       (if (eq? name 'main)
+                           (cons (cons 0 (expr-fvar 'SysCap))
+                                 (current-capability-scope))
+                           (current-capability-scope))])
+         (elaborate body-surf))))
      (cond
        [(prologos-error? body) body]
        [else
@@ -951,7 +965,14 @@
                 (format "~a : ~a defined." name (pp-expr zonked-type)))]
              [else
               ;; 4. Elaborate body (self-reference now resolves)
-              (define body (time-phase! elaborate (elaborate body-surf)))
+              ;; IO-D5: If this is `main`, provision SysCap into capability scope.
+              (define body (time-phase! elaborate
+                (parameterize ([current-capability-scope
+                                (if (eq? name 'main)
+                                    (cons (cons 0 (expr-fvar 'SysCap))
+                                          (current-capability-scope))
+                                    (current-capability-scope))])
+                  (elaborate body-surf))))
               (cond
                 [(prologos-error? body)
                  ;; Remove pre-registered entry on elaboration failure
@@ -1668,10 +1689,28 @@
   ;; because marshalling only applies to the runtime argument types, not erased capabilities
   (define parsed-type (parse-foreign-type zonked-type))
   (define-values (marshal-in marshal-out) (make-marshaller-pair parsed-type))
-  (define arity (length (car parsed-type)))
+  (define base-arity (length (car parsed-type)))
+
+  ;; IO-D5: Account for erased capability arguments in the foreign function.
+  ;; The elaborator inserts :0 cap proofs as leading arguments. At runtime,
+  ;; these erased args are passed through but must be dropped before calling
+  ;; the actual Racket function. We increase the arity to include cap args,
+  ;; add identity marshallers for them, and wrap the proc to drop them.
+  (define n-caps (length foreign-caps))
+  (define full-arity (+ base-arity n-caps))
+  (define full-marshal-in
+    (if (zero? n-caps)
+        marshal-in
+        (append (make-list n-caps (lambda (x) x))  ;; identity for erased cap proofs
+                marshal-in)))
+  (define effective-proc
+    (if (zero? n-caps)
+        rkt-proc
+        (lambda args
+          (apply rkt-proc (drop args n-caps)))))
 
   ;; Build the foreign-fn value with the Prologos name
-  (define val (expr-foreign-fn prologos-name rkt-proc arity '() marshal-in marshal-out))
+  (define val (expr-foreign-fn prologos-name effective-proc full-arity '() full-marshal-in marshal-out))
 
   ;; Register in global env with full type (including capability Pi binders)
   (current-global-env

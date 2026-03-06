@@ -5,6 +5,7 @@ require [prologos::data::char    :as char :refer []]
 require [prologos::data::list    :refer [List nil cons map]]
 require [prologos::core::string-ops :as sops :refer [split join]]
 require [prologos::core::io      :as io :refer [read-file write-file]]
+require [prologos::core::capabilities :refer [ReadCap WriteCap]]
 
 ;; ========================================
 ;; CSV Module (IO-G2)
@@ -38,13 +39,15 @@ spec csv-to-string [List [List String]] -> String
 defn csv-to-string [rows]
   csv-serialize-raw [join rs [map [fn [row : [List String]] [join us row]] rows]]
 
-;; --- File-based CSV ---
-;; read-csv : String -> List (List String)
-spec read-csv String -> [List [List String]]
-defn read-csv [path]
+;; --- File-based CSV (IO-D5: capability-annotated) ---
+;; read-csv : ReadCap -0> String -> List (List String)
+;; Requires ReadCap proof (erased at runtime).
+spec read-csv ReadCap -0> String -> [List [List String]]
+defn read-csv [_cap path]
   parse-csv [read-file path]
 
-;; write-csv : String -> List (List String) -> Unit
-spec write-csv String -> [List [List String]] -> Unit
-defn write-csv [path rows]
+;; write-csv : WriteCap -0> String -> List (List String) -> Unit
+;; Requires WriteCap proof (erased at runtime).
+spec write-csv WriteCap -0> String -> [List [List String]] -> Unit
+defn write-csv [_cap path rows]
   write-file path [csv-to-string rows]

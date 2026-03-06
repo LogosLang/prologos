@@ -80,6 +80,7 @@
 (define ready-param-impl-registry     (current-param-impl-registry))
 (define ready-bundle-registry         (current-bundle-registry))
 (define ready-specialization-registry (current-specialization-registry))
+(define ready-capability-registry    (current-capability-registry))
 (define ready-property-store          (current-property-store))
 (define ready-functor-store           (current-functor-store))
 (define ready-user-precedence-groups  (current-user-precedence-groups))
@@ -184,6 +185,7 @@
          [current-param-impl-registry     ready-param-impl-registry]
          [current-bundle-registry         ready-bundle-registry]
          [current-specialization-registry ready-specialization-registry]
+         [current-capability-registry    ready-capability-registry]
          [current-property-store          ready-property-store]
          [current-functor-store           ready-functor-store]
          [current-user-precedence-groups  ready-user-precedence-groups]

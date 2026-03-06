@@ -1,11 +1,11 @@
 ns prologos::core::io :no-prelude
 
-;; File IO — direct FFI, errors propagate as Racket exceptions
-foreign racket "io-ffi.rkt" [io-ffi-read-all :as read-file : String -> String]
-foreign racket "io-ffi.rkt" [io-ffi-write-file :as write-file : String String -> Unit]
-foreign racket "io-ffi.rkt" [io-ffi-append-file :as append-file : String String -> Unit]
+;; File IO — requires filesystem capabilities (IO-D5)
+foreign racket "io-ffi.rkt" :requires (ReadCap) [io-ffi-read-all :as read-file : String -> String]
+foreign racket "io-ffi.rkt" :requires (WriteCap) [io-ffi-write-file :as write-file : String String -> Unit]
+foreign racket "io-ffi.rkt" :requires (AppendCap) [io-ffi-append-file :as append-file : String String -> Unit]
 
-;; Console IO — direct FFI, no capability annotations yet (IO-G/IO-H)
-foreign racket "io-ffi.rkt" [display-wrapper :as print : String -> Unit]
-foreign racket "io-ffi.rkt" [displayln-wrapper :as println : String -> Unit]
-foreign racket "io-ffi.rkt" [io-ffi-read-ln-unit :as read-ln : Unit -> String]
+;; Console IO — requires StdioCap (IO-D5)
+foreign racket "io-ffi.rkt" :requires (StdioCap) [display-wrapper :as print : String -> Unit]
+foreign racket "io-ffi.rkt" :requires (StdioCap) [displayln-wrapper :as println : String -> Unit]
+foreign racket "io-ffi.rkt" :requires (StdioCap) [io-ffi-read-ln-unit :as read-ln : Unit -> String]

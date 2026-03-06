@@ -77,7 +77,11 @@
                  [current-preparse-registry (current-preparse-registry)]
                  [current-trait-registry shared-trait-reg]
                  [current-impl-registry shared-impl-reg]
-                 [current-param-impl-registry shared-param-impl-reg])
+                 [current-param-impl-registry shared-param-impl-reg]
+                 ;; IO-D5: Provision SysCap so top-level defs can call IO functions.
+                 ;; Mirrors REPL powerbox behavior — test runner is the authority.
+                 [current-capability-scope
+                  (list (cons 0 (expr-fvar 'SysCap)))])
     (process-string s)))
 
 (define (run-last s) (last (run s)))
