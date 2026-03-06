@@ -28,7 +28,10 @@
  io-ffi-write-file
  io-ffi-append-file
  ;; Console IO with Unit arg (IO-D2)
- io-ffi-read-ln-unit)
+ io-ffi-read-ln-unit
+ ;; FS query wrappers (IO-D4)
+ io-ffi-is-file
+ io-ffi-path-exists)
 
 ;; ========================================
 ;; Wrapper Functions
@@ -85,6 +88,16 @@
 (define (io-ffi-read-ln-unit _unit)
   (define v (read-line))
   (if (eof-object? v) "" v))
+
+;; Filesystem query wrapper (IO-D4)
+;; True if path exists AND is a regular file (not a directory).
+(define (io-ffi-is-file path-str)
+  (and (file-exists? path-str) (not (directory-exists? path-str))))
+
+;; True if path exists as either a file or a directory.
+;; Racket's file-exists? returns #f for directories, so we check both.
+(define (io-ffi-path-exists path-str)
+  (or (file-exists? path-str) (directory-exists? path-str)))
 
 ;; ========================================
 ;; FFI Registry

@@ -241,6 +241,8 @@
    (test-dep '(io-bridge.rkt io-ffi.rkt propagator.rkt session-runtime.rkt sessions.rkt syntax.rkt) #f)
    'test-io-file-01.rkt
    (test-dep '(driver.rkt io-ffi.rkt foreign.rkt) #t)
+   'test-io-fs-01.rkt
+   (test-dep '(driver.rkt io-ffi.rkt foreign.rkt) #t)
    'test-free-ordering.rkt
    (test-dep '(driver.rkt global-env.rkt macros.rkt) #t)
    'test-functor-ws.rkt

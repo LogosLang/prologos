@@ -1,0 +1,12 @@
+ns prologos::io::fs :no-prelude
+
+;; Filesystem queries — pure predicates, no side effects
+
+;; exists? returns true for both files AND directories
+foreign racket "io-ffi.rkt" [io-ffi-path-exists :as exists? : String -> Bool]
+
+;; dir? returns true only for directories
+foreign racket "racket/base" ["directory-exists?" :as dir? : String -> Bool]
+
+;; file? returns true only for regular files (not directories)
+foreign racket "io-ffi.rkt" [io-ffi-is-file :as file? : String -> Bool]
