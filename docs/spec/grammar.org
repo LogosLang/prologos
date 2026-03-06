@@ -1307,6 +1307,79 @@ Nat -w> Nat           ;; unrestricted: explicit
 (fn (x :1 Nat) x)                    ;; must use x exactly once
 #+end_src
 
+* Session Types (Process Calculus)
+
+Session types describe structured communication protocols between concurrent
+processes. Each protocol step specifies the direction (send/receive) and the
+type of data being transmitted.
+
+** Session Declarations
+
+#+begin_src prologos
+;; A simple request-response protocol
+session Greeter
+  ? String       ;; receive a name
+  ! String       ;; send back a greeting
+  end
+#+end_src
+
+** Session Step Operators
+
+| WS Operator      | Sexp Form         | Meaning                              |
+|-------------------+-------------------+--------------------------------------|
+| =! Type=          | =(Send T S)=      | Send a value of Type                 |
+| =? Type=          | =(Recv T S)=      | Receive a value of Type              |
+| =!: name Type=    | =(DSend (n:T) S)= | Dependent send (binds name in cont)  |
+| =?: name Type=    | =(DRecv (n:T) S)= | Dependent recv (binds name in cont)  |
+| =!! Type=         | =(AsyncSend T S)= | Asynchronous (buffered) send         |
+| =?? Type=         | =(AsyncRecv T S)= | Asynchronous (buffered) recv         |
+| =+>=              | =(Choice ...)=    | Internal choice (select a branch)    |
+| =&>=              | =(Offer ...)=     | External choice (offer branches)     |
+| =rec= /[label]/   | =(Mu S)=          | Recursive reference point            |
+| =end=             | =End=             | Session termination                  |
+
+** Choice and Offer
+
+#+begin_src prologos
+session FileRead
+  rec
+    +>                            ;; internal choice (client decides)
+      | :read-all  -> ? String -> end
+      | :read-line -> ? String -> rec
+      | :close     -> end
+#+end_src
+
+** Dependent Sessions
+
+Dependent send (=!:=) and dependent recv (=?:=) bind a name so
+that the continuation type can reference the transmitted value.
+
+#+begin_src prologos
+;; Length-indexed vector protocol:
+;; first send the length, then send exactly that many elements.
+session VecProto
+  !: n Nat                        ;; send n, bind it in continuation
+  ! [Vec String n]                ;; send exactly n strings
+  end
+#+end_src
+
+** Process Definitions
+
+#+begin_src prologos
+;; defproc defines a process that implements a session protocol
+defproc greeter : Greeter
+  name := self ?                  ;; receive from self channel
+  self ! [concat "Hello, " name]  ;; send greeting
+  stop                            ;; terminate
+
+;; with-open: sugar for file IO with auto-close
+defproc reader
+  with-open "data.txt" : FileRead
+    select ch :read-all
+    data := ch ?
+  stop
+#+end_src
+
 * Dependent Types and Eliminators
 
 ** Natural Number Elimination (natrec)

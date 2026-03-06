@@ -1121,6 +1121,39 @@ process-expr    = '(' , 'stop' , ')'
 
 proc-branch     = '(' , identifier , process-expr , ')' ;
 
+(* --- WS-mode session type operators ---
+   In .prologos files, session type steps use prefix operators
+   instead of wrapping each step in parentheses.
+
+   WS operator   Sexp form       Meaning
+   ──────────    ─────────       ───────
+   ! Type        (Send T ...)    send a value of Type
+   ? Type        (Recv T ...)    receive a value of Type
+   !: name Type  (DSend (n:T)..) dependent send — binds name in continuation
+   ?: name Type  (DRecv (n:T)..) dependent recv — binds name in continuation
+   !! Type       (AsyncSend T..) asynchronous (buffered) send
+   ?? Type       (AsyncRecv T..) asynchronous (buffered) recv
+   +> branches   (Choice ...)    internal choice (select a branch)
+   &> branches   (Offer ...)     external choice (offer branches)
+   rec [label]   (Mu ...)        recursive reference point
+   end           End             session termination
+*)
+
+ws-session-step = '!' , type-expr                                (* Send *)
+                | '?' , type-expr                                (* Recv *)
+                | '!:' , identifier , type-expr                  (* DSend *)
+                | '?:' , identifier , type-expr                  (* DRecv *)
+                | '!!' , type-expr                               (* AsyncSend *)
+                | '??' , type-expr                               (* AsyncRecv *)
+                | '+>' , INDENT , { ws-branch } , DEDENT         (* Choice *)
+                | '&>' , INDENT , { ws-branch } , DEDENT         (* Offer *)
+                | 'rec' , [ identifier ]                         (* Mu / recursion point *)
+                | 'end'                                          (* End *)
+                | identifier                                     (* SVar — recursion var *)
+                ;
+
+ws-branch       = '|' , keyword-literal , '->' , { ws-session-step } ;
+
 
 (* ================================================================== *)
 (* 7. S-EXPRESSION MODE (Fallback)                                     *)
