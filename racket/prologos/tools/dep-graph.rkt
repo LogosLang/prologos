@@ -63,6 +63,7 @@
    'expander.rkt                  '(elaborator.rkt errors.rkt global-env.rkt lang-error.rkt macros.rkt metavar-store.rkt multi-dispatch.rkt parser.rkt prelude.rkt pretty-print.rkt reduction.rkt repl-support.rkt source-location.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt typing-core.rkt typing-errors.rkt zonk.rkt)
    'foreign.rkt                   '(syntax.rkt)
    'effect-bridge.rkt              '(propagator.rkt sessions.rkt session-lattice.rkt effect-position.rkt)
+   'effect-ordering.rkt            '(effect-position.rkt processes.rkt propagator.rkt sessions.rkt syntax.rkt)
    'effect-position.rkt            '(sessions.rkt)
    'global-env.rkt                '()
    'inductive.rkt                 '(syntax.rkt typing-core.rkt)
@@ -207,6 +208,8 @@
    (test-dep '(effect-bridge.rkt effect-position.rkt propagator.rkt sessions.rkt session-lattice.rkt syntax.rkt) #f)
    'test-effect-collection-01.rkt
    (test-dep '(effect-bridge.rkt effect-position.rkt io-bridge.rkt processes.rkt propagator.rkt session-lattice.rkt session-runtime.rkt sessions.rkt syntax.rkt) #f)
+   'test-effect-ordering-01.rkt
+   (test-dep '(effect-bridge.rkt effect-ordering.rkt effect-position.rkt io-bridge.rkt processes.rkt propagator.rkt session-lattice.rkt session-runtime.rkt sessions.rkt syntax.rkt) #f)
    'test-effect-position-01.rkt
    (test-dep '(effect-position.rkt sessions.rkt syntax.rkt) #f)
    'test-elab-speculation.rkt

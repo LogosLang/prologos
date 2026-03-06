@@ -266,7 +266,7 @@
 (define (eff-ordering-linearize positions ordering)
   (define edges (eff-ordering-edges ordering))
   ;; Build adjacency and in-degree
-  (define adj (make-hasheq))   ;; pos → list of pos
+  (define adj (make-hash))     ;; pos → list of pos (equal?-based for struct keys)
   (define indeg (make-hash))   ;; pos → Nat (uses equal? keys)
   ;; Initialize
   (for ([p (in-list positions)])
