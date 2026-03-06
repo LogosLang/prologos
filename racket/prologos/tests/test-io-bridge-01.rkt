@@ -13,6 +13,7 @@
 (require rackunit
          racket/file
          racket/port
+         racket/string
          "../io-bridge.rkt"
          "../propagator.rkt"
          "../sessions.rkt"
@@ -92,3 +93,105 @@
   (check-false (io-state-contradicts? opening))
   (check-false (io-state-contradicts? open-st))
   (close-input-port mock-port))
+
+;; ========================================
+;; Group 2: IO Bridge Propagator (IO-B2)
+;; ========================================
+
+(test-case "io-bridge-cell: creates cell at io-bot"
+  (define net (make-prop-network))
+  (define-values (net* cid) (make-io-bridge-cell net))
+  (check-true (io-bot? (net-cell-read net* cid))))
+
+(test-case "io-bridge-open-file: read mode opens input port"
+  ;; Create a temp file with known content
+  (define tmp (make-temporary-file))
+  (call-with-output-file tmp
+    (lambda (out) (write-string "hello world" out))
+    #:exists 'truncate/replace)
+  ;; Set up a network with an io-cell at io-opening
+  (define net0 (make-prop-network))
+  (define-values (net1 io-cid) (make-io-bridge-cell net0))
+  (define net2 (net-cell-write net1 io-cid (io-opening (path->string tmp) 'read)))
+  ;; Open the file
+  (define net3 (io-bridge-open-file net2 io-cid))
+  (define state (net-cell-read net3 io-cid))
+  (check-true (io-open? state))
+  (check-equal? (io-open-mode state) 'read)
+  (check-true (input-port? (io-open-port state)))
+  ;; Clean up
+  (close-input-port (io-open-port state))
+  (delete-file tmp))
+
+(test-case "io-bridge-open-file: nonexistent file → io-top"
+  (define net0 (make-prop-network))
+  (define-values (net1 io-cid) (make-io-bridge-cell net0))
+  (define net2 (net-cell-write net1 io-cid
+                 (io-opening "/nonexistent/path/does-not-exist.txt" 'read)))
+  (define net3 (io-bridge-open-file net2 io-cid))
+  (check-true (io-top? (net-cell-read net3 io-cid))))
+
+(test-case "io-bridge-propagator: read delivers data to msg-in"
+  ;; Create a temp file with known content
+  (define tmp (make-temporary-file))
+  (call-with-output-file tmp
+    (lambda (out) (write-string "test data" out))
+    #:exists 'truncate/replace)
+  ;; Open the file to get a real port
+  (define port (open-input-file tmp))
+  ;; Set up a mini propagator network:
+  ;;   io-cell: io-open (with real port)
+  ;;   session-cell: sess-recv String sess-end (expecting to receive data)
+  ;;   msg-out-cell: msg-bot (nothing outgoing)
+  ;;   msg-in-cell: msg-bot (where read result should arrive)
+  (define net0 (make-prop-network))
+  (define-values (net1 io-cid)      (make-io-bridge-cell net0))
+  (define-values (net2 sess-cid)    (net-new-cell net1 (sess-recv (expr-String) (sess-end))
+                                      (lambda (o n) n)))  ; simple overwrite merge
+  (define-values (net3 msg-out-cid) (net-new-cell net2 msg-bot msg-lattice-merge))
+  (define-values (net4 msg-in-cid)  (net-new-cell net3 msg-bot msg-lattice-merge))
+  ;; Write io-open state
+  (define net5 (net-cell-write net4 io-cid (io-open port 'read)))
+  ;; Install the IO bridge propagator
+  (define fire-fn (make-io-bridge-propagator io-cid sess-cid msg-in-cid msg-out-cid))
+  (define-values (net6 _pid) (net-add-propagator net5
+                               (list io-cid sess-cid msg-out-cid)
+                               (list msg-in-cid io-cid)
+                               fire-fn))
+  ;; Run to quiescence — the bridge should read from the file
+  (define net7 (run-to-quiescence net6))
+  ;; Verify msg-in-cell received the file contents
+  (define result (net-cell-read net7 msg-in-cid))
+  (check-true (expr-string? result))
+  (check-equal? (expr-string-val result) "test data")
+  ;; Clean up
+  (close-input-port port)
+  (delete-file tmp))
+
+(test-case "io-bridge-propagator: session end closes port"
+  ;; Create a temp file
+  (define tmp (make-temporary-file))
+  (define port (open-input-file tmp))
+  ;; Set up network with io-open and sess-end
+  (define net0 (make-prop-network))
+  (define-values (net1 io-cid)      (make-io-bridge-cell net0))
+  (define-values (net2 sess-cid)    (net-new-cell net1 (sess-end)
+                                      (lambda (o n) n)))
+  (define-values (net3 msg-out-cid) (net-new-cell net2 msg-bot msg-lattice-merge))
+  (define-values (net4 msg-in-cid)  (net-new-cell net3 msg-bot msg-lattice-merge))
+  ;; Write io-open state
+  (define net5 (net-cell-write net4 io-cid (io-open port 'read)))
+  ;; Install bridge propagator
+  (define fire-fn (make-io-bridge-propagator io-cid sess-cid msg-in-cid msg-out-cid))
+  (define-values (net6 _pid) (net-add-propagator net5
+                               (list io-cid sess-cid msg-out-cid)
+                               (list msg-in-cid io-cid)
+                               fire-fn))
+  ;; Run to quiescence
+  (define net7 (run-to-quiescence net6))
+  ;; Verify io-cell is now io-closed
+  (check-true (io-closed? (net-cell-read net7 io-cid)))
+  ;; Verify the Racket port is actually closed
+  (check-true (port-closed? port))
+  ;; Clean up
+  (delete-file tmp))
