@@ -484,9 +484,11 @@
   (check-true (string-contains? (last result) "verification passed")
               "cap-verify should report passed"))
 
-(test-case "cap-verify/repl-fails-with-E2002"
-  ;; Construct env directly with mismatched caps, then run cap-verify via REPL.
+(test-case "cap-verify/repl-fails-with-E2004-security-error"
+  ;; Construct env directly with mismatched caps, then attempt process-string.
   ;; cv-fail declares ReadCap but calls cv-http (HttpCap).
+  ;; run-post-compilation-inference! raises E2004 (security violation) because
+  ;; cv-fail's closure includes HttpCap which is not covered by ReadCap.
   (define g-type (expr-Pi 'm0 (expr-fvar 'HttpCap)
                    (expr-Pi 'mw (expr-fvar 'Nat) (expr-fvar 'Nat))))
   (define g-body (expr-lam 'mw #f (expr-lam 'mw #f (expr-fvar 'x))))
@@ -494,26 +496,29 @@
                    (expr-Pi 'mw (expr-fvar 'Nat) (expr-fvar 'Nat))))
   (define f-body (expr-lam 'mw #f
                    (expr-lam 'mw #f (expr-app (expr-fvar 'cv-http) (expr-fvar 'x)))))
-  ;; Inject into env, then run cap-verify REPL command
+  ;; Inject into env, then run — should raise E2004 security error
   (define env-with-fns
     (hash-set (hash-set shared-global-env 'cv-http (cons g-type g-body))
               'cv-fail (cons f-type f-body)))
-  (parameterize ([current-global-env env-with-fns]
-                 [current-ns-context shared-ns-context]
-                 [current-module-registry shared-module-reg]
-                 [current-lib-paths (list prelude-lib-dir)]
-                 [current-mult-meta-store (make-hasheq)]
-                 [current-preparse-registry (current-preparse-registry)]
-                 [current-trait-registry shared-trait-reg]
-                 [current-impl-registry shared-impl-reg]
-                 [current-param-impl-registry shared-param-impl-reg]
-                 [current-capability-registry shared-capability-reg]
-                 [current-subtype-registry shared-subtype-reg])
-    (define result (process-string "(cap-verify cv-fail)"))
-    (check-true (string-contains? (last result) "E2002")
-                "Should report E2002 error code")
-    (check-true (string-contains? (last result) "HttpCap")
-                "Should identify HttpCap as missing")))
+  (check-exn
+   (lambda (e)
+     (and (exn:fail? e)
+          (string-contains? (exn-message e) "E2004")
+          (string-contains? (exn-message e) "HttpCap")))
+   (lambda ()
+     (parameterize ([current-global-env env-with-fns]
+                    [current-ns-context shared-ns-context]
+                    [current-module-registry shared-module-reg]
+                    [current-lib-paths (list prelude-lib-dir)]
+                    [current-mult-meta-store (make-hasheq)]
+                    [current-preparse-registry (current-preparse-registry)]
+                    [current-trait-registry shared-trait-reg]
+                    [current-impl-registry shared-impl-reg]
+                    [current-param-impl-registry shared-param-impl-reg]
+                    [current-capability-registry shared-capability-reg]
+                    [current-subtype-registry shared-subtype-reg])
+       (process-string "(cap-verify cv-fail)")))
+   "Underdeclared authority root should raise E2004 security error"))
 
 (test-case "cap-verify/repl-pure-function-passes"
   (define result

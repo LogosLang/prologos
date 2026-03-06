@@ -1122,11 +1122,15 @@
 ;; ========================================
 ;;
 ;; After all definitions in a module/REPL batch are processed, run capability
-;; inference and emit warnings for authority roots whose declarations don't
+;; inference and raise an error for authority roots whose declarations don't
 ;; cover their inferred closures.
 ;;
 ;; Fast path: skips if no capability types have been registered (most programs).
-;; This is advisory in Phase 0 — warnings, not errors.
+;;
+;; SECURITY INVARIANT: An underdeclared transitive capability is a security
+;; violation — it means a function has authority it didn't declare. This MUST
+;; be a hard error, never a warning. The whole point of capability-secure
+;; design is that authority is explicit; silent leaks defeat the purpose.
 
 (define (run-post-compilation-inference!)
   ;; Fast path: skip if no capability types exist
@@ -1137,6 +1141,7 @@
     ;; An authority root is a function whose type declares capability requirements
     ;; (i.e., has :0 binders with capability-type domains).
     (define closures (cap-inference-result-closures result))
+    (define violations '())  ;; accumulate all violations before erroring
     (for ([(name entry) (in-hash (current-global-env))])
       (when (and (pair? entry) (car entry))
         (define declared-caps (extract-capability-requirements (car entry)))
@@ -1151,11 +1156,24 @@
                                        (subtype-pair? cap dcap))))
               cap))
           (unless (set-empty? missing)
-            (eprintf "warning[W2004]: authority root `~a` does not cover required capabilities: ~a\n"
-                     name
-                     (string-join
-                      (sort (map symbol->string (set->list missing)) string<?)
-                      ", "))))))))
+            (set! violations
+                  (cons (cons name missing) violations))))))
+    ;; Raise a single error listing all violations
+    (unless (null? violations)
+      (define msgs
+        (for/list ([v (in-list (sort violations
+                                     string<?
+                                     #:key (lambda (p) (symbol->string (car p)))))])
+          (define name (car v))
+          (define missing (cdr v))
+          (format "  `~a` requires undeclared: {~a}"
+                  name
+                  (string-join
+                   (sort (map symbol->string (set->list missing)) string<?)
+                   ", "))))
+      (error 'capability-check
+             "E2004: capability security violation — authority roots with undeclared transitive capabilities:\n~a"
+             (string-join msgs "\n")))))
 
 ;; ========================================
 ;; Process all commands from a string

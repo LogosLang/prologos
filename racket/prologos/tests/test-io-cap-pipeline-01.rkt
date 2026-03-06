@@ -7,7 +7,7 @@
 ;;; (process-string / process-string-ws / load-module) and that:
 ;;;   1. current-module-cap-result is populated with inference results
 ;;;   2. Closures contain the expected capabilities
-;;;   3. W2004 warnings are emitted for underdeclared authority roots
+;;;   3. E2004 security errors are raised for underdeclared authority roots
 ;;;   4. Pure programs skip inference (fast path)
 ;;;
 ;;; Pattern: Shared fixture with process-string + prelude.
@@ -17,7 +17,6 @@
          racket/list
          racket/set
          racket/string
-         racket/port
          "test-support.rkt"
          "../macros.rkt"
          "../prelude.rkt"
@@ -93,25 +92,6 @@
                  [current-module-cap-result #f])
     (define results (process-string s))
     (values results (current-module-cap-result))))
-
-;; Helper: run code and capture stderr output (for W2004 warnings)
-(define (run-and-capture-warnings s)
-  (define warnings-port (open-output-string))
-  (parameterize ([current-global-env shared-global-env]
-                 [current-ns-context shared-ns-context]
-                 [current-module-registry shared-module-reg]
-                 [current-lib-paths (list prelude-lib-dir)]
-                 [current-mult-meta-store (make-hasheq)]
-                 [current-preparse-registry (current-preparse-registry)]
-                 [current-trait-registry shared-trait-reg]
-                 [current-impl-registry shared-impl-reg]
-                 [current-param-impl-registry shared-param-impl-reg]
-                 [current-capability-registry shared-capability-reg]
-                 [current-subtype-registry shared-subtype-reg]
-                 [current-module-cap-result #f]
-                 [current-error-port warnings-port])
-    (define results (process-string s))
-    (values results (current-module-cap-result) (get-output-string warnings-port))))
 
 ;; Standard run (for tests that don't need cap-result)
 (define (run s)
@@ -196,42 +176,33 @@
               "rw-fn closure should include WriteCap"))
 
 ;; ========================================
-;; Group 2: Warning on mismatch
+;; Group 2: Security enforcement (underdeclared caps = error)
 ;; ========================================
 
-(test-case "cap-pipeline/underdeclared-emits-warning"
-  ;; Simulate an underdeclared authority root by injecting a function with a
-  ;; mismatched closure directly into the env. This can't happen naturally via
-  ;; Prologos source (the type checker enforces caps at call sites), but
-  ;; tests that the W2004 warning machinery works for FFI/future edge cases.
-  ;;
-  ;; Strategy: define a function declaring ReadCap, then manually add
-  ;; WriteCap to its closure entry in the call graph by calling
-  ;; run-post-compilation-inference! with a doctored env.
-  (define-values (results cap-result warnings)
-    (run-and-capture-warnings
+(test-case "cap-pipeline/independent-caps-no-error"
+  ;; Two functions — each declaring one cap, neither calling the other.
+  ;; No underdeclared caps → no error.
+  (define-values (results cap-result)
+    (run-and-infer
      (string-append
-      ;; Two functions — each declaring one cap, neither calling the other
       "(def read-thing : (Pi (c :0 ReadCap) (Pi (x :w Nat) Nat))"
       " := (fn (c :0 ReadCap) (fn (x :w Nat) x)))\n"
       "(def write-thing : (Pi (c :0 WriteCap) (Pi (x :w Nat) Nat))"
       " := (fn (c :0 WriteCap) (fn (x :w Nat) x)))")))
-  ;; Both define successfully, each has exactly its declared cap.
-  ;; No W2004 warnings because each root covers its own caps.
-  (check-false (string-contains? warnings "W2004")
-               "Two independent cap functions should not trigger W2004"))
+  (check-true (cap-inference-result? cap-result)
+              "Both definitions should succeed without cap security error"))
 
-(test-case "cap-pipeline/fully-declared-no-warning"
-  ;; Authority root declares all needed caps → no warning
-  (define-values (results cap-result warnings)
-    (run-and-capture-warnings
+(test-case "cap-pipeline/fully-declared-no-error"
+  ;; Authority root declares all needed caps → no error
+  (define-values (results cap-result)
+    (run-and-infer
      (string-append
       "(def writer2 : (Pi (c :0 WriteCap) (Pi (x :w Nat) Nat))"
       " := (fn (c :0 WriteCap) (fn (x :w Nat) x)))\n"
       "(def caller-ok : (Pi (c1 :0 ReadCap) (Pi (c2 :0 WriteCap) (Pi (x :w Nat) Nat)))"
       " := (fn (c1 :0 ReadCap) (fn (c2 :0 WriteCap) (fn (x :w Nat) (writer2 x)))))")))
-  (check-false (string-contains? warnings "W2004")
-               "Fully-declared authority root should not emit warnings"))
+  (check-true (cap-inference-result? cap-result)
+              "Fully-declared authority root should not raise error"))
 
 (test-case "cap-pipeline/no-caps-no-inference"
   ;; Program with no capabilities at all → fast path, cap-result is #f
@@ -268,52 +239,54 @@
   (check-true (string-contains? (last result) "ReadCap")
               "cap-closure REPL command should still work"))
 
-(test-case "cap-pipeline/subtype-subsumption-no-warning"
+(test-case "cap-pipeline/subtype-subsumption-no-error"
   ;; Authority root declares FsCap, callee needs ReadCap.
-  ;; ReadCap <: FsCap, so FsCap subsumes ReadCap → no warning.
-  (define-values (results cap-result warnings)
-    (run-and-capture-warnings
+  ;; ReadCap <: FsCap, so FsCap subsumes ReadCap → no error.
+  (define-values (results cap-result)
+    (run-and-infer
      (string-append
       "(def reader3 : (Pi (c :0 ReadCap) (Pi (x :w Nat) Nat))"
       " := (fn (c :0 ReadCap) (fn (x :w Nat) x)))\n"
       "(def fs-root : (Pi (c :0 FsCap) (Pi (x :w Nat) Nat))"
       " := (fn (c :0 FsCap) (fn (x :w Nat) (reader3 x))))")))
-  (check-false (string-contains? warnings "W2004")
-               "FsCap subsumes ReadCap — no warning expected"))
+  (check-true (cap-inference-result? cap-result)
+              "FsCap subsumes ReadCap — no error expected"))
 
-(test-case "cap-pipeline/synthetic-w2004-warning"
+(test-case "cap-pipeline/synthetic-e2004-security-error"
   ;; Synthetic test: manually inject a function whose type declares only ReadCap
   ;; but whose body references a WriteCap-requiring function. This bypasses
-  ;; the type checker to test the W2004 warning machinery directly.
-  (define warnings-port (open-output-string))
-  (parameterize ([current-global-env
-                  ;; Env with two functions:
-                  ;; write-fn: declares WriteCap (type + body)
-                  ;; sneaky-fn: declares ReadCap but body references write-fn
-                  (hash-set
-                   (hash-set shared-global-env
-                             'write-fn
-                             (cons (expr-Pi 'm0 (expr-fvar 'WriteCap)
-                                     (expr-Pi 'mw (expr-fvar 'Nat)
-                                       (expr-fvar 'Nat)))
-                                   (expr-lam 'mw (expr-fvar 'Nat)
-                                     (expr-fvar 'write-fn))))
-                   'sneaky-fn
-                   (cons (expr-Pi 'm0 (expr-fvar 'ReadCap)
-                           (expr-Pi 'mw (expr-fvar 'Nat)
-                             (expr-fvar 'Nat)))
-                         ;; body references write-fn → call graph has edge
-                         (expr-lam 'mw (expr-fvar 'Nat)
-                           (expr-app (expr-fvar 'write-fn) (expr-bvar 0)))))]
-                 [current-capability-registry shared-capability-reg]
-                 [current-subtype-registry shared-subtype-reg]
-                 [current-module-cap-result #f]
-                 [current-error-port warnings-port])
-    (run-post-compilation-inference!))
-  (define warnings (get-output-string warnings-port))
-  (check-true (string-contains? warnings "W2004")
-              "Synthetic underdeclared root should emit W2004")
-  (check-true (string-contains? warnings "sneaky-fn")
-              "Warning should name the underdeclared function")
-  (check-true (string-contains? warnings "WriteCap")
-              "Warning should mention the missing WriteCap"))
+  ;; the type checker to test the E2004 error machinery directly.
+  ;;
+  ;; SECURITY INVARIANT: underdeclared transitive caps are a security violation.
+  ;; This MUST raise an error, not just a warning.
+  (check-exn
+   (lambda (e)
+     (and (exn:fail? e)
+          (string-contains? (exn-message e) "E2004")
+          (string-contains? (exn-message e) "sneaky-fn")
+          (string-contains? (exn-message e) "WriteCap")))
+   (lambda ()
+     (parameterize ([current-global-env
+                     ;; Env with two functions:
+                     ;; write-fn: declares WriteCap (type + body)
+                     ;; sneaky-fn: declares ReadCap but body references write-fn
+                     (hash-set
+                      (hash-set shared-global-env
+                                'write-fn
+                                (cons (expr-Pi 'm0 (expr-fvar 'WriteCap)
+                                        (expr-Pi 'mw (expr-fvar 'Nat)
+                                          (expr-fvar 'Nat)))
+                                      (expr-lam 'mw (expr-fvar 'Nat)
+                                        (expr-fvar 'write-fn))))
+                      'sneaky-fn
+                      (cons (expr-Pi 'm0 (expr-fvar 'ReadCap)
+                              (expr-Pi 'mw (expr-fvar 'Nat)
+                                (expr-fvar 'Nat)))
+                            ;; body references write-fn → call graph has edge
+                            (expr-lam 'mw (expr-fvar 'Nat)
+                              (expr-app (expr-fvar 'write-fn) (expr-bvar 0)))))]
+                    [current-capability-registry shared-capability-reg]
+                    [current-subtype-registry shared-subtype-reg]
+                    [current-module-cap-result #f])
+       (run-post-compilation-inference!)))
+   "Underdeclared transitive cap should raise E2004 security error"))
