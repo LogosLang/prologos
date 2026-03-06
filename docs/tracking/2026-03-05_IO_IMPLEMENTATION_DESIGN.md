@@ -1,6 +1,6 @@
 # IO Library Implementation Design
 
-**Status**: Design Phase (Phase II)
+**Status**: Implementation Phase — IO-A complete, IO-B next
 **Predecessor**: `docs/tracking/2026-03-05_IO_LIBRARY_DESIGN_V2.md` (Phase I — API research + gap analysis)
 **Template**: Follows the format of `docs/tracking/2026-03-03_SESSION_TYPE_DESIGN.md`
 **Date**: 2026-03-05
@@ -11,9 +11,9 @@
 
 | Phase | Sub-phase | Status | Commit | Notes |
 |-------|-----------|--------|--------|-------|
-| IO-A | A1: Opaque type marshalling | | | `expr-opaque` + `foreign.rkt` |
-| IO-A | A2: Path + IOError types | | | String wrapper, 6 error ctors |
-| IO-A | A3: IO capability extensions | | | Extend `capabilities.prologos` for IO |
+| IO-A | A1: Opaque type marshalling | ✅ | `8a2f5d0` | 13 tests; `expr-opaque` AST node + marshalling in `foreign.rkt`; pass-throughs in substitution/zonk/reduction/pretty-print |
+| IO-A | A2: Path + IOError types | ✅ | `1a6d926` | 14 tests; `path.prologos` (3 fns via qualified `str::append`), `io-error.prologos` (6 ctors); deferred `path-parent`/`path-extension`/`path-file-name` (need `substring`/`index-of`) |
+| IO-A | A3: IO capability extensions | ✅ | `da67f31` | 18 tests; +`AppendCap`, +`StatCap`, +`IOCap`; hierarchy `FsCap/NetCap/StdioCap → IOCap → SysCap`; used `capability`+`subtype` declarations (pragmatic, not D17 union types — see note below) |
 | IO-B | B1: IO state lattice | | | `io-bridge.rkt` |
 | IO-B | B2: IO bridge propagator | | | Side-effecting fire-fn |
 | IO-B | B3: FFI bridge to Racket | | | `io-ffi.rkt` |
@@ -39,6 +39,24 @@
 | IO-J | J1: Elaborator binder scope | | | Extend gamma for dep session continuation |
 | IO-J | J2: Runtime dep send/recv | | | `sess-dsend`/`sess-drecv` predicates + `substS` |
 | IO-J | J3: Grammar + E2E tests | | | Update grammar.ebnf; dep session E2E tests |
+
+### Implementation Notes
+
+**IO-A3 vs D17 (Composite Capability Model)**: D17 specifies composite capabilities as
+union types (`type FsCap = ReadCap | WriteCap | AppendCap | StatCap`), but IO-A3 used
+`capability` + `subtype` declarations instead. This pragmatic approach works because the
+capability inference system operates on symbol registries (not type-level constructs), and
+transitive closure of `subtype` declarations produces the same subtyping relationships
+(`ReadCap <: FsCap <: IOCap <: SysCap`). Revisiting with true union type syntax remains
+possible but is not blocking — the subtype hierarchy is semantically correct.
+
+**IO-A2 Deferred Functions**: `path-parent`, `path-extension`, and `path-file-name` are
+deferred because they require `substring` and `index-of` string operations not yet available
+in the Prologos standard library. Added to DEFERRED.md.
+
+**`spec` syntax discovery**: `.prologos` spec declarations use NO colon after the function
+name: `spec path String -> Path`, not `spec path : String -> Path`. This was undocumented
+in the implementation design but is consistent across the entire codebase.
 
 ### Phase Dependency Graph
 
