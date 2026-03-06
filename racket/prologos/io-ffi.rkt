@@ -11,7 +11,8 @@
 ;;; Design reference: docs/tracking/2026-03-05_IO_IMPLEMENTATION_DESIGN.md §10
 ;;;
 
-(require racket/file)
+(require racket/file
+         racket/string)
 
 (provide
  io-ffi-registry
@@ -39,7 +40,13 @@
  fio-read-cached
  fio-write-port
  fio-write-port-ret
- fio-close-port)
+ fio-close-port
+ ;; CSV parsing (IO-G1)
+ csv-parse-serialized
+ csv-serialize-rows
+ csv-quote-field
+ csv-read-file
+ csv-write-file)
 
 ;; ========================================
 ;; Wrapper Functions
@@ -174,6 +181,150 @@
     (lambda () (error 'fio-close-port "invalid handle: ~a" handle-id))))
   (if (input-port? port) (close-input-port port) (close-output-port port))
   (hash-remove! fio-port-table handle-id)
+  (void))
+
+;; ========================================
+;; CSV Parsing (IO-G1)
+;; ========================================
+;;
+;; RFC 4180 CSV parser implemented as a state machine.
+;; Uses RS (ASCII 30) / US (ASCII 31) serialization to pass structured
+;; data through the String-only FFI boundary:
+;;   rows are RS-delimited, fields within rows are US-delimited.
+;;
+;; This avoids needing List[List[String]] marshalling across FFI.
+
+(define RS (string (integer->char 30)))  ;; Record Separator
+(define US (string (integer->char 31)))  ;; Unit Separator
+
+;; csv-parse-serialized : String → String
+;; Parses CSV per RFC 4180, returns RS-delimited rows with US-delimited fields.
+;; Empty input → empty string.
+;;
+;; State machine states:
+;;   'start       — beginning of a field
+;;   'unquoted    — inside an unquoted field
+;;   'quoted      — inside a quoted field
+;;   'after-quote — just saw a quote inside a quoted field (could be escape or end)
+(define (csv-parse-serialized csv-str)
+  (if (string=? csv-str "")
+      ""
+      (csv-parse-loop csv-str)))
+
+;; Separated loop body for cleaner paren management.
+(define (csv-parse-loop csv-str)
+  (define len (string-length csv-str))
+  (define (finish-row field row)
+    (reverse (cons (list->string (reverse field)) row)))
+  (define (finish-field field)
+    (list->string (reverse field)))
+  (let loop ([i 0]
+             [state 'start]
+             [field '()]
+             [row '()]
+             [rows '()])
+    (if (>= i len)
+        ;; End of input — finalize
+        (let* ([cleaned-rows
+                (if (and (null? field) (null? row) (eq? state 'start))
+                    ;; Ended right after a newline committed the row — no phantom row
+                    (reverse rows)
+                    ;; Otherwise finalize the current field/row
+                    (reverse (cons (finish-row field row) rows)))])
+          (string-join
+           (for/list ([r (in-list cleaned-rows)])
+             (string-join r US))
+           RS))
+        ;; Process next character
+        (let ([ch (string-ref csv-str i)])
+          (case state
+            [(start)
+             (cond
+               [(char=? ch #\")
+                (loop (add1 i) 'quoted field row rows)]
+               [(char=? ch #\,)
+                (loop (add1 i) 'start '() (cons "" row) rows)]
+               [(char=? ch #\return)
+                (if (and (< (add1 i) len)
+                         (char=? (string-ref csv-str (add1 i)) #\newline))
+                    (loop (+ i 2) 'start '() '() (cons (finish-row field row) rows))
+                    (loop (add1 i) 'start '() '() (cons (finish-row field row) rows)))]
+               [(char=? ch #\newline)
+                (loop (add1 i) 'start '() '() (cons (finish-row field row) rows))]
+               [else
+                (loop (add1 i) 'unquoted (cons ch field) row rows)])]
+            [(unquoted)
+             (cond
+               [(char=? ch #\,)
+                (loop (add1 i) 'start '() (cons (finish-field field) row) rows)]
+               [(char=? ch #\return)
+                (if (and (< (add1 i) len)
+                         (char=? (string-ref csv-str (add1 i)) #\newline))
+                    (loop (+ i 2) 'start '() '() (cons (finish-row field row) rows))
+                    (loop (add1 i) 'start '() '() (cons (finish-row field row) rows)))]
+               [(char=? ch #\newline)
+                (loop (add1 i) 'start '() '() (cons (finish-row field row) rows))]
+               [else
+                (loop (add1 i) 'unquoted (cons ch field) row rows)])]
+            [(quoted)
+             (cond
+               [(char=? ch #\")
+                (loop (add1 i) 'after-quote field row rows)]
+               [else
+                (loop (add1 i) 'quoted (cons ch field) row rows)])]
+            [(after-quote)
+             (cond
+               [(char=? ch #\")
+                (loop (add1 i) 'quoted (cons #\" field) row rows)]
+               [(char=? ch #\,)
+                (loop (add1 i) 'start '() (cons (finish-field field) row) rows)]
+               [(char=? ch #\return)
+                (if (and (< (add1 i) len)
+                         (char=? (string-ref csv-str (add1 i)) #\newline))
+                    (loop (+ i 2) 'start '() '() (cons (finish-row field row) rows))
+                    (loop (add1 i) 'start '() '() (cons (finish-row field row) rows)))]
+               [(char=? ch #\newline)
+                (loop (add1 i) 'start '() '() (cons (finish-row field row) rows))]
+               [else
+                (loop (add1 i) 'unquoted (cons ch field) row rows)])])))))
+;; csv-quote-field : String → String
+;; Quotes a field for CSV output if it contains special characters.
+;; Per RFC 4180: fields with commas, quotes, or newlines must be quoted.
+;; Quotes within fields are escaped as "".
+(define (csv-quote-field field-str)
+  (if (or (string-contains? field-str ",")
+          (string-contains? field-str "\"")
+          (string-contains? field-str "\n")
+          (string-contains? field-str "\r"))
+      (string-append "\"" (string-replace field-str "\"" "\"\"") "\"")
+      field-str))
+
+;; csv-serialize-rows : String → String
+;; Converts RS/US-delimited string back to RFC 4180 CSV.
+;; Each field is quoted if necessary.
+(define (csv-serialize-rows serialized-str)
+  (if (string=? serialized-str "")
+      ""
+      (let* ([rs-char (string-ref RS 0)]
+             [us-char (string-ref US 0)]
+             [rows (string-split serialized-str RS)]
+             [csv-rows
+              (for/list ([row (in-list rows)])
+                (define fields (string-split row US #:trim? #f))
+                (string-join (map csv-quote-field fields) ","))])
+        (string-join csv-rows "\r\n"))))
+
+;; csv-read-file : String → String
+;; Read a CSV file and return RS/US-serialized parsed data.
+(define (csv-read-file path-str)
+  (csv-parse-serialized (file->string path-str)))
+
+;; csv-write-file : String String → Void
+;; Write RS/US-serialized data to a file as CSV.
+(define (csv-write-file path-str serialized-str)
+  (call-with-output-file path-str
+    (lambda (out) (write-string (csv-serialize-rows serialized-str) out))
+    #:exists 'truncate/replace)
   (void))
 
 ;; ========================================

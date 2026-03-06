@@ -252,6 +252,13 @@
               metavar-store.rkt multi-dispatch.rkt namespace.rkt parser.rkt
               prelude.rkt pretty-print.rkt source-location.rkt
               surface-syntax.rkt syntax.rkt) #f)
+   'test-io-csv-01.rkt
+   (test-dep '(io-ffi.rkt) #f)
+   'test-io-csv-02.rkt
+   (test-dep '(driver.rkt elaborator.rkt errors.rkt global-env.rkt
+              io-ffi.rkt macros.rkt metavar-store.rkt multi-dispatch.rkt
+              namespace.rkt parser.rkt prelude.rkt pretty-print.rkt
+              source-location.rkt surface-syntax.rkt syntax.rkt) #f)
    'test-io-boundary-01.rkt
    (test-dep '(io-bridge.rkt processes.rkt propagator.rkt session-lattice.rkt session-runtime.rkt sessions.rkt syntax.rkt) #f)
    'test-io-bridge-01.rkt

@@ -1,0 +1,50 @@
+ns prologos::core::csv :no-prelude
+
+require [prologos::data::string  :as str :refer []]
+require [prologos::data::char    :as char :refer []]
+require [prologos::data::list    :refer [List nil cons map]]
+require [prologos::core::string-ops :as sops :refer [split join]]
+require [prologos::core::io      :as io :refer [read-file write-file]]
+
+;; ========================================
+;; CSV Module (IO-G2)
+;; ========================================
+;;
+;; RFC 4180 CSV parsing and serialization.
+;; Uses Racket-side parser (io-ffi.rkt) via FFI, with RS/US
+;; (ASCII 30/31) serialization to pass structured data through
+;; the String-only FFI boundary.
+
+;; --- FFI imports ---
+foreign racket "io-ffi.rkt" [csv-parse-serialized :as csv-parse-raw : String -> String]
+foreign racket "io-ffi.rkt" [csv-serialize-rows :as csv-serialize-raw : String -> String]
+
+;; --- RS/US separator strings ---
+;; Record Separator (ASCII 30) and Unit Separator (ASCII 31)
+def rs : String := [str::from-char [char::from-code 30]]
+def us : String := [str::from-char [char::from-code 31]]
+
+;; --- Parse CSV ---
+;; parse-csv : String -> List (List String)
+;; Parses a CSV string into a list of rows, each a list of fields.
+spec parse-csv String -> [List [List String]]
+defn parse-csv [csv-str]
+  if [str::eq csv-str ""] [nil [List String]] [map [fn [row : String] [split us row]] [split rs [csv-parse-raw csv-str]]]
+
+;; --- Serialize CSV ---
+;; csv-to-string : List (List String) -> String
+;; Converts a list of rows back to RFC 4180 CSV text.
+spec csv-to-string [List [List String]] -> String
+defn csv-to-string [rows]
+  csv-serialize-raw [join rs [map [fn [row : [List String]] [join us row]] rows]]
+
+;; --- File-based CSV ---
+;; read-csv : String -> List (List String)
+spec read-csv String -> [List [List String]]
+defn read-csv [path]
+  parse-csv [read-file path]
+
+;; write-csv : String -> List (List String) -> Unit
+spec write-csv String -> [List [List String]] -> Unit
+defn write-csv [path rows]
+  write-file path [csv-to-string rows]
