@@ -91,9 +91,9 @@ formal foundations. This document assumes familiarity with them.
 | AD-D | D1: Data-Flow Edge Extraction | ✅ | =e7127d0= | =effect-ordering.rkt=: cross-channel data-flow analysis + session ordering edges |
 | AD-D | D2: Transitive Closure Propagator | ✅ | =e7127d0= | Monotone fixed-point in propagator network; cycle = deadlock = contradiction |
 | AD-D | D3: Integration with Collection | ✅ | =e7127d0= | =linearize-effects= + full pipeline test; 30 tests; 5981 pass across 307 files |
-| AD-E | E1: Effect Linearization | NOT STARTED | | Topological sort |
-| AD-E | E2: Effect Executor | NOT STARTED | | =effect-executor.rkt= |
-| AD-E | E3: Full D Pipeline | NOT STARTED | | =rt-execute-process-d= |
+| AD-E | E1: Effect Linearization | ✅ | =d016902= | Multi-effect-per-position fix in =linearize-effects=; open→write/read→close priority sort |
+| AD-E | E2: Effect Executor | ✅ | =d016902= | =effect-executor.rkt=: execute-effects, execute-effects-and-propagate (read feedback to msg-in) |
+| AD-E | E3: Full D Pipeline | ✅ | =d016902= | =rt-execute-process-d=: compile→collect→order→linearize→execute→quiescence; 19 tests; 6000 pass across 308 files |
 | AD-F | F1: ATMS Branching | NOT STARTED | | =proc-case= worldview management |
 | AD-F | F2: Architecture Selection | NOT STARTED | | Auto-detect A vs D |
 | AD-F | F3: Concurrent Hooks | NOT STARTED | | Placeholder for S8b runtime |
