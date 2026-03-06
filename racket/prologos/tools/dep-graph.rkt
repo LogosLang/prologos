@@ -62,6 +62,7 @@
    'errors.rkt                    '(source-location.rkt)
    'expander.rkt                  '(elaborator.rkt errors.rkt global-env.rkt lang-error.rkt macros.rkt metavar-store.rkt multi-dispatch.rkt parser.rkt prelude.rkt pretty-print.rkt reduction.rkt repl-support.rkt source-location.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt typing-core.rkt typing-errors.rkt zonk.rkt)
    'foreign.rkt                   '(syntax.rkt)
+   'effect-position.rkt            '(sessions.rkt)
    'global-env.rkt                '()
    'inductive.rkt                 '(syntax.rkt typing-core.rkt)
    'io-bridge.rkt                 '(propagator.rkt sessions.rkt syntax.rkt)
@@ -201,6 +202,8 @@
    (test-dep '(macros.rkt) #f)
    'test-dot-access.rkt
    (test-dep '(driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parser.rkt prelude.rkt pretty-print.rkt reader.rkt reduction.rkt source-location.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt typing-core.rkt) #t)
+   'test-effect-position-01.rkt
+   (test-dep '(effect-position.rkt sessions.rkt syntax.rkt) #f)
    'test-elab-speculation.rkt
    (test-dep '(atms.rkt elab-speculation.rkt elaborator-network.rkt prelude.rkt propagator.rkt syntax.rkt type-lattice.rkt) #f)
    'test-elaborator-network.rkt
