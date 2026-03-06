@@ -65,7 +65,17 @@
          cap-inference-result-call-graph
          cap-inference-result-provenance-atms
          cap-inference-result-provenance-roots
-         atms-cell-key)
+         atms-cell-key
+         ;; Pipeline integration (IO-H)
+         current-module-cap-result)
+
+;; ========================================
+;; Pipeline Integration Parameter (IO-H)
+;; ========================================
+;;
+;; Stores the most recent capability inference result after module compilation.
+;; Set by run-post-compilation-inference! in driver.rkt.
+(define current-module-cap-result (make-parameter #f))
 
 ;; ========================================
 ;; CapabilitySet Lattice

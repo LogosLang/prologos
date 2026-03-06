@@ -235,6 +235,11 @@
               metavar-store.rkt multi-dispatch.rkt namespace.rkt parser.rkt
               prelude.rkt pretty-print.rkt source-location.rkt
               surface-syntax.rkt syntax.rkt) #f)
+   'test-io-cap-pipeline-01.rkt
+   (test-dep '(capability-inference.rkt driver.rkt elaborator.rkt errors.rkt
+              global-env.rkt macros.rkt metavar-store.rkt multi-dispatch.rkt
+              namespace.rkt parser.rkt prelude.rkt pretty-print.rkt
+              source-location.rkt surface-syntax.rkt syntax.rkt) #f)
    'test-io-boundary-01.rkt
    (test-dep '(io-bridge.rkt processes.rkt propagator.rkt session-lattice.rkt session-runtime.rkt sessions.rkt syntax.rkt) #f)
    'test-io-bridge-01.rkt

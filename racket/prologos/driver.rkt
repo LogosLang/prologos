@@ -63,7 +63,9 @@
          rewrite-specializations
          ;; Phase 6: Foreign capability gating helpers (for testing)
          extract-foreign-caps
-         extract-caps-from-brace-params)
+         extract-caps-from-brace-params
+         ;; IO-H: Post-compilation capability inference
+         run-post-compilation-inference!)
 
 ;; ========================================
 ;; Standard library path (computed from this module's location)
@@ -1116,6 +1118,46 @@
   (prologos-read-syntax-all source port))
 
 ;; ========================================
+;; Post-Compilation Capability Inference (IO-H)
+;; ========================================
+;;
+;; After all definitions in a module/REPL batch are processed, run capability
+;; inference and emit warnings for authority roots whose declarations don't
+;; cover their inferred closures.
+;;
+;; Fast path: skips if no capability types have been registered (most programs).
+;; This is advisory in Phase 0 — warnings, not errors.
+
+(define (run-post-compilation-inference!)
+  ;; Fast path: skip if no capability types exist
+  (when (not (hash-empty? (current-capability-registry)))
+    (define result (run-capability-inference))
+    (current-module-cap-result result)
+    ;; Check all entries in the global env for authority roots.
+    ;; An authority root is a function whose type declares capability requirements
+    ;; (i.e., has :0 binders with capability-type domains).
+    (define closures (cap-inference-result-closures result))
+    (for ([(name entry) (in-hash (current-global-env))])
+      (when (and (pair? entry) (car entry))
+        (define declared-caps (extract-capability-requirements (car entry)))
+        (when (not (set-empty? declared-caps))
+          ;; This is an authority root — verify that declared caps subsume closure
+          (define closure (hash-ref closures name (seteq)))
+          ;; Find capabilities in closure NOT covered by any declared cap
+          (define missing
+            (for/seteq ([cap (in-set closure)]
+                        #:unless (for/or ([dcap (in-set declared-caps)])
+                                   (or (eq? cap dcap)
+                                       (subtype-pair? cap dcap))))
+              cap))
+          (unless (set-empty? missing)
+            (eprintf "warning[W2004]: authority root `~a` does not cover required capabilities: ~a\n"
+                     name
+                     (string-join
+                      (sort (map symbol->string (set->list missing)) string<?)
+                      ", "))))))))
+
+;; ========================================
 ;; Process all commands from a string
 ;; ========================================
 (define (process-string s)
@@ -1140,6 +1182,8 @@
     (for ([r (in-list results)])
       (when (prologos-error? r)
         (emit-error-diagnostic r))))
+  ;; IO-H: Run capability inference after all definitions are processed
+  (run-post-compilation-inference!)
   (when pc (print-perf-report! pc))
   (print-phase-report! pt)
   (print-provenance-report! pv)
@@ -1173,6 +1217,8 @@
     (for ([r (in-list results)])
       (when (prologos-error? r)
         (emit-error-diagnostic r))))
+  ;; IO-H: Run capability inference after all definitions are processed
+  (run-post-compilation-inference!)
   (when pc (print-perf-report! pc))
   (print-phase-report! pt)
   (print-provenance-report! pv)
@@ -1312,6 +1358,9 @@
            (when (prologos-error? result)
              (error 'imports "Error loading module ~a: ~a"
                     ns-sym (prologos-error-message result)))))
+
+       ;; IO-H: Run capability inference after module definitions are processed
+       (run-post-compilation-inference!)
 
        ;; Capture the resulting environment, namespace context, and registries
        (set! mod-env (current-global-env))
