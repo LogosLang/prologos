@@ -22,7 +22,11 @@
  io-close-port
  display-wrapper
  displayln-wrapper
- read-line-wrapper)
+ read-line-wrapper
+ ;; High-level convenience wrappers (IO-D1)
+ io-ffi-read-all
+ io-ffi-write-file
+ io-ffi-append-file)
 
 ;; ========================================
 ;; Wrapper Functions
@@ -54,6 +58,25 @@
 (define (display-wrapper str) (display str) (void))
 (define (displayln-wrapper str) (displayln str) (void))
 (define (read-line-wrapper) (read-line))
+
+;; High-level convenience wrappers (IO-D1)
+;; These do the full open-read/write-close cycle.
+;; Errors (file not found, permission denied) propagate as Racket exceptions.
+
+(define (io-ffi-read-all path-str)
+  (file->string path-str))
+
+(define (io-ffi-write-file path-str content)
+  (call-with-output-file path-str
+    (lambda (out) (write-string content out))
+    #:exists 'truncate/replace)
+  (void))
+
+(define (io-ffi-append-file path-str content)
+  (call-with-output-file path-str
+    (lambda (out) (write-string content out))
+    #:exists 'append)
+  (void))
 
 ;; ========================================
 ;; FFI Registry

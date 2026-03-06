@@ -1,0 +1,6 @@
+ns prologos::core::io :no-prelude
+
+;; File IO — direct FFI, errors propagate as Racket exceptions
+foreign racket "io-ffi.rkt" [io-ffi-read-all :as read-file : String -> String]
+foreign racket "io-ffi.rkt" [io-ffi-write-file :as write-file : String String -> Unit]
+foreign racket "io-ffi.rkt" [io-ffi-append-file :as append-file : String String -> Unit]

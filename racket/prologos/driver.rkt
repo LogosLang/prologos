@@ -1585,7 +1585,12 @@
                foreign-caps)))
 
   ;; dynamic-require the Racket function using its ORIGINAL Racket name
-  (define rkt-mod-path (string->symbol module-path-str))
+  ;; For .rkt file paths, resolve relative to the prologos source directory.
+  ;; For collection paths like "racket/base", convert to symbol.
+  (define rkt-mod-path
+    (if (regexp-match? #rx"\\.rkt$" module-path-str)
+        (simplify-path (build-path prologos-lib-dir ".." module-path-str))
+        (string->symbol module-path-str)))
   (define rkt-proc
     (with-handlers ([exn:fail? (lambda (e)
                                  (error 'foreign "Cannot import ~a from ~a: ~a"
@@ -1610,8 +1615,10 @@
     (define fqn (qualify-name prologos-name (ns-context-current-ns (current-ns-context))))
     (current-global-env
      (global-env-add (current-global-env) fqn full-type val))
-    ;; Auto-export the foreign binding
-    (ns-context-add-auto-export (current-ns-context) prologos-name)))
+    ;; Auto-export the foreign binding (must update current-ns-context —
+    ;; ns-context-add-auto-export returns a new struct, does not mutate)
+    (current-ns-context
+     (ns-context-add-auto-export (current-ns-context) prologos-name))))
 
 ;; Convert foreign type tokens to a parseable sexp.
 ;; Transforms infix (Nat -> Nat -> Bool) to prefix (-> Nat (-> Nat Bool)).
