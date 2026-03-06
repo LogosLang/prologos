@@ -543,10 +543,11 @@
 ;; the bindings hash under special keys (threaded through recursive calls
 ;; automatically — no signature changes needed for internal recursion).
 
-(define eff-collect-key    '__collect_effects?)
-(define eff-acc-key        '__effect_acc)
-(define eff-chan-depth-key  '__chan_depth)
-(define eff-pos-cells-key  '__eff_pos_cells)
+(define eff-collect-key      '__collect_effects?)
+(define eff-acc-key          '__effect_acc)
+(define eff-chan-depth-key    '__chan_depth)
+(define eff-pos-cells-key    '__eff_pos_cells)
+(define eff-choice-sel-key   '__choice_selections)  ;; AD-F1
 
 ;; Is this walk in effect collection mode?
 (define (collecting-effects? bindings)
@@ -830,8 +831,16 @@
           (rt-trace-add trace (channel-endpoint-session-cell ep)
             (format "process selects '~a on ~a" label chan)))
         ;; Increment channel depth (AD-C1: select is one step)
+        ;; AD-F1: Record choice selection in bindings for partner's proc-case.
+        ;; In Phase 0 (sequential walk), proc-sel is compiled before proc-case
+        ;; (left-to-right in proc-par). The bindings hash flows from p1 to p2,
+        ;; so proc-case can read the selection without waiting for quiescence.
         (define bindings-sel
-          (if collecting? (inc-chan-depth bindings0 chan) bindings0))
+          (if collecting?
+              (let ([b (inc-chan-depth bindings0 chan)])
+                (hash-set b eff-choice-sel-key
+                  (hash-set (hash-ref b eff-choice-sel-key (hasheq)) chan label)))
+              bindings0))
         ;; Recurse
         (compile-live-process rnet3 cont
           (hash-set channel-eps chan ep*) bindings-sel trace*)])]
@@ -877,14 +886,29 @@
                        (net-cell-write net-acc sess-cell sess-top)
                        (net-cell-write net-acc cid branch)))]
                 [else (net-cell-write n sess-cell sess-top)]))))
-        ;; Compile each branch guarded on the choice cell value
-        ;; All branches are compiled, but only the one matching the choice
-        ;; will see non-bot values on its message cells.
+        ;; Compile each branch guarded on the choice cell value.
         ;; Increment channel depth (AD-C1: case/offer is one step)
         (define bindings-case
           (if collecting? (inc-chan-depth bindings0 chan) bindings0))
+        ;; AD-F1: In effect collection mode, only compile the active branch.
+        ;; Phase 0 simplification: proc-sel records its selection in bindings
+        ;; (threaded left-to-right through proc-par), so proc-case can read it
+        ;; without waiting for cross-wire propagator quiescence. Compiling only
+        ;; the active branch avoids collecting effects from unchosen branches.
+        ;; In non-collection mode, all branches are compiled — only the one
+        ;; matching the choice will see non-bot values on its message cells.
+        (define branches-to-compile
+          (if collecting?
+              (let* ([selections (hash-ref bindings-case eff-choice-sel-key (hasheq))]
+                     [resolved-label (hash-ref selections chan #f)])
+                (if resolved-label
+                    (for/list ([pb (in-list proc-branches)]
+                              #:when (eq? (car pb) resolved-label))
+                      pb)
+                    proc-branches))  ;; No selection yet — compile all (safety fallback)
+              proc-branches))
         (for/fold ([r rnet2] [b bindings-case] [t trace*])
-                  ([pb (in-list proc-branches)])
+                  ([pb (in-list branches-to-compile)])
           (define lbl (car pb))
           (define p (cdr pb))
           (define cont-cid (cdr (assq lbl branch-cells-rev)))

@@ -51,7 +51,8 @@
          "sessions.rkt"           ;; Phase S3: session types (for driver integration)
          "processes.rkt"          ;; Phase S3: process types (for driver integration)
          "typing-sessions.rkt"    ;; Phase S3: type-proc judgment
-         "session-runtime.rkt")   ;; Phase S7c: rt-execute-process (spawn execution)
+         "session-runtime.rkt"    ;; Phase S7c: rt-execute-process (spawn execution)
+         "effect-executor.rkt")   ;; AD-F2: rt-execute-process-auto (architecture dispatch)
 
 (provide process-command
          process-file
@@ -738,7 +739,7 @@
                           [else sess-ty]))
                       (cond
                         [resolved-sess
-                         (define result (rt-execute-process proc-body resolved-sess))
+                         (define result (rt-execute-process-auto proc-body resolved-sess))
                          (define status (rt-exec-result-status result))
                          (case status
                            [(ok)
@@ -776,7 +777,7 @@
                       (cond
                         [resolved-sess
                          (define fuel (hash-ref props ':fuel 50000))
-                         (define result (rt-execute-process proc-body resolved-sess fuel))
+                         (define result (rt-execute-process-auto proc-body resolved-sess fuel))
                          (define status (rt-exec-result-status result))
                          (case status
                            [(ok)

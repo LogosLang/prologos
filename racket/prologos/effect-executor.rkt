@@ -33,7 +33,13 @@
  execute-effects
  execute-effects-and-propagate
  ;; AD-E3: Full D pipeline
- rt-execute-process-d)
+ rt-execute-process-d
+ ;; AD-F2: Unified architecture dispatch
+ rt-execute-process-auto
+ ;; AD-F3: Concurrent hooks (placeholders for S8b runtime)
+ current-effect-executor
+ default-effect-executor
+ concurrent-effect-executor)
 
 
 ;; ========================================
@@ -228,3 +234,73 @@
              [else
               (rt-exec-result 'ok
                 (hash-set bindings '__effect_results results) rnet5 trace)])])])]))
+
+
+;; ========================================
+;; AD-F2: Unified Architecture Dispatch
+;; ========================================
+
+;; Execute a process with automatic architecture selection.
+;; Dispatches between Architecture A (walk-order, from session-runtime.rkt)
+;; and Architecture D (session-derived ordering) based on process characteristics.
+;;
+;; Architecture D is selected when:
+;;   1. Multiple IO channels exist (> 1 proc-open), AND
+;;   2. Cross-channel data flow edges exist (recv on one → send on another)
+;; Otherwise Architecture A is used (cheaper, same result for single-channel IO).
+;;
+;; proc          : proc-* (process AST)
+;; session-type  : session type for the process
+;; fuel          : propagator network fuel limit
+;; #:architecture : 'auto | 'a | 'd — override architecture selection
+;;
+;; Returns: rt-exec-result
+(define (rt-execute-process-auto proc session-type [fuel 1000000]
+                                 #:architecture [arch 'auto])
+  ;; For proc-open processes, 'self gets sess-end because the process
+  ;; communicates via IO channels (proc-open creates 'ch), not 'self.
+  ;; The session-type parameter describes the IO channel protocol,
+  ;; used by Architecture D for effect ordering.
+  (define a-session (if (proc-open? proc) (sess-end) session-type))
+  (case arch
+    [(a) (rt-execute-process proc a-session fuel)]
+    [(d) (rt-execute-process-d proc session-type fuel)]
+    [(auto)
+     (if (architecture-d-required? proc)
+         (rt-execute-process-d proc session-type fuel)
+         (rt-execute-process proc a-session fuel))]
+    [else (error 'rt-execute-process-auto
+                 "unknown architecture: ~a (expected 'a, 'd, or 'auto)" arch)]))
+
+
+;; ========================================
+;; AD-F3: Concurrent Execution Hooks
+;; ========================================
+;;
+;; Placeholders for the S8b concurrent runtime. In Phase 0, all execution
+;; is sequential (single-network). The concurrent runtime will:
+;;   - Execute partner processes on separate networks
+;;   - Deliver messages via buffered channels
+;;   - Defer ATMS worldview collapse until runtime label delivery
+;;   - Execute effects from consistent worldviews only
+;;
+;; These hooks allow the execution strategy to be swapped without modifying
+;; the core pipeline. The default executor runs effects sequentially (Phase 0).
+;; The concurrent executor is a stub that raises an error (S8b not yet implemented).
+
+;; Parameter: the current effect execution strategy.
+;; Value is a function: (rnet effects channel-eps) → (values rnet* results)
+(define current-effect-executor (make-parameter #f))
+
+;; Default (sequential) effect executor — delegates to execute-effects-and-propagate.
+;; This is the Phase 0 behavior: effects are linearized and executed in order.
+(define (default-effect-executor rnet effects channel-eps)
+  (execute-effects-and-propagate rnet effects channel-eps))
+
+;; Concurrent effect executor — placeholder for S8b runtime.
+;; Raises an error because the concurrent runtime is not yet implemented.
+;; Future: will partition effects by network, execute concurrently, and
+;; merge results via cross-network message delivery.
+(define (concurrent-effect-executor rnet effects channel-eps)
+  (error 'concurrent-effect-executor
+         "S8b concurrent runtime not yet implemented"))

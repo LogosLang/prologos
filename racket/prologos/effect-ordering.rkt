@@ -33,7 +33,10 @@
  ;; AD-D2: Ordering propagator
  add-ordering-propagator
  ;; AD-D3: Linearize effect descriptors
- linearize-effects)
+ linearize-effects
+ ;; AD-F2: Architecture selection
+ count-io-channels
+ architecture-d-required?)
 
 
 ;; ========================================
@@ -267,3 +270,40 @@
      (apply append
        (for/list ([pos (in-list linearized-positions)])
          (sort-effects-at-position (hash-ref pos->effects pos '()))))]))
+
+
+;; ========================================
+;; AD-F2: Architecture Selection
+;; ========================================
+
+;; Count the number of IO channels (proc-open nodes) in a process AST.
+;; Architecture D is only needed when multiple IO channels have cross-channel
+;; data flow; otherwise Architecture A is sufficient and cheaper.
+;;
+;; proc : proc-* (process AST)
+;; Returns: Nat (count of proc-open nodes)
+(define (count-io-channels proc)
+  (match proc
+    [(proc-open _path _session-type _cap-type cont)
+     (add1 (count-io-channels cont))]
+    [(proc-send _expr _chan cont) (count-io-channels cont)]
+    [(proc-recv _chan _binding _type cont) (count-io-channels cont)]
+    [(proc-sel _chan _label cont) (count-io-channels cont)]
+    [(proc-case _chan branches)
+     (apply max 0 (map (lambda (b) (count-io-channels (cdr b))) branches))]
+    [(proc-par left right)
+     (+ (count-io-channels left) (count-io-channels right))]
+    [(proc-new _session cont) (count-io-channels cont)]
+    [(proc-stop) 0]
+    [(proc-link _c1 _c2) 0]
+    [_ 0]))
+
+;; Predicate: does this process require Architecture D?
+;; D is required only when multiple IO channels have cross-channel data flow.
+;; Otherwise Architecture A (walk-order execution) is sufficient and cheaper.
+;;
+;; proc : proc-* (process AST)
+;; Returns: boolean
+(define (architecture-d-required? proc)
+  (and (> (count-io-channels proc) 1)
+       (not (null? (extract-data-flow-edges proc)))))
