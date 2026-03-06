@@ -1,0 +1,80 @@
+#+TITLE: Standup — 2026-03-05
+#+DATE: 2026-03-05
+
+
+* Yesterday (since Mar 4 standup/dailies)
+
+** Session Type Implementation: S7b-S7d + S8 Complete
+
+Finished the session type runtime and async layers:
+
+- *S7b* (commit =60f4e33=): Process-to-propagator compilation — =compile-live-process= walks proc-* tree, installs runtime propagators. =rt-execute-process= entry point.
+- *S7c* (commit =7b4fedb=): End-to-end spawn execution — =process-registry= for named processes, =spawn= command creates channel pair + compiles + quiesces.
+- *S7d* (commit =89f4933=): Strategy application — =spawn-with= applies strategy properties (fuel, fairness, IO mode) to process execution.
+- *S8a* (commit =3ffc9a8=): Async session types — =!!=, =??= operators (non-blocking send/recv), =:scheduler-io= strategy property rename.
+- *S8c* (commit =1304309=): Async integration tests + tracking doc update.
+
+Session type implementation is now *complete* (S1-S8, all phases).
+
+** Post Implementation Review + Methodology Update
+
+- *PIR* (commit =22a7eb6=): Post Implementation Review for Session Types. Comprehensive review of S1-S8, strengths/weaknesses, lessons learned.
+- *Methodology* (commit =5798e59=): Added PIR practice to Design Methodology Phase 5 (Composition/Review). PIR is now a standard post-implementation step.
+
+** Research: Propagator Networks + AT Protocol
+
+- *Propagator Networks* (commit =4e6024f=): Comprehensive survey article on Propagator Networks in Prologos. Covers architecture, lattice design, cross-domain bridges, applications across all subsystems.
+- *AT Protocol* (commit =1da35be=): Research on AT Protocol as composable session types — exploring how decentralized social protocols map onto our session type system.
+
+** PROTOCOLS_AS_TYPES Principles Document (commit =e9a1407=)
+
+New principles document: Protocol composition through named continuations, capability composition through session types, IO protocols as typed boundaries.
+
+** IO Library Design V2 (Phase I Design Complete)
+
+Full design cycle following Design Methodology:
+
+- *V2 Design* (commit =c6ae494=): IO Library Design v2 — capabilities + sessions + propagators. Double-boundary model: compile-time capability check → runtime session type → IO bridge → external world. 15 sections, ~1000 lines.
+- *Deferred gaps* (commit =c7aaf0b=): Documented IO Library gaps in =DEFERRED.md=.
+- *Feedback pass* (commit =e71a975=): Addressed feedback on V2 design.
+- *D12.2 resolution* (commit =cec4ff8=): Resolved hybrid IO decision (Option C) — =io= module (session-based) + =fio= module (functional linear handles).
+
+** IO Implementation Design (Phase II — Living Document)
+
+Phase II implementation plan bridging design→code:
+
+- *Initial plan* (commit =8ee7811=): 20 sections, 10 phases (IO-A through IO-J), ~173 tests planned. Exact files, function signatures, phased sub-tasks with explicit dependencies.
+- *Dep cap promotion* (commit =fc0f5be=): Dependent capabilities promoted to Phase IO-I with progress tracker.
+- *Dep send/recv* (commit =f2e606b=): Dependent send/receive promoted to Phase IO-J; fixed stale blocker claims (8 of 10 pipeline layers complete).
+- *Audit improvements* (commit =6ab4a13=): Comprehensive audit of Doc2 against Doc1. 16 findings addressed: 6 new sections (§4 IO Cap Types, §12 FS Queries, §13 main Powerbox, §20 Test Infra, §21 Example Programs), decisions D16-D21, prelude format fix. Expanded to 25 sections, ~199 tests.
+- *D17 correction* (commit =7fe228f=): Fixed composite capability model — union types (not standalone declarations with subtype hierarchies), per =CAPABILITY_SECURITY.md= §Composite Union.
+
+** Metrics
+
+| Metric          | Mar 4 dailies | Current          |
+|-----------------+---------------+------------------|
+| Tests           | 5535          | ~5593+ (284 files) |
+| Test files      | 279           | 284              |
+| Failures        | 0             | 0                |
+| Session types   | S7a+S7b       | *S1-S8 complete* |
+| IO Design V2    | —             | Phase I complete |
+| IO Impl Design  | —             | Phase II complete (25 sections) |
+
+
+* Today
+
+** IO Implementation: Begin Phase IO-J (Dependent Send/Receive)
+- Only 2 small gaps remain (~20 lines total)
+- IO-J1: Elaborator binder scope for =surf-sess-dsend=/=surf-sess-drecv=
+- IO-J2: Runtime predicates for =sess-dsend=/=sess-drecv=
+- IO-J3: Grammar update + E2E tests
+
+** IO Implementation: Begin Phase IO-A
+- IO-A3: Revise =capabilities.prologos= — union types for composite caps
+- IO-A1: Opaque type marshalling (=expr-opaque= in syntax.rkt)
+- IO-A2: Path + IOError data types
+
+
+* Blockers
+
+None.
