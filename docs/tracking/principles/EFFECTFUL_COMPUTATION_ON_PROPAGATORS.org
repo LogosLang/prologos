@@ -129,7 +129,7 @@ This formalizes why session types can serve as the foundation for effect
 ordering: the algebraic structure is shared. The connection is not accidental;
 it reflects a deep mathematical relationship between protocols and effects.
 
-See: =docs/tracking/2026-03-06_SESSION_TYPES_AS_EFFECT_ORDERING.md= §4 (Galois
+See: =docs/tracking/2026-03-06_SESSION_TYPES_AS_EFFECT_ORDERING.org= §4 (Galois
 Connection), §6 (Effect Quantale Connection).
 
 ** Cross-Channel Data Dependencies
