@@ -1188,6 +1188,29 @@
        ;; (link c1 c2) — channel forwarding
        [(and (= len 3) (eq? (car item) 'link))
         `(proc-link ,(cadr item) ,(caddr item))]
+       ;; (with-open path : Session body...) — auto-closing open
+       ;; Expands to: (proc-open path : Session (body... (proc-sel ch :close cont)))
+       ;; The user writes:
+       ;;   with-open "file.txt" : FileRead
+       ;;     select ch :read-all
+       ;;     data := ch ?
+       ;; And it auto-adds select ch :close before the outer continuation.
+       ;; Minimum: (with-open path : Session) = 4 elements (no body, just open+close)
+       [(and (>= len 4) (eq? (car item) 'with-open))
+        (define path-expr (cadr item))
+        (define after-open (cddr item))  ; (: FileRead body1 body2 ...)
+        (cond
+          [(and (>= (length after-open) 2) (eq? (car after-open) ':))
+           (define sess-type (cadr after-open))
+           (define body-items (cddr after-open))
+           ;; Build: body items folded right, with (proc-sel ch :close cont) as base
+           (define close-then-cont `(proc-sel ch |:close| ,cont))
+           (define body-nested
+             (foldr (lambda (item* acc) (proc-item->sexp item* acc))
+                    close-then-cont
+                    body-items))
+           `(proc-open ,path-expr : ,sess-type ,body-nested)]
+          [else item])]  ;; malformed — let parser report error
        ;; (open/connect/listen path : Session [Cap] body...) — boundary ops
        [(and (>= len 4) (memq (car item) '(open connect listen)))
         (define proc-op (case (car item)
