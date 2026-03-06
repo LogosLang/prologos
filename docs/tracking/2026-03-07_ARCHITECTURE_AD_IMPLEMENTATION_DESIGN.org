@@ -94,9 +94,9 @@ formal foundations. This document assumes familiarity with them.
 | AD-E | E1: Effect Linearization | ✅ | =d016902= | Multi-effect-per-position fix in =linearize-effects=; open→write/read→close priority sort |
 | AD-E | E2: Effect Executor | ✅ | =d016902= | =effect-executor.rkt=: execute-effects, execute-effects-and-propagate (read feedback to msg-in) |
 | AD-E | E3: Full D Pipeline | ✅ | =d016902= | =rt-execute-process-d=: compile→collect→order→linearize→execute→quiescence; 19 tests; 6000 pass across 308 files |
-| AD-F | F1: ATMS Branching | NOT STARTED | | =proc-case= worldview management |
-| AD-F | F2: Architecture Selection | NOT STARTED | | Auto-detect A vs D |
-| AD-F | F3: Concurrent Hooks | NOT STARTED | | Placeholder for S8b runtime |
+| AD-F | F1: ATMS Branching | ✅ | =0f7ff6c= | Phase 0 simplified: bindings-threaded choice selections; only active branch effects collected |
+| AD-F | F2: Architecture Selection | ✅ | =0f7ff6c= | =rt-execute-process-auto=: auto-detect A vs D; =count-io-channels=, =architecture-d-required?= |
+| AD-F | F3: Concurrent Hooks | ✅ | =0f7ff6c= | =current-effect-executor= parameter; default (sequential) + placeholder concurrent; 25 tests; 6025 pass across 310 files |
 
 * Phase Dependency Graph
 
