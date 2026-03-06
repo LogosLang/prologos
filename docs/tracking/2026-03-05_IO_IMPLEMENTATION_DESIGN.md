@@ -1,6 +1,6 @@
 # IO Library Implementation Design
 
-**Status**: Implementation Phase — IO-A/B/C/D/E complete, IO-F next
+**Status**: Implementation Phase — IO-A/B/C/D/E/J complete, IO-F next
 **Predecessor**: `docs/tracking/2026-03-05_IO_LIBRARY_DESIGN_V2.md` (Phase I — API research + gap analysis)
 **Template**: Follows the format of `docs/tracking/2026-03-03_SESSION_TYPE_DESIGN.md`
 **Date**: 2026-03-05
@@ -36,9 +36,9 @@
 | IO-I | I2: `extract-capability-requirements` for `expr-app` | | | `FileCap "/data"` extraction |
 | IO-I | I3: Cap-type bridge for applied caps | | | α/γ for `expr-app` cap types |
 | IO-I | I4: Path-indexed cap tests | | | End-to-end dependent caps |
-| IO-J | J1: Elaborator binder scope | | | Extend gamma for dep session continuation |
-| IO-J | J2: Runtime dep send/recv | | | `sess-dsend`/`sess-drecv` predicates + `substS` |
-| IO-J | J3: Grammar + E2E tests | | | Update grammar.ebnf; dep session E2E tests |
+| IO-J | J1: Elaborator binder scope | ✅ | `059a934` | Racket params `current-sess-expr-env`/`current-sess-expr-depth` thread expression-level scope through session body elaboration; `env-extend` + `parameterize` for dsend/drecv continuations |
+| IO-J | J2: Runtime dep send/recv | ✅ | `059a934` | `sess-dsend`/`sess-drecv` added to `sess-send-like?`/`sess-recv-like?` predicates + cont extractors; `substS` applied in send advance; io-bridge local predicates updated; 14 tests |
+| IO-J | J3: Grammar + E2E tests | ✅ | `594d780` | WS-mode `ws-session-step` production added to grammar.ebnf; Session Types section added to grammar.org; 8 E2E tests validating dependent sessions through full WS pipeline |
 
 ### Implementation Notes
 
