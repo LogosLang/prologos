@@ -60,20 +60,27 @@
  ;; IO channel
  rt-new-io-channel
  ;; IO mode inference (IO-E2)
- io-infer-mode)
+ io-infer-mode
+ ;; Async-aware predicates (IO-J2)
+ sess-send-like? sess-send-like-cont
+ sess-recv-like? sess-recv-like-cont)
 
 ;; ========================================
 ;; Async-aware predicates: accept both sync and async session variants
 ;; In Phase 0, proc-send/proc-recv compile identically for both.
 ;; ========================================
 
-(define (sess-send-like? v) (or (sess-send? v) (sess-async-send? v)))
+(define (sess-send-like? v) (or (sess-send? v) (sess-async-send? v) (sess-dsend? v)))
 (define (sess-send-like-cont v)
-  (if (sess-send? v) (sess-send-cont v) (sess-async-send-cont v)))
+  (cond [(sess-send? v) (sess-send-cont v)]
+        [(sess-async-send? v) (sess-async-send-cont v)]
+        [(sess-dsend? v) (sess-dsend-cont v)]))
 
-(define (sess-recv-like? v) (or (sess-recv? v) (sess-async-recv? v)))
+(define (sess-recv-like? v) (or (sess-recv? v) (sess-async-recv? v) (sess-drecv? v)))
 (define (sess-recv-like-cont v)
-  (if (sess-recv? v) (sess-recv-cont v) (sess-async-recv-cont v)))
+  (cond [(sess-recv? v) (sess-recv-cont v)]
+        [(sess-async-recv? v) (sess-async-recv-cont v)]
+        [(sess-drecv? v) (sess-drecv-cont v)]))
 
 ;; ========================================
 ;; IO mode inference for proc-open (IO-E2)
@@ -605,10 +612,17 @@
         (define-values (rnet2 next-sess-cell)
           (rt-fresh-session-cell-in-rnet rnet1 sess-bot))
         ;; Add session advance: Send → continuation
+        ;; For dependent send (sess-dsend), apply substS to substitute the sent
+        ;; value into the continuation type.  For regular send, just extract cont.
+        (define (send-cont-extractor sess)
+          (define raw-cont (sess-send-like-cont sess))
+          (if (sess-dsend? sess)
+              (substS raw-cont 0 val)
+              raw-cont))
         (define-values (rnet3 _pid)
           (rt-add-session-advance-in-rnet rnet2
             (channel-endpoint-session-cell ep) next-sess-cell
-            sess-send-like? sess-send-like-cont))
+            sess-send-like? send-cont-extractor))
         ;; Update endpoint with new session cell
         (define ep* (endpoint-advance-session ep next-sess-cell))
         (define trace*

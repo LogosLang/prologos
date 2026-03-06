@@ -3157,6 +3157,13 @@
 ;; Converts surf-sess-* tree → sess-* tree (de Bruijn indices for recursion)
 ;; ========================================
 
+;; S3d: Expression-level scope for dependent session binders.
+;; When !: or ?: introduces a binder, the name must be in scope when
+;; elaborating types in the continuation.  Racket parameters let us
+;; thread this through without changing every call site.
+(define current-sess-expr-env   (make-parameter '()))
+(define current-sess-expr-depth (make-parameter 0))
+
 ;; S3c: Wrap a session step in an error-offer when :throws is active.
 ;; Protocol step S becomes (sess-offer ((:ok S) (:error (sess-send ErrorType (sess-end)))))
 (define (maybe-wrap-throws step throws-type)
@@ -3171,46 +3178,55 @@
 (define (elaborate-session-body surf rec-stack depth [session-name #f] [throws-type #f])
   (match surf
     [(surf-sess-send type-surf cont-surf _loc)
-     (let ([ty (elaborate type-surf)])
+     (let ([ty (elaborate type-surf (current-sess-expr-env) (current-sess-expr-depth))])
        (if (prologos-error? ty) ty
            (let ([cont (elaborate-session-body cont-surf rec-stack depth session-name throws-type)])
              (if (prologos-error? cont) cont
                  (maybe-wrap-throws (sess-send ty cont) throws-type)))))]
 
     [(surf-sess-recv type-surf cont-surf _loc)
-     (let ([ty (elaborate type-surf)])
+     (let ([ty (elaborate type-surf (current-sess-expr-env) (current-sess-expr-depth))])
        (if (prologos-error? ty) ty
            (let ([cont (elaborate-session-body cont-surf rec-stack depth session-name throws-type)])
              (if (prologos-error? cont) cont
                  (maybe-wrap-throws (sess-recv ty cont) throws-type)))))]
 
     [(surf-sess-async-send type-surf cont-surf _loc)
-     (let ([ty (elaborate type-surf)])
+     (let ([ty (elaborate type-surf (current-sess-expr-env) (current-sess-expr-depth))])
        (if (prologos-error? ty) ty
            (let ([cont (elaborate-session-body cont-surf rec-stack depth session-name throws-type)])
              (if (prologos-error? cont) cont
                  (maybe-wrap-throws (sess-async-send ty cont) throws-type)))))]
 
     [(surf-sess-async-recv type-surf cont-surf _loc)
-     (let ([ty (elaborate type-surf)])
+     (let ([ty (elaborate type-surf (current-sess-expr-env) (current-sess-expr-depth))])
        (if (prologos-error? ty) ty
            (let ([cont (elaborate-session-body cont-surf rec-stack depth session-name throws-type)])
              (if (prologos-error? cont) cont
                  (maybe-wrap-throws (sess-async-recv ty cont) throws-type)))))]
 
     [(surf-sess-dsend name type-surf cont-surf _loc)
-     (let ([ty (elaborate type-surf)])
+     (let ([ty (elaborate type-surf (current-sess-expr-env) (current-sess-expr-depth))])
        (if (prologos-error? ty) ty
-           ;; Dependent send: the name binds in the continuation type (expression-level).
-           ;; This does NOT affect session-level de Bruijn; name is for substS.
-           (let ([cont (elaborate-session-body cont-surf rec-stack depth session-name throws-type)])
+           ;; Dependent send: binder goes into scope for continuation elaboration.
+           ;; env-extend + depth+1 gives name de Bruijn index 0 in the continuation.
+           (let ([cont (parameterize ([current-sess-expr-env
+                                       (env-extend (current-sess-expr-env) name (current-sess-expr-depth))]
+                                      [current-sess-expr-depth
+                                       (+ (current-sess-expr-depth) 1)])
+                         (elaborate-session-body cont-surf rec-stack depth session-name throws-type))])
              (if (prologos-error? cont) cont
                  (maybe-wrap-throws (sess-dsend ty cont) throws-type)))))]
 
     [(surf-sess-drecv name type-surf cont-surf _loc)
-     (let ([ty (elaborate type-surf)])
+     (let ([ty (elaborate type-surf (current-sess-expr-env) (current-sess-expr-depth))])
        (if (prologos-error? ty) ty
-           (let ([cont (elaborate-session-body cont-surf rec-stack depth session-name throws-type)])
+           ;; Dependent recv: same binder scoping as dsend.
+           (let ([cont (parameterize ([current-sess-expr-env
+                                       (env-extend (current-sess-expr-env) name (current-sess-expr-depth))]
+                                      [current-sess-expr-depth
+                                       (+ (current-sess-expr-depth) 1)])
+                         (elaborate-session-body cont-surf rec-stack depth session-name throws-type))])
              (if (prologos-error? cont) cont
                  (maybe-wrap-throws (sess-drecv ty cont) throws-type)))))]
 

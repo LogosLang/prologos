@@ -108,8 +108,8 @@
 
 ;; sess-send-like? / sess-recv-like? are internal to session-runtime.rkt.
 ;; Define local equivalents using struct predicates from sessions.rkt.
-(define (io-sess-send? v) (or (sess-send? v) (sess-async-send? v)))
-(define (io-sess-recv? v) (or (sess-recv? v) (sess-async-recv? v)))
+(define (io-sess-send? v) (or (sess-send? v) (sess-async-send? v) (sess-dsend? v)))
+(define (io-sess-recv? v) (or (sess-recv? v) (sess-async-recv? v) (sess-drecv? v)))
 
 ;; Unfold session mu-types before matching.
 (define (io-unfold-session v)

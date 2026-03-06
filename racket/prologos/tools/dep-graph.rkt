@@ -243,6 +243,8 @@
    (test-dep '(driver.rkt io-ffi.rkt foreign.rkt) #t)
    'test-io-file-02.rkt
    (test-dep '(driver.rkt macros.rkt sessions.rkt) #t)
+   'test-io-dep-session-01.rkt
+   (test-dep '(driver.rkt sessions.rkt session-runtime.rkt elaborator.rkt) #t)
    'test-io-fs-01.rkt
    (test-dep '(driver.rkt io-ffi.rkt foreign.rkt) #t)
    'test-io-session-01.rkt
