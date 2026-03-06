@@ -88,9 +88,9 @@ formal foundations. This document assumes familiarity with them.
 | AD-B | B2: Multi-Channel Bridge | ✅ | =7da2cd8= | 18 tests; 5932 tests pass across 305 files |
 | AD-C | C1: Effect Collection Mode | ✅ | =e76dd0c= | =#:collect-effects?= kwarg; effect descriptors with causal positions |
 | AD-C | C2: Position Cells in Runtime | ✅ | =e76dd0c= | Bridge propagators installed at proc-open; 19 tests; 5951 tests pass across 306 files |
-| AD-D | D1: Data-Flow Edge Extraction | NOT STARTED | | =effect-ordering.rkt= |
-| AD-D | D2: Transitive Closure Propagator | NOT STARTED | | Monotone fixed-point computation |
-| AD-D | D3: Integration with Collection | NOT STARTED | | Full pipeline wiring |
+| AD-D | D1: Data-Flow Edge Extraction | ✅ | =e7127d0= | =effect-ordering.rkt=: cross-channel data-flow analysis + session ordering edges |
+| AD-D | D2: Transitive Closure Propagator | ✅ | =e7127d0= | Monotone fixed-point in propagator network; cycle = deadlock = contradiction |
+| AD-D | D3: Integration with Collection | ✅ | =e7127d0= | =linearize-effects= + full pipeline test; 30 tests; 5981 pass across 307 files |
 | AD-E | E1: Effect Linearization | NOT STARTED | | Topological sort |
 | AD-E | E2: Effect Executor | NOT STARTED | | =effect-executor.rkt= |
 | AD-E | E3: Full D Pipeline | NOT STARTED | | =rt-execute-process-d= |
