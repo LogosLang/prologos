@@ -86,8 +86,8 @@ formal foundations. This document assumes familiarity with them.
 | AD-A | A2: Effect Descriptor Type | ✅ | =0f20fec= | Sum-type descriptors + effect-set accumulator; 54 new tests |
 | AD-B | B1: Single-Channel Bridge | ✅ | =7da2cd8= | =effect-bridge.rkt=: alpha direction Galois connection |
 | AD-B | B2: Multi-Channel Bridge | ✅ | =7da2cd8= | 18 tests; 5932 tests pass across 305 files |
-| AD-C | C1: Effect Collection Mode | NOT STARTED | | =#:collect-effects?= in =compile-live-process= |
-| AD-C | C2: Position Cells in Runtime | NOT STARTED | | Bridge propagators in runtime network |
+| AD-C | C1: Effect Collection Mode | ✅ | =e76dd0c= | =#:collect-effects?= kwarg; effect descriptors with causal positions |
+| AD-C | C2: Position Cells in Runtime | ✅ | =e76dd0c= | Bridge propagators installed at proc-open; 19 tests; 5951 tests pass across 306 files |
 | AD-D | D1: Data-Flow Edge Extraction | NOT STARTED | | =effect-ordering.rkt= |
 | AD-D | D2: Transitive Closure Propagator | NOT STARTED | | Monotone fixed-point computation |
 | AD-D | D3: Integration with Collection | NOT STARTED | | Full pipeline wiring |
