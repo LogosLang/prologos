@@ -705,17 +705,25 @@ The following collection items ARE also deferred (genuine infrastructure deps):
 - Source: `docs/tracking/2026-03-06_EFFECTFUL_PROPAGATORS_RESEARCH.md` §8
 - Principles: `docs/tracking/principles/EFFECTFUL_COMPUTATION_ON_PROPAGATORS.org`
 
-### Phase 2: Session-Derived Effect Ordering — Architecture D (NOT STARTED)
+### Phase 2: Architecture A+D — Propagator-Native Effectful IO (NOT STARTED)
 - **Problem**: Architecture A (walk-based barriers) doesn't support concurrent
   multi-channel processes — walk visits channels sequentially, but some effects
   should be concurrent
 - **Solution**: Architecture D — session types as causal clocks, effect ordering
   derived via Galois connection (α, γ) between session lattice and effect position lattice
-- **Components**: Effect position lattice, session-effect bridge propagator,
-  data-flow analysis for cross-channel edges, transitive closure propagator,
-  ATMS for branching effect orders, effect handler at Layer 5
-- **Blocked on**: Concurrent runtime (deferred from S8b — session types §8b)
-- **Source**: `docs/tracking/2026-03-06_SESSION_TYPES_AS_EFFECT_ORDERING.org`
+- **Architecture Decision**: A + D (D for session-typed IO, A for unsessioned IO/REPL)
+- **Implementation Design**: `docs/tracking/2026-03-07_ARCHITECTURE_AD_IMPLEMENTATION_DESIGN.org`
+- **Sub-phases** (16 sub-phases across 6 phases):
+  - AD-A: Effect Position Lattice — `effect-position.rkt` (NOT STARTED)
+  - AD-B: Session-Effect Bridge Propagator — `effect-bridge.rkt` (NOT STARTED)
+  - AD-C: Effect Collection During Compilation — `session-runtime.rkt` modification (NOT STARTED)
+  - AD-D: Ordering Analysis — data-flow edges + transitive closure in `effect-ordering.rkt` (NOT STARTED)
+  - AD-E: Effect Handler (Layer 5) — `effect-executor.rkt` + `rt-execute-process-d` (NOT STARTED)
+  - AD-F: ATMS Integration + Migration — architecture selection, concurrent hooks (NOT STARTED)
+- **Not blocked**: All phases buildable without concurrent runtime (S8b)
+- **Estimated**: ~720 new lines, ~178 new tests, 4 new modules
+- **Source**: `docs/tracking/2026-03-06_SESSION_TYPES_AS_EFFECT_ORDERING.org`,
+  `docs/tracking/principles/EFFECTFUL_COMPUTATION_ON_PROPAGATORS.org`
 
 ### Phase 3: Full Reactive Effect Integration (RESEARCH — NOT STARTED)
 - Architecture C — topological scheduling of effect propagators with freeze semantics
