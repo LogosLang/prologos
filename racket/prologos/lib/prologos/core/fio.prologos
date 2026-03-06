@@ -28,30 +28,29 @@ defn fio-open [path mode]
   mk-handle [fio-open-raw path mode]
 
 ;; Read all contents via a handle.
-;; Consumes handle (:1), returns (new-handle, data).
-;; Uses sexp def for :1 Pi type (spec/defn can't express :1).
+;; Consumes handle linearly (-1>), returns (new-handle, data).
 ;;
 ;; Data-flow trick for lazy evaluation: fio-read-ret reads the file
 ;; eagerly and caches the data, returning the handle-id. The handle-id
 ;; is embedded in mk-handle, so it's forced when the handle is extracted
 ;; (e.g., by fio-close in fio-with-file). fio-read-cached retrieves
 ;; the cached data without touching the port.
-(def fio-read-all : [Pi [h :1 <Handle>] [Sigma [_ <Handle>] String]]
-  (fn [h :1 <Handle>]
-    (match h (mk-handle idx -> (pair (mk-handle (fio-read-ret idx)) (fio-read-cached idx))))))
+spec fio-read-all Handle -1> <Handle * String>
+defn fio-read-all [h]
+  match h (mk-handle idx -> (pair (mk-handle (fio-read-ret idx)) (fio-read-cached idx)))
 
 ;; Write string via a handle.
-;; Consumes handle (:1), takes string, returns new handle.
+;; Consumes handle linearly (-1>), takes string, returns new handle.
 ;; Uses fio-write-ret which returns the port ID (not void), so the
 ;; FFI call is in the data flow and always evaluated.
-(def fio-write : [Pi [h :1 <Handle>] [-> String Handle]]
-  (fn [h :1 <Handle>] [data <String>]
-    (match h (mk-handle idx -> (mk-handle (fio-write-ret idx data))))))
+spec fio-write Handle -1> String -> Handle
+defn fio-write [h data]
+  match h (mk-handle idx -> (mk-handle (fio-write-ret idx data)))
 
-;; Close a handle (consumes it :1, returns unit).
-(def fio-close : [Pi [h :1 <Handle>] Unit]
-  (fn [h :1 <Handle>]
-    (match h (mk-handle idx -> (fio-close-raw idx)))))
+;; Close a handle (consumes it linearly, returns unit).
+spec fio-close Handle -1> Unit
+defn fio-close [h]
+  match h (mk-handle idx -> (fio-close-raw idx))
 
 ;; ========================================
 ;; Bracket Pattern (IO-F2)
@@ -71,7 +70,10 @@ defn fio-open [path mode]
 ;;   3. fio-close (first p) → match on handle → fio-close-raw (fio-read-ret id)
 ;;      → forces read (returns id as Nat) → closes port
 ;;   4. second p → fio-read-cached id → retrieves cached data
-(def fio-with-file : [Pi [A :0 <Type>] [-> String [-> String [-> [-> Handle [Sigma [_ <Handle>] A]] A]]]]
-  (fn [A :0 <Type>] [path <String>] [mode <String>] [body <(-> Handle (Sigma [_ <Handle>] A))>]
-    (let p := (body (fio-open path mode))
-      (match (fio-close (first p)) (unit -> (second p))))))
+;;
+;; Not linear (-1>) because it doesn't take a linear param — it creates
+;; and manages the handle internally.
+spec fio-with-file {A : Type} String -> String -> <Handle -> <Handle * A>> -> A
+defn fio-with-file [path mode body]
+  let p := [body [fio-open path mode]]
+    match [fio-close [first p]] (unit -> [second p])

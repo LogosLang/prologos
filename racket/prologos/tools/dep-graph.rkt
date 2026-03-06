@@ -241,6 +241,8 @@
    (test-dep '(io-bridge.rkt io-ffi.rkt propagator.rkt session-runtime.rkt sessions.rkt syntax.rkt) #f)
    'test-io-fio-01.rkt
    (test-dep '(driver.rkt io-ffi.rkt foreign.rkt) #t)
+   'test-spec-mult-01.rkt
+   (test-dep '(driver.rkt macros.rkt) #t)
    'test-io-file-01.rkt
    (test-dep '(driver.rkt io-ffi.rkt foreign.rkt) #t)
    'test-io-file-02.rkt

@@ -2986,6 +2986,54 @@
         (error 'spec "spec ~a: type has ~a type parameters but defn has ~a params"
                name (length flat-params) n-params)])]))
 
+;; Like decompose-spec-type but recognizes multiplicity arrows (-0>, -1>, -w>)
+;; and returns a parallel multiplicities list alongside param types.
+;; Returns (values param-types param-mults return-type-tokens)
+;;   param-mults: list parallel to param-types, each #f, 'm0, 'm1, or 'mw
+(define (decompose-spec-type/mult tokens n-params name)
+  (define-values (segments arrow-mults) (split-on-arrow-datum/mult tokens))
+  (cond
+    ;; No arrows: relation type (or zero-param function)
+    [(= (length segments) 1)
+     (if (= n-params 0)
+         (values '() '() tokens)
+         (error 'spec "spec type for ~a has no arrow but defn has ~a params"
+                name n-params))]
+    [else
+     (define non-last (drop-right segments 1))
+     (define last-seg (last segments))
+     ;; Flatten non-last segments: each element is a param type
+     (define flat-params (append-map (lambda (x) x) non-last))
+     ;; Build parallel multiplicity list: each param in a segment gets
+     ;; the multiplicity of the arrow that follows that segment.
+     ;; arrow-mults[i] = mult of arrow between segments[i] and segments[i+1]
+     (define flat-mults
+       (apply append
+              (for/list ([seg (in-list non-last)]
+                         [mult (in-list arrow-mults)])
+                (make-list (length seg) mult))))
+     (cond
+       [(= (length flat-params) n-params)
+        (values flat-params flat-mults last-seg)]
+       [(> (length flat-params) n-params)
+        ;; More type params than defn params — extra become part of return type
+        (define actual (take flat-params n-params))
+        (define actual-mults (take flat-mults n-params))
+        (define extra (drop flat-params n-params))
+        ;; Reconstruct arrows for extra params → return type
+        (define extra-mults (drop flat-mults n-params))
+        (define return-with-extras
+          (let loop ([ps extra] [ms extra-mults])
+            (cond
+              [(null? ps) last-seg]
+              [else
+               (define arrow (case (car ms) [(m0) '-0>] [(m1) '-1>] [(mw) '-w>] [else '->]))
+               (append (list (car ps) arrow) (loop (cdr ps) (cdr ms)))])))
+        (values actual actual-mults return-with-extras)]
+       [else
+        (error 'spec "spec ~a: type has ~a type parameters but defn has ~a params"
+               name (length flat-params) n-params)])]))
+
 ;; Convert a spec param-type element to an $angle-type annotation.
 ;; - plain atom Nat → ($angle-type Nat)
 ;; - grouped list [List A] → ($angle-type List A)
@@ -3070,8 +3118,8 @@
   ;; a) ALL params (including constraint dicts) → use full spec-tokens, no where rewrite
   ;; b) Only regular params (without dicts) → strip constraints, re-add `where`
   (define n-constraints (length where-constraints))
-  ;; Count total param types in full spec
-  (define full-segments (split-on-arrow-datum spec-tokens))
+  ;; Count total param types in full spec (use mult-aware splitting to handle -1> etc.)
+  (define-values (full-segments full-arrow-mults) (split-on-arrow-datum/mult spec-tokens))
   (define full-non-last (if (> (length full-segments) 1) (drop-right full-segments 1) '()))
   (define full-flat-params (append-map (lambda (x) x) full-non-last))
   (define n-full-params (length full-flat-params))
@@ -3085,21 +3133,25 @@
       [(= n-constraints 0) spec-tokens]  ;; no constraints
       [user-provides-dicts? spec-tokens]  ;; user provides all params including dicts
       [else
-       ;; Strip leading N constraint types
-       (define remaining-params (drop full-flat-params n-constraints))
-       (define last-seg (last full-segments))
-       (if (null? remaining-params)
-           last-seg
-           (append remaining-params (list '->) last-seg))]))
-  ;; Decompose the effective spec type into param types + return type
-  (define-values (param-types return-type-tokens)
-    (decompose-spec-type effective-spec-tokens (length param-names) name))
-  ;; Build typed bracket for user params: [x ($angle-type T1) y ($angle-type T2)]
+       ;; Strip leading constraint types prepended by process-spec:
+       ;; spec-tokens = (constraint1 ... constraintN -> user-type-tokens...)
+       ;; Drop n-constraints sublists + 1 arrow to recover user-type-tokens.
+       ;; This preserves multiplicity arrows (-1>, -0>, -w>) in user tokens.
+       (drop spec-tokens (add1 n-constraints))]))
+  ;; Decompose the effective spec type into param types + return type + multiplicities
+  (define-values (param-types param-mults return-type-tokens)
+    (decompose-spec-type/mult effective-spec-tokens (length param-names) name))
+  ;; Build typed bracket for user params: [x ($angle-type T1) y :1 ($angle-type T2)]
+  ;; When a param has non-default multiplicity (m0 or m1), emit the annotation.
   (define typed-bracket
     (apply append
            (for/list ([pname (in-list param-names)]
-                      [ptype (in-list param-types)])
-             (list pname (param-type->angle-type ptype)))))
+                      [ptype (in-list param-types)]
+                      [pmult (in-list param-mults)])
+             (define annot (mult->annot-symbol pmult))
+             (if annot
+                 (list pname annot (param-type->angle-type ptype))
+                 (list pname (param-type->angle-type ptype))))))
   ;; Build return type angle form.
   ;; When return-type-tokens is a single sub-list (e.g. from [A * B] in the spec),
   ;; use param-type->angle-type to properly flatten infix operators like * and ->.
@@ -5733,6 +5785,37 @@
        (loop (cdr remaining) '() (cons (reverse current) result))]
       [else
        (loop (cdr remaining) (cons (car remaining) current) result)])))
+
+;; Like split-on-arrow-datum but recognizes ALL arrow variants (->, -0>, -1>, -w>)
+;; and returns multiplicity information alongside segments.
+;; Returns (values segments arrow-mults)
+;;   segments: list of token-lists (param types + return type)
+;;   arrow-mults: list of mult symbols (#f, 'm0, 'm1, 'mw), one per arrow
+;;   (length arrow-mults) = (- (length segments) 1)
+;; Example: (Handle -1> String -> Unit)
+;;   → segments: ((Handle) (String) (Unit))
+;;   → arrow-mults: (m1 #f)
+(define (arrow-symbol-datum? s) (memq s '(-> -0> -1> -w>)))
+(define (arrow-mult-datum sym)
+  (case sym [(-0>) 'm0] [(-1>) 'm1] [(-w>) 'mw] [(->)  #f] [else #f]))
+
+;; Convert internal mult symbol to annotation symbol for typed brackets.
+;; Returns :0, :1, or #f (omit annotation for :w/unrestricted and #f/default).
+(define (mult->annot-symbol m)
+  (case m [(m0) ':0] [(m1) ':1] [else #f]))
+
+(define (split-on-arrow-datum/mult atoms)
+  (let loop ([remaining atoms] [current '()] [segments '()] [mults '()])
+    (cond
+      [(null? remaining)
+       (values (reverse (cons (reverse current) segments))
+               (reverse mults))]
+      [(arrow-symbol-datum? (car remaining))
+       (loop (cdr remaining) '()
+             (cons (reverse current) segments)
+             (cons (arrow-mult-datum (car remaining)) mults))]
+      [else
+       (loop (cdr remaining) (cons (car remaining) current) segments mults)])))
 
 ;; Build a nested -> type from a list of domains and a codomain
 ;; (build-arrow-type '(A B C) 'R) → (-> A (-> B (-> C R)))
