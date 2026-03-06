@@ -31,7 +31,15 @@
  io-ffi-read-ln-unit
  ;; FS query wrappers (IO-D4)
  io-ffi-is-file
- io-ffi-path-exists)
+ io-ffi-path-exists
+ ;; Handle-based port table (IO-F1)
+ fio-open-port
+ fio-read-port
+ fio-read-port-ret
+ fio-read-cached
+ fio-write-port
+ fio-write-port-ret
+ fio-close-port)
 
 ;; ========================================
 ;; Wrapper Functions
@@ -98,6 +106,75 @@
 ;; Racket's file-exists? returns #f for directories, so we check both.
 (define (io-ffi-path-exists path-str)
   (or (file-exists? path-str) (directory-exists? path-str)))
+
+;; ========================================
+;; Handle-based Port Table (IO-F1)
+;; ========================================
+;;
+;; Integer-indexed port table: Prologos sees Nat port IDs, actual Racket
+;; ports live here. This avoids Opaque:* types in .prologos FFI decls
+;; (the colon in Opaque:file-port is parsed as a keyword by the WS reader).
+
+(define fio-port-table (make-hasheq))
+(define fio-next-port-id 0)
+
+(define (fio-open-port path-str mode-str)
+  (define port
+    (case mode-str
+      [("read")   (open-input-file path-str)]
+      [("write")  (open-output-file path-str #:exists 'truncate/replace)]
+      [("append") (open-output-file path-str #:exists 'append)]
+      [else (error 'fio-open-port "unknown mode: ~a" mode-str)]))
+  (define id fio-next-port-id)
+  (set! fio-next-port-id (add1 id))
+  (hash-set! fio-port-table id port)
+  id)
+
+(define (fio-read-port handle-id)
+  (define port (hash-ref fio-port-table handle-id
+    (lambda () (error 'fio-read-port "invalid handle: ~a" handle-id))))
+  (define data (read-string 1048576 port))  ;; 1MB max
+  (if (eof-object? data) "" data))
+
+(define (fio-write-port handle-id content)
+  (define port (hash-ref fio-port-table handle-id
+    (lambda () (error 'fio-write-port "invalid handle: ~a" handle-id))))
+  (write-string content port)
+  (flush-output port)
+  (void))
+
+;; Write variant that returns the handle-id instead of void.
+;; Used by fio-write so the FFI call is in the data flow (not a discarded
+;; let binding that lazy evaluation might skip).
+(define (fio-write-port-ret handle-id content)
+  (define port (hash-ref fio-port-table handle-id
+    (lambda () (error 'fio-write-port-ret "invalid handle: ~a" handle-id))))
+  (write-string content port)
+  (flush-output port)
+  handle-id)
+
+;; Read variant that reads eagerly, caches the result, and returns handle-id.
+;; Used by fio-read-all to force the read BEFORE fio-close runs.
+;; In a lazy reducer, (pair (mk-handle (fio-read-port-ret id)) (fio-read-cached id))
+;; forces the read when the handle-id is needed for close (data-flow trick).
+(define fio-read-cache (make-hasheq))
+
+(define (fio-read-port-ret handle-id)
+  (define port (hash-ref fio-port-table handle-id
+    (lambda () (error 'fio-read-port-ret "invalid handle: ~a" handle-id))))
+  (define data (read-string 1048576 port))  ;; 1MB max
+  (hash-set! fio-read-cache handle-id (if (eof-object? data) "" data))
+  handle-id)
+
+(define (fio-read-cached handle-id)
+  (hash-ref fio-read-cache handle-id ""))
+
+(define (fio-close-port handle-id)
+  (define port (hash-ref fio-port-table handle-id
+    (lambda () (error 'fio-close-port "invalid handle: ~a" handle-id))))
+  (if (input-port? port) (close-input-port port) (close-output-port port))
+  (hash-remove! fio-port-table handle-id)
+  (void))
 
 ;; ========================================
 ;; FFI Registry

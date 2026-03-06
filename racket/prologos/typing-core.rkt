@@ -2373,6 +2373,28 @@
     [(_ (expr-hole))
      (not (expr-error? (infer ctx e)))]
 
+    ;; ---- Let pattern (beta-redex): propagate expected type into body ----
+    ;; (app (lam m dom body) arg) is the desugared form of (let x := arg in body).
+    ;; Without this case, the conversion fallback tries to infer the body type,
+    ;; which fails for match/reduce expressions (infer has no expr-reduce case).
+    ;; Fix: propagate the expected type into the body via check, not infer.
+    ;; The expected type must be shifted by 1 to account for the new binder.
+    [((expr-app (expr-lam m dom body) arg) expected-type)
+     (cond
+       [(expr-hole? dom)
+        ;; Hole domain: infer arg type, extend context, check body
+        (let ([arg-ty (infer ctx arg)])
+          (and (not (expr-error? arg-ty))
+               (let ([m-resolved (if (mult-meta? m) 'mw m)])
+                 (when (mult-meta? m)
+                   (solve-mult-meta! (mult-meta-id m) m-resolved))
+                 (check (ctx-extend ctx arg-ty m-resolved) body
+                        (shift 1 0 expected-type)))))]
+       ;; Explicit domain: check arg against domain, check body with extended context
+       [(and (is-type ctx dom) (check ctx arg dom))
+        (check (ctx-extend ctx dom m) body (shift 1 0 expected-type))]
+       [else #f])]
+
     ;; ---- Conversion fallback ----
     ;; If e synthesizes to T' and conv(T, T'), then check succeeds.
     ;; Cumulativity: if T' = Type(m) and T = Type(n) where m ≤ n, accept.

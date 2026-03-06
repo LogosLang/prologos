@@ -239,6 +239,8 @@
    (test-dep '(io-bridge.rkt processes.rkt propagator.rkt session-lattice.rkt session-runtime.rkt sessions.rkt syntax.rkt) #f)
    'test-io-bridge-01.rkt
    (test-dep '(io-bridge.rkt io-ffi.rkt propagator.rkt session-runtime.rkt sessions.rkt syntax.rkt) #f)
+   'test-io-fio-01.rkt
+   (test-dep '(driver.rkt io-ffi.rkt foreign.rkt) #t)
    'test-io-file-01.rkt
    (test-dep '(driver.rkt io-ffi.rkt foreign.rkt) #t)
    'test-io-file-02.rkt
