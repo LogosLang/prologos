@@ -450,20 +450,12 @@ The following collection items ARE also deferred (genuine infrastructure deps):
   - Additional abstract domains (Congruence, Pointer, etc.)
 - Source: `docs/tracking/2026-02-27_1026_GALOIS_CONNECTIONS_ABSTRACT_INTERPRETATION.md`
 
-### Capabilities — Phase 7e-7g: Dependent Capability Extensions
-- **7e**: Extend `cap-set` to hold type expressions (not just symbols) for propagator network
-  - Symbolic constraint variables for dependent indices
-  - `extract-capability-requirements` for `expr-app` forms
-- **7f**: Update cap-type-bridge α/γ functions for `expr-app` capability types
-- **7g**: Dependent caps in `foreign` blocks (`:requires [FileCap p]` syntax)
-- **Context**: Phases 7a-7d complete (commit `0a75942`) — parsing, type formation,
-  scope tracking, functor-based resolution all working. Current cap-closure/cap-inference
-  treats applied caps (like `[FileCap "/data"]`) as opaque (appears pure). These phases
-  add full dependent-cap awareness to the inference/bridge infrastructure.
-- **Note**: 7e and 7f are now covered by IO Implementation Design Phase IO-I (IO-I1 through
-  IO-I3). 7g (foreign block syntax) remains deferred as IO-N.
-- **Implementation design**: `docs/tracking/2026-03-05_IO_IMPLEMENTATION_DESIGN.md` §16
-- Source: `docs/tracking/2026-03-01_1500_CAPABILITIES_AS_TYPES_DESIGN.md` §Phase 7
+### ~~Capabilities — Phase 7e-7f: Dependent Capability Extensions~~ COMPLETE ✅
+- **7e**: `cap-entry` struct + `cap-set` migration — commit `5c9eb93` (IO-I)
+- **7f**: cap-type-bridge α/γ for `expr-app` caps — commit `5c9eb93` (IO-I)
+- **7g**: Dependent caps in `foreign` blocks (`:requires [FileCap p]` syntax) — DEFERRED as IO-N
+- **Context**: Phases 7a-7d complete (commit `0a75942`), 7e-7f complete via IO-I
+- **Source**: `docs/tracking/2026-03-01_1500_CAPABILITIES_AS_TYPES_DESIGN.md` §Phase 7
 
 ### Capabilities — Phase 8d: Multi-Agent Cross-Network Reasoning
 - Separate agents on separate propagator networks cross-referencing via
@@ -670,18 +662,67 @@ The following collection items ARE also deferred (genuine infrastructure deps):
 - **Blocked on**: Nothing, but lower priority than text IO
 - **Source**: `docs/tracking/2026-03-05_IO_LIBRARY_DESIGN_V2.md` §12.3
 
-### Capability Inference Pipeline Integration (NOT STARTED — Phase IO-H)
-- **Problem**: `run-capability-inference` in `capability-inference.rkt` correctly computes
-  transitive closure via propagator fixed-point, but is only wired into REPL commands
-  (`(cap-closure)`, `(cap-audit)`), NOT into the normal compilation pipeline. Tier 1
-  progressive disclosure requires automatic inference during compilation.
-- **Note**: Transitive inference IS implemented (propagator network handles it). The gap
-  is wiring it into `driver.rkt` after `process-top-level-defs`. Flat cap names only —
-  applied/dependent caps (`FileCap "/data"`) require Phases 7e-7g.
-- **Needed for**: Ergonomic IO (Tier 1 progressive disclosure — no manual cap annotations)
-- **Blocked on**: IO functions to exist (need something to infer caps on)
-- **Implementation design**: `docs/tracking/2026-03-05_IO_IMPLEMENTATION_DESIGN.md` §15
-- **Source**: `docs/tracking/2026-03-05_IO_LIBRARY_DESIGN_V2.md` §10, `docs/tracking/principles/CAPABILITY_SECURITY.md` §Lexical Resolution
+### ~~Capability Inference Pipeline Integration (Phase IO-H)~~ COMPLETE ✅
+- Automatic `run-post-compilation-inference!` after `process-string`/`process-string-ws`/`load-module`
+- Underdeclared authority roots → hard error E2004 (not warning — security violation)
+- `current-module-cap-result` parameter stores inference result
+- Commit: `3a72975`, `84a8d83`
+
+### ~~Dependent Capabilities (Phase IO-I)~~ COMPLETE ✅
+- `cap-entry` struct (name + optional index-expr), `cap-set` migrated to `set` of `cap-entry`
+- `extract-capability-requirements` handles `expr-app` (applied caps like `[FileCap "/data"]`)
+- α/γ bridge updated for applied caps; REPL commands display applied cap syntax
+- Covers Phases 7e and 7f from capabilities roadmap
+- Commit: `5c9eb93`
+
+### ~~CSV Parsing (Phase IO-G)~~ COMPLETE ✅
+- RFC 4180 CSV parser in `io-ffi.rkt` with RS/US serialization
+- `csv.prologos` module: `parse-csv`, `csv-to-string`, `read-csv`, `write-csv`
+- 28 tests (20 Racket-side + 8 E2E)
+- Commit: `7d621e8`
+
+### CSV Maps — `parse-csv-maps` (Deferred)
+- **Problem**: `parse-csv` returns `List [List String]`. A header-aware variant
+  `parse-csv-maps : String -> List [Map String String]` would be more ergonomic
+  for structured data (treats first row as header, returns list of maps).
+- **Blocked on**: Map construction from key-value pair lists. Currently no
+  `map-from-pairs : List [Pair K V] -> Map K V` function. Requires either a new
+  FFI helper or Prologos-side fold over pairs.
+- **Priority**: Low — `parse-csv` + manual header indexing works for all use cases
+- **Source**: IO-G plan in `buzzing-launching-pascal.md`
+
+---
+
+## Effectful Computation on Propagators
+
+### ~~Phase 1: Formalize Stratified Effect Barriers~~ COMPLETE ✅
+- Three-stratum architecture documented in the effectful propagators research:
+  Stratum 1 (pre-execution verification, monotone), Stratum 2 (effect execution,
+  non-monotone sequential walk), Stratum 3 (post-execution verification, monotone)
+- Correctness argument: session type order = AST structure = walk order = effect order
+- Documented where Architecture A breaks down (multi-channel concurrent processes)
+- Commit: `bc34e44`
+- Source: `docs/tracking/2026-03-06_EFFECTFUL_PROPAGATORS_RESEARCH.md` §8
+- Principles: `docs/tracking/principles/EFFECTFUL_COMPUTATION_ON_PROPAGATORS.org`
+
+### Phase 2: Session-Derived Effect Ordering — Architecture D (NOT STARTED)
+- **Problem**: Architecture A (walk-based barriers) doesn't support concurrent
+  multi-channel processes — walk visits channels sequentially, but some effects
+  should be concurrent
+- **Solution**: Architecture D — session types as causal clocks, effect ordering
+  derived via Galois connection (α, γ) between session lattice and effect position lattice
+- **Components**: Effect position lattice, session-effect bridge propagator,
+  data-flow analysis for cross-channel edges, transitive closure propagator,
+  ATMS for branching effect orders, effect handler at Layer 5
+- **Blocked on**: Concurrent runtime (deferred from S8b — session types §8b)
+- **Source**: `docs/tracking/2026-03-06_SESSION_TYPES_AS_EFFECT_ORDERING.org`
+
+### Phase 3: Full Reactive Effect Integration (RESEARCH — NOT STARTED)
+- Architecture C — topological scheduling of effect propagators with freeze semantics
+- Would handle declarative effect specifications outside session contexts
+- Research problem, not engineering task
+- **Blocked on**: Phase 2 completion, research prototype
+- **Source**: `docs/tracking/2026-03-06_EFFECTFUL_PROPAGATORS_RESEARCH.md` §5c
 
 ---
 
