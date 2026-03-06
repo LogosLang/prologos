@@ -194,6 +194,8 @@
  (struct-out expr-table-add) (struct-out expr-table-answers)
  (struct-out expr-table-freeze) (struct-out expr-table-complete)
  (struct-out expr-table-run) (struct-out expr-table-lookup)
+ ;; Opaque FFI values (IO library)
+ (struct-out expr-opaque)
  ;; Relational language (Phase 7)
  (struct-out expr-defr) (struct-out expr-defr-variant)
  (struct-out expr-rel) (struct-out expr-clause) (struct-out expr-fact-block) (struct-out expr-fact-row)
@@ -739,6 +741,11 @@
 (struct expr-table-run (store) #:transparent)                             ; TableStore -> TableStore
 (struct expr-table-lookup (store name answer) #:transparent)              ; TableStore -> Keyword -> A -> Bool
 
+;; ---- Opaque FFI values (IO library) ----
+;; Runtime wrapper for Racket values passed through FFI without inspection.
+;; Used for file ports, database connections, etc.
+(struct expr-opaque (value tag) #:transparent)  ; wraps Racket value with type tag symbol
+
 ;; ---- Relational language (Phase 7) ----
 ;; Relational core (14)
 (struct expr-defr (name schema variants) #:transparent)         ; (defr name schema [variants...])
@@ -1027,6 +1034,7 @@
       (expr-solver-type? x) (expr-goal-type? x) (expr-derivation-type? x)
       (expr-schema-type? x) (expr-answer-type? x) (expr-relation-type? x)
       (expr-solver-config? x) (expr-cut? x)
+      (expr-opaque? x)
       (expr-panic? x)
       (expr-hole? x) (expr-typed-hole? x) (expr-meta? x) (expr-reduce? x)
       (expr-union? x) (expr-tycon? x) (expr-error? x)))

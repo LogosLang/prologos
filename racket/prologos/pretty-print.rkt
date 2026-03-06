@@ -491,6 +491,8 @@
     [(expr-table-store-type) "TableStore"]
     [(expr-table-store-val v)
      (format "#<table-store ~a>" (hash-count (table-store-tables v)))]
+    ;; Opaque FFI values
+    [(expr-opaque v tag) (format "#<opaque:~a>" tag)]
     [(expr-table-new net)
      (format "[table-new ~a]" (pp-expr net names))]
     [(expr-table-register s n m)
@@ -1097,6 +1099,8 @@
     ;; Tabling
     [(expr-table-store-type) #f]
     [(expr-table-store-val _) #f]
+    ;; Opaque FFI values (no bound variables)
+    [(expr-opaque _ _) #f]
     [(expr-table-new net) (uses-bvar0? net)]
     [(expr-table-register s n m) (or (uses-bvar0? s) (uses-bvar0? n) (uses-bvar0? m))]
     [(expr-table-add s n a) (or (uses-bvar0? s) (uses-bvar0? n) (uses-bvar0? a))]

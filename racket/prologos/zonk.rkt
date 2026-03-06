@@ -339,6 +339,9 @@
     [(expr-table-run s) (expr-table-run (zonk s))]
     [(expr-table-lookup s n a) (expr-table-lookup (zonk s) (zonk n) (zonk a))]
 
+    ;; Opaque FFI values
+    [(expr-opaque _ _) e]
+
     ;; Relational language (Phase 7)
     [(expr-solver-type) e] [(expr-goal-type) e] [(expr-derivation-type) e] [(expr-cut) e]
     [(expr-schema-type _) e] [(expr-logic-var _ _) e]
@@ -769,6 +772,9 @@
     [(expr-table-run s) (expr-table-run (zonk-at-depth depth s))]
     [(expr-table-lookup s n a) (expr-table-lookup (zonk-at-depth depth s) (zonk-at-depth depth n) (zonk-at-depth depth a))]
 
+    ;; Opaque FFI values
+    [(expr-opaque _ _) e]
+
     ;; Relational language (Phase 7)
     [(expr-solver-type) e] [(expr-goal-type) e] [(expr-derivation-type) e] [(expr-cut) e]
     [(expr-schema-type _) e] [(expr-logic-var _ _) e]
@@ -1166,6 +1172,9 @@
     [(expr-table-complete s n) (expr-table-complete (default-metas s) (default-metas n))]
     [(expr-table-run s) (expr-table-run (default-metas s))]
     [(expr-table-lookup s n a) (expr-table-lookup (default-metas s) (default-metas n) (default-metas a))]
+
+    ;; Opaque FFI values
+    [(expr-opaque _ _) e]
 
     ;; Relational language (Phase 7)
     [(expr-solver-type) e] [(expr-goal-type) e] [(expr-derivation-type) e] [(expr-cut) e]

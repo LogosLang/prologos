@@ -2206,6 +2206,9 @@
     [(expr-table-store-type) e]
     [(expr-table-store-val _) e]
 
+    ;; Opaque FFI values are self-values (already reduced)
+    [(expr-opaque _ _) e]
+
     ;; table-new : PropNetwork -> TableStore
     [(expr-table-new network)
      (let ([network* (whnf network)])
@@ -2778,6 +2781,9 @@
     [(expr-table-complete st n) (expr-table-complete (nf st) (nf n))]
     [(expr-table-run st) (expr-table-run (nf st))]
     [(expr-table-lookup st n a) (expr-table-lookup (nf st) (nf n) (nf a))]
+
+    ;; Opaque FFI values are normal forms
+    [(expr-opaque _ _) e]
 
     ;; Relational language (Phase 7)
     [(expr-solver-type) e] [(expr-goal-type) e] [(expr-derivation-type) e] [(expr-cut) e]

@@ -358,6 +358,9 @@
     [(expr-table-run s) (expr-table-run (shift delta cutoff s))]
     [(expr-table-lookup s n a) (expr-table-lookup (shift delta cutoff s) (shift delta cutoff n) (shift delta cutoff a))]
 
+    ;; Opaque FFI values (no binding structure)
+    [(expr-opaque _ _) e]
+
     ;; Relational language (Phase 7 — all non-binding)
     [(expr-solver-type) e]
     [(expr-goal-type) e]
@@ -794,6 +797,9 @@
     [(expr-table-complete st n) (expr-table-complete (subst k s st) (subst k s n))]
     [(expr-table-run st) (expr-table-run (subst k s st))]
     [(expr-table-lookup st n a) (expr-table-lookup (subst k s st) (subst k s n) (subst k s a))]
+
+    ;; Opaque FFI values (no binding structure)
+    [(expr-opaque _ _) e]
 
     ;; Relational language (Phase 7 — all non-binding)
     [(expr-solver-type) e]

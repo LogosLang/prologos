@@ -221,6 +221,8 @@
    (test-dep '(driver.rkt elaborator.rkt errors.rkt foreign.rkt global-env.rkt macros.rkt metavar-store.rkt multi-dispatch.rkt namespace.rkt parser.rkt prelude.rkt pretty-print.rkt source-location.rkt surface-syntax.rkt syntax.rkt) #t)
    'test-foreign.rkt
    (test-dep '(driver.rkt elaborator.rkt errors.rkt foreign.rkt global-env.rkt macros.rkt metavar-store.rkt multi-dispatch.rkt namespace.rkt parser.rkt prelude.rkt pretty-print.rkt source-location.rkt surface-syntax.rkt syntax.rkt) #t)
+   'test-io-opaque-01.rkt
+   (test-dep '(foreign.rkt pretty-print.rkt reduction.rkt substitution.rkt syntax.rkt) #f)
    'test-free-ordering.rkt
    (test-dep '(driver.rkt global-env.rkt macros.rkt) #t)
    'test-functor-ws.rkt

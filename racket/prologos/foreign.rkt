@@ -13,6 +13,7 @@
 ;;;
 
 (require racket/match
+         racket/string
          "syntax.rkt")
 
 (provide marshal-prologos->racket
@@ -78,7 +79,11 @@
     [(Unit)   (void)]
     [(Char)   (char->rkt-char val)]
     [(String) (string->rkt-string val)]
-    [else (error 'foreign "Unsupported marshal-in type: ~a" base-type)]))
+    [else
+     (define type-str (symbol->string base-type))
+     (if (string-prefix? type-str "Opaque:")
+         (if (expr-opaque? val) (expr-opaque-value val) val)
+         (error 'foreign "Unsupported marshal-in type: ~a" base-type))]))
 
 ;; ========================================
 ;; Racket → Prologos marshalling
@@ -112,7 +117,11 @@
     [(Unit)   (expr-unit)]
     [(Char)   (expr-char val)]
     [(String) (expr-string val)]
-    [else (error 'foreign "Unsupported marshal-out type: ~a" base-type)]))
+    [else
+     (define type-str (symbol->string base-type))
+     (if (string-prefix? type-str "Opaque:")
+         (expr-opaque val (string->symbol (substring type-str 7)))
+         (error 'foreign "Unsupported marshal-out type: ~a" base-type))]))
 
 ;; ========================================
 ;; Type parsing for marshalling
