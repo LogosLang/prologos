@@ -1,6 +1,6 @@
 # IO Library Implementation Design
 
-**Status**: Implementation Phase — IO-A/B/C complete, IO-D next
+**Status**: Implementation Phase — IO-A/B/C/D complete, IO-E next
 **Predecessor**: `docs/tracking/2026-03-05_IO_LIBRARY_DESIGN_V2.md` (Phase I — API research + gap analysis)
 **Template**: Follows the format of `docs/tracking/2026-03-03_SESSION_TYPE_DESIGN.md`
 **Date**: 2026-03-05
@@ -19,11 +19,11 @@
 | IO-B | B3: FFI bridge to Racket | ✅ | `d4934d4` | 5 tests; `io-ffi.rkt` with 12-entry registry + wrapper fns; `io-close-port` generic close (Racket has no `close-port`) |
 | IO-C | C1: `proc-open` runtime | ✅ | `5b14a07` | `rt-new-io-channel` (5 cells: 4 standard + 1 IO state); `proc-open` match arm in `compile-live-process`; broke io-bridge↔session-runtime circular dep via local `io-msg-bot?` |
 | IO-C | C2: Integration tests | ✅ | `7cde920` | 11 tests in 3 groups: channel creation, direct IO channel read/write/error/close, compile-live-process integration |
-| IO-D | D1: File IO functions | | | `read-file`, `write-file`, etc. |
-| IO-D | D2: Console IO functions | | | `print`, `println`, `read-ln` |
-| IO-D | D3: `with-open` macro | | | Bracket pattern |
-| IO-D | D4: Filesystem query functions | | | `exists?`, `file?`, `dir?`, `list-dir` |
-| IO-D | D5: `main` powerbox mechanism | | | Runtime caps provisioning + `defn main` desugaring |
+| IO-D | D1: File IO functions | ✅ | `cc1c1e1` | 8 tests; `read-file`, `write-file`, `append-file` via `foreign racket "io-ffi.rkt"`; fixed `handle-foreign-decl` module path resolution + auto-export bug |
+| IO-D | D2: Console IO functions | ✅ | `8f5235a` | 4 tests; `print`, `println`, `read-ln` in io.prologos; print/println added to prelude |
+| IO-D | D3: `with-open` macro | ⏳ | | DEFERRED → IO-E (needs session ops) |
+| IO-D | D4: Filesystem query functions | ✅ | `832cd5e` | 7 tests; `exists?`, `file?`, `dir?` in `prologos::io::fs`; `io-ffi-path-exists` wrapper (Racket `file-exists?` excludes dirs); `list-dir` deferred (needs List marshalling) |
+| IO-D | D5: `main` powerbox mechanism | ⏳ | | DEFERRED → IO-H (needs cap inference) |
 | IO-E | E1: Protocol definitions | | | `FileRead`/`FileWrite`/`FileRW` |
 | IO-E | E2: Session-based file IO | | | IO service processes |
 | IO-E | E3: Protocol composition tests | | | IO protocols compose with user protocols |
