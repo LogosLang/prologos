@@ -65,6 +65,7 @@
    'global-env.rkt                '()
    'inductive.rkt                 '(syntax.rkt typing-core.rkt)
    'io-bridge.rkt                 '(propagator.rkt session-runtime.rkt sessions.rkt syntax.rkt)
+   'io-ffi.rkt                    '()
    'lang-error.rkt                '(errors.rkt source-location.rkt)
    'macros.rkt                    '(errors.rkt global-env.rkt namespace.rkt source-location.rkt surface-syntax.rkt syntax.rkt)
    'main.rkt                      '(expander.rkt repl-support.rkt)
@@ -235,7 +236,7 @@
               prelude.rkt pretty-print.rkt source-location.rkt
               surface-syntax.rkt syntax.rkt) #f)
    'test-io-bridge-01.rkt
-   (test-dep '(io-bridge.rkt propagator.rkt session-runtime.rkt sessions.rkt syntax.rkt) #f)
+   (test-dep '(io-bridge.rkt io-ffi.rkt propagator.rkt session-runtime.rkt sessions.rkt syntax.rkt) #f)
    'test-free-ordering.rkt
    (test-dep '(driver.rkt global-env.rkt macros.rkt) #t)
    'test-functor-ws.rkt

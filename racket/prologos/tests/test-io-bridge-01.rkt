@@ -15,6 +15,7 @@
          racket/port
          racket/string
          "../io-bridge.rkt"
+         "../io-ffi.rkt"
          "../propagator.rkt"
          "../sessions.rkt"
          "../session-runtime.rkt"
@@ -195,3 +196,64 @@
   (check-true (port-closed? port))
   ;; Clean up
   (delete-file tmp))
+
+;; ========================================
+;; Group 3: FFI Bridge Wrappers (IO-B3)
+;; ========================================
+
+(test-case "io-ffi-registry: all entries present"
+  ;; Registry should contain 12 entries, each a (cons procedure type-desc)
+  (define expected-keys
+    '(io-open-input io-open-output io-read-string io-read-line
+      io-write-string io-close io-port-closed?
+      io-display io-displayln io-read-ln
+      io-file-exists? io-directory?))
+  (for ([key (in-list expected-keys)])
+    (define entry (hash-ref io-ffi-registry key #f))
+    (check-not-false entry (format "missing key: ~a" key))
+    (check-true (pair? entry) (format "entry for ~a should be a pair" key))
+    (check-true (procedure? (car entry))
+                (format "car of ~a should be a procedure" key))))
+
+(test-case "io-ffi: port-read-string reads content"
+  (define tmp (make-temporary-file))
+  (call-with-output-file tmp
+    (lambda (out) (write-string "hello from file" out))
+    #:exists 'truncate/replace)
+  (define port (open-input-file tmp))
+  (define result (port-read-string port))
+  (check-equal? result "hello from file")
+  (close-input-port port)
+  (delete-file tmp))
+
+(test-case "io-ffi: port-read-string returns empty on EOF"
+  (define tmp (make-temporary-file))
+  ;; Write nothing — the file will be empty from make-temporary-file
+  (call-with-output-file tmp
+    (lambda (out) (void))
+    #:exists 'truncate/replace)
+  (define port (open-input-file tmp))
+  (define result (port-read-string port))
+  (check-equal? result "")
+  (close-input-port port)
+  (delete-file tmp))
+
+(test-case "io-ffi: port-write-string writes content"
+  (define tmp (make-temporary-file))
+  (define port (open-output-file tmp #:exists 'truncate/replace))
+  (port-write-string port "written content")
+  (close-output-port port)
+  ;; Read back and verify
+  (define content (file->string tmp))
+  (check-equal? content "written content")
+  (delete-file tmp))
+
+(test-case "io-ffi: display/displayln wrappers"
+  ;; display-wrapper should produce "hello" without newline
+  (define display-out
+    (with-output-to-string (lambda () (display-wrapper "hello"))))
+  (check-equal? display-out "hello")
+  ;; displayln-wrapper should produce "hello\n" with newline
+  (define displayln-out
+    (with-output-to-string (lambda () (displayln-wrapper "hello"))))
+  (check-equal? displayln-out "hello\n"))
