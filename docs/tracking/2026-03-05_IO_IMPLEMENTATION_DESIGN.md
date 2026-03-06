@@ -1,6 +1,6 @@
 # IO Library Implementation Design
 
-**Status**: Implementation Phase — IO-A/B/C/D complete, IO-E next
+**Status**: Implementation Phase — IO-A/B/C/D/E complete, IO-F next
 **Predecessor**: `docs/tracking/2026-03-05_IO_LIBRARY_DESIGN_V2.md` (Phase I — API research + gap analysis)
 **Template**: Follows the format of `docs/tracking/2026-03-03_SESSION_TYPE_DESIGN.md`
 **Date**: 2026-03-05
@@ -21,12 +21,12 @@
 | IO-C | C2: Integration tests | ✅ | `7cde920` | 11 tests in 3 groups: channel creation, direct IO channel read/write/error/close, compile-live-process integration |
 | IO-D | D1: File IO functions | ✅ | `cc1c1e1` | 8 tests; `read-file`, `write-file`, `append-file` via `foreign racket "io-ffi.rkt"`; fixed `handle-foreign-decl` module path resolution + auto-export bug |
 | IO-D | D2: Console IO functions | ✅ | `8f5235a` | 4 tests; `print`, `println`, `read-ln` in io.prologos; print/println added to prelude |
-| IO-D | D3: `with-open` macro | ⏳ | | DEFERRED → IO-E (needs session ops) |
+| IO-D | D3: `with-open` macro | ✅ | `cbfa039` | 8 tests; preparse macro in `proc-item->sexp` expands to proc-open + body + proc-sel ch :close; auto-close on block exit |
 | IO-D | D4: Filesystem query functions | ✅ | `832cd5e` | 7 tests; `exists?`, `file?`, `dir?` in `prologos::io::fs`; `io-ffi-path-exists` wrapper (Racket `file-exists?` excludes dirs); `list-dir` deferred (needs List marshalling) |
 | IO-D | D5: `main` powerbox mechanism | ⏳ | | DEFERRED → IO-H (needs cap inference) |
-| IO-E | E1: Protocol definitions | | | `FileRead`/`FileWrite`/`FileRW` |
-| IO-E | E2: Session-based file IO | | | IO service processes |
-| IO-E | E3: Protocol composition tests | | | IO protocols compose with user protocols |
+| IO-E | E1: Protocol definitions | ✅ | `54071c5` | 11 tests; `FileRead`/`FileWrite`/`FileAppend`/`FileRW` in `io-protocols.prologos`; duality, structure, branch validation |
+| IO-E | E2: Session-based file IO | ✅ | `fe6ea88` | 10 tests; direct IO execution in compile-live-process (not bridge propagators); `io-infer-mode` for choice protocols; fresh choice cells for recursive sessions; `read+write`/`append` modes |
+| IO-E | E3: Protocol composition tests | ✅ | `a2b5c7c` | 6 tests; fixed `proc-item->sexp` missing continuation for open/connect/listen boundary ops; WS pipeline defproc with open + select + recv |
 | IO-F | F1: Linear handle type | | | `Handle :1`, fio functions |
 | IO-F | F2: fio bracket pattern | | | `fio-with-open` |
 | IO-G | G1: CSV parser | | | RFC 4180 parsing |
