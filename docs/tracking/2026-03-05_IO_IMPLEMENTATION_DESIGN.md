@@ -1,6 +1,6 @@
 # IO Library Implementation Design
 
-**Status**: Implementation Phase — IO-A/B/C/D/E/J complete, IO-F next
+**Status**: Implementation Phase — IO-A/B/C/D/E/F/J complete, IO-G next
 **Predecessor**: `docs/tracking/2026-03-05_IO_LIBRARY_DESIGN_V2.md` (Phase I — API research + gap analysis)
 **Template**: Follows the format of `docs/tracking/2026-03-03_SESSION_TYPE_DESIGN.md`
 **Date**: 2026-03-05
@@ -27,8 +27,8 @@
 | IO-E | E1: Protocol definitions | ✅ | `54071c5` | 11 tests; `FileRead`/`FileWrite`/`FileAppend`/`FileRW` in `io-protocols.prologos`; duality, structure, branch validation |
 | IO-E | E2: Session-based file IO | ✅ | `fe6ea88` | 10 tests; direct IO execution in compile-live-process (not bridge propagators); `io-infer-mode` for choice protocols; fresh choice cells for recursive sessions; `read+write`/`append` modes |
 | IO-E | E3: Protocol composition tests | ✅ | `a2b5c7c` | 6 tests; fixed `proc-item->sexp` missing continuation for open/connect/listen boundary ops; WS pipeline defproc with open + select + recv |
-| IO-F | F1: Linear handle type | | | `Handle :1`, fio functions |
-| IO-F | F2: fio bracket pattern | | | `fio-with-open` |
+| IO-F | F1: Linear handle type | ✅ | `d249098` | `Handle` ADT + `fio-open`/`fio-read-all`/`fio-write`/`fio-close` with `:1` Pi types; integer port table in `io-ffi.rkt`; data-flow FFI tricks for lazy eval; type checker fix for let+match (beta-redex check propagation) |
+| IO-F | F2: fio bracket pattern | ✅ | `d249098` | `fio-with-file` bracket: open, run body, close; match-on-unit forces close; read-and-cache pattern for lazy eval safety; 15 tests |
 | IO-G | G1: CSV parser | | | RFC 4180 parsing |
 | IO-G | G2: CSV file functions | | | `read-csv`, `write-csv` |
 | IO-H | H1: Cap inference pipeline | | | Wire into `driver.rkt` |
