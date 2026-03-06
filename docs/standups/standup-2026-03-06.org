@@ -1,0 +1,98 @@
+#+TITLE: Standup — 2026-03-06
+#+DATE: 2026-03-06
+
+
+* Yesterday (since Mar 5 standup/dailies created ~17:33)
+
+** IO Implementation: ALL 29 Sub-phases Complete (IO-A through IO-J)
+
+Implemented the entire IO system in a single intensive session:
+
+*** IO-A: Foundation Types (commits =8a2f5d0=, =1a6d926=, =da67f31=)
+- Opaque type marshalling, Path/IOError ADTs, capability hierarchy extensions
+- 45 tests across 3 files
+
+*** IO-B: IO Bridge Layer (commits =2f1ebbf=, =1b9b91a=, =d4934d4=)
+- IO state lattice (5-element), side-effecting bridge propagator, FFI bridge (12 Racket primitives)
+- 15 tests
+
+*** IO-C: Boundary Operations (commits =5b14a07=, =7cde920=)
+- =proc-open= runtime match arm in =compile-live-process=, single-endpoint IO channels
+- 11 tests
+
+*** IO-D: File/Console/FS Functions (commits =cc1c1e1=, =8f5235a=, =832cd5e=, =cbfa039=, =f2dd088=)
+- =io.prologos= (read-file, write-file, println, etc.), =fs.prologos= (exists?, file?, dir?)
+- =with-open= preparse macro, =main= as powerbox with SysCap provisioning
+- 38 tests
+
+*** IO-E: Session Protocols (commits =54071c5=, =fe6ea88=, =a2b5c7c=)
+- FileRead/FileWrite/FileAppend/FileRW protocol definitions
+- *Key architectural discovery*: propagator networks cannot order side effects --- solved via direct IO execution during =compile-live-process= walk
+- 27 tests
+
+*** IO-F: Linear Handle Type (commit =d249098=)
+- =fio.prologos= with Handle ADT, bracket pattern, QTT enforcement
+- Data-flow tricks for lazy evaluation (return-handle, read-and-cache, match-on-unit patterns)
+- 15 tests
+
+*** IO-G: CSV Parsing (commit =7d621e8=)
+- RFC 4180 parser, RS/US encoding for structured data through String-only FFI
+- =csv.prologos= with parse-csv, read-csv, write-csv
+- 28 tests
+
+*** IO-H: Capability Inference Pipeline (commits =3a72975=, =84a8d83=)
+- =run-post-compilation-inference!= in driver.rkt, underdeclared caps = E2004 hard error
+- 10 tests
+
+*** IO-I: Dependent Capabilities (commit =5c9eb93=)
+- =cap-entry= struct, applied cap inference (=[FileCap "/data"]=), =cap-set= migration
+- 15 tests
+
+*** IO-J: Dependent Send/Receive (commits =059a934=, =594d780=)
+- Elaborator binder scope via Racket parameters, =sess-dsend=/=sess-drecv= runtime predicates
+- Grammar updates (EBNF + org companion)
+- 22 tests
+
+*** IO-D5: Batch Worker Fix (within commit =f2dd088=)
+- =current-capability-registry= missing from batch-worker.rkt save/restore list
+- Tests passed individually but failed in batch runner --- root cause traced through 5 levels
+
+** IO Post-Implementation Review (commit =7a9e971=)
+- Comprehensive PIR following Design Methodology Phase V
+- 10 sections, ~490 lines: objectives vs actuals, what went well, challenges, lessons learned
+- Key challenges: propnets can't order side effects, batch worker parameter gap, data-flow tricks for lazy eval, RS/US encoding
+
+** Metrics
+
+| Metric         | Mar 5 dailies created | At PIR (close of interval) |
+|----------------+-----------------------+----------------------------|
+| Tests          | 5535                  | 5860                       |
+| Test files     | 279                   | 303                        |
+| Failures       | 0                     | 0                          |
+| IO phases done | 0/10                  | *10/10 complete*           |
+| New tests      | —                     | ~226                       |
+| New files      | —                     | ~27 (.rkt + .prologos)     |
+
+
+* Today
+
+** Research: Effectful Propagators (commit =548cf5d=)
+- Tracking doc exploring whether order-dependent effects can be recovered on a propagator substrate
+- Surveys CALM theorem, LVars, Timely Dataflow, CRDTs, algebraic effects, Radul/Sussman, Flix
+- Three candidate architectures: (A) barriers, (B) timestamped effect cells, (C) reactive effect streams
+
+** Research: Session Types as Causal Timelines (commit =5fbe496=)
+- Deep investigation of PIR 9c: session types as effect ordering
+- Formalizes Galois connection (alpha, gamma) between session lattice and effect position lattice
+- Proposes Architecture D: session-derived effect ordering --- ordering is a theorem, not a design choice
+- Session advancement = Lamport clock per channel; multi-channel = vector clock
+- Parameterised monad / effect quantale algebraic structure
+- 5-phase formalization roadmap (D1-D5)
+
+** Continuing: Effect Ordering Exploration
+- Formalize current approach as Stratified Effect Barriers (architectural documentation)
+- Further exploration of Architecture D
+
+* Blockers
+
+None.
