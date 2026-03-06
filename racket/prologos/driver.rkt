@@ -302,7 +302,7 @@
     [(proc-listen _port _sess cap-type cont)
      (set-union (if cap-type (set cap-type) (set)) (proc-body-used-caps cont))]
     [(proc-send _e _c cont) (proc-body-used-caps cont)]
-    [(proc-recv _c _t cont) (proc-body-used-caps cont)]
+    [(proc-recv _c _binding _t cont) (proc-body-used-caps cont)]
     [(proc-sel _c _l cont) (proc-body-used-caps cont)]
     [(proc-case _c branches)
      (for/fold ([s (set)]) ([b (in-list branches)])

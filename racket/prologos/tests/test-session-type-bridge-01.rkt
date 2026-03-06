@@ -165,7 +165,7 @@
   (define-values (net1 self-cell) (make-session-cell net0 sess))
   (define channel-cells (hasheq 'self self-cell))
   (define proc (proc-send (expr-string "hello") 'self
-                 (proc-recv 'self #f (proc-stop))))
+                 (proc-recv 'self #f #f (proc-stop))))
   (define-values (net2 trace constraints)
     (compile-proc-with-type-bridges net1 proc channel-cells))
   ;; Should have 2 constraints (send + recv)
@@ -226,7 +226,7 @@
 (test-case "check-session-with-types: protocol violation still detected"
   ;; Session expects Send, process does Recv → protocol error
   (define sess (sess-send (expr-Nat) (sess-end)))
-  (define proc (proc-recv 'self #f (proc-stop)))
+  (define proc (proc-recv 'self #f #f (proc-stop)))
   (define result (check-session-with-types proc sess))
   ;; Should be a session-protocol-error (protocol shape error), not a type error
   (check-true (session-protocol-error? result)))
@@ -234,7 +234,7 @@
 (test-case "check-session-with-types: multi-step with type checking"
   (define sess (sess-send (expr-String) (sess-recv (expr-Nat) (sess-end))))
   (define proc (proc-send (expr-string "hello") 'self
-                 (proc-recv 'self #f (proc-stop))))
+                 (proc-recv 'self #f #f (proc-stop))))
   ;; Check function that verifies expr-string matches expr-String
   (define (simple-check expr expected-type)
     (cond

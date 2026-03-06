@@ -59,7 +59,7 @@
 
 (test-case "error: recv against Send has derivation chain"
   (define sess (sess-send (expr-String) (sess-end)))
-  (define proc (proc-recv 'self #f (proc-stop)))
+  (define proc (proc-recv 'self #f #f (proc-stop)))
   (define result (check-session-via-propagators proc sess))
   (check-true (check-protocol-error? result))
   (check-true (derivation-contains? result "receives from self")))
@@ -99,7 +99,7 @@
   (define sess (sess-offer (list (cons 'get (sess-send (expr-String) (sess-end))))))
   (define proc
     (proc-case 'self
-      (list (cons 'get (proc-recv 'self #f (proc-stop))))))
+      (list (cons 'get (proc-recv 'self #f #f (proc-stop))))))
   (define result (check-session-via-propagators proc sess))
   (check-true (check-protocol-error? result))
   ;; Should mention the branch context and the conflicting operation
@@ -128,7 +128,7 @@
 
 (test-case "format-error: includes declared session type"
   (define sess (sess-send (expr-String) (sess-end)))
-  (define proc (proc-recv 'self #f (proc-stop)))
+  (define proc (proc-recv 'self #f #f (proc-stop)))
   (define result (check-session-via-propagators proc sess))
   (define formatted (format-error result))
   ;; Detail line should mention the declared session
@@ -146,5 +146,5 @@
 (test-case "success: multi-step returns 'ok"
   (define sess (sess-send (expr-String) (sess-recv (expr-Nat) (sess-end))))
   (define proc (proc-send (expr-string "hello") 'self
-                 (proc-recv 'self #f (proc-stop))))
+                 (proc-recv 'self #f #f (proc-stop))))
   (check-true (check-ok? (check-session-via-propagators proc sess))))

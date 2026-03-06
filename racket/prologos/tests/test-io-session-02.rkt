@@ -106,7 +106,7 @@
   (define proc
     (proc-open (expr-string (path->string tmp)) sess #f
       (proc-sel 'ch ':read-all
-        (proc-recv 'ch (expr-String)
+        (proc-recv 'ch #f (expr-String)
           (proc-stop)))))
   ;; Compile and run
   (define rnet (make-runtime-network))

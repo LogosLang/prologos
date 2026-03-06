@@ -162,7 +162,7 @@
 
     ;; ---- Receive: recv from c into x:A, continue as P ----
     ;; a-annot is the type annotation from the process; #f means "infer from session".
-    [(proc-recv c a-annot p)
+    [(proc-recv c _binding a-annot p)
      (let ([s (zonk-session (chan-ctx-lookup delta c))])
        (match s
          ;; Simple recv: c :: recv(A, S)

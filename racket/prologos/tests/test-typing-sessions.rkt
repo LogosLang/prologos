@@ -43,7 +43,7 @@
   (check-true
    (type-proc ctx-empty
               (make-chan-ctx (cons 'c (sess-recv (expr-Nat) (sess-end))))
-              (proc-recv 'c (expr-Nat) (proc-stop)))))
+              (proc-recv 'c #f (expr-Nat) (proc-stop)))))
 
 ;; ========================================
 ;; Process typing: send then recv
@@ -53,7 +53,7 @@
   (check-true
    (type-proc ctx-empty
               (make-chan-ctx (cons 'c (sess-send (expr-Nat) (sess-recv (expr-Bool) (sess-end)))))
-              (proc-send (expr-zero) 'c (proc-recv 'c (expr-Bool) (proc-stop))))))
+              (proc-send (expr-zero) 'c (proc-recv 'c #f (expr-Bool) (proc-stop))))))
 
 ;; ========================================
 ;; Process typing: dependent send
@@ -102,7 +102,7 @@
    (type-proc ctx-empty
               (make-chan-ctx (cons 'c (sess-offer (list (cons 'ping (sess-recv (expr-Nat) (sess-end)))
                                                        (cons 'quit (sess-end))))))
-              (proc-case 'c (list (cons 'ping (proc-recv 'c (expr-Nat) (proc-stop)))
+              (proc-case 'c (list (cons 'ping (proc-recv 'c #f (expr-Nat) (proc-stop)))
                                   (cons 'quit (proc-stop)))))))
 
 ;; ========================================

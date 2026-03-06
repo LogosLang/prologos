@@ -3383,13 +3383,13 @@
                  (proc-send expr chan cont)))))]
 
     [(surf-proc-recv var chan cont-surf _loc)
-     ;; recv binds a variable; for now pass through as symbol
-     ;; (the typing judgment handles binding semantics)
+     ;; recv binds a variable; preserve binding name for data-flow analysis (AD-A0).
+     ;; proc-recv takes (chan binding type cont):
+     ;;   binding = symbol (variable name) | #f
+     ;;   type annotation is #f when unspecified (typing judgment infers from session context)
      (let ([cont (elaborate-proc-body cont-surf)])
        (if (prologos-error? cont) cont
-           ;; proc-recv takes (chan type cont) — type annotation is #f when unspecified.
-           ;; The typing judgment infers the receive type from the session context.
-           (proc-recv chan #f cont)))]
+           (proc-recv chan var #f cont)))]
 
     [(surf-proc-select chan label cont-surf _loc)
      (let ([cont (elaborate-proc-body cont-surf)])

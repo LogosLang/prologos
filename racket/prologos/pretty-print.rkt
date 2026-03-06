@@ -1285,10 +1285,12 @@
     [(proc-stop) "stop"]
     [(proc-send e c cont)
      (format "send(~a, ~a, ~a)" c (pp-expr e) (pp-process cont))]
-    [(proc-recv c ty cont)
-     (if ty
-         (format "recv(~a : ~a, ~a)" c (pp-expr ty) (pp-process cont))
-         (format "recv(~a, ~a)" c (pp-process cont)))]
+    [(proc-recv c binding ty cont)
+     (cond
+       [(and binding ty) (format "recv(~a as ~a : ~a, ~a)" c binding (pp-expr ty) (pp-process cont))]
+       [binding (format "recv(~a as ~a, ~a)" c binding (pp-process cont))]
+       [ty (format "recv(~a : ~a, ~a)" c (pp-expr ty) (pp-process cont))]
+       [else (format "recv(~a, ~a)" c (pp-process cont))])]
     [(proc-sel c label cont)
      (format "sel(~a.~a, ~a)" c label (pp-process cont))]
     [(proc-case c branches)

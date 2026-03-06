@@ -633,7 +633,7 @@
           (hash-set channel-eps chan ep*) bindings trace*)])]
 
     ;; ---- Recv: read from channel-in, bind value, advance session ----
-    [(proc-recv chan _type cont)
+    [(proc-recv chan _binding _type cont)
      (define ep (hash-ref channel-eps chan #f))
      (cond
        [(not ep) (values rnet bindings trace)]

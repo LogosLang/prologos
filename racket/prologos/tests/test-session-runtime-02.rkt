@@ -87,7 +87,7 @@
 (test-case "proc-recv: advances session through recv"
   ;; Session: Recv Nat End
   (define sess (sess-recv (expr-Nat) (sess-end)))
-  (define proc (proc-recv 'self (expr-Nat) (proc-stop)))
+  (define proc (proc-recv 'self #f (expr-Nat) (proc-stop)))
   (define result (rt-execute-process proc sess))
   ;; Should succeed
   (check-equal? (rt-exec-result-status result) 'ok))
@@ -95,7 +95,7 @@
 (test-case "proc-recv: protocol violation (recv on send session)"
   ;; Session: Send Nat End — but process tries to recv
   (define sess (sess-send (expr-Nat) (sess-end)))
-  (define proc (proc-recv 'self (expr-Nat) (proc-stop)))
+  (define proc (proc-recv 'self #f (expr-Nat) (proc-stop)))
   (define result (rt-execute-process proc sess))
   ;; Should hit contradiction
   (check-equal? (rt-exec-result-status result) 'contradiction))
@@ -187,7 +187,7 @@
   ;; p1: ch ! 42; stop
   (define p1 (proc-send 42 'ch (proc-stop)))
   ;; p2: ch ? Nat; stop  (dual session: Recv Nat End)
-  (define p2 (proc-recv 'ch (expr-Nat) (proc-stop)))
+  (define p2 (proc-recv 'ch #f (expr-Nat) (proc-stop)))
   (define proc (proc-new sess (proc-par p1 p2)))
   ;; Wrap with trivial self session
   (define self-sess (sess-end))
@@ -199,7 +199,7 @@
   ;; Verify that p1 sending on ch results in p2's msg-in receiving the value
   (define sess (sess-send (expr-Nat) (sess-end)))
   (define p1 (proc-send 99 'ch (proc-stop)))
-  (define p2 (proc-recv 'ch (expr-Nat) (proc-stop)))
+  (define p2 (proc-recv 'ch #f (expr-Nat) (proc-stop)))
   (define proc (proc-new sess (proc-par p1 p2)))
   (define self-sess (sess-end))
   (define result (rt-execute-process proc self-sess))
@@ -250,7 +250,7 @@
   (define sess (sess-send (expr-String) (sess-recv (expr-Nat) (sess-end))))
   (define proc
     (proc-send "hello" 'self
-      (proc-recv 'self (expr-Nat)
+      (proc-recv 'self #f (expr-Nat)
         (proc-stop))))
   (define result (rt-execute-process proc sess))
   (check-equal? (rt-exec-result-status result) 'ok))
@@ -268,7 +268,7 @@
 (test-case "e2e: rt-exec-result has bindings hash"
   ;; Verify the result struct carries bindings
   (define sess (sess-recv (expr-Nat) (sess-end)))
-  (define proc (proc-recv 'self (expr-Nat) (proc-stop)))
+  (define proc (proc-recv 'self #f (expr-Nat) (proc-stop)))
   (define result (rt-execute-process proc sess))
   (check-equal? (rt-exec-result-status result) 'ok)
   ;; bindings should have a 'self entry from the recv

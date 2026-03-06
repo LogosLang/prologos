@@ -39,7 +39,7 @@
 ;; ========================================
 (struct proc-stop () #:transparent)
 (struct proc-send (expr chan cont) #:transparent)    ; send e on c, continue P
-(struct proc-recv (chan type cont) #:transparent)     ; recv from c into x:A, continue P
+(struct proc-recv (chan binding type cont) #:transparent) ; recv from c into x:A, continue P (binding: symbol | #f)
 (struct proc-sel (chan label cont) #:transparent)     ; select branch l on c
 (struct proc-case (chan branches) #:transparent)      ; offer branches on c
 (struct proc-new (session cont) #:transparent)        ; new channel with session S

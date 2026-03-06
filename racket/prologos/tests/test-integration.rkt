@@ -131,7 +131,7 @@
   (check-true
    (type-proc ctx-empty
               (make-chan-ctx (cons 's cs-offer-session))
-              (proc-case 's (list (cons 'ping (proc-recv 's (expr-Nat) (proc-stop)))
+              (proc-case 's (list (cons 'ping (proc-recv 's #f (expr-Nat) (proc-stop)))
                                   (cons 'quit (proc-stop)))))))
 
 ;; ================================================================

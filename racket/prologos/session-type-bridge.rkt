@@ -193,7 +193,7 @@
              (hash-set channel-cells chan cont-cid) trace* constraints*)))]
 
     ;; ---- Recv: constrain channel to Recv, create type bridge ----
-    [(proc-recv chan _type cont)
+    [(proc-recv chan _binding _type cont)
      (define chan-cid (hash-ref channel-cells chan #f))
      (if (not chan-cid)
          (values net trace constraints)

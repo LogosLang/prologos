@@ -170,7 +170,7 @@
      (type-proc ctx-empty
                 (make-chan-ctx (cons 'c (sess-send (expr-Nat) cont-meta)))
                 (proc-send (expr-zero) 'c
-                  (proc-recv 'c (expr-Bool) (proc-stop)))))
+                  (proc-recv 'c #f (expr-Bool) (proc-stop)))))
     (check-equal? (zonk-session cont-meta)
                   (sess-recv (expr-Bool) (sess-end)))))
 
@@ -193,7 +193,7 @@
      (type-proc ctx-empty
                 (make-chan-ctx (cons 'c ch-meta))
                 (proc-send (expr-zero) 'c
-                  (proc-recv 'c (expr-Bool) (proc-stop)))))
+                  (proc-recv 'c #f (expr-Bool) (proc-stop)))))
     (check-equal? (zonk-session ch-meta)
                   (sess-send (expr-Nat) (sess-recv (expr-Bool) (sess-end))))))
 
@@ -224,7 +224,7 @@
      (type-proc ctx-empty
                 (make-chan-ctx (cons 'c ch-meta))
                 (proc-case 'c
-                  (list (cons 'ping (proc-recv 'c (expr-Nat) (proc-stop)))
+                  (list (cons 'ping (proc-recv 'c #f (expr-Nat) (proc-stop)))
                         (cons 'quit (proc-stop))))))
     ;; Verify the sess-meta was solved to an offer
     (define solved (zonk-session ch-meta))
@@ -289,7 +289,7 @@
     (check-false
      (type-proc ctx-empty
                 (make-chan-ctx (cons 'c (sess-send (expr-Nat) (sess-end))))
-                (proc-recv 'c (expr-Nat) (proc-stop))))))
+                (proc-recv 'c #f (expr-Nat) (proc-stop))))))
 
 ;; ========================================
 ;; Regression: existing concrete session tests still work
@@ -307,7 +307,7 @@
     (check-true
      (type-proc ctx-empty
                 (make-chan-ctx (cons 'c (sess-recv (expr-Nat) (sess-end))))
-                (proc-recv 'c (expr-Nat) (proc-stop))))))
+                (proc-recv 'c #f (expr-Nat) (proc-stop))))))
 
 (test-case "regression/concrete-link-still-works"
   (with-fresh-meta-env

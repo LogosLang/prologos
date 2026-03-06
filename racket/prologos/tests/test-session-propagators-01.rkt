@@ -33,13 +33,13 @@
 
 (test-case "propagator: recv/stop against Recv Nat End"
   (define sess (sess-recv (expr-Nat) (sess-end)))
-  (define proc (proc-recv 'self #f (proc-stop)))
+  (define proc (proc-recv 'self #f #f (proc-stop)))
   (check-true (check-ok? (check-session-via-propagators proc sess))))
 
 (test-case "propagator: multi-step send/recv/stop"
   (define sess (sess-send (expr-String) (sess-recv (expr-Nat) (sess-end))))
   (define proc (proc-send (expr-string "hello") 'self
-                 (proc-recv 'self #f (proc-stop))))
+                 (proc-recv 'self #f #f (proc-stop))))
   (check-true (check-ok? (check-session-via-propagators proc sess))))
 
 (test-case "propagator: stop against End"
@@ -58,7 +58,7 @@
 
 (test-case "propagator: recv against Send → contradiction"
   (define sess (sess-send (expr-String) (sess-end)))
-  (define proc (proc-recv 'self #f (proc-stop)))
+  (define proc (proc-recv 'self #f #f (proc-stop)))
   (check-true (check-contradiction? (check-session-via-propagators proc sess))))
 
 (test-case "propagator: send against End → contradiction"
@@ -98,7 +98,7 @@
   (define proc
     (proc-case 'self
       (list (cons 'get (proc-send (expr-string "value") 'self (proc-stop)))
-            (cons 'put (proc-recv 'self #f (proc-stop))))))
+            (cons 'put (proc-recv 'self #f #f (proc-stop))))))
   (check-true (check-ok? (check-session-via-propagators proc sess))))
 
 (test-case "propagator: case against Offer — branch polarity mismatch → contradiction"
@@ -106,7 +106,7 @@
   ;; Process sends recv for a send-expected branch
   (define proc
     (proc-case 'self
-      (list (cons 'get (proc-recv 'self #f (proc-stop))))))
+      (list (cons 'get (proc-recv 'self #f #f (proc-stop))))))
   (check-true (check-contradiction? (check-session-via-propagators proc sess))))
 
 ;; ========================================
@@ -121,7 +121,7 @@
     (proc-new (sess-send (expr-String) (sess-end))
       (proc-par
         (proc-send (expr-string "hi") 'ch (proc-stop))
-        (proc-recv 'ch #f (proc-stop)))))
+        (proc-recv 'ch #f #f (proc-stop)))))
   ;; No session type annotation on the outer process — just check compilation
   ;; Use End as the outer session (proc-new is self-contained)
   (check-true (check-ok? (check-session-via-propagators proc (sess-end)))))

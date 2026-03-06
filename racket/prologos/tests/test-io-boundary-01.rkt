@@ -231,7 +231,7 @@
   (define proc
     (proc-open (expr-string (path->string tmp))
                sess 'FsCap
-               (proc-recv 'ch (expr-String) (proc-stop))))
+               (proc-recv 'ch #f (expr-String) (proc-stop))))
   (define rnet (make-runtime-network))
   (define-values (rnet* bindings trace)
     (compile-live-process rnet proc (hasheq)))
@@ -277,7 +277,7 @@
   (define proc
     (proc-open (expr-string (path->string tmp))
                sess 'FsCap
-               (proc-recv 'ch (expr-String) (proc-stop))))
+               (proc-recv 'ch #f (expr-String) (proc-stop))))
   (define rnet (make-runtime-network))
   (define-values (rnet* bindings trace)
     (compile-live-process rnet proc (hasheq)))

@@ -37,7 +37,7 @@
 (test-case "deadlock: multi-step send/recv/stop passes"
   (define sess (sess-send (expr-String) (sess-recv (expr-Nat) (sess-end))))
   (define proc (proc-send (expr-string "hello") 'self
-                 (proc-recv 'self #f (proc-stop))))
+                 (proc-recv 'self #f #f (proc-stop))))
   (check-true (check-ok? (check-session-via-propagators proc sess))))
 
 (test-case "deadlock: stop against End passes"
@@ -57,7 +57,7 @@
   (define proc
     (proc-case 'self
       (list (cons 'get (proc-send (expr-string "value") 'self (proc-stop)))
-            (cons 'put (proc-recv 'self #f (proc-stop))))))
+            (cons 'put (proc-recv 'self #f #f (proc-stop))))))
   (check-true (check-ok? (check-session-via-propagators proc sess))))
 
 (test-case "deadlock: proc-new with complementary par passes"
@@ -65,7 +65,7 @@
     (proc-new (sess-send (expr-String) (sess-end))
       (proc-par
         (proc-send (expr-string "hi") 'ch (proc-stop))
-        (proc-recv 'ch #f (proc-stop)))))
+        (proc-recv 'ch #f #f (proc-stop)))))
   (check-true (check-ok? (check-session-via-propagators proc (sess-end)))))
 
 ;; ========================================
