@@ -81,9 +81,9 @@ formal foundations. This document assumes familiarity with them.
 
 | Phase | Sub-phase | Status | Commit | Notes |
 |-------+-----------+--------+--------+-------|
-| AD-A | A0: =proc-recv= binding preservation | NOT STARTED | | Add =binding= field to =proc-recv= (14-file pass-through) |
-| AD-A | A1: Effect Position Lattice | NOT STARTED | | =effect-position.rkt= |
-| AD-A | A2: Effect Descriptor Type | NOT STARTED | | Extends =effect-position.rkt= |
+| AD-A | A0: =proc-recv= binding preservation | COMPLETE | =9dce7dd= | 9 source + 8 test files; 5860 tests pass |
+| AD-A | A1: Effect Position Lattice | COMPLETE | =0f20fec= | =effect-position.rkt=: lattice + ordering + session-depth |
+| AD-A | A2: Effect Descriptor Type | COMPLETE | =0f20fec= | Sum-type descriptors + effect-set accumulator; 54 new tests |
 | AD-B | B1: Single-Channel Bridge | NOT STARTED | | =effect-bridge.rkt= |
 | AD-B | B2: Multi-Channel Bridge | NOT STARTED | | Vector clock positions |
 | AD-C | C1: Effect Collection Mode | NOT STARTED | | =#:collect-effects?= in =compile-live-process= |
