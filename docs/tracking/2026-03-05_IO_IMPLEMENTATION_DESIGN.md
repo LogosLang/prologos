@@ -22,7 +22,7 @@
 | IO-D | D1: File IO functions | | | `read-file`, `write-file`, etc. |
 | IO-D | D2: Console IO functions | | | `print`, `println`, `read-ln` |
 | IO-D | D3: `with-open` macro | | | Bracket pattern |
-| IO-D | D4: Filesystem query functions | | | `exists?`, `is-file?`, `is-dir?`, `list-dir` |
+| IO-D | D4: Filesystem query functions | | | `exists?`, `file?`, `dir?`, `list-dir` |
 | IO-D | D5: `main` powerbox mechanism | | | Runtime caps provisioning + `defn main` desugaring |
 | IO-E | E1: Protocol definitions | | | `FileRead`/`FileWrite`/`FileRW` |
 | IO-E | E2: Session-based file IO | | | IO service processes |
@@ -39,6 +39,22 @@
 | IO-J | J1: Elaborator binder scope | | | Extend gamma for dep session continuation |
 | IO-J | J2: Runtime dep send/recv | | | `sess-dsend`/`sess-drecv` predicates + `substS` |
 | IO-J | J3: Grammar + E2E tests | | | Update grammar.ebnf; dep session E2E tests |
+
+### Phase Dependency Graph
+
+```
+IO-A1 (Opaque FFI) ──┐
+IO-A2 (Path/IOError)  ├── IO-B (IO Bridge) ── IO-C (Boundary Ops) ──┐
+IO-A3 (IO Caps) ─────┘                                              │
+                                                                     ├── IO-D (File IO + Console + with-open + FS Queries + main) ──┐
+                                                                     │                                                              │
+                                                                     │   ┌── IO-E (Session Protocols + Composition Tests)           │
+                                                                     │   ├── IO-F (Functional IO)                                   │
+                                                                     └───┤   ├── IO-G (CSV)                                        │
+                                                                         └── IO-H (Cap Inference) ── IO-I (Dependent Caps)         │
+
+IO-J (Dep Send/Recv) ── no IO dependencies; can start immediately ── IO-G upgrade (schema-typed CSV)
+```
 
 ---
 
@@ -121,7 +137,7 @@ Decisions resolved in Phase I (IO Library Design V2 §12) plus new implementatio
 | D1 | Effect discipline | Fine-grained capability traits (`:0` erased), not `World :1` | V2 §1.2 |
 | D2 | Handle model | Hybrid: session channels (`io`) + linear handles (`fio`) | V2 §12.2, resolved as Option C |
 | D3 | Module split | `prologos.core.io` (sessions) + `prologos.core.fio` (functional) | V2 §12.2 |
-| D4 | Prelude inclusion | `println` in prelude; file IO requires `use prologos.core.io` | V2 §12.1 |
+| D4 | Prelude inclusion | `print`, `println`, `read-ln` in prelude; file IO requires `use prologos.core.io` | V2 §12.1 |
 | D5 | Binary IO | Deferred to Phase 2; text IO (`String`) first | V2 §12.3 |
 | D6 | Error recovery | Errors are `Result` values in protocol; no session short-circuit | V2 §12.4 |
 | D7 | IO mocking | Swap IO propagator (server side); session protocol unchanged | V2 §12.5 |
@@ -384,12 +400,14 @@ runtime without interpretation.
      (error 'foreign "Unsupported marshal-out type: ~a" base-type))]
 ```
 
-### 5.3 Alternative Considered: Simple Pass-Through
+### 5.3 Alternative Rejected: Simple Pass-Through
 
-A simpler approach: add a single `'Opaque` symbol to `base-type-name` without tag
-differentiation. This loses type safety (all opaque values are the same type). The tagged
-approach costs ~5 more lines but preserves the invariant that different opaque types
-(file port vs. db connection) are distinct at the type level.
+A simpler approach would add a single `'Opaque` symbol to `base-type-name` without tag
+differentiation. **This is rejected** — it loses type safety. All opaque values become
+the same type, meaning a file port could be passed where a database connection is
+expected. The tagged approach costs ~5 more lines but preserves the invariant that
+different opaque types (`file-port` vs. `db-conn`) are distinct at the type level.
+Type safety at the FFI boundary is non-negotiable.
 
 ### 5.4 AST Pipeline Impact
 
@@ -787,7 +805,7 @@ defn path-str [p]
   match p
     | MkPath s -> s
 
-spec path-join : Path -> Path -> Path
+spec path-join : Path Path -> Path
 defn path-join [a b]
   [MkPath [string-append [path-str a] "/" [path-str b]]]
 
@@ -954,7 +972,7 @@ defn read-file [p]
   ;; Implementation: open session channel, read-all, close
   ...
 
-spec write-file : Path -> String -> Result Unit IOError
+spec write-file : Path String -> Result Unit IOError
 defn write-file [p content]
   ...
 
@@ -964,13 +982,13 @@ defn read-lines [p]
     | ok content -> ok [split content "\n"]
     | err e -> err e
 
-spec append-file : Path -> String -> Result Unit IOError
+spec append-file : Path String -> Result Unit IOError
 defn append-file [p content]
   ...
 
 ;; === Tier 2: Bracketed resource management ===
 
-spec with-open : Path -> Keyword -> <(ch : FileRW) -> A> -> Result A IOError
+spec with-open : Path Keyword <(ch : FileRW) -> A> -> Result A IOError
 defn with-open [p mode body]
   ;; Opens a session channel, passes to body, closes on exit
   ...
@@ -1072,13 +1090,12 @@ spec exists? : Path -> Bool
 defn exists? [p]
   foreign io-file-exists? [path-str p]
 
-spec is-file? : Path -> Bool
-defn is-file? [p]
-  ;; foreign io-file-exists? + not directory
+spec file? : Path -> Bool
+defn file? [p]
   foreign io-is-file? [path-str p]
 
-spec is-dir? : Path -> Bool
-defn is-dir? [p]
+spec dir? : Path -> Bool
+defn dir? [p]
   foreign io-directory? [path-str p]
 
 spec list-dir : Path -> Result [List Path] IOError
@@ -1101,8 +1118,8 @@ defn list-dir [p]
 
 - `exists?` returns `#t` for existing file
 - `exists?` returns `#f` for nonexistent path
-- `is-file?` returns `#t` for file, `#f` for directory
-- `is-dir?` returns `#t` for directory, `#f` for file
+- `file?` returns `#t` for file, `#f` for directory
+- `dir?` returns `#t` for directory, `#f` for file
 - `list-dir` returns list of paths for existing directory
 - `list-dir` returns error for nonexistent directory
 - Capability inference: `exists?` infers `{StatCap}`
@@ -1401,7 +1418,7 @@ type Handle := MkHandle ChannelEndpoint
 
 ;; Open a file, returning a linear handle
 ;; Internally: creates a session channel via proc-open, wraps in Handle
-spec fio-open : Path -> Keyword -> Result Handle IOError
+spec fio-open : Path Keyword -> Result Handle IOError
 defn fio-open [p mode]
   ;; open p mode creates a session channel to IO bridge
   ;; wrap the endpoint in Handle for linear tracking
@@ -1419,7 +1436,7 @@ defn fio-read-all [h]
         [MkHandle ch, result]
 
 ;; Write content (consumes handle, returns new handle)
-spec fio-write : Handle :1 -> String -> <Handle :1 * Result Unit IOError>
+spec fio-write : Handle :1 String -> <Handle :1 * Result Unit IOError>
 defn fio-write [h content]
   match h
     | MkHandle ch ->
@@ -1441,7 +1458,7 @@ defn fio-close [h]
 ```prologos
 ;; Bracket pattern for fio: opens, runs body with linear handle, closes.
 ;; The body receives a Handle :1 and must return (Handle :1 * A).
-spec fio-with-open : Path -> Keyword -> <Handle :1 -> <Handle :1 * A>> -> Result A IOError
+spec fio-with-open : Path Keyword <Handle :1 -> <Handle :1 * A>> -> Result A IOError
 defn fio-with-open [p mode body]
   match [fio-open p mode]
     | ok h ->
@@ -1516,18 +1533,18 @@ defn read-ln []
   foreign io-read-ln
 ```
 
-### 16.3 Prelude Inclusion (Decision D18)
+### 16.3 Prelude Inclusion (Decision D4, D18)
 
-Per Decision D4 and D18, `println` is included in the prelude for beginner accessibility
-and is **cap-free** — it does not require `StdioCap`. This supports Tier 1 progressive
-disclosure where beginners never see capability annotations.
+Per Decisions D4 and D18, **all standard console IO functions** are included in the
+prelude: `print`, `println`, `read-ln`. These are debugging and interaction
+essentials that belong in every program's default vocabulary, just as they do in
+every practical language.
 
-`print` and `read-ln` also require no capability in their convenience forms. Explicit
-`StdioCap` is only required for session-based console IO (Tier 3, §16.4).
+Explicit `StdioCap` is only required for session-based console IO (Tier 3, §16.4).
 
 ```racket
 ;; In namespace.rkt, add to prelude-imports:
-(imports [prologos::core::io :refer [println]])
+(imports [prologos::core::io :refer [print println read-ln]])
 ```
 
 ### 16.4 Session-Based Console (Optional, Tier 3)
@@ -1609,25 +1626,34 @@ defn read-csv-maps [p]
     | ok content -> ok [parse-csv-maps content]
     | err e -> err e
 
-spec write-csv : Path -> List [List String] -> Result Unit IOError
+spec write-csv : Path [List [List String]] -> Result Unit IOError
 defn write-csv [p rows]
   let content := [csv-rows-to-string rows]
   [write-file p content]
 ```
 
-### 17.3 Schema-Typed CSV (Dependent Send/Receive — Deferred)
+### 17.3 Schema-Typed CSV (Dependent Send/Receive — Priority)
 
-When `!:`/`?:` are implemented (Phase IO-J), CSV reading can be typed by schema:
+Schema-typed CSV is a first-class target for the IO library and a key motivator for
+prioritizing dependent send/receive (Phase IO-J). When `!:`/`?:` are implemented,
+CSV reading becomes type-safe against a schema:
 
 ```prologos
-;; Future: schema-typed CSV reading
+;; Schema-typed CSV reading — the killer app for dependent sessions
 session TypedCsvRead {S : Schema}
   ?: header [List String]
   ? [List [Record S]]            ;; each row validates against schema
   end
 ```
 
-This is deferred because it depends on dependent send/receive infrastructure.
+This requires IO-J (dependent send/receive) to be complete. **IO-J should be
+implemented before or in parallel with IO-G** — dependent sessions are the mechanism
+that elevates CSV from "untyped maps" to "schema-validated records". Without this,
+`read-csv-maps` returns `List [Map Keyword String]` with no static guarantees about
+which keys exist or what types the values have.
+
+Phase IO-G (CSV) initially ships with untyped maps (§17.1-17.2). Schema-typed CSV
+(this subsection) upgrades when IO-J completes. Both can proceed in parallel.
 
 ### 17.4 Tests (~20)
 
@@ -1663,8 +1689,14 @@ inference must run automatically:
    over the module's definitions
 2. **Annotate `main` with inferred capabilities**: The runtime provides capabilities
    based on the inferred set
-3. **Warning on explicit caps that disagree with inference**: If a user writes
-   `{fs :0 ReadCap}` but the function also needs `WriteCap`, warn
+3. **Insufficient capabilities are a compiler error**: If a user writes
+   `{fs :0 ReadCap}` but the function also needs `WriteCap`, this is an **error** —
+   the function claims less authority than it exercises. This is a security violation
+   (the declared capability set is insufficient to cover the actual operations).
+4. **Over-declared authority is a compiler warning**: If a user writes
+   `{fs :0 FsCap}` but the function only needs `ReadCap`, this is a **warning** —
+   the function claims more authority than it uses (dead authority, violates POLA).
+   This is the same pattern as W2002 (dead authority) in process cap warnings.
 
 ### 18.3 Implementation
 
@@ -2072,15 +2104,16 @@ All modules use `:no-prelude` (standard for library code, avoids circularity).
 
 ```racket
 ;; In namespace.rkt, add to prelude-imports list:
-;; Minimal IO in prelude — just println for debugging
-(imports [prologos::core::io :refer [println]])
+;; Console IO in prelude — standard debugging + interaction
+(imports [prologos::core::io :refer [print println read-ln]])
 (imports [prologos::data::path :refer [Path path]])
 (imports [prologos::data::io-error :refer [IOError]])
 ```
 
 File IO (`read-file`, `write-file`, etc.) requires explicit `use prologos.core.io`.
-This follows Decision D4 — pure functions shouldn't see IO by default, but `println`
-is a debugging aid that belongs in the prelude.
+This follows Decision D4 — pure functions shouldn't see file IO by default, but
+console IO (`print`, `println`, `read-ln`) belongs in the prelude as standard
+debugging and interaction aids.
 
 **Note**: The `prelude-imports` list in `namespace.rkt` uses `(imports [module::path :refer [...]])`
 syntax with `::` separators (Racket-side), not dot-separated module paths. The `.prologos` files
