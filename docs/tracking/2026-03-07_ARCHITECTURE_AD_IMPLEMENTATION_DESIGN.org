@@ -81,11 +81,11 @@ formal foundations. This document assumes familiarity with them.
 
 | Phase | Sub-phase | Status | Commit | Notes |
 |-------+-----------+--------+--------+-------|
-| AD-A | A0: =proc-recv= binding preservation | COMPLETE | =9dce7dd= | 9 source + 8 test files; 5860 tests pass |
-| AD-A | A1: Effect Position Lattice | COMPLETE | =0f20fec= | =effect-position.rkt=: lattice + ordering + session-depth |
-| AD-A | A2: Effect Descriptor Type | COMPLETE | =0f20fec= | Sum-type descriptors + effect-set accumulator; 54 new tests |
-| AD-B | B1: Single-Channel Bridge | NOT STARTED | | =effect-bridge.rkt= |
-| AD-B | B2: Multi-Channel Bridge | NOT STARTED | | Vector clock positions |
+| AD-A | A0: =proc-recv= binding preservation | ✅ | =9dce7dd= | 9 source + 8 test files; 5860 tests pass |
+| AD-A | A1: Effect Position Lattice | ✅ | =0f20fec= | =effect-position.rkt=: lattice + ordering + session-depth |
+| AD-A | A2: Effect Descriptor Type | ✅ | =0f20fec= | Sum-type descriptors + effect-set accumulator; 54 new tests |
+| AD-B | B1: Single-Channel Bridge | ✅ | =7da2cd8= | =effect-bridge.rkt=: alpha direction Galois connection |
+| AD-B | B2: Multi-Channel Bridge | ✅ | =7da2cd8= | 18 tests; 5932 tests pass across 305 files |
 | AD-C | C1: Effect Collection Mode | NOT STARTED | | =#:collect-effects?= in =compile-live-process= |
 | AD-C | C2: Position Cells in Runtime | NOT STARTED | | Bridge propagators in runtime network |
 | AD-D | D1: Data-Flow Edge Extraction | NOT STARTED | | =effect-ordering.rkt= |
@@ -1152,24 +1152,24 @@ After each sub-phase:
 
 * Files Summary
 
-| File | Nature | Phases |
-|------+--------+--------|
-| NEW =effect-position.rkt= | New module (~160 lines) | AD-A1, AD-A2 |
-| NEW =effect-bridge.rkt= | New module (~150 lines) | AD-B1, AD-B2 |
-| NEW =effect-ordering.rkt= | New module (~290 lines) | AD-D1, AD-D2, AD-D3, AD-E1, AD-F1 |
-| NEW =effect-executor.rkt= | New module (~120 lines) | AD-E2 |
-| =processes.rkt= | Modified (AD-A0) | Add =binding= field to =proc-recv= |
-| =elaborator.rkt= | Modified (AD-A0) | Preserve =var= from =surf-proc-recv= |
-| =substitution.rkt= + 10 pipeline files | Modified (AD-A0) | Pass-through =binding= field |
-| =session-runtime.rkt= | Modified | AD-C1, AD-C2, AD-E3, AD-F2, AD-F3 |
-| =driver.rkt= | Modified | AD-F2 (architecture selection wiring) |
-| =propagator.rkt= | Reuse (read-only) | All phases (cell/propagator API) |
-| =atms.rkt= | Reuse (read-only) | AD-F1 (ATMS API) |
-| =io-bridge.rkt= | Reuse (read-only) | AD-E2 (IO state lattice, bridge functions) |
-| =session-lattice.rkt= | Reuse (read-only) | AD-B (source domain of Galois connection) |
-| =sessions.rkt= | Reuse (read-only) | AD-A1 (session type constructors for depth) |
-| =processes.rkt= | Reuse (read-only) | AD-D1 (proc AST for data-flow analysis) |
-| NEW test files (6-8) | Tests | All phases |
+| File                                   | Nature                  | Phases                                      |
+|----------------------------------------+-------------------------+---------------------------------------------|
+| NEW =effect-position.rkt=              | New module (~160 lines) | AD-A1, AD-A2                                |
+| NEW =effect-bridge.rkt=                | New module (~150 lines) | AD-B1, AD-B2                                |
+| NEW =effect-ordering.rkt=              | New module (~290 lines) | AD-D1, AD-D2, AD-D3, AD-E1, AD-F1           |
+| NEW =effect-executor.rkt=              | New module (~120 lines) | AD-E2                                       |
+| =processes.rkt=                        | Modified (AD-A0)        | Add =binding= field to =proc-recv=          |
+| =elaborator.rkt=                       | Modified (AD-A0)        | Preserve =var= from =surf-proc-recv=        |
+| =substitution.rkt= + 10 pipeline files | Modified (AD-A0)        | Pass-through =binding= field                |
+| =session-runtime.rkt=                  | Modified                | AD-C1, AD-C2, AD-E3, AD-F2, AD-F3           |
+| =driver.rkt=                           | Modified                | AD-F2 (architecture selection wiring)       |
+| =propagator.rkt=                       | Reuse (read-only)       | All phases (cell/propagator API)            |
+| =atms.rkt=                             | Reuse (read-only)       | AD-F1 (ATMS API)                            |
+| =io-bridge.rkt=                        | Reuse (read-only)       | AD-E2 (IO state lattice, bridge functions)  |
+| =session-lattice.rkt=                  | Reuse (read-only)       | AD-B (source domain of Galois connection)   |
+| =sessions.rkt=                         | Reuse (read-only)       | AD-A1 (session type constructors for depth) |
+| =processes.rkt=                        | Reuse (read-only)       | AD-D1 (proc AST for data-flow analysis)     |
+| NEW test files (6-8)                   | Tests                   | All phases                                  |
 
 Estimated new code: ~720 lines across 4 new modules + ~100 lines of modifications to
 =session-runtime.rkt= + ~178 new tests across 6-8 test files.
