@@ -704,35 +704,259 @@ stronger guarantees than SysCap IO.
 
 ---
 
-## 10. Relationship to the Three Existing Architectures
+## 10. Discussion: Resolving the Open Questions
 
-Architecture D doesn't replace A, B, or C — it *subsumes* B and provides a
-theoretical foundation for all three:
+*This section captures findings from the Mar 6 design discussion, where the
+open questions from §9 were subjected to deeper analysis. Several key insights
+emerged that resolve the cross-channel data dependency problem (§9c), establish
+the architecture decision (§9d), and reveal a deep structural parallel between
+the `rel` and `proc` engines.*
 
-| Architecture | Effect Ordering Source | When to Use |
-|---|---|---|
-| A (Barriers) | AST walk order | Top-level effects, unstructured IO, Phase 0 |
-| B (Timestamps) | Syntactic position | General effects, needs external timestamp assignment |
-| C (Topo-Sort) | DAG of effect dependencies | Complex effect graphs, research-level |
-| D (Session-Derived) | Session type structure | Session-typed IO (the common case) |
+### 10a. Cross-Channel Data Dependencies Are Constraint Resolution (§9c Resolved)
 
-Architecture D is strictly more informative than B for session-typed effects:
-timestamps must be assigned externally, while session positions are intrinsic.
-For unsessioned effects, D degenerates to A or B.
+The central open question of §9c was: can the propagator network capture
+cross-channel data dependencies *without* the sequential AST walk? The answer
+is **yes** — via **transitive closure of ordering edges**, which is a
+**monotone fixed-point computation** and therefore lives natively in the
+propagator network.
 
-The recommended layering:
+The insight: there are two kinds of ordering edges in a process:
+
+1. **Session ordering edges** (per-channel): `send a` → `recv a` → `send a`
+   (from session type continuation structure)
+2. **Data-flow edges** (cross-channel): `recv x a` → `send [f x] b`
+   (from variable binding — `x` is produced by the recv and consumed by the send)
+
+The **complete ordering** is the transitive closure of the union of these edges.
+And transitive closure is a monotone operation on sets of edges (adding edges
+never removes existing ordering relationships). This means a propagator can
+incrementally compute the ordering:
 
 ```
-Layer 0: Propagator Network (monotone fixed points)         [exists]
-Layer 1: Session Lattice (protocol verification)            [exists]
-Layer 2: Effect Position Lattice (session-derived ordering)  [NEW]
-Layer 3: Effect Handler (sequential execution in position order) [NEW]
-Fallback: AST Walk (for unsessioned effects)                [exists]
+Ordering Cell: {(a₀ < a₁), (b₀ < b₁)}        ;; initial: session edges only
+    + data-flow edge (a₀ < b₀)                ;; recv x a flows to send [f x] b
+    → {(a₀ < a₁), (b₀ < b₁), (a₀ < b₀)}
+    + transitive closure
+    → {(a₀ < a₁), (b₀ < b₁), (a₀ < b₀), (a₀ < b₁)}  ;; a₀ before b₁ via transitivity
+```
+
+Each new edge makes the ordering set "larger" (monotone). The propagator reaches
+a fixed point when no new transitive edges can be derived. At that point, the
+partial order is complete, and effects can be executed in any linearization of
+the partial order (concurrent effects in any interleaving).
+
+**This is the same computational pattern as `rel`**: the logic engine computes
+the transitive closure of logical dependencies via propagation. Here, `proc`
+computes the transitive closure of causal dependencies via the same mechanism.
+
+### 10b. ATMS for Branching Effect Orders
+
+When a process contains `proc-case` (branching based on received values), each
+branch may create different data-flow patterns and therefore different ordering
+edges:
+
+```prologos
+proc a b =
+  recv x a
+  case x of
+    | "hello" -> send "world" b     ;; branch 1: edge (a₀ < b₀)
+    | "query" -> send [lookup x] b  ;; branch 2: edge (a₀ < b₀) + data dep on x
+  stop
+```
+
+The ATMS handles this naturally. Each branch is a **hypothesis** (an ATMS
+assumption). Ordering edges derived from a branch are tagged with that
+branch's assumption. The ATMS maintains multiple consistent worldviews:
+
+```
+Worldview 1 (x = "hello"): ordering = {(a₀ < b₀)}
+Worldview 2 (x = "query"): ordering = {(a₀ < b₀), (a₀ depends-on x)}
+```
+
+When the recv resolves (the value of `x` becomes known), one worldview is
+selected and the other becomes a nogood. Effects are executed according to
+the ordering in the chosen worldview. This is exactly how the logic engine
+handles `amb` — maintain hypotheses, resolve when evidence arrives, discard
+inconsistent worldviews.
+
+### 10c. The `rel`/`proc` Structural Parallel
+
+The pattern that emerges reveals a deep structural parallel between our two
+computational engines:
+
+| Dimension | `rel` (Logic Engine) | `proc` (Session Runtime) |
+|---|---|---|
+| **Variables** | Logic variables (unification) | Session cells (protocol state) |
+| **Constraints** | Equality constraints (type/term) | Ordering constraints (causal) |
+| **Propagation** | Unification propagators | Session advancement + ordering propagators |
+| **Fixed point** | Constraint closure (all equalities derived) | Ordering closure (transitive closure of causal edges) |
+| **Hypotheses** | ATMS worldviews (choice points) | ATMS worldviews (branch alternatives) |
+| **Resolution** | Evidence selects worldview | Received value selects worldview |
+| **Execution** | Proof terms (constructive evidence) | Effects (IO operations in causal order) |
+| **Substrate** | Propagator network + ATMS + stratification | Propagator network + ATMS + effect handler |
+
+Both engines share the three-layer architecture from the Logic Engine Design:
+
+```
+Layer 1: Propagator Network   — monotone fixed points on lattice cells
+Layer 2: ATMS                 — hypothetical reasoning over alternatives
+Layer 3: Control              — stratification (rel) / effect handler (proc)
+```
+
+The Logic Engine Design (`2026-02-24_LOGIC_ENGINE_DESIGN.org`, §5) established
+this three-layer pattern for recovering non-monotone behavior (negation, choice
+points) on a monotone substrate. The same pattern recovers non-monotone behavior
+(effect ordering, sequential execution) for `proc`. **The Layered Recovery
+Principle is general**: it applies to any domain where non-monotone operations
+must be performed on convergent infrastructure.
+
+### 10d. Partial Order Planning Connection
+
+The ordering computation described in §10a is isomorphic to **Partial Order
+Planning (POP)**, a classical AI planning technique:
+
+| POP Concept | Effect Ordering Analogue |
+|---|---|
+| **Actions** | IO effects (read, write, open, close) |
+| **Causal links** | Data-flow edges (variable flows from one effect to another) |
+| **Ordering constraints** | Session ordering edges + data-flow edges |
+| **Initial constraints** | Session type structure (per-channel total order) |
+| **Plan alternatives** | `proc-case` branches |
+| **Threats** | Potential re-orderings that violate data dependencies |
+| **Threat resolution** | Transitive closure forces ordering; ATMS prevents inconsistent orderings |
+| **Least commitment** | Don't order concurrent effects unnecessarily |
+
+The POP connection is significant because it confirms that **least commitment**
+is the correct strategy: effects that are truly concurrent (different channels,
+no data dependencies) should NOT be forced into an arbitrary order. The partial
+order is the maximally concurrent schedule. Any linearization is valid for
+execution.
+
+This also connects to the CALM theorem: the ordering computation is monotone
+(transitive closure, edge accumulation), so it can proceed without coordination.
+The only non-monotone operation is effect *execution* (which consumes the plan
+and produces side effects), and that happens at the control layer boundary —
+exactly where the Layered Recovery Principle predicts it should be.
+
+### 10e. Architecture D Refined: Five Layers
+
+With the cross-channel resolution, the architecture extends to five layers:
+
+```
+Layer 1: Session Advancement             [exists — session-runtime.rkt]
+    Session cells advance monotonically through session types.
+    Each advancement is a causal clock tick for that channel.
+
+Layer 2: Data-Flow Analysis              [NEW — per-variable ordering edges]
+    Analyze variable bindings to derive cross-channel ordering edges.
+    recv x a → send [f x] b  ⟹  ordering edge (a_pos < b_pos)
+
+Layer 3: Transitive Closure              [NEW — ordering cell propagator]
+    Compute the complete partial order by propagating ordering edges
+    to their transitive closure. Monotone fixed-point computation.
+    Concurrent effects remain unordered (least commitment).
+
+Layer 4: ATMS Branching                  [exists — atms.rkt]
+    Maintain per-branch ordering hypotheses for proc-case.
+    Resolve when branch is chosen; discard inconsistent worldviews.
+
+Layer 5: Effect Handler                  [NEW — sequential execution]
+    Read the resolved partial order. Execute effects in any valid
+    linearization. This is the only non-monotone step (actual IO).
+    Equivalent to the "stratification barrier" in the logic engine.
+```
+
+Layers 1-4 are monotone and live entirely within the propagator network.
+Layer 5 is the control boundary — the point where monotone reasoning hands
+off to sequential execution, just as the logic engine's stratification barrier
+hands off to negation evaluation.
+
+### 10f. `main` as Implicit Session
+
+An important observation: `main` is already an implicit session. Today,
+`main` is a function that executes IO effects in sequential order. This is
+exactly what Architecture A (Stratified Barriers) provides — and it's also
+what Architecture D provides for a single-channel, single-session process.
+
+In fact, **Architecture A is a degenerate case of Architecture D**:
+
+```
+Architecture A: main is a sequential walk → effects in walk order
+Architecture D: main as implicit single-channel session → effects in session order
+                (and walk order = session order for the degenerate case)
+```
+
+This observation means the transition from A to D is smooth. The current
+behavior of `main` (sequential IO execution via AST walk) is exactly what D
+would produce for a process with a single implicit session. As `main` gains
+explicit session structure (multi-channel, concurrent sub-processes), D
+naturally extends to provide the richer ordering semantics.
+
+For non-`main` top-level IO (REPL, `eval` with `SysCap`), there is no session
+type, so Architecture A remains the fallback. This is correct — unstructured
+IO in the REPL is intentionally less disciplined. The type system makes this
+distinction visible.
+
+---
+
+## 11. Architecture Decision: A + D
+
+### 11a. The Recommended Pair
+
+Architecture D provides session-derived ordering for session-typed IO (the
+structured case). Architecture A provides walk-based ordering for unsessioned
+IO (the unstructured case). Together, they cover all IO scenarios:
+
+| Scenario | Architecture | Ordering Source | Guarantees |
+|---|---|---|---|
+| Session-typed IO (`defproc`) | D | Session type structure | Session fidelity (theorem) |
+| Multi-channel IO | D | Vector clock from per-channel sessions | Concurrent effects correctly unordered |
+| `main` (single-channel) | D (degenerate) | Implicit session ≅ walk order | Same as current behavior |
+| REPL / top-level `eval` | A | AST walk order | Sequential execution |
+| Non-IO pure computation | — | N/A | No effects to order |
+
+### 11b. Why B Is Subsumed
+
+Architecture B (Timestamped Effect Cells) assigns syntactic timestamps to
+effects and executes in timestamp order at barriers. For session-typed effects,
+Architecture D provides strictly more information:
+
+- **D's ordering is intrinsic**: derived from the session type, not from
+  syntactic position. Refactoring code doesn't change the ordering (it can't
+  — the session type is invariant).
+- **D's ordering is verified**: session fidelity is a theorem of the type
+  system. Timestamp assignment has no such guarantee.
+- **D handles concurrency**: vector clocks from multi-channel sessions
+  naturally express concurrent effects. Timestamps require explicit
+  vector-timestamp machinery.
+- **D is compositional**: session type composition (PROTOCOLS_AS_TYPES.org)
+  composes effect orderings automatically.
+
+For unsessioned effects, B and A are equivalent (both impose external ordering).
+A is simpler (walk order requires no new infrastructure). Therefore B adds
+nothing that A + D don't already provide.
+
+### 11c. When C Might Be Relevant
+
+Architecture C (Reactive Effect Streams with topological scheduling) could be
+relevant for effects that are neither session-typed nor sequentially walked —
+e.g., declarative effect specifications in a constraint language. This remains
+a research direction but is not needed for Phase 0.
+
+### 11d. Layered Architecture
+
+```
+Layer 0: Propagator Network (monotone fixed points)               [exists]
+Layer 1: Session Lattice (protocol verification)                  [exists]
+Layer 2: Effect Position Lattice (session-derived ordering)       [NEW - D]
+Layer 3: ATMS (hypothetical effect orderings for branches)        [exists]
+Layer 4: Effect Handler (sequential execution in position order)  [NEW - D]
+Fallback: AST Walk (for unsessioned effects)                      [exists - A]
 ```
 
 ---
 
-## 11. Formalization Roadmap
+## 12. Formalization Roadmap
 
 If we pursue Architecture D, the implementation would proceed:
 
@@ -764,9 +988,72 @@ If we pursue Architecture D, the implementation would proceed:
 
 ---
 
-## 12. Conclusions
+## 13. Critique and Limitations
 
-### 12a. The Core Discovery
+### 13a. Data-Flow Analysis Complexity
+
+The cross-channel data-flow analysis (§10a) requires tracking variable bindings
+through process structure. For simple cases (variable flows directly from recv
+to send), this is straightforward. For complex cases (pattern matching on
+received values, function application, higher-order bindings), the data-flow
+graph grows in complexity.
+
+However, the process language (`proc`) is intentionally restricted compared to
+the expression language. Processes don't have arbitrary higher-order functions —
+they have `send`, `recv`, `proc-case`, `proc-par`, and sequential composition.
+This restriction bounds the data-flow analysis to a manageable set of cases.
+
+### 13b. Cycle Detection as Deadlock Detection
+
+If the transitive closure computation discovers a cycle in the ordering graph
+(position A < position B < position A), this indicates a **deadlock** — two
+effects that each depend on the other having already executed. This is not a
+failure of the ordering algorithm; it's a detection of a genuine program error.
+
+The session type system already prevents many deadlocks (session fidelity ensures
+that endpoints agree on ordering). But cross-channel cycles can still arise:
+
+```
+Process 1: recv x a . send [f x] b
+Process 2: recv y b . send [g y] a
+```
+
+Each process waits for the other. The transitive closure would produce
+`a₀ < b₀ < a₀` — a cycle. The ordering propagator can detect this and raise
+an error at compile time, turning a runtime deadlock into a compile-time
+rejection. This is a significant advantage — the ordering analysis serves
+double duty as a static deadlock detector for cross-channel data dependencies.
+
+### 13c. Performance Considerations
+
+Transitive closure on a set of ordering edges has `O(n³)` worst-case complexity
+(Floyd-Warshall). For typical process structures, `n` is the number of IO
+operations in a single process — usually small (< 50). The propagator-based
+incremental computation may be more efficient than batch algorithms because
+edges arrive incrementally as session cells advance.
+
+For very large processes with many channels, the vector clock representation
+grows linearly with the number of channels. This is the same scaling behavior
+as distributed vector clocks, and the same mitigation applies: only track
+channels that interact (sparse vector clocks).
+
+### 13d. The "Fully Native" Limit
+
+Even with all five layers, the effect handler (Layer 5) remains non-monotone —
+it executes actual IO operations that produce observable side effects. This is
+irreducible: the CALM theorem guarantees that non-monotonic operations (which
+include all observable effects) require coordination.
+
+The achievement is not eliminating the coordination point, but *minimizing* it.
+All reasoning about ordering is done monotonically in the propagator network.
+The only coordination point is the final execution barrier. This is optimal —
+it's the minimum coordination required by the CALM theorem.
+
+---
+
+## 14. Conclusions
+
+### 14a. The Core Discovery
 
 Session types are not just protocol specifications — they are **causal clocks**.
 The continuation structure of a session type encodes a total order on effects
@@ -780,7 +1067,7 @@ Together, they provide a vector-clock-like causal ordering that is:
    effect position derivation via α is monotone; both live happily in the
    propagator network
 
-### 12b. The Galois Connection
+### 14b. The Galois Connection
 
 The Galois connection `(α, γ)` between the session lattice and the effect
 position lattice formalizes this relationship:
@@ -792,21 +1079,47 @@ position lattice formalizes this relationship:
 This connection is a quantale morphism between two effect quantales, reflecting
 the deep algebraic structure shared by session types and effect systems.
 
-### 12c. Architecture D as Natural Extension
+### 14c. Architecture A + D
 
-Architecture D (Session-Derived Effect Ordering) emerges as a natural
-extension of our existing infrastructure:
+The recommended architecture pairs session-derived ordering (D) with walk-based
+barriers (A) as a fallback:
+
+- **D** handles session-typed IO — the structured, common case. Ordering is
+  a theorem from session fidelity, not a design choice. Cross-channel data
+  dependencies are resolved by transitive closure (a monotone fixed point).
+  Branch alternatives are maintained by the ATMS.
+- **A** handles unsessioned IO — the REPL, top-level eval, `main` without
+  explicit sessions. Walk order provides sequential execution.
+- **B** is subsumed — it adds nothing that A + D don't provide.
+
+### 14d. The `rel`/`proc` Parallel
+
+The deep structural parallel between the logic engine (`rel`) and the session
+runtime (`proc`) confirms that the Layered Recovery Principle is general:
+non-monotone behavior is recovered on a monotone substrate by inserting control
+layers at the boundaries of monotone phases. The propagator network is the
+shared foundation; the ATMS provides hypothetical reasoning; the control layer
+(stratification for `rel`, effect handler for `proc`) performs the non-monotone
+operations at precisely the points where coordination is required.
+
+### 14e. Architecture D as Natural Extension
+
+Architecture D emerges as a natural extension of our existing infrastructure:
 
 - The session lattice already exists
 - Session advancement propagators already exist
 - Cross-domain bridge propagators are an established pattern
+- The ATMS for branching already exists
 - The effect position lattice is a simple new lattice
 - The bridge propagator follows the existing Galois connection pattern
+- Transitive closure is a standard propagator computation
 
-The novel contribution is recognizing that session types provide what
-timestamps and barriers provide externally — but with stronger guarantees
-(soundness from session fidelity) and tighter integration (effect ordering
-is a property of the type system, not the scheduler).
+The novel contributions are:
+1. Recognizing that session types provide causal clocks intrinsically
+2. Formalizing the session-to-effect mapping as a Galois connection
+3. Using transitive closure of ordering edges for cross-channel dependencies
+4. Leveraging the ATMS for branching effect orders
+5. Identifying the `rel`/`proc` structural parallel
 
 ---
 
@@ -819,6 +1132,8 @@ is a property of the type system, not the scheduler).
 - Logic Engine Design: `docs/tracking/2026-02-24_LOGIC_ENGINE_DESIGN.org`
 - Session Type Design: `docs/tracking/2026-03-03_SESSION_TYPE_DESIGN.md`
 - Session Type PIR: `docs/tracking/2026-03-04_SESSION_TYPE_PIR.md`
+- Protocols as Types: `docs/tracking/principles/PROTOCOLS_AS_TYPES.org`
+- Effectful Computation on Propagators: `docs/tracking/principles/EFFECTFUL_COMPUTATION_ON_PROPAGATORS.org`
 
 ### Foundational
 - [Propositions as Sessions](https://homepages.inf.ed.ac.uk/wadler/papers/propositions-as-sessions/propositions-as-sessions.pdf) — Wadler (ICFP 2012)
@@ -844,8 +1159,13 @@ is a property of the type system, not the scheduler).
 - [Manifest Deadlock-Freedom for Shared Session Types](https://www.cs.cmu.edu/~balzers/publications/manifest_deadlock_freedom.pdf) — Balzer et al.
 - [Deadlock-Free Session Types in Linear Haskell](https://arxiv.org/pdf/2103.14481) — Kokke (2021)
 
-### Propagators and CRDTs
+### Propagators, CRDTs, and Distributed Systems
 - [Revised Report on the Propagator Model](https://groups.csail.mit.edu/mac/users/gjs/propagators/) — Radul & Sussman
 - [CRDTs (Wikipedia)](https://en.wikipedia.org/wiki/Conflict-free_replicated_data_type)
 - [Vector Clocks (Wikipedia)](https://en.wikipedia.org/wiki/Vector_clock)
 - [Kmett's Propagators (GitHub)](https://github.com/ekmett/propagators)
+- [CALM Theorem](https://dsf.berkeley.edu/papers/cidr11-bloom.pdf) — Hellerstein (CIDR 2011)
+
+### Planning and Ordering
+- Weld, D.S. — An Introduction to Least Commitment Planning (AI Magazine, 1994)
+- Penberthy, J.S. & Weld, D.S. — UCPOP: A Sound, Complete, Partial Order Planner for ADL (KR 1992)
