@@ -1194,7 +1194,7 @@
                           [(open) 'proc-open]
                           [(connect) 'proc-connect]
                           [(listen) 'proc-listen]))
-        `(,proc-op ,@(cdr item))]
+        `(,proc-op ,@(cdr item) ,cont)]
        ;; Other list forms (match, function calls, etc.) — pass through
        [else item])]
     [else item]))

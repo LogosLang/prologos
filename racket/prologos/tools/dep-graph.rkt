@@ -247,6 +247,8 @@
    (test-dep '(driver.rkt sessions.rkt) #t)
    'test-io-session-02.rkt
    (test-dep '(session-runtime.rkt io-bridge.rkt sessions.rkt) #f)
+   'test-io-session-03.rkt
+   (test-dep '(driver.rkt macros.rkt sessions.rkt) #t)
    'test-free-ordering.rkt
    (test-dep '(driver.rkt global-env.rkt macros.rkt) #t)
    'test-functor-ws.rkt
