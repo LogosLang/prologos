@@ -1,6 +1,6 @@
 # IO Library Implementation Design
 
-**Status**: Implementation Phase — IO-A complete, IO-B next
+**Status**: Implementation Phase — IO-A/B/C complete, IO-D next
 **Predecessor**: `docs/tracking/2026-03-05_IO_LIBRARY_DESIGN_V2.md` (Phase I — API research + gap analysis)
 **Template**: Follows the format of `docs/tracking/2026-03-03_SESSION_TYPE_DESIGN.md`
 **Date**: 2026-03-05
@@ -17,8 +17,8 @@
 | IO-B | B1: IO state lattice | ✅ | `2f1ebbf` | 5 tests; `io-bot/io-top/io-opening/io-open/io-closed` + merge function in `io-bridge.rkt` |
 | IO-B | B2: IO bridge propagator | ✅ | `1b9b91a` | 5 tests; side-effecting fire-fn, `io-bridge-open-file`, `make-io-bridge-cell`; local session predicates (avoids modifying session-runtime.rkt) |
 | IO-B | B3: FFI bridge to Racket | ✅ | `d4934d4` | 5 tests; `io-ffi.rkt` with 12-entry registry + wrapper fns; `io-close-port` generic close (Racket has no `close-port`) |
-| IO-C | C1: `proc-open` runtime | | | `compile-live-process` match arm |
-| IO-C | C2: Integration tests | | | Open + session + IO bridge E2E |
+| IO-C | C1: `proc-open` runtime | ✅ | `5b14a07` | `rt-new-io-channel` (5 cells: 4 standard + 1 IO state); `proc-open` match arm in `compile-live-process`; broke io-bridge↔session-runtime circular dep via local `io-msg-bot?` |
+| IO-C | C2: Integration tests | ✅ | `7cde920` | 11 tests in 3 groups: channel creation, direct IO channel read/write/error/close, compile-live-process integration |
 | IO-D | D1: File IO functions | | | `read-file`, `write-file`, etc. |
 | IO-D | D2: Console IO functions | | | `print`, `println`, `read-ln` |
 | IO-D | D3: `with-open` macro | | | Bracket pattern |
