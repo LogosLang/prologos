@@ -223,6 +223,11 @@
    (test-dep '(driver.rkt elaborator.rkt errors.rkt foreign.rkt global-env.rkt macros.rkt metavar-store.rkt multi-dispatch.rkt namespace.rkt parser.rkt prelude.rkt pretty-print.rkt source-location.rkt surface-syntax.rkt syntax.rkt) #t)
    'test-io-opaque-01.rkt
    (test-dep '(foreign.rkt pretty-print.rkt reduction.rkt substitution.rkt syntax.rkt) #f)
+   'test-io-path-01.rkt
+   (test-dep '(driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt
+              metavar-store.rkt multi-dispatch.rkt namespace.rkt parser.rkt
+              prelude.rkt pretty-print.rkt source-location.rkt
+              surface-syntax.rkt syntax.rkt) #t)
    'test-free-ordering.rkt
    (test-dep '(driver.rkt global-env.rkt macros.rkt) #t)
    'test-functor-ws.rkt
@@ -771,12 +776,14 @@
    'prologos::data::datum         '()
    'prologos::data::either        '(prologos::data::option)
    'prologos::data::eq            '()
+   'prologos::data::io-error      '()
    'prologos::data::list          '(prologos::core::eq)
    'prologos::data::lseq          '(prologos::data::option)
    'prologos::data::lseq-ops      '(prologos::data::lseq)
    'prologos::data::map-entry     '()
    'prologos::data::nat           '()
    'prologos::data::never         '()
+   'prologos::data::path          '(prologos::data::string)
    'prologos::data::option        '()
    'prologos::data::ordering      '()
    'prologos::data::pair          '()
@@ -827,6 +834,7 @@
    'test-hkt-kind.rkt             '(prologos::core::eq prologos::core::ord prologos::data::list prologos::data::option)
    'test-identity-generic-ops.rkt '(prologos::core::algebra prologos::core::arithmetic prologos::data::list)
    'test-implicit-inference.rkt   '(prologos::core prologos::data::list prologos::data::nat prologos::data::option)
+   'test-io-path-01.rkt           '(prologos::data::io-error prologos::data::path)
    'test-kind-inference-where.rkt '(prologos::core::collection-traits prologos::core::eq prologos::data::lseq)
    'test-kind-inference.rkt       '(prologos::core::collection-traits prologos::data::lseq)
    'test-list-extended-01-01.rkt  '(prologos::core::eq prologos::data::list prologos::data::nat prologos::data::option prologos::data::option::none)

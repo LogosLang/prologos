@@ -1,0 +1,28 @@
+ns prologos::data::path :no-prelude
+
+;; ========================================
+;; Prologos Path Type
+;; ========================================
+;; Lightweight wrapper around String for filesystem paths.
+;; Pure type — no IO operations. Used as the argument type
+;; for all IO functions that take filesystem paths.
+
+require [prologos::data::string :as str :refer []]
+
+data Path
+  mk-path : String
+
+;; Construct a Path from a String.
+spec path String -> Path
+defn path [s] [mk-path s]
+
+;; Extract the underlying String from a Path.
+spec path-str Path -> String
+defn path-str [p]
+  match p
+    | mk-path s -> s
+
+;; Join two paths with "/" separator.
+spec path-join Path Path -> Path
+defn path-join [a b]
+  [mk-path [str::append [path-str a] [str::append "/" [path-str b]]]]

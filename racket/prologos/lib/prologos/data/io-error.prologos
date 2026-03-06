@@ -1,0 +1,17 @@
+ns prologos::data::io-error :no-prelude
+
+;; ========================================
+;; Prologos IOError Type
+;; ========================================
+;; Standard error type for IO operations.
+;; Uses String (not Path) for the path argument to avoid
+;; circular dependency between io-error and path modules.
+;; IO functions convert Path → String before constructing IOError.
+
+data IOError
+  file-not-found : String
+  permission-denied : String
+  is-directory : String
+  already-exists : String
+  not-a-file : String
+  io-failed : String
