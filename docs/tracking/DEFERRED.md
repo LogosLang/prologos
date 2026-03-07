@@ -734,6 +734,64 @@ The following collection items ARE also deferred (genuine infrastructure deps):
 
 ---
 
+## Session Types — Parameterized/Indexed Sessions & Bounded Liveness
+
+### Parameterized (Indexed) Session Types (RESEARCH — NOT STARTED)
+- **Problem**: Multiplexed protocols (like CapTP) run N concurrent sub-sessions
+  over a single connection, each tracked by an index (e.g., `questionID`). Current
+  session types can model the data dependency (dependent `!:`/`?:` binding) but not
+  the concurrent multiplexing structure — dependent sessions are sequential.
+- **Goal**: Session type definitions parameterized by a value from the dependent type
+  level. A multiplexed connection holds a family `{S(i) | i ∈ active}` of concurrent
+  sub-sessions.
+- **Approaches investigated** (from Endo analysis, 2026-03-07):
+  1. *Encoding via `par`* — dynamic channel creation (`proc-new`/`proc-par`) can model
+     each sub-session as its own channel. Works structurally but differs from the runtime
+     model (single-connection multiplexing vs. separate channels).
+  2. *Parameterized session types* — `session-family S [i : I] = ...` where `S` is
+     indexed by a value. Requires extending session type definitions to accept type-level
+     parameters. Natural fit given existing dependent type infrastructure.
+  3. *Session maps* — `Map QuestionId (Session S qid)` tracking active sub-sessions.
+     Combines (2) with collection types for the multiplexed container.
+- **Observation**: This is the same extension needed for fuel-indexed bounded liveness
+  (below). Both are instances of "session types indexed by dependent type values."
+- **Literature**: Katsumata (Parametric Effect Monads, POPL 2014), Atkey (Parameterised
+  Notions of Computation, JFP 2009), Gay & Hole (Subtyping for Session Types)
+- **Not blocked**: Dependent type infrastructure exists. Design work needed.
+- **Source**: `docs/research/2026-03-07_ENDO_AS_SESSION_TYPES.org` §4.3, §15
+
+### Bounded Liveness for Session Types (RESEARCH — NOT STARTED)
+- **Problem**: Session types verify *safety* (bad things don't happen) but not *liveness*
+  (good things eventually happen). Example: a transient pin protocol has no guarantee
+  that `Unpin` is ever reached — a crash between pin and unpin leaks the pin.
+- **Current capabilities** (what we have today):
+  - Linear types (`[1]`) prevent resource leaks within a single function scope — if you
+    hold a linear pin token, you MUST consume it on every code path
+  - `check-session-completeness` verifies sessions reach `end` when the process terminates
+  - These are *weak* liveness: "if you terminate, you must be at end"
+- **Graduated roadmap** (increasing levels of guarantee):
+  1. **Today**: Linear types + session completeness (described above)
+  2. **Near-term** (small extension): Timeout branches in session types — a `timeout`
+     choice taken if normal protocol doesn't progress. Syntactic sugar for a choice with
+     an implicit clock. Session type checker verifies timeout branch properly cleans up
+     resources (releases linear tokens).
+  3. **Medium-term** (parameterized sessions): Fuel-indexed recursive sessions where
+     termination falls out of well-founded recursion on a decreasing `Nat` parameter.
+     Requires indexed/parameterized session types (above).
+  4. **Long-term** (timed session types): Full clock constraints à la Bocchi, Honda &
+     Tuosto (2014). Each message step has a deadline; type checker verifies all deadlines
+     are satisfiable. Bigger research investment.
+- **Key insight**: Options 2-3 converge on parameterized session types — timeout branches
+  need clock parameters, fuel indexing needs Nat parameters. Both are specializations
+  of the parameterized session type extension above.
+- **Literature**: Bocchi, Honda & Tuosto (Timed Multiparty Session Types, 2014), Neykova &
+  Yoshida (Session Types with Explicit Timeouts, 2017), Barbanera & de'Liguoro (Session
+  Types with Retries, 2015)
+- **Not blocked**: Design and research needed, but foundational infrastructure exists
+- **Source**: `docs/research/2026-03-07_ENDO_AS_SESSION_TYPES.org` §5.4, §15.2
+
+---
+
 ## Infrastructure / Performance
 
 ### Compiled Module Cache
