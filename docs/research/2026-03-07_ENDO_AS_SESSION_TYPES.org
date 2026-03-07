@@ -1655,7 +1655,549 @@ Prologos processes, formula identifiers as channel names, and CapTP messages
 as session-typed communications.
 
 
-* 19. Conclusion
+* 19. CRDT-Based Retention for Distributed Formula References
+
+A hypothesis contributed by an Endo maintainer: /the formula system is
+missing a CRDT for managing retention of local formulas on a pair of
+connected peers that must be able to progress when partitioned, notably for
+deletion of references, as this is the basis for revocation./
+
+This section analyzes this hypothesis through the lens of our session type
+models and finds it well-founded.
+
+** 19.1 The Partition Problem
+
+The formula graph currently assumes a centralized, connected model.
+Reference counting between peers flows through =CTP_DROP= messages, and GC
+is a local sweep that runs under the single async mutex. When two peers are
+connected, this works:
+
+#+begin_example
+   Peer A                    Peer B
+   ──────                    ──────
+   Host holds handle →       Guest has o-N import
+   Host cancels formula →    Sends CTP_DROP → Guest releases
+   GC sweep →                Reference count = 0 → Collect
+#+end_example
+
+Under partition, this breaks:
+
+#+begin_example
+   Peer A                    ║  Peer B
+   ──────                    ║  ──────
+   Host cancels formula      ║  Guest still holds o-N import
+   Wants to send CTP_DROP    ║  Network down — message never arrives
+   GC sweep sees no remote   ║  Guest may pass capability to Carol
+     refs (can't reach B)    ║    via promise pipelining
+                             ║
+   Dilemma:                  ║
+   - GC eagerly?             ║  → Dangling reference when B reconnects
+   - Retain conservatively?  ║  → Leaked references, no revocation
+#+end_example
+
+** 19.2 Why Reference Counting Fails Under Partition
+
+The current =CTP_DROP= protocol is a /coordination-dependent/ reference
+counting scheme. It has three properties that are individually reasonable
+but collectively problematic for partitioned operation:
+
+1. *Reference counts are split across peers*: The exporting side tracks
+   how many times a slot has been imported, but this count is maintained
+   through =CTP_DROP= messages that decrement it. If messages can't flow,
+   the count diverges from reality.
+
+2. *GC assumes reachability information is current*: The 10-step GC sweep
+   counts references from local pet stores, local formula dependencies, and
+   /known/ remote imports. But during partition, the "known remote imports"
+   set is stale --- the remote peer may have already dropped references, or
+   may have created new ones via capability delegation.
+
+3. *Revocation is a cancel + GC cycle*: When a host cancels a formula, the
+   =withCollection= wrapper triggers GC, which should collect the cancelled
+   formula and send =CTP_DROP= to all importers. But under partition, the
+   drops don't arrive, and the remote peer continues holding a reference to
+   a cancelled formula. On reconnection, the peer discovers the formula no
+   longer exists --- a dangling reference.
+
+** 19.3 CRDT Design for Retention State
+
+A CRDT (Conflict-Free Replicated Data Type) for retention state would allow
+each peer to make progress independently during partition, with convergent
+merge on reconnection. The natural choice is an operation-based CRDT where:
+
+- *Retain* and *Revoke* are the two operations
+- *Revoke wins* on conflict (authority-first semantics, aligned with OCap)
+- Each formula's retention state includes a /vector clock/ or /Lamport
+  timestamp/ so that causal ordering is preserved
+
+#+begin_src prologos
+;; --- Retention CRDT ---
+;; A per-formula, per-peer retention state.
+
+type RetentionOp
+  := Retain Timestamp                    ;; "I am holding this reference"
+   | Revoke Timestamp                    ;; "I revoke this capability"
+
+type RetentionState
+  :formula-id FormulaIdentifier
+  :local-ops  [List RetentionOp]         ;; operations from this peer
+  :remote-ops [List RetentionOp]         ;; operations from the other peer
+  :merged     RetentionDecision          ;; resolved state
+
+type RetentionDecision
+  := Alive                               ;; at least one active Retain, no Revoke
+   | Revoked Timestamp                   ;; authoritative revocation (wins)
+   | Expired Timestamp                   ;; all Retains withdrawn, no Revoke needed
+
+;; The merge function: join-semilattice (monotone, commutative, idempotent)
+;; Revoke always wins over Retain. Later timestamps supersede earlier ones.
+;; This IS a lattice: bot = no operations, top = Revoked.
+#+end_src
+
+The merge semantics are:
+
+| Local State | Remote State | Merged Result | Rationale                              |
+|-------------+--------------+---------------+----------------------------------------|
+| Retain(t1)  | Retain(t2)   | Alive         | Both peers agree: reference is live     |
+| Retain(t1)  | Revoke(t2)   | Revoked(t2)   | Revocation wins (authority-first)       |
+| Revoke(t1)  | Retain(t2)   | Revoked(t1)   | Revocation wins regardless of ordering  |
+| Revoke(t1)  | Revoke(t2)   | Revoked(max)  | Both agree, use latest timestamp        |
+| Retain(t1)  | (none)       | Alive         | Remote hasn't reported; assume live     |
+| Revoke(t1)  | (none)       | Revoked(t1)   | Local revocation is immediately binding |
+
+** 19.4 Session Type for CRDT-Aware Retention
+
+#+begin_src prologos
+;; --- CRDT Retention Protocol ---
+;; Replaces CTP_DROP with a convergent retention protocol.
+
+session Retention-Protocol
+  ;; Phase 1: Initial capability grant
+  !! Handle                                ;; export the capability
+  !! RetentionEpoch                        ;; initial epoch (monotonic)
+  Retention-Active
+
+session Retention-Active
+  rec Active
+    &>
+      ;; Normal capability usage — calls tagged with epoch
+      | :use ->
+          ?? [CapTP-Call Epoch]             ;; call tagged with peer's epoch
+          +>
+            | :epoch-current ->
+                !! CapTP-Result
+                Active
+            | :epoch-stale ->
+                !! EpochExpired            ;; clean error, not dangling ref
+                Active
+      ;; Local revocation (works during partition)
+      | :revoke ->
+          ! RevocationRecord               ;; persist CRDT op locally
+          ;; Does NOT send CTP_DROP — revocation is a CRDT op
+          Active                           ;; stay active; merge on reconnect
+      ;; Reconnection: merge CRDT states
+      | :reconnect ->
+          ?? PeerRetentionState            ;; receive peer's retention ops
+          ! MergedRetentionState           ;; send merge result
+          ;; Apply merged revocations
+          Retention-Active-Post-Merge
+      ;; Clean disconnection
+      | :disconnect ->
+          end
+
+session Retention-Active-Post-Merge
+  rec PostMerge
+    +>
+      | :apply-revocation ->
+          ! FormulaIdentifier              ;; revoke this formula
+          ! CancelSignal                   ;; cancel its dependents
+          PostMerge
+      | :merge-complete ->
+          Retention-Active                 ;; back to normal operation
+#+end_src
+
+** 19.5 Impact on GC
+
+With CRDT retention, the GC algorithm gains a new input: the local
+retention state. The current "count references from known remote imports"
+step would be replaced by "consult the retention CRDT for each formula's
+aliveness across all peers":
+
+#+begin_src prologos
+;; --- CRDT-Aware GC ---
+;; Step 4 of GC-Sweep changes: root set includes CRDT-alive formulas.
+
+session GC-Sweep-CRDT
+  ;; Steps 1-3 unchanged (assign groups, build deps, count refs)
+  ! GroupAssignment
+  ! [Map GroupId [Set GroupId]]
+  ! [Map GroupId Nat]
+
+  ;; Step 4 (modified): Root set includes CRDT-alive formulas
+  ! [Set GroupId]                          ;; permanent roots (unchanged)
+  ! [Set GroupId]                          ;; CRDT-alive: Retain without Revoke
+  ! [Set GroupId]                          ;; transitively reachable from both
+
+  ;; Steps 5-10 unchanged
+  ! [Set GroupId]                          ;; groups to collect
+  !! CancelBatch
+  !! DropBatch
+  !! DisconnectBatch
+  ! DeleteBatch
+  ! GCComplete
+  end
+#+end_src
+
+** 19.6 Why This Matters for Revocation
+
+In OCap security, revocation must be /authoritative/. When Alice grants Bob
+a capability and later wants to revoke it, the revocation must take effect
+regardless of Bob's state. With the current protocol, revocation requires
+Bob to be connected (to receive =CTP_DROP=). With a revoke-wins CRDT:
+
+- Alice revokes locally, immediately. Her daemon marks the formula as
+  revoked in the CRDT.
+- Bob may continue using the capability during partition (his local CRDT
+  still says "Alive").
+- On reconnection, CRDT merge happens. Revoke wins. Bob discovers the
+  formula is revoked. His calls get clean "EpochExpired" errors, not
+  dangling references.
+- Crucially: Bob cannot "un-revoke" by sending a Retain after the Revoke.
+  The lattice is monotone --- once revoked, always revoked.
+
+This aligns with the capability discipline: the authority that grants a
+capability should be the authority that revokes it, without requiring
+consensus from the holder.
+
+
+* 20. Practical Recommendations for the Endo Codebase
+
+This section offers concrete, graduated recommendations for the Endo team
+--- organized from lowest to highest implementation effort, all achievable
+within the existing JavaScript codebase without requiring Prologos or any
+external type system.
+
+** 20.1 Immediate / Low Effort
+
+*** 20.1.1 Explicit State Machine for Formula Lifecycle
+
+The formula lifecycle (§5.1) is currently implicit across =daemon.js=,
+=graph.js=, and =context.js=. Different code paths implement different
+lifecycle transitions with no single authoritative representation.
+
+*Recommendation*: Extract a =FormulaState= enum and a =transitionState=
+function that validates transitions:
+
+#+begin_example javascript
+// formula-state.js
+const FormulaState = /** @enum {string} */ ({
+  PREFORMULATE: 'preformulate',   // ID assigned, not yet persisted
+  PERSISTED: 'persisted',         // on disk, not yet in graph
+  REGISTERED: 'registered',       // in graph, controller not yet created
+  CONTROLLED: 'controlled',       // controller exists (synchronous)
+  EVALUATING: 'evaluating',       // async evaluation in progress
+  ACTIVE: 'active',               // value available
+  CANCELLING: 'cancelling',       // cancel initiated, cascading
+  CANCELLED: 'cancelled',         // fully cancelled
+  DISPOSED: 'disposed',           // cleanup hooks run, removed from graph
+});
+
+const validTransitions = new Map([
+  [FormulaState.PREFORMULATE, [FormulaState.PERSISTED]],
+  [FormulaState.PERSISTED, [FormulaState.REGISTERED]],
+  [FormulaState.REGISTERED, [FormulaState.CONTROLLED]],
+  [FormulaState.CONTROLLED, [FormulaState.EVALUATING, FormulaState.CANCELLING]],
+  [FormulaState.EVALUATING, [FormulaState.ACTIVE, FormulaState.CANCELLING]],
+  [FormulaState.ACTIVE, [FormulaState.CANCELLING]],
+  [FormulaState.CANCELLING, [FormulaState.CANCELLED]],
+  [FormulaState.CANCELLED, [FormulaState.DISPOSED]],
+]);
+
+const transitionState = (current, next) => {
+  const allowed = validTransitions.get(current);
+  if (!allowed || !allowed.includes(next)) {
+    throw Error(`Invalid formula transition: ${current} → ${next}`);
+  }
+  return next;
+};
+#+end_example
+
+*Effort*: Small. The transitions already happen; this just makes them
+explicit and validates them. Every =Fail("unexpected formula state")= in the
+codebase becomes a caught invalid transition instead of a mystery crash.
+
+*Value*: This is the JavaScript equivalent of the =Formula-Lifecycle=
+session type from §5. It turns implicit protocol assumptions into runtime
+assertions. When a new formula type is added, the valid transitions are
+declared alongside the type.
+
+*** 20.1.2 Exhaustive Formula Type Dispatch
+
+Several dispatch sites in =daemon.js= switch on =formula.type= but do not
+assert exhaustiveness. TypeScript's =satisfies= or a runtime assertion can
+catch missing cases:
+
+#+begin_example javascript
+// At each dispatch site:
+const formulaHandlers = /** @type {Record<FormulaType, Function>} */ ({
+  endo: makeEndoFormula,
+  host: makeHostFormula,
+  guest: makeGuestFormula,
+  // ... all 26+ types
+});
+
+const handler = formulaHandlers[formula.type];
+if (!handler) {
+  throw Error(`Unhandled formula type: ${formula.type}`);
+}
+#+end_example
+
+*Effort*: Minimal per dispatch site. An afternoon of auditing to find all
+switch sites and add the handler map.
+
+*Value*: This is the JavaScript equivalent of the exhaustive =&>= session
+type choice from §15.5. Adding a new formula type without updating /all/
+dispatch sites becomes an immediate, obvious error.
+
+*** 20.1.3 Pin Lifecycle Tracking
+
+Add a =WeakRef= + =FinalizationRegistry= based tracker for transient pins
+to detect leaks:
+
+#+begin_example javascript
+const activePins = new Map();  // formulaId → { pinTime, stackTrace }
+
+const pinTransientTracked = (formulaId) => {
+  activePins.set(formulaId, {
+    pinnedAt: Date.now(),
+    stack: new Error('pin origin').stack,
+  });
+  pinTransient(formulaId);
+};
+
+const unpinTransientTracked = (formulaId) => {
+  activePins.delete(formulaId);
+  unpinTransient(formulaId);
+};
+
+// Periodic leak detection (e.g., every 60s)
+setInterval(() => {
+  const now = Date.now();
+  for (const [id, info] of activePins) {
+    if (now - info.pinnedAt > 30_000) {
+      console.warn(`Pin leak detected: ${id}, pinned ${now - info.pinnedAt}ms ago`);
+      console.warn(info.stack);
+    }
+  }
+}, 60_000);
+#+end_example
+
+*Effort*: Small. Wraps existing pin/unpin calls with tracking.
+
+*Value*: Detects the pin leak scenario described in §5.4 and §15.2 at
+runtime. Not a static guarantee, but a practical diagnostic that catches
+the exact failure mode.
+
+** 20.2 Medium Effort
+
+*** 20.2.1 Operation Ordering Assertions
+
+The GC protocol has critical ordering constraints (§10.3, §15.3, §15.4):
+pet store edge before resolution status, =CTP_DROP= before
+=CTP_DISCONNECT=. These can be asserted with ordered checkpoints:
+
+#+begin_example javascript
+// ordering.js — lightweight ordered-checkpoint assertions
+const makeOrderedCheckpoints = (name) => {
+  const reached = [];
+  return harden({
+    checkpoint(label) {
+      reached.push(label);
+    },
+    assertOrder(...expectedOrder) {
+      for (let i = 0; i < expectedOrder.length - 1; i++) {
+        const a = reached.indexOf(expectedOrder[i]);
+        const b = reached.indexOf(expectedOrder[i + 1]);
+        if (a === -1 || b === -1 || a >= b) {
+          throw Error(
+            `${name}: ordering violation: ` +
+            `expected ${expectedOrder[i]} before ${expectedOrder[i + 1]}`
+          );
+        }
+      }
+    },
+  });
+};
+
+// Usage in promise resolution:
+const cp = makeOrderedCheckpoints('promise-resolution');
+// ... write pet store edge ...
+cp.checkpoint('edge-written');
+// ... write resolution status ...
+cp.checkpoint('status-written');
+cp.assertOrder('edge-written', 'status-written');
+#+end_example
+
+*Effort*: Medium. Requires identifying all ordering-critical code paths
+and inserting checkpoints. The =makeOrderedCheckpoints= utility is trivial;
+the audit to find all critical orderings is the real work.
+
+*Value*: This is the JavaScript equivalent of the ordered session type
+=Promise-Resolution-Safe= from §15.3. It turns implicit code-ordering
+dependencies into explicit, runtime-checked invariants.
+
+*** 20.2.2 RemoteControl State Machine Hardening
+
+The =RemoteControl= type already has an implicit state machine
+(Pending → Connected → Disconnected). The test suite covers ID-based
+connection arbitration. But there are no partition-specific tests, and
+the state machine doesn't model "partitioned" as a distinct state.
+
+*Recommendation*: Add a =PARTITIONED= state and a heartbeat/timeout
+mechanism:
+
+#+begin_example javascript
+const RemoteControlState = {
+  PENDING: 'pending',
+  CONNECTED: 'connected',
+  PARTITIONED: 'partitioned',   // NEW: connection silent for > timeout
+  DISCONNECTED: 'disconnected',
+};
+#+end_example
+
+When a connection has received no messages for a configurable timeout,
+transition from =CONNECTED= to =PARTITIONED=. In the =PARTITIONED= state:
+- Outbound calls are queued (not dropped)
+- The retention state for shared formulas is frozen (no GC of remotely-held formulas)
+- A reconnection attempt is scheduled
+
+On reconnection, transition from =PARTITIONED= back to =CONNECTED= and
+flush the queued calls.
+
+*Effort*: Medium. The heartbeat mechanism needs to be added to the CapTP
+layer. The state machine change is straightforward given the existing
+=RemoteControl= structure.
+
+*Value*: This is the architectural prerequisite for CRDT-based retention.
+Without a =PARTITIONED= state, the system can't distinguish "peer is slow"
+from "peer is unreachable," and can't defer GC decisions accordingly.
+
+*** 20.2.3 Structured Protocol Logging
+
+Add structured logging at protocol boundaries that captures the session
+type operations (send/recv/select/offer) as named events:
+
+#+begin_example javascript
+// protocol-log.js
+const protocolLog = (sessionName, step, data) => {
+  console.log(JSON.stringify({
+    session: sessionName,
+    step: step,      // 'send', 'recv', 'select', 'offer'
+    timestamp: Date.now(),
+    data: typeof data === 'object' ? Object.keys(data) : typeof data,
+  }));
+};
+
+// Usage:
+protocolLog('CapTP-Bootstrap', 'send', { type: 'CTP_BOOTSTRAP' });
+protocolLog('Formula-Lifecycle', 'transition', { from: 'CONTROLLED', to: 'EVALUATING' });
+#+end_example
+
+*Effort*: Medium (pervasive but mechanical).
+
+*Value*: Creates an observable trace that can be compared against the
+session type specifications in this document. Deviations between the
+expected session type protocol and the actual log trace indicate protocol
+bugs.
+
+** 20.3 Larger Architectural Shifts
+
+*** 20.3.1 CRDT Retention Layer
+
+Implement the CRDT-based retention protocol described in §19. This is the
+most impactful recommendation but also the largest effort.
+
+*Implementation sketch*:
+
+1. Define a =RetentionCRDT= module with:
+   - Per-formula, per-peer retention state
+   - =retain(formulaId, timestamp)= and =revoke(formulaId, timestamp)= operations
+   - =merge(localState, remoteState) → mergedState= using revoke-wins semantics
+   - Persistence to disk alongside formula JSON
+
+2. Replace =CTP_DROP= reference counting with CRDT operations:
+   - When a peer imports a formula: =retain(formulaId, now)=
+   - When a peer drops a reference: =revoke(formulaId, now)= (instead of =CTP_DROP=)
+   - On reconnection: exchange and merge retention states
+
+3. Modify GC to consult the retention CRDT:
+   - A formula with any =Alive= retention state across any peer is a root
+   - A formula with =Revoked= retention from the granting host is dead
+     regardless of remote retention
+
+*Effort*: Substantial (multi-week, across multiple subsystems). The CRDT
+itself is simple (join-semilattice with revoke-wins). The integration with
+GC, CapTP, and persistence is the real work.
+
+*Value*: Solves the partition-revocation problem entirely. Enables the
+following properties that the current system lacks:
+- Revocation works during partition
+- GC does not create dangling references across peers
+- Reconnection is idempotent (merge is commutative and idempotent)
+- No coordination required between peers for revocation
+
+*** 20.3.2 TypeScript Branded Types for FormulaIdentifier
+
+The =types.d.ts= already uses branded string types (=FormulaNumber=,
+=NodeNumber=, =FormulaIdentifier=). Extend this pattern to enforce formula
+lifecycle states at the type level:
+
+#+begin_example typescript
+type UnpersistedFormulaId = string & { __brand: 'UnpersistedFormulaId' };
+type PersistedFormulaId = string & { __brand: 'PersistedFormulaId' };
+type ActiveFormulaId = string & { __brand: 'ActiveFormulaId' };
+
+// Functions that require specific lifecycle states:
+declare function persistFormula(id: UnpersistedFormulaId): PersistedFormulaId;
+declare function evaluateFormula(id: PersistedFormulaId): ActiveFormulaId;
+declare function cancelFormula(id: ActiveFormulaId): void;
+
+// Type error: can't cancel an unpersisted formula
+cancelFormula(makeFormulaId()); // Error!
+#+end_example
+
+*Effort*: Medium (requires converting JSDoc types to proper TypeScript or
+extending the existing branded type pattern).
+
+*Value*: A limited form of session typing — the branded types track which
+lifecycle state a formula ID is in, and functions that require specific
+states reject IDs in the wrong state. Not as powerful as real session types,
+but catches a class of bugs where a formula ID is used before its formula
+has been properly initialized.
+
+*** 20.3.3 Protocol Conformance Testing
+
+Write integration tests that verify protocol conformance against the
+session type specifications in this document. For each named session type,
+write a test that:
+
+1. Exercises the happy path (all protocol steps in order)
+2. Exercises error branches (what happens when the protocol is violated)
+3. Exercises edge cases (timeout, partition, crash-recovery)
+
+The existing test suite has =remote-control.test.js= with state machine
+coverage, but no tests for partition scenarios, GC ordering, or
+cross-agent protocol conformance.
+
+*Effort*: Medium-to-large (depends on how many protocols are tested).
+
+*Value*: Even without static session typing, conformance tests verify that
+the implementation matches the protocol specification. When the protocol
+specification (this document) and the test suite agree, there is high
+confidence in the implementation's correctness.
+
+
+* 21. Conclusion
 
 The Endo system, with its formula graph, CapTP protocol, agent hierarchy,
 and distributed garbage collection, is a rich target for session type
@@ -1671,13 +2213,19 @@ analysis. Every major component maps naturally to a session type:
   that compose with the main agent protocols.
 - /Garbage collection/ is an ordering-critical protocol where session types
   prevent the subtle bugs that arise from misordered steps.
+- /Retention under partition/ is a convergent state problem that CRDTs solve,
+  with revoke-wins semantics preserving OCap revocation authority.
 
 The analysis identifies concrete protocol properties --- mutex re-entrancy
 prevention, pin leak detection, GC ordering safety, dispatch exhaustiveness,
-and message number validity --- that session types can verify statically.
-These properties are currently enforced by runtime checks, code ordering,
-and developer discipline. Session types would move them to compile-time
-guarantees.
+message number validity, and partition-safe revocation --- that session types
+and related type-theoretic tools can verify statically. These properties are
+currently enforced by runtime checks, code ordering, and developer
+discipline. The practical recommendations in §20 show how to incrementally
+harden the existing codebase, from low-effort state machine extraction and
+exhaustive dispatch maps to medium-effort protocol ordering assertions and
+partition-aware state machines, culminating in a CRDT retention layer that
+would solve the distributed revocation problem.
 
 Prologos's unique combination of session types, linear types, dependent
 types, capability annotations, and propagator-based effect ordering makes
@@ -1719,3 +2267,15 @@ not a hope.
 
 - Prologos Project. "The AT Protocol as Composable Session Types."
   =docs/research/2026-03-05_ATP_AS_SESSION_TYPES.org=. 2026.
+
+- Shapiro, M., Preguica, N., Baquero, C., and Zawirski, M. "Conflict-Free
+  Replicated Data Types." SSS 2011.
+
+- Bieniusa, A., et al. "An Optimized Conflict-Free Replicated Set."
+  arXiv:1210.3368. 2012.
+
+- Bocchi, L., Honda, K., and Tuosto, E. "Timed Multiparty Session Types."
+  CONCUR 2014.
+
+- Neykova, R., and Yoshida, N. "Session Types Go Dynamic, or How to Verify
+  Your Python Conversations." FORTE 2017.
