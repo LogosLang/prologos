@@ -1,0 +1,75 @@
+#+TITLE: Standup — 2026-03-07
+#+DATE: 2026-03-07
+
+
+* Yesterday (since Mar 6 standup/dailies created ~20:54)
+
+** Architecture A+D Post-Implementation Review (commit =3316579=)
+
+Completed the formal PIR for the Architecture A+D implementation (AD-A through AD-F).
+All 6 phases, 4 new modules (~770 lines), ~165 new tests, zero regressions.
+
+** Research: Endo Formula Graph as Session Types (commit =4a9f455=, updated =c18a6cd=)
+
+Comprehensive research document (~2,290 lines, 20 sections) analyzing the [[https://github.com/endojs/endo][Endo project]]
+(Agoric's hardened JavaScript platform) through Prologos session types.
+
+- CapTP wire protocol modelled as session types with =!!/??= async operators
+- Formula Graph lifecycle, agent protocols (Host/Guest), worker isolation
+- Pet Store, mail/messaging, GC, invitation/peering, cancellation, remote control
+- Session type mappings for all major Endo components
+- Prologos roadmap items surfaced by the analysis
+
+*** CRDT Retention Analysis (added in =c18a6cd=)
+
+Responded to an Endo maintainer's hypothesis: "the formula system is missing a CRDT for
+managing retention of local formulas on a pair of connected peers that must be able to
+progress when partitioned, notably for deletion of references, as this is the basis for
+revocation."
+
+- Validated the hypothesis: CTP_DROP reference counting fails under partition
+- Designed revoke-wins CRDT with session type protocol
+- Showed impact on GC and revocation semantics
+
+*** Practical Recommendations for Endo Team (added in =c18a6cd=)
+
+Graduated by effort (low/medium/large), acknowledging JavaScript without
+Prologos's typing affordances:
+
+- *Low effort*: FormulaState enum, exhaustive dispatch, pin tracking structs
+- *Medium*: ordering assertions, RemoteControl PARTITIONED state, protocol logging
+- *Large*: CRDT retention layer, TypeScript branded types, conformance testing
+
+** Deferred: Parameterized Session Types + Bounded Liveness (commit =f92af79=)
+
+Added to DEFERRED.md:
+- Three approaches to indexed/parameterized session types (par encoding, dependent indexing, session maps)
+- Four-level bounded liveness roadmap (linear types → timeout branches → fuel-indexed recursion → timed session types)
+- Key insight: parameterized sessions and bounded liveness converge (fuel = session index)
+
+** Discussion: Model Checking ↔ Propagator Networks
+
+Extended brainstorming session exploring the deep structural correspondence between:
+- Prologos session type checking + effect ordering lattice + ATMS
+- CTL model checking + modal μ-calculus + fixpoint computation
+
+Key insight: =run-to-quiescence= IS monotone fixpoint iteration (Kleene chain);
+ATMS worldviews ARE CTL path quantifiers (A = all worldviews, E = exists worldview);
+session completeness checking IS =AF end= (inevitable termination on all paths).
+
+** Research: Propagator Networks as Model Checkers (commit =93b2e98=)
+
+Formalized the above discussion as a research document (~865 lines, 13 sections):
+- Detailed correspondence table mapping propagator concepts ↔ CTL model checking
+- Modal μ-calculus as the unifying algebra
+- What Prologos already has (safety via AG, weak liveness, ATMS as path quantifier, Galois connections)
+- What would complete the picture (temporal property spec language, greatest fixpoint support)
+- Tier-level accessibility model for formal methods (push expert tools down to invisible features)
+- Concrete Endo examples, research program roadmap
+
+* Today
+
+
+* Blockers
+
+None.
