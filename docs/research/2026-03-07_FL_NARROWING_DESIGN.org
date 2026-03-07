@@ -1,0 +1,781 @@
+#+TITLE: FL Narrowing for Prologos: Definitional Trees, Needed Demand Analysis, and Function-as-Relation Unification
+#+SUBTITLE: Phase 0--1 Feature Design Document
+#+AUTHOR: Prologos Research
+#+DATE: 2026-03-07
+#+OPTIONS: toc:3 num:t
+
+* Abstract
+
+This document is a Phase 0 (Research) and Phase 1 (Design) artifact for
+bringing functional-logic (FL) narrowing into Prologos as a core language
+feature. The goal: every ~defn~ function should be automatically usable as a
+relation---queryable with unbound variables---without the programmer writing
+a separate ~defr~ definition. This is achieved through /narrowing/: the
+combination of unification and term rewriting, guided by /definitional trees/
+extracted from function definitions and driven by /needed demand analysis/.
+
+The document covers:
+1. The formal foundations of narrowing and definitional trees
+2. How definitional trees map to Prologos's existing ~defn~ infrastructure
+3. A concrete design for the narrowing propagator
+4. Integration with the propagator network and ATMS
+5. Interaction with constraint solving and the ~solver~ configuration
+6. A phased implementation roadmap
+
+* 1. Motivation: The defn/defr Divide
+
+** 1.1 The Current State
+
+Prologos currently maintains two separate worlds:
+
+- *~defn~* (functions): Define computations by pattern matching and
+  reduction. Given ground inputs, produce ground outputs. Evaluated by
+  the reducer (~reduction.rkt~).
+
+- *~defr~* (relations): Define logical relationships with multiple clauses.
+  Given goals with potentially unbound variables, search for all satisfying
+  substitutions. Evaluated by the solver (~relations.rkt~, ~solver.rkt~).
+
+These share syntax (both use pattern matching, both support multiple clauses)
+but have completely separate evaluation mechanisms. A function ~add~ defined
+with ~defn~ cannot be used in a relational query. If you want to query "which
+pairs X, Y satisfy ~add X Y = 5~?", you must write a separate ~defr~
+definition that mirrors the function's logic.
+
+** 1.2 The Vision
+
+With FL narrowing, the divide disappears:
+
+#+begin_src prologos
+;; Define add as a function
+defn add [x y]
+  | [Zero y]    := y
+  | [(Suc n) y] := [Suc [add n y]]
+
+;; Use it forwards (rewriting):
+eval [add [Suc Zero] [Suc Zero]]   ;; => Suc (Suc Zero)
+
+;; Use it backwards (narrowing):
+solve [?x ?y] where [add ?x ?y] = [Suc [Suc Zero]]
+;; => {x: Zero, y: Suc (Suc Zero)}
+;;    {x: Suc Zero, y: Suc Zero}
+;;    {x: Suc (Suc Zero), y: Zero}
+#+end_src
+
+Every ~defn~ is automatically a ~defr~. The programmer writes the function
+once; the system derives the relational behavior through narrowing.
+
+** 1.3 Why This Matters for Prologos
+
+Prologos's design thesis is the /unification of paradigms/: dependent types,
+linear types, session types, logic programming, and propagators on a single
+substrate. FL narrowing is the natural bridge between the functional and logic
+paradigms. Without it, the language has two separate evaluation models that
+don't interoperate. With it, the boundary dissolves.
+
+Moreover, FL narrowing enables:
+
+- *Program synthesis*: Given a specification as a goal, narrowing searches
+  for programs that satisfy it.
+- *Test generation*: Given a postcondition, narrowing generates inputs.
+- *Constraint solving*: Numeric functions become constraint propagators
+  automatically.
+- *Symbolic execution*: Functions evaluated symbolically for verification
+  (connects to our model checking research).
+
+* 2. Formal Foundations
+
+** 2.1 Term Rewriting Systems
+
+A /term rewriting system/ (TRS) $R$ is a set of rules $l \to r$ where $l$
+(the left-hand side) is a term with variables and $r$ (the right-hand side)
+is a term whose variables are a subset of $l$'s variables.
+
+A /rewrite step/ $s \to_R t$ replaces a subterm of $s$ that matches some
+rule's LHS with the corresponding RHS:
+- Find position $p$ in $s$ and rule $l \to r$ in $R$ such that
+  $s|_p = l\sigma$ for some substitution $\sigma$.
+- Then $t = s[r\sigma]_p$.
+
+Key: rewriting requires the subterm to already be an /instance/ of the LHS
+(pattern matching).
+
+** 2.2 Narrowing
+
+A /narrowing step/ $s \leadsto_{R,\sigma} t$ generalizes rewriting by
+allowing /unification/ instead of matching:
+- Find position $p$ in $s$ (where $s|_p$ is not a variable) and a renamed
+  copy of rule $l \to r$ in $R$ (sharing no variables with $s$).
+- Compute the most general unifier $\sigma = mgu(s|_p, l)$.
+- Then $t = s\sigma[r\sigma]_p$.
+
+Key difference: $\sigma$ may instantiate variables in $s$. The term is
+simultaneously /rewritten/ (the rule is applied) and /narrowed/ (variables
+are constrained).
+
+** 2.3 Completeness
+
+The /Narrowing Lemma/ (Hullot 1980, Middeldorp & Hamoen 1994):
+
+If $s\theta \to^*_R t$ for some substitution $\theta$, then there exists a
+narrowing derivation $s \leadsto^*_{R,\sigma} s'$ and rewriting $t \to^*_R t'$
+such that $t'$ is an instance of $s'$ and $\sigma$ is more general than
+$\theta$ (restricted to $s$'s variables).
+
+In plain language: /every rewriting solution can be found by narrowing/. This
+makes narrowing a complete method for solving equational goals over a TRS.
+
+** 2.4 Definitional Trees
+
+*** Definition (Antoy 1992)
+
+Let $f$ be a function of arity $n$ defined by a set of rules $R_f$. A
+/definitional tree/ of $f$ is a hierarchical case analysis structure $T$
+where:
+
+1. *Rule node* $\text{Rule}(l \to r)$: A leaf containing a rewrite rule.
+   The pattern $l$ is a linear term of the form $f(c_1, \ldots, c_n)$ where
+   each $c_i$ is a constructor pattern.
+
+2. *Branch node* $\text{Branch}(\pi, p, [T_1, \ldots, T_k])$: An interior
+   node with:
+   - $\pi$: a /pattern/ (partially instantiated term $f(t_1, \ldots, t_n)$).
+   - $p$: the /inductive position/ --- the argument position being case-
+     analyzed.
+   - $T_1, \ldots, T_k$: child trees, one per constructor of the type at
+     position $p$.
+   Each child's pattern extends $\pi$ by instantiating the variable at
+   position $p$ to the corresponding constructor.
+
+3. *Exempt node* $\text{Exempt}(\pi)$: A leaf marking a position where no
+   rule applies (partial function---the function is undefined for this
+   pattern). May raise an error or suspend.
+
+*** Example: ~add~
+
+For the function:
+
+#+begin_src prologos
+defn add [x y]
+  | [Zero y]    := y
+  | [(Suc n) y] := [Suc [add n y]]
+#+end_src
+
+The definitional tree is:
+
+#+begin_example
+Branch(add(X, Y), position=1, [
+  Rule(add(Zero, Y) → Y),
+  Branch(add(Suc(N), Y), position=1.1, [
+    ;; Actually: single rule applies for any N
+    Rule(add(Suc(N), Y) → Suc(add(N, Y)))
+  ])
+])
+#+end_example
+
+Simplified (since ~Suc~ has only one sub-pattern):
+
+#+begin_example
+Branch(position=arg1, [
+  Zero  → Rule: add(Zero, y) = y
+  Suc(n) → Rule: add(Suc(n), y) = Suc(add(n, y))
+])
+#+end_example
+
+*** Example: ~last~ (nested branching)
+
+#+begin_src prologos
+defn last [xs]
+  | [[Cons x Nil]]      := x
+  | [[Cons x [Cons y ys]]] := [last [Cons y ys]]
+#+end_src
+
+Definitional tree:
+
+#+begin_example
+Branch(position=arg1, [
+  Nil    → Exempt (last [] is undefined)
+  Cons(x, xs) → Branch(position=arg1.2, [
+    Nil    → Rule: last(Cons(x, Nil)) = x
+    Cons(y, ys) → Rule: last(Cons(x, Cons(y, ys))) = last(Cons(y, ys))
+  ])
+])
+#+end_example
+
+** 2.5 Inductively Sequential Functions
+
+A function $f$ is /inductively sequential/ if its defining rules can be
+organized into a definitional tree. Equivalently: the case analysis of $f$'s
+arguments is /uniform/ (at each level, the same argument position is analyzed
+for all patterns) and /non-overlapping/ (each input matches at most one rule).
+
+Most functions written in natural pattern-matching style are inductively
+sequential. Functions with overlapping rules (non-deterministic functions) or
+guards are not, but can be handled by generalizations (or-branches,
+conditional branches).
+
+** 2.6 The Needed Narrowing Strategy
+
+Given a goal $f(t_1, \ldots, t_n) = t$:
+
+1. Look up the definitional tree $T$ for $f$.
+2. At a *Branch* node on position $p$:
+   - Let $s$ be the subterm at position $p$ in the current arguments.
+   - If $s$ is a /constructor/ $c(\ldots)$: follow the child for $c$
+     (deterministic step).
+   - If $s$ is a /variable/ $X$: create a /choice point/ over all
+     constructors $c_1, \ldots, c_k$ of the appropriate type. For each
+     $c_i$, bind $X := c_i(\text{fresh vars})$ and continue down child $i$.
+   - If $s$ is a /function application/ $g(\ldots)$: recursively /demand/
+     the evaluation of $g$---narrow $g$ first, then retry.
+3. At a *Rule* node $l \to r$: apply the rule. Unify $r\sigma$ with the
+   target $t$ to further constrain variables.
+4. At an *Exempt* node: fail (this branch has no solution).
+
+*** Optimality (Antoy, Echahed, Hanus 2000)
+
+For inductively sequential functions:
+
+- *Minimal length*: No narrowing derivation to the same result is shorter.
+- *Independent solutions*: Computed substitutions are pairwise incomparable
+  (no redundant generalizations).
+- *Subsumption*: When all arguments are ground, needed narrowing reduces to
+  lazy evaluation (no choice points created). When all functions are
+  constructors, it reduces to SLD resolution.
+
+** 2.7 Non-Deterministic Functions
+
+When a function has overlapping rules (multiple clauses match the same
+input), it is /non-deterministic/. This is the bridge to ~defr~:
+
+#+begin_src prologos
+defn insert [x xs]
+  | [x xs]           := [Cons x xs]
+  | [x [Cons y ys]]  := [Cons y [insert x ys]]
+#+end_src
+
+Both clauses match ~insert 3 [Cons 1 [Cons 2 Nil]]~. In the functional-
+logic paradigm, both results are returned non-deterministically. The
+definitional tree has an /or-branch/ at the root:
+
+#+begin_example
+Or([
+  Rule: insert(x, xs) = Cons(x, xs),
+  Branch(position=arg2, [
+    Nil    → Exempt,
+    Cons(y, ys) → Rule: insert(x, Cons(y, ys)) = Cons(y, insert(x, ys))
+  ])
+])
+#+end_example
+
+Non-deterministic functions in narrowing directly correspond to relations in
+logic programming. This is the formal justification for treating ~defn~ with
+overlapping rules as automatically generating a ~defr~.
+
+** 2.8 Residuation
+
+An alternative to narrowing for functions with unbound arguments:
+
+- *Narrowing*: Guess the constructor (create choice point), then continue.
+- *Residuation*: Suspend evaluation until the variable is bound by another
+  constraint. If never bound, the goal remains suspended (residual).
+
+Residuation is deterministic (no choice points) but incomplete (may miss
+solutions if nothing binds the variable). Narrowing is complete but may
+create exponentially many choice points.
+
+Curry's PAKCS system defaults to residuation for rigid functions (standard
+library), narrowing for flexible functions (user-defined). KiCS2 supports
+both, selected per function.
+
+In Prologos, residuation is /already implemented/ by the propagator network:
+a propagator whose input cell is ~bot~ doesn't fire. When the cell is
+written, the propagator fires. This is exactly residuation.
+
+* 3. Mapping to Prologos Infrastructure
+
+** 3.1 Definitional Trees from ~defn~
+
+A Prologos ~defn~ definition is parsed and elaborated into a list of clauses,
+each with a pattern (LHS) and body (RHS). The definitional tree can be
+extracted by analyzing the pattern structure:
+
+*** Pattern Structure in Prologos AST
+
+After elaboration, each clause has:
+- ~args~: a list of patterns (one per parameter)
+- Each pattern is: a variable (~expr-fvar~), a constructor application
+  (~expr-app~ of a ~expr-ctor~), a literal, or a wildcard
+
+*** Extraction Algorithm
+
+#+begin_example
+extract-definitional-tree(clauses, arg-positions):
+  1. If clauses is a singleton: return Rule(clause)
+  2. Find the first arg position p where clauses disagree on the
+     outermost constructor:
+     a. For each position, collect the set of top-level constructors
+        across all clauses
+     b. The "inductive position" is the first position with >1 distinct
+        constructors (or a mix of constructor and variable)
+  3. If no such position: clauses overlap → return Or(clauses)
+  4. Group clauses by the constructor at position p
+  5. For each group: recursively extract the subtree (after peeling one
+     layer of pattern at position p)
+  6. Return Branch(p, [(ctor1, subtree1), ..., (ctorK, subtreeK)])
+#+end_example
+
+This is a compile-time analysis---the definitional tree is computed once
+during elaboration and stored alongside the function definition.
+
+*** Handling Prologos-Specific Features
+
+| Feature | Definitional Tree Mapping |
+|-|-|
+| Wildcard (~_~) | Variable (matches any constructor) |
+| Literal (~42N~, ~"hello"~) | Constructor (nullary; one child per literal value) |
+| Guard (~\vert [pred x] := ...~) | Conditional branch (evaluate guard after constructor match) |
+| Where clause | Additional constraints (generate after rule application) |
+| Higher-order args | Opaque (treat as variable; don't branch on them) |
+
+** 3.2 Constructor Universe
+
+Needed narrowing requires knowing /all constructors/ of a type at each branch
+point (to enumerate the alternatives for a variable). In Prologos:
+
+- ADT definitions (~type Nat := Zero \vert [Suc Nat]~) provide the complete
+  constructor set.
+- The type checker already tracks constructor info (stored in the global
+  environment during elaboration).
+- At each branch node, the definitional tree records the type at the
+  inductive position, which gives the constructor universe.
+
+** 3.3 The Propagator Connection
+
+Each element of the narrowing evaluation maps to a propagator network
+operation:
+
+| Narrowing Concept | Propagator Network Operation |
+|-|-|
+| Variable (unknown) | Cell at ~bot~ |
+| Known constructor | Cell contains constructor tag + subcells |
+| Narrowing step (instantiate var) | ~net-cell-write~ (refine cell value) |
+| Choice point (multiple constructors) | ~atms-amb~ with mutual exclusion |
+| Deterministic step (known constructor) | Direct branch in narrowing propagator |
+| Residuation (wait for input) | Propagator doesn't fire (input cell is ~bot~) |
+| Recursive demand | Chain of narrowing propagators (fire in dependency order) |
+| Unification | ~net-cell-write~ with lattice merge |
+| Failure (exempt/no match) | Contradiction in cell |
+| Solution | All cells at fixpoint with consistent values |
+
+** 3.4 Term Cells
+
+For narrowing, we need cells that hold /partial term information/. We
+propose a /Term Lattice/:
+
+#+begin_example
+TermLattice:
+  bot          — nothing known
+  Var(id)      — logic variable (may be unified later)
+  Ctor(tag, [cell-id, ...])  — constructor with subcells
+  top          — contradiction (incompatible constructors)
+
+Merge:
+  bot ⊔ x = x
+  x ⊔ bot = x
+  Var(a) ⊔ Var(b) = unify(a, b)  ;; union-find
+  Var(a) ⊔ Ctor(t, cs) = bind(a, Ctor(t, cs))
+  Ctor(t1, cs1) ⊔ Ctor(t2, cs2) =
+    if t1 = t2: Ctor(t1, [merge(c1i, c2i) ...])
+    else: top  ;; contradiction
+#+end_example
+
+This is a lattice: ~bot~ is bottom, ~top~ is top, and merge is a monotone
+join operation. Contradiction (incompatible constructors) is detected
+immediately.
+
+* 4. Narrowing Propagator Design
+
+** 4.1 The Narrowing Propagator
+
+For each function ~f~ with definitional tree ~T~, we create a /narrowing
+propagator factory/ that, given argument cells and a result cell, installs
+propagators implementing needed narrowing:
+
+#+begin_example
+install-narrowing-propagators(net, f, arg-cells, result-cell, def-tree):
+  match def-tree:
+    Rule(lhs → rhs):
+      ;; Install propagator: when arg-cells match lhs, write rhs to result-cell
+      net-add-propagator(net, arg-cells, [result-cell], fire-rule(lhs, rhs))
+
+    Branch(pos, children):
+      ;; Install propagator watching cell at position `pos`
+      let watched-cell = arg-cells[pos]
+      net-add-propagator(net, [watched-cell], [],
+        lambda(net):
+          let val = net-cell-read(net, watched-cell)
+          match val:
+            bot → net  ;; residuate (wait for info)
+            Ctor(tag, sub-cells) →
+              ;; Deterministic: follow the branch for `tag`
+              let child = lookup(children, tag)
+              install-narrowing-propagators(net, f, updated-arg-cells, result-cell, child)
+            Var(id) →
+              ;; Non-deterministic: create amb over constructors
+              let ctors = all-constructors-of-type-at(pos)
+              atms-amb(net, ctors, ...)
+              ;; For each constructor alternative, install child propagators
+              ...)
+
+    Or(branches):
+      ;; Non-deterministic function: try all branches via amb
+      atms-amb(net, branches, ...)
+
+    Exempt(pattern):
+      ;; Mark contradiction (function undefined for this pattern)
+      net-cell-write(net, result-cell, 'top)
+#+end_example
+
+** 4.2 Demand-Driven Evaluation
+
+The narrowing propagator's behavior at a Branch node with a ~bot~ cell
+implements /residuation/: it simply doesn't fire, waiting for information.
+This is the default behavior for Prologos's propagator network (propagators
+don't fire until their input cells change).
+
+When narrowing (not residuation) is desired, the search phase creates ~amb~
+choices. This happens at the /branching phase/ of the
+propagate→branch→propagate loop (§4.3):
+
+1. Propagation runs to quiescence.
+2. If unresolved demands remain (cells at ~bot~ that narrowing propagators
+   are waiting on): the search heuristic selects one such cell and creates
+   an ~amb~ over its possible constructors.
+3. Propagation resumes, possibly resolving other demands.
+
+** 4.3 Interaction with the Solver Loop
+
+The narrowing propagator integrates into the existing solver architecture:
+
+#+begin_example
+narrowing-solve(goal, strategy):
+  1. Create fresh arg cells and result cell
+  2. Install narrowing propagators for the goal function
+  3. Unify result cell with goal target (if any)
+  4. Install any additional constraints
+  5. LOOP:
+     a. run-to-quiescence
+     b. IF result cell determined AND all arg cells determined:
+        RETURN substitution
+     c. IF contradiction: BACKTRACK
+     d. Find unresolved demands (bot cells with waiting narrowing propagators)
+     e. SELECT demand to resolve (variable ordering heuristic)
+     f. SELECT constructor for that demand (value ordering heuristic)
+     g. CREATE amb choice point
+     h. GOTO 5a
+#+end_example
+
+** 4.4 Backward Compatibility
+
+The narrowing propagator is /additive/: it doesn't change how ~defn~
+functions evaluate when called with ground arguments. In that case:
+
+1. All arg cells are immediately written with ground values.
+2. The narrowing propagator fires deterministically at each branch (no ~amb~
+   needed---the constructor is known).
+3. The result cell receives the function's output.
+4. This is exactly equivalent to the existing reducer behavior.
+
+The narrowing mechanism is only activated when ~defn~ functions appear in
+~solve~ goals or when argument cells remain ~bot~ after propagation.
+
+* 5. Integration with Constraint Solving
+
+** 5.1 Functions as Constraint Propagators
+
+With narrowing, a function like ~add~ automatically generates a constraint
+propagator. When used in a constraint context:
+
+#+begin_src prologos
+solve [?x ?y]
+  where [add ?x ?y] = [Suc [Suc [Suc Zero]]]
+    and [leq ?x ?y]
+#+end_src
+
+The narrowing propagator for ~add~ cooperates with the ~leq~ constraint
+propagator. Together:
+
+1. ~add~ narrows ~?x~ and ~?y~ based on the result constraint.
+2. ~leq~ narrows ~?x~ to be ≤ ~?y~.
+3. These narrow each other via the propagator network (fixpoint).
+
+** 5.2 Narrowing + Finite Domain Constraints
+
+When variables have finite domain constraints (e.g., $X \in \{0, 1, 2, 3\}$),
+narrowing can exploit this:
+
+- Instead of creating ~amb~ over all constructors of ~Nat~ (infinite!),
+  the domain constraint limits the choices to the domain values.
+- The narrowing propagator reads the domain cell and only creates ~amb~
+  alternatives for values in the current domain.
+- Constraint propagation may further narrow the domain between ~amb~ steps.
+
+This is the CFLP(FD) integration: the /Constraint Lazy Narrowing Calculus/
+over finite domains.
+
+** 5.3 Type-Directed Narrowing
+
+Prologos's type system provides additional information for narrowing:
+
+- The type at each branch position gives the constructor universe.
+- Dependent types may further constrain the possible constructors (e.g.,
+  ~Vec Nat 3~ can only be ~Cons _ (Cons _ (Cons _ Nil))~).
+- Linear types (QTT) may restrict which variables can be narrowed (a linear
+  variable can only be used once, so narrowing it in multiple branches
+  requires care).
+
+** 5.4 Interaction with the ATMS
+
+The ATMS provides the infrastructure for managing narrowing choices:
+
+- Each ~amb~ from narrowing creates mutually exclusive assumptions.
+- If narrowing a variable in one branch leads to contradiction, the ATMS
+  records a nogood and prunes that branch.
+- ~atms-solve-all~ enumerates all consistent worldviews (= all solutions
+  to the narrowing query).
+- The ATMS's incremental nogood detection means that contradictions are
+  discovered as soon as they arise, not after exploring the full branch.
+
+* 6. Design Decisions
+
+** D1: Residuation by Default, Narrowing on Demand
+
+Following Curry's PAKCS precedent: functions /residuate/ by default (wait
+for input). Narrowing is activated only when:
+
+(a) A ~solve~ goal contains the function, OR
+(b) The function is annotated as ~:narrowable~, OR
+(c) The search phase encounters an unresolved demand.
+
+Rationale: residuation is deterministic and avoids unnecessary search.
+Narrowing creates choice points and should only be used when search is
+intended.
+
+** D2: Definitional Tree Extraction at Elaboration Time
+
+The definitional tree is computed during elaboration (not at query time).
+This is a static analysis with cost proportional to the number of clauses.
+The tree is stored as part of the function's metadata in the global
+environment.
+
+** D3: Constructor Universe from Type Definitions
+
+The constructor universe at each branch point is drawn from the ADT
+definition. This requires that the type at the branch position be known
+at tree-extraction time---which it always is for inductively sequential
+functions over algebraic data types.
+
+For polymorphic functions, the constructor universe is parameterized by the
+type argument. At narrowing time, the type argument must be resolved (either
+from the goal type or by constraint propagation) before ~amb~ alternatives
+can be created.
+
+** D4: Non-Deterministic Functions Create Or-Branches
+
+Functions with overlapping rules are treated as non-deterministic: the
+definitional tree has Or-branches, and narrowing creates ~amb~ over the
+alternatives. This is consistent with Curry's semantics and Prologos's
+existing ~defr~ behavior.
+
+** D5: Term Lattice for Variable Cells
+
+Narrowing variables are represented as cells in a /Term Lattice/ (§3.4).
+This is a new lattice type alongside the existing ones (FlatLattice,
+SetLattice, IntervalLattice). It integrates with the existing propagator
+infrastructure via the standard ~net-new-cell~ + merge function interface.
+
+** D6: Backward-Compatible with ~defr~
+
+FL narrowing does not replace ~defr~. Relations defined with ~defr~ continue
+to work as before. The new capability is that ~defn~ functions /also/ work as
+relations. For cases where the programmer explicitly wants relational
+semantics (e.g., multi-mode predicates, recursive relations with tabling),
+~defr~ remains the right tool.
+
+* 7. Implementation Roadmap
+
+** Phase 0: Research (This Document)
+
+- [X] Survey FL narrowing theory (Antoy, Hanus, Curry)
+- [X] Survey constraint-narrowing integration (CFLP(FD))
+- [X] Identify mapping to Prologos infrastructure
+- [X] Document design decisions
+
+** Phase 1a: Definitional Tree Infrastructure
+
+- [ ] Define ~def-tree~ Racket struct hierarchy (~dt-rule~, ~dt-branch~,
+  ~dt-or~, ~dt-exempt~)
+- [ ] Implement ~extract-definitional-tree~ from elaborated ~defn~ clauses
+- [ ] Store definitional tree in function metadata (global env)
+- [ ] Test: extract trees for ~add~, ~append~, ~map~, ~last~, ~insert~
+- [ ] Test: detect and handle overlapping rules (Or-branches)
+- [ ] Test: detect and handle exempt positions (partial functions)
+
+Estimated: ~200 lines in new ~definitional-tree.rkt~, ~40 tests
+
+** Phase 1b: Term Lattice
+
+- [ ] Define ~term-lattice~ types (~term-bot~, ~term-var~, ~term-ctor~,
+  ~term-top~)
+- [ ] Implement ~term-merge~ (lattice join with unification semantics)
+- [ ] Implement ~term-contradiction?~ (top detection)
+- [ ] Implement ~term-walk~ (transitive variable resolution)
+- [ ] Integrate with ~net-new-cell~ (term cells in propagator network)
+- [ ] Test: merge bot/var, var/var (unification), var/ctor (binding),
+  ctor/ctor (recursive merge vs. contradiction)
+
+Estimated: ~150 lines in new ~term-lattice.rkt~, ~30 tests
+
+** Phase 1c: Narrowing Propagator
+
+- [ ] Implement ~install-narrowing-propagators~ factory function
+- [ ] Handle Branch nodes (deterministic constructor following)
+- [ ] Handle Rule nodes (rewrite application → cell write)
+- [ ] Handle Exempt nodes (contradiction)
+- [ ] Handle Or-branches (non-deterministic ~amb~)
+- [ ] Handle recursive function calls (chain narrowing propagators)
+- [ ] Residuation behavior (bot → don't fire)
+- [ ] Test: narrowing ~add~, ~append~, ~map~ with unbound args
+- [ ] Test: deterministic evaluation (ground args → same result as reducer)
+- [ ] Test: non-deterministic functions (~insert~)
+- [ ] Test: nested narrowing (recursive functions)
+
+Estimated: ~300 lines in new ~narrowing.rkt~, ~50 tests
+
+** Phase 1d: Solver Integration
+
+- [ ] Extend ~solve~ to recognize ~defn~ functions in goals
+- [ ] Install narrowing propagators for function goals
+- [ ] Implement demand-driven narrowing in the search loop
+- [ ] Connect to variable/value ordering heuristics (if available)
+- [ ] Test: ~solve~ with ~defn~ functions (backwards evaluation)
+- [ ] Test: mixed ~defn~/~defr~ goals
+- [ ] Test: narrowing with constraints (~leq~, ~neq~)
+- [ ] Test: encapsulated search (~solve~ returns all solutions)
+
+Estimated: ~150 lines modifying ~relations.rkt~ + ~solver.rkt~, ~40 tests
+
+** Phase 1e: WS-Mode Integration
+
+- [ ] Surface syntax for narrowing queries (extend ~solve~ form)
+- [ ] WS-mode tests for function-as-relation usage
+- [ ] Error messages for non-narrowable functions (if any)
+- [ ] Documentation of narrowing behavior
+
+Estimated: ~50 lines, ~20 tests
+
+** Phase Summary
+
+| Phase | Files | Lines (est.) | Tests (est.) |
+|-|-|-|-|
+| 1a: Definitional Trees | ~definitional-tree.rkt~ | 200 | 40 |
+| 1b: Term Lattice | ~term-lattice.rkt~ | 150 | 30 |
+| 1c: Narrowing Propagator | ~narrowing.rkt~ | 300 | 50 |
+| 1d: Solver Integration | ~relations.rkt~, ~solver.rkt~ | 150 | 40 |
+| 1e: WS-Mode Integration | parser, tests | 50 | 20 |
+| *Total* | *3 new + 2 modified* | *~850* | *~180* |
+
+* 8. Open Questions
+
+** Q1: Infinite Constructor Universes
+
+Some types have infinitely many constructors (e.g., ~Int~, ~String~). For
+these, narrowing over all constructors is impossible. Options:
+- Restrict narrowing to algebraic data types (finite constructor universe).
+- Allow constraint-based narrowing for numeric types (domain cells instead
+  of constructor enumeration).
+- Allow user annotation (~:narrowable~ / ~:rigid~) to control behavior.
+
+** Q2: Higher-Order Functions
+
+Functions as arguments cannot be narrowed (we can't enumerate all possible
+functions). Options:
+- Treat higher-order arguments as opaque (residuate, never narrow).
+- Allow narrowing of the /application/ (if the function is known, narrow
+  through it).
+- Defunctionalization: represent functions as data (constructors) and narrow
+  over those.
+
+** Q3: Interaction with QTT
+
+Linear variables (multiplicity 1) can only be used once. If narrowing creates
+multiple ~amb~ branches that each use a linear variable, QTT is violated.
+Options:
+- Check linearity after narrowing (reject queries that violate QTT).
+- Thread linear variables through ~amb~ branches (each branch gets its own
+  copy, but only the chosen branch's usage counts).
+- Use the ATMS worldview semantics: each branch is a separate worldview,
+  and linearity is checked per-worldview.
+
+** Q4: Termination
+
+Narrowing over recursive functions may not terminate (e.g., narrowing ~add~
+with no constraints generates infinitely many solutions). Options:
+- Depth limit (existing: 100 in solver).
+- Fuel limit (existing: 1M propagator firings).
+- Iterative deepening search strategy.
+- Fair search (breadth-first or limited discrepancy).
+
+** Q5: Performance
+
+Needed narrowing is optimal in derivation length, but the constant factors
+matter. Potential bottlenecks:
+- Definitional tree traversal per narrowing step (mitigated by compilation).
+- ~amb~ creation overhead (mitigated by residuation-first strategy).
+- Term lattice merge cost (mitigated by structural sharing).
+
+Benchmarking against Curry's PAKCS and KiCS2 on standard benchmarks
+(permutation sort, N-queens) would provide a performance baseline.
+
+* 9. Related Work
+
+- Antoy, Echahed, Hanus. "A Needed Narrowing Strategy." /JACM/ 47(4), 2000.
+- Antoy. "Definitional Trees." /ALP/ 1992.
+- Antoy, Hanus. "Functional Logic Programming." /CACM/ 53(4), 2010.
+- Antoy. "Evaluation Strategies for FL Programming." /JSC/ 40(1), 2005.
+- Hanus et al. "Curry: A Truly Integrated Functional Logic Language."
+  https://www.curry-lang.org/
+- Brassel et al. "KiCS2: A New Compiler from Curry to Haskell." /PADL/ 2011.
+- Fernandez et al. "Constraint Functional Logic Programming over Finite
+  Domains." /TPLP/ 7(1-2), 2007.
+- Escobar, Meseguer. "Symbolic Model Checking Using Narrowing." /RTA/ 2007.
+- Radul, Sussman. "The Art of the Propagator." MIT TR, 2009.
+- de Kleer. "An Assumption-Based TMS." /AIJ/ 28(2), 1986.
+
+* 10. Conclusion
+
+FL narrowing is the missing bridge between Prologos's functional (~defn~)
+and relational (~defr~) worlds. The infrastructure for implementing it
+already exists: propagator cells are the narrowing substrate, the ATMS
+provides choice-point management, and ~defn~'s multi-clause syntax provides
+the definitional tree structure.
+
+The implementation is decomposable into clean phases: definitional tree
+extraction (static analysis), term lattice (domain theory), narrowing
+propagator (the core algorithm), and solver integration (wiring it all
+together). Each phase is independently testable and builds on existing
+infrastructure.
+
+The resulting system would be, to our knowledge, the first language that
+implements FL narrowing on a /propagator network/ substrate, combining:
+- The optimality of needed narrowing (Antoy et al.)
+- The parallelism and incrementality of propagator networks
+- The hypothetical reasoning of ATMS (vs. chronological backtracking)
+- The integration with dependent types, linear types, and session types
+
+This positions Prologos not just as a language that supports multiple
+paradigms, but as a language where the paradigms are /unified/---functional
+computation, logic programming, and constraint solving are all instances of
+monotone refinement on a lattice, guided by demand, branched by heuristic
+choice, and verified by type.
