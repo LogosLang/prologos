@@ -1,0 +1,1333 @@
+#+TITLE: Abstract Interpretation, Static Analysis, and Advanced Narrowing: Phase 2--3 Implementation Design
+#+SUBTITLE: Companion to FL Narrowing Phase 0--1 Design
+#+AUTHOR: Prologos Research
+#+DATE: 2026-03-07
+#+OPTIONS: toc:3 num:t
+
+* Abstract
+
+This document is the Phase 2--3 implementation design companion to the FL
+Narrowing Phase 0--1 design document. Where Phase 1 establishes the core
+narrowing machinery (definitional trees, term lattice, narrowing propagator,
+solver integration), Phases 2--3 extend it with:
+
+- *Phase 2: Abstract Interpretation for Narrowing* --- Galois connections
+  between concrete term cells and abstract domain cells, interval abstract
+  domains for infinite constructor universes, size-based termination
+  analysis, and confluence checking via critical pair analysis.
+
+- *Phase 3: Advanced Extensions* --- 0-CFA closure analysis for
+  auto-defunctionalization of higher-order narrowing, configurable search
+  heuristics (variable ordering, value selection, search strategy), global
+  constraints, and branch-and-bound optimization.
+
+Together, Phases 1--3 deliver a unified solver where every =defn= is a
+relation, constraints flow from types, search is configurable, and abstract
+interpretation tames infinite domains and guarantees termination.
+
+*Prerequisites*: Phase 1 (core FL narrowing) must be complete before Phase 2.
+Phase 2 and Phase 3 are largely independent and can proceed in parallel,
+except that 0-CFA (Phase 3a) builds on the narrowing propagator from Phase 1c.
+
+* 1. Phase 2: Abstract Interpretation for Narrowing
+
+** 1.1 The Problem: Infinite Constructor Universes
+
+Phase 1's narrowing machinery works cleanly for finite ADTs: when a branch
+node in the definitional tree encounters a variable, it creates an =amb=
+over all constructors. For =Bool= (2 constructors) or =[List A]= (2: =Nil=,
+=Cons=), this is tractable.
+
+But for =Nat=, =Int=, =String=, or any type with infinitely many
+inhabitants, enumerating all constructors is impossible. Without abstract
+interpretation:
+
+- =[add ?x ?y] = 13N= would try =?x := Zero=, =?x := Suc(Zero)=,
+  =?x := Suc(Suc(Zero))=, ... up to 14 alternatives for just the first
+  argument.
+- =[mul ?x ?y] = 100N= would enumerate 100+ alternatives.
+- Functions over =String= or =Int= would be completely impractical.
+
+Abstract interpretation solves this: instead of enumerating concrete values,
+we work in an /abstract domain/ that finitely over-approximates the concrete
+domain, then narrow the abstract domain using constraint propagation.
+
+** 1.2 Architecture: Galois Connections as Cross-Domain Propagators
+
+The key insight: Prologos already implements Galois connections as
+cross-domain propagators (=net-add-cross-domain-propagator= in
+=propagator.rkt=). The existing pattern:
+
+#+begin_example
+net-add-cross-domain-propagator(net, concrete-cell, abstract-cell, alpha, gamma)
+  creates two propagators:
+    alpha: concrete-cell -> abstract-cell   (abstraction)
+    gamma: abstract-cell -> concrete-cell   (concretization)
+#+end_example
+
+This is used today for the Type $\leftrightarrow$ Multiplicity bridge
+(=elaborator-network.rkt= line 894). For abstract interpretation in
+narrowing, we use the same pattern:
+
+#+begin_example
+Term Cell (concrete)  <--alpha/gamma-->  Interval Cell (abstract)
+
+alpha: Ctor(Suc, [Ctor(Suc, [Ctor(Zero)])]) --> [2, 2]
+gamma: [3, 7] --> {Ctor(Suc^n, [Ctor(Zero)]) | 3 <= n <= 7}
+
+Cross-domain propagation:
+  When the interval cell narrows [0, 100] to [3, 7]:
+    gamma fires, writes constrained constructor set to term cell
+  When the term cell learns Ctor(Suc, _):
+    alpha fires, writes [1, infinity) to interval cell (at least 1)
+#+end_example
+
+The Galois connection requirements ($\alpha \circ \gamma \geq id$ and
+$\gamma \circ \alpha \leq id$) ensure soundness: no valid solutions are
+lost, and abstract information correctly constrains concrete narrowing.
+
+** 1.3 Phase 2a: Interval Abstract Domain
+
+*** 1.3.1 Design
+
+A new module =interval-domain.rkt= implementing:
+
+#+begin_src racket
+;; Interval bounds (extended integers)
+;; -inf, +inf for unbounded; concrete integers for bounded
+(struct interval (lo hi) #:transparent)
+
+;; Lattice operations
+interval-bot       ;; = entire type domain (no constraint)
+interval-top       ;; = empty (contradiction)
+interval-merge     ;; intersection: [max(lo1,lo2), min(hi1,hi2)]
+interval-contradicts?  ;; lo > hi
+
+;; Arithmetic operations (interval arithmetic)
+interval-add       ;; [a,b] + [c,d] = [a+c, b+d]
+interval-sub       ;; [a,b] - [c,d] = [a-d, b-c]
+interval-mul       ;; [a,b] * [c,d] = [min(ac,ad,bc,bd), max(ac,ad,bc,bd)]
+interval-negate    ;; -[a,b] = [-b,-a]
+
+;; Domain operations
+interval-split     ;; [a,b] -> ([a,mid], [mid+1,b]) for search branching
+interval-singleton? ;; lo = hi (determined)
+interval-size      ;; hi - lo + 1 (for first-fail heuristic)
+interval-contains? ;; value in [lo, hi]
+
+;; Constraint propagators (installed as propagator functions)
+interval-eq-propagator   ;; X = Y: intersect domains
+interval-neq-propagator  ;; X /= Y: if one is singleton, remove from other
+interval-leq-propagator  ;; X <= Y: X.hi := min(X.hi, Y.hi), Y.lo := max(Y.lo, X.lo)
+interval-add-propagator  ;; X + Y = Z: narrow all three using interval arithmetic
+interval-mul-propagator  ;; X * Y = Z: narrow all three
+#+end_src
+
+*** 1.3.2 Galois Connection: Term Cells $\leftrightarrow$ Interval Cells
+
+For numeric types (=Nat=, =Int=, =PosInt=, =Rat=):
+
+#+begin_src racket
+;; Alpha: Term -> Interval
+;; Given a term cell value, compute the interval it represents
+(define (term->interval-alpha term-val type-info)
+  (match term-val
+    ['bot  (type-initial-interval type-info)]  ;; full domain from type
+    [(term-var _) (type-initial-interval type-info)]
+    [(term-ctor 'Zero '()) (interval 0 0)]
+    [(term-ctor 'Suc (list sub))
+     (let ([sub-int (term->interval-alpha sub type-info)])
+       (interval-add sub-int (interval 1 1)))]
+    ;; Literal integers
+    [(? integer? n) (interval n n)]
+    ;; Unknown constructor — full domain
+    [_ (type-initial-interval type-info)]))
+
+;; Gamma: Interval -> Term constraint
+;; Given an interval, constrain what constructors are valid
+(define (interval->term-gamma int-val type-info)
+  (cond
+    [(interval-singleton? int-val)
+     ;; Exactly one value — construct the concrete term
+     (integer->nat-term (interval-lo int-val))]
+    [(interval-contradicts? int-val)
+     'top]  ;; contradiction
+    [else
+     ;; Range — can't determine exact constructor, but can
+     ;; constrain: if [3, 7], then at least Suc(Suc(Suc(_)))
+     ;; This partial information narrows the term cell
+     (interval-to-partial-term int-val type-info)]))
+
+;; Type-specific initial intervals
+(define (type-initial-interval type-info)
+  (match (type-info-name type-info)
+    ['Nat    (interval 0 +inf.0)]
+    ['PosInt (interval 1 +inf.0)]
+    ['Int    (interval -inf.0 +inf.0)]
+    ['Rat    (interval -inf.0 +inf.0)]
+    [_ (error "no interval domain for type")]))
+#+end_src
+
+*** 1.3.3 Integration with Narrowing Propagator
+
+When a narrowing propagator encounters a branch on a numeric type:
+
+1. Instead of creating an =amb= over infinitely many constructors,
+   create an /interval cell/ for the variable via the Galois connection.
+2. Install interval constraint propagators based on the function body.
+3. Run propagation to narrow the interval.
+4. At the branching phase:
+   - If the interval is a singleton: bind the variable directly (no search).
+   - If the interval is finite and small ($|D| \leq$ threshold): create
+     =amb= over the concrete values.
+   - If the interval is large: use =interval-split= (binary search) via
+     =amb= with two alternatives: $[lo, mid]$ and $[mid+1, hi]$.
+   - If the interval is infinite: widen to force convergence, then narrow.
+
+#+begin_example
+narrowing-add(?x, ?y, 13):
+  1. Create interval cells: ix = [0, +inf), iy = [0, +inf)
+  2. Install: interval-add-propagator(ix, iy, iz=[13,13])
+  3. Propagation narrows: ix = [0, 13], iy = [0, 13]
+  4. Branching: split ix → [0, 6] | [7, 13]
+     Each branch propagates further...
+  5. Eventually: 14 solutions found, each with ix=[k,k], iy=[13-k,13-k]
+#+end_example
+
+*** 1.3.4 Implementation
+
+| Component | File | Lines (est.) | Tests (est.) |
+|-|-|-|-|
+| Interval struct + lattice ops | =interval-domain.rkt= | 120 | 25 |
+| Interval arithmetic | =interval-domain.rkt= | 80 | 20 |
+| Interval constraint propagators | =interval-domain.rkt= | 100 | 20 |
+| Galois connection (term $\leftrightarrow$ interval) | =narrowing-abstract.rkt= | 150 | 25 |
+| Narrowing propagator integration | =narrowing.rkt= (modify) | 80 | 15 |
+| *Sub-total Phase 2a* | *2 new + 1 modified* | *~530* | *~105* |
+
+*** 1.3.5 Tests
+
+- Interval lattice properties: idempotent, commutative, associative merge
+- Interval arithmetic: add, sub, mul correctness with boundary cases
+- Galois connection soundness: $\alpha(\gamma(x)) \geq x$ and
+  $\gamma(\alpha(t)) \leq t$
+- =[add ?x ?y] = 13N= with interval narrowing → 14 solutions
+- =[mul ?x ?y] = 12N= with interval narrowing → 6 solutions (1*12, 2*6, etc.)
+- PosInt domain: =[add ?x ?y] = 5N= with =spec ... : PosInt -> PosInt -> PosInt=
+  → only 4 solutions (1+4, 2+3, 3+2, 4+1)
+- Interval splitting for large domains
+- Singleton detection and direct binding
+
+** 1.4 Phase 2b: Size-Based Termination Analysis
+
+*** 1.4.1 The Problem
+
+Recursive narrowing may not terminate. Consider:
+
+#+begin_src prologos
+defn f [x] := [f [Suc x]]    ;; diverges on any input
+#+end_src
+
+Narrowing =[f ?x] = 5N= would recurse infinitely. We need to /statically/
+detect potential non-termination and either:
+(a) reject the function as non-narrowable, or
+(b) insert fuel bounds, or
+(c) use widening to force convergence.
+
+*** 1.4.2 Size-Based Abstract Domain
+
+Following Chin & Khoo (2001) and Lee, Jones & Ben-Amram (2001), we define a
+/size-based abstract domain/ that tracks how argument sizes change across
+recursive calls:
+
+#+begin_src racket
+;; Size abstraction
+(struct size-info (dimension change) #:transparent)
+;; dimension: which argument
+;; change: 'decreasing | 'non-increasing | 'increasing | 'unknown
+
+;; Size order: a partial order on size-info
+;; decreasing < non-increasing < unknown
+;; increasing is incomparable with decreasing
+
+;; Size matrix for a function: rows = recursive calls, cols = arguments
+;; M[i,j] = how argument j changes in recursive call i
+;; Example for add:
+;;   add(Suc(n), y) → add(n, y)
+;;   M = [[decreasing, non-increasing]]
+;;   Column 1 strictly decreases → termination guaranteed
+#+end_src
+
+*** 1.4.3 Analysis Algorithm
+
+#+begin_example
+analyze-termination(def-tree, clauses):
+  1. For each recursive call in each clause:
+     a. Compare actual args with formal params
+     b. Determine size change per argument:
+        - Ctor(tag, [x]) where x is a subterm of param → 'decreasing
+        - Same variable as param → 'non-increasing
+        - Ctor wrapping param → 'increasing
+        - Otherwise → 'unknown
+  2. Build the size-change matrix M
+  3. Check the Lee-Jones-Ben-Amram (LJBA) criterion:
+     For every idempotent matrix in the transitive closure of M,
+     at least one diagonal entry must be 'decreasing
+  4. Verdict:
+     - LJBA satisfied → definitely terminates (safe for unrestricted narrowing)
+     - Not satisfied → potentially non-terminating:
+       a. If some column is non-increasing: use fuel (bounded narrowing)
+       b. If all columns are unknown: reject as non-narrowable
+#+end_example
+
+*** 1.4.4 Integration with Narrowing
+
+The termination analysis is a /compile-time/ static analysis, run once per
+=defn= during elaboration (alongside definitional tree extraction):
+
+#+begin_src racket
+;; Stored in function metadata alongside the definitional tree
+(struct narrowing-info
+  (def-tree           ;; definitional tree (from Phase 1a)
+   termination-class  ;; 'terminating | 'bounded | 'non-narrowable
+   size-matrix        ;; the size-change matrix
+   fuel-bound)        ;; #f or Nat (estimated bound for 'bounded class)
+  #:transparent)
+#+end_src
+
+When the narrowing propagator encounters a recursive call:
+- =terminating=: proceed normally (guaranteed to finish).
+- =bounded=: decrement fuel counter; fail (contradiction) if fuel exhausted.
+- =non-narrowable=: residuate (don't narrow; wait for the variable to be
+  bound by another constraint). Emit a warning/note if the user explicitly
+  requested narrowing.
+
+*** 1.4.5 Widening for Non-Terminating Abstract Fixpoints
+
+When interval constraint propagation itself involves recursion (e.g.,
+propagators that reference each other cyclically), the abstract fixpoint may
+not converge. Widening forces convergence:
+
+#+begin_example
+Widening for intervals:
+  widen([a1, b1], [a2, b2]) =
+    [if a2 < a1 then -inf else a1,
+     if b2 > b1 then +inf else b1]
+#+end_example
+
+Prologos already has the widening infrastructure:
+- =net-set-widen-point= marks a cell for widening.
+- =run-to-quiescence-widen= implements the two-phase widen→narrow iteration.
+
+For narrowing, we mark interval cells at recursive narrowing positions as
+widening points. The existing =run-to-quiescence-widen= handles the rest:
+Phase 1 (widen) over-approximates for convergence, Phase 2 (narrow) recovers
+precision.
+
+*** 1.4.6 Implementation
+
+| Component | File | Lines (est.) | Tests (est.) |
+|-|-|-|-|
+| Size-change analysis | =termination-analysis.rkt= | 200 | 35 |
+| LJBA criterion check | =termination-analysis.rkt= | 100 | 20 |
+| Integration with narrowing-info | =narrowing.rkt= (modify) | 40 | 10 |
+| Fuel bounds for bounded class | =narrowing.rkt= (modify) | 30 | 10 |
+| Warning/note for non-narrowable | =narrowing.rkt= (modify) | 20 | 5 |
+| *Sub-total Phase 2b* | *1 new + 1 modified* | *~390* | *~80* |
+
+*** 1.4.7 Tests
+
+- Size matrix extraction for =add=, =append=, =map=, =fib=, =ack=
+- =add=: column 1 decreasing → =terminating=
+- =append=: column 1 decreasing → =terminating=
+- =fib=: both calls decrease arg 1 → =terminating=
+- =ack=: lexicographic decrease → =terminating= (LJBA handles this)
+- =loop x := loop x=: no decreasing column → =non-narrowable=
+- =f x := f (Suc x)=: column 1 increasing → =non-narrowable=
+- =collatz=: column 1 unknown → =bounded= with fuel
+- Integration: narrowing with fuel bounds respects limit
+- Integration: non-narrowable function residuates, emits warning
+
+** 1.5 Phase 2c: Critical Pair Analysis for Confluence
+
+*** 1.5.1 The Problem: Church-Rosser Property
+
+Narrowing's completeness relies on the term rewriting system being
+/confluent/ (Church-Rosser): if a term can be rewritten in two different
+ways, both paths must converge to a common reduct. For inductively
+sequential functions (Phase 1), confluence holds automatically (the
+definitional tree ensures non-overlapping rules). But for non-deterministic
+functions (Or-branches, D7 in Phase 1 design), confluence may fail.
+
+Confluence matters because:
+- If non-confluent, narrowing may miss solutions (incompleteness).
+- If non-confluent, narrowing may find spurious solutions (unsoundness for
+  some strategies).
+
+*** 1.5.2 Critical Pair Analysis
+
+Two rules $l_1 \to r_1$ and $l_2 \to r_2$ form a /critical pair/ if their
+left-hand sides overlap (unify at some position). The critical pair is:
+$(r_1\sigma, r_2\sigma)$ where $\sigma = mgu(l_1|_p, l_2)$ for some
+position $p$ in $l_1$.
+
+A TRS is confluent if and only if all critical pairs are /joinable/: both
+elements can be rewritten to a common term (Knuth-Bendix, 1970).
+
+*** 1.5.3 Analysis Algorithm
+
+#+begin_example
+check-confluence(clauses):
+  1. For each pair of clauses (c1, c2) (including c1 with itself):
+     a. Rename variables to be disjoint
+     b. For each non-variable position p in lhs(c1):
+        Try to unify lhs(c1)|_p with lhs(c2)
+     c. If unifiable with mgu sigma:
+        Compute critical pair (rhs(c1)*sigma, rhs(c2)*sigma)
+        Try to join: reduce both sides and check convergence
+  2. Classification:
+     - All critical pairs joinable → confluent (optimal narrowing applies)
+     - Some non-joinable → non-confluent:
+       a. Warn the user
+       b. Use more conservative (complete but less optimal) narrowing strategy
+       c. Or: require the user to add rules to resolve the overlap
+#+end_example
+
+*** 1.5.4 Integration
+
+Confluence analysis is another /compile-time/ static analysis stored in
+=narrowing-info=:
+
+#+begin_src racket
+(struct narrowing-info
+  (def-tree
+   termination-class
+   size-matrix
+   fuel-bound
+   confluence-class     ;; 'confluent | 'non-confluent | 'unknown
+   critical-pairs)      ;; list of critical-pair structs (for diagnostics)
+  #:transparent)
+#+end_src
+
+The narrowing propagator checks =confluence-class=:
+- =confluent=: use optimal needed narrowing (Phase 1 strategy).
+- =non-confluent=: use /basic narrowing/ (explore all overlaps), which is
+  complete but not optimal. Emit a compiler note suggesting the user
+  either make the function inductively sequential or add resolving rules.
+- =unknown=: joinability is undecidable in general; treat as potentially
+  non-confluent.
+
+*** 1.5.5 Implementation
+
+| Component | File | Lines (est.) | Tests (est.) |
+|-|-|-|-|
+| Critical pair computation | =confluence-analysis.rkt= | 180 | 30 |
+| Joinability checking (reduction) | =confluence-analysis.rkt= | 120 | 20 |
+| Integration with narrowing-info | =narrowing.rkt= (modify) | 30 | 10 |
+| Compiler notes for non-confluence | =narrowing.rkt= (modify) | 20 | 5 |
+| *Sub-total Phase 2c* | *1 new + 1 modified* | *~350* | *~65* |
+
+*** 1.5.6 Tests
+
+- Inductively sequential functions (=add=, =append=): no critical pairs → confluent
+- Non-deterministic =insert=: critical pair exists but joinable → confluent
+- Deliberately non-confluent function: critical pair detected → =non-confluent=
+- Self-overlap detection (a rule overlapping with itself)
+- Nested overlap detection
+- Compiler note emission for non-confluent functions
+
+** 1.6 Phase 2 Summary
+
+| Sub-phase | Module | Lines (est.) | Tests (est.) |
+|-|-|-|-|
+| 2a: Interval Abstract Domain | =interval-domain.rkt=, =narrowing-abstract.rkt= | 530 | 105 |
+| 2b: Size-Based Termination | =termination-analysis.rkt= | 390 | 80 |
+| 2c: Critical Pair / Confluence | =confluence-analysis.rkt= | 350 | 65 |
+| *Phase 2 Total* | *4 new + 1 modified* | *~1,270* | *~250* |
+
+** 1.7 Phase 2 Dependencies and Ordering
+
+#+begin_example
+Phase 1 (complete)
+  |
+  +-- Phase 2a (Interval Domain)
+  |     |
+  |     +-- Narrowing propagator integration (reads interval cells)
+  |
+  +-- Phase 2b (Termination Analysis)  [independent of 2a]
+  |     |
+  |     +-- narrowing-info extended with termination-class
+  |
+  +-- Phase 2c (Confluence Analysis)   [independent of 2a, 2b]
+        |
+        +-- narrowing-info extended with confluence-class
+#+end_example
+
+Phases 2a, 2b, and 2c are mutually independent and can be implemented in
+any order. All three modify =narrowing.rkt= to integrate their results
+into the narrowing propagator.
+
+* 2. Phase 3: Advanced Extensions
+
+** 2.1 Phase 3a: 0-CFA Closure Analysis for Auto-Defunctionalization
+
+*** 2.1.1 The Problem: Higher-Order Narrowing
+
+Phase 1 (D10) specifies: when a higher-order function argument is /known/
+(a specific =defn=), narrow through the application. When /unknown/,
+residuate.
+
+But often a higher-order argument isn't statically known at the narrowing
+call site yet could be determined by analysis. Consider:
+
+#+begin_src prologos
+defn apply-op [f x y]
+  | [f x y] := [f x y]
+
+;; Usage:
+[apply-op add 3N ?y] = 10N     ;; f = add, known at this call site
+[apply-op ?f 3N 7N] = 10N      ;; f is unknown — which functions could it be?
+#+end_src
+
+For the second query, we need to determine the set of functions that could
+flow to =?f=. This is exactly what 0-CFA (zeroth-order Control Flow
+Analysis) computes.
+
+*** 2.1.2 0-CFA Overview
+
+0-CFA (Shivers 1991) is an abstract interpretation that computes, for each
+expression in the program, the set of /closures/ (lambda abstractions or
+named functions) that could be its value at runtime.
+
+For Prologos, 0-CFA would compute:
+
+#+begin_example
+0-CFA Analysis:
+  For each variable/expression of function type:
+    Compute the set of defn names that could flow to it
+
+  If the set is finite: the HO argument can be defunctionalized
+    → create an amb over the functions in the set
+    → for each function, install narrowing propagators
+  If the set is infinite/unknown: residuate (don't narrow)
+#+end_example
+
+*** 2.1.3 Connection to Defunctionalization
+
+Reynolds (1972) showed that any higher-order program can be transformed
+to first-order by /defunctionalization/:
+
+1. Each lambda/function becomes a constructor of a function-type ADT.
+2. An =apply= function pattern-matches on the constructor to dispatch.
+
+0-CFA determines the set of functions at each call site, which is exactly
+the constructor universe for the defunctionalized ADT. This connects
+narrowing to defunctionalization:
+
+#+begin_example
+If 0-CFA determines f ∈ {add, mul, sub} at a call site:
+
+Defunctionalized:
+  type Op := Add | Mul | Sub
+  defn apply-op [op x y]
+    | [Add x y] := [add x y]
+    | [Mul x y] := [mul x y]
+    | [Sub x y] := [sub x y]
+
+Narrowing: amb over {Add, Mul, Sub}
+  → try narrowing each function separately
+#+end_example
+
+*** 2.1.4 Implementation
+
+The 0-CFA analysis is a /whole-program/ static analysis, run at module
+boundary (or lazily on demand for narrowing):
+
+#+begin_src racket
+;; 0-CFA result for a module
+(struct cfa-result
+  (flow-sets)  ;; hasheq: expr-id → (setof defn-name)
+  #:transparent)
+
+;; Key operations
+(define (cfa-analyze module-env)
+  ;; 1. Build constraint graph from all defn/defr definitions
+  ;; 2. Compute fixpoint (iterate until flow sets stabilize)
+  ;; 3. Return cfa-result
+  ...)
+
+(define (cfa-lookup result expr-id)
+  ;; Returns the set of functions that could flow to expr-id
+  (hash-ref (cfa-result-flow-sets result) expr-id (set)))
+
+;; Integration with narrowing
+(define (narrow-higher-order net f-cell arg-cells result-cell cfa)
+  (define flow-set (cfa-lookup cfa (cell->expr-id f-cell)))
+  (cond
+    [(set-empty? flow-set)
+     ;; No functions flow here — residuate
+     net]
+    [(= 1 (set-count flow-set))
+     ;; Exactly one function — narrow through it directly
+     (install-narrowing-propagators net (set-first flow-set) arg-cells result-cell)]
+    [else
+     ;; Multiple functions — create amb over the set
+     (atms-amb net (set->list flow-set)
+       (lambda (net fn-name)
+         (install-narrowing-propagators net fn-name arg-cells result-cell)))]))
+#+end_src
+
+*** 2.1.5 Scope: Module-Level vs. Whole-Program
+
+0-CFA can be scoped at different granularities:
+
+| Scope | Precision | Cost | When |
+|-|-|-|-|
+| Per-function | Low (only local calls) | O(n) per function | Phase 3a initial |
+| Per-module | Medium (all calls in module) | O(n^2) per module | Phase 3a full |
+| Whole-program | High (all calls) | O(n^3) worst case | Phase 3a+ (optional) |
+
+For Phase 3a, module-level analysis is the right target. Whole-program
+analysis can be deferred or made lazy (analyze on demand when narrowing
+encounters an unknown HO argument).
+
+*** 2.1.6 Implementation
+
+| Component | File | Lines (est.) | Tests (est.) |
+|-|-|-|-|
+| 0-CFA constraint graph builder | =cfa-analysis.rkt= | 250 | 30 |
+| 0-CFA fixpoint solver | =cfa-analysis.rkt= | 150 | 25 |
+| Integration with narrowing | =narrowing.rkt= (modify) | 60 | 15 |
+| *Sub-total Phase 3a* | *1 new + 1 modified* | *~460* | *~70* |
+
+*** 2.1.7 Tests
+
+- Simple call sites: =f = add= (direct assignment) → flow set = ={add}=
+- Conditional: =let f = if b then add else mul= → flow set = ={add, mul}=
+- Higher-order parameter: =defn apply [f x] := [f x]= with call
+  =[apply add 3]= → =f= flows ={add}=
+- Multiple call sites: same parameter receives different functions → union
+- Narrowing with defunctionalized amb: =[apply-op ?f 3N 7N] = 10N= finds
+  =f = add=
+- Unknown function residuates (no 0-CFA info available)
+
+** 2.2 Phase 3b: Configurable Search Heuristics
+
+*** 2.2.1 Design: Three Orthogonal Axes
+
+Following ECLiPSe's =search/6= design and Gecode's clean
+propagate/branch separation, we extend the =solver= configuration with
+three axes:
+
+#+begin_src prologos
+solver my-solver
+  :variable-order  first-fail     ;; which variable to branch on
+  :value-order     bisect         ;; which value/split to try
+  :search          complete       ;; how to traverse the search tree
+  :tabling         by-default
+  :timeout         30
+#+end_src
+
+*** 2.2.2 Variable Ordering Strategies
+
+Determines which unresolved variable to branch on next after propagation
+reaches quiescence:
+
+| Strategy | Implementation | Cost |
+|-|-|-|
+| =input-order= | First unresolved variable in declaration order | O(n) |
+| =first-fail= | Variable with smallest domain | O(n) scan |
+| =most-constrained= | Smallest domain, tiebreak by propagator count | O(n) scan |
+| =max-weighted-degree= | Highest failure-weighted constraint degree | O(n) scan |
+| =random= | Random unresolved variable | O(1) |
+
+In the propagator/ATMS architecture:
+
+#+begin_src racket
+;; Variable ordering is a function: (net, unresolved-cells) → cell-id
+(define (first-fail-select net cells)
+  (argmin (lambda (cid) (domain-size (net-cell-read net cid))) cells))
+
+(define (most-constrained-select net cells)
+  (argmin (lambda (cid)
+            (let ([dom (domain-size (net-cell-read net cid))]
+                  [deg (length (cell-dependents net cid))])
+              (cons dom (- deg))))  ;; tiebreak by degree (higher = preferred)
+          cells))
+
+;; Adaptive: max-weighted-degree (dom/wdeg, Boussemart et al. 2004)
+;; Requires maintaining a weight counter per propagator, incremented on
+;; domain wipeout (contradiction). Higher weight → more failure-prone.
+(define (max-weighted-degree-select net cells weight-table)
+  (argmin (lambda (cid)
+            (let ([dom (domain-size (net-cell-read net cid))]
+                  [wdeg (sum-weighted-degree cid weight-table)])
+              (/ dom (max 1 wdeg))))
+          cells))
+#+end_src
+
+*** 2.2.3 Value Ordering Strategies
+
+Determines which value to try for the selected variable:
+
+| Strategy | Implementation | Split |
+|-|-|-|
+| =indomain-min= | Try minimum value first | Enumerate: lo, lo+1, ... |
+| =indomain-max= | Try maximum value first | Enumerate: hi, hi-1, ... |
+| =bisect= | Binary domain split | [lo,mid] vs [mid+1,hi] |
+| =random= | Random value from domain | Random element |
+
+In the propagator/ATMS architecture:
+
+#+begin_src racket
+;; Value ordering creates the amb alternatives
+(define (bisect-value net cid)
+  (define dom (net-cell-read net cid))
+  (define mid (quotient (+ (interval-lo dom) (interval-hi dom)) 2))
+  ;; Returns two alternative domain restrictions
+  (list (interval (interval-lo dom) mid)
+        (interval (+ mid 1) (interval-hi dom))))
+
+(define (indomain-min-value net cid)
+  (define dom (net-cell-read net cid))
+  ;; Returns: try lo first, then [lo+1, hi]
+  (list (interval (interval-lo dom) (interval-lo dom))
+        (interval (+ (interval-lo dom) 1) (interval-hi dom))))
+#+end_src
+
+*** 2.2.4 Search Strategies
+
+Determines how the search tree is traversed:
+
+| Strategy | Description | ATMS Mapping |
+|-|-|-|
+| =complete= | Exhaustive DFS | Default =atms-solve-all= |
+| =(lds N)= | Limited discrepancy search (max N deviations) | Prioritize consistent worldviews with fewer non-first-choice assumptions |
+| =(bb-min expr)= | Branch-and-bound minimization | Cost-bound cell as propagator |
+| =(restart (luby K))= | Luby restart sequence | Reset assumptions after K conflicts |
+| =(restart (geometric K G))= | Geometric restart | Reset after K*G^i conflicts |
+
+*** 2.2.5 Search Strategy Integration
+
+The search strategy modifies the /outer solve loop/ (Phase 1d's
+=narrowing-solve=):
+
+#+begin_src racket
+;; Complete search (default)
+(define (search-complete net goals)
+  (atms-solve-all net goals))
+
+;; Limited discrepancy search
+(define (search-lds net goals max-discrepancy)
+  ;; Filter worldviews by discrepancy count
+  ;; Discrepancy = number of non-first-choice assumptions
+  (define all (atms-solve-all net goals))
+  (filter (lambda (wv) (<= (discrepancy-count wv) max-discrepancy)) all))
+
+;; Branch-and-bound minimization
+(define (search-bb-min net goals cost-expr)
+  (define cost-cell (net-new-cell net +inf.0 min-merge))
+  ;; Install propagator: when cost-cell improves, prune branches
+  ;; where cost lower bound > current best
+  ...)
+
+;; Restart-based search
+(define (search-restart net goals cutoff-fn)
+  (let loop ([attempt 0] [best #f] [nogoods '()])
+    (define cutoff (cutoff-fn attempt))
+    ;; Add accumulated nogoods
+    ;; Search until cutoff conflicts
+    ;; Record new nogoods
+    ;; Restart with fresh assumptions
+    ...))
+#+end_src
+
+*** 2.2.6 Implementation
+
+| Component | File | Lines (est.) | Tests (est.) |
+|-|-|-|-|
+| Variable ordering strategies | =search-heuristics.rkt= | 120 | 25 |
+| Value ordering strategies | =search-heuristics.rkt= | 80 | 20 |
+| Search strategies (LDS, BB, restart) | =search-strategies.rkt= | 250 | 35 |
+| Extended =solver= config parsing | =solver.rkt= (modify) | 80 | 15 |
+| Integration with narrowing solve loop | =narrowing.rkt= (modify) | 60 | 10 |
+| *Sub-total Phase 3b* | *2 new + 2 modified* | *~590* | *~105* |
+
+*** 2.2.7 Tests
+
+- Variable ordering: first-fail selects tightest domain
+- Variable ordering: most-constrained tiebreaks correctly
+- Value ordering: bisect splits evenly
+- Value ordering: indomain-min enumerates in order
+- Search: complete finds all solutions
+- Search: LDS finds solutions reachable within discrepancy bound
+- Search: BB-min finds optimal solution
+- Search: restart with Luby sequence finds solution
+- Solver config: parsing new axes from =solver= form
+- Integration: same problem with different heuristics → same solutions,
+  different ordering/performance
+
+** 2.3 Phase 3c: Global Constraints and Optimization
+
+*** 2.3.1 Global Constraint Propagators
+
+Global constraints are specialized propagators that achieve stronger
+consistency than decomposition into binary constraints. Each is a
+/propagator factory/: given constraint parameters, it creates propagators
+with the appropriate cell dependencies and narrowing behavior.
+
+#+begin_src prologos
+;; Surface syntax for global constraints
+all-different [x y z w]     ;; all variables must have distinct values
+cumulative tasks 5           ;; task scheduling with capacity 5
+element i xs v               ;; v = xs[i] (array element constraint)
+#+end_src
+
+*** 2.3.2 =all-different= Implementation
+
+The =all-different= constraint uses /bound consistency/ (Puget 1998):
+
+#+begin_src racket
+;; all-different propagator: when a variable is assigned value v,
+;; remove v from all other variables' domains
+(define (all-different-propagator net cells)
+  ;; For each cell:
+  ;;   If singleton [v,v]: remove v from all other cells
+  ;;   If domain size = count of remaining cells:
+  ;;     Hall set detection → prune
+  (for/fold ([net net])
+            ([c cells])
+    (define val (net-cell-read net c))
+    (if (interval-singleton? val)
+        (let ([v (interval-lo val)])
+          (for/fold ([net net])
+                    ([other (remove c cells)])
+            (net-cell-write net other
+              (interval-remove (net-cell-read net other) v))))
+        net)))
+#+end_src
+
+For stronger consistency (matching-based filtering, Regin 1994), a more
+sophisticated implementation using value graphs and maximum matching is
+needed. This can be deferred to Phase 3c+ if bound consistency suffices
+for initial use cases.
+
+*** 2.3.3 Branch-and-Bound Optimization
+
+Optimization problems use branch-and-bound: maintain a best-known solution
+and prune branches that can't improve on it.
+
+#+begin_src prologos
+;; Surface syntax
+solver opt-solver
+  :search (bb-min cost)
+
+solve [find ?x ?y]
+  [add ?x ?y] = 100N
+  [mul ?x ?y] = ?cost
+  :minimize ?cost
+#+end_src
+
+Implementation via a cost-bound cell:
+
+#+begin_src racket
+;; Branch-and-bound as propagator
+(define (install-bb-min net cost-cell)
+  ;; Cost bound cell: starts at +inf, decreases monotonically
+  (define-values (net* bound-cell)
+    (net-new-cell net +inf.0
+      (lambda (old new) (min old new))  ;; merge = min
+      (lambda (v) #f)))                 ;; never contradicts
+  ;; Propagator: cost-cell.lo > bound-cell → contradiction
+  (define-values (net** _pid)
+    (net-add-propagator net* (list cost-cell bound-cell) '()
+      (lambda (net)
+        (define cost (net-cell-read net cost-cell))
+        (define bound (net-cell-read net bound-cell))
+        (if (> (interval-lo cost) bound)
+            ;; Prune: this branch can't improve on current best
+            (struct-copy prop-network net [contradiction #t])
+            ;; Tighten cost domain
+            (net-cell-write net cost-cell
+              (interval (interval-lo cost) (min (interval-hi cost) bound)))))))
+  (values net** bound-cell))
+#+end_src
+
+*** 2.3.4 Implementation
+
+| Component | File | Lines (est.) | Tests (est.) |
+|-|-|-|-|
+| =all-different= (bound consistency) | =global-constraints.rkt= | 120 | 25 |
+| =cumulative= (timetable filtering) | =global-constraints.rkt= | 150 | 20 |
+| =element= (array element) | =global-constraints.rkt= | 60 | 15 |
+| Branch-and-bound optimization | =search-strategies.rkt= (extend) | 100 | 20 |
+| Surface syntax for constraints | parser, elaborator (modify) | 80 | 15 |
+| *Sub-total Phase 3c* | *1 new + 3 modified* | *~510* | *~95* |
+
+*** 2.3.5 Tests
+
+- =all-different=: singleton propagation removes value from peers
+- =all-different=: Hall set detection (3 vars, 3 values → all determined)
+- =all-different=: contradiction when domain too small for constraint
+- =cumulative=: task scheduling with capacity bound
+- =element=: index determines value, value constrains index
+- BB-min: finds optimal solution for simple optimization
+- BB-min: prunes suboptimal branches (count backtracks, verify reduction)
+- Integration with narrowing: =[add ?x ?y] = 10N= with =all-different [?x ?y]=
+
+** 2.4 Phase 3 Summary
+
+| Sub-phase | Module | Lines (est.) | Tests (est.) |
+|-|-|-|-|
+| 3a: 0-CFA Auto-Defunctionalization | =cfa-analysis.rkt= | 460 | 70 |
+| 3b: Configurable Search Heuristics | =search-heuristics.rkt=, =search-strategies.rkt= | 590 | 105 |
+| 3c: Global Constraints + Optimization | =global-constraints.rkt= | 510 | 95 |
+| *Phase 3 Total* | *4 new + 3 modified* | *~1,560* | *~270* |
+
+** 2.5 Phase 3 Dependencies and Ordering
+
+#+begin_example
+Phase 1 (complete)
+  |
+  +-- Phase 3a (0-CFA)
+  |     Depends on: narrowing propagator (Phase 1c)
+  |     Independent of: Phases 2a-2c, 3b, 3c
+  |
+  +-- Phase 3b (Search Heuristics)
+  |     Depends on: solver integration (Phase 1d)
+  |     Independent of: Phases 2a-2c, 3a, 3c
+  |     (Enhanced by Phase 2a: interval domains enable bisect strategy)
+  |
+  +-- Phase 3c (Global Constraints)
+        Depends on: interval domain (Phase 2a) for numeric constraints
+        Enhanced by: search heuristics (Phase 3b) for optimization
+#+end_example
+
+Recommended ordering: 3b → 3a → 3c (search heuristics are highest
+impact and most independent; 0-CFA is moderately complex; global
+constraints benefit from both interval domains and search heuristics).
+
+* 3. Unified Roadmap: Phases 1--3
+
+** 3.1 Complete Implementation Table
+
+| Phase | Sub-phase | Description | Lines | Tests | New Files | Modified Files |
+|-|-|-|-|-|-|-|
+| 1 | 1a | Definitional Trees | 200 | 40 | =definitional-tree.rkt= | |
+| 1 | 1b | Term Lattice | 150 | 30 | =term-lattice.rkt= | |
+| 1 | 1c | Narrowing Propagator | 300 | 50 | =narrowing.rkt= | |
+| 1 | 1d | Solver Integration | 200 | 50 | | =relations.rkt=, =solver.rkt= |
+| 1 | 1e | WS-Mode Syntax | 100 | 30 | | parser, WS reader |
+| 2 | 2a | Interval Abstract Domain | 530 | 105 | =interval-domain.rkt=, =narrowing-abstract.rkt= | =narrowing.rkt= |
+| 2 | 2b | Termination Analysis | 390 | 80 | =termination-analysis.rkt= | =narrowing.rkt= |
+| 2 | 2c | Confluence Analysis | 350 | 65 | =confluence-analysis.rkt= | =narrowing.rkt= |
+| 3 | 3a | 0-CFA Auto-Defunctionalization | 460 | 70 | =cfa-analysis.rkt= | =narrowing.rkt= |
+| 3 | 3b | Search Heuristics | 590 | 105 | =search-heuristics.rkt=, =search-strategies.rkt= | =solver.rkt=, =narrowing.rkt= |
+| 3 | 3c | Global Constraints + Optimization | 510 | 95 | =global-constraints.rkt= | =search-strategies.rkt=, parser, elaborator |
+| | | *Grand Total* | *~3,780* | *~720* | *11 new* | *~6 modified* |
+
+** 3.2 Dependency Graph
+
+#+begin_example
+                    Phase 1
+          (Core FL Narrowing, ~950 lines)
+         /          |           \
+        /           |            \
+   Phase 2a      Phase 2b      Phase 2c
+  (Interval)   (Termination)  (Confluence)
+   ~530 lines   ~390 lines     ~350 lines
+       |            |              |
+       +-----+------+------+------+
+             |             |
+          Phase 3a      Phase 3b
+          (0-CFA)      (Heuristics)
+          ~460 lines   ~590 lines
+             |             |
+             +------+------+
+                    |
+                Phase 3c
+          (Global Constraints)
+              ~510 lines
+#+end_example
+
+** 3.3 Recommended Implementation Sequence
+
+1. *Phase 1* (1a → 1b → 1c → 1d → 1e): Core narrowing. ~950 lines, ~200 tests.
+   Duration estimate: major implementation phase.
+
+2. *Phase 2b* (Termination Analysis): Static analysis, independent of other
+   Phase 2 work. ~390 lines, ~80 tests. High value: prevents infinite loops.
+
+3. *Phase 2a* (Interval Abstract Domain): Enables numeric narrowing. ~530
+   lines, ~105 tests. High value: handles Nat/Int/PosInt.
+
+4. *Phase 3b* (Search Heuristics): User-configurable search. ~590 lines,
+   ~105 tests. High value: performance improvement.
+
+5. *Phase 2c* (Confluence Analysis): Static analysis for soundness. ~350
+   lines, ~65 tests. Important for correctness of non-deterministic functions.
+
+6. *Phase 3a* (0-CFA): Auto-defunctionalization. ~460 lines, ~70 tests.
+   Enables higher-order narrowing without manual defunctionalization.
+
+7. *Phase 3c* (Global Constraints + Optimization): Advanced constraint
+   solving. ~510 lines, ~95 tests. Enables practical optimization problems.
+
+Rationale: Phase 1 is prerequisite for everything. Then 2b (termination)
+gives safety, 2a (intervals) gives expressiveness, 3b (heuristics) gives
+performance, 2c (confluence) gives correctness guarantees, 3a (0-CFA)
+gives HO support, and 3c (global constraints) gives full constraint
+programming capability.
+
+* 4. Surface Syntax for Extended Features
+
+** 4.1 Solver Configuration
+
+#+begin_src prologos
+;; Full solver configuration with all axes
+solver constraint-solver
+  :variable-order  first-fail
+  :value-order     bisect
+  :search          (bb-min cost)
+  :tabling         by-default
+  :timeout         60
+
+;; Using a solver for narrowing
+let solutions = with-solver constraint-solver
+  [add ?x ?y] = 100N
+  all-different [?x ?y]
+#+end_src
+
+** 4.2 Constraint Syntax
+
+#+begin_src prologos
+;; Interval domain constraints (implicit from types)
+spec add : <(x : PosInt) -> (y : PosInt) -> PosInt>
+;; PosInt → interval [1, +inf)
+
+;; Global constraints
+all-different [?x ?y ?z]       ;; distinct values
+element ?i ?xs ?v              ;; array element
+;; cumulative tasks cap         ;; resource scheduling (future)
+
+;; Optimization
+solve :minimize [cost ?x ?y]
+  [profit ?x] = ?px
+  [profit ?y] = ?py
+  let ?total = [add ?px ?py]
+#+end_src
+
+** 4.3 Static Analysis Feedback
+
+#+begin_src prologos
+;; Termination analysis feedback (compiler messages)
+;; INFO: add is terminating (size decrease on arg 1)
+;; INFO: fib is terminating (size decrease on arg 1, both calls)
+;; WARN: collatz is bounded-narrowable (fuel limit: 1000)
+;; ERROR: loop is non-narrowable (no decreasing argument)
+
+;; Confluence analysis feedback
+;; INFO: add is confluent (inductively sequential)
+;; WARN: insert has overlapping rules — using basic narrowing
+;;       Consider making clauses non-overlapping for optimal narrowing
+#+end_src
+
+* 5. Interaction Between Phases
+
+** 5.1 Interval Domains + Search Heuristics (2a + 3b)
+
+Interval domains enable the =bisect= value ordering strategy:
+
+#+begin_example
+Variable ?x with domain [1, 100]:
+  bisect → amb([1, 50], [51, 100])
+
+  After propagation with [1, 50]:
+    Further narrowing may determine ?x = [23, 23]
+
+  With first-fail variable ordering:
+    Select the variable with smallest domain → most constrained → fewest
+    backtracks needed
+#+end_example
+
+** 5.2 Termination Analysis + Interval Domains (2b + 2a)
+
+Termination analysis can use interval domain sizes for fuel estimation:
+
+#+begin_example
+Function f : PosInt -> PosInt -> Nat
+  Size decrease on arg 1
+  With interval domain [1, K] for arg 1:
+    Max recursion depth = K
+    Fuel bound = K (not infinite)
+#+end_example
+
+When the interval domain is finite, the termination analysis can compute
+a precise fuel bound instead of using a fixed default.
+
+** 5.3 0-CFA + Narrowing Propagator (3a + 1c)
+
+0-CFA results feed directly into the narrowing propagator's handling of
+higher-order arguments:
+
+#+begin_example
+narrowing-propagator at Branch node, argument is HO function:
+  1. Check: is the cell a known function? → narrow directly
+  2. Check: does 0-CFA give a finite flow set? → amb over set
+  3. Otherwise: residuate
+#+end_example
+
+** 5.4 Confluence + Termination (2c + 2b)
+
+A non-confluent function that is also non-terminating is particularly
+dangerous: narrowing may loop AND produce inconsistent results. The
+combination of both analyses gives a clear classification:
+
+| Confluent | Terminating | Classification |
+|-|-|-|
+| Yes | Yes | Safe for unrestricted narrowing |
+| Yes | No | Use fuel bounds |
+| No | Yes | Use basic narrowing (sound but not optimal) |
+| No | No | Non-narrowable (residuate only) |
+
+** 5.5 Global Constraints + Narrowing (3c + 1c)
+
+Global constraints and narrowing propagators coexist in the same
+propagator network and run to quiescence together:
+
+#+begin_example
+solve
+  [add ?x ?y] = 10N       ;; narrowing propagator
+  all-different [?x ?y]   ;; global constraint propagator
+
+  1. Narrowing: ?x ∈ [0,10], ?y ∈ [0,10]
+  2. all-different: if ?x = 5, then ?y ≠ 5
+  3. Combined: 10 solutions instead of 11 (5+5 excluded)
+#+end_example
+
+* 6. Open Research Questions
+
+** 6.1 Phase 2 Open Questions
+
+1. *Interval domain for non-numeric types*: Can we define abstract domains
+   for List (length interval), String (length interval), or algebraic types
+   in general? Length-based abstraction is a natural Galois connection.
+
+2. *Widening precision*: Standard interval widening loses significant
+   precision. /Widening with thresholds/ (set of landmark values that the
+   widened interval preserves) may recover precision. Implementation cost
+   is minimal (extend the widen function with a threshold set).
+
+3. *Size-change termination vs. dependency pairs*: The LJBA criterion
+   handles most practical functions but not all terminating ones.
+   /Dependency pairs/ (Arts & Giesl 2000) are strictly more powerful but
+   more complex to implement. Defer to Phase 2b+ if needed.
+
+4. *Confluence checking decidability*: Joinability is undecidable for
+   general TRS. Our scope is limited to inductively sequential functions
+   with finite constructor sets, where decidability is not an issue. For
+   non-IS functions, we conservatively classify as =unknown=.
+
+** 6.2 Phase 3 Open Questions
+
+1. *0-CFA precision*: 0-CFA may be imprecise for polymorphic higher-order
+   functions (merges flow sets across all call sites). /1-CFA/ (call-site
+   sensitive) improves precision at higher cost. Start with 0-CFA; upgrade
+   to k-CFA if precision is insufficient in practice.
+
+2. *Adaptive heuristics state*: =max-weighted-degree= requires maintaining
+   weight counters across search. In a persistent/immutable propagator
+   network, this means threading weight state through the search. The
+   ATMS's persistent nature makes this natural (weights are part of the
+   ATMS state).
+
+3. *Global constraint strength*: Bound consistency for =all-different= is
+   weaker than matching-based GAC (Regin 1994). For most Prologos use
+   cases, bound consistency suffices. GAC implementation can be deferred.
+
+4. *Branch-and-bound with restarts*: Combining optimization with restart
+   search requires careful handling of incumbent solutions across restarts.
+   The ATMS's persistent nature helps (the best-known solution is a cell
+   value that persists across restarts).
+
+* 7. Connection to Existing Research Documents
+
+This design document is part of a coherent research arc:
+
+1. *Effectful Propagators* (=2026-03-06_EFFECTFUL_PROPAGATORS.org=):
+   Established propagator networks as the computational substrate.
+
+2. *Session Types as Effect Ordering* (=2026-03-06_SESSION_EFFECT_ORDERING.org=):
+   Showed session types as causal ordering over effects on the propagator
+   substrate.
+
+3. *Propagators as Model Checkers* (=2026-03-07_PROPAGATORS_AS_MODEL_CHECKERS.org=):
+   Showed the structural isomorphism between propagator fixpoints and CTL
+   model checking. Narrowing-based symbolic reachability (§5.4 of the
+   Search Heuristics research doc) is the narrowing side of this
+   isomorphism.
+
+4. *Narrowing and Search Heuristics* (=2026-03-07_NARROWING_AND_SEARCH_HEURISTICS.org=):
+   General research survey of the three converging lines. This document
+   and the Phase 0--1 design document are the implementation-oriented
+   refinements.
+
+5. *FL Narrowing Phase 0--1 Design* (=2026-03-07_FL_NARROWING_DESIGN.org=):
+   Core narrowing machinery. This document (Phase 2--3) is its direct
+   companion.
+
+The arc: propagators → effects → ordering → model checking → narrowing →
+abstract interpretation → search → constraints → optimization. Each builds
+on the previous, all unified on the propagator substrate.
+
+* 8. Design Decisions
+
+** DD-1: Interval Domain as First Abstract Domain
+
+Start with intervals for numeric types. This covers the most common
+infinite constructor universe (=Nat=, =Int=, =PosInt=). Other abstract
+domains (set domain for =List= length, string length domain) can be added
+incrementally using the same Galois connection infrastructure.
+
+** DD-2: LJBA Termination over Dependency Pairs
+
+Lee-Jones-Ben-Amram (2001) is simpler to implement and handles most
+practical functions. Dependency pairs (Arts & Giesl 2000) are strictly more
+powerful but require more infrastructure (dependency graph, usable rules,
+argument filterings). Start with LJBA; upgrade if needed.
+
+** DD-3: Module-Level 0-CFA
+
+Scope 0-CFA to module level for Phase 3a. This balances precision (captures
+all intra-module function flows) against cost (avoids whole-program
+analysis). Cross-module flows can be handled conservatively (treat imported
+functions as unknown flow sets) or eagerly (analyze transitively).
+
+** DD-4: Bound Consistency for =all-different=
+
+Start with bound consistency (O(n log n) per invocation). GAC via
+maximum matching (Regin 1994) is O(n^{3/2}) and achieves strictly stronger
+pruning but is more complex. Defer GAC to Phase 3c+ if bound consistency
+proves insufficient.
+
+** DD-5: Existing Widening Infrastructure
+
+Reuse =net-set-widen-point= and =run-to-quiescence-widen= for abstract
+interpretation widening. No new widening infrastructure needed. Mark
+interval cells at recursive narrowing positions as widening points; the
+existing two-phase widen→narrow iteration handles convergence.
+
+** DD-6: Existing Cross-Domain Propagator Infrastructure
+
+Reuse =net-add-cross-domain-propagator= for Galois connections between
+term cells and interval cells. The alpha/gamma pair pattern from the
+Type $\leftrightarrow$ Multiplicity bridge (=elaborator-network.rkt=)
+transfers directly.
+
+** DD-7: Search Heuristics as Solver Config Extensions
+
+Extend the existing =solver= surface syntax with =:variable-order=,
+=:value-order=, =:search= axes. The solver config already supports
+=:execution=, =:threshold=, =:strategy=, =:tabling=, =:provenance=,
+=:timeout=. Three new axes follow the same pattern.
+
+** DD-8: Static Analyses at Elaboration Time
+
+Termination analysis and confluence analysis are compile-time (elaboration
+time) analyses stored in =narrowing-info= alongside the definitional tree.
+They run once per =defn= and do not affect runtime performance. 0-CFA runs
+at module boundary (or lazily on first narrowing demand for a HO function).
+
+* 9. Related Work
+
+** Abstract Interpretation
+
+- Cousot, Cousot. "Abstract Interpretation: A Unified Lattice Model for
+  Static Analysis of Programs." /POPL/ 1977.
+- Cousot, Cousot. "Systematic Design of Program Analysis Frameworks."
+  /POPL/ 1979.
+- Mine. "The Octagon Abstract Domain." /HOSC/ 19(1), 2006.
+
+** Termination Analysis
+
+- Lee, Jones, Ben-Amram. "The Size-Change Principle for Program
+  Termination." /POPL/ 2001.
+- Arts, Giesl. "Termination of Term Rewriting Using Dependency Pairs."
+  /TCS/ 236(1-2), 2000.
+- Chin, Khoo. "Calculating Sized Types." /HOSC/ 14(2-3), 2001.
+
+** Confluence and Critical Pairs
+
+- Knuth, Bendix. "Simple Word Problems in Universal Algebras." 1970.
+- Huet. "Confluent Reductions: Abstract Properties and Applications to
+  Term Rewriting Systems." /JACM/ 27(4), 1980.
+
+** Control Flow Analysis
+
+- Shivers. "Control-Flow Analysis of Higher-Order Languages, or Taming
+  Lambda." /CMU Tech Report/ CMU-CS-91-145, 1991.
+- Reynolds. "Definitional Interpreters for Higher-Order Programming
+  Languages." /ACM National Conference/ 1972.
+
+** Constraint Programming
+
+- Boussemart et al. "Boosting Systematic Search by Weighting Constraints."
+  /ECAI/ 2004.
+- Harvey, Ginsberg. "Limited Discrepancy Search." /IJCAI/ 1995.
+- Regin. "A Filtering Algorithm for Constraints of Difference in CSPs."
+  /AAAI/ 1994.
+- Puget. "A Fast Algorithm for the Bound Consistency of alldiff
+  Constraints." /AAAI/ 1998.
+- Schulte, Stuckey. "Efficient Constraint Propagation Engines." /TOPLAS/
+  30(1), 2008.
+
+** Functional-Logic Programming
+
+- Antoy, Echahed, Hanus. "A Needed Narrowing Strategy." /JACM/ 47(4), 2000.
+- Antoy, Hanus. "Functional Logic Programming." /CACM/ 53(4), 2010.
+- Fernandez et al. "Constraint Functional Logic Programming over Finite
+  Domains." /TPLP/ 7(1-2), 2007.
+
+* 10. Conclusion
+
+Phases 2--3 transform the core FL narrowing engine (Phase 1) from a
+prototype into a production-grade unified solver. The key contributions:
+
+- *Abstract interpretation* (Phase 2a) tames infinite constructor universes
+  by computing in an abstract interval domain, connected to concrete term
+  cells via Galois connections using existing cross-domain propagator
+  infrastructure.
+
+- *Termination analysis* (Phase 2b) provides static guarantees that
+  narrowing will terminate, using the size-change principle with LJBA
+  criterion.
+
+- *Confluence analysis* (Phase 2c) detects non-confluent rewrite systems
+  and adjusts the narrowing strategy accordingly, ensuring soundness for
+  non-deterministic functions.
+
+- *Auto-defunctionalization* (Phase 3a) via 0-CFA enables higher-order
+  narrowing by statically determining the finite set of functions at each
+  call site.
+
+- *Configurable search heuristics* (Phase 3b) give the user control over
+  the three orthogonal axes of search: variable ordering, value selection,
+  and search strategy.
+
+- *Global constraints and optimization* (Phase 3c) bring practical
+  constraint programming capabilities: =all-different=, =cumulative=,
+  and branch-and-bound optimization.
+
+The total implementation across Phases 1--3 is estimated at ~3,780 lines
+of source and ~720 tests across 11 new files and 6 modified files. All
+phases build on the same propagator+ATMS substrate, and all design
+decisions reuse existing infrastructure wherever possible (cross-domain
+propagators for Galois connections, widening points for abstract fixpoint
+convergence, =amb= for search branching, =solver= config for heuristic
+selection).
+
+The result: a language where functional evaluation, logic programming,
+constraint solving, abstract interpretation, and configurable search are
+unified on a single algebraic substrate --- monotone refinement on a
+lattice, guided by demand, branched by heuristic choice, abstracted by
+Galois connection, and verified by type.
