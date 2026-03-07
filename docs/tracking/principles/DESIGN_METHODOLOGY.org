@@ -622,3 +622,39 @@ These completed efforts illustrate the methodology in practice:
   PIR practice. Validated the 3-phase design methodology, identified
   the ~??~/~$typed-hole~ desugaring lesson, and established forward
   roadmap for concurrent runtime and multi-party sessions.
+
+** Effect Ordering via Session Types (Architecture A+D)
+- *Research*: ~2026-03-06_EFFECTFUL_PROPAGATORS_RESEARCH.md~ surveying
+  CALM theorem, LVars, Timely Dataflow, CRDTs, Radul-Sussman, BloomL,
+  algebraic effects, and Flix. Three candidate architectures (A, B, C)
+  for recovering order-dependent effects on a monotone substrate.
+- ~2026-03-06_SESSION_TYPES_AS_EFFECT_ORDERING.org~ (~1,200 lines):
+  discovery that session types are /causal clocks/ --- each position in
+  a session type's continuation chain is a causally-ordered event.
+  Formal Galois connection $(\alpha, \gamma)$ between session lattice
+  and effect position lattice. Quantale morphism at the algebraic level.
+- *Key insight*: The Layered Recovery Principle --- non-monotone behavior
+  (effect ordering) recovered on a monotone substrate (propagator network)
+  by inserting a control layer between phases of monotone computation.
+  Generalises the logic engine's recovery of choice-point semantics.
+- *Design*: ~2026-03-07_ARCHITECTURE_AD_IMPLEMENTATION_DESIGN.org~
+  (~750 lines) with 16 sub-phases across 6 phases (AD-A through AD-F),
+  dependency graph, concrete data structures, traced example, migration
+  strategy, and test plan (~178 tests).
+- *Architecture decision*: A + D --- session-derived ordering (D) for
+  session-typed IO, sequential walk ordering (A) for unsessioned IO.
+  Architecture B subsumed; no overlap, each mechanism maximally suited
+  to its domain.
+- *Implementation*: All 6 phases complete. 4 new modules
+  (~effect-position.rkt~, ~effect-bridge.rkt~, ~effect-ordering.rkt~,
+  ~effect-executor.rkt~), ~770 lines, ~165 tests, 0 regressions.
+  Auto-detection in ~driver.rkt~ selects Architecture A or D based on
+  process structure.
+- *Principles*: Elevated to ~EFFECTFUL_COMPUTATION_ON_PROPAGATORS.org~
+  --- the Layered Recovery Principle as a general design methodology,
+  the ~rel~/~proc~ structural parallel, and the five-layer architecture.
+- *Composition*: Effect position lattice composes with session lattice
+  via Galois connection bridge propagators. Effect ordering composes
+  with ATMS branching (choice branches → per-branch orderings).
+  Architecture selection composes with existing ~rt-execute-process~
+  (additive, not replacing).
