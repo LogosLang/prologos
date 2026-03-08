@@ -210,14 +210,19 @@ def-private     = 'def-' , identifier , def-body ;
 (* 3.2 Function Definition (defn)                   *)
 (* ------------------------------------------------ *)
 
-(* defn is sugar for def + fn. Supports multi-arity via | separator. *)
+(* defn is sugar for def + fn. Supports multi-arity and pattern dispatch
+   via | separator. Pattern clauses use -> between param patterns and body.
+   Arity clauses use typed params with optional return annotation.
+   Within a single arity group, all clauses must be the same kind. *)
 defn-form       = 'defn' , identifier , defn-sig , defn-clauses ;
 defn-sig        = [ ':' , type-expr ]              (* optional inline type *)
                 | (* empty — rely on separate spec *)
                 ;
-defn-clauses    = defn-clause , { '|' , defn-clause }  (* multi-arity *)
+defn-clauses    = defn-clause , { '|' , defn-clause }  (* multi-clause *)
                 ;
-defn-clause     = param-list , [ return-annot ] , expr ;
+defn-clause     = param-list , [ return-annot ] , expr  (* arity clause *)
+                | pattern-list , '->' , expr            (* pattern clause *)
+                ;
 param-list      = '[' , { param } , ']' ;
 param           = identifier                       (* bare param *)
                 | identifier , ':' , type-expr     (* typed param *)
@@ -679,6 +684,16 @@ reduce-arm      = '(' , pattern , '->' , expr , ')'    (* sexp mode *)
 (* 5.9 Patterns                                     *)
 (* ------------------------------------------------ *)
 
+(* Pattern list for defn pattern clauses: outer brackets wrap argument patterns *)
+pattern-list    = '[' , { defn-pattern } , ']' ;
+defn-pattern    = identifier                       (* variable binding or nullary ctor *)
+                | wildcard                         (* _ discard *)
+                | nat-literal                      (* numeric pattern 0N, 1N, etc. *)
+                | '[' , defn-pattern , { defn-pattern } , ']'  (* compound ctor pattern *)
+                | '[' , defn-pattern , { defn-pattern } , '|' , defn-pattern , ']'
+                                                   (* head-tail list pattern *)
+                ;
+
 (* Patterns in match/reduce arms *)
 pattern         = pat-atom , { pat-atom } ;        (* constructor + bindings *)
 
@@ -691,9 +706,13 @@ pat-atom        = identifier                       (* variable binding or nullar
                 | '[' , pattern , ']'              (* nested/grouped pattern *)
                 ;
 
+(* Head-tail list pattern in match arms: [a b | rest] → desugars to nested cons *)
+head-tail-pat   = pat-atom , { pat-atom } , '|' , pat-atom ;
+
 (* Note: Constructor patterns are distinguished from variable bindings
    contextually — known constructors (from data declarations in scope)
-   are treated as patterns; unknown names become variable bindings. *)
+   are treated as patterns; unknown names become variable bindings.
+   Head-tail patterns [a b | rest] desugar to cons(a, cons(b, rest)). *)
 
 (* ------------------------------------------------ *)
 (* 5.10 Conditional (if)                            *)

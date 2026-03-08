@@ -474,6 +474,23 @@ Available patterns:
 - *Constructor*: =zero=, =suc k=, =nil=, =cons a as=, =true=, =false=,
   =none=, =some v=, =ok v=, =err e=, =datum-nil=, =datum-cons h t=, etc.
 - *Nested*: =[cons x nil]= -- grouped pattern in brackets
+- *Head-tail*: =[a b | rest]= -- Prolog/Erlang-style list destructuring,
+  desugars to nested =cons= matching: =cons a (cons b rest)=
+- *Numeric*: =0N=, =1N=, =42N= -- Nat literal patterns, desugar to
+  =zero=, =suc zero=, =suc (suc ... zero)=
+
+#+begin_src prologos
+;; Head-tail list pattern in match
+match xs
+  | [a | rest]  -> a       ;; first element
+  | nil         -> default
+
+;; Multiple head elements
+match xs
+  | [a b | rest] -> [add a b]
+  | [a | _]      -> a
+  | nil           -> zero
+#+end_src
 
 ** If (Conditional)
 
@@ -781,10 +798,29 @@ impl Eq Nat
   defn eq? [x y] <Bool>
     nat-eq? x y
 
-;; Multi-arity with |
+;; Pattern dispatch (Haskell/Erlang-style)
+;; Clauses with [patterns...] -> body are grouped by arity
+;; and compiled to match/reduce at macro expansion time.
 defn fact
   | [zero]  -> suc zero
   | [suc n] -> mult [suc n] [fact n]
+
+;; Multi-arg patterns: bare tokens = atomic, inner [] = compound
+defn add
+  | [zero n]    -> n
+  | [[suc m] n] -> suc [add m n]
+
+;; Head-tail list patterns: [head1 head2 | rest]
+;; Desugars to nested cons matching.
+defn list-head
+  | [[a | rest]] -> some a
+  | [nil]        -> none
+
+;; Mixed: arity clauses + pattern clauses (different arities)
+defn f
+  | [zero] -> true        ;; arity 1, pattern clause
+  | [n]    -> false       ;; arity 1, pattern clause
+  | [x y]  <Nat> [add x y]  ;; arity 2, arity clause
 
 ;; Private
 defn- helper [x]
