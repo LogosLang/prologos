@@ -1517,7 +1517,8 @@
 ;; --- Parse a child form (inside an indented block) ---
 
 (define (parse-child-form p)
-  (define elems (read-line-elements p))
+  (define raw-elems (read-line-elements p))
+  (define elems (maybe-rewrite-infix-eq raw-elems (parser-source p)))
   (define tt (parser-peek-type p))
 
   (cond
@@ -1558,7 +1559,8 @@
 ;; --- Parse a top-level form ---
 
 (define (parse-top-level-form p)
-  (define elems (read-line-elements p))
+  (define raw-elems (read-line-elements p))
+  (define elems (maybe-rewrite-infix-eq raw-elems (parser-source p)))
   (define tt (parser-peek-type p))
 
   (cond
@@ -1578,6 +1580,38 @@
     ;; Single element at top level — still wrap (top-level forms are always commands)
     [else
      (wrap-as-list elems (parser-source p))]))
+
+;; --- Infix = rewriting for narrowing ---
+;; If a line's elements contain a bare `=` symbol (not `:=`, `<=`, `>=`),
+;; rewrite from infix to prefix: `A ... = B ...` → `(= A... B...)`.
+;; This enables `[add ?x ?y] = 13N` → `(= (add ?x ?y) 13N)` in WS mode.
+;; Only rewrites the FIRST `=` on the line (left-associative).
+;; Does NOT rewrite if `=` is the first element (already prefix).
+(define (list-take lst n)
+  (if (zero? n) '() (cons (car lst) (list-take (cdr lst) (- n 1)))))
+
+(define (maybe-rewrite-infix-eq elems source)
+  (define eq-pos
+    (let loop ([es elems] [i 0])
+      (cond
+        [(null? es) #f]
+        [(and (symbol? (syntax-e (car es)))
+              (eq? (syntax-e (car es)) '=)
+              (> i 0))  ;; not first element
+         i]
+        [else (loop (cdr es) (+ i 1))])))
+  (if eq-pos
+      (let* ([lhs-elems (list-take elems eq-pos)]
+             [eq-stx (list-ref elems eq-pos)]
+             [rhs-elems (list-tail elems (+ eq-pos 1))]
+             [lhs (if (= (length lhs-elems) 1)
+                      (car lhs-elems)
+                      (wrap-as-list lhs-elems source))]
+             [rhs (if (= (length rhs-elems) 1)
+                      (car rhs-elems)
+                      (wrap-as-list rhs-elems source))])
+        (list (wrap-as-list (list eq-stx lhs rhs) source)))
+      elems))
 
 ;; --- Wrap a list of syntax elements as a syntax list ---
 

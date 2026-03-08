@@ -264,6 +264,8 @@
  (struct-out surf-goal-app) (struct-out surf-unify) (struct-out surf-not) (struct-out surf-is)
  (struct-out surf-solve) (struct-out surf-solve-with)
  (struct-out surf-explain) (struct-out surf-explain-with)
+ ;; Narrowing (Phase 1e)
+ (struct-out surf-narrow)
  (struct-out surf-schema) (struct-out surf-solver)
  ;; Relational type constructors
  (struct-out surf-solver-type) (struct-out surf-goal-type)
@@ -923,6 +925,11 @@
 (struct surf-explain          (goal srcloc) #:transparent)
 ;; Explain-with: (explain-with solver {overrides} (goal))
 (struct surf-explain-with     (solver overrides goal srcloc) #:transparent)
+;; Narrowing expression: [f ?x ?y] = target (functional context unification)
+;; lhs: surf-expr (the functional expression with ?-variables)
+;; rhs: surf-expr (the target value)
+;; vars: (listof symbol) — the ?-prefixed variables found in lhs/rhs
+(struct surf-narrow           (lhs rhs vars srcloc) #:transparent)
 ;; Schema: schema name :field Type ...
 (struct surf-schema           (name fields srcloc) #:transparent)
 ;; Solver: solver name :key val ...

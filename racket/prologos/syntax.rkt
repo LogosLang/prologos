@@ -200,6 +200,8 @@
  (struct-out expr-defr) (struct-out expr-defr-variant)
  (struct-out expr-rel) (struct-out expr-clause) (struct-out expr-fact-block) (struct-out expr-fact-row)
  (struct-out expr-goal-app) (struct-out expr-logic-var) (struct-out expr-unify-goal) (struct-out expr-is-goal) (struct-out expr-not-goal)
+ ;; Narrowing (Phase 1e)
+ (struct-out expr-narrow)
  (struct-out expr-relation-type) (struct-out expr-schema) (struct-out expr-schema-type)
  (struct-out expr-solve) (struct-out expr-solve-with) (struct-out expr-solve-one) (struct-out expr-goal-type)
  (struct-out expr-explain) (struct-out expr-explain-with)
@@ -759,6 +761,12 @@
 (struct expr-unify-goal (lhs rhs) #:transparent)                ; unification goal (= x y)
 (struct expr-is-goal (var expr) #:transparent)                  ; functional eval (is x [expr])
 (struct expr-not-goal (goal) #:transparent)                     ; negation-as-failure
+;; Narrowing expression: [f ?x ?y] = target (functional unification)
+;; func: expr — the function expression
+;; args: (listof expr) — function arguments (may include expr-logic-var)
+;; target: expr — the target value to unify with
+;; vars: (listof symbol) — the ?-prefixed narrowing variable names
+(struct expr-narrow (func args target vars) #:transparent)
 (struct expr-relation-type (param-types) #:transparent)         ; type of a relation
 (struct expr-schema (name fields) #:transparent)                ; named closed validated map
 (struct expr-schema-type (name) #:transparent)                  ; type constructor for schema

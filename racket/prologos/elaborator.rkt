@@ -2514,6 +2514,43 @@
              [(prologos-error? eg) eg]
              [else (expr-explain-with es (or eo #f) eg)]))]
 
+    ;; narrow — functional-logic narrowing: [f ?x ?y] = target
+    ;; ?-prefixed variables are bound as logic variables in the env before
+    ;; elaborating sub-expressions. The LHS must be a function application;
+    ;; we extract func + args for the solver to look up definitional trees.
+    [(surf-narrow lhs rhs vars loc)
+     (let* ([strip-? (lambda (sym)
+                       (let ([s (symbol->string sym)])
+                         (if (and (> (string-length s) 1) (char=? (string-ref s 0) #\?))
+                             (string->symbol (substring s 1))
+                             sym)))]
+            [narrow-rel-env
+             (for/fold ([h (or (current-relational-env) (hasheq))]) ([v (in-list vars)])
+               (hash-set h v (expr-logic-var (strip-? v) 'free)))]
+            [stripped-vars (map strip-? vars)]
+            [elab-rhs (parameterize ([current-relational-env narrow-rel-env])
+                        (elaborate rhs env depth))])
+       (cond
+         [(prologos-error? elab-rhs) elab-rhs]
+         [(surf-app? lhs)
+          (let* ([func-surf (surf-app-func lhs)]
+                 [args-surf (surf-app-args lhs)]
+                 [elab-func (parameterize ([current-relational-env narrow-rel-env])
+                              (elaborate func-surf env depth))]
+                 [elab-args (parameterize ([current-relational-env narrow-rel-env])
+                              (for/list ([a (in-list args-surf)])
+                                (elaborate a env depth)))])
+            (cond
+              [(prologos-error? elab-func) elab-func]
+              [(findf prologos-error? elab-args) => values]
+              [else (expr-narrow elab-func elab-args elab-rhs stripped-vars)]))]
+         [else
+          ;; Non-application LHS: elaborate as a single expression
+          (let ([elab-lhs (parameterize ([current-relational-env narrow-rel-env])
+                            (elaborate lhs env depth))])
+            (if (prologos-error? elab-lhs) elab-lhs
+                (expr-narrow elab-lhs '() elab-rhs stripped-vars)))]))]
+
     ;; Reduce: ML-style pattern matching
     ;; Each arm's body must be elaborated with binding names in scope.
     ;; We add dummy binders (the actual types come from the type checker).

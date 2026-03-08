@@ -2005,6 +2005,13 @@
      (infer ctx g)
      (expr-hole)]
 
+    ;; Narrow — functional-logic narrowing: type-unsafe (hole) like solve
+    [(expr-narrow func args target vars)
+     (infer ctx func)
+     (for-each (lambda (a) (infer ctx a)) args)
+     (infer ctx target)
+     (expr-hole)]
+
     ;; ---- Fallback: cannot infer ----
     [_ (expr-error)]))
 

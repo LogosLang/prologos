@@ -559,6 +559,11 @@
     [(expr-explain-with sv ov g)
      (format "(explain-with ~a ~a ~a)"
              (if sv (pp-expr sv names) "#f") (if ov (pp-expr ov names) "#f") (pp-expr g names))]
+    [(expr-narrow func args target vars)
+     (format "(narrow ~a [~a] = ~a)"
+             (pp-expr func names)
+             (string-join (map (lambda (a) (pp-expr a names)) args) " ")
+             (pp-expr target names))]
     [(expr-guard cond goal)
      (format "(guard ~a ~a)" (pp-expr cond names) (pp-expr goal names))]
 
@@ -1132,6 +1137,7 @@
     [(expr-solve-one g) (uses-bvar0? g)]
     [(expr-explain g) (uses-bvar0? g)]
     [(expr-explain-with sv ov g) (or (and sv (uses-bvar0? sv)) (and ov (uses-bvar0? ov)) (uses-bvar0? g))]
+    [(expr-narrow func args target vars) (or (uses-bvar0? func) (ormap uses-bvar0? args) (uses-bvar0? target))]
     [(expr-guard cond goal) (or (uses-bvar0? cond) (uses-bvar0? goal))]
 
     [(expr-Int) #f]

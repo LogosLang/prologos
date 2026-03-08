@@ -78,6 +78,7 @@
    'mult-lattice.rkt              '()
    'multi-dispatch.rkt            '()
    'namespace.rkt                 '()
+   'narrowing.rkt                 '(definitional-tree.rkt macros.rkt propagator.rkt syntax.rkt term-lattice.rkt)
    'parser.rkt                    '(errors.rkt macros.rkt sexp-readtable.rkt source-location.rkt surface-syntax.rkt)
    'performance-counters.rkt      '()
    'posit-impl.rkt                '()
@@ -434,6 +435,8 @@
    (test-dep '(driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt multi-dispatch.rkt parser.rkt prelude.rkt source-location.rkt surface-syntax.rkt syntax.rkt) #t)
    'test-namespace.rkt
    (test-dep '(elaborator.rkt global-env.rkt namespace.rkt prelude.rkt source-location.rkt surface-syntax.rkt syntax.rkt) #f)
+   'test-narrow-syntax-01.rkt
+   (test-dep '(driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parser.rkt prelude.rkt pretty-print.rkt reader.rkt reduction.rkt source-location.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt typing-core.rkt) #t)
    'test-narrowing-01.rkt
    (test-dep '(definitional-tree.rkt macros.rkt narrowing.rkt propagator.rkt syntax.rkt term-lattice.rkt) #f)
    'test-native-collection-ops.rkt
@@ -724,6 +727,8 @@
    (test-dep '(global-env.rkt prelude.rkt pretty-print.rkt propagator.rkt qtt.rkt reduction.rkt substitution.rkt syntax.rkt tabling.rkt typing-core.rkt) #f)
    'test-tabling.rkt
    (test-dep '(propagator.rkt tabling.rkt) #f)
+   'test-term-lattice-01.rkt
+   (test-dep '(term-lattice.rkt) #f)
    'test-trait-impl-01.rkt
    (test-dep '(driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parser.rkt prelude.rkt pretty-print.rkt source-location.rkt surface-syntax.rkt syntax.rkt) #t)
    'test-trait-impl-02.rkt

@@ -18,7 +18,9 @@
 (provide parse-datum
          parse-string
          parse-port
-         current-parsing-relational-goal?)
+         current-parsing-relational-goal?
+         narrow-var-symbol?
+         collect-narrow-vars)
 
 ;; ========================================
 ;; Relational goal context
@@ -2664,7 +2666,8 @@
         (parse-explain-with args loc)]
 
        ;; (= lhs rhs) — unification goal in relational context,
-       ;; generic equality in functional context
+       ;; narrowing expression in functional context (when ?vars present),
+       ;; generic equality otherwise
        [(=)
         (cond
           [(current-parsing-relational-goal?)
@@ -2675,8 +2678,20 @@
                        [(prologos-error? r) r]
                        [else (surf-unify l r loc)])))]
           [else
-           ;; Functional context: generic equality operator
-           (parse-application head-stx args loc)])]
+           ;; Functional context: check for ?-variables → narrowing
+           (if (and (= (length args) 2)
+                    (let ([qvars (collect-narrow-vars (car args) (cadr args))])
+                      (and (pair? qvars) qvars)))
+               ;; Has ?-variables: parse as narrowing expression
+               (let* ([lhs (parse-datum (car args))]
+                      [rhs (parse-datum (cadr args))]
+                      [qvars (collect-narrow-vars (car args) (cadr args))])
+                 (if (or (prologos-error? lhs) (prologos-error? rhs))
+                     (or (and (prologos-error? lhs) lhs)
+                         rhs)
+                     (surf-narrow lhs rhs qvars loc)))
+               ;; No ?-variables: generic equality operator
+               (parse-application head-stx args loc))])]
 
        ;; (is var [expr]) — functional eval in relational context
        [(is)
@@ -5533,6 +5548,37 @@
                    (format "~a expects ~a argument~a, got ~a"
                            form expected (if (= expected 1) "" "s") (length args))
                    form expected (length args) #f)))
+
+;; ========================================
+;; Narrowing variable detection
+;; ========================================
+;; Scan raw datum trees (pre-parse syntax objects) for ?-prefixed symbols.
+;; Returns a deduplicated list of ?-variable names found, or '() if none.
+;; Example: (collect-narrow-vars '(add ?x ?y) '13) → '(?x ?y)
+
+(define (narrow-var-symbol? s)
+  (and (symbol? s)
+       (let ([str (symbol->string s)])
+         (and (> (string-length str) 1)
+              (char=? (string-ref str 0) #\?)
+              (char-alphabetic? (string-ref str 1))))))
+
+(define (collect-narrow-vars . datums)
+  (define seen (make-hasheq))
+  (define result '())
+  (define (walk d)
+    (cond
+      [(syntax? d) (walk (syntax-e d))]
+      [(narrow-var-symbol? d)
+       (unless (hash-ref seen d #f)
+         (hash-set! seen d #t)
+         (set! result (cons d result)))]
+      [(pair? d)
+       (walk (car d))
+       (walk (cdr d))]
+      [else (void)]))
+  (for-each walk datums)
+  (reverse result))
 
 ;; ========================================
 ;; Parse reduce: (reduce scrutinee arm1 arm2 ...)

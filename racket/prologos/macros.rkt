@@ -7645,6 +7645,9 @@
                                      (reduce-arm-srcloc arm)))
                        arms)
                   loc)]
+    ;; Narrowing expression — expand sub-expressions (Phase 1e)
+    [(surf-narrow lhs rhs vars loc)
+     (surf-narrow (expand-expression lhs) (expand-expression rhs) vars loc)]
     ;; Leaf forms — pass through
     [_ surf]))
 
@@ -8283,6 +8286,9 @@
     [(surf-spawn? surf) surf]
     ;; Spawn-with command — pass through to elaboration (Phase S7d)
     [(surf-spawn-with? surf) surf]
+    ;; Narrowing expression — treat as implicit eval (Phase 1e)
+    [(surf-narrow? surf)
+     (surf-eval (expand-expression surf) (surf-narrow-srcloc surf))]
     ;; Bare expression — implicit eval
     [else
      (define loc (cond

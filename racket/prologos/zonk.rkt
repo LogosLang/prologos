@@ -364,6 +364,8 @@
     [(expr-solve-one g) (expr-solve-one (zonk g))]
     [(expr-explain g) (expr-explain (zonk g))]
     [(expr-explain-with sv ov g) (expr-explain-with (and sv (zonk sv)) (and ov (zonk ov)) (zonk g))]
+    [(expr-narrow func args target vars)
+     (expr-narrow (zonk func) (map zonk args) (zonk target) vars)]
     [(expr-guard cond goal) (expr-guard (zonk cond) (zonk goal))]
 
     ;; Int
@@ -797,6 +799,8 @@
     [(expr-solve-one g) (expr-solve-one (zonk-at-depth depth g))]
     [(expr-explain g) (expr-explain (zonk-at-depth depth g))]
     [(expr-explain-with sv ov g) (expr-explain-with (and sv (zonk-at-depth depth sv)) (and ov (zonk-at-depth depth ov)) (zonk-at-depth depth g))]
+    [(expr-narrow func args target vars)
+     (expr-narrow (zonk-at-depth depth func) (map (lambda (a) (zonk-at-depth depth a)) args) (zonk-at-depth depth target) vars)]
     [(expr-guard cond goal) (expr-guard (zonk-at-depth depth cond) (zonk-at-depth depth goal))]
 
     ;; Int
@@ -1198,6 +1202,8 @@
     [(expr-solve-one g) (expr-solve-one (default-metas g))]
     [(expr-explain g) (expr-explain (default-metas g))]
     [(expr-explain-with sv ov g) (expr-explain-with (and sv (default-metas sv)) (and ov (default-metas ov)) (default-metas g))]
+    [(expr-narrow func args target vars)
+     (expr-narrow (default-metas func) (map default-metas args) (default-metas target) vars)]
     [(expr-guard cond goal) (expr-guard (default-metas cond) (default-metas goal))]
 
     [(expr-Int) e]

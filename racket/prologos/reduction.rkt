@@ -2352,6 +2352,9 @@
              default-solver-config)))
      (run-explain-goal goal cfg 'full)]
 
+    ;; Narrow: pass through for now (Phase 1d adds execution)
+    [(expr-narrow _ _ _ _) e]
+
     ;; Union types: pass through (types don't reduce)
     [(expr-union _ _) e]
 
@@ -2808,6 +2811,8 @@
     [(expr-solve-one g) (expr-solve-one (nf g))]
     [(expr-explain g) (expr-explain (nf g))]
     [(expr-explain-with sv ov g) (expr-explain-with (and sv (nf sv)) (and ov (nf ov)) (nf g))]
+    [(expr-narrow func args target vars)
+     (expr-narrow (nf func) (map nf args) (nf target) vars)]
 
     ;; Foreign function: opaque leaf (already in WHNF)
     [(expr-foreign-fn _ _ _ _ _ _) e]
