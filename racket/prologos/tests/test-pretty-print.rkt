@@ -9,6 +9,7 @@
          "../prelude.rkt"
          "../syntax.rkt"
          "../sessions.rkt"
+         "../champ.rkt"
          "../pretty-print.rkt")
 
 ;; ========================================
@@ -128,13 +129,13 @@
   (check-equal? (pp-expr (expr-pair (expr-zero) (expr-refl)))
                 "[pair 0N refl]"))
 
-(test-case "pp: first"
+(test-case "pp: fst"
   (check-equal? (pp-expr (expr-fst (expr-fvar 'p)))
-                "[first p]"))
+                "[fst p]"))
 
-(test-case "pp: second"
+(test-case "pp: snd"
   (check-equal? (pp-expr (expr-snd (expr-fvar 'p)))
-                "[second p]"))
+                "[snd p]"))
 
 ;; ========================================
 ;; Annotation
@@ -201,3 +202,27 @@
                                                (cons 'quit (sess-end)))))])
     (check-true (string-contains? result "ping"))
     (check-true (string-contains? result "quit"))))
+
+;; ========================================
+;; Map display
+;; ========================================
+
+(test-case "pp: empty map"
+  (check-equal? (pp-expr (expr-champ champ-empty)) "{}"))
+
+(test-case "pp: single-entry map"
+  (let* ([k (expr-keyword ':a)]
+         [m (champ-insert champ-empty (equal-hash-code k) k (expr-int 1))])
+    (check-true (string-contains? (pp-expr (expr-champ m)) ":a"))
+    (check-true (string-contains? (pp-expr (expr-champ m)) "1"))))
+
+(test-case "pp: multi-entry map"
+  (let* ([kx (expr-keyword ':x)]
+         [ky (expr-keyword ':y)]
+         [m1 (champ-insert champ-empty (equal-hash-code kx) kx (expr-int 10))]
+         [m2 (champ-insert m1 (equal-hash-code ky) ky (expr-int 20))])
+    (check-true (string-contains? (pp-expr (expr-champ m2)) ":x"))
+    (check-true (string-contains? (pp-expr (expr-champ m2)) "10"))
+    (check-true (string-contains? (pp-expr (expr-champ m2)) ":y"))
+    (check-true (string-contains? (pp-expr (expr-champ m2)) "20"))
+    (check-true (string-contains? (pp-expr (expr-champ m2)) ","))))

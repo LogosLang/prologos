@@ -195,11 +195,11 @@
 (test-case "elab: (pair zero refl)"
   (check-equal? (elab "(pair zero refl)") (expr-pair (expr-nat-val 0) (expr-refl))))
 
-(test-case "elab: (first (pair zero refl))"
-  (check-equal? (elab "(first (pair zero refl))") (expr-fst (expr-pair (expr-nat-val 0) (expr-refl)))))
+(test-case "elab: (fst (pair zero refl))"
+  (check-equal? (elab "(fst (pair zero refl))") (expr-fst (expr-pair (expr-nat-val 0) (expr-refl)))))
 
-(test-case "elab: (second (pair zero refl))"
-  (check-equal? (elab "(second (pair zero refl))") (expr-snd (expr-pair (expr-nat-val 0) (expr-refl)))))
+(test-case "elab: (snd (pair zero refl))"
+  (check-equal? (elab "(snd (pair zero refl))") (expr-snd (expr-pair (expr-nat-val 0) (expr-refl)))))
 
 ;; ========================================
 ;; Annotation

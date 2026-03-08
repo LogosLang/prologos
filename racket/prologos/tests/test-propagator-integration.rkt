@@ -103,8 +103,8 @@
      "(ns prop-t2)\n"
      "(def merge : (-> Nat (-> Nat Nat)) (fn (x : Nat) (fn (y : Nat) y)))\n"
      "(def pair1 : (Sigma (_ : PropNetwork) CellId) (net-new-cell (net-new 1000) zero merge))\n"
-     "(def mynet : PropNetwork (first pair1))\n"
-     "(def mycid : CellId (second pair1))\n"
+     "(def mynet : PropNetwork (fst pair1))\n"
+     "(def mycid : CellId (snd pair1))\n"
      "(def net2 : PropNetwork (net-cell-write mynet mycid (suc zero)))\n"
      "(eval (the Nat (net-cell-read mynet mycid)))"))
    "0N : Nat"))
@@ -116,8 +116,8 @@
      "(ns prop-t3)\n"
      "(def merge : (-> Nat (-> Nat Nat)) (fn (x : Nat) (fn (y : Nat) y)))\n"
      "(def pair1 : (Sigma (_ : PropNetwork) CellId) (net-new-cell (net-new 1000) zero merge))\n"
-     "(def mynet : PropNetwork (first pair1))\n"
-     "(def mycid : CellId (second pair1))\n"
+     "(def mynet : PropNetwork (fst pair1))\n"
+     "(def mycid : CellId (snd pair1))\n"
      "(def net2 : PropNetwork (net-cell-write mynet mycid (suc zero)))\n"
      "(eval (the Nat (net-cell-read net2 mycid)))"))
    "1N : Nat"))
@@ -129,7 +129,7 @@
      "(ns prop-t4)\n"
      "(def merge : (-> Nat (-> Nat Nat)) (fn (x : Nat) (fn (y : Nat) y)))\n"
      "(def pair1 : (Sigma (_ : PropNetwork) CellId) (net-new-cell (net-new 1000) zero merge))\n"
-     "(def mynet : PropNetwork (first pair1))\n"
-     "(def mycid : CellId (second pair1))\n"
+     "(def mynet : PropNetwork (fst pair1))\n"
+     "(def mycid : CellId (snd pair1))\n"
      "(eval (the Nat (net-cell-read mynet mycid)))"))
    "0N : Nat"))

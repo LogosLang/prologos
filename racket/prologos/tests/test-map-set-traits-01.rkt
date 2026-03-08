@@ -154,7 +154,7 @@
 (test-case "map-set-traits/keyed-first-type"
   ;; first of keyed dict = kv-get function
   (define result (run-ns-last (string-append preamble
-    "(infer (first Map--Keyed--dict))")))
+    "(infer (fst Map--Keyed--dict))")))
   (check-contains result "Pi")
   (check-contains result "Map")
   (check-contains result "Option"))
@@ -163,7 +163,7 @@
 (test-case "map-set-traits/keyed-second-type"
   ;; second of keyed dict = (pair kv-assoc kv-dissoc)
   (define result (run-ns-last (string-append preamble
-    "(infer (second Map--Keyed--dict))")))
+    "(infer (snd Map--Keyed--dict))")))
   (check-contains result "Sigma")
   (check-contains result "Map"))
 
@@ -182,7 +182,7 @@
 (test-case "map-set-traits/setlike-first-type"
   ;; first of setlike dict = set-member? function
   (define result (run-ns-last (string-append preamble
-    "(infer (first Set--Setlike--dict))")))
+    "(infer (fst Set--Setlike--dict))")))
   (check-contains result "Pi")
   (check-contains result "Set")
   (check-contains result "Bool"))

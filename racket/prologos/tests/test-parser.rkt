@@ -135,13 +135,13 @@
     (check-true (surf-zero? (surf-pair-fst r)))
     (check-true (surf-refl? (surf-pair-snd r)))))
 
-(test-case "parse: (first x)"
-  (let ([r (p "(first x)")])
+(test-case "parse: (fst x)"
+  (let ([r (p "(fst x)")])
     (check-true (surf-fst? r))
     (check-true (surf-var? (surf-fst-expr r)))))
 
-(test-case "parse: (second x)"
-  (let ([r (p "(second x)")])
+(test-case "parse: (snd x)"
+  (let ([r (p "(snd x)")])
     (check-true (surf-snd? r))
     (check-true (surf-var? (surf-snd-expr r)))))
 

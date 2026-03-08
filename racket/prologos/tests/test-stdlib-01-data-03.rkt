@@ -271,10 +271,10 @@
 
 (test-case "pair/swap"
   (check-equal?
-   (run-ns "(ns ps1)\n(imports [prologos::data::pair :refer [swap]])\n(eval (first (swap Nat Bool (pair zero true))))")
+   (run-ns "(ns ps1)\n(imports [prologos::data::pair :refer [swap]])\n(eval (fst (swap Nat Bool (pair zero true))))")
    '("true : Bool"))
   (check-equal?
-   (run-ns "(ns ps2)\n(imports [prologos::data::pair :refer [swap]])\n(eval (second (swap Nat Bool (pair zero true))))")
+   (run-ns "(ns ps2)\n(imports [prologos::data::pair :refer [swap]])\n(eval (snd (swap Nat Bool (pair zero true))))")
    '("0N : Nat")))
 
 
@@ -285,10 +285,10 @@
 (test-case "pair/map-fst"
   ;; Auto-implicit order: A C B (first-occurrence in spec [A -> C] [Sigma [_ <A>] B] -> ...)
   (check-equal?
-   (run-ns "(ns pm1)\n(imports [prologos::data::pair :refer [map-fst]])\n(eval (first (map-fst Nat Nat Bool (fn (x : Nat) (suc x)) (pair zero true))))")
+   (run-ns "(ns pm1)\n(imports [prologos::data::pair :refer [map-fst]])\n(eval (fst (map-fst Nat Nat Bool (fn (x : Nat) (suc x)) (pair zero true))))")
    '("1N : Nat"))
   (check-equal?
-   (run-ns "(ns pm2)\n(imports [prologos::data::pair :refer [map-fst]])\n(eval (second (map-fst Nat Nat Bool (fn (x : Nat) (suc x)) (pair zero true))))")
+   (run-ns "(ns pm2)\n(imports [prologos::data::pair :refer [map-fst]])\n(eval (snd (map-fst Nat Nat Bool (fn (x : Nat) (suc x)) (pair zero true))))")
    '("true : Bool")))
 
 
@@ -299,8 +299,8 @@
 (test-case "pair/map-snd"
   ;; Auto-implicit order: B C A (first-occurrence in spec [B -> C] [Sigma [_ <A>] B] -> ...)
   (check-equal?
-   (run-ns "(ns pm3)\n(imports [prologos::data::pair :refer [map-snd]])\n(eval (first (map-snd Bool Nat Nat (fn (b : Bool) zero) (pair (suc zero) true))))")
+   (run-ns "(ns pm3)\n(imports [prologos::data::pair :refer [map-snd]])\n(eval (fst (map-snd Bool Nat Nat (fn (b : Bool) zero) (pair (suc zero) true))))")
    '("1N : Nat"))
   (check-equal?
-   (run-ns "(ns pm4)\n(imports [prologos::data::pair :refer [map-snd]])\n(eval (second (map-snd Bool Nat Nat (fn (b : Bool) zero) (pair (suc zero) true))))")
+   (run-ns "(ns pm4)\n(imports [prologos::data::pair :refer [map-snd]])\n(eval (snd (map-snd Bool Nat Nat (fn (b : Bool) zero) (pair (suc zero) true))))")
    '("0N : Nat")))

@@ -47,8 +47,8 @@
      "(imports [prologos::core::propagator :refer [new-widenable-cell]])\n"
      "(imports [prologos::core::lattice :refer [Interval interval-bot Interval--Lattice--dict Interval--Widenable--dict]])\n"
      "(def p : (Sigma (_ : PropNetwork) CellId) (new-widenable-cell Interval Interval--Lattice--dict Interval--Widenable--dict (net-new 100)))\n"
-     "(def n : PropNetwork (first p))\n"
-     "(def c : CellId (second p))\n"
+     "(def n : PropNetwork (fst p))\n"
+     "(def c : CellId (snd p))\n"
      "(eval (the Interval (net-cell-read n c)))\n"))
    "interval-bot"))
 
@@ -60,8 +60,8 @@
      "(imports [prologos::core::propagator :refer [new-widenable-cell]])\n"
      "(imports [prologos::core::lattice :refer [Interval mk-interval Interval--Lattice--dict Interval--Widenable--dict]])\n"
      "(def p : (Sigma (_ : PropNetwork) CellId) (new-widenable-cell Interval Interval--Lattice--dict Interval--Widenable--dict (net-new 100)))\n"
-     "(def n1 : PropNetwork (first p))\n"
-     "(def c : CellId (second p))\n"
+     "(def n1 : PropNetwork (fst p))\n"
+     "(def c : CellId (snd p))\n"
      "(def n2 : PropNetwork (net-cell-write n1 c (mk-interval 1 10)))\n"
      "(eval (the Interval (net-cell-read n2 c)))\n"))
    "mk-interval"))
@@ -78,8 +78,8 @@
       "(imports [prologos::core::propagator :refer [new-widenable-cell]])\n"
       "(imports [prologos::core::lattice :refer [Interval interval-bot Interval--Lattice--dict Interval--Widenable--dict]])\n"
       "(def p : (Sigma (_ : PropNetwork) CellId) (new-widenable-cell Interval Interval--Lattice--dict Interval--Widenable--dict (net-new 100)))\n"
-      "(def n : PropNetwork (first p))\n"
-      "(def c : CellId (second p))\n"
+      "(def n : PropNetwork (fst p))\n"
+      "(def c : CellId (snd p))\n"
       "(eval (the Interval (net-cell-read n c)))\n")))
   (check-contains spec-result "interval-bot"))
 

@@ -13,7 +13,7 @@
 ;;   • **Never** — the uninhabited bottom type
 ;;
 ;; Pairs use the built-in `Sigma` type with a non-dependent first
-;; component: `Sigma (_ : A) B`. The `pair`, `first`, and `second`
+;; component: `Sigma (_ : A) B`. The `pair`, `fst`, and `snd`
 ;; constructors/accessors are AST-level keywords. The Pair module
 ;; adds derived operations like `swap`, `bimap`, and `uncurry`.
 ;;
@@ -33,28 +33,28 @@ module prologos::data::pair
 ;;
 ;; The built-in `Sigma` type represents dependent pairs. When the
 ;; second component doesn't depend on the first, you get an ordinary
-;; tuple. The `pair`, `first`, and `second` keywords are built-in
+;; tuple. The `pair`, `fst`, and `snd` keywords are built-in
 ;; AST nodes; this module provides derived combinators.
 
 ;; Swap: (a, b) -> (b, a)
 spec swap [Sigma [_ <A>] B] -> [Sigma [_ <B>] A]
 defn swap [p]
-  pair [second p] [first p]
+  pair [snd p] [fst p]
 
 ;; Map over first component: (A -> C) -> (A, B) -> (C, B)
 spec map-fst [A -> C] [Sigma [_ <A>] B] -> [Sigma [_ <C>] B]
 defn map-fst [f p]
-  pair [f [first p]] [second p]
+  pair [f [fst p]] [snd p]
 
 ;; Map over second component: (B -> C) -> (A, B) -> (A, C)
 spec map-snd [B -> C] [Sigma [_ <A>] B] -> [Sigma [_ <A>] C]
 defn map-snd [f p]
-  pair [first p] [f [second p]]
+  pair [fst p] [f [snd p]]
 
 ;; Bimap: (A -> C) -> (B -> D) -> (A, B) -> (C, D)
 spec bimap [A -> C] [B -> D] [Sigma [_ <A>] B] -> [Sigma [_ <C>] D]
 defn bimap [f g p]
-  pair [f [first p]] [g [second p]]
+  pair [f [fst p]] [g [snd p]]
 
 ;; Duplicate: a -> (a, a)
 spec dup A -> [Sigma [_ <A>] A]
@@ -64,7 +64,7 @@ defn dup [x]
 ;; Uncurry: (A -> B -> C) -> (A, B) -> C
 spec uncurry [A -> B -> C] [Sigma [_ <A>] B] -> C
 defn uncurry [f p]
-  f [first p] [second p]
+  f [fst p] [snd p]
 
 
 ;; ════════════════════════════════════════════════════

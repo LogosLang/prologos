@@ -117,13 +117,13 @@
 (test-case "zip/both-some"
   ;; zip into a pair, then extract via match
   (check-equal?
-   (last (run-ns "(ns oz1)\n(imports [prologos::data::option :refer [Option none some zip]])\n(eval (the Nat (match (zip Nat Nat (some Nat (suc zero)) (some Nat (suc (suc zero)))) (none -> zero) (some p -> (first p)))))"))
+   (last (run-ns "(ns oz1)\n(imports [prologos::data::option :refer [Option none some zip]])\n(eval (the Nat (match (zip Nat Nat (some Nat (suc zero)) (some Nat (suc (suc zero)))) (none -> zero) (some p -> (fst p)))))"))
    "1N : Nat"))
 
 
 (test-case "zip/one-none"
   (check-equal?
-   (last (run-ns "(ns oz2)\n(imports [prologos::data::option :refer [Option none some zip]])\n(eval (the Nat (match (zip Nat Nat (none Nat) (some Nat (suc (suc zero)))) (none -> (suc (suc (suc zero)))) (some p -> (first p)))))"))
+   (last (run-ns "(ns oz2)\n(imports [prologos::data::option :refer [Option none some zip]])\n(eval (the Nat (match (zip Nat Nat (none Nat) (some Nat (suc (suc zero)))) (none -> (suc (suc (suc zero)))) (some p -> (fst p)))))"))
    "3N : Nat"))
 
 

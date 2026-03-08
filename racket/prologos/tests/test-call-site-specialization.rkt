@@ -54,8 +54,8 @@
      "(ns cs-bool1)\n"
      "(imports [prologos::core::propagator :refer [new-lattice-cell]])\n"
      "(def p : (Sigma (_ : PropNetwork) CellId) (new-lattice-cell Bool Bool--Lattice--dict (net-new 100)))\n"
-     "(def n : PropNetwork (first p))\n"
-     "(def c : CellId (second p))\n"
+     "(def n : PropNetwork (fst p))\n"
+     "(def c : CellId (snd p))\n"
      "(def n2 : PropNetwork (net-cell-write n c true))\n"
      "(eval (the Bool (net-cell-read n2 c)))\n"))
    "true : Bool"))
@@ -67,8 +67,8 @@
      "(ns cs-bool2)\n"
      "(imports [prologos::core::propagator :refer [new-lattice-cell]])\n"
      "(def p : (Sigma (_ : PropNetwork) CellId) (new-lattice-cell Bool Bool--Lattice--dict (net-new 100)))\n"
-     "(def n1 : PropNetwork (first p))\n"
-     "(def c : CellId (second p))\n"
+     "(def n1 : PropNetwork (fst p))\n"
+     "(def c : CellId (snd p))\n"
      "(def n2 : PropNetwork (net-cell-write n1 c false))\n"
      "(def n3 : PropNetwork (net-cell-write n2 c true))\n"
      "(eval (the Bool (net-cell-read n3 c)))\n"))
@@ -86,8 +86,8 @@
      "(imports [prologos::core::propagator :refer [new-lattice-cell]])\n"
      "(imports [prologos::core::lattice :refer [Interval interval-bot Interval--Lattice--dict]])\n"
      "(def p : (Sigma (_ : PropNetwork) CellId) (new-lattice-cell Interval Interval--Lattice--dict (net-new 100)))\n"
-     "(def n : PropNetwork (first p))\n"
-     "(def c : CellId (second p))\n"
+     "(def n : PropNetwork (fst p))\n"
+     "(def c : CellId (snd p))\n"
      "(eval (the Interval (net-cell-read n c)))\n"))
    "interval-bot"))
 
@@ -130,8 +130,8 @@
       "(ns cs-equiv1)\n"
       "(imports [prologos::core::propagator :refer [new-lattice-cell]])\n"
       "(def p : (Sigma (_ : PropNetwork) CellId) (new-lattice-cell Bool Bool--Lattice--dict (net-new 100)))\n"
-      "(def n : PropNetwork (first p))\n"
-      "(def c : CellId (second p))\n"
+      "(def n : PropNetwork (fst p))\n"
+      "(def c : CellId (snd p))\n"
       "(def n2 : PropNetwork (net-cell-write n c true))\n"
       "(eval (the Bool (net-cell-read n2 c)))\n")))
   (define generic-result
@@ -142,8 +142,8 @@
       "(spec nlc {A} PropNetwork -> (PropNetwork * CellId) where (Lattice A))\n"
       "(defn nlc [net] where (Lattice A) (net-new-cell net bot (fn (x : _) (y : _) (join x y))))\n"
       "(def p : (Sigma (_ : PropNetwork) CellId) (nlc Bool Bool--Lattice--dict (net-new 100)))\n"
-      "(def n : PropNetwork (first p))\n"
-      "(def c : CellId (second p))\n"
+      "(def n : PropNetwork (fst p))\n"
+      "(def c : CellId (snd p))\n"
       "(def n2 : PropNetwork (net-cell-write n c true))\n"
       "(eval (the Bool (net-cell-read n2 c)))\n")))
   (check-equal? specialized-result generic-result))

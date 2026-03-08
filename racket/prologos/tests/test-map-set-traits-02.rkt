@@ -108,7 +108,7 @@
 (test-case "map-set-traits/buildable-set-second"
   ;; second of buildable dict = empty-coll function
   (define result (run-ns-last (string-append preamble
-    "(infer (second Set--Buildable--dict))")))
+    "(infer (snd Set--Buildable--dict))")))
   (check-contains result "Pi")
   (check-contains result "Set"))
 

@@ -106,14 +106,14 @@
 (test-case "list/split-at-first"
   ;; split-at 2 [1,2,3], first part sum = 3
   (check-equal?
-   (last (run-ns "(ns lst141)\n(imports [prologos::data::list :refer [List nil cons split-at sum]])\n(eval (sum (first (split-at Nat (suc (suc zero)) (cons Nat (suc zero) (cons Nat (suc (suc zero)) (cons Nat (suc (suc (suc zero))) (nil Nat))))))))"))
+   (last (run-ns "(ns lst141)\n(imports [prologos::data::list :refer [List nil cons split-at sum]])\n(eval (sum (fst (split-at Nat (suc (suc zero)) (cons Nat (suc zero) (cons Nat (suc (suc zero)) (cons Nat (suc (suc (suc zero))) (nil Nat))))))))"))
    "3N : Nat"))
 
 
 (test-case "list/split-at-second"
   ;; split-at 2 [1,2,3], second part sum = 3
   (check-equal?
-   (last (run-ns "(ns lst142)\n(imports [prologos::data::list :refer [List nil cons split-at sum]])\n(eval (sum (second (split-at Nat (suc (suc zero)) (cons Nat (suc zero) (cons Nat (suc (suc zero)) (cons Nat (suc (suc (suc zero))) (nil Nat))))))))"))
+   (last (run-ns "(ns lst142)\n(imports [prologos::data::list :refer [List nil cons split-at sum]])\n(eval (sum (snd (split-at Nat (suc (suc zero)) (cons Nat (suc zero) (cons Nat (suc (suc zero)) (cons Nat (suc (suc (suc zero))) (nil Nat))))))))"))
    "3N : Nat"))
 
 
@@ -168,14 +168,14 @@
 (test-case "list/partition-first"
   ;; partition zero? [0, 1, 0, 2], first = zeros, length 2
   (check-equal?
-   (last (run-ns "(ns lst149)\n(imports [prologos::data::list :refer [List nil cons partition length]])\n(imports [prologos::data::nat :refer [zero?]])\n(eval (length Nat (first (partition Nat zero? (cons Nat zero (cons Nat (suc zero) (cons Nat zero (cons Nat (suc (suc zero)) (nil Nat)))))))))"))
+   (last (run-ns "(ns lst149)\n(imports [prologos::data::list :refer [List nil cons partition length]])\n(imports [prologos::data::nat :refer [zero?]])\n(eval (length Nat (fst (partition Nat zero? (cons Nat zero (cons Nat (suc zero) (cons Nat zero (cons Nat (suc (suc zero)) (nil Nat)))))))))"))
    "2N : Nat"))
 
 
 (test-case "list/partition-second"
   ;; partition zero? [0, 1, 0, 2], second = non-zeros, sum = 3
   (check-equal?
-   (last (run-ns "(ns lst150)\n(imports [prologos::data::list :refer [List nil cons partition sum]])\n(imports [prologos::data::nat :refer [zero?]])\n(eval (sum (second (partition Nat zero? (cons Nat zero (cons Nat (suc zero) (cons Nat zero (cons Nat (suc (suc zero)) (nil Nat)))))))))"))
+   (last (run-ns "(ns lst150)\n(imports [prologos::data::list :refer [List nil cons partition sum]])\n(imports [prologos::data::nat :refer [zero?]])\n(eval (sum (snd (partition Nat zero? (cons Nat zero (cons Nat (suc zero) (cons Nat zero (cons Nat (suc (suc zero)) (nil Nat)))))))))"))
    "3N : Nat"))
 
 

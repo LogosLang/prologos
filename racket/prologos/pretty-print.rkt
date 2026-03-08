@@ -179,8 +179,8 @@
      (format "[pair ~a ~a]" (pp-expr e1 names) (pp-expr e2 names))]
 
     ;; Projections
-    [(expr-fst e1) (format "[first ~a]" (pp-expr e1 names))]
-    [(expr-snd e1) (format "[second ~a]" (pp-expr e1 names))]
+    [(expr-fst e1) (format "[fst ~a]" (pp-expr e1 names))]
+    [(expr-snd e1) (format "[snd ~a]" (pp-expr e1 names))]
 
     ;; Annotation
     [(expr-ann term type)
@@ -345,7 +345,18 @@
     [(expr-string val) (format "~s" val)]
     ;; Map
     [(expr-Map k v) (format "(Map ~a ~a)" (pp-expr k names) (pp-expr v names))]
-    [(expr-champ c) "{map ...}"]
+    [(expr-champ c)
+     (let ([entries (champ-entries c)])
+       (if (null? entries)
+           "{}"
+           (format "{~a}"
+                   (string-join
+                    (map (lambda (entry)
+                           (format "~a ~a"
+                                   (pp-expr (car entry) names)
+                                   (pp-expr (cdr entry) names)))
+                         entries)
+                    ", "))))]
     [(expr-map-empty k v) (format "{} : (Map ~a ~a)" (pp-expr k names) (pp-expr v names))]
     [(expr-map-assoc m k v) (format "[map-assoc ~a ~a ~a]" (pp-expr m names) (pp-expr k names) (pp-expr v names))]
     [(expr-map-get m k) (format "[map-get ~a ~a]" (pp-expr m names) (pp-expr k names))]

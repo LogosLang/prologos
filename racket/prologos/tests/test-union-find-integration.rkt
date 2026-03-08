@@ -68,7 +68,7 @@
 ;; ========================================
 
 (test-case "surface: eval uf-find returns pair"
-  (let ([result (run "(def s : UnionFind (uf-make-set (uf-empty) 0N true)) (eval (first (uf-find s 0N)))")])
+  (let ([result (run "(def s : UnionFind (uf-make-set (uf-empty) 0N true)) (eval (fst (uf-find s 0N)))")])
     (check-not-false (member "0N : Nat" result)
                 "first of uf-find is the root id (0 for singleton)")))
 
@@ -82,8 +82,8 @@
                           "(def s1 : UnionFind (uf-make-set s0 0N true))"
                           "(def s2 : UnionFind (uf-make-set s1 1N false))"
                           "(def s3 : UnionFind (uf-union s2 0N 1N))"
-                          "(def r0 : Nat (first (uf-find s3 0N)))"
-                          "(def r1 : Nat (first (uf-find s3 1N)))"
+                          "(def r0 : Nat (fst (uf-find s3 0N)))"
+                          "(def r1 : Nat (fst (uf-find s3 1N)))"
                           "(eval (nat-eq? r0 r1))"))])
     (check-not-false (member "true : Bool" result)
                 "after union, both ids have same root")))
@@ -99,8 +99,8 @@
                           "(def s2 : UnionFind (uf-make-set s1 1N false))"
                           "(def s3 : UnionFind (uf-union s2 0N 1N))"
                           ;; Query old store s2: 0 and 1 should have different roots
-                          "(def r0-old : Nat (first (uf-find s2 0N)))"
-                          "(def r1-old : Nat (first (uf-find s2 1N)))"
+                          "(def r0-old : Nat (fst (uf-find s2 0N)))"
+                          "(def r1-old : Nat (fst (uf-find s2 1N)))"
                           "(eval (nat-eq? r0-old r1-old))"))])
     (check-not-false (member "false : Bool" result)
                 "old store: 0 and 1 are separate (different roots)")))
@@ -118,8 +118,8 @@
                           "(def s4 : UnionFind (uf-union s3 0N 1N))"
                           "(def s5 : UnionFind (uf-union s4 1N 2N))"
                           ;; All three should have same root
-                          "(def r0 : Nat (first (uf-find s5 0N)))"
-                          "(def r2 : Nat (first (uf-find s5 2N)))"
+                          "(def r0 : Nat (fst (uf-find s5 0N)))"
+                          "(def r2 : Nat (fst (uf-find s5 2N)))"
                           "(eval (nat-eq? r0 r2))"))])
     (check-not-false (member "true : Bool" result)
                 "after chained unions, 0 and 2 have same root")))

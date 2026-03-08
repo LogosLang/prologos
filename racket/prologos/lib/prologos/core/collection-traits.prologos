@@ -97,17 +97,17 @@ deftype [Seq $S] [Sigma [_ <[Pi [A :0 <Type>] [-> [$S A] [Option A]]]>] [Sigma [
 ;; seq-first : (Seq S) -> S A -> Option A
 spec seq-first [Seq S] [S A] -> [Option A]
 defn seq-first [dict xs]
-  [first dict] A xs
+  [fst dict] A xs
 
 ;; seq-rest : (Seq S) -> S A -> S A
 spec seq-rest [Seq S] [S A] -> [S A]
 defn seq-rest [dict xs]
-  [first [second dict]] A xs
+  [fst [snd dict]] A xs
 
 ;; seq-empty? : (Seq S) -> S A -> Bool
 spec seq-empty? [Seq S] [S A] -> Bool
 defn seq-empty? [dict xs]
-  [second [second dict]] A xs
+  [snd [snd dict]] A xs
 
 ;; ========================================
 ;; Indexed Trait — Positional Access

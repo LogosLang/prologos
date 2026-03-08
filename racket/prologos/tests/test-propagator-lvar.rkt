@@ -60,8 +60,8 @@
      "(ns nlc1)\n"
      "(def merge : (-> Bool (-> Bool Bool)) (fn (old : Bool) (fn (nv : Bool) (or old nv))))\n"
      "(def pair1 : (Sigma (_ : PropNetwork) CellId) (net-new-cell (net-new 1000) false merge))\n"
-     "(def mynet : PropNetwork (first pair1))\n"
-     "(def mycid : CellId (second pair1))\n"
+     "(def mynet : PropNetwork (fst pair1))\n"
+     "(def mycid : CellId (snd pair1))\n"
      "(eval (the Bool (net-cell-read mynet mycid)))"))
    "false : Bool"))
 
@@ -72,8 +72,8 @@
      "(ns nlc2)\n"
      "(def merge : (-> Bool (-> Bool Bool)) (fn (old : Bool) (fn (nv : Bool) (or old nv))))\n"
      "(def pair1 : (Sigma (_ : PropNetwork) CellId) (net-new-cell (net-new 1000) false merge))\n"
-     "(def net1 : PropNetwork (first pair1))\n"
-     "(def cid : CellId (second pair1))\n"
+     "(def net1 : PropNetwork (fst pair1))\n"
+     "(def cid : CellId (snd pair1))\n"
      "(def net2 : PropNetwork (net-cell-write net1 cid true))\n"
      "(eval (the Bool (net-cell-read net2 cid)))"))
    "true : Bool"))
@@ -86,8 +86,8 @@
      "(ns nlc3)\n"
      "(def merge : (-> Bool (-> Bool Bool)) (fn (old : Bool) (fn (nv : Bool) (or old nv))))\n"
      "(def pair1 : (Sigma (_ : PropNetwork) CellId) (net-new-cell (net-new 1000) false merge))\n"
-     "(def net1 : PropNetwork (first pair1))\n"
-     "(def cid : CellId (second pair1))\n"
+     "(def net1 : PropNetwork (fst pair1))\n"
+     "(def cid : CellId (snd pair1))\n"
      "(def net2 : PropNetwork (net-cell-write net1 cid true))\n"
      "(def net3 : PropNetwork (net-cell-write net2 cid false))\n"
      "(eval (the Bool (net-cell-read net3 cid)))"))
@@ -104,8 +104,8 @@
      "(ns lcp1)\n"
      "(def merge : (-> Bool (-> Bool Bool)) (fn (old : Bool) (fn (nv : Bool) (or old nv))))\n"
      "(def pair1 : (Sigma (_ : PropNetwork) CellId) (net-new-cell (net-new 1000) false merge))\n"
-     "(def net1 : PropNetwork (first pair1))\n"
-     "(def cid : CellId (second pair1))\n"
+     "(def net1 : PropNetwork (fst pair1))\n"
+     "(def cid : CellId (snd pair1))\n"
      "(def net2 : PropNetwork (net-cell-write net1 cid true))\n"
      ";; Read from OLD network — should still be false (bot)\n"
      "(eval (the Bool (net-cell-read net1 cid)))"))
@@ -122,7 +122,7 @@
      "(ns nrc1)\n"
      "(def merge : (-> Bool (-> Bool Bool)) (fn (old : Bool) (fn (nv : Bool) (or old nv))))\n"
      "(def pair1 : (Sigma (_ : PropNetwork) CellId) (net-new-cell (net-new 1000) false merge))\n"
-     "(def net1 : PropNetwork (first pair1))\n"
+     "(def net1 : PropNetwork (fst pair1))\n"
      "(def net2 : PropNetwork (net-run net1))\n"
      "(eval (net-contradict? net2))"))
    "false : Bool"))

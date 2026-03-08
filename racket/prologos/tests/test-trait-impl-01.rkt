@@ -152,29 +152,29 @@
 
 
 (test-case "trait/accessor-body-multi-method-first"
-  ;; Multi-method: first accessor should project via (first dict)
+  ;; Multi-method: first accessor should project via (fst dict)
   (parameterize ([current-preparse-registry prelude-preparse-registry]
                  [current-trait-registry (hasheq)])
     (define defs
       (process-trait '(trait (Eq (A : (Type 0))) (== : A -> A -> Bool) (/= : A -> A -> Bool))))
     (define acc1 (car defs))
     (define body1 (last acc1))
-    ;; body is (fn (A :0 (Type 0)) (fn (dict ...) (first dict)))
+    ;; body is (fn (A :0 (Type 0)) (fn (dict ...) (fst dict)))
     (define inner1 (caddr body1))
-    (check-equal? (caddr inner1) '(first dict))))
+    (check-equal? (caddr inner1) '(fst dict))))
 
 
 (test-case "trait/accessor-body-multi-method-second"
-  ;; Multi-method: second accessor should project via (second dict)
+  ;; Multi-method: second accessor should project via (snd dict)
   (parameterize ([current-preparse-registry prelude-preparse-registry]
                  [current-trait-registry (hasheq)])
     (define defs
       (process-trait '(trait (Eq (A : (Type 0))) (== : A -> A -> Bool) (/= : A -> A -> Bool))))
     (define acc2 (second defs))
     (define body2 (last acc2))
-    ;; body is (fn (A :0 (Type 0)) (fn (dict ...) (second dict)))
+    ;; body is (fn (A :0 (Type 0)) (fn (dict ...) (snd dict)))
     (define inner2 (caddr body2))
-    (check-equal? (caddr inner2) '(second dict))))
+    (check-equal? (caddr inner2) '(snd dict))))
 
 
 (test-case "trait/three-methods-sigma-nesting"
@@ -206,12 +206,12 @@
                         (sub-a : A -> A -> A)
                         (neg-a : A -> A -> A))))
     ;; Each body is (fn (A :0 (Type 0)) (fn (dict ...) projection))
-    ;; 1st: (first dict)
-    (check-equal? (caddr (caddr (last (first defs)))) '(first dict))
-    ;; 2nd: (first (second dict))
-    (check-equal? (caddr (caddr (last (second defs)))) '(first (second dict)))
-    ;; 3rd: (second (second dict))
-    (check-equal? (caddr (caddr (last (third defs)))) '(second (second dict)))))
+    ;; 1st: (fst dict)
+    (check-equal? (caddr (caddr (last (first defs)))) '(fst dict))
+    ;; 2nd: (fst (snd dict))
+    (check-equal? (caddr (caddr (last (second defs)))) '(fst (snd dict)))
+    ;; 3rd: (snd (snd dict))
+    (check-equal? (caddr (caddr (last (third defs)))) '(snd (snd dict)))))
 
 
 (test-case "trait/error-no-methods"
@@ -278,5 +278,5 @@
       "(def nat-eq2 : (Sigma (_ : (-> Nat (-> Nat Bool))) (-> Nat (-> Nat Bool)))"
       "  (pair (fn [x <Nat>] (fn [y <Nat>] true)) (fn [x <Nat>] (fn [y <Nat>] false))))\n"
       ;; Project first method then apply
-      "(eval ((first nat-eq2) zero zero))")))
+      "(eval ((fst nat-eq2) zero zero))")))
   (check-equal? result "true : Bool"))

@@ -115,7 +115,7 @@
   ;; span zero? [0 0 0] = pair [0 0 0] []
   (check-equal?
    (last (run-ns (string-append "(ns tle16)\n" preamble
-     "(eval (length (first (span zero? '[0N 0N 0N]))))")))
+     "(eval (length (fst (span zero? '[0N 0N 0N]))))")))
    "3N : Nat"))
 
 
@@ -123,7 +123,7 @@
   ;; span zero? [1 2 3] = pair [] [1 2 3]
   (check-equal?
    (last (run-ns (string-append "(ns tle17)\n" preamble
-     "(eval (length (first (span zero? '[1N 2N 3N]))))")))
+     "(eval (length (fst (span zero? '[1N 2N 3N]))))")))
    "0N : Nat"))
 
 
@@ -131,11 +131,11 @@
   ;; span zero? [0 0 1 2] — prefix length 2, suffix sum 3
   (check-equal?
    (last (run-ns (string-append "(ns tle18)\n" preamble
-     "(eval (length (first (span zero? '[0N 0N 1N 2N]))))")))
+     "(eval (length (fst (span zero? '[0N 0N 1N 2N]))))")))
    "2N : Nat")
   (check-equal?
    (last (run-ns (string-append "(ns tle18b)\n" preamble
-     "(eval (sum (second (span zero? '[0N 0N 1N 2N]))))")))
+     "(eval (sum (snd (span zero? '[0N 0N 1N 2N]))))")))
    "3N : Nat"))
 
 
@@ -147,7 +147,7 @@
   ;; break zero? [1 2 3] = pair [1 2 3] []
   (check-equal?
    (last (run-ns (string-append "(ns tle19)\n" preamble
-     "(eval (sum (first (break zero? '[1N 2N 3N]))))")))
+     "(eval (sum (fst (break zero? '[1N 2N 3N]))))")))
    "6N : Nat"))
 
 
@@ -155,7 +155,7 @@
   ;; break zero? [0 1 2] = pair [] [0 1 2]
   (check-equal?
    (last (run-ns (string-append "(ns tle20)\n" preamble
-     "(eval (length (first (break zero? '[0N 1N 2N]))))")))
+     "(eval (length (fst (break zero? '[0N 1N 2N]))))")))
    "0N : Nat"))
 
 
@@ -163,11 +163,11 @@
   ;; break zero? [1 2 0 3] — prefix sum 3, suffix length 2
   (check-equal?
    (last (run-ns (string-append "(ns tle21)\n" preamble
-     "(eval (sum (first (break zero? '[1N 2N 0N 3N]))))")))
+     "(eval (sum (fst (break zero? '[1N 2N 0N 3N]))))")))
    "3N : Nat")
   (check-equal?
    (last (run-ns (string-append "(ns tle21b)\n" preamble
-     "(eval (length (second (break zero? '[1N 2N 0N 3N]))))")))
+     "(eval (length (snd (break zero? '[1N 2N 0N 3N]))))")))
    "2N : Nat"))
 
 

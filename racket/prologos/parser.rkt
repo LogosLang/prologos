@@ -907,13 +907,13 @@
                 [(prologos-error? b) b]
                 [else (surf-pair a b loc)])))]
 
-       ;; (first e), (second e)
-       [(first)
-        (or (check-arity 'first args 1 loc)
+       ;; (fst e), (snd e)
+       [(fst)
+        (or (check-arity 'fst args 1 loc)
             (let ([e (parse-datum (car args))])
               (if (prologos-error? e) e (surf-fst e loc))))]
-       [(second)
-        (or (check-arity 'second args 1 loc)
+       [(snd)
+        (or (check-arity 'snd args 1 loc)
             (let ([e (parse-datum (car args))])
               (if (prologos-error? e) e (surf-snd e loc))))]
 

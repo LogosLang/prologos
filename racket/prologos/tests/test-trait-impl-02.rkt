@@ -212,7 +212,7 @@
      (string-append
       "(ns pair-t1)\n"
       "(imports [prologos::data::pair :refer [dup]])\n"
-      "(eval (first (dup Nat zero)))")))
+      "(eval (fst (dup Nat zero)))")))
   (check-equal? result "0N : Nat"))
 
 

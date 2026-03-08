@@ -70,10 +70,10 @@
 (test-case "pair/bimap"
   ;; Auto-implicit order: A C B D (first-occurrence in spec [A -> C] [B -> D] [Sigma [_ <A>] B] -> ...)
   (check-equal?
-   (run-ns "(ns pb1)\n(imports [prologos::data::pair :refer [bimap]])\n(eval (first (bimap Nat Nat Bool Bool (fn (x : Nat) (suc x)) (fn (b : Bool) (boolrec Bool false true b)) (pair (suc zero) true))))")
+   (run-ns "(ns pb1)\n(imports [prologos::data::pair :refer [bimap]])\n(eval (fst (bimap Nat Nat Bool Bool (fn (x : Nat) (suc x)) (fn (b : Bool) (boolrec Bool false true b)) (pair (suc zero) true))))")
    '("2N : Nat"))
   (check-equal?
-   (run-ns "(ns pb2)\n(imports [prologos::data::pair :refer [bimap]])\n(eval (second (bimap Nat Nat Bool Bool (fn (x : Nat) (suc x)) (fn (b : Bool) (boolrec Bool false true b)) (pair (suc zero) true))))")
+   (run-ns "(ns pb2)\n(imports [prologos::data::pair :refer [bimap]])\n(eval (snd (bimap Nat Nat Bool Bool (fn (x : Nat) (suc x)) (fn (b : Bool) (boolrec Bool false true b)) (pair (suc zero) true))))")
    '("false : Bool")))
 
 

@@ -66,14 +66,14 @@ defn fio-close [h]
 ;;
 ;; Evaluation order for read bodies:
 ;;   1. body opens/reads, returns (pair (mk-handle (fio-read-ret id)) ...)
-;;   2. first p → mk-handle (fio-read-ret id) — forces the read (data-flow)
-;;   3. fio-close (first p) → match on handle → fio-close-raw (fio-read-ret id)
+;;   2. fst p → mk-handle (fio-read-ret id) — forces the read (data-flow)
+;;   3. fio-close (fst p) → match on handle → fio-close-raw (fio-read-ret id)
 ;;      → forces read (returns id as Nat) → closes port
-;;   4. second p → fio-read-cached id → retrieves cached data
+;;   4. snd p → fio-read-cached id → retrieves cached data
 ;;
 ;; Not linear (-1>) because it doesn't take a linear param — it creates
 ;; and manages the handle internally.
 spec fio-with-file {A : Type} String -> String -> <Handle -> <Handle * A>> -> A
 defn fio-with-file [path mode body]
   let p := [body [fio-open path mode]]
-    match [fio-close [first p]] (unit -> [second p])
+    match [fio-close [fst p]] (unit -> [snd p])

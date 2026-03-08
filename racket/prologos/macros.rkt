@@ -6077,18 +6077,18 @@
 ;; dict-expr = the expression to project from
 (define (build-sigma-accessor n i dict-expr)
   (cond
-    ;; Last element: apply (n-1) `second` projections
+    ;; Last element: apply (n-1) `snd` projections
     [(= i (- n 1))
      (for/fold ([expr dict-expr])
                ([_ (in-range (- n 1))])
-       `(second ,expr))]
-    ;; Not last: apply i `second` projections, then `first`
+       `(snd ,expr))]
+    ;; Not last: apply i `snd` projections, then `fst`
     [else
      (define inner
        (for/fold ([expr dict-expr])
                  ([_ (in-range i)])
-         `(second ,expr)))
-     `(first ,inner)]))
+         `(snd ,expr)))
+     `(fst ,inner)]))
 
 (define (process-trait datum)
   (unless (and (list? datum) (>= (length datum) 3))
@@ -6251,7 +6251,7 @@
 
       ;; Accessor body: fn that projects from dict
       ;; For single-method: (fn (dict <TraitType>) dict)
-      ;; For multi-method: (fn (dict <TraitType>) (first/second... dict))
+      ;; For multi-method: (fn (dict <TraitType>) (fst/snd... dict))
       (define dict-var 'dict)
       (define projection
         (if (= n-methods 1)

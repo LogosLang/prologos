@@ -82,7 +82,7 @@
 (test-case "list/zip-head-first"
   ;; zip [1,2] [3,4], first element of head pair = 1
   (check-equal?
-   (run-last "(eval (first (head (Sigma [_ <Nat>] Nat) (pair zero zero) (zip Nat Nat (cons Nat (suc zero) (cons Nat (suc (suc zero)) (nil Nat))) (cons Nat (suc (suc (suc zero))) (cons Nat (suc (suc (suc (suc zero)))) (nil Nat)))))))")
+   (run-last "(eval (fst (head (Sigma [_ <Nat>] Nat) (pair zero zero) (zip Nat Nat (cons Nat (suc zero) (cons Nat (suc (suc zero)) (nil Nat))) (cons Nat (suc (suc (suc zero))) (cons Nat (suc (suc (suc (suc zero)))) (nil Nat)))))))")
    "1N : Nat"))
 
 
@@ -91,14 +91,14 @@
 (test-case "list/unzip-firsts"
   ;; unzip [(1,2), (3,4)], first list sum = 4
   (check-equal?
-   (run-last "(eval (sum (first (unzip Nat Nat (cons (Sigma [_ <Nat>] Nat) (pair (suc zero) (suc (suc zero))) (cons (Sigma [_ <Nat>] Nat) (pair (suc (suc (suc zero))) (suc (suc (suc (suc zero))))) (nil (Sigma [_ <Nat>] Nat))))))))")
+   (run-last "(eval (sum (fst (unzip Nat Nat (cons (Sigma [_ <Nat>] Nat) (pair (suc zero) (suc (suc zero))) (cons (Sigma [_ <Nat>] Nat) (pair (suc (suc (suc zero))) (suc (suc (suc (suc zero))))) (nil (Sigma [_ <Nat>] Nat))))))))")
    "4N : Nat"))
 
 
 (test-case "list/unzip-seconds"
   ;; unzip [(1,2), (3,4)], second list sum = 6
   (check-equal?
-   (run-last "(eval (sum (second (unzip Nat Nat (cons (Sigma [_ <Nat>] Nat) (pair (suc zero) (suc (suc zero))) (cons (Sigma [_ <Nat>] Nat) (pair (suc (suc (suc zero))) (suc (suc (suc (suc zero))))) (nil (Sigma [_ <Nat>] Nat))))))))")
+   (run-last "(eval (sum (snd (unzip Nat Nat (cons (Sigma [_ <Nat>] Nat) (pair (suc zero) (suc (suc zero))) (cons (Sigma [_ <Nat>] Nat) (pair (suc (suc (suc zero))) (suc (suc (suc (suc zero))))) (nil (Sigma [_ <Nat>] Nat))))))))")
    "6N : Nat"))
 
 
@@ -130,21 +130,21 @@
 (test-case "list/halve-empty"
   ;; halve [] = ([], []), first length 0
   (check-equal?
-   (run-last "(eval (length Nat (first (halve Nat (nil Nat)))))")
+   (run-last "(eval (length Nat (fst (halve Nat (nil Nat)))))")
    "0N : Nat"))
 
 
 (test-case "list/halve-odd"
   ;; halve [1,2,3] — alternating: first = [1,3] (length 2)
   (check-equal?
-   (run-last "(eval (length Nat (first (halve Nat (cons Nat (suc zero) (cons Nat (suc (suc zero)) (cons Nat (suc (suc (suc zero))) (nil Nat))))))))")
+   (run-last "(eval (length Nat (fst (halve Nat (cons Nat (suc zero) (cons Nat (suc (suc zero)) (cons Nat (suc (suc (suc zero))) (nil Nat))))))))")
    "2N : Nat"))
 
 
 (test-case "list/halve-even"
   ;; halve [1,2,3,4] — second = [2,4] (length 2)
   (check-equal?
-   (run-last "(eval (length Nat (second (halve Nat (cons Nat (suc zero) (cons Nat (suc (suc zero)) (cons Nat (suc (suc (suc zero))) (cons Nat (suc (suc (suc (suc zero)))) (nil Nat)))))))))")
+   (run-last "(eval (length Nat (snd (halve Nat (cons Nat (suc zero) (cons Nat (suc (suc zero)) (cons Nat (suc (suc (suc zero))) (cons Nat (suc (suc (suc (suc zero)))) (nil Nat)))))))))")
    "2N : Nat"))
 
 

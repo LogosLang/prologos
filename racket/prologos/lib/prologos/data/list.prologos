@@ -293,7 +293,7 @@ spec unzip-helper [List A] [List B] [List [Sigma [_ <A>] B]] -> [Sigma [_ <List 
 defn unzip-helper [ls rs ps]
   match ps
     | nil       -> pair [reverse ls] [reverse rs]
-    | cons p rest -> unzip-helper [cons [first p] ls] [cons [second p] rs] rest
+    | cons p rest -> unzip-helper [cons [fst p] ls] [cons [snd p] rs] rest
 
 spec unzip [List [Sigma [_ <A>] B]] -> [Sigma [_ <List A>] [List B]]
 defn unzip [ps]
@@ -348,7 +348,7 @@ defn sort [lte xs]
     | nil       -> nil
     | cons a as -> match as
       | nil     -> cons a nil
-      | cons _ _ -> merge lte [sort lte [first [halve xs]]] [sort lte [second [halve xs]]]
+      | cons _ _ -> merge lte [sort lte [fst [halve xs]]] [sort lte [snd [halve xs]]]
 
 ;; ========================================
 ;; Non-empty Folds
