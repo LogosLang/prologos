@@ -829,19 +829,20 @@ The following collection items ARE also deferred (genuine infrastructure deps):
 
 ## Surface Syntax Issues (Uncovered 2026-03-08)
 
-### Polymorphic Nullary Constructor Inference at Call Sites
-- Bare `none` and `nil` at function call sites fail type inference
-- Example: `[unwrap-or-zero none]` — `none : Option A` for any A, but
-  the checker can't infer A = Nat from the function's parameter type
-- Return type constraints don't propagate backwards through application
-- Affects all polymorphic nullary constructors (none, nil, etc.)
-- **Not blocked**: requires inference improvement (bidirectional propagation)
-- Source: `examples/unified-matching.prologos` Sections 6, 11
-
-### WS-Mode `:=` Body Parsing with $nat-literal Sentinels
+### WS-Mode `:=` Body Parsing with Multi-Form Bodies
 - `def x : List Nat := cons 1N [cons 2N nil]` fails in WS mode
-- The WS reader produces `($nat-literal N)` sentinels for numeric literals
-  like `1N`, and the `:=` body parser chokes on multi-form bodies containing them
+- Root cause: `expand-def-assign` in macros.rkt (line 3466) requires exactly
+  one form after `:=`. But the WS reader produces multiple inline elements:
+  `cons`, `($nat-literal 1)`, `[cons 2N nil]` — three separate forms
+- Fix: when multiple elements exist after `:=`, wrap them as implicit application
 - Workaround: use quote-list syntax `'[1N 2N 3N]` instead of cons chains
-- **Not blocked**: requires WS reader / parser fix for `:=` body handling
+- **Not blocked**: straightforward fix in `expand-def-assign`
 - Source: `examples/unified-matching.prologos` Section 5
+
+### Multi-Bracket defn Not Supported
+- `defn f [a] [b] body` and `defn f [a : T] [b : T] body` don't work
+- Neither sexp nor WS mode — pre-existing limitation, not caused by unified matching
+- Standard pattern is uncurried single-bracket: `defn f [a b] body`
+- Affects both regular defn and params+arms defn syntax
+- **Not blocked**: requires parser extension for multi-bracket param groups
+- Source: `examples/unified-matching.prologos` Section 11

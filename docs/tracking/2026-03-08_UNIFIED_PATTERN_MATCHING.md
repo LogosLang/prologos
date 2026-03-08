@@ -76,6 +76,14 @@ New surface AST node `surf-match-patterns` (with `match-pattern-arm`). Parser pr
 - `5b59169` — Add test-unified-match-01.rkt + fix $nat-literal in pattern parsing
 - `983a7a5` — Add params+arms tests + handle typed params in defn detection
 - `1ad02e8` — Add test-unified-match-01.rkt to dep-graph
+- `88eed86` — Update grammar docs + create tracking doc
+- `c88811b` — Add unified-matching.prologos demo file
+
+## Known Issues Uncovered
+
+1. **`:=` body parsing** (DEFERRED): `def x := cons 1N [cons 2N nil]` fails — `expand-def-assign` expects single form after `:=` but WS reader produces multiple inline elements. Fix: wrap as implicit application.
+2. **Multi-bracket defn** (DEFERRED): `defn f [a] [b] body` doesn't work (pre-existing). Standard is uncurried `defn f [a b] body`.
+3. **NOT a bug**: Polymorphic nullary ctors (`none`, `nil`) at call sites — actually works via auto-apply + unification.
 
 ## Bugs Fixed During Implementation
 

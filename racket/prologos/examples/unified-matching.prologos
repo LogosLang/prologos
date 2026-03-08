@@ -170,13 +170,9 @@ defn unwrap-or-zero [opt : Option Nat] : Nat
 
 [unwrap-or-zero [some 42N]]
 
-;; ISSUE: Bare `none` at a call site is polymorphic (none : Option A for
-;; any A). The type checker can't infer A = Nat from the function's param
-;; type alone — return type constraints don't propagate backwards through
-;; function application. Needs explicit type annotation at the call site.
-;;
-;; Ideal syntax (commented out — inference limitation):
-;; [unwrap-or-zero none]
+;; Polymorphic nullary constructors work at call sites — the type checker
+;; unifies the implicit type parameter through bidirectional checking:
+[unwrap-or-zero none]
 
 
 ;; ========================================================================
@@ -308,21 +304,18 @@ defn safe-head [xs : List Nat] : Nat
 [safe-head '[1N 2N 3N]]
 [safe-head '[42N]]
 
-;; ISSUE: Same polymorphic nullary constructor issue as Section 6.
-;; Bare `nil` can't be inferred as `List Nat` at the call site.
+;; Polymorphic nullary constructors work here too:
+[safe-head nil]
+
+;; ISSUE: Multi-bracket params+arms — `defn f [a : T] [b : T] | ...` —
+;; doesn't parse. Multi-bracket defn is a pre-existing limitation; the
+;; standard pattern is uncurried single-bracket: `defn f [a b] body`.
 ;;
-;; Ideal syntax (commented out — inference limitation):
-;; [safe-head nil]
-
-;; Option with params+arms and typed params:
-defn get-or [opt : Option Nat] [default : Nat] : Nat
-  | some v  _ -> v
-  | none    d -> d
-
-[get-or [some 10N] 0N]
-
-;; ISSUE: Same as above — bare `none` needs type annotation.
-;; Ideal syntax (commented out — inference limitation):
+;; Ideal syntax (commented out — multi-bracket defn not supported):
+;; defn get-or [opt : Option Nat] [default : Nat] : Nat
+;;   | some v  _ -> v
+;;   | none    d -> d
+;; [get-or [some 10N] 0N]
 ;; [get-or none 99N]
 
 
@@ -400,11 +393,12 @@ defn fib [n]
 ;;
 ;; Known surface syntax issues uncovered during this capstone:
 ;;
-;; ISSUE 1: Polymorphic nullary constructors (none, nil) at call sites
-;;   need explicit type annotation — inference doesn't propagate param
-;;   type constraints backwards through function application.
-;;   Example: [unwrap-or-zero none] fails; needs (the (Option Nat) none)
+;; ISSUE 1: WS-mode `def x := cons 1N [cons 2N nil]` fails.
+;;   expand-def-assign in macros.rkt requires exactly one form after :=,
+;;   but the WS reader produces multiple inline elements (cons, ($nat-literal 1),
+;;   [cons ...]). Fix: wrap multiple elements as implicit application.
 ;;
-;; ISSUE 2: WS-mode `def x := cons 1N [cons 2N nil]` fails due to
-;;   $nat-literal sentinel interaction with := body parsing.
-;;   Workaround: use quote-list syntax '[1N 2N 3N]
+;; ISSUE 2: Multi-bracket defn `defn f [a] [b] body` doesn't work in
+;;   WS mode (or sexp mode). Pre-existing limitation. The standard pattern
+;;   is uncurried single-bracket: `defn f [a b] body`.
+;;   Affects both regular defn and params+arms defn.
