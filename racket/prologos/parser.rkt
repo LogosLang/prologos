@@ -3643,6 +3643,13 @@
     ;; Integer literal (in sexp mode, 0, 1, etc. are read as integers)
     [(and (exact-nonnegative-integer? d) (integer? d))
      (pat-atom 'numeric d d loc)]
+    ;; $nat-literal sentinel from WS reader: ($nat-literal n) → numeric pattern
+    [(and (pair? d)
+          (let ([h (let ([c (car d)]) (if (syntax? c) (syntax-e c) c))])
+            (eq? h '$nat-literal))
+          (= (length d) 2))
+     (let ([v (let ([x (cadr d)]) (if (syntax? x) (syntax-e x) x))])
+       (pat-atom 'numeric v v loc))]
     ;; List (inner bracket): compound pattern or head-tail
     [(pair? d)
      (define inner-elems
