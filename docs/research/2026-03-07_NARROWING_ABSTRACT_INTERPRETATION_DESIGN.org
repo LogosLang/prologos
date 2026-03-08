@@ -302,6 +302,29 @@ When the narrowing propagator encounters a recursive call:
   bound by another constraint). Emit a warning/note if the user explicitly
   requested narrowing.
 
+*** 1.4.4a Domain-Bounded Fuel Estimation (2a + 2b Interaction)
+
+When Phase 2a's interval domain is available, =bounded= functions can
+compute /dynamic/ fuel bounds from the concrete domain size rather than
+using a fixed default. If a function's argument has interval domain
+$[a, b]$ with finite $b - a$, and the size-change matrix shows
+non-increasing recursion on that argument, then the maximum recursion
+depth is bounded by $b - a + 1$.
+
+#+begin_example
+defn f [x] := [f [sub x 1N]]   ;; size-change: non-increasing (not structurally decreasing)
+                                ;; classified as 'bounded
+
+;; Without interval domain: fuel = fixed default (e.g., 1000)
+;; With interval domain ?x ∈ [3, 7]: fuel = 7 - 3 + 1 = 5
+#+end_example
+
+This is computed at narrowing time (not elaboration time) since the
+interval domain is only known after constraint propagation narrows it.
+The narrowing propagator checks: if the function is =bounded= AND the
+relevant argument has a finite interval domain, compute fuel from the
+domain size. Otherwise, fall back to the default fuel bound.
+
 *** 1.4.5 Widening for Non-Terminating Abstract Fixpoints
 
 When interval constraint propagation itself involves recursion (e.g.,
@@ -376,9 +399,17 @@ elements can be rewritten to a common term (Knuth-Bendix, 1970).
 
 *** 1.5.3 Analysis Algorithm
 
+The analysis is /lazy/: inductively sequential functions (those whose
+definitional tree has no Or-branches) are confluent by construction and
+skip critical pair analysis entirely. Only functions with Or-branches
+(non-deterministic, overlapping rules) trigger the full analysis.
+
 #+begin_example
-check-confluence(clauses):
-  1. For each pair of clauses (c1, c2) (including c1 with itself):
+check-confluence(def-tree, clauses):
+  0. FAST PATH: If def-tree has no Or-branches → 'confluent (skip analysis)
+     This covers the common case (add, append, map, filter, etc.) at O(tree-size)
+  1. SLOW PATH (Or-branches present):
+     For each pair of clauses (c1, c2) (including c1 with itself):
      a. Rename variables to be disjoint
      b. For each non-variable position p in lhs(c1):
         Try to unify lhs(c1)|_p with lhs(c2)
@@ -438,12 +469,12 @@ The narrowing propagator checks =confluence-class=:
 
 ** 1.6 Phase 2 Summary
 
-| Sub-phase | Module | Lines (est.) | Tests (est.) |
-|-|-|-|-|
-| 2a: Interval Abstract Domain | =interval-domain.rkt=, =narrowing-abstract.rkt= | 530 | 105 |
-| 2b: Size-Based Termination | =termination-analysis.rkt= | 390 | 80 |
-| 2c: Critical Pair / Confluence | =confluence-analysis.rkt= | 350 | 65 |
-| *Phase 2 Total* | *4 new + 1 modified* | *~1,270* | *~250* |
+| Sub-phase                      | Module                                          | Lines (est.) | Tests (est.) |
+|--------------------------------+-------------------------------------------------+--------------+--------------|
+| 2a: Interval Abstract Domain   | =interval-domain.rkt=, =narrowing-abstract.rkt= |          530 |          105 |
+| 2b: Size-Based Termination     | =termination-analysis.rkt=                      |          390 |           80 |
+| 2c: Critical Pair / Confluence | =confluence-analysis.rkt=                       |          350 |           65 |
+| *Phase 2 Total*                | *4 new + 1 modified*                            |     *~1,270* |       *~250* |
 
 ** 1.7 Phase 2 Dependencies and Ordering
 
@@ -577,19 +608,36 @@ boundary (or lazily on demand for narrowing):
          (install-narrowing-propagators net fn-name arg-cells result-cell)))]))
 #+end_src
 
-*** 2.1.5 Scope: Module-Level vs. Whole-Program
+*** 2.1.5 Scope: Demand-Driven Analysis
 
 0-CFA can be scoped at different granularities:
 
 | Scope | Precision | Cost | When |
 |-|-|-|-|
 | Per-function | Low (only local calls) | O(n) per function | Phase 3a initial |
-| Per-module | Medium (all calls in module) | O(n^2) per module | Phase 3a full |
-| Whole-program | High (all calls) | O(n^3) worst case | Phase 3a+ (optional) |
+| Per-module | Medium (all calls in module) | O(n^2) per module | Phase 3a+ (optional) |
+| Whole-program | High (all calls) | O(n^3) worst case | Phase 3a++ (optional) |
 
-For Phase 3a, module-level analysis is the right target. Whole-program
-analysis can be deferred or made lazy (analyze on demand when narrowing
-encounters an unknown HO argument).
+For Phase 3a, the analysis is /demand-driven/: 0-CFA runs only when the
+elaborator encounters a higher-order argument in a narrowing context
+(signaled by the presence of =?=-prefixed variables). This avoids
+analyzing functions that are never narrowed through.
+
+#+begin_example
+Demand-driven 0-CFA trigger:
+  1. Elaborator encounters [apply-op ?f 3N ?y] = 10N
+  2. ?f is HO (function type) and ?-prefixed → narrowing context
+  3. Check 0-CFA cache for apply-op's first argument → miss
+  4. Run 0-CFA for apply-op, scoped to current module
+  5. Cache result: f ∈ {add, mul, sub}
+  6. Install narrowing propagators via amb over {add, mul, sub}
+#+end_example
+
+This is neither fully module-level (avoids analyzing unused functions)
+nor fully lazy (the elaborator signals demand at the right granularity).
+Results are cached per-module, so repeated narrowing through the same HO
+argument pays the analysis cost only once. Cross-module flows are handled
+conservatively: imported functions with unknown flow sets residuate.
 
 *** 2.1.6 Implementation
 
@@ -828,29 +876,50 @@ solve [find ?x ?y]
   :minimize ?cost
 #+end_src
 
-Implementation via a cost-bound cell:
+**** ATMS Interaction: Global Cost Bound
+
+The cost bound is /global/ across all ATMS worldviews, consistent with
+the ATMS's global nogood semantics (D9 in Phase 1 design: nogoods are
+shared, unconditional facts are shared). When a solution with cost $c$
+is found in any worldview, /all/ worldviews are immediately pruned to
+cost $< c$.
+
+This is strictly more efficient than per-worldview bounds: a solution in
+worldview $W_1$ prunes the search space of worldview $W_2$ without $W_2$
+having to independently discover that bound.
+
+Implementation: the cost-bound cell lives outside any specific worldview
+(it is part of the search state, not the propagator network state). The
+=atms-solve-all= loop updates it on each solution found.
 
 #+begin_src racket
-;; Branch-and-bound as propagator
-(define (install-bb-min net cost-cell)
-  ;; Cost bound cell: starts at +inf, decreases monotonically
-  (define-values (net* bound-cell)
-    (net-new-cell net +inf.0
-      (lambda (old new) (min old new))  ;; merge = min
-      (lambda (v) #f)))                 ;; never contradicts
-  ;; Propagator: cost-cell.lo > bound-cell → contradiction
-  (define-values (net** _pid)
-    (net-add-propagator net* (list cost-cell bound-cell) '()
-      (lambda (net)
-        (define cost (net-cell-read net cost-cell))
-        (define bound (net-cell-read net bound-cell))
-        (if (> (interval-lo cost) bound)
-            ;; Prune: this branch can't improve on current best
-            (struct-copy prop-network net [contradiction #t])
-            ;; Tighten cost domain
-            (net-cell-write net cost-cell
-              (interval (interval-lo cost) (min (interval-hi cost) bound)))))))
-  (values net** bound-cell))
+;; Branch-and-bound with global cost bound
+(define (search-bb-min net goals cost-cell)
+  ;; Global bound: shared across all worldviews
+  (define global-bound (box +inf.0))
+  (atms-solve-all net goals
+    ;; Prune worldviews whose cost lower bound exceeds global best
+    #:prune-fn (lambda (wv)
+                 (define cost-lo (interval-lo (worldview-cell-read wv cost-cell)))
+                 (< cost-lo (unbox global-bound)))
+    ;; On each solution found: update the global bound
+    #:on-solution (lambda (wv)
+                    (define cost (interval-lo (worldview-cell-read wv cost-cell)))
+                    (when (< cost (unbox global-bound))
+                      (set-box! global-bound cost)))))
+
+;; Additionally, install a pruning propagator within each worldview:
+(define (install-bb-pruning-propagator net cost-cell global-bound)
+  (net-add-propagator net (list cost-cell) (list cost-cell)
+    (lambda (net)
+      (define cost (net-cell-read net cost-cell))
+      (define bound (unbox global-bound))
+      (if (> (interval-lo cost) bound)
+          ;; Prune: this branch can't improve on current best
+          (struct-copy prop-network net [contradiction #t])
+          ;; Tighten cost domain
+          (net-cell-write net cost-cell
+            (interval (interval-lo cost) (min (interval-hi cost) bound)))))))
 #+end_src
 
 *** 2.3.4 Implementation
@@ -1105,13 +1174,60 @@ solve
   3. Combined: 10 solutions instead of 11 (5+5 excluded)
 #+end_example
 
+** 5.6 Narrowing and Effects (Pure Fragment Only)
+
+Narrowing operates exclusively over the /pure fragment/ of Prologos.
+Functions with capability requirements (QTT resource usage, IO effects,
+session types) are automatically non-narrowable.
+
+The QTT system makes this distinction explicit at the type level:
+
+- *Pure functions* (=spec f : A -> B= with no capability binders): the
+  function body can be symbolically executed via narrowing. These are
+  narrowable.
+
+- *Capability-bearing functions* (=spec f {Cap} : A -> B=): the erased
+  capability binder indicates the function body may perform effects. Even
+  though =Cap= is erased at runtime, the function /semantically/ depends
+  on external state. Narrowing would require symbolically executing the
+  effect, which is nonsensical. These are non-narrowable; the narrowing
+  propagator residuates.
+
+- *Session-typed processes* (=proc= definitions): narrowing does not
+  apply to processes — they are communicating entities, not term-rewriting
+  functions. No interaction needed.
+
+This classification requires no additional analysis: the elaborator
+already knows whether a function has capability binders from its type.
+A function's =narrowing-info= simply inherits =non-narrowable= when
+capability binders are present, before termination or confluence analysis
+even runs.
+
+#+begin_example
+spec read-config {ReadCap} : <(path : String) -> Config>
+;; narrowing-info: non-narrowable (capability-bearing)
+;; [read-config ?path] = some-config  →  residuates (waits for ?path to be bound)
+
+spec add : <(x : Nat) -> (y : Nat) -> Nat>
+;; narrowing-info: terminating, confluent (pure)
+;; [add ?x ?y] = 13N  →  narrows to 14 solutions
+#+end_example
+
 * 6. Open Research Questions
 
 ** 6.1 Phase 2 Open Questions
 
-1. *Interval domain for non-numeric types*: Can we define abstract domains
-   for List (length interval), String (length interval), or algebraic types
-   in general? Length-based abstraction is a natural Galois connection.
+1. *Length-interval domain for structured types* (Phase 2a+): For =List=,
+   =String=, and other recursive types, a /length-interval/ Galois
+   connection abstracts the structure to its size: =alpha(Cons(_, Cons(_, Nil))) = [2, 2]=,
+   =gamma([2, 4]) = "at least 2 and at most 4 elements"=. This enables
+   propagation like =length(?xs) + length(?ys) = length(zs)= for =append=
+   queries. Note that for finite constructor ADTs (=List= has 2 constructors:
+   =Nil=, =Cons=), Phase 1's needed narrowing handles the common case
+   directly --- the length domain adds value primarily when propagating size
+   constraints across multiple list variables to prune the search space
+   without enumerating. For =Vec n A= (dependently typed), the type index
+   =n= /is/ the size --- the type system provides the abstraction for free.
 
 2. *Widening precision*: Standard interval widening loses significant
    precision. /Widening with thresholds/ (set of landmark values that the
@@ -1196,12 +1312,14 @@ practical functions. Dependency pairs (Arts & Giesl 2000) are strictly more
 powerful but require more infrastructure (dependency graph, usable rules,
 argument filterings). Start with LJBA; upgrade if needed.
 
-** DD-3: Module-Level 0-CFA
+** DD-3: Demand-Driven 0-CFA
 
-Scope 0-CFA to module level for Phase 3a. This balances precision (captures
-all intra-module function flows) against cost (avoids whole-program
-analysis). Cross-module flows can be handled conservatively (treat imported
-functions as unknown flow sets) or eagerly (analyze transitively).
+0-CFA is triggered on demand when the elaborator encounters a higher-order
+argument in a narrowing context (=?=-prefixed variables). Results are
+cached per-module. This avoids analyzing functions that are never narrowed
+through, while still capturing all intra-module function flows when needed.
+Cross-module flows are handled conservatively: imported functions with
+unknown flow sets residuate.
 
 ** DD-4: Bound Consistency for =all-different=
 
@@ -1235,8 +1353,20 @@ Extend the existing =solver= surface syntax with =:variable-order=,
 
 Termination analysis and confluence analysis are compile-time (elaboration
 time) analyses stored in =narrowing-info= alongside the definitional tree.
-They run once per =defn= and do not affect runtime performance. 0-CFA runs
-at module boundary (or lazily on first narrowing demand for a HO function).
+They run once per =defn= and do not affect runtime performance. Confluence
+analysis is lazy: it skips the full critical pair computation for
+inductively sequential functions (no Or-branches in the definitional tree),
+covering the common case at O(tree-size). 0-CFA runs on demand when the
+elaborator encounters HO arguments in narrowing contexts, with per-module
+caching.
+
+** DD-9: Narrowing Over the Pure Fragment
+
+Functions with capability binders (=\{Cap\}=) are automatically
+non-narrowable. The QTT system distinguishes pure from effectful at the
+type level; no additional analysis is needed. Session-typed processes
+(=proc=) are not subject to narrowing. This ensures narrowing never
+attempts to symbolically execute side effects.
 
 * 9. Related Work
 
