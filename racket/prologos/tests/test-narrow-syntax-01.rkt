@@ -4,7 +4,7 @@
 ;;; Tests for Phase 1e: WS-Mode Narrowing Syntax
 ;;; Tests the syntax pipeline for narrowing expressions:
 ;;; WS reader (infix =) → parser (?-var detection) → elaborator (surf-narrow → expr-narrow)
-;;; → type-checker → reduction (pass-through) → pretty-printer.
+;;; → type-checker → reduction (DT-guided search) → pretty-printer.
 ;;;
 
 (require rackunit
@@ -145,16 +145,21 @@
 ;; B. Sexp-mode — narrowing through full pipeline
 ;; ========================================
 
-(test-case "narrow/sexp: single ?-var produces narrow output"
-  ;; (= (not ?b) true) — one ?-variable → narrowing
+;; Helper: count solution maps in output
+(define (count-answers result-str)
+  (length (regexp-match* #rx"\\{map" result-str)))
+
+(test-case "narrow/sexp: single ?-var produces solution"
+  ;; (= (not ?b) true) — one ?-variable → narrowing finds {b: false}
   (define result (run-last "(= (not ?b) true)"))
   (check-true (string? result))
-  (check-true (string-contains? result "narrow")))
+  (check-true (string-contains? result "{map")))
 
 (test-case "narrow/sexp: two ?-vars"
+  ;; (= (add ?x ?y) 3) — four solutions: (0,3), (1,2), (2,1), (3,0)
   (define result (run-last "(= (add ?x ?y) 3)"))
   (check-true (string? result))
-  (check-true (string-contains? result "narrow")))
+  (check-true (string-contains? result "{map")))
 
 (test-case "narrow/sexp: no ?-vars → not narrowing"
   ;; (= true true) without ?-vars: = is treated as a function application.
@@ -173,41 +178,41 @@
   (define result
     (run-ws-last "ns test-ws-n1\n[not ?b] = true\n"))
   (check-true (string? result))
-  (check-true (string-contains? result "narrow")))
+  (check-true (string-contains? result "{map")))
 
 (test-case "narrow/ws: two ?-vars with infix ="
   (define result
     (run-ws-last "ns test-ws-n2\n[add ?x ?y] = 3N\n"))
   (check-true (string? result))
-  (check-true (string-contains? result "narrow")))
+  (check-true (string-contains? result "{map")))
 
 (test-case "narrow/ws: ?-var on RHS"
   ;; true = [not ?b] — ?-var appears on RHS
   (define result
     (run-ws-last "ns test-ws-n3\ntrue = [not ?b]\n"))
   (check-true (string? result))
-  (check-true (string-contains? result "narrow")))
+  (check-true (string-contains? result "{map")))
 
 ;; ========================================
-;; D. Elaboration details — logic variables
+;; D. Result format — narrowing produces solution maps
 ;; ========================================
 
-(test-case "narrow/elab: ?-vars become logic vars in pretty-print"
+(test-case "narrow/result: single solution has one map"
   (define result (run-last "(= (not ?b) true)"))
-  ;; ?b should appear as a logic variable (pretty-printed with ? prefix)
-  (check-true (string-contains? result "?b")))
+  ;; not ?b = true → 1 solution {b: false}
+  (check-equal? (count-answers result) 1))
 
-(test-case "narrow/elab: function resolved"
-  (define result (run-last "(= (not ?b) true)"))
-  ;; 'not' function should be elaborated (may appear as expanded lambda)
-  (check-true (string? result)))
+(test-case "narrow/result: Bool negation both ways"
+  ;; not ?b = false → 1 solution {b: true}
+  (define result (run-last "(= (not ?b) false)"))
+  (check-equal? (count-answers result) 1))
 
-(test-case "narrow/elab: target preserved"
-  (define result (run-last "(= (not ?b) true)"))
-  ;; Target should be 'true'
-  (check-true (string-contains? result "true")))
+(test-case "narrow/result: add produces multiple solutions"
+  ;; add ?x ?y = 2 → 3 solutions: (0,2), (1,1), (2,0)
+  (define result (run-last "(= (add ?x ?y) 2)"))
+  (check-equal? (count-answers result) 3))
 
-(test-case "narrow/elab: type annotation is hole"
+(test-case "narrow/result: type annotation is hole"
   ;; Narrowing results are type-unsafe (hole/underscore)
   (define result (run-last "(= (not ?b) true)"))
   (check-true (string-contains? result ": _")))
@@ -217,28 +222,32 @@
 ;; ========================================
 
 (test-case "narrow/edge: single ?-var no function call"
-  ;; (= ?x 5) — LHS is just a var, no function application
+  ;; (= ?x 5) — LHS is just a var, no function application → no narrowing
   (define result (run-last "(= ?x 5)"))
   (check-true (string? result))
-  (check-true (string-contains? result "narrow")))
+  ;; No function to narrow → nil (empty answer list)
+  (check-true (string-contains? result "nil")))
 
-(test-case "narrow/edge: nested function in arg"
-  ;; (= (add (suc ?x) ?y) 5) — nested ctor in argument
+(test-case "narrow/edge: nested ctor in arg"
+  ;; (= (add (suc ?x) ?y) 5) — fixed first arg shape, narrows second
   (define result (run-last "(= (add (suc ?x) ?y) 5)"))
   (check-true (string? result))
-  (check-true (string-contains? result "narrow")))
+  (check-true (string-contains? result "{map")))
 
 (test-case "narrow/edge: ?-var appears in both sides"
-  ;; (= (not ?b) ?b) — same var on both sides
+  ;; (= (not ?b) ?b) — same var on both sides → no solution
+  ;; not(false) = true ≠ false; not(true) = false ≠ true
   (define result (run-last "(= (not ?b) ?b)"))
   (check-true (string? result))
-  (check-true (string-contains? result "narrow")))
+  (check-true (string-contains? result "nil")))
 
 ;; ========================================
 ;; F. WS-mode integration — multi-line with definitions
 ;; ========================================
 
 (test-case "narrow/ws: narrowing after definitions"
+  ;; defn double [n] : Nat [add n n] — no pattern matching, so no DT
+  ;; [double ?x] = 6N → nil (no DT available for double)
   (define result
     (run-ws-last
      (string-append
@@ -246,4 +255,5 @@
       "defn double [n] : Nat [add n n]\n"
       "[double ?x] = 6N\n")))
   (check-true (string? result))
-  (check-true (string-contains? result "narrow")))
+  ;; double has no pattern matching → no definitional tree → nil
+  (check-true (string-contains? result "nil")))

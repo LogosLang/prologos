@@ -33,7 +33,10 @@
  def-tree-has-exempt?
  def-tree-has-or?
  def-tree-depth
- def-tree-leaves)
+ def-tree-leaves
+ ;; FQN helpers
+ lookup-ctor-flexible
+ ctor-short-name)
 
 ;; ========================================
 ;; Tree node structs

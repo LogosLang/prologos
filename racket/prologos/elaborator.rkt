@@ -2544,8 +2544,25 @@
               [(prologos-error? elab-func) elab-func]
               [(findf prologos-error? elab-args) => values]
               [else (expr-narrow elab-func elab-args elab-rhs stripped-vars)]))]
+         ;; LHS is not a function call but RHS is → swap (func on RHS, target on LHS)
+         [(surf-app? rhs)
+          (let* ([func-surf (surf-app-func rhs)]
+                 [args-surf (surf-app-args rhs)]
+                 [elab-lhs (parameterize ([current-relational-env narrow-rel-env])
+                             (elaborate lhs env depth))]
+                 [elab-func (parameterize ([current-relational-env narrow-rel-env])
+                              (elaborate func-surf env depth))]
+                 [elab-args (parameterize ([current-relational-env narrow-rel-env])
+                              (for/list ([a (in-list args-surf)])
+                                (elaborate a env depth)))])
+            (cond
+              [(prologos-error? elab-lhs) elab-lhs]
+              [(prologos-error? elab-func) elab-func]
+              [(findf prologos-error? elab-args) => values]
+              ;; Swapped: func+args from RHS, target from LHS
+              [else (expr-narrow elab-func elab-args elab-lhs stripped-vars)]))]
          [else
-          ;; Non-application LHS: elaborate as a single expression
+          ;; Neither side is a function call
           (let ([elab-lhs (parameterize ([current-relational-env narrow-rel-env])
                             (elaborate lhs env depth))])
             (if (prologos-error? elab-lhs) elab-lhs

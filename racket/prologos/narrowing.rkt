@@ -35,7 +35,8 @@
          "propagator.rkt"
          "term-lattice.rkt"
          "definitional-tree.rkt"
-         "macros.rkt")
+         "macros.rkt"
+         "global-env.rkt")
 
 (provide
  ;; Core API
@@ -43,6 +44,8 @@
  narrow-function
  ;; Demand analysis
  narrowing-demands
+ ;; Phase 1d: Narrowing search
+ run-narrowing-search
  ;; Helpers (for testing)
  term-from-ground-expr
  nat->term
@@ -420,3 +423,435 @@
              #:when (term-bot? (term-walk (net-cell-read net cid)
                                           (lambda (c) (net-cell-read net c)))))
     cid))
+
+;; ========================================
+;; Phase 1d: DT-Guided Narrowing Search
+;; ========================================
+;;
+;; Given [f ?x ?y ...] = target, find all substitutions for the ?-variables
+;; such that f(x, y, ...) = target.  Walks the definitional tree to enumerate
+;; argument instantiations (needed narrowing), substitutes into the rule RHS,
+;; and matches structurally against the target.  Function calls in the RHS
+;; trigger recursive narrowing.
+
+(define NARROW-DEPTH-LIMIT 50)
+
+;; run-narrowing-search :
+;;   symbol × (listof expr) × expr × (listof symbol) → (listof hasheq)
+;;
+;; Entry point for narrowing.  Returns a list of answer maps (hasheq),
+;; each mapping variable names (from var-names) to ground Prologos values.
+(define (run-narrowing-search func-name arg-exprs target-expr var-names)
+  (define func-body (global-env-lookup-value func-name))
+  (when (not func-body) (set! func-body #f))
+  (cond
+    [(not func-body) '()]
+    [else
+     (define dt (extract-definitional-tree func-body))
+     (cond
+       [(not dt) '()]
+       [else
+        (define-values (arity _inner) (peel-lambdas func-body))
+        ;; Build initial binding stack.
+        ;; After peeling n lambdas: bvar 0 = last param, bvar (n-1) = first param.
+        ;; So initial-bindings = (reverse arg-exprs).
+        (define initial-bindings (reverse arg-exprs))
+        ;; Normalize target for matching (convert nat-val to Peano suc/zero)
+        (define target-norm (normalize-narrow-target target-expr))
+        ;; Run search
+        (define raw-solutions
+          (narrow-dt-search dt initial-bindings func-name target-norm (hasheq) 0))
+        ;; Project and resolve variable names from solutions
+        (for/list ([sol (in-list raw-solutions)])
+          (for/hasheq ([vn (in-list var-names)])
+            (values vn (narrow-resolve-val sol vn))))])]))
+
+;; ----------------------------------------
+;; Target normalization
+;; ----------------------------------------
+
+;; Convert numeric literals to Peano suc/zero chains for structural matching.
+;; Function bodies use suc/zero, so the target must match that representation.
+;; Handles both expr-nat-val (natural numbers) and expr-int (integer literals,
+;; which are used for bare numeric literals like 5 in the parser).
+(define (normalize-narrow-target expr)
+  (match expr
+    [(expr-nat-val n) (nat-val->peano n)]
+    [(expr-int n) (if (>= n 0) (nat-val->peano n) expr)]
+    [(expr-suc sub) (expr-suc (normalize-narrow-target sub))]
+    [(expr-app f a)
+     (expr-app (normalize-narrow-target f) (normalize-narrow-target a))]
+    [_ expr]))
+
+(define (nat-val->peano n)
+  (if (zero? n) (expr-zero) (expr-suc (nat-val->peano (- n 1)))))
+
+;; ----------------------------------------
+;; DT-guided search
+;; ----------------------------------------
+
+;; narrow-dt-search : dt × bindings × func-name × target × subst × depth
+;;                    → (listof hasheq)
+;;
+;; bindings: (listof expr) indexed by bvar position (newest first).
+;;   Contains expr-logic-var for unbound variables, concrete exprs for ground.
+;; subst: hasheq mapping logic-var names (symbols) to values.
+(define (narrow-dt-search tree bindings func-name target subst depth)
+  (cond
+    [(> depth NARROW-DEPTH-LIMIT) '()]
+    [else
+     (match tree
+       [(dt-branch pos type-name children)
+        ;; Map DT position to binding stack index.
+        ;; Position was computed as (arity - 1 - bvar_index) during extraction.
+        ;; Our binding stack has the same structure, so:
+        ;;   binding-index = (length bindings) - 1 - pos
+        (define binding-idx (- (length bindings) 1 pos))
+        (cond
+          [(or (< binding-idx 0) (>= binding-idx (length bindings))) '()]
+          [else
+           (define current-val (list-ref bindings binding-idx))
+           (cond
+             ;; Unbound logic variable — enumerate constructors
+             [(expr-logic-var? current-val)
+              (define var-name (expr-logic-var-name current-val))
+              (append-map
+               (lambda (child-entry)
+                 (define ctor-name (car child-entry))
+                 (define child-tree (cdr child-entry))
+                 (cond
+                   [(dt-exempt? child-tree) '()]
+                   [else
+                    (define ctor-meta-info (lookup-ctor-flexible ctor-name))
+                    (define field-count
+                      (if ctor-meta-info
+                          (length (ctor-meta-field-types ctor-meta-info))
+                          0))
+                    ;; Fresh logic vars for sub-fields
+                    (define sub-vars
+                      (for/list ([i (in-range field-count)])
+                        (expr-logic-var
+                         (gensym (format "~a~a_" ctor-name i))
+                         'free)))
+                    ;; Build constructor expression
+                    (define ctor-val (make-narrow-ctor-expr ctor-name sub-vars))
+                    ;; Update bindings: replace the narrowed position
+                    (define updated-bindings
+                      (list-set bindings binding-idx ctor-val))
+                    ;; Prepend sub-field bindings (reversed, per de Bruijn)
+                    (define new-bindings
+                      (append (reverse sub-vars) updated-bindings))
+                    ;; Record in substitution
+                    (define new-subst (hash-set subst var-name ctor-val))
+                    (narrow-dt-search child-tree new-bindings func-name
+                                     target new-subst depth)]))
+               children)]
+
+             ;; Ground value — extract constructor and follow matching child
+             [else
+              (define tag (narrow-extract-ctor-tag current-val))
+              (define child-entry (and tag (assq tag children)))
+              (cond
+                [(not child-entry) '()]
+                [(dt-exempt? (cdr child-entry)) '()]
+                [else
+                 (define child-tree (cdr child-entry))
+                 (define sub-vals (narrow-extract-ctor-subfields current-val))
+                 (define new-bindings
+                   (append (reverse sub-vals) bindings))
+                 (narrow-dt-search child-tree new-bindings func-name
+                                  target subst depth)])])])]
+
+       [(dt-rule rhs)
+        ;; Substitute bvar references in RHS with binding values
+        (define result (narrow-subst-bvars rhs bindings 0))
+        ;; Match result against target
+        (narrow-match result target subst func-name depth)]
+
+       [(dt-or branches)
+        (append-map
+         (lambda (b)
+           (narrow-dt-search b bindings func-name target subst depth))
+         branches)]
+
+       [(dt-exempt) '()])]))
+
+;; ----------------------------------------
+;; BVar substitution (one-pass, all indices)
+;; ----------------------------------------
+
+;; Substitute all bvar references in expr with values from bindings.
+;; depth: current binder depth offset (increases inside lam/reduce).
+(define (narrow-subst-bvars expr bindings depth)
+  (match expr
+    [(expr-bvar idx)
+     (define adjusted (- idx depth))
+     (if (and (>= adjusted 0) (< adjusted (length bindings)))
+         (list-ref bindings adjusted)
+         expr)]
+    [(expr-app f a)
+     (expr-app (narrow-subst-bvars f bindings depth)
+               (narrow-subst-bvars a bindings depth))]
+    [(expr-suc e)
+     (expr-suc (narrow-subst-bvars e bindings depth))]
+    [(expr-lam m t body)
+     (expr-lam m t (narrow-subst-bvars body bindings (+ depth 1)))]
+    [(expr-reduce scrut arms structural?)
+     (expr-reduce
+      (narrow-subst-bvars scrut bindings depth)
+      (for/list ([arm (in-list arms)])
+        (define bc (expr-reduce-arm-binding-count arm))
+        (expr-reduce-arm
+         (expr-reduce-arm-ctor-name arm)
+         bc
+         (narrow-subst-bvars (expr-reduce-arm-body arm)
+                             bindings (+ depth bc))))
+      structural?)]
+    [(expr-pair a b)
+     (expr-pair (narrow-subst-bvars a bindings depth)
+                (narrow-subst-bvars b bindings depth))]
+    ;; Ground/atomic — no bvars inside
+    [(expr-zero) expr] [(expr-true) expr] [(expr-false) expr]
+    [(expr-nat-val _) expr] [(expr-int _) expr] [(expr-string _) expr]
+    [(expr-fvar _) expr] [(expr-keyword _) expr] [(expr-logic-var _ _) expr]
+    [(expr-unit) expr] [(expr-nil) expr]
+    [_ expr]))
+
+;; ----------------------------------------
+;; Structural matching (result vs target)
+;; ----------------------------------------
+
+;; narrow-match : expr × expr × subst × func-name × depth → (listof hasheq)
+;;
+;; Match a (possibly partially evaluated) result against a target.
+;; The result may contain:
+;;   - expr-logic-var nodes (unbound variables) → bind to corresponding target part
+;;   - constructor applications → structural decomposition
+;;   - function calls (expr-app with non-constructor fvar) → recursive narrowing
+(define (narrow-match result target subst func-name depth)
+  (cond
+    ;; Logic variable in result → bind to target
+    [(expr-logic-var? result)
+     (define var-name (expr-logic-var-name result))
+     (list (hash-set subst var-name target))]
+
+    ;; Logic variable in target → resolve or bind
+    [(expr-logic-var? target)
+     (define var-name (expr-logic-var-name target))
+     (define existing (hash-ref subst var-name #f))
+     (cond
+       ;; Already bound → resolve and re-match
+       [existing
+        (narrow-match result (narrow-resolve-expr subst existing) subst func-name depth)]
+       ;; Unbound → bind target var to result
+       [else
+        (list (hash-set subst var-name result))])]
+
+    ;; Both zero → match
+    [(and (expr-zero? result) (expr-zero? target))
+     (list subst)]
+
+    ;; Both true → match
+    [(and (expr-true? result) (expr-true? target))
+     (list subst)]
+
+    ;; Both false → match
+    [(and (expr-false? result) (expr-false? target))
+     (list subst)]
+
+    ;; Both suc → recurse on predecessor
+    [(and (expr-suc? result) (expr-suc? target))
+     (narrow-match (expr-suc-pred result) (expr-suc-pred target)
+                   subst func-name depth)]
+
+    ;; suc result vs nat-val target (shouldn't happen after normalization, but handle)
+    [(and (expr-suc? result) (expr-nat-val? target) (> (expr-nat-val-n target) 0))
+     (narrow-match (expr-suc-pred result)
+                   (expr-suc (nat-val->peano (- (expr-nat-val-n target) 1)))
+                   subst func-name depth)]
+
+    ;; Both nil → match
+    [(and (or (expr-nil? result) (and (expr-fvar? result) (eq? (expr-fvar-name result) 'nil)))
+          (or (expr-nil? target) (and (expr-fvar? target) (eq? (expr-fvar-name target) 'nil))))
+     (list subst)]
+
+    ;; Both unit → match
+    [(and (expr-unit? result) (expr-unit? target))
+     (list subst)]
+
+    ;; Both nat-val with same value → match
+    [(and (expr-nat-val? result) (expr-nat-val? target)
+          (= (expr-nat-val-n result) (expr-nat-val-n target)))
+     (list subst)]
+
+    ;; Constructor application (fvar apps) — decompose
+    ;; Match if same constructor name and same number of args
+    [(and (expr-app? result) (expr-app? target))
+     (define-values (r-func r-args) (narrow-extract-call result))
+     (define-values (t-func t-args) (narrow-extract-call target))
+     (cond
+       ;; Same constructor → match sub-fields
+       [(and r-func t-func (eq? r-func t-func)
+             (lookup-ctor-flexible r-func)
+             (= (length r-args) (length t-args)))
+        (narrow-match-list r-args t-args subst func-name depth)]
+       ;; Result is a function call (non-constructor) → recursive narrowing
+       [(and r-func (not (lookup-ctor-flexible r-func)))
+        (define call-vars (collect-narrow-logic-vars r-args))
+        (cond
+          [(null? call-vars)
+           ;; All args ground but result didn't reduce — no solution
+           '()]
+          [else
+           (define inner-solutions
+             (run-narrowing-search r-func r-args target call-vars))
+           ;; Merge inner solutions with current subst
+           (for/list ([inner-sol (in-list inner-solutions)])
+             (for/fold ([s subst])
+                       ([(k v) (in-hash inner-sol)])
+               (hash-set s k v)))])]
+       [else '()])]
+
+    ;; Result is an fvar application, target is not → function call
+    [(and (expr-app? result) (not (expr-app? target)))
+     (define-values (r-func r-args) (narrow-extract-call result))
+     (cond
+       [(and r-func (not (lookup-ctor-flexible r-func)))
+        (define call-vars (collect-narrow-logic-vars r-args))
+        (cond
+          [(null? call-vars) '()]
+          [else
+           (define inner-solutions
+             (run-narrowing-search r-func r-args target call-vars))
+           (for/list ([inner-sol (in-list inner-solutions)])
+             (for/fold ([s subst])
+                       ([(k v) (in-hash inner-sol)])
+               (hash-set s k v)))])]
+       [else '()])]
+
+    ;; Structural equality fallback (handles expr-string, expr-int, etc.)
+    [(equal? result target) (list subst)]
+
+    ;; No match
+    [else '()]))
+
+;; Match a list of result sub-fields against target sub-fields.
+(define (narrow-match-list results targets subst func-name depth)
+  (cond
+    [(and (null? results) (null? targets)) (list subst)]
+    [(or (null? results) (null? targets)) '()]
+    [else
+     (define first-matches
+       (narrow-match (car results) (car targets) subst func-name depth))
+     (append-map
+      (lambda (s)
+        (narrow-match-list (cdr results) (cdr targets) s func-name depth))
+      first-matches)]))
+
+;; ----------------------------------------
+;; Helpers: constructor building & extraction
+;; ----------------------------------------
+
+;; Build a constructor expression from a name and sub-field expressions.
+(define (make-narrow-ctor-expr ctor-name sub-vars)
+  (cond
+    [(eq? ctor-name 'zero) (expr-zero)]
+    [(eq? ctor-name 'true) (expr-true)]
+    [(eq? ctor-name 'false) (expr-false)]
+    [(eq? ctor-name 'nil) (expr-fvar 'nil)]
+    [(eq? ctor-name 'unit) (expr-unit)]
+    [(and (eq? ctor-name 'suc) (= (length sub-vars) 1))
+     (expr-suc (car sub-vars))]
+    ;; General: curried application
+    [(null? sub-vars) (expr-fvar ctor-name)]
+    [else
+     (foldl (lambda (arg acc) (expr-app acc arg))
+            (expr-fvar ctor-name)
+            sub-vars)]))
+
+;; Extract constructor tag from a ground expression.
+(define (narrow-extract-ctor-tag expr)
+  (match expr
+    [(expr-zero) 'zero]
+    [(expr-true) 'true]
+    [(expr-false) 'false]
+    [(expr-unit) 'unit]
+    [(expr-suc _) 'suc]
+    [(expr-nat-val n) (if (zero? n) 'zero 'suc)]
+    [(expr-fvar name)
+     (if (or (lookup-ctor name) (lookup-ctor (ctor-short-name name)))
+         (ctor-short-name name) #f)]
+    [(expr-app func _) (narrow-extract-ctor-tag func)]
+    [_ #f]))
+
+;; Extract sub-field values from a constructor expression.
+(define (narrow-extract-ctor-subfields expr)
+  (match expr
+    [(expr-zero) '()]
+    [(expr-true) '()]
+    [(expr-false) '()]
+    [(expr-unit) '()]
+    [(expr-nil) '()]
+    [(expr-suc sub) (list sub)]
+    [(expr-nat-val n)
+     (if (zero? n) '() (list (nat-val->peano (- n 1))))]
+    [(expr-fvar _) '()]   ;; nullary constructor
+    [(expr-app _ _)
+     ;; Curried ctor app: collect args
+     (let loop ([e expr] [args '()])
+       (match e
+         [(expr-app f a) (loop f (cons a args))]
+         [_ args]))]
+    [_ '()]))
+
+;; Extract function name and args from an application chain.
+;; (app (app (fvar f) a1) a2) → (values 'f (list a1 a2))
+(define (narrow-extract-call expr)
+  (let loop ([e expr] [args '()])
+    (match e
+      [(expr-app f a) (loop f (cons a args))]
+      [(expr-fvar name) (values name args)]
+      [_ (values #f '())])))
+
+;; Collect logic variable names from a list of expressions.
+(define (collect-narrow-logic-vars exprs)
+  (define seen (make-hasheq))
+  (define result '())
+  (define (walk e)
+    (match e
+      [(expr-logic-var name _)
+       (unless (hash-ref seen name #f)
+         (hash-set! seen name #t)
+         (set! result (cons name result)))]
+      [(expr-app f a) (walk f) (walk a)]
+      [(expr-suc sub) (walk sub)]
+      [(expr-pair a b) (walk a) (walk b)]
+      [_ (void)]))
+  (for-each walk exprs)
+  (reverse result))
+
+;; ----------------------------------------
+;; Solution resolution
+;; ----------------------------------------
+
+;; Resolve a variable name through the substitution to a ground value.
+(define (narrow-resolve-val subst name)
+  (define val (hash-ref subst name #f))
+  (cond
+    [(not val) (expr-logic-var name 'free)]  ;; unresolved — leave as logic var
+    [else (narrow-resolve-expr subst val)]))
+
+;; Walk an expression, resolving all embedded logic vars through the substitution.
+(define (narrow-resolve-expr subst expr)
+  (match expr
+    [(expr-logic-var name _)
+     (narrow-resolve-val subst name)]
+    [(expr-suc sub)
+     (expr-suc (narrow-resolve-expr subst sub))]
+    [(expr-app f a)
+     (expr-app (narrow-resolve-expr subst f)
+               (narrow-resolve-expr subst a))]
+    [(expr-pair a b)
+     (expr-pair (narrow-resolve-expr subst a)
+                (narrow-resolve-expr subst b))]
+    [_ expr]))

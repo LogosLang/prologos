@@ -31,7 +31,9 @@
          "solver.rkt"
          "relations.rkt"
          "provenance.rkt"
-         "stratified-eval.rkt")
+         "stratified-eval.rkt"
+         "narrowing.rkt"
+         "definitional-tree.rkt")
 
 (provide whnf nf nf-whnf conv conv-nf
          current-nf-cache current-whnf-cache
@@ -202,6 +204,33 @@
         [else
          (set! goal-args (cons a* goal-args))])))
   (values (reverse goal-args) (reverse query-vars)))
+
+;; Run narrowing for [func args...] = target, returning a Prologos list of answer maps.
+(define (run-narrowing func-expr arg-exprs target-expr var-names)
+  ;; Extract function name and any additional args from the func expression.
+  ;; func-expr may be (expr-app (expr-fvar 'add) (expr-suc ?x)) when the LHS
+  ;; is (add (suc ?x) ?y) — the elaborator partially curries the application.
+  ;; Unwrap the application chain to get the base function name and prepend
+  ;; any embedded args to the explicit arg list.
+  (define-values (func-name all-args)
+    (let loop ([e func-expr] [extra-args '()])
+      (match e
+        [(expr-fvar name) (values name (append extra-args arg-exprs))]
+        [(expr-app f a) (loop f (cons a extra-args))]
+        [_ (values #f '())])))
+  (cond
+    [(not func-name)
+     ;; Can't narrow through non-function — return empty list
+     (expr-fvar 'nil)]
+    [else
+     ;; Reduce args and target
+     (define args-whnf (map whnf all-args))
+     (define target-whnf (whnf target-expr))
+     ;; Run the DT-guided search
+     (define solutions
+       (run-narrowing-search func-name args-whnf target-whnf var-names))
+     ;; Format results as Prologos list of maps
+     (answers->prologos-expr solutions var-names)]))
 
 ;; Run solve for a goal expression, returning a Prologos list of answer maps.
 (define (run-solve-goal goal-expr config)
@@ -2352,8 +2381,9 @@
              default-solver-config)))
      (run-explain-goal goal cfg 'full)]
 
-    ;; Narrow: pass through for now (Phase 1d adds execution)
-    [(expr-narrow _ _ _ _) e]
+    ;; Narrow: DT-guided narrowing search (Phase 1d)
+    [(expr-narrow func args target vars)
+     (run-narrowing func args target vars)]
 
     ;; Union types: pass through (types don't reduce)
     [(expr-union _ _) e]
