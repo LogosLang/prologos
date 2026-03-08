@@ -79,7 +79,9 @@
    'multi-dispatch.rkt            '()
    'namespace.rkt                 '()
    'confluence-analysis.rkt       '(definitional-tree.rkt syntax.rkt)
-   'narrowing.rkt                 '(confluence-analysis.rkt definitional-tree.rkt global-env.rkt macros.rkt propagator.rkt syntax.rkt term-lattice.rkt termination-analysis.rkt)
+   'interval-domain.rkt           '()
+   'narrowing-abstract.rkt        '(definitional-tree.rkt interval-domain.rkt syntax.rkt)
+   'narrowing.rkt                 '(confluence-analysis.rkt definitional-tree.rkt global-env.rkt interval-domain.rkt macros.rkt narrowing-abstract.rkt propagator.rkt syntax.rkt term-lattice.rkt termination-analysis.rkt)
    'termination-analysis.rkt      '(definitional-tree.rkt macros.rkt syntax.rkt)
    'parser.rkt                    '(errors.rkt macros.rkt sexp-readtable.rkt source-location.rkt surface-syntax.rkt)
    'performance-counters.rkt      '()
@@ -111,7 +113,9 @@
    'surface-syntax.rkt            '(source-location.rkt)
    'syntax.rkt                    '(prelude.rkt)
    'confluence-analysis.rkt       '(definitional-tree.rkt syntax.rkt)
-   'narrowing.rkt                 '(confluence-analysis.rkt definitional-tree.rkt global-env.rkt macros.rkt propagator.rkt syntax.rkt term-lattice.rkt termination-analysis.rkt)
+   'interval-domain.rkt           '()
+   'narrowing-abstract.rkt        '(definitional-tree.rkt interval-domain.rkt syntax.rkt)
+   'narrowing.rkt                 '(confluence-analysis.rkt definitional-tree.rkt global-env.rkt interval-domain.rkt macros.rkt narrowing-abstract.rkt propagator.rkt syntax.rkt term-lattice.rkt termination-analysis.rkt)
    'termination-analysis.rkt      '(definitional-tree.rkt macros.rkt syntax.rkt)
    'tabling.rkt                   '(propagator.rkt)
    'term-lattice.rkt              '()
@@ -449,6 +453,8 @@
    (test-dep '(definitional-tree.rkt macros.rkt narrowing.rkt propagator.rkt syntax.rkt term-lattice.rkt) #f)
    'test-narrowing-search-01.rkt
    (test-dep '(definitional-tree.rkt driver.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt narrowing.rkt namespace.rkt prelude.rkt reduction.rkt syntax.rkt trait-resolution.rkt) #t)
+   'test-interval-domain-01.rkt
+   (test-dep '(definitional-tree.rkt driver.rkt errors.rkt global-env.rkt interval-domain.rkt macros.rkt metavar-store.rkt narrowing.rkt narrowing-abstract.rkt namespace.rkt prelude.rkt reduction.rkt syntax.rkt trait-resolution.rkt) #t)
    'test-native-collection-ops.rkt
    (test-dep '(driver.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt multi-dispatch.rkt namespace.rkt syntax.rkt) #t)
    'test-negative-literals.rkt

@@ -37,6 +37,8 @@
          "definitional-tree.rkt"
          "confluence-analysis.rkt"
          "termination-analysis.rkt"
+         "interval-domain.rkt"
+         "narrowing-abstract.rkt"
          "macros.rkt"
          "global-env.rkt")
 
@@ -53,6 +55,8 @@
  ;; Phase 2b: Termination classification
  get-termination-class
  get-function-fuel
+ ;; Phase 2a: Interval domain
+ current-narrow-intervals
  ;; Helpers (for testing)
  term-from-ground-expr
  nat->term
@@ -444,6 +448,14 @@
 (define NARROW-DEPTH-LIMIT 50)
 
 ;; ----------------------------------------
+;; Phase 2a: Interval domain for bounded enumeration
+;; ----------------------------------------
+
+;; Maps logic-var name (symbol) → interval.
+;; Threaded via parameterize for proper backtracking in search.
+(define current-narrow-intervals (make-parameter (hasheq)))
+
+;; ----------------------------------------
 ;; Confluence classification (Phase 2c)
 ;; ----------------------------------------
 
@@ -534,9 +546,22 @@
            (define target-norm (normalize-narrow-target target-expr))
            ;; Per-function fuel from termination analysis
            (define fuel (get-function-fuel func-name))
-           ;; Run search
+           ;; Phase 2a: Compute initial intervals for argument variables
+           (define initial-intervals
+             (let ([arg-ivs (compute-arg-intervals func-name arg-exprs target-norm)])
+               (cond
+                 [arg-ivs
+                  (for/fold ([store (hasheq)])
+                            ([arg (in-list arg-exprs)]
+                             [iv (in-list arg-ivs)])
+                    (if (expr-logic-var? arg)
+                        (hash-set store (expr-logic-var-name arg) iv)
+                        store))]
+                 [else (hasheq)])))
+           ;; Run search with interval bounds
            (define raw-solutions
-             (narrow-dt-search dt initial-bindings func-name target-norm (hasheq) 0 fuel))
+             (parameterize ([current-narrow-intervals initial-intervals])
+               (narrow-dt-search dt initial-bindings func-name target-norm (hasheq) 0 fuel)))
            ;; Project and resolve variable names from solutions
            (for/list ([sol (in-list raw-solutions)])
              (for/hasheq ([vn (in-list var-names)])
@@ -592,37 +617,68 @@
              ;; Unbound logic variable — enumerate constructors
              [(expr-logic-var? current-val)
               (define var-name (expr-logic-var-name current-val))
-              (append-map
-               (lambda (child-entry)
-                 (define ctor-name (car child-entry))
-                 (define child-tree (cdr child-entry))
-                 (cond
-                   [(dt-exempt? child-tree) '()]
-                   [else
-                    (define ctor-meta-info (lookup-ctor-flexible ctor-name))
-                    (define field-count
-                      (if ctor-meta-info
-                          (length (ctor-meta-field-types ctor-meta-info))
-                          0))
-                    ;; Fresh logic vars for sub-fields
-                    (define sub-vars
-                      (for/list ([i (in-range field-count)])
-                        (expr-logic-var
-                         (gensym (format "~a~a_" ctor-name i))
-                         'free)))
-                    ;; Build constructor expression
-                    (define ctor-val (make-narrow-ctor-expr ctor-name sub-vars))
-                    ;; Update bindings: replace the narrowed position
-                    (define updated-bindings
-                      (list-set bindings binding-idx ctor-val))
-                    ;; Prepend sub-field bindings (reversed, per de Bruijn)
-                    (define new-bindings
-                      (append (reverse sub-vars) updated-bindings))
-                    ;; Record in substitution
-                    (define new-subst (hash-set subst var-name ctor-val))
-                    (narrow-dt-search child-tree new-bindings func-name
-                                     target new-subst depth fuel)]))
-               children)]
+              ;; Phase 2a: interval lookup for numeric types
+              (define var-iv
+                (and (nat-type-name? type-name)
+                     (hash-ref (current-narrow-intervals) var-name
+                               (type-initial-interval type-name))))
+              (cond
+                ;; Interval contradiction — no solutions
+                [(and var-iv (interval-contradiction? var-iv)) '()]
+                ;; Enumerate constructors (with interval pruning when var-iv available)
+                [else
+                 (append-map
+                  (lambda (child-entry)
+                    (define ctor-name (car child-entry))
+                    (define child-tree (cdr child-entry))
+                    (define short (ctor-short-name ctor-name))
+                    (cond
+                      [(dt-exempt? child-tree) '()]
+                      ;; Phase 2a: skip zero when interval lo > 0
+                      [(and var-iv (eq? short 'zero)
+                            (> (interval-lo var-iv) 0))
+                       '()]
+                      ;; Phase 2a: skip suc when interval hi = 0
+                      [(and var-iv (eq? short 'suc)
+                            (eqv? (interval-hi var-iv) 0))
+                       '()]
+                      [else
+                       (define ctor-meta-info (lookup-ctor-flexible ctor-name))
+                       (define field-count
+                         (if ctor-meta-info
+                             (length (ctor-meta-field-types ctor-meta-info))
+                             0))
+                       ;; Fresh logic vars for sub-fields
+                       (define sub-vars
+                         (for/list ([i (in-range field-count)])
+                           (expr-logic-var
+                            (gensym (format "~a~a_" ctor-name i))
+                            'free)))
+                       ;; Build constructor expression
+                       (define ctor-val (make-narrow-ctor-expr ctor-name sub-vars))
+                       ;; Update bindings: replace the narrowed position
+                       (define updated-bindings
+                         (list-set bindings binding-idx ctor-val))
+                       ;; Prepend sub-field bindings (reversed, per de Bruijn)
+                       (define new-bindings
+                         (append (reverse sub-vars) updated-bindings))
+                       ;; Record in substitution
+                       (define new-subst (hash-set subst var-name ctor-val))
+                       ;; Phase 2a: propagate sub-interval for suc
+                       (define new-intervals
+                         (if (and var-iv (eq? short 'suc) (= field-count 1))
+                             (let* ([sub-name (expr-logic-var-name (car sub-vars))]
+                                    [sub-iv (interval
+                                             (max 0 (- (interval-lo var-iv) 1))
+                                             (if (eqv? (interval-hi var-iv) +inf.0)
+                                                 +inf.0
+                                                 (- (interval-hi var-iv) 1)))])
+                               (hash-set (current-narrow-intervals) sub-name sub-iv))
+                             (current-narrow-intervals)))
+                       (parameterize ([current-narrow-intervals new-intervals])
+                         (narrow-dt-search child-tree new-bindings func-name
+                                          target new-subst depth fuel))]))
+                  children)])]
 
              ;; Ground value — extract constructor and follow matching child
              [else
