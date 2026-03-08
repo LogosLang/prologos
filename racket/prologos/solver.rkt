@@ -37,6 +37,8 @@
  ;; Narrowing constraints (Phase 3c)
  solver-config-narrow-constraints
  solver-config-narrow-minimize
+ ;; CFA scope (Phase 3a)
+ solver-config-cfa-scope
  ;; Merge
  solver-config-merge
  ;; Validation
@@ -58,7 +60,7 @@
 (define valid-solver-keys
   '(execution threshold strategy tabling provenance timeout
     narrow-value-order narrow-search narrow-iterative
-    narrow-constraints narrow-minimize))
+    narrow-constraints narrow-minimize cfa-scope))
 
 (define (valid-solver-key? k)
   (memq k valid-solver-keys))
@@ -75,7 +77,8 @@
           'narrow-search      'all
           'narrow-iterative   #f
           'narrow-constraints '()
-          'narrow-minimize    #f))
+          'narrow-minimize    #f
+          'cfa-scope          'module))
 
 ;; ========================================
 ;; Construction
@@ -135,6 +138,10 @@
 
 (define (solver-config-narrow-minimize cfg)
   (solver-config-get cfg 'narrow-minimize #f))
+
+;; CFA scope (Phase 3a)
+(define (solver-config-cfa-scope cfg)
+  (solver-config-get cfg 'cfa-scope 'module))
 
 ;; ========================================
 ;; Merge

@@ -247,14 +247,17 @@
 ;; D. Edge cases
 ;; ========================================
 
-(test-case "edge/no-dt: function without pattern matching → nil"
-  ;; defn double [n] : Nat [add n n] — no DT
+(test-case "edge/no-dt: function without pattern matching narrowed via Phase 3a"
+  ;; defn double [n] : Nat [add n n]
+  ;; Phase 3a: non-matching functions get trivial dt-rule, enabling narrowing
+  ;; through function body. [double ?x] = 4N → add(?x, ?x) = 4 → x = 2
   (define result
     (run-ws-last
      (string-append "ns test-ns-nodt\n"
                     "defn double [n] : Nat [add n n]\n"
                     "[double ?x] = 4N\n")))
-  (check-true (string-contains? result "nil")))
+  ;; Should find solutions (not nil)
+  (check-false (string-contains? result "nil")))
 
 (test-case "edge/nat-val-target: expr-int normalized to Peano"
   ;; Pipeline uses expr-int for bare numeric literals

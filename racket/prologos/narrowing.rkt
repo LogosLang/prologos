@@ -42,6 +42,7 @@
          "search-heuristics.rkt"
          "global-constraints.rkt"
          "bb-optimization.rkt"
+         "cfa-analysis.rkt"
          "macros.rkt"
          "global-env.rkt")
 
@@ -900,6 +901,59 @@
           (= (expr-nat-val-n result) (expr-nat-val-n target)))
      (list subst)]
 
+    ;; Phase 3a: logic var in function position → CFA defunctionalization
+    ;; Result is an application whose head is an unbound logic variable.
+    ;; Use 0-CFA to determine candidate functions, try each one.
+    ;; Must come before general app cases, which assume fvar heads.
+    [(and (expr-app? result)
+          (let-values ([(fn _args) (narrow-extract-call-ho result)])
+            (expr-logic-var? fn)))
+     (define-values (fn-var all-args) (narrow-extract-call-ho result))
+     (define var-name (expr-logic-var-name fn-var))
+     ;; Check if already bound in subst
+     (define existing (hash-ref subst var-name #f))
+     (cond
+       [existing
+        ;; Already bound — reconstruct the application with the bound value
+        ;; and re-match
+        (define resolved (narrow-resolve-expr subst existing))
+        (define rebuilt (foldl (lambda (a f) (expr-app f a)) resolved all-args))
+        (narrow-match rebuilt target subst func-name depth)]
+       [else
+        ;; Unbound — use CFA to find candidate functions
+        (define arity (length all-args))
+        (define cfa (cfa-ensure-analyzed!))
+        (define flow-list (cfa-flow-set-for-param cfa func-name 0))
+        ;; Use flow set if non-empty, otherwise fall back to arity enumeration
+        (define candidates
+          (if (null? flow-list)
+              (cfa-get-candidates-for-arity arity)
+              flow-list))
+        ;; Try each candidate function
+        (append-map
+         (lambda (cand-name)
+           ;; Verify candidate has a definitional tree (is narrowable)
+           (define cand-body (global-env-lookup-value cand-name))
+           (cond
+             [(not cand-body) '()]
+             [else
+              (define cand-dt (extract-definitional-tree cand-body))
+              (cond
+                [(not cand-dt) '()]
+                [else
+                 (define call-vars (collect-narrow-logic-vars all-args))
+                 (define inner-solutions
+                   (run-narrowing-search cand-name all-args target call-vars))
+                 ;; Merge inner solutions with current subst,
+                 ;; binding fn-var to the candidate function
+                 (for/list ([inner-sol (in-list inner-solutions)])
+                   (define merged
+                     (for/fold ([s subst])
+                               ([(k v) (in-hash inner-sol)])
+                       (hash-set s k v)))
+                   (hash-set merged var-name (expr-fvar cand-name)))])]))
+         candidates)])]
+
     ;; Constructor application (fvar apps) — decompose
     ;; Match if same constructor name and same number of args
     [(and (expr-app? result) (expr-app? target))
@@ -912,20 +966,20 @@
              (= (length r-args) (length t-args)))
         (narrow-match-list r-args t-args subst func-name depth)]
        ;; Result is a function call (non-constructor) → recursive narrowing
+       ;; Even with all ground args, we must recurse: the function body needs
+       ;; to be "evaluated" via DT traversal to check if the result matches.
+       ;; Resolve args through current subst to propagate known bindings.
        [(and r-func (not (lookup-ctor-flexible r-func)))
-        (define call-vars (collect-narrow-logic-vars r-args))
-        (cond
-          [(null? call-vars)
-           ;; All args ground but result didn't reduce — no solution
-           '()]
-          [else
-           (define inner-solutions
-             (run-narrowing-search r-func r-args target call-vars))
-           ;; Merge inner solutions with current subst
-           (for/list ([inner-sol (in-list inner-solutions)])
-             (for/fold ([s subst])
-                       ([(k v) (in-hash inner-sol)])
-               (hash-set s k v)))])]
+        (define resolved-args
+          (map (lambda (a) (narrow-resolve-expr subst a)) r-args))
+        (define call-vars (collect-narrow-logic-vars resolved-args))
+        (define inner-solutions
+          (run-narrowing-search r-func resolved-args target call-vars))
+        ;; Merge inner solutions with current subst
+        (for/list ([inner-sol (in-list inner-solutions)])
+          (for/fold ([s subst])
+                    ([(k v) (in-hash inner-sol)])
+            (hash-set s k v)))]
        [else '()])]
 
     ;; Result is an fvar application, target is not → function call
@@ -933,16 +987,16 @@
      (define-values (r-func r-args) (narrow-extract-call result))
      (cond
        [(and r-func (not (lookup-ctor-flexible r-func)))
-        (define call-vars (collect-narrow-logic-vars r-args))
-        (cond
-          [(null? call-vars) '()]
-          [else
-           (define inner-solutions
-             (run-narrowing-search r-func r-args target call-vars))
-           (for/list ([inner-sol (in-list inner-solutions)])
-             (for/fold ([s subst])
-                       ([(k v) (in-hash inner-sol)])
-               (hash-set s k v)))])]
+        ;; Resolve args through current subst
+        (define resolved-args
+          (map (lambda (a) (narrow-resolve-expr subst a)) r-args))
+        (define call-vars (collect-narrow-logic-vars resolved-args))
+        (define inner-solutions
+          (run-narrowing-search r-func resolved-args target call-vars))
+        (for/list ([inner-sol (in-list inner-solutions)])
+          (for/fold ([s subst])
+                    ([(k v) (in-hash inner-sol)])
+            (hash-set s k v)))]
        [else '()])]
 
     ;; Structural equality fallback (handles expr-string, expr-int, etc.)
@@ -1028,6 +1082,16 @@
       [(expr-app f a) (loop f (cons a args))]
       [(expr-fvar name) (values name args)]
       [_ (values #f '())])))
+
+;; Phase 3a: Extract head expression and args from an application chain.
+;; Like narrow-extract-call but returns the head expression even if it's
+;; not an fvar (e.g., a logic var or lambda).
+;; (app (app (logic-var 'f) a1) a2) → (values (logic-var 'f) (list a1 a2))
+(define (narrow-extract-call-ho expr)
+  (let loop ([e expr] [args '()])
+    (match e
+      [(expr-app f a) (loop f (cons a args))]
+      [_ (values e args)])))
 
 ;; Collect logic variable names from a list of expressions.
 (define (collect-narrow-logic-vars exprs)

@@ -83,7 +83,8 @@
    'bb-optimization.rkt           '(interval-domain.rkt syntax.rkt)
    'interval-domain.rkt           '()
    'narrowing-abstract.rkt        '(definitional-tree.rkt interval-domain.rkt syntax.rkt)
-   'narrowing.rkt                 '(bb-optimization.rkt confluence-analysis.rkt definitional-tree.rkt global-constraints.rkt global-env.rkt interval-domain.rkt macros.rkt narrowing-abstract.rkt propagator.rkt search-heuristics.rkt syntax.rkt term-lattice.rkt termination-analysis.rkt)
+   'cfa-analysis.rkt              '(definitional-tree.rkt global-env.rkt macros.rkt syntax.rkt)
+   'narrowing.rkt                 '(bb-optimization.rkt cfa-analysis.rkt confluence-analysis.rkt definitional-tree.rkt global-constraints.rkt global-env.rkt interval-domain.rkt macros.rkt narrowing-abstract.rkt propagator.rkt search-heuristics.rkt syntax.rkt term-lattice.rkt termination-analysis.rkt)
    'search-heuristics.rkt         '()
    'termination-analysis.rkt      '(definitional-tree.rkt macros.rkt syntax.rkt)
    'parser.rkt                    '(errors.rkt macros.rkt sexp-readtable.rkt source-location.rkt surface-syntax.rkt)
@@ -120,7 +121,8 @@
    'bb-optimization.rkt           '(interval-domain.rkt syntax.rkt)
    'interval-domain.rkt           '()
    'narrowing-abstract.rkt        '(definitional-tree.rkt interval-domain.rkt syntax.rkt)
-   'narrowing.rkt                 '(bb-optimization.rkt confluence-analysis.rkt definitional-tree.rkt global-constraints.rkt global-env.rkt interval-domain.rkt macros.rkt narrowing-abstract.rkt propagator.rkt search-heuristics.rkt syntax.rkt term-lattice.rkt termination-analysis.rkt)
+   'cfa-analysis.rkt              '(definitional-tree.rkt global-env.rkt macros.rkt syntax.rkt)
+   'narrowing.rkt                 '(bb-optimization.rkt cfa-analysis.rkt confluence-analysis.rkt definitional-tree.rkt global-constraints.rkt global-env.rkt interval-domain.rkt macros.rkt narrowing-abstract.rkt propagator.rkt search-heuristics.rkt syntax.rkt term-lattice.rkt termination-analysis.rkt)
    'search-heuristics.rkt         '()
    'termination-analysis.rkt      '(definitional-tree.rkt macros.rkt syntax.rkt)
    'tabling.rkt                   '(propagator.rkt)
@@ -465,6 +467,8 @@
    (test-dep '(definitional-tree.rkt driver.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt narrowing.rkt namespace.rkt prelude.rkt search-heuristics.rkt syntax.rkt trait-resolution.rkt) #t)
    'test-global-constraints-01.rkt
    (test-dep '(bb-optimization.rkt definitional-tree.rkt driver.rkt errors.rkt global-constraints.rkt global-env.rkt interval-domain.rkt macros.rkt metavar-store.rkt narrowing.rkt namespace.rkt prelude.rkt solver.rkt syntax.rkt trait-resolution.rkt) #t)
+   'test-cfa-analysis-01.rkt
+   (test-dep '(bb-optimization.rkt cfa-analysis.rkt definitional-tree.rkt driver.rkt errors.rkt global-constraints.rkt global-env.rkt macros.rkt metavar-store.rkt narrowing.rkt namespace.rkt prelude.rkt search-heuristics.rkt solver.rkt syntax.rkt trait-resolution.rkt) #t)
    'test-native-collection-ops.rkt
    (test-dep '(driver.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt multi-dispatch.rkt namespace.rkt syntax.rkt) #t)
    'test-negative-literals.rkt

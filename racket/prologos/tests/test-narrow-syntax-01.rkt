@@ -246,8 +246,9 @@
 ;; ========================================
 
 (test-case "narrow/ws: narrowing after definitions"
-  ;; defn double [n] : Nat [add n n] — no pattern matching, so no DT
-  ;; [double ?x] = 6N → nil (no DT available for double)
+  ;; defn double [n] : Nat [add n n]
+  ;; Phase 3a: non-matching functions get trivial dt-rule, enabling narrowing.
+  ;; [double ?x] = 6N → add(?x, ?x) = 6 → x = 3
   (define result
     (run-ws-last
      (string-append
@@ -255,5 +256,5 @@
       "defn double [n] : Nat [add n n]\n"
       "[double ?x] = 6N\n")))
   (check-true (string? result))
-  ;; double has no pattern matching → no definitional tree → nil
-  (check-true (string-contains? result "nil")))
+  ;; Should find solutions (not nil)
+  (check-false (string-contains? result "nil")))

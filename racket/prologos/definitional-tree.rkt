@@ -108,11 +108,19 @@
 ;; extract-definitional-tree : expr -> (or/c dt-branch? dt-or? dt-rule? #f)
 ;; Top-level entry point. Takes an elaborated function body (from global-env).
 ;; Returns a definitional tree, or #f if the function has no pattern matching.
+;; For functions without pattern matching (straight-through), returns a single
+;; dt-rule whose RHS is the inner body — enabling narrowing through higher-order
+;; applications (Phase 3a: 0-CFA auto-defunctionalization).
 (define (extract-definitional-tree body)
   (define-values (arity inner) (peel-lambdas body))
   (cond
     [(expr-reduce? inner)
      (extract-from-reduce inner arity)]
+    ;; Phase 3a: non-matching functions get a trivial dt-rule
+    ;; This allows narrowing to proceed through function applications
+    ;; in the RHS (e.g., [f x y] where f is a logic var).
+    [(> arity 0)
+     (dt-rule inner)]
     [else #f]))
 
 ;; extract-from-reduce : expr-reduce nat -> dt-branch or dt-or

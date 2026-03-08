@@ -176,8 +176,10 @@
 
 (test-case "dt/extract-no-reduce"
   ;; fn [x] -> x  (no pattern matching)
+  ;; Phase 3a: non-matching functions with arity > 0 get a trivial dt-rule
   (define body (expr-lam 'mw (expr-Nat) (expr-bvar 0)))
-  (check-false (extract-definitional-tree body)))
+  (define tree (extract-definitional-tree body))
+  (check-pred dt-rule? tree))
 
 (test-case "dt/extract-partial-match-exempt"
   ;; fn [x] -> match x | zero -> true  (suc is missing)
@@ -341,12 +343,12 @@
   (check-false (def-tree-has-exempt? tree)))
 
 (test-case "dt/integration-no-match"
-  ;; identity: no pattern matching -> #f
+  ;; identity: no pattern matching → Phase 3a trivial dt-rule
   (define tree
     (extract-tree-for
      'my-id
      "(def my-id : (-> Nat Nat) (fn (n : Nat) n))"))
-  (check-false tree))
+  (check-pred dt-rule? tree))
 
 (test-case "dt/integration-3-ctors"
   ;; Ordering type from prelude has 3 constructors: lt-ord, eq-ord, gt-ord
@@ -537,9 +539,8 @@
      "(defn wild-dt ($pipe (_) -> zero))"))
   ;; Wildcard compiles to a match with variable — no expr-reduce
   ;; because it's a catch-all with no constructor dispatch.
-  ;; The function body is just a let binding, no match tree.
-  ;; So no DT is extracted.
-  (check-false tree))
+  ;; Phase 3a: non-matching functions with arity > 0 get a trivial dt-rule.
+  (check-pred dt-rule? tree))
 
 (test-case "dt/pattern-defn-ws-add"
   ;; WS-mode pattern-compiled add
