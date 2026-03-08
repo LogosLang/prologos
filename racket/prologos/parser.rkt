@@ -3489,13 +3489,119 @@
           (values #f rest))))
   (when (null? clause-args)
     (parse-error loc (format "defn ~a: multi-body defn requires at least one clause" name) #f))
-  ;; Parse each $pipe clause
+  ;; Detect: defn f [params] | arms syntax
+  ;; First clause-arg is a bracket form (param list, NOT $pipe-prefixed),
+  ;; and all remaining clause-args are $pipe forms.
+  (define first-d (stx->datum (car clause-args)))
+  (define (is-pipe-form? stx)
+    (let ([d (stx->datum stx)])
+      (and (pair? d)
+           (let ([h (car d)])
+             (eq? (if (syntax? h) (syntax-e h) h) '$pipe)))))
+  (cond
+    ;; New syntax: defn f [params] | pat1 -> body1 | pat2 -> body2
+    [(and (pair? first-d)
+          (not (is-pipe-form? (car clause-args)))
+          (not (null? (cdr clause-args)))
+          (andmap is-pipe-form? (cdr clause-args)))
+     (parse-defn-params-and-patterns name docstring clause-args loc)]
+    ;; Existing syntax: defn f | [patterns] -> body | ...
+    [else
+     (define clauses
+       (for/list ([clause-stx (in-list clause-args)])
+         (parse-defn-clause clause-stx name loc)))
+     (define first-err (findf prologos-error? clauses))
+     (if first-err first-err
+         (surf-defn-multi name docstring clauses loc))]))
+
+;; ========================================
+;; defn f [params] | pattern arms syntax
+;; ========================================
+;; Parse: defn name [params] | pat... -> body | pat... -> body
+;; Desugars to defn-pattern-clause list, compiled by compile-pattern-group.
+
+(define (parse-defn-params-and-patterns name docstring clause-args loc)
+  ;; First element is param list, rest are $pipe pattern arms
+  (define params-stx (car clause-args))
+  (define arm-stxs (cdr clause-args))
+  ;; Extract param list for arity
+  (define param-elems
+    (let ([d (stx->datum params-stx)])
+      (cond
+        [(and (syntax? params-stx) (syntax->list params-stx))
+         => (lambda (lst) lst)]
+        [(list? d)
+         (map (lambda (x) (datum->syntax #f x)) d)]
+        [else
+         (parse-error loc
+           (format "defn ~a: expected [params] before pattern arms" name) #f)])))
+  (define arity (length param-elems))
+  (when (= arity 0)
+    (parse-error loc
+      (format "defn ~a: params+patterns syntax requires at least one parameter" name) #f))
+  ;; Parse each $pipe arm into a defn-pattern-clause
   (define clauses
-    (for/list ([clause-stx (in-list clause-args)])
-      (parse-defn-clause clause-stx name loc)))
+    (for/list ([arm-stx (in-list arm-stxs)])
+      (parse-defn-param-pattern-arm arm-stx name arity loc)))
   (define first-err (findf prologos-error? clauses))
   (if first-err first-err
       (surf-defn-multi name docstring clauses loc)))
+
+;; Parse one arm of defn f [params] | pat... -> body into a defn-pattern-clause.
+(define (parse-defn-param-pattern-arm arm-stx name arity loc)
+  (define d (stx->datum arm-stx))
+  (define parts
+    (if (syntax? arm-stx) (syntax->list arm-stx)
+        (if (list? d) (map (lambda (x) (datum->syntax #f x)) d) #f)))
+  (unless parts
+    (parse-error loc (format "defn ~a: pattern arm must be a list" name) #f))
+  ;; Strip $pipe
+  (define cleaned
+    (if (and (not (null? parts)) (eq? (stx->datum (car parts)) '$pipe))
+        (cdr parts) parts))
+  ;; Find ->
+  (define arrow-idx
+    (for/or ([p (in-list cleaned)] [i (in-naturals)])
+      (and (eq? (stx->datum p) '->) i)))
+  (unless arrow-idx
+    (parse-error loc (format "defn ~a: pattern arm missing ->" name) #f))
+  (define pat-forms (take cleaned arrow-idx))
+  (define body-parts (drop cleaned (+ arrow-idx 1)))
+  (when (null? body-parts)
+    (parse-error loc (format "defn ~a: pattern arm missing body after ->" name) #f))
+  ;; Parse body
+  (define body-stx
+    (if (= (length body-parts) 1) (car body-parts)
+        (datum->syntax #f (map stx->datum body-parts) (car body-parts))))
+  (define body (parse-datum body-stx))
+  (when (prologos-error? body) body)
+  ;; Parse patterns based on arity
+  (define patterns
+    (cond
+      ;; Arity 1: group ALL forms into a single pattern
+      [(= arity 1)
+       (cond
+         [(null? pat-forms)
+          (parse-error loc
+            (format "defn ~a: pattern arm has no pattern forms" name) #f)]
+         [(= (length pat-forms) 1)
+          (list (parse-single-pattern (car pat-forms) loc))]
+         [else
+          ;; Multiple forms for arity 1: group as compound pattern
+          (list (parse-single-pattern
+                 (datum->syntax #f (map stx->datum pat-forms) (car pat-forms))
+                 loc))])]
+      ;; Arity > 1: require exactly arity forms
+      [else
+       (unless (= (length pat-forms) arity)
+         (parse-error loc
+           (format "defn ~a: pattern arm has ~a pattern forms but expected ~a (use brackets for compound patterns)"
+                   name (length pat-forms) arity) #f))
+       (for/list ([pf (in-list pat-forms)])
+         (parse-single-pattern pf loc))]))
+  (define first-err (findf prologos-error? patterns))
+  (if first-err first-err
+      (defn-pattern-clause patterns body loc)))
 
 ;; ========================================
 ;; Pattern parsing for pattern-based defn clauses
@@ -5629,196 +5735,44 @@
   (reverse result))
 
 ;; ========================================
-;; Parse reduce: (reduce scrutinee arm1 arm2 ...)
+;; Parse reduce/match: (match scrutinee arm1 arm2 ...)
 ;; ========================================
+;; Uses parse-single-pattern for rich pattern matching (nested constructors,
+;; head-tail, numeric literals, wildcards). The parser produces
+;; surf-match-patterns nodes; macros.rkt compiles them via compile-match-tree
+;; into nested surf-reduce/reduce-arm during expansion.
+;;
 ;; WS mode (pipe syntax):
-;;   (reduce scrutinee ($pipe nil -> default) ($pipe cons a acc -> body))
+;;   (match scrutinee ($pipe suc zero -> body) ($pipe nil -> default))
 ;; Sexp mode (arrow syntax):
-;;   (reduce scrutinee (nil -> default) (cons a acc -> body))
+;;   (match scrutinee (suc zero -> body) (nil -> default))
 
 (define (parse-reduce args loc)
   (when (< (length args) 2)
-    (parse-error loc "reduce requires scrutinee and at least one arm" #f))
+    (parse-error loc "match requires scrutinee and at least one arm" #f))
   (define scrutinee (parse-datum (car args)))
   (if (prologos-error? scrutinee) scrutinee
-      (let ([arms (parse-reduce-arms (cdr args) loc)])
+      (let ([arms (parse-match-pattern-arms (cdr args) loc)])
         (if (prologos-error? arms) arms
-            (surf-reduce scrutinee arms loc)))))
+            (surf-match-patterns scrutinee arms loc)))))
 
-(define (parse-reduce-arms arm-stxs loc)
+(define (parse-match-pattern-arms arm-stxs loc)
   (define result
     (for/list ([arm-stx (in-list arm-stxs)])
-      (parse-reduce-arm arm-stx loc)))
+      (parse-match-pattern-arm arm-stx loc)))
   (define first-err (findf prologos-error? result))
-  (cond
-    [first-err first-err]
-    ;; If any arms have numeric ctor-names, desugar them
-    [(ormap (lambda (a) (integer? (reduce-arm-ctor-name a))) result)
-     (desugar-numeric-arms result)]
-    [else result]))
+  (if first-err first-err result))
 
-;; Desugar numeric literal patterns in a list of reduce-arms.
-;; Numeric arms have integer ctor-names (produced by parse-reduce-arm).
-;; Strategy: collect all numeric arms, convert to a cascading nested match tree,
-;; then splice the desugared arm(s) back into the arm list at the position of
-;; the first numeric arm.
-;;
-;; Example: | 0 -> A | 1 -> B | 2 -> C | suc k -> D
-;; Desugars to: | zero -> A | suc $v -> (match $v | zero -> B | suc $v2 -> (match $v2 | zero -> C | suc k -> D))
-;;
-;; The cascading match peels one layer of `suc` per numeric level, trying the
-;; numeric arms from smallest to largest before falling through to user-written
-;; `suc` arms.
-(define (desugar-numeric-arms arms)
-  ;; Separate numeric-literal arms from normal arms
-  (define numeric-arms
-    (filter (lambda (a) (integer? (reduce-arm-ctor-name a))) arms))
-  (when (null? numeric-arms) (error 'desugar-numeric-arms "no numeric arms"))
-
-  ;; Non-numeric arms, preserving order
-  (define normal-arms
-    (filter (lambda (a) (not (integer? (reduce-arm-ctor-name a)))) arms))
-
-  ;; Sort numeric arms by value (ascending) for cascading dispatch
-  (define sorted-numeric
-    (sort numeric-arms < #:key reduce-arm-ctor-name))
-
-  ;; Find the existing 'suc arm and 'zero arm from normal arms (if any)
-  (define user-zero-arm
-    (findf (lambda (a) (eq? (reduce-arm-ctor-name a) 'zero)) normal-arms))
-  (define user-suc-arm
-    (findf (lambda (a) (eq? (reduce-arm-ctor-name a) 'suc)) normal-arms))
-
-  ;; Normal arms that are NOT zero or suc (e.g., for other types — shouldn't
-  ;; happen for Nat, but be safe)
-  (define other-arms
-    (filter (lambda (a)
-              (and (not (integer? (reduce-arm-ctor-name a)))
-                   (not (eq? (reduce-arm-ctor-name a) 'zero))
-                   (not (eq? (reduce-arm-ctor-name a) 'suc))))
-            arms))
-
-  ;; Build the desugared arm list.
-  ;; Numeric arms produce: zero arms (for N=0) and a cascading suc arm (for N>0)
-  (define zero-numeric (filter (lambda (a) (= (reduce-arm-ctor-name a) 0)) sorted-numeric))
-  (define positive-numeric (filter (lambda (a) (> (reduce-arm-ctor-name a) 0)) sorted-numeric))
-
-  ;; The zero arm: either from numeric | 0 -> ... or from user | zero -> ...
-  ;; Numeric takes priority (it appears in the arm list position)
-  (define final-zero-arm
-    (cond
-      [(not (null? zero-numeric))
-       (let ([a (car zero-numeric)])
-         (reduce-arm 'zero '() (reduce-arm-body a) (reduce-arm-srcloc a)))]
-      [user-zero-arm user-zero-arm]
-      [else #f]))
-
-  ;; Build cascading nested match for positive numeric patterns.
-  ;; Each level peels one `suc` and dispatches on the predecessor.
-  ;; At the bottom, fall through to the user's `suc k -> ...` arm if present.
-  ;;
-  ;; For N=1: match pred | zero -> body1 | suc k -> <user-suc-body or next-level>
-  ;; For N=2 after peeling to pred:
-  ;;   match pred | zero -> body1 | suc $v -> match $v | zero -> body2 | suc k -> ...
-  ;;
-  ;; We build this inside-out: start with the deepest level and work outward.
-  (define final-suc-arm
-    (if (null? positive-numeric)
-        user-suc-arm  ;; no positive numeric arms, keep user's suc arm
-        (let ()
-          ;; Group positive-numeric by depth (value - 1 = depth of predecessor match)
-          ;; Build a tree: at depth d, match the d-th predecessor
-          ;; Approach: recursively build from the highest numeric value down
-          ;;
-          ;; We organize by value: for each N, at nesting depth N-1, we match zero.
-          ;; Between levels, we match suc and recurse.
-          ;;
-          ;; Build a function that creates the nested match for a range of values.
-          ;; Given a list of (value . body) pairs sorted ascending and a fallthrough arm,
-          ;; produce a reduce-arm for 'suc that dispatches.
-
-          (define (build-dispatch remaining-pairs fallthrough-suc-arm depth loc)
-            ;; remaining-pairs: list of (value . body) sorted ascending, all > depth
-            ;; depth: current nesting depth (0 = matching pred of outermost suc)
-            ;; fallthrough-suc-arm: user's suc arm to use when no numeric match
-            (cond
-              [(null? remaining-pairs)
-               ;; No more numeric patterns at this level or deeper
-               ;; Use the user's suc arm if available, else no arm
-               fallthrough-suc-arm]
-              [else
-               (define next-val (car (car remaining-pairs)))
-               (define next-body (cdr (car remaining-pairs)))
-               (define rest-pairs (cdr remaining-pairs))
-               (cond
-                 [(= next-val (+ depth 1))
-                  ;; This pattern matches zero at this level (i.e., value = depth+1
-                  ;; means after peeling depth+1 incs total, we find zero at this pred)
-                  ;; Build: match pred | zero -> body | suc $v -> <recurse>
-                  (define var (gensym '$np-))
-                  (define deeper
-                    (build-dispatch rest-pairs fallthrough-suc-arm (+ depth 1) loc))
-                  (define inner-arms
-                    (append
-                     (list (reduce-arm 'zero '() next-body loc))
-                     (if deeper (list deeper) '())))
-                  ;; Return an suc arm at this level
-                  (reduce-arm 'suc (list var)
-                              (surf-reduce (surf-var var loc) inner-arms loc)
-                              loc)]
-                 [else
-                  ;; next-val > depth+1: no pattern at this level, just peel and recurse
-                  (define var (gensym '$np-))
-                  (define deeper
-                    (build-dispatch remaining-pairs fallthrough-suc-arm (+ depth 1) loc))
-                  (define inner-arms
-                    (if deeper (list deeper) '()))
-                  (if (null? inner-arms)
-                      fallthrough-suc-arm  ;; nothing to dispatch, fall through
-                      (reduce-arm 'suc (list var)
-                                  (surf-reduce (surf-var var loc) inner-arms loc)
-                                  loc))])]))
-
-          (define pairs
-            (map (lambda (a) (cons (reduce-arm-ctor-name a) (reduce-arm-body a)))
-                 positive-numeric))
-          (define loc (reduce-arm-srcloc (car positive-numeric)))
-
-          (build-dispatch pairs user-suc-arm 0 loc))))
-
-  ;; Assemble final arm list: zero arm, suc arm, then other arms
-  (append
-   (if final-zero-arm (list final-zero-arm) '())
-   (if final-suc-arm (list final-suc-arm) '())
-   other-arms))
-
-;; Build nested cons arms for head-tail list pattern: [a b | rest] → body
-;; heads: list of symbols (head binding names)
-;; tail-name: symbol (tail binding name)
-;; body: parsed surface expression
-;; Returns a single reduce-arm that matches cons, with nested match for multi-head.
-(define (build-nested-cons-arms heads tail-name body loc)
-  (cond
-    ;; Single head: cons head tail -> body
-    [(= (length heads) 1)
-     (reduce-arm 'cons (list (car heads) tail-name) body loc)]
-    ;; Multiple heads: cons head0 $ht0 -> (match $ht0 | cons head1 ... -> ...)
-    [else
-     (define gen-tail (gensym '$ht-))
-     (define inner-arm (build-nested-cons-arms (cdr heads) tail-name body loc))
-     (define inner-match
-       (surf-reduce (surf-var gen-tail loc) (list inner-arm) loc))
-     (reduce-arm 'cons (list (car heads) gen-tail) inner-match loc)]))
-
-(define (parse-reduce-arm arm-stx loc)
-  ;; arm-stx is a syntax object or datum wrapping a list like:
-  ;; ($pipe nil -> default) or (cons a acc -> body)
+;; Parse a single match arm into a match-pattern-arm.
+;; Match is always arity-1 (single scrutinee), so all pattern forms before ->
+;; are grouped into a single pattern via parse-single-pattern.
+(define (parse-match-pattern-arm arm-stx loc)
   (define d (stx->datum arm-stx))
   (define parts
     (if (syntax? arm-stx) (syntax->list arm-stx)
         (if (list? d) (map (lambda (x) (datum->syntax #f x)) d) #f)))
   (unless parts
-    (parse-error loc "reduce arm must be a list" #f))
+    (parse-error loc "match arm must be a list" #f))
 
   ;; Skip leading $pipe if present (WS mode)
   (define cleaned
@@ -5832,21 +5786,17 @@
     (for/or ([p (in-list cleaned)] [i (in-naturals)])
       (and (eq? (stx->datum p) '->) i)))
   (unless arrow-idx
-    (parse-error loc "reduce arm missing -> separator" #f))
+    (parse-error loc "match arm missing -> separator" #f))
 
-  (define pattern (take cleaned arrow-idx))
+  (define pat-forms (take cleaned arrow-idx))
   (define body-parts (drop cleaned (+ arrow-idx 1)))
 
-  (when (null? pattern)
-    (parse-error loc "reduce arm missing constructor name" #f))
+  (when (null? pat-forms)
+    (parse-error loc "match arm missing pattern" #f))
   (when (null? body-parts)
-    (parse-error loc "reduce arm missing body after ->" #f))
+    (parse-error loc "match arm missing body after ->" #f))
 
-  ;; Body: may be a single expression or multiple tokens forming one expression
-  ;; For WS mode, each arm is a sub-list, so body-parts should have exactly 1 element
-  ;; For sexp mode, body should also be a single form
-  ;; But we need to handle (ctor args -> (f x)) where body is one list
-  ;; If multiple body parts, wrap them as an application
+  ;; Parse body
   (define body-stx
     (if (= (length body-parts) 1)
         (car body-parts)
@@ -5854,105 +5804,26 @@
         (datum->syntax #f
                        (map stx->datum body-parts)
                        (car body-parts))))
-
-  ;; Flatten single-element list patterns from $mixfix expansion:
-  ;; If pattern is ((cons h t)), flatten to (cons h t) for ctor-name + bindings.
-  ;; This handles .{h :: t} in match arms.
-  ;; Note: stx->datum (syntax-e) does shallow unwrap — use syntax->datum for deep.
-  (define effective-pattern
-    (let* ([first-stx (car pattern)]
-           [first-deep (if (syntax? first-stx) (syntax->datum first-stx) first-stx)])
-      (if (and (= (length pattern) 1) (pair? first-deep) (symbol? (car first-deep)))
-          ;; Single list element that is a constructor application: flatten it
-          ;; Get inner syntax objects via syntax->list, or reconstruct
-          (or (and (syntax? first-stx) (syntax->list first-stx))
-              (map (lambda (x) (datum->syntax #f x)) first-deep))
-          pattern)))
-
-  ;; Head-tail list pattern detection: [a b | rest] → (a b $pipe rest)
-  ;; Must check BEFORE ctor-name extraction since $pipe in bindings is invalid
-  (define pipe-idx-in-pat
-    (for/or ([p (in-list effective-pattern)] [i (in-naturals)])
-      (and (eq? (stx->datum p) '$pipe) i)))
-
-  (define ctor-name (if pipe-idx-in-pat #f (stx->datum (car effective-pattern))))
-  (define binding-names
-    (if pipe-idx-in-pat '()
-        (for/list ([p (in-list (cdr effective-pattern))])
-          (stx->datum p))))
-
-  ;; Parse body first (needed by all paths)
   (define body (parse-datum body-stx))
-  (cond
-    [(prologos-error? body) body]
+  (when (prologos-error? body) body)
 
-    ;; Head-tail list pattern: [a b | rest] → nested cons arms
-    [pipe-idx-in-pat
-     (define head-stxs (take effective-pattern pipe-idx-in-pat))
-     (define tail-stxs (drop effective-pattern (+ pipe-idx-in-pat 1)))
-     (cond
-       [(null? head-stxs)
-        (parse-error loc "head-tail pattern: need at least one head element before |" #f)]
-       [(not (= (length tail-stxs) 1))
-        (parse-error loc "head-tail pattern: expected exactly one tail element after |" #f)]
-       [else
-        (define head-names (map stx->datum head-stxs))
-        (define tail-name (stx->datum (car tail-stxs)))
-        (unless (andmap symbol? head-names)
-          (parse-error loc "head-tail pattern: head elements must be symbols" #f))
-        (unless (symbol? tail-name)
-          (parse-error loc "head-tail pattern: tail must be a symbol" #f))
-        (build-nested-cons-arms head-names tail-name body loc)])]
+  ;; Parse pattern: match is arity-1, group all forms into one pattern.
+  ;; Single form → parse directly via parse-single-pattern.
+  ;; Multiple forms → synthesize as compound pattern (ctor arg1 arg2 ...).
+  (define pattern
+    (cond
+      [(= (length pat-forms) 1)
+       ;; Single form: could be symbol, nat literal, or bracketed compound
+       (parse-single-pattern (car pat-forms) loc)]
+      [else
+       ;; Multiple forms: group as compound pattern
+       ;; e.g., (suc zero) → (pat-compound 'suc [(pat-atom 'var 'zero)])
+       (parse-single-pattern
+        (datum->syntax #f (map stx->datum pat-forms) (car pat-forms))
+        loc)]))
+  (when (prologos-error? pattern) pattern)
 
-    ;; Numeric literal pattern: validate and produce tagged reduce-arm
-    ;; Actual desugaring happens in desugar-numeric-arms (called from parse-reduce-arms)
-    [(and (exact-nonnegative-integer? ctor-name) (integer? ctor-name))
-     (cond
-       ;; Numeric patterns cannot have bindings: | 2 k -> ... is invalid
-       [(not (null? binding-names))
-        (parse-error loc
-          (format "reduce arm: numeric literal pattern ~a cannot have bindings" ctor-name) #f)]
-       ;; Reject unreasonably large patterns to avoid deep nesting
-       [(> ctor-name 20)
-        (parse-error loc
-          (format "reduce arm: numeric literal pattern ~a is too large (max 20)" ctor-name) #f)]
-       ;; Tag with the numeric value as ctor-name (integer, not symbol)
-       ;; desugar-numeric-arms will convert these to proper constructor arms
-       [else
-        (reduce-arm ctor-name '() body loc)])]
-
-    ;; Nat-suffix literal pattern: 0N, 3N, etc. (sexp mode reads these as symbols)
-    [(and (symbol? ctor-name)
-          (let ([s (symbol->string ctor-name)])
-            (and (> (string-length s) 1)
-                 (char=? (string-ref s (- (string-length s) 1)) #\N)
-                 (for/and ([c (in-string (substring s 0 (- (string-length s) 1)))])
-                   (char-numeric? c)))))
-     (let ([v (string->number
-               (substring (symbol->string ctor-name) 0
-                          (- (string-length (symbol->string ctor-name)) 1)))])
-       (cond
-         [(not (null? binding-names))
-          (parse-error loc
-            (format "reduce arm: numeric literal pattern ~aN cannot have bindings" v) #f)]
-         [(> v 20)
-          (parse-error loc
-            (format "reduce arm: numeric literal pattern ~aN is too large (max 20)" v) #f)]
-         [else
-          (reduce-arm v '() body loc)]))]
-
-    ;; Non-numeric, non-symbol constructor name: error (fixes latent unless bug)
-    [(not (symbol? ctor-name))
-     (parse-error loc
-       (format "reduce arm: constructor name must be a symbol, got ~a" ctor-name) #f)]
-
-    ;; Non-symbol bindings: error (fixes latent unless bug)
-    [(not (andmap symbol? binding-names))
-     (parse-error loc "reduce arm: all bindings must be bare symbols" #f)]
-
-    ;; Normal constructor pattern
-    [else
-     (reduce-arm ctor-name binding-names body loc)]))
+  (match-pattern-arm (list pattern) body loc))
 
 ;; ========================================
 ;; Convenience: parse from string

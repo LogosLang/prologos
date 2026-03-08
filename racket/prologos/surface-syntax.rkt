@@ -298,6 +298,9 @@
  ;; Reduce (ML-style pattern matching with type inference)
  (struct-out surf-reduce)
  (struct-out reduce-arm)
+ ;; Rich pattern match (compiled via compile-match-tree)
+ (struct-out match-pattern-arm)
+ (struct-out surf-match-patterns)
  ;; Multi-body defn (case-split by arity)
  (struct-out defn-clause)
  (struct-out surf-defn-multi)
@@ -1010,6 +1013,17 @@
 
 ;; reduce: scrutinee (surf expr), list of reduce-arms
 (struct surf-reduce (scrutinee arms srcloc) #:transparent)
+
+;; ========================================
+;; Rich pattern match (compiled during expand-expression)
+;; ========================================
+;; match-pattern-arm: patterns (list of pat-* nodes), body (surf expr)
+;; For single-scrutinee match, patterns is a single-element list.
+(struct match-pattern-arm (patterns body srcloc) #:transparent)
+
+;; surf-match-patterns: rich pattern match that gets compiled into
+;; nested surf-reduce via compile-match-tree during macro expansion.
+(struct surf-match-patterns (scrutinee arms srcloc) #:transparent)
 
 ;; ========================================
 ;; Multi-body defn: case-split by arity

@@ -2970,12 +2970,24 @@
        (for/and ([clause (in-list pipe-clauses)])
          (pipe-clause-datum-is-pattern? clause))))
 
-;; Check if ANY pipe clause in rest is a pattern clause
+;; Check if ANY pipe clause in rest is a pattern clause.
+;; Also detects defn f [params] | arms syntax where the first element
+;; is a bracket form (param list) and subsequent elements are $pipe arms.
 (define (defn-has-any-pattern-clauses? rest)
   (define pipe-clauses
     (filter (lambda (x) (and (pair? x) (eq? (car x) '$pipe))) rest))
-  (for/or ([clause (in-list pipe-clauses)])
-    (pipe-clause-datum-is-pattern? clause)))
+  (or
+   ;; Existing: any pipe clause has [patterns] -> body format
+   (for/or ([clause (in-list pipe-clauses)])
+     (pipe-clause-datum-is-pattern? clause))
+   ;; New: first element is a bracket form (not $pipe), rest are $pipe arms
+   ;; This is the defn f [params] | pat... -> body syntax
+   (and (not (null? rest))
+        (pair? (car rest))
+        (not (eq? (let ([h (car (car rest))]) h) '$pipe))
+        (not (null? (cdr rest)))
+        (andmap (lambda (x) (and (pair? x) (eq? (car x) '$pipe)))
+                (cdr rest)))))
 
 ;; Decompose spec type tokens into parameter types and return type.
 ;; Uses the Prologos uncurried arrow convention:
@@ -7635,6 +7647,10 @@
      (surf-J (expand-expression mot) (expand-expression base)
              (expand-expression left) (expand-expression right)
              (expand-expression proof) loc)]
+    ;; Rich pattern match — compile via compile-match-tree, then re-expand
+    [(surf-match-patterns scrutinee arms loc)
+     (define compiled (compile-match-expression scrutinee arms loc))
+     (expand-expression compiled)]
     ;; Reduce — walk scrutinee and arm bodies
     [(surf-reduce scrutinee arms loc)
      (surf-reduce (expand-expression scrutinee)
@@ -7868,6 +7884,20 @@
            (compile-match-tree specialized new-params loc))
          (reduce-arm ctor field-names arm-body loc)))
      (surf-reduce (surf-var scrutinee-name loc) arms loc)]))
+
+;; Compile a rich pattern match expression into nested surf-reduce.
+;; Used by expand-expression to handle surf-match-patterns nodes.
+;; scrutinee: already-parsed surface expression (NOT yet expanded)
+;; arms: list of match-pattern-arm (each has a single-element patterns list)
+;; Returns un-expanded surface AST (caller should re-expand).
+(define (compile-match-expression scrutinee arms loc)
+  (define scrutinee-name (gensym '__scrutinee))
+  (define rows
+    (for/list ([arm (in-list arms)])
+      (list (map normalize-pattern (match-pattern-arm-patterns arm))
+            (match-pattern-arm-body arm))))
+  (define match-body (compile-match-tree rows (list scrutinee-name) loc))
+  (make-let-binding scrutinee-name scrutinee match-body loc))
 
 ;; Convert a type name symbol to its surface syntax representation.
 ;; Built-in types (Nat, Bool, Unit) have dedicated surface syntax structs;
