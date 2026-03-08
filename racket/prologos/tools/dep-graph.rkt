@@ -108,6 +108,7 @@
    'surface-syntax.rkt            '(source-location.rkt)
    'syntax.rkt                    '(prelude.rkt)
    'tabling.rkt                   '(propagator.rkt)
+   'term-lattice.rkt              '()
    'trait-resolution.rkt          '(errors.rkt macros.rkt metavar-store.rkt performance-counters.rkt prelude.rkt pretty-print.rkt source-location.rkt syntax.rkt unify.rkt zonk.rkt)
    'type-lattice.rkt              '(prelude.rkt reduction.rkt substitution.rkt syntax.rkt zonk.rkt)
    'typing-core.rkt               '(elab-speculation-bridge.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt performance-counters.rkt prelude.rkt pretty-print.rkt reduction.rkt substitution.rkt syntax.rkt unify.rkt warnings.rkt)
@@ -210,6 +211,8 @@
    (test-dep '(macros.rkt) #f)
    'test-definitional-tree-01.rkt
    (test-dep '(definitional-tree.rkt macros.rkt syntax.rkt) #t)
+   'test-term-lattice-01.rkt
+   (test-dep '(term-lattice.rkt) #f)
    'test-dot-access.rkt
    (test-dep '(driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parser.rkt prelude.rkt pretty-print.rkt reader.rkt reduction.rkt source-location.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt typing-core.rkt) #t)
    'test-effect-bridge-01.rkt

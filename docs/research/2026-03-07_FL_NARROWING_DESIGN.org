@@ -27,7 +27,7 @@ The document covers:
    constructors)
 7. A phased implementation roadmap (Phases 1--3)
 
-*Implementation tracking*: See companion document =2026-03-07_NARROWING_ABSTRACT_INTERPRETATION_DESIGN.org=.
+*Implementation tracking*: See companion document =docs/tracking/2026-03-07_NARROWING_ABSTRACT_INTERPRETATION_DESIGN.org=.
 
 * 1. Motivation: The defn/defr Divide
 
@@ -862,7 +862,7 @@ Estimated: ~100 lines, ~30 tests
 - [ ] Widening for fixpoint convergence on abstract domains
 - [ ] Critical pair analysis for confluence detection
 
-See: ~2026-03-07_NARROWING_ABSTRACT_INTERPRETATION_DESIGN.org~
+See: ~docs/tracking/2026-03-07_NARROWING_ABSTRACT_INTERPRETATION_DESIGN.org~
 
 ** Phase 3: Advanced Extensions (see companion design doc)
 
@@ -871,7 +871,7 @@ See: ~2026-03-07_NARROWING_ABSTRACT_INTERPRETATION_DESIGN.org~
 - [ ] Global constraints (~all-different~, ~cumulative~)
 - [ ] Branch-and-bound optimization (~minimize~, ~maximize~)
 
-See: ~2026-03-07_NARROWING_ABSTRACT_INTERPRETATION_DESIGN.org~
+See: ~docs/tracking/2026-03-07_NARROWING_ABSTRACT_INTERPRETATION_DESIGN.org~
 
 * 9. Related Work
 
