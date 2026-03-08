@@ -483,6 +483,27 @@ The following collection items ARE also deferred (genuine infrastructure deps):
 
 ---
 
+## FL Narrowing — WS Surface Gaps
+
+### Nested Constructor Patterns in Match Arms
+- `match` arms (`reduce-arm`) use flat bindings: `| suc n -> body` treats `n` as a variable
+- Nested constructor patterns like `| suc zero -> body` treat `zero` as a variable name, not the constructor
+- Bracketed form `| [suc zero] -> body` also fails — `effective-pattern` flattening unwraps it to the same flat representation
+- Root cause: `parse-reduce-arm` (parser.rkt:5879) extracts everything after the ctor as raw symbol names; no recursion into `parse-single-pattern`
+- **Workaround 1**: Use `defn` pattern clauses with double brackets: `defn pred | [[suc zero]] -> zero | [[suc [suc n]]] -> suc n | [[zero]] -> zero` — these compile via `compile-match-tree` which handles nested `pat-compound`
+- **Workaround 2**: Nest matches manually: `| suc n -> match n | zero -> body1 | suc k -> body2`
+- Fix would require: making `parse-reduce-arm` use `parse-single-pattern` infrastructure and compiling compound patterns into nested `surf-reduce` bodies
+- Source: C2 investigation, 2026-03-08
+
+### Higher-Order Narrowing in WS Mode
+- `[apply-op ?f 3N 2N] = 5N` doesn't trigger HO narrowing via WS pipeline
+- Infrastructure works at sexp/API level (23 tests pass)
+- Issue: bound variable `f` (de Bruijn `expr-bvar`) in function body ≠ caller's `?f` (`expr-logic-var`)
+- Fix requires deeper integration between narrowing substitution env and DT body traversal
+- Source: C3 analysis, 2026-03-08; `examples/narrowing-demo.prologos` §9
+
+---
+
 ## Homoiconicity
 
 ### Phase IV: Runtime Eval & Read
