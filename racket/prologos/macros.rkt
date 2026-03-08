@@ -3737,6 +3737,50 @@
                   (error 'do "do: each binding must be [name <type> value] or [name : type = value], got ~a" b)]))])
         `(let ,let-bindings ,body))))
 
+;; cond: multi-way conditional dispatch
+;; (cond ($pipe guard1 -> body1) ($pipe guard2 -> body2) ...)
+;;   → (if guard1 body1 (if guard2 body2 ...))
+;; The last arm should typically be `| true -> default`.
+;; If no arm matches, evaluates to a typed hole (__cond-fail).
+(define (expand-cond datum)
+  (unless (and (list? datum) (>= (length datum) 2))
+    (error 'cond "cond requires at least one arm: (cond | guard -> body ...)"))
+  (define arms (cdr datum))
+  (define parsed
+    (for/list ([arm arms])
+      ;; Strip $pipe prefix if present (WS mode); otherwise use as-is (sexp mode)
+      (define parts
+        (cond
+          [(and (list? arm) (pair? arm)
+                (eq? (car arm) '$pipe))
+           (cdr arm)]
+          [(list? arm) arm]
+          [else (error 'cond "cond: each arm must be (guard -> body), got ~a" arm)]))
+      ;; Find -> separator
+      (define arrow-pos (index-of-symbol '-> parts))
+      (unless arrow-pos
+        (error 'cond "cond arm missing ->: ~a" arm))
+      (define guard-parts (take parts arrow-pos))
+      (define body-parts (drop parts (+ arrow-pos 1)))
+      (when (null? guard-parts)
+        (error 'cond "cond arm has empty guard: ~a" arm))
+      (when (null? body-parts)
+        (error 'cond "cond arm has empty body: ~a" arm))
+      ;; Single form → use directly; multiple forms → implicit application
+      (define guard (if (= (length guard-parts) 1)
+                        (car guard-parts)
+                        guard-parts))
+      (define body (if (= (length body-parts) 1)
+                       (car body-parts)
+                       body-parts))
+      (list guard body)))
+  ;; Build nested if chain (right fold)
+  ;; Last arm wraps in: (if guard body __cond-fail)
+  (foldr (lambda (arm rest)
+           `(if ,(car arm) ,(cadr arm) ,rest))
+         '($typed-hole __cond-fail)
+         parsed))
+
 ;; if: boolean branching (requires boolrec in core)
 ;; (if ResultType cond then else) → (boolrec (the (-> Bool (Type 0)) (fn (_ : Bool) ResultType)) then else cond)
 ;; The motive must be annotated with `the` so boolrec can synthesize its type.
@@ -4779,6 +4823,7 @@
 (register-preparse-macro! 'let expand-let)
 (register-preparse-macro! 'do expand-do)
 (register-preparse-macro! 'if expand-if)
+(register-preparse-macro! 'cond expand-cond)
 (register-preparse-macro! '$list-literal expand-list-literal)
 (register-preparse-macro! '$lseq-literal expand-lseq-literal)
 (register-preparse-macro! '$pipe-gt expand-pipe-block)
