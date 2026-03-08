@@ -42,7 +42,7 @@ except that 0-CFA (Phase 3a) builds on the narrowing propagator from Phase 1c.
 | 2 | 2a | Interval Abstract Domain | ⬚ | | ~530 lines, ~105 tests |
 | 2 | 2a+ | Length-Interval Domain (List/String) | ⬚ | | Future enhancement |
 | 2 | 2b | Size-Based Termination (LJBA) | ⬚ | | ~390 lines, ~80 tests |
-| 2 | 2c | Critical Pair / Confluence Analysis | ⬚ | | ~350 lines, ~65 tests; lazy for IS functions |
+| 2 | 2c | Critical Pair / Confluence Analysis | ✅ | | =confluence-analysis.rkt= ~200 lines, =narrowing.rkt= +20, 58 tests |
 | 3 | 3a | 0-CFA Auto-Defunctionalization | ⬚ | | ~460 lines, ~70 tests; demand-driven |
 | 3 | 3b | Configurable Search Heuristics | ⬚ | | ~590 lines, ~105 tests |
 | 3 | 3c | Global Constraints + BB Optimization | ⬚ | | ~510 lines, ~95 tests |

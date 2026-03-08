@@ -35,6 +35,7 @@
          "propagator.rkt"
          "term-lattice.rkt"
          "definitional-tree.rkt"
+         "confluence-analysis.rkt"
          "macros.rkt"
          "global-env.rkt")
 
@@ -46,6 +47,8 @@
  narrowing-demands
  ;; Phase 1d: Narrowing search
  run-narrowing-search
+ ;; Phase 2c: Confluence classification
+ get-confluence-class
  ;; Helpers (for testing)
  term-from-ground-expr
  nat->term
@@ -436,6 +439,30 @@
 
 (define NARROW-DEPTH-LIMIT 50)
 
+;; ----------------------------------------
+;; Confluence classification (Phase 2c)
+;; ----------------------------------------
+
+;; Lazily analyze and cache confluence for a function's definitional tree.
+;; Returns 'confluent, 'non-confluent, or 'unknown.
+;; Tries DT registry first, then extracts from function body if needed.
+(define (get-confluence-class func-name)
+  (define cached (lookup-confluence func-name))
+  (cond
+    [cached (confluence-result-class cached)]
+    [else
+     (define tree
+       (or (lookup-def-tree func-name)
+           ;; Fallback: extract DT from function body in global env
+           (let ([body (global-env-lookup-value func-name)])
+             (and body (extract-definitional-tree body)))))
+     (cond
+       [tree
+        (define result (analyze-confluence tree))
+        (register-confluence! func-name result)
+        (confluence-result-class result)]
+       [else 'unknown])]))
+
 ;; run-narrowing-search :
 ;;   symbol × (listof expr) × expr × (listof symbol) → (listof hasheq)
 ;;
@@ -569,6 +596,11 @@
         (narrow-match result target subst func-name depth)]
 
        [(dt-or branches)
+        ;; Phase 2c: confluence classification determines search optimality.
+        ;; Both confluent and non-confluent use the same search (try all branches);
+        ;; needed narrowing for confluent functions is optimal, basic narrowing for
+        ;; non-confluent ensures completeness.
+        (get-confluence-class func-name) ;; lazy analyze + cache
         (append-map
          (lambda (b)
            (narrow-dt-search b bindings func-name target subst depth))
