@@ -54,6 +54,7 @@
    'cap-type-bridge.rkt           '(capability-inference.rkt global-env.rkt macros.rkt propagator.rkt syntax.rkt type-lattice.rkt)
    'capability-inference.rkt      '(atms.rkt global-env.rkt macros.rkt propagator.rkt syntax.rkt)
    'champ.rkt                     '()
+   'definitional-tree.rkt         '(macros.rkt syntax.rkt)
    'driver.rkt                    '(atms.rkt cap-type-bridge.rkt capability-inference.rkt champ.rkt effect-executor.rkt elab-speculation-bridge.rkt elaborator-network.rkt elaborator.rkt errors.rkt foreign.rkt global-env.rkt macros.rkt metavar-store.rkt multi-dispatch.rkt namespace.rkt parser.rkt performance-counters.rkt prelude.rkt pretty-print.rkt processes.rkt propagator.rkt qtt.rkt reader.rkt reduction.rkt relations.rkt session-runtime.rkt sessions.rkt sexp-readtable.rkt source-location.rkt stratified-eval.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt type-lattice.rkt typing-core.rkt typing-errors.rkt typing-sessions.rkt unify.rkt warnings.rkt zonk.rkt)
    'elab-speculation-bridge.rkt   '(atms.rkt metavar-store.rkt performance-counters.rkt)
    'elab-speculation.rkt          '(atms.rkt elaborator-network.rkt propagator.rkt type-lattice.rkt)
@@ -207,6 +208,8 @@
    (test-dep '(driver.rkt global-env.rkt parser.rkt posit-impl.rkt prelude.rkt reader.rkt surface-syntax.rkt syntax.rkt) #f)
    'test-defmacro.rkt
    (test-dep '(macros.rkt) #f)
+   'test-definitional-tree-01.rkt
+   (test-dep '(definitional-tree.rkt macros.rkt syntax.rkt) #t)
    'test-dot-access.rkt
    (test-dep '(driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parser.rkt prelude.rkt pretty-print.rkt reader.rkt reduction.rkt source-location.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt typing-core.rkt) #t)
    'test-effect-bridge-01.rkt
