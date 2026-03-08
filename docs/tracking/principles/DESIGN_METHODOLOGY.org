@@ -340,11 +340,14 @@ integrates cleanly and enables future extension.
 
 *** What this looks like
 
+- Write a capstone demo (~.prologos~ file) exercising the feature in
+  the user-facing syntax — this is the first mandatory step
 - Verify that the new feature composes with existing features
 - Check that the new abstractions are reusable in contexts beyond the
   original design
 - Update principles documents if new patterns emerged
 - Identify the new possibilities that the feature enables
+- Conduct a Post Implementation Review for significant features
 
 *** Key practices
 
@@ -368,11 +371,99 @@ integrates cleanly and enables future extension.
   - Relevant principles docs (new patterns, new lessons)
   - The original tracking document (completion status, lessons learned)
 
-- *Teach through usage*: Write examples that show the feature in
-  context. The Logic Engine's test files serve double duty as
-  documentation: they show how to create networks, add cells, wire
-  propagators, run to quiescence, and read results. Future users
-  (including future context windows) learn from these examples.
+- *Teach through the capstone demo*: Write a ~.prologos~ demo file that
+  shows the feature in context (see "Feature Capstone Demo" below). The
+  demo serves triple duty: user-facing documentation, integration
+  validation, and honest assessment of WS-mode surface coverage. This
+  replaces the test-files-as-documentation pattern — tests prove
+  correctness, demos prove usability.
+
+*** Feature Capstone Demo (Mandatory)
+
+After a significant feature track is complete --- all sub-phases shipped,
+tests passing --- write a *capstone demo file* that exercises the feature
+in the user-facing ~.prologos~ syntax. This is not a test file (those
+exist already); it is a /feature showcase/ written in the ideal syntax of
+the language, intended to be read and run by users (including future selves).
+
+**** Why this is mandatory
+
+The capstone demo serves purposes that unit tests cannot:
+
+- *Discovers syntax gaps*: Unit tests exercise the sexp/API layer. The
+  capstone forces the WS reader → preparse → parse → elaborate path,
+  revealing features that work internally but aren't surfaced in the
+  user-facing syntax. The FL Narrowing capstone revealed that ground
+  constructor args in WS narrowing (~[add zero ?y] = 5N~), nested match
+  patterns, and composed-function narrowing don't yet work in WS mode ---
+  none of which were visible from the passing test suite.
+
+- *Validates integration with other features*: The demo should exercise
+  how the new feature interacts with existing language components ---
+  the prelude, the type system, other syntactic forms (pipes, match,
+  pattern defn). A feature that works in isolation but breaks when
+  composed with the rest of the language is not done.
+
+- *Establishes ground truth for "what works"*: After the demo runs,
+  you have an honest inventory: which ideal-syntax expressions produce
+  correct output, which need commenting out, and which reveal future
+  work. This inventory is more valuable than any design document for
+  understanding the current state of the feature.
+
+- *Creates user-facing documentation*: The demo is a teaching artifact.
+  It shows users what the feature does, how to use it, and what the
+  output looks like. Heavy commenting explains the underlying mechanisms.
+
+- *Exercises the language vision*: Writing the demo forces you to think
+  about how the feature /should/ look in the ideal syntax, even if the
+  current parser doesn't support it yet. Ideal syntax that's commented
+  out with a ~NOTE:~ becomes a specification for future work.
+
+**** What the capstone should contain
+
+- *Prologos header and ~ns~ declaration*: First-class ~.prologos~ file
+  in the examples directory
+- *Sections organized by feature/phase*: Each section introduces one
+  capability with commentary explaining the mechanism
+- *Live executable expressions*: Every uncommented expression must run
+  without errors
+- *Commented ideal syntax*: Features not yet surfaced in WS mode are
+  shown as commented-out ideal syntax with ~NOTE:~ explaining the gap
+- *Cross-feature exercises*: At least one section showing how the new
+  feature composes with existing features (e.g., narrowing + functional
+  code, narrowing + prelude functions, narrowing + user definitions)
+- *Summary table*: Lines/tests per sub-phase, giving readers a sense
+  of the implementation's scope
+
+**** What the capstone should NOT be
+
+- Not a test file (no ~check-equal?~, no ~rackunit~)
+- Not an exhaustive regression suite (that's what ~tests/~ is for)
+- Not a design document (that's in ~docs/tracking/~)
+- Not a copy of existing tests translated to WS mode (it should explore
+  NEW combinations and usage patterns)
+
+**** When to write it
+
+After the last sub-phase is committed and all tests pass, but /before/
+the PIR. The capstone often surfaces issues that inform the PIR's
+"challenges" and "forward enablement" sections.
+
+**** Naming and location
+
+~racket/prologos/examples/{feature}-demo.prologos~
+
+Examples: ~narrowing-demo.prologos~, ~relational-demo.prologos~,
+~session-demo.prologos~.
+
+**** Example
+
+The FL Narrowing capstone (~examples/narrowing-demo.prologos~, 533 lines)
+covered all 11 sub-phases with 16 live narrowing queries and 5 commented
+ideal-syntax sections. It revealed 3 WS-mode gaps, validated 7 working
+cross-feature interactions, and established the ground truth that
+narrowing currently operates over inductively-defined types (Nat, Bool)
+with Int narrowing via constraint propagation as a future extension.
 
 *** Post Implementation Review (PIR)
 
