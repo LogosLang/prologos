@@ -107,6 +107,7 @@
    'substitution.rkt              '(prelude.rkt syntax.rkt)
    'surface-syntax.rkt            '(source-location.rkt)
    'syntax.rkt                    '(prelude.rkt)
+   'narrowing.rkt                 '(definitional-tree.rkt macros.rkt propagator.rkt syntax.rkt term-lattice.rkt)
    'tabling.rkt                   '(propagator.rkt)
    'term-lattice.rkt              '()
    'trait-resolution.rkt          '(errors.rkt macros.rkt metavar-store.rkt performance-counters.rkt prelude.rkt pretty-print.rkt source-location.rkt syntax.rkt unify.rkt zonk.rkt)
@@ -433,6 +434,8 @@
    (test-dep '(driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt multi-dispatch.rkt parser.rkt prelude.rkt source-location.rkt surface-syntax.rkt syntax.rkt) #t)
    'test-namespace.rkt
    (test-dep '(elaborator.rkt global-env.rkt namespace.rkt prelude.rkt source-location.rkt surface-syntax.rkt syntax.rkt) #f)
+   'test-narrowing-01.rkt
+   (test-dep '(definitional-tree.rkt macros.rkt narrowing.rkt propagator.rkt syntax.rkt term-lattice.rkt) #f)
    'test-native-collection-ops.rkt
    (test-dep '(driver.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt multi-dispatch.rkt namespace.rkt syntax.rkt) #t)
    'test-negative-literals.rkt
