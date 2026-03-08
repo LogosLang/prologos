@@ -353,3 +353,91 @@
       " ($pipe [x <Nat>] <Bool> false)" ;; arity clause, arity 1
       ")")))
   (check-true (prologos-error? (car results))))
+
+;; ========================================
+;; G. defn f [params] | arms syntax (params+patterns)
+;; ========================================
+
+(test-case "params+arms/sexp-arity1-pred"
+  ;; Sexp mode: defn f (params) ($pipe pat -> body) ...
+  (check-equal?
+   (run-last
+    (string-append
+     "(defn pred-pp (n)"
+     " ($pipe suc zero -> zero)"
+     " ($pipe suc (suc k) -> (suc k))"
+     " ($pipe zero -> zero))\n"
+     "(eval (pred-pp (suc (suc (suc zero)))))"))
+   "2N : Nat"))
+
+(test-case "params+arms/sexp-arity2-add"
+  ;; Sexp mode: arity 2, recursive
+  (check-equal?
+   (run-last
+    (string-append
+     "(spec add-pp Nat -> Nat -> Nat)\n"
+     "(defn add-pp (m n)"
+     " ($pipe zero n -> n)"
+     " ($pipe (suc m2) n2 -> (suc (add-pp m2 n2))))\n"
+     "(eval (add-pp (suc (suc zero)) (suc zero)))"))
+   "3N : Nat"))
+
+(test-case "params+arms/ws-arity1-pred"
+  ;; WS mode: defn pred [n] | suc zero -> zero | ...
+  (check-equal?
+   (run-ws-last
+    "defn pred-ws [n]\n  | suc zero -> zero\n  | suc [suc k] -> suc k\n  | zero -> zero\neval [pred-ws 3N]")
+   "2N : Nat")
+  (check-equal?
+   (run-ws-last
+    "defn pred-ws2 [n]\n  | suc zero -> zero\n  | suc [suc k] -> suc k\n  | zero -> zero\neval [pred-ws2 1N]")
+   "0N : Nat")
+  (check-equal?
+   (run-ws-last
+    "defn pred-ws3 [n]\n  | suc zero -> zero\n  | suc [suc k] -> suc k\n  | zero -> zero\neval [pred-ws3 0N]")
+   "0N : Nat"))
+
+(test-case "params+arms/ws-arity2-add"
+  ;; WS mode: defn add [m n] | zero n -> n | [suc m'] n' -> suc [add m' n']
+  (check-equal?
+   (run-ws-last
+    "spec add-ws2 Nat -> Nat -> Nat\ndefn add-ws2 [m n]\n  | zero n -> n\n  | [suc m'] n' -> suc [add-ws2 m' n']\neval [add-ws2 2N 3N]")
+   "5N : Nat"))
+
+(test-case "params+arms/ws-bool-not"
+  ;; WS mode: defn not [b] | true -> false | false -> true
+  (check-equal?
+   (run-ws-last
+    "defn not-ws [b]\n  | true -> false\n  | false -> true\neval [not-ws true]")
+   "false : Bool")
+  (check-equal?
+   (run-ws-last
+    "defn not-ws2 [b]\n  | true -> false\n  | false -> true\neval [not-ws2 false]")
+   "true : Bool"))
+
+(test-case "params+arms/ws-head-tail"
+  ;; WS mode: defn with head-tail pattern and typed params
+  (check-true
+   (let ([result
+          (run-last
+           (string-append
+            "(spec safe-head (List Nat) -> (Option Nat))\n"
+            "(defn safe-head (xs)"
+            " ($pipe (x $pipe rest) -> (some x))"
+            " ($pipe nil -> none))\n"
+            "(def mylist : (List Nat) (cons (suc zero) (cons (suc (suc zero)) nil)))\n"
+            "(eval (safe-head mylist))"))])
+     (and (string-contains? result "some")
+          (string-contains? result "1N"))))
+  ;; Test none case
+  (check-true
+   (let ([result
+          (run-last
+           (string-append
+            "(spec safe-head2 (List Nat) -> (Option Nat))\n"
+            "(defn safe-head2 (xs)"
+            " ($pipe (x $pipe rest) -> (some x))"
+            " ($pipe nil -> none))\n"
+            "(eval (safe-head2 (the (List Nat) nil)))"))])
+     (or (equal? result "none : Option Nat")
+         (string-contains? result "none")))))

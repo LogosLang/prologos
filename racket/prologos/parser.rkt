@@ -3491,20 +3491,35 @@
     (parse-error loc (format "defn ~a: multi-body defn requires at least one clause" name) #f))
   ;; Detect: defn f [params] | arms syntax
   ;; First clause-arg is a bracket form (param list, NOT $pipe-prefixed),
-  ;; and all remaining clause-args are $pipe forms.
+  ;; then optionally `: RetType` tokens, then all remaining are $pipe forms.
   (define first-d (stx->datum (car clause-args)))
   (define (is-pipe-form? stx)
     (let ([d (stx->datum stx)])
       (and (pair? d)
            (let ([h (car d)])
              (eq? (if (syntax? h) (syntax-e h) h) '$pipe)))))
+  ;; Find the $pipe arms after the param bracket (skip return type tokens)
+  (define (find-pipe-tail args)
+    (cond
+      [(null? args) '()]
+      [(is-pipe-form? (car args)) args]
+      [else (find-pipe-tail (cdr args))]))
+  (define after-params (cdr clause-args))
+  (define pipe-tail (find-pipe-tail after-params))
+  ;; Return type tokens are everything between param bracket and first $pipe
+  (define ret-type-tokens
+    (let loop ([rest after-params] [acc '()])
+      (cond
+        [(null? rest) (reverse acc)]
+        [(is-pipe-form? (car rest)) (reverse acc)]
+        [else (loop (cdr rest) (cons (car rest) acc))])))
   (cond
-    ;; New syntax: defn f [params] | pat1 -> body1 | pat2 -> body2
+    ;; New syntax: defn f [params] [: RetType] | pat1 -> body1 | pat2 -> body2
     [(and (pair? first-d)
           (not (is-pipe-form? (car clause-args)))
-          (not (null? (cdr clause-args)))
-          (andmap is-pipe-form? (cdr clause-args)))
-     (parse-defn-params-and-patterns name docstring clause-args loc)]
+          (not (null? pipe-tail))
+          (andmap is-pipe-form? pipe-tail))
+     (parse-defn-params-and-patterns name docstring clause-args ret-type-tokens loc)]
     ;; Existing syntax: defn f | [patterns] -> body | ...
     [else
      (define clauses
@@ -3520,11 +3535,17 @@
 ;; Parse: defn name [params] | pat... -> body | pat... -> body
 ;; Desugars to defn-pattern-clause list, compiled by compile-pattern-group.
 
-(define (parse-defn-params-and-patterns name docstring clause-args loc)
-  ;; First element is param list, rest are $pipe pattern arms
+(define (parse-defn-params-and-patterns name docstring clause-args ret-type-tokens loc)
+  ;; First element is param list, rest (after ret-type-tokens) are $pipe pattern arms
   (define params-stx (car clause-args))
-  (define arm-stxs (cdr clause-args))
-  ;; Extract param list for arity
+  ;; Skip param bracket and ret-type-tokens to get $pipe arms
+  (define arm-stxs
+    (let ([after-params (cdr clause-args)])
+      (drop after-params (length ret-type-tokens))))
+  ;; Extract param list for arity: strip type annotations from bracket
+  ;; [xs : List Nat] → arity 1 (only count names before first :)
+  ;; [m n] → arity 2
+  ;; [x : A, y : B] → arity 2 (count comma-separated binders)
   (define param-elems
     (let ([d (stx->datum params-stx)])
       (cond
@@ -3535,7 +3556,25 @@
         [else
          (parse-error loc
            (format "defn ~a: expected [params] before pattern arms" name) #f)])))
-  (define arity (length param-elems))
+  ;; Count actual parameter names (before first : or , separator)
+  (define arity
+    (let ([elems (map stx->datum param-elems)])
+      (cond
+        ;; Typed params: [x : T ...] or [x : T, y : T, ...]
+        [(memq ': elems)
+         ;; Count names before first :, plus comma-separated groups
+         (let loop ([rest elems] [count 0])
+           (cond
+             [(null? rest) count]
+             [(eq? (car rest) ':) ;; skip type annotation until comma or end
+              (let skip ([r (cdr rest)])
+                (cond
+                  [(null? r) (+ count 1)] ;; +1 for the name before this :
+                  [(eq? (car r) '$comma) (loop (cdr r) (+ count 1))]
+                  [else (skip (cdr r))]))]
+             [else (loop (cdr rest) count)]))]
+        ;; Bare params: [x y z]
+        [else (length elems)])))
   (when (= arity 0)
     (parse-error loc
       (format "defn ~a: params+patterns syntax requires at least one parameter" name) #f))
