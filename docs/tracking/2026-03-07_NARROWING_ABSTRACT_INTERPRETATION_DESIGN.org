@@ -45,7 +45,7 @@ except that 0-CFA (Phase 3a) builds on the narrowing propagator from Phase 1c.
 | 2 | 2c | Critical Pair / Confluence Analysis | ✅ | =3d3c0ce= | =confluence-analysis.rkt= ~200 lines, =narrowing.rkt= +20, 58 tests |
 | 3 | 3a | 0-CFA Auto-Defunctionalization | ⬚ | | ~460 lines, ~70 tests; demand-driven |
 | 3 | 3b | Configurable Search Heuristics | ✅ | =fdda370= | =search-heuristics.rkt= ~140 lines, =solver.rkt= +12, =narrowing.rkt= +20, 41 tests |
-| 3 | 3c | Global Constraints + BB Optimization | ⬚ | | ~510 lines, ~95 tests |
+| 3 | 3c | Global Constraints + BB Optimization | ✅ | =16dd1ac= | =global-constraints.rkt= ~200 lines, =bb-optimization.rkt= ~100 lines, =narrowing.rkt= +40, 49 tests |
 
 *Totals*: Phase 1 ~950 lines / ~200 tests. Phase 2 ~1,270 lines / ~250 tests. Phase 3 ~1,560 lines / ~270 tests. Grand total ~3,780 lines / ~720 tests.
 
