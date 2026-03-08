@@ -7767,7 +7767,10 @@
         (pat-compound name '() (pat-atom-srcloc pat))]
        ;; Not a constructor → stays as variable
        [else pat])]
-    ;; Numeric → nested zero/suc
+    ;; Int literal → leave as-is (compiled to equality dispatch, not constructor dispatch)
+    [(and (pat-atom? pat) (eq? (pat-atom-kind pat) 'int-lit))
+     pat]
+    ;; Numeric (Nat literal) → nested zero/suc
     [(and (pat-atom? pat) (eq? (pat-atom-kind pat) 'numeric))
      (normalize-numeric-pattern pat)]
     ;; Compound → normalize sub-patterns
@@ -7876,6 +7879,88 @@
       ;; Different ctor — skip this row
       [else result])))
 
+;; Check if a column contains any Int literal patterns.
+(define (has-int-literal-column? rows col)
+  (for/or ([row (in-list rows)])
+    (define pat (list-ref (car row) col))
+    (and (pat-atom? pat) (eq? (pat-atom-kind pat) 'int-lit))))
+
+;; Compile Int literal dispatch via equality checks.
+;; Produces nested surf-boolrec: (if (int-eq scrutinee lit) body (if ...))
+;; Variable/wildcard rows become the default fallback.
+(define (compile-int-dispatch rows col param-names loc)
+  (define scrutinee-name (list-ref param-names col))
+  (define scrutinee-ref (surf-var scrutinee-name loc))
+  ;; Separate into int-lit rows and default (var/wildcard) rows.
+  ;; Process in order: each int-lit row becomes an equality check,
+  ;; variable/wildcard rows become the default branch.
+  (define-values (int-rows default-rows)
+    (partition (lambda (row)
+                 (define pat (list-ref (car row) col))
+                 (and (pat-atom? pat) (eq? (pat-atom-kind pat) 'int-lit)))
+               rows))
+  ;; Build the default branch from variable/wildcard rows
+  (define default-branch
+    (if (null? default-rows)
+        (surf-typed-hole '__match-fail loc)
+        ;; Remove the dispatch column from default rows (it matched as var/wildcard)
+        ;; and compile the remaining columns
+        (let* ([adjusted-rows
+                (for/list ([row (in-list default-rows)])
+                  (define pats (car row))
+                  (define body (cadr row))
+                  (define pat-at-col (list-ref pats col))
+                  (define new-pats
+                    (append (take pats col) (drop pats (+ col 1))))
+                  ;; Bind variable if needed
+                  (define new-body
+                    (cond
+                      [(and (pat-atom? pat-at-col) (eq? (pat-atom-kind pat-at-col) 'var))
+                       (make-let-binding (pat-atom-name pat-at-col) scrutinee-ref body loc)]
+                      [else body]))
+                  (list new-pats new-body))]
+               [new-params
+                (append (take param-names col) (drop param-names (+ col 1)))])
+          (if (null? (caar adjusted-rows))
+              ;; Dispatch column was the only one — return first default body
+              (cadar adjusted-rows)
+              ;; More columns to dispatch — recurse
+              (compile-match-tree adjusted-rows new-params loc)))))
+  ;; Build nested if chain from int-lit rows (right fold, order preserved)
+  (foldr (lambda (row rest)
+           (define pat (list-ref (car row) col))
+           (define lit-value (pat-atom-value pat))
+           (define body (cadr row))
+           ;; Remove the int-lit column from remaining patterns
+           (define remaining-pats
+             (append (take (car row) col) (drop (car row) (+ col 1))))
+           (define new-params
+             (append (take param-names col) (drop param-names (+ col 1))))
+           ;; If there are remaining columns with non-trivial patterns, recurse
+           (define resolved-body
+             (if (and (pair? remaining-pats)
+                      (for/or ([p (in-list remaining-pats)])
+                        (not (pattern-is-variable? p))))
+                 (compile-match-tree (list (list remaining-pats body)) new-params loc)
+                 ;; All remaining are variables — just bind and return body
+                 (if (null? remaining-pats)
+                     body
+                     (wrap-variable-bindings remaining-pats new-params body loc))))
+           ;; Use constant motive shorthand (same as parser's boolrec handler):
+           ;; _ → (the (-> Bool (Type 0)) (fn [_ <Bool>] _))
+           ;; This gives the type checker enough info to infer the result type.
+           (surf-boolrec (surf-ann
+                          (surf-arrow #f (surf-bool-type loc) (surf-type 0 loc) loc)
+                          (surf-lam (binder-info '_ 'mw (surf-bool-type loc))
+                                    (surf-hole loc) loc)
+                          loc)
+                         resolved-body
+                         rest
+                         (surf-int-eq scrutinee-ref (surf-int-lit lit-value loc) loc)
+                         loc))
+         default-branch
+         int-rows))
+
 ;; Compile a match tree from pattern rows.
 ;; rows: list of (list patterns body) where patterns is a list of normalized patterns.
 ;; param-names: symbols for the scrutinee at each position.
@@ -7889,46 +7974,52 @@
     [(for/and ([pat (in-list (caar rows))])
        (pattern-is-variable? pat))
      (wrap-variable-bindings (caar rows) param-names (cadar rows) loc)]
-    ;; Dispatch on a column with constructor patterns
+    ;; Dispatch: check if column has Int literal patterns
     [else
      (define col (find-dispatch-column rows))
      (define scrutinee-name (list-ref param-names col))
-     ;; Determine type from ctor patterns in this column
-     (define type-name (find-type-from-column rows col))
-     ;; Get all constructors (in declaration order if type known)
-     (define all-ctors
-       (if type-name
-           (or (lookup-type-ctors type-name) '())
-           ;; Fallback: collect constructors from rows (order of first appearance)
-           (remove-duplicates
-            (filter-map
-             (lambda (row)
-               (define pat (list-ref (car row) col))
-               (and (pat-compound? pat) (pat-compound-ctor-name pat)))
-             rows))))
-     ;; Build reduce-arms for each constructor
-     (define arms
-       (for/list ([ctor (in-list all-ctors)])
-         (define meta (lookup-ctor ctor))
-         (define n-fields
-           (if meta (length (ctor-meta-field-types meta)) 0))
-         ;; Generate fresh field binding names
-         (define field-names
-           (for/list ([i (in-range n-fields)])
-             (string->symbol (format "__~a_~a" ctor i))))
-         ;; Specialize rows for this constructor
-         (define specialized
-           (specialize-rows rows col ctor n-fields param-names loc))
-         ;; New param names: replace dispatch column with field names
-         (define new-params
-           (append (take param-names col)
-                   field-names
-                   (drop param-names (+ col 1))))
-         ;; Recurse
-         (define arm-body
-           (compile-match-tree specialized new-params loc))
-         (reduce-arm ctor field-names arm-body loc)))
-     (surf-reduce (surf-var scrutinee-name loc) arms loc)]))
+     (cond
+       ;; Int literal dispatch — equality-based (not constructor-based)
+       [(has-int-literal-column? rows col)
+        (compile-int-dispatch rows col param-names loc)]
+       ;; Constructor dispatch — standard algebraic type matching
+       [else
+        ;; Determine type from ctor patterns in this column
+        (define type-name (find-type-from-column rows col))
+        ;; Get all constructors (in declaration order if type known)
+        (define all-ctors
+          (if type-name
+              (or (lookup-type-ctors type-name) '())
+              ;; Fallback: collect constructors from rows (order of first appearance)
+              (remove-duplicates
+               (filter-map
+                (lambda (row)
+                  (define pat (list-ref (car row) col))
+                  (and (pat-compound? pat) (pat-compound-ctor-name pat)))
+                rows))))
+        ;; Build reduce-arms for each constructor
+        (define arms
+          (for/list ([ctor (in-list all-ctors)])
+            (define meta (lookup-ctor ctor))
+            (define n-fields
+              (if meta (length (ctor-meta-field-types meta)) 0))
+            ;; Generate fresh field binding names
+            (define field-names
+              (for/list ([i (in-range n-fields)])
+                (string->symbol (format "__~a_~a" ctor i))))
+            ;; Specialize rows for this constructor
+            (define specialized
+              (specialize-rows rows col ctor n-fields param-names loc))
+            ;; New param names: replace dispatch column with field names
+            (define new-params
+              (append (take param-names col)
+                      field-names
+                      (drop param-names (+ col 1))))
+            ;; Recurse
+            (define arm-body
+              (compile-match-tree specialized new-params loc))
+            (reduce-arm ctor field-names arm-body loc)))
+        (surf-reduce (surf-var scrutinee-name loc) arms loc)])]))
 
 ;; Compile a rich pattern match expression into nested surf-reduce.
 ;; Used by expand-expression to handle surf-match-patterns nodes.

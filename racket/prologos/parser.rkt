@@ -3679,9 +3679,9 @@
     ;; Regular symbol (variable or nullary constructor — resolved at desugar time)
     [(symbol? d)
      (pat-atom 'var d #f loc)]
-    ;; Integer literal (in sexp mode, 0, 1, etc. are read as integers)
-    [(and (exact-nonnegative-integer? d) (integer? d))
-     (pat-atom 'numeric d d loc)]
+    ;; Int literal pattern (bare integers: 0, 1, 42, -1 — equality dispatch)
+    [(and (integer? d) (exact-integer? d))
+     (pat-atom 'int-lit d d loc)]
     ;; $nat-literal sentinel from WS reader: ($nat-literal n) → numeric pattern
     [(and (pair? d)
           (let ([h (let ([c (car d)]) (if (syntax? c) (syntax-e c) c))])
