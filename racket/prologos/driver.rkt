@@ -110,6 +110,31 @@
     [(expr-lam _ a b) (or (type-contains-hole? a) (type-contains-hole? b))]
     [_ #f]))
 
+;; Replace expr-hole with fresh metavariables in a type expression.
+;; This allows holes in type annotations (e.g., return type of pattern-compiled
+;; functions) to be solved via unification during type checking.
+(define (holes-to-metas e)
+  (match e
+    [(expr-hole) (fresh-meta ctx-empty (expr-Type 0) "type-hole")]
+    [(expr-typed-hole _) e]
+    [(expr-Pi m a b) (expr-Pi m (holes-to-metas a) (holes-to-metas b))]
+    [(expr-Sigma a b) (expr-Sigma (holes-to-metas a) (holes-to-metas b))]
+    [(expr-app f x) (expr-app (holes-to-metas f) (holes-to-metas x))]
+    [(expr-lam m a b) (expr-lam m (holes-to-metas a) (holes-to-metas b))]
+    [_ e]))
+
+;; After zonk-final, replace any remaining unsolved metas with holes.
+;; Prevents dangling meta references in stored types (metas are cleared
+;; between commands by reset-meta-store!).
+(define (unsolved-metas-to-holes e)
+  (match e
+    [(expr-meta _) (expr-hole)]
+    [(expr-Pi m a b) (expr-Pi m (unsolved-metas-to-holes a) (unsolved-metas-to-holes b))]
+    [(expr-Sigma a b) (expr-Sigma (unsolved-metas-to-holes a) (unsolved-metas-to-holes b))]
+    [(expr-app f x) (expr-app (unsolved-metas-to-holes f) (unsolved-metas-to-holes x))]
+    [(expr-lam m a b) (expr-lam m (unsolved-metas-to-holes a) (unsolved-metas-to-holes b))]
+    [_ e]))
+
 ;; Check if an elaborated type contains unsolved metas (level-meta, mult-meta, or expr-meta).
 ;; When a type has unsolved metas (from implicit parameter inference), is-type may fail
 ;; because infer-level can't handle universe level mismatches caused by Church encoding
@@ -918,26 +943,28 @@
         ;; Sprint 10: Skip is-type for types with holes (bare-param defn).
         ;; Holes act as wildcards in check and are retained in the stored type.
         ;; Also skip for types with unsolved metas (implicit param inference).
-        (define ty-ok (if (or (type-contains-hole? type)
-                              (type-contains-meta? type))
+        (define has-holes? (type-contains-hole? type))
+        (define ty-ok (if (or has-holes? (type-contains-meta? type))
                           #t
                           (is-type/err ctx-empty type)))
         (cond
           [(prologos-error? ty-ok) ty-ok]
           [else
+           ;; Replace holes with metas so they can be solved via unification
+           (define type* (if has-holes? (holes-to-metas type) type))
            ;; GDE-1: Record user type annotation as ATMS context assumption.
            ;; This enables error messages like "because: user annotated x : Nat".
            (add-context-assumption!
             'def-type-annotation
-            (format "~a : ~a" name (pp-expr type)))
+            (format "~a : ~a" name (pp-expr type*)))
            ;; 3. Pre-register for recursive references
            (current-global-env
-            (global-env-add-type-only (current-global-env) name type))
+            (global-env-add-type-only (current-global-env) name type*))
            (when (current-ns-context)
              (define fqn (qualify-name name
                            (ns-context-current-ns (current-ns-context))))
              (current-global-env
-              (global-env-add-type-only (current-global-env) fqn type)))
+              (global-env-add-type-only (current-global-env) fqn type*)))
            ;; Check if this is a data type or constructor definition.
            ;; Both are opaque with native constructors — the Church-encoded bodies
            ;; can't be type-checked against the new Type 0 annotation.
@@ -984,9 +1011,9 @@
                      (qualify-name name (ns-context-current-ns (current-ns-context))))))
                  body]
                 [else
-                 ;; 5. Check body against type (use type which has metas instead of holes)
+                 ;; 5. Check body against type (use type* which has metas instead of holes)
                  ;; Sprint 9: pass recovered name map for de Bruijn recovery in errors
-                 (define chk (time-phase! type-check (check/err ctx-empty body type srcloc-unknown (recover-name-map))))
+                 (define chk (time-phase! type-check (check/err ctx-empty body type* srcloc-unknown (recover-name-map))))
                  (cond
                    [(prologos-error? chk)
                     ;; Remove pre-registered entry on type-check failure
@@ -1051,8 +1078,10 @@
                        ;; 6. zonk-final (resolves mult-metas to concrete values,
                        ;; defaults unsolved level-metas to lzero, mult-metas to mw).
                        ;; Then rewrite call sites to use registered specializations.
+                       ;; Convert any unsolved metas back to holes (prevents dangling refs).
                        (define zonked-body (rewrite-specializations (time-phase! zonk (zonk-final body))))
-                       (define zonked-type (time-phase! zonk (zonk-final type)))
+                       (define zonked-type-raw (time-phase! zonk (zonk-final type*)))
+                       (define zonked-type (if has-holes? (unsolved-metas-to-holes zonked-type-raw) zonked-type-raw))
                        ;; 6.5. QTT multiplicity check (on zonked terms with concrete mults).
                        ;; Skip for expressions containing unsupported node types (Vec/Fin).
                        (define qtt-ok

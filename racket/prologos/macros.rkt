@@ -7673,17 +7673,35 @@
         (pat-compound 'suc (list (loop (- n 1))) loc))))
 
 ;; Normalize a pattern recursively:
+;; - var that's a known constructor → compound (ctor disambiguation)
 ;; - numeric → nested zero/suc compound
 ;; - head-tail → nested cons compound
 ;; - compound sub-patterns normalized recursively
 (define (normalize-pattern pat)
   (cond
+    ;; Variable that might actually be a constructor
+    [(and (pat-atom? pat) (eq? (pat-atom-kind pat) 'var))
+     (define name (pat-atom-name pat))
+     (define meta (lookup-ctor name))
+     (cond
+       ;; Known nullary constructor → convert to compound
+       [(and meta (null? (ctor-meta-field-types meta)))
+        (pat-compound name '() (pat-atom-srcloc pat))]
+       ;; Known constructor with fields used without brackets — treat as
+       ;; nullary match (type checker will catch arity mismatch if wrong)
+       [meta
+        (pat-compound name '() (pat-atom-srcloc pat))]
+       ;; Not a constructor → stays as variable
+       [else pat])]
+    ;; Numeric → nested zero/suc
     [(and (pat-atom? pat) (eq? (pat-atom-kind pat) 'numeric))
      (normalize-numeric-pattern pat)]
+    ;; Compound → normalize sub-patterns
     [(pat-compound? pat)
      (pat-compound (pat-compound-ctor-name pat)
                    (map normalize-pattern (pat-compound-args pat))
                    (pat-compound-srcloc pat))]
+    ;; Head-tail → nested cons
     [(pat-head-tail? pat)
      (define heads (pat-head-tail-heads pat))
      (define tail (pat-head-tail-tail pat))
@@ -7838,12 +7856,178 @@
          (reduce-arm ctor field-names arm-body loc)))
      (surf-reduce (surf-var scrutinee-name loc) arms loc)]))
 
+;; Convert a type name symbol to its surface syntax representation.
+;; Built-in types (Nat, Bool, Unit) have dedicated surface syntax structs;
+;; user-defined types use surf-var (looked up in global env at elaboration).
+(define (type-name->surf-type type-name loc)
+  (case type-name
+    [(Nat)  (surf-nat-type loc)]
+    [(Bool) (surf-bool-type loc)]
+    [(Unit) (surf-unit-type loc)]
+    [else   (surf-var type-name loc)]))
+
+;; Build a type annotation for the pattern group from constructor metadata.
+;; For each argument position, if constructor patterns are present, infer the
+;; argument type from the constructor registry. Otherwise, use a hole.
+;; Returns a surf-pi chain: T1 -> T2 -> ... -> _ (return type is always a hole).
+(define (build-pattern-group-type param-names rows loc)
+  (define arg-types
+    (for/list ([i (in-range (length param-names))])
+      ;; Look for a constructor pattern in this column to determine the type
+      (define type-info
+        (for/or ([row (in-list rows)])
+          (define pat (list-ref (car row) i))
+          (and (pat-compound? pat)
+               (let ([meta (lookup-ctor (pat-compound-ctor-name pat))])
+                 (and meta (list (ctor-meta-type-name meta)
+                                (ctor-meta-params meta)))))))
+      (cond
+        [type-info
+         (define type-name (car type-info))
+         (define params (cadr type-info))
+         (if (null? params)
+             ;; Nullary type (Nat, Bool, Unit)
+             (type-name->surf-type type-name loc)
+             ;; Parameterized type (List A, Option A) → apply to hole params
+             (surf-app (type-name->surf-type type-name loc)
+                       (for/list ([_ (in-list params)])
+                         (surf-hole loc))
+                       loc))]
+        ;; No constructor info → hole (type will be inferred)
+        [else (surf-hole loc)])))
+  ;; Build Pi chain
+  (foldr (lambda (pname arg-type inner)
+           (surf-pi (binder-info pname 'mw arg-type) inner loc))
+         (surf-hole loc)  ;; Return type is a hole
+         param-names
+         arg-types))
+
+;; Convert a raw datum (symbol or application list) to a surface type AST.
+;; Handles built-in type names and type constructor applications.
+;; Returns a surface type node, or #f if the datum is unsupported.
+(define (datum->surf-type datum loc)
+  (cond
+    [(symbol? datum)
+     (case datum
+       [(Nat)    (surf-nat-type loc)]
+       [(Bool)   (surf-bool-type loc)]
+       [(Unit)   (surf-unit-type loc)]
+       [(Int)    (surf-int-type loc)]
+       [(Rat)    (surf-rat-type loc)]
+       [(Char)   (surf-char-type loc)]
+       [(String) (surf-string-type loc)]
+       [(Type)   (surf-var 'Type loc)]
+       [(Posit8)  (surf-posit8-type loc)]
+       [(Posit16) (surf-posit16-type loc)]
+       [(Posit32) (surf-posit32-type loc)]
+       [(Posit64) (surf-posit64-type loc)]
+       [(Symbol) (surf-symbol-type loc)]
+       [(Keyword) (surf-keyword-type loc)]
+       [else (surf-var datum loc)])]
+    [(pair? datum)
+     ;; Application: (Constructor Arg1 Arg2 ...)
+     (define head (datum->surf-type (car datum) loc))
+     (define args (map (lambda (a) (datum->surf-type a loc)) (cdr datum)))
+     (cond
+       [(not head) #f]
+       [(ormap not args) #f]
+       [(null? args) head]  ;; single-element list → just the head
+       [else (surf-app head args loc)])]
+    [else #f]))
+
+;; Convert spec type tokens (e.g., (Nat -> Nat -> Bool)) to a surface type AST.
+;; Only handles "simple" specs — no nested arrow types in param positions.
+;; Returns a surface type (surf-arrow chain), or #f on failure.
+(define (spec-tokens->surf-type tokens loc)
+  ;; Guard: reject tokens with nested arrows in sublists (higher-order param types).
+  ;; These require infix type parsing which isn't available at this stage.
+  (define (simple-tokens? ts)
+    (for/and ([t (in-list ts)])
+      (cond
+        [(symbol? t) #t]
+        [(pair? t) (not (ormap arrow-symbol-datum? t))]
+        [else #t])))
+  (cond
+    [(not (simple-tokens? tokens)) #f]
+    [else
+     (define-values (segments mults) (split-on-arrow-datum/mult tokens))
+     (cond
+       [(= (length segments) 1)
+        ;; No arrows — just a return type (unusual for functions)
+        (define seg (car segments))
+        (define datum (if (= (length seg) 1) (car seg) seg))
+        (datum->surf-type datum loc)]
+       [else
+        ;; Has arrows: flatten params, build arrow chain
+        (define non-last (drop-right segments 1))
+        (define last-seg (last segments))
+        ;; Flatten: each atom in a segment is a separate param type.
+        ;; Each param gets the multiplicity of the arrow following its segment.
+        (define flat-params+mults
+          (apply append
+                 (for/list ([seg (in-list non-last)]
+                            [mult (in-list mults)])
+                   (map (lambda (p) (cons p mult)) seg))))
+        ;; Build codomain
+        (define codomain-datum
+          (if (= (length last-seg) 1) (car last-seg) last-seg))
+        (define codomain (datum->surf-type codomain-datum loc))
+        (cond
+          [(not codomain) #f]
+          [else
+           ;; Build right-associated arrow chain: T1 -> T2 -> ... -> Ret
+           (define result
+             (foldr (lambda (pm inner)
+                      (cond
+                        [(not inner) #f]
+                        [else
+                         (define p (car pm))
+                         (define m (cdr pm))
+                         (define dom (datum->surf-type p loc))
+                         (cond
+                           [(not dom) #f]
+                           [else (surf-arrow m dom inner loc)])]))
+                    codomain
+                    flat-params+mults))
+           result])])]))
+
+;; Look up the spec for a pattern group and convert to surface type.
+;; Only uses simple specs (no implicit binders, no where-constraints, single-arity).
+;; arity: expected number of parameters (for validation).
+;; Returns a surface type or #f (caller falls back to build-pattern-group-type).
+(define (lookup-spec-type-for-patterns spec-name arity loc)
+  (define spec (and spec-name (lookup-spec spec-name)))
+  (cond
+    [(not spec) #f]
+    ;; Skip complex specs: implicits, constraints, multi-arity
+    [(spec-entry-multi? spec) #f]
+    [(and (spec-entry-implicit-binders spec)
+          (not (null? (spec-entry-implicit-binders spec)))) #f]
+    [(and (spec-entry-where-constraints spec)
+          (not (null? (spec-entry-where-constraints spec)))) #f]
+    [else
+     ;; spec-entry-type-datums is (list type-tokens) for single-arity
+     ;; Strip leading colon if present (WS reader includes ':' from 'spec foo : T')
+     (define raw-tokens (car (spec-entry-type-datums spec)))
+     (define type-tokens
+       (if (and (pair? raw-tokens) (eq? (car raw-tokens) ':))
+           (cdr raw-tokens)
+           raw-tokens))
+     ;; Validate arity: count domain segments
+     (define-values (segments _mults) (split-on-arrow-datum/mult type-tokens))
+     (define non-last (if (> (length segments) 1) (drop-right segments 1) '()))
+     (define n-params (apply + (map length non-last)))
+     (cond
+       [(not (= n-params arity)) #f]  ;; arity mismatch — skip
+       [else (spec-tokens->surf-type type-tokens loc)])]))
+
 ;; Compile a group of pattern clauses (all same arity) into a single surf-def.
 ;; name: the function name (symbol), possibly internal name like name::arity.
 ;; clauses: list of defn-pattern-clause, all same arity.
 ;; loc: source location.
-;; Returns a surf-def with #f type (type inferred from body).
-(define (compile-pattern-group name clauses loc)
+;; spec-name: original function name (for spec lookup), or #f.
+;; Returns a surf-def with inferred type (built from constructor metadata or spec).
+(define (compile-pattern-group name clauses loc [spec-name #f])
   (define arity
     (length (defn-pattern-clause-patterns (car clauses))))
   ;; Generate fresh param names
@@ -7855,6 +8039,9 @@
     (for/list ([clause (in-list clauses)])
       (list (map normalize-pattern (defn-pattern-clause-patterns clause))
             (defn-pattern-clause-body clause))))
+  ;; Try spec type first, fall back to inferred type from constructor metadata
+  (define spec-type
+    (and (> arity 0) (lookup-spec-type-for-patterns spec-name arity loc)))
   (cond
     ;; Zero-arity: just use first body
     [(= arity 0)
@@ -7869,19 +8056,21 @@
              (gensym '__wild)
              (pat-atom-name pat))))
      (define body (cadar rows))
+     (define type (or spec-type (build-pattern-group-type var-names rows loc)))
      (define nested-lam
        (foldr (lambda (vn inner)
                 (surf-lam (binder-info vn 'mw (surf-hole loc)) inner loc))
               body var-names))
-     (surf-def name #f nested-lam loc)]
+     (surf-def name type nested-lam loc)]
     ;; General case: compile match tree
     [else
+     (define type (or spec-type (build-pattern-group-type param-names rows loc)))
      (define body (compile-match-tree rows param-names loc))
      (define nested-lam
        (foldr (lambda (pn inner)
                 (surf-lam (binder-info pn 'mw (surf-hole loc)) inner loc))
               body param-names))
-     (surf-def name #f nested-lam loc)]))
+     (surf-def name type nested-lam loc)]))
 
 ;; ========================================
 ;; Expand multi-body defn → surf-def-group
@@ -7942,7 +8131,7 @@
        [(and (= (length sorted-groups) 1)
              (defn-pattern-clause? (cadr (car sorted-groups))))
         (define group-clauses (cdr (car sorted-groups)))
-        (define compiled (compile-pattern-group name group-clauses loc))
+        (define compiled (compile-pattern-group name group-clauses loc name))
         (if (prologos-error? compiled) compiled
             (expand-top-level compiled))]
 
@@ -7966,7 +8155,7 @@
                (define internal-name
                  (string->symbol (format "~a::~a" name arity)))
                (define compiled
-                 (compile-pattern-group internal-name group-clauses loc))
+                 (compile-pattern-group internal-name group-clauses loc name))
                (cond
                  [(prologos-error? compiled)
                   (set! first-err compiled)]

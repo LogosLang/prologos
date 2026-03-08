@@ -70,6 +70,31 @@
     [(expr-lam _ a b) (or (type-contains-hole? a) (type-contains-hole? b))]
     [_ #f]))
 
+;; Replace expr-hole with fresh metavariables in a type expression.
+;; This allows holes in type annotations (e.g., return type of pattern-compiled
+;; functions) to be solved via unification during type checking.
+(define (holes-to-metas e)
+  (match e
+    [(expr-hole) (fresh-meta ctx-empty (expr-Type 0) "type-hole")]
+    [(expr-typed-hole _) e]
+    [(expr-Pi m a b) (expr-Pi m (holes-to-metas a) (holes-to-metas b))]
+    [(expr-Sigma a b) (expr-Sigma (holes-to-metas a) (holes-to-metas b))]
+    [(expr-app f x) (expr-app (holes-to-metas f) (holes-to-metas x))]
+    [(expr-lam m a b) (expr-lam m (holes-to-metas a) (holes-to-metas b))]
+    [_ e]))
+
+;; After zonk-final, replace any remaining unsolved metas with holes.
+;; Prevents dangling meta references in stored types (metas are cleared
+;; between commands by reset-meta-store!).
+(define (unsolved-metas-to-holes e)
+  (match e
+    [(expr-meta _) (expr-hole)]
+    [(expr-Pi m a b) (expr-Pi m (unsolved-metas-to-holes a) (unsolved-metas-to-holes b))]
+    [(expr-Sigma a b) (expr-Sigma (unsolved-metas-to-holes a) (unsolved-metas-to-holes b))]
+    [(expr-app f x) (expr-app (unsolved-metas-to-holes f) (unsolved-metas-to-holes x))]
+    [(expr-lam m a b) (expr-lam m (unsolved-metas-to-holes a) (unsolved-metas-to-holes b))]
+    [_ e]))
+
 
 ;; Returns: (list 'def name type-string)
 ;;        | (list 'output string)
@@ -103,12 +128,13 @@
     ;; (def name type body) — annotated path
     [(list 'def name type body)
      ;; Sprint 10: skip is-type check when type has holes (bare-param defn)
-     (let ([ty-ok (if (type-contains-hole? type)
-                      #t
-                      (is-type/err ctx-empty type loc))])
+     (define has-holes? (type-contains-hole? type))
+     (let ([ty-ok (if has-holes? #t (is-type/err ctx-empty type loc))])
        (when (prologos-error? ty-ok)
          (raise-prologos-error ty-ok))
-       (let ([chk (check/err ctx-empty body type loc)])
+       ;; Replace holes with metas so they can be solved via unification
+       (define type* (if has-holes? (holes-to-metas type) type))
+       (let ([chk (check/err ctx-empty body type* loc)])
          (when (prologos-error? chk)
            (raise-prologos-error chk))
          (resolve-trait-constraints!)
@@ -116,8 +142,10 @@
            (when (not (null? te))
              (raise-prologos-error (car te))))
          ;; Zonk for storage and display (defaults unsolved level/mult-metas)
-         (let ([z-type (zonk-final type)]
+         ;; Convert any unsolved metas back to holes (prevents dangling refs)
+         (let ([z-type-raw (zonk-final type*)]
                [z-body (zonk-final body)])
+           (define z-type (if has-holes? (unsolved-metas-to-holes z-type-raw) z-type-raw))
            ;; Update the global environment for subsequent forms
            (current-global-env
             (global-env-add (current-global-env) name z-type z-body))
