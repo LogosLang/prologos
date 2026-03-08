@@ -39,6 +39,7 @@
          "termination-analysis.rkt"
          "interval-domain.rkt"
          "narrowing-abstract.rkt"
+         "search-heuristics.rkt"
          "macros.rkt"
          "global-env.rkt")
 
@@ -558,10 +559,20 @@
                         (hash-set store (expr-logic-var-name arg) iv)
                         store))]
                  [else (hasheq)])))
-           ;; Run search with interval bounds
-           (define raw-solutions
+           ;; Phase 3b: Search heuristics
+           (define search-cfg (current-narrow-search-config))
+           (define counter (make-solution-counter
+                            (narrow-search-config-search-mode search-cfg)))
+           ;; Build the core search function (takes fuel, returns solutions)
+           (define (do-search f)
              (parameterize ([current-narrow-intervals initial-intervals])
-               (narrow-dt-search dt initial-bindings func-name target-norm (hasheq) 0 fuel)))
+               (narrow-dt-search dt initial-bindings func-name
+                                target-norm (hasheq) 0 f counter)))
+           ;; Run search: iterative deepening or fixed fuel
+           (define raw-solutions
+             (if (narrow-search-config-iterative? search-cfg)
+                 (iterative-deepening-search do-search fuel)
+                 (do-search fuel)))
            ;; Project and resolve variable names from solutions
            (for/list ([sol (in-list raw-solutions)])
              (for/hasheq ([vn (in-list var-names)])
@@ -598,9 +609,12 @@
 ;;   Contains expr-logic-var for unbound variables, concrete exprs for ground.
 ;; subst: hasheq mapping logic-var names (symbols) to values.
 ;; fuel: per-function depth limit (from termination analysis or NARROW-DEPTH-LIMIT).
-(define (narrow-dt-search tree bindings func-name target subst depth [fuel NARROW-DEPTH-LIMIT])
+(define (narrow-dt-search tree bindings func-name target subst depth
+                          [fuel NARROW-DEPTH-LIMIT]
+                          [counter 'unlimited])
   (cond
     [(> depth fuel) '()]
+    [(solution-counter-exhausted? counter) '()]
     [else
      (match tree
        [(dt-branch pos type-name children)
@@ -627,7 +641,14 @@
                 [(and var-iv (interval-contradiction? var-iv)) '()]
                 ;; Enumerate constructors (with interval pruning when var-iv available)
                 [else
-                 (append-map
+                 ;; Phase 3b: apply value ordering
+                 (define search-cfg (current-narrow-search-config))
+                 (define ordered-children
+                   (reorder-dt-children children
+                                        (narrow-search-config-value-order search-cfg)
+                                        dt-exempt?))
+                 ;; Phase 3b: use bounded-append-map for early exit
+                 (bounded-append-map
                   (lambda (child-entry)
                     (define ctor-name (car child-entry))
                     (define child-tree (cdr child-entry))
@@ -677,8 +698,9 @@
                              (current-narrow-intervals)))
                        (parameterize ([current-narrow-intervals new-intervals])
                          (narrow-dt-search child-tree new-bindings func-name
-                                          target new-subst depth fuel))]))
-                  children)])]
+                                          target new-subst depth fuel counter))]))
+                  ordered-children
+                  counter)])]
 
              ;; Ground value — extract constructor and follow matching child
              [else
@@ -693,7 +715,7 @@
                  (define new-bindings
                    (append (reverse sub-vals) bindings))
                  (narrow-dt-search child-tree new-bindings func-name
-                                  target subst depth fuel)])])])]
+                                  target subst depth fuel counter)])])])]
 
        [(dt-rule rhs)
         ;; Substitute bvar references in RHS with binding values
@@ -707,10 +729,11 @@
         ;; needed narrowing for confluent functions is optimal, basic narrowing for
         ;; non-confluent ensures completeness.
         (get-confluence-class func-name) ;; lazy analyze + cache
-        (append-map
+        (bounded-append-map
          (lambda (b)
-           (narrow-dt-search b bindings func-name target subst depth fuel))
-         branches)]
+           (narrow-dt-search b bindings func-name target subst depth fuel counter))
+         branches
+         counter)]
 
        [(dt-exempt) '()])]))
 
