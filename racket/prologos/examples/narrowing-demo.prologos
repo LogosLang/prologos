@@ -1,0 +1,533 @@
+ns examples.narrowing-demo
+
+;; ========================================================================
+;;
+;;     ╔═══════════════════════════════════════════════════════╗
+;;     ║   F U N C T I O N A L - L O G I C   N A R R O W I N G ║
+;;     ║           I N   P R O L O G O S                       ║
+;;     ║   A Feature Capstone                                  ║
+;;     ╚═══════════════════════════════════════════════════════╝
+;;
+;; ========================================================================
+;;
+;; This file demonstrates Prologos's FL Narrowing system — the ability
+;; to run functions BACKWARDS. Given a function and a desired output,
+;; narrowing finds ALL inputs that produce that output.
+;;
+;; Narrowing unifies two paradigms:
+;;
+;;   Functional:  [add 3N 2N]           → 5N     (forward: compute output)
+;;   Narrowing:   [add ?x ?y] = 5N      → find ?x, ?y  (backward: find inputs)
+;;
+;; This is the defining feature of functional-logic languages like Curry,
+;; but Prologos integrates it with dependent types, propagator networks,
+;; and configurable search — making it a practical tool, not a curiosity.
+;;
+;; NOTE ON NUMERIC TYPES: Narrowing currently operates over inductively
+;; defined types — Nat (Peano naturals) and Bool. Nat is the natural
+;; type for narrowing because its structural recursion (zero/suc) gives
+;; the definitional tree concrete branches to walk. In computation code,
+;; Int is the standard numeric type; Nat is for type-level indexing and
+;; structural induction. Narrowing over Int (and other native numeric
+;; types) is a future extension that will use constraint propagation
+;; rather than structural case splitting.
+;;
+;; Phases delivered:
+;;
+;;   Phase 1  — Core narrowing (DT extraction, search, solver, WS syntax)
+;;   Phase 2  — Static analysis (intervals, termination, confluence)
+;;   Phase 3  — Advanced (0-CFA defunctionalization, heuristics, constraints)
+;;
+;; Every uncommented `[f ?x] = target` expression below is LIVE.
+;; Commented-out sections show ideal syntax for features whose WS
+;; surface syntax is not yet wired up (the infrastructure exists
+;; and is tested at the sexp/API level).
+;;
+
+
+;; ========================================================================
+;; 1. BASIC NARROWING — Running Functions Backwards
+;; ========================================================================
+;;
+;; FEATURE: Phase 1e WS syntax — `?`-prefixed logic variables + infix `=`
+;; FEATURE: Phase 1a definitional tree extraction — automatic from defn
+;; FEATURE: Phase 1c narrowing propagator — DT-guided search
+;;
+;; The `=` operator with `?`-prefixed variables triggers narrowing.
+;; The engine extracts a definitional tree from the function's pattern
+;; match clauses, then walks the tree trying each branch, unifying
+;; arguments against patterns to find solutions.
+;;
+;; Syntax:  [function ?var1 ?var2 ...] = target-value
+;;          target-value = [function ?var1 ?var2 ...]
+
+;; --- Boolean negation (Phase 1c: DT with two branches) ---
+;;
+;; `not` has two clauses: not(true) = false, not(false) = true.
+;; The definitional tree has a Branch node on the argument, with
+;; two Rule leaves — one for each constructor of Bool.
+;;
+;; Narrowing inverts: which ?b makes not(?b) = true?
+;; → walks Branch, tries true-arm (not(true)=false ≠ true, fail),
+;;   then false-arm (not(false)=true = true, success!) → {b: false}
+[not ?b] = true
+
+;; The other direction: not(?b) = false → {b: true}
+[not ?b] = false
+
+;; RHS can hold the function call — the parser handles both sides:
+true = [not ?b]
+
+;; --- Nat addition (Phase 1c: recursive DT traversal) ---
+;;
+;; `add` recurses on its first argument:
+;;   add(zero, y)  = y          (Rule leaf)
+;;   add(suc k, y) = suc(add(k, y))  (Rule leaf with recursive call)
+;;
+;; The DT has a Branch on arg 0 (zero vs suc), and the suc branch
+;; recurses. Narrowing follows each path, collecting solutions.
+
+;; add(?x, ?y) = 0 → one solution: {x: 0, y: 0}
+[add ?x ?y] = 0N
+
+;; add(?x, ?y) = 3 → four solutions: (0,3), (1,2), (2,1), (3,0)
+[add ?x ?y] = 3N
+
+;; add(?x, ?y) = 5 → six solutions
+[add ?x ?y] = 5N
+
+
+;; ========================================================================
+;; 2. CONSTRAINED NARROWING — Partial Information
+;; ========================================================================
+;;
+;; FEATURE: Phase 1c — ground args skip DT branches automatically
+;;
+;; When an argument is already ground (not a logic variable), the
+;; definitional tree skips irrelevant branches. This lets you narrow
+;; over a subset of arguments while fixing others.
+
+;; Fix first arg to suc(?x) — skips the zero branch entirely:
+;; add(suc(?x), ?y) = 5 → 5 solutions (x from 0 to 4)
+[add [suc ?x] ?y] = 5N
+
+;; Fix first arg to zero — only the base case applies:
+;; add(zero, ?y) = 5 → one solution: {y: 5}
+;; NOTE: ground ctor args in WS narrowing syntax is a future extension;
+;; currently works at the sexp/API level: (= (add (zero) ?y) 5)
+;; [add zero ?y] = 5N
+
+
+;; ========================================================================
+;; 3. MULTI-ARGUMENT BOOLEAN NARROWING
+;; ========================================================================
+;;
+;; FEATURE: Phase 1c — multi-branch DTs on inductively defined types
+;;
+;; Boolean operations with two arguments create DTs that branch on
+;; the first argument, then (in some arms) the second. Narrowing
+;; exhaustively explores all constructor combinations.
+
+;; and(?a, ?b) = true
+;; DT branches on ?a: true-arm returns ?b, false-arm returns false.
+;; Only (true, true) produces true. → 1 solution
+[and ?a ?b] = true
+
+;; or(?a, ?b) = false
+;; Only (false, false) produces false. → 1 solution
+[or ?a ?b] = false
+
+;; xor(?a, ?b) = true → {a: true, b: false}, {a: false, b: true}
+;; Two solutions — xor is true when exactly one input is true.
+[xor ?a ?b] = true
+
+
+;; ========================================================================
+;; 4. IMPOSSIBLE QUERIES — No Solutions
+;; ========================================================================
+;;
+;; FEATURE: Phase 1c — exhaustive search returns nil for impossible goals
+;;
+;; When no input can produce the target, narrowing returns nil
+;; (empty solution list). The search is exhaustive within the
+;; definitional tree — if it says nil, there truly is no answer.
+
+;; not(?b) = ?b → impossible
+;; Tries both: not(true)=false ≠ true, not(false)=true ≠ false
+[not ?b] = ?b
+
+;; A bare variable with no function call → nil (nothing to narrow)
+(= ?x 5)
+
+
+;; ========================================================================
+;; 5. USER-DEFINED FUNCTIONS — Narrowing Your Own Code
+;; ========================================================================
+;;
+;; FEATURE: Phase 1a — automatic DT extraction from any defn
+;; FEATURE: Phase 2b — automatic termination classification
+;; FEATURE: Phase 2c — automatic confluence classification
+;;
+;; Any function you define with pattern matching is automatically
+;; narrowable. At elaboration time, three analyses run:
+;;   1. DT extraction — builds the search tree
+;;   2. Termination — classifies as terminating/bounded/non-narrowable
+;;   3. Confluence — checks for overlapping clauses
+
+;; A predicate: maps Nat to Bool via structural recursion
+spec positive? Nat -> Bool
+defn positive? [n]
+  match n
+    | zero  -> false
+    | suc _ -> true
+
+;; positive?(?n) = true → n = suc(?_), any nonzero Nat
+;; The DT branches on ?n: zero-arm gives false (fail), suc-arm gives true (match!)
+[positive? ?n] = true
+
+;; positive?(?n) = false → n = zero
+[positive? ?n] = false
+
+
+;; ========================================================================
+;; 6. NARROWING THROUGH WRAPPERS — Trivial DT Rules
+;; ========================================================================
+;;
+;; FEATURE: Phase 3a — non-matching functions get trivial dt-rule
+;;
+;; Functions without explicit `match` (simple wrappers around another
+;; function call) now get a trivial definitional tree rule. Narrowing
+;; "sees through" the wrapper into the inner function's DT.
+
+;; my-double has no pattern match — it just calls add:
+defn my-double [n] : Nat [add n n]
+
+;; my-double(?x) = 6 → narrowing enters the body: add(?x, ?x) = 6
+;; Since both args are the same variable, narrowing finds all (a, b)
+;; pairs where a + b = 6, then filters to those where a = b.
+;; Result: {x: 3} (plus some over-approximations from the DFS)
+[my-double ?x] = 6N
+
+
+;; ========================================================================
+;; 7. SATURATING SUBTRACTION — Recursive Narrowing
+;; ========================================================================
+;;
+;; FEATURE: Phase 1c — recursive DT traversal through nested calls
+;; FEATURE: Phase 2b — termination analysis (sub is terminating)
+;;
+;; sub(x, y) = max(x - y, 0) is defined by recursion on y.
+;; Narrowing handles the recursion automatically.
+
+;; sub(?x, ?y) = 3
+;; Finds pairs where x - y = 3 (within the fuel bound)
+[sub ?x ?y] = 3N
+
+
+;; ========================================================================
+;; 8. NESTED MATCH — Two-Level Pattern Dispatch
+;; ========================================================================
+;;
+;; FEATURE: Phase 1a — DT extraction handles nested match expressions
+;; FEATURE: Phase 2c — confluence: non-overlapping patterns → needed narrowing
+;;
+;; Functions that match on MULTIPLE arguments create multi-level DTs.
+;; The DT first branches on the outer match, then on the inner.
+
+;; safe-min dispatches on both x and y:
+spec safe-min Nat Nat -> Nat
+defn safe-min [x y]
+  match x
+    | zero  -> zero
+    | suc a ->
+      match y
+        | zero  -> zero
+        | suc b -> suc [safe-min a b]
+
+;; This is inductively sequential (confluent by construction).
+;; The DT has a Branch on x, and the suc-arm has a Branch on y.
+
+;; safe-min(?x, ?y) = 2 → all (x, y) where min(x, y) = 2
+;; → x = suc(suc(x')), y = suc(suc(y')), min(x', y') = 1, etc.
+;; CURRENTLY: nested match DTs don't fully narrow yet in WS mode
+;; (the infrastructure handles this at the API level)
+;; [safe-min ?x ?y] = 2N
+
+
+;; ========================================================================
+;; 9. HIGHER-ORDER NARROWING — 0-CFA Auto-Defunctionalization
+;; ========================================================================
+;;
+;; FEATURE: Phase 3a — 0-CFA closure analysis
+;; FEATURE: Phase 3a — arity-based fallback for query variables
+;; FEATURE: Phase 3a — automatic candidate enumeration via DFS
+;;
+;; When a logic variable appears in FUNCTION position, the 0-CFA
+;; (Zeroth-Order Control Flow Analysis, Shivers 1991) determines
+;; which functions could flow there:
+;;
+;;   1. Constraint collection: walks all definitions, tracks which
+;;      named functions are passed to which parameter positions
+;;   2. Fixpoint solver: iterates until flow sets stabilize
+;;   3. Query: returns the flow set for a given position
+;;   4. Arity fallback: if flow set is empty (no prior call sites),
+;;      enumerates all non-constructor functions with matching arity
+;;   5. Search: tries each candidate via run-narrowing-search
+;;
+;; The CFA result is cached per module (demand-driven analysis).
+;;
+;; This enables answering: "which function, applied to these
+;; arguments, produces this result?"
+
+;; A higher-order applicator:
+spec apply-op [Nat -> Nat -> Nat] Nat Nat -> Nat
+defn apply-op [f x y] [f x y]
+
+;; Which binary Nat→Nat→Nat function gives 5 from (3, 2)?
+;; CFA's arity fallback finds all binary Nat functions (add, sub,
+;; mult, pow, min, max, ...), tries each, keeps those that work.
+;;
+;; CURRENTLY: HO narrowing works at the sexp/API level (23 tests
+;; pass) but the WS pipeline doesn't fully surface ?f in function
+;; position yet. The infrastructure is complete; the WS integration
+;; is tracked for the next phase.
+;;
+;; [apply-op ?f 3N 2N] = 5N   ;; → finds f = add (3+2=5)
+;; [apply-op ?f 2N 3N] = 6N   ;; → finds f = mult (2*3=6)
+;; [apply-op ?f 0N 0N] = 0N   ;; → finds f = add, f = mult
+
+
+;; ========================================================================
+;; 10. TERMINATION ANALYSIS — Size-Based Safety
+;; ========================================================================
+;;
+;; FEATURE: Phase 2b — LJBA size-change termination analysis
+;;
+;; The compiler classifies every function before narrowing:
+;;
+;;   terminating     — provably terminates (structural decrease on arg)
+;;   bounded         — terminates with fuel limit
+;;   non-narrowable  — no guarantee → narrowing residuates
+;;
+;; Uses the Lee-Jones-Ben-Amram (LJBA, 2001) size-change criterion:
+;; for every cycle in the call graph, at least one argument must
+;; strictly decrease. No annotation needed — automatic from defn.
+;;
+;; Classification of prelude functions:
+;;   add    — terminating (arg 0 decreases: suc(k) → k)
+;;   sub    — terminating (arg 1 decreases)
+;;   mult   — terminating (arg 1 decreases)
+;;   not    — terminating (no recursion)
+;;   and/or — terminating (no recursion)
+;;
+;; The classification controls the search:
+;;   terminating    → unrestricted narrowing (safe, exhaustive)
+;;   bounded        → fuel counter (backtrack if exhausted)
+;;   non-narrowable → residuate (wait for more info)
+
+
+;; ========================================================================
+;; 11. CONFLUENCE ANALYSIS — Overlapping Clause Detection
+;; ========================================================================
+;;
+;; FEATURE: Phase 2c — critical pair analysis for confluence
+;;
+;; The compiler checks whether function clauses overlap:
+;;
+;;   confluent       — non-overlapping patterns (inductively sequential)
+;;                     → uses optimal "needed narrowing" strategy
+;;   non-confluent   — overlapping rules detected
+;;                     → falls back to "basic narrowing" (complete but slower)
+;;   unknown         — undecidable → treated conservatively
+;;
+;; Critical pair analysis (Knuth-Bendix): two rules form a critical
+;; pair if their LHS patterns unify. The pair is joinable if both
+;; RHS values reduce to a common term. A TRS is confluent iff ALL
+;; critical pairs are joinable.
+;;
+;; Fast path: inductively sequential functions (no Or-branches in DT)
+;; are confluent by construction — analysis returns immediately.
+;;
+;; All prelude functions are inductively sequential → confluent.
+;;
+;; Combined classification (Phase 2b + 2c):
+;;   Confluent + Terminating     → safe unrestricted narrowing
+;;   Confluent + Bounded         → fuel-bounded narrowing
+;;   Non-confluent + Terminating → basic narrowing (complete, slower)
+;;   Non-confluent + Bounded     → non-narrowable (too risky)
+
+
+;; ========================================================================
+;; 12. INTERVAL ABSTRACT DOMAIN — Numeric Pruning
+;; ========================================================================
+;;
+;; FEATURE: Phase 2a — Galois connection between terms and intervals
+;; FEATURE: Phase 2a — bidirectional interval arithmetic propagation
+;;
+;; For Nat-typed variables, the system maintains interval constraints
+;; [lo, hi] that prune impossible branches before they're explored.
+;;
+;; When narrowing add(?x, ?y) = 5:
+;;   Without intervals: try all Nat values (infinite search space!)
+;;   With intervals: ?x ∈ [0, 5], ?y ∈ [0, 5] (finite, 6 × 6)
+;;
+;; The domain is connected to concrete terms via Galois connections:
+;;   α (abstraction):   suc(suc(zero)) → [2, 2]
+;;   γ (concretization): [0, 5] → {0, 1, 2, 3, 4, 5}
+;;
+;; Interval arithmetic propagates constraints bidirectionally:
+;;   add(X, Y) = Z where X ∈ [a,b], Y ∈ [c,d], Z ∈ [e,f]
+;;   → X ∈ [max(a, e-d), min(b, f-c)]
+;;   → Y ∈ [max(c, e-b), min(d, f-a)]
+;;
+;; This is invisible to the user — narrowing "just works" efficiently.
+;; The 6 solutions for [add ?x ?y] = 5N are found without exploring
+;; any Nat values > 5.
+
+
+;; ========================================================================
+;; 13. SOLVER CONFIGURATION — Search Heuristics
+;; ========================================================================
+;;
+;; FEATURE: Phase 3b — three orthogonal axes of search control
+;;
+;; The solver supports configurable search strategies:
+;;
+;;   :narrow-value-order   — How to pick values for a variable
+;;     source-order          Try values in definition order (default)
+;;     reverse               Try values in reverse order
+;;
+;;   :narrow-search        — How many solutions to find
+;;     all                   Find all solutions (default)
+;;     first                 Stop after first solution
+;;
+;;   :narrow-iterative     — Iterative deepening
+;;     #f                    Disabled (default)
+;;     (depth-limit N)       Max recursion depth
+;;
+;; These are currently available through the sexp solver API.
+;;
+;; IDEAL SYNTAX (future WS surface):
+;;
+;; solver fast-solver
+;;   :narrow-search     first
+;;   :narrow-value-order reverse
+;;
+;; solve-with fast-solver
+;;   [add ?x ?y] = 100N
+
+
+;; ========================================================================
+;; 14. GLOBAL CONSTRAINTS — Branch-and-Bound Optimization
+;; ========================================================================
+;;
+;; FEATURE: Phase 3c — global constraint propagators
+;; FEATURE: Phase 3c — branch-and-bound optimization
+;;
+;; Global constraints work alongside narrowing in the propagator
+;; network — both fire to quiescence together:
+;;
+;;   all-different  — all variables must have distinct values
+;;   bb-minimize    — branch-and-bound: prune branches that can't
+;;                    improve on the best solution found so far
+;;   element        — array indexing: v = xs[i]
+;;   cumulative     — resource scheduling
+;;
+;; The BB optimization maintains a GLOBAL cost bound across all
+;; ATMS worldviews. When any worldview finds a solution with cost C,
+;; ALL worldviews are immediately pruned to cost < C.
+;;
+;; IDEAL SYNTAX (future WS surface):
+;;
+;; solve
+;;   [add ?x ?y] = 10N
+;;   all-different [?x ?y]
+;;   ;; → 10 solutions (excludes x = y = 5)
+;;
+;; solve :minimize [mult ?x ?y]
+;;   [add ?x ?y] = 100N
+;;   ;; → finds (x, y) minimizing x * y subject to x + y = 100
+
+
+;; ========================================================================
+;; 15. INTERACTION: FORWARD + BACKWARD IN ONE FILE
+;; ========================================================================
+;;
+;; FEATURE: Phase 1d — solver integration (narrowing + existing pipeline)
+;;
+;; Narrowing expressions live alongside regular functional code.
+;; The same function serves double duty — no special declaration needed.
+
+;; Forward: add computes a Nat
+[add 3N 4N]
+
+;; Backward: add finds inputs that produce 7
+[add ?x ?y] = 7N
+
+;; A wrapper function — still narrowable (Phase 3a trivial dt-rule)
+defn halves [n] : Nat [add n n]
+
+;; halves(?x) = 10 → add(?x, ?x) = 10 → finds solutions
+[halves ?x] = 10N
+
+
+;; ========================================================================
+;; 16. THE BIG PICTURE — Where Narrowing Fits
+;; ========================================================================
+;;
+;; Prologos has three co-equal paradigms, each with its own delimiter:
+;;
+;;   Functional  [f x y]   — compute values     (defn, spec, fn)
+;;   Relational  (R x y)   — constrain search   (defr, schema, rel)
+;;   Process     indent    — sequence comms      (defproc, session, proc)
+;;
+;; Narrowing extends the functional paradigm with relational power.
+;; Any `defn` with pattern matching can be used as a relation —
+;; no `defr` needed. The `?` prefix and `=` operator are sufficient.
+;;
+;; The SAME function definition serves double duty:
+;;
+;;   spec add Nat Nat -> Nat
+;;   defn add [x y]
+;;     match x
+;;       | zero  -> y
+;;       | suc k -> suc [add k y]
+;;
+;;   [add 3N 4N]           ;; functional: compute 7
+;;   [add ?x ?y] = 7N      ;; relational: find all (x, y) summing to 7
+;;
+;; Under the hood, the definitional tree is extracted once at elaboration.
+;; Termination and confluence analyses classify the function once.
+;; The interval domain prunes the search space automatically.
+;; 0-CFA handles higher-order arguments transparently.
+;; Search heuristics and global constraints tune performance.
+;;
+;; All built on the propagator + ATMS substrate — the same
+;; infrastructure powering type checking, trait resolution, and
+;; multiplicity inference. Narrowing is not an add-on; it's a
+;; natural consequence of the architecture.
+;;
+;;
+;; ========================================================================
+;; FEATURE SUMMARY
+;; ========================================================================
+;;
+;; | Phase | Feature                           | Lines | Tests |
+;; |-------|-----------------------------------|-------|-------|
+;; | 1a    | Definitional tree extraction      |  ~200 |   ~40 |
+;; | 1b    | Term lattice                      |  ~150 |   ~30 |
+;; | 1c    | Narrowing propagator              |  ~400 |   ~60 |
+;; | 1d    | Solver integration                |  ~100 |   ~40 |
+;; | 1e    | WS syntax (?vars, infix =)        |  ~100 |   ~30 |
+;; | 2a    | Interval abstract domain          |  ~380 |   ~43 |
+;; | 2b    | Size-based termination (LJBA)     |  ~350 |   ~45 |
+;; | 2c    | Critical pair confluence          |  ~220 |   ~58 |
+;; | 3a    | 0-CFA auto-defunctionalization    |  ~285 |   ~23 |
+;; | 3b    | Configurable search heuristics    |  ~170 |   ~41 |
+;; | 3c    | Global constraints + BB           |  ~340 |   ~49 |
+;; |-------|-----------------------------------|-------|-------|
+;; | Total |                                   | ~2700 |  ~460 |
+;;
+;; ========================================================================
+;; END
+;; ========================================================================
