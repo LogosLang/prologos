@@ -545,7 +545,10 @@
            ;; Build initial binding stack.
            ;; After peeling n lambdas: bvar 0 = last param, bvar (n-1) = first param.
            ;; So initial-bindings = (reverse arg-exprs).
-           (define initial-bindings (reverse arg-exprs))
+           ;; Normalize ground args to Peano form (nat-val/int → suc/zero chains)
+           ;; so they match structurally when substituted into RHS bodies.
+           (define initial-bindings
+             (reverse (map normalize-narrow-target arg-exprs)))
            ;; Normalize target for matching (convert nat-val to Peano suc/zero)
            (define target-norm (normalize-narrow-target target-expr))
            ;; Per-function fuel from termination analysis

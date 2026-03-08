@@ -101,3 +101,19 @@
    (string-contains?
     (run-ns-ws-last "ns t13\nfirst [rest '[1 2 3]]")
     "some Int 2")))
+
+;; ========================================
+;; F. Ground ctor args in narrowing
+;; ========================================
+
+(test-case "narrow/ground-zero-arg"
+  (check-true
+   (string-contains?
+    (run-ns-ws-last "ns t14\n[add zero ?y] = 5N")
+    ":y 5N")))
+
+(test-case "narrow/ground-nat-literal-arg"
+  (check-true
+   (string-contains?
+    (run-ns-ws-last "ns t15\nadd ?x 10N = 33N")
+    ":x 23N")))

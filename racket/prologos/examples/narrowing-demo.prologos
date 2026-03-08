@@ -70,7 +70,8 @@ ns examples.narrowing-demo
 ;; Narrowing inverts: which ?b makes not(?b) = true?
 ;; → walks Branch, tries true-arm (not(true)=false ≠ true, fail),
 ;;   then false-arm (not(false)=true = true, success!) → {b: false}
-[not ?b] = true
+
+not ?b = true
 
 ;; The other direction: not(?b) = false → {b: true}
 [not ?b] = false
@@ -88,13 +89,23 @@ true = [not ?b]
 ;; recurses. Narrowing follows each path, collecting solutions.
 
 ;; add(?x, ?y) = 0 → one solution: {x: 0, y: 0}
-[add ?x ?y] = 0N
+add ?x ?y = 0N
+
 
 ;; add(?x, ?y) = 3 → four solutions: (0,3), (1,2), (2,1), (3,0)
-[add ?x ?y] = 3N
+add ?x ?y = 3N
+;; '[{:y 0N, :x 3N}
+;;   {:y 1N, :x 2N}
+;;   {:y 2N, :x 1N}
+;;   {:y 3N, :x 0N}] : _
+
+
+add ?x 10N = 33N
+
 
 ;; add(?x, ?y) = 5 → six solutions
-[add ?x ?y] = 5N
+add ?x ?y = 5N
+;; '[{:y 0N, :x 5N} {:y 1N, :x 4N} {:y 2N, :x 3N} {:y 3N, :x 2N} {:y 4N, :x 1N} {:y 5N, :x 0N}] : _
 
 
 ;; ========================================================================
@@ -113,9 +124,7 @@ true = [not ?b]
 
 ;; Fix first arg to zero — only the base case applies:
 ;; add(zero, ?y) = 5 → one solution: {y: 5}
-;; NOTE: ground ctor args in WS narrowing syntax is a future extension;
-;; currently works at the sexp/API level: (= (add (zero) ?y) 5)
-;; [add zero ?y] = 5N
+[add zero ?y] = 5N
 
 
 ;; ========================================================================
