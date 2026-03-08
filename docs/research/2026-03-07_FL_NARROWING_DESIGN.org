@@ -31,7 +31,7 @@ The document covers:
 
 | Phase | Sub-phase | Description | Status | Commit | Notes |
 |-------+-----------+---------------------------------+-------------+--------+-------|
-| 1 | 1a | Definitional Tree Extraction | NOT STARTED | | =definitional-tree.rkt= ~200 lines |
+| 1 | 1a | Definitional Tree Extraction | COMPLETE | =99e56a8= | =definitional-tree.rkt= ~200 lines, 33 tests |
 | 1 | 1b | Term Lattice | NOT STARTED | | =term-lattice.rkt= ~150 lines |
 | 1 | 1c | Narrowing Propagator | NOT STARTED | | =narrowing.rkt= ~300 lines |
 | 1 | 1d | Solver Integration | NOT STARTED | | =relations.rkt=, =solver.rkt= ~200 lines |
