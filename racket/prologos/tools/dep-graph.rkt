@@ -79,7 +79,8 @@
    'multi-dispatch.rkt            '()
    'namespace.rkt                 '()
    'confluence-analysis.rkt       '(definitional-tree.rkt syntax.rkt)
-   'narrowing.rkt                 '(confluence-analysis.rkt definitional-tree.rkt global-env.rkt macros.rkt propagator.rkt syntax.rkt term-lattice.rkt)
+   'narrowing.rkt                 '(confluence-analysis.rkt definitional-tree.rkt global-env.rkt macros.rkt propagator.rkt syntax.rkt term-lattice.rkt termination-analysis.rkt)
+   'termination-analysis.rkt      '(definitional-tree.rkt macros.rkt syntax.rkt)
    'parser.rkt                    '(errors.rkt macros.rkt sexp-readtable.rkt source-location.rkt surface-syntax.rkt)
    'performance-counters.rkt      '()
    'posit-impl.rkt                '()
@@ -110,7 +111,8 @@
    'surface-syntax.rkt            '(source-location.rkt)
    'syntax.rkt                    '(prelude.rkt)
    'confluence-analysis.rkt       '(definitional-tree.rkt syntax.rkt)
-   'narrowing.rkt                 '(confluence-analysis.rkt definitional-tree.rkt global-env.rkt macros.rkt propagator.rkt syntax.rkt term-lattice.rkt)
+   'narrowing.rkt                 '(confluence-analysis.rkt definitional-tree.rkt global-env.rkt macros.rkt propagator.rkt syntax.rkt term-lattice.rkt termination-analysis.rkt)
+   'termination-analysis.rkt      '(definitional-tree.rkt macros.rkt syntax.rkt)
    'tabling.rkt                   '(propagator.rkt)
    'term-lattice.rkt              '()
    'trait-resolution.rkt          '(errors.rkt macros.rkt metavar-store.rkt performance-counters.rkt prelude.rkt pretty-print.rkt source-location.rkt syntax.rkt unify.rkt zonk.rkt)
@@ -441,6 +443,8 @@
    (test-dep '(driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parser.rkt prelude.rkt pretty-print.rkt reader.rkt reduction.rkt source-location.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt typing-core.rkt) #t)
    'test-confluence-01.rkt
    (test-dep '(confluence-analysis.rkt definitional-tree.rkt driver.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt multi-dispatch.rkt narrowing.rkt namespace.rkt prelude.rkt syntax.rkt trait-resolution.rkt) #t)
+   'test-termination-01.rkt
+   (test-dep '(confluence-analysis.rkt definitional-tree.rkt driver.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt multi-dispatch.rkt narrowing.rkt namespace.rkt prelude.rkt syntax.rkt termination-analysis.rkt trait-resolution.rkt) #t)
    'test-narrowing-01.rkt
    (test-dep '(definitional-tree.rkt macros.rkt narrowing.rkt propagator.rkt syntax.rkt term-lattice.rkt) #f)
    'test-narrowing-search-01.rkt

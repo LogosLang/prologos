@@ -36,6 +36,7 @@
          "term-lattice.rkt"
          "definitional-tree.rkt"
          "confluence-analysis.rkt"
+         "termination-analysis.rkt"
          "macros.rkt"
          "global-env.rkt")
 
@@ -49,6 +50,9 @@
  run-narrowing-search
  ;; Phase 2c: Confluence classification
  get-confluence-class
+ ;; Phase 2b: Termination classification
+ get-termination-class
+ get-function-fuel
  ;; Helpers (for testing)
  term-from-ground-expr
  nat->term
@@ -463,6 +467,44 @@
         (confluence-result-class result)]
        [else 'unknown])]))
 
+;; ----------------------------------------
+;; Termination classification (Phase 2b)
+;; ----------------------------------------
+
+;; Lazily analyze and cache termination for a function.
+;; Returns 'terminating, 'bounded, or 'non-narrowable.
+(define (get-termination-class func-name)
+  (define cached (lookup-termination func-name))
+  (cond
+    [cached (termination-result-class cached)]
+    [else
+     (define body (global-env-lookup-value func-name))
+     (cond
+       [body
+        (define tree (or (lookup-def-tree func-name)
+                         (extract-definitional-tree body)))
+        (define-values (arity _inner) (peel-lambdas body))
+        (define result (analyze-termination func-name tree arity))
+        (register-termination! func-name result)
+        (termination-result-class result)]
+       [else 'non-narrowable])]))
+
+;; Get the fuel bound for a function (per-function or default).
+(define (get-function-fuel func-name)
+  (define cached (lookup-termination func-name))
+  (cond
+    [cached
+     (define class (termination-result-class cached))
+     (cond
+       [(eq? class 'terminating) NARROW-DEPTH-LIMIT]
+       [(eq? class 'bounded)
+        (or (termination-result-fuel-bound cached) NARROW-DEPTH-LIMIT)]
+       [else 0])]  ;; non-narrowable: no fuel
+    [else
+     ;; Not yet analyzed — trigger analysis
+     (get-termination-class func-name)
+     (get-function-fuel func-name)]))
+
 ;; run-narrowing-search :
 ;;   symbol × (listof expr) × expr × (listof symbol) → (listof hasheq)
 ;;
@@ -478,20 +520,27 @@
      (cond
        [(not dt) '()]
        [else
-        (define-values (arity _inner) (peel-lambdas func-body))
-        ;; Build initial binding stack.
-        ;; After peeling n lambdas: bvar 0 = last param, bvar (n-1) = first param.
-        ;; So initial-bindings = (reverse arg-exprs).
-        (define initial-bindings (reverse arg-exprs))
-        ;; Normalize target for matching (convert nat-val to Peano suc/zero)
-        (define target-norm (normalize-narrow-target target-expr))
-        ;; Run search
-        (define raw-solutions
-          (narrow-dt-search dt initial-bindings func-name target-norm (hasheq) 0))
-        ;; Project and resolve variable names from solutions
-        (for/list ([sol (in-list raw-solutions)])
-          (for/hasheq ([vn (in-list var-names)])
-            (values vn (narrow-resolve-val sol vn))))])]))
+        ;; Phase 2b: check termination class before searching
+        (define term-class (get-termination-class func-name))
+        (cond
+          [(eq? term-class 'non-narrowable) '()]
+          [else
+           (define-values (arity _inner) (peel-lambdas func-body))
+           ;; Build initial binding stack.
+           ;; After peeling n lambdas: bvar 0 = last param, bvar (n-1) = first param.
+           ;; So initial-bindings = (reverse arg-exprs).
+           (define initial-bindings (reverse arg-exprs))
+           ;; Normalize target for matching (convert nat-val to Peano suc/zero)
+           (define target-norm (normalize-narrow-target target-expr))
+           ;; Per-function fuel from termination analysis
+           (define fuel (get-function-fuel func-name))
+           ;; Run search
+           (define raw-solutions
+             (narrow-dt-search dt initial-bindings func-name target-norm (hasheq) 0 fuel))
+           ;; Project and resolve variable names from solutions
+           (for/list ([sol (in-list raw-solutions)])
+             (for/hasheq ([vn (in-list var-names)])
+               (values vn (narrow-resolve-val sol vn))))])])]))
 
 ;; ----------------------------------------
 ;; Target normalization
@@ -517,15 +566,16 @@
 ;; DT-guided search
 ;; ----------------------------------------
 
-;; narrow-dt-search : dt × bindings × func-name × target × subst × depth
+;; narrow-dt-search : dt × bindings × func-name × target × subst × depth × fuel
 ;;                    → (listof hasheq)
 ;;
 ;; bindings: (listof expr) indexed by bvar position (newest first).
 ;;   Contains expr-logic-var for unbound variables, concrete exprs for ground.
 ;; subst: hasheq mapping logic-var names (symbols) to values.
-(define (narrow-dt-search tree bindings func-name target subst depth)
+;; fuel: per-function depth limit (from termination analysis or NARROW-DEPTH-LIMIT).
+(define (narrow-dt-search tree bindings func-name target subst depth [fuel NARROW-DEPTH-LIMIT])
   (cond
-    [(> depth NARROW-DEPTH-LIMIT) '()]
+    [(> depth fuel) '()]
     [else
      (match tree
        [(dt-branch pos type-name children)
@@ -571,7 +621,7 @@
                     ;; Record in substitution
                     (define new-subst (hash-set subst var-name ctor-val))
                     (narrow-dt-search child-tree new-bindings func-name
-                                     target new-subst depth)]))
+                                     target new-subst depth fuel)]))
                children)]
 
              ;; Ground value — extract constructor and follow matching child
@@ -587,7 +637,7 @@
                  (define new-bindings
                    (append (reverse sub-vals) bindings))
                  (narrow-dt-search child-tree new-bindings func-name
-                                  target subst depth)])])])]
+                                  target subst depth fuel)])])])]
 
        [(dt-rule rhs)
         ;; Substitute bvar references in RHS with binding values
@@ -603,7 +653,7 @@
         (get-confluence-class func-name) ;; lazy analyze + cache
         (append-map
          (lambda (b)
-           (narrow-dt-search b bindings func-name target subst depth))
+           (narrow-dt-search b bindings func-name target subst depth fuel))
          branches)]
 
        [(dt-exempt) '()])]))
