@@ -471,6 +471,7 @@
                                                   length concat any? all?
                                                   to-list find take drop
                                                   into head empty? rest-seq
+                                                  first second rest
                                                   coll-map coll-filter coll-length coll-to-list
                                                   vec list-to-seq pvec-to-seq
                                                   set-to-seq into-vec

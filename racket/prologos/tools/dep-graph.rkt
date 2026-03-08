@@ -717,6 +717,8 @@
    (test-dep '(driver.rkt global-env.rkt macros.rkt namespace.rkt) #t)
    'test-stdlib-03-list-03.rkt
    (test-dep '(driver.rkt global-env.rkt macros.rkt namespace.rkt) #t)
+   'test-first-rest-01.rkt
+   (test-dep '(driver.rkt namespace.rkt parser.rkt) #t)
    'test-stdlib-03-list-04-01.rkt
    (test-dep '(driver.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt) #t)
    'test-stdlib-03-list-04-02.rkt
@@ -1010,6 +1012,7 @@
    'test-stdlib-03-list-01.rkt    '(prologos::data::list prologos::data::nat prologos::data::option)
    'test-stdlib-03-list-02.rkt    '(prologos::data::list prologos::data::nat prologos::data::option)
    'test-stdlib-03-list-03.rkt    '(prologos::data::list prologos::data::nat)
+   'test-first-rest-01.rkt        '(prologos::core::collections prologos::data::list prologos::data::option)
    'test-stdlib-03-list-04-01.rkt '(prologos::data::list)
    'test-stdlib-03-list-04-02.rkt '(prologos::data::list prologos::data::nat)
    'test-stdlib-03-list-05.rkt    '(prologos::data::list prologos::data::nat)

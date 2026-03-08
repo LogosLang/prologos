@@ -122,8 +122,7 @@
 ;; head : C A -> Option A
 ;; Get the first element of any collection, or none if empty.
 ;; Converts to LSeq via Seqable, then extracts the head.
-;; Note: named `head` not `first` because `first` is a parser keyword
-;; (Sigma pair projection).
+;; Alias: `first` (identical behavior).
 (spec head {A : Type} {C : Type -> Type} (Seqable C) -> (C A) -> (Option A))
 (defn head [$seq xs]
   (lseq-head A ($seq A xs)))
@@ -141,6 +140,30 @@
 (spec rest-seq {A : Type} {C : Type -> Type} (Seqable C) -> (C A) -> (LSeq A))
 (defn rest-seq [$seq xs]
   (lseq-rest A ($seq A xs)))
+
+;; ── first / second / rest ─────────────────────
+
+;; first : C A -> Option A
+;; Get the first element of any Seqable collection, or none if empty.
+;; Identical to `head` — exists for ergonomic naming alongside `second`/`rest`.
+(spec first {A : Type} {C : Type -> Type} (Seqable C) -> (C A) -> (Option A))
+(defn first [$seq xs]
+  (lseq-head A ($seq A xs)))
+
+;; second : C A -> Option A
+;; Get the second element of any Seqable collection, or none if fewer than 2.
+(spec second {A : Type} {C : Type -> Type} (Seqable C) -> (C A) -> (Option A))
+(defn second [$seq xs]
+  (match ($seq A xs)
+    (lseq-nil -> (none A))
+    (lseq-cell _ t -> (lseq-head A (t unit)))))
+
+;; rest : C A -> C A
+;; All elements after the first, preserving the collection type.
+;; Returns empty for empty collections.
+(spec rest {A : Type} {C : Type -> Type} (Seqable C) -> (Buildable C) -> (C A) -> (C A))
+(defn rest [$seq $build xs]
+  (Buildable-from-seq $build A (lseq-rest A ($seq A xs))))
 
 ;; ========================================
 ;; Collection Operations (List-specialized)
