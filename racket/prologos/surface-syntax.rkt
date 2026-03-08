@@ -297,6 +297,11 @@
  (struct-out defn-clause)
  (struct-out surf-defn-multi)
  (struct-out surf-def-group)
+ ;; Pattern-based defn clauses
+ (struct-out pat-atom)
+ (struct-out pat-compound)
+ (struct-out pat-head-tail)
+ (struct-out defn-pattern-clause)
  ;; Binder info
  (struct-out binder-info)
  ;; Foreign escape block
@@ -1003,6 +1008,31 @@
 ;; name: base name (symbol), defs: list of surf-def, arities: sorted list of int,
 ;; docstring: (or/c string? #f)
 (struct surf-def-group (name defs arities docstring srcloc) #:transparent)
+
+;; ========================================
+;; Pattern AST: for pattern-matching defn clauses and head-tail patterns
+;; ========================================
+;; Parsed pattern elements used in pattern-based defn clauses.
+;; Patterns are structural — no constructor registry lookup at parse time.
+
+;; Atomic pattern: variable, wildcard, or numeric literal
+;; kind: 'var | 'wildcard | 'numeric
+;; name: symbol (var name, ctor name, or '_ for wildcard)
+;; value: #f for var/wildcard, integer for numeric
+(struct pat-atom (kind name value srcloc) #:transparent)
+
+;; Compound pattern: constructor applied to sub-patterns
+;; ctor-name: symbol; args: list of pattern
+(struct pat-compound (ctor-name args srcloc) #:transparent)
+
+;; Head-tail list pattern: [a b | rest]
+;; heads: list of pattern; tail: pattern
+(struct pat-head-tail (heads tail srcloc) #:transparent)
+
+;; Pattern-based clause of a multi-body defn
+;; patterns: list of pattern (one per argument position)
+;; body: surface expression
+(struct defn-pattern-clause (patterns body srcloc) #:transparent)
 
 ;; ========================================
 ;; Foreign escape block

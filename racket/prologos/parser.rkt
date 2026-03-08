@@ -3434,8 +3434,146 @@
   (if first-err first-err
       (surf-defn-multi name docstring clauses loc)))
 
-;; Parse a single clause of a multi-body defn.
-;; Input: ($pipe [params...] : RetType body) or ($pipe [params...] <RetType> body)
+;; ========================================
+;; Pattern parsing for pattern-based defn clauses
+;; ========================================
+
+;; Check if a symbol looks like a Nat literal: 0N, 1N, 42N, etc.
+(define (nat-literal-symbol? sym)
+  (and (symbol? sym)
+       (let ([s (symbol->string sym)])
+         (and (> (string-length s) 1)
+              (char=? (string-ref s (- (string-length s) 1)) #\N)
+              (for/and ([c (in-string (substring s 0 (- (string-length s) 1)))])
+                (char-numeric? c))))))
+
+;; Parse the numeric value from a Nat literal symbol (e.g., '42N → 42)
+(define (parse-nat-literal-value sym)
+  (string->number
+   (substring (symbol->string sym) 0
+              (- (string-length (symbol->string sym)) 1))))
+
+;; Find the index of $pipe in a list of syntax objects, or #f
+(define (find-pipe-index elems)
+  (for/or ([e (in-list elems)] [i (in-naturals)])
+    (and (eq? (stx->datum e) '$pipe) i)))
+
+;; Parse a single pattern element → pat-atom, pat-compound, or pat-head-tail
+(define (parse-single-pattern stx loc)
+  (define d (stx->datum stx))
+  (cond
+    ;; Wildcard
+    [(and (symbol? d) (eq? d '_))
+     (pat-atom 'wildcard '_ #f loc)]
+    ;; Nat literal symbol: 0N, 1N, etc.
+    [(nat-literal-symbol? d)
+     (pat-atom 'numeric d (parse-nat-literal-value d) loc)]
+    ;; Regular symbol (variable or nullary constructor — resolved at desugar time)
+    [(symbol? d)
+     (pat-atom 'var d #f loc)]
+    ;; Integer literal (in sexp mode, 0, 1, etc. are read as integers)
+    [(and (exact-nonnegative-integer? d) (integer? d))
+     (pat-atom 'numeric d d loc)]
+    ;; List (inner bracket): compound pattern or head-tail
+    [(pair? d)
+     (define inner-elems
+       (cond
+         [(syntax? stx)
+          (or (syntax->list stx)
+              (map (lambda (x) (datum->syntax #f x)) d))]
+         [else
+          (map (lambda (x) (datum->syntax #f x)) d)]))
+     (cond
+       [(null? inner-elems)
+        (parse-error loc "pattern: empty bracket [] not allowed in patterns; use nil" #f)]
+       [else
+        (define pipe-idx (find-pipe-index inner-elems))
+        (cond
+          ;; Head-tail list pattern: [a b | rest]
+          [pipe-idx
+           (define head-stxs (take inner-elems pipe-idx))
+           (define tail-stxs (drop inner-elems (+ pipe-idx 1)))
+           (cond
+             [(null? head-stxs)
+              (parse-error loc "head-tail pattern: need at least one head element before |" #f)]
+             [(not (= (length tail-stxs) 1))
+              (parse-error loc "head-tail pattern: expected exactly one tail element after |" #f)]
+             [else
+              (define heads (for/list ([e (in-list head-stxs)])
+                              (parse-single-pattern e loc)))
+              (define first-err (findf prologos-error? heads))
+              (if first-err first-err
+                  (let ([tail (parse-single-pattern (car tail-stxs) loc)])
+                    (if (prologos-error? tail) tail
+                        (pat-head-tail heads tail loc))))])]
+          ;; Compound constructor pattern: [ctor arg1 arg2 ...]
+          [else
+           (define ctor-name (stx->datum (car inner-elems)))
+           (unless (symbol? ctor-name)
+             (parse-error loc
+               (format "compound pattern: expected constructor name, got ~a" ctor-name) #f))
+           (define args (for/list ([e (in-list (cdr inner-elems))])
+                          (parse-single-pattern e loc)))
+           (define first-err (findf prologos-error? args))
+           (if first-err first-err
+               (pat-compound ctor-name args loc))])])]
+    [else
+     (parse-error loc (format "invalid pattern element: ~a" d) #f)]))
+
+;; Parse the outer bracket of a pattern clause → list of patterns (one per argument)
+(define (parse-pattern-bracket bracket-stx loc)
+  (define elems
+    (cond
+      [(syntax? bracket-stx)
+       (or (syntax->list bracket-stx)
+           (let ([d (syntax->datum bracket-stx)])
+             (if (pair? d)
+                 (map (lambda (x) (datum->syntax #f x)) d)
+                 #f)))]
+      [(pair? (stx->datum bracket-stx))
+       (map (lambda (x) (datum->syntax #f x)) (stx->datum bracket-stx))]
+      [else #f]))
+  (cond
+    [(not elems)
+     (parse-error loc "pattern clause: expected bracket [...] with patterns" #f)]
+    [(null? elems)
+     ;; Empty bracket [] — zero argument patterns
+     '()]
+    [else
+     ;; Check if the outer bracket itself is a head-tail: [a b | rest]
+     ;; This means single argument, matched as a list head-tail pattern
+     (define pipe-idx (find-pipe-index elems))
+     (cond
+       [pipe-idx
+        ;; Outer bracket is a head-tail pattern for a single argument
+        (define head-stxs (take elems pipe-idx))
+        (define tail-stxs (drop elems (+ pipe-idx 1)))
+        (cond
+          [(null? head-stxs)
+           (parse-error loc "head-tail pattern: need at least one head element before |" #f)]
+          [(not (= (length tail-stxs) 1))
+           (parse-error loc "head-tail pattern: expected exactly one tail element after |" #f)]
+          [else
+           (define heads (for/list ([e (in-list head-stxs)])
+                           (parse-single-pattern e loc)))
+           (define first-err (findf prologos-error? heads))
+           (if first-err first-err
+               (let ([tail (parse-single-pattern (car tail-stxs) loc)])
+                 (if (prologos-error? tail) tail
+                     (list (pat-head-tail heads tail loc)))))])]
+       [else
+        ;; Each element is one argument pattern
+        (define patterns (for/list ([e (in-list elems)])
+                           (parse-single-pattern e loc)))
+        (define first-err (findf prologos-error? patterns))
+        (if first-err first-err patterns)])]))
+
+;; ========================================
+;; Parse a single clause of a multi-body defn
+;; ========================================
+;; Input: ($pipe [params...] : RetType body) — arity clause
+;;    or: ($pipe [params...] <RetType> body) — arity clause
+;;    or: ($pipe [patterns...] -> body)       — pattern clause
 (define (parse-defn-clause clause-stx name loc)
   (define d (stx->datum clause-stx))
   (define parts
@@ -3451,60 +3589,60 @@
         parts))
   (when (null? cleaned)
     (parse-error loc (format "defn ~a: empty clause" name) #f))
-  ;; First element should be the params bracket
+  ;; First element should be the params/patterns bracket
   (define params-stx (car cleaned))
   (define rest-args (cdr cleaned))
-  ;; Detect bare vs typed params (same logic as parse-defn)
-  (define binders
-    (let ([elems (if (syntax? params-stx) (syntax->list params-stx) #f)])
-      (cond
-        ;; Bare params: all symbols, no types
-        [(and elems (not (null? elems))
-              (andmap (lambda (e) (symbol? (syntax-e e))) elems)
-              (not (ormap (lambda (e)
-                            (let ([dd (syntax-e e)])
-                              (or (eq? dd ':) (mult-annot? dd))))
-                          elems)))
-         (for/list ([e (in-list elems)])
-           (binder-info (syntax-e e) #f (surf-hole loc)))]
-        ;; Typed params
-        [else
-         (parse-defn-binders params-stx loc)])))
+
+  ;; Discriminate: pattern clause (-> body) vs arity clause (<RetType> body / : RetType body)
+  (define first-rest-datum
+    (and (not (null? rest-args)) (stx->datum (car rest-args))))
+
   (cond
-    [(prologos-error? binders) binders]
-    [(< (length rest-args) 2)
-     (parse-error loc (format "defn ~a: clause missing return type or body" name) #f)]
-    [else
-     (define ret-type-stx (car rest-args))
+    ;; ---- Pattern clause: [patterns...] -> body ----
+    [(eq? first-rest-datum '->)
+     (define body-parts (cdr rest-args))
+     (when (null? body-parts)
+       (parse-error loc (format "defn ~a: pattern clause missing body after ->" name) #f))
+     (define body-stx
+       (if (= (length body-parts) 1)
+           (car body-parts)
+           (datum->syntax #f (map stx->datum body-parts) (car body-parts))))
+     (define body (parse-datum body-stx))
+     (define patterns (parse-pattern-bracket params-stx loc))
      (cond
-       ;; <ReturnType> body
-       [(angle-type-stx? ret-type-stx)
-        (define ret-type (unwrap-angle-type ret-type-stx loc))
-        (define body (parse-datum (cadr rest-args)))
+       [(prologos-error? body) body]
+       [(prologos-error? patterns) patterns]
+       [else (defn-pattern-clause patterns body loc)])]
+
+    ;; ---- Arity clause: existing logic ----
+    [else
+     ;; Detect bare vs typed params (same logic as parse-defn)
+     (define binders
+       (let ([elems (if (syntax? params-stx) (syntax->list params-stx) #f)])
+         (cond
+           ;; Bare params: all symbols, no types
+           [(and elems (not (null? elems))
+                 (andmap (lambda (e) (symbol? (syntax-e e))) elems)
+                 (not (ormap (lambda (e)
+                               (let ([dd (syntax-e e)])
+                                 (or (eq? dd ':) (mult-annot? dd))))
+                             elems)))
+            (for/list ([e (in-list elems)])
+              (binder-info (syntax-e e) #f (surf-hole loc)))]
+           ;; Typed params
+           [else
+            (parse-defn-binders params-stx loc)])))
+     (cond
+       [(prologos-error? binders) binders]
+       [(< (length rest-args) 2)
+        (parse-error loc (format "defn ~a: clause missing return type or body" name) #f)]
+       [else
+        (define ret-type-stx (car rest-args))
         (cond
-          [(prologos-error? ret-type) ret-type]
-          [(prologos-error? body) body]
-          [else
-           (define full-type
-             (foldr (lambda (bnd rest-ty)
-                      (surf-pi bnd rest-ty loc))
-                    ret-type
-                    binders))
-           (define param-names (map binder-info-name binders))
-           (defn-clause full-type param-names body loc)])]
-       ;; : ReturnType body
-       [(eq? (stx->datum ret-type-stx) ':)
-        (cond
-          [(< (length rest-args) 3)
-           (parse-error loc (format "defn ~a: clause missing return type or body after ':'" name) #f)]
-          [else
-           (define after-colon (cdr rest-args))
-           (define type-atoms (drop-right after-colon 1))
-           (define body-stx (last after-colon))
-           (when (null? type-atoms)
-             (parse-error loc (format "defn ~a: clause missing return type after ':'" name) #f))
-           (define ret-type (parse-infix-type type-atoms loc))
-           (define body (parse-datum body-stx))
+          ;; <ReturnType> body
+          [(angle-type-stx? ret-type-stx)
+           (define ret-type (unwrap-angle-type ret-type-stx loc))
+           (define body (parse-datum (cadr rest-args)))
            (cond
              [(prologos-error? ret-type) ret-type]
              [(prologos-error? body) body]
@@ -3515,10 +3653,34 @@
                        ret-type
                        binders))
               (define param-names (map binder-info-name binders))
-              (defn-clause full-type param-names body loc)])])]
-       [else
-        (parse-error loc (format "defn ~a: clause expected <ReturnType> or : ReturnType, got ~a"
-                                 name (stx->datum ret-type-stx)) #f)])]))
+              (defn-clause full-type param-names body loc)])]
+          ;; : ReturnType body
+          [(eq? (stx->datum ret-type-stx) ':)
+           (cond
+             [(< (length rest-args) 3)
+              (parse-error loc (format "defn ~a: clause missing return type or body after ':'" name) #f)]
+             [else
+              (define after-colon (cdr rest-args))
+              (define type-atoms (drop-right after-colon 1))
+              (define body-stx (last after-colon))
+              (when (null? type-atoms)
+                (parse-error loc (format "defn ~a: clause missing return type after ':'" name) #f))
+              (define ret-type (parse-infix-type type-atoms loc))
+              (define body (parse-datum body-stx))
+              (cond
+                [(prologos-error? ret-type) ret-type]
+                [(prologos-error? body) body]
+                [else
+                 (define full-type
+                   (foldr (lambda (bnd rest-ty)
+                            (surf-pi bnd rest-ty loc))
+                          ret-type
+                          binders))
+                 (define param-names (map binder-info-name binders))
+                 (defn-clause full-type param-names body loc)])])]
+          [else
+           (parse-error loc (format "defn ~a: clause expected <ReturnType>, : ReturnType, or -> for pattern clause, got ~a"
+                                    name (stx->datum ret-type-stx)) #f)])])]))
 
 ;; ========================================
 ;; Parse defn: (defn name : type [params...] body)
@@ -5536,6 +5698,24 @@
    (if final-suc-arm (list final-suc-arm) '())
    other-arms))
 
+;; Build nested cons arms for head-tail list pattern: [a b | rest] → body
+;; heads: list of symbols (head binding names)
+;; tail-name: symbol (tail binding name)
+;; body: parsed surface expression
+;; Returns a single reduce-arm that matches cons, with nested match for multi-head.
+(define (build-nested-cons-arms heads tail-name body loc)
+  (cond
+    ;; Single head: cons head tail -> body
+    [(= (length heads) 1)
+     (reduce-arm 'cons (list (car heads) tail-name) body loc)]
+    ;; Multiple heads: cons head0 $ht0 -> (match $ht0 | cons head1 ... -> ...)
+    [else
+     (define gen-tail (gensym '$ht-))
+     (define inner-arm (build-nested-cons-arms (cdr heads) tail-name body loc))
+     (define inner-match
+       (surf-reduce (surf-var gen-tail loc) (list inner-arm) loc))
+     (reduce-arm 'cons (list (car heads) gen-tail) inner-match loc)]))
+
 (define (parse-reduce-arm arm-stx loc)
   ;; arm-stx is a syntax object or datum wrapping a list like:
   ;; ($pipe nil -> default) or (cons a acc -> body)
@@ -5594,15 +5774,41 @@
           (or (and (syntax? first-stx) (syntax->list first-stx))
               (map (lambda (x) (datum->syntax #f x)) first-deep))
           pattern)))
-  (define ctor-name (stx->datum (car effective-pattern)))
+
+  ;; Head-tail list pattern detection: [a b | rest] → (a b $pipe rest)
+  ;; Must check BEFORE ctor-name extraction since $pipe in bindings is invalid
+  (define pipe-idx-in-pat
+    (for/or ([p (in-list effective-pattern)] [i (in-naturals)])
+      (and (eq? (stx->datum p) '$pipe) i)))
+
+  (define ctor-name (if pipe-idx-in-pat #f (stx->datum (car effective-pattern))))
   (define binding-names
-    (for/list ([p (in-list (cdr effective-pattern))])
-      (stx->datum p)))
+    (if pipe-idx-in-pat '()
+        (for/list ([p (in-list (cdr effective-pattern))])
+          (stx->datum p))))
 
   ;; Parse body first (needed by all paths)
   (define body (parse-datum body-stx))
   (cond
     [(prologos-error? body) body]
+
+    ;; Head-tail list pattern: [a b | rest] → nested cons arms
+    [pipe-idx-in-pat
+     (define head-stxs (take effective-pattern pipe-idx-in-pat))
+     (define tail-stxs (drop effective-pattern (+ pipe-idx-in-pat 1)))
+     (cond
+       [(null? head-stxs)
+        (parse-error loc "head-tail pattern: need at least one head element before |" #f)]
+       [(not (= (length tail-stxs) 1))
+        (parse-error loc "head-tail pattern: expected exactly one tail element after |" #f)]
+       [else
+        (define head-names (map stx->datum head-stxs))
+        (define tail-name (stx->datum (car tail-stxs)))
+        (unless (andmap symbol? head-names)
+          (parse-error loc "head-tail pattern: head elements must be symbols" #f))
+        (unless (symbol? tail-name)
+          (parse-error loc "head-tail pattern: tail must be a symbol" #f))
+        (build-nested-cons-arms head-names tail-name body loc)])]
 
     ;; Numeric literal pattern: validate and produce tagged reduce-arm
     ;; Actual desugaring happens in desugar-numeric-arms (called from parse-reduce-arms)

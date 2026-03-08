@@ -2953,6 +2953,30 @@
            (and (pair? x) (eq? (car x) '$pipe)))
          rest))
 
+;; Check if a $pipe clause is a pattern clause (has -> after params bracket)
+;; Pattern clause datum: ($pipe (params...) -> body ...)
+(define (pipe-clause-datum-is-pattern? clause)
+  (and (pair? clause) (eq? (car clause) '$pipe)
+       (let ([rest (cdr clause)])
+         (and (>= (length rest) 3)
+              (list? (car rest))      ;; params bracket
+              (eq? (cadr rest) '->))))) ;; arrow after params
+
+;; Check if ALL pipe clauses in rest are pattern clauses
+(define (defn-has-all-pattern-clauses? rest)
+  (define pipe-clauses
+    (filter (lambda (x) (and (pair? x) (eq? (car x) '$pipe))) rest))
+  (and (not (null? pipe-clauses))
+       (for/and ([clause (in-list pipe-clauses)])
+         (pipe-clause-datum-is-pattern? clause))))
+
+;; Check if ANY pipe clause in rest is a pattern clause
+(define (defn-has-any-pattern-clauses? rest)
+  (define pipe-clauses
+    (filter (lambda (x) (and (pair? x) (eq? (car x) '$pipe))) rest))
+  (for/or ([clause (in-list pipe-clauses)])
+    (pipe-clause-datum-is-pattern? clause)))
+
 ;; Decompose spec type tokens into parameter types and return type.
 ;; Uses the Prologos uncurried arrow convention:
 ;;   A B -> C  means  A -> B -> C  (each atom in non-last segment = separate param type)
@@ -3249,6 +3273,11 @@
        ;; Multi-body defn with pipes
        [(defn-has-pipes? rest)
         (cond
+          ;; Pattern clauses (have -> after params bracket):
+          ;; Skip spec injection — pattern clause compilation handles type inference.
+          ;; The spec type is NOT injected per-clause; the compiled defn infers its type.
+          [(defn-has-any-pattern-clauses? rest)
+           datum]
           [(defn-has-type-annotation? rest)
            ;; Defn has inline types AND a spec. If propagated, override silently.
            (if (spec-propagated? name)
@@ -7620,54 +7649,375 @@
     [_ surf]))
 
 ;; ========================================
+;; Pattern-based defn clause compilation
+;; ========================================
+;; Compiles pattern-based defn clauses into a single surf-def
+;; with a match-based body. Used by expand-defn-multi when
+;; multiple clauses share the same arity with pattern syntax.
+
+;; Check if a pattern is a variable or wildcard (non-dispatching)
+(define (pattern-is-variable? pat)
+  (and (pat-atom? pat)
+       (memq (pat-atom-kind pat) '(var wildcard))))
+
+;; Normalize a numeric pattern to nested constructor pattern
+;; 0 → (pat-compound 'zero () loc)
+;; 1 → (pat-compound 'suc [(pat-compound 'zero () loc)] loc)
+;; n → suc^n(zero)
+(define (normalize-numeric-pattern pat)
+  (define val (pat-atom-value pat))
+  (define loc (pat-atom-srcloc pat))
+  (let loop ([n val])
+    (if (= n 0)
+        (pat-compound 'zero '() loc)
+        (pat-compound 'suc (list (loop (- n 1))) loc))))
+
+;; Normalize a pattern recursively:
+;; - numeric → nested zero/suc compound
+;; - head-tail → nested cons compound
+;; - compound sub-patterns normalized recursively
+(define (normalize-pattern pat)
+  (cond
+    [(and (pat-atom? pat) (eq? (pat-atom-kind pat) 'numeric))
+     (normalize-numeric-pattern pat)]
+    [(pat-compound? pat)
+     (pat-compound (pat-compound-ctor-name pat)
+                   (map normalize-pattern (pat-compound-args pat))
+                   (pat-compound-srcloc pat))]
+    [(pat-head-tail? pat)
+     (define heads (pat-head-tail-heads pat))
+     (define tail (pat-head-tail-tail pat))
+     (define loc (pat-head-tail-srcloc pat))
+     (let loop ([hs heads])
+       (cond
+         [(null? hs) (normalize-pattern tail)]
+         [else
+          (pat-compound 'cons
+                        (list (normalize-pattern (car hs))
+                              (if (null? (cdr hs))
+                                  (normalize-pattern tail)
+                                  (loop (cdr hs))))
+                        loc)]))]
+    [else pat]))
+
+;; Find the first column index with a non-variable pattern.
+;; Returns column index or #f if all patterns are variables.
+(define (find-dispatch-column rows)
+  (define n-cols (length (caar rows)))
+  (for/or ([col (in-range n-cols)])
+    (and (for/or ([row (in-list rows)])
+           (not (pattern-is-variable? (list-ref (car row) col))))
+         col)))
+
+;; Find the type being matched from constructor patterns in a column.
+;; Returns type-name symbol or #f.
+(define (find-type-from-column rows col)
+  (for/or ([row (in-list rows)])
+    (define pat (list-ref (car row) col))
+    (and (pat-compound? pat)
+         (let ([meta (lookup-ctor (pat-compound-ctor-name pat))])
+           (and meta (ctor-meta-type-name meta))))))
+
+;; Create a let-binding expression: let name := value in body
+;; Implemented as ((fn (name : _) body) value)
+(define (make-let-binding name value body loc)
+  (surf-app
+   (surf-lam (binder-info name 'mw (surf-hole loc)) body loc)
+   (list value)
+   loc))
+
+;; Wrap body with let bindings for variable patterns.
+;; For each variable pattern at position i, bind pattern-name to param-name.
+;; Wildcards are skipped (no binding needed).
+(define (wrap-variable-bindings patterns param-names body loc)
+  ;; Process in reverse order so outermost let is first param
+  (for/fold ([b body])
+            ([pat (in-list (reverse patterns))]
+             [pname (in-list (reverse param-names))])
+    (cond
+      [(and (pat-atom? pat) (eq? (pat-atom-kind pat) 'var))
+       (define vname (pat-atom-name pat))
+       (if (eq? vname pname) b
+           (make-let-binding vname (surf-var pname loc) b loc))]
+      [else b])))
+
+;; Specialize rows for a constructor at a given column.
+;; For each row:
+;;   - compound matching ctor → replace column with sub-patterns
+;;   - variable → replace column with fresh wildcards + bind variable
+;;   - different ctor → skip
+;; Returns list of (list new-patterns new-body), preserving order.
+(define (specialize-rows rows col ctor n-fields param-names loc)
+  (define param-at-col (list-ref param-names col))
+  (for/fold ([result '()])
+            ([row (in-list (reverse rows))])
+    (define pats (car row))
+    (define body (cadr row))
+    (define pat-at-col (list-ref pats col))
+    (cond
+      ;; Compound pattern matching this ctor
+      [(and (pat-compound? pat-at-col)
+            (eq? (pat-compound-ctor-name pat-at-col) ctor))
+       (define sub-pats (pat-compound-args pat-at-col))
+       (define new-pats
+         (append (take pats col) sub-pats (drop pats (+ col 1))))
+       (cons (list new-pats body) result)]
+      ;; Variable — matches any ctor, bind to original param
+      [(and (pat-atom? pat-at-col) (eq? (pat-atom-kind pat-at-col) 'var))
+       (define vname (pat-atom-name pat-at-col))
+       (define fresh-vars
+         (for/list ([_ (in-range n-fields)])
+           (pat-atom 'wildcard '_ #f loc)))
+       (define new-pats
+         (append (take pats col) fresh-vars (drop pats (+ col 1))))
+       (define new-body
+         (make-let-binding vname (surf-var param-at-col loc) body loc))
+       (cons (list new-pats new-body) result)]
+      ;; Wildcard — matches any ctor, no binding
+      [(and (pat-atom? pat-at-col) (eq? (pat-atom-kind pat-at-col) 'wildcard))
+       (define fresh-vars
+         (for/list ([_ (in-range n-fields)])
+           (pat-atom 'wildcard '_ #f loc)))
+       (define new-pats
+         (append (take pats col) fresh-vars (drop pats (+ col 1))))
+       (cons (list new-pats body) result)]
+      ;; Different ctor — skip this row
+      [else result])))
+
+;; Compile a match tree from pattern rows.
+;; rows: list of (list patterns body) where patterns is a list of normalized patterns.
+;; param-names: symbols for the scrutinee at each position.
+;; Returns a surface expression (surf-reduce, surf-var, surf-app, etc.)
+(define (compile-match-tree rows param-names loc)
+  (cond
+    ;; No rows — unreachable branch (incomplete pattern match)
+    [(null? rows)
+     (surf-typed-hole '__match-fail loc)]
+    ;; First row is all variables → base case: bind and return body
+    [(for/and ([pat (in-list (caar rows))])
+       (pattern-is-variable? pat))
+     (wrap-variable-bindings (caar rows) param-names (cadar rows) loc)]
+    ;; Dispatch on a column with constructor patterns
+    [else
+     (define col (find-dispatch-column rows))
+     (define scrutinee-name (list-ref param-names col))
+     ;; Determine type from ctor patterns in this column
+     (define type-name (find-type-from-column rows col))
+     ;; Get all constructors (in declaration order if type known)
+     (define all-ctors
+       (if type-name
+           (or (lookup-type-ctors type-name) '())
+           ;; Fallback: collect constructors from rows (order of first appearance)
+           (remove-duplicates
+            (filter-map
+             (lambda (row)
+               (define pat (list-ref (car row) col))
+               (and (pat-compound? pat) (pat-compound-ctor-name pat)))
+             rows))))
+     ;; Build reduce-arms for each constructor
+     (define arms
+       (for/list ([ctor (in-list all-ctors)])
+         (define meta (lookup-ctor ctor))
+         (define n-fields
+           (if meta (length (ctor-meta-field-types meta)) 0))
+         ;; Generate fresh field binding names
+         (define field-names
+           (for/list ([i (in-range n-fields)])
+             (string->symbol (format "__~a_~a" ctor i))))
+         ;; Specialize rows for this constructor
+         (define specialized
+           (specialize-rows rows col ctor n-fields param-names loc))
+         ;; New param names: replace dispatch column with field names
+         (define new-params
+           (append (take param-names col)
+                   field-names
+                   (drop param-names (+ col 1))))
+         ;; Recurse
+         (define arm-body
+           (compile-match-tree specialized new-params loc))
+         (reduce-arm ctor field-names arm-body loc)))
+     (surf-reduce (surf-var scrutinee-name loc) arms loc)]))
+
+;; Compile a group of pattern clauses (all same arity) into a single surf-def.
+;; name: the function name (symbol), possibly internal name like name::arity.
+;; clauses: list of defn-pattern-clause, all same arity.
+;; loc: source location.
+;; Returns a surf-def with #f type (type inferred from body).
+(define (compile-pattern-group name clauses loc)
+  (define arity
+    (length (defn-pattern-clause-patterns (car clauses))))
+  ;; Generate fresh param names
+  (define param-names
+    (for/list ([i (in-range arity)])
+      (string->symbol (format "__arg~a" i))))
+  ;; Normalize all patterns and build rows
+  (define rows
+    (for/list ([clause (in-list clauses)])
+      (list (map normalize-pattern (defn-pattern-clause-patterns clause))
+            (defn-pattern-clause-body clause))))
+  (cond
+    ;; Zero-arity: just use first body
+    [(= arity 0)
+     (surf-def name #f (cadar rows) loc)]
+    ;; Single clause, all variables → optimize: use variable names as params
+    [(and (= (length rows) 1)
+          (for/and ([pat (in-list (caar rows))])
+            (pattern-is-variable? pat)))
+     (define var-names
+       (for/list ([pat (in-list (caar rows))])
+         (if (eq? (pat-atom-kind pat) 'wildcard)
+             (gensym '__wild)
+             (pat-atom-name pat))))
+     (define body (cadar rows))
+     (define nested-lam
+       (foldr (lambda (vn inner)
+                (surf-lam (binder-info vn 'mw (surf-hole loc)) inner loc))
+              body var-names))
+     (surf-def name #f nested-lam loc)]
+    ;; General case: compile match tree
+    [else
+     (define body (compile-match-tree rows param-names loc))
+     (define nested-lam
+       (foldr (lambda (pn inner)
+                (surf-lam (binder-info pn 'mw (surf-hole loc)) inner loc))
+              body param-names))
+     (surf-def name #f nested-lam loc)]))
+
+;; ========================================
 ;; Expand multi-body defn → surf-def-group
 ;; ========================================
-;; Each clause becomes a separate surf-def with an internal name (name/N).
-;; The surf-def-group carries the dispatch metadata.
+;; Clauses may be arity-based (defn-clause) or pattern-based
+;; (defn-pattern-clause). They are grouped by arity. Within each
+;; arity group, all clauses must be the same kind:
+;;   - arity clauses → existing pipeline (one surf-def per clause)
+;;   - pattern clauses → compiled to single surf-def with match body
 (define (expand-defn-multi form)
   (match form
     [(surf-defn-multi name docstring clauses loc)
-     ;; Compute arities (explicit param count per clause)
-     (define arities
-       (for/list ([clause (in-list clauses)])
-         (length (defn-clause-param-names clause))))
-     ;; Check for duplicate arities
-     (if (not (= (length arities) (length (remove-duplicates arities))))
-       (prologos-error loc
-         (format "defn ~a: multiple clauses with the same arity" name))
-       ;; Expand each clause through the normal defn pipeline
-       (let ()
-         (define expanded-defs
-           (for/list ([clause (in-list clauses)]
-                      [arity (in-list arities)])
-             (define internal-name
-               (string->symbol (format "~a::~a" name arity)))
-             ;; Wrap as surf-defn for existing pipeline
-             (define as-defn
-               (surf-defn internal-name
-                          (defn-clause-type clause)
-                          (defn-clause-param-names clause)
-                          (defn-clause-body clause)
-                          (defn-clause-srcloc clause)))
-             ;; Apply auto-implicits then desugar to surf-def
-             (define with-implicits (infer-auto-implicits as-defn))
-             (define desugared (desugar-defn with-implicits))
-             (if (prologos-error? desugared)
-                 desugared
-                 (expand-top-level desugared))))
-         ;; Check for errors in expansion
-         (define first-err (findf prologos-error? expanded-defs))
-         (cond
-           [first-err first-err]
-           [else
-            ;; Build arity-map for dispatch
-            (define arity-map
-              (for/fold ([m (hasheq)])
-                        ([clause (in-list clauses)]
-                         [arity (in-list arities)])
-                (hash-set m arity
-                          (string->symbol (format "~a::~a" name arity)))))
-            (surf-def-group name expanded-defs arities docstring loc)])))]))
+     ;; Compute arity for each clause (works for both kinds)
+     (define (clause-arity c)
+       (cond
+         [(defn-clause? c) (length (defn-clause-param-names c))]
+         [(defn-pattern-clause? c)
+          (length (defn-pattern-clause-patterns c))]
+         [else (error 'expand-defn-multi "unknown clause type: ~a" c)]))
+     (define arities (map clause-arity clauses))
+
+     ;; Group clauses by arity (preserving order within groups)
+     (define arity-group-hash (make-hasheq))
+     (for ([clause (in-list clauses)]
+           [arity (in-list arities)])
+       (hash-update! arity-group-hash arity
+                     (lambda (lst) (append lst (list clause)))
+                     '()))
+     (define sorted-arities
+       (sort (remove-duplicates arities) <))
+     (define sorted-groups
+       (for/list ([a (in-list sorted-arities)])
+         (cons a (hash-ref arity-group-hash a))))
+
+     ;; Validate: within each group, all same kind
+     (define validation-error
+       (for/or ([group (in-list sorted-groups)])
+         (define arity (car group))
+         (define group-clauses (cdr group))
+         (define kinds
+           (map (lambda (c)
+                  (cond [(defn-clause? c) 'arity]
+                        [(defn-pattern-clause? c) 'pattern]
+                        [else 'unknown]))
+                group-clauses))
+         (define unique-kinds (remove-duplicates kinds))
+         (if (> (length unique-kinds) 1)
+             (prologos-error loc
+               (format "defn ~a: arity ~a mixes arity and pattern clauses"
+                       name arity))
+             #f)))
+
+     (cond
+       [validation-error validation-error]
+
+       ;; Optimization: single arity group, all pattern clauses →
+       ;; return compiled surf-def directly (no arity dispatch needed)
+       [(and (= (length sorted-groups) 1)
+             (defn-pattern-clause? (cadr (car sorted-groups))))
+        (define group-clauses (cdr (car sorted-groups)))
+        (define compiled (compile-pattern-group name group-clauses loc))
+        (if (prologos-error? compiled) compiled
+            (expand-top-level compiled))]
+
+       ;; General case: multiple arity groups or arity-based clauses
+       [else
+        (let ()
+          (define expanded-defs '())
+          (define all-arities '())
+          (define first-err #f)
+
+          (for ([group (in-list sorted-groups)])
+            #:break first-err
+            (define arity (car group))
+            (define group-clauses (cdr group))
+            (define kind
+              (if (defn-clause? (car group-clauses)) 'arity 'pattern))
+
+            (cond
+              ;; Pattern group → compile to single surf-def
+              [(eq? kind 'pattern)
+               (define internal-name
+                 (string->symbol (format "~a::~a" name arity)))
+               (define compiled
+                 (compile-pattern-group internal-name group-clauses loc))
+               (cond
+                 [(prologos-error? compiled)
+                  (set! first-err compiled)]
+                 [else
+                  (define expanded (expand-top-level compiled))
+                  (cond
+                    [(prologos-error? expanded)
+                     (set! first-err expanded)]
+                    [else
+                     (set! expanded-defs
+                           (append expanded-defs (list expanded)))
+                     (set! all-arities
+                           (append all-arities (list arity)))])])]
+
+              ;; Arity group → existing pipeline
+              [else
+               (when (> (length group-clauses) 1)
+                 (set! first-err
+                   (prologos-error loc
+                     (format "defn ~a: multiple arity clauses with same arity ~a"
+                             name arity))))
+               (unless first-err
+                 (define clause (car group-clauses))
+                 (define internal-name
+                   (string->symbol (format "~a::~a" name arity)))
+                 (define as-defn
+                   (surf-defn internal-name
+                              (defn-clause-type clause)
+                              (defn-clause-param-names clause)
+                              (defn-clause-body clause)
+                              (defn-clause-srcloc clause)))
+                 (define with-implicits (infer-auto-implicits as-defn))
+                 (define desugared (desugar-defn with-implicits))
+                 (define expanded
+                   (if (prologos-error? desugared)
+                       desugared
+                       (expand-top-level desugared)))
+                 (cond
+                   [(prologos-error? expanded)
+                    (set! first-err expanded)]
+                   [else
+                    (set! expanded-defs
+                          (append expanded-defs (list expanded)))
+                    (set! all-arities
+                          (append all-arities (list arity)))]))]))
+
+          (cond
+            [first-err first-err]
+            [else
+             (surf-def-group name expanded-defs all-arities
+                             docstring loc)]))])]))
 
 ;; ========================================
 ;; Expand a top-level form (post-parse)
