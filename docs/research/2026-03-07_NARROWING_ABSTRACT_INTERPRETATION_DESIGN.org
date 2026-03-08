@@ -29,6 +29,25 @@ interpretation tames infinite domains and guarantees termination.
 Phase 2 and Phase 3 are largely independent and can proceed in parallel,
 except that 0-CFA (Phase 3a) builds on the narrowing propagator from Phase 1c.
 
+* Progress Tracker
+
+| Phase | Sub-phase | Description | Status | Commit | Notes |
+|-------+-----------+-------------------------------------------+-------------+--------+-------|
+| 1 | 1a | Definitional Tree Extraction | NOT STARTED | | Prereq for all Phase 2-3 |
+| 1 | 1b | Term Lattice | NOT STARTED | | |
+| 1 | 1c | Narrowing Propagator | NOT STARTED | | |
+| 1 | 1d | Solver Integration | NOT STARTED | | |
+| 1 | 1e | WS-Mode Syntax (=?= variables, ==\==) | NOT STARTED | | |
+| 2 | 2a | Interval Abstract Domain | NOT STARTED | | ~530 lines, ~105 tests |
+| 2 | 2a+ | Length-Interval Domain (List/String) | NOT STARTED | | Future enhancement |
+| 2 | 2b | Size-Based Termination (LJBA) | NOT STARTED | | ~390 lines, ~80 tests |
+| 2 | 2c | Critical Pair / Confluence Analysis | NOT STARTED | | ~350 lines, ~65 tests; lazy for IS functions |
+| 3 | 3a | 0-CFA Auto-Defunctionalization | NOT STARTED | | ~460 lines, ~70 tests; demand-driven |
+| 3 | 3b | Configurable Search Heuristics | NOT STARTED | | ~590 lines, ~105 tests |
+| 3 | 3c | Global Constraints + BB Optimization | NOT STARTED | | ~510 lines, ~95 tests |
+
+*Totals*: Phase 1 ~950 lines / ~200 tests. Phase 2 ~1,270 lines / ~250 tests. Phase 3 ~1,560 lines / ~270 tests. Grand total ~3,780 lines / ~720 tests.
+
 * 1. Phase 2: Abstract Interpretation for Narrowing
 
 ** 1.1 The Problem: Infinite Constructor Universes
