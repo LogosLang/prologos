@@ -824,3 +824,24 @@ The following collection items ARE also deferred (genuine infrastructure deps):
 - Compile `.prologos` to intermediate format, skip parse/elaborate/type-check
 - Major investment, deferred until language stabilizes
 - Source: `docs/tracking/2026-02-19_PIPE_COMPOSE_AUDIT.md`
+
+---
+
+## Surface Syntax Issues (Uncovered 2026-03-08)
+
+### Polymorphic Nullary Constructor Inference at Call Sites
+- Bare `none` and `nil` at function call sites fail type inference
+- Example: `[unwrap-or-zero none]` — `none : Option A` for any A, but
+  the checker can't infer A = Nat from the function's parameter type
+- Return type constraints don't propagate backwards through application
+- Affects all polymorphic nullary constructors (none, nil, etc.)
+- **Not blocked**: requires inference improvement (bidirectional propagation)
+- Source: `examples/unified-matching.prologos` Sections 6, 11
+
+### WS-Mode `:=` Body Parsing with $nat-literal Sentinels
+- `def x : List Nat := cons 1N [cons 2N nil]` fails in WS mode
+- The WS reader produces `($nat-literal N)` sentinels for numeric literals
+  like `1N`, and the `:=` body parser chokes on multi-form bodies containing them
+- Workaround: use quote-list syntax `'[1N 2N 3N]` instead of cons chains
+- **Not blocked**: requires WS reader / parser fix for `:=` body handling
+- Source: `examples/unified-matching.prologos` Section 5

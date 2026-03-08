@@ -1,0 +1,410 @@
+ns examples.unified-matching
+
+;; ========================================================================
+;; Unified Pattern Matching — Feature Capstone
+;; ========================================================================
+;;
+;; Prologos now has a single, unified pattern matching system. The same
+;; rich patterns work everywhere: in `match` arms, in `defn` pattern
+;; clauses, and in the new `defn f [params] | arms` syntax.
+;;
+;; Previously, match arms used flat extraction — `| suc zero -> body`
+;; treated `zero` as a variable binding, not as the zero constructor.
+;; Pattern definitions (`defn f | ...`) supported nested patterns but
+;; match arms did not.
+;;
+;; Now both share the same pipeline:
+;;   parse-single-pattern -> normalize-pattern -> compile-match-tree
+;;
+;; This means: constructor disambiguation, nested constructors, numeric
+;; literal patterns, head-tail destructuring, and wildcards all work
+;; uniformly in match arms and defn pattern clauses.
+;;
+;; This file spirals from simple patterns through advanced features,
+;; testing each new capability and showing how they compose with the
+;; rest of the language.
+
+
+;; ========================================================================
+;; 1. CONSTRUCTOR DISAMBIGUATION — zero Is a Constructor, Not a Variable
+;; ========================================================================
+;;
+;; The pattern compiler consults the constructor registry to distinguish
+;; constructors from variable bindings. When you write `| zero -> ...`,
+;; the system recognizes `zero` as the Nat constructor (not a fresh
+;; variable named "zero") because it's registered via the prelude's
+;; `deftype Nat := zero | suc Nat`.
+;;
+;; This works for ALL registered constructors: zero, true, false,
+;; nil, none, some, cons, suc, etc.
+
+;; zero matches only zero — suc values fall through to the second arm:
+defn zero? [n : Nat] : Bool
+  match n
+    | zero  -> true
+    | suc _ -> false
+
+[zero? zero]
+[zero? 1N]
+[zero? 3N]
+
+;; true/false are also disambiguated — they're Bool constructors:
+defn my-not [b : Bool] : Bool
+  match b
+    | true  -> false
+    | false -> true
+
+[my-not true]
+[my-not false]
+
+
+;; ========================================================================
+;; 2. NESTED CONSTRUCTOR PATTERNS — suc zero Means What It Says
+;; ========================================================================
+;;
+;; Before unification, `| suc zero -> ...` in a match arm parsed as
+;; a single-constructor pattern with `zero` bound as a variable.
+;;
+;; Now the pattern compiler recursively parses sub-patterns. `suc zero`
+;; becomes (pat-compound 'suc [(pat-compound 'zero [])]) — a nested
+;; constructor pattern that matches only `suc zero` (i.e., the number 1).
+
+;; Exact match on 1 (suc zero):
+defn is-one [n : Nat] : Bool
+  match n
+    | suc zero -> true
+    | _        -> false
+
+[is-one 0N]
+[is-one 1N]
+[is-one 2N]
+
+;; Deeply nested: suc [suc k] extracts the predecessor's predecessor:
+defn pred2 [n : Nat] : Nat
+  match n
+    | suc [suc k] -> k
+    | _           -> 0N
+
+[pred2 0N]
+[pred2 1N]
+[pred2 5N]
+
+
+;; ========================================================================
+;; 3. NUMERIC LITERAL PATTERNS — 0N, 1N, 2N as Patterns
+;; ========================================================================
+;;
+;; Numeric literal patterns desugar through normalize-pattern into
+;; nested constructor trees: 0N -> zero, 1N -> suc zero,
+;; 2N -> suc [suc zero], etc.
+;;
+;; This gives you readable case analysis without manually spelling out
+;; the Peano structure.
+
+defn is-zero-lit [n : Nat] : Bool
+  match n
+    | 0N -> true
+    | 1N -> false
+    | _  -> false
+
+[is-zero-lit 0N]
+[is-zero-lit 1N]
+[is-zero-lit 2N]
+
+
+;; ========================================================================
+;; 4. WILDCARD PATTERNS — _ Matches Anything
+;; ========================================================================
+;;
+;; The wildcard `_` matches any value without binding it. Essential for
+;; default/catch-all arms. The compiled decision tree generates a
+;; variable binding that's never referenced.
+
+defn always-zero [n : Nat] : Nat
+  match n
+    | _ -> 0N
+
+[always-zero 0N]
+[always-zero 42N]
+
+
+;; ========================================================================
+;; 5. HEAD-TAIL PATTERNS — [x | rest] Destructures Lists
+;; ========================================================================
+;;
+;; The pattern [x | rest] matches a non-empty list, binding x to the
+;; head and rest to the tail. It compiles through normalize-pattern
+;; into a nested cons pattern: (pat-compound 'cons [pat-x, pat-rest]).
+;;
+;; This gives you Haskell-style (x:xs) destructuring in Prologos syntax.
+
+defn my-head [xs : List Nat] : Nat
+  match xs
+    | [x | rest] -> x
+    | nil        -> 0N
+
+[my-head '[1N 2N 3N]]
+[my-head '[42N]]
+
+;; ISSUE: Constructing list data with `def xs : List Nat := cons 1N [cons 2N nil]`
+;; fails in WS mode due to $nat-literal sentinel interaction with := body parsing.
+;; The quote-list syntax '[...] works as the clean alternative.
+;;
+;; Ideal syntax (commented out — WS := body parsing issue):
+;; def sample-list : List Nat := cons 1N [cons 2N [cons 3N nil]]
+;; [my-head sample-list]
+
+
+;; ========================================================================
+;; 6. OPTION MATCHING — some/none as Patterns
+;; ========================================================================
+;;
+;; Option is defined as: deftype Option A := none | some A
+;; Both `some` and `none` are registered constructors. With unified
+;; pattern matching, you can match on them directly in match arms.
+
+defn unwrap-or-zero [opt : Option Nat] : Nat
+  match opt
+    | some v -> v
+    | none   -> 0N
+
+[unwrap-or-zero [some 42N]]
+
+;; ISSUE: Bare `none` at a call site is polymorphic (none : Option A for
+;; any A). The type checker can't infer A = Nat from the function's param
+;; type alone — return type constraints don't propagate backwards through
+;; function application. Needs explicit type annotation at the call site.
+;;
+;; Ideal syntax (commented out — inference limitation):
+;; [unwrap-or-zero none]
+
+
+;; ========================================================================
+;; 7. DEFN WITH PARAMS AND ARMS — Haskell-Style Definitions
+;; ========================================================================
+;;
+;; The new `defn f [params] | arms` syntax combines named parameters
+;; (which declare arity) with bare positional patterns in each arm.
+;; This is the Prologos equivalent of Haskell's equation-style definitions.
+;;
+;; The param list tells the compiler how many patterns each arm needs.
+;; For arity-1, all tokens before -> are grouped into one compound pattern.
+;; For arity-N, exactly N patterns are expected per arm.
+
+;; Arity-1: predecessor with params+arms
+spec my-pred Nat -> Nat
+defn my-pred [n]
+  | suc k -> k
+  | zero  -> zero
+
+[my-pred 0N]
+[my-pred 1N]
+[my-pred 5N]
+
+;; Arity-1 with nested patterns:
+spec double-pred Nat -> Nat
+defn double-pred [n]
+  | suc [suc k] -> k
+  | suc zero    -> zero
+  | zero        -> zero
+
+[double-pred 0N]
+[double-pred 1N]
+[double-pred 3N]
+[double-pred 5N]
+
+;; Arity-2: addition via params+arms
+spec my-add Nat -> Nat -> Nat
+defn my-add [m n]
+  | zero n      -> n
+  | [suc k] n2  -> suc [my-add k n2]
+
+[my-add 0N 3N]
+[my-add 2N 3N]
+[my-add 5N 5N]
+
+
+;; ========================================================================
+;; 8. SPEC + PARAMS+ARMS — The Living Interface Pattern
+;; ========================================================================
+;;
+;; In Prologos, `spec` declares the type contract and `defn` provides
+;; the implementation. With params+arms syntax, the spec/defn pair
+;; reads like a mathematical definition:
+;;
+;;   spec mult Nat -> Nat -> Nat
+;;   defn mult [m n]
+;;     | zero _      -> zero
+;;     | [suc k] n2  -> add n2 [mult k n2]
+;;
+;; The spec is the contract. The defn is the equational proof.
+;; Together they form a living interface — tested by the type checker
+;; and readable as documentation.
+
+spec my-mult Nat -> Nat -> Nat
+defn my-mult [m n]
+  | zero _      -> zero
+  | [suc k] n2  -> my-add n2 [my-mult k n2]
+
+[my-mult 0N 5N]
+[my-mult 3N 4N]
+[my-mult 2N 7N]
+
+
+;; ========================================================================
+;; 9. BOOLEAN PARAMS+ARMS — Constructor Patterns Beyond Nat
+;; ========================================================================
+;;
+;; The params+arms syntax works with any algebraic type, not just Nat.
+;; Bool's constructors (true/false) are disambiguated the same way.
+
+spec my-and Bool -> Bool -> Bool
+defn my-and [a b]
+  | true  b2 -> b2
+  | false _  -> false
+
+[my-and true true]
+[my-and true false]
+[my-and false true]
+
+
+;; ========================================================================
+;; 10. CROSS-FEATURE: MATCH INSIDE DEFN BODY
+;; ========================================================================
+;;
+;; The standard defn + match body pattern now benefits from rich match
+;; patterns. A defn body can use match with nested constructors,
+;; numeric literals, head-tail — all the same patterns as params+arms.
+;;
+;; This is how you write a function when the pattern dispatch is on an
+;; expression rather than a parameter directly.
+
+spec classify Nat -> Nat
+defn classify [n]
+  match n
+    | 0N       -> 0N
+    | 1N       -> 1N
+    | suc zero -> 1N
+    | _        -> n
+
+;; The numeric literal patterns give readable case analysis:
+[classify 0N]
+[classify 1N]
+[classify 5N]
+
+
+;; ========================================================================
+;; 11. CROSS-FEATURE: PARAMS+ARMS WITH TYPED PARAMS
+;; ========================================================================
+;;
+;; Params+arms supports full type annotations on parameters and return
+;; types. This is essential for polymorphic types like Option and List
+;; where inference needs guidance.
+
+defn safe-head [xs : List Nat] : Nat
+  | [x | rest] -> x
+  | nil         -> 0N
+
+[safe-head '[1N 2N 3N]]
+[safe-head '[42N]]
+
+;; ISSUE: Same polymorphic nullary constructor issue as Section 6.
+;; Bare `nil` can't be inferred as `List Nat` at the call site.
+;;
+;; Ideal syntax (commented out — inference limitation):
+;; [safe-head nil]
+
+;; Option with params+arms and typed params:
+defn get-or [opt : Option Nat] [default : Nat] : Nat
+  | some v  _ -> v
+  | none    d -> d
+
+[get-or [some 10N] 0N]
+
+;; ISSUE: Same as above — bare `none` needs type annotation.
+;; Ideal syntax (commented out — inference limitation):
+;; [get-or none 99N]
+
+
+;; ========================================================================
+;; 12. CROSS-FEATURE: RECURSION WITH PARAMS+ARMS
+;; ========================================================================
+;;
+;; Recursive functions with params+arms read like mathematical
+;; induction proofs — base case and inductive step.
+
+spec fib Nat -> Nat
+defn fib [n]
+  | zero        -> zero
+  | suc zero    -> suc zero
+  | suc [suc k] -> my-add [fib [suc k]] [fib k]
+
+[fib 0N]
+[fib 1N]
+[fib 2N]
+[fib 3N]
+[fib 4N]
+[fib 5N]
+[fib 6N]
+
+
+;; ========================================================================
+;; 13. CROSS-FEATURE: PIPE INTO PATTERN-MATCHED FUNCTIONS
+;; ========================================================================
+;;
+;; Functions defined with params+arms or rich match compose naturally
+;; with |> (pipe). The pattern-compiled function is just a function —
+;; the compilation is invisible to the rest of the language.
+
+0N |> suc |> suc |> my-pred
+5N |> my-pred |> my-pred
+3N |> is-one
+1N |> is-one
+
+
+;; ========================================================================
+;; 14. THE FULL PICTURE
+;; ========================================================================
+;;
+;; What we built:
+;;
+;; 1. Constructor disambiguation — zero, true, nil, none, some all
+;;    recognized as constructors in match arms (not just defn clauses)
+;;
+;; 2. Nested constructor patterns — suc zero, suc [suc k], some [suc n]
+;;    all work uniformly in match and defn
+;;
+;; 3. Numeric literal patterns — 0N, 1N, 2N desugar to nested suc/zero
+;;    for readable case analysis
+;;
+;; 4. Head-tail patterns — [x | rest] destructures lists in both
+;;    match arms and defn pattern clauses
+;;
+;; 5. Wildcard patterns — _ matches anything, anywhere
+;;
+;; 6. defn f [params] | arms — Haskell-style equational definitions
+;;    with named params declaring arity
+;;
+;; How it works:
+;;
+;;   Parser produces surf-match-patterns (new surface AST node)
+;;   -> macros.rkt compiles via compile-match-expression
+;;     -> normalize-pattern (constructor disambiguation + numeric desugar)
+;;     -> compile-match-tree (decision tree -> nested surf-reduce)
+;;   -> Downstream sees only surf-reduce — zero changes to elaborator,
+;;      type checker, or reducer
+;;
+;; The same pipeline (parse-single-pattern -> normalize-pattern ->
+;; compile-match-tree) handles BOTH match arms and defn pattern clauses.
+;; One pattern language, one compilation strategy, one source of truth.
+;;
+;; Known surface syntax issues uncovered during this capstone:
+;;
+;; ISSUE 1: Polymorphic nullary constructors (none, nil) at call sites
+;;   need explicit type annotation — inference doesn't propagate param
+;;   type constraints backwards through function application.
+;;   Example: [unwrap-or-zero none] fails; needs (the (Option Nat) none)
+;;
+;; ISSUE 2: WS-mode `def x := cons 1N [cons 2N nil]` fails due to
+;;   $nat-literal sentinel interaction with := body parsing.
+;;   Workaround: use quote-list syntax '[1N 2N 3N]
