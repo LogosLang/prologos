@@ -491,6 +491,8 @@
    (test-dep '(errors.rkt parser.rkt source-location.rkt surface-syntax.rkt) #f)
    'test-pattern-defn-01.rkt
    (test-dep '(driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt multi-dispatch.rkt namespace.rkt parser.rkt prelude.rkt pretty-print.rkt reader.rkt reduction.rkt source-location.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt typing-core.rkt) #t)
+   'test-unified-match-01.rkt
+   (test-dep '(driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt multi-dispatch.rkt namespace.rkt parser.rkt prelude.rkt pretty-print.rkt reader.rkt reduction.rkt source-location.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt typing-core.rkt) #t)
    'test-path-expressions.rkt
    (test-dep '(driver.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt multi-dispatch.rkt namespace.rkt parser.rkt prelude.rkt sexp-readtable.rkt surface-syntax.rkt syntax.rkt) #t)
    'test-perf-counters.rkt
