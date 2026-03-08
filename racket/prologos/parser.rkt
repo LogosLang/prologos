@@ -68,7 +68,7 @@
     UnionFind uf-empty uf-make-set uf-find uf-union uf-value
     ;; Relational language (Phase 7)
     defr rel solve solve-with solve-one explain explain-with solver schema selection
-    is not
+    is not all-different element cumulative minimize
     Solver Goal DerivationTree Answer
     def defn check eval infer expand expand-1 expand-full parse elaborate match
     ;; Pre-parse macros — should be expanded before reaching parser
@@ -2719,6 +2719,54 @@
           [else
            ;; 'not' is not a functional keyword — treat as application
            (parse-application head-stx args loc)])]
+
+       ;; ---- Constraint forms (Phase 3c) ----
+
+       ;; (all-different var1 var2 ...) — all variables must have distinct values
+       [(all-different)
+        (cond
+          [(current-parsing-relational-goal?)
+           (define parsed-vars (map parse-relational-goal args))
+           (define errs (filter prologos-error? parsed-vars))
+           (if (pair? errs) (car errs)
+               (surf-all-different parsed-vars loc))]
+          [else (parse-application head-stx args loc)])]
+
+       ;; (element index list-expr var) — v = xs[i]
+       [(element)
+        (cond
+          [(current-parsing-relational-goal?)
+           (or (check-arity 'element args 3 loc)
+               (let ([i (parse-relational-goal (car args))]
+                     [xs (parse-datum (cadr args))]
+                     [v (parse-relational-goal (caddr args))])
+                 (cond [(prologos-error? i) i]
+                       [(prologos-error? xs) xs]
+                       [(prologos-error? v) v]
+                       [else (surf-element i xs v loc)])))]
+          [else (parse-application head-stx args loc)])]
+
+       ;; (cumulative tasks capacity) — task scheduling
+       [(cumulative)
+        (cond
+          [(current-parsing-relational-goal?)
+           (or (check-arity 'cumulative args 2 loc)
+               (let ([tasks (parse-datum (car args))]
+                     [cap (parse-datum (cadr args))])
+                 (cond [(prologos-error? tasks) tasks]
+                       [(prologos-error? cap) cap]
+                       [else (surf-cumulative tasks cap loc)])))]
+          [else (parse-application head-stx args loc)])]
+
+       ;; (minimize cost-var) — branch-and-bound minimization
+       [(minimize)
+        (cond
+          [(current-parsing-relational-goal?)
+           (or (check-arity 'minimize args 1 loc)
+               (let ([cv (parse-relational-goal (car args))])
+                 (if (prologos-error? cv) cv
+                     (surf-minimize cv loc))))]
+          [else (parse-application head-stx args loc)])]
 
        ;; Type constructors — bare atoms
        [(Solver) (surf-solver-type loc)]

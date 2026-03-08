@@ -42,6 +42,8 @@
  interval-mul
  interval-negate
  interval-clamp-nat
+ ;; Domain operations
+ interval-remove
  ;; Search
  interval-split
  ;; Constraint propagators
@@ -172,6 +174,28 @@
 ;; Intersect with [0, +∞) to ensure Nat range.
 (define (interval-clamp-nat iv)
   (interval-merge iv interval-nat-full))
+
+;; ========================================
+;; Domain operations
+;; ========================================
+
+;; interval-remove : interval × exact-integer → interval
+;; Remove a single value from an interval (bound consistency).
+;; Only shrinks the interval if val is at a boundary (lo or hi).
+;; Interior values are NOT removed — this is sound but imprecise.
+;; For precise interior removal, a full domain representation is needed.
+(define (interval-remove iv val)
+  (cond
+    [(interval-contradiction? iv) iv]
+    [(not (interval-contains? iv val)) iv]
+    ;; val is lo → shrink from below
+    [(and (exact-integer? (interval-lo iv)) (= val (interval-lo iv)))
+     (interval (+ val 1) (interval-hi iv))]
+    ;; val is hi → shrink from above
+    [(and (exact-integer? (interval-hi iv)) (= val (interval-hi iv)))
+     (interval (interval-lo iv) (- val 1))]
+    ;; val is interior → no change (bound consistency only)
+    [else iv]))
 
 ;; ========================================
 ;; Search: splitting

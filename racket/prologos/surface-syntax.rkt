@@ -266,6 +266,9 @@
  (struct-out surf-explain) (struct-out surf-explain-with)
  ;; Narrowing (Phase 1e)
  (struct-out surf-narrow)
+ ;; Constraints (Phase 3c)
+ (struct-out surf-all-different) (struct-out surf-element)
+ (struct-out surf-cumulative) (struct-out surf-minimize)
  (struct-out surf-schema) (struct-out surf-solver)
  ;; Relational type constructors
  (struct-out surf-solver-type) (struct-out surf-goal-type)
@@ -930,6 +933,15 @@
 ;; rhs: surf-expr (the target value)
 ;; vars: (listof symbol) — the ?-prefixed variables found in lhs/rhs
 (struct surf-narrow           (lhs rhs vars srcloc) #:transparent)
+;; ---- Constraint forms (Phase 3c) ----
+;; all-different [?x ?y ?z]: all variables must have distinct values
+(struct surf-all-different    (vars srcloc) #:transparent)
+;; element ?i xs ?v: v = xs[i] (array element constraint)
+(struct surf-element          (index list-expr var srcloc) #:transparent)
+;; cumulative tasks cap: task scheduling with capacity bound
+(struct surf-cumulative       (tasks capacity srcloc) #:transparent)
+;; :minimize ?cost: branch-and-bound minimization
+(struct surf-minimize         (cost-var srcloc) #:transparent)
 ;; Schema: schema name :field Type ...
 (struct surf-schema           (name fields srcloc) #:transparent)
 ;; Solver: solver name :key val ...

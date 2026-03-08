@@ -206,6 +206,8 @@
  (struct-out expr-solve) (struct-out expr-solve-with) (struct-out expr-solve-one) (struct-out expr-goal-type)
  (struct-out expr-explain) (struct-out expr-explain-with)
  (struct-out expr-solver-config) (struct-out expr-solver-type)
+ (struct-out expr-all-different) (struct-out expr-element)
+ (struct-out expr-cumulative) (struct-out expr-minimize)
  (struct-out expr-answer-type) (struct-out expr-derivation-type)
  (struct-out expr-cut) (struct-out expr-guard)
  ;; Int (arbitrary-precision integers)
@@ -781,6 +783,11 @@
 ;; Solver config (2)
 (struct expr-solver-config (config-map) #:transparent)          ; solver configuration value
 (struct expr-solver-type () #:transparent)                      ; type constructor Solver
+;; Constraint forms (Phase 3c) (4)
+(struct expr-all-different (var-names) #:transparent)            ; all-different constraint
+(struct expr-element (index-name list-val var-name) #:transparent) ; element constraint v=xs[i]
+(struct expr-cumulative (tasks capacity) #:transparent)          ; cumulative scheduling constraint
+(struct expr-minimize (cost-var-name) #:transparent)             ; BB-min cost variable
 ;; Answer + Provenance (2)
 (struct expr-answer-type (val-type) #:transparent)              ; type constructor Answer V
 (struct expr-derivation-type () #:transparent)                  ; type constructor DerivationTree

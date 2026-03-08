@@ -2385,6 +2385,12 @@
     [(expr-narrow func args target vars)
      (run-narrowing func args target vars)]
 
+    ;; Constraint forms (Phase 3c) — pass through (consumed by solve dispatch)
+    [(expr-all-different _) e]
+    [(expr-element _ _ _) e]
+    [(expr-cumulative _ _) e]
+    [(expr-minimize _) e]
+
     ;; Union types: pass through (types don't reduce)
     [(expr-union _ _) e]
 

@@ -2514,6 +2514,59 @@
              [(prologos-error? eg) eg]
              [else (expr-explain-with es (or eo #f) eg)]))]
 
+    ;; ---- Constraint forms (Phase 3c) ----
+
+    ;; all-different — all variables must have distinct values
+    [(surf-all-different vars loc)
+     (define elab-vars
+       (for/list ([v (in-list vars)])
+         (parameterize ([current-relational-fallback? #t])
+           (elaborate v env depth))))
+     (define errs (filter prologos-error? elab-vars))
+     (cond
+       [(pair? errs) (car errs)]
+       [else
+        (define var-names
+          (for/list ([ev (in-list elab-vars)])
+            (if (expr-logic-var? ev) (expr-logic-var-name ev)
+                (gensym 'ad))))
+        (expr-all-different var-names)])]
+
+    ;; element — v = xs[i]
+    [(surf-element index list-expr var loc)
+     (define ei (parameterize ([current-relational-fallback? #t])
+                  (elaborate index env depth)))
+     (define exs (elaborate list-expr env depth))
+     (define ev (parameterize ([current-relational-fallback? #t])
+                  (elaborate var env depth)))
+     (cond
+       [(prologos-error? ei) ei]
+       [(prologos-error? exs) exs]
+       [(prologos-error? ev) ev]
+       [else
+        (define i-name (if (expr-logic-var? ei) (expr-logic-var-name ei) (gensym 'ei)))
+        (define v-name (if (expr-logic-var? ev) (expr-logic-var-name ev) (gensym 'ev)))
+        (expr-element i-name exs v-name)])]
+
+    ;; cumulative — task scheduling
+    [(surf-cumulative tasks capacity loc)
+     (define et (elaborate tasks env depth))
+     (define ec (elaborate capacity env depth))
+     (cond
+       [(prologos-error? et) et]
+       [(prologos-error? ec) ec]
+       [else (expr-cumulative et ec)])]
+
+    ;; minimize — BB-min cost variable
+    [(surf-minimize cost-var loc)
+     (define ecv (parameterize ([current-relational-fallback? #t])
+                   (elaborate cost-var env depth)))
+     (cond
+       [(prologos-error? ecv) ecv]
+       [else
+        (define cv-name (if (expr-logic-var? ecv) (expr-logic-var-name ecv) (gensym 'cost)))
+        (expr-minimize cv-name)])]
+
     ;; narrow — functional-logic narrowing: [f ?x ?y] = target
     ;; ?-prefixed variables are bound as logic variables in the env before
     ;; elaborating sub-expressions. The LHS must be a function application;

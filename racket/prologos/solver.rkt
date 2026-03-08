@@ -34,6 +34,9 @@
  solver-config-narrow-value-order
  solver-config-narrow-search
  solver-config-narrow-iterative
+ ;; Narrowing constraints (Phase 3c)
+ solver-config-narrow-constraints
+ solver-config-narrow-minimize
  ;; Merge
  solver-config-merge
  ;; Validation
@@ -54,7 +57,8 @@
 
 (define valid-solver-keys
   '(execution threshold strategy tabling provenance timeout
-    narrow-value-order narrow-search narrow-iterative))
+    narrow-value-order narrow-search narrow-iterative
+    narrow-constraints narrow-minimize))
 
 (define (valid-solver-key? k)
   (memq k valid-solver-keys))
@@ -69,7 +73,9 @@
           'timeout    #f
           'narrow-value-order 'source-order
           'narrow-search      'all
-          'narrow-iterative   #f))
+          'narrow-iterative   #f
+          'narrow-constraints '()
+          'narrow-minimize    #f))
 
 ;; ========================================
 ;; Construction
@@ -122,6 +128,13 @@
 
 (define (solver-config-narrow-iterative cfg)
   (solver-config-get cfg 'narrow-iterative #f))
+
+;; Narrowing constraints (Phase 3c)
+(define (solver-config-narrow-constraints cfg)
+  (solver-config-get cfg 'narrow-constraints '()))
+
+(define (solver-config-narrow-minimize cfg)
+  (solver-config-get cfg 'narrow-minimize #f))
 
 ;; ========================================
 ;; Merge

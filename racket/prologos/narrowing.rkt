@@ -40,6 +40,8 @@
          "interval-domain.rkt"
          "narrowing-abstract.rkt"
          "search-heuristics.rkt"
+         "global-constraints.rkt"
+         "bb-optimization.rkt"
          "macros.rkt"
          "global-env.rkt")
 
@@ -563,9 +565,14 @@
            (define search-cfg (current-narrow-search-config))
            (define counter (make-solution-counter
                             (narrow-search-config-search-mode search-cfg)))
+           ;; Phase 3c: Global constraints and BB optimization
+           (define constraints (current-narrow-constraints))
+           (define bb (current-bb-state))
            ;; Build the core search function (takes fuel, returns solutions)
            (define (do-search f)
-             (parameterize ([current-narrow-intervals initial-intervals])
+             (parameterize ([current-narrow-intervals initial-intervals]
+                            [current-narrow-constraints constraints]
+                            [current-bb-state bb])
                (narrow-dt-search dt initial-bindings func-name
                                 target-norm (hasheq) 0 f counter)))
            ;; Run search: iterative deepening or fixed fuel
@@ -573,8 +580,17 @@
              (if (narrow-search-config-iterative? search-cfg)
                  (iterative-deepening-search do-search fuel)
                  (do-search fuel)))
+           ;; Phase 3c: update BB bound for each solution found
+           (when bb
+             (for ([sol (in-list raw-solutions)])
+               (bb-update-bound! bb sol)))
+           ;; Phase 3c: filter to optimal solutions if BB active
+           (define filtered-solutions
+             (if bb
+                 (bb-filter-optimal raw-solutions bb)
+                 raw-solutions))
            ;; Project and resolve variable names from solutions
-           (for/list ([sol (in-list raw-solutions)])
+           (for/list ([sol (in-list filtered-solutions)])
              (for/hasheq ([vn (in-list var-names)])
                (values vn (narrow-resolve-val sol vn))))])])]))
 
@@ -696,9 +712,28 @@
                                                  (- (interval-hi var-iv) 1)))])
                                (hash-set (current-narrow-intervals) sub-name sub-iv))
                              (current-narrow-intervals)))
-                       (parameterize ([current-narrow-intervals new-intervals])
-                         (narrow-dt-search child-tree new-bindings func-name
-                                          target new-subst depth fuel counter))]))
+                       ;; Phase 3c: forward-check constraints
+                       (define active-constraints (current-narrow-constraints))
+                       (define fc-result
+                         (if (null? active-constraints)
+                             (list new-subst active-constraints new-intervals)
+                             (forward-check new-subst active-constraints new-intervals)))
+                       (cond
+                         [(not fc-result) '()]  ;; constraint violation → prune
+                         [else
+                          (define fc-subst (car fc-result))
+                          (define fc-constraints (cadr fc-result))
+                          (define fc-intervals (caddr fc-result))
+                          ;; Phase 3c: BB pruning
+                          (define bb (current-bb-state))
+                          (cond
+                            [(and bb (bb-should-prune? bb fc-intervals)) '()]
+                            [else
+                             (parameterize ([current-narrow-intervals fc-intervals]
+                                            [current-narrow-constraints fc-constraints]
+                                            [current-bb-state bb])
+                               (narrow-dt-search child-tree new-bindings func-name
+                                                target fc-subst depth fuel counter))])])]))
                   ordered-children
                   counter)])]
 
@@ -721,7 +756,27 @@
         ;; Substitute bvar references in RHS with binding values
         (define result (narrow-subst-bvars rhs bindings 0))
         ;; Match result against target
-        (narrow-match result target subst func-name depth)]
+        (define raw-solutions (narrow-match result target subst func-name depth))
+        ;; Phase 3c: post-match constraint checking
+        ;; Variables may be bound during matching (not just enumeration),
+        ;; so we must verify constraints on the complete solutions.
+        (define active-constraints (current-narrow-constraints))
+        (if (null? active-constraints)
+            raw-solutions
+            (filter-map
+             (lambda (sol)
+               ;; Fully resolve all variable values through the substitution
+               ;; chain before constraint checking.  The raw subst may map
+               ;; 'x -> (expr-suc (expr-logic-var 'suc0_123 'free)) with
+               ;; 'suc0_123 -> ... elsewhere; resolve-var in global-constraints
+               ;; only follows top-level logic-var chains, missing nested ones.
+               (define resolved-sol
+                 (for/hasheq ([(k v) (in-hash sol)])
+                   (values k (narrow-resolve-expr sol v))))
+               (define fc-result
+                 (forward-check resolved-sol active-constraints (current-narrow-intervals)))
+               (and fc-result (car fc-result)))
+             raw-solutions))]
 
        [(dt-or branches)
         ;; Phase 2c: confluence classification determines search optimality.

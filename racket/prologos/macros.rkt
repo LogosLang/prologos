@@ -7648,6 +7648,16 @@
     ;; Narrowing expression — expand sub-expressions (Phase 1e)
     [(surf-narrow lhs rhs vars loc)
      (surf-narrow (expand-expression lhs) (expand-expression rhs) vars loc)]
+    ;; Constraint forms — expand sub-expressions (Phase 3c)
+    [(surf-all-different vars loc)
+     (surf-all-different (map expand-expression vars) loc)]
+    [(surf-element index list-expr var loc)
+     (surf-element (expand-expression index) (expand-expression list-expr)
+                   (expand-expression var) loc)]
+    [(surf-cumulative tasks capacity loc)
+     (surf-cumulative (expand-expression tasks) (expand-expression capacity) loc)]
+    [(surf-minimize cost-var loc)
+     (surf-minimize (expand-expression cost-var) loc)]
     ;; Leaf forms — pass through
     [_ surf]))
 
