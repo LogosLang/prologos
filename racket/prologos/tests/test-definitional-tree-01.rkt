@@ -482,3 +482,88 @@
   (check-pred dt-branch? tree)
   (check-equal? (dt-branch-type-name tree) 'Unit)
   (check-false (def-tree-has-exempt? tree)))
+
+;; ========================================
+;; E. Pattern-compiled defn → DT extraction
+;; ========================================
+;; Verify that defn with pattern clauses (| [patterns...] -> body)
+;; produces the same DT structures as hand-written match.
+
+(test-case "dt/pattern-defn-add"
+  ;; Pattern-compiled add: two-arg, match on first
+  (define tree
+    (extract-tree-for
+     'addp-dt
+     (string-append
+      "(spec addp-dt Nat -> Nat -> Nat)\n"
+      "(defn addp-dt ($pipe (zero n) -> n)"
+      " ($pipe ((suc m) n) -> (suc (addp-dt m n))))")))
+  (check-pred dt-branch? tree)
+  (check-equal? (dt-branch-position tree) 0)
+  (check-equal? (dt-branch-type-name tree) 'Nat)
+  (define children (dt-branch-children tree))
+  (check-equal? (length children) 2)
+  (check-pred dt-rule? (cdr (assq 'zero children)))
+  (check-pred dt-rule? (cdr (assq 'suc children)))
+  (check-false (def-tree-has-exempt? tree)))
+
+(test-case "dt/pattern-defn-not"
+  ;; Bool negation via pattern clauses
+  (define tree
+    (extract-tree-for
+     'notp-dt
+     "(defn notp-dt ($pipe (true) -> false) ($pipe (false) -> true))"))
+  (check-pred dt-branch? tree)
+  (check-equal? (dt-branch-position tree) 0)
+  (check-equal? (dt-branch-type-name tree) 'Bool)
+  (check-equal? (length (dt-branch-children tree)) 2)
+  (check-false (def-tree-has-exempt? tree)))
+
+(test-case "dt/pattern-defn-is-zero"
+  ;; is-zero: constructor + variable catch-all
+  (define tree
+    (extract-tree-for
+     'iz-dt
+     "(defn iz-dt ($pipe (zero) -> true) ($pipe (n) -> false))"))
+  (check-pred dt-branch? tree)
+  (check-equal? (dt-branch-position tree) 0)
+  (check-equal? (dt-branch-type-name tree) 'Nat))
+
+(test-case "dt/pattern-defn-wildcard"
+  ;; Wildcard _ pattern
+  (define tree
+    (extract-tree-for
+     'wild-dt
+     "(defn wild-dt ($pipe (_) -> zero))"))
+  ;; Wildcard compiles to a match with variable — no expr-reduce
+  ;; because it's a catch-all with no constructor dispatch.
+  ;; The function body is just a let binding, no match tree.
+  ;; So no DT is extracted.
+  (check-false tree))
+
+(test-case "dt/pattern-defn-ws-add"
+  ;; WS-mode pattern-compiled add
+  (define tree
+    (extract-tree-ws
+     'addp-ws-dt
+     (string-append
+      "ns test\n\n"
+      "spec addp-ws-dt Nat -> Nat -> Nat\n"
+      "defn addp-ws-dt\n"
+      "  | [zero n] -> n\n"
+      "  | [[suc m] n] -> suc [addp-ws-dt m n]\n")))
+  (check-pred dt-branch? tree)
+  (check-equal? (dt-branch-position tree) 0)
+  (check-equal? (dt-branch-type-name tree) 'Nat)
+  (check-equal? (length (dt-branch-children tree)) 2)
+  (check-false (def-tree-has-exempt? tree)))
+
+(test-case "dt/pattern-defn-ws-not"
+  ;; WS-mode pattern-compiled Bool negation
+  (define tree
+    (extract-tree-ws
+     'notp-ws-dt
+     "ns test\n\ndefn notp-ws-dt\n  | [true] -> false\n  | [false] -> true\n"))
+  (check-pred dt-branch? tree)
+  (check-equal? (dt-branch-type-name tree) 'Bool)
+  (check-false (def-tree-has-exempt? tree)))
