@@ -32,12 +32,13 @@ except that 0-CFA (Phase 3a) builds on the narrowing propagator from Phase 1c.
 * Progress Tracker
 
 | Phase | Sub-phase | Description | Status | Commit | Notes |
-|-------+-----------+-------------------------------------------+-------------+--------+-------|
-| 1 | 1a | Definitional Tree Extraction | NOT STARTED | | Prereq for all Phase 2-3 |
-| 1 | 1b | Term Lattice | NOT STARTED | | |
-| 1 | 1c | Narrowing Propagator | NOT STARTED | | |
-| 1 | 1d | Solver Integration | NOT STARTED | | |
-| 1 | 1e | WS-Mode Syntax (=?= variables, ==\==) | NOT STARTED | | |
+|-------+-----------+-------------------------------------------+-------------+------------+-------|
+| 1 | 1a | Definitional Tree Extraction | COMPLETE | =99e56a8= | =definitional-tree.rkt= ~200 lines, 39 tests |
+| 1 | 1a+ | Pattern defn → DT integration | COMPLETE | =3bd6cc8= | Verified: pattern clauses produce correct DTs |
+| 1 | 1b | Term Lattice | NOT STARTED | | =term-lattice.rkt= ~150 lines |
+| 1 | 1c | Narrowing Propagator | NOT STARTED | | =narrowing.rkt= ~300 lines |
+| 1 | 1d | Solver Integration | NOT STARTED | | =relations.rkt=, =solver.rkt= ~200 lines |
+| 1 | 1e | WS-Mode Syntax (=?= variables, ==\==) | NOT STARTED | | parser, WS reader ~100 lines |
 | 2 | 2a | Interval Abstract Domain | NOT STARTED | | ~530 lines, ~105 tests |
 | 2 | 2a+ | Length-Interval Domain (List/String) | NOT STARTED | | Future enhancement |
 | 2 | 2b | Size-Based Termination (LJBA) | NOT STARTED | | ~390 lines, ~80 tests |

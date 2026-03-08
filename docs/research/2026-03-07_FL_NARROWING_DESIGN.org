@@ -27,19 +27,7 @@ The document covers:
    constructors)
 7. A phased implementation roadmap (Phases 1--3)
 
-* Progress Tracker
-
-| Phase | Sub-phase | Description | Status | Commit | Notes |
-|-------+-----------+---------------------------------+-------------+--------+-------|
-| 1 | 1a | Definitional Tree Extraction | COMPLETE | =99e56a8= | =definitional-tree.rkt= ~200 lines, 33 tests |
-| 1 | 1b | Term Lattice | NOT STARTED | | =term-lattice.rkt= ~150 lines |
-| 1 | 1c | Narrowing Propagator | NOT STARTED | | =narrowing.rkt= ~300 lines |
-| 1 | 1d | Solver Integration | NOT STARTED | | =relations.rkt=, =solver.rkt= ~200 lines |
-| 1 | 1e | WS-Mode Syntax (=?= vars, ==\==) | NOT STARTED | | parser, WS reader ~100 lines |
-
-*Totals*: ~950 lines source, ~200 tests, 3 new files + 2 modified.
-
-*Companion document*: Phases 2--3 in =2026-03-07_NARROWING_ABSTRACT_INTERPRETATION_DESIGN.org=.
+*Implementation tracking*: See companion document =2026-03-07_NARROWING_ABSTRACT_INTERPRETATION_DESIGN.org=.
 
 * 1. Motivation: The defn/defr Divide
 
