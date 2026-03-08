@@ -210,19 +210,23 @@ def-private     = 'def-' , identifier , def-body ;
 (* 3.2 Function Definition (defn)                   *)
 (* ------------------------------------------------ *)
 
-(* defn is sugar for def + fn. Supports multi-arity and pattern dispatch
-   via | separator. Pattern clauses use -> between param patterns and body.
-   Arity clauses use typed params with optional return annotation.
+(* defn is sugar for def + fn. Supports multi-arity, pattern dispatch
+   via | separator, and params+patterns syntax. Pattern clauses use ->
+   between param patterns and body. Arity clauses use typed params with
+   optional return annotation.
    Within a single arity group, all clauses must be the same kind. *)
 defn-form       = 'defn' , identifier , defn-sig , defn-clauses ;
 defn-sig        = [ ':' , type-expr ]              (* optional inline type *)
                 | (* empty — rely on separate spec *)
                 ;
 defn-clauses    = defn-clause , { '|' , defn-clause }  (* multi-clause *)
+                | param-list , [ return-annot ] , defn-pattern-arms  (* params+patterns *)
                 ;
 defn-clause     = param-list , [ return-annot ] , expr  (* arity clause *)
                 | pattern-list , '->' , expr            (* pattern clause *)
                 ;
+(* params+patterns: defn f [params] [: RetType] | pat... -> body | ... *)
+defn-pattern-arms = { '|' , match-pattern , '->' , expr } ;
 param-list      = '[' , { param } , ']' ;
 param           = identifier                       (* bare param *)
                 | identifier , ':' , type-expr     (* typed param *)
@@ -667,52 +671,45 @@ fn-binder       = '(' , identifier , [ ':' , type-expr ] , ')'  (* typed *)
 (* 5.8 Pattern Matching                             *)
 (* ------------------------------------------------ *)
 
-(* match is the primary pattern matching form. Uses | for arm separation. *)
+(* match is the primary pattern matching form. Uses | for arm separation.
+   match arms support the same rich patterns as defn pattern clauses:
+   nested constructor patterns, numeric literals, head-tail, wildcards.
+   Constructor names are disambiguated via the constructor registry. *)
 match-expr      = 'match' , expr , match-arms ;
 match-arms      = { match-arm } ;
-match-arm       = '|' , pattern , '->' , expr ;
-
-(* reduce is the lower-level elimination form *)
-reduce-expr     = 'reduce' , expr , reduce-arms ;
-reduce-body     = expr , reduce-arms ;
-reduce-arms     = { reduce-arm } ;
-reduce-arm      = '(' , pattern , '->' , expr , ')'    (* sexp mode *)
-                | '|' , pattern , '->' , expr          (* WS mode *)
-                ;
+match-arm       = '|' , match-pattern , '->' , expr ;
 
 (* ------------------------------------------------ *)
 (* 5.9 Patterns                                     *)
 (* ------------------------------------------------ *)
 
+(* Unified pattern language shared by match arms and defn pattern clauses.
+   Constructor names (zero, true, nil, suc, some, etc.) are recognized via
+   the constructor registry and treated as constructor patterns. Unknown
+   names become variable bindings. Patterns compile to decision trees via
+   compile-match-tree. *)
+
 (* Pattern list for defn pattern clauses: outer brackets wrap argument patterns *)
-pattern-list    = '[' , { defn-pattern } , ']' ;
-defn-pattern    = identifier                       (* variable binding or nullary ctor *)
+pattern-list    = '[' , { match-pattern } , ']' ;
+
+(* Single match pattern — used in both match arms and defn pattern clauses *)
+match-pattern   = identifier                       (* variable binding or nullary ctor *)
                 | wildcard                         (* _ discard *)
                 | nat-literal                      (* numeric pattern 0N, 1N, etc. *)
-                | '[' , defn-pattern , { defn-pattern } , ']'  (* compound ctor pattern *)
-                | '[' , defn-pattern , { defn-pattern } , '|' , defn-pattern , ']'
+                | identifier , { match-pattern }   (* compound ctor: suc zero, suc [suc k] *)
+                | '[' , match-pattern , { match-pattern } , ']'  (* bracketed compound *)
+                | '[' , match-pattern , { match-pattern } , '|' , match-pattern , ']'
                                                    (* head-tail list pattern *)
                 ;
 
-(* Patterns in match/reduce arms *)
-pattern         = pat-atom , { pat-atom } ;        (* constructor + bindings *)
+(* Head-tail list pattern: [a b | rest] → desugars to nested cons *)
+head-tail-pat   = match-pattern , { match-pattern } , '|' , match-pattern ;
 
-pat-atom        = identifier                       (* variable binding or nullary ctor *)
-                | wildcard                         (* _ discard *)
-                | nat-literal                      (* numeric pattern *)
-                | 'zero' | 'true' | 'false'       (* builtin constructors *)
-                | 'nil' | 'unit' | 'refl'
-                | 'none' | 'datum-nil'
-                | '[' , pattern , ']'              (* nested/grouped pattern *)
-                ;
-
-(* Head-tail list pattern in match arms: [a b | rest] → desugars to nested cons *)
-head-tail-pat   = pat-atom , { pat-atom } , '|' , pat-atom ;
-
-(* Note: Constructor patterns are distinguished from variable bindings
-   contextually — known constructors (from data declarations in scope)
-   are treated as patterns; unknown names become variable bindings.
-   Head-tail patterns [a b | rest] desugar to cons(a, cons(b, rest)). *)
+(* Note: In WS mode with arity-1 match or defn, bare forms like
+   suc zero are grouped into a single compound pattern (suc zero).
+   For arity > 1, each form maps to one positional pattern argument.
+   Use brackets for compound patterns in multi-argument positions:
+     defn add [m n] | zero n -> n | [suc m'] n' -> suc [add m' n']  *)
 
 (* ------------------------------------------------ *)
 (* 5.10 Conditional (if)                            *)
@@ -1211,8 +1208,8 @@ sexp-form       = '(' , 'ns' , module-path , [ ns-options ] , ')'
                 | '(' , expr , { expr } , ')'      (* application *)
                 ;
 
-sexp-match-arm  = '(' , pattern , '->' , expr , ')' ;
-sexp-reduce-arm = '(' , pattern , '->' , expr , ')' ;
+sexp-match-arm  = '(' , match-pattern , '->' , expr , ')' ;
+sexp-reduce-arm = '(' , match-pattern , '->' , expr , ')' ;
 sexp-let-binding = '(' , identifier , [ ':' , type-expr ] , expr , ')' ;
 
 

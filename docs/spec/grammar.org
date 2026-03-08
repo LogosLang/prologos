@@ -432,18 +432,37 @@ fn x [suc x]
 
 ** Pattern Matching
 
-=match= is the primary pattern matching form, using =|= for arm separation:
+=match= is the primary pattern matching form, using =|= for arm separation.
+Match arms support the same rich pattern language as =defn= pattern clauses:
+nested constructor patterns, numeric literals, head-tail, and wildcards.
+Constructor names are disambiguated via the constructor registry.
 
 #+begin_src grammar
-match-expr ::= 'match' scrutinee match-arm+
-match-arm  ::= '|' pattern '->' body
+match-expr    ::= 'match' scrutinee match-arm+
+match-arm     ::= '|' match-pattern '->' body
+match-pattern ::= identifier | wildcard | nat-literal
+               |  identifier match-pattern+          (* compound: suc zero *)
+               |  '[' match-pattern+ ']'             (* bracketed compound *)
+               |  '[' match-pattern+ '|' match-pattern ']'  (* head-tail *)
 #+end_src
 
 #+begin_src prologos
-;; Match on Nat
+;; Match on Nat — zero is recognized as constructor
 match n
   | zero  -> zero
   | suc k -> add k k
+
+;; Nested constructor pattern: suc zero (zero is ctor, not variable)
+match n
+  | suc zero    -> true    ;; matches exactly 1N
+  | suc [suc k] -> false   ;; matches >= 2N, binds k
+  | zero        -> true    ;; matches 0N
+
+;; Numeric literal patterns
+match n
+  | 0N -> true
+  | 1N -> false
+  | _  -> false
 
 ;; Match on Bool
 match b
@@ -473,7 +492,9 @@ Available patterns:
 - *Wildcard*: =_= -- matches anything, discards
 - *Constructor*: =zero=, =suc k=, =nil=, =cons a as=, =true=, =false=,
   =none=, =some v=, =ok v=, =err e=, =datum-nil=, =datum-cons h t=, etc.
-- *Nested*: =[cons x nil]= -- grouped pattern in brackets
+- *Nested constructor*: =suc zero=, =suc [suc k]= -- nested ctor patterns,
+  constructors are distinguished from variables via the constructor registry
+- *Bracketed*: =[cons x nil]= -- grouped pattern in brackets
 - *Head-tail*: =[a b | rest]= -- Prolog/Erlang-style list destructuring,
   desugars to nested =cons= matching: =cons a (cons b rest)=
 - *Numeric*: =0N=, =1N=, =42N= -- Nat literal patterns, desugar to
@@ -809,6 +830,24 @@ defn fact
 defn add
   | [zero n]    -> n
   | [[suc m] n] -> suc [add m n]
+
+;; Params+patterns: named params declare arity, bare positional patterns
+;; Arity 1: all forms before -> grouped into one pattern
+defn pred [n]
+  | suc zero    -> zero
+  | suc [suc k] -> suc k
+  | zero        -> zero
+
+;; Arity 2: each bare form is one pattern argument
+;; Use brackets for compound patterns in multi-arg positions
+defn add2 [m n]
+  | zero n      -> n
+  | [suc m'] n' -> suc [add2 m' n']
+
+;; Typed params + return type with patterns
+defn safe-head [xs : List Nat] : Option Nat
+  | [x | rest] -> some x
+  | nil        -> none
 
 ;; Head-tail list patterns: [head1 head2 | rest]
 ;; Desugars to nested cons matching.
