@@ -37,7 +37,7 @@ except that 0-CFA (Phase 3a) builds on the narrowing propagator from Phase 1c.
 | 1 | 1a+ | Pattern defn → DT integration | ✅ | =3bd6cc8= | Verified: pattern clauses produce correct DTs |
 | 1 | 1b | Term Lattice | ✅ | =4a7e215= | =term-lattice.rkt= 226 lines, 49 tests |
 | 1 | 1c | Narrowing Propagator | ✅ | =77f4a5d= | =narrowing.rkt= 275 lines, 31 tests |
-| 1 | 1d | Solver Integration | ⬚ | | =relations.rkt=, =solver.rkt= ~200 lines |
+| 1 | 1d | Solver Integration | ✅ | =36831ed= | =narrowing.rkt= +400 lines, =reduction.rkt= +30, =elaborator.rkt= +15; 22+24 tests |
 | 1 | 1e | WS-Mode Syntax (=?= variables, ==\==) | ✅ | =3062b4c= | 13 files, 24 tests; syntax pipeline only |
 | 2 | 2a | Interval Abstract Domain | ⬚ | | ~530 lines, ~105 tests |
 | 2 | 2a+ | Length-Interval Domain (List/String) | ⬚ | | Future enhancement |
