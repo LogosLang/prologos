@@ -189,7 +189,9 @@
    (test-dep '(capability-inference.rkt driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt multi-dispatch.rkt namespace.rkt parser.rkt prelude.rkt pretty-print.rkt source-location.rkt surface-syntax.rkt syntax.rkt type-lattice.rkt) #t)
    'test-capability-08.rkt
    (test-dep '(cap-type-bridge.rkt capability-inference.rkt driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt multi-dispatch.rkt namespace.rkt parser.rkt prelude.rkt pretty-print.rkt propagator.rkt source-location.rkt surface-syntax.rkt syntax.rkt type-lattice.rkt) #t)
-   'test-char-string.rkt
+   'test-char-string-01.rkt
+   (test-dep '(driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parser.rkt prelude.rkt pretty-print.rkt reader.rkt reduction.rkt source-location.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt typing-core.rkt) #t)
+   'test-char-string-02.rkt
    (test-dep '(driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parser.rkt prelude.rkt pretty-print.rkt reader.rkt reduction.rkt source-location.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt typing-core.rkt) #t)
    'test-coercion-warnings.rkt
    (test-dep '(driver.rkt global-env.rkt posit-impl.rkt prelude.rkt syntax.rkt) #f)
@@ -231,7 +233,9 @@
    (test-dep '(definitional-tree.rkt macros.rkt syntax.rkt) #t)
    'test-term-lattice-01.rkt
    (test-dep '(term-lattice.rkt) #f)
-   'test-dot-access.rkt
+   'test-dot-access-01.rkt
+   (test-dep '(macros.rkt reader.rkt) #f)
+   'test-dot-access-02.rkt
    (test-dep '(driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parser.rkt prelude.rkt pretty-print.rkt reader.rkt reduction.rkt source-location.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt typing-core.rkt) #t)
    'test-effect-bridge-01.rkt
    (test-dep '(effect-bridge.rkt effect-position.rkt propagator.rkt sessions.rkt session-lattice.rkt syntax.rkt) #f)
@@ -371,7 +375,9 @@
    (test-dep '(driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt multi-dispatch.rkt namespace.rkt parser.rkt prelude.rkt pretty-print.rkt source-location.rkt surface-syntax.rkt syntax.rkt) #t)
    'test-implicit-inference.rkt
    (test-dep '(driver.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt) #t)
-   'test-implicit-map.rkt
+   'test-implicit-map-01.rkt
+   (test-dep '(macros.rkt) #f)
+   'test-implicit-map-02.rkt
    (test-dep '(driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parser.rkt prelude.rkt pretty-print.rkt reader.rkt reduction.rkt source-location.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt typing-core.rkt) #t)
    'test-inductive.rkt
    (test-dep '(prelude.rkt reduction.rkt substitution.rkt syntax.rkt typing-core.rkt) #f)
@@ -453,6 +459,8 @@
    (test-dep '(elaborator.rkt global-env.rkt namespace.rkt prelude.rkt source-location.rkt surface-syntax.rkt syntax.rkt) #f)
    'test-narrow-syntax-01.rkt
    (test-dep '(driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parser.rkt prelude.rkt pretty-print.rkt reader.rkt reduction.rkt source-location.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt typing-core.rkt) #t)
+   'test-narrow-syntax-02.rkt
+   (test-dep '(driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parser.rkt prelude.rkt pretty-print.rkt reader.rkt reduction.rkt source-location.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt typing-core.rkt) #t)
    'test-confluence-01.rkt
    (test-dep '(confluence-analysis.rkt definitional-tree.rkt driver.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt multi-dispatch.rkt narrowing.rkt namespace.rkt prelude.rkt syntax.rkt trait-resolution.rkt) #t)
    'test-termination-01.rkt
@@ -461,6 +469,8 @@
    (test-dep '(definitional-tree.rkt macros.rkt narrowing.rkt propagator.rkt syntax.rkt term-lattice.rkt) #f)
    'test-narrowing-search-01.rkt
    (test-dep '(definitional-tree.rkt driver.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt narrowing.rkt namespace.rkt prelude.rkt reduction.rkt syntax.rkt trait-resolution.rkt) #t)
+   'test-narrowing-search-02.rkt
+   (test-dep '(definitional-tree.rkt driver.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt narrowing.rkt namespace.rkt prelude.rkt reduction.rkt syntax.rkt trait-resolution.rkt) #t)
    'test-interval-domain-01.rkt
    (test-dep '(definitional-tree.rkt driver.rkt errors.rkt global-env.rkt interval-domain.rkt macros.rkt metavar-store.rkt narrowing.rkt narrowing-abstract.rkt namespace.rkt prelude.rkt reduction.rkt syntax.rkt trait-resolution.rkt) #t)
    'test-search-heuristics-01.rkt
@@ -468,6 +478,8 @@
    'test-global-constraints-01.rkt
    (test-dep '(bb-optimization.rkt definitional-tree.rkt driver.rkt errors.rkt global-constraints.rkt global-env.rkt interval-domain.rkt macros.rkt metavar-store.rkt narrowing.rkt namespace.rkt prelude.rkt solver.rkt syntax.rkt trait-resolution.rkt) #t)
    'test-cfa-analysis-01.rkt
+   (test-dep '(bb-optimization.rkt cfa-analysis.rkt definitional-tree.rkt driver.rkt errors.rkt global-constraints.rkt global-env.rkt macros.rkt metavar-store.rkt narrowing.rkt namespace.rkt prelude.rkt search-heuristics.rkt solver.rkt syntax.rkt trait-resolution.rkt) #t)
+   'test-cfa-analysis-02.rkt
    (test-dep '(bb-optimization.rkt cfa-analysis.rkt definitional-tree.rkt driver.rkt errors.rkt global-constraints.rkt global-env.rkt macros.rkt metavar-store.rkt narrowing.rkt namespace.rkt prelude.rkt search-heuristics.rkt solver.rkt syntax.rkt trait-resolution.rkt) #t)
    'test-native-collection-ops.rkt
    (test-dep '(driver.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt multi-dispatch.rkt namespace.rkt syntax.rkt) #t)
@@ -490,6 +502,8 @@
    'test-parser.rkt
    (test-dep '(errors.rkt parser.rkt source-location.rkt surface-syntax.rkt) #f)
    'test-pattern-defn-01.rkt
+   (test-dep '(driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt multi-dispatch.rkt namespace.rkt parser.rkt prelude.rkt pretty-print.rkt reader.rkt reduction.rkt source-location.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt typing-core.rkt) #t)
+   'test-pattern-defn-02.rkt
    (test-dep '(driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt multi-dispatch.rkt namespace.rkt parser.rkt prelude.rkt pretty-print.rkt reader.rkt reduction.rkt source-location.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt typing-core.rkt) #t)
    'test-unified-match-01.rkt
    (test-dep '(driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt multi-dispatch.rkt namespace.rkt parser.rkt prelude.rkt pretty-print.rkt reader.rkt reduction.rkt source-location.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt typing-core.rkt) #t)
@@ -807,7 +821,9 @@
    (test-dep '(metavar-store.rkt prelude.rkt syntax.rkt unify.rkt) #f)
    'test-unify.rkt
    (test-dep '(global-env.rkt metavar-store.rkt prelude.rkt reduction.rkt syntax.rkt unify.rkt) #f)
-   'test-union-find-integration.rkt
+   'test-union-find-integration-01.rkt
+   (test-dep '(driver.rkt errors.rkt global-env.rkt prelude.rkt pretty-print.rkt reduction.rkt substitution.rkt syntax.rkt typing-core.rkt) #t)
+   'test-union-find-integration-02.rkt
    (test-dep '(driver.rkt errors.rkt global-env.rkt prelude.rkt pretty-print.rkt reduction.rkt substitution.rkt syntax.rkt typing-core.rkt) #t)
    'test-union-find-types.rkt
    (test-dep '(global-env.rkt prelude.rkt pretty-print.rkt qtt.rkt reduction.rkt substitution.rkt syntax.rkt typing-core.rkt union-find.rkt) #f)
@@ -946,7 +962,7 @@
    'test-auto-implicits.rkt       '(prologos::data::list)
    'test-bundles.rkt              '(prologos::core::eq)
    'test-call-site-specialization.rkt '(prologos::core::lattice prologos::core::propagator)
-   'test-char-string.rkt          '(prologos::data::ordering)
+   'test-char-string-02.rkt       '(prologos::data::ordering)
    'test-coherence.rkt            '(prologos::core::eq)
    'test-collection-conversions.rkt '(prologos::core::collections prologos::data::list prologos::data::lseq prologos::data::lseq-ops)
    'test-collection-fns-01.rkt    '(prologos::core::collections prologos::data::nat)
