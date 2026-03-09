@@ -270,6 +270,8 @@
  ;; Unapplied type constructor (HKT support)
  (struct-out expr-tycon)
  builtin-tycon-arity
+ current-tycon-arity-extension
+ tycon-arity
  ;; Error marker
  (struct-out expr-error)
  ;; Expr predicate
@@ -941,6 +943,15 @@
           'TVec 1    ;; TVec : Type -> Type
           'TMap 2    ;; TMap : Type -> Type -> Type
           'TSet 1))  ;; TSet : Type -> Type
+
+;; Dynamic extension for trait-generated type constructors.
+;; Populated by process-trait in macros.rkt when traits are declared.
+(define current-tycon-arity-extension (make-parameter (hasheq)))
+
+;; Unified kind lookup: checks built-in table first, then dynamic extensions.
+(define (tycon-arity name)
+  (or (hash-ref builtin-tycon-arity name #f)
+      (hash-ref (current-tycon-arity-extension) name #f)))
 
 
 ;; ========================================

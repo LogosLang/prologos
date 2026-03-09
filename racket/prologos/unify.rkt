@@ -89,7 +89,7 @@
     [(expr-app f a)  (expr-app (normalize-for-resolution f) (normalize-for-resolution a))]
     ;; Promote known type constructor fvars to expr-tycon
     [(expr-fvar name)
-     (if (hash-has-key? builtin-tycon-arity name)
+     (if (tycon-arity name)
          (expr-tycon name)
          e)]
     ;; Chase solved metas

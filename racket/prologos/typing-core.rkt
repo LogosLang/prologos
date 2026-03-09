@@ -495,7 +495,7 @@
     ;; Returns the kind as a curried Pi type: Type -> Type -> ... -> Type
     ;; Arity from builtin-tycon-arity table
     [(expr-tycon name)
-     (let ([arity (hash-ref builtin-tycon-arity name #f)])
+     (let ([arity (tycon-arity name)])
        (if arity
            (let loop ([n arity])
              (if (= n 0)

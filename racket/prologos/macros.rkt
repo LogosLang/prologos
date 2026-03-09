@@ -6347,6 +6347,12 @@
   ;; Process deftype to register it as a pre-parse macro
   (process-deftype deftype-datum)
 
+  ;; Register trait as type constructor with correct arity for kind inference
+  (current-tycon-arity-extension
+    (hash-set (current-tycon-arity-extension)
+              trait-name
+              (length params)))
+
   ;; ---- Generate accessor definitions ----
   ;; Each accessor takes type params + a dict, and projects the right field.
   ;; Single method: accessor is identity (dict IS the function)

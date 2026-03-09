@@ -809,6 +809,8 @@
    (test-dep '(driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parser.rkt prelude.rkt pretty-print.rkt reader.rkt reduction.rkt source-location.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt typing-core.rkt) #t)
    'test-transient.rkt
    (test-dep '(champ.rkt driver.rkt errors.rkt global-env.rkt macros.rkt namespace.rkt prelude.rkt pretty-print.rkt reduction.rkt rrb.rkt substitution.rkt syntax.rkt typing-core.rkt) #t)
+   'test-trait-tycon-01.rkt
+   (test-dep '(driver.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt prelude.rkt syntax.rkt trait-resolution.rkt typing-core.rkt unify.rkt) #t)
    'test-tycon.rkt
    (test-dep '(global-env.rkt metavar-store.rkt prelude.rkt pretty-print.rkt reduction.rkt substitution.rkt syntax.rkt trait-resolution.rkt typing-core.rkt unify.rkt zonk.rkt) #f)
    'test-type-lattice.rkt
