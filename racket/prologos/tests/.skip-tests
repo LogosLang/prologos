@@ -5,4 +5,5 @@
 # Use --no-skip to override, --skip-only to run only these tests.
 
 test-reduction-perf-01-02.rkt  # fuel exhaustion (1M WHNF steps), ~144s
+test-reduction-perf-02-01.rkt  # Nat arithmetic perf (fib 15 + ackermann), ~51s
 test-reduction-perf-02-02.rkt  # fib 20 exponential recursion, ~48s

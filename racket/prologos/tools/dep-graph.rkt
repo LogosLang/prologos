@@ -445,7 +445,9 @@
    (test-dep '(driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parser.rkt prelude.rkt pretty-print.rkt source-location.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt) #t)
    'test-mixed-map.rkt
    (test-dep '(champ.rkt driver.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt prelude.rkt pretty-print.rkt reduction.rkt substitution.rkt syntax.rkt typing-core.rkt unify.rkt) #t)
-   'test-mixfix.rkt
+   'test-mixfix-01.rkt
+   (test-dep '(driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parser.rkt prelude.rkt pretty-print.rkt reader.rkt reduction.rkt source-location.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt typing-core.rkt) #t)
+   'test-mixfix-02.rkt
    (test-dep '(driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parser.rkt prelude.rkt pretty-print.rkt reader.rkt reduction.rkt source-location.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt typing-core.rkt) #t)
    'test-mult-inference.rkt
    (test-dep '(driver.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt prelude.rkt syntax.rkt unify.rkt zonk.rkt) #t)
@@ -522,6 +524,8 @@
    'test-pipe-compose-e2e-01.rkt
    (test-dep '(driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parser.rkt prelude.rkt pretty-print.rkt reader.rkt reduction.rkt source-location.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt typing-core.rkt) #t)
    'test-pipe-compose-e2e-02.rkt
+   (test-dep '(driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parser.rkt prelude.rkt pretty-print.rkt reader.rkt reduction.rkt source-location.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt typing-core.rkt) #t)
+   'test-pipe-compose-e2e-03.rkt
    (test-dep '(driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parser.rkt prelude.rkt pretty-print.rkt reader.rkt reduction.rkt source-location.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt typing-core.rkt) #t)
    'test-pipe-compose.rkt
    (test-dep '(macros.rkt reader.rkt) #f)
@@ -1009,6 +1013,7 @@
    'test-numeric-traits-02.rkt    '(prologos::core::algebra prologos::core::arithmetic prologos::core::conversions prologos::core::eq prologos::core::ord prologos::data::nat)
    'test-pipe-compose-e2e-01.rkt  '(prologos::data::list prologos::data::nat prologos::data::transducer)
    'test-pipe-compose-e2e-02.rkt  '(prologos::data::list prologos::data::nat prologos::data::transducer)
+   'test-pipe-compose-e2e-03.rkt  '(prologos::data::list prologos::data::nat prologos::data::transducer)
    'test-posit-identity.rkt       '(prologos::core::algebra prologos::core::arithmetic prologos::data::list)
    'test-prelude-system-01.rkt    '(prologos::core)
    'test-prelude-system-02.rkt    '(prologos::core prologos::core::test-dep prologos::data prologos::data::nat prologos::data::test-dep prologos::data::test-dep2)

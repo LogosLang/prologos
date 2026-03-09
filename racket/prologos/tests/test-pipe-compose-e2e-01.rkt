@@ -1,11 +1,12 @@
 #lang racket/base
 
 ;;;
-;;; E2E Tests for Phase 2c: Pipe (|>) and Compose (>>) Operators
+;;; E2E Tests for Phase 2c: Pipe (|>) Operator — Sexp Mode
 ;;;
-;;; Split from test-pipe-compose.rkt for performance:
-;;; - test-pipe-compose.rkt: 46 fast unit/preparse tests (<10s)
-;;; - THIS FILE: 24 E2E tests with shared fixture (~30-60s)
+;;; Split from original test-pipe-compose-e2e-01.rkt:
+;;; - THIS FILE: Pipe E2E tests (sexp mode) — 5 tests
+;;; - test-pipe-compose-e2e-02.rkt: WS mode E2E tests (separate)
+;;; - test-pipe-compose-e2e-03.rkt: Compose E2E tests (sexp mode)
 ;;;
 ;;; The shared fixture loads modules once at file level, avoiding
 ;;; the quadratic module reloading that caused >60 min runtimes.
@@ -114,28 +115,6 @@
 
 (define (run-last s) (last (run s)))
 
-;; Run WS code via temp file using shared environment
-(define (run-ws s)
-  (define tmp (make-temporary-file "prologos-test-~a.prologos"))
-  (call-with-output-file tmp #:exists 'replace
-    (lambda (out) (display s out)))
-  (define result
-    (parameterize ([current-global-env shared-global-env]
-                   [current-ns-context shared-ns-context]
-                   [current-module-registry shared-module-reg]
-                   [current-lib-paths (list lib-dir)]
-                   [current-mult-meta-store (make-hasheq)]   ; Fresh per test
-                   [current-preparse-registry (current-preparse-registry)]
-                   [current-trait-registry shared-trait-reg]
-                   [current-impl-registry shared-impl-reg]
-                   [current-param-impl-registry shared-param-impl-reg]
-                   [current-bundle-registry shared-bundle-reg])
-      (process-file tmp)))
-  (delete-file tmp)
-  result)
-
-(define (run-ws-last s) (last (run-ws s)))
-
 ;; ========================================
 ;; C. Pipe E2E — Sexp Mode (5 tests)
 ;; ========================================
@@ -154,25 +133,3 @@
 
 (test-case "e2e/pipe-preserves-type: zero |> suc preserves types"
   (check-equal? (run-last "(eval ($pipe-gt zero suc))") "1N : Nat"))
-
-;; ========================================
-;; D. Compose E2E — Sexp Mode (4 tests)
-;; ========================================
-
-(test-case "e2e/compose-basic: (suc >> suc) zero → 2"
-  (check-equal? (run-last "(eval (($compose suc suc) zero))") "2N : Nat"))
-
-(test-case "e2e/compose-chain: (suc >> suc >> suc) zero → 3"
-  (check-equal? (run-last "(eval (($compose suc suc suc) zero))") "3N : Nat"))
-
-(test-case "e2e/compose-4: (suc >> suc >> suc >> suc) zero → 4"
-  (check-equal? (run-last "(eval (($compose suc suc suc suc) zero))") "4N : Nat"))
-
-(test-case "e2e/compose-applied: composed fn applied twice"
-  (define double-suc "($compose suc suc)")
-  (check-equal? (run-last (format "(eval (~a (~a zero)))" double-suc double-suc)) "4N : Nat"))
-
-;; ========================================
-;; E. WS Mode E2E (6 tests)
-;; ========================================
-
