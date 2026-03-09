@@ -3549,6 +3549,24 @@
             (and (pair? second) (eq? (car second) '$angle-type))))
      (define parsed (parse-let-flat-triples bindings-datum))
      (let-bindings->nested-fn parsed body)]
+    ;; Flat-pair format: (x v1 y v2 ...) — alternating name/value, no sub-lists
+    [(and (>= (length bindings-datum) 2)
+          (even? (length bindings-datum))
+          (andmap (lambda (x) (not (list? x))) bindings-datum)
+          (let ([names (for/list ([x (in-list bindings-datum)]
+                                  [i (in-naturals)]
+                                  #:when (even? i))
+                         x)])
+            (andmap symbol? names)))
+     (define parsed
+       (let loop ([rest bindings-datum] [acc '()])
+         (cond
+           [(null? rest) (reverse acc)]
+           [else
+            (define name (car rest))
+            (define value (cadr rest))
+            (loop (cddr rest) (cons (list name '_ value) acc))])))
+     (let-bindings->nested-fn parsed body)]
     ;; Nested format: ([name : T value] ...) or ([name value] ...) with inferred type
     [else
      (define parsed
