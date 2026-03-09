@@ -50,6 +50,32 @@ Everything else — HasMethod, row variables, trait universes, `project` — is
 *mechanism* for expressing these operations. The mechanism is incidental; the
 operations are essential.
 
+### Why Not "Evidence Combination" as a Fourth Operation?
+
+Languages with trait hierarchies (Haskell's `class Eq a => Ord a`, Rust's
+supertraits) need a fourth operation: **evidence extraction** — given a
+composite dictionary `d : Ord A`, extract the sub-dictionary `d' : Eq A`.
+This is elimination for nested records.
+
+Prologos does not need this operation because **Prologos has no trait
+hierarchies** (see DESIGN_PRINCIPLES.org § "No Trait Hierarchies — Bundles
+Only"). Bundles are conjunctive sugar expanded at parse time:
+
+```
+where (Num A)
+  ↓ expands to ↓
+where (Add A) (Sub A) (Mul A) (Neg A) (Abs A) (FromInt A) (Eq A) (Ord A)
+```
+
+Each constraint produces an independent dictionary parameter. There is no
+composite `Num` dictionary — the sub-evidence is already present as separate
+dict params. Evidence extraction is unnecessary when evidence is never nested.
+
+This is a direct consequence of the non-negotiable "No Trait Hierarchies"
+principle. If a future design revisits this (which would require changing a
+core principle), evidence combination would need to be added as a fourth
+essential operation.
+
 ---
 
 ## 3. The Prologos Way: Surface Syntax
@@ -273,12 +299,30 @@ When a type cell refines, eliminate candidates that don't match.
 type-cell for ?A = Nat  →  constraint-set {Add Nat}  (from {Add Nat, Add Int, Add Rat})
 ```
 
+**Union type semantics:** When the type cell is a union (`?A = Nat | Int`), P1
+retains impls for *every* member of the union: `constraint-set {Add Nat, Add Int}`.
+This is conjunctive — the constraint requires that *all* types in the union
+satisfy the trait, not just one. If any member lacks an impl (e.g., `Nat | Foo`
+where `Foo` has no `Add` impl), the constraint cell excludes that member's
+contribution, eventually reaching `constraint-top` (contradiction) if no common
+impl exists. This matches the standard approach: `where (Add A)` with
+`A = Nat | Int` means both `Add Nat` and `Add Int` must be available, because
+the dispatched method must work for any value of type `A`.
+
 **P2: Constraint → Type**
 When the constraint cell narrows, constrain the type cell. *This is new* — today
 resolution is unidirectional (types → dispatch; never dispatch → types).
 ```
 constraint-set {Add Nat, Add Int}  →  type-cell for ?A = Union(Nat, Int)
 ```
+
+**Duality note:** P1 and P2 operate in dual spaces. In *constraint space*,
+adding a constraint computes an *intersection* (fewer candidates). In *type
+space*, the remaining candidates map to a *union* of possible types. These are
+two views of the same information: constraint intersection ↔ type union. The
+constraint cell shrinks monotonically (intersection); the type cell reflects
+the remaining possibilities (union). Neither contradicts the other — they are
+duals under the Galois connection between constraint sets and type sets.
 
 **P3: Constraint → Method (Conditional Activation)**
 When a constraint cell resolves to a single candidate, install the concrete
@@ -287,6 +331,16 @@ that creates other propagators.
 ```
 constraint-one (Add Nat)  →  install narrowing propagators for nat-add's DT
 ```
+
+**Architecture note:** "Creates other propagators" is not mutation. In
+Prologos's pure functional propagator network (`prop-network` struct,
+propagator.rkt:78), adding a propagator returns a *new* network value with
+structural sharing. This is the same mechanism used by the narrowing DFS
+(`install-narrowing-propagators`, narrowing.rkt:163), which dynamically adds
+propagators as it explores definitional tree branches. Pre-allocating all
+possible method propagators would be wasteful when a trait has many impls (e.g.,
+`Add` spans Nat, Int, Rat, Posit8-64, String, and user types). Dynamic
+installation after resolution is both correct and efficient in this architecture.
 
 **P4: Result → Constraint (Reverse)**
 When the result type/value is known, eliminate candidates whose method signature
@@ -694,7 +748,35 @@ This is CLP over type-theoretic domains. The domain isn't a numeric range —
 it's the set of types satisfying a constraint conjunction. The propagator
 network computes the intersection monotonically.
 
-### 8.3 Emergent Capabilities (Speculative)
+### 8.3 Homoiconicity: Traits as Quotable Data
+
+Prologos's homoiconicity invariant (LANGUAGE_DESIGN.org § "Homoiconicity: The
+Strong Invariant") guarantees every syntactic form has a canonical s-expression
+representation. Trait declarations are no exception:
+
+```prologos
+;; Trait declaration is quotable as Datum
+$[trait Eq {A} eq? : A A -> Bool]
+;; → ($trait Eq ($brace-params A) (eq? : (-> A A Bool)))
+
+;; Impl declaration is quotable too
+$[impl Eq Nat defn eq? [x y] [nat-eq x y]]
+;; → ($impl Eq Nat (defn eq? (x y) (nat-eq x y)))
+```
+
+Trait *declarations* are first-class `Datum` values, manipulable by macros and
+the quote/quasiquote system. This enables metaprogramming over traits: macros
+that generate trait declarations, derive instances, or inspect structure at
+expansion time.
+
+The impl *registry* (Racket-side `current-impl-registry`, `current-trait-registry`)
+is not directly quotable today. Phase 3b (Trait Introspection) bridges this gap
+with foreign functions (`instances-of`, `methods-of`, `satisfies?`) that query
+the registry from Prologos surface code. Full registry reification as first-class
+data (enabling runtime trait queries as relational goals) is a future direction
+that builds on Phase 3b + the relational constraint chain syntax (Phase 3c).
+
+### 8.4 Emergent Capabilities (Speculative)
 
 Following the session types precedent — capabilities that may emerge from
 first-class traits but cannot be predicted:
@@ -805,7 +887,22 @@ Propagator network handles dependency naturally.
 - ATMS nogoods prune inconsistent combinations
 - In practice, type info resolves to singletons without search
 
-### Risk 4: Reader Complexity for Constraint Chain
+### Risk 4: Two-Network Synchronization
+
+**Concern:** Constraint cells in a separate narrowing network may drift from the
+elaboration network's type information.
+
+**Mitigation:** The narrowing network is a *consumer* of type information, not a
+*producer*. It is created on-demand during `run-narrowing`, reads type info from
+the elaboration network (one-way), and is discarded after narrowing completes.
+There is no bidirectional synchronization — the narrowing network is ephemeral.
+
+Phase 3d (incremental trait resolution) would unify both into a single network,
+eliminating the separation entirely. Until then, the read-only relationship is
+a deliberate simplification that avoids interference with the established
+type-checking pipeline.
+
+### Risk 5: Reader Complexity for Constraint Chain
 
 **Concern:** `?n:Between[50 100]:Even` is syntactically complex to parse.
 
@@ -815,19 +912,219 @@ The constraint chain is greedily parsed: after reading the identifier, consume
 Parameterized constraints use standard `[]` brackets which the reader already
 handles.
 
-### Risk 5: HasMethod for Multi-Method Traits
+### Risk 6: HasMethod Circular Dependencies
 
-**Concern:** Sigma projection for multi-method traits is more complex than
-single-method identity.
+**Concern:** Resolving `HasMethod P "eq?" T` requires looking up `trait-meta`
+for `P`, but `P` might not be resolved yet.
+
+**Mitigation:** Standard constraint postponement. If `P` is an unsolved meta,
+the HasMethod constraint is stored in the postponement queue
+(`constraint-postponement.rkt`). When `P` solves, the wakeup mechanism retries
+HasMethod resolution. This is the same pattern used for all deferred constraints
+in the type checker (trait constraints, universe level constraints, QTT
+multiplicity constraints) — no new mechanism required.
+
+### Risk 7: HasMethod for Multi-Method Traits
+
+**Concern:** Positional Sigma projection for multi-method traits is fragile if
+methods are reordered.
 
 **Mitigation:** Currently, all Prologos traits are single-method (bundles
-expand to multiple single-method constraints). Multi-method Sigma projection
-is needed only for future multi-method traits, and the Sigma projection
-machinery already exists in the type checker.
+expand to multiple single-method constraints). For single-method traits —
+which is everything in the language today — projection is identity (the
+dictionary IS the function). Multi-method Sigma projection is needed only for
+future multi-method traits. If multi-method traits are added, named projection
+(by method name, not position) should be used to avoid ordering fragility. The
+Sigma projection machinery already exists in the type checker and can be
+extended with named field access.
+
+### Trait Coherence
+
+Prologos enforces trait coherence: at most one `impl` per type per trait.
+Overlapping instances are a compile-time error, checked by
+`check-for-duplicate-impl` in `process-monomorphic-impl` (macros.rkt). This
+guarantee is essential for constraint cells — if a trait had multiple impls for
+the same type, the dispatch cell could not narrow to a unique resolution.
+
+Coherence is preserved across all three levels:
+- **Level 1:** Trait names as type constructors don't affect coherence.
+- **Level 2:** Constraint cells assume unique resolution per type; coherence
+  guarantees this.
+- **Level 3:** HasMethod queries the trait registry, which enforces coherence
+  at registration time.
+
+Orphan instance rules (preventing impls in modules that own neither the trait
+nor the type) are not yet enforced but are planned for post-Phase 0 module
+system hardening.
 
 ---
 
-## 11. Future Directions (Beyond Level 3)
+## 11. Error Message Design
+
+Excellent error messages are a core value of Prologos (see ERGONOMICS.org).
+Constraint cells introduce new failure modes that require dedicated error codes
+and rich diagnostic output. Every error should tell the user *what* went wrong,
+*why* it went wrong (the elimination trace), and *how* to fix it.
+
+### 11.1 Error Codes
+
+Following the existing error code conventions (E1xxx = type inference,
+E2xxx = capabilities):
+
+| Code | Category | Trigger |
+|------|----------|---------|
+| **E3001** | Constraint contradiction | All candidates eliminated from a constraint cell |
+| **E3002** | Ambiguous constraint | Multiple candidates remain, no further info available |
+| **E3003** | Kind mismatch in constraint chain | `?n:Foo` where `Foo` has unexpected kind |
+| **E3004** | No impl for union member | `where (Add A)` with `A = Nat \| Foo`, `Foo` has no `Add` |
+| **E3005** | HasMethod projection failure | `P` lacks method with required name/signature |
+| **E3006** | Constraint chain parse error | Malformed `?var:C1:C2` syntax |
+
+### 11.2 E3001: Constraint Contradiction (Primary Error)
+
+This is the most important error — it fires when all candidates are eliminated.
+
+**Format:**
+
+```
+error[E3001]: no trait implementation satisfies all constraints
+
+  ┌─ src/example.prologos:12:5
+  │
+12│   .{?x + ?y} = "hello"
+  │   ^^^^^^^^^^^^^^^^ constraint contradiction
+  │
+  = candidates for Add:
+    - Add Nat      eliminated: result type Nat ≠ String  (via P4, line 12)
+    - Add Int      eliminated: result type Int ≠ String  (via P4, line 12)
+    - Add Rat      eliminated: result type Rat ≠ String  (via P4, line 12)
+    - Add String   eliminated: argument ?x : String, but ?x + ?y used as numeric
+                              (via P1, line 10)
+  = hint: the result "hello" : String is incompatible with numeric addition.
+          Did you mean to use string concatenation (concat)?
+```
+
+**Key features:**
+- Shows the full candidate set and why each was eliminated
+- Traces elimination to specific propagators (P1, P2, P4) and source locations
+- Provides an actionable hint
+
+**Implementation:** The constraint cell tracks an *elimination log* — a list of
+`(candidate, reason, propagator-id, source-location)` tuples. When the cell
+reaches `constraint-top`, the log is formatted into the diagnostic.
+
+### 11.3 E3002: Ambiguous Constraint
+
+Fires when type inference completes but a constraint cell has multiple
+candidates and no further information can resolve it.
+
+**Format:**
+
+```
+error[E3002]: ambiguous trait dispatch — multiple implementations match
+
+  ┌─ src/example.prologos:8:3
+  │
+ 8│   add ?x ?y
+  │   ^^^ ambiguous: Add Nat or Add Int
+  │
+  = remaining candidates:
+    - Add Nat   (if ?x : Nat, ?y : Nat)
+    - Add Int   (if ?x : Int, ?y : Int)
+  = hint: add a type annotation to disambiguate:
+          add (?x:Nat) (?y:Nat)     — for natural number addition
+          add (the Int ?x) (the Int ?y) — for integer addition
+```
+
+**Key features:**
+- Lists remaining candidates with conditions
+- Suggests concrete type annotations to disambiguate
+- The hint shows *both* possible fixes, not just one
+
+### 11.4 E3003: Kind Mismatch in Constraint Chain
+
+```
+error[E3003]: kind mismatch in constraint chain
+
+  ┌─ src/example.prologos:5:10
+  │
+ 5│   defr foo [?n:List:Even]
+  │               ^^^^ expected kind (Type → Type) or (A → Type),
+  │                    but List has kind (Type → Type) and is a type constructor,
+  │                    not a predicate constraint
+  │
+  = note: List is a type constructor. Did you mean:
+          ?n:List[Nat]   — constrain ?n to be a List of Nat
+          ?ns:Ord        — constrain elements of ?ns to satisfy Ord
+```
+
+### 11.5 E3004: No Impl for Union Member
+
+```
+error[E3004]: union type member lacks required trait implementation
+
+  ┌─ src/example.prologos:10:5
+  │
+10│   spec foo {A : Type} where (Ord A) [A] -> [A]
+  │                              ^^^^^ Ord required
+  │
+  = type A was inferred as: Nat | MyCustomType
+  = Ord Nat            — found (prologos::core::ord)
+  = Ord MyCustomType   — NOT FOUND
+  = hint: add an Ord implementation for MyCustomType:
+          impl Ord MyCustomType
+            defn compare [x y] ...
+```
+
+### 11.6 E3005: HasMethod Projection Failure
+
+```
+error[E3005]: trait does not provide required method
+
+  ┌─ src/example.prologos:15:3
+  │
+15│   spec apply {A : Type} [P A] A A -> Bool
+  │     :over P
+  │     :method P eq? : A A -> Bool
+  │                ^^^ method "eq?" not found in trait
+  │
+  = P was resolved to: Add
+  = Add provides: [add : A A -> A]
+  = hint: did you mean Eq? Eq provides eq? : A A -> Bool
+```
+
+### 11.7 Implementation: Elimination Log
+
+Each constraint cell carries an elimination log alongside its candidate set:
+
+```racket
+(struct constraint-cell
+  (candidates         ;; seteq of impl-keys (current live set)
+   elimination-log    ;; (listof elimination-entry)
+   trait-ref          ;; trait-ref struct (name + arity)
+   source-location)   ;; srcloc from the triggering expression
+  #:transparent)
+
+(struct elimination-entry
+  (candidate          ;; impl-key symbol
+   reason             ;; string describing why eliminated
+   propagator-id      ;; which propagator fired (P1/P2/P3/P4)
+   source-location)   ;; srcloc of the constraining expression
+  #:transparent)
+```
+
+The elimination log is append-only (monotonic, like everything else in the
+network). When the cell reaches `constraint-top`, the log is complete and
+provides the full derivation chain for the error diagnostic.
+
+For E3002 (ambiguity), the log shows which candidates were eliminated (partial
+progress), helping the user understand why the remaining ones couldn't be
+disambiguated.
+
+---
+
+## 12. Future Directions (Beyond Level 3)
+
 
 ### Row Types (Separate Design Track)
 
