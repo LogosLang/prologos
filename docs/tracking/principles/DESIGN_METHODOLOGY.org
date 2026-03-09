@@ -16,9 +16,9 @@ Propagators, Collections Ergonomics, the Numerics Tower, and the
 Homoiconicity phases. It is descriptive (capturing what actually works)
 as much as prescriptive (defining what we should do).
 
-* The Five Phases
+* The Five Stages
 
-** Phase 1: Deep Research
+** Stage 1: Deep Research
 
 /Goal/: Ground ourselves in the best techniques --- cutting-edge and
 well-proven --- with a comprehensive survey of the landscape.
@@ -71,7 +71,7 @@ propagator networks, and TMS/ATMS truth maintenance. This document
 established the conceptual vocabulary (cells, propagators, quiescence,
 monotonic merge) that all subsequent design work referenced.
 
-** Phase 2: Research Refinement and Gap Analysis
+** Stage 2: Research Refinement and Gap Analysis
 
 /Goal/: Refine our understanding, identify gaps in current infrastructure,
 consider tradeoffs, identify opportunities aligned with core principles,
@@ -82,7 +82,7 @@ and make qualified recommendations.
 - Review research findings against our existing implementation
 - Identify what infrastructure we already have and what is missing
 - Enumerate alternative approaches with their tradeoffs
-- Check alignment with principles in ~DESIGN_PRINCIPLES.org~ and
+- Check alignment with design principles in ~DESIGN_PRINCIPLES.org~ and
   ~LANGUAGE_VISION.org~
 - Make recommendations, with rationale, for which approach to pursue
 
@@ -125,7 +125,7 @@ and make qualified recommendations.
 - Tradeoff tables with explicit criteria
 - Recommendation with rationale tied to principles
 
-** Phase 3: Design Iteration
+** Stage 3: Design Iteration
 
 /Goal/: Produce a concrete design with a detailed, phased roadmap for
 implementation, refined through critique and feedback until there is
@@ -218,7 +218,7 @@ The Logic Engine Design went through a similar cycle:
 - Phase-specific test strategies and success criteria
 - Record of critique and responses (preserved in standups)
 
-** Phase 4: Implementation
+** Stage 4: Implementation
 
 /Goal/: Execute the phased roadmap, shipping complete and sound solutions
 at each phase, raising design issues as they surface.
@@ -332,7 +332,7 @@ at each phase, raising design issues as they surface.
 - Updated ~DEFERRED.md~ for any deferred work
 - Test suite growth (measurable)
 
-** Phase 5: Composition and Extension
+** Stage 5: Composition and Extension
 
 /Goal/: Enjoy the well-thought-out design and how it composes with our
 multi-level, modular, extensible language. Verify that the new feature
@@ -469,8 +469,8 @@ with Int narrowing via constraint propagation as a future extension.
 
 After a significant feature is complete --- all sub-phases shipped, tests
 passing, tracking documents updated --- conduct a Post Implementation
-Review. The PIR is the reflective counterpart to the research phase: where
-Phase 1 asks "what do we know going in?", the PIR asks "what do we know
+Review. The PIR is the reflective counterpart to the research stage: where
+Stage 1 asks "what do we know going in?", the PIR asks "what do we know
 coming out?"
 
 A PIR is /not/ a retrospective about process (though process insights
@@ -487,7 +487,7 @@ this feature enable that we didn't anticipate?
 
 - *What went well*: Identify decisions, patterns, and practices that
   paid off. These are candidates for codification in principles
-  documents. The Session Type PIR identified the 3-phase design process
+  documents. The Session Type PIR identified the 3-stage design process
   (research → design → plan) and propagator-as-universal-substrate as
   key successes worth replicating.
 
@@ -541,7 +541,7 @@ followed established patterns without surprises.
 
 The Session Types PIR (~2026-03-04_SESSION_TYPE_PIR.md~) covered 36/38
 sub-phases across ~24 hours. Key findings:
-- The 3-phase design methodology (deep research → adversarial critique →
+- The 3-stage design methodology (deep research → adversarial critique →
   phased implementation) produced zero architectural rework
 - Propagator networks proved to be a universal substrate: session types
   were the third domain (after types and multiplicities) to use the
@@ -555,7 +555,7 @@ sub-phases across ~24 hours. Key findings:
 
 * Cross-Cutting Principles
 
-These principles apply across all five phases.
+These principles apply across all five stages.
 
 ** Theoretical Grounding, Practical Surface
 
@@ -640,12 +640,12 @@ done until they have tests.
 
 | Document                    | Relationship to this methodology                      |
 |-----------------------------+-------------------------------------------------------|
-| ~DESIGN_PRINCIPLES.org~     | Provides the values that Phase 2 alignment checks use |
-| ~LANGUAGE_VISION.org~       | Provides the north star that research (Phase 1) aims at |
-| ~DEVELOPMENT_LESSONS.org~   | Collects lessons that emerge from Phase 4              |
-| ~PATTERNS_AND_CONVENTIONS.org~ | Captures patterns that Phase 5 discovers            |
-| ~ERGONOMICS.org~            | Informs Phase 2 tradeoff analysis for user-facing features |
-| ~RELATIONAL_LANGUAGE_VISION.org~ | Example of Phase 1-2 output for a specific domain |
+| ~DESIGN_PRINCIPLES.org~     | Provides the values that Stage 2 alignment checks use |
+| ~LANGUAGE_VISION.org~       | Provides the north star that research (Stage 1) aims at |
+| ~DEVELOPMENT_LESSONS.org~   | Collects lessons that emerge from Stage 4              |
+| ~PATTERNS_AND_CONVENTIONS.org~ | Captures patterns that Stage 5 discovers            |
+| ~ERGONOMICS.org~            | Informs Stage 2 tradeoff analysis for user-facing features |
+| ~RELATIONAL_LANGUAGE_VISION.org~ | Example of Stage 1-2 output for a specific domain |
 
 * Exemplar Projects
 
@@ -710,7 +710,7 @@ These completed efforts illustrate the methodology in practice:
   compose session and type domains. ~defproc~ composes with trait
   system, QTT, and capability binders.
 - *PIR*: ~2026-03-04_SESSION_TYPE_PIR.md~ --- first exemplar of the
-  PIR practice. Validated the 3-phase design methodology, identified
+  PIR practice. Validated the 3-stage design methodology, identified
   the ~??~/~$typed-hole~ desugaring lesson, and established forward
   roadmap for concurrent runtime and multi-party sessions.
 
