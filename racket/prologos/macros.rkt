@@ -3623,7 +3623,7 @@
         (define-values (value-tokens rest) (split-at-next-assign-binding after-assign))
         (define value (if (= (length value-tokens) 1)
                           (car value-tokens)
-                          value-tokens))
+                          (maybe-restructure-infix-eq value-tokens)))
         (cons (list name '_ value) (parse-assign-bindings rest))]
        ;; name : T1 T2 ... := value ... — with type annotation
        [(and (pair? after-name) (eq? (car after-name) ':))
@@ -3645,10 +3645,30 @@
                          type-atoms))
         (define value (if (= (length value-tokens) 1)
                           (car value-tokens)
-                          value-tokens))
+                          (maybe-restructure-infix-eq value-tokens)))
         (cons (list name type value) (parse-assign-bindings rest))]
        [else
         (error 'let "let :=: expected := or : after name ~a, got ~a" name after-name)])]))
+
+;; Restructure infix = in a multi-token value list to prefix form.
+;; (add ?x 3N = 5N) → (= (add ?x 3N) 5N)
+;; This is needed because the WS reader's infix = rewriting is suppressed
+;; after := (Phase 1b), so = in let values remains in infix position.
+;; Only fires on multi-token lists; single-token values pass through.
+(define (maybe-restructure-infix-eq tokens)
+  (define eq-idx
+    (let loop ([ts tokens] [i 0])
+      (cond
+        [(null? ts) #f]
+        [(and (symbol? (car ts)) (eq? (car ts) '=) (> i 0)) i]
+        [else (loop (cdr ts) (+ i 1))])))
+  (if eq-idx
+      (let* ([lhs-ts (take tokens eq-idx)]
+             [rhs-ts (drop tokens (+ eq-idx 1))]
+             [lhs (if (= (length lhs-ts) 1) (car lhs-ts) lhs-ts)]
+             [rhs (if (= (length rhs-ts) 1) (car rhs-ts) rhs-ts)])
+        (list '= lhs rhs))
+      tokens))
 
 ;; Split a list at the first occurrence of a given symbol.
 ;; Returns (values before-symbol from-symbol-onwards).
