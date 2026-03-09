@@ -33,7 +33,7 @@ Implementation phases in suggested order:
 
 | # | Phase | Deliverable | Level | Effort | Status |
 |---|-------|-------------|-------|--------|--------|
-| 1 | **Phase 1** | Trait names as type constructors | L1 | Small | ⬜ Not started |
+| 1 | **Phase 1** | Trait names as type constructors | L1 | Small | ✅ Complete (`f6b540e`) |
 | 2 | **Phase 2a** | Static generic operator resolution | L2 | Small | ⬜ Not started |
 | 3 | **Phase 2b** | `constraint-cell.rkt` module | L2 | Small | ⬜ Not started |
 | 4 | **Phase 3a** | HasMethod constraint + projection | L3 | Medium | ⬜ Not started |
