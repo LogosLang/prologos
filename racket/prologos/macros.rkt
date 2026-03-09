@@ -1475,9 +1475,19 @@
           ;; Collect consecutive let forms
           (define-values (lets remaining) (collect-consecutive-lets rest))
           (cond
-            ;; Single let — no merging needed
+            ;; Single let — merge with following body if present
             [(<= (length lets) 1)
-             (loop remaining (cons (car lets) acc))]
+             (if (and (pair? remaining)
+                      (not (let-form? (car remaining))))
+                 ;; Single bodyless let followed by body expression — merge
+                 ;; (Same logic as multi-let case: WS reader produces bodyless
+                 ;; lets as siblings, with body at same indent level.)
+                 (let* ([body (car remaining)]
+                        [all-bindings (extract-let-binding-tokens (car lets))]
+                        [merged `(let ,all-bindings ,body)])
+                   (loop (cdr remaining) (cons merged acc)))
+                 ;; No following body — pass through as-is
+                 (loop remaining (cons (car lets) acc)))]
             ;; Multiple lets followed by a non-let body expression —
             ;; treat ALL lets as bodyless bindings, trailing expr is the body.
             ;; This handles WS-mode where body is at the same indent level:
@@ -3549,15 +3559,14 @@
             (and (pair? second) (eq? (car second) '$angle-type))))
      (define parsed (parse-let-flat-triples bindings-datum))
      (let-bindings->nested-fn parsed body)]
-    ;; Flat-pair format: (x v1 y v2 ...) — alternating name/value, no sub-lists
+    ;; Flat-pair format: (x v1 y v2 ...) — alternating name/value pairs.
+    ;; Values CAN be lists (applications like (suc zero)).
+    ;; Distinguished from nested format because nested has ALL elements as
+    ;; sub-lists, while flat-pair has symbols at even positions (names).
+    ;; The := and $angle-type cases are already handled by earlier branches.
     [(and (>= (length bindings-datum) 2)
           (even? (length bindings-datum))
-          (andmap (lambda (x) (not (list? x))) bindings-datum)
-          (let ([names (for/list ([x (in-list bindings-datum)]
-                                  [i (in-naturals)]
-                                  #:when (even? i))
-                         x)])
-            (andmap symbol? names)))
+          (symbol? (car bindings-datum)))
      (define parsed
        (let loop ([rest bindings-datum] [acc '()])
          (cond

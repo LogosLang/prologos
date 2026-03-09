@@ -36,6 +36,13 @@ impl Eq Nat
 ;; Backward-compatible alias
 def nat-eq Nat--Eq--dict
 
+;; Generic equality check: wraps eq? for use without where clause
+;; Used by the = operator desugaring (Phase 1a surface ergonomics)
+spec eq-check [Eq A] A A -> Bool
+  :doc "Equality check: returns true when two values are equal"
+defn eq-check [dict x y]
+  dict x y
+
 ;; Generic neq: negate equality
 spec eq-neq [Eq A] A A -> Bool
   :doc "Not-equal: negation of eq?"
