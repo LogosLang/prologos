@@ -2012,6 +2012,11 @@
     [((expr-refl) (expr-Eq _ e1 e2))
      (bu (unify-ok? (unify ctx e1 e2)) (zero-usage n))]
 
+    ;; ---- Holes: optimistically succeed with zero usage ----
+    ;; Holes (_, ??name) don't consume resources — mirrors typing-core check behavior.
+    [((expr-hole) _) (bu #t (zero-usage n))]
+    [((expr-typed-hole _) _) (bu #t (zero-usage n))]
+
     ;; ---- Meta expression: optimistically succeed with zero usage ----
     ;; A metavariable (from implicit arg insertion) doesn't consume resources.
     [((expr-meta _) _) (bu #t (zero-usage n))]
