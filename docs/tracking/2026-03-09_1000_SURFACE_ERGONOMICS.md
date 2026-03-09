@@ -120,7 +120,11 @@ This makes `=` a universal operator:
 - Without `?` vars → equality check (returns Bool)
 - In relational context → unification goal (existing behavior)
 
-Parser change at line 2693-2694: replace `parse-application` fallback with new `surf-eq-check` surface node.
+Parser change at line 2693-2694: desugar to `(eq-check a b)` — a wrapper function in `eq.prologos` with `spec eq-check [Eq A] A A -> Bool` that delegates to the `eq?` trait method with a dictionary constraint. Added `eq-check` to prelude imports in `namespace.rkt`.
+
+**Note**: `=` as a keyword in the parser intercepts before application lookup. Code that declares `=` as a foreign function (e.g., `(foreign racket "racket/base" (= : Nat Nat -> Bool))`) should use `:as` qualifier to avoid the keyword: `(foreign racket "racket/base" :as rkt (= ...))` then `(rkt/= ...)`.
+
+**Implementation detail**: `merge-sibling-lets` handles single bodyless lets by first pre-processing with `preprocess-let-infix-eq` (restructures `a = b` → `(= a b)` in value tokens) so that `let-bodyless?` correctly identifies lets whose values contain `=`.
 
 ### 1c: Sequential Let Blocks
 
@@ -202,10 +206,10 @@ The no-space rule is critical — `xs [0]` is application (passing list `[0]`), 
 
 | Phase | Status | Commit |
 |-------|--------|--------|
-| 1a: `=` as Bool check | NOT STARTED | |
-| 1b: let + = interop | NOT STARTED | |
-| 1c: sequential let | NOT STARTED | |
-| 1d: flat-pair let | NOT STARTED | |
+| 1a: `=` as Bool check | DONE | `f4ef4c0`, `587cacf` |
+| 1b: let + = interop | DONE | `4584739`, `d2714ef`, `587cacf` |
+| 1c: sequential let | DONE (already worked) | verified in `587cacf` |
+| 1d: flat-pair let | DONE | `b8b5039`, `587cacf` |
 | 2a: bound var `_` suffix | NOT STARTED | |
 | 2b: spec param names | NOT STARTED | |
 | 2c: collision handling | NOT STARTED | |
