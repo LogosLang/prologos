@@ -356,7 +356,104 @@ defn fib [n]
 
 
 ;; ========================================================================
-;; 14. THE FULL PICTURE
+;; 14. INT LITERAL PATTERNS — Equality Dispatch for Int
+;; ========================================================================
+;;
+;; Bare integer literals (0, 1, -1, 42) in pattern positions compile to
+;; equality dispatch via int-eq. Unlike Nat literal patterns (0N, 1N)
+;; which desugar to zero/suc constructors, Int patterns are opaque —
+;; they generate nested if/else chains:
+;;
+;;   match n | 0 -> body0 | 1 -> body1 | _ -> default
+;;   ==>
+;;   if (int-eq n 0) body0 (if (int-eq n 1) body1 default)
+;;
+;; This distinction matters: Nat is for inductive/structural reasoning,
+;; Int is for computational/functional code.
+
+;; Fibonacci on Int (not Nat) — Int literal base cases
+defn fib-int [n : Int] : Int
+  | 0 -> 0
+  | 1 -> 1
+  | n -> [int+ [fib-int [int- n 1]] [fib-int [int- n 2]]]
+
+[fib-int 0]
+[fib-int 1]
+[fib-int 5]
+[fib-int 10]
+
+;; Factorial on Int
+defn fact [n : Int] : Int
+  | 0 -> 1
+  | n -> [int* n [fact [int- n 1]]]
+
+[fact 0]
+[fact 5]
+
+
+;; ========================================================================
+;; 15. GUARD CLAUSES — Conditional Pattern Arms
+;; ========================================================================
+;;
+;; Guard clauses add boolean conditions to pattern arms using `when`.
+;; The guard is checked AFTER the pattern matches. If the guard fails,
+;; control falls through to the next arm.
+;;
+;; Syntax: | pattern when guard-expr -> body
+;;
+;; Guards compile to nested boolrec (if/then/else) checks inside the
+;; pattern match decision tree.
+
+;; Absolute value using guard clause
+defn abs-val [n : Int] : Int
+  | n when [int-lt n 0] -> [int-neg n]
+  | n                   -> n
+
+[abs-val -5]
+[abs-val 0]
+[abs-val 7]
+
+;; Int literal + guard: three-way classify
+defn sign [n : Int] : Int
+  | 0                   -> 0
+  | n when [int-lt n 0] -> -1
+  | _                   -> 1
+
+[sign -42]
+[sign 0]
+[sign 17]
+
+
+;; ========================================================================
+;; 16. COND MACRO — Multi-Way Conditional
+;; ========================================================================
+;;
+;; `cond` provides multi-way conditional dispatch without pattern matching.
+;; Each arm has a boolean guard and a body. Arms are tried top-to-bottom;
+;; the first true guard fires. Use `true` as a catch-all default.
+;;
+;; Syntax:
+;;   cond
+;;     | guard1 -> body1
+;;     | guard2 -> body2
+;;     | true   -> default
+;;
+;; Desugars to nested if: if guard1 body1 (if guard2 body2 default)
+
+;; Classify with cond — no pattern matching needed
+defn classify-cond [n : Int] : Int
+  cond
+    | [int-eq n 0] -> 0
+    | [int-lt n 0] -> -1
+    | true         -> 1
+
+[classify-cond -5]
+[classify-cond 0]
+[classify-cond 5]
+
+
+;; ========================================================================
+;; 17. THE FULL PICTURE
 ;; ========================================================================
 ;;
 ;; What we built:
@@ -367,16 +464,24 @@ defn fib [n]
 ;; 2. Nested constructor patterns — suc zero, suc [suc k], some [suc n]
 ;;    all work uniformly in match and defn
 ;;
-;; 3. Numeric literal patterns — 0N, 1N, 2N desugar to nested suc/zero
-;;    for readable case analysis
+;; 3. Nat literal patterns — 0N, 1N, 2N desugar to nested suc/zero
+;;    for readable case analysis on inductive Nat
 ;;
-;; 4. Head-tail patterns — [x | rest] destructures lists in both
+;; 4. Int literal patterns — 0, 1, -1, 42 compile to equality dispatch
+;;    via int-eq for computational code on Int
+;;
+;; 5. Guard clauses — | pattern when guard -> body adds boolean
+;;    conditions to pattern arms; falls through on failure
+;;
+;; 6. Head-tail patterns — [x | rest] destructures lists in both
 ;;    match arms and defn pattern clauses
 ;;
-;; 5. Wildcard patterns — _ matches anything, anywhere
+;; 7. Wildcard patterns — _ matches anything, anywhere
 ;;
-;; 6. defn f [params] | arms — Haskell-style equational definitions
+;; 8. defn f [params] | arms — Haskell-style equational definitions
 ;;    with named params declaring arity
+;;
+;; 9. cond macro — multi-way conditional dispatch without patterns
 ;;
 ;; How it works:
 ;;

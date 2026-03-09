@@ -439,8 +439,9 @@ Constructor names are disambiguated via the constructor registry.
 
 #+begin_src grammar
 match-expr    ::= 'match' scrutinee match-arm+
-match-arm     ::= '|' match-pattern '->' body
-match-pattern ::= identifier | wildcard | nat-literal
+match-arm     ::= '|' match-pattern guard? '->' body
+guard         ::= 'when' expr
+match-pattern ::= identifier | wildcard | nat-literal | int-literal
                |  identifier match-pattern+          (* compound: suc zero *)
                |  '[' match-pattern+ ']'             (* bracketed compound *)
                |  '[' match-pattern+ '|' match-pattern ']'  (* head-tail *)
@@ -458,11 +459,29 @@ match n
   | suc [suc k] -> false   ;; matches >= 2N, binds k
   | zero        -> true    ;; matches 0N
 
-;; Numeric literal patterns
+;; Nat literal patterns (0N, 1N, ... desugar to zero, suc zero, ...)
 match n
   | 0N -> true
   | 1N -> false
   | _  -> false
+
+;; Int literal patterns (bare integers → equality dispatch)
+match n
+  | 0  -> "zero"
+  | 1  -> "one"
+  | -1 -> "minus-one"
+  | _  -> "other"
+
+;; Guard clauses (when keyword)
+match n
+  | x when [int-lt x 0] -> [int-neg x]
+  | x                   -> x
+
+;; Int literals + guards
+defn classify [n : Int] : Int
+  | 0                    -> 0
+  | n when [int-lt n 0]  -> -1
+  | _                    -> 1
 
 ;; Match on Bool
 match b
@@ -497,8 +516,12 @@ Available patterns:
 - *Bracketed*: =[cons x nil]= -- grouped pattern in brackets
 - *Head-tail*: =[a b | rest]= -- Prolog/Erlang-style list destructuring,
   desugars to nested =cons= matching: =cons a (cons b rest)=
-- *Numeric*: =0N=, =1N=, =42N= -- Nat literal patterns, desugar to
+- *Nat literal*: =0N=, =1N=, =42N= -- desugar to
   =zero=, =suc zero=, =suc (suc ... zero)=
+- *Int literal*: =0=, =1=, =-1=, =42= -- bare integers compile to
+  equality dispatch via =int-eq=, NOT constructor patterns
+- *Guard clause*: =| pattern when guard-expr -> body= -- boolean guard
+  checked after pattern matches; if guard fails, falls through to next arm
 
 #+begin_src prologos
 ;; Head-tail list pattern in match
@@ -525,6 +548,32 @@ if [zero? n] base-case [step n]
 match [zero? n]
   | true  -> base-case
   | false -> step n
+#+end_src
+
+** Cond (Multi-Way Conditional)
+
+=cond= is a macro for multi-way conditional dispatch. Each arm has a boolean
+guard and a body separated by =->= . Arms are tried top-to-bottom; the first
+true guard fires. Use =true= as a catch-all default.
+
+#+begin_src grammar
+cond-expr ::= 'cond' cond-arm+
+cond-arm  ::= '|' guard-expr '->' body
+#+end_src
+
+#+begin_src prologos
+;; Classify an integer
+defn classify [n : Int] : Int
+  cond
+    | [int-eq n 0]  -> 0
+    | [int-lt n 0]  -> -1
+    | true          -> 1
+
+;; Absolute value
+defn abs [n : Int] : Int
+  cond
+    | [int-lt n 0] -> [int-neg n]
+    | true         -> n
 #+end_src
 
 ** Let (Local Binding)

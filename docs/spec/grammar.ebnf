@@ -226,7 +226,8 @@ defn-clause     = param-list , [ return-annot ] , expr  (* arity clause *)
                 | pattern-list , '->' , expr            (* pattern clause *)
                 ;
 (* params+patterns: defn f [params] [: RetType] | pat... -> body | ... *)
-defn-pattern-arms = { '|' , match-pattern , '->' , expr } ;
+defn-pattern-arms = { '|' , match-pattern , [ guard-clause ] , '->' , expr } ;
+guard-clause      = 'when' , expr ;
 param-list      = '[' , { param } , ']' ;
 param           = identifier                       (* bare param *)
                 | identifier , ':' , type-expr     (* typed param *)
@@ -589,6 +590,7 @@ expr-atom       = literal
                 | match-expr
                 | reduce-expr
                 | if-expr
+                | cond-expr
                 | let-expr
                 | do-expr
                 | the-expr
@@ -677,7 +679,7 @@ fn-binder       = '(' , identifier , [ ':' , type-expr ] , ')'  (* typed *)
    Constructor names are disambiguated via the constructor registry. *)
 match-expr      = 'match' , expr , match-arms ;
 match-arms      = { match-arm } ;
-match-arm       = '|' , match-pattern , '->' , expr ;
+match-arm       = '|' , match-pattern , [ guard-clause ] , '->' , expr ;
 
 (* ------------------------------------------------ *)
 (* 5.9 Patterns                                     *)
@@ -696,6 +698,7 @@ pattern-list    = '[' , { match-pattern } , ']' ;
 match-pattern   = identifier                       (* variable binding or nullary ctor *)
                 | wildcard                         (* _ discard *)
                 | nat-literal                      (* numeric pattern 0N, 1N, etc. *)
+                | int-literal                      (* bare integer pattern 0, 1, -1 etc. *)
                 | identifier , { match-pattern }   (* compound ctor: suc zero, suc [suc k] *)
                 | '[' , match-pattern , { match-pattern } , ']'  (* bracketed compound *)
                 | '[' , match-pattern , { match-pattern } , '|' , match-pattern , ']'
@@ -717,6 +720,12 @@ head-tail-pat   = match-pattern , { match-pattern } , '|' , match-pattern ;
 
 (* if is a pre-parse macro that desugars to match on Bool *)
 if-expr         = 'if' , expr , expr , expr ;
+
+(* cond: multi-way conditional dispatch. Pre-parse macro expanding to nested if.
+   Each arm has a boolean guard and body separated by '->'.
+   Use 'true' as a catch-all default. *)
+cond-expr       = 'cond' , { cond-arm } ;
+cond-arm        = '|' , expr , '->' , expr ;
 
 (* ------------------------------------------------ *)
 (* 5.11 Local Bindings (let)                        *)
