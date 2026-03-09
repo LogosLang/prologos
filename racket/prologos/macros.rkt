@@ -7847,7 +7847,8 @@
   (for/fold ([result '()])
             ([row (in-list (reverse rows))])
     (define pats (car row))
-    (define body (cadr row))
+    (define guard (cadr row))
+    (define body (caddr row))
     (define pat-at-col (list-ref pats col))
     (cond
       ;; Compound pattern matching this ctor
@@ -7856,7 +7857,7 @@
        (define sub-pats (pat-compound-args pat-at-col))
        (define new-pats
          (append (take pats col) sub-pats (drop pats (+ col 1))))
-       (cons (list new-pats body) result)]
+       (cons (list new-pats guard body) result)]
       ;; Variable — matches any ctor, bind to original param
       [(and (pat-atom? pat-at-col) (eq? (pat-atom-kind pat-at-col) 'var))
        (define vname (pat-atom-name pat-at-col))
@@ -7867,7 +7868,7 @@
          (append (take pats col) fresh-vars (drop pats (+ col 1))))
        (define new-body
          (make-let-binding vname (surf-var param-at-col loc) body loc))
-       (cons (list new-pats new-body) result)]
+       (cons (list new-pats guard new-body) result)]
       ;; Wildcard — matches any ctor, no binding
       [(and (pat-atom? pat-at-col) (eq? (pat-atom-kind pat-at-col) 'wildcard))
        (define fresh-vars
@@ -7875,7 +7876,7 @@
            (pat-atom 'wildcard '_ #f loc)))
        (define new-pats
          (append (take pats col) fresh-vars (drop pats (+ col 1))))
-       (cons (list new-pats body) result)]
+       (cons (list new-pats guard body) result)]
       ;; Different ctor — skip this row
       [else result])))
 
@@ -7908,29 +7909,56 @@
         (let* ([adjusted-rows
                 (for/list ([row (in-list default-rows)])
                   (define pats (car row))
-                  (define body (cadr row))
+                  (define guard (cadr row))
+                  (define body (caddr row))
                   (define pat-at-col (list-ref pats col))
                   (define new-pats
                     (append (take pats col) (drop pats (+ col 1))))
-                  ;; Bind variable if needed
+                  ;; Keep the original pattern at dispatch col for variable binding
+                  ;; (handled by compile-match-tree base case or here for single-col)
                   (define new-body
                     (cond
                       [(and (pat-atom? pat-at-col) (eq? (pat-atom-kind pat-at-col) 'var))
                        (make-let-binding (pat-atom-name pat-at-col) scrutinee-ref body loc)]
                       [else body]))
-                  (list new-pats new-body))]
+                  ;; Guard may reference pattern variables — wrap guard too
+                  (define new-guard
+                    (cond
+                      [(not guard) #f]
+                      [(and (pat-atom? pat-at-col) (eq? (pat-atom-kind pat-at-col) 'var))
+                       (make-let-binding (pat-atom-name pat-at-col) scrutinee-ref guard loc)]
+                      [else guard]))
+                  (list new-pats new-guard new-body))]
                [new-params
                 (append (take param-names col) (drop param-names (+ col 1)))])
           (if (null? (caar adjusted-rows))
-              ;; Dispatch column was the only one — return first default body
-              (cadar adjusted-rows)
+              ;; Dispatch column was the only one — return first default body/guard
+              (let ([guard (cadr (car adjusted-rows))]
+                    [body (caddr (car adjusted-rows))])
+                (if guard
+                    (let ([motive (surf-ann
+                                  (surf-arrow #f (surf-bool-type loc) (surf-type 0 loc) loc)
+                                  (surf-lam (binder-info '_ 'mw (surf-bool-type loc))
+                                            (surf-hole loc) loc)
+                                  loc)])
+                      ;; Guard and body already have variable bindings applied above
+                      (surf-boolrec motive body
+                                    (compile-match-tree (cdr adjusted-rows) '() loc)
+                                    guard loc))
+                    body))
               ;; More columns to dispatch — recurse
               (compile-match-tree adjusted-rows new-params loc)))))
   ;; Build nested if chain from int-lit rows (right fold, order preserved)
+  (define boolrec-motive
+    (surf-ann (surf-arrow #f (surf-bool-type loc) (surf-type 0 loc) loc)
+              (surf-lam (binder-info '_ 'mw (surf-bool-type loc))
+                        (surf-hole loc) loc)
+              loc))
   (foldr (lambda (row rest)
            (define pat (list-ref (car row) col))
            (define lit-value (pat-atom-value pat))
-           (define body (cadr row))
+           (define guard (cadr row))
+           (define body (caddr row))
            ;; Remove the int-lit column from remaining patterns
            (define remaining-pats
              (append (take (car row) col) (drop (car row) (+ col 1))))
@@ -7941,20 +7969,19 @@
              (if (and (pair? remaining-pats)
                       (for/or ([p (in-list remaining-pats)])
                         (not (pattern-is-variable? p))))
-                 (compile-match-tree (list (list remaining-pats body)) new-params loc)
+                 (compile-match-tree (list (list remaining-pats guard body)) new-params loc)
                  ;; All remaining are variables — just bind and return body
                  (if (null? remaining-pats)
                      body
                      (wrap-variable-bindings remaining-pats new-params body loc))))
-           ;; Use constant motive shorthand (same as parser's boolrec handler):
-           ;; _ → (the (-> Bool (Type 0)) (fn [_ <Bool>] _))
-           ;; This gives the type checker enough info to infer the result type.
-           (surf-boolrec (surf-ann
-                          (surf-arrow #f (surf-bool-type loc) (surf-type 0 loc) loc)
-                          (surf-lam (binder-info '_ 'mw (surf-bool-type loc))
-                                    (surf-hole loc) loc)
-                          loc)
-                         resolved-body
+           ;; Apply guard if present: wrap body with (if guard body rest)
+           (define guarded-body
+             (if guard
+                 (surf-boolrec boolrec-motive resolved-body rest guard loc)
+                 resolved-body))
+           ;; Equality check: if (int-eq scrutinee lit) then guarded-body else rest
+           (surf-boolrec boolrec-motive
+                         guarded-body
                          rest
                          (surf-int-eq scrutinee-ref (surf-int-lit lit-value loc) loc)
                          loc))
@@ -7962,7 +7989,7 @@
          int-rows))
 
 ;; Compile a match tree from pattern rows.
-;; rows: list of (list patterns body) where patterns is a list of normalized patterns.
+;; rows: list of (list patterns guard body) where patterns is a list of normalized patterns.
 ;; param-names: symbols for the scrutinee at each position.
 ;; Returns a surface expression (surf-reduce, surf-var, surf-app, etc.)
 (define (compile-match-tree rows param-names loc)
@@ -7973,7 +8000,28 @@
     ;; First row is all variables → base case: bind and return body
     [(for/and ([pat (in-list (caar rows))])
        (pattern-is-variable? pat))
-     (wrap-variable-bindings (caar rows) param-names (cadar rows) loc)]
+     (define row-guard (cadr (car rows)))
+     (define row-body (caddr (car rows)))
+     (if row-guard
+         ;; Guard: bind variables, then check guard; if guard fails, try remaining rows.
+         ;; The guard expression may reference pattern-bound variables, so both
+         ;; guard and body must be inside the variable binding scope.
+         ;; Use the same annotated constant motive shorthand as the parser's
+         ;; boolrec handler: (the (-> Bool (Type 0)) (fn [_ <Bool>] _))
+         (let* ([guard-motive
+                 (surf-ann (surf-arrow #f (surf-bool-type loc) (surf-type 0 loc) loc)
+                           (surf-lam (binder-info '_ 'mw (surf-bool-type loc))
+                                     (surf-hole loc) loc)
+                           loc)]
+                [guard-check
+                 (surf-boolrec guard-motive
+                               row-body
+                               (compile-match-tree (cdr rows) param-names loc)
+                               row-guard
+                               loc)])
+           (wrap-variable-bindings (caar rows) param-names guard-check loc))
+         ;; No guard: just bind and return body
+         (wrap-variable-bindings (caar rows) param-names row-body loc))]
     ;; Dispatch: check if column has Int literal patterns
     [else
      (define col (find-dispatch-column rows))
@@ -8026,11 +8074,13 @@
 ;; scrutinee: already-parsed surface expression (NOT yet expanded)
 ;; arms: list of match-pattern-arm (each has a single-element patterns list)
 ;; Returns un-expanded surface AST (caller should re-expand).
+;; Row format: (list patterns guard body) where guard is #f or surf expr.
 (define (compile-match-expression scrutinee arms loc)
   (define scrutinee-name (gensym '__scrutinee))
   (define rows
     (for/list ([arm (in-list arms)])
       (list (map normalize-pattern (match-pattern-arm-patterns arm))
+            (match-pattern-arm-guard arm)
             (match-pattern-arm-body arm))))
   (define match-body (compile-match-tree rows (list scrutinee-name) loc))
   (make-let-binding scrutinee-name scrutinee match-body loc))
@@ -8209,14 +8259,28 @@
 (define (compile-pattern-group name clauses loc [spec-name #f])
   (define arity
     (length (defn-pattern-clause-patterns (car clauses))))
-  ;; Generate fresh param names
+  ;; Generate param names. If all clauses have all-variable first patterns,
+  ;; use variable names from the first clause to avoid redundant let-bindings.
+  ;; This is critical for guards: fn __arg0 . (let n = __arg0 in ...) creates
+  ;; an extra indirection that triggers QTT false positives.
   (define param-names
-    (for/list ([i (in-range arity)])
-      (string->symbol (format "__arg~a" i))))
+    (let* ([all-var? (for/and ([clause (in-list clauses)])
+                       (for/and ([pat (in-list (defn-pattern-clause-patterns clause))])
+                         (pattern-is-variable? pat)))]
+           [first-pats (defn-pattern-clause-patterns (car clauses))])
+      (if all-var?
+          (for/list ([pat (in-list first-pats)])
+            (if (and (pat-atom? pat) (eq? (pat-atom-kind pat) 'var))
+                (pat-atom-name pat)
+                (gensym '__wild)))
+          (for/list ([i (in-range arity)])
+            (string->symbol (format "__arg~a" i))))))
   ;; Normalize all patterns and build rows
+  ;; Row format: (list patterns guard body)
   (define rows
     (for/list ([clause (in-list clauses)])
       (list (map normalize-pattern (defn-pattern-clause-patterns clause))
+            (defn-pattern-clause-guard clause)
             (defn-pattern-clause-body clause))))
   ;; Try spec type first, fall back to inferred type from constructor metadata
   (define spec-type
@@ -8224,9 +8288,10 @@
   (cond
     ;; Zero-arity: just use first body
     [(= arity 0)
-     (surf-def name #f (cadar rows) loc)]
-    ;; Single clause, all variables → optimize: use variable names as params
+     (surf-def name #f (caddr (car rows)) loc)]
+    ;; Single clause, all variables, no guard → optimize: use variable names as params
     [(and (= (length rows) 1)
+          (not (cadr (car rows)))  ;; no guard
           (for/and ([pat (in-list (caar rows))])
             (pattern-is-variable? pat)))
      (define var-names
@@ -8234,7 +8299,7 @@
          (if (eq? (pat-atom-kind pat) 'wildcard)
              (gensym '__wild)
              (pat-atom-name pat))))
-     (define body (cadar rows))
+     (define body (caddr (car rows)))
      (define type (or spec-type (build-pattern-group-type var-names rows loc)))
      (define nested-lam
        (foldr (lambda (vn inner)

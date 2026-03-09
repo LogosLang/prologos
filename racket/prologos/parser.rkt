@@ -3578,6 +3578,42 @@
   (when (= arity 0)
     (parse-error loc
       (format "defn ~a: params+patterns syntax requires at least one parameter" name) #f))
+  ;; Register inline type as spec if typed params AND return type present.
+  ;; This allows compile-pattern-group to use the correct type via lookup-spec.
+  (let ([elems (map stx->datum param-elems)]
+        [has-ret-type (and (pair? ret-type-tokens)
+                           (eq? (stx->datum (car ret-type-tokens)) ':)
+                           (> (length ret-type-tokens) 1))])
+    (when (and (memq ': elems) has-ret-type)
+      ;; Extract param types: split on $comma, take tokens after : in each group
+      (define param-types
+        (let loop ([rest elems] [current-type '()] [types '()] [saw-colon #f])
+          (cond
+            [(null? rest)
+             (reverse (if saw-colon
+                         (cons (reverse current-type) types)
+                         types))]
+            [(eq? (car rest) '$comma)
+             (loop (cdr rest) '()
+                   (if saw-colon (cons (reverse current-type) types) types)
+                   #f)]
+            [(eq? (car rest) ':)
+             (loop (cdr rest) '() types #t)]
+            [saw-colon
+             (loop (cdr rest) (cons (car rest) current-type) types #t)]
+            [else ;; param name before :
+             (loop (cdr rest) current-type types saw-colon)])))
+      ;; Extract return type: strip leading :
+      (define ret-type-datums
+        (map stx->datum (cdr ret-type-tokens)))
+      ;; Build spec tokens: T1 -> T2 -> ... -> RetType
+      (define spec-tokens
+        (let ([parts (append param-types (list ret-type-datums))])
+          (apply append
+            (for/list ([part (in-list parts)] [i (in-naturals)])
+              (if (= i 0) part (cons '-> part))))))
+      (register-spec! name
+        (spec-entry (list spec-tokens) docstring #f loc '() '() #f (hasheq)))))
   ;; Parse each $pipe arm into a defn-pattern-clause
   (define clauses
     (for/list ([arm-stx (in-list arm-stxs)])
@@ -3604,10 +3640,29 @@
       (and (eq? (stx->datum p) '->) i)))
   (unless arrow-idx
     (parse-error loc (format "defn ~a: pattern arm missing ->" name) #f))
-  (define pat-forms (take cleaned arrow-idx))
+  (define pre-arrow (take cleaned arrow-idx))
   (define body-parts (drop cleaned (+ arrow-idx 1)))
   (when (null? body-parts)
     (parse-error loc (format "defn ~a: pattern arm missing body after ->" name) #f))
+
+  ;; Split pre-arrow into pattern forms and optional guard at `when`
+  (define-values (pat-forms guard-forms)
+    (let ([when-idx (for/or ([p (in-list pre-arrow)] [i (in-naturals)])
+                      (and (eq? (stx->datum p) 'when) i))])
+      (if when-idx
+          (values (take pre-arrow when-idx) (drop pre-arrow (+ when-idx 1)))
+          (values pre-arrow '()))))
+
+  ;; Parse guard expression (if present)
+  (define guard
+    (if (null? guard-forms) #f
+        (let ([guard-stx (if (= (length guard-forms) 1)
+                             (car guard-forms)
+                             (datum->syntax #f (map stx->datum guard-forms)
+                                            (car guard-forms)))])
+          (parse-datum guard-stx))))
+  (when (and guard (prologos-error? guard)) guard)
+
   ;; Parse body
   (define body-stx
     (if (= (length body-parts) 1) (car body-parts)
@@ -3640,7 +3695,7 @@
          (parse-single-pattern pf loc))]))
   (define first-err (findf prologos-error? patterns))
   (if first-err first-err
-      (defn-pattern-clause patterns body loc)))
+      (defn-pattern-clause patterns guard body loc)))
 
 ;; ========================================
 ;; Pattern parsing for pattern-based defn clauses
@@ -3814,6 +3869,7 @@
 
   (cond
     ;; ---- Pattern clause: [patterns...] -> body ----
+    ;; Also supports: [patterns...] when guard -> body (but rare in this syntax)
     [(eq? first-rest-datum '->)
      (define body-parts (cdr rest-args))
      (when (null? body-parts)
@@ -3827,7 +3883,7 @@
      (cond
        [(prologos-error? body) body]
        [(prologos-error? patterns) patterns]
-       [else (defn-pattern-clause patterns body loc)])]
+       [else (defn-pattern-clause patterns #f body loc)])]
 
     ;; ---- Arity clause: existing logic ----
     [else
@@ -5834,13 +5890,34 @@
   (unless arrow-idx
     (parse-error loc "match arm missing -> separator" #f))
 
-  (define pat-forms (take cleaned arrow-idx))
+  (define pre-arrow (take cleaned arrow-idx))
   (define body-parts (drop cleaned (+ arrow-idx 1)))
 
-  (when (null? pat-forms)
+  (when (null? pre-arrow)
     (parse-error loc "match arm missing pattern" #f))
   (when (null? body-parts)
     (parse-error loc "match arm missing body after ->" #f))
+
+  ;; Split pre-arrow into pattern forms and optional guard at `when`
+  (define-values (pat-forms guard-forms)
+    (let ([when-idx (for/or ([p (in-list pre-arrow)] [i (in-naturals)])
+                      (and (eq? (stx->datum p) 'when) i))])
+      (if when-idx
+          (values (take pre-arrow when-idx) (drop pre-arrow (+ when-idx 1)))
+          (values pre-arrow '()))))
+
+  (when (null? pat-forms)
+    (parse-error loc "match arm missing pattern" #f))
+
+  ;; Parse guard expression (if present)
+  (define guard
+    (if (null? guard-forms) #f
+        (let ([guard-stx (if (= (length guard-forms) 1)
+                             (car guard-forms)
+                             (datum->syntax #f (map stx->datum guard-forms)
+                                            (car guard-forms)))])
+          (parse-datum guard-stx))))
+  (when (and guard (prologos-error? guard)) guard)
 
   ;; Parse body
   (define body-stx
@@ -5869,7 +5946,7 @@
         loc)]))
   (when (prologos-error? pattern) pattern)
 
-  (match-pattern-arm (list pattern) body loc))
+  (match-pattern-arm (list pattern) guard body loc))
 
 ;; ========================================
 ;; Convenience: parse from string

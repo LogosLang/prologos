@@ -1017,9 +1017,10 @@
 ;; ========================================
 ;; Rich pattern match (compiled during expand-expression)
 ;; ========================================
-;; match-pattern-arm: patterns (list of pat-* nodes), body (surf expr)
+;; match-pattern-arm: patterns (list of pat-* nodes), guard (#f or surf expr), body (surf expr)
 ;; For single-scrutinee match, patterns is a single-element list.
-(struct match-pattern-arm (patterns body srcloc) #:transparent)
+;; guard: #f (no guard) or a parsed surf expression checked after pattern match.
+(struct match-pattern-arm (patterns guard body srcloc) #:transparent)
 
 ;; surf-match-patterns: rich pattern match that gets compiled into
 ;; nested surf-reduce via compile-match-tree during macro expansion.
@@ -1065,7 +1066,8 @@
 ;; Pattern-based clause of a multi-body defn
 ;; patterns: list of pattern (one per argument position)
 ;; body: surface expression
-(struct defn-pattern-clause (patterns body srcloc) #:transparent)
+;; guard: #f (no guard) or a parsed surf expression.
+(struct defn-pattern-clause (patterns guard body srcloc) #:transparent)
 
 ;; ========================================
 ;; Foreign escape block

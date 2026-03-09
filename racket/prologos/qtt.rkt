@@ -1976,10 +1976,14 @@
                            [else m])]
             [mults-ok (or (mult-meta? m) (mult-meta? m2) (eq? m m2))])
        (cond
-         [(not mults-ok) (bu #f (zero-usage n))]
-         [(not (unify-ok? (unify ctx a t-dom))) (bu #f (zero-usage n))]
+         [(not mults-ok)
+          (bu #f (zero-usage n))]
+         [(and (not (expr-hole? a)) (not (unify-ok? (unify ctx a t-dom))))
+          (bu #f (zero-usage n))]
          [else
-          (let ([r (checkQ (ctx-extend ctx a effective-m) body b)])
+          ;; Use Pi domain when lambda domain is a hole (mirrors type checker behavior)
+          (define ctx-dom (if (expr-hole? a) t-dom a))
+          (let ([r (checkQ (ctx-extend ctx ctx-dom effective-m) body b)])
             (match r
               [(bu #t u)
                (let ([actual-usage (uhead u)])
