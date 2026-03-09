@@ -1591,16 +1591,32 @@
   (if (zero? n) '() (cons (car lst) (list-take (cdr lst) (- n 1)))))
 
 (define (maybe-rewrite-infix-eq elems source)
+  ;; Find position of := (binding operator) — if present and before =,
+  ;; the = is in a value position (e.g., let x := foo = bar) and should
+  ;; NOT be treated as top-level infix equality.
+  (define assign-pos
+    (let loop ([es elems] [i 0])
+      (cond
+        [(null? es) #f]
+        [(and (syntax? (car es))
+              (symbol? (syntax-e (car es)))
+              (eq? (syntax-e (car es)) ':=))
+         i]
+        [else (loop (cdr es) (+ i 1))])))
   (define eq-pos
     (let loop ([es elems] [i 0])
       (cond
         [(null? es) #f]
-        [(and (symbol? (syntax-e (car es)))
+        [(and (syntax? (car es))
+              (symbol? (syntax-e (car es)))
               (eq? (syntax-e (car es)) '=)
               (> i 0))  ;; not first element
          i]
         [else (loop (cdr es) (+ i 1))])))
-  (if eq-pos
+  ;; Skip infix rewrite if := exists and = comes after :=
+  ;; (the = is part of the value expression, not a top-level operator)
+  (if (and eq-pos
+           (not (and assign-pos (> eq-pos assign-pos))))
       (let* ([lhs-elems (list-take elems eq-pos)]
              [eq-stx (list-ref elems eq-pos)]
              [rhs-elems (list-tail elems (+ eq-pos 1))]
