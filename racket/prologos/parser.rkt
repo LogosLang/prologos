@@ -2690,8 +2690,9 @@
                      (or (and (prologos-error? lhs) lhs)
                          rhs)
                      (surf-narrow lhs rhs qvars loc)))
-               ;; No ?-variables: generic equality operator
-               (parse-application head-stx args loc))])]
+               ;; No ?-variables: desugar to eq? (Eq trait method, returns Bool)
+               (or (check-arity '= args 2 loc)
+                   (parse-datum `(eq? ,(car args) ,(cadr args)))))])]
 
        ;; (is var [expr]) — functional eval in relational context
        [(is)
