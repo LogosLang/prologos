@@ -350,11 +350,11 @@
    "3N : Nat"))
 
 (test-case "foreign/uncurried-bool-return"
-  ;; Nat Nat -> Bool
+  ;; Nat Nat -> Bool — use :as to avoid = keyword interception (= now desugars to eq-check)
   (check-contains
    (run-ns-last
-    "(foreign racket \"racket/base\" (= : Nat Nat -> Bool))
-     (eval (= (suc (suc zero)) (suc (suc zero))))")
+    "(foreign racket \"racket/base\" :as rkt (= : Nat Nat -> Bool))
+     (eval (rkt/= (suc (suc zero)) (suc (suc zero))))")
    "true : Bool"))
 
 (test-case "foreign/curried-still-works"

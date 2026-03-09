@@ -1475,18 +1475,24 @@
           ;; Collect consecutive let forms
           (define-values (lets remaining) (collect-consecutive-lets rest))
           (cond
-            ;; Single let — merge with following body if present
+            ;; Single let — merge with following body only if bodyless
             [(<= (length lets) 1)
+             ;; Pre-process: restructure infix = in value tokens so that
+             ;; let-bodyless? works correctly for values like (r := 1N = 1N).
+             ;; Without this, (let r := ($nat-literal 1) = ($nat-literal 1))
+             ;; appears to have 3 elements after :=, fooling let-bodyless?.
+             (define preprocessed (preprocess-let-infix-eq (car lets)))
              (if (and (pair? remaining)
-                      (not (let-form? (car remaining))))
+                      (not (let-form? (car remaining)))
+                      (let-bodyless? preprocessed))
                  ;; Single bodyless let followed by body expression — merge
-                 ;; (Same logic as multi-let case: WS reader produces bodyless
-                 ;; lets as siblings, with body at same indent level.)
+                 ;; (WS reader produces bodyless lets as siblings, with body
+                 ;; at same indent level.)
                  (let* ([body (car remaining)]
-                        [all-bindings (extract-let-binding-tokens (car lets))]
+                        [all-bindings (extract-let-binding-tokens preprocessed)]
                         [merged `(let ,all-bindings ,body)])
                    (loop (cdr remaining) (cons merged acc)))
-                 ;; No following body — pass through as-is
+                 ;; Has body already or no following expr — pass through as-is
                  (loop remaining (cons (car lets) acc)))]
             ;; Multiple lets followed by a non-let body expression —
             ;; treat ALL lets as bodyless bindings, trailing expr is the body.
@@ -1507,6 +1513,25 @@
              (loop remaining (cons merged acc))])]
          [else
           (loop (cdr rest) (cons (car rest) acc))]))]))
+
+;; Pre-process a let form to restructure infix = in value tokens.
+;; (let r := a = b) → (let r := (= a b))
+;; This makes let-bodyless? work correctly for values containing =.
+(define (preprocess-let-infix-eq form)
+  (if (not (and (list? form) (pair? form) (eq? (car form) 'let)))
+      form
+      (let* ([rest (cdr form)]
+             [assign-pos (index-of-symbol ':= rest)])
+        (if (not assign-pos)
+            form
+            (let* ([before-and-assign (take rest (+ assign-pos 1))]  ; name ... :=
+                   [after-assign (drop rest (+ assign-pos 1))])
+              (if (<= (length after-assign) 1)
+                  form  ; already single-element value or empty — no restructuring needed
+                  (let ([restructured (maybe-restructure-infix-eq after-assign)])
+                    (if (equal? restructured after-assign)
+                        form  ; no = found in value — leave unchanged
+                        `(let ,@before-and-assign ,restructured)))))))))
 
 ;; Is this element a let form?
 (define (let-form? elem)
