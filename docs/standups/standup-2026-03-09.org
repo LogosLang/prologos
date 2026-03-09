@@ -1,0 +1,87 @@
+#+TITLE: Standup — 2026-03-09
+#+DATE: 2026-03-09
+
+
+* Yesterday (since Mar 7 standup created)
+
+** FL Narrowing: Complete Implementation (Phases 1-3, 11 sub-phases)
+
+Full functional-logic narrowing engine built on the propagator+ATMS substrate.
+~3,800 lines of new code, ~720 new tests, 11 new modules, zero regressions.
+
+*** Phase 1: Core Narrowing (5 sub-phases)
+- 1a: Definitional tree extraction from =defn= patterns (commit =99e56a8=)
+- 1b: Term lattice with bot/Var/Ctor/top + unification merge (commit =4a7e215=)
+- 1c: Narrowing propagator factory (commit =77f4a5d=)
+- 1d: DT-guided narrowing search with ATMS branching (commit =36831ed=)
+- 1e: WS-mode narrowing syntax (commit =3062b4c=)
+
+*** Phase 2: Abstract Interpretation + Static Analysis (3 sub-phases)
+- 2a: Interval abstract domain via Galois connections (commit =6301d69=)
+- 2b: Size-based termination analysis with LJBA criterion (commit =bae2fb4=)
+- 2c: Critical pair / confluence analysis (commit =3d3c0ce=)
+
+*** Phase 3: Advanced Extensions (3 sub-phases)
+- 3a: 0-CFA auto-defunctionalization for HO narrowing (commit =cdb6176=)
+- 3b: Configurable search heuristics — 3 orthogonal axes (commit =fdda370=)
+- 3c: Global constraints + branch-and-bound optimization (commit =16dd1ac=)
+
+*** FL Narrowing Post-Implementation Review + Capstone Demo (commits =550bbd4=, =92d4e0c=)
+
+** Pattern-Based =defn= Clauses + Head-Tail Patterns (commits =8402619=..=96bd62e=)
+
+Haskell/Erlang-style pattern matching at the function definition level:
+- =| [zero y] -> y= / =| [(suc n) y] -> [suc [add n y]]= syntax
+- Head-tail =[a b | rest]= in both defn and match contexts
+- Spec integration for pattern-compiled functions
+- 22 tests, grammar docs updated
+
+** Unified Pattern Matching (commits =99f97ef=..=1ad02e8=)
+
+Rich patterns (constructors, literals, nested, head-tail) in both =match= arms
+and =defn= params/arms — same compilation path. 38 new tests.
+
+** Int Literal Patterns + Guard Clauses + Cond Macro (commits =8df17c1=..=d0b880f=)
+
+Three new surface features for =Int=-based dispatch:
+- Bare integer literals in patterns compile to =surf-int-eq= equality dispatch
+- =| pattern when guard-expr -> body= guard clauses with fall-through
+- =cond | guard -> body | ...= multi-way conditional macro
+- Performance regression found and fixed in =compile-match-expression= fast path
+- Test expectation fixes (={map= → ={:= regex, empty CHAMP map ={}= pp)
+- 47 new tests, grammar + tracking docs
+
+** Library Improvements
+- Renamed =first/second= to =fst/snd= for Sigma pair projections (commit =5feaeb9=)
+- Added =first/second/rest= as generic collection functions (commit =7c04a89=)
+- Fixed ground constructor args in narrowing (commit =7fdf1cd=)
+- Documented WS narrowing surface gaps in DEFERRED (commit =ebacd75=)
+
+** Whale Test Splits (commits =936b045=, =626b1af=)
+
+Split 10 test files exceeding 30s wall time into =-01/-02= halves for better
+thread-pool parallelism. Added =test-reduction-perf-02-01.rkt= to skip list.
+Files split: pattern-defn, char-string, narrow-syntax, mixfix, union-find-integration,
+implicit-map, pipe-compose-e2e, narrowing-search, dot-access, cfa-analysis.
+
+** Research Documents (commits =93b2e98=, =111ba69=, =0a3ead4=, =9add767=)
+- Propagator Networks as Model Checkers (~865 lines)
+- Narrowing, Search Heuristics, and FL Narrowing Feature Design (~490 lines)
+- FL Narrowing Phase 0-1 revision (~780 lines)
+- Phase 2-3 Abstract Interpretation + Static Analysis design (~680 lines)
+- External critique review: accepted 6/10 concerns, revised design
+
+** Metrics
+
+| Metric     | Mar 7 standup | Current   |
+|------------+---------------+-----------|
+| Tests      |          6080 |      6528 |
+| Test files |           312 |       336 |
+| Failures   |             0 |         0 |
+| Wall time  |         176.9 |     190.4 |
+| Skipped    |             2 |         3 |
+| Commits    |             — | ~50 new   |
+
+
+* Today
+
