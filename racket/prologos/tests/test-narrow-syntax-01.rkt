@@ -147,19 +147,19 @@
 
 ;; Helper: count solution maps in output
 (define (count-answers result-str)
-  (length (regexp-match* #rx"\\{map" result-str)))
+  (length (regexp-match* #rx"\\{:" result-str)))
 
 (test-case "narrow/sexp: single ?-var produces solution"
   ;; (= (not ?b) true) — one ?-variable → narrowing finds {b: false}
   (define result (run-last "(= (not ?b) true)"))
   (check-true (string? result))
-  (check-true (string-contains? result "{map")))
+  (check-true (string-contains? result "{:")))
 
 (test-case "narrow/sexp: two ?-vars"
   ;; (= (add ?x ?y) 3) — four solutions: (0,3), (1,2), (2,1), (3,0)
   (define result (run-last "(= (add ?x ?y) 3)"))
   (check-true (string? result))
-  (check-true (string-contains? result "{map")))
+  (check-true (string-contains? result "{:")))
 
 (test-case "narrow/sexp: no ?-vars → not narrowing"
   ;; (= true true) without ?-vars: = is treated as a function application.
@@ -178,20 +178,20 @@
   (define result
     (run-ws-last "ns test-ws-n1\n[not ?b] = true\n"))
   (check-true (string? result))
-  (check-true (string-contains? result "{map")))
+  (check-true (string-contains? result "{:")))
 
 (test-case "narrow/ws: two ?-vars with infix ="
   (define result
     (run-ws-last "ns test-ws-n2\n[add ?x ?y] = 3N\n"))
   (check-true (string? result))
-  (check-true (string-contains? result "{map")))
+  (check-true (string-contains? result "{:")))
 
 (test-case "narrow/ws: ?-var on RHS"
   ;; true = [not ?b] — ?-var appears on RHS
   (define result
     (run-ws-last "ns test-ws-n3\ntrue = [not ?b]\n"))
   (check-true (string? result))
-  (check-true (string-contains? result "{map")))
+  (check-true (string-contains? result "{:")))
 
 ;; ========================================
 ;; D. Result format — narrowing produces solution maps
@@ -232,7 +232,7 @@
   ;; (= (add (suc ?x) ?y) 5) — fixed first arg shape, narrows second
   (define result (run-last "(= (add (suc ?x) ?y) 5)"))
   (check-true (string? result))
-  (check-true (string-contains? result "{map")))
+  (check-true (string-contains? result "{:")))
 
 (test-case "narrow/edge: ?-var appears in both sides"
   ;; (= (not ?b) ?b) — same var on both sides → no solution

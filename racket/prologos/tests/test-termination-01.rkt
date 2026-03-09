@@ -96,7 +96,7 @@
 (define (run-last s) (last (run s)))
 
 (define (count-answers result-str)
-  (length (regexp-match* #rx"\\{map" result-str)))
+  (length (regexp-match* #rx"\\{:" result-str)))
 
 ;; ========================================
 ;; A. Struct unit tests

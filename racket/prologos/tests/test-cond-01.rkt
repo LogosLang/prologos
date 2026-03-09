@@ -25,14 +25,14 @@
   ;; First arm with true guard fires immediately
   (check-equal?
    (run-ns-ws-last
-    "(ns c1)\neval\n  cond\n    | true -> 1\n    | true -> 2")
+    "(ns c1)\ndefn pick [] : Int\n  cond\n    | true -> 1\n    | true -> 2\neval [pick]")
    "1 : Int"))
 
 (test-case "cond/fallthrough"
   ;; False guards fall through to next arm
   (check-equal?
    (run-ns-ws-last
-    "(ns c2)\neval\n  cond\n    | false -> 1\n    | false -> 2\n    | true -> 3")
+    "(ns c2)\ndefn pick2 [] : Int\n  cond\n    | false -> 1\n    | false -> 2\n    | true -> 3\neval [pick2]")
    "3 : Int"))
 
 ;; ========================================

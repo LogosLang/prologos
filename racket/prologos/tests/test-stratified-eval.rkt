@@ -68,7 +68,7 @@
       (fail (format "Unexpected error: ~a" (prologos-error-message r))))))
 
 (define (count-answers result-str)
-  (length (regexp-match* #rx"\\{map" result-str)))
+  (length (regexp-match* #rx"\\{:" result-str)))
 
 ;; ========================================
 ;; Phase S1: Dependency Extraction

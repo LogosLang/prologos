@@ -187,7 +187,7 @@
                 "(Map Keyword Nat)" "pp Map Keyword Nat")
   (check-equal? (pp-expr (expr-map-assoc (expr-champ champ-empty)
                                           (expr-keyword 'x) (expr-zero)) '())
-                "[map-assoc {map ...} :x 0N]" "pp map-assoc"))
+                "[map-assoc {} :x 0N]" "pp map-assoc"))
 
 ;; ========================================
 ;; Surface syntax: End-to-end via process-string (sexp mode)

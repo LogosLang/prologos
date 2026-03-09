@@ -26,28 +26,28 @@
   ;; Bare 0 in match arm → Int equality dispatch
   (check-equal?
    (run-ns-ws-last
-    "(ns t1)\ndef n : Int := 0\neval\n  match n\n    | 0 -> true\n    | _ -> false")
+    "(ns t1)\ndefn iz [n : Int] : Bool\n  match n\n    | 0 -> true\n    | _ -> false\neval [iz 0]")
    "true : Bool"))
 
 (test-case "int-pat/match-nonzero"
   ;; Non-matching Int literal
   (check-equal?
    (run-ns-ws-last
-    "(ns t2)\ndef n : Int := 5\neval\n  match n\n    | 0 -> true\n    | _ -> false")
+    "(ns t2)\ndefn iz2 [n : Int] : Bool\n  match n\n    | 0 -> true\n    | _ -> false\neval [iz2 5]")
    "false : Bool"))
 
 (test-case "int-pat/match-multi-lit"
   ;; Multiple Int literals in match
   (check-equal?
    (run-ns-ws-last
-    "(ns t3)\ndef n : Int := 1\neval\n  match n\n    | 0 -> 10\n    | 1 -> 20\n    | _ -> 30")
+    "(ns t3)\ndefn m [n : Int] : Int\n  match n\n    | 0 -> 10\n    | 1 -> 20\n    | _ -> 30\neval [m 1]")
    "20 : Int"))
 
 (test-case "int-pat/match-negative"
   ;; Negative Int literal
   (check-equal?
    (run-ns-ws-last
-    "(ns t4)\ndef n : Int := -1\neval\n  match n\n    | -1 -> true\n    | _ -> false")
+    "(ns t4)\ndefn neg [n : Int] : Bool\n  match n\n    | -1 -> true\n    | _ -> false\neval [neg -1]")
    "true : Bool"))
 
 (test-case "int-pat/match-variable-default"

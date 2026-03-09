@@ -8069,6 +8069,16 @@
             (reduce-arm ctor field-names arm-body loc)))
         (surf-reduce (surf-var scrutinee-name loc) arms loc)])]))
 
+;; Check if a normalized pattern is "simple flat": a constructor with all
+;; variable or wildcard sub-patterns. These can be compiled directly to
+;; reduce-arm without the full compile-match-tree pipeline. Top-level
+;; variable/wildcard patterns are NOT simple-flat because they need
+;; let-bindings from compile-match-tree to bind the scrutinee.
+(define (pattern-is-simple-flat? pat)
+  (and (pat-compound? pat)
+       (for/and ([sub (in-list (pat-compound-args pat))])
+         (and (pat-atom? sub) (memq (pat-atom-kind sub) '(var wildcard))))))
+
 ;; Compile a rich pattern match expression into nested surf-reduce.
 ;; Used by expand-expression to handle surf-match-patterns nodes.
 ;; scrutinee: already-parsed surface expression (NOT yet expanded)
@@ -8076,14 +8086,36 @@
 ;; Returns un-expanded surface AST (caller should re-expand).
 ;; Row format: (list patterns guard body) where guard is #f or surf expr.
 (define (compile-match-expression scrutinee arms loc)
-  (define scrutinee-name (gensym '__scrutinee))
-  (define rows
+  ;; Fast path: if all arms are simple flat constructor patterns with no guards,
+  ;; directly produce surf-reduce (like the old parse-reduce-arm did).
+  ;; This avoids the compile-match-tree overhead of extra let-bindings and
+  ;; re-expansion, which matters because prelude loading processes hundreds of
+  ;; match expressions.
+  (define normalized-arms
     (for/list ([arm (in-list arms)])
       (list (map normalize-pattern (match-pattern-arm-patterns arm))
             (match-pattern-arm-guard arm)
             (match-pattern-arm-body arm))))
-  (define match-body (compile-match-tree rows (list scrutinee-name) loc))
-  (make-let-binding scrutinee-name scrutinee match-body loc))
+  (define simple?
+    (for/and ([row (in-list normalized-arms)])
+      (and (not (cadr row))                     ;; no guard
+           (= (length (car row)) 1)             ;; single pattern
+           (pattern-is-simple-flat? (caar row))  ;; flat ctor or variable
+           )))
+  (if simple?
+      ;; Fast path: directly produce surf-reduce (all arms are flat constructors)
+      (let ([reduce-arms
+             (for/list ([row (in-list normalized-arms)])
+               (define pat (caar row))
+               (define body (caddr row))
+               (reduce-arm (pat-compound-ctor-name pat)
+                           (map pat-atom-name (pat-compound-args pat))
+                           body loc))])
+        (surf-reduce scrutinee reduce-arms loc))
+      ;; Full path: compile via compile-match-tree for complex patterns
+      (let* ([scrutinee-name (gensym '__scrutinee)]
+             [match-body (compile-match-tree normalized-arms (list scrutinee-name) loc)])
+        (make-let-binding scrutinee-name scrutinee match-body loc))))
 
 ;; Convert a type name symbol to its surface syntax representation.
 ;; Built-in types (Nat, Bool, Unit) have dedicated surface syntax structs;

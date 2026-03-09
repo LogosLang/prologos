@@ -65,9 +65,9 @@
     (when (prologos-error? r)
       (fail (format "Unexpected error: ~a" (prologos-error-message r))))))
 
-;; Count occurrences of "{map" in a result string to determine answer count.
+;; Count occurrences of "{:" in a result string to determine answer count.
 (define (count-answers result-str)
-  (length (regexp-match* #rx"\\{map" result-str)))
+  (length (regexp-match* #rx"\\{:" result-str)))
 
 ;; Get the last non-error result from the results list.
 (define (last-result results)
@@ -90,7 +90,7 @@
   (define solve-result (last-result results))
   (check-true (string? solve-result)
               "solve result should be a string")
-  (check-true (string-contains? solve-result "{map")
+  (check-true (string-contains? solve-result "{:")
               "solve result should contain answer maps")
   (check-equal? (count-answers solve-result) 1
                 "should find exactly 1 answer for parent alice ?y"))

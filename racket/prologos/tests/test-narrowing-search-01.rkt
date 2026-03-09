@@ -102,7 +102,7 @@
 
 ;; Count solution maps in pretty-printed output
 (define (count-answers result-str)
-  (length (regexp-match* #rx"\\{map" result-str)))
+  (length (regexp-match* #rx"\\{:" result-str)))
 
 ;; ========================================
 ;; A. Direct search API tests (run-narrowing-search)
