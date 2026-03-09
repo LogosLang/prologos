@@ -142,6 +142,61 @@ protocols to be assembled from simpler phases. This is not a separate
 mechanism --- it falls out of session types being first-class types. See
 [[file:PROTOCOLS_AS_TYPES.org][Protocols as Types]].
 
+* First-Class by Default
+
+When introducing a language construct --- types, multiplicities, session
+protocols, traits, propagator cells --- make it a /first-class citizen/: a
+value that can be stored, passed, returned, abstracted over, and computed
+upon. The marginal cost of first-class-ness is typically modest (reification
+plus type rules), but the option value is unbounded. First-class constructs
+compose with every other first-class construct, creating a combinatorial
+surface area for emergent capabilities that cannot be predicted at design
+time.
+
+** The Session Types Lesson
+
+Session types in Prologos were designed as protocol specifications. Because
+they were made first-class types (not a special-purpose annotation system),
+they could appear anywhere types appear --- including as continuation type
+arguments to other session types. This yielded composable protocol phases: a
+capability that was not designed but /fell out/ of the first-class decision.
+No amount of upfront analysis would have predicted this; it emerged from the
+combinatorial interaction of session types with the existing type system.
+
+This is the general pattern: first-class-ness creates /affordances you
+cannot anticipate/. The architectural decision (make it first-class)
+precedes and enables the capability discovery (composable protocols,
+type-directed search, trait-polymorphic narrowing, etc.). Deferring
+first-class treatment "until we need it" forecloses discoveries we cannot
+yet name.
+
+** Application
+
+| Construct | First-class as | Enables |
+|--------------+---------------------+--------------------------------------|
+| Types | Values of ~Type~ | Dependent types, type-level programming |
+| Multiplicities | Lattice elements | QTT, resource-sensitive computation |
+| Session types | Types in continuations | Composable protocol phases |
+| Traits | Propositions / types | Trait-polymorphic narrowing, dispatch as constraint |
+| Propagator cells | Network-resident values | Cross-domain bidirectional inference |
+| Code | ~Datum~ values | Homoiconic metaprogramming |
+
+** Relationship to Other Principles
+
+First-Class by Default is the /meta-principle/ behind several existing
+Prologos design choices:
+- *Homoiconicity*: code is first-class data (~Datum~ type with 8 constructors)
+- *Session types as types*: protocols are first-class in the type system
+- *Layered architecture*: each layer's constructs are independently useful
+  /because/ they are first-class --- they compose with constructs from other layers
+- *Spec as living interface*: specs are first-class because their metadata is
+  structured data, not opaque annotations
+
+The principle also serves as a /design heuristic/: when uncertain whether a
+construct should be reified, default to yes. The cost of premature
+first-class-ness (unused reification machinery) is far less than the cost of
+premature opacity (foreclosed capabilities requiring architectural rework).
+
 * The Most Generalizable Interface
 
 When designing any abstraction, prefer the interface that serves the widest
