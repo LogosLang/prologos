@@ -813,6 +813,8 @@
    (test-dep '(driver.rkt global-env.rkt macros.rkt metavar-store.rkt narrowing.rkt namespace.rkt prelude.rkt reduction.rkt syntax.rkt trait-resolution.rkt) #t)
    'test-constraint-cell-01.rkt
    (test-dep '(constraint-cell.rkt) #f)
+   'test-constraint-propagators-01.rkt
+   (test-dep '(constraint-cell.rkt constraint-propagators.rkt driver.rkt global-env.rkt macros.rkt metavar-store.rkt narrowing.rkt namespace.rkt prelude.rkt propagator.rkt reduction.rkt syntax.rkt) #t)
    'test-trait-tycon-01.rkt
    (test-dep '(driver.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt prelude.rkt syntax.rkt trait-resolution.rkt typing-core.rkt unify.rkt) #t)
    'test-tycon.rkt

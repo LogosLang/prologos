@@ -33,7 +33,8 @@
          "provenance.rkt"
          "stratified-eval.rkt"
          "narrowing.rkt"
-         "definitional-tree.rkt")
+         "definitional-tree.rkt"
+         "constraint-propagators.rkt")
 
 (provide whnf nf nf-whnf conv conv-nf
          current-nf-cache current-whnf-cache
@@ -217,19 +218,19 @@
       (match e
         [(expr-fvar name) (values name (append extra-args arg-exprs))]
         [(expr-app f a) (loop f (cons a extra-args))]
-        ;; Generic operators: dispatch to concrete FQN via type inspection.
-        ;; Uses target-expr (from outer scope) as fallback type hint.
+        ;; Generic operators: dispatch via constraint-cell-based resolution.
+        ;; Queries impl registry dynamically; uses target-expr as fallback type hint.
         [(expr-generic-add a b)
-         (let ([fname (generic-op-dispatch 'Add (list a b) target-expr)])
+         (let ([fname (resolve-generic-narrowing 'Add (list a b) target-expr)])
            (if fname (values fname (append extra-args (list a b) arg-exprs)) (values #f '())))]
         [(expr-generic-sub a b)
-         (let ([fname (generic-op-dispatch 'Sub (list a b) target-expr)])
+         (let ([fname (resolve-generic-narrowing 'Sub (list a b) target-expr)])
            (if fname (values fname (append extra-args (list a b) arg-exprs)) (values #f '())))]
         [(expr-generic-mul a b)
-         (let ([fname (generic-op-dispatch 'Mul (list a b) target-expr)])
+         (let ([fname (resolve-generic-narrowing 'Mul (list a b) target-expr)])
            (if fname (values fname (append extra-args (list a b) arg-exprs)) (values #f '())))]
         [(expr-generic-div a b)
-         (let ([fname (generic-op-dispatch 'Div (list a b) target-expr)])
+         (let ([fname (resolve-generic-narrowing 'Div (list a b) target-expr)])
            (if fname (values fname (append extra-args (list a b) arg-exprs)) (values #f '())))]
         [_ (values #f '())])))
   (cond
@@ -510,36 +511,6 @@
     [(expr-posit64? e) 'p64]
     [else #f]))
 
-;; Infer ground type for narrowing dispatch from argument expressions.
-;; For narrowing purposes, both Nat and Int literals map to 'nat since
-;; narrowing operates on Nat's definitional tree (Int has no DT).
-;; Returns 'nat for any exact non-negative integer, or #f if no ground type found.
-(define (infer-narrowing-type-from-args args)
-  (for/or ([a (in-list args)])
-    (cond
-      [(nat-value a) 'nat]
-      [(and (expr-int? a) (exact-nonnegative-integer? (expr-int-val a))) 'nat]
-      [else #f])))
-
-;; Static dispatch table: generic trait → narrowing type → FQN function name.
-;; Only includes types with definitional trees for narrowing search.
-;; Initially hardcoded; Phase 2c will make this registry-based.
-(define generic-narrowing-dispatch
-  (hasheq
-   'Add (hasheq 'nat 'prologos::data::nat::add)
-   'Sub (hasheq 'nat 'prologos::data::nat::sub)
-   'Mul (hasheq 'nat 'prologos::data::nat::mult)))
-
-;; Look up concrete FQN for a generic operator given its trait name, arguments,
-;; and optionally the target expression. The target is used as a type hint when
-;; all arguments are unground (e.g., both are logic variables).
-(define (generic-op-dispatch trait-name args [target #f])
-  (define type-tag (or (infer-narrowing-type-from-args args)
-                       (and target (infer-narrowing-type-from-args (list target)))))
-  (and type-tag
-       (let ([trait-table (hash-ref generic-narrowing-dispatch trait-name #f)])
-         (and trait-table
-              (hash-ref trait-table type-tag #f)))))
 
 ;; Coerce a Racket rational value to a target type tag, returning an AST literal.
 (define (rational->literal val tag)
