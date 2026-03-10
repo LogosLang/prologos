@@ -255,7 +255,13 @@
         cid))
     (when (not (null? cell-ids))
       (hash-set! (current-trait-cell-map) meta-id
-                 (remove-duplicates cell-ids eq?)))))
+                 (remove-duplicates cell-ids eq?))))
+  ;; Phase 3d: If all type-args are already ground (no metas to trigger wakeup),
+  ;; attempt immediate resolution via the callback.
+  (when (null? type-arg-metas)
+    (define resolve-fn (current-retry-trait-resolve))
+    (when resolve-fn
+      (resolve-fn meta-id info))))
 
 (define (lookup-trait-constraint meta-id)
   (hash-ref (current-trait-constraint-map) meta-id #f))
