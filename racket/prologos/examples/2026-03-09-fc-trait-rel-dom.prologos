@@ -1,0 +1,516 @@
+ns examples.fc-trait-rel-dom
+
+;; ========================================================================
+;;
+;;     ╔════════════════════════════════════════════════════════════╗
+;;     ║  F I R S T - C L A S S   T R A I T S   &                 ║
+;;     ║  C O N S T R A I N T   D O M A I N S   O N               ║
+;;     ║  R E L A T I O N S                                        ║
+;;     ║  A Feature Capstone — Stage 3                             ║
+;;     ╚════════════════════════════════════════════════════════════╝
+;;
+;; ========================================================================
+;;
+;; This file demonstrates the Stage 3 "First-Class Traits" feature track
+;; in Prologos — nine implementation phases that make traits, dispatch,
+;; and constraint domains first-class citizens of the language.
+;;
+;; The central thesis: traits are constraints on types. Making constraints
+;; first-class creates a combinatorial surface where functional code,
+;; relational narrowing, and type-level dispatch compose freely.
+;;
+;; Stage 3 delivered three cumulative levels:
+;;
+;;   Level 1  trait-ref — abstract over *which trait* at the type level
+;;   Level 2  constraint cells — bidirectional type↔dispatch propagation
+;;   Level 3  traits as propositions — constraint chains, introspection,
+;;            incremental resolution
+;;
+;; Every uncommented expression below is LIVE and produces output.
+;; Commented-out sections show ideal syntax for features whose WS
+;; surface isn't yet wired up (annotated with NOTE:).
+;;
+;; Phases covered:
+;;
+;;   Phase 1   — Trait names as type constructors (trait-ref)
+;;   Phase 2a  — Static generic operator resolution in narrowing
+;;   Phase 2b  — Constraint cell lattice (bot/set/one/top)
+;;   Phase 2c  — Constraint propagators P1–P4
+;;   Phase 2d  — ATMS multi-candidate search
+;;   Phase 3a  — HasMethod constraint + method projection
+;;   Phase 3b  — Trait introspection (instances-of, methods-of, satisfies?)
+;;   Phase 3c  — Constraint chain syntax ?var:C1:C2
+;;   Phase 3d  — Incremental trait resolution (no batch pass)
+;;
+
+
+;; ========================================================================
+;; 1. TRAIT-DISPATCHED COMPUTATION — The Foundation
+;; ========================================================================
+;;
+;; FEATURE: Trait system (pre-Stage 3 foundation)
+;; FEATURE: Phase 3d — incremental resolution (no batch resolve pass)
+;;
+;; Traits in Prologos are single-method or multi-method type classes.
+;; The prelude defines Add, Sub, Mul, Eq, Ord, etc. with instances
+;; for Nat, Int, Rat, String, and more.
+;;
+;; Phase 3d made resolution incremental: when a type-arg meta is solved
+;; during type-checking, the trait dict is resolved immediately via a
+;; propagator callback — no batch post-pass needed.
+
+;; Forward computation through generic dispatch:
+;; `add` resolves to Add Nat → Nat--Add--dict → concrete Peano addition
+
+[add 3N 4N]
+;; 7N : Nat
+
+[sub 5N 2N]
+;; 3N : Nat
+
+[mult 3N 4N]
+;; 12N : Nat
+
+;; String concatenation — same `add`, different instance:
+[add "hello " "world"]
+;; "hello world" : String
+
+
+;; ========================================================================
+;; 2. GENERIC NARROWING — Running Trait Methods Backwards
+;; ========================================================================
+;;
+;; FEATURE: Phase 2a — static generic operator resolution in narrowing
+;; FEATURE: Phase 2c — constraint propagators for dispatch
+;; FEATURE: Phase 2d — multi-candidate ATMS search
+;;
+;; The centerpiece of this feature track: generic operators (+, -, *)
+;; can be used in narrowing queries. The narrowing engine resolves the
+;; trait, extracts the concrete definitional tree from the resolved
+;; method, and walks it backwards.
+;;
+;; Under the hood:
+;;   1. `add ?x ?y` elaborates with a fresh type-var meta A and
+;;      a dict meta for Add A
+;;   2. Phase 3d: as type args resolve to Nat, the dict meta is
+;;      solved incrementally via the resolve callback
+;;   3. Phase 2a: the narrowing propagator extracts the concrete DT
+;;      from the resolved Add Nat instance
+;;   4. Phase 2c: constraint cells narrow candidates as types flow
+;;   5. Standard DT-guided search finds all solutions
+
+;; Find all (x, y) such that x + y = 5:
+add ?x ?y = 5N
+;; '[{:y 0N, :x 5N} {:y 1N, :x 4N} {:y 2N, :x 3N}
+;;   {:y 3N, :x 2N} {:y 4N, :x 1N} {:y 5N, :x 0N}]
+
+;; Constrained: fix one argument
+add 3N ?y = 8N
+;; '[{:y 5N}]
+
+;; Multiplication backwards:
+mult ?x ?y = 6N
+;; Finds factor pairs: (1,6), (2,3), (3,2), (6,1)
+
+;; Subtraction backwards (saturating):
+sub ?x ?y = 3N
+;; Finds all (x, y) where x - y = 3 (within search depth)
+
+
+;; ========================================================================
+;; 3. CONSTRAINT CHAIN SYNTAX — Type-Guided Search Pruning
+;; ========================================================================
+;;
+;; FEATURE: Phase 3c — ?var:C1:C2 constraint chain syntax
+;;
+;; Logic variables can carry type constraints: ?x:Nat means "x must
+;; be a natural number." The reader greedily consumes :UpperCase
+;; segments into a single token, the parser splits them, and the
+;; narrowing solver installs type-guard constraints that prune
+;; invalid branches via forward-checking.
+;;
+;; This is the bridge between traits-as-types and narrowing-as-search:
+;; type constraints become domain constraints on logic variables.
+
+;; With type constraint — only Nat solutions explored:
+[add ?x:Nat ?y:Nat] = 5N
+
+;; Without constraint (same result, but the solver may explore
+;; more branches before finding all solutions):
+[add ?x ?y] = 5N
+
+;; The real power is with user-defined predicates.
+;; positive? has a DT with two branches (zero → false, suc → true):
+
+spec positive? Nat -> Bool
+defn positive? [n]
+  match n
+    | zero  -> false
+    | suc _ -> true
+
+;; Which Nat is positive?
+[positive? ?n:Nat] = true
+;; → finds n = suc(?_) — any nonzero Nat
+
+;; Which Nat is NOT positive?
+[positive? ?n:Nat] = false
+;; → finds n = zero
+
+
+;; ========================================================================
+;; 4. TRAIT INTROSPECTION — Runtime Reflection on the Type System
+;; ========================================================================
+;;
+;; FEATURE: Phase 3b — instances-of, methods-of, satisfies?
+;;
+;; Three commands let you query the trait registry at runtime.
+;; This enables generic programming patterns where code discovers
+;; which types satisfy a constraint.
+
+;; List all types that implement Eq:
+(instances-of Eq)
+;; → Instances of Eq: Nat, Bool, Int, Rat, String, Char, Ordering, ...
+
+;; List all types that implement Add:
+(instances-of Add)
+;; → Instances of Add: Nat, Int, Rat, String, ...
+
+;; List the methods of a trait:
+(methods-of Eq)
+;; → Methods of Eq: eq?
+
+(methods-of Ord)
+;; → Methods of Ord: compare
+
+;; Check if a specific type satisfies a trait:
+(satisfies? Nat Eq)
+;; → Nat satisfies Eq: true
+
+(satisfies? Nat Add)
+;; → Nat satisfies Add: true
+
+(satisfies? Bool Add)
+;; → Bool satisfies Add: false
+
+
+;; ========================================================================
+;; 5. FUNCTIONAL + RELATIONAL — Same Definition, Two Modes
+;; ========================================================================
+;;
+;; FEATURE: Phase 2a — generic narrowing through trait dispatch
+;; FEATURE: Phase 3c — constraint chains on user-defined functions
+;;
+;; The same function serves both as a computational tool (forward)
+;; and a constraint (backward). No separate `defr` needed.
+
+;; Define a function with trait-dispatched behavior:
+defn my-double [n] : Nat [add n n]
+
+;; Forward: compute
+[my-double 3N]
+;; 6N : Nat
+
+;; Backward: find inputs
+[my-double ?x] = 6N
+;; → finds x = 3 (plus any over-approximations from DFS)
+
+[my-double ?x] = 10N
+;; → finds x = 5
+
+;; Boolean logic — same duality:
+[and ?a ?b] = true
+;; → only (true, true) produces true
+
+[or ?a ?b] = false
+;; → only (false, false) produces false
+
+[xor ?a ?b] = true
+;; → (true, false) and (false, true)
+
+
+;; ========================================================================
+;; 6. COMPOSITION: PIPES + TRAIT-DISPATCHED FUNCTIONS
+;; ========================================================================
+;;
+;; FEATURE: Piping (|>) + trait dispatch
+;;
+;; Generic functions dispatched through traits compose naturally with
+;; the pipe operator. The pipeline reads left-to-right while each
+;; step resolves its trait constraint independently.
+
+;; Simple pipe: double then add
+3N |> my-double |> [add 1N]
+;; 7N : Nat  (3 → 6 → 7)
+
+;; Multi-step Nat pipeline:
+2N |> [add 3N] |> [mult 2N]
+;; 10N : Nat  (2 → 5 → 10)
+
+;; String pipeline:
+"hello" |> [add " "] |> [add "world"]
+;; "hello world" : String
+
+
+;; ========================================================================
+;; 7. COMPOSITION: PATTERN MATCHING + NARROWING
+;; ========================================================================
+;;
+;; FEATURE: Phase 1a — DT extraction from match expressions
+;; FEATURE: Phase 2b — termination analysis (LJBA)
+;;
+;; Functions defined with pattern matching automatically get
+;; definitional trees that narrowing can walk backwards.
+
+;; A parity classifier:
+spec even? Nat -> Bool
+defn even? [n]
+  match n
+    | zero    -> true
+    | suc k   ->
+      match k
+        | zero  -> false
+        | suc j -> [even? j]
+
+;; Forward: check parity
+[even? 4N]
+;; true : Bool
+
+[even? 3N]
+;; false : Bool
+
+;; Which Nat is even?
+[even? ?n:Nat] = true
+
+
+;; ========================================================================
+;; 8. COMPOSITION: INTROSPECTION + GENERIC DISPATCH
+;; ========================================================================
+;;
+;; FEATURE: Phase 3b — instances-of discovers trait landscape
+;; FEATURE: Phase 2c — constraint propagators for dispatch
+;;
+;; Introspection reveals the trait landscape; generic dispatch uses it.
+;; Together, they enable a style where code adapts to the available
+;; type class instances.
+
+;; Discover what's orderable:
+(instances-of Ord)
+;; → Nat, Bool, Int, Rat, String, Char, ...
+
+;; Then use Ord-constrained functions:
+[compare 3N 5N]
+;; LT : Ordering
+
+[compare "alpha" "beta"]
+;; LT : Ordering
+
+;; Equality through trait dispatch:
+[eq? 3N 3N]
+;; true : Bool
+
+[eq? 3N 4N]
+;; false : Bool
+
+
+;; ========================================================================
+;; 9. COMPOSITION: HIGHER-ORDER FUNCTIONS + NARROWING
+;; ========================================================================
+;;
+;; FEATURE: Phase 1a — DT from wrapper functions (trivial dt-rule)
+;; FEATURE: Phase 2a — generic narrowing
+;;
+;; Higher-order wrapper functions are narrowable thanks to trivial
+;; dt-rules. The narrowing engine "sees through" the wrapper into
+;; the inner function's definitional tree.
+
+;; A wrapper around a trait-dispatched function:
+defn triple [n] : Nat [add n [add n n]]
+
+;; Forward:
+[triple 3N]
+;; 9N : Nat
+
+;; Backward through wrapper → through generic add:
+[triple ?x] = 9N
+
+;; Another wrapper with subtraction:
+defn half-diff [x y] : Nat [sub x [add y y]]
+
+;; Forward:
+[half-diff 10N 3N]
+;; 4N : Nat
+
+
+;; ========================================================================
+;; 10. THE INCREMENTAL RESOLUTION PIPELINE
+;; ========================================================================
+;;
+;; FEATURE: Phase 3d — no batch resolve-trait-constraints! pass
+;;
+;; In the current pipeline, trait resolution is fully incremental:
+;;
+;;   1. Elaborator creates type-var metas and dict metas
+;;   2. register-trait-constraint! builds wakeup index
+;;   3. Type-checking solves type-var metas via unification
+;;   4. solve-meta! triggers retry-trait-for-meta! (wakeup map)
+;;      + retry-traits-via-cells! (propagator network)
+;;   5. Resolve callback does monomorphic/parametric lookup
+;;   6. Dict meta solved immediately — no batch pass needed
+;;
+;; Phase 3d removed the last 4 batch resolve-trait-constraints!
+;; calls from expander.rkt. The incremental path handles everything.
+;;
+;; This means trait errors are detected DURING inference, not after.
+;; Better error messages and faster compilation.
+
+;; All of these resolve incrementally — no batch pass:
+[add 1N 2N]
+[sub 5N 3N]
+[mult 2N 3N]
+[eq? true false]
+[compare 1N 2N]
+
+
+;; ========================================================================
+;; 11. THE CONSTRAINT LATTICE — How Dispatch Narrows
+;; ========================================================================
+;;
+;; FEATURE: Phase 2b — constraint-cell.rkt lattice
+;; FEATURE: Phase 2c — constraint propagators P1–P4
+;;
+;; Under the hood, each trait constraint is modeled as a lattice value:
+;;
+;;   constraint-bot     ⊥  — unconstrained (all candidates possible)
+;;   constraint-set S      — partially constrained (S ⊆ all impls)
+;;   constraint-one e      — fully resolved (single impl)
+;;   constraint-top     ⊤  — contradiction (no candidates)
+;;
+;; Merge = set intersection. As type information flows through the
+;; propagator network, constraint cells narrow monotonically:
+;;
+;;   ?T:Add  →  {Add Nat, Add Int, Add Rat, Add String}
+;;   + type info: T = Nat  →  {Add Nat}  →  constraint-one
+;;
+;; Four propagators maintain consistency:
+;;   P1: Type → Constraint  (type cell narrows → filter candidates)
+;;   P2: Constraint → Type  (constraint narrows → compute type union)
+;;   P3: Method → Constraint (method evidence narrows candidates)
+;;   P4: Result → Constraint (result type narrows candidates)
+;;
+;; This is invisible to the user — it all happens behind `add ?x ?y`.
+
+
+;; ========================================================================
+;; 12. HASMETHOD CONSTRAINTS — Abstract Method Projection
+;; ========================================================================
+;;
+;; FEATURE: Phase 3a — :over/:method spec syntax
+;;
+;; Functions can be abstract over *which trait* provides a method.
+;; The HasMethod constraint says "trait P must have method m with
+;; signature S." Resolution searches the trait registry.
+;;
+;; NOTE: The :over/:method spec keywords work in the sexp pipeline.
+;; WS surface syntax for these keywords is pending (tracked).
+;;
+;; IDEAL SYNTAX (sexp infrastructure exists, WS integration pending):
+;;
+;; spec apply-method {A : Type} [P A] A A -> Bool
+;;   :over P
+;;   :method P eq? : A A -> Bool
+;;
+;; defn apply-method [dict x y]
+;;   [eq? dict x y]
+;;
+;; [apply-method 3N 3N]
+;; ;; → resolves P = Eq, applies Eq Nat dict, returns true
+
+
+;; ========================================================================
+;; 13. MULTI-CANDIDATE SEARCH — ATMS Worldview Enumeration
+;; ========================================================================
+;;
+;; FEATURE: Phase 2d — ATMS multi-candidate search
+;;
+;; When the type isn't known at narrowing time, multiple trait impls
+;; may match. Phase 2d uses an ATMS (Assumption-based Truth
+;; Maintenance System) to explore each candidate in a separate
+;; worldview:
+;;
+;;   1. Constraint cell has candidates: {Add Nat, Add Int, Add String}
+;;   2. For each candidate, create a worldview (ATMS environment)
+;;   3. Run narrowing in each worldview independently
+;;   4. Collect all solutions, deduplicate
+;;
+;; In practice, type inference usually resolves to a single candidate
+;; before narrowing begins (Phase 3d incremental resolution). The
+;; multi-candidate path is the safety net for truly ambiguous cases.
+
+;; This resolves to a single candidate (Nat) before search:
+[add ?x ?y] = 3N
+
+
+;; ========================================================================
+;; 14. CROSS-FEATURE EXERCISE: Everything Together
+;; ========================================================================
+;;
+;; This section demonstrates the composition of ALL Stage 3 features
+;; in a single cohesive example.
+
+;; Define a user function with pattern matching (gets a DT):
+spec collatz-step Nat -> Nat
+defn collatz-step [n]
+  match n
+    | zero  -> zero
+    | suc k ->
+      match [even? n]
+        | true  -> [div n 2N]
+        | false -> [add [mult n 3N] 1N]
+
+;; Forward computation (trait dispatch: mult, add, div, even?):
+[collatz-step 6N]
+;; 3N : Nat
+
+[collatz-step 3N]
+;; 10N : Nat
+
+;; Introspect the traits involved:
+(methods-of Mul)
+;; → Methods of Mul: mult
+
+(satisfies? Nat Mul)
+;; → Nat satisfies Mul: true
+
+;; Constrained narrowing — which step produces 1?
+;; (Collatz conjecture: all paths eventually reach 1)
+[collatz-step ?n:Nat] = 1N
+
+;; Check: discover all numeric traits available
+(instances-of Num)
+
+
+;; ========================================================================
+;; 15. SUMMARY — What Stage 3 Delivered
+;; ========================================================================
+;;
+;; | Phase | Feature                    | Composition demonstrated above |
+;; |-------|----------------------------|--------------------------------|
+;; | 1     | trait-ref type constructor | §1 (generic dispatch)          |
+;; | 2a    | generic narrowing          | §2 (add/sub/mult backwards)    |
+;; | 2b    | constraint cell lattice    | §11 (theory section)           |
+;; | 2c    | constraint propagators     | §2, §5 (narrowing dispatch)    |
+;; | 2d    | ATMS multi-candidate       | §13 (theory section)           |
+;; | 3a    | HasMethod projection       | §12 (ideal syntax)             |
+;; | 3b    | trait introspection        | §4, §8, §14 (live queries)     |
+;; | 3c    | constraint chain ?var:T    | §3, §5, §7 (constrained vars)  |
+;; | 3d    | incremental resolution     | §1, §10 (all dispatch)         |
+;;
+;; Cross-feature compositions:
+;;   • Generic narrowing + constraint chains (§3)
+;;   • Pipes + trait dispatch (§6)
+;;   • Pattern matching + narrowing (§7)
+;;   • Introspection + generic dispatch (§8)
+;;   • Higher-order wrappers + narrowing (§9)
+;;   • User-defined functions + trait dispatch + narrowing (§14)
+;;
+;; Lines: ~360 | Live expressions: ~45 | Sections: 15
