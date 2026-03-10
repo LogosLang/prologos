@@ -41,7 +41,7 @@ Implementation phases in suggested order:
 | 6 | **Phase 2d** | ATMS multi-candidate search | L2 | ✅ `9faecd2` | Enumerate-and-merge over candidates, dedup |
 | 7 | **Phase 3b** | Trait introspection (REPL + sexp) | L3 | ✅ `3ce09aa` | instances-of, methods-of, satisfies? |
 | 8 | **Phase 3c** | `?var:C1:C2` constraint chain syntax | L3 | ✅ `184e85e` | Reader greedy consumption + type-guard forward-check |
-| 9 | **Phase 3d** | Incremental trait resolution | L3 | ⬜ | |
+| 9 | **Phase 3d** | Incremental trait resolution | L3 | ✅ `1cbe5fc` | Removed batch resolve; immediate-resolve for ground type-args |
 
 **Legend:** ⬜ Not started · 🔄 In progress · ✅ Complete · ⏸️ Blocked
 
