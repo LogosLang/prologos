@@ -811,6 +811,8 @@
    (test-dep '(champ.rkt driver.rkt errors.rkt global-env.rkt macros.rkt namespace.rkt prelude.rkt pretty-print.rkt reduction.rkt rrb.rkt substitution.rkt syntax.rkt typing-core.rkt) #t)
    'test-trait-narrowing-01.rkt
    (test-dep '(driver.rkt global-env.rkt macros.rkt metavar-store.rkt narrowing.rkt namespace.rkt prelude.rkt reduction.rkt syntax.rkt trait-resolution.rkt) #t)
+   'test-constraint-cell-01.rkt
+   (test-dep '(constraint-cell.rkt) #f)
    'test-trait-tycon-01.rkt
    (test-dep '(driver.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt prelude.rkt syntax.rkt trait-resolution.rkt typing-core.rkt unify.rkt) #t)
    'test-tycon.rkt
