@@ -8735,6 +8735,10 @@
     [(surf-elaborate? surf)
      (surf-elaborate (expand-expression (surf-elaborate-expr surf))
                      (surf-elaborate-srcloc surf))]
+    ;; Phase 3b: Trait introspection — pass through to elaboration
+    [(surf-instances-of? surf) surf]
+    [(surf-methods-of? surf) surf]
+    [(surf-satisfies?? surf) surf]
     ;; defr — named relation definition (Phase 7)
     ;; Pass through to elaboration, which produces (list 'defr name expr)
     [(surf-defr? surf) surf]

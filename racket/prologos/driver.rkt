@@ -478,6 +478,75 @@
                   [(list 'elaborate expr)
                    (pp-expr (zonk-final expr))]
 
+                  ;; Phase 3b: Trait introspection commands
+                  ;; (instances-of TraitName) — list all type instances
+                  [(list 'instances-of trait-name)
+                   (define impl-reg (current-impl-registry))
+                   (define param-reg (current-param-impl-registry))
+                   ;; Collect monomorphic instances from impl registry
+                   (define mono-instances
+                     (for/list ([(key entry) (in-hash impl-reg)]
+                                #:when (eq? (impl-entry-trait-name entry) trait-name))
+                       (impl-entry-type-args entry)))
+                   ;; Collect parametric instances
+                   (define param-instances
+                     (hash-ref param-reg trait-name '()))
+                   (define param-type-args
+                     (map (lambda (pe)
+                            (param-impl-entry-type-pattern pe))
+                          param-instances))
+                   (if (and (null? mono-instances) (null? param-type-args))
+                       (format "No instances found for trait ~a" trait-name)
+                       (string-append
+                        (format "Instances of ~a:\n" trait-name)
+                        (string-join
+                         (append
+                          (map (lambda (ta)
+                                 (format "  ~a" (string-join (map (lambda (t) (format "~a" t)) ta) " ")))
+                               mono-instances)
+                          (map (lambda (tp)
+                                 (format "  ~a (parametric)" (string-join (map (lambda (t) (format "~a" t)) tp) " ")))
+                               param-type-args))
+                         "\n")))]
+
+                  ;; (methods-of TraitName) — list all methods
+                  [(list 'methods-of trait-name)
+                   (define tm (lookup-trait trait-name))
+                   (if (not tm)
+                       (format "No trait found: ~a" trait-name)
+                       (let ([methods (trait-meta-methods tm)])
+                         (if (null? methods)
+                             (format "Trait ~a has no methods." trait-name)
+                             (string-append
+                              (format "Methods of ~a:\n" trait-name)
+                              (string-join
+                               (map (lambda (m)
+                                      (format "  ~a : ~a"
+                                              (trait-method-name m)
+                                              (pp-datum (trait-method-type-datum m))))
+                                    methods)
+                               "\n")))))]
+
+                  ;; (satisfies? TypeName TraitName) — check if type implements trait
+                  [(list 'satisfies? type-name trait-name)
+                   (define impl-reg (current-impl-registry))
+                   (define param-reg (current-param-impl-registry))
+                   ;; Check monomorphic: look for key "TypeName--TraitName"
+                   (define mono-key
+                     (string->symbol (format "~a--~a" type-name trait-name)))
+                   (define mono? (hash-has-key? impl-reg mono-key))
+                   ;; Check parametric instances
+                   (define param?
+                     (let ([entries (hash-ref param-reg trait-name '())])
+                       (ormap (lambda (pe)
+                                (let ([pattern (param-impl-entry-type-pattern pe)])
+                                  (and (pair? pattern)
+                                       (eq? (car pattern) type-name))))
+                              entries)))
+                   (if (or mono? param?)
+                       (format "~a satisfies ~a: true" type-name trait-name)
+                       (format "~a satisfies ~a: false" type-name trait-name))]
+
                   ;; (defr name expr) — named relation definition (Phase 7)
                   ;; Type-infer the relation, register in global env + relation store
                   [(list 'defr name expr)

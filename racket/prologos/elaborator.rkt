@@ -3672,6 +3672,16 @@
        (if (prologos-error? e) e
            (list 'elaborate e)))]
 
+    ;; Phase 3b: Trait introspection — pass through to driver
+    [(surf-instances-of trait-name loc)
+     (list 'instances-of trait-name)]
+
+    [(surf-methods-of trait-name loc)
+     (list 'methods-of trait-name)]
+
+    [(surf-satisfies? type-name trait-name loc)
+     (list 'satisfies? type-name trait-name)]
+
     ;; defr — named relation definition (Phase 7)
     ;; Elaborate to (list 'defr name expr-defr-node) for driver processing
     [(surf-defr name schema variants loc)

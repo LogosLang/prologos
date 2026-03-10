@@ -71,6 +71,7 @@
     is not all-different element cumulative minimize
     Solver Goal DerivationTree Answer
     def defn check eval infer expand expand-1 expand-full parse elaborate match
+    instances-of methods-of satisfies?
     ;; Pre-parse macros — should be expanded before reaching parser
     defmacro let do if deftype data spec trait impl where bundle with-transient
     ;; Private-suffix forms — consumed in preparse, rewritten to base form
@@ -2861,6 +2862,26 @@
         (or (check-arity 'elaborate args 1 loc)
             (let ([e (parse-datum (car args))])
               (if (prologos-error? e) e (surf-elaborate e loc))))]
+
+       ;; Phase 3b: Trait introspection commands
+       ;; (instances-of TraitName) — list all type instances of a trait
+       [(instances-of)
+        (or (check-arity 'instances-of args 1 loc)
+            (let ([raw (stx->datum (car args))])
+              (surf-instances-of raw loc)))]
+
+       ;; (methods-of TraitName) — list all methods of a trait
+       [(methods-of)
+        (or (check-arity 'methods-of args 1 loc)
+            (let ([raw (stx->datum (car args))])
+              (surf-methods-of raw loc)))]
+
+       ;; (satisfies? TypeName TraitName) — check if a type implements a trait
+       [(satisfies?)
+        (or (check-arity 'satisfies? args 2 loc)
+            (let ([type-name (stx->datum (car args))]
+                  [trait-name (stx->datum (cadr args))])
+              (surf-satisfies? type-name trait-name loc)))]
 
        ;; (subtype Sub Super) or (subtype Sub Super via coerce-fn)
        [(subtype)

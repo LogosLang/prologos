@@ -285,6 +285,10 @@
  (struct-out surf-expand-full)
  (struct-out surf-parse)
  (struct-out surf-elaborate)
+ ;; Trait introspection (Phase 3b)
+ (struct-out surf-instances-of)
+ (struct-out surf-methods-of)
+ (struct-out surf-satisfies?)
  ;; Annotated lambda
  (struct-out surf-the-fn)
  ;; Type hole (inferred)
@@ -990,6 +994,16 @@
 
 ;; Inspection: (expand-full form) — show all preparse transforms with labels
 (struct surf-expand-full (datum srcloc) #:transparent)
+
+;; Trait introspection (Phase 3b)
+;; (instances-of TraitName) — list all type instances of a trait
+(struct surf-instances-of (trait-name srcloc) #:transparent)
+
+;; (methods-of TraitName) — list all methods of a trait
+(struct surf-methods-of (trait-name srcloc) #:transparent)
+
+;; (satisfies? TypeName TraitName) — check if a type implements a trait
+(struct surf-satisfies? (type-name trait-name srcloc) #:transparent)
 
 ;; Annotated lambda: (the-fn type [params...] body)
 ;; Desugars to (the type (fn (p1:T1) (fn (p2:T2) ... body)))

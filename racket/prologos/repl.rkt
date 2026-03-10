@@ -17,7 +17,8 @@
          "global-env.rkt"
          "reader.rkt"
          "macros.rkt"
-         "sexp-readtable.rkt")
+         "sexp-readtable.rkt"
+         "trait-resolution.rkt")
 
 (provide run-repl
          current-repl-mode)
@@ -32,7 +33,7 @@
 ;; ========================================
 (define (run-repl)
   (displayln "Prologos v0.3.0")
-  (displayln ":quit to exit | :env | :load | :type | :expand | :macros | :specs")
+  (displayln ":quit to exit | :env | :load | :type | :expand | :macros | :specs | :instances | :methods | :satisfies")
   (newline)
   ;; Start with empty global env
   (parameterize ([current-global-env (hasheq)])
@@ -301,6 +302,78 @@
                             (string-join (map (lambda (t) (format "~s" t)) clause) " "))
                           types)
                      " | ")))))]
+    ;; Phase 3b: Trait introspection commands
+    [(string-prefix? cmd ":instances")
+     (let ([trait-str (string-trim (substring cmd 10))])
+       (if (string=? trait-str "")
+           ;; List all registered traits
+           (let ([reg (current-trait-registry)])
+             (if (hash-empty? reg)
+                 (displayln "  (no traits registered)")
+                 (for ([(name _) (in-hash reg)])
+                   (displayln (format "  ~a" name)))))
+           ;; List instances of specific trait
+           (let ([trait-name (string->symbol trait-str)])
+             (define impl-reg (current-impl-registry))
+             (define param-reg (current-param-impl-registry))
+             (define mono-instances
+               (for/list ([(key entry) (in-hash impl-reg)]
+                          #:when (eq? (impl-entry-trait-name entry) trait-name))
+                 (impl-entry-type-args entry)))
+             (define param-instances (hash-ref param-reg trait-name '()))
+             (if (and (null? mono-instances) (null? param-instances))
+                 (displayln (format "  No instances found for trait ~a" trait-name))
+                 (begin
+                   (for ([ta (in-list mono-instances)])
+                     (displayln (format "  ~a"
+                       (string-join (map (lambda (t) (format "~a" t)) ta) " "))))
+                   (for ([pe (in-list param-instances)])
+                     (displayln (format "  ~a (parametric)"
+                       (string-join
+                        (map (lambda (t) (format "~a" t))
+                             (param-impl-entry-type-pattern pe))
+                        " ")))))))))]
+
+    [(string-prefix? cmd ":methods")
+     (let ([trait-str (string-trim (substring cmd 8))])
+       (if (string=? trait-str "")
+           (displayln "Usage: :methods TraitName")
+           (let ([trait-name (string->symbol trait-str)])
+             (define tm (lookup-trait trait-name))
+             (if (not tm)
+                 (displayln (format "  No trait found: ~a" trait-name))
+                 (let ([methods (trait-meta-methods tm)])
+                   (if (null? methods)
+                       (displayln (format "  Trait ~a has no methods." trait-name))
+                       (for ([m (in-list methods)])
+                         (displayln (format "  ~a : ~a"
+                           (trait-method-name m)
+                           (pp-datum (trait-method-type-datum m)))))))))))]
+
+    [(string-prefix? cmd ":satisfies")
+     (let ([args-str (string-trim (substring cmd 10))])
+       (define parts (string-split args-str))
+       (cond
+         [(< (length parts) 2)
+          (displayln "Usage: :satisfies TypeName TraitName")]
+         [else
+          (define type-name (string->symbol (car parts)))
+          (define trait-name (string->symbol (cadr parts)))
+          (define impl-reg (current-impl-registry))
+          (define param-reg (current-param-impl-registry))
+          (define mono-key
+            (string->symbol (format "~a--~a" type-name trait-name)))
+          (define mono? (hash-has-key? impl-reg mono-key))
+          (define param?
+            (let ([entries (hash-ref param-reg trait-name '())])
+              (ormap (lambda (pe)
+                       (let ([pattern (param-impl-entry-type-pattern pe)])
+                         (and (pair? pattern)
+                              (eq? (car pattern) type-name))))
+                     entries)))
+          (displayln (format "  ~a satisfies ~a: ~a"
+                             type-name trait-name (if (or mono? param?) "true" "false")))]))]
+
     [else
      (displayln (format "Unknown command: ~a" cmd))]))
 
