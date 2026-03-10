@@ -305,30 +305,35 @@ recursive =even?= call in the =suc (suc j)= branch, or (b) the nested match
 generates a DT shape that the backward walker doesn't decompose correctly. Nested
 match DT extraction is a known area for improvement.
 
-** Issue 6: =compare= and =eq?= are unbound (Lines 303, 306, 310, 313)
+** Issue 6: =compare= and =eq?= are unbound (Lines 303, 306, 310, 313) — RESOLVED
 
 *Symptom*: =Unbound variable: compare= and =Unbound variable: eq?=.
 
-*Hypothesis*: The prelude's =:refer= lists for =prologos::core::ord= and
-=prologos::core::eq= export wrapper functions (=ord-lt=, =eq-check=, =nat-eq=) but
-*not* the trait method names (=compare=, =eq?=) themselves. The trait method names
-are defined inside trait bodies and are only accessible through dict dispatch, not as
-standalone functions. To use them, the user must either: (a) call the wrapper
-(=eq-check=, =ord-compare=), or (b) import the method explicitly. The capstone demo
-assumed these were prelude-exported generic functions.
+*Root cause confirmed*: Trait method names (=eq?=, =compare=) are NOT standalone
+functions — they exist only inside trait bodies and as dict accessors (=Eq-eq?=,
+=Ord-compare=). The prelude correctly exports wrapper functions (=eq-check=, =ord-lt=,
+etc.) but had no generic =compare= wrapper.
 
-** Issue 7: =collatz-step= fails to parse (Lines 463–476)
+*Resolution* (commit =1c345fa=):
+- Added =ord-compare= generic wrapper to =prologos::core::ord= (analogous to =eq-check=)
+- Exported =ord-compare= from prelude
+- Users should use =eq-check= for equality, =ord-compare= for comparison
+- Demo updated to use correct names (commit =0c7b82b=)
+
+** Issue 7: =collatz-step= fails to parse (Lines 463–476) — RESOLVED
 
 *Symptom*: =Unbound variable: spec= and =defn requires: ...= errors.
 
-*Hypothesis*: The =spec=/=defn= pair at lines 463–464 is being parsed in an unexpected
-context. Possible causes: (a) A prior expression's evaluation changed the parser
-state (e.g., the file-level =ns= form expects all subsequent forms to be in expression
-mode after the narrowing queries). (b) The WS-mode file processor treats narrowing
-queries (=add ?x ?y = 5N=) as expressions, and after processing them, the parser
-context may not reset to accept new declaration forms. (c) There may be a scoping
-interaction where the prior =even?= definition's recursive DT leaves the parser in
-a state that doesn't recognize subsequent =spec= forms.
+*Root cause confirmed*: NOT a parser state issue. The driver processes all forms with
+complete isolation (=process-command= resets metas, ATMS, and constraint state per
+command). The actual cause is =div= being unbound — Nat has no =Div= instance (=div=
+is only defined for Int/Rat/Posit types). When =defn collatz-step= fails to elaborate
+due to =div= being unbound, the definition isn't registered, causing the subsequent
+=[collatz-step 6N]= to also fail with "Unbound variable."
+
+*Resolution* (commit =0c7b82b=):
+- Replaced =[div n 2N]= with =[half n]= using a pattern-matched Nat halving function
+- Confirmed =spec=/=defn= after narrowing queries works correctly in minimal tests
 
 -----
 

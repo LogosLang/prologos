@@ -213,7 +213,7 @@ The no-space rule is critical — `xs [0]` is application (passing list `[0]`), 
 | 2a: bound var `_` suffix | NOT STARTED | |
 | 2b: spec param names | NOT STARTED | |
 | 2c: collision handling | NOT STARTED | |
-| 2d: trait-dispatch narrowing | NOT STARTED | |
+| 2d: trait-dispatch narrowing | DONE (Stage 3 Phase 2a) | `44539b1` (resolve-generic-narrowing) |
 | 3a: `x[n]` postfix index | NOT STARTED | |
 | 3b: chained indexing | NOT STARTED | |
 | 3c: path algebra integration | NOT STARTED | |
