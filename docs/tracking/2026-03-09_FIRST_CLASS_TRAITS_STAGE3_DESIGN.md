@@ -38,7 +38,7 @@ Implementation phases in suggested order:
 | 3 | **Phase 2b** | `constraint-cell.rkt` module | L2 | ✅ `dc98b9b` | Pure lattice: bot/set/one/top, merge=∩ |
 | 4 | **Phase 3a** | HasMethod constraint + projection | L3 | ✅ `a5c465d` | :over/:method spec syntax, search-based P discovery |
 | 5 | **Phase 2c** | Constraint propagators (P1–P4) | L2 | ✅ `2ca66d2` | Registry-based dispatch replaces static table |
-| 6 | **Phase 2d** | ATMS multi-candidate search | L2 | ⬜ | |
+| 6 | **Phase 2d** | ATMS multi-candidate search | L2 | ✅ `9faecd2` | Enumerate-and-merge over candidates, dedup |
 | 7 | **Phase 3b** | Trait introspection (REPL + foreign) | L3 | ⬜ | |
 | 8 | **Phase 3c** | `?var:C1:C2` constraint chain syntax | L3 | ⬜ | |
 | 9 | **Phase 3d** | Incremental trait resolution | L3 | ⬜ | |
