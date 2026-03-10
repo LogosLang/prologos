@@ -362,7 +362,7 @@
 
     ;; ---- Core traits (type class definitions) ----
     (imports [prologos::core::eq :refer [Eq eq-check eq-neq nat-eq Char--Eq--dict String--Eq--dict]])
-    (imports [prologos::core::ord :refer [Ord PartialOrd PartialOrd-partial-compare
+    (imports [prologos::core::ord :refer [Ord ord-compare PartialOrd PartialOrd-partial-compare
                                           nat-ord ord-lt ord-le ord-gt ord-ge ord-eq
                                           ord-min ord-max Char--Ord--dict String--Ord--dict]])
     (imports [prologos::core::arithmetic :refer [Add Sub Mul Div Neg Abs String--Add--dict]])

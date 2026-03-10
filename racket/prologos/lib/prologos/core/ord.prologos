@@ -208,3 +208,14 @@ impl Ord String
       [if [str::eq x y]
         eq-ord
         gt-ord]
+
+;; ========================================
+;; Generic compare: standalone wrapper
+;; ========================================
+;; Wraps the Ord trait method for use without explicit dict or where clause.
+;; Analogous to eq-check for Eq.
+
+spec ord-compare [Ord A] A A -> Ordering
+  :doc "Generic comparison: returns lt-ord, eq-ord, or gt-ord"
+defn ord-compare [dict x y]
+  dict x y
