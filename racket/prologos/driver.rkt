@@ -52,7 +52,8 @@
          "processes.rkt"          ;; Phase S3: process types (for driver integration)
          "typing-sessions.rkt"    ;; Phase S3: type-proc judgment
          "session-runtime.rkt"    ;; Phase S7c: rt-execute-process (spawn execution)
-         "effect-executor.rkt")   ;; AD-F2: rt-execute-process-auto (architecture dispatch)
+         "effect-executor.rkt"    ;; AD-F2: rt-execute-process-auto (architecture dispatch)
+         "global-constraints.rkt") ;; Phase 3c: current-narrow-var-constraints
 
 (provide process-command
          process-file
@@ -374,6 +375,7 @@
                  [current-whnf-cache (make-hash)]       ;; per-command whnf memoization
                  [current-reduction-fuel (box 1000000)]  ;; 1M step limit
                  [current-nat-value-cache (make-hash)]  ;; per-command nat-value memoization
+                 [current-narrow-var-constraints (hasheq)] ;; Phase 3c: per-command constraint chain
                  [current-coercion-warnings '()]         ;; per-command coercion warnings
                  [current-deprecation-warnings '()]      ;; per-command deprecation warnings
                  [current-capability-warnings '()]       ;; per-command capability warnings

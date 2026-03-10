@@ -570,7 +570,16 @@
            (define counter (make-solution-counter
                             (narrow-search-config-search-mode search-cfg)))
            ;; Phase 3c: Global constraints and BB optimization
-           (define constraints (current-narrow-constraints))
+           ;; Inject type-guard constraints from ?x:Nat:Even constraint chains
+           (define base-constraints (current-narrow-constraints))
+           (define var-constraint-map (current-narrow-var-constraints))
+           (define type-guard-constraints
+             (if (hash-empty? var-constraint-map)
+                 '()
+                 (for*/list ([(vn type-names) (in-hash var-constraint-map)]
+                             [tn (in-list type-names)])
+                   (narrow-constraint 'type-guard (list vn) tn))))
+           (define constraints (append type-guard-constraints base-constraints))
            (define bb (current-bb-state))
            ;; Build the core search function (takes fuel, returns solutions)
            (define (do-search f)

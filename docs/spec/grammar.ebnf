@@ -1042,6 +1042,14 @@ mode-param      = '?' , identifier           (* free logic variable *)
                 | identifier                 (* no mode annotation *)
                 ;
 
+(* Narrowing variables with optional constraint chains (Phase 3c).
+   ?x:Nat:Even constrains the logic variable x to type Nat satisfying Even.
+   Constraint names must start with uppercase (type names).
+   The colon-constraint segments are greedily consumed by the reader when
+   ':' is immediately followed by an uppercase letter. *)
+narrow-var      = '?' , identifier , { ':' , constraint-name } ;
+constraint-name = ? uppercase letter ? , { ident-char } ;
+
 (* Clause body: goals separated by sentinels *)
 clause-body     = '&>' , { goal }            (* rule clause: head :- goals *)
                 | '||' , { fact-row }        (* fact block: ground data *)

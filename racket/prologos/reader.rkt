@@ -640,8 +640,22 @@
          [else
           ;; Lone ? — treat as identifier character, read rest
           (let ([rest (read-ident-rest! tok)])
-            (token 'symbol (string->symbol (string-append "?" rest)) ln cl ps
-                   (+ 1 (string-length rest))))])]
+            ;; Phase 3c: greedily consume :Constraint segments.
+            ;; ?x:Nat:Even becomes single symbol '?x:Nat:Even.
+            ;; Only when : is immediately followed by uppercase (type name).
+            (define full-name
+              (let loop ([acc (string-append "?" rest)])
+                (define nc (tok-peek tok))
+                (cond
+                  [(and (char? nc) (char=? nc #\:)
+                        (let ([nc2 (peek-char (tokenizer-port tok) 1)])
+                          (and (char? nc2) (char-upper-case? nc2))))
+                   (tok-read! tok) ; consume :
+                   (define constraint-name (read-ident-chars! tok))
+                   (loop (string-append acc ":" constraint-name))]
+                  [else acc])))
+            (token 'symbol (string->symbol full-name) ln cl ps
+                   (string-length full-name)))])]
 
       ;; Exclamation mark — session send operator (S2c)
       [(char=? c #\!)

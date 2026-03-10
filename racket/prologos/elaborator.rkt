@@ -26,6 +26,7 @@
          "macros.rkt"             ;; Phase C: for lookup-trait (trait constraint detection)
          "substitution.rkt"      ;; Phase C: for subst (Pi codomain substitution)
          "warnings.rkt"          ;; Phase 2: for capability warnings (W2001)
+         "global-constraints.rkt" ;; Phase 3c: for current-narrow-var-constraints
          "sessions.rkt"          ;; Phase S3: session type constructors (elaboration target)
          "processes.rkt")        ;; Phase S3: process constructors (elaboration target)
 
@@ -2622,7 +2623,7 @@
     ;; ?-prefixed variables are bound as logic variables in the env before
     ;; elaborating sub-expressions. The LHS must be a function application;
     ;; we extract func + args for the solver to look up definitional trees.
-    [(surf-narrow lhs rhs vars loc)
+    [(surf-narrow lhs rhs vars loc constraint-map)
      (let* ([strip-? (lambda (sym)
                        (let ([s (symbol->string sym)])
                          (if (and (> (string-length s) 1) (char=? (string-ref s 0) #\?))
@@ -2631,46 +2632,54 @@
             [narrow-rel-env
              (for/fold ([h (or (current-relational-env) (hasheq))]) ([v (in-list vars)])
                (hash-set h v (expr-logic-var (strip-? v) 'free)))]
-            [stripped-vars (map strip-? vars)]
-            [elab-rhs (parameterize ([current-relational-env narrow-rel-env])
-                        (elaborate rhs env depth))])
-       (cond
-         [(prologos-error? elab-rhs) elab-rhs]
-         [(surf-app? lhs)
-          (let* ([func-surf (surf-app-func lhs)]
-                 [args-surf (surf-app-args lhs)]
-                 [elab-func (parameterize ([current-relational-env narrow-rel-env])
-                              (elaborate func-surf env depth))]
-                 [elab-args (parameterize ([current-relational-env narrow-rel-env])
-                              (for/list ([a (in-list args-surf)])
-                                (elaborate a env depth)))])
-            (cond
-              [(prologos-error? elab-func) elab-func]
-              [(findf prologos-error? elab-args) => values]
-              [else (expr-narrow elab-func elab-args elab-rhs stripped-vars)]))]
-         ;; LHS is not a function call but RHS is → swap (func on RHS, target on LHS)
-         [(surf-app? rhs)
-          (let* ([func-surf (surf-app-func rhs)]
-                 [args-surf (surf-app-args rhs)]
-                 [elab-lhs (parameterize ([current-relational-env narrow-rel-env])
-                             (elaborate lhs env depth))]
-                 [elab-func (parameterize ([current-relational-env narrow-rel-env])
-                              (elaborate func-surf env depth))]
-                 [elab-args (parameterize ([current-relational-env narrow-rel-env])
-                              (for/list ([a (in-list args-surf)])
-                                (elaborate a env depth)))])
-            (cond
-              [(prologos-error? elab-lhs) elab-lhs]
-              [(prologos-error? elab-func) elab-func]
-              [(findf prologos-error? elab-args) => values]
-              ;; Swapped: func+args from RHS, target from LHS
-              [else (expr-narrow elab-func elab-args elab-lhs stripped-vars)]))]
-         [else
-          ;; Neither side is a function call
-          (let ([elab-lhs (parameterize ([current-relational-env narrow-rel-env])
-                            (elaborate lhs env depth))])
-            (if (prologos-error? elab-lhs) elab-lhs
-                (expr-narrow elab-lhs '() elab-rhs stripped-vars)))]))]
+            [stripped-vars (map strip-? vars)])
+       ;; Phase 3c: set per-variable constraint map for the narrowing solver.
+       ;; Uses the setter (not parameterize) so it persists through type-check → reduce.
+       (when (and constraint-map (hash? constraint-map) (not (hash-empty? constraint-map)))
+         (define var-constraints
+           (for/hasheq ([(var-sym cs) (in-hash constraint-map)]
+                        #:when (pair? cs))
+             (values (strip-? var-sym) cs)))
+         (current-narrow-var-constraints var-constraints))
+       (let ([elab-rhs (parameterize ([current-relational-env narrow-rel-env])
+                         (elaborate rhs env depth))])
+         (cond
+           [(prologos-error? elab-rhs) elab-rhs]
+           [(surf-app? lhs)
+            (let* ([func-surf (surf-app-func lhs)]
+                   [args-surf (surf-app-args lhs)]
+                   [elab-func (parameterize ([current-relational-env narrow-rel-env])
+                                (elaborate func-surf env depth))]
+                   [elab-args (parameterize ([current-relational-env narrow-rel-env])
+                                (for/list ([a (in-list args-surf)])
+                                  (elaborate a env depth)))])
+              (cond
+                [(prologos-error? elab-func) elab-func]
+                [(findf prologos-error? elab-args) => values]
+                [else (expr-narrow elab-func elab-args elab-rhs stripped-vars)]))]
+           ;; LHS is not a function call but RHS is → swap (func on RHS, target on LHS)
+           [(surf-app? rhs)
+            (let* ([func-surf (surf-app-func rhs)]
+                   [args-surf (surf-app-args rhs)]
+                   [elab-lhs (parameterize ([current-relational-env narrow-rel-env])
+                               (elaborate lhs env depth))]
+                   [elab-func (parameterize ([current-relational-env narrow-rel-env])
+                                (elaborate func-surf env depth))]
+                   [elab-args (parameterize ([current-relational-env narrow-rel-env])
+                                (for/list ([a (in-list args-surf)])
+                                  (elaborate a env depth)))])
+              (cond
+                [(prologos-error? elab-lhs) elab-lhs]
+                [(prologos-error? elab-func) elab-func]
+                [(findf prologos-error? elab-args) => values]
+                ;; Swapped: func+args from RHS, target from LHS
+                [else (expr-narrow elab-func elab-args elab-lhs stripped-vars)]))]
+           [else
+            ;; Neither side is a function call
+            (let ([elab-lhs (parameterize ([current-relational-env narrow-rel-env])
+                              (elaborate lhs env depth))])
+              (if (prologos-error? elab-lhs) elab-lhs
+                  (expr-narrow elab-lhs '() elab-rhs stripped-vars)))])))]
 
     ;; Reduce: ML-style pattern matching
     ;; Each arm's body must be elaborated with binding names in scope.

@@ -20,7 +20,12 @@
          parse-port
          current-parsing-relational-goal?
          narrow-var-symbol?
-         collect-narrow-vars)
+         collect-narrow-vars
+         ;; Phase 3c: constraint chain helpers
+         narrow-var-base-name
+         narrow-var-constraints
+         collect-narrow-vars+constraints
+         rewrite-constrained-vars)
 
 ;; ========================================
 ;; Relational goal context
@@ -2681,16 +2686,21 @@
           [else
            ;; Functional context: check for ?-variables → narrowing
            (if (and (= (length args) 2)
-                    (let ([qvars (collect-narrow-vars (car args) (cadr args))])
+                    (let-values ([(qvars _cmap)
+                                 (collect-narrow-vars+constraints
+                                  (car args) (cadr args))])
                       (and (pair? qvars) qvars)))
                ;; Has ?-variables: parse as narrowing expression
-               (let* ([lhs (parse-datum (car args))]
-                      [rhs (parse-datum (cadr args))]
-                      [qvars (collect-narrow-vars (car args) (cadr args))])
+               ;; Phase 3c: rewrite constrained vars (?x:Nat → ?x) before parse-datum
+               (let*-values
+                 ([(qvars cmap) (collect-narrow-vars+constraints
+                                 (car args) (cadr args))]
+                  [(lhs) (parse-datum (rewrite-constrained-vars (car args)))]
+                  [(rhs) (parse-datum (rewrite-constrained-vars (cadr args)))])
                  (if (or (prologos-error? lhs) (prologos-error? rhs))
                      (or (and (prologos-error? lhs) lhs)
                          rhs)
-                     (surf-narrow lhs rhs qvars loc)))
+                     (surf-narrow lhs rhs qvars loc cmap)))
                ;; No ?-variables: desugar to eq-check (Eq trait, returns Bool)
                (or (check-arity '= args 2 loc)
                    (parse-datum `(eq-check ,(car args) ,(cadr args)))))])]
@@ -5857,6 +5867,68 @@
       [else (void)]))
   (for-each walk datums)
   (reverse result))
+
+;; Phase 3c: Constraint chain helpers for ?x:Nat:Even syntax
+;; Extract the base variable name from a possibly-constrained narrow var.
+;; ?x → ?x, ?x:Nat:Even → ?x
+(define (narrow-var-base-name sym)
+  (define str (symbol->string sym))
+  (define rest (substring str 1)) ; strip leading ?
+  (define parts (string-split rest ":"))
+  (string->symbol (string-append "?" (car parts))))
+
+;; Extract constraint names from a constrained narrow var.
+;; ?x → '(), ?x:Nat:Even → '(Nat Even)
+(define (narrow-var-constraints sym)
+  (define str (symbol->string sym))
+  (define rest (substring str 1)) ; strip leading ?
+  (define parts (string-split rest ":"))
+  (if (= (length parts) 1)
+      '()
+      (map string->symbol (cdr parts))))
+
+;; Like collect-narrow-vars but also extracts constraint annotations.
+;; Returns (values var-list constraint-map)
+;; var-list: (listof symbol) — base ?-prefixed names, e.g., '(?x ?y)
+;; constraint-map: hasheq from base-name → (listof symbol)
+(define (collect-narrow-vars+constraints . datums)
+  (define seen (make-hasheq))
+  (define result '())
+  (define cmap (make-hasheq))
+  (define (walk d)
+    (cond
+      [(syntax? d) (walk (syntax-e d))]
+      [(narrow-var-symbol? d)
+       (define base (narrow-var-base-name d))
+       (define constraints (narrow-var-constraints d))
+       (unless (hash-ref seen base #f)
+         (hash-set! seen base #t)
+         (set! result (cons base result))
+         (hash-set! cmap base constraints))]
+      [(pair? d)
+       (walk (car d))
+       (walk (cdr d))]
+      [else (void)]))
+  (for-each walk datums)
+  (values (reverse result) (hash-copy cmap)))
+
+;; Rewrite constrained vars in datum tree: ?x:Nat → ?x (base name only).
+;; Applied before parse-datum so the parser sees plain ?-variables.
+(define (rewrite-constrained-vars datum)
+  (cond
+    [(syntax? datum)
+     (define d (syntax-e datum))
+     (define rewritten (rewrite-constrained-vars d))
+     (if (eq? rewritten d) datum (datum->syntax #f rewritten datum))]
+    [(narrow-var-symbol? datum)
+     (narrow-var-base-name datum)]
+    [(pair? datum)
+     (define a (rewrite-constrained-vars (car datum)))
+     (define d (rewrite-constrained-vars (cdr datum)))
+     (if (and (eq? a (car datum)) (eq? d (cdr datum)))
+         datum
+         (cons a d))]
+    [else datum]))
 
 ;; ========================================
 ;; Parse reduce/match: (match scrutinee arm1 arm2 ...)

@@ -7908,8 +7908,8 @@
                        arms)
                   loc)]
     ;; Narrowing expression — expand sub-expressions (Phase 1e)
-    [(surf-narrow lhs rhs vars loc)
-     (surf-narrow (expand-expression lhs) (expand-expression rhs) vars loc)]
+    [(surf-narrow lhs rhs vars loc constraint-map)
+     (surf-narrow (expand-expression lhs) (expand-expression rhs) vars loc constraint-map)]
     ;; Constraint forms — expand sub-expressions (Phase 3c)
     [(surf-all-different vars loc)
      (surf-all-different (map expand-expression vars) loc)]

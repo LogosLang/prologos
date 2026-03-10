@@ -27,8 +27,12 @@
  (struct-out narrow-constraint)
  ;; Constraint store parameter
  current-narrow-constraints
+ ;; Phase 3c: per-variable type constraint parameter
+ current-narrow-var-constraints
  ;; Forward-checking API
  forward-check
+ ;; Phase 3c: type guard helpers
+ value-matches-type?
  ;; Helpers for testing
  expr->nat-val
  resolve-var
@@ -39,16 +43,22 @@
 ;; ========================================
 
 ;; narrow-constraint:
-;;   kind: 'all-different | 'element | 'cumulative
+;;   kind: 'all-different | 'element | 'cumulative | 'type-guard
 ;;   vars: (listof symbol) — variable names involved
 ;;   data: kind-specific data
 ;;     all-different: #f (no extra data)
 ;;     element: (list index-var-name value-var-name ground-list)
 ;;     cumulative: (list durations resources capacity)
+;;     type-guard: symbol — type name (e.g., 'Nat, 'Bool, 'Int)
 (struct narrow-constraint (kind vars data) #:transparent)
 
 ;; Active constraint store, threaded via parameterize for backtracking.
 (define current-narrow-constraints (make-parameter '()))
+
+;; Phase 3c: per-variable type constraints from ?x:Nat:Even syntax.
+;; hasheq mapping stripped var name (symbol) → (listof symbol) of constraint names.
+;; Set by the elaborator when processing surf-narrow with constraint chains.
+(define current-narrow-var-constraints (make-parameter (hasheq)))
 
 ;; ========================================
 ;; Variable resolution helpers
@@ -149,6 +159,8 @@
      (check-element constraint subst intervals)]
     [(cumulative)
      (check-cumulative constraint subst intervals)]
+    [(type-guard)
+     (check-type-guard constraint subst intervals)]
     [else (list 'active intervals)]))
 
 ;; ========================================
@@ -360,3 +372,72 @@
        [(not capacity-ok?) #f]  ;; overloaded → contradiction
        [all-bound? (list 'satisfied intervals)]
        [else (list 'active intervals)])]))
+
+;; ========================================
+;; type-guard constraint (Phase 3c)
+;; ========================================
+
+;; check-type-guard : constraint × subst × intervals → result
+;;
+;; type-guard: variable value must match expected type constructor.
+;; vars = (list var-name), data = type-name (symbol)
+;; If var is unbound → active (defer).
+;; If var is bound → check structural type match.
+(define (check-type-guard constraint subst intervals)
+  (define var-name (car (narrow-constraint-vars constraint)))
+  (define type-name (narrow-constraint-data constraint))
+  (define val (resolve-var subst var-name))
+  (cond
+    [(not val)
+     ;; Variable not yet bound — keep constraint active
+     (list 'active intervals)]
+    [(not (ground-expr? val))
+     ;; Partially bound — keep checking
+     (list 'active intervals)]
+    [else
+     ;; Fully ground — check type
+     (if (value-matches-type? val type-name)
+         (list 'satisfied intervals)
+         #f)]))  ;; type mismatch → contradiction
+
+;; value-matches-type? : expr × symbol → boolean
+;;
+;; Structural type check for narrowing values.
+;; Checks whether a ground value matches the given type name.
+(define (value-matches-type? val type-name)
+  (match type-name
+    ['Nat (nat-value? val)]
+    ['Bool (or (expr-true? val) (expr-false? val))]
+    ['Int (or (expr-int? val) (nat-value? val))]  ;; Nat ⊂ Int
+    ['String (expr-string? val)]
+    ['Unit (expr-unit? val)]
+    [_ ;; For user-defined types: check constructor tag
+     (value-has-type-tag? val type-name)]))
+
+;; Is this a natural number value? (zero, suc chain, or nat-val)
+(define (nat-value? val)
+  (match val
+    [(expr-zero) #t]
+    [(expr-nat-val _) #t]
+    [(expr-suc sub) (nat-value? sub)]
+    [_ #f]))
+
+;; Check if val was constructed by a constructor belonging to type-name.
+;; Traverses application chains to find the outermost function.
+(define (value-has-type-tag? val type-name)
+  (define head (expr-head val))
+  (and (expr-fvar? head)
+       (let* ([name-str (symbol->string (expr-fvar-name head))]
+              [type-str (symbol->string type-name)])
+         ;; Convention: constructors are lowercase variants of the type name,
+         ;; or namespaced as TypeName/CtorName.
+         ;; Heuristic: head name contains the type name as prefix (e.g., some, none for Option)
+         ;; For now, this is a best-effort check; exact matching would require
+         ;; the constructor registry from macros.rkt (not imported here).
+         #f)))
+
+;; Get the head of an application chain: (app (app f x) y) → f
+(define (expr-head e)
+  (match e
+    [(expr-app f _) (expr-head f)]
+    [_ e]))

@@ -389,6 +389,8 @@
    (test-dep '(driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parser.rkt prelude.rkt pretty-print.rkt reader.rkt reduction.rkt sexp-readtable.rkt source-location.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt) #t)
    'test-trait-introspection-01.rkt
    (test-dep '(driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parser.rkt prelude.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt) #t)
+   'test-constraint-chain-01.rkt
+   (test-dep '(driver.rkt elaborator.rkt errors.rkt global-constraints.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt narrowing.rkt parser.rkt prelude.rkt reader.rkt surface-syntax.rkt syntax.rkt) #t)
    'test-kind-inference-where.rkt
    (test-dep '(driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parser.rkt prelude.rkt pretty-print.rkt source-location.rkt surface-syntax.rkt syntax.rkt) #t)
    'test-kind-inference.rkt

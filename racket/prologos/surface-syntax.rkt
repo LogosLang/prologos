@@ -938,8 +938,10 @@
 ;; Narrowing expression: [f ?x ?y] = target (functional context unification)
 ;; lhs: surf-expr (the functional expression with ?-variables)
 ;; rhs: surf-expr (the target value)
-;; vars: (listof symbol) — the ?-prefixed variables found in lhs/rhs
-(struct surf-narrow           (lhs rhs vars srcloc) #:transparent)
+;; vars: (listof symbol) — the ?-prefixed variables found in lhs/rhs (base names)
+;; constraint-map: hasheq from base ?-name → (listof symbol), or #f
+;;   e.g., (hasheq '?x '(Nat Even)) for ?x:Nat:Even constraint chain
+(struct surf-narrow           (lhs rhs vars srcloc constraint-map) #:transparent)
 ;; ---- Constraint forms (Phase 3c) ----
 ;; all-different [?x ?y ?z]: all variables must have distinct values
 (struct surf-all-different    (vars srcloc) #:transparent)
