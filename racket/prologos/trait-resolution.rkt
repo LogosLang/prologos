@@ -22,6 +22,7 @@
          "pretty-print.rkt")
 
 (provide resolve-trait-constraints!
+         resolve-hasmethod-constraints!
          check-unresolved-trait-constraints
          check-unresolved-capability-constraints
          ;; Exposed for testing
@@ -31,7 +32,10 @@
          ground-expr?
          match-type-pattern
          match-one
-         build-parametric-dict-expr)
+         build-parametric-dict-expr
+         project-method
+         trait-expr->name
+         find-trait-with-method)
 
 ;; ========================================
 ;; Ground expression check
@@ -408,6 +412,101 @@
       (format "E2001: Required capability ~a not available in scope. Add it as a function parameter: {cap :0 ~a}"
               display-name display-name))
     (no-instance-error loc message cap-name (symbol->string cap-name))))
+
+;; ========================================
+;; Phase 3a: HasMethod constraint resolution
+;; ========================================
+
+;; Extract trait name from a ground type expression.
+;; After zonking, the trait variable should be a concrete type constructor or fvar.
+(define (trait-expr->name expr)
+  (match expr
+    [(expr-tycon name) name]
+    [(expr-fvar name) (strip-ns name)]
+    [_ #f]))
+
+;; Project a method from a dict expression by index within the trait.
+;; Single-method traits: dict IS the function (identity projection).
+;; Multi-method traits: nested pairs (sigma product), projection via fst/snd chain.
+;; Method ordering follows the trait definition: method 0 is first, etc.
+;; For N methods: pair structure is (pair m0 (pair m1 (pair m2 ... mN-1)))
+;; Method 0 → (fst dict), Method 1 → (fst (snd dict)), ..., Method N-1 → (snd (snd ... dict))
+(define (project-method dict-expr trait-meta method-idx)
+  (define n-methods (length (trait-meta-methods trait-meta)))
+  (cond
+    [(= n-methods 1) dict-expr]  ;; single-method: dict IS the function
+    [else
+     ;; Multi-method: nested pairs, project by position
+     (let loop ([d dict-expr] [remaining method-idx])
+       (cond
+         [(zero? remaining)
+          (if (= method-idx (sub1 n-methods))
+              d  ;; last element: already at the tail
+              (expr-fst d))]
+         [else (loop (expr-snd d) (sub1 remaining))]))]))
+
+;; Walk all HasMethod constraint metas and resolve those with ground type args.
+;; Resolution strategy:
+;; 1. If the trait variable P is already ground → use it directly
+;; 2. If P is NOT ground → search all traits for one that has the required method
+;;    AND has an impl for the given type args. This discovers P from the method name.
+;; After finding the trait:
+;; - Resolve the dict via impl resolution (monomorphic or parametric)
+;; - Project the method from the dict
+;; - Solve both the evidence meta and the trait variable meta
+(define (resolve-hasmethod-constraints!)
+  (for ([(meta-id hm-info) (in-hash (current-hasmethod-constraint-map))])
+    (unless (meta-solved? meta-id)
+      (define method-name (hasmethod-constraint-info-method-name hm-info))
+      (define type-args
+        (map (lambda (e) (normalize-for-resolution (zonk e)))
+             (hasmethod-constraint-info-type-arg-exprs hm-info)))
+      (when (andmap ground-expr? type-args)
+        ;; Strategy 1: P is already ground
+        (define trait-expr (zonk (hasmethod-constraint-info-trait-var-expr hm-info)))
+        (define known-trait-name (and (ground-expr? trait-expr) (trait-expr->name trait-expr)))
+        ;; Strategy 2: P is not ground — search all traits for the method name
+        (define resolved-trait-name
+          (or known-trait-name
+              (find-trait-with-method method-name type-args)))
+        (when resolved-trait-name
+          (define tm (lookup-trait resolved-trait-name))
+          (when tm
+            (define methods (trait-meta-methods tm))
+            (define method-idx
+              (for/or ([m (in-list methods)] [i (in-naturals)])
+                (and (eq? (trait-method-name m) method-name) i)))
+            (when method-idx
+              ;; Resolve the dict via standard impl resolution
+              (define dict-expr
+                (or (try-monomorphic-resolve resolved-trait-name type-args)
+                    (try-parametric-resolve resolved-trait-name type-args)))
+              (when dict-expr
+                ;; Solve the trait variable P if it's still a meta
+                (define trait-var-expr (hasmethod-constraint-info-trait-var-expr hm-info))
+                (when (and (expr-meta? trait-var-expr)
+                           (not (meta-solved? (expr-meta-id trait-var-expr))))
+                  (solve-meta! (expr-meta-id trait-var-expr) (expr-fvar resolved-trait-name)))
+                ;; Optionally solve the dict meta if present
+                (define dict-meta-id (hasmethod-constraint-info-dict-meta-id hm-info))
+                (when (and dict-meta-id (not (meta-solved? dict-meta-id)))
+                  (solve-meta! dict-meta-id dict-expr))
+                ;; Project the method and solve the evidence meta
+                (define projected (project-method dict-expr tm method-idx))
+                (solve-meta! meta-id projected)))))))))
+
+;; Search all traits for one that has a method with the given name
+;; AND has an impl for the given type args. Returns the trait name or #f.
+;; If multiple traits match, returns #f (ambiguity — future: error).
+(define (find-trait-with-method method-name type-args)
+  (define candidates
+    (for/list ([(name tm) (in-hash (current-trait-registry))]
+               #:when (ormap (lambda (m) (eq? (trait-method-name m) method-name))
+                             (trait-meta-methods tm))
+               #:when (or (try-monomorphic-resolve name type-args)
+                          (try-parametric-resolve name type-args)))
+      name))
+  (and (= (length candidates) 1) (car candidates)))
 
 ;; Collect all registered instances for a trait, returning short display strings.
 ;; Checks both monomorphic registry (e.g., "Nat--Eq" → "Nat") and

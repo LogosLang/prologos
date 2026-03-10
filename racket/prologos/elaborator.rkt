@@ -172,25 +172,32 @@
        name (map where-method-entry-trait-name matches))]
     [else
      (define entry (car matches))
-     (define type-var-names (where-method-entry-type-var-names entry))
-     (define dict-param-name (where-method-entry-dict-param-name entry))
      (define accessor-name (where-method-entry-accessor-name entry))
-     ;; Look up de Bruijn indices for type vars and dict param
-     (define tv-indices
-       (for/list ([tv (in-list type-var-names)])
-         (env-lookup env tv depth)))
-     (define dict-idx (env-lookup env dict-param-name depth))
-     ;; All must be found in the environment
-     (if (and (andmap (lambda (x) x) tv-indices) dict-idx)
-         ;; Build: (app ... (app (fvar accessor) (bvar tv1)) ... (bvar dict))
-         (let* ([base (expr-fvar accessor-name)]
-                [with-types
-                 (foldl (lambda (idx acc) (expr-app acc (expr-bvar idx)))
-                        base tv-indices)]
-                [with-dict (expr-app with-types (expr-bvar dict-idx))])
-           with-dict)
-         ;; Type vars or dict not in scope — fall through
-         #f)]))
+     (define dict-param-name (where-method-entry-dict-param-name entry))
+     (cond
+       ;; Phase 3a: Direct HasMethod evidence — the param IS the method function
+       [(not accessor-name)
+        (define dict-idx (env-lookup env dict-param-name depth))
+        (and dict-idx (expr-bvar dict-idx))]
+       ;; Standard accessor-based resolution
+       [else
+        (define type-var-names (where-method-entry-type-var-names entry))
+        ;; Look up de Bruijn indices for type vars and dict param
+        (define tv-indices
+          (for/list ([tv (in-list type-var-names)])
+            (env-lookup env tv depth)))
+        (define dict-idx (env-lookup env dict-param-name depth))
+        ;; All must be found in the environment
+        (if (and (andmap (lambda (x) x) tv-indices) dict-idx)
+            ;; Build: (app ... (app (fvar accessor) (bvar tv1)) ... (bvar dict))
+            (let* ([base (expr-fvar accessor-name)]
+                   [with-types
+                    (foldl (lambda (idx acc) (expr-app acc (expr-bvar idx)))
+                           base tv-indices)]
+                   [with-dict (expr-app with-types (expr-bvar dict-idx))])
+              with-dict)
+            ;; Type vars or dict not in scope — fall through
+            #f)])]))
 
 ;; ========================================
 ;; HKT-9: Constraint inference from usage
@@ -430,22 +437,51 @@
            ;; For (Eq A, Ord B), the first constraint has type arg at pos 0, second at pos 1.
            [trait-from-spec?
             (define wc (list-ref where-constraints constraint-idx))
-            (define trait-name (car wc))
-            (define type-var-names (cdr wc))  ;; e.g., '(A) for (Eq A), '(C) for (Seqable C)
-            ;; Map each type var name to its corresponding meta using name→position mapping.
-            ;; For (Seqable C) with {A : Type} {C : Type -> Type}, C maps to position 1.
-            ;; Falls back to positional index if name not found (backward compatibility).
-            (define type-arg-metas
-              (for/list ([tv-name (in-list type-var-names)]
-                         [i (in-naturals)])
-                (define pos (hash-ref type-var-name->pos tv-name #f))
-                (define effective-pos (or pos i))
-                (if (< effective-pos (vector-length type-var-metas))
-                    (vector-ref type-var-metas effective-pos)
-                    (expr-hole))))  ;; shouldn't happen — fallback
-            (register-trait-constraint!
-              (expr-meta-id meta-expr)
-              (trait-constraint-info trait-name type-arg-metas))]))
+            (cond
+              ;; Phase 3a: HasMethod constraint marker — (HasMethod trait-var method-name)
+              ;; Register hasmethod-constraint-info instead of trait-constraint-info.
+              ;; The evidence meta will be solved by resolve-hasmethod-constraints! after
+              ;; the trait variable P is unified with a concrete trait.
+              [(and (pair? wc) (eq? (car wc) 'HasMethod))
+               (define hm-trait-var-name (cadr wc))
+               (define hm-method-name (caddr wc))
+               ;; Get the trait variable meta from type-var-metas
+               (define trait-var-pos (hash-ref type-var-name->pos hm-trait-var-name #f))
+               (define trait-var-meta
+                 (and trait-var-pos
+                      (< trait-var-pos (vector-length type-var-metas))
+                      (vector-ref type-var-metas trait-var-pos)))
+               ;; Get type arg metas (all type vars except the trait var)
+               (define type-arg-metas
+                 (for/list ([i (in-range (vector-length type-var-metas))]
+                            #:when (not (equal? i trait-var-pos)))
+                   (vector-ref type-var-metas i)))
+               (when trait-var-meta
+                 (register-hasmethod-constraint!
+                   (expr-meta-id meta-expr)
+                   (hasmethod-constraint-info
+                     trait-var-meta
+                     hm-method-name
+                     type-arg-metas
+                     #f)))]  ;; dict-meta-id: not needed, resolve via impl registry
+              [else
+               ;; Standard trait constraint — (Eq A), (Seqable C), etc.
+               (define trait-name (car wc))
+               (define type-var-names (cdr wc))
+               ;; Map each type var name to its corresponding meta using name→position mapping.
+               ;; For (Seqable C) with {A : Type} {C : Type -> Type}, C maps to position 1.
+               ;; Falls back to positional index if name not found (backward compatibility).
+               (define type-arg-metas
+                 (for/list ([tv-name (in-list type-var-names)]
+                            [i (in-naturals)])
+                   (define pos (hash-ref type-var-name->pos tv-name #f))
+                   (define effective-pos (or pos i))
+                   (if (< effective-pos (vector-length type-var-metas))
+                       (vector-ref type-var-metas effective-pos)
+                       (expr-hole))))  ;; shouldn't happen — fallback
+               (register-trait-constraint!
+                 (expr-meta-id meta-expr)
+                 (trait-constraint-info trait-name type-arg-metas))])]))
        ;; Phase 4/7: Capability constraint resolution (lexical scope)
        ;; If the domain is a capability type (not a trait), try to resolve from scope.
        ;; Phase 7: handles both simple caps (ReadCap) and dependent caps (FileCap "/data").
@@ -791,12 +827,27 @@
            (let* ([new-env (env-extend env name depth)]
                   [new-depth (+ depth 1)]
                   ;; Phase D: detect dict param binders and populate where-context
-                  [body-ctx (if (is-dict-param-name? name)
-                                (let ([entries (dict-param->where-entries name)])
-                                  (if entries
-                                      (append (current-where-context) entries)
-                                      (current-where-context)))
-                                (current-where-context))]
+                  ;; Phase 3a: also detect $hm- prefixed HasMethod evidence params
+                  [body-ctx (let ([name-str (symbol->string name)])
+                              (cond
+                                ;; HasMethod evidence: $hm-METHOD → direct where-method-entry
+                                [(and (> (string-length name-str) 4)
+                                      (string=? (substring name-str 0 4) "$hm-"))
+                                 (let ([method-name (string->symbol (substring name-str 4))])
+                                   (append (current-where-context)
+                                           (list (where-method-entry
+                                                   method-name
+                                                   #f      ;; accessor-name: direct reference
+                                                   #f      ;; trait-name: unknown (abstract P)
+                                                   '()     ;; type-var-names: not needed
+                                                   name))))] ;; dict-param-name: evidence param
+                                ;; Standard dict param detection
+                                [(is-dict-param-name? name)
+                                 (let ([entries (dict-param->where-entries name)])
+                                   (if entries
+                                       (append (current-where-context) entries)
+                                       (current-where-context)))]
+                                [else (current-where-context)]))]
                   ;; Phase 4: track capability-typed bindings in scope
                   ;; Phase 7: store full type expr for dependent cap support
                   [cap-scope (if (capability-type-expr? ty)

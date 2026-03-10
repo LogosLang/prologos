@@ -101,6 +101,11 @@
  install-trait-resolve-callback!
  retry-traits-via-cells!
  current-trait-cell-map
+ ;; Phase 3a: HasMethod constraint tracking
+ (struct-out hasmethod-constraint-info)
+ current-hasmethod-constraint-map
+ register-hasmethod-constraint!
+ lookup-hasmethod-constraint
  ;; Phase 4: Capability constraint tracking
  (struct-out capability-constraint-info)
  current-capability-constraint-map
@@ -254,6 +259,30 @@
 
 (define (lookup-trait-constraint meta-id)
   (hash-ref (current-trait-constraint-map) meta-id #f))
+
+;; ========================================
+;; Phase 3a: HasMethod constraint tracking
+;; ========================================
+;; When a spec has :method P eq? : T, the elaborator inserts an implicit
+;; evidence parameter for the projected method. At call sites, the meta
+;; for this evidence is tagged with hasmethod-constraint-info so the
+;; resolver can project the method from the trait dict once P is ground.
+
+(struct hasmethod-constraint-info
+  (trait-var-expr    ;; Expr — the trait variable (typically (expr-meta ?P-id))
+   method-name       ;; symbol — e.g., 'eq?
+   type-arg-exprs    ;; (listof Expr) — type args [?A-meta]
+   dict-meta-id)     ;; symbol | #f — meta-id of the dict param for projection
+  #:transparent)
+
+;; Auxiliary map: meta-id → hasmethod-constraint-info
+(define current-hasmethod-constraint-map (make-parameter (make-hasheq)))
+
+(define (register-hasmethod-constraint! meta-id info)
+  (hash-set! (current-hasmethod-constraint-map) meta-id info))
+
+(define (lookup-hasmethod-constraint meta-id)
+  (hash-ref (current-hasmethod-constraint-map) meta-id #f))
 
 ;; ========================================
 ;; Phase 4: Capability constraint tracking
@@ -581,6 +610,7 @@
                  [current-trait-constraint-map (make-hasheq)]
                  [current-trait-wakeup-map (make-hasheq)]
                  [current-trait-cell-map (make-hasheq)]
+                 [current-hasmethod-constraint-map (make-hasheq)]
                  [current-prop-meta-info-box (box champ-empty)]
                  [current-prop-net-box #f]
                  [current-prop-id-map-box #f]
@@ -987,6 +1017,7 @@
   (hash-clear! (current-trait-constraint-map))
   (hash-clear! (current-trait-wakeup-map))
   (hash-clear! (current-trait-cell-map))
+  (hash-clear! (current-hasmethod-constraint-map))
   (reset-constraint-store!)
   ;; Always reset CHAMP meta-info + auxiliary boxes
   (define mi-box (current-prop-meta-info-box))

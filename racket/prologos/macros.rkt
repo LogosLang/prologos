@@ -2582,6 +2582,38 @@
          [(eq? key ':see-also)
           (define-values (refs rest) (collect-constraint-values tail))
           (loop rest (hash-set result key refs))]
+         ;; :over → single symbol (trait variable name for HasMethod abstraction)
+         [(eq? key ':over)
+          (if (and (pair? tail) (symbol? (car tail)))
+              (loop (cdr tail) (hash-set result key (car tail)))
+              (error 'spec ":over requires a trait variable name"))]
+         ;; :method → TraitVar method-name : Type...
+         ;; Collects tokens until next :keyword or end, parses into (trait-var method-name type-tokens)
+         [(eq? key ':method)
+          (unless (and (pair? tail) (symbol? (car tail))
+                       (pair? (cdr tail)) (symbol? (cadr tail)))
+            (error 'spec ":method requires: :method TraitVar method-name : Type..."))
+          (define trait-var (car tail))
+          (define method-name (cadr tail))
+          (define after-name (cddr tail))
+          ;; Skip optional colon
+          (define type-start
+            (if (and (pair? after-name) (eq? (car after-name) ':))
+                (cdr after-name)
+                after-name))
+          ;; Collect type tokens until next keyword or end
+          (define-values (type-tokens rest)
+            (let collect ([remaining type-start] [acc '()])
+              (cond
+                [(null? remaining) (values (reverse acc) '())]
+                [(keyword-like-symbol? (car remaining))
+                 (values (reverse acc) remaining)]
+                [else (collect (cdr remaining) (cons (car remaining) acc))])))
+          (when (null? type-tokens)
+            (error 'spec ":method ~a ~a requires a type signature" trait-var method-name))
+          (define entry (list trait-var method-name type-tokens))
+          (define existing (hash-ref result key '()))
+          (loop rest (hash-set result key (append existing (list entry))))]
          ;; :pre → predicate expression on function args (Phase 2: runtime contract)
          [(eq? key ':pre)
           (if (null? tail)
@@ -2832,8 +2864,19 @@
                                     (not (known-type-name? v))))
                              candidates)])
       (map (lambda (v) (cons v '(Type 0))) new-vars)))
+  ;; Phase 3a: :over P → add {P : Type → Type} to implicit binders
+  (define over-var (and metadata (hash? metadata) (hash-ref metadata ':over #f)))
+  (define over-binder
+    (if over-var
+        (list (cons over-var '(-> (Type 0) (Type 0))))
+        '()))
+  ;; Phase 3a: filter auto-detected-binders to exclude :over variable (already added with HKT kind)
+  (define filtered-auto-detected-binders
+    (if over-var
+        (filter (lambda (b) (not (eq? (car b) over-var))) auto-detected-binders)
+        auto-detected-binders))
   (define all-implicit-binders
-    (append merged-implicit-binders auto-detected-binders))
+    (append over-binder merged-implicit-binders filtered-auto-detected-binders))
   (define refined-implicit-binders
     (if (or (null? all-implicit-binders) (null? all-constraints))
         all-implicit-binders
@@ -2850,9 +2893,32 @@
     (if (null? where-constraints)
         desugared-type-tokens
         (append where-constraints (list '->) desugared-type-tokens)))
+  ;; Phase 3a: :method entries → prepend evidence types to effective-tokens
+  ;; Each :method entry adds a leading param type (the method's type signature).
+  ;; These are prepended AFTER where-constraints but before user params.
+  (define method-entries
+    (if (and metadata (hash? metadata))
+        (hash-ref metadata ':method '())
+        '()))
+  (define effective-tokens-with-methods
+    (if (null? method-entries)
+        effective-tokens
+        ;; Build evidence type tokens: (type1) -> (type2) -> ... existing-tokens
+        ;; Each method type is wrapped in parens so it's a single compound token
+        ;; that survives arrow-splitting (method types often contain arrows themselves).
+        (let ([evidence-prefix
+               (apply append
+                 (for/list ([me (in-list method-entries)])
+                   (define method-type-tokens (caddr me))  ;; type tokens from :method
+                   (list method-type-tokens '->)))])
+          (append evidence-prefix effective-tokens))))
   ;; Store all-constraints (explicit where + inline) in spec entry so that
   ;; inject-spec-into-defn knows about inline constraints for dict param generation.
-  (define stored-constraints all-constraints)
+  ;; Phase 3a: also include HasMethod marker entries for constraint counting
+  (define method-constraint-markers
+    (for/list ([me (in-list method-entries)])
+      (list 'HasMethod (car me) (cadr me))))  ;; (HasMethod P eq?)
+  (define stored-constraints (append all-constraints method-constraint-markers))
   ;; G1: :invariant and :pre/:post have different proof obligation semantics — error if combined
   (when (and metadata (hash? metadata)
              (hash-ref metadata ':invariant #f)
@@ -2878,18 +2944,19 @@
               (eprintf "warning: property `~a` requires `~a` but spec `~a` only provides ~a~n"
                        prop-name pw name stored-constraints)))))))
   ;; Check for multi-arity: effective-tokens contain $pipe forms
+  (define final-effective-tokens effective-tokens-with-methods)
   (define has-pipes?
     (ormap (lambda (t) (or (eq? t '$pipe)
                            (and (pair? t) (eq? (car t) '$pipe))))
-           effective-tokens))
+           final-effective-tokens))
   (cond
     [has-pipes?
      ;; Split on $pipe to get branches
-     (define branches (split-on-pipe effective-tokens))
+     (define branches (split-on-pipe final-effective-tokens))
      (register-spec! name (spec-entry branches merged-docstring #t srcloc-unknown stored-constraints refined-implicit-binders rest-type metadata))]
     [else
      ;; Single-arity: the entire effective-tokens is the type datum
-     (register-spec! name (spec-entry (list effective-tokens) merged-docstring #f srcloc-unknown stored-constraints refined-implicit-binders rest-type metadata))])
+     (register-spec! name (spec-entry (list final-effective-tokens) merged-docstring #f srcloc-unknown stored-constraints refined-implicit-binders rest-type metadata))])
   ;; Phase 2: If spec has :mixfix metadata, auto-register as user operator
   (when (and metadata (hash? metadata) (hash-ref metadata ':mixfix #f))
     (maybe-register-mixfix-operator name metadata)))
@@ -3262,15 +3329,71 @@
                    `($brace-params ,@names)
                    `($brace-params ,@names : ,current-kind)))
              (loop rest (cons form groups))]))))
+  ;; Phase 3a: Split where-constraints into standard trait constraints and HasMethod entries.
+  ;; Standard constraints go through maybe-inject-where; HasMethod evidence params are
+  ;; generated directly here (since 'HasMethod is not a real trait in the registry).
+  (define-values (standard-where-constraints hasmethod-where-entries)
+    (partition (lambda (c) (not (and (pair? c) (eq? (car c) 'HasMethod))))
+              where-constraints))
+  ;; Generate HasMethod evidence params: [$hm-eq? ($angle-type method-type)]
+  ;; These use the method evidence types from the full spec tokens.
+  ;; The evidence types are at positions after standard where-constraints.
+  (define hasmethod-params
+    (for/list ([hm (in-list hasmethod-where-entries)])
+      ;; hm = (HasMethod trait-var method-name)
+      (define method-name (caddr hm))
+      (define param-name (string->symbol (string-append "$hm-" (symbol->string method-name))))
+      ;; Find the corresponding evidence type from the spec tokens.
+      ;; It's the n-standard-where + offset param in the full spec.
+      ;; For now, use a placeholder angle-type from the spec metadata.
+      ;; The actual type comes from the spec-tokens decomposition.
+      param-name))
+  ;; Reconstruct typed-bracket with HasMethod evidence params prepended
+  ;; Each evidence param gets its type from the full spec decomposition.
+  ;; When the user didn't provide dict params, we need to decompose the full spec
+  ;; to extract evidence types. The evidence types are the params between
+  ;; standard where-constraints and user params in the full spec.
+  (define extended-typed-bracket
+    (if (or (null? hasmethod-where-entries) user-provides-dicts?)
+        typed-bracket
+        ;; Decompose the full spec to get evidence param types
+        (let ()
+          ;; Full spec has: std-constraints... -> evidence-types... -> user-types... -> ret
+          (define n-std (length standard-where-constraints))
+          (define n-hm (length hasmethod-where-entries))
+          ;; Skip standard constraints + arrows, extract evidence types
+          (define after-std (drop spec-tokens (if (> n-std 0) (add1 n-std) 0)))
+          (define-values (ev-segments _ev-mults) (split-on-arrow-datum/mult after-std))
+          ;; Unwrap single-element segments: ((A A -> Bool)) → (A A -> Bool)
+          ;; Evidence types are compound tokens (paren-wrapped function types),
+          ;; so each segment contains exactly one list element.
+          (define evidence-types
+            (map (lambda (seg)
+                   (if (and (= (length seg) 1) (list? (car seg)))
+                       (car seg)  ;; unwrap compound token
+                       seg))
+                 (take (drop-right ev-segments 1) n-hm)))
+          ;; Build typed bracket with evidence params prepended
+          (define hm-bracket-entries
+            (apply append
+              (for/list ([pname (in-list hasmethod-params)]
+                         [ptype (in-list evidence-types)])
+                (list pname (param-type->angle-type ptype)))))
+          (append hm-bracket-entries typed-bracket))))
   ;; Assemble: (defn name [typed-bracket...] ($angle-type ret) body-forms...)
   ;; With implicits: (defn name ($brace-params ...) ... [typed-bracket...] ($angle-type ret) body-forms...)
   ;; If constraints were stripped, append `where` so maybe-inject-where adds them back.
+  ;; Phase 3a: Only standard constraints go in the where clause; HasMethod params are already
+  ;; in the typed bracket.
   (define base-defn
     (cond
       [(or (null? where-constraints) user-provides-dicts?)
-       `(defn ,name ,typed-bracket ,ret-angle ,@body-forms)]
+       `(defn ,name ,extended-typed-bracket ,ret-angle ,@body-forms)]
+      [(null? standard-where-constraints)
+       ;; Only HasMethod constraints, no standard where clause needed
+       `(defn ,name ,extended-typed-bracket ,ret-angle ,@body-forms)]
       [else
-       `(defn ,name ,typed-bracket ,ret-angle where ,@where-constraints ,@body-forms)]))
+       `(defn ,name ,extended-typed-bracket ,ret-angle where ,@standard-where-constraints ,@body-forms)]))
   ;; Prepend brace-forms after name if present
   (if (null? brace-forms)
       base-defn
