@@ -35,7 +35,7 @@ Implementation phases in suggested order:
 |---|-------|-------------|-------|--------|--------|
 | 1 | **Phase 1** | Trait names as type constructors | L1 | Small | ✅ Complete (`f6b540e`) |
 | 2 | **Phase 2a** | Static generic operator resolution | L2 | Small | ✅ Complete (`44539b1`) |
-| 3 | **Phase 2b** | `constraint-cell.rkt` module | L2 | Small | ⬜ Not started |
+| 3 | **Phase 2b** | `constraint-cell.rkt` module | L2 | Small | ✅ Complete (`dc98b9b`) |
 | 4 | **Phase 3a** | HasMethod constraint + projection | L3 | Medium | ⬜ Not started |
 | 5 | **Phase 2c** | Constraint propagators (P1–P4) | L2 | Medium | ⬜ Not started |
 | 6 | **Phase 2d** | ATMS multi-candidate search | L2 | Medium | ⬜ Not started |
