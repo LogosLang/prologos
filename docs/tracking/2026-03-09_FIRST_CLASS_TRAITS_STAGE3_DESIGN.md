@@ -40,7 +40,7 @@ Implementation phases in suggested order:
 | 5 | **Phase 2c** | Constraint propagators (P1–P4) | L2 | ✅ `2ca66d2` | Registry-based dispatch replaces static table |
 | 6 | **Phase 2d** | ATMS multi-candidate search | L2 | ✅ `9faecd2` | Enumerate-and-merge over candidates, dedup |
 | 7 | **Phase 3b** | Trait introspection (REPL + sexp) | L3 | ✅ `3ce09aa` | instances-of, methods-of, satisfies? |
-| 8 | **Phase 3c** | `?var:C1:C2` constraint chain syntax | L3 | ⬜ | |
+| 8 | **Phase 3c** | `?var:C1:C2` constraint chain syntax | L3 | ✅ `184e85e` | Reader greedy consumption + type-guard forward-check |
 | 9 | **Phase 3d** | Incremental trait resolution | L3 | ⬜ | |
 
 **Legend:** ⬜ Not started · 🔄 In progress · ✅ Complete · ⏸️ Blocked
