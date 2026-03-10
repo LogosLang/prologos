@@ -72,8 +72,13 @@ ns examples.fc-trait-rel-dom
 ;; 12N : Nat
 
 ;; String concatenation — same `add`, different instance:
-[add "hello " "world"]
-;; "hello world" : String
+;; NOTE: Currently the prelude exports Nat-specific `add` from prologos::data::nat,
+;; which shadows the generic Add trait method. String `add` requires making trait
+;; method dispatch the default (tracked as a design question).
+;;
+;; IDEAL (once generic `add` replaces Nat-specific `add`):
+;; [add "hello " "world"]
+;; ;; → "hello world" : String
 
 
 ;; ========================================================================
@@ -246,9 +251,9 @@ defn my-double [n] : Nat [add n n]
 2N |> [add 3N] |> [mult 2N]
 ;; 10N : Nat  (2 → 5 → 10)
 
-;; String pipeline:
-"hello" |> [add " "] |> [add "world"]
-;; "hello world" : String
+;; String pipeline (requires generic `add` — see §1 note):
+;; IDEAL: "hello" |> [add " "] |> [add "world"]
+;; ;; → "hello world" : String
 
 
 ;; ========================================================================
@@ -298,17 +303,17 @@ defn even? [n]
 ;; → Nat, Bool, Int, Rat, String, Char, ...
 
 ;; Then use Ord-constrained functions:
-[compare 3N 5N]
-;; LT : Ordering
+[ord-compare 3N 5N]
+;; lt-ord : Ordering
 
-[compare "alpha" "beta"]
-;; LT : Ordering
+[ord-compare "alpha" "beta"]
+;; lt-ord : Ordering
 
 ;; Equality through trait dispatch:
-[eq? 3N 3N]
+[eq-check 3N 3N]
 ;; true : Bool
 
-[eq? 3N 4N]
+[eq-check 3N 4N]
 ;; false : Bool
 
 
@@ -457,6 +462,16 @@ defn half-diff [x y] : Nat [sub x [add y y]]
 ;; This section demonstrates the composition of ALL Stage 3 features
 ;; in a single cohesive example.
 
+;; Helper: integer halving via pattern matching (Nat has no div)
+spec half Nat -> Nat
+defn half [n]
+  match n
+    | zero        -> zero
+    | suc k       ->
+      match k
+        | zero  -> zero
+        | suc j -> suc [half j]
+
 ;; Define a user function with pattern matching (gets a DT):
 spec collatz-step Nat -> Nat
 defn collatz-step [n]
@@ -464,10 +479,10 @@ defn collatz-step [n]
     | zero  -> zero
     | suc k ->
       match [even? n]
-        | true  -> [div n 2N]
+        | true  -> [half n]
         | false -> [add [mult n 3N] 1N]
 
-;; Forward computation (trait dispatch: mult, add, div, even?):
+;; Forward computation (trait dispatch: mult, add, half, even?):
 [collatz-step 6N]
 ;; 3N : Nat
 
