@@ -33,6 +33,9 @@
  ;; Narrowing dispatch
  infer-narrowing-type-tag
  resolve-generic-narrowing
+ ;; Multi-candidate dispatch (Phase 2d)
+ candidate->func-name
+ resolve-generic-narrowing-candidates
  ;; Propagator constructors
  install-type->constraint-propagator
  install-constraint->type-propagator
@@ -137,6 +140,36 @@
 ;; method helper's FQN from the global env. The method helper name is:
 ;;   TypeArg--TraitName--method-name (where method-name comes from trait-meta).
 ;; This is namespace-qualified when stored in the global env.
+;; Map a constraint candidate to its narrowable function name.
+;; Returns symbol (FQN) or #f.
+(define (candidate->func-name trait-name cand)
+  (define tm (lookup-trait trait-name))
+  (cond
+    [(not tm) #f]
+    [(null? (trait-meta-methods tm)) #f]
+    [else
+     ;; For single-method traits, the method helper name is
+     ;; TypeArg--TraitName--methodName.
+     (define method-name (trait-method-name (car (trait-meta-methods tm))))
+     (define type-arg-str
+       (string-join
+        (map (lambda (ta)
+               (if (symbol? ta) (symbol->string ta) (format "~a" ta)))
+             (constraint-candidate-type-args cand))
+        "-"))
+     (define helper-name
+       (string->symbol
+        (string-append type-arg-str "--"
+                       (symbol->string trait-name)
+                       "--"
+                       (symbol->string method-name))))
+     ;; Look up the FQN in the global env
+     (define fqn (find-fqn-for-local-name helper-name))
+     (or fqn
+         ;; Fallback: try the dict-name directly
+         (find-fqn-for-local-name
+          (constraint-candidate-dict-name cand)))]))
+
 (define (resolve-generic-narrowing trait-name args [target #f])
   ;; 1. Build initial constraint from all impls
   (define cv0 (build-trait-constraint trait-name))
@@ -156,39 +189,26 @@
      (define resolved (constraint-resolved-candidate cv1))
      (cond
        [(not resolved) #f]
-       [else
-        ;; 5. Map resolved candidate to narrowable function name.
-        ;; The dict-name from the registry is the dict function.
-        ;; For narrowing, we need the actual function with a DT.
-        ;; Use the method-helper naming convention:
-        ;;   TypeArg--TraitName--methodName
-        ;; and look it up in the global env (namespace-qualified).
-        (define tm (lookup-trait trait-name))
-        (cond
-          [(not tm) #f]
-          [(null? (trait-meta-methods tm)) #f]
-          [else
-           ;; For single-method traits (all current Prologos traits),
-           ;; the method helper name is TypeArg--TraitName--methodName.
-           (define method-name (trait-method-name (car (trait-meta-methods tm))))
-           (define type-arg-str
-             (string-join
-              (map (lambda (ta)
-                     (if (symbol? ta) (symbol->string ta) (format "~a" ta)))
-                   (constraint-candidate-type-args resolved))
-              "-"))
-           (define helper-name
-             (string->symbol
-              (string-append type-arg-str "--"
-                             (symbol->string trait-name)
-                             "--"
-                             (symbol->string method-name))))
-           ;; Look up the FQN in the global env
-           (define fqn (find-fqn-for-local-name helper-name))
-           (or fqn
-               ;; Fallback: try the dict-name directly
-               (find-fqn-for-local-name
-                (constraint-candidate-dict-name resolved)))])])]))
+       [else (candidate->func-name trait-name resolved)])]))
+
+;; Returns (listof (cons constraint-candidate symbol)) for all remaining
+;; candidates after refinement. Used by multi-candidate dispatch (Phase 2d).
+(define (resolve-generic-narrowing-candidates trait-name args [target #f])
+  (define cv0 (build-trait-constraint trait-name))
+  (cond
+    [(or (constraint-bot? cv0) (constraint-top? cv0)) '()]
+    [else
+     (define type-tag (or (infer-narrowing-type-tag args)
+                          (and target (infer-narrowing-type-tag (list target)))))
+     (define cv1 (if type-tag (refine-constraint-by-type-tag cv0 type-tag) cv0))
+     (define candidates (constraint-candidates cv1))
+     (if candidates
+         (filter (lambda (p) p)
+                 (map (lambda (c)
+                        (define f (candidate->func-name trait-name c))
+                        (and f (cons c f)))
+                      candidates))
+         '())]))
 
 ;; Find a fully-qualified name in the global env matching a local name suffix.
 ;; E.g., 'Nat--Add--add → 'prologos::core::arithmetic::Nat--Add--add

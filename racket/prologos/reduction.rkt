@@ -220,31 +220,57 @@
         [(expr-app f a) (loop f (cons a extra-args))]
         ;; Generic operators: dispatch via constraint-cell-based resolution.
         ;; Queries impl registry dynamically; uses target-expr as fallback type hint.
+        ;; Phase 2d: falls through to multi-candidate search when static dispatch fails.
         [(expr-generic-add a b)
          (let ([fname (resolve-generic-narrowing 'Add (list a b) target-expr)])
-           (if fname (values fname (append extra-args (list a b) arg-exprs)) (values #f '())))]
+           (if fname (values fname (append extra-args (list a b) arg-exprs))
+               (let ([cands (resolve-generic-narrowing-candidates 'Add (list a b) target-expr)])
+                 (if (null? cands) (values #f '())
+                     (values (list 'multi-dispatch 'Add cands)
+                             (append extra-args (list a b) arg-exprs))))))]
         [(expr-generic-sub a b)
          (let ([fname (resolve-generic-narrowing 'Sub (list a b) target-expr)])
-           (if fname (values fname (append extra-args (list a b) arg-exprs)) (values #f '())))]
+           (if fname (values fname (append extra-args (list a b) arg-exprs))
+               (let ([cands (resolve-generic-narrowing-candidates 'Sub (list a b) target-expr)])
+                 (if (null? cands) (values #f '())
+                     (values (list 'multi-dispatch 'Sub cands)
+                             (append extra-args (list a b) arg-exprs))))))]
         [(expr-generic-mul a b)
          (let ([fname (resolve-generic-narrowing 'Mul (list a b) target-expr)])
-           (if fname (values fname (append extra-args (list a b) arg-exprs)) (values #f '())))]
+           (if fname (values fname (append extra-args (list a b) arg-exprs))
+               (let ([cands (resolve-generic-narrowing-candidates 'Mul (list a b) target-expr)])
+                 (if (null? cands) (values #f '())
+                     (values (list 'multi-dispatch 'Mul cands)
+                             (append extra-args (list a b) arg-exprs))))))]
         [(expr-generic-div a b)
          (let ([fname (resolve-generic-narrowing 'Div (list a b) target-expr)])
-           (if fname (values fname (append extra-args (list a b) arg-exprs)) (values #f '())))]
+           (if fname (values fname (append extra-args (list a b) arg-exprs))
+               (let ([cands (resolve-generic-narrowing-candidates 'Div (list a b) target-expr)])
+                 (if (null? cands) (values #f '())
+                     (values (list 'multi-dispatch 'Div cands)
+                             (append extra-args (list a b) arg-exprs))))))]
         [_ (values #f '())])))
   (cond
     [(not func-name)
      ;; Can't narrow through non-function — return empty list
      (expr-fvar 'nil)]
-    [else
-     ;; Reduce args and target
+    ;; Phase 2d: multi-candidate dispatch — try each candidate independently
+    [(and (list? func-name) (eq? (car func-name) 'multi-dispatch))
+     (define candidates (caddr func-name))
      (define args-whnf (map whnf all-args))
      (define target-whnf (whnf target-expr))
-     ;; Run the DT-guided search
+     (define all-solutions
+       (append*
+        (for/list ([cp (in-list candidates)])
+          (run-narrowing-search (cdr cp) args-whnf target-whnf var-names))))
+     (define unique (remove-duplicates all-solutions equal?))
+     (answers->prologos-expr unique var-names)]
+    [else
+     ;; Single-candidate dispatch (standard path)
+     (define args-whnf (map whnf all-args))
+     (define target-whnf (whnf target-expr))
      (define solutions
        (run-narrowing-search func-name args-whnf target-whnf var-names))
-     ;; Format results as Prologos list of maps
      (answers->prologos-expr solutions var-names)]))
 
 ;; Run solve for a goal expression, returning a Prologos list of answer maps.
