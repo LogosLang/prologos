@@ -263,15 +263,19 @@
   ;; Phase C: Build reverse index from type-arg metas → this dict meta
   (define type-arg-metas (extract-shallow-meta-ids-from-list
                            (trait-constraint-info-type-arg-exprs info)))
+  ;; Phase 1e: Filter to only unsolved metas for wakeup — solved metas won't trigger
+  ;; future solve-meta! calls. If all type-args are already solved, immediate resolution
+  ;; fires below (same pattern as hasmethod wakeup).
+  (define unsolved-ta-metas (filter (lambda (id) (not (meta-solved? id))) type-arg-metas))
   (define wakeup (current-trait-wakeup-map))
-  (for ([ta-id (in-list type-arg-metas)])
+  (for ([ta-id (in-list unsolved-ta-metas)])
     (define existing (hash-ref wakeup ta-id '()))
     (hash-set! wakeup ta-id (cons meta-id existing)))
   ;; Phase 1c: Dual-write trait wakeup map to cell.
   (define tw-cid (current-trait-wakeup-cell-id))
-  (when (and tw-cid tc-net-box write-fn (pair? type-arg-metas))
+  (when (and tw-cid tc-net-box write-fn (pair? unsolved-ta-metas))
     (define tw-delta
-      (for/fold ([acc (hasheq)]) ([ta-id (in-list type-arg-metas)])
+      (for/fold ([acc (hasheq)]) ([ta-id (in-list unsolved-ta-metas)])
         (hash-set acc ta-id (list meta-id))))
     (set-box! tc-net-box (write-fn (unbox tc-net-box) tw-cid tw-delta)))
   ;; P3a: Record cell-ids for type-arg metas for cell-state-driven resolution.
@@ -292,9 +296,9 @@
         (set-box! tc-net-box
                   (write-fn (unbox tc-net-box) tcm-cid
                             (hasheq meta-id (remove-duplicates cell-ids eq?)))))))
-  ;; Phase 3d: If all type-args are already ground (no metas to trigger wakeup),
+  ;; Phase 3d: If all type-args are already ground (no unsolved metas to trigger wakeup),
   ;; attempt immediate resolution via the callback.
-  (when (null? type-arg-metas)
+  (when (null? unsolved-ta-metas)
     (define resolve-fn (current-retry-trait-resolve))
     (when resolve-fn
       (resolve-fn meta-id info))))
@@ -348,13 +352,17 @@
   (define type-arg-metas (extract-shallow-meta-ids-from-list
                             (hasmethod-constraint-info-type-arg-exprs info)))
   (define all-dep-metas (append trait-var-metas type-arg-metas))
+  ;; Phase 1e: Filter to only unsolved metas for wakeup tracking.
+  ;; Already-solved metas won't trigger future solve-meta! calls, so they
+  ;; can't fire wakeup. If all deps are solved, immediate resolution fires below.
+  (define unsolved-dep-metas (filter (lambda (id) (not (meta-solved? id))) all-dep-metas))
   (define wakeup (current-hasmethod-wakeup-map))
-  (for ([dep-id (in-list all-dep-metas)])
+  (for ([dep-id (in-list unsolved-dep-metas)])
     (define existing (hash-ref wakeup dep-id '()))
     (hash-set! wakeup dep-id (cons meta-id existing)))
-  ;; Phase 1d: If all deps are already ground (no metas to trigger wakeup),
+  ;; Phase 1d: If all deps are already ground (no unsolved metas to trigger wakeup),
   ;; attempt immediate resolution via the callback.
-  (when (null? all-dep-metas)
+  (when (null? unsolved-dep-metas)
     (define resolve-fn (current-retry-hasmethod-resolve))
     (when resolve-fn
       (resolve-fn meta-id info))))
@@ -853,12 +861,23 @@
                    (not (prop-type-bot? cell-val))
                    (not (prop-type-top? cell-val)))
           (perf-inc-cell-write-mismatch!)))))
-  ;; P1-E3c: Constraint retry — propagator path when network available,
-  ;; legacy wakeup registry only for test contexts without a network.
+  ;; Constraint retry: three-layer approach.
+  ;;
+  ;; Layer 1 (network quiescence): Run the propagator network so type information
+  ;; flows between connected meta cells. This can transitively solve metas.
+  ;;
+  ;; Layer 2 (cell-state full scan): After quiescence, retry-constraints-via-cells!
+  ;; scans ALL postponed constraints and retries those whose meta cells changed.
+  ;; This catches transitive propagation that targeted wakeup (layer 3) misses.
+  ;;
+  ;; Layer 3 (targeted wakeup): retry-constraints-for-meta! retries only constraints
+  ;; mentioning this specific meta. Fast but misses transitive propagation.
+  ;;
+  ;; Production uses layers 1+2; test fallback uses layer 3 only.
   (cond
     [(and net-box (current-prop-run-quiescence)
           (current-prop-unwrap-net) (current-prop-rewrap-net))
-     ;; Production path: run network to quiescence, then cell-state retry.
+     ;; Production path: quiescence + cell-state scan.
      (define run-fn (current-prop-run-quiescence))
      (define unwrap (current-prop-unwrap-net))
      (define rewrap (current-prop-rewrap-net))
@@ -870,10 +889,10 @@
     [else
      ;; Fallback for test contexts without propagator network
      (retry-constraints-for-meta! id)])
-  ;; Trait resolution: cell-state-driven path (propagator) + legacy wakeup.
-  ;; P3a: Cell-state path captures transitive propagation via the network.
+  ;; Trait resolution: cell-state scan + targeted wakeup (both run for safety).
+  ;; The full scan catches transitive propagation via the network.
   (retry-traits-via-cells!)
-  ;; Legacy wakeup map path (still runs as secondary for P3a shadow phase)
+  ;; Targeted wakeup: fast path for direct dependencies.
   (retry-trait-for-meta! id)
   ;; Phase 1d: HasMethod resolution — reactive wakeup when dependency metas solved.
   (retry-hasmethod-for-meta! id))
