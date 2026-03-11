@@ -35,7 +35,11 @@
                  [current-mult-meta-store (make-hasheq)]
                  [current-sess-meta-store (make-hasheq)]
                  [current-constraint-store '()]
-                 [current-constraint-cell-id #f]  ;; Phase 1a: isolate from other tests
+                 [current-constraint-cell-id #f]  ;; Phase 1a
+                 [current-trait-constraint-cell-id #f]  ;; Phase 1b
+                 [current-trait-cell-map-cell-id #f]  ;; Phase 1b
+                 [current-hasmethod-constraint-cell-id #f]  ;; Phase 1b
+                 [current-capability-constraint-cell-id #f]  ;; Phase 1b
                  [current-wakeup-registry (make-hasheq)]
                  [current-trait-constraint-map (make-hasheq)]
                  [current-trait-wakeup-map (make-hasheq)]

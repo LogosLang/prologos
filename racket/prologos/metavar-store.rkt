@@ -132,6 +132,11 @@
  current-prop-new-infra-cell
  current-constraint-cell-id
  read-constraint-store
+ ;; Phase 1b: Trait/HasMethod/Capability constraint cell IDs
+ current-trait-constraint-cell-id
+ current-trait-cell-map-cell-id
+ current-hasmethod-constraint-cell-id
+ current-capability-constraint-cell-id
  ;; P5b: Multiplicity cell callbacks
  current-prop-fresh-mult-cell
  current-prop-mult-cell-write
@@ -242,6 +247,12 @@
 ;; Register a trait constraint and build wakeup index for incremental resolution.
 (define (register-trait-constraint! meta-id info)
   (hash-set! (current-trait-constraint-map) meta-id info)
+  ;; Phase 1b: Dual-write to trait constraint cell.
+  (define tc-cid (current-trait-constraint-cell-id))
+  (define tc-net-box (current-prop-net-box))
+  (define write-fn (current-prop-cell-write))
+  (when (and tc-cid tc-net-box write-fn)
+    (set-box! tc-net-box (write-fn (unbox tc-net-box) tc-cid (hasheq meta-id info))))
   ;; Phase C: Build reverse index from type-arg metas → this dict meta
   (define type-arg-metas (extract-shallow-meta-ids-from-list
                            (trait-constraint-info-type-arg-exprs info)))
@@ -260,7 +271,13 @@
         cid))
     (when (not (null? cell-ids))
       (hash-set! (current-trait-cell-map) meta-id
-                 (remove-duplicates cell-ids eq?))))
+                 (remove-duplicates cell-ids eq?))
+      ;; Phase 1b: Dual-write trait-cell-map.
+      (define tcm-cid (current-trait-cell-map-cell-id))
+      (when (and tcm-cid tc-net-box write-fn)
+        (set-box! tc-net-box
+                  (write-fn (unbox tc-net-box) tcm-cid
+                            (hasheq meta-id (remove-duplicates cell-ids eq?)))))))
   ;; Phase 3d: If all type-args are already ground (no metas to trigger wakeup),
   ;; attempt immediate resolution via the callback.
   (when (null? type-arg-metas)
@@ -290,7 +307,13 @@
 (define current-hasmethod-constraint-map (make-parameter (make-hasheq)))
 
 (define (register-hasmethod-constraint! meta-id info)
-  (hash-set! (current-hasmethod-constraint-map) meta-id info))
+  (hash-set! (current-hasmethod-constraint-map) meta-id info)
+  ;; Phase 1b: Dual-write to hasmethod constraint cell.
+  (define hm-cid (current-hasmethod-constraint-cell-id))
+  (define hm-net-box (current-prop-net-box))
+  (define write-fn (current-prop-cell-write))
+  (when (and hm-cid hm-net-box write-fn)
+    (set-box! hm-net-box (write-fn (unbox hm-net-box) hm-cid (hasheq meta-id info)))))
 
 (define (lookup-hasmethod-constraint meta-id)
   (hash-ref (current-hasmethod-constraint-map) meta-id #f))
@@ -312,7 +335,13 @@
 (define current-capability-constraint-map (make-parameter (make-hasheq)))
 
 (define (register-capability-constraint! meta-id info)
-  (hash-set! (current-capability-constraint-map) meta-id info))
+  (hash-set! (current-capability-constraint-map) meta-id info)
+  ;; Phase 1b: Dual-write to capability constraint cell.
+  (define cap-cid (current-capability-constraint-cell-id))
+  (define cap-net-box (current-prop-net-box))
+  (define write-fn (current-prop-cell-write))
+  (when (and cap-cid cap-net-box write-fn)
+    (set-box! cap-net-box (write-fn (unbox cap-net-box) cap-cid (hasheq meta-id info)))))
 
 (define (lookup-capability-constraint meta-id)
   (hash-ref (current-capability-constraint-map) meta-id #f))
@@ -534,6 +563,11 @@
 (define (reset-constraint-store!)
   (current-constraint-store '())
   (current-constraint-cell-id #f)
+  ;; Phase 1b: Clear cell IDs (new cells are created per-command by reset-meta-store!).
+  (current-trait-constraint-cell-id #f)
+  (current-trait-cell-map-cell-id #f)
+  (current-hasmethod-constraint-cell-id #f)
+  (current-capability-constraint-cell-id #f)
   (hash-clear! (current-wakeup-registry)))
 
 ;; Query: all postponed constraints.
@@ -598,6 +632,13 @@
 ;; When #f, falls back to legacy parameter-based storage.
 (define current-constraint-cell-id (make-parameter #f))
 
+;; Phase 1b: Cell IDs for trait/hasmethod/capability constraint registry cells.
+;; Each is a registry cell with merge-hasheq-union, mirroring the legacy hasheq maps.
+(define current-trait-constraint-cell-id (make-parameter #f))
+(define current-trait-cell-map-cell-id (make-parameter #f))
+(define current-hasmethod-constraint-cell-id (make-parameter #f))
+(define current-capability-constraint-cell-id (make-parameter #f))
+
 ;; P5b: Multiplicity cell callbacks
 (define current-prop-fresh-mult-cell (make-parameter #f))   ;; (enet source → (values enet* cell-id))
 (define current-prop-mult-cell-write (make-parameter #f))   ;; (enet cell-id value → enet*)
@@ -652,6 +693,10 @@
                  [current-sess-meta-store (make-hasheq)]
                  [current-constraint-store '()]
                  [current-constraint-cell-id #f]  ;; Phase 1a
+                 [current-trait-constraint-cell-id #f]  ;; Phase 1b
+                 [current-trait-cell-map-cell-id #f]    ;; Phase 1b
+                 [current-hasmethod-constraint-cell-id #f]  ;; Phase 1b
+                 [current-capability-constraint-cell-id #f]  ;; Phase 1b
                  [current-wakeup-registry (make-hasheq)]
                  [current-trait-constraint-map (make-hasheq)]
                  [current-trait-wakeup-map (make-hasheq)]
@@ -1095,10 +1140,19 @@
     (define new-cell-fn (current-prop-new-infra-cell))
     (when new-cell-fn
       (define nb (current-prop-net-box))
-      (define enet (unbox nb))
-      (define-values (enet* cstore-cid) (new-cell-fn enet '() merge-list-append))
-      (set-box! nb enet*)
-      (current-constraint-cell-id cstore-cid))))
+      (define enet0 (unbox nb))
+      (define-values (enet1 cstore-cid) (new-cell-fn enet0 '() merge-list-append))
+      (current-constraint-cell-id cstore-cid)
+      ;; Phase 1b: Create registry cells for trait/hasmethod/capability constraints.
+      (define-values (enet2 tc-cid) (new-cell-fn enet1 (hasheq) merge-hasheq-union))
+      (current-trait-constraint-cell-id tc-cid)
+      (define-values (enet3 tcm-cid) (new-cell-fn enet2 (hasheq) merge-hasheq-union))
+      (current-trait-cell-map-cell-id tcm-cid)
+      (define-values (enet4 hm-cid) (new-cell-fn enet3 (hasheq) merge-hasheq-union))
+      (current-hasmethod-constraint-cell-id hm-cid)
+      (define-values (enet5 cap-cid) (new-cell-fn enet4 (hasheq) merge-hasheq-union))
+      (current-capability-constraint-cell-id cap-cid)
+      (set-box! nb enet5))))
 
 ;; ========================================
 ;; Meta state save/restore for speculative type-checking
