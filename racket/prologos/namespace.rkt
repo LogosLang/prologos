@@ -353,7 +353,7 @@
     ;; List: full API unqualified (wins all name-conflict tiebreaks)
     (imports [prologos::data::list :refer [List nil cons foldr reduce length
                                            map filter append head tail singleton
-                                           reverse sum product any? all? find
+                                           reverse any? all? find
                                            nth last replicate range concat
                                            concat-map take drop split-at
                                            take-while drop-while partition
