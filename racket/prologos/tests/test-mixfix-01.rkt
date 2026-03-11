@@ -267,11 +267,11 @@
     (run-last "(eval ($mixfix 1N + 2N * 3N))"))
   (check-equal? result "7N : Nat"))
 
-(test-case "e2e/sexp: wildcard partial application"
+(test-case "e2e/sexp: generic + as function via fn"
   (define result
     (run-last
      (string-append
-      "(def double : (-> Nat Nat) ($mixfix _ + _))\n"
+      "(def double : (-> Nat Nat) (fn [x] (+ x x)))\n"
       "(eval (double 3N))")))
   (check-equal? result "6N : Nat"))
 

@@ -331,9 +331,7 @@
     ;; ---- Foundation data types ----
     (imports [prologos::data::ordering :refer [Ordering lt-ord eq-ord gt-ord]])
     (imports [prologos::data::bool     :refer [not and or xor bool-eq implies nand nor]])
-    (imports [prologos::data::nat      :refer [add mult double pred zero? sub pow
-                                               le? lt? gt? ge? nat-eq? min max
-                                               bool-to-nat clamp]])
+    (imports [prologos::data::nat      :as nat :refer [zero?]])
     (imports [prologos::data::pair     :refer [swap map-fst map-snd bimap dup uncurry]])
     (imports [prologos::data::eq       :refer [sym cong trans]])
     ;; Datum: code-as-data for quote/quasiquote
