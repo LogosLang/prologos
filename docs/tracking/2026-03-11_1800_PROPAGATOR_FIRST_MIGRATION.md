@@ -25,8 +25,8 @@ Migrate the Prologos compilation pipeline from ad-hoc mutable state (Racket para
 | 0 | 0d | Parallel propagation verification + benchmarks | ✅ | `e408151` — 6 tests, seq=BSP=par verified, <1ms overhead |
 | 0 | 0e | Integration smoke test | ✅ | Full suite: 6803 tests, 353 files, 0 failures, 208.6s. Canary OK. |
 | 1 | 1a | Constraint store cell (storage only) | ✅ | `411e96b` — 10 tests, dual-write to cell + legacy parameter |
-| 1 | 1b | Trait constraint cells (storage only) | ⬜ | |
-| 1 | 1c | Wakeup registry cell (storage only) | ⬜ | |
+| 1 | 1b | Trait constraint cells (storage only) | ✅ | `ec36685` — 6 tests, 4 registry cells (trait/hasmethod/cap), dual-write |
+| 1 | 1c | Wakeup registry cell (storage only) | ✅ | `7419752` — 4 tests, wakeup+trait-wakeup cells, merge-hasheq-list-append |
 | 1 | 1d | Reactive resolution wiring (behavior change) | ⬜ | |
 | 1 | 1e | Remove retry infrastructure | ⬜ | |
 | 2 | 2a | Core type registries (8 registries) | ⬜ | |
@@ -50,7 +50,7 @@ Migrate the Prologos compilation pipeline from ad-hoc mutable state (Racket para
 | Phase | Description | Sub-phases | Est. Effort | Risk | Status |
 |-------|-------------|------------|-------------|------|--------|
 | 0 | Unified cell abstraction + ATMS | 0a–0e | 3–4 days | Low | ✅ DONE |
-| 1 | Constraint tracking → cells | 1a–1e | 3–5 days | Medium | NOT STARTED |
+| 1 | Constraint tracking → cells | 1a–1e | 3–5 days | Medium | IN PROGRESS (1a–1c ✅) |
 | 2 | Registry parameters → cells | 2a–2c | 2–3 days | Low | NOT STARTED |
 | 3 | Global environment → cells + cache invalidation | 3a–3e | 6–9 days | High | NOT STARTED |
 | 4 | Speculation → ATMS assumptions | 4a–4c | 3–5 days | Medium | NOT STARTED |
