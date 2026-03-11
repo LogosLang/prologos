@@ -1,0 +1,127 @@
+ns examples.audit.traits-instances
+
+;; ========================================================================
+;; AUDIT 06 — Traits, Instances, Bundles
+;; ========================================================================
+;; Tests trait/impl/bundle system in WS-mode .prologos files.
+;; Classification: OK | WRONG | CRASH | DEFN-ONLY | SEXP-ONLY | MISSING | DESIGN
+
+
+;; ========================================================================
+;; 1. Using Pre-defined Traits (from prelude)
+;; ========================================================================
+
+;; --- 1a. Eq trait (prelude provides eq-check for Nat, Bool, etc.) ---
+[eq-check 3N 3N]
+;; expect: true : Bool
+
+[eq-check 3N 5N]
+;; expect: false : Bool
+
+;; --- 1b. Ord trait ---
+[ord-compare 3N 5N]
+;; expect: lt-ord : Ordering
+
+[ord-compare 5N 3N]
+;; expect: gt-ord : Ordering
+
+[ord-compare 3N 3N]
+;; expect: eq-ord : Ordering
+
+;; --- 1c. Generic operators via trait dispatch ---
+.{2N + 3N}
+;; expect: 5N : Nat
+
+.{10N - 3N}
+;; expect: 7N : Nat
+
+.{4N * 5N}
+;; expect: 20N : Nat
+
+;; --- 1d. Generic comparison ---
+.{3N < 5N}
+;; expect: true : Bool
+
+.{5N <= 5N}
+;; expect: true : Bool
+
+;; --- 1e. Generic equality (= inside mixfix) ---
+;;! CRASH: "Unexpected token after expression: ="
+;;  = inside .{} mixfix conflicts with the narrowing/equality rewrite
+;; .{3N = 3N}
+;; .{3N = 5N}
+
+;; Use = outside mixfix instead (works):
+3N = 3N
+;; expect: true : Bool
+
+3N = 5N
+;; expect: false : Bool
+
+
+;; ========================================================================
+;; 2. Trait Constrained Functions
+;; ========================================================================
+
+;; --- 2a. Function with Eq constraint ---
+;;! CRASH: "spec both-eq: type has 1 type parameters but defn has 2 params"
+;;  inject-spec-into-defn miscounts arity when constraint (Eq A) is present
+;; spec both-eq {A : Type} (Eq A) A A -> Bool
+;; defn both-eq [a b] [eq-check a b]
+;; [both-eq 3N 3N]
+;; expect: true : Bool
+;; [both-eq true false]
+;; expect: false : Bool
+
+
+;; ========================================================================
+;; 3. User-Defined Trait (WS mode)
+;; ========================================================================
+
+;; --- 3a. Define a trait ---
+;;  trait definition itself works (produces Describable-describe function def)
+trait Describable {A : Type}
+  describe : A -> Nat
+
+;; --- 3b. Implement the trait ---
+;;! CRASH: "defn requires: (defn name [x <T> ...] <ReturnType> body)"
+;;  defn inside impl block not recognized in WS-mode preparse
+;; impl Describable Nat
+;;   defn describe [n] n
+;;
+;; impl Describable Bool
+;;   defn describe [b]
+;;     if b 1N 0N
+
+;; --- 3c. Use the trait ---
+;; Can't test without working impl blocks above
+;; [describe 42N]
+;; expect: 42N : Nat
+;; [describe true]
+;; expect: 1N : Nat
+;; [describe false]
+;; expect: 0N : Nat
+
+
+;; ========================================================================
+;; 4. Bundle
+;; ========================================================================
+
+;; Bundles combine traits. Testing syntax only.
+;; bundle MyNum := (Add Sub Mul)
+;; (Bundle registration may not produce visible output)
+
+
+;; ========================================================================
+;; 5. Property declarations
+;; ========================================================================
+
+;; property Reflexive {A : Type}
+;;   :where (Eq A)
+;;   - :name "reflexivity" :forall {a : A} :holds [eq-check a a] = true
+;; (Property syntax may be complex — test separately)
+
+
+;; ========================================================================
+;; END
+;; ========================================================================

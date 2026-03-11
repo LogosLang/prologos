@@ -1,0 +1,144 @@
+ns examples.audit.fn-let-do
+
+;; ========================================================================
+;; AUDIT 05 — fn, let, do
+;; ========================================================================
+;; Tests lambda expressions, let bindings, and do sequencing.
+;; Classification: OK | WRONG | CRASH | DEFN-ONLY | SEXP-ONLY | MISSING | DESIGN
+
+
+;; ========================================================================
+;; 1. fn (lambda) expressions
+;; ========================================================================
+
+;; --- 1a. fn passed to higher-order function ---
+[map (fn [x] [add x 1N]) '[1N 2N 3N]]
+;; expect: '[2N 3N 4N] : List Nat
+
+;; --- 1b. fn with typed parameter ---
+[map (fn [x : Nat] [mult x 2N]) '[1N 2N 3N]]
+;; expect: '[2N 4N 6N] : List Nat
+
+;; --- 1c. fn as value in def ---
+;;! CRASH: "Could not infer type" — def with fn value fails at top level
+;;  def double-fn := (fn [x : Nat] [mult x 2N])
+;;  [double-fn 5N]
+;;  expect: 10N : Nat
+
+;; --- 1d. fn applied immediately ---
+[(fn [x : Nat] [add x 10N]) 5N]
+;; expect: 15N : Nat
+
+;; --- 1e. Multi-param fn ---
+;;! CRASH: "Could not infer type" — multi-bracket fn fails
+;;  [(fn [x : Nat] [y : Nat] [add x y]) 3N 4N]
+;;  expect: 7N : Nat
+
+;; --- 1f. fn with filter ---
+[filter (fn [x : Nat] [gt? x 2N]) '[1N 2N 3N 4N 5N]]
+;; expect: '[3N 4N 5N] : List Nat
+
+
+;; ========================================================================
+;; 2. let bindings
+;; ========================================================================
+
+;; --- 2a. Simple let at top level ---
+;;! CRASH: "let :=: missing value after := for x1"
+;;  Top-level let without body crashes the preparse
+;; let x1 := 42N
+
+;; --- 2b. let used in subsequent expression ---
+;; NOTE: At top level, sequential lets don't scope into each other
+;; (known DESIGN limitation). Each let is a separate top-level form.
+
+;; --- 2c. let inside defn body (works) ---
+spec add-10-double Nat -> Nat
+defn add-10-double [n]
+  let a := [add n 10N]
+  [mult a 2N]
+
+[add-10-double 5N]
+;; expect: 30N : Nat
+
+;; --- 2d. Sequential lets inside defn ---
+spec triple-add Nat -> Nat
+defn triple-add [n]
+  let a := [add n 1N]
+  let b := [add a 2N]
+  let c := [add b 3N]
+  c
+
+[triple-add 10N]
+;; expect: 16N : Nat
+
+;; --- 2e. let with = in value position ---
+spec check-and-use Nat Nat -> Nat
+defn check-and-use [a b]
+  let s := [add a b]
+  if [nat-eq? s 10N] s 0N
+
+[check-and-use 3N 7N]
+;; expect: 10N : Nat
+
+[check-and-use 3N 4N]
+;; expect: 0N : Nat
+
+;; --- 2f. Top-level sequential lets (known limitation) ---
+;;! DESIGN: top-level sequential lets don't scope into each other
+;; let p := 10N
+;; let q := [add p 5N]   ;; p not in scope here
+;; q
+
+;; --- 2g. let with computation ---
+spec compute-val Nat -> Nat
+defn compute-val [n]
+  let doubled := [double n]
+  let tripled := [add doubled n]
+  tripled
+
+[compute-val 4N]
+;; expect: 12N : Nat
+
+
+;; ========================================================================
+;; 3. do sequencing
+;; ========================================================================
+
+;; do is for sequencing effects. In a pure context, it chains lets.
+;; Testing basic do syntax:
+
+;;! May not work at top level — test inside defn
+;; spec do-test Nat -> Nat
+;; defn do-test [n]
+;;   do
+;;     x <- [add n 1N]
+;;     y <- [add x 2N]
+;;     y
+
+;; [do-test 10N]
+;; ;; expect: 13N
+
+
+;; ========================================================================
+;; 4. fn edge cases
+;; ========================================================================
+
+;; --- 4a. Nested fn ---
+;;! CRASH: "Could not infer type" — def with nested fn value fails
+;;  def make-adder := (fn [x : Nat] (fn [y : Nat] [add x y]))
+;;  [make-adder 3N]
+;;  expect: fn : Nat -> Nat (closure)
+;;  [[make-adder 3N] 4N]
+;;  expect: 7N : Nat
+
+;; --- 4b. fn in map with closure over def ---
+def offset := 100N
+
+[map (fn [x : Nat] [add x offset]) '[1N 2N 3N]]
+;; expect: '[101N 102N 103N] : List Nat
+
+
+;; ========================================================================
+;; END
+;; ========================================================================
