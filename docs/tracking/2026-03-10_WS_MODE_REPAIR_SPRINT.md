@@ -65,37 +65,38 @@ because narrowing correctness is lower priority than basic functionality.
 
 ## Phase Tracker
 
-| # | Sub-phase | Effort | Status |
-|---|-----------|--------|--------|
-| **Phase 1: Reader** | | | |
-| 1a | Char literal docs | S | ✅ |
-| 1b | Quote/quasiquote | M+M | ✅ |
-| **Phase 2: Preparse** | | | |
-| 2a | `def-` recognition | S | ✅ |
-| 2b | `def` multi-token RHS | M | ✅ |
-| 2c | `def` with lambda value | S–M | ⬜ |
-| 2d | spec+constraint arity | S | ⬜ |
-| 2e | `defn` inside `impl` | M | ⬜ |
-| 2f | Multi-clause `defn` + spec | M | ⬜ |
-| 2g | `with-transient` WS form | S | ⬜ |
-| 2h | `into-list` name collision | S | ⬜ |
-| 2i | Top-level `let` error | S | ⬜ |
-| 2j | `=` inside mixfix | S | ⬜ |
-| **Phase 3: Data & Constructors** | | | |
-| 3a | Nullary constructors | S | ⬜ |
-| 3b | Multi-field constructors | M | ⬜ |
-| 3c | Polymorphic ctor binding | M | ⬜ |
-| 3d | Constructor-as-HOF | M–L | ⬜ |
-| **Phase 4: Type Inference** | | | |
-| 4a | Top-level `if` type | S | ⬜ |
-| 4b | sort/dedup constraints | M | ⬜ |
-| 4c | `opt::unwrap-or` inference | M | ⬜ |
-| 4d | Collection conversion | M–L | ⬜ |
-| 4e | Multi-bracket `fn` | S–M | ⬜ |
-| **Phase 5: Narrowing** | | | |
-| 5a | Shared variable constraint | M | ⬜ |
-| 5b | Constructor narrowing | M | ⬜ |
-| 5c | Narrowing through `if` | M | ⬜ |
+| # | Sub-phase | Effort | Status | Notes |
+|---|-----------|--------|--------|-------|
+| **Phase 1: Reader** | | | | |
+| 1a | Char literal docs | S | ✅ | `3165faa` — `\a` is canonical char form |
+| 1b | Quote/quasiquote | M+M | ✅ | `2f8e889` — datum in prelude; `,x` in parens deferred |
+| **Phase 2: Preparse** | | | | |
+| 2a | `def-` recognition | S | ✅ | `dd5c09d` — expand-def-assign + spec-def injection |
+| 2b | `def` multi-token RHS | M | ✅ | `02bce89` — auto-wrap multi-token after `:=` |
+| 2c | `def` with lambda value | S–M | ⏭️ | Typing issue, not preparse; use `spec` as workaround |
+| 2d | spec+constraint arity | S | ✅ | `7e1d212` — Pass -1 for ns/imports before Pass 0/1 |
+| 2e | `defn` inside `impl` | M | ✅ | `e7e78f4` — bare-param defn + return type from trait |
+| 2f | Multi-clause `defn` + spec | M | ⬜ | |
+| 2g | `with-transient` WS form | S | ⬜ | |
+| 2h | `into-list` name collision | S | ⬜ | |
+| 2i | Top-level `let` error | S | ⬜ | |
+| 2j | `=` inside mixfix | S | ⬜ | |
+| 2k | Error reporting: `expr-bvar` in errors | M | ⬜ | Pretty-print type vars in error messages |
+| **Phase 3: Data & Constructors** | | | | |
+| 3a | Nullary constructors | S | ⬜ | |
+| 3b | Multi-field constructors | M | ⬜ | |
+| 3c | Polymorphic ctor binding | M | ⬜ | |
+| 3d | Constructor-as-HOF | M–L | ⬜ | |
+| **Phase 4: Type Inference** | | | | |
+| 4a | Top-level `if` type | S | ⬜ | |
+| 4b | sort/dedup constraints | M | ⬜ | |
+| 4c | `opt::unwrap-or` inference | M | ⬜ | |
+| 4d | Collection conversion | M–L | ⬜ | |
+| 4e | Multi-bracket `fn` | S–M | ⬜ | |
+| **Phase 5: Narrowing** | | | | |
+| 5a | Shared variable constraint | M | ⬜ | |
+| 5b | Constructor narrowing | M | ⬜ | |
+| 5c | Narrowing through `if` | M | ⬜ | |
 
 **Legend**: ⬜ Not started · 🔨 In progress · ✅ Done · ⏭️ Skipped · 🔬 Diagnosing
 
@@ -217,28 +218,22 @@ is present (the type-annotated path is already separate).
 **Validation**: Un-comment, expect `some 42N : Option Nat`. Add tests for
 `def` with fn value, if expression, and nested brackets on RHS.
 
-### Phase 2c: `def` with Lambda Value
+### Phase 2c: `def` with Lambda Value — SKIPPED (typing issue, not preparse)
 
-**Problem**: `def double-fn := (fn [x : Nat] [add x x])` → "Could not infer
-type" (audit-05). Also `def make-adder := (fn [x] (fn [y] ...))`.
+**Problem**: `def double-fn := (fn [x : Nat] [add x x])` → "Could not infer type".
 
-**Root cause**: Top-level `def` with a `fn` value fails type inference because
-the fn has no bidirectional type context. Inside a `defn` body with a `spec`,
-the return type provides context. At top level, the fn's parameter types may
-need to be fully annotated.
+**Diagnosis**: Tested — the datum reaches the elaborator correctly. The issue is
+type inference: top-level `def` with a `fn` value has no bidirectional type context.
+With a `spec` providing the type, it works perfectly:
+```
+spec double-fn Nat -> Nat
+def double-fn := (fn [x : Nat] [add x x])
+[double-fn 5N]  ;; → 10N : Nat ✅
+```
 
-**Diagnosis needed**: Is this a preparse issue (the datum shape is wrong) or a
-typing issue (elaborator can't infer fn types at top level)? If the datum reaches
-the elaborator correctly and typing fails, this belongs in Phase 4 instead.
-
-**Approach**: Test whether `def double-fn : [Nat -> Nat] := (fn [x : Nat] [add x x])`
-(with explicit type annotation) works. If it does, the issue is inference, not
-preparse, and the fix is to improve top-level fn inference or document that
-type annotations are required.
-
-**Effort**: S (if annotation works) / M (if elaborator fix needed)
-**Audit expressions**: audit-05 `def double-fn`, `def make-adder`
-**Validation**: Test with and without type annotations
+**Resolution**: This is a typing limitation, not a preparse bug. Skipped from
+Phase 2. Workaround: use `spec` before `def` to provide type context, or use
+`defn` (which is the idiomatic way to define functions in Prologos).
 
 ### Phase 2d: `inject-spec-into-defn` Arity with Constraints
 
@@ -393,20 +388,40 @@ handle.
 **Audit expressions**: audit-06 `.{3N = 3N}`
 **Validation**: Un-comment `.{3N = 3N}` in audit-06, expect `true : Bool`
 
+### Phase 2k: Error Reporting — `expr-bvar` in Error Messages
+
+**Problem**: Constraint/type errors expose internal AST structures like
+`#(struct:expr-bvar 3)` instead of human-readable type variable names.
+Example: `No instance of Eq for #(struct:expr-bvar 3)` should say
+`No instance of Eq for type variable A`.
+
+**Root cause**: Error messages format type expressions using Racket's default
+struct printing. The pretty-printer (`pretty-print.rkt`) handles most display,
+but error message paths in `typing-core.rkt` and `elaborator.rkt` use raw
+`format` with `~a` on AST nodes.
+
+**Fix**: Add a `type->display-string` helper that renders `expr-bvar` nodes
+as their original variable names (using the de Bruijn index to look up the
+name from the typing context). Use this in error message formatting paths.
+
+**Effort**: M
+**Audit expressions**: All constraint/inference errors across audit files
+
 ### Phase 2 Status
 
 | Sub-phase | Status | Commit |
 |-----------|--------|--------|
-| 2a: `def-` recognition | NOT STARTED | |
-| 2b: `def` multi-token RHS | NOT STARTED | |
-| 2c: `def` with lambda value | NOT STARTED | |
-| 2d: spec+constraint arity | NOT STARTED | |
-| 2e: `defn` inside `impl` | NOT STARTED | |
-| 2f: Multi-clause `defn` + spec | NOT STARTED | |
-| 2g: `with-transient` WS form | NOT STARTED | |
-| 2h: `into-list` name collision | NOT STARTED | |
-| 2i: Top-level `let` error | NOT STARTED | |
-| 2j: `=` inside mixfix | NOT STARTED | |
+| 2a: `def-` recognition | ✅ | `dd5c09d` |
+| 2b: `def` multi-token RHS | ✅ | `02bce89` |
+| 2c: `def` with lambda value | ⏭️ | (typing issue, not preparse) |
+| 2d: spec+constraint arity | ✅ | `7e1d212` |
+| 2e: `defn` inside `impl` | ✅ | `e7e78f4` |
+| 2f: Multi-clause `defn` + spec | ⬜ | |
+| 2g: `with-transient` WS form | ⬜ | |
+| 2h: `into-list` name collision | ⬜ | |
+| 2i: Top-level `let` error | ⬜ | |
+| 2j: `=` inside mixfix | ⬜ | |
+| 2k: Error reporting: expr-bvar | ⬜ | |
 
 ---
 
@@ -772,10 +787,10 @@ or after the repair sprint:
 
 | Metric | Target |
 |--------|--------|
-| Total sub-phases | 22 (1a–b, 2a–j, 3a–d, 4a–e, 5a–c) |
-| Estimated S fixes | 8 (1a, 2a, 2d, 2g, 2h, 2i, 2j, 3a) |
-| Estimated M fixes | 11 (1b, 2b, 2c, 2e, 2f, 3b, 3c, 4a, 4b, 4c, 5c) |
-| Estimated M–L fixes | 3 (3d, 4d, 4e) |
+| Total sub-phases | 23 (1a–b, 2a–k, 3a–d, 4a–e, 5a–c) |
+| Completed | 6 (1a, 1b, 2a, 2b, 2d, 2e) |
+| Skipped | 1 (2c) |
+| Remaining | 16 |
 | Audit expressions to un-comment | ~36 (all CRASH) + ~6 (WRONG) |
 | Regression test count | 5440 (must stay green) |
 
@@ -787,3 +802,9 @@ or after the repair sprint:
 |-------|--------|------|-------|
 | (planning) | `c8f3929` | 2026-03-10 | Initial sprint document |
 | (revision) | | 2026-03-10 | Incorporated external critique |
+| 1a | `3165faa` | 2026-03-10 | Char literal documentation |
+| 1b | `2f8e889` | 2026-03-10 | Datum in prelude for quote/quasiquote |
+| 2a | `dd5c09d` | 2026-03-10 | def- recognition via expand-def-assign |
+| 2b | `02bce89` | 2026-03-10 | Multi-token RHS auto-wrap |
+| 2d | `7e1d212` | 2026-03-10 | Pass -1 for ns/imports; constraint stripping |
+| 2e | `e7e78f4` | 2026-03-10 | Bare-param defn; trait return type injection |
