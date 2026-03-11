@@ -63,10 +63,9 @@ ns examples.audit.modules-imports
 ;; ========================================================================
 
 ;; --- 4a. Private def ---
-;;! CRASH: "def requires: (def name <type> body)" — def- not recognized in WS mode
-;; def- private-val := 42N
-;; [add private-val 1N]
-;; expect: 43N : Nat
+def- private-val := 42N
+[add private-val 1N]
+;; OK: 43N : Nat (fixed: expand-def-assign now called for def- in private-form handler)
 
 ;; --- 4b. Private defn ---
 spec- helper Nat -> Nat

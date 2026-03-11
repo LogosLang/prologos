@@ -69,9 +69,9 @@ because narrowing correctness is lower priority than basic functionality.
 |---|-----------|--------|--------|
 | **Phase 1: Reader** | | | |
 | 1a | Char literal docs | S | ✅ |
-| 1b | Quote/quasiquote | M+M | 🔨 |
+| 1b | Quote/quasiquote | M+M | ✅ |
 | **Phase 2: Preparse** | | | |
-| 2a | `def-` recognition | S | ⬜ |
+| 2a | `def-` recognition | S | ✅ |
 | 2b | `def` multi-token RHS | M | ⬜ |
 | 2c | `def` with lambda value | S–M | ⬜ |
 | 2d | spec+constraint arity | S | ⬜ |
@@ -160,7 +160,7 @@ predicates (`sym?`, `kw?`, `nat?`, `int?`, `rat?`, `bool?`, `nil?`, `cons?`).
 | Sub-phase | Status | Commit |
 |-----------|--------|--------|
 | 1a: Char literal docs | ✅ | `3165faa` |
-| 1b: Quote/quasiquote (prelude fix) | ✅ | (pending) |
+| 1b: Quote/quasiquote (prelude fix) | ✅ | `2f8e889` |
 | 1b-residual: Quasiquote unquote in parens | DEFERRED | reader.rkt:1074–1077 |
 
 ---

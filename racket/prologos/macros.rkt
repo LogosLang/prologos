@@ -2033,17 +2033,25 @@
                                       stx)
                        ;; Fallback: pure datum
                        (datum->syntax #f rewritten stx)))
+                 ;; Expand := syntax for def- (before spec injection)
+                 (define pre-datum
+                   (let ([d (syntax->datum new-stx)])
+                     (if (and (eq? base 'def) (memq ':= d))
+                         (expand-def-assign d)
+                         d)))
                  ;; Inject spec type into bare-param defn- if matching spec exists
                  (define maybe-injected
-                   (let ([d (syntax->datum new-stx)])
-                     (if (eq? base 'defn) (maybe-inject-spec d) d)))
+                   (if (eq? base 'defn) (maybe-inject-spec pre-datum) pre-datum))
+                 ;; Inject spec type into def- if matching spec exists
+                 (define maybe-spec-injected
+                   (if (eq? base 'def) (maybe-inject-spec-def maybe-injected) maybe-injected))
                  ;; Inject where-clause constraints (defn only)
                  (define maybe-where-injected
-                   (if (and (pair? maybe-injected)
-                            (eq? (car maybe-injected) 'defn)
-                            (memq 'where maybe-injected))
-                       (maybe-inject-where maybe-injected)
-                       maybe-injected))
+                   (if (and (pair? maybe-spec-injected)
+                            (eq? (car maybe-spec-injected) 'defn)
+                            (memq 'where maybe-spec-injected))
+                       (maybe-inject-where maybe-spec-injected)
+                       maybe-spec-injected))
                  (define expanded (preparse-expand-form maybe-where-injected))
                  (if (equal? expanded maybe-where-injected)
                      (cons (datum->syntax #f maybe-where-injected stx) acc)
