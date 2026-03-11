@@ -365,8 +365,10 @@
 ;; bare symbols (for local use) and as fully-qualified names (for export).
 (define (process-command surf)
   (reset-meta-store!)  ;; clear metavariables from previous command
-  ;; Phase 2a: Create macros registry cells in the fresh network.
+  ;; Phase 2a/2b/2c: Create macros registry cells in the fresh network.
   (register-macros-cells! (current-prop-net-box) (current-prop-new-infra-cell))
+  ;; Phase 2c: Create warning cells in the fresh network.
+  (register-warning-cells! (current-prop-net-box) (current-prop-new-infra-cell))
   ;; Phase D: Initialize ATMS for dependency-directed error tracking.
   ;; The ATMS box is always available — init-speculation-tracking! creates a
   ;; fresh ATMS per command. This is cheap (empty ATMS = ~3 hasheq allocations).
@@ -1228,6 +1230,7 @@
     (for/list ([def (in-list defs)])
       (reset-meta-store!)
       (register-macros-cells! (current-prop-net-box) (current-prop-new-infra-cell))
+      (register-warning-cells! (current-prop-net-box) (current-prop-new-infra-cell))
       (init-speculation-tracking!)
       (process-def def)))
   ;; Check for errors
@@ -1618,9 +1621,13 @@
         (when spec-entry
           (current-spec-store
             (hash-set (current-spec-store) name spec-entry))
+          ;; Phase 2c: dual-write spec-store to cell
+          (macros-cell-write! (current-spec-store-cell-id) (hasheq name spec-entry))
           ;; Mark as propagated so own-module defs can override silently
           (current-propagated-specs
-            (set-add (current-propagated-specs) name))))))
+            (set-add (current-propagated-specs) name))
+          ;; Phase 2c: dual-write propagated-specs to cell (set merge)
+          (macros-cell-write! (current-propagated-specs-cell-id) (seteq name))))))
   (when (null? (current-lib-paths))
     (current-lib-paths (list prologos-lib-dir))))
 
@@ -1764,6 +1771,7 @@
   ;; Parse and elaborate the type
   (reset-meta-store!)
   (register-macros-cells! (current-prop-net-box) (current-prop-new-infra-cell))
+  (register-warning-cells! (current-prop-net-box) (current-prop-new-infra-cell))
   (define type-surf (parse-datum type-sexp))
   (when (prologos-error? type-surf)
     (error 'foreign "Failed to parse type for ~a: ~a" racket-name type-surf))
@@ -1909,6 +1917,9 @@
 ;; net-box is installed per-command via register-macros-cells!, since it's created
 ;; fresh in reset-meta-store!.
 (current-macros-prop-cell-write elab-cell-write)
+
+;; Phase 2c: Install warnings cell-write callback.
+(current-warnings-prop-cell-write elab-cell-write)
 
 ;; P5b: Install multiplicity cell callbacks
 (current-prop-fresh-mult-cell elab-fresh-mult-cell)

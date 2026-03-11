@@ -32,7 +32,51 @@
          process-cap-warning-name
          process-cap-warning-message
          emit-process-cap-warning!
-         format-process-cap-warning)
+         format-process-cap-warning
+         ;; Phase 2c: Warning cell infrastructure
+         current-warnings-prop-net-box
+         current-warnings-prop-cell-write
+         current-coercion-warnings-cell-id
+         current-deprecation-warnings-cell-id
+         current-capability-warnings-cell-id
+         register-warning-cells!)
+
+(require "infra-cell.rkt")  ;; merge-list-append
+
+;; ========================================
+;; Phase 2c: Propagator-First Migration — Warning Cell Infrastructure
+;; ========================================
+;; Callback parameters for network access (set by driver.rkt).
+(define current-warnings-prop-net-box (make-parameter #f))
+(define current-warnings-prop-cell-write (make-parameter #f))
+;; Cell-id parameters for each warning accumulator.
+(define current-coercion-warnings-cell-id (make-parameter #f))
+(define current-deprecation-warnings-cell-id (make-parameter #f))
+(define current-capability-warnings-cell-id (make-parameter #f))
+
+;; Helper: dual-write a warning to a list cell.
+;; value should be a list with one element — the cell's merge function
+;; (merge-list-append) will append it to existing warnings.
+(define (warnings-cell-write! cid value)
+  (define net-box (current-warnings-prop-net-box))
+  (define write-fn (current-warnings-prop-cell-write))
+  (when (and net-box write-fn cid)
+    (set-box! net-box (write-fn (unbox net-box) cid value))))
+
+;; Create warning cells in the propagator network.
+;; Called per-command after reset-meta-store!, since the network is fresh.
+;; Initializes each cell from the current legacy parameter content.
+(define (register-warning-cells! net-box new-cell-fn)
+  (when (and net-box new-cell-fn)
+    (current-warnings-prop-net-box net-box)
+    (define enet0 (unbox net-box))
+    (define-values (enet1 cw-cid) (new-cell-fn enet0 (current-coercion-warnings) merge-list-append))
+    (current-coercion-warnings-cell-id cw-cid)
+    (define-values (enet2 dw-cid) (new-cell-fn enet1 (current-deprecation-warnings) merge-list-append))
+    (current-deprecation-warnings-cell-id dw-cid)
+    (define-values (enet3 capw-cid) (new-cell-fn enet2 (current-capability-warnings) merge-list-append))
+    (current-capability-warnings-cell-id capw-cid)
+    (set-box! net-box enet3)))
 
 ;; ========================================
 ;; Coercion warnings
@@ -48,9 +92,10 @@
 ;; Emit a coercion warning (exact → approximate).
 ;; from-str, to-str: strings like "Int", "Posit32"
 (define (emit-coercion-warning! from-str to-str)
-  (current-coercion-warnings
-   (cons (coercion-warning from-str to-str)
-         (current-coercion-warnings))))
+  (define w (coercion-warning from-str to-str))
+  (current-coercion-warnings (cons w (current-coercion-warnings)))
+  ;; Phase 2c: dual-write to cell
+  (warnings-cell-write! (current-coercion-warnings-cell-id) (list w)))
 
 ;; Format a coercion warning for display.
 (define (format-coercion-warning w)
@@ -72,9 +117,10 @@
 
 ;; Emit a deprecation warning.
 (define (emit-deprecation-warning! name msg)
-  (current-deprecation-warnings
-   (cons (deprecation-warning name msg)
-         (current-deprecation-warnings))))
+  (define w (deprecation-warning name msg))
+  (current-deprecation-warnings (cons w (current-deprecation-warnings)))
+  ;; Phase 2c: dual-write to cell
+  (warnings-cell-write! (current-deprecation-warnings-cell-id) (list w)))
 
 ;; Format a deprecation warning for display.
 (define (format-deprecation-warning w)
@@ -99,9 +145,10 @@
 
 ;; Emit a capability warning.
 (define (emit-capability-warning! name mult)
-  (current-capability-warnings
-   (cons (capability-warning name mult)
-         (current-capability-warnings))))
+  (define w (capability-warning name mult))
+  (current-capability-warnings (cons w (current-capability-warnings)))
+  ;; Phase 2c: dual-write to cell
+  (warnings-cell-write! (current-capability-warnings-cell-id) (list w)))
 
 ;; Format a capability warning for display.
 (define (format-capability-warning w)
@@ -119,9 +166,10 @@
 
 ;; Emit a process capability warning.
 (define (emit-process-cap-warning! code name msg)
-  (current-capability-warnings
-   (cons (process-cap-warning code name msg)
-         (current-capability-warnings))))
+  (define w (process-cap-warning code name msg))
+  (current-capability-warnings (cons w (current-capability-warnings)))
+  ;; Phase 2c: dual-write to cell (shared with capability warnings)
+  (warnings-cell-write! (current-capability-warnings-cell-id) (list w)))
 
 ;; Format a process capability warning for display.
 (define (format-process-cap-warning w)

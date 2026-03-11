@@ -324,6 +324,16 @@
          current-specialization-registry-cell-id
          current-selection-registry-cell-id
          current-session-registry-cell-id
+         ;; Phase 2c: Remaining registry cell IDs
+         current-preparse-registry-cell-id
+         current-spec-store-cell-id
+         current-propagated-specs-cell-id
+         current-strategy-registry-cell-id
+         current-process-registry-cell-id
+         current-user-precedence-groups-cell-id
+         current-user-operators-cell-id
+         current-macro-registry-cell-id
+         macros-cell-write!
          register-macros-cells!
          ;; Mixfix / precedence groups (Phase 2)
          current-user-precedence-groups
@@ -370,7 +380,9 @@
 
 (define (register-preparse-macro! name entry)
   (current-preparse-registry
-   (hash-set (current-preparse-registry) name entry)))
+   (hash-set (current-preparse-registry) name entry))
+  ;; Phase 2c: dual-write to cell
+  (macros-cell-write! (current-preparse-registry-cell-id) (hasheq name entry)))
 
 ;; ========================================
 ;; Spec store: type signatures for named definitions
@@ -398,7 +410,9 @@
 (define current-propagated-specs (make-parameter (seteq)))
 
 (define (register-spec! name entry)
-  (current-spec-store (hash-set (current-spec-store) name entry)))
+  (current-spec-store (hash-set (current-spec-store) name entry))
+  ;; Phase 2c: dual-write to cell
+  (macros-cell-write! (current-spec-store-cell-id) (hasheq name entry)))
 
 (define (lookup-spec name)
   (hash-ref (current-spec-store) name #f))
@@ -444,6 +458,15 @@
 (define current-specialization-registry-cell-id (make-parameter #f))
 (define current-selection-registry-cell-id (make-parameter #f))
 (define current-session-registry-cell-id (make-parameter #f))
+;; Phase 2c: Remaining registry cell IDs
+(define current-preparse-registry-cell-id (make-parameter #f))
+(define current-spec-store-cell-id (make-parameter #f))
+(define current-propagated-specs-cell-id (make-parameter #f))
+(define current-strategy-registry-cell-id (make-parameter #f))
+(define current-process-registry-cell-id (make-parameter #f))
+(define current-user-precedence-groups-cell-id (make-parameter #f))
+(define current-user-operators-cell-id (make-parameter #f))
+(define current-macro-registry-cell-id (make-parameter #f))
 
 ;; Helper: dual-write a single entry to a registry cell.
 ;; value should be a hasheq/hash with just the new entry — the cell's merge
@@ -502,7 +525,25 @@
     (current-selection-registry-cell-id sel-cid)
     (define-values (enet16 sess-cid) (new-cell-fn enet15 (current-session-registry) merge-hasheq-union))
     (current-session-registry-cell-id sess-cid)
-    (set-box! net-box enet16)))
+    ;; Phase 2c: Remaining registries
+    (define-values (enet17 pp-cid) (new-cell-fn enet16 (current-preparse-registry) merge-hasheq-union))
+    (current-preparse-registry-cell-id pp-cid)
+    (define-values (enet18 ss-cid) (new-cell-fn enet17 (current-spec-store) merge-hasheq-union))
+    (current-spec-store-cell-id ss-cid)
+    ;; propagated-specs is a set (seteq), uses merge-set-union
+    (define-values (enet19 ps-set-cid) (new-cell-fn enet18 (current-propagated-specs) merge-set-union))
+    (current-propagated-specs-cell-id ps-set-cid)
+    (define-values (enet20 strat-cid) (new-cell-fn enet19 (current-strategy-registry) merge-hasheq-union))
+    (current-strategy-registry-cell-id strat-cid)
+    (define-values (enet21 proc-cid) (new-cell-fn enet20 (current-process-registry) merge-hasheq-union))
+    (current-process-registry-cell-id proc-cid)
+    (define-values (enet22 pg-cid) (new-cell-fn enet21 (current-user-precedence-groups) merge-hasheq-union))
+    (current-user-precedence-groups-cell-id pg-cid)
+    (define-values (enet23 op-cid) (new-cell-fn enet22 (current-user-operators) merge-hasheq-union))
+    (current-user-operators-cell-id op-cid)
+    (define-values (enet24 mr-cid) (new-cell-fn enet23 (current-macro-registry) merge-hasheq-union))
+    (current-macro-registry-cell-id mr-cid)
+    (set-box! net-box enet24)))
 
 ;; ========================================
 ;; Schema registry: field information for schema types
@@ -674,7 +715,9 @@
 (define current-strategy-registry (make-parameter (hasheq)))
 
 (define (register-strategy! name entry)
-  (current-strategy-registry (hash-set (current-strategy-registry) name entry)))
+  (current-strategy-registry (hash-set (current-strategy-registry) name entry))
+  ;; Phase 2c: dual-write to cell
+  (macros-cell-write! (current-strategy-registry-cell-id) (hasheq name entry)))
 
 (define (lookup-strategy name)
   (hash-ref (current-strategy-registry) name #f))
@@ -695,7 +738,9 @@
 (define current-process-registry (make-parameter (hasheq)))
 
 (define (register-process! name entry)
-  (current-process-registry (hash-set (current-process-registry) name entry)))
+  (current-process-registry (hash-set (current-process-registry) name entry))
+  ;; Phase 2c: dual-write to cell
+  (macros-cell-write! (current-process-registry-cell-id) (hasheq name entry)))
 
 (define (lookup-process name)
   (hash-ref (current-process-registry) name #f))
@@ -7221,7 +7266,9 @@
 
 (define (register-precedence-group! name entry)
   (current-user-precedence-groups
-   (hash-set (current-user-precedence-groups) name entry)))
+   (hash-set (current-user-precedence-groups) name entry))
+  ;; Phase 2c: dual-write to cell
+  (macros-cell-write! (current-user-precedence-groups-cell-id) (hasheq name entry)))
 
 (define (lookup-precedence-group name)
   (or (hash-ref (current-user-precedence-groups) name #f)
@@ -7233,7 +7280,9 @@
 
 (define (register-user-operator! sym info)
   (current-user-operators
-   (hash-set (current-user-operators) sym info)))
+   (hash-set (current-user-operators) sym info))
+  ;; Phase 2c: dual-write to cell
+  (macros-cell-write! (current-user-operators-cell-id) (hasheq sym info)))
 
 ;; process-precedence-group: parse and register a precedence-group declaration
 ;; Syntax (WS mode): precedence-group mygroup :assoc left :tighter-than additive
@@ -7877,7 +7926,9 @@
 
 (define (register-macro! name proc)
   (current-macro-registry
-   (hash-set (current-macro-registry) name proc)))
+   (hash-set (current-macro-registry) name proc))
+  ;; Phase 2c: dual-write to cell
+  (macros-cell-write! (current-macro-registry-cell-id) (hasheq name proc)))
 
 (define (lookup-macro name)
   (hash-ref (current-macro-registry) name #f))
