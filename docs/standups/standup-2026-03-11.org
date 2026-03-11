@@ -1,0 +1,439 @@
+#+TITLE: Standup — 2026-03-11
+#+DATE: 2026-03-11
+
+
+* Yesterday (since Mar 10 standup created)
+
+** WS-Mode Audit + Repair Sprint: COMPLETE
+
+Systematic Level 3 (file-mode) audit across 12 =.prologos= files (~300 expressions).
+Found 36 CRASHes, 6 WRONGs, 7 DESIGN notes. Clustered into 8 root causes (C1-C8).
+
+Repair sprint: 24 sub-phases across 5 phases, bottom-up (reader -> preparse -> constructors -> typing -> narrowing). 23 completed, 1 skipped (=def= with lambda value -- =spec=/=defn= workaround). Commits =3165faa=..=200a525=.
+
+Key fixes: =def-= recognition, multi-token RHS auto-wrap, =defn= inside =impl= blocks,
+multi-clause =defn= dispatch, =with-transient= WS form, top-level =if= typing,
+constructor-as-HOF eta-expansion, narrowing shared variable constraints, constructor
+inversion, boolrec narrowing, quasiquote comma parsing.
+
+** Generic Numerics Audit + Sprint: COMPLETE
+
+Audit (commit =d61669f=): cataloged 16 NAT-API, 15 NAT-PRELUDE, 4 SHADOW findings.
+22 repair tasks across 5 priority levels.
+
+Sprint (commits =111190e=..=d8a2e0d=): 11/14 sub-phases done, 3 skipped.
+- Phase 1: Nat arithmetic behind =nat::= alias; =sum=/=product= shadowing fixed
+- Phase 2: Int-indexed list ops (=nth-int=, =take-int=, =drop-int=, =length-int=)
+- Phase 3: Rewrote tutorial + ergonomics demos for Int-first; new =generic-numerics.prologos= showcase
+- Phase 4: =Hashable Int= instance; Posit =Num= bundle verified
+
+Codebase is now generic/Int-first for computation. Nat preserved for induction + proofs.
+
+** Discussion: Editor Support / LSP / VSCode
+
+Research conversation on extending editor support. Explored LSP architecture
+(Racket-native vs Node bridge vs hybrid), VSCode extension layers (syntax vs semantic),
+key infrastructure gaps (source locations lost in core AST), feature prioritization
+(diagnostics -> hover types -> go-to-def -> completion). Open design questions identified.
+
+** Discussion: Relational Fact Data Representation
+
+Design discussion on fact storage. Key proposal: schemas as compile-time bijection
+between named keys and positional indices; flat vector storage with keyed pattern syntax,
+zero runtime overhead.
+
+** Metrics
+
+| Metric     | Mar 9 standup | Current   |
+|------------+---------------+-----------|
+| Tests      |          6528 |      6733 |
+| Test files |           336 |       349 |
+| Failures   |             0 |         0 |
+| Wall time  |         190.4 |     188.4 |
+| Commits    |             - | ~49 new   |
+
+
+* Today
+** Editor Support
+
+*** 🗣️
+
+I'm starting to get some initial interest in the language, which is why recently I've been wanting to focus on some of the usability and proper numeric usage patterns rather than add some more features that I have in mind.
+
+I'd like to open ourselves up to research and design conversation, for extending editor support to VSCode, since a good portion of developers use/are familiar with this editor or forks therefrom.
+
+I would like to discuss the development of an LSP backend that could extend our current Emacs editor support, but also be used by other editors beziehungsweise VSCode.
+
+I would also like to hear some considerations of how we build out a VSCode extension.
+
+Let's discuss this, then we'll either continue research and design questions, or go into an early research/design stage as part of our Design Methodology.
+
+*** 🤖
+#+begin_src markdown
+```markdown
+  Excellent — now I have a clear picture of where things stand. Let me lay out the landscape and then we can discuss the key design decisions.
+```
+
+## Current State
+
+You already have strong foundations:
+
+- **Emacs**: Production-ready — 7 elisp packages, 149 ERT tests, regex + tree-sitter modes, REPL integration, structural navigation (surfer)
+- **Tree-sitter grammar**: Compiled `libtree-sitter-prologos.dylib` with highlight queries — this is editor-agnostic and directly reusable
+- **Racket backend**: Rich pipeline with structured errors (16+ error types with srclocs, provenance chains), module registry, type inference — but currently only accessible through `process-file`/`process-string` batch APIs
+
+## LSP Architecture: Key Design Questions
+
+### 1. Where does the LSP server live?
+
+There are three realistic options:
+
+**A) Racket-native LSP server** — Write the server in Racket, wrapping your existing pipeline with JSON-RPC. This is the path of least resistance since all the type checking, elaboration, and error machinery is already in Racket. Racket has `json` and TCP libraries. Idris 2, Lean 4, and Agda all take this approach (server in the implementation language).
+
+**B) Thin bridge process** — A lightweight Node.js or Python process handles LSP protocol, spawns/communicates with a Racket subprocess via stdin/stdout or a custom protocol. More plumbing but lets you use battle-tested LSP libraries (`vscode-languageserver` for Node).
+
+**C) Hybrid** — Tree-sitter handles syntax-level features (highlighting, folding, outline) client-side, while Racket handles semantic features (diagnostics, hover types, go-to-def) via a simpler custom protocol.
+
+My recommendation: **Option A** for the long term, possibly starting with a thin variant of **B** if you want rapid iteration on the VSCode side. The Racket pipeline is where all the intelligence lives — keeping it in-process avoids serialization overhead for type queries.
+
+### 2. What's the biggest gap?
+
+The pipeline currently processes whole files in one shot. For LSP to feel responsive, you need:
+
+- **Source locations on core AST**: Surface AST (`surf-*`) preserves srclocs, but core AST (`expr-*`) drops them. You'd need an elaboration-time map from expressions to locations/types — this is the single most impactful infrastructure change.
+- **Incremental-ish processing**: Full re-elaboration on every keystroke won't scale. At minimum, you'd want module-level caching (only re-check the changed file, keep cached module-infos for dependencies). Your `current-module-registry` already supports this pattern.
+
+### 3. VSCode Extension Architecture
+
+For VSCode specifically, the extension would have two layers:
+
+**Syntax layer** (immediate, no server needed):
+- TextMate grammar or tree-sitter grammar for highlighting
+- Language configuration (brackets, comments, auto-closing)
+- Snippets for common forms (`defn`, `spec`, `match`, etc.)
+
+**Semantic layer** (requires LSP):
+- Diagnostics (errors/warnings on save or on-type)
+- Hover (show inferred type at cursor)
+- Go-to-definition (via namespace resolution + module-info file paths)
+- Completion (from module exports, prelude, local bindings)
+- Signature help (from `spec` declarations)
+
+The tree-sitter grammar you already have can be converted to a TextMate grammar for VSCode's built-in highlighter, or you could use the `vscode-anycode` extension pattern that consumes tree-sitter grammars directly.
+
+### 4. Feature Prioritization (what gives the most value soonest)
+
+Based on what developers actually use most:
+
+1. **Diagnostics** — you already have structured errors with srclocs. Highest impact, lowest effort.
+2. **Hover types** — needs the elaboration-time metadata map, but huge for usability.
+3. **Go-to-definition** — module-info already has file paths; namespace resolution exists.
+4. **Completion** — build from module exports + prelude + local env.
+5. **Find references / rename** — needs reference tracking during elaboration; defer.
+
+## Questions for You
+
+Before going into formal design:
+
+1. **Racket-native vs bridge**: Do you have a preference? Racket-native is cleaner but means the VSCode extension itself is thin (just a client). Bridge gives you more flexibility on the VSCode side but adds a layer.
+
+2. **Emacs integration path**: Do you want the LSP to *replace* your current Emacs REPL integration, or *supplement* it? Your Emacs setup is quite rich (surfer, inline overlays) — some of that goes beyond what LSP offers. You could use `eglot` or `lsp-mode` for the standard LSP features while keeping your custom packages.
+
+3. **Scope for v0.1**: Are you thinking "just get diagnostics and highlighting in VSCode" as a first milestone, or do you want hover types in the initial cut?
+
+4. **Timeline pressure**: Is this driven by the incoming interest (need something presentable soon), or is this a longer-term infrastructure investment where we can do it properly?
+#+end_src
+
+
+
+
+-- 
+
+Let's close this working-day interval, and open the next working day, creating a new March 11 standup org-mode doc for me, and new dailies for you. Everything done from the creation of last standup to now "yesterday".
+
+Let's make sure to have completed your dailies notes for the work we just did on Numerics Audit and Sprint in March 10 dailies.
+
+
+
+
+*** 🗣️
+
+4. We have time to do this right, so we should.
+
+3. Hover types
+   And moreover, I would like to have some similar features that we have in our emacs integration... I'd like an interactive experince, so that a developer can evaluate forms directly in source, and get results in line. Just like emacs has Cider for Clojure, VSCode has Calva... I'm thinking we can do something similar on the VSCode side.
+   I'm thinking that we do a full research and design where we map out an entire roadmap of support that we can workthrough.
+
+2. I would like the LSP to supplement what we have, provide things like definition lookup, signature hints from spec, etc. But really, I want to focus on the VSCode experience primarily right now... Our emacs support is "good enough" for my purposes. But good to know what to design towards.
+
+1. You make a good reason to lean into the Racket-native, but I wonder if we shouldn't also be using our treesitter grammar as well.
+
+Thoughts?
+
+*** 🤖
+#+begin_src markdown
+```markdown
+  Excellent — these are clear directional decisions. Let me respond to each and then we can talk about shaping the research/design phase.
+```
+
+
+## On Your Four Points
+
+**1. Racket-native + tree-sitter**: Absolutely, these aren't either/or — they serve different layers. Tree-sitter handles the **syntax layer** (highlighting, folding, bracket matching, structural selection) and works instantly with zero server overhead. The Racket-native LSP handles the **semantic layer** (diagnostics, types, definition lookup). This is exactly what Rust does: `tree-sitter-rust` for syntax, `rust-analyzer` for semantics. Your compiled `libtree-sitter-prologos.dylib` is directly usable by VSCode via the tree-sitter integration path. So the architecture is: **tree-sitter for fast syntax, Racket LSP for deep semantics**.
+
+**2. LSP supplements Emacs, focuses on VSCode**: Makes sense. Your Emacs setup has custom features (surfer, inline overlays, REPL integration) that go well beyond what LSP covers. The LSP provides the portable baseline — diagnostics, hover, go-to-def, signature help — that benefits *all* editors. Emacs can consume it via `eglot` alongside your existing packages. But the design energy goes toward making the **VSCode experience first-class**.
+
+**3. Interactive inline evaluation — the Calva/CIDER model**: This is the big one, and it's the right call. What makes Calva and CIDER transformative isn't just type information — it's the **live connection to a running language runtime**. You evaluate a form, you see the result inline, you build up understanding interactively. For Prologos this is especially powerful because you have:
+
+- **Type inference results** — evaluate a `spec`-less `defn` and see the inferred type inline
+- **Narrowing/solve results** — evaluate `add ?x 3N = 5N` and see `'{:x 2N}` inline
+- **Trait resolution** — evaluate `instances-of Add` and see the full instance list
+- **Reduction** — evaluate `[map [fn [x] .{x + 1}] '[1 2 3]]` and see `'[2 3 4]`
+
+This means the VSCode extension needs a **REPL backend** alongside (or integrated with) the LSP — a persistent Racket process that can evaluate forms in a namespace context, not just type-check files. Your `process-string` and `process-file` APIs are already the core of this; the question is how to expose them interactively.
+
+**4. Time to do it right, full roadmap**: Agreed. This is infrastructure that will shape how every new user experiences the language. Let's design the whole picture before building any of it.
+
+## Thoughts on the Full Roadmap Shape
+
+I see roughly four capability tiers, each building on the previous:
+
+**Tier 1: Syntax & Static** (tree-sitter, no server)
+- Highlighting, folding, bracket matching, indentation
+- Snippets for common forms
+- Language configuration (comment toggling, auto-closing)
+
+**Tier 2: Diagnostics & Navigation** (LSP, file-level)
+- Errors/warnings on save (from `process-file`)
+- Go-to-definition (module-info file paths + namespace resolution)
+- Signature help from `spec` declarations
+- Document symbols / outline
+
+**Tier 3: Type Intelligence** (LSP, expression-level metadata)
+- Hover shows inferred types
+- Hover on trait-constrained calls shows resolved instance
+- Inlay hints (ghost text showing inferred types on untyped bindings)
+- Completion from module exports, prelude, local env
+
+**Tier 4: Interactive Evaluation** (REPL backend, Calva-style)
+- Evaluate form at cursor, show result inline
+- Evaluate top-level `def`/`defn`, build up namespace incrementally
+- Evaluate `solve`/`narrow`/`instances-of` interactively
+- REPL panel alongside the editor
+- Namespace-aware: results respect the file's `ns` declaration
+
+The infrastructure investment increases per tier, but each tier is independently useful. Tier 1 can ship in days since you have the tree-sitter grammar. Tier 2 needs the LSP server skeleton + diagnostics wiring. Tier 3 needs the expression→type metadata map during elaboration. Tier 4 needs the persistent REPL process with namespace management.
+
+## What I'd Suggest for the Research & Design Phase
+
+A formal R&D phase per your Design Methodology would cover:
+
+1. **Landscape survey**: How do Calva, CIDER, Lean4/VSCode, Idris2/VSCode, and Agda/VSCode structure their extensions? What LSP capabilities do they use vs. custom protocol extensions? What tree-sitter integration patterns exist for VSCode?
+
+2. **Infrastructure audit**: What does Prologos already have that maps to each tier? Where are the gaps (e.g., core AST srclocs, incremental module caching, REPL session management)?
+
+3. **Architecture design**: The Racket LSP server structure, the REPL backend protocol, how tree-sitter and LSP coexist in the extension, the extension's TypeScript/Node layer.
+
+4. **Roadmap with phases**: Concrete phases like your other sprints, with acceptance criteria and tracking.
+
+Shall we proceed into that R&D phase? I can start with the landscape survey — looking at how the comparable language extensions (especially Calva and Lean4) are structured — and the infrastructure audit against your current codebase.
+#+end_src
+
+
+
+
+
+
+** Relational Fact Data Representation Discussion
+
+
+#+begin_src markdown
+
+```markdown
+  Good, I now have a comprehensive picture. Let me compose my response.
+```
+
+---
+
+This is a great question that sits at the intersection of several design threads you've already been working through. Let me trace through what exists, what the tensions are, and where I think the interesting design space lives.
+
+## Current State
+
+Right now, facts are represented as **flat positional lists**. The `fact-row` struct in `relations.rkt:69` is simply:
+
+```racket
+(struct fact-row (terms) #:transparent)
+;; terms: a list of values, e.g. '("Alice" "Bob")
+```
+
+A `variant-info` holds a list of `fact-row`s alongside a list of `param-info`s (name + mode). So the "column names" exist in the parameter metadata, but the fact data itself is just a positional vector. The solver does positional unification against these lists — iterate through `(fact-row-terms fr)`, unify term-by-term against the goal arguments.
+
+The `schema` form in the vision document introduces named, typed columns (`:parent String`, `:child String`), and the vision explicitly says schemas provide "positional ordering" — the field declaration order establishes the canonical mapping. But at runtime, fact data is still flat lists.
+
+## The Triangle You're Describing
+
+You're identifying three vertices:
+
+1. **Positional tuples** — what Prolog uses, what we have now. Compact, fast to unify, but opaque: `("Alice" "Engineering" 95000)` means nothing without the schema nearby.
+
+2. **Keyed maps** — what your Prolog-with-databases workflow uses (`table_name({column_key: Val, ...})`). Self-describing, composable, but heavier and potentially slower for the hot unification path.
+
+3. **Typed records** — what schemas aspire to be. Named fields, type-checked, but with the efficiency of positional access.
+
+The tension: positional is fast but fragile; keyed is robust but heavy; records are ideal but usually require compile-time resolution.
+
+## How to Square It
+
+I think the answer is already implicit in your schema design, but making it explicit reveals the right representation:
+
+### The Schema *is* the Rosetta Stone
+
+A `schema` declaration establishes a **bijection between positions and keys**:
+
+```prologos
+schema Employee
+  :name   String    ;; position 0
+  :dept   Department ;; position 1
+  :salary Nat       ;; position 2
+```
+
+This means the underlying runtime representation can be **positional vectors** (fast, compact, cache-friendly) while the *surface syntax* supports **both positional and keyed access**. The schema mediates:
+
+- **Storage**: flat vector `#("Alice" Engineering 95000)` — essentially a database row
+- **Authoring (positional)**: `|| "Alice" Engineering 95000N` — tabular, concise
+- **Authoring (keyed)**: `|| {:name "Alice" :dept Engineering :salary 95000N}` — self-documenting
+- **Access (keyed)**: `alice.name` or `:name` in goal patterns
+- **Unification**: positional, against the vector, always
+
+The key insight: **keyed syntax is a compile-time convenience that erases to positional access**. The schema provides the mapping; after elaboration, everything is positional. This is exactly what databases do — SQL lets you say `WHERE name = 'Alice'` but the storage engine uses column offsets.
+
+### What About Schema-less Relations?
+
+Bare `defr` without a schema annotation works like traditional Prolog — positional only, untyped. This is fine for quick prototyping and small relations. The moment you want keyed access or database interop, you add a schema.
+
+### The Database Import Use Case
+
+Your Prolog workflow of `table_name({column_key: Val, ...}).` maps beautifully:
+
+```prologos
+;; Import: each table gets a schema
+schema Employees
+  :id     Nat
+  :name   String
+  :dept   String
+  :salary Nat
+
+;; Facts loaded from CSV/SQL/JSON — keyed or positional
+defr employees : Employees
+  || 1N "Alice" "Engineering" 95000N
+     2N "Bob"   "Marketing"   72000N
+     3N "Carol" "Engineering" 110000N
+
+;; Or bulk-loaded from file
+defr employees : Employees
+  :source "data/employees.csv"
+```
+
+The schema does double duty: it's the type contract *and* the column mapping for import/export. A CSV header row, a SQL `CREATE TABLE`, a JSON schema, and a Prologos `schema` all describe the same thing — a named sequence of typed fields. The schema is the interop surface.
+
+### PVec vs Flat Vector vs CHAMP Map
+
+For the underlying runtime representation, the options are:
+
+| Representation | Pros | Cons |
+|---|---|---|
+| **Flat Racket vector** | Fastest access, minimal allocation | Not persistent, no structural sharing |
+| **PVec (RRB tree)** | Persistent, shareable, log-time access | Overkill for small fixed-width rows |
+| **CHAMP map** | Keyed access, persistent | Heaviest, hash overhead per lookup |
+| **Struct** | Fastest, named fields | No dynamism, one struct per schema |
+
+My analysis: for **fact storage**, flat vectors (or even Racket structs generated per-schema) are the right choice. A fact row is small (typically 3-15 fields), fixed-width (schema determines it), and accessed many times during unification. The hot path is "unify position i of fact with goal argument i" — this wants O(1) indexed access, not hash lookup.
+
+PVec and CHAMP are great for *user-facing collections* (lists, maps in the functional language), but using them for the internal fact representation would be paying persistent-data-structure overhead for data that doesn't need persistence — facts are immutable once asserted.
+
+**The representation I'd suggest**: compile-time-generated Racket structs per schema (fastest) with a fallback to flat vectors for schema-less relations. The struct fields correspond to schema columns. The schema provides the name→position mapping for keyed syntax. This is essentially what Ecto changesets do — the schema generates a struct, and the struct is the runtime representation.
+
+### Keyed Pattern Matching in Goals
+
+The really interesting ergonomic question is: can you use keyed patterns in relational goals?
+
+```prologos
+;; Positional (current)
+(employees id name "Engineering" salary)
+
+;; Keyed (proposed) — only bind what you care about
+(employees {:dept "Engineering" :name name :salary salary})
+
+;; Mixed — positional with keyword override
+(employees _ name :dept "Engineering" _)
+```
+
+The keyed pattern form is a big ergonomic win for wide relations. If your `employees` table has 15 columns, positional patterns require 15 arguments with `_` for every column you don't care about. Keyed patterns let you mention only the columns you need — which is exactly what SQL's `SELECT ... WHERE` does.
+
+At compile time, with the schema in hand, `{:dept "Engineering" :name name}` desugars to a positional pattern with logic variables in the right positions and `_` everywhere else. Zero runtime overhead.
+
+### The Graph-Query Power
+
+The combination of schemas + keyed patterns + tabling + rule composition gives you something very powerful for your database use case:
+
+```prologos
+;; Schema per table (generated from DB metadata)
+schema Employees  :id Nat :name String :dept String :salary Nat
+schema Departments  :name String :budget Nat :head String
+
+;; Facts loaded from DB
+defr employees : Employees
+  :source "db://company/employees"
+
+defr departments : Departments
+  :source "db://company/departments"
+
+;; Composable graph queries — this is where Prologos shines
+defr high-earners-in [?dept ?name ?salary]
+  &> (employees {:dept dept :name name :salary salary})
+     (> salary 90000N)
+
+defr over-budget-depts [?dept ?total ?budget]
+  &> (departments {:name dept :budget budget})
+     (aggregate (employees {:dept dept :salary s}) [sum s] total)
+     (> total budget)
+```
+
+Each `defr` is a reusable, composable, tabled view. You can build them up incrementally, test them individually, and compose them freely — something that requires CTEs and subqueries in SQL.
+
+## Summary of the Design
+
+1. **Storage**: flat vectors (or generated structs), positional, compact
+2. **Schema**: the bijection between positions and named/typed keys
+3. **Authoring**: dual syntax — positional `||` for tabular data, keyed `{...}` for clarity
+4. **Goals**: keyed patterns desugar to positional at compile time
+5. **Interop**: schema is the import/export contract (CSV, SQL, JSON all map)
+6. **Schema-less**: falls back to positional-only Prolog-style (no keyed access)
+
+The schema is the load-bearing element. It resolves the positional-vs-keyed tension by being the compile-time dictionary that lets you *write* keyed and *execute* positional. No runtime overhead for the keyed ergonomics. No loss of self-documentation. And the same schema serves as the database interop surface.
+
+What aspects of this would you like to dig deeper into?
+
+Good, the background agent confirmed the full picture of the data structure implementations. The analysis I gave above is well-grounded — let me know which direction you'd like to explore further, or if you want to refine any aspect of the design.
+
+To recap the key design proposal in a sentence: **schemas establish a compile-time bijection between named keys and positional indices, so facts store as flat vectors (fast unification) while the surface language offers keyed patterns (ergonomic authoring and querying), with zero runtime cost for the keyed syntax**.
+
+The open questions that might be worth drilling into:
+
+1. **Keyed goal patterns** — the `(employees {:dept "Engineering" :name name})` syntax and how it desugars. This is probably the biggest ergonomic win.
+
+2. **Bulk import surface** — the `:source` annotation on `defr` for loading from CSV/SQL/JSON, and how schema mediates the column mapping.
+
+3. **Schema-less facts with retroactive schema** — can you define facts first, then attach a schema later? (Useful for exploratory/REPL workflows.)
+
+4. **Wide-row optimization** — for relations with many columns, should the solver index on specific columns rather than always scanning position 0? (First-argument indexing is what Prolog does, but keyed patterns suggest multi-column indexing.)
+
+5. **The Hickey separation** — your schema research already identified the schema/select split. How does that play into relational facts? (A `select` on a schema-annotated relation is essentially a SQL projection.)
+
+Which of these (or something else entirely) would you like to go deeper on?
+#+end_src
+
+
+
+** To Brooklyn Z.
+
