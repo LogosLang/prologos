@@ -1854,6 +1854,28 @@
 
 (define (preparse-expand-all stxs)
   ;; ============================================================
+  ;; Pass -1: Process ns/imports declarations FIRST
+  ;; ============================================================
+  ;; The ns declaration triggers prelude loading, which registers
+  ;; all prelude traits (Eq, Ord, Add, etc.) into the trait registry.
+  ;; This MUST happen before Pass 0/1, because:
+  ;;   - Pass 1 processes `spec` which calls `extract-inline-constraints`
+  ;;   - `extract-inline-constraints` uses `lookup-trait` to recognize
+  ;;     constraint forms like `(Eq A)`
+  ;;   - If prelude traits aren't registered yet, constraints aren't
+  ;;     recognized → arity mismatch and missing dict parameters
+  ;; Also process imports here so user-specified imports are available.
+  (for ([stx (in-list stxs)])
+    (define datum (syntax->datum stx))
+    (define head (and (pair? datum) (car datum)))
+    (when (and (pair? datum) (eq? head 'ns))
+      (with-handlers ([exn:fail? void])
+        (process-ns-declaration datum)))
+    (when (and (pair? datum) (or (eq? head 'imports) (eq? head 'require)))
+      (with-handlers ([exn:fail? void])
+        (process-imports datum))))
+
+  ;; ============================================================
   ;; Pass 0: Pre-register no-dependency declarations
   ;; ============================================================
   ;; Register all declarations that have NO external reads: data, trait,
@@ -3276,11 +3298,25 @@
       [(= n-constraints 0) spec-tokens]  ;; no constraints
       [user-provides-dicts? spec-tokens]  ;; user provides all params including dicts
       [else
-       ;; Strip leading constraint types prepended by process-spec:
-       ;; spec-tokens = (constraint1 ... constraintN -> user-type-tokens...)
-       ;; Drop n-constraints sublists + 1 arrow to recover user-type-tokens.
-       ;; This preserves multiplicity arrows (-1>, -0>, -w>) in user tokens.
-       (drop spec-tokens (add1 n-constraints))]))
+       ;; Strip leading constraint types from spec-tokens.
+       ;; Constraints may be prepended via `where` clause (with -> arrow separator)
+       ;; or inline (without -> separator between constraint and value params).
+       ;; Walk the list, removing n-constraints constraint forms + interleaved arrows.
+       (let loop ([remaining spec-tokens] [n n-constraints])
+         (cond
+           [(= n 0)
+            ;; Skip any leading -> arrow after last constraint
+            (if (and (pair? remaining) (memq (car remaining) '(-> -0> -1> -w>)))
+                (cdr remaining)
+                remaining)]
+           [(null? remaining)
+            (error 'spec "spec ~a: could not strip ~a constraint(s) from type" name n-constraints)]
+           ;; Skip arrow tokens between constraints
+           [(memq (car remaining) '(-> -0> -1> -w>))
+            (loop (cdr remaining) n)]
+           ;; Skip constraint form
+           [else
+            (loop (cdr remaining) (- n 1))]))]))
   ;; Decompose the effective spec type into param types + return type + multiplicities
   (define-values (param-types param-mults return-type-tokens)
     (decompose-spec-type/mult effective-spec-tokens (length param-names) name))

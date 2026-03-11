@@ -64,14 +64,17 @@ ns examples.audit.traits-instances
 ;; ========================================================================
 
 ;; --- 2a. Function with Eq constraint ---
-;;! CRASH: "spec both-eq: type has 1 type parameters but defn has 2 params"
-;;  inject-spec-into-defn miscounts arity when constraint (Eq A) is present
-;; spec both-eq {A : Type} (Eq A) A A -> Bool
-;; defn both-eq [a b] [eq-check a b]
-;; [both-eq 3N 3N]
-;; expect: true : Bool
-;; [both-eq true false]
-;; expect: false : Bool
+;; OK: Constraint recognition fixed by processing ns before spec in preparse (Pass -1).
+;; Note: must use trait method `eq?` directly (not `eq-check`, which has its own
+;; constraint and requires constraint forwarding — a separate limitation).
+spec both-eq {A : Type} (Eq A) A A -> Bool
+defn both-eq [a b] [eq? a b]
+
+[both-eq 3N 3N]
+;; OK: true : Bool
+
+[both-eq true false]
+;; OK: false : Bool
 
 
 ;; ========================================================================
