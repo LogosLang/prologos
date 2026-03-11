@@ -49,7 +49,9 @@
  meta-lookup
  reset-meta-store!
  all-unsolved-metas
- ;; Meta state save/restore (for speculative type-checking)
+ ;; Phase 4d: save-meta-state/restore-meta-state! are internal to the
+ ;; speculation bridge. External code should use with-speculative-rollback.
+ ;; Exported only for elab-speculation-bridge.rkt — do not use directly.
  save-meta-state
  restore-meta-state!
  ;; Sprint 5: Constraint postponement
@@ -1272,8 +1274,13 @@
 ;; Saves the status and solution of all metas in the current store.
 ;; Restore resets each meta back to its saved state.
 
-;; Hash removal: save-meta-state is always O(1).
+;; Phase 4d: INTERNAL to elab-speculation-bridge.rkt — do not call directly.
+;; Use with-speculative-rollback instead.
+;;
 ;; Captures all six CHAMP references (network, id-map, meta-info, level, mult, sess).
+;; O(1) — reads immutable CHAMP references from boxes.
+;; NOTE: Does NOT capture current-constraint-store (Racket parameter).
+;; The bridge handles constraint store save/restore separately (Phase 4b).
 ;; When no network is available (test context), net/id-map are #f — still captured.
 (define (save-meta-state)
   (define net-box (current-prop-net-box))
