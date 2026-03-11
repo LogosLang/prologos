@@ -68,7 +68,7 @@ because narrowing correctness is lower priority than basic functionality.
 | # | Sub-phase | Effort | Status |
 |---|-----------|--------|--------|
 | **Phase 1: Reader** | | | |
-| 1a | Char literal docs | S | ⬜ |
+| 1a | Char literal docs | S | ✅ |
 | 1b | Quote/quasiquote | M+M | ⬜ |
 | **Phase 2: Preparse** | | | |
 | 2a | `def-` recognition | S | ⬜ |

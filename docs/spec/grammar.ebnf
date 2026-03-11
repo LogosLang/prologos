@@ -89,27 +89,42 @@ string-char     = ? any char except '"' and '\' ?
                 ;
 
 (* ------------------------------------------------ *)
-(* 1.5 Keywords (Keyword literals for map keys etc) *)
+(* 1.5 Char Literals                                *)
+(* ------------------------------------------------ *)
+
+(* In WS-mode, char literals use backslash prefix: \a, \z, \0.
+   The 'x' syntax is NOT available because ' is the quote/list prefix.
+   Named chars: \newline, \space, \tab, \return, \backspace, \formfeed.
+   Unicode escape: \uXXXX (4 hex digits). *)
+char-literal    = '\' , ( letter | digit | named-char | unicode-escape ) ;
+named-char      = 'newline' | 'space' | 'tab' | 'return'
+                | 'backspace' | 'formfeed' ;
+unicode-escape  = 'u' , hex-digit , hex-digit , hex-digit , hex-digit ;
+hex-digit       = digit | 'a' | 'b' | 'c' | 'd' | 'e' | 'f'
+                | 'A' | 'B' | 'C' | 'D' | 'E' | 'F' ;
+
+(* ------------------------------------------------ *)
+(* 1.6 Keywords (Keyword literals for map keys etc) *)
 (* ------------------------------------------------ *)
 
 (* Keywords start with : followed by identifier chars *)
 keyword-literal = ':' , identifier ;
 
 (* ------------------------------------------------ *)
-(* 1.6 Symbol Literals                              *)
+(* 1.7 Symbol Literals                              *)
 (* ------------------------------------------------ *)
 
 (* Created via (symbol-lit name) built-in form *)
 symbol-lit-form = '(' , 'symbol-lit' , identifier , ')' ;
 
 (* ------------------------------------------------ *)
-(* 1.7 Boolean Literals                             *)
+(* 1.8 Boolean Literals                             *)
 (* ------------------------------------------------ *)
 
 bool-literal    = 'true' | 'false' ;
 
 (* ------------------------------------------------ *)
-(* 1.8 Wildcard and Holes                           *)
+(* 1.9 Wildcard and Holes                           *)
 (* ------------------------------------------------ *)
 
 wildcard        = '_' ;
@@ -117,7 +132,7 @@ numbered-hole   = '_' , digit , { digit } ;
 typed-hole      = '??' , [ identifier ] ;              (* interactive development hole *)
 
 (* ------------------------------------------------ *)
-(* 1.9 Multiplicity Annotations                     *)
+(* 1.10 Multiplicity Annotations                    *)
 (* ------------------------------------------------ *)
 
 multiplicity    = ':0' | ':1' | ':w' ;

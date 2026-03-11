@@ -7,10 +7,10 @@ ns examples.audit.literals-types
 ;; Classification: OK | WRONG | CRASH | DEFN-ONLY | SEXP-ONLY | MISSING | DESIGN
 ;;
 ;; RESULTS (41 expressions, 0 errors):
-;;   OK: 38   WRONG: 1   CRASH: 1 (commented out)   DESIGN: 1
+;;   OK: 38   WRONG: 1   DESIGN: 2
 ;;
 ;;   [WRONG]  5/1 -> 5 : Int (should be 5/1 : Rat — reader simplifies)
-;;   [CRASH]  char literals 'a' conflict with quote/list reader prefix
+;;   [DESIGN] char literals use \x syntax, not 'x' ('x' conflicts with quote prefix)
 ;;   [DESIGN] nil shows unsolved meta in type (polymorphic — expected)
 
 ;; ========================================================================
@@ -118,14 +118,14 @@ false
 ;; ========================================================================
 ;; 7. Char Literals
 ;; ========================================================================
-;; Note: char literal syntax in WS mode uses single quotes
-;; but ' is also the quote/list-literal prefix in the reader.
-;; Testing whether char literals work at all in WS file mode.
-
-;;! CRASH? — single-quote reader conflict may prevent char literals
-;; 'a'
-;; 'z'
-;; 'A'
+;; DESIGN: WS-mode char literal syntax is \x (backslash-char), not 'x'.
+;; The ' prefix is reserved for quote/list-literal in WS mode.
+;; The reader handles: \a (single char), \newline \space \tab \return
+;; \backspace \formfeed (named), \uXXXX (Unicode escape).
+;; See reader.rkt:700–759.
+;;
+;; The 'x' syntax from C/Java-style languages is NOT available in WS mode
+;; because ' is the quote operator (e.g., '[1N 2N 3N] for list literals).
 
 
 ;; ========================================================================
