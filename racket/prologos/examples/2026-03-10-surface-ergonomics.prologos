@@ -113,35 +113,35 @@ add ?x ?y = 7N
 ;; expression. The preparse macro detects consecutive lets and
 ;; nests them automatically.
 
-spec sum-of-doubles Nat -> Nat
+spec sum-of-doubles Int -> Int
 defn sum-of-doubles [n]
-  let a := [double n]
-  let b := [double a]
-  let c := [add a b]
+  let a := .{n + n}
+  let b := .{a + a}
+  let c := .{a + b}
   c
 
-[sum-of-doubles 3N]
-;; 18N : Nat  (a=6, b=12, c=18)
+[sum-of-doubles 3]
+;; 18 : Int  (a=6, b=12, c=18)
 
-spec chain-add Nat Nat -> Nat
+spec chain-add Int Int -> Int
 defn chain-add [x y]
-  let s := [add x y]
-  let d := [double s]
+  let s := .{x + y}
+  let d := .{s + s}
   d
 
-[chain-add 3N 4N]
-;; 14N : Nat  (s=7, d=14)
+[chain-add 3 4]
+;; 14 : Int  (s=7, d=14)
 
 ;; Sequential lets with = as equality check:
-spec check-sum Nat Nat Nat -> Bool
+spec check-sum Int Int Int -> Bool
 defn check-sum [a b expected]
-  let s := [add a b]
+  let s := .{a + b}
   s = expected
 
-[check-sum 3N 4N 7N]
+[check-sum 3 4 7]
 ;; true : Bool
 
-[check-sum 3N 4N 8N]
+[check-sum 3 4 8]
 ;; false : Bool
 
 
@@ -220,45 +220,45 @@ add 5N ?y = 8N
 
 ;; --- 5a. List indexing ---
 
-def fruits : (List Nat) := '[10N 20N 30N 40N 50N]
+def fruits : (List Int) := '[10 20 30 40 50]
 
 ;; First element:
 fruits[0]
-;; 10N : Nat
+;; 10 : Int
 
 ;; Third element:
 fruits[2]
-;; 30N : Nat
+;; 30 : Int
 
 ;; Last element:
 fruits[4]
-;; 50N : Nat
+;; 50 : Int
 
 ;; With a computed Int index:
 def idx : Int := 3
 fruits[idx]
-;; 40N : Nat
+;; 40 : Int
 
 ;; With a Nat literal index:
 fruits[1N]
-;; 20N : Nat
+;; 20 : Int
 
 
 ;; --- 5b. Map indexing ---
 
-def config : (Map Keyword Nat) := {:port 8080N :timeout 30N :retries 3N}
+def config : (Map Keyword Int) := {:port 8080 :timeout 30 :retries 3}
 
 ;; Keyword lookup:
 config[:port]
-;; 8080N : Nat
+;; 8080 : Int
 
 config[:timeout]
-;; 30N : Nat
+;; 30 : Int
 
 ;; Computed key:
 def kw : Keyword := :retries
 config[kw]
-;; 3N : Nat
+;; 3 : Int
 
 
 ;; ========================================================================
@@ -270,28 +270,28 @@ config[kw]
 
 ;; --- 6a. Nested maps ---
 
-def nested : (Map Keyword (Map Keyword Nat))
-  {:db {:port 5432N :pool 10N} :cache {:port 6379N :ttl 300N}}
+def nested : (Map Keyword (Map Keyword Int))
+  {:db {:port 5432 :pool 10} :cache {:port 6379 :ttl 300}}
 
 ;; Two-level lookup:
 nested[:db][:port]
-;; 5432N : Nat
+;; 5432 : Int
 
 nested[:cache][:ttl]
-;; 300N : Nat
+;; 300 : Int
 
 
 ;; --- 6b. List of maps ---
 
-def people : (List (Map Keyword Nat))
-  '[{:age 25N :score 90N} {:age 30N :score 85N} {:age 22N :score 95N}]
+def people : (List (Map Keyword Int))
+  '[{:age 25 :score 90} {:age 30 :score 85} {:age 22 :score 95}]
 
 ;; Index into list, then into map:
 people[0][:age]
-;; 25N : Nat
+;; 25 : Int
 
 people[2][:score]
-;; 95N : Nat
+;; 95 : Int
 
 
 ;; ========================================================================
@@ -306,20 +306,20 @@ people[2][:score]
 
 ;; Index then dot-access on the people list:
 people[0].age
-;; 25N : Nat
+;; 25 : Int
 
 people[1].score
-;; 85N : Nat
+;; 85 : Int
 
 ;; Bracket chaining on nested maps:
-def infra : (Map Keyword (Map Keyword Nat))
-  {:server {:port 3000N :workers 4N} :logging {:level 2N :buffer 1024N}}
+def infra : (Map Keyword (Map Keyword Int))
+  {:server {:port 3000 :workers 4} :logging {:level 2 :buffer 1024}}
 
 infra[:server][:workers]
-;; 4N : Nat
+;; 4 : Int
 
 infra[:logging][:buffer]
-;; 1024N : Nat
+;; 1024 : Int
 
 
 ;; ========================================================================
@@ -331,33 +331,33 @@ infra[:logging][:buffer]
 
 ;; --- 8a. Equality on indexed values ---
 
-def nums : (List Nat) := '[100N 200N 300N]
+def nums : (List Int) := '[100 200 300]
 
-nums[0] = 100N
+nums[0] = 100
 ;; true : Bool
 
-nums[1] = 999N
+nums[1] = 999
 ;; false : Bool
 
 ;; --- 8b. Let + indexing in a function ---
 
-spec sum-first-two (List Nat) -> Nat
+spec sum-first-two (List Int) -> Int
 defn sum-first-two [xs]
   let a := xs[0]
   let b := xs[1]
-  [add a b]
+  .{a + b}
 
 [sum-first-two nums]
-;; 300N : Nat
+;; 300 : Int
 
 ;; --- 8c. Indexed map values in equality ---
 
-def inventory : (Map Keyword Nat) := {:apples 5N :bananas 3N :cherries 8N}
+def inventory : (Map Keyword Int) := {:apples 5 :bananas 3 :cherries 8}
 
-inventory[:apples] = 5N
+inventory[:apples] = 5
 ;; true : Bool
 
-inventory[:cherries] = 8N
+inventory[:cherries] = 8
 ;; true : Bool
 
 
@@ -370,12 +370,12 @@ inventory[:cherries] = 8N
 ;; functions — all with clean, ergonomic syntax.
 
 ;; Define a lookup table and index into it:
-def weights : (Map Keyword Nat) := {:small 1N :medium 5N :large 10N}
+def weights : (Map Keyword Int) := {:small 1 :medium 5 :large 10}
 
 weights[:large]
-;; 10N : Nat
+;; 10 : Int
 
-weights[:small] = 1N
+weights[:small] = 1
 ;; true : Bool
 
 ;; Narrowing alongside indexed data — same file, same namespace:
@@ -395,14 +395,14 @@ add ?x ?y = 5N
 ;; and equality checks composed inside function bodies.
 
 ;; A function that validates a config entry:
-spec validate-entry (Map Keyword Nat) Keyword Nat -> Bool
+spec validate-entry (Map Keyword Int) Keyword Int -> Bool
 defn validate-entry [m key expected]
   [map-get m key] = expected
 
-[validate-entry config :port 8080N]
+[validate-entry config :port 8080]
 ;; true : Bool
 
-[validate-entry config :timeout 999N]
+[validate-entry config :timeout 999]
 ;; false : Bool
 
 
@@ -415,32 +415,32 @@ defn validate-entry [m key expected]
 
 ;; --- 11a. Config validation ---
 
-def app-config : (Map Keyword Nat)
-  {:port 8080N :max-conn 100N :timeout 30N}
+def app-config : (Map Keyword Int)
+  {:port 8080 :max-conn 100 :timeout 30}
 
-app-config[:port] = 8080N
+app-config[:port] = 8080
 ;; true : Bool
 
 ;; --- 11b. Data pipeline ---
 
-def records : (List (Map Keyword Nat))
-  '[{:id 1N :val 100N} {:id 2N :val 200N} {:id 3N :val 300N}]
+def records : (List (Map Keyword Int))
+  '[{:id 1 :val 100} {:id 2 :val 200} {:id 3 :val 300}]
 
-spec sum-first-two-vals (List (Map Keyword Nat)) -> Nat
+spec sum-first-two-vals (List (Map Keyword Int)) -> Int
 defn sum-first-two-vals [rs]
   let v1 := rs[0][:val]
   let v2 := rs[1][:val]
-  [add v1 v2]
+  .{v1 + v2}
 
 [sum-first-two-vals records]
-;; 300N : Nat
+;; 300 : Int
 
 ;; --- 11c. Index + equality verification ---
 
-records[0][:val] = 100N
+records[0][:val] = 100
 ;; true : Bool
 
-records[2][:val] = 300N
+records[2][:val] = 300
 ;; true : Bool
 
 ;; --- 11d. Narrowing as a query language ---
