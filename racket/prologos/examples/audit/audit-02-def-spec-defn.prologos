@@ -7,11 +7,10 @@ ns examples.audit.def-spec-defn
 ;; Classification: OK | WRONG | CRASH | DEFN-ONLY | SEXP-ONLY | MISSING | DESIGN
 ;;
 ;; RESULTS (41 expressions, 0 errors):
-;;   OK: 39   CRASH: 1 (commented out)   SEXP-ONLY: 1 (commented out)
+;;   OK: 43   CRASH: 0   SEXP-ONLY: 0
 ;;
 ;;   [FIXED] def x := some 42N — auto-wrap multi-token RHS (Phase 2b)
-;;   [CRASH] multi-clause defn | pat -> body — "spec is single-arity
-;;           but defn has multiple clauses" — must use match-in-body instead
+;;   [FIXED] multi-clause defn | pat -> body — flat $pipe grouping + bare pattern parsing (Phase 2f)
 
 
 ;; ========================================================================
@@ -130,11 +129,15 @@ defn my-double [n]
 ;; expect: 6N : Nat
 
 ;; --- 3e2. Multi-clause defn with | (direct pattern dispatch) ---
-;;! May CRASH — multi-clause defn syntax varies from match-in-body
-;; spec mc-zero Nat -> Bool
-;; defn mc-zero
-;;   | zero -> true
-;;   | _ -> false
+;; OK: Fixed by grouping flat $pipe tokens and handling bare patterns in parser.
+spec mc-zero Nat -> Bool
+defn mc-zero | zero -> true | _ -> false
+
+[mc-zero 0N]
+;; OK: true : Bool
+
+[mc-zero 3N]
+;; OK: false : Bool
 
 ;; --- 3f. defn with sequential lets in body ---
 spec compute Nat -> Nat

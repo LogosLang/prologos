@@ -3925,19 +3925,23 @@
         parts))
   (when (null? cleaned)
     (parse-error loc (format "defn ~a: empty clause" name) #f))
-  ;; First element should be the params/patterns bracket
-  (define params-stx (car cleaned))
-  (define rest-args (cdr cleaned))
-
-  ;; Discriminate: pattern clause (-> body) vs arity clause (<RetType> body / : RetType body)
-  (define first-rest-datum
-    (and (not (null? rest-args)) (stx->datum (car rest-args))))
+  ;; Find -> in cleaned to detect pattern clause vs arity clause.
+  ;; Pattern clause: ... -> body (bare or bracketed patterns before ->)
+  ;; Arity clause: [params] <RetType> body or [params] : RetType body
+  (define arrow-idx
+    (for/first ([i (in-naturals)]
+                [s (in-list cleaned)]
+                #:when (eq? (stx->datum s) '->))
+      i))
 
   (cond
-    ;; ---- Pattern clause: [patterns...] -> body ----
-    ;; Also supports: [patterns...] when guard -> body (but rare in this syntax)
-    [(eq? first-rest-datum '->)
-     (define body-parts (cdr rest-args))
+    ;; ---- Pattern clause: patterns... -> body ----
+    ;; Handles both bracketed [pats] -> body and bare pat1 pat2 -> body
+    [arrow-idx
+     (define pattern-stxs (take cleaned arrow-idx))
+     (define body-parts (drop cleaned (+ arrow-idx 1)))
+     (when (null? pattern-stxs)
+       (parse-error loc (format "defn ~a: pattern clause needs at least one pattern before ->" name) #f))
      (when (null? body-parts)
        (parse-error loc (format "defn ~a: pattern clause missing body after ->" name) #f))
      (define body-stx
@@ -3945,14 +3949,29 @@
            (car body-parts)
            (datum->syntax #f (map stx->datum body-parts) (car body-parts))))
      (define body (parse-datum body-stx))
-     (define patterns (parse-pattern-bracket params-stx loc))
+     ;; Parse patterns: single bracket element → use parse-pattern-bracket
+     ;; Multiple bare elements → parse each as individual pattern
+     (define patterns
+       (cond
+         [(and (= (length pattern-stxs) 1)
+               (pair? (stx->datum (car pattern-stxs))))
+          ;; Single bracket [patterns...] → existing parse-pattern-bracket
+          (parse-pattern-bracket (car pattern-stxs) loc)]
+         [else
+          ;; Bare patterns: each element is one argument pattern
+          (for/list ([p (in-list pattern-stxs)])
+            (parse-single-pattern p loc))]))
      (cond
        [(prologos-error? body) body]
        [(prologos-error? patterns) patterns]
+       [(findf prologos-error? patterns) => (lambda (err) err)]
        [else (defn-pattern-clause patterns #f body loc)])]
 
     ;; ---- Arity clause: existing logic ----
     [else
+     ;; First element is params bracket, rest is type/body
+     (define params-stx (car cleaned))
+     (define rest-args (cdr cleaned))
      ;; Detect bare vs typed params (same logic as parse-defn)
      (define binders
        (let ([elems (if (syntax? params-stx) (syntax->list params-stx) #f)])

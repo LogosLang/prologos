@@ -2055,12 +2055,15 @@
                                       stx)
                        ;; Fallback: pure datum
                        (datum->syntax #f rewritten stx)))
+                 ;; Step 0: group flat $pipe tokens in defn- (WS reader produces flat form)
+                 (define grouped-d
+                   (let ([d (syntax->datum new-stx)])
+                     (if (eq? base 'defn) (group-defn-pipes d) d)))
                  ;; Expand := syntax for def- (before spec injection)
                  (define pre-datum
-                   (let ([d (syntax->datum new-stx)])
-                     (if (and (eq? base 'def) (memq ':= d))
-                         (expand-def-assign d)
-                         d)))
+                   (if (and (eq? base 'def) (memq ':= grouped-d))
+                       (expand-def-assign grouped-d)
+                       grouped-d))
                  ;; Inject spec type into bare-param defn- if matching spec exists
                  (define maybe-injected
                    (if (eq? base 'defn) (maybe-inject-spec pre-datum) pre-datum))
@@ -2265,11 +2268,14 @@
          (auto-export-names! (extract-defined-name datum head))
          ;; HKT-3: Auto-register trait dict defs in impl registry
          (maybe-register-trait-dict-def datum)
+         ;; Step 0: group flat $pipe tokens in defn (WS reader produces flat form)
+         (define grouped-datum
+           (if (eq? head 'defn) (group-defn-pipes datum) datum))
          ;; Step 1: expand := syntax for def (before spec injection)
          (define pre-datum
-           (if (and (eq? head 'def) (memq ':= datum))
-               (expand-def-assign datum)
-               datum))
+           (if (and (eq? (car grouped-datum) 'def) (memq ':= grouped-datum))
+               (expand-def-assign grouped-datum)
+               grouped-datum))
          ;; Step 2: inject spec type (defn or def)
          (define maybe-injected
            (cond
@@ -3010,6 +3016,40 @@
          [else
           (loop (cdr remaining) (cons (car remaining) current) result)]))]))
 
+;; Restructure a defn datum with flat $pipe tokens into grouped form.
+;; (defn name $pipe a -> b $pipe c -> d) → (defn name ($pipe a -> b) ($pipe c -> d))
+;; Also handles: (defn name [params] $pipe a -> b $pipe c -> d)
+;;            → (defn name [params] ($pipe a -> b) ($pipe c -> d))
+;; If no flat $pipe tokens found, returns datum unchanged.
+(define (group-defn-pipes datum)
+  (cond
+    [(and (pair? datum) (memq (car datum) '(defn defn-)))
+     (define head (car datum))
+     (define name (cadr datum))
+     (define rest (cddr datum))
+     ;; Check if rest has flat $pipe symbols (not already grouped)
+     (define has-flat-pipes?
+       (ormap (lambda (x) (eq? x '$pipe)) rest))
+     (cond
+       [has-flat-pipes?
+        ;; Collect non-pipe prefix (e.g., [params], docstring)
+        ;; and group pipe segments
+        (define-values (prefix pipe-tokens)
+          (let loop ([remaining rest] [pre '()])
+            (cond
+              [(null? remaining) (values (reverse pre) '())]
+              [(eq? (car remaining) '$pipe)
+               (values (reverse pre) remaining)]
+              [else (loop (cdr remaining) (cons (car remaining) pre))])))
+        ;; Group pipe-tokens into ($pipe ...) sub-lists
+        (define branches (split-on-pipe pipe-tokens))
+        (define grouped-branches
+          (for/list ([branch (in-list branches)])
+            (cons '$pipe branch)))
+        `(,head ,name ,@prefix ,@grouped-branches)]
+       [else datum])]
+    [else datum]))
+
 ;; ========================================
 ;; Spec injection into defn
 ;; ========================================
@@ -3077,14 +3117,17 @@
            (and (pair? x) (eq? (car x) '$pipe)))
          rest))
 
-;; Check if a $pipe clause is a pattern clause (has -> after params bracket)
-;; Pattern clause datum: ($pipe (params...) -> body ...)
+;; Check if a $pipe clause is a pattern clause (has -> in clause body)
+;; Pattern clause datums:
+;;   ($pipe (params...) -> body ...)   — bracketed params
+;;   ($pipe pattern -> body ...)       — bare pattern (e.g., zero -> true)
+;;   ($pipe pattern1 pattern2 -> body ...)  — multi-arg patterns
 (define (pipe-clause-datum-is-pattern? clause)
   (and (pair? clause) (eq? (car clause) '$pipe)
        (let ([rest (cdr clause)])
          (and (>= (length rest) 3)
-              (list? (car rest))      ;; params bracket
-              (eq? (cadr rest) '->))))) ;; arrow after params
+              (memq '-> rest)          ;; contains -> somewhere
+              #t))))
 
 ;; Check if ALL pipe clauses in rest are pattern clauses
 (define (defn-has-all-pattern-clauses? rest)
