@@ -83,12 +83,12 @@ because narrowing correctness is lower priority than basic functionality.
 | 2j | `=` inside mixfix | S | ✅ | `9a597cf` — = alias for == in mixfix operator table |
 | 2k | Error reporting: `expr-bvar` in errors | M | ✅ | `c101a11` — expr-bvar→A/B/C; fallback uses pp-expr |
 | **Phase 3: Data & Constructors** | | | | |
-| 3a | Nullary constructors | S | ⬜ | |
-| 3b | Multi-field constructors | M | ⬜ | |
-| 3c | Polymorphic ctor binding | M | ⬜ | |
-| 3d | Constructor-as-HOF | M–L | ⬜ | |
+| 3a | Nullary constructors | S | ✅ | `cd5d97d` — was wrong audit syntax (GADT vs field-list) |
+| 3b | Multi-field constructors | M | ✅ | `cd5d97d` — was wrong audit syntax; + Phase 5b partition fix |
+| 3c | Polymorphic ctor binding | M | ✅ | `cd5d97d` — was wrong audit syntax; MkBox works with `MkBox : A` |
+| 3d | Constructor-as-HOF | M–L | ✅ | `aa8d7ee` — eta-expand `suc` in elaborator; 8 audit expressions fixed |
 | **Phase 4: Type Inference** | | | | |
-| 4a | Top-level `if` type | S | ⬜ | |
+| 4a | Top-level `if` type | S | ✅ | Fresh-meta motive in boolrec infer handler |
 | 4b | sort/dedup constraints | M | ⬜ | |
 | 4c | `opt::unwrap-or` inference | M | ⬜ | |
 | 4d | Collection conversion | M–L | ⬜ | |
@@ -432,64 +432,34 @@ name from the typing context). Use this in error message formatting paths.
 `racket/prologos/elaborator.rkt` (constructor lookup, env injection)
 **Audit files affected**: audit-03, audit-07, audit-10, audit-11
 
-### Phase 3a: Nullary Constructors as Values
+### Phases 3a–3c: Constructor Syntax Reclassification
 
-**Problem**: `data Direction` with `North : Direction` defines `North` as type
-`Direction -> Direction` (a function) instead of a value of type `Direction`
-(audit-03).
+**Original diagnosis**: The audit used GADT-style syntax (`North : Direction`,
+`Circle : Nat -> Shape`, `MkBox : A -> MyBox A`) but the established Prologos
+convention is **field-list syntax** where everything after `:` is field types
+and the return type is always implicit.
 
-**Root cause**: `process-data` (macros.rkt:6127) generates a constructor def
-with type `Pi(...) -> ... -> TypeName`. For nullary constructors (no fields),
-this degenerates to `Direction -> Direction` instead of just `Direction`. The
-`parse-data-ctor` (macros.rkt:5963) returns `(North . ())` for a bare symbol
-ctor, but the def generation doesn't handle the empty-field-list case correctly.
+**Library convention** (used in all stdlib `.prologos` files):
+- Nullary: bare symbol (`none`, `nil`, `lt-ord`)
+- One field: `some : A`, `mk-path : String`
+- Two fields: `cons : A -> List A`, `mk-entry : K -> V`
+- GADT syntax: only with `data Foo [params] where | ctor : full-type`
 
-**Fix**: In `process-data` (macros.rkt:6193–6210), when a constructor has zero
-field types, generate `def North : Direction := <constructor-body>` instead of
-`def North : (Direction -> Direction) := ...`. The Pi-wrapping of field types
-should be skipped entirely for nullary constructors.
+**Resolution**: Corrected audit-03 to use field-list syntax:
+- `North` (bare) instead of `North : Direction`
+- `Circle : Nat` instead of `Circle : Nat -> Shape`
+- `Rect : Nat -> Nat` instead of `Rect : Nat Nat -> Shape`
+- `MkBox : A` instead of `MkBox : A -> MyBox A`
 
-**Effort**: S
-**Audit expressions**: audit-03 `North`, `South`, `direction-name`
-**Validation**: Un-comment Direction tests, verify `North : Direction`
+All expressions now work correctly.
 
-### Phase 3b: Multi-Field Constructors
+**Bonus fix (Phase 5b partition)**:  Found that `[direction-name North]` was
+being hoisted by the Phase 5b partition because `North` (the second datum
+element) matched a generated constructor name. The partition lambda now also
+checks that `(car datum)` is a definition keyword (`def`/`defn`/`spec`/`deftype`),
+preventing function calls from being misclassified as generated declarations.
 
-**Problem**: `Rect : Nat Nat -> Shape` → "Expression is not a valid type"
-(audit-03).
-
-**Root cause**: `parse-data-ctor` (macros.rkt:5963) handles the `:` syntax
-at lines 5976–5994, splitting on `->` to extract field types. The issue may
-be that `Nat Nat` (two types before `->`) isn't parsed correctly — it may be
-treated as a single compound expression instead of two separate field types.
-
-**Fix**: In `parse-data-ctor`, when processing `CtorName : T1 T2 ... -> RetType`,
-ensure that the segment before `->` is split into individual type expressions.
-Each space-separated token is a separate field type.
-
-**Effort**: M (need to handle various field type combinations)
-**Audit expressions**: audit-03 `Rect : Nat Nat -> Shape`
-**Validation**: Un-comment Rect tests, verify `[Rect 3N 4N] : Shape`
-
-### Phase 3c: Polymorphic Constructor Binding
-
-**Problem**: `data MyBox {A : Type}` with `MkBox : A -> MyBox A` — `MkBox`
-is defined but `[MkBox 42N]` fails "Unbound variable" (audit-03).
-
-**Root cause**: The constructor `MkBox` is registered in the constructor
-metadata registry (`ctor-meta`) but not injected into the global environment
-where `env-lookup` (elaborator.rkt:75–86) can find it. For built-in types
-(Nat, Bool, List, etc.), constructors are injected by the prelude modules.
-For user-defined types, the generated `def MkBox : ...` form should add
-MkBox to the environment, but something in the elaboration path drops it.
-
-**Diagnosis needed**: Check whether the generated `def MkBox : <type> := ...`
-form from `process-data` is syntactically correct for a polymorphic constructor.
-The type includes implicit params `{A : Type}` which may not be handled.
-
-**Effort**: M
-**Audit expressions**: audit-03 `MkBox 42N`, `MkBox true`
-**Validation**: Un-comment MyBox tests, verify polymorphic construction works
+**Commit**: `cd5d97d`
 
 ### Phase 3d: Constructor-as-HOF (The Big One)
 
@@ -544,10 +514,10 @@ but touches elaborator type-checking logic)
 
 | Sub-phase | Status | Commit |
 |-----------|--------|--------|
-| 3a: Nullary constructors | NOT STARTED | |
-| 3b: Multi-field constructors | NOT STARTED | |
-| 3c: Polymorphic ctor binding | NOT STARTED | |
-| 3d: Constructor-as-HOF | NOT STARTED | |
+| 3a: Nullary constructors | ✅ | `cd5d97d` (syntax reclassification + partition fix) |
+| 3b: Multi-field constructors | ✅ | `cd5d97d` (syntax reclassification) |
+| 3c: Polymorphic ctor binding | ✅ | `cd5d97d` (syntax reclassification) |
+| 3d: Constructor-as-HOF | ✅ | `aa8d7ee` |
 
 ---
 
@@ -651,7 +621,7 @@ on the fn.
 
 | Sub-phase | Status | Commit |
 |-----------|--------|--------|
-| 4a: Top-level if type | NOT STARTED | |
+| 4a: Top-level if type | ✅ | (see commits table) |
 | 4b: sort/dedup constraints | NOT STARTED | |
 | 4c: opt::unwrap-or inference | NOT STARTED | |
 | 4d: Collection conversion | NOT STARTED | |
@@ -788,9 +758,9 @@ or after the repair sprint:
 | Metric | Target |
 |--------|--------|
 | Total sub-phases | 23 (1a–b, 2a–k, 3a–d, 4a–e, 5a–c) |
-| Completed | 12 (1a, 1b, 2a, 2b, 2d, 2e, 2f, 2g, 2h, 2i, 2j, 2k) |
+| Completed | 17 (1a, 1b, 2a, 2b, 2d, 2e, 2f, 2g, 2h, 2i, 2j, 2k, 3a, 3b, 3c, 3d, 4a) |
 | Skipped | 1 (2c) |
-| Remaining | 10 |
+| Remaining | 5 |
 | Audit expressions to un-comment | ~36 (all CRASH) + ~6 (WRONG) |
 | Regression test count | 5440 (must stay green) |
 
@@ -814,3 +784,5 @@ or after the repair sprint:
 | 2i | `52d16fd` | 2026-03-10 | Top-level let error with def hint |
 | 2j | `9a597cf` | 2026-03-10 | = alias for == in mixfix |
 | 2k | `c101a11` | 2026-03-10 | expr-bvar readable names in errors |
+| 3a-c | `cd5d97d` | 2026-03-10 | Syntax reclassification + Phase 5b partition fix |
+| 3d | `aa8d7ee` | 2026-03-10 | Eta-expand suc in HOF position |

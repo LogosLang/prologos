@@ -7,11 +7,11 @@ ns examples.audit.match-if-cond
 ;; Classification: OK | WRONG | CRASH | DEFN-ONLY | SEXP-ONLY | MISSING | DESIGN
 ;;
 ;; RESULTS (36 expressions, 0 errors):
-;;   OK: 34   WRONG: 2
+;;   OK: 36   WRONG: 0
 ;;
-;;   [WRONG] Top-level `if true 1N 2N` -> 1N : _ (type is _ not Nat)
-;;   [WRONG] Top-level `if false 1N 2N` -> 2N : _ (type is _ not Nat)
-;;   Note: if inside defn body types correctly; issue is top-level only
+;;   [FIXED] Top-level `if true 1N 2N` -> 1N : Nat (was WRONG: type showed as _)
+;;   [FIXED] Top-level `if false 1N 2N` -> 2N : Nat (was WRONG: type showed as _)
+;;   Fix: fresh-meta motive in boolrec infer handler (typing-core.rkt)
 
 
 ;; ========================================================================

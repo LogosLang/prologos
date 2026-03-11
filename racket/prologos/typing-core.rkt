@@ -601,12 +601,22 @@
      (let ([mot-ty (whnf (infer ctx mot))])
        (match mot-ty
          [(expr-Pi _ dom _)
-          (if (and (unify-ok? (unify ctx dom (expr-Bool)))
-                   (check ctx tc (expr-app mot (expr-true)))
-                   (check ctx fc (expr-app mot (expr-false)))
-                   (check ctx target (expr-Bool)))
-              (expr-app mot target)
-              (expr-error))]
+          ;; When the motive body is a hole (from 3-arg `if`), the result type
+          ;; (app mot true) reduces to (expr-hole), which accepts any type without
+          ;; solving. Replace with a fresh meta so branch checking solves it.
+          (let* ([result-tc (nf (expr-app mot (expr-true)))]
+                 [use-meta? (expr-hole? result-tc)]
+                 [mot* (if use-meta?
+                           (let ([m (fresh-meta ctx (expr-Type (lzero)) "if-motive")])
+                             (expr-ann (expr-lam 'mw (expr-Bool) m)
+                                       (expr-Pi 'mw (expr-Bool) (expr-Type (lzero)))))
+                           mot)])
+            (if (and (unify-ok? (unify ctx dom (expr-Bool)))
+                     (check ctx tc (nf (expr-app mot* (expr-true))))
+                     (check ctx fc (nf (expr-app mot* (expr-false))))
+                     (check ctx target (expr-Bool)))
+                (nf (expr-app mot* target))
+                (expr-error)))]
          [_ (expr-error)]))]
 
     ;; ---- Nat eliminator (natrec) ----
