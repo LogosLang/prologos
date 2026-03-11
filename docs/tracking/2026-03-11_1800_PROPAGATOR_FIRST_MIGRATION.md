@@ -27,7 +27,7 @@ Migrate the Prologos compilation pipeline from ad-hoc mutable state (Racket para
 | 1 | 1a | Constraint store cell (storage only) | ✅ | `411e96b` — 10 tests, dual-write to cell + legacy parameter |
 | 1 | 1b | Trait constraint cells (storage only) | ✅ | `ec36685` — 6 tests, 4 registry cells (trait/hasmethod/cap), dual-write |
 | 1 | 1c | Wakeup registry cell (storage only) | ✅ | `7419752` — 4 tests, wakeup+trait-wakeup cells, merge-hasheq-list-append |
-| 1 | 1d | Reactive resolution wiring (behavior change) | ⬜ | |
+| 1 | 1d | Reactive resolution wiring (behavior change) | ✅ | `65a1c59` — reactive hasmethod resolution, wakeup map, re-entrancy guard |
 | 1 | 1e | Remove retry infrastructure | ⬜ | |
 | 2 | 2a | Core type registries (8 registries) | ⬜ | |
 | 2 | 2b | Trait + instance registries (8 registries) | ⬜ | |
