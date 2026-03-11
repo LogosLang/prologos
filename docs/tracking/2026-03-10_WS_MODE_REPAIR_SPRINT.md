@@ -77,11 +77,11 @@ because narrowing correctness is lower priority than basic functionality.
 | 2d | spec+constraint arity | S | ✅ | `7e1d212` — Pass -1 for ns/imports before Pass 0/1 |
 | 2e | `defn` inside `impl` | M | ✅ | `e7e78f4` — bare-param defn + return type from trait |
 | 2f | Multi-clause `defn` + spec | M | ✅ | `a467299` — flat $pipe grouping + bare pattern parsing |
-| 2g | `with-transient` WS form | S | ⬜ | |
-| 2h | `into-list` name collision | S | ⬜ | |
-| 2i | Top-level `let` error | S | ⬜ | |
-| 2j | `=` inside mixfix | S | ⬜ | |
-| 2k | Error reporting: `expr-bvar` in errors | M | ⬜ | Pretty-print type vars in error messages |
+| 2g | `with-transient` WS form | S | ✅ | `4b816b0` — multi-step expansion + transient var injection |
+| 2h | `into-list` name collision | S | ✅ | `4a32d2f` — renamed to xf-into-list / xf-into-list-rev |
+| 2i | Top-level `let` error | S | ✅ | `52d16fd` — clear error with `def` hint |
+| 2j | `=` inside mixfix | S | ✅ | `9a597cf` — = alias for == in mixfix operator table |
+| 2k | Error reporting: `expr-bvar` in errors | M | ✅ | `c101a11` — expr-bvar→A/B/C; fallback uses pp-expr |
 | **Phase 3: Data & Constructors** | | | | |
 | 3a | Nullary constructors | S | ⬜ | |
 | 3b | Multi-field constructors | M | ⬜ | |
@@ -417,11 +417,11 @@ name from the typing context). Use this in error message formatting paths.
 | 2d: spec+constraint arity | ✅ | `7e1d212` |
 | 2e: `defn` inside `impl` | ✅ | `e7e78f4` |
 | 2f: Multi-clause `defn` + spec | ✅ | `a467299` |
-| 2g: `with-transient` WS form | ⬜ | |
-| 2h: `into-list` name collision | ⬜ | |
-| 2i: Top-level `let` error | ⬜ | |
-| 2j: `=` inside mixfix | ⬜ | |
-| 2k: Error reporting: expr-bvar | ⬜ | |
+| 2g: `with-transient` WS form | ✅ | `4b816b0` |
+| 2h: `into-list` name collision | ✅ | `4a32d2f` |
+| 2i: Top-level `let` error | ✅ | `52d16fd` |
+| 2j: `=` inside mixfix | ✅ | `9a597cf` |
+| 2k: Error reporting: expr-bvar | ✅ | `c101a11` |
 
 ---
 
@@ -788,9 +788,9 @@ or after the repair sprint:
 | Metric | Target |
 |--------|--------|
 | Total sub-phases | 23 (1a–b, 2a–k, 3a–d, 4a–e, 5a–c) |
-| Completed | 7 (1a, 1b, 2a, 2b, 2d, 2e, 2f) |
+| Completed | 12 (1a, 1b, 2a, 2b, 2d, 2e, 2f, 2g, 2h, 2i, 2j, 2k) |
 | Skipped | 1 (2c) |
-| Remaining | 15 |
+| Remaining | 10 |
 | Audit expressions to un-comment | ~36 (all CRASH) + ~6 (WRONG) |
 | Regression test count | 5440 (must stay green) |
 
@@ -809,3 +809,8 @@ or after the repair sprint:
 | 2d | `7e1d212` | 2026-03-10 | Pass -1 for ns/imports; constraint stripping |
 | 2e | `e7e78f4` | 2026-03-10 | Bare-param defn; trait return type injection |
 | 2f | `a467299` | 2026-03-10 | Flat $pipe grouping; bare pattern parsing |
+| 2g | `4b816b0` | 2026-03-10 | Multi-step with-transient expansion |
+| 2h | `4a32d2f` | 2026-03-10 | Rename into-list → xf-into-list |
+| 2i | `52d16fd` | 2026-03-10 | Top-level let error with def hint |
+| 2j | `9a597cf` | 2026-03-10 | = alias for == in mixfix |
+| 2k | `c101a11` | 2026-03-10 | expr-bvar readable names in errors |
