@@ -53,7 +53,7 @@
    "(ns test-pipe-e2e)\n"
    "(imports [prologos::data::list :refer [List nil cons map filter reduce sum length reverse]])\n"
    "(imports [prologos::data::nat :refer [add]])\n"
-   "(imports [prologos::data::transducer :refer [map-xf filter-xf remove-xf xf-compose transduce into-list-rev into-list list-conj]])\n"))
+   "(imports [prologos::data::transducer :refer [map-xf filter-xf remove-xf xf-compose transduce xf-into-list-rev xf-into-list list-conj]])\n"))
 
 (define (pipe-helpers-sexp)
   (string-append

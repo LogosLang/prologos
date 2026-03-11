@@ -4533,7 +4533,7 @@
 ;; ========================================
 ;; ($pipe-gt init step1 step2 ...) — block-form pipe with automatic fusion.
 ;; Consecutive fusible operations (map, filter, remove) are composed into a
-;; single transducer pass via xf-compose + transduce/into-list.
+;; single transducer pass via xf-compose + transduce/xf-into-list.
 ;; Non-fusible operations act as barriers that materialize intermediate results.
 
 ;; --- Step classification tables ---

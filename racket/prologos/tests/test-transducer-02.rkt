@@ -3,14 +3,14 @@
 ;;;
 ;;; Tests for Phase 2c.3: Transducer Infrastructure
 ;;; Tests transducer.prologos — map-xf, filter-xf, remove-xf,
-;;; transduce, xf-compose, list-conj, into-list-rev.
+;;; transduce, xf-compose, list-conj, xf-into-list-rev.
 ;;;
 ;;; Key design notes:
 ;;; - All transducers are R-polymorphic: Pi [R :0 Type] (R -> B -> R) -> (R -> A -> R)
-;;; - transduce and into-list-rev accept polymorphic xf and specialize R internally
+;;; - transduce and xf-into-list-rev accept polymorphic xf and specialize R internally
 ;;; - xf-compose composes two transducers, threading R through both
 ;;; - Individual xf functions (map-xf, filter-xf) take their config args but NOT R
-;;;   when passed to transduce/into-list-rev (R is still erased/polymorphic)
+;;;   when passed to transduce/xf-into-list-rev (R is still erased/polymorphic)
 
 (require rackunit
          racket/list
@@ -48,7 +48,7 @@
 (imports (prologos::data::list :refer (List nil cons))
          (prologos::data::lseq :refer (LSeq lseq-nil lseq-cell lseq-head lseq-rest lseq-empty?))
          (prologos::data::lseq-ops :refer (list-to-lseq lseq-to-list lseq-map lseq-filter lseq-fold lseq-length))
-         (prologos::data::transducer :refer (transduce map-xf filter-xf remove-xf xf-compose list-conj into-list-rev)))
+         (prologos::data::transducer :refer (transduce map-xf filter-xf remove-xf xf-compose list-conj xf-into-list-rev)))
 
 ;; Helper: make a list of Nat: '(1 2 3)
 (def list123 : (List Nat)
@@ -175,7 +175,7 @@
   (check-contains result "9N : Nat"))
 
 ;; ========================================
-;; F. list-conj and into-list-rev (3 tests)
+;; F. list-conj and xf-into-list-rev (3 tests)
 ;; ========================================
 
 (test-case "xf/list-conj-type: list-conj type-checks"
@@ -183,17 +183,17 @@
    (run-last "(infer (list-conj Nat))")
    "->"))
 
-(test-case "xf/into-list-rev-map: into-list-rev with map"
+(test-case "xf/xf-into-list-rev-map: xf-into-list-rev with map"
   (define result (run-last
-    "(eval (into-list-rev Nat Nat (map-xf Nat Nat suc-fn) list123))"))
+    "(eval (xf-into-list-rev Nat Nat (map-xf Nat Nat suc-fn) list123))"))
   (check-contains result "'[4N 3N 2N]")
   (check-contains result "List Nat"))
 
-(test-case "xf/into-list-rev-filter: into-list-rev with filter"
+(test-case "xf/xf-into-list-rev-filter: xf-into-list-rev with filter"
   (define result (run-last
     "(def list012 : (List Nat)
        (cons Nat zero (cons Nat (suc zero) (cons Nat (suc (suc zero)) (nil Nat)))))
-     (eval (into-list-rev Nat Nat (filter-xf Nat is-positive) list012))"))
+     (eval (xf-into-list-rev Nat Nat (filter-xf Nat is-positive) list012))"))
   (check-contains result "'[2N 1N]")
   (check-contains result "List Nat"))
 
@@ -232,14 +232,14 @@ eval [transduce Nat Nat [List Nat] [xf-compose Nat Nat Nat [filter-xf Nat is-pos
   (check-contains result "'[3N 2N]")
   (check-contains result "List Nat"))
 
-(test-case "ws/into-list-rev-ws: into-list-rev in WS mode"
+(test-case "ws/xf-into-list-rev-ws: xf-into-list-rev in WS mode"
   (define result (run-ws-last
     "ns test
 require [prologos::data::list :refer [List nil cons]]
-require [prologos::data::transducer :refer [into-list-rev map-xf]]
+require [prologos::data::transducer :refer [xf-into-list-rev map-xf]]
 
 (def list12 : [List Nat] (cons Nat (suc zero) (cons Nat (suc (suc zero)) (nil Nat))))
 (def suc-fn : [-> Nat Nat] (fn (x : Nat) (suc x)))
-eval [into-list-rev Nat Nat [map-xf Nat Nat suc-fn] list12]"))
+eval [xf-into-list-rev Nat Nat [map-xf Nat Nat suc-fn] list12]"))
   (check-contains result "'[3N 2N]")
   (check-contains result "List Nat"))

@@ -233,15 +233,17 @@ spec transduce {A B R : Type} <(S :0 Type) -> [S -> B -> S] -> S -> A -> S> [R -
 defn transduce [xf rf init xs]
   lseq-fold R A [xf R rf] init [list-to-lseq A xs]
 
-;; into-list-rev : transduce into a reversed list (fold-left with cons).
-;; The xf is polymorphic in R — into-list-rev specializes it to (List B).
-spec into-list-rev {A B : Type} <(S :0 Type) -> [S -> B -> S] -> S -> A -> S> [List A] -> [List B]
-defn into-list-rev [xf xs]
+;; xf-into-list-rev : transduce into a reversed list (fold-left with cons).
+;; The xf is polymorphic in R — xf-into-list-rev specializes it to (List B).
+;; Renamed from into-list-rev to avoid collision with prologos::core::collections::into-list.
+spec xf-into-list-rev {A B : Type} <(S :0 Type) -> [S -> B -> S] -> S -> A -> S> [List A] -> [List B]
+defn xf-into-list-rev [xf xs]
   lseq-fold [List B] A [xf [List B] [list-conj B]] [nil B] [list-to-lseq A xs]
 
-;; into-list : transduce into a correctly-ordered list.
-;; Uses into-list-rev then reverses for correct element order.
+;; xf-into-list : transduce into a correctly-ordered list.
+;; Uses xf-into-list-rev then reverses for correct element order.
 ;; One extra O(n) reverse, but fusion saves N-1 intermediate list allocations.
-spec into-list {A B : Type} <(S :0 Type) -> [S -> B -> S] -> S -> A -> S> [List A] -> [List B]
-defn into-list [xf xs]
-  reverse B [into-list-rev xf xs]
+;; Renamed from into-list to avoid collision with prologos::core::collections::into-list.
+spec xf-into-list {A B : Type} <(S :0 Type) -> [S -> B -> S] -> S -> A -> S> [List A] -> [List B]
+defn xf-into-list [xf xs]
+  reverse B [xf-into-list-rev xf xs]

@@ -67,23 +67,24 @@ defn nums-pipe [xs]
 ;;! CRASH: "Unbound variable" — `suc` cannot be assigned to fn-typed def
 ;; def suc-fn : [Nat -> Nat] := suc
 
-[into-list Nat Nat [map-xf Nat Nat suc-fn] '[1N 2N 3N]]
+[xf-into-list Nat Nat [map-xf Nat Nat suc-fn] '[1N 2N 3N]]
 ;; expect: '[2N 3N 4N] : List Nat
 ;;! CRASH: "Too many arguments to 'into-list'" — into-list arity different
 ;;  Prelude into-list takes (Seqable a) list, not transducer form
+;;  Renamed to xf-into-list to disambiguate; still needs transducer import
 
 ;; --- 4b. Filter transducer ---
 spec pos? Nat -> Bool
 defn pos? [n] [gt? n 0N]
 
-[into-list Nat Nat [filter-xf Nat pos?] '[0N 1N 0N 2N 3N]]
+[xf-into-list Nat Nat [filter-xf Nat pos?] '[0N 1N 0N 2N 3N]]
 ;; expect: '[1N 2N 3N] : List Nat
-;;! CRASH: "Too many arguments to 'into-list'" — same arity issue
+;;! CRASH: "Too many arguments to 'into-list'" — same arity issue (now renamed to xf-into-list)
 
 ;; --- 4c. Composed transducers ---
-[into-list Nat Nat [xf-compose Nat Nat Nat [filter-xf Nat pos?] [map-xf Nat Nat suc-fn]] '[0N 1N 0N 2N 3N]]
+[xf-into-list Nat Nat [xf-compose Nat Nat Nat [filter-xf Nat pos?] [map-xf Nat Nat suc-fn]] '[0N 1N 0N 2N 3N]]
 ;; expect: '[2N 3N 4N] : List Nat
-;;! CRASH: "Too many arguments to 'into-list'" — same arity issue
+;;! CRASH: "Too many arguments to 'into-list'" — same arity issue (now renamed to xf-into-list)
 
 
 ;; ========================================================================

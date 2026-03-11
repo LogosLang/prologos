@@ -10,7 +10,7 @@ imports [prologos::data::list       :refer [List nil cons map filter reduce sum 
         [prologos::data::nat        :refer [add double pred zero? le? sub]]
         [prologos::data::lseq       :refer [LSeq lseq-nil lseq-cell]]
         [prologos::data::lseq-ops   :refer [lseq-fold list-to-lseq lseq-to-list lseq-map lseq-filter]]
-        [prologos::data::transducer :refer [transduce map-xf filter-xf remove-xf xf-compose list-conj into-list-rev into-list]]
+        [prologos::data::transducer :refer [transduce map-xf filter-xf remove-xf xf-compose list-conj xf-into-list-rev xf-into-list]]
 
 ;; ========================================
 ;; Section 1: The |> Pipe Operator
@@ -131,8 +131,8 @@ zero |> [suc >> suc] |> [suc >> suc >> suc]
 ;; Map suc over [1,2,3] → [4,3,2] (reversed, since fold-left with cons)
 transduce Nat Nat [List Nat] [map-xf Nat Nat suc-fn] [list-conj Nat] [nil Nat] nums3
 
-;; Map suc over [1,2,3] using into-list-rev (convenience wrapper)
-into-list-rev Nat Nat [map-xf Nat Nat suc-fn] nums3
+;; Map suc over [1,2,3] using xf-into-list-rev (convenience wrapper)
+xf-into-list-rev Nat Nat [map-xf Nat Nat suc-fn] nums3
 
 ;; --- filter-xf: keep matching elements ---
 
@@ -140,7 +140,7 @@ into-list-rev Nat Nat [map-xf Nat Nat suc-fn] nums3
 transduce Nat Nat [List Nat] [filter-xf Nat positive?] [list-conj Nat] [nil Nat] nums5
 
 ;; Filter > 1 from [0,1,2,3,4] → [4,3,2] (reversed)
-into-list-rev Nat Nat [filter-xf Nat gt1?] nums5
+xf-into-list-rev Nat Nat [filter-xf Nat gt1?] nums5
 
 ;; --- remove-xf: discard matching elements ---
 
@@ -163,8 +163,8 @@ transduce Nat Nat [List Nat] [xf-compose Nat Nat Nat [map-xf Nat Nat suc-fn] [fi
 ;; Remove zeros then map double: [0,1,2,3,4] → remove zeros → [1,2,3,4] → double → [8,6,4,2] (reversed)
 transduce Nat Nat [List Nat] [xf-compose Nat Nat Nat [remove-xf Nat is-zero] [map-xf Nat Nat double]] [list-conj Nat] [nil Nat] nums5
 
-;; Composed xf with into-list-rev:
-into-list-rev Nat Nat [xf-compose Nat Nat Nat [filter-xf Nat positive?] [map-xf Nat Nat suc-fn]] nums5
+;; Composed xf with xf-into-list-rev:
+xf-into-list-rev Nat Nat [xf-compose Nat Nat Nat [filter-xf Nat positive?] [map-xf Nat Nat suc-fn]] nums5
 
 ;; ========================================
 ;; Section 8: Custom Reducers with Transducers

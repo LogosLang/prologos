@@ -3,14 +3,14 @@
 ;;;
 ;;; Tests for Phase 2c.3: Transducer Infrastructure
 ;;; Tests transducer.prologos — map-xf, filter-xf, remove-xf,
-;;; transduce, xf-compose, list-conj, into-list-rev.
+;;; transduce, xf-compose, list-conj, xf-into-list-rev.
 ;;;
 ;;; Key design notes:
 ;;; - All transducers are R-polymorphic: Pi [R :0 Type] (R -> B -> R) -> (R -> A -> R)
-;;; - transduce and into-list-rev accept polymorphic xf and specialize R internally
+;;; - transduce and xf-into-list-rev accept polymorphic xf and specialize R internally
 ;;; - xf-compose composes two transducers, threading R through both
 ;;; - Individual xf functions (map-xf, filter-xf) take their config args but NOT R
-;;;   when passed to transduce/into-list-rev (R is still erased/polymorphic)
+;;;   when passed to transduce/xf-into-list-rev (R is still erased/polymorphic)
 
 (require rackunit
          racket/list
@@ -48,7 +48,7 @@
 (imports (prologos::data::list :refer (List nil cons))
          (prologos::data::lseq :refer (LSeq lseq-nil lseq-cell lseq-head lseq-rest lseq-empty?))
          (prologos::data::lseq-ops :refer (list-to-lseq lseq-to-list lseq-map lseq-filter lseq-fold lseq-length))
-         (prologos::data::transducer :refer (transduce map-xf filter-xf remove-xf xf-compose list-conj into-list-rev)))
+         (prologos::data::transducer :refer (transduce map-xf filter-xf remove-xf xf-compose list-conj xf-into-list-rev)))
 
 ;; Helper: make a list of Nat: '(1 2 3)
 (def list123 : (List Nat)
@@ -158,10 +158,10 @@
   (check-contains result "nil")
   (check-contains result "List Nat"))
 
-(test-case "xf/map-xf-into: map using into-list-rev"
-  ;; into-list-rev wraps the xf + list-conj + nil pattern
+(test-case "xf/map-xf-into: map using xf-into-list-rev"
+  ;; xf-into-list-rev wraps the xf + list-conj + nil pattern
   (define result (run-last
-    "(eval (into-list-rev Nat Nat (map-xf Nat Nat suc-fn) list123))"))
+    "(eval (xf-into-list-rev Nat Nat (map-xf Nat Nat suc-fn) list123))"))
   (check-contains result "'[4N 3N 2N]")
   (check-contains result "List Nat"))
 
@@ -273,12 +273,12 @@
   (check-contains result "nil")
   (check-contains result "List Nat"))
 
-(test-case "xf/compose-into-list-rev: composed xf with into-list-rev"
-  ;; into-list-rev with composed xf
+(test-case "xf/compose-xf-into-list-rev: composed xf with xf-into-list-rev"
+  ;; xf-into-list-rev with composed xf
   (define result (run-last
     "(def list012 : (List Nat)
        (cons Nat zero (cons Nat (suc zero) (cons Nat (suc (suc zero)) (nil Nat)))))
-     (eval (into-list-rev Nat Nat (xf-compose Nat Nat Nat (filter-xf Nat is-positive) (map-xf Nat Nat suc-fn)) list012))"))
+     (eval (xf-into-list-rev Nat Nat (xf-compose Nat Nat Nat (filter-xf Nat is-positive) (map-xf Nat Nat suc-fn)) list012))"))
   (check-contains result "'[3N 2N]")
   (check-contains result "List Nat"))
 
