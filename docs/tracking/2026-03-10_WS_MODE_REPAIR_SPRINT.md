@@ -69,7 +69,7 @@ because narrowing correctness is lower priority than basic functionality.
 |---|-----------|--------|--------|-------|
 | **Phase 1: Reader** | | | | |
 | 1a | Char literal docs | S | ✅ | `3165faa` — `\a` is canonical char form |
-| 1b | Quote/quasiquote | M+M | ✅ | `2f8e889` — datum in prelude; `,x` in parens deferred |
+| 1b | Quote/quasiquote | M+M | ✅ | `2f8e889` — datum in prelude; `200a525` — qq-depth comma fix |
 | **Phase 2: Preparse** | | | | |
 | 2a | `def-` recognition | S | ✅ | `dd5c09d` — expand-def-assign + spec-def injection |
 | 2b | `def` multi-token RHS | M | ✅ | `02bce89` — auto-wrap multi-token after `:=` |
@@ -153,8 +153,15 @@ predicates (`sym?`, `kw?`, `nat?`, `int?`, `rat?`, `bool?`, `nil?`, `cons?`).
   read as a bare symbol rather than wrapped in `$unquote`. This is a residual
   reader-level issue requiring quasiquote-context-aware comma handling.
 
-**Effort**: M (prelude fix = S, residual reader fix = M, deferred)
+**Effort**: M (prelude fix = S, residual reader fix = M)
 **Audit expressions**: audit-12 `'foo`, `'(a b c)`, `` `(hello ,x world) ``
+
+**1b-residual fix** (`200a525`): Added `current-qq-depth` Racket parameter
+to `reader.rkt`. Backtick handler increments depth via `parameterize`;
+unquote handler decrements it. All 8 comma-skip sites in bracket/paren/
+brace/literal parsers now check `(zero? (current-qq-depth))` before
+skipping commas. When depth > 0, commas fall through to `parse-inline-element`
+which produces `($unquote expr)`. 8 new WS-mode reader tests added.
 
 ### Phase 1 Status
 
@@ -162,7 +169,7 @@ predicates (`sym?`, `kw?`, `nat?`, `int?`, `rat?`, `bool?`, `nil?`, `cons?`).
 |-----------|--------|--------|
 | 1a: Char literal docs | ✅ | `3165faa` |
 | 1b: Quote/quasiquote (prelude fix) | ✅ | `2f8e889` |
-| 1b-residual: Quasiquote unquote in parens | DEFERRED | reader.rkt:1074–1077 |
+| 1b-residual: Quasiquote unquote in parens | ✅ | `200a525` — `current-qq-depth` param guards 8 comma-skip sites |
 
 ---
 
@@ -757,12 +764,12 @@ or after the repair sprint:
 
 | Metric | Value |
 |--------|-------|
-| Total sub-phases | 23 (1a–b, 2a–k, 3a–d, 4a–e, 5a–c) |
-| Completed | 22 |
+| Total sub-phases | 24 (1a–b + 1b-residual, 2a–k, 3a–d, 4a–e, 5a–c) |
+| Completed | 23 |
 | Skipped | 1 (2c) |
 | Remaining | 0 |
-| Regression test count | 6725 (all pass) |
-| Audit expressions fixed | 36 CRASH + 6 WRONG + 3 narrowing WRONG = 45 total reclassified |
+| Regression test count | 6733 (all pass) |
+| Audit expressions fixed | 36 CRASH + 6 WRONG + 3 narrowing WRONG + 1b-residual qq fix = 46 total reclassified |
 
 ---
 
@@ -786,3 +793,7 @@ or after the repair sprint:
 | 2k | `c101a11` | 2026-03-10 | expr-bvar readable names in errors |
 | 3a-c | `cd5d97d` | 2026-03-10 | Syntax reclassification + Phase 5b partition fix |
 | 3d | `aa8d7ee` | 2026-03-10 | Eta-expand suc in HOF position |
+| 4a | `df88a92` | 2026-03-10 | Fresh-meta motive in boolrec infer |
+| 4b-e | `276fbd9` | 2026-03-10 | Lambda synthesis + audit reclassifications |
+| 5a-c | `d19ec9d` | 2026-03-11 | Narrowing correctness: shared var, ctor inversion, boolrec |
+| 1b-res | `200a525` | 2026-03-11 | WS reader qq-depth: comma→unquote in quasiquote |
