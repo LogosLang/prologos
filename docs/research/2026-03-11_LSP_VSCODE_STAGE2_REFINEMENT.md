@@ -37,7 +37,11 @@ recommendations, and sequences work into five tiers with explicit dependencies.
 - Single Racket process serving both LSP and REPL evaluation
 - Custom LSP methods (`$/prologos/*`) for interactive features (eval, narrowing)
 - TextMate grammar for immediate highlighting; tree-sitter WASM for structural features
-- Elaboration-time side table as the foundational infrastructure investment
+- **Propagator-first infrastructure**: all LSP state (type index, definition registry,
+  diagnostics, module exports, completion cache) built on propagator cells — not mutable
+  hash tables. Correct-by-construction: derived state is always consistent because the
+  network topology enforces it. Incremental re-elaboration falls out of the architecture
+  rather than requiring hand-written invalidation code.
 
 **Total estimated effort**: ~8–12 weeks of focused implementation across all five tiers.
 Tier 1 (syntax-only, no server) can ship independently within ~1 week. Tier 2 (diagnostics
@@ -94,8 +98,17 @@ racket-langserver, we adopt a **Lean 4–influenced, Calva-inspired** architectu
 │  │  reader → preparse → parse → elaborate → type-check      │ │
 │  │  → trait-resolve → zonk → reduce                         │ │
 │  │                                                          │ │
-│  │  [NEW] Elaboration Side Table (srcloc → type)           │ │
-│  │  [NEW] Definition Location Registry (name → srcloc)     │ │
+│  │  ┌────────────────────────────────────────────────────┐  │ │
+│  │  │         Propagator Network (LSP State)             │  │ │
+│  │  │                                                    │  │ │
+│  │  │  Type Index Cells  ←──── Metavariable Cells        │  │ │
+│  │  │       ↓                        ↑                   │  │ │
+│  │  │  Diagnostic Cells  ←── Elaboration Results         │  │ │
+│  │  │       ↓                        ↑                   │  │ │
+│  │  │  Completion Cells  ←── Module Export Cells          │  │ │
+│  │  │       ↓                        ↑                   │  │ │
+│  │  │  Definition Loc Cells ←─ REPL Session Cells        │  │ │
+│  │  └────────────────────────────────────────────────────┘  │ │
 │  │                                                          │ │
 │  │  process-file / process-string-ws / process-command      │ │
 │  │  module-registry / global-env / ns-context               │ │
@@ -352,26 +365,19 @@ No external libraries needed.
 ```racket
 ;; lsp/server.rkt — ~400-500 lines
 
-;; Server state
+;; Server state is the propagator network (see §9.0-9.1)
+;; Each document gets a sub-network of cells; the server holds the root network.
 (struct lsp-state
   (initialized?         ; boolean — has client sent Initialize?
-   documents            ; hash: uri → document-state
+   network              ; propagator network (all LSP cells)
    module-registry      ; shared module registry (prelude pre-cached)
-   global-env           ; per-document global envs
    ) #:mutable)
 
-;; Document state (per open file)
-(struct document-state
-  (uri                 ; string
-   version             ; integer
-   content             ; string (latest content)
-   results             ; (listof result) from last process-file
-   errors              ; (listof prologos-error) from last process-file
-   ns-context          ; namespace context from last process
-   global-env          ; definitions from last process
-   ) #:mutable)
+;; Per-document cells are created in the network when a document is opened.
+;; Source cell (content), parse cells, elaboration cells, diagnostic cells,
+;; type index cells, def location cells — all wired into the network.
 
-;; Main loop: read message → dispatch → write response
+;; Main loop: thin event pump feeding the propagator network
 (define (run-lsp-server)
   (define state (make-initial-state))
   ;; Pre-cache prelude modules at startup
@@ -381,6 +387,8 @@ No external libraries needed.
     (define response (handle-message state msg))
     (when response
       (write-message (current-output-port) response))
+    ;; Flush any changed diagnostic cells as publishDiagnostics
+    (publish-changed-diagnostics! (lsp-state-network state))
     (loop)))
 ```
 
@@ -542,35 +550,36 @@ mapping from source positions to type information.
 
 **Design**:
 
-```racket
-;; lsp/type-index.rkt
+The type index is a propagator-backed structure (see §9.1–9.2). Each source position
+with type information gets a propagator cell containing a `type-index-entry`:
 
-;; Entry in the type index
+```racket
+;; lsp/lsp-cells.rkt
+
 (struct type-index-entry
   (srcloc           ; source location of the expression
-   type             ; inferred type (core expr)
+   type             ; inferred type (core expr) — may contain metas initially
    names            ; name stack at this point (for pp-expr)
    kind             ; 'variable | 'application | 'binding | 'type-annotation | 'pattern
    name             ; symbol or #f — the name if this is a named binding
    ) #:transparent)
+```
 
-;; The index: built during elaboration, queried by LSP
-(define current-type-index (make-parameter #f))
+**Why propagator cells here**: Type entries often contain unsolved metavariables at
+creation time. When a meta is solved later (trait resolution, unification), the type
+index cell automatically reflects the solution via the existing meta → dependent
+propagation path. No explicit "zonk the index" pass needed. This is correct by
+construction — the cell's value is always consistent with the current meta solutions.
 
-;; Record an entry during elaboration
+**Recording entries during elaboration**:
+
+```racket
+;; Called from elaborator.rkt at each instrumentation point
 (define (record-type-at-position! srcloc type names kind [name #f])
-  (when (current-type-index)
-    (define idx (current-type-index))
-    (hash-set! idx
-               (cons (srcloc-line srcloc) (srcloc-col srcloc))
-               (type-index-entry srcloc type names kind name))))
-
-;; Query: find the entry closest to a given position
-(define (lookup-type-at-position idx line col)
-  ;; Find the innermost entry whose range contains (line, col)
-  ;; Strategy: iterate entries, find those containing the position,
-  ;; return the one with the smallest span (most specific)
-  ...)
+  (when (current-lsp-network)
+    (define cell (get-or-create-type-index-cell!
+                   (current-lsp-network) srcloc))
+    (cell-add-content! cell (type-index-entry srcloc type names kind name))))
 ```
 
 **Instrumentation points in `elaborator.rkt`** (3924 lines):
@@ -591,8 +600,10 @@ each case to record the inferred type:
 `elaborator.rkt` and `driver.rkt`. Each call is 1–3 lines. The elaborator already has
 access to both the surface form (with srcloc) and the inferred type.
 
-**Performance impact**: Hash table insertions are O(1). For a typical file with ~100
-expressions, this adds ~100 hash insertions — negligible.
+**Performance impact**: Cell content additions are O(1). For a typical file with ~100
+expressions, this adds ~100 cell writes — negligible. The propagation overhead (meta
+solutions updating type index cells) is proportional to the number of affected cells,
+which is small in practice.
 
 ### 6.3 WS-Mode Pretty-Printer
 
@@ -746,40 +757,42 @@ Run narrowing queries from the editor. Persistent namespace context across evalu
 
 ### 7.2 REPL Backend
 
-The REPL backend maintains a persistent evaluation context per workspace:
+The REPL backend maintains a persistent evaluation context per workspace, backed by
+a REPL session cell in the propagator network (see §9.1):
 
 ```racket
 ;; lsp/repl.rkt
 
-(struct repl-session
-  (global-env          ; accumulated definitions
-   ns-context          ; current namespace context
-   module-registry     ; loaded modules
-   ) #:mutable)
+;; The REPL session is a propagator cell whose content is the accumulated
+;; global-env. Definitions only grow (monotonic), so this is a natural
+;; lattice: ⊥ → {name₁ → type₁} → {name₁ → type₁, name₂ → type₂} → ...
+;;
+;; New definitions from eval propagate into type index cells and completion
+;; cells automatically via the network — no explicit cache invalidation.
 
 ;; Evaluate a single form in the session context
-(define (repl-eval session code)
-  (parameterize ([current-global-env (repl-session-global-env session)]
-                 [current-ns-context (repl-session-ns-context session)]
-                 [current-module-registry (repl-session-module-registry session)]
-                 [current-mult-meta-store (make-hasheq)])
+(define (repl-eval network uri code)
+  (define session-cell (get-repl-session-cell network uri))
+  (parameterize ([current-global-env (cell-content session-cell)]
+                 [current-ns-context (cell-content (get-ns-context-cell network uri))]
+                 [current-module-registry (lsp-network-module-registry network)]
+                 [current-mult-meta-store (make-hasheq)]
+                 [current-lsp-network network])  ;; enables type index recording
     (define results (process-string-ws code))
-    ;; Update session state with any new definitions
-    (set-repl-session-global-env! session (current-global-env))
-    (set-repl-session-ns-context! session (current-ns-context))
-    (set-repl-session-module-registry! session (current-module-registry))
+    ;; Update session cell — propagates to completion/type index cells
+    (cell-add-content! session-cell (current-global-env))
     results))
 
 ;; Load a file into the session (like CIDER's load-file)
-(define (repl-load-file session path)
-  (parameterize ([current-global-env (repl-session-global-env session)]
-                 [current-ns-context (repl-session-ns-context session)]
-                 [current-module-registry (repl-session-module-registry session)]
-                 [current-mult-meta-store (make-hasheq)])
+(define (repl-load-file network uri path)
+  (define session-cell (get-repl-session-cell network uri))
+  (parameterize ([current-global-env (cell-content session-cell)]
+                 [current-ns-context (cell-content (get-ns-context-cell network uri))]
+                 [current-module-registry (lsp-network-module-registry network)]
+                 [current-mult-meta-store (make-hasheq)]
+                 [current-lsp-network network])
     (define results (process-file path))
-    (set-repl-session-global-env! session (current-global-env))
-    (set-repl-session-ns-context! session (current-ns-context))
-    (set-repl-session-module-registry! session (current-module-registry))
+    (cell-add-content! session-cell (current-global-env))
     results))
 ```
 
@@ -954,35 +967,158 @@ Custom notifications for cursor-reactive updates:
 ## 9. Infrastructure Investments (Cross-Tier)
 
 These are foundational changes to the Prologos codebase that support multiple tiers.
-They can be started early and developed incrementally.
+They follow the **Propagator-First Infrastructure** principle (see `DESIGN_PRINCIPLES.org`):
+all LSP state is built on propagator cells, not mutable hash tables. This is a
+**correct-by-construction** approach — derived state is always consistent because the
+network topology enforces it, eliminating the need for hand-written invalidation code.
 
-### 9.1 Elaboration Side Table
+### 9.0 Design Philosophy: Why Propagator-First
+
+The naïve approach to LSP infrastructure is mutable hash tables with manual invalidation:
+build a type index as a `(make-hash)`, insert entries during elaboration, zonk all entries
+when metas are solved, rebuild when the file changes, diff the old diagnostics against the
+new ones, etc. Each cross-cutting concern requires explicit plumbing.
+
+The propagator-first approach replaces mutable stores with propagator cells connected by
+dependency edges. The infrastructure becomes a reactive network:
+
+```
+Content Change ──► Parse Cells ──► Elaboration Cells ──► Type Index Cells
+                                          │                     │
+                                          ▼                     ▼
+                                   Meta Cells ──────────► Diagnostic Cells
+                                          │                     │
+                                          ▼                     ▼
+                                   Module Export Cells ──► Completion Cells
+                                          │
+                                          ▼
+                                   Def Location Cells
+```
+
+**Key properties:**
+- **Incremental**: Changing one form re-elaborates only that cell; downstream cells
+  (diagnostics, types, completions) update automatically via propagation
+- **Consistent**: No "stale cache" bugs — cells always reflect their inputs
+- **Composable**: Adding a new LSP feature (e.g., inlay hints) means adding cells that
+  read from existing cells — no modification of existing infrastructure
+- **Non-monotonic via ATMS**: File edits that remove definitions are handled by retracting
+  ATMS assumptions, which causes dependent cells to fall back — the pocket-universe
+  pattern already validated in the constraint propagation system
+
+**Relationship to existing infrastructure**: The Prologos codebase already has
+battle-tested propagator cells (`propagator.rkt`), lattice traits, ATMS (`atms.rkt`),
+and metavariable cells that propagate solutions through the type checker. The LSP
+network is a new application of the same abstractions, not a new framework.
+
+### 9.1 LSP Propagator Network
+
+**Supports**: All tiers (foundational)
+
+This is the core infrastructure: a propagator network that represents the entire LSP
+server state as a reactive graph of cells.
+
+**Cell taxonomy:**
+
+| Cell Type | Content | Lattice | Inputs |
+|-----------|---------|---------|--------|
+| **Source cell** | Document text (per URI) | String (replace) | `textDocument/didChange` |
+| **Parse cell** | Surface AST (`surf-*` forms) | List of forms | Source cell |
+| **Elaboration cell** | Per-form: core AST + type + errors | `⊥ → (ast, type, errors)` | Parse cell, meta cells |
+| **Meta cell** | Metavariable solution | `unsolved → solved(expr)` | Elaboration cells, trait resolution |
+| **Type index cell** | Per-position: `srcloc → type` | `⊥ → type-index-entry` | Elaboration cells, meta cells |
+| **Diagnostic cell** | Per-form: error list | `[] → [diag ...]` | Elaboration cells |
+| **Def location cell** | Per-name: definition srcloc | `⊥ → srcloc` | Elaboration cells |
+| **Module export cell** | Per-module: export list + types | `⊥ → module-info` | Module loading |
+| **Completion cell** | Per-namespace: available names | Set of completion items | Module export cells, def location cells |
+| **REPL session cell** | Accumulated global-env | Monotonic map growth | Eval results |
+
+**ATMS integration**: Each elaboration cell is backed by an ATMS assumption corresponding
+to the top-level form it represents. When a form changes:
+1. Retract the old assumption (pocket-universe pattern)
+2. Create a new assumption for the re-elaborated form
+3. Dependent cells (type index, diagnostics) automatically update via the ATMS
+
+**Files created**:
+| File | Est. Lines | Purpose |
+|------|-----------|---------|
+| `lsp/lsp-network.rkt` | ~300 | LSP propagator network topology, cell creation, wiring |
+| `lsp/lsp-cells.rkt` | ~200 | Cell types, lattice definitions, merge functions |
+
+**Files modified**:
+| File | Lines | Change |
+|------|-------|--------|
+| `elaborator.rkt` | 3924 | ~50 `record-type-at-position!` calls that write to type index cells |
+| `driver.rkt` | 1968 | Initialize network per document; connect to process-command pipeline |
+
+**Effort**: 4–6 days
+
+### 9.2 Type Index (Propagator-Backed)
 
 **Supports**: Tier 3 (hover), Tier 3 (inlay hints), Tier 5 (InfoView)
 
-**Files modified**:
-| File | Lines | Change |
-|------|-------|--------|
-| `elaborator.rkt` | 3924 | Add ~50 `record-type-at-position!` calls |
-| `driver.rkt` | 1968 | Initialize type index in `process-command`; pass to `process-file` results |
-| New: `lsp/type-index.rkt` | ~150 | Type index data structures and query functions |
+The type index is a collection of propagator cells, one per source position that has
+type information. Each cell's content is a `type-index-entry`:
 
-**Effort**: 3–5 days
+```racket
+(struct type-index-entry
+  (srcloc           ; source location
+   type             ; inferred type (core expr) — may contain metas initially
+   names            ; name stack for pp-expr
+   kind             ; 'variable | 'application | 'binding | 'pattern
+   name             ; symbol or #f
+   ) #:transparent)
+```
 
-### 9.2 Definition Location Registry
+**Why propagator cells, not a hash table**: Type index entries often contain unsolved
+metavariables at creation time. When the meta is later solved (e.g., during trait
+resolution), the type index entry needs to reflect the solution. With propagator cells:
+the meta cell's solution propagates into the type index cell automatically via the
+existing meta → dependent propagation path. With a hash table: you'd need an explicit
+"zonk the entire index" pass after trait resolution, and again after each meta solution.
+
+**Instrumentation points in `elaborator.rkt`**: Same as the original design (§6.2) —
+~50 calls inserted at `surf-var`, `surf-app`, `surf-ann`, `surf-lambda`, `surf-def`,
+`surf-match` cases. The difference is that each call writes to a propagator cell rather
+than a mutable hash entry.
+
+**Query interface**: `lookup-type-at-position` reads cells and returns the innermost
+entry containing the queried position. Reading a cell is O(1).
+
+**Effort**: Included in §9.1 (part of the network)
+
+### 9.3 Definition Location Registry (Propagator-Backed)
 
 **Supports**: Tier 2 (go-to-definition), Tier 3 (completion with location)
 
+Each definition gets a propagator cell mapping `name → srcloc`. When a module is loaded,
+its definition location cells are populated. When a file is re-elaborated, only the
+changed definitions' cells update.
+
 **Files modified**:
 | File | Lines | Change |
 |------|-------|--------|
-| `namespace.rkt` | 652 | Add `definition-locations` to `module-info` |
+| `namespace.rkt` | 652 | Add `definition-locations` to `module-info` (cell-backed) |
 | `global-env.rkt` | 81 | Add `current-definition-locations` parameter |
-| `driver.rkt` | 1968 | Record definition locations during `process-def`/`process-def-group` |
+| `driver.rkt` | 1968 | Record def locations during `process-def`/`process-def-group` |
 
-**Effort**: 1 day
+**Effort**: 1–2 days
 
-### 9.3 WS-Mode Pretty-Printer
+### 9.4 Diagnostic Cells (Propagator-Backed)
+
+**Supports**: Tier 2 (publishDiagnostics)
+
+Each top-level form has a diagnostic cell. The cell's content is the list of
+`prologos-error` values produced by elaborating/type-checking that form.
+
+**Key benefit**: When re-elaborating a single form, only that form's diagnostic cell
+changes. The LSP diagnostic publisher watches all diagnostic cells and sends
+`publishDiagnostics` only for URIs whose diagnostic cells have changed. This is the
+natural path from on-save to on-type diagnostics — the network topology handles the
+incrementality, not explicit diffing.
+
+**Effort**: Included in §9.1 (part of the network)
+
+### 9.5 WS-Mode Pretty-Printer
 
 **Supports**: Tier 3 (hover display), Tier 4 (inline results), Tier 5 (InfoView)
 
@@ -993,7 +1129,7 @@ They can be started early and developed incrementally.
 
 **Effort**: 2–3 days
 
-### 9.4 JSON-RPC Layer
+### 9.6 JSON-RPC Layer
 
 **Supports**: Tier 2+
 
@@ -1004,14 +1140,39 @@ They can be started early and developed incrementally.
 
 **Effort**: 2–3 days
 
-### 9.5 LSP Server Skeleton
+### 9.7 LSP Server Skeleton
 
 **Supports**: Tier 2+
+
+The server main loop becomes a thin event pump feeding the propagator network. Incoming
+LSP messages (didOpen, didChange, didSave) update source cells. Outgoing LSP responses
+(hover, completion, diagnostics) read from output cells. The network does the work.
+
+```racket
+;; Simplified server loop — the network is the engine
+(define (run-lsp-server network)
+  (let loop ()
+    (define msg (read-message (current-input-port)))
+    (cond
+      [(did-change? msg)
+       ;; Feed source cell → network propagates to all dependent cells
+       (update-source-cell! network (msg-uri msg) (msg-content msg))]
+      [(hover-request? msg)
+       ;; Read from type index cells — always current
+       (write-response (read-type-at-position network (msg-uri msg) (msg-position msg)))]
+      [(completion-request? msg)
+       ;; Read from completion cells — always current
+       (write-response (read-completions network (msg-uri msg) (msg-position msg)))]
+      ...)
+    ;; Flush any changed diagnostic cells as publishDiagnostics
+    (publish-changed-diagnostics! network)
+    (loop)))
+```
 
 **Files created**:
 | File | Est. Lines | Purpose |
 |------|-----------|---------|
-| `lsp/server.rkt` | ~500 | Main loop, state management, capability negotiation |
+| `lsp/server.rkt` | ~500 | Main loop, event pump, response dispatch |
 | `lsp/protocol.rkt` | ~200 | LSP protocol constants, message builders |
 
 **Effort**: 2–3 days
@@ -1030,12 +1191,34 @@ They can be started early and developed incrementally.
 | **Performance** | No wasted work | Repeated processing on every keystroke (debounced) |
 | **Infrastructure needed** | `process-file` (exists) | Partial-file processing, error recovery (NEW) |
 
-**Recommendation**: **On Save for Tiers 1–3**. Add on-type in a later iteration if
-user feedback demands it. The primary cost of on-type is error recovery — the current
-pipeline aborts on the first error. Building a recovery mechanism is a significant
-investment best deferred.
+**Recommendation**: **On Save initially, with on-type as a natural evolution**. The
+propagator-first architecture (§9.0) significantly reduces the incremental cost of
+on-type diagnostics: diagnostic cells per form already support incremental updates,
+so the path from on-save to on-type is adding debounced content-change events and
+per-form re-elaboration — not a full rewrite. The remaining cost is error recovery
+(the current pipeline aborts on the first error in a form), which is orthogonal to
+the propagator design but still needed for a good on-type experience.
 
-### 10.2 Process Model: Single vs. Dual
+### 10.2 State Management: Mutable Hash Tables vs. Propagator Network
+
+| Criterion | Mutable Hash Tables | Propagator Network |
+|-----------|--------------------|--------------------|
+| **Initial implementation** | Simpler (~20 lines per store) | More structure (~80-100 lines per cell type) |
+| **Incremental updates** | Manual invalidation + rebuild | Automatic via dependency propagation |
+| **Meta solution propagation** | Explicit "zonk the index" pass | Automatic — metas propagate to dependents |
+| **Cross-feature consistency** | Manual plumbing between stores | Structural — network topology enforces it |
+| **Path to on-type diagnostics** | Requires rewrite of state management | Natural evolution — add debounced source cell updates |
+| **Composability** | Each new feature adds invalidation code | Each new feature adds cells that read existing cells |
+| **Correctness guarantee** | By discipline (test that invalidation is complete) | By construction (network is always consistent) |
+| **Existing infrastructure** | None needed | Propagator cells, lattice traits, ATMS already exist |
+
+**Decision**: **Propagator network**. The upfront cost is modestly higher, but correctness
+is structural rather than maintained by discipline. Every subsequent tier benefits from
+the network without adding invalidation complexity. This follows the Correct by
+Construction principle (`DESIGN_PRINCIPLES.org`): the architecture makes the wrong thing
+hard to express, rather than relying on vigilance to avoid it.
+
+### 10.3 Process Model: Single vs. Dual
 
 | Criterion | Single Process | Dual Process |
 |-----------|---------------|--------------|
@@ -1117,6 +1300,26 @@ than forking the protocol.
 ✅ **Aligned**. Standard LSP for the 80%. Custom methods only where standard LSP can't
 express the interaction (eval, narrowing). Code actions for features that fit the
 standard model. Any LSP-capable editor gets Tiers 1–3 for free.
+
+### Correct by Construction
+
+✅ **Aligned**. The propagator-first infrastructure design (§9.0) makes incremental
+consistency a structural property of the network topology. Type index cells are always
+consistent with metavariable solutions because the propagation path enforces it —
+no explicit "zonk the index" pass that could be forgotten or called at the wrong time.
+Diagnostic cells are always consistent with elaboration results because the dependency
+edges enforce it — no "rebuild diagnostics" step that could be skipped. The architecture
+makes the wrong thing (stale state) hard to express, rather than relying on discipline
+to avoid it.
+
+### Propagator-First Infrastructure
+
+✅ **Aligned**. All five infrastructure subsystems (type index, definition registry,
+diagnostics, module exports, completion cache) are propagator-backed. They compose into
+a single reactive network where information flows bidirectionally. Adding a new LSP
+feature means adding new cells that read from existing cells — no modification of
+existing infrastructure, no new invalidation code. The synergy of composing propagator
+networks exceeds the sum of their parts.
 
 ---
 
@@ -1263,14 +1466,16 @@ Week 10-12: Tier 5 (InfoView React app, cursor tracking, narrowing explorer)
 | `editors/vscode-prologos/queries/folds.scm` | Folding queries | 1 |
 | `editors/vscode-prologos/queries/indents.scm` | Indent queries | 1 |
 | `racket/prologos/lsp/json-rpc.rkt` | JSON-RPC layer | 2 |
-| `racket/prologos/lsp/server.rkt` | LSP server main | 2 |
+| `racket/prologos/lsp/server.rkt` | LSP server main (event pump) | 2 |
 | `racket/prologos/lsp/protocol.rkt` | LSP constants | 2 |
+| `racket/prologos/lsp/lsp-network.rkt` | Propagator network topology | Infra |
+| `racket/prologos/lsp/lsp-cells.rkt` | Cell types, lattices, merge fns | Infra |
 | `racket/prologos/lsp/diagnostics.rkt` | Error → Diagnostic | 2 |
 | `racket/prologos/lsp/symbols.rkt` | Document symbols | 2 |
 | `racket/prologos/lsp/definition.rkt` | Go-to-definition | 2 |
 | `racket/prologos/lsp/signature.rkt` | Signature help | 2 |
 | `editors/vscode-prologos/src/client.ts` | LSP client | 2 |
-| `racket/prologos/lsp/type-index.rkt` | Type index | 3 |
+| (type index is part of `lsp-network.rkt` / `lsp-cells.rkt`) | — | Infra |
 | `racket/prologos/lsp/hover.rkt` | Hover provider | 3 |
 | `racket/prologos/lsp/completion.rkt` | Completion | 3 |
 | `racket/prologos/lsp/semantic-tokens.rkt` | Semantic tokens | 3 |

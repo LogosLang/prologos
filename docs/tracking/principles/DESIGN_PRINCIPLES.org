@@ -318,6 +318,46 @@ Pi types, Sigma types, universe levels, and multiplicity annotations exist in
 /available/ when needed, but the primary interface is structured metadata
 expressed through keywords.
 
+* Correct by Construction
+
+Prefer designs where correctness is a structural property of the
+architecture, not a property maintained by discipline. A correct-by-
+construction system makes the wrong thing hard to express rather than
+relying on vigilance to avoid it. This applies at every level:
+
+- *Type system*: illegal states are unrepresentable (dependent types,
+  session types, QTT multiplicities)
+- *Data structures*: persistent/immutable by default; mutation is opt-in
+  and scoped (~transient~/~persist!~)
+- *Protocols*: session types ensure both endpoints agree; violation is a
+  type error, not a runtime crash
+- *Infrastructure*: propagator networks ensure derived state is always
+  consistent with source state; no explicit invalidation discipline needed
+- *Concurrency*: linearity prevents data races; session types prevent
+  protocol violations; capability types prevent unauthorized access
+
+The upfront cost of correct-by-construction is higher than the ad-hoc
+alternative. The long-term cost is dramatically lower: every subsequent
+feature built on correct-by-construction foundations inherits its guarantees
+without additional effort. Bugs that /cannot exist/ need not be tested for,
+debugged, or documented as caveats.
+
+This principle is the philosophical foundation for [[*Propagator-First Infrastructure][Propagator-First
+Infrastructure]]: building the LSP server's state management on propagator
+cells makes incremental consistency a structural property of the network
+topology, rather than a property maintained by hand-written invalidation
+code.
+
+** Relationship to Other Principles
+
+- *Correctness Through Types* is correct-by-construction applied to user
+  programs via the type system
+- *Open Extension, Closed Verification* is correct-by-construction applied
+  to the open-world assumption: new code cannot break verified guarantees
+- *Propagator-First Infrastructure* is correct-by-construction applied to
+  tooling and infrastructure: derived state is always consistent because
+  the network enforces it
+
 * Open Extension, Closed Verification
 
 New types, traits, instances, and bundles can always be added (open world).
