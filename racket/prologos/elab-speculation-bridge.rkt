@@ -21,6 +21,12 @@
 ;;; nested speculations, the inner failures are captured as `sub-failures`
 ;;; of the outer failure. This builds a tree of failures for derivation chains.
 ;;;
+;;; Phase 4b (propagator-first migration): save/restore `current-constraint-store`
+;;; alongside the 6 CHAMP boxes. Audit found that `add-constraint!` in unify.rkt
+;;; is reachable during speculation (via check → unify → pattern-check failure)
+;;; but was not captured by save-meta-state. The constraint parameter leaked
+;;; spurious constraints on failed speculation branches.
+;;;
 ;;; Phase 5+8b+D+D2 of the type inference refactoring.
 ;;; Design reference: docs/tracking/2026-02-25_TYPE_INFERENCE_ON_LOGIC_ENGINE_DESIGN.md §5.5
 ;;;
@@ -168,6 +174,11 @@
       (if b (length (unbox b)) 0)))
   ;; 1. Save meta-state (immutable CHAMP snapshot — O(1) for network)
   (define saved (save-meta-state))
+  ;; Phase 4b: Save constraint store (parameter, not captured by save-meta-state).
+  ;; add-constraint! in unify.rkt is reachable during speculation via
+  ;; check → unify → pattern-check failure. Without this, failed speculation
+  ;; leaks spurious constraints to the parameter while the prop-net cell reverts.
+  (define saved-constraints (current-constraint-store))
   ;; 2. Run the speculation
   (define result (thunk))
   (cond
@@ -175,6 +186,8 @@
     [else
      ;; 3. Restore meta-state (O(1) for network)
      (restore-meta-state! saved)
+     ;; Phase 4b: Restore constraint store parameter
+     (current-constraint-store saved-constraints)
      ;; Phase D2: Extract sub-failures (failures added during this thunk)
      ;; The box stores newest-first, so new failures are at the front.
      (define-values (sub-failures support-set)
