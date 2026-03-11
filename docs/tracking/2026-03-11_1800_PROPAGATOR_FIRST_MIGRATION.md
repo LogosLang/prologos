@@ -13,7 +13,34 @@
 
 Migrate the Prologos compilation pipeline from ad-hoc mutable state (Racket parameters with mutable hasheqs, dirty flags, manual retry loops) to a unified propagator-cell infrastructure. The audit identified ~42 propagator-natural state sites (52% of all mutable state). This sprint migrates them in dependency order, unlocking 5 composition synergies and building the foundation for LSP incremental re-elaboration.
 
-**Non-goals**: Reader, parser, zonking, reduction caches, elaborator context parameters — these remain as-is (see audit §7).
+**Non-goals**: Reader, parser, zonking, elaborator context parameters — these remain as-is (see audit §7).
+
+### Progress Tracker
+
+| Phase | Sub | Description | Status | Notes |
+|-------|-----|-------------|--------|-------|
+| 0 | 0a | Merge function library + cell factory | ⬜ | |
+| 0 | 0b | ATMS assumption infrastructure | ⬜ | |
+| 0 | 0c | Network construction via registration protocol | ⬜ | |
+| 0 | 0d | Parallel propagation verification + benchmarks | ⬜ | |
+| 0 | 0e | Integration smoke test | ⬜ | |
+| 1 | 1a | Constraint store cell (storage only) | ⬜ | |
+| 1 | 1b | Trait constraint cells (storage only) | ⬜ | |
+| 1 | 1c | Wakeup registry cell (storage only) | ⬜ | |
+| 1 | 1d | Reactive resolution wiring (behavior change) | ⬜ | |
+| 1 | 1e | Remove retry infrastructure | ⬜ | |
+| 2 | 2a | Core type registries (8 registries) | ⬜ | |
+| 2 | 2b | Trait + instance registries (8 registries) | ⬜ | |
+| 2 | 2c | Remaining registries + warnings (11 registries) | ⬜ | |
+| 3 | 3a | Per-definition cell infrastructure | ⬜ | |
+| 3 | 3b | Wire definition dependencies | ⬜ | |
+| 3 | 3c | Module registry cells | ⬜ | |
+| 3 | 3d | Retire `current-global-env` | ⬜ | |
+| 4 | 4a | Speculation side-effect audit | ⬜ | |
+| 4 | 4b | Replace save/restore with assumptions | ⬜ | |
+| 4 | 4c | Remove legacy snapshot infrastructure | ⬜ | |
+| 5 | 5a | Simplify per-command parameterize | ⬜ | |
+| 5 | 5b | Documentation and cleanup | ⬜ | |
 
 ---
 
@@ -428,6 +455,19 @@ The shared fixture pattern (`define-values` at module level, per-test `parameter
 3. **Fresh `current-mult-meta-store` per test**: Preserved from current pattern — each test gets `(make-hasheq)` for multiplicity isolation.
 
 This preserves the shared fixture's performance benefit (prelude loaded once, ~2s saved per test file) while providing per-test isolation through ATMS assumptions rather than full network reconstruction. The ATMS retraction cost is O(tagged-writes) per test, not O(prelude-size).
+
+### Fallback: Hybrid ATMS + Parameterize Isolation
+
+If ATMS retraction proves too expensive for high-write-count tests (e.g., tests that create hundreds of metavariables and constraints), the fallback is a **hybrid** approach:
+
+- **ATMS assumptions** for infrastructure cells (registries, global-env, module registry) — these have low write counts and high benefit from structural isolation
+- **`parameterize` with fresh hasheqs** for per-test meta isolation (`current-mult-meta-store`, metavariable cells) — the current pattern, which is already fast and well-tested
+
+This hybrid approach preserves the architectural benefit of unified cells (composition synergies, reactive propagation) while using the faster mechanism where write-heavy transient state dominates. The choice between full-ATMS and hybrid should be made empirically in Phase 0e based on benchmark results comparing:
+- ATMS retraction cost for a typical test (~50–200 meta writes)
+- `parameterize` cost for the same test (baseline, already measured)
+
+If ATMS retraction adds <5ms per test (compared to ~2ms for `parameterize`), use full ATMS. If >20ms, use hybrid. Between 5–20ms, evaluate based on composition benefits (do propagators between meta-cells and constraint-cells add value that justifies the overhead?).
 
 ---
 
