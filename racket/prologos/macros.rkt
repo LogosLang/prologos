@@ -304,7 +304,7 @@
          datum->datum-expr
          qq->datum-expr
          keyword-like-symbol?
-         ;; Phase 2a: Propagator-first migration — registry cell infrastructure
+         ;; Phase 2a/2b: Propagator-first migration — registry cell infrastructure
          current-macros-prop-net-box
          current-macros-prop-cell-write
          current-schema-registry-cell-id
@@ -315,6 +315,15 @@
          current-capability-registry-cell-id
          current-property-store-cell-id
          current-functor-store-cell-id
+         ;; Phase 2b: Trait + instance registry cell IDs
+         current-trait-registry-cell-id
+         current-trait-laws-cell-id
+         current-impl-registry-cell-id
+         current-param-impl-registry-cell-id
+         current-bundle-registry-cell-id
+         current-specialization-registry-cell-id
+         current-selection-registry-cell-id
+         current-session-registry-cell-id
          register-macros-cells!
          ;; Mixfix / precedence groups (Phase 2)
          current-user-precedence-groups
@@ -426,6 +435,15 @@
 (define current-capability-registry-cell-id (make-parameter #f))
 (define current-property-store-cell-id (make-parameter #f))
 (define current-functor-store-cell-id (make-parameter #f))
+;; Phase 2b: Trait + instance registry cell IDs
+(define current-trait-registry-cell-id (make-parameter #f))
+(define current-trait-laws-cell-id (make-parameter #f))
+(define current-impl-registry-cell-id (make-parameter #f))
+(define current-param-impl-registry-cell-id (make-parameter #f))
+(define current-bundle-registry-cell-id (make-parameter #f))
+(define current-specialization-registry-cell-id (make-parameter #f))
+(define current-selection-registry-cell-id (make-parameter #f))
+(define current-session-registry-cell-id (make-parameter #f))
 
 ;; Helper: dual-write a single entry to a registry cell.
 ;; value should be a hasheq/hash with just the new entry — the cell's merge
@@ -466,7 +484,25 @@
     (current-property-store-cell-id ps-cid)
     (define-values (enet8 fs-cid) (new-cell-fn enet7 (current-functor-store) merge-hasheq-union))
     (current-functor-store-cell-id fs-cid)
-    (set-box! net-box enet8)))
+    ;; Phase 2b: Trait + instance registry cells
+    (define-values (enet9 tr-cid) (new-cell-fn enet8 (current-trait-registry) merge-hasheq-union))
+    (current-trait-registry-cell-id tr-cid)
+    (define-values (enet10 tl-cid) (new-cell-fn enet9 (current-trait-laws) merge-hasheq-union))
+    (current-trait-laws-cell-id tl-cid)
+    (define-values (enet11 ir-cid) (new-cell-fn enet10 (current-impl-registry) merge-hasheq-union))
+    (current-impl-registry-cell-id ir-cid)
+    (define-values (enet12 pir-cid) (new-cell-fn enet11 (current-param-impl-registry) merge-hasheq-union))
+    (current-param-impl-registry-cell-id pir-cid)
+    (define-values (enet13 br-cid) (new-cell-fn enet12 (current-bundle-registry) merge-hasheq-union))
+    (current-bundle-registry-cell-id br-cid)
+    ;; specialization-registry uses hash (equal?-based keys: cons pairs)
+    (define-values (enet14 spr-cid) (new-cell-fn enet13 (current-specialization-registry) merge-hasheq-union))
+    (current-specialization-registry-cell-id spr-cid)
+    (define-values (enet15 sel-cid) (new-cell-fn enet14 (current-selection-registry) merge-hasheq-union))
+    (current-selection-registry-cell-id sel-cid)
+    (define-values (enet16 sess-cid) (new-cell-fn enet15 (current-session-registry) merge-hasheq-union))
+    (current-session-registry-cell-id sess-cid)
+    (set-box! net-box enet16)))
 
 ;; ========================================
 ;; Schema registry: field information for schema types
@@ -578,7 +614,9 @@
 (define current-selection-registry (make-parameter (hasheq)))
 
 (define (register-selection! name entry)
-  (current-selection-registry (hash-set (current-selection-registry) name entry)))
+  (current-selection-registry (hash-set (current-selection-registry) name entry))
+  ;; Phase 2b: dual-write to cell
+  (macros-cell-write! (current-selection-registry-cell-id) (hasheq name entry)))
 
 (define (lookup-selection name)
   (hash-ref (current-selection-registry) name #f))
@@ -596,7 +634,9 @@
 (define current-session-registry (make-parameter (hasheq)))
 
 (define (register-session! name entry)
-  (current-session-registry (hash-set (current-session-registry) name entry)))
+  (current-session-registry (hash-set (current-session-registry) name entry))
+  ;; Phase 2b: dual-write to cell
+  (macros-cell-write! (current-session-registry-cell-id) (hasheq name entry)))
 
 (define (lookup-session name)
   (hash-ref (current-session-registry) name #f))
@@ -5554,7 +5594,9 @@
 (define current-trait-registry (make-parameter (hasheq)))
 
 (define (register-trait! name meta)
-  (current-trait-registry (hash-set (current-trait-registry) name meta)))
+  (current-trait-registry (hash-set (current-trait-registry) name meta))
+  ;; Phase 2b: dual-write to cell
+  (macros-cell-write! (current-trait-registry-cell-id) (hasheq name meta)))
 
 (define (lookup-trait name)
   (hash-ref (current-trait-registry) name #f))
@@ -5569,7 +5611,9 @@
 (define current-trait-laws (make-parameter (hasheq)))
 
 (define (register-trait-laws! name laws)
-  (current-trait-laws (hash-set (current-trait-laws) name laws)))
+  (current-trait-laws (hash-set (current-trait-laws) name laws))
+  ;; Phase 2b: dual-write to cell
+  (macros-cell-write! (current-trait-laws-cell-id) (hasheq name laws)))
 
 (define (lookup-trait-laws name)
   (hash-ref (current-trait-laws) name '()))
@@ -5595,7 +5639,9 @@
     (error 'impl
       "Duplicate instance: ~a already registered (dict ~a), cannot re-register (dict ~a)"
       key (impl-entry-dict-name existing) (impl-entry-dict-name entry)))
-  (current-impl-registry (hash-set (current-impl-registry) key entry)))
+  (current-impl-registry (hash-set (current-impl-registry) key entry))
+  ;; Phase 2b: dual-write to cell
+  (macros-cell-write! (current-impl-registry-cell-id) (hasheq key entry)))
 
 (define (lookup-impl key)
   (hash-ref (current-impl-registry) key #f))
@@ -5690,8 +5736,11 @@
                  trait-name
                  (format-param-impl-entry entry)
                  (format-param-impl-entry ex))))
+    (define new-list (cons entry existing))
     (current-param-impl-registry
-      (hash-set (current-param-impl-registry) trait-name (cons entry existing)))))
+      (hash-set (current-param-impl-registry) trait-name new-list))
+    ;; Phase 2b: dual-write to cell
+    (macros-cell-write! (current-param-impl-registry-cell-id) (hasheq trait-name new-list))))
 
 ;; Check if two parametric impls could overlap.
 ;; Two impls overlap if their type patterns could unify (i.e., there exists a type
@@ -5747,7 +5796,9 @@
 (define current-bundle-registry (make-parameter (hasheq)))
 
 (define (register-bundle! name entry)
-  (current-bundle-registry (hash-set (current-bundle-registry) name entry)))
+  (current-bundle-registry (hash-set (current-bundle-registry) name entry))
+  ;; Phase 2b: dual-write to cell
+  (macros-cell-write! (current-bundle-registry-cell-id) (hasheq name entry)))
 
 (define (lookup-bundle name)
   (hash-ref (current-bundle-registry) name #f))
@@ -5769,9 +5820,11 @@
 
 (define (register-specialization! generic-name type-con specialized-name)
   (define key (cons generic-name type-con))
+  (define entry (specialization-entry generic-name type-con specialized-name))
   (current-specialization-registry
-    (hash-set (current-specialization-registry) key
-              (specialization-entry generic-name type-con specialized-name))))
+    (hash-set (current-specialization-registry) key entry))
+  ;; Phase 2b: dual-write to cell (hash with equal?-based cons keys)
+  (macros-cell-write! (current-specialization-registry-cell-id) (hash key entry)))
 
 (define (lookup-specialization generic-name type-con)
   (hash-ref (current-specialization-registry) (cons generic-name type-con) #f))
