@@ -7204,10 +7204,51 @@
                       "--" (symbol->string method-name)))))
 
   ;; Rewrite each defn with scoped name
+  ;; Rewrite each defn with scoped name.
+  ;; If the defn lacks a return type annotation (only params + body), inject
+  ;; the return type from the trait method's type-datum so the parser can build
+  ;; the full Pi type. Without this, bare-param defns like `defn describe [n] n`
+  ;; produce inferred holes that don't resolve correctly.
   (define method-helper-defns
     (for/list ([defn-d (in-list method-defns)]
-               [helper-name (in-list method-helper-names)])
-      (cons 'defn (cons helper-name (cddr defn-d)))))
+               [helper-name (in-list method-helper-names)]
+               [expected-m (in-list expected-methods)])
+      (define after-name (cddr defn-d))  ;; everything after method name: params body [rettype]
+      ;; Check if defn has a return type annotation:
+      ;; With rettype: (params rettype body) — 3+ elements, second is $angle-type or ':'
+      ;; Without rettype: (params body) — exactly 2 elements, second is the body
+      (define needs-rettype?
+        (and (= (length after-name) 2)
+             (let ([second-datum (if (syntax? (cadr after-name))
+                                     (syntax->datum (cadr after-name))
+                                     (cadr after-name))])
+               (not (and (pair? second-datum)
+                         (eq? (car second-datum) '$angle-type))))))
+      (if needs-rettype?
+          ;; Extract return type from trait method's type-datum.
+          ;; Type is curried: (-> A (-> B Ret)). Walk to get the final result type.
+          ;; Substitute trait params → type-args.
+          (let* ([method-type (trait-method-type-datum expected-m)]
+                 [trait-params (map car (trait-meta-params tm))]
+                 [subst-type (let subst-loop ([t method-type])
+                               (cond
+                                 [(symbol? t)
+                                  (let ([idx (index-of trait-params t)])
+                                    (if idx (list-ref type-args idx) t))]
+                                 [(and (pair? t) (eq? (car t) '->))
+                                  `(-> ,(subst-loop (cadr t)) ,(subst-loop (caddr t)))]
+                                 [(pair? t) (map subst-loop t)]
+                                 [else t]))]
+                 ;; Extract the final return type from curried arrows
+                 [ret-type (let ret-loop ([t subst-type])
+                             (if (and (pair? t) (eq? (car t) '->) (= (length t) 3))
+                                 (ret-loop (caddr t))
+                                 t))]
+                 [params (car after-name)]
+                 [body (cadr after-name)])
+            `(defn ,helper-name ,params ($angle-type ,ret-type) ,body))
+          ;; Already has return type — just rename
+          (cons 'defn (cons helper-name after-name)))))
 
   ;; Build dictionary value: for single-method, just the helper name.
   ;; For multi-method, (pair helper1 (pair helper2 helper3))

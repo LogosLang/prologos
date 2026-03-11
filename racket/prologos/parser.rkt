@@ -4042,10 +4042,11 @@
      (parse-defn-with-implicits args loc)]
 
     ;; Sprint 10: Bare-param syntax: (defn name [x y z] <ReturnType> body)
+    ;; Also supports: (defn name [x y z] body) — return type inferred
     ;; Detection: second arg is a list containing ONLY bare symbols
     ;; (no $angle-type markers, no ':', no multiplicity annotations)
     ;; Position-based: second arg of defn is always the param list.
-    [(and (>= (length args) 4)
+    [(and (>= (length args) 3)
           (let ([second (cadr args)])
             (let ([elems (if (syntax? second) (syntax->list second) #f)])
               (and elems
@@ -4288,10 +4289,24 @@
     (for/list ([e (in-list param-elems)])
       (binder-info (syntax-e e) #f (surf-hole loc))))
 
-  ;; rest-args should be: <ReturnType> body  OR  : ReturnType body
+  ;; rest-args should be: <ReturnType> body  OR  : ReturnType body  OR  body (inferred)
   (cond
-    [(< (length rest-args) 2)
-     (parse-error loc "defn: missing return type or body" #f)]
+    [(null? rest-args)
+     (parse-error loc "defn: missing body" #f)]
+    ;; Single element after params: body only, return type is inferred (hole)
+    [(= (length rest-args) 1)
+     (define body (parse-datum (car rest-args)))
+     (cond
+       [(prologos-error? body) body]
+       [else
+        (define ret-type (surf-hole loc))
+        (define full-type
+          (foldr (lambda (bnd rest-ty)
+                   (surf-pi bnd rest-ty loc))
+                 ret-type
+                 binders))
+        (define param-names (map binder-info-name binders))
+        (surf-defn name full-type param-names body loc)])]
     [else
      (define ret-type-stx (car rest-args))
      (cond

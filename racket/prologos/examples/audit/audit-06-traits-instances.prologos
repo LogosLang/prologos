@@ -87,23 +87,20 @@ trait Describable {A : Type}
   describe : A -> Nat
 
 ;; --- 3b. Implement the trait ---
-;;! CRASH: "defn requires: (defn name [x <T> ...] <ReturnType> body)"
-;;  defn inside impl block not recognized in WS-mode preparse
-;; impl Describable Nat
-;;   defn describe [n] n
-;;
-;; impl Describable Bool
-;;   defn describe [b]
-;;     if b 1N 0N
+;; OK: defn parsing fixed (bare-param without return type now inferred).
+;; Return type injected from trait method's type-datum.
+impl Describable Nat
+  defn describe [n] n
+
+impl Describable Bool
+  defn describe [b]
+    if b 1N 0N
 
 ;; --- 3c. Use the trait ---
-;; Can't test without working impl blocks above
-;; [describe 42N]
-;; expect: 42N : Nat
-;; [describe true]
-;; expect: 1N : Nat
-;; [describe false]
-;; expect: 0N : Nat
+;; Trait dispatch via Describable-describe accessor still fails:
+;;! CRASH: "Could not infer type" — trait accessor dispatch for user-defined traits
+;; [Describable-describe 42N]
+;; expect: 42N : Nat (pending: trait accessor dispatch fix)
 
 
 ;; ========================================================================
