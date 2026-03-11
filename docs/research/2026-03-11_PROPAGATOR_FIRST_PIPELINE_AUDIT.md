@@ -28,31 +28,31 @@ Source Text
     │
     ▼
 ┌──────────┐
-│  Reader   │  ws-reader.rkt (WS mode) or read (sexp mode)
+│  Reader  │  ws-reader.rkt (WS mode) or read (sexp mode)
 └────┬─────┘
      ▼
 ┌──────────┐
-│ Preparse  │  macros.rkt (register-preparse!, preparse-datum)
+│ Preparse │  macros.rkt (register-preparse!, preparse-datum)
 └────┬─────┘
      ▼
 ┌──────────┐
-│  Parser   │  parser.rkt (parse-datum → AST)
+│  Parser  │  parser.rkt (parse-datum → AST)
 └────┬─────┘
      ▼
-┌──────────────┐
+┌───────────────┐
 │  Elaborator   │  elaborator.rkt (elaborate, elaborate-top-level)
 │  + Type Check │  typing-core.rkt (infer, check)
 │  + Unify      │  unify.rkt (unify!)
 │  + Traits     │  macros.rkt (resolve-trait-constraints!)
 │  + Constraints│  constraint-propagators.rkt (P1–P4)
-└────┬─────────┘
+└────┬──────────┘
      ▼
 ┌──────────┐
-│   Zonk    │  zonk.rkt (zonk-expr, zonk-level-default, zonk-mult-default)
+│   Zonk   │  zonk.rkt (zonk-expr, zonk-level-default, zonk-mult-default)
 └────┬─────┘
      ▼
 ┌──────────┐
-│ Reduction │  reduction.rkt (whnf, nf, reduce-to-value)
+│ Reduction│  reduction.rkt (whnf, nf, reduce-to-value)
 └────┬─────┘
      ▼
   Result / Value
@@ -332,9 +332,9 @@ The value of propagator-first infrastructure exceeds the sum of individual cell 
 
 ### Phase 0: Unified Cell Abstraction (Prerequisite)
 
-Define a single `propagator-cell` abstraction that works for both the existing elaborator network and the new infrastructure cells. Currently, the elaborator network uses `elab-network` from `elaborator-network.rkt` with `net-cell-write`/`net-cell-read`. The new cells need the same API but may live outside the per-command network (e.g., module registry cells persist across commands).
+Extend the existing pure `prop-network` (`propagator.rkt`) with domain-specific merge functions for infrastructure cells. All cell types — metavariable, registry, constraint, global-env — live in **one** network, scheduled by **one** scheduler. The network is pure (all operations return new values; structural sharing via CHAMP). Parallel propagation is inherent: the existing BSP/Jacobi scheduler and parallel executor apply to all cells uniformly.
 
-**Design decision**: Single network with scoped assumptions, or layered networks (per-command + per-file + per-session)? Recommend: single network with ATMS assumption scoping, matching the LSP architecture from the Stage 2 document.
+**Design decisions**: (1) Pure, not mutable — correctness is structural (Correct by Construction). (2) Single network with ATMS-scoped assumptions, not layered networks. (3) Parallel propagation is a structural property of the network, not a deferred feature.
 
 ### Phase 1: Constraint Tracking → Cells (Highest Synergy)
 

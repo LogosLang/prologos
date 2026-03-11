@@ -34,54 +34,68 @@ Migrate the Prologos compilation pipeline from ad-hoc mutable state (Racket para
 
 ## Phase 0: Unified Cell Abstraction (Prerequisite)
 
-**Goal**: Define a single cell abstraction that serves both the existing per-command elaborator network and the new persistent infrastructure cells. Currently `propagator.rkt` provides `net-cell-write`/`net-cell-read` operating on a pure-value `prop-network`. The new abstraction must support cells that persist across commands (module registry, global-env) while remaining compatible with the per-command network.
+**Goal**: Extend the existing pure `prop-network` (`propagator.rkt`) with domain-specific merge functions for infrastructure cells, so that metavariable cells, registry cells, constraint cells, and global-env cells all live in **one** network — scheduled by **one** scheduler — with parallel propagation as an inherent structural property.
 
-**Key design decision**: Single network with ATMS-scoped assumptions vs layered networks. The audit recommends single network with scoped assumptions (§6 Phase 0, §8).
+**Key design decisions**:
+1. **Pure, not mutable** — all operations return new network values (structural sharing via CHAMP). The driver holds the network in a box (like `current-prop-net-box` today). Parallelism is safe because BSP rounds read old state and write to new state. No locks, no races — correctness is structural (Correct by Construction).
+2. **Single network, not layered** — one `prop-network` instance holds all cells. ATMS-scoped assumptions distinguish per-command state from persistent state. The audit's recommendation (§6 Phase 0, §8).
+3. **Parallel propagation is inherent** — the existing BSP/Jacobi scheduler (`run-to-quiescence-bsp`) and parallel executor (`make-parallel-fire-all`) apply to all cells uniformly. Independent propagators (e.g., elaborating 10 definitions, resolving 5 trait constraints) fire in parallel automatically. This is not a feature we add later; it is a property of the network structure.
 
-### 0a: Infrastructure Cell Module
+### 0a: Merge Function Library + Cell Factory
 
-- [ ] Create `racket/prologos/infra-cell.rkt` — standalone module, no dependency on elaborator-network or metavar-store
-- [ ] Define `infra-cell` struct: `(id content merge-fn assumption-set)`
-- [ ] `content` is the cell's current value (any Racket value)
-- [ ] `merge-fn` is a monotonic merge: `(content × content → content)` (e.g., hash union for registries, `join` for type lattice)
-- [ ] Provide `make-infra-cell`, `cell-read`, `cell-write!`, `cell-merge!`
-- [ ] Provide `make-infra-network` — a mutable container of infra-cells with a worklist scheduler
-- [ ] Tests: `tests/test-infra-cell-01.rkt` — unit tests for cell create/read/write/merge, merge commutativity, merge idempotency
+- [ ] Create `racket/prologos/infra-cell.rkt` — thin layer on top of `propagator.rkt`, no dependency on elaborator-network or metavar-store
+- [ ] Define domain-specific merge functions (each is a `(content × content → content)` suitable for `net-cell-write`'s lattice join):
+  - `merge-hasheq-union` — monotonic hash union (for registries): conflicts use right-hand-side (latest registration wins)
+  - `merge-list-append` — monotonic list accumulation (for warnings, constraints)
+  - `merge-set-union` — monotonic set union (for propagated-specs)
+  - `merge-type-join` — re-export of `type-join` from `type-lattice.rkt` (for metavariable cells)
+- [ ] Define cell factory functions that pair a `net-new-cell` call with the appropriate merge function:
+  - `net-new-registry-cell` — creates cell with `merge-hasheq-union`, initial content `(hasheq)`
+  - `net-new-list-cell` — creates cell with `merge-list-append`, initial content `'()`
+  - `net-new-set-cell` — creates cell with `merge-set-union`, initial content `(seteq)`
+  - `net-new-definition-cell` — creates cell for a single definition (type + value pair)
+- [ ] Property tests for each merge function: commutativity, associativity, idempotency (where applicable)
+- [ ] Tests: `tests/test-infra-cell-01.rkt` — unit tests for cell create/read/write/merge via factory functions on a `prop-network`
 
-**Files**: New `infra-cell.rkt` (~150–200 LOC), new test file (~30 tests)
+**Files**: New `infra-cell.rkt` (~120–160 LOC), new test file (~30 tests)
+**Key constraint**: `infra-cell.rkt` depends only on `propagator.rkt` and `champ.rkt` — no circular dependency risk
 
-### 0b: Merge Functions Library
+### 0b: Unified Network Constructor
 
-- [ ] Create `racket/prologos/cell-merge-fns.rkt` — library of merge functions for standard patterns
-- [ ] `merge-hasheq-union` — monotonic hash union (for registries): `(hasheq-union a b)` where conflicts use right-hand-side (latest registration wins)
-- [ ] `merge-list-append` — monotonic list accumulation (for warnings, constraints)
-- [ ] `merge-set-union` — monotonic set union (for propagated-specs)
-- [ ] `merge-replace` — non-monotonic replacement with ATMS assumption tagging (for global-env definitions that can change)
-- [ ] `merge-type-join` — re-export of `type-join` from `type-lattice.rkt` (for metavariable cells)
-- [ ] Tests: `tests/test-cell-merge-fns-01.rkt` — property tests for each merge function (commutativity, associativity, idempotency where applicable)
+- [ ] Create `make-unified-network` — a `prop-network` pre-populated with infrastructure cells:
+  - One registry cell per registry parameter (24 cells, one per `current-*-registry`)
+  - One list cell per warning accumulator (3 cells)
+  - One list cell for constraint store
+  - Module registry cell, ns-context cell
+  - Returns `(values network cell-id-map)` where `cell-id-map` is a `hasheq: symbol → cell-id` for named lookup
+- [ ] `network-cell-ref` — look up a named infrastructure cell by symbol (e.g., `'impl-registry`, `'coercion-warnings`)
+- [ ] The unified network coexists with the existing `elab-network` by **becoming** the underlying `prop-network` that `elab-network` wraps — `elab-network` adds type-inference-specific metadata (`elab-cell-info`, `contradiction-info`) on top of the same network
+- [ ] Design note: During Phase 0, the existing `elab-network` continues to create its own cells for metavariables. The infrastructure cells are additional cells in the same network. Phases 1–3 progressively wire propagators between them.
 
-**Files**: New `cell-merge-fns.rkt` (~80–120 LOC), new test file (~20 tests)
+**Files**: Extend `infra-cell.rkt` (+80–100 LOC), extend test file (+15 tests)
 
-### 0c: Network Lifecycle API
+### 0c: Parallel Propagation Verification
 
-- [ ] Add to `infra-cell.rkt`: `with-infra-network` form (parameterize-based) that scopes a network for the duration of a computation
-- [ ] `network-add-cell!` — register a cell in the network, return cell-id
-- [ ] `network-add-propagator!` — register a propagator (closure triggered by cell updates)
-- [ ] `network-run-to-quiescence!` — drain the worklist (reuse scheduler logic from `propagator.rkt`)
-- [ ] `network-snapshot` / `network-restore!` — for compatibility with the existing `save-meta-state`/`restore-meta-state!` pattern during transition
-- [ ] Ensure the network coexists with the existing `elab-network` in `current-prop-net-box` — both can live in the same `parameterize` block without interference
+- [ ] Verify that infrastructure cells work with all three schedulers:
+  - `run-to-quiescence` (sequential) — deterministic baseline
+  - `run-to-quiescence-bsp` (BSP) — parallel-ready, verify same results as sequential
+  - With `make-parallel-fire-all` (multi-core futures) — verify same results as sequential
+- [ ] Create test: network with 10 independent registry cells, 10 propagators writing to them, run BSP — verify all cells have correct content and order-independence holds
+- [ ] Create test: network with dependent propagator chain (A → B → C), verify BSP converges in correct number of rounds
+- [ ] Benchmark: compare sequential vs BSP vs parallel on a synthetic network of 100 cells with 50 propagators — establish baseline for overhead characterization
+- [ ] Tests: `tests/test-infra-cell-parallel-01.rkt` — parallel correctness + performance characterization
 
-**Files**: Extend `infra-cell.rkt` (+100–150 LOC), extend test file (+15 tests)
+**Files**: New test file (~20 tests)
 
 ### 0d: Integration Smoke Test
 
 - [ ] Create `tests/test-infra-cell-integration-01.rkt` using shared fixture pattern
-- [ ] Smoke test: create a network with 3 cells (registry, constraint-list, type), add propagators between them, write to registry cell, verify propagation reaches constraint cell
-- [ ] Verify no interference with existing elaboration: run `process-string` with a `parameterize` block that includes both `current-prop-net-box` and `current-infra-network`
+- [ ] Smoke test: create a unified network, add infrastructure cells + elaboration cells, add propagators between them, verify propagation flows across both cell types
+- [ ] Integration test: run `process-string` with the unified network backing both `current-prop-net-box` and infrastructure cells — verify elaboration works as before, and infrastructure cells accumulate correct content
 - [ ] Run full test suite — 0 regressions
 
 **Files**: New test file (~15 tests)
-**Commit gate**: Full test suite passes, new tests pass
+**Commit gate**: Full test suite passes, new tests pass, parallel scheduler produces identical results to sequential
 
 ---
 
@@ -93,10 +107,10 @@ Migrate the Prologos compilation pipeline from ad-hoc mutable state (Racket para
 
 ### 1a: Constraint Store Cell
 
-- [ ] Add `current-infra-network` parameter to `metavar-store.rkt` (initialized to `#f`, set by driver)
-- [ ] Replace `current-constraint-store` (list accumulator) with an infra-cell using `merge-list-append`
-- [ ] `add-constraint!` → `cell-merge!` on the constraint cell
-- [ ] `all-postponed-constraints` / `all-failed-constraints` → `cell-read` on the constraint cell
+- [ ] Thread the unified network through the driver — `current-prop-net-box` now holds the unified network (not a separate `elab-network`)
+- [ ] Replace `current-constraint-store` (list accumulator) with the constraint list cell from the unified network
+- [ ] `add-constraint!` → `net-cell-write` to constraint cell (pure — returns new network, driver updates box)
+- [ ] `all-postponed-constraints` / `all-failed-constraints` → `net-cell-read` on the constraint cell
 - [ ] Adapt `current-wakeup-registry` to wire propagators: when a meta cell is written, fire the wakeup propagator that retries relevant constraints
 - [ ] Tests: Existing constraint tests must pass unchanged; add 5 new tests verifying propagator-based wakeup
 
@@ -326,8 +340,7 @@ Migrate the Prologos compilation pipeline from ad-hoc mutable state (Racket para
 
 | File | Phase(s) | Type of Change |
 |------|----------|----------------|
-| `infra-cell.rkt` (NEW) | 0a, 0c, 4a | New module: cell abstraction, network, ATMS |
-| `cell-merge-fns.rkt` (NEW) | 0b | New module: merge function library |
+| `infra-cell.rkt` (NEW) | 0a–0b, 4a | New module: merge functions, cell factories, unified network constructor, ATMS assumptions |
 | `metavar-store.rkt` (1125 LOC) | 1a–1d, 4b–4c, 5b | Constraint cells, remove retry infra, remove snapshot |
 | `macros.rkt` (8968 LOC) | 1b–1c, 2a–2c | Trait resolution wiring, registry cells |
 | `global-env.rkt` (81 LOC) | 3a, 3d | Per-definition cells, retire current-global-env |
@@ -416,6 +429,7 @@ Phases 1, 2, and 3 can proceed in parallel after Phase 0. Phase 4 requires Phase
 
 ## Deferred Work (Known)
 
-- **LSP network integration**: The infra-cell network from this sprint becomes the LSP state management network. Integration work is in the LSP roadmap (`2026-03-11_LSP_VSCODE_STAGE2_REFINEMENT.md`), not this sprint.
+- **LSP network integration**: The unified network from this sprint becomes the LSP state management network. Integration work is in the LSP roadmap (`2026-03-11_LSP_VSCODE_STAGE2_REFINEMENT.md`), not this sprint.
 - **Reduction cache invalidation via cells**: Audit §3.7 notes that WHNF/NF caches could be cells for LSP invalidation. Not needed for batch pipeline. Track in DEFERRED.md if useful later.
-- **Parallel propagation**: `propagator.rkt` already has BSP/Jacobi parallel scheduler. The infra-cell network could use it for multi-core elaboration. Future work.
+
+Note: Parallel propagation is **not deferred** — it is inherent in Phase 0's design. The unified network uses `propagator.rkt`'s existing schedulers (sequential, BSP, parallel). Independent propagators fire in parallel automatically via the BSP scheduler. Phase 0c verifies parallel correctness.
