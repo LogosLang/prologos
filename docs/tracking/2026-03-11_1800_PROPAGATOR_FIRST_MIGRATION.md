@@ -20,10 +20,10 @@ Migrate the Prologos compilation pipeline from ad-hoc mutable state (Racket para
 | Phase | Sub | Description | Status | Notes |
 |-------|-----|-------------|--------|-------|
 | 0 | 0a | Merge function library + cell factory | ✅ | `140c023` — 37 tests, ~160 LOC |
-| 0 | 0b | ATMS assumption infrastructure | ⬜ | |
-| 0 | 0c | Network construction via registration protocol | ⬜ | |
-| 0 | 0d | Parallel propagation verification + benchmarks | ⬜ | |
-| 0 | 0e | Integration smoke test | ⬜ | |
+| 0 | 0b | ATMS assumption infrastructure | ✅ | `8e9d018` — 21 tests, infra-state + ATMS bridge |
+| 0 | 0c | Network construction via registration protocol | ✅ | `5d4d6f9` — 6 tests, elab-network coexistence verified |
+| 0 | 0d | Parallel propagation verification + benchmarks | ✅ | `e408151` — 6 tests, seq=BSP=par verified, <1ms overhead |
+| 0 | 0e | Integration smoke test | ✅ | Full suite: 6803 tests, 353 files, 0 failures, 208.6s. Canary OK. |
 | 1 | 1a | Constraint store cell (storage only) | ⬜ | |
 | 1 | 1b | Trait constraint cells (storage only) | ⬜ | |
 | 1 | 1c | Wakeup registry cell (storage only) | ⬜ | |
@@ -49,7 +49,7 @@ Migrate the Prologos compilation pipeline from ad-hoc mutable state (Racket para
 
 | Phase | Description | Sub-phases | Est. Effort | Risk | Status |
 |-------|-------------|------------|-------------|------|--------|
-| 0 | Unified cell abstraction + ATMS | 0a–0e | 3–4 days | Low | IN PROGRESS (0a done) |
+| 0 | Unified cell abstraction + ATMS | 0a–0e | 3–4 days | Low | ✅ DONE |
 | 1 | Constraint tracking → cells | 1a–1e | 3–5 days | Medium | NOT STARTED |
 | 2 | Registry parameters → cells | 2a–2c | 2–3 days | Low | NOT STARTED |
 | 3 | Global environment → cells + cache invalidation | 3a–3e | 6–9 days | High | NOT STARTED |
@@ -453,10 +453,10 @@ Migrate the Prologos compilation pipeline from ad-hoc mutable state (Racket para
 
 | Metric | Value |
 |--------|-------|
-| Tests | 6733 |
-| Test files | 349 |
+| Tests | 6733 → 6803 (after Phase 0) |
+| Test files | 349 → 353 (4 new infra-cell test files) |
 | Failures | 0 |
-| Wall time | ~190s |
+| Wall time | ~190s → ~209s (includes new test files) |
 
 ### Performance Targets
 
