@@ -24,7 +24,8 @@
 
 (require racket/set
          "propagator.rkt"
-         "champ.rkt")
+         "champ.rkt"
+         "atms.rkt")
 
 (provide
  ;; Merge functions — pure (content × content → content)
@@ -43,7 +44,22 @@
  net-register-named-cell
  net-named-cell-ref
  net-named-cell-ref/opt
- net-has-named-cell?)
+ net-has-named-cell?
+ ;; ATMS assumption bridge — Phase 0b
+ ;; Struct
+ (struct-out infra-state)
+ ;; Construction
+ make-infra-state
+ ;; Assumption lifecycle
+ infra-assume
+ infra-retract
+ infra-commit
+ ;; Assumed cell operations
+ infra-write-assumed
+ infra-read-believed
+ infra-read-all-supported
+ ;; Current assumption tracking
+ current-infra-assumption)
 
 ;; ========================================
 ;; Merge Functions
@@ -167,3 +183,100 @@
 ;; Check if a named cell exists.
 (define (net-has-named-cell? names name)
   (hash-has-key? names name))
+
+;; ========================================
+;; ATMS Assumption Bridge — Phase 0b
+;; ========================================
+;;
+;; Pairs the prop-network (monotonic infra-cells) with an ATMS
+;; (assumption-tagged cells for non-monotonic operations).
+;;
+;; Two kinds of infrastructure cells coexist:
+;;   1. Monotonic cells (registries, warnings, constraint stores) — live in
+;;      prop-network, use merge functions, never need retraction.
+;;   2. Assumed cells (definitions, speculative state) — live in ATMS TMS cells,
+;;      tagged with assumptions, support retraction and commit.
+;;
+;; The infra-state struct holds both, plus the named registry.
+;; This is the "one network" from the design document — the prop-network
+;; inside the ATMS is the same one that holds the monotonic cells.
+
+;; Combined state: prop-network (via ATMS) + names + current assumption scope.
+;; Pure value — all operations return new infra-state values.
+(struct infra-state
+  (atms       ;; atms (wraps prop-network; holds both monotonic + TMS cells)
+   names)     ;; hasheq: symbol → cell-id (named cell registry)
+  #:transparent)
+
+;; Dynamic parameter: the currently active assumption-id (or #f for unconditional).
+;; Used by `infra-write-assumed` to auto-tag writes.
+;; This is the ONE Racket parameter in the cell abstraction — justified because
+;; assumption scoping is inherently dynamic (it follows the call stack, not the
+;; data flow). The cell values themselves remain pure.
+(define current-infra-assumption (make-parameter #f))
+
+;; Create an infra-state with a fresh ATMS wrapping the given prop-network.
+;; If no network is given, starts from a fresh prop-network.
+(define (make-infra-state [net #f] [names (hasheq)])
+  (infra-state (atms-empty (or net (make-prop-network))) names))
+
+;; --- Assumption Lifecycle ---
+
+;; Create a new assumption. Returns (values new-infra-state assumption-id).
+;; name: symbol (for debugging, e.g., 'per-command, 'speculation-church-fold)
+;; datum: any value (e.g., the form being elaborated)
+(define (infra-assume is name [datum #f])
+  (define-values (atms* aid) (atms-assume (infra-state-atms is) name datum))
+  (values (struct-copy infra-state is [atms atms*]) aid))
+
+;; Retract an assumption: all TMS cell values tagged with this assumption
+;; become non-believed. They still exist in the TMS (for history/nogoods),
+;; but `infra-read-believed` will no longer return them.
+(define (infra-retract is aid)
+  (struct-copy infra-state is
+    [atms (atms-retract (infra-state-atms is) aid)]))
+
+;; Commit an assumption: makes it permanent. In practice, this is a no-op
+;; for the current ATMS (assumptions start believed). The semantic intent
+;; is: "this assumption is now unconditional; future retractions won't
+;; affect its content." For batch mode, all per-command assumptions are
+;; committed immediately after successful elaboration.
+;;
+;; Implementation: commitment is implicit — believed assumptions are
+;; already "active." The commit operation is the decision to NOT retract.
+;; We provide this as an explicit API for clarity and future extensibility
+;; (e.g., removing the assumption from the believed set entirely to reduce
+;; membership checks).
+(define (infra-commit is aid)
+  ;; Currently a no-op — the assumption stays in believed.
+  ;; Future: could compact TMS cells by removing the assumption tag
+  ;; from all supported-values, converting them to unconditional.
+  is)
+
+;; --- Assumed Cell Operations ---
+
+;; Write a value to a TMS cell under the given assumption (or the
+;; current-infra-assumption if not specified).
+;; cell-key: any hashable key (typically a symbol like 'global-env:foo)
+;; value: the content to write
+;; Returns: new infra-state
+(define (infra-write-assumed is cell-key value [aid (current-infra-assumption)])
+  (unless aid
+    (error 'infra-write-assumed
+           "no active assumption — use infra-assume or parameterize current-infra-assumption"))
+  (define support (hasheq aid #t))
+  (struct-copy infra-state is
+    [atms (atms-write-cell (infra-state-atms is) cell-key value support)]))
+
+;; Read the believed value from a TMS cell under the current worldview.
+;; Returns 'infra-bot if no compatible value exists (mirrors bot convention).
+(define (infra-read-believed is cell-key)
+  (define val (atms-read-cell (infra-state-atms is) cell-key))
+  (if (eq? val 'bot) 'infra-bot val))
+
+;; Read all supported values for a TMS cell (regardless of worldview).
+;; Returns a list of supported-value structs.
+;; Useful for debugging, inspection, and understanding what's been written.
+(define (infra-read-all-supported is cell-key)
+  (define tc (hash-ref (atms-tms-cells (infra-state-atms is)) cell-key #f))
+  (if tc (tms-cell-values tc) '()))
