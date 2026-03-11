@@ -76,7 +76,7 @@ because narrowing correctness is lower priority than basic functionality.
 | 2c | `def` with lambda value | S–M | ⏭️ | Typing issue, not preparse; use `spec` as workaround |
 | 2d | spec+constraint arity | S | ✅ | `7e1d212` — Pass -1 for ns/imports before Pass 0/1 |
 | 2e | `defn` inside `impl` | M | ✅ | `e7e78f4` — bare-param defn + return type from trait |
-| 2f | Multi-clause `defn` + spec | M | ⬜ | |
+| 2f | Multi-clause `defn` + spec | M | ✅ | `a467299` — flat $pipe grouping + bare pattern parsing |
 | 2g | `with-transient` WS form | S | ⬜ | |
 | 2h | `into-list` name collision | S | ⬜ | |
 | 2i | Top-level `let` error | S | ⬜ | |
@@ -416,7 +416,7 @@ name from the typing context). Use this in error message formatting paths.
 | 2c: `def` with lambda value | ⏭️ | (typing issue, not preparse) |
 | 2d: spec+constraint arity | ✅ | `7e1d212` |
 | 2e: `defn` inside `impl` | ✅ | `e7e78f4` |
-| 2f: Multi-clause `defn` + spec | ⬜ | |
+| 2f: Multi-clause `defn` + spec | ✅ | `a467299` |
 | 2g: `with-transient` WS form | ⬜ | |
 | 2h: `into-list` name collision | ⬜ | |
 | 2i: Top-level `let` error | ⬜ | |
@@ -788,9 +788,9 @@ or after the repair sprint:
 | Metric | Target |
 |--------|--------|
 | Total sub-phases | 23 (1a–b, 2a–k, 3a–d, 4a–e, 5a–c) |
-| Completed | 6 (1a, 1b, 2a, 2b, 2d, 2e) |
+| Completed | 7 (1a, 1b, 2a, 2b, 2d, 2e, 2f) |
 | Skipped | 1 (2c) |
-| Remaining | 16 |
+| Remaining | 15 |
 | Audit expressions to un-comment | ~36 (all CRASH) + ~6 (WRONG) |
 | Regression test count | 5440 (must stay green) |
 
@@ -808,3 +808,4 @@ or after the repair sprint:
 | 2b | `02bce89` | 2026-03-10 | Multi-token RHS auto-wrap |
 | 2d | `7e1d212` | 2026-03-10 | Pass -1 for ns/imports; constraint stripping |
 | 2e | `e7e78f4` | 2026-03-10 | Bare-param defn; trait return type injection |
+| 2f | `a467299` | 2026-03-10 | Flat $pipe grouping; bare pattern parsing |

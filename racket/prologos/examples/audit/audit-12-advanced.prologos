@@ -155,18 +155,19 @@ defn dep-id [x] x
 ;; ========================================================================
 
 ;; --- 10a. Transient builder pattern ---
-;;! CRASH: "with-transient: expected (with-transient coll fn-expr)"
-;;  WS-mode macro expansion passes multi-step form, macro expects 2 args
-;; (with-transient @[] Nat
-;;   [tvec-push! 1N]
-;;   [tvec-push! 2N]
-;;   [tvec-push! 3N])
-;; expect: @[1N 2N 3N] : PVec Nat
-;;
-;; (with-transient {} Keyword Nat
-;;   [tmap-assoc! :a 1N]
-;;   [tmap-assoc! :b 2N])
-;; expect: {:a 1N :b 2N} : Map Keyword Nat
+;; OK: Fixed by multi-step with-transient expansion. Collection must be
+;; bracketed in WS mode: [pvec-empty Nat] not @[] Nat (bare @[] is a literal,
+;; can't take type args). Each step has transient arg injected automatically.
+(with-transient [pvec-empty Nat]
+  [tvec-push! 1N]
+  [tvec-push! 2N]
+  [tvec-push! 3N])
+;; OK: @[1N 2N 3N] : PVec Nat
+
+(with-transient [map-empty Keyword Nat]
+  [tmap-assoc! :a 1N]
+  [tmap-assoc! :b 2N])
+;; OK: {:a 1N :b 2N} : Map Keyword Nat
 
 
 ;; ========================================================================

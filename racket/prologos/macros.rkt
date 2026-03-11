@@ -5191,13 +5191,59 @@
 ;;       t
 ;;   ;; => @[1N 2N]
 (define (expand-with-transient datum)
-  (unless (and (list? datum) (= (length datum) 3))
-    (error 'with-transient
-           "expected (with-transient coll fn-expr), got ~v" datum))
-  (let ([coll (cadr datum)]
-        [fn-expr (caddr datum)])
-    ;; (persist! ((fn-expr) (transient coll)))
-    `(|persist!| (,fn-expr (transient ,coll)))))
+  (cond
+    ;; 2-arg form: (with-transient coll fn-expr)
+    [(and (list? datum) (= (length datum) 3))
+     (let ([coll (cadr datum)]
+           [fn-expr (caddr datum)])
+       ;; (persist! ((fn-expr) (transient coll)))
+       `(|persist!| (,fn-expr (transient ,coll))))]
+    ;; Multi-step WS form: (with-transient coll [type-args...] step1 step2 ...)
+    ;; In WS mode, collection may span multiple tokens: @[] Nat → ($vec-literal) Nat.
+    ;; Steps are application forms (lists starting with a !-suffixed symbol).
+    ;; Collection = first arg + any following bare type symbols before steps.
+    [(and (list? datum) (>= (length datum) 4))
+     (define args (cdr datum))  ;; everything after with-transient
+     ;; First arg is always the collection base (may be symbol or list)
+     (define coll-base (car args))
+     ;; Remaining args: bare symbols = type args for collection, lists = steps
+     (define-values (type-args steps)
+       (let loop ([remaining (cdr args)] [types '()])
+         (cond
+           [(null? remaining) (values (reverse types) '())]
+           ;; Bare symbol = type argument for collection
+           [(symbol? (car remaining))
+            (loop (cdr remaining) (cons (car remaining) types))]
+           ;; List form = step (stop collecting type args)
+           [else (values (reverse types) remaining)])))
+     ;; Build collection expression: base + type args wrapped as application
+     (define coll
+       (if (null? type-args)
+           coll-base
+           (cons coll-base type-args)))
+     (when (null? steps)
+       (error 'with-transient "missing steps after collection"))
+     ;; Build chained let body: let __t := [step1 __t args...] in let __t := [step2 __t args...] in ...
+     ;; Each step (f arg1 arg2 ...) becomes (f __t arg1 arg2 ...)
+     (define (inject-transient-arg step)
+       (if (pair? step)
+           (cons (car step) (cons '__t (cdr step)))
+           `(,step __t)))
+     (define body
+       (let loop ([remaining steps])
+         (cond
+           [(null? (cdr remaining))
+            ;; Last step — just apply it
+            (inject-transient-arg (car remaining))]
+           [else
+            ;; Chain: let __t := [step __t args] in rest
+            `(let __t := ,(inject-transient-arg (car remaining))
+               ,(loop (cdr remaining)))])))
+     (define fn-expr `(fn (__t) ,body))
+     `(|persist!| (,fn-expr (transient ,coll)))]
+    [else
+     (error 'with-transient
+            "expected (with-transient coll fn-expr) or (with-transient coll step1 step2 ...), got ~v" datum)]))
 
 (register-preparse-macro! 'with-transient expand-with-transient)
 
