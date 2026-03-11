@@ -37,6 +37,13 @@
 (struct token (type value line col pos span) #:transparent)
 
 ;; ========================================
+;; Quasiquote depth tracking
+;; ========================================
+;; When > 0, commas inside brackets/parens/braces are parsed as unquote
+;; rather than silently skipped as parameter separators.
+(define current-qq-depth (make-parameter 0))
+
+;; ========================================
 ;; Tokenizer
 ;; ========================================
 
@@ -949,7 +956,7 @@
         [(eq? tt 'eof)
          (error 'prologos-reader "~a:~a:~a: Unclosed postfix index ["
                 src ln cl)]
-        [(eq? tt 'comma)
+        [(and (eq? tt 'comma) (zero? (current-qq-depth)))
          (parser-next! p)
          (loop elems)]
         [else
@@ -1039,8 +1046,8 @@
         [(eq? tt 'eof)
          (error 'prologos-reader "~a:~a:~a: Unclosed bracket"
                 src ln cl)]
-        ;; Skip comma tokens inside brackets (parameter separator)
-        [(eq? tt 'comma)
+        ;; Skip comma tokens inside brackets (parameter separator) — but not in quasiquote
+        [(and (eq? tt 'comma) (zero? (current-qq-depth)))
          (parser-next! p) ; consume comma
          (loop elems)]
         [else
@@ -1071,8 +1078,8 @@
         [(eq? tt 'eof)
          (error 'prologos-reader "~a:~a:~a: Unclosed paren"
                 src ln cl)]
-        ;; Skip comma tokens inside parens (parameter separator)
-        [(eq? tt 'comma)
+        ;; Skip comma tokens inside parens (parameter separator) — but not in quasiquote
+        [(and (eq? tt 'comma) (zero? (current-qq-depth)))
          (parser-next! p) ; consume comma
          (loop elems)]
         [else
@@ -1107,8 +1114,8 @@
         [(eq? tt 'eof)
          (error 'prologos-reader "~a:~a:~a: Unclosed list literal '[..."
                 src ln cl)]
-        ;; Skip commas inside list literals
-        [(eq? tt 'comma)
+        ;; Skip commas inside list literals — but not in quasiquote
+        [(and (eq? tt 'comma) (zero? (current-qq-depth)))
          (parser-next! p)
          (loop elems)]
         ;; Pipe for cons-tail syntax: '[ 1 2 | ys ]
@@ -1162,8 +1169,8 @@
         [(eq? tt 'eof)
          (error 'prologos-reader "~a:~a:~a: Unclosed PVec literal @[..."
                 src ln cl)]
-        ;; Skip commas
-        [(eq? tt 'comma)
+        ;; Skip commas — but not in quasiquote
+        [(and (eq? tt 'comma) (zero? (current-qq-depth)))
          (parser-next! p)
          (loop elems)]
         [else
@@ -1255,8 +1262,8 @@
         [(eq? tt 'eof)
          (error 'prologos-reader "~a:~a:~a: Unclosed mixfix form .{..."
                 src ln cl)]
-        ;; Skip commas
-        [(eq? tt 'comma)
+        ;; Skip commas — but not in quasiquote
+        [(and (eq? tt 'comma) (zero? (current-qq-depth)))
          (parser-next! p)
          (loop elems)]
         [else
@@ -1295,8 +1302,8 @@
         [(eq? tt 'eof)
          (error 'prologos-reader "~a:~a:~a: Unclosed LSeq literal ~[..."
                 src ln cl)]
-        ;; Skip commas
-        [(eq? tt 'comma)
+        ;; Skip commas — but not in quasiquote
+        [(and (eq? tt 'comma) (zero? (current-qq-depth)))
          (parser-next! p)
          (loop elems)]
         [else
@@ -1393,8 +1400,8 @@
         [(eq? tt 'eof)
          (error 'prologos-reader "~a:~a:~a: Unclosed Set literal #{"
                 src ln cl)]
-        ;; Skip commas
-        [(eq? tt 'comma)
+        ;; Skip commas — but not in quasiquote
+        [(and (eq? tt 'comma) (zero? (current-qq-depth)))
          (parser-next! p)
          (loop elems)]
         [else
@@ -1449,7 +1456,8 @@
     [(eq? tt 'backtick)
      ;; `expr — quasiquote operator
      (define d (parser-next! p)) ; consume `
-     (define inner (parse-inline-element p))
+     (define inner (parameterize ([current-qq-depth (add1 (current-qq-depth))])
+                     (parse-inline-element p)))
      (define src (parser-source p))
      (make-stx (list (make-stx '$quasiquote src
                                (token-line d) (token-col d) (token-pos d) 1)
@@ -1459,7 +1467,8 @@
     [(eq? tt 'comma)
      ;; ,expr — unquote operator
      (define d (parser-next! p)) ; consume ,
-     (define inner (parse-inline-element p))
+     (define inner (parameterize ([current-qq-depth (sub1 (current-qq-depth))])
+                     (parse-inline-element p)))
      (define src (parser-source p))
      (make-stx (list (make-stx '$unquote src
                                (token-line d) (token-col d) (token-pos d) 1)

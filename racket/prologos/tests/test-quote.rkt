@@ -408,3 +408,55 @@
       "(eval (the Nat (match result (datum-nat n -> n))))")))
   (check-true (string? result))
   (check-true (string-contains? result "99")))
+
+;; ========================================
+;; H. Quasiquote WS-mode reader tests
+;; ========================================
+;; These test the WS reader (read-all-forms-string) to verify that commas
+;; inside quasiquoted paren/bracket forms produce ($unquote ...) instead
+;; of being silently skipped as parameter separators.
+
+(test-case "quasiquote/ws-reader: `(add ,x 2) has $unquote"
+  (define forms (read-all-forms-string "`(add ,x 2)"))
+  (check-equal? (length forms) 1)
+  (define form (car forms))
+  (check-equal? form '($quasiquote (add ($unquote x) 2))))
+
+(test-case "quasiquote/ws-reader: `(,a ,b) has two unquotes"
+  (define forms (read-all-forms-string "`(,a ,b)"))
+  (check-equal? (length forms) 1)
+  (check-equal? (car forms) '($quasiquote (($unquote a) ($unquote b)))))
+
+(test-case "quasiquote/ws-reader: `[,a ,b] bracket form has unquotes"
+  (define forms (read-all-forms-string "`[,a ,b]"))
+  (check-equal? (length forms) 1)
+  (check-equal? (car forms) '($quasiquote (($unquote a) ($unquote b)))))
+
+(test-case "quasiquote/ws-reader: `foo bare symbol"
+  (define forms (read-all-forms-string "`foo"))
+  (check-equal? (length forms) 1)
+  (check-equal? (car forms) '($quasiquote foo)))
+
+(test-case "quasiquote/ws-reader: `,x reads as quasiquote-unquote"
+  (define forms (read-all-forms-string "`,x"))
+  (check-equal? (length forms) 1)
+  (check-equal? (car forms) '($quasiquote ($unquote x))))
+
+(test-case "quasiquote/ws-reader: commas still separate outside quasiquote"
+  ;; (Nat, Bool) without quasiquote → commas are separators → (Nat Bool)
+  (define forms (read-all-forms-string "(Nat, Bool)"))
+  (check-equal? (length forms) 1)
+  (check-equal? (car forms) '(Nat Bool)))
+
+(test-case "quasiquote/ws-reader: unquote inside nested parens"
+  ;; `(f (g ,x)) — comma inside nested paren
+  (define forms (read-all-forms-string "`(f (g ,x))"))
+  (check-equal? (length forms) 1)
+  (check-equal? (car forms) '($quasiquote (f (g ($unquote x))))))
+
+(test-case "quasiquote/ws-reader: commas in unquoted subexpr are separators"
+  ;; `(f ,(g a, b)) — the comma before (g...) is unquote,
+  ;; but commas inside (g a, b) are separators (back to depth 0)
+  (define forms (read-all-forms-string "`(f ,(g a, b))"))
+  (check-equal? (length forms) 1)
+  (check-equal? (car forms) '($quasiquote (f ($unquote (g a b))))))
