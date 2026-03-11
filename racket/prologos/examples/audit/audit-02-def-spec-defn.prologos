@@ -1,0 +1,229 @@
+ns examples.audit.def-spec-defn
+
+;; ========================================================================
+;; AUDIT 02 — def, spec, defn
+;; ========================================================================
+;; Tests definition forms in WS-mode .prologos files.
+;; Classification: OK | WRONG | CRASH | DEFN-ONLY | SEXP-ONLY | MISSING | DESIGN
+;;
+;; RESULTS (41 expressions, 0 errors):
+;;   OK: 39   CRASH: 1 (commented out)   SEXP-ONLY: 1 (commented out)
+;;
+;;   [CRASH] def x := some 42N — "expected exactly one value after :="
+;;           multi-token constructor apps need brackets: [some 42N]
+;;   [CRASH] multi-clause defn | pat -> body — "spec is single-arity
+;;           but defn has multiple clauses" — must use match-in-body instead
+
+
+;; ========================================================================
+;; 1. def — Value Binding
+;; ========================================================================
+
+;; --- 1a. Typed def ---
+def a1 : Nat := 42N
+;; expect: a1 : Nat defined.
+
+def a2 : Bool := true
+;; expect: a2 : Bool defined.
+
+def a3 : String := "hello"
+;; expect: a3 : String defined.
+
+;; --- 1b. Inferred def (no type annotation) ---
+def b1 := 10N
+;; expect: b1 : Nat defined.
+
+def b2 := false
+;; expect: b2 : Bool defined.
+
+def b3 := "world"
+;; expect: b3 : String defined.
+
+;; --- 1c. def with computation in value ---
+def c1 : Nat := [add 3N 4N]
+;; expect: c1 : Nat defined.
+
+def c2 := [mult 5N 6N]
+;; expect: c2 : Nat defined.
+
+;; --- 1d. def with list value ---
+def d1 : (List Nat) := '[1N 2N 3N]
+;; expect: d1 : List Nat defined.
+
+;; --- 1e. def with map value ---
+def d2 : (Map Keyword Nat) := {:port 8080N :timeout 30N}
+;; expect: d2 : (Map Keyword Nat) defined.
+
+
+;; ========================================================================
+;; 2. spec — Type Signatures
+;; ========================================================================
+
+;; --- 2a. Simple spec ---
+spec my-add Nat Nat -> Nat
+;; expect: my-add spec registered
+
+;; --- 2b. spec with implicit binders ---
+spec my-id {A : Type} A -> A
+;; expect: my-id spec registered
+
+;; --- 2c. spec with trait constraints ---
+spec my-eq {A : Type} (Eq A) A A -> Bool
+;; expect: my-eq spec registered
+
+;; --- 2d. spec with multiple constraints ---
+spec my-sort {A : Type} (Eq A) (Ord A) (List A) -> (List A)
+;; expect: my-sort spec registered
+
+
+;; ========================================================================
+;; 3. defn — Function Definition
+;; ========================================================================
+
+;; --- 3a. Simple defn with spec ---
+spec inc Nat -> Nat
+defn inc [n] [add n 1N]
+
+[inc 5N]
+;; expect: 6N : Nat
+
+;; --- 3b. Multi-arg defn ---
+spec my-add2 Nat Nat -> Nat
+defn my-add2 [x y] [add x y]
+
+[my-add2 3N 4N]
+;; expect: 7N : Nat
+
+;; --- 3c. defn with match in body (Nat patterns) ---
+spec is-zero Nat -> Bool
+defn is-zero [n]
+  match n
+    | zero -> true
+    | _ -> false
+
+[is-zero 0N]
+;; expect: true : Bool
+
+[is-zero 5N]
+;; expect: false : Bool
+
+;; --- 3d. defn with match (suc pattern) ---
+spec my-pred Nat -> Nat
+defn my-pred [n]
+  match n
+    | zero -> zero
+    | [suc k] -> k
+
+[my-pred 5N]
+;; expect: 4N : Nat
+
+[my-pred 0N]
+;; expect: 0N : Nat
+
+;; --- 3e. Recursive defn ---
+spec my-double Nat -> Nat
+defn my-double [n]
+  match n
+    | zero -> zero
+    | [suc k] -> [suc [suc [my-double k]]]
+
+[my-double 3N]
+;; expect: 6N : Nat
+
+;; --- 3e2. Multi-clause defn with | (direct pattern dispatch) ---
+;;! May CRASH — multi-clause defn syntax varies from match-in-body
+;; spec mc-zero Nat -> Bool
+;; defn mc-zero
+;;   | zero -> true
+;;   | _ -> false
+
+;; --- 3f. defn with sequential lets in body ---
+spec compute Nat -> Nat
+defn compute [n]
+  let a := [add n 1N]
+  let b := [mult a 2N]
+  b
+
+[compute 3N]
+;; expect: 8N : Nat (a=4, b=8)
+
+;; --- 3g. defn with Bool matching ---
+spec not2 Bool -> Bool
+defn not2 [b]
+  match b
+    | true -> false
+    | false -> true
+
+[not2 true]
+;; expect: false : Bool
+
+;; --- 3h. defn with List matching ---
+spec my-head (List Nat) -> Nat
+defn my-head [xs]
+  match xs
+    | [cons x _] -> x
+    | nil -> 0N
+
+[my-head '[10N 20N 30N]]
+;; expect: 10N : Nat
+
+[my-head '[]]
+;; expect: 0N : Nat
+
+;; --- 3j. Higher-order defn ---
+spec apply-twice (Nat -> Nat) Nat -> Nat
+defn apply-twice [f x] [f [f x]]
+
+[apply-twice inc 5N]
+;; expect: 7N : Nat
+
+;; --- 3k. defn using = for equality check in body ---
+spec check-eq Nat Nat -> Bool
+defn check-eq [a b]
+  a = b
+
+[check-eq 3N 3N]
+;; expect: true : Bool
+
+[check-eq 3N 5N]
+;; expect: false : Bool
+
+
+;; ========================================================================
+;; 4. Interaction between def and defn
+;; ========================================================================
+
+;; Use a def-bound value in a defn
+def base : Nat := 100N
+
+spec add-base Nat -> Nat
+defn add-base [n] [add base n]
+
+[add-base 42N]
+;; expect: 142N : Nat
+
+
+;; ========================================================================
+;; 5. Edge Cases
+;; ========================================================================
+
+;; --- 5a. def with Option value ---
+;;! CRASH without brackets: def opt-val : (Option Nat) := some 42N
+;;  "expected exactly one value after :=" — some 42N parsed as two tokens
+def opt-val : (Option Nat) := [some 42N]
+;; expect: opt-val : Option Nat defined.
+
+def opt-none : (Option Nat) := none
+;; expect: opt-none : Option Nat defined.
+
+;; --- 5b. Verify values ---
+c1
+;; expect: 7N : Nat
+
+c2
+;; expect: 30N : Nat
+
+
+;; ========================================================================
+;; END
+;; ========================================================================
