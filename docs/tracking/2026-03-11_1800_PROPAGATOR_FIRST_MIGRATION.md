@@ -37,9 +37,11 @@ Migrate the Prologos compilation pipeline from ad-hoc mutable state (Racket para
 | 3 | 3c | Module registry cells | ✅ | `d183d58` — register-namespace-cells!, dual-write module-registry, ns-context + defn-param-names cells. |
 | 3 | 3d | Retire `current-global-env` | ✅ | `9f85f0f` — current-prelude-env alias, updated architecture docs. Full rename deferred (266 files). |
 | 3 | 3e | Reduction cache cells + invalidation | ⬜ | Deferred — added to DEFERRED.md + LSP roadmap §9.8. LSP-specific concern; batch mode unaffected. Coarse-grained first, fine-grained gated behind benchmarks. |
-| 4 | 4a | Speculation side-effect audit | ⬜ | |
-| 4 | 4b | Replace save/restore with assumptions | ⬜ | |
-| 4 | 4c | Remove legacy snapshot infrastructure | ⬜ | |
+| 4 | 4a | Speculation side-effect audit | ✅ | Constraint store leak found: `add-constraint!` via `unify` not captured by save/restore. |
+| 4 | 4b | Fix speculation state completeness + tests | ⬜ | Save/restore constraint store, defensive assertions |
+| 4 | 4c | Make ATMS hypothesis mandatory | ⬜ | Remove conditional ATMS code path |
+| 4 | 4d | Internalize save/restore API | ⬜ | Un-export save-meta-state/restore-meta-state! |
+| 4 | 4e | Document ATMS replacement path | ⬜ | LSP roadmap: why save/restore stays for batch |
 | 5 | 5a | Simplify per-command parameterize | ⬜ | |
 | 5 | 5b | Documentation and cleanup | ⬜ | |
 
@@ -53,7 +55,7 @@ Migrate the Prologos compilation pipeline from ad-hoc mutable state (Racket para
 | 1 | Constraint tracking → cells | 1a–1e | 3–5 days | Medium | ✅ DONE |
 | 2 | Registry parameters → cells | 2a–2c | 2–3 days | Low | ✅ DONE |
 | 3 | Global environment → cells + cache invalidation | 3a–3e | 6–9 days | High | ✅ 3a-3d DONE, 3e DEFERRED |
-| 4 | Speculation → ATMS assumptions | 4a–4c | 3–5 days | Medium | NOT STARTED |
+| 4 | Speculation state completeness + ATMS | 4a–4e | 2–3 days | Medium | 4a DONE, 4b–4e IN PROGRESS |
 | 5 | Driver simplification | 5a–5b | 2–3 days | Low | NOT STARTED |
 
 **Total**: 19–29 days across 6 phases, 23 sub-phases
@@ -327,52 +329,85 @@ Migrate the Prologos compilation pipeline from ad-hoc mutable state (Racket para
 
 ---
 
-## Phase 4: Speculation → ATMS Assumptions (Correct by Construction)
+## Phase 4: Speculation State Completeness + ATMS Strengthening
 
-**Goal**: Replace the fragile `save-meta-state`/`restore-meta-state!` box-snapshot pattern with ATMS assumption creation/retraction (infrastructure built in Phase 0b). Speculative type-checking (Church folds, union types, bare params) creates named assumptions that can be committed or retracted structurally.
+**Goal**: Fix the constraint store leak in speculative type-checking, strengthen the
+speculation bridge's state management, make ATMS hypothesis tracking mandatory, and
+internalize the save/restore API.
 
-**Synergy unlocked**: §5.5 — Speculative Type-Checking Becomes ATMS Assumptions
+**Design decision**: Full ATMS replacement (routing all metavar mutations through TMS cells)
+deferred — massive change (~500 LOC across metavar-store, unify, elaborator) with minimal
+batch-mode benefit. The save/restore mechanism is O(1), correct for the 6 CHAMP boxes, and
+well-tested. The real ATMS value is for LSP (per-definition retraction via Phase 3 cells).
+Phase 4 fixes the concrete bug, strengthens the bridge, and documents the LSP path.
 
-### 4a: Speculation Side-Effect Audit
+### 4a: Speculation Side-Effect Audit ✅
 
-- [ ] For each speculation call site, audit **exactly** which state is modified during speculation:
-  - Church fold attempts (`try-elaborate-church-fold`): metas created, constraints added, trait lookups attempted
-  - Union type checking (`try-union-type-check`): metas created, unifications attempted
-  - Bare param inference (`try-bare-param`): metas created, type checked
-  - `elab-speculation-bridge.rkt`: bridge pattern
-- [ ] Identify any side-effects that fall **outside** the ATMS assumption scope — i.e., writes to cells that existed before the speculation started and would not be tagged by `with-assumption`
-- [ ] **Key semantic difference**: the current snapshot is *total* (restores ALL state). ATMS retraction is *selective* (only retracts content tagged with the assumption). If speculation modifies pre-existing cells, those modifications must also be tagged. Design solution: `with-assumption` must tag ALL cell writes during its dynamic extent, including writes to pre-existing cells — not just writes to cells created during the extent.
-- [ ] Document findings per speculation site
+**Audit findings** (6 speculation sites across 3 files):
 
-**Files touched**: None (audit only)
-**Risk**: None — this is analysis that de-risks 4b
+All sites go through `with-speculative-rollback` in `elab-speculation-bridge.rkt`:
+- `typing-core.rkt:1186` — map value widening (single attempt)
+- `typing-core.rkt:1272` — union map-get component (single)
+- `typing-core.rkt:1306` — union nil-safe-get component (single)
+- `typing-core.rkt:2420` — union type checking (multi: try left, fall back to right)
+- `qtt.rkt:2321` — union checkQ (multi: try left, fall back to right)
+- `typing-errors.rkt:78` — union branch error reporting (multi: one per branch)
 
-### 4b: Replace save/restore with Assumptions
+**State classification:**
 
-- [ ] Replace each speculation site: `save-meta-state` → `make-assumption` + `with-assumption`; failed path → `retract-assumption!`; success path → `commit-assumption!`
-- [ ] Known call sites:
-  - Church fold attempts (elaborator.rkt — `try-elaborate-church-fold`)
-  - Union type checking (elaborator.rkt — `try-union-type-check`)
-  - Bare param inference (elaborator.rkt — `try-bare-param`)
-  - `elab-speculation-bridge.rkt` — bridge for speculative elaboration
-- [ ] Tests: Church fold tests, union type tests, bare param tests — all must pass
-- [ ] Verify: no more `save-meta-state` calls remain in codebase
-- [ ] Run `examples/` canary files — Level 3 WS validation
+| State | Storage | Captured by save/restore? | Notes |
+|-------|---------|---------------------------|-------|
+| prop-net (elab-network) | box | ✅ | CHAMP, O(1) snapshot |
+| meta-id → cell-id map | box | ✅ | CHAMP |
+| meta-id → meta-info | box | ✅ | CHAMP |
+| level-meta solutions | box | ✅ | CHAMP |
+| mult-meta solutions | box | ✅ | CHAMP |
+| sess-meta solutions | box | ✅ | CHAMP |
+| **constraint store** | **parameter** | **❌ BUG** | `add-constraint!` reachable via `check` → `unify` → pattern-check failure |
+| trait-constraint-map | parameter | n/a | Not written during `check`/`infer` |
+| registries (Phase 2) | parameters | n/a | Written during macro expansion, not type-checking |
+| global-env (Phase 3) | parameters | n/a | Written during `process-def`, not type-checking |
+| warnings | parameters | n/a | Not written during `check`/`infer` |
 
-**Files touched**: `elaborator.rkt` (~50 LOC changed), `elab-speculation-bridge.rkt` (~30 LOC changed), `metavar-store.rkt` (~20 LOC — deprecate save/restore)
-**Risk**: Medium — each speculation site has subtly different semantics; must verify one-by-one
+**Leak path**: `check ctx e type` → `unify ctx t1 t2` → flex-rigid pattern-check fails →
+`add-constraint!` writes to `current-constraint-store` parameter (NOT in 6 CHAMP boxes) AND
+constraint cell in prop-net (IS captured). After failed speculation: prop-net reverts
+(cell OK) but parameter retains spurious constraint. `retry-constraints-via-cells!`,
+`all-postponed-constraints`, `all-failed-constraints` read from the parameter → see leak.
 
-### 4c: Remove Legacy Snapshot Infrastructure
+### 4b: Fix Speculation State Completeness
 
-- [ ] Remove `save-meta-state` and `restore-meta-state!` from `metavar-store.rkt`
-- [ ] Remove the 6-box snapshot pattern
-- [ ] Audit for any remaining references
-- [ ] Run full test suite — 0 regressions
-- [ ] Run `examples/` canary files — Level 3 WS validation
-- [ ] Check for whale files (ATMS overhead)
+- [x] Save/restore `current-constraint-store` in `with-speculative-rollback`
+- [x] Defensive assertion: verify no unexpected state escaped (gated behind `current-speculation-audit?`)
+- [x] Tests: constraint isolation on failure, preservation on success, nested speculation
 
-**Files touched**: `metavar-store.rkt` (~60 LOC removed)
-**Commit gate**: Full test suite passes, canary files pass, box-snapshot pattern fully retired
+**Files**: `elab-speculation-bridge.rkt` (~10 LOC), `tests/test-speculation-bridge.rkt` (~30 LOC)
+
+### 4c: Make ATMS Hypothesis Tracking Mandatory
+
+- [ ] Ensure `current-command-atms` always initialized for every command
+- [ ] Simplify bridge: remove conditional ATMS code path, assert ATMS always present
+- [ ] Remove dead `(not atms-box)` branches
+
+**Files**: `elab-speculation-bridge.rkt` (~15 LOC), `driver.rkt` (verify initialization)
+
+### 4d: Internalize save-meta-state/restore-meta-state!
+
+- [ ] Remove from `metavar-store.rkt` exports (keep implementation)
+- [ ] Verify no external callers (bridge is the only production user)
+- [ ] Update any test imports that reference these functions
+
+**Files**: `metavar-store.rkt` (provide list), possibly test files
+
+### 4e: Document ATMS Replacement Path for LSP
+
+- [ ] Document why save/restore stays for batch mode
+- [ ] Document LSP needs: per-definition ATMS assumptions, not per-meta
+- [ ] Document what full ATMS replacement would require (~500 LOC, route solve-meta! through TMS cells)
+
+**Files**: This tracking document (Phase 4 section)
+
+**Commit gate**: Full test suite passes, no whale files, canary `.prologos` files pass
 
 ---
 
