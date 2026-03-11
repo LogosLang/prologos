@@ -81,6 +81,17 @@ defn hash-list [hash-a xs]
     | cons a as -> hash-combine [hash-a a] [hash-list hash-a as]
 
 ;; ========================================
+;; Hashable Int — use Racket's equal-hash-code
+;; ========================================
+;; Handles negative integers correctly via Racket's built-in hasher.
+
+foreign racket "racket/base" [equal-hash-code :as int-hash-nat : Int -> Nat]
+
+impl Hashable Int
+  defn hash [n : Int] <Nat>
+    int-hash-nat n
+
+;; ========================================
 ;; Hashable Char — hash by code point
 ;; ========================================
 ;; Use char->integer marshalled as Nat for the hash value.
