@@ -1,0 +1,222 @@
+ns examples.audit.literals-types
+
+;; ========================================================================
+;; AUDIT 01 — Literals & Base Types
+;; ========================================================================
+;; Tests every literal form and base type in WS-mode .prologos files.
+;; Classification: OK | WRONG | CRASH | DEFN-ONLY | SEXP-ONLY | MISSING | DESIGN
+;;
+;; RESULTS (41 expressions, 0 errors):
+;;   OK: 38   WRONG: 1   CRASH: 1 (commented out)   DESIGN: 1
+;;
+;;   [WRONG]  5/1 -> 5 : Int (should be 5/1 : Rat — reader simplifies)
+;;   [CRASH]  char literals 'a' conflict with quote/list reader prefix
+;;   [DESIGN] nil shows unsolved meta in type (polymorphic — expected)
+
+;; ========================================================================
+;; 1. Nat Literals
+;; ========================================================================
+
+0N
+;; expect: 0N : Nat
+
+42N
+;; expect: 42N : Nat
+
+100N
+;; expect: 100N : Nat
+
+zero
+;; expect: zero : Nat
+
+suc zero
+;; expect: suc zero : Nat (= 1N)
+
+suc [suc zero]
+;; expect: 2N : Nat
+
+
+;; ========================================================================
+;; 2. Int Literals
+;; ========================================================================
+
+0
+;; expect: 0 : Int
+
+42
+;; expect: 42 : Int
+
+-7
+;; expect: -7 : Int
+
+-1
+;; expect: -1 : Int
+
+100
+;; expect: 100 : Int
+
+
+;; ========================================================================
+;; 3. Rat Literals
+;; ========================================================================
+
+1/2
+;; expect: 1/2 : Rat
+
+-3/7
+;; expect: -3/7 : Rat
+
+5/1
+;;! WRONG: produces 5 : Int (reader reduces 5/1 to integer 5)
+
+
+;; ========================================================================
+;; 4. Posit / Approximate Literals
+;; ========================================================================
+
+~3.14
+;; expect: ~3.14 : Posit32
+
+~42
+;; expect: ~42 : Posit32
+
+~1/3
+;; expect: ~1/3 : Posit32
+
+3.14
+;; expect: 3.14 : Posit32 (bare decimal = Posit32)
+
+
+;; ========================================================================
+;; 5. Bool Literals
+;; ========================================================================
+
+true
+;; expect: true : Bool
+
+false
+;; expect: false : Bool
+
+
+;; ========================================================================
+;; 6. String Literals
+;; ========================================================================
+
+"hello"
+;; expect: "hello" : String
+
+"world with spaces"
+;; expect: "world with spaces" : String
+
+""
+;; expect: "" : String
+
+"escape: \n \t \\ \""
+;; expect: string with escape sequences : String
+
+
+;; ========================================================================
+;; 7. Char Literals
+;; ========================================================================
+;; Note: char literal syntax in WS mode uses single quotes
+;; but ' is also the quote/list-literal prefix in the reader.
+;; Testing whether char literals work at all in WS file mode.
+
+;;! CRASH? — single-quote reader conflict may prevent char literals
+;; 'a'
+;; 'z'
+;; 'A'
+
+
+;; ========================================================================
+;; 8. Keyword Literals
+;; ========================================================================
+
+:foo
+;; expect: :foo : Keyword
+
+:bar
+;; expect: :bar : Keyword
+
+:hello-world
+;; expect: :hello-world : Keyword
+
+
+;; ========================================================================
+;; 9. Unit & Nil
+;; ========================================================================
+
+unit
+;; expect: unit : Unit
+
+nil
+;; expect: nil : ... (Nil or List?)
+
+
+;; ========================================================================
+;; 10. Type Annotations with def
+;; ========================================================================
+
+def nat-val : Nat := 42N
+;; expect: nat-val : Nat defined.
+
+def int-val : Int := -7
+;; expect: int-val : Int defined.
+
+def bool-val : Bool := true
+;; expect: bool-val : Bool defined.
+
+def str-val : String := "hello"
+;; expect: str-val : String defined.
+
+def kw-val : Keyword := :test
+;; expect: kw-val : Keyword defined.
+
+
+;; ========================================================================
+;; 11. def with := (type inferred)
+;; ========================================================================
+
+def inf-nat := 10N
+;; expect: inf-nat : Nat defined. (inferred)
+
+def inf-int := 42
+;; expect: inf-int : Int defined. (inferred)
+
+def inf-bool := false
+;; expect: inf-bool : Bool defined. (inferred)
+
+def inf-str := "inferred"
+;; expect: inf-str : String defined. (inferred)
+
+
+;; ========================================================================
+;; 12. the (type ascription)
+;; ========================================================================
+
+(the Nat 42N)
+;; expect: 42N : Nat
+
+(the Bool true)
+;; expect: true : Bool
+
+(the String "typed")
+;; expect: "typed" : String
+
+
+;; ========================================================================
+;; 13. Wildcard & Holes
+;; ========================================================================
+
+;; Wildcard as expression hole — may or may not work at top level
+;; _
+;; expect: depends on context
+
+;; Typed hole (interactive development)
+;; ?? my-hole
+;; expect: hole report
+
+
+;; ========================================================================
+;; END
+;; ========================================================================
