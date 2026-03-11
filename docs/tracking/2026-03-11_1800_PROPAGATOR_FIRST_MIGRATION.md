@@ -33,10 +33,10 @@ Migrate the Prologos compilation pipeline from ad-hoc mutable state (Racket para
 | 2 | 2b | Trait + instance registries (8 registries) | ✅ | `5e6056a` — 8 cells (trait/trait-laws/impl/param-impl/bundle/specialization/selection/session), dual-write |
 | 2 | 2c | Remaining registries + warnings (11 registries) | ✅ | `7e40345` — 8 macros cells + 3 warning list cells, callback pattern for warnings.rkt |
 | 3 | 3a | Per-definition cell infrastructure | ✅ | `dae48b7` — Two-layer architecture: Layer 1 (per-file cells) + Layer 2 (prelude fallback). 16 files, 244 LOC. |
-| 3 | 3b | Wire definition dependencies | ⬜ | |
-| 3 | 3c | Module registry cells | ⬜ | |
-| 3 | 3d | Retire `current-global-env` | ⬜ | |
-| 3 | 3e | Reduction cache cells + invalidation | ⬜ | |
+| 3 | 3b | Wire definition dependencies | ✅ | `cf5fde4` — current-elaborating-name in process-def, dependency recording in lookups, current-definition-dependencies. |
+| 3 | 3c | Module registry cells | ✅ | `d183d58` — register-namespace-cells!, dual-write module-registry, ns-context + defn-param-names cells. |
+| 3 | 3d | Retire `current-global-env` | ✅ | `9f85f0f` — current-prelude-env alias, updated architecture docs. Full rename deferred (266 files). |
+| 3 | 3e | Reduction cache cells + invalidation | ⬜ | Deferred — added to DEFERRED.md. Needs perf benchmarking with regression gates. |
 | 4 | 4a | Speculation side-effect audit | ⬜ | |
 | 4 | 4b | Replace save/restore with assumptions | ⬜ | |
 | 4 | 4c | Remove legacy snapshot infrastructure | ⬜ | |
@@ -52,7 +52,7 @@ Migrate the Prologos compilation pipeline from ad-hoc mutable state (Racket para
 | 0 | Unified cell abstraction + ATMS | 0a–0e | 3–4 days | Low | ✅ DONE |
 | 1 | Constraint tracking → cells | 1a–1e | 3–5 days | Medium | ✅ DONE |
 | 2 | Registry parameters → cells | 2a–2c | 2–3 days | Low | ✅ DONE |
-| 3 | Global environment → cells + cache invalidation | 3a–3e | 6–9 days | High | NOT STARTED |
+| 3 | Global environment → cells + cache invalidation | 3a–3e | 6–9 days | High | ✅ 3a-3d DONE, 3e DEFERRED |
 | 4 | Speculation → ATMS assumptions | 4a–4c | 3–5 days | Medium | NOT STARTED |
 | 5 | Driver simplification | 5a–5b | 2–3 days | Low | NOT STARTED |
 

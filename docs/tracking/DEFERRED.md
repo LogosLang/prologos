@@ -481,6 +481,33 @@ The following collection items ARE also deferred (genuine infrastructure deps):
 - ✅ Phase E3: Constraint-retry propagators — cell-state-driven retry after quiescence replaces legacy wakeup registry in production path (commits d2ef419, 29cdf0f, b5ba62b). Legacy fallback retained for test contexts without network.
 - Source: `docs/tracking/2026-02-25_TYPE_INFERENCE_ON_LOGIC_ENGINE_DESIGN.md`
 
+### Propagator-First Phase 3e: Reduction Cache Cells — NOT STARTED
+- **Phase**: 3e (follows Phase 3a-3d, all complete as of commit `9f85f0f`)
+- **Rationale**: Reduction (whnf/nf/nat-value) is the hottest code path. Cache cell
+  invalidation + dependency tracking needs performance benchmarking with explicit
+  regression gates. Orthogonal to the definition-cell architecture — can be done
+  independently after profiling shows no regression.
+- **Dependencies**: Phase 3a (per-definition cells), Phase 3b (dependency recording)
+- **Scope**: Convert whnf/nf/nat-value caches to write-through cells, gated behind
+  `current-track-reduction-deps?` parameter (off for batch, on for LSP). When a
+  definition changes (cell update), invalidate cached reductions that depended on it.
+- **Risk**: Performance regression in batch mode if cache cell overhead exceeds savings.
+  Must benchmark before and after with `racket tools/benchmark-tests.rkt --report`.
+- **Design**: Each reduction cache entry gets a cell. Cache lookup reads the cell.
+  Cache miss writes the result to the cell. Definition-change propagator invalidates
+  dependent cache cells. The `current-track-reduction-deps?` gate ensures zero
+  overhead in batch mode (caches remain simple `make-hash` when gate is off).
+
+### Propagator-First Phase 3d: Full current-global-env Rename — DEFERRED
+- **Phase**: 3d mechanical cleanup (Phase 3d documentation + alias complete, commit `9f85f0f`)
+- **Rationale**: Renaming `current-global-env` → `current-prelude-env` across 266 files
+  (1002 references) is purely mechanical with zero behavioral change. Alias provided
+  via `rename-out` for new code. Full rename deferred to avoid risky mass-rename
+  during active development.
+- **Dependencies**: None (alias already works)
+- **Scope**: Find-replace `current-global-env` → `current-prelude-env` in all files.
+  Update test-support.rkt, batch-worker.rkt, driver.rkt, all test fixtures.
+
 ---
 
 ## FL Narrowing — WS Surface Gaps
