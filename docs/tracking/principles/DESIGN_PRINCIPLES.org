@@ -329,3 +329,66 @@ cannot break existing guarantees. This is achieved through:
 - Session type duality (both endpoints of a protocol must agree, preserved through composition)
 - Monotonic constraint propagation (type inference only accumulates information)
 - Capability security (authority cannot be forged, only delegated; see [[file:CAPABILITY_SECURITY.md][Capability Security]])
+
+* Propagator-First Infrastructure
+
+When building internal infrastructure --- caches, indices, registries,
+environment maps --- default to propagator cells over mutable hash tables.
+The synergy of composing propagator networks exceeds the sum of their parts:
+each new propagator-backed structure can participate in cross-domain
+information flow with every other propagator-backed structure, creating
+emergent capabilities that isolated mutable stores cannot provide.
+
+** The Composition Argument
+
+A propagator cell is a monotonic accumulator with automatic dependency
+propagation. A hash table is a mutable store with manual invalidation. The
+difference is small for a single structure in isolation. But when /multiple/
+structures coexist, propagator networks compose:
+
+- A type index cell (srcloc → type) that depends on a metavariable cell
+  automatically updates when the meta is solved --- no explicit "zonk the
+  index" pass needed.
+- A definition location cell that depends on module loading automatically
+  reflects newly-loaded modules --- no explicit "rebuild the index" step.
+- A diagnostic cell that depends on type index cells automatically retracts
+  when the source is re-elaborated --- incremental re-checking falls out
+  of the network topology.
+
+With mutable hash tables, each of these cross-cutting dependencies requires
+explicit plumbing (invalidation callbacks, dirty flags, rebuild passes).
+With propagator cells, the plumbing is the network itself.
+
+** When Not To Use Propagators
+
+Not all state is monotonic. Propagators are the wrong choice when:
+- The value can decrease or retract (use ATMS-backed cells instead, which
+  compose /with/ the propagator network for non-monotonic recovery)
+- The access pattern is pure lookup with no dependency tracking (rare in
+  practice for infrastructure that participates in the compilation pipeline)
+- The structure is ephemeral and single-use (per-command scratch space)
+
+Even for non-monotonic cases, the design pattern of /monotonic layers with
+ATMS-backed retraction/ often applies. This recovers non-monotonic behavior
+within the propagator paradigm rather than stepping outside it.
+
+** Relationship to First-Class by Default
+
+This principle is the infrastructure-facing corollary of [[*First-Class by Default][First-Class by
+Default]]. First-Class by Default says: reify language constructs as
+first-class values. Propagator-First Infrastructure says: build internal
+state as first-class network participants. Both principles produce the same
+kind of emergent composition --- the combinatorial interaction of
+independently-designed components creating capabilities that no single
+component was designed to provide.
+
+** Application
+
+| Infrastructure | Na\iuml{}ve Approach | Propagator-First Approach |
+|---------------------+------------------------+------------------------------------------|
+| Type index | ~(make-hash)~ + manual zonk | Cell per position; metas propagate solutions |
+| Definition registry | ~(hasheq)~ + rebuild on load | Cell per name; module loading propagates |
+| Diagnostic set | Recompute on save | Cell per form; elaboration changes propagate |
+| Module exports | Snapshot at load time | Cell per module; re-export propagates |
+| Completion cache | Rebuild periodically | Cell per namespace; imports propagate |
+
