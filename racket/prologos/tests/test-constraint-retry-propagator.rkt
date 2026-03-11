@@ -40,6 +40,8 @@
                  [current-trait-cell-map-cell-id #f]  ;; Phase 1b
                  [current-hasmethod-constraint-cell-id #f]  ;; Phase 1b
                  [current-capability-constraint-cell-id #f]  ;; Phase 1b
+                 [current-wakeup-registry-cell-id #f]  ;; Phase 1c
+                 [current-trait-wakeup-cell-id #f]  ;; Phase 1c
                  [current-wakeup-registry (make-hasheq)]
                  [current-trait-constraint-map (make-hasheq)]
                  [current-trait-wakeup-map (make-hasheq)]

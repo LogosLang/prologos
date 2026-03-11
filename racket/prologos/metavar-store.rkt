@@ -137,6 +137,9 @@
  current-trait-cell-map-cell-id
  current-hasmethod-constraint-cell-id
  current-capability-constraint-cell-id
+ ;; Phase 1c: Wakeup registry cell IDs
+ current-wakeup-registry-cell-id
+ current-trait-wakeup-cell-id
  ;; P5b: Multiplicity cell callbacks
  current-prop-fresh-mult-cell
  current-prop-mult-cell-write
@@ -260,6 +263,13 @@
   (for ([ta-id (in-list type-arg-metas)])
     (define existing (hash-ref wakeup ta-id '()))
     (hash-set! wakeup ta-id (cons meta-id existing)))
+  ;; Phase 1c: Dual-write trait wakeup map to cell.
+  (define tw-cid (current-trait-wakeup-cell-id))
+  (when (and tw-cid tc-net-box write-fn (pair? type-arg-metas))
+    (define tw-delta
+      (for/fold ([acc (hasheq)]) ([ta-id (in-list type-arg-metas)])
+        (hash-set acc ta-id (list meta-id))))
+    (set-box! tc-net-box (write-fn (unbox tc-net-box) tw-cid tw-delta)))
   ;; P3a: Record cell-ids for type-arg metas for cell-state-driven resolution.
   (define id-map-box (current-prop-id-map-box))
   (when id-map-box
@@ -468,6 +478,13 @@
   (for ([id (in-list meta-ids)])
     (define existing (hash-ref registry id '()))
     (hash-set! registry id (cons c existing)))
+  ;; Phase 1c: Dual-write wakeup registry to cell.
+  (define wr-cid (current-wakeup-registry-cell-id))
+  (when (and wr-cid cstore-net-box write-fn (pair? meta-ids))
+    (define wr-delta
+      (for/fold ([acc (hasheq)]) ([id (in-list meta-ids)])
+        (hash-set acc id (list c))))
+    (set-box! cstore-net-box (write-fn (unbox cstore-net-box) wr-cid wr-delta)))
   ;; Propagator path: add unify constraints between cells
   (define net-box (current-prop-net-box))
   (define add-unify-fn (current-prop-add-unify-constraint))
@@ -568,6 +585,9 @@
   (current-trait-cell-map-cell-id #f)
   (current-hasmethod-constraint-cell-id #f)
   (current-capability-constraint-cell-id #f)
+  ;; Phase 1c: Clear wakeup cell IDs.
+  (current-wakeup-registry-cell-id #f)
+  (current-trait-wakeup-cell-id #f)
   (hash-clear! (current-wakeup-registry)))
 
 ;; Query: all postponed constraints.
@@ -639,6 +659,11 @@
 (define current-hasmethod-constraint-cell-id (make-parameter #f))
 (define current-capability-constraint-cell-id (make-parameter #f))
 
+;; Phase 1c: Cell IDs for wakeup registries.
+;; These map meta-id → (listof value), using merge-hasheq-list-append.
+(define current-wakeup-registry-cell-id (make-parameter #f))
+(define current-trait-wakeup-cell-id (make-parameter #f))
+
 ;; P5b: Multiplicity cell callbacks
 (define current-prop-fresh-mult-cell (make-parameter #f))   ;; (enet source → (values enet* cell-id))
 (define current-prop-mult-cell-write (make-parameter #f))   ;; (enet cell-id value → enet*)
@@ -697,6 +722,8 @@
                  [current-trait-cell-map-cell-id #f]    ;; Phase 1b
                  [current-hasmethod-constraint-cell-id #f]  ;; Phase 1b
                  [current-capability-constraint-cell-id #f]  ;; Phase 1b
+                 [current-wakeup-registry-cell-id #f]  ;; Phase 1c
+                 [current-trait-wakeup-cell-id #f]     ;; Phase 1c
                  [current-wakeup-registry (make-hasheq)]
                  [current-trait-constraint-map (make-hasheq)]
                  [current-trait-wakeup-map (make-hasheq)]
@@ -1152,7 +1179,12 @@
       (current-hasmethod-constraint-cell-id hm-cid)
       (define-values (enet5 cap-cid) (new-cell-fn enet4 (hasheq) merge-hasheq-union))
       (current-capability-constraint-cell-id cap-cid)
-      (set-box! nb enet5))))
+      ;; Phase 1c: Create wakeup registry cells (merge-hasheq-list-append).
+      (define-values (enet6 wr-cid) (new-cell-fn enet5 (hasheq) merge-hasheq-list-append))
+      (current-wakeup-registry-cell-id wr-cid)
+      (define-values (enet7 tw-cid) (new-cell-fn enet6 (hasheq) merge-hasheq-list-append))
+      (current-trait-wakeup-cell-id tw-cid)
+      (set-box! nb enet7))))
 
 ;; ========================================
 ;; Meta state save/restore for speculative type-checking

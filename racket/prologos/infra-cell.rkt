@@ -30,6 +30,7 @@
 (provide
  ;; Merge functions — pure (content × content → content)
  merge-hasheq-union
+ merge-hasheq-list-append
  merge-list-append
  merge-set-union
  merge-replace
@@ -76,6 +77,18 @@
      (for/fold ([acc old])
                ([(k v) (in-hash new)])
        (hash-set acc k v))]))
+
+;; Monotonic hash with per-key list append: for wakeup registries.
+;; Each key maps to a list; on collision, lists are appended.
+;; Both arguments must be hasheq.
+(define (merge-hasheq-list-append old new)
+  (cond
+    [(eq? old 'infra-bot) new]
+    [(eq? new 'infra-bot) old]
+    [else
+     (for/fold ([acc old])
+               ([(k v) (in-hash new)])
+       (hash-set acc k (append (hash-ref acc k '()) v)))]))
 
 ;; Monotonic list accumulation: for warnings, constraints.
 ;; Appends new items to existing list. Both must be lists.
