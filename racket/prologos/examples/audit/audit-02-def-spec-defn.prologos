@@ -9,8 +9,7 @@ ns examples.audit.def-spec-defn
 ;; RESULTS (41 expressions, 0 errors):
 ;;   OK: 39   CRASH: 1 (commented out)   SEXP-ONLY: 1 (commented out)
 ;;
-;;   [CRASH] def x := some 42N — "expected exactly one value after :="
-;;           multi-token constructor apps need brackets: [some 42N]
+;;   [FIXED] def x := some 42N — auto-wrap multi-token RHS (Phase 2b)
 ;;   [CRASH] multi-clause defn | pat -> body — "spec is single-arity
 ;;           but defn has multiple clauses" — must use match-in-body instead
 
@@ -208,10 +207,9 @@ defn add-base [n] [add base n]
 ;; ========================================================================
 
 ;; --- 5a. def with Option value ---
-;;! CRASH without brackets: def opt-val : (Option Nat) := some 42N
-;;  "expected exactly one value after :=" — some 42N parsed as two tokens
-def opt-val : (Option Nat) := [some 42N]
-;; expect: opt-val : Option Nat defined.
+;; Now works without brackets (Phase 2b: auto-wrap multi-token RHS)
+def opt-val : (Option Nat) := some 42N
+;; OK: opt-val : Option Nat defined.
 
 def opt-none : (Option Nat) := none
 ;; expect: opt-none : Option Nat defined.

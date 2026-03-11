@@ -72,7 +72,7 @@ because narrowing correctness is lower priority than basic functionality.
 | 1b | Quote/quasiquote | M+M | ✅ |
 | **Phase 2: Preparse** | | | |
 | 2a | `def-` recognition | S | ✅ |
-| 2b | `def` multi-token RHS | M | ⬜ |
+| 2b | `def` multi-token RHS | M | ✅ |
 | 2c | `def` with lambda value | S–M | ⬜ |
 | 2d | spec+constraint arity | S | ⬜ |
 | 2e | `defn` inside `impl` | M | ⬜ |

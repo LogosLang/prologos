@@ -3621,9 +3621,11 @@
     [else
      (define before (take rest assign-pos))
      (define after (drop rest (+ assign-pos 1)))
-     (unless (= (length after) 1)
-       (error 'def "def: expected exactly one value after :=, got ~a" after))
-     (define value (car after))
+     (when (null? after)
+       (error 'def "def: expected at least one value after :="))
+     ;; Auto-wrap multi-token RHS as application: `some 42N` → `(some 42N)`
+     ;; In WS mode, juxtaposed tokens after := form an application.
+     (define value (if (= (length after) 1) (car after) after))
      (cond
        ;; No type annotation: (def name := value) → (def name value)
        [(null? before)
