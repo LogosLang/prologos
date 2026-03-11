@@ -365,6 +365,8 @@
 ;; bare symbols (for local use) and as fully-qualified names (for export).
 (define (process-command surf)
   (reset-meta-store!)  ;; clear metavariables from previous command
+  ;; Phase 2a: Create macros registry cells in the fresh network.
+  (register-macros-cells! (current-prop-net-box) (current-prop-new-infra-cell))
   ;; Phase D: Initialize ATMS for dependency-directed error tracking.
   ;; The ATMS box is always available — init-speculation-tracking! creates a
   ;; fresh ATMS per command. This is cheap (empty ATMS = ~3 hasheq allocations).
@@ -1225,6 +1227,7 @@
   (define results
     (for/list ([def (in-list defs)])
       (reset-meta-store!)
+      (register-macros-cells! (current-prop-net-box) (current-prop-new-infra-cell))
       (init-speculation-tracking!)
       (process-def def)))
   ;; Check for errors
@@ -1760,6 +1763,7 @@
 
   ;; Parse and elaborate the type
   (reset-meta-store!)
+  (register-macros-cells! (current-prop-net-box) (current-prop-new-infra-cell))
   (define type-surf (parse-datum type-sexp))
   (when (prologos-error? type-surf)
     (error 'foreign "Failed to parse type for ~a: ~a" racket-name type-surf))
@@ -1900,6 +1904,11 @@
 
 ;; Phase 1a: Install infrastructure cell creation callback.
 (current-prop-new-infra-cell elab-new-infra-cell)
+
+;; Phase 2a: Install macros cell-write callback (constant — doesn't depend on net-box).
+;; net-box is installed per-command via register-macros-cells!, since it's created
+;; fresh in reset-meta-store!.
+(current-macros-prop-cell-write elab-cell-write)
 
 ;; P5b: Install multiplicity cell callbacks
 (current-prop-fresh-mult-cell elab-fresh-mult-cell)

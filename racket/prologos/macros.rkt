@@ -25,7 +25,8 @@
          "source-location.rkt"
          "errors.rkt"
          "namespace.rkt"
-         "global-env.rkt")
+         "global-env.rkt"
+         "infra-cell.rkt")      ;; Phase 2a: merge functions for registry cells
 
 (provide ;; Post-parse (layer 2)
          expand-top-level
@@ -303,6 +304,18 @@
          datum->datum-expr
          qq->datum-expr
          keyword-like-symbol?
+         ;; Phase 2a: Propagator-first migration — registry cell infrastructure
+         current-macros-prop-net-box
+         current-macros-prop-cell-write
+         current-schema-registry-cell-id
+         current-ctor-registry-cell-id
+         current-type-meta-cell-id
+         current-subtype-registry-cell-id
+         current-coercion-registry-cell-id
+         current-capability-registry-cell-id
+         current-property-store-cell-id
+         current-functor-store-cell-id
+         register-macros-cells!
          ;; Mixfix / precedence groups (Phase 2)
          current-user-precedence-groups
          current-user-operators
@@ -385,6 +398,77 @@
   (set-member? (current-propagated-specs) name))
 
 ;; ========================================
+;; Phase 2a: Propagator-First Migration — Registry Cell Infrastructure
+;; ========================================
+;;
+;; Callback parameters for network access. Set by driver.rkt to the same
+;; elab-network box and write function used by metavar-store.rkt. This breaks
+;; the circular dependency: macros.rkt cannot import metavar-store.rkt or
+;; elaborator-network.rkt, so network operations are injected via callbacks.
+;;
+;; Design: dual-write pattern — each register-X! writes to both the legacy
+;; Racket parameter AND the propagator cell. Reads still go through the legacy
+;; parameter for compatibility. The cell shadow enables LSP incremental
+;; re-elaboration and reactive propagation in future phases.
+
+;; Box of elab-network | #f — same box as current-prop-net-box in metavar-store
+(define current-macros-prop-net-box (make-parameter #f))
+;; (enet cell-id value → enet*) — same as elab-cell-write
+(define current-macros-prop-cell-write (make-parameter #f))
+
+;; Cell-id parameters for each registry (set by register-macros-cells!).
+;; When #f, dual-write is skipped (legacy-only mode).
+(define current-schema-registry-cell-id (make-parameter #f))
+(define current-ctor-registry-cell-id (make-parameter #f))
+(define current-type-meta-cell-id (make-parameter #f))
+(define current-subtype-registry-cell-id (make-parameter #f))
+(define current-coercion-registry-cell-id (make-parameter #f))
+(define current-capability-registry-cell-id (make-parameter #f))
+(define current-property-store-cell-id (make-parameter #f))
+(define current-functor-store-cell-id (make-parameter #f))
+
+;; Helper: dual-write a single entry to a registry cell.
+;; value should be a hasheq/hash with just the new entry — the cell's merge
+;; function (merge-hasheq-union) will union it with existing content.
+(define (macros-cell-write! cid value)
+  (define net-box (current-macros-prop-net-box))
+  (define write-fn (current-macros-prop-cell-write))
+  (when (and net-box write-fn cid)
+    (set-box! net-box (write-fn (unbox net-box) cid value))))
+
+;; Initialize registry cells in the propagator network.
+;; Called by driver.rkt after reset-meta-store! to create cells initialized
+;; from the current legacy parameter content. Each cell uses merge-hasheq-union
+;; so subsequent register-X! calls accumulate entries monotonically.
+;; net-box: (box elab-network) — the shared network box
+;; new-cell-fn: (enet initial-value merge-fn → (values enet* cell-id))
+(define (register-macros-cells! net-box new-cell-fn)
+  (when (and net-box new-cell-fn)
+    ;; Install net-box for dual-write access during this command
+    (current-macros-prop-net-box net-box)
+    (define enet0 (unbox net-box))
+    ;; Create cells initialized from current registry content
+    (define-values (enet1 sr-cid) (new-cell-fn enet0 (current-schema-registry) merge-hasheq-union))
+    (current-schema-registry-cell-id sr-cid)
+    (define-values (enet2 cr-cid) (new-cell-fn enet1 (current-ctor-registry) merge-hasheq-union))
+    (current-ctor-registry-cell-id cr-cid)
+    (define-values (enet3 tm-cid) (new-cell-fn enet2 (current-type-meta) merge-hasheq-union))
+    (current-type-meta-cell-id tm-cid)
+    ;; subtype/coercion use hash (equal?-based keys), but merge-hasheq-union
+    ;; works correctly — hash-set preserves the hash type of the accumulator.
+    (define-values (enet4 st-cid) (new-cell-fn enet3 (current-subtype-registry) merge-hasheq-union))
+    (current-subtype-registry-cell-id st-cid)
+    (define-values (enet5 co-cid) (new-cell-fn enet4 (current-coercion-registry) merge-hasheq-union))
+    (current-coercion-registry-cell-id co-cid)
+    (define-values (enet6 cap-cid) (new-cell-fn enet5 (current-capability-registry) merge-hasheq-union))
+    (current-capability-registry-cell-id cap-cid)
+    (define-values (enet7 ps-cid) (new-cell-fn enet6 (current-property-store) merge-hasheq-union))
+    (current-property-store-cell-id ps-cid)
+    (define-values (enet8 fs-cid) (new-cell-fn enet7 (current-functor-store) merge-hasheq-union))
+    (current-functor-store-cell-id fs-cid)
+    (set-box! net-box enet8)))
+
+;; ========================================
 ;; Schema registry: field information for schema types
 ;; ========================================
 
@@ -407,7 +491,9 @@
 (define current-schema-registry (make-parameter (hasheq)))
 
 (define (register-schema! name entry)
-  (current-schema-registry (hash-set (current-schema-registry) name entry)))
+  (current-schema-registry (hash-set (current-schema-registry) name entry))
+  ;; Phase 2a: dual-write to cell
+  (macros-cell-write! (current-schema-registry-cell-id) (hasheq name entry)))
 
 (define (lookup-schema name)
   (hash-ref (current-schema-registry) name #f))
@@ -5291,7 +5377,9 @@
 (define current-type-meta (make-parameter (hasheq)))
 
 (define (register-ctor! name meta)
-  (current-ctor-registry (hash-set (current-ctor-registry) name meta)))
+  (current-ctor-registry (hash-set (current-ctor-registry) name meta))
+  ;; Phase 2a: dual-write to cell
+  (macros-cell-write! (current-ctor-registry-cell-id) (hasheq name meta)))
 
 (define (lookup-ctor name)
   (hash-ref (current-ctor-registry) name #f))
@@ -5329,7 +5417,9 @@
 
 (define (register-subtype-pair! sub-key super-key)
   (current-subtype-registry
-   (hash-set (current-subtype-registry) (cons sub-key super-key) #t)))
+   (hash-set (current-subtype-registry) (cons sub-key super-key) #t))
+  ;; Phase 2a: dual-write to cell
+  (macros-cell-write! (current-subtype-registry-cell-id) (hash (cons sub-key super-key) #t)))
 
 (define (subtype-pair? sub-key super-key)
   (hash-ref (current-subtype-registry) (cons sub-key super-key) #f))
@@ -5355,7 +5445,9 @@
 
 (define (register-coercion! sub-key super-key coerce-fn)
   (current-coercion-registry
-   (hash-set (current-coercion-registry) (cons sub-key super-key) coerce-fn)))
+   (hash-set (current-coercion-registry) (cons sub-key super-key) coerce-fn))
+  ;; Phase 2a: dual-write to cell
+  (macros-cell-write! (current-coercion-registry-cell-id) (hash (cons sub-key super-key) coerce-fn)))
 
 (define (lookup-coercion sub-key super-key)
   (hash-ref (current-coercion-registry) (cons sub-key super-key) #f))
@@ -5392,7 +5484,9 @@
 
 (define (register-capability! name meta)
   (current-capability-registry
-   (hash-set (current-capability-registry) name meta)))
+   (hash-set (current-capability-registry) name meta))
+  ;; Phase 2a: dual-write to cell
+  (macros-cell-write! (current-capability-registry-cell-id) (hasheq name meta)))
 
 (define (lookup-capability name)
   (hash-ref (current-capability-registry) name #f))
@@ -6373,9 +6467,11 @@
       `(def ,ctor-name : ,ctor-type ,full-body)))
 
   ;; Register constructor metadata for reduce
+  (define ctor-names (map car ctors))
   (current-type-meta
-   (hash-set (current-type-meta) type-name
-             (map car ctors)))
+   (hash-set (current-type-meta) type-name ctor-names))
+  ;; Phase 2a: dual-write to cell
+  (macros-cell-write! (current-type-meta-cell-id) (hasheq type-name ctor-names))
 
   (for ([ctor (in-list ctors)]
         [i (in-naturals)])
@@ -6702,7 +6798,9 @@
 (define current-property-store (make-parameter (hasheq)))
 
 (define (register-property! name entry)
-  (current-property-store (hash-set (current-property-store) name entry)))
+  (current-property-store (hash-set (current-property-store) name entry))
+  ;; Phase 2a: dual-write to cell
+  (macros-cell-write! (current-property-store-cell-id) (hasheq name entry)))
 
 (define (lookup-property name)
   (hash-ref (current-property-store) name #f))
@@ -6968,7 +7066,9 @@
 (define current-functor-store (make-parameter (hasheq)))
 
 (define (register-functor! name entry)
-  (current-functor-store (hash-set (current-functor-store) name entry)))
+  (current-functor-store (hash-set (current-functor-store) name entry))
+  ;; Phase 2a: dual-write to cell
+  (macros-cell-write! (current-functor-store-cell-id) (hasheq name entry)))
 
 (define (lookup-functor name)
   (hash-ref (current-functor-store) name #f))
