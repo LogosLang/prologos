@@ -336,6 +336,11 @@
                                                bool-to-nat clamp]])
     (imports [prologos::data::pair     :refer [swap map-fst map-snd bimap dup uncurry]])
     (imports [prologos::data::eq       :refer [sym cong trans]])
+    ;; Datum: code-as-data for quote/quasiquote
+    (imports [prologos::data::datum   :refer [Datum datum-sym datum-kw datum-nat
+                                              datum-int datum-rat datum-bool
+                                              datum-nil datum-cons
+                                              sym? kw? nat? int? rat? bool? nil? cons?]])
 
     ;; ---- Char & String data operations ----
     ;; Most operations accessed via module alias: char::code, str::length, etc.

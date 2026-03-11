@@ -13,19 +13,19 @@ ns examples.audit.advanced
 
 ;; --- 1a. Quote ---
 'foo
-;; expect: foo : Datum
-;;! CRASH: "Unbound variable" — quote `'` conflicts with list-literal reader prefix
+;; OK: datum-sym 'foo : Datum
 
 '(a b c)
-;; expect: (a b c) : Datum
-;;! CRASH: "Unbound variable" — same quote reader conflict
+;; OK: datum-cons chain : Datum
 
 ;; --- 1b. Quasiquote ---
-def x := 42N
+def qx := 42N
 
-`(hello ,x world)
+`(hello ,qx world)
 ;; expect: (hello 42N world) : Datum
-;;! CRASH: "Unbound variable" — quasiquote not supported in WS-mode file reader
+;;! WRONG: produces (hello qx world) — comma consumed as separator in paren form
+;;   Root cause: reader.rkt:1074-1077 skips commas inside parens unconditionally
+;;   The ,x unquote is lost; x is read as bare symbol, not spliced value
 
 
 ;; ========================================================================

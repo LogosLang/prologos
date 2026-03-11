@@ -69,7 +69,7 @@ because narrowing correctness is lower priority than basic functionality.
 |---|-----------|--------|--------|
 | **Phase 1: Reader** | | | |
 | 1a | Char literal docs | S | ✅ |
-| 1b | Quote/quasiquote | M+M | ⬜ |
+| 1b | Quote/quasiquote | M+M | 🔨 |
 | **Phase 2: Preparse** | | | |
 | 2a | `def-` recognition | S | ⬜ |
 | 2b | `def` multi-token RHS | M | ⬜ |
@@ -130,31 +130,38 @@ the `\x` char literal form.
 
 ### Phase 1b: Quote / Quasiquote in WS Mode
 
-**Problem**: `'foo`, `'(a b c)`, and `` `(hello ,x world) `` all crash (audit-12).
-The `'` prefix is overloaded: `'[` → list literal, `'` alone → quote. But the
-quote path produces `($quote foo)` which then fails because the elaboration path
-for `$quote` may not work in WS mode, or because `'(a b c)` → `($quote (a b c))`
-and the inner `(a b c)` gets parsed as a function call.
+**Problem**: `'foo`, `'(a b c)`, and `` `(hello ,x world) `` all crash (audit-12)
+with "Unbound variable" errors for `datum-sym`, `datum-cons`, etc.
 
-**Root cause**: Reader tokenizes `'foo` as `(quote . foo)` or `($quote foo)`
-(reader.rkt:354–364, quote token type). The issue is downstream — the parser
-or elaborator doesn't handle the quote form correctly in WS mode.
+**Root cause**: The reader correctly produces `($quote expr)` (reader.rkt:1439–1448)
+and the `expand-quote` macro (macros.rkt:5041) correctly expands to `datum-*`
+constructor calls. But `prologos::data::datum` was NOT in the prelude imports
+(namespace.rkt), so the `datum-sym`, `datum-cons`, etc. constructors were unbound.
 
-**Approach**: Investigate the actual reader output for `'foo` in WS mode. The
-fix may be in the parser (handle `$quote` sentinel) or in the elaborator (handle
-`expr-quote`). Quasiquote requires the `prologos-qq-readtable` to be active in
-WS mode — check if it's installed.
+**Fix**: Added `prologos::data::datum` to the prelude imports in `namespace.rkt`,
+referring `Datum`, all 8 constructors (`datum-sym`, `datum-kw`, `datum-nat`,
+`datum-int`, `datum-rat`, `datum-bool`, `datum-nil`, `datum-cons`), and all 8
+predicates (`sym?`, `kw?`, `nat?`, `int?`, `rat?`, `bool?`, `nil?`, `cons?`).
 
-**Effort**: M (quote) + M (quasiquote — readtable integration)
+**Result**:
+- `'foo` → OK: `datum-sym 'foo : Datum` ✅
+- `'(a b c)` → OK: `datum-cons` chain : Datum ✅
+- `` `(hello ,x world) `` → WRONG: produces `(hello x world)` — the `,x`
+  unquote is lost because reader.rkt:1074–1077 **unconditionally skips commas
+  inside paren forms** as separators. The comma in `,x` is consumed and `x` is
+  read as a bare symbol rather than wrapped in `$unquote`. This is a residual
+  reader-level issue requiring quasiquote-context-aware comma handling.
+
+**Effort**: M (prelude fix = S, residual reader fix = M, deferred)
 **Audit expressions**: audit-12 `'foo`, `'(a b c)`, `` `(hello ,x world) ``
-**Validation**: Un-comment quote/quasiquote tests in audit-12
 
 ### Phase 1 Status
 
 | Sub-phase | Status | Commit |
 |-----------|--------|--------|
-| 1a: Char literal docs | NOT STARTED | |
-| 1b: Quote/quasiquote | NOT STARTED | |
+| 1a: Char literal docs | ✅ | `3165faa` |
+| 1b: Quote/quasiquote (prelude fix) | ✅ | (pending) |
+| 1b-residual: Quasiquote unquote in parens | DEFERRED | reader.rkt:1074–1077 |
 
 ---
 

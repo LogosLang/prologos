@@ -510,6 +510,9 @@ The following collection items ARE also deferred (genuine infrastructure deps):
 - Runtime `eval` — evaluate quoted expressions; requires embedding compiler
 - Runtime `read` — parse string to Prologos datum; requires exposing reader
 - `unquote-splicing` (`,@`) — only single-element unquote is implemented
+- Quasiquote `,x` unquote inside paren forms — reader.rkt:1074–1077 unconditionally
+  skips commas in parens as separators, losing the `$unquote` wrapper. Needs
+  quasiquote-context-aware comma handling. (Discovered in WS-mode audit, 2026-03-10)
 - Source: `docs/tracking/2026-02-19_HOMOICONICITY_ROADMAP.md`
 
 ---
