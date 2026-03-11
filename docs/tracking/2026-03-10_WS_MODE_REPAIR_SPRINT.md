@@ -63,6 +63,44 @@ because narrowing correctness is lower priority than basic functionality.
 
 ---
 
+## Phase Tracker
+
+| # | Sub-phase | Effort | Status |
+|---|-----------|--------|--------|
+| **Phase 1: Reader** | | | |
+| 1a | Char literal docs | S | ⬜ |
+| 1b | Quote/quasiquote | M+M | ⬜ |
+| **Phase 2: Preparse** | | | |
+| 2a | `def-` recognition | S | ⬜ |
+| 2b | `def` multi-token RHS | M | ⬜ |
+| 2c | `def` with lambda value | S–M | ⬜ |
+| 2d | spec+constraint arity | S | ⬜ |
+| 2e | `defn` inside `impl` | M | ⬜ |
+| 2f | Multi-clause `defn` + spec | M | ⬜ |
+| 2g | `with-transient` WS form | S | ⬜ |
+| 2h | `into-list` name collision | S | ⬜ |
+| 2i | Top-level `let` error | S | ⬜ |
+| 2j | `=` inside mixfix | S | ⬜ |
+| **Phase 3: Data & Constructors** | | | |
+| 3a | Nullary constructors | S | ⬜ |
+| 3b | Multi-field constructors | M | ⬜ |
+| 3c | Polymorphic ctor binding | M | ⬜ |
+| 3d | Constructor-as-HOF | M–L | ⬜ |
+| **Phase 4: Type Inference** | | | |
+| 4a | Top-level `if` type | S | ⬜ |
+| 4b | sort/dedup constraints | M | ⬜ |
+| 4c | `opt::unwrap-or` inference | M | ⬜ |
+| 4d | Collection conversion | M–L | ⬜ |
+| 4e | Multi-bracket `fn` | S–M | ⬜ |
+| **Phase 5: Narrowing** | | | |
+| 5a | Shared variable constraint | M | ⬜ |
+| 5b | Constructor narrowing | M | ⬜ |
+| 5c | Narrowing through `if` | M | ⬜ |
+
+**Legend**: ⬜ Not started · 🔨 In progress · ✅ Done · ⏭️ Skipped · 🔬 Diagnosing
+
+---
+
 ## Phase 1: Reader Fixes
 
 **Cluster**: C5 (Reader-Level Syntax Conflicts)
