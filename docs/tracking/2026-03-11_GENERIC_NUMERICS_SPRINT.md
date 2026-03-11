@@ -21,11 +21,11 @@ computation, preserving Nat for induction, proofs, and type-level indices.
 | # | Sub-phase | Effort | Status | Commit | Notes |
 |---|-----------|--------|--------|--------|-------|
 | **Phase 1: Prelude Rebalancing** | | | | | |
-| 1a | Move Nat arithmetic behind `nat::` alias | M | ⬜ | | namespace.rkt |
-| 1b | Fix sum/product shadowing | S | ⬜ | | Remove from list `:refer` |
-| 1c | Fix min/max shadowing | S | ⬜ | | Already removed in 1a; verify ord generics |
-| 1d | Expose generic wrappers unqualified | S | ⬜ | | Verify `plus`/`minus`/`times`/`divide` |
-| 1e | Add int convenience names | S | ⬜ | | Evaluate if needed |
+| 1a | Move Nat arithmetic behind `nat::` alias | M | ✅ | `35a989d` | namespace.rkt; also fixed dead peel-lambda-names ref |
+| 1b | Fix sum/product shadowing | S | ✅ | `87fcfa9` | Removed from list `:refer`; algebra generic wins |
+| 1c | Fix min/max shadowing | S | ✅ | (done by 1a) | min/max aliases in ord caused type errors; deferred |
+| 1d | Expose generic wrappers unqualified | S | ✅ | (verified) | plus/minus/times/divide/int-range all resolve via :refer-all |
+| 1e | Add int convenience names | S | ⏭️ | | int+/int-/int*/int/ already sufficient |
 | **Phase 2: Collection API** | | | | | |
 | 2a | Int-indexed list ops | M | ⬜ | | `nth-int`, `take-int`, `drop-int` |
 | 2b | `length-int` alternative | S | ⬜ | | `List A -> Int` |
