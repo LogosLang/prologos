@@ -44,8 +44,8 @@ ns examples.audit.fn-let-do
 ;; ========================================================================
 
 ;; --- 2a. Simple let at top level ---
-;;! CRASH: "let :=: missing value after := for x1"
-;;  Top-level let without body crashes the preparse
+;; DESIGN: Top-level let now emits clear error with hint:
+;;   "`let` is not allowed at top level. Use `def` instead."
 ;; let x1 := 42N
 
 ;; --- 2b. let used in subsequent expression ---

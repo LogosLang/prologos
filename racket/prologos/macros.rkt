@@ -3735,6 +3735,28 @@
     (error 'let "let requires at least: (let name value body)"))
   (define rest (cdr datum))  ; everything after 'let
 
+  ;; Detect top-level let without body: (let name := value) with no continuation.
+  ;; In WS mode, top-level let has no body because there's no enclosing scope.
+  ;; Emit a clear error directing users to use `def` instead.
+  (when (and (memq ':= rest)
+             (symbol? (car rest))
+             ;; A single-binding let without body: (name := value) or (name : T := value)
+             ;; has no remaining tokens after the first value.
+             ;; Detect by checking: after removing the binding, nothing is left for a body.
+             (let ()
+               (define assign-pos (index-of rest ':=))
+               (and assign-pos
+                    ;; Everything after := is the value; if there's exactly 1 token after :=,
+                    ;; then the "body" would be that same token (stolen by expand-let-inline-assign).
+                    ;; Count total bindings: each binding consumes name [: type...] := value.
+                    ;; Simple heuristic: exactly one := and value is the last token.
+                    (let ([after-assign (drop rest (+ assign-pos 1))])
+                      (= (length after-assign) 1)))))
+    (define name (car rest))
+    (error 'let
+           "`let` is not allowed at top level. Use `def` instead.\n  let ~a := ...\n      ^^^\n  Use: def ~a := ..."
+           name name))
+
   (cond
     ;; --- Branch 1: Bracket format — second element is a list ---
     [(list? (car rest))
