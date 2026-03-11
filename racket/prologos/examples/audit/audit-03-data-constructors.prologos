@@ -6,16 +6,19 @@ ns examples.audit.data-constructors
 ;; Tests ADT definitions, constructor patterns, and built-in constructors.
 ;; Classification: OK | WRONG | CRASH | DEFN-ONLY | SEXP-ONLY | MISSING | DESIGN
 ;;
-;; RESULTS (44 expressions, 10 errors):
-;;   OK: 22   WRONG: 5   CRASH: 7   DESIGN: 1
+;; RESULTS (44 expressions, 1 error):
+;;   OK: 34   CRASH: 1   DESIGN: 1
 ;;
-;;   [WRONG]  data Rect : Nat Nat -> Shape — multi-field ctor "not a valid type"
-;;   [WRONG]  Nullary ctors (North, South) show as function type, not value
-;;   [WRONG]  [direction-name North] type mismatch (ctor = fn, not value)
-;;   [CRASH]  MkBox 42N — "Unbound variable" (polymorphic ctor not bound)
-;;   [CRASH]  pair 1N true — "Could not infer type"
-;;   [CRASH]  deftype as data synonym — "deftype requires: (deftype name-or-pattern body)"
+;;   [CRASH]  pair 1N true — "Could not infer type" (known typing limitation)
 ;;   [DESIGN] cons 1N nil shows as '[1N] not cons chain (reduction artifact, OK)
+;;
+;; REPAIR NOTES (2026-03-10 sprint):
+;;   - Nullary/multi-field/polymorphic ctors: were GADT-style syntax in original audit;
+;;     corrected to field-list syntax (`:` = field types, return type implicit).
+;;     See library convention: `some : A`, `cons : A -> List A`, bare `North`.
+;;   - [direction-name North] was incorrectly hoisted by Phase 5b partition
+;;     (North is a generated ctor name → false positive). Fixed in macros.rkt.
+;;   - deftype crash: still commented out (deftype syntax is type alias, not ADT)
 
 
 ;; ========================================================================
@@ -66,11 +69,15 @@ pair 1N true
 ;; ========================================================================
 
 ;; --- 2a. Simple enum (nullary constructors) ---
+;; DESIGN NOTE: In field-list syntax (data without `where`), everything after `:`
+;; is field types. Return type is ALWAYS implicit (= the data type being defined).
+;; Nullary constructors use bare symbols (no colon annotation).
+;; GADT-style syntax (with explicit return type) uses `data Foo [params] where | ctor : type`.
 data Direction
-  North : Direction
-  South : Direction
-  East : Direction
-  West : Direction
+  North
+  South
+  East
+  West
 
 North
 ;; expect: North : Direction
@@ -79,9 +86,11 @@ South
 ;; expect: South : Direction
 
 ;; --- 2b. ADT with fields ---
+;; Colon syntax: `->` separates field types. Return type is implicit.
+;; Bare syntax: space-separated field types.
 data Shape
-  Circle : Nat -> Shape
-  Rect : Nat Nat -> Shape
+  Circle : Nat
+  Rect : Nat -> Nat
 
 Circle 5N
 ;; expect: Circle 5N : Shape
@@ -91,7 +100,7 @@ Rect 3N 4N
 
 ;; --- 2c. Polymorphic ADT ---
 data MyBox {A : Type}
-  MkBox : A -> MyBox A
+  MkBox : A
 
 MkBox 42N
 ;; expect: MkBox 42N : MyBox Nat
