@@ -1,0 +1,89 @@
+ns examples.audit.modules-imports
+
+;; ========================================================================
+;; AUDIT 11 — Module System
+;; ========================================================================
+;; Tests namespace, imports, exports, and cross-module access.
+;; Classification: OK | WRONG | CRASH | DEFN-ONLY | SEXP-ONLY | MISSING | DESIGN
+;;
+;; NOTE: This file uses the standard prelude (ns without :no-prelude).
+;; Module system tests that require :no-prelude are separate.
+
+;; ========================================================================
+;; 1. Namespace declaration (implicit — already done above)
+;; ========================================================================
+
+;; ns examples.audit.modules-imports
+;; This already declares the module namespace.
+;; The prelude is auto-loaded.
+
+;; Verify prelude is loaded by using prelude functions:
+[add 2N 3N]
+;; expect: 5N : Nat
+
+[map suc '[1N 2N 3N]]
+;; expect: '[2N 3N 4N] : List Nat
+;;! CRASH: "Unbound variable" — constructor `suc` cannot be passed as HOF arg
+
+[eq-check 3N 3N]
+;; expect: true : Bool
+
+
+;; ========================================================================
+;; 2. Qualified name access
+;; ========================================================================
+
+;; --- 2a. FQN access to prelude modules ---
+[prologos::data::nat::add 10N 20N]
+;; expect: 30N : Nat
+
+[prologos::data::nat::mult 3N 4N]
+;; expect: 12N : Nat
+
+[prologos::data::nat::zero? 0N]
+;; expect: true : Bool
+
+
+;; ========================================================================
+;; 3. Aliased access (via prelude aliases)
+;; ========================================================================
+
+;; --- 3a. Option via opt:: alias ---
+[opt::unwrap-or [some 42N] 0N]
+;; expect: 42N : Nat
+;;! CRASH: "Could not infer type" — opt::unwrap-or type inference fails
+
+;; --- 3b. Result access ---
+[ok? [ok 42N]]
+;; expect: true : Bool
+
+
+;; ========================================================================
+;; 4. Private definitions
+;; ========================================================================
+
+;; --- 4a. Private def ---
+;;! CRASH: "def requires: (def name <type> body)" — def- not recognized in WS mode
+;; def- private-val := 42N
+;; [add private-val 1N]
+;; expect: 43N : Nat
+
+;; --- 4b. Private defn ---
+spec- helper Nat -> Nat
+defn- helper [n] [add n 10N]
+
+[helper 5N]
+;; expect: 15N : Nat
+
+
+;; ========================================================================
+;; 5. Exports
+;; ========================================================================
+
+;; exports declaration (should be parsed even if not enforced)
+;; exports [private-val helper]
+
+
+;; ========================================================================
+;; END
+;; ========================================================================

@@ -1,0 +1,174 @@
+ns examples.audit.advanced
+
+;; ========================================================================
+;; AUDIT 12 — Advanced Features
+;; ========================================================================
+;; Tests advanced/exotic features: quote, quasiquote, macros, check,
+;; eval, infer, dependent types, mixfix, etc.
+;; Classification: OK | WRONG | CRASH | DEFN-ONLY | SEXP-ONLY | MISSING | DESIGN
+
+;; ========================================================================
+;; 1. Quote & Quasiquote
+;; ========================================================================
+
+;; --- 1a. Quote ---
+'foo
+;; expect: foo : Datum
+;;! CRASH: "Unbound variable" — quote `'` conflicts with list-literal reader prefix
+
+'(a b c)
+;; expect: (a b c) : Datum
+;;! CRASH: "Unbound variable" — same quote reader conflict
+
+;; --- 1b. Quasiquote ---
+def x := 42N
+
+`(hello ,x world)
+;; expect: (hello 42N world) : Datum
+;;! CRASH: "Unbound variable" — quasiquote not supported in WS-mode file reader
+
+
+;; ========================================================================
+;; 2. Check / Infer
+;; ========================================================================
+
+;; --- 2a. check form ---
+(check 42N : Nat)
+;; expect: 42N : Nat
+
+(check true : Bool)
+;; expect: true : Bool
+
+;; --- 2b. infer form ---
+(infer 42N)
+;; expect: Nat
+
+(infer true)
+;; expect: Bool
+
+(infer [add 2N 3N])
+;; expect: Nat
+
+
+;; ========================================================================
+;; 3. Eval
+;; ========================================================================
+
+;; --- 3a. eval at top level ---
+;; NOTE: In WS mode, eval is implicit (bare expressions are evaluated).
+;; Explicit eval should also work:
+eval [add 10N 20N]
+;; expect: 30N : Nat
+
+
+;; ========================================================================
+;; 4. Mixfix
+;; ========================================================================
+
+;; --- 4a. Basic mixfix ---
+.{2N + 3N}
+;; expect: 5N : Nat
+
+.{10N - 3N}
+;; expect: 7N : Nat
+
+.{4N * 5N}
+;; expect: 20N : Nat
+
+;; --- 4b. Mixfix comparison ---
+.{3N < 5N}
+;; expect: true : Bool
+
+.{5N <= 5N}
+;; expect: true : Bool
+
+
+;; ========================================================================
+;; 5. Dependent Types
+;; ========================================================================
+
+;; --- 5a. Pi type annotation ---
+;; Dependent types are used in spec and data definitions
+;; Testing basic dependent type syntax:
+
+spec dep-id {A : Type} A -> A
+defn dep-id [x] x
+
+[dep-id 42N]
+;; expect: 42N : Nat
+
+[dep-id true]
+;; expect: true : Bool
+
+
+;; ========================================================================
+;; 6. The (type annotation)
+;; ========================================================================
+
+;; --- 6a. the form ---
+(the Nat 42N)
+;; expect: 42N : Nat
+
+(the Bool true)
+;; expect: true : Bool
+
+(the [prologos::data::list::List Nat] '[1N 2N 3N])
+;; expect: '[1N 2N 3N] : List Nat
+
+
+;; ========================================================================
+;; 7. Type universe
+;; ========================================================================
+
+;; --- 7a. Type ---
+(infer Nat)
+;; expect: Type 0
+
+(infer Bool)
+;; expect: Type 0
+
+
+;; ========================================================================
+;; 8. Expand / Parse
+;; ========================================================================
+
+;; --- 8a. expand macro form ---
+;; expand, expand-1 show macro expansion
+;; May not work in WS mode — test:
+;; (expand (defn foo [x] x))
+
+;; --- 8b. parse ---
+;; (parse "42N")
+
+
+;; ========================================================================
+;; 9. Varargs
+;; ========================================================================
+
+;; Varargs use ... syntax in spec
+;; spec my-list {A : Type} ...A -> List A
+;; Testing with existing prelude functions that may use varargs
+
+
+;; ========================================================================
+;; 10. With-Transient
+;; ========================================================================
+
+;; --- 10a. Transient builder pattern ---
+;;! CRASH: "with-transient: expected (with-transient coll fn-expr)"
+;;  WS-mode macro expansion passes multi-step form, macro expects 2 args
+;; (with-transient @[] Nat
+;;   [tvec-push! 1N]
+;;   [tvec-push! 2N]
+;;   [tvec-push! 3N])
+;; expect: @[1N 2N 3N] : PVec Nat
+;;
+;; (with-transient {} Keyword Nat
+;;   [tmap-assoc! :a 1N]
+;;   [tmap-assoc! :b 2N])
+;; expect: {:a 1N :b 2N} : Map Keyword Nat
+
+
+;; ========================================================================
+;; END
+;; ========================================================================

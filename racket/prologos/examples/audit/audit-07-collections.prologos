@@ -1,0 +1,296 @@
+ns examples.audit.collections
+
+;; ========================================================================
+;; AUDIT 07 — Collections & Operations
+;; ========================================================================
+;; Tests all collection types and their operations.
+;; Classification: OK | WRONG | CRASH | DEFN-ONLY | SEXP-ONLY | MISSING | DESIGN
+
+;; ========================================================================
+;; 1. List Operations
+;; ========================================================================
+
+;; --- 1a. List creation ---
+'[1N 2N 3N]
+;; expect: '[1N 2N 3N] : List Nat
+
+[nil Nat]
+;; expect: nil : List Nat
+
+[cons 0N '[1N 2N]]
+;; expect: '[0N 1N 2N] : List Nat
+
+;; --- 1b. List access ---
+[head '[10N 20N 30N]]
+;; expect: 10N : Nat
+;; actual: some 10N : Option Nat — DESIGN: safe API returns Option
+
+[tail '[10N 20N 30N]]
+;; expect: '[20N 30N] : List Nat
+;; actual: some '[20N 30N] : Option (List Nat) — DESIGN: safe API returns Option
+
+[length '[1N 2N 3N 4N]]
+;; expect: 4N : Nat
+
+[nth 1N '[10N 20N 30N]]
+;; expect: 20N : Nat
+;; actual: some 20N : Option Nat — DESIGN: safe API returns Option
+
+[last '[10N 20N 30N]]
+;; expect: 30N : Nat
+;; actual: some 30N : Option Nat — DESIGN: safe API returns Option
+
+;; --- 1c. List transformation ---
+[map suc '[1N 2N 3N]]
+;; expect: '[2N 3N 4N] : List Nat
+;;! CRASH: "Unbound variable" — constructor `suc` cannot be passed as HOF arg
+
+[filter (fn [x : Nat] [gt? x 2N]) '[1N 2N 3N 4N]]
+;; expect: '[3N 4N] : List Nat
+
+[reverse '[1N 2N 3N]]
+;; expect: '[3N 2N 1N] : List Nat
+
+[append '[1N 2N] '[3N 4N]]
+;; expect: '[1N 2N 3N 4N] : List Nat
+
+;; --- 1d. List reduction ---
+[foldr (fn [a : Nat] (fn [b : Nat] [add a b])) 0N '[1N 2N 3N]]
+;; expect: 6N : Nat
+
+[sum '[1N 2N 3N 4N]]
+;; expect: 10N : Nat
+
+;; --- 1e. List query ---
+[any? (fn [x : Nat] [gt? x 3N]) '[1N 2N 3N 4N]]
+;; expect: true : Bool
+
+[all? (fn [x : Nat] [gt? x 0N]) '[1N 2N 3N]]
+;; expect: true : Bool
+
+;; --- 1f. List higher-order ---
+[take 2N '[1N 2N 3N 4N]]
+;; expect: '[1N 2N] : List Nat
+
+[drop 2N '[1N 2N 3N 4N]]
+;; expect: '[3N 4N] : List Nat
+
+[zip '[1N 2N 3N] '[10N 20N 30N]]
+;; expect: list of pairs
+
+[sort '[3N 1N 2N]]
+;; expect: '[1N 2N 3N] : List Nat
+;;! CRASH: "Could not infer type" — sort needs Ord constraint, not inferred from literal
+
+[dedup '[1N 2N 2N 3N 3N 3N]]
+;; expect: '[1N 2N 3N] : List Nat
+;;! CRASH: "Could not infer type" — dedup needs Eq constraint, not inferred from literal
+
+[range 1N 5N]
+;; expect: '[1N 2N 3N 4N] : List Nat
+;;! CRASH: "Too many arguments to 'range'" — range signature different than expected
+
+
+;; ========================================================================
+;; 2. Option Operations
+;; ========================================================================
+
+;; --- 2a. Option creation ---
+[some 42N]
+;; expect: some 42N : Option Nat
+
+[none Nat]
+;; expect: none : Option Nat
+
+;; --- 2b. Option query ---
+[some? [some 42N]]
+;; expect: true : Bool
+
+[none? [none Nat]]
+;; expect: true : Bool
+
+;; --- 2c. Option access ---
+[opt::unwrap-or [some 42N] 0N]
+;; expect: 42N : Nat
+;;! CRASH: "Could not infer type" — opt::unwrap-or fails type inference
+
+[opt::unwrap-or [none Nat] 0N]
+;; expect: 0N : Nat
+;;! CRASH: "Could not infer type" — opt::unwrap-or fails type inference
+
+
+;; ========================================================================
+;; 3. Result Operations
+;; ========================================================================
+
+;; --- 3a. Result creation ---
+[ok 42N]
+;; expect: ok 42N : Result Nat _
+
+[err "failure"]
+;; expect: err "failure" : Result _ String
+
+;; --- 3b. Result query ---
+[ok? [ok 42N]]
+;; expect: true : Bool
+
+[err? [err "failure"]]
+;; expect: true : Bool
+
+
+;; ========================================================================
+;; 4. PVec Operations
+;; ========================================================================
+
+;; --- 4a. PVec creation ---
+@[1N 2N 3N]
+;; expect: @[1N 2N 3N] : PVec Nat
+
+;; --- 4b. PVec operations ---
+[pvec-map suc @[1N 2N 3N]]
+;; expect: @[2N 3N 4N] : PVec Nat
+;;! CRASH: "Unbound variable" — constructor `suc` cannot be passed as HOF arg
+
+[pvec-filter (fn [x : Nat] [gt? x 1N]) @[1N 2N 3N]]
+;; expect: @[2N 3N] : PVec Nat
+
+[pvec-fold (fn [acc : Nat] (fn [x : Nat] [add acc x])) 0N @[1N 2N 3N]]
+;; expect: 6N : Nat
+
+
+;; ========================================================================
+;; 5. Map Operations
+;; ========================================================================
+
+;; --- 5a. Map creation ---
+{:a 1N :b 2N :c 3N}
+;; expect: {:a 1N :b 2N :c 3N} : Map Keyword Nat
+
+[map-empty Keyword Nat]
+;; expect: {} : Map Keyword Nat
+
+;; --- 5b. Map operations ---
+[map-assoc {:a 1N} :b 2N]
+;; expect: {:a 1N :b 2N} : Map Keyword Nat
+
+[map-get {:a 1N :b 2N} :a]
+;; expect: 1N : Nat
+
+[map-dissoc {:a 1N :b 2N} :a]
+;; expect: {:b 2N} : Map Keyword Nat
+
+[map-size {:a 1N :b 2N :c 3N}]
+;; expect: 3N : Nat
+
+[map-has-key? {:a 1N :b 2N} :a]
+;; expect: true : Bool
+
+[map-keys {:a 1N :b 2N}]
+;; expect: set of :a :b
+
+[map-vals {:a 1N :b 2N}]
+;; expect: list of 1N 2N
+
+;; --- 5c. Map higher-order ---
+[map-map-vals suc {:a 1N :b 2N}]
+;; expect: {:a 2N :b 3N} : Map Keyword Nat
+;;! CRASH: "Unbound variable" — constructor `suc` cannot be passed as HOF arg
+
+
+;; ========================================================================
+;; 6. Set Operations
+;; ========================================================================
+
+;; --- 6a. Set creation ---
+#{1N 2N 3N}
+;; expect: #{1N 2N 3N} : Set Nat
+
+[set-singleton 42N]
+;; expect: #{42N} : Set Nat
+;;! CRASH: "Could not infer type" — set-singleton can't infer from bare Nat
+
+;; --- 6b. Set operations ---
+[set-map suc #{1N 2N 3N}]
+;; expect: #{2N 3N 4N} : Set Nat
+;;! CRASH: "Unbound variable" — constructor `suc` cannot be passed as HOF arg
+
+[set-fold (fn [acc : Nat] (fn [x : Nat] [add acc x])) 0N #{1N 2N 3N}]
+;; expect: 6N : Nat
+
+
+;; ========================================================================
+;; 7. LSeq (Lazy Sequence) Operations
+;; ========================================================================
+
+;; --- 7a. LSeq creation and conversion ---
+[list-to-lseq '[1N 2N 3N]]
+;; expect: LSeq
+
+[lseq-to-list [list-to-lseq '[1N 2N 3N]]]
+;; expect: '[1N 2N 3N] : List Nat
+
+;; --- 7b. LSeq operations ---
+[lseq-map suc [list-to-lseq '[1N 2N 3N]]]
+;; expect: LSeq (lazy)
+;;! CRASH: "Unbound variable" — constructor `suc` cannot be passed as HOF arg
+
+[lseq-take 2N [list-to-lseq '[1N 2N 3N 4N 5N]]]
+;; expect: LSeq (first 2)
+
+[lseq-to-list [lseq-take 2N [list-to-lseq '[1N 2N 3N 4N 5N]]]]
+;; expect: '[1N 2N] : List Nat
+
+[lseq-length [list-to-lseq '[1N 2N 3N]]]
+;; expect: 3N : Nat
+
+
+;; ========================================================================
+;; 8. Collection Conversions
+;; ========================================================================
+
+;; --- 8a. into-vec, into-list, into-set ---
+[into-vec '[1N 2N 3N]]
+;; expect: @[1N 2N 3N] : PVec Nat
+;;! CRASH: "Could not infer type" — into-vec type inference fails
+
+[into-list @[1N 2N 3N]]
+;; expect: '[1N 2N 3N] : List Nat
+;;! CRASH: "Could not infer type" — into-list type inference fails
+
+
+;; ========================================================================
+;; 9. Postfix Indexing
+;; ========================================================================
+
+;; --- 9a. List indexing ---
+def xs := '[10N 20N 30N 40N]
+
+xs[0]
+;; expect: 10N : Nat
+
+xs[2]
+;; expect: 30N : Nat
+
+;; --- 9b. Map indexing ---
+def config := {:port 8080N :timeout 30N}
+
+config[:port]
+;; expect: 8080N : Nat
+
+config[:timeout]
+;; expect: 30N : Nat
+
+;; --- 9c. Chained indexing ---
+def nested := {:db {:port 5432N :host 1N} :app {:port 3000N}}
+
+nested[:db][:port]
+;; expect: 5432N : Nat
+
+;; --- 9d. Dot access ---
+config.port
+;; expect: 8080N : Nat
+
+
+;; ========================================================================
+;; END
+;; ========================================================================
