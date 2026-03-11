@@ -1898,6 +1898,9 @@
  elab-cell-read
  elab-add-unify-constraint)
 
+;; Phase 1a: Install infrastructure cell creation callback.
+(current-prop-new-infra-cell elab-new-infra-cell)
+
 ;; P5b: Install multiplicity cell callbacks
 (current-prop-fresh-mult-cell elab-fresh-mult-cell)
 (current-prop-mult-cell-write elab-mult-cell-write)

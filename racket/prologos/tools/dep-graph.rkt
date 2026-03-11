@@ -393,6 +393,8 @@
    (test-dep '(infra-cell.rkt elaborator-network.rkt propagator.rkt champ.rkt type-lattice.rkt syntax.rkt atms.rkt) #f)
    'test-infra-cell-parallel-01.rkt
    (test-dep '(infra-cell.rkt propagator.rkt champ.rkt) #f)
+   'test-infra-cell-constraint-01.rkt
+   (test-dep '(infra-cell.rkt elaborator-network.rkt metavar-store.rkt propagator.rkt champ.rkt syntax.rkt) #f)
    'test-inductive.rkt
    (test-dep '(prelude.rkt reduction.rkt substitution.rkt syntax.rkt typing-core.rkt) #f)
    'test-int.rkt

@@ -51,6 +51,8 @@
  elab-all-cells
  elab-unsolved-cells
  elab-contradicted-cells
+ ;; Phase 1a: Infrastructure cell creation (for propagator-first migration)
+ elab-new-infra-cell
  ;; P5b: Multiplicity cells
  elab-fresh-mult-cell
  elab-mult-cell-read
@@ -124,6 +126,17 @@
    (net-cell-write (elab-network-prop-net enet) cid val)
    (elab-network-cell-info enet)
    (elab-network-next-meta-id enet)))
+
+;; Phase 1a: Create an infrastructure cell in the elab-network's prop-net.
+;; Unlike elab-fresh-meta, this does NOT add cell-info metadata or increment
+;; the meta counter — infra-cells are not metavariables.
+;; Returns (values elab-network* cell-id).
+(define (elab-new-infra-cell enet initial-value merge-fn)
+  (define net (elab-network-prop-net enet))
+  (define-values (net* cid) (net-new-cell net initial-value merge-fn))
+  (values
+   (elab-network net* (elab-network-cell-info enet) (elab-network-next-meta-id enet))
+   cid))
 
 ;; Retrieve cell metadata, or 'none if unknown.
 (define (elab-cell-info-ref enet cid)

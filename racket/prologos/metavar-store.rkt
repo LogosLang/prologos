@@ -27,7 +27,8 @@
          "sessions.rkt"
          "source-location.rkt"
          "performance-counters.rkt"
-         "champ.rkt")
+         "champ.rkt"
+         "infra-cell.rkt")  ;; Phase 1a: merge-list-append for constraint cell
          ;; NOTE: elaborator-network.rkt and type-lattice.rkt are NOT required
          ;; directly to avoid a circular dependency:
          ;;   metavar-store → elaborator-network → type-lattice → reduction → metavar-store
@@ -127,6 +128,10 @@
  current-prop-cell-read
  current-prop-add-unify-constraint
  install-prop-network-callbacks!
+ ;; Phase 1a: Infrastructure cell callback
+ current-prop-new-infra-cell
+ current-constraint-cell-id
+ read-constraint-store
  ;; P5b: Multiplicity cell callbacks
  current-prop-fresh-mult-cell
  current-prop-mult-cell-write
@@ -418,8 +423,16 @@
 (define (add-constraint! lhs rhs ctx source)
   (perf-inc-constraint!)
   (define c (constraint lhs rhs ctx source 'postponed '()))
-  ;; Add to global store
+  ;; Add to global store (legacy parameter path)
   (current-constraint-store (cons c (current-constraint-store)))
+  ;; Phase 1a: Also write to constraint cell if available.
+  ;; merge-list-append appends (list c) to the existing cell contents.
+  (define cstore-cid (current-constraint-cell-id))
+  (define cstore-net-box (current-prop-net-box))
+  (define write-fn (current-prop-cell-write))
+  (when (and cstore-cid cstore-net-box write-fn)
+    (define enet (unbox cstore-net-box))
+    (set-box! cstore-net-box (write-fn enet cstore-cid (list c))))
   ;; Register for wakeup on all mentioned metas
   (define meta-ids (append (collect-meta-ids lhs) (collect-meta-ids rhs)))
   (define registry (current-wakeup-registry))
@@ -502,17 +515,35 @@
           (when (eq? (constraint-status c) 'retrying)
             (set-constraint-status! c 'postponed)))))))
 
+;; Phase 1a: Read the constraint store from the cell (preferred) or legacy parameter.
+;; Returns the current list of all constraints.
+;; NOTE: Phase 1a is "storage only" — constraint cell is write-only for now.
+;; All reads go through legacy parameter until save/restore is updated (Phase 1d+).
+;; This function is exported for future use and tests.
+(define (read-constraint-store)
+  (define cid (current-constraint-cell-id))
+  (define net-box (current-prop-net-box))
+  (define read-fn (current-prop-cell-read))
+  (if (and cid net-box read-fn)
+      (read-fn (unbox net-box) cid)
+      (current-constraint-store)))
+
 ;; Reset the constraint store (called by reset-meta-store!).
+;; Phase 1a: constraint cell is inherently reset when the network is recreated.
+;; Only need to clear the legacy parameter and wakeup registry.
 (define (reset-constraint-store!)
   (current-constraint-store '())
+  (current-constraint-cell-id #f)
   (hash-clear! (current-wakeup-registry)))
 
 ;; Query: all postponed constraints.
+;; Phase 1a: still reads from legacy parameter (not cell) for save/restore compatibility.
 (define (all-postponed-constraints)
   (filter (lambda (c) (eq? (constraint-status c) 'postponed))
           (current-constraint-store)))
 
 ;; Query: all failed constraints.
+;; Phase 1a: still reads from legacy parameter (not cell) for save/restore compatibility.
 (define (all-failed-constraints)
   (filter (lambda (c) (eq? (constraint-status c) 'failed))
           (current-constraint-store)))
@@ -558,6 +589,14 @@
 (define current-prop-cell-write (make-parameter #f))        ;; (enet cell-id value → enet*)
 (define current-prop-cell-read (make-parameter #f))         ;; (enet cell-id → value)
 (define current-prop-add-unify-constraint (make-parameter #f))  ;; (enet cid-a cid-b → (values enet* pid))
+
+;; Phase 1a: Infrastructure cell creation callback (set by driver.rkt).
+;; (enet initial-value merge-fn → (values enet* cell-id))
+(define current-prop-new-infra-cell (make-parameter #f))
+
+;; Phase 1a: Cell ID for the constraint store cell (set by reset-meta-store!).
+;; When #f, falls back to legacy parameter-based storage.
+(define current-constraint-cell-id (make-parameter #f))
 
 ;; P5b: Multiplicity cell callbacks
 (define current-prop-fresh-mult-cell (make-parameter #f))   ;; (enet source → (values enet* cell-id))
@@ -612,6 +651,7 @@
                  [current-mult-meta-store (make-hasheq)]
                  [current-sess-meta-store (make-hasheq)]
                  [current-constraint-store '()]
+                 [current-constraint-cell-id #f]  ;; Phase 1a
                  [current-wakeup-registry (make-hasheq)]
                  [current-trait-constraint-map (make-hasheq)]
                  [current-trait-wakeup-map (make-hasheq)]
@@ -1049,7 +1089,16 @@
           (set-box! (current-prop-id-map-box) champ-empty))
         (begin
           (current-prop-net-box (box (make-net)))
-          (current-prop-id-map-box (box champ-empty))))))
+          (current-prop-id-map-box (box champ-empty))))
+    ;; Phase 1a: Create constraint store cell in the unified network.
+    ;; merge-list-append ensures constraints accumulate monotonically.
+    (define new-cell-fn (current-prop-new-infra-cell))
+    (when new-cell-fn
+      (define nb (current-prop-net-box))
+      (define enet (unbox nb))
+      (define-values (enet* cstore-cid) (new-cell-fn enet '() merge-list-append))
+      (set-box! nb enet*)
+      (current-constraint-cell-id cstore-cid))))
 
 ;; ========================================
 ;; Meta state save/restore for speculative type-checking
