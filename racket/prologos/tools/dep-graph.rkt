@@ -389,6 +389,8 @@
    (test-dep '(infra-cell.rkt propagator.rkt champ.rkt) #f)
    'test-infra-cell-atms-01.rkt
    (test-dep '(infra-cell.rkt atms.rkt propagator.rkt champ.rkt) #f)
+   'test-infra-cell-registration-01.rkt
+   (test-dep '(infra-cell.rkt elaborator-network.rkt propagator.rkt champ.rkt type-lattice.rkt syntax.rkt atms.rkt) #f)
    'test-inductive.rkt
    (test-dep '(prelude.rkt reduction.rkt substitution.rkt syntax.rkt typing-core.rkt) #f)
    'test-int.rkt
