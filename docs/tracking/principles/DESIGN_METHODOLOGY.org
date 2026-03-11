@@ -282,6 +282,13 @@ at each phase, raising design issues as they surface.
   and library-level traits (8 tests). Tests are not an afterthought
   --- they are the proof that the implementation matches the design.
 
+- *Three-level WS validation* (see "WS-Mode Validation Protocol" below):
+  Features must be validated at all three levels: sexp unit tests,
+  ~process-string-ws~ tests, and ~process-file~ on a ~.prologos~ file.
+  A feature that passes sexp tests but fails in a ~.prologos~ file is
+  /not done/. This is the most common gap in our process --- see the
+  anti-pattern "Sexp-Only Validation" below.
+
 - *Track deferred work immediately*: When something must be deferred
   (the ~new-lattice-cell~ generic wrapper, for instance), add it to
   ~DEFERRED.md~ in the same commit. Deferred work not tracked is
@@ -325,12 +332,89 @@ at each phase, raising design issues as they surface.
   └──────────────────────────────────┘
 #+end_src
 
+*** WS-Mode Validation Protocol
+
+WS-mode ~.prologos~ files are the /only/ user-facing syntax. A feature
+that works in sexp mode but not in WS mode is broken --- it does not
+work for our users. This protocol ensures we catch these gaps during
+implementation, not at Stage 5 demo time.
+
+**** Three levels of testing
+
+| Level | Tool                    | What it validates                            |
+|-------+-------------------------+----------------------------------------------|
+|     1 | ~process-string~ / ~run-last~ | Sexp IR, parser internals, type rules     |
+|     2 | ~process-string-ws~ / ~run-ws-last~ | Single WS expression in preloaded env |
+|     3 | ~process-file~ on ~.prologos~ | Full pipeline: reader, top-level scoping, multi-form interaction, file-level preparse |
+
+Level 3 is consistently the gap. Features pass Level 1 and 2 but fail
+Level 3 because:
+- Top-level scoping differs from inside-defn scoping
+- File-level preparse expansion has different code paths than string mode
+- Multi-form interaction (e.g., ~def~ followed by indexing expression)
+  exercises the WS reader's form-boundary logic
+
+**** The acceptance file
+
+Before implementation begins, write a skeleton ~.prologos~ file with
+the expressions the feature should support. This becomes the acceptance
+test. The file lives at:
+
+~racket/prologos/examples/{date}-{feature}.prologos~
+
+The skeleton can start with commented-out expressions showing the
+target syntax. As each phase completes, uncomment the expressions
+that now work. The feature isn't done until ~process-file~ on the
+acceptance file produces 0 errors.
+
+This catches the sexp-vs-WS gap at implementation time because you
+are forced to confront top-level scoping, file-level preparse, and
+multi-form interaction from the start.
+
+**** The canary file
+
+Maintain a single ~.prologos~ file (~examples/canary.prologos~) that
+exercises every landed feature. Updated incrementally as each feature
+lands --- not deferred to Stage 5. Run it as part of the test suite or
+as a manual smoke test. If it breaks, something regressed.
+
+The canary differs from per-feature tests in that it tests /composition/
+of features in a single namespace --- the same environment a user works in.
+
+**** Completion criterion
+
+A phase is not complete until:
+
+1. All sexp unit tests pass (Level 1)
+2. WS-mode string tests pass (Level 2)
+3. The expressions work in a standalone ~.prologos~ file via
+   ~process-file~ (Level 3)
+4. The acceptance file has been updated (new expressions uncommented)
+
+A ~process-string-ws~ test alone is insufficient --- top-level scoping
+and file-level preparse must be validated.
+
+**** Tracking WS coverage
+
+The progress tracker for each feature should include a column for
+WS file validation:
+
+| Phase | Status | Commit    | WS file validated?      |
+|-------+--------+-----------+-------------------------|
+| 1a    | DONE   | ~f4ef4c0~ | Yes                     |
+| 1c    | DONE   | ~587cacf~ | *No --- only inside defn* |
+| 1d    | DONE   | ~b8b5039~ | *No --- sexp only*        |
+
+This makes the gap visible. "DONE" without WS file validation should
+be treated as "DONE (sexp only)" and flagged for follow-up.
+
 *** Artifacts
 
 - Phase-specific commits with descriptive messages
-- Updated tracking document with completion status
+- Updated tracking document with completion status (including WS validation column)
 - Updated ~DEFERRED.md~ for any deferred work
 - Test suite growth (measurable)
+- Acceptance ~.prologos~ file with uncommented working expressions
 
 ** Stage 5: Composition and Extension
 
@@ -635,6 +719,25 @@ you're most confident about --- confidence is where blind spots hide.
 An untested implementation is an unverified hypothesis. Tests are the
 proof that the implementation matches the design. New features aren't
 done until they have tests.
+
+** Sexp-only validation
+
+A feature validated only at the sexp or ~process-string-ws~ level has
+an unknown status in the user-facing syntax. This is the most common
+gap in our process. The Surface Ergonomics Sprint (March 2026) revealed
+that several features marked "DONE" failed in ~.prologos~ files:
+
+- Top-level ~let~ with sequential scoping --- works inside ~defn~ bodies,
+  fails at file top level (forms parsed as separate top-level expressions)
+- Flat-pair ~let [x v y v]~ --- works in sexp mode, no WS surface at all
+- Keyword equality (~:hello = :hello~) --- no ~Eq Keyword~ instance
+- ~let~-bound values as narrowing targets --- value doesn't propagate
+  into the narrowing context
+
+None of these were visible from the passing test suite because the tests
+used ~process-string-ws~ (Level 2), which processes a single expression
+in a pre-initialized environment. The gap is between Level 2 (string)
+and Level 3 (file). See "WS-Mode Validation Protocol" under Stage 4.
 
 * Relationship to Other Principles Documents
 

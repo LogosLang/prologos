@@ -14,3 +14,9 @@
   - Failure logs are always available in `data/benchmarks/failures/*.log` -- use Read tool to inspect individual failures without re-running
   - The `--failures` flag replays failure logs without re-running tests: `racket tools/run-affected-tests.rkt --failures`
 - **Shared fixture pattern** (REQUIRED): All test files that use `process-string` must use the shared fixture pattern — load modules ONCE at module level via `define-values`, each test reuses the cached env via `run`/`run-last`. Never use per-test `run-ns`/`run-ns-last` that creates fresh env per call. See `tests/test-char-string.rkt` or `tests/test-hashable-01.rkt` for the canonical pattern. Use `prelude-module-registry` from `test-support.rkt` as the starting module registry (not `(hasheq)`).
+- **Three-level WS validation** (REQUIRED for new language features): Features that add or modify user-facing syntax must be validated at three levels:
+  - **Level 1 (sexp)**: `process-string` / `run-last` — validates IR, parser internals, type rules
+  - **Level 2 (WS string)**: `process-string-ws` / `run-ws-last` — validates single WS expression in preloaded env
+  - **Level 3 (WS file)**: `process-file` on a `.prologos` file — validates full pipeline: reader, top-level scoping, multi-form interaction, file-level preparse
+  - Level 3 is the gap that most commonly produces "works in tests, broken for users" situations. Top-level scoping, file-level preparse, and multi-form interaction differ from string-mode processing. A feature passing Level 1-2 but untested at Level 3 should be marked "DONE (sexp only)" not "DONE".
+  - See `DESIGN_METHODOLOGY.org` § "WS-Mode Validation Protocol" for the full protocol including acceptance files and the canary file.
