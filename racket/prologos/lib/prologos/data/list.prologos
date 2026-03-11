@@ -535,3 +535,50 @@ defn intercalate [sep xss]
 spec sort-on [B -> B -> Bool] [A -> B] [List A] -> List A
 defn sort-on [lte key xs]
   sort A [fn a b [lte [key a] [key b]]] xs
+
+;; ========================================
+;; Int-Indexed Operations
+;; ========================================
+;; Alternatives to Nat-indexed functions for computational contexts.
+;; Use these when working with Int values — they handle negative
+;; indices safely (returning none/nil) without manual Nat conversion.
+
+;; 0-indexed element lookup using Int index.
+spec nth-int Int [List A] -> Option A
+  :doc "Element at Int index (0-based). Negative indices return none."
+defn nth-int [n xs]
+  match [int-lt n 0]
+    | true  -> none
+    | false -> match xs
+      | nil       -> none
+      | cons a as -> match [int-eq n 0]
+        | true  -> some a
+        | false -> nth-int [int- n 1] as
+
+;; Take first n elements using Int index.
+spec take-int Int [List A] -> List A
+  :doc "Take first n elements. Non-positive n returns nil."
+defn take-int [n xs]
+  match [int-lt n 1]
+    | true  -> nil
+    | false -> match xs
+      | nil       -> nil
+      | cons a as -> cons a [take-int [int- n 1] as]
+
+;; Drop first n elements using Int index.
+spec drop-int Int [List A] -> List A
+  :doc "Drop first n elements. Non-positive n returns the list unchanged."
+defn drop-int [n xs]
+  match [int-lt n 1]
+    | true  -> xs
+    | false -> match xs
+      | nil       -> nil
+      | cons _ as -> drop-int [int- n 1] as
+
+;; Length of a list as Int.
+spec length-int [List A] -> Int
+  :doc "Number of elements as Int (for computational contexts)"
+defn length-int [xs]
+  match xs
+    | nil      -> 0
+    | cons _ as -> int+ 1 [length-int as]

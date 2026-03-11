@@ -361,7 +361,8 @@
                                            elem dedup count scanl iterate-n
                                            intercalate sort-on reduce1 foldr1
                                            init span break prefix-of? suffix-of?
-                                           delete find-index]])
+                                           delete find-index
+                                           nth-int take-int drop-int length-int]])
 
     ;; ---- Core traits (type class definitions) ----
     (imports [prologos::core::eq :refer [Eq eq-check eq-neq nat-eq Char--Eq--dict String--Eq--dict]])
