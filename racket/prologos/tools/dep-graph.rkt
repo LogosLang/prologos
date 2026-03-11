@@ -237,6 +237,12 @@
    (test-dep '(macros.rkt reader.rkt) #f)
    'test-dot-access-02.rkt
    (test-dep '(driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parser.rkt prelude.rkt pretty-print.rkt reader.rkt reduction.rkt source-location.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt typing-core.rkt) #t)
+   'test-postfix-index-01.rkt
+   (test-dep '(reader.rkt) #f)
+   'test-postfix-index-02.rkt
+   (test-dep '(macros.rkt) #f)
+   'test-postfix-index-03.rkt
+   (test-dep '(driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parser.rkt prelude.rkt pretty-print.rkt reader.rkt reduction.rkt source-location.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt typing-core.rkt) #t)
    'test-effect-bridge-01.rkt
    (test-dep '(effect-bridge.rkt effect-position.rkt propagator.rkt sessions.rkt session-lattice.rkt syntax.rkt) #f)
    'test-effect-collection-01.rkt
