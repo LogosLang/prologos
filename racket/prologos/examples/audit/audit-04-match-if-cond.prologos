@@ -1,0 +1,216 @@
+ns examples.audit.match-if-cond
+
+;; ========================================================================
+;; AUDIT 04 — Pattern Matching, if, cond
+;; ========================================================================
+;; Tests match, if, and cond forms in WS-mode .prologos files.
+;; Classification: OK | WRONG | CRASH | DEFN-ONLY | SEXP-ONLY | MISSING | DESIGN
+;;
+;; RESULTS (36 expressions, 0 errors):
+;;   OK: 34   WRONG: 2
+;;
+;;   [WRONG] Top-level `if true 1N 2N` -> 1N : _ (type is _ not Nat)
+;;   [WRONG] Top-level `if false 1N 2N` -> 2N : _ (type is _ not Nat)
+;;   Note: if inside defn body types correctly; issue is top-level only
+
+
+;; ========================================================================
+;; 1. match on Nat
+;; ========================================================================
+
+spec nat-to-str Nat -> Nat
+defn nat-to-str [n]
+  match n
+    | zero -> 0N
+    | [suc zero] -> 1N
+    | [suc [suc zero]] -> 2N
+    | _ -> 99N
+
+[nat-to-str 0N]
+;; expect: 0N : Nat
+
+[nat-to-str 1N]
+;; expect: 1N : Nat
+
+[nat-to-str 2N]
+;; expect: 2N : Nat
+
+[nat-to-str 5N]
+;; expect: 99N : Nat
+
+
+;; ========================================================================
+;; 2. match on Bool
+;; ========================================================================
+
+spec bool-to-nat Bool -> Nat
+defn bool-to-nat [b]
+  match b
+    | true -> 1N
+    | false -> 0N
+
+[bool-to-nat true]
+;; expect: 1N : Nat
+
+[bool-to-nat false]
+;; expect: 0N : Nat
+
+
+;; ========================================================================
+;; 3. match on List
+;; ========================================================================
+
+;; --- 3a. nil vs cons ---
+spec is-empty (List Nat) -> Bool
+defn is-empty [xs]
+  match xs
+    | nil -> true
+    | [cons _ _] -> false
+
+[is-empty '[]]
+;; expect: true : Bool
+
+[is-empty '[1N 2N]]
+;; expect: false : Bool
+
+;; --- 3b. Nested cons pattern ---
+spec second-elem (List Nat) -> Nat
+defn second-elem [xs]
+  match xs
+    | [cons _ [cons y _]] -> y
+    | _ -> 0N
+
+[second-elem '[10N 20N 30N]]
+;; expect: 20N : Nat
+
+[second-elem '[10N]]
+;; expect: 0N : Nat
+
+
+;; ========================================================================
+;; 4. match on Option
+;; ========================================================================
+
+spec get-or-default (Option Nat) -> Nat
+defn get-or-default [o]
+  match o
+    | [some x] -> x
+    | none -> 0N
+
+[get-or-default [some 42N]]
+;; expect: 42N : Nat
+
+[get-or-default none]
+;; expect: 0N : Nat
+
+
+;; ========================================================================
+;; 5. match on Result
+;; ========================================================================
+
+spec result-val (Result Nat String) -> Nat
+defn result-val [r]
+  match r
+    | [ok x] -> x
+    | [err _] -> 0N
+
+[result-val [ok 42N]]
+;; expect: 42N : Nat
+
+[result-val [err "bad"]]
+;; expect: 0N : Nat
+
+
+;; ========================================================================
+;; 6. Wildcard patterns
+;; ========================================================================
+
+spec always-one Nat -> Nat
+defn always-one [_] 1N
+
+[always-one 0N]
+;; expect: 1N : Nat
+
+[always-one 99N]
+;; expect: 1N : Nat
+
+
+;; ========================================================================
+;; 7. if expressions
+;; ========================================================================
+
+;; --- 7a. if as expression ---
+if true 1N 2N
+;; expect: 1N : Nat
+
+if false 1N 2N
+;; expect: 2N : Nat
+
+;; --- 7b. if in function body ---
+spec abs-diff Nat Nat -> Nat
+defn abs-diff [x y]
+  if [le? x y] [sub y x] [sub x y]
+
+[abs-diff 3N 7N]
+;; expect: 4N : Nat
+
+[abs-diff 7N 3N]
+;; expect: 4N : Nat
+
+;; --- 7c. Nested if ---
+spec clamp-val Nat -> Nat
+defn clamp-val [n]
+  if [lt? n 5N]
+    5N
+    if [gt? n 10N]
+      10N
+      n
+
+[clamp-val 3N]
+;; expect: 5N : Nat
+
+[clamp-val 7N]
+;; expect: 7N : Nat
+
+[clamp-val 15N]
+;; expect: 10N : Nat
+
+
+;; ========================================================================
+;; 8. cond expressions
+;; ========================================================================
+
+;; --- 8a. Basic cond ---
+spec classify Nat -> Nat
+defn classify [n]
+  cond
+    | [lt? n 5N] -> 0N
+    | [lt? n 10N] -> 1N
+    | true -> 2N
+
+[classify 3N]
+;; expect: 0N : Nat
+
+[classify 7N]
+;; expect: 1N : Nat
+
+[classify 15N]
+;; expect: 2N : Nat
+
+
+;; ========================================================================
+;; 9. match with guard clauses
+;; ========================================================================
+;; Guard syntax: | pat when expr -> body
+
+;;! Guards may not be supported in WS mode — test separately
+;; spec guarded Nat -> Nat
+;; defn guarded [n]
+;;   match n
+;;     | x when [gt? x 10N] -> 99N
+;;     | x -> x
+
+
+;; ========================================================================
+;; END
+;; ========================================================================

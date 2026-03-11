@@ -1,0 +1,201 @@
+ns examples.audit.data-constructors
+
+;; ========================================================================
+;; AUDIT 03 — Data Types & Constructors
+;; ========================================================================
+;; Tests ADT definitions, constructor patterns, and built-in constructors.
+;; Classification: OK | WRONG | CRASH | DEFN-ONLY | SEXP-ONLY | MISSING | DESIGN
+;;
+;; RESULTS (44 expressions, 10 errors):
+;;   OK: 22   WRONG: 5   CRASH: 7   DESIGN: 1
+;;
+;;   [WRONG]  data Rect : Nat Nat -> Shape — multi-field ctor "not a valid type"
+;;   [WRONG]  Nullary ctors (North, South) show as function type, not value
+;;   [WRONG]  [direction-name North] type mismatch (ctor = fn, not value)
+;;   [CRASH]  MkBox 42N — "Unbound variable" (polymorphic ctor not bound)
+;;   [CRASH]  pair 1N true — "Could not infer type"
+;;   [CRASH]  deftype as data synonym — "deftype requires: (deftype name-or-pattern body)"
+;;   [DESIGN] cons 1N nil shows as '[1N] not cons chain (reduction artifact, OK)
+
+
+;; ========================================================================
+;; 1. Built-in Constructors
+;; ========================================================================
+
+;; --- 1a. Nat constructors ---
+zero
+;; expect: 0N : Nat
+
+suc zero
+;; expect: 1N : Nat
+
+suc [suc [suc zero]]
+;; expect: 3N : Nat
+
+;; --- 1b. Option constructors ---
+some 42N
+;; expect: some 42N : Option Nat
+
+none
+;; expect: none : Option _
+
+;; --- 1c. List constructors ---
+nil
+;; expect: nil : List _
+
+cons 1N nil
+;; expect: cons 1N nil : List Nat
+
+cons 1N [cons 2N nil]
+;; expect: '[1N 2N] : List Nat
+
+;; --- 1d. Result constructors ---
+ok 42N
+;; expect: ok 42N : Result Nat _
+
+err "failure"
+;; expect: err "failure" : Result _ String
+
+;; --- 1e. Pair constructor ---
+pair 1N true
+;; expect: pair 1N true : Pair Nat Bool (or Sigma)
+
+
+;; ========================================================================
+;; 2. User-Defined ADTs (data)
+;; ========================================================================
+
+;; --- 2a. Simple enum (nullary constructors) ---
+data Direction
+  North : Direction
+  South : Direction
+  East : Direction
+  West : Direction
+
+North
+;; expect: North : Direction
+
+South
+;; expect: South : Direction
+
+;; --- 2b. ADT with fields ---
+data Shape
+  Circle : Nat -> Shape
+  Rect : Nat Nat -> Shape
+
+Circle 5N
+;; expect: Circle 5N : Shape
+
+Rect 3N 4N
+;; expect: Rect 3N 4N : Shape
+
+;; --- 2c. Polymorphic ADT ---
+data MyBox {A : Type}
+  MkBox : A -> MyBox A
+
+MkBox 42N
+;; expect: MkBox 42N : MyBox Nat
+
+MkBox true
+;; expect: MkBox true : MyBox Bool
+
+;; --- 2d. Match on user-defined ADT ---
+spec direction-name Direction -> Nat
+defn direction-name [d]
+  match d
+    | North -> 0N
+    | South -> 1N
+    | East -> 2N
+    | West -> 3N
+
+[direction-name North]
+;; expect: 0N : Nat
+
+[direction-name West]
+;; expect: 3N : Nat
+
+;; --- 2e. Match on ADT with fields ---
+spec area Shape -> Nat
+defn area [s]
+  match s
+    | Circle r -> [mult r r]
+    | Rect w h -> [mult w h]
+
+[area [Circle 5N]]
+;; expect: 25N : Nat
+
+[area [Rect 3N 4N]]
+;; expect: 12N : Nat
+
+
+;; ========================================================================
+;; 3. Pattern Matching on Built-in Types
+;; ========================================================================
+
+;; --- 3a. Option matching ---
+spec unwrap-nat (Option Nat) -> Nat
+defn unwrap-nat [o]
+  match o
+    | [some x] -> x
+    | none -> 0N
+
+[unwrap-nat [some 42N]]
+;; expect: 42N : Nat
+
+[unwrap-nat none]
+;; expect: 0N : Nat
+
+;; --- 3b. List matching ---
+spec list-len (List Nat) -> Nat
+defn list-len [xs]
+  match xs
+    | nil -> 0N
+    | [cons _ rest] -> [add 1N [list-len rest]]
+
+[list-len '[1N 2N 3N]]
+;; expect: 3N : Nat
+
+[list-len '[]]
+;; expect: 0N : Nat
+
+;; --- 3c. Nat matching ---
+spec fib Nat -> Nat
+defn fib [n]
+  match n
+    | zero -> 0N
+    | [suc zero] -> 1N
+    | [suc [suc k]] -> [add [fib [suc k]] [fib k]]
+
+[fib 6N]
+;; expect: 8N : Nat
+
+
+;; ========================================================================
+;; 4. List Literals
+;; ========================================================================
+
+'[1N 2N 3N]
+;; expect: '[1N 2N 3N] : List Nat
+
+'[]
+;; expect: '[] : List _
+
+'[true false true]
+;; expect: '[true false true] : List Bool
+
+
+;; ========================================================================
+;; 5. deftype
+;; ========================================================================
+;; Grammar says deftype is a synonym for data, but used as type alias
+;; in practice. The data-like syntax crashes.
+;;
+;;! CRASH: "deftype requires: (deftype name-or-pattern body)"
+;; deftype Color2
+;;   Red2 : Color2
+;;   Blue2 : Color2
+
+
+;; ========================================================================
+;; END
+;; ========================================================================
