@@ -706,9 +706,11 @@
                             'free)))
                        ;; Build constructor expression
                        (define ctor-val (make-narrow-ctor-expr ctor-name sub-vars))
-                       ;; Update bindings: replace the narrowed position
+                       ;; Update bindings at the narrowed position
                        (define updated-bindings
-                         (list-set bindings binding-idx ctor-val))
+                         (for/list ([b (in-list bindings)]
+                                    [i (in-naturals)])
+                           (if (= i binding-idx) ctor-val b)))
                        ;; Prepend sub-field bindings (reversed, per de Bruijn)
                        (define new-bindings
                          (append (reverse sub-vars) updated-bindings))
@@ -839,6 +841,11 @@
     [(expr-pair a b)
      (expr-pair (narrow-subst-bvars a bindings depth)
                 (narrow-subst-bvars b bindings depth))]
+    [(expr-boolrec mot tc fc scrut)
+     (expr-boolrec (narrow-subst-bvars mot bindings depth)
+                   (narrow-subst-bvars tc bindings depth)
+                   (narrow-subst-bvars fc bindings depth)
+                   (narrow-subst-bvars scrut bindings depth))]
     ;; Ground/atomic — no bvars inside
     [(expr-zero) expr] [(expr-true) expr] [(expr-false) expr]
     [(expr-nat-val _) expr] [(expr-int _) expr] [(expr-string _) expr]
@@ -859,10 +866,17 @@
 ;;   - function calls (expr-app with non-constructor fvar) → recursive narrowing
 (define (narrow-match result target subst func-name depth)
   (cond
-    ;; Logic variable in result → bind to target
+    ;; Logic variable in result → check existing binding or bind to target
     [(expr-logic-var? result)
      (define var-name (expr-logic-var-name result))
-     (list (hash-set subst var-name target))]
+     (define existing (hash-ref subst var-name #f))
+     (cond
+       ;; Already bound → resolve and verify consistency
+       [existing
+        (narrow-match (narrow-resolve-expr subst existing) target subst func-name depth)]
+       ;; Unbound → bind to target
+       [else
+        (list (hash-set subst var-name target))])]
 
     ;; Logic variable in target → resolve or bind
     [(expr-logic-var? target)
@@ -1009,6 +1023,30 @@
           (for/fold ([s subst])
                     ([(k v) (in-hash inner-sol)])
             (hash-set s k v)))]
+       [else '()])]
+
+    ;; Boolrec (if/then/else): reduce when scrutinee is known, enumerate when logic var
+    [(expr-boolrec? result)
+     (define scrut (expr-boolrec-target result))
+     (define resolved-scrut (narrow-resolve-expr subst scrut))
+     (cond
+       ;; Scrutinee is true → match then-case against target
+       [(expr-true? resolved-scrut)
+        (narrow-match (expr-boolrec-true-case result) target subst func-name depth)]
+       ;; Scrutinee is false → match else-case against target
+       [(expr-false? resolved-scrut)
+        (narrow-match (expr-boolrec-false-case result) target subst func-name depth)]
+       ;; Scrutinee is a logic var → enumerate both Bool values
+       [(expr-logic-var? resolved-scrut)
+        (define var-name (expr-logic-var-name resolved-scrut))
+        (append
+         ;; Try true: bind var to true, match then-case
+         (narrow-match (expr-boolrec-true-case result) target
+                       (hash-set subst var-name (expr-true)) func-name depth)
+         ;; Try false: bind var to false, match else-case
+         (narrow-match (expr-boolrec-false-case result) target
+                       (hash-set subst var-name (expr-false)) func-name depth))]
+       ;; Unknown scrutinee — cannot narrow
        [else '()])]
 
     ;; Structural equality fallback (handles expr-string, expr-int, etc.)

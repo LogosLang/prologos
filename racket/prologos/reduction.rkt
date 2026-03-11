@@ -290,6 +290,77 @@
                     (string-append (symbol->string (param-info-name pi)) "_"))
                    arg))])])]))
 
+;; Phase 5b: Constructor inversion — structurally match a constructor expression
+;; containing logic variables against a concrete target value.
+;; Returns a list of substitution hashes, or '() if no match.
+(define (narrow-constructor-match lhs target var-names)
+  (define target* (whnf target))
+  ;; Structurally decompose: both sides must have the same constructor shape.
+  (let match-ctor ([l lhs] [t target*] [subst (hasheq)])
+    (cond
+      ;; Logic variable → bind
+      [(expr-logic-var? l)
+       (define existing (hash-ref subst (expr-logic-var-name l) #f))
+       (cond
+         [existing (if (equal? existing t) (list subst) '())]
+         [else (list (hash-set subst (expr-logic-var-name l) t))])]
+      ;; Both suc → recurse on predecessor
+      [(and (expr-suc? l) (expr-suc? t))
+       (match-ctor (expr-suc-pred l) (expr-suc-pred t) subst)]
+      ;; suc vs nat-val → convert nat-val to peano and retry
+      [(and (expr-suc? l) (expr-nat-val? t) (> (expr-nat-val-n t) 0))
+       (match-ctor l (ctor-nat-val->peano (expr-nat-val-n t)) subst)]
+      ;; Both zero → match
+      [(and (expr-zero? l) (expr-zero? t)) (list subst)]
+      ;; Both nat-val same → match
+      [(and (expr-nat-val? l) (expr-nat-val? t) (= (expr-nat-val-n l) (expr-nat-val-n t)))
+       (list subst)]
+      ;; Both true/false → match
+      [(and (expr-true? l) (expr-true? t)) (list subst)]
+      [(and (expr-false? l) (expr-false? t)) (list subst)]
+      ;; Both nil → match
+      [(and (or (expr-nil? l) (and (expr-fvar? l) (eq? (expr-fvar-name l) 'nil)))
+            (or (expr-nil? t) (and (expr-fvar? t) (eq? (expr-fvar-name t) 'nil))))
+       (list subst)]
+      ;; Both unit → match
+      [(and (expr-unit? l) (expr-unit? t)) (list subst)]
+      ;; Constructor application (expr-app chains with same head) → decompose fields
+      [(and (expr-app? l) (expr-app? t))
+       (define-values (l-head l-args) (flatten-app l))
+       (define-values (t-head t-args) (flatten-app t))
+       (cond
+         [(and (expr-fvar? l-head) (expr-fvar? t-head)
+               (eq? (expr-fvar-name l-head) (expr-fvar-name t-head))
+               (= (length l-args) (length t-args)))
+          ;; Pairwise match all args
+          (let loop ([ls l-args] [ts t-args] [subs (list subst)])
+            (cond
+              [(null? ls) subs]
+              [(null? subs) '()]
+              [else
+               (define next-subs
+                 (append-map
+                  (lambda (s)
+                    (match-ctor (car ls) (car ts) s))
+                  subs))
+               (loop (cdr ls) (cdr ts) next-subs)]))]
+         [else '()])]
+      ;; Structural equality fallback
+      [(equal? l t) (list subst)]
+      ;; No match
+      [else '()])))
+
+;; Convert a natural number to Peano representation (local helper for ctor matching)
+(define (ctor-nat-val->peano n)
+  (if (zero? n) (expr-zero) (expr-suc (ctor-nat-val->peano (- n 1)))))
+
+;; Flatten nested expr-app into (head . args-list)
+(define (flatten-app e)
+  (let loop ([e e] [args '()])
+    (match e
+      [(expr-app f a) (loop f (cons a args))]
+      [_ (values e args)])))
+
 ;; Run narrowing for [func args...] = target, returning a Prologos list of answer maps.
 (define (run-narrowing func-expr arg-exprs target-expr var-names)
   ;; Extract function name and any additional args from the func expression.
@@ -336,8 +407,14 @@
         [_ (values #f '())])))
   (cond
     [(not func-name)
-     ;; Can't narrow through non-function — return empty list
-     (expr-fvar 'nil)]
+     ;; Phase 5b: Constructor inversion — when LHS is a constructor
+     ;; (not a function), structurally decompose against the target.
+     ;; E.g., [suc ?n] = 3N → match (suc ?n) against (suc (suc (suc (zero))))
+     (define ctor-solutions
+       (narrow-constructor-match func-expr target-expr var-names))
+     (if (pair? ctor-solutions)
+         (answers->prologos-expr ctor-solutions var-names '())
+         (expr-fvar 'nil))]
     ;; Phase 2d: multi-candidate dispatch — try each candidate independently
     [(and (list? func-name) (eq? (car func-name) 'multi-dispatch))
      (define candidates (caddr func-name))

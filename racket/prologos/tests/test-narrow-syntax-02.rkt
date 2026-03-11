@@ -134,11 +134,11 @@
 ;; ========================================
 
 (test-case "narrow/edge: single ?-var no function call"
-  ;; (= ?x 5) — LHS is just a var, no function application → no narrowing
+  ;; (= ?x 5) — LHS is just a var, constructor inversion binds ?x = 5
   (define result (run-last "(= ?x 5)"))
   (check-true (string? result))
-  ;; No function to narrow → nil (empty answer list)
-  (check-true (string-contains? result "nil")))
+  ;; Constructor inversion: ?x unifies with 5
+  (check-true (string-contains? result "{:x")))
 
 (test-case "narrow/edge: nested ctor in arg"
   ;; (= (add (suc ?x) ?y) 5) — fixed first arg shape, narrows second

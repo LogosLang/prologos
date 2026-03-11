@@ -94,9 +94,9 @@ because narrowing correctness is lower priority than basic functionality.
 | 4d | Collection conversion | M–L | ✅ | Wrong audit types — into-vec/into-list take LSeq, not List/PVec |
 | 4e | Multi-bracket `fn` | S–M | ✅ | Lambda with explicit domain now synthesizes Pi type |
 | **Phase 5: Narrowing** | | | | |
-| 5a | Shared variable constraint | M | ⬜ | |
-| 5b | Constructor narrowing | M | ⬜ | |
-| 5c | Narrowing through `if` | M | ⬜ | |
+| 5a | Shared variable constraint | M | ✅ | narrow-match checks existing bindings before overwriting |
+| 5b | Constructor narrowing | M | ✅ | narrow-constructor-match in reduction.rkt |
+| 5c | Narrowing through `if` | M | ✅ | boolrec handling in narrow-subst-bvars + narrow-match |
 
 **Legend**: ⬜ Not started · 🔨 In progress · ✅ Done · ⏭️ Skipped · 🔬 Diagnosing
 
@@ -715,9 +715,9 @@ purpose of case splitting.
 
 | Sub-phase | Status | Commit |
 |-----------|--------|--------|
-| 5a: Shared variable constraint | NOT STARTED | |
-| 5b: Constructor narrowing | NOT STARTED | |
-| 5c: Narrowing through if | NOT STARTED | |
+| 5a: Shared variable constraint | ✅ | (see commits table) |
+| 5b: Constructor narrowing | ✅ | (see commits table) |
+| 5c: Narrowing through if | ✅ | (see commits table) |
 
 ---
 
@@ -755,14 +755,14 @@ or after the repair sprint:
 
 ## Sprint Metrics
 
-| Metric | Target |
-|--------|--------|
+| Metric | Value |
+|--------|-------|
 | Total sub-phases | 23 (1a–b, 2a–k, 3a–d, 4a–e, 5a–c) |
-| Completed | 21 (1a, 1b, 2a, 2b, 2d, 2e, 2f, 2g, 2h, 2i, 2j, 2k, 3a, 3b, 3c, 3d, 4a, 4b, 4c, 4d, 4e) |
+| Completed | 22 |
 | Skipped | 1 (2c) |
-| Remaining | 3 (5a, 5b, 5c) |
+| Remaining | 0 |
 | Regression test count | 6725 (all pass) |
-| Audit expressions fixed | 36 CRASH + 6 WRONG reclassified |
+| Audit expressions fixed | 36 CRASH + 6 WRONG + 3 narrowing WRONG = 45 total reclassified |
 
 ---
 

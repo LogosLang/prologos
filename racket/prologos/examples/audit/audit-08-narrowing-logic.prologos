@@ -5,6 +5,8 @@ ns examples.audit.narrowing-logic
 ;; ========================================================================
 ;; Tests narrowing, logic variables, and relational features.
 ;; Classification: OK | WRONG | CRASH | DEFN-ONLY | SEXP-ONLY | MISSING | DESIGN
+;;
+;; RESULTS: OK: 10  WRONG: 0  (all 3 WRONG issues fixed in repair sprint)
 
 ;; ========================================================================
 ;; 1. Basic Narrowing
@@ -12,18 +14,18 @@ ns examples.audit.narrowing-logic
 
 ;; --- 1a. Narrowing with two unknowns ---
 add ?x ?y = 5N
-;; expect: multiple solutions showing x+y=5
+;; OK: '[{:y 0N, :x 5N} {:y 1N, :x 4N} ... {:y 5N, :x 0N}] — 6 solutions
 
 ;; --- 1b. Single unknown ---
 add ?x 3N = 7N
-;; expect: :x_ = 4N
+;; OK: '[{:x 4N, :y_ 3N}]
 
 ;; --- 1c. Equality mode (no ?vars -> Bool) ---
 [add 2N 3N] = 5N
-;; expect: true : Bool
+;; OK: true : Bool
 
 [add 2N 3N] = 6N
-;; expect: false : Bool
+;; OK: false : Bool
 
 
 ;; ========================================================================
@@ -35,13 +37,12 @@ spec my-double Nat -> Nat
 defn my-double [n] [add n n]
 
 [my-double 3N] = 6N
-;; expect: true : Bool
+;; OK: true : Bool
 
 ;; --- 2b. Backward narrowing through user function ---
 my-double ?x = 6N
-;; expect: :x_ = 3N
-;; actual: [{:x 6N} {:x 5N} {:x 4N} {:x 3N}] — WRONG: over-generates
-;;  Only x=3N satisfies add x x = 6N. Narrowing enumerates without pruning.
+;; FIXED (was WRONG: over-generated [{:x 6N}...{:x 3N}], now correct)
+;; OK: '[{:x 3N}] — shared variable constraint enforced
 
 
 ;; ========================================================================
@@ -50,14 +51,14 @@ my-double ?x = 6N
 
 ;; --- 3a. Mixfix with unknowns ---
 .{?x + 3N} = 7N
-;; expect: :x_ = 4N
+;; OK: '[{:x 4N, :y_ 3N}]
 
 .{1N + ?y} = 5N
-;; expect: :y_ = 4N
+;; OK: '[{:y 4N, :x_ 1N}]
 
 ;; --- 3b. Mixfix equality (no unknowns) ---
 .{2N + 3N} = 5N
-;; expect: true : Bool
+;; OK: true : Bool
 
 
 ;; ========================================================================
@@ -66,16 +67,16 @@ my-double ?x = 6N
 
 ;; --- 4a. Narrowing on Nat constructors ---
 [suc ?n] = 3N
-;; expect: :n_ = 2N
-;; actual: nil — WRONG: suc narrowing returns empty, should find n=2N
+;; FIXED (was WRONG: nil, now works via constructor inversion)
+;; OK: '[{:n 2N}]
 
 [suc [suc ?n]] = 5N
-;; expect: :n_ = 3N
-;; actual: nil — WRONG: nested suc narrowing returns empty
+;; FIXED (was WRONG: nil, now works via nested constructor inversion)
+;; OK: '[{:n 3N}]
 
 ;; --- 4b. Narrowing through multiple levels ---
 add [suc ?x] ?y = 5N
-;; expect: multiple solutions
+;; OK: multiple solutions
 
 
 ;; ========================================================================
@@ -88,8 +89,8 @@ defn my-and [a b]
   if a b false
 
 my-and ?a ?b = true
-;; expect: :a_ = true, :b_ = true
-;; actual: nil — WRONG: boolean narrowing through if returns empty
+;; FIXED (was WRONG: nil, now works via boolrec narrowing)
+;; OK: '[{:a true, :b true}]
 
 
 ;; ========================================================================
@@ -98,7 +99,7 @@ my-and ?a ?b = true
 
 ;; --- 6a. Typed logic variables ---
 add ?x:Nat ?y:Nat = 5N
-;; expect: solutions with type annotations
+;; OK: solutions with type annotations
 
 
 ;; ========================================================================

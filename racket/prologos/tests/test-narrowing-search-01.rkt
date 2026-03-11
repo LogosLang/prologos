@@ -218,6 +218,6 @@
   (define result (run-last "(= (not ?b) ?b)"))
   (check-true (string-contains? result "nil")))
 
-(test-case "pipeline/sexp: bare ?x = 5 → nil (no function)"
+(test-case "pipeline/sexp: bare ?x = 5 → binds x (constructor inversion)"
   (define result (run-last "(= ?x 5)"))
-  (check-true (string-contains? result "nil")))
+  (check-true (string-contains? result "{:x")))
