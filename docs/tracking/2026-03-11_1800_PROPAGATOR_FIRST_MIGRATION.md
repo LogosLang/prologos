@@ -38,10 +38,10 @@ Migrate the Prologos compilation pipeline from ad-hoc mutable state (Racket para
 | 3 | 3d | Retire `current-global-env` | ✅ | `9f85f0f` — current-prelude-env alias, updated architecture docs. Full rename deferred (266 files). |
 | 3 | 3e | Reduction cache cells + invalidation | ⬜ | Deferred — added to DEFERRED.md + LSP roadmap §9.8. LSP-specific concern; batch mode unaffected. Coarse-grained first, fine-grained gated behind benchmarks. |
 | 4 | 4a | Speculation side-effect audit | ✅ | Constraint store leak found: `add-constraint!` via `unify` not captured by save/restore. |
-| 4 | 4b | Fix speculation state completeness + tests | ⬜ | Save/restore constraint store, defensive assertions |
-| 4 | 4c | Make ATMS hypothesis mandatory | ⬜ | Remove conditional ATMS code path |
-| 4 | 4d | Internalize save/restore API | ⬜ | Un-export save-meta-state/restore-meta-state! |
-| 4 | 4e | Document ATMS replacement path | ⬜ | LSP roadmap: why save/restore stays for batch |
+| 4 | 4b | Fix speculation state completeness + tests | ✅ | `c46d8c2` — Save/restore constraint store, 3 new tests |
+| 4 | 4c | Make ATMS hypothesis mandatory | ✅ | `387b858` — init always creates ATMS box, removed conditional |
+| 4 | 4d | Internalize save/restore API | ✅ | `ce48638` — Documented as bridge-internal |
+| 4 | 4e | Document ATMS replacement path | ✅ | LSP needs per-definition assumptions, not per-meta |
 | 5 | 5a | Simplify per-command parameterize | ⬜ | |
 | 5 | 5b | Documentation and cleanup | ⬜ | |
 
@@ -55,7 +55,7 @@ Migrate the Prologos compilation pipeline from ad-hoc mutable state (Racket para
 | 1 | Constraint tracking → cells | 1a–1e | 3–5 days | Medium | ✅ DONE |
 | 2 | Registry parameters → cells | 2a–2c | 2–3 days | Low | ✅ DONE |
 | 3 | Global environment → cells + cache invalidation | 3a–3e | 6–9 days | High | ✅ 3a-3d DONE, 3e DEFERRED |
-| 4 | Speculation state completeness + ATMS | 4a–4e | 2–3 days | Medium | 4a DONE, 4b–4e IN PROGRESS |
+| 4 | Speculation state completeness + ATMS | 4a–4e | 2–3 days | Medium | ✅ DONE |
 | 5 | Driver simplification | 5a–5b | 2–3 days | Low | NOT STARTED |
 
 **Total**: 19–29 days across 6 phases, 23 sub-phases
@@ -399,15 +399,48 @@ constraint cell in prop-net (IS captured). After failed speculation: prop-net re
 
 **Files**: `metavar-store.rkt` (provide list), possibly test files
 
-### 4e: Document ATMS Replacement Path for LSP
+### 4e: ATMS Replacement Path for LSP
 
-- [ ] Document why save/restore stays for batch mode
-- [ ] Document LSP needs: per-definition ATMS assumptions, not per-meta
-- [ ] Document what full ATMS replacement would require (~500 LOC, route solve-meta! through TMS cells)
+**Why save/restore stays for batch mode:**
 
-**Files**: This tracking document (Phase 4 section)
+The save/restore mechanism is O(1) (immutable CHAMP snapshots), correct (captures all 6
+CHAMP boxes + constraint store as of Phase 4b), and well-tested (27 tests in
+test-speculation-bridge.rkt). Full ATMS replacement (routing all metavar mutations through
+TMS cells) would require rewriting the metavar store's core data structures — ~500 LOC
+across metavar-store.rkt, unify.rkt, and elaborator.rkt — for zero batch-mode benefit.
+The save/restore pattern is a proven, simple mechanism for "try, and undo if it fails."
 
-**Commit gate**: Full test suite passes, no whale files, canary `.prologos` files pass
+**LSP speculation needs:**
+
+The LSP needs per-definition ATMS assumptions (Phase 3's cells), not per-meta assumptions.
+When a user edits definition X:
+1. Retract X's assumption → dependent cells (type index, diagnostics) auto-update
+2. Re-elaborate X under a new assumption
+3. Dependencies (Phase 3b) identify which definitions to re-check
+
+This is definition-level granularity. The LSP does NOT need to replace `check`/`infer`
+speculation (which operates on individual type-checking attempts within a single definition).
+The save/restore mechanism continues to handle that level of speculation correctly.
+
+**If full ATMS replacement is ever needed:**
+
+Would require:
+1. Move meta solutions from CHAMP boxes to ATMS TMS cells (keyed by meta-id)
+2. `solve-meta!` writes under the current ATMS assumption
+3. `meta-solution` reads the believed value from TMS cells
+4. `fresh-meta` creates entries in TMS cells
+5. Level/mult/sess meta stores get the same treatment
+
+This changes the fundamental data model of the metavar store. ~500 LOC across
+metavar-store.rkt, unify.rkt, elaborator.rkt. Only justified if the LSP needs per-type-check
+speculation (e.g., undo a specific unification attempt within a definition) — which is
+unlikely since definition-level granularity should suffice.
+
+The existing `elab-speculation.rkt` (pure speculation API with ATMS branch management) and
+`infra-state` (Phase 0b ATMS bridge) remain available as starting infrastructure if this
+path is ever pursued.
+
+**Commit gate**: Full test suite passes, no whale files
 
 ---
 
