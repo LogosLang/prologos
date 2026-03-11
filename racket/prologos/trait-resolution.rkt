@@ -118,12 +118,18 @@
     [(expr-fvar name) (symbol->string (strip-ns name))]
     [(expr-app f a)
      (string-append (expr->impl-key-str f) "-" (expr->impl-key-str a))]
+    [(expr-bvar k)
+     ;; Use standard type variable names for display
+     (define var-names #("A" "B" "C" "D" "E" "F" "G" "H"))
+     (if (< k (vector-length var-names))
+         (vector-ref var-names k)
+         (format "T~a" k))]
     [(expr-meta id)
      ;; If solved, chase the solution
      (if (meta-solved? id)
          (expr->impl-key-str (meta-solution id))
          (format "?~a" id))]
-    [_ (format "~a" e)]))
+    [_ (pp-expr e)]))
 
 ;; ========================================
 ;; Monomorphic resolution
