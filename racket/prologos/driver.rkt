@@ -369,13 +369,16 @@
   (register-macros-cells! (current-prop-net-box) (current-prop-new-infra-cell))
   ;; Phase 2c: Create warning cells in the fresh network.
   (register-warning-cells! (current-prop-net-box) (current-prop-new-infra-cell))
+  ;; Phase 3a: Create per-definition cells in the fresh network.
+  (register-global-env-cells! (current-prop-net-box) (current-prop-new-infra-cell))
   ;; Phase D: Initialize ATMS for dependency-directed error tracking.
   ;; The ATMS box is always available — init-speculation-tracking! creates a
   ;; fresh ATMS per command. This is cheap (empty ATMS = ~3 hasheq allocations).
   (when (not (current-command-atms))
     (current-command-atms (box (atms-empty))))
   (init-speculation-tracking!)
-  (parameterize ([current-nf-cache (make-hash)]         ;; per-command nf memoization
+  (parameterize ([current-global-env-prop-net-box (current-prop-net-box)]  ;; Phase 3a: activate cell writes (auto-reverts)
+                 [current-nf-cache (make-hash)]         ;; per-command nf memoization
                  [current-whnf-cache (make-hash)]       ;; per-command whnf memoization
                  [current-reduction-fuel (box 1000000)]  ;; 1M step limit
                  [current-nat-value-cache (make-hash)]  ;; per-command nat-value memoization
@@ -681,10 +684,10 @@
                    (define cap-closures (cap-type-bridge-result-cap-closures bridge-result))
                    (define overdeclared-set (cap-audit-overdeclared bridge-result name))
                    ;; Type from the env (original)
-                   (define entry (hash-ref (current-global-env) name #f))
+                   (define looked-up-type (global-env-lookup-type name))
                    (define type-str
-                     (if (and entry (pair? entry))
-                         (format "~a" (car entry))
+                     (if looked-up-type
+                         (format "~a" looked-up-type)
                          "<unknown>"))
                    ;; Capabilities from type decomposition (α direction)
                    (define type-caps (hash-ref cap-closures name (set)))
@@ -1087,11 +1090,13 @@
               (cond
                 [(prologos-error? body)
                  ;; Remove pre-registered entry on elaboration failure
+                 ;; Phase 3a: remove from both layers (per-file + legacy) for safety
+                 (current-definition-cells-content (hash-remove (current-definition-cells-content) name))
                  (current-global-env (hash-remove (current-global-env) name))
                  (when (current-ns-context)
-                   (current-global-env
-                    (hash-remove (current-global-env)
-                     (qualify-name name (ns-context-current-ns (current-ns-context))))))
+                   (define fail-fqn (qualify-name name (ns-context-current-ns (current-ns-context))))
+                   (current-definition-cells-content (hash-remove (current-definition-cells-content) fail-fqn))
+                   (current-global-env (hash-remove (current-global-env) fail-fqn)))
                  body]
                 [else
                  ;; 5. Check body against type (use type* which has metas instead of holes)
@@ -1100,11 +1105,13 @@
                  (cond
                    [(prologos-error? chk)
                     ;; Remove pre-registered entry on type-check failure
+                    ;; Phase 3a: remove from both layers
+                    (current-definition-cells-content (hash-remove (current-definition-cells-content) name))
                     (current-global-env (hash-remove (current-global-env) name))
                     (when (current-ns-context)
-                      (current-global-env
-                       (hash-remove (current-global-env)
-                        (qualify-name name (ns-context-current-ns (current-ns-context))))))
+                      (define chk-fqn (qualify-name name (ns-context-current-ns (current-ns-context))))
+                      (current-definition-cells-content (hash-remove (current-definition-cells-content) chk-fqn))
+                      (current-global-env (hash-remove (current-global-env) chk-fqn)))
                     chk]
                    [else
                     ;; Phase C: resolve trait-constraint metas to dictionary expressions
@@ -1117,18 +1124,22 @@
                     (define cap-errors-ann (check-unresolved-capability-constraints))
                     (cond
                       [(not (null? trait-errors-ann))
+                       ;; Phase 3a: remove from both layers
+                       (current-definition-cells-content (hash-remove (current-definition-cells-content) name))
                        (current-global-env (hash-remove (current-global-env) name))
                        (when (current-ns-context)
-                         (current-global-env
-                          (hash-remove (current-global-env)
-                           (qualify-name name (ns-context-current-ns (current-ns-context))))))
+                         (define te-fqn (qualify-name name (ns-context-current-ns (current-ns-context))))
+                         (current-definition-cells-content (hash-remove (current-definition-cells-content) te-fqn))
+                         (current-global-env (hash-remove (current-global-env) te-fqn)))
                        (car trait-errors-ann)]
                       [(not (null? cap-errors-ann))
+                       ;; Phase 3a: remove from both layers
+                       (current-definition-cells-content (hash-remove (current-definition-cells-content) name))
                        (current-global-env (hash-remove (current-global-env) name))
                        (when (current-ns-context)
-                         (current-global-env
-                          (hash-remove (current-global-env)
-                           (qualify-name name (ns-context-current-ns (current-ns-context))))))
+                         (define ce-fqn (qualify-name name (ns-context-current-ns (current-ns-context))))
+                         (current-definition-cells-content (hash-remove (current-definition-cells-content) ce-fqn))
+                         (current-global-env (hash-remove (current-global-env) ce-fqn)))
                        (car cap-errors-ann)]
                       [else
                     ;; 5.5. Check for failed constraints (Sprint 5)
@@ -1136,11 +1147,13 @@
                     (cond
                       [(not (null? failed))
                        ;; Remove pre-registered entry on constraint failure
+                       ;; Phase 3a: remove from both layers
+                       (current-definition-cells-content (hash-remove (current-definition-cells-content) name))
                        (current-global-env (hash-remove (current-global-env) name))
                        (when (current-ns-context)
-                         (current-global-env
-                          (hash-remove (current-global-env)
-                           (qualify-name name (ns-context-current-ns (current-ns-context))))))
+                         (define cf-fqn (qualify-name name (ns-context-current-ns (current-ns-context))))
+                         (current-definition-cells-content (hash-remove (current-definition-cells-content) cf-fqn))
+                         (current-global-env (hash-remove (current-global-env) cf-fqn)))
                        ;; Sprint 9: structured constraint failure with provenance
                        (define c (car failed))
                        (define prov (constraint-source c))
@@ -1177,11 +1190,13 @@
                        (cond
                          [(prologos-error? qtt-ok)
                           ;; Remove pre-registered entry on QTT failure
+                          ;; Phase 3a: remove from both layers
+                          (current-definition-cells-content (hash-remove (current-definition-cells-content) name))
                           (current-global-env (hash-remove (current-global-env) name))
                           (when (current-ns-context)
-                            (current-global-env
-                             (hash-remove (current-global-env)
-                              (qualify-name name (ns-context-current-ns (current-ns-context))))))
+                            (define qtt-fqn (qualify-name name (ns-context-current-ns (current-ns-context))))
+                            (current-definition-cells-content (hash-remove (current-definition-cells-content) qtt-fqn))
+                            (current-global-env (hash-remove (current-global-env) qtt-fqn)))
                           qtt-ok]
                          [else
                           (current-global-env
@@ -1231,8 +1246,10 @@
       (reset-meta-store!)
       (register-macros-cells! (current-prop-net-box) (current-prop-new-infra-cell))
       (register-warning-cells! (current-prop-net-box) (current-prop-new-infra-cell))
+      (register-global-env-cells! (current-prop-net-box) (current-prop-new-infra-cell))
       (init-speculation-tracking!)
-      (process-def def)))
+      (parameterize ([current-global-env-prop-net-box (current-prop-net-box)])
+        (process-def def))))
   ;; Check for errors
   (define first-err (findf prologos-error? results))
   (if first-err first-err
@@ -1280,7 +1297,7 @@
     ;; (i.e., has :0 binders with capability-type domains).
     (define closures (cap-inference-result-closures result))
     (define violations '())  ;; accumulate all violations before erroring
-    (for ([(name entry) (in-hash (current-global-env))])
+    (for ([(name entry) (in-hash (global-env-snapshot))])
       (when (and (pair? entry) (car entry))
         (define declared-caps (extract-capability-requirements (car entry)))
         (when (not (set-empty? declared-caps))
@@ -1488,6 +1505,12 @@
                     ;; Phase 8b: fresh propagator network per module
                     [current-prop-net-box #f]
                     [current-prop-id-map-box #f]
+                    ;; Phase 3a: Module loading uses legacy hasheq path.
+                    ;; Set prop-net-box to #f so global-env-add writes to
+                    ;; current-global-env (Layer 2), not definition-cells (Layer 1).
+                    [current-global-env-prop-net-box #f]
+                    [current-definition-cells-content (hasheq)]
+                    [current-definition-cell-ids (hasheq)]
                     ;; Phase A: fresh meta-info CHAMP per module
                     [current-prop-meta-info-box #f]
                     ;; Phase B: fresh auxiliary meta CHAMPs per module
@@ -1518,8 +1541,12 @@
        ;; IO-H: Run capability inference after module definitions are processed
        (run-post-compilation-inference!)
 
-       ;; Capture the resulting environment, namespace context, and registries
-       (set! mod-env (current-global-env))
+       ;; Capture the resulting environment, namespace context, and registries.
+       ;; Use global-env-snapshot to merge both layers: per-definition cells
+       ;; (Layer 1) and legacy hasheq (Layer 2). During module loading,
+       ;; reset-meta-store! may create a prop-net despite parameterize setting
+       ;; current-prop-net-box to #f, so some definitions may end up in Layer 1.
+       (set! mod-env (global-env-snapshot))
        (set! mod-ns-ctx (current-ns-context))
        (set! mod-preparse-reg (current-preparse-registry))
        (set! mod-ctor-reg (current-ctor-registry))
@@ -1772,6 +1799,7 @@
   (reset-meta-store!)
   (register-macros-cells! (current-prop-net-box) (current-prop-new-infra-cell))
   (register-warning-cells! (current-prop-net-box) (current-prop-new-infra-cell))
+  (register-global-env-cells! (current-prop-net-box) (current-prop-new-infra-cell))
   (define type-surf (parse-datum type-sexp))
   (when (prologos-error? type-surf)
     (error 'foreign "Failed to parse type for ~a: ~a" racket-name type-surf))
@@ -1920,6 +1948,10 @@
 
 ;; Phase 2c: Install warnings cell-write callback.
 (current-warnings-prop-cell-write elab-cell-write)
+
+;; Phase 3a: Install global-env cell callbacks.
+(current-global-env-prop-cell-write elab-cell-write)
+(current-global-env-prop-new-cell elab-new-infra-cell)
 
 ;; P5b: Install multiplicity cell callbacks
 (current-prop-fresh-mult-cell elab-fresh-mult-cell)

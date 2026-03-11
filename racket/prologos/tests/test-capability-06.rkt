@@ -59,7 +59,7 @@
                  [current-capability-registry prelude-capability-registry])
     (install-module-loader!)
     (process-string shared-preamble)
-    (values (current-global-env)
+    (values (global-env-snapshot)  ;; Phase 3a: merge both layers
             (current-ns-context)
             (current-module-registry)
             (current-trait-registry)
@@ -71,6 +71,7 @@
 ;; Helper: run code and return list of result strings.
 (define (run s)
   (parameterize ([current-global-env shared-global-env]
+                 [current-definition-cells-content (hasheq)]  ;; Phase 3a: fresh per-test
                  [current-ns-context shared-ns-context]
                  [current-module-registry shared-module-reg]
                  [current-lib-paths (list prelude-lib-dir)]
@@ -88,6 +89,7 @@
 ;; Helper: run code and capture global-env after execution
 (define (run-capturing-env s)
   (parameterize ([current-global-env shared-global-env]
+                 [current-definition-cells-content (hasheq)]  ;; Phase 3a: fresh per-test
                  [current-ns-context shared-ns-context]
                  [current-module-registry shared-module-reg]
                  [current-lib-paths (list prelude-lib-dir)]
@@ -99,7 +101,7 @@
                  [current-capability-registry shared-capability-reg]
                  [current-subtype-registry shared-subtype-reg])
     (process-string s)
-    (current-global-env)))
+    (global-env-snapshot)))
 
 ;; ========================================
 ;; Unit Tests: extract-foreign-caps

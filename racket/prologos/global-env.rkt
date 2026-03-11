@@ -2,10 +2,25 @@
 
 ;;;
 ;;; PROLOGOS GLOBAL ENVIRONMENT
-;;; Thread-local parameter holding top-level definitions.
-;;; Used by the type checker and reducer to resolve expr-fvar references.
 ;;;
-;;; Each entry maps a symbol name to (cons type value).
+;;; Two-layer architecture (Phase 3a, Propagator-First Migration):
+;;;
+;;;   Layer 1: current-definition-cells-content (hasheq: name → (cons type value))
+;;;     - Per-file definitions created during elaboration
+;;;     - Persistent across commands within a file
+;;;     - Authoritative for per-file defs — lookups check here FIRST
+;;;     - Backed by per-definition cells in the propagator network
+;;;
+;;;   Layer 2: current-global-env (hasheq: name → (cons type value))
+;;;     - Prelude and module definitions (populated during module loading)
+;;;     - Structurally frozen after prelude loading: global-env-add doesn't
+;;;       write here when cell infrastructure is available
+;;;     - Serves as fallback when definition not found in Layer 1
+;;;
+;;; The "freeze" is structural: during module loading, parameterize sets
+;;; current-prop-net-box to #f, so global-env-add falls back to legacy
+;;; behavior. After module loading, the prop-net is set up, so global-env-add
+;;; writes to Layer 1 only. No explicit freeze needed.
 ;;;
 
 (provide current-global-env
@@ -16,42 +31,142 @@
          global-env-names
          global-env-import-module
          global-env-snapshot
+         ;; Phase 3a: Per-definition cell infrastructure
+         current-definition-cells-content
+         current-definition-cell-ids
+         current-global-env-prop-net-box
+         current-global-env-prop-cell-write
+         current-global-env-prop-new-cell
+         register-global-env-cells!
          ;; Defn param-name registry (user-facing names for bound-arg display)
          current-defn-param-names
          register-defn-param-names!
          lookup-defn-param-names)
 
-;; The global environment: name -> (cons type value)
+(require racket/list        ;; remove-duplicates
+         "infra-cell.rkt")  ;; merge-replace, merge-hasheq-union
+
+;; ========================================
+;; Layer 2: Prelude/module definitions (legacy)
+;; ========================================
+;; Populated during module loading. Structurally frozen after prelude load.
 (define current-global-env (make-parameter (hasheq)))
+
+;; ========================================
+;; Layer 1: Per-file definitions (Phase 3a)
+;; ========================================
+;; Persistent across commands within a file. Reset per-file (and per-test).
+(define current-definition-cells-content (make-parameter (hasheq)))
+
+;; Per-command cell-ids in the prop-net (recreated each command).
+;; Cells exist for future propagator wiring (LSP dependency propagation).
+(define current-definition-cell-ids (make-parameter (hasheq)))
+
+;; Callback parameters for network access (set by driver.rkt).
+(define current-global-env-prop-net-box (make-parameter #f))
+(define current-global-env-prop-cell-write (make-parameter #f))
+(define current-global-env-prop-new-cell (make-parameter #f))
+
+;; Helper: write to per-definition cell in the prop-net.
+;; Creates a new cell if one doesn't exist for this name.
+(define (definition-cell-write! name entry)
+  (define net-box (current-global-env-prop-net-box))
+  (define write-fn (current-global-env-prop-cell-write))
+  (define new-cell-fn (current-global-env-prop-new-cell))
+  (when (and net-box write-fn)
+    (define cid (hash-ref (current-definition-cell-ids) name #f))
+    (cond
+      [cid
+       ;; Update existing cell (e.g., type-only → type+value)
+       (set-box! net-box (write-fn (unbox net-box) cid entry))]
+      [new-cell-fn
+       ;; Create new cell for new definition
+       (define-values (enet* new-cid) (new-cell-fn (unbox net-box) entry merge-replace))
+       (current-definition-cell-ids
+        (hash-set (current-definition-cell-ids) name new-cid))
+       (set-box! net-box enet*)])))
+
+;; ========================================
+;; Lookups (two-layer: per-file first, prelude fallback)
+;; ========================================
 
 ;; Lookup the type of a global definition
 (define (global-env-lookup-type name)
-  (let ([entry (hash-ref (current-global-env) name #f)])
-    (and entry (car entry))))
+  ;; Layer 1: per-file definitions
+  (define cell-entry (hash-ref (current-definition-cells-content) name #f))
+  (cond
+    [cell-entry (car cell-entry)]
+    [else
+     ;; Layer 2: prelude/module definitions
+     (let ([entry (hash-ref (current-global-env) name #f)])
+       (and entry (car entry)))]))
 
 ;; Lookup the value of a global definition
 (define (global-env-lookup-value name)
-  (let ([entry (hash-ref (current-global-env) name #f)])
-    (and entry (cdr entry))))
+  ;; Layer 1: per-file definitions
+  (define cell-entry (hash-ref (current-definition-cells-content) name #f))
+  (cond
+    [cell-entry (cdr cell-entry)]
+    [else
+     ;; Layer 2: prelude/module definitions
+     (let ([entry (hash-ref (current-global-env) name #f)])
+       (and entry (cdr entry)))]))
 
-;; Add a definition to the global environment (returns new env)
+;; ========================================
+;; Writes (per-file → cells, module loading → legacy)
+;; ========================================
+
+;; Add a definition to the global environment.
+;; When cell infrastructure is available (per-file processing):
+;;   writes to current-definition-cells-content + prop-net cell.
+;;   Returns env UNCHANGED (per-file def is NOT in the legacy hasheq).
+;; When cell infrastructure is unavailable (module loading, tests):
+;;   legacy behavior — returns updated hasheq.
 (define (global-env-add env name type value)
-  (hash-set env name (cons type value)))
+  (define entry (cons type value))
+  (cond
+    [(current-global-env-prop-net-box)
+     ;; Per-file processing: write to Layer 1 + cell
+     (current-definition-cells-content
+      (hash-set (current-definition-cells-content) name entry))
+     (definition-cell-write! name entry)
+     env]  ;; return UNCHANGED
+    [else
+     ;; Module loading / tests: legacy behavior
+     (hash-set env name entry)]))
 
 ;; Pre-register only the type (value = #f) for recursive definitions.
 ;; whnf treats #f as stuck (no unfolding), so self-references are opaque
 ;; during type checking. After checking, call global-env-add with real value.
 (define (global-env-add-type-only env name type)
-  (hash-set env name (cons type #f)))
+  (define entry (cons type #f))
+  (cond
+    [(current-global-env-prop-net-box)
+     ;; Per-file processing: write to Layer 1 + cell
+     (current-definition-cells-content
+      (hash-set (current-definition-cells-content) name entry))
+     (definition-cell-write! name entry)
+     env]  ;; return UNCHANGED
+    [else
+     ;; Module loading / tests: legacy behavior
+     (hash-set env name entry)]))
 
-;; List all definition names
+;; ========================================
+;; Utilities (merge both layers)
+;; ========================================
+
+;; List all definition names (from both layers)
 (define (global-env-names)
-  (hash-keys (current-global-env)))
+  (define prelude-keys (hash-keys (current-global-env)))
+  (define file-keys (hash-keys (current-definition-cells-content)))
+  (remove-duplicates (append file-keys prelude-keys) eq?))
 
 ;; Import a module's exported definitions into a global env.
 ;; Takes a qualify-fn that maps (short-name, namespace-sym) → fqn-symbol.
 ;; The module-exports is a list of short-name symbols.
 ;; The module-env is a hasheq of fqn → (cons type value).
+;; Note: This operates on raw hasheqs and is used during module loading
+;; (legacy path). Per-file definitions don't go through this path.
 (define (global-env-import-module env module-exports module-env qualify-fn module-ns)
   (for/fold ([e env])
             ([short-name (in-list module-exports)])
@@ -59,9 +174,37 @@
     (define entry (hash-ref module-env fqn #f))
     (if entry (hash-set e fqn entry) e)))
 
-;; Snapshot the current global env (returns the raw hasheq)
+;; Snapshot the current global env (merges both layers).
+;; Per-file defs shadow prelude defs.
 (define (global-env-snapshot)
-  (current-global-env))
+  (define base (current-global-env))
+  (define file-defs (current-definition-cells-content))
+  (if (hash-empty? file-defs)
+      base
+      (for/fold ([env base])
+                ([(k v) (in-hash file-defs)])
+        (hash-set env k v))))
+
+;; ========================================
+;; Cell registration (per-command)
+;; ========================================
+
+;; Create per-definition cells in the propagator network.
+;; Called per-command after reset-meta-store!, since the network is fresh.
+;; Recreates cells from current-definition-cells-content (which persists).
+(define (register-global-env-cells! net-box new-cell-fn)
+  (when (and net-box new-cell-fn)
+    ;; Note: does NOT set current-global-env-prop-net-box here.
+    ;; driver.rkt sets it in process-command's parameterize block so
+    ;; it auto-reverts when the command finishes (preventing test leakage).
+    (define cells-content (current-definition-cells-content))
+    (define-values (final-enet final-ids)
+      (for/fold ([enet (unbox net-box)] [ids (hasheq)])
+                ([(name entry) (in-hash cells-content)])
+        (define-values (enet* cid) (new-cell-fn enet entry merge-replace))
+        (values enet* (hash-set ids name cid))))
+    (current-definition-cell-ids final-ids)
+    (set-box! net-box final-enet)))
 
 ;; ========================================
 ;; Defn param-name registry

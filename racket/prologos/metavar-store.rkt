@@ -28,7 +28,8 @@
          "source-location.rkt"
          "performance-counters.rkt"
          "champ.rkt"
-         "infra-cell.rkt")  ;; Phase 1a: merge-list-append for constraint cell
+         "infra-cell.rkt"   ;; Phase 1a: merge-list-append for constraint cell
+         "global-env.rkt")  ;; Phase 3a: current-definition-cells-content for with-fresh-meta-env
          ;; NOTE: elaborator-network.rkt and type-lattice.rkt are NOT required
          ;; directly to avoid a circular dependency:
          ;;   metavar-store → elaborator-network → type-lattice → reduction → metavar-store
@@ -776,6 +777,7 @@
                  [current-mult-meta-store (make-hasheq)]
                  [current-sess-meta-store (make-hasheq)]
                  [current-constraint-store '()]
+                 [current-definition-cells-content (hasheq)]  ;; Phase 3a
                  [current-constraint-cell-id #f]  ;; Phase 1a
                  [current-trait-constraint-cell-id #f]  ;; Phase 1b
                  [current-trait-cell-map-cell-id #f]    ;; Phase 1b

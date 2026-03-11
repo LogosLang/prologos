@@ -59,7 +59,7 @@
                  [current-capability-registry prelude-capability-registry])
     (install-module-loader!)
     (process-string shared-preamble)
-    (values (current-global-env)
+    (values (global-env-snapshot)  ;; Phase 3a: merge both layers
             (current-ns-context)
             (current-module-registry)
             (current-trait-registry)
@@ -100,7 +100,7 @@
                  [current-subtype-registry shared-subtype-reg])
     (define results (process-string s))
     (list results
-          (current-global-env)
+          (global-env-snapshot)  ;; Phase 3a: merge both layers
           (current-capability-registry))))
 
 ;; ========================================

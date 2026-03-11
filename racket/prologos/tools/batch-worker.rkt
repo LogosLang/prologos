@@ -201,6 +201,9 @@
          [current-foreign-handler         ready-foreign-handler]
          ;; global-env.rkt
          [current-global-env              ready-global-env]
+         [current-definition-cells-content (hasheq)]   ;; Phase 3a: fresh per-file
+         [current-definition-cell-ids      (hasheq)]   ;; Phase 3a: fresh per-file
+         [current-global-env-prop-net-box  #f]          ;; Phase 3a: no stale cell writes
          ;; metavar-store.rkt — fresh mutable hash per file
          [current-mult-meta-store         (make-hasheq)]
          ;; errors.rkt — emit formatted errors to stderr for failure logs

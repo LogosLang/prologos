@@ -75,6 +75,7 @@
                 prelude-preparse-registry
                 prelude-capability-registry)
   (parameterize ([current-global-env (hasheq)]
+                 [current-definition-cells-content (hasheq)]  ;; Phase 3a
                  [current-ns-context #f]
                  [current-module-registry (hasheq)]
                  [current-lib-paths (list prelude-lib-dir)]
@@ -102,6 +103,7 @@
 ;; Each call gets a fresh global-env, ns-context, and meta-store for isolation.
 (define (run-ns-last s)
   (parameterize ([current-global-env (hasheq)]
+                 [current-definition-cells-content (hasheq)]  ;; Phase 3a
                  [current-ns-context #f]
                  [current-module-registry prelude-module-registry]
                  [current-lib-paths (list prelude-lib-dir)]
@@ -116,6 +118,7 @@
 ;; Process a string and return ALL results (list).
 (define (run-ns-all s)
   (parameterize ([current-global-env (hasheq)]
+                 [current-definition-cells-content (hasheq)]  ;; Phase 3a
                  [current-ns-context #f]
                  [current-module-registry prelude-module-registry]
                  [current-lib-paths (list prelude-lib-dir)]
@@ -135,6 +138,7 @@
 
 (define (run-ns-ws-last s)
   (parameterize ([current-global-env (hasheq)]
+                 [current-definition-cells-content (hasheq)]  ;; Phase 3a
                  [current-ns-context #f]
                  [current-module-registry prelude-module-registry]
                  [current-lib-paths (list prelude-lib-dir)]
@@ -148,6 +152,7 @@
 
 (define (run-ns-ws-all s)
   (parameterize ([current-global-env (hasheq)]
+                 [current-definition-cells-content (hasheq)]  ;; Phase 3a
                  [current-ns-context #f]
                  [current-module-registry prelude-module-registry]
                  [current-lib-paths (list prelude-lib-dir)]
@@ -168,6 +173,7 @@
   (define stderr-out (open-output-string))
   (define results
     (parameterize ([current-global-env (hasheq)]
+                   [current-definition-cells-content (hasheq)]  ;; Phase 3a
                    [current-error-port stderr-out])
       (process-string s)))
   (cons results (get-output-string stderr-out)))

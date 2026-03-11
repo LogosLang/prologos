@@ -79,7 +79,7 @@
                  [current-capability-registry shared-capability-reg])
     (define results (process-string s))
     (list results
-          (current-global-env)
+          (global-env-snapshot)  ;; Phase 3a: merge both layers
           (current-capability-registry))))
 
 (define (run s)

@@ -170,7 +170,7 @@
    call-graph)         ;; hasheq: name → (seteq callee-names)
   #:transparent)
 
-(define (build-cross-domain-network [env (current-global-env)])
+(define (build-cross-domain-network [env (global-env-snapshot)])
   ;; Step 1: Build call graph (reuse from capability-inference.rkt)
   (define call-graph (build-call-graph env))
 

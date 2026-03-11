@@ -250,7 +250,7 @@
    provenance-roots)     ;; hash: (cons func cap-name) → (seteq declaring-func-names)
   #:transparent)
 
-(define (run-capability-inference [env (current-global-env)])
+(define (run-capability-inference [env (global-env-snapshot)])
   ;; Step 1: Build call graph
   (define call-graph (build-call-graph env))
 
@@ -599,7 +599,7 @@
 ;; Verify that root-name's declared capabilities subsume its inferred closure.
 ;; If env is provided, runs inference on it; otherwise uses current-global-env.
 ;; Returns authority-root-ok or authority-root-failure.
-(define (verify-authority-root root-name [env (current-global-env)])
+(define (verify-authority-root root-name [env (global-env-snapshot)])
   ;; Run inference to get the full picture
   (define result (run-capability-inference env))
   (define closure (capability-closure result root-name))
