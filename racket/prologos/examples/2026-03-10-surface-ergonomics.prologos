@@ -1,0 +1,481 @@
+ns examples.surface-ergonomics
+
+;; ========================================================================
+;;
+;;     +=========================================================+
+;;     |   S U R F A C E   E R G O N O M I C S   S P R I N T     |
+;;     |   A Design Exposition                                    |
+;;     +=========================================================+
+;;
+;; ========================================================================
+;;
+;; This file demonstrates the Surface Ergonomics Sprint — a series of
+;; improvements to Prologos's day-to-day syntax and evaluation semantics
+;; driven by hands-on usage.
+;;
+;; Three batches of changes, each composing with the others:
+;;
+;;   Batch 1  = operator + let binding fixes
+;;   Batch 2  narrowing output enrichment + trait-dispatch narrowing
+;;   Batch 3  postfix bracket indexing + path algebra
+;;
+;; Every uncommented expression below is LIVE and produces output.
+;; Run the whole file, or evaluate sections one at a time.
+;;
+;; The prelude (loaded by `ns`) provides everything we need:
+;; Nat, Bool, List, Map, Option, add, sub, mult, double, etc.
+
+
+;; ========================================================================
+;; 1. THE = OPERATOR — Universal Equality
+;; ========================================================================
+;;
+;; Before this sprint, = had exactly one role: narrowing. Writing
+;; [add 1N 2N] = 3N without ?-prefixed logic variables would crash
+;; with "Unbound variable: =".
+;;
+;; Now = is a universal operator with two modes:
+;;
+;;   With ?vars  -->  narrowing (returns solution maps)
+;;   Without ?vars --> equality check (returns Bool)
+;;
+;; This is the single most impactful ergonomic change. Equality
+;; testing is fundamental, and it now Just Works.
+
+;; --- 1a. Boolean equality checks ---
+
+;; Simple arithmetic equality — both sides evaluate, then compare:
+[add 2N 3N] = 5N
+;; true : Bool
+
+[add 2N 3N] = 6N
+;; false : Bool
+
+;; Works with any type that has an Eq instance:
+true = true
+;; true : Bool
+
+false = true
+;; false : Bool
+
+;; Nat comparison:
+3N = 3N
+;; true : Bool
+
+3N = 5N
+;; false : Bool
+
+
+;; --- 1b. Same expression, two modes ---
+;;
+;; = chooses its behavior based on whether ?-prefixed logic
+;; variables are present. The same syntactic form serves two
+;; completely different roles:
+
+;; No ?vars --> equality check (returns Bool):
+[add 3N 4N] = 7N
+;; true : Bool
+
+;; With ?vars --> narrowing (returns solution maps):
+add ?x ?y = 7N
+;; '[{:y 0N, :x 7N} {:y 1N, :x 6N} ...] : _
+
+
+;; ========================================================================
+;; 2. LET BINDING — Fixed and Extended
+;; ========================================================================
+;;
+;; Three sub-issues fixed in Batch 1:
+;;
+;;   2a. let + = interop  (= in value position no longer crashes)
+;;   2b. Sequential lets  (consecutive lets scope correctly in defn)
+;;   2c. Flat-pair lets   (sexp mode)
+
+;; --- 2a. let with = in value position ---
+;;
+;; Before: let s := add ?x 10N = 33N would crash because = in the
+;; value expression fell through to the broken no-?-var path.
+;; Now: = in a let value works in both modes.
+;;
+;; At the REPL / top-level eval:
+;;   let solutions := add ?x 10N = 33N
+;;   solutions    --> '{:x 23N, :x_ 10N} : _
+;;
+;; The fix is in the preparse macro: `preprocess-let-infix-eq`
+;; restructures `a = b` in value tokens so `let-bodyless?`
+;; correctly identifies lets whose values contain `=`.
+
+
+;; --- 2b. Sequential lets (inside defn body) ---
+;;
+;; Consecutive let blocks scope correctly inside function bodies.
+;; Each let's binding is visible to subsequent lets and the final
+;; expression. The preparse macro detects consecutive lets and
+;; nests them automatically.
+
+spec sum-of-doubles Nat -> Nat
+defn sum-of-doubles [n]
+  let a := [double n]
+  let b := [double a]
+  let c := [add a b]
+  c
+
+[sum-of-doubles 3N]
+;; 18N : Nat  (a=6, b=12, c=18)
+
+spec chain-add Nat Nat -> Nat
+defn chain-add [x y]
+  let s := [add x y]
+  let d := [double s]
+  d
+
+[chain-add 3N 4N]
+;; 14N : Nat  (s=7, d=14)
+
+;; Sequential lets with = as equality check:
+spec check-sum Nat Nat Nat -> Bool
+defn check-sum [a b expected]
+  let s := [add a b]
+  s = expected
+
+[check-sum 3N 4N 7N]
+;; true : Bool
+
+[check-sum 3N 4N 8N]
+;; false : Bool
+
+
+;; ========================================================================
+;; 3. NARROWING OUTPUT ENRICHMENT
+;; ========================================================================
+;;
+;; Batch 2 enriches narrowing output to show BOTH the logic variables
+;; the user asked about AND the bound arguments from the function's
+;; spec. Bound args appear with a _ suffix, pulling names from spec.
+;;
+;; Before: add ?y 3N = 5N --> '{:y 2N}
+;; After:  add ?y 3N = 5N --> '{:y 2N :y_ 3N}
+;;
+;; The _ suffix convention: if spec says `add [x y]`, and the user
+;; writes `add ?y 3N`, then:
+;;   :y  = 2N  (the solved logic variable)
+;;   :y_ = 3N  (the bound argument, named from spec param "y")
+
+;; One free variable, one bound — the bound arg shows with _ suffix:
+add ?x 3N = 7N
+;; '{:x 4N, :y_ 3N} : _
+
+;; Both free — all solutions, no _ suffixed vars (nothing is bound):
+add ?a ?b = 4N
+;; '{:a 4N, :b 0N} {:a 3N, :b 1N} ...
+
+;; Bound variable in second position:
+add 5N ?y = 8N
+;; '{:y 3N, :x_ 5N} : _
+
+
+;; ========================================================================
+;; 4. TRAIT-DISPATCH NARROWING
+;; ========================================================================
+;;
+;; Before this sprint, narrowing could only run through defn-defined
+;; functions (which have definitional trees). Trait-dispatched generics
+;; like + returned empty solutions.
+;;
+;; Now the narrowing engine resolves trait dispatch to concrete
+;; instances, then narrows through the instance body.
+;;
+;;   .{1N + ?y} = 3N   -- + resolves to Nat's Add instance (= add)
+;;                      -- narrows through add's definitional tree
+;;                      -- finds :y = 2N
+
+;; Mixfix arithmetic narrowing through trait dispatch:
+.{1N + ?y} = 5N
+;; '{:y 4N, :x_ 1N} : _
+
+.{?x + 3N} = 7N
+;; '{:x 4N, :y_ 3N} : _
+
+;; This composes with = as equality check:
+.{2N + 3N} = 5N
+;; true : Bool (no ?vars, so this is an equality check)
+
+
+;; ========================================================================
+;; 5. POSTFIX BRACKET INDEXING — xs[0]
+;; ========================================================================
+;;
+;; Batch 3 introduces postfix bracket indexing. Before, accessing
+;; the nth element of a list required [nth xs 0] or [idx-nth xs 0].
+;; Now: xs[0].
+;;
+;; The no-space rule distinguishes indexing from application:
+;;   xs[0]   = index (postfix bracket, no space)
+;;   xs [0]  = application (passing [0] as argument)
+;;
+;; Under the hood, the reader detects adjacency via position
+;; arithmetic and emits a $postfix-index sentinel. The preparse
+;; macro rewrites it to a (get ...) call, which the AST pipeline
+;; dispatches by collection type.
+
+;; --- 5a. List indexing ---
+
+def fruits : (List Nat) := '[10N 20N 30N 40N 50N]
+
+;; First element:
+fruits[0]
+;; 10N : Nat
+
+;; Third element:
+fruits[2]
+;; 30N : Nat
+
+;; Last element:
+fruits[4]
+;; 50N : Nat
+
+;; With a computed Int index:
+def idx : Int := 3
+fruits[idx]
+;; 40N : Nat
+
+;; With a Nat literal index:
+fruits[1N]
+;; 20N : Nat
+
+
+;; --- 5b. Map indexing ---
+
+def config : (Map Keyword Nat) := {:port 8080N :timeout 30N :retries 3N}
+
+;; Keyword lookup:
+config[:port]
+;; 8080N : Nat
+
+config[:timeout]
+;; 30N : Nat
+
+;; Computed key:
+def kw : Keyword := :retries
+config[kw]
+;; 3N : Nat
+
+
+;; ========================================================================
+;; 6. CHAINED INDEXING — xs[0][1], m[:a][:b]
+;; ========================================================================
+;;
+;; Postfix brackets chain naturally. Each [] wraps the result of
+;; the previous access, left to right.
+
+;; --- 6a. Nested maps ---
+
+def nested : (Map Keyword (Map Keyword Nat))
+  {:db {:port 5432N :pool 10N} :cache {:port 6379N :ttl 300N}}
+
+;; Two-level lookup:
+nested[:db][:port]
+;; 5432N : Nat
+
+nested[:cache][:ttl]
+;; 300N : Nat
+
+
+;; --- 6b. List of maps ---
+
+def people : (List (Map Keyword Nat))
+  '[{:age 25N :score 90N} {:age 30N :score 85N} {:age 22N :score 95N}]
+
+;; Index into list, then into map:
+people[0][:age]
+;; 25N : Nat
+
+people[2][:score]
+;; 95N : Nat
+
+
+;; ========================================================================
+;; 7. PATH ALGEBRA — xs[0].field
+;; ========================================================================
+;;
+;; Postfix brackets compose with dot-access. The reader emits
+;; interleaved $postfix-index and $dot-access sentinels, and the
+;; preparse macro folds them left-to-right into nested get/map-get.
+;;
+;; xs[0].age  -->  (map-get (get xs 0) :age)
+
+;; Index then dot-access on the people list:
+people[0].age
+;; 25N : Nat
+
+people[1].score
+;; 85N : Nat
+
+;; Bracket chaining on nested maps:
+def infra : (Map Keyword (Map Keyword Nat))
+  {:server {:port 3000N :workers 4N} :logging {:level 2N :buffer 1024N}}
+
+infra[:server][:workers]
+;; 4N : Nat
+
+infra[:logging][:buffer]
+;; 1024N : Nat
+
+
+;; ========================================================================
+;; 8. COMPOSITION — Equality + Indexing
+;; ========================================================================
+;;
+;; The three batches compose. Equality checks work on indexed values.
+;; Sequential lets inside functions capture indexed results.
+
+;; --- 8a. Equality on indexed values ---
+
+def nums : (List Nat) := '[100N 200N 300N]
+
+nums[0] = 100N
+;; true : Bool
+
+nums[1] = 999N
+;; false : Bool
+
+;; --- 8b. Let + indexing in a function ---
+
+spec sum-first-two (List Nat) -> Nat
+defn sum-first-two [xs]
+  let a := xs[0]
+  let b := xs[1]
+  [add a b]
+
+[sum-first-two nums]
+;; 300N : Nat
+
+;; --- 8c. Indexed map values in equality ---
+
+def inventory : (Map Keyword Nat) := {:apples 5N :bananas 3N :cherries 8N}
+
+inventory[:apples] = 5N
+;; true : Bool
+
+inventory[:cherries] = 8N
+;; true : Bool
+
+
+;; ========================================================================
+;; 9. COMPOSITION — Narrowing + Indexing Side by Side
+;; ========================================================================
+;;
+;; Narrowing and indexing live side by side in the same file.
+;; Define data with maps and lists, index into it, and narrow
+;; functions — all with clean, ergonomic syntax.
+
+;; Define a lookup table and index into it:
+def weights : (Map Keyword Nat) := {:small 1N :medium 5N :large 10N}
+
+weights[:large]
+;; 10N : Nat
+
+weights[:small] = 1N
+;; true : Bool
+
+;; Narrowing alongside indexed data — same file, same namespace:
+add ?x ?y = 5N
+;; All (x, y) pairs summing to 5
+
+;; Trait-dispatch narrowing:
+.{?a + 2N} = 5N
+;; Resolves + to nat-add, finds a = 3N
+
+
+;; ========================================================================
+;; 10. COMPOSITION — Full Stack in Functions
+;; ========================================================================
+;;
+;; The full ergonomic stack in action: sequential lets, indexing,
+;; and equality checks composed inside function bodies.
+
+;; A function that validates a config entry:
+spec validate-entry (Map Keyword Nat) Keyword Nat -> Bool
+defn validate-entry [m key expected]
+  [map-get m key] = expected
+
+[validate-entry config :port 8080N]
+;; true : Bool
+
+[validate-entry config :timeout 999N]
+;; false : Bool
+
+
+;; ========================================================================
+;; 11. REAL-WORLD PATTERNS
+;; ========================================================================
+;;
+;; These patterns show how the ergonomic improvements feel in
+;; practice — the kind of code you'd write daily.
+
+;; --- 11a. Config validation ---
+
+def app-config : (Map Keyword Nat)
+  {:port 8080N :max-conn 100N :timeout 30N}
+
+app-config[:port] = 8080N
+;; true : Bool
+
+;; --- 11b. Data pipeline ---
+
+def records : (List (Map Keyword Nat))
+  '[{:id 1N :val 100N} {:id 2N :val 200N} {:id 3N :val 300N}]
+
+spec sum-first-two-vals (List (Map Keyword Nat)) -> Nat
+defn sum-first-two-vals [rs]
+  let v1 := rs[0][:val]
+  let v2 := rs[1][:val]
+  [add v1 v2]
+
+[sum-first-two-vals records]
+;; 300N : Nat
+
+;; --- 11c. Index + equality verification ---
+
+records[0][:val] = 100N
+;; true : Bool
+
+records[2][:val] = 300N
+;; true : Bool
+
+;; --- 11d. Narrowing as a query language ---
+
+;; "Does 3 + 4 equal 7?" (no ?vars = equality check)
+[add 3N 4N] = 7N
+;; true : Bool
+
+;; "What are all ways to decompose 5 into two addends?"
+add ?x ?y = 5N
+
+;; "What number added to 3 gives 7 via trait dispatch?"
+.{?x + 3N} = 7N
+
+
+;; ========================================================================
+;; FEATURE SUMMARY
+;; ========================================================================
+;;
+;; | Batch | Phase | Feature                              |
+;; |-------|-------|--------------------------------------|
+;; | 1     | 1a    | = as Bool equality check             |
+;; | 1     | 1b    | let + = interop                      |
+;; | 1     | 1c    | Sequential let blocks                |
+;; | 1     | 1d    | Flat-pair let syntax (sexp)          |
+;; | 2     | 2a-b  | Bound var _ suffix + spec names      |
+;; | 2     | 2d    | Trait-dispatch narrowing              |
+;; | 3     | 3a    | Postfix bracket indexing xs[0]       |
+;; | 3     | 3b    | Chained indexing xs[0][1]            |
+;; | 3     | 3c    | Path algebra xs[0].field             |
+;;
+;; All features compose: = works on indexed values, sequential lets
+;; bind intermediate results, indexing chains with dot-access, and
+;; trait-dispatched operators narrow through instance bodies.
+;;
+;; ========================================================================
+;; END
+;; ========================================================================
