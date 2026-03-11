@@ -203,8 +203,14 @@
 ;; NEGATIVE tests
 ;; ========================================
 
-(test-case "NEGATIVE: bare lambda cannot synthesize"
+;; Phase 4e: bare lambda WITH explicit domain CAN now synthesize a Pi type.
+;; Lambda with hole domain still cannot synthesize (no bidirectional context).
+(test-case "bare lambda with explicit domain synthesizes Pi"
   (check-equal? (tc:infer ctx-empty (expr-lam 'mw (expr-Nat) (expr-bvar 0)))
+                (expr-Pi 'mw (expr-Nat) (expr-Nat))))
+
+(test-case "NEGATIVE: bare lambda with hole domain cannot synthesize"
+  (check-equal? (tc:infer ctx-empty (expr-lam 'mw (expr-hole) (expr-bvar 0)))
                 (expr-error)))
 
 (test-case "NEGATIVE: zero is not a Bool"

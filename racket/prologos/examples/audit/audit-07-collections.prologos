@@ -77,17 +77,14 @@ ns examples.audit.collections
 [zip '[1N 2N 3N] '[10N 20N 30N]]
 ;; expect: list of pairs
 
-[sort '[3N 1N 2N]]
-;; expect: '[1N 2N 3N] : List Nat
-;;! CRASH: "Could not infer type" — sort needs Ord constraint, not inferred from literal
+[sort (fn [a : Nat] (fn [b : Nat] [le? a b])) '[3N 1N 2N]]
+;; OK: '[1N 2N 3N] : List Nat — sort takes explicit comparator (not trait-dispatched)
 
-[dedup '[1N 2N 2N 3N 3N 3N]]
-;; expect: '[1N 2N 3N] : List Nat
-;;! CRASH: "Could not infer type" — dedup needs Eq constraint, not inferred from literal
+[dedup (fn [a : Nat] (fn [b : Nat] [nat-eq? a b])) '[1N 2N 2N 3N 3N 3N]]
+;; OK: '[1N 2N 3N] : List Nat — dedup takes explicit eq function (not trait-dispatched)
 
-[range 1N 5N]
-;; expect: '[1N 2N 3N 4N] : List Nat
-;;! CRASH: "Too many arguments to 'range'" — range signature different than expected
+[range 5N]
+;; OK: '[0N 1N 2N 3N 4N] : List Nat — range takes single Nat (0-based)
 
 
 ;; ========================================================================
@@ -109,13 +106,11 @@ ns examples.audit.collections
 ;; expect: true : Bool
 
 ;; --- 2c. Option access ---
-[opt::unwrap-or [some 42N] 0N]
-;; expect: 42N : Nat
-;;! CRASH: "Could not infer type" — opt::unwrap-or fails type inference
+[opt::unwrap-or 0N [some 42N]]
+;; OK: 42N : Nat — unwrap-or takes (default, opt) not (opt, default)
 
-[opt::unwrap-or [none Nat] 0N]
-;; expect: 0N : Nat
-;;! CRASH: "Could not infer type" — opt::unwrap-or fails type inference
+[opt::unwrap-or 0N [none Nat]]
+;; OK: 0N : Nat
 
 
 ;; ========================================================================
@@ -202,9 +197,8 @@ ns examples.audit.collections
 #{1N 2N 3N}
 ;; expect: #{1N 2N 3N} : Set Nat
 
-[set-singleton 42N]
-;; expect: #{42N} : Set Nat
-;;! CRASH: "Could not infer type" — set-singleton can't infer from bare Nat
+[set-singleton Nat 42N]
+;; OK: #{42N} : Set Nat — needs explicit type arg (Pi binder, not implicit)
 
 ;; --- 6b. Set operations ---
 [set-map suc #{1N 2N 3N}]
@@ -244,13 +238,11 @@ ns examples.audit.collections
 ;; ========================================================================
 
 ;; --- 8a. into-vec, into-list, into-set ---
-[into-vec '[1N 2N 3N]]
-;; expect: @[1N 2N 3N] : PVec Nat
-;;! CRASH: "Could not infer type" — into-vec type inference fails
+[into-vec [list-to-lseq '[1N 2N 3N]]]
+;; OK: @[1N 2N 3N] : PVec Nat — into-vec takes LSeq, not List directly
 
-[into-list @[1N 2N 3N]]
-;; expect: '[1N 2N 3N] : List Nat
-;;! CRASH: "Could not infer type" — into-list type inference fails
+[into-list [pvec-to-seq @[1N 2N 3N]]]
+;; OK: '[1N 2N 3N] : List Nat — into-list takes LSeq, not PVec directly
 
 
 ;; ========================================================================

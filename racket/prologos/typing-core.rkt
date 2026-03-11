@@ -536,6 +536,19 @@
          t
          (expr-error))]
 
+    ;; ---- Lambda with explicit domain: synthesize Pi type ----
+    ;; Enables inference of bare lambdas (e.g., multi-bracket fn) at top level.
+    ;; Only fires when the domain annotation is a concrete type, not a hole.
+    [(expr-lam m dom body)
+     (cond
+       [(expr-hole? dom) (expr-error)]  ;; can't infer without context
+       [(not (is-type ctx dom)) (expr-error)]
+       [else
+        (let ([body-ty (infer (ctx-extend ctx dom m) body)])
+          (if (equal? body-ty (expr-error))
+              (expr-error)
+              (expr-Pi m dom body-ty)))])]
+
     ;; ---- Pi elimination (application) ----
     [(expr-app e1 e2)
      (match e1

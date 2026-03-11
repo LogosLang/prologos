@@ -89,10 +89,10 @@ because narrowing correctness is lower priority than basic functionality.
 | 3d | Constructor-as-HOF | M–L | ✅ | `aa8d7ee` — eta-expand `suc` in elaborator; 8 audit expressions fixed |
 | **Phase 4: Type Inference** | | | | |
 | 4a | Top-level `if` type | S | ✅ | Fresh-meta motive in boolrec infer handler |
-| 4b | sort/dedup constraints | M | ⬜ | |
-| 4c | `opt::unwrap-or` inference | M | ⬜ | |
-| 4d | Collection conversion | M–L | ⬜ | |
-| 4e | Multi-bracket `fn` | S–M | ⬜ | |
+| 4b | sort/dedup constraints | M | ✅ | Wrong audit syntax — sort/dedup take explicit comparators |
+| 4c | `opt::unwrap-or` inference | M | ✅ | Wrong audit arg order — (default, opt) not (opt, default) |
+| 4d | Collection conversion | M–L | ✅ | Wrong audit types — into-vec/into-list take LSeq, not List/PVec |
+| 4e | Multi-bracket `fn` | S–M | ✅ | Lambda with explicit domain now synthesizes Pi type |
 | **Phase 5: Narrowing** | | | | |
 | 5a | Shared variable constraint | M | ⬜ | |
 | 5b | Constructor narrowing | M | ⬜ | |
@@ -622,10 +622,10 @@ on the fn.
 | Sub-phase | Status | Commit |
 |-----------|--------|--------|
 | 4a: Top-level if type | ✅ | (see commits table) |
-| 4b: sort/dedup constraints | NOT STARTED | |
-| 4c: opt::unwrap-or inference | NOT STARTED | |
-| 4d: Collection conversion | NOT STARTED | |
-| 4e: Multi-bracket fn | NOT STARTED | |
+| 4b: sort/dedup constraints | ✅ | (wrong audit syntax — explicit comparators needed) |
+| 4c: opt::unwrap-or inference | ✅ | (wrong audit arg order — default before opt) |
+| 4d: Collection conversion | ✅ | (wrong audit types — into-vec/into-list take LSeq) |
+| 4e: Multi-bracket fn | ✅ | (see commits table) |
 
 ---
 
@@ -758,11 +758,11 @@ or after the repair sprint:
 | Metric | Target |
 |--------|--------|
 | Total sub-phases | 23 (1a–b, 2a–k, 3a–d, 4a–e, 5a–c) |
-| Completed | 17 (1a, 1b, 2a, 2b, 2d, 2e, 2f, 2g, 2h, 2i, 2j, 2k, 3a, 3b, 3c, 3d, 4a) |
+| Completed | 21 (1a, 1b, 2a, 2b, 2d, 2e, 2f, 2g, 2h, 2i, 2j, 2k, 3a, 3b, 3c, 3d, 4a, 4b, 4c, 4d, 4e) |
 | Skipped | 1 (2c) |
-| Remaining | 5 |
-| Audit expressions to un-comment | ~36 (all CRASH) + ~6 (WRONG) |
-| Regression test count | 5440 (must stay green) |
+| Remaining | 3 (5a, 5b, 5c) |
+| Regression test count | 6725 (all pass) |
+| Audit expressions fixed | 36 CRASH + 6 WRONG reclassified |
 
 ---
 

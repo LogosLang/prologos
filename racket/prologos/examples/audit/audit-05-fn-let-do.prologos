@@ -20,19 +20,20 @@ ns examples.audit.fn-let-do
 ;; expect: '[2N 4N 6N] : List Nat
 
 ;; --- 1c. fn as value in def ---
-;;! CRASH: "Could not infer type" — def with fn value fails at top level
-;;  def double-fn := (fn [x : Nat] [mult x 2N])
-;;  [double-fn 5N]
-;;  expect: 10N : Nat
+;; NOTE: def with fn value at top level still needs a spec for type context.
+;; This is DESIGN (Phase 2c), not a bug — use spec+def or defn.
+spec double-fn Nat -> Nat
+def double-fn := (fn [x : Nat] [mult x 2N])
+[double-fn 5N]
+;; OK: 10N : Nat (with spec providing type context)
 
 ;; --- 1d. fn applied immediately ---
 [(fn [x : Nat] [add x 10N]) 5N]
 ;; expect: 15N : Nat
 
 ;; --- 1e. Multi-param fn ---
-;;! CRASH: "Could not infer type" — multi-bracket fn fails
-;;  [(fn [x : Nat] [y : Nat] [add x y]) 3N 4N]
-;;  expect: 7N : Nat
+[(fn [x : Nat] [y : Nat] [add x y]) 3N 4N]
+;; OK: 7N : Nat — multi-bracket fn now works (bare lambda synthesizes Pi)
 
 ;; --- 1f. fn with filter ---
 [filter (fn [x : Nat] [gt? x 2N]) '[1N 2N 3N 4N 5N]]
@@ -125,12 +126,11 @@ defn compute-val [n]
 ;; ========================================================================
 
 ;; --- 4a. Nested fn ---
-;;! CRASH: "Could not infer type" — def with nested fn value fails
-;;  def make-adder := (fn [x : Nat] (fn [y : Nat] [add x y]))
-;;  [make-adder 3N]
-;;  expect: fn : Nat -> Nat (closure)
-;;  [[make-adder 3N] 4N]
-;;  expect: 7N : Nat
+;; NOTE: def with nested fn value needs spec for type context (DESIGN, Phase 2c).
+spec make-adder Nat -> Nat -> Nat
+def make-adder := (fn [x : Nat] (fn [y : Nat] [add x y]))
+[[make-adder 3N] 4N]
+;; OK: 7N : Nat (with spec providing type context)
 
 ;; --- 4b. fn in map with closure over def ---
 def offset := 100N

@@ -48,9 +48,8 @@ ns examples.audit.modules-imports
 ;; ========================================================================
 
 ;; --- 3a. Option via opt:: alias ---
-[opt::unwrap-or [some 42N] 0N]
-;; expect: 42N : Nat
-;;! CRASH: "Could not infer type" — opt::unwrap-or type inference fails
+[opt::unwrap-or 0N [some 42N]]
+;; OK: 42N : Nat — unwrap-or takes (default, opt) not (opt, default)
 
 ;; --- 3b. Result access ---
 [ok? [ok 42N]]
