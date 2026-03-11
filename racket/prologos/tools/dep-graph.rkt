@@ -385,6 +385,8 @@
    (test-dep '(macros.rkt) #f)
    'test-implicit-map-02.rkt
    (test-dep '(driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parser.rkt prelude.rkt pretty-print.rkt reader.rkt reduction.rkt source-location.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt typing-core.rkt) #t)
+   'test-infra-cell-01.rkt
+   (test-dep '(infra-cell.rkt propagator.rkt champ.rkt) #f)
    'test-inductive.rkt
    (test-dep '(prelude.rkt reduction.rkt substitution.rkt syntax.rkt typing-core.rkt) #f)
    'test-int.rkt
