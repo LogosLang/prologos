@@ -242,13 +242,7 @@
   (define param-names
     (cond
       [registry-names registry-names]
-      [else
-       ;; Fallback: peel lambda names from the function body
-       (define func-body (global-env-lookup-value func-name))
-       (if func-body
-           (let-values ([(names _inner) (peel-lambda-names func-body)])
-             names)
-           '())]))
+      [else '()]))
   (cond
     ;; Arity mismatch — function may have extra dict params or be partially applied
     [(not (= (length param-names) (length args-whnf))) '()]
