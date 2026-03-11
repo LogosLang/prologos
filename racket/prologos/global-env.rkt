@@ -3,27 +3,41 @@
 ;;;
 ;;; PROLOGOS GLOBAL ENVIRONMENT
 ;;;
-;;; Two-layer architecture (Phase 3a, Propagator-First Migration):
+;;; Two-layer architecture (Propagator-First Migration Phase 3):
 ;;;
 ;;;   Layer 1: current-definition-cells-content (hasheq: name → (cons type value))
 ;;;     - Per-file definitions created during elaboration
-;;;     - Persistent across commands within a file
+;;;     - Persistent across commands within a file; reset per-file/per-test
 ;;;     - Authoritative for per-file defs — lookups check here FIRST
-;;;     - Backed by per-definition cells in the propagator network
+;;;     - Each definition backed by a cell in the propagator network
+;;;     - Phase 3b: lookups record dependency edges in current-definition-dependencies
 ;;;
-;;;   Layer 2: current-global-env (hasheq: name → (cons type value))
+;;;   Layer 2: current-global-env / current-prelude-env (hasheq: name → (cons type value))
 ;;;     - Prelude and module definitions (populated during module loading)
 ;;;     - Structurally frozen after prelude loading: global-env-add doesn't
 ;;;       write here when cell infrastructure is available
 ;;;     - Serves as fallback when definition not found in Layer 1
+;;;     - Phase 3d: aliased as current-prelude-env for clarity; full rename
+;;;       deferred (266 files, 1002 references, purely mechanical)
 ;;;
 ;;; The "freeze" is structural: during module loading, parameterize sets
-;;; current-prop-net-box to #f, so global-env-add falls back to legacy
-;;; behavior. After module loading, the prop-net is set up, so global-env-add
-;;; writes to Layer 1 only. No explicit freeze needed.
+;;; current-global-env-prop-net-box to #f, so global-env-add falls back to
+;;; legacy behavior (writes to Layer 2). After module loading returns, the
+;;; prop-net is set up by process-command's parameterize, so global-env-add
+;;; writes to Layer 1 + cell. The legacy hasheq stops growing automatically.
+;;;
+;;; Read path: global-env-lookup-type/value check Layer 1 first, then Layer 2.
+;;; Merge: global-env-snapshot merges both layers (per-file shadows prelude).
+;;; Names: global-env-names returns union of both layers.
 ;;;
 
 (provide current-global-env
+         ;; Phase 3d: Alias — current-global-env holds prelude/module definitions
+         ;; (Layer 2). Per-file definitions are in current-definition-cells-content
+         ;; (Layer 1). Use global-env-lookup-* for reads (checks both layers).
+         ;; The alias is provided for documentation clarity; the rename is deferred
+         ;; to avoid touching 266 files with a purely mechanical change.
+         (rename-out [current-global-env current-prelude-env])
          global-env-lookup-type
          global-env-lookup-value
          global-env-add
