@@ -16,7 +16,8 @@
          racket/string
          racket/list
          racket/set
-         racket/path)
+         racket/path
+         "infra-cell.rkt")  ;; merge-replace, merge-hasheq-union
 
 (provide
  ;; Module info
@@ -58,7 +59,14 @@
  current-foreign-handler
  process-foreign
  ;; Spec propagation callback (set by driver.rkt for HKT implicit arg insertion)
- current-spec-propagation-handler)
+ current-spec-propagation-handler
+ ;; Phase 3c: Namespace cell infrastructure
+ current-ns-prop-net-box
+ current-ns-prop-cell-write
+ current-ns-prop-new-cell
+ current-module-registry-cell-id
+ current-ns-context-cell-id
+ register-namespace-cells!)
 
 ;; ========================================
 ;; Module Info — describes a loaded module
@@ -81,10 +89,27 @@
 ;; Maps namespace-symbol → module-info
 (define current-module-registry (make-parameter (hasheq)))
 
+;; Phase 3c: Callback parameters for namespace cell infrastructure.
+(define current-ns-prop-net-box (make-parameter #f))
+(define current-ns-prop-cell-write (make-parameter #f))
+(define current-ns-prop-new-cell (make-parameter #f))
+(define current-module-registry-cell-id (make-parameter #f))
+(define current-ns-context-cell-id (make-parameter #f))
+
+;; Helper: write to a namespace cell in the prop-net.
+(define (ns-cell-write! cell-id entry)
+  (define net-box (current-ns-prop-net-box))
+  (define write-fn (current-ns-prop-cell-write))
+  (when (and net-box write-fn cell-id)
+    (set-box! net-box (write-fn (unbox net-box) cell-id entry))))
+
 ;; Register a loaded module in the registry
 (define (register-module! ns-sym mod-info)
   (current-module-registry
-   (hash-set (current-module-registry) ns-sym mod-info)))
+   (hash-set (current-module-registry) ns-sym mod-info))
+  ;; Phase 3c: dual-write to cell
+  (ns-cell-write! (current-module-registry-cell-id)
+                  (current-module-registry)))
 
 ;; Look up a module by namespace symbol
 (define (lookup-module ns-sym)
@@ -622,6 +647,24 @@
 
     [else
      (error 'imports "Invalid imports spec: ~a" spec)]))
+
+;; ========================================
+;; Phase 3c: Namespace cell registration
+;; ========================================
+;; Creates cells for module-registry and ns-context in the propagator network.
+;; Called per-command after reset-meta-store!, since the network is fresh.
+;; Module-registry gets real-time dual-write (via register-module!).
+;; Ns-context cell is a snapshot — populated at command start.
+(define (register-namespace-cells! net-box new-cell-fn)
+  (when (and net-box new-cell-fn)
+    ;; Module registry cell
+    (define-values (enet1 mr-cid) (new-cell-fn (unbox net-box) (current-module-registry) merge-hasheq-union))
+    (current-module-registry-cell-id mr-cid)
+    ;; Ns-context cell (snapshot — not dual-written per-mutation)
+    (define ns-ctx (current-ns-context))
+    (define-values (enet2 nc-cid) (new-cell-fn enet1 (or ns-ctx 'no-ns) merge-replace))
+    (current-ns-context-cell-id nc-cid)
+    (set-box! net-box enet2)))
 
 ;; Ensure a module is loaded, returning its module-info (or #f if loader unavailable).
 ;; Always calls load-module (even if cached) so that load-module can import

@@ -371,6 +371,8 @@
   (register-warning-cells! (current-prop-net-box) (current-prop-new-infra-cell))
   ;; Phase 3a: Create per-definition cells in the fresh network.
   (register-global-env-cells! (current-prop-net-box) (current-prop-new-infra-cell))
+  ;; Phase 3c: Create namespace cells in the fresh network.
+  (register-namespace-cells! (current-prop-net-box) (current-prop-new-infra-cell))
   ;; Phase D: Initialize ATMS for dependency-directed error tracking.
   ;; The ATMS box is always available — init-speculation-tracking! creates a
   ;; fresh ATMS per command. This is cheap (empty ATMS = ~3 hasheq allocations).
@@ -378,6 +380,7 @@
     (current-command-atms (box (atms-empty))))
   (init-speculation-tracking!)
   (parameterize ([current-global-env-prop-net-box (current-prop-net-box)]  ;; Phase 3a: activate cell writes (auto-reverts)
+                 [current-ns-prop-net-box (current-prop-net-box)]          ;; Phase 3c: activate ns cell writes (auto-reverts)
                  [current-nf-cache (make-hash)]         ;; per-command nf memoization
                  [current-whnf-cache (make-hash)]       ;; per-command whnf memoization
                  [current-reduction-fuel (box 1000000)]  ;; 1M step limit
@@ -1249,8 +1252,10 @@
       (register-macros-cells! (current-prop-net-box) (current-prop-new-infra-cell))
       (register-warning-cells! (current-prop-net-box) (current-prop-new-infra-cell))
       (register-global-env-cells! (current-prop-net-box) (current-prop-new-infra-cell))
+      (register-namespace-cells! (current-prop-net-box) (current-prop-new-infra-cell))
       (init-speculation-tracking!)
-      (parameterize ([current-global-env-prop-net-box (current-prop-net-box)])
+      (parameterize ([current-global-env-prop-net-box (current-prop-net-box)]
+                     [current-ns-prop-net-box (current-prop-net-box)])
         (process-def def))))
   ;; Check for errors
   (define first-err (findf prologos-error? results))
@@ -1511,6 +1516,10 @@
                     ;; Set prop-net-box to #f so global-env-add writes to
                     ;; current-global-env (Layer 2), not definition-cells (Layer 1).
                     [current-global-env-prop-net-box #f]
+                    [current-ns-prop-net-box #f]                ;; Phase 3c: no ns cell writes during module loading
+                    [current-module-registry-cell-id #f]
+                    [current-ns-context-cell-id #f]
+                    [current-defn-param-names-cell-id #f]
                     [current-definition-cells-content (hasheq)]
                     [current-definition-cell-ids (hasheq)]
                     [current-definition-dependencies (hasheq)]  ;; Phase 3b
@@ -1803,6 +1812,7 @@
   (register-macros-cells! (current-prop-net-box) (current-prop-new-infra-cell))
   (register-warning-cells! (current-prop-net-box) (current-prop-new-infra-cell))
   (register-global-env-cells! (current-prop-net-box) (current-prop-new-infra-cell))
+  (register-namespace-cells! (current-prop-net-box) (current-prop-new-infra-cell))
   (define type-surf (parse-datum type-sexp))
   (when (prologos-error? type-surf)
     (error 'foreign "Failed to parse type for ~a: ~a" racket-name type-surf))
@@ -1955,6 +1965,10 @@
 ;; Phase 3a: Install global-env cell callbacks.
 (current-global-env-prop-cell-write elab-cell-write)
 (current-global-env-prop-new-cell elab-new-infra-cell)
+
+;; Phase 3c: Install namespace cell callbacks.
+(current-ns-prop-cell-write elab-cell-write)
+(current-ns-prop-new-cell elab-new-infra-cell)
 
 ;; P5b: Install multiplicity cell callbacks
 (current-prop-fresh-mult-cell elab-fresh-mult-cell)

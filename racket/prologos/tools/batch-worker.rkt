@@ -205,6 +205,10 @@
          [current-definition-cell-ids      (hasheq)]   ;; Phase 3a: fresh per-file
          [current-definition-dependencies  (hasheq)]   ;; Phase 3b: fresh per-file
          [current-global-env-prop-net-box  #f]          ;; Phase 3a: no stale cell writes
+         [current-ns-prop-net-box          #f]          ;; Phase 3c: no stale ns cell writes
+         [current-module-registry-cell-id  #f]          ;; Phase 3c: fresh per-file
+         [current-ns-context-cell-id       #f]          ;; Phase 3c: fresh per-file
+         [current-defn-param-names-cell-id #f]          ;; Phase 3c: fresh per-file
          ;; metavar-store.rkt — fresh mutable hash per file
          [current-mult-meta-store         (make-hasheq)]
          ;; errors.rkt — emit formatted errors to stderr for failure logs

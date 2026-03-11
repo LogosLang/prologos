@@ -44,6 +44,7 @@
          definition-dependencies-snapshot
          ;; Defn param-name registry (user-facing names for bound-arg display)
          current-defn-param-names
+         current-defn-param-names-cell-id
          register-defn-param-names!
          lookup-defn-param-names)
 
@@ -90,6 +91,14 @@
        (current-definition-cell-ids
         (hash-set (current-definition-cell-ids) name new-cid))
        (set-box! net-box enet*)])))
+
+;; Helper: write to a known cell-id in the prop-net.
+;; Used for param-names and other singleton cells.
+(define (definition-cell-write-named! cell-id entry)
+  (define net-box (current-global-env-prop-net-box))
+  (define write-fn (current-global-env-prop-cell-write))
+  (when (and net-box write-fn cell-id)
+    (set-box! net-box (write-fn (unbox net-box) cell-id entry))))
 
 ;; ========================================
 ;; Phase 3b: Definition dependency recording
@@ -244,7 +253,10 @@
         (define-values (enet* cid) (new-cell-fn enet entry merge-replace))
         (values enet* (hash-set ids name cid))))
     (current-definition-cell-ids final-ids)
-    (set-box! net-box final-enet)))
+    ;; Phase 3c: Create defn-param-names cell
+    (define-values (enet-pn pn-cid) (new-cell-fn final-enet (current-defn-param-names) merge-replace))
+    (current-defn-param-names-cell-id pn-cid)
+    (set-box! net-box enet-pn)))
 
 ;; ========================================
 ;; Defn param-name registry
@@ -255,10 +267,14 @@
 ;; bound-variable output (e.g., :y_ 3N) instead of internal lambda names.
 
 (define current-defn-param-names (make-parameter (hasheq)))
+(define current-defn-param-names-cell-id (make-parameter #f))
 
 (define (register-defn-param-names! name param-names)
   (current-defn-param-names
-   (hash-set (current-defn-param-names) name param-names)))
+   (hash-set (current-defn-param-names) name param-names))
+  ;; Phase 3c: dual-write to cell
+  (definition-cell-write-named! (current-defn-param-names-cell-id)
+                                (current-defn-param-names)))
 
 (define (lookup-defn-param-names name)
   (hash-ref (current-defn-param-names) name #f))
