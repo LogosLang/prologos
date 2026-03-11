@@ -27,16 +27,16 @@ computation, preserving Nat for induction, proofs, and type-level indices.
 | 1d | Expose generic wrappers unqualified | S | ✅ | (verified) | plus/minus/times/divide/int-range all resolve via :refer-all |
 | 1e | Add int convenience names | S | ⏭️ | | int+/int-/int*/int/ already sufficient |
 | **Phase 2: Collection API** | | | | | |
-| 2a | Int-indexed list ops | M | ⬜ | | `nth-int`, `take-int`, `drop-int` |
-| 2b | `length-int` alternative | S | ⬜ | | `List A -> Int` |
-| 2c | Harmonize generic collection ops | M | ⬜ | | Evaluate scope |
-| 2d | Document index type strategy | S | ⬜ | | |
+| 2a | Int-indexed list ops | M | ✅ | `8158a08` | nth-int, take-int, drop-int; match-on-Bool not if |
+| 2b | `length-int` alternative | S | ✅ | `8158a08` | `List A -> Int` in same commit |
+| 2c | Harmonize generic collection ops | M | ⏭️ | | Too broad; List Int-ops sufficient for now |
+| 2d | Document index type strategy | S | ✅ | | PATTERNS_AND_CONVENTIONS.org: index type strategy section |
 | **Phase 3: Examples & Docs** | | | | | |
 | 3a | Rewrite numerics-tutorial-demo | M | ⬜ | | Shrink Nat, expand Int/generic |
 | 3b | Rewrite surface-ergonomics demo | M | ⬜ | | Int for configs/computation |
 | 3c | Generic numerics showcase | M | ⬜ | | New example file |
-| 3d | Reframe narrowing demo | S | ⬜ | | Header explaining Nat requirement |
-| 3e | Update PATTERNS_AND_CONVENTIONS | S | ⬜ | | Numeric type selection guide |
+| 3d | Reframe narrowing demo | S | ✅ | (pre-existing) | Header already present at lines 26-33 |
+| 3e | Update PATTERNS_AND_CONVENTIONS | S | ✅ | | Done as part of 2d |
 | **Phase 4: Trait Gaps** | | | | | |
 | 4a | Verify Posit Num bundle | S | ⬜ | | End-to-end `.{p + q}` |
 | 4b | Hashable Int instance | M | ⬜ | | core/hashable.prologos |

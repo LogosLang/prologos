@@ -63,13 +63,17 @@ computation. ~Rat~ for exact rationals. ~Posit32~ for approximate.
 
 | Use Case | Type | Example |
 |-------------------------------+-----------+-------------------------------------|
-| General arithmetic | ~Int~ | ~[+ 3 4]~ => ~7 : Int~ |
+| General arithmetic | ~Int~ | ~.{3 + 4}~ => ~7 : Int~ |
 | Exact fractions | ~Rat~ | ~3/7 : Rat~ |
 | Approximate computation | ~Posit32~ | ~~3.14 : Posit32~ |
 | Type-level vector length | ~Nat~ | ~<(n : Nat) -> Vec A n>~ |
 | Structural induction / proofs | ~Nat~ | ~defn by-induction \| [zero] ...~ |
 | List length (structural) | ~Nat~ | ~spec length : [List A] -> Nat~ |
-| Indexing (nth, take, drop) | ~Nat~ | ~spec nth : Nat [List A] -> A?~ |
+| List length (computational) | ~Int~ | ~spec length-int : [List A] -> Int~ |
+| Indexing (structural) | ~Nat~ | ~spec nth : Nat [List A] -> A?~ |
+| Indexing (computational) | ~Int~ | ~spec nth-int : Int [List A] -> A?~ |
+| Narrowing / logic programming | ~Nat~ | ~add ?x ?y = 5N~ |
+| Generic numeric code | ~Num A~ | ~spec double : (Num A) A -> A~ |
 
 #+begin_src prologos
 ;; GOOD: Int for computation
@@ -80,9 +84,41 @@ defn factorial [n]
 ;; GOOD: Nat for type-level indexing
 spec safe-head : {A : Type} (xs : [List A]) {pf : [NonEmpty xs]} -> A
 
+;; GOOD: Int-indexed list operations for computational contexts
+[nth-int 2 my-list]     ;; Int index, returns Option A
+[take-int 5 my-list]    ;; Int count, returns List A
+[length-int my-list]    ;; returns Int (not Nat)
+
 ;; BAD: Nat for general computation
 ;; spec factorial : Nat -> Nat   -- Nat is for types, not computation
 #+end_src
+
+** Index Type Strategy
+
+Collection operations have two families of index types:
+
+- *Nat-indexed* (~nth~, ~take~, ~drop~, ~length~): Use for structural
+  recursion, dependent types, and proof terms. ~length~ returns ~Nat~
+  because it mirrors the structural depth of the list.
+
+- *Int-indexed* (~nth-int~, ~take-int~, ~drop-int~, ~length-int~): Use
+  for computational contexts where you work with Int values. These
+  handle negative indices safely (returning ~none~ / ~nil~) without
+  requiring manual Nat conversion.
+
+#+begin_src prologos
+;; Computational code: use Int-indexed ops
+let n := [length-int xs]       ;; Int, works with int arithmetic
+let elem := [nth-int 2 xs]     ;; no from-nat needed
+
+;; Type-level / proof code: use Nat-indexed ops
+spec safe-index : {A : Type} (n : Nat) (xs : [List A])
+  {pf : [lt? n [length xs]]} -> A
+#+end_src
+
+*Recommendation*: Default to Int-indexed operations in new code.
+Use Nat-indexed only when Nat is structurally required (dependent
+types, inductive proofs, narrowing).
 
 * Function Definition Patterns
 
@@ -217,6 +253,9 @@ The prelude (~ns foo~) provides:
 - All traits and instances: ~Eq~, ~Ord~, ~Add~, ~Sub~, etc.
 - Collection operations and conversions
 - Generic numeric functions: ~sum~, ~product~, ~int-range~
+- Generic wrappers: ~plus~, ~minus~, ~times~, ~divide~, ~negate-fn~, ~abs-fn~
+- Int-indexed list ops: ~nth-int~, ~take-int~, ~drop-int~, ~length-int~
+- Nat ops behind ~nat::~ alias (e.g., ~nat::add~, ~nat::mult~); ~zero?~ unqualified
 
 Own-definition priority: a user's ~def map~ shadows the prelude's
 ~list::map~.
