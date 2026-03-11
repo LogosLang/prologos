@@ -13,19 +13,34 @@ fixes earlier in the pipeline may unblock or simplify later fixes.
 **Guiding principle**: Fix from the bottom of the stack upward. Reader fixes before
 preparse fixes before elaborator fixes before typing fixes before narrowing fixes.
 
-**Validation strategy**: After each phase, re-run the affected audit file(s) via
-`run-file.rkt` and un-comment any expressions that the fix should have unblocked.
-Full test suite (`--all`) at each phase boundary.
+**Validation strategy**: After each sub-phase, re-run the affected audit file(s)
+via `run-file.rkt` and un-comment any expressions that the fix should have
+unblocked. Full test suite at phase boundaries per the checkpoint schedule below.
+
+**Rollback strategy**: Each sub-phase is committed individually. If a fix breaks
+the regression suite, revert via `git revert <commit>` and re-assess. For Phase 3d
+(constructor-as-HOF), which may require broader changes, branch if the fix is
+non-trivial and reconcile after the sprint.
+
+### Validation Checkpoints
+
+| After | Run |
+|-------|-----|
+| Each sub-phase | Affected audit file(s) via `run-file.rkt` |
+| Each phase completion | `racket tools/run-affected-tests.rkt --all` |
+| Phases 1–2 complete | Full audit re-run (all 12 files) |
+| Phases 3–4 complete | Full audit re-run (all 12 files) |
+| Sprint complete | Full audit + regression + `--slowest 10` |
 
 ---
 
 ## Dependency Graph
 
 ```
-Phase 1: Reader Fixes (C5 partial)
+Phase 1: Reader Fixes (C5 — quote/quasiquote, char docs)
     |
     v
-Phase 2: Preparse Fixes (C3, C7, C8)
+Phase 2: Preparse Fixes (C3, C5, C7, C8 — 10 sub-phases)
     |
     v
 Phase 3: Data & Constructor Fixes (C4, C1)
@@ -38,12 +53,13 @@ Phase 5: Narrowing Correctness (C6)
 ```
 
 Phases 1 and 2 are largely independent of each other (reader vs preparse) but
-are ordered this way because reader fixes may change the datum shapes that preparse
-sees. Phase 3 depends on Phase 2 (preparse must correctly handle `data` forms
-before we fix constructor elaboration). Phase 4 depends on Phase 3 (constructors
-must be first-class before we can test inference improvements). Phase 5 is
-independent but is last because narrowing correctness is lower priority than
-basic functionality.
+are ordered this way because reader fixes may change the datum shapes that
+preparse sees. The `=` inside mixfix fix (formerly C5/reader) is in Phase 2
+since the actual fix is in `macros.rkt`, not `reader.rkt`. Phase 3 depends on
+Phase 2 (preparse must correctly handle `data` forms before we fix constructor
+elaboration). Phase 4 depends on Phase 3 (constructors must be first-class
+before we can test inference improvements). Phase 5 is independent but is last
+because narrowing correctness is lower priority than basic functionality.
 
 ---
 
@@ -51,52 +67,30 @@ basic functionality.
 
 **Cluster**: C5 (Reader-Level Syntax Conflicts)
 **Files**: `racket/prologos/reader.rkt`
-**Audit files affected**: audit-01, audit-06, audit-12
+**Audit files affected**: audit-01, audit-12
+**Note**: The `=` inside mixfix fix (C5) is in Phase 2j since the fix is in
+`macros.rkt`, not `reader.rkt`.
 
-### Phase 1a: Char Literal Syntax in WS Mode
+### Phase 1a: Char Literal Syntax — Documentation Only
 
 **Problem**: `'a'` is read as `(quote a)` + stray `'` because `'` is the
 quote/list-literal prefix (reader.rkt:354–364). The Char type exists and
-`\a` backslash-escape works (reader.rkt:700–759), but there's no single-char
-literal syntax in WS mode.
+`\a` backslash-escape works (reader.rkt:700–759), but `'x'`-style char
+literal syntax is not available in WS mode.
 
-**Approach**: The `\` escape path already handles single chars. The question is
-whether we need a new literal syntax (e.g., `#'a'` or `c'a'`) or whether `\a`
-is sufficient. The audit showed the Char type works fine — it's only the literal
-syntax that's missing.
+**Resolution**: `\a` (backslash-char) is sufficient for WS-mode char literals.
+The reader already handles single chars (`\a`), named chars (`\newline`,
+`\space`, `\tab`), and Unicode escapes (`\uXXXX`) via reader.rkt:700–759.
+No new syntax needed — document `\a` as the canonical char literal form.
 
-**Decision needed**: Is `\a` (backslash-char) sufficient for WS-mode char
-literals, or do we want a dedicated syntax? If `\a` is sufficient, this is a
-DESIGN note (document it) not a fix. If we want new syntax, it requires a
-readtable entry.
+**Action**: Update audit-01 char literal annotations from CRASH to DESIGN
+(WS-mode char syntax is `\a` not `'a'`). Update grammar docs to document
+the `\x` char literal form.
 
-**Effort**: S (if documentation only) / M (if new syntax)
+**Effort**: S (documentation only)
 **Audit expressions**: audit-01 `'a'`, `'\n'`
-**Validation**: Un-comment char literal tests in audit-01, verify output
 
-### Phase 1b: `=` Inside Mixfix `.{}`
-
-**Problem**: `.{3N = 3N}` crashes with "Unexpected token after expression: ="
-(audit-06). The `=` triggers the narrowing/equality rewrite pass, which runs
-before mixfix parsing and conflicts with it.
-
-**Root cause**: The rewrite pass in `macros.rkt` (not reader.rkt) scans for `=`
-at the top level of forms. When `=` appears inside `.{}`, the rewrite pass
-captures it before the mixfix parser sees it.
-
-**Approach**: The rewrite pass that handles `=` needs to skip `=` tokens that
-are inside `$mixfix` or `.{}` delimiters. This is a preparse fix, not a reader
-fix — listing it here because it's C5 but the actual fix is in macros.rkt.
-
-**Fix location**: `macros.rkt` — the `=` rewrite pass (find the pass that
-transforms `expr1 = expr2` into `($unify expr1 expr2)` or `($eq expr1 expr2)`;
-add a guard that skips when inside `$mixfix`).
-
-**Effort**: S
-**Audit expressions**: audit-06 `.{3N = 3N}`
-**Validation**: Un-comment `.{3N = 3N}` in audit-06, expect `true : Bool`
-
-### Phase 1c: Quote / Quasiquote in WS Mode
+### Phase 1b: Quote / Quasiquote in WS Mode
 
 **Problem**: `'foo`, `'(a b c)`, and `` `(hello ,x world) `` all crash (audit-12).
 The `'` prefix is overloaded: `'[` → list literal, `'` alone → quote. But the
@@ -121,9 +115,8 @@ WS mode — check if it's installed.
 
 | Sub-phase | Status | Commit |
 |-----------|--------|--------|
-| 1a: Char literal syntax | NOT STARTED | |
-| 1b: `=` inside mixfix | NOT STARTED | |
-| 1c: Quote/quasiquote | NOT STARTED | |
+| 1a: Char literal docs | NOT STARTED | |
+| 1b: Quote/quasiquote | NOT STARTED | |
 
 ---
 
@@ -154,24 +147,30 @@ dispatch cond clause.
 ### Phase 2b: `def` with Multi-Token RHS (Constructor Application)
 
 **Problem**: `def x := some 42N` → "expected exactly one value after :="
-(audit-02). The preparse `:=` handler sees two tokens (`some`, `42N`) and
-rejects.
+(audit-02). `expand-def-assign` (macros.rkt:3607) at line 3616 does
+`(unless (= (length after) 1) (error ...))`.
 
-**Root cause**: The `:=` handler in the preparse splits on `:=` and expects
-exactly one datum on the right. Multi-token constructor applications need
-brackets: `[some 42N]`.
+**Root cause**: The `:=` handler splits on `:=` and expects exactly one datum
+on the right. The WS reader produces separate datums for `some` and `42N`.
 
-**Fix**: Change the `:=` handler to auto-wrap multiple RHS tokens in a list
-(application). If there are N > 1 tokens after `:=`, wrap them as
+**Fix**: In `expand-def-assign`, when `(length after) > 1`, auto-wrap as
 `(token1 token2 ... tokenN)`. This matches the WS-mode convention that
-juxtaposed tokens form an application.
+juxtaposed tokens form an application. Prologos sexp is uniformly
+list-application, so wrapping is always semantically correct:
+- `def x := some 42N` → `(some 42N)` — constructor application, correct
+- `def f := fn [x] [add x 1]` → `(fn (x) (add x 1))` — fn expression, correct
+- `def y := if cond a b` → `(if cond a b)` — if expression, correct
 
-**Risk**: Must not break cases where `:=` RHS is intentionally a single token.
-Only wrap when count > 1.
+**Risk**: Low — all multi-token sequences after `:=` ARE applications in
+Prologos. But edge cases need test coverage: forms with type annotations
+(`def x : T := multi token`), forms where `:=` RHS contains brackets
+(`def x := [f a] b`). Only wrap when count > 1 and no type annotation
+is present (the type-annotated path is already separate).
 
-**Effort**: S
+**Effort**: M (edge case testing required)
 **Audit expressions**: audit-02 `def x := some 42N`
-**Validation**: Un-comment, expect `some 42N : Option Nat`
+**Validation**: Un-comment, expect `some 42N : Option Nat`. Add tests for
+`def` with fn value, if expression, and nested brackets on RHS.
 
 ### Phase 2c: `def` with Lambda Value
 
@@ -222,17 +221,24 @@ implicit dictionary parameters injected by trait constraints.
 **Problem**: `impl Describable Nat` with indented `defn describe [n] n` →
 "defn requires: (defn name [x <T> ...] body)" (audit-06).
 
-**Root cause**: `preparse-expand-all` processes `impl` in Pass 1
-(macros.rkt:1911–1927). The WS-mode indentation groups the `defn` forms as
-children of the `impl` datum, but the impl handler doesn't recognize `defn`
-as a valid child form — it expects sexp-style method definitions.
+**Root cause**: The impl machinery already handles `defn` forms correctly.
+`process-impl` (macros.rkt:7039) checks `(eq? (caar remaining) 'defn)` at
+line 7089 and processes method definitions. The WS reader's `parse-child-form`
+(reader.rkt:1602) produces the correct outer shape: `(impl Describable Nat
+(defn describe (n) n))`.
 
-**Fix**: The `impl` handler needs to recognize `defn` (and `def`) as method
-definition forms within its body. Each child `defn` should be treated as a
-method implementation. This may require teaching the impl processing to
-preparse-expand its children before interpreting them.
+The error "defn requires: (defn name [x <T>...] body)" comes from *inside*
+defn processing, not from impl failing to find the defn. The issue is in how
+the method defn's internal datum structure (bracket arguments, body) is shaped
+by the WS reader within the impl context. This is a datum-shape debugging
+problem, not an architectural one.
 
-**Effort**: M (must understand impl processing flow, test multi-method impls)
+**Fix**: Diagnose the exact datum shape `process-impl` passes to method
+processing. The defn's bracket `[n]` may be flattened or mis-grouped when
+nested inside impl's indented block. Fix the datum normalization for method
+defns before they're processed.
+
+**Effort**: M (datum-shape debugging, not impl machinery rewrite)
 **Audit expressions**: audit-06 `impl Describable Nat { defn describe [n] ... }`
 **Validation**: Un-comment impl blocks, verify trait dispatch works
 
@@ -295,7 +301,7 @@ is more commonly used; the transducer form should have a distinct name.
 **Audit expressions**: audit-10 `into-list` with transducer args (×3)
 **Validation**: Update audit-10 to use new name, verify output
 
-### Phase 2i: Top-Level `let` as `def` Sugar
+### Phase 2i: Top-Level `let` — Error with Hint
 
 **Problem**: `let x := val` at top level → "let :=: missing value after :="
 (audit-05).
@@ -304,13 +310,43 @@ is more commonly used; the transducer form should have a distinct name.
 desugars to nested lambda application. The preparse doesn't handle `let` as
 a top-level form.
 
-**Fix**: In the preparse, recognize top-level `let x := val` and rewrite it
-to `def x := val`. This makes `let` an alias for `def` at top level, which
-matches user expectation from REPL-style usage.
+**Fix**: Emit a clear error with guidance instead of the cryptic current error:
+```
+Error: `let` is not allowed at top level. Use `def` instead.
+  let x := 1N
+  ^^^
+  Use: def x := 1N
+```
+Rationale: `let` and `def` have different semantics — `let` shadows (in nested
+scope), `def` creates a unique global binding. Silently converting `let` → `def`
+would surprise users when `let x := 1N; let x := 2N` behaves differently at
+top level (redefinition error) vs in a function body (shadowing). A clear error
+preserves the semantic distinction.
 
 **Effort**: S
 **Audit expressions**: audit-05 `let x := val`
-**Validation**: Un-comment top-level let, verify it works as def
+**Validation**: Verify error message is emitted with hint text
+
+### Phase 2j: `=` Inside Mixfix `.{}`
+
+**Problem**: `.{3N = 3N}` crashes with "Unexpected token after expression: ="
+(audit-06). The `=` triggers the narrowing/equality rewrite pass, which
+conflicts with the mixfix parser.
+
+**Root cause**: `maybe-rewrite-infix-eq` in reader.rkt:1604 (called from
+`parse-child-form` and `parse-top-level-form`) scans for `=` tokens and
+rewrites `expr1 = expr2` into `($unify expr1 expr2)` or `($eq expr1 expr2)`.
+When `=` appears inside a `$mixfix` form (`.{}`), the rewrite captures it
+before the mixfix parser processes the expression.
+
+**Fix**: In `maybe-rewrite-infix-eq`, skip rewriting when the `=` token is
+inside a `$mixfix` delimiter. Check whether the surrounding context is a
+mixfix form and if so, leave `=` as a bare symbol for the mixfix parser to
+handle.
+
+**Effort**: S
+**Audit expressions**: audit-06 `.{3N = 3N}`
+**Validation**: Un-comment `.{3N = 3N}` in audit-06, expect `true : Bool`
 
 ### Phase 2 Status
 
@@ -324,7 +360,8 @@ matches user expectation from REPL-style usage.
 | 2f: Multi-clause `defn` + spec | NOT STARTED | |
 | 2g: `with-transient` WS form | NOT STARTED | |
 | 2h: `into-list` name collision | NOT STARTED | |
-| 2i: Top-level `let` as `def` | NOT STARTED | |
+| 2i: Top-level `let` error | NOT STARTED | |
+| 2j: `=` inside mixfix | NOT STARTED | |
 
 ---
 
@@ -401,23 +438,40 @@ audit-10 ×2, audit-11 ×1). Constructors can be applied directly (`[suc 2N]`)
 and used in pipes (`0N |> suc`) but cannot be passed as arguments to
 higher-order functions.
 
-**Root cause**: When `suc` appears as a bare argument to `map`, the elaborator
-looks it up in the environment via `env-lookup` (elaborator.rkt:75–86). For
-built-in constructors, `suc` IS in the global environment (it's defined by
-the Nat prelude module). So the issue may be more subtle — perhaps `suc` is
-in the environment but its type doesn't match what `map` expects (a function
-`Nat -> Nat`), or the elaborator tries to apply `suc` immediately rather than
-passing it as a value.
+**Existing evidence**: Audit-10 shows `def suc-fn : [Nat -> Nat] := suc` also
+crashes with "Unbound variable". So `suc` as a bare expression (outside of
+application context) fails even with an explicit type annotation. This
+suggests constructors aren't valid as standalone expressions — they only
+work in application position (`[suc 2N]`) and pipe position (`0N |> suc`,
+which desugars to application).
 
-**Diagnosis needed**: More precise investigation. Test in sexp mode:
-`(process-string "(map suc (cons 1N (cons 2N nil)))")` — does this work?
-If sexp works but WS doesn't, the issue is in the WS reader/preparse path.
-If both fail, the issue is in elaboration.
+**Diagnosis steps** (before attempting fix):
+1. Test in sexp mode: `(process-string "(map suc (cons 1N (cons 2N nil)))")`
+   — if sexp works but WS doesn't, issue is reader/preparse
+2. Test alias: `def suc-alias := (fn [x : Nat] [suc x])` then `[map suc-alias xs]`
+   — if the lambda wrapper works, confirms constructors need η-expansion
+3. Check `env-lookup` for `suc` — is it in the global env? What type does it have?
+4. Check elaborator path for bare symbols in non-application position
 
-**Approach**: If the issue is that constructors aren't η-expanded to functions,
-the fix is to have the elaborator generate `(fn [x] (suc x))` when `suc` is
-used in a position expecting a function type. This is "constructor η-expansion"
-and is a standard technique in dependently typed languages.
+**Root cause hypothesis**: Constructors are only elaborated correctly when
+they appear as the head of an application. In HOF position, `suc` is a bare
+symbol that the elaborator tries to look up as a regular variable. Either it's
+not in the environment, or its type (as a constructor) doesn't match the
+expected function type.
+
+**Approach (after diagnosis confirms)**: Constructor η-expansion — when a
+constructor name appears in a position expecting a function type, the elaborator
+generates an η-expanded lambda:
+- `suc` (unary) → `(fn [x : Nat] (suc x))`
+- `cons` (binary) → `(fn [x : A] (fn [y : (List A)] (cons x y)))`
+- `some` (polymorphic) → `(fn [x : A] (some x))` with `A` inferred
+
+**Implementation notes**:
+- Only η-expand in HOF position (when expected type is a function type), not everywhere
+- Arity must match the constructor's field count
+- Polymorphic constructors: type variables must be preserved/inferred
+- Alternative: compile constructors as functions from the start (inject into
+  global-env as function-typed values during `process-data`)
 
 **Effort**: M–L (depends on diagnosis; η-expansion is architecturally clean
 but touches elaborator type-checking logic)
@@ -460,6 +514,13 @@ already happen but may be guarded behind a `check` mode condition.
 **Effort**: S
 **Audit expressions**: audit-04 `if true 1N 2N`
 **Validation**: Un-comment top-level if test, expect `1N : Nat`
+
+**Note on Phases 4b–4d**: These three issues may share a root cause — trait
+constraint resolution failing at top level. If 4b's fix (making `sort` work)
+also resolves `opt::unwrap-or` and `into-vec`, mark 4c and 4d as done
+automatically. However, they're tracked separately because `opt::unwrap-or`
+uses the qualified alias path (`opt::`) which has its own lookup machinery
+and may have independent bugs.
 
 ### Phase 4b: `sort` / `dedup` Trait Constraint Resolution
 
@@ -592,21 +653,31 @@ binding `?n = k`.
 **Problem**: `my-and ?a ?b = true` → `nil` (audit-08). The function uses
 `if a b false`, but `if` doesn't generate a definitional tree.
 
-**Root cause**: Only `match`-based definitions create definitional trees that
-the narrowing engine can decompose. `if` is elaborated differently — it
-doesn't produce the same case-split structure. The narrowing engine is
-opaque to `if`.
+**Root cause**: `if` is a preparse macro (`expand-if`, macros.rkt:3976) that
+expands to `boolrec` (the Bool eliminator), NOT to `match`:
+```
+(if cond then else) → (boolrec _ then else cond)
+```
+`boolrec` is the type-theoretically canonical elimination form for Bool in
+the dependent type system. The narrowing engine only understands `match`-based
+case splits (definitional trees), not `boolrec`. Changing `if` to produce
+`match` instead would alter the type-theoretic foundation.
 
 **Fix options**:
-1. Teach the narrowing engine to handle `if` as a case split (treat
-   `if cond then-e else-e` as `match cond | true -> then-e | false -> else-e`)
+1. Teach the narrowing engine to recognize `boolrec` as a case split on Bool
+   (analogous to how it recognizes `match` — when `boolrec` appears with a
+   logic variable in the condition position, split into `true` and `false` branches)
 2. Document that narrowable functions should use `match`, not `if`
-3. Desugar `if` to `match` during elaboration (making them equivalent)
+3. Generate a parallel `match`-based definitional tree alongside `boolrec`
+   during elaboration, for narrowing purposes only
 
-**Recommended**: Option 3 is the cleanest — `if` becomes sugar for a boolean
-match, and narrowing works automatically.
+**Recommended**: Option 1 — teach narrowing about `boolrec`. This preserves
+the type theory while giving narrowing the structure it needs. The narrowing
+engine's definitional tree builder should recognize `boolrec _ then-e else-e cond`
+as equivalent to `match cond | true -> then-e | false -> else-e` for the
+purpose of case splitting.
 
-**Effort**: S (option 3, if `if` already desugars to match) / M (option 1)
+**Effort**: M (must integrate boolrec into definitional tree construction)
 **Audit expressions**: audit-08 `my-and ?a ?b = true`
 **Validation**: Expect `[{:a true, :b true}]`
 
@@ -629,9 +700,9 @@ inform future ergonomic improvements.
 |----|---------|-------------|
 | D1 | `nil` shows `?meta` in type | Cosmetic — pretty-print unsolved metas as `_` (separate ticket) |
 | D2 | `head`/`tail`/`nth`/`last` return `Option` | Correct by design — add `head!` etc. partial variants later |
-| D3 | Top-level sequential `let` scoping | Fixed by Phase 2i (`let` → `def` at top level) |
+| D3 | Top-level sequential `let` scoping | Phase 2i emits error-with-hint directing users to `def` |
 | D4 | `cond` emits `Hole ??__cond-fail` warning | Suppress internal hole in process-file output (separate ticket) |
-| D5 | Constructor app in `def` needs brackets | Fixed by Phase 2b (auto-wrap multi-token RHS) |
+| D5 | Constructor app in `def` needs brackets | Addressed by Phase 2b (auto-wrap multi-token RHS) |
 | D6 | `=` overloaded equality/narrowing | By design — document the duality |
 | D7 | `cons` pretty-prints as list literal | Desirable normalization — no action needed |
 
@@ -656,10 +727,10 @@ or after the repair sprint:
 
 | Metric | Target |
 |--------|--------|
-| Total sub-phases | 22 |
-| Estimated S fixes | 10 |
-| Estimated M fixes | 10 |
-| Estimated L fixes | 2 |
+| Total sub-phases | 22 (1a–b, 2a–j, 3a–d, 4a–e, 5a–c) |
+| Estimated S fixes | 8 (1a, 2a, 2d, 2g, 2h, 2i, 2j, 3a) |
+| Estimated M fixes | 11 (1b, 2b, 2c, 2e, 2f, 3b, 3c, 4a, 4b, 4c, 5c) |
+| Estimated M–L fixes | 3 (3d, 4d, 4e) |
 | Audit expressions to un-comment | ~36 (all CRASH) + ~6 (WRONG) |
 | Regression test count | 5440 (must stay green) |
 
@@ -669,4 +740,5 @@ or after the repair sprint:
 
 | Phase | Commit | Date | Notes |
 |-------|--------|------|-------|
-| (planning) | | 2026-03-10 | This document |
+| (planning) | `c8f3929` | 2026-03-10 | Initial sprint document |
+| (revision) | | 2026-03-10 | Incorporated external critique |
