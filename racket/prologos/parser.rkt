@@ -64,7 +64,7 @@
     Symbol symbol-lit
     Keyword Char String
     Map map-empty map-assoc map-get nil-safe-get nil? map-dissoc map-size map-has-key? map-keys map-vals
-    get-in update-in
+    get get-in update-in
     Set set-empty set-insert set-member? set-delete set-size set-union set-intersect set-diff set-to-list
     PVec pvec-empty pvec-push pvec-nth pvec-update pvec-length pvec-pop pvec-concat pvec-slice pvec-to-list pvec-from-list pvec-fold pvec-map pvec-filter
     set-fold set-filter
@@ -1859,6 +1859,15 @@
                     [(prologos-error? k) k]
                     [(prologos-error? v) v]
                     [else (surf-map-assoc m k v loc)])))]
+
+       ;; get: (get coll key) — type-directed index/lookup
+       [(get)
+        (or (check-arity 'get args 2 loc)
+            (let ([c (parse-datum (car args))]
+                  [k (parse-datum (cadr args))])
+              (cond [(prologos-error? c) c]
+                    [(prologos-error? k) k]
+                    [else (surf-get c k loc)])))]
 
        ;; map-get: (map-get m k)
        [(map-get)

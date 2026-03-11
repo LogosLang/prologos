@@ -1174,6 +1174,31 @@
                    ;; sees concrete types, not raw meta references
                    (expr-Map kt (build-union-type (list (whnf vt) tv)))))])]
          [_ (expr-error)]))]
+    ;; get: type-directed index/lookup
+    ;; List A → Nat → A, PVec A → Nat → A, Map K V → K → V
+    ;; Selection/Schema → delegate to expr-map-get
+    [(expr-get coll key)
+     (let ([tc (whnf (infer ctx coll))])
+       (match tc
+         ;; PVec A → Nat/Int → A
+         [(expr-PVec a)
+          (if (or (check ctx key (expr-Nat)) (check ctx key (expr-Int))) a (expr-error))]
+         ;; Map K V → K → V
+         [(expr-Map kt vt)
+          (if (check ctx key kt) vt (expr-error))]
+         ;; Selection type → delegate to map-get typing
+         [(expr-fvar name)
+          #:when (lookup-selection-by-name name)
+          (infer ctx (expr-map-get coll key))]
+         ;; Schema type → delegate to map-get typing
+         [(expr-fvar name)
+          #:when (lookup-schema-by-name name)
+          (infer ctx (expr-map-get coll key))]
+         ;; List A → Nat/Int → A
+         [(expr-app f a)
+          #:when (equal? f (list-type-fvar))
+          (if (or (check ctx key (expr-Nat)) (check ctx key (expr-Int))) a (expr-error))]
+         [_ (expr-error)]))]
     [(expr-map-get m k)
      (let ([tm (whnf (infer ctx m))])
        (match tm

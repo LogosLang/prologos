@@ -1746,6 +1746,13 @@
              [(prologos-error? ev) ev]
              [else (expr-map-assoc em ek ev)]))]
 
+    [(surf-get coll key loc)
+     (let ([ec (elaborate coll env depth)]
+           [ek (elaborate key env depth)])
+       (cond [(prologos-error? ec) ec]
+             [(prologos-error? ek) ek]
+             [else (expr-get ec ek)]))]
+
     [(surf-map-get m k loc)
      (let ([em (elaborate m env depth)]
            [ek (elaborate k env depth)])

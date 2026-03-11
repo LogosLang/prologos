@@ -924,6 +924,71 @@
   (make-stx (token-value t) source
             (token-line t) (token-col t) (token-pos t) (token-span t)))
 
+;; --- Postfix index helpers ---
+
+;; Get end position of a syntax object (position + span)
+(define (stx-end-pos stx)
+  (+ (syntax-position stx) (syntax-span stx)))
+
+;; Read the contents of a postfix index bracket [...].
+;; Assumes the adjacent lbracket has been confirmed but NOT consumed.
+;; Returns (values content-stx close-end-pos).
+(define (read-postfix-index-contents p)
+  (define open-tok (parser-next! p))  ; consume lbracket
+  (define src (parser-source p))
+  (define ln (token-line open-tok))
+  (define cl (token-col open-tok))
+  (define ps (token-pos open-tok))
+  ;; Parse elements inside brackets, stripping commas
+  (define elements
+    (let loop ([elems '()])
+      (define tt (parser-peek-type p))
+      (cond
+        [(eq? tt 'rbracket)
+         (reverse elems)]
+        [(eq? tt 'eof)
+         (error 'prologos-reader "~a:~a:~a: Unclosed postfix index ["
+                src ln cl)]
+        [(eq? tt 'comma)
+         (parser-next! p)
+         (loop elems)]
+        [else
+         (define elem (parse-inline-element p))
+         (loop (cons elem elems))])))
+  (define close-tok (parser-next! p))  ; consume rbracket
+  (define close-end (+ (token-pos close-tok) (token-span close-tok)))
+  ;; Single element → use directly; multiple → wrap as list
+  (define contents
+    (if (= (length elements) 1)
+        (car elements)
+        (make-stx elements src ln (+ cl 1) (+ ps 1)
+                  (- close-end ps 2))))
+  (values contents close-end))
+
+;; After parsing an element, check for adjacent postfix brackets.
+;; xs[0] → (xs ($postfix-index 0))
+;; xs[0][1] → (xs ($postfix-index 0) ($postfix-index 1))
+;; Returns list of syntax objects in forward order.
+(define (parse-postfix-chain p elem)
+  (let loop ([accum (list elem)] [end-pos (stx-end-pos elem)])
+    (define next-tok (parser-peek p))
+    (cond
+      [(and (eq? (token-type next-tok) 'lbracket)
+            (= (token-pos next-tok) end-pos))
+       ;; Adjacent bracket — postfix index
+       (define src (parser-source p))
+       (define open-ln (token-line next-tok))
+       (define open-cl (token-col next-tok))
+       (define open-ps (token-pos next-tok))
+       (define-values (contents close-end) (read-postfix-index-contents p))
+       (define sentinel
+         (make-stx (list (make-stx '$postfix-index src open-ln open-cl open-ps 0)
+                         contents)
+                   src open-ln open-cl open-ps (- close-end open-ps)))
+       (loop (cons sentinel accum) close-end)]
+      [else
+       (reverse accum)])))
+
 ;; --- Parse a grouped form: ( ... ) ---
 ;; Inside parens, indentation is disabled. Content is a flat sequence.
 
@@ -946,7 +1011,8 @@
                 src ln cl)]
         [else
          (define elem (parse-inline-element p))
-         (loop (cons elem elems))])))
+         (define chain (parse-postfix-chain p elem))
+         (loop (foldl cons elems chain))])))
 
   ;; Produce a syntax list
   (make-stx elements src ln cl ps
@@ -979,7 +1045,8 @@
          (loop elems)]
         [else
          (define elem (parse-inline-element p))
-         (loop (cons elem elems))])))
+         (define chain (parse-postfix-chain p elem))
+         (loop (foldl cons elems chain))])))
 
   (make-stx elements src ln cl ps
             (- (+ (token-pos (parser-peek p)) 1) ps)))
@@ -1010,7 +1077,8 @@
          (loop elems)]
         [else
          (define elem (parse-inline-element p))
-         (loop (cons elem elems))])))
+         (define chain (parse-postfix-chain p elem))
+         (loop (foldl cons elems chain))])))
 
   (make-stx elements src ln cl ps
             (- (+ (token-pos (parser-peek p)) 1) ps)))
@@ -1526,7 +1594,8 @@
        (reverse elems)]
       [else
        (define elem (parse-inline-element p))
-       (loop (cons elem elems))])))
+       (define chain (parse-postfix-chain p elem))
+       (loop (foldl cons elems chain))])))
 
 ;; --- Parse a child form (inside an indented block) ---
 

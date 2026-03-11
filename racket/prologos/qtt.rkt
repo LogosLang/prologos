@@ -1013,6 +1013,15 @@
                (tu result-type (add-usage u1 u2)))]
             [_ (tu-error)])]
          [(_ _) (tu-error)]))]
+    [(expr-get c k)
+     (let ([r1 (inferQ ctx c)]
+           [r2 (inferQ ctx k)])
+       (match* (r1 r2)
+         [((tu t1 u1) (tu _ u2))
+          ;; get: infer result type from typing-core, track usage from both args
+          (let ([result-type (infer ctx e)])
+            (tu result-type (add-usage u1 u2)))]
+         [(_ _) (tu-error)]))]
     [(expr-nil-safe-get m k)
      (let ([r1 (inferQ ctx m)]
            [r2 (inferQ ctx k)])

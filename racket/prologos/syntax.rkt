@@ -140,7 +140,7 @@
  (struct-out expr-map-get) (struct-out expr-nil-safe-get) (struct-out expr-map-dissoc)
  (struct-out expr-map-size) (struct-out expr-map-has-key)
  (struct-out expr-map-keys) (struct-out expr-map-vals)
- (struct-out expr-get-in) (struct-out expr-update-in)
+ (struct-out expr-get) (struct-out expr-get-in) (struct-out expr-update-in)
  ;; Set (persistent hash set)
  (struct-out expr-Set) (struct-out expr-hset)
  (struct-out expr-set-empty) (struct-out expr-set-insert)
@@ -577,6 +577,7 @@
 
 ;; Operations
 (struct expr-map-assoc (m k v) #:transparent)                 ; assoc : Map K V → K → V → Map K V
+(struct expr-get (coll key) #:transparent)                     ; get : Collection → Key → Option Value (type-directed)
 (struct expr-map-get (m k) #:transparent)                     ; get : Map K V → K → V (error if missing)
 (struct expr-nil-safe-get (m k) #:transparent)                ; nil-safe-get : (Map K V | Nil) → K → (V | Nil)
 (struct expr-map-dissoc (m k) #:transparent)                  ; dissoc : Map K V → K → Map K V

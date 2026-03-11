@@ -205,7 +205,7 @@
  (struct-out surf-map-has-key)
  (struct-out surf-map-keys)
  (struct-out surf-map-vals)
- (struct-out surf-get-in)
+ (struct-out surf-get) (struct-out surf-get-in)
  (struct-out surf-update-in)
  ;; Set surface forms
  (struct-out surf-set-type)
@@ -794,6 +794,7 @@
 (struct surf-map-literal (entries srcloc) #:transparent)   ; {k1 v1, k2 v2, ...} — entries is list of (key . val) pairs
 (struct surf-map-empty (k v srcloc) #:transparent)         ; (map-empty K V)
 (struct surf-map-assoc (m k v srcloc) #:transparent)       ; (map-assoc m k v)
+(struct surf-get (coll key srcloc) #:transparent)          ; (get coll key) — type-directed index/lookup
 (struct surf-map-get (m k srcloc) #:transparent)           ; (map-get m k)
 (struct surf-nil-safe-get (m k srcloc) #:transparent)      ; (nil-safe-get m k)
 (struct surf-map-dissoc (m k srcloc) #:transparent)        ; (map-dissoc m k)

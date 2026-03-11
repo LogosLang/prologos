@@ -860,6 +860,7 @@
            (expr-map-empty? e)      ;; map constructor
            (expr-map-assoc? e)      ;; map operation
            (expr-map-get? e)        ;; nested map-get
+           (expr-get? e)            ;; generic get, could return a map
            (expr-nil-safe-get? e)  ;; nested nil-safe-get
            (expr-map-dissoc? e)     ;; map operation
            (expr-error? e))))       ;; error propagation
@@ -1599,6 +1600,37 @@
          (if (eq? result 'none)
              (expr-error)
              (whnf result))))]
+    ;; Generic get: dispatch by collection type
+    [(expr-get coll key)
+     (let ([c* (whnf coll)])
+       ;; Extract numeric index from Nat or Int key
+       (define (index-value k)
+         (or (nat-value k)
+             (and (expr-int? k) (let ([v (expr-int-val k)]) (and (>= v 0) v)))))
+       (match c*
+         ;; Map (CHAMP) → delegate to map-get
+         [(expr-champ _) (whnf (expr-map-get c* (whnf key)))]
+         ;; PVec (RRB) → index by nat/int
+         [(expr-rrb r)
+          (let* ([k* (whnf key)]
+                 [n (index-value k*)])
+            (if n
+                (with-handlers ([exn:fail? (lambda (_) (expr-error))])
+                  (whnf (rrb-get r n)))
+                (expr-get c* k*)))]
+         ;; List (cons chain) → walk to nth
+         [_
+          (let ([elems (prologos-list->racket-list c*)])
+            (if elems
+                (let* ([k* (whnf key)]
+                       [n (index-value k*)])
+                  (if (and n (< n (length elems)))
+                      (whnf (list-ref elems n))
+                      (expr-error)))
+                ;; Not yet reduced → try reducing
+                (if (not (equal? c* coll))
+                    (whnf (expr-get c* key))
+                    (expr-get c* key))))]))]
     ;; nil?: nil → true, ground non-nil value → false
     [(expr-nil-check (? expr-nil?)) (expr-true)]
     [(expr-nil-check a)
@@ -2839,6 +2871,7 @@
     [(expr-map-empty k v) (expr-map-empty (nf k) (nf v))]
     [(expr-map-assoc m k v) (expr-map-assoc (nf m) (nf k) (nf v))]
     [(expr-map-get m k) (expr-map-get (nf m) (nf k))]
+    [(expr-get c k) (expr-get (nf c) (nf k))]
     [(expr-nil-safe-get m k) (expr-nil-safe-get (nf m) (nf k))]
     [(expr-nil-check a) (expr-nil-check (nf a))]
     [(expr-map-dissoc m k) (expr-map-dissoc (nf m) (nf k))]

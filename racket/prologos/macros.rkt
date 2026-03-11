@@ -1740,25 +1740,17 @@
     [(not (equal? map-rewritten datum))
      (preparse-expand-form map-rewritten reg depth)]
     [else
-  ;; First: rewrite dot-access sentinels (.field, .:kw) before infix operators,
-  ;; so that `user.name |> f` first desugars to `(map-get user :name)` then pipes.
+  ;; First: rewrite all access sentinels (.field, .:kw, #.field, #:kw, [index])
+  ;; before infix operators, so that `user.name |> f` desugars correctly.
+  ;; Unified handler processes $dot-access, $nil-dot-access, $postfix-index in one pass.
   (define dot-rewritten (rewrite-dot-access datum))
   (cond
     [(not (equal? dot-rewritten datum))
-     ;; Dot-access rewrite happened — re-expand the result through preparse
+     ;; Access sentinel rewrite happened — re-expand the result through preparse
      ;; (this will re-enter preparse-expand-subforms for further rewrites)
      (if (list? dot-rewritten)
          (preparse-expand-form dot-rewritten reg depth)
          dot-rewritten)]
-    [else
-  ;; 1b: rewrite nil-dot-access sentinels (#.field, #:kw) → nil-safe-get calls
-  (define nil-dot-rewritten (rewrite-nil-dot-access datum))
-  (cond
-    [(not (equal? nil-dot-rewritten datum))
-     ;; Nil-dot-access rewrite happened — re-expand the result
-     (if (list? nil-dot-rewritten)
-         (preparse-expand-form nil-dot-rewritten reg depth)
-         nil-dot-rewritten)]
     [else
   ;; Second: rewrite infix operators (|>, >>) before other expansions
   (define infix-rewritten (rewrite-infix-operators datum))
@@ -1781,7 +1773,7 @@
      ;; Return expanded if any transformation changed the datum.
      ;; Compare against original datum (not intermediate) to preserve
      ;; changes from combining passes (foreign blocks, pipe grouping, let merging).
-     (if (equal? expanded datum) datum expanded)])])])]))
+     (if (equal? expanded datum) datum expanded)])])]))
 
 ;; For $pipe forms (WS match arms), group body elements after -> into a single list.
 ;; ($pipe ctor args... -> e1 e2 e3) → ($pipe ctor args... -> (e1 e2 e3))
@@ -4326,59 +4318,6 @@
 (define (dot-key? x)
   (and (list? x) (= (length x) 2) (eq? (car x) '$dot-key)))
 
-;; Rewrite dot-access sentinels in a flat datum list.
-;; Pattern 1: (expr ($dot-access f1) ($dot-access f2) ...)
-;;   → (map-get (map-get expr :f1) :f2)  (left-to-right chaining)
-;; Pattern 2: (($dot-key :kw) expr) at head position
-;;   → (map-get expr :kw)
-;; Pattern 3: ($dot-key :kw) standalone (length=1 after splitting)
-;;   → (fn ($x : _) (map-get $x :kw))  (partial application for piping)
-(define (rewrite-dot-access datum)
-  (cond
-    [(not (list? datum)) datum]
-    [(null? datum) datum]
-    ;; Check for any dot-access or dot-key sentinels in the list
-    [(not (or (ormap dot-access? datum) (ormap dot-key? datum)))
-     datum]
-    ;; Pattern 2: ($dot-key :kw) at head, with at least one more element
-    [(and (dot-key? (car datum)) (>= (length datum) 2))
-     (define kw (cadr (car datum)))
-     (define expr (cadr datum))
-     (define rest-elems (cddr datum))
-     ;; Build (map-get expr :kw), then handle any remaining elements
-     (define rewritten `(map-get ,expr ,kw))
-     (if (null? rest-elems)
-         rewritten
-         ;; If there are more elements, recur on the rebuilt list
-         (rewrite-dot-access (cons rewritten rest-elems)))]
-    ;; Pattern 3: standalone ($dot-key :kw) — single element list
-    [(and (= (length datum) 1) (dot-key? (car datum)))
-     (define kw (cadr (car datum)))
-     `(fn ($x : _) (map-get $x ,kw))]
-    ;; Pattern 1: scan for ($dot-access ...) sentinels, fold left
-    [else
-     (define result
-       (let loop ([elems datum] [acc '()])
-         (cond
-           [(null? elems) (reverse acc)]
-           [(dot-access? (car elems))
-            ;; Must have a preceding element to attach to
-            (if (null? acc)
-                ;; No preceding element — just leave sentinel as-is (error case)
-                (loop (cdr elems) (cons (car elems) acc))
-                ;; Fold: wrap preceding element with map-get
-                (let* ([field (cadr (car elems))]
-                       [target (car acc)]
-                       [wrapped `(map-get ,target ,(string->symbol
-                                                     (string-append ":" (symbol->string field))))])
-                  (loop (cdr elems) (cons wrapped (cdr acc)))))]
-           [else
-            (loop (cdr elems) (cons (car elems) acc))])))
-     ;; If result is a single-element list, unwrap it
-     (if (and (pair? result) (null? (cdr result)))
-         (car result)
-         result)]))
-
 ;; Check if a datum element is a ($nil-dot-access field) sentinel
 (define (nil-dot-access? x)
   (and (list? x) (= (length x) 2) (eq? (car x) '$nil-dot-access)))
@@ -4387,51 +4326,87 @@
 (define (nil-dot-key? x)
   (and (list? x) (= (length x) 2) (eq? (car x) '$nil-dot-key)))
 
-;; Rewrite nil-dot-access sentinels in a flat datum list.
-;; Pattern 1: (expr ($nil-dot-access f1) ($nil-dot-access f2) ...)
-;;   → (nil-safe-get (nil-safe-get expr :f1) :f2)  (left-to-right chaining)
-;; Pattern 2: (($nil-dot-key :kw) expr) at head position
-;;   → (nil-safe-get expr :kw)
-;; Pattern 3: ($nil-dot-key :kw) standalone (length=1 after splitting)
-;;   → (fn ($x : _) (nil-safe-get $x :kw))  (partial application for piping)
-(define (rewrite-nil-dot-access datum)
+;; Check if a datum element is a ($postfix-index key) sentinel
+(define (postfix-index? x)
+  (and (list? x) (= (length x) 2) (eq? (car x) '$postfix-index)))
+
+;; Is this element any kind of access sentinel?
+(define (access-sentinel? x)
+  (or (dot-access? x) (dot-key? x)
+      (nil-dot-access? x) (nil-dot-key? x)
+      (postfix-index? x)))
+
+;; Unified rewrite for ALL access sentinels in a flat datum list.
+;; Handles: $dot-access, $dot-key, $nil-dot-access, $nil-dot-key, $postfix-index
+;; All are "consume preceding element" operations, processed left-to-right.
+;;
+;; Pattern 1: (expr ($dot-access f1) ($postfix-index k) ($dot-access f2) ...)
+;;   → fold left: (map-get (get (map-get expr :f1) k) :f2)
+;; Pattern 2: (($dot-key :kw) expr) or (($nil-dot-key :kw) expr) at head
+;;   → (map-get expr :kw) or (nil-safe-get expr :kw)
+;; Pattern 3: standalone ($dot-key :kw) or ($nil-dot-key :kw)
+;;   → partial fn
+(define (rewrite-dot-access datum)
   (cond
     [(not (list? datum)) datum]
     [(null? datum) datum]
-    ;; Check for any nil-dot-access or nil-dot-key sentinels in the list
-    [(not (or (ormap nil-dot-access? datum) (ormap nil-dot-key? datum)))
+    ;; Check for any access sentinels in the list
+    [(not (ormap access-sentinel? datum))
      datum]
-    ;; Pattern 2: ($nil-dot-key :kw) at head, with at least one more element
+    ;; Pattern 2a: ($dot-key :kw) at head, with at least one more element
+    [(and (dot-key? (car datum)) (>= (length datum) 2))
+     (define kw (cadr (car datum)))
+     (define expr (cadr datum))
+     (define rest-elems (cddr datum))
+     (define rewritten `(map-get ,expr ,kw))
+     (if (null? rest-elems)
+         rewritten
+         (rewrite-dot-access (cons rewritten rest-elems)))]
+    ;; Pattern 3a: standalone ($dot-key :kw) — single element list
+    [(and (= (length datum) 1) (dot-key? (car datum)))
+     (define kw (cadr (car datum)))
+     `(fn ($x : _) (map-get $x ,kw))]
+    ;; Pattern 2b: ($nil-dot-key :kw) at head, with at least one more element
     [(and (nil-dot-key? (car datum)) (>= (length datum) 2))
      (define kw (cadr (car datum)))
      (define expr (cadr datum))
      (define rest-elems (cddr datum))
-     ;; Build (nil-safe-get expr :kw), then handle any remaining elements
      (define rewritten `(nil-safe-get ,expr ,kw))
      (if (null? rest-elems)
          rewritten
-         ;; If there are more elements, recur on the rebuilt list
-         (rewrite-nil-dot-access (cons rewritten rest-elems)))]
-    ;; Pattern 3: standalone ($nil-dot-key :kw) — single element list
+         (rewrite-dot-access (cons rewritten rest-elems)))]
+    ;; Pattern 3b: standalone ($nil-dot-key :kw) — single element list
     [(and (= (length datum) 1) (nil-dot-key? (car datum)))
      (define kw (cadr (car datum)))
      `(fn ($x : _) (nil-safe-get $x ,kw))]
-    ;; Pattern 1: scan for ($nil-dot-access ...) sentinels, fold left
+    ;; Unified fold-left for all access sentinels
     [else
      (define result
        (let loop ([elems datum] [acc '()])
          (cond
            [(null? elems) (reverse acc)]
-           [(nil-dot-access? (car elems))
-            ;; Must have a preceding element to attach to
+           [(dot-access? (car elems))
             (if (null? acc)
-                ;; No preceding element — just leave sentinel as-is (error case)
                 (loop (cdr elems) (cons (car elems) acc))
-                ;; Fold: wrap preceding element with nil-safe-get
+                (let* ([field (cadr (car elems))]
+                       [target (car acc)]
+                       [wrapped `(map-get ,target ,(string->symbol
+                                                     (string-append ":" (symbol->string field))))])
+                  (loop (cdr elems) (cons wrapped (cdr acc)))))]
+           [(nil-dot-access? (car elems))
+            (if (null? acc)
+                (loop (cdr elems) (cons (car elems) acc))
                 (let* ([field (cadr (car elems))]
                        [target (car acc)]
                        [wrapped `(nil-safe-get ,target ,(string->symbol
                                                           (string-append ":" (symbol->string field))))])
+                  (loop (cdr elems) (cons wrapped (cdr acc)))))]
+           [(postfix-index? (car elems))
+            (if (null? acc)
+                (loop (cdr elems) (cons (car elems) acc))
+                (let* ([key (cadr (car elems))]
+                       [target (car acc)]
+                       [wrapped `(get ,target ,key)])
                   (loop (cdr elems) (cons wrapped (cdr acc)))))]
            [else
             (loop (cdr elems) (cons (car elems) acc))])))
@@ -4439,6 +4414,10 @@
      (if (and (pair? result) (null? (cdr result)))
          (car result)
          result)]))
+
+;; Backward-compatible alias — rewrite-nil-dot-access now handled by rewrite-dot-access
+(define (rewrite-nil-dot-access datum)
+  (rewrite-dot-access datum))
 
 ;; Rewrite infix operators ($pipe-gt, $compose) in a datum.
 ;; Called from preparse-expand-subforms before recursing into subexpressions.
