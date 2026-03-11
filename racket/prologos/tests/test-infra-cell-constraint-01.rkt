@@ -53,6 +53,7 @@
                  [current-trait-wakeup-map (make-hasheq)]
                  [current-trait-cell-map (make-hasheq)]
                  [current-hasmethod-constraint-map (make-hasheq)]
+                 [current-hasmethod-wakeup-map (make-hasheq)]  ;; Phase 1d
                  [current-capability-constraint-map (make-hasheq)])
     (reset-meta-store!)
     body ...))

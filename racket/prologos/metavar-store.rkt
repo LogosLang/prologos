@@ -105,8 +105,12 @@
  ;; Phase 3a: HasMethod constraint tracking
  (struct-out hasmethod-constraint-info)
  current-hasmethod-constraint-map
+ current-hasmethod-wakeup-map
+ current-retry-hasmethod-resolve
  register-hasmethod-constraint!
  lookup-hasmethod-constraint
+ install-hasmethod-resolve-callback!
+ retry-hasmethod-for-meta!
  ;; Phase 4: Capability constraint tracking
  (struct-out capability-constraint-info)
  current-capability-constraint-map
@@ -316,6 +320,19 @@
 ;; Auxiliary map: meta-id → hasmethod-constraint-info
 (define current-hasmethod-constraint-map (make-parameter (make-hasheq)))
 
+;; Phase 1d: Hasmethod wakeup map — reverse index from dependency meta → hasmethod meta-id.
+;; Maps meta-id (of type-arg or trait-var) → (listof hasmethod-meta-id).
+(define current-hasmethod-wakeup-map (make-parameter (make-hasheq)))
+
+;; Phase 1d: Callback for incremental hasmethod resolution.
+;; Signature: (hasmethod-meta-id hasmethod-constraint-info) → void
+;; Injected from driver.rkt to break circular dependency (same pattern as trait resolve).
+(define current-retry-hasmethod-resolve (make-parameter #f))
+
+;; Phase 1d: Install the hasmethod resolve callback.
+(define (install-hasmethod-resolve-callback! resolve-fn)
+  (current-retry-hasmethod-resolve resolve-fn))
+
 (define (register-hasmethod-constraint! meta-id info)
   (hash-set! (current-hasmethod-constraint-map) meta-id info)
   ;; Phase 1b: Dual-write to hasmethod constraint cell.
@@ -323,10 +340,42 @@
   (define hm-net-box (current-prop-net-box))
   (define write-fn (current-prop-cell-write))
   (when (and hm-cid hm-net-box write-fn)
-    (set-box! hm-net-box (write-fn (unbox hm-net-box) hm-cid (hasheq meta-id info)))))
+    (set-box! hm-net-box (write-fn (unbox hm-net-box) hm-cid (hasheq meta-id info))))
+  ;; Phase 1d: Build reverse wakeup index from dependency metas → this hasmethod meta.
+  ;; Dependencies are: metas in trait-var-expr + metas in type-arg-exprs.
+  (define trait-var-metas (extract-shallow-meta-ids
+                            (hasmethod-constraint-info-trait-var-expr info)))
+  (define type-arg-metas (extract-shallow-meta-ids-from-list
+                            (hasmethod-constraint-info-type-arg-exprs info)))
+  (define all-dep-metas (append trait-var-metas type-arg-metas))
+  (define wakeup (current-hasmethod-wakeup-map))
+  (for ([dep-id (in-list all-dep-metas)])
+    (define existing (hash-ref wakeup dep-id '()))
+    (hash-set! wakeup dep-id (cons meta-id existing)))
+  ;; Phase 1d: If all deps are already ground (no metas to trigger wakeup),
+  ;; attempt immediate resolution via the callback.
+  (when (null? all-dep-metas)
+    (define resolve-fn (current-retry-hasmethod-resolve))
+    (when resolve-fn
+      (resolve-fn meta-id info))))
 
 (define (lookup-hasmethod-constraint meta-id)
   (hash-ref (current-hasmethod-constraint-map) meta-id #f))
+
+;; Phase 1d: Try to resolve hasmethod constraints that reference a just-solved meta.
+;; Called from solve-meta! when a dependency meta is solved. Checks the wakeup
+;; map for any hasmethod constraints referencing this meta, and if all their
+;; dependencies are now ground, triggers resolution via the callback.
+(define (retry-hasmethod-for-meta! meta-id)
+  (define resolve-fn (current-retry-hasmethod-resolve))
+  (when resolve-fn
+    (define wakeup (current-hasmethod-wakeup-map))
+    (define hm-metas (hash-ref wakeup meta-id '()))
+    (for ([hm-id (in-list hm-metas)])
+      (unless (meta-solved? hm-id)
+        (define hm-info (hash-ref (current-hasmethod-constraint-map) hm-id #f))
+        (when hm-info
+          (resolve-fn hm-id hm-info))))))
 
 ;; ========================================
 ;; Phase 4: Capability constraint tracking
@@ -588,7 +637,9 @@
   ;; Phase 1c: Clear wakeup cell IDs.
   (current-wakeup-registry-cell-id #f)
   (current-trait-wakeup-cell-id #f)
-  (hash-clear! (current-wakeup-registry)))
+  (hash-clear! (current-wakeup-registry))
+  ;; Phase 1d: Clear hasmethod wakeup map.
+  (hash-clear! (current-hasmethod-wakeup-map)))
 
 ;; Query: all postponed constraints.
 ;; Phase 1a: still reads from legacy parameter (not cell) for save/restore compatibility.
@@ -729,6 +780,7 @@
                  [current-trait-wakeup-map (make-hasheq)]
                  [current-trait-cell-map (make-hasheq)]
                  [current-hasmethod-constraint-map (make-hasheq)]
+                 [current-hasmethod-wakeup-map (make-hasheq)]  ;; Phase 1d
                  [current-prop-meta-info-box (box champ-empty)]
                  [current-prop-net-box #f]
                  [current-prop-id-map-box #f]
@@ -822,7 +874,9 @@
   ;; P3a: Cell-state path captures transitive propagation via the network.
   (retry-traits-via-cells!)
   ;; Legacy wakeup map path (still runs as secondary for P3a shadow phase)
-  (retry-trait-for-meta! id))
+  (retry-trait-for-meta! id)
+  ;; Phase 1d: HasMethod resolution — reactive wakeup when dependency metas solved.
+  (retry-hasmethod-for-meta! id))
 
 ;; P-U3c: Lightweight quiescence flush.
 ;; Runs the propagator network to quiescence if available.

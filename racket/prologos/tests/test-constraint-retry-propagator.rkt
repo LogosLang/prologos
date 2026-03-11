@@ -45,6 +45,8 @@
                  [current-wakeup-registry (make-hasheq)]
                  [current-trait-constraint-map (make-hasheq)]
                  [current-trait-wakeup-map (make-hasheq)]
+                 [current-hasmethod-constraint-map (make-hasheq)]  ;; Phase 1d
+                 [current-hasmethod-wakeup-map (make-hasheq)]  ;; Phase 1d
                  [current-prop-meta-info-box (box champ-empty)]
                  [current-prop-net-box (box (make-elaboration-network))]
                  [current-prop-id-map-box (box champ-empty)]
