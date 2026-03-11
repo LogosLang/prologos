@@ -13,7 +13,8 @@
          "surface-syntax.rkt"
          "errors.rkt"
          "sexp-readtable.rkt"
-         "macros.rkt")
+         "macros.rkt"
+         "global-env.rkt")
 
 (provide parse-datum
          parse-string
@@ -3610,6 +3611,30 @@
   (when (= arity 0)
     (parse-error loc
       (format "defn ~a: params+patterns syntax requires at least one parameter" name) #f))
+  ;; Register user-facing param names for bound-arg display in narrowing/solve.
+  ;; Extract names from the bracket: [x y] → (x y), [x : T, y : T] → (x y)
+  (let ([elems (map stx->datum param-elems)])
+    (define user-param-names
+      (cond
+        ;; Typed params: extract names before each : group
+        [(memq ': elems)
+         (let loop ([rest elems] [names '()])
+           (cond
+             [(null? rest) (reverse names)]
+             [(eq? (car rest) ':)
+              ;; Skip type tokens until comma or end
+              (let skip ([r (cdr rest)])
+                (cond
+                  [(null? r) (reverse names)]
+                  [(eq? (car r) '$comma) (loop (cdr r) names)]
+                  [else (skip (cdr r))]))]
+             [(symbol? (car rest))
+              (loop (cdr rest) (cons (car rest) names))]
+             [else (loop (cdr rest) names)]))]
+        ;; Bare params: all elements are names
+        [else (filter symbol? elems)]))
+    (when (= (length user-param-names) arity)
+      (register-defn-param-names! name user-param-names)))
   ;; Register inline type as spec if typed params AND return type present.
   ;; This allows compile-pattern-group to use the correct type via lookup-spec.
   (let ([elems (map stx->datum param-elems)]

@@ -7760,6 +7760,8 @@
                    (surf-lam bnd inner loc))
                  body-ast
                  named-binders))
+        ;; Register user-facing param names for bound-arg display in narrowing/solve
+        (register-defn-param-names! name param-names)
         (surf-def name type-ast nested-lam loc)])]))
 
 ;; ========================================
@@ -8538,6 +8540,9 @@
        (foldr (lambda (vn inner)
                 (surf-lam (binder-info vn 'mw (surf-hole loc)) inner loc))
               body var-names))
+     ;; Register user-facing param names for bound-arg display (don't overwrite parser-provided names)
+     (unless (lookup-defn-param-names name)
+       (register-defn-param-names! name var-names))
      (surf-def name type nested-lam loc)]
     ;; General case: compile match tree
     [else
@@ -8547,6 +8552,9 @@
        (foldr (lambda (pn inner)
                 (surf-lam (binder-info pn 'mw (surf-hole loc)) inner loc))
               body param-names))
+     ;; Register param names for bound-arg display (don't overwrite parser-provided names)
+     (unless (lookup-defn-param-names name)
+       (register-defn-param-names! name param-names))
      (surf-def name type nested-lam loc)]))
 
 ;; ========================================

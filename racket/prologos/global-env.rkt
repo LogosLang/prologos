@@ -15,7 +15,11 @@
          global-env-add-type-only
          global-env-names
          global-env-import-module
-         global-env-snapshot)
+         global-env-snapshot
+         ;; Defn param-name registry (user-facing names for bound-arg display)
+         current-defn-param-names
+         register-defn-param-names!
+         lookup-defn-param-names)
 
 ;; The global environment: name -> (cons type value)
 (define current-global-env (make-parameter (hasheq)))
@@ -58,3 +62,20 @@
 ;; Snapshot the current global env (returns the raw hasheq)
 (define (global-env-snapshot)
   (current-global-env))
+
+;; ========================================
+;; Defn param-name registry
+;; ========================================
+;; Maps function name (symbol) to user-facing parameter names (listof symbol).
+;; Populated during defn processing in macros.rkt.
+;; Used by compute-bound-args in reduction.rkt to produce readable
+;; bound-variable output (e.g., :y_ 3N) instead of internal lambda names.
+
+(define current-defn-param-names (make-parameter (hasheq)))
+
+(define (register-defn-param-names! name param-names)
+  (current-defn-param-names
+   (hash-set (current-defn-param-names) name param-names)))
+
+(define (lookup-defn-param-names name)
+  (hash-ref (current-defn-param-names) name #f))

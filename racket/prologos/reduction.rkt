@@ -162,7 +162,9 @@
 ;; Convert solver answer maps (list of hasheq) back to a Prologos expression.
 ;; Each answer is a hasheq mapping query variable names (symbols) to ground values.
 ;; Returns a Prologos List of Maps: '[(map :x val1 :y val2), ...]
-(define (answers->prologos-expr answers query-vars)
+;; Optional bound-args: list of (symbol . expr) pairs for ground function arguments
+;; with spec parameter names suffixed with '_'. Added to each solution map.
+(define (answers->prologos-expr answers query-vars [bound-args '()])
   (racket-list->prologos-list
    (for/list ([answer (in-list answers)])
      ;; Build a CHAMP map from the answer bindings
@@ -173,7 +175,14 @@
          (define key (expr-keyword qv))
          (define pval (if val (ground->prologos-expr val) (expr-fvar 'none)))
          (champ-insert c (equal-hash-code key) key pval)))
-     (expr-champ champ-val))))
+     ;; Add bound (ground) args with _ suffix param names
+     (define champ-with-bound
+       (for/fold ([c champ-val])
+                 ([ba (in-list bound-args)])
+         (define key (expr-keyword (car ba)))
+         (define pval (ground->prologos-expr (cdr ba)))
+         (champ-insert c (equal-hash-code key) key pval)))
+     (expr-champ champ-with-bound))))
 
 ;; Convert a ground solver value back to a Prologos AST expression.
 ;; If the value is already an AST expression, return it directly.
@@ -205,6 +214,81 @@
         [else
          (set! goal-args (cons a* goal-args))])))
   (values (reverse goal-args) (reverse query-vars)))
+
+;; ========================================
+;; Bound-argument tracking for narrowing/solve output
+;; ========================================
+
+;; compute-bound-args : symbol (listof expr) -> (listof (cons symbol expr))
+;; For each function parameter whose corresponding argument is ground (not a
+;; logic variable), create a (param-name_ . ground-value) pair.  These are
+;; added to narrowing/solve results so the user can see which concrete values
+;; were bound to which parameters.
+;;
+;; Uses the defn param-name registry (user-facing names from defn declarations)
+;; first, falling back to peel-lambda-names from the function body.
+;;
+;; Example: `add ?y 3N = 5N` where defn add [x y]
+;;   arg 0 = ?y  → logic var → skipped
+;;   arg 1 = 3N  → ground, param 'y → (:y_ . 3N)
+(define (compute-bound-args func-name args-whnf)
+  ;; Try user-facing param names from defn registry first.
+  ;; Try FQN first, then short name (strip module prefix).
+  (define registry-names
+    (or (lookup-defn-param-names func-name)
+        (let ([short (ctor-short-name func-name)])
+          (and (not (eq? short func-name))
+               (lookup-defn-param-names short)))))
+  (define param-names
+    (cond
+      [registry-names registry-names]
+      [else
+       ;; Fallback: peel lambda names from the function body
+       (define func-body (global-env-lookup-value func-name))
+       (if func-body
+           (let-values ([(names _inner) (peel-lambda-names func-body)])
+             names)
+           '())]))
+  (cond
+    ;; Arity mismatch — function may have extra dict params or be partially applied
+    [(not (= (length param-names) (length args-whnf))) '()]
+    [else
+     (for/list ([pn (in-list param-names)]
+                [arg (in-list args-whnf)]
+                ;; Only include ground (non-logic-var) args
+                #:when (not (expr-logic-var? arg))
+                ;; Skip dict parameters (trait method convention)
+                #:when (not (eq? pn 'dict)))
+       (cons (string->symbol
+              (string-append (symbol->string pn) "_"))
+             arg))]))
+
+;; compute-bound-args-for-relation : symbol (listof any) (listof symbol) -> (listof (cons symbol expr))
+;; Like compute-bound-args but for relations (solve). Uses param-info from the
+;; relation store to get parameter names.
+(define (compute-bound-args-for-relation rel-name goal-args query-vars)
+  (define store (current-relation-store))
+  (define rel (relation-lookup store rel-name))
+  (cond
+    [(not rel) '()]
+    [else
+     (define variants (relation-info-variants rel))
+     (cond
+       [(null? variants) '()]
+       [else
+        (define params (variant-info-params (car variants)))
+        (cond
+          [(not (= (length params) (length goal-args))) '()]
+          [else
+           (for/list ([pi (in-list params)]
+                      [arg (in-list goal-args)]
+                      ;; Only include ground (non-logic-var) args
+                      #:when (not (symbol? arg))
+                      #:when (not (and (expr-logic-var? arg)
+                                       (memq (expr-logic-var-name arg) query-vars))))
+             (cons (string->symbol
+                    (string-append (symbol->string (param-info-name pi)) "_"))
+                   arg))])])]))
 
 ;; Run narrowing for [func args...] = target, returning a Prologos list of answer maps.
 (define (run-narrowing func-expr arg-exprs target-expr var-names)
@@ -264,14 +348,20 @@
         (for/list ([cp (in-list candidates)])
           (run-narrowing-search (cdr cp) args-whnf target-whnf var-names))))
      (define unique (remove-duplicates all-solutions equal?))
-     (answers->prologos-expr unique var-names)]
+     ;; Bound args: use first candidate's param names (all instances share arity)
+     (define bound-args
+       (if (null? candidates) '()
+           (compute-bound-args (cdr (car candidates)) args-whnf)))
+     (answers->prologos-expr unique var-names bound-args)]
     [else
      ;; Single-candidate dispatch (standard path)
      (define args-whnf (map whnf all-args))
      (define target-whnf (whnf target-expr))
      (define solutions
        (run-narrowing-search func-name args-whnf target-whnf var-names))
-     (answers->prologos-expr solutions var-names)]))
+     ;; Bound args: extract spec param names for ground arguments
+     (define bound-args (compute-bound-args func-name args-whnf))
+     (answers->prologos-expr solutions var-names bound-args)]))
 
 ;; Run solve for a goal expression, returning a Prologos list of answer maps.
 (define (run-solve-goal goal-expr config)
@@ -283,7 +373,9 @@
      (define-values (goal-args query-vars) (extract-query-info rel-args))
      (define store (current-relation-store))
      (define answers (stratified-solve-goal config store rel-name goal-args query-vars))
-     (answers->prologos-expr answers query-vars)]
+     ;; Bound args: show ground arguments with parameter names from relation definition
+     (define bound-args (compute-bound-args-for-relation rel-name goal-args query-vars))
+     (answers->prologos-expr answers query-vars bound-args)]
     ;; If the goal is not yet reduced to a goal-app, return the expression unchanged
     [else (expr-solve goal*)]))
 
@@ -299,16 +391,24 @@
      (define answers (stratified-solve-goal config store rel-name goal-args query-vars))
      (if (null? answers)
          (expr-fvar 'none)
-         ;; Wrap first answer in 'some'
+         ;; Wrap first answer in 'some' — include bound args
          (let* ([first-answer (car answers)]
+                [bound-args (compute-bound-args-for-relation rel-name goal-args query-vars)]
                 [champ-val
                  (for/fold ([c champ-empty])
                            ([qv (in-list query-vars)])
                    (define val (hash-ref first-answer qv #f))
                    (define key (expr-keyword qv))
                    (define pval (if val (ground->prologos-expr val) (expr-fvar 'none)))
+                   (champ-insert c (equal-hash-code key) key pval))]
+                ;; Add bound args
+                [champ-with-bound
+                 (for/fold ([c champ-val])
+                           ([ba (in-list bound-args)])
+                   (define key (expr-keyword (car ba)))
+                   (define pval (ground->prologos-expr (cdr ba)))
                    (champ-insert c (equal-hash-code key) key pval))])
-           (expr-app (expr-fvar 'some) (expr-champ champ-val))))]
+           (expr-app (expr-fvar 'some) (expr-champ champ-with-bound))))]
     [else (expr-solve-one goal*)]))
 
 ;; Run explain for a goal expression, returning a Prologos list of answer-records.
@@ -328,7 +428,9 @@
      (define binding-maps
        (for/list ([ar (in-list answer-records)])
          (answer-record-bindings ar)))
-     (answers->prologos-expr binding-maps query-vars)]
+     ;; Bound args for explain output
+     (define bound-args (compute-bound-args-for-relation rel-name goal-args query-vars))
+     (answers->prologos-expr binding-maps query-vars bound-args)]
     [else (expr-explain goal*)]))
 
 ;; ========================================
