@@ -42,8 +42,7 @@ ns examples.audit.collections
 
 ;; --- 1c. List transformation ---
 [map suc '[1N 2N 3N]]
-;; expect: '[2N 3N 4N] : List Nat
-;;! CRASH: "Unbound variable" — constructor `suc` cannot be passed as HOF arg
+;; OK: '[2N 3N 4N] : List Nat — suc eta-expanded as HOF arg
 
 [filter (fn [x : Nat] [gt? x 2N]) '[1N 2N 3N 4N]]
 ;; expect: '[3N 4N] : List Nat
@@ -148,8 +147,7 @@ ns examples.audit.collections
 
 ;; --- 4b. PVec operations ---
 [pvec-map suc @[1N 2N 3N]]
-;; expect: @[2N 3N 4N] : PVec Nat
-;;! CRASH: "Unbound variable" — constructor `suc` cannot be passed as HOF arg
+;; OK: @[2N 3N 4N] : PVec Nat — suc eta-expanded as HOF arg
 
 [pvec-filter (fn [x : Nat] [gt? x 1N]) @[1N 2N 3N]]
 ;; expect: @[2N 3N] : PVec Nat
@@ -193,8 +191,7 @@ ns examples.audit.collections
 
 ;; --- 5c. Map higher-order ---
 [map-map-vals suc {:a 1N :b 2N}]
-;; expect: {:a 2N :b 3N} : Map Keyword Nat
-;;! CRASH: "Unbound variable" — constructor `suc` cannot be passed as HOF arg
+;; OK: {:a 2N :b 3N} : Map Keyword Nat — suc eta-expanded as HOF arg
 
 
 ;; ========================================================================
@@ -211,8 +208,7 @@ ns examples.audit.collections
 
 ;; --- 6b. Set operations ---
 [set-map suc #{1N 2N 3N}]
-;; expect: #{2N 3N 4N} : Set Nat
-;;! CRASH: "Unbound variable" — constructor `suc` cannot be passed as HOF arg
+;; OK: #{2N 3N 4N} : Set Nat — suc eta-expanded as HOF arg
 
 [set-fold (fn [acc : Nat] (fn [x : Nat] [add acc x])) 0N #{1N 2N 3N}]
 ;; expect: 6N : Nat
@@ -231,8 +227,7 @@ ns examples.audit.collections
 
 ;; --- 7b. LSeq operations ---
 [lseq-map suc [list-to-lseq '[1N 2N 3N]]]
-;; expect: LSeq (lazy)
-;;! CRASH: "Unbound variable" — constructor `suc` cannot be passed as HOF arg
+;; OK: LSeq (lazy) — suc eta-expanded as HOF arg
 
 [lseq-take 2N [list-to-lseq '[1N 2N 3N 4N 5N]]]
 ;; expect: LSeq (first 2)

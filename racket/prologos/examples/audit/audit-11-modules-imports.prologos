@@ -22,8 +22,7 @@ ns examples.audit.modules-imports
 ;; expect: 5N : Nat
 
 [map suc '[1N 2N 3N]]
-;; expect: '[2N 3N 4N] : List Nat
-;;! CRASH: "Unbound variable" — constructor `suc` cannot be passed as HOF arg
+;; OK: '[2N 3N 4N] : List Nat — suc eta-expanded as HOF arg (Phase 3d)
 
 [eq-check 3N 3N]
 ;; expect: true : Bool

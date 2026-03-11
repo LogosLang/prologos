@@ -718,6 +718,12 @@
       [(and (current-infer-constraints-mode?)
             (try-infer-constraint-from-method name loc env depth))
        => (lambda (resolved) resolved)]
+      ;; Constructor-as-HOF: parser-keyword constructors that aren't in the
+      ;; global env but need to be usable as first-class values (e.g., passed
+      ;; to map, filter, etc.). Eta-expand to a lambda at the use site.
+      ;; suc: Nat -> Nat  (the only non-nullary parser-keyword constructor)
+      [(eq? name 'suc)
+       (expr-lam 'mw (expr-Nat) (expr-suc (expr-bvar 0)))]
       [else (unbound-variable-error loc "Unbound variable" name)])))
 
 ;; elaborate: surface-expr, env, depth -> (or/c expr? prologos-error?)

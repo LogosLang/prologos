@@ -55,8 +55,8 @@ defn nums-pipe [xs]
 
 [nums-pipe '[1N 2N 3N]]
 ;; expect: 9N : Nat
-;;! CRASH: "Type mismatch" — block pipe with `map suc` fails
-;;  Likely because `suc` can't be passed as HOF arg to map in block pipe
+;;! CRASH: "Type mismatch" — block pipe partial application `map suc` type error
+;;  suc is eta-expanded correctly (Phase 3d) but block pipe desugaring fails
 
 
 ;; ========================================================================
@@ -64,8 +64,9 @@ defn nums-pipe [xs]
 ;; ========================================================================
 
 ;; --- 4a. Basic transducer ---
-;;! CRASH: "Unbound variable" — `suc` cannot be assigned to fn-typed def
-;; def suc-fn : [Nat -> Nat] := suc
+;; OK: suc eta-expanded as HOF value (Phase 3d fix)
+spec suc-fn Nat -> Nat
+def suc-fn := suc
 
 [xf-into-list Nat Nat [map-xf Nat Nat suc-fn] '[1N 2N 3N]]
 ;; expect: '[2N 3N 4N] : List Nat
