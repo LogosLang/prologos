@@ -203,6 +203,7 @@
          [current-global-env              ready-global-env]
          [current-definition-cells-content (hasheq)]   ;; Phase 3a: fresh per-file
          [current-definition-cell-ids      (hasheq)]   ;; Phase 3a: fresh per-file
+         [current-definition-dependencies  (hasheq)]   ;; Phase 3b: fresh per-file
          [current-global-env-prop-net-box  #f]          ;; Phase 3a: no stale cell writes
          ;; metavar-store.rkt — fresh mutable hash per file
          [current-mult-meta-store         (make-hasheq)]

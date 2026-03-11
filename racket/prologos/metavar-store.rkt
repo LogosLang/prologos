@@ -778,6 +778,7 @@
                  [current-sess-meta-store (make-hasheq)]
                  [current-constraint-store '()]
                  [current-definition-cells-content (hasheq)]  ;; Phase 3a
+                 [current-definition-dependencies (hasheq)]  ;; Phase 3b
                  [current-constraint-cell-id #f]  ;; Phase 1a
                  [current-trait-constraint-cell-id #f]  ;; Phase 1b
                  [current-trait-cell-map-cell-id #f]    ;; Phase 1b

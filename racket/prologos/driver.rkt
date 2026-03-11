@@ -940,6 +940,8 @@
   (define name (surf-def-name expanded))
   (define type-surf (surf-def-type expanded))
   (define body-surf (surf-def-body expanded))
+  ;; Phase 3b: Record dependencies during elaboration/type-checking.
+  (parameterize ([current-elaborating-name name])
   (cond
     ;; Sprint 10: Type-inferred def (no type annotation)
     [(not type-surf)
@@ -1208,7 +1210,7 @@
                              (global-env-add (current-global-env) fqn zonked-type zonked-body)))
                           (format "~a : ~a defined."
                                   name (pp-expr zonked-type))])]
-                      )])])])])])])]))
+                      )])])])])])])])))  ;; extra ) closes Phase 3b parameterize
 
 ;; ========================================
 ;; Process a multi-body defn group
@@ -1511,6 +1513,7 @@
                     [current-global-env-prop-net-box #f]
                     [current-definition-cells-content (hasheq)]
                     [current-definition-cell-ids (hasheq)]
+                    [current-definition-dependencies (hasheq)]  ;; Phase 3b
                     ;; Phase A: fresh meta-info CHAMP per module
                     [current-prop-meta-info-box #f]
                     ;; Phase B: fresh auxiliary meta CHAMPs per module

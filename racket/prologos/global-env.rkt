@@ -38,12 +38,17 @@
          current-global-env-prop-cell-write
          current-global-env-prop-new-cell
          register-global-env-cells!
+         ;; Phase 3b: Definition dependency recording
+         current-elaborating-name
+         current-definition-dependencies
+         definition-dependencies-snapshot
          ;; Defn param-name registry (user-facing names for bound-arg display)
          current-defn-param-names
          register-defn-param-names!
          lookup-defn-param-names)
 
 (require racket/list        ;; remove-duplicates
+         racket/set         ;; seteq, set-add (Phase 3b dependency recording)
          "infra-cell.rkt")  ;; merge-replace, merge-hasheq-union
 
 ;; ========================================
@@ -87,11 +92,42 @@
        (set-box! net-box enet*)])))
 
 ;; ========================================
+;; Phase 3b: Definition dependency recording
+;; ========================================
+;; When elaboration references a prior definition via lookup, record a
+;; dependency edge. Informational in batch mode; enables selective
+;; re-elaboration in LSP.
+
+;; Set to the name of the definition currently being elaborated.
+;; When set, lookups record dependency edges.
+(define current-elaborating-name (make-parameter #f))
+
+;; Persistent across commands within a file (same lifecycle as
+;; current-definition-cells-content). Maps name → (seteq dep-name).
+(define current-definition-dependencies (make-parameter (hasheq)))
+
+;; Record that `elaborating-name` depends on `dep-name`.
+(define (record-definition-dependency! elaborating-name dep-name)
+  (when (not (eq? elaborating-name dep-name))  ;; skip self-references
+    (define deps (current-definition-dependencies))
+    (define existing (hash-ref deps elaborating-name (seteq)))
+    (current-definition-dependencies
+     (hash-set deps elaborating-name (set-add existing dep-name)))))
+
+;; Snapshot for inspection/testing.
+(define (definition-dependencies-snapshot)
+  (current-definition-dependencies))
+
+;; ========================================
 ;; Lookups (two-layer: per-file first, prelude fallback)
 ;; ========================================
 
 ;; Lookup the type of a global definition
 (define (global-env-lookup-type name)
+  ;; Phase 3b: record dependency
+  (define elab-name (current-elaborating-name))
+  (when elab-name
+    (record-definition-dependency! elab-name name))
   ;; Layer 1: per-file definitions
   (define cell-entry (hash-ref (current-definition-cells-content) name #f))
   (cond
@@ -103,6 +139,10 @@
 
 ;; Lookup the value of a global definition
 (define (global-env-lookup-value name)
+  ;; Phase 3b: record dependency
+  (define elab-name (current-elaborating-name))
+  (when elab-name
+    (record-definition-dependency! elab-name name))
   ;; Layer 1: per-file definitions
   (define cell-entry (hash-ref (current-definition-cells-content) name #f))
   (cond

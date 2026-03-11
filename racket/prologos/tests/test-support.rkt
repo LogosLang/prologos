@@ -76,6 +76,7 @@
                 prelude-capability-registry)
   (parameterize ([current-global-env (hasheq)]
                  [current-definition-cells-content (hasheq)]  ;; Phase 3a
+                 [current-definition-dependencies (hasheq)]  ;; Phase 3b
                  [current-ns-context #f]
                  [current-module-registry (hasheq)]
                  [current-lib-paths (list prelude-lib-dir)]
@@ -104,6 +105,7 @@
 (define (run-ns-last s)
   (parameterize ([current-global-env (hasheq)]
                  [current-definition-cells-content (hasheq)]  ;; Phase 3a
+                 [current-definition-dependencies (hasheq)]  ;; Phase 3b
                  [current-ns-context #f]
                  [current-module-registry prelude-module-registry]
                  [current-lib-paths (list prelude-lib-dir)]
@@ -119,6 +121,7 @@
 (define (run-ns-all s)
   (parameterize ([current-global-env (hasheq)]
                  [current-definition-cells-content (hasheq)]  ;; Phase 3a
+                 [current-definition-dependencies (hasheq)]  ;; Phase 3b
                  [current-ns-context #f]
                  [current-module-registry prelude-module-registry]
                  [current-lib-paths (list prelude-lib-dir)]
@@ -139,6 +142,7 @@
 (define (run-ns-ws-last s)
   (parameterize ([current-global-env (hasheq)]
                  [current-definition-cells-content (hasheq)]  ;; Phase 3a
+                 [current-definition-dependencies (hasheq)]  ;; Phase 3b
                  [current-ns-context #f]
                  [current-module-registry prelude-module-registry]
                  [current-lib-paths (list prelude-lib-dir)]
@@ -153,6 +157,7 @@
 (define (run-ns-ws-all s)
   (parameterize ([current-global-env (hasheq)]
                  [current-definition-cells-content (hasheq)]  ;; Phase 3a
+                 [current-definition-dependencies (hasheq)]  ;; Phase 3b
                  [current-ns-context #f]
                  [current-module-registry prelude-module-registry]
                  [current-lib-paths (list prelude-lib-dir)]
@@ -174,6 +179,7 @@
   (define results
     (parameterize ([current-global-env (hasheq)]
                    [current-definition-cells-content (hasheq)]  ;; Phase 3a
+                 [current-definition-dependencies (hasheq)]  ;; Phase 3b
                    [current-error-port stderr-out])
       (process-string s)))
   (cons results (get-output-string stderr-out)))
