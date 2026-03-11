@@ -38,9 +38,9 @@ computation, preserving Nat for induction, proofs, and type-level indices.
 | 3d | Reframe narrowing demo | S | ✅ | (pre-existing) | Header already present at lines 26-33 |
 | 3e | Update PATTERNS_AND_CONVENTIONS | S | ✅ | | Done as part of 2d |
 | **Phase 4: Trait Gaps** | | | | | |
-| 4a | Verify Posit Num bundle | S | ⬜ | | End-to-end `.{p + q}` |
-| 4b | Hashable Int instance | M | ⬜ | | core/hashable.prologos |
-| 4c | Expose `int-range` in prelude | S | ⬜ | | Verify `:refer-all` covers it |
+| 4a | Verify Posit Num bundle | S | ✅ | (verified) | `.{~3.14 + ~2.0}` etc. all work via prelude |
+| 4b | Hashable Int instance | M | ✅ | `782d862` | `equal-hash-code` via foreign import |
+| 4c | Expose `int-range` in prelude | S | ✅ | (verified) | Already accessible via `:refer-all` on algebra |
 
 **Legend**: ⬜ Not started · 🔨 In progress · ✅ Done · ⏭️ Skipped
 
