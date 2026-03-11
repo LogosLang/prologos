@@ -5317,7 +5317,9 @@
                                 (if (syntax? x) (syntax-e x) x)))
             (define label
               (cond
-                [(keyword? label-raw) (string->symbol (keyword->string label-raw))]
+                ;; NB: symbol? must come before keyword? — the parser's keyword? shadows
+                ;; Racket's and would match Prologos keywords (e.g., 'get), causing
+                ;; keyword->string to crash on a symbol.
                 [(symbol? label-raw) label-raw]
                 [else (parse-error loc (format "Branch label must be a keyword or symbol, got ~a" label-raw) #f)]))
             (if (prologos-error? label) label
@@ -5625,7 +5627,6 @@
            (define label-raw (stx->datum (cadr body-args)))
            (define label
              (cond
-               [(keyword? label-raw) (string->symbol (keyword->string label-raw))]
                [(symbol? label-raw) label-raw]
                [else (parse-error use-loc (format "proc-sel: label must be keyword or symbol, got ~a" label-raw) #f)]))
            (if (prologos-error? label) label
@@ -5721,7 +5722,6 @@
                                 (if (syntax? x) (syntax-e x) x)))
             (define label
               (cond
-                [(keyword? label-raw) (string->symbol (keyword->string label-raw))]
                 [(symbol? label-raw) label-raw]
                 [else (parse-error loc (format "Process branch label must be keyword or symbol, got ~a" label-raw) #f)]))
             (if (prologos-error? label) label
