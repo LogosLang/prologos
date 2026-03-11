@@ -892,6 +892,7 @@ map-ops         = 'map-empty' , type-expr , type-expr
                 | 'map-assoc' , expr , expr , expr
                 | 'map-get' , expr , expr
                 | 'nil-safe-get' , expr , expr     (* safe access: missing key → nil *)
+                | 'get' , expr , expr              (* generic index: type-directed dispatch *)
                 | 'map-dissoc' , expr , expr
                 | 'map-size' , expr
                 | 'map-has-key?' , expr , expr
@@ -1290,6 +1291,8 @@ sexp-let-binding = '(' , identifier , [ ':' , type-expr ] , expr , ')' ;
    .:k  →  ($dot-key :k)      map keyword access (→ map-get)
    #.f  →  ($nil-dot-access f)  nil-safe field access (→ nil-safe-get)
    #:k  →  ($nil-dot-key :k)    nil-safe keyword access (→ nil-safe-get)
+   e[k] →  ($postfix-index k)   postfix bracket index (→ get)
+                                 adjacency required: e[k] not e [k]
 
    Block-form |> with indented steps:
      |> initial

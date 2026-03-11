@@ -210,10 +210,11 @@ The no-space rule is critical — `xs [0]` is application (passing list `[0]`), 
 | 1b: let + = interop | DONE | `4584739`, `d2714ef`, `587cacf` |
 | 1c: sequential let | DONE (already worked) | verified in `587cacf` |
 | 1d: flat-pair let | DONE | `b8b5039`, `587cacf` |
-| 2a: bound var `_` suffix | NOT STARTED | |
-| 2b: spec param names | NOT STARTED | |
-| 2c: collision handling | NOT STARTED | |
+| 2a: bound var `_` suffix | DONE | `0cc9b55` |
+| 2b: spec param names | DONE (part of 2a) | `0cc9b55` |
+| 2c: collision handling | DEFERRED (use `_` suffix, handle if collision arises) | |
 | 2d: trait-dispatch narrowing | DONE (Stage 3 Phase 2a) | `44539b1` (resolve-generic-narrowing) |
-| 3a: `x[n]` postfix index | NOT STARTED | |
-| 3b: chained indexing | NOT STARTED | |
-| 3c: path algebra integration | NOT STARTED | |
+| 3a: `x[n]` postfix index (reader + preparse) | DONE | `b77a136` |
+| 3b: chained indexing + AST pipeline | DONE | `b77a136` |
+| 3c: path algebra integration | DONE (chaining works: `xs[0].field`, `m[:a][:b]`) | `b77a136` |
+| 3d: tests (35 tests, 3 files) | DONE | `05fbd3e` |

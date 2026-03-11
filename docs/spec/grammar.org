@@ -340,6 +340,33 @@ In sexp mode, use =nil-safe-get= directly:
 =nil-safe-get= returns =(V | Nil)= — if the key is missing or the map is =nil=,
 it returns =nil= (NOT an error like =map-get=).
 
+*** Postfix Bracket Indexing
+
+Bracket indexing uses adjacency detection: =xs[0]= (no space) is an index,
+while =xs [0]= (with space) is function application.
+
+#+begin_src prologos
+;; List indexing (accepts Int or Nat keys):
+xs[0]             ;; first element
+xs[2]             ;; third element
+
+;; Map indexing:
+m[:key]           ;; keyword lookup
+m[computed-expr]  ;; computed key
+
+;; Chaining with dot-access:
+users[0].name     ;; index then field access
+m[:config][:port] ;; nested map indexing
+
+;; In sexp mode:
+(get xs 0)
+(get m :key)
+#+end_src
+
+Type-directed dispatch: =get= on =List A= / =PVec A= requires =Nat= or =Int= key
+and returns =A=. On =Map K V= requires key type =K= and returns =V=.
+Selection and Schema types delegate to =map-get=.
+
 ** Universe Levels
 
 #+begin_src prologos
@@ -1656,3 +1683,5 @@ The WS reader converts indentation to explicit structure:
 | =x.name=        | =($dot-access name)=     | Map field access              |
 | =x#.name=       | =($nil-dot-access name)= | Nil-safe field access         |
 | =x#:name=       | =($nil-dot-key :name)=   | Nil-safe keyword access       |
+| =xs[0]=          | =($postfix-index 0)=     | Postfix bracket index         |
+| =m[:key]=        | =($postfix-index :key)=  | Postfix keyword index         |
