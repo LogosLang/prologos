@@ -29,9 +29,9 @@ Migrate the Prologos compilation pipeline from ad-hoc mutable state (Racket para
 | 1 | 1c | Wakeup registry cell (storage only) | ✅ | `7419752` — 4 tests, wakeup+trait-wakeup cells, merge-hasheq-list-append |
 | 1 | 1d | Reactive resolution wiring (behavior change) | ✅ | `65a1c59` — reactive hasmethod resolution, wakeup map, re-entrancy guard |
 | 1 | 1e | Remove retry infrastructure | ✅ | `c98d95f` — filtered wakeup maps, documented 3-layer retry, kept safety nets |
-| 2 | 2a | Core type registries (8 registries) | ⬜ | |
-| 2 | 2b | Trait + instance registries (8 registries) | ⬜ | |
-| 2 | 2c | Remaining registries + warnings (11 registries) | ⬜ | |
+| 2 | 2a | Core type registries (8 registries) | ✅ | `5a12671` — 8 cells (schema/ctor/type-meta/subtype/coercion/capability/property/functor), dual-write pattern |
+| 2 | 2b | Trait + instance registries (8 registries) | ✅ | `5e6056a` — 8 cells (trait/trait-laws/impl/param-impl/bundle/specialization/selection/session), dual-write |
+| 2 | 2c | Remaining registries + warnings (11 registries) | ✅ | `7e40345` — 8 macros cells + 3 warning list cells, callback pattern for warnings.rkt |
 | 3 | 3a | Per-definition cell infrastructure | ⬜ | |
 | 3 | 3b | Wire definition dependencies | ⬜ | |
 | 3 | 3c | Module registry cells | ⬜ | |
@@ -51,7 +51,7 @@ Migrate the Prologos compilation pipeline from ad-hoc mutable state (Racket para
 |-------|-------------|------------|-------------|------|--------|
 | 0 | Unified cell abstraction + ATMS | 0a–0e | 3–4 days | Low | ✅ DONE |
 | 1 | Constraint tracking → cells | 1a–1e | 3–5 days | Medium | ✅ DONE |
-| 2 | Registry parameters → cells | 2a–2c | 2–3 days | Low | NOT STARTED |
+| 2 | Registry parameters → cells | 2a–2c | 2–3 days | Low | ✅ DONE |
 | 3 | Global environment → cells + cache invalidation | 3a–3e | 6–9 days | High | NOT STARTED |
 | 4 | Speculation → ATMS assumptions | 4a–4c | 3–5 days | Medium | NOT STARTED |
 | 5 | Driver simplification | 5a–5b | 2–3 days | Low | NOT STARTED |
