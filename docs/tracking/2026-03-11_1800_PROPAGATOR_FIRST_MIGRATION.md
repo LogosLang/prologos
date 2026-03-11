@@ -1,7 +1,7 @@
 # Propagator-First Pipeline Migration Sprint
 
 **Created**: 2026-03-11
-**Status**: NOT STARTED
+**Status**: IN PROGRESS
 **Design Document**: `docs/research/2026-03-11_PROPAGATOR_FIRST_PIPELINE_AUDIT.md`
 **Depends on**: None (Phase 0 is prerequisite for all later phases)
 **Related**: `docs/research/2026-03-11_LSP_VSCODE_STAGE2_REFINEMENT.md` (LSP architecture), `docs/tracking/principles/DESIGN_PRINCIPLES.org` § "Propagator-First Infrastructure"
@@ -19,7 +19,7 @@ Migrate the Prologos compilation pipeline from ad-hoc mutable state (Racket para
 
 | Phase | Sub | Description | Status | Notes |
 |-------|-----|-------------|--------|-------|
-| 0 | 0a | Merge function library + cell factory | ⬜ | |
+| 0 | 0a | Merge function library + cell factory | ✅ | `140c023` — 37 tests, ~160 LOC |
 | 0 | 0b | ATMS assumption infrastructure | ⬜ | |
 | 0 | 0c | Network construction via registration protocol | ⬜ | |
 | 0 | 0d | Parallel propagation verification + benchmarks | ⬜ | |
@@ -49,7 +49,7 @@ Migrate the Prologos compilation pipeline from ad-hoc mutable state (Racket para
 
 | Phase | Description | Sub-phases | Est. Effort | Risk | Status |
 |-------|-------------|------------|-------------|------|--------|
-| 0 | Unified cell abstraction + ATMS | 0a–0e | 3–4 days | Low | NOT STARTED |
+| 0 | Unified cell abstraction + ATMS | 0a–0e | 3–4 days | Low | IN PROGRESS (0a done) |
 | 1 | Constraint tracking → cells | 1a–1e | 3–5 days | Medium | NOT STARTED |
 | 2 | Registry parameters → cells | 2a–2c | 2–3 days | Low | NOT STARTED |
 | 3 | Global environment → cells + cache invalidation | 3a–3e | 6–9 days | High | NOT STARTED |
