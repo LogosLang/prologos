@@ -32,7 +32,7 @@ Migrate the Prologos compilation pipeline from ad-hoc mutable state (Racket para
 | 2 | 2a | Core type registries (8 registries) | ✅ | `5a12671` — 8 cells (schema/ctor/type-meta/subtype/coercion/capability/property/functor), dual-write pattern |
 | 2 | 2b | Trait + instance registries (8 registries) | ✅ | `5e6056a` — 8 cells (trait/trait-laws/impl/param-impl/bundle/specialization/selection/session), dual-write |
 | 2 | 2c | Remaining registries + warnings (11 registries) | ✅ | `7e40345` — 8 macros cells + 3 warning list cells, callback pattern for warnings.rkt |
-| 3 | 3a | Per-definition cell infrastructure | ⬜ | |
+| 3 | 3a | Per-definition cell infrastructure | ✅ | `dae48b7` — Two-layer architecture: Layer 1 (per-file cells) + Layer 2 (prelude fallback). 16 files, 244 LOC. |
 | 3 | 3b | Wire definition dependencies | ⬜ | |
 | 3 | 3c | Module registry cells | ⬜ | |
 | 3 | 3d | Retire `current-global-env` | ⬜ | |
