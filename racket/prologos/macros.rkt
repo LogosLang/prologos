@@ -4877,6 +4877,7 @@
       ;; Comparison — parser keywords lt/le/eq produce surf-generic-* AST nodes
       ;; > and >= rewrite to (lt b a) and (le b a) via swap? flag
       (make-op '== 'eq      'comparison)
+      (make-op '=  'eq      'comparison)  ; = is alias for == in mixfix context
       (make-op '/= 'neq     'comparison)
       (make-op '<  'lt      'comparison)
       (make-op '<= 'le      'comparison)

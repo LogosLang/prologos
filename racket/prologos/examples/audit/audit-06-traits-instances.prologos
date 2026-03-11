@@ -46,12 +46,14 @@ ns examples.audit.traits-instances
 ;; expect: true : Bool
 
 ;; --- 1e. Generic equality (= inside mixfix) ---
-;;! CRASH: "Unexpected token after expression: ="
-;;  = inside .{} mixfix conflicts with the narrowing/equality rewrite
-;; .{3N = 3N}
-;; .{3N = 5N}
+;; OK: Fixed — = is now alias for == in mixfix context
+.{3N = 3N}
+;; OK: true : Bool
 
-;; Use = outside mixfix instead (works):
+.{3N = 5N}
+;; OK: false : Bool
+
+;; = outside mixfix also works:
 3N = 3N
 ;; expect: true : Bool
 
