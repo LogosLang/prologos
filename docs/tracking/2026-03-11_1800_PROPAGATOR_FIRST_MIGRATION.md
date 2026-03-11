@@ -36,7 +36,7 @@ Migrate the Prologos compilation pipeline from ad-hoc mutable state (Racket para
 | 3 | 3b | Wire definition dependencies | ✅ | `cf5fde4` — current-elaborating-name in process-def, dependency recording in lookups, current-definition-dependencies. |
 | 3 | 3c | Module registry cells | ✅ | `d183d58` — register-namespace-cells!, dual-write module-registry, ns-context + defn-param-names cells. |
 | 3 | 3d | Retire `current-global-env` | ✅ | `9f85f0f` — current-prelude-env alias, updated architecture docs. Full rename deferred (266 files). |
-| 3 | 3e | Reduction cache cells + invalidation | ⬜ | Deferred — added to DEFERRED.md. Needs perf benchmarking with regression gates. |
+| 3 | 3e | Reduction cache cells + invalidation | ⬜ | Deferred — added to DEFERRED.md + LSP roadmap §9.8. LSP-specific concern; batch mode unaffected. Coarse-grained first, fine-grained gated behind benchmarks. |
 | 4 | 4a | Speculation side-effect audit | ⬜ | |
 | 4 | 4b | Replace save/restore with assumptions | ⬜ | |
 | 4 | 4c | Remove legacy snapshot infrastructure | ⬜ | |

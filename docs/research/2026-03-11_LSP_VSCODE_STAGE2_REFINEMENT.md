@@ -57,28 +57,28 @@ Based on the Stage 1 survey of Lean 4, Calva, Idris 2, Agda, rust-analyzer, and
 racket-langserver, we adopt a **Lean 4–influenced, Calva-inspired** architecture:
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    VSCode Extension (TypeScript)              │
+┌──────────────────────────────────────────────────────────────┐
+│                    VSCode Extension (TypeScript)             │
 │                                                              │
-│  ┌──────────────┐ ┌──────────────┐ ┌──────────────────────┐ │
-│  │ TextMate      │ │ Tree-sitter  │ │ LSP Client           │ │
-│  │ Grammar       │ │ WASM         │ │ (vscode-languageclient│ │
-│  │ (.tmLanguage) │ │ (structural) │ │  + custom methods)   │ │
-│  └──────────────┘ └──────────────┘ └──────────┬───────────┘ │
+│  ┌──────────────┐ ┌──────────────┐ ┌───────────────────────┐ │
+│  │ TextMate     │ │ Tree-sitter  │ │ LSP Client            │ │
+│  │ Grammar      │ │ WASM         │ │ (vscode-languageclient│ │
+│  │ (.tmLanguage)│ │ (structural) │ │  + custom methods)    │ │
+│  └──────────────┘ └──────────────┘ └───────────┬───────────┘ │
 │                                                │             │
-│  ┌────────────────────────┐  ┌─────────────────┼───────────┐│
-│  │ Inline Result          │  │ InfoView Panel   │           ││
-│  │ Decorations            │  │ (React Webview)  │           ││
-│  │ (VSCode DecorationAPI) │  │ (Tier 5)         │           ││
-│  └────────────────────────┘  └─────────────────┼───────────┘│
-└────────────────────────────────────────────────┼────────────┘
+│  ┌────────────────────────┐  ┌─────────────────┼──────────┐  │
+│  │ Inline Result          │  │ InfoView Panel  │          │  │
+│  │ Decorations            │  │ (React Webview) │          │  │
+│  │ (VSCode DecorationAPI) │  │ (Tier 5)        │          │  │
+│  └────────────────────────┘  └─────────────────┼──────────┘  │
+└────────────────────────────────────────────────┼─────────────┘
                               stdio / JSON-RPC   │
-┌────────────────────────────────────────────────┼────────────┐
-│                 Racket Process (single)         │            │
-│                                                │            │
-│  ┌──────────────────────┐  ┌───────────────────┴──────────┐ │
+┌────────────────────────────────────────────────┼─────────────┐
+│                 Racket Process (single)        │             │
+│                                                │             │
+│  ┌───────────────────────┐  ┌──────────────────┴───────────┐ │
 │  │ LSP Server            │  │ REPL Backend                 │ │
-│  │ (lsp-server.rkt)      │  │ (lsp-repl.rkt)              │ │
+│  │ (lsp-server.rkt)      │  │ (lsp-repl.rkt)               │ │
 │  │                       │  │                              │ │
 │  │ Standard methods:     │  │ Custom methods:              │ │
 │  │ · publishDiagnostics  │  │ · $/prologos/eval            │ │
@@ -93,26 +93,26 @@ racket-langserver, we adopt a **Lean 4–influenced, Calva-inspired** architectu
 │  └──────────┬────────────┘  └──────────────┬───────────────┘ │
 │             │                              │                 │
 │  ┌──────────┴──────────────────────────────┴───────────────┐ │
-│  │              Prologos Pipeline                           │ │
-│  │                                                          │ │
-│  │  reader → preparse → parse → elaborate → type-check      │ │
-│  │  → trait-resolve → zonk → reduce                         │ │
-│  │                                                          │ │
-│  │  ┌────────────────────────────────────────────────────┐  │ │
-│  │  │         Propagator Network (LSP State)             │  │ │
-│  │  │                                                    │  │ │
-│  │  │  Type Index Cells  ←──── Metavariable Cells        │  │ │
-│  │  │       ↓                        ↑                   │  │ │
-│  │  │  Diagnostic Cells  ←── Elaboration Results         │  │ │
-│  │  │       ↓                        ↑                   │  │ │
-│  │  │  Completion Cells  ←── Module Export Cells          │  │ │
-│  │  │       ↓                        ↑                   │  │ │
-│  │  │  Definition Loc Cells ←─ REPL Session Cells        │  │ │
-│  │  └────────────────────────────────────────────────────┘  │ │
-│  │                                                          │ │
-│  │  process-file / process-string-ws / process-command      │ │
-│  │  module-registry / global-env / ns-context               │ │
-│  └──────────────────────────────────────────────────────────┘ │
+│  │              Prologos Pipeline                          │ │
+│  │                                                         │ │
+│  │  reader → preparse → parse → elaborate → type-check     │ │
+│  │  → trait-resolve → zonk → reduce                        │ │
+│  │                                                         │ │
+│  │  ┌────────────────────────────────────────────────────┐ │ │
+│  │  │         Propagator Network (LSP State)             │ │ │
+│  │  │                                                    │ │ │
+│  │  │  Type Index Cells  ←──── Metavariable Cells        │ │ │
+│  │  │       ↓                        ↑                   │ │ │
+│  │  │  Diagnostic Cells  ←── Elaboration Results         │ │ │
+│  │  │       ↓                        ↑                   │ │ │
+│  │  │  Completion Cells  ←── Module Export Cells         │ │ │
+│  │  │       ↓                        ↑                   │ │ │
+│  │  │  Definition Loc Cells ←─ REPL Session Cells        │ │ │
+│  │  └────────────────────────────────────────────────────┘ │ │
+│  │                                                         │ │
+│  │  process-file / process-string-ws / process-command     │ │
+│  │  module-registry / global-env / ns-context              │ │
+│  └─────────────────────────────────────────────────────────┘ │
 └──────────────────────────────────────────────────────────────┘
 ```
 
@@ -1176,6 +1176,60 @@ LSP messages (didOpen, didChange, didSave) update source cells. Outgoing LSP res
 | `lsp/protocol.rkt` | ~200 | LSP protocol constants, message builders |
 
 **Effort**: 2–3 days
+
+### 9.8 Reduction Cache Cells (Deferred — Requires Benchmarking)
+
+**Supports**: Tier 2 (incremental re-elaboration), Tier 3 (type-correct hover after edits)
+
+**Status**: Deferred from Propagator-First Migration Phase 3e. Captured here as an
+LSP-specific infrastructure investment because **batch mode does not need this** — in
+batch compilation, reduction caches (`current-whnf-cache`, `current-nf-cache`,
+`current-nat-value-cache`) are populated during a single run and discarded afterward.
+There is no invalidation problem because there is no incremental re-use.
+
+The question of "which cached reductions depend on definition X?" only arises when a
+user edits definition X in their editor and the LSP needs to selectively re-elaborate
+dependents without rebuilding everything from scratch. Without cache invalidation, the
+LSP must either (a) clear all reduction caches on any edit (correct but potentially
+slow) or (b) risk stale cached reductions feeding incorrect type-checking results
+(fast but unsound).
+
+**Design question — two approaches:**
+
+| Approach | Description | Pros | Cons |
+|----------|-------------|------|------|
+| **Fine-grained** | Per-reduction-entry cells with dependency tracking. Each `whnf` call records which definitions it unfolded; changing a definition invalidates only the entries that used it. | Precise invalidation, minimal re-work | High overhead per reduction call. Reduction is the hottest code path (~millions of calls per file). Even a single `hash-set` per call could measurably regress batch performance. |
+| **Coarse-grained** | Bulk invalidation of all caches when any definition in the dependency set (Phase 3b) changes. | Near-zero batch overhead (no per-call tracking). Simple implementation. | Over-invalidates — changing `foo` clears caches for `bar` even if `bar` never reduced through `foo`. Acceptable if re-reduction is fast relative to re-elaboration. |
+
+**Recommendation**: Start with coarse-grained. The dependency graph from Phase 3b
+already tells us which definitions depend on the edited definition. When re-elaborating
+those dependents, simply start with empty reduction caches. This gives correct
+incremental behavior with zero batch-mode overhead. Fine-grained tracking is a
+potential optimization if profiling shows re-reduction dominates LSP response latency.
+
+**Batch-mode safety gate**: Any implementation MUST be gated behind a
+`current-track-reduction-deps?` parameter (default `#f`). Batch compilation never
+sets this parameter, so the reduction hot path sees zero additional overhead — not
+even a parameter check in the inner loop. The LSP server sets it to `#t` only when
+fine-grained tracking is active.
+
+**Benchmarking requirements** (before implementing fine-grained approach):
+
+1. **Baseline**: Measure batch-mode wall time with `--all` tests. Current: ~190s.
+2. **Per-call overhead**: Instrument `whnf` with a no-op `hash-set` on every call.
+   Measure delta. If >5% regression, fine-grained is ruled out without optimization.
+3. **Cache hit rate**: Measure whnf/nf cache hit rates during typical elaboration.
+   If hit rates are low (<30%), caches provide little value and coarse invalidation
+   is free.
+4. **Re-reduction cost**: Measure time spent in reduction during elaboration of a
+   single definition. If <10ms, coarse invalidation is negligible even for
+   large files.
+5. **Regression gate**: No approach ships unless full test suite stays within 5%
+   of baseline wall time.
+
+**Dependencies**: Phase 3a (per-definition cells), Phase 3b (dependency recording)
+
+**Effort**: 2–4 days (coarse-grained); 5–8 days (fine-grained with benchmarking)
 
 ---
 
