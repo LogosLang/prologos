@@ -75,13 +75,19 @@
 (define current-command-atms (make-parameter #f))
 
 ;; Initialize per-command speculation tracking.
-;; Phase D: Also initializes a fresh ATMS when ATMS support is requested.
+;; Phase D: Also initializes a fresh ATMS for dependency-directed errors.
+;; Phase 4c: ATMS initialization is now mandatory — always creates the box
+;; if absent, always resets to empty. This removes the conditional code path
+;; in with-speculative-rollback and ensures every speculation branch has
+;; an ATMS hypothesis for error derivation chains.
 (define (init-speculation-tracking!)
   (current-speculation-failures (box '()))
-  ;; Phase D: create a fresh ATMS per command if ATMS box exists
+  ;; Phase 4c: Always ensure ATMS box exists and is fresh.
+  ;; Cheap: empty ATMS = ~3 hasheq allocations.
   (define atms-box (current-command-atms))
-  (when atms-box
-    (set-box! atms-box (atms-empty)))
+  (cond
+    [atms-box (set-box! atms-box (atms-empty))]
+    [else (current-command-atms (box (atms-empty)))])
   ;; GDE-1: initialize context assumptions tracking
   (current-context-assumptions (box '())))
 
@@ -159,15 +165,18 @@
 (define (with-speculative-rollback thunk success? label)
   ;; E3d: count speculation entries
   (perf-inc-speculation!)
-  ;; Phase D: Create ATMS hypothesis if tracking is active
-  (define-values (atms-box hyp-id)
-    (let ([ab (current-command-atms)])
-      (if ab
-          (let-values ([(a* aid) (atms-assume (unbox ab) (string->symbol label) label)])
-            (set-box! ab a*)
-            (perf-inc-atms-hypothesis!)
-            (values ab aid))
-          (values #f #f))))
+  ;; Phase 4c: ATMS hypothesis is mandatory — init-speculation-tracking! ensures
+  ;; the box always exists. Every speculation branch gets a hypothesis for
+  ;; error derivation chains and nogood recording.
+  (define atms-box (current-command-atms))
+  (unless atms-box
+    (error 'with-speculative-rollback
+           "ATMS not initialized — call init-speculation-tracking! before speculation"))
+  (define-values (_a* hyp-id)
+    (let-values ([(a* aid) (atms-assume (unbox atms-box) (string->symbol label) label)])
+      (set-box! atms-box a*)
+      (perf-inc-atms-hypothesis!)
+      (values a* aid)))
   ;; Phase D2: Snapshot failure count for sub-failure capture
   (define failures-before-count
     (let ([b (current-speculation-failures)])
@@ -211,18 +220,17 @@
             ;; The nogood set contains the speculation hypothesis AND any context
             ;; assumptions (user annotations), enabling diagnoses like
             ;; "because: user annotated x : Nat".
+            ;; Phase 4c: Always record nogoods (ATMS is always available).
             (define ss
-              (if (and atms-box hyp-id)
-                  (let* ([ctx-aids (get-context-assumption-ids)]
-                         [nogood-set
-                          (for/fold ([s (hasheq hyp-id #t)])
-                                    ([aid (in-list ctx-aids)])
-                            (hash-set s aid #t))])
-                    (set-box! atms-box
-                              (atms-add-nogood (unbox atms-box) nogood-set))
-                    (perf-inc-atms-nogood!)
-                    nogood-set)
-                  #f))
+              (let* ([ctx-aids (get-context-assumption-ids)]
+                     [nogood-set
+                      (for/fold ([s (hasheq hyp-id #t)])
+                                ([aid (in-list ctx-aids)])
+                        (hash-set s aid #t))])
+                (set-box! atms-box
+                          (atms-add-nogood (unbox atms-box) nogood-set))
+                (perf-inc-atms-nogood!)
+                nogood-set))
             (values subs ss)])))
      ;; 4. Record failure with sub-failures and support-set
      (record-speculation-failure! label hyp-id support-set sub-failures)
