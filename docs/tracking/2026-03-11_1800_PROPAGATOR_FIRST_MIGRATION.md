@@ -36,6 +36,7 @@ Migrate the Prologos compilation pipeline from ad-hoc mutable state (Racket para
 | 3 | 3b | Wire definition dependencies | ⬜ | |
 | 3 | 3c | Module registry cells | ⬜ | |
 | 3 | 3d | Retire `current-global-env` | ⬜ | |
+| 3 | 3e | Reduction cache cells + invalidation | ⬜ | |
 | 4 | 4a | Speculation side-effect audit | ⬜ | |
 | 4 | 4b | Replace save/restore with assumptions | ⬜ | |
 | 4 | 4c | Remove legacy snapshot infrastructure | ⬜ | |
@@ -51,11 +52,11 @@ Migrate the Prologos compilation pipeline from ad-hoc mutable state (Racket para
 | 0 | Unified cell abstraction + ATMS | 0a–0e | 3–4 days | Low | NOT STARTED |
 | 1 | Constraint tracking → cells | 1a–1e | 3–5 days | Medium | NOT STARTED |
 | 2 | Registry parameters → cells | 2a–2c | 2–3 days | Low | NOT STARTED |
-| 3 | Global environment → cells | 3a–3d | 5–8 days | High | NOT STARTED |
+| 3 | Global environment → cells + cache invalidation | 3a–3e | 6–9 days | High | NOT STARTED |
 | 4 | Speculation → ATMS assumptions | 4a–4c | 3–5 days | Medium | NOT STARTED |
 | 5 | Driver simplification | 5a–5b | 2–3 days | Low | NOT STARTED |
 
-**Total**: 18–28 days across 6 phases, 22 sub-phases
+**Total**: 19–29 days across 6 phases, 23 sub-phases
 
 ---
 
@@ -308,6 +309,22 @@ Migrate the Prologos compilation pipeline from ad-hoc mutable state (Racket para
 **Files touched**: `global-env.rkt` (~40 LOC removed), `driver.rkt` (~20 LOC), `elaborator.rkt` (~10 LOC), `namespace.rkt` (~10 LOC)
 **Commit gate**: Full test suite passes, Level 3 WS validation passes, canary files pass, `current-global-env` retired or reduced to thin wrapper
 
+### 3e: Reduction Cache Cells + Dependency-Driven Invalidation
+
+- [ ] Convert `current-whnf-cache`, `current-nf-cache`, `current-nat-value-cache` from mutable hash parameters to infra-cells
+- [ ] Design **write-through cache** pattern: batch mode writes to both fast local hash (for hot-path performance) and cell (for dependency tracking). Reads come from the local hash. The cell is only consulted for invalidation in LSP mode.
+- [ ] Record per-reduction dependencies: when `whnf` traverses a definition (via `global-env-lookup` inside reduction), tag the cache entry with the definition-cell it depends on
+- [ ] Wire invalidation propagator: when a definition-cell changes (via ATMS retraction in LSP, or re-elaboration), fire a propagator that removes all cache entries whose reduction touched that definition
+- [ ] ATMS tagging for speculative reductions: cache entries written during `with-assumption` are tagged with the speculation assumption — retraction clears them automatically (composes with Phase 4b)
+- [ ] **Batch mode optimization**: In batch compilation where definitions are write-once, the invalidation propagators never fire — zero overhead. The dependency recording can be gated behind a `(current-track-reduction-deps?)` parameter, defaulting to `#f` for batch and `#t` for LSP.
+- [ ] Tests: 10 new tests — cache cell create/read/write, dependency recording during reduction, invalidation on definition change, ATMS-tagged cache retraction, batch-mode fast path (no dependency tracking overhead)
+
+**Files touched**: `reduction.rkt` (~60 LOC — dependency tracking in `whnf`/`nf`), `infra-cell.rkt` (~30 LOC — cache cell factory + invalidation propagator), `driver.rkt` (~5 LOC — cache cell registration)
+**Risk**: Medium — reduction is the hottest path; dependency recording must be zero-cost in batch mode. The write-through pattern keeps the fast hash for reads; the cell layer is write-only metadata.
+**Key insight**: With definition-cells (3a) + dependency wiring (3b) + cache cells (3e), the network *knows* which cached results are stale. This makes incremental re-elaboration correct by construction — stale cache entries are structurally impossible.
+
+**Commit gate**: Full test suite passes, no performance regression in batch mode (cache dependency tracking off), reduction cache invalidation works when definitions change, canary files pass
+
 ---
 
 ## Phase 4: Speculation → ATMS Assumptions (Correct by Construction)
@@ -411,6 +428,7 @@ Migrate the Prologos compilation pipeline from ad-hoc mutable state (Racket para
 | `driver.rkt` (1968 LOC) | 1a, 3a, 5a | Network init, per-command simplification |
 | `elaborator.rkt` (3924 LOC) | 3b, 4b | Dependency recording, speculation replacement |
 | `namespace.rkt` (652 LOC) | 3c | Module registry cells |
+| `reduction.rkt` (~2000 LOC) | 3e | Cache cells, dependency tracking in whnf/nf |
 | `constraint-propagators.rkt` (292 LOC) | 1d | Compose with infra-cell propagators |
 | `elab-speculation-bridge.rkt` (216 LOC) | 4b | Replace save/restore with assumptions |
 | `warnings.rkt` | 2c | Warning cells |
@@ -526,7 +544,7 @@ Phases 1, 2, 3, and 4 can proceed in parallel after Phase 0. Phase 5 requires al
 ## Deferred Work (Known)
 
 - **LSP network integration**: The unified network from this sprint becomes the LSP state management network. Integration work is in the LSP roadmap (`2026-03-11_LSP_VSCODE_STAGE2_REFINEMENT.md`), not this sprint.
-- **Reduction cache invalidation via cells**: Audit §3.7 notes that WHNF/NF caches could be cells for LSP invalidation. Not needed for batch pipeline. Track in DEFERRED.md if useful later.
+- **Reduction cache invalidation via cells**: ~~Deferred~~ → Included as Phase 3e. Combinatorial composition with definition cells (3a), dependency wiring (3b), and ATMS speculation (Phase 4) makes structural cache invalidation too valuable to defer.
 - **Self-hosting compiler using Prologos propagator cells**: Open Question 6 — the `infra-cell` API should be designed to avoid foreclosing the self-hosting path. Full evaluation deferred to self-hosting planning.
 
 Note: Parallel propagation is **not deferred** — it is inherent in Phase 0's design. The unified network uses `propagator.rkt`'s existing schedulers (sequential, BSP, parallel). Independent propagators fire in parallel automatically via the BSP scheduler. Phase 0d verifies parallel correctness and benchmarks speedup.
