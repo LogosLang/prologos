@@ -24,7 +24,7 @@ Migrate the Prologos compilation pipeline from ad-hoc mutable state (Racket para
 | 0 | 0c | Network construction via registration protocol | ✅ | `5d4d6f9` — 6 tests, elab-network coexistence verified |
 | 0 | 0d | Parallel propagation verification + benchmarks | ✅ | `e408151` — 6 tests, seq=BSP=par verified, <1ms overhead |
 | 0 | 0e | Integration smoke test | ✅ | Full suite: 6803 tests, 353 files, 0 failures, 208.6s. Canary OK. |
-| 1 | 1a | Constraint store cell (storage only) | ⬜ | |
+| 1 | 1a | Constraint store cell (storage only) | ✅ | `411e96b` — 10 tests, dual-write to cell + legacy parameter |
 | 1 | 1b | Trait constraint cells (storage only) | ⬜ | |
 | 1 | 1c | Wakeup registry cell (storage only) | ⬜ | |
 | 1 | 1d | Reactive resolution wiring (behavior change) | ⬜ | |
