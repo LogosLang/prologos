@@ -1,0 +1,187 @@
+ns examples.generic-numerics
+
+;; ========================================================================
+;;
+;;     Generic Numerics in Prologos
+;;     ─────────────────────────────
+;;
+;;     Prologos's trait system enables numeric code that works across
+;;     Int, Rat, Posit, and any future numeric type. This file shows
+;;     how to write type-generic numeric functions.
+;;
+;;     Key concepts:
+;;       • Add/Sub/Mul/Neg/Abs/Div traits for individual operations
+;;       • Num bundle := (Add Sub Mul Neg Eq Ord Abs FromInt) — 8 traits
+;;       • Fractional bundle := (Num Div FromRat) — 10 traits
+;;       • .{x + y} mixfix dispatches through traits automatically
+;;       • Trait dicts are inferred at call sites — no manual passing
+;;
+;; ========================================================================
+
+
+;; ========================================================================
+;; 1. SINGLE-TRAIT GENERIC FUNCTIONS
+;; ========================================================================
+
+;; --- Add: double any addable value ---
+
+spec double-it {A : Type} [Add A] -> A -> A
+defn double-it [d x] [Add-add d x x]
+
+[double-it 21]
+;; => 42 : Int
+
+[double-it 1/4]
+;; => 1/2 : Rat
+
+[double-it 5N]
+;; => 10N : Nat
+
+[double-it (posit8 64)]
+;; => [posit8 72] : Posit8  (1.0 + 1.0 = 2.0)
+
+
+;; --- Mul: square any multipliable value ---
+
+spec square-it {A : Type} [Mul A] -> A -> A
+defn square-it [d x] [Mul-mul d x x]
+
+[square-it 7]
+;; => 49 : Int
+
+[square-it 3/2]
+;; => 9/4 : Rat
+
+
+;; --- Eq: generic equality check ---
+
+spec same? {A : Type} [Eq A] -> A -> A -> Bool
+defn same? [d x y] [Eq-eq? d x y]
+
+[same? 42 42]
+;; => true : Bool
+
+[same? 1/2 2/4]
+;; => true : Bool
+
+[same? 3N 4N]
+;; => false : Bool
+
+
+;; ========================================================================
+;; 2. MULTI-TRAIT GENERIC FUNCTIONS
+;; ========================================================================
+
+;; --- Add + Neg: subtraction via negate-and-add ---
+
+spec diff {A : Type} [Add A] -> [Neg A] -> A -> A -> A
+defn diff [add-d neg-d x y]
+  [Add-add add-d x [Neg-neg neg-d y]]
+
+[diff 10 3]
+;; => 7 : Int
+
+[diff 5/6 1/3]
+;; => 1/2 : Rat
+
+
+;; --- Add + Mul: sum of squares ---
+
+spec sum-of-squares {A : Type} [Add A] -> [Mul A] -> A -> A -> A
+defn sum-of-squares [add-d mul-d x y]
+  [Add-add add-d [Mul-mul mul-d x x] [Mul-mul mul-d y y]]
+
+[sum-of-squares 3 4]
+;; => 25 : Int  (9 + 16)
+
+[sum-of-squares 1/2 1/2]
+;; => 1/2 : Rat  (1/4 + 1/4)
+
+
+;; ========================================================================
+;; 3. GENERIC SUM AND PRODUCT
+;; ========================================================================
+;;
+;; The prelude provides generic `sum` and `product` that work over
+;; any list whose element type has the right traits:
+;;   sum     : (Add A) -> (AdditiveIdentity A) -> List A -> A
+;;   product : (Mul A) -> (MultiplicativeIdentity A) -> List A -> A
+
+[sum [int-range 1 11]]
+;; => 55 : Int  (1 + 2 + ... + 10)
+
+[product [int-range 1 6]]
+;; => 120 : Int  (5!)
+
+
+;; ========================================================================
+;; 4. MIXFIX .{} DISPATCHES THROUGH TRAITS
+;; ========================================================================
+;;
+;; The .{x + y} syntax isn't just sugar — it resolves to the Add trait
+;; for the appropriate type. Same expression, different types:
+
+.{10 + 20}
+;; => 30 : Int
+
+.{1/3 + 1/6}
+;; => 1/2 : Rat
+
+.{3N + 4N}
+;; => 7N : Nat
+
+.{~1.5 + ~2.5}
+;; => [posit32 1342177280] : Posit32  (4.0)
+
+;; Comparison operators too:
+.{3 < 5}
+;; => true : Bool
+
+.{1/2 == 2/4}
+;; => true : Bool
+
+
+;; ========================================================================
+;; 5. PREFIX WRAPPERS: plus, minus, times, divide
+;; ========================================================================
+;;
+;; For use in higher-order contexts (map, fold, etc.), the prelude
+;; exports prefix wrappers that dispatch through traits:
+
+[plus 3 4]
+;; => 7 : Int
+
+[times 6 7]
+;; => 42 : Int
+
+[minus 10 3]
+;; => 7 : Int
+
+
+;; ========================================================================
+;; 6. THE TRAIT COMPATIBILITY GRID
+;; ========================================================================
+;;
+;;   Trait       | Nat | Int | Rat | Posit*
+;;   ------------+-----+-----+-----+-------
+;;   Add         |  Y  |  Y  |  Y  |  Y
+;;   Sub         |  Y* |  Y  |  Y  |  Y
+;;   Mul         |  Y  |  Y  |  Y  |  Y
+;;   Neg         |  -  |  Y  |  Y  |  Y
+;;   Abs         |  -  |  Y  |  Y  |  Y
+;;   Div         |  -  |  Y  |  Y  |  Y
+;;   Eq          |  Y  |  Y  |  Y  |  Y
+;;   Ord         |  Y  |  Y  |  Y  |  Y
+;;   FromInt     |  -  |  Y  |  Y  |  Y
+;;   Num bundle  |  -  |  Y  |  Y  |  Y
+;;   Fractional  |  -  |  -  |  Y  |  Y
+;;
+;;   * Nat Sub is saturating (min 0)
+;;
+;; Nat lacks Neg, Abs, FromInt — it can't satisfy Num.
+;; This is by design: Nat is type infrastructure, not a computational type.
+;; Use Int for computation, Num for generic code.
+;;
+;; ========================================================================
+;; END
+;; ========================================================================
