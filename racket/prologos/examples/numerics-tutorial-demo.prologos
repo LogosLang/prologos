@@ -45,169 +45,87 @@ ns examples.numerics-tutorial-demo
 
 imports [prologos::data::list   :refer [List nil cons length head map
                                         foldr reduce filter reverse append]]
-        [prologos::data::nat    :refer [add mult pred sub pow double
-                                        zero? le? lt? gt? ge? nat-eq?
-                                        min max bool-to-nat clamp]]
+        [prologos::data::nat    :as nat :refer [add mult pred sub pow double
+                                                zero? le? lt? nat-eq?
+                                                bool-to-nat]]
         [prologos::data::option :refer [Option some none unwrap-or]]
         [prologos::data::bool   :refer [not and or]]
 
 
 ;; ========================================================================
-;; 🌀 PASS 1 — Natural Numbers: Type Infrastructure
+;; 🌀 PASS 1 — Natural Numbers: Type Infrastructure (Brief)
 ;; ========================================================================
 ;;
-;; Naturals are Peano numbers: zero, suc zero, suc (suc zero), ...
-;; They live at Type 0 and serve as **type-level infrastructure**:
-;; indices for Vec lengths, inductive proofs, type-level computation.
+;; Naturals (Nat) are Peano numbers: zero, suc zero, suc (suc zero), ...
+;; They serve as **type-level infrastructure**: dependent type indices,
+;; structural induction, proofs. Nat is NOT for general computation.
 ;;
-;; The literal `42N` desugars to 42 nested `suc` constructors around `zero`.
-;; No negative values. No fractions. For general computation, use Int/Rat.
-;;
-;; NOTE: Nat is NOT intended for general numerical computation.
-;; Use Int for arithmetic, Rat for fractions, Posit for approximation.
+;; For arithmetic, use Int. For fractions, Rat. For approximation, Posit.
+;; We cover Nat briefly here — just enough to understand its role.
 
-;; --- Literals and the N suffix ---
+;; --- Literals use the N suffix ---
 
 0N
 ;; => 0N : Nat
 
-1N
-;; => 1N : Nat
-
 42N
-;; => 42N : Nat
+;; => 42N : Nat  (42 nested `suc` constructors around `zero`)
 
-;; TIP: Always write the N suffix for Nat literals. Without it,
-;; bare `42` is an Int!
+;; TIP: Without the N suffix, bare `42` is an Int!
 
+;; --- Structural pattern matching: the reason Nat exists ---
 
-;; --- Basic Arithmetic ---
+;; Nat enables structural recursion via zero/suc patterns:
+spec nat-double Nat -> Nat
+defn nat-double
+  | [zero]  -> zero
+  | [[suc k]] -> suc [suc [nat-double k]]
 
-;; Addition: add x y = x + y
-[add 3N 4N]
-;; => 7N : Nat
+[nat-double 3N]
+;; => 6N : Nat
 
-;; Multiplication: mult x y = x * y
-[mult 6N 7N]
-;; => 42N : Nat
-
-;; Doubling: double n = n + n
-[double 5N]
-;; => 10N : Nat
-
-;; Predecessor: pred(0) = 0, pred(suc k) = k
-[pred 5N]
-;; => 4N : Nat
-
-[pred 0N]
-;; => 0N : Nat  (can't go below zero!)
-
-;; Saturating subtraction: sub x y = max(x - y, 0)
-[sub 10N 3N]
-;; => 7N : Nat
-
-[sub 3N 10N]
-;; => 0N : Nat  (saturates at zero, never negative)
-
-;; Exponentiation: pow base exp = base^exp
-[pow 2N 8N]
-;; => 256N : Nat
-
-[pow 3N 4N]
-;; => 81N : Nat
-
-
-;; --- Predicates and Comparison ---
-
+;; The zero?/pred/add/sub functions are available via nat:: or explicit import:
 [zero? 0N]
 ;; => true : Bool
 
-[zero? 5N]
-;; => false : Bool
-
-[le? 3N 5N]
-;; => true : Bool  (3 ≤ 5)
-
-[lt? 3N 5N]
-;; => true : Bool  (3 < 5)
-
-[gt? 7N 3N]
-;; => true : Bool  (7 > 3)
-
-[ge? 5N 5N]
-;; => true : Bool  (5 ≥ 5)
-
-[nat-eq? 3N 3N]
-;; => true : Bool
-
-[nat-eq? 3N 4N]
-;; => false : Bool
-
-
-;; --- Min, Max, Clamp ---
-
-[min 3N 7N]
-;; => 3N : Nat
-
-[max 3N 7N]
+[add 3N 4N]
 ;; => 7N : Nat
 
-;; clamp returns a clamping function: clamp low high → (Nat → Nat)
-[[clamp 2N 8N] 10N]
-;; => 8N : Nat  (clamped down to 8)
-
-[[clamp 2N 8N] 1N]
-;; => 2N : Nat  (clamped up to 2)
-
-[[clamp 2N 8N] 5N]
-;; => 5N : Nat  (already in range)
-
-
-;; --- Conversion ---
-
-[bool-to-nat true]
-;; => 1N : Nat
-
-[bool-to-nat false]
-;; => 0N : Nat
-
-
-;; ────────────────────────────────────────────────────────────
-;; YOUR TURN: Compute 10! (factorial of 10) using pow and mult.
-;; Hint: there's no built-in factorial, but you can build one!
-;; Try: [mult [pow 2N 3N] [pow 3N 2N]]  — what does that give?
-;; ────────────────────────────────────────────────────────────
-
-mult [pow 2N 3N] [pow 3N 2N]
-;; => 72N : Nat
+;; --- Where Nat is appropriate ---
+;;
+;; • Type-level indices: Vec A n, Fin n
+;; • Structural induction and proofs
+;; • Narrowing / logic programming (add ?x ?y = 5N)
+;; • List length (structural): length xs -> Nat
+;;
+;; For everything else, use Int. See Pass 2.
 
 
 ;; ========================================================================
-;; 🌀 PASS 2 — Integers: Going Negative
+;; 🌀 PASS 2 — Integers: The Default Numeric Type
 ;; ========================================================================
 ;;
 ;; Int is the type of exact, arbitrary-precision integers.
-;; Unlike Nat, Int supports negative values and is a built-in type
-;; with fast FFI primitives from Racket's exact integer arithmetic.
+;; It's the DEFAULT numeric type for computation in Prologos.
+;; Bare number literals (42, -7, 0) are Int.
 ;;
-;; Literals: bare numbers like 42, -7, 0 are Int (not Nat!).
-;; Use `(the Int 42)` or `(int 42)` for explicitness.
+;; Three ways to do Int arithmetic:
+;;   1. Primitives:  [int+ 3 4]         — fast built-in ops
+;;   2. Mixfix:      .{3 + 4}           — infix syntax via traits
+;;   3. Generic:     [plus 3 4]          — trait-dispatched wrappers
 
 ;; --- Literals ---
 
-(the Int 42)
+42
 ;; => 42 : Int
 
 (the Int 0)
 ;; => 0 : Int
 
-;; TIP: In Prologos, bare number literals (42, -7, 0) default to Int
-;; in most contexts. Use 42N for Nat, 3/7 for Rat.
+;; TIP: Bare numbers are Int. Use 42N for Nat, 3/7 for Rat, ~3.14 for Posit.
 
 
-;; --- Arithmetic Primitives ---
-
-;; All Int operations are parser keywords (built-in, fast).
+;; --- Primitive Arithmetic ---
 
 [int+ 3 4]
 ;; => 7 : Int
@@ -221,24 +139,39 @@ mult [pow 2N 3N] [pow 3N 2N]
 [int* 6 7]
 ;; => 42 : Int
 
-;; Integer division (truncates toward zero)
 [int/ 17 5]
-;; => 3 : Int
+;; => 3 : Int  (truncates toward zero)
 
-;; Modulus (remainder)
 [int-mod 17 5]
 ;; => 2 : Int
 
-;; Negation
 [int-neg 7]
 ;; => -7 : Int
 
-;; Absolute value
-[int-abs 7]
-;; => 7 : Int
-
 [int-abs (int-neg 7)]
 ;; => 7 : Int
+
+
+;; --- Mixfix Arithmetic (.{...}) ---
+;;
+;; The .{...} syntax gives familiar infix notation.
+;; Under the hood, operators dispatch through traits (Add, Sub, Mul, etc.)
+;; so the same syntax works for Int, Rat, and Posit values.
+
+.{3 + 4}
+;; => 7 : Int
+
+.{10 - 3}
+;; => 7 : Int
+
+.{6 * 7}
+;; => 42 : Int
+
+.{17 / 5}
+;; => 3 : Int
+
+.{2 + 3 * 4}
+;; => 14 : Int  (precedence: * before +)
 
 
 ;; --- Comparison ---
@@ -246,51 +179,68 @@ mult [pow 2N 3N] [pow 3N 2N]
 [int-lt 3 5]
 ;; => true : Bool
 
-[int-le 3 5]
-;; => true : Bool
-
 [int-eq 3 3]
 ;; => true : Bool
 
-[int-eq 3 4]
-;; => false : Bool
+.{3 < 5}
+;; => true : Bool
+
+.{3 == 3}
+;; => true : Bool
 
 
-;; --- Binding and Using ---
+;; --- Binding and Functions ---
 
 (def answer : Int 42)
-
-answer
-;; => 42 : Int
 
 [int+ answer 8]
 ;; => 50 : Int
 
-[int* answer answer]
+.{answer * answer}
 ;; => 1764 : Int
-
-
-;; --- Functions over Int ---
 
 spec square-int Int -> Int
 defn square-int [x]
-  [int* x x]
+  .{x * x}
 
 [square-int 7]
 ;; => 49 : Int
 
-[square-int (int-neg 5)]
-;; => 25 : Int
-
 spec abs-diff Int Int -> Int
 defn abs-diff [x y]
-  [int-abs [int- x y]]
+  [int-abs .{x - y}]
 
 [abs-diff 3 10]
 ;; => 7 : Int
 
-[abs-diff 10 3]
-;; => 7 : Int
+
+;; --- Int-Indexed List Operations ---
+;;
+;; When working with Int values, use Int-indexed list ops to avoid
+;; manual Nat conversion. Negative indices return none/nil safely.
+
+def my-list : [List Int] := '[10 20 30 40 50]
+
+[nth-int 0 my-list]
+;; => some 10 : Option Int
+
+[nth-int 2 my-list]
+;; => some 30 : Option Int
+
+[nth-int 99 my-list]
+;; => none : Option Int  (out of bounds)
+
+[nth-int (int-neg 1) my-list]
+;; => none : Option Int  (negative index safely returns none)
+
+[take-int 3 my-list]
+;; => '[10 20 30] : [List Int]
+
+[drop-int 2 my-list]
+;; => '[30 40 50] : [List Int]
+
+[length-int my-list]
+;; => 5 : Int  (Int, not Nat!)
 
 
 ;; ────────────────────────────────────────────────────────────
@@ -513,75 +463,56 @@ defn recip [x]
 ;; 🌀 PASS 5 — Traits: Polymorphic Arithmetic
 ;; ========================================================================
 ;;
-;; Each numeric operation (add, sub, mul, ...) has a corresponding trait.
-;; Traits let you write GENERIC code that works across number types.
+;; Each numeric operation has a corresponding trait. Traits let you write
+;; GENERIC code that works across number types:
 ;;
-;;   trait Add {A}     →  add : A → A → A
-;;   trait Sub {A}     →  sub : A → A → A
-;;   trait Mul {A}     →  mul : A → A → A
-;;   trait Neg {A}     →  neg : A → A
-;;   trait Abs {A}     →  abs : A → A
-;;   trait Div {A}     →  div : A → A → A
-;;   trait Eq  {A}     →  eq? : A → A → Bool
-;;   trait Ord {A}     →  compare : A → A → Ordering
+;;   trait Add {A}  →  + : A → A → A     (via .{x + y})
+;;   trait Sub {A}  →  - : A → A → A     (via .{x - y})
+;;   trait Mul {A}  →  * : A → A → A     (via .{x * y})
+;;   trait Neg {A}  →  negate : A → A
+;;   trait Abs {A}  →  abs : A → A
+;;   trait Div {A}  →  / : A → A → A     (via .{x / y})
+;;   trait Eq  {A}  →  == : A → A → Bool (via .{x == y})
+;;   trait Ord {A}  →  compare : A → A → Ordering
 ;;
-;; Single-method traits: the dict IS the function!
-;; E.g., Int--Add--dict : Int → Int → Int
+;; The .{...} mixfix syntax dispatches through traits automatically.
+;; You rarely need to call trait methods directly.
 
-;; --- Direct Trait Calls ---
+;; --- Mixfix works across types ---
 
-;; Add for different types:
-[Add-add Int Int--Add--dict 10 20]
+;; Int:
+.{10 + 20}
 ;; => 30 : Int
 
-[Add-add Rat Rat--Add--dict 1/3 1/6]
+;; Rat:
+.{1/3 + 1/6}
 ;; => 1/2 : Rat
 
-[Add-add Nat Nat--Add--dict 3N 4N]
+;; Nat:
+.{3N + 4N}
 ;; => 7N : Nat
 
-;; Sub, Mul:
-[Sub-sub Int Int--Sub--dict 10 3]
-;; => 7 : Int
+;; Comparison works the same way:
+.{3 == 3}
+;; => true : Bool
 
-[Mul-mul Int Int--Mul--dict 6 7]
+.{1/2 == 2/4}
+;; => true : Bool
+
+.{3 < 5}
+;; => true : Bool
+
+
+;; --- Generic wrappers (prefix form) ---
+;;
+;; The prelude provides `plus`, `minus`, `times`, `divide` as prefix
+;; wrappers for the trait operations:
+
+[plus 10 20]
+;; => 30 : Int
+
+[times 6 7]
 ;; => 42 : Int
-
-;; Neg and Abs (not available for Nat — naturals are always ≥ 0):
-[Neg-neg Int Int--Neg--dict 7]
-;; => -7 : Int
-
-[Abs-abs Int Int--Abs--dict (int-neg 7)]
-;; => 7 : Int
-
-;; Div:
-[Div-div Int Int--Div--dict 17 5]
-;; => 3 : Int
-
-
-;; --- Eq and Ord ---
-
-[Eq-eq? Int Int--Eq--dict 3 3]
-;; => true : Bool
-
-[Eq-eq? Int Int--Eq--dict 3 4]
-;; => false : Bool
-
-[Eq-eq? Rat Rat--Eq--dict 1/2 2/4]
-;; => true : Bool
-
-;; Ordering: lt-ord, eq-ord, gt-ord
-[Ord-compare Int Int--Ord--dict 3 5]
-;; => prologos::data::ordering::lt-ord : prologos::data::ordering::Ordering
-
-[Ord-compare Int Int--Ord--dict 5 5]
-;; => prologos::data::ordering::eq-ord : prologos::data::ordering::Ordering
-
-[Ord-compare Int Int--Ord--dict 7 5]
-;; => prologos::data::ordering::gt-ord : prologos::data::ordering::Ordering
-
-[Ord-compare Nat Nat--Ord--dict 3N 5N]
-;; => prologos::data::ordering::lt-ord : prologos::data::ordering::Ordering
 
 
 ;; --- Writing Generic Functions ---
@@ -591,7 +522,7 @@ spec generic-double {A : Type} [Add A] -> A -> A
 defn generic-double [add-d x]
   [Add-add add-d x x]
 
-;; Call it with different types — the trait dict is resolved automatically:
+;; Trait dict resolved automatically at each call site:
 [generic-double 21]
 ;; => 42 : Int
 
@@ -603,17 +534,6 @@ defn generic-double [add-d x]
 
 [generic-double 5N]
 ;; => 10N : Nat
-
-;; A generic negate-and-add:
-spec negate-add {A : Type} [Add A] -> [Neg A] -> A -> A -> A
-defn negate-add [add-d neg-d x y]
-  [Add-add add-d x [Neg-neg neg-d y]]
-
-[negate-add 10 3]
-;; => 7 : Int
-
-[negate-add 5/6 1/3]
-;; => 1/2 : Rat
 
 ;; TIP: Nat has Add, Sub, Mul, Eq, Ord — but NOT Neg, Abs, FromInt.
 ;; That's why Nat doesn't satisfy the Num bundle (more in Pass 7).
@@ -789,15 +709,12 @@ defn negate-add [add-d neg-d x y]
 
 ;; ---- Trait instances for Posits ---
 
-;; Posits have Eq, Ord, Add, Sub, Mul, Neg, Abs, Div trait instances!
-[Eq-eq? Posit8 Posit8--Eq--dict (posit8 64) (posit8 64)]
-;; => true : Bool
+;; Posits have full trait instances — mixfix .{} works directly:
+.{(posit8 64) + (posit8 64)}
+;; => [posit8 72] : Posit8  (1.0 + 1.0 = 2.0)
 
-[Eq-eq? Posit8 Posit8--Eq--dict (posit8 64) (posit8 72)]
-;; => false : Bool
-
-[Add-add Posit8 Posit8--Add--dict (posit8 64) (posit8 64)]
-;; => [posit8 72] : Posit8
+.{~3.14 * ~3.14}
+;; => [posit32 1507593919] : Posit32  (≈ 9.86, π²)
 
 
 ;; ────────────────────────────────────────────────────────────
@@ -828,26 +745,11 @@ defn negate-add [add-d neg-d x y]
 ;;   sum / product — generic folds over lists
 ;;   int-range — generate [start..end) as List Int
 
-;; --- Identity Elements ---
+;; --- sum, product, int-range ---
+;;
+;; The prelude provides generic sum/product (fold over Add/Mul traits)
+;; and int-range for generating integer lists.
 
-;; The zero element:
-[AdditiveIdentity-zero Int Int--AdditiveIdentity--dict]
-;; => 0 : Int
-
-[AdditiveIdentity-zero Nat Nat--AdditiveIdentity--dict]
-;; => 0N : Nat
-
-;; The one element:
-[MultiplicativeIdentity-one Int Int--MultiplicativeIdentity--dict]
-;; => 1 : Int
-
-[MultiplicativeIdentity-one Nat Nat--MultiplicativeIdentity--dict]
-;; => 1N : Nat
-
-
-;; --- sum and product ---
-
-;; sum folds addition over a list, starting from the additive identity:
 (def int-list : [List Int] (cons Int 1 (cons Int 2 (cons Int 3 (cons Int 4 (cons Int 5 (nil Int)))))))
 
 [sum int-list]
@@ -856,14 +758,9 @@ defn negate-add [add-d neg-d x y]
 [product int-list]
 ;; => 120 : Int  (5! = 120)
 
-
-;; --- int-range: generating integer lists ---
-
+;; int-range generates [start..end) as List Int:
 [int-range 1 6]
 ;; => '[1 2 3 4 5] : [prologos::data::list::List Int]
-
-[int-range 0 4]
-;; => '[0 1 2 3] : [prologos::data::list::List Int]
 
 ;; Combine with sum:
 [sum [int-range 1 11]]
@@ -873,42 +770,26 @@ defn negate-add [add-d neg-d x y]
 ;; => 120 : Int  (5! = 120)
 
 
-;; --- map over number lists ---
+;; --- Int-indexed operations on computed lists ---
 
-;; Square every element:
-[map Int Int (fn [x : Int] [int* x x]) [int-range 1 6]]
+;; Use length-int for Int results:
+[length-int [int-range 1 11]]
+;; => 10 : Int
+
+;; Square every element with mixfix:
+[map Int Int (fn [x : Int] .{x * x}) [int-range 1 6]]
 ;; => '[1 4 9 16 25] : [prologos::data::list::List Int]
 
 ;; Sum of squares:
-[sum [map Int Int (fn [x : Int] [int* x x]) [int-range 1 6]]]
+[sum [map Int Int (fn [x : Int] .{x * x}) [int-range 1 6]]]
 ;; => 55 : Int  (1² + 2² + 3² + 4² + 5² = 55)
-
-;; Length of a range:
-[length Int [int-range 1 11]]
-;; => 10N : Nat
-
-
-;; --- Nat lists with foldr ---
-
-(def nat-list : [List Nat] (cons Nat 1N (cons Nat 2N (cons Nat 3N (cons Nat 4N (cons Nat 5N (nil Nat)))))))
-
-[foldr Nat Nat (fn [x : Nat] [acc : Nat] [add x acc]) 0N nat-list]
-;; => 15N : Nat
-
-;; map doubles:
-[map Nat Nat (fn [n : Nat] [double n]) nat-list]
-;; => '[2N 4N 6N 8N 10N] : [prologos::data::list::List Nat]
-
-;; Reduce for Nat product:
-[foldr Nat Nat (fn [x : Nat] [acc : Nat] [mult x acc]) 1N nat-list]
-;; => 120N : Nat  (5! = 120)
 
 
 ;; ────────────────────────────────────────────────────────────
 ;; YOUR TURN: Compute the sum of the first 100 integers.
 ;; Hint: [sum [int-range 1 101]]
 ;; The answer should be 5050 (Gauss's famous formula: n(n+1)/2).
-;; Can you verify? [int/ [int* 100 101] 2]
+;; Can you verify? .{100 * 101 / 2}
 ;; ────────────────────────────────────────────────────────────
 
 
@@ -1085,12 +966,12 @@ defn collatz-len [n steps]
 ;;
 ;; Let's combine everything in more complex examples.
 
-;; --- Pythagorean check with Rat ---
+;; --- Pythagorean check ---
 ;; Does a² + b² = c²?
 
 spec pythagorean? Int -> Int -> Int -> Bool
 defn pythagorean? [a b c]
-  [int-eq [int+ [int* a a] [int* b b]] [int* c c]]
+  .{a * a + b * b == c * c}
 
 [pythagorean? 3 4 5]
 ;; => true : Bool
@@ -1257,27 +1138,27 @@ as-posit
 ;;  RECAP — The Numeric Tower at a Glance
 ;; ========================================================================
 ;;
-;; Nat   42N             add mult pred sub pow double zero? le? lt?
-;;                       gt? ge? nat-eq? min max clamp bool-to-nat
+;; RECOMMENDED FOR COMPUTATION:
 ;;
-;; Int   42              int+ int- int* int/ int-mod int-neg int-abs
-;;                       int-lt int-le int-eq from-nat
+;; Int   42              .{x + y}, .{x * y}, int+, int-, int*, int/
+;;                       nth-int, take-int, drop-int, length-int
 ;;
-;; Rat   3/7             rat+ rat- rat* rat/ rat-neg rat-abs
-;;                       rat-numer rat-denom rat-lt rat-le rat-eq from-int
+;; Rat   3/7             .{x + y}, rat+, rat-, rat*, rat/
 ;;
-;; Posit (posit8 64)     p{N}+ p{N}- p{N}* p{N}/ p{N}-neg p{N}-abs
-;;       ~3.14           p{N}-sqrt p{N}-lt p{N}-le
-;;       ~2.718          p{N}-from-nat p{N}-from-int p{N}-from-rat p{N}-to-rat
-;;                       (where N = 8, 16, 32, 64)
-;;                       ~N syntax: ~42, ~3/7, ~3.14 (decimal → exact rational → Posit32)
+;; Posit ~3.14           .{x + y}, p{N}+, p{N}-, p{N}*, p{N}/
+;;       (posit8 64)     (N = 8, 16, 32, 64)
 ;;
-;; Traits  Add Sub Mul Neg Abs Div Eq Ord FromInt FromRat From TryFrom
-;;         AdditiveIdentity MultiplicativeIdentity
+;; GENERIC:
+;;   Mixfix .{x + y}     dispatches through Add/Sub/Mul/Div/Eq/Ord traits
+;;   plus/minus/times     prefix wrappers for trait-dispatched arithmetic
+;;   sum/product          generic folds over lists
+;;   int-range            generate [start..end) as List Int
+;;   Num bundle           (Add Sub Mul Neg Eq Ord Abs FromInt)
+;;   Fractional bundle    (Num Div FromRat)
 ;;
-;; Bundles  Num := (Add Sub Mul Neg Eq Ord Abs FromInt)
-;;          Fractional := (Num Div FromRat)
+;; TYPE INFRASTRUCTURE (not for general computation):
 ;;
-;; Generics  sum product int-range generic functions via trait dicts
+;; Nat   42N             nat::add, nat::mult, nat::sub, zero?
+;;                       For: type indices, proofs, narrowing
 ;;
-;; Happy counting! 🔢
+;; Happy counting!
