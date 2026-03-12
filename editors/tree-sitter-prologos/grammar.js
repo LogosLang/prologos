@@ -37,7 +37,6 @@ module.exports = grammar({
 
   conflicts: $ => [
     [$.fn_param, $.fn_body],
-    [$.type_application, $.expression],
   ],
 
   rules: {
@@ -89,10 +88,10 @@ module.exports = grammar({
       optional(':no-prelude'),
     ),
 
-    provide_declaration: $ => seq(
+    provide_declaration: $ => prec.right(seq(
       'provide',
       repeat1($.identifier),
-    ),
+    )),
 
     require_declaration: $ => seq(
       'require',
@@ -142,11 +141,11 @@ module.exports = grammar({
       $._dedent,
     ),
 
-    metadata_entry: $ => seq(
+    metadata_entry: $ => prec.right(10, seq(
       $.keyword_literal,
       $.expression,
       optional($._newline),
-    ),
+    )),
 
     // ============================================================
     // Function definitions
@@ -368,13 +367,13 @@ module.exports = grammar({
     eval_form: $ => seq('eval', $.expression),
     infer_form: $ => seq('infer', $.expression),
 
-    let_top_level: $ => seq(
+    let_top_level: $ => prec(5, seq(
       'let',
       field('name', $.identifier),
       optional(seq(':', field('type', $.type_expr))),
       ':=',
       field('value', $.expression),
-    ),
+    )),
 
     // ============================================================
     // Shared syntax
@@ -413,7 +412,7 @@ module.exports = grammar({
       field('type', $.type_expr),
     )),
 
-    bare_param: $ => $.identifier,
+    bare_param: $ => prec(3, $.identifier),
 
     multiplicity: $ => choice(':0', ':1', ':w'),
 
@@ -441,14 +440,14 @@ module.exports = grammar({
       $._dedent,
     ),
 
-    match_arm: $ => seq(
+    match_arm: $ => prec.right(5, seq(
       '|',
       field('pattern', $.pattern),
       optional(seq('when', field('guard', $.expression))),
       '->',
       field('body', $.match_arm_body),
       optional($._newline),
-    ),
+    )),
 
     match_arm_body: $ => choice(
       $.match_expr,
@@ -526,7 +525,7 @@ module.exports = grammar({
     paren_expr: $ => seq('(', repeat1($.expression), ')'),
 
     // Angle bracket expression: <(x : A) -> B>
-    angle_expr: $ => seq('<', repeat1(choice($.expression, '->', '*', $.typed_binder_paren)), '>'),
+    angle_expr: $ => seq('<', repeat1(choice($.expression, token.immediate('->'), token.immediate('*'), $.typed_binder_paren)), '>'),
 
     typed_binder_paren: $ => seq('(', $.identifier, ':', $.type_expr, ')'),
 
@@ -578,18 +577,18 @@ module.exports = grammar({
     )),
 
     // Cond expression: (cond [pred1 body1] [pred2 body2] ...)
-    cond_expr: $ => seq(
+    cond_expr: $ => prec.right(seq(
       'cond',
       repeat1($.cond_clause),
-    ),
+    )),
 
     cond_clause: $ => seq('[', $.expression, $.expression, ']'),
 
     // Do expression: (do expr1 expr2 ...)
-    do_expr: $ => seq(
+    do_expr: $ => prec.right(seq(
       'do',
       repeat1($.expression),
-    ),
+    )),
 
     // The (type annotation): (the Type expr)
     the_expr: $ => seq(
@@ -662,8 +661,6 @@ module.exports = grammar({
 
     type_expr: $ => choice(
       $.arrow_type,
-      $.union_type,
-      $.product_type,
       $.type_application,
       $.grouped_type,
       $.identifier,
@@ -672,18 +669,6 @@ module.exports = grammar({
     arrow_type: $ => prec.right(1, seq(
       $.type_expr,
       '->',
-      $.type_expr,
-    )),
-
-    union_type: $ => prec.left(0, seq(
-      $.type_expr,
-      '|',
-      $.type_expr,
-    )),
-
-    product_type: $ => prec.left(0, seq(
-      $.type_expr,
-      '*',
       $.type_expr,
     )),
 
@@ -698,7 +683,8 @@ module.exports = grammar({
     // Atoms and terminals
     // ============================================================
 
-    qualified_name: $ => /[a-zA-Z_][a-zA-Z0-9_.\-]+/,
+    // Supports both dot-separated (prologos.data.nat) and :: separated (prologos::data::nat)
+    qualified_name: $ => /[a-zA-Z_][a-zA-Z0-9_.\-]+(::[\$a-zA-Z_][a-zA-Z0-9_.\-]*)*/,
 
     identifier: $ => /\$?[a-zA-Z_][a-zA-Z0-9_!?*+\-']*(::[\$a-zA-Z_][a-zA-Z0-9_!?*+\-']*)*/,
 
