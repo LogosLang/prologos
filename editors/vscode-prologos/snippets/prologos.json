@@ -1,0 +1,120 @@
+{
+  "Namespace declaration": {
+    "prefix": "ns",
+    "body": [
+      "ns ${1:name}",
+      "",
+      "$0"
+    ],
+    "description": "Namespace declaration"
+  },
+  "Type specification": {
+    "prefix": "spec",
+    "body": [
+      "spec ${1:name} ${0:Type}"
+    ],
+    "description": "Type specification"
+  },
+  "Function definition": {
+    "prefix": "defn",
+    "body": [
+      "defn ${1:name} [${2:args}]",
+      "  ${0:body}"
+    ],
+    "description": "Function definition"
+  },
+  "Spec + defn": {
+    "prefix": "specdefn",
+    "body": [
+      "spec ${1:name} ${2:Type}",
+      "defn ${1:name} [${3:args}]",
+      "  ${0:body}"
+    ],
+    "description": "Type specification followed by function definition"
+  },
+  "Data type": {
+    "prefix": "data",
+    "body": [
+      "data ${1:Name} : ${2:Type} where",
+      "  | ${0:Constructor}"
+    ],
+    "description": "Algebraic data type definition"
+  },
+  "Pattern match": {
+    "prefix": "match",
+    "body": [
+      "(match ${1:expr}",
+      "  [${2:pattern} ${0:body}])"
+    ],
+    "description": "Pattern match expression"
+  },
+  "Anonymous function": {
+    "prefix": "fn",
+    "body": [
+      "(fn [${1:args}] ${0:body})"
+    ],
+    "description": "Anonymous function (lambda)"
+  },
+  "Trait implementation": {
+    "prefix": "impl",
+    "body": [
+      "impl ${1:Trait} ${2:Type}",
+      "  ${0:methods}"
+    ],
+    "description": "Trait implementation"
+  },
+  "Trait definition": {
+    "prefix": "trait",
+    "body": [
+      "trait ${1:Name} {${2:A} : Type}",
+      "  spec ${3:method} ${0:Type}"
+    ],
+    "description": "Trait definition"
+  },
+  "Let binding": {
+    "prefix": "let",
+    "body": [
+      "(let ${1:name} := ${2:expr}",
+      "  ${0:body})"
+    ],
+    "description": "Let binding"
+  },
+  "If expression": {
+    "prefix": "if",
+    "body": [
+      "(if ${1:cond}",
+      "  ${2:then}",
+      "  ${0:else})"
+    ],
+    "description": "Conditional expression"
+  },
+  "Definition with type": {
+    "prefix": "def",
+    "body": [
+      "def ${1:name} : ${2:Type} := ${0:value}"
+    ],
+    "description": "Value definition with type annotation"
+  },
+  "Require module": {
+    "prefix": "require",
+    "body": [
+      "require [${1:module.path} :refer [${0:names}]]"
+    ],
+    "description": "Import names from a module"
+  },
+  "Bundle": {
+    "prefix": "bundle",
+    "body": [
+      "bundle ${1:Name} := (${0:Traits})"
+    ],
+    "description": "Trait bundle (superclass combination)"
+  },
+  "Property": {
+    "prefix": "property",
+    "body": [
+      "property ${1:Name} {${2:A} : Type} (${3:trait} : ${4:Trait} ${2:A})",
+      "  :holds ${0:expr}"
+    ],
+    "description": "Property declaration (law)"
+  }
+}
