@@ -80,10 +80,10 @@ Tier 1 (syntax-only, no server) can ship independently within ~1 week. Tier 2 (d
 | 2.0 | JSON-RPC layer (`lsp/json-rpc.rkt`) | ✅ | `c2787b2` — read/write with Content-Length, #px regex |
 | 2.1 | LSP server main loop (`lsp/server.rkt`) | ✅ | `c2787b2` — lifecycle + didOpen/didChange/didSave/didClose + documentSymbol |
 | 2.2 | Diagnostic publisher (`lsp/diagnostics.rkt`) | ✅ | `c2787b2` — error→diagnostic, E1001-E3001, srcloc→range |
-| 2.3 | Definition location infrastructure | ⬜ | Add `definition-locations` to `module-info` |
-| 2.4 | Go-to-definition provider | ⬜ | Depends on 2.3 |
+| 2.3 | Definition location infrastructure | ✅ | `d1eab47` — current-definition-locations param, module-info 8th field, 3 success paths in process-def |
+| 2.4 | Go-to-definition provider | ✅ | `d1eab47` — word-at-position + location lookup with FQN and regex fallbacks |
 | 2.5 | Document symbol provider | ✅ | `c2787b2` — regex-based outline in server.rkt |
-| 2.6 | Signature help provider | ⬜ | |
+| 2.6 | Signature help provider | ✅ | `d1eab47` — bracket-based fn detection + param names from defn registry |
 | 2.7 | TypeScript LSP client (`src/client.ts`) | ✅ | `c2787b2` — auto-detect Racket, configurable paths |
 | 2.8 | Integration test + verification | ⬜ | Lifecycle verified; on-save diagnostics need VSCode test |
 
