@@ -114,11 +114,11 @@ Tier 1 (syntax-only, no server) can ship independently within ~1 week. Tier 2 (d
 
 | # | Sub-phase | ⏳ | Notes |
 |---|-----------|---|-------|
-| 5.0 | React webview skeleton | ⬜ | |
-| 5.1 | Goal/context display | ⬜ | |
-| 5.2 | Narrowing result display | ⬜ | |
-| 5.3 | Interactive type exploration | ⬜ | |
-| 5.4 | Integration test + verification | ⬜ | |
+| 5.0 | Webview skeleton + cursor tracking | ✅ | `99268a2` — Plain HTML WebviewViewProvider (no React), 100ms debounced cursor tracking, custom activity bar |
+| 5.1 | Cursor context server handler | ✅ | `99268a2` — `$/prologos/cursorContext` returns type, outline+types, diagnostics, REPL state in single round-trip |
+| 5.2 | Panel rendering (4 sections) | ✅ | `99268a2` — Type at Cursor, File Outline, Diagnostics, REPL — all with VSCode CSS variable theming |
+| 5.3 | Interactive features | ✅ | `99268a2` — Click-to-navigate, copy type, sticky mode (pin), refresh button |
+| 5.4 | Integration test + verification | ⬜ | Needs manual VSCode testing |
 
 ### Legend
 
