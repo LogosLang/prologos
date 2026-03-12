@@ -20,13 +20,39 @@ literally the same network"). The tool IS the documentation of the paradigm.
 
 | Phase | Description | Status | Notes |
 |-------|-------------|--------|-------|
-| 0 | First-class trace data representation | ✅ | `817a958` — structs in propagator.rkt, 11 tests |
-| 1 | BSP-round trace capture | ✅ | `35c1a03` — observer param, BSP loop, 5 new tests |
-| 2 | Network serialization | ✅ | `779c6e9` — trace-serialize.rkt, 19 tests |
-| 3 | LSP endpoint | ✅ | `2998a4c` — handler + trace capture in elaboration |
-| 4 | VS Code graph panel | 🔄 | `2fe92c9` 4a done (panel + tables); 4b (D3 rendering) pending |
-| 5 | BSP-round replay | ⬜ | Step-through, timeline slider, animated transitions |
-| 6 | Polish and integration | ⬜ | Perf tuning, SVG export, documentation |
+| **0** | **First-class trace data** | | |
+| 0a | Core data types (cell-diff, bsp-round, prop-trace) | ✅ | `817a958` |
+| 0b | ATMS event hierarchy (assume/retract/nogood) | ✅ | `817a958` |
+| 0c | Unit tests (11 cases) | ✅ | `817a958` |
+| **1** | **BSP-round trace capture** | | |
+| 1a | Observer parameter + accumulator | ✅ | `35c1a03` |
+| 1b | BSP loop integration (cell-diff correlation) | ✅ | `35c1a03` |
+| 1c | Integration tests (5 cases) | ✅ | `35c1a03` |
+| **2** | **Network serialization** | | |
+| 2a | Lattice value display | ✅ | `779c6e9` |
+| 2b | Struct→JSON (cell-diff, atms-event, bsp-round) | ✅ | `779c6e9` |
+| 2c | Network topology extraction | ✅ | `779c6e9` |
+| 2d | trace→json-string round-trip | ✅ | `779c6e9` |
+| 2e | Unit + integration tests (19 cases) | ✅ | `779c6e9` |
+| **3** | **LSP endpoint** | | |
+| 3a | `$/prologos/propagatorSnapshot` handler | ✅ | `2998a4c` |
+| 3b | Trace capture in elaborate-and-publish-diagnostics! | ✅ | `2998a4c` |
+| 3c | Per-URI trace storage in lsp-state | ✅ | `2998a4c` |
+| **4** | **VS Code graph panel** | | |
+| 4a | WebviewPanel skeleton + tabular data rendering | ✅ | `2fe92c9` |
+| 4b | Canvas graph rendering (layout + d3-zoom + tooltips) | ✅ | `a2286fb` |
+| 4c | Source-location linking (cell → editor position) | ⬜ | Needs elab-cell-info source |
+| 4d | Auto-refresh on file save | ⬜ | |
+| **5** | **BSP-round replay** | | |
+| 5a | Timeline slider UI | ⬜ | |
+| 5b | Round step-through (prev/next) | ⬜ | |
+| 5c | Animated cell-diff highlighting | ⬜ | |
+| 5d | Cell value history popup | ⬜ | |
+| **6** | **Polish and integration** | | |
+| 6a | Performance tuning (large networks) | ⬜ | |
+| 6b | SVG/PNG export | ⬜ | |
+| 6c | Contradiction diagnosis view (ATMS nogoods) | ⬜ | |
+| 6d | Documentation + user guide | ⬜ | |
 
 ## Infrastructure Gap Analysis
 
