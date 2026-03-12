@@ -666,11 +666,16 @@
 ;; Format spec-entry type-datums as a display string.
 ;; type-datums is a list of clauses; each clause is a list of tokens (symbols/datums).
 ;; Single clause: "Int -> Int"; multi-clause: "0 -> 1 | Nat -> Nat"
+;; Note: WS-parsed specs include a leading `:` token (the type separator) — strip it.
 (define (format-spec-type spec)
   (define types (spec-entry-type-datums spec))
   (string-join
    (map (lambda (clause)
-          (string-join (map (lambda (t) (format "~a" t)) clause) " "))
+          (define tokens
+            (if (and (pair? clause) (eq? (car clause) ':))
+                (cdr clause)  ; strip leading `:` from WS-parsed specs
+                clause))
+          (string-join (map (lambda (t) (format "~a" t)) tokens) " "))
         types)
    " | "))
 

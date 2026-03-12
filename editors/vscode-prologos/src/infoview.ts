@@ -400,8 +400,8 @@ export class InfoViewProvider implements vscode.WebviewViewProvider {
 
     .type-display {
       font-family: var(--font-mono);
-      font-size: var(--font-size);
-      padding: 8px 10px;
+      font-size: 12px;
+      padding: 6px 8px;
       margin: 4px 0;
       background: var(--code-bg);
       border-radius: 4px;
