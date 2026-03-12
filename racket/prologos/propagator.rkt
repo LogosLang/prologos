@@ -67,7 +67,15 @@
  net-pair-decomp?
  net-pair-decomp-insert
  decomp-key
- decomp-key-hash)
+ decomp-key-hash
+ ;; Trace data types (Visualization Phase 0)
+ (struct-out bsp-round)
+ (struct-out cell-diff)
+ (struct-out atms-event)
+ (struct-out atms-event:assume)
+ (struct-out atms-event:retract)
+ (struct-out atms-event:nogood)
+ (struct-out prop-trace))
 
 ;; ========================================
 ;; Structs
@@ -120,6 +128,38 @@
    cell-decomps
    pair-decomps)
   #:transparent)
+
+;; ========================================
+;; Trace Data Types (Visualization Phase 0)
+;; ========================================
+
+;; Per-cell change record within a BSP round — pure data.
+;; source-propagator: which propagator wrote this change
+(struct cell-diff (cell-id old-value new-value source-propagator) #:transparent)
+
+;; ATMS events that occur during a BSP round (non-monotonic operations).
+;; Base struct + three variants for assume, retract, nogood.
+(struct atms-event () #:transparent)
+(struct atms-event:assume atms-event (cell-id assumption-label) #:transparent)
+(struct atms-event:retract atms-event (cell-id assumption-label reason) #:transparent)
+(struct atms-event:nogood atms-event (nogood-set explanation) #:transparent)
+
+;; A single BSP round's record — pure data, no side effects.
+;; network-snapshot: immutable CHAMP snapshot at round end
+;; cell-diffs: (listof cell-diff) — what changed this round
+;; propagators-fired: (listof prop-id) — which propagators executed
+;; contradiction: #f | cell-id — contradiction detected this round
+;; atms-events: (listof atms-event) — assumption/retraction/nogood events
+(struct bsp-round
+  (round-number network-snapshot cell-diffs propagators-fired contradiction atms-events)
+  #:transparent)
+
+;; The complete trace of an elaboration run — pure data.
+;; initial-network: prop-network state before first round
+;; rounds: (listof bsp-round) in chronological order
+;; final-network: prop-network at quiescence
+;; metadata: hasheq of elaboration context (file, timestamp, fuel-used, etc.)
+(struct prop-trace (initial-network rounds final-network metadata) #:transparent)
 
 ;; ========================================
 ;; Hash Helpers

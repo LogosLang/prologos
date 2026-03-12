@@ -16,6 +16,18 @@ The visualization is both a practical debugging tool ("why did this type resolve
 and a conceptual revelation ("type checking, trait resolution, and verification are
 literally the same network"). The tool IS the documentation of the paradigm.
 
+## Progress Tracker
+
+| Phase | Description | Status | Notes |
+|-------|-------------|--------|-------|
+| 0 | First-class trace data representation | ✅ | `bsp-round`, `cell-diff`, `atms-event`, `prop-trace` structs |
+| 1 | BSP-round trace capture | ⬜ | `current-bsp-observer` callback parameter |
+| 2 | Network serialization | ⬜ | JSON export of topology + trace data |
+| 3 | LSP endpoint | ⬜ | `$/prologos/propNetwork` + `$/prologos/propTrace` |
+| 4 | VS Code graph panel | ⬜ | D3 + d3-dag Canvas rendering, HTML overlay tooltips |
+| 5 | BSP-round replay | ⬜ | Step-through, timeline slider, animated transitions |
+| 6 | Polish and integration | ⬜ | Perf tuning, SVG export, documentation |
+
 ## Infrastructure Gap Analysis
 
 | Component | Status | What Exists | What's Needed |
