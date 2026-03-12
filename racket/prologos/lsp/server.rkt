@@ -388,6 +388,13 @@
      (hash-remove! (lsp-state-repl-sessions state) uri)
      (respond! (hasheq 'ok #t))]
 
+    ;; ---- InfoView: Cursor context (Tier 5) ----
+    ["$/prologos/cursorContext"
+     (define uri  (hash-ref params 'uri ""))
+     (define line (hash-ref params 'line 0))
+     (define char (hash-ref params 'character 0))
+     (respond! (get-cursor-context state uri line char))]
+
     ;; ---- Client notifications (silently ignored) ----
     ["$/setTrace" (void)]           ; trace level change — no-op
     ["$/cancelRequest" (void)]      ; request cancellation — no-op for sync server
@@ -760,6 +767,106 @@
                 i)))
         (if (>= start char) ""
             (substring l start char))])]))
+
+;; ============================================================
+;; Cursor context (Tier 5: InfoView)
+;; ============================================================
+
+;; Return cursor context for the InfoView panel: type at cursor,
+;; file outline with types, diagnostics, REPL state.
+(define (get-cursor-context state uri line char)
+  (define text (hash-ref (lsp-state-document-contents state) uri #f))
+  (define type-env (hash-ref (lsp-state-type-envs state) uri #f))
+
+  ;; 1. Type at cursor — reuse hover logic
+  (define word (and text (word-at-position text line char)))
+  (define type-at-cursor
+    (and word type-env
+         (let* ([sym (string->symbol word)]
+                [entry (or (hash-ref type-env sym #f)
+                           ;; Try FQN match
+                           (for/first ([(k v) (in-hash type-env)]
+                                       #:when (let ([s (symbol->string k)])
+                                                (string-suffix? s (string-append "::" word))))
+                             v))])
+           (and entry
+                (let ([type-expr (if (pair? entry) (car entry) entry)])
+                  (format "~a : ~a" word (pp-expr type-expr)))))))
+
+  ;; 2. File context: definitions with types + namespace
+  (define symbols (if text (get-document-symbols state uri) '()))
+  (define definitions
+    (for/list ([s (in-list symbols)])
+      (define name (hash-ref s 'name ""))
+      (define sym (string->symbol name))
+      (define kind-num (hash-ref s 'kind 0))
+      (define kind-str (symbol-kind->string kind-num))
+      (define def-line (hash-ref (hash-ref (hash-ref s 'range (hasheq)) 'start (hasheq)) 'line 0))
+      ;; Look up type from type-env
+      (define type-str
+        (cond
+          [(not type-env) ""]
+          [else
+           (define entry (or (hash-ref type-env sym #f)
+                             (for/first ([(k v) (in-hash type-env)]
+                                         #:when (let ([sk (symbol->string k)])
+                                                  (string-suffix? sk (string-append "::" name))))
+                               v)))
+           (if (and entry (pair? entry))
+               (pp-expr (car entry))
+               "")]))
+      (hasheq 'name name 'type type-str 'line def-line 'kind kind-str)))
+
+  ;; Extract namespace from symbols
+  (define ns-name
+    (for/first ([s (in-list symbols)]
+                #:when (= (hash-ref s 'kind 0) 2))  ; Module kind
+      (hash-ref s 'name "")))
+
+  ;; 3. Diagnostics for this document
+  (define raw-diags (hash-ref (lsp-state-document-diagnostics state) uri '()))
+  (define diags
+    (for/list ([d (in-list raw-diags)])
+      (define range (hash-ref d 'range (hasheq)))
+      (define start (hash-ref range 'start (hasheq)))
+      (define d-line (hash-ref start 'line 0))
+      (define severity-num (hash-ref d 'severity 1))
+      (hasheq 'message (hash-ref d 'message "")
+              'line d-line
+              'severity (if (= severity-num 1) "error" "warning"))))
+
+  ;; 4. REPL state
+  (define session (hash-ref (lsp-state-repl-sessions state) uri #f))
+  (define repl-state
+    (cond
+      [session
+       (define env (repl-session-global-env session))
+       (hasheq 'active #t
+               'evalCount (hash-count env)
+               'lastResult (json-null))]
+      [else
+       (hasheq 'active #f
+               'evalCount 0
+               'lastResult (json-null))]))
+
+  ;; Build response
+  (hasheq 'typeAtCursor (or type-at-cursor (json-null))
+          'symbolKind (json-null)
+          'fileContext (hasheq 'namespace (or ns-name (json-null))
+                              'definitions definitions
+                              'imports '())
+          'diagnostics diags
+          'replState repl-state))
+
+;; Convert LSP SymbolKind number to a readable string.
+(define (symbol-kind->string kind)
+  (case kind
+    [(2)  "module"]
+    [(5)  "data"]
+    [(11) "spec"]
+    [(12) "function"]
+    [(13) "variable"]
+    [else "other"]))
 
 ;; ============================================================
 ;; Signature help (Tier 2.6)

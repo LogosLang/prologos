@@ -7,10 +7,12 @@ import {
 } from 'vscode-languageclient/node';
 import { ReplManager } from './repl';
 import { DecorationsManager } from './decorations';
+import { InfoViewProvider } from './infoview';
 
 let client: LanguageClient | undefined;
 let replManager: ReplManager | undefined;
 let decorationsManager: DecorationsManager | undefined;
+let infoViewProvider: InfoViewProvider | undefined;
 
 export function activate(context: vscode.ExtensionContext) {
   const outputChannel = vscode.window.createOutputChannel('Prologos');
@@ -93,6 +95,16 @@ export function activate(context: vscode.ExtensionContext) {
       // REPL commands require a running client
       replManager = new ReplManager(client!, replChannel, decorationsManager!);
 
+      // InfoView panel — sidebar with cursor-tracking type context
+      infoViewProvider = new InfoViewProvider(client!);
+      context.subscriptions.push(
+        vscode.window.registerWebviewViewProvider(
+          InfoViewProvider.viewType,
+          infoViewProvider
+        )
+      );
+      context.subscriptions.push(infoViewProvider);
+
       // Register REPL commands
       context.subscriptions.push(
         vscode.commands.registerCommand('prologos.evalTopLevel', () =>
@@ -110,6 +122,9 @@ export function activate(context: vscode.ExtensionContext) {
         vscode.commands.registerCommand('prologos.resetSession', () =>
           replManager!.resetSession()
         ),
+        vscode.commands.registerCommand('prologos.toggleInfoView', () => {
+          vscode.commands.executeCommand('prologos.infoView.focus');
+        }),
       );
     },
     (err) => {

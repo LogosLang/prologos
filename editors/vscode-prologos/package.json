@@ -67,6 +67,10 @@
       {
         "command": "prologos.resetSession",
         "title": "Prologos: Reset REPL Session"
+      },
+      {
+        "command": "prologos.toggleInfoView",
+        "title": "Prologos: Toggle InfoView Panel"
       }
     ],
     "keybindings": [
@@ -101,6 +105,25 @@
         "when": "editorTextFocus && editorLangId == prologos"
       }
     ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "prologos-panel",
+          "title": "Prologos",
+          "icon": "$(symbol-misc)"
+        }
+      ]
+    },
+    "views": {
+      "prologos-panel": [
+        {
+          "type": "webview",
+          "id": "prologos.infoView",
+          "name": "InfoView",
+          "when": "editorLangId == prologos || resourceExtname == .prologos"
+        }
+      ]
+    },
     "configuration": {
       "title": "Prologos",
       "properties": {
