@@ -85,7 +85,7 @@ Tier 1 (syntax-only, no server) can ship independently within ~1 week. Tier 2 (d
 | 2.5 | Document symbol provider | ✅ | `c2787b2` — regex-based outline in server.rkt |
 | 2.6 | Signature help provider | ✅ | `d1eab47` — bracket-based fn detection + param names from defn registry |
 | 2.7 | TypeScript LSP client (`src/client.ts`) | ✅ | `c2787b2` — auto-detect Racket, configurable paths |
-| 2.8 | Integration test + verification | ⬜ | Lifecycle verified; on-save diagnostics need VSCode test |
+| 2.8 | Integration test + verification | ✅ | `712c45a` — on-save diagnostics, go-to-def, symbol outline all working. Known: def-level srcloc (deferred to propagator integration), cross-module go-to-def (deferred) |
 
 ### Tier 3: Type Intelligence
 

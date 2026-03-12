@@ -876,3 +876,18 @@ The following collection items ARE also deferred (genuine infrastructure deps):
 - Affects both regular defn and params+arms defn syntax
 - **Not blocked**: requires parser extension for multi-bracket param groups
 - Source: `examples/unified-matching.prologos` Section 11
+
+## LSP / Editor Support
+
+### Token-level srcloc precision for diagnostics
+- Unbound variable errors point to the enclosing `defn` (line 16) instead of the exact token (line 19)
+- Root cause: WS reader/parser assigns definition-level srcloc to body tokens
+- **Blocked on**: full propagator integration (cell-per-node architecture gives precise provenance by construction)
+- Workaround: diagnostics currently point to the definition, which is correct but imprecise
+- Source: LSP Tier 2 integration testing, commit `712c45a`
+
+### Cross-module go-to-definition
+- Go-to-definition only works for symbols defined in the current file
+- Prelude/imported symbols (e.g., `mult`, `map`) don't resolve
+- **Blocked on**: cross-module location tracking in module registry
+- Source: LSP Tier 2, commit `12ea616`

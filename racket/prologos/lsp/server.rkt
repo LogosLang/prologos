@@ -24,7 +24,8 @@
          "../errors.rkt"
          "../namespace.rkt"
          "../source-location.rkt"
-         "../global-env.rkt")
+         "../global-env.rkt"
+         "../pretty-print.rkt")
 
 (provide run-lsp-server)
 
@@ -42,6 +43,7 @@
    module-registry        ; cached module registry from prelude
    log-port               ; output port for logging (stderr)
    definition-locations   ; hash: uri → (hasheq: symbol → srcloc)
+   type-envs              ; hash: uri → hasheq (global-env snapshot for hover)
    ) #:mutable)
 
 (define (make-initial-state)
@@ -51,6 +53,7 @@
              (make-hash)
              #f       ; module registry loaded on initialize
              (current-error-port)
+             (make-hash)
              (make-hash)))
 
 ;; Log a message to stderr (not stdout — stdout is the LSP channel).
@@ -168,6 +171,14 @@
      (define char (hash-ref pos 'character))
      (respond! (get-signature-help state uri line char))]
 
+    ;; ---- Hover ----
+    ["textDocument/hover"
+     (define uri (hash-ref (hash-ref params 'textDocument) 'uri))
+     (define pos (hash-ref params 'position))
+     (define line (hash-ref pos 'line))
+     (define char (hash-ref pos 'character))
+     (respond! (get-hover-info state uri line char))]
+
     ;; ---- Client notifications (silently ignored) ----
     ["$/setTrace" (void)]           ; trace level change — no-op
     ["$/cancelRequest" (void)]      ; request cancellation — no-op for sync server
@@ -201,7 +212,10 @@
 
     ;; Signature help
     'signatureHelpProvider
-    (hasheq 'triggerCharacters '("[" " ")))
+    (hasheq 'triggerCharacters '("[" " "))
+
+    ;; Hover
+    'hoverProvider #t)
 
    'serverInfo
    (hasheq 'name "prologos-lsp"
@@ -222,6 +236,7 @@
   (define errors '())
   (define warnings '())
   (define captured-def-locs (hasheq))
+  (define captured-type-env (hasheq))
 
   (with-handlers
     ([exn:fail?
@@ -253,8 +268,9 @@
           (when (prologos-error? r)
             (set! errors (cons r errors)))))
       (delete-file tmp-path)
-      ;; Capture definition locations before parameterize exits
-      (set! captured-def-locs (current-definition-locations))))
+      ;; Capture definition locations and type env before parameterize exits
+      (set! captured-def-locs (current-definition-locations))
+      (set! captured-type-env (current-global-env))))
 
   ;; Filter out errors with unknown/zero srclocs — these come from internal
   ;; elaboration issues (e.g., reduce type inference) and can't be displayed
@@ -276,6 +292,9 @@
 
   ;; LSP Tier 2.3: Store captured definition locations for go-to-definition
   (hash-set! (lsp-state-definition-locations state) uri captured-def-locs)
+
+  ;; LSP Tier 3: Store type env for hover
+  (hash-set! (lsp-state-type-envs state) uri captured-type-env)
 
   (lsp-log state "Published ~a diagnostics, ~a definitions for ~a"
            (length diags) (hash-count captured-def-locs) uri))
@@ -412,6 +431,52 @@
               [n (in-naturals)]
               #:when (regexp-match? rx l))
     n))
+
+;; ============================================================
+;; Hover (Tier 3.2)
+;; ============================================================
+
+;; Provide hover information (type signature) for the symbol under cursor.
+;; Returns an LSP Hover object or null.
+(define (get-hover-info state uri line char)
+  (define text (hash-ref (lsp-state-document-contents state) uri #f))
+  (cond
+    [(not text) (json-null)]
+    [else
+     (define word (word-at-position text line char))
+     (cond
+       [(not word) (json-null)]
+       [else
+        (lsp-log state "Hover: ~a at ~a:~a" word line char)
+        (define sym (string->symbol word))
+        (define type-env (hash-ref (lsp-state-type-envs state) uri #f))
+        (cond
+          [(not type-env) (json-null)]
+          [else
+           ;; Look up type in the global env snapshot
+           (define entry (hash-ref type-env sym #f))
+           ;; Also try FQN variants
+           (define entry*
+             (or entry
+                 (and (hash-ref (lsp-state-definition-locations state) uri #f)
+                      (for/first ([(k v) (in-hash type-env)]
+                                  #:when (let ([s (symbol->string k)])
+                                           (string-suffix? s (string-append "::" word))))
+                        v))))
+           (cond
+             [(not entry*) (json-null)]
+             [else
+              ;; entry is (cons type value) or just type depending on env format
+              (define type-expr
+                (cond
+                  [(pair? entry*) (car entry*)]  ; (type . value)
+                  [else entry*]))
+              (define type-str (pp-expr type-expr))
+              (define markdown
+                (format "```prologos\n~a : ~a\n```" word type-str))
+              (hasheq 'contents
+                      (hasheq 'kind "markdown"
+                              'value markdown))])])])]))
 
 ;; ============================================================
 ;; Signature help (Tier 2.6)
