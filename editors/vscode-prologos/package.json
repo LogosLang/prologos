@@ -71,6 +71,10 @@
       {
         "command": "prologos.toggleInfoView",
         "title": "Prologos: Toggle InfoView Panel"
+      },
+      {
+        "command": "prologos.showPropagatorView",
+        "title": "Prologos: Show Propagator Network"
       }
     ],
     "keybindings": [

@@ -8,11 +8,13 @@ import {
 import { ReplManager } from './repl';
 import { DecorationsManager } from './decorations';
 import { InfoViewProvider } from './infoview';
+import { PropagatorViewManager } from './propagatorView';
 
 let client: LanguageClient | undefined;
 let replManager: ReplManager | undefined;
 let decorationsManager: DecorationsManager | undefined;
 let infoViewProvider: InfoViewProvider | undefined;
+let propagatorViewManager: PropagatorViewManager | undefined;
 
 export function activate(context: vscode.ExtensionContext) {
   const outputChannel = vscode.window.createOutputChannel('Prologos');
@@ -124,6 +126,12 @@ export function activate(context: vscode.ExtensionContext) {
         ),
         vscode.commands.registerCommand('prologos.toggleInfoView', () => {
           vscode.commands.executeCommand('prologos.infoView.focus');
+        }),
+        vscode.commands.registerCommand('prologos.showPropagatorView', () => {
+          if (!propagatorViewManager) {
+            propagatorViewManager = new PropagatorViewManager(client!);
+          }
+          propagatorViewManager.show();
         }),
       );
     },
