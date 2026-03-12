@@ -1,27 +1,29 @@
-# Stage 2: Research Refinement & Gap Analysis — VSCode Extension Roadmap
+# Stage 2→4: VSCode Extension — Research, Design & Implementation
 
 **Companion to**: [Stage 1 Research](./2026-03-11_LSP_VSCODE_EDITOR_SUPPORT.md)
 **Date**: 2026-03-11
-**Stage**: 2 of 5 (per [DESIGN_METHODOLOGY.org](../tracking/principles/DESIGN_METHODOLOGY.org))
+**Stage**: 2–4 of 5 (per [DESIGN_METHODOLOGY.org](../tracking/principles/DESIGN_METHODOLOGY.org))
+**Implementation started**: 2026-03-11
 
 ---
 
 ## Table of Contents
 
 1. [Executive Summary](#1-executive-summary)
-2. [Architecture Decision: Reference Model](#2-architecture-decision)
-3. [Tier Dependency Graph](#3-tier-dependency-graph)
-4. [Tier 1: Syntax & Static](#4-tier-1-syntax--static)
-5. [Tier 2: Diagnostics & Navigation](#5-tier-2-diagnostics--navigation)
-6. [Tier 3: Type Intelligence](#6-tier-3-type-intelligence)
-7. [Tier 4: Interactive Evaluation](#7-tier-4-interactive-evaluation)
-8. [Tier 5: InfoView Panel](#8-tier-5-infoview-panel)
-9. [Infrastructure Investments (Cross-Tier)](#9-infrastructure-investments)
-10. [Tradeoff Matrices](#10-tradeoff-matrices)
-11. [Principle Alignment Check](#11-principle-alignment-check)
-12. [Open Design Questions with Recommendations](#12-open-design-questions)
-13. [Effort Summary & Sequencing](#13-effort-summary)
-14. [Risk Register](#14-risk-register)
+2. [Progress Tracker](#2-progress-tracker)
+3. [Architecture Decision: Reference Model](#3-architecture-decision)
+4. [Tier Dependency Graph](#4-tier-dependency-graph)
+5. [Tier 1: Syntax & Static](#5-tier-1-syntax--static)
+6. [Tier 2: Diagnostics & Navigation](#6-tier-2-diagnostics--navigation)
+7. [Tier 3: Type Intelligence](#7-tier-3-type-intelligence)
+8. [Tier 4: Interactive Evaluation](#8-tier-4-interactive-evaluation)
+9. [Tier 5: InfoView Panel](#9-tier-5-infoview-panel)
+10. [Infrastructure Investments (Cross-Tier)](#10-infrastructure-investments)
+11. [Tradeoff Matrices](#11-tradeoff-matrices)
+12. [Principle Alignment Check](#12-principle-alignment-check)
+13. [Open Design Questions with Recommendations](#13-open-design-questions)
+14. [Effort Summary & Sequencing](#14-effort-summary)
+15. [Risk Register](#15-risk-register)
 
 ---
 
@@ -49,7 +51,88 @@ Tier 1 (syntax-only, no server) can ship independently within ~1 week. Tier 2 (d
 
 ---
 
-## 2. Architecture Decision: Reference Model
+## 2. Progress Tracker
+
+### Design Phases
+
+| # | Phase | ⏳ | Notes |
+|---|-------|---|-------|
+| D1 | Stage 1: Landscape survey | ✅ | `2026-03-11_LSP_VSCODE_EDITOR_SUPPORT.md` |
+| D2 | Stage 2: Research refinement & gap analysis | ✅ | This document (original) |
+| D3 | Stage 3: Design iteration | ✅ | Propagator-first decision, §9-10 tradeoff matrices |
+| D4 | Stage 4: Implementation | 🔄 | Started 2026-03-11 |
+
+### Tier 1: Syntax & Static (No Server)
+
+| # | Sub-phase | ⏳ | Notes |
+|---|-----------|---|-------|
+| 1.0 | Extension scaffold (`package.json`, `tsconfig`, `extension.ts`) | ⬜ | |
+| 1.1 | Tree-sitter grammar refresh | ⬜ | Grammar stale since 2026-02-17; ~30 missing constructs (traits, specs, bundles, pipes, quote, logic, transients, etc.) |
+| 1.2 | TextMate grammar (`prologos.tmLanguage.json`) | ⬜ | Translate highlights.scm to regex patterns |
+| 1.3 | Language configuration + snippets | ⬜ | Brackets, comments, word pattern, 10 snippets |
+| 1.4 | Tree-sitter WASM build + query files | ⬜ | `folds.scm`, `indents.scm` |
+| 1.5 | Integration test + verification | ⬜ | All §4.7 verification checklist items |
+
+### Tier 2: Diagnostics & Navigation (LSP Server)
+
+| # | Sub-phase | ⏳ | Notes |
+|---|-----------|---|-------|
+| 2.0 | JSON-RPC layer (`lsp/json-rpc.rkt`) | ⬜ | ~150-200 lines, Content-Length header parsing |
+| 2.1 | LSP server main loop (`lsp/server.rkt`) | ⬜ | ~400-500 lines, init/shutdown/dispatch |
+| 2.2 | Diagnostic publisher (`lsp/diagnostics.rkt`) | ⬜ | Error → Diagnostic mapping, E1001-E3001 |
+| 2.3 | Definition location infrastructure | ⬜ | Add `definition-locations` to `module-info` |
+| 2.4 | Go-to-definition provider (`lsp/definition.rkt`) | ⬜ | |
+| 2.5 | Document symbol provider (`lsp/symbols.rkt`) | ⬜ | |
+| 2.6 | Signature help provider (`lsp/signature.rkt`) | ⬜ | |
+| 2.7 | TypeScript LSP client (`src/client.ts`) | ⬜ | ~100 lines, spawn Racket process |
+| 2.8 | Integration test + verification | ⬜ | All §5.9 verification checklist items |
+
+### Tier 3: Type Intelligence
+
+| # | Sub-phase | ⏳ | Notes |
+|---|-----------|---|-------|
+| 3.0 | Elaboration side table (`lsp/type-index.rkt`) | ⬜ | ~30-50 instrumentation points |
+| 3.1 | WS-mode pretty-printer (`pp-expr-ws`) | ⬜ | ~200-300 lines |
+| 3.2 | Hover provider (`lsp/hover.rkt`) | ⬜ | |
+| 3.3 | Completion provider (`lsp/completion.rkt`) | ⬜ | 5 completion sources |
+| 3.4 | Semantic token provider (`lsp/semantic-tokens.rkt`) | ⬜ | 12 token types, 6 modifiers |
+| 3.5 | Inlay hint provider (`lsp/inlay-hints.rkt`) | ⬜ | |
+| 3.6 | Integration test + verification | ⬜ | All §6.8 verification checklist items |
+
+### Tier 4: Interactive Evaluation
+
+| # | Sub-phase | ⏳ | Notes |
+|---|-----------|---|-------|
+| 4.0 | REPL backend (`lsp/repl.rkt`) | ⬜ | |
+| 4.1 | Custom LSP methods (`$/prologos/*`) | ⬜ | eval, loadFile, narrowing, typeOf, elaborated |
+| 4.2 | Form identification (`src/forms.ts`) | ⬜ | Tree-sitter WASM cursor navigation |
+| 4.3 | Inline decorations (`src/decorations.ts`) | ⬜ | |
+| 4.4 | REPL commands + keybindings | ⬜ | |
+| 4.5 | Integration test + verification | ⬜ | |
+
+### Tier 5: InfoView Panel
+
+| # | Sub-phase | ⏳ | Notes |
+|---|-----------|---|-------|
+| 5.0 | React webview skeleton | ⬜ | |
+| 5.1 | Goal/context display | ⬜ | |
+| 5.2 | Narrowing result display | ⬜ | |
+| 5.3 | Interactive type exploration | ⬜ | |
+| 5.4 | Integration test + verification | ⬜ | |
+
+### Legend
+
+| Symbol | Meaning |
+|--------|---------|
+| ⬜ | Not started |
+| 🔄 | In progress |
+| ✅ | Complete |
+| ⏸️ | Paused/blocked |
+| 🚫 | Deferred |
+
+---
+
+## 3. Architecture Decision: Reference Model
 
 ### Selected Architecture
 
@@ -138,7 +221,7 @@ racket-langserver, we adopt a **Lean 4–influenced, Calva-inspired** architectu
 
 ---
 
-## 3. Tier Dependency Graph
+## 4. Tier Dependency Graph
 
 ```
 Tier 1: Syntax & Static
@@ -167,7 +250,7 @@ of each other once Tier 3 is complete.
 
 ---
 
-## 4. Tier 1: Syntax & Static
+## 5. Tier 1: Syntax & Static
 
 **Goal**: `.prologos` files open in VSCode with correct syntax highlighting, bracket
 matching, comment toggling, code folding, and snippets. No server process required.
@@ -318,7 +401,7 @@ editors/vscode-prologos/
 
 ---
 
-## 5. Tier 2: Diagnostics & Navigation
+## 6. Tier 2: Diagnostics & Navigation
 
 **Goal**: Type errors appear inline on save. Go-to-definition works across files.
 Document outline shows top-level definitions. Signature help from `spec` declarations.
@@ -524,7 +607,7 @@ export function createClient(context: vscode.ExtensionContext): LanguageClient {
 
 ---
 
-## 6. Tier 3: Type Intelligence
+## 7. Tier 3: Type Intelligence
 
 **Goal**: Hover shows inferred types. Inlay hints display types on untyped bindings.
 Semantic tokens provide rich highlighting (logic vars, multiplicities, traits).
@@ -737,7 +820,7 @@ and emit inlay hints for each untyped binding.
 
 ---
 
-## 7. Tier 4: Interactive Evaluation
+## 8. Tier 4: Interactive Evaluation
 
 **Goal**: Evaluate any form inline (Calva/CIDER-style), see results next to code.
 Run narrowing queries from the editor. Persistent namespace context across evaluations.
@@ -910,7 +993,7 @@ export function showInlineResult(
 
 ---
 
-## 8. Tier 5: InfoView Panel
+## 9. Tier 5: InfoView Panel
 
 **Goal**: A continuously-updated panel (like Lean 4's InfoView) showing type context,
 narrowing state, goal information, and interactive widgets.
@@ -964,7 +1047,7 @@ Custom notifications for cursor-reactive updates:
 
 ---
 
-## 9. Infrastructure Investments (Cross-Tier)
+## 10. Infrastructure Investments (Cross-Tier)
 
 These are foundational changes to the Prologos codebase that support multiple tiers.
 They follow the **Propagator-First Infrastructure** principle (see `DESIGN_PRINCIPLES.org`):
@@ -1233,7 +1316,7 @@ fine-grained tracking is active.
 
 ---
 
-## 10. Tradeoff Matrices
+## 11. Tradeoff Matrices
 
 ### 10.1 Diagnostics: On Save vs. On Type
 
@@ -1318,7 +1401,7 @@ This maximizes portability while enabling the interactive experience.
 
 ---
 
-## 11. Principle Alignment Check
+## 12. Principle Alignment Check
 
 Per DESIGN_METHODOLOGY.org §Stage 2, each recommendation must align with core principles.
 
@@ -1377,7 +1460,7 @@ networks exceeds the sum of their parts.
 
 ---
 
-## 12. Open Design Questions with Recommendations
+## 13. Open Design Questions with Recommendations
 
 ### Q1: Where should the LSP server code live?
 
@@ -1471,7 +1554,7 @@ language is ready for wider adoption.
 
 ---
 
-## 13. Effort Summary & Sequencing
+## 14. Effort Summary & Sequencing
 
 ### Per-Tier Effort
 
@@ -1555,7 +1638,7 @@ Week 10-12: Tier 5 (InfoView React app, cursor tracking, narrowing explorer)
 
 ---
 
-## 14. Risk Register
+## 15. Risk Register
 
 | Risk | Impact | Likelihood | Mitigation |
 |------|--------|-----------|-----------|
