@@ -67,11 +67,11 @@ Tier 1 (syntax-only, no server) can ship independently within ~1 week. Tier 2 (d
 | # | Sub-phase | ⏳ | Notes |
 |---|-----------|---|-------|
 | 1.0 | Extension scaffold (`package.json`, `tsconfig`, `extension.ts`) | ✅ | `ca4d756` — manifest, TS config, minimal activation |
-| 1.1 | Tree-sitter grammar refresh | ✅ | `3b52243` — ~25 new forms, all literals, highlights/folds/indents queries. Parser regen needs node.js. |
+| 1.1 | Tree-sitter grammar refresh | ✅ | `3b52243` + `899b226` — ~25 new forms, parser generated, 3/5 stdlib files parse 100% |
 | 1.2 | TextMate grammar (`prologos.tmLanguage.json`) | ✅ | `ca4d756` — 15 scope categories, all current keywords/types/operators |
 | 1.3 | Language configuration + snippets | ✅ | `ca4d756` — brackets, comments, indentation, folding, 16 snippets |
-| 1.4 | Tree-sitter WASM build + query files | ⏸️ | Query files done (`3b52243`). WASM build blocked on node.js in sandbox. |
-| 1.5 | Integration test + verification | ⬜ | All §4.7 verification checklist items |
+| 1.4 | Tree-sitter WASM build + query files | ✅ | `899b226` — parser generated, queries in place. WASM for VSCode deferred to Tier 4 (tree-sitter WASM needed for form identification). |
+| 1.5 | Integration test + verification | ⬜ | Needs manual VSCode testing (`code --extensionDevelopmentPath=.`) |
 
 ### Tier 2: Diagnostics & Navigation (LSP Server)
 
