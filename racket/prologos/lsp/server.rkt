@@ -16,6 +16,7 @@
          racket/list
          racket/string
          racket/file
+         racket/port
          (only-in json json-null)
          "json-rpc.rkt"
          "diagnostics.rkt"
@@ -167,6 +168,10 @@
      (define char (hash-ref pos 'character))
      (respond! (get-signature-help state uri line char))]
 
+    ;; ---- Client notifications (silently ignored) ----
+    ["$/setTrace" (void)]           ; trace level change — no-op
+    ["$/cancelRequest" (void)]      ; request cancellation — no-op for sync server
+
     ;; ---- Unknown ----
     [_
      (lsp-log state "Unhandled method: ~a" method)
@@ -225,12 +230,18 @@
         (set! errors
               (list (prologos-error #f (exn-message e)))))])
 
-    ;; Run elaboration, capture errors via the error emission parameter
+    ;; Run elaboration, capture errors via the error emission parameter.
+    ;; Redirect current-error-port to suppress perf/phase/memory noise
+    ;; from process-file (those reports are for test runner, not LSP).
+    ;; Our lsp-log uses lsp-state-log-port (captured at init), not
+    ;; current-error-port, so it's unaffected.
     (parameterize ([current-emit-error-diagnostics
                     (lambda (err)
                       (set! errors (cons err errors)))]
                    ;; LSP Tier 2.3: fresh definition locations per elaboration
-                   [current-definition-locations (hasheq)])
+                   [current-definition-locations (hasheq)]
+                   ;; Suppress process-file perf/phase/memory/diagnostic noise
+                   [current-error-port (open-output-nowhere)])
       ;; Write content to temp file and process
       (define tmp-path (make-temporary-file "prologos-lsp-~a.prologos"))
       (call-with-output-file tmp-path
