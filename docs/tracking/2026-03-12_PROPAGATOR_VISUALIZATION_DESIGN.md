@@ -500,49 +500,198 @@ Add a "Propagator View" webview panel, opened via:
 
 Register in `package.json` as a secondary panel (editor column 2, beside the code).
 
-### 4b: Graph Rendering
+### 4b: Graph Library Decision — D3 + d3-dag
 
-Use a lightweight graph library in the webview. Options:
-- **Cytoscape.js**: Mature, supports force-directed + hierarchical layouts, good performance
-  up to ~500 nodes. Ideal for propagator networks which are typically small-to-medium.
-- **D3-force**: More control, but more boilerplate. Better for custom aesthetics.
-- **Elk.js**: Layered/hierarchical layout (good for dataflow graphs). Can combine with
-  simple SVG rendering.
+**Chosen: D3 + d3-dag for layout, Canvas rendering for performance.**
 
-**Recommended: Cytoscape.js** — best balance of features, performance, and simplicity.
-Can switch to Elk.js for layout if hierarchical rendering is preferred.
+#### Why Not Cytoscape.js
+
+Cytoscape is batteries-included for generic graph visualization, but propagator networks
+are not generic graphs. They are **bipartite DAGs** — cells and propagators form two
+disjoint node sets, with directed edges always crossing between sets (cell → propagator
+→ cell). This topology has a natural layered/dataflow structure.
+
+Cytoscape's limitations for this use case:
+- **Force-directed is the wrong default** — it produces "hairball" layouts that obscure
+  information flow direction. Propagator networks need layered/Sugiyama layout to show
+  how information flows from inputs through propagators to outputs.
+- **Opaque rendering** — when BSP-round replay needs to animate cell value transitions,
+  flash propagator firings, and highlight ATMS assumption changes, we're fighting
+  Cytoscape's rendering pipeline rather than drawing what we want.
+- **Scale ceiling** — performance degrades around 2000+ nodes with force layout. While
+  current elaboration networks peak at ~500 nodes, user-defined propagator networks and
+  whole-module visualization could exceed this.
+
+#### Why D3 + d3-dag
+
+D3 separates layout computation from rendering — we control both independently:
+
+- **d3-dag** provides Sugiyama/layered layout algorithms purpose-built for DAGs. This is
+  the correct layout for dataflow: information flows top-to-bottom (or left-to-right),
+  edges cross minimally, and the bipartite structure (cells vs propagators) is visually
+  obvious.
+- **Canvas rendering** for the graph gives smooth 60fps animation at 5000+ nodes. SVG
+  is available as a fallback for static export (Phase 6d).
+- **Full rendering control** — BSP-round replay (Phase 5) needs frame-by-frame updates:
+  cell labels change, edges flash, nodes change color/state. With D3+Canvas, this is
+  direct draw calls, not DOM manipulation through an abstraction layer.
+- **The "boilerplate" is domain code** — what Cytoscape hides (node rendering, event
+  handling, layout wiring) is exactly what we need to customize. Our rendering code
+  expresses propagator network semantics, not generic graph boilerplate.
+
+#### Measured Network Sizes (Grounding the Decision)
+
+From the test suite benchmark data:
+
+| File | Cells (est.) | Propagators (est.) | Total Nodes |
+|------|-------------|-------------------|-------------|
+| test-reducible.rkt | ~206 | ~316 | ~522 |
+| test-list-extended-01-02.rkt | ~194 | ~260 | ~454 |
+| test-collection-fns-02.rkt | ~182 | ~153 | ~335 |
+| test-functor-ws.rkt (peak steps) | ~200+ | ~1100+ | ~1300+ |
+| Typical single expression | ~20-40 | ~20-60 | ~40-100 |
+
+Estimates: cells ≈ 2×meta_created (type + multiplicity per meta) + constraint_count;
+propagators ≈ unify_steps + trait_resolve_steps (rough proxy for total propagators).
+
+Current peak is ~500 nodes for the most complex test files. Single-expression elaboration
+(the common visualization case) is 40-100 nodes. But user-defined propagator networks and
+whole-module visualization could reach 1000-5000 nodes — Canvas handles this comfortably;
+SVG and Cytoscape would struggle.
+
+#### Layout Strategy
+
+The propagator network is a bipartite DAG. d3-dag's Sugiyama layout with:
+- **Layer assignment**: cells and propagators alternate in layers, reflecting the
+  cell → propagator → cell dataflow
+- **Crossing minimization**: edges are routed to minimize visual clutter
+- **Flow direction**: top-to-bottom by default; user can toggle to left-to-right
+- **Compound nodes** (future): group cells by elaboration context (e.g., all metas
+  from a single function definition form a subgraph)
+
+For very small networks (<20 nodes), a simpler force-directed layout may be more
+readable. Provide a layout toggle: Sugiyama (default) / force-directed / manual.
 
 ### 4c: Visual Encoding
 
-| Element | Visual | Encoding |
-|---------|--------|----------|
-| Cell (unsolved) | Circle, gray | Dashed border, "?" label |
-| Cell (solved) | Circle, green | Solid border, value label |
-| Cell (contradicted) | Circle, red | Solid border, "⊤" label |
-| Propagator | Diamond/square, blue | Label with kind ("unify", "trait", etc.) |
-| Edge (input) | Arrow → propagator | Thin line |
-| Edge (output) | Arrow → cell | Thick line |
-| Firing | Edge flash | Brief animation on the output edge |
-| ATMS assumption | Triangle, yellow | Assumption name label |
+| Element | Shape | Default Color | State Encoding |
+|---------|-------|---------------|----------------|
+| Cell (unsolved) | Circle | Gray | Dashed stroke, "?" label |
+| Cell (solved) | Circle | Green | Solid stroke, value label (truncated) |
+| Cell (contradicted) | Circle | Red | Solid stroke, "⊤" label, pulse animation |
+| Cell (meta-type) | Circle | Blue-gray | Distinguishes type metas from mult metas |
+| Cell (meta-mult) | Circle | Purple-gray | QTT multiplicity cells |
+| Cell (registry) | Rounded rect | Slate | Infrastructure cells, collapsible |
+| Propagator | Diamond | Blue | Label: kind ("unify", "trait", "session") |
+| Edge (input) | Arrow → propagator | Light gray | Thin line, arrow at propagator end |
+| Edge (output) | Arrow → cell | Dark gray | Thicker line, arrow at cell end |
+| Active firing | Edge | Orange flash | Brief pulse during replay (Phase 5) |
+| ATMS assumption | Triangle | Yellow | Assumption label; retracted = strikethrough |
+| ATMS nogood | Hexagon | Red-orange | Connected to contradicted cells |
+
+Color scheme uses VS Code CSS variables (`--vscode-editor-foreground`, etc.) as base,
+with domain-specific semantic colors overlaid. Dark/light theme compatibility via
+alpha-blended overlays on the VS Code background color.
+
+Cell value labels are truncated to ~20 chars with full value shown on hover tooltip.
+Type expressions use the same pretty-printer as the InfoView panel.
 
 ### 4d: Interaction
 
-- **Click cell** → show detail panel (value, typing context, source) + highlight source location
-- **Click propagator** → show inputs/outputs, kind, firing count
-- **Hover** → tooltip with summary
-- **Click source location** → highlight corresponding cell(s) in graph
-- **Filter** → toggle cell domains (type metas, mult metas, session metas, registries)
-- **Layout** → switch between force-directed and hierarchical
+**Node interaction:**
+- **Click cell** → detail panel below graph (value, typing context, source location,
+  dependent propagators) + highlight source line in editor via `vscode.commands`
+- **Click propagator** → detail panel (inputs/outputs, kind, firing count per round,
+  source expression that created it)
+- **Hover** → tooltip with summary (cell: type + state; propagator: kind + I/O count)
+- **Double-click cell** → focus view: show only this cell's N-hop neighborhood
 
-### 4e: Bundled Dependencies
+**Source linking (bidirectional):**
+- Click cell → highlight source location in editor
+- Click source expression in editor → highlight corresponding cell(s) in graph
+  (requires `prologos.revealCell` command wired to `onDidChangeTextEditorSelection`)
 
-Cytoscape.js (~400KB minified) bundled into the extension's `out/` directory.
-Loaded in the webview via a local URI.
+**Filtering:**
+- Toggle by cell domain: type metas / multiplicity metas / session metas / registries
+- Toggle by propagator kind: unify / trait-resolve / constraint / session
+- Hide solved cells (show only unsolved + contradicted — useful for debugging)
+- Collapse infrastructure (registry cells, list/set cells) to reduce noise
 
-**Files**: New `editors/vscode-prologos/src/propagator-view.ts`, `editors/vscode-prologos/src/propagator-view.css`
+**Layout controls:**
+- Switch between Sugiyama (default) and force-directed
+- Flow direction: top-to-bottom / left-to-right
+- Zoom/pan via mouse wheel + drag (d3-zoom)
+- Fit-to-view button
+- Minimap for large networks (>100 nodes)
+
+### 4e: Rendering Architecture
+
+```
+┌─────────────────────────────────────┐
+│  VS Code Webview                    │
+│                                     │
+│  ┌───────────────────────────────┐  │
+│  │  <canvas> (primary render)    │  │  ← d3-zoom transforms, node/edge drawing
+│  │  d3-dag layout → positions    │  │  ← Sugiyama computes (x,y) per node
+│  │  requestAnimationFrame loop   │  │  ← 60fps during replay animation
+│  └───────────────────────────────┘  │
+│                                     │
+│  ┌───────────────────────────────┐  │
+│  │  Detail panel (HTML)          │  │  ← Cell/propagator details on click
+│  └───────────────────────────────┘  │
+│                                     │
+│  ┌───────────────────────────────┐  │
+│  │  Timeline bar (HTML/CSS)      │  │  ← Phase 5: round scrubber
+│  └───────────────────────────────┘  │
+│                                     │
+│  ┌───────────────────────────────┐  │
+│  │  Toolbar (HTML)               │  │  ← Layout, filter, zoom controls
+│  └───────────────────────────────┘  │
+└─────────────────────────────────────┘
+```
+
+The Canvas renders the graph; HTML elements overlay it for UI controls and detail panels.
+This avoids DOM-heavy rendering for the graph itself while keeping interactive controls
+in standard HTML (consistent with VS Code's webview patterns and the existing InfoView).
+
+Hit testing for click/hover on Canvas nodes uses a quadtree spatial index (d3-quadtree)
+for O(log n) lookup — no need to maintain a parallel DOM structure.
+
+### 4f: Bundled Dependencies
+
+| Dependency | Size (minified) | Purpose |
+|------------|----------------|---------|
+| d3-dag | ~30KB | Sugiyama layout for DAGs |
+| d3-zoom | ~15KB | Pan/zoom behavior |
+| d3-quadtree | ~5KB | Spatial index for hit testing |
+| d3-force (optional) | ~15KB | Force-directed layout fallback |
+| Total | ~65KB | vs ~400KB for Cytoscape.js |
+
+Bundled into `editors/vscode-prologos/lib/` as minified ESM modules, loaded in the
+webview via local URIs. No build tooling required — the modules are pre-built.
+
+Note: we deliberately avoid pulling in all of D3 (~250KB). Only the specific D3
+subpackages needed are bundled. D3's modular architecture supports this naturally.
+
+### 4g: SVG Export Path
+
+For static diagrams (documentation, papers, wiki articles — Phase 6d), the same d3-dag
+layout positions can drive an SVG renderer instead of Canvas. This is a thin alternative
+render pass over the same layout data — no duplicate layout computation.
+
+```typescript
+function renderToSVG(layout: LayoutResult): string {
+  // Same node positions as Canvas, rendered as SVG elements
+  // Returns a self-contained SVG string for export
+}
+```
+
+**Files**: New `editors/vscode-prologos/src/propagator-view.ts`,
+  `editors/vscode-prologos/src/graph-renderer.ts` (Canvas + SVG render),
+  `editors/vscode-prologos/src/graph-layout.ts` (d3-dag layout wrapper)
 **Modified**: `package.json` (command, panel), `extension.ts` (registration)
-**Dependencies**: Phase 3 (LSP endpoint for data), Cytoscape.js (bundled)
-**Tests**: Manual visual testing + snapshot tests for serialization
+**Dependencies**: Phase 3 (LSP endpoint for data), d3-dag + d3-zoom + d3-quadtree (bundled)
+**Tests**: Manual visual testing + snapshot tests for serialization + layout determinism tests
 
 ## Phase 5: BSP-Round Replay
 
@@ -634,6 +783,31 @@ When a contradiction exists:
 **Chosen: Option D.** BSP rounds are the semantic unit of propagation. The scheduler already
 computes diffs; we just stop discarding them. Memory is <0.1% of heap in all measured cases.
 Per-firing resolution deferred to future work on custom prop-net specifications.
+
+### Graph Rendering Library
+
+| Library | Layout | Rendering | Scale | Bundle | Control | Recommendation |
+|---------|--------|-----------|-------|--------|---------|----------------|
+| Cytoscape.js | Force, hierarchical, breadthfirst | Canvas (opaque) | ~2K nodes | ~400KB | Low — opaque API | Not chosen |
+| **D3 + d3-dag** | **Sugiyama/layered (DAG-native)** | **Canvas (direct)** | **5K+ nodes** | **~65KB** | **Full** | **Chosen** |
+| D3 + Elk.js | Sugiyama/layered (port-based) | SVG or Canvas | ~3K nodes | ~300KB | High | Viable alternative |
+| D3-force only | Force-directed | SVG or Canvas | ~3K nodes | ~30KB | High | Wrong layout for DAGs |
+
+**Chosen: D3 + d3-dag.** The propagator network is a bipartite DAG — cells and
+propagators form two node sets with directed edges always crossing between them.
+Sugiyama/layered layout makes information flow direction visible, which is the core
+purpose of the visualization. Force-directed layout obscures this structure.
+
+D3's modularity means we bundle only the subpackages we need (~65KB total vs ~400KB
+for Cytoscape or ~250KB for all of D3). Canvas rendering gives 60fps animation for
+BSP-round replay at 5K+ nodes. Full rendering control means Phase 5 (replay animation)
+is direct draw calls, not API workarounds.
+
+The "boilerplate" concern is addressed by noting that our rendering code IS the domain
+logic — it expresses propagator network semantics (cell states, propagator firings,
+ATMS assumptions), not generic graph chrome. This aligns with First-Class by Default:
+the visualization code is specific to our domain, not a configuration of someone else's
+abstraction.
 
 ### Visualization Approach
 
