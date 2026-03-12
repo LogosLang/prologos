@@ -60,7 +60,12 @@
          current-defn-param-names
          current-defn-param-names-cell-id
          register-defn-param-names!
-         lookup-defn-param-names)
+         lookup-defn-param-names
+         ;; LSP Tier 2.3: Definition location registry
+         current-definition-locations
+         register-definition-location!
+         lookup-definition-location
+         all-definition-locations)
 
 (require racket/list        ;; remove-duplicates
          racket/set         ;; seteq, set-add (Phase 3b dependency recording)
@@ -292,3 +297,22 @@
 
 (define (lookup-defn-param-names name)
   (hash-ref (current-defn-param-names) name #f))
+
+;; ========================================
+;; Definition location registry (LSP Tier 2.3)
+;; ========================================
+;; Maps definition name (symbol) to source location.
+;; Populated during process-def in driver.rkt.
+;; Used by the LSP server for textDocument/definition (go-to-definition).
+
+(define current-definition-locations (make-parameter (hasheq)))
+
+(define (register-definition-location! name srcloc)
+  (current-definition-locations
+   (hash-set (current-definition-locations) name srcloc)))
+
+(define (lookup-definition-location name)
+  (hash-ref (current-definition-locations) name #f))
+
+(define (all-definition-locations)
+  (current-definition-locations))

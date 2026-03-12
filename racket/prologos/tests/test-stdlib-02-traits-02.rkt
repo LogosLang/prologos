@@ -54,7 +54,7 @@
                           [(not (null? (ns-context-auto-exports ctx)))
                            (reverse (ns-context-auto-exports ctx))]
                           [else '()])]
-               [mi (module-info ns-sym exports (current-global-env) #f (hasheq) (hasheq) (hasheq))])
+               [mi (module-info ns-sym exports (current-global-env) #f (hasheq) (hasheq) (hasheq) (hasheq))])
           (register-module! ns-sym mi))))
     ;; Reset for second module
     (current-global-env (hasheq))

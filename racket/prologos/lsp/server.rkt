@@ -22,7 +22,8 @@
          "../driver.rkt"
          "../errors.rkt"
          "../namespace.rkt"
-         "../source-location.rkt")
+         "../source-location.rkt"
+         "../global-env.rkt")
 
 (provide run-lsp-server)
 
@@ -39,6 +40,7 @@
    document-diagnostics   ; hash: uri → (listof diagnostic)
    module-registry        ; cached module registry from prelude
    log-port               ; output port for logging (stderr)
+   definition-locations   ; hash: uri → (hasheq: symbol → srcloc)
    ) #:mutable)
 
 (define (make-initial-state)
@@ -47,7 +49,8 @@
              (make-hash)
              (make-hash)
              #f       ; module registry loaded on initialize
-             (current-error-port)))
+             (current-error-port)
+             (make-hash)))
 
 ;; Log a message to stderr (not stdout — stdout is the LSP channel).
 (define (lsp-log state fmt . args)
@@ -148,6 +151,22 @@
      (define uri (hash-ref (hash-ref params 'textDocument) 'uri))
      (respond! (get-document-symbols state uri))]
 
+    ;; ---- Go-to-definition ----
+    ["textDocument/definition"
+     (define uri (hash-ref (hash-ref params 'textDocument) 'uri))
+     (define pos (hash-ref params 'position))
+     (define line (hash-ref pos 'line))
+     (define char (hash-ref pos 'character))
+     (respond! (get-definition-location state uri line char))]
+
+    ;; ---- Signature help ----
+    ["textDocument/signatureHelp"
+     (define uri (hash-ref (hash-ref params 'textDocument) 'uri))
+     (define pos (hash-ref params 'position))
+     (define line (hash-ref pos 'line))
+     (define char (hash-ref pos 'character))
+     (respond! (get-signature-help state uri line char))]
+
     ;; ---- Unknown ----
     [_
      (lsp-log state "Unhandled method: ~a" method)
@@ -170,7 +189,14 @@
             'save (hasheq 'includeText #t))
 
     ;; Document symbols (outline)
-    'documentSymbolProvider #t)
+    'documentSymbolProvider #t
+
+    ;; Go-to-definition
+    'definitionProvider #t
+
+    ;; Signature help
+    'signatureHelpProvider
+    (hasheq 'triggerCharacters '("[" " ")))
 
    'serverInfo
    (hasheq 'name "prologos-lsp"
@@ -190,6 +216,7 @@
   ;; Capture errors from process-file
   (define errors '())
   (define warnings '())
+  (define captured-def-locs (hasheq))
 
   (with-handlers
     ([exn:fail?
@@ -201,7 +228,9 @@
     ;; Run elaboration, capture errors via the error emission parameter
     (parameterize ([current-emit-error-diagnostics
                     (lambda (err)
-                      (set! errors (cons err errors)))])
+                      (set! errors (cons err errors)))]
+                   ;; LSP Tier 2.3: fresh definition locations per elaboration
+                   [current-definition-locations (hasheq)])
       ;; Write content to temp file and process
       (define tmp-path (make-temporary-file "prologos-lsp-~a.prologos"))
       (call-with-output-file tmp-path
@@ -210,7 +239,9 @@
       (with-handlers ([exn:fail? (lambda (e)
                                    (set! errors (cons (prologos-error #f (exn-message e)) errors)))])
         (process-file tmp-path))
-      (delete-file tmp-path)))
+      (delete-file tmp-path)
+      ;; Capture definition locations before parameterize exits
+      (set! captured-def-locs (current-definition-locations))))
 
   ;; Convert to LSP diagnostics and publish
   (define diags (errors->diagnostics (reverse errors)))
@@ -218,7 +249,12 @@
   (notify! "textDocument/publishDiagnostics"
            (hasheq 'uri uri
                    'diagnostics diags))
-  (lsp-log state "Published ~a diagnostics for ~a" (length diags) uri))
+
+  ;; LSP Tier 2.3: Store captured definition locations for go-to-definition
+  (hash-set! (lsp-state-definition-locations state) uri captured-def-locs)
+
+  (lsp-log state "Published ~a diagnostics, ~a definitions for ~a"
+           (length diags) (hash-count captured-def-locs) uri))
 
 ;; ============================================================
 ;; Document symbols
@@ -268,6 +304,178 @@
 (define (make-range start-line start-char end-line end-char)
   (hasheq 'start (hasheq 'line start-line 'character start-char)
           'end   (hasheq 'line end-line   'character end-char)))
+
+;; ============================================================
+;; Go-to-definition (Tier 2.4)
+;; ============================================================
+
+;; Find the definition location for the symbol at the given position.
+;; Returns an LSP Location or null if not found.
+(define (get-definition-location state uri line char)
+  (define text (hash-ref (lsp-state-document-contents state) uri #f))
+  (cond
+    [(not text) (json-null)]
+    [else
+     (define word (word-at-position text line char))
+     (cond
+       [(not word) (json-null)]
+       [else
+        (lsp-log state "Go-to-definition: ~a at ~a:~a" word line char)
+        (define sym (string->symbol word))
+        ;; Check definition locations captured during elaboration
+        (define def-locs (hash-ref (lsp-state-definition-locations state) uri #f))
+        (define loc (and def-locs (hash-ref def-locs sym #f)))
+        (cond
+          [loc
+           ;; Found in same file — return Location with srcloc
+           (define range (srcloc->range loc))
+           (hasheq 'uri uri 'range range)]
+          [else
+           ;; Try qualified name lookup — search def-locs for FQN matching short name
+           (define found-loc
+             (and def-locs
+                  (for/first ([(k v) (in-hash def-locs)]
+                              #:when (let ([s (symbol->string k)])
+                                       (string-suffix? s (string-append "::" word))))
+                    v)))
+           (cond
+             [found-loc
+              (hasheq 'uri uri 'range (srcloc->range found-loc))]
+             [else
+              ;; Fallback: regex scan for definition in current document
+              (define def-line (find-definition-line text word))
+              (cond
+                [def-line
+                 (hasheq 'uri uri
+                         'range (make-range def-line 0 def-line (string-length word)))]
+                [else (json-null)])])])])]))
+
+;; Extract the word (identifier) at the given line and character position.
+(define (word-at-position text line char)
+  (define lines (string-split text "\n"))
+  (cond
+    [(>= line (length lines)) #f]
+    [else
+     (define l (list-ref lines line))
+     (cond
+       [(>= char (string-length l)) #f]
+       [else
+        ;; Expand left and right from cursor to find word boundaries
+        (define id-char?
+          (lambda (c) (or (char-alphabetic? c) (char-numeric? c)
+                          (char=? c #\_) (char=? c #\?) (char=? c #\!)
+                          (char=? c #\') (char=? c #\-) (char=? c #\:))))
+        (define start
+          (let loop ([i char])
+            (if (and (> i 0) (id-char? (string-ref l (sub1 i))))
+                (loop (sub1 i))
+                i)))
+        (define end
+          (let loop ([i char])
+            (if (and (< i (string-length l)) (id-char? (string-ref l i)))
+                (loop (add1 i))
+                i)))
+        (if (= start end) #f
+            (substring l start end))])]))
+
+;; Regex-scan fallback: find the line number where a name is defined.
+;; Returns 0-based line number or #f.
+(define (find-definition-line text name)
+  (define escaped (regexp-quote name))
+  (define rx (regexp (string-append "^(?:def|defn|spec|data|trait|impl|bundle)\\s+" escaped "\\b")))
+  (define lines (string-split text "\n"))
+  (for/first ([l (in-list lines)]
+              [n (in-naturals)]
+              #:when (regexp-match? rx l))
+    n))
+
+;; ============================================================
+;; Signature help (Tier 2.6)
+;; ============================================================
+
+;; Provide signature help for the function being called.
+;; Returns a SignatureHelp object or null.
+(define (get-signature-help state uri line char)
+  (define text (hash-ref (lsp-state-document-contents state) uri #f))
+  (cond
+    [(not text) (json-null)]
+    [else
+     ;; Simple heuristic: look for the function name before the cursor
+     ;; In Prologos, function calls are [f x y z], so look for [ followed by name
+     (define lines (string-split text "\n"))
+     (cond
+       [(>= line (length lines)) (json-null)]
+       [else
+        (define l (list-ref lines line))
+        ;; Search backwards from cursor for opening bracket
+        (define fn-name (find-function-name l char))
+        (cond
+          [(not fn-name) (json-null)]
+          [else
+           (lsp-log state "Signature help: ~a" fn-name)
+           ;; Look up param names from the elaboration
+           (define param-names (lookup-defn-param-names (string->symbol fn-name)))
+           ;; Look up type from definition locations
+           (define def-locs (hash-ref (lsp-state-definition-locations state) uri #f))
+           (define type-str
+             (and def-locs
+                  (let ([sym (string->symbol fn-name)])
+                    ;; Try to get type from global env snapshot
+                    ;; For now, use param names as the signature
+                    #f)))
+           (cond
+             [(and param-names (not (null? param-names)))
+              (define params-str
+                (string-join (map symbol->string param-names) ", "))
+              (define sig-label
+                (format "~a [~a]" fn-name params-str))
+              (hasheq 'signatures
+                      (list (hasheq 'label sig-label
+                                    'parameters
+                                    (for/list ([p (in-list param-names)])
+                                      (hasheq 'label (symbol->string p)))))
+                      'activeSignature 0
+                      'activeParameter (count-args-before-cursor l char))]
+             [else (json-null)])])])]))
+
+;; Find the function name being called at cursor position.
+;; Searches backwards for pattern like "[name " or "[name\n".
+(define (find-function-name line char)
+  (define id-char?
+    (lambda (c) (or (char-alphabetic? c) (char-numeric? c)
+                    (char=? c #\_) (char=? c #\?) (char=? c #\!)
+                    (char=? c #\') (char=? c #\-))))
+  ;; Search backwards from cursor for [
+  (let loop ([i (min (sub1 char) (sub1 (string-length line)))])
+    (cond
+      [(< i 0) #f]
+      [(char=? (string-ref line i) #\[)
+       ;; Found opening bracket — extract the name after it
+       (define start (add1 i))
+       (define end
+         (let lp ([j start])
+           (if (and (< j (string-length line)) (id-char? (string-ref line j)))
+               (lp (add1 j))
+               j)))
+       (if (> end start) (substring line start end) #f)]
+      [else (loop (sub1 i))])))
+
+;; Count how many arguments appear before the cursor (for activeParameter).
+(define (count-args-before-cursor line char)
+  ;; Simple heuristic: count space-separated tokens between [ and cursor
+  (let loop ([i 0] [depth 0] [args 0] [in-word? #f])
+    (cond
+      [(>= i (min char (string-length line))) (max 0 (sub1 args))]
+      [else
+       (define c (string-ref line i))
+       (cond
+         [(char=? c #\[) (loop (add1 i) (add1 depth) (if (= depth 0) 0 args) #f)]
+         [(char=? c #\]) (loop (add1 i) (sub1 depth) args #f)]
+         [(and (> depth 0) (char-whitespace? c))
+          (loop (add1 i) depth args #f)]
+         [(and (> depth 0) (not in-word?))
+          (loop (add1 i) depth (add1 args) #t)]
+         [else (loop (add1 i) depth args in-word?)])])))
 
 ;; ============================================================
 ;; URI <-> path conversion

@@ -26,6 +26,7 @@
                           #f
                           (hasheq)
                           (hasheq)
+                          (hasheq)
                           (hasheq)))
   (check-equal? (module-info-namespace mi) 'prologos::core)
   (check-equal? (module-info-exports mi) '(id const))
@@ -37,7 +38,7 @@
 
 (test-case "register and lookup module"
   (parameterize ([current-module-registry (hasheq)])
-    (define mi (module-info 'test.mod '(foo) (hasheq) #f (hasheq) (hasheq) (hasheq)))
+    (define mi (module-info 'test.mod '(foo) (hasheq) #f (hasheq) (hasheq) (hasheq) (hasheq)))
     (check-false (module-loaded? 'test.mod))
     (check-false (lookup-module 'test.mod))
     (register-module! 'test.mod mi)
@@ -130,7 +131,7 @@
     (define mi (module-info 'prologos::core
                             '(id const)
                             (hasheq)
-                            #f (hasheq) (hasheq) (hasheq)))
+                            #f (hasheq) (hasheq) (hasheq) (hasheq)))
     (register-module! 'prologos::core mi)
     (define ctx (ns-context-add-refer-all
                  (make-empty-ns-context 'my.ns)

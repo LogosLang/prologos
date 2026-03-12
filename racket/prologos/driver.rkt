@@ -943,6 +943,7 @@
   (define name (surf-def-name expanded))
   (define type-surf (surf-def-type expanded))
   (define body-surf (surf-def-body expanded))
+  (define def-srcloc (surf-def-srcloc expanded))
   ;; Phase 3b: Record dependencies during elaboration/type-checking.
   (parameterize ([current-elaborating-name name])
   (cond
@@ -1017,11 +1018,14 @@
                    [else
                     (current-global-env
                      (global-env-add (current-global-env) name zonked-type zonked-body))
+                    ;; LSP Tier 2.3: record definition location
+                    (register-definition-location! name def-srcloc)
                     (when (current-ns-context)
                       (define fqn (qualify-name name
                                     (ns-context-current-ns (current-ns-context))))
                       (current-global-env
-                       (global-env-add (current-global-env) fqn zonked-type zonked-body)))
+                       (global-env-add (current-global-env) fqn zonked-type zonked-body))
+                      (register-definition-location! fqn def-srcloc))
                     (format "~a : ~a defined." name (pp-expr zonked-type))])])])])])])]
     ;; Existing annotated path (type annotation present)
     [else
@@ -1076,11 +1080,14 @@
               (let ([zonked-type (time-phase! zonk (zonk-final type))])
                 (current-global-env
                  (global-env-add-type-only (current-global-env) name zonked-type))
+                ;; LSP Tier 2.3: record definition location
+                (register-definition-location! name def-srcloc)
                 (when (current-ns-context)
                   (define fqn (qualify-name name
                                 (ns-context-current-ns (current-ns-context))))
                   (current-global-env
-                   (global-env-add-type-only (current-global-env) fqn zonked-type)))
+                   (global-env-add-type-only (current-global-env) fqn zonked-type))
+                  (register-definition-location! fqn def-srcloc))
                 (format "~a : ~a defined." name (pp-expr zonked-type)))]
              [else
               ;; 4. Elaborate body (self-reference now resolves)
@@ -1206,11 +1213,14 @@
                          [else
                           (current-global-env
                            (global-env-add (current-global-env) name zonked-type zonked-body))
+                          ;; LSP Tier 2.3: record definition location
+                          (register-definition-location! name def-srcloc)
                           (when (current-ns-context)
                             (define fqn (qualify-name name
                                           (ns-context-current-ns (current-ns-context))))
                             (current-global-env
-                             (global-env-add (current-global-env) fqn zonked-type zonked-body)))
+                             (global-env-add (current-global-env) fqn zonked-type zonked-body))
+                            (register-definition-location! fqn def-srcloc))
                           (format "~a : ~a defined."
                                   name (pp-expr zonked-type))])]
                       )])])])])])])])))  ;; extra ) closes Phase 3b parameterize
@@ -1624,7 +1634,8 @@
                              file-path
                              (hasheq)
                              (hasheq)
-                             mod-spec-store))
+                             mod-spec-store
+                             (current-definition-locations)))
 
      ;; 6. Register
      (register-module! ns-sym mi)

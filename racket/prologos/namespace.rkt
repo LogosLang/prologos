@@ -79,7 +79,8 @@
    file-path      ; path-string or #f (for built-in modules)
    macros         ; hasheq: short-name → preparse-macro or procedure
    type-aliases   ; hasheq: short-name → alias body
-   specs)         ; hasheq: short-name → spec-entry (for implicit arg insertion)
+   specs          ; hasheq: short-name → spec-entry (for implicit arg insertion)
+   definition-locations)  ; hasheq: symbol → srcloc (LSP Tier 2.3: go-to-definition)
   #:transparent)
 
 ;; ========================================
