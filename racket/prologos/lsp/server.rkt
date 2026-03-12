@@ -648,21 +648,31 @@
         (if (= start end) #f
             (substring l start end))])]))
 
-;; Like word-at-position, but also finds words when cursor is immediately
-;; after a word (e.g., "factorial|") or between words on the same line.
-;; Falls back to the first word on the line (the "head" of the form).
-;; Used for InfoView where we want sticky type display.
-(define (word-near-position text line char)
-  ;; First try exact position
-  (or (word-at-position text line char)
-      ;; Try one char to the left (cursor just past end of word)
-      (and (> char 0) (word-at-position text line (sub1 char)))
-      ;; Fall back: first word on this line (head of the form)
-      (let ([lines (string-split text "\n")])
-        (and (< line (length lines))
-             (let ([l (list-ref lines line)])
-               (define m (regexp-match #rx"^\\s*([A-Za-z_][A-Za-z0-9_?!':=-]*)" l))
-               (and m (cadr m)))))))
+;; Return a list of candidate words to look up for InfoView, ordered by priority:
+;; 1. Exact word at cursor position
+;; 2. Word immediately left of cursor (for "factorial|" case)
+;; 3. First word on the line (form head — for "factorial 5|" case)
+;; Used for InfoView where we want sticky type display across the whole form line.
+(define (words-near-position text line char)
+  (define candidates '())
+  ;; 1. Exact position
+  (define exact (word-at-position text line char))
+  (when exact (set! candidates (cons exact candidates)))
+  ;; 2. One char left
+  (when (> char 0)
+    (define left (word-at-position text line (sub1 char)))
+    (when (and left (not (equal? left exact)))
+      (set! candidates (cons left candidates))))
+  ;; 3. First word on line (form head)
+  (define lines (string-split text "\n"))
+  (when (< line (length lines))
+    (define l (list-ref lines line))
+    (define m (regexp-match #rx"^\\s*([A-Za-z_][A-Za-z0-9_?!':=-]*)" l))
+    (when (and m (cadr m))
+      (define head (cadr m))
+      (unless (member head candidates)
+        (set! candidates (cons head candidates)))))
+  (reverse candidates))
 
 ;; Regex-scan fallback: find the line number where a name is defined.
 ;; Returns 0-based line number or #f.
@@ -832,29 +842,27 @@
   (define text (hash-ref (lsp-state-document-contents state) uri #f))
   (define type-env (hash-ref (lsp-state-type-envs state) uri #f))
 
-  ;; 1. Type at cursor — use word-near-position for sticky display
-  ;;    (shows type when cursor is at end of word or between args)
-  (define word (and text (word-near-position text line char)))
+  ;; 1. Type at cursor — try candidate words in priority order for sticky display.
+  ;;    Handles: exact position, cursor just past word, and form head on the line.
+  (define candidates (if text (words-near-position text line char) '()))
   (define spec-store (hash-ref (lsp-state-spec-stores state) uri #f))
   (define type-at-cursor
-    (and word
-         (let* ([sym (string->symbol word)]
-                [entry (and type-env
-                            (or (hash-ref type-env sym #f)
-                                ;; Try FQN match
-                                (for/first ([(k v) (in-hash type-env)]
-                                            #:when (let ([s (symbol->string k)])
-                                                     (string-suffix? s (string-append "::" word))))
-                                  v)))])
-           (cond
-             [entry
-              (let ([type-expr (if (pair? entry) (car entry) entry)])
-                (format "~a : ~a" word (pp-expr type-expr)))]
-             ;; Fall back to spec-store
-             [(and spec-store (hash-ref spec-store sym #f))
-              => (lambda (spec)
-                   (format "~a : ~a" word (format-spec-type spec)))]
-             [else #f]))))
+    (for/or ([word (in-list candidates)])
+      (define sym (string->symbol word))
+      (define entry (and type-env
+                         (or (hash-ref type-env sym #f)
+                             (for/first ([(k v) (in-hash type-env)]
+                                         #:when (let ([s (symbol->string k)])
+                                                  (string-suffix? s (string-append "::" word))))
+                               v))))
+      (cond
+        [entry
+         (let ([type-expr (if (pair? entry) (car entry) entry)])
+           (format "~a : ~a" word (pp-expr type-expr)))]
+        [(and spec-store (hash-ref spec-store sym #f))
+         => (lambda (spec)
+              (format "~a : ~a" word (format-spec-type spec)))]
+        [else #f])))
 
   ;; 2. File context: definitions with types + namespace
   (define symbols (if text (get-document-symbols state uri) '()))
