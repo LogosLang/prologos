@@ -101,7 +101,7 @@
     (define here-dir
       (path->string (path-only (syntax-source #'here))))
     (define lib-dir
-      (simplify-path (build-path here-dir ".." ".." "lib")))
+      (simplify-path (build-path here-dir ".." "lib")))
     (define-values (mod-reg trait-reg impl-reg param-impl-reg preparse-reg cap-reg)
       (parameterize ([current-global-env (hasheq)]
                      [current-definition-cells-content (hasheq)]
