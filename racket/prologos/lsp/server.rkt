@@ -25,7 +25,9 @@
          "../namespace.rkt"
          "../source-location.rkt"
          "../global-env.rkt"
-         "../pretty-print.rkt")
+         "../pretty-print.rkt"
+         "../macros.rkt"
+         "../metavar-store.rkt")
 
 (provide run-lsp-server)
 
@@ -44,6 +46,8 @@
    log-port               ; output port for logging (stderr)
    definition-locations   ; hash: uri → (hasheq: symbol → srcloc)
    type-envs              ; hash: uri → hasheq (global-env snapshot for hover)
+   repl-sessions          ; hash: uri → repl-session
+   prelude-cache          ; prelude-cache struct or #f (loaded lazily)
    ) #:mutable)
 
 (define (make-initial-state)
@@ -54,7 +58,160 @@
              #f       ; module registry loaded on initialize
              (current-error-port)
              (make-hash)
-             (make-hash)))
+             (make-hash)
+             (make-hash)
+             #f       ; prelude cache loaded on first eval
+             ))
+
+;; ============================================================
+;; Tier 4: REPL sessions
+;; ============================================================
+
+;; Cached prelude registries (loaded once, shared across sessions).
+(struct prelude-cache
+  (module-registry
+   trait-registry
+   impl-registry
+   param-impl-registry
+   preparse-registry
+   capability-registry
+   lib-dir) #:transparent)
+
+;; Per-URI REPL session state. Definitions accumulate across evals.
+(struct repl-session
+  (global-env              ; hasheq: name → (cons type value)
+   ns-context              ; ns-context or #f
+   module-registry         ; hasheq: ns-sym → module-info
+   trait-registry          ; hasheq
+   impl-registry           ; hasheq
+   param-impl-registry     ; hasheq
+   preparse-registry       ; hasheq
+   capability-registry     ; hasheq
+   spec-store              ; hasheq
+   definition-cells        ; hasheq (Phase 3a)
+   definition-deps         ; hasheq (Phase 3b)
+   ) #:mutable)
+
+;; Load prelude once and cache registries (mirrors test-support.rkt pattern).
+(define (load-prelude-cache! state)
+  (define cache (lsp-state-prelude-cache state))
+  (when (not cache)
+    (lsp-log state "Loading prelude for REPL sessions...")
+    ;; Compute lib-dir relative to server.rkt location
+    (define here-dir
+      (path->string (path-only (syntax-source #'here))))
+    (define lib-dir
+      (simplify-path (build-path here-dir ".." ".." "lib")))
+    (define-values (mod-reg trait-reg impl-reg param-impl-reg preparse-reg cap-reg)
+      (parameterize ([current-global-env (hasheq)]
+                     [current-definition-cells-content (hasheq)]
+                     [current-definition-dependencies (hasheq)]
+                     [current-ns-context #f]
+                     [current-module-registry (hasheq)]
+                     [current-lib-paths (list lib-dir)]
+                     [current-mult-meta-store (make-hasheq)]
+                     [current-preparse-registry (current-preparse-registry)]
+                     [current-trait-registry (current-trait-registry)]
+                     [current-impl-registry (current-impl-registry)]
+                     [current-param-impl-registry (current-param-impl-registry)]
+                     [current-capability-registry (current-capability-registry)]
+                     [current-error-port (open-output-nowhere)])
+        (install-module-loader!)
+        (process-string "(ns prelude-cache)\n")
+        (values (current-module-registry)
+                (current-trait-registry)
+                (current-impl-registry)
+                (current-param-impl-registry)
+                (current-preparse-registry)
+                (current-capability-registry))))
+    (set-lsp-state-prelude-cache!
+     state
+     (prelude-cache mod-reg trait-reg impl-reg param-impl-reg preparse-reg cap-reg lib-dir))
+    (lsp-log state "Prelude loaded (~a modules cached)" (hash-count mod-reg))))
+
+;; Get or create a REPL session for a URI.
+(define (get-or-create-session! state uri)
+  (define sessions (lsp-state-repl-sessions state))
+  (define existing (hash-ref sessions uri #f))
+  (cond
+    [existing existing]
+    [else
+     (load-prelude-cache! state)
+     (define pc (lsp-state-prelude-cache state))
+     (define session
+       (repl-session
+        (hasheq)                                    ; global-env (fresh)
+        #f                                          ; ns-context
+        (prelude-cache-module-registry pc)           ; module-registry
+        (prelude-cache-trait-registry pc)             ; trait-registry
+        (prelude-cache-impl-registry pc)              ; impl-registry
+        (prelude-cache-param-impl-registry pc)        ; param-impl-registry
+        (prelude-cache-preparse-registry pc)           ; preparse-registry
+        (prelude-cache-capability-registry pc)         ; capability-registry
+        (hasheq)                                    ; spec-store
+        (hasheq)                                    ; definition-cells (Phase 3a)
+        (hasheq)))                                  ; definition-deps (Phase 3b)
+     ;; Initialize the session with a namespace declaration to load prelude
+     (eval-in-session-raw! state session "(ns repl)\n")
+     (hash-set! sessions uri session)
+     (lsp-log state "Created REPL session for ~a" uri)
+     session]))
+
+;; Evaluate code in a REPL session. Returns a list of result hasheqs.
+(define (eval-in-session! state session code)
+  (define raw-results (eval-in-session-raw! state session code))
+  ;; Format results for LSP response
+  (for/list ([r (in-list raw-results)])
+    (cond
+      [(prologos-error? r)
+       (hasheq 'text (prologos-error-message r)
+               'isError #t)]
+      [(string? r)
+       (hasheq 'text r
+               'isError #f)]
+      [else
+       (hasheq 'text (format "~a" r)
+               'isError #f)])))
+
+;; Low-level eval: parameterize with session state, call process-string-ws,
+;; snapshot state back. Returns raw results (strings and prologos-errors).
+(define (eval-in-session-raw! state session code)
+  (define pc (lsp-state-prelude-cache state))
+  (define results '())
+  (with-handlers
+    ([exn:fail?
+      (lambda (e)
+        (set! results (list (prologos-error #f (exn-message e)))))])
+    (parameterize ([current-global-env           (repl-session-global-env session)]
+                   [current-definition-cells-content (repl-session-definition-cells session)]
+                   [current-definition-dependencies  (repl-session-definition-deps session)]
+                   [current-ns-context           (repl-session-ns-context session)]
+                   [current-module-registry       (repl-session-module-registry session)]
+                   [current-lib-paths             (list (prelude-cache-lib-dir pc))]
+                   [current-mult-meta-store       (make-hasheq)]
+                   [current-preparse-registry     (repl-session-preparse-registry session)]
+                   [current-trait-registry         (repl-session-trait-registry session)]
+                   [current-impl-registry          (repl-session-impl-registry session)]
+                   [current-param-impl-registry    (repl-session-param-impl-registry session)]
+                   [current-capability-registry    (repl-session-capability-registry session)]
+                   [current-spec-store             (repl-session-spec-store session)]
+                   [current-error-port             (open-output-nowhere)]
+                   [current-definition-locations   (hasheq)])
+      (install-module-loader!)
+      (set! results (process-string-ws code))
+      ;; Snapshot state back into session (definitions accumulate)
+      (set-repl-session-global-env!           session (current-global-env))
+      (set-repl-session-ns-context!           session (current-ns-context))
+      (set-repl-session-module-registry!      session (current-module-registry))
+      (set-repl-session-trait-registry!        session (current-trait-registry))
+      (set-repl-session-impl-registry!         session (current-impl-registry))
+      (set-repl-session-param-impl-registry!   session (current-param-impl-registry))
+      (set-repl-session-preparse-registry!      session (current-preparse-registry))
+      (set-repl-session-capability-registry!    session (current-capability-registry))
+      (set-repl-session-spec-store!             session (current-spec-store))
+      (set-repl-session-definition-cells!       session (current-definition-cells-content))
+      (set-repl-session-definition-deps!        session (current-definition-dependencies))))
+  results)
 
 ;; Log a message to stderr (not stdout — stdout is the LSP channel).
 (define (lsp-log state fmt . args)
@@ -186,6 +343,50 @@
      (define line (hash-ref pos 'line))
      (define char (hash-ref pos 'character))
      (respond! (get-completions state uri line char))]
+
+    ;; ---- REPL: Evaluate (Tier 4) ----
+    ["$/prologos/eval"
+     (define uri  (hash-ref params 'uri ""))
+     (define code (hash-ref params 'code ""))
+     (lsp-log state "REPL eval (~a bytes) for ~a" (string-length code) uri)
+     (define session (get-or-create-session! state uri))
+     (define results (eval-in-session! state session code))
+     (respond! (hasheq 'results results))]
+
+    ;; ---- REPL: Load file (Tier 4) ----
+    ["$/prologos/loadFile"
+     (define uri  (hash-ref params 'uri ""))
+     (define code (hash-ref params 'code ""))
+     (lsp-log state "REPL loadFile for ~a" uri)
+     (define session (get-or-create-session! state uri))
+     (define results (eval-in-session! state session code))
+     (respond! (hasheq 'results results))]
+
+    ;; ---- REPL: Type of expression (Tier 4) ----
+    ["$/prologos/typeOf"
+     (define uri  (hash-ref params 'uri ""))
+     (define code (hash-ref params 'code ""))
+     (lsp-log state "REPL typeOf: ~a" code)
+     (define session (get-or-create-session! state uri))
+     ;; Try global-env lookup first, then wrap in infer
+     (define sym (string->symbol code))
+     (define entry (hash-ref (repl-session-global-env session) sym #f))
+     (cond
+       [(and entry (pair? entry))
+        (respond! (hasheq 'type (pp-expr (car entry))))]
+       [else
+        ;; Wrap in infer command
+        (define results (eval-in-session! state session (format "infer ~a" code)))
+        (respond! (hasheq 'type (if (null? results)
+                                    "unknown"
+                                    (hash-ref (car results) 'text "unknown"))))])]
+
+    ;; ---- REPL: Reset session (Tier 4) ----
+    ["$/prologos/resetSession"
+     (define uri (hash-ref params 'uri ""))
+     (lsp-log state "REPL resetSession for ~a" uri)
+     (hash-remove! (lsp-state-repl-sessions state) uri)
+     (respond! (hasheq 'ok #t))]
 
     ;; ---- Client notifications (silently ignored) ----
     ["$/setTrace" (void)]           ; trace level change — no-op
