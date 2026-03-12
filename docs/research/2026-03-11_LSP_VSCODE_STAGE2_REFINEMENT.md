@@ -66,11 +66,11 @@ Tier 1 (syntax-only, no server) can ship independently within ~1 week. Tier 2 (d
 
 | # | Sub-phase | ⏳ | Notes |
 |---|-----------|---|-------|
-| 1.0 | Extension scaffold (`package.json`, `tsconfig`, `extension.ts`) | ⬜ | |
-| 1.1 | Tree-sitter grammar refresh | ⬜ | Grammar stale since 2026-02-17; ~30 missing constructs (traits, specs, bundles, pipes, quote, logic, transients, etc.) |
-| 1.2 | TextMate grammar (`prologos.tmLanguage.json`) | ⬜ | Translate highlights.scm to regex patterns |
-| 1.3 | Language configuration + snippets | ⬜ | Brackets, comments, word pattern, 10 snippets |
-| 1.4 | Tree-sitter WASM build + query files | ⬜ | `folds.scm`, `indents.scm` |
+| 1.0 | Extension scaffold (`package.json`, `tsconfig`, `extension.ts`) | ✅ | `ca4d756` — manifest, TS config, minimal activation |
+| 1.1 | Tree-sitter grammar refresh | ✅ | `3b52243` — ~25 new forms, all literals, highlights/folds/indents queries. Parser regen needs node.js. |
+| 1.2 | TextMate grammar (`prologos.tmLanguage.json`) | ✅ | `ca4d756` — 15 scope categories, all current keywords/types/operators |
+| 1.3 | Language configuration + snippets | ✅ | `ca4d756` — brackets, comments, indentation, folding, 16 snippets |
+| 1.4 | Tree-sitter WASM build + query files | ⏸️ | Query files done (`3b52243`). WASM build blocked on node.js in sandbox. |
 | 1.5 | Integration test + verification | ⬜ | All §4.7 verification checklist items |
 
 ### Tier 2: Diagnostics & Navigation (LSP Server)
