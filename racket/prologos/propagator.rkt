@@ -179,8 +179,14 @@
 ;; get-rounds-fn: (→ (listof bsp-round)) — call after quiescence
 (define (make-trace-accumulator)
   (define rounds (box '()))
+  (define counter (box 0))
   (values
-   (lambda (round) (set-box! rounds (cons round (unbox rounds))))
+   (lambda (round)
+     (define n (unbox counter))
+     (set-box! counter (add1 n))
+     ;; Re-stamp round-number so it auto-increments across scheduler calls
+     (set-box! rounds (cons (struct-copy bsp-round round [round-number n])
+                            (unbox rounds))))
    (lambda () (reverse (unbox rounds)))))
 
 ;; ========================================
