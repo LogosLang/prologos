@@ -944,6 +944,14 @@
   (define type-surf (surf-def-type expanded))
   (define body-surf (surf-def-body expanded))
   (define def-srcloc (surf-def-srcloc expanded))
+  ;; LSP: register definition location eagerly (before elaboration),
+  ;; so go-to-definition works even when the body has errors.
+  (when def-srcloc
+    (register-definition-location! name def-srcloc)
+    (when (current-ns-context)
+      (define fqn (qualify-name name
+                    (ns-context-current-ns (current-ns-context))))
+      (register-definition-location! fqn def-srcloc)))
   ;; Phase 3b: Record dependencies during elaboration/type-checking.
   (parameterize ([current-elaborating-name name])
   (cond

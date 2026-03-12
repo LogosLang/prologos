@@ -285,14 +285,14 @@
      (define symbols '())
      (for ([line (in-list lines)]
            [line-num (in-naturals)])
-       (define m-defn (regexp-match #rx"^defn\\s+([a-zA-Z_][a-zA-Z0-9_?!'-]*)" line))
-       (define m-def  (regexp-match #rx"^def\\s+([a-zA-Z_][a-zA-Z0-9_?!'-]*)" line))
-       (define m-spec (regexp-match #rx"^spec\\s+([a-zA-Z_][a-zA-Z0-9_?!'-]*)" line))
-       (define m-data (regexp-match #rx"^data\\s+([a-zA-Z_][a-zA-Z0-9_?!'-]*)" line))
-       (define m-trait (regexp-match #rx"^trait\\s+([a-zA-Z_][a-zA-Z0-9_?!'-]*)" line))
-       (define m-impl (regexp-match #rx"^impl\\s+([a-zA-Z_][a-zA-Z0-9_?!'-]*)" line))
-       (define m-ns   (regexp-match #rx"^ns\\s+([a-zA-Z_][a-zA-Z0-9_.:-]*)" line))
-       (define m-bundle (regexp-match #rx"^bundle\\s+([a-zA-Z_][a-zA-Z0-9_?!'-]*)" line))
+       (define m-defn (regexp-match #rx"^\\s*defn\\s+([a-zA-Z_][a-zA-Z0-9_?!'-]*)" line))
+       (define m-def  (regexp-match #rx"^\\s*def\\s+([a-zA-Z_][a-zA-Z0-9_?!'-]*)" line))
+       (define m-spec (regexp-match #rx"^\\s*spec\\s+([a-zA-Z_][a-zA-Z0-9_?!'-]*)" line))
+       (define m-data (regexp-match #rx"^\\s*data\\s+([a-zA-Z_][a-zA-Z0-9_?!'-]*)" line))
+       (define m-trait (regexp-match #rx"^\\s*trait\\s+([a-zA-Z_][a-zA-Z0-9_?!'-]*)" line))
+       (define m-impl (regexp-match #rx"^\\s*impl\\s+([a-zA-Z_][a-zA-Z0-9_?!'-]*)" line))
+       (define m-ns   (regexp-match #rx"^\\s*ns\\s+([a-zA-Z_][a-zA-Z0-9_.:-]*)" line))
+       (define m-bundle (regexp-match #rx"^\\s*bundle\\s+([a-zA-Z_][a-zA-Z0-9_?!'-]*)" line))
 
        (define (add-symbol! name kind)
          (set! symbols
@@ -395,7 +395,7 @@
 ;; Returns 0-based line number or #f.
 (define (find-definition-line text name)
   (define escaped (regexp-quote name))
-  (define rx (regexp (string-append "^(?:def|defn|spec|data|trait|impl|bundle)\\s+" escaped "\\b")))
+  (define rx (regexp (string-append "^\\s*(?:def|defn|spec|data|trait|impl|bundle)\\s+" escaped "\\b")))
   (define lines (string-split text "\n"))
   (for/first ([l (in-list lines)]
               [n (in-naturals)]
