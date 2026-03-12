@@ -38,13 +38,106 @@ literally the same network"). The tool IS the documentation of the paradigm.
 | **Source linking** | **PARTIAL** | `elab-cell-info-source` has debug strings/srclocs; not yet wired to LSP locations | **Phase 3** |
 
 **Key architectural advantage**: The network is already pure/persistent (CHAMP structural sharing).
-Snapshots are zero-cost references. This makes trace capture and replay fundamentally simple —
-just keep a list of network snapshots at each step.
+Every intermediate `prop-network` value after a cell write is a complete, valid snapshot held
+by a single pointer to a CHAMP root. Old and new networks share all unchanged structure.
+This gives us Clojure-style "time-travel for free" — the question is just which snapshots to keep.
+
+## Trace Strategy: BSP-Round Snapshots
+
+### Design Decision: Why BSP Rounds, Not Per-Propagator Firings
+
+We evaluated four approaches to capturing propagator execution history. The key insight
+is that the BSP (Bulk-Synchronous Parallel) scheduler already computes per-cell diffs
+each round via `fire-and-collect-writes` — it just discards them. Capturing at BSP-round
+boundaries is both honest to the execution model and nearly free.
+
+#### Approaches Considered
+
+**Option A — Keep every intermediate network (Clojure-style full history)**
+
+`run-to-quiescence` is a pure recursive function `net → net → ... → net`. Each
+intermediate `net*` after a propagator fires is a complete snapshot. Just cons them
+onto an accumulator.
+
+| Metric | Typical (200 steps, ~100 cells) | Worst case (4230 steps) |
+|--------|--------------------------------|------------------------|
+| Snapshots kept | 200 | 4,230 |
+| Marginal memory per step | ~160B (2 changed cells × ~80B CHAMP path) | ~160B |
+| Total marginal memory | ~32KB | ~680KB |
+| Performance overhead | O(1) cons per step | O(1) cons per step |
+| Replay quality | Perfect — every firing is a full queryable network | Same |
+
+Risk: pathological cases (fuel exhaustion at 1M steps) could retain ~160MB. Mitigated
+by the parameter being off by default and skip-listed tests.
+
+**Option B — Callback observer parameter**
+
+A `current-step-observer` parameter called with `(prop-id, net-before, net-after)` at
+each firing. Observer decides what to keep.
+
+- Flexible but more API surface.
+- Observer must be careful not to retain too much.
+- Moderate code change.
+
+**Option C — Minimal diff log (step, prop-id, cell-id, old-value, new-value)**
+
+Record only the changes, not full snapshots. Reconstruct any intermediate state by
+replaying forward from the initial network.
+
+| Metric | Typical | Worst case |
+|--------|---------|------------|
+| Memory per step | ~100B (symbols + small values) | ~100B |
+| Total memory | ~20KB | ~420KB |
+| Replay to step N | O(N) reconstruction | O(N) |
+| Random access | O(N) without checkpoints | Add periodic snapshots for O(√N) |
+
+The BSP scheduler's `fire-and-collect-writes` already computes these diffs — capturing
+them is literally one `cons` in existing code.
+
+**Option D — BSP-round snapshots + diffs (CHOSEN)**
+
+Keep a network reference at each BSP *round* boundary, not at each individual firing.
+For 200 steps with ~10 propagators per round, that's ~20 round snapshots instead of
+200 per-firing snapshots. Combined with the per-cell diffs BSP already computes:
+
+| Metric | Typical (~20 rounds) | Worst case (~400 rounds) |
+|--------|---------------------|-------------------------|
+| Snapshots kept | ~20 | ~400 |
+| Marginal memory | ~3.2KB | ~64KB |
+| Diffs per round | Free (already computed) | Free |
+| Round-level replay | Instant (direct snapshot) | Instant |
+| Per-firing replay | Reconstruct within round | Reconstruct within round |
+| Performance overhead | Near-zero | Near-zero |
+
+**Why this is the right granularity:**
+- BSP rounds ARE the natural unit of propagation — all propagators in a round fire
+  against the same snapshot, then writes are merged. This is the semantic step.
+- Per-firing detail within a round is an implementation artifact of the scheduler,
+  not a meaningful unit of information flow.
+- If per-firing visualization is wanted later (e.g., for custom user-defined
+  propagator networks), it can be added as a separate concern using Option A
+  on a targeted subnetwork.
+
+### Memory Budget
+
+Based on actual elaboration metrics from the test suite:
+
+| Metric | Typical | Peak | Source |
+|--------|---------|------|--------|
+| Elaborate steps | 0–200 | 4,230 | `timings.jsonl` |
+| Metavars created | 0–25 | 103 | `timings.jsonl` |
+| BSP rounds (est.) | 5–20 | ~400 | steps / avg propagators per round |
+| Retained memory | 0–260KB | 260KB | `MEMORY-STATS` |
+| Heap baseline | ~120MB | ~120MB | `MEMORY-STATS` |
+
+The BSP-round trace adds <0.1% to heap in all measured cases. No special memory
+management needed. The parameter is off by default — zero overhead in normal operation,
+test suite, and CI. Only the LSP visualization path enables it.
 
 ## Critical Path
 
 ```
-Phase 1 (Trace Capture)
+Phase 1 (BSP Round Capture)
     ↓
 Phase 2 (Serialization)
     ↓
@@ -52,7 +145,7 @@ Phase 3 (LSP Endpoint) ← depends on Phase 1 + 2
     ↓
 Phase 4 (VS Code Panel) ← depends on Phase 3
     ↓
-Phase 5 (Step-Through)  ← depends on Phase 4 + trace data from Phase 1
+Phase 5 (Round Replay)  ← depends on Phase 4 + round data from Phase 1
     ↓
 Phase 6 (Polish)        ← depends on Phase 4 + 5
 ```
@@ -60,62 +153,71 @@ Phase 6 (Polish)        ← depends on Phase 4 + 5
 Phases 1 and 2 can be developed/tested independently of the VS Code extension.
 Phase 4 can start with static snapshot rendering while Phase 5 adds replay.
 
-## Phase 1: Trace Capture
+## Phase 1: BSP-Round Trace Capture
 
-**Goal**: Record a timestamped event log during elaboration: cell creations, cell writes,
-propagator registrations, propagator firings, contradictions, and ATMS events.
+**Goal**: Capture a network snapshot and cell-diff summary at each BSP round boundary.
+Leverage the persistent network and BSP's existing diff mechanism — no new instrumentation
+of individual cell writes or propagator internals.
 
-### 1a: Event Structs
-
-Define trace event types in a new `trace.rkt`:
-
-```racket
-(struct trace-event (step-number kind data) #:transparent)
-
-;; kind is one of:
-;; 'cell-new       data: (hasheq 'cell-id N 'merge-kind symbol 'source string)
-;; 'cell-write     data: (hasheq 'cell-id N 'old-value any 'new-value any 'changed? bool)
-;; 'prop-new       data: (hasheq 'prop-id N 'inputs (listof N) 'outputs (listof N) 'kind symbol)
-;; 'prop-fire      data: (hasheq 'prop-id N 'writes (listof N))
-;; 'contradiction  data: (hasheq 'cell-id N 'value any)
-;; 'atms-assume    data: (hasheq 'assumption-id N 'name symbol)
-;; 'atms-nogood    data: (hasheq 'assumption-ids (listof N))
-;; 'quiescence     data: (hasheq 'steps N 'unsolved N 'contradicted N)
-```
-
-### 1b: Instrumented Network Operations
-
-Wrap `net-cell-write`, `net-add-propagator`, and `run-to-quiescence` with optional
-trace capture controlled by a parameter:
+### 1a: Round Record Struct
 
 ```racket
-(define current-trace-log (make-parameter #f))  ;; #f = off, box of list = on
-
-(define (trace-emit! event)
-  (define log (current-trace-log))
-  (when log
-    (set-box! log (cons event (unbox log)))))
+(struct bsp-round
+  (round-number        ;; Nat — 0-indexed round
+   network             ;; prop-network — snapshot at END of this round (O(1) reference)
+   cell-diffs          ;; (listof (list cell-id old-value new-value)) — cells changed this round
+   propagators-fired   ;; (listof prop-id) — which propagators fired this round
+   contradiction?)     ;; #f | cell-id — if contradiction detected this round
+  #:transparent)
 ```
 
-The parameter is `#f` by default — zero overhead in normal operation.
-Only the LSP (or test harness) sets it to capture traces.
+No new event types, no trace-emit! machinery — just a list of `bsp-round` values
+accumulated by the scheduler itself.
 
-### 1c: Snapshot Bookmarks
+### 1b: Modified BSP Scheduler
 
-Since the network is persistent, capture a reference to the network state at each
-quiescence point (or at each step in detailed mode):
+`run-to-quiescence-bsp` already has the round loop structure and computes diffs.
+The change is minimal — accumulate round records when tracing is on:
 
 ```racket
-(struct trace-snapshot (step-number network) #:transparent)
+(define current-bsp-trace (make-parameter #f))  ;; #f = off, box of list = on
+
+;; Inside run-to-quiescence-bsp, at end of each round:
+(when (current-bsp-trace)
+  (set-box! (current-bsp-trace)
+    (cons (bsp-round round-number merged cell-diffs fired-pids contradiction)
+          (unbox (current-bsp-trace)))))
 ```
 
-These are O(1) to create (just a pointer to the CHAMP root). The detailed step-by-step
-snapshots enable replay in Phase 5.
+The round's `merged` network is already computed — we just keep a reference to it.
+The `cell-diffs` are already computed by `fire-and-collect-writes` — we just don't
+discard them. Zero new computation.
 
-**Files**: New `racket/prologos/trace.rkt`
-**Modifications**: `propagator.rkt` (instrumented wrappers), `elaborator-network.rkt` (elab-solve trace hooks)
-**Tests**: ~10 (trace capture on small networks, verify event ordering)
-**Dependencies**: None (purely additive)
+### 1c: Initial Network Capture
+
+Also capture the network state BEFORE the first round (round -1 / initial state).
+This is the "blank canvas" — all cells at their initial values before any propagation.
+
+```racket
+(struct bsp-trace
+  (initial-network     ;; prop-network before first round
+   rounds              ;; (listof bsp-round) in chronological order
+   final-network)      ;; prop-network after last round (= quiescent state)
+  #:transparent)
+```
+
+### 1d: Gauss-Seidel Fallback
+
+The standard `run-to-quiescence` (Gauss-Seidel scheduler) fires one propagator at a
+time. For visualization, treat each firing as a degenerate "round" of one propagator.
+Use Option A (accumulate per-firing snapshots) since GS is only used when BSP isn't
+available. The per-firing snapshots in GS are equivalent to per-round snapshots in BSP
+from the user's perspective.
+
+**Files**: Modified `propagator.rkt` (bsp-round struct, accumulator in BSP loop)
+**New exports**: `bsp-round`, `bsp-trace`, `current-bsp-trace`
+**Tests**: ~8 (trace capture on small networks, verify round ordering and diffs)
+**Dependencies**: None (purely additive, parameter off by default)
 
 ## Phase 2: Network Serialization
 
@@ -288,45 +390,54 @@ Loaded in the webview via a local URI.
 **Dependencies**: Phase 3 (LSP endpoint for data), Cytoscape.js (bundled)
 **Tests**: Manual visual testing + snapshot tests for serialization
 
-## Phase 5: Step-Through Replay
+## Phase 5: BSP-Round Replay
 
-**Goal**: Replay the elaboration trace step-by-step, showing cells narrowing over time.
+**Goal**: Replay the elaboration trace round-by-round, showing cells narrowing over time.
+Each BSP round is a natural frame — all propagators in the round fire against the same
+snapshot, then writes merge. This IS how propagation works; the visualization is honest
+to the execution model.
 
 ### 5a: Timeline Control
 
 Add a timeline control bar below the graph:
 - Play/pause button
-- Step forward/backward
+- Step forward/backward (one BSP round per step)
 - Speed control
-- Step counter: "Step 14 / 87"
+- Round counter: "Round 7 / 18"
 - Jump to contradiction (if any)
 
 ### 5b: Differential Rendering
 
-On each step, compute the diff from the previous state:
-- Cells that changed value → flash animation, update label
-- Propagator that fired → highlight edges
-- New cells/propagators → fade in
+Each `bsp-round` already contains the `cell-diffs` (which cells changed) and
+`propagators-fired` (which propagators ran). No diffing needed — it's pre-computed:
+- Cells in `cell-diffs` → flash animation, update label with new value
+- Propagators in `propagators-fired` → highlight edges
+- New cells/propagators (round 0 → 1) → fade in
 - Contradiction → red pulse on the cell
 
-Since network snapshots are persistent, the diff is computed by comparing
-cell values between consecutive snapshot references.
+### 5c: Round Annotations
 
-### 5c: Trace Event Annotations
+Show the current round's summary as a status bar annotation:
+- `"Round 3: 4 propagators fired, 2 cells narrowed"`
+- `"Round 7: unify #3 ↔ #5 → Int, trait-resolve #8 → Eq Int"`
+- `"Round 12: Contradiction at Cell #15"` (red)
+- `"Quiescence: 18 rounds, 42 cells solved, 0 unsolved"` (green)
 
-Show the current trace event as a status bar annotation:
-- `"Cell #3 wrote: Int → (Int → Int)"` (narrowing)
-- `"Propagator #7 fired (unify #3 ↔ #5)"`
-- `"Contradiction at Cell #12"` (red)
-- `"Quiescence reached: 8 solved, 0 unsolved"` (green)
+### 5d: Bookmarked Rounds
 
-### 5d: Bookmarked Snapshots
+Allow the user to bookmark specific rounds. Useful for comparing "before and after"
+a particular propagation burst. Since each round's snapshot is already retained
+(O(1) pointer), bookmarking is free.
 
-Allow the user to bookmark specific steps. Useful for comparing "before and after"
-a particular propagation. Since snapshots are O(1), this is trivially cheap.
+### 5e: Future — Per-Firing Detail Within a Round
+
+For advanced users or custom propagator networks, allow expanding a single BSP round
+to see the individual propagator firings within it. This would use Option A
+(per-firing snapshots) scoped to just the selected round — not the entire elaboration.
+Deferred until custom prop-net specification support is in place.
 
 **Files**: Modified `propagator-view.ts` (timeline UI + diff rendering)
-**Dependencies**: Phase 4 (graph panel), Phase 1 (trace data)
+**Dependencies**: Phase 4 (graph panel), Phase 1 (BSP round data)
 
 ## Phase 6: Polish and Integration
 
@@ -357,10 +468,26 @@ When a contradiction exists:
 
 ## Tradeoff Analysis
 
+### Trace Capture Strategy
+
+| Approach | Memory (typical) | Memory (peak) | Perf overhead | Replay quality | Code change |
+|----------|-----------------|---------------|---------------|----------------|-------------|
+| A: Full per-firing snapshots | ~32KB | ~680KB | O(1) cons/step | Perfect | Small (accumulator) |
+| B: Callback observer | Varies | Varies | 1 call/step | Varies | Moderate |
+| C: Minimal diff log | ~20KB | ~420KB | ~Free (BSP already diffs) | O(N) reconstruction | Small |
+| **D: BSP-round snapshots** | **~3.2KB** | **~64KB** | **Near-zero** | **Instant per-round** | **Minimal** |
+
+**Chosen: Option D.** BSP rounds are the semantic unit of propagation. The scheduler already
+computes diffs; we just stop discarding them. Memory is <0.1% of heap in all measured cases.
+Per-firing resolution deferred to future work on custom prop-net specifications.
+
+### Visualization Approach
+
 | Approach | Pros | Cons | Recommendation |
 |----------|------|------|----------------|
 | Static snapshot only | Simple, no trace overhead | No animation, less educational | Start here (Phase 4a-d) |
-| Full step-by-step trace | Maximum insight | Memory for snapshots, UI complexity | Phase 5 (additive) |
+| BSP-round replay | Natural granularity, low memory | Not per-firing | Phase 5 (additive) |
+| Per-firing replay | Maximum detail | Higher memory, GS scheduler only | Future (custom prop-nets) |
 | Live incremental (Tier 3+) | Real-time as user types | Requires incremental elaboration | Future (when LSP Tier 3+ lands) |
 | Separate Electron app | No VS Code coupling | Separate install, context switching | Not recommended |
 | Web-based (localhost) | Cross-editor | Deployment complexity | Not recommended for Phase 0 |
