@@ -5,11 +5,16 @@ import {
   LanguageClientOptions,
   ServerOptions,
 } from 'vscode-languageclient/node';
+import { ReplManager } from './repl';
+import { DecorationsManager } from './decorations';
 
 let client: LanguageClient | undefined;
+let replManager: ReplManager | undefined;
+let decorationsManager: DecorationsManager | undefined;
 
 export function activate(context: vscode.ExtensionContext) {
   const outputChannel = vscode.window.createOutputChannel('Prologos');
+  const replChannel = vscode.window.createOutputChannel('Prologos REPL');
   outputChannel.appendLine('Prologos extension activating...');
 
   // Resolve Racket path — check setting, then common locations
@@ -77,8 +82,36 @@ export function activate(context: vscode.ExtensionContext) {
     clientOptions
   );
 
+  // Initialize REPL infrastructure
+  decorationsManager = new DecorationsManager();
+  context.subscriptions.push(decorationsManager);
+
   client.start().then(
-    () => outputChannel.appendLine('LSP client started successfully'),
+    () => {
+      outputChannel.appendLine('LSP client started successfully');
+
+      // REPL commands require a running client
+      replManager = new ReplManager(client!, replChannel, decorationsManager!);
+
+      // Register REPL commands
+      context.subscriptions.push(
+        vscode.commands.registerCommand('prologos.evalTopLevel', () =>
+          replManager!.evalTopLevel()
+        ),
+        vscode.commands.registerCommand('prologos.evalSelection', () =>
+          replManager!.evalSelection()
+        ),
+        vscode.commands.registerCommand('prologos.loadFile', () =>
+          replManager!.loadFile()
+        ),
+        vscode.commands.registerCommand('prologos.typeOf', () =>
+          replManager!.typeOf()
+        ),
+        vscode.commands.registerCommand('prologos.resetSession', () =>
+          replManager!.resetSession()
+        ),
+      );
+    },
     (err) => {
       outputChannel.appendLine(`ERROR starting LSP client: ${err}`);
       vscode.window.showErrorMessage(`Prologos LSP failed to start: ${err.message || err}`);
@@ -94,28 +127,13 @@ export async function deactivate(): Promise<void> {
 
 /**
  * Find the LSP server.rkt file.
- * Checks relative to the extension, then falls back to common project locations.
  */
 function resolveServerPath(context: vscode.ExtensionContext): string {
-  // The server.rkt lives in the prologos source tree
-  // When installed as extension: bundled alongside
-  // During development: relative to workspace
-  const candidates = [
-    // Relative to extension
-    path.join(context.extensionPath, '..', '..', 'racket', 'prologos', 'lsp', 'server.rkt'),
-    // Development: workspace folder
-    ...(vscode.workspace.workspaceFolders || []).map(f =>
-      path.join(f.uri.fsPath, 'racket', 'prologos', 'lsp', 'server.rkt')
-    ),
-  ];
-
-  // For now, use a setting or the first candidate
   const config = vscode.workspace.getConfiguration('prologos');
   const configuredPath = config.get<string>('serverPath');
   if (configuredPath) {
     return configuredPath;
   }
-
   // Default: assume extension is in editors/vscode-prologos/
   return path.join(context.extensionPath, '..', '..', 'racket', 'prologos', 'lsp', 'server.rkt');
 }

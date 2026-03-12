@@ -46,6 +46,61 @@
         "path": "./snippets/prologos.json"
       }
     ],
+    "commands": [
+      {
+        "command": "prologos.evalTopLevel",
+        "title": "Prologos: Evaluate Top-Level Form",
+        "icon": "$(play)"
+      },
+      {
+        "command": "prologos.evalSelection",
+        "title": "Prologos: Evaluate Selection"
+      },
+      {
+        "command": "prologos.loadFile",
+        "title": "Prologos: Load File into REPL"
+      },
+      {
+        "command": "prologos.typeOf",
+        "title": "Prologos: Type Of Expression"
+      },
+      {
+        "command": "prologos.resetSession",
+        "title": "Prologos: Reset REPL Session"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "prologos.evalTopLevel",
+        "key": "ctrl+enter",
+        "mac": "cmd+enter",
+        "when": "editorTextFocus && editorLangId == prologos"
+      },
+      {
+        "command": "prologos.evalSelection",
+        "key": "ctrl+shift+enter",
+        "mac": "cmd+shift+enter",
+        "when": "editorTextFocus && editorLangId == prologos"
+      },
+      {
+        "command": "prologos.loadFile",
+        "key": "ctrl+alt+enter",
+        "mac": "cmd+alt+enter",
+        "when": "editorTextFocus && editorLangId == prologos"
+      },
+      {
+        "command": "prologos.typeOf",
+        "key": "ctrl+shift+t",
+        "mac": "cmd+shift+t",
+        "when": "editorTextFocus && editorLangId == prologos"
+      },
+      {
+        "command": "prologos.resetSession",
+        "key": "ctrl+alt+r",
+        "mac": "cmd+alt+r",
+        "when": "editorTextFocus && editorLangId == prologos"
+      }
+    ],
     "configuration": {
       "title": "Prologos",
       "properties": {
