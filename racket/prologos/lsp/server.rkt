@@ -648,6 +648,22 @@
         (if (= start end) #f
             (substring l start end))])]))
 
+;; Like word-at-position, but also finds words when cursor is immediately
+;; after a word (e.g., "factorial|") or between words on the same line.
+;; Falls back to the first word on the line (the "head" of the form).
+;; Used for InfoView where we want sticky type display.
+(define (word-near-position text line char)
+  ;; First try exact position
+  (or (word-at-position text line char)
+      ;; Try one char to the left (cursor just past end of word)
+      (and (> char 0) (word-at-position text line (sub1 char)))
+      ;; Fall back: first word on this line (head of the form)
+      (let ([lines (string-split text "\n")])
+        (and (< line (length lines))
+             (let ([l (list-ref lines line)])
+               (define m (regexp-match #rx"^\\s*([A-Za-z_][A-Za-z0-9_?!':=-]*)" l))
+               (and m (cadr m)))))))
+
 ;; Regex-scan fallback: find the line number where a name is defined.
 ;; Returns 0-based line number or #f.
 (define (find-definition-line text name)
@@ -816,8 +832,9 @@
   (define text (hash-ref (lsp-state-document-contents state) uri #f))
   (define type-env (hash-ref (lsp-state-type-envs state) uri #f))
 
-  ;; 1. Type at cursor — check type-env first, then fall back to spec-store
-  (define word (and text (word-at-position text line char)))
+  ;; 1. Type at cursor — use word-near-position for sticky display
+  ;;    (shows type when cursor is at end of word or between args)
+  (define word (and text (word-near-position text line char)))
   (define spec-store (hash-ref (lsp-state-spec-stores state) uri #f))
   (define type-at-cursor
     (and word
