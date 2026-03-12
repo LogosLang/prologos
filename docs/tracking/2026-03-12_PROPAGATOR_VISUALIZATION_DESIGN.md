@@ -134,24 +134,154 @@ The BSP-round trace adds <0.1% to heap in all measured cases. No special memory
 management needed. The parameter is off by default — zero overhead in normal operation,
 test suite, and CI. Only the LSP visualization path enables it.
 
+### Zero-Cost-When-Off Guarantee
+
+When `current-bsp-observer` is `#f` (the default), the trace infrastructure imposes
+**no measurable cost** on the propagator network:
+
+- **No new allocation**: The intermediate `merged` network and `all-writes` diff list
+  are already computed by the BSP scheduler as part of its normal operation. When tracing
+  is off, they are used and GC'd exactly as today. No new data structures are created.
+- **No new computation**: `fire-and-collect-writes` already diffs output cells to know
+  what to merge. We are not adding diffing — we are optionally retaining diffs that are
+  already computed and currently discarded.
+- **Minimal branch cost**: One `(when observer ...)` check per BSP round, where `observer`
+  is a let-bound local from `(current-bsp-observer)` read once at loop entry. Evaluates to
+  `#f`, skips the body. This is the same pattern used by `current-perf-counters` throughout
+  the codebase.
+- **No struct instantiation**: The `bsp-round`, `cell-diff`, and `prop-trace` struct
+  definitions exist in the module but are never instantiated when tracing is off.
+- **No GC pressure**: No references are retained, no snapshot lifetimes are extended.
+  The GC profile is identical to the current codebase.
+
+This guarantee means the visualization feature can be merged into the main codebase
+without any performance regression for users who never open the Propagator View panel.
+
 ## Critical Path
 
 ```
+Phase 0 (First-Class Trace Data Type)
+    ↓
 Phase 1 (BSP Round Capture)
     ↓
-Phase 2 (Serialization)
+Phase 2 (Serialization)      ← thin adapter over Phase 0 data
     ↓
-Phase 3 (LSP Endpoint) ← depends on Phase 1 + 2
+Phase 3 (LSP Endpoint)       ← depends on Phase 1 + 2
     ↓
-Phase 4 (VS Code Panel) ← depends on Phase 3
+Phase 4 (VS Code Panel)      ← depends on Phase 3
     ↓
-Phase 5 (Round Replay)  ← depends on Phase 4 + round data from Phase 1
+Phase 5 (Round Replay)       ← depends on Phase 4 + round data from Phase 1
     ↓
-Phase 6 (Polish)        ← depends on Phase 4 + 5
+Phase 6 (Polish)             ← depends on Phase 4 + 5
 ```
 
+Phase 0 defines the data representation first — all subsequent phases are views over it.
 Phases 1 and 2 can be developed/tested independently of the VS Code extension.
 Phase 4 can start with static snapshot rendering while Phase 5 adds replay.
+
+## Phase 0: First-Class Trace Data Representation
+
+**Goal**: Define the trace data as a first-class Prologos-side type before any capture
+or serialization code exists. The trace is *data* — pure, inspectable, serializable,
+reusable — not an implementation artifact of the visualization pipeline.
+
+**Principle**: First-Class by Default. The BSP round trace should be representable as
+a Prologos `data` type (or at minimum a well-defined Racket struct hierarchy that
+corresponds 1:1 to a future Prologos type). JSON serialization becomes a thin adapter
+over this data, not the canonical form. Other consumers (REPL inspection, programmatic
+analysis, test assertions, future Prologos-side tooling) work with the same data.
+
+### 0a: Core Data Types
+
+```racket
+;; A single BSP round's record — pure data, no side effects
+(struct bsp-round
+  (round-number        ;; Nat — 0-indexed
+   network-snapshot    ;; prop-network — immutable CHAMP snapshot at round end
+   cell-diffs          ;; (listof cell-diff) — what changed this round
+   propagators-fired   ;; (listof prop-id) — which propagators fired
+   contradiction       ;; #f | cell-id — contradiction detected this round
+   atms-events)        ;; (listof atms-event) — assumption/retraction/nogood events
+  #:transparent)
+
+(struct cell-diff
+  (cell-id             ;; cell-id
+   old-value           ;; any — cell value before round
+   new-value           ;; any — cell value after round
+   source-propagator)  ;; prop-id — which propagator wrote this change
+  #:transparent)
+
+;; ATMS events that occur during a BSP round
+(struct atms-event () #:transparent)
+(struct atms-event:assume atms-event (cell-id assumption-label) #:transparent)
+(struct atms-event:retract atms-event (cell-id assumption-label reason) #:transparent)
+(struct atms-event:nogood atms-event (nogood-set explanation) #:transparent)
+
+;; The complete trace of an elaboration run
+(struct prop-trace
+  (initial-network     ;; prop-network — state before first round
+   rounds              ;; (listof bsp-round) — chronological order
+   final-network       ;; prop-network — quiescent state
+   metadata)           ;; hasheq — elaboration context (file, timestamp, fuel-used, etc.)
+  #:transparent)
+```
+
+### 0b: Data-Oriented Design Rationale
+
+The trace types are **pure data** with no behavior attached:
+- `#:transparent` — inspectable, printable, testable via `equal?`
+- No mutable fields — a `prop-trace` value is a complete, immutable record
+- No methods or protocols — operations are external functions over the data
+- Composable — two traces can be concatenated, filtered, or diffed
+- The `metadata` hasheq is an open extension point (timestamps, file paths,
+  elaboration options) without requiring struct changes
+
+This follows the project's **Decomplection** principle: the data representation is
+decoupled from how it's captured (Phase 1), how it's serialized (Phase 2), and how
+it's rendered (Phase 4). Any of these can change independently.
+
+### 0c: ATMS Event Representation
+
+Non-monotonic events (assumption introduction, retraction, nogood discovery) are
+first-class in the round record via `atms-events`. This is critical because:
+- ATMS operations happen *during* BSP rounds, interleaved with cell writes
+- A nogood discovered mid-round changes the interpretation of subsequent propagator firings
+- The diagnosis view (Phase 6c) needs to correlate nogoods with the round in which
+  they were discovered
+- Without explicit ATMS events, the trace would be incomplete for any elaboration
+  involving speculative type-checking (Church folds, union dispatch)
+
+### 0d: Future Prologos-Side Type
+
+The Racket structs are designed to map directly to a future Prologos `data` declaration:
+
+```
+data CellDiff := cell-diff [cell-id : CellId] [old : Value] [new : Value] [source : PropId]
+
+data AtmsEvent
+  | assume [cell : CellId] [label : Symbol]
+  | retract [cell : CellId] [label : Symbol] [reason : Symbol]
+  | nogood [nogood-set : List Assumption] [explanation : List CellId]
+
+data BspRound := bsp-round
+  [round : Nat] [snapshot : PropNetwork] [diffs : List CellDiff]
+  [fired : List PropId] [contradiction : Option CellId]
+  [atms-events : List AtmsEvent]
+
+data PropTrace := prop-trace
+  [initial : PropNetwork] [rounds : List BspRound]
+  [final : PropNetwork] [metadata : Map Symbol Value]
+```
+
+When Prologos gains FFI or reflection capabilities, these types become the bridge
+between the Racket runtime and Prologos-side analysis tools.
+
+**Files**: New structs in `racket/prologos/propagator.rkt` (co-located with network types)
+**Exports**: `bsp-round`, `cell-diff`, `atms-event`, `atms-event:assume/retract/nogood`, `prop-trace`
+**Tests**: ~5 (struct construction, transparency, equality)
+**Dependencies**: None
+
+---
 
 ## Phase 1: BSP-Round Trace Capture
 
@@ -159,54 +289,71 @@ Phase 4 can start with static snapshot rendering while Phase 5 adds replay.
 Leverage the persistent network and BSP's existing diff mechanism — no new instrumentation
 of individual cell writes or propagator internals.
 
-### 1a: Round Record Struct
+### 1a: Data Types
+
+Phase 0 defines the data types (`bsp-round`, `cell-diff`, `atms-event`, `prop-trace`).
+Phase 1 uses them — no new struct definitions needed here.
+
+### 1b: Observer Parameter (Decoupled)
+
+The capture mechanism uses a **callback parameter**, not a mutable box. This follows
+the **Decomplection** principle: the scheduler emits round records; what happens to
+them is the caller's concern.
 
 ```racket
-(struct bsp-round
-  (round-number        ;; Nat — 0-indexed round
-   network             ;; prop-network — snapshot at END of this round (O(1) reference)
-   cell-diffs          ;; (listof (list cell-id old-value new-value)) — cells changed this round
-   propagators-fired   ;; (listof prop-id) — which propagators fired this round
-   contradiction?)     ;; #f | cell-id — if contradiction detected this round
-  #:transparent)
-```
-
-No new event types, no trace-emit! machinery — just a list of `bsp-round` values
-accumulated by the scheduler itself.
-
-### 1b: Modified BSP Scheduler
-
-`run-to-quiescence-bsp` already has the round loop structure and computes diffs.
-The change is minimal — accumulate round records when tracing is on:
-
-```racket
-(define current-bsp-trace (make-parameter #f))  ;; #f = off, box of list = on
+;; Observer callback: (bsp-round → void). #f = no observer = zero cost.
+(define current-bsp-observer (make-parameter #f))
 
 ;; Inside run-to-quiescence-bsp, at end of each round:
-(when (current-bsp-trace)
-  (set-box! (current-bsp-trace)
-    (cons (bsp-round round-number merged cell-diffs fired-pids contradiction)
-          (unbox (current-bsp-trace)))))
+(define observer (current-bsp-observer))
+(when observer
+  (observer (bsp-round round-number merged cell-diffs fired-pids contradiction atms-evts)))
 ```
+
+**Why a callback, not a box-of-list?** A `box` couples the scheduler to a specific
+accumulation strategy (prepend-then-reverse). A callback lets callers:
+- Accumulate into a list (the common case for visualization)
+- Stream to a file (for large traces)
+- Filter on the fly (keep only rounds with contradictions)
+- Forward to an LSP notification channel (live updates)
+
+The standard accumulator is a one-liner convenience:
+
+```racket
+;; Convenience: create an accumulating observer
+(define (make-trace-accumulator)
+  (define rounds (box '()))
+  (values
+    (lambda (round) (set-box! rounds (cons round (unbox rounds))))
+    (lambda () (reverse (unbox rounds)))))  ;; → (listof bsp-round)
+```
+
+### 1c: Modified BSP Scheduler
+
+`run-to-quiescence-bsp` already has the round loop structure and computes diffs.
+The change is minimal — call the observer when present:
 
 The round's `merged` network is already computed — we just keep a reference to it.
 The `cell-diffs` are already computed by `fire-and-collect-writes` — we just don't
 discard them. Zero new computation.
 
-### 1c: Initial Network Capture
+### 1d: Initial + Final Network Capture
 
-Also capture the network state BEFORE the first round (round -1 / initial state).
-This is the "blank canvas" — all cells at their initial values before any propagation.
+The caller captures the network before and after `run-to-quiescence-bsp` to construct
+the full `prop-trace`. This keeps the scheduler free of trace-assembly concerns:
 
 ```racket
-(struct bsp-trace
-  (initial-network     ;; prop-network before first round
-   rounds              ;; (listof bsp-round) in chronological order
-   final-network)      ;; prop-network after last round (= quiescent state)
-  #:transparent)
+(define (elaborate-with-trace ...)
+  (define-values (observe get-rounds) (make-trace-accumulator))
+  (define initial-net (current-prop-network))
+  (parameterize ([current-bsp-observer observe])
+    (run-to-quiescence-bsp ...))
+  (define final-net (current-prop-network))
+  (prop-trace initial-net (get-rounds) final-net
+              (hasheq 'file uri 'timestamp (current-seconds))))
 ```
 
-### 1d: Gauss-Seidel Fallback
+### 1e: Gauss-Seidel Fallback
 
 The standard `run-to-quiescence` (Gauss-Seidel scheduler) fires one propagator at a
 time. For visualization, treat each firing as a degenerate "round" of one propagator.
@@ -214,14 +361,18 @@ Use Option A (accumulate per-firing snapshots) since GS is only used when BSP is
 available. The per-firing snapshots in GS are equivalent to per-round snapshots in BSP
 from the user's perspective.
 
-**Files**: Modified `propagator.rkt` (bsp-round struct, accumulator in BSP loop)
-**New exports**: `bsp-round`, `bsp-trace`, `current-bsp-trace`
+**Files**: Modified `propagator.rkt` (observer param, observer call in BSP loop)
+**New exports**: `current-bsp-observer`, `make-trace-accumulator`
 **Tests**: ~8 (trace capture on small networks, verify round ordering and diffs)
-**Dependencies**: None (purely additive, parameter off by default)
+**Dependencies**: Phase 0 (data types)
 
 ## Phase 2: Network Serialization
 
 **Goal**: Serialize a network snapshot + trace log to JSON for consumption by LSP/VS Code.
+This is a **thin adapter** over the Phase 0 data types — the canonical representation is
+the Racket-side `prop-trace` / `bsp-round` structs, not the JSON. Any consumer that can
+work with the Racket data directly (REPL, tests, future Prologos-side tools) should prefer
+the structs over JSON.
 
 ### 2a: Cell Serialization
 
@@ -283,19 +434,22 @@ session types). Need a `serialize-lattice-value` that handles:
 
 ### 3a: Network Capture During Elaboration
 
-Extend `elaborate-and-publish-diagnostics!` to optionally capture the elaboration network
-(not just the global-env and spec-store):
+Extend `elaborate-and-publish-diagnostics!` to optionally capture the trace using
+the decoupled observer from Phase 1:
 
 ```racket
 ;; In elaborate-and-publish-diagnostics!:
-(define captured-elab-network #f)
-(define captured-trace-log #f)
+(define-values (observe get-rounds) (make-trace-accumulator))
+(define initial-net #f)
 
-(parameterize ([current-trace-log (box '())]
+(parameterize ([current-bsp-observer (if trace-enabled? observe #f)]
                ...)
+  (set! initial-net (current-prop-network))
   (process-file tmp-path)
-  (set! captured-elab-network (current-elab-network))
-  (set! captured-trace-log (reverse (unbox (current-trace-log)))))
+  (when trace-enabled?
+    (set! captured-trace
+      (prop-trace initial-net (get-rounds) (current-prop-network)
+                  (hasheq 'file uri 'timestamp (current-seconds))))))
 ```
 
 Store in lsp-state:
@@ -303,7 +457,7 @@ Store in lsp-state:
 (struct lsp-state
   (...
    elab-networks     ;; hash: uri → elab-network (snapshot after elaboration)
-   trace-logs        ;; hash: uri → (listof trace-event)
+   prop-traces       ;; hash: uri → prop-trace (when visualization active)
    ...))
 ```
 
@@ -494,10 +648,61 @@ Per-firing resolution deferred to future work on custom prop-net specifications.
 
 ## Principle Alignment
 
+### Principles This Design Honors
+
 - **Invisible infrastructure, visible behavior**: The propagator network is infrastructure;
   the visualization makes its behavior visible without changing it.
-- **Homoiconicity**: The network is data; the visualization is a view of that data.
 - **Completeness over deferral**: Each phase is self-contained and useful on its own.
   Phase 4 (static graph) is valuable without Phase 5 (replay).
 - **The tool is the documentation**: The visualization explains propagators better than
   any paper. This aligns with the project's educational mission.
+- **Zero-cost-when-off**: The observer parameter adds no overhead when disabled,
+  matching the `current-perf-counters` pattern used throughout the codebase.
+
+### Principles Addressed by This Design (Self-Critique Incorporated)
+
+**First-Class by Default** — Phase 0 addresses this directly. The trace is defined as
+a first-class data type (`prop-trace`, `bsp-round`, `cell-diff`) before any capture or
+serialization code. JSON is a thin adapter, not the canonical representation. The data
+is inspectable from the REPL, testable via `equal?`, composable (traces can be filtered,
+concatenated, diffed), and will map 1:1 to a future Prologos `data` declaration. This
+ensures the trace is reusable beyond visualization — test assertions, programmatic
+analysis, and Prologos-side tooling all consume the same data.
+
+**Decomplection** — The observer callback (`current-bsp-observer`) decouples the
+scheduler from trace accumulation strategy. The scheduler emits round records; how they
+are collected, stored, streamed, or discarded is the caller's concern. This is cleaner
+than a `box-of-list` which couples the scheduler to a specific accumulation pattern and
+requires the scheduler to know about list reversal semantics.
+
+**Homoiconicity as Invariant** — The trace data types are transparent Racket structs
+that correspond to a planned Prologos `data` declaration (see Phase 0d). When Prologos
+gains reflection/FFI, the trace becomes first-class Prologos data, inspectable and
+manipulable with the same tools as any other program value.
+
+### Known Gaps and Future Work
+
+**ATMS non-monotonic events** — BSP rounds capture monotonic cell writes naturally, but
+non-monotonic ATMS operations (assumption retraction, nogood discovery) require explicit
+event records. Phase 0 includes `atms-event` variants for this purpose. The capture code
+(Phase 1) must hook into the ATMS operations that fire during elaboration — this is the
+one place where new instrumentation is genuinely needed (as opposed to retaining existing
+diffs). The complexity is bounded: ATMS events are rare relative to cell writes, and the
+hook points are well-defined in `atms.rkt`.
+
+**Tier 3+ incremental elaboration** — The current design assumes full re-elaboration per
+file (Tier 2 LSP). When incremental elaboration lands (Tier 3+), the trace model needs
+to handle *partial* re-elaboration: only some cells/propagators are re-fired, and the
+trace should capture the delta, not repeat the unchanged portion. The decoupled observer
+pattern helps here — the incremental elaborator can install an observer that only records
+rounds in the re-elaborated region. But the `prop-trace` struct may need a
+`parent-trace` field or a way to represent trace composition. This is explicitly deferred
+until Tier 3+ design is further along; the Phase 0 data types are designed to be
+extensible via the `metadata` hasheq and struct subtypes.
+
+**Propagator-First Infrastructure** — The visualization should eventually support
+user-defined propagator networks, not just the elaboration network. The current design
+is scoped to elaboration traces because that's what exists today. The Phase 0 data types
+are generic (`prop-trace` wraps any `prop-network`, not specifically `elab-network`),
+so extending to user-defined networks requires no data type changes — only new capture
+points.
