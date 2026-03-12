@@ -27,7 +27,10 @@
          "../global-env.rkt"
          "../pretty-print.rkt"
          "../macros.rkt"
-         "../metavar-store.rkt")
+         "../metavar-store.rkt"
+         "../propagator.rkt"
+         "../elaborator-network.rkt"
+         "../trace-serialize.rkt")
 
 (provide run-lsp-server)
 
@@ -49,6 +52,7 @@
    repl-sessions          ; hash: uri → repl-session
    prelude-cache          ; prelude-cache struct or #f (loaded lazily)
    spec-stores            ; hash: uri → hasheq (spec-store snapshot for hover/InfoView)
+   prop-traces            ; hash: uri → jsexpr (serialized prop-trace for visualization)
    ) #:mutable)
 
 (define (make-initial-state)
@@ -63,6 +67,7 @@
              (make-hash)
              #f       ; prelude cache loaded on first eval
              (make-hash)
+             (make-hash)  ; prop-traces
              ))
 
 ;; ============================================================
@@ -390,6 +395,12 @@
      (hash-remove! (lsp-state-repl-sessions state) uri)
      (respond! (hasheq 'ok #t))]
 
+    ;; ---- Propagator Visualization (Phase 3) ----
+    ["$/prologos/propagatorSnapshot"
+     (define uri (hash-ref params 'uri ""))
+     (define trace (hash-ref (lsp-state-prop-traces state) uri #f))
+     (respond! (or trace (hasheq 'error "No propagator trace available for this file")))]
+
     ;; ---- InfoView: Cursor context (Tier 5) ----
     ["$/prologos/cursorContext"
      (define uri  (hash-ref params 'uri ""))
@@ -461,6 +472,10 @@
   (define captured-def-locs (hasheq))
   (define captured-type-env (hasheq))
   (define captured-spec-store (hasheq))
+  (define captured-prop-trace #f)
+
+  ;; Set up BSP observer for propagator trace capture
+  (define-values (bsp-observe bsp-get-rounds) (make-trace-accumulator))
 
   (with-handlers
     ([exn:fail?
@@ -478,7 +493,9 @@
                    ;; LSP Tier 2.3: fresh definition locations per elaboration
                    [current-definition-locations (hasheq)]
                    ;; Suppress process-file perf/phase/memory/diagnostic noise
-                   [current-error-port (open-output-nowhere)])
+                   [current-error-port (open-output-nowhere)]
+                   ;; Visualization Phase 1: capture BSP rounds
+                   [current-bsp-observer bsp-observe])
       ;; Write content to temp file and process
       (define tmp-path (make-temporary-file "prologos-lsp-~a.prologos"))
       (call-with-output-file tmp-path
@@ -495,7 +512,20 @@
       ;; Capture definition locations, type env, and spec store before parameterize exits
       (set! captured-def-locs (current-definition-locations))
       (set! captured-type-env (current-global-env))
-      (set! captured-spec-store (current-spec-store))))
+      (set! captured-spec-store (current-spec-store))
+      ;; Visualization Phase 3: capture propagator network trace
+      (define net-box (current-prop-net-box))
+      (when net-box
+        (define final-enet (unbox net-box))
+        (define final-net (elab-network-prop-net final-enet))
+        (define rounds (bsp-get-rounds))
+        (when (> (length rounds) 0)
+          (set! captured-prop-trace
+                (serialize-prop-trace
+                 (prop-trace final-net  ;; initial = final for now (no pre-elab snapshot)
+                             rounds
+                             final-net
+                             (hasheq 'file uri))))))))
 
   ;; Filter out errors with unknown/zero srclocs — these come from internal
   ;; elaboration issues (e.g., reduce type inference) and can't be displayed
@@ -521,6 +551,10 @@
   ;; LSP Tier 3: Store type env and spec store for hover/InfoView
   (hash-set! (lsp-state-type-envs state) uri captured-type-env)
   (hash-set! (lsp-state-spec-stores state) uri captured-spec-store)
+
+  ;; Visualization Phase 3: Store propagator trace
+  (when captured-prop-trace
+    (hash-set! (lsp-state-prop-traces state) uri captured-prop-trace))
 
   (lsp-log state "Published ~a diagnostics, ~a definitions, ~a specs for ~a"
            (length diags) (hash-count captured-def-locs)
