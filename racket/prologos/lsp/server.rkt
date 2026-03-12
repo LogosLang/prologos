@@ -179,6 +179,14 @@
      (define char (hash-ref pos 'character))
      (respond! (get-hover-info state uri line char))]
 
+    ;; ---- Completion ----
+    ["textDocument/completion"
+     (define uri (hash-ref (hash-ref params 'textDocument) 'uri))
+     (define pos (hash-ref params 'position))
+     (define line (hash-ref pos 'line))
+     (define char (hash-ref pos 'character))
+     (respond! (get-completions state uri line char))]
+
     ;; ---- Client notifications (silently ignored) ----
     ["$/setTrace" (void)]           ; trace level change — no-op
     ["$/cancelRequest" (void)]      ; request cancellation — no-op for sync server
@@ -215,7 +223,12 @@
     (hasheq 'triggerCharacters '("[" " "))
 
     ;; Hover
-    'hoverProvider #t)
+    'hoverProvider #t
+
+    ;; Completion
+    'completionProvider
+    (hasheq 'triggerCharacters '("." ":")
+            'resolveProvider #f))
 
    'serverInfo
    (hasheq 'name "prologos-lsp"
@@ -477,6 +490,75 @@
               (hasheq 'contents
                       (hasheq 'kind "markdown"
                               'value markdown))])])])]))
+
+;; ============================================================
+;; Completion (Tier 3.3)
+;; ============================================================
+
+;; Provide completion items based on the global env.
+;; Returns a CompletionList with isIncomplete=true (client-side filtering).
+(define (get-completions state uri line char)
+  (define text (hash-ref (lsp-state-document-contents state) uri #f))
+  (define type-env (hash-ref (lsp-state-type-envs state) uri #f))
+  (cond
+    [(not type-env) (hasheq 'isIncomplete #t 'items '())]
+    [else
+     ;; Get the prefix being typed
+     (define prefix (word-prefix-at-position text line char))
+     ;; Build completion items from the global env
+     ;; Filter: only short names (no :: qualified names) to avoid duplicates,
+     ;; and names matching the prefix
+     (define items
+       (for/list ([(name entry) (in-hash type-env)]
+                  #:when (pair? entry)  ; must have type
+                  #:when (let ([s (symbol->string name)])
+                           (and (not (string-contains? s "::"))
+                                (or (not prefix)
+                                    (string=? prefix "")
+                                    (string-prefix? s prefix)))))
+         (define name-str (symbol->string name))
+         (define type-str (pp-expr (car entry)))
+         (hasheq 'label name-str
+                 'kind 3           ; CompletionItemKind.Function = 3
+                 'detail type-str
+                 'sortText name-str)))
+     ;; Also add keywords
+     (define kw-items
+       (for/list ([kw (in-list '("defn" "def" "spec" "data" "trait" "impl"
+                                 "bundle" "match" "fn" "let" "if" "require"
+                                 "ns" "reduce" "eval" "infer" "type"
+                                 "where" "forall" "property"))]
+                  #:when (or (not prefix)
+                             (string=? prefix "")
+                             (string-prefix? kw prefix)))
+         (hasheq 'label kw
+                 'kind 14          ; CompletionItemKind.Keyword = 14
+                 'sortText (string-append "~" kw))))  ; sort keywords after names
+     (hasheq 'isIncomplete #t
+             'items (append items kw-items))]))
+
+;; Extract the word prefix being typed at the cursor position.
+;; Returns the partial word before the cursor, or "" if at word start.
+(define (word-prefix-at-position text line char)
+  (cond
+    [(not text) ""]
+    [else
+     (define lines (string-split text "\n"))
+     (cond
+       [(>= line (length lines)) ""]
+       [else
+        (define l (list-ref lines line))
+        (define id-char?
+          (lambda (c) (or (char-alphabetic? c) (char-numeric? c)
+                          (char=? c #\_) (char=? c #\?) (char=? c #\!)
+                          (char=? c #\') (char=? c #\-) (char=? c #\:))))
+        (define start
+          (let loop ([i char])
+            (if (and (> i 0) (id-char? (string-ref l (sub1 i))))
+                (loop (sub1 i))
+                i)))
+        (if (>= start char) ""
+            (substring l start char))])]))
 
 ;; ============================================================
 ;; Signature help (Tier 2.6)
