@@ -7,6 +7,7 @@
 ;;; severity levels, and source location conversion.
 
 (require json
+         syntax/srcloc
          "../errors.rkt")
 
 (provide error->diagnostic
@@ -101,6 +102,13 @@
      (define span (if (>= (vector-length loc) 5)
                       (or (vector-ref loc 4) 1)
                       1))
+     (make-range (sub1 (max 1 line)) col
+                 (sub1 (max 1 line)) (+ col span))]
+    [(and loc (srcloc? loc))
+     ;; Racket srcloc struct: (srcloc source line column position span)
+     (define line (or (srcloc-line loc) 1))
+     (define col  (or (srcloc-column loc) 0))
+     (define span (or (srcloc-span loc) 1))
      (make-range (sub1 (max 1 line)) col
                  (sub1 (max 1 line)) (+ col span))]
     [else
