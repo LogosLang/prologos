@@ -40,7 +40,8 @@ literally the same network"). The tool IS the documentation of the paradigm.
 | 3c | Per-URI trace storage in lsp-state | ✅ | `2998a4c` |
 | **4** | **VS Code graph panel** | | |
 | 4a | WebviewPanel skeleton + tabular data rendering | ✅ | `2fe92c9` |
-| 4b | Canvas graph rendering (layout + d3-zoom + tooltips) | ✅ | `a2286fb` |
+| 4b | Canvas graph rendering (layout + d3-zoom + tooltips) | ✅ | `a2286fb`, `3049305` |
+| 4b' | Sequential scheduler observer + round numbering | ✅ | `af43e4e`, `1232fda` |
 | 4c | Source-location linking (cell → editor position) | ⬜ | Needs elab-cell-info source |
 | 4d | Auto-refresh on file save | ⬜ | |
 | **5** | **BSP-round replay** | | |
@@ -53,6 +54,30 @@ literally the same network"). The tool IS the documentation of the paradigm.
 | 6b | SVG/PNG export | ⬜ | |
 | 6c | Contradiction diagnosis view (ATMS nogoods) | ⬜ | |
 | 6d | Documentation + user guide | ⬜ | |
+
+## Known Limitation: No Propagator Edges in Current Elaboration
+
+The visualization pipeline (Phases 0–4b) is end-to-end functional: cells are captured,
+serialized, served via LSP, and rendered in the VS Code webview with zoom/pan/tooltips.
+
+However, the graph shows **cells with no edges** because the current elaboration pipeline
+does not create formal propagator edges (`net-add-propagator`) between cells. Constraint
+solving (type unification, trait resolution) is driven by imperative retry loops in
+`metavar-store.rkt`, not by the propagator network's scheduler. The 47 cells visible for
+`foray-min.prologos` are infrastructure cells (registries, environments, constraint stores)
+written to imperatively.
+
+**Resolution**: A dedicated "Propagator-First Elaboration Migration" track will move the
+constraint-solving path into the propagator network. Once meta→constraint relationships
+are formal propagator edges, the existing visualization will display real DAG topology
+with no additional rendering changes. See `DEFERRED.md` § "Propagator-First Elaboration
+Migration".
+
+Phases 4c–6 of this design track remain valid and can proceed independently — they add
+auto-refresh, replay, and polish that will work with both the current flat topology and
+the future wired topology.
+
+---
 
 ## Infrastructure Gap Analysis
 

@@ -610,6 +610,32 @@ The following collection items ARE also deferred (genuine infrastructure deps):
 
 ---
 
+## Propagator-First Elaboration Migration
+
+### Unify type inference and trait resolution under the propagator network — NOT STARTED
+- **Problem**: The current elaboration pipeline uses the propagator network for infrastructure
+  cells (registries, environments) but does NOT create formal propagator edges between cells.
+  Constraint solving (type unification, trait resolution, hasmethod resolution) is driven by
+  imperative retry loops in `metavar-store.rkt` (`solve-meta!`, `retry-constraints-via-cells!`,
+  `retry-trait-for-meta!`), not by the propagator scheduler.
+- **Consequence**: The propagator network contains 47+ cells with non-bot values but 0
+  propagator edges. The Propagator Network Visualization (Phase 4b, commit `a2286fb`) renders
+  cells correctly but shows no topology because there IS no topology in the network.
+- **Goal**: Migrate the constraint-solving path to use `net-add-propagator` so that:
+  1. Meta→constraint relationships are formal propagator edges
+  2. Trait resolution triggers propagator firings, not imperative retry scans
+  3. The propagator visualization shows the actual type inference DAG
+  4. `run-to-quiescence` drives solving instead of ad-hoc retry loops
+- **Scope**: This is a dedicated design/implement track — multi-session, architectural.
+  The P-Unify section below covers unification specifically; this covers the full pipeline.
+- **Visualization impact**: Once this lands, the existing visualization infrastructure
+  (Phases 0–4b) will display real DAG topology with no additional changes needed.
+- **Depends on**: Existing propagator infrastructure (COMPLETE), ATMS/GDE (COMPLETE)
+- **Source**: `docs/tracking/2026-03-12_PROPAGATOR_VISUALIZATION_DESIGN.md` gap analysis,
+  `docs/tracking/2026-03-11_1800_PROPAGATOR_FIRST_MIGRATION.md`
+
+---
+
 ## Propagator-Driven Unification (P-Unify)
 
 ### Full Lattice-Propagator Unification — NOT STARTED
