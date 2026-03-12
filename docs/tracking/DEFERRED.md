@@ -891,3 +891,33 @@ The following collection items ARE also deferred (genuine infrastructure deps):
 - Prelude/imported symbols (e.g., `mult`, `map`) don't resolve
 - **Blocked on**: cross-module location tracking in module registry
 - Source: LSP Tier 2, commit `12ea616`
+
+## QTT / Multiplicity
+
+### QTT multiplicity violation with generic trait-constrained functions in defn bodies
+- Any `defn` whose body uses generic `map`, `filter`, or `reduce` (from `prologos::core::collections`) fails QTT checking
+- Root cause: generic collection functions carry erased (`:0`) trait dictionary params (`List--Seqable--dict`, `List--Buildable--dict`); when the defn body gets wrapped in a lambda, QTT flags the captured dicts as a multiplicity violation
+- Non-generic list-specific `map` from `prologos::data::list` works fine in defn bodies (no trait dicts)
+- Standalone expressions (not inside defn) work fine — QTT only runs on defn bodies
+- **Blocked on**: either QTT rework for dict-param handling, or propagator integration
+- Workaround: use list-specific functions via explicit `(imports (prologos::data::list :refer [map]))`, or keep expressions standalone
+- Source: LSP Tier 4 testing, foray-min.prologos
+
+## Arithmetic / Operator Dispatch
+
+### `+` `-` `*` `/` should work as higher-order generic functions
+- Currently parser keywords — desugar directly to `expr-generic-add` etc. at parse time
+- Require exactly 2 arguments; can't be passed to `map`, `reduce`, or use `_` placeholders
+- `[+ 1 _]` fails because `_` desugaring fires on `surf-app` but `+` produces `surf-generic-add`
+- Want: `map [+ 1 _] '[1 2 3]` and `reduce + 0 '[1 2 3]` to work
+- First-class wrappers (`plus`, `minus`, `times`, `divide`) exist as workarounds
+- **Design question**: make `+` etc. resolve to first-class functions in HO position, or teach placeholder desugaring to handle parser keyword nodes?
+- Source: LSP Tier 4 testing, foray-min.prologos
+
+### Trait-constrained functions can't be passed bare to higher-order functions
+- `reduce plus 0 '[1 2 3 4 5]` fails: "Could not infer type"
+- `plus` has type `{A} -> Add A -> A -> A -> A`; when passed bare to `reduce` (which expects `B -> A -> B`), the elaborator can't match due to the implicit dict parameter
+- Elaborator doesn't auto-insert dictionary args when a trait-constrained function is in HO argument position
+- Workaround: wrap in explicit lambda: `reduce (fn [a : Int] [b : Int] [+ a b]) 0 xs`, or use `sum`/`product`
+- **Blocked on**: elaborator enhancement for automatic eta-expansion + dictionary insertion in HO position
+- Source: LSP Tier 4 testing, foray-min.prologos
