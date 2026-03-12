@@ -16,32 +16,24 @@ export function getTopLevelFormRange(
 
   // Walk UP from cursor to find the start of the top-level form
   let startLine = position.line;
-  while (startLine > 0) {
-    const prevLine = document.lineAt(startLine - 1);
-    const prevText = prevLine.text;
-    // If previous line is blank or indented, it belongs to an earlier form or is a separator
-    if (prevText.trim() === '') {
-      // Blank line: check if it's within a form (has non-blank col-0 line above and below)
-      // Walk further up to see
-      let checkLine = startLine - 2;
-      while (checkLine >= 0 && document.lineAt(checkLine).text.trim() === '') {
-        checkLine--;
-      }
-      if (checkLine >= 0 && !isTopLevelStart(document.lineAt(checkLine).text)) {
-        startLine = checkLine + 1;
+
+  // If the cursor line starts at col 0, it IS the start of its own form —
+  // no need to walk up. We only walk up when cursor is on an indented line
+  // (continuation of a multi-line form like defn body).
+  if (!isTopLevelStart(document.lineAt(startLine).text)) {
+    while (startLine > 0) {
+      const prevLine = document.lineAt(startLine - 1);
+      const prevText = prevLine.text;
+      if (prevText.trim() === '') {
+        // Blank line above an indented line — keep walking up, the form start is higher
+        startLine = startLine - 1;
         continue;
       }
-      break;
-    }
-    if (isTopLevelStart(prevText)) {
-      // Previous line starts a different top-level form — if current line also starts
-      // at col 0, we've found our boundary
-      if (isTopLevelStart(document.lineAt(startLine).text)) {
-        break; // startLine is already the start of our form
+      if (isTopLevelStart(prevText)) {
+        // Found the col-0 line that starts this form
+        startLine = startLine - 1;
+        break;
       }
-      // Otherwise, cursor is in the continuation of the prev line's form
-      startLine = startLine - 1;
-    } else {
       // Indented or comment-only — belongs to the form, keep going up
       startLine = startLine - 1;
     }

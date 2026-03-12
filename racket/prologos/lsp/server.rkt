@@ -48,6 +48,7 @@
    type-envs              ; hash: uri → hasheq (global-env snapshot for hover)
    repl-sessions          ; hash: uri → repl-session
    prelude-cache          ; prelude-cache struct or #f (loaded lazily)
+   spec-stores            ; hash: uri → hasheq (spec-store snapshot for hover/InfoView)
    ) #:mutable)
 
 (define (make-initial-state)
@@ -61,6 +62,7 @@
              (make-hash)
              (make-hash)
              #f       ; prelude cache loaded on first eval
+             (make-hash)
              ))
 
 ;; ============================================================
@@ -458,6 +460,7 @@
   (define warnings '())
   (define captured-def-locs (hasheq))
   (define captured-type-env (hasheq))
+  (define captured-spec-store (hasheq))
 
   (with-handlers
     ([exn:fail?
@@ -489,9 +492,10 @@
           (when (prologos-error? r)
             (set! errors (cons r errors)))))
       (delete-file tmp-path)
-      ;; Capture definition locations and type env before parameterize exits
+      ;; Capture definition locations, type env, and spec store before parameterize exits
       (set! captured-def-locs (current-definition-locations))
-      (set! captured-type-env (current-global-env))))
+      (set! captured-type-env (current-global-env))
+      (set! captured-spec-store (current-spec-store))))
 
   ;; Filter out errors with unknown/zero srclocs — these come from internal
   ;; elaboration issues (e.g., reduce type inference) and can't be displayed
@@ -514,11 +518,13 @@
   ;; LSP Tier 2.3: Store captured definition locations for go-to-definition
   (hash-set! (lsp-state-definition-locations state) uri captured-def-locs)
 
-  ;; LSP Tier 3: Store type env for hover
+  ;; LSP Tier 3: Store type env and spec store for hover/InfoView
   (hash-set! (lsp-state-type-envs state) uri captured-type-env)
+  (hash-set! (lsp-state-spec-stores state) uri captured-spec-store)
 
-  (lsp-log state "Published ~a diagnostics, ~a definitions for ~a"
-           (length diags) (hash-count captured-def-locs) uri))
+  (lsp-log state "Published ~a diagnostics, ~a definitions, ~a specs for ~a"
+           (length diags) (hash-count captured-def-locs)
+           (hash-count captured-spec-store) uri))
 
 ;; ============================================================
 ;; Document symbols
@@ -654,6 +660,21 @@
     n))
 
 ;; ============================================================
+;; Spec type formatting
+;; ============================================================
+
+;; Format spec-entry type-datums as a display string.
+;; type-datums is a list of clauses; each clause is a list of tokens (symbols/datums).
+;; Single clause: "Int -> Int"; multi-clause: "0 -> 1 | Nat -> Nat"
+(define (format-spec-type spec)
+  (define types (spec-entry-type-datums spec))
+  (string-join
+   (map (lambda (clause)
+          (string-join (map (lambda (t) (format "~a" t)) clause) " "))
+        types)
+   " | "))
+
+;; ============================================================
 ;; Hover (Tier 3.2)
 ;; ============================================================
 
@@ -685,8 +706,7 @@
                                            (string-suffix? s (string-append "::" word))))
                         v))))
            (cond
-             [(not entry*) (json-null)]
-             [else
+             [entry*
               ;; entry is (cons type value) or just type depending on env format
               (define type-expr
                 (cond
@@ -697,7 +717,20 @@
                 (format "```prologos\n~a : ~a\n```" word type-str))
               (hasheq 'contents
                       (hasheq 'kind "markdown"
-                              'value markdown))])])])]))
+                              'value markdown))]
+             [else
+              ;; Fall back to spec-store for type signature
+              (define spec-store (hash-ref (lsp-state-spec-stores state) uri #f))
+              (define spec (and spec-store (hash-ref spec-store sym #f)))
+              (cond
+                [spec
+                 (define type-str (format-spec-type spec))
+                 (define markdown
+                   (format "```prologos\n~a : ~a\n```" word type-str))
+                 (hasheq 'contents
+                         (hasheq 'kind "markdown"
+                                 'value markdown))]
+                [else (json-null)])])])])]))
 
 ;; ============================================================
 ;; Completion (Tier 3.3)
@@ -778,20 +811,28 @@
   (define text (hash-ref (lsp-state-document-contents state) uri #f))
   (define type-env (hash-ref (lsp-state-type-envs state) uri #f))
 
-  ;; 1. Type at cursor — reuse hover logic
+  ;; 1. Type at cursor — check type-env first, then fall back to spec-store
   (define word (and text (word-at-position text line char)))
+  (define spec-store (hash-ref (lsp-state-spec-stores state) uri #f))
   (define type-at-cursor
-    (and word type-env
+    (and word
          (let* ([sym (string->symbol word)]
-                [entry (or (hash-ref type-env sym #f)
-                           ;; Try FQN match
-                           (for/first ([(k v) (in-hash type-env)]
-                                       #:when (let ([s (symbol->string k)])
-                                                (string-suffix? s (string-append "::" word))))
-                             v))])
-           (and entry
-                (let ([type-expr (if (pair? entry) (car entry) entry)])
-                  (format "~a : ~a" word (pp-expr type-expr)))))))
+                [entry (and type-env
+                            (or (hash-ref type-env sym #f)
+                                ;; Try FQN match
+                                (for/first ([(k v) (in-hash type-env)]
+                                            #:when (let ([s (symbol->string k)])
+                                                     (string-suffix? s (string-append "::" word))))
+                                  v)))])
+           (cond
+             [entry
+              (let ([type-expr (if (pair? entry) (car entry) entry)])
+                (format "~a : ~a" word (pp-expr type-expr)))]
+             ;; Fall back to spec-store
+             [(and spec-store (hash-ref spec-store sym #f))
+              => (lambda (spec)
+                   (format "~a : ~a" word (format-spec-type spec)))]
+             [else #f]))))
 
   ;; 2. File context: definitions with types + namespace
   (define symbols (if text (get-document-symbols state uri) '()))
@@ -802,19 +843,20 @@
       (define kind-num (hash-ref s 'kind 0))
       (define kind-str (symbol-kind->string kind-num))
       (define def-line (hash-ref (hash-ref (hash-ref s 'range (hasheq)) 'start (hasheq)) 'line 0))
-      ;; Look up type from type-env
+      ;; Look up type from type-env, fall back to spec-store
       (define type-str
         (cond
-          [(not type-env) ""]
-          [else
-           (define entry (or (hash-ref type-env sym #f)
-                             (for/first ([(k v) (in-hash type-env)]
-                                         #:when (let ([sk (symbol->string k)])
-                                                  (string-suffix? sk (string-append "::" name))))
-                               v)))
-           (if (and entry (pair? entry))
-               (pp-expr (car entry))
-               "")]))
+          [(and type-env
+                (let ([entry (or (hash-ref type-env sym #f)
+                                 (for/first ([(k v) (in-hash type-env)]
+                                             #:when (let ([sk (symbol->string k)])
+                                                      (string-suffix? sk (string-append "::" name))))
+                                   v))])
+                  (and entry (pair? entry) (pp-expr (car entry)))))
+           => values]
+          [(and spec-store (hash-ref spec-store sym #f))
+           => (lambda (spec) (format-spec-type spec))]
+          [else ""]))
       (hasheq 'name name 'type type-str 'line def-line 'kind kind-str)))
 
   ;; Extract namespace from symbols

@@ -110,7 +110,7 @@
         {
           "id": "prologos-panel",
           "title": "Prologos",
-          "icon": "$(symbol-misc)"
+          "icon": "./icons/prologos-panel.svg"
         }
       ]
     },
