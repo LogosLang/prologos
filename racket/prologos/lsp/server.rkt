@@ -256,8 +256,19 @@
       ;; Capture definition locations before parameterize exits
       (set! captured-def-locs (current-definition-locations))))
 
+  ;; Filter out errors with unknown/zero srclocs — these come from internal
+  ;; elaboration issues (e.g., reduce type inference) and can't be displayed
+  ;; meaningfully since they'd always pin to line 0 (the ns declaration).
+  (define (has-real-srcloc? err)
+    (define loc (and (prologos-error? err) (prologos-error-srcloc err)))
+    (or (not loc)
+        (not (srcloc? loc))
+        (and (srcloc? loc)
+             (not (equal? (srcloc-file loc) "<unknown>"))
+             (> (srcloc-line loc) 0))))
   ;; Convert to LSP diagnostics and publish
-  (define diags (errors->diagnostics (reverse errors)))
+  (define real-errors (filter has-real-srcloc? (reverse errors)))
+  (define diags (errors->diagnostics real-errors))
   (hash-set! (lsp-state-document-diagnostics state) uri diags)
   (notify! "textDocument/publishDiagnostics"
            (hasheq 'uri uri

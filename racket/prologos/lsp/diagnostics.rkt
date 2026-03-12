@@ -7,8 +7,8 @@
 ;;; severity levels, and source location conversion.
 
 (require json
-         syntax/srcloc
-         "../errors.rkt")
+         "../errors.rkt"
+         "../source-location.rkt")
 
 (provide error->diagnostic
          errors->diagnostics
@@ -77,37 +77,14 @@
 ;; Convert a Prologos srcloc to an LSP Range.
 ;; LSP uses 0-based lines, 0-based characters.
 ;; Prologos uses 1-based lines, 0-based columns.
+;;
+;; Prologos srcloc struct: (srcloc file line col span) from source-location.rkt
 (define (srcloc->range loc)
   (cond
-    [(and loc
-          (list? loc)
-          (>= (length loc) 4)
-          (number? (list-ref loc 0))
-          (number? (list-ref loc 1)))
-     ;; loc = (source line col pos span) or (line col pos span)
-     ;; Try to extract line and col
-     (define line (list-ref loc 0))
-     (define col  (list-ref loc 1))
-     (define span (if (>= (length loc) 5)
-                      (or (list-ref loc 4) 1)
-                      (if (>= (length loc) 4)
-                          (or (list-ref loc 3) 1)
-                          1)))
-     (make-range (sub1 (max 1 line)) col
-                 (sub1 (max 1 line)) (+ col span))]
-    [(and loc (vector? loc) (>= (vector-length loc) 4))
-     ;; vector form: #(source line col pos span)
-     (define line (vector-ref loc 1))
-     (define col  (vector-ref loc 2))
-     (define span (if (>= (vector-length loc) 5)
-                      (or (vector-ref loc 4) 1)
-                      1))
-     (make-range (sub1 (max 1 line)) col
-                 (sub1 (max 1 line)) (+ col span))]
     [(and loc (srcloc? loc))
-     ;; Racket srcloc struct: (srcloc source line column position span)
+     ;; Prologos srcloc struct: file, line (1-based), col (0-based), span
      (define line (or (srcloc-line loc) 1))
-     (define col  (or (srcloc-column loc) 0))
+     (define col  (or (srcloc-col loc) 0))
      (define span (or (srcloc-span loc) 1))
      (make-range (sub1 (max 1 line)) col
                  (sub1 (max 1 line)) (+ col span))]
