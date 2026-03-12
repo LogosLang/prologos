@@ -402,11 +402,18 @@ export class PropagatorViewManager {
     cells.forEach(c => {
       const isSolved = c.value !== '\\u22a5' && c.value !== 'bot';
       const isContra = contradiction !== null && c.id === contradiction;
+      // Short label: show value snippet if it's compact, otherwise ID
+      let label = '#' + c.id;
+      if (c.value.length <= 12 && c.value !== '\\u22a5') {
+        label = c.value;
+      } else if (c.value.length <= 20) {
+        label = c.value.substring(0, 12) + '..';
+      }
       const node = {
         id: 'c' + c.id,
         type: 'cell',
         cellId: c.id,
-        label: '#' + c.id,
+        label: label,
         value: c.value,
         solved: isSolved,
         contradiction: isContra,
@@ -485,24 +492,28 @@ export class PropagatorViewManager {
     // Layout parameters
     const CELL_R = 16;
     const PROP_R = 12;
-    const H_SPACING = 100;
-    const V_SPACING = 70;
+    const H_SPACING = 60;
+    const V_SPACING = 60;
     const PADDING = 60;
 
-    // Assign positions
-    let maxNodesInLayer = 0;
-    Object.values(layerNodes).forEach((arr) => {
-      if (arr.length > maxNodesInLayer) maxNodesInLayer = arr.length;
-    });
-
-    for (let l = 0; l < numLayers; l++) {
-      const layerArr = layerNodes[l] || [];
-      const layerWidth = (layerArr.length - 1) * H_SPACING;
-      const startX = -layerWidth / 2;
-      layerArr.forEach((n, i) => {
-        n.x = startX + i * H_SPACING;
-        n.y = l * V_SPACING;
+    // If no edges, use grid layout instead of single-line layering
+    if (edges.length === 0 && nodes.length > 0) {
+      const cols = Math.ceil(Math.sqrt(nodes.length * 1.5));
+      nodes.forEach((n, i) => {
+        n.x = (i % cols) * H_SPACING;
+        n.y = Math.floor(i / cols) * V_SPACING;
       });
+    } else {
+      // Assign positions within layers
+      for (let l = 0; l < numLayers; l++) {
+        const layerArr = layerNodes[l] || [];
+        const layerWidth = (layerArr.length - 1) * H_SPACING;
+        const startX = -layerWidth / 2;
+        layerArr.forEach((n, i) => {
+          n.x = startX + i * H_SPACING;
+          n.y = l * V_SPACING;
+        });
+      }
     }
 
     // Center the graph
@@ -675,12 +686,21 @@ export class PropagatorViewManager {
 
         // Label
         if (transform.k > 0.4) {
-          ctx.fillStyle = COLORS.text;
-          ctx.font = Math.max(9, 11 * transform.k) + 'px ' +
+          const fontSize = Math.max(8, 10 * transform.k);
+          ctx.font = fontSize + 'px ' +
             (getComputedStyle(document.body).fontFamily || 'sans-serif');
           ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillText(n.label, sx, sy);
+          // Draw label below the node for cells (so circle stays clean)
+          if (n.type === 'cell' && edges.length === 0) {
+            ctx.textBaseline = 'top';
+            ctx.fillStyle = COLORS.textDim;
+            const labelText = n.label.length > 14 ? n.label.substring(0, 12) + '..' : n.label;
+            ctx.fillText(labelText, sx, sy + r + 3 * transform.k);
+          } else {
+            ctx.textBaseline = 'middle';
+            ctx.fillStyle = COLORS.text;
+            ctx.fillText(n.label, sx, sy);
+          }
         }
       });
     }
