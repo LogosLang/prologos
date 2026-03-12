@@ -596,20 +596,117 @@ alpha-blended overlays on the VS Code background color.
 Cell value labels are truncated to ~20 chars with full value shown on hover tooltip.
 Type expressions use the same pretty-printer as the InfoView panel.
 
-### 4d: Interaction
+### 4d: Hover Tooltips
 
-**Node interaction:**
+Canvas has no DOM elements — no `title` attributes or CSS `:hover` states. Hover
+requires tracking `mousemove`, hit-testing against the quadtree, and rendering a
+tooltip ourselves. Three approaches were considered:
+
+#### Approaches Considered
+
+**Option A — HTML overlay tooltip (CHOSEN)**
+
+An absolutely-positioned `<div>` floats over the Canvas, positioned at the
+hovered node's screen coordinates. Standard pattern for D3+Canvas visualizations.
+
+- Rich HTML content: monospace type signatures, colored state badges, clickable links
+- Styled with VS Code CSS variables (matches InfoView, detail panel, toolbar)
+- Multi-line content without fighting Canvas text measurement/wrapping
+- Slight visual layer mismatch (HTML over Canvas), but this is universal practice
+
+**Option B — Canvas-drawn tooltip**
+
+Render the tooltip directly on Canvas as part of the draw loop.
+
+- Visually integrated — no DOM layer boundary
+- But: Canvas text rendering is painful (no word wrap, no rich formatting, manual
+  line height, no clickable links). Every tooltip change requires a full Canvas
+  repaint or a dedicated overlay canvas.
+- Not worth the complexity for a tooltip that needs rich formatting.
+
+**Option C — Canvas highlight only, defer to click**
+
+On hover, highlight the node (glow ring) but show no tooltip. Full information
+on click only.
+
+- Lightest implementation — no tooltip rendering at all
+- But: breaks the "glanceable" experience. Users expect hover to preview
+  information before committing to a click. A graph with no hover feedback
+  feels unresponsive.
+
+#### Chosen: A + C hybrid (HTML tooltip + Canvas highlight)
+
+On `mousemove` → quadtree hit test → if node found:
+1. **Canvas**: draw a highlight ring around the hovered node (glow or thicker stroke)
+2. **HTML**: position a tooltip `<div>` near the node with key information
+
+The tooltip `<div>` is a single reusable element, repositioned and re-populated on
+each hover target change. Hidden when the mouse leaves all nodes. Debounced at 16ms
+(one frame) to avoid flicker during fast mouse movement.
+
+#### Tooltip Content by Node Type
+
+| Node Type | Tooltip Content |
+|-----------|----------------|
+| Cell (type meta) | `#42 : ?T₃`  state badge (solved/unsolved/contradicted)  value if solved (full, not truncated)  source location (file:line) |
+| Cell (mult meta) | `#17 : ?m₂`  multiplicity value (0/1/ω)  state badge |
+| Cell (registry) | Name  entry count  kind (list-registry, set-registry, etc.) |
+| Propagator | Kind label ("unify", "trait-resolve", "session-step")  `inputs: #3, #7 → outputs: #12`  times fired (total across all rounds) |
+| Edge | Source → target  last-active round number |
+| ATMS assumption | Label  status (active/retracted)  dependent cell count |
+| ATMS nogood | Nogood set members  round discovered |
+
+Type signatures in tooltips use the same pretty-printer as the InfoView panel —
+monospace font, consistent formatting. The tooltip width is capped at 300px; values
+exceeding this are truncated with `...` and shown in full in the detail panel on click.
+
+#### Implementation
+
+```typescript
+// Single reusable tooltip element
+const tooltip = document.createElement('div');
+tooltip.className = 'prop-tooltip';
+tooltip.style.position = 'absolute';
+tooltip.style.pointerEvents = 'none';  // don't interfere with Canvas events
+container.appendChild(tooltip);
+
+canvas.addEventListener('mousemove', (e) => {
+  const [gx, gy] = screenToGraph(e.offsetX, e.offsetY);  // inverse zoom transform
+  const node = quadtree.find(gx, gy, hitRadius);
+  if (node && node !== lastHovered) {
+    tooltip.innerHTML = renderTooltip(node);
+    tooltip.style.left = `${e.offsetX + 12}px`;
+    tooltip.style.top = `${e.offsetY - 8}px`;
+    tooltip.style.display = 'block';
+    lastHovered = node;
+    requestRedraw();  // draw highlight ring
+  } else if (!node) {
+    tooltip.style.display = 'none';
+    lastHovered = null;
+    requestRedraw();  // clear highlight ring
+  }
+});
+```
+
+### 4e: Interaction
+
+**Click behavior:**
 - **Click cell** → detail panel below graph (value, typing context, source location,
   dependent propagators) + highlight source line in editor via `vscode.commands`
 - **Click propagator** → detail panel (inputs/outputs, kind, firing count per round,
   source expression that created it)
-- **Hover** → tooltip with summary (cell: type + state; propagator: kind + I/O count)
-- **Double-click cell** → focus view: show only this cell's N-hop neighborhood
+- **Double-click cell** → focus view: zoom to this cell's N-hop neighborhood
 
 **Source linking (bidirectional):**
 - Click cell → highlight source location in editor
 - Click source expression in editor → highlight corresponding cell(s) in graph
   (requires `prologos.revealCell` command wired to `onDidChangeTextEditorSelection`)
+
+**Node dragging:**
+- Click-drag a node to manually reposition it (d3-drag, ~5KB additional dependency)
+- Dragged position is sticky — survives replay steps and zoom changes
+- "Reset layout" button recomputes Sugiyama positions, clearing all manual overrides
+- Useful when the automatic layout places related cells far apart
 
 **Filtering:**
 - Toggle by cell domain: type metas / multiplicity metas / session metas / registries
@@ -622,9 +719,16 @@ Type expressions use the same pretty-printer as the InfoView panel.
 - Flow direction: top-to-bottom / left-to-right
 - Zoom/pan via mouse wheel + drag (d3-zoom)
 - Fit-to-view button
+- Zoom-to-selection: double-click a node to smoothly zoom and center on its neighborhood
 - Minimap for large networks (>100 nodes)
 
-### 4e: Rendering Architecture
+**Animated transitions:**
+- When stepping between BSP rounds (Phase 5), nodes that move due to layout changes
+  animate smoothly to their new positions rather than jumping
+- New nodes fade in; removed nodes fade out
+- Cell value label changes cross-fade
+
+### 4f: Rendering Architecture
 
 ```
 ┌─────────────────────────────────────┐
@@ -657,15 +761,16 @@ in standard HTML (consistent with VS Code's webview patterns and the existing In
 Hit testing for click/hover on Canvas nodes uses a quadtree spatial index (d3-quadtree)
 for O(log n) lookup — no need to maintain a parallel DOM structure.
 
-### 4f: Bundled Dependencies
+### 4g: Bundled Dependencies
 
 | Dependency | Size (minified) | Purpose |
 |------------|----------------|---------|
 | d3-dag | ~30KB | Sugiyama layout for DAGs |
 | d3-zoom | ~15KB | Pan/zoom behavior |
 | d3-quadtree | ~5KB | Spatial index for hit testing |
+| d3-drag | ~5KB | Node dragging |
 | d3-force (optional) | ~15KB | Force-directed layout fallback |
-| Total | ~65KB | vs ~400KB for Cytoscape.js |
+| Total | ~70KB | vs ~400KB for Cytoscape.js |
 
 Bundled into `editors/vscode-prologos/lib/` as minified ESM modules, loaded in the
 webview via local URIs. No build tooling required — the modules are pre-built.
@@ -673,7 +778,7 @@ webview via local URIs. No build tooling required — the modules are pre-built.
 Note: we deliberately avoid pulling in all of D3 (~250KB). Only the specific D3
 subpackages needed are bundled. D3's modular architecture supports this naturally.
 
-### 4g: SVG Export Path
+### 4h: SVG Export Path
 
 For static diagrams (documentation, papers, wiki articles — Phase 6d), the same d3-dag
 layout positions can drive an SVG renderer instead of Canvas. This is a thin alternative
@@ -690,7 +795,7 @@ function renderToSVG(layout: LayoutResult): string {
   `editors/vscode-prologos/src/graph-renderer.ts` (Canvas + SVG render),
   `editors/vscode-prologos/src/graph-layout.ts` (d3-dag layout wrapper)
 **Modified**: `package.json` (command, panel), `extension.ts` (registration)
-**Dependencies**: Phase 3 (LSP endpoint for data), d3-dag + d3-zoom + d3-quadtree (bundled)
+**Dependencies**: Phase 3 (LSP endpoint for data), d3-dag + d3-zoom + d3-quadtree + d3-drag (bundled)
 **Tests**: Manual visual testing + snapshot tests for serialization + layout determinism tests
 
 ## Phase 5: BSP-Round Replay
