@@ -11,6 +11,8 @@
 
 (require json
          "champ.rkt"
+         "elaborator-network.rkt"
+         "mult-lattice.rkt"
          "propagator.rkt"
          "pretty-print.rkt"
          "type-lattice.rkt")
@@ -104,20 +106,51 @@
 ;; ========================================
 
 ;; Serialize the topology of a prop-network (cells, propagators, edges).
-;; Does NOT include cell values — use serialize-bsp-round for per-round diffs.
-(define (serialize-network-topology net)
+;; Optional cell-info-champ maps cell-id → elab-cell-info for subsystem categorization.
+;; When provided, each cell includes 'subsystem' and 'source' fields.
+(define (serialize-network-topology net [cell-info-champ #f])
   (define cells-champ (prop-network-cells net))
   (define props-champ (prop-network-propagators net))
   ;; Collect all cell IDs
   (define cell-ids (champ-keys cells-champ))
   ;; Collect all propagator IDs and their connections
   (define prop-ids (champ-keys props-champ))
-  ;; Serialize cells: id + current value
+  ;; Categorize a cell by its elab-cell-info (or lack thereof).
+  ;; Returns (values subsystem-string source-string).
+  (define (categorize-cell cid cell-value)
+    (if (not cell-info-champ)
+        (values "unknown" "")
+        (let ([info (champ-lookup cell-info-champ (cell-id-hash cid) cid)])
+          (cond
+            [(eq? info 'none)
+             ;; No cell-info → infrastructure cell
+             (values "infrastructure"
+                     (cond
+                       [(hash? cell-value) "registry"]
+                       [(pair? cell-value) "store"]
+                       [else "infra"]))]
+            [else
+             ;; Has cell-info — check type field to distinguish type vs mult cell
+             (define ty (elab-cell-info-type info))
+             (define src (elab-cell-info-source info))
+             (define src-str (if src (format "~a" src) ""))
+             (cond
+               [(not ty)
+                ;; type=#f → multiplicity cell
+                (values "multiplicity" src-str)]
+               [else
+                ;; Has type → type meta cell
+                (values "type-inference" src-str)])]))))
+  ;; Serialize cells: id + current value + subsystem category
   (define cells-json
     (map (lambda (cid)
            (define cell (champ-lookup cells-champ (cell-id-hash cid) cid))
+           (define val (prop-cell-value cell))
+           (define-values (subsystem source) (categorize-cell cid val))
            (hasheq 'id (cell-id-n cid)
-                   'value (serialize-lattice-value (prop-cell-value cell))))
+                   'value (serialize-lattice-value val)
+                   'subsystem subsystem
+                   'source source))
          cell-ids))
   ;; Serialize propagators: id + input/output cell IDs
   (define props-json
@@ -141,10 +174,10 @@
 ;; Prop Trace Serialization
 ;; ========================================
 
-(define (serialize-prop-trace tr)
-  (hasheq 'initialNetwork (serialize-network-topology (prop-trace-initial-network tr))
+(define (serialize-prop-trace tr [cell-info-champ #f])
+  (hasheq 'initialNetwork (serialize-network-topology (prop-trace-initial-network tr) cell-info-champ)
           'rounds (map serialize-bsp-round (prop-trace-rounds tr))
-          'finalNetwork (serialize-network-topology (prop-trace-final-network tr))
+          'finalNetwork (serialize-network-topology (prop-trace-final-network tr) cell-info-champ)
           'metadata (serialize-metadata (prop-trace-metadata tr))))
 
 (define (serialize-metadata meta)
@@ -158,5 +191,5 @@
 ;; Convenience: Full trace → JSON string
 ;; ========================================
 
-(define (trace->json-string tr)
-  (jsexpr->string (serialize-prop-trace tr)))
+(define (trace->json-string tr [cell-info-champ #f])
+  (jsexpr->string (serialize-prop-trace tr cell-info-champ)))

@@ -518,6 +518,7 @@
       (when net-box
         (define final-enet (unbox net-box))
         (define final-net (elab-network-prop-net final-enet))
+        (define cell-info-champ (elab-network-cell-info final-enet))
         (define rounds (bsp-get-rounds))
         (when (> (length rounds) 0)
           (set! captured-prop-trace
@@ -525,7 +526,8 @@
                  (prop-trace final-net  ;; initial = final for now (no pre-elab snapshot)
                              rounds
                              final-net
-                             (hasheq 'file uri))))))))
+                             (hasheq 'file uri))
+                 cell-info-champ))))))
 
   ;; Filter out errors with unknown/zero srclocs — these come from internal
   ;; elaboration issues (e.g., reduce type inference) and can't be displayed

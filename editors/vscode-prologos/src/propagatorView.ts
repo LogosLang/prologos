@@ -13,6 +13,8 @@ import { LanguageClient } from 'vscode-languageclient/node';
 interface CellJson {
   id: number;
   value: string;
+  subsystem?: string;  // "type-inference" | "infrastructure" | "multiplicity" | "unknown"
+  source?: string;     // provenance string from elab-cell-info
 }
 
 interface PropagatorJson {
@@ -180,7 +182,8 @@ export class PropagatorViewManager {
     // Build the tabular fallback rows
     const cellRows = net.cells.map(c => {
       const val = c.value.length > 40 ? c.value.substring(0, 40) + '...' : c.value;
-      return `<tr><td>#${c.id}</td><td><code>${escapeHtml(val)}</code></td></tr>`;
+      const sub = c.subsystem || '';
+      return `<tr><td>#${c.id}</td><td>${escapeHtml(sub)}</td><td><code>${escapeHtml(val)}</code></td></tr>`;
     }).join('\n');
 
     const propRows = net.propagators.map(p => {
@@ -344,13 +347,16 @@ export class PropagatorViewManager {
     <div class="tooltip" id="tooltip"></div>
     <div class="legend">
       <div class="legend-item">
-        <span class="legend-swatch" style="background:#6a9955;"></span> Cell (solved)
+        <span class="legend-swatch" style="background:#6a9955;"></span> Type inference
       </div>
       <div class="legend-item">
-        <span class="legend-swatch" style="background:#666;"></span> Cell (unsolved)
+        <span class="legend-swatch" style="background:#888;"></span> Infrastructure
       </div>
       <div class="legend-item">
-        <span class="legend-swatch" style="background:#f44;"></span> Cell (contradiction)
+        <span class="legend-swatch" style="background:#b48ead;"></span> Multiplicity
+      </div>
+      <div class="legend-item">
+        <span class="legend-swatch" style="background:#f44;"></span> Contradiction
       </div>
       <div class="legend-item">
         <span class="legend-diamond" style="background:#569cd6;"></span> Propagator
@@ -370,7 +376,7 @@ export class PropagatorViewManager {
     <details>
       <summary><strong>Cells (${net.cells.length})</strong></summary>
       <table>
-        <tr><th>ID</th><th>Value</th></tr>
+        <tr><th>ID</th><th>Subsystem</th><th>Value</th></tr>
         ${cellRows}
       </table>
     </details>
@@ -402,6 +408,7 @@ export class PropagatorViewManager {
     cells.forEach(c => {
       const isSolved = c.value !== '\\u22a5' && c.value !== 'bot';
       const isContra = contradiction !== null && c.id === contradiction;
+      const subsystem = c.subsystem || 'unknown';
       // Short label: show value snippet if it's compact, otherwise ID
       let label = '#' + c.id;
       if (c.value.length <= 12 && c.value !== '\\u22a5') {
@@ -415,6 +422,8 @@ export class PropagatorViewManager {
         cellId: c.id,
         label: label,
         value: c.value,
+        subsystem: subsystem,
+        source: c.source || '',
         solved: isSolved,
         contradiction: isContra,
         x: 0, y: 0,
@@ -550,10 +559,14 @@ export class PropagatorViewManager {
     resize();
     window.addEventListener('resize', () => { resize(); draw(); });
 
-    // Colors
+    // Colors — subsystem-based palette
+    const SUBSYSTEM_COLORS = {
+      'type-inference':  { solved: '#6a9955', unsolved: '#4a6a3a' },
+      'infrastructure':  { solved: '#888',    unsolved: '#555'    },
+      'multiplicity':    { solved: '#b48ead', unsolved: '#7a5a7a' },
+      'unknown':         { solved: '#569cd6', unsolved: '#3a6a9a' },
+    };
     const COLORS = {
-      cellSolved: '#6a9955',
-      cellUnsolved: '#666',
       cellContra: '#f44',
       propagator: '#569cd6',
       edge: '#555',
@@ -561,6 +574,12 @@ export class PropagatorViewManager {
       text: getComputedStyle(document.body).color || '#ccc',
       textDim: '#999',
     };
+
+    function cellColor(node) {
+      if (node.contradiction) return COLORS.cellContra;
+      const sub = SUBSYSTEM_COLORS[node.subsystem] || SUBSYSTEM_COLORS['unknown'];
+      return node.solved ? sub.solved : sub.unsolved;
+    }
 
     // Transform state (pan + zoom)
     let transform = { x: 0, y: 0, k: 1 };
@@ -662,14 +681,10 @@ export class PropagatorViewManager {
         const r = (n.type === 'cell' ? CELL_R : PROP_R) * transform.k;
 
         if (n.type === 'cell') {
-          // Circle
-          let fill = COLORS.cellUnsolved;
-          if (n.contradiction) fill = COLORS.cellContra;
-          else if (n.solved) fill = COLORS.cellSolved;
-
+          // Circle — color by subsystem
           ctx.beginPath();
           ctx.arc(sx, sy, r, 0, Math.PI * 2);
-          ctx.fillStyle = fill;
+          ctx.fillStyle = cellColor(n);
           ctx.fill();
           ctx.strokeStyle = (hoveredNode && hoveredNode.id === n.id) ? '#fff' : 'rgba(255,255,255,0.3)';
           ctx.lineWidth = (hoveredNode && hoveredNode.id === n.id) ? 2 : 1;
@@ -740,6 +755,8 @@ export class PropagatorViewManager {
           let html = '';
           if (hit.type === 'cell') {
             html = '<strong>Cell #' + hit.cellId + '</strong>\\n'
+              + 'Subsystem: ' + (hit.subsystem || 'unknown') + '\\n'
+              + (hit.source ? 'Source: ' + escapeHtmlInline(hit.source) + '\\n' : '')
               + 'Value: ' + escapeHtmlInline(hit.value);
           } else {
             html = '<strong>Propagator P' + hit.propId + '</strong>\\n'
