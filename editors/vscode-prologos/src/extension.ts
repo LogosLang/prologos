@@ -129,7 +129,7 @@ export function activate(context: vscode.ExtensionContext) {
         }),
         vscode.commands.registerCommand('prologos.showPropagatorView', () => {
           if (!propagatorViewManager) {
-            propagatorViewManager = new PropagatorViewManager(client!);
+            propagatorViewManager = new PropagatorViewManager(client!, context.extensionPath);
           }
           propagatorViewManager.show();
         }),
