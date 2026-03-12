@@ -91,13 +91,13 @@ Tier 1 (syntax-only, no server) can ship independently within ~1 week. Tier 2 (d
 
 | # | Sub-phase | ⏳ | Notes |
 |---|-----------|---|-------|
-| 3.0 | Elaboration side table (`lsp/type-index.rkt`) | ⬜ | ~30-50 instrumentation points |
-| 3.1 | WS-mode pretty-printer (`pp-expr-ws`) | ⬜ | ~200-300 lines |
-| 3.2 | Hover provider (`lsp/hover.rkt`) | ⬜ | |
-| 3.3 | Completion provider (`lsp/completion.rkt`) | ⬜ | 5 completion sources |
-| 3.4 | Semantic token provider (`lsp/semantic-tokens.rkt`) | ⬜ | 12 token types, 6 modifiers |
-| 3.5 | Inlay hint provider (`lsp/inlay-hints.rkt`) | ⬜ | |
-| 3.6 | Integration test + verification | ⬜ | All §6.8 verification checklist items |
+| 3.0 | Elaboration side table (`lsp/type-index.rkt`) | ⬜ | Deferred to propagator integration |
+| 3.1 | WS-mode pretty-printer (`pp-expr-ws`) | ⬜ | Using sexp pp-expr for now |
+| 3.2 | Hover provider | ✅ | `ed51572` — type lookup from global-env snapshot, markdown code block |
+| 3.3 | Completion provider | ✅ | `8cc6891` — env names + keywords, prefix filtering, type detail |
+| 3.4 | Semantic token provider (`lsp/semantic-tokens.rkt`) | ⬜ | Deferred — TextMate grammar provides base highlighting; will be much better with propagator type info |
+| 3.5 | Inlay hint provider (`lsp/inlay-hints.rkt`) | ⬜ | Deferred to propagator integration (needs per-expression type index) |
+| 3.6 | Integration test + verification | ⬜ | Hover + completion need VSCode testing |
 
 ### Tier 4: Interactive Evaluation
 
