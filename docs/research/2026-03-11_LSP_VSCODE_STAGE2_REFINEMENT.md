@@ -77,15 +77,15 @@ Tier 1 (syntax-only, no server) can ship independently within ~1 week. Tier 2 (d
 
 | # | Sub-phase | ⏳ | Notes |
 |---|-----------|---|-------|
-| 2.0 | JSON-RPC layer (`lsp/json-rpc.rkt`) | ⬜ | ~150-200 lines, Content-Length header parsing |
-| 2.1 | LSP server main loop (`lsp/server.rkt`) | ⬜ | ~400-500 lines, init/shutdown/dispatch |
-| 2.2 | Diagnostic publisher (`lsp/diagnostics.rkt`) | ⬜ | Error → Diagnostic mapping, E1001-E3001 |
+| 2.0 | JSON-RPC layer (`lsp/json-rpc.rkt`) | ✅ | `c2787b2` — read/write with Content-Length, #px regex |
+| 2.1 | LSP server main loop (`lsp/server.rkt`) | ✅ | `c2787b2` — lifecycle + didOpen/didChange/didSave/didClose + documentSymbol |
+| 2.2 | Diagnostic publisher (`lsp/diagnostics.rkt`) | ✅ | `c2787b2` — error→diagnostic, E1001-E3001, srcloc→range |
 | 2.3 | Definition location infrastructure | ⬜ | Add `definition-locations` to `module-info` |
-| 2.4 | Go-to-definition provider (`lsp/definition.rkt`) | ⬜ | |
-| 2.5 | Document symbol provider (`lsp/symbols.rkt`) | ⬜ | |
-| 2.6 | Signature help provider (`lsp/signature.rkt`) | ⬜ | |
-| 2.7 | TypeScript LSP client (`src/client.ts`) | ⬜ | ~100 lines, spawn Racket process |
-| 2.8 | Integration test + verification | ⬜ | All §5.9 verification checklist items |
+| 2.4 | Go-to-definition provider | ⬜ | Depends on 2.3 |
+| 2.5 | Document symbol provider | ✅ | `c2787b2` — regex-based outline in server.rkt |
+| 2.6 | Signature help provider | ⬜ | |
+| 2.7 | TypeScript LSP client (`src/client.ts`) | ✅ | `c2787b2` — auto-detect Racket, configurable paths |
+| 2.8 | Integration test + verification | ⬜ | Lifecycle verified; on-save diagnostics need VSCode test |
 
 ### Tier 3: Type Intelligence
 
