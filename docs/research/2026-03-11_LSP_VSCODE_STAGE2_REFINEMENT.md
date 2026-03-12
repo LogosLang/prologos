@@ -103,12 +103,12 @@ Tier 1 (syntax-only, no server) can ship independently within ~1 week. Tier 2 (d
 
 | # | Sub-phase | ⏳ | Notes |
 |---|-----------|---|-------|
-| 4.0 | REPL backend (`lsp/repl.rkt`) | ⬜ | |
-| 4.1 | Custom LSP methods (`$/prologos/*`) | ⬜ | eval, loadFile, narrowing, typeOf, elaborated |
-| 4.2 | Form identification (`src/forms.ts`) | ⬜ | Tree-sitter WASM cursor navigation |
-| 4.3 | Inline decorations (`src/decorations.ts`) | ⬜ | |
-| 4.4 | REPL commands + keybindings | ⬜ | |
-| 4.5 | Integration test + verification | ⬜ | |
+| 4.0 | REPL session + eval method (server) | ✅ | `16cbc46` — repl-session struct, prelude caching, eval-in-session!, 4 custom methods |
+| 4.1 | Commands + keybindings (package.json) | ✅ | `a151413` — 5 commands, Ctrl+Enter/Shift+Enter/Alt+Enter/Shift+T/Alt+R |
+| 4.2 | Form identification (`src/forms.ts`) | ✅ | `a151413` — text-based col-0 form detection, no tree-sitter WASM needed |
+| 4.3 | Inline decorations (`src/decorations.ts`) | ✅ | `a151413` — grey italic results, red errors, clear on edit |
+| 4.4 | Integration wiring (`src/repl.ts`) | ✅ | `a151413` — ReplManager, REPL output channel, all 5 commands wired |
+| 4.5 | Integration test + verification | ⬜ | Needs manual VSCode testing (Ctrl+Enter eval, inline results, session persistence) |
 
 ### Tier 5: InfoView Panel
 
