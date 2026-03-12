@@ -398,15 +398,51 @@
 ;; Pure tail-recursive loop that fires propagators from the worklist.
 ;; Stops when: (1) contradiction detected, (2) fuel exhausted, or
 ;; (3) worklist empty (quiescence reached).
+;;
+;; When current-bsp-observer is set, emits one bsp-round per quiescence
+;; call summarizing all propagator firings and cell diffs from initial
+;; to final state.
 (define (run-to-quiescence net)
+  (define observer (current-bsp-observer))
+  (if (not observer)
+      ;; Fast path: no tracing overhead
+      (run-to-quiescence-inner net)
+      ;; Traced path: capture diffs between initial and final state
+      (let* ([initial net]
+             [result (run-to-quiescence-inner/traced net)]
+             [final (car result)]
+             [fired-pids (cdr result)])
+        (when (pair? fired-pids)
+          ;; Compute cell diffs by comparing initial vs final cell values
+          (define cell-ids (champ-keys (prop-network-cells final)))
+          (define diffs
+            (for/fold ([acc '()])
+                      ([cid (in-list cell-ids)])
+              (define old-cell (champ-lookup (prop-network-cells initial)
+                                            (cell-id-hash cid) cid))
+              (define new-cell (champ-lookup (prop-network-cells final)
+                                            (cell-id-hash cid) cid))
+              (cond
+                [(eq? old-cell 'none) ;; new cell — diff from bot
+                 (cons (cell-diff cid 'bot (prop-cell-value new-cell)
+                                  (if (pair? fired-pids) (car fired-pids) (prop-id 0)))
+                       acc)]
+                [(eq? new-cell 'none) acc] ;; shouldn't happen
+                [(equal? (prop-cell-value old-cell) (prop-cell-value new-cell)) acc]
+                [else
+                 (cons (cell-diff cid (prop-cell-value old-cell) (prop-cell-value new-cell)
+                                  (if (pair? fired-pids) (car fired-pids) (prop-id 0)))
+                       acc)])))
+          (observer (bsp-round 0 final (reverse diffs) fired-pids
+                               (prop-network-contradiction final) '())))
+        final)))
+
+;; Inner loop: no tracing.
+(define (run-to-quiescence-inner net)
   (cond
-    ;; Already contradicted — stop
     [(prop-network-contradiction net) net]
-    ;; Fuel exhausted — stop
     [(<= (prop-network-fuel net) 0) net]
-    ;; Worklist empty — quiescent (fixed point reached)
     [(null? (prop-network-worklist net)) net]
-    ;; Fire next propagator
     [else
      (let* ([pid (car (prop-network-worklist net))]
             [rest (cdr (prop-network-worklist net))]
@@ -416,10 +452,27 @@
             [prop (champ-lookup (prop-network-propagators net*)
                                 (prop-id-hash pid) pid)])
        (if (eq? prop 'none)
-           ;; Propagator removed or unknown — skip
-           (run-to-quiescence net*)
-           ;; Fire: pure function from network to network
-           (run-to-quiescence ((propagator-fire-fn prop) net*))))]))
+           (run-to-quiescence-inner net*)
+           (run-to-quiescence-inner ((propagator-fire-fn prop) net*))))]))
+
+;; Inner loop with tracing: returns (cons final-net fired-pids-list).
+(define (run-to-quiescence-inner/traced net)
+  (let loop ([net net] [fired '()])
+    (cond
+      [(prop-network-contradiction net) (cons net (reverse fired))]
+      [(<= (prop-network-fuel net) 0) (cons net (reverse fired))]
+      [(null? (prop-network-worklist net)) (cons net (reverse fired))]
+      [else
+       (let* ([pid (car (prop-network-worklist net))]
+              [rest (cdr (prop-network-worklist net))]
+              [net* (struct-copy prop-network net
+                      [worklist rest]
+                      [fuel (sub1 (prop-network-fuel net))])]
+              [prop (champ-lookup (prop-network-propagators net*)
+                                  (prop-id-hash pid) pid)])
+         (if (eq? prop 'none)
+             (loop net* fired)
+             (loop ((propagator-fire-fn prop) net*) (cons pid fired))))])))
 
 ;; ========================================
 ;; Scheduler: BSP / Jacobi (Parallel-Ready) (Phase 2.5a)
