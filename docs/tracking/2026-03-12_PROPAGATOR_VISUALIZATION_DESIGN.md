@@ -21,8 +21,8 @@ literally the same network"). The tool IS the documentation of the paradigm.
 | Phase | Description | Status | Notes |
 |-------|-------------|--------|-------|
 | 0 | First-class trace data representation | ✅ | `817a958` — structs in propagator.rkt, 11 tests |
-| 1 | BSP-round trace capture | ✅ | `current-bsp-observer`, `make-trace-accumulator`, BSP loop modified |
-| 2 | Network serialization | ⬜ | JSON export of topology + trace data |
+| 1 | BSP-round trace capture | ✅ | `35c1a03` — observer param, BSP loop, 5 new tests |
+| 2 | Network serialization | ✅ | JSON export of topology + trace data |
 | 3 | LSP endpoint | ⬜ | `$/prologos/propNetwork` + `$/prologos/propTrace` |
 | 4 | VS Code graph panel | ⬜ | D3 + d3-dag Canvas rendering, HTML overlay tooltips |
 | 5 | BSP-round replay | ⬜ | Step-through, timeline slider, animated transitions |
