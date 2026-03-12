@@ -230,14 +230,12 @@
         (set! errors
               (list (prologos-error #f (exn-message e)))))])
 
-    ;; Run elaboration, capture errors via the error emission parameter.
-    ;; Redirect current-error-port to suppress perf/phase/memory noise
-    ;; from process-file (those reports are for test runner, not LSP).
-    ;; Our lsp-log uses lsp-state-log-port (captured at init), not
+    ;; Run elaboration. process-file returns a list of results where
+    ;; prologos-error? items are errors. Also redirect current-error-port
+    ;; to suppress perf/phase/memory noise (those reports are for the test
+    ;; runner, not LSP). Our lsp-log uses lsp-state-log-port, not
     ;; current-error-port, so it's unaffected.
-    (parameterize ([current-emit-error-diagnostics
-                    (lambda (err)
-                      (set! errors (cons err errors)))]
+    (parameterize ([current-emit-error-diagnostics #t]
                    ;; LSP Tier 2.3: fresh definition locations per elaboration
                    [current-definition-locations (hasheq)]
                    ;; Suppress process-file perf/phase/memory/diagnostic noise
@@ -249,7 +247,11 @@
         #:exists 'replace)
       (with-handlers ([exn:fail? (lambda (e)
                                    (set! errors (cons (prologos-error #f (exn-message e)) errors)))])
-        (process-file tmp-path))
+        (define results (process-file tmp-path))
+        ;; Extract errors from the result list
+        (for ([r (in-list (or results '()))])
+          (when (prologos-error? r)
+            (set! errors (cons r errors)))))
       (delete-file tmp-path)
       ;; Capture definition locations before parameterize exits
       (set! captured-def-locs (current-definition-locations))))
