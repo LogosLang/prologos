@@ -24,7 +24,7 @@ literally the same network"). The tool IS the documentation of the paradigm.
 | 1 | BSP-round trace capture | ✅ | `35c1a03` — observer param, BSP loop, 5 new tests |
 | 2 | Network serialization | ✅ | `779c6e9` — trace-serialize.rkt, 19 tests |
 | 3 | LSP endpoint | ✅ | `2998a4c` — handler + trace capture in elaboration |
-| 4 | VS Code graph panel | 🔄 | 4a: panel scaffold + data tables; 4b: D3 rendering pending |
+| 4 | VS Code graph panel | 🔄 | `2fe92c9` 4a done (panel + tables); 4b (D3 rendering) pending |
 | 5 | BSP-round replay | ⬜ | Step-through, timeline slider, animated transitions |
 | 6 | Polish and integration | ⬜ | Perf tuning, SVG export, documentation |
 
