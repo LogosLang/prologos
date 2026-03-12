@@ -75,7 +75,10 @@
  (struct-out atms-event:assume)
  (struct-out atms-event:retract)
  (struct-out atms-event:nogood)
- (struct-out prop-trace))
+ (struct-out prop-trace)
+ ;; Trace capture (Visualization Phase 1)
+ current-bsp-observer
+ make-trace-accumulator)
 
 ;; ========================================
 ;; Structs
@@ -160,6 +163,25 @@
 ;; final-network: prop-network at quiescence
 ;; metadata: hasheq of elaboration context (file, timestamp, fuel-used, etc.)
 (struct prop-trace (initial-network rounds final-network metadata) #:transparent)
+
+;; ========================================
+;; Trace Capture (Visualization Phase 1)
+;; ========================================
+
+;; Observer callback: (bsp-round → void). #f = no observer = zero cost.
+;; The scheduler calls this at the end of each BSP round with a bsp-round record.
+;; What happens to the record is the caller's concern (accumulate, stream, filter).
+(define current-bsp-observer (make-parameter #f))
+
+;; Convenience: create an accumulating observer + getter pair.
+;; Returns (values observer-fn get-rounds-fn).
+;; observer-fn: (bsp-round → void) — pass to current-bsp-observer
+;; get-rounds-fn: (→ (listof bsp-round)) — call after quiescence
+(define (make-trace-accumulator)
+  (define rounds (box '()))
+  (values
+   (lambda (round) (set-box! rounds (cons round (unbox rounds))))
+   (lambda () (reverse (unbox rounds)))))
 
 ;; ========================================
 ;; Hash Helpers
@@ -480,28 +502,46 @@
 ;; BSP run-to-quiescence: fire all worklist propagators per round.
 ;; executor: (snapshot-net pids → (listof (listof (cons cell-id value))))
 ;; Defaults to sequential-fire-all. Use make-parallel-fire-all for parallelism.
+;; When current-bsp-observer is set, emits a bsp-round record after each round.
 (define (run-to-quiescence-bsp net #:executor [executor sequential-fire-all])
-  (cond
-    ;; Already contradicted — stop
-    [(prop-network-contradiction net) net]
-    ;; Fuel exhausted — stop
-    [(<= (prop-network-fuel net) 0) net]
-    ;; Worklist empty — quiescent (fixed point reached)
-    [(null? (prop-network-worklist net)) net]
-    ;; Fire all worklist propagators in one BSP round
-    [else
-     (let* (;; 1. Deduplicate worklist
-            [pids (dedup-pids (prop-network-worklist net))]
-            [n (length pids)]
-            ;; 2. Clear worklist and decrease fuel
-            [snapshot (struct-copy prop-network net
-                       [worklist '()]
-                       [fuel (- (prop-network-fuel net) n)])]
-            ;; 3. Fire all propagators against snapshot
-            [all-writes (executor snapshot pids)]
-            ;; 4. Bulk-merge writes into snapshot
-            [merged (bulk-merge-writes snapshot all-writes)])
-       (run-to-quiescence-bsp merged #:executor executor))]))
+  (define observer (current-bsp-observer))
+  (let loop ([net net] [round-number 0])
+    (cond
+      ;; Already contradicted — stop
+      [(prop-network-contradiction net) net]
+      ;; Fuel exhausted — stop
+      [(<= (prop-network-fuel net) 0) net]
+      ;; Worklist empty — quiescent (fixed point reached)
+      [(null? (prop-network-worklist net)) net]
+      ;; Fire all worklist propagators in one BSP round
+      [else
+       (let* (;; 1. Deduplicate worklist
+              [pids (dedup-pids (prop-network-worklist net))]
+              [n (length pids)]
+              ;; 2. Clear worklist and decrease fuel
+              [snapshot (struct-copy prop-network net
+                         [worklist '()]
+                         [fuel (- (prop-network-fuel net) n)])]
+              ;; 3. Fire all propagators against snapshot
+              [all-writes (executor snapshot pids)]
+              ;; 4. Bulk-merge writes into snapshot
+              [merged (bulk-merge-writes snapshot all-writes)])
+         ;; 5. Notify observer if present (zero cost when #f)
+         (when observer
+           (define diffs
+             (for/fold ([acc '()])
+                       ([writes (in-list all-writes)]
+                        [pid (in-list pids)])
+               (for/fold ([acc acc])
+                         ([w (in-list writes)])
+                 (cons (cell-diff (car w)
+                                  (net-cell-read snapshot (car w))
+                                  (cdr w)
+                                  pid)
+                       acc))))
+           (observer (bsp-round round-number merged (reverse diffs) pids
+                                (prop-network-contradiction merged) '())))
+         (loop merged (add1 round-number)))])))
 
 ;; ========================================
 ;; Parallel Executor (Phase 2.5c)
