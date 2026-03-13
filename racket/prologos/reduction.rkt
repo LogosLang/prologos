@@ -34,7 +34,8 @@
          "stratified-eval.rkt"
          "narrowing.rkt"
          "definitional-tree.rkt"
-         "constraint-propagators.rkt")
+         "constraint-propagators.rkt"
+         "prop-observatory.rkt")  ;; Observatory: capture user network runs
 
 (provide whnf nf nf-whnf conv conv-nf
          current-nf-cache current-whnf-cache
@@ -2255,7 +2256,8 @@
      (let ([net* (whnf net)])
        (match net*
          [(expr-prop-network rnet)
-          (expr-prop-network (run-to-quiescence rnet))]
+          (define cell-metas (build-cell-metas-from-network rnet 'user 'lattice))
+          (expr-prop-network (capture-network rnet 'user "user:net-run" cell-metas))]
          [_ (if (equal? net* net) e (whnf (expr-net-run net*)))]))]
 
     ;; net-snapshot : PropNetwork -> PropNetwork (identity on persistent data)
