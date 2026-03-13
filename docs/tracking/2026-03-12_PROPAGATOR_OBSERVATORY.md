@@ -16,6 +16,7 @@
 | **5** | **LSP observatory endpoint** | ⬜ | `lsp/server.rkt` |
 | **6** | **VS Code multi-network UI** | ⬜ | `propagatorView.ts` |
 | **7** | **Cross-network links** | ⬜ | All integration points |
+| **8** | **User network integration** | ⬜ | `net-run` compiled form, `typing-core.rkt` |
 
 ---
 
@@ -82,6 +83,7 @@ Every subsystem that creates or uses a propagator network is a potential observa
 | **Narrowing** | Caller-provided (`narrowing.rkt`) | Term cells | Definitional tree props | Term lattice | Per narrowing query | Caller's quiescence |
 | **ATMS** (future) | Local per query | Assumption cells | Justification props | Truth values | Per query | TBD |
 | **Effects** (future) | Shared or local | Effect variable cells | Effect propagators | Effect rows | TBD | TBD |
+| **User networks** | Local per `net-run` | User-defined cells | User-defined props | User lattice domains | Per `net-run` call | `reduction.rkt:2258` |
 
 ### 4.1 Current Edge Production in the Elab-Network
 
@@ -475,6 +477,7 @@ A collapsible summary panel shows:
 | `editors/vscode-prologos/src/propagatorView.ts` | Modify | Multi-network selector UI, subsystem filter |
 | `racket/prologos/tests/test-observatory-01.rkt` | **NEW** | Unit tests for capture protocol |
 | `racket/prologos/tests/test-observatory-02.rkt` | **NEW** | Serialization tests |
+| `racket/prologos/reduction.rkt` | Modify | Wrap `net-run` quiescence with `capture-network` for user networks (Phase 8) |
 
 ## 12. Reuse Points
 
@@ -495,6 +498,88 @@ A collapsible summary panel shows:
 - **Diffing**: Compare two observatory snapshots (e.g., before/after a code change) to see what changed in the network topology.
 - **Streaming**: For long-running elaborations, stream captures as they're produced (via observatory observer callback) rather than accumulating.
 - **Pagination**: For programs producing many captures (large modules with many `defproc` forms), the LSP endpoint could support summary-then-detail retrieval — return capture metadata without networks, fetch individual networks on demand. Not needed for current program sizes.
+
+## 13a. Phase 8: User Network Integration
+
+Phases 0–7 cover the compiler's internal networks. Phase 8 extends the observatory to **user-created propagator networks** — networks built by users in `.prologos` files using the language-level propagator API.
+
+### Motivation
+
+Prologos exposes a full user-facing propagator API as grammar-level keywords:
+
+```
+net-new           : Int -> PropNetwork
+net-new-cell      : PropNetwork -> A -> (A A -> A) -> [PropNetwork * CellId]
+net-cell-read     : PropNetwork -> CellId -> A
+net-cell-write    : PropNetwork -> CellId -> A -> PropNetwork
+net-add-prop      : PropNetwork -> [List CellId] -> [List CellId] -> fn -> [PropNetwork * PropId]
+net-run           : PropNetwork -> PropNetwork
+net-snapshot      : PropNetwork -> PropNetwork
+net-contradict?   : PropNetwork -> Bool
+```
+
+Library helpers (`new-lattice-cell`, `new-widenable-cell` in `prologos::core::propagator`) and lattice infrastructure (`prologos::core::lattice`, `prologos::book::lattices`) enable users to build domain-specific abstract interpretations, constraint solvers, and analysis tools using propagator networks.
+
+Without Phase 8, the observatory only sees the compiler's networks. A user building a custom interval analysis who wonders why their network reached a contradiction has no access to the same debugging infrastructure we use for type inference. The vision — "every prop net is visualizable" — requires user networks too.
+
+### Integration Point: `reduction.rkt:2258`
+
+The `net-run` keyword reduces to `run-to-quiescence` in the evaluator:
+
+```racket
+;; reduction.rkt, current:
+[(expr-net-run net)
+ (let ([net* (whnf net)])
+   (match net*
+     [(expr-prop-network rnet)
+      (expr-prop-network (run-to-quiescence rnet))]
+     [_ ...]))]
+```
+
+This is the single point where user networks reach quiescence. The capture wraps here:
+
+```racket
+;; After Phase 8:
+[(expr-net-run net)
+ (let ([net* (whnf net)])
+   (match net*
+     [(expr-prop-network rnet)
+      (expr-prop-network
+        (capture-network rnet 'user
+          (format "user:net-run@~a" (current-source-location))
+          (infer-user-cell-metas rnet)))]
+     [_ ...]))]
+```
+
+### User Cell Metadata
+
+Users don't provide `cell-meta` — their cells are opaque Racket values inside `expr-prop-network`. The observatory infers metadata:
+
+- **`subsystem`**: Always `'user`
+- **`label`**: Synthetic — `"cell-0"`, `"cell-1"`, ..., based on `cell-id-n`
+- **`domain`**: Inferred from the cell's merge function if recognizable (e.g., `cap-set-join` → `'capability-set`, lattice join → `'lattice`), otherwise `'unknown`
+- **`source-loc`**: The source location of the `net-run` call (not individual cell creation, since cells are created incrementally and source locations aren't tracked per-cell in user code)
+- **`extra`**: `(hasheq 'merge-fn-name (object-name merge-fn))` when available
+
+`infer-user-cell-metas` walks the network's cells CHAMP and builds a `cell-meta` per cell with these heuristics.
+
+### User Network Labeling
+
+By default, user captures are labeled `"user:net-run@line:col"` using the source location of the `net-run` expression. For users who want richer labels, a future keyword extension:
+
+```prologos
+;; Optional labeled variant (future, not Phase 8)
+def result := net-run-traced my-net "interval-analysis"
+```
+
+This would pass the label string through to `capture-network`. Phase 8 uses only the automatic source-location label.
+
+### Testing
+
+- `process-string` a user network creation + `net-run` with `current-observatory` → verify user capture appears with `subsystem: 'user`
+- Verify cell count in capture matches cells created by user code
+- Verify label contains source location
+- `process-file` on a `.prologos` file that creates a user network → verify capture appears alongside compiler captures in the same observatory
 
 ## 14. Design Decisions and Trade-offs
 
