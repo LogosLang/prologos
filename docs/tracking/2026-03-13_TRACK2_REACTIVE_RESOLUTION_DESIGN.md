@@ -29,8 +29,8 @@ questions that must be resolved before implementation.
 | 2 | Constraint status cells (pending/resolved) | ✅ | commit `b4cdb1e`; cid field on constraint, enet9 status cell, dual-write in unify.rkt |
 | 3 | Stratified quiescence architecture | ✅ | commit `4c0c927`; solve-meta! split into core + stratified loop, fuel=100 |
 | 4 | Data-oriented solve-meta! (action descriptors) | ✅ | commit `e6aeafc`; 3 descriptor structs, 5 scan fns, interpreter with re-check guards |
-| 5 | Trait resolution propagators | ⬜ | |
-| 6 | HasMethod resolution propagators | ⬜ | |
+| 5 | Trait resolution propagators | ✅ | Already covered by Phase 4 `collect-ready-traits-via-cells` scan; trait-cell-map from Track 1 |
+| 6 | HasMethod resolution propagators | ✅ | commit `4a91b24`; hasmethod-cell-map cell (enet10), `collect-ready-hasmethods-via-cells` scan wired into S1 |
 | 7 | Error cell + grouped error reporting | ⬜ | Set-union merge keyed on constraint ID; includes HKT-7 |
 | 8 | Post-pass elimination | ⬜ | Compare performance against D.5 baseline |
 | 9 | Confluence verification | ⬜ | Prerequisite: HKT-7 (Phase 7); randomized-order property tests |
