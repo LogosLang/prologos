@@ -42,7 +42,8 @@ literally the same network"). The tool IS the documentation of the paradigm.
 | 4a | WebviewPanel skeleton + tabular data rendering | ✅ | `2fe92c9` |
 | 4b | Canvas graph rendering (layout + d3-zoom + tooltips) | ✅ | `a2286fb`, `3049305` |
 | 4b' | Sequential scheduler observer + round numbering | ✅ | `af43e4e`, `1232fda` |
-| 4c | Source-location linking (cell → editor position) | ⬜ | Needs elab-cell-info source |
+| 4c | Subsystem-categorized cells (color-coded by origin) | ✅ | `04cb546` — type-inference/infrastructure/multiplicity |
+| 4c' | Source-location linking (cell → editor position) | ⬜ | |
 | 4d | Auto-refresh on file save | ⬜ | |
 | **5** | **BSP-round replay** | | |
 | 5a | Timeline slider UI | ⬜ | |
@@ -55,27 +56,45 @@ literally the same network"). The tool IS the documentation of the paradigm.
 | 6c | Contradiction diagnosis view (ATMS nogoods) | ⬜ | |
 | 6d | Documentation + user guide | ⬜ | |
 
-## Known Limitation: No Propagator Edges in Current Elaboration
+## Subsystem Cell Categorization (Phase 4c)
 
-The visualization pipeline (Phases 0–4b) is end-to-end functional: cells are captured,
-serialized, served via LSP, and rendered in the VS Code webview with zoom/pan/tooltips.
+All subsystems share ONE `prop-network` inside the `elab-network`. Cells are categorized
+by their origin:
 
-However, the graph shows **cells with no edges** because the current elaboration pipeline
-does not create formal propagator edges (`net-add-propagator`) between cells. Constraint
-solving (type unification, trait resolution) is driven by imperative retry loops in
-`metavar-store.rkt`, not by the propagator network's scheduler. The 47 cells visible for
-`foray-min.prologos` are infrastructure cells (registries, environments, constraint stores)
-written to imperatively.
+| Subsystem | Color | Cell Source | Has cell-info? |
+|-----------|-------|-------------|----------------|
+| **Type inference** | Green | `elab-fresh-meta` (meta cells) | ✅ ctx, type, source |
+| **Infrastructure** | Gray | `elab-new-infra-cell` (registries, stores) | ❌ |
+| **Multiplicity** | Purple | `elab-fresh-mult-cell` (QTT mult cells) | ✅ type=#f |
+| **Unknown** | Blue | Fallback | — |
 
-**Resolution**: A dedicated "Propagator-First Elaboration Migration" track will move the
-constraint-solving path into the propagator network. Once meta→constraint relationships
-are formal propagator edges, the existing visualization will display real DAG topology
-with no additional rendering changes. See `DEFERRED.md` § "Propagator-First Elaboration
-Migration".
+### Propagator Edge Sources
 
-Phases 4c–6 of this design track remain valid and can proceed independently — they add
-auto-refresh, replay, and polish that will work with both the current flat topology and
-the future wired topology.
+Real `net-add-propagator` edges exist in these subsystems:
+
+| Subsystem | File | Edge Count | Active in Elaboration? |
+|-----------|------|------------|----------------------|
+| Unification | `elaborator-network.rkt` | Bidirectional per constraint | ✅ via `metavar-store.rkt:564` |
+| Structural decomp | `elaborator-network.rkt` | ~30 decomposition variants | ✅ when types are concrete |
+| Type↔Mult bridge | `elaborator-network.rkt` | Per Pi type | ✅ via `elab-add-type-mult-bridge` |
+| Session types | `session-propagators.rkt` | 9 variants | ✅ for session-typed code |
+| Effect ordering | `effect-ordering.rkt` | 1 | ✅ for effectful code |
+| Effect bridge | `effect-bridge.rkt` | 1 | ✅ session→effect bridge |
+| Capability | `capability-inference.rkt` | 1 | ✅ for cap-annotated code |
+| Cap↔Type bridge | `cap-type-bridge.rkt` | 1 | ✅ |
+| Constraint P1-P4 | `constraint-propagators.rkt` | 4 variants | ❌ tests only (deferred) |
+
+The unification propagators (`elab-add-unify-constraint`) ARE wired during real elaboration
+via `metavar-store.rkt` line 564. For `.prologos` files with enough type inference activity,
+the visualization should show real edges.
+
+**Note**: `process-file` calls `reset-meta-store!` per top-level form, creating a fresh
+network each time. The final network snapshot is from the LAST top-level form only.
+
+### Future: Propagator-First Elaboration Migration
+
+A dedicated track will move the remaining imperative constraint-solving path (trait
+resolution, hasmethod dispatch) into the propagator network. See `DEFERRED.md`.
 
 ---
 
