@@ -432,3 +432,132 @@ component was designed to provide.
 | Module exports | Snapshot at load time | Cell per module; re-export propagates |
 | Completion cache | Rebuild periodically | Cell per namespace; imports propagate |
 
+* Data Orientation
+
+Prefer structures where behavior is derived from data transformations rather
+than embedded in imperative control flow. Effects become first-class
+descriptions of intent, interpreted at explicit control boundaries rather
+than executed in-line.
+
+This principle addresses a specific form of incidental complexity: /control
+flow with embedded effects/. When a function braids pure computation with
+effectful operations (state mutations, recursive callbacks, registry
+lookups), the result is hard to reason about, hard to observe, hard to test
+in isolation, and hard to roll back during speculation. Data orientation
+separates the /what/ (a description of the work to be done) from the /when/
+and /how/ (interpretation at a controlled boundary).
+
+** The Core Pattern
+
+Instead of:
+
+#+begin_example
+resolve-constraint! c =
+  zonk type-args                   ;; pure
+  lookup instance registry         ;; read effect
+  solve-meta! dict-meta solution   ;; write effect, re-entrant
+#+end_example
+
+Data orientation produces:
+
+#+begin_example
+describe-resolution c =
+  zonk type-args                                  ;; pure
+  lookup instance registry                        ;; read (from cell)
+  return (ResolveTraitDict dict-meta solution)     ;; DATA: action descriptor
+
+interpret actions =
+  for each action in actions:
+    execute action, collect new descriptors
+  if new descriptors: iterate
+  else: fixpoint
+#+end_example
+
+The action descriptors form a /free algebra/ over the effect signature. The
+interpreter is the /fold/ that evaluates the algebra. This separation yields:
+
+1. *Inspectability*: the worklist is data --- it can be logged, counted,
+   visualized in the observatory, validated for confluence
+2. *Testability*: resolution logic can be unit-tested with mock descriptors
+   without running the full elaborator
+3. *Ordering control*: the interpreter chooses evaluation order, enabling
+   stratification without modifying the resolution logic itself
+4. *Totality*: the interpreter can enforce fuel limits, detect cycles, and
+   guarantee termination --- structurally, not by convention
+5. *Speculation safety*: descriptors are data in cells, captured by snapshots
+
+** Relationship to Other Principles
+
+Data Orientation is the /unifying principle/ behind several existing Prologos
+design choices:
+
+- *Propagator-First Infrastructure*: data (cells) over state (mutable
+  hashes). Propagators are data-oriented by construction --- they read cells,
+  write cells, and compute pure transformations. Data orientation generalizes
+  this pattern beyond infrastructure to /all/ effectful computation.
+
+- *Layered Recovery Principle* (=EFFECTFUL_COMPUTATION_ON_PROPAGATORS.org=):
+  "reasoning about effects happens monotonically... executing effects happens
+  at a control boundary." This /is/ data orientation applied to IO effects.
+  Data orientation recognizes the same pattern applies to internal effects
+  (constraint resolution, trait lookup, meta solving).
+
+- *Correct by Construction*: data structures that make wrong states
+  unrepresentable. Action descriptors make /wrong orderings/ unrepresentable
+  --- the interpreter controls ordering, not the producer of descriptors.
+
+- *Decomplection*: separating what from when. Data orientation decomplects
+  effect description from effect interpretation, the same way session types
+  decomplect protocol specification from process implementation.
+
+- *First-Class by Default*: action descriptors are first-class data ---
+  storable, passable, inspectable, serializable. Embedded effects are none
+  of these things.
+
+** The Semi-Naive Evaluation Connection
+
+Data orientation connects to Datalog's semi-naive evaluation. Naive
+evaluation re-scans all rules on every iteration. Semi-naive evaluation
+tracks the /delta/ (newly derived facts) and only applies rules affected by
+the delta. In propagator terms: propagators fire only when their input cells
+change --- the network's worklist is the delta. This is inherently
+data-oriented: the worklist is data describing what needs to happen next.
+
+** The Free Monad Analogy
+
+Categorically, data orientation implements the /free monad/ pattern.
+Instead of executing effects immediately, the system builds a description
+of effects (the free algebra) and interprets them in a controlled loop (the
+fold). The description is a value; the interpretation is a function. Both
+are first-class, testable, and composable.
+
+** Design Invariant: Propagator Statelessness
+
+Propagators must be /stateless pure fire functions/: ~net \to net~. Any
+state that matters for provenance, speculation, or observability must live
+in cells, not in closures. A propagator that captures mutable state in its
+closure creates invisible state that:
+
+- Is not captured by ~save-meta-state~ / ~restore-meta-state!~
+- Is not observable by the observatory
+- Is not subject to confluence guarantees
+- Leaks across speculative branches
+
+This invariant ensures that the propagator network remains the single source
+of truth. Threshold propagators (=make-threshold-fire-fn=,
+=make-barrier-fire-fn=) demonstrate the correct pattern: they read cell
+values on every invocation, compute a predicate, and either run the body or
+return the network unchanged. The "memory" is in the cells, not the closure.
+On monotone lattices, this stateless approach is observationally identical to
+a stateful "fire once" propagator --- but preserves full observability.
+
+** Application
+
+| Domain | Imperative (effects-in-control-flow) | Data-Oriented (effects-as-descriptors) |
+|-------------------+---------------------------------------------------+-----------------------------------------------------|
+| Constraint retry | =retry-constraints-via-cells!= mutates status | Readiness propagator produces =RetryConstraint= data |
+| Trait resolution | =resolve-fn= callback calls =solve-meta!= | Resolution propagator produces =ResolveTraitDict= |
+| Error reporting | =raise= / =error= during resolution | Error descriptors accumulated in error cell |
+| Instance registry | =hash-set!= on mutable parameter | Cell write to CHAMP-backed registry cell |
+| IO effects | Execute during AST walk | Collect ordering in session cells; execute at barrier |
+
