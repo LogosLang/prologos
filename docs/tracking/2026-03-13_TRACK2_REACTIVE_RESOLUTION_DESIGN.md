@@ -27,7 +27,7 @@ questions that must be resolved before implementation.
 | D.6 | External review integration | ✅ | |
 | 1 | Instance registry — cell reader infrastructure | ✅ | `read-impl-registry` + 4 read conversions; parameter write stays for cross-command |
 | 2 | Constraint status cells (pending/resolved) | ✅ | commit `b4cdb1e`; cid field on constraint, enet9 status cell, dual-write in unify.rkt |
-| 3 | Stratified quiescence architecture | ⬜ | Includes fuel counter for termination guarantee |
+| 3 | Stratified quiescence architecture | ✅ | commit `4c0c927`; solve-meta! split into core + stratified loop, fuel=100 |
 | 4 | Data-oriented solve-meta! (action descriptors) | ⬜ | |
 | 5 | Trait resolution propagators | ⬜ | |
 | 6 | HasMethod resolution propagators | ⬜ | |
@@ -941,16 +941,21 @@ Single constraint-status-map cell (not per-constraint cells). Maps constraint-id
 **Key design choice**: `'resolved` covers both `'solved` and `'failed`. The cell lattice only needs to distinguish "needs work" from "terminal". The fine-grained status stays on the struct until Phase 3 eliminates the imperative retry chain. The cell's monotonicity means speculation rollback (via network snapshot restore) correctly reverts status transitions from failed branches.
 
 ### Phase 3: Stratified Quiescence Architecture
-- Modify `solve-meta!` to use a stratified loop:
-  S0 (type propagation) → S1 (readiness scan) → S2 (resolution batch)
-- Replace recursive re-entrancy with flat iteration
-- **Fuel counter**: the outer loop (S0→S1→S2→S0) gets a maximum iteration
-  count. On fuel exhaustion, collect all pending constraints and report
-  "constraint resolution did not converge." The CALM theorem guarantees
-  convergence for monotone operations, but S2 is the non-monotone barrier —
-  fuel is the safety net. (The current `retrying` guard is a local cycle
-  breaker; the fuel counter is its global replacement.)
-- This is the structural change; resolution logic stays imperative initially
+
+**Implementation** (commit `4c0c927`):
+
+Split `solve-meta!` into `solve-meta-core!` (write only) + `run-stratified-resolution!` (flat loop).
+
+1. **solve-meta-core!**: CHAMP write + cell write + P-U2b consistency check. No retry logic. Sets progress flag (via `current-stratified-progress-box`) when solving a meta during S2.
+2. **run-stratified-resolution!**: Flat S0→S1+S2 loop:
+   - S0: Run network to quiescence (type propagation)
+   - S1+S2: Scan + retry ready constraints (`retry-constraints-via-cells!`), traits (`retry-traits-via-cells!` + `retry-trait-for-meta!`), hasmethods (`retry-hasmethod-for-meta!`)
+   - Progress check: box flag set by nested `solve-meta-core!` calls
+   - Repeat until no progress or fuel exhausted (100 iterations)
+3. **Re-entrancy prevention**: `current-in-stratified-resolution?` parameter. When `#t`, `solve-meta!` calls only `solve-meta-core!` (no loop). The outer loop handles further rounds. Call stack is always flat.
+4. **Test fallback**: When no propagator network exists (test contexts), uses `retry-constraints-for-meta!` instead of cell-state scan. Same stratified structure.
+
+The `retrying` guard on constraint structs is now structurally dead code — re-entrancy is eliminated by the flag. Kept as safety net until Phase 4 removes the imperative retry chain entirely.
 
 ### Phase 4: Action Descriptors
 - Define action descriptor structs (RetryConstraint, ResolveTraitDict,
