@@ -43,12 +43,12 @@ literally the same network"). The tool IS the documentation of the paradigm.
 | 4b | Canvas graph rendering (layout + d3-zoom + tooltips) | ✅ | `a2286fb`, `3049305` |
 | 4b' | Sequential scheduler observer + round numbering | ✅ | `af43e4e`, `1232fda` |
 | 4c | Subsystem-categorized cells (color-coded by origin) | ✅ | `04cb546` — type-inference/infrastructure/multiplicity |
-| 4c' | Source-location linking (cell → editor position) | ⬜ | |
-| 4d | Auto-refresh on file save | ⬜ | |
+| 4c' | Source-location linking (cell → editor position) | ✅ | `16cb7ce` — click cell → jump to source line |
+| 4d | Auto-refresh on file save | ✅ | `c36b1ac` — debounced onDidSaveTextDocument |
 | **5** | **BSP-round replay** | | |
-| 5a | Timeline slider UI | ⬜ | |
-| 5b | Round step-through (prev/next) | ⬜ | |
-| 5c | Animated cell-diff highlighting | ⬜ | |
+| 5a | Timeline slider UI | ✅ | `ee0e6a1` — range slider with round info bar |
+| 5b | Round step-through (prev/next) | ✅ | `ee0e6a1` — slider positions 0..N reconstruct state via cell diffs |
+| 5c | Animated cell-diff highlighting | ✅ | `ee0e6a1` — yellow ring/glow on changed cells |
 | 5d | Cell value history popup | ⬜ | |
 | **6** | **Polish and integration** | | |
 | 6a | Performance tuning (large networks) | ⬜ | |
