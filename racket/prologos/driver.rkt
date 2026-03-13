@@ -1510,6 +1510,9 @@
      (for ([(k v) (in-hash (module-info-env-snapshot cached))])
        (current-global-env
         (hash-set (current-global-env) k v)))
+     ;; Observatory: replay cached captures so capability graphs appear
+     ;; even when the module is loaded from cache.
+     (replay-module-captures! ns-sym)
      cached]
     [else
      ;; 2. Check for circular dependencies
@@ -1574,6 +1577,10 @@
                     ;; Phase D: fresh ATMS per module
                     [current-command-atms #f]
 )
+       ;; Observatory: count captures before this module loads, so we can
+       ;; identify which captures were added during loading and cache them.
+       (define captures-before (observatory-capture-count))
+
        ;; Read and process the file
        ;; Use WS reader for .prologos files, sexp reader otherwise
        (define port (open-input-file file-path))
@@ -1594,6 +1601,9 @@
 
        ;; IO-H: Run capability inference after module definitions are processed
        (run-post-compilation-inference!)
+
+       ;; Observatory: cache any captures registered during this module's load
+       (cache-module-captures! ns-sym captures-before)
 
        ;; Capture the resulting environment, namespace context, and registries.
        ;; Use global-env-snapshot to merge both layers: per-definition cells

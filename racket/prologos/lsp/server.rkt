@@ -56,6 +56,7 @@
    spec-stores            ; hash: uri → hasheq (spec-store snapshot for hover/InfoView)
    prop-traces            ; hash: uri → jsexpr (serialized prop-trace for visualization)
    observatory-snapshots  ; hash: uri → jsexpr (serialized observatory for multi-network view)
+   module-capture-cache   ; hasheq: ns-sym → (listof net-capture), or #f
    ) #:mutable)
 
 (define (make-initial-state)
@@ -72,6 +73,7 @@
              (make-hash)
              (make-hash)  ; prop-traces
              (make-hash)  ; observatory-snapshots
+             #f           ; module-capture-cache
              ))
 
 ;; ============================================================
@@ -113,7 +115,8 @@
       (path->string (path-only (syntax-source #'here))))
     (define lib-dir
       (simplify-path (build-path here-dir ".." "lib")))
-    (define-values (mod-reg trait-reg impl-reg param-impl-reg preparse-reg cap-reg)
+    (define prelude-obs (make-observatory (hasheq 'source "prelude")))
+    (define-values (mod-reg trait-reg impl-reg param-impl-reg preparse-reg cap-reg mod-cap-cache)
       (parameterize ([current-global-env (hasheq)]
                      [current-definition-cells-content (hasheq)]
                      [current-definition-dependencies (hasheq)]
@@ -126,7 +129,11 @@
                      [current-impl-registry (current-impl-registry)]
                      [current-param-impl-registry (current-param-impl-registry)]
                      [current-capability-registry (current-capability-registry)]
-                     [current-error-port (open-output-nowhere)])
+                     [current-error-port (open-output-nowhere)]
+                     ;; Enable observatory during prelude loading so capability
+                     ;; inference captures are recorded and cached for replay.
+                     [current-observatory prelude-obs]
+                     [current-module-capture-cache (hasheq)])
         (install-module-loader!)
         (process-string "(ns prelude-cache)\n")
         (values (current-module-registry)
@@ -134,11 +141,14 @@
                 (current-impl-registry)
                 (current-param-impl-registry)
                 (current-preparse-registry)
-                (current-capability-registry))))
+                (current-capability-registry)
+                (current-module-capture-cache))))
     (set-lsp-state-prelude-cache!
      state
      (prelude-cache mod-reg trait-reg impl-reg param-impl-reg preparse-reg cap-reg lib-dir))
-    (lsp-log state "Prelude loaded (~a modules cached)" (hash-count mod-reg))))
+    (set-lsp-state-module-capture-cache! state mod-cap-cache)
+    (lsp-log state "Prelude loaded (~a modules cached, ~a module captures cached)"
+             (hash-count mod-reg) (hash-count mod-cap-cache))))
 
 ;; Get or create a REPL session for a URI.
 (define (get-or-create-session! state uri)
@@ -511,7 +521,11 @@
                    ;; Visualization Phase 1: capture BSP rounds
                    [current-bsp-observer bsp-observe]
                    ;; Observatory: capture all subsystem networks
-                   [current-observatory obs])
+                   [current-observatory obs]
+                   ;; Module capture cache: replay cached capability captures
+                   ;; from prelude loading into per-file observatory
+                   [current-module-capture-cache
+                    (or (lsp-state-module-capture-cache state) (hasheq))])
       ;; Write content to temp file and process
       (define tmp-path (make-temporary-file "prologos-lsp-~a.prologos"))
       (call-with-output-file tmp-path

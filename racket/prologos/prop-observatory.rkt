@@ -20,7 +20,8 @@
 ;;; Design reference: docs/tracking/2026-03-12_PROPAGATOR_OBSERVATORY.md
 ;;;
 
-(require "champ.rkt"
+(require racket/list
+         "champ.rkt"
          "propagator.rkt")
 
 (provide
@@ -41,7 +42,12 @@
  ;; Capture protocol
  capture-network
  ;; Cell-meta builder helper
- build-cell-metas-from-network)
+ build-cell-metas-from-network
+ ;; Module capture cache — replay cached captures into observatory
+ current-module-capture-cache
+ observatory-capture-count
+ cache-module-captures!
+ replay-module-captures!)
 
 ;; ========================================
 ;; Core Data Types
@@ -232,3 +238,49 @@
                           source-loc
                           domain
                           (hasheq)))))
+
+;; ========================================
+;; Module Capture Cache
+;; ========================================
+
+;; Parameter: hasheq mapping module ns-sym → (listof net-capture).
+;; When a module is first loaded with observatory active, its captures
+;; are stashed here. On subsequent cached loads, they are replayed into
+;; the current observatory so the user always sees capability captures.
+(define current-module-capture-cache (make-parameter (hasheq)))
+
+;; Return the current number of captures in the observatory (0 if off).
+(define (observatory-capture-count)
+  (define obs (current-observatory))
+  (if obs (length (unbox (observatory-state-captures-box obs))) 0))
+
+;; Snapshot observatory captures that were registered during this module's load.
+;; Call AFTER run-post-compilation-inference! in load-module.
+;; captures-before = count of captures in observatory before this module loaded.
+(define (cache-module-captures! ns-sym captures-before)
+  (define obs (current-observatory))
+  (when obs
+    (define all-caps (unbox (observatory-state-captures-box obs)))
+    ;; all-caps is newest-first; captures-before tells us how many existed before
+    (define new-count (- (length all-caps) captures-before))
+    (when (> new-count 0)
+      (define new-caps (take all-caps new-count))
+      (current-module-capture-cache
+       (hash-set (current-module-capture-cache) ns-sym new-caps)))))
+
+;; Replay cached captures for a module into the current observatory.
+;; Called when loading a cached module with observatory active.
+(define (replay-module-captures! ns-sym)
+  (define obs (current-observatory))
+  (when obs
+    (define cached-caps
+      (hash-ref (current-module-capture-cache) ns-sym #f))
+    (when cached-caps
+      ;; Re-register each capture with a fresh sequence number
+      (for ([cap (in-list (reverse cached-caps))])  ;; reverse to restore chronological order
+        (define new-seq (observatory-next-sequence! obs))
+        (observatory-register-capture!
+         obs
+         (struct-copy net-capture cap
+                      [sequence-number new-seq]
+                      [timestamp-ms (current-inexact-milliseconds)]))))))
