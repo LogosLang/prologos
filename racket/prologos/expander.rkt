@@ -115,8 +115,7 @@
        (let ([ty-ok (is-type/err ctx-empty inferred-type loc)])
          (when (prologos-error? ty-ok)
            (raise-prologos-error ty-ok))
-         ;; Phase 3d: trait resolution handled incrementally by solve-meta! callback
-         (resolve-hasmethod-constraints!)
+         ;; Track 2: trait + hasmethod resolution handled reactively by propagator callbacks
          (let ([te (check-unresolved-trait-constraints)])
            (when (not (null? te))
              (raise-prologos-error (car te))))
@@ -138,8 +137,7 @@
        (let ([chk (check/err ctx-empty body type* loc)])
          (when (prologos-error? chk)
            (raise-prologos-error chk))
-         ;; Phase 3d: trait resolution handled incrementally by solve-meta! callback
-         (resolve-hasmethod-constraints!)
+         ;; Track 2: trait + hasmethod resolution handled reactively by propagator callbacks
          (let ([te (check-unresolved-trait-constraints)])
            (when (not (null? te))
              (raise-prologos-error (car te))))
@@ -165,8 +163,7 @@
      (let ([ty (infer/err ctx-empty expr loc)])
        (when (prologos-error? ty)
          (raise-prologos-error ty))
-       ;; Phase 3d: trait resolution handled incrementally by solve-meta! callback
-       (resolve-hasmethod-constraints!)
+       ;; Track 2: trait + hasmethod resolution handled reactively by propagator callbacks
        (let ([te (check-unresolved-trait-constraints)])
          (when (not (null? te))
            (raise-prologos-error (car te))))
@@ -179,8 +176,7 @@
      (let ([ty (infer/err ctx-empty expr loc)])
        (when (prologos-error? ty)
          (raise-prologos-error ty))
-       ;; Phase 3d: trait resolution handled incrementally by solve-meta! callback
-       (resolve-hasmethod-constraints!)
+       ;; Track 2: trait + hasmethod resolution handled reactively by propagator callbacks
        (let ([te (check-unresolved-trait-constraints)])
          (when (not (null? te))
            (raise-prologos-error (car te))))

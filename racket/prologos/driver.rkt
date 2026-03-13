@@ -431,9 +431,7 @@
                    (let ([ty (time-phase! type-check (infer/err ctx-empty expr))])
                      (if (prologos-error? ty) ty
                          (begin
-                           ;; Trait resolution: handled by propagator cell-path in solve-meta!
-                           ;; HasMethod resolution: search-based, runs after type checking
-                           (resolve-hasmethod-constraints!)
+                           ;; Track 2: trait + hasmethod resolution handled reactively by propagator callbacks
                            (let ([te (check-unresolved-trait-constraints)])
                              (if (not (null? te))
                                  (car te)
@@ -456,9 +454,7 @@
                    (let ([ty (time-phase! type-check (infer/err ctx-empty expr))])
                      (if (prologos-error? ty) ty
                          (begin
-                           ;; Trait resolution: handled by propagator cell-path in solve-meta!
-                           ;; HasMethod resolution: search-based, runs after type checking
-                           (resolve-hasmethod-constraints!)
+                           ;; Track 2: trait + hasmethod resolution handled reactively by propagator callbacks
                            (let ([te (check-unresolved-trait-constraints)])
                              (if (not (null? te))
                                  (car te)
@@ -565,9 +561,7 @@
                    (let ([ty (time-phase! type-check (infer/err ctx-empty expr))])
                      (if (prologos-error? ty) ty
                          (begin
-                           ;; Trait resolution: handled by propagator cell-path in solve-meta!
-                           ;; HasMethod resolution: search-based, runs after type checking
-                           (resolve-hasmethod-constraints!)
+                           ;; Track 2: trait + hasmethod resolution handled reactively by propagator callbacks
                            (let ([te (check-unresolved-trait-constraints)])
                              (if (not (null? te))
                                  (car te)
@@ -1003,9 +997,7 @@
            (cond
              [(prologos-error? ty-ok) ty-ok]
              [else
-              ;; Trait resolution: handled by propagator cell-path in solve-meta!
-              ;; HasMethod resolution: search-based, runs after type checking
-              (resolve-hasmethod-constraints!)
+              ;; Track 2: trait + hasmethod resolution handled reactively by propagator callbacks
               ;; Check for unresolved trait constraints (error reporting)
               (define trait-errors (check-unresolved-trait-constraints))
               ;; Phase 4: Check for unresolved capability constraints
@@ -1160,10 +1152,7 @@
                       (current-global-env (hash-remove (current-global-env) chk-fqn)))
                     chk]
                    [else
-                    ;; Phase C: resolve trait-constraint metas to dictionary expressions
-                    ;; Trait resolution: handled by propagator cell-path in solve-meta!
-                    ;; HasMethod resolution: search-based, runs after type checking
-                    (resolve-hasmethod-constraints!)
+                    ;; Track 2: trait + hasmethod resolution handled reactively by propagator callbacks
                     ;; Phase C.6: Check for unresolved trait constraints
                     (define trait-errors-ann (check-unresolved-trait-constraints))
                     ;; Phase 4: Check for unresolved capability constraints

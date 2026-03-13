@@ -441,8 +441,8 @@
             (cond
               ;; Phase 3a: HasMethod constraint marker — (HasMethod trait-var method-name)
               ;; Register hasmethod-constraint-info instead of trait-constraint-info.
-              ;; The evidence meta will be solved by resolve-hasmethod-constraints! after
-              ;; the trait variable P is unified with a concrete trait.
+              ;; The evidence meta will be solved by the hasmethod resolution callback
+              ;; (reactive, via propagators) after the trait variable P is unified.
               [(and (pair? wc) (eq? (car wc) 'HasMethod))
                (define hm-trait-var-name (cadr wc))
                (define hm-method-name (caddr wc))
