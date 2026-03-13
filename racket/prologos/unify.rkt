@@ -750,8 +750,14 @@
          [rhs (zonk-at-depth 0 (constraint-rhs c))])
      (define result (unify-core (constraint-ctx c) lhs rhs))
      (cond
-       [(eq? result #t)   (set-constraint-status! c 'solved)]
-       [(eq? result #f)   (set-constraint-status! c 'failed)]
+       [(eq? result #t)
+        (set-constraint-status! c 'solved)
+        ;; Track 2 Phase 2: dual-write to status cell.
+        (write-constraint-status-cell! (constraint-cid c) 'resolved)]
+       [(eq? result #f)
+        (set-constraint-status! c 'failed)
+        ;; Track 2 Phase 2: dual-write to status cell.
+        (write-constraint-status-cell! (constraint-cid c) 'resolved)]
        ;; 'postponed: leave status as-is (will be set back to 'postponed
        ;; by retry-constraints-for-meta! if still 'retrying)
        ))))

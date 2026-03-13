@@ -153,6 +153,10 @@
  current-wakeup-registry-cell-id
  current-trait-wakeup-cell-id
  current-hasmethod-wakeup-cell-id
+ ;; Track 2 Phase 2: Constraint status cell
+ current-constraint-status-cell-id
+ read-constraint-status-map
+ write-constraint-status-cell!
  ;; P5b: Multiplicity cell callbacks
  current-prop-fresh-mult-cell
  current-prop-mult-cell-write
@@ -191,7 +195,8 @@
 ;; Constraints are retried when the metavariables they mention get solved.
 
 (struct constraint
-  (lhs       ;; Expr — left side of unification
+  (cid       ;; symbol (gensym) — unique identity for status cell keying (Track 2 Phase 2)
+   lhs       ;; Expr — left side of unification
    rhs       ;; Expr — right side of unification
    ctx       ;; Context — typing context at creation
    source    ;; any — debug info (string or constraint-provenance)
@@ -507,13 +512,15 @@
 ;; referenced by metas in lhs/rhs.
 (define (add-constraint! lhs rhs ctx source)
   (perf-inc-constraint!)
-  (define c (constraint lhs rhs ctx source 'postponed '()))
+  (define c (constraint (gensym 'cst) lhs rhs ctx source 'postponed '()))
   ;; Track 1 Phase 6c: Cell-only writes (network-everywhere).
   (define cstore-cid (current-constraint-cell-id))
   (define cstore-net-box (current-prop-net-box))
   (define write-fn (current-prop-cell-write))
   (let ([enet (unbox cstore-net-box)])
     (set-box! cstore-net-box (write-fn enet cstore-cid (list c))))
+  ;; Track 2 Phase 2: Write initial 'pending status to cell.
+  (write-constraint-status-cell! (constraint-cid c) 'pending)
   ;; Register for wakeup on all mentioned metas.
   (define meta-ids (append (collect-meta-ids lhs) (collect-meta-ids rhs)))
   (define wr-cid (current-wakeup-registry-cell-id))
@@ -693,6 +700,26 @@
       (read-fn (unbox net-box) cid)
       (hasheq)))
 
+;; Track 2 Phase 2: Read constraint status map from cell.
+;; Returns hasheq: constraint-id → 'pending | 'resolved.
+(define (read-constraint-status-map)
+  (define cid (current-constraint-status-cell-id))
+  (define net-box (current-prop-net-box))
+  (define read-fn (current-prop-cell-read))
+  (if (and cid net-box read-fn)
+      (read-fn (unbox net-box) cid)
+      (hasheq)))
+
+;; Track 2 Phase 2: Write a constraint's status to the status cell.
+;; Dual-writes alongside set-constraint-status! until Phase 3 eliminates
+;; the struct's mutable status field.
+(define (write-constraint-status-cell! constraint-id status-sym)
+  (define cid (current-constraint-status-cell-id))
+  (define net-box (current-prop-net-box))
+  (define write-fn (current-prop-cell-write))
+  (when (and cid net-box write-fn)
+    (set-box! net-box (write-fn (unbox net-box) cid (hasheq constraint-id status-sym)))))
+
 ;; Reset the constraint store (called by reset-meta-store!).
 ;; Clears cell IDs — new cells are created by reset-meta-store! when the network is recreated.
 (define (reset-constraint-store!)
@@ -706,7 +733,9 @@
   (current-wakeup-registry-cell-id #f)
   (current-trait-wakeup-cell-id #f)
   ;; Phase 7a: Clear hasmethod wakeup cell ID (was hash-clear! on parameter).
-  (current-hasmethod-wakeup-cell-id #f))
+  (current-hasmethod-wakeup-cell-id #f)
+  ;; Track 2 Phase 2: Clear constraint status cell ID.
+  (current-constraint-status-cell-id #f))
 
 ;; Query: all postponed constraints.
 ;; Track 1 Phase 1a: reads from cell (primary) with parameter fallback.
@@ -784,6 +813,13 @@
 ;; Phase 7a: Hasmethod wakeup cell (was missing — the only wakeup map without a cell).
 (define current-hasmethod-wakeup-cell-id (make-parameter #f))
 
+;; Track 2 Phase 2: Constraint status cell.
+;; Maps constraint-id (gensym) → 'pending | 'resolved.
+;; Monotone lattice: pending < resolved. Once resolved, stays resolved.
+;; The struct's mutable status field ('postponed/'retrying/'solved/'failed)
+;; stays in place until Phase 3 eliminates re-entrancy.
+(define current-constraint-status-cell-id (make-parameter #f))
+
 ;; P5b: Multiplicity cell callbacks
 (define current-prop-fresh-mult-cell (make-parameter #f))   ;; (enet source → (values enet* cell-id))
 (define current-prop-mult-cell-write (make-parameter #f))   ;; (enet cell-id value → enet*)
@@ -852,6 +888,7 @@
                  [current-wakeup-registry-cell-id #f]
                  [current-trait-wakeup-cell-id #f]
                  [current-hasmethod-wakeup-cell-id #f]
+                 [current-constraint-status-cell-id #f]
                  ;; CHAMP boxes + network: #f — reset-meta-store! creates fresh
                  [current-prop-meta-info-box #f]
                  [current-prop-net-box #f]
@@ -1322,7 +1359,10 @@
       ;; Phase 7a: Hasmethod wakeup cell (was missing — now parallel to trait wakeup).
       (define-values (enet8 hw-cid) (new-cell-fn enet7 (hasheq) merge-hasheq-list-append))
       (current-hasmethod-wakeup-cell-id hw-cid)
-      (set-box! nb enet8))))
+      ;; Track 2 Phase 2: Constraint status cell (constraint-id → 'pending | 'resolved).
+      (define-values (enet9 cs-cid) (new-cell-fn enet8 (hasheq) merge-constraint-status-map))
+      (current-constraint-status-cell-id cs-cid)
+      (set-box! nb enet9))))
 
 ;; ========================================
 ;; Meta state save/restore for speculative type-checking

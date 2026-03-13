@@ -41,15 +41,15 @@
 
 (test-case "constraint cell: single write appends"
   (define-values (enet0 cid) (make-test-env))
-  (define c1 (constraint (expr-Nat) (expr-Nat) '() "test" 'postponed '()))
+  (define c1 (constraint (gensym 'cst) (expr-Nat) (expr-Nat) '() "test" 'postponed '()))
   (define enet1 (elab-cell-write enet0 cid (list c1)))
   (check-equal? (length (elab-cell-read enet1 cid)) 1)
   (check-eq? (car (elab-cell-read enet1 cid)) c1))
 
 (test-case "constraint cell: multiple writes accumulate"
   (define-values (enet0 cid) (make-test-env))
-  (define c1 (constraint (expr-Nat) (expr-Nat) '() "first" 'postponed '()))
-  (define c2 (constraint (expr-Bool) (expr-Bool) '() "second" 'postponed '()))
+  (define c1 (constraint (gensym 'cst) (expr-Nat) (expr-Nat) '() "first" 'postponed '()))
+  (define c2 (constraint (gensym 'cst) (expr-Bool) (expr-Bool) '() "second" 'postponed '()))
   (define enet1 (elab-cell-write enet0 cid (list c1)))
   (define enet2 (elab-cell-write enet1 cid (list c2)))
   (define contents (elab-cell-read enet2 cid))
@@ -59,7 +59,7 @@
 
 (test-case "constraint cell: immutable — old network unaffected"
   (define-values (enet0 cid) (make-test-env))
-  (define c1 (constraint (expr-Nat) (expr-Nat) '() "test" 'postponed '()))
+  (define c1 (constraint (gensym 'cst) (expr-Nat) (expr-Nat) '() "test" 'postponed '()))
   (define enet1 (elab-cell-write enet0 cid (list c1)))
   (check-equal? (elab-cell-read enet0 cid) '())
   (check-equal? (length (elab-cell-read enet1 cid)) 1))

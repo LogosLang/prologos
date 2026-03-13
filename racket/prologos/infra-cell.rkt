@@ -34,6 +34,7 @@
  merge-list-append
  merge-set-union
  merge-replace
+ merge-constraint-status-map
  ;; General cell factory — The Most Generalizable Interface
  net-new-cell-with-merge
  ;; Convenience cell factories (delegate to net-new-cell-with-merge)
@@ -115,6 +116,22 @@
   (cond
     [(eq? new 'infra-bot) old]
     [else new]))
+
+;; Track 2 Phase 2: Monotonic hash with per-key status max.
+;; Maps constraint-id → status symbol with lattice: 'pending < 'resolved.
+;; Once a key reaches 'resolved, it stays 'resolved regardless of new writes.
+(define (merge-constraint-status-map old new)
+  (cond
+    [(eq? old 'infra-bot) new]
+    [(eq? new 'infra-bot) old]
+    [else
+     (for/fold ([acc old])
+               ([(k v) (in-hash new)])
+       (define existing (hash-ref acc k #f))
+       ;; Monotone: 'resolved wins over 'pending (or absent)
+       (if (eq? existing 'resolved)
+           acc
+           (hash-set acc k v)))]))
 
 ;; ========================================
 ;; General Cell Factory
