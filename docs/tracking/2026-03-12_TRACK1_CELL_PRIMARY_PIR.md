@@ -101,9 +101,11 @@ Cell writes use `merge-list-append` (newest at tail), while the parameter used `
 
 **Lesson**: When migrating from one data structure to another, the *ordering invariant* deserves explicit documentation. The merge function's behavior (append-to-tail) is documented, but the consumer's assumption (newest-first) was implicit.
 
-### 4.3 Hasmethod Wakeup Has No Cell
+### 4.3 Hasmethod Wakeup Had No Cell (Fixed in Phase 7a)
 
-Of all the constraint wakeup maps, `current-hasmethod-wakeup-map` is the only one without a corresponding cell ID. This was an oversight in the prior sprint's dual-write implementation (Phases 1a-1e). The parameter write for hasmethod wakeup must stay. Documented as future work.
+Of all the constraint wakeup maps, `current-hasmethod-wakeup-map` was the only one without a corresponding cell ID. This was an oversight in the prior sprint's dual-write implementation (Phases 1a-1e). This meant `save-meta-state`/`restore-meta-state!` did not capture hasmethod wakeup registrations — a correctness issue for speculative rollback.
+
+**Resolution** (Phase 7a, `b64321e`): Created `current-hasmethod-wakeup-cell-id` with `merge-hasheq-list-append`, mirroring the trait-wakeup pattern exactly. Writes converted from `hash-set!` to cell write; reads via new `read-hasmethod-wakeup-map` accessor. The audit also found `current-trait-cell-map` had a dual-write (both parameter and cell) with reads bypassing the cell — fixed in Phase 7b.
 
 ---
 

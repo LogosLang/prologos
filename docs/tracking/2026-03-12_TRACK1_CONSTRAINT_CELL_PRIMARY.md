@@ -262,6 +262,8 @@ Remove the now-dead parameters and update all reset/initialization code:
 | 6d | Simplify speculation bridge | ✅ | | `35fa4ae` — no conditional save/restore |
 | 6e | Retire `with-prop-meta-env`, `with-infra-cell-env` | ✅ | | `35fa4ae` — replaced by `with-fresh-meta-env` |
 | 6f | Guard read functions for pre-init safety | ✅ | 186.4s | `35fa4ae` — 6889 tests, 0 failures |
+| 7a | Create hasmethod wakeup cell | ✅ | | `b64321e` — was only wakeup map without cell |
+| 7b | Fix trait-cell-map dual-write | ✅ | 188.9s | `b64321e` — remove param write, add cell reader |
 
 ---
 
