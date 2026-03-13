@@ -132,6 +132,8 @@
                      [current-error-port (open-output-nowhere)]
                      ;; Enable observatory during prelude loading so capability
                      ;; inference captures are recorded and cached for replay.
+                     ;; Captures are stored per-module and merged at snapshot time
+                     ;; (NOT replayed during every file elaboration).
                      [current-observatory prelude-obs]
                      [current-module-capture-cache (hasheq)])
         (install-module-loader!)
@@ -521,11 +523,7 @@
                    ;; Visualization Phase 1: capture BSP rounds
                    [current-bsp-observer bsp-observe]
                    ;; Observatory: capture all subsystem networks
-                   [current-observatory obs]
-                   ;; Module capture cache: replay cached capability captures
-                   ;; from prelude loading into per-file observatory
-                   [current-module-capture-cache
-                    (or (lsp-state-module-capture-cache state) (hasheq))])
+                   [current-observatory obs])
       ;; Write content to temp file and process
       (define tmp-path (make-temporary-file "prologos-lsp-~a.prologos"))
       (call-with-output-file tmp-path
@@ -588,7 +586,21 @@
   (when captured-prop-trace
     (hash-set! (lsp-state-prop-traces state) uri captured-prop-trace))
 
-  ;; Observatory: Store serialized observatory snapshot
+  ;; Observatory: Merge cached capability captures from prelude loading.
+  ;; Only capability subsystem captures are merged — type-inference captures
+  ;; from prelude modules (765+) are too large to serialize (33MB+ JSON).
+  ;; Merging happens at snapshot time, not during elaboration, to avoid
+  ;; per-file-save overhead.
+  (define mod-cap-cache (lsp-state-module-capture-cache state))
+  (when mod-cap-cache
+    (for ([(ns-sym caps) (in-hash mod-cap-cache)])
+      (for ([cap (in-list (reverse caps))]
+            #:when (eq? (net-capture-subsystem cap) 'capability))
+        (observatory-register-capture!
+         obs
+         (struct-copy net-capture cap
+                      [sequence-number (observatory-next-sequence! obs)]
+                      [timestamp-ms (current-inexact-milliseconds)])))))
   (when (> (length (observatory-captures obs)) 0)
     (hash-set! (lsp-state-observatory-snapshots state) uri
                (serialize-observatory obs)))
