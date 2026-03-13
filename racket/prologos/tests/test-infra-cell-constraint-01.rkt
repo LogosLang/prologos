@@ -112,11 +112,11 @@
     (define cid (current-constraint-cell-id))
     (check-equal? (elab-cell-read enet cid) '())))
 
-(test-case "constraint cell: add-constraint! dual-writes"
+(test-case "constraint cell: add-constraint! cell-primary writes"
   (with-infra-cell-env
-    (define c (add-constraint! (expr-Nat) (expr-Bool) '() "test-dual-write"))
-    (check-equal? (length (current-constraint-store)) 1)
-    (check-eq? (car (current-constraint-store)) c)
+    (define c (add-constraint! (expr-Nat) (expr-Bool) '() "test-cell-primary"))
+    ;; Track 1 Phase 5a: cell-primary — parameter is NOT written when network is active
+    (check-equal? (length (current-constraint-store)) 0)
     (define cell-contents (elab-cell-read (unbox (current-prop-net-box))
                                           (current-constraint-cell-id)))
     (check-equal? (length cell-contents) 1)
@@ -127,7 +127,8 @@
     (define c1 (add-constraint! (expr-Nat) (expr-Nat) '() "first"))
     (define c2 (add-constraint! (expr-Bool) (expr-Bool) '() "second"))
     (define c3 (add-constraint! (expr-Nat) (expr-Bool) '() "third"))
-    (check-equal? (length (current-constraint-store)) 3)
+    ;; Track 1 Phase 5a: cell-primary — parameter is NOT written when network is active
+    (check-equal? (length (current-constraint-store)) 0)
     (define cell-contents (elab-cell-read (unbox (current-prop-net-box))
                                           (current-constraint-cell-id)))
     (check-equal? (length cell-contents) 3)

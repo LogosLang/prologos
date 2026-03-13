@@ -261,13 +261,14 @@
 
 ;; Register a trait constraint and build wakeup index for incremental resolution.
 (define (register-trait-constraint! meta-id info)
-  (hash-set! (current-trait-constraint-map) meta-id info)
-  ;; Phase 1b: Dual-write to trait constraint cell.
+  ;; Track 1 Phase 5a: Cell-primary with parameter fallback.
   (define tc-cid (current-trait-constraint-cell-id))
   (define tc-net-box (current-prop-net-box))
   (define write-fn (current-prop-cell-write))
-  (when (and tc-cid tc-net-box write-fn)
-    (set-box! tc-net-box (write-fn (unbox tc-net-box) tc-cid (hasheq meta-id info))))
+  (if (and tc-cid tc-net-box write-fn)
+      (set-box! tc-net-box (write-fn (unbox tc-net-box) tc-cid (hasheq meta-id info)))
+      ;; Fallback: no propagator network
+      (hash-set! (current-trait-constraint-map) meta-id info))
   ;; Phase C: Build reverse index from type-arg metas → this dict meta
   (define type-arg-metas (extract-shallow-meta-ids-from-list
                            (trait-constraint-info-type-arg-exprs info)))
@@ -275,17 +276,18 @@
   ;; future solve-meta! calls. If all type-args are already solved, immediate resolution
   ;; fires below (same pattern as hasmethod wakeup).
   (define unsolved-ta-metas (filter (lambda (id) (not (meta-solved? id))) type-arg-metas))
-  (define wakeup (current-trait-wakeup-map))
-  (for ([ta-id (in-list unsolved-ta-metas)])
-    (define existing (hash-ref wakeup ta-id '()))
-    (hash-set! wakeup ta-id (cons meta-id existing)))
-  ;; Phase 1c: Dual-write trait wakeup map to cell.
+  ;; Track 1 Phase 5a: Cell-primary with parameter fallback.
   (define tw-cid (current-trait-wakeup-cell-id))
-  (when (and tw-cid tc-net-box write-fn (pair? unsolved-ta-metas))
-    (define tw-delta
-      (for/fold ([acc (hasheq)]) ([ta-id (in-list unsolved-ta-metas)])
-        (hash-set acc ta-id (list meta-id))))
-    (set-box! tc-net-box (write-fn (unbox tc-net-box) tw-cid tw-delta)))
+  (if (and tw-cid tc-net-box write-fn (pair? unsolved-ta-metas))
+      (let ([tw-delta
+             (for/fold ([acc (hasheq)]) ([ta-id (in-list unsolved-ta-metas)])
+               (hash-set acc ta-id (list meta-id)))])
+        (set-box! tc-net-box (write-fn (unbox tc-net-box) tw-cid tw-delta)))
+      ;; Fallback: no propagator network, write to parameter
+      (let ([wakeup (current-trait-wakeup-map)])
+        (for ([ta-id (in-list unsolved-ta-metas)])
+          (define existing (hash-ref wakeup ta-id '()))
+          (hash-set! wakeup ta-id (cons meta-id existing)))))
   ;; P3a: Record cell-ids for type-arg metas for cell-state-driven resolution.
   (define id-map-box (current-prop-id-map-box))
   (when id-map-box
@@ -347,13 +349,14 @@
   (current-retry-hasmethod-resolve resolve-fn))
 
 (define (register-hasmethod-constraint! meta-id info)
-  (hash-set! (current-hasmethod-constraint-map) meta-id info)
-  ;; Phase 1b: Dual-write to hasmethod constraint cell.
+  ;; Track 1 Phase 5a: Cell-primary with parameter fallback.
   (define hm-cid (current-hasmethod-constraint-cell-id))
   (define hm-net-box (current-prop-net-box))
   (define write-fn (current-prop-cell-write))
-  (when (and hm-cid hm-net-box write-fn)
-    (set-box! hm-net-box (write-fn (unbox hm-net-box) hm-cid (hasheq meta-id info))))
+  (if (and hm-cid hm-net-box write-fn)
+      (set-box! hm-net-box (write-fn (unbox hm-net-box) hm-cid (hasheq meta-id info)))
+      ;; Fallback: no propagator network
+      (hash-set! (current-hasmethod-constraint-map) meta-id info))
   ;; Phase 1d: Build reverse wakeup index from dependency metas → this hasmethod meta.
   ;; Dependencies are: metas in trait-var-expr + metas in type-arg-exprs.
   (define trait-var-metas (extract-shallow-meta-ids
@@ -413,13 +416,14 @@
 (define current-capability-constraint-map (make-parameter (make-hasheq)))
 
 (define (register-capability-constraint! meta-id info)
-  (hash-set! (current-capability-constraint-map) meta-id info)
-  ;; Phase 1b: Dual-write to capability constraint cell.
+  ;; Track 1 Phase 5a: Cell-primary with parameter fallback.
   (define cap-cid (current-capability-constraint-cell-id))
   (define cap-net-box (current-prop-net-box))
   (define write-fn (current-prop-cell-write))
-  (when (and cap-cid cap-net-box write-fn)
-    (set-box! cap-net-box (write-fn (unbox cap-net-box) cap-cid (hasheq meta-id info)))))
+  (if (and cap-cid cap-net-box write-fn)
+      (set-box! cap-net-box (write-fn (unbox cap-net-box) cap-cid (hasheq meta-id info)))
+      ;; Fallback: no propagator network
+      (hash-set! (current-capability-constraint-map) meta-id info)))
 
 ;; Track 1 Phase 2c: read from cell.
 (define (lookup-capability-constraint meta-id)
@@ -534,29 +538,31 @@
 (define (add-constraint! lhs rhs ctx source)
   (perf-inc-constraint!)
   (define c (constraint lhs rhs ctx source 'postponed '()))
-  ;; Add to global store (legacy parameter path)
-  (current-constraint-store (cons c (current-constraint-store)))
-  ;; Phase 1a: Also write to constraint cell if available.
-  ;; merge-list-append appends (list c) to the existing cell contents.
+  ;; Track 1 Phase 5a: Cell-primary write with parameter fallback.
+  ;; When propagator network is active, write to cell only.
+  ;; When no network (unit tests without driver), fall back to parameter.
   (define cstore-cid (current-constraint-cell-id))
   (define cstore-net-box (current-prop-net-box))
   (define write-fn (current-prop-cell-write))
-  (when (and cstore-cid cstore-net-box write-fn)
-    (define enet (unbox cstore-net-box))
-    (set-box! cstore-net-box (write-fn enet cstore-cid (list c))))
-  ;; Register for wakeup on all mentioned metas
+  (if (and cstore-cid cstore-net-box write-fn)
+      (let ([enet (unbox cstore-net-box)])
+        (set-box! cstore-net-box (write-fn enet cstore-cid (list c))))
+      ;; Fallback: no propagator network, write to parameter
+      (current-constraint-store (cons c (current-constraint-store))))
+  ;; Register for wakeup on all mentioned metas.
+  ;; Track 1 Phase 5a: Cell-primary with parameter fallback.
   (define meta-ids (append (collect-meta-ids lhs) (collect-meta-ids rhs)))
-  (define registry (current-wakeup-registry))
-  (for ([id (in-list meta-ids)])
-    (define existing (hash-ref registry id '()))
-    (hash-set! registry id (cons c existing)))
-  ;; Phase 1c: Dual-write wakeup registry to cell.
   (define wr-cid (current-wakeup-registry-cell-id))
-  (when (and wr-cid cstore-net-box write-fn (pair? meta-ids))
-    (define wr-delta
-      (for/fold ([acc (hasheq)]) ([id (in-list meta-ids)])
-        (hash-set acc id (list c))))
-    (set-box! cstore-net-box (write-fn (unbox cstore-net-box) wr-cid wr-delta)))
+  (if (and wr-cid cstore-net-box write-fn (pair? meta-ids))
+      (let ([wr-delta
+             (for/fold ([acc (hasheq)]) ([id (in-list meta-ids)])
+               (hash-set acc id (list c)))])
+        (set-box! cstore-net-box (write-fn (unbox cstore-net-box) wr-cid wr-delta)))
+      ;; Fallback: no propagator network, write to parameter
+      (let ([registry (current-wakeup-registry)])
+        (for ([id (in-list meta-ids)])
+          (define existing (hash-ref registry id '()))
+          (hash-set! registry id (cons c existing)))))
   ;; Propagator path: add unify constraints between cells
   (define net-box (current-prop-net-box))
   (define add-unify-fn (current-prop-add-unify-constraint))
