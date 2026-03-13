@@ -12,7 +12,7 @@
 | **1** | **Observatory serialization** | ⬜ | `observatory-serialize.rkt` |
 | **2** | **Session type integration** | ⬜ | `session-propagators.rkt` |
 | **3** | **Capability inference integration** | ⬜ | `capability-inference.rkt` |
-| **4** | **Type inference integration** | ⬜ | `metavar-store.rkt` / `driver.rkt` |
+| **4** | **Type inference integration** | ⬜ | `metavar-store.rkt` (inside `reset-meta-store!`) |
 | **5** | **LSP observatory endpoint** | ⬜ | `lsp/server.rkt` |
 | **6** | **VS Code multi-network UI** | ⬜ | `propagatorView.ts` |
 | **7** | **Cross-network links** | ⬜ | All integration points |
@@ -109,13 +109,16 @@ This means the elab-network capture (Phase 4) will often show cells but no edges
          ▼
 ┌─────────────────────────────────────────────────────┐
 │ net-capture                                          │
-│   id: symbol (gensym)                                │
+│   id: symbol (gensym 'session-cap-)                  │
 │   subsystem: symbol ('type-inference, 'session, ...) │
 │   label: string ("session:greeter")                  │
 │   network: prop-network (immutable snapshot)         │
 │   cell-metas: champ (cell-id → cell-meta)            │
 │   trace: prop-trace | #f                             │
+│   status: symbol ('complete | 'exception)            │
+│   status-detail: string | #f (exn message if failed) │
 │   timestamp-ms: fixnum                               │
+│   sequence-number: nat (monotonic within observatory)│
 │   parent-id: symbol | #f (for sub-networks)          │
 └─────────────────────────────────────────────────────┘
          │ per cell
@@ -141,7 +144,9 @@ This means the elab-network capture (Phase 4) will often show cells but no edges
 
 **`cell-meta`** is the subsystem-agnostic replacement for `elab-cell-info`. Where `elab-cell-info` carries `ctx`, `type`, and `source` specific to type inference, `cell-meta` carries generic metadata suitable for any subsystem. Subsystem-specific data goes in the `extra` hasheq.
 
-**`net-capture`** bundles an immutable `prop-network` snapshot with its cell metadata and optional BSP trace. The `parent-id` field supports hierarchical captures (e.g., narrowing sub-networks spawned within a type inference command).
+**`net-capture`** bundles an immutable `prop-network` snapshot with its cell metadata and optional BSP trace. The `status` field is `'complete` for normal captures or `'exception` when `run-to-quiescence` raised an error (the partial network is still captured for debugging; the exception message is stored in `status-detail`). The `sequence-number` is a monotonic counter within the observatory, providing unambiguous ordering even when `timestamp-ms` values collide. Capture IDs use named gensyms — `(gensym 'session-cap-)` produces `session-cap-12345`, which is more debuggable than opaque `g12345`.
+
+The `parent-id` field supports hierarchical captures (e.g., narrowing sub-networks spawned within a type inference command). The hierarchy is a strict tree (not DAG) — each capture has at most one parent. Parent-child relationships are set explicitly by the caller via the `#:parent` keyword argument. If a parent ID refers to a capture that wasn't registered (e.g., the caller passed a stale ID), the capture is still registered as a root — `parent-id` is a label, not a structural constraint.
 
 **`cross-net-link`** represents a semantic relationship between cells in different networks. These are registered explicitly by integration code, not inferred — the observatory doesn't guess what relates to what.
 
@@ -178,6 +183,7 @@ The capture protocol is the central mechanism. It wraps `run-to-quiescence` to s
 - **Transparent**: callers get the same `prop-network` back regardless of whether the observatory is on or off
 - **Non-invasive**: no modification to `run-to-quiescence` itself
 - **Composable with existing tracing**: `capture-network` respects and extends `current-bsp-observer`, it doesn't replace it
+- **Exception-safe**: if `run-to-quiescence` raises, the capture is still registered with `status: 'exception` and `status-detail` set to the exception message, then the exception is re-raised. This preserves the partial network state for debugging failed elaborations.
 
 ### 5.3 Observatory Lifecycle
 
@@ -216,10 +222,13 @@ The observatory serializes to a JSON schema that extends the existing `prop-trac
   "observatory": {
     "captures": [
       {
-        "id": "cap1234",
+        "id": "session-cap-1234",
         "subsystem": "session",
         "label": "session:greeter",
+        "status": "complete",
+        "statusDetail": null,
         "parentId": null,
+        "sequenceNumber": 1,
         "timestampMs": 1710000000,
         "network": {
           "cells": [
@@ -303,24 +312,32 @@ Each integration is a small, localized change — typically 3–5 lines wrapping
 
 ### 7.3 Type Inference Elab-Network
 
-The elab-network is shared and long-lived (per command). It doesn't call `run-to-quiescence` — constraints are resolved inline during elaboration. The capture point is the **command boundary** in `driver.rkt`, just before `reset-meta-store!` destroys the current network.
+The elab-network is shared and long-lived (per command). It doesn't call `run-to-quiescence` — constraints are resolved inline during elaboration. The capture point is **inside `reset-meta-store!`** in `metavar-store.rkt`, co-located with the reset that destroys the current network. This is more robust than capturing in `driver.rkt` because `reset-meta-store!` is the single chokepoint — regardless of which caller triggers the reset, the capture happens.
 
 ```racket
-;; In process-command, after elaboration, before reset:
-(when (current-observatory)
-  (define elab-net (unbox (current-prop-net-box)))
-  (observatory-register-capture!
-    (current-observatory)
-    (net-capture (gensym 'cap) 'type-inference
-                 (format "elab:~a" (abbreviate-form cmd))
-                 (elab-network-prop-net elab-net)
-                 (elab-cell-info-champ->cell-metas elab-net)
-                 (current-captured-trace)
-                 (current-inexact-milliseconds)
-                 #f)))
+;; In reset-meta-store!, before clearing the network:
+(define (reset-meta-store!)
+  ;; Capture outgoing elab-network before reset
+  (when (current-observatory)
+    (define elab-net (unbox (current-prop-net-box)))
+    (observatory-register-capture!
+      (current-observatory)
+      (net-capture (gensym 'elab-cap-) 'type-inference
+                   (format "elab:~a" (current-command-label))
+                   (elab-network-prop-net elab-net)
+                   (elab-cell-info-champ->cell-metas elab-net)
+                   (current-captured-trace)
+                   'complete #f
+                   (current-inexact-milliseconds)
+                   (observatory-next-sequence! (current-observatory))
+                   #f)))
+  ;; ... existing reset logic ...
+  )
 ```
 
-`elab-cell-info-champ->cell-metas` adapts the existing `elab-cell-info` structs into generic `cell-meta` structs.
+**Note**: Speculative resets (`restore-meta-state!`) should NOT capture — they represent abandoned work. Only `reset-meta-store!` captures.
+
+`elab-cell-info-champ->cell-metas` adapts the existing `elab-cell-info` structs into generic `cell-meta` structs. The `elab-cell-info` struct continues to exist in `elaborator-network.rkt` — no migration or deprecation is needed. The adapter is a one-way function called only by the observatory.
 
 ### 7.4 Cross-Network Links
 
@@ -335,7 +352,7 @@ Registered explicitly at integration boundaries. For example, when a session typ
                     'type-of)))
 ```
 
-This is Phase 7 work — it requires the session checker to know the elab-network's capture ID, which means the capture ID must be threaded through or stored in the observatory for lookup.
+This is Phase 7 work. The session checker obtains the elab-network's capture ID via `observatory-last-capture-for-subsystem`: a lookup on the observatory's captures list filtered by subsystem symbol. Since the elab-network is captured at the `reset-meta-store!` boundary (which precedes session checking within the same command), the capture is always available. No explicit ID threading is needed.
 
 ## 8. LSP Protocol
 
@@ -396,10 +413,14 @@ The existing `propagatorView.ts` WebviewPanel gains a **network selector** at th
 
 ### 9.2 Cross-Network Links
 
-When multiple captures are visible (e.g., side-by-side or overlaid):
-- Cross-network links render as **dashed lines** between cells in different captures
-- Link labels show the relation type ("type-of", "constrains")
-- This is Phase 7 UI work and can be deferred
+The primary interaction for cross-network links is **jump-to-linked-cell**: clicking a link indicator on a cell switches the network selector to the linked capture and highlights the target cell. This avoids the complexity of side-by-side or overlay rendering while still making cross-network relationships navigable.
+
+Visual indicators:
+- Cells with cross-network links show a small **link badge** (e.g., a chain icon)
+- Hovering the badge shows the relation type ("type-of", "constrains") and target capture label
+- Clicking the badge navigates to the linked capture and centers/highlights the target cell
+
+This is Phase 7 UI work and can be deferred. Side-by-side or overlay modes are future extensions if the jump-to-linked interaction proves insufficient.
 
 ### 9.3 Capture Summary
 
@@ -413,21 +434,26 @@ A collapsible summary panel shows:
 
 ### 10.1 Unit Tests (`test-observatory-01.rkt`)
 
-- `net-capture` construction and field access
+- `net-capture` construction and field access (including `status`, `sequence-number`)
 - `cell-meta` construction
-- `observatory` accumulation (register 3 captures, verify order)
+- `observatory` accumulation (register 3 captures, verify order and sequence numbers)
 - `cross-net-link` construction
-- `capture-network` with observatory=#f (passthrough)
-- `capture-network` with observatory (capture registered)
+- `capture-network` with observatory=#f (passthrough — returns identical network)
+- `capture-network` with observatory (capture registered, status='complete)
 - `capture-network` with trace?=#t (BSP observer installed)
+- `capture-network` transparency: network returned is structurally equal regardless of observatory on/off
+- `capture-network` exception handling: on `run-to-quiescence` failure, capture is registered with status='exception and exception is re-raised
+- Zero-cost verification: `capture-network` with observatory=#f adds < 1μs overhead vs bare `run-to-quiescence`
 
 ### 10.2 Serialization Tests (`test-observatory-02.rkt`)
 
-- `serialize-cell-meta` → JSON round-trip
-- `serialize-net-capture` → JSON with network topology embedded
-- `serialize-observatory` → full JSON schema version 2
-- `serialize-cross-net-link` → JSON
+- `serialize-cell-meta` → JSON field extraction (verify subsystem, label, domain keys)
+- `serialize-net-capture` → JSON with network topology, status, sequenceNumber embedded
+- `serialize-observatory` → full JSON schema version 2 with captures and links
+- `serialize-cross-net-link` → JSON field extraction
 - Backward compat: version 1 extraction from observatory
+
+**TypeScript schema validation**: The existing TypeScript interfaces in `propagatorView.ts` (`CellJson`, `PropagatorJson`, etc.) will be extended with `ObservatoryV2`, `NetCaptureJson`, `CrossNetLinkJson` interfaces. TypeScript compile-time checking catches Racket↔TypeScript schema drift — this is existing practice from Phases 0–4c.
 
 ### 10.3 Integration Tests
 
@@ -444,7 +470,7 @@ A collapsible summary panel shows:
 | `racket/prologos/observatory-serialize.rkt` | **NEW** | `serialize-observatory`, `serialize-net-capture`, `serialize-cell-meta`, `serialize-cross-net-link` |
 | `racket/prologos/session-propagators.rkt` | Modify | Wrap `run-to-quiescence` with `capture-network`, add `build-session-cell-metas` |
 | `racket/prologos/capability-inference.rkt` | Modify | Wrap `run-to-quiescence` with `capture-network`, add `build-capability-cell-metas` |
-| `racket/prologos/metavar-store.rkt` or `driver.rkt` | Modify | Capture elab-network at command boundary, add `elab-cell-info-champ->cell-metas` |
+| `racket/prologos/metavar-store.rkt` | Modify | Capture elab-network inside `reset-meta-store!`, add `elab-cell-info-champ->cell-metas` |
 | `racket/prologos/lsp/server.rkt` | Modify | `$/prologos/observatorySnapshot` handler, `current-observatory` installation |
 | `editors/vscode-prologos/src/propagatorView.ts` | Modify | Multi-network selector UI, subsystem filter |
 | `racket/prologos/tests/test-observatory-01.rkt` | **NEW** | Unit tests for capture protocol |
@@ -468,6 +494,7 @@ A collapsible summary panel shows:
 - **CI reporter**: Captures observatory in test mode, reports anomalies (unexpected contradictions, unusually large networks).
 - **Diffing**: Compare two observatory snapshots (e.g., before/after a code change) to see what changed in the network topology.
 - **Streaming**: For long-running elaborations, stream captures as they're produced (via observatory observer callback) rather than accumulating.
+- **Pagination**: For programs producing many captures (large modules with many `defproc` forms), the LSP endpoint could support summary-then-detail retrieval — return capture metadata without networks, fetch individual networks on demand. Not needed for current program sizes.
 
 ## 14. Design Decisions and Trade-offs
 
@@ -475,12 +502,13 @@ A collapsible summary panel shows:
 
 `elab-cell-info` is type-inference-specific: it carries `ctx` (typing context) and `type` (expected type), which have no meaning for session or capability cells. Making it generic would either require stuffing irrelevant fields with `#f` or creating a hierarchy. A separate, flat `cell-meta` struct with a subsystem-agnostic schema and an `extra` hasheq for subsystem-specific data is cleaner and doesn't pollute the existing elab-network code.
 
-### 14.2 Why gensym for capture IDs?
+### 14.2 Why named gensym for capture IDs?
 
 Captures need unique IDs for cross-network linking. Alternatives:
 - **Counter**: Requires threading a counter through all subsystems. Fragile.
 - **Content hash**: Expensive (networks are large). Over-engineered for an in-session identifier.
-- **Gensym**: Cheap, unique within a session, good enough for linking during one elaboration. Not suitable for cross-session persistence, but that's not a current requirement.
+- **Bare gensym**: Cheap but opaque — `g12345` tells you nothing.
+- **Named gensym** (chosen): `(gensym 'session-cap-)` produces `session-cap-12345` — cheap, unique within a session, and debuggable. Combined with `sequence-number` for ordering and `subsystem` for filtering, this is sufficient for all current use cases. Not suitable for cross-session persistence, but that's not a current requirement.
 
 ### 14.3 Why mutable accumulation in the observatory?
 
@@ -498,3 +526,15 @@ The `capture-network` wrapper gives callers explicit control over what is captur
 ### 14.5 Why append-only captures?
 
 Captures are snapshots at quiescence boundaries. They are inherently historical — you want to see what happened, not what's happening now. Append-only is the natural data model. It also makes the observatory trivially serializable (no cycles, no mutable references between captures).
+
+### 14.6 Error Handling
+
+The observatory follows the codebase's standard error patterns:
+- **`cell-meta` construction failure**: Not possible — `cell-meta` is a transparent struct with no validation. Subsystem-specific builders (`build-session-cell-metas`, etc.) may fail, but they run inside `capture-network`'s `with-handlers`.
+- **Unserializable cell values**: Handled by the existing `serialize-lattice-value` in `trace-serialize.rkt`, which falls through to `(format "~v" v)` for unknown types. No new protocol needed.
+- **Unknown URI in LSP handler**: Returns an empty observatory (`(observatory '() '() (hasheq))`). Same pattern as the existing `propagatorSnapshot` handler.
+- **`capture-network` exception**: Captured with `status: 'exception`, exception re-raised. See §5.2.
+
+### 14.7 Memory Pressure
+
+Expected captures per elaboration: ~1 elab-network + 0–5 session + 0–1 capability = single digits. Each capture holds a reference to an immutable `prop-network` (already in memory via CHAMP structural sharing) and a small CHAMP of `cell-meta` structs. Total footprint is kilobytes, not megabytes. For the current program sizes (research language, example files with 1–20 definitions), memory pressure is a non-concern. If Prologos ever compiles industrial codebases, a pressure-relief valve (flush traces to disk, keep only topology) would be needed — same future where pagination and streaming become relevant.
