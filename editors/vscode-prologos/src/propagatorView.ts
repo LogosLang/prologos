@@ -1131,6 +1131,16 @@ export class PropagatorViewManager {
       display: none; z-index: 10;
       box-shadow: 0 2px 8px rgba(0,0,0,0.3);
     }
+    .subsystem-filters {
+      padding: 4px 16px;
+      border-bottom: 1px solid var(--vscode-widget-border, #333);
+      flex-shrink: 0; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+      font-size: 0.8em;
+    }
+    .subsystem-filters label { display: flex; align-items: center; gap: 4px; cursor: pointer; opacity: 0.85; }
+    .subsystem-filters label:hover { opacity: 1; }
+    .subsystem-filters input[type="checkbox"] { accent-color: var(--vscode-focusBorder, #007acc); }
+    .filter-label { font-size: 0.75em; opacity: 0.6; text-transform: uppercase; letter-spacing: 0.5px; }
     .legend {
       position: absolute; bottom: 8px; left: 8px;
       background: var(--vscode-textBlockQuote-background, #252526);
@@ -1209,6 +1219,9 @@ export class PropagatorViewManager {
       </div>
     </div>
   </div>
+  <div class="subsystem-filters" id="subsystem-filters">
+    <span class="filter-label">Filter:</span>
+  </div>
   <div class="capture-info" id="capture-info"></div>
 
   <div class="timeline-bar" id="timeline-bar">
@@ -1257,6 +1270,7 @@ export class PropagatorViewManager {
     const timelineSlider = document.getElementById('timeline-slider');
     const roundInfoDiv = document.getElementById('round-info');
     const roundDiffDiv = document.getElementById('round-diff-table');
+    const filtersDiv = document.getElementById('subsystem-filters');
     const ctx = canvas.getContext('2d');
     const dpr = window.devicePixelRatio || 1;
 
@@ -1271,6 +1285,66 @@ export class PropagatorViewManager {
     let currentRound = -1;          // -1 = final, 0 = initial, 1..N = after round N
     let changedCellIds = new Set();  // Cell IDs that changed in the current round
     let initialCellValues = {};      // cellId -> initial value (from trace.initialNetwork)
+
+    // Pre-sorted capture indices (captures with most propagators first)
+    const captureIndices = captures.map((_, i) => i);
+    captureIndices.sort((a, b) => {
+      const pa = captures[a].network.propagators.length;
+      const pb = captures[b].network.propagators.length;
+      if (pb !== pa) return pb - pa;
+      return a - b;
+    });
+
+    // Subsystem filter state
+    const enabledSubsystems = {};
+    const allSubsystems = obsData.observatory.metadata.subsystems || [];
+    allSubsystems.forEach(sub => { enabledSubsystems[sub] = true; });
+
+    // Rebuild the capture dropdown based on active subsystem filters
+    function rebuildCaptureSelector() {
+      const currentVal = parseInt(selector.value) || 0;
+      const filtered = captureIndices.filter(i => enabledSubsystems[captures[i].subsystem] !== false);
+      selector.innerHTML = filtered.map(i => {
+        const cap = captures[i];
+        const statusIcon = cap.status === 'exception' ? '\\u26a0' : '\\u2713';
+        const propCount = cap.network.propagators.length;
+        const propSuffix = propCount > 0 ? ' (' + cap.network.cells.length + 'c/' + propCount + 'p)' : '';
+        return '<option value="' + i + '">[' + cap.subsystem + '] ' + escapeHtmlInline(cap.label) + propSuffix + ' ' + statusIcon + '</option>';
+      }).join('\\n');
+
+      // Try to preserve selection; if not available, select first
+      if (filtered.includes(currentVal)) {
+        selector.value = String(currentVal);
+      } else if (filtered.length > 0) {
+        selector.value = String(filtered[0]);
+        loadCapture(filtered[0]);
+      }
+    }
+
+    // Build filter checkboxes
+    allSubsystems.forEach(sub => {
+      const label = document.createElement('label');
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = true;
+      cb.dataset.subsystem = sub;
+      const swatchColor = SUBSYSTEM_PALETTE[sub] || '#888';
+      label.appendChild(cb);
+      const swatch = document.createElement('span');
+      swatch.style.display = 'inline-block';
+      swatch.style.width = '8px';
+      swatch.style.height = '8px';
+      swatch.style.borderRadius = '50%';
+      swatch.style.background = swatchColor;
+      label.appendChild(swatch);
+      label.appendChild(document.createTextNode(' ' + sub));
+      filtersDiv.appendChild(label);
+
+      cb.addEventListener('change', () => {
+        enabledSubsystems[sub] = cb.checked;
+        rebuildCaptureSelector();
+      });
+    });
 
     const CELL_R = 16;
     const PROP_R = 12;
