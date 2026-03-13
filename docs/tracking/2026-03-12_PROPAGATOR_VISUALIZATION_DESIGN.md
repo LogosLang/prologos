@@ -84,9 +84,33 @@ Real `net-add-propagator` edges exist in these subsystems:
 | Cap↔Type bridge | `cap-type-bridge.rkt` | 1 | ✅ |
 | Constraint P1-P4 | `constraint-propagators.rkt` | 4 variants | ❌ tests only (deferred) |
 
-The unification propagators (`elab-add-unify-constraint`) ARE wired during real elaboration
-via `metavar-store.rkt` line 564. For `.prologos` files with enough type inference activity,
-the visualization should show real edges.
+### Current Edge Production (Investigated 2026-03-12, commit `786b6e0`)
+
+**Finding: the current production pipeline produces 0 propagator edges for all tested expressions.**
+
+Root causes:
+
+1. **Type inference constraints are always one-sided.** The elaborator resolves constraints
+   eagerly: when posting `?A = Int`, `extract-shallow-meta-ids` finds `?A` on the LHS but
+   nothing on the RHS. The cross product in `metavar-store.rkt:556-559` is empty, so
+   `elab-add-unify-constraint` is never called. Meta-meta constraints (metas on BOTH sides)
+   would create edges, but they don't occur in practice because the elaborator grounds one
+   side before the constraint is posted.
+
+2. **Session type checking uses direct pattern matching.** Production `defproc` processing
+   calls `type-proc` from `typing-sessions.rkt` (direct `sess-send`/`sess-recv` matching),
+   NOT `check-session-via-propagators` from `session-propagators.rkt`. The propagator-based
+   session checker exists but is only used in tests.
+
+3. **Capability/effect propagators not exercised.** The `net-add-propagator` calls in
+   `capability-inference.rkt`, `effect-ordering.rkt`, etc. exist but the current demo
+   expressions don't trigger those subsystems.
+
+**Consequence**: The visualizer currently shows **cells with subsystem coloring** (type-inference
+green, infrastructure gray) but **no edges**. Edges will appear when either:
+- The propagator-first elaboration migration wires constraint solving through the network
+- Session type checking is switched to the propagator-based implementation
+- Expressions are crafted that exercise capability/effect subsystems
 
 **Note**: `process-file` calls `reset-meta-store!` per top-level form, creating a fresh
 network each time. The final network snapshot is from the LAST top-level form only.
@@ -94,7 +118,8 @@ network each time. The final network snapshot is from the LAST top-level form on
 ### Future: Propagator-First Elaboration Migration
 
 A dedicated track will move the remaining imperative constraint-solving path (trait
-resolution, hasmethod dispatch) into the propagator network. See `DEFERRED.md`.
+resolution, hasmethod dispatch, session type checking) into the propagator network.
+See `DEFERRED.md`.
 
 ---
 
