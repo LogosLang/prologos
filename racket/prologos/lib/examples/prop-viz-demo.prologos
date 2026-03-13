@@ -1,0 +1,32 @@
+ns examples.prop-viz-demo
+
+;; ========================================
+;; Propagator Visualization Demo
+;; ========================================
+;; Designed to exercise the propagator network for visualization.
+;; Only the LAST top-level form's network survives in the visualizer.
+;;
+;; Current state: the visualizer shows cells with subsystem categorization
+;; (type-inference, infrastructure, multiplicity) but no propagator edges.
+;; Edges will appear when the propagator-first elaboration migration
+;; wires constraint solving through the propagator network.
+
+;; --- Definitions (networks discarded after each form) ---
+
+spec factorial : Int -> Int
+defn factorial [n]
+  | 0  -> 1
+  | n  -> * n [factorial [- n 1]]
+
+;; --- Intermediate expressions (networks discarded) ---
+
+factorial 5
+
+int-range 1 5
+
+;; --- LAST form: this is the network the visualizer captures ---
+;; map creates fresh type metas for its polymorphic params {A B},
+;; plus infrastructure cells (constraint store, registries, etc.).
+;; Subsystem coloring:  green = type-inference, gray = infrastructure.
+
+map [plus 1 _] [int-range 1 10]
