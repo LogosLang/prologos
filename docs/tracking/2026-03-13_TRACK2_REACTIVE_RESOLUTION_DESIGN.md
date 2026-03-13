@@ -31,7 +31,7 @@ questions that must be resolved before implementation.
 | 4 | Data-oriented solve-meta! (action descriptors) | ✅ | commit `e6aeafc`; 3 descriptor structs, 5 scan fns, interpreter with re-check guards |
 | 5 | Trait resolution propagators | ✅ | Already covered by Phase 4 `collect-ready-traits-via-cells` scan; trait-cell-map from Track 1 |
 | 6 | HasMethod resolution propagators | ✅ | commit `4a91b24`; hasmethod-cell-map cell (enet10), `collect-ready-hasmethods-via-cells` scan wired into S1 |
-| 7 | Error cell + grouped error reporting | ⬜ | Set-union merge keyed on constraint ID; includes HKT-7 |
+| 7 | Error cell + grouped error reporting | ✅ | commit `510b77f`; error descriptor cell (enet11), build-trait-error helper, callback writes errors, cell-first sweep; HKT-7 ambiguity deferred to Phase 9 |
 | 8 | Post-pass elimination | ⬜ | Compare performance against D.5 baseline |
 | 9 | Confluence verification | ⬜ | Prerequisite: HKT-7 (Phase 7); randomized-order property tests |
 
