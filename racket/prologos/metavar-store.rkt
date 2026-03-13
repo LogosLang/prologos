@@ -139,6 +139,9 @@
  current-prop-new-infra-cell
  current-constraint-cell-id
  read-constraint-store
+ read-trait-constraints
+ read-hasmethod-constraints
+ read-capability-constraints
  ;; Phase 1b: Trait/HasMethod/Capability constraint cell IDs
  current-trait-constraint-cell-id
  current-trait-cell-map-cell-id
@@ -306,8 +309,9 @@
     (when resolve-fn
       (resolve-fn meta-id info))))
 
+;; Track 1 Phase 2a: read from cell.
 (define (lookup-trait-constraint meta-id)
-  (hash-ref (current-trait-constraint-map) meta-id #f))
+  (hash-ref (read-trait-constraints) meta-id #f))
 
 ;; ========================================
 ;; Phase 3a: HasMethod constraint tracking
@@ -370,8 +374,9 @@
     (when resolve-fn
       (resolve-fn meta-id info))))
 
+;; Track 1 Phase 2b: read from cell.
 (define (lookup-hasmethod-constraint meta-id)
-  (hash-ref (current-hasmethod-constraint-map) meta-id #f))
+  (hash-ref (read-hasmethod-constraints) meta-id #f))
 
 ;; Phase 1d: Try to resolve hasmethod constraints that reference a just-solved meta.
 ;; Called from solve-meta! when a dependency meta is solved. Checks the wakeup
@@ -384,7 +389,8 @@
     (define hm-metas (hash-ref wakeup meta-id '()))
     (for ([hm-id (in-list hm-metas)])
       (unless (meta-solved? hm-id)
-        (define hm-info (hash-ref (current-hasmethod-constraint-map) hm-id #f))
+        ;; Track 1 Phase 2b: read from cell.
+        (define hm-info (hash-ref (read-hasmethod-constraints) hm-id #f))
         (when hm-info
           (resolve-fn hm-id hm-info))))))
 
@@ -413,8 +419,9 @@
   (when (and cap-cid cap-net-box write-fn)
     (set-box! cap-net-box (write-fn (unbox cap-net-box) cap-cid (hasheq meta-id info)))))
 
+;; Track 1 Phase 2c: read from cell.
 (define (lookup-capability-constraint meta-id)
-  (hash-ref (current-capability-constraint-map) meta-id #f))
+  (hash-ref (read-capability-constraints) meta-id #f))
 
 
 ;; Global constraint store: list of all constraints
@@ -489,7 +496,8 @@
     (define dict-metas (hash-ref wakeup meta-id '()))
     (for ([dict-id (in-list dict-metas)])
       (unless (meta-solved? dict-id)
-        (define tc-info (hash-ref (current-trait-constraint-map) dict-id #f))
+        ;; Track 1 Phase 2a: read from cell.
+        (define tc-info (hash-ref (read-trait-constraints) dict-id #f))
         (when tc-info
           (resolve-fn dict-id tc-info))))))
 
@@ -506,7 +514,8 @@
     (define tcm (current-trait-cell-map))
     (for ([(dict-id cell-ids) (in-hash tcm)])
       (unless (meta-solved? dict-id)
-        (define tc-info (hash-ref (current-trait-constraint-map) dict-id #f))
+        ;; Track 1 Phase 2a: read from cell.
+        (define tc-info (hash-ref (read-trait-constraints) dict-id #f))
         (when tc-info
           ;; Check if any type-arg cell has become non-bot
           (define any-solved?
@@ -622,11 +631,14 @@
           (when (eq? (constraint-status c) 'retrying)
             (set-constraint-status! c 'postponed)))))))
 
-;; Phase 1a: Read the constraint store from the cell (preferred) or legacy parameter.
+;; ========================================
+;; Cell-Primary Read Accessors
+;; ========================================
+;; Each reads from the cell (primary) with parameter fallback.
+;; Track 1: constraint store, trait/hasmethod/capability maps.
+
+;; Read the constraint store from the cell (preferred) or legacy parameter.
 ;; Returns the current list of all constraints.
-;; NOTE: Phase 1a is "storage only" — constraint cell is write-only for now.
-;; All reads go through legacy parameter until save/restore is updated (Phase 1d+).
-;; This function is exported for future use and tests.
 (define (read-constraint-store)
   (define cid (current-constraint-cell-id))
   (define net-box (current-prop-net-box))
@@ -634,6 +646,36 @@
   (if (and cid net-box read-fn)
       (read-fn (unbox net-box) cid)
       (current-constraint-store)))
+
+;; Track 1 Phase 2a: Read trait constraint map from cell or parameter.
+;; Returns hasheq: meta-id → trait-constraint-info.
+(define (read-trait-constraints)
+  (define cid (current-trait-constraint-cell-id))
+  (define net-box (current-prop-net-box))
+  (define read-fn (current-prop-cell-read))
+  (if (and cid net-box read-fn)
+      (read-fn (unbox net-box) cid)
+      (current-trait-constraint-map)))
+
+;; Track 1 Phase 2b: Read hasmethod constraint map from cell or parameter.
+;; Returns hasheq: meta-id → hasmethod-constraint-info.
+(define (read-hasmethod-constraints)
+  (define cid (current-hasmethod-constraint-cell-id))
+  (define net-box (current-prop-net-box))
+  (define read-fn (current-prop-cell-read))
+  (if (and cid net-box read-fn)
+      (read-fn (unbox net-box) cid)
+      (current-hasmethod-constraint-map)))
+
+;; Track 1 Phase 2c: Read capability constraint map from cell or parameter.
+;; Returns hasheq: meta-id → capability-constraint-info.
+(define (read-capability-constraints)
+  (define cid (current-capability-constraint-cell-id))
+  (define net-box (current-prop-net-box))
+  (define read-fn (current-prop-cell-read))
+  (if (and cid net-box read-fn)
+      (read-fn (unbox net-box) cid)
+      (current-capability-constraint-map)))
 
 ;; Reset the constraint store (called by reset-meta-store!).
 ;; Phase 1a: constraint cell is inherently reset when the network is recreated.

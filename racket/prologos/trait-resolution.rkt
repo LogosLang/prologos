@@ -313,7 +313,8 @@
 ;; types like (expr-PVec A) are converted to (expr-app (expr-tycon 'PVec) A)
 ;; and type constructor fvars like (expr-fvar 'List) become (expr-tycon 'List).
 (define (resolve-trait-constraints!)
-  (for ([(meta-id tc-info) (in-hash (current-trait-constraint-map))])
+  ;; Track 1 Phase 2a: read from cell (primary) with parameter fallback.
+  (for ([(meta-id tc-info) (in-hash (read-trait-constraints))])
     (unless (meta-solved? meta-id)
       (perf-inc-trait-resolve!)
       (define trait-name (trait-constraint-info-trait-name tc-info))
@@ -335,7 +336,8 @@
 ;; Each error includes the source location from the meta that created it.
 ;; Enhanced with available instance listing, kind mismatch detection, and hints.
 (define (check-unresolved-trait-constraints)
-  (for/list ([(meta-id tc-info) (in-hash (current-trait-constraint-map))]
+  ;; Track 1 Phase 2a: read from cell (primary) with parameter fallback.
+  (for/list ([(meta-id tc-info) (in-hash (read-trait-constraints))]
              #:when (not (meta-solved? meta-id))
              #:when (andmap ground-expr?
                            (map (lambda (e) (normalize-for-resolution (zonk e)))
@@ -396,7 +398,8 @@
 ;; remain unsolved (i.e., no matching capability found in lexical scope).
 ;; E2001: "Required capability ~a not available in scope."
 (define (check-unresolved-capability-constraints)
-  (for/list ([(meta-id cc-info) (in-hash (current-capability-constraint-map))]
+  ;; Track 1 Phase 2c: read from cell (primary) with parameter fallback.
+  (for/list ([(meta-id cc-info) (in-hash (read-capability-constraints))]
              #:when (not (meta-solved? meta-id)))
     (define cap-name (capability-constraint-info-cap-name cc-info))
     (define cap-type (capability-constraint-info-cap-type-expr cc-info))
@@ -461,7 +464,8 @@
 ;; - Project the method from the dict
 ;; - Solve both the evidence meta and the trait variable meta
 (define (resolve-hasmethod-constraints!)
-  (for ([(meta-id hm-info) (in-hash (current-hasmethod-constraint-map))])
+  ;; Track 1 Phase 2b: read from cell (primary) with parameter fallback.
+  (for ([(meta-id hm-info) (in-hash (read-hasmethod-constraints))])
     (unless (meta-solved? meta-id)
       (define method-name (hasmethod-constraint-info-method-name hm-info))
       (define type-args
