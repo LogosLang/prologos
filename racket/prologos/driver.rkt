@@ -929,6 +929,9 @@
               [(surf-session? surf) (format "elab:session-~a" (surf-session-name surf))]
               [(and (pair? surf) (surf-def? (car surf)))
                (format "elab:~a" (surf-def-name (car surf)))]
+              [(surf-eval? surf) "elab:eval"]
+              [(surf-check? surf) "elab:check"]
+              [(surf-infer? surf) "elab:infer"]
               [else "elab:command"]))
       (observatory-register-capture! obs
         (net-capture (gensym 'elab-cap-)
