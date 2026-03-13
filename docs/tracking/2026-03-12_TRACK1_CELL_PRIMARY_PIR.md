@@ -1,7 +1,7 @@
 # Track 1: Constraint Cell-Primary — Post-Implementation Review
 
 **Date**: 2026-03-12 / 2026-03-13
-**Commits**: `ffc5d26` through `2c95a9d` (7 commits)
+**Commits**: `ffc5d26` through `35fa4ae` (8 commits)
 **Test Count**: 6889 (358 files) — unchanged from baseline
 **Design Document**: `docs/tracking/2026-03-12_TRACK1_CONSTRAINT_CELL_PRIMARY.md`
 **Baseline Tag**: `benchmark-baseline-track-1`
@@ -28,11 +28,9 @@ Migrate all constraint tracking reads from legacy Racket parameters to propagato
 
 ### 1.3 Actual Scope
 
-**Phases 0-5 completed. Phase 6 partially deferred.**
+**Phases 0-6 completed.**
 
-The core goal was achieved: all constraint reads go through cell-primary accessors, and all writes are cell-primary when a propagator network is active. The key deviation from the original plan was the emergence of a **parameter fallback** pattern — unit tests that use `with-fresh-meta-env` don't create a propagator network, so both reads and writes must fall back to parameters when no network exists.
-
-This means Phase 6 (parameter removal) can't proceed as originally designed. The parameters stay as lightweight fallback storage for the test harness. This is the correct architecture, not a compromise — it mirrors how the read accessors were already designed (`read-constraint-store` always had a parameter fallback).
+The core goal was achieved: all constraint reads go through cell-primary accessors, and all writes are cell-only (no parameter fallback). Phase 6 ("network-everywhere") eliminated the `if/else` fallback pattern that Phases 0-5 introduced by making `with-fresh-meta-env` always create a propagator network via `reset-meta-store!`. This required adding `driver.rkt` to 10 test files and 2 benchmarks that lacked propagator callbacks, but the result is a single write path — cell-only — with no branch at every write site. Read functions have guards returning empty defaults when called pre-initialization (semantically correct: no constraints exist before the network is created).
 
 ---
 
@@ -56,11 +54,11 @@ This means Phase 6 (parameter removal) can't proceed as originally designed. The
 
 1. **Cell-primary read accessors** (5 new functions): Each follows the same pattern — check for cell ID + network + read function; if all present, read from cell; otherwise fall back to parameter. This is a clean abstraction that encapsulates the cell-vs-parameter decision.
 
-2. **Cell-primary write paths**: All 6 constraint write functions (`add-constraint!`, `register-trait-constraint!`, `register-hasmethod-constraint!`, `register-capability-constraint!`, plus wakeup registry writes) now use `if/else` instead of `when` — cell path when network is active, parameter fallback when not.
+2. **Cell-only write paths** (Phase 6): All 6 constraint write functions use cell-only writes — no `if/else` fallback. The network is always present (network-everywhere via `with-fresh-meta-env` calling `reset-meta-store!`). Writes without a network crash loud (fail-by-construction), preventing silent data loss.
 
 3. **Cell metrics emission**: `CELL-METRICS` JSON lines emitted to stderr alongside existing `PERF-COUNTERS`/`PHASE-TIMINGS`/`MEMORY-STATS`, extracted by batch-worker. Provides cells/propagators counts per test file.
 
-4. **Conditional speculation save/restore**: `with-speculative-rollback` only saves/restores the constraint parameter when no propagator network is active. When the network IS active, `save-meta-state`/`restore-meta-state!` handles rollback via the network box.
+4. **Unconditional speculation rollback** (Phase 6d): `with-speculative-rollback` relies entirely on `save-meta-state`/`restore-meta-state!` — no conditional constraint parameter save/restore needed since the network is always present.
 
 ---
 
@@ -90,11 +88,7 @@ The original plan had Phase 4 (speculation) before Phase 5 (write removal). Duri
 
 The original design assumed full parameter removal in Phase 6. The discovery that `with-fresh-meta-env` sets all cell IDs to `#f` (no propagator network) meant that pure write removal broke 5 test files. The fix — `if/else` with parameter fallback instead of pure `when` cell write — was the right architectural response, but it changes the endgame: parameters can't be fully removed until all test fixtures create propagator networks.
 
-**Impact**: Phase 6a-6c deferred. The parameters remain as fallback storage, adding ~15 lines of dead-ish code in the production path.
-
-**Root cause**: The `with-fresh-meta-env` macro was designed before the propagator infrastructure existed. It creates a clean slate for meta variables but doesn't create a network. This is correct for unit tests that test meta variable mechanics in isolation, but it means constraint writes have no cell to target.
-
-**Resolution path**: A future track could add a `with-fresh-meta-env/network` variant that creates both clean meta state AND a minimal propagator network. This would let unit tests exercise the cell-primary path and enable full parameter removal.
+**Resolution** (Phase 6): Rather than creating a separate `with-fresh-meta-env/network` variant, Phase 6 made `with-fresh-meta-env` itself call `reset-meta-store!`, which creates the network when callbacks are installed. This required adding `driver.rkt` to 10 test files and 2 benchmarks that lacked callbacks. The result: all `with-fresh-meta-env` contexts have a network, all writes are cell-only, no parameter fallback needed. The `if/else` at every write site was removed entirely (`commit 35fa4ae`).
 
 ### 4.2 merge-list-append Ordering vs. cons Ordering
 
@@ -118,9 +112,9 @@ The design document had been thoroughly critiqued (external review incorporated)
 
 ### 5.2 Scope
 
-**Expected**: Phases 0-6 complete. **Actual**: Phases 0-5 complete, Phase 6 partially deferred.
+**Expected**: Phases 0-6 complete. **Actual**: Phases 0-6 complete.
 
-The 85% completion is appropriate. The deferred work (full parameter removal) is blocked on test fixture migration, which is a different kind of work than the core migration. Forcing it would have created churn in ~26 test files without improving correctness or performance.
+Phase 6 was redesigned from "parameter removal" to "network-everywhere" — making `with-fresh-meta-env` always create a propagator network. This eliminated the parameter fallback entirely, achieving the original intent (single write path) through a different mechanism than originally planned (inject network everywhere vs. remove parameters).
 
 ### 5.3 Performance
 
@@ -148,14 +142,11 @@ What the cells do NOT provide (yet):
 
 The hand-rolled machinery (explicit retry loops in `retry-constraints-for-meta!`, batch resolution in `resolve-trait-constraints!`) still does the actual work. Track 1 moved the *data* to cells but left the *control flow* unchanged.
 
-### 6.2 The Parameter Fallback Is Not Test-Only
+### 6.2 Network-Everywhere Eliminates Write-Side Duality
 
-The fallback isn't just for existing unit tests. It's for any context without a propagator network:
-- A future REPL or interactive mode
-- Tooling that processes partial expressions
-- Any consumer of `add-constraint!` outside the full driver pipeline
+Phase 6 resolved the parameter fallback concern from the original PIR. By making `with-fresh-meta-env` call `reset-meta-store!` (which creates the propagator network when callbacks are installed), every context that writes constraints has a network. The `if/else` at every write site is gone — replaced by a single cell write path. Writes without a network crash loud (`unbox` on `#f`), which is correct-by-construction: it surfaces programming errors immediately rather than silently falling back to a parameter that no reader checks.
 
-This means we maintain two write paths (`if/else` at every write site) and two read paths (cell with parameter fallback). We've unified reads under a single accessor, but the write-side duality persists. This is a real cost — not dual-write (both paths always fire), but still a branch at every write site that must be maintained and tested.
+Read functions retain guards that return empty defaults (`'()`, `(hasheq)`) when no cell exists. This handles the brief window during initialization and `reset-constraint-store!` transitions. This is semantically correct (no constraints exist pre-initialization), not a "fallback."
 
 ### 6.3 save-meta-state Captures Everything (Almost)
 
@@ -191,12 +182,9 @@ These would eliminate the manual retry loops and batch resolution passes, replac
 
 Cell-primary constraint tracking means speculation rollback is handled by the network snapshot. This is a prerequisite for ATMS-based multi-world speculation, where different constraint assumptions coexist in parallel worlds. With parameters, each world would need its own parameter save/restore; with cells, the ATMS dependency management handles this natively.
 
-### 7.4 Test Fixture Modernization (Future)
+### 7.4 Test Fixture Modernization (COMPLETE — Phase 6)
 
-Creating a `with-fresh-meta-env/network` macro that includes a minimal propagator network would:
-- Enable full parameter removal (Phase 6a-6c)
-- Let unit tests validate cell-primary paths directly
-- Align test behavior with production behavior (reducing "works in tests, broken in driver" gaps)
+Phase 6 made `with-fresh-meta-env` always create a propagator network by calling `reset-meta-store!`. All 10 test files and 2 benchmarks that lacked `driver.rkt` were updated. Unit tests now exercise the same cell-primary write path as production code — no behavioral divergence between test and production contexts.
 
 ---
 
@@ -252,8 +240,7 @@ What we gained concretely:
 
 What we did not gain:
 1. **Reactive resolution** — constraints are still resolved by explicit call chains, not by propagator firing
-2. **Full parameter elimination** — the fallback pattern keeps parameters alive at every write site
-3. **Cross-domain composition** — no new bridges exist; the constraint cells are isolated from type/session/multiplicity domains
-4. **Observability** — the Observatory can see meta cells, but constraint cells aren't visualized or traced
+2. **Cross-domain composition** — no new bridges exist; the constraint cells are isolated from type/session/multiplicity domains
+3. **Observability** — the Observatory can see meta cells, but constraint cells aren't visualized or traced
 
 The key lesson: **moving data to cells is table stakes, not the endgame**. The value comes from wiring propagator edges to those cells — which is Track 2's job. Track 1 laid the pipe; Track 2 turns on the water.

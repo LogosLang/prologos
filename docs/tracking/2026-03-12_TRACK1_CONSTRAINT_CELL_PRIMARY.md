@@ -1,7 +1,7 @@
 # Track 1: Constraint Tracking — Cell-Primary Reads
 
 **Created**: 2026-03-12
-**Status**: Stage 3 (Implementation — Phases 0-5 COMPLETE, Phase 6 PARTIAL)
+**Status**: Stage 3 (Implementation — Phases 0-6 COMPLETE)
 **Depends on**: Propagator-First Migration Sprint Phases 0-4 (COMPLETE)
 **Enables**: Track 4 (ATMS Speculation)
 **Research basis**: `2026-03-11_PROPAGATOR_FIRST_PIPELINE_AUDIT.md` §3.2, `2026-03-11_WHOLE_SYSTEM_PROPAGATOR_MIGRATION.md` §4.2 Tier 1
@@ -256,10 +256,12 @@ Remove the now-dead parameters and update all reset/initialization code:
 | 4b | Focused speculation test pass | ✅ | | 27/27 pass |
 | 5a | Cell-primary writes with parameter fallback | ✅ | 190.6s | `2c6e237` — all 6889 tests pass |
 | 5b | Re-run speculation tests after write removal | ✅ | | All pass |
-| 6a | Remove constraint parameter definitions | ⏸️ | | Parameters stay as fallback for unit tests |
-| 6b | Remove dirty flags (`current-retry-unify` etc.) | ⏸️ | | Defer: retry paths still use polling |
-| 6c | Update `reset-meta-store!`, `with-meta-env`, driver | ⏸️ | | Blocked on 6a |
-| 6d | Final benchmark comparison | ✅ | 191.4s | +1.2% vs baseline (noise) |
+| 6a | `with-fresh-meta-env` calls `reset-meta-store!` | ✅ | | `35fa4ae` — network-everywhere |
+| 6b | Add `driver.rkt` to 10 test + 2 benchmark files | ✅ | | `35fa4ae` — callbacks always present |
+| 6c | Remove `if/else` fallback from 6 write sites | ✅ | | `35fa4ae` — cell-only writes |
+| 6d | Simplify speculation bridge | ✅ | | `35fa4ae` — no conditional save/restore |
+| 6e | Retire `with-prop-meta-env`, `with-infra-cell-env` | ✅ | | `35fa4ae` — replaced by `with-fresh-meta-env` |
+| 6f | Guard read functions for pre-init safety | ✅ | 186.4s | `35fa4ae` — 6889 tests, 0 failures |
 
 ---
 
@@ -310,7 +312,7 @@ Remove the now-dead parameters and update all reset/initialization code:
 2. The parameter fallback preserves backward compatibility for test harnesses
 3. The driver pipeline always has a network, so production paths are cell-primary
 
-**Deferred to later tracks**: Phase 6a-6c (full parameter removal) requires migrating all test fixtures to use propagator networks, which is a larger effort. Phase 6b (dirty flag removal) requires verifying all retry paths use propagator wakeup, which depends on Track 2 (cross-domain propagator wiring).
+**Phase 6 complete** (`35fa4ae`): Network-everywhere — `with-fresh-meta-env` calls `reset-meta-store!`, all test fixtures have `driver.rkt`, all writes are cell-only (no parameter fallback). Dirty flag removal deferred to Track 2 (requires verifying all retry paths use propagator wakeup).
 
 **Commits**: `ffc5d26` (metrics), `b11cce8` (Phase 1), `6720408` (Phase 2), `7fe5d5a` (Phase 3), `2c6e237` (Phase 5a), `3f1c69b` (Phase 4a)
 
