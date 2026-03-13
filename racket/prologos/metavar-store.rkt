@@ -157,6 +157,9 @@
  current-constraint-status-cell-id
  read-constraint-status-map
  write-constraint-status-cell!
+ ;; Track 2 Phase 3: Stratified resolution (progress box is internal)
+ current-in-stratified-resolution?
+ current-stratified-progress-box
  ;; P5b: Multiplicity cell callbacks
  current-prop-fresh-mult-cell
  current-prop-mult-cell-write
@@ -924,11 +927,43 @@
     (set-box! net-box enet*))
   (expr-meta id))
 
+;; Track 2 Phase 3: Stratified resolution flag.
+;; When #t, solve-meta! only writes the solution (core) and defers retries
+;; to the outer stratified loop. Prevents recursive re-entrancy.
+(define current-in-stratified-resolution? (make-parameter #f))
+
+;; Track 2 Phase 3: Progress box for the stratified loop.
+;; Contains a box (or #f). When set, solve-meta-core! writes #t to the box
+;; to signal that progress was made during the current S2 round.
+(define current-stratified-progress-box (make-parameter #f))
+
+;; Track 2 Phase 3: Maximum iterations for the S0→S1→S2 loop.
+;; The CALM theorem guarantees convergence for monotone operations, but
+;; Stratum 2 (resolution commitment) is a non-monotone barrier — fuel is
+;; the safety net. Replaces the per-constraint `retrying` guard.
+(define stratified-resolution-fuel 100)
+
 ;; Assign a solution to a metavariable. Errors if already solved.
-;; After solving, retries any postponed constraints that mention this meta.
+;; Track 2 Phase 3: After solving, enters a stratified resolution loop
+;; (if not already inside one). Recursive solve-meta! calls from within
+;; retries only write the solution — the outer loop handles further rounds.
 ;; Hash removal: Always reads/writes CHAMP meta-info store.
 (define (solve-meta! id solution)
+  (solve-meta-core! id solution)
+  ;; If already inside a stratified resolution loop, defer retries to the
+  ;; outer loop. This eliminates recursive re-entrancy — the call stack is
+  ;; always flat regardless of constraint graph depth.
+  (unless (current-in-stratified-resolution?)
+    (run-stratified-resolution! id)))
+
+;; Core of solve-meta!: write solution to CHAMP + propagator cell.
+;; No retry logic — that lives in run-stratified-resolution!.
+(define (solve-meta-core! id solution)
   (perf-inc-meta-solved!)
+  ;; Track 2 Phase 3: Signal to the stratified loop that progress was made.
+  (define progress-box (current-stratified-progress-box))
+  (when progress-box
+    (set-box! progress-box #t))
   (define mi-box (current-prop-meta-info-box))
   (define info
     (let ([v (champ-lookup (unbox mi-box) (prop-meta-id-hash id) id)])
@@ -962,42 +997,57 @@
                    ;; Don't flag bot/top — those are expected lattice states
                    (not (prop-type-bot? cell-val))
                    (not (prop-type-top? cell-val)))
-          (perf-inc-cell-write-mismatch!)))))
-  ;; Constraint retry: three-layer approach.
-  ;;
-  ;; Layer 1 (network quiescence): Run the propagator network so type information
-  ;; flows between connected meta cells. This can transitively solve metas.
-  ;;
-  ;; Layer 2 (cell-state full scan): After quiescence, retry-constraints-via-cells!
-  ;; scans ALL postponed constraints and retries those whose meta cells changed.
-  ;; This catches transitive propagation that targeted wakeup (layer 3) misses.
-  ;;
-  ;; Layer 3 (targeted wakeup): retry-constraints-for-meta! retries only constraints
-  ;; mentioning this specific meta. Fast but misses transitive propagation.
-  ;;
-  ;; Production uses layers 1+2; test fallback uses layer 3 only.
-  (cond
-    [(and net-box (current-prop-run-quiescence)
-          (current-prop-unwrap-net) (current-prop-rewrap-net))
-     ;; Production path: quiescence + cell-state scan.
-     (define run-fn (current-prop-run-quiescence))
-     (define unwrap (current-prop-unwrap-net))
-     (define rewrap (current-prop-rewrap-net))
-     (define enet (unbox net-box))
-     (define pnet (unwrap enet))
-     (define pnet* (run-fn pnet))
-     (set-box! net-box (rewrap enet pnet*))
-     (retry-constraints-via-cells!)]
-    [else
-     ;; Fallback for test contexts without propagator network
-     (retry-constraints-for-meta! id)])
-  ;; Trait resolution: cell-state scan + targeted wakeup (both run for safety).
-  ;; The full scan catches transitive propagation via the network.
-  (retry-traits-via-cells!)
-  ;; Targeted wakeup: fast path for direct dependencies.
-  (retry-trait-for-meta! id)
-  ;; Phase 1d: HasMethod resolution — reactive wakeup when dependency metas solved.
-  (retry-hasmethod-for-meta! id))
+          (perf-inc-cell-write-mismatch!))))))
+
+;; Track 2 Phase 3: Stratified resolution loop.
+;; Replaces the recursive retry chain with flat iteration:
+;;   S0 (type propagation) → S1+S2 (readiness scan + resolution) → repeat
+;;
+;; The loop terminates when a round produces no new resolutions (fixpoint)
+;; or the fuel counter is exhausted.
+;;
+;; `trigger-meta-id` is the meta that was just solved, used for targeted
+;; wakeup in the test fallback path.
+(define (run-stratified-resolution! trigger-meta-id)
+  (define progress-box (box #f))
+  (parameterize ([current-in-stratified-resolution? #t]
+                 [current-stratified-progress-box progress-box])
+    (define net-box (current-prop-net-box))
+    (define has-network?
+      (and net-box (current-prop-run-quiescence)
+           (current-prop-unwrap-net) (current-prop-rewrap-net)))
+    (let loop ([fuel stratified-resolution-fuel]
+               [meta-id trigger-meta-id])
+      (when (> fuel 0)
+        ;; ── Stratum 0: Type propagation (quiescence) ──
+        ;; Run the propagator network so type information flows between
+        ;; connected meta cells. This can transitively solve metas.
+        (when has-network?
+          (define run-fn (current-prop-run-quiescence))
+          (define unwrap (current-prop-unwrap-net))
+          (define rewrap (current-prop-rewrap-net))
+          (define enet (unbox net-box))
+          (define pnet (unwrap enet))
+          (define pnet* (run-fn pnet))
+          (set-box! net-box (rewrap enet pnet*)))
+        ;; ── Stratum 1+2: Readiness scan + resolution commitment ──
+        ;; Reset progress box. Any solve-meta-core! calls during S2 set it.
+        (set-box! progress-box #f)
+        ;; Constraint retry (S2a): scan + retry ready constraints.
+        (if has-network?
+            (retry-constraints-via-cells!)
+            ;; Fallback for test contexts without propagator network
+            (retry-constraints-for-meta! meta-id))
+        ;; Trait resolution (S2b): cell-state scan + targeted wakeup.
+        (retry-traits-via-cells!)
+        (retry-trait-for-meta! meta-id)
+        ;; HasMethod resolution (S2c): targeted wakeup.
+        (retry-hasmethod-for-meta! meta-id)
+        ;; ── Check for progress ──
+        ;; If any new metas were solved during S2, loop for another round.
+        ;; This replaces the recursive re-entrancy of the old solve-meta!.
+        (when (unbox progress-box)
+          (loop (sub1 fuel) meta-id))))))
 
 ;; P-U3c: Lightweight quiescence flush.
 ;; Runs the propagator network to quiescence if available.
