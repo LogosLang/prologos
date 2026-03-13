@@ -26,7 +26,7 @@ questions that must be resolved before implementation.
 | D.5 | Performance baseline capture | ⬜ | Before Phase 1 implementation |
 | D.6 | External review integration | ✅ | |
 | 1 | Instance registry — cell reader infrastructure | ✅ | `read-impl-registry` + 4 read conversions; parameter write stays for cross-command |
-| 2 | Constraint status cells (pending/resolved) | ⬜ | Status cell alongside existing struct; `retrying` stays until Phase 3 |
+| 2 | Constraint status cells (pending/resolved) | ✅ | commit `b4cdb1e`; cid field on constraint, enet9 status cell, dual-write in unify.rkt |
 | 3 | Stratified quiescence architecture | ⬜ | Includes fuel counter for termination guarantee |
 | 4 | Data-oriented solve-meta! (action descriptors) | ⬜ | |
 | 5 | Trait resolution propagators | ⬜ | |
@@ -923,13 +923,22 @@ With `read-impl-registry` available as the cell-authoritative reader:
 - The registry is observable through the propagator network
 
 ### Phase 2: Constraint Status Cells
-- Add a status cell per constraint: `pending → resolved` lattice
-- The status cell is added *alongside* the existing struct field — the
-  `retrying` guard on the struct stays in place until Phase 3 replaces the
-  imperative call chain with stratified quiescence (which eliminates
-  re-entrancy, making the guard dead code)
-- Verify save/restore captures constraint status (the current speculation gap)
-- Tests: verify status transitions, speculation safety
+
+**Implementation** (commit `b4cdb1e`):
+
+Single constraint-status-map cell (not per-constraint cells). Maps constraint-id → `'pending | 'resolved`.
+
+1. **Constraint IDs**: Added `cid` field (first position) to constraint struct, gensym'd at creation in `add-constraint!`. Updated 4 direct constructor sites (1 production, 3 test).
+2. **Merge function**: `merge-constraint-status-map` in `infra-cell.rkt` — per-key monotone merge where `'resolved` wins over `'pending`. Handles `'infra-bot` for initial state.
+3. **Cell creation**: `enet9` in `reset-meta-store!` after hasmethod wakeup cell (enet8). Parameter: `current-constraint-status-cell-id`.
+4. **Reader/writer**: `read-constraint-status-map` (standard pattern with fallback to `(hasheq)`) and `write-constraint-status-cell!` (writes single-entry hasheq delta).
+5. **Dual-write sites**:
+   - `add-constraint!`: writes `'pending` at creation
+   - `unify.rkt` retry callback: writes `'resolved` on `solved` or `failed`
+   - `retrying`/`postponed` transitions are NOT written to cell — these are transient re-entrancy guards that don't change the monotone status
+6. **Wiring**: Added to `with-fresh-meta-env` parameterize, `reset-constraint-store!`, provide list.
+
+**Key design choice**: `'resolved` covers both `'solved` and `'failed`. The cell lattice only needs to distinguish "needs work" from "terminal". The fine-grained status stays on the struct until Phase 3 eliminates the imperative retry chain. The cell's monotonicity means speculation rollback (via network snapshot restore) correctly reverts status transitions from failed branches.
 
 ### Phase 3: Stratified Quiescence Architecture
 - Modify `solve-meta!` to use a stratified loop:
