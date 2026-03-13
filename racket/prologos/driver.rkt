@@ -389,8 +389,7 @@
                  [current-narrow-var-constraints (hasheq)] ;; Phase 3c: per-command constraint chain
                  [current-coercion-warnings '()]         ;; per-command coercion warnings
                  [current-deprecation-warnings '()]      ;; per-command deprecation warnings
-                 [current-capability-warnings '()]       ;; per-command capability warnings
-                 [current-capability-constraint-map (make-hasheq)])  ;; per-command capability constraints
+                 [current-capability-warnings '()])       ;; per-command capability warnings
   (define result
   (let ()
   (define expanded (expand-top-level surf))
@@ -1560,8 +1559,6 @@
                     [current-meta-store (make-hasheq)]
                     [current-level-meta-store (make-hasheq)]
                     [current-mult-meta-store (make-hasheq)]
-                    [current-constraint-store '()]
-                    [current-wakeup-registry (make-hasheq)]
                     [current-preparse-registry (current-preparse-registry)]
                     [current-ctor-registry (current-ctor-registry)]
                     [current-type-meta (current-type-meta)]

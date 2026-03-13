@@ -21,11 +21,10 @@
 ;;; nested speculations, the inner failures are captured as `sub-failures`
 ;;; of the outer failure. This builds a tree of failures for derivation chains.
 ;;;
-;;; Phase 4b (propagator-first migration): save/restore `current-constraint-store`
-;;; alongside the 6 CHAMP boxes. Audit found that `add-constraint!` in unify.rkt
-;;; is reachable during speculation (via check → unify → pattern-check failure)
-;;; but was not captured by save-meta-state. The constraint parameter leaked
-;;; spurious constraints on failed speculation branches.
+;;; Phase 4b→6d→7: Constraint state is now fully captured by the propagator
+;;; network snapshot (save-meta-state/restore-meta-state!). All constraint
+;;; writes go to cells (Phase 6); all 8 infrastructure cells are captured
+;;; by the network box snapshot (Phase 7). No separate parameter save/restore needed.
 ;;;
 ;;; Phase 5+8b+D+D2 of the type inference refactoring.
 ;;; Design reference: docs/tracking/2026-02-25_TYPE_INFERENCE_ON_LOGIC_ENGINE_DESIGN.md §5.5

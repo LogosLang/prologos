@@ -56,8 +56,8 @@
  restore-meta-state!
  ;; Sprint 5: Constraint postponement
  (struct-out constraint)
- current-constraint-store
- current-wakeup-registry
+ ;; Vestigial parameters removed in Phase 8 cleanup:
+ ;; current-constraint-store, current-wakeup-registry
  current-retry-unify
  add-constraint!
  collect-meta-ids
@@ -97,18 +97,16 @@
  primary-unsolved-metas
  ;; Phase C: Trait constraint tracking + incremental resolution
  (struct-out trait-constraint-info)
- current-trait-constraint-map
- current-trait-wakeup-map
+ ;; Vestigial: current-trait-constraint-map, current-trait-wakeup-map
  current-retry-trait-resolve
  register-trait-constraint!
  lookup-trait-constraint
  install-trait-resolve-callback!
  retry-traits-via-cells!
- current-trait-cell-map
+ ;; Vestigial: current-trait-cell-map
  ;; Phase 3a: HasMethod constraint tracking
  (struct-out hasmethod-constraint-info)
- current-hasmethod-constraint-map
- current-hasmethod-wakeup-map
+ ;; Vestigial: current-hasmethod-constraint-map, current-hasmethod-wakeup-map
  current-retry-hasmethod-resolve
  register-hasmethod-constraint!
  lookup-hasmethod-constraint
@@ -116,7 +114,7 @@
  retry-hasmethod-for-meta!
  ;; Phase 4: Capability constraint tracking
  (struct-out capability-constraint-info)
- current-capability-constraint-map
+ ;; Vestigial: current-capability-constraint-map
  register-capability-constraint!
  lookup-capability-constraint
  ;; Phase 8b: Propagator-backed internal state
@@ -238,16 +236,8 @@
    type-arg-exprs)  ;; (listof Expr) — elaborated type args (may contain metas initially)
   #:transparent)
 
-;; Auxiliary map: meta-id → trait-constraint-info
-;; Keyed by meta-id (symbol), cleared by reset-meta-store!.
-;; Separate from meta-info to avoid extending that struct (which would
-;; require touching every fresh-meta call site).
-(define current-trait-constraint-map (make-parameter (make-hasheq)))
-
-;; Phase C: Reverse index for incremental trait resolution.
-;; Maps type-arg-meta-id → (listof dict-meta-id). When a type-arg meta is
-;; solved, we can immediately check if any trait constraints become resolvable.
-(define current-trait-wakeup-map (make-parameter (make-hasheq)))
+;; Phase 8 cleanup: current-trait-constraint-map and current-trait-wakeup-map
+;; removed — superseded by trait-constraint and trait-wakeup cells.
 
 ;; Phase C: Callback for incremental trait resolution.
 ;; Signature: (dict-meta-id trait-constraint-info) → void
@@ -258,9 +248,7 @@
 (define (install-trait-resolve-callback! resolve-fn)
   (current-retry-trait-resolve resolve-fn))
 
-;; P3a: Trait constraint → cell-ids mapping for cell-state-driven resolution.
-;; Maps dict-meta-id → (listof cell-id) for type-arg metas.
-(define current-trait-cell-map (make-parameter (make-hasheq)))
+;; Phase 8 cleanup: current-trait-cell-map removed — superseded by trait-cell-map cell.
 
 ;; Register a trait constraint and build wakeup index for incremental resolution.
 (define (register-trait-constraint! meta-id info)
@@ -323,12 +311,8 @@
    dict-meta-id)     ;; symbol | #f — meta-id of the dict param for projection
   #:transparent)
 
-;; Auxiliary map: meta-id → hasmethod-constraint-info
-(define current-hasmethod-constraint-map (make-parameter (make-hasheq)))
-
-;; Phase 1d: Hasmethod wakeup map — reverse index from dependency meta → hasmethod meta-id.
-;; Maps meta-id (of type-arg or trait-var) → (listof hasmethod-meta-id).
-(define current-hasmethod-wakeup-map (make-parameter (make-hasheq)))
+;; Phase 8 cleanup: current-hasmethod-constraint-map and current-hasmethod-wakeup-map
+;; removed — superseded by hasmethod-constraint and hasmethod-wakeup cells.
 
 ;; Phase 1d: Callback for incremental hasmethod resolution.
 ;; Signature: (hasmethod-meta-id hasmethod-constraint-info) → void
@@ -404,8 +388,7 @@
    cap-type-expr) ;; type expression — e.g., (expr-fvar 'ReadCap) or (expr-app (expr-fvar 'FileCap) ...)
   #:transparent)
 
-;; Auxiliary map: meta-id → capability-constraint-info
-(define current-capability-constraint-map (make-parameter (make-hasheq)))
+;; Phase 8 cleanup: current-capability-constraint-map removed — superseded by capability-constraint cell.
 
 (define (register-capability-constraint! meta-id info)
   ;; Track 1 Phase 6c: Cell-only write (network-everywhere).
@@ -419,11 +402,8 @@
   (hash-ref (read-capability-constraints) meta-id #f))
 
 
-;; Global constraint store: list of all constraints
-(define current-constraint-store (make-parameter '()))
-
-;; Per-meta wakeup registry: maps meta-id -> (listof constraint)
-(define current-wakeup-registry (make-parameter (make-hasheq)))
+;; Phase 8 cleanup: current-constraint-store and current-wakeup-registry
+;; removed — superseded by constraint and wakeup-registry cells.
 
 ;; Callback for constraint retry (set by unify.rkt at initialization).
 ;; This avoids a circular dependency: metavar-store.rkt -> unify.rkt.
@@ -714,10 +694,8 @@
       (hasheq)))
 
 ;; Reset the constraint store (called by reset-meta-store!).
-;; Phase 1a: constraint cell is inherently reset when the network is recreated.
-;; Only need to clear the legacy parameter and wakeup registry.
+;; Clears cell IDs — new cells are created by reset-meta-store! when the network is recreated.
 (define (reset-constraint-store!)
-  (current-constraint-store '())
   (current-constraint-cell-id #f)
   ;; Phase 1b: Clear cell IDs (new cells are created per-command by reset-meta-store!).
   (current-trait-constraint-cell-id #f)
@@ -728,8 +706,7 @@
   (current-wakeup-registry-cell-id #f)
   (current-trait-wakeup-cell-id #f)
   ;; Phase 7a: Clear hasmethod wakeup cell ID (was hash-clear! on parameter).
-  (current-hasmethod-wakeup-cell-id #f)
-  (hash-clear! (current-wakeup-registry)))
+  (current-hasmethod-wakeup-cell-id #f))
 
 ;; Query: all postponed constraints.
 ;; Track 1 Phase 1a: reads from cell (primary) with parameter fallback.
@@ -864,7 +841,6 @@
                  [current-level-meta-store (make-hasheq)]
                  [current-mult-meta-store (make-hasheq)]
                  [current-sess-meta-store (make-hasheq)]
-                 [current-constraint-store '()]
                  [current-definition-cells-content (hasheq)]  ;; Phase 3a
                  [current-definition-dependencies (hasheq)]  ;; Phase 3b
                  ;; Cell IDs: #f — reset-meta-store! populates when callbacks available
@@ -876,12 +852,6 @@
                  [current-wakeup-registry-cell-id #f]
                  [current-trait-wakeup-cell-id #f]
                  [current-hasmethod-wakeup-cell-id #f]
-                 [current-wakeup-registry (make-hasheq)]
-                 [current-trait-constraint-map (make-hasheq)]
-                 [current-trait-wakeup-map (make-hasheq)]
-                 [current-trait-cell-map (make-hasheq)]
-                 [current-hasmethod-constraint-map (make-hasheq)]
-                 [current-hasmethod-wakeup-map (make-hasheq)]
                  ;; CHAMP boxes + network: #f — reset-meta-store! creates fresh
                  [current-prop-meta-info-box #f]
                  [current-prop-net-box #f]
@@ -1300,10 +1270,7 @@
   (hash-clear! (current-level-meta-store))
   (hash-clear! (current-mult-meta-store))
   (hash-clear! (current-sess-meta-store))
-  (hash-clear! (current-trait-constraint-map))
-  (hash-clear! (current-trait-wakeup-map))
-  ;; Phase 7b: Removed (hash-clear! (current-trait-cell-map)) — cell handles reset.
-  (hash-clear! (current-hasmethod-constraint-map))
+  ;; Phase 8 cleanup: vestigial hash-clear! calls removed — cells handle reset.
   (reset-constraint-store!)
   ;; Always reset CHAMP meta-info + auxiliary boxes
   (define mi-box (current-prop-meta-info-box))

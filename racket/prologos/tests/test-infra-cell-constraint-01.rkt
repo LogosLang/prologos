@@ -79,8 +79,6 @@
 (test-case "constraint cell: add-constraint! cell-primary writes"
   (with-fresh-meta-env
     (define c (add-constraint! (expr-Nat) (expr-Bool) '() "test-cell-primary"))
-    ;; Track 1 Phase 5a: cell-primary — parameter is NOT written when network is active
-    (check-equal? (length (current-constraint-store)) 0)
     (define cell-contents (elab-cell-read (unbox (current-prop-net-box))
                                           (current-constraint-cell-id)))
     (check-equal? (length cell-contents) 1)
@@ -91,8 +89,6 @@
     (define c1 (add-constraint! (expr-Nat) (expr-Nat) '() "first"))
     (define c2 (add-constraint! (expr-Bool) (expr-Bool) '() "second"))
     (define c3 (add-constraint! (expr-Nat) (expr-Bool) '() "third"))
-    ;; Track 1 Phase 5a: cell-primary — parameter is NOT written when network is active
-    (check-equal? (length (current-constraint-store)) 0)
     (define cell-contents (elab-cell-read (unbox (current-prop-net-box))
                                           (current-constraint-cell-id)))
     (check-equal? (length cell-contents) 3)
@@ -105,22 +101,13 @@
     (add-constraint! (expr-Nat) (expr-Bool) '() "test")
     (check-equal? (length (read-constraint-store)) 1)))
 
-(test-case "constraint cell: read-constraint-store reads from cell not parameter"
-  ;; Phase 6e: With network-everywhere, reads always go through cells.
-  ;; Manually writing to the parameter should NOT be visible via the read accessor.
-  (with-fresh-meta-env
-    (current-constraint-store (list (constraint (expr-Nat) (expr-Nat) '() "legacy" 'postponed '())))
-    ;; Cell is empty — the parameter write is invisible to the cell-primary reader.
-    (check-equal? (length (read-constraint-store)) 0)))
-
 (test-case "constraint cell: reset recreates cell"
   (with-fresh-meta-env
     (add-constraint! (expr-Nat) (expr-Bool) '() "before-reset")
     (reset-meta-store!)
     (check-not-false (current-constraint-cell-id))
     (check-equal? (elab-cell-read (unbox (current-prop-net-box))
-                                  (current-constraint-cell-id)) '())
-    (check-equal? (current-constraint-store) '())))
+                                  (current-constraint-cell-id)) '())))
 
 ;; ========================================
 ;; Phase 1b: Trait/HasMethod/Capability constraint cells
