@@ -144,10 +144,12 @@
  read-trait-wakeup-map
  read-hasmethod-wakeup-map
  read-trait-cell-map
+ read-hasmethod-cell-map
  ;; Phase 1b: Trait/HasMethod/Capability constraint cell IDs
  current-trait-constraint-cell-id
  current-trait-cell-map-cell-id
  current-hasmethod-constraint-cell-id
+ current-hasmethod-cell-map-cell-id
  current-capability-constraint-cell-id
  ;; Phase 1c: Wakeup registry cell IDs
  current-wakeup-registry-cell-id
@@ -166,6 +168,7 @@
  (struct-out action-resolve-hasmethod)
  collect-ready-constraints-via-cells
  collect-ready-traits-via-cells
+ collect-ready-hasmethods-via-cells
  execute-resolution-action!
  execute-resolution-actions!
  ;; P5b: Multiplicity cell callbacks
@@ -390,6 +393,22 @@
            (for/fold ([acc (hasheq)]) ([dep-id (in-list unsolved-dep-metas)])
              (hash-set acc dep-id (list meta-id)))])
       (set-box! hm-net-box (write-fn (unbox hm-net-box) hw-cid hw-delta))))
+  ;; Track 2 Phase 6: Record cell-ids for dependency metas (cell-state-driven resolution).
+  ;; Mirrors trait-cell-map pattern: enables collect-ready-hasmethods-via-cells.
+  (define id-map-box (current-prop-id-map-box))
+  (when id-map-box
+    (define id-map (unbox id-map-box))
+    (define cell-ids
+      (for*/list ([dep-id (in-list all-dep-metas)]
+                  [cid (in-value (champ-lookup id-map (prop-meta-id-hash dep-id) dep-id))]
+                  #:when (not (eq? cid 'none)))
+        cid))
+    (when (not (null? cell-ids))
+      (define hcm-cid (current-hasmethod-cell-map-cell-id))
+      (when hcm-cid
+        (set-box! hm-net-box
+                  (write-fn (unbox hm-net-box) hcm-cid
+                            (hasheq meta-id (remove-duplicates cell-ids eq?)))))))
   ;; Phase 1d: If all deps are already ground (no unsolved metas to trigger wakeup),
   ;; attempt immediate resolution via the callback.
   (when (null? unsolved-dep-metas)
@@ -713,6 +732,26 @@
               #:when hm-info)
     (action-resolve-hasmethod hm-id hm-info)))
 
+;; Track 2 Phase 6: Scan hasmethod constraints via cell state.
+;; Symmetric to collect-ready-traits-via-cells — reads hasmethod-cell-map
+;; and checks whether any dependency cells have non-bot values.
+(define (collect-ready-hasmethods-via-cells)
+  (define net-box (current-prop-net-box))
+  (define read-fn (current-prop-cell-read))
+  (cond
+    [(and net-box read-fn)
+     (define enet (unbox net-box))
+     (define hcm (read-hasmethod-cell-map))
+     (for*/list ([(hm-id cell-ids) (in-hash hcm)]
+                 #:when (not (meta-solved? hm-id))
+                 [hm-info (in-value (hash-ref (read-hasmethod-constraints) hm-id #f))]
+                 #:when hm-info
+                 #:when (for/or ([cid (in-list cell-ids)])
+                          (let ([v (read-fn enet cid)])
+                            (and (not (prop-type-bot? v)) (not (prop-type-top? v))))))
+       (action-resolve-hasmethod hm-id hm-info))]
+    [else '()]))
+
 ;; ========================================
 ;; Track 2 Phase 4: Action Interpreter (Stratum 2)
 ;; ========================================
@@ -843,6 +882,16 @@
       (read-fn (unbox net-box) cid)
       (hasheq)))
 
+;; Track 2 Phase 6: Read hasmethod cell-map from cell.
+;; Returns hasheq: hasmethod-meta-id → (listof cell-id).
+(define (read-hasmethod-cell-map)
+  (define cid (current-hasmethod-cell-map-cell-id))
+  (define net-box (current-prop-net-box))
+  (define read-fn (current-prop-cell-read))
+  (if (and cid net-box read-fn)
+      (read-fn (unbox net-box) cid)
+      (hasheq)))
+
 ;; Track 2 Phase 2: Read constraint status map from cell.
 ;; Returns hasheq: constraint-id → 'pending | 'resolved.
 (define (read-constraint-status-map)
@@ -877,6 +926,8 @@
   (current-trait-wakeup-cell-id #f)
   ;; Phase 7a: Clear hasmethod wakeup cell ID (was hash-clear! on parameter).
   (current-hasmethod-wakeup-cell-id #f)
+  ;; Track 2 Phase 6: Clear hasmethod cell-map cell ID.
+  (current-hasmethod-cell-map-cell-id #f)
   ;; Track 2 Phase 2: Clear constraint status cell ID.
   (current-constraint-status-cell-id #f))
 
@@ -956,6 +1007,10 @@
 ;; Phase 7a: Hasmethod wakeup cell (was missing — the only wakeup map without a cell).
 (define current-hasmethod-wakeup-cell-id (make-parameter #f))
 
+;; Track 2 Phase 6: HasMethod cell-map cell (mirrors trait-cell-map).
+;; Maps hasmethod-meta-id → (listof cell-id), using merge-hasheq-union.
+(define current-hasmethod-cell-map-cell-id (make-parameter #f))
+
 ;; Track 2 Phase 2: Constraint status cell.
 ;; Maps constraint-id (gensym) → 'pending | 'resolved.
 ;; Monotone lattice: pending < resolved. Once resolved, stays resolved.
@@ -1031,6 +1086,7 @@
                  [current-wakeup-registry-cell-id #f]
                  [current-trait-wakeup-cell-id #f]
                  [current-hasmethod-wakeup-cell-id #f]
+                 [current-hasmethod-cell-map-cell-id #f]
                  [current-constraint-status-cell-id #f]
                  ;; CHAMP boxes + network: #f — reset-meta-store! creates fresh
                  [current-prop-meta-info-box #f]
@@ -1182,7 +1238,8 @@
            ;; Trait readiness (cell-state scan + targeted wakeup).
            (collect-ready-traits-via-cells)
            (collect-ready-traits-for-meta meta-id)
-           ;; HasMethod readiness (targeted wakeup).
+           ;; HasMethod readiness (cell-state scan + targeted wakeup).
+           (collect-ready-hasmethods-via-cells)
            (collect-ready-hasmethods-for-meta meta-id)))
         ;; ── Stratum 2: Resolution commitment (execute actions) ──
         ;; Reset progress box. Any solve-meta-core! calls during S2 set it.
@@ -1556,7 +1613,10 @@
       ;; Track 2 Phase 2: Constraint status cell (constraint-id → 'pending | 'resolved).
       (define-values (enet9 cs-cid) (new-cell-fn enet8 (hasheq) merge-constraint-status-map))
       (current-constraint-status-cell-id cs-cid)
-      (set-box! nb enet9))))
+      ;; Track 2 Phase 6: HasMethod cell-map (meta-id → (listof cell-id)).
+      (define-values (enet10 hcm-cid) (new-cell-fn enet9 (hasheq) merge-hasheq-union))
+      (current-hasmethod-cell-map-cell-id hcm-cid)
+      (set-box! nb enet10))))
 
 ;; ========================================
 ;; Meta state save/restore for speculative type-checking
