@@ -19,16 +19,18 @@ questions that must be resolved before implementation.
 
 | Phase | Description | Status | Notes |
 |-------|-------------|--------|-------|
-| D.1 | Design analysis and formal grounding | 🔄 | This document |
-| D.2 | Principles capture (data orientation) | ⬜ | New DESIGN_PRINCIPLES section |
-| 1 | Stratified quiescence architecture | ⬜ | |
-| 2 | Data-oriented solve-meta! (action descriptors) | ⬜ | |
-| 3 | Trait resolution propagators | ⬜ | |
-| 4 | HasMethod resolution propagators | ⬜ | |
-| 5 | Constraint status cells | ⬜ | |
-| 6 | Registration-complete threshold | ⬜ | |
-| 7 | Post-pass elimination | ⬜ | |
-| 8 | Confluence verification | ⬜ | |
+| D.1 | Design analysis and formal grounding | ✅ | commit 061455e |
+| D.2 | Design iteration (review feedback) | 🔄 | This revision |
+| D.3 | Principles capture (data orientation) | ⬜ | New DESIGN_PRINCIPLES section |
+| 1 | Instance registry cell + incremental registration | ⬜ | |
+| 2 | Constraint status cells (pending/resolved) | ⬜ | |
+| 3 | Stratified quiescence architecture | ⬜ | |
+| 4 | Data-oriented solve-meta! (action descriptors) | ⬜ | |
+| 5 | Trait resolution propagators | ⬜ | |
+| 6 | HasMethod resolution propagators | ⬜ | |
+| 7 | Error cell + grouped error reporting | ⬜ | |
+| 8 | Post-pass elimination | ⬜ | |
+| 9 | Confluence verification | ⬜ | |
 
 ---
 
@@ -417,7 +419,7 @@ For the use cases Haskell's overlapping instances serve:
 
 ---
 
-## §5. The Post-Pass: Elimination via Registration-Complete Threshold
+## §5. The Post-Pass: Elimination via Incremental Instance Registration
 
 ### 5.1 What the Post-Pass Actually Does
 
@@ -433,81 +435,127 @@ registered trait instances**. During elaboration, instances are registered
 incrementally as `impl` declarations are processed. A reactive propagator
 firing mid-elaboration might miss an instance that hasn't been registered yet.
 
-### 5.2 The Registration-Complete Threshold
-
 The post-pass isn't special because of its logic — it's special because of its
 *timing*. It runs after all declarations have been processed, meaning all
-instances are registered. The propagator equivalent of this timing is a
-**threshold propagator** gated on a "registration complete" signal.
+instances are registered.
 
-Architecture:
+### 5.2 Incremental Instance Registration via Cell Writes
+
+The conservative approach would gate resolution propagators on a
+"registration-complete" threshold signal. But this is a workaround for batch
+processing. The principled approach is to make instance registration itself
+incremental and cell-backed.
+
+**Instance Registry Cell**: starts at `(hasheq)` (empty). Each `process-impl`
+writes `(hasheq key impl-entry)` to the cell. The merge function is
+`merge-hasheq` (hash map union, backed by CHAMP). The cell monotonically
+accumulates the full instance registry as declarations are processed.
+
+**Resolution propagators watch the registry cell**:
 
 ```
-Registration-Complete Cell: starts at bot (false)
-  Set to true when driver.rkt finishes processing all top-level declarations.
-
 HasMethod Resolution Propagator:
-  Inputs: [type-arg cells..., registration-complete cell]
-  Threshold: all type-arg cells non-bot AND registration-complete = true
-  Fire: perform hasmethod resolution (search traits, resolve dict)
+  Inputs: [type-arg-cell-1, type-arg-cell-2, ..., instance-registry-cell]
+  Fire: if all type-arg cells non-bot AND registry has matching instance:
+          perform resolution, write solution to evidence meta cell
+        else:
+          return net unchanged (no-op, will re-fire on next change)
 ```
 
-The `net-add-barrier` primitive already exists in `propagator.rkt` for exactly
-this pattern — a propagator that fires only when ALL conditions are met.
+When type-arg cells are solved before matching instances are registered, the
+propagator fires but finds no match — it returns `net` unchanged. Later, when
+`process-impl` writes the matching instance to the registry cell, the cell
+changes, the propagator fires again, and this time resolution succeeds.
 
-### 5.3 Implications for Error Handling
+**This is the standard propagator pattern**: partial information, monotone
+refinement, eventual convergence. No registration-complete threshold needed.
 
-With a registration-complete threshold, the propagator fires exactly once per
-hasmethod constraint, at the right time, with the full instance registry
-available. Two outcomes:
+### 5.3 Why This Aligns with Our Principles
 
-1. **Resolution succeeds**: propagator solves the evidence meta. Done.
-2. **Resolution fails**: the constraint remains unsolved.
+**Propagator-First Infrastructure**: instance registries should be cells, not
+mutable hash tables. This is the same principle that motivated Track 1.
 
-Unsolved constraints after the registration-complete signal are **errors** —
-not diagnostics, not "the reactive path missed something." If the full
-instance registry is available and resolution still fails, the program is
-ill-typed. This is a stronger guarantee than the current system, where the
-post-pass silently leaves constraints unsolved and relies on
-`check-unresolved-trait-constraints` to report them.
+**Layered Recovery**: "careful registration order" sounds like it needs
+coordination — but under non-overlapping instances, instance registration is
+monotone (adding instances only grows the registry) and resolution is monotone
+in the registry (more instances can only enable more resolutions, never
+invalidate one). The composition is monotone. The CALM theorem says: no
+coordination needed. Registration order doesn't matter.
 
-**The post-pass can be eliminated entirely.** The error-reporting pass
-(`check-unresolved-trait-constraints`) remains, but it becomes: "after
-registration-complete propagators have all fired and the network is quiescent,
-any unsolved trait/hasmethod constraint is an error." No batch resolution
-pass needed.
+**CHAMP-backed incrementalism**: the instance registry cell's merge is CHAMP
+hash map union — O(log₃₂ n) insertion with structural sharing. Each write
+creates minimal allocation. Immutable snapshots are captured by save/restore
+for free. This is a core value proposition of our propagator infrastructure.
 
-### 5.4 What Else the Post-Pass Position Touches
+**Partial state is what propagators do**: propagators are designed for
+incomplete information. A resolution propagator that fires with an incomplete
+registry simply produces no result — the same as a type propagator that fires
+with an unsolved meta. The lattice handles partial state natively.
 
-Beyond hasmethod resolution, the post-elaboration position in `driver.rkt`
-does:
-1. `check-unresolved-trait-constraints` — error reporting (stays)
+### 5.4 The Post-Pass Becomes Unnecessary
+
+With incremental registration, resolution propagators fire throughout
+elaboration as information becomes available. By the time all declarations are
+processed, all instances are in the registry cell and all resolution
+propagators have had the opportunity to fire. The batch post-pass has no
+remaining work to do.
+
+The post-pass can be eliminated entirely. What remains:
+1. `check-unresolved-trait-constraints` — error reporting (stays as read-only sweep)
 2. `check-unresolved-capability-constraints` — error reporting (stays)
 3. `zonk-final` — defaulting unsolved metas (orthogonal)
 4. `rewrite-specializations` — optimization pass (orthogonal)
 
-The error-reporting passes don't need to be propagator-driven — they're
-read-only sweeps over cell state. The registration-complete signal just needs
-to precede them.
+Any constraint still unsolved after the network reaches its global fixpoint is
+an error — the program is ill-typed. This is not a diagnostic ("the reactive
+path missed something") — it is a definitive type error. If the full instance
+registry is in the cell and the propagator still couldn't resolve, no
+resolution exists.
 
-### 5.5 Is the Registration-Complete Threshold Its Own Layer?
+### 5.5 Threshold Propagator Design Note
 
-Yes — it naturally forms **Stratum 3** in the stratified architecture:
+The `net-add-barrier` primitive in `propagator.rkt` implements threshold
+propagators as **stateless, pure fire functions**. The fire function
+(`make-barrier-fire-fn`) reads cell values on every invocation, checks
+predicates, and either runs the body or returns `net` unchanged. No internal
+state accumulation.
+
+This is architecturally correct for provenance: every readiness signal is a
+cell value, every cell value change is observable by the observatory, every
+snapshot captures the full state. The propagator itself is `net → net` — pure.
+
+The monotonicity guarantee makes this work: once a threshold is met on a
+monotone lattice, it stays met. A stateless "check threshold every time"
+propagator and a stateful "fire once" propagator are observationally identical.
+But the stateless version keeps all state in cells (observable, capturable,
+speculation-safe).
+
+**Design invariant for Track 2**: propagators read cells, write cells, and
+compute pure transformations. Any state that matters for provenance or
+speculation must live in cells. Resist the temptation to stash state inside
+closures — that state becomes invisible to the observatory and leaks during
+speculation.
+
+### 5.6 Strata Revised
+
+With incremental registration, the separate "registration-complete" stratum
+collapses. The architecture simplifies:
 
 ```
 Stratum 0: Type Propagation (monotone)
+  - Cell writes, unify propagators, cross-domain bridges
 Stratum 1: Readiness Detection (monotone)
+  - Constraint readiness, trait readiness, hasmethod readiness
+  - Instance registry changes also trigger readiness re-evaluation
 Stratum 2: Resolution Commitment (non-monotone barrier)
-  [Loop S0-S2 until fixpoint within elaboration]
-Stratum 3: Registration-Complete Resolution (non-monotone barrier)
-  [Fires once after all declarations processed]
-Stratum 4: Error Reporting (read-only)
-  [Sweeps unsolved constraints, reports errors]
+  - Consume readiness signals, execute resolutions, feed back to S0
+  [Loop S0-S2 until global fixpoint]
+Stratum 3: Error Reporting (read-only)
+  - Sweep unsolved constraints, report errors
 ```
 
-Strata 0-2 operate *during* elaboration (the inner fixpoint loop). Stratum 3
-fires *between* elaboration and evaluation (the outer pipeline). Stratum 4 is
-the final error check.
+Three strata during elaboration, one post-elaboration error sweep.
+No separate registration barrier needed.
 
 ---
 
@@ -526,32 +574,36 @@ of type-checker state that lives outside the propagator network. It is:
 
 ### 6.2 The Fix
 
-Each constraint gets a **status cell** in the propagator network. The status
-lattice:
+Each constraint gets a **status cell** in the propagator network. With
+stratified quiescence eliminating re-entrancy, the `retrying` guard state
+has no purpose. The lattice simplifies to two elements:
 
 ```
-    postponed
-    /       \
-retrying   resolved
-    \       /
-     failed
+pending → resolved
 ```
 
-(Or simply: `bot → postponed → retrying → resolved/failed`, where resolved
-and failed are top-like terminal states.)
+- `pending`: constraint created, not yet resolved (analogous to current
+  `'postponed`)
+- `resolved`: solution committed (terminal)
+
+Constraints that never reach `resolved` after the global fixpoint are errors
+— detected by the Stratum 3 error sweep.
 
 Status transitions become cell writes:
-- Creating a constraint writes `postponed`
-- Retry attempt writes `retrying`
-- Successful retry writes `resolved`
-- Failed retry writes back `postponed` (or `failed` if terminal)
+- Creating a constraint writes `pending`
+- Successful resolution writes `resolved`
+- Failed resolution leaves `pending` (the constraint simply never resolves)
+
+If retry-count provenance is needed later (how many times was this constraint
+examined?), that would be a separate counter cell — not a status flag.
 
 Benefits:
 - **Speculation safety**: status captured by network snapshot
 - **Observability**: observatory can show constraint lifecycle
 - **Readiness propagation**: a propagator can watch the status cell and gate
-  on `'postponed` (don't retry already-resolved constraints)
-- **Confluence**: status transitions are monotone (information only grows)
+  on `'pending` (don't retry already-resolved constraints)
+- **Confluence**: `pending → resolved` is trivially monotone
+- **Simplicity**: two-element lattice, no re-entrancy guard needed
 
 ### 6.3 Total Network Observability
 
@@ -569,10 +621,13 @@ the propagator network:
 | HasMethod constraints | Map cell | Track 1 Phase 2b |
 | HasMethod wakeup | Map cell | Track 1 Phase 7a |
 | Capability constraints | Map cell | Track 1 Phase 2c |
-| **Constraint status** | **Status cell** | **Track 2 Phase 5** |
+| **Constraint status** | **Status cell (pending/resolved)** | **Track 2 Phase 2** |
+| **Instance registry** | **Map cell (CHAMP-backed)** | **Track 2 Phase 1** |
+| **Error descriptors** | **List cell (append-merge)** | **Track 2 Phase 7** |
 
 This completes the vision of total network observability: the propagator
-network is the single source of truth for the entire type-checking state.
+network is the single source of truth for the entire type-checking state,
+including instance registration and resolution errors.
 
 ---
 
@@ -665,80 +720,96 @@ The cycle-freedom condition is satisfied structurally.
 
 ---
 
-## §8. Open Questions and Design Decisions
+## §8. Design Decisions (Resolved)
 
-### 8.1 Granularity of Action Descriptors
+### 8.1 Granularity of Action Descriptors → Option A (Fine-Grained)
 
-How fine-grained should the resolution action descriptors be?
-
-**Option A**: One action type per resolution kind:
+**Decision**: One action type per resolution kind:
 - `RetryConstraint(constraint)`
 - `ResolveTraitDict(dict-id, trait-constraint-info)`
 - `ResolveHasMethod(meta-id, hasmethod-constraint-info)`
 - `SolveMeta(meta-id, solution)`
 
-**Option B**: A single `SolveMeta` action — all resolution logic runs in
-Stratum 2 and produces only `SolveMeta` actions that feed back to Stratum 0.
+**Rationale through principles**:
 
-Option A is more observable. Option B is simpler. The choice affects how much
-of the resolution logic lives inside propagator fire functions (B) vs.
-outside them in the interpreter (A).
+- **Decomplection**: Option A separates *what* should happen (action type)
+  from *when* it happens (interpreter scheduling). Option B braids resolution
+  logic inside propagator fire functions — mixing what with when.
 
-### 8.2 Stratum 2 Execution Strategy
+- **First-Class by Default**: granular action descriptors are reusable data.
+  A `ResolveTraitDict` descriptor can be: inspected by the observatory for
+  resolution provenance, replayed in testing, serialized for debugging,
+  counted for performance analysis. A `SolveMeta` descriptor loses the *why*.
 
-When multiple resolution actions are ready simultaneously, does the order
-matter?
+- **Correct by Construction**: the interpreter can validate action descriptors
+  before executing them — check that the constraint is still unsolved, verify
+  the resolution is still valid, detect conflicts between concurrent
+  resolutions. With Option B, validation must happen inside the propagator
+  fire function, mixing validation with execution.
+
+- **Computational cost**: negligible. Action descriptors are small structs
+  (a tag + a few IDs). The dominant cost is resolution logic (zonking,
+  instance lookup, unification), which is identical in both options.
+
+### 8.2 Stratum 2 Execution Strategy → Batch
+
+**Decision**: commit all ready resolutions in one batch before re-entering S0.
 
 Under non-overlapping instances, resolution is confluent (§4.3), so order
-doesn't matter. But:
-- Should we commit all ready resolutions in one batch before re-entering S0?
-- Or commit one at a time, re-entering S0 after each?
+doesn't matter. Batch commitment is more efficient (one S0 quiescence pass
+for N resolutions) and produces the same result. Single-step commitment adds
+N-1 unnecessary quiescence passes with no correctness benefit.
 
-Batch commitment is more efficient (one S0 quiescence pass for N resolutions).
-Single commitment is more conservative (each resolution sees the latest type
-information). Under confluence, both produce the same result — so batch is
-preferred for performance.
+### 8.3 Ambiguity Detection Timing → Resolution-Time, with Cell-Based Collection
 
-### 8.3 Ambiguity Detection Timing
+**Decision**: detect ambiguity at resolution time (Stratum 2), but accumulate
+error descriptors in an **error cell** for grouped presentation.
 
-The HKT-7 ambiguity error (multiple same-specificity matches) should be
-detected and reported. When?
+Resolution propagators write error descriptors to an error cell (another
+infrastructure cell, merge function = list-append). The error cell
+monotonically accumulates all resolution errors. The error-reporting pass
+(Stratum 3) reads the error cell and presents grouped, provenance-rich
+diagnostics.
 
-- **At resolution time** (Stratum 2): detect during parametric resolution,
-  produce an error action descriptor
-- **At error-reporting time** (Stratum 4): sweep unsolved constraints, detect
-  ambiguity as a sub-case of "no resolution found"
+This gives the best of both approaches:
+- **Detection at source**: ambiguity is caught when it occurs, preserving
+  full provenance (which constraint, which competing instances, which
+  type-args triggered it)
+- **Grouped presentation**: errors from related constraints (e.g., `(Eq A)`
+  and `(Ord A)` from the same function call) can be presented together
+- **Propagator-natural**: error descriptors are data in a cell, not thrown
+  exceptions. They are observable, capturable by save/restore, and subject
+  to the same confluence guarantees as everything else
 
-Resolution-time detection is more immediate and provides better error
-messages ("ambiguous: these two instances both match" vs. "no instance found").
+With propagators, the usual argument for "throw early" loses its force.
+Provenance is structural — the observatory traces any error back to the cell
+that caused it. We can wait to collect more errors AND still know exactly
+where each came from. This is a capability that imperative control flow
+doesn't naturally provide.
 
-### 8.4 Incremental Instance Registration
+### 8.4 Incremental Instance Registration → Yes, Cell-Based
 
-Should instance registration itself be a cell write?
+**Decision**: make instance registration a cell write from the start.
 
-Currently, `process-impl` writes to mutable hash tables (`current-impl-registry`).
-Making instance registration a cell write would:
-- Allow propagators to react to new instances (resolution retries on registration)
-- Eliminate the need for a registration-complete threshold (propagators fire
-  incrementally as instances become available)
-- But: require careful handling of registration order and partial state
+See §5.2-5.3 for the full argument. In summary:
+- Registration is monotone under non-overlapping instances (CALM: no
+  coordination needed)
+- CHAMP-backed cells handle partial state and incrementalism natively
+- Eliminates the need for a registration-complete threshold
+- Resolution propagators fire throughout elaboration as information arrives
+- Aligns with Propagator-First Infrastructure and Layered Recovery principles
 
-This is an advanced extension — the registration-complete threshold is simpler
-and more conservative for the initial implementation.
+This is not an advanced extension — it is the principled approach. A
+registration-complete threshold would be a workaround for batch processing,
+adding complexity to avoid a cell migration that we should do anyway.
 
-### 8.5 Constraint Status Lattice Shape
+### 8.5 Constraint Status Lattice → Two-Element (pending/resolved)
 
-Is the status lattice `bot → postponed → retrying → resolved` the right shape?
+**Decision**: `pending → resolved`.
 
-Alternative: a two-element lattice `pending | resolved`. The `retrying`
-status is a re-entrancy guard for the current imperative loop — with
-stratified quiescence and data-oriented resolution, re-entrancy is eliminated,
-so the guard may not be needed.
-
-The simpler lattice would be: `pending → resolved`, where `pending` means
-"not yet resolved" and `resolved` means "solution committed." Failed
-resolution would leave the constraint as `pending` (it never resolves) and
-the error pass detects it.
+Stratified quiescence eliminates re-entrancy, so the `retrying` guard state
+has no purpose. The two-element lattice is trivially monotone and sufficient.
+See §6.2 for details.
 
 ---
 
@@ -764,25 +835,68 @@ free monad pattern (algebra over side effects).
 
 ---
 
-## §10. Phased Implementation Sketch
+## §10. Phased Implementation Plan
 
-Pending design iteration, the rough phase structure:
+Phase ordering reflects dependency structure: infrastructure cells first
+(enabling propagator wiring), then resolution propagators, then elimination
+of the legacy paths.
 
-1. **Capture data orientation as a design principle** (amend DESIGN_PRINCIPLES.org)
-2. **Stratified quiescence loop** — modify `solve-meta!` to use a
-   two-phase loop: network quiescence (S0) then readiness scan (S1)
-3. **Action descriptors** — make resolution produce data instead of effects
-4. **Trait resolution propagators** — add propagator edges from type-arg
-   cells to trait resolution fire functions
-5. **Constraint status cells** — migrate `set-constraint-status!` to cell writes
-6. **Registration-complete threshold** — add registration cell, gate hasmethod
-   resolution propagators on it
-7. **Hasmethod resolution propagators** — replace `resolve-hasmethod-constraints!`
-8. **Post-pass elimination** — remove `resolve-hasmethod-constraints!` calls from
-   `driver.rkt`; verify all resolution happens via propagators
-9. **Confluence testing** — property-based tests verifying resolution order
-   independence
-10. **Ambiguity detection** — implement HKT-7 proper ambiguity errors
+### Phase D.3: Capture Data Orientation Principle
+Amend `DESIGN_PRINCIPLES.org` with the Data Orientation principle.
+
+### Phase 1: Instance Registry Cell
+- Migrate `current-impl-registry` from mutable hash to a CHAMP-backed
+  propagator cell with `merge-hasheq` merge function
+- Cell created in `reset-meta-store!` alongside the existing 8 infrastructure cells
+- `process-impl` writes to the cell instead of the hash table
+- Read accessor `read-instance-registry` for downstream consumers
+- Tests: verify instances accumulate correctly, snapshot captures registry
+
+### Phase 2: Constraint Status Cells
+- Add a status cell per constraint: `pending → resolved` lattice
+- Replace `set-constraint-status!` mutable struct mutation with cell writes
+- Verify save/restore captures constraint status (the current speculation gap)
+- Tests: verify status transitions, speculation safety
+
+### Phase 3: Stratified Quiescence Architecture
+- Modify `solve-meta!` to use a stratified loop:
+  S0 (type propagation) → S1 (readiness scan) → S2 (resolution batch)
+- Replace recursive re-entrancy with flat iteration
+- This is the structural change; resolution logic stays imperative initially
+
+### Phase 4: Action Descriptors
+- Define action descriptor structs (RetryConstraint, ResolveTraitDict,
+  ResolveHasMethod, SolveMeta)
+- Modify resolution functions to return descriptors instead of executing
+- Implement the interpreter loop that consumes descriptors in Stratum 2
+
+### Phase 5: Trait Resolution Propagators
+- Add propagator edges from type-arg cells to trait resolution fire functions
+- Resolution propagators also watch the instance registry cell
+- Fires when type-args are ground AND matching instance exists in registry
+- Produces `ResolveTraitDict` action descriptors
+
+### Phase 6: HasMethod Resolution Propagators
+- Same pattern as Phase 5 for hasmethod constraints
+- Watches type-arg cells + instance registry cell + trait registry cell
+- Replaces `resolve-hasmethod-constraints!` batch pass
+
+### Phase 7: Error Cell + Grouped Error Reporting
+- Add error descriptor cell (list-append merge)
+- Resolution propagators write error descriptors on failure/ambiguity
+- Convert `check-unresolved-trait-constraints` to read error cell + sweep
+  unsolved constraints
+- Implement HKT-7 ambiguity detection at resolution time
+
+### Phase 8: Post-Pass Elimination
+- Remove `resolve-hasmethod-constraints!` calls from `driver.rkt` (5 sites)
+- Verify all resolution happens through propagators
+- The error-reporting sweep (Stratum 3) is the only remaining post-pass
+
+### Phase 9: Confluence Verification
+- Property-based tests: randomize resolution order, verify same fixpoint
+- Verify non-overlapping instance invariant is enforced
+- Ambiguity detection tests for HKT-7 edge cases
 
 ---
 
