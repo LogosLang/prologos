@@ -133,6 +133,12 @@ export function activate(context: vscode.ExtensionContext) {
           }
           propagatorViewManager.show();
         }),
+        vscode.commands.registerCommand('prologos.showObservatory', () => {
+          if (!propagatorViewManager) {
+            propagatorViewManager = new PropagatorViewManager(client!, context.extensionPath);
+          }
+          propagatorViewManager.showObservatory();
+        }),
       );
     },
     (err) => {

@@ -75,6 +75,10 @@
       {
         "command": "prologos.showPropagatorView",
         "title": "Prologos: Show Propagator Network"
+      },
+      {
+        "command": "prologos.showObservatory",
+        "title": "Prologos: Show Observatory (All Networks)"
       }
     ],
     "keybindings": [
