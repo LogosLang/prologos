@@ -988,12 +988,22 @@ export class PropagatorViewManager {
       'narrowing':      '#4ec9b0',
     };
 
-    // Build capture options for the selector
-    const captureOptions = captures.map((cap, i) => {
-      const color = SUBSYSTEM_PALETTE[cap.subsystem] || '#888';
+    // Build capture options for the selector, sorted: captures with propagators first
+    const captureIndices = captures.map((_, i) => i);
+    captureIndices.sort((a, b) => {
+      const pa = captures[a].network.propagators.length;
+      const pb = captures[b].network.propagators.length;
+      if (pb !== pa) return pb - pa; // More propagators first
+      return a - b; // Then by original order
+    });
+    const captureOptions = captureIndices.map(i => {
+      const cap = captures[i];
       const statusIcon = cap.status === 'exception' ? '\u26a0' : '\u2713';
-      return `<option value="${i}" data-color="${color}">[${cap.subsystem}] ${escapeHtml(cap.label)} ${statusIcon}</option>`;
+      const propCount = cap.network.propagators.length;
+      const propSuffix = propCount > 0 ? ` (${cap.network.cells.length}c/${propCount}p)` : '';
+      return `<option value="${i}">[${cap.subsystem}] ${escapeHtml(cap.label)}${propSuffix} ${statusIcon}</option>`;
     }).join('\n');
+    const defaultCapture = captureIndices[0];
 
     // Serialize all captures for the webview script
     const obsDataJson = JSON.stringify(obs).replace(/</g, '\\u003c');
@@ -1060,9 +1070,9 @@ export class PropagatorViewManager {
       background: var(--vscode-editorHoverWidget-background, #252526);
       border: 1px solid var(--vscode-editorHoverWidget-border, #454545);
       color: var(--vscode-editorHoverWidget-foreground, #ccc);
-      padding: 6px 10px; border-radius: 4px;
+      padding: 8px 12px; border-radius: 4px;
       font-size: 12px; font-family: var(--vscode-editor-font-family, monospace);
-      max-width: 300px; white-space: pre-wrap;
+      max-width: 500px; white-space: pre-wrap; word-break: break-word;
       display: none; z-index: 10;
       box-shadow: 0 2px 8px rgba(0,0,0,0.3);
     }
@@ -1222,11 +1232,12 @@ export class PropagatorViewManager {
       cells.forEach(c => {
         const isSolved = c.value !== '\\u22a5' && c.value !== 'bot';
         const isContra = contradiction !== null && c.id === contradiction;
-        let label = c.label || ('#' + c.id);
-        if (label.length > 14) label = label.substring(0, 12) + '..';
+        const fullLabel = c.label || ('#' + c.id);
+        let label = fullLabel;
+        if (label.length > 24) label = label.substring(0, 22) + '..';
         const node = {
           id: 'c' + c.id, type: 'cell', cellId: c.id,
-          label: label, value: c.value,
+          label: label, fullLabel: fullLabel, value: c.value,
           cellSubsystem: c.cellSubsystem || c.subsystem || cap.subsystem,
           domain: c.domain || '',
           source: c.source || '',
@@ -1285,12 +1296,70 @@ export class PropagatorViewManager {
       });
 
       if (currentEdges.length === 0 && currentNodes.length > 0) {
+        // Grid layout for disconnected nodes
         const cols = Math.ceil(Math.sqrt(currentNodes.length * 1.5));
         currentNodes.forEach((n, i) => {
           n.x = (i % cols) * H_SPACING;
           n.y = Math.floor(i / cols) * V_SPACING;
         });
+      } else if (currentNodes.length > 100) {
+        // Force-directed layout for large connected graphs
+        // Initialize with layered positions (wider spread)
+        const maxLayerSize = Math.max(...Object.values(layerNodes).map(arr => arr.length), 1);
+        for (let l = 0; l < numLayers; l++) {
+          const arr = layerNodes[l] || [];
+          arr.forEach((n, i) => {
+            n.x = (i - arr.length / 2) * H_SPACING * 0.8 + (Math.random() - 0.5) * 20;
+            n.y = l * V_SPACING * 2;
+          });
+        }
+        // Simple force simulation (repulsion + edge attraction)
+        const iterations = 80;
+        const repulsion = 800;
+        const attraction = 0.05;
+        const damping = 0.85;
+        const vx = {}, vy = {};
+        currentNodes.forEach(n => { vx[n.id] = 0; vy[n.id] = 0; });
+
+        for (let iter = 0; iter < iterations; iter++) {
+          const temp = 1 - iter / iterations;
+          // Repulsion between nearby nodes (skip distant pairs for O(n) perf)
+          const cutoff = 200;
+          for (let i = 0; i < currentNodes.length; i++) {
+            for (let j = i + 1; j < currentNodes.length; j++) {
+              const a = currentNodes[i], b = currentNodes[j];
+              let dx = b.x - a.x, dy = b.y - a.y;
+              if (Math.abs(dx) > cutoff || Math.abs(dy) > cutoff) continue;
+              const dist = Math.max(Math.sqrt(dx * dx + dy * dy), 1);
+              if (dist > cutoff) continue;
+              const force = repulsion / (dist * dist) * temp;
+              const fx = (dx / dist) * force, fy = (dy / dist) * force;
+              vx[a.id] -= fx; vy[a.id] -= fy;
+              vx[b.id] += fx; vy[b.id] += fy;
+            }
+          }
+          // Attraction along edges
+          currentEdges.forEach(e => {
+            const a = nodeById[e.from], b = nodeById[e.to];
+            if (!a || !b) return;
+            const dx = b.x - a.x, dy = b.y - a.y;
+            const fx = dx * attraction * temp, fy = dy * attraction * temp;
+            vx[a.id] += fx; vy[a.id] += fy;
+            vx[b.id] -= fx; vy[b.id] -= fy;
+          });
+          // Layer constraint: gently pull nodes toward their layer's Y
+          currentNodes.forEach(n => {
+            const targetY = n.layer * V_SPACING * 2;
+            vy[n.id] += (targetY - n.y) * 0.1 * temp;
+          });
+          // Apply velocities
+          currentNodes.forEach(n => {
+            vx[n.id] *= damping; vy[n.id] *= damping;
+            n.x += vx[n.id]; n.y += vy[n.id];
+          });
+        }
       } else {
+        // Standard layered layout for small graphs
         for (let l = 0; l < numLayers; l++) {
           const arr = layerNodes[l] || [];
           const w = (arr.length - 1) * H_SPACING;
@@ -1328,8 +1397,12 @@ export class PropagatorViewManager {
         const lbl = c.label || '#' + c.id;
         return '<tr><td>#' + c.id + '</td><td>' + escapeHtmlInline(lbl) + '</td><td><code>' + escapeHtmlInline(val) + '</code></td></tr>';
       }).join('');
+      const cellLabelMap = {};
+      cells.forEach(c => { cellLabelMap[c.id] = c.label || '#' + c.id; });
       const propRows = propagators.map(p => {
-        return '<tr><td>P' + p.id + '</td><td>' + p.inputs.map(i => '#' + i).join(', ') + '</td><td>' + p.outputs.map(o => '#' + o).join(', ') + '</td></tr>';
+        const ins = p.inputs.map(i => '#' + i + ' <span style="opacity:0.6">(' + escapeHtmlInline(cellLabelMap[i] || '?') + ')</span>').join(', ');
+        const outs = p.outputs.map(o => '#' + o + ' <span style="opacity:0.6">(' + escapeHtmlInline(cellLabelMap[o] || '?') + ')</span>').join(', ');
+        return '<tr><td>P' + p.id + '</td><td>' + ins + '</td><td>' + outs + '</td></tr>';
       }).join('');
 
       tablesDiv.innerHTML =
@@ -1452,14 +1525,22 @@ export class PropagatorViewManager {
           let html = '';
           if (hit.type === 'cell') {
             html = '<strong>Cell #' + hit.cellId + '</strong>\\n'
-              + 'Label: ' + escapeHtmlInline(hit.label) + '\\n'
+              + 'Label: ' + escapeHtmlInline(hit.fullLabel || hit.label) + '\\n'
               + 'Subsystem: ' + (hit.cellSubsystem || 'unknown') + '\\n'
               + (hit.domain ? 'Domain: ' + hit.domain + '\\n' : '')
               + 'Value: ' + escapeHtmlInline(hit.value);
           } else {
+            const inputLabels = hit.inputs.map(i => {
+              const cn = nodeById['c' + i];
+              return '#' + i + (cn ? ' (' + escapeHtmlInline(cn.fullLabel || cn.label) + ')' : '');
+            }).join('\\n  ');
+            const outputLabels = hit.outputs.map(o => {
+              const cn = nodeById['c' + o];
+              return '#' + o + (cn ? ' (' + escapeHtmlInline(cn.fullLabel || cn.label) + ')' : '');
+            }).join('\\n  ');
             html = '<strong>Propagator P' + hit.propId + '</strong>\\n'
-              + 'Inputs: ' + hit.inputs.map(i => '#' + i).join(', ') + '\\n'
-              + 'Outputs: ' + hit.outputs.map(o => '#' + o).join(', ');
+              + 'Inputs:\\n  ' + inputLabels + '\\n'
+              + 'Outputs:\\n  ' + outputLabels;
           }
           tooltip.innerHTML = html;
           tooltip.style.display = 'block';
@@ -1516,10 +1597,12 @@ export class PropagatorViewManager {
       selector.addEventListener('change', () => { loadCapture(parseInt(selector.value) || 0); });
     }
 
-    // Initial load
+    // Initial load — default to capture with most propagators
+    const defaultCaptureIndex = ${defaultCapture};
+    selector.value = String(defaultCaptureIndex);
     resize();
     window.addEventListener('resize', () => { resize(); draw(); });
-    loadCapture(0);
+    loadCapture(defaultCaptureIndex);
   })();
   </script>
 </body>
