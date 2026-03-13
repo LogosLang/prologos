@@ -140,6 +140,15 @@ export function activate(context: vscode.ExtensionContext) {
           propagatorViewManager.showObservatory();
         }),
       );
+
+      // Auto-refresh Observatory panel on .prologos file save
+      context.subscriptions.push(
+        vscode.workspace.onDidSaveTextDocument((doc) => {
+          if (doc.languageId === 'prologos' && propagatorViewManager) {
+            propagatorViewManager.refreshIfOpen();
+          }
+        })
+      );
     },
     (err) => {
       outputChannel.appendLine(`ERROR starting LSP client: ${err}`);

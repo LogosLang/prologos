@@ -106,6 +106,9 @@ export class PropagatorViewManager {
   private panel: vscode.WebviewPanel | undefined;
   private client: LanguageClient;
   private extensionPath: string;
+  private lastUri: string | undefined;         // Track last displayed URI for auto-refresh
+  private lastSelectedIndex: number = 0;       // Preserve capture selection across refreshes
+  private refreshDebounceTimer: NodeJS.Timeout | undefined;
 
   constructor(client: LanguageClient, extensionPath?: string) {
     this.client = client;
@@ -124,6 +127,7 @@ export class PropagatorViewManager {
     }
 
     const uri = editor.document.uri.toString();
+    this.lastUri = uri;
 
     // Create or reveal the panel
     if (this.panel) {
@@ -176,6 +180,27 @@ export class PropagatorViewManager {
    * Requests $/prologos/observatorySnapshot and renders a network selector
    * with per-capture graph views and subsystem color coding.
    */
+  /**
+   * Auto-refresh: if the panel is open and visible, re-request observatory data
+   * for the last URI and re-render. Debounced to avoid rapid re-requests on
+   * multiple quick saves. Preserves the currently selected capture index.
+   */
+  public refreshIfOpen() {
+    if (!this.panel || !this.panel.visible || !this.lastUri) {
+      return;
+    }
+
+    // Debounce: clear any pending refresh and schedule a new one (300ms)
+    if (this.refreshDebounceTimer) {
+      clearTimeout(this.refreshDebounceTimer);
+    }
+    this.refreshDebounceTimer = setTimeout(async () => {
+      this.refreshDebounceTimer = undefined;
+      if (!this.panel || !this.lastUri) { return; }
+      await this.showObservatoryForUri(this.lastUri);
+    }, 300);
+  }
+
   public async showObservatory() {
     const editor = vscode.window.activeTextEditor;
     if (!editor || editor.document.languageId !== 'prologos') {
@@ -184,6 +209,7 @@ export class PropagatorViewManager {
     }
 
     const uri = editor.document.uri.toString();
+    this.lastUri = uri;
 
     if (this.panel) {
       this.panel.reveal(vscode.ViewColumn.Beside);
