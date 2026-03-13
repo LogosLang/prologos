@@ -148,6 +148,7 @@ export class PropagatorViewManager {
       this.panel.onDidDispose(() => {
         this.panel = undefined;
       });
+      this.setupPanelMessageHandler();
     }
 
     // Request snapshot from LSP server
@@ -229,10 +230,38 @@ export class PropagatorViewManager {
       this.panel.onDidDispose(() => {
         this.panel = undefined;
       });
+      this.setupPanelMessageHandler();
     }
 
     this.panel.webview.html = this.renderLoading();
     await this.showObservatoryForUri(uri);
+  }
+
+  /**
+   * Set up message handler for webview → extension host communication.
+   * Handles source-location linking (cell click → editor jump).
+   */
+  private setupPanelMessageHandler() {
+    if (!this.panel) { return; }
+    this.panel.webview.onDidReceiveMessage(async (msg) => {
+      if (msg.type === 'revealSourceLocation' && this.lastUri) {
+        try {
+          const uri = vscode.Uri.parse(this.lastUri);
+          const doc = await vscode.workspace.openTextDocument(uri);
+          const editor = await vscode.window.showTextDocument(doc, vscode.ViewColumn.One);
+          const line = Math.max(0, (msg.line || 1) - 1); // Convert 1-based to 0-based
+          const col = Math.max(0, (msg.col || 1) - 1);
+          const pos = new vscode.Position(line, col);
+          editor.selection = new vscode.Selection(pos, pos);
+          editor.revealRange(
+            new vscode.Range(pos, pos),
+            vscode.TextEditorRevealType.InCenterIfOutsideViewport
+          );
+        } catch (err) {
+          // Silently fail — source loc may be stale
+        }
+      }
+    });
   }
 
   /**
@@ -1316,6 +1345,7 @@ export class PropagatorViewManager {
           cellSubsystem: c.cellSubsystem || c.subsystem || cap.subsystem,
           domain: c.domain || '',
           source: c.source || '',
+          sourceLoc: c.cellSourceLoc || null,
           solved: isSolved, contradiction: isContra,
           x: 0, y: 0, layer: -1,
         };
@@ -1732,6 +1762,7 @@ export class PropagatorViewManager {
       const hit = hitTest(mx, my);
       if (hit !== hoveredNode) {
         hoveredNode = hit; draw();
+        canvas.style.cursor = (hit && hit.type === 'cell' && hit.sourceLoc) ? 'pointer' : 'default';
         if (hit) {
           let html = '';
           if (hit.type === 'cell') {
@@ -1739,7 +1770,8 @@ export class PropagatorViewManager {
               + 'Label: ' + escapeHtmlInline(hit.fullLabel || hit.label) + '\\n'
               + 'Subsystem: ' + (hit.cellSubsystem || 'unknown') + '\\n'
               + (hit.domain ? 'Domain: ' + hit.domain + '\\n' : '')
-              + 'Value: ' + escapeHtmlInline(hit.value);
+              + 'Value: ' + escapeHtmlInline(hit.value)
+              + (hit.sourceLoc ? '\\n<span style="color:#007acc;font-size:0.9em;">Click to jump to line ' + hit.sourceLoc.line + '</span>' : '');
           } else {
             const inputLabels = hit.inputs.map(i => {
               const cn = nodeById['c' + i];
@@ -1766,6 +1798,21 @@ export class PropagatorViewManager {
 
     canvas.addEventListener('mouseleave', () => {
       hoveredNode = null; tooltip.style.display = 'none'; draw();
+    });
+
+    // Click handler for source-location linking
+    const vscode = acquireVsCodeApi();
+    canvas.addEventListener('click', (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+      const hit = hitTest(mx, my);
+      if (hit && hit.type === 'cell' && hit.sourceLoc) {
+        vscode.postMessage({
+          type: 'revealSourceLocation',
+          line: hit.sourceLoc.line,
+          col: hit.sourceLoc.col,
+        });
+      }
     });
 
     function escapeHtmlInline(s) {
