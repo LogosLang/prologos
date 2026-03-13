@@ -51,6 +51,9 @@
  measure-memory-after
  print-memory-report!
 
+ ;; Cell metrics reporting (Track 1 Phase 0b)
+ print-cell-metrics-report!
+
  ;; E3d: Provenance stats
  (struct-out provenance-counters)
  current-provenance-counters
@@ -290,6 +293,19 @@
 ;; Print MEMORY-STATS:{json} to stderr for subprocess extraction.
 (define (print-memory-report! mem-stats)
   (eprintf "MEMORY-STATS:~a\n" (jsexpr->string mem-stats)))
+
+;; ============================================================
+;; Track 1 Phase 0b: Cell metrics reporting
+;;
+;; Emits CELL-METRICS:{json} to stderr for subprocess extraction.
+;; The caller (driver.rkt) builds the hasheq from network state;
+;; this function just serializes and emits it. Keeps this module
+;; as a pure leaf (no propagator.rkt dependency).
+;; ============================================================
+
+(define (print-cell-metrics-report! metrics)
+  (when metrics
+    (eprintf "CELL-METRICS:~a\n" (jsexpr->string metrics))))
 
 ;; ============================================================
 ;; E3d: Provenance stats

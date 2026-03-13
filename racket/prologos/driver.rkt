@@ -1383,6 +1383,21 @@
              (string-join msgs "\n")))))
 
 ;; ========================================
+;; Cell Metrics Collection (Track 1 Phase 0b)
+;; ========================================
+;; Reads cell/propagator counts from the current elab-network.
+;; Returns a hasheq suitable for CELL-METRICS:{json} emission,
+;; or #f if no network is active.
+(define (collect-cell-metrics)
+  (define net-box (current-prop-net-box))
+  (and net-box
+       (let ([enet (unbox net-box)])
+         (and enet
+              (let ([pnet (elab-network-prop-net enet)])
+                (hasheq 'cells (prop-network-next-cell-id pnet)
+                        'propagators (prop-network-next-prop-id pnet)))))))
+
+;; ========================================
 ;; Process all commands from a string
 ;; ========================================
 (define (process-string s)
@@ -1413,6 +1428,7 @@
   (print-phase-report! pt)
   (print-provenance-report! pv)
   (print-memory-report! (measure-memory-after mem-before))
+  (print-cell-metrics-report! (collect-cell-metrics))
   results)
 
 ;; ========================================
@@ -1448,6 +1464,7 @@
   (print-phase-report! pt)
   (print-provenance-report! pv)
   (print-memory-report! (measure-memory-after mem-before))
+  (print-cell-metrics-report! (collect-cell-metrics))
   results)
 
 ;; ========================================
@@ -1484,6 +1501,7 @@
   (print-phase-report! pt)
   (print-provenance-report! pv)
   (print-memory-report! (measure-memory-after mem-before))
+  (print-cell-metrics-report! (collect-cell-metrics))
   results)
 
 ;; ========================================

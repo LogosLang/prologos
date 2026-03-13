@@ -252,6 +252,7 @@
   (define heartbeat-entries (extract-json-lines "PERF-COUNTERS:" captured-err))
   (define phase-entries (extract-json-lines "PHASE-TIMINGS:" captured-err))
   (define memory-entries (extract-json-lines "MEMORY-STATS:" captured-err))
+  (define cell-metrics-entries (extract-json-lines "CELL-METRICS:" captured-err))
 
   ;; Merge multiple PERF-COUNTERS / PHASE-TIMINGS by summing
   (define (merge-sum entries)
@@ -266,6 +267,8 @@
   (define heartbeats (merge-sum heartbeat-entries))
   (define phases (merge-sum phase-entries))
   (define memory (and (not (null? memory-entries)) (last memory-entries)))
+  ;; Cell metrics: take last entry (final network state after all commands)
+  (define cell-metrics (and (not (null? cell-metrics-entries)) (last cell-metrics-entries)))
 
   ;; Build result hash
   (define result
@@ -278,6 +281,7 @@
   (define result+hb  (if heartbeats (hash-set result 'heartbeats heartbeats) result))
   (define result+ph  (if phases (hash-set result+hb 'phases phases) result+hb))
   (define result+mem (if memory (hash-set result+ph 'memory memory) result+ph))
+  (define result+cm  (if cell-metrics (hash-set result+mem 'cell_metrics cell-metrics) result+mem))
 
   ;; Extract error diagnostics from captured stderr
   (define-values (error-diagnostics remaining-stderr-lines)
@@ -292,7 +296,8 @@
               (and (not (string-prefix? l "PERF-COUNTERS"))
                    (not (string-prefix? l "PHASE-TIMINGS"))
                    (not (string-prefix? l "MEMORY-STATS"))
-                   (not (string-prefix? l "PROVENANCE-STATS"))))
+                   (not (string-prefix? l "PROVENANCE-STATS"))
+                   (not (string-prefix? l "CELL-METRICS"))))
             remaining-stderr-lines))
 
   ;; Attach error output on failure — ALL diagnostics, not just the first
@@ -304,8 +309,8 @@
       [else #f]))
   (define result-final
     (if (and (not ok?) error-output)
-        (hash-set result+mem 'error_output error-output)
-        result+mem))
+        (hash-set result+cm 'error_output error-output)
+        result+cm))
 
   ;; Write failure log if test failed
   (define file-name (path->string (file-name-from-path (string->path file))))
