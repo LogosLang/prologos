@@ -28,7 +28,7 @@ questions that must be resolved before implementation.
 | 1 | Instance registry — cell reader infrastructure | ✅ | `read-impl-registry` + 4 read conversions; parameter write stays for cross-command |
 | 2 | Constraint status cells (pending/resolved) | ✅ | commit `b4cdb1e`; cid field on constraint, enet9 status cell, dual-write in unify.rkt |
 | 3 | Stratified quiescence architecture | ✅ | commit `4c0c927`; solve-meta! split into core + stratified loop, fuel=100 |
-| 4 | Data-oriented solve-meta! (action descriptors) | ⬜ | |
+| 4 | Data-oriented solve-meta! (action descriptors) | ✅ | commit `e6aeafc`; 3 descriptor structs, 5 scan fns, interpreter with re-check guards |
 | 5 | Trait resolution propagators | ⬜ | |
 | 6 | HasMethod resolution propagators | ⬜ | |
 | 7 | Error cell + grouped error reporting | ⬜ | Set-union merge keyed on constraint ID; includes HKT-7 |
@@ -958,10 +958,20 @@ Split `solve-meta!` into `solve-meta-core!` (write only) + `run-stratified-resol
 The `retrying` guard on constraint structs is now structurally dead code — re-entrancy is eliminated by the flag. Kept as safety net until Phase 4 removes the imperative retry chain entirely.
 
 ### Phase 4: Action Descriptors
-- Define action descriptor structs (RetryConstraint, ResolveTraitDict,
-  ResolveHasMethod, SolveMeta)
-- Modify resolution functions to return descriptors instead of executing
-- Implement the interpreter loop that consumes descriptors in Stratum 2
+
+**Implementation** (commit `e6aeafc`):
+
+Separate S1 (readiness scan) from S2 (resolution commitment) using action descriptors.
+
+1. **Descriptor structs**: `action-retry-constraint`, `action-resolve-trait`, `action-resolve-hasmethod` — transparent, data-only.
+2. **S1 scan functions** (pure, return lists):
+   - `collect-ready-constraints-via-cells` / `collect-ready-constraints-for-meta`
+   - `collect-ready-traits-via-cells` / `collect-ready-traits-for-meta`
+   - `collect-ready-hasmethods-for-meta`
+3. **S2 interpreter**: `execute-resolution-action!` dispatches on descriptor type via `match`. Re-checks readiness before executing (actions can become stale when prior actions in the same batch solve shared metas — first discovered via "metavariable already solved" errors in `test-eq-let-surface-01.rkt`).
+4. **Loop integration**: `run-stratified-resolution!` now does S0 (quiescence) → S1 (collect via `append`) → S2 (execute batch) → progress check → repeat.
+
+The old fused scan+execute functions (`retry-constraints-via-cells!`, `retry-traits-via-cells!`, etc.) remain as legacy code — they're no longer called from the stratified loop but are still available for test fallback.
 
 ### Phase 5: Trait Resolution Propagators
 - Add propagator edges from type-arg cells to trait resolution fire functions
