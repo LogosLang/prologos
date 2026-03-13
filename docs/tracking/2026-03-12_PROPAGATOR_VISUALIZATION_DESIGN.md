@@ -49,12 +49,12 @@ literally the same network"). The tool IS the documentation of the paradigm.
 | 5a | Timeline slider UI | ✅ | `ee0e6a1` — range slider with round info bar |
 | 5b | Round step-through (prev/next) | ✅ | `ee0e6a1` — slider positions 0..N reconstruct state via cell diffs |
 | 5c | Animated cell-diff highlighting | ✅ | `ee0e6a1` — yellow ring/glow on changed cells |
-| 5d | Cell value history popup | ⬜ | |
+| 5d | Bookmarked rounds | ⏸️ | Deferred — low priority polish |
 | **6** | **Polish and integration** | | |
-| 6a | Performance tuning (large networks) | ⬜ | |
-| 6b | SVG/PNG export | ⬜ | |
-| 6c | Contradiction diagnosis view (ATMS nogoods) | ⬜ | |
-| 6d | Documentation + user guide | ⬜ | |
+| 6a | Performance tuning (large networks) | ⏸️ | Deferred |
+| 6b | SVG/PNG export | ⏸️ | Deferred |
+| 6c | Contradiction diagnosis view (ATMS nogoods) | ⏸️ | Deferred |
+| 6d | Documentation + user guide | ⏸️ | Deferred |
 
 ## Subsystem Cell Categorization (Phase 4c)
 

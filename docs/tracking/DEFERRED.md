@@ -947,3 +947,17 @@ The following collection items ARE also deferred (genuine infrastructure deps):
 - Workaround: wrap in explicit lambda: `reduce (fn [a : Int] [b : Int] [+ a b]) 0 xs`, or use `sum`/`product`
 - **Blocked on**: elaborator enhancement for automatic eta-expansion + dictionary insertion in HO position
 - Source: LSP Tier 4 testing, foray-min.prologos
+
+## Propagator Observatory — Visualization Polish
+
+### 5d: Bookmarked Rounds
+- Allow user to bookmark specific BSP rounds for comparison
+- Lightweight feature — each round's snapshot is already retained (O(1) pointer)
+- Source: `2026-03-12_PROPAGATOR_VISUALIZATION_DESIGN.md` Phase 5d
+
+### 6a-6d: Polish and Integration
+- 6a: Performance tuning for large networks (force-directed layout optimization)
+- 6b: SVG/PNG export of propagator graphs
+- 6c: Contradiction diagnosis view (ATMS nogoods visualization)
+- 6d: Documentation + user guide for the Observatory panel
+- Source: `2026-03-12_PROPAGATOR_VISUALIZATION_DESIGN.md` Phases 6a-6d
