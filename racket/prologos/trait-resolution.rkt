@@ -37,7 +37,9 @@
          build-parametric-dict-expr
          project-method
          trait-expr->name
-         find-trait-with-method)
+         find-trait-with-method
+         ;; Track 2 Phase 9a: ambiguity detection
+         detect-parametric-ambiguity)
 
 ;; ========================================
 ;; Ground expression check
@@ -304,7 +306,19 @@
        (sort matches <
          #:key (lambda (m)
                  (length (param-impl-entry-pattern-vars (car m))))))
-     (apply build-parametric-dict-expr (car sorted))]))
+     (define best-specificity
+       (length (param-impl-entry-pattern-vars (car (car sorted)))))
+     (define ties
+       (filter (lambda (m)
+                 (= (length (param-impl-entry-pattern-vars (car m)))
+                    best-specificity))
+               sorted))
+     (if (= (length ties) 1)
+         (apply build-parametric-dict-expr (car sorted))
+         ;; Track 2 Phase 9a (HKT-7): same-specificity ambiguity — reject.
+         ;; Multiple instances match with equal specificity; resolving would
+         ;; be nondeterministic. Return #f so the caller reports an error.
+         #f)]))
 
 ;; ========================================
 ;; Main resolution entry point
@@ -354,9 +368,11 @@
         (meta-source-info-loc src)
         srcloc-unknown))
 
-  ;; Enhanced error: detect kind mismatch and list available instances
+  ;; Enhanced error: detect kind mismatch, ambiguity, and list available instances
   (define kind-mismatch (detect-kind-mismatch trait-name type-args))
   (define available (collect-available-instances trait-name))
+  ;; Track 2 Phase 9a (HKT-7): detect same-specificity ambiguity for better error.
+  (define ambiguity (detect-parametric-ambiguity trait-name type-args))
 
   (define message
     (cond
@@ -364,6 +380,10 @@
       [kind-mismatch
        (format "Kind mismatch in constraint (~a ~a): ~a"
                trait-name type-args-str kind-mismatch)]
+      ;; HKT-7: ambiguous instances — multiple same-specificity matches
+      [ambiguity
+       (format "Ambiguous instances for ~a ~a: ~a"
+               trait-name type-args-str ambiguity)]
       ;; No instance — list available instances and provide hint
       [else
        (define avail-str
@@ -592,3 +612,43 @@
                            [expected-str (format "~a" expected-kind)])
                        (format "~a expects a type constructor (kind ~a), but ~a has kind Type"
                                trait-name expected-str ta-str))))))))
+
+;; Track 2 Phase 9a (HKT-7): Detect same-specificity parametric ambiguity.
+;; Returns a descriptive string or #f.
+;; Ambiguity occurs when multiple parametric impls match the given type-args
+;; with the same number of pattern variables (same specificity level).
+(define (detect-parametric-ambiguity trait-name type-args)
+  (define param-impls (lookup-param-impls trait-name))
+  (define matches
+    (for/fold ([acc '()])
+              ([pentry (in-list param-impls)])
+      (define bindings (match-type-pattern type-args pentry))
+      (if (not bindings)
+          acc
+          (let ([sub-dicts (resolve-sub-constraints
+                             (param-impl-entry-where-constraints pentry)
+                             bindings)])
+            (if (not sub-dicts)
+                acc
+                (cons pentry acc))))))
+  (cond
+    [(<= (length matches) 1) #f]  ;; 0 or 1 match — no ambiguity
+    [else
+     (define sorted
+       (sort matches <
+         #:key (lambda (m) (length (param-impl-entry-pattern-vars m)))))
+     (define best (length (param-impl-entry-pattern-vars (car sorted))))
+     (define ties (filter (lambda (m) (= (length (param-impl-entry-pattern-vars m)) best))
+                          sorted))
+     (if (<= (length ties) 1)
+         #f  ;; unique most-specific match
+         (format "~a matching instances with ~a type variable~a each: ~a"
+                 (length ties) best (if (= best 1) "" "s")
+                 (string-join
+                  (map (lambda (pe)
+                         (define pat (param-impl-entry-type-pattern pe))
+                         (if (and (list? pat) (= (length pat) 1))
+                             (format "~a" (car pat))
+                             (format "(~a)" (string-join (map (lambda (x) (format "~a" x)) pat) " "))))
+                       ties)
+                  ", ")))]))
