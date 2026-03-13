@@ -30,7 +30,9 @@
          "../metavar-store.rkt"
          "../propagator.rkt"
          "../elaborator-network.rkt"
-         "../trace-serialize.rkt")
+         "../trace-serialize.rkt"
+         "../prop-observatory.rkt"
+         "../observatory-serialize.rkt")
 
 (provide run-lsp-server)
 
@@ -53,6 +55,7 @@
    prelude-cache          ; prelude-cache struct or #f (loaded lazily)
    spec-stores            ; hash: uri → hasheq (spec-store snapshot for hover/InfoView)
    prop-traces            ; hash: uri → jsexpr (serialized prop-trace for visualization)
+   observatory-snapshots  ; hash: uri → jsexpr (serialized observatory for multi-network view)
    ) #:mutable)
 
 (define (make-initial-state)
@@ -68,6 +71,7 @@
              #f       ; prelude cache loaded on first eval
              (make-hash)
              (make-hash)  ; prop-traces
+             (make-hash)  ; observatory-snapshots
              ))
 
 ;; ============================================================
@@ -401,6 +405,12 @@
      (define trace (hash-ref (lsp-state-prop-traces state) uri #f))
      (respond! (or trace (hasheq 'error "No propagator trace available for this file")))]
 
+    ;; ---- Observatory: Multi-Network Snapshot ----
+    ["$/prologos/observatorySnapshot"
+     (define uri (hash-ref params 'uri ""))
+     (define obs-json (hash-ref (lsp-state-observatory-snapshots state) uri #f))
+     (respond! (or obs-json (hasheq 'error "No observatory snapshot available for this file")))]
+
     ;; ---- InfoView: Cursor context (Tier 5) ----
     ["$/prologos/cursorContext"
      (define uri  (hash-ref params 'uri ""))
@@ -473,9 +483,13 @@
   (define captured-type-env (hasheq))
   (define captured-spec-store (hasheq))
   (define captured-prop-trace #f)
+  (define captured-observatory #f)
 
   ;; Set up BSP observer for propagator trace capture
   (define-values (bsp-observe bsp-get-rounds) (make-trace-accumulator))
+
+  ;; Set up observatory for multi-network capture
+  (define obs (make-observatory (hasheq 'file uri)))
 
   (with-handlers
     ([exn:fail?
@@ -495,7 +509,9 @@
                    ;; Suppress process-file perf/phase/memory/diagnostic noise
                    [current-error-port (open-output-nowhere)]
                    ;; Visualization Phase 1: capture BSP rounds
-                   [current-bsp-observer bsp-observe])
+                   [current-bsp-observer bsp-observe]
+                   ;; Observatory: capture all subsystem networks
+                   [current-observatory obs])
       ;; Write content to temp file and process
       (define tmp-path (make-temporary-file "prologos-lsp-~a.prologos"))
       (call-with-output-file tmp-path
@@ -557,6 +573,11 @@
   ;; Visualization Phase 3: Store propagator trace
   (when captured-prop-trace
     (hash-set! (lsp-state-prop-traces state) uri captured-prop-trace))
+
+  ;; Observatory: Store serialized observatory snapshot
+  (when (> (length (observatory-captures obs)) 0)
+    (hash-set! (lsp-state-observatory-snapshots state) uri
+               (serialize-observatory obs)))
 
   (lsp-log state "Published ~a diagnostics, ~a definitions, ~a specs for ~a"
            (length diags) (hash-count captured-def-locs)
