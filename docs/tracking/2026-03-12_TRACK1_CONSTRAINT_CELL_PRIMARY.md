@@ -261,7 +261,79 @@ Remove the now-dead parameters and update all reset/initialization code:
 
 ---
 
-## 7. Principle Alignment
+## 7. Cross-Domain Composition Opportunities
+
+Making constraint cells primary doesn't just clean up the read path — it makes constraint state **wirable**. Constraint cells become first-class participants in the propagator network, composable with the six existing cross-domain bridges via `net-add-cross-domain-propagator`.
+
+### 7.1 Existing Bridge Inventory
+
+The codebase has six active cross-domain bridges, all using the same α/γ Galois connection pattern:
+
+| Bridge | Source Domain | Target Domain | File | Direction |
+|--------|-------------|---------------|------|-----------|
+| **P5c** | Type | Multiplicity | `elaborator-network.rkt` | α active, γ identity |
+| **S4** | Session | Type | `session-type-bridge.rkt` | α active (send/recv), γ identity |
+| **AD-B** | Session | Effect Position | `effect-bridge.rkt` | α only (unidirectional) |
+| **IO-I** | Type | Capability Set | `cap-type-bridge.rkt` | Full Galois adjunction (α + γ) |
+| **D2** | Elaboration | Speculation/ATMS | `elab-speculation-bridge.rkt` | Bidirectional via ATMS hypotheses |
+| **IO-B2** | Session + IO State | Filesystem | `io-bridge.rkt` | α only (side-effecting) |
+
+### 7.2 New Compositions Enabled by Cell-Primary Constraints
+
+Once constraint cells are primary (readable, not just shadow-written), the following cross-domain connections become possible:
+
+**Constraint ↔ Impl Registry (Reactive Trait Resolution)**
+- α: When `impl-registry` cell gains a new instance, propagate to trait-constraint cells — any pending constraint matching the new instance resolves immediately
+- γ: When a trait constraint narrows (type arg solved), propagate the narrowed type-tag to the impl-registry lookup — refine which instances are candidates
+- **Effect**: `resolve-trait-constraints!` as an explicit driver pass becomes a propagator that fires on cell changes. The retry loop disappears.
+
+**Constraint ↔ Type (Bidirectional Inference)**
+- α: When a type cell solves (unification), propagate to constraint cells — the `retry-constraints-for-meta!` wakeup becomes a propagator edge
+- γ: When a constraint resolves to a single candidate, propagate the resolved type back to the type cell — currently done by `solve-meta!` but the dependency is implicit; as a propagator edge it becomes explicit and traceable
+- **Effect**: The wakeup registry is replaced by the network's own dependency graph. Transitive wakeups are automatic.
+
+**Constraint ↔ Capability (Capability-Aware Trait Resolution)**
+- α: A trait constraint carrying capability requirements propagates to the capability lattice — `cap-type-bridge.rkt`'s `type-to-cap-set` can compose with constraint resolution to determine the capability footprint of a resolved instance
+- Currently `capability-constraint-map` is independent of trait constraints. Composing them via cells enables: "this trait resolution chose instance X, which requires capability Y"
+
+**Constraint ↔ Speculation/ATMS (Provenance)**
+- Each constraint in a cell carries an implicit ATMS support set (which assumptions it depends on)
+- When constraint reads go through cells, `atms-explain-hypothesis` can answer "why was this constraint created?" — the ATMS derivation chain traces back through unification steps to user annotations
+- **Effect**: Error messages gain automatic provenance: "type mismatch because constraint C was created at line 12 under assumption A, which conflicts with..."
+
+### 7.3 What This Track Does vs. Defers
+
+This track makes constraint cells **readable** — prerequisite for all the above. It does NOT wire any new cross-domain propagators. The wiring is Track 4 (ATMS Speculation) and future work (reactive trait resolution).
+
+The distinction matters: this track is mechanical (flip reads, remove parameters, verify tests pass). The compositional opportunities require design decisions (which α/γ functions? what merge semantics for constraint ↔ impl?). Those decisions belong in subsequent tracks or in a dedicated reactive-resolution design doc.
+
+### 7.4 Network Topology After This Track
+
+```
+                    ┌──────────────────┐
+                    │  Type Cells      │
+                    │  (meta solutions)│
+                    └──┬───────┬───────┘
+                       │       │
+              P5c α/γ  │       │ (future: constraint↔type bridge)
+                       │       │
+              ┌────────▼──┐  ┌─▼──────────────────────┐
+              │ Mult Cells │  │ Constraint Cells        │ ← NOW READABLE
+              └────────────┘  │ (store, trait, hasmethod,│
+                              │  capability, wakeup)    │
+                              └─────────┬───────────────┘
+                                        │
+                           (future: constraint↔impl bridge)
+                                        │
+                              ┌─────────▼───────────────┐
+                              │ Registry Cells           │
+                              │ (impl, trait, schema...) │ ← Track 2
+                              └──────────────────────────┘
+```
+
+---
+
+## 8. Principle Alignment (updated from §7)
 
 | Principle | How This Track Upholds It |
 |-----------|--------------------------|
@@ -273,7 +345,7 @@ Remove the now-dead parameters and update all reset/initialization code:
 
 ---
 
-## 8. Open Questions
+## 9. Open Questions
 
 1. **Is the capability constraint cell dual-write actually complete?** The explore agent reported that `register-capability-constraint!` may not have a cell write. If so, Phase 2 must add it before flipping reads.
 
