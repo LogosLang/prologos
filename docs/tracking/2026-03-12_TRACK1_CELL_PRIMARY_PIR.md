@@ -132,41 +132,66 @@ Confirmed: cell reads via CHAMP lookup are not measurably slower than parameter 
 
 ## 6. Architectural Validation
 
-### 6.1 Cell-Primary-with-Fallback Is the Right Pattern
+### 6.1 What We Actually Achieved (Honest Assessment)
 
-The original plan assumed a binary transition: parameters → cells, then delete parameters. Reality revealed a third state: **cell-primary with parameter fallback**. This is more robust because:
+The constraint cells are **passive storage**, not **reactive nodes**. They have merge functions for monotonic accumulation, but zero propagator edges wired to them. Nothing watches the constraint cells. No cross-domain bridge reads from them. No propagator fires when a constraint is added.
 
-1. It's backwards-compatible with test harnesses that don't create networks
-2. It fails gracefully (parameter fallback) rather than silently (returning `'()` when no cell exists)
-3. It makes the migration incremental — each read/write site can be flipped independently
+What the cells provide today:
+- **Transactional state**: The network snapshot captures all cell contents, so speculation rollback "just works" for constraints. This is genuinely useful — it's the property that made Phase 4a possible.
+- **Unified read interface**: A single `read-constraint-store` accessor instead of direct parameter access. This is an API improvement, not a behavioral one.
+- **Metric visibility**: Cell counts per elaboration, emitted as `CELL-METRICS`.
 
-This pattern should be the template for all future migration tracks.
+What the cells do NOT provide (yet):
+- **Reactive constraint resolution**: A propagator from the trait-constraint cell to the resolution engine that fires when constraints appear — replacing the explicit `resolve-trait-constraints!` call in the driver
+- **Automatic wakeup**: A propagator from the wakeup-registry cell to the constraint retry logic — replacing `retry-constraints-for-meta!`
+- **Cross-domain constraint propagation**: Bridges from constraint cells to type/multiplicity/session domains
 
-### 6.2 save-meta-state Captures Everything (Almost)
+The hand-rolled machinery (explicit retry loops in `retry-constraints-for-meta!`, batch resolution in `resolve-trait-constraints!`) still does the actual work. Track 1 moved the *data* to cells but left the *control flow* unchanged.
+
+### 6.2 The Parameter Fallback Is Not Test-Only
+
+The fallback isn't just for existing unit tests. It's for any context without a propagator network:
+- A future REPL or interactive mode
+- Tooling that processes partial expressions
+- Any consumer of `add-constraint!` outside the full driver pipeline
+
+This means we maintain two write paths (`if/else` at every write site) and two read paths (cell with parameter fallback). We've unified reads under a single accessor, but the write-side duality persists. This is a real cost — not dual-write (both paths always fire), but still a branch at every write site that must be maintained and tested.
+
+### 6.3 save-meta-state Captures Everything (Almost)
 
 The prop-network box captured by `save-meta-state` includes all cell contents, making explicit per-parameter save/restore redundant — but only when the network is active. This validates the design of the speculation system: it was built to capture the network as a whole, not individual cells.
 
-The "almost" is the parameter fallback: when no network exists, `save-meta-state` captures the box as `#f`, and restoring it to `#f` doesn't restore parameter state. The conditional save/restore in the speculation bridge handles this correctly.
+The "almost" is the parameter fallback: when no network exists, `save-meta-state` captures the box as `#f`, and restoring it to `#f` doesn't restore parameter state. The conditional save/restore in the speculation bridge handles this.
 
-### 6.3 Propagator Network as Universal State Substrate
+### 6.4 "Dirty Flags" Don't Exist
 
-Track 1 adds evidence to the recurring theme: the propagator network can subsume parameter-based state management. The wakeup registries, constraint stores, and trait/hasmethod/capability maps were all hand-rolled dependency tracking. With cells as the primary store, the network's built-in dependency tracking (propagator edges, quiescence-driven updates) can replace the manual machinery.
-
-The remaining manual machinery — dirty flags, explicit retry loops — are candidates for Track 2+ once the cross-domain propagator wiring is in place.
+The design document's Phase 6b identified `current-retry-unify` and `current-retry-trait-resolve` as dirty flags to remove. They're not dirty flags — they're **dependency-injection callbacks** that break circular module dependencies (`metavar-store.rkt` → `unify.rkt`). They're a legitimate architectural pattern and will never be removed. The PIR initially conflated these with the retry machinery; this correction is important for future planning.
 
 ---
 
 ## 7. Forward Enablement
 
-### 7.1 Track 2: Cross-Domain Propagator Wiring (Immediate)
+### 7.1 What Track 1 Actually Enables
 
-With constraint state on cells, the six existing cross-domain bridges (type↔multiplicity, type↔session, etc.) can be extended to include constraint domains. A trait constraint cell changing value can trigger propagation in the type domain — enabling automatic constraint resolution without the polling retry loop.
+Track 1 is a **prerequisite**, not a **deliverable**. It moved constraint data to cells, but the cells are inert. The value is that subsequent tracks can now wire propagator edges to these cells without touching the write sites.
 
-### 7.2 Track 4: ATMS Speculation (Medium-Term)
+Concretely, the constraint cells are now addressable by cell ID and live in the propagator network. A future track can call `net-add-propagator` with a constraint cell ID as input and some resolution logic as the propagator body. Before Track 1, this was impossible — constraint state lived in parameters, which are invisible to the propagator network.
+
+### 7.2 Track 2: Reactive Constraint Resolution (The Real Prize)
+
+The six existing cross-domain bridges use `net-add-cross-domain-propagator` to wire Galois connections between domains (type↔multiplicity, type↔session, etc.). Track 2 would add analogous bridges where constraint cells are inputs:
+
+1. **Trait constraint cell → resolution propagator**: When a new trait constraint is written to the cell, a propagator attempts resolution. This replaces the explicit `resolve-trait-constraints!` call in the post-elaboration phase of the driver.
+2. **Wakeup registry cell → retry propagator**: When a wakeup entry is added, a propagator checks if the referenced constraint can be retried. This replaces `retry-constraints-for-meta!` called explicitly from `solve-meta!`.
+3. **Constraint store cell → constraint-status propagator**: When a constraint is added, a propagator checks if quiescence has already resolved it. This replaces the snapshot comparison in `unify.rkt`.
+
+These would eliminate the manual retry loops and batch resolution passes, replacing them with propagator-driven incremental resolution. The constraint cells would become truly reactive rather than passive storage.
+
+### 7.3 Track 4: ATMS Speculation (Medium-Term)
 
 Cell-primary constraint tracking means speculation rollback is handled by the network snapshot. This is a prerequisite for ATMS-based multi-world speculation, where different constraint assumptions coexist in parallel worlds. With parameters, each world would need its own parameter save/restore; with cells, the ATMS dependency management handles this natively.
 
-### 7.3 Test Fixture Modernization (Future)
+### 7.4 Test Fixture Modernization (Future)
 
 Creating a `with-fresh-meta-env/network` macro that includes a minimal propagator network would:
 - Enable full parameter removal (Phase 6a-6c)
@@ -209,12 +234,26 @@ First-Class Traits was a *feature* track (new AST nodes, new syntax, new semanti
 
 ### Recurring theme across PIRs
 
-The propagator network continues to validate as a universal substrate. Each migration track adds evidence: session types (3/4), unification (3/4), narrowing (3/8), constraint tracking (3/12) all landed on cells as the single source of truth. The remaining parameter-based state is shrinking.
+The propagator network continues to validate as a data substrate. But Track 1 reveals a distinction previous PIRs glossed over: **data on cells ≠ reactive propagation**. Session types, unification, and narrowing all landed on cells AND wired propagator edges for reactive behavior. Track 1 landed constraint data on cells but left the control flow (retry loops, batch resolution) unchanged. The cells are passive storage, not reactive participants.
+
+This is the honest state: we're building the foundation, not the building.
 
 ---
 
 ## 10. Conclusion
 
-Track 1 achieved its primary goal: constraint state is now cell-primary. The deviation from full parameter removal is architecturally sound — the fallback pattern is more robust than the original all-or-nothing design. Performance is unchanged, correctness is maintained across all 6889 tests, and the work enables Tracks 2-4 of the propagator migration roadmap.
+Track 1 is infrastructure, not capability. It moved constraint data from parameters to cells, which is a necessary precondition for reactive constraint resolution (Track 2) and ATMS multi-world speculation (Track 4). But the cells are inert — nothing watches them, no propagator fires when they change. The manual retry loops and batch resolution passes remain the actual resolution machinery.
 
-The key takeaway: **migration tracks should plan for coexistence, not replacement**. The cell-primary-with-fallback pattern is the right intermediate state, and it may be the right *final* state — the fallback adds negligible complexity while providing resilience for contexts (test fixtures, REPL, future tooling) that don't warrant a full propagator network.
+What we gained concretely:
+1. **Unified read API** — 6 accessors that abstract over cell-vs-parameter
+2. **Transactional rollback for free** — speculation captures constraint state via the network snapshot
+3. **Addressable constraint state** — cells have IDs, live in the network, can have propagators wired to them in future tracks
+4. **Performance validation** — cell reads are cost-free (+1.2% = noise), green-lighting future migration tracks
+
+What we did not gain:
+1. **Reactive resolution** — constraints are still resolved by explicit call chains, not by propagator firing
+2. **Full parameter elimination** — the fallback pattern keeps parameters alive at every write site
+3. **Cross-domain composition** — no new bridges exist; the constraint cells are isolated from type/session/multiplicity domains
+4. **Observability** — the Observatory can see meta cells, but constraint cells aren't visualized or traced
+
+The key lesson: **moving data to cells is table stakes, not the endgame**. The value comes from wiring propagator edges to those cells — which is Track 2's job. Track 1 laid the pipe; Track 2 turns on the water.
