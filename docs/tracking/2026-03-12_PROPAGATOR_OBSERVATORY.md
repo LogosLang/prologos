@@ -1,7 +1,7 @@
 # Propagator Network Observatory — Design Document
 
 **Date**: 2026-03-12
-**Status**: Stage 3 (Implementation — backend complete, VS Code UI pending)
+**Status**: Stage 3 (Implementation Complete — all 9 phases done)
 **Builds on**: Propagator Visualization (`2026-03-12_PROPAGATOR_VISUALIZATION_DESIGN.md`), Design Principles (Propagator-First Infrastructure, First-Class by Default, Correct by Construction)
 
 ## Progress Tracker
@@ -14,7 +14,7 @@
 | **3** | **Capability inference integration** | ✅ | `capability-inference.rkt` (`5e6208c`) |
 | **4** | **Type inference integration** | ✅ | `driver.rkt` — snapshot at command boundary (`5e6208c`) |
 | **5** | **LSP observatory endpoint** | ✅ | `lsp/server.rkt` — `$/prologos/observatorySnapshot` (`b6a0633`) |
-| **6** | **VS Code multi-network UI** | ⬜ | `propagatorView.ts` — network selector, subsystem colors |
+| **6** | **VS Code multi-network UI** | ✅ | `propagatorView.ts` — observatory view + command (`cff847c`) |
 | **7** | **Cross-network links** | ✅ | Infrastructure complete; actual registration deferred |
 | **8** | **User network integration** | ✅ | `reduction.rkt` — `net-run` capture (`a966c98`) |
 
