@@ -154,7 +154,7 @@
        (parameterize ([current-speculation-failures #f])
          (init-speculation-tracking!)
          ;; Pre-speculation: empty constraint store
-         (check-equal? (current-constraint-store) '())
+         (check-equal? (read-constraint-store) '())
          ;; Speculation that adds a constraint then fails
          (define m (fresh-meta '() (expr-Nat) "cstore-test"))
          (define result
@@ -166,20 +166,20 @@
                                 '()
                                 #f)
                ;; Verify constraint was added during speculation
-               (check-equal? (length (current-constraint-store)) 1)
+               (check-equal? (length (read-constraint-store)) 1)
                #f)  ;; fail
              values
              "constraint-leak-test"))
          (check-false result)
          ;; Phase 4b: constraint store should be RESTORED to empty
-         (check-equal? (current-constraint-store) '()
+         (check-equal? (read-constraint-store) '()
                        "constraint store leaked after failed speculation"))))
 
    (test-case "successful speculation keeps constraints"
      (with-fresh-meta-env
        (parameterize ([current-speculation-failures #f])
          (init-speculation-tracking!)
-         (check-equal? (current-constraint-store) '())
+         (check-equal? (read-constraint-store) '())
          (define m (fresh-meta '() (expr-Nat) "cstore-keep"))
          (define result
            (with-speculative-rollback
@@ -193,13 +193,13 @@
              "constraint-keep-test"))
          (check-true result)
          ;; Constraints should be KEPT on success
-         (check-equal? (length (current-constraint-store)) 1))))
+         (check-equal? (length (read-constraint-store)) 1))))
 
    (test-case "nested speculation — inner failure restores, outer keeps"
      (with-fresh-meta-env
        (parameterize ([current-speculation-failures #f])
          (init-speculation-tracking!)
-         (check-equal? (current-constraint-store) '())
+         (check-equal? (read-constraint-store) '())
          (define m1 (fresh-meta '() (expr-Nat) "outer"))
          (define m2 (fresh-meta '() (expr-Nat) "inner"))
          (define result
@@ -208,24 +208,24 @@
                ;; Outer adds a constraint
                (add-constraint! (expr-meta (expr-meta-id m1))
                                 (expr-Bool) '() #f)
-               (check-equal? (length (current-constraint-store)) 1)
+               (check-equal? (length (read-constraint-store)) 1)
                ;; Inner speculation adds another then fails
                (with-speculative-rollback
                  (lambda ()
                    (add-constraint! (expr-meta (expr-meta-id m2))
                                     (expr-Nat) '() #f)
-                   (check-equal? (length (current-constraint-store)) 2)
+                   (check-equal? (length (read-constraint-store)) 2)
                    #f)  ;; inner fails
                  values
                  "inner-fail")
                ;; After inner failure: only outer constraint remains
-               (check-equal? (length (current-constraint-store)) 1)
+               (check-equal? (length (read-constraint-store)) 1)
                #t)  ;; outer succeeds
              values
              "outer-success"))
          (check-true result)
          ;; Outer constraint kept, inner constraint restored
-         (check-equal? (length (current-constraint-store)) 1))))))
+         (check-equal? (length (read-constraint-store)) 1))))))
 
 ;; ========================================
 ;; Suite 3: Union Type Speculation (Integration)

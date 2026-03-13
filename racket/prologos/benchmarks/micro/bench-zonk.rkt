@@ -9,7 +9,8 @@
          "../../zonk.rkt"
          "../../metavar-store.rkt"
          "../../reduction.rkt"
-         "../../performance-counters.rkt")
+         "../../performance-counters.rkt"
+         "../../driver.rkt")
 
 ;; Helper: create a fresh meta store with N solved metas
 ;; Returns (values meta-exprs term-with-metas)

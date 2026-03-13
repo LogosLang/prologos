@@ -19,7 +19,8 @@
          "../reduction.rkt"
          "../pretty-print.rkt"
          "../zonk.rkt"
-         "../global-env.rkt")
+         "../global-env.rkt"
+         "../driver.rkt")
 
 ;; ========================================
 ;; Meta store basics

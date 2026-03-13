@@ -15,48 +15,12 @@
          "../elaborator-network.rkt"
          "../metavar-store.rkt"
          "../syntax.rkt"
-         "../champ.rkt")
+         "../champ.rkt"
+         "../driver.rkt")
 
-;; ========================================
-;; Helper: with-infra-cell-env
-;; ========================================
-;; Creates a full environment with all callbacks installed and all constraint
-;; parameters isolated. Calls reset-meta-store! to create the constraint cells.
-
-(define-syntax-rule (with-infra-cell-env body ...)
-  (parameterize ([current-prop-make-network make-elaboration-network]
-                 [current-prop-new-infra-cell elab-new-infra-cell]
-                 [current-prop-cell-write elab-cell-write]
-                 [current-prop-cell-read elab-cell-read]
-                 [current-prop-fresh-meta elab-fresh-meta]
-                 [current-prop-add-unify-constraint elab-add-unify-constraint]
-                 [current-prop-net-box #f]
-                 [current-prop-id-map-box #f]
-                 [current-prop-meta-info-box (box champ-empty)]
-                 [current-level-meta-champ-box (box champ-empty)]
-                 [current-mult-meta-champ-box (box champ-empty)]
-                 [current-sess-meta-champ-box (box champ-empty)]
-                 [current-meta-store (make-hasheq)]
-                 [current-level-meta-store (make-hasheq)]
-                 [current-mult-meta-store (make-hasheq)]
-                 [current-sess-meta-store (make-hasheq)]
-                 [current-constraint-store '()]
-                 [current-constraint-cell-id #f]
-                 [current-trait-constraint-cell-id #f]
-                 [current-trait-cell-map-cell-id #f]
-                 [current-hasmethod-constraint-cell-id #f]
-                 [current-capability-constraint-cell-id #f]
-                 [current-wakeup-registry-cell-id #f]
-                 [current-trait-wakeup-cell-id #f]
-                 [current-wakeup-registry (make-hasheq)]
-                 [current-trait-constraint-map (make-hasheq)]
-                 [current-trait-wakeup-map (make-hasheq)]
-                 [current-trait-cell-map (make-hasheq)]
-                 [current-hasmethod-constraint-map (make-hasheq)]
-                 [current-hasmethod-wakeup-map (make-hasheq)]  ;; Phase 1d
-                 [current-capability-constraint-map (make-hasheq)])
-    (reset-meta-store!)
-    body ...))
+;; Phase 6e: with-fresh-meta-env is now redundant — with-fresh-meta-env
+;; creates the propagator network via reset-meta-store! when callbacks
+;; are installed (which they are, via driver.rkt).
 
 ;; ========================================
 ;; Helper: make-test-env (direct cell tests, no metavar-store)
@@ -105,7 +69,7 @@
 ;; ========================================
 
 (test-case "constraint cell: created by reset-meta-store!"
-  (with-infra-cell-env
+  (with-fresh-meta-env
     (check-not-false (current-constraint-cell-id))
     (check-not-false (current-prop-net-box))
     (define enet (unbox (current-prop-net-box)))
@@ -113,7 +77,7 @@
     (check-equal? (elab-cell-read enet cid) '())))
 
 (test-case "constraint cell: add-constraint! cell-primary writes"
-  (with-infra-cell-env
+  (with-fresh-meta-env
     (define c (add-constraint! (expr-Nat) (expr-Bool) '() "test-cell-primary"))
     ;; Track 1 Phase 5a: cell-primary — parameter is NOT written when network is active
     (check-equal? (length (current-constraint-store)) 0)
@@ -123,7 +87,7 @@
     (check-eq? (car cell-contents) c)))
 
 (test-case "constraint cell: multiple adds accumulate"
-  (with-infra-cell-env
+  (with-fresh-meta-env
     (define c1 (add-constraint! (expr-Nat) (expr-Nat) '() "first"))
     (define c2 (add-constraint! (expr-Bool) (expr-Bool) '() "second"))
     (define c3 (add-constraint! (expr-Nat) (expr-Bool) '() "third"))
@@ -137,17 +101,20 @@
     (check-eq? (third cell-contents) c3)))
 
 (test-case "constraint cell: read-constraint-store reads from cell"
-  (with-infra-cell-env
+  (with-fresh-meta-env
     (add-constraint! (expr-Nat) (expr-Bool) '() "test")
     (check-equal? (length (read-constraint-store)) 1)))
 
-(test-case "constraint cell: read-constraint-store fallback"
+(test-case "constraint cell: read-constraint-store reads from cell not parameter"
+  ;; Phase 6e: With network-everywhere, reads always go through cells.
+  ;; Manually writing to the parameter should NOT be visible via the read accessor.
   (with-fresh-meta-env
     (current-constraint-store (list (constraint (expr-Nat) (expr-Nat) '() "legacy" 'postponed '())))
-    (check-equal? (length (read-constraint-store)) 1)))
+    ;; Cell is empty — the parameter write is invisible to the cell-primary reader.
+    (check-equal? (length (read-constraint-store)) 0)))
 
 (test-case "constraint cell: reset recreates cell"
-  (with-infra-cell-env
+  (with-fresh-meta-env
     (add-constraint! (expr-Nat) (expr-Bool) '() "before-reset")
     (reset-meta-store!)
     (check-not-false (current-constraint-cell-id))
@@ -160,7 +127,7 @@
 ;; ========================================
 
 (test-case "Phase 1b: all 4 registry cells created by reset-meta-store!"
-  (with-infra-cell-env
+  (with-fresh-meta-env
     (check-not-false (current-trait-constraint-cell-id))
     (check-not-false (current-trait-cell-map-cell-id))
     (check-not-false (current-hasmethod-constraint-cell-id))
@@ -174,7 +141,7 @@
     (check-equal? (length (remove-duplicates ids equal?)) 5)))
 
 (test-case "Phase 1b: trait constraint dual-write"
-  (with-infra-cell-env
+  (with-fresh-meta-env
     (define info (trait-constraint-info 'Eq (list (expr-Nat))))
     (register-trait-constraint! 'test-meta-id info)
     ;; Legacy hash has it
@@ -188,7 +155,7 @@
                   'Eq)))
 
 (test-case "Phase 1b: hasmethod constraint dual-write"
-  (with-infra-cell-env
+  (with-fresh-meta-env
     (define info (hasmethod-constraint-info (expr-fvar 'P) 'eq? (list (expr-Nat)) 'dict-id))
     (register-hasmethod-constraint! 'hm-meta info)
     ;; Legacy hash has it
@@ -202,7 +169,7 @@
                   'eq?)))
 
 (test-case "Phase 1b: capability constraint dual-write"
-  (with-infra-cell-env
+  (with-fresh-meta-env
     (define info (capability-constraint-info 'ReadCap (expr-fvar 'ReadCap)))
     (register-capability-constraint! 'cap-meta info)
     ;; Legacy hash has it
@@ -216,7 +183,7 @@
                   'ReadCap)))
 
 (test-case "Phase 1b: multiple trait constraints accumulate in cell"
-  (with-infra-cell-env
+  (with-fresh-meta-env
     (register-trait-constraint! 'm1 (trait-constraint-info 'Eq (list (expr-Nat))))
     (register-trait-constraint! 'm2 (trait-constraint-info 'Ord (list (expr-Bool))))
     (register-trait-constraint! 'm3 (trait-constraint-info 'Add (list (expr-Nat))))
@@ -229,7 +196,7 @@
     (check-equal? (trait-constraint-info-trait-name (hash-ref tc-cell 'm3)) 'Add)))
 
 (test-case "Phase 1b: registry cells are empty after reset"
-  (with-infra-cell-env
+  (with-fresh-meta-env
     (register-trait-constraint! 'm1 (trait-constraint-info 'Eq (list (expr-Nat))))
     (register-hasmethod-constraint! 'hm1 (hasmethod-constraint-info (expr-fvar 'P) 'eq? '() #f))
     (register-capability-constraint! 'cap1 (capability-constraint-info 'R (expr-fvar 'R)))
@@ -246,7 +213,7 @@
 ;; ========================================
 
 (test-case "Phase 1c: wakeup registry cells created"
-  (with-infra-cell-env
+  (with-fresh-meta-env
     (check-not-false (current-wakeup-registry-cell-id))
     (check-not-false (current-trait-wakeup-cell-id))
     ;; Both are empty hasheqs initially
@@ -255,7 +222,7 @@
     (check-equal? (hash-count (elab-cell-read enet (current-trait-wakeup-cell-id))) 0)))
 
 (test-case "Phase 1c: wakeup registry cell distinct from others"
-  (with-infra-cell-env
+  (with-fresh-meta-env
     (define ids (list (current-constraint-cell-id)
                       (current-trait-constraint-cell-id)
                       (current-trait-cell-map-cell-id)
@@ -266,7 +233,7 @@
     (check-equal? (length (remove-duplicates ids equal?)) 7)))
 
 (test-case "Phase 1c: add-constraint! dual-writes to wakeup cell"
-  (with-infra-cell-env
+  (with-fresh-meta-env
     ;; add-constraint! with expr containing metas would populate wakeup registry
     ;; but without actual metas, meta-ids will be empty. Use direct meta construction.
     ;; For this test we just verify the cell is writable and accumulates.
@@ -278,7 +245,7 @@
     (check-equal? (hash-count (elab-cell-read enet (current-wakeup-registry-cell-id))) 0)))
 
 (test-case "Phase 1c: all 7 cells empty after reset"
-  (with-infra-cell-env
+  (with-fresh-meta-env
     (register-trait-constraint! 'm1 (trait-constraint-info 'Eq (list (expr-Nat))))
     (register-hasmethod-constraint! 'hm1 (hasmethod-constraint-info (expr-fvar 'P) 'eq? '() #f))
     (register-capability-constraint! 'cap1 (capability-constraint-info 'R (expr-fvar 'R)))

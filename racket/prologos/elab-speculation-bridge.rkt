@@ -182,16 +182,10 @@
     (let ([b (current-speculation-failures)])
       (if b (length (unbox b)) 0)))
   ;; 1. Save meta-state (immutable CHAMP snapshot — O(1) for network)
+  ;; Track 1 Phase 6d: Network is always present (network-everywhere).
+  ;; save-meta-state captures the network box, and restore-meta-state! reverts
+  ;; all cell contents (including constraint cells). No parameter fallback needed.
   (define saved (save-meta-state))
-  ;; Track 1 Phase 4a: Constraint save/restore only needed for parameter fallback.
-  ;; When propagator network is active, save-meta-state captures the network box,
-  ;; and restore-meta-state! reverts all cell contents (including constraint cells).
-  ;; When no network (unit tests), writes fall back to parameters, so we must
-  ;; explicitly save/restore the constraint parameter.
-  (define has-network? (and (current-constraint-cell-id)
-                            (current-prop-net-box)
-                            (current-prop-cell-write)))
-  (define saved-constraints (if has-network? #f (current-constraint-store)))
   ;; 2. Run the speculation
   (define result (thunk))
   (cond
@@ -199,9 +193,6 @@
     [else
      ;; 3. Restore meta-state (O(1) for network — includes constraint cells)
      (restore-meta-state! saved)
-     ;; Restore parameter fallback if no network
-     (when saved-constraints
-       (current-constraint-store saved-constraints))
      ;; Phase D2: Extract sub-failures (failures added during this thunk)
      ;; The box stores newest-first, so new failures are at the front.
      (define-values (sub-failures support-set)

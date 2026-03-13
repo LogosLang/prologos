@@ -13,7 +13,8 @@
          "../unify.rkt"
          "../global-env.rkt"
          (prefix-in tc: "../typing-core.rkt")
-         "../performance-counters.rkt")
+         "../performance-counters.rkt"
+         "../driver.rkt")
 
 (provide gen:prologos-type
          gen:prologos-type-depth

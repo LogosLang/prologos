@@ -12,7 +12,8 @@
          "../prelude.rkt"
          "../syntax.rkt"
          "../metavar-store.rkt"
-         "../unify.rkt")
+         "../unify.rkt"
+         "../driver.rkt")
 
 ;; ========================================
 ;; Suite 1: Trivial equality / wildcards

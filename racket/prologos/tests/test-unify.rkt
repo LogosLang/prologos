@@ -12,7 +12,8 @@
          "../metavar-store.rkt"
          "../reduction.rkt"
          "../unify.rkt"
-         "../global-env.rkt")
+         "../global-env.rkt"
+         "../driver.rkt")
 
 ;; ========================================
 ;; Atom unification

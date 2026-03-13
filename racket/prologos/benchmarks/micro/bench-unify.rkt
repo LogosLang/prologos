@@ -9,7 +9,8 @@
          "../../unify.rkt"
          "../../metavar-store.rkt"
          "../../reduction.rkt"
-         "../../performance-counters.rkt")
+         "../../performance-counters.rkt"
+         "../../driver.rkt")
 
 ;; Helper: build a deeply nested Pi type: (Nat -> (Nat -> ... -> Nat))
 (define (deep-pi depth)

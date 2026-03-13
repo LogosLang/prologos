@@ -16,7 +16,8 @@
          "../qtt.rkt"
          "../global-env.rkt"
          "../atms.rkt"
-         "../propagator.rkt")
+         "../propagator.rkt"
+         "../driver.rkt")
 
 ;; ========================================
 ;; Type formation: ATMS

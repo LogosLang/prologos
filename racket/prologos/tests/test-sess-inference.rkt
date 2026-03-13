@@ -15,7 +15,8 @@
          "../processes.rkt"
          "../metavar-store.rkt"
          (except-in "../typing-core.rkt" check)
-         "../typing-sessions.rkt")
+         "../typing-sessions.rkt"
+         "../driver.rkt")
 
 ;; Helper to build channel contexts from pairs
 (define (make-chan-ctx . pairs)

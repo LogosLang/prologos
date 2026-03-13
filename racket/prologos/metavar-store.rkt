@@ -261,14 +261,11 @@
 
 ;; Register a trait constraint and build wakeup index for incremental resolution.
 (define (register-trait-constraint! meta-id info)
-  ;; Track 1 Phase 5a: Cell-primary with parameter fallback.
+  ;; Track 1 Phase 6c: Cell-only write (network-everywhere).
   (define tc-cid (current-trait-constraint-cell-id))
   (define tc-net-box (current-prop-net-box))
   (define write-fn (current-prop-cell-write))
-  (if (and tc-cid tc-net-box write-fn)
-      (set-box! tc-net-box (write-fn (unbox tc-net-box) tc-cid (hasheq meta-id info)))
-      ;; Fallback: no propagator network
-      (hash-set! (current-trait-constraint-map) meta-id info))
+  (set-box! tc-net-box (write-fn (unbox tc-net-box) tc-cid (hasheq meta-id info)))
   ;; Phase C: Build reverse index from type-arg metas → this dict meta
   (define type-arg-metas (extract-shallow-meta-ids-from-list
                            (trait-constraint-info-type-arg-exprs info)))
@@ -276,36 +273,29 @@
   ;; future solve-meta! calls. If all type-args are already solved, immediate resolution
   ;; fires below (same pattern as hasmethod wakeup).
   (define unsolved-ta-metas (filter (lambda (id) (not (meta-solved? id))) type-arg-metas))
-  ;; Track 1 Phase 5a: Cell-primary with parameter fallback.
+  ;; Track 1 Phase 6c: Cell-only wakeup write (network-everywhere).
   (define tw-cid (current-trait-wakeup-cell-id))
-  (if (and tw-cid tc-net-box write-fn (pair? unsolved-ta-metas))
-      (let ([tw-delta
-             (for/fold ([acc (hasheq)]) ([ta-id (in-list unsolved-ta-metas)])
-               (hash-set acc ta-id (list meta-id)))])
-        (set-box! tc-net-box (write-fn (unbox tc-net-box) tw-cid tw-delta)))
-      ;; Fallback: no propagator network, write to parameter
-      (let ([wakeup (current-trait-wakeup-map)])
-        (for ([ta-id (in-list unsolved-ta-metas)])
-          (define existing (hash-ref wakeup ta-id '()))
-          (hash-set! wakeup ta-id (cons meta-id existing)))))
+  (when (pair? unsolved-ta-metas)
+    (let ([tw-delta
+           (for/fold ([acc (hasheq)]) ([ta-id (in-list unsolved-ta-metas)])
+             (hash-set acc ta-id (list meta-id)))])
+      (set-box! tc-net-box (write-fn (unbox tc-net-box) tw-cid tw-delta))))
   ;; P3a: Record cell-ids for type-arg metas for cell-state-driven resolution.
   (define id-map-box (current-prop-id-map-box))
-  (when id-map-box
-    (define id-map (unbox id-map-box))
-    (define cell-ids
-      (for*/list ([ta-id (in-list type-arg-metas)]
-                  [cid (in-value (champ-lookup id-map (prop-meta-id-hash ta-id) ta-id))]
-                  #:when (not (eq? cid 'none)))
-        cid))
-    (when (not (null? cell-ids))
-      (hash-set! (current-trait-cell-map) meta-id
-                 (remove-duplicates cell-ids eq?))
-      ;; Phase 1b: Dual-write trait-cell-map.
-      (define tcm-cid (current-trait-cell-map-cell-id))
-      (when (and tcm-cid tc-net-box write-fn)
-        (set-box! tc-net-box
-                  (write-fn (unbox tc-net-box) tcm-cid
-                            (hasheq meta-id (remove-duplicates cell-ids eq?)))))))
+  (define id-map (unbox id-map-box))
+  (define cell-ids
+    (for*/list ([ta-id (in-list type-arg-metas)]
+                [cid (in-value (champ-lookup id-map (prop-meta-id-hash ta-id) ta-id))]
+                #:when (not (eq? cid 'none)))
+      cid))
+  (when (not (null? cell-ids))
+    (hash-set! (current-trait-cell-map) meta-id
+               (remove-duplicates cell-ids eq?))
+    ;; Phase 6c: Cell-only write for trait-cell-map.
+    (define tcm-cid (current-trait-cell-map-cell-id))
+    (set-box! tc-net-box
+              (write-fn (unbox tc-net-box) tcm-cid
+                        (hasheq meta-id (remove-duplicates cell-ids eq?)))))
   ;; Phase 3d: If all type-args are already ground (no unsolved metas to trigger wakeup),
   ;; attempt immediate resolution via the callback.
   (when (null? unsolved-ta-metas)
@@ -349,14 +339,11 @@
   (current-retry-hasmethod-resolve resolve-fn))
 
 (define (register-hasmethod-constraint! meta-id info)
-  ;; Track 1 Phase 5a: Cell-primary with parameter fallback.
+  ;; Track 1 Phase 6c: Cell-only write (network-everywhere).
   (define hm-cid (current-hasmethod-constraint-cell-id))
   (define hm-net-box (current-prop-net-box))
   (define write-fn (current-prop-cell-write))
-  (if (and hm-cid hm-net-box write-fn)
-      (set-box! hm-net-box (write-fn (unbox hm-net-box) hm-cid (hasheq meta-id info)))
-      ;; Fallback: no propagator network
-      (hash-set! (current-hasmethod-constraint-map) meta-id info))
+  (set-box! hm-net-box (write-fn (unbox hm-net-box) hm-cid (hasheq meta-id info)))
   ;; Phase 1d: Build reverse wakeup index from dependency metas → this hasmethod meta.
   ;; Dependencies are: metas in trait-var-expr + metas in type-arg-exprs.
   (define trait-var-metas (extract-shallow-meta-ids
@@ -416,14 +403,11 @@
 (define current-capability-constraint-map (make-parameter (make-hasheq)))
 
 (define (register-capability-constraint! meta-id info)
-  ;; Track 1 Phase 5a: Cell-primary with parameter fallback.
+  ;; Track 1 Phase 6c: Cell-only write (network-everywhere).
   (define cap-cid (current-capability-constraint-cell-id))
   (define cap-net-box (current-prop-net-box))
   (define write-fn (current-prop-cell-write))
-  (if (and cap-cid cap-net-box write-fn)
-      (set-box! cap-net-box (write-fn (unbox cap-net-box) cap-cid (hasheq meta-id info)))
-      ;; Fallback: no propagator network
-      (hash-set! (current-capability-constraint-map) meta-id info)))
+  (set-box! cap-net-box (write-fn (unbox cap-net-box) cap-cid (hasheq meta-id info))))
 
 ;; Track 1 Phase 2c: read from cell.
 (define (lookup-capability-constraint meta-id)
@@ -538,31 +522,20 @@
 (define (add-constraint! lhs rhs ctx source)
   (perf-inc-constraint!)
   (define c (constraint lhs rhs ctx source 'postponed '()))
-  ;; Track 1 Phase 5a: Cell-primary write with parameter fallback.
-  ;; When propagator network is active, write to cell only.
-  ;; When no network (unit tests without driver), fall back to parameter.
+  ;; Track 1 Phase 6c: Cell-only writes (network-everywhere).
   (define cstore-cid (current-constraint-cell-id))
   (define cstore-net-box (current-prop-net-box))
   (define write-fn (current-prop-cell-write))
-  (if (and cstore-cid cstore-net-box write-fn)
-      (let ([enet (unbox cstore-net-box)])
-        (set-box! cstore-net-box (write-fn enet cstore-cid (list c))))
-      ;; Fallback: no propagator network, write to parameter
-      (current-constraint-store (cons c (current-constraint-store))))
+  (let ([enet (unbox cstore-net-box)])
+    (set-box! cstore-net-box (write-fn enet cstore-cid (list c))))
   ;; Register for wakeup on all mentioned metas.
-  ;; Track 1 Phase 5a: Cell-primary with parameter fallback.
   (define meta-ids (append (collect-meta-ids lhs) (collect-meta-ids rhs)))
   (define wr-cid (current-wakeup-registry-cell-id))
-  (if (and wr-cid cstore-net-box write-fn (pair? meta-ids))
-      (let ([wr-delta
-             (for/fold ([acc (hasheq)]) ([id (in-list meta-ids)])
-               (hash-set acc id (list c)))])
-        (set-box! cstore-net-box (write-fn (unbox cstore-net-box) wr-cid wr-delta)))
-      ;; Fallback: no propagator network, write to parameter
-      (let ([registry (current-wakeup-registry)])
-        (for ([id (in-list meta-ids)])
-          (define existing (hash-ref registry id '()))
-          (hash-set! registry id (cons c existing)))))
+  (when (pair? meta-ids)
+    (let ([wr-delta
+           (for/fold ([acc (hasheq)]) ([id (in-list meta-ids)])
+             (hash-set acc id (list c)))])
+      (set-box! cstore-net-box (write-fn (unbox cstore-net-box) wr-cid wr-delta))))
   ;; Propagator path: add unify constraints between cells
   (define net-box (current-prop-net-box))
   (define add-unify-fn (current-prop-add-unify-constraint))
@@ -647,7 +620,14 @@
 ;; Each reads from the cell (primary) with parameter fallback.
 ;; Track 1: constraint store, trait/hasmethod/capability maps.
 
-;; Read the constraint store from the cell (preferred) or legacy parameter.
+;; Track 1 Phase 6f: Cell-primary reads.
+;; Reads go through cells when the network is active. When no network
+;; exists (pre-initialization, between reset-constraint-store! and
+;; cell recreation), returns the empty default. This is semantically
+;; correct: no constraints exist before initialization.
+;; Note: WRITES remain cell-only (crash without network = data loss prevention).
+
+;; Read the constraint store from the cell.
 ;; Returns the current list of all constraints.
 (define (read-constraint-store)
   (define cid (current-constraint-cell-id))
@@ -655,9 +635,9 @@
   (define read-fn (current-prop-cell-read))
   (if (and cid net-box read-fn)
       (read-fn (unbox net-box) cid)
-      (current-constraint-store)))
+      '()))
 
-;; Track 1 Phase 2a: Read trait constraint map from cell or parameter.
+;; Read trait constraint map from cell.
 ;; Returns hasheq: meta-id → trait-constraint-info.
 (define (read-trait-constraints)
   (define cid (current-trait-constraint-cell-id))
@@ -665,9 +645,9 @@
   (define read-fn (current-prop-cell-read))
   (if (and cid net-box read-fn)
       (read-fn (unbox net-box) cid)
-      (current-trait-constraint-map)))
+      (hasheq)))
 
-;; Track 1 Phase 2b: Read hasmethod constraint map from cell or parameter.
+;; Read hasmethod constraint map from cell.
 ;; Returns hasheq: meta-id → hasmethod-constraint-info.
 (define (read-hasmethod-constraints)
   (define cid (current-hasmethod-constraint-cell-id))
@@ -675,9 +655,9 @@
   (define read-fn (current-prop-cell-read))
   (if (and cid net-box read-fn)
       (read-fn (unbox net-box) cid)
-      (current-hasmethod-constraint-map)))
+      (hasheq)))
 
-;; Track 1 Phase 2c: Read capability constraint map from cell or parameter.
+;; Read capability constraint map from cell.
 ;; Returns hasheq: meta-id → capability-constraint-info.
 (define (read-capability-constraints)
   (define cid (current-capability-constraint-cell-id))
@@ -685,9 +665,9 @@
   (define read-fn (current-prop-cell-read))
   (if (and cid net-box read-fn)
       (read-fn (unbox net-box) cid)
-      (current-capability-constraint-map)))
+      (hasheq)))
 
-;; Track 1 Phase 3a: Read wakeup registry from cell or parameter.
+;; Read wakeup registry from cell.
 ;; Returns hasheq: meta-id → (listof constraint).
 (define (read-wakeup-registry)
   (define cid (current-wakeup-registry-cell-id))
@@ -695,9 +675,9 @@
   (define read-fn (current-prop-cell-read))
   (if (and cid net-box read-fn)
       (read-fn (unbox net-box) cid)
-      (current-wakeup-registry)))
+      (hasheq)))
 
-;; Track 1 Phase 3b: Read trait wakeup map from cell or parameter.
+;; Read trait wakeup map from cell.
 ;; Returns hasheq: meta-id → (listof dict-meta-id).
 (define (read-trait-wakeup-map)
   (define cid (current-trait-wakeup-cell-id))
@@ -705,7 +685,7 @@
   (define read-fn (current-prop-cell-read))
   (if (and cid net-box read-fn)
       (read-fn (unbox net-box) cid)
-      (current-trait-wakeup-map)))
+      (hasheq)))
 
 ;; Reset the constraint store (called by reset-meta-store!).
 ;; Phase 1a: constraint cell is inherently reset when the network is recreated.
@@ -839,8 +819,13 @@
 ;; Hash removal: Test isolation macro
 ;; ========================================
 ;; Provides a fresh, isolated meta environment for unit tests.
-;; Sets up all CHAMP boxes (meta-info, level, mult, sess) plus hash stores
-;; and constraint infrastructure. No propagator network (that's driver's job).
+;; Sets up all hash stores and constraint infrastructure, then calls
+;; reset-meta-store! to create CHAMP boxes and propagator network+cells
+;; (when callbacks are installed, e.g., via driver.rkt).
+;;
+;; Phase 6a: Network-everywhere — with-fresh-meta-env always creates a
+;; propagator network when callbacks are available. This eliminates the
+;; parameter fallback pattern and ensures a single write path (cell-only).
 ;;
 ;; Usage in tests:
 ;;   (with-fresh-meta-env (fresh-meta ...) (solve-meta! ...) ...)
@@ -854,25 +839,28 @@
                  [current-constraint-store '()]
                  [current-definition-cells-content (hasheq)]  ;; Phase 3a
                  [current-definition-dependencies (hasheq)]  ;; Phase 3b
-                 [current-constraint-cell-id #f]  ;; Phase 1a
-                 [current-trait-constraint-cell-id #f]  ;; Phase 1b
-                 [current-trait-cell-map-cell-id #f]    ;; Phase 1b
-                 [current-hasmethod-constraint-cell-id #f]  ;; Phase 1b
-                 [current-capability-constraint-cell-id #f]  ;; Phase 1b
-                 [current-wakeup-registry-cell-id #f]  ;; Phase 1c
-                 [current-trait-wakeup-cell-id #f]     ;; Phase 1c
+                 ;; Cell IDs: #f — reset-meta-store! populates when callbacks available
+                 [current-constraint-cell-id #f]
+                 [current-trait-constraint-cell-id #f]
+                 [current-trait-cell-map-cell-id #f]
+                 [current-hasmethod-constraint-cell-id #f]
+                 [current-capability-constraint-cell-id #f]
+                 [current-wakeup-registry-cell-id #f]
+                 [current-trait-wakeup-cell-id #f]
                  [current-wakeup-registry (make-hasheq)]
                  [current-trait-constraint-map (make-hasheq)]
                  [current-trait-wakeup-map (make-hasheq)]
                  [current-trait-cell-map (make-hasheq)]
                  [current-hasmethod-constraint-map (make-hasheq)]
-                 [current-hasmethod-wakeup-map (make-hasheq)]  ;; Phase 1d
-                 [current-prop-meta-info-box (box champ-empty)]
+                 [current-hasmethod-wakeup-map (make-hasheq)]
+                 ;; CHAMP boxes + network: #f — reset-meta-store! creates fresh
+                 [current-prop-meta-info-box #f]
                  [current-prop-net-box #f]
                  [current-prop-id-map-box #f]
-                 [current-level-meta-champ-box (box champ-empty)]
-                 [current-mult-meta-champ-box (box champ-empty)]
-                 [current-sess-meta-champ-box (box champ-empty)])
+                 [current-level-meta-champ-box #f]
+                 [current-mult-meta-champ-box #f]
+                 [current-sess-meta-champ-box #f])
+    (reset-meta-store!)
     body ...))
 
 ;; ========================================

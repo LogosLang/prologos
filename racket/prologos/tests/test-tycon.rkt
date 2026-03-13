@@ -18,7 +18,8 @@
          "../pretty-print.rkt"
          "../unify.rkt"
          "../trait-resolution.rkt"
-         "../global-env.rkt")
+         "../global-env.rkt"
+         "../driver.rkt")
 
 ;; ========================================
 ;; 1. expr-tycon construction and predicates

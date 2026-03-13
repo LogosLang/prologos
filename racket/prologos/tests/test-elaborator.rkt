@@ -13,7 +13,8 @@
          "../elaborator.rkt"
          "../errors.rkt"
          "../global-env.rkt"
-         "../metavar-store.rkt")
+         "../metavar-store.rkt"
+         "../driver.rkt")
 
 ;; Helper: parse and elaborate from string
 (define (elab s)

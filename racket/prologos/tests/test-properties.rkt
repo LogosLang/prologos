@@ -15,7 +15,8 @@
          "../global-env.rkt"
          (prefix-in tc: "../typing-core.rkt")
          "../performance-counters.rkt"
-         "test-generators.rkt")
+         "test-generators.rkt"
+         "../driver.rkt")
 
 ;; ============================================================
 ;; Property 1: Subject reduction

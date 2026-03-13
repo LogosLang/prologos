@@ -22,45 +22,16 @@
          "../propagator.rkt"
          "../type-lattice.rkt")
 
-;; ========================================
-;; Helper: with-prop-meta-env
-;;
-;; Like with-fresh-meta-env but initializes the propagator network,
-;; so cell-ids get populated on constraints.
-;; ========================================
-
-(define-syntax-rule (with-prop-meta-env body ...)
-  (parameterize ([current-meta-store (make-hasheq)]
-                 [current-level-meta-store (make-hasheq)]
-                 [current-mult-meta-store (make-hasheq)]
-                 [current-sess-meta-store (make-hasheq)]
-                 [current-constraint-store '()]
-                 [current-constraint-cell-id #f]  ;; Phase 1a
-                 [current-trait-constraint-cell-id #f]  ;; Phase 1b
-                 [current-trait-cell-map-cell-id #f]  ;; Phase 1b
-                 [current-hasmethod-constraint-cell-id #f]  ;; Phase 1b
-                 [current-capability-constraint-cell-id #f]  ;; Phase 1b
-                 [current-wakeup-registry-cell-id #f]  ;; Phase 1c
-                 [current-trait-wakeup-cell-id #f]  ;; Phase 1c
-                 [current-wakeup-registry (make-hasheq)]
-                 [current-trait-constraint-map (make-hasheq)]
-                 [current-trait-wakeup-map (make-hasheq)]
-                 [current-hasmethod-constraint-map (make-hasheq)]  ;; Phase 1d
-                 [current-hasmethod-wakeup-map (make-hasheq)]  ;; Phase 1d
-                 [current-prop-meta-info-box (box champ-empty)]
-                 [current-prop-net-box (box (make-elaboration-network))]
-                 [current-prop-id-map-box (box champ-empty)]
-                 [current-level-meta-champ-box (box champ-empty)]
-                 [current-mult-meta-champ-box (box champ-empty)]
-                 [current-sess-meta-champ-box (box champ-empty)])
-    body ...))
+;; Phase 6e: with-fresh-meta-env is now redundant — with-fresh-meta-env
+;; creates the propagator network via reset-meta-store! when callbacks
+;; are installed (which they are, via driver.rkt).
 
 ;; ========================================
 ;; Unit tests: cell-ids populated on constraints
 ;; ========================================
 
 (test-case "cell-ids/constraint-with-one-meta-has-cell-id"
-  (with-prop-meta-env
+  (with-fresh-meta-env
     (define m (fresh-meta ctx-empty (expr-hole) "test"))
     (define c (add-constraint! m (expr-Nat) ctx-empty "test"))
     ;; Constraint mentions 1 meta → should have 1 cell-id
@@ -68,7 +39,7 @@
     (check-equal? (length (constraint-cell-ids c)) 1)))
 
 (test-case "cell-ids/constraint-with-two-metas-has-two-cell-ids"
-  (with-prop-meta-env
+  (with-fresh-meta-env
     (define m1 (fresh-meta ctx-empty (expr-hole) "a"))
     (define m2 (fresh-meta ctx-empty (expr-hole) "b"))
     ;; Constraint: ?m1 vs ?m2
@@ -76,13 +47,13 @@
     (check-equal? (length (constraint-cell-ids c)) 2)))
 
 (test-case "cell-ids/constraint-no-metas-has-empty-cell-ids"
-  (with-prop-meta-env
+  (with-fresh-meta-env
     ;; Constraint with no metas (shouldn't normally happen, but defensive)
     (define c (add-constraint! (expr-Nat) (expr-Bool) ctx-empty "test"))
     (check-equal? (constraint-cell-ids c) '())))
 
 (test-case "cell-ids/constraint-with-nested-meta-has-cell-id"
-  (with-prop-meta-env
+  (with-fresh-meta-env
     (define m (fresh-meta ctx-empty (expr-hole) "test"))
     ;; Nested: (Pi ?m Nat) vs (Pi Nat Nat)
     (define lhs (expr-Pi 'mw m (expr-Nat)))
@@ -90,7 +61,7 @@
     (check-equal? (length (constraint-cell-ids c)) 1)))
 
 (test-case "cell-ids/constraint-same-meta-both-sides-deduplicates"
-  (with-prop-meta-env
+  (with-fresh-meta-env
     (define m (fresh-meta ctx-empty (expr-hole) "test"))
     ;; Same meta on both sides
     (define c (add-constraint! m m ctx-empty "test"))
@@ -98,18 +69,19 @@
     (check-equal? (length (constraint-cell-ids c)) 1)))
 
 (test-case "cell-ids/without-network-stays-empty"
-  ;; When propagator network is NOT initialized, cell-ids stay empty
+  ;; Phase 6e: With network-everywhere, cell-ids are ALWAYS populated.
   (with-fresh-meta-env
     (define m (fresh-meta ctx-empty (expr-hole) "test"))
     (define c (add-constraint! m (expr-Nat) ctx-empty "test"))
-    (check-equal? (constraint-cell-ids c) '())))
+    (check-true (pair? (constraint-cell-ids c))
+                "constraint should have cell-ids with network-everywhere")))
 
 ;; ========================================
 ;; Unit tests: retry-constraints-via-cells!
 ;; ========================================
 
 (test-case "via-cells/retries-when-meta-solved"
-  (with-prop-meta-env
+  (with-fresh-meta-env
     (parameterize ([current-global-env (hasheq)])
       (define m (fresh-meta ctx-empty (expr-Type (lzero)) "test"))
       (define mid (expr-meta-id m))
@@ -119,7 +91,8 @@
       (check-equal? result 'postponed)
       (check-equal? (length (all-postponed-constraints)) 1)
       ;; Check the constraint has cell-ids from the propagator network
-      (define c (car (current-constraint-store)))
+      ;; Phase 6e: Read from cell via read-constraint-store (no parameter fallback)
+      (define c (car (read-constraint-store)))
       (check-true (> (length (constraint-cell-ids c)) 0)
                   "constraint should have cell-ids with network active")
       ;; Write solution to cell (simulate what solve-meta! does)
@@ -133,7 +106,7 @@
       (check-equal? (constraint-status c) 'solved))))
 
 (test-case "via-cells/skips-when-no-cells-solved"
-  (with-prop-meta-env
+  (with-fresh-meta-env
     (define m (fresh-meta ctx-empty (expr-hole) "test"))
     ;; Add a constraint — meta is unsolved, cell is still bot
     (define c (add-constraint! m (expr-Nat) ctx-empty "test"))
@@ -144,14 +117,15 @@
                   "constraint should still be postponed")))
 
 (test-case "via-cells/skips-already-solved-constraints"
-  (with-prop-meta-env
+  (with-fresh-meta-env
     (parameterize ([current-global-env (hasheq)])
       (define m (fresh-meta ctx-empty (expr-Type (lzero)) "test"))
       (define mid (expr-meta-id m))
       ;; Create and postpone
       (define flex-term (expr-app m (expr-zero)))
       (unify ctx-empty flex-term (expr-Nat))
-      (define c (car (current-constraint-store)))
+      ;; Phase 6e: Read from cell via read-constraint-store (no parameter fallback)
+      (define c (car (read-constraint-store)))
       ;; Manually mark as solved
       (set-constraint-status! c 'solved)
       ;; Write to cell
@@ -163,7 +137,7 @@
       (check-equal? (constraint-status c) 'solved))))
 
 (test-case "via-cells/skips-constraints-without-cell-ids"
-  (with-prop-meta-env
+  (with-fresh-meta-env
     (define m (fresh-meta ctx-empty (expr-hole) "test"))
     (define c (add-constraint! m (expr-Nat) ctx-empty "test"))
     ;; Clear cell-ids to simulate legacy constraint
@@ -177,7 +151,7 @@
 ;; ========================================
 
 (test-case "integration/solve-meta-retries-via-both-paths"
-  (with-prop-meta-env
+  (with-fresh-meta-env
     (parameterize ([current-global-env (hasheq)])
       (define m (fresh-meta ctx-empty (expr-Type (lzero)) "test"))
       (define mid (expr-meta-id m))
@@ -193,7 +167,7 @@
       (check-equal? (length (all-failed-constraints)) 0))))
 
 (test-case "integration/solve-meta-fails-constraint-via-both-paths"
-  (with-prop-meta-env
+  (with-fresh-meta-env
     (parameterize ([current-global-env (hasheq)])
       (define m (fresh-meta ctx-empty (expr-Type (lzero)) "test"))
       (define mid (expr-meta-id m))
@@ -207,7 +181,7 @@
       (check-equal? (length (all-failed-constraints)) 1))))
 
 (test-case "integration/multiple-constraints-different-metas"
-  (with-prop-meta-env
+  (with-fresh-meta-env
     (parameterize ([current-global-env (hasheq)])
       (define m1 (fresh-meta ctx-empty (expr-Type (lzero)) "a"))
       (define m2 (fresh-meta ctx-empty (expr-Type (lzero)) "b"))
@@ -228,7 +202,7 @@
       (check-equal? (length (all-failed-constraints)) 0))))
 
 (test-case "integration/constraint-postponed-again-on-partial-solve"
-  (with-prop-meta-env
+  (with-fresh-meta-env
     (parameterize ([current-global-env (hasheq)]
                    [current-retry-unify #f])  ;; disable retry to manually control
       (define m1 (fresh-meta ctx-empty (expr-hole) "a"))
@@ -246,7 +220,7 @@
 ;; ========================================
 
 (test-case "cell-ids/consistent-with-prop-meta-id-map"
-  (with-prop-meta-env
+  (with-fresh-meta-env
     (define m1 (fresh-meta ctx-empty (expr-hole) "a"))
     (define m2 (fresh-meta ctx-empty (expr-hole) "b"))
     (define c (add-constraint! m1 m2 ctx-empty "test"))
@@ -262,7 +236,7 @@
                      "cell-id for m2 should be in constraint's cell-ids")))
 
 (test-case "cell-ids/cell-reads-reflect-meta-solutions"
-  (with-prop-meta-env
+  (with-fresh-meta-env
     (parameterize ([current-global-env (hasheq)]
                    [current-retry-unify #f])  ;; manual control
       (define m (fresh-meta ctx-empty (expr-Type (lzero)) "test"))
