@@ -1112,6 +1112,37 @@ export class PropagatorViewManager {
     .legend-item { display: flex; align-items: center; gap: 6px; margin: 2px 0; }
     .legend-swatch { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
     .legend-diamond { width: 12px; height: 12px; display: inline-block; transform: rotate(45deg); }
+    .timeline-bar {
+      padding: 6px 16px;
+      border-bottom: 1px solid var(--vscode-widget-border, #333);
+      flex-shrink: 0; display: none;
+      align-items: center; gap: 12px;
+    }
+    .timeline-bar.visible { display: flex; flex-wrap: wrap; }
+    .timeline-bar label { font-size: 0.8em; opacity: 0.7; white-space: nowrap; }
+    .timeline-slider {
+      flex: 1; min-width: 120px;
+      accent-color: var(--vscode-focusBorder, #007acc);
+    }
+    .round-info {
+      font-size: 0.8em; display: flex; gap: 10px; flex-wrap: wrap;
+    }
+    .round-info .ri-item { white-space: nowrap; }
+    .round-info .ri-value { font-weight: bold; }
+    .round-diff-table {
+      font-size: 0.8em; max-height: 120px; overflow-y: auto;
+      border-top: 1px solid var(--vscode-widget-border, #333);
+      flex-shrink: 0; display: none;
+    }
+    .round-diff-table.visible { display: block; }
+    .round-diff-table table { border-collapse: collapse; width: 100%; }
+    .round-diff-table th, .round-diff-table td {
+      padding: 2px 6px; text-align: left;
+      border-bottom: 1px solid var(--vscode-widget-border, #333);
+    }
+    .round-diff-table th { opacity: 0.7; font-size: 0.9em; }
+    .diff-old { color: #f44; text-decoration: line-through; opacity: 0.7; }
+    .diff-new { color: #6a9955; }
     .tables {
       max-height: 35vh; overflow-y: auto;
       padding: 8px 16px;
@@ -1151,6 +1182,14 @@ export class PropagatorViewManager {
   </div>
   <div class="capture-info" id="capture-info"></div>
 
+  <div class="timeline-bar" id="timeline-bar">
+    <label>Round:</label>
+    <input type="range" class="timeline-slider" id="timeline-slider" min="0" max="0" step="1" value="0">
+    <div class="round-info" id="round-info"></div>
+  </div>
+
+  <div class="round-diff-table" id="round-diff-table"></div>
+
   <div class="graph-container" id="graph-container">
     <canvas id="graph-canvas"></canvas>
     <div class="tooltip" id="tooltip"></div>
@@ -1185,6 +1224,10 @@ export class PropagatorViewManager {
     const captureInfo = document.getElementById('capture-info');
     const tablesDiv = document.getElementById('tables');
     const selector = document.getElementById('capture-selector');
+    const timelineBar = document.getElementById('timeline-bar');
+    const timelineSlider = document.getElementById('timeline-slider');
+    const roundInfoDiv = document.getElementById('round-info');
+    const roundDiffDiv = document.getElementById('round-diff-table');
     const ctx = canvas.getContext('2d');
     const dpr = window.devicePixelRatio || 1;
 
@@ -1193,6 +1236,12 @@ export class PropagatorViewManager {
     let nodeById = {};
     let hoveredNode = null;
     let transform = { x: 0, y: 0, k: 1 };
+
+    // Timeline state
+    let currentTrace = null;        // PropTraceJson for current capture (null if no trace)
+    let currentRound = -1;          // -1 = final, 0 = initial, 1..N = after round N
+    let changedCellIds = new Set();  // Cell IDs that changed in the current round
+    let initialCellValues = {};      // cellId -> initial value (from trace.initialNetwork)
 
     const CELL_R = 16;
     const PROP_R = 12;
@@ -1438,8 +1487,131 @@ export class PropagatorViewManager {
         '<table><tr><th>ID</th><th>Inputs</th><th>Outputs</th></tr>' + propRows + '</table></details>';
 
       hoveredNode = null;
+
+      // Timeline: check if this capture has trace data
+      currentTrace = cap.trace || null;
+      changedCellIds = new Set();
+      initialCellValues = {};
+
+      if (currentTrace && currentTrace.rounds && currentTrace.rounds.length > 0) {
+        // Build initial cell value map from trace.initialNetwork
+        if (currentTrace.initialNetwork && currentTrace.initialNetwork.cells) {
+          currentTrace.initialNetwork.cells.forEach(c => {
+            initialCellValues[c.id] = c.value;
+          });
+        }
+        // Show timeline bar
+        const maxRound = currentTrace.rounds.length;
+        timelineSlider.max = String(maxRound);
+        timelineSlider.value = String(maxRound); // Start at final state
+        currentRound = maxRound;
+        timelineBar.classList.add('visible');
+        updateRoundInfo(maxRound);
+      } else {
+        // No trace — hide timeline
+        currentTrace = null;
+        currentRound = -1;
+        timelineBar.classList.remove('visible');
+        roundDiffDiv.classList.remove('visible');
+      }
+
       draw();
     }
+
+    // Apply cell diffs up to round K and update node values
+    function applyDiffsToRound(roundIndex) {
+      if (!currentTrace) return;
+      const rounds = currentTrace.rounds;
+
+      // Reset all cells to initial values
+      currentNodes.forEach(n => {
+        if (n.type === 'cell' && initialCellValues.hasOwnProperty(n.cellId)) {
+          n.value = initialCellValues[n.cellId];
+          n.solved = n.value !== '\\u22a5' && n.value !== 'bot';
+        }
+      });
+
+      changedCellIds = new Set();
+
+      // Apply diffs from round 1..roundIndex
+      for (let r = 0; r < roundIndex && r < rounds.length; r++) {
+        const round = rounds[r];
+        if (round.cellDiffs) {
+          round.cellDiffs.forEach(diff => {
+            const node = nodeById['c' + diff.cellId];
+            if (node) {
+              node.value = diff.newValue;
+              node.solved = diff.newValue !== '\\u22a5' && diff.newValue !== 'bot';
+            }
+          });
+        }
+      }
+
+      // Mark cells that changed in this specific round (for highlighting)
+      if (roundIndex > 0 && roundIndex <= rounds.length) {
+        const round = rounds[roundIndex - 1];
+        if (round.cellDiffs) {
+          round.cellDiffs.forEach(diff => {
+            changedCellIds.add(diff.cellId);
+          });
+        }
+      }
+    }
+
+    function updateRoundInfo(roundIndex) {
+      if (!currentTrace || !currentTrace.rounds) return;
+      const rounds = currentTrace.rounds;
+      const maxRound = rounds.length;
+
+      if (roundIndex === 0) {
+        roundInfoDiv.innerHTML =
+          '<span class="ri-item"><span class="ri-value">Initial</span> state (before propagation)</span>';
+        roundDiffDiv.classList.remove('visible');
+      } else if (roundIndex <= maxRound) {
+        const round = rounds[roundIndex - 1];
+        const diffs = round.cellDiffs ? round.cellDiffs.length : 0;
+        const fired = round.propagatorsFired ? round.propagatorsFired.length : 0;
+        const contra = round.contradiction !== null && round.contradiction !== undefined;
+        roundInfoDiv.innerHTML =
+          '<span class="ri-item">Round <span class="ri-value">' + roundIndex + '</span>/' + maxRound + '</span>' +
+          '<span class="ri-item"><span class="ri-value">' + diffs + '</span> diffs</span>' +
+          '<span class="ri-item"><span class="ri-value">' + fired + '</span> fired</span>' +
+          (contra ? '<span class="ri-item" style="color:#f44;">⚠ Contradiction</span>' : '');
+
+        // Show diff table for this round
+        if (diffs > 0) {
+          const cellLabelMap = {};
+          currentNodes.forEach(n => { if (n.type === 'cell') cellLabelMap[n.cellId] = n.fullLabel || n.label; });
+          const rows = round.cellDiffs.map(d => {
+            const lbl = cellLabelMap[d.cellId] || '#' + d.cellId;
+            const oldVal = d.oldValue.length > 30 ? d.oldValue.substring(0, 28) + '..' : d.oldValue;
+            const newVal = d.newValue.length > 30 ? d.newValue.substring(0, 28) + '..' : d.newValue;
+            return '<tr><td>#' + d.cellId + '</td><td>' + escapeHtmlInline(lbl) + '</td>' +
+              '<td><span class="diff-old">' + escapeHtmlInline(oldVal) + '</span></td>' +
+              '<td><span class="diff-new">' + escapeHtmlInline(newVal) + '</span></td>' +
+              '<td>P' + d.sourcePropagator + '</td></tr>';
+          }).join('');
+          roundDiffDiv.innerHTML =
+            '<table><tr><th>ID</th><th>Cell</th><th>Old</th><th>New</th><th>Source</th></tr>' + rows + '</table>';
+          roundDiffDiv.classList.add('visible');
+        } else {
+          roundDiffDiv.classList.remove('visible');
+        }
+      } else {
+        roundInfoDiv.innerHTML =
+          '<span class="ri-item"><span class="ri-value">Final</span> state</span>';
+        roundDiffDiv.classList.remove('visible');
+      }
+    }
+
+    // Timeline slider event handler
+    timelineSlider.addEventListener('input', () => {
+      const val = parseInt(timelineSlider.value) || 0;
+      currentRound = val;
+      applyDiffsToRound(val);
+      updateRoundInfo(val);
+      draw();
+    });
 
     function toScreen(x, y) {
       return [x * transform.k + transform.x, y * transform.k + transform.y];
@@ -1501,11 +1673,24 @@ export class PropagatorViewManager {
         const [sx, sy] = toScreen(n.x, n.y);
         const r = (n.type === 'cell' ? CELL_R : PROP_R) * transform.k;
         if (n.type === 'cell') {
+          const isChanged = changedCellIds.has(n.cellId);
           ctx.beginPath(); ctx.arc(sx, sy, r, 0, Math.PI * 2);
           ctx.fillStyle = cellColor(n, capSub); ctx.fill();
-          ctx.strokeStyle = (hoveredNode && hoveredNode.id === n.id) ? '#fff' : 'rgba(255,255,255,0.3)';
-          ctx.lineWidth = (hoveredNode && hoveredNode.id === n.id) ? 2 : 1;
-          ctx.stroke();
+          if (isChanged) {
+            // Highlight changed cells with bright yellow ring
+            ctx.strokeStyle = '#ffd700';
+            ctx.lineWidth = 3;
+            ctx.stroke();
+            // Outer glow
+            ctx.beginPath(); ctx.arc(sx, sy, r + 3 * transform.k, 0, Math.PI * 2);
+            ctx.strokeStyle = 'rgba(255, 215, 0, 0.4)';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+          } else {
+            ctx.strokeStyle = (hoveredNode && hoveredNode.id === n.id) ? '#fff' : 'rgba(255,255,255,0.3)';
+            ctx.lineWidth = (hoveredNode && hoveredNode.id === n.id) ? 2 : 1;
+            ctx.stroke();
+          }
         } else {
           drawDiamond(ctx, sx, sy, r);
           ctx.fillStyle = COLORS.propagator; ctx.fill();
