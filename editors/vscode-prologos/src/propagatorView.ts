@@ -254,8 +254,11 @@ export class PropagatorViewManager {
       color: var(--vscode-foreground, #ccc);
       background: var(--vscode-editor-background, #1e1e1e);
       padding: 20px;
+      word-break: break-word;
+      overflow-wrap: break-word;
     }
     .error { color: var(--vscode-errorForeground, #f44); }
+    .detail { font-family: var(--vscode-editor-font-family, monospace); font-size: 0.8em; opacity: 0.5; white-space: pre-wrap; word-break: break-all; }
   </style>
 </head>
 <body>
@@ -263,7 +266,7 @@ export class PropagatorViewManager {
   <p style="opacity: 0.7; font-size: 0.9em;">
     Save the file to trigger elaboration, then try again.
   </p>
-  <p style="opacity: 0.5; font-size: 0.8em;">${escapeHtml(message)}</p>
+  <p class="detail">${escapeHtml(message)}</p>
 </body>
 </html>`;
   }
@@ -383,6 +386,8 @@ export class PropagatorViewManager {
       text-align: left;
       border-bottom: 1px solid var(--vscode-widget-border, #333);
       font-size: 0.85em;
+      word-break: break-word;
+      overflow-wrap: break-word;
     }
     th { opacity: 0.7; font-size: 0.8em; }
     code { font-family: var(--vscode-editor-font-family, monospace); font-size: 0.9em; }

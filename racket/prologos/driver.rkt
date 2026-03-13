@@ -921,16 +921,19 @@
         [net-box (current-prop-net-box)])
     (when (and obs net-box)
       (define elab-net (unbox net-box))
-      (define cell-metas (build-cell-metas-from-network elab-net 'type-inference 'type))
+      (define pnet (elab-network-prop-net elab-net))
+      (define cell-metas (build-cell-metas-from-network pnet 'type-inference 'type))
       (define label
         (cond [(surf-def? surf) (format "elab:~a" (surf-def-name surf))]
+              [(surf-defproc? surf) (format "elab:defproc-~a" (surf-defproc-name surf))]
+              [(surf-session? surf) (format "elab:session-~a" (surf-session-name surf))]
               [(and (pair? surf) (surf-def? (car surf)))
                (format "elab:~a" (surf-def-name (car surf)))]
               [else "elab:command"]))
       (observatory-register-capture! obs
         (net-capture (gensym 'elab-cap-)
                      'type-inference label
-                     elab-net cell-metas #f
+                     pnet cell-metas #f
                      (if (prologos-error? result) 'exception 'complete)
                      (and (prologos-error? result) (prologos-error-message result))
                      (current-inexact-milliseconds)
