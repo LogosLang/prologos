@@ -142,6 +142,8 @@
  read-trait-constraints
  read-hasmethod-constraints
  read-capability-constraints
+ read-wakeup-registry
+ read-trait-wakeup-map
  ;; Phase 1b: Trait/HasMethod/Capability constraint cell IDs
  current-trait-constraint-cell-id
  current-trait-cell-map-cell-id
@@ -492,7 +494,8 @@
 (define (retry-trait-for-meta! meta-id)
   (define resolve-fn (current-retry-trait-resolve))
   (when resolve-fn
-    (define wakeup (current-trait-wakeup-map))
+    ;; Track 1 Phase 3b: read from cell.
+    (define wakeup (read-trait-wakeup-map))
     (define dict-metas (hash-ref wakeup meta-id '()))
     (for ([dict-id (in-list dict-metas)])
       (unless (meta-solved? dict-id)
@@ -585,8 +588,9 @@
   c)
 
 ;; Get constraints associated with a metavariable for wakeup.
+;; Track 1 Phase 3a: read from cell.
 (define (get-wakeup-constraints meta-id)
-  (hash-ref (current-wakeup-registry) meta-id '()))
+  (hash-ref (read-wakeup-registry) meta-id '()))
 
 ;; Retry postponed constraints that mention the given meta.
 ;; Uses 'retrying guard to prevent infinite re-entrant loops.
@@ -676,6 +680,26 @@
   (if (and cid net-box read-fn)
       (read-fn (unbox net-box) cid)
       (current-capability-constraint-map)))
+
+;; Track 1 Phase 3a: Read wakeup registry from cell or parameter.
+;; Returns hasheq: meta-id → (listof constraint).
+(define (read-wakeup-registry)
+  (define cid (current-wakeup-registry-cell-id))
+  (define net-box (current-prop-net-box))
+  (define read-fn (current-prop-cell-read))
+  (if (and cid net-box read-fn)
+      (read-fn (unbox net-box) cid)
+      (current-wakeup-registry)))
+
+;; Track 1 Phase 3b: Read trait wakeup map from cell or parameter.
+;; Returns hasheq: meta-id → (listof dict-meta-id).
+(define (read-trait-wakeup-map)
+  (define cid (current-trait-wakeup-cell-id))
+  (define net-box (current-prop-net-box))
+  (define read-fn (current-prop-cell-read))
+  (if (and cid net-box read-fn)
+      (read-fn (unbox net-box) cid)
+      (current-trait-wakeup-map)))
 
 ;; Reset the constraint store (called by reset-meta-store!).
 ;; Phase 1a: constraint cell is inherently reset when the network is recreated.
