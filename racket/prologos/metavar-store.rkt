@@ -144,6 +144,8 @@
  read-capability-constraints
  read-wakeup-registry
  read-trait-wakeup-map
+ read-hasmethod-wakeup-map
+ read-trait-cell-map
  ;; Phase 1b: Trait/HasMethod/Capability constraint cell IDs
  current-trait-constraint-cell-id
  current-trait-cell-map-cell-id
@@ -152,6 +154,7 @@
  ;; Phase 1c: Wakeup registry cell IDs
  current-wakeup-registry-cell-id
  current-trait-wakeup-cell-id
+ current-hasmethod-wakeup-cell-id
  ;; P5b: Multiplicity cell callbacks
  current-prop-fresh-mult-cell
  current-prop-mult-cell-write
@@ -288,10 +291,8 @@
                 [cid (in-value (champ-lookup id-map (prop-meta-id-hash ta-id) ta-id))]
                 #:when (not (eq? cid 'none)))
       cid))
+  ;; Phase 7b: Cell-only write for trait-cell-map (removed dual-write to parameter).
   (when (not (null? cell-ids))
-    (hash-set! (current-trait-cell-map) meta-id
-               (remove-duplicates cell-ids eq?))
-    ;; Phase 6c: Cell-only write for trait-cell-map.
     (define tcm-cid (current-trait-cell-map-cell-id))
     (set-box! tc-net-box
               (write-fn (unbox tc-net-box) tcm-cid
@@ -355,10 +356,13 @@
   ;; Already-solved metas won't trigger future solve-meta! calls, so they
   ;; can't fire wakeup. If all deps are solved, immediate resolution fires below.
   (define unsolved-dep-metas (filter (lambda (id) (not (meta-solved? id))) all-dep-metas))
-  (define wakeup (current-hasmethod-wakeup-map))
-  (for ([dep-id (in-list unsolved-dep-metas)])
-    (define existing (hash-ref wakeup dep-id '()))
-    (hash-set! wakeup dep-id (cons meta-id existing)))
+  ;; Phase 7a: Cell-only wakeup write (mirrors trait-wakeup pattern).
+  (define hw-cid (current-hasmethod-wakeup-cell-id))
+  (when (pair? unsolved-dep-metas)
+    (let ([hw-delta
+           (for/fold ([acc (hasheq)]) ([dep-id (in-list unsolved-dep-metas)])
+             (hash-set acc dep-id (list meta-id)))])
+      (set-box! hm-net-box (write-fn (unbox hm-net-box) hw-cid hw-delta))))
   ;; Phase 1d: If all deps are already ground (no unsolved metas to trigger wakeup),
   ;; attempt immediate resolution via the callback.
   (when (null? unsolved-dep-metas)
@@ -377,7 +381,8 @@
 (define (retry-hasmethod-for-meta! meta-id)
   (define resolve-fn (current-retry-hasmethod-resolve))
   (when resolve-fn
-    (define wakeup (current-hasmethod-wakeup-map))
+    ;; Phase 7a: Read from cell (was direct parameter access).
+    (define wakeup (read-hasmethod-wakeup-map))
     (define hm-metas (hash-ref wakeup meta-id '()))
     (for ([hm-id (in-list hm-metas)])
       (unless (meta-solved? hm-id)
@@ -502,7 +507,8 @@
   (define read-fn (current-prop-cell-read))
   (when (and resolve-fn net-box read-fn)
     (define enet (unbox net-box))
-    (define tcm (current-trait-cell-map))
+    ;; Phase 7b: Read from cell (was direct parameter access).
+    (define tcm (read-trait-cell-map))
     (for ([(dict-id cell-ids) (in-hash tcm)])
       (unless (meta-solved? dict-id)
         ;; Track 1 Phase 2a: read from cell.
@@ -687,6 +693,26 @@
       (read-fn (unbox net-box) cid)
       (hasheq)))
 
+;; Phase 7a: Read hasmethod wakeup map from cell.
+;; Returns hasheq: meta-id → (listof hasmethod-meta-id).
+(define (read-hasmethod-wakeup-map)
+  (define cid (current-hasmethod-wakeup-cell-id))
+  (define net-box (current-prop-net-box))
+  (define read-fn (current-prop-cell-read))
+  (if (and cid net-box read-fn)
+      (read-fn (unbox net-box) cid)
+      (hasheq)))
+
+;; Phase 7b: Read trait cell-map from cell.
+;; Returns hasheq: dict-meta-id → (listof cell-id).
+(define (read-trait-cell-map)
+  (define cid (current-trait-cell-map-cell-id))
+  (define net-box (current-prop-net-box))
+  (define read-fn (current-prop-cell-read))
+  (if (and cid net-box read-fn)
+      (read-fn (unbox net-box) cid)
+      (hasheq)))
+
 ;; Reset the constraint store (called by reset-meta-store!).
 ;; Phase 1a: constraint cell is inherently reset when the network is recreated.
 ;; Only need to clear the legacy parameter and wakeup registry.
@@ -701,9 +727,9 @@
   ;; Phase 1c: Clear wakeup cell IDs.
   (current-wakeup-registry-cell-id #f)
   (current-trait-wakeup-cell-id #f)
-  (hash-clear! (current-wakeup-registry))
-  ;; Phase 1d: Clear hasmethod wakeup map.
-  (hash-clear! (current-hasmethod-wakeup-map)))
+  ;; Phase 7a: Clear hasmethod wakeup cell ID (was hash-clear! on parameter).
+  (current-hasmethod-wakeup-cell-id #f)
+  (hash-clear! (current-wakeup-registry)))
 
 ;; Query: all postponed constraints.
 ;; Track 1 Phase 1a: reads from cell (primary) with parameter fallback.
@@ -778,6 +804,8 @@
 ;; These map meta-id → (listof value), using merge-hasheq-list-append.
 (define current-wakeup-registry-cell-id (make-parameter #f))
 (define current-trait-wakeup-cell-id (make-parameter #f))
+;; Phase 7a: Hasmethod wakeup cell (was missing — the only wakeup map without a cell).
+(define current-hasmethod-wakeup-cell-id (make-parameter #f))
 
 ;; P5b: Multiplicity cell callbacks
 (define current-prop-fresh-mult-cell (make-parameter #f))   ;; (enet source → (values enet* cell-id))
@@ -847,6 +875,7 @@
                  [current-capability-constraint-cell-id #f]
                  [current-wakeup-registry-cell-id #f]
                  [current-trait-wakeup-cell-id #f]
+                 [current-hasmethod-wakeup-cell-id #f]
                  [current-wakeup-registry (make-hasheq)]
                  [current-trait-constraint-map (make-hasheq)]
                  [current-trait-wakeup-map (make-hasheq)]
@@ -1273,7 +1302,7 @@
   (hash-clear! (current-sess-meta-store))
   (hash-clear! (current-trait-constraint-map))
   (hash-clear! (current-trait-wakeup-map))
-  (hash-clear! (current-trait-cell-map))
+  ;; Phase 7b: Removed (hash-clear! (current-trait-cell-map)) — cell handles reset.
   (hash-clear! (current-hasmethod-constraint-map))
   (reset-constraint-store!)
   ;; Always reset CHAMP meta-info + auxiliary boxes
@@ -1323,7 +1352,10 @@
       (current-wakeup-registry-cell-id wr-cid)
       (define-values (enet7 tw-cid) (new-cell-fn enet6 (hasheq) merge-hasheq-list-append))
       (current-trait-wakeup-cell-id tw-cid)
-      (set-box! nb enet7))))
+      ;; Phase 7a: Hasmethod wakeup cell (was missing — now parallel to trait wakeup).
+      (define-values (enet8 hw-cid) (new-cell-fn enet7 (hasheq) merge-hasheq-list-append))
+      (current-hasmethod-wakeup-cell-id hw-cid)
+      (set-box! nb enet8))))
 
 ;; ========================================
 ;; Meta state save/restore for speculative type-checking
