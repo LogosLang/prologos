@@ -1,7 +1,7 @@
 # Track 0: Cell-Primary Reads — Infrastructure Foundation
 
 **Created**: 2026-03-12
-**Status**: Stage 2 (Design)
+**Status**: SUPERSEDED — folded into Track 1 (`2026-03-12_TRACK1_CONSTRAINT_CELL_PRIMARY.md`)
 **Depends on**: Propagator-First Migration Sprint Phases 0-4 (COMPLETE)
 **Enables**: Track 1 (Constraint Tracking), Track 2 (Registries), Track 3 (Global Env), Track 4 (ATMS Speculation)
 **Research basis**: `2026-03-11_PROPAGATOR_FIRST_PIPELINE_AUDIT.md`, `2026-03-11_WHOLE_SYSTEM_PROPAGATOR_MIGRATION.md`
