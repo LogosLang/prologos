@@ -587,6 +587,8 @@
    (test-dep '(driver.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt sessions.rkt) #f)
    'test-observatory-01.rkt
    (test-dep '(champ.rkt propagator.rkt prop-observatory.rkt) #f)
+   'test-observatory-02.rkt
+   (test-dep '(champ.rkt propagator.rkt prop-observatory.rkt observatory-serialize.rkt trace-serialize.rkt) #f)
    'test-propagator-bsp.rkt
    (test-dep '(champ.rkt propagator.rkt) #f)
    'test-propagator-integration.rkt
