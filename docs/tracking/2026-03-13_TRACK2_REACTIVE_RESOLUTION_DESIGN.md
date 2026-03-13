@@ -20,9 +20,10 @@ questions that must be resolved before implementation.
 | Phase | Description | Status | Notes |
 |-------|-------------|--------|-------|
 | D.1 | Design analysis and formal grounding | ✅ | commit 061455e |
-| D.2 | Design iteration (review feedback) | 🔄 | This revision |
-| D.3 | Principles capture (data orientation) | ⬜ | New DESIGN_PRINCIPLES section |
-| 1 | Instance registry cell + incremental registration | ⬜ | |
+| D.2 | Design iteration (review feedback) | ✅ | commit 4edfa80 |
+| D.3 | Principles capture (data orientation) | ✅ | commit 5a9bf3f |
+| D.4 | Phase 1 dependency mapping | ✅ | |
+| 1 | Instance registry — eliminate dual-write | ⬜ | 1 write site, ~11 read sites, ~90 test fixtures (no change) |
 | 2 | Constraint status cells (pending/resolved) | ⬜ | |
 | 3 | Stratified quiescence architecture | ⬜ | |
 | 4 | Data-oriented solve-meta! (action descriptors) | ⬜ | |
@@ -844,13 +845,112 @@ of the legacy paths.
 ### Phase D.3: Capture Data Orientation Principle
 Amend `DESIGN_PRINCIPLES.org` with the Data Orientation principle.
 
-### Phase 1: Instance Registry Cell
-- Migrate `current-impl-registry` from mutable hash to a CHAMP-backed
-  propagator cell with `merge-hasheq` merge function
-- Cell created in `reset-meta-store!` alongside the existing 8 infrastructure cells
-- `process-impl` writes to the cell instead of the hash table
-- Read accessor `read-instance-registry` for downstream consumers
-- Tests: verify instances accumulate correctly, snapshot captures registry
+### Phase 1: Instance Registry — Eliminate Dual-Write
+
+**Key finding**: The instance registry cell *already exists*. Phase 2b of Track 1
+created `current-impl-registry-cell-id` with `merge-hasheq-union`, seeded from
+the parameter value at network initialization (`macros.rkt` line 515). But
+`register-impl!` dual-writes to BOTH the parameter AND the cell (lines 5687-5689),
+and all readers use the parameter. This is the exact `trait-cell-map` pattern
+that Track 1 Phase 7b fixed.
+
+Phase 1 = remove the parameter write, add a cell reader, convert production reads.
+
+#### Dependency Surface
+
+**Write site** (1 site, `macros.rkt`):
+- L5687: `(current-impl-registry (hash-set ...))` — parameter write (**REMOVE**)
+- L5689: `(macros-cell-write! (current-impl-registry-cell-id) ...)` — cell write (**KEEP**)
+- L5681: `(hash-ref (current-impl-registry) key #f)` — duplicate check in `register-impl!`.
+  Needs conversion to cell read (or kept as-is since the parameter is seeded with the
+  full registry at network init and stays consistent within a single `register-impl!` call).
+
+**Reader: `lookup-impl`** (1 site, `macros.rkt`):
+- L5692: `(hash-ref (current-impl-registry) key #f)` → convert to cell read.
+  This is the hot path — called during trait resolution for every constraint.
+
+**Reader: `collect-available-instances`** (`trait-resolution.rkt`):
+- L529: `(for/list ([(k _v) (in-hash (current-impl-registry))] ...)` → convert.
+  Used by `instances-of` introspection and trait narrowing.
+
+**Reader: `build-trait-constraint`** (`constraint-propagators.rkt`):
+- L52: default argument `[impl-reg (current-impl-registry)]` → convert.
+  Builds initial constraint domain from all known instances of a trait.
+
+**Reader: `driver.rkt`** (2 sites):
+- L496: `instances-of` REPL command — snapshot for introspection
+- L544: `satisfies?` REPL command — snapshot for introspection
+
+**Reader: `repl.rkt`** (2 sites):
+- L317, L362: Save/restore registry across REPL interactions
+
+**Reader: `lsp/server.rkt`** (4 sites):
+- L129, L143: Session parameterization
+- L230: Session save (`set-repl-session-impl-registry!`)
+- L217: Session restore
+
+**Reader: `tools/batch-worker.rkt`** (2 sites):
+- L79, L184: Precomputed snapshot for batch compilation
+
+**Test fixture parameterization** (~90+ test files):
+- Pattern: `[current-impl-registry prelude-impl-registry]` or
+  `[current-impl-registry shared-impl-reg]` in shared fixture `define-values`.
+  These seed the parameter which then flows into the cell via `reset-meta-store!`.
+  **No changes needed** — the parameter continues to exist as the seeding mechanism;
+  it's the *mid-execution reads* that move to the cell.
+
+#### Implementation Steps
+
+1. **Add `read-impl-registry`** reader function in `macros.rkt`:
+   ```racket
+   (define (read-impl-registry)
+     (define cid (current-impl-registry-cell-id))
+     (define net-box (current-prop-net-box))
+     (define read-fn (current-prop-cell-read))
+     (if (and cid net-box read-fn)
+         (read-fn (unbox net-box) cid)
+         (current-impl-registry)))  ;; fallback to parameter when no network
+   ```
+   The fallback ensures `lookup-impl` works during module loading (before
+   the propagator network is initialized), where instances are registered
+   into the parameter and the cell doesn't exist yet.
+
+2. **Convert `lookup-impl`** to use the reader:
+   ```racket
+   (define (lookup-impl key)
+     (hash-ref (read-impl-registry) key #f))
+   ```
+
+3. **Remove parameter write** in `register-impl!` (L5687):
+   Delete `(current-impl-registry (hash-set (current-impl-registry) key entry))`.
+   Keep the cell write (L5689). Keep the duplicate check (L5681) — it reads
+   the parameter which is accurate at registration time (seeded at network init).
+
+4. **Convert production reads** (6 files, ~11 sites):
+   - `trait-resolution.rkt` L529: `(read-impl-registry)` instead of `(current-impl-registry)`
+   - `constraint-propagators.rkt` L52: default to `(read-impl-registry)`
+   - `driver.rkt` L496, L544: `(read-impl-registry)`
+   - `repl.rkt` L317, L362: `(read-impl-registry)`
+   - `lsp/server.rkt` L129, L143, L230: `(read-impl-registry)` for save
+   - `tools/batch-worker.rkt` L79: `(read-impl-registry)` for snapshot
+
+5. **Export** `read-impl-registry` from `macros.rkt`; add to provide list.
+
+6. **Tests**: Existing test suite is the validation — the external API
+   (`register-impl!`, `lookup-impl`) has the same signatures. The behavioral
+   change is that mid-elaboration reads see the cell's monotone accumulation
+   rather than the parameter's snapshot-at-init value. This is strictly more
+   correct for Track 2's incremental registration goal.
+
+#### What This Enables
+
+With the parameter write removed, the cell becomes the *sole authoritative
+source* for the instance registry during elaboration. This means:
+- A threshold propagator watching the registry cell will fire when new instances
+  appear (Phase 5 prerequisite)
+- `save-meta-state`/`restore-meta-state!` captures registry state via the network
+  snapshot (speculation safety — currently a gap for parameter-based registry)
+- The registry is visible in the propagator network for debugging/observability
 
 ### Phase 2: Constraint Status Cells
 - Add a status cell per constraint: `pending → resolved` lattice
