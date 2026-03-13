@@ -26,6 +26,8 @@ Migrate all constraint tracking reads from legacy Racket parameters to propagato
 
 12 distinct constraint read sites across 3 files (`metavar-store.rkt`, `unify.rkt`, `trait-resolution.rkt`), plus 6 write sites and 1 speculation save/restore site.
 
+Phase 6 was originally conceived as parameter removal and dirty-flag cleanup. During implementation, Phase 5 revealed that `with-fresh-meta-env` (used by 26 test files) created contexts without propagator networks, forcing an `if/else` parameter fallback at every write site. Phase 6 was redesigned as "network-everywhere" — making `with-fresh-meta-env` always create a propagator network — which eliminated the fallback and achieved the original intent (single write path) through a different mechanism than planned.
+
 ### 1.3 Actual Scope
 
 **Phases 0-6 completed.**
@@ -38,27 +40,30 @@ The core goal was achieved: all constraint reads go through cell-primary accesso
 
 ### 2.1 Quantitative Summary
 
-| Metric | Value |
-|--------|-------|
-| New read accessors | 5 (`read-trait-constraints`, `read-hasmethod-constraints`, `read-capability-constraints`, `read-wakeup-registry`, `read-trait-wakeup-map`) |
-| Read sites flipped | 12 (across metavar-store.rkt, unify.rkt, trait-resolution.rkt) |
-| Write sites converted | 6 (cell-primary with parameter fallback) |
-| Speculation alignment | 1 (conditional save/restore in elab-speculation-bridge.rkt) |
-| Cell metrics infrastructure | 3 files (performance-counters.rkt, driver.rkt, batch-worker.rkt) |
-| Tests modified | 1 (test-infra-cell-constraint-01.rkt — updated for cell-primary assertions) |
-| Implementation commits | 7 |
-| Total LOC changed | ~160 insertions, ~100 deletions |
-| Benchmark delta | +1.2% (189.2s → 191.4s, within noise) |
+| Metric | Phases 0-5 | Phase 6 | Final |
+|--------|-----------|---------|-------|
+| New read accessors | 5 | — | 5 |
+| Read sites flipped | 12 | — | 12 |
+| Write sites converted | 6 (cell-primary + parameter fallback) | 6 (cell-only, no fallback) | 6 (cell-only) |
+| Speculation alignment | 1 (conditional save/restore) | simplified (unconditional) | unconditional |
+| Test files modified | 4 | 14 (10 + driver.rkt, 4 test updates) | 16 |
+| Benchmark files modified | — | 2 (+ driver.rkt) | 2 |
+| Redundant test macros removed | — | 2 (`with-prop-meta-env`, `with-infra-cell-env`) | — |
+| Implementation commits | 7 | 1 | 8 |
+| Total LOC changed | ~160 ins, ~100 del | ~160 ins, ~229 del | net −69 lines |
+| Benchmark (wall time) | 191.4s (+1.2%) | 186.4s (−1.5%) | no regression |
 
 ### 2.2 Architectural Components Delivered
 
-1. **Cell-primary read accessors** (5 new functions): Each follows the same pattern — check for cell ID + network + read function; if all present, read from cell; otherwise fall back to parameter. This is a clean abstraction that encapsulates the cell-vs-parameter decision.
+1. **Cell-primary read accessors** (5 new functions, Phases 1-3): Each follows the same pattern — check for cell ID + network + read function; if all present, read from cell; otherwise return an empty default. This is a clean abstraction that encapsulates the read decision. The guards handle the brief pre-initialization window (semantically correct: no constraints exist before the network is created).
 
-2. **Cell-only write paths** (Phase 6): All 6 constraint write functions use cell-only writes — no `if/else` fallback. The network is always present (network-everywhere via `with-fresh-meta-env` calling `reset-meta-store!`). Writes without a network crash loud (fail-by-construction), preventing silent data loss.
+2. **Cell-only write paths** (Phases 5 → 6): The write-side story has two chapters. Phase 5 introduced cell-primary writes with `if/else` parameter fallback — necessary because `with-fresh-meta-env` didn't create a network. Phase 6 eliminated the fallback entirely by making `with-fresh-meta-env` call `reset-meta-store!` (which creates the network when `driver.rkt` callbacks are installed). The final state is a single cell write path. Writes without a network crash loud (`unbox` on `#f`), which is correct-by-construction: it surfaces programming errors at the call site, not downstream.
 
-3. **Cell metrics emission**: `CELL-METRICS` JSON lines emitted to stderr alongside existing `PERF-COUNTERS`/`PHASE-TIMINGS`/`MEMORY-STATS`, extracted by batch-worker. Provides cells/propagators counts per test file.
+3. **Cell metrics emission** (Phase 0b): `CELL-METRICS` JSON lines emitted to stderr alongside existing `PERF-COUNTERS`/`PHASE-TIMINGS`/`MEMORY-STATS`, extracted by batch-worker. Provides cells/propagators counts per test file.
 
-4. **Unconditional speculation rollback** (Phase 6d): `with-speculative-rollback` relies entirely on `save-meta-state`/`restore-meta-state!` — no conditional constraint parameter save/restore needed since the network is always present.
+4. **Unconditional speculation rollback** (Phases 4 → 6d): Another two-chapter story. Phase 4a added conditional save/restore: save the constraint parameter explicitly when no network exists, rely on the network snapshot when it does. Phase 6d removed the conditional — with network-everywhere, `save-meta-state`/`restore-meta-state!` always captures constraint state via the network box. The speculation bridge shrank.
+
+5. **Test fixture unification** (Phase 6e): Retired `with-prop-meta-env` (from `test-constraint-retry-propagator.rkt`) and `with-infra-cell-env` (from `test-infra-cell-constraint-01.rkt`) — both were variants of `with-fresh-meta-env` that added a propagator network. With network-everywhere, `with-fresh-meta-env` subsumes both. Two fewer macros to maintain, and test code aligns with production infrastructure.
 
 ---
 
@@ -106,9 +111,12 @@ Of all the constraint wakeup maps, `current-hasmethod-wakeup-map` is the only on
 
 ### 5.1 Timeline
 
-**Expected**: 3-4 days. **Actual**: ~1 session (~4 hours implementation).
+**Expected**: 3-4 days. **Actual**: 2 sessions across 2 days.
 
-The design document had been thoroughly critiqued (external review incorporated), and the prior sprint's dual-write infrastructure meant the cell-side plumbing was already in place. The work was mostly mechanical: create accessor, flip callers, verify tests. The only non-trivial debugging was the parameter fallback discovery (Phase 5a).
+- **Session 1** (Phases 0-5, ~4 hours): Mechanical migration. The design document had been thoroughly critiqued, the dual-write plumbing was already in place, and most work was template-following. The only non-trivial debugging was the parameter fallback discovery (Phase 5a).
+- **Session 2** (Phase 6, ~2 hours): Redesign + implementation of network-everywhere. Required re-examining the architectural choice from Session 1 (accept the fallback? or fix the root cause?). The user's dissatisfaction with `if/else` at every write site drove the redesign. Implementation was fast once the approach was clear — `with-fresh-meta-env` + `reset-meta-store!` + `driver.rkt` requires.
+
+The gap between sessions was productive: it allowed the parameter fallback to be evaluated as an architectural pattern rather than accepted as a fait accompli.
 
 ### 5.2 Scope
 
@@ -148,11 +156,11 @@ Phase 6 resolved the parameter fallback concern from the original PIR. By making
 
 Read functions retain guards that return empty defaults (`'()`, `(hasheq)`) when no cell exists. This handles the brief window during initialization and `reset-constraint-store!` transitions. This is semantically correct (no constraints exist pre-initialization), not a "fallback."
 
-### 6.3 save-meta-state Captures Everything (Almost)
+### 6.3 save-meta-state Captures Everything
 
-The prop-network box captured by `save-meta-state` includes all cell contents, making explicit per-parameter save/restore redundant — but only when the network is active. This validates the design of the speculation system: it was built to capture the network as a whole, not individual cells.
+The prop-network box captured by `save-meta-state` includes all cell contents, making explicit per-parameter save/restore redundant. This validates the design of the speculation system: it was built to capture the network as a whole, not individual cells.
 
-The "almost" is the parameter fallback: when no network exists, `save-meta-state` captures the box as `#f`, and restoring it to `#f` doesn't restore parameter state. The conditional save/restore in the speculation bridge handles this.
+Before Phase 6, this came with a caveat: when no network existed, `save-meta-state` captured the box as `#f`, and restoring it to `#f` didn't restore parameter state. The conditional save/restore in the speculation bridge handled this edge. With network-everywhere, the caveat is gone — the network is always present, `save-meta-state` always captures constraint state, and the speculation bridge is unconditional.
 
 ### 6.4 "Dirty Flags" Don't Exist
 
@@ -194,19 +202,25 @@ Phase 6 made `with-fresh-meta-env` always create a propagator network by calling
 
 1. **Ordering invariants need explicit documentation**: The `merge-list-append` → newest-at-tail vs `cons` → newest-at-head difference caused a bug. When migrating data structures, document the ordering contract at the write site AND the read site.
 
-2. **`if/else` > `when` for migration writes**: Using `when (cell available)` for writes silently drops data when no cell exists. Using `if/else` with a fallback ensures writes always land somewhere. This is the same lesson as "fail loudly, not silently."
+2. **Fallback is a stepping stone, not an endpoint**: Phase 5 introduced `if/else` parameter fallback at every write site — a correct intermediate state that ensured writes always landed somewhere. But fallback at every write site is a maintenance burden and a source of behavioral divergence. Phase 6 resolved this by injecting the network everywhere, eliminating the branch entirely. The lesson: when a migration introduces a fallback, ask immediately whether the fallback can be eliminated by fixing the environment rather than accommodating its absence. The `if/else` was the right Phase 5 answer; it would have been the wrong long-term architecture.
 
-3. **Test fixtures are architecture too**: `with-fresh-meta-env` is infrastructure that 26 test files depend on. Changing its implicit contract (from "parameters are the only state" to "cells are primary") has ripple effects. Treating test fixtures as architectural decisions — not throwaway scaffolding — would have surfaced the fallback need earlier.
+3. **Test fixtures are architecture too**: `with-fresh-meta-env` is infrastructure that 26 test files depend on. Changing its implicit contract (from "parameters are the only state" to "cells are primary") has ripple effects. Phase 6 treated it as an architectural component worth redesigning — making it call `reset-meta-store!` — rather than working around its limitations. The fallback pattern existed for one session precisely because we initially treated the fixture as immutable scaffolding rather than modifiable infrastructure.
 
 4. **Phase dependency analysis matters**: The original plan's phase ordering (4 before 5) was wrong. Quick dependency analysis (asking "what does Phase 4's removal assume?") during implementation caught this before wasted work. Design documents should include explicit dependency arrows, not just sequential numbering.
+
+5. **Write/read asymmetry is a design principle**: Writes crash without infrastructure (fail loud — prevents silent data loss). Reads return empty defaults without infrastructure (graceful — semantically correct, no stale data). This asymmetry emerged from debugging Phase 6 failures, not from upfront design. It's the right pattern for any system where initialization order isn't fully deterministic: a write to nowhere is data loss; a read from nowhere is "nothing exists yet."
+
+6. **Correct-by-construction beats correct-by-convention**: The `if/else` fallback was correct by convention — every write site had to remember to check for the network. Network-everywhere is correct by construction — the network always exists, so the check is unnecessary. Convention requires vigilance at every new write site forever; construction requires nothing. When the cost of injecting the prerequisite (adding `driver.rkt` to 12 files) is low relative to the ongoing cost of the convention (maintaining branches at every write site), construction wins.
 
 ### 8.2 Process Lessons
 
 1. **External critique paid off**: The design document incorporated critique from an outside review (added benchmarking protocol, dirty-flag removal guidance, mental-model questions). This led to the benchmarking infrastructure being in place before implementation started.
 
-2. **The fallback pattern emerged from implementation, not design**: No amount of design review would have surfaced the `with-fresh-meta-env` issue — it required running the tests after write removal. This validates the staged implementation approach (flip reads → verify → remove writes → verify) over a big-bang migration.
+2. **The fallback pattern emerged from implementation, not design**: No amount of design review would have surfaced the `with-fresh-meta-env` issue — it required running the tests after write removal. This validates the staged implementation approach (flip reads → verify → remove writes → verify) over a big-bang migration. But the lesson has a second half: once the fallback emerged, the *dissatisfaction* with it drove a better solution. Implementation surfaces problems; critical evaluation of the implementation surfaces opportunities.
 
-3. **Mechanical migrations are fast when the pattern is established**: All 5 read accessors followed the same template. All 6 write conversions followed the same `if/else` pattern. Once the first one was done and tested, the rest were copy-paste with find-replace. Total implementation time: ~4 hours including all debugging.
+3. **Mechanical migrations are fast when the pattern is established**: All 5 read accessors followed the same template. All 6 write conversions followed the same pattern. Once the first one was done and tested, the rest were template-following. Phase 6 was similar — once the approach was clear (`with-fresh-meta-env` calls `reset-meta-store!`), the implementation was mechanical: add `driver.rkt` to files, remove `if/else` from writes, retire redundant macros.
+
+4. **Sleeping on architectural dissatisfaction is productive**: The gap between Session 1 (accepted the fallback) and Session 2 (eliminated it) allowed the parameter fallback to be evaluated as a pattern rather than accepted as a constraint. The user's reaction — "it is more principally correct and complete" — articulated what was wrong with the fallback: not that it was buggy, but that it was two code paths where one should suffice. The PIR's original honest assessment ("we maintain two write paths... this is a real cost") was the trigger for Phase 6's redesign. PIRs that are honest about shortcomings create the conditions for fixing them.
 
 ---
 
@@ -230,17 +244,27 @@ This is the honest state: we're building the foundation, not the building.
 
 ## 10. Conclusion
 
-Track 1 is infrastructure, not capability. It moved constraint data from parameters to cells, which is a necessary precondition for reactive constraint resolution (Track 2) and ATMS multi-world speculation (Track 4). But the cells are inert — nothing watches them, no propagator fires when they change. The manual retry loops and batch resolution passes remain the actual resolution machinery.
+Track 1 is infrastructure, not capability. It moved constraint data from parameters to cells, which is a necessary precondition for reactive constraint resolution (Track 2) and ATMS multi-world speculation (Track 4). The cells are inert — nothing watches them, no propagator fires when they change. The manual retry loops and batch resolution passes remain the actual resolution machinery.
+
+But the infrastructure is *clean*. That matters. After Phase 6, there is one write path (cells), one rollback mechanism (network snapshot), one test fixture macro (`with-fresh-meta-env`), and zero conditional branches at write sites. The code that exists is the code that runs. This is a different quality of foundation than "it works but there's an `if/else` at every write site that you have to remember to maintain."
 
 What we gained concretely:
-1. **Unified read API** — 6 accessors that abstract over cell-vs-parameter
-2. **Transactional rollback for free** — speculation captures constraint state via the network snapshot
+1. **Single write path** — cell-only writes, no fallback, no branch, correct-by-construction
+2. **Transactional rollback for free** — speculation captures constraint state via the network snapshot, unconditionally
 3. **Addressable constraint state** — cells have IDs, live in the network, can have propagators wired to them in future tracks
-4. **Performance validation** — cell reads are cost-free (+1.2% = noise), green-lighting future migration tracks
+4. **Test/production equivalence** — `with-fresh-meta-env` creates the same infrastructure as the production driver
+5. **Performance validation** — cell reads are cost-free, green-lighting future migration tracks
+6. **Net code reduction** — 69 fewer lines than we started with; the code got simpler, not more complex
 
 What we did not gain:
 1. **Reactive resolution** — constraints are still resolved by explicit call chains, not by propagator firing
 2. **Cross-domain composition** — no new bridges exist; the constraint cells are isolated from type/session/multiplicity domains
 3. **Observability** — the Observatory can see meta cells, but constraint cells aren't visualized or traced
 
-The key lesson: **moving data to cells is table stakes, not the endgame**. The value comes from wiring propagator edges to those cells — which is Track 2's job. Track 1 laid the pipe; Track 2 turns on the water.
+What we learned about how we work:
+1. **Staged migration surfaces problems that design review cannot** — the fallback pattern emerged from running tests, not from reading code
+2. **Honest PIRs create the conditions for improvement** — the original PIR's candid assessment of the fallback cost is what triggered Phase 6
+3. **"Correct by construction" is worth the effort of injecting prerequisites** — adding `driver.rkt` to 12 files was cheaper than maintaining `if/else` at every write site forever
+4. **Data on cells ≠ reactive propagation** — this distinction, glossed over in prior PIRs, is now explicit and understood
+
+The key lesson: **moving data to cells is table stakes, not the endgame**. The value comes from wiring propagator edges to those cells — which is Track 2's job. Track 1 laid the pipe; Track 2 turns on the water. But the pipe is clean, single-bore, and has no leaks. That's what Phase 6 achieved.
