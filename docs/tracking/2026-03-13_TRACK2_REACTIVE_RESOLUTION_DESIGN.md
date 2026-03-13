@@ -23,15 +23,17 @@ questions that must be resolved before implementation.
 | D.2 | Design iteration (review feedback) | ✅ | commit 4edfa80 |
 | D.3 | Principles capture (data orientation) | ✅ | commit 5a9bf3f |
 | D.4 | Phase 1 dependency mapping | ✅ | |
+| D.5 | Performance baseline capture | ⬜ | Before Phase 1 implementation |
+| D.6 | External review integration | ✅ | |
 | 1 | Instance registry — eliminate dual-write | ⬜ | 1 write site, ~11 read sites, ~90 test fixtures (no change) |
-| 2 | Constraint status cells (pending/resolved) | ⬜ | |
-| 3 | Stratified quiescence architecture | ⬜ | |
+| 2 | Constraint status cells (pending/resolved) | ⬜ | Status cell alongside existing struct; `retrying` stays until Phase 3 |
+| 3 | Stratified quiescence architecture | ⬜ | Includes fuel counter for termination guarantee |
 | 4 | Data-oriented solve-meta! (action descriptors) | ⬜ | |
 | 5 | Trait resolution propagators | ⬜ | |
 | 6 | HasMethod resolution propagators | ⬜ | |
-| 7 | Error cell + grouped error reporting | ⬜ | |
-| 8 | Post-pass elimination | ⬜ | |
-| 9 | Confluence verification | ⬜ | |
+| 7 | Error cell + grouped error reporting | ⬜ | Set-union merge keyed on constraint ID; includes HKT-7 |
+| 8 | Post-pass elimination | ⬜ | Compare performance against D.5 baseline |
+| 9 | Confluence verification | ⬜ | Prerequisite: HKT-7 (Phase 7); randomized-order property tests |
 
 ---
 
@@ -551,11 +553,12 @@ Stratum 1: Readiness Detection (monotone)
 Stratum 2: Resolution Commitment (non-monotone barrier)
   - Consume readiness signals, execute resolutions, feed back to S0
   [Loop S0-S2 until global fixpoint]
-Stratum 3: Error Reporting (read-only)
+Post-Fixpoint Error Sweep (after global fixpoint):
   - Sweep unsolved constraints, report errors
+  - Read-only: does not participate in the fixpoint iteration
 ```
 
-Three strata during elaboration, one post-elaboration error sweep.
+Three strata during elaboration (S0-S2), one post-fixpoint error sweep.
 No separate registration barrier needed.
 
 ---
@@ -588,7 +591,7 @@ pending → resolved
 - `resolved`: solution committed (terminal)
 
 Constraints that never reach `resolved` after the global fixpoint are errors
-— detected by the Stratum 3 error sweep.
+— detected by the post-fixpoint error sweep.
 
 Status transitions become cell writes:
 - Creating a constraint writes `pending`
@@ -624,7 +627,7 @@ the propagator network:
 | Capability constraints | Map cell | Track 1 Phase 2c |
 | **Constraint status** | **Status cell (pending/resolved)** | **Track 2 Phase 2** |
 | **Instance registry** | **Map cell (CHAMP-backed)** | **Track 2 Phase 1** |
-| **Error descriptors** | **List cell (append-merge)** | **Track 2 Phase 7** |
+| **Error descriptors** | **Set cell (constraint-ID-keyed union)** | **Track 2 Phase 7** |
 
 This completes the vision of total network observability: the propagator
 network is the single source of truth for the entire type-checking state,
@@ -767,10 +770,12 @@ N-1 unnecessary quiescence passes with no correctness benefit.
 error descriptors in an **error cell** for grouped presentation.
 
 Resolution propagators write error descriptors to an error cell (another
-infrastructure cell, merge function = list-append). The error cell
-monotonically accumulates all resolution errors. The error-reporting pass
-(Stratum 3) reads the error cell and presents grouped, provenance-rich
-diagnostics.
+infrastructure cell, merge function = set-union keyed on constraint ID).
+Keying on constraint ID deduplicates: if a resolution propagator fires
+multiple times for the same constraint (due to related cell changes), only
+one error descriptor survives. The error cell monotonically accumulates all
+resolution errors. The post-fixpoint error sweep reads the error cell and
+presents grouped, provenance-rich diagnostics.
 
 This gives the best of both approaches:
 - **Detection at source**: ambiguity is caught when it occurs, preserving
@@ -824,7 +829,7 @@ This design extends and concretizes several principles from
 | Correct by Construction | Stratification makes confluence structural, not contingent |
 | Propagator-First Infrastructure | Constraint status → cells; resolution → propagators |
 | First-Class by Default | Resolution actions are first-class data, not embedded effects |
-| Layered Architecture | Strata 0-4 are composable layers |
+| Layered Architecture | Strata 0-2 + post-fixpoint sweep are composable layers |
 | Decomplection | Separates effect description from effect execution |
 
 **New principle to capture**: **Data Orientation** — prefer data
@@ -844,6 +849,12 @@ of the legacy paths.
 
 ### Phase D.3: Capture Data Orientation Principle
 Amend `DESIGN_PRINCIPLES.org` with the Data Orientation principle.
+
+### Phase D.5: Performance Baseline
+Before Phase 1 implementation, capture timing baseline:
+`racket tools/run-affected-tests.rkt --all` to record per-file timings in
+`data/benchmarks/timings.jsonl`. Compare after Phase 8 to verify no
+regression from the architectural migration.
 
 ### Phase 1: Instance Registry — Eliminate Dual-Write
 
@@ -954,7 +965,10 @@ source* for the instance registry during elaboration. This means:
 
 ### Phase 2: Constraint Status Cells
 - Add a status cell per constraint: `pending → resolved` lattice
-- Replace `set-constraint-status!` mutable struct mutation with cell writes
+- The status cell is added *alongside* the existing struct field — the
+  `retrying` guard on the struct stays in place until Phase 3 replaces the
+  imperative call chain with stratified quiescence (which eliminates
+  re-entrancy, making the guard dead code)
 - Verify save/restore captures constraint status (the current speculation gap)
 - Tests: verify status transitions, speculation safety
 
@@ -962,6 +976,12 @@ source* for the instance registry during elaboration. This means:
 - Modify `solve-meta!` to use a stratified loop:
   S0 (type propagation) → S1 (readiness scan) → S2 (resolution batch)
 - Replace recursive re-entrancy with flat iteration
+- **Fuel counter**: the outer loop (S0→S1→S2→S0) gets a maximum iteration
+  count. On fuel exhaustion, collect all pending constraints and report
+  "constraint resolution did not converge." The CALM theorem guarantees
+  convergence for monotone operations, but S2 is the non-monotone barrier —
+  fuel is the safety net. (The current `retrying` guard is a local cycle
+  breaker; the fuel counter is its global replacement.)
 - This is the structural change; resolution logic stays imperative initially
 
 ### Phase 4: Action Descriptors
@@ -982,25 +1002,56 @@ source* for the instance registry during elaboration. This means:
 - Replaces `resolve-hasmethod-constraints!` batch pass
 
 ### Phase 7: Error Cell + Grouped Error Reporting
-- Add error descriptor cell (list-append merge)
-- Resolution propagators write error descriptors on failure/ambiguity
+- Add error descriptor cell (set-union merge, keyed on constraint ID —
+  deduplicates across repeated propagator firings for the same constraint)
+- Resolution propagators write error descriptors on failure/ambiguity;
+  only write for constraints whose status cell is still `pending`
 - Convert `check-unresolved-trait-constraints` to read error cell + sweep
-  unsolved constraints
+  unsolved constraints in the post-fixpoint error sweep
 - Implement HKT-7 ambiguity detection at resolution time
 
 ### Phase 8: Post-Pass Elimination
 - Remove `resolve-hasmethod-constraints!` calls from `driver.rkt` (5 sites)
 - Verify all resolution happens through propagators
-- The error-reporting sweep (Stratum 3) is the only remaining post-pass
+- The post-fixpoint error sweep is the only remaining post-elaboration pass
 
 ### Phase 9: Confluence Verification
-- Property-based tests: randomize resolution order, verify same fixpoint
-- Verify non-overlapping instance invariant is enforced
-- Ambiguity detection tests for HKT-7 edge cases
+- **Prerequisite**: HKT-7 ambiguity detection (Phase 7) must be complete.
+  Without ambiguity errors for same-specificity parametric instance ties,
+  confluence tests would pass vacuously (silent first-match is deterministic
+  but not for the right reason).
+- **Randomized-order property tests**: shuffle the Stratum 2 ready set,
+  resolve in shuffled order, assert same fixpoint. This surfaces any hidden
+  ordering dependencies that the non-overlapping invariant should prevent.
+- Verify non-overlapping instance invariant is enforced at registration time
+- Ambiguity detection tests for HKT-7 edge cases (same-specificity ties,
+  overlapping parametric patterns)
 
 ---
 
-## §11. References
+## §11. External Review Disposition (2026-03-13)
+
+Design submitted for independent review. Reviewer had no full project context.
+Disposition of each critique point:
+
+| # | Critique | Verdict | Rationale |
+|---|----------|---------|-----------|
+| 1 | HKT-7 ambiguity as Phase 0 | **Partial accept** | HKT-7 noted as Phase 9 prerequisite; not blocking Phases 1-8. Non-overlapping policy means ambiguity is academic until pathological input. |
+| 2 | Registry cell fallback window | **Reject** | Reviewer misunderstands lifecycle. Module loading → parameter; `register-macros-cells!` → seeds cell from parameter; elaboration → cell only. No window for lost instances. Same pattern as all 13 other registry cells, battle-tested across 5400+ tests. |
+| 3 | Error cell duplicate descriptors | **Accept** | Changed error cell merge from list-append to set-union keyed on constraint ID. Resolution propagators also gate on `status = pending`. |
+| 4 | Batch S2 hides ordering bugs | **Partial accept** | Randomized-order property tests added to Phase 9. Dedicated debug mode rejected — it tests a property guaranteed by non-overlapping instances, which the property tests already verify. |
+| 5 | Phase 2/3 retrying removal timing | **Reject** | Reviewer inferred a sequencing we don't have. Phase 2 adds status cells *alongside* struct field; `retrying` stays until Phase 3 eliminates re-entrancy. Clarified in Phase 2 description. |
+| 6 | Missing fuel limits / cycle detection | **Accept** | Fuel counter added to Phase 3 spec. The `retrying` guard is a local cycle breaker; the fuel counter is its global replacement. |
+| 7 | Observatory integration | **Reject** | Observatory is future unbuilt infrastructure. Cells are observable by construction — no per-cell-type integration needed. Adding a phase for unbuilt dependencies violates Completeness Over Deferral in the wrong direction. |
+| 8 | Performance baseline | **Accept** | Added D.5 (baseline capture before Phase 1) and note on Phase 8 (compare after migration). We already have `benchmark-tests.rkt` infrastructure. |
+| 9 | Stratum vs Phase naming | **Reject** | "Stratum" matches Datalog literature; "Phase" is implementation steps. Renaming to "Layer" or "Stage" would conflict with Layered Recovery Principle terminology. |
+| 10 | S3 is not a stratum | **Accept** | Renamed to "Post-Fixpoint Error Sweep" throughout. It runs after fixpoint, not as part of the stratified iteration. |
+| 11 | Action descriptor struct detail | **Partial accept** | Deferred to Phase 4 implementation. Design doc intentionally stays conceptual; struct layouts emerge from code. |
+| 12 | Observability table placement | **Accept** | Editorial improvement for a future pass. |
+
+---
+
+## §12. References
 
 - Radul & Sussman, "The Art of the Propagator" (2009) — propagator substrate
 - Kmett, "Propagators" (YOW! Lambda Jam 2016) — stratified non-monotone extension
