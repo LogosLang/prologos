@@ -159,6 +159,10 @@
  current-constraint-status-cell-id
  read-constraint-status-map
  write-constraint-status-cell!
+ ;; Track 2 Phase 7: Error descriptor cell
+ current-error-descriptor-cell-id
+ read-error-descriptors
+ write-error-descriptor!
  ;; Track 2 Phase 3: Stratified resolution (progress box is internal)
  current-in-stratified-resolution?
  current-stratified-progress-box
@@ -912,6 +916,25 @@
   (when (and cid net-box write-fn)
     (set-box! net-box (write-fn (unbox net-box) cid (hasheq constraint-id status-sym)))))
 
+;; Track 2 Phase 7: Read error descriptors from cell.
+;; Returns hasheq: meta-id → no-instance-error.
+(define (read-error-descriptors)
+  (define cid (current-error-descriptor-cell-id))
+  (define net-box (current-prop-net-box))
+  (define read-fn (current-prop-cell-read))
+  (if (and cid net-box read-fn)
+      (read-fn (unbox net-box) cid)
+      (hasheq)))
+
+;; Track 2 Phase 7: Write an error descriptor to the error cell.
+;; Called by resolution callbacks when resolution fails for a ground constraint.
+(define (write-error-descriptor! meta-id error)
+  (define cid (current-error-descriptor-cell-id))
+  (define net-box (current-prop-net-box))
+  (define write-fn (current-prop-cell-write))
+  (when (and cid net-box write-fn)
+    (set-box! net-box (write-fn (unbox net-box) cid (hasheq meta-id error)))))
+
 ;; Reset the constraint store (called by reset-meta-store!).
 ;; Clears cell IDs — new cells are created by reset-meta-store! when the network is recreated.
 (define (reset-constraint-store!)
@@ -929,7 +952,9 @@
   ;; Track 2 Phase 6: Clear hasmethod cell-map cell ID.
   (current-hasmethod-cell-map-cell-id #f)
   ;; Track 2 Phase 2: Clear constraint status cell ID.
-  (current-constraint-status-cell-id #f))
+  (current-constraint-status-cell-id #f)
+  ;; Track 2 Phase 7: Clear error descriptor cell ID.
+  (current-error-descriptor-cell-id #f))
 
 ;; Query: all postponed constraints.
 ;; Track 1 Phase 1a: reads from cell (primary) with parameter fallback.
@@ -1018,6 +1043,11 @@
 ;; stays in place until Phase 3 eliminates re-entrancy.
 (define current-constraint-status-cell-id (make-parameter #f))
 
+;; Track 2 Phase 7: Error descriptor cell.
+;; Maps meta-id → no-instance-error. Written by resolution callbacks when
+;; resolution fails; read by post-fixpoint error sweep.
+(define current-error-descriptor-cell-id (make-parameter #f))
+
 ;; P5b: Multiplicity cell callbacks
 (define current-prop-fresh-mult-cell (make-parameter #f))   ;; (enet source → (values enet* cell-id))
 (define current-prop-mult-cell-write (make-parameter #f))   ;; (enet cell-id value → enet*)
@@ -1088,6 +1118,7 @@
                  [current-hasmethod-wakeup-cell-id #f]
                  [current-hasmethod-cell-map-cell-id #f]
                  [current-constraint-status-cell-id #f]
+                 [current-error-descriptor-cell-id #f]
                  ;; CHAMP boxes + network: #f — reset-meta-store! creates fresh
                  [current-prop-meta-info-box #f]
                  [current-prop-net-box #f]
@@ -1616,7 +1647,10 @@
       ;; Track 2 Phase 6: HasMethod cell-map (meta-id → (listof cell-id)).
       (define-values (enet10 hcm-cid) (new-cell-fn enet9 (hasheq) merge-hasheq-union))
       (current-hasmethod-cell-map-cell-id hcm-cid)
-      (set-box! nb enet10))))
+      ;; Track 2 Phase 7: Error descriptor cell (meta-id → no-instance-error).
+      (define-values (enet11 ed-cid) (new-cell-fn enet10 (hasheq) merge-error-descriptor-map))
+      (current-error-descriptor-cell-id ed-cid)
+      (set-box! nb enet11))))
 
 ;; ========================================
 ;; Meta state save/restore for speculative type-checking

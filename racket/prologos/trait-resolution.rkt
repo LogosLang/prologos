@@ -25,6 +25,8 @@
          resolve-hasmethod-constraints!
          check-unresolved-trait-constraints
          check-unresolved-capability-constraints
+         ;; Track 2 Phase 7: shared error builder for resolution callbacks
+         build-trait-error
          ;; Exposed for testing
          try-monomorphic-resolve
          try-parametric-resolve
@@ -335,60 +337,87 @@
 ;; have ground type args but remain unsolved (i.e., no matching impl found).
 ;; Each error includes the source location from the meta that created it.
 ;; Enhanced with available instance listing, kind mismatch detection, and hints.
+;; Track 2 Phase 7: Build a no-instance-error for a trait constraint.
+;; Extracted as shared helper — used by both resolution callbacks (eager error writing)
+;; and check-unresolved-trait-constraints (post-fixpoint sweep).
+;; meta-id: the dict meta's symbol
+;; trait-name: symbol (e.g., 'Add)
+;; type-args: (listof expr) — already normalized and zonked
+(define (build-trait-error meta-id trait-name type-args)
+  (define type-args-str
+    (string-join (map expr->impl-key-str type-args) " "))
+  ;; Recover source location from the meta's source info
+  (define minfo (meta-lookup meta-id))
+  (define src (and minfo (meta-info-source minfo)))
+  (define loc
+    (if (and src (meta-source-info? src))
+        (meta-source-info-loc src)
+        srcloc-unknown))
+
+  ;; Enhanced error: detect kind mismatch and list available instances
+  (define kind-mismatch (detect-kind-mismatch trait-name type-args))
+  (define available (collect-available-instances trait-name))
+
+  (define message
+    (cond
+      ;; Kind mismatch — e.g., (Seqable Int) when Seqable expects Type -> Type
+      [kind-mismatch
+       (format "Kind mismatch in constraint (~a ~a): ~a"
+               trait-name type-args-str kind-mismatch)]
+      ;; No instance — list available instances and provide hint
+      [else
+       (define avail-str
+         (if (null? available)
+             ""
+             (format "\n  Available instances: ~a"
+                     (string-join
+                      (map (lambda (i) (format "~a ~a" trait-name i))
+                           available)
+                      ", "))))
+       (define hint
+         (let ([tm (lookup-trait trait-name)])
+           (if tm
+               (let ([methods (trait-meta-methods tm)])
+                 (format "\n  Hint: Define 'impl ~a ~a' with method~a ~a."
+                         trait-name type-args-str
+                         (if (> (length methods) 1) "s" "")
+                         (string-join (map (lambda (m) (format "'~a'" (trait-method-name m))) methods)
+                                      ", ")))
+               "")))
+       (format "No instance of ~a for ~a~a~a"
+               trait-name type-args-str avail-str hint)]))
+
+  (no-instance-error loc message trait-name type-args-str))
+
 (define (check-unresolved-trait-constraints)
-  ;; Track 1 Phase 2a: read from cell (primary) with parameter fallback.
-  (for/list ([(meta-id tc-info) (in-hash (read-trait-constraints))]
-             #:when (not (meta-solved? meta-id))
-             #:when (andmap ground-expr?
-                           (map (lambda (e) (normalize-for-resolution (zonk e)))
-                                (trait-constraint-info-type-arg-exprs tc-info))))
-    (define trait-name (trait-constraint-info-trait-name tc-info))
-    (define type-args (map (lambda (e) (normalize-for-resolution (zonk e)))
-                           (trait-constraint-info-type-arg-exprs tc-info)))
-    (define type-args-str
-      (string-join (map expr->impl-key-str type-args) " "))
-    ;; Recover source location from the meta's source info
-    (define minfo (meta-lookup meta-id))
-    (define src (and minfo (meta-info-source minfo)))
-    (define loc
-      (if (and src (meta-source-info? src))
-          (meta-source-info-loc src)
-          srcloc-unknown))
-
-    ;; Enhanced error: detect kind mismatch and list available instances
-    (define kind-mismatch (detect-kind-mismatch trait-name type-args))
-    (define available (collect-available-instances trait-name))
-
-    (define message
-      (cond
-        ;; Kind mismatch — e.g., (Seqable Int) when Seqable expects Type -> Type
-        [kind-mismatch
-         (format "Kind mismatch in constraint (~a ~a): ~a"
-                 trait-name type-args-str kind-mismatch)]
-        ;; No instance — list available instances and provide hint
-        [else
-         (define avail-str
-           (if (null? available)
-               ""
-               (format "\n  Available instances: ~a"
-                       (string-join
-                        (map (lambda (i) (format "~a ~a" trait-name i))
-                             available)
-                        ", "))))
-         (define hint
-           (let ([tm (lookup-trait trait-name)])
-             (if tm
-                 (let ([methods (trait-meta-methods tm)])
-                   (format "\n  Hint: Define 'impl ~a ~a' with method~a ~a."
-                           trait-name type-args-str
-                           (if (> (length methods) 1) "s" "")
-                           (string-join (map (lambda (m) (format "'~a'" (trait-method-name m))) methods)
-                                        ", ")))
-                 "")))
-         (format "No instance of ~a for ~a~a~a"
-                 trait-name type-args-str avail-str hint)]))
-
-    (no-instance-error loc message trait-name type-args-str)))
+  ;; Track 2 Phase 7c: read pre-computed errors from resolution propagators first.
+  ;; These were written by the trait resolution callback on failure — no need to
+  ;; re-zonk or re-scan for constraints that already attempted resolution.
+  (define cell-errors (read-error-descriptors))
+  ;; Sweep remaining unsolved constraints not covered by cell errors.
+  ;; Belt-and-suspenders: catches constraints whose type-args never became ground
+  ;; during elaboration (the resolution callback never fires for non-ground args).
+  (define sweep-errors
+    (for/list ([(meta-id tc-info) (in-hash (read-trait-constraints))]
+               #:when (not (meta-solved? meta-id))
+               #:when (not (hash-has-key? cell-errors meta-id))
+               #:when (andmap ground-expr?
+                             (map (lambda (e) (normalize-for-resolution (zonk e)))
+                                  (trait-constraint-info-type-arg-exprs tc-info))))
+      (define trait-name (trait-constraint-info-trait-name tc-info))
+      (define type-args (map (lambda (e) (normalize-for-resolution (zonk e)))
+                             (trait-constraint-info-type-arg-exprs tc-info)))
+      (build-trait-error meta-id trait-name type-args)))
+  ;; Filter cell errors: only include errors for metas that are still unsolved.
+  ;; Resolution may have succeeded on a later attempt (e.g., after more instances
+  ;; were loaded), solving the meta. The error descriptor stays in the cell
+  ;; (monotone merge) but is stale.
+  (define active-cell-errors
+    (for/list ([(meta-id err) (in-hash cell-errors)]
+               #:when (not (meta-solved? meta-id)))
+      err))
+  ;; Cell errors first (they have resolution-time context), then sweep errors.
+  (append active-cell-errors sweep-errors))
 
 ;; ========================================
 ;; Unresolved capability constraint checking (Phase 4)

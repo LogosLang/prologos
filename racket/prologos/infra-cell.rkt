@@ -35,6 +35,7 @@
  merge-set-union
  merge-replace
  merge-constraint-status-map
+ merge-error-descriptor-map
  ;; General cell factory — The Most Generalizable Interface
  net-new-cell-with-merge
  ;; Convenience cell factories (delegate to net-new-cell-with-merge)
@@ -132,6 +133,18 @@
        (if (eq? existing 'resolved)
            acc
            (hash-set acc k v)))]))
+
+;; Track 2 Phase 7: Error descriptor map — last-write-wins per meta-id.
+;; Maps meta-id → no-instance-error. Later resolution attempts produce
+;; better errors as more type info becomes available, so last write wins.
+(define (merge-error-descriptor-map old new)
+  (cond
+    [(eq? old 'infra-bot) new]
+    [(eq? new 'infra-bot) old]
+    [else
+     (for/fold ([acc old])
+               ([(k v) (in-hash new)])
+       (hash-set acc k v))]))
 
 ;; ========================================
 ;; General Cell Factory

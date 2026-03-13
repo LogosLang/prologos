@@ -2091,8 +2091,12 @@
      (define dict-expr
        (or (try-monomorphic-resolve trait-name type-args)
            (try-parametric-resolve trait-name type-args)))
-     (when dict-expr
-       (solve-meta! dict-meta-id dict-expr)))))
+     (if dict-expr
+         (solve-meta! dict-meta-id dict-expr)
+         ;; Track 2 Phase 7: Write error descriptor on resolution failure.
+         ;; The post-fixpoint error sweep reads these instead of re-scanning.
+         (write-error-descriptor! dict-meta-id
+           (build-trait-error dict-meta-id trait-name type-args))))))
 
 ;; Phase 1d: Install incremental hasmethod resolution callback.
 ;; When a dependency meta (type-arg or trait-var) is solved, this callback checks
