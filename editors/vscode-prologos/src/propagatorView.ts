@@ -156,12 +156,18 @@ export class PropagatorViewManager {
       ) as PropTraceJson;
 
       if (response.error) {
-        this.panel.webview.html = this.renderError(response.error);
+        // No old-style trace — fall back to observatory view
+        await this.showObservatoryForUri(uri);
       } else {
         this.panel.webview.html = this.renderSnapshot(response);
       }
     } catch (err: any) {
-      this.panel.webview.html = this.renderError(err.message || String(err));
+      // Propagator trace request failed — try observatory fallback
+      try {
+        await this.showObservatoryForUri(uri);
+      } catch {
+        this.panel.webview.html = this.renderError(err.message || String(err));
+      }
     }
   }
 
@@ -200,7 +206,15 @@ export class PropagatorViewManager {
     }
 
     this.panel.webview.html = this.renderLoading();
+    await this.showObservatoryForUri(uri);
+  }
 
+  /**
+   * Internal: request observatory snapshot for a URI and render it into the existing panel.
+   * Used by both showObservatory() and as fallback from show() when no old-style trace is available.
+   */
+  private async showObservatoryForUri(uri: string) {
+    if (!this.panel) { return; }
     try {
       const response = await this.client.sendRequest(
         '$/prologos/observatorySnapshot',
