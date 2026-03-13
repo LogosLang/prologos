@@ -160,6 +160,14 @@
  ;; Track 2 Phase 3: Stratified resolution (progress box is internal)
  current-in-stratified-resolution?
  current-stratified-progress-box
+ ;; Track 2 Phase 4: Action descriptors
+ (struct-out action-retry-constraint)
+ (struct-out action-resolve-trait)
+ (struct-out action-resolve-hasmethod)
+ collect-ready-constraints-via-cells
+ collect-ready-traits-via-cells
+ execute-resolution-action!
+ execute-resolution-actions!
  ;; P5b: Multiplicity cell callbacks
  current-prop-fresh-mult-cell
  current-prop-mult-cell-write
@@ -229,6 +237,33 @@
   (loc          ;; srcloc — where in user code this constraint arose
    description  ;; string — human-readable
    meta-source) ;; meta-source-info or #f — the meta that triggered this constraint
+  #:transparent)
+
+;; ========================================
+;; Track 2 Phase 4: Resolution Action Descriptors
+;; ========================================
+;; Data-oriented descriptions of resolution actions. Produced by S1 (readiness
+;; scan), consumed by S2 (resolution commitment). The interpreter loop in
+;; run-stratified-resolution! processes these as a worklist.
+;;
+;; This is the free monad pattern: instead of executing effects inline,
+;; resolution functions return data describing what should happen.
+
+;; Retry a postponed unification constraint.
+(struct action-retry-constraint
+  (constraint)    ;; constraint struct — the constraint to retry
+  #:transparent)
+
+;; Resolve a trait dictionary (e.g., find the Eq Int instance).
+(struct action-resolve-trait
+  (dict-meta-id   ;; symbol — the dictionary metavariable to solve
+   tc-info)       ;; trait-constraint-info — trait name + type args
+  #:transparent)
+
+;; Resolve a hasmethod constraint (e.g., find .length method).
+(struct action-resolve-hasmethod
+  (meta-id        ;; symbol — the hasmethod metavariable
+   hm-info)       ;; hasmethod-constraint-info — method details
   #:transparent)
 
 ;; ========================================
@@ -609,6 +644,111 @@
           (retry-fn c)
           (when (eq? (constraint-status c) 'retrying)
             (set-constraint-status! c 'postponed)))))))
+
+;; ========================================
+;; Track 2 Phase 4: Readiness Scan (Stratum 1)
+;; ========================================
+;; Pure scan functions that produce action descriptors without executing.
+;; These implement S1 (readiness detection) — observation only.
+
+;; Scan postponed constraints via cell state, return ready ones as descriptors.
+;; Production path: checks which constraints have non-bot meta cells.
+(define (collect-ready-constraints-via-cells)
+  (define net-box (current-prop-net-box))
+  (define read-fn (current-prop-cell-read))
+  (cond
+    [(and net-box read-fn)
+     (define enet (unbox net-box))
+     (for*/list ([c (in-list (read-constraint-store))]
+                 #:when (and (eq? (constraint-status c) 'postponed)
+                             (not (null? (constraint-cell-ids c))))
+                 #:when (for/or ([cid (in-list (constraint-cell-ids c))])
+                          (let ([v (read-fn enet cid)])
+                            (and (not (prop-type-bot? v)) (not (prop-type-top? v))))))
+       (action-retry-constraint c))]
+    [else '()]))
+
+;; Scan postponed constraints for a specific meta (test fallback path).
+(define (collect-ready-constraints-for-meta meta-id)
+  (define constraints (get-wakeup-constraints meta-id))
+  (for/list ([c (in-list constraints)]
+             #:when (eq? (constraint-status c) 'postponed))
+    (action-retry-constraint c)))
+
+;; Scan trait constraints via cell state, return ready ones as descriptors.
+(define (collect-ready-traits-via-cells)
+  (define net-box (current-prop-net-box))
+  (define read-fn (current-prop-cell-read))
+  (cond
+    [(and net-box read-fn)
+     (define enet (unbox net-box))
+     (define tcm (read-trait-cell-map))
+     (for*/list ([(dict-id cell-ids) (in-hash tcm)]
+                 #:when (not (meta-solved? dict-id))
+                 [tc-info (in-value (hash-ref (read-trait-constraints) dict-id #f))]
+                 #:when tc-info
+                 #:when (for/or ([cid (in-list cell-ids)])
+                          (let ([v (read-fn enet cid)])
+                            (and (not (prop-type-bot? v)) (not (prop-type-top? v))))))
+       (action-resolve-trait dict-id tc-info))]
+    [else '()]))
+
+;; Scan trait constraints for a specific meta (targeted wakeup).
+(define (collect-ready-traits-for-meta meta-id)
+  (define wakeup (read-trait-wakeup-map))
+  (define dict-metas (hash-ref wakeup meta-id '()))
+  (for*/list ([dict-id (in-list dict-metas)]
+              #:when (not (meta-solved? dict-id))
+              [tc-info (in-value (hash-ref (read-trait-constraints) dict-id #f))]
+              #:when tc-info)
+    (action-resolve-trait dict-id tc-info)))
+
+;; Scan hasmethod constraints for a specific meta (targeted wakeup).
+(define (collect-ready-hasmethods-for-meta meta-id)
+  (define wakeup (read-hasmethod-wakeup-map))
+  (define hm-metas (hash-ref wakeup meta-id '()))
+  (for*/list ([hm-id (in-list hm-metas)]
+              #:when (not (meta-solved? hm-id))
+              [hm-info (in-value (hash-ref (read-hasmethod-constraints) hm-id #f))]
+              #:when hm-info)
+    (action-resolve-hasmethod hm-id hm-info)))
+
+;; ========================================
+;; Track 2 Phase 4: Action Interpreter (Stratum 2)
+;; ========================================
+;; Consumes action descriptors produced by S1 and executes them.
+;; Each action may produce new cell writes that feed back to S0.
+
+(define (execute-resolution-action! action)
+  (match action
+    [(action-retry-constraint c)
+     ;; Re-check: constraint may have been resolved by a prior action in this batch.
+     (when (eq? (constraint-status c) 'postponed)
+       (perf-inc-constraint-retry!)
+       (define retry-fn (current-retry-unify))
+       (when retry-fn
+         ;; Guard still present as safety net (structurally dead under stratified loop).
+         (set-constraint-status! c 'retrying)
+         (retry-fn c)
+         (when (eq? (constraint-status c) 'retrying)
+           (set-constraint-status! c 'postponed))))]
+    [(action-resolve-trait dict-id tc-info)
+     ;; Re-check: dict meta may have been solved by a prior action.
+     (unless (meta-solved? dict-id)
+       (define resolve-fn (current-retry-trait-resolve))
+       (when resolve-fn
+         (resolve-fn dict-id tc-info)))]
+    [(action-resolve-hasmethod hm-id hm-info)
+     ;; Re-check: hasmethod meta may have been solved by a prior action.
+     (unless (meta-solved? hm-id)
+       (define resolve-fn (current-retry-hasmethod-resolve))
+       (when resolve-fn
+         (resolve-fn hm-id hm-info)))]))
+
+;; Execute a batch of action descriptors.
+(define (execute-resolution-actions! actions)
+  (for ([a (in-list actions)])
+    (execute-resolution-action! a)))
 
 ;; ========================================
 ;; Cell-Primary Read Accessors
@@ -999,15 +1139,17 @@
                    (not (prop-type-top? cell-val)))
           (perf-inc-cell-write-mismatch!))))))
 
-;; Track 2 Phase 3: Stratified resolution loop.
-;; Replaces the recursive retry chain with flat iteration:
-;;   S0 (type propagation) → S1+S2 (readiness scan + resolution) → repeat
+;; Track 2 Phase 3+4: Stratified resolution loop with action descriptors.
+;; S0 (type propagation) → S1 (collect ready actions) → S2 (execute) → repeat.
 ;;
-;; The loop terminates when a round produces no new resolutions (fixpoint)
-;; or the fuel counter is exhausted.
+;; Phase 4 change: S1 and S2 are now separate. S1 produces action descriptors
+;; (data), S2 executes them. This enables inspectability, testability, and
+;; ordering control per the free monad / semi-naive evaluation design.
+;;
+;; The loop terminates when S1 produces no actions (fixpoint) or fuel exhausted.
 ;;
 ;; `trigger-meta-id` is the meta that was just solved, used for targeted
-;; wakeup in the test fallback path.
+;; wakeup in the test fallback path and trait/hasmethod scans.
 (define (run-stratified-resolution! trigger-meta-id)
   (define progress-box (box #f))
   (parameterize ([current-in-stratified-resolution? #t]
@@ -1030,22 +1172,24 @@
           (define pnet (unwrap enet))
           (define pnet* (run-fn pnet))
           (set-box! net-box (rewrap enet pnet*)))
-        ;; ── Stratum 1+2: Readiness scan + resolution commitment ──
+        ;; ── Stratum 1: Readiness scan (collect action descriptors) ──
+        (define actions
+          (append
+           ;; Constraint readiness (cell-state scan or targeted wakeup).
+           (if has-network?
+               (collect-ready-constraints-via-cells)
+               (collect-ready-constraints-for-meta meta-id))
+           ;; Trait readiness (cell-state scan + targeted wakeup).
+           (collect-ready-traits-via-cells)
+           (collect-ready-traits-for-meta meta-id)
+           ;; HasMethod readiness (targeted wakeup).
+           (collect-ready-hasmethods-for-meta meta-id)))
+        ;; ── Stratum 2: Resolution commitment (execute actions) ──
         ;; Reset progress box. Any solve-meta-core! calls during S2 set it.
         (set-box! progress-box #f)
-        ;; Constraint retry (S2a): scan + retry ready constraints.
-        (if has-network?
-            (retry-constraints-via-cells!)
-            ;; Fallback for test contexts without propagator network
-            (retry-constraints-for-meta! meta-id))
-        ;; Trait resolution (S2b): cell-state scan + targeted wakeup.
-        (retry-traits-via-cells!)
-        (retry-trait-for-meta! meta-id)
-        ;; HasMethod resolution (S2c): targeted wakeup.
-        (retry-hasmethod-for-meta! meta-id)
+        (execute-resolution-actions! actions)
         ;; ── Check for progress ──
         ;; If any new metas were solved during S2, loop for another round.
-        ;; This replaces the recursive re-entrancy of the old solve-meta!.
         (when (unbox progress-box)
           (loop (sub1 fuel) meta-id))))))
 
