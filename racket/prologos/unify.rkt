@@ -544,7 +544,8 @@
     [(not (pattern-check args))
      ;; Failed pattern condition — postpone for later retry (Sprint 5)
      ;; Sprint 9: attach structured provenance from the head meta
-     (define pre-store (current-constraint-store))
+     ;; Track 1 Phase 1d: read from cell (primary) with parameter fallback.
+     (define pre-store (read-constraint-store))
      (add-constraint! flex-term rhs ctx
        (constraint-provenance
          srcloc-unknown
@@ -555,11 +556,13 @@
      ;; P-U2a: Check if quiescence already resolved the constraint.
      ;; add-constraint! creates propagator cells, so transitive propagation
      ;; may have solved the constraint immediately.
-     (define post-store (current-constraint-store))
+     ;; Track 1: cell uses merge-list-append (newest at tail); check last element.
+     (define post-store (read-constraint-store))
      (cond
        [(and (pair? post-store)
              (not (eq? post-store pre-store))
-             (eq? (constraint-status (car post-store)) 'solved))
+             (let ([newest (last post-store)])
+               (eq? (constraint-status newest) 'solved)))
         #t]  ;; Upgrade: constraint was resolved by quiescence
        [else 'postponed])]
     [(occurs? id rhs) #f]  ; occur check
@@ -703,8 +706,9 @@
 ;; unify-core is internal (for recursive calls and constraint retry).
 
 (define (unify ctx t1 t2)
+  ;; Track 1 Phase 1d: read from cell (primary) with parameter fallback.
   ;; Snapshot constraint store to detect solved-via-quiescence.
-  (define pre-store (current-constraint-store))
+  (define pre-store (read-constraint-store))
   (define result (unify-core ctx t1 t2))
   ;; Post-unification consistency check with propagator network.
   ;; Quiescence already ran inside solve-meta! (if any metas were solved).
@@ -716,13 +720,15 @@
     ;; If unify-core returned 'postponed, check if quiescence resolved
     ;; the constraint via transitive propagation. If the most recent constraint
     ;; added during this call was solved by retry-via-cells, upgrade to #t.
+    ;; Track 1: cell uses merge-list-append (newest at tail); check last element.
     [(eq? result 'postponed)
-     (define post-store (current-constraint-store))
+     (define post-store (read-constraint-store))
      (cond
        ;; A new constraint was added (post-store is longer than pre-store)
        [(and (pair? post-store)
              (not (eq? post-store pre-store))
-             (eq? (constraint-status (car post-store)) 'solved))
+             (let ([newest (last post-store)])
+               (eq? (constraint-status newest) 'solved)))
         #t]  ;; Upgrade: constraint was resolved by quiescence
        [else 'postponed])]
     [else result]))

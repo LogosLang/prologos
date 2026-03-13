@@ -606,7 +606,8 @@
   (define read-fn (current-prop-cell-read))
   (when (and retry-fn net-box read-fn)
     (define enet (unbox net-box))
-    (for ([c (in-list (current-constraint-store))])
+    ;; Track 1 Phase 1c: read from cell (primary) with parameter fallback.
+    (for ([c (in-list (read-constraint-store))])
       (when (and (eq? (constraint-status c) 'postponed)
                  (not (null? (constraint-cell-ids c))))
         ;; Check if any meta cell has become non-bot (meta solved)
@@ -653,16 +654,16 @@
   (hash-clear! (current-hasmethod-wakeup-map)))
 
 ;; Query: all postponed constraints.
-;; Phase 1a: still reads from legacy parameter (not cell) for save/restore compatibility.
+;; Track 1 Phase 1a: reads from cell (primary) with parameter fallback.
 (define (all-postponed-constraints)
   (filter (lambda (c) (eq? (constraint-status c) 'postponed))
-          (current-constraint-store)))
+          (read-constraint-store)))
 
 ;; Query: all failed constraints.
-;; Phase 1a: still reads from legacy parameter (not cell) for save/restore compatibility.
+;; Track 1 Phase 1b: reads from cell (primary) with parameter fallback.
 (define (all-failed-constraints)
   (filter (lambda (c) (eq? (constraint-status c) 'failed))
-          (current-constraint-store)))
+          (read-constraint-store)))
 
 ;; ========================================
 ;; Global metavariable store
