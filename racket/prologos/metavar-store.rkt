@@ -1372,9 +1372,9 @@
 ;;
 ;; Captures all six CHAMP references (network, id-map, meta-info, level, mult, sess).
 ;; O(1) — reads immutable CHAMP references from boxes.
-;; NOTE: Does NOT capture current-constraint-store (Racket parameter).
-;; The bridge handles constraint store save/restore separately (Phase 4b).
-;; When no network is available (test context), net/id-map are #f — still captured.
+;; With network-everywhere (Phase 6) and cell-only writes (Phases 5-7), the network
+;; snapshot captures ALL constraint state — no separate parameter save/restore needed.
+;; When no network is available (pre-initialization), net/id-map are #f — still captured.
 (define (save-meta-state)
   (define net-box (current-prop-net-box))
   (define id-box (current-prop-id-map-box))

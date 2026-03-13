@@ -1,7 +1,7 @@
 # Track 1: Constraint Cell-Primary — Post-Implementation Review
 
 **Date**: 2026-03-12 / 2026-03-13
-**Commits**: `ffc5d26` through `35fa4ae` (8 commits)
+**Commits**: `ffc5d26` through `a2914a0` (10 commits)
 **Test Count**: 6889 (358 files) — unchanged from baseline
 **Design Document**: `docs/tracking/2026-03-12_TRACK1_CONSTRAINT_CELL_PRIMARY.md`
 **Baseline Tag**: `benchmark-baseline-track-1`
@@ -30,7 +30,7 @@ Phase 6 was originally conceived as parameter removal and dirty-flag cleanup. Du
 
 ### 1.3 Actual Scope
 
-**Phases 0-6 completed.**
+**Phases 0-7 completed.**
 
 The core goal was achieved: all constraint reads go through cell-primary accessors, and all writes are cell-only (no parameter fallback). Phase 6 ("network-everywhere") eliminated the `if/else` fallback pattern that Phases 0-5 introduced by making `with-fresh-meta-env` always create a propagator network via `reset-meta-store!`. This required adding `driver.rkt` to 10 test files and 2 benchmarks that lacked propagator callbacks, but the result is a single write path — cell-only — with no branch at every write site. Read functions have guards returning empty defaults when called pre-initialization (semantically correct: no constraints exist before the network is created).
 
@@ -40,18 +40,17 @@ The core goal was achieved: all constraint reads go through cell-primary accesso
 
 ### 2.1 Quantitative Summary
 
-| Metric | Phases 0-5 | Phase 6 | Final |
-|--------|-----------|---------|-------|
-| New read accessors | 5 | — | 5 |
-| Read sites flipped | 12 | — | 12 |
-| Write sites converted | 6 (cell-primary + parameter fallback) | 6 (cell-only, no fallback) | 6 (cell-only) |
-| Speculation alignment | 1 (conditional save/restore) | simplified (unconditional) | unconditional |
-| Test files modified | 4 | 14 (10 + driver.rkt, 4 test updates) | 16 |
-| Benchmark files modified | — | 2 (+ driver.rkt) | 2 |
-| Redundant test macros removed | — | 2 (`with-prop-meta-env`, `with-infra-cell-env`) | — |
-| Implementation commits | 7 | 1 | 8 |
-| Total LOC changed | ~160 ins, ~100 del | ~160 ins, ~229 del | net −69 lines |
-| Benchmark (wall time) | 191.4s (+1.2%) | 186.4s (−1.5%) | no regression |
+| Metric | Phases 0-5 | Phase 6 | Phase 7 | Final |
+|--------|-----------|---------|---------|-------|
+| New read accessors | 5 | — | 2 (`read-hasmethod-wakeup-map`, `read-trait-cell-map`) | 7 |
+| Read sites flipped | 12 | — | 2 | 14 |
+| Write sites converted | 6 (cell-primary + parameter fallback) | 6 (cell-only, no fallback) | 2 (hasmethod wakeup: new cell; trait-cell-map: removed dual-write) | 8 (cell-only) |
+| Infrastructure cells | 6 | 6 | 8 (+hasmethod-wakeup, trait-cell-map read-path) | 8 |
+| Speculation alignment | 1 (conditional save/restore) | simplified (unconditional) | complete (all wakeup/mapping state captured) | unconditional + complete |
+| Test files modified | 4 | 14 (10 + driver.rkt, 4 test updates) | 0 | 16 |
+| Implementation commits | 7 | 1 | 2 | 10 |
+| Total LOC changed | ~160 ins, ~100 del | ~160 ins, ~229 del | +46 ins, −14 del | net ~−37 lines |
+| Benchmark (wall time) | 191.4s (+1.2%) | 186.4s (−1.5%) | 188.9s (within noise) | no regression |
 
 ### 2.2 Architectural Components Delivered
 
@@ -120,6 +119,8 @@ Of all the constraint wakeup maps, `current-hasmethod-wakeup-map` was the only o
 
 The gap between sessions was productive: it allowed the parameter fallback to be evaluated as an architectural pattern rather than accepted as a fait accompli.
 
+- **Session 3** (Phase 7, ~1 hour): Audit-driven follow-up. Re-reading the PIR's own §4.3 ("Hasmethod Wakeup Had No Cell") revealed that an identified gap had not been fixed. Phase 7a created the hasmethod wakeup cell; Phase 7b fixed the trait-cell-map dual-write. Both followed established patterns exactly — demonstrating that the PIR functioned as an audit tool, surfacing unfinished work that would otherwise have been forgotten.
+
 ### 5.2 Scope
 
 **Expected**: Phases 0-6 complete. **Actual**: Phases 0-6 complete.
@@ -158,11 +159,16 @@ Phase 6 resolved the parameter fallback concern from the original PIR. By making
 
 Read functions retain guards that return empty defaults (`'()`, `(hasheq)`) when no cell exists. This handles the brief window during initialization and `reset-constraint-store!` transitions. This is semantically correct (no constraints exist pre-initialization), not a "fallback."
 
-### 6.3 save-meta-state Captures Everything
+### 6.3 save-meta-state Captures Everything (Achieved in Phase 7)
 
-The prop-network box captured by `save-meta-state` includes all cell contents, making explicit per-parameter save/restore redundant. This validates the design of the speculation system: it was built to capture the network as a whole, not individual cells.
+The title of this section was premature when first written after Phase 6. "Everything" was aspirational — two state paths still bypassed cells:
 
-Before Phase 6, this came with a caveat: when no network existed, `save-meta-state` captured the box as `#f`, and restoring it to `#f` didn't restore parameter state. The conditional save/restore in the speculation bridge handled this edge. With network-everywhere, the caveat is gone — the network is always present, `save-meta-state` always captures constraint state, and the speculation bridge is unconditional.
+1. **`current-hasmethod-wakeup-map`** — written via `hash-set!`, never captured by `save-meta-state`. Speculative rollback did not undo hasmethod wakeup registrations from failed branches.
+2. **`current-trait-cell-map`** — had a cell but also had a `hash-set!` dual-write, and the sole reader (`retry-traits-via-cells!`) read the parameter, not the cell.
+
+Phase 7a created the hasmethod wakeup cell; Phase 7b removed the trait-cell-map dual-write and redirected the reader to the cell. After Phase 7, the prop-network box captured by `save-meta-state` genuinely includes all constraint-tracking state — 8 infrastructure cells covering constraints, trait constraints, trait-cell-map, hasmethod constraints, capability constraints, wakeup registry, trait wakeup, and hasmethod wakeup.
+
+Before Phase 6, there was an additional caveat: when no network existed, `save-meta-state` captured the box as `#f`, and restoring `#f` didn't restore parameter state. The conditional save/restore in the speculation bridge handled this edge. With network-everywhere (Phase 6), the network is always present. With cell-complete coverage (Phase 7), all constraint state lives in cells. The speculation bridge is now unconditional and complete.
 
 ### 6.4 "Dirty Flags" Don't Exist
 
@@ -214,6 +220,10 @@ Phase 6 made `with-fresh-meta-env` always create a propagator network by calling
 
 6. **Correct-by-construction beats correct-by-convention**: The `if/else` fallback was correct by convention — every write site had to remember to check for the network. Network-everywhere is correct by construction — the network always exists, so the check is unnecessary. Convention requires vigilance at every new write site forever; construction requires nothing. When the cost of injecting the prerequisite (adding `driver.rkt` to 12 files) is low relative to the ongoing cost of the convention (maintaining branches at every write site), construction wins.
 
+7. **PIRs are audit tools, not just retrospectives**: Re-reading the PIR's own §4.3 after Phase 6 revealed that an identified gap (hasmethod wakeup with no cell) had been documented but not fixed. The PIR surfaced the issue; the fix (Phase 7a) was mechanical — it followed the established pattern exactly. A PIR that honestly documents what's incomplete creates a checklist for follow-up work. The lesson: write PIRs with enough specificity to be actionable, and re-read them before declaring a track complete.
+
+8. **Parallel patterns should be replicated exhaustively**: The trait-wakeup cell was created in Phase 1c; the hasmethod-wakeup parallel was missed because the two wakeup maps weren't treated as a pair. When a pattern is replicated (cell for wakeup map), enumerate all instances of the pattern and handle them together. The trait-cell-map dual-write was a similar case: the cell write was added but the parameter write wasn't removed because the reader wasn't updated simultaneously. Write and read conversions should be atomic — convert both in the same commit.
+
 ### 8.2 Process Lessons
 
 1. **External critique paid off**: The design document incorporated critique from an outside review (added benchmarking protocol, dirty-flag removal guidance, mental-model questions). This led to the benchmarking infrastructure being in place before implementation started.
@@ -252,11 +262,12 @@ But the infrastructure is *clean*. That matters. After Phase 6, there is one wri
 
 What we gained concretely:
 1. **Single write path** — cell-only writes, no fallback, no branch, correct-by-construction
-2. **Transactional rollback for free** — speculation captures constraint state via the network snapshot, unconditionally
+2. **Complete transactional rollback** — speculation captures ALL constraint state via the network snapshot; 8 infrastructure cells covering every constraint-tracking state path, including wakeup maps and trait-cell mappings (Phase 7)
 3. **Addressable constraint state** — cells have IDs, live in the network, can have propagators wired to them in future tracks
 4. **Test/production equivalence** — `with-fresh-meta-env` creates the same infrastructure as the production driver
 5. **Performance validation** — cell reads are cost-free, green-lighting future migration tracks
-6. **Net code reduction** — 69 fewer lines than we started with; the code got simpler, not more complex
+6. **Net code reduction** — the code got simpler, not more complex
+7. **Speculation correctness fix** — hasmethod wakeup registrations from failed speculative branches are now properly rolled back (was a latent correctness issue before Phase 7a)
 
 What we did not gain:
 1. **Reactive resolution** — constraints are still resolved by explicit call chains, not by propagator firing
@@ -265,8 +276,9 @@ What we did not gain:
 
 What we learned about how we work:
 1. **Staged migration surfaces problems that design review cannot** — the fallback pattern emerged from running tests, not from reading code
-2. **Honest PIRs create the conditions for improvement** — the original PIR's candid assessment of the fallback cost is what triggered Phase 6
+2. **Honest PIRs create the conditions for improvement** — the original PIR's candid assessment of the fallback cost triggered Phase 6; its §4.3 gap documentation triggered Phase 7
 3. **"Correct by construction" is worth the effort of injecting prerequisites** — adding `driver.rkt` to 12 files was cheaper than maintaining `if/else` at every write site forever
 4. **Data on cells ≠ reactive propagation** — this distinction, glossed over in prior PIRs, is now explicit and understood
+5. **PIRs are audit checklists** — re-reading a PIR before declaring a track complete caught two gaps (Phase 7a, 7b) that would have been latent correctness issues
 
-The key lesson: **moving data to cells is table stakes, not the endgame**. The value comes from wiring propagator edges to those cells — which is Track 2's job. Track 1 laid the pipe; Track 2 turns on the water. But the pipe is clean, single-bore, and has no leaks. That's what Phase 6 achieved.
+The key lesson: **moving data to cells is table stakes, not the endgame**. The value comes from wiring propagator edges to those cells — which is Track 2's job. Track 1 laid the pipe; Track 2 turns on the water. But the pipe is clean, single-bore, has no leaks, and — after Phase 7 — covers every state path. That's what Phases 6 and 7 achieved.
