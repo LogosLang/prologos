@@ -33,7 +33,7 @@ questions that must be resolved before implementation.
 | 6 | HasMethod resolution propagators | ✅ | commit `4a91b24`; hasmethod-cell-map cell (enet10), `collect-ready-hasmethods-via-cells` scan wired into S1 |
 | 7 | Error cell + grouped error reporting | ✅ | commit `510b77f`; error descriptor cell (enet11), build-trait-error helper, callback writes errors, cell-first sweep; HKT-7 ambiguity deferred to Phase 9 |
 | 8 | Post-pass elimination | ✅ | commit `8ff9cbe`; removed 9 `resolve-hasmethod-constraints!` calls from driver+expander; 200.1s (vs 188.8s baseline D.5) |
-| 9 | Confluence verification | ⬜ | Prerequisite: HKT-7 (Phase 7); randomized-order property tests |
+| 9 | Confluence verification | ✅ | commit `5afbee8`; HKT-7 ambiguity rejection in try-parametric-resolve, detect-parametric-ambiguity, 19 new tests; 6907 tests pass, 197.6s |
 
 ---
 
