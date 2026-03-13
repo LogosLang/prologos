@@ -314,7 +314,7 @@
                    (displayln (format "  ~a" name)))))
            ;; List instances of specific trait
            (let ([trait-name (string->symbol trait-str)])
-             (define impl-reg (current-impl-registry))
+             (define impl-reg (read-impl-registry))
              (define param-reg (current-param-impl-registry))
              (define mono-instances
                (for/list ([(key entry) (in-hash impl-reg)]
@@ -359,7 +359,7 @@
          [else
           (define type-name (string->symbol (car parts)))
           (define trait-name (string->symbol (cadr parts)))
-          (define impl-reg (current-impl-registry))
+          (define impl-reg (read-impl-registry))
           (define param-reg (current-param-impl-registry))
           (define mono-key
             (string->symbol (format "~a--~a" type-name trait-name)))

@@ -526,7 +526,7 @@
   (define suffix (string-append "--" trait-str))
   ;; Monomorphic instances: extract type name from "TypeName--TraitName" keys
   (define mono-instances
-    (for/list ([(k _v) (in-hash (current-impl-registry))]
+    (for/list ([(k _v) (in-hash (read-impl-registry))]
                #:when (let ([ks (symbol->string k)])
                         (and (> (string-length ks) (string-length suffix))
                              (string-suffix? ks suffix))))

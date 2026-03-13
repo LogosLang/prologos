@@ -89,6 +89,7 @@
          impl-entry-dict-name
          register-impl!
          lookup-impl
+         read-impl-registry
          ;; Parametric impl metadata registry
          current-param-impl-registry
          param-impl-entry
@@ -307,6 +308,7 @@
          ;; Phase 2a/2b: Propagator-first migration — registry cell infrastructure
          current-macros-prop-net-box
          current-macros-prop-cell-write
+         current-macros-prop-cell-read
          current-schema-registry-cell-id
          current-ctor-registry-cell-id
          current-type-meta-cell-id
@@ -438,6 +440,7 @@
 (define current-macros-prop-net-box (make-parameter #f))
 ;; (enet cell-id value → enet*) — same as elab-cell-write
 (define current-macros-prop-cell-write (make-parameter #f))
+(define current-macros-prop-cell-read (make-parameter #f))   ;; (enet cell-id → value)
 
 ;; Cell-id parameters for each registry (set by register-macros-cells!).
 ;; When #f, dual-write is skipped (legacy-only mode).
@@ -5677,17 +5680,36 @@
 ;; HKT-4: Duplicate detection — error if same key with different dict name.
 ;; Benign re-registration (same key, same dict name) is allowed because the
 ;; prelude may load the same instance module multiple times.
+;; Track 2 Phase 1: read the instance registry from the propagator cell.
+;; Falls back to the parameter when no network exists (during module loading,
+;; where instances are registered to the parameter before the network is initialized).
+(define (read-impl-registry)
+  (define cid (current-impl-registry-cell-id))
+  (define net-box (current-macros-prop-net-box))
+  (define read-fn (current-macros-prop-cell-read))
+  (if (and cid net-box read-fn)
+      (read-fn (unbox net-box) cid)
+      (current-impl-registry)))
+
 (define (register-impl! key entry)
+  ;; Duplicate check uses the parameter — it's the persistent cross-command
+  ;; accumulator, always accurate at registration time.
   (define existing (hash-ref (current-impl-registry) key #f))
   (when (and existing
              (not (eq? (impl-entry-dict-name existing) (impl-entry-dict-name entry))))
     (error 'impl
       "Duplicate instance: ~a already registered (dict ~a), cannot re-register (dict ~a)"
       key (impl-entry-dict-name existing) (impl-entry-dict-name entry)))
+  ;; Parameter write kept for cross-command accumulation (prelude loading).
+  ;; The parameter seeds the cell at network init via register-macros-cells!.
   (current-impl-registry (hash-set (current-impl-registry) key entry))
-  ;; Phase 2b: dual-write to cell
+  ;; Cell write for intra-command visibility (Track 2: sole authority during elaboration).
   (macros-cell-write! (current-impl-registry-cell-id) (hasheq key entry)))
 
+;; lookup-impl uses the parameter — it's called during registration paths
+;; (register-impl!, maybe-register-trait-dict-def) where the parameter is the
+;; authoritative source. For mid-elaboration reads that need cell-authoritative
+;; data, use read-impl-registry instead.
 (define (lookup-impl key)
   (hash-ref (current-impl-registry) key #f))
 

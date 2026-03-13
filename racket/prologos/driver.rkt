@@ -493,7 +493,7 @@
                   ;; Phase 3b: Trait introspection commands
                   ;; (instances-of TraitName) — list all type instances
                   [(list 'instances-of trait-name)
-                   (define impl-reg (current-impl-registry))
+                   (define impl-reg (read-impl-registry))
                    (define param-reg (current-param-impl-registry))
                    ;; Collect monomorphic instances from impl registry
                    (define mono-instances
@@ -541,7 +541,7 @@
 
                   ;; (satisfies? TypeName TraitName) — check if type implements trait
                   [(list 'satisfies? type-name trait-name)
-                   (define impl-reg (current-impl-registry))
+                   (define impl-reg (read-impl-registry))
                    (define param-reg (current-param-impl-registry))
                    ;; Check monomorphic: look for key "TypeName--TraitName"
                    (define mono-key
@@ -2022,10 +2022,11 @@
 ;; Phase 1a: Install infrastructure cell creation callback.
 (current-prop-new-infra-cell elab-new-infra-cell)
 
-;; Phase 2a: Install macros cell-write callback (constant — doesn't depend on net-box).
-;; net-box is installed per-command via register-macros-cells!, since it's created
-;; fresh in reset-meta-store!.
+;; Phase 2a: Install macros cell-write and cell-read callbacks (constant — don't
+;; depend on net-box). net-box is installed per-command via register-macros-cells!,
+;; since it's created fresh in reset-meta-store!.
 (current-macros-prop-cell-write elab-cell-write)
+(current-macros-prop-cell-read elab-cell-read)
 
 ;; Phase 2c: Install warnings cell-write callback.
 (current-warnings-prop-cell-write elab-cell-write)
