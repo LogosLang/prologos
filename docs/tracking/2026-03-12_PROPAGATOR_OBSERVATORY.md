@@ -1,22 +1,22 @@
 # Propagator Network Observatory — Design Document
 
 **Date**: 2026-03-12
-**Status**: Stage 2-3 (Architecture Design)
+**Status**: Stage 3 (Implementation — backend complete, VS Code UI pending)
 **Builds on**: Propagator Visualization (`2026-03-12_PROPAGATOR_VISUALIZATION_DESIGN.md`), Design Principles (Propagator-First Infrastructure, First-Class by Default, Correct by Construction)
 
 ## Progress Tracker
 
 | Phase | Description | Status | Notes |
 |-------|-------------|--------|-------|
-| **0** | **Core data types + capture protocol** | ⬜ | `prop-observatory.rkt` |
-| **1** | **Observatory serialization** | ⬜ | `observatory-serialize.rkt` |
-| **2** | **Session type integration** | ⬜ | `session-propagators.rkt` |
-| **3** | **Capability inference integration** | ⬜ | `capability-inference.rkt` |
-| **4** | **Type inference integration** | ⬜ | `metavar-store.rkt` (inside `reset-meta-store!`) |
-| **5** | **LSP observatory endpoint** | ⬜ | `lsp/server.rkt` |
-| **6** | **VS Code multi-network UI** | ⬜ | `propagatorView.ts` |
-| **7** | **Cross-network links** | ⬜ | All integration points |
-| **8** | **User network integration** | ⬜ | `net-run` compiled form, `typing-core.rkt` |
+| **0** | **Core data types + capture protocol** | ✅ | `prop-observatory.rkt` (`3cae600`) |
+| **1** | **Observatory serialization** | ✅ | `observatory-serialize.rkt` + 13 tests (`6c134b3`) |
+| **2** | **Session type integration** | ✅ | `session-propagators.rkt` (`5e6208c`) |
+| **3** | **Capability inference integration** | ✅ | `capability-inference.rkt` (`5e6208c`) |
+| **4** | **Type inference integration** | ✅ | `driver.rkt` — snapshot at command boundary (`5e6208c`) |
+| **5** | **LSP observatory endpoint** | ✅ | `lsp/server.rkt` — `$/prologos/observatorySnapshot` (`b6a0633`) |
+| **6** | **VS Code multi-network UI** | ⬜ | `propagatorView.ts` — network selector, subsystem colors |
+| **7** | **Cross-network links** | ✅ | Infrastructure complete; actual registration deferred |
+| **8** | **User network integration** | ✅ | `reduction.rkt` — `net-run` capture (`a966c98`) |
 
 ---
 
