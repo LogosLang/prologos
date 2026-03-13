@@ -53,7 +53,8 @@
          "typing-sessions.rkt"    ;; Phase S3: type-proc judgment
          "session-runtime.rkt"    ;; Phase S7c: rt-execute-process (spawn execution)
          "effect-executor.rkt"    ;; AD-F2: rt-execute-process-auto (architecture dispatch)
-         "global-constraints.rkt") ;; Phase 3c: current-narrow-var-constraints
+         "global-constraints.rkt"  ;; Phase 3c: current-narrow-var-constraints
+         "prop-observatory.rkt")  ;; Observatory: capture protocol
 
 (provide process-command
          process-file
@@ -915,6 +916,26 @@
                                 (or proc-name "anonymous process")))])]
 
                   [_ (prologos-error srcloc-unknown (format "Unknown command: ~a" elab-result))])))]))))
+  ;; Observatory: capture elab-network snapshot at command boundary
+  (let ([obs (current-observatory)]
+        [net-box (current-prop-net-box)])
+    (when (and obs net-box)
+      (define elab-net (unbox net-box))
+      (define cell-metas (build-cell-metas-from-network elab-net 'type-inference 'type))
+      (define label
+        (cond [(surf-def? surf) (format "elab:~a" (surf-def-name surf))]
+              [(and (pair? surf) (surf-def? (car surf)))
+               (format "elab:~a" (surf-def-name (car surf)))]
+              [else "elab:command"]))
+      (observatory-register-capture! obs
+        (net-capture (gensym 'elab-cap-)
+                     'type-inference label
+                     elab-net cell-metas #f
+                     (if (prologos-error? result) 'exception 'complete)
+                     (and (prologos-error? result) (prologos-error-message result))
+                     (current-inexact-milliseconds)
+                     (observatory-next-sequence! obs)
+                     #f))))
   ;; Append warnings to result string (if any)
   (define coercion-warns (reverse (current-coercion-warnings)))
   (define deprecation-warns (reverse (current-deprecation-warnings)))

@@ -29,7 +29,9 @@
          "global-env.rkt"     ;; current-global-env
          "propagator.rkt"     ;; prop-network, cells, propagators, run-to-quiescence
          "atms.rkt"           ;; ATMS for provenance tracking
-         "pretty-print.rkt")  ;; pp-expr for cap-entry->string
+         "pretty-print.rkt"   ;; pp-expr for cap-entry->string
+         "prop-observatory.rkt"  ;; observatory capture protocol
+         "champ.rkt")            ;; champ for cell-metas
 
 (provide ;; Capability entries (IO-I)
          cap-entry
@@ -291,8 +293,12 @@
                   (net-cell-write n caller-cid callee-caps))))
             net*))))
 
-  ;; Step 4: Run to quiescence (fixed point)
-  (define net-final (run-to-quiescence net1))
+  ;; Step 4: Run to quiescence (fixed point), with observatory capture
+  (define cap-cell-metas
+    (build-capability-cell-metas name->cid))
+  (define net-final
+    (capture-network net1 'capability "capability:module"
+                     cap-cell-metas))
 
   ;; Step 5: Extract closures from final cell values
   (define closures
@@ -631,3 +637,19 @@
          (define trail (capability-audit-trail result root-name (cap-entry-name cap-e)))
          (list (cap-entry-name cap-e) trail)))
      (authority-root-failure root-name declared missing traces)]))
+
+;; ========================================
+;; Observatory: Cell-Meta Builder
+;; ========================================
+
+;; Build cell-metas for capability inference networks.
+;; name->cid maps function name symbols → cell-ids.
+(define (build-capability-cell-metas name->cid)
+  (for/fold ([cm champ-empty])
+            ([(name cid) (in-hash name->cid)])
+    (champ-insert cm (cell-id-hash cid) cid
+                  (cell-meta 'capability
+                             (symbol->string name)
+                             #f
+                             'capability-set
+                             (hasheq)))))

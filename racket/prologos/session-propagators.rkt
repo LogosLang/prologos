@@ -34,7 +34,9 @@
          "session-lattice.rkt"
          "errors.rkt"
          "source-location.rkt"
-         "pretty-print.rkt")
+         "pretty-print.rkt"
+         "prop-observatory.rkt"
+         "champ.rkt")
 
 (provide
  ;; Core operations
@@ -568,8 +570,13 @@
   ;; 4. Compile process tree against channel cells
   (define channel-cells (hasheq 'self self-cell))
   (define-values (net2 trace) (compile-proc-to-network net1 proc channel-cells init-trace))
-  ;; 5. Run to quiescence
-  (define net3 (run-to-quiescence net2))
+  ;; 5. Run to quiescence (with observatory capture if active)
+  (define cell-metas
+    (build-session-cell-metas net2 channel-cells))
+  (define net3
+    (capture-network net2 'session
+                     (format "session:~a" (pp-session session-type))
+                     cell-metas))
   ;; 6. Check for contradictions
   (define contradiction-cell (prop-network-contradiction net3))
   (cond
@@ -578,3 +585,25 @@
     ;; 7. S4f: Check for incomplete protocol (deadlock detection)
     [else
      (check-session-completeness net3 trace)]))
+
+;; ========================================
+;; Observatory: Cell-Meta Builder
+;; ========================================
+
+;; Build cell-metas for session networks.
+;; channel-cells is a hasheq of symbol → cell-id (e.g., 'self → cell-id(0)).
+;; Named channels get their symbol as label; other cells get generic labels.
+(define (build-session-cell-metas net channel-cells)
+  ;; Build reverse map: cell-id → channel name
+  (define named-cells
+    (for/hasheq ([(name cid) (in-hash channel-cells)])
+      (values cid (symbol->string name))))
+  ;; Walk all cells in the network
+  (define all-cell-ids (champ-keys (prop-network-cells net)))
+  (for/fold ([cm champ-empty])
+            ([cid (in-list all-cell-ids)])
+    (define label
+      (hash-ref named-cells cid
+                (lambda () (format "session-cell-~a" (cell-id-n cid)))))
+    (champ-insert cm (cell-id-hash cid) cid
+                  (cell-meta 'session label #f 'session-protocol (hasheq)))))
