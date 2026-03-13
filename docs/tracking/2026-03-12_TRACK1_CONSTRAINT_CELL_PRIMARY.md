@@ -16,6 +16,8 @@ The Propagator-First Migration Sprint (Phases 1a-1e) established dual-write for 
 
 This track flips reads from parameters to cells, then removes the parameter writes — making cells the single source of truth for constraint tracking. This is the Pipeline Audit's highest-priority migration target because it eliminates the retry-loop/dirty-flag machinery that currently bridges the gap between parameter state and propagator-driven resolution.
 
+**Key insight**: The current parameter-based constraint infrastructure (wakeup registries, dirty flags, retry loops) IS a hand-rolled propagator network — it maintains dependencies, tracks what needs re-evaluation, and fires callbacks on state changes. The dual-write proved that the actual propagator network can mirror this behavior exactly. This track replaces the hand-rolled version with the real one, gaining monotonic merges, automatic transitive wakeup, and ATMS-compatible provenance for free.
+
 ### 1.1 Current Read Sites (Parameter-Based)
 
 | Function | File | What it reads | Used by |
@@ -131,7 +133,7 @@ Then update callers:
 | `(current-hasmethod-constraint-map)` in wakeup path | `(read-hasmethod-constraints)` |
 | `(current-capability-constraint-map)` in `lookup-capability-constraint` | `(hash-ref (read-capability-constraints) meta-id #f)` |
 
-**Note**: `current-capability-constraint-map` has dual-write for `register-capability-constraint!` but the explore agent reported it may not be dual-written yet (Phase 1b incomplete for capability). Verify and complete the dual-write before flipping reads.
+**Precondition (Phase 2pre)**: `current-capability-constraint-map` has dual-write for `register-capability-constraint!` but the explore agent reported it may not be dual-written yet (Phase 1b incomplete for capability). **Before flipping any reads in Phase 2, verify and complete the dual-write.** This was Open Question #1 — resolved by making it a gate.
 
 **Files touched**: `metavar-store.rkt`, `trait-resolution.rkt`
 **Test gate**: Full suite, no failures
@@ -152,9 +154,15 @@ The wakeup registry maps meta-ids to lists of constraints for targeted retry. Th
       (current-wakeup-registry)))
 ```
 
-Update `get-wakeup-constraints` to use `read-wakeup-registry`. Same for `current-trait-wakeup-map`.
+Update `get-wakeup-constraints` to use `read-wakeup-registry`. Add a matching `read-trait-wakeup-map` accessor for `current-trait-wakeup-map` (used in `retry-trait-wakeup-for-meta!`).
 
-**Subtlety**: The legacy `current-wakeup-registry` is a **mutable hasheq** (`make-hasheq` with `hash-set!`). The cell version stores an **immutable hasheq** (each write merges via `merge-hasheq-list-append`). The read values should be equivalent, but the mutable → immutable transition means we can't `eq?`-compare them. `equal?` comparison is the correctness gate.
+**Subtlety**: The legacy `current-wakeup-registry` and `current-trait-wakeup-map` are **mutable hasheq** (`make-hasheq` with `hash-set!`). The cell versions store **immutable hasheq** (each write merges via `merge-hasheq-list-append`). The read values should be equivalent, but the mutable → immutable transition means we can't `eq?`-compare them. `equal?` comparison is the correctness gate.
+
+**Phase 3c verification**: After flipping reads, grep for any remaining `hash-set!` calls on the wakeup maps. There should be zero — all mutations should go through cell writes.
+
+```bash
+grep -rn 'hash-set!.*wakeup' racket/prologos/
+```
 
 **Files touched**: `metavar-store.rkt`
 **Test gate**: Full suite, no failures
@@ -165,10 +173,17 @@ Update `get-wakeup-constraints` to use `read-wakeup-registry`. Same for `current
 
 **Change**: Remove the explicit `(define saved-constraints (current-constraint-store))` and `(current-constraint-store saved-constraints)` from `with-speculative-rollback`. The `save-meta-state` / `restore-meta-state!` already captures and restores the `current-prop-net-box`, which contains the constraint cell.
 
-**Verify**: The speculation tests (`test-speculation-bridge.rkt`, Church fold tests, union type tests, bare-param tests) must all pass — these exercise the exact scenario where speculation adds constraints that must be rolled back on failure.
+**Focused speculation tests** (Phase 4b — must all pass before proceeding):
+- `tests/test-speculation-bridge-01.rkt` — explicit save/restore scenarios
+- `tests/test-church-fold-*.rkt` — speculative Church fold with constraint rollback
+- `tests/test-union-*.rkt` — union type resolution via speculation
+- `tests/test-bare-param-*.rkt` — bare parameter inference with fallback
+- `tests/test-trait-resolution-*.rkt` — trait resolution interacting with speculation
+
+These exercise the exact scenario where speculation adds constraints that must be rolled back on failure. Run these individually to validate Phase 4a before running the full suite.
 
 **Files touched**: `elab-speculation-bridge.rkt`
-**Test gate**: Full suite + focused speculation tests
+**Test gate**: Focused speculation tests first, then full suite
 
 ### 2.6 Phase 5: Remove Legacy Parameter Writes
 
@@ -183,8 +198,10 @@ With all reads going through cells and all tests passing, the legacy parameter w
 
 **Do NOT remove the parameter definitions yet** — they may still be referenced in `reset-meta-store!`, `with-meta-env`, test fixtures. Those are cleaned up in a subsequent pass.
 
+**Phase 5b**: After removing writes, re-run the focused speculation tests from Phase 4b. Write removal changes the operational semantics — speculation paths that previously read from parameters now see different state. Regression here would indicate a dual-write inconsistency that was masked by the parameter path.
+
 **Files touched**: `metavar-store.rkt`
-**Test gate**: Full suite, no failures
+**Test gate**: Focused speculation tests (Phase 5b), then full suite
 
 ### 2.7 Phase 6: Parameter Removal + Cleanup
 
@@ -202,7 +219,12 @@ Remove the now-dead parameters and update all reset/initialization code:
 - Update `with-meta-env` in test fixtures — remove constraint parameter bindings
 - Update `driver.rkt` parameterize blocks — remove constraint parameters
 
-**Caution**: `current-retry-unify` and `current-retry-trait-resolve` may still be needed if the transition is partial (some retry paths still use polling). Remove only when ALL retry paths go through propagator wakeup. If uncertain, defer removal to a later track and document in DEFERRED.md.
+**Mental model for dirty-flag removal (Phase 6b)**: For each dirty flag, ask: "What propagator edge does this flag represent?" The flag is a manual notification channel — it says "something changed, re-evaluate me." In the cell-primary world, this notification is a propagator edge from the source cell to the consumer. If we can identify that edge and verify it fires correctly, the flag is dead code. If we can't identify it, the flag encodes a dependency we haven't yet surfaced — keep it and document what's missing.
+
+- `current-retry-unify`: represents edge from meta-solution → constraint retry
+- `current-retry-trait-resolve`: represents edge from meta-solution → trait resolution
+
+**Caution**: These flags may still be needed if the transition is partial (some retry paths still use polling). Remove only when ALL retry paths go through propagator wakeup. If uncertain, defer removal to a later track and document in DEFERRED.md.
 
 **Files touched**: `metavar-store.rkt`, `driver.rkt`, `unify.rkt`, `elab-speculation-bridge.rkt`, test fixtures
 **Test gate**: Full suite, no failures
@@ -213,13 +235,31 @@ Remove the now-dead parameters and update all reset/initialization code:
 
 | Phase | Description | Status | Bench | Notes |
 |-------|-------------|--------|-------|-------|
-| 0 | Benchmarking baseline + cell metrics | ⬜ | — | Baseline, not delta |
-| 1 | Constraint store reads → cell | ⬜ | | |
-| 2 | Trait/hasmethod/capability reads → cell | ⬜ | | |
-| 3 | Wakeup registry reads → cell | ⬜ | | |
-| 4 | Speculation save/restore alignment | ⬜ | | |
-| 5 | Remove legacy parameter writes | ⬜ | | |
-| 6 | Parameter removal + cleanup | ⬜ | | |
+| 0a | Capture baseline benchmarks (`--report`) | ⬜ | — | |
+| 0b | Add `--cell-metrics` to test runner | ⬜ | — | |
+| 0c | Tag baseline commit | ⬜ | — | |
+| 1a | `all-postponed-constraints` → cell read | ⬜ | | |
+| 1b | `all-failed-constraints` → cell read | ⬜ | | |
+| 1c | `retry-constraints-via-cells!` → cell read | ⬜ | | |
+| 1d | `unify.rkt` snapshot sites → cell read | ⬜ | | |
+| 1e | Remove parameter write from `add-constraint!` | ⬜ | | |
+| 2pre | Verify capability constraint dual-write complete | ⬜ | | Open Q #1 precondition |
+| 2a | `read-trait-constraints` accessor + callers | ⬜ | | |
+| 2b | `read-hasmethod-constraints` accessor + callers | ⬜ | | |
+| 2c | `read-capability-constraints` accessor + callers | ⬜ | | |
+| 2d | Remove parameter writes for trait/hasmethod/cap | ⬜ | | |
+| 3a | `read-wakeup-registry` accessor + callers | ⬜ | | |
+| 3b | `read-trait-wakeup-map` accessor + callers | ⬜ | | |
+| 3c | Verify no `hash-set!` on wakeup maps remains | ⬜ | | grep verification |
+| 3d | Remove parameter writes for wakeup registries | ⬜ | | |
+| 4a | Remove explicit constraint save/restore from speculation | ⬜ | | |
+| 4b | Focused speculation test pass | ⬜ | | See §2.5 test list |
+| 5a | Remove all dual-write parameter writes | ⬜ | | |
+| 5b | Re-run speculation tests after write removal | ⬜ | | |
+| 6a | Remove constraint parameter definitions | ⬜ | | |
+| 6b | Remove dirty flags (`current-retry-unify` etc.) | ⬜ | | Each flag: "what propagator edge?" |
+| 6c | Update `reset-meta-store!`, `with-meta-env`, driver | ⬜ | | |
+| 6d | Final benchmark comparison | ⬜ | | |
 
 ---
 
@@ -342,12 +382,13 @@ The distinction matters: this track is mechanical (flip reads, remove parameters
 | **The Most Generalizable Interface** | No new abstractions introduced — uses existing `prop-cell-read`, `merge-hasheq-union`, cell factories |
 | **Completeness Over Deferral** | Each phase completes its scope fully; dirty-flag removal is explicit (Phase 6) or documented as deferred with rationale |
 | **Observability** | Phase 0 establishes cell-metric baseline; every subsequent phase records delta |
+| **Concurrency readiness** | Immutable cell values (via pure merge functions) are inherently thread-safe; mutable `hash-set!` parameters are not. This track eliminates the last mutable-hasheq constraint state, making constraint tracking safe for future parallel elaboration (LSP multi-file, speculative parallelism) |
 
 ---
 
 ## 9. Open Questions
 
-1. **Is the capability constraint cell dual-write actually complete?** The explore agent reported that `register-capability-constraint!` may not have a cell write. If so, Phase 2 must add it before flipping reads.
+1. ~~**Is the capability constraint cell dual-write actually complete?**~~ **RESOLVED** — moved to Phase 2 precondition (Phase 2pre). Verify and complete dual-write before flipping any reads in Phase 2.
 
 2. **Should `retry-constraints-via-cells!` be removed after Phase 3?** It exists as a safety net for missed transitive wakeups. With wakeup registry reads going through cells, the safety net may be unnecessary. But removing it is a behavioral change — keep it unless benchmarks show it's a measurable cost.
 
