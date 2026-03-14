@@ -15,8 +15,9 @@
 | 1 | Descending Cells in propagator.rkt | ⬜ | |
 | 2 | Bilattice Module (bilattice.rkt) | ⬜ | |
 | 3 | Well-Founded Propagator Patterns (wf-propagators.rkt) | ⬜ | |
-| 4 | Well-Founded Engine Orchestration (wf-engine.rkt) | ⬜ | |
+| 4a | Well-Founded Engine — Core (wf-engine.rkt) | ⬜ | Hybrid DFS + bilattice |
 | 5 | Three-Valued Tabling Extension | ⬜ | |
+| 4b | Well-Founded Engine — Tabling Integration | ⬜ | After Phase 5 |
 | 6 | Test Suite — Known Well-Founded Models | ⬜ | |
 | 7 | Benchmark Comparison | ⬜ | |
 
@@ -53,6 +54,46 @@ The engine is built in 7 phases:
 7. **Benchmark Comparison** — same programs on both backends, measure time/correctness
 
 
+## Acceptance File
+
+Per workflow rules, a `.prologos` acceptance file is written BEFORE implementation. This file exercises the WFLE through WS-mode surface syntax — the primary design target.
+
+**File**: `examples/2026-03-14-wfle-acceptance.prologos`
+
+Target expressions (commented out, uncommented as phases complete):
+
+```prologos
+ns wfle-acceptance
+
+;; -- Phase 4a: Basic WF solving --
+;; solver wf-solver
+;;   semantics well-founded
+
+;; rel [even Nat]
+;;   | [even zero]
+;;   | {n : Nat} -> [even n] -> [even [succ [succ n]]]
+
+;; rel [win Pos]
+;;   | {p q : Pos} -> [move p q] -> [not [win q]] -> [win p]
+
+;; -- Phase 4a: Classic WF programs --
+;; rel [p] := [not [q]]
+;; rel [q] := [not [p]]
+;; ;; Both p and q should be 'unknown under WF semantics
+
+;; -- Phase 5: Tabled WF queries --
+;; rel [reaches Node Node] :tabled
+;;   | {x y : Node} -> [edge x y] -> [reaches x y]
+;;   | {x y z : Node} -> [edge x z] -> [reaches z y] -> [reaches x y]
+
+;; -- Phase 6: Explanation --
+;; explain [win a] with wf-solver
+;; ;; Should produce proof tree or cycle explanation
+```
+
+This file is the Level 3 validation gate. The WFLE is not DONE until all target expressions run with 0 errors via `process-file`.
+
+
 ## Critical Path
 
 ```
@@ -62,16 +103,18 @@ Phase 2 (Bilattice Module — bilattice.rkt)
   ↓
 Phase 3 (WF Propagator Patterns — wf-propagators.rkt)
   ↓
-Phase 4 (WF Engine — wf-engine.rkt)
+Phase 4a (WF Engine Core — wf-engine.rkt)
   ↓                  ↓
-Phase 5 (Tabling)    Phase 6 (Test Suite)
-  ↓                    ↓
-  └────────────────────┘
-           ↓
+Phase 5 (Tabling)    Phase 6a (Ground WF Tests)
+  ↓
+Phase 4b (Engine + Tabling Integration)
+  ↓
+Phase 6b (Full Test Suite)
+  ↓
 Phase 7 (Benchmark Comparison)
 ```
 
-Phases 1-4 are strictly sequential (each builds on the previous). Phases 5 and 6 can overlap. Phase 7 requires all prior phases.
+Phases 1–3–4a are strictly sequential. Phase 5 (tabling) can begin after Phase 3. Phase 4b requires both 4a and 5. Phase 6 has ground-only tests (6a, after 4a) and full tests (6b, after 4b). Phase 7 requires all prior phases.
 
 ---
 
@@ -321,34 +364,18 @@ For the Boolean bilattice (L = {false, true}):
           (bilattice-var lower-cid upper-cid lat)))
 ```
 
-### 2.4.2 `bilattice-read` — Three-Valued Reading
+### 2.4.2 `bilattice-read` — General Three-Valued Reading
 
 ```racket
-;; Read the three-valued result from a bilattice variable.
-;; Returns: 'true | 'false | 'unknown | 'contradiction
+;; Read a bilattice variable's approximation state.
+;; Returns: (list 'exact value) | (list 'approx lower upper) | 'contradiction
 ;;
 ;; For the Boolean bilattice:
-;;   (true, true)   → 'true        (definitely holds)
-;;   (false, false)  → 'false       (definitely doesn't hold)
-;;   (false, true)   → 'unknown     (gap remains — undetermined)
-;;   (true, false)   → 'contradiction (lower > upper — impossible)
+;;   (true, true)   → (list 'exact #t)      — definitely true
+;;   (false, false)  → (list 'exact #f)      — definitely false
+;;   (false, true)   → (list 'approx #f #t)  — unknown (gap remains)
+;;   (true, false)   → 'contradiction        — impossible
 (define (bilattice-read net bvar)
-  (define lo (net-cell-read net (bilattice-var-lower-cid bvar)))
-  (define hi (net-cell-read net (bilattice-var-upper-cid bvar)))
-  (define leq (lattice-desc-leq (bilattice-var-lattice bvar)))
-  (cond
-    [(and (equal? lo hi) (leq lo hi)) ;; exact: lower = upper
-     (if lo 'true 'false)]            ;; for Boolean; generalize below
-    [(leq lo hi) 'unknown]            ;; gap remains
-    [else 'contradiction]))           ;; lower > upper
-```
-
-### 2.4.3 `bilattice-read-generalized` — Beyond Boolean
-
-```racket
-;; Generalized bilattice read for non-Boolean lattices.
-;; Returns: (list 'exact value) | (list 'approx lower upper) | 'contradiction
-(define (bilattice-read-general net bvar)
   (define lo (net-cell-read net (bilattice-var-lower-cid bvar)))
   (define hi (net-cell-read net (bilattice-var-upper-cid bvar)))
   (define leq (lattice-desc-leq (bilattice-var-lattice bvar)))
@@ -356,6 +383,19 @@ For the Boolean bilattice (L = {false, true}):
     [(equal? lo hi) (list 'exact lo)]
     [(leq lo hi) (list 'approx lo hi)]
     [else 'contradiction]))
+```
+
+### 2.4.3 `bilattice-read-bool` — Boolean Specialization
+
+```racket
+;; Convenience for the Boolean bilattice (the common case for logic programming).
+;; Returns: 'true | 'false | 'unknown | 'contradiction
+(define (bilattice-read-bool net bvar)
+  (define result (bilattice-read net bvar))
+  (cond
+    [(eq? result 'contradiction) 'contradiction]
+    [(eq? (car result) 'exact) (if (cadr result) 'true 'false)]
+    [else 'unknown]))
 ```
 
 ### 2.4.4 `bilattice-lower-write` / `bilattice-upper-write` — Direct Writes
@@ -697,12 +737,16 @@ For a ground fact `p.` (clause with empty body):
     (for/fold ([net net2])
               ([(head-name fns) (in-hash head-clause-fns)])
       (define head-bvar (hash-ref atom-map head-name))
-      ;; Collect all upper-cids that any clause for this head reads
-      ;; (simplified: use all upper cids from all atoms)
-      (define all-upper-cids
-        (for/list ([(name bvar) (in-hash atom-map)])
-          (bilattice-var-upper-cid bvar)))
-      (wf-wire-aggregate-upper net head-bvar all-upper-cids fns)))
+      ;; Collect only the upper-cids that clauses for this head actually reference.
+      ;; Each body-upper-fn closes over its clause's effective bvars, so we extract
+      ;; their upper-cids from the clause structure. This avoids O(n²) dependencies
+      ;; where every head watches every atom.
+      (define clause-upper-cids
+        (remove-duplicates
+         (apply append
+                (for/list ([clause (in-list (hash-ref head-clauses head-name '()))])
+                  (map bilattice-var-upper-cid (clause-effective-bvars clause))))))
+      (wf-wire-aggregate-upper net head-bvar clause-upper-cids fns)))
   (values net3 atom-map))
 ```
 
@@ -844,50 +888,89 @@ test-wf-propagators-01.rkt:
 
 # Phase 4: Well-Founded Engine Orchestration (wf-engine.rkt)
 
+Phase 4 is split into two sub-phases to resolve the circular dependency between the engine and three-valued tabling:
+
+- **Phase 4a**: Core engine with ground-only queries (propositional WF semantics)
+- **Phase 4b**: Integration with tabling for non-ground queries (after Phase 5)
+
 ## 4.1 Goal
 
-Create the `wf-engine.rkt` module — the solver-level entry point that translates Prologos relation stores into bilattice propagator networks, runs the well-founded fixpoint, and returns three-valued answers. This is the WFLE parallel to `stratified-eval.rkt`.
+Create the `wf-engine.rkt` module — the solver-level entry point that orchestrates the existing DFS solver with bilattice cell pairs to compute well-founded semantics. This is the WFLE parallel to `stratified-eval.rkt`.
 
-## 4.2 Architecture
+## 4.2 Architecture: Hybrid DFS + Bilattice
+
+**Key design decision**: The WFLE does NOT replace the DFS solver's proof search. It wraps the existing solver, using bilattice cells to track the three-valued status of predicates while the DFS solver does the actual unification, backtracking, and variant dispatch. The WFLE's value-add is *negation cycle handling*, not an alternative proof search strategy.
+
+This hybrid approach preserves full Prolog-style queries (unification variables, function symbols, open Herbrand base) while gaining well-founded semantics for negation.
 
 ```
   User query: solve (ancestor ?x bob)
        │
        ▼
-  ┌─────────────────────────────┐
-  │ Solver Dispatch (solver.rkt) │
-  │ current-solver-mode param    │
-  └──────┬──────────┬───────────┘
-         │          │
-    'stratified   'well-founded
-         │          │
-         ▼          ▼
-  stratified-    wf-solve-goal
-  solve-goal     (wf-engine.rkt)
-         │          │
-         │     ┌────┴────────────────────┐
-         │     │ 1. Extract ground atoms  │
-         │     │ 2. Create bilattice vars │
-         │     │ 3. Wire propagators      │
-         │     │ 4. Inject facts          │
-         │     │ 5. run-to-quiescence     │
-         │     │ 6. Read three-valued     │
-         │     └─────────────────────────┘
-         │          │
-         └────┬─────┘
+  ┌──────────────────────────────────────┐
+  │ Solver Dispatch (solver.rkt)          │
+  │ config 'semantics key                 │
+  └──────┬──────────────┬────────────────┘
+         │              │
+    'stratified      'well-founded
+         │              │
+         ▼              ▼
+  stratified-       wf-solve-goal
+  solve-goal        (wf-engine.rkt)
+         │              │
+         │         ┌────┴──────────────────────────────────┐
+         │         │ Iterative orchestration:               │
+         │         │                                        │
+         │         │ 1. Create bilattice-var per predicate   │
+         │         │ 2. LOOP:                               │
+         │         │    a. For each predicate p:             │
+         │         │       - Run DFS solver (solve-goal)     │
+         │         │       - Results found → lower-p := #t   │
+         │         │    b. For each predicate p with NAF:    │
+         │         │       - Check negated predicates' status │
+         │         │       - No proofs possible → upper-q := #f │
+         │         │    c. Wire cross-cell negation:          │
+         │         │       - lower-not-q = ¬upper-q          │
+         │         │       - upper-not-q = ¬lower-q          │
+         │         │    d. run-to-quiescence on bilattice    │
+         │         │    e. If bilattice changed → repeat     │
+         │         │       If stable → done                  │
+         │         │ 3. Read three-valued results             │
+         │         └───────────────────────────────────────┘
+         │              │
+         └────┬─────────┘
               ▼
   Three-valued result:
     'true / 'false / 'unknown
 ```
 
-## 4.3 Solver Mode Parameter
+**Why hybrid**: The DFS solver already handles unification, backtracking, variant dispatch, and tabling. Reimplementing this as static compilation to a propositional bilattice network would either (a) require ground-instantiation of the Herbrand base (breaks open-ended programs) or (b) require lifting bilattice to first-order (research territory). The hybrid approach reuses all existing solver machinery and adds only the negation-cycle-handling layer.
+
+## 4.3 Solver Config: `semantics` Key
+
+Rather than a separate `current-solver-mode` parameter, the solver backend is selected via the existing `solver-config` mechanism. This is consistent with how other solver behaviors (execution, threshold, strategy, tabling) are already configured.
 
 ```racket
-;; Solver mode: determines which backend handles relational queries.
-;; 'stratified — current engine (default): compile-time stratification, 2-valued
-;; 'well-founded — WFLE: bilattice pairs, 3-valued, handles odd negation cycles
-(define current-solver-mode (make-parameter 'stratified))
+;; Add to valid-solver-keys in solver.rkt:
+;;   'semantics — 'stratified (default) | 'well-founded
+;;
+;; Add to solver-defaults:
+;;   'semantics 'stratified
+;;
+;; Add accessor:
+(define (solver-config-semantics cfg)
+  (solver-config-get cfg 'semantics 'stratified))
 ```
+
+This enables user-facing selection via the existing `solver` form:
+
+```prologos
+solver wf-solver
+  semantics well-founded
+  tabling by-default
+```
+
+No new syntax required — `semantics` is just another solver config key.
 
 ## 4.4 Core Operations
 
@@ -895,32 +978,105 @@ Create the `wf-engine.rkt` module — the solver-level entry point that translat
 
 ```racket
 ;; Solve a relational goal using the well-founded engine.
-;; Parallel to stratified-solve-goal — same interface, different backend.
+;; Parallel to stratified-solve-goal — same external interface.
+;;
+;; The WFLE wraps the existing DFS solver: it uses solve-goal for proof
+;; search, and bilattice cells to track three-valued predicate status.
+;; The iteration continues until the bilattice reaches a fixpoint.
 ;;
 ;; config: solver-config
 ;; store: relation store (hasheq of name → relation-info)
 ;; goal-name: symbol
-;; goal-args: (listof any) — ground arguments to the query
-;; query-vars: (listof symbol) — variables to project
+;; goal-args: (listof any)
+;; query-vars: (listof symbol)
 ;;
-;; Returns: (listof wf-answer) where each answer has variable bindings
-;; and a certainty tag ('definite or 'unknown)
+;; Returns: (listof wf-answer)
 (define (wf-solve-goal config store goal-name goal-args query-vars)
-  ;; Step 1: Extract all relation clauses from the store
-  (define clauses (extract-ground-clauses store goal-name goal-args))
-  ;; Step 2: Build the bilattice propagator network
-  (define-values (net atom-map)
-    (wf-compile-program (make-prop-network) clauses))
-  ;; Step 3: Inject ground facts
-  (define net2
-    (inject-facts net atom-map store))
-  ;; Step 4: Run to quiescence
-  (define net3 (run-to-quiescence net2))
-  ;; Step 5: Read three-valued results
-  (read-wf-answers net3 atom-map goal-name query-vars))
+  ;; Step 1: Identify all predicates reachable from the goal
+  (define all-preds (transitive-pred-closure store goal-name))
+  ;; Step 2: Identify which predicates participate in negation
+  (define neg-preds (preds-with-negation store all-preds))
+  ;; Step 3: Create bilattice-vars for negation-participating predicates
+  (define-values (net pred-bvar-map)
+    (for/fold ([net (make-prop-network)] [m (hasheq)])
+              ([pred (in-list neg-preds)])
+      (let-values ([(net2 bvar) (bilattice-new-var net bool-lattice)])
+        (values net2 (hash-set m pred bvar)))))
+  ;; Step 4: Iterative fixpoint
+  (define-values (final-net final-answers)
+    (wf-iterate config store net pred-bvar-map
+                goal-name goal-args query-vars))
+  ;; Step 5: Annotate answers with certainty
+  (annotate-answers final-net pred-bvar-map final-answers goal-name))
 ```
 
-### 4.4.2 Answer Type
+### 4.4.2 `wf-iterate` — Iterative Fixpoint Loop
+
+```racket
+;; Iterate DFS solving + bilattice update until stable.
+;;
+;; Each iteration:
+;; 1. Run solve-goal with current NAF oracle (reads bilattice upper bounds)
+;; 2. Update bilattice: proven atoms → lower := #t
+;; 3. Update bilattice: atoms with no possible proof → upper := #f
+;; 4. Propagate negation cross-links
+;; 5. Check for bilattice change → repeat if changed
+;;
+;; The NAF oracle is the key bridge: when the DFS solver evaluates
+;; `not p`, instead of the stratified check ("is p in a lower stratum?"),
+;; it consults the bilattice: "is upper-p = #f?" (definitely false → NAF succeeds)
+;; or "is lower-p = #t?" (definitely true → NAF fails).
+;; If neither (unknown), the NAF result is deferred.
+(define (wf-iterate config store net pred-bvar-map
+                     goal-name goal-args query-vars)
+  (let loop ([net net] [iteration 0] [max-iterations 100])
+    (when (>= iteration max-iterations)
+      (values net '()))  ;; fuel exhaustion — return partial results
+    ;; Phase A: Run DFS solver with WF-aware NAF oracle
+    (define naf-oracle (make-wf-naf-oracle net pred-bvar-map))
+    (define answers
+      (parameterize ([current-naf-oracle naf-oracle])
+        (solve-goal config store goal-name goal-args query-vars)))
+    ;; Phase B: Update bilattice from solver results
+    (define net2 (update-bilattice-from-results net pred-bvar-map store answers))
+    ;; Phase C: Run bilattice propagators to quiescence
+    (define net3 (run-to-quiescence net2))
+    ;; Phase D: Check for fixpoint (no bilattice change)
+    (if (bilattice-stable? net net3 pred-bvar-map)
+        (values net3 answers)
+        (loop net3 (add1 iteration) max-iterations))))
+```
+
+### 4.4.3 `make-wf-naf-oracle` — Three-Valued NAF
+
+```racket
+;; Create a NAF oracle that consults the bilattice instead of
+;; the stratification check.
+;;
+;; Returns a function: (symbol → 'succeed | 'fail | 'defer)
+;;   'succeed — the negated predicate is definitely false (upper = #f)
+;;   'fail — the negated predicate is definitely true (lower = #t)
+;;   'defer — the negated predicate is unknown (bilattice gap)
+;;
+;; The DFS solver calls this when evaluating `not p`:
+;;   'succeed → treat `not p` as true (NAF holds)
+;;   'fail → treat `not p` as false (backtrack)
+;;   'defer → treat `not p` as unknown (skip this clause for now)
+(define (make-wf-naf-oracle net pred-bvar-map)
+  (lambda (pred-name)
+    (define bvar (hash-ref pred-bvar-map pred-name #f))
+    (cond
+      [(not bvar) 'succeed]  ;; no bilattice entry → closed-world: not provable
+      [else
+       (define result (bilattice-read-bool net bvar))
+       (case result
+         [(false) 'succeed]    ;; definitely false → NAF succeeds
+         [(true) 'fail]        ;; definitely true → NAF fails
+         [(unknown) 'defer]    ;; unknown → defer
+         [(contradiction) 'fail])])))
+```
+
+### 4.4.4 Answer Type
 
 ```racket
 ;; A well-founded answer: variable bindings with certainty.
@@ -931,38 +1087,73 @@ Create the `wf-engine.rkt` module — the solver-level entry point that translat
 (struct wf-answer (bindings certainty) #:transparent)
 ```
 
-### 4.4.3 `extract-ground-clauses` — Bridge from Relation Store
+### 4.4.5 `wf-explain-goal` — Explanation for Three-Valued Results
 
 ```racket
-;; Walk the relation store to extract the clause structure needed by
-;; wf-compile-program. This bridges the relation-info representation
-;; (used by the DFS solver) to the bilattice compilation format.
+;; Explain a well-founded result, including undeterminacy.
 ;;
-;; For ground queries (all arguments instantiated), this extracts the
-;; relevant ground instances. For open queries (with variables), this
-;; interacts with the unification engine to enumerate possible groundings
-;; (using the tabling infrastructure from Phase 5).
+;; For atoms with certainty 'definite: returns the proof tree (as in
+;; the stratified explain path).
 ;;
-;; Returns: association list for wf-compile-program
-(define (extract-ground-clauses store goal-name goal-args)
-  ;; Walk relation-info for goal-name and transitively reachable relations
-  ;; Convert goal-descs to (cons 'pos|'neg atom-name) format
-  ;; This is the bridge between the DFS relation representation
-  ;; and the bilattice compilation format
-  ...)  ;; Implementation details TBD — depends on relation-info structure
+;; For atoms with certainty 'unknown: returns a wf-explanation
+;; describing the negation cycle that prevents determination.
+;;
+;; config: solver-config
+;; store, goal-name, goal-args, query-vars: as in wf-solve-goal
+;; prov-level: provenance level ('none | 'shallow | 'deep)
+;;
+;; Returns: (listof wf-explained-answer)
+(define (wf-explain-goal config store goal-name goal-args query-vars prov-level)
+  (define-values (final-net final-answers)
+    (wf-solve-goal config store goal-name goal-args query-vars))
+  (for/list ([answer (in-list final-answers)])
+    (define certainty (wf-answer-certainty answer))
+    (case certainty
+      [(definite)
+       ;; Delegate to existing explain infrastructure
+       (wf-explained-answer
+        (wf-answer-bindings answer) 'definite
+        (explain-goal config store goal-name goal-args query-vars prov-level))]
+      [(unknown)
+       ;; Build undeterminacy explanation: identify the cycle
+       (define cycle (find-negation-cycle store goal-name))
+       (wf-explained-answer
+        (wf-answer-bindings answer) 'unknown
+        (wf-undeterminacy-explanation goal-name cycle))])))
+
+;; Explanation structs
+(struct wf-explained-answer (bindings certainty explanation) #:transparent)
+(struct wf-undeterminacy-explanation (atom cycle-predicates) #:transparent)
+
+;; Find the negation cycle containing a predicate.
+;; Uses the dependency graph (from stratify.rkt) to identify the SCC
+;; with negative edges that creates the undeterminacy.
+(define (find-negation-cycle store pred-name)
+  (define dep-infos (extract-all-dep-infos store))
+  (define graph (build-dependency-graph dep-infos))
+  (define sccs (tarjan-scc graph))
+  ;; Find the SCC containing pred-name that has a negative internal edge
+  (for/or ([scc (in-list sccs)])
+    (and (member pred-name scc)
+         (scc-has-negative-edge? graph scc)
+         scc)))
 ```
 
-### 4.4.4 Solver Dispatch Integration
+### 4.4.6 Solver Dispatch Integration
 
 ```racket
-;; Add to the solver dispatch in the appropriate location:
-;; When current-solver-mode is 'well-founded, route to wf-solve-goal.
-;;
-;; The dispatch point is where stratified-solve-goal is currently called.
-;; No changes to the surface syntax or elaborator — just the runtime dispatch.
+;; In stratified-eval.rkt, modify stratified-solve-goal to check config:
+(define (stratified-solve-goal config store goal-name goal-args query-vars)
+  (define semantics (solver-config-semantics config))
+  (case semantics
+    [(well-founded)
+     (wf-solve-goal config store goal-name goal-args query-vars)]
+    [else
+     ;; existing stratified path (unchanged)
+     ...]))
 ```
 
-## 4.5 Three-Valued → Two-Valued Bridge
+### 4.4.7 Three-Valued → Two-Valued Bridge
 
 For callers that expect two-valued answers (the common case), the WFLE provides a bridge:
 
@@ -984,19 +1175,25 @@ For callers that expect two-valued answers (the common case), the WFLE provides 
                  '__certainty (wf-answer-certainty a)))]))
 ```
 
+## 4.5 Phase 4a vs 4b Split
+
+**Phase 4a** (this phase): Core engine with the iterative loop, NAF oracle, bilattice tracking, explanation, solver dispatch. Uses the DFS solver for proof search. Ground and non-ground queries work because the DFS solver handles unification natively.
+
+**Phase 4b** (after Phase 5): Integration with three-valued tabling. When the WFLE detects that a predicate is `'unknown`, tabled entries for that predicate get certainty `'unknown`. This enables the "compositional" stable model path: ATMS choice points over `'unknown` tabled entries.
+
 ## 4.6 File Changes
 
 | File | Change | Scope |
 |------|--------|-------|
-| `wf-engine.rkt` | NEW — wf-solve-goal, wf-answer, extract-ground-clauses, dispatch | ~150 lines |
-| `solver.rkt` | Add `current-solver-mode` parameter | ~5 lines |
-| `stratified-eval.rkt` | Add dispatch point checking `current-solver-mode` | ~10 lines |
+| `wf-engine.rkt` | NEW — wf-solve-goal, wf-iterate, NAF oracle, wf-explain-goal, answer types | ~250 lines |
+| `solver.rkt` | Add `semantics` to valid-solver-keys + defaults + accessor | ~10 lines |
+| `stratified-eval.rkt` | Add dispatch checking `solver-config-semantics` | ~10 lines |
 
-## 4.7 Tests (~20)
+## 4.7 Tests (~25)
 
 ```
 test-wf-engine-01.rkt:
-  ;; Basic solving
+  ;; Basic solving (Phase 4a)
   1. Simple fact query: solve with ground fact → 'definite answer
   2. Simple rule query: p :- q, q is fact → p 'definite
   3. Negation query: a :- not b. b :- not c. c. → a 'definite true
@@ -1004,31 +1201,38 @@ test-wf-engine-01.rkt:
   4. Odd cycle: p :- not q. q :- not p. → both 'unknown
   5. Mixed: some atoms definite, some unknown
   6. Self-reference: p :- not p. → 'unknown
-  ;; Solver dispatch
-  7. current-solver-mode 'stratified uses stratified engine
-  8. current-solver-mode 'well-founded uses WF engine
-  9. Same program, same answers on both engines (stratifiable case)
+  ;; NAF oracle
+  7. NAF oracle returns 'succeed for definitely-false predicate
+  8. NAF oracle returns 'fail for definitely-true predicate
+  9. NAF oracle returns 'defer for unknown predicate
+ 10. NAF oracle returns 'succeed for predicate without bilattice entry
+  ;; Solver dispatch via config
+ 11. semantics 'stratified uses stratified engine (default)
+ 12. semantics 'well-founded uses WF engine
+ 13. Same program, same answers on both engines (stratifiable case)
+  ;; Explanation
+ 14. wf-explain-goal returns proof tree for 'definite atom
+ 15. wf-explain-goal returns cycle explanation for 'unknown atom
+ 16. wf-undeterminacy-explanation identifies correct SCC
   ;; Answer conversion
- 10. wf-answers->standard 'strict filters unknowns
- 11. wf-answers->standard 'all includes certainty tag
+ 17. wf-answers->standard 'strict filters unknowns
+ 18. wf-answers->standard 'all includes certainty tag
   ;; Integration with solver-config
- 12. Solver config respected (timeout, threshold)
+ 19. Solver config respected (timeout, threshold)
   ;; Edge cases
- 13. Empty relation store → empty answers
- 14. Query for undefined relation → empty answers
- 15. Large program (20+ clauses) converges
-  ;; Comparison tests (same program on both engines)
- 16. ancestor relation: same answers, both definite
- 17. path relation with negation: stratified rejects, WF produces answers
- 18. Three-stratum program: WF matches stratified answers
- 19. Ground query with multiple answers
- 20. Query with variables (open query via tabling)
+ 20. Empty relation store → empty answers
+ 21. Query for undefined relation → empty answers
+ 22. Large program (20+ clauses) converges within max-iterations
+  ;; Non-ground queries (via DFS solver)
+ 23. ancestor ?x bob: returns all ancestors with certainty
+ 24. Query with variables and negation: correct three-valued answers
+ 25. Iterative fixpoint converges in ≤ 3 iterations for standard examples
 ```
 
 ## 4.8 Dependencies
 
-- **Depends on**: Phase 3 (`wf-compile-program`, `wf-compile-clause`), existing `solver.rkt`, `stratified-eval.rkt`, `relations.rkt`
-- **Provides to Phase 5**: `wf-solve-goal` (needs three-valued tabling for non-ground queries)
+- **Depends on**: Phase 2 (`bilattice-new-var`, `bilattice-read-bool`), Phase 3 (propositional patterns for reference/testing), existing `solver.rkt`, `stratified-eval.rkt`, `relations.rkt`, `stratify.rkt`
+- **Phase 4b depends on**: Phase 5 (three-valued tabling)
 - **Provides to Phase 6**: Solver entry point for test programs
 - **Provides to Phase 7**: Benchmark-ready solver
 
@@ -1481,9 +1685,42 @@ Future: for stable model enumeration, `atms-amb` creates choice points over `'un
 
 No interaction. The WFLE is a solver backend; multiplicities are tracked at the type-checking level.
 
-## B.5 Existing Test Suite
+## B.5 Solver Config (`semantics` Key)
 
-All existing tests continue to pass. The WFLE is additive — no existing behavior changes. The default `current-solver-mode` is `'stratified`, so all existing programs use the stratified engine unless explicitly switched.
+The WFLE is selected via the existing `solver-config` mechanism. Current solver keys:
+
+| Key | Default | Purpose |
+|-----|---------|---------|
+| `execution` | `'parallel` | DFS parallelism strategy |
+| `threshold` | `4` | Max parallel branches |
+| `strategy` | `'auto` | Search strategy selection |
+| `tabling` | `'by-default` | Tabling behavior |
+| `provenance` | `'none` | Proof provenance tracking |
+| `timeout` | `#f` | Query timeout |
+| `narrow-*` | (various) | Narrowing search heuristics (Phase 3b/3c) |
+| `cfa-scope` | `'module` | CFA scope (Phase 3a) |
+| **`semantics`** | **`'stratified`** | **NEW: Backend selection** |
+
+The `semantics` key selects the logic engine backend:
+- `'stratified` (default): Current engine — stratification check, stratum-ordered evaluation, fails on unstratifiable programs
+- `'well-founded`: WFLE — bilattice iteration, three-valued output, handles cyclic negation
+
+This is the only user-visible entry point. All other WFLE internals (bilattice-vars, iterative loop, NAF oracle) are implementation details.
+
+## B.6 Explain Path for Unknown Atoms
+
+The `explain` form must handle three-valued results. For atoms determined `'unknown` by the WFLE:
+
+- `wf-explain-goal` returns a `wf-undeterminacy-explanation` struct containing:
+  - The atom in question
+  - The cycle of predicates responsible (extracted from the bilattice's stable gap)
+  - The specific NAF dependency chain (which `not` created the cycle)
+- The explanation renderer (pretty-print.rkt) needs a new case for this struct
+- For atoms determined `'true` or `'false`, the existing proof-tree renderer works unchanged
+
+## B.7 Existing Test Suite
+
+All existing tests continue to pass. The WFLE is additive — no existing behavior changes. The default `semantics` is `'stratified`, so all existing programs use the stratified engine unless explicitly switched.
 
 
 ---
@@ -1500,6 +1737,22 @@ The Stage 2 design recommends Approach A (bilattice pairs) with evolution to App
 
 The key insight: everything built in Phases 1-7 is prerequisite infrastructure for Approach C. No throwaway work.
 
+## C.2 First-Class Bilattice Variables
+
+The current design keeps bilattice-vars as internal Racket structs within `wf-engine.rkt`. A future evolution would expose bilattice variables as first-class Prologos values accessible from user programs:
+
+1. **Prologos-level `BilatticeVar A` type**: wraps the Racket bilattice-var struct, parameterized by the value lattice
+2. **`bilattice-read` as Prologos function**: returns `Exact A | Approx A A | Contradiction` (a union type or custom ADT)
+3. **User-defined lattice descriptors**: bridge between the Prologos `Lattice` trait and the Racket `lattice-desc` struct
+4. **Custom propagator wiring**: users write propagators over bilattice-vars for domain-specific three-valued reasoning
+
+This evolution would serve:
+- **Runtime monitoring**: user-level bilattice cells tracking partial verdicts
+- **Abstract interpretation**: user-defined abstract domains with widening/narrowing on bilattice pairs
+- **Game-theoretic semantics**: bilattice cells for alternating quantifier blocks
+
+Prerequisites: the `Lattice` trait infrastructure, a safe API for propagator construction from Prologos, and a story for managing cell lifetimes. This is post-WFLE work — the internal-only design in Phases 1-7 is the right first step.
+
 
 ---
 
@@ -1510,11 +1763,12 @@ The key insight: everything built in Phases 1-7 is prerequisite infrastructure f
 | 1. Descending Cells | ~40 | ~5 | 0 | ~15 |
 | 2. Bilattice Module | ~120 | 0 | 1 | ~20 |
 | 3. WF Propagator Patterns | ~250 | 0 | 1 | ~25 |
-| 4. WF Engine Orchestration | ~150 | ~15 | 1 | ~20 |
+| 4a. WF Engine Core | ~200 | ~20 | 1 | ~25 |
 | 5. Three-Valued Tabling | ~60 | 0 | 0 | ~12 |
+| 4b. Engine + Tabling | ~50 | ~10 | 0 | ~8 |
 | 6. Test Suite (Literature) | ~410 | 0 | 3 | ~30 |
 | 7. Benchmark Comparison | ~250 | 0 | 2 | ~8 |
-| **Total** | **~1280** | **~20** | **8** | **~130** |
+| **Total** | **~1380** | **~35** | **8** | **~143** |
 
 Total estimated effort: Medium. The propagator infrastructure does most of the heavy lifting — the WFLE is primarily new propagator *patterns* and *wiring*, not new infrastructure.
 
