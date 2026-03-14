@@ -797,6 +797,12 @@
    (test-dep '(bilattice.rkt propagator.rkt relations.rkt solver.rkt stratified-eval.rkt syntax.rkt tabling.rkt wf-engine.rkt) #f)
    'test-wf-tabling-01.rkt
    (test-dep '(tabling.rkt propagator.rkt) #f)
+   'test-wf-literature-01.rkt
+   (test-dep '(bilattice.rkt propagator.rkt relations.rkt solver.rkt stratified-eval.rkt syntax.rkt tabling.rkt wf-engine.rkt) #f)
+   'test-wf-comparison-01.rkt
+   (test-dep '(relations.rkt solver.rkt stratified-eval.rkt syntax.rkt wf-engine.rkt) #f)
+   'test-wf-errors-01.rkt
+   (test-dep '(relations.rkt solver.rkt stratified-eval.rkt syntax.rkt wf-engine.rkt) #f)
    'test-string-ops.rkt
    (test-dep '(driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parser.rkt prelude.rkt pretty-print.rkt reader.rkt reduction.rkt source-location.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt typing-core.rkt) #t)
    'test-structural-decomp.rkt
