@@ -2026,6 +2026,21 @@
          '())]
     [else '()]))
 
+;; Flatten WS-reader sub-lists for keyword-value forms.
+;; WS reader wraps each indented line as a sub-list:
+;;   ((:tabling by-default) (:timeout 5000))
+;; This flattens to: (:tabling by-default :timeout 5000)
+;; Only flattens sub-lists whose first element is a keyword-like symbol (:foo).
+;; Compound types like (List Nat) are NOT flattened.
+(define (flatten-ws-kv-pairs items)
+  (apply append
+         (for/list ([item (in-list items)])
+           (if (and (pair? item) (not (null? item))
+                    (let ([head (car item)])
+                      (and (symbol? head) (keyword-like-symbol? head))))
+               item
+               (list item)))))
+
 (define (preparse-expand-all stxs)
   ;; ============================================================
   ;; Pass -1: Process ns/imports declarations FIRST
@@ -2077,7 +2092,7 @@
          ;; Pre-register schema fields so forward references work
          (when (and (list? eff-datum) (>= (length eff-datum) 2) (symbol? (cadr eff-datum)))
            (define sname (cadr eff-datum))
-           (define after-name (cddr eff-datum))
+           (define after-name (flatten-ws-kv-pairs (cddr eff-datum)))
            ;; Detect :closed property after schema name
            (define-values (closed? fpairs)
              (if (and (pair? after-name) (eq? (car after-name) ':closed))
@@ -2360,16 +2375,19 @@
          (if (equal? expanded datum)
              (cons stx acc)
              (cons (datum->syntax #f expanded stx) acc))]
-        ;; ---- Public solver — expand to (def name (solver-config ...)), auto-export ----
+        ;; ---- Public solver — expand to (def name ($solver-config ...)), auto-export ----
         [(and (pair? datum) (eq? head 'solver))
-         ;; (solver name :key val ...) → (def name {:key val ...})
+         ;; (solver name :key val ...) → (def name ($solver-config :key val ...))
+         ;; $solver-config sentinel makes the parser produce a surf-solver,
+         ;; which the elaborator converts to expr-solver-config with a proper
+         ;; solver-config struct. Values are treated as symbol literals.
          (unless (and (list? datum) (>= (length datum) 2) (symbol? (cadr datum)))
            (error 'solver "solver requires: (solver name :key val ...)"))
          (define sname (cadr datum))
          (auto-export-name! sname)
-         (define opts (cddr datum))
-         ;; Wrap as: (def name ($brace-params :key val ...))
-         (define expanded `(def ,sname ($brace-params ,@opts)))
+         (define opts (flatten-ws-kv-pairs (cddr datum)))
+         ;; Wrap as: (def name ($solver-config :key val ...))
+         (define expanded `(def ,sname ($solver-config ,@opts)))
          (define new-stx (datum->syntax #f (preparse-expand-form expanded) stx))
          (cons new-stx acc)]
         ;; ---- Public schema — parse fields, register, emit as named type, auto-export ----
@@ -2379,7 +2397,7 @@
            (error 'schema "schema requires: (schema Name :field1 Type1 ...)"))
          (define schema-name (cadr datum))
          (auto-export-name! schema-name)
-         (define after-name (cddr datum))
+         (define after-name (flatten-ws-kv-pairs (cddr datum)))
          ;; Detect :closed property after schema name
          (define-values (closed? field-pairs)
            (if (and (pair? after-name) (eq? (car after-name) ':closed))

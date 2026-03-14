@@ -2609,11 +2609,21 @@
      (run-solve-goal goal default-solver-config)]
 
     [(expr-solve-with solver overrides goal)
+     (define base-cfg
+       (if solver
+           (let ([s (whnf solver)])
+             (if (expr-solver-config? s)
+                 (expr-solver-config-config-map s)
+                 default-solver-config))
+           default-solver-config))
      (define cfg
-       (let ([s (whnf solver)])
-         (if (expr-solver-config? s)
-             (expr-solver-config-config-map s)
-             default-solver-config)))
+       (if overrides
+           (let ([o (whnf overrides)])
+             (if (expr-solver-config? o)
+                 (solver-config-merge base-cfg
+                                      (solver-config-options (expr-solver-config-config-map o)))
+                 base-cfg))
+           base-cfg))
      (run-solve-goal goal cfg)]
 
     [(expr-solve-one goal)
@@ -2623,11 +2633,21 @@
      (run-explain-goal goal default-solver-config 'full)]
 
     [(expr-explain-with solver overrides goal)
+     (define base-cfg
+       (if solver
+           (let ([s (whnf solver)])
+             (if (expr-solver-config? s)
+                 (expr-solver-config-config-map s)
+                 default-solver-config))
+           default-solver-config))
      (define cfg
-       (let ([s (whnf solver)])
-         (if (expr-solver-config? s)
-             (expr-solver-config-config-map s)
-             default-solver-config)))
+       (if overrides
+           (let ([o (whnf overrides)])
+             (if (expr-solver-config? o)
+                 (solver-config-merge base-cfg
+                                      (solver-config-options (expr-solver-config-config-map o)))
+                 base-cfg))
+           base-cfg))
      (run-explain-goal goal cfg 'full)]
 
     ;; Narrow: DT-guided narrowing search (Phase 1d)

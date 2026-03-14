@@ -28,6 +28,7 @@
          "warnings.rkt"          ;; Phase 2: for capability warnings (W2001)
          "global-constraints.rkt" ;; Phase 3c: for current-narrow-var-constraints
          "sessions.rkt"          ;; Phase S3: session type constructors (elaboration target)
+         "solver.rkt"            ;; Solver configuration (make-solver-config)
          "processes.rkt")        ;; Phase S3: process constructors (elaboration target)
 
 (provide elaborate
@@ -2443,6 +2444,27 @@
 
     ;; ---- Relational language (Phase 7) ----
 
+    ;; Solver config literal — convert key-value pairs to solver-config struct
+    [(surf-solver name options loc)
+     (define opts-datum (map (lambda (o) (if (syntax? o) (syntax-e o) o)) options))
+     (define kv-hash
+       (let loop ([items opts-datum] [h (hasheq)])
+         (cond
+           [(null? items) h]
+           [(null? (cdr items))
+            (error 'solver (format "solver key ~a is missing a value" (car items)))]
+           [else
+            (define k (car items))
+            (define v (cadr items))
+            ;; Strip : prefix from keyword-style keys
+            (define key-sym
+              (let ([s (symbol->string k)])
+                (if (and (> (string-length s) 1) (char=? (string-ref s 0) #\:))
+                    (string->symbol (substring s 1))
+                    k)))
+            (loop (cddr items) (hash-set h key-sym v))])))
+     (expr-solver-config (make-solver-config kv-hash))]
+
     ;; Type constructors — no sub-expressions to elaborate
     [(surf-solver-type loc)
      (expr-solver-type)]
@@ -2552,14 +2574,14 @@
 
     ;; solve-with — parameterized solve
     [(surf-solve-with solver overrides goal loc)
-     (let ([es (elaborate solver env depth)]
+     (let ([es (and solver (elaborate solver env depth))]
            [eo (and overrides (elaborate overrides env depth))]
            [eg (parameterize ([current-relational-fallback? #t])
                  (elaborate goal env depth))])
-       (cond [(prologos-error? es) es]
+       (cond [(and es (prologos-error? es)) es]
              [(and eo (prologos-error? eo)) eo]
              [(prologos-error? eg) eg]
-             [else (expr-solve-with es (or eo #f) eg)]))]
+             [else (expr-solve-with (or es #f) (or eo #f) eg)]))]
 
     ;; explain — bare explain
     [(surf-explain goal loc)

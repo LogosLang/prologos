@@ -17,7 +17,8 @@
          "syntax.rkt"
          "metavar-store.rkt"
          "substitution.rkt"
-         "performance-counters.rkt")
+         "performance-counters.rkt"
+         "solver.rkt")
 
 (provide zonk zonk-ctx zonk-final zonk-at-depth)
 
@@ -348,7 +349,8 @@
     [(expr-schema-type _) e] [(expr-logic-var _ _) e]
     [(expr-answer-type t) (expr-answer-type (zonk t))]
     [(expr-relation-type pts) (expr-relation-type (map zonk pts))]
-    [(expr-solver-config m) (expr-solver-config (zonk m))]
+    [(expr-solver-config m)
+     (if (solver-config? m) e (expr-solver-config (zonk m)))]
     [(expr-defr nm sc vs) (expr-defr nm (and sc (zonk sc)) (map zonk vs))]
     [(expr-defr-variant ps bd) (expr-defr-variant ps (map zonk bd))]
     [(expr-rel ps cls) (expr-rel ps (map zonk cls))]
@@ -784,7 +786,8 @@
     [(expr-schema-type _) e] [(expr-logic-var _ _) e]
     [(expr-answer-type t) (expr-answer-type (zonk-at-depth depth t))]
     [(expr-relation-type pts) (expr-relation-type (map (lambda (p) (zonk-at-depth depth p)) pts))]
-    [(expr-solver-config m) (expr-solver-config (zonk-at-depth depth m))]
+    [(expr-solver-config m)
+     (if (solver-config? m) e (expr-solver-config (zonk-at-depth depth m)))]
     [(expr-defr nm sc vs) (expr-defr nm (and sc (zonk-at-depth depth sc)) (map (lambda (v) (zonk-at-depth depth v)) vs))]
     [(expr-defr-variant ps bd) (expr-defr-variant ps (map (lambda (b) (zonk-at-depth depth b)) bd))]
     [(expr-rel ps cls) (expr-rel ps (map (lambda (c) (zonk-at-depth depth c)) cls))]
@@ -1188,7 +1191,8 @@
     [(expr-schema-type _) e] [(expr-logic-var _ _) e]
     [(expr-answer-type t) (expr-answer-type (default-metas t))]
     [(expr-relation-type pts) (expr-relation-type (map default-metas pts))]
-    [(expr-solver-config m) (expr-solver-config (default-metas m))]
+    [(expr-solver-config m)
+     (if (solver-config? m) e (expr-solver-config (default-metas m)))]
     [(expr-defr nm sc vs) (expr-defr nm (and sc (default-metas sc)) (map default-metas vs))]
     [(expr-defr-variant ps bd) (expr-defr-variant ps (map default-metas bd))]
     [(expr-rel ps cls) (expr-rel ps (map default-metas cls))]

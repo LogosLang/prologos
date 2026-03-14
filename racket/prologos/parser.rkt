@@ -647,6 +647,11 @@
     [(and (symbol? head) (eq? head '$brace-params))
      (parse-map-literal args loc)]
 
+    ;; $solver-config sentinel: solver config {:key symbol-val ...}
+    ;; Values are treated as symbol literals, not variable references.
+    [(and (symbol? head) (eq? head '$solver-config))
+     (surf-solver #f args loc)]
+
     ;; $set-literal sentinel: Set literal #{e1 e2 ...}
     [(and (symbol? head) (eq? head '$set-literal))
      (parse-set-literal args loc)]
@@ -4759,11 +4764,13 @@
     [(< (length args) 2)
      (prologos-error loc "solve-with requires at least 2 arguments (solver/overrides and goal)")]
     ;; 3 args: solver {overrides} (goal)
+    ;; Brace-params overrides are parsed as solver-config
     [(and (= (length args) 3)
-          (not (brace-params? (car args)))
-          (brace-params? (cadr args)))
+          (not (brace-params-stx? (car args)))
+          (brace-params-stx? (cadr args)))
      (let ([s (parse-datum (car args))]
-           [o (parse-datum (cadr args))]
+           [o (let ([d (stx->datum (cadr args))])
+                (surf-solver #f (cdr d) loc))]
            [g (parse-relational-goal (caddr args))])
        (cond
          [(prologos-error? s) s]
@@ -4771,9 +4778,11 @@
          [(prologos-error? g) g]
          [else (surf-solve-with s o g loc)]))]
     ;; 2 args: {overrides} (goal) — merge into default-solver
+    ;; Brace-params are parsed as solver-config (symbol values, not var refs)
     [(and (= (length args) 2)
-          (brace-params? (car args)))
-     (let ([o (parse-datum (car args))]
+          (brace-params-stx? (car args)))
+     (let ([o (let ([d (stx->datum (car args))])
+                (surf-solver #f (cdr d) loc))]   ; skip $brace-params sentinel
            [g (parse-relational-goal (cadr args))])
        (cond
          [(prologos-error? o) o]
@@ -4796,11 +4805,13 @@
     [(< (length args) 2)
      (prologos-error loc "explain-with requires at least 2 arguments")]
     ;; 3 args: solver {overrides} (goal)
+    ;; Brace-params overrides are parsed as solver-config
     [(and (= (length args) 3)
-          (not (brace-params? (car args)))
-          (brace-params? (cadr args)))
+          (not (brace-params-stx? (car args)))
+          (brace-params-stx? (cadr args)))
      (let ([s (parse-datum (car args))]
-           [o (parse-datum (cadr args))]
+           [o (let ([d (stx->datum (cadr args))])
+                (surf-solver #f (cdr d) loc))]
            [g (parse-relational-goal (caddr args))])
        (cond
          [(prologos-error? s) s]
@@ -4808,9 +4819,11 @@
          [(prologos-error? g) g]
          [else (surf-explain-with s o g loc)]))]
     ;; 2 args: {overrides} (goal)
+    ;; Brace-params overrides are parsed as solver-config
     [(and (= (length args) 2)
-          (brace-params? (car args)))
-     (let ([o (parse-datum (car args))]
+          (brace-params-stx? (car args)))
+     (let ([o (let ([d (stx->datum (car args))])
+                (surf-solver #f (cdr d) loc))]
            [g (parse-relational-goal (cadr args))])
        (cond
          [(prologos-error? o) o]

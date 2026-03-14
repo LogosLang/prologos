@@ -41,13 +41,13 @@ defr color [?item ?hue]
      "grape"  "purple"
      "lime"   "green"
 
-eval (solve (color "apple" c))
+solve (color "apple" c)
 ;; => [{:c "red"}]
 
-eval (solve (color fruit "yellow"))
+solve (color fruit "yellow")
 ;; => [{:fruit "banana"}]
 
-eval (solve (color fruit hue))
+solve (color fruit hue)
 ;; => 4 answers
 
 ;; --- A2: Rules (recursive) ---
@@ -62,10 +62,10 @@ defr path [?from ?to]
   &> (edge from to)
   &> (edge from mid) (path mid to)
 
-eval (solve (path "a" dest))
+solve (path "a" dest)
 ;; => [{:dest "b"} {:dest "c"} {:dest "d"} {:dest "e"}]
 
-eval (solve (path src "e"))
+solve (path src "e")
 ;; => [{:src "d"} {:src "c"} {:src "b"} {:src "a"}]
 
 ;; --- A3: Unification goals ---
@@ -73,7 +73,9 @@ eval (solve (path src "e"))
 defr same-pair [?x ?y]
   &> (= x y)
 
-eval (solve (same-pair "hello" r))
+solve (same-pair "hello" ?x)
+  
+solve (solve (same-pair "hello" r))
 ;; => [{:r "hello"}]
 
 ;; --- A4: Negation-as-failure (ground, stratifiable) ---
@@ -85,7 +87,7 @@ defr reachable [?from ?to]
   &> (edge from to) (not (blocked to))
   &> (edge from mid) (not (blocked mid)) (reachable mid to)
 
-eval (solve (reachable "a" dest))
+solve (reachable "a" dest)
 ;; => [{:dest "b"}] — c is blocked, so d and e unreachable
 
 ;; --- A5: Mode annotations ---
@@ -109,30 +111,31 @@ eval (solve (lookup "host" v))
 ;; --- B1: Solver definition ---
 ;; The `solver` form should expand at preparse to a def of a config map.
 
-;; solver default-config
-;;   tabling by-default
+solver default-config
+  :tabling by-default
 
 ;; --- B2: Solver with semantics key (NEW for WFLE) ---
+;; semantics key doesn't exist yet — will be added in WFLE Phase 2
 
 ;; solver wf-solver
-;;   semantics well-founded
+;;   :semantics well-founded
 
 ;; solver strat-solver
-;;   semantics stratified
+;;   :semantics stratified
 
 ;; --- B3: solve-with using named solver ---
 
-;; eval (solve-with strat-solver (path "a" dest))
+eval (solve-with default-config (path "a" dest))
 ;; => same as regular solve (stratified is default)
 
 ;; --- B4: solve-with with inline overrides ---
 
-;; eval (solve-with {semantics well-founded} (path "a" dest))
+eval (solve-with {:tabling by-default} (path "a" dest))
 ;; => same answers for stratifiable program
 
 ;; --- B5: solve-with named solver + overrides ---
 
-;; eval (solve-with wf-solver {timeout 5000} (path "a" dest))
+eval (solve-with default-config {:timeout 5000} (path "a" dest))
 
 
 ;; ========================================================================
