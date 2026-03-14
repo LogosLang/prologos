@@ -450,6 +450,22 @@
      ;; Bound args: show ground arguments with parameter names from relation definition
      (define bound-args (compute-bound-args-for-relation rel-name goal-args query-vars))
      (answers->prologos-expr answers query-vars bound-args)]
+    [(expr-rel? goal*)
+     ;; Anonymous relation — create temporary relation-info and solve
+     (define temp-name (gensym 'anon-rel))
+     (define rel-info (expr-rel->relation-info goal* temp-name))
+     (define store (hash-set (current-relation-store) temp-name rel-info))
+     ;; All params are query vars
+     (define query-vars
+       (for/list ([p (in-list (expr-rel-params goal*))])
+         (cond [(pair? p) (car p)]
+               [(expr-logic-var? p) (expr-logic-var-name p)]
+               [else p])))
+     (define goal-args (map (lambda (v) v) query-vars))  ;; all unbound
+     (define answers
+       (parameterize ([current-is-eval-fn nf])
+         (stratified-solve-goal config store temp-name goal-args query-vars)))
+     (answers->prologos-expr answers query-vars '())]
     ;; If the goal is not yet reduced to a goal-app, return the expression unchanged
     [else (expr-solve goal*)]))
 
@@ -485,6 +501,31 @@
                    (define pval (ground->prologos-expr (cdr ba)))
                    (champ-insert c (equal-hash-code key) key pval))])
            (expr-app (expr-fvar 'some) (expr-champ champ-with-bound))))]
+    [(expr-rel? goal*)
+     ;; Anonymous relation — create temporary relation-info and solve-one
+     (define temp-name (gensym 'anon-rel))
+     (define rel-info (expr-rel->relation-info goal* temp-name))
+     (define store (hash-set (current-relation-store) temp-name rel-info))
+     (define query-vars
+       (for/list ([p (in-list (expr-rel-params goal*))])
+         (cond [(pair? p) (car p)]
+               [(expr-logic-var? p) (expr-logic-var-name p)]
+               [else p])))
+     (define goal-args (map (lambda (v) v) query-vars))
+     (define answers
+       (parameterize ([current-is-eval-fn nf])
+         (stratified-solve-goal config store temp-name goal-args query-vars)))
+     (if (null? answers)
+         (expr-fvar 'none)
+         (let* ([first-answer (car answers)]
+                [champ-val
+                 (for/fold ([c champ-empty])
+                           ([qv (in-list query-vars)])
+                   (define val (hash-ref first-answer qv #f))
+                   (define key (expr-keyword qv))
+                   (define pval (if val (ground->prologos-expr val) (expr-fvar 'none)))
+                   (champ-insert c (equal-hash-code key) key pval))])
+           (expr-app (expr-fvar 'some) (expr-champ champ-val))))]
     [else (expr-solve-one goal*)]))
 
 ;; Run explain for a goal expression, returning a Prologos list of answer-records.

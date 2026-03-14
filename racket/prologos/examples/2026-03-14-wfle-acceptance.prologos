@@ -390,13 +390,10 @@ solve (positive-edge from to w)
 ;;        (is len [add sub-len 1N])
 
 ;; --- F4: Anonymous relations with rel ---
-;; STATUS: PRE-EXISTING GAP — rel parses to expr-rel but solve+rel
-;; integration is incomplete (returns representation, not results).
+;; STATUS: WORKING (fixed — solve dispatches on expr-rel, creates temporary relation-info)
 
-;; def two-hop-pairs : List
-;;   (solve (rel [?from ?to]
-;;     &> (edge from mid) (edge mid to))
-;;     from to)
+solve (rel [?from ?to] &> (edge from mid) (edge mid to))
+;; => [{:to "c", :from "a"} {:to "d", :from "b"}]
 
 ;; --- F5: solve-one (returns Option not Seq) ---
 ;; STATUS: WORKING (fixed — added surf-solve-one to parser/elaborator)

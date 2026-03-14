@@ -40,6 +40,7 @@
  relation-store-names
  ;; AST → runtime conversion
  expr-defr->relation-info
+ expr-rel->relation-info
  expr->goal-desc
  ;; Variable renaming helpers (for negation)
  rename-ast-vars
@@ -144,6 +145,30 @@
       [(expr-fvar? schema) (expr-fvar-name schema)]
       [else #f]))
   (relation-info name arity converted-variants schema-name #f))
+
+;; Convert an anonymous expr-rel to a relation-info with a given name.
+;; expr-rel has params (list of (name . mode) pairs) and clauses (list of expr-clause/expr-fact-block).
+(define (expr-rel->relation-info rel-expr temp-name)
+  (define params (expr-rel-params rel-expr))
+  (define clauses (expr-rel-clauses rel-expr))
+  (define converted-params
+    (for/list ([p (in-list params)])
+      (cond
+        [(expr-logic-var? p)
+         (param-info (expr-logic-var-name p)
+                     (or (expr-logic-var-mode p) 'free))]
+        [(and (pair? p) (symbol? (car p)))
+         (param-info (car p) (or (cdr p) 'free))]
+        [(symbol? p) (param-info p 'free)]
+        [else (param-info (gensym 'p) 'free)])))
+  (define arity (length converted-params))
+  ;; Each clause becomes a variant-info body
+  (define converted-variants
+    (for/list ([c (in-list clauses)])
+      (define-values (facts clause-goals)
+        (extract-facts-and-clauses c))
+      (variant-info converted-params clause-goals facts)))
+  (relation-info temp-name arity converted-variants #f #f))
 
 ;; Convert an expr-defr-variant to a variant-info.
 (define (expr-variant->variant-info v)
