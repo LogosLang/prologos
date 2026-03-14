@@ -38,7 +38,15 @@
  ;; Execution
  table-run
  ;; Query
- table-lookup)
+ table-lookup
+ ;; Well-founded tabling (Phase 5)
+ (struct-out wf-table-entry)
+ wf-all-mode-merge
+ wf-table-register
+ wf-table-add
+ wf-table-answers
+ wf-table-complete
+ wf-table-certainty)
 
 ;; ========================================
 ;; Core structs
@@ -167,3 +175,77 @@
 (define (table-lookup ts name answer)
   (define answers (table-answers ts name))
   (and (member answer answers) #t))
+
+;; ========================================
+;; Well-Founded Tabling (Phase 5)
+;; ========================================
+;;
+;; Three-valued table entries for the well-founded engine.
+;; Each answer is paired with a certainty tag ('definite | 'unknown).
+;; The merge function deduplicates by answer value, preferring 'definite
+;; over 'unknown when the same answer appears with different certainties.
+
+;; Extended table entry with a certainty field for the overall table status.
+;; certainty: 'definite | 'unknown — reflects the best certainty across all answers
+(struct wf-table-entry table-entry (certainty) #:transparent)
+
+;; Merge for three-valued 'all mode: list-based set union keyed on answer.
+;; Each element is (cons answer certainty).
+;; If the same answer appears with different certainties, 'definite wins.
+(define (wf-all-mode-merge old new)
+  (define best (make-hash))
+  (for ([entry (in-list (append old new))])
+    (define answer (car entry))
+    (define certainty (cdr entry))
+    (define current (hash-ref best answer #f))
+    (when (or (not current) (eq? certainty 'definite))
+      (hash-set! best answer certainty)))
+  (for/list ([(answer certainty) (in-hash best)])
+    (cons answer certainty)))
+
+;; Register a tabled predicate for three-valued answers.
+;; Creates a cell with wf-all-mode-merge and a wf-table-entry.
+;; Returns (values new-table-store cell-id).
+(define (wf-table-register ts name)
+  (define-values (net2 cid)
+    (net-new-cell (table-store-network ts) '() wf-all-mode-merge))
+  (define entry (wf-table-entry name cid 'all 'active 'unknown))
+  (values
+   (table-store net2 (hash-set (table-store-tables ts) name entry))
+   cid))
+
+;; Add an answer with certainty to a three-valued table.
+;; answer: any Racket value
+;; certainty: 'definite | 'unknown
+(define (wf-table-add ts name answer certainty)
+  (define entry (hash-ref (table-store-tables ts) name))
+  (define net2 (net-cell-write (table-store-network ts)
+                               (table-entry-cell-id entry)
+                               (list (cons answer certainty))))
+  (struct-copy table-store ts [network net2]))
+
+;; Read all answers from a three-valued table.
+;; Returns (listof (cons answer certainty)).
+(define (wf-table-answers ts name)
+  (define entry (hash-ref (table-store-tables ts) name #f))
+  (if entry
+      (net-cell-read (table-store-network ts) (table-entry-cell-id entry))
+      '()))
+
+;; Mark a three-valued table as complete with a final certainty.
+;; final-certainty: 'definite | 'unknown
+(define (wf-table-complete ts name final-certainty)
+  (define entry (hash-ref (table-store-tables ts) name))
+  (define entry2 (wf-table-entry (table-entry-name entry)
+                                 (table-entry-cell-id entry)
+                                 (table-entry-answer-mode entry)
+                                 'complete
+                                 final-certainty))
+  (struct-copy table-store ts
+    [tables (hash-set (table-store-tables ts) name entry2)]))
+
+;; Get the certainty of a three-valued table entry.
+;; Returns 'definite | 'unknown | #f (if not a wf-table-entry or not found).
+(define (wf-table-certainty ts name)
+  (define entry (hash-ref (table-store-tables ts) name #f))
+  (and entry (wf-table-entry? entry) (wf-table-entry-certainty entry)))
