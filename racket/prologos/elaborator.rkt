@@ -2572,6 +2572,13 @@
        (if (prologos-error? eg) eg
            (expr-solve eg)))]
 
+    ;; solve-one — returns first answer or none
+    [(surf-solve-one goal loc)
+     (let ([eg (parameterize ([current-relational-fallback? #t])
+                 (elaborate goal env depth))])
+       (if (prologos-error? eg) eg
+           (expr-solve-one eg)))]
+
     ;; solve-with — parameterized solve
     [(surf-solve-with solver overrides goal loc)
      (let ([es (and solver (elaborate solver env depth))]

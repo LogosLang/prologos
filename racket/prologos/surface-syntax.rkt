@@ -262,7 +262,7 @@
  (struct-out surf-defr) (struct-out surf-defr-variant) (struct-out surf-rel)
  (struct-out surf-clause) (struct-out surf-facts) (struct-out surf-fact-row)
  (struct-out surf-goal-app) (struct-out surf-unify) (struct-out surf-not) (struct-out surf-is)
- (struct-out surf-solve) (struct-out surf-solve-with)
+ (struct-out surf-solve) (struct-out surf-solve-one) (struct-out surf-solve-with)
  (struct-out surf-explain) (struct-out surf-explain-with)
  ;; Narrowing (Phase 1e)
  (struct-out surf-narrow)
@@ -930,6 +930,8 @@
 (struct surf-is               (var expr srcloc) #:transparent)
 ;; Solve: (solve (goal))
 (struct surf-solve            (goal srcloc) #:transparent)
+;; Solve-one: (solve-one (goal)) — returns first answer or none
+(struct surf-solve-one        (goal srcloc) #:transparent)
 ;; Solve-with: (solve-with solver {overrides} (goal))
 (struct surf-solve-with       (solver overrides goal srcloc) #:transparent)
 ;; Explain: (explain (goal))

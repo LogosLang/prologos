@@ -2672,7 +2672,7 @@
         (or (check-arity 'solve-one args 1 loc)
             (let ([g (parse-relational-goal (car args))])
               (if (prologos-error? g) g
-                  (surf-solve g loc))))]  ;; reuse surf-solve (reduction distinguishes)
+                  (surf-solve-one g loc))))]
 
        ;; (explain (goal)) — goal arg is parsed in relational context
        [(explain)
