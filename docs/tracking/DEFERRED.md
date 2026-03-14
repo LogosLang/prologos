@@ -542,9 +542,11 @@ issues in the relational subsystem (Phase 7 surface syntax), not WS-specific bug
   Fix: add to keyword dispatch in `parser.rkt`.
 - **`cut` not in parser keyword list**: Same as `guard` — runtime handler exists (`relations.rkt:316`)
   but `cut` is not a parser keyword. Fix: add to keyword dispatch in `parser.rkt`.
-- **Multi-arity `|` relation variants**: `|`-separated variants (multi-clause defr sugar) don't
-  register properly with the solver runtime for dispatch. The parser produces them but the
-  runtime doesn't always see all clauses.
+- **Multi-arity `|` relation variants — zero-arg solve path**: Multi-arity variants (different
+  param counts per `|` clause) work correctly in the DFS solver — `solve-app-goal` tries all
+  variants via `append-map` and arity-mismatched variants fail unification gracefully. The only
+  gap is `solve-goal`'s zero-arg path (bare `solve rel-name`), which infers arity from the
+  first variant only. Fix: iterate all variants or require explicit args for multi-arity rels.
 - **Anonymous `rel` + `solve` integration**: Anonymous relations created with `rel` inside `solve`
   expressions don't fully integrate — the relation isn't registered in the solver's relation
   environment before solve dispatches.
