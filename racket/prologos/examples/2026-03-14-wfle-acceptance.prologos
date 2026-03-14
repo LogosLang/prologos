@@ -1,0 +1,550 @@
+ns examples.wfle-acceptance
+
+;; ========================================================================
+;;
+;;   Well-Founded Logic Engine — Acceptance Test File
+;;
+;;   STATUS: Phase 0 (Pre-Implementation)
+;;   All target expressions are COMMENTED OUT. Uncomment as phases complete.
+;;   The WFLE is not DONE until this file runs with 0 errors via process-file.
+;;
+;;   This file exercises the FULL capability envelope of the relational
+;;   language as it should work in WS-mode (.prologos files), including
+;;   features that exist at sexp level but may not yet be wired through.
+;;
+;;   Sections:
+;;     A. Baseline — existing relational features (should already work)
+;;     B. Solver configuration — solver form + solve-with
+;;     C. Well-founded semantics — core WFLE features
+;;     D. Explain and provenance — three-valued explanations
+;;     E. Tabling interaction — tabled WF queries
+;;     F. Advanced relational features — is, guard, cut, multi-arity
+;;     G. Interaction with functional language — solve results in exprs
+;;     H. Interaction with type system — typed relations + WF
+;;     I. Edge cases and error conditions
+;;
+;; ========================================================================
+
+
+;; ========================================================================
+;; SECTION A: BASELINE — Existing Relational Features
+;; ========================================================================
+;;
+;; These should already work. If any fail, we have a pre-existing gap
+;; to fix before WFLE implementation begins.
+
+;; --- A1: Facts ---
+
+defr color [?item ?hue]
+  || "apple"  "red"
+     "banana" "yellow"
+     "grape"  "purple"
+     "lime"   "green"
+
+eval (solve (color "apple" c))
+;; => [{:c "red"}]
+
+eval (solve (color fruit "yellow"))
+;; => [{:fruit "banana"}]
+
+eval (solve (color fruit hue))
+;; => 4 answers
+
+;; --- A2: Rules (recursive) ---
+
+defr edge [?from ?to]
+  || "a" "b"
+     "b" "c"
+     "c" "d"
+     "d" "e"
+
+defr path [?from ?to]
+  &> (edge from to)
+  &> (edge from mid) (path mid to)
+
+eval (solve (path "a" dest))
+;; => [{:dest "b"} {:dest "c"} {:dest "d"} {:dest "e"}]
+
+eval (solve (path src "e"))
+;; => [{:src "d"} {:src "c"} {:src "b"} {:src "a"}]
+
+;; --- A3: Unification goals ---
+
+defr same-pair [?x ?y]
+  &> (= x y)
+
+eval (solve (same-pair "hello" r))
+;; => [{:r "hello"}]
+
+;; --- A4: Negation-as-failure (ground, stratifiable) ---
+
+defr blocked [?node]
+  || "c"
+
+defr reachable [?from ?to]
+  &> (edge from to) (not (blocked to))
+  &> (edge from mid) (not (blocked mid)) (reachable mid to)
+
+eval (solve (reachable "a" dest))
+;; => [{:dest "b"}] — c is blocked, so d and e unreachable
+
+;; --- A5: Mode annotations ---
+
+defr lookup [+key -val]
+  || "host" "localhost"
+     "port" "8080"
+
+eval (solve (lookup "host" v))
+;; => [{:v "localhost"}]
+
+
+;; ========================================================================
+;; SECTION B: SOLVER CONFIGURATION
+;; ========================================================================
+;;
+;; The `solver` form and `solve-with` may not be fully wired to WS mode.
+;; This section validates the pipeline from solver definition through
+;; solve-with dispatch.
+
+;; --- B1: Solver definition ---
+;; The `solver` form should expand at preparse to a def of a config map.
+
+;; solver default-config
+;;   tabling by-default
+
+;; --- B2: Solver with semantics key (NEW for WFLE) ---
+
+;; solver wf-solver
+;;   semantics well-founded
+
+;; solver strat-solver
+;;   semantics stratified
+
+;; --- B3: solve-with using named solver ---
+
+;; eval (solve-with strat-solver (path "a" dest))
+;; => same as regular solve (stratified is default)
+
+;; --- B4: solve-with with inline overrides ---
+
+;; eval (solve-with {semantics well-founded} (path "a" dest))
+;; => same answers for stratifiable program
+
+;; --- B5: solve-with named solver + overrides ---
+
+;; eval (solve-with wf-solver {timeout 5000} (path "a" dest))
+
+
+;; ========================================================================
+;; SECTION C: WELL-FOUNDED SEMANTICS — Core WFLE Features
+;; ========================================================================
+;;
+;; These are the NEW capabilities enabled by the WFLE. Programs with
+;; cyclic negation that would be rejected by the stratified engine.
+
+;; --- C1: Classic odd cycle (p :- not q, q :- not p) ---
+;; The canonical WF example. Both p and q should be 'unknown.
+
+;; defr p-holds []
+;;   &> (not (q-holds))
+;;
+;; defr q-holds []
+;;   &> (not (p-holds))
+;;
+;; eval (solve-with wf-solver (p-holds))
+;; => [{:__certainty unknown}] or equivalent three-valued result
+
+;; --- C2: Self-referencing (p :- not p) ---
+;; Single-atom odd cycle. p should be 'unknown.
+
+;; defr paradox []
+;;   &> (not (paradox))
+;;
+;; eval (solve-with wf-solver (paradox))
+;; => 'unknown
+
+;; --- C3: Self-referencing positive (p :- p) ---
+;; Positive self-loop. p should be 'unknown (unfounded).
+
+;; defr unfounded []
+;;   &> (unfounded)
+;;
+;; eval (solve-with wf-solver (unfounded))
+;; => 'unknown (no base case to ground the recursion)
+
+;; --- C4: Mixed definite and unknown ---
+;; Some atoms determined, some not.
+
+;; defr fact-a []
+;;   || ;; a is a ground fact — no columns, just exists
+;;
+;; defr depends-on-a []
+;;   &> (fact-a) (not (paradox))
+;;
+;; eval (solve-with wf-solver (fact-a))
+;; => definite true
+;;
+;; eval (solve-with wf-solver (depends-on-a))
+;; => 'unknown (depends on paradox which is unknown)
+
+;; --- C5: Stratifiable program under WF engine ---
+;; WF semantics should agree with stratified for non-cyclic programs.
+
+;; eval (solve-with wf-solver (reachable "a" dest))
+;; => same as stratified: [{:dest "b"}]
+
+;; --- C6: Default reasoning (Nixon diamond) ---
+;; Classic non-monotonic reasoning example.
+
+;; defr quaker [?x]
+;;   || "nixon"
+;;
+;; defr republican [?x]
+;;   || "nixon"
+;;
+;; defr pacifist [?x]
+;;   &> (quaker x) (not (hawk x))
+;;
+;; defr hawk [?x]
+;;   &> (republican x) (not (pacifist x))
+;;
+;; eval (solve-with wf-solver (pacifist "nixon"))
+;; => 'unknown (mutual negation cycle)
+;;
+;; eval (solve-with wf-solver (hawk "nixon"))
+;; => 'unknown (symmetric)
+
+;; --- C7: Win/lose game positions ---
+;; Classic game theory in logic programming.
+;; A position is a win if there exists a move to a losing position.
+
+;; defr move [?from ?to]
+;;   || "a" "b"
+;;      "b" "c"
+;;      "c" "a"    ;; cycle!
+;;      "b" "d"
+;;      "d" "e"
+;;
+;; defr win [?pos]
+;;   &> (move pos next) (not (win next))
+;;
+;; Under WF semantics:
+;;   e: no moves → not a win (definite false)
+;;   d: moves to e, not(win(e)) succeeds → d is a win (definite true)
+;;   b: moves to c and d. d is a win, c is in a cycle.
+;;      not(win(d)) fails → that path fails
+;;      not(win(c)) unknown → that path unknown
+;;      But b also moves to d... wait, b→d, not(win(d)) fails.
+;;      b→c, not(win(c)) unknown → still unknown overall? No:
+;;      b is a win if ANY move leads to a loss. b→d→e: not(win(e))=true
+;;      ... actually the DFS solver tries all clauses for win(b):
+;;      clause with next=c: not(win(c)) deferred → skip
+;;      clause with next=d: not(win(d)) fails (d IS a win) → skip
+;;      So win(b) has no successful derivation in iteration 1.
+;;      But wait — we need to re-examine. The WF engine iterates.
+;;
+;; eval (solve-with wf-solver (win pos))
+;; => characterize: which positions are definite wins, which unknown?
+
+;; --- C8: Even-length paths (uses negation cycle) ---
+
+;; defr even-path [?from ?to]
+;;   &> (edge from to)                                ;; 1-hop: odd (not even)
+;;   &> (edge from mid) (even-path mid to)            ;; add 1 hop
+;;
+;; defr odd-path [?from ?to]
+;;   &> (edge from mid) (not (odd-path mid to)) (path mid to)
+;;
+;; This creates a negative dependency between odd-path and itself.
+;; Under WF, some path-length queries will be 'unknown.
+
+
+;; ========================================================================
+;; SECTION D: EXPLAIN AND PROVENANCE
+;; ========================================================================
+;;
+;; Three-valued explanations: definite atoms get proof trees,
+;; unknown atoms get cycle explanations.
+
+;; --- D1: explain for definite atom ---
+
+;; eval (explain (path "a" "b"))
+;; => derivation tree: path(a,b) via edge(a,b) [fact]
+
+;; --- D2: explain-with solver config ---
+
+;; eval (explain-with wf-solver (reachable "a" "b"))
+;; => derivation tree with WF engine
+
+;; --- D3: explain for unknown atom (WFLE-specific) ---
+;; The explain path must handle 'unknown results with cycle info.
+
+;; eval (explain-with wf-solver (paradox))
+;; => undeterminacy explanation: paradox depends on not(paradox), cycle
+
+;; eval (explain-with wf-solver (pacifist "nixon"))
+;; => undeterminacy explanation: pacifist ↔ hawk via mutual negation
+
+;; --- D4: explain with provenance levels ---
+
+;; eval (explain-with wf-solver {provenance full} (win "d"))
+;; => full derivation with rule IDs and depth
+
+
+;; ========================================================================
+;; SECTION E: TABLING INTERACTION
+;; ========================================================================
+;;
+;; Tabling with three-valued entries. :tabled annotation in WS mode.
+
+;; --- E1: Tabled relation with WF semantics ---
+
+;; defr tabled-path [?from ?to] :tabled
+;;   &> (edge from to)
+;;   &> (edge from mid) (tabled-path mid to)
+;;
+;; eval (solve-with wf-solver (tabled-path "a" "e"))
+;; => same as non-tabled (stratifiable, no negation)
+
+;; --- E2: Tabled relation with negation (WF + tabling) ---
+
+;; defr safe-path [?from ?to] :tabled
+;;   &> (edge from to) (not (blocked to))
+;;   &> (edge from mid) (not (blocked mid)) (safe-path mid to)
+;;
+;; eval (solve-with wf-solver (safe-path "a" dest))
+;; => [{:dest "b"}] with tabling
+
+;; --- E3: Tabled relation with negation cycle ---
+;; The combination that requires Phase 4b + Phase 5.
+
+;; defr tabled-win [?pos] :tabled
+;;   &> (move pos next) (not (tabled-win next))
+;;
+;; eval (solve-with wf-solver (tabled-win pos))
+;; => per-tabled-variant granularity: each ground position gets its own certainty
+
+
+;; ========================================================================
+;; SECTION F: ADVANCED RELATIONAL FEATURES
+;; ========================================================================
+;;
+;; Features that exist at sexp level but may not be wired to WS mode.
+;; These interact with WFLE orthogonally but should work under both
+;; stratified and well-founded semantics.
+
+;; --- F1: is-goals (functional evaluation in clauses) ---
+
+;; defr factorial [+n -result]
+;;   || 0N 1N
+;;   &> (is n1 [sub n 1N])
+;;      (factorial n1 partial)
+;;      (is result [mul n partial])
+;;
+;; eval (solve (factorial 5N r))
+;; => [{:r 120N}]
+
+;; --- F2: guard goals ---
+
+;; defr positive-edge [?from ?to ?weight]
+;;   &> (weighted-edge from to weight) (guard [gt? weight 0N])
+
+;; --- F3: Multi-arity dispatch with | ---
+
+;; defr list-length
+;;   | [-len]
+;;     || 0N
+;;   | [+xs -len]
+;;     &> (= xs '[])
+;;        (= len 0N)
+;;     &> (is rest [tail xs])
+;;        (list-length rest sub-len)
+;;        (is len [add sub-len 1N])
+
+;; --- F4: Anonymous relations with rel ---
+
+;; def two-hop-pairs : List
+;;   (solve (rel [?from ?to]
+;;     &> (edge from mid) (edge mid to))
+;;     from to)
+
+;; --- F5: solve-one (returns Option not Seq) ---
+
+;; eval (solve-one (path "a" dest))
+;; => (some {:dest "b"})  — first answer only
+
+;; eval (solve-one (path "z" dest))
+;; => none  — no answers
+
+;; --- F6: cut (committed choice) ---
+
+;; defr first-color [?item -hue]
+;;   &> (color item hue) (cut)
+;;
+;; eval (solve (first-color "apple" h))
+;; => [{:h "red"}]  — only first, cut prunes alternatives
+
+;; --- F7: Schema-typed relations ---
+
+;; schema Employee
+;;   :name   String
+;;   :dept   String
+;;   :salary Nat
+;;
+;; defr employees : Employee [?name ?dept ?salary]
+;;   || "alice" "eng"   100000N
+;;      "bob"   "sales" 80000N
+;;
+;; eval (solve (employees name "eng" salary))
+;; => [{:name "alice" :salary 100000N}]
+
+
+;; ========================================================================
+;; SECTION G: INTERACTION WITH FUNCTIONAL LANGUAGE
+;; ========================================================================
+;;
+;; Solve results used in functional expressions. This validates the
+;; bridge between relational and functional worlds.
+
+;; --- G1: solve result in def binding ---
+
+;; NOTE: binding solve result to def requires care with QTT multiplicities.
+;; The solve result is a lazy Seq; binding it linearly may trigger a
+;; multiplicity violation if the Seq type is not erased/unrestricted.
+;; This is a known interaction point worth testing.
+;;
+;; def all-paths : List
+;;   (solve (path "a" dest))
+
+;; --- G2: solve result in let binding ---
+
+;; def path-count : Nat
+;;   let paths := (solve (path "a" dest))
+;;   [length paths]
+
+;; --- G3: solve result in match ---
+
+;; def first-path : String
+;;   match (solve-one (path "a" dest))
+;;     | (some m) => [map-get m :dest]
+;;     | none => "no path"
+
+;; --- G4: solve with functional filter ---
+
+;; def short-paths : List
+;;   [filter (fn [m] [lt? [map-get m :dest] "d"])
+;;           (solve (path "a" dest))]
+
+;; --- G5: WF solve result with certainty in functional context ---
+;; The key question: how do three-valued results appear to functional code?
+
+;; def wf-results : List
+;;   (solve-with wf-solver (win pos))
+;; ;; Each element should carry certainty information somehow
+
+
+;; ========================================================================
+;; SECTION H: INTERACTION WITH TYPE SYSTEM
+;; ========================================================================
+;;
+;; Type-level validation of relational constructs.
+
+;; --- H1: Solver type ---
+;; solver form should produce a value of type Solver
+
+;; def my-solver : Solver
+;;   solver my-solver
+;;     semantics well-founded
+;;     tabling by-default
+
+;; --- H2: solve result type ---
+;; solve should return (Seq Map) or similar
+
+;; spec path-answers : [Seq Map]
+;; defn path-answers []
+;;   (solve (path "a" dest))
+
+;; --- H3: explain result type ---
+;; explain should return something with derivation info
+
+;; --- H4: Goal type ---
+;; Goals in relational context should have type Goal
+
+;; --- H5: Relation type ---
+;; defr produces a value of type (Relation [T1 T2 ...])
+
+
+;; ========================================================================
+;; SECTION I: EDGE CASES AND ERROR CONDITIONS
+;; ========================================================================
+
+;; --- I1: Empty relation under WF ---
+
+;; defr empty-rel [?x]
+;;   ||
+;;
+;; eval (solve-with wf-solver (empty-rel y))
+;; => nil (no answers, definite)
+
+;; --- I2: Single fact under WF (no negation) ---
+
+;; defr just-one []
+;;   ||
+;;
+;; eval (solve-with wf-solver (just-one))
+;; => [{:__certainty definite}] or equivalent
+
+;; --- I3: Deep recursion under WF ---
+
+;; defr chain [?from ?to]
+;;   &> (edge from to)
+;;   &> (edge from mid) (chain mid to)
+;;
+;; eval (solve-with wf-solver (chain "a" "e"))
+;; => should handle depth without iteration limit hit
+
+;; --- I4: Stratified program error message under stratified engine ---
+;; This program should FAIL under 'stratified but SUCCEED under 'well-founded
+
+;; eval (solve (p-holds))
+;; => error: unstratifiable program (negative cycle in SCC)
+;;
+;; eval (solve-with wf-solver (p-holds))
+;; => 'unknown (WF handles it)
+
+;; --- I5: Multiple solve calls on same program, different engines ---
+;; Verify no state leakage between engine backends
+
+;; eval (solve-with strat-solver (path "a" dest))
+;; eval (solve-with wf-solver (path "a" dest))
+;; eval (solve-with strat-solver (path "a" dest))
+;; => all three return same answers
+
+;; --- I6: WF with timeout ---
+
+;; eval (solve-with wf-solver {timeout 100} (path "a" dest))
+;; => should respect timeout
+
+;; --- I7: WF with provenance none vs full ---
+
+;; eval (solve-with wf-solver {provenance none} (win "d"))
+;; eval (solve-with wf-solver {provenance full} (win "d"))
+;; => different detail levels, same answer
+
+
+;; ========================================================================
+;; SECTION Z: UNCOMMENTED BASELINE VALIDATION
+;; ========================================================================
+;;
+;; This section has UNCOMMENTED expressions that should work TODAY.
+;; If any of these fail, we have a pre-existing gap to fix first.
+;; The eval calls above in Section A are the primary baseline tests.
+
+eval (solve (path "a" "e"))
+;; => [{:from "a" :to "e"}] or similar — confirms recursive path works
+
+eval (solve (color item hue))
+;; => 4 answers — confirms fact-only relation works
+
+eval (solve (reachable "a" dest))
+;; => confirms stratified negation works
