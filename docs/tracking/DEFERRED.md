@@ -533,23 +533,20 @@ The following collection items ARE also deferred (genuine infrastructure deps):
 These gaps were identified during WS acceptance testing for the WFLE feature. They are pre-existing
 issues in the relational subsystem (Phase 7 surface syntax), not WS-specific bugs.
 
-- **`is`-goals don't evaluate functional expressions**: `relations.rkt:321` is a stub that unifies
-  the variable with the expression as ground — doesn't actually evaluate arithmetic/functional
-  expressions. E.g., `?x is [add 1N 2N]` just unifies `?x` with the AST node `[add 1N 2N]`,
-  not with `3N`. Fix requires calling `whnf` on the expression before unification.
-- **`guard` not in parser keyword list**: The runtime handler exists in `relations.rkt:313` but
-  `guard` is not registered as a parser keyword, so WS-mode `guard [gt ?x 0N]` doesn't parse.
-  Fix: add to keyword dispatch in `parser.rkt`.
-- **`cut` not in parser keyword list**: Same as `guard` — runtime handler exists (`relations.rkt:316`)
-  but `cut` is not a parser keyword. Fix: add to keyword dispatch in `parser.rkt`.
+- ~~**`is`-goals don't evaluate functional expressions**~~ — **RESOLVED** (commit `df65974`):
+  `is`-goals now evaluate via `nf` callback, parser disables relational context for expression arg.
+- ~~**`guard` not in parser keyword list**~~ — **RESOLVED** (commit `a863f20`):
+  Guard wired through parser/elaborator with 1-arg (condition only) and 2-arg (condition + goal) forms.
+- ~~**`cut` not in parser keyword list**~~ — **RESOLVED** (commit `a863f20`):
+  Cut parses and elaborates. Runtime handler succeeds but doesn't actually prune alternatives
+  (needs solver-level cooperation for true committed choice — deferred).
 - **Multi-arity `|` relation variants — zero-arg solve path**: Multi-arity variants (different
   param counts per `|` clause) work correctly in the DFS solver — `solve-app-goal` tries all
   variants via `append-map` and arity-mismatched variants fail unification gracefully. The only
   gap is `solve-goal`'s zero-arg path (bare `solve rel-name`), which infers arity from the
   first variant only. Fix: iterate all variants or require explicit args for multi-arity rels.
-- **Anonymous `rel` + `solve` integration**: Anonymous relations created with `rel` inside `solve`
-  expressions don't fully integrate — the relation isn't registered in the solver's relation
-  environment before solve dispatches.
+- ~~**Anonymous `rel` + `solve` integration**~~ — **RESOLVED** (commit `14c3d2b`):
+  `run-solve-goal` now dispatches on `expr-rel?`, creates temporary relation-info with gensym name.
 - Source: `examples/2026-03-14-wfle-acceptance.prologos` §F (STATUS annotations)
 
 ---
