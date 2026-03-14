@@ -19,7 +19,7 @@
 | 5 | Three-Valued Tabling Extension | ✅ | `9bc99fc` — wf-table-entry, wf-all-mode-merge, register/add/answers/complete/certainty, 16 tests |
 | 4b | Well-Founded Engine — Tabling Integration | ✅ | `7281c1a` — wf-solve-goal-tabled, current-wf-table-store, per-predicate certainty in WF tables, 5 tests |
 | 6 | Test Suite — Known Well-Founded Models | ✅ | `9a03bb9` — 3 test files, 30 tests: literature (13), comparison (10), errors (7) |
-| 7 | Benchmark Comparison | ⬜ | |
+| 7 | Benchmark Comparison | ✅ | `8e9a66f` — 10 benchmarks: positive/stratifiable/cycle/convergence, wall time + answer agreement |
 
 ---
 
