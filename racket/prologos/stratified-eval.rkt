@@ -171,12 +171,24 @@
          (wf-solve-goal-tabled config store goal-name goal-args query-vars)))
      (wf-answers->standard wf-answers 'strict)]
     [else
-     ;; Stratified path (default): unchanged
+     ;; Stratified path (default)
+     ;; Scope stratification to predicates reachable from the query,
+     ;; so unstratifiable predicates elsewhere in the store don't
+     ;; block stratifiable queries.
      (cond
        [(not (store-has-negation? store))
         (solve-goal config store goal-name goal-args query-vars)]
        [else
-        (define strata (get-or-compute-strata store))
+        (define reachable (transitive-pred-closure store goal-name))
+        (define reachable-dep-infos
+          (for*/list ([pred (in-list reachable)]
+                      [ri (in-value (hash-ref store pred #f))]
+                      #:when ri)
+            (relation-info->dep-info ri)))
+        (define strata
+          (if (null? reachable-dep-infos)
+              '()
+              (stratify reachable-dep-infos)))
         (cond
           [(<= (length strata) 1)
            (solve-goal config store goal-name goal-args query-vars)]

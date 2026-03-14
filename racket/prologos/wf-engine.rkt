@@ -85,32 +85,39 @@
                 '()))
           (loop (append rest new-deps) (cons pred visited))])])))
 
-;; Identify which predicates participate in negation (appear as targets of `not`).
-;; Returns: (listof symbol) — subset of all-preds that are negated somewhere
+;; Identify which predicates are in negative cycles (SCCs with internal negative edges).
+;; Only these predicates need bilattice tracking — predicates that are negated but
+;; NOT in a cycle can use standard DFS NAF correctly. This ensures the WF engine
+;; agrees with the stratified engine on stratifiable programs.
+;; Returns: (listof symbol) — subset of all-preds that are in negative SCCs
 (define (preds-with-negation store all-preds)
-  (define neg-targets
+  ;; Build dep-info for all reachable predicates
+  (define dep-infos
     (for*/list ([pred (in-list all-preds)]
                 [ri (in-value (hash-ref store pred #f))]
-                #:when ri
-                [v (in-list (relation-info-variants ri))]
-                [c (in-list (variant-info-clauses v))]
-                [g (in-list (clause-info-goals c))]
-                #:when (eq? (goal-desc-kind g) 'not)
-                [inner (in-value (car (goal-desc-args g)))]
-                #:when (expr-goal-app? inner))
-      (expr-goal-app-name inner)))
-  ;; Include all predicates that are negation targets OR that negate others,
-  ;; since both need bilattice tracking for the iterative fixpoint.
-  (define negating-preds
-    (for*/list ([pred (in-list all-preds)]
-                [ri (in-value (hash-ref store pred #f))]
-                #:when ri
-                [v (in-list (relation-info-variants ri))]
-                [c (in-list (variant-info-clauses v))]
-                [g (in-list (clause-info-goals c))]
-                #:when (eq? (goal-desc-kind g) 'not))
+                #:when ri)
+      (wf-relation-info->dep-info ri)))
+  (define graph (build-dependency-graph dep-infos))
+  (define sccs (tarjan-scc graph))
+  ;; Collect predicates from SCCs that have internal negative edges
+  (define neg-cycle-preds
+    (for*/list ([scc (in-list sccs)]
+                #:when (and (> (length scc) 1)
+                            (scc-has-negative-edge? graph scc))
+                [pred (in-list scc)]
+                #:when (member pred all-preds))
       pred))
-  (remove-duplicates (append neg-targets negating-preds)))
+  ;; Also include single-node SCCs with self-negation (p :- not p)
+  (define self-neg-preds
+    (for*/list ([scc (in-list sccs)]
+                #:when (= (length scc) 1)
+                [pred (in-value (car scc))]
+                #:when (member pred all-preds)
+                [di (in-value (hash-ref graph pred #f))]
+                #:when di
+                #:when (member pred (dep-info-neg-deps di)))
+      pred))
+  (remove-duplicates (append neg-cycle-preds self-neg-preds)))
 
 ;; ========================================
 ;; NAF Oracle
@@ -256,6 +263,15 @@
 ;; Top-Level Entry Point
 ;; ========================================
 
+;; Create a "closed-world" NAF oracle for the fast path (no negative cycles).
+;; For predicates not in the store, returns 'succeed (closed-world: undefined = false).
+;; For predicates in the store, returns 'standard to fall through to standard DFS NAF.
+(define (make-closed-world-oracle store)
+  (lambda (pred-name)
+    (if (hash-ref store pred-name #f)
+        'standard  ;; defined → fall through to standard NAF
+        'succeed)))  ;; undefined → closed world → NAF succeeds
+
 ;; Solve a relational goal using the well-founded engine.
 ;; Returns: (listof wf-answer)
 (define (wf-solve-goal config store goal-name goal-args query-vars)
@@ -264,11 +280,12 @@
   ;; Step 2: Identify which predicates participate in negation
   (define neg-preds (preds-with-negation store all-preds))
   (cond
-    ;; Fast path: no negation → delegate to standard solver
+    ;; Fast path: no negative cycles → standard DFS NAF with closed-world fallback
     [(null? neg-preds)
      (define answers
        (with-handlers ([exn:fail? (lambda (e) '())])
-         (solve-goal config store goal-name goal-args query-vars)))
+         (parameterize ([current-naf-oracle (make-closed-world-oracle store)])
+           (solve-goal config store goal-name goal-args query-vars))))
      (for/list ([a (in-list answers)])
        (wf-answer a 'definite))]
     [else
@@ -381,11 +398,12 @@
   (define all-preds (transitive-pred-closure store goal-name))
   (define neg-preds (preds-with-negation store all-preds))
   (cond
-    ;; Fast path: no negation → delegate to standard solver, no tabling needed
+    ;; Fast path: no negative cycles → standard DFS NAF with closed-world fallback
     [(null? neg-preds)
      (define answers
        (with-handlers ([exn:fail? (lambda (e) '())])
-         (solve-goal config store goal-name goal-args query-vars)))
+         (parameterize ([current-naf-oracle (make-closed-world-oracle store)])
+           (solve-goal config store goal-name goal-args query-vars))))
      (define wf-answers
        (for/list ([a (in-list answers)])
          (wf-answer a 'definite)))

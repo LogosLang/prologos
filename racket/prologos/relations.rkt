@@ -471,7 +471,14 @@
         (case oracle-result
           [(succeed) (list subst)]  ;; definitely false → NAF succeeds
           [(fail) '()]              ;; definitely true → NAF fails
-          [(defer) '()])]           ;; unknown → skip (conservative)
+          [(defer) '()]             ;; unknown → skip (conservative)
+          [else
+           ;; Oracle returned 'standard — fall through to standard DFS NAF
+           (define resolved-inner-goal (apply-subst-to-goal inner-goal subst))
+           (define results (solve-single-goal config store resolved-inner-goal subst depth))
+           (if (null? results)
+               (list subst)
+               '())])]
        ;; Standard NAF path: try to prove inner goal
        [else
         (define resolved-inner-goal (apply-subst-to-goal inner-goal subst))

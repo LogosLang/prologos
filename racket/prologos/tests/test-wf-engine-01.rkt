@@ -114,14 +114,28 @@
 ;; 4. Preds with negation
 ;; ========================================
 
-(test-case "wf-engine/preds-with-negation: detects negated targets"
-  ;; p :- not q.
+(test-case "wf-engine/preds-with-negation: stratifiable negation → no cycle preds"
+  ;; p :- not q. q is a fact. This is stratifiable (no negative cycle).
+  ;; preds-with-negation should return empty — only negative CYCLE predicates
+  ;; need bilattice tracking.
   (define inner-q (expr-goal-app 'q (list)))
   (define store
     (build-store
      (list 'q 0 '(()) '())
      (list 'p 0 '()
            (list (list (goal-desc 'not (list inner-q)))))))
+  (define all-preds (transitive-pred-closure store 'p))
+  (define neg-preds (preds-with-negation store all-preds))
+  (check-equal? neg-preds '() "stratifiable: no negative cycles"))
+
+(test-case "wf-engine/preds-with-negation: odd cycle → cycle preds detected"
+  ;; p :- not q. q :- not p. This is an odd cycle — both are in negative SCC.
+  (define inner-q (expr-goal-app 'q (list)))
+  (define inner-p (expr-goal-app 'p (list)))
+  (define store
+    (build-store
+     (list 'p 0 '() (list (list (goal-desc 'not (list inner-q)))))
+     (list 'q 0 '() (list (list (goal-desc 'not (list inner-p)))))))
   (define all-preds (transitive-pred-closure store 'p))
   (define neg-preds (preds-with-negation store all-preds))
   (check-not-false (member 'q neg-preds))
