@@ -259,6 +259,8 @@
 ;; ========================================
 
 ;; Collect logic variable names from a general AST expression.
+;; Walks into expr-app, pairs, and any transparent struct (e.g. expr-int-add,
+;; expr-guard, etc.) to find all expr-logic-var nodes.
 (define (collect-logic-vars-in-expr expr vars)
   (cond
     [(expr-logic-var? expr)
@@ -269,10 +271,16 @@
     [(pair? expr)
      (collect-logic-vars-in-expr (car expr) vars)
      (collect-logic-vars-in-expr (cdr expr) vars)]
+    ;; Generic: walk transparent struct fields (covers expr-int-add, expr-suc, etc.)
+    [(struct? expr)
+     (define v (struct->vector expr))
+     (for ([i (in-range 1 (vector-length v))])
+       (collect-logic-vars-in-expr (vector-ref v i) vars))]
     [else (void)]))
 
 ;; Rename logic variable names inside an AST expression using a fresh-map.
 ;; Used by rename-goal-vars for `is`-goal expressions.
+;; Walks into expr-app, pairs, and any transparent struct to reach nested logic vars.
 (define (rename-logic-vars-in-expr expr fresh-map)
   (cond
     [(expr-logic-var? expr)
@@ -285,12 +293,30 @@
     [(pair? expr)
      (cons (rename-logic-vars-in-expr (car expr) fresh-map)
            (rename-logic-vars-in-expr (cdr expr) fresh-map))]
+    ;; Generic: walk transparent struct fields (covers expr-int-add, expr-suc, etc.)
+    [(struct? expr)
+     (define v (struct->vector expr))
+     (define len (vector-length v))
+     (define new-fields
+       (for/list ([i (in-range 1 len)])
+         (rename-logic-vars-in-expr (vector-ref v i) fresh-map)))
+     ;; Only reconstruct if something changed
+     (define changed?
+       (for/or ([i (in-range (- len 1))]
+                [nf (in-list new-fields)])
+         (not (eq? (vector-ref v (+ i 1)) nf))))
+     (if changed?
+         (let-values ([(st _) (struct-info expr)])
+           (apply (struct-type-make-constructor st) new-fields))
+         expr)]
     [else expr]))
 
 ;; Substitute logic variable values from a substitution into an AST expression.
 ;; Walks the AST tree, replacing expr-logic-var nodes with their resolved values.
 ;; This is needed for `is`-goals and `guard` conditions where functional
 ;; expressions reference logic variables that may be bound.
+;; Walks into expr-app, pairs, and any transparent struct (e.g. expr-int-add,
+;; expr-suc, expr-guard, etc.) to reach nested logic vars.
 (define (subst-logic-vars-in-expr expr subst)
   (cond
     [(expr-logic-var? expr)
@@ -305,6 +331,22 @@
     [(pair? expr)
      (cons (subst-logic-vars-in-expr (car expr) subst)
            (subst-logic-vars-in-expr (cdr expr) subst))]
+    ;; Generic: walk transparent struct fields (covers expr-int-add, expr-suc, etc.)
+    [(struct? expr)
+     (define v (struct->vector expr))
+     (define len (vector-length v))
+     (define new-fields
+       (for/list ([i (in-range 1 len)])
+         (subst-logic-vars-in-expr (vector-ref v i) subst)))
+     ;; Only reconstruct if something changed
+     (define changed?
+       (for/or ([i (in-range (- len 1))]
+                [nf (in-list new-fields)])
+         (not (eq? (vector-ref v (+ i 1)) nf))))
+     (if changed?
+         (let-values ([(st _) (struct-info expr)])
+           (apply (struct-type-make-constructor st) new-fields))
+         expr)]
     [else expr]))
 
 ;; ========================================

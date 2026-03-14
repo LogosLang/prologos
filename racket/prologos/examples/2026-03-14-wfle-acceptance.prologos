@@ -339,39 +339,62 @@ solve-with default-config {:timeout 5000} (path "a" dest)
 ;; --- F1: is-goals (functional evaluation in clauses) ---
 ;; STATUS: WORKING (fixed — is-goal now evaluates functional expressions via nf)
 ;; NOTE: is-goals use nf (full normal form) to evaluate the functional expression.
-;; LIMITATION: Nat is used here because `add`/`gt?` in the global env are Nat-specific
-;; primitive functions. Int arithmetic needs trait dispatch (Add/Ord instances),
-;; which doesn't occur inside relational `is`-goals — the nf evaluator sees the
-;; trait dict application as opaque. Fixing this requires relational-context trait
-;; resolution (deferred).
+;; Supports both Nat (via `add`) and Int (via `plus`, `int+`).
+;; For Nat: `add` resolves to the Nat-specific primitive.
+;; For Int: use `plus` (generic trait-dispatched Add) or `int+` (parser keyword).
+;; Generic trait dispatch works because `plus` has a `spec [Add A]` constraint
+;; that inserts the correct trait dict at elaboration time.
 
-defr add-one [?n ?result]
+;; F1a: Nat arithmetic in is-goals (via `add`)
+defr add-one-nat [?n ?result]
   &> (is result [add n 1N])
 
-solve (add-one 5N r)
+solve (add-one-nat 5N r)
 ;; => [{:n_ 5N, :r 6N}]
 
-defr double [?n ?result]
-  &> (is result [add n n])
+;; F1b: Int arithmetic in is-goals (via `plus` — generic trait dispatch)
+defr add-one-int [?n ?result]
+  &> (is result [plus n 1])
 
-solve (double 5N r)
-;; => [{:n_ 5N, :r 10N}]
+solve (add-one-int 5 r)
+;; => [{:n_ 5, :r 6}]
+
+;; F1c: Int arithmetic in is-goals (via `int+` — parser keyword)
+defr double-int [?n ?result]
+  &> (is result [int+ n n])
+
+solve (double-int 5 r)
+;; => [{:n_ 5, :r 10}]
 
 ;; --- F2: guard goals ---
 ;; STATUS: WORKING (fixed — guard wired through parser/elaborator, 1-arg and 2-arg forms)
-;; NOTE: Same Nat limitation as F1 — `gt?` is a Nat primitive, Int comparison
-;; needs trait dispatch which doesn't happen in guard condition evaluation.
+;; Supports both Nat (via `gt?`) and Int (via `ord-gt`, `int-lt`).
+;; For Nat: `gt?` is a Nat-specific primitive.
+;; For Int: use `ord-gt` (generic trait-dispatched Ord) or `int-lt` (parser keyword).
 
-defr weighted-edge [?from ?to ?weight]
+;; F2a: Nat guard (via `gt?`)
+defr weighted-edge-nat [?from ?to ?weight]
   || "a" "b" 3N
      "b" "c" 0N
      "c" "d" 5N
 
+defr positive-edge-nat [?from ?to ?weight]
+  &> (weighted-edge-nat from to weight) (guard [gt? weight 0N])
+
+solve (positive-edge-nat from to w)
+;; => [{:to "b", :w 3N, :from "a"} {:to "d", :w 5N, :from "c"}]
+
+;; F2b: Int guard (via `ord-gt` — generic trait dispatch)
+defr weighted-edge [?from ?to ?weight]
+  || "a" "b" 3
+     "b" "c" 0
+     "c" "d" 5
+
 defr positive-edge [?from ?to ?weight]
-  &> (weighted-edge from to weight) (guard [gt? weight 0N])
+  &> (weighted-edge from to weight) (guard [ord-gt weight 0])
 
 solve (positive-edge from to w)
-;; => [{:to "b", :w 3N, :from "a"} {:to "d", :w 5N, :from "c"}]
+;; => [{:to "b", :w 3, :from "a"} {:to "d", :w 5, :from "c"}]
 
 ;; --- F3: Multi-arity dispatch with | ---
 ;; STATUS: WORKING — multi-arity | variants dispatch correctly; arity-mismatched
