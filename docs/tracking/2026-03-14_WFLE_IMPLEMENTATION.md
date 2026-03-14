@@ -15,10 +15,10 @@
 | 1 | Descending Cells in propagator.rkt | ✅ | `4a492c7` — cell-dirs field, net-new-cell-desc, net-cell-direction, 15 tests |
 | 2 | Bilattice Module (bilattice.rkt) | ✅ | `edb3fad` — lattice-desc, bilattice-var, 3-valued read, consistency propagator, 20 tests |
 | 3 | Well-Founded Propagator Patterns (wf-propagators.rkt) | ✅ | `fc83451` — fact/negation/positive/aggregate patterns, clause/program compilation, 25 tests |
-| 4a | Well-Founded Engine — Core (wf-engine.rkt) | ⬜ | Hybrid DFS + bilattice |
-| 5 | Three-Valued Tabling Extension | ⬜ | |
-| 4b | Well-Founded Engine — Tabling Integration | ⬜ | After Phase 5 |
-| 6 | Test Suite — Known Well-Founded Models | ⬜ | |
+| 4a | Well-Founded Engine — Core (wf-engine.rkt) | ✅ | `333130a` — wf-solve-goal, NAF oracle, iterative fixpoint, solver dispatch, 24 tests |
+| 5 | Three-Valued Tabling Extension | ✅ | `9bc99fc` — wf-table-entry, wf-all-mode-merge, register/add/answers/complete/certainty, 16 tests |
+| 4b | Well-Founded Engine — Tabling Integration | ✅ | `7281c1a` — wf-solve-goal-tabled, current-wf-table-store, per-predicate certainty in WF tables, 5 tests |
+| 6 | Test Suite — Known Well-Founded Models | ✅ | `9a03bb9` — 3 test files, 30 tests: literature (13), comparison (10), errors (7) |
 | 7 | Benchmark Comparison | ⬜ | |
 
 ---

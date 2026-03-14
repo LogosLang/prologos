@@ -803,6 +803,8 @@
    (test-dep '(relations.rkt solver.rkt stratified-eval.rkt syntax.rkt wf-engine.rkt) #f)
    'test-wf-errors-01.rkt
    (test-dep '(relations.rkt solver.rkt stratified-eval.rkt syntax.rkt wf-engine.rkt) #f)
+   'test-wf-benchmark-01.rkt
+   (test-dep '(relations.rkt solver.rkt stratified-eval.rkt syntax.rkt wf-engine.rkt) #f)
    'test-string-ops.rkt
    (test-dep '(driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parser.rkt prelude.rkt pretty-print.rkt reader.rkt reduction.rkt source-location.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt typing-core.rkt) #t)
    'test-structural-decomp.rkt
