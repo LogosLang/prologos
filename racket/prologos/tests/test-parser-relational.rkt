@@ -65,9 +65,8 @@
 (test-case "parse (solve-one expr)"
   (define result (p "(eval (solve-one (parent x y)))"))
   (check-true (surf-eval? result))
-  ;; solve-one reuses surf-solve
   (define inner (surf-eval-expr result))
-  (check-true (surf-solve? inner)))
+  (check-true (surf-solve-one? inner)))
 
 (test-case "parse (explain expr)"
   (define result (p "(eval (explain (parent x y)))"))
