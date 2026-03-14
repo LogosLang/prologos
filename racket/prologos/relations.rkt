@@ -47,6 +47,8 @@
  collect-ast-vars
  ;; Evaluation callback (set by reduction.rkt to break circular dep)
  current-is-eval-fn
+ ;; NAF oracle (set by wf-engine.rkt for well-founded semantics)
+ current-naf-oracle
  ;; Execution
  solve-goal
  explain-goal)
@@ -59,6 +61,15 @@
 ;; Set by reduction.rkt to `whnf` to break circular dependency.
 ;; When #f, is-goals fall back to raw unification (no evaluation).
 (define current-is-eval-fn (make-parameter #f))
+
+;; NAF oracle callback for well-founded semantics.
+;; When #f (default), standard NAF is used (try to prove inner goal;
+;; if no proof found, negation succeeds).
+;; When set, must be a function: (symbol → 'succeed | 'fail | 'defer)
+;;   'succeed — treat `not p` as true
+;;   'fail — treat `not p` as false (backtrack)
+;;   'defer — treat `not p` as unknown (skip this clause)
+(define current-naf-oracle (make-parameter #f))
 
 ;; ========================================
 ;; Core structs
@@ -451,11 +462,23 @@
      ;; so negation checks the ground instantiation (not unbound vars).
      (define inner-goal-expr (car args))
      (define inner-goal (expr->goal-desc inner-goal-expr))
-     (define resolved-inner-goal (apply-subst-to-goal inner-goal subst))
-     (define results (solve-single-goal config store resolved-inner-goal subst depth))
-     (if (null? results)
-         (list subst)  ;; inner failed → not succeeds
-         '())]         ;; inner succeeded → not fails
+     (define naf-oracle (current-naf-oracle))
+     (cond
+       ;; Well-founded NAF oracle path: consult bilattice instead of DFS
+       [(and naf-oracle (eq? (goal-desc-kind inner-goal) 'app))
+        (define pred-name (car (goal-desc-args inner-goal)))
+        (define oracle-result (naf-oracle pred-name))
+        (case oracle-result
+          [(succeed) (list subst)]  ;; definitely false → NAF succeeds
+          [(fail) '()]              ;; definitely true → NAF fails
+          [(defer) '()])]           ;; unknown → skip (conservative)
+       ;; Standard NAF path: try to prove inner goal
+       [else
+        (define resolved-inner-goal (apply-subst-to-goal inner-goal subst))
+        (define results (solve-single-goal config store resolved-inner-goal subst depth))
+        (if (null? results)
+            (list subst)  ;; inner failed → not succeeds
+            '())])]       ;; inner succeeded → not fails
     [(cut)
      ;; Cut: return current substitution (cut semantics need special handling)
      (list subst)]

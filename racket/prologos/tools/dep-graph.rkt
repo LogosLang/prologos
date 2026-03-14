@@ -111,7 +111,9 @@
    'sexp.rkt                      '(main.rkt)
    'solver.rkt                    '()
    'source-location.rkt           '()
-   'stratified-eval.rkt           '(relations.rkt solver.rkt stratify.rkt syntax.rkt tabling.rkt)
+   'stratified-eval.rkt           '(relations.rkt solver.rkt stratify.rkt syntax.rkt tabling.rkt wf-engine.rkt)
+   'wf-engine.rkt                 '(bilattice.rkt propagator.rkt relations.rkt solver.rkt stratify.rkt syntax.rkt)
+   'wf-propagators.rkt            '(bilattice.rkt propagator.rkt)
    'stratify.rkt                  '()
    'substitution.rkt              '(prelude.rkt syntax.rkt)
    'surface-syntax.rkt            '(source-location.rkt)
@@ -785,6 +787,14 @@
    (test-dep '(driver.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt reader.rkt relations.rkt solver.rkt stratified-eval.rkt stratify.rkt syntax.rkt trait-resolution.rkt) #f)
    'test-stratify.rkt
    (test-dep '(stratify.rkt) #f)
+   'test-bilattice-01.rkt
+   (test-dep '(bilattice.rkt propagator.rkt) #f)
+   'test-propagator-descending-01.rkt
+   (test-dep '(propagator.rkt) #f)
+   'test-wf-propagators-01.rkt
+   (test-dep '(bilattice.rkt propagator.rkt wf-propagators.rkt) #f)
+   'test-wf-engine-01.rkt
+   (test-dep '(bilattice.rkt propagator.rkt relations.rkt solver.rkt stratified-eval.rkt syntax.rkt wf-engine.rkt) #f)
    'test-string-ops.rkt
    (test-dep '(driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parser.rkt prelude.rkt pretty-print.rkt reader.rkt reduction.rkt source-location.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt typing-core.rkt) #t)
    'test-structural-decomp.rkt

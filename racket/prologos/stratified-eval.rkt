@@ -20,7 +20,8 @@
          "stratify.rkt"
          "tabling.rkt"
          "relations.rkt"
-         "solver.rkt")
+         "solver.rkt"
+         "wf-engine.rkt")
 
 (provide
  ;; Phase S1: Dependency extraction
@@ -159,19 +160,25 @@
 ;;
 ;; Returns: (listof hasheq) — each maps query var names to values
 (define (stratified-solve-goal config store goal-name goal-args query-vars)
-  ;; Fast path: no negation anywhere → direct delegate
-  (cond
-    [(not (store-has-negation? store))
-     (solve-goal config store goal-name goal-args query-vars)]
+  ;; Well-founded semantics dispatch
+  (define semantics (solver-config-semantics config))
+  (case semantics
+    [(well-founded)
+     ;; WFLE path: handles negation cycles via bilattice fixpoint
+     (define wf-answers (wf-solve-goal config store goal-name goal-args query-vars))
+     (wf-answers->standard wf-answers 'strict)]
     [else
-     ;; Multi-stratum path
-     (define strata (get-or-compute-strata store))
+     ;; Stratified path (default): unchanged
      (cond
-       ;; If stratification yields 0 or 1 stratum, still fast-path
-       [(<= (length strata) 1)
+       [(not (store-has-negation? store))
         (solve-goal config store goal-name goal-args query-vars)]
        [else
-        (stratified-solve-multi config store strata goal-name goal-args query-vars)])]))
+        (define strata (get-or-compute-strata store))
+        (cond
+          [(<= (length strata) 1)
+           (solve-goal config store goal-name goal-args query-vars)]
+          [else
+           (stratified-solve-multi config store strata goal-name goal-args query-vars)])])]))
 
 ;; Multi-stratum evaluation.
 ;; Evaluates strata bottom-up: for each stratum, solve all predicates once
@@ -221,4 +228,9 @@
 ;; Stratified explain: like solve but with provenance.
 ;; For now, delegates to explain-goal directly (stratified explain is future work).
 (define (stratified-explain-goal config store goal-name goal-args query-vars prov-level)
-  (explain-goal config store goal-name goal-args query-vars prov-level))
+  (define semantics (solver-config-semantics config))
+  (case semantics
+    [(well-founded)
+     (wf-explain-goal config store goal-name goal-args query-vars prov-level)]
+    [else
+     (explain-goal config store goal-name goal-args query-vars prov-level)]))

@@ -39,6 +39,8 @@
  solver-config-narrow-minimize
  ;; CFA scope (Phase 3a)
  solver-config-cfa-scope
+ ;; Well-founded semantics (WFLE Phase 4a)
+ solver-config-semantics
  ;; Merge
  solver-config-merge
  ;; Validation
@@ -60,7 +62,8 @@
 (define valid-solver-keys
   '(execution threshold strategy tabling provenance timeout
     narrow-value-order narrow-search narrow-iterative
-    narrow-constraints narrow-minimize cfa-scope))
+    narrow-constraints narrow-minimize cfa-scope
+    semantics))
 
 (define (valid-solver-key? k)
   (memq k valid-solver-keys))
@@ -78,7 +81,8 @@
           'narrow-iterative   #f
           'narrow-constraints '()
           'narrow-minimize    #f
-          'cfa-scope          'module))
+          'cfa-scope          'module
+          'semantics          'stratified))
 
 ;; ========================================
 ;; Construction
@@ -142,6 +146,10 @@
 ;; CFA scope (Phase 3a)
 (define (solver-config-cfa-scope cfg)
   (solver-config-get cfg 'cfa-scope 'module))
+
+;; Well-founded semantics (WFLE Phase 4a)
+(define (solver-config-semantics cfg)
+  (solver-config-get cfg 'semantics 'stratified))
 
 ;; ========================================
 ;; Merge
