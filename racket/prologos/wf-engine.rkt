@@ -192,9 +192,9 @@
         (define query-vars
           (for/list ([p (in-list params)] [i (in-naturals)])
             (string->symbol (format "_wf_~a_~a" pred-name i))))
-        (define goal-args
-          (for/list ([qv (in-list query-vars)])
-            (expr-logic-var qv 'free)))
+        ;; Use plain symbols as goal-args (not expr-logic-var structs),
+        ;; because the DFS solver's unify-terms only treats symbols as variables.
+        (define goal-args query-vars)
         ;; Track whether any NAF deferred during this probe
         (current-naf-deferred? #f)
         (define actual-results
